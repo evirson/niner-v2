@@ -34,7 +34,11 @@ Projeto **spec-driven** em fase de fundação (pré-código). Ainda **não há c
 
 3. **Commit `6c65765`** — CLAUDE.md + `db/` + spec v1.1 enviados para `origin/main`.
 
-4. **GitHub CLI instalado** — `gh` 2.96.0 em `C:\Program Files\GitHub CLI\gh.exe` (via winget), para gestão de colaboradores.
+4. **GitHub CLI instalado e autenticado** — `gh` 2.96.0 em `C:\Program Files\GitHub CLI\gh.exe` (via winget), autenticado como `evirson` (device flow; escopos `gist`, `read:org`, `repo`).
+
+5. **Coautor convidado** — `claudiocalixto` (`claudio@vetorsistemas.com.br`) convidado com acesso **Write** via `gh api PUT .../collaborators/claudiocalixto -f permission=push`. Convite **aguardando aceite**.
+
+6. **Commit `76922ac`** — `docs/PROGRESSO.md` enviado para `origin/main` (após rebase sobre o commit remoto `9e4fa65` "inclusao de base").
 
 ---
 
@@ -52,16 +56,14 @@ Precisam ser resolvidas **antes de codar** os módulos afetados:
 
 ## Colaboração / acesso ao repositório
 
-- **Claudio (`claudio@vetorsistemas.com.br`)** será **coautor** do projeto → precisa de acesso **Write** ao repo `evirson/niner-v2`.
-- **Status:** convite **pendente**. Bloqueado por:
-  1. Autenticação do `gh` na conta `evirson` (o `gh auth status` ainda acusa "not logged in" nesta máquina — refazer `gh auth login` num terminal com o `gh` no PATH).
-  2. **Username GitHub do Claudio** — a API de repositório pessoal convida por username, não por e-mail. Alternativa: convidar por e-mail pela interface web (`Settings → Collaborators → Add people`).
+- **Claudio** — username GitHub **`claudiocalixto`** (`claudio@vetorsistemas.com.br`) — é **coautor** com acesso **Write** ao repo `evirson/niner-v2`.
+- **Status:** ✅ **convite enviado (2026-07-07), aguardando aceite.** Ele aceita pelo e-mail do GitHub ou em https://github.com/evirson/niner-v2/invitations.
+- Após aceitar, comita com a própria identidade Git (`user.name`/`user.email`) e aparece como autor nos commits.
 
 ---
 
 ## Próximos passos sugeridos
 
 1. Fechar as decisões bloqueantes (Q2, Q5, Q6, Q7) e registrar como ADRs.
-2. Concluir o convite de colaborador ao Claudio.
-3. Scaffolding da Fase 0: `docker-compose.yml`, esqueleto Spring Boot (`api/`) com módulos, Flyway, `web/` React.
-4. Gerar as primeiras migrations Flyway (`V001__*.sql`) convertendo o legado conforme §3.3.1.
+2. Scaffolding da Fase 0: `docker-compose.yml`, esqueleto Spring Boot (`api/`) com módulos, Flyway, `web/` React.
+3. Gerar as primeiras migrations Flyway (`V001__*.sql`) convertendo o legado conforme §3.3.1.
