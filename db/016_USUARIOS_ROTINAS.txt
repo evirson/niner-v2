@@ -1,0 +1,11 @@
+CREATE TABLE USUARIOS_ROTINAS (
+   ID_USUARIO INTEGER NOT NULL,
+   NOME_ROTINA VARCHAR(50) NOT NULL);
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+ALTER TABLE USUARIOS_ROTINAS ADD CONSTRAINT PK_USUARIOS_ROTINAS PRIMARY KEY (ID_USUARIO, NOME_ROTINA);
+
+ALTER TABLE USUARIOS_ROTINAS ADD CONSTRAINT FK_USUARIOS_ROTINAS_ID_USUARIO FOREIGN KEY (ID_USUARIO) REFERENCES USUARIOS (ID_USUARIO);
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+

@@ -1,0 +1,41 @@
+CREATE PROCEDURE SP_ATUALIZA_QUANTIDADE_ESTOQUE
+   (oCODIGO_BARRA   VARCHAR(30),
+    oID_EMPRESA     INTEGER,
+    oCREDITO_DEBITO VARCHAR(1),
+    oQTD_ESTOQUE    FLOAT)
+
+AS
+
+DECLARE VARIABLE iEXISTE INTEGER;
+DECLARE VARIABLE iQTD_ESTOQUE FLOAT;
+
+BEGIN
+   IF (:oCREDITO_DEBITO = 'C') THEN
+      iQTD_ESTOQUE = :oQTD_ESTOQUE;
+   ELSE
+      iQTD_ESTOQUE = (:oQTD_ESTOQUE * -1);
+
+   SELECT COUNT(*)
+      FROM PRODUTOS_ESTOQUE
+         WHERE CODIGO_BARRA = :oCODIGO_BARRA AND
+               ID_EMPRESA = :oID_EMPRESA
+   INTO :iEXISTE;
+
+   IF ((:iEXISTE IS NULL) OR (:iEXISTE <= 00)) THEN
+   BEGIN
+      INSERT INTO PRODUTOS_ESTOQUE (
+         CODIGO_BARRA, ID_EMPRESA, QTD_ESTOQUE)
+      VALUES (
+         :oCODIGO_BARRA, :oID_EMPRESA, :iQTD_ESTOQUE);
+   END
+   ELSE
+   BEGIN
+      UPDATE PRODUTOS_ESTOQUE SET
+         QTD_ESTOQUE = (QTD_ESTOQUE + :iQTD_ESTOQUE)
+      WHERE CODIGO_BARRA = :oCODIGO_BARRA AND
+            ID_EMPRESA   = :oID_EMPRESA;
+   END
+END;
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+

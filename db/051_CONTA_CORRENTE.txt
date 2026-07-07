@@ -1,0 +1,17 @@
+CREATE TABLE CONTA_CORRENTE (
+   ID_CONTA_CORRENTE VARCHAR(20) NOT NULL,
+   ID_BANCO VARCHAR(20) NOT NULL,
+   ID_AGENCIA VARCHAR(20) NOT NULL,
+   ID_EMPRESA INTEGER NOT NULL,
+   ATIVO VARCHAR(1) NOT NULL,
+   DESCRICAO VARCHAR(50) NOT NULL,
+   DATA_ABERTURA TIMESTAMP,
+   SALDO_INICIAL FLOAT DEFAULT 0);
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+ALTER TABLE CONTA_CORRENTE ADD CONSTRAINT PK_CONTA_CORRENTE PRIMARY KEY (ID_CONTA_CORRENTE);
+
+ALTER TABLE CONTA_CORRENTE ADD CONSTRAINT FK_CONTA_CORRENTE_ID_EMPRESA FOREIGN KEY (ID_EMPRESA) REFERENCES EMPRESAS (ID_EMPRESA);
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+

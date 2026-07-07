@@ -1,0 +1,29 @@
+--------------------------------------------------------------------------------
+-- Estrutura de Codigo de Barras                                              --
+--   GGGGG SSSSSSS D                                                          --
+--   10000 0000000 1                                                          --
+--                                                                            --
+--   GGGGG     = Id do Grupo - Comecando em 10.000                            --
+--   SSSSSSS = Sequencial Comecando em Zero                                   --
+--   D        = Digito Verificador                                            --
+--                                                                            --
+--   om esta estrutura de codigo de barras, poderemos ter:                    --
+--   9999     - Bancos de dados Ativos (Clientes)                             --
+--   .999.999 - Ate 10 Milhoes de Codigo de Barras por banco                  --
+--------------------------------------------------------------------------------
+
+CREATE TABLE PRODUTOS_BARRA (
+   ID_PRODUTO INTEGER NOT NULL,
+   ID_VARIANTE_LINHA INTEGER NOT NULL,
+   ID_VARIANTE_COLUNA INTEGER NOT NULL,
+   CODIGO_BARRA VARCHAR(30) NOT NULL);
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+ALTER TABLE PRODUTOS_BARRA ADD CONSTRAINT PK_PRODUTOS_BARRA PRIMARY KEY (CODIGO_BARRA);
+
+ALTER TABLE PRODUTOS_BARRA ADD CONSTRAINT FK_PRODUTOS_BARRA_ID_PRODUTO         FOREIGN KEY (ID_PRODUTO)         REFERENCES PRODUTOS            (ID_PRODUTO);
+ALTER TABLE PRODUTOS_BARRA ADD CONSTRAINT FK_PRODUTOS_BARRA_ID_VARIANTE_LINHA  FOREIGN KEY (ID_VARIANTE_LINHA)  REFERENCES CFG_VARIANTE_LINHA  (ID_VARIANTE_LINHA);
+ALTER TABLE PRODUTOS_BARRA ADD CONSTRAINT FK_PRODUTOS_BARRA_ID_VARIANTE_COLUNA FOREIGN KEY (ID_VARIANTE_COLUNA) REFERENCES CFG_VARIANTE_COLUNA (ID_VARIANTE_COLUNA);
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+
