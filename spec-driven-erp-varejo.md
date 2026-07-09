@@ -1,7 +1,9 @@
-# Modelo Spec-Driven — ERP de Varejo com Integração a Marketplaces
+# Modelo Spec-Driven — ERP de Varejo com Integração a Marketplaces (SaaS multi-tenant)
 
-**Stack:** React (frontend) · Java 25 + Spring Boot 4.x (API) · PostgreSQL 18 (Docker) · Docker Compose
-**Versão do documento:** 1.1 · **Status:** Rascunho para preenchimento
+**Stack:** React (frontend) · Java 25 + Spring Boot 4.x (API) · PostgreSQL 18 (Docker, banco `niner_db`) · Docker Compose
+**Versão do documento:** 2.0 · **Status:** Rascunho para preenchimento
+
+> **Pivô v2.0 — SaaS multi-tenant:** a partir desta versão o produto é um **SaaS por assinatura** (marca **Niner**, banco `niner_db`), com muitos lojistas (**tenants**) isolados na mesma instância, site público de aquisição + trial, backoffice de gestão de tenants e cobrança recorrente das assinaturas. Isso **supera** o non-goal de multiempresa da v1 (§2.3) e introduz os princípios **P8/P9** (§1) e o **Plano de Controle × Plano do Inquilino** (§3.1). Conceitos-chave de vocabulário: *assinatura/plano/trial/mensalidade/gateway* = **plataforma** (Vetor cobra o lojista); *caixa/crediário/contas a pagar-receber/conta corrente da loja* = **financeiro do lojista** (§3.3.7). Nunca conflar os dois.
 
 > **Convenção de marcação:** itens em <span style="color:red">🔴 **vermelho**</span> são **pendências** — decisões ou tarefas que ainda preciso resolver antes de codar. Renderizam em vermelho em VS Code/Obsidian; no GitHub aparecem com o marcador 🔴. Ao fechar uma pendência, remova a marcação.
 
@@ -31,6 +33,8 @@ Princípios que nenhuma spec ou task pode violar:
 - **P5 — Testes acompanham a spec.** Todo critério de aceitação vira teste automatizado antes do merge (contrato Given/When/Then → teste).
 - **P6 — Simplicidade primeiro.** Monolito modular antes de microsserviços. Uma instância Postgres. Escalar só quando a métrica justificar.
 - **P7 — Dinheiro em `NUMERIC`.** Valores monetários nunca em float; sempre `NUMERIC(12,2)` no banco e `BigDecimal` no Java.
+- **P8 — Isolamento de tenant é inviolável.** Nenhuma query cruza a fronteira de um tenant. O isolamento é imposto pelo **banco** (Postgres RLS com `FORCE ROW LEVEL SECURITY`), não apenas pelo código de aplicação. A role de aplicação (`niner_app`) **nunca** tem `BYPASSRLS`; migrations rodam com uma role dona separada (`niner_owner`). Toda tabela de dados de lojista carrega `id_tenant` e tem política RLS; as tabelas do módulo `plataforma` (control-plane) são a exceção explícita e documentada. Todo caminho **sem requisição** (worker/outbox/webhook) estabelece o `TenantContext` antes de tocar dados de domínio.
+- **P9 — Separação de planos (control-plane × tenant).** Dados da plataforma (assinatura, faturas, cobrança) e dados do lojista nunca compartilham a mesma política de acesso. Staff da plataforma só acessa dados de um tenant via **impersonação auditada** (trilha imutável, P3). O módulo `plataforma` é o único que enxerga cross-tenant.
 
 ---
 
@@ -50,18 +54,27 @@ Pequenos varejistas que vendem em loja física e em 2–5 canais online (Mercado
 
 ## 2.3 Non-Goals (fora de escopo do v1)
 
-- **Emissão fiscal (NF-e/NFC-e):** integrar com emissor terceiro via API é P2; construir emissor próprio nunca.
+- **Emissão fiscal do lojista (NF-e/NFC-e das vendas):** integrar com emissor terceiro via API é P2; construir emissor próprio nunca. **Exceção (v2.0):** a **NFS-e da própria assinatura** (Vetor→lojista) é obrigação da plataforma, não do produto — ver decisão D6 no plano de negócio.
 - **PDV/frente de caixa:** o v1 registra vendas da loja física por lançamento manual/importação; PDV completo é produto separado.
-- **Multi-empresa/multi-CNPJ:** v1 atende um CNPJ por conta. Arquitetura deve permitir depois (P2).
+- **Multi-CNPJ dentro de um mesmo tenant:** um tenant = **um CNPJ** no v1. Um assinante com **N empresas/CNPJs** é recurso de plano / P2 (a arquitetura já nasce `tenant 1:N empresa`, ver §3.1.1). *(Isto substitui o antigo non-goal "multi-empresa"; a modelagem legada mantém `id_empresa` — Q6 fechada.)*
 - **Logística própria (etiquetas, rastreio):** usa-se a logística do próprio marketplace (ML Envios, etc.). Gestão de transportadora própria fica fora.
 - **BI avançado:** v1 entrega relatórios operacionais básicos; dashboards analíticos ficam para v2.
 
+> **Agora CORE (deixaram de ser non-goal com o pivô SaaS v2.0):** **multi-tenancy** com isolamento entre assinantes (R10); **site público** de aquisição + **trial** self-service (R11–R12, R20); **cobrança recorrente** da assinatura / faturamento da plataforma (R14, R16); **backoffice** de gestão de tenants (R17). Ver §2.5 e o `docs/PLANO-DE-NEGOCIO.md`.
+
 ## 2.4 Personas e User Stories
 
+**Plano do Inquilino (usuários do ERP — dados de um tenant):**
 **Persona A — Dono/gestor da loja** (decide preço, compra estoque)
 **Persona B — Operador** (separa pedidos, dá baixa, cadastra produto)
 
-Prioridade decrescente:
+**Plano de Controle (usuários da plataforma Niner / Vetor):**
+**Persona C — Super-admin da plataforma** (gerencia todos os tenants, planos, limites, staff)
+**Persona D — Suporte / Customer Success** (consulta tenants, impersona com auditoria, acompanha ativação/saúde)
+**Persona E — Financeiro/Cobrança da plataforma** (faturas, inadimplência, reembolsos, conciliação com gateway)
+**Persona F — Assinante/comprador** (o dono da loja na ótica de aquisição/billing: faz signup, escolhe plano, gerencia a própria assinatura e vê faturas)
+
+Prioridade decrescente (operação do ERP — Personas A/B):
 
 1. Como **operador**, quero que pedidos de todos os canais apareçam numa fila única para eu separar e expedir sem abrir cada painel.
 2. Como **gestor**, quero que a venda em qualquer canal baixe o estoque central e atualize os demais canais automaticamente, para nunca vender sem estoque.
@@ -73,6 +86,20 @@ Prioridade decrescente:
 8. Como **gestor**, quero relatório de vendas por canal, por produto e por período.
 9. *(edge)* Como **operador**, quando dois canais venderem a última unidade quase simultaneamente, quero que o sistema aceite o primeiro, cancele/alerta o segundo e me notifique.
 10. *(edge)* Como **gestor**, quando a API de um marketplace ficar fora do ar, quero que as sincronizações fiquem enfileiradas e sejam aplicadas quando voltar, sem perda.
+
+**Aquisição e assinatura (Persona F — site público):**
+
+11. Como **visitante**, quero criar uma conta e começar um trial em minutos, **sem cartão**, para avaliar o produto com meus próprios dados.
+12. Como **assinante**, quero escolher um plano e concluir o pagamento (cartão/PIX/boleto) para ativar minha conta ao fim do trial.
+13. Como **assinante**, quero fazer upgrade/downgrade ou cancelar minha assinatura sozinho, com efeito e proration claros.
+14. Como **assinante**, quero ver minhas faturas, o método de pagamento e o status da assinatura.
+
+**Operação da plataforma (Personas C/D/E — backoffice):**
+
+15. Como **super-admin**, quero listar/buscar tenants e ver plano, status, uso vs. limites e saúde das integrações.
+16. Como **suporte**, quero acessar (impersonar) um tenant com registro de auditoria para diagnosticar um problema.
+17. Como **financeiro**, quero ver faturas, inadimplentes e disparar/acompanhar a régua de cobrança (dunning).
+18. Como **super-admin**, quero suspender ou reativar um tenant (por inadimplência ou pedido do cliente) sem perder dados.
 
 ## 2.5 Requisitos
 
@@ -89,6 +116,24 @@ Prioridade decrescente:
 | R7 | Painel de saúde das integrações com fila de erros e reprocessamento manual | Erro de sync exibe payload, motivo e botão "reprocessar" |
 | R8 | Autenticação (e-mail/senha + JWT), papéis `ADMIN` e `OPERADOR` | Operador não acessa configuração de integrações nem preços de custo |
 | R9 | Venda manual (loja física) com baixa de estoque | Venda manual dispara mesma sincronização que venda de canal |
+
+#### Must-Have (P0) — SaaS multi-tenant (v2.0)
+
+| ID | Requisito | Critérios de aceitação (Dado/Quando/Então) |
+|----|-----------|-------------------------------|
+| R10 | **Multi-tenancy com isolamento de dados por tenant** | Dado dois tenants T1 e T2, quando um usuário de T1 consulta qualquer recurso (produto, estoque, pedido, financeiro), então **nunca** retorna dado de T2; o corte por `id_tenant` é imposto por RLS no banco (P8), não só pelo código. |
+| R11 | **Site público de aquisição** (landing, planos, preços) | Dado um visitante, quando acessa a página de planos, então vê os 3 tiers com limites e preços e um CTA de "iniciar avaliação". |
+| R12 | **Signup self-service + criação de tenant + trial** | Dado um visitante que informa e-mail/senha/nome da loja, quando confirma, então é criado um tenant `TRIAL` (expira em 14 dias) e o usuário vira `ADMIN` desse tenant; e-mail duplicado **no mesmo tenant** é rejeitado. |
+| R13 | **Catálogo de planos e limites (entitlements)** | Dado um plano com limites (canais, SKUs, usuários, pedidos/mês), quando um tenant é associado a ele, então os limites ficam disponíveis para enforcement (R19). |
+| R14 | **Checkout e criação de assinatura (adapter de gateway)** | Dado um tenant em trial que escolhe um plano e informa pagamento, quando o gateway aprova, então o tenant vira `ATIVA`, a assinatura é criada com ciclo (mensal/anual) e a 1ª fatura é registrada. *(Gateway real a definir — D3; v1 usa adapter com cobrança manual/registro.)* |
+| R15 | **Autogestão da assinatura pelo lojista** | Dado um tenant ativo, quando o ADMIN faz upgrade, então limites novos valem imediatamente com cobrança proporcional; quando faz downgrade, então vale no próximo ciclo e o uso atual é validado contra os novos limites; quando cancela, então mantém acesso até o fim do ciclo pago. |
+| R16 | **Cobrança recorrente + inadimplência + suspensão (dunning)** | Dado uma fatura vencida não paga, quando decorre a régua (D+1, D+3, D+7 de tentativas/avisos), então o tenant é notificado e, ao esgotar, entra em `SUSPENSA` (somente leitura, sync pausado); ao pagar, é reativado sem perda de dados. |
+| R17 | **Backoffice de gestão de tenants (staff)** | Dado um staff autenticado, quando abre o backoffice, então lista/filtra tenants por status/plano/uso e abre a ficha de um tenant (plano, faturas, saúde, uso vs. limite). |
+| R18 | **Papéis de staff da plataforma** (super-admin/suporte/financeiro) | Dado um usuário `SUPORTE`, quando tenta editar dados de cobrança, então é negado (403); papéis de staff são **separados** do RBAC `ADMIN`/`OPERADOR` do tenant (R8) e vivem em `plataforma.staff`. |
+| R19 | **Enforcement de limites do plano** | Dado um tenant no limite de canais/usuários/SKUs, quando tenta exceder, então a ação é bloqueada (Problem Details) com CTA de upgrade; para **pedidos/mês** o pedido **é sempre importado** e o excedente gera alerta/gatilho de upgrade — **nunca descarta pedido** (preserva O1/O4). |
+| R20 | **Ciclo de vida do trial** | Dado um trial expirado sem conversão, quando a data passa, então o tenant vai a modo **leitura/graça** por 7 dias (dados preservados, sync pausado); ao assinar dentro da graça, retoma sem reprovisionar. |
+| R21 | **Impersonação auditada pelo suporte** | Dado um suporte acessando um tenant, quando entra em modo impersonação, então gera registro imutável (quem, quando, tenant, duração) visível ao super-admin (P3/P9). |
+| R22 | **Ajuda de tela (manual de operação) + vídeo em TODA tela** | Dado qualquer tela do produto (ERP/backoffice/site), quando o usuário aciona a ajuda, então vê o manual de operação da tela (objetivo + passo a passo) e um acesso a vídeo explicativo (ou "em breve" se o vídeo ainda não existir). Nenhuma tela sem ajuda (§3.7.1). |
 
 ### Nice-to-Have (P1)
 
@@ -111,6 +156,8 @@ Prioridade decrescente:
 **Lagging (meses):** cancelamentos por falta de estoque (meta 0); retenção dos lojistas-piloto em 90 dias (meta ≥ 80%); tempo médio diário de operação manual (meta −80% vs. baseline).
 Medição: métricas expostas via endpoint `/actuator` + tabela de eventos; avaliação em 30/60/90 dias pós-go-live.
 
+**Funil SaaS (v2.0 — detalhado no `docs/PLANO-DE-NEGOCIO.md`):** conversão visitante→signup; signup→trial ativo; **trial→paid (meta ≥ 20%)**; % de trials no aha moment ≤ 7 dias (meta ≥ 60%); MRR/ARR; churn de receita mensal (meta ≤ 4%); NRR (meta ≥ 100%); inadimplência mensal (meta ≤ 5%) e recuperação por dunning (meta ≥ 50% das falhas de cartão).
+
 ## 2.7 Questões Abertas
 
 | # | Questão | Responsável | Bloqueante? |
@@ -120,8 +167,23 @@ Medição: métricas expostas via endpoint `/actuator` + tabela de eventos; aval
 | Q3 | Limite de rate das APIs (ML: ~X req/s por app) comporta quantos lojistas por app credential? | Engenharia | Não |
 | Q4 | Precisamos de LGPD DPA com os marketplaces para dados de comprador? | Jurídico | Não |
 | Q5 | <span style="color:red">🔴 O módulo `financeiro` (caixa, crediário, contas a pagar/receber, conta corrente) do schema legado entra no v1 ou fica para depois? (ver §3.3.7)</span> | Produto + Eng | Sim |
-| Q6 | <span style="color:red">🔴 Multi-empresa: manter `id_empresa` desde já (preparando P2) ou remover no v1? (ver §3.3.2)</span> | Produto + Eng | Sim |
+| Q6 | ✅ **Fechada (v2.0):** manter `id_empresa` **e** adicionar `id_tenant` como chave de isolamento. Relação `tenant 1:N empresa` (1:1 no v1). Ver §3.1.1 / ADR-006. | Produto + Eng | — |
 | Q7 | <span style="color:red">🔴 SKU = EAN (código de barras) ou código interno + coluna `ean` separada? (ver §3.3.3)</span> | Produto + Eng | Sim |
+
+**Decisões de negócio do SaaS (v2.0) — detalhadas em `docs/PLANO-DE-NEGOCIO.md`:**
+
+| # | Decisão | Situação |
+|---|---------|----------|
+| D1 | Preços dos 3 planos (Essencial/Profissional/Escala) e desconto anual | 🔴 Aberta (placeholders R$ 99 / 249 / 599) |
+| D2 | Trial: 14 dias, **sem cartão**, expondo o plano Profissional | ✅ Decidida |
+| D3 | Gateway de cobrança (PIX/boleto/cartão recorrente) | 🔴 **Adiada** — modelar via adapter abstrato; cobrança manual no início |
+| D4 | Multi-CNPJ por tenant como recurso de plano / P2 | ✅ Decidida (1 CNPJ/tenant no v1) |
+| D5 | Nome comercial "Niner" (DB `niner_db`) + domínio do site | 🔴 Confirmar |
+| D6 | NFS-e da assinatura (Vetor→lojista): emissor/município | 🔴 Aberta |
+| D7 | Overage de pedidos/mês: nunca descartar, só gatilhar upgrade | ✅ Recomendada (R19) |
+| D8 | Régua de dunning (avisos D+1/D+3/D+7, suspensão ~15d, graça 7d) | 🔴 Confirmar |
+| D9 | Metas numéricas (MRR, trial→paid, churn) para GA+6m | 🔴 Aberta |
+| D10 | Estado `INADIMPLENTE`: ERP em modo leitura/aviso vs bloqueio total | 🔴 Aberta (regra do gate de login) |
 
 ---
 
@@ -130,21 +192,32 @@ Medição: métricas expostas via endpoint `/actuator` + tabela de eventos; aval
 ## 3.1 Arquitetura (monolito modular)
 
 ```
-┌────────────┐   HTTPS/JSON    ┌──────────────────────────────────────┐
-│  React SPA │ ──────────────► │  API Java 25 · Spring Boot 4.x       │
-│  (Vite)    │                 │                                      │
-└────────────┘                 │  módulos (packages):                 │
-                               │   catalogo/  estoque/  pedidos/      │
-      webhooks ──────────────► │   precos/    canais/   identidade/   │
-   (ML, Shopee, ...)           │   integracao/{mercadolivre,shopee}   │
-                               │                                      │
-                               │  outbox + scheduler (retry/poll)     │
-                               └──────────────┬───────────────────────┘
-                                              │ JDBC
-                                       ┌──────▼──────┐
-                                       │ PostgreSQL18│  (Docker)
-                                       └─────────────┘
+ 3 apps React (Vite) — cada um lê a base-URL da API em RUNTIME (não no build):
+ ┌───────────────┐   ┌───────────────┐   ┌───────────────┐
+ │ site/ público │   │ web/ ERP      │   │ admin/ backof.│
+ │ (aquisição/   │   │ (lojista)     │   │ (plataforma)  │
+ │  trial)       │   │               │   │               │
+ └──────┬────────┘   └──────┬────────┘   └──────┬────────┘
+   /api/publico/**     /api/v1/**          /api/admin/**
+        │                   │                   │
+        ▼                   ▼                   ▼
+ ┌──────────────────────────────────────────────────────────┐
+ │  API Java 25 · Spring Boot 4.x  (STATELESS — N instâncias)│
+ │  3 SecurityFilterChain (publico / tenant / plataforma)   │
+ │  módulos: catalogo/ estoque/ pedidos/ precos/ canais/    │
+ │           identidade/ integracao/{mercadolivre,shopee}   │
+ │           financeiro/(Q5)  ·  plataforma/  ← control-plane│
+ │  outbox + scheduler (retry/poll) · TenantContext + RLS   │
+ └──────────────────────────┬───────────────────────────────┘
+   webhooks (ML/Shopee,      │ JDBC (role niner_app, SEM BYPASSRLS)
+   gateway de cobrança) ─────┘
+                      ┌──────▼──────┐
+                      │ PostgreSQL18│  banco niner_db (Docker)
+                      │  RLS FORCE  │
+                      └─────────────┘
 ```
+
+**Topologia (ADR-007).** **Uma** API (monólito modular, P6) expõe **três superfícies** por prefixo de path, cada uma com seu `SecurityFilterChain`: `/api/publico/**` (site: signup, checkout, trial — sem auth ou auth leve), `/api/v1/**` (ERP do tenant — JWT de tenant, RLS ativo), `/api/admin/**` (backoffice da plataforma — JWT de staff, opera em `plataforma.*`). Três apps React independentes: **`site/`** (público), **`web/`** (ERP do lojista) e **`admin/`** (backoffice). A separação pedida ("api e front separados") é de **superfície e front-end**, não de processo. A **API é stateless** (JWT, sem sessão/afinidade) e cada front lê a **base-URL da API em runtime** (arquivo de config/env servido, não embutido no bundle) — assim é possível rodar **2 servidores com 2 instâncias** da API e trocar o endereço para manutenção/failover. *Gatilhos para separar o control-plane em serviço próprio depois: janela de manutenção independente, compliance de dados de cartão em rede isolada, ou scale-out do ERP que torne caro arrastar a plataforma junto.*
 
 > <span style="color:red">🔴 O schema legado (`db/*.txt`) traz também um módulo **`financeiro`** (caixa, crediário, contas a pagar/receber, conta corrente) não representado neste diagrama. Confirmar se entra no v1 e, em caso positivo, adicioná-lo aqui — ver §3.3.7 e Q5.</span>
 
@@ -155,6 +228,17 @@ Decisões-chave (registrar cada uma como ADR — template na seção 6):
 - **Outbox pattern:** mutações de estoque/preço gravam evento na tabela `outbox_eventos` na mesma transação; um worker (Spring `@Scheduled` no v1; fila dedicada só se necessário) publica para os canais com retry exponencial e dead-letter.
 - **Idempotência:** pedidos importados usam chave natural `(canal, id_externo)` com constraint única; webhooks processados registram `webhook_id` recebido.
 - **Sem broker externo no v1** (sem Kafka/RabbitMQ): Postgres como fila via outbox + `SELECT ... FOR UPDATE SKIP LOCKED`. ADR explícito; revisitar se throughput exigir.
+
+### 3.1.1 Isolamento de tenant (multi-tenancy) — ADR-006
+
+**Estratégia: banco único + coluna `id_tenant` + Postgres RLS** (`FORCE ROW LEVEL SECURITY`). Escolhida sobre schema-per-tenant e db-per-tenant por aderência ao P6 (uma instância Postgres, uma migração) e ao ticket baixo do público-alvo (muitos lojistas pequenos). Isolamento imposto pelo kernel do banco = defesa em profundidade além do código (P8).
+
+- **Modelo tenant → empresa:** `tenant (conta_assinante)` **1:N** `empresa`. No v1 é **1:1** (uma assinatura = um CNPJ), mas já nasce 1:N para o multi-CNPJ futuro (P2) sem refazer schema. Fecha **Q6**: mantém-se `id_empresa` (granularidade de negócio: loja/depósito/CNPJ) **e** adiciona-se `id_tenant`.
+- **`id_tenant BIGINT` em toda tabela de domínio** (desnormalização deliberada: RLS usa um predicado simples e indexável, sem join na política). `empresa.id_tenant` FK → `plataforma.tenant`.
+- **Resolução por requisição:** login emite **JWT com claim `tid`** (id_tenant) + `sub` + `roles` (+ `emp`). Um `OncePerRequestFilter` valida a assinatura ativa e popula o **`TenantContext`** (`ScopedValue` no Java 25 / ThreadLocal). Um interceptor executa **`SET LOCAL app.id_tenant = :tid`** no início da transação; as políticas RLS usam `current_setting('app.id_tenant')::bigint`. `SET LOCAL` some no fim da transação (sem vazamento entre conexões do pool). **Defesa dupla:** RLS (garantia dura) + Hibernate `@Filter` (melhores planos de query).
+- **Roles Postgres:** aplicação roda como **`niner_app`** (sem `BYPASSRLS`, não é dona das tabelas); migrations rodam como **`niner_owner`**.
+- **Caminhos sem requisição (P8):** `outbox_evento` carrega `id_tenant`; o worker fica **fora** do RLS de tenant (é infraestrutura da plataforma) e, ao despachar cada evento, estabelece o `TenantContext` a partir de `evento.id_tenant` antes de aplicar efeitos de domínio. Webhook de marketplace resolve o tenant pelo `id_canal` que recebeu a notificação; webhook do gateway de cobrança age em `plataforma.*` (global).
+- **Módulo `plataforma` (control-plane)** é o **único** que enxerga cross-tenant; suas tabelas são **globais** e **não** entram no RLS de tenant (P9). Ver §3.3.11.
 
 ## 3.2 Stack e versões
 
@@ -197,13 +281,18 @@ Aplicar de forma sistemática ao gerar as migrations Flyway a partir de `db/*.tx
 ### 3.3.2 Módulo `identidade` (auth, empresas, permissões)
 
 ```sql
-empresa(id_empresa PK, razao_social, cnpj, inscricao, endereco, numero, bairro,
-        cidade, estado, cep, telefone, email, imagem_relatorio)
-usuario(id_usuario PK, nome_usuario, email UNIQUE, senha_hash,
-        ativo BOOL, administrador BOOL)          -- 'papel' ADMIN/OPERADOR deriva de administrador
+empresa(id_empresa PK, id_tenant FK -> plataforma.tenant, razao_social, cnpj, inscricao,
+        endereco, numero, bairro, cidade, estado, cep, telefone, email, imagem_relatorio)
+-- usuário do TENANT (lojista). email é único POR TENANT, não global.
+usuario(id_usuario PK, id_tenant FK, nome_usuario, email, senha_hash,
+        ativo BOOL, administrador BOOL,          -- papel ADMIN/OPERADOR deriva de administrador (R8)
+        UNIQUE(id_tenant, email))
 usuario_rotina(id_usuario FK, nome_rotina, PK(id_usuario, nome_rotina))  -- permissões finas legadas
 ```
-<span style="color:red">🔴 **Decisão pendente (multi-empresa):** o legado é multi-empresa (`id_empresa` em quase toda tabela), mas o Non-goal §2.3 define v1 = **1 CNPJ por conta**. Decidir: (a) manter a coluna `id_empresa` fixa/default no v1 preparando o P2, ou (b) remover agora e reintroduzir depois. Registrar como ADR.</span>
+> **Duas populações de usuário separadas (P9, R18):** os usuários do lojista ficam em `usuario` (com `id_tenant`, sujeitos a RLS). Os usuários da **plataforma** (staff Vetor: `SUPER_ADMIN`/`SUPORTE`/`FINANCEIRO`) ficam em `plataforma.staff` (global, §3.3.11). **JWTs distintos por `aud`** (`tenant` × `plataforma`): a chain de `/api/v1/**` rejeita token de staff e a de `/api/admin/**` rejeita token de tenant.
+
+**Signup público atômico** (`POST /api/publico/assinar`, R12): numa **única transação** cria `tenant (status=TRIAL)` + `empresa (id_tenant)` + primeiro `usuario` (ADMIN, `senha_hash`) + `assinatura (status=TRIAL, trial_expira_em = now()+14d)` + linha inicial em `plataforma.uso_tenant`; dispara e-mail de boas-vindas via **outbox**. A atomicidade é trivial por tudo estar no mesmo banco/monólito (mais um ponto a favor da topologia de uma API).
+
 <span style="color:red">🔴 Mapear `usuario.administrador` + `usuario_rotina` para os papéis `ADMIN`/`OPERADOR` (R8) — definir se v1 usa RBAC simples (2 papéis) ou mantém as rotinas granulares.</span>
 <span style="color:red">🔴 `senha` do legado é texto — no v1 é **hash** (BCrypt/Argon2) + JWT (P4/R8).</span>
 
@@ -372,6 +461,52 @@ funcionario(id_funcionario PK, nome_funcionario, fone_celular, perc_comissao NUM
 - <span style="color:red">🔴 **Auditoria imutável (P3):** confirmar que `produto_movimento_detalhe`, `pedido`, `anuncio` (sync) cobrem "quem/quando/origem/valor anterior→novo" para estoque **e preço**. Preço hoje não tem histórico — avaliar `produto_preco_historico`.</span>
 - <span style="color:red">🔴 **Cifragem de credenciais (ADR-005):** `canal.credenciais` em `JSONB` cifrado (AES-GCM, chave fora do banco).</span>
 
+### 3.3.11 Módulo `plataforma` (control-plane) — tabelas GLOBAIS
+
+Tabelas do **Plano de Controle** (o negócio da Vetor). São **globais**: **não** têm `id_tenant` como discriminador nem entram nas políticas RLS de tenant (P9). Dinheiro em `NUMERIC` (P7). Não confundir com o módulo `financeiro` do lojista (§3.3.7).
+
+```sql
+-- conta assinante = o tenant
+tenant(id_tenant PK, nome_conta, slug UNIQUE, email_contato,
+       status ENUM('TRIAL','ATIVA','INADIMPLENTE','SUSPENSA','CANCELADA'),
+       criado_em, cancelado_em)
+-- planos de preço (tiers) e seus limites
+plano(id_plano PK, nome, descricao, ciclo_padrao ENUM('MENSAL','ANUAL'),
+      preco_mensal NUMERIC(12,2), preco_anual NUMERIC(12,2), ativo BOOL,
+      limite_canais INT, limite_produtos INT, limite_usuarios INT, limite_pedidos_mes INT)
+assinatura(id_assinatura PK, id_tenant FK, id_plano FK,
+           status ENUM('TRIAL','ATIVA','INADIMPLENTE','SUSPENSA','CANCELADA'),
+           ciclo ENUM('MENSAL','ANUAL'), trial_expira_em TIMESTAMPTZ,
+           inicio_vigencia, fim_vigencia, proxima_cobranca DATE,
+           id_gateway_assinatura VARCHAR,          -- ref da recorrência no gateway
+           criado_em, atualizado_em)
+fatura(id_fatura PK, id_assinatura FK, id_tenant FK, competencia DATE,
+       valor NUMERIC(12,2), vencimento DATE,
+       status ENUM('ABERTA','PAGA','VENCIDA','CANCELADA','ESTORNADA'),
+       id_gateway_cobranca VARCHAR, criado_em)
+pagamento(id_pagamento PK, id_fatura FK, metodo ENUM('PIX','BOLETO','CARTAO'),
+          gateway VARCHAR, id_gateway_transacao VARCHAR, valor NUMERIC(12,2),
+          status ENUM('PENDENTE','CONFIRMADO','FALHOU','ESTORNADO'),
+          pago_em TIMESTAMPTZ, payload_bruto JSONB)
+-- idempotência do gateway (mesmo padrão de webhook_recebido dos marketplaces, §3.3.6)
+webhook_gateway(id PK, gateway VARCHAR, evento_id UNIQUE, tipo, payload JSONB,
+                recebido_em, processado_em, erro)
+-- contadores para enforcement de limites do plano (R19)
+uso_tenant(id_tenant PK/FK, periodo DATE,        -- competência mensal p/ pedidos/mês
+           qtd_canais INT, qtd_produtos INT, qtd_usuarios INT, qtd_pedidos_mes INT,
+           atualizado_em)
+-- staff da plataforma (separado dos usuários do tenant, R18)
+staff(id_staff PK, nome, email UNIQUE, senha_hash, ativo BOOL,
+      papel ENUM('SUPER_ADMIN','SUPORTE','FINANCEIRO'))
+-- impersonação auditada (R21/P3)
+impersonacao_log(id PK, id_staff FK, id_tenant FK, iniciado_em, encerrado_em, motivo)
+```
+Notas:
+- **Adapter de gateway (ADR-008, D3 adiada):** `id_gateway_*` e `pagamento.gateway` são preenchidos por um adapter abstrato; no v1 a cobrança pode ser **manual/registro** até integrar um provedor real (Asaas/Iugu/…).
+- **Efeitos de cobrança idempotentes (P2):** marcar fatura paga, reativar/suspender assinatura passam pelo **outbox**; `webhook_gateway.evento_id UNIQUE` + `FOR UPDATE SKIP LOCKED` no worker.
+- **Enforcement (R19):** `uso_tenant` é atualizado por eventos de domínio (produto criado, canal conectado, pedido importado); um *guard* no caminho de escrita compara `uso_tenant` vs `plano` e bloqueia com Problem Details ao estourar tier estrutural. Pedidos/mês nunca dropam (§R19).
+- **Gate de login do ERP:** tenant `SUSPENSA`/`CANCELADA` → `/api/v1` nega; `INADIMPLENTE` → modo restrito (regra D10, em aberto).
+
 ## 3.4 Contratos de API (amostra do padrão)
 
 ```
@@ -384,9 +519,27 @@ POST   /api/v1/canais/{tipo}/conectar        inicia OAuth (retorna URL)
 GET    /api/v1/canais/{id}/saude             status, fila de erros
 POST   /api/v1/anuncios/{id}/reprocessar     re-sync manual
 POST   /webhooks/mercadolivre                recepção de notificações (público, validado)
+
+# --- Plano de Controle e site público (v2.0) ---
+# superfície pública (site/ — sem auth ou auth leve + rate limit)
+POST   /api/publico/assinar                  signup: cria tenant + admin + trial (14d)  [R12]
+GET    /api/publico/planos                    catálogo de planos e preços               [R11]
+POST   /api/publico/assinaturas/checkout      escolhe plano + inicia pagamento          [R14]
+# superfície do tenant (web/ — autogestão da própria assinatura, JWT de tenant)
+GET    /api/v1/assinatura                     status, plano, uso vs. limites            [R15]
+POST   /api/v1/assinatura/upgrade             troca de plano (proration)                [R15]
+POST   /api/v1/assinatura/cancelar            cancela ao fim do ciclo                    [R15]
+GET    /api/v1/faturas                         faturas do próprio tenant                 [R14]
+# superfície da plataforma (admin/ — JWT de staff, opera em plataforma.*)
+GET    /api/admin/tenants                     lista/filtra tenants (status/plano/uso)   [R17]
+GET    /api/admin/tenants/{id}                ficha do tenant (plano, faturas, saúde)   [R17]
+POST   /api/admin/tenants/{id}/suspender      suspende/reativa                          [R18]
+POST   /api/admin/tenants/{id}/impersonar     token efêmero + log de auditoria          [R21]
+GET    /api/admin/faturas?status=VENCIDA      inadimplência / régua de dunning          [R16]
+POST   /webhooks/gateway                       notificação do gateway (idempotente)      [R16]
 ```
 
-Convenções: versionamento no path; erros no formato Problem Details (RFC 9457); paginação por cursor em listagens; todos os endpoints documentados no OpenAPI antes da implementação (contrato faz parte da spec da feature).
+Convenções: versionamento no path; erros no formato Problem Details (RFC 9457); paginação por cursor em listagens; todos os endpoints documentados no OpenAPI antes da implementação (contrato faz parte da spec da feature). **Multi-tenant:** o tenant vem do claim `tid` do JWT (nunca do path/body) em `/api/v1/**`; `/api/admin/**` usa JWT de staff (`aud=plataforma`) e opera cross-tenant; `/api/publico/**` é anônimo/rate-limited.
 
 ## 3.5 Docker / ambiente
 
@@ -411,14 +564,54 @@ services:
     depends_on:
       db: { condition: service_healthy }
     ports: ["8080:8080"]
-  web:
+  web:                    # ERP do lojista
     build: ./web          # node:22 build → nginx
     ports: ["5173:80"]
+  admin:                  # backoffice da plataforma
+    build: ./admin        # node:22 build → nginx
+    ports: ["5174:80"]
+  site:                   # site público de aquisição + trial
+    build: ./site         # node:22 build → nginx
+    ports: ["5175:80"]
 volumes:
   pgdata:
 ```
 
-Produção: mesma composição + backup diário (`pg_dump` ou WAL-G), segredos via variáveis de ambiente/secret manager, TLS no proxy reverso (Caddy/Traefik/nginx).
+> **Banco:** `POSTGRES_DB` deve ser **`niner_db`** (o `erp` acima é placeholder da v1). A API conecta como role `niner_app` (sem `BYPASSRLS`); migrations Flyway rodam como `niner_owner` (ver §3.1.1 / §3.5.1).
+>
+> **Base-URL da API em runtime (topologia stateless):** os 3 fronts **não** embutem a URL da API no bundle. Cada imagem serve um `config.js`/`env.js` (ou `/config` do nginx) lido em runtime com `API_BASE_URL`; trocar a variável e recarregar aponta o front para outra instância da API. Isso permite **2 servidores com 2 APIs** e failover/manutenção sem rebuild.
+
+Produção: mesma composição + backup diário (`pg_dump` ou WAL-G), segredos via variáveis de ambiente/secret manager, TLS no proxy reverso (Caddy/Traefik/nginx). API stateless → escalar horizontalmente atrás de um balanceador (sem afinidade de sessão).
+
+### 3.5.1 Migrations Flyway — sequência para `niner_db`
+
+Materializadas em `db/migration/`. A **plataforma + tenant + infra de contexto de tenant vêm primeiro** (o `id_tenant` é FK das tabelas de domínio e a função de contexto é base das políticas RLS). Cada migration de domínio aplica as regras de conversão Firebird→Postgres (§3.3.1). Greenfield: **V001 é o baseline** (não há migração in-place; `db/*.txt` é só referência de modelagem). Reversibilidade por scripts de reversão manuais (§7 exige reversível). **Antes das migrations**, o `db/bootstrap/00_roles.sql` (fora do Flyway, superusuário) cria as roles `niner_owner` (dona, roda o Flyway) e `niner_app` (aplicação, **sem `BYPASSRLS`**) — P8.
+
+**Control-plane + infra de tenant (criados — renumerados em ordem contígua):**
+```
+V001  schema plataforma
+V002  contexto de tenant (função plataforma.tenant_atual(); convenção app.id_tenant)
+V003  tipos ENUM do control-plane
+V004  plataforma.tenant            V005  plataforma.plano
+V006  plataforma.assinatura        V007  plataforma.fatura + pagamento
+V008  plataforma.webhook_gateway   V009  plataforma.uso_tenant
+V010  plataforma.staff + impersonacao_log
+V011  grants de niner_app no schema plataforma
+V012  seed dos planos (🔴 preços provisórios — D1)
+```
+**Domínio do lojista (a criar — cada tabela nasce com `id_tenant`):**
+```
+V013+ identidade.empresa (+id_tenant, FK->plataforma.tenant)
+      identidade.usuario (+id_tenant, senha_hash, UNIQUE(id_tenant,email)) + usuario_rotina
+      catalogo (cfg, produto, produto_barra) · estoque (produto_estoque +reservado/minimo,
+      movimento +saldo_apos/origem, balanco) · pedidos (venda; canal+anuncio credenciais
+      cifradas; pedido UNIQUE(canal,id_externo)) · integracao (outbox_evento COM id_tenant;
+      webhook_recebido) · financeiro.* (SÓ se Q5) · cfg_geral (singleton POR tenant) +
+      cliente/fornecedor/funcionario
+V0xx (final) RLS de domínio: ENABLE + FORCE ROW LEVEL SECURITY +
+      USING (id_tenant = plataforma.tenant_atual()) em TODAS as tabelas de tenant + grants
+```
+Racional de RLS num arquivo final: garante que **nenhuma** tabela de tenant fica sem política — auditável num único ponto e testável ("toda tabela de tenant tem RLS" vira teste de P8). As tabelas de `plataforma` são globais (P9) e **não** entram no RLS de tenant.
 
 ## 3.6 Requisitos não funcionais
 
@@ -427,11 +620,72 @@ Produção: mesma composição + backup diário (`pg_dump` ou WAL-G), segredos v
 - **Segurança:** credenciais de canal cifradas em repouso (AES-GCM, chave fora do banco); LGPD — dados de comprador retidos só o necessário; rate limit nos webhooks; validação de assinatura dos webhooks quando o canal oferecer.
 - **Backup/restauração:** RPO 24 h (v1), teste de restore mensal.
 
+## 3.7 Padrão visual e de UI (design system)
+
+Toda tela do frontend segue o **padrão de referência** em [`docs/padroes/cadastro_fornecedor_campos_cinza.html`](docs/padroes/cadastro_fornecedor_campos_cinza.html) — o mockup do Cadastro de Fornecedor ("campos cinza"). Ele é o *golden file* da UI: quando uma decisão de layout/estilo não estiver aqui, ela está no HTML de referência; ao construir componentes React, portar esses padrões para tokens/componentes reutilizáveis (não copiar HTML por tela). O painel lateral "Personalizar cores" do mockup é apenas ferramenta de exploração de paleta — **não** faz parte do produto.
+
+**Design tokens (CSS custom properties).** Todas as cores vêm de variáveis `--*`; nenhum hex literal em componente. Suporte obrigatório a **tema claro e escuro**: default por `@media (prefers-color-scheme)` e override explícito via atributo `data-theme="light|dark"` no elemento raiz (toggle do usuário vence a preferência do sistema). Cada tema mantém seu próprio conjunto de tokens. Paleta base:
+
+| Token | Claro | Escuro | Uso |
+|---|---|---|---|
+| `--ground` | `#f5f4f0` | `#12181a` | fundo da página |
+| `--surface` | `#ffffff` | `#1a2225` | fundo de cards/formulários |
+| `--surface-2` | `#edece6` | `#202a2d` | barras/rodapés |
+| `--field-bg` | `#e4e6e2` | `#2a3336` | fundo dos campos ("cinza") |
+| `--field-text` | `#20262a` | `#e7ecec` | texto dos campos |
+| `--label-color` | `#5c6660` | `#93a19e` | rótulos |
+| `--ink` / `--ink-muted` | `#20262a` / `#5c6660` | `#e7ecec` / `#93a19e` | texto principal / secundário |
+| `--accent` | `#1f6f6b` (teal) | `#4fbdb2` | ação primária, títulos de seção |
+| `--line` / `--line-strong` | `#dee2dc` / `#b9beb5` | `#2a3538` / `#4a5457` | divisórias / bordas de campo |
+| `--danger` | `#a63d29` | `#e2836a` | erros, marca de obrigatório |
+| `--focus` | = `--accent` | = `--accent` | anel de foco |
+
+**Tipografia.** Corpo em sans do sistema (`-apple-system, "Segoe UI", Roboto…`), 14px, `line-height 1.5`. Títulos (`h1`, `h2`) em **serif** (`Georgia, "Iowan Old Style"…`). Rótulos de seção e *eyebrows* em maiúsculas, `letter-spacing 0.08em`, cor `--accent`. Campos numéricos/documentos (CNPJ, CEP, telefone, valores) usam `font-variant-numeric: tabular-nums` (classe `.mono`).
+
+**Layout.**
+- **Topbar:** eyebrow (breadcrumb) + `<h1>` à esquerda; ações à direita.
+- **Formulário:** card com `--surface`, borda `--line`, `border-radius: 12px` e sombra `--shadow`, dividido em **seções** (`.section`) separadas por linha. Cada seção tem cabeçalho `section-label` (uppercase/accent) + `section-hint` (texto de apoio).
+- **Grid de 12 colunas** (`grid-template-columns: repeat(12,1fr)`, gap `16px 20px`); campos ocupam `col-2/3/4/6/7/12`. Colapsa para 1 coluna em `≤640px`.
+- **Footer-bar:** `--surface-2`, alinhado à direita, com `id-chip` (identificador do registro) à esquerda e botões **Cancelar** (secundário) + **Salvar** (primário).
+
+**Componentes.**
+- **Campo:** `label` (com `*` em `--danger` quando obrigatório) acima de `input`/`select` de fundo `--field-bg`, borda `--line-strong`, `border-radius: 7px`, padding `9px 10px`, largura total. Foco: sem outline default, borda `--focus` + `box-shadow` de 3px com `color-mix`.
+- **Botões:** `.btn` `font-weight 600`, `border-radius 8px`. Primário = `--btn-primary-bg`/`--btn-primary-text`; secundário = transparente com borda `--btn-secondary-border`. Hover por `filter: brightness(0.92)`.
+
+**Acessibilidade (obrigatório).** `:focus-visible` com `outline: 2px solid var(--focus)` em todo controle; `aria-label` em botões de ícone; `aria-pressed` em toggles; regiões de feedback com `aria-live="polite"`; contraste AA nos dois temas. Português em todos os rótulos e no vocabulário de domínio (§CLAUDE.md).
+
+**Responsivo.** Breakpoints em `960px` (painéis laterais viram bloco) e `640px` (grid colapsa, paddings reduzidos). Imagens/tabelas largas rolam em contêiner próprio, nunca a página.
+
+Convenção de nomes de campo no mockup segue os identificadores legados em MAIÚSCULAS (`RAZAO_SOCIAL`, `CNPJ`); no produto, os nomes de campos da API seguem o contrato REST (§3.4) — o mockup ilustra layout, não o contrato.
+
+### 3.7.1 Ajuda da tela (manual de operação) + vídeo — **obrigatório em toda tela**
+
+**Regra (R22):** **toda tela** do produto (ERP `web/`, backoffice `admin/`, site `site/`) tem um componente padrão de **Ajuda** que explica e detalha o uso daquela tela (um *manual de operação* contextual) e um ponto **preparado para direcionar a um vídeo explicativo**. Sem exceção — telas sem ajuda não passam no gate de aprovação de spec.
+
+- **Componente `AjudaDaTela`** (parte do design system): botão/ícone de ajuda (ex.: `?`) fixo no cabeçalho da tela (junto do `eyebrow`/`h1` do §3.7), que abre um painel/drawer lateral com:
+  - **Título + objetivo** da tela (o que ela resolve, para qual persona).
+  - **Passo a passo** de operação (o "como fazer" — o manual), incluindo campos obrigatórios, validações e ações do rodapé (`footer-bar`).
+  - **Dicas/erros comuns** e o que fazer.
+  - **Botão "Assistir vídeo"** que direciona ao vídeo explicativo da tela.
+- **Fonte do conteúdo (API-first, P4):** o texto da ajuda e a URL do vídeo **não** são hard-coded no front. Vêm de um catálogo de ajuda versionado, servido pela API — proposta de modelo:
+  ```sql
+  -- 🔴 a criar (migration futura): catálogo de ajuda por tela (global; conteúdo institucional, não é dado de tenant)
+  ajuda_tela(chave_tela PK,        -- ex.: 'catalogo.produto.form'
+             titulo, objetivo, passos JSONB,   -- passos = lista ordenada de instruções
+             url_video,            -- link do vídeo explicativo (pode ser NULL até gravar)
+             versao, atualizado_em)
+  ```
+  Cada tela declara sua `chave_tela`; o front busca `GET /api/v1/ajuda/{chave_tela}` (ou `/api/publico`, `/api/admin` conforme a superfície) e renderiza o painel. `url_video` **NULL** ⇒ o botão "Assistir vídeo" aparece como *"em breve"* (a tela já nasce **preparada** para o vídeo, mesmo antes de ele existir).
+- **Acessibilidade:** o gatilho de ajuda tem `aria-label`; o painel é focável e fecha com `Esc`; o link de vídeo abre em nova aba com `rel="noopener"`.
+- **Rastreabilidade spec-driven:** cada **Spec de Feature** (§5) descreve a ajuda da(s) sua(s) tela(s) — ver o campo *"Ajuda da tela"* no template. O critério de aceitação correspondente vira teste (P5): a tela expõe o gatilho de ajuda e carrega o conteúdo da `chave_tela`.
+
 ---
 
 # 4. Fases e Tasks (macro)
 
-**Fase 0 — Fundação (1–2 semanas):** repositório mono (api/ web/), Docker Compose, CI (build + testes + Testcontainers), esqueleto Spring Boot com módulos, Flyway, auth JWT, layout base do React.
+**Fase 0 — Fundação (1–2 semanas):** repositório mono (api/ web/ admin/ site/), Docker Compose (db=`niner_db`), CI (build + testes + Testcontainers), esqueleto Spring Boot com módulos **incluindo `plataforma`** e as 3 superfícies (`/api/publico`, `/api/v1`, `/api/admin`), Flyway com a **infra multi-tenant** (roles `niner_app`/`niner_owner`, `TenantContext`, RLS `FORCE` — migrations V001–V091 §3.5.1), auth JWT com claim `tid` + `aud`, **signup/trial** self-service (R12/R20) e layout base dos fronts seguindo o design system (§3.7). *Gate:* teste de isolamento (P8) verde — um tenant nunca lê dado de outro.
+
+> **Roadmap comercial** (waitlist → design partners → closed/open beta com cobrança → GA) em `docs/PLANO-DE-NEGOCIO.md`, alinhado a estas fases.
 
 **Fase 1 — Núcleo do ERP (3–4 semanas):** R1, R2, R8, R9 — catálogo, estoque, movimentações, venda manual. *Gate:* todos os critérios de aceitação com teste verde.
 
@@ -465,6 +719,9 @@ Autor: · Data: · Módulo(s): · Fase:
 ## Impacto no contrato de API
 [endpoints novos/alterados — trecho OpenAPI]
 
+## Ajuda da tela (manual de operação + vídeo) — obrigatório (R22 / §3.7.1)
+[para cada tela nova/alterada: `chave_tela`; objetivo; passo a passo do manual; erros comuns; url_video (ou "a gravar"). A tela deve nascer preparada para o vídeo mesmo sem ele.]
+
 ## Impacto no banco
 [migration Flyway prevista]
 
@@ -496,7 +753,7 @@ Data: · Decisores:
 Positivas: · Negativas/dívidas: · Gatilho de revisão: [métrica ou evento que faria rever]
 ```
 
-ADRs já previstos: ADR-001 monolito modular; ADR-002 outbox sobre Postgres sem broker; ADR-003 biblioteca de UI; ADR-004 estratégia de reserva de estoque (depende de Q2); ADR-005 cifragem de credenciais.
+ADRs já previstos: ADR-001 monolito modular; ADR-002 outbox sobre Postgres sem broker; ADR-003 biblioteca de UI; ADR-004 estratégia de reserva de estoque (depende de Q2); ADR-005 cifragem de credenciais; **ADR-006 isolamento de tenant (banco único + `id_tenant` + Postgres RLS; §3.1.1); ADR-007 topologia do control-plane (uma API/3 superfícies + 3 apps React, API stateless, supera o non-goal §2.3, gatilhos de split); ADR-008 adapter de gateway de cobrança (provedor a definir — D3); ADR-009 auth/identidade multi-tenant (duas populações de usuário, claims JWT por `aud`, papéis de staff × RBAC do tenant).**
 
 # 7. Template — Task
 
@@ -519,5 +776,7 @@ Dependências: TASK-XXX
 - [ ] Critérios de aceitação testáveis e sem palavras ambíguas ("rápido", "intuitivo")
 - [ ] Non-goals explícitos
 - [ ] Contrato de API e migration esboçados
-- [ ] Nenhuma violação da Constituição (P1–P7)
+- [ ] Nenhuma violação da Constituição (P1–P9)
+- [ ] Multi-tenant: recurso isolado por `id_tenant` + política RLS (P8); nada de plataforma misturado com dado de lojista (P9)
+- [ ] Toda tela nova/alterada tem ajuda (manual de operação) + acesso a vídeo, com `chave_tela` definida (R22 / §3.7.1)
 - [ ] Questões bloqueantes respondidas

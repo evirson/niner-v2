@@ -1,0 +1,839 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Cadastro de Fornecedor — Campos Cinza</title>
+<style>
+  :root {
+    --ground: #f5f4f0;
+    --surface: #ffffff;
+    --surface-2: #edece6;
+    --field-bg: #e4e6e2;
+    --field-text: #20262a;
+    --label-color: #5c6660;
+    --ink: #20262a;
+    --ink-muted: #5c6660;
+    --accent: #1f6f6b;
+    --accent-hover: #185754;
+    --accent-ink: #ffffff;
+    --btn-primary-bg: #1f6f6b;
+    --btn-primary-text: #ffffff;
+    --btn-secondary-border: #b9beb5;
+    --btn-secondary-text: #20262a;
+    --line: #dee2dc;
+    --line-strong: #b9beb5;
+    --danger: #a63d29;
+    --danger-bg: #f7e9e4;
+    --focus: #1f6f6b;
+    --shadow: 0 1px 2px rgba(30, 40, 38, 0.06), 0 8px 24px rgba(30, 40, 38, 0.08);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --ground: #12181a;
+      --surface: #1a2225;
+      --surface-2: #202a2d;
+      --field-bg: #2a3336;
+      --field-text: #e7ecec;
+      --label-color: #93a19e;
+      --ink: #e7ecec;
+      --ink-muted: #93a19e;
+      --accent: #4fbdb2;
+      --accent-hover: #6ccec4;
+      --accent-ink: #08201e;
+      --btn-primary-bg: #4fbdb2;
+      --btn-primary-text: #08201e;
+      --btn-secondary-border: #4a5457;
+      --btn-secondary-text: #e7ecec;
+      --line: #2a3538;
+      --line-strong: #4a5457;
+      --danger: #e2836a;
+      --danger-bg: #2a1f1c;
+      --focus: #4fbdb2;
+      --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 24px rgba(0, 0, 0, 0.35);
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --ground: #12181a;
+    --surface: #1a2225;
+    --surface-2: #202a2d;
+    --field-bg: #2a3336;
+    --field-text: #e7ecec;
+    --label-color: #93a19e;
+    --ink: #e7ecec;
+    --ink-muted: #93a19e;
+    --accent: #4fbdb2;
+    --accent-hover: #6ccec4;
+    --accent-ink: #08201e;
+    --btn-primary-bg: #4fbdb2;
+    --btn-primary-text: #08201e;
+    --btn-secondary-border: #4a5457;
+    --btn-secondary-text: #e7ecec;
+    --line: #2a3538;
+    --line-strong: #4a5457;
+    --danger: #e2836a;
+    --danger-bg: #2a1f1c;
+    --focus: #4fbdb2;
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 24px rgba(0, 0, 0, 0.35);
+  }
+
+  :root[data-theme="light"] {
+    --ground: #f5f4f0;
+    --surface: #ffffff;
+    --surface-2: #edece6;
+    --field-bg: #e4e6e2;
+    --field-text: #20262a;
+    --label-color: #5c6660;
+    --ink: #20262a;
+    --ink-muted: #5c6660;
+    --accent: #1f6f6b;
+    --accent-hover: #185754;
+    --accent-ink: #ffffff;
+    --btn-primary-bg: #1f6f6b;
+    --btn-primary-text: #ffffff;
+    --btn-secondary-border: #b9beb5;
+    --btn-secondary-text: #20262a;
+    --line: #dee2dc;
+    --line-strong: #b9beb5;
+    --danger: #a63d29;
+    --danger-bg: #f7e9e4;
+    --focus: #1f6f6b;
+    --shadow: 0 1px 2px rgba(30, 40, 38, 0.06), 0 8px 24px rgba(30, 40, 38, 0.08);
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    font-size: 14px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 18px 32px;
+    border-bottom: 1px solid var(--line);
+    background: var(--surface);
+  }
+
+  .topbar-titles {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .eyebrow {
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--ink-muted);
+  }
+
+  h1 {
+    font-family: Georgia, "Iowan Old Style", "Palatino Linotype", serif;
+    font-size: 22px;
+    font-weight: 600;
+    margin: 0;
+    text-wrap: balance;
+  }
+
+  .topbar-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .theme-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 14px;
+    border: 1px solid var(--line-strong);
+    border-radius: 8px;
+    background: var(--surface);
+    color: var(--ink);
+    font-size: 13px;
+    cursor: pointer;
+  }
+  .theme-toggle:hover { border-color: var(--accent); }
+  .theme-toggle:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+  .color-panel.is-hidden { display: none; }
+
+  .layout {
+    display: flex;
+    align-items: flex-start;
+    gap: 24px;
+    max-width: 1220px;
+    margin: 0 auto;
+    padding: 32px 24px 64px;
+  }
+
+  main {
+    flex: 1;
+    min-width: 0;
+  }
+
+  form {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    box-shadow: var(--shadow);
+    overflow: hidden;
+  }
+
+  .section {
+    padding: 24px 32px;
+    border-bottom: 1px solid var(--line);
+  }
+  .section:last-of-type { border-bottom: none; }
+
+  .section-header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    margin-bottom: 18px;
+  }
+
+  .section-label {
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--accent);
+    font-weight: 700;
+  }
+
+  .section-hint {
+    font-size: 12px;
+    color: var(--ink-muted);
+  }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(12, 1fr);
+    gap: 16px 20px;
+  }
+
+  .field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 0;
+  }
+
+  .field label {
+    font-size: 12.5px;
+    color: var(--label-color);
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .required-mark { color: var(--danger); }
+
+  .field input,
+  .field select {
+    font: inherit;
+    color: var(--field-text);
+    background: var(--field-bg);
+    border: 1px solid var(--line-strong);
+    border-radius: 7px;
+    padding: 9px 10px;
+    width: 100%;
+  }
+
+  .field input::placeholder { color: var(--label-color); opacity: 0.7; }
+
+  .field input:focus-visible,
+  .field select:focus-visible {
+    outline: none;
+    border-color: var(--focus);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--focus) 22%, transparent);
+  }
+
+  .field.mono input { font-variant-numeric: tabular-nums; letter-spacing: 0.02em; }
+
+  .col-12 { grid-column: span 12; }
+  .col-7  { grid-column: span 7; }
+  .col-6  { grid-column: span 6; }
+  .col-4  { grid-column: span 4; }
+  .col-3  { grid-column: span 3; }
+  .col-2  { grid-column: span 2; }
+
+  @media (max-width: 640px) {
+    .col-7, .col-6, .col-4, .col-3, .col-2 { grid-column: span 12; }
+    .section { padding: 20px; }
+    .topbar { padding: 16px 20px; }
+  }
+
+  .color-panel {
+    width: 272px;
+    flex-shrink: 0;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    box-shadow: var(--shadow);
+    padding: 20px;
+    position: sticky;
+    top: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+
+  .panel-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding-top: 16px;
+    border-top: 1px solid var(--line);
+  }
+
+  .save-feedback {
+    font-size: 12px;
+    color: var(--accent);
+    min-height: 16px;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+  }
+  .save-feedback.visible { opacity: 1; }
+
+  .color-panel h2 {
+    font-family: Georgia, "Iowan Old Style", "Palatino Linotype", serif;
+    font-size: 16px;
+    font-weight: 600;
+    margin: 0;
+  }
+
+  .color-panel p.panel-hint {
+    margin: -12px 0 0;
+    font-size: 12px;
+    color: var(--ink-muted);
+  }
+
+  .color-group {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding-top: 16px;
+    border-top: 1px solid var(--line);
+  }
+  .color-group:first-of-type { padding-top: 0; border-top: none; }
+
+  .color-group-title {
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--accent);
+    font-weight: 700;
+  }
+
+  .color-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+  }
+
+  .toggle-row input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    accent-color: var(--accent);
+    cursor: pointer;
+  }
+
+  .bold-fields .field input,
+  .bold-fields .field select {
+    font-weight: 700;
+    letter-spacing: 0.02em;
+  }
+
+  .color-row label {
+    font-size: 12.5px;
+    color: var(--ink);
+  }
+
+  .color-inputs {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .color-inputs input[type="color"] {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 30px;
+    height: 30px;
+    padding: 0;
+    border: 1px solid var(--line-strong);
+    border-radius: 7px;
+    background: none;
+    cursor: pointer;
+  }
+  .color-inputs input[type="color"]::-webkit-color-swatch-wrapper { padding: 2px; }
+  .color-inputs input[type="color"]::-webkit-color-swatch { border: none; border-radius: 5px; }
+  .color-inputs input[type="color"]:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+  .color-inputs input.hex-input {
+    width: 74px;
+    font: inherit;
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+    color: var(--ink);
+    background: var(--ground);
+    border: 1px solid var(--line-strong);
+    border-radius: 7px;
+    padding: 6px 8px;
+  }
+  .color-inputs input.hex-input:focus-visible {
+    outline: none;
+    border-color: var(--focus);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--focus) 22%, transparent);
+  }
+
+  @media (max-width: 960px) {
+    .layout { flex-direction: column; }
+    .color-panel { width: 100%; position: static; order: -1; }
+  }
+
+  .footer-bar {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 12px;
+    padding: 20px 32px;
+    background: var(--surface-2);
+  }
+
+  .btn {
+    font: inherit;
+    font-weight: 600;
+    padding: 10px 20px;
+    border-radius: 8px;
+    border: 1px solid transparent;
+    cursor: pointer;
+  }
+  .btn:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+  .btn-primary {
+    background: var(--btn-primary-bg);
+    color: var(--btn-primary-text);
+  }
+  .btn-primary:hover { filter: brightness(0.92); }
+
+  .btn-secondary {
+    background: transparent;
+    color: var(--btn-secondary-text);
+    border-color: var(--btn-secondary-border);
+  }
+  .btn-secondary:hover { filter: brightness(0.92); }
+
+  .id-chip {
+    font-size: 12px;
+    color: var(--ink-muted);
+    font-variant-numeric: tabular-nums;
+    background: var(--surface-2);
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    padding: 4px 12px;
+    margin-right: auto;
+  }
+</style>
+</head>
+<body>
+
+  <div class="topbar">
+    <div class="topbar-titles">
+      <span class="eyebrow">Fornecedores &rsaquo; Novo cadastro</span>
+      <h1>Cadastro de Fornecedor</h1>
+    </div>
+    <div class="topbar-actions">
+      <button type="button" class="theme-toggle" id="panelToggle" aria-label="Mostrar ou esconder painel de cores" aria-pressed="true">
+        <span>&#127912;</span>
+        <span id="panelToggleLabel">Esconder cores</span>
+      </button>
+      <button type="button" class="theme-toggle" id="themeToggle" aria-label="Alternar tema claro ou escuro">
+        <span id="themeIcon">&#9789;</span>
+        <span id="themeLabel">Tema escuro</span>
+      </button>
+    </div>
+  </div>
+
+  <div class="layout">
+  <main>
+    <form id="fornecedorForm" novalidate>
+
+      <div class="section">
+        <div class="section-header">
+          <span class="section-label">Identificação</span>
+          <span class="section-hint">Dados fiscais e contábeis</span>
+        </div>
+        <div class="grid">
+          <div class="field col-12">
+            <label for="razaoSocial">Razão social <span class="required-mark">*</span></label>
+            <input type="text" id="razaoSocial" name="RAZAO_SOCIAL" maxlength="100" placeholder="Ex.: Distribuidora Aço Forte Ltda" value="VETOR SISTEMAS LTDA" required>
+          </div>
+          <div class="field col-4 mono">
+            <label for="cnpj">CNPJ</label>
+            <input type="text" id="cnpj" name="CNPJ" maxlength="20" placeholder="00.000.000/0000-00" inputmode="numeric" value="06.994.660/0001-11">
+          </div>
+          <div class="field col-4 mono">
+            <label for="inscricao">Inscrição estadual</label>
+            <input type="text" id="inscricao" name="INSCRICAO" maxlength="20" placeholder="Isento ou número" value="ISENTO">
+          </div>
+          <div class="field col-4 mono">
+            <label for="planoContas">Plano de contas <span class="required-mark">*</span></label>
+            <input type="text" id="planoContas" name="ID_PLANO_CONTAS" maxlength="13" placeholder="0000.00.0000" value="8400.00.00125" required>
+          </div>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-header">
+          <span class="section-label">Endereço</span>
+          <span class="section-hint">Localização do fornecedor</span>
+        </div>
+        <div class="grid">
+          <div class="field col-6">
+            <label for="endereco">Endereço</label>
+            <input type="text" id="endereco" name="ENDERECO" maxlength="100" placeholder="Rua, avenida..." value="ROD. BR 116 - LINHA VERDE">
+          </div>
+          <div class="field col-2 mono">
+            <label for="numero">Número</label>
+            <input type="text" id="numero" name="NUMERO" maxlength="10" placeholder="123" value="2563">
+          </div>
+          <div class="field col-4">
+            <label for="bairro">Bairro</label>
+            <input type="text" id="bairro" name="BAIRRO" maxlength="40" placeholder="Bairro" value="VILA FANY">
+          </div>
+          <div class="field col-7">
+            <label for="cidade">Cidade</label>
+            <input type="text" id="cidade" name="CIDADE" maxlength="40" placeholder="Cidade" value="CURITIBA">
+          </div>
+          <div class="field col-2">
+            <label for="estado">UF</label>
+            <select id="estado" name="ESTADO">
+              <option value="">--</option>
+              <option>AC</option><option>AL</option><option>AP</option><option>AM</option>
+              <option>BA</option><option>CE</option><option>DF</option><option>ES</option>
+              <option>GO</option><option>MA</option><option>MT</option><option>MS</option>
+              <option>MG</option><option>PA</option><option>PB</option><option selected>PR</option>
+              <option>PE</option><option>PI</option><option>RJ</option><option>RN</option>
+              <option>RS</option><option>RO</option><option>RR</option><option>SC</option>
+              <option>SP</option><option>SE</option><option>TO</option>
+            </select>
+          </div>
+          <div class="field col-3 mono">
+            <label for="cep">CEP</label>
+            <input type="text" id="cep" name="CEP" maxlength="10" placeholder="00000000" inputmode="numeric" value="80.250-125">
+          </div>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-header">
+          <span class="section-label">Contato</span>
+          <span class="section-hint">Como falar com o fornecedor</span>
+        </div>
+        <div class="grid">
+          <div class="field col-4 mono">
+            <label for="telefone">Telefone</label>
+            <input type="text" id="telefone" name="TELEFONE" maxlength="20" placeholder="(00) 00000-0000" inputmode="tel" value="(41) 3094-5480">
+          </div>
+          <div class="field col-4">
+            <label for="contato">Contato</label>
+            <input type="text" id="contato" name="CONTATO" maxlength="50" placeholder="Nome do contato" value="JOSE DA SILVA">
+          </div>
+          <div class="field col-4">
+            <label for="email">E-mail</label>
+            <input type="email" id="email" name="EMAIL" maxlength="100" placeholder="contato@fornecedor.com.br" value="jose@vetorsistemas.com.br">
+          </div>
+        </div>
+      </div>
+
+      <div class="footer-bar">
+        <span class="id-chip">ID_FORNECEDOR: novo</span>
+        <button type="button" class="btn btn-secondary" id="cancelBtn">Cancelar</button>
+        <button type="submit" class="btn btn-primary">Salvar fornecedor</button>
+      </div>
+    </form>
+  </main>
+
+  <aside class="color-panel">
+    <div>
+      <h2>Personalizar cores</h2>
+      <p class="panel-hint">Editando <strong id="panelThemeName">tema claro</strong> — cada tema guarda seu próprio ajuste.</p>
+    </div>
+
+    <div class="color-group">
+      <span class="color-group-title">Fundo</span>
+      <div class="color-row">
+        <label for="c-ground">Fundo da página</label>
+        <div class="color-inputs">
+          <input type="color" id="c-ground" data-var="--ground">
+          <input type="text" class="hex-input" data-var="--ground" maxlength="7" spellcheck="false">
+        </div>
+      </div>
+      <div class="color-row">
+        <label for="c-surface">Fundo do formulário</label>
+        <div class="color-inputs">
+          <input type="color" id="c-surface" data-var="--surface">
+          <input type="text" class="hex-input" data-var="--surface" maxlength="7" spellcheck="false">
+        </div>
+      </div>
+    </div>
+
+    <div class="color-group">
+      <span class="color-group-title">Campos (edits)</span>
+      <div class="color-row">
+        <label for="c-field-bg">Fundo dos campos</label>
+        <div class="color-inputs">
+          <input type="color" id="c-field-bg" data-var="--field-bg">
+          <input type="text" class="hex-input" data-var="--field-bg" maxlength="7" spellcheck="false">
+        </div>
+      </div>
+      <div class="color-row">
+        <label for="c-field-text">Texto dos campos</label>
+        <div class="color-inputs">
+          <input type="color" id="c-field-text" data-var="--field-text">
+          <input type="text" class="hex-input" data-var="--field-text" maxlength="7" spellcheck="false">
+        </div>
+      </div>
+      <div class="color-row toggle-row">
+        <label for="boldToggle">Negrito no conteúdo</label>
+        <input type="checkbox" id="boldToggle">
+      </div>
+    </div>
+
+    <div class="color-group">
+      <span class="color-group-title">Labels</span>
+      <div class="color-row">
+        <label for="c-label">Cor das labels</label>
+        <div class="color-inputs">
+          <input type="color" id="c-label" data-var="--label-color">
+          <input type="text" class="hex-input" data-var="--label-color" maxlength="7" spellcheck="false">
+        </div>
+      </div>
+    </div>
+
+    <div class="color-group">
+      <span class="color-group-title">Botões</span>
+      <div class="color-row">
+        <label for="c-btn-primary-bg">Fundo do botão principal</label>
+        <div class="color-inputs">
+          <input type="color" id="c-btn-primary-bg" data-var="--btn-primary-bg">
+          <input type="text" class="hex-input" data-var="--btn-primary-bg" maxlength="7" spellcheck="false">
+        </div>
+      </div>
+      <div class="color-row">
+        <label for="c-btn-primary-text">Texto do botão principal</label>
+        <div class="color-inputs">
+          <input type="color" id="c-btn-primary-text" data-var="--btn-primary-text">
+          <input type="text" class="hex-input" data-var="--btn-primary-text" maxlength="7" spellcheck="false">
+        </div>
+      </div>
+      <div class="color-row">
+        <label for="c-btn-secondary-border">Borda do botão secundário</label>
+        <div class="color-inputs">
+          <input type="color" id="c-btn-secondary-border" data-var="--btn-secondary-border">
+          <input type="text" class="hex-input" data-var="--btn-secondary-border" maxlength="7" spellcheck="false">
+        </div>
+      </div>
+      <div class="color-row">
+        <label for="c-btn-secondary-text">Texto do botão secundário</label>
+        <div class="color-inputs">
+          <input type="color" id="c-btn-secondary-text" data-var="--btn-secondary-text">
+          <input type="text" class="hex-input" data-var="--btn-secondary-text" maxlength="7" spellcheck="false">
+        </div>
+      </div>
+    </div>
+
+    <div class="panel-actions">
+      <button type="button" class="btn btn-primary" id="saveColors">Salvar cores deste tema</button>
+      <button type="button" class="btn btn-secondary" id="resetColors">Restaurar padrão deste tema</button>
+      <span class="save-feedback" id="saveFeedback" aria-live="polite"></span>
+    </div>
+  </aside>
+  </div>
+
+  <script>
+    const root = document.documentElement;
+    const toggle = document.getElementById('themeToggle');
+    const icon = document.getElementById('themeIcon');
+    const label = document.getElementById('themeLabel');
+
+    const PANEL_VISIBLE_KEY = 'fornecedorPainelVisivel';
+    const colorPanel = document.querySelector('.color-panel');
+    const panelToggle = document.getElementById('panelToggle');
+    const panelToggleLabel = document.getElementById('panelToggleLabel');
+
+    function applyPanelVisibility(isVisible) {
+      colorPanel.classList.toggle('is-hidden', !isVisible);
+      panelToggle.setAttribute('aria-pressed', String(isVisible));
+      panelToggleLabel.textContent = isVisible ? 'Esconder cores' : 'Mostrar cores';
+    }
+
+    applyPanelVisibility(localStorage.getItem(PANEL_VISIBLE_KEY) !== '0');
+
+    panelToggle.addEventListener('click', () => {
+      const isVisible = !colorPanel.classList.contains('is-hidden');
+      applyPanelVisibility(!isVisible);
+      localStorage.setItem(PANEL_VISIBLE_KEY, isVisible ? '0' : '1');
+    });
+
+    const PANEL_VARS = [
+      '--ground', '--surface', '--field-bg', '--field-text', '--label-color',
+      '--btn-primary-bg', '--btn-primary-text', '--btn-secondary-border', '--btn-secondary-text',
+    ];
+    const STORAGE_KEY = 'fornecedorCoresCinzaPorTema';
+    const HEX_RE = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i;
+    const themeNameEl = document.getElementById('panelThemeName');
+
+    function getActiveTheme() {
+      const current = root.getAttribute('data-theme');
+      if (current === 'dark' || current === 'light') return current;
+      return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    }
+
+    function currentValue(varName) {
+      return getComputedStyle(root).getPropertyValue(varName).trim() || '#000000';
+    }
+
+    function syncControl(varName, value) {
+      const colorInput = document.querySelector(`input[type="color"][data-var="${varName}"]`);
+      const hexInput = document.querySelector(`input.hex-input[data-var="${varName}"]`);
+      if (colorInput) colorInput.value = value;
+      if (hexInput) hexInput.value = value;
+    }
+
+    function syncAllControls() {
+      PANEL_VARS.forEach((v) => syncControl(v, currentValue(v)));
+    }
+
+    function loadAllOverrides() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        return raw ? JSON.parse(raw) : {};
+      } catch (e) {
+        return {};
+      }
+    }
+
+    function saveAllOverrides(data) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    }
+
+    function updateThemeName() {
+      themeNameEl.textContent = getActiveTheme() === 'dark' ? 'tema escuro' : 'tema claro';
+    }
+
+    function applyThemeOverrides() {
+      PANEL_VARS.forEach((v) => root.style.removeProperty(v));
+      const all = loadAllOverrides();
+      const themeData = all[getActiveTheme()] || {};
+      Object.entries(themeData).forEach(([k, v]) => root.style.setProperty(k, v));
+      syncAllControls();
+      updateThemeName();
+    }
+
+    function previewVar(varName, value) {
+      root.style.setProperty(varName, value);
+      syncControl(varName, value);
+    }
+
+    let feedbackTimer = null;
+    function showFeedback(message) {
+      const el = document.getElementById('saveFeedback');
+      el.textContent = message;
+      el.classList.add('visible');
+      clearTimeout(feedbackTimer);
+      feedbackTimer = setTimeout(() => el.classList.remove('visible'), 2000);
+    }
+
+    function applyLabel() {
+      const isDark = getActiveTheme() === 'dark';
+      icon.innerHTML = isDark ? '&#9789;' : '&#9788;';
+      label.textContent = isDark ? 'Tema escuro' : 'Tema claro';
+    }
+
+    toggle.addEventListener('click', () => {
+      const isDark = getActiveTheme() === 'dark';
+      root.setAttribute('data-theme', isDark ? 'light' : 'dark');
+      applyLabel();
+      applyThemeOverrides();
+    });
+
+    applyLabel();
+    applyThemeOverrides();
+
+    const BOLD_KEY = 'fornecedorCamposNegrito';
+    const boldToggle = document.getElementById('boldToggle');
+
+    function applyBold(isBold) {
+      document.body.classList.toggle('bold-fields', isBold);
+      boldToggle.checked = isBold;
+    }
+
+    applyBold(localStorage.getItem(BOLD_KEY) === '1');
+
+    boldToggle.addEventListener('change', () => {
+      applyBold(boldToggle.checked);
+      localStorage.setItem(BOLD_KEY, boldToggle.checked ? '1' : '0');
+    });
+
+    document.querySelectorAll('input[type="color"][data-var]').forEach((input) => {
+      input.addEventListener('input', () => previewVar(input.dataset.var, input.value));
+    });
+
+    document.querySelectorAll('input.hex-input[data-var]').forEach((input) => {
+      input.addEventListener('change', () => {
+        const val = input.value.trim();
+        if (HEX_RE.test(val)) {
+          previewVar(input.dataset.var, val);
+        } else {
+          syncControl(input.dataset.var, currentValue(input.dataset.var));
+        }
+      });
+    });
+
+    document.getElementById('saveColors').addEventListener('click', () => {
+      const theme = getActiveTheme();
+      const all = loadAllOverrides();
+      all[theme] = all[theme] || {};
+      PANEL_VARS.forEach((v) => {
+        all[theme][v] = currentValue(v);
+      });
+      saveAllOverrides(all);
+      showFeedback('Cores salvas para ' + (theme === 'dark' ? 'o tema escuro' : 'o tema claro') + '.');
+    });
+
+    document.getElementById('resetColors').addEventListener('click', () => {
+      const theme = getActiveTheme();
+      PANEL_VARS.forEach((v) => root.style.removeProperty(v));
+      const all = loadAllOverrides();
+      delete all[theme];
+      saveAllOverrides(all);
+      syncAllControls();
+      showFeedback('Cores restauradas para o padrão.');
+    });
+
+    document.getElementById('fornecedorForm').addEventListener('submit', (e) => {
+      e.preventDefault();
+      console.log('Formulário de teste — sem envio real de dados.');
+    });
+    document.getElementById('cancelBtn').addEventListener('click', () => {
+      document.getElementById('fornecedorForm').reset();
+    });
+  </script>
+
+</body>
+</html>

@@ -4,12 +4,20 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this repository is
 
-A **greenfield, spec-driven ERP** for small retailers that sell both in a physical store and across 2–5 online marketplaces (Mercado Livre, Shopee, Amazon, own e-commerce). The product's job is to make the ERP the single source of truth for stock and price, and to keep every channel in sync automatically (zero overselling).
+A **greenfield, spec-driven ERP** (product name **Niner**, DB `niner_db`) for small retailers that sell both in a physical store and across 2–5 online marketplaces (Mercado Livre, Shopee, Amazon, own e-commerce). The product's job is to make the ERP the single source of truth for stock and price, and to keep every channel in sync automatically (zero overselling).
+
+**As of spec v2.0 it is a multi-tenant SaaS**, sold by subscription. Two planes that must never be conflated:
+- **Control Plane ("Plataforma Niner")** — Vetor's business: tenants, pricing plans, subscriptions, invoices, billing, support. Global tables under module `plataforma/` (outside tenant RLS).
+- **Tenant Plane (the retailer's ERP)** — catalog, stock, orders, channels and the retailer's own internal finance (legacy `financeiro`, scope Q5). Every row isolated by `id_tenant`.
+- Vocabulary rule: *assinatura/plano/trial/mensalidade/gateway* = **platform** (Vetor charges the retailer); *caixa/crediário/contas a pagar-receber/conta corrente da loja* = **retailer's finance**. Never mix.
+
+Acquisition is self-service via a **public site** with a **14-day, no-card trial**; a **backoffice** manages tenants; billing charges subscribers (gateway **to be defined** — modelled behind an abstract adapter, manual billing at first).
 
 **There is no application source code yet.** The repo currently contains only:
-- `spec-driven-erp-varejo.md` — the governing document (Constitution + PRD + technical plan + templates). This is the primary source of truth.
+- `spec-driven-erp-varejo.md` — the governing document (Constitution + PRD + technical plan + templates), **v2.0 (SaaS pivot)**. Primary source of truth.
+- `docs/PLANO-DE-NEGOCIO.md` — the business plan (pricing, funnel, SaaS metrics, roadmap, open decisions D1–D10).
+- `docs/PROGRESSO.md` — progress log. `docs/padroes/` — UI reference mockup (golden file, spec §3.7).
 - `db/*.txt` — a **legacy** Firebird/InterBase schema (DDL, procedures, triggers, generators) from an *existing* retail ERP, kept for reference. It is **not** the schema of the system being built.
-- `docs/` — currently empty.
 - `db/*.RAR` — archived dumps of the legacy database.
 
 Everything below flows from `spec-driven-erp-varejo.md`; read it before making any design decision.
@@ -32,23 +40,27 @@ These override any convenience; do not violate them without a superseding ADR:
 - **P5 — Tests track the spec.** Every acceptance criterion becomes an automated test before merge.
 - **P6 — Simplicity first.** Modular monolith before microservices; one Postgres instance; no external broker (Kafka/RabbitMQ) in v1 — use Postgres as the queue via outbox + `SELECT … FOR UPDATE SKIP LOCKED`.
 - **P7 — Money in `NUMERIC`.** Never float for monetary values — `NUMERIC(12,2)` in the DB, `BigDecimal` in Java. **Note:** the legacy `db/` schema uses `FLOAT` for money; do not carry that forward.
+- **P8 — Tenant isolation is inviolable.** No query crosses a tenant boundary; enforced by the DB via Postgres RLS (`FORCE ROW LEVEL SECURITY`), not just app code. App role `niner_app` never has `BYPASSRLS`; migrations run as `niner_owner`. Every tenant-data table carries `id_tenant` + an RLS policy; `plataforma/` tables are the documented exception. Every non-request path (worker/outbox/webhook) sets the `TenantContext` before touching domain data.
+- **P9 — Plane separation (control-plane × tenant).** Platform data (subscription, invoices, billing) and retailer data never share an access policy. Platform staff reach tenant data only via **audited impersonation** (P3).
 
 ## Intended architecture (spec §3)
 
-Modular monolith. Planned stack: **Java 25 + Spring Boot 4.x**, **PostgreSQL 18** (Docker), **React 19 + Vite + TypeScript**, Flyway migrations, JWT auth (roles `ADMIN` / `OPERADOR`), springdoc-openapi. Tests: JUnit 5, Testcontainers (real Postgres), WireMock (marketplace APIs), Playwright (critical e2e). Virtual threads enabled for integration I/O.
+Modular monolith, **one API with three surfaces** (ADR-007): `/api/publico/**` (public site: signup, checkout, trial), `/api/v1/**` (tenant ERP, JWT `tid` claim + RLS), `/api/admin/**` (platform backoffice, staff JWT). Planned stack: **Java 25 + Spring Boot 4.x**, **PostgreSQL 18** (Docker, DB `niner_db`), **React 19 + Vite + TypeScript**, Flyway migrations, JWT auth (tenant roles `ADMIN`/`OPERADOR`; staff roles `SUPER_ADMIN`/`SUPORTE`/`FINANCEIRO`), springdoc-openapi. Tests: JUnit 5, Testcontainers (real Postgres), WireMock (marketplace APIs), Playwright (critical e2e). Virtual threads enabled for integration I/O. **API is stateless**; the three React apps read the API base-URL at **runtime** (not baked into the bundle) so two API servers can run behind a switchable address for maintenance/failover.
 
-Domain modules (packages): `catalogo/ estoque/ pedidos/ precos/ canais/ identidade/ integracao/{mercadolivre,shopee}`. Modules communicate via Java interfaces + internal domain events.
+**Tenant isolation (ADR-006):** shared DB + `id_tenant` discriminator on every domain table + Postgres RLS. `tenant 1:N empresa` (1:1 in v1). Request resolves tenant from JWT `tid` → `TenantContext` → `SET LOCAL app.id_tenant` per transaction; policies use `current_setting('app.id_tenant')`. Closes legacy Q6: keep `id_empresa` **and** add `id_tenant`.
+
+Domain modules (packages): `catalogo/ estoque/ pedidos/ precos/ canais/ identidade/ integracao/{mercadolivre,shopee}` (+ `financeiro/` if Q5), plus the control-plane module **`plataforma/`** (tenant, plano, assinatura, fatura, pagamento, uso_tenant, staff — global, no tenant RLS). Modules communicate via Java interfaces + internal domain events.
 
 Key patterns:
 - **Adapter / anti-corruption layer per marketplace**, all implementing a common `CanalDeVenda` interface (`publicarAnuncio`, `atualizarEstoque`, `atualizarPreco`, `importarPedidos`, `confirmarEnvio`). The domain never sees ML/Shopee payloads. Adding a second channel (Shopee, §Fase 3) is the test of this design.
 - **Outbox pattern:** stock/price mutations write an event to `outbox_eventos` in the same transaction; a `@Scheduled` worker publishes to channels with exponential backoff + dead-letter.
 - **Idempotency:** imported orders keyed by natural key `(canal, id_externo)` with a unique constraint; processed webhooks record their `webhook_id`.
 
-The new core data model, API contract sample, and docker-compose layout live in spec §3.3–§3.5. The repo layout the plan assumes is `api/` (Spring Boot) and `web/` (React), not yet created.
+The new core data model, API contract sample, and docker-compose layout live in spec §3.3–§3.5 (migration sequence V001–V091 in §3.5.1; control-plane tables in §3.3.11). The repo layout the plan assumes is `api/` (Spring Boot) + three React apps — `web/` (retailer ERP), `admin/` (platform backoffice), `site/` (public acquisition) — none created yet.
 
 ## Build / run
 
-No build tooling exists yet — there is no `pom.xml`, `package.json`, or `docker-compose.yml` in the repo. When scaffolding, follow spec §3.5: dev is `docker compose up` bringing up `db` (postgres:18), `api` (port 8080), `web` (port 5173). Do not invent build/test commands in docs before the corresponding project is scaffolded.
+No build tooling exists yet — there is no `pom.xml`, `package.json`, or `docker-compose.yml` in the repo. When scaffolding, follow spec §3.5: dev is `docker compose up` bringing up `db` (postgres:18, DB `niner_db`), `api` (port 8080), `web` (5173), `admin` (5174), `site` (5175). Do not invent build/test commands in docs before the corresponding project is scaffolded.
 
 ## Conventions to honor when building
 

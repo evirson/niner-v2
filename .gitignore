@@ -1,0 +1,10 @@
+# macOS
+.DS_Store
+
+# Arquivos temporários / scratch
+*.log
+*.tmp
+
+# Descompactação do padrão de telas (mantém-se só o HTML de referência)
+docs/padroes/TELA/
+docs/padroes/*.rar
