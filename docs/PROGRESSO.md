@@ -1,7 +1,7 @@
 # Progresso do Projeto — niner-v2
 
 Registro cronológico das decisões e entregas. Atualizar a cada marco relevante.
-**Última atualização:** 2026-07-08
+**Última atualização:** 2026-07-09
 
 ---
 
@@ -16,6 +16,7 @@ Projeto **spec-driven** em fase de fundação (pré-código). Ainda **não há c
 | `docs/padroes/` | Mockup de referência de UI (golden file, §3.7) — `TELA.rar` descompactado e removido |
 | `db/*.txt` | Schema **legado (Firebird)** versionado como referência (31 tabelas + generators, procedures, triggers) |
 | `CLAUDE.md` | Guia do repositório — atualizado para o SaaS multi-tenant (P8/P9, plataforma, `id_tenant`+RLS) |
+| `docker-compose.yml` | **Novo** — infra local de dev: `db` (postgres:18, `niner_db`) + `flyway` (profile `migrate`); V001–V012 **aplicadas e validadas em banco real** |
 | `api/`, `web/`, `admin/`, `site/` | Ainda não criados (scaffolding pendente) |
 
 **Stack alvo:** Java 25 + Spring Boot 4.x · PostgreSQL 18 (Docker, banco **`niner_db`**) · React 19 + Vite (3 apps) · Flyway · JWT. **SaaS multi-tenant** (banco único + `id_tenant` + Postgres RLS).
@@ -23,6 +24,20 @@ Projeto **spec-driven** em fase de fundação (pré-código). Ainda **não há c
 ---
 
 ## Linha do tempo
+
+### 2026-07-09 — Infra local no ar: Postgres 18 + migrations validadas
+
+1. **`docker-compose.yml` criado** (raiz, spec §3.5) com dois serviços por ora:
+   - `db` — `postgres:18` (banco **`niner_db`**), volume `pgdata`, healthcheck, e `db/bootstrap/` montado em `/docker-entrypoint-initdb.d` (roles criadas no primeiro init).
+   - `flyway` — `flyway/flyway:11` sob profile `migrate`; roda como **`niner_owner`** e aplica `db/migration/`. Uso: `docker compose up -d db` e `docker compose run --rm flyway`.
+   - Nota técnica: a imagem `postgres:18` mudou o volume de dados para `/var/lib/postgresql` (o yaml de exemplo da spec §3.5 ainda mostra o caminho antigo `/var/lib/postgresql/data`).
+   - `api`/`web`/`admin`/`site` entram no compose quando forem scaffolded.
+
+2. **Migrations V001–V012 aplicadas com sucesso em banco real** (PostgreSQL 18.4) — antes só havia validação estática. Verificado:
+   - Roles `niner_owner`/`niner_app` criadas, ambas **sem `BYPASSRLS`** (P8).
+   - 9 tabelas no schema `plataforma` (dono `niner_owner`); seed dos 3 planos (Essencial R$ 99 / Profissional R$ 249 / Escala R$ 599 — 🔴 provisórios, D1).
+   - `plataforma.tenant_atual()` lê `app.id_tenant` corretamente.
+   - `niner_app` lê `plataforma.plano` (grant V011) e **não consegue** criar objetos no schema (`permission denied`) — como esperado.
 
 ### 2026-07-08 — Pivô para SaaS multi-tenant (spec v2.0)
 
@@ -90,6 +105,6 @@ Precisam ser resolvidas **antes de codar** os módulos afetados:
 ## Próximos passos sugeridos
 
 1. Fechar as decisões bloqueantes restantes (Q2, Q5, Q7) e as de negócio (D1, D5, D6, D8, D9, D10); registrar Q6 e as de arquitetura como ADRs (ADR-006 a 009).
-2. Scaffolding da Fase 0: `docker-compose.yml` (db=`niner_db`), esqueleto Spring Boot (`api/`) com módulos **incluindo `plataforma`** e as 3 superfícies, Flyway com infra multi-tenant (roles + RLS), e os 3 apps React (`web/`, `admin/`, `site/`).
-3. Gerar as migrations Flyway V001–V091 (§3.5.1): plataforma + tenant + RLS primeiro, depois domínio convertido conforme §3.3.1.
+2. Scaffolding da Fase 0: esqueleto Spring Boot (`api/`) com módulos **incluindo `plataforma`** e as 3 superfícies, e os 3 apps React (`web/`, `admin/`, `site/`); adicionar os serviços correspondentes ao `docker-compose.yml`. *(✅ compose + db + Flyway já no ar em 2026-07-09.)*
+3. Continuar as migrations V013+ (§3.5.1): domínio do lojista (`identidade`, `catalogo`, `estoque`, `pedidos`, `integracao`…) — depende de Q2/Q5/Q7 — e o arquivo final de RLS de domínio.
 4. Teste de isolamento (P8) como gate da Fase 0: um tenant nunca lê dado de outro.

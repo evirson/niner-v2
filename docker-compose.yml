@@ -1,0 +1,47 @@
+# docker-compose.yml (dev) — spec §3.5
+# Por ora só a infra de dados: db (Postgres 18, banco niner_db) + flyway (migrations).
+# Os serviços api/web/admin/site entram quando os projetos forem scaffolded (Fase 0).
+#
+# Uso:
+#   docker compose up -d db          # sobe o banco (bootstrap de roles roda no 1º init)
+#   docker compose run --rm flyway   # aplica as migrations db/migration/ como niner_owner
+
+name: niner
+
+services:
+  db:
+    image: postgres:18
+    container_name: niner-db
+    environment:
+      POSTGRES_DB: niner_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-dev_postgres}   # 🔴 dev; produção via secret manager
+    volumes:
+      # postgres:18 mudou o VOLUME para /var/lib/postgresql (PGDATA=/var/lib/postgresql/18/docker)
+      - pgdata:/var/lib/postgresql
+      # 00_roles.sql roda uma única vez no primeiro init, como superusuário, já em niner_db
+      - ./db/bootstrap:/docker-entrypoint-initdb.d:ro
+    ports: ["5432:5432"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d niner_db"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+  # Flyway roda como niner_owner (P8: niner_app nunca roda migration nem é dono de tabela)
+  flyway:
+    image: flyway/flyway:11
+    profiles: [migrate]
+    depends_on:
+      db: { condition: service_healthy }
+    volumes:
+      - ./db/migration:/flyway/sql:ro
+    command: >-
+      -url=jdbc:postgresql://db:5432/niner_db
+      -user=niner_owner
+      -password=${FLYWAY_OWNER_PASSWORD:-dev_owner}
+      -connectRetries=10
+      migrate
+
+volumes:
+  pgdata:
