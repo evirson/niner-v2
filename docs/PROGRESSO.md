@@ -246,8 +246,16 @@ com autenticação JWT real protegendo o ERP.
 
 ## Próximos passos sugeridos
 
-1. ✅ **Decisões de arquitetura fechadas** (Q2/Q5/Q6/Q7 + ADR-004/006/007/010). Restam só as de negócio (D1, D5, D6, D8, D9, D10) e **ADR-011** (framework do site) — nenhuma bloqueia o backend.
-2. ✅ **Migrations de domínio V013–V024 no ar** e **gate P8 verde** (2026-07-10).
-3. **Camada Java do domínio (Spring Data JDBC):** agregados/repositórios/serviços sobre as tabelas V014–V023 (começar por `identidade` + `catalogo` + `estoque`), com o `TenantContext` já ligado. Endpoints `/api/v1/**` reais (produtos, estoque, movimentações) — hoje só há o ping.
-4. **Signup/trial self-service** (R12): `POST /api/publico/assinar` atômico (tenant TRIAL + empresa + usuário ADMIN + assinatura) + emissão/validação de JWT (`tid`/`aud`) — destrava o `TenantFilter` de verdade.
-5. Scaffolding dos 3 apps React (`web/`/`admin/`/`site/`); decidir Astro×Next do `site/` (ADR-011).
+**Feito até 2026-07-10:** ✅ decisões de arquitetura (Q2/Q5/Q6/Q7 + ADRs) · ✅ esqueleto da API + 3 superfícies + contexto de tenant · ✅ domínio V013–V024 + RLS + **gate P8** · ✅ **trial self-service** (signup atômico + JWT + login + `/eu`) · ✅ **site** (Astro/SSG) · ✅ **web** (ERP: login + handoff SSO + painel). **Loop de aquisição fechado** (site → trial → web logado).
+
+**Retomar amanhã (2026-07-11) — ordem sugerida:**
+
+1. **⭐ Vertical slice de Produtos (começar por aqui):** valida a stack inteira ponta a ponta.
+   - Backend `/api/v1`: `GET /api/v1/produtos` (lista, cursor) + `POST /api/v1/produtos` (cria produto + variação com `sku`/`ean`) — camada Spring Data JDBC sobre `produto`/`produto_barra`, com o `TenantContext`/RLS já ligados. Atualizar `uso_tenant.qtd_produtos` (enforcement R19 depois).
+   - Web: tela **Produtos** real (listar + criar) no lugar do placeholder, via TanStack Query.
+2. **Estoque:** `produto_estoque` (saldo/reserva) + movimentações (`POST /api/v1/estoque/movimentacoes`) → tela de estoque.
+3. **`admin/`** — backoffice da plataforma (lista/ficha de tenants R17, suspender/impersonar R18/R21).
+4. **R22** (`AjudaDaTela` + `ajuda_tela`) nos fronts; páginas de conteúdo/SEO no site.
+5. Decisões de negócio em aberto: D1 (preços), D3 (gateway), D5/D6/D8/D9/D10.
+
+**Como subir o ambiente:** `docker compose up -d db && docker compose run --rm flyway` · API: `cd api && ./mvnw spring-boot:run` (ou `java -jar target/*.jar`) · fronts: `cd site && npm run dev` / `cd web && npm run dev`. Testes da API: `cd api && TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE=/var/run/docker.sock ./mvnw test` (Colima). ⚠️ Se a API der 401 no `/api/publico/**`, há instância velha presa na 8080 → `lsof -ti tcp:8080 | xargs kill -9`.
