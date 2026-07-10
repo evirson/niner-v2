@@ -163,12 +163,12 @@ Medição: métricas expostas via endpoint `/actuator` + tabela de eventos; aval
 | # | Questão | Responsável | Bloqueante? |
 |---|---------|-------------|-------------|
 | Q1 | Shopee exige empresa registrada no programa de parceiros — prazo de aprovação? | Negócio | Sim (para R4) |
-| Q2 | Estratégia de reserva: reservar no `pago` ou no `recebido`? (marketplaces variam) | Produto + Eng | Sim |
+| Q2 | ✅ **Fechada (2026-07-10):** reservar no **`recebido`** — o pedido importado já incrementa `produto_estoque.reservado` (alinha R5 + P1 zero-overselling), com **expiração** que devolve a reserva de pedidos que não pagam no prazo. Ver §3.3.5 / ADR-004. | Produto + Eng | — |
 | Q3 | Limite de rate das APIs (ML: ~X req/s por app) comporta quantos lojistas por app credential? | Engenharia | Não |
 | Q4 | Precisamos de LGPD DPA com os marketplaces para dados de comprador? | Jurídico | Não |
-| Q5 | <span style="color:red">🔴 O módulo `financeiro` (caixa, crediário, contas a pagar/receber, conta corrente) do schema legado entra no v1 ou fica para depois? (ver §3.3.7)</span> | Produto + Eng | Sim |
+| Q5 | ✅ **Fechada (2026-07-10):** o módulo `financeiro` do lojista (caixa, crediário, contas a pagar/receber, conta corrente) **fica para depois** — **fora do v1**. Venda manual (R9) grava só `venda` + baixa de estoque. **Crediário** é item prioritário da **Fase 2**. Ver §3.3.7 / ADR-010. | Produto + Eng | — |
 | Q6 | ✅ **Fechada (v2.0):** manter `id_empresa` **e** adicionar `id_tenant` como chave de isolamento. Relação `tenant 1:N empresa` (1:1 no v1). Ver §3.1.1 / ADR-006. | Produto + Eng | — |
-| Q7 | <span style="color:red">🔴 SKU = EAN (código de barras) ou código interno + coluna `ean` separada? (ver §3.3.3)</span> | Produto + Eng | Sim |
+| Q7 | ✅ **Fechada (2026-07-10):** **separar** `sku` interno (obrigatório, único, chave do domínio) de `ean` (GTIN real, nullable, único quando preenchido). EAN exigido só na **publicação** em canal, não no cadastro. Ver §3.3.3. | Produto + Eng | — |
 
 **Decisões de negócio do SaaS (v2.0) — detalhadas em `docs/PLANO-DE-NEGOCIO.md`:**
 
@@ -206,7 +206,7 @@ Medição: métricas expostas via endpoint `/actuator` + tabela de eventos; aval
  │  3 SecurityFilterChain (publico / tenant / plataforma)   │
  │  módulos: catalogo/ estoque/ pedidos/ precos/ canais/    │
  │           identidade/ integracao/{mercadolivre,shopee}   │
- │           financeiro/(Q5)  ·  plataforma/  ← control-plane│
+ │           plataforma/  ← control-plane (financeiro: Fase 2)│
  │  outbox + scheduler (retry/poll) · TenantContext + RLS   │
  └──────────────────────────┬───────────────────────────────┘
    webhooks (ML/Shopee,      │ JDBC (role niner_app, SEM BYPASSRLS)
@@ -219,7 +219,7 @@ Medição: métricas expostas via endpoint `/actuator` + tabela de eventos; aval
 
 **Topologia (ADR-007).** **Uma** API (monólito modular, P6) expõe **três superfícies** por prefixo de path, cada uma com seu `SecurityFilterChain`: `/api/publico/**` (site: signup, checkout, trial — sem auth ou auth leve), `/api/v1/**` (ERP do tenant — JWT de tenant, RLS ativo), `/api/admin/**` (backoffice da plataforma — JWT de staff, opera em `plataforma.*`). Três apps React independentes: **`site/`** (público), **`web/`** (ERP do lojista) e **`admin/`** (backoffice). A separação pedida ("api e front separados") é de **superfície e front-end**, não de processo. A **API é stateless** (JWT, sem sessão/afinidade) e cada front lê a **base-URL da API em runtime** (arquivo de config/env servido, não embutido no bundle) — assim é possível rodar **2 servidores com 2 instâncias** da API e trocar o endereço para manutenção/failover. *Gatilhos para separar o control-plane em serviço próprio depois: janela de manutenção independente, compliance de dados de cartão em rede isolada, ou scale-out do ERP que torne caro arrastar a plataforma junto.*
 
-> <span style="color:red">🔴 O schema legado (`db/*.txt`) traz também um módulo **`financeiro`** (caixa, crediário, contas a pagar/receber, conta corrente) não representado neste diagrama. Confirmar se entra no v1 e, em caso positivo, adicioná-lo aqui — ver §3.3.7 e Q5.</span>
+> ✅ **Q5 fechada (2026-07-10):** o módulo **`financeiro`** do lojista (caixa, crediário, contas a pagar/receber, conta corrente) **não entra no v1** (fora de escopo, junto com PDV — §2.3). Fica para a **Fase 2** (crediário priorizado). Por isso não aparece no diagrama. Ver §3.3.7 / ADR-010.
 
 Decisões-chave (registrar cada uma como ADR — template na seção 6):
 
@@ -309,13 +309,16 @@ produto(id_produto PK, ativo BOOL, marca, referencia, descricao,
         peso_liquido NUMERIC(14,3), nome_variante_linha, nome_variante_coluna,
         imagem, criado_em, alterado_em, reajustado_em)
 produto_categoria(id_produto FK, id_categoria FK, PK(id_produto, id_categoria))
--- PRODUTOS_BARRA é o SKU real: 1 código de barras por (produto × linha × coluna)
-produto_barra(codigo_barra PK, id_produto FK, id_variante_linha FK, id_variante_coluna FK)
+-- produto_barra é a VARIAÇÃO. Q7 (fechada): sku interno (chave) + ean opcional (GTIN real).
+produto_barra(sku PK,                              -- identificador INTERNO, obrigatório, único (ex-codigo_barra); imprimível como código de barras na loja
+              ean,                                  -- 🔴 novo: GTIN real (EAN-13/UPC), NULLABLE; UNIQUE quando preenchido
+              id_produto FK, id_variante_linha FK, id_variante_coluna FK)
 ```
-> **Mapeamento p/ a spec:** o par (`produto` + `produto_barra`) implementa `produto`+`variacao` do PRD (R1). O **SKU = `codigo_barra`** (estrutura documentada em `033_PRODUTOS_BARRA.txt`: grupo+sequencial+dígito).
+> **Mapeamento p/ a spec:** o par (`produto` + `produto_barra`) implementa `produto`+`variacao` do PRD (R1). A chave da variação é o **`sku`** (interno, papel do antigo `codigo_barra`; estrutura grupo+sequencial+dígito de `033_PRODUTOS_BARRA.txt`). Nas migrations de domínio (V013+), **todas as FKs que hoje apontam para `codigo_barra`** (estoque, movimento, pedido_item, anúncio…) passam a referenciar `sku`.
 
-<span style="color:red">🔴 Garantir unicidade de SKU (R1): `codigo_barra` é PK — ok; adicionar `UNIQUE` de `(id_produto, id_variante_linha, id_variante_coluna)` para impedir barra duplicada da mesma variação.</span>
-<span style="color:red">🔴 Falta `ean` explícito (R1 pede EAN): decidir se `codigo_barra` = EAN ou se é código interno + coluna `ean` separada.</span>
+> **SKU × EAN (Q7, fechada em 2026-07-10):** **separar** `sku` (interno, obrigatório, único por tenant — a chave usada em todo o domínio) de `ean` (**GTIN real, nullable**, `UNIQUE` parcial `WHERE ean IS NOT NULL`). O produto pode ser **cadastrado sem EAN** (loja física, sem marca); o EAN só é **exigido na publicação** em canal que pede GTIN — o adapter (P2/anti-corruption) manda `ean` como GTIN, e se estiver NULL bloqueia o *publicar anúncio* com Problem Details pedindo o EAN (ou usa o fluxo "sem GTIN" quando o canal permitir). Nunca empurrar o `sku` interno como se fosse EAN.
+
+<span style="color:red">🔴 Garantir unicidade de SKU (R1): `sku` é PK — ok; adicionar `UNIQUE` de `(id_produto, id_variante_linha, id_variante_coluna)` para impedir variação duplicada.</span>
 
 ### 3.3.4 Módulo `estoque` (saldo, movimentações, balanço)
 
@@ -380,7 +383,7 @@ pedido_item(id_pedido_item PK, id_pedido FK, codigo_barra FK, id_anuncio FK,
 ```
 <span style="color:red">🔴 Unificar o modelo de "pedido": o legado só tem `venda` (física). Decidir se `venda` e `pedido` (canal) convergem para uma fila única de expedição (R5, estados `recebido→pago→em separação→enviado→entregue/cancelado`) ou permanecem separados com uma view unificada.</span>
 <span style="color:red">🔴 A venda física (`venda`) hoje não tem itens próprios — os itens vêm de `produto_movimento_detalhe` (tipo 5). Confirmar se esse é o design desejado ou se `venda` ganha `venda_item`.</span>
-<span style="color:red">🔴 Estratégia de reserva (Q2): reservar no `recebido` ou no `pago`? Bloqueante — define quando `reservado` é incrementado.</span>
+> **Estratégia de reserva (Q2, fechada em 2026-07-10 — ADR-004):** reservar no **`recebido`**. Ao importar um pedido de canal, na **mesma transação** cria-se a linha em `pedido`/`pedido_item` e incrementa-se `produto_estoque.reservado` (débito lógico de disponível = `qtd_estoque − reservado`), registrando um `produto_movimento` de tipo `reserva` (P3). Transições da fila: `pago`/`em separação` **não** re-reservam (a reserva já existe); `enviado` converte reserva em **baixa** de `qtd_estoque` e zera a parcela `reservado`; `cancelado` **devolve** a reserva (R5). **Expiração:** pedidos parados em `recebido` (sem pagar) além de um prazo **configurável por canal** liberam a reserva automaticamente (via worker/outbox) — mitiga reserva-fantasma de boleto/PIX não concluído. Como ML/Shopee em geral só notificam **pós-pagamento**, na prática a janela `recebido→pago` é quase nula; a expiração cobre e-commerce próprio e boleto. 🔴 *Prazo default da expiração a confirmar (tunável, não bloqueante).*
 
 ### 3.3.6 Módulo `integracao` (outbox, webhooks)
 
@@ -394,7 +397,9 @@ webhook_recebido(id PK, id_canal FK, webhook_id UNIQUE, recebido_em, processado_
 ```
 Worker `@Scheduled` consome `outbox_evento` com `SELECT ... FOR UPDATE SKIP LOCKED`, retry exponencial e dead-letter visível no painel (R7). Polling de segurança a cada 15 min cobre webhooks perdidos.
 
-### 3.3.7 Módulo `financeiro` (caixa, contas, conta corrente) — <span style="color:red">🔴 escopo a confirmar</span>
+### 3.3.7 Módulo `financeiro` (caixa, contas, conta corrente) — ⛔ **Fora do v1 (Q5 fechada — Fase 2)**
+
+> ✅ **Q5 (2026-07-10 — ADR-010):** o financeiro do lojista **não entra no v1**. Junto com PDV (§2.3), fica para a **Fase 2**; **crediário** é o item prioritário dessa fase. As tabelas abaixo permanecem aqui **só como referência de modelagem** (não geram migration em V013+). Venda manual (R9) é atendida por `venda` + baixa de estoque, sem tocar caixa/contas.
 
 O legado traz um financeiro completo que **não está no diagrama de módulos do §3.1** e tangencia o Non-goal §2.3 (PDV/frente de caixa fora do v1).
 
@@ -428,7 +433,7 @@ conta_corrente_movimento(localizador PK, id_conta_corrente FK, data_movimento,
                numero_documento, credito_debito, compensado BOOL,
                valor NUMERIC(12,2), observacao)
 ```
-<span style="color:red">🔴 **Decisão de escopo (bloqueante para planejar fases):** o financeiro/caixa/crediário entra no v1 ou fica para depois? O §2.3 lista PDV como fora de escopo, mas R9 (venda manual com baixa) e o crediário legado sugerem financeiro parcial. Definir o subconjunto mínimo do v1 e registrar ADR. Ajustar o diagrama §3.1 para incluir (ou não) o módulo `financeiro`.</span>
+> ✅ **Resolvido (Q5, 2026-07-10 — ADR-010):** financeiro/caixa/crediário **fora do v1**, Fase 2 (crediário priorizado). R9 (venda manual) é atendido por `venda` + baixa de estoque, sem financeiro. Diagrama §3.1 já ajustado (sem módulo `financeiro`).
 
 ### 3.3.8 Configuração global
 
@@ -606,8 +611,8 @@ V013+ identidade.empresa (+id_tenant, FK->plataforma.tenant)
       catalogo (cfg, produto, produto_barra) · estoque (produto_estoque +reservado/minimo,
       movimento +saldo_apos/origem, balanco) · pedidos (venda; canal+anuncio credenciais
       cifradas; pedido UNIQUE(canal,id_externo)) · integracao (outbox_evento COM id_tenant;
-      webhook_recebido) · financeiro.* (SÓ se Q5) · cfg_geral (singleton POR tenant) +
-      cliente/fornecedor/funcionario
+      webhook_recebido) · cfg_geral (singleton POR tenant) +
+      cliente/fornecedor/funcionario   [financeiro.* NÃO — Q5 fechada, Fase 2]
 V0xx (final) RLS de domínio: ENABLE + FORCE ROW LEVEL SECURITY +
       USING (id_tenant = plataforma.tenant_atual()) em TODAS as tabelas de tenant + grants
 ```
@@ -753,7 +758,7 @@ Data: · Decisores:
 Positivas: · Negativas/dívidas: · Gatilho de revisão: [métrica ou evento que faria rever]
 ```
 
-ADRs já previstos: ADR-001 monolito modular; ADR-002 outbox sobre Postgres sem broker; ADR-003 biblioteca de UI; ADR-004 estratégia de reserva de estoque (depende de Q2); ADR-005 cifragem de credenciais; **ADR-006 isolamento de tenant (banco único + `id_tenant` + Postgres RLS; §3.1.1); ADR-007 topologia do control-plane (uma API/3 superfícies + 3 apps React, API stateless, supera o non-goal §2.3, gatilhos de split); ADR-008 adapter de gateway de cobrança (provedor a definir — D3); ADR-009 auth/identidade multi-tenant (duas populações de usuário, claims JWT por `aud`, papéis de staff × RBAC do tenant).**
+ADRs já previstos: ADR-001 monolito modular; ADR-002 outbox sobre Postgres sem broker; ADR-003 biblioteca de UI; **ADR-004 estratégia de reserva de estoque: reservar no `recebido` + expiração configurável por canal (Q2 fechada 2026-07-10; §3.3.5);** ADR-005 cifragem de credenciais; **ADR-006 isolamento de tenant (banco único + `id_tenant` + Postgres RLS; §3.1.1); ADR-007 topologia do control-plane (uma API/3 superfícies + 3 apps React, API stateless, supera o non-goal §2.3, gatilhos de split); ADR-008 adapter de gateway de cobrança (provedor a definir — D3); ADR-009 auth/identidade multi-tenant (duas populações de usuário, claims JWT por `aud`, papéis de staff × RBAC do tenant); ADR-010 financeiro do lojista fora do v1 (Q5 fechada 2026-07-10 — Fase 2, crediário priorizado; §3.3.7); ADR-011 framework do site público para SEO (Astro × Next — em aberto, "decidir depois").**
 
 # 7. Template — Task
 

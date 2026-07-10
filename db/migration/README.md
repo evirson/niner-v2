@@ -34,11 +34,22 @@ RLS. Só depois os módulos de domínio do lojista e, por fim, as políticas RLS
 | **V010** | `staff` + `impersonacao_log` | ✅ |
 | **V011** | grants de `niner_app` no schema `plataforma` | ✅ |
 | **V012** | seed dos planos (🔴 preços provisórios, D1) | ✅ |
-| **V013+** | domínio do lojista (`identidade.empresa`/`usuario`, `catalogo`, `estoque`, `pedidos`, `canais`, `integracao`, e `financeiro` se Q5) — **cada tabela nasce com `id_tenant`** | ⏳ a criar |
-| **V0xx (final)** | políticas RLS de domínio: `ENABLE`+`FORCE ROW LEVEL SECURITY` + `USING (id_tenant = plataforma.tenant_atual())` em **todas** as tabelas de tenant, e grants de `niner_app` | ⏳ a criar |
+| **V013** | tipos ENUM de domínio (canal, pedido, movimento, outbox…) | ✅ |
+| **V014** | `identidade.empresa` | ✅ |
+| **V015** | `identidade.usuario` + `usuario_rotina` | ✅ |
+| **V016** | cadastros: `cliente`, `fornecedor`, `funcionario` | ✅ |
+| **V017** | `catalogo`: configs, `produto`, `produto_categoria`, `produto_barra` (**Q7:** `sku` + `ean`) | ✅ |
+| **V018** | vendas: `venda`, `venda_devolucao` (R9; sem financeiro — Q5) | ✅ |
+| **V019** | `estoque`: `produto_estoque` (**Q2:** `reservado`, `disponivel`), ledger `produto_movimento_*`, `produto_balanco` | ✅ |
+| **V020** | `canais`: `canal` (credenciais cifradas), `anuncio` (de-para SKU, R6) | ✅ |
+| **V021** | pedidos de canal: `pedido` (idempotente `(canal,id_externo)`), `pedido_item` | ✅ |
+| **V022** | `integracao`: `outbox_evento`, `webhook_recebido` (P2) | ✅ |
+| **V023** | `cfg_geral` (singleton por tenant) | ✅ |
+| **V024** | **RLS de domínio** (final): `ENABLE`+`FORCE` + `USING/WITH CHECK (id_tenant = plataforma.tenant_atual())` em todas as tabelas de tenant + grants de `niner_app` + guarda-corpo que falha se alguma tabela com `id_tenant` ficar sem RLS | ✅ |
 
 > As tabelas do schema `plataforma` são **globais** (P9) e **não** entram no RLS de tenant.
-> O RLS (`FORCE`) só se aplica às tabelas de **domínio** do lojista (V013+).
+> O RLS (`FORCE`) só se aplica às tabelas de **domínio** do lojista (V014–V023, ativado em V024).
+> `financeiro` do lojista **não** entra no v1 (Q5/ADR-010 — Fase 2).
 
 ## Reversibilidade
 
@@ -51,5 +62,7 @@ Em desenvolvimento, recriar do zero (`flyway clean` + `migrate`) é aceitável.
 
 - Nomes de objeto em **português**, `snake_case` (vocabulário de domínio da spec).
 - PKs `bigint GENERATED ALWAYS AS IDENTITY`; dinheiro `NUMERIC(12,2)` (P7); tempo `TIMESTAMPTZ`.
-- Datas de auditoria (`criado_em`/`atualizado_em`) mantidas pela aplicação (JPA auditing) —
-  sem triggers de banco (§3.3.1).
+- Tabela de domínio: `id_<x>` surrogate PK + `id_tenant bigint NOT NULL REFERENCES plataforma.tenant`;
+  chaves naturais únicas **por tenant** (`UNIQUE (id_tenant, …)`); FKs internas por surrogate.
+- Datas de auditoria (`criado_em` `DEFAULT now()` / `atualizado_em`) mantidas pela aplicação
+  (Spring Data JDBC) — **sem triggers** de banco e **sem** JPA auditing (§3.3.1 / §3.2).

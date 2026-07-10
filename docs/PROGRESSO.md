@@ -16,7 +16,8 @@ Projeto **spec-driven** em fase de fundação. O **esqueleto da API (Spring Boot
 | `docs/padroes/` | Mockup de referência de UI (golden file, §3.7) — `TELA.rar` descompactado e removido |
 | `db/*.txt` | Schema **legado (Firebird)** versionado como referência (31 tabelas + generators, procedures, triggers) |
 | `CLAUDE.md` | Guia do repositório — atualizado para o SaaS multi-tenant (P8/P9, plataforma, `id_tenant`+RLS) |
-| `docker-compose.yml` | Infra local de dev: `db` (postgres:18, `niner_db`) + `flyway` (profile `migrate`) + **`api`** (Spring Boot, porta 8080, conecta como `niner_app`); V001–V012 **aplicadas e validadas em banco real** |
+| `docker-compose.yml` | Infra local de dev: `db` (postgres:18, `niner_db`) + `flyway` (profile `migrate`) + **`api`** (Spring Boot, porta 8080, conecta como `niner_app`); **V001–V024 aplicadas e validadas em banco real** (control-plane + domínio do lojista + RLS) |
+| `db/migration/V013–V024` | **Novo — domínio do lojista** (identidade, cadastros, catálogo com `sku`+`ean`, estoque com `reservado`/`disponivel`, vendas, canais, pedidos, integração/outbox, cfg_geral) + **RLS de domínio** (`FORCE` + política por `id_tenant`). **Gate P8 verde** (teste de isolamento cross-tenant automatizado). `financeiro` NÃO entra (Q5/ADR-010) |
 | `api/` | **Novo — esqueleto Spring Boot 4.0.7 / Java 25** (Maven). 3 superfícies (`/api/publico`, `/api/v1`, `/api/admin`) com `SecurityFilterChain` separados; `TenantContext` (`ScopedValue`) + `TenantAwareTransactionManager` (`SET LOCAL app.id_tenant`); pacotes-módulo do monólito; pings de fumaça. **7 testes verdes** (Testcontainers Postgres 18 + Flyway) e app **rodando/curada ao vivo**. Persistência: **Spring Data JDBC** |
 | `web/`, `admin/`, `site/` | Ainda não criados (scaffolding pendente). Stack do `site/` (SEO — Astro/Next) a decidir |
 
@@ -71,8 +72,36 @@ sem as migrations de domínio (V013+).
    - ⚠️ **Colima + Testcontainers:** exige `TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE=/var/run/docker.sock`
      (senão o Ryuk falha ao montar o docker.sock). Anotado no README da `api/`.
 
-8. **Gate P8 parcial:** o teste de isolamento cross-tenant só fecha quando existirem
-   tabelas de domínio com RLS (V013+). Registrado como pendência — **não** cumprido ainda.
+8. **Gate P8 (parcial neste momento):** fecha com as tabelas de domínio + RLS — feito no
+   mesmo dia (ver entrada seguinte).
+
+### 2026-07-10 — Decisões Q2/Q7/Q5 fechadas + domínio do lojista (V013–V024) + gate P8 verde
+
+1. **Decisões bloqueantes de arquitetura fechadas** (todas):
+   - **Q2 (ADR-004)** — reserva no **`recebido`** + expiração por canal (§3.3.5).
+   - **Q7** — **separar** `sku` interno (obrigatório/único) de `ean` (GTIN, nullable/único), EAN
+     exigido só na publicação (§3.3.3).
+   - **Q5 (ADR-010)** — `financeiro` do lojista **fora do v1** (Fase 2, crediário priorizado; §3.3.7).
+   - ADRs renumerados: **ADR-010** = financeiro fora do v1; **ADR-011** = framework do site (SEO, em aberto).
+
+2. **Migrations de domínio V013–V024 criadas e validadas em banco real** (Postgres 18.4),
+   convertendo o legado Firebird conforme §3.3.1 (minúsculo `snake_case`, `NUMERIC` para
+   dinheiro, `BOOLEAN`, `TIMESTAMPTZ`, `BIGINT IDENTITY`) e com **`id_tenant` em toda tabela**:
+   - identidade (`empresa`, `usuario`, `usuario_rotina`), cadastros (`cliente`/`fornecedor`/`funcionario`),
+     catálogo (`produto`, `produto_barra` com `sku`+`ean`), estoque (`produto_estoque` com
+     `reservado`/`disponivel` gerado, ledger imutável, balanço), vendas, canais (`canal`/`anuncio`),
+     pedidos de canal (idempotência `(canal,id_externo)`), integração (`outbox_evento`/`webhook_recebido`),
+     `cfg_geral`.
+   - Convenção de domínio: surrogate `id_<x>` PK + `id_tenant` FK + chaves naturais únicas **por tenant**.
+
+3. **RLS de domínio (V024)** — arquivo único e final: `ENABLE`+`FORCE ROW LEVEL SECURITY` +
+   política `USING/WITH CHECK (id_tenant = plataforma.tenant_atual())` + grants de `niner_app` em
+   **todas** as tabelas de tenant, mais um **guarda-corpo** que faz a migration falhar se alguma
+   tabela com `id_tenant` ficar sem RLS (P8 auto-verificável).
+
+4. **✅ Gate P8 verde:** teste automatizado (`RlsIsolamentoTest`, Testcontainers) conectando como
+   **`niner_app`** (sem BYPASSRLS) prova: T1 não lê produto de T2; `WITH CHECK` bloqueia gravar para
+   outro tenant; sem contexto não vê nada. **Suíte: 8 testes verdes.**
 
 ### 2026-07-09 — Infra local no ar: Postgres 18 + migrations validadas
 
@@ -131,14 +160,14 @@ sem as migrations de domínio (V013+).
 
 ## Decisões bloqueantes em aberto (ver §2.7 e §3.3 da spec)
 
-Precisam ser resolvidas **antes de codar** os módulos afetados:
+**Todas as bloqueantes de arquitetura (Q2/Q5/Q6/Q7) estão fechadas** — o domínio (V013+) está destravado. Restam só decisões de **negócio**, que não travam o schema central:
 
-- **Q5 — módulo `financeiro`** (caixa, crediário, contas a pagar/receber, conta corrente): entra no v1 ou fica para depois? Tangencia o Non-goal de PDV. *(Não confundir com o faturamento da plataforma — Anexo A do plano de negócio.)*
-- **Q7 — SKU vs EAN**: `codigo_barra` é o EAN ou código interno + coluna `ean` separada?
-- **Q2 — estratégia de reserva**: reservar estoque no `recebido` ou no `pago`?
-- **Reserva de estoque**: adicionar colunas `reservado`/`minimo` a `produto_estoque` (sem isso não há anti-overselling — P1/R5).
 - **Decisões de negócio do SaaS (D1–D10)** — ver `docs/PLANO-DE-NEGOCIO.md`. Abertas: D1 preços, D3 gateway (adiado), D5 nome "Niner", D6 NFS-e da assinatura, D8 dunning, D9 metas, D10 comportamento do estado `INADIMPLENTE`.
+- **ADR-011 — framework do site público (SEO):** Astro × Next, "decidir depois" (não bloqueia o backend).
 
+> ✅ **Q5 — módulo `financeiro` do lojista:** fechada em 2026-07-10 — **fora do v1** (junto com PDV, §2.3); vai para a **Fase 2** com **crediário priorizado**. R9 (venda manual) é atendido por `venda` + baixa de estoque, sem financeiro. Vira **ADR-010**. Ver §3.3.7.
+> ✅ **Q7 — SKU vs EAN:** fechada em 2026-07-10 — **separar** `sku` interno (obrigatório, único, chave do domínio; ex-`codigo_barra`) de `ean` (GTIN real, nullable, único quando preenchido). EAN exigido só na **publicação** em canal, não no cadastro. Nas migrations V013+, as FKs que apontavam para `codigo_barra` passam a referenciar `sku`. Ver §3.3.3.
+> ✅ **Q2 — estratégia de reserva:** fechada em 2026-07-10 — reservar no **`recebido`** (pedido importado já incrementa `reservado`), com expiração configurável por canal que devolve reservas não pagas. Alinha R5 + P1. Vira **ADR-004**; adicionar colunas `reservado`/`minimo` a `produto_estoque` nas migrations de domínio. Ver §3.3.5.
 > ✅ **Q6 — multi-empresa/tenant:** fechada em 2026-07-08 — manter `id_empresa` **e** adicionar `id_tenant` (banco único + RLS; `tenant 1:N empresa`, 1:1 no v1).
 
 ---
@@ -153,7 +182,8 @@ Precisam ser resolvidas **antes de codar** os módulos afetados:
 
 ## Próximos passos sugeridos
 
-1. Fechar as decisões bloqueantes restantes (Q2, Q5, Q7) e as de negócio (D1, D5, D6, D8, D9, D10); registrar Q6 e as de arquitetura como ADRs (ADR-006 a 009).
-2. Scaffolding da Fase 0: ✅ **esqueleto Spring Boot (`api/`) no ar em 2026-07-10** (módulos incl. `plataforma`, 3 superfícies, contexto de tenant, serviço `api` no compose). **Falta** scaffoldar os 3 apps React (`web/`, `admin/`, `site/`) — e decidir o stack de SEO do `site/` (Astro/Next), registrando como ADR-010.
-3. Continuar as migrations V013+ (§3.5.1): domínio do lojista (`identidade`, `catalogo`, `estoque`, `pedidos`, `integracao`…) — depende de Q2/Q5/Q7 — e o arquivo final de RLS de domínio.
-4. Teste de isolamento (P8) como gate da Fase 0: um tenant nunca lê dado de outro.
+1. ✅ **Decisões de arquitetura fechadas** (Q2/Q5/Q6/Q7 + ADR-004/006/007/010). Restam só as de negócio (D1, D5, D6, D8, D9, D10) e **ADR-011** (framework do site) — nenhuma bloqueia o backend.
+2. ✅ **Migrations de domínio V013–V024 no ar** e **gate P8 verde** (2026-07-10).
+3. **Camada Java do domínio (Spring Data JDBC):** agregados/repositórios/serviços sobre as tabelas V014–V023 (começar por `identidade` + `catalogo` + `estoque`), com o `TenantContext` já ligado. Endpoints `/api/v1/**` reais (produtos, estoque, movimentações) — hoje só há o ping.
+4. **Signup/trial self-service** (R12): `POST /api/publico/assinar` atômico (tenant TRIAL + empresa + usuário ADMIN + assinatura) + emissão/validação de JWT (`tid`/`aud`) — destrava o `TenantFilter` de verdade.
+5. Scaffolding dos 3 apps React (`web/`/`admin/`/`site/`); decidir Astro×Next do `site/` (ADR-011).
