@@ -1,13 +1,13 @@
 # Progresso do Projeto — niner-v2
 
 Registro cronológico das decisões e entregas. Atualizar a cada marco relevante.
-**Última atualização:** 2026-07-09
+**Última atualização:** 2026-07-10
 
 ---
 
 ## Estado atual
 
-Projeto **spec-driven** em fase de fundação (pré-código). Ainda **não há código de aplicação** — só a spec, o schema legado de referência e a documentação de apoio.
+Projeto **spec-driven** em fase de fundação. O **esqueleto da API (Spring Boot 4 / Java 25)** já existe e sobe: 3 superfícies + infra de contexto de tenant. Domínio do lojista (migrations V013+, controllers) ainda não — depende de Q2/Q5/Q7.
 
 | Artefato | Situação |
 |---|---|
@@ -16,14 +16,63 @@ Projeto **spec-driven** em fase de fundação (pré-código). Ainda **não há c
 | `docs/padroes/` | Mockup de referência de UI (golden file, §3.7) — `TELA.rar` descompactado e removido |
 | `db/*.txt` | Schema **legado (Firebird)** versionado como referência (31 tabelas + generators, procedures, triggers) |
 | `CLAUDE.md` | Guia do repositório — atualizado para o SaaS multi-tenant (P8/P9, plataforma, `id_tenant`+RLS) |
-| `docker-compose.yml` | **Novo** — infra local de dev: `db` (postgres:18, `niner_db`) + `flyway` (profile `migrate`); V001–V012 **aplicadas e validadas em banco real** |
-| `api/`, `web/`, `admin/`, `site/` | Ainda não criados (scaffolding pendente) |
+| `docker-compose.yml` | Infra local de dev: `db` (postgres:18, `niner_db`) + `flyway` (profile `migrate`) + **`api`** (Spring Boot, porta 8080, conecta como `niner_app`); V001–V012 **aplicadas e validadas em banco real** |
+| `api/` | **Novo — esqueleto Spring Boot 4.0.7 / Java 25** (Maven). 3 superfícies (`/api/publico`, `/api/v1`, `/api/admin`) com `SecurityFilterChain` separados; `TenantContext` (`ScopedValue`) + `TenantAwareTransactionManager` (`SET LOCAL app.id_tenant`); pacotes-módulo do monólito; pings de fumaça. **7 testes verdes** (Testcontainers Postgres 18 + Flyway) e app **rodando/curada ao vivo**. Persistência: **Spring Data JDBC** |
+| `web/`, `admin/`, `site/` | Ainda não criados (scaffolding pendente). Stack do `site/` (SEO — Astro/Next) a decidir |
 
 **Stack alvo:** Java 25 + Spring Boot 4.x · PostgreSQL 18 (Docker, banco **`niner_db`**) · React 19 + Vite (3 apps) · Flyway · JWT. **SaaS multi-tenant** (banco único + `id_tenant` + Postgres RLS).
 
 ---
 
 ## Linha do tempo
+
+### 2026-07-10 — Esqueleto da API no ar (Fase 0): 3 superfícies + contexto de tenant
+
+Scaffolding do backend (spec §Roadmap Fase 0), **independente** das decisões
+bloqueantes Q2/Q5/Q7 — entrega um esqueleto que compila, sobe e prova a arquitetura,
+sem as migrations de domínio (V013+).
+
+1. **`api/` criado** via Spring Initializr — **Spring Boot 4.0.7 / Java 25**, Maven,
+   deps: webmvc, security, oauth2-resource-server, validation, actuator, postgresql,
+   flyway, **data-jdbc**, testcontainers. `groupId com.vetor.niner`.
+
+2. **Decisão de persistência: Spring Data JDBC** (não JPA/Hibernate). Mais explícito e
+   previsível para o padrão RLS + `SET LOCAL` por transação. A spec foi atualizada
+   (§3.1.1, §3.2, §3.3.1): removidas as menções a Hibernate `@Filter` e JPA auditing;
+   timestamps via `DEFAULT now()` + preenchimento no serviço de domínio.
+
+3. **3 superfícies (ADR-007)** — `SegurancaConfig` com `SecurityFilterChain` separados
+   por `securityMatcher`: `/api/publico/**` (+ actuator, permitAll), `/api/v1/**`
+   (tenant), `/api/admin/**` (staff) e um chain default que **nega** o resto. JWT ainda
+   não exigido (sem emissor nesta fase) — marcado `TODO(jwt)`; validação de `aud` entra
+   na fase de auth.
+
+4. **Infra de contexto de tenant (P8, §3.1.1)** — `TenantContext` com **`ScopedValue`**
+   (Java 25); `TenantFilter` lê o claim `tid` do JWT e liga o contexto na cadeia de
+   `/api/v1`; `TenantAwareTransactionManager` roda
+   `select set_config('app.id_tenant', :tid, true)` no início da transação, casando com
+   as políticas RLS (`plataforma.tenant_atual()`, V002). A app conecta como **`niner_app`**
+   (sem BYPASSRLS); **Flyway roda separado** como `niner_owner` (serviço do compose) —
+   `spring.flyway.enabled=false` na app.
+
+5. **Pacotes-módulo do monólito** criados com `package-info.java`: `plataforma`,
+   `identidade`, `catalogo`, `estoque`, `pedidos`, `precos`, `canais`, `integracao`,
+   `comum/{config,tenant,web}`. Domínio entra com as migrations V013+.
+
+6. **Serviço `api` no `docker-compose.yml`** + `Dockerfile` multi-stage (Maven+JDK 25 →
+   JRE 25, usuário não-root). Ordem documentada: `db` → `flyway` → `api`.
+
+7. **Verificação de ponta a ponta (tudo verde):**
+   - `./mvnw test` → **7 testes** (context loads + 3 superfícies + propagação de tenant
+     `tid=42 → id_tenant=42` + rota fora → 403), com **Testcontainers Postgres 18.4** e
+     **Flyway aplicando V001–V012** (bootstrap de roles via `bootstrap-test.sql`).
+   - App rodando ao vivo contra o `db` do compose (como `niner_app`):
+     `/actuator/health` UP; `/api/publico|v1|admin/ping` → 200; rota fora → 403.
+   - ⚠️ **Colima + Testcontainers:** exige `TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE=/var/run/docker.sock`
+     (senão o Ryuk falha ao montar o docker.sock). Anotado no README da `api/`.
+
+8. **Gate P8 parcial:** o teste de isolamento cross-tenant só fecha quando existirem
+   tabelas de domínio com RLS (V013+). Registrado como pendência — **não** cumprido ainda.
 
 ### 2026-07-09 — Infra local no ar: Postgres 18 + migrations validadas
 
@@ -105,6 +154,6 @@ Precisam ser resolvidas **antes de codar** os módulos afetados:
 ## Próximos passos sugeridos
 
 1. Fechar as decisões bloqueantes restantes (Q2, Q5, Q7) e as de negócio (D1, D5, D6, D8, D9, D10); registrar Q6 e as de arquitetura como ADRs (ADR-006 a 009).
-2. Scaffolding da Fase 0: esqueleto Spring Boot (`api/`) com módulos **incluindo `plataforma`** e as 3 superfícies, e os 3 apps React (`web/`, `admin/`, `site/`); adicionar os serviços correspondentes ao `docker-compose.yml`. *(✅ compose + db + Flyway já no ar em 2026-07-09.)*
+2. Scaffolding da Fase 0: ✅ **esqueleto Spring Boot (`api/`) no ar em 2026-07-10** (módulos incl. `plataforma`, 3 superfícies, contexto de tenant, serviço `api` no compose). **Falta** scaffoldar os 3 apps React (`web/`, `admin/`, `site/`) — e decidir o stack de SEO do `site/` (Astro/Next), registrando como ADR-010.
 3. Continuar as migrations V013+ (§3.5.1): domínio do lojista (`identidade`, `catalogo`, `estoque`, `pedidos`, `integracao`…) — depende de Q2/Q5/Q7 — e o arquivo final de RLS de domínio.
 4. Teste de isolamento (P8) como gate da Fase 0: um tenant nunca lê dado de outro.

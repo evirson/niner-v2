@@ -1,0 +1,8 @@
+# Overrides de teste. O datasource vem do Testcontainers (@ServiceConnection),
+# conectando como o superusuário do container.
+spring:
+  # Nos testes o Flyway aplica as migrations reais de db/migration (validação em CI).
+  # Em produção a app NÃO roda Flyway (fica com o serviço `flyway` do compose, P8).
+  flyway:
+    enabled: true
+    locations: filesystem:../db/migration

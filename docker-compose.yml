@@ -1,10 +1,11 @@
 # docker-compose.yml (dev) — spec §3.5
-# Por ora só a infra de dados: db (Postgres 18, banco niner_db) + flyway (migrations).
-# Os serviços api/web/admin/site entram quando os projetos forem scaffolded (Fase 0).
+# Infra de dados + API. Ordem de subida: db → flyway (migrations) → api.
+# Os serviços web/admin/site entram quando os fronts forem scaffolded.
 #
 # Uso:
 #   docker compose up -d db          # sobe o banco (bootstrap de roles roda no 1º init)
 #   docker compose run --rm flyway   # aplica as migrations db/migration/ como niner_owner
+#   docker compose up -d api         # sobe a API (conecta como niner_app, porta 8080)
 
 name: niner
 
@@ -42,6 +43,19 @@ services:
       -password=${FLYWAY_OWNER_PASSWORD:-dev_owner}
       -connectRetries=10
       migrate
+
+  # API Niner (Spring Boot 4 / Java 25). Conecta como niner_app (SEM BYPASSRLS, P8).
+  # As migrations devem ter sido aplicadas antes: `docker compose run --rm flyway`.
+  api:
+    build: ./api
+    container_name: niner-api
+    depends_on:
+      db: { condition: service_healthy }
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/niner_db
+      SPRING_DATASOURCE_USERNAME: niner_app
+      SPRING_DATASOURCE_PASSWORD: ${DB_APP_PASSWORD:-dev_app}
+    ports: ["8080:8080"]
 
 volumes:
   pgdata:

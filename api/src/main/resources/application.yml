@@ -1,0 +1,39 @@
+spring:
+  application:
+    name: niner-api
+
+  # A API conecta como niner_app (SEM BYPASSRLS) — P8. Overridable por env no compose.
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/niner_db}
+    username: ${SPRING_DATASOURCE_USERNAME:niner_app}
+    password: ${SPRING_DATASOURCE_PASSWORD:dev_app}
+
+  # Migrations NÃO rodam pela app: são aplicadas como niner_owner pelo serviço
+  # `flyway` do docker-compose (P8: a app nunca roda migration nem é dona de tabela).
+  flyway:
+    enabled: false
+
+  # I/O de integração com marketplaces/gateway (§3.2).
+  threads:
+    virtual:
+      enabled: true
+
+  # Erros no formato Problem Details (RFC 9457).
+  mvc:
+    problemdetails:
+      enabled: true
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true
+
+# TODO(jwt): quando existir o emissor de token (fase de auth/login), configurar o
+# resource server por superfície e validar `aud` (tenant × plataforma) + claim `tid`:
+#   spring.security.oauth2.resourceserver.jwt.issuer-uri: <...>
+#   spring.security.oauth2.resourceserver.jwt.jwk-set-uri: <...>
