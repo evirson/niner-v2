@@ -33,7 +33,12 @@ management:
       probes:
         enabled: true
 
-# TODO(jwt): quando existir o emissor de token (fase de auth/login), configurar o
-# resource server por superfície e validar `aud` (tenant × plataforma) + claim `tid`:
-#   spring.security.oauth2.resourceserver.jwt.issuer-uri: <...>
-#   spring.security.oauth2.resourceserver.jwt.jwk-set-uri: <...>
+# Config do Niner (JWT e trial). O segredo é HS256 (>=256 bits); em produção via secret manager.
+niner:
+  jwt:
+    secret: ${NINER_JWT_SECRET:niner-dev-secret-troque-em-producao-0123456789abcdef}
+    expiracao: PT8H            # validade do access token
+    emissor: niner
+  trial:
+    dias: 14                   # trial sem cartão (D2)
+    plano: Profissional        # plano-base durante o trial (fallback: menor preço ativo)

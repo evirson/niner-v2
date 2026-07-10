@@ -47,8 +47,9 @@ public class SegurancaConfig {
     SecurityFilterChain tenantFilterChain(HttpSecurity http, TenantFilter tenantFilter) throws Exception {
         http
                 .securityMatcher("/api/v1/**")
-                // TODO(jwt): .authorizeHttpRequests(a -> a.anyRequest().authenticated())
-                .authorizeHttpRequests(auth -> auth.anyRequest().permitAll())
+                .authorizeHttpRequests(auth -> auth.anyRequest().authenticated())
+                // JWT de tenant (aud=tenant validado no JwtDecoder). Emissão no login/signup.
+                .oauth2ResourceServer(oauth -> oauth.jwt(org.springframework.security.config.Customizer.withDefaults()))
                 .csrf(AbstractHttpConfigurer::disable)
                 .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 // estabelece o TenantContext após a autenticação, dentro da cadeia do tenant

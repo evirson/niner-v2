@@ -1,8 +1,19 @@
 # Overrides de teste. O datasource vem do Testcontainers (@ServiceConnection),
 # conectando como o superusuário do container.
+# NB: este arquivo SOMBREIA src/main/resources/application.yml no classpath de teste —
+# por isso o bloco `niner` precisa ser repetido aqui.
 spring:
   # Nos testes o Flyway aplica as migrations reais de db/migration (validação em CI).
   # Em produção a app NÃO roda Flyway (fica com o serviço `flyway` do compose, P8).
   flyway:
     enabled: true
     locations: filesystem:../db/migration
+
+niner:
+  jwt:
+    secret: niner-test-secret-0123456789abcdef0123456789abcdef
+    expiracao: PT8H
+    emissor: niner
+  trial:
+    dias: 14
+    plano: Profissional

@@ -46,10 +46,9 @@ class SuperficiesPingTest {
     }
 
     @Test
-    void v1SemTokenNaoTemTenant() throws Exception {
+    void v1SemTokenEhNaoAutorizado() throws Exception {
         mockMvc.perform(get("/api/v1/ping"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.id_tenant").doesNotExist());
+                .andExpect(status().isUnauthorized());
     }
 
     @Test

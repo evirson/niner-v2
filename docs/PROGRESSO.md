@@ -18,7 +18,7 @@ Projeto **spec-driven** em fase de fundação. O **esqueleto da API (Spring Boot
 | `CLAUDE.md` | Guia do repositório — atualizado para o SaaS multi-tenant (P8/P9, plataforma, `id_tenant`+RLS) |
 | `docker-compose.yml` | Infra local de dev: `db` (postgres:18, `niner_db`) + `flyway` (profile `migrate`) + **`api`** (Spring Boot, porta 8080, conecta como `niner_app`); **V001–V024 aplicadas e validadas em banco real** (control-plane + domínio do lojista + RLS) |
 | `db/migration/V013–V024` | **Novo — domínio do lojista** (identidade, cadastros, catálogo com `sku`+`ean`, estoque com `reservado`/`disponivel`, vendas, canais, pedidos, integração/outbox, cfg_geral) + **RLS de domínio** (`FORCE` + política por `id_tenant`). **Gate P8 verde** (teste de isolamento cross-tenant automatizado). `financeiro` NÃO entra (Q5/ADR-010) |
-| `api/` | **Novo — esqueleto Spring Boot 4.0.7 / Java 25** (Maven). 3 superfícies (`/api/publico`, `/api/v1`, `/api/admin`) com `SecurityFilterChain` separados; `TenantContext` (`ScopedValue`) + `TenantAwareTransactionManager` (`SET LOCAL app.id_tenant`); pacotes-módulo do monólito; pings de fumaça. **7 testes verdes** (Testcontainers Postgres 18 + Flyway) e app **rodando/curada ao vivo**. Persistência: **Spring Data JDBC** |
+| `api/` | Spring Boot 4.0.7 / Java 25 (Maven). 3 superfícies com `SecurityFilterChain` separados; `TenantContext` (`ScopedValue`) + `TenantAwareTransactionManager`; **auth JWT HS256** (login/signup emitem, `/api/v1` valida `aud=tenant`); **trial self-service** (`POST /api/publico/assinar` → tenant+configs+ADMIN+assinatura TRIAL + token), `POST /api/publico/login`, `GET /api/v1/eu`. **11 testes verdes** (Testcontainers) + fluxo **verificado ao vivo** como `niner_app`. Persistência: **Spring Data JDBC**. Falta: domínio (repos/serviços/endpoints de produto/estoque/pedido) e os 3 fronts |
 | `web/`, `admin/`, `site/` | Ainda não criados (scaffolding pendente). Stack do `site/` (SEO — Astro/Next) a decidir |
 
 **Stack alvo:** Java 25 + Spring Boot 4.x · PostgreSQL 18 (Docker, banco **`niner_db`**) · React 19 + Vite (3 apps) · Flyway · JWT. **SaaS multi-tenant** (banco único + `id_tenant` + Postgres RLS).
@@ -74,6 +74,31 @@ sem as migrations de domínio (V013+).
 
 8. **Gate P8 (parcial neste momento):** fecha com as tabelas de domínio + RLS — feito no
    mesmo dia (ver entrada seguinte).
+
+### 2026-07-10 — Motor do trial self-service (R12): signup → tenant + JWT + primeiro uso
+
+Implementado o fluxo de **assinatura-teste** (14 dias, sem cartão — D2) na superfície pública,
+com autenticação JWT real protegendo o ERP.
+
+1. **Auth JWT (HS256)** — `JwtConfig` (encoder/decoder com segredo simétrico; decoder valida
+   assinatura, expiração e **`aud=tenant`**), `TokenService` (emite token com `sub`/`tid`/`aud`/`roles`),
+   `BCryptPasswordEncoder`. Config em `niner.jwt.*`. `/api/v1/**` agora **exige** JWT (era permitAll);
+   o `TenantFilter` passa a ler o `tid` de um token real.
+
+2. **`POST /api/publico/assinar`** (`SignupService`, atômico) — numa única transação: cria
+   `plataforma.tenant` (TRIAL), estabelece `app.id_tenant` (para o RLS deixar inserir o domínio),
+   cria `assinatura` TRIAL (plano-base **Profissional**, `trial_expira_em = now()+14d`), `uso_tenant`,
+   `empresa`, `cfg_geral` (configurações padrão) e o primeiro **usuário ADMIN** (senha em BCrypt).
+   Devolve o **token de primeiro acesso (auto-login)** + slug + validade do trial.
+
+3. **`POST /api/publico/login`** (slug da loja + email + senha) e **`GET /api/v1/eu`** (primeiro uso:
+   com o token, o cliente já enxerga a própria conta/assinatura via RLS).
+
+4. **Verificação (tudo verde):**
+   - **11 testes** (`OnboardingTrialTest`: signup cria tenant e libera 1º uso; login; 401 sem token).
+   - **Ao vivo como `niner_app`** (RLS ativo): signup de "Loja do Ze" criou `empresa=1`, `cfg_geral=1`,
+     `usuario_admin=1`, `assinatura=TRIAL`, `uso.qtd_usuarios=1`; `/api/v1/eu` com o token → conta TRIAL;
+     sem token → 401; login → 200.
 
 ### 2026-07-10 — Decisões Q2/Q7/Q5 fechadas + domínio do lojista (V013–V024) + gate P8 verde
 
