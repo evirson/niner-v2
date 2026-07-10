@@ -55,6 +55,9 @@ import Base from '../layouts/Base.astro';
         document.getElementById('resumo').innerHTML =
           `A loja <strong>${conta.nomeConta || ''}</strong> está liberada em modo <strong>teste</strong>` +
           (validade ? ` até <strong>${validade}</strong>.` : '.');
+        // Handoff para o app do ERP levando o token (SSO leve site → web).
+        const webBase = window.NINER_WEB_BASE || 'http://localhost:5173';
+        document.getElementById('entrar').setAttribute('href', `${webBase}/#token=${encodeURIComponent(token)}`);
         carregando.style.display = 'none';
         pronto.style.display = 'block';
       } catch (_) {

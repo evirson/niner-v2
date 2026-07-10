@@ -20,7 +20,8 @@ Projeto **spec-driven** em fase de fundação. O **esqueleto da API (Spring Boot
 | `db/migration/V013–V024` | **Novo — domínio do lojista** (identidade, cadastros, catálogo com `sku`+`ean`, estoque com `reservado`/`disponivel`, vendas, canais, pedidos, integração/outbox, cfg_geral) + **RLS de domínio** (`FORCE` + política por `id_tenant`). **Gate P8 verde** (teste de isolamento cross-tenant automatizado). `financeiro` NÃO entra (Q5/ADR-010) |
 | `api/` | Spring Boot 4.0.7 / Java 25 (Maven). 3 superfícies com `SecurityFilterChain` separados; `TenantContext` (`ScopedValue`) + `TenantAwareTransactionManager`; **auth JWT HS256** (login/signup emitem, `/api/v1` valida `aud=tenant`); **trial self-service** (`POST /api/publico/assinar` → tenant+configs+ADMIN+assinatura TRIAL + token), `POST /api/publico/login`, `GET /api/v1/eu`. **11 testes verdes** (Testcontainers) + fluxo **verificado ao vivo** como `niner_app`. Persistência: **Spring Data JDBC**. Falta: domínio (repos/serviços/endpoints de produto/estoque/pedido) e os 3 fronts |
 | `site/` | **Novo — site público (Astro/SSG, ADR-011)**. Landing SEO (title/description/OG/canonical + planos no HTML), `/assinar` (form → `POST /api/publico/assinar` → auto-login → `/bem-vindo`), `/bem-vindo` (1º uso via `GET /api/v1/eu`). Design tokens §3.7 (tema claro/escuro). Base-URL da API em runtime. **Build SSG ok**; CORS validado |
-| `web/`/`admin/` | Ainda não criados (React 19 + Vite) |
+| `web/` | **Novo — ERP do lojista (React 19 + Vite + TS)**. Auth JWT (login slug+email+senha; **handoff SSO** do site via `#token=`), shell (nav Painel/Produtos/Estoque/Pedidos/Canais + Sair), **Painel** real (`GET /api/v1/eu` via TanStack Query), placeholders "em construção". Design tokens §3.7 (claro/escuro). **Build ok**; fluxo **e2e verificado** (login + handoff). |
+| `admin/` | Ainda não criado (backoffice React 19 + Vite) |
 
 **Stack alvo:** Java 25 + Spring Boot 4.x · PostgreSQL 18 (Docker, banco **`niner_db`**) · React 19 + Vite (3 apps) · Flyway · JWT. **SaaS multi-tenant** (banco único + `id_tenant` + Postgres RLS).
 
@@ -75,6 +76,26 @@ sem as migrations de domínio (V013+).
 
 8. **Gate P8 (parcial neste momento):** fecha com as tabelas de domínio + RLS — feito no
    mesmo dia (ver entrada seguinte).
+
+### 2026-07-10 — App `web/` (ERP do lojista): login + handoff + painel
+
+1. **`web/` criado** (React 19 + Vite + TS; React Router 7 + TanStack Query 5 — §3.2).
+2. **Autenticação:** login (`slug + email + senha` → `POST /api/publico/login`) e
+   **handoff SSO** do site — o botão "Ir para o sistema" do `/bem-vindo` leva o token via
+   `#token=...`; o app consome, guarda e limpa a URL. Guarda de rota + logout em 401.
+3. **Shell do ERP:** cabeçalho (marca + Sair) + navegação lateral (Painel, Produtos,
+   Estoque, Pedidos, Canais). **Painel** real via `GET /api/v1/eu` (loja, assinatura TRIAL,
+   usuário/papel + próximos passos). Áreas de domínio como placeholders "em construção".
+4. **Design system §3.7** (tokens CSS, tema claro/escuro) — mesma paleta do site.
+5. **Backend:** CORS já cobre a origem do web (`niner.cors.origins`).
+6. **Verificação (e2e, Playwright):** login → painel "Olá, Ana / Loja Web Teste / TRIAL";
+   navegação para "Produtos"; **handoff** `#token=` → entra logado e limpa o hash. **Build ok.**
+   *(Durante a verificação, uma instância antiga da API presa na 8080 foi derrubada e a API
+   subiu do jar atual — sem mudança de código.)*
+7. Serviço `web` adicionado ao `docker-compose.yml` (perfil `fronts`).
+
+> O loop de aquisição está fechado: **site → assinar → tenant + trial → "Ir para o sistema" → web logado**.
+> Falta: `admin/` (backoffice), endpoints de domínio reais em `/api/v1`, e R22 (ajuda) nos fronts.
 
 ### 2026-07-10 — Site público (Astro/SSG) + planos + CORS: aquisição self-service no ar
 

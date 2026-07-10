@@ -1,0 +1,106 @@
+/* Design system do Niner (§3.7) — tokens + tema claro/escuro. Compartilha a paleta
+   com o site (golden file: cadastro_fornecedor_campos_cinza.html). */
+:root {
+  --ground: #f5f4f0; --surface: #ffffff; --surface-2: #edece6;
+  --field-bg: #e4e6e2; --field-text: #20262a; --label-color: #5c6660;
+  --ink: #20262a; --ink-muted: #5c6660;
+  --accent: #1f6f6b; --accent-ink: #ffffff;
+  --line: #dee2dc; --line-strong: #b9beb5; --danger: #a63d29;
+  --radius: 10px;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ground: #12181a; --surface: #1a2225; --surface-2: #202a2d;
+    --field-bg: #2a3336; --field-text: #e7ecec; --label-color: #93a19e;
+    --ink: #e7ecec; --ink-muted: #93a19e;
+    --accent: #4fbdb2; --accent-ink: #0b1416;
+    --line: #2a3538; --line-strong: #4a5457; --danger: #e2836a;
+  }
+}
+:root[data-theme='light'] {
+  --ground: #f5f4f0; --surface: #ffffff; --surface-2: #edece6;
+  --field-bg: #e4e6e2; --field-text: #20262a; --label-color: #5c6660;
+  --ink: #20262a; --ink-muted: #5c6660; --accent: #1f6f6b; --accent-ink: #ffffff;
+  --line: #dee2dc; --line-strong: #b9beb5; --danger: #a63d29;
+}
+:root[data-theme='dark'] {
+  --ground: #12181a; --surface: #1a2225; --surface-2: #202a2d;
+  --field-bg: #2a3336; --field-text: #e7ecec; --label-color: #93a19e;
+  --ink: #e7ecec; --ink-muted: #93a19e; --accent: #4fbdb2; --accent-ink: #0b1416;
+  --line: #2a3538; --line-strong: #4a5457; --danger: #e2836a;
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--ground); color: var(--ink);
+  font: 15px/1.55 system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+}
+a { color: var(--accent); }
+code { background: var(--surface-2); padding: 1px 6px; border-radius: 6px; font-size: .9em; }
+.muted { color: var(--ink-muted); }
+.eyebrow { color: var(--accent); font-weight: 600; text-transform: uppercase; letter-spacing: 1px; font-size: 12px; }
+.erro { color: var(--danger); font-size: 14px; }
+h1 { font-size: 26px; line-height: 1.2; }
+
+.brand { font-weight: 700; letter-spacing: .5px; color: var(--ink); text-decoration: none; }
+.brand span { color: var(--accent); }
+
+.btn {
+  display: inline-block; padding: 11px 18px; border-radius: var(--radius);
+  background: var(--accent); color: var(--accent-ink); font-weight: 600;
+  text-decoration: none; border: 0; cursor: pointer; font-size: 14px;
+}
+.btn:disabled { opacity: .6; cursor: default; }
+.btn.ghost { background: transparent; color: var(--ink-muted); border: 1px solid var(--line-strong); }
+
+.card {
+  background: var(--surface); border: 1px solid var(--line);
+  border-radius: var(--radius); padding: 20px;
+}
+.card-title { font-size: 13px; color: var(--label-color); text-transform: uppercase; letter-spacing: .5px; margin: 0 0 8px; }
+.big { font-size: 20px; font-weight: 700; margin: 0 0 4px; }
+
+label { display: block; color: var(--label-color); font-size: 13px; margin: 12px 0 6px; }
+input {
+  width: 100%; padding: 11px 13px; border-radius: 8px;
+  background: var(--field-bg); color: var(--field-text); border: 1px solid var(--line-strong);
+  font-size: 15px;
+}
+
+.badge {
+  display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 600;
+  background: var(--surface-2); color: var(--ink-muted); border: 1px solid var(--line);
+}
+.badge-trial { background: color-mix(in srgb, var(--accent) 18%, transparent); color: var(--accent); border-color: transparent; }
+
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; margin-top: 16px; }
+.passos { margin: 0 0 8px; padding-left: 20px; color: var(--ink); }
+.passos li { margin: 6px 0; }
+
+/* Shell do ERP */
+.app { min-height: 100vh; display: flex; flex-direction: column; }
+.app-header {
+  height: 60px; display: flex; align-items: center; justify-content: space-between;
+  padding: 0 20px; background: var(--surface-2); border-bottom: 1px solid var(--line);
+}
+.app-body { flex: 1; display: flex; }
+.app-nav {
+  width: 200px; padding: 16px 12px; background: var(--surface); border-right: 1px solid var(--line);
+  display: flex; flex-direction: column; gap: 4px;
+}
+.app-nav a {
+  display: block; padding: 9px 12px; border-radius: 8px; text-decoration: none;
+  color: var(--ink-muted); font-weight: 500;
+}
+.app-nav a:hover { background: var(--surface-2); color: var(--ink); }
+.app-nav a.active { background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--accent); }
+.app-main { flex: 1; padding: 28px; max-width: 900px; }
+
+/* Login */
+.login-wrap { min-height: 100vh; display: grid; place-items: center; padding: 20px; }
+.login-card { width: 100%; max-width: 380px; }
+
+@media (max-width: 640px) {
+  .app-body { flex-direction: column; }
+  .app-nav { width: auto; flex-direction: row; overflow-x: auto; border-right: 0; border-bottom: 1px solid var(--line); }
+}
