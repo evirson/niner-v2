@@ -19,7 +19,8 @@ Projeto **spec-driven** em fase de fundação. O **esqueleto da API (Spring Boot
 | `docker-compose.yml` | Infra local de dev: `db` (postgres:18, `niner_db`) + `flyway` (profile `migrate`) + **`api`** (Spring Boot, porta 8080, conecta como `niner_app`); **V001–V024 aplicadas e validadas em banco real** (control-plane + domínio do lojista + RLS) |
 | `db/migration/V013–V024` | **Novo — domínio do lojista** (identidade, cadastros, catálogo com `sku`+`ean`, estoque com `reservado`/`disponivel`, vendas, canais, pedidos, integração/outbox, cfg_geral) + **RLS de domínio** (`FORCE` + política por `id_tenant`). **Gate P8 verde** (teste de isolamento cross-tenant automatizado). `financeiro` NÃO entra (Q5/ADR-010) |
 | `api/` | Spring Boot 4.0.7 / Java 25 (Maven). 3 superfícies com `SecurityFilterChain` separados; `TenantContext` (`ScopedValue`) + `TenantAwareTransactionManager`; **auth JWT HS256** (login/signup emitem, `/api/v1` valida `aud=tenant`); **trial self-service** (`POST /api/publico/assinar` → tenant+configs+ADMIN+assinatura TRIAL + token), `POST /api/publico/login`, `GET /api/v1/eu`. **11 testes verdes** (Testcontainers) + fluxo **verificado ao vivo** como `niner_app`. Persistência: **Spring Data JDBC**. Falta: domínio (repos/serviços/endpoints de produto/estoque/pedido) e os 3 fronts |
-| `web/`, `admin/`, `site/` | Ainda não criados (scaffolding pendente). Stack do `site/` (SEO — Astro/Next) a decidir |
+| `site/` | **Novo — site público (Astro/SSG, ADR-011)**. Landing SEO (title/description/OG/canonical + planos no HTML), `/assinar` (form → `POST /api/publico/assinar` → auto-login → `/bem-vindo`), `/bem-vindo` (1º uso via `GET /api/v1/eu`). Design tokens §3.7 (tema claro/escuro). Base-URL da API em runtime. **Build SSG ok**; CORS validado |
+| `web/`/`admin/` | Ainda não criados (React 19 + Vite) |
 
 **Stack alvo:** Java 25 + Spring Boot 4.x · PostgreSQL 18 (Docker, banco **`niner_db`**) · React 19 + Vite (3 apps) · Flyway · JWT. **SaaS multi-tenant** (banco único + `id_tenant` + Postgres RLS).
 
@@ -74,6 +75,23 @@ sem as migrations de domínio (V013+).
 
 8. **Gate P8 (parcial neste momento):** fecha com as tabelas de domínio + RLS — feito no
    mesmo dia (ver entrada seguinte).
+
+### 2026-07-10 — Site público (Astro/SSG) + planos + CORS: aquisição self-service no ar
+
+1. **ADR-011 decidido: Astro (SSG)** para o `site/` (SEO/Core Web Vitals). `web`/`admin`
+   seguem React+Vite.
+2. **`site/` criado** (Astro): landing SEO-forte (`<title>`/description/OG/canonical, h1,
+   planos renderizados no HTML estático), `/assinar` (formulário → `POST /api/publico/assinar`
+   → guarda token e vai para `/bem-vindo`), `/bem-vindo` (primeiro uso: `GET /api/v1/eu`).
+   Design tokens §3.7 (tema claro/escuro); base-URL da API lida em runtime (`public/config.js`).
+   **Build SSG ok** (3 páginas estáticas).
+3. **Backend de apoio:** `GET /api/publico/planos` (R11, catálogo público) e **CORS**
+   (`niner.cors.origins`) para os fronts chamarem a API. Preflight e planos validados com
+   `Origin` do site (headers `Access-Control-Allow-*` corretos). **11 testes seguem verdes.**
+4. Serviço `site` adicionado ao `docker-compose.yml` (perfil `fronts`).
+
+> Pendente no site: **R22** (ajuda de tela + vídeo), páginas de conteúdo/sitemap, e o botão
+> "Ir para o sistema" ligado ao app `web/` (a criar).
 
 ### 2026-07-10 — Motor do trial self-service (R12): signup → tenant + JWT + primeiro uso
 

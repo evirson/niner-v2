@@ -1,0 +1,82 @@
+---
+import Base from '../layouts/Base.astro';
+
+const beneficios = [
+  { t: 'Estoque como fonte única', d: 'O ERP é o dono do estoque e do preço. Os marketplaces são réplicas — sincronizadas automaticamente.' },
+  { t: 'Zero overselling', d: 'Reserva de estoque no momento do pedido e baixa em todos os canais ao mesmo tempo. Você nunca vende o que não tem.' },
+  { t: 'Um pedido, todos os canais', d: 'Mercado Livre, Shopee, Amazon e sua loja física numa fila única de expedição.' },
+];
+
+// Planos-base para SEO (renderizados no HTML). Os valores reais vêm de /api/publico/planos
+// no cliente; se a API estiver no ar, estes cards são atualizados.
+const planosFallback = [
+  { nome: 'Essencial', precoMensal: 99, descricao: 'Loja física + 1 canal online.' },
+  { nome: 'Profissional', precoMensal: 249, descricao: 'Multicanal (ML + Shopee).' },
+  { nome: 'Escala', precoMensal: 599, descricao: 'Todos os canais e maior volume.' },
+];
+---
+
+<Base
+  title="Niner — ERP para varejo multicanal, sem overselling"
+  description="O ERP que é a fonte única de estoque e preço da sua loja e sincroniza automaticamente Mercado Livre, Shopee, Amazon e a loja física. Teste grátis por 14 dias, sem cartão."
+  path="/"
+>
+  <section class="container" style="padding: 72px 20px 40px;">
+    <p class="eyebrow">ERP para varejo multicanal</p>
+    <h1>Um estoque só. Todos os canais em sincronia.</h1>
+    <p style="font-size:19px; color:var(--ink-muted); max-width:640px;">
+      O Niner é a fonte única de estoque e preço da sua loja. Venda no Mercado Livre, Shopee,
+      Amazon e no balcão — sem vender o que não tem. <strong>Teste grátis por 14 dias, sem cartão.</strong>
+    </p>
+    <div style="display:flex; gap:12px; margin-top:24px; flex-wrap:wrap;">
+      <a class="btn" href="/assinar">Começar teste grátis</a>
+      <a class="btn ghost" href="#planos">Ver planos</a>
+    </div>
+  </section>
+
+  <section class="container" style="padding: 24px 20px; display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:20px;">
+    {beneficios.map((b) => (
+      <article class="card">
+        <h2 style="font-size:19px; margin:0 0 8px; color:var(--accent);">{b.t}</h2>
+        <p style="margin:0; color:var(--ink-muted);">{b.d}</p>
+      </article>
+    ))}
+  </section>
+
+  <section id="planos" class="container" style="padding: 56px 20px;">
+    <p class="eyebrow">Planos</p>
+    <h2 style="font-size:28px; margin:0 0 24px;">Escolha ao fim do teste. Sem compromisso agora.</h2>
+    <div id="planos-grid" style="display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:20px;">
+      {planosFallback.map((p) => (
+        <article class="card" data-plano={p.nome}>
+          <h3 style="margin:0 0 4px;">{p.nome}</h3>
+          <p style="font-size:28px; font-weight:700; margin:8px 0;">
+            R$ {p.precoMensal}<span style="font-size:14px; color:var(--ink-muted); font-weight:400;">/mês</span>
+          </p>
+          <p style="color:var(--ink-muted); margin:0 0 16px;">{p.descricao}</p>
+          <a class="btn" href="/assinar">Testar grátis</a>
+        </article>
+      ))}
+    </div>
+    <p style="color:var(--ink-muted); font-size:13px; margin-top:12px;">Preços provisórios (em definição).</p>
+  </section>
+
+  <!-- Atualiza os planos com os dados reais da API, se disponível (progressive enhancement). -->
+  <script is:inline>
+    (async () => {
+      try {
+        const base = window.NINER_API_BASE;
+        const res = await fetch(base + '/api/publico/planos');
+        if (!res.ok) return;
+        const planos = await res.json();
+        for (const p of planos) {
+          const card = document.querySelector(`[data-plano="${p.nome}"]`);
+          if (card) {
+            const preco = card.querySelector('p');
+            if (preco) preco.innerHTML = `R$ ${Number(p.precoMensal).toFixed(0)}<span style="font-size:14px;color:var(--ink-muted);font-weight:400;">/mês</span>`;
+          }
+        }
+      } catch (_) { /* offline: mantém o fallback estático (bom para SEO) */ }
+    })();
+  </script>
+</Base>

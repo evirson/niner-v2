@@ -5,11 +5,17 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
+import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.access.intercept.AuthorizationFilter;
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.CorsConfigurationSource;
+import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+
+import java.util.List;
 
 /**
  * Uma API, três superfícies, três {@link SecurityFilterChain} distintos (ADR-007,
@@ -37,6 +43,7 @@ public class SegurancaConfig {
         http
                 .securityMatcher("/api/publico/**", "/actuator/**")
                 .authorizeHttpRequests(auth -> auth.anyRequest().permitAll())
+                .cors(Customizer.withDefaults())
                 .csrf(AbstractHttpConfigurer::disable)
                 .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS));
         return http.build();
@@ -49,7 +56,8 @@ public class SegurancaConfig {
                 .securityMatcher("/api/v1/**")
                 .authorizeHttpRequests(auth -> auth.anyRequest().authenticated())
                 // JWT de tenant (aud=tenant validado no JwtDecoder). Emissão no login/signup.
-                .oauth2ResourceServer(oauth -> oauth.jwt(org.springframework.security.config.Customizer.withDefaults()))
+                .oauth2ResourceServer(oauth -> oauth.jwt(Customizer.withDefaults()))
+                .cors(Customizer.withDefaults())
                 .csrf(AbstractHttpConfigurer::disable)
                 .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 // estabelece o TenantContext após a autenticação, dentro da cadeia do tenant
@@ -78,5 +86,18 @@ public class SegurancaConfig {
                 .csrf(AbstractHttpConfigurer::disable)
                 .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS));
         return http.build();
+    }
+
+    /** CORS para os fronts (site/web/admin) chamarem a API. Origens em niner.cors.origins. */
+    @Bean
+    CorsConfigurationSource corsConfigurationSource(NinerProperties props) {
+        CorsConfiguration cfg = new CorsConfiguration();
+        cfg.setAllowedOrigins(props.cors().origins());
+        cfg.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
+        cfg.setAllowedHeaders(List.of("Authorization", "Content-Type"));
+        cfg.setMaxAge(3600L);
+        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+        source.registerCorsConfiguration("/api/**", cfg);
+        return source;
     }
 }

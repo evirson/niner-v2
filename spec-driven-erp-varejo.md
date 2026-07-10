@@ -248,7 +248,7 @@ Decisões-chave (registrar cada uma como ADR — template na seção 6):
 | Framework | Spring Boot 4.x / Spring Framework 7 | Suporte oficial a Java 25 |
 | Persistência | **Spring Data JDBC** (não JPA/Hibernate); Flyway para migrations | Decisão de 2026-07-10: JDBC é mais explícito e previsível para o padrão RLS + `SET LOCAL` por transação (sem proxy/lazy-loading/1º nível de cache do Hibernate a mascarar o contexto). Migrations versionadas em `db/migration`. Auditoria de datas via `DEFAULT now()` na coluna + preenchimento no serviço de domínio (na mesma transação, P3) — não `@CreatedDate` |
 | Banco | PostgreSQL 18 (imagem oficial `postgres:18`) | `JSONB` para payloads brutos de integração. Schema legado em `db/*.txt` é **Firebird** e serve de referência — ver §3.3.1 para as regras de conversão |
-| Frontend | React 19 + Vite + TypeScript | TanStack Query para dados; React Router |
+| Frontend | `web`/`admin`: React 19 + Vite + TS (TanStack Query, React Router). `site`: **Astro (SSG)** para SEO (ADR-011) | Fronts leem a base-URL da API em runtime (não embutida) |
 | UI | shadcn/ui ou Mantine | decidir por ADR |
 | Auth | Spring Security + JWT (access curto + refresh) | |
 | Docs API | springdoc-openapi (OpenAPI 3.1) | Contrato gerado é parte da spec |
@@ -758,7 +758,7 @@ Data: · Decisores:
 Positivas: · Negativas/dívidas: · Gatilho de revisão: [métrica ou evento que faria rever]
 ```
 
-ADRs já previstos: ADR-001 monolito modular; ADR-002 outbox sobre Postgres sem broker; ADR-003 biblioteca de UI; **ADR-004 estratégia de reserva de estoque: reservar no `recebido` + expiração configurável por canal (Q2 fechada 2026-07-10; §3.3.5);** ADR-005 cifragem de credenciais; **ADR-006 isolamento de tenant (banco único + `id_tenant` + Postgres RLS; §3.1.1); ADR-007 topologia do control-plane (uma API/3 superfícies + 3 apps React, API stateless, supera o non-goal §2.3, gatilhos de split); ADR-008 adapter de gateway de cobrança (provedor a definir — D3); ADR-009 auth/identidade multi-tenant (duas populações de usuário, claims JWT por `aud`, papéis de staff × RBAC do tenant); ADR-010 financeiro do lojista fora do v1 (Q5 fechada 2026-07-10 — Fase 2, crediário priorizado; §3.3.7); ADR-011 framework do site público para SEO (Astro × Next — em aberto, "decidir depois").**
+ADRs já previstos: ADR-001 monolito modular; ADR-002 outbox sobre Postgres sem broker; ADR-003 biblioteca de UI; **ADR-004 estratégia de reserva de estoque: reservar no `recebido` + expiração configurável por canal (Q2 fechada 2026-07-10; §3.3.5);** ADR-005 cifragem de credenciais; **ADR-006 isolamento de tenant (banco único + `id_tenant` + Postgres RLS; §3.1.1); ADR-007 topologia do control-plane (uma API/3 superfícies + 3 apps React, API stateless, supera o non-goal §2.3, gatilhos de split); ADR-008 adapter de gateway de cobrança (provedor a definir — D3); ADR-009 auth/identidade multi-tenant (duas populações de usuário, claims JWT por `aud`, papéis de staff × RBAC do tenant); ADR-010 financeiro do lojista fora do v1 (Q5 fechada 2026-07-10 — Fase 2, crediário priorizado; §3.3.7); ADR-011 framework do site público: **Astro (SSG)** — decidido 2026-07-10, prioriza SEO/Core Web Vitals para a landing/planos; `web`/`admin` seguem React+Vite.**
 
 # 7. Template — Task
 

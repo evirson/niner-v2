@@ -42,3 +42,8 @@ niner:
   trial:
     dias: 14                   # trial sem cartão (D2)
     plano: Profissional        # plano-base durante o trial (fallback: menor preço ativo)
+  cors:
+    origins:                   # fronts em dev (site/web/admin). Em prod: domínios reais.
+      - http://localhost:5175
+      - http://localhost:5173
+      - http://localhost:5174

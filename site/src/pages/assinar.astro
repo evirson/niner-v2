@@ -1,0 +1,79 @@
+---
+import Base from '../layouts/Base.astro';
+---
+
+<Base
+  title="Criar conta de teste — Niner"
+  description="Crie sua conta de teste do Niner em 1 minuto. 14 dias grátis, sem cartão de crédito."
+  path="/assinar"
+>
+  <section class="container" style="padding: 56px 20px; max-width: 480px;">
+    <p class="eyebrow">Teste grátis · 14 dias · sem cartão</p>
+    <h1 style="font-size:32px;">Crie a conta da sua loja</h1>
+    <p style="color:var(--ink-muted);">
+      Em um passo você já entra no sistema. Você pode configurar canais e produtos depois.
+    </p>
+
+    <form id="form-assinar" class="card" style="margin-top:16px;" novalidate>
+      <label for="nomeLoja">Nome da loja</label>
+      <input id="nomeLoja" name="nomeLoja" required autocomplete="organization" placeholder="Ex.: Loja do Zé" />
+
+      <label for="nomeAdmin">Seu nome</label>
+      <input id="nomeAdmin" name="nomeAdmin" required autocomplete="name" placeholder="Ex.: Zé da Silva" />
+
+      <label for="email">E-mail</label>
+      <input id="email" name="email" type="email" required autocomplete="email" placeholder="voce@sualoja.com" />
+
+      <label for="senha">Senha (mín. 8 caracteres)</label>
+      <input id="senha" name="senha" type="password" required minlength="8" autocomplete="new-password" />
+
+      <p id="erro" role="alert" style="color:var(--danger); min-height:20px; margin:12px 0 0; font-size:14px;"></p>
+
+      <button id="btn" class="btn" type="submit" style="width:100%; margin-top:8px;">Criar conta e entrar</button>
+      <p style="color:var(--ink-muted); font-size:12px; margin-top:12px;">
+        Ao continuar você inicia um teste gratuito de 14 dias. Sem cobrança automática.
+      </p>
+    </form>
+  </section>
+
+  <script is:inline>
+    const form = document.getElementById('form-assinar');
+    const erro = document.getElementById('erro');
+    const btn = document.getElementById('btn');
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      erro.textContent = '';
+      const dados = {
+        nomeLoja: form.nomeLoja.value.trim(),
+        nomeAdmin: form.nomeAdmin.value.trim(),
+        email: form.email.value.trim(),
+        senha: form.senha.value,
+      };
+      btn.disabled = true;
+      btn.textContent = 'Criando...';
+      try {
+        const res = await fetch(window.NINER_API_BASE + '/api/publico/assinar', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(dados),
+        });
+        if (res.status === 201) {
+          const r = await res.json();
+          // auto-login: guarda o token e leva ao primeiro uso
+          localStorage.setItem('niner_token', r.token);
+          localStorage.setItem('niner_slug', r.slug);
+          window.location.href = '/bem-vindo';
+          return;
+        }
+        const problema = await res.json().catch(() => ({}));
+        erro.textContent = problema.detail || problema.title || 'Não foi possível criar a conta. Verifique os dados.';
+      } catch (_) {
+        erro.textContent = 'Não foi possível conectar ao servidor. Tente novamente.';
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Criar conta e entrar';
+      }
+    });
+  </script>
+</Base>

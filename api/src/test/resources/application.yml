@@ -17,3 +17,6 @@ niner:
   trial:
     dias: 14
     plano: Profissional
+  cors:
+    origins:
+      - http://localhost:5175

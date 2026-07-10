@@ -1,0 +1,67 @@
+---
+import Base from '../layouts/Base.astro';
+---
+
+<Base
+  title="Bem-vindo ao Niner"
+  description="Sua conta de teste do Niner está pronta."
+  path="/bem-vindo"
+>
+  <section class="container" style="padding: 56px 20px; max-width: 640px;">
+    <div id="carregando" style="color:var(--ink-muted);">Liberando seu sistema…</div>
+
+    <div id="pronto" style="display:none;">
+      <p class="eyebrow">Sua loja está no ar</p>
+      <h1 id="titulo">Bem-vindo!</h1>
+      <div class="card">
+        <p id="resumo" style="margin:0 0 16px;"></p>
+        <p style="margin:0 0 20px; color:var(--ink-muted);">
+          Próximos passos: cadastrar seus produtos, conectar um canal de venda e importar pedidos.
+        </p>
+        <a class="btn" id="entrar" href="#">Ir para o sistema</a>
+      </div>
+      <p style="color:var(--ink-muted); font-size:13px; margin-top:16px;">
+        O aplicativo do ERP (web) ainda está em construção — em breve este botão abre o painel.
+      </p>
+    </div>
+
+    <div id="semconta" style="display:none;">
+      <h1>Você ainda não tem uma conta</h1>
+      <p><a class="btn" href="/assinar">Criar conta de teste</a></p>
+    </div>
+  </section>
+
+  <script is:inline>
+    (async () => {
+      const token = localStorage.getItem('niner_token');
+      const carregando = document.getElementById('carregando');
+      const pronto = document.getElementById('pronto');
+      const semconta = document.getElementById('semconta');
+      if (!token) {
+        carregando.style.display = 'none';
+        semconta.style.display = 'block';
+        return;
+      }
+      try {
+        const res = await fetch(window.NINER_API_BASE + '/api/v1/eu', {
+          headers: { Authorization: 'Bearer ' + token },
+        });
+        if (!res.ok) throw new Error('sessão inválida');
+        const eu = await res.json();
+        const conta = eu.conta || {};
+        const usuario = eu.usuario || {};
+        document.getElementById('titulo').textContent = `Bem-vindo, ${usuario.nome || ''}!`;
+        const validade = eu.trial_expira_em ? new Date(eu.trial_expira_em).toLocaleDateString('pt-BR') : '';
+        document.getElementById('resumo').innerHTML =
+          `A loja <strong>${conta.nomeConta || ''}</strong> está liberada em modo <strong>teste</strong>` +
+          (validade ? ` até <strong>${validade}</strong>.` : '.');
+        carregando.style.display = 'none';
+        pronto.style.display = 'block';
+      } catch (_) {
+        localStorage.removeItem('niner_token');
+        carregando.style.display = 'none';
+        semconta.style.display = 'block';
+      }
+    })();
+  </script>
+</Base>

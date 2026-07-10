@@ -57,5 +57,16 @@ services:
       SPRING_DATASOURCE_PASSWORD: ${DB_APP_PASSWORD:-dev_app}
     ports: ["8080:8080"]
 
+  # Site público (Astro/SSG, SEO — ADR-011). Dev server na 5175. Perfil `fronts`.
+  # A base-URL da API é lida em runtime (site/public/config.js).
+  site:
+    image: node:26-alpine
+    profiles: [fronts]
+    working_dir: /app
+    volumes:
+      - ./site:/app
+    command: sh -c "npm install && npm run dev -- --host"
+    ports: ["5175:5175"]
+
 volumes:
   pgdata:
