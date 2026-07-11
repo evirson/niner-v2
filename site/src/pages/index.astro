@@ -1,80 +1,274 @@
 ---
 import Base from '../layouts/Base.astro';
 
-const beneficios = [
-  { t: 'Estoque como fonte única', d: 'O ERP é o dono do estoque e do preço. Os marketplaces são réplicas — sincronizadas automaticamente.' },
-  { t: 'Zero overselling', d: 'Reserva de estoque no momento do pedido e baixa em todos os canais ao mesmo tempo. Você nunca vende o que não tem.' },
-  { t: 'Um pedido, todos os canais', d: 'Mercado Livre, Shopee, Amazon e sua loja física numa fila única de expedição.' },
+// Recursos (linguagem do Niner — multicanal, não o PDV/crediário legado).
+const recursos = [
+  { ic: '📦', t: 'Estoque como fonte única', d: 'O ERP é o dono do estoque e do preço. Marketplaces são réplicas, sincronizadas automaticamente a cada venda.' },
+  { ic: '🛡️', t: 'Zero overselling', d: 'Reserva no momento do pedido e baixa simultânea em todos os canais. Você nunca vende o que não tem.' },
+  { ic: '🧾', t: 'Um pedido, todos os canais', d: 'Mercado Livre, Shopee, Amazon e o balcão numa fila única de expedição — sem pular de aba.' },
+  { ic: '🏷️', t: 'Preço sincronizado', d: 'Ajuste o preço uma vez; ele viaja para cada anúncio conectado, com histórico de quem mudou e quando.' },
+  { ic: '🔎', t: 'Auditoria de tudo', d: 'Cada movimento de estoque, preço e pedido vira registro imutável: quem, quando, de onde e de/para.' },
+  { ic: '⚡', t: 'Integração automática', d: 'Sincronização assíncrona e idempotente, com retentativa. Reprocessar um evento nunca duplica pedido ou baixa.' },
 ];
 
-// Planos-base para SEO (renderizados no HTML). Os valores reais vêm de /api/publico/planos
-// no cliente; se a API estiver no ar, estes cards são atualizados.
+// Fallback de planos para SEO (o HTML já sai com valores); a API atualiza no cliente se estiver no ar.
 const planosFallback = [
-  { nome: 'Essencial', precoMensal: 99, descricao: 'Loja física + 1 canal online.' },
-  { nome: 'Profissional', precoMensal: 249, descricao: 'Multicanal (ML + Shopee).' },
-  { nome: 'Escala', precoMensal: 599, descricao: 'Todos os canais e maior volume.' },
+  { nome: 'Essencial', precoMensal: 99, descricao: 'Loja física + 1 canal online.', destaque: false },
+  { nome: 'Profissional', precoMensal: 249, descricao: 'Multicanal (ML + Shopee) e maior volume.', destaque: true },
+  { nome: 'Escala', precoMensal: 599, descricao: 'Todos os canais e o maior volume.', destaque: false },
 ];
 ---
 
 <Base
   title="Niner — ERP para varejo multicanal, sem overselling"
-  description="O ERP que é a fonte única de estoque e preço da sua loja e sincroniza automaticamente Mercado Livre, Shopee, Amazon e a loja física. Teste grátis por 14 dias, sem cartão."
+  description="O ERP que é a fonte única de estoque e preço da sua loja e sincroniza automaticamente Mercado Livre, Shopee, Amazon e o balcão. Teste grátis por 60 dias, sem cartão."
   path="/"
 >
-  <section class="container" style="padding: 72px 20px 40px;">
-    <p class="eyebrow">ERP para varejo multicanal</p>
-    <h1>Um estoque só. Todos os canais em sincronia.</h1>
-    <p style="font-size:19px; color:var(--ink-muted); max-width:640px;">
-      O Niner é a fonte única de estoque e preço da sua loja. Venda no Mercado Livre, Shopee,
-      Amazon e no balcão — sem vender o que não tem. <strong>Teste grátis por 14 dias, sem cartão.</strong>
-    </p>
-    <div style="display:flex; gap:12px; margin-top:24px; flex-wrap:wrap;">
-      <a class="btn" href="/assinar">Começar teste grátis</a>
-      <a class="btn ghost" href="#planos">Ver planos</a>
+  <!-- ============ HERO ============ -->
+  <section class="hero">
+    <div class="hero-mesh" aria-hidden="true"></div>
+    <div class="container hero-grid">
+      <div class="hero-copy reveal">
+        <span class="eyebrow">ERP para varejo multicanal</span>
+        <h1>Um estoque só.<br /><em>Todos os canais</em> em sincronia.</h1>
+        <p class="hero-sub">
+          O Niner é a fonte única de estoque e preço da sua loja. Venda no Mercado Livre, Shopee,
+          Amazon e no balcão — sem nunca vender o que não tem.
+        </p>
+        <div class="hero-actions">
+          <a class="btn btn-primary btn-lg" href="/assinar">Começar teste grátis</a>
+          <a class="btn btn-secondary btn-lg" href="#como-funciona">Ver como funciona</a>
+        </div>
+        <p class="hero-note">
+          <b>60 dias grátis</b><span class="dot"></span>sem cartão<span class="dot"></span>configure em minutos
+        </p>
+      </div>
+
+      <!-- Painel decorativo animado. TODO: trocar por print real do painel do ERP. -->
+      <div class="hero-visual reveal" data-delay="1">
+        <div class="mock" aria-hidden="true">
+          <div class="mock-bar">
+            <span class="mock-dot"></span><span class="mock-dot"></span><span class="mock-dot"></span>
+            <span class="mock-title">Painel Niner — Visão da loja</span>
+          </div>
+          <div class="mock-body">
+            <div class="mock-kpis">
+              <div class="mock-kpi"><div class="n">R$ 18,4k</div><div class="l">Vendas hoje</div></div>
+              <div class="mock-kpi"><div class="n">1.240</div><div class="l">SKUs em estoque</div></div>
+              <div class="mock-kpi"><div class="n">37</div><div class="l">Pedidos p/ expedir</div></div>
+            </div>
+
+            <div class="sync" id="sync-demo" data-start="48">
+              <div class="sync-source">
+                <span class="lbl">Camiseta Preta P · estoque</span>
+                <span class="val"><span data-stock>48</span> un</span>
+              </div>
+              <div class="sync-channels">
+                <div class="chan"><span class="ic">ML</span> Mercado Livre <span class="ok"></span></div>
+                <div class="chan"><span class="ic">SH</span> Shopee <span class="ok"></span></div>
+                <div class="chan"><span class="ic">AM</span> Amazon <span class="ok"></span></div>
+                <div class="chan"><span class="ic">🏬</span> Loja física <span class="ok"></span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   </section>
 
-  <section class="container" style="padding: 24px 20px; display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:20px;">
-    {beneficios.map((b) => (
-      <article class="card">
-        <h2 style="font-size:19px; margin:0 0 8px; color:var(--accent);">{b.t}</h2>
-        <p style="margin:0; color:var(--ink-muted);">{b.d}</p>
-      </article>
-    ))}
-  </section>
-
-  <section id="planos" class="container" style="padding: 56px 20px;">
-    <p class="eyebrow">Planos</p>
-    <h2 style="font-size:28px; margin:0 0 24px;">Escolha ao fim do teste. Sem compromisso agora.</h2>
-    <div id="planos-grid" style="display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:20px;">
-      {planosFallback.map((p) => (
-        <article class="card" data-plano={p.nome}>
-          <h3 style="margin:0 0 4px;">{p.nome}</h3>
-          <p style="font-size:28px; font-weight:700; margin:8px 0;">
-            R$ {p.precoMensal}<span style="font-size:14px; color:var(--ink-muted); font-weight:400;">/mês</span>
-          </p>
-          <p style="color:var(--ink-muted); margin:0 0 16px;">{p.descricao}</p>
-          <a class="btn" href="/assinar">Testar grátis</a>
-        </article>
-      ))}
+  <!-- ============ PROVA / STATS ============ -->
+  <section class="tight alt">
+    <div class="container">
+      <div class="stats">
+        <div class="stat reveal"><div class="n"><span data-count="0">0</span></div><div class="l">Casos de overselling</div></div>
+        <div class="stat reveal" data-delay="1"><div class="n"><span data-count="4">0</span>+</div><div class="l">Canais em um só painel</div></div>
+        <div class="stat reveal" data-delay="2"><div class="n">seg</div><div class="l">Sincronização a cada venda</div></div>
+        <div class="stat reveal" data-delay="3"><div class="n"><span data-count="1">0</span></div><div class="l">Fonte de verdade do estoque</div></div>
+      </div>
     </div>
-    <p style="color:var(--ink-muted); font-size:13px; margin-top:12px;">Preços provisórios (em definição).</p>
   </section>
 
-  <!-- Atualiza os planos com os dados reais da API, se disponível (progressive enhancement). -->
+  <!-- ============ PROBLEMA → SOLUÇÃO ============ -->
+  <section>
+    <div class="container">
+      <div class="section-head reveal">
+        <span class="eyebrow">O problema</span>
+        <h2>Vender em vários lugares não pode significar vender o que não tem</h2>
+        <p>Cada marketplace com seu próprio estoque vira planilha, retrabalho e cliente irritado. O Niner inverte a lógica: um estoque manda em todos.</p>
+      </div>
+      <div class="split">
+        <div class="panel bad reveal">
+          <h3>😵‍💫 Sem uma fonte única</h3>
+          <ul>
+            <li><span class="mk">✕</span> Estoque atualizado à mão em cada canal</li>
+            <li><span class="mk">✕</span> Vendeu no ML e na Shopee a mesma última peça</li>
+            <li><span class="mk">✕</span> Preço divergente entre anúncios</li>
+            <li><span class="mk">✕</span> Ninguém sabe quem mudou o quê</li>
+          </ul>
+        </div>
+        <div class="panel good reveal" data-delay="1">
+          <h3>✅ Com o Niner</h3>
+          <ul>
+            <li><span class="mk">✓</span> Um estoque central, réplicas sincronizadas sozinhas</li>
+            <li><span class="mk">✓</span> Reserva no pedido: <b>zero overselling</b></li>
+            <li><span class="mk">✓</span> Mudou o preço uma vez, valeu em todo canal</li>
+            <li><span class="mk">✓</span> Cada mudança auditada: quem, quando, de/para</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ COMO FUNCIONA ============ -->
+  <section id="como-funciona" class="alt">
+    <div class="container">
+      <div class="section-head reveal">
+        <span class="eyebrow">Como funciona</span>
+        <h2>Do cadastro à venda multicanal em três passos</h2>
+        <p>Sem consultoria, sem migração dolorida. Você entra no sistema no mesmo minuto do cadastro.</p>
+      </div>
+      <div class="steps">
+        <div class="step reveal">
+          <div class="num"></div>
+          <h3>Cadastre seus produtos</h3>
+          <p>Importe ou cadastre com variações (cor, tamanho), preço e estoque. É a base — sua fonte única.</p>
+          <div class="art" aria-hidden="true">
+            <svg width="120" height="34" viewBox="0 0 120 34" fill="none"><rect x="1" y="4" width="26" height="26" rx="6" stroke="currentColor" stroke-width="2"/><rect x="34" y="9" width="60" height="6" rx="3" fill="currentColor" opacity=".8"/><rect x="34" y="20" width="40" height="6" rx="3" fill="currentColor" opacity=".4"/></svg>
+          </div>
+        </div>
+        <div class="step reveal" data-delay="1">
+          <div class="num"></div>
+          <h3>Conecte os canais</h3>
+          <p>Autorize Mercado Livre, Shopee, Amazon e sua loja em poucos cliques (OAuth). Anúncios e pedidos passam a conversar com o ERP.</p>
+          <div class="art" aria-hidden="true">
+            <svg width="120" height="34" viewBox="0 0 120 34" fill="none"><circle cx="17" cy="17" r="9" stroke="currentColor" stroke-width="2"/><circle cx="103" cy="17" r="9" stroke="currentColor" stroke-width="2"/><path d="M26 17h68" stroke="currentColor" stroke-width="2" stroke-dasharray="4 4"/></svg>
+          </div>
+        </div>
+        <div class="step reveal" data-delay="2">
+          <div class="num"></div>
+          <h3>Venda sem overselling</h3>
+          <p>Cada venda baixa o estoque uma vez e sincroniza todos os canais automaticamente. Você despacha de uma fila só.</p>
+          <div class="art" aria-hidden="true">
+            <svg width="120" height="34" viewBox="0 0 120 34" fill="none"><path d="M4 18l8 8 16-18" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><rect x="44" y="14" width="72" height="6" rx="3" fill="currentColor" opacity=".5"/></svg>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ RECURSOS ============ -->
+  <section id="recursos">
+    <div class="container">
+      <div class="section-head reveal">
+        <span class="eyebrow">Recursos</span>
+        <h2>Tudo o que uma loja multicanal precisa, integrado</h2>
+        <p>Construído sobre princípios sérios: estoque como fonte da verdade, integrações idempotentes e auditoria de cada mudança.</p>
+      </div>
+      <div class="grid-3">
+        {recursos.map((r, i) => (
+          <article class="card reveal" data-delay={String(i % 3)}>
+            <div class="card-icon" aria-hidden="true">{r.ic}</div>
+            <h3>{r.t}</h3>
+            <p>{r.d}</p>
+          </article>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ CANAIS ============ -->
+  <section id="canais" class="alt">
+    <div class="container">
+      <div class="section-head reveal">
+        <span class="eyebrow">Canais</span>
+        <h2>Conecte onde você já vende</h2>
+        <p>Comece pelo balcão e um marketplace; adicione os outros quando quiser. O mesmo estoque manda em todos.</p>
+      </div>
+      <div class="channels-row reveal">
+        <span class="chan-pill"><svg width="20" height="20" viewBox="0 0 20 20"><circle cx="10" cy="10" r="9" fill="#ffe600"/><path d="M5 12c2-4 8-4 10 0" stroke="#2d3277" stroke-width="1.6" fill="none"/></svg>Mercado Livre</span>
+        <span class="chan-pill"><svg width="20" height="20" viewBox="0 0 20 20"><rect x="3" y="6" width="14" height="11" rx="2" fill="#ee4d2d"/><path d="M7 6a3 3 0 016 0" stroke="#fff" stroke-width="1.4" fill="none"/></svg>Shopee</span>
+        <span class="chan-pill"><svg width="20" height="20" viewBox="0 0 20 20"><path d="M3 13c4 3 10 3 14 0" stroke="#ff9900" stroke-width="2" fill="none" stroke-linecap="round"/><circle cx="16" cy="12" r="1.4" fill="#ff9900"/></svg>Amazon</span>
+        <span class="chan-pill"><svg width="20" height="20" viewBox="0 0 20 20"><path d="M3 8l2-3h10l2 3" stroke="currentColor" stroke-width="1.6" fill="none"/><rect x="4" y="8" width="12" height="8" rx="1.5" stroke="currentColor" stroke-width="1.6" fill="none"/></svg>Loja própria</span>
+        <span class="chan-pill"><svg width="20" height="20" viewBox="0 0 20 20"><rect x="3" y="4" width="14" height="12" rx="2" stroke="currentColor" stroke-width="1.6" fill="none"/><path d="M3 9h14" stroke="currentColor" stroke-width="1.6"/></svg>Balcão / PDV</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ PLANOS ============ -->
+  <section id="planos">
+    <div class="container">
+      <div class="section-head reveal">
+        <span class="eyebrow">Planos</span>
+        <h2>Escolha ao fim do teste. Sem compromisso agora.</h2>
+        <p>Todos os planos começam com 60 dias grátis, sem cartão. Você só decide depois de ver o Niner rodando com os seus dados.</p>
+      </div>
+      <div class="planos-grid" id="planos-grid">
+        {planosFallback.map((p) => (
+          <article class={`card plano reveal${p.destaque ? ' destaque' : ''}`} data-plano={p.nome}>
+            {p.destaque && <span class="tag">Mais popular</span>}
+            <h3>{p.nome}</h3>
+            <p class="preco" data-preco>R$ {p.precoMensal}<small>/mês</small></p>
+            <p class="desc">{p.descricao}</p>
+            <a class="btn btn-primary btn-block" href="/assinar">Testar grátis</a>
+          </article>
+        ))}
+      </div>
+      <p class="muted" style="font-size:13px; margin-top:14px; text-align:center;">Preços provisórios (em definição).</p>
+    </div>
+  </section>
+
+  <!-- ============ FAQ ============ -->
+  <section id="perguntas" class="alt">
+    <div class="container">
+      <div class="section-head reveal">
+        <span class="eyebrow">Perguntas frequentes</span>
+        <h2>O que costumam perguntar antes de testar</h2>
+      </div>
+      <div class="faq reveal">
+        <details open>
+          <summary>Preciso de cartão de crédito para testar?</summary>
+          <p>Não. São <strong>60 dias grátis, sem cartão</strong>. Você só informa pagamento se decidir assinar ao fim do teste.</p>
+        </details>
+        <details>
+          <summary>Já vendo no Mercado Livre e na Shopee. Consigo conectar?</summary>
+          <p>Sim. Você autoriza cada canal por OAuth em poucos cliques, e o Niner passa a ser a fonte única de estoque e preço, sincronizando os anúncios automaticamente.</p>
+        </details>
+        <details>
+          <summary>O que acontece com meus dados quando o teste termina?</summary>
+          <p>Nada é apagado na hora. O teste entra em <strong>modo leitura por um período de graça</strong>: seus dados ficam preservados e a sincronização é pausada. Ao assinar, tudo volta de onde parou.</p>
+        </details>
+        <details>
+          <summary>Vou perder vendas por causa de estoque errado?</summary>
+          <p>Esse é justamente o problema que o Niner resolve. Com reserva no momento do pedido e baixa simultânea em todos os canais, o overselling deixa de acontecer.</p>
+        </details>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ CTA FINAL ============ -->
+  <section class="tight">
+    <div class="container">
+      <div class="cta-banner reveal">
+        <div class="txt">
+          <h2>Pronto para parar de vender o que não tem?</h2>
+          <p>Crie sua conta em um minuto e comece agora. 60 dias grátis, sem cartão.</p>
+        </div>
+        <a class="btn btn-lg btn-onaccent" href="/assinar">Começar teste grátis</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- Atualiza os preços com os dados reais da API, se disponível (progressive enhancement). -->
   <script is:inline>
     (async () => {
       try {
-        const base = window.NINER_API_BASE;
-        const res = await fetch(base + '/api/publico/planos');
+        const res = await fetch(window.NINER_API_BASE + '/api/publico/planos');
         if (!res.ok) return;
         const planos = await res.json();
         for (const p of planos) {
           const card = document.querySelector(`[data-plano="${p.nome}"]`);
-          if (card) {
-            const preco = card.querySelector('p');
-            if (preco) preco.innerHTML = `R$ ${Number(p.precoMensal).toFixed(0)}<span style="font-size:14px;color:var(--ink-muted);font-weight:400;">/mês</span>`;
-          }
+          const preco = card && card.querySelector('[data-preco]');
+          if (preco) preco.innerHTML = `R$ ${Number(p.precoMensal).toFixed(0)}<small>/mês</small>`;
         }
       } catch (_) { /* offline: mantém o fallback estático (bom para SEO) */ }
     })();

@@ -1,5 +1,9 @@
 ---
-// Layout base do site público: SEO + design tokens (§3.7) + tema claro/escuro.
+// Layout base do site público do Niner: SEO/OG + sistema visual (site.css) + tema claro/escuro
+// + camada de movimento (scroll-reveal, contadores, sync do hero). A base-URL da API é lida em
+// runtime (public/config.js), nunca embutida no bundle (spec §3.1).
+import '../styles/site.css';
+
 export interface Props {
   title: string;
   description: string;
@@ -17,7 +21,7 @@ const canonical = new URL(path, Astro.site ?? 'https://niner.com.br').toString()
     <title>{title}</title>
     <meta name="description" content={description} />
     <link rel="canonical" href={canonical} />
-    <!-- Open Graph / social (SEO / compartilhamento) -->
+    <!-- Open Graph / social -->
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="Niner" />
     <meta property="og:title" content={title} />
@@ -25,89 +29,185 @@ const canonical = new URL(path, Astro.site ?? 'https://niner.com.br').toString()
     <meta property="og:url" content={canonical} />
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="robots" content="index,follow" />
-    <!-- base-URL da API lida em runtime, não embutida (spec §3.1) -->
+    <!-- Anti-flash de tema + marca .js (habilita o CSS de reveal só quando há JS). -->
+    <script is:inline>
+      (function () {
+        var r = document.documentElement;
+        r.classList.add('js');
+        try {
+          var t = localStorage.getItem('ninerTema');
+          if (t === 'light' || t === 'dark') r.setAttribute('data-theme', t);
+        } catch (e) {}
+      })();
+    </script>
+    <!-- base-URL da API lida em runtime (spec §3.1) -->
     <script is:inline src="/config.js"></script>
-    <style is:global>
-      /* Design tokens (§3.7) — tema claro por padrão, escuro por preferência/override. */
-      :root {
-        --ground: #f5f4f0; --surface: #ffffff; --surface-2: #edece6;
-        --field-bg: #e4e6e2; --field-text: #20262a; --label-color: #5c6660;
-        --ink: #20262a; --ink-muted: #5c6660;
-        --accent: #1f6f6b; --accent-ink: #ffffff;
-        --line: #dee2dc; --line-strong: #b9beb5; --danger: #a63d29;
-        --radius: 10px; --maxw: 1080px;
-      }
-      @media (prefers-color-scheme: dark) {
-        :root {
-          --ground: #12181a; --surface: #1a2225; --surface-2: #202a2d;
-          --field-bg: #2a3336; --field-text: #e7ecec; --label-color: #93a19e;
-          --ink: #e7ecec; --ink-muted: #93a19e;
-          --accent: #4fbdb2; --accent-ink: #0b1416;
-          --line: #2a3538; --line-strong: #4a5457; --danger: #e2836a;
-        }
-      }
-      :root[data-theme='light'] {
-        --ground: #f5f4f0; --surface: #ffffff; --surface-2: #edece6;
-        --field-bg: #e4e6e2; --field-text: #20262a; --label-color: #5c6660;
-        --ink: #20262a; --ink-muted: #5c6660; --accent: #1f6f6b; --accent-ink: #ffffff;
-        --line: #dee2dc; --line-strong: #b9beb5; --danger: #a63d29;
-      }
-      :root[data-theme='dark'] {
-        --ground: #12181a; --surface: #1a2225; --surface-2: #202a2d;
-        --field-bg: #2a3336; --field-text: #e7ecec; --label-color: #93a19e;
-        --ink: #e7ecec; --ink-muted: #93a19e; --accent: #4fbdb2; --accent-ink: #0b1416;
-        --line: #2a3538; --line-strong: #4a5457; --danger: #e2836a;
-      }
-      * { box-sizing: border-box; }
-      body {
-        margin: 0; background: var(--ground); color: var(--ink);
-        font: 16px/1.6 system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
-      }
-      a { color: var(--accent); }
-      .container { max-width: var(--maxw); margin: 0 auto; padding: 0 20px; }
-      .site-header, .site-footer { background: var(--surface-2); border-color: var(--line); }
-      .site-header { border-bottom: 1px solid var(--line); }
-      .site-footer { border-top: 1px solid var(--line); margin-top: 64px; color: var(--ink-muted); }
-      .bar { display: flex; align-items: center; justify-content: space-between; height: 64px; }
-      .brand { font-weight: 700; letter-spacing: .5px; color: var(--ink); text-decoration: none; }
-      .brand span { color: var(--accent); }
-      .btn {
-        display: inline-block; padding: 12px 20px; border-radius: var(--radius);
-        background: var(--accent); color: var(--accent-ink); font-weight: 600;
-        text-decoration: none; border: 0; cursor: pointer; font-size: 15px;
-      }
-      .btn.ghost { background: transparent; color: var(--accent); border: 1px solid var(--line-strong); }
-      .card {
-        background: var(--surface); border: 1px solid var(--line);
-        border-radius: var(--radius); padding: 24px;
-      }
-      label { display: block; color: var(--label-color); font-size: 13px; margin: 14px 0 6px; }
-      input {
-        width: 100%; padding: 12px 14px; border-radius: 8px;
-        background: var(--field-bg); color: var(--field-text); border: 1px solid var(--line-strong);
-        font-size: 15px;
-      }
-      h1 { font-size: clamp(30px, 5vw, 46px); line-height: 1.15; margin: 0 0 16px; }
-      .eyebrow { color: var(--accent); font-weight: 600; text-transform: uppercase; letter-spacing: 1px; font-size: 13px; }
-    </style>
   </head>
   <body>
-    <header class="site-header">
-      <div class="container bar">
-        <a class="brand" href="/">NI<span>NER</span></a>
-        <nav style="display:flex; gap:16px; align-items:center;">
-          <a href="/#planos" style="text-decoration:none; color:var(--ink-muted);">Planos</a>
-          <a class="btn" href="/assinar">Testar grátis</a>
-        </nav>
+    <header class="navbar" id="navbar">
+      <a href="/" class="brand" aria-label="Niner — início">
+        <span class="brand-mark">N</span>
+        <span class="brand-text">
+          <span class="brand-name">NI<span>NER</span></span>
+          <span class="brand-tagline">ERP para varejo multicanal</span>
+        </span>
+      </a>
+      <nav class="nav-links" aria-label="Seções">
+        <a href="/#recursos">Recursos</a>
+        <a href="/#como-funciona">Como funciona</a>
+        <a href="/#planos">Planos</a>
+        <a href="/#perguntas">Perguntas</a>
+      </nav>
+      <div class="nav-actions">
+        <button type="button" class="theme-toggle" id="themeToggle" aria-label="Alternar tema claro ou escuro">
+          <span id="themeIcon" aria-hidden="true">☾</span>
+          <span id="themeLabel">Tema escuro</span>
+        </button>
+        <a href="/assinar" class="btn btn-primary">Testar 60 dias grátis</a>
+        <button type="button" class="nav-toggle" id="navToggle" aria-label="Abrir menu">☰</button>
       </div>
     </header>
+
     <main>
       <slot />
     </main>
+
     <footer class="site-footer">
-      <div class="container" style="padding-top:24px; padding-bottom:24px;">
-        Niner — ERP para varejo multicanal. © Vetor Sistemas.
+      <div class="container">
+        <div class="footer-grid">
+          <div class="footer-brand">
+            <a href="/" class="brand" aria-label="Niner — início">
+              <span class="brand-mark">N</span>
+              <span class="brand-text"><span class="brand-name">NI<span>NER</span></span></span>
+            </a>
+            <p>O ERP que é a fonte única de estoque e preço da sua loja e mantém todos os canais em sincronia — sem overselling.</p>
+          </div>
+          <div>
+            <h4>Produto</h4>
+            <ul>
+              <li><a href="/#recursos">Recursos</a></li>
+              <li><a href="/#como-funciona">Como funciona</a></li>
+              <li><a href="/#canais">Canais</a></li>
+              <li><a href="/#planos">Planos</a></li>
+            </ul>
+          </div>
+          <div>
+            <h4>Começar</h4>
+            <ul>
+              <li><a href="/assinar">Teste grátis (60 dias)</a></li>
+              <li><a href="/#perguntas">Perguntas frequentes</a></li>
+            </ul>
+          </div>
+          <div>
+            <h4>Empresa</h4>
+            <ul>
+              <li><a href="mailto:contato@vetorsistemas.com.br">Contato</a></li>
+            </ul>
+          </div>
+        </div>
+        <div class="footer-bottom">
+          <span>© 2026 Niner — Vetor Sistemas. Todos os direitos reservados.</span>
+          <span>Feito para o varejo multicanal brasileiro.</span>
+        </div>
       </div>
     </footer>
+
+    <script is:inline>
+      (function () {
+        var root = document.documentElement;
+        var reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+        // ---- Tema (sempre ativo) ----
+        function effective() {
+          var t = root.getAttribute('data-theme');
+          if (t === 'light' || t === 'dark') return t;
+          return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+        }
+        function paintToggle() {
+          var icon = document.getElementById('themeIcon');
+          var label = document.getElementById('themeLabel');
+          if (!icon || !label) return;
+          var isDark = effective() === 'dark';
+          icon.textContent = isDark ? '☀' : '☾';
+          label.textContent = isDark ? 'Tema claro' : 'Tema escuro';
+        }
+        paintToggle();
+        var toggle = document.getElementById('themeToggle');
+        if (toggle) toggle.addEventListener('click', function () {
+          var next = effective() === 'dark' ? 'light' : 'dark';
+          root.setAttribute('data-theme', next);
+          try { localStorage.setItem('ninerTema', next); } catch (e) {}
+          paintToggle();
+        });
+
+        // ---- Menu mobile (sempre ativo) ----
+        var navToggle = document.getElementById('navToggle');
+        var navbar = document.getElementById('navbar');
+        if (navToggle && navbar) navToggle.addEventListener('click', function () {
+          navbar.classList.toggle('menu-open');
+        });
+
+        // ---- Movimento (só sem prefers-reduced-motion) ----
+        var reveals = Array.prototype.slice.call(document.querySelectorAll('.reveal'));
+        if (reduce || !('IntersectionObserver' in window)) {
+          reveals.forEach(function (el) { el.classList.add('is-visible'); });
+          document.querySelectorAll('[data-count]').forEach(function (el) {
+            el.textContent = el.getAttribute('data-count');
+          });
+          return;
+        }
+
+        var io = new IntersectionObserver(function (entries) {
+          entries.forEach(function (e) {
+            if (!e.isIntersecting) return;
+            e.target.classList.add('is-visible');
+            if (e.target.hasAttribute('data-count')) animateCount(e.target);
+            if (e.target.id === 'sync-demo') runSync(e.target);
+            io.unobserve(e.target);
+          });
+        }, { threshold: 0.2 });
+        reveals.forEach(function (el) { io.observe(el); });
+        document.querySelectorAll('[data-count]').forEach(function (el) { io.observe(el); });
+        var sd = document.getElementById('sync-demo');
+        if (sd) io.observe(sd);
+
+        function animateCount(el) {
+          var target = el.getAttribute('data-count');
+          var num = parseFloat(target.replace(',', '.'));
+          if (isNaN(num)) { el.textContent = target; return; }
+          var suffix = target.replace(/[\d.,]/g, '');
+          var t0 = null, dur = 1100;
+          function tick(ts) {
+            if (t0 === null) t0 = ts;
+            var p = Math.min((ts - t0) / dur, 1);
+            var eased = 1 - Math.pow(1 - p, 3);
+            var v = Math.round(num * eased);
+            el.textContent = v.toLocaleString('pt-BR') + suffix;
+            if (p < 1) requestAnimationFrame(tick);
+            else el.textContent = target;
+          }
+          requestAnimationFrame(tick);
+        }
+
+        // Sincronização do hero: estoque baixa 1 e "propaga" aos canais em cascata.
+        function runSync(box) {
+          var val = box.querySelector('[data-stock]');
+          var chans = Array.prototype.slice.call(box.querySelectorAll('.chan'));
+          var n = parseInt(box.getAttribute('data-start') || '48', 10);
+          function cycle() {
+            chans.forEach(function (c) { c.classList.remove('is-synced', 'just-synced'); });
+            n = n > 40 ? n - 1 : 48;
+            if (val) val.textContent = n;
+            chans.forEach(function (c, i) {
+              setTimeout(function () {
+                c.classList.add('is-synced', 'just-synced');
+              }, 320 + i * 260);
+            });
+          }
+          cycle();
+          setInterval(cycle, 3400);
+        }
+      })();
+    </script>
   </body>
 </html>

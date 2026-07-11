@@ -40,7 +40,7 @@ niner:
     expiracao: PT8H            # validade do access token
     emissor: niner
   trial:
-    dias: 14                   # trial sem cartão (D2)
+    dias: 60                   # trial sem cartão (D2 — revisto de 14 para 60 dias)
     plano: Profissional        # plano-base durante o trial (fallback: menor preço ativo)
   cors:
     origins:                   # fronts em dev (site/web/admin). Em prod: domínios reais.

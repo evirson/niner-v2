@@ -12,7 +12,7 @@
 
 ## 1. Sumário executivo
 
-Niner é um **ERP em nuvem (SaaS por assinatura)** da Vetor Sistemas para o **pequeno varejista brasileiro** que vende em loja física e em 2–5 marketplaces (Mercado Livre, Shopee, Amazon, loja própria). Entrega uma **fonte única de verdade de estoque e preço**, com sincronização automática entre canais e **zero overselling**. Aquisição **self-service** pelo site público com **trial gratuito de 14 dias sem cartão**; receita por **assinatura recorrente** mensal/anual em 3 planos.
+Niner é um **ERP em nuvem (SaaS por assinatura)** da Vetor Sistemas para o **pequeno varejista brasileiro** que vende em loja física e em 2–5 marketplaces (Mercado Livre, Shopee, Amazon, loja própria). Entrega uma **fonte única de verdade de estoque e preço**, com sincronização automática entre canais e **zero overselling**. Aquisição **self-service** pelo site público com **trial gratuito de 60 dias sem cartão**; receita por **assinatura recorrente** mensal/anual em 3 planos.
 
 ## 2. Proposta de valor
 
@@ -59,7 +59,7 @@ Niner é um **ERP em nuvem (SaaS por assinatura)** da Vetor Sistemas para o **pe
 
 ## 6. Período de trial (avaliação)
 
-- **14 dias, sem cartão antecipado** (self-service, baixa fricção — decisão D2). ✅
+- **60 dias, sem cartão antecipado** (self-service, baixa fricção — decisão D2; revisto de 14 para 60 dias em 2026-07-11 para dar mais tempo de ativação/aha). ✅
 - Trial dá acesso ao **plano Profissional** (mostrar o produto forte).
 - **Cartão pedido só na conversão** (fim do trial ou ativação de plano pago).
 - Fim do trial sem conversão → **modo leitura/graça (7 dias)**: dados preservados, sync pausado, sem exclusão imediata (R20). Reativa ao assinar.
@@ -129,7 +129,7 @@ Regra prática: qualquer coisa com *assinatura/plano/trial/mensalidade/gateway* 
 | # | Decisão | Situação / recomendação |
 |---|---------|-------------------------|
 | D1 | Preços dos 3 planos + desconto anual | 🔴 Confirmar (placeholders R$ 99 / 249 / 599; anual ~2 meses grátis) |
-| D2 | Trial: 14 dias, sem cartão, expondo o Profissional | ✅ Decidida |
+| D2 | Trial: 60 dias, sem cartão, expondo o Profissional (revisto de 14 dias em 2026-07-11) | ✅ Decidida |
 | D3 | Gateway de cobrança (PIX/boleto/cartão recorrente) | 🔴 **Adiada** — adapter abstrato; cobrança manual no início; candidatos BR: Asaas, Iugu, Vindi, Pagar.me |
 | D4 | Multi-CNPJ por tenant como recurso de plano / P2 | ✅ Decidida (1 CNPJ/tenant no v1) |
 | D5 | Nome comercial "Niner" + domínio do site | 🔴 Confirmar |

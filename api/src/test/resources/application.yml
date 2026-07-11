@@ -15,7 +15,7 @@ niner:
     expiracao: PT8H
     emissor: niner
   trial:
-    dias: 14
+    dias: 60
     plano: Profissional
   cors:
     origins:

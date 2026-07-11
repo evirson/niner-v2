@@ -123,7 +123,7 @@ Prioridade decrescente (operação do ERP — Personas A/B):
 |----|-----------|-------------------------------|
 | R10 | **Multi-tenancy com isolamento de dados por tenant** | Dado dois tenants T1 e T2, quando um usuário de T1 consulta qualquer recurso (produto, estoque, pedido, financeiro), então **nunca** retorna dado de T2; o corte por `id_tenant` é imposto por RLS no banco (P8), não só pelo código. |
 | R11 | **Site público de aquisição** (landing, planos, preços) | Dado um visitante, quando acessa a página de planos, então vê os 3 tiers com limites e preços e um CTA de "iniciar avaliação". |
-| R12 | **Signup self-service + criação de tenant + trial** | Dado um visitante que informa e-mail/senha/nome da loja, quando confirma, então é criado um tenant `TRIAL` (expira em 14 dias) e o usuário vira `ADMIN` desse tenant; e-mail duplicado **no mesmo tenant** é rejeitado. |
+| R12 | **Signup self-service + criação de tenant + trial** | Dado um visitante que informa e-mail/senha/nome da loja, quando confirma, então é criado um tenant `TRIAL` (expira em 60 dias) e o usuário vira `ADMIN` desse tenant; e-mail duplicado **no mesmo tenant** é rejeitado. |
 | R13 | **Catálogo de planos e limites (entitlements)** | Dado um plano com limites (canais, SKUs, usuários, pedidos/mês), quando um tenant é associado a ele, então os limites ficam disponíveis para enforcement (R19). |
 | R14 | **Checkout e criação de assinatura (adapter de gateway)** | Dado um tenant em trial que escolhe um plano e informa pagamento, quando o gateway aprova, então o tenant vira `ATIVA`, a assinatura é criada com ciclo (mensal/anual) e a 1ª fatura é registrada. *(Gateway real a definir — D3; v1 usa adapter com cobrança manual/registro.)* |
 | R15 | **Autogestão da assinatura pelo lojista** | Dado um tenant ativo, quando o ADMIN faz upgrade, então limites novos valem imediatamente com cobrança proporcional; quando faz downgrade, então vale no próximo ciclo e o uso atual é validado contra os novos limites; quando cancela, então mantém acesso até o fim do ciclo pago. |
@@ -175,7 +175,7 @@ Medição: métricas expostas via endpoint `/actuator` + tabela de eventos; aval
 | # | Decisão | Situação |
 |---|---------|----------|
 | D1 | Preços dos 3 planos (Essencial/Profissional/Escala) e desconto anual | 🔴 Aberta (placeholders R$ 99 / 249 / 599) |
-| D2 | Trial: 14 dias, **sem cartão**, expondo o plano Profissional | ✅ Decidida |
+| D2 | Trial: **60 dias**, **sem cartão**, expondo o plano Profissional (revê a escolha anterior de 14 dias, 2026-07-11) | ✅ Decidida |
 | D3 | Gateway de cobrança (PIX/boleto/cartão recorrente) | 🔴 **Adiada** — modelar via adapter abstrato; cobrança manual no início |
 | D4 | Multi-CNPJ por tenant como recurso de plano / P2 | ✅ Decidida (1 CNPJ/tenant no v1) |
 | D5 | Nome comercial "Niner" (DB `niner_db`) + domínio do site | 🔴 Confirmar |
@@ -291,7 +291,7 @@ usuario_rotina(id_usuario FK, nome_rotina, PK(id_usuario, nome_rotina))  -- perm
 ```
 > **Duas populações de usuário separadas (P9, R18):** os usuários do lojista ficam em `usuario` (com `id_tenant`, sujeitos a RLS). Os usuários da **plataforma** (staff Vetor: `SUPER_ADMIN`/`SUPORTE`/`FINANCEIRO`) ficam em `plataforma.staff` (global, §3.3.11). **JWTs distintos por `aud`** (`tenant` × `plataforma`): a chain de `/api/v1/**` rejeita token de staff e a de `/api/admin/**` rejeita token de tenant.
 
-**Signup público atômico** (`POST /api/publico/assinar`, R12): numa **única transação** cria `tenant (status=TRIAL)` + `empresa (id_tenant)` + primeiro `usuario` (ADMIN, `senha_hash`) + `assinatura (status=TRIAL, trial_expira_em = now()+14d)` + linha inicial em `plataforma.uso_tenant`; dispara e-mail de boas-vindas via **outbox**. A atomicidade é trivial por tudo estar no mesmo banco/monólito (mais um ponto a favor da topologia de uma API).
+**Signup público atômico** (`POST /api/publico/assinar`, R12): numa **única transação** cria `tenant (status=TRIAL)` + `empresa (id_tenant)` + primeiro `usuario` (ADMIN, `senha_hash`) + `assinatura (status=TRIAL, trial_expira_em = now()+60d)` + linha inicial em `plataforma.uso_tenant`; dispara e-mail de boas-vindas via **outbox**. A atomicidade é trivial por tudo estar no mesmo banco/monólito (mais um ponto a favor da topologia de uma API).
 
 <span style="color:red">🔴 Mapear `usuario.administrador` + `usuario_rotina` para os papéis `ADMIN`/`OPERADOR` (R8) — definir se v1 usa RBAC simples (2 papéis) ou mantém as rotinas granulares.</span>
 <span style="color:red">🔴 `senha` do legado é texto — no v1 é **hash** (BCrypt/Argon2) + JWT (P4/R8).</span>
@@ -527,7 +527,7 @@ POST   /webhooks/mercadolivre                recepção de notificações (públ
 
 # --- Plano de Controle e site público (v2.0) ---
 # superfície pública (site/ — sem auth ou auth leve + rate limit)
-POST   /api/publico/assinar                  signup: cria tenant + admin + trial (14d)  [R12]
+POST   /api/publico/assinar                  signup: cria tenant + admin + trial (60d)  [R12]
 GET    /api/publico/planos                    catálogo de planos e preços               [R11]
 POST   /api/publico/assinaturas/checkout      escolhe plano + inicia pagamento          [R14]
 # superfície do tenant (web/ — autogestão da própria assinatura, JWT de tenant)

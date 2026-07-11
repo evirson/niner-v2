@@ -1,7 +1,7 @@
 # Progresso do Projeto — niner-v2
 
 Registro cronológico das decisões e entregas. Atualizar a cada marco relevante.
-**Última atualização:** 2026-07-10
+**Última atualização:** 2026-07-11
 
 ---
 
@@ -19,7 +19,7 @@ Projeto **spec-driven** em fase de fundação. O **esqueleto da API (Spring Boot
 | `docker-compose.yml` | Infra local de dev: `db` (postgres:18, `niner_db`) + `flyway` (profile `migrate`) + **`api`** (Spring Boot, porta 8080, conecta como `niner_app`); **V001–V024 aplicadas e validadas em banco real** (control-plane + domínio do lojista + RLS) |
 | `db/migration/V013–V024` | **Novo — domínio do lojista** (identidade, cadastros, catálogo com `sku`+`ean`, estoque com `reservado`/`disponivel`, vendas, canais, pedidos, integração/outbox, cfg_geral) + **RLS de domínio** (`FORCE` + política por `id_tenant`). **Gate P8 verde** (teste de isolamento cross-tenant automatizado). `financeiro` NÃO entra (Q5/ADR-010) |
 | `api/` | Spring Boot 4.0.7 / Java 25 (Maven). 3 superfícies com `SecurityFilterChain` separados; `TenantContext` (`ScopedValue`) + `TenantAwareTransactionManager`; **auth JWT HS256** (login/signup emitem, `/api/v1` valida `aud=tenant`); **trial self-service** (`POST /api/publico/assinar` → tenant+configs+ADMIN+assinatura TRIAL + token), `POST /api/publico/login`, `GET /api/v1/eu`. **11 testes verdes** (Testcontainers) + fluxo **verificado ao vivo** como `niner_app`. Persistência: **Spring Data JDBC**. Falta: domínio (repos/serviços/endpoints de produto/estoque/pedido) e os 3 fronts |
-| `site/` | **Novo — site público (Astro/SSG, ADR-011)**. Landing SEO (title/description/OG/canonical + planos no HTML), `/assinar` (form → `POST /api/publico/assinar` → auto-login → `/bem-vindo`), `/bem-vindo` (1º uso via `GET /api/v1/eu`). Design tokens §3.7 (tema claro/escuro). Base-URL da API em runtime. **Build SSG ok**; CORS validado |
+| `site/` | Site público (Astro/SSG, ADR-011). **Home institucional "matadora"** (posicionamento concorrente do Bling): hero com painel animado + demo de sincronização, faixa de stats com contadores, contraste problema→solução, 3 passos, 6 recursos, canais (ML/Shopee/Amazon/balcão), planos (preços via `/api/publico/planos`), FAQ e CTA — tudo em CSS/SVG puro com **scroll-reveal** e **prefers-reduced-motion** (sem novas deps). Sistema visual em `src/styles/site.css` portado do golden `nainer_institucional`. `/assinar` (form → `POST /api/publico/assinar` → auto-login → `/bem-vindo`) e `/bem-vindo` mantidos. **Trial 60 dias** em toda a copy. Tema claro/escuro persistido. **Build SSG ok**; hero/reveal/contadores verificados via Playwright |
 | `web/` | **Novo — ERP do lojista (React 19 + Vite + TS)**. Auth JWT (login slug+email+senha; **handoff SSO** do site via `#token=`), shell (nav Painel/Produtos/Estoque/Pedidos/Canais + Sair), **Painel** real (`GET /api/v1/eu` via TanStack Query), placeholders "em construção". Design tokens §3.7 (claro/escuro). **Build ok**; fluxo **e2e verificado** (login + handoff). |
 | `admin/` | Ainda não criado (backoffice React 19 + Vite) |
 
@@ -28,6 +28,31 @@ Projeto **spec-driven** em fase de fundação. O **esqueleto da API (Spring Boot
 ---
 
 ## Linha do tempo
+
+### 2026-07-11 — Home institucional (concorrente do Bling) + trial 60 dias (ponta a ponta)
+
+Reforço do topo do funil (§Fase 0, ADR-011) e revisão de D2.
+
+1. **Trial 14 → 60 dias (D2 revisto).** Decisão do dono do produto para dar mais tempo de
+   ativação/aha. Aplicado **ponta a ponta**: `application.yml` (`niner.trial.dias: 60`, prod e
+   teste), comentário em `OnboardingController`, e todos os textos da spec (R12, §3.3.2, tabela de
+   rotas, D2), do `PLANO-DE-NEGOCIO` (§6, intro, D2) e do site. `SignupService` já parametrizava
+   via `NinerProperties.Trial.dias` — nenhuma lógica mudou; os 11 testes seguem válidos (nenhum
+   depende do valor de dias).
+2. **Home reconstruída (`site/index.astro`).** De landing "seca" para página longa e animada,
+   posicionando o Niner como ERP multicanal moderno (sem citar o Bling nominalmente): hero com
+   painel decorativo + **demo de sincronização estoque→canais**, faixa de prova com **contadores
+   animados**, blocos problema→solução, "como funciona" em 3 passos com ilustrações SVG,
+   6 recursos, pílulas de canais, planos (mantido o enhancement de preços da API), FAQ em
+   `<details>` e CTA final. Toda CTA leva a `/assinar` ("60 dias grátis, sem cartão").
+3. **Sistema visual + movimento.** Novo `site/src/styles/site.css` (portado do golden
+   `docs/padroes/nainer_institucional`, rebrandeado Niner) e `Base.astro` com navbar sticky,
+   toggle de tema persistido, menu mobile e um script de **scroll-reveal** (IntersectionObserver)
+   + contadores, tudo desligado sob `prefers-reduced-motion`. Sem novas dependências (P6/ADR-011).
+   `/assinar` adotou `form-card`/`field` e ganhou uma coluna de reforços; `/bem-vindo` alinhado.
+4. **Verificação:** `npm run build` (SSG, 3 páginas) ok; Playwright confirmou hero animado,
+   reveal disparando ao rolar (opacity 0→1) e contadores, em tema claro e escuro; caminho
+   reduced-motion mostra tudo estático.
 
 ### 2026-07-10 — Esqueleto da API no ar (Fase 0): 3 superfícies + contexto de tenant
 

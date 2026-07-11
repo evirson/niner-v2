@@ -4,36 +4,55 @@ import Base from '../layouts/Base.astro';
 
 <Base
   title="Criar conta de teste — Niner"
-  description="Crie sua conta de teste do Niner em 1 minuto. 14 dias grátis, sem cartão de crédito."
+  description="Crie sua conta de teste do Niner em 1 minuto. 60 dias grátis, sem cartão de crédito."
   path="/assinar"
 >
-  <section class="container" style="padding: 56px 20px; max-width: 480px;">
-    <p class="eyebrow">Teste grátis · 14 dias · sem cartão</p>
-    <h1 style="font-size:32px;">Crie a conta da sua loja</h1>
-    <p style="color:var(--ink-muted);">
-      Em um passo você já entra no sistema. Você pode configurar canais e produtos depois.
-    </p>
+  <section class="page-header">
+    <div class="container">
+      <span class="eyebrow">Teste grátis · 60 dias · sem cartão</span>
+      <h1>Crie a conta da sua loja</h1>
+      <p>Em um passo você já entra no sistema. Configure canais e produtos quando quiser — o teste não tem cobrança automática.</p>
+    </div>
+  </section>
 
-    <form id="form-assinar" class="card" style="margin-top:16px;" novalidate>
-      <label for="nomeLoja">Nome da loja</label>
-      <input id="nomeLoja" name="nomeLoja" required autocomplete="organization" placeholder="Ex.: Loja do Zé" />
+  <section style="padding-top: 24px;">
+    <div class="container">
+      <div class="grid-2" style="align-items: start; gap: 32px;">
+        <form id="form-assinar" class="form-card reveal" novalidate>
+          <div class="field">
+            <label for="nomeLoja">Nome da loja</label>
+            <input id="nomeLoja" name="nomeLoja" required autocomplete="organization" placeholder="Ex.: Loja do Zé" />
+          </div>
+          <div class="field">
+            <label for="nomeAdmin">Seu nome</label>
+            <input id="nomeAdmin" name="nomeAdmin" required autocomplete="name" placeholder="Ex.: Zé da Silva" />
+          </div>
+          <div class="field">
+            <label for="email">E-mail</label>
+            <input id="email" name="email" type="email" required autocomplete="email" placeholder="voce@sualoja.com" />
+          </div>
+          <div class="field">
+            <label for="senha">Senha (mín. 8 caracteres)</label>
+            <input id="senha" name="senha" type="password" required minlength="8" autocomplete="new-password" />
+          </div>
 
-      <label for="nomeAdmin">Seu nome</label>
-      <input id="nomeAdmin" name="nomeAdmin" required autocomplete="name" placeholder="Ex.: Zé da Silva" />
+          <p id="erro" role="alert" style="color:var(--danger); min-height:20px; margin:4px 0 8px; font-size:14px;"></p>
 
-      <label for="email">E-mail</label>
-      <input id="email" name="email" type="email" required autocomplete="email" placeholder="voce@sualoja.com" />
+          <button id="btn" class="btn btn-primary btn-block btn-lg" type="submit">Criar conta e entrar</button>
+          <p class="muted" style="font-size:12px; margin-top:12px;">
+            Ao continuar você inicia um teste gratuito de 60 dias. Sem cobrança automática, sem cartão.
+          </p>
+        </form>
 
-      <label for="senha">Senha (mín. 8 caracteres)</label>
-      <input id="senha" name="senha" type="password" required minlength="8" autocomplete="new-password" />
-
-      <p id="erro" role="alert" style="color:var(--danger); min-height:20px; margin:12px 0 0; font-size:14px;"></p>
-
-      <button id="btn" class="btn" type="submit" style="width:100%; margin-top:8px;">Criar conta e entrar</button>
-      <p style="color:var(--ink-muted); font-size:12px; margin-top:12px;">
-        Ao continuar você inicia um teste gratuito de 14 dias. Sem cobrança automática.
-      </p>
-    </form>
+        <aside class="form-aside reveal" data-delay="1">
+          <div class="li"><span class="mk">✓</span><span><b>60 dias grátis</b>, sem cartão de crédito.</span></div>
+          <div class="li"><span class="mk">✓</span><span>Acesso ao plano <b>Profissional</b> durante o teste.</span></div>
+          <div class="li"><span class="mk">✓</span><span>Seus dados <b>preservados</b> ao fim do teste (modo leitura antes de qualquer decisão).</span></div>
+          <div class="li"><span class="mk">✓</span><span>Conecte Mercado Livre, Shopee, Amazon e o balcão — um estoque só.</span></div>
+          <div class="li"><span class="mk">✓</span><span>Você entra no sistema <b>agora</b>, no mesmo minuto do cadastro.</span></div>
+        </aside>
+      </div>
+    </div>
   </section>
 
   <script is:inline>

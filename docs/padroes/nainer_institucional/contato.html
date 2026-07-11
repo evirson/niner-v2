@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Contato — NAINER</title>
+<meta name="description" content="Fale com a equipe do NAINER e solicite uma demonstração do sistema para o seu comércio varejista." />
+<link rel="stylesheet" href="nainer.css" />
+</head>
+<body>
+
+  <div class="navbar" id="navbar">
+    <a href="index.html" class="brand">
+      <span class="brand-mark">N</span>
+      <span class="brand-text">
+        <span class="brand-name">NAINER</span>
+        <span class="brand-tagline">Gestão para o varejo</span>
+      </span>
+    </a>
+    <nav class="nav-links">
+      <a href="index.html">Início</a>
+      <a href="funcionalidades.html">Funcionalidades</a>
+      <a href="sobre.html">Sobre</a>
+      <a href="contato.html" class="active">Contato</a>
+    </nav>
+    <div class="nav-actions">
+      <button type="button" class="theme-toggle" id="themeToggle" aria-label="Alternar tema claro ou escuro">
+        <span id="themeIcon">&#9789;</span>
+        <span id="themeLabel">Tema escuro</span>
+      </button>
+      <a href="contato.html" class="btn btn-primary">Solicitar demonstração</a>
+      <button type="button" class="nav-toggle" id="navToggle" aria-label="Abrir menu">&#9776;</button>
+    </div>
+  </div>
+
+  <section class="page-header">
+    <div class="container">
+      <span class="eyebrow">Contato</span>
+      <h1>Vamos conversar sobre a sua loja</h1>
+      <p>Preencha o formulário ou fale diretamente com a gente. Retornamos para entender sua operação e mostrar o NAINER na prática.</p>
+    </div>
+  </section>
+
+  <section class="tight">
+    <div class="container contact-grid">
+
+      <div class="form-card">
+        <h3 style="margin-bottom: 18px;">Solicitar demonstração</h3>
+        <form id="contatoForm" novalidate>
+          <div class="form-row">
+            <div class="field">
+              <label for="nome">Nome <span style="color:var(--danger)">*</span></label>
+              <input type="text" id="nome" name="nome" maxlength="100" placeholder="Seu nome" required>
+            </div>
+            <div class="field">
+              <label for="loja">Nome da loja</label>
+              <input type="text" id="loja" name="loja" maxlength="100" placeholder="Ex.: Mercado Bom Preço">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="field">
+              <label for="telefone">Telefone / WhatsApp</label>
+              <input type="text" id="telefone" name="telefone" maxlength="20" placeholder="(00) 00000-0000" inputmode="tel">
+            </div>
+            <div class="field">
+              <label for="email">E-mail <span style="color:var(--danger)">*</span></label>
+              <input type="email" id="email" name="email" maxlength="100" placeholder="voce@sualoja.com.br" required>
+            </div>
+          </div>
+          <div class="field">
+            <label for="segmento">Segmento da loja</label>
+            <select id="segmento" name="segmento">
+              <option value="">Selecione...</option>
+              <option>Moda e calçados</option>
+              <option>Mercado / mercearia</option>
+              <option>Açougue</option>
+              <option>Adega / bebidas</option>
+              <option>Materiais de construção</option>
+              <option>Outro varejo</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="mensagem">Mensagem</label>
+            <textarea id="mensagem" name="mensagem" rows="4" placeholder="Conte um pouco sobre a sua loja e o que você procura"></textarea>
+          </div>
+          <button type="submit" class="btn btn-primary btn-lg" style="width:100%; margin-top: 6px;">Enviar solicitação</button>
+          <p class="form-feedback" id="formFeedback" aria-live="polite"></p>
+        </form>
+      </div>
+
+      <div class="card contact-info-list">
+        <div class="contact-info-item">
+          <span class="ic">&#9993;&#65039;</span>
+          <div>
+            <strong>E-mail</strong>
+            <span><a href="mailto:claudio@vetorsistemas.com.br">claudio@vetorsistemas.com.br</a></span>
+          </div>
+        </div>
+        <div class="contact-info-item">
+          <span class="ic">&#128222;</span>
+          <div>
+            <strong>Telefone</strong>
+            <span>Informe seu contato no formulário que retornamos a ligação</span>
+          </div>
+        </div>
+        <div class="contact-info-item">
+          <span class="ic">&#128337;</span>
+          <div>
+            <strong>Atendimento</strong>
+            <span>Segunda a sexta, das 8h às 18h</span>
+          </div>
+        </div>
+        <div class="contact-info-item">
+          <span class="ic">&#127970;</span>
+          <div>
+            <strong>Vetor Sistemas</strong>
+            <span>Desenvolvimento do sistema NAINER</span>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <footer>
+    <div class="container">
+      <div class="footer-grid">
+        <div class="footer-brand">
+          <a href="index.html" class="brand">
+            <span class="brand-mark">N</span>
+            <span class="brand-text"><span class="brand-name">NAINER</span></span>
+          </a>
+          <p>Sistema de gestão desenvolvido para o comércio varejista: vendas, estoque, financeiro e caixa em um só lugar.</p>
+        </div>
+        <div>
+          <h4>Produto</h4>
+          <ul>
+            <li><a href="funcionalidades.html#cadastros">Cadastros</a></li>
+            <li><a href="funcionalidades.html#produtos">Produtos &amp; Estoque</a></li>
+            <li><a href="funcionalidades.html#vendas">Vendas &amp; PDV</a></li>
+            <li><a href="funcionalidades.html#financeiro">Financeiro</a></li>
+          </ul>
+        </div>
+        <div>
+          <h4>Empresa</h4>
+          <ul>
+            <li><a href="sobre.html">Sobre o NAINER</a></li>
+            <li><a href="contato.html">Contato</a></li>
+          </ul>
+        </div>
+        <div>
+          <h4>Contato</h4>
+          <ul>
+            <li><a href="mailto:claudio@vetorsistemas.com.br">claudio@vetorsistemas.com.br</a></li>
+            <li><a href="contato.html">Fale conosco</a></li>
+          </ul>
+        </div>
+      </div>
+      <div class="footer-bottom">
+        <span>&copy; 2026 NAINER. Todos os direitos reservados.</span>
+        <span>Feito para o comércio varejista brasileiro.</span>
+      </div>
+    </div>
+  </footer>
+
+  <script src="nainer.js"></script>
+  <script>
+    document.getElementById('contatoForm').addEventListener('submit', (e) => {
+      e.preventDefault();
+      const feedback = document.getElementById('formFeedback');
+      feedback.textContent = 'Recebemos sua solicitação! Em breve entraremos em contato.';
+      e.target.reset();
+    });
+  </script>
+</body>
+</html>

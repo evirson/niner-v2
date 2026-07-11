@@ -19,7 +19,7 @@ public class OnboardingController {
         this.signup = signup;
     }
 
-    /** Assinatura-teste self-service (14 dias, sem cartão). Cria o tenant e loga o cliente. */
+    /** Assinatura-teste self-service (60 dias, sem cartão). Cria o tenant e loga o cliente. */
     @PostMapping("/assinar")
     @ResponseStatus(HttpStatus.CREATED)
     public AssinarResponse assinar(@Valid @RequestBody AssinarRequest req) {
