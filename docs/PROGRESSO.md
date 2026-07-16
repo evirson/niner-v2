@@ -17,7 +17,8 @@ Projeto **spec-driven** em fase de fundação. A **API (Spring Boot 4 / Java 25)
 | `db/*.txt` | Schema **legado (Firebird)** versionado como referência (31 tabelas + generators, procedures, triggers) |
 | `CLAUDE.md` | Guia do repositório — atualizado para o SaaS multi-tenant (P8/P9, plataforma, `id_tenant`+RLS) |
 | `docker-compose.yml` | Infra local de dev: `db` (postgres:18, `niner_db`) + `flyway` (profile `migrate`) + **`api`** (Spring Boot, porta 8080, conecta como `niner_app`); **V001–V024 aplicadas e validadas em banco real** (control-plane + domínio do lojista + RLS) |
-| `db/migration/V013–V024` | Domínio do lojista (identidade, cadastros, catálogo com `sku`+`ean`, estoque com `reservado`/`disponivel`, vendas, canais, pedidos, integração/outbox, cfg_geral) + **RLS de domínio** (`FORCE` + política por `id_tenant`). **Gate P8 verde** (teste de isolamento cross-tenant automatizado). `financeiro` NÃO entra (Q5/ADR-010). **Revisado em 2026-07-16** (ver linha do tempo): tipos padronizados (`id_tenant SMALLINT`, demais PKs `INTEGER`), sem `ON DELETE CASCADE`, ledger de estoque imutável via `REVOKE`, e-mail case-insensitive, fix de bootstrap (`GRANT CREATE ON SCHEMA public`) |
+| `db/migration/V013–V024` | Domínio do lojista (identidade, cadastros, catálogo com `sku`+`ean`, estoque com `reservado`/`disponivel`, vendas, canais, pedidos, integração/outbox, cfg_geral) + **RLS de domínio** (`FORCE` + política por `id_tenant`). **Gate P8 verde** (teste de isolamento cross-tenant automatizado). **Revisado em 2026-07-16** (ver linha do tempo): tipos padronizados (`id_tenant SMALLINT`, demais PKs `INTEGER`), sem `ON DELETE CASCADE`, ledger de estoque imutável via `REVOKE`, e-mail case-insensitive, fix de bootstrap (`GRANT CREATE ON SCHEMA public`) |
+| `db/migration/V025` | **Novo (2026-07-16) — `financeiro` parcial (revisão de Q5/ADR-010, ADR-012):** crediário (`tipo_carteira`, `moeda`, `moeda_detalhe`, `contas_receber`/`contas_receber_detalhe`) + caixa (`caixa_mestre`/`caixa_detalhe`). RLS próprio no arquivo (V024 já tinha rodado). `contas_pagar`/`conta_corrente*` continuam fora. Só schema — **script criado, banco não recriado/testado** (convenção da sessão: só rebuild quando pedido) |
 | `api/` | Spring Boot 4.0.7 / Java 25 (Maven). 3 superfícies com `SecurityFilterChain` separados; `TenantContext` (`ScopedValue`) + `TenantAwareTransactionManager`; **auth JWT HS256** (login/signup emitem, `/api/v1` valida `aud=tenant`); **trial self-service** (`POST /api/publico/assinar` → tenant+configs+ADMIN+assinatura TRIAL + token), `POST /api/publico/login`, `GET /api/v1/eu`. **11 testes verdes** (Testcontainers) + fluxo **verificado ao vivo** como `niner_app`. Persistência: **Spring Data JDBC**. Falta: domínio (repos/serviços/endpoints de produto/estoque/pedido) e os 3 fronts |
 | `site/` | Site público (Astro/SSG, ADR-011). **Home institucional "matadora"** (posicionamento concorrente do Bling): hero com painel animado + demo de sincronização, faixa de stats com contadores, contraste problema→solução, 3 passos, 6 recursos, canais (ML/Shopee/Amazon/balcão), planos (preços via `/api/publico/planos`), FAQ e CTA — tudo em CSS/SVG puro com **scroll-reveal** e **prefers-reduced-motion** (sem novas deps). Sistema visual em `src/styles/site.css` portado do golden `nainer_institucional`. `/assinar` (form → `POST /api/publico/assinar` → auto-login → `/bem-vindo`) e `/bem-vindo` mantidos. **Trial 60 dias** em toda a copy. Tema claro/escuro persistido. **Build SSG ok**; hero/reveal/contadores verificados via Playwright |
 | `web/` | **Novo — ERP do lojista (React 19 + Vite + TS)**. Auth JWT (login slug+email+senha; **handoff SSO** do site via `#token=`), shell (nav Painel/Produtos/Estoque/Pedidos/Canais + Sair), **Painel** real (`GET /api/v1/eu` via TanStack Query), placeholders "em construção". Design tokens §3.7 (claro/escuro). **Build ok**; fluxo **e2e verificado** (login + handoff). |
@@ -28,6 +29,48 @@ Projeto **spec-driven** em fase de fundação. A **API (Spring Boot 4 / Java 25)
 ---
 
 ## Linha do tempo
+
+### 2026-07-16 — V025: crediário + caixa antecipados da Fase 2 (revisão de Q5/ADR-010 — ADR-012)
+
+O dono do produto pediu 8 tabelas do legado financeiro (`tipo_carteira`, `moeda`,
+`moeda_detalhe`, `contas_receber`/`_detalhe`, `caixa_mestre`/`_detalhe`) e pediu análise antes
+de criar (não recriar/testar banco ainda — convenção da sessão).
+
+1. **Revisão de escopo confirmada:** Q5/ADR-010 dizia que todo o `financeiro` (caixa,
+   crediário, contas a pagar/receber, conta corrente) ficava fora do v1, para a Fase 2. O dono
+   do produto confirmou que quer **antecipar crediário + caixa** para agora — mesmo movimento
+   já feito com `cfg_plano_contas` (V016). Vira **ADR-012** (revisa ADR-010).
+   `contas_pagar`/`conta_corrente(_movimento)` **continuam fora**, sem migration.
+2. **Análise do DDL colado (legado Firebird quase sem conversão)** — achados corrigidos antes
+   de criar: faltava `id_tenant` em todas as 8 tabelas; FKs simples e apontando para nomes de
+   tabela errados (`VENDAS`/`EMPRESAS`/`USUARIOS` em vez de `venda`/`empresa`/`usuario`, que já
+   existem desde V014/V015/V018); `FLOAT` em dinheiro/percentual (P7); `VARCHAR(1)` S/N em vez
+   de `boolean`; `TIMESTAMP` em vez de `TIMESTAMPTZ`; `GENERATED BY DEFAULT` em vez de
+   `GENERATED ALWAYS AS IDENTITY`; `CONTAS_RECEBER_DETALHE` sem PK nenhuma (virou PK composta
+   `(id_tenant, id_conta_receber)`, 1:1 confirmado com o dono do produto); `MOEDAS_DETALHE`
+   como PK `(id_moeda, id_carteira)` sem tenant (virou `(id_tenant, id_moeda, id_carteira)`).
+3. **`caixa_detalhe.tipo_operacao`** — os códigos do legado (`RV`/`RP`/`DC`/`CC`/`TR`) não
+   diziam o significado; confirmado com o dono do produto e virou ENUM `tipo_operacao_caixa`
+   por extenso: `RECEBIMENTO_VENDA`, `RECEBIMENTO_PARCELA_CREDIARIO`, `DEBITO_CAIXA`,
+   `CREDITO_CAIXA`, `TROCO`. `credito_debito` (`C`/`D`) **reaproveita** o ENUM já criado em
+   V013 para o ledger de estoque, em vez de criar um tipo novo.
+4. **`caixa_detalhe` ganhou `criado_em`** (ausente no legado) — uma sessão de caixa pode durar
+   o dia todo com vários lançamentos em horários diferentes; sem timestamp por linha não dá
+   pra saber "quando" cada lançamento ocorreu (P3 exige quem/quando/origem).
+5. **Seed de `moeda` é por tenant, não global:** o legado insere 7 linhas fixas (DINHEIRO,
+   PIX, CARTAO DEBITO/CREDITO, CREDIARIO, VALE PRESENTE, VALE MERCADORIA) sem tenant — como
+   `id_tenant` é obrigatório e não existe no momento da migration, o dono do produto confirmou
+   que o seed deve ser **por tenant no signup**, mesmo padrão de `cfg_geral` no
+   `SignupService`. ✅ **Implementado em seguida (mesmo dia):** `SignupService.assinar()`
+   insere as 7 linhas de `moeda` logo após criar `cfg_geral`, dentro da mesma transação
+   atômica do signup (§3.3.2). Nenhum teste foi rodado/banco recriado nesta rodada (convenção
+   da sessão — só sob pedido explícito).
+6. **Migration `V025__financeiro_caixa_crediario.sql` criada** (nome pedido pelo dono do
+   produto) — as 7 tabelas + ENUM `tipo_operacao_caixa`, todas com `id_tenant`, FKs compostas
+   `(id_tenant, id_x)` (P8) e RLS **próprio no arquivo** (o guarda-corpo de V024 já tinha
+   rodado antes destas tabelas existirem, então não as alcançaria). Documentação sincronizada:
+   `db/migration/README.md`, `spec-driven-erp-varejo.md` (§2.7 Q5, §3.3.7, §3.5.1, lista de
+   ADRs) e este arquivo. **Banco não recriado/testado nesta rodada** (convenção da sessão).
 
 ### 2026-07-16 — Revisão do schema de domínio: tipos, cascade, imutabilidade e bug de bootstrap
 
@@ -437,7 +480,7 @@ com autenticação JWT real protegendo o ERP.
 - **Decisões de negócio do SaaS (D1–D10)** — ver `docs/PLANO-DE-NEGOCIO.md`. Abertas: D1 preços, D3 gateway (adiado), D5 nome "Niner", D6 NFS-e da assinatura, D8 dunning, D9 metas, D10 comportamento do estado `INADIMPLENTE`.
 - **ADR-011 — framework do site público (SEO):** Astro × Next, "decidir depois" (não bloqueia o backend).
 
-> ✅ **Q5 — módulo `financeiro` do lojista:** fechada em 2026-07-10 — **fora do v1** (junto com PDV, §2.3); vai para a **Fase 2** com **crediário priorizado**. R9 (venda manual) é atendido por `venda` + baixa de estoque, sem financeiro. Vira **ADR-010**. Ver §3.3.7.
+> ✅ **Q5 — módulo `financeiro` do lojista:** fechada em 2026-07-10 — **fora do v1**; **revisada em 2026-07-16 (ADR-012)** — crediário (`tipo_carteira`/`moeda`/`contas_receber`) e caixa (`caixa_mestre`/`caixa_detalhe`) antecipados via **V025**. `contas_pagar`/`conta_corrente(_movimento)` continuam fora. R9 (venda manual) segue sem ligação automática ao financeiro (schema existe, domínio Java ainda não liga venda→recebível). Ver §3.3.7.
 > ✅ **Q7 — SKU vs EAN:** fechada em 2026-07-10 — **separar** `sku` interno (obrigatório, único, chave do domínio; ex-`codigo_barra`) de `ean` (GTIN real, nullable, único quando preenchido). EAN exigido só na **publicação** em canal, não no cadastro. Nas migrations V013+, as FKs que apontavam para `codigo_barra` passam a referenciar `sku`. Ver §3.3.3.
 > ✅ **Q2 — estratégia de reserva:** fechada em 2026-07-10 — reservar no **`recebido`** (pedido importado já incrementa `reservado`), com expiração configurável por canal que devolve reservas não pagas. Alinha R5 + P1. Vira **ADR-004**; adicionar colunas `reservado`/`minimo` a `produto_estoque` nas migrations de domínio. Ver §3.3.5.
 > ✅ **Q6 — multi-empresa/tenant:** fechada em 2026-07-08 — manter `id_empresa` **e** adicionar `id_tenant` (banco único + RLS; `tenant 1:N empresa`, 1:1 no v1).

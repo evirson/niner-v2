@@ -85,6 +85,22 @@ public class SignupService {
 
         jdbc.sql("INSERT INTO cfg_geral (id_tenant) VALUES (?)").param(idTenant).update();
 
+        // 5b) moedas padrão (formas de recebimento, §3.3.7/V025) — seed POR TENANT aqui,
+        // não em migration global, porque id_tenant é obrigatório (P8) e não existe no
+        // momento do Flyway. Mesmo conjunto do legado (db/042_MOEDAS.txt).
+        jdbc.sql("""
+                        INSERT INTO moeda (id_tenant, nome_moeda) VALUES
+                            (?, 'DINHEIRO'),
+                            (?, 'PIX'),
+                            (?, 'CARTAO DEBITO'),
+                            (?, 'CARTAO CREDITO'),
+                            (?, 'CREDIARIO'),
+                            (?, 'VALE PRESENTE'),
+                            (?, 'VALE MERCADORIA')
+                        """)
+                .params(idTenant, idTenant, idTenant, idTenant, idTenant, idTenant, idTenant)
+                .update();
+
         // 6) primeiro usuário = ADMIN (senha em hash — nunca texto).
         long idUsuario = jdbc.sql("""
                         INSERT INTO usuario (id_tenant, id_empresa, nome_usuario, email, senha_hash, administrador)

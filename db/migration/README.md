@@ -55,11 +55,14 @@ RLS. Só depois os módulos de domínio do lojista e, por fim, as políticas RLS
 | **V021** | pedidos de canal: `pedido` (idempotente `(canal,id_externo)`), `pedido_item` | ✅ |
 | **V022** | `integracao`: `outbox_evento`, `webhook_recebido` (P2) | ✅ |
 | **V023** | `cfg_geral` (singleton por tenant; `cfg_usa_variante_linha`/`cfg_usa_variante_coluna` boolean default true; sem `moeda_devolucao`) | ✅ |
-| **V024** | **RLS de domínio** (final): `ENABLE`+`FORCE` + `USING/WITH CHECK (id_tenant = plataforma.tenant_atual())` em todas as tabelas de tenant + grants de `niner_app` + `REVOKE UPDATE, DELETE` só em `produto_movimento_mestre` (imutabilidade, P3 — `produto_movimento_detalhe` ficou de fora desde 2026-07-16, ver trigger em V019) + guarda-corpo que falha se alguma tabela com `id_tenant` ficar sem RLS | ✅ |
+| **V024** | **RLS de domínio** (final para V014–V023): `ENABLE`+`FORCE` + `USING/WITH CHECK (id_tenant = plataforma.tenant_atual())` em todas as tabelas de tenant + grants de `niner_app` + `REVOKE UPDATE, DELETE` só em `produto_movimento_mestre` (imutabilidade, P3 — `produto_movimento_detalhe` ficou de fora desde 2026-07-16, ver trigger em V019) + guarda-corpo que falha se alguma tabela com `id_tenant` ficar sem RLS | ✅ |
+| **V025** | **`financeiro` (parcial) — crediário + caixa** (revisão de Q5/ADR-010, 2026-07-16): `tipo_carteira` (prazo/parcelas min-max/taxa adm), `moeda` (formas de recebimento, seed **por tenant** no signup — não global), `moeda_detalhe` (moeda × carteira), `contas_receber`/`contas_receber_detalhe` (1:1, taxas de cartão), `caixa_mestre`/`caixa_detalhe` (sessão de caixa + lançamentos, ENUM `tipo_operacao_caixa` mapeado do legado `RV/RP/DC/CC/TR`). Tem **RLS próprio** no mesmo arquivo (V024 já tinha rodado). `contas_pagar`/`conta_corrente*` continuam fora (§3.3.7) | ✅ |
 
 > As tabelas do schema `plataforma` são **globais** (P9) e **não** entram no RLS de tenant.
-> O RLS (`FORCE`) só se aplica às tabelas de **domínio** do lojista (V014–V023, ativado em V024).
-> `financeiro` do lojista **não** entra no v1 (Q5/ADR-010 — Fase 2).
+> O RLS (`FORCE`) se aplica a toda tabela de **domínio** do lojista — V014–V023 (ativado em V024)
+> e V025 (ativado no próprio arquivo, por ter sido criado depois do guarda-corpo de V024).
+> `financeiro` do lojista está **parcialmente** no v1 desde V025 (crediário/caixa); `contas_pagar`
+> e `conta_corrente(_movimento)` continuam fora (Q5/ADR-010 revisado — Fase 2).
 >
 > **FKs compostas (2026-07-16):** V014–V022 tiveram **todas** as FKs entre tabelas de
 > domínio convertidas de simples para compostas `(id_tenant, id_x)` — ~34 constraints em
@@ -132,3 +135,25 @@ Em desenvolvimento, recriar do zero (`flyway clean` + `migrate`) é aceitável.
   seria redundante (seria sempre igual a `data_venda`/`data_devolucao`, já que nenhuma das
   duas tem fluxo de "criar rascunho hoje, confirmar depois"). `venda` também perdeu
   `valor_total` (derivado do ledger `produto_movimento_detalhe`) e `observacao`.
+- **`financeiro` parcial (V025, 2026-07-16) revisa Q5/ADR-010:** crediário (`tipo_carteira`,
+  `moeda`, `moeda_detalhe`, `contas_receber`/`_detalhe`) e caixa (`caixa_mestre`/`_detalhe`)
+  antecipados da Fase 2 para o v1. `contas_pagar` e `conta_corrente(_movimento)` continuam
+  fora — não fazem parte desta migration. Pontos específicos:
+  - `contas_receber_detalhe` é **1:1** com `contas_receber`: PK é `(id_tenant, id_conta_receber)`,
+    não um surrogate próprio.
+  - `caixa_detalhe.tipo_operacao` é ENUM `tipo_operacao_caixa` — nomes por extenso confirmados
+    pelo dono do produto para os códigos do legado: `RV`→`RECEBIMENTO_VENDA`,
+    `RP`→`RECEBIMENTO_PARCELA_CREDIARIO`, `DC`→`DEBITO_CAIXA`, `CC`→`CREDITO_CAIXA`, `TR`→`TROCO`.
+  - `caixa_detalhe.credito_debito` **reaproveita** o ENUM `credito_debito` (`C`/`D`) já criado em
+    V013 para o ledger de estoque — não cria tipo novo.
+  - `caixa_detalhe` ganhou `criado_em` (ausente no legado) porque uma sessão de caixa pode durar
+    o dia todo com vários lançamentos em horários diferentes — sem isso não dá pra saber
+    "quando" cada lançamento ocorreu (P3).
+  - `moeda` não tem seed global de Flyway (o legado insere 7 linhas fixas: DINHEIRO, PIX,
+    CARTAO DEBITO/CREDITO, CREDIARIO, VALE PRESENTE, VALE MERCADORIA) porque `id_tenant` é
+    obrigatório e não existe no momento da migration — o seed é **por tenant**, feito pelo
+    `SignupService` no signup (mesmo padrão de `cfg_geral`). ✅ Implementado (2026-07-16):
+    `SignupService.assinar()` insere as 7 linhas logo após `cfg_geral`.
+  - RLS destas 7 tabelas está **no próprio V025**, não em V024 — o guarda-corpo de V024 rodou
+    antes delas existirem e não as alcançaria; V025 repete o padrão (ENABLE+FORCE+policy+grants)
+    e tem seu próprio guarda-corpo.
