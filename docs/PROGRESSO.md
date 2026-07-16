@@ -167,6 +167,38 @@ domínio em `api/` ainda depende dessas tabelas, então deu para corrigir sem qu
     - Convenção registrada no checklist de aprovação de spec (fim do documento) e em
       `db/migration/README.md`/`spec-driven-erp-varejo.md` §3.1.1: toda FK nova entre tabelas
       de domínio nasce composta, nunca simples.
+17. **`cfg_plano_contas` antecipada (V016) — preparação para relatórios/DRE.** O dono do
+    produto pediu a tabela de plano de contas (§3.3.7 do legado, que fazia parte do módulo
+    `financeiro` deferido pra Fase 2 — Q5/ADR-010) + `fornecedor.id_plano_contas NOT NULL`.
+    Só o plano de contas em si entrou — `moeda`, `caixa_*`, `contas_receber*`,
+    `contas_pagar`, `conta_corrente*` continuam fora, sem migration (Fase 2). DDL ajustado
+    ao padrão do projeto a partir do que foi passado:
+    - PK vira **composta `(id_tenant, id_plano_contas)`** em vez de `id_plano_contas` sozinho
+      — a chave de negócio (código contábil `text`, ex.: `"3.1.001"`) precisa do tenant pra
+      não colidir entre lojistas; é a primeira tabela do domínio sem PK surrogate `integer`.
+    - `VARCHAR(13)`/`VARCHAR(100)` → `text`; `VARCHAR(1) CHECK IN ('S','N')`
+      (`inclui_dre`/`inclui_fluxo_caixa`) → `boolean` (regra de conversão §3.3.1).
+    - `tipo_movimento VARCHAR(1) CHECK IN ('C','D','N')` → novo ENUM `tipo_movimento_conta`
+      (V013) — distinto de `credito_debito` (ledger de estoque). Valores por extenso
+      (`'CRÉDITO'`/`'DÉBITO'`/`'NEUTRO'`, ajustado logo em seguida no mesmo dia — ver item 18),
+      não os códigos de uma letra do legado.
+    - `fornecedor.id_plano_contas` entra como FK **composta** desde já (não simples e depois
+      corrigida) — já nasce seguindo a convenção do item 16. Sem linha padrão pré-cadastrada
+      em `cfg_plano_contas`, então todo fornecedor novo precisa de um plano de contas já
+      criado.
+    - Constraint/índice nomeados no padrão do projeto (`cfg_plano_contas_pk`,
+      `..._id_tenant_ix`, `..._descricao_ix`), não no estilo Firebird (`PK_...`, `IX_...`) do
+      DDL original; PK definida inline no `CREATE TABLE`, não via `ALTER TABLE` depois.
+    - `cfg_plano_contas` entrou no array de RLS do V024.
+18. **Ajuste do ENUM `tipo_movimento_conta` + mais 3 arquivos legados removidos.**
+    `tipo_movimento_conta` (item 17) trocou de códigos de uma letra
+    (`'C'`/`'D'`/`'N'`) para valores por extenso: `CREATE TYPE tipo_movimento_conta AS ENUM
+    ('CRÉDITO', 'DÉBITO', 'NEUTRO')` (V013). Nada dependia do valor anterior (tabela sem
+    seed, sem código em `api/`), troca segura. Removidos também `db/005_CFG_PLANO_CONTAS.txt`,
+    `db/101_PROCEDURES.txt` e `db/102_TRIGGERS.txt` — dumps do legado Firebird (procedures/
+    triggers, incluindo a antiga `SP_ATUALIZA_QUANTIDADE_ESTOQUE`) que não fazem mais falta
+    como referência: a lógica de estoque já está na trigger real (`V019`, item 15) e o plano
+    de contas já foi migrado (item 17).
 
 ### 2026-07-11 — Home institucional (concorrente do Bling) + trial 60 dias (ponta a ponta)
 

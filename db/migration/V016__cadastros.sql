@@ -53,16 +53,32 @@ CREATE INDEX cliente_id_tenant_ix  ON cliente (id_tenant);
 CREATE INDEX cliente_nome_ix       ON cliente (id_tenant, nome);
 CREATE INDEX cliente_categoria_ix  ON cliente (id_tenant, id_categoria_cliente);
 
+-- plano de contas (§3.3.7 do legado — preparação p/ relatórios/DRE futuros, fora do
+-- financeiro completo que segue fora do v1, Q5/ADR-010). Chave de negócio (id_plano_contas)
+-- é o código contábil (ex.: "3.1.001"), único POR TENANT — não é PK global.
+CREATE TABLE cfg_plano_contas (
+  id_tenant          smallint              NOT NULL REFERENCES plataforma.tenant (id_tenant),
+  id_plano_contas    text                  NOT NULL,
+  descricao          text                  NOT NULL,
+  tipo_movimento     tipo_movimento_conta  NOT NULL,   -- CRÉDITO/DÉBITO/NEUTRO
+  inclui_dre         boolean               NOT NULL,
+  inclui_fluxo_caixa boolean               NOT NULL,
+  CONSTRAINT cfg_plano_contas_pk PRIMARY KEY (id_tenant, id_plano_contas)
+);
+CREATE INDEX cfg_plano_contas_id_tenant_ix ON cfg_plano_contas (id_tenant);
+CREATE INDEX cfg_plano_contas_descricao_ix ON cfg_plano_contas (id_tenant, descricao);
+
 CREATE TABLE fornecedor (
   id_fornecedor      integer     GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   id_tenant          smallint    NOT NULL REFERENCES plataforma.tenant (id_tenant),
+  id_plano_contas    text        NOT NULL,
   razao_social       text        NOT NULL,
   nome_fantasia      text,
   cnpj               text,
   inscricao_estadual text,
   email              text,
   telefone           text,
-  endereco           text, 
+  endereco           text,
   numero             text,
   bairro             text,
   cidade             text,
@@ -73,7 +89,10 @@ CREATE TABLE fornecedor (
   atualizado_em      timestamptz NOT NULL DEFAULT now(),
   CONSTRAINT fornecedor_cnpj_uk UNIQUE (id_tenant, cnpj),
   -- base para FK composta (2026-07-16, P8) — ver comentário em empresa_id_empresa_uk (V014).
-  CONSTRAINT fornecedor_id_fornecedor_uk UNIQUE (id_tenant, id_fornecedor)
+  CONSTRAINT fornecedor_id_fornecedor_uk UNIQUE (id_tenant, id_fornecedor),
+  -- FK composta (2026-07-16, P8) — ver comentário em usuario_empresa_fk (V015).
+  CONSTRAINT fornecedor_plano_contas_fk FOREIGN KEY (id_tenant, id_plano_contas)
+    REFERENCES cfg_plano_contas (id_tenant, id_plano_contas)
 );
 CREATE INDEX fornecedor_id_tenant_ix ON fornecedor (id_tenant);
 
@@ -98,5 +117,6 @@ CREATE INDEX funcionario_id_tenant_ix ON funcionario (id_tenant);
 
 COMMENT ON TABLE cfg_categoria_cliente IS 'Categoria de cliente (RLS). Referenciada por cliente.id_categoria_cliente (NOT NULL).';
 COMMENT ON TABLE cliente               IS 'Cliente do lojista (RLS). limite_credito preparado para crediário (Fase 2).';
+COMMENT ON TABLE cfg_plano_contas      IS 'Plano de contas (RLS). Preparação p/ relatórios/DRE (financeiro completo é Fase 2, Q5/ADR-010). Referenciada por fornecedor.id_plano_contas (NOT NULL).';
 COMMENT ON TABLE fornecedor            IS 'Fornecedor do lojista (RLS).';
 COMMENT ON TABLE funcionario           IS 'Funcionário do lojista (RLS). Referenciado no ledger de estoque/venda.';

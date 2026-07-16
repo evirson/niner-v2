@@ -29,3 +29,8 @@ CREATE TYPE status_outbox AS ENUM ('PENDENTE', 'PROCESSADO', 'ERRO', 'DEAD_LETTE
 
 -- Gênero do cliente (legado: M/F/O). Usado em cliente.genero (V016).
 CREATE TYPE genero_cliente AS ENUM ('MASCULINO', 'FEMININO', 'OUTROS');
+
+-- Natureza do lançamento no plano de contas (legado: C/D/N, por extenso desde 2026-07-16).
+-- Usado em cfg_plano_contas.tipo_movimento (V016). Diferente de credito_debito (ledger de
+-- estoque); 'NEUTRO' cobre conta sintética/agrupadora que não recebe lançamento direto.
+CREATE TYPE tipo_movimento_conta AS ENUM ('CRÉDITO', 'DÉBITO', 'NEUTRO');

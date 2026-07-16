@@ -14,7 +14,7 @@ DECLARE
     -- identidade
     'empresa', 'usuario', 'usuario_rotina',
     -- cadastros
-    'cfg_categoria_cliente', 'cliente', 'fornecedor', 'funcionario',
+    'cfg_categoria_cliente', 'cliente', 'cfg_plano_contas', 'fornecedor', 'funcionario',
     -- catalogo
     'cfg_categoria_produto', 'cfg_variante_linha', 'cfg_variante_coluna',
     'produto', 'produto_categoria', 'produto_barra', 'produto_imagem',

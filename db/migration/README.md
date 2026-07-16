@@ -44,10 +44,10 @@ RLS. Só depois os módulos de domínio do lojista e, por fim, as políticas RLS
 | **V010** | `staff` + `impersonacao_log` | ✅ |
 | **V011** | grants de `niner_app` no schema `plataforma` | ✅ |
 | **V012** | seed dos planos (🔴 preços provisórios, D1) | ✅ |
-| **V013** | tipos ENUM de domínio (canal, pedido, movimento, outbox, `genero_cliente`…) | ✅ |
+| **V013** | tipos ENUM de domínio (canal, pedido, movimento, outbox, `genero_cliente`, `tipo_movimento_conta`…) | ✅ |
 | **V014** | `identidade.empresa` (`codigo_empresa` único por tenant, só para exibição em relatório; `cfg_nome_etiqueta` obrigatório) | ✅ |
 | **V015** | `identidade.usuario` (e-mail único por tenant, case-insensitive) + `usuario_rotina` | ✅ |
-| **V016** | cadastros: `cfg_categoria_cliente`, `cliente` (`id_categoria_cliente` NOT NULL; `data_nascimento`/`genero` obrigatórios só p/ pessoa física, `CHECK`; `whatsapp`/`instagram`/`facebook`/`tiktok`), `fornecedor`, `funcionario` (`telefone`) | ✅ |
+| **V016** | cadastros: `cfg_categoria_cliente`, `cliente` (`id_categoria_cliente` NOT NULL; `data_nascimento`/`genero` obrigatórios só p/ pessoa física, `CHECK`; `whatsapp`/`instagram`/`facebook`/`tiktok`), `cfg_plano_contas` (PK composta `(id_tenant, id_plano_contas)`, prep. p/ DRE — Q5/ADR-010), `fornecedor` (`id_plano_contas` NOT NULL), `funcionario` (`telefone`) | ✅ |
 | **V017** | `catalogo`: configs, `produto` (sem `imagem`), `produto_categoria`, `produto_barra` (**Q7:** `sku` + `ean`), `produto_imagem` (galeria, `indice smallint` único por produto) | ✅ |
 | **V018** | vendas: `venda` (sem `id_funcionario` — comissão/vendedor ficam em `produto_movimento_detalhe`), `venda_devolucao` (R9; sem financeiro — Q5) | ✅ |
 | **V019** | `estoque`: `produto_estoque` (**Q2:** `reservado`, `disponivel`), `produto_movimento_mestre` (imutável) + `produto_movimento_detalhe` (sem `saldo_apos` por linha; corrigível, ver trigger), `produto_balanco` (`id_balanco BIGINT`, sem `qtd_sistema`/`observacao`), **trigger `trg_produto_movimento_detalhe_estoque`** (`fn_atualiza_estoque_movimento`) mantém `produto_estoque.qtd_estoque` em INSERT/UPDATE/DELETE do ledger | ✅ |
@@ -115,6 +115,13 @@ Em desenvolvimento, recriar do zero (`flyway clean` + `migrate`) é aceitável.
 - **`funcionario_cpf_uk` (V016, 2026-07-16):** passou a `UNIQUE(id_tenant, id_funcionario)` —
   como `id_funcionario` já é a PK, essa constraint não impõe nada além do que a PK já
   garante; **o CPF deixou de ser único por tenant** (decisão explícita).
+- **`cfg_plano_contas` (V016, 2026-07-16) foge do padrão de PK surrogate + `integer`:** a PK é
+  `(id_tenant, id_plano_contas)` — `id_plano_contas` é `text` (código contábil, ex.:
+  `"3.1.001"`), a própria chave de negócio, sem `id_<entidade> integer GENERATED ALWAYS AS
+  IDENTITY`. Preparação para relatórios/DRE; o módulo `financeiro` completo (caixa,
+  contas a pagar/receber) continua fora do v1 (Q5/ADR-010, Fase 2) — só o plano de contas
+  em si (e o vínculo em `fornecedor.id_plano_contas`, `NOT NULL`, sem linha padrão
+  pré-cadastrada) entrou agora.
 - Datas de auditoria (`criado_em` `DEFAULT now()` / `atualizado_em`) mantidas pela aplicação
   (Spring Data JDBC), **sem** JPA auditing (§3.3.1 / §3.2). Única exceção a "sem trigger de
   banco": `produto_estoque.qtd_estoque`, mantido por `trg_produto_movimento_detalhe_estoque`

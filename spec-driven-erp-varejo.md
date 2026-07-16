@@ -492,6 +492,17 @@ conta_corrente_movimento(localizador PK, id_conta_corrente FK, data_movimento,
                valor NUMERIC(12,2), observacao)
 ```
 > ✅ **Resolvido (Q5, 2026-07-10 — ADR-010):** financeiro/caixa/crediário **fora do v1**, Fase 2 (crediário priorizado). R9 (venda manual) é atendido por `venda` + baixa de estoque, sem financeiro. Diagrama §3.1 já ajustado (sem módulo `financeiro`).
+>
+> 🟡 **Exceção pontual (2026-07-16):** `cfg_plano_contas` foi antecipada — criada em **V016**
+> (junto de `identidade`/cadastros, não como módulo `financeiro`), como preparação para
+> relatórios/DRE futuros. Só o plano de contas em si; `moeda`, `tipo_carteira`, `caixa_*`,
+> `contas_receber*`, `contas_pagar`, `conta_corrente*` continuam de fora, sem migration,
+> ainda referência de modelagem para a Fase 2. Diferenças da tabela real vs. este
+> pseudo-schema: PK vira `(id_tenant, id_plano_contas)` (P8 — chave de negócio não pode ser
+> PK sozinha, precisa do tenant); `tipo_movimento` vira ENUM `tipo_movimento_conta`
+> (`'CRÉDITO'`/`'DÉBITO'`/`'NEUTRO'`, por extenso desde 2026-07-16, não os códigos `C`/`D`/`N`
+> do legado — V013); `inclui_dre`/`inclui_fluxo_caixa` viram `boolean` (não `VARCHAR(1)`
+> `S`/`N`). `fornecedor.id_plano_contas` (§3.3.9) passou a referenciá-la, `NOT NULL`.
 
 ### 3.3.8 Configuração global
 
@@ -528,7 +539,10 @@ funcionario(id_funcionario PK, nome_funcionario, fone_celular, perc_comissao NUM
 ```
 > **Implementado (V016):** `cliente`/`fornecedor`/`funcionario` nasceram com `id_tenant` (não
 > `id_empresa`) e um subconjunto simplificado de campos (`cpf_cnpj` único em vez de `cpf`; sem
-> `bloqueado`/`contato_crm` — ficam para quando houver demanda). `instagram`/`facebook` do
+> `bloqueado`/`contato_crm` — ficam para quando houver demanda). `fornecedor.id_plano_contas`
+> (FK composta para `cfg_plano_contas`, ver §3.3.7) é **obrigatório** (`NOT NULL`) desde
+> 2026-07-16 — sem linha padrão pré-cadastrada, então todo fornecedor precisa de um plano de
+> contas já criado. `instagram`/`facebook` do
 > legado entraram em 2026-07-16, junto com `whatsapp` e `tiktok` (novos, sem equivalente no
 > legado) — as 4 colunas são `text` nullable, sem validação de formato no banco.
 > `id_categoria_cliente` (FK para `cfg_categoria_cliente`, ver §3.3.8) é **obrigatório**
@@ -694,7 +708,9 @@ V014  identidade.empresa (+id_tenant; codigo_empresa único/tenant; cfg_nome_eti
 V015  identidade.usuario (+id_tenant, UNIQUE(id_tenant,lower(email))) + usuario_rotina
 V016  cadastros: cfg_categoria_cliente · cliente (id_categoria_cliente NOT NULL;
       data_nascimento/genero obrigatórios só p/ pessoa física; whatsapp/instagram/
-      facebook/tiktok) · fornecedor · funcionario (telefone; CPF não é mais único por tenant)
+      facebook/tiktok) · cfg_plano_contas (PK composta id_tenant+id_plano_contas; prep.
+      DRE, Q5/ADR-010) · fornecedor (id_plano_contas NOT NULL) · funcionario (telefone;
+      CPF não é mais único por tenant)
 V017  catalogo: cfg_categoria_produto/variante_linha/variante_coluna · produto (sem imagem) ·
       produto_categoria · produto_barra (sku+ean, Q7) · produto_imagem (galeria, indice
       único por produto)
