@@ -8,7 +8,8 @@ CREATE TABLE cfg_geral (
   juros_crediario           numeric(5,2) NOT NULL DEFAULT 0,   -- Fase 2 (Q5)
   multa_crediario_dias      integer      NOT NULL DEFAULT 0,   -- Fase 2 (Q5)
   multa_crediario           numeric(5,2) NOT NULL DEFAULT 0,   -- Fase 2 (Q5)
-  moeda_devolucao           text,
+  cfg_usa_variante_linha    boolean      NOT NULL DEFAULT true,
+  cfg_usa_variante_coluna   boolean      NOT NULL DEFAULT true,
   atualizado_em             timestamptz  NOT NULL DEFAULT now()
 );
 

@@ -14,10 +14,10 @@ DECLARE
     -- identidade
     'empresa', 'usuario', 'usuario_rotina',
     -- cadastros
-    'cliente', 'fornecedor', 'funcionario',
+    'cfg_categoria_cliente', 'cliente', 'fornecedor', 'funcionario',
     -- catalogo
     'cfg_categoria_produto', 'cfg_variante_linha', 'cfg_variante_coluna',
-    'produto', 'produto_categoria', 'produto_barra',
+    'produto', 'produto_categoria', 'produto_barra', 'produto_imagem',
     -- vendas
     'venda', 'venda_devolucao',
     -- estoque
@@ -41,6 +41,15 @@ BEGIN
     EXECUTE format('GRANT SELECT, INSERT, UPDATE, DELETE ON %I TO niner_app', t);
   END LOOP;
 END $$;
+
+-- produto_movimento_mestre é imutável (P3, ver comentário de V019): uma vez gravado, um
+-- movimento só é corrigido por um novo movimento compensatório, nunca por UPDATE/DELETE.
+-- Mesmo tratamento já dado a plataforma.impersonacao_log (V011).
+-- produto_movimento_detalhe NÃO entra mais nesse REVOKE (2026-07-16): ganhou a trigger
+-- trg_produto_movimento_detalhe_estoque (V019), que recalcula produto_estoque.qtd_estoque
+-- em UPDATE/DELETE também — niner_app precisa poder corrigir/excluir linha de detalhe para
+-- a trigger disparar de verdade.
+REVOKE UPDATE, DELETE ON produto_movimento_mestre FROM niner_app;
 
 -- Guarda-corpo (P8): falha a migration se alguma tabela de tenant (tem coluna id_tenant,
 -- fora do schema plataforma) ficar SEM RLS habilitado. Torna a garantia auto-verificável.

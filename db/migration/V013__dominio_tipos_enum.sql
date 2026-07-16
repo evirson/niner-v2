@@ -26,3 +26,6 @@ CREATE TYPE tipo_operacao_venda AS ENUM ('VENDA', 'DEVOLUCAO');
 
 -- Situação de um evento no outbox (P2: async + retry + dead-letter).
 CREATE TYPE status_outbox AS ENUM ('PENDENTE', 'PROCESSADO', 'ERRO', 'DEAD_LETTER');
+
+-- Gênero do cliente (legado: M/F/O). Usado em cliente.genero (V016).
+CREATE TYPE genero_cliente AS ENUM ('MASCULINO', 'FEMININO', 'OUTROS');

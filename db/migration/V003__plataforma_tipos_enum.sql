@@ -25,5 +25,3 @@ CREATE TYPE plataforma.status_pagamento AS ENUM
 -- Papéis do staff da plataforma (separados do RBAC ADMIN/OPERADOR do tenant — R18).
 CREATE TYPE plataforma.papel_staff AS ENUM ('SUPER_ADMIN', 'SUPORTE', 'FINANCEIRO');
 
--- Situação SIM / NÃO.
-CREATE TYPE plataforma.sim_nao AS ENUM ('SIM', 'NÃO');

@@ -1,13 +1,13 @@
 # Progresso do Projeto — niner-v2
 
 Registro cronológico das decisões e entregas. Atualizar a cada marco relevante.
-**Última atualização:** 2026-07-11
+**Última atualização:** 2026-07-16
 
 ---
 
 ## Estado atual
 
-Projeto **spec-driven** em fase de fundação. O **esqueleto da API (Spring Boot 4 / Java 25)** já existe e sobe: 3 superfícies + infra de contexto de tenant. Domínio do lojista (migrations V013+, controllers) ainda não — depende de Q2/Q5/Q7.
+Projeto **spec-driven** em fase de fundação. A **API (Spring Boot 4 / Java 25)** sobe com 3 superfícies + infra de contexto de tenant; o schema completo (control-plane + domínio do lojista, V001–V024) está criado, revisado e com RLS validado. Falta a camada de domínio na API (repos/serviços/endpoints de produto/estoque/pedido) e o app `admin/`.
 
 | Artefato | Situação |
 |---|---|
@@ -17,7 +17,7 @@ Projeto **spec-driven** em fase de fundação. O **esqueleto da API (Spring Boot
 | `db/*.txt` | Schema **legado (Firebird)** versionado como referência (31 tabelas + generators, procedures, triggers) |
 | `CLAUDE.md` | Guia do repositório — atualizado para o SaaS multi-tenant (P8/P9, plataforma, `id_tenant`+RLS) |
 | `docker-compose.yml` | Infra local de dev: `db` (postgres:18, `niner_db`) + `flyway` (profile `migrate`) + **`api`** (Spring Boot, porta 8080, conecta como `niner_app`); **V001–V024 aplicadas e validadas em banco real** (control-plane + domínio do lojista + RLS) |
-| `db/migration/V013–V024` | **Novo — domínio do lojista** (identidade, cadastros, catálogo com `sku`+`ean`, estoque com `reservado`/`disponivel`, vendas, canais, pedidos, integração/outbox, cfg_geral) + **RLS de domínio** (`FORCE` + política por `id_tenant`). **Gate P8 verde** (teste de isolamento cross-tenant automatizado). `financeiro` NÃO entra (Q5/ADR-010) |
+| `db/migration/V013–V024` | Domínio do lojista (identidade, cadastros, catálogo com `sku`+`ean`, estoque com `reservado`/`disponivel`, vendas, canais, pedidos, integração/outbox, cfg_geral) + **RLS de domínio** (`FORCE` + política por `id_tenant`). **Gate P8 verde** (teste de isolamento cross-tenant automatizado). `financeiro` NÃO entra (Q5/ADR-010). **Revisado em 2026-07-16** (ver linha do tempo): tipos padronizados (`id_tenant SMALLINT`, demais PKs `INTEGER`), sem `ON DELETE CASCADE`, ledger de estoque imutável via `REVOKE`, e-mail case-insensitive, fix de bootstrap (`GRANT CREATE ON SCHEMA public`) |
 | `api/` | Spring Boot 4.0.7 / Java 25 (Maven). 3 superfícies com `SecurityFilterChain` separados; `TenantContext` (`ScopedValue`) + `TenantAwareTransactionManager`; **auth JWT HS256** (login/signup emitem, `/api/v1` valida `aud=tenant`); **trial self-service** (`POST /api/publico/assinar` → tenant+configs+ADMIN+assinatura TRIAL + token), `POST /api/publico/login`, `GET /api/v1/eu`. **11 testes verdes** (Testcontainers) + fluxo **verificado ao vivo** como `niner_app`. Persistência: **Spring Data JDBC**. Falta: domínio (repos/serviços/endpoints de produto/estoque/pedido) e os 3 fronts |
 | `site/` | Site público (Astro/SSG, ADR-011). **Home institucional "matadora"** (posicionamento concorrente do Bling): hero com painel animado + demo de sincronização, faixa de stats com contadores, contraste problema→solução, 3 passos, 6 recursos, canais (ML/Shopee/Amazon/balcão), planos (preços via `/api/publico/planos`), FAQ e CTA — tudo em CSS/SVG puro com **scroll-reveal** e **prefers-reduced-motion** (sem novas deps). Sistema visual em `src/styles/site.css` portado do golden `nainer_institucional`. `/assinar` (form → `POST /api/publico/assinar` → auto-login → `/bem-vindo`) e `/bem-vindo` mantidos. **Trial 60 dias** em toda a copy. Tema claro/escuro persistido. **Build SSG ok**; hero/reveal/contadores verificados via Playwright |
 | `web/` | **Novo — ERP do lojista (React 19 + Vite + TS)**. Auth JWT (login slug+email+senha; **handoff SSO** do site via `#token=`), shell (nav Painel/Produtos/Estoque/Pedidos/Canais + Sair), **Painel** real (`GET /api/v1/eu` via TanStack Query), placeholders "em construção". Design tokens §3.7 (claro/escuro). **Build ok**; fluxo **e2e verificado** (login + handoff). |
@@ -28,6 +28,145 @@ Projeto **spec-driven** em fase de fundação. O **esqueleto da API (Spring Boot
 ---
 
 ## Linha do tempo
+
+### 2026-07-16 — Revisão do schema de domínio: tipos, cascade, imutabilidade e bug de bootstrap
+
+Auditoria linha a linha de `db/migration/V001–V024` + `db/bootstrap/00_roles.sql` (nenhum código de
+domínio em `api/` ainda depende dessas tabelas, então deu para corrigir sem quebrar nada em produção).
+
+1. **Bug bloqueante corrigido: `niner_owner` sem `CREATE` no schema `public`.**
+   `ALTER DATABASE niner_db OWNER TO niner_owner` (bootstrap) muda o dono do **banco**, não do
+   schema `public` pré-existente (dono é o superusuário de bootstrap da imagem). Como as
+   migrations de domínio (V013+) criam tipos/tabelas sem prefixo de schema (→ `public`), o
+   Flyway rodando como `niner_owner` via `docker compose run --rm flyway` falharia em V013 com
+   `permission denied for schema public`. Não aparecia nos testes porque
+   `api/src/test/resources/bootstrap-test.sql` roda o Flyway como o superusuário do container
+   Testcontainers, não como `niner_owner` — o caminho real nunca tinha sido exercitado. Fix:
+   `GRANT CREATE ON SCHEMA public TO niner_owner;` no bootstrap.
+2. **Regressão revertida em V017 (catálogo).** Uma edição anterior tinha substituído a coluna
+   `sku` de `produto_barra` por `ean_fabricante plataforma.sim_nao DEFAULT 'SIML'` — valor
+   inválido para o ENUM (`'SIM'`/`'NÃO'`), o que quebraria a migration — e tornado `ean`
+   obrigatório, revertendo a decisão **Q7** (sku interno obrigatório/único, ean opcional).
+   Restaurado ao design da Q7.
+3. **Tipos padronizados em todo o schema:** `id_tenant` sempre `SMALLINT` (raiz do isolamento,
+   `plataforma.tenant.id_tenant`); demais PKs surrogate sempre `INTEGER`. Decisão consciente
+   (revê a orientação anterior da spec de `BIGINT` genérico) — teto de 32.767 tenants, considerado
+   suficiente para o público-alvo; revisitar se o funil comercial aproximar do limite.
+4. **Sem `ON DELETE CASCADE` em nenhuma FK do domínio** — decisão do produto: apagar um registro
+   com dependentes deve falhar por violação de FK, nunca apagar em cascata silenciosamente.
+5. **Ledger de estoque imutável ao nível de banco.** `produto_movimento_mestre`/
+   `produto_movimento_detalhe` (P3) ganharam `REVOKE UPDATE, DELETE ... FROM niner_app` em V024
+   — mesmo tratamento que `plataforma.impersonacao_log` já tinha (V011). Correção de um
+   lançamento é sempre um novo movimento compensatório.
+6. **E-mail de login case-insensitive.** `usuario.email` (V015) passou de
+   `UNIQUE(id_tenant, email)` para `UNIQUE INDEX (id_tenant, lower(email))`, igual ao padrão já
+   usado em `plataforma.staff` (V010) — evita duas contas do mesmo tenant diferindo só por
+   maiúscula/minúscula.
+7. **`empresa.codigo_empresa`** (número sequencial por tenant, só para exibição em relatório)
+   ganhou `UNIQUE(id_tenant, codigo_empresa)` + comentário. **`produto_movimento_mestre.
+   id_transferencia`** documentado como proposital sem FK (vem de um gerador externo).
+8. **Documentação sincronizada:** `db/migration/README.md` e `spec-driven-erp-varejo.md`
+   (§3.1.1, §3.3.1–§3.3.6) atualizados para refletir os tipos/convenções reais e os marcadores
+   🔴 já resolvidos pelas migrations V013–V024 (reserva/disponível, ledger, canal/anúncio/pedido,
+   outbox/webhook).
+9. **`cliente.data_nascimento` + `cliente.genero`.** Campos do legado (§3.3.9: `nascimento`,
+   `genero` M/F/O) que tinham ficado de fora quando `V016` foi criado. Como o banco ainda está
+   em fase de construção (nenhuma migration foi aplicada em ambiente real até agora), os campos
+   entraram **direto na V016** em vez de uma migration nova: `data_nascimento DATE` +
+   `genero genero_cliente` (ENUM `MASCULINO`/`FEMININO`/`OUTROS`, tipo definido em V013).
+   Primeira versão os deixou `NOT NULL` incondicional; **ajustado no mesmo dia** para
+   obrigatório **só em pessoa física** — colunas nullable + `CONSTRAINT
+   cliente_dados_pessoais_ck CHECK (NOT fisica_juridica OR (data_nascimento IS NOT NULL AND
+   genero IS NOT NULL))`, já que cliente pessoa jurídica não tem data de nascimento nem gênero.
+   Convenção do projeto enquanto o banco não roda em ambiente real: só criar migration
+   incremental (`V025+`) depois que V001–V024 forem de fato aplicadas num ambiente que importa
+   preservar.
+10. **`cfg_categoria_cliente` (V016) + `cliente.id_categoria_cliente` (`NOT NULL`).** Tabela do
+    legado (§3.3.8) que também tinha ficado de fora — criada com o padrão já usado em
+    `cfg_categoria_produto` (V017): `id_categoria_cliente integer GENERATED ALWAYS AS IDENTITY
+    PK`, `id_tenant` (P8), `nome_categoria text NOT NULL`, `UNIQUE(id_tenant, nome_categoria)`.
+    Entra **antes** de `cliente` no mesmo arquivo (ordem de FK). `cliente` ganhou
+    `id_categoria_cliente integer NOT NULL REFERENCES cfg_categoria_cliente` + índice
+    `(id_tenant, id_categoria_cliente)`; sem categoria padrão pré-cadastrada, então todo cliente
+    precisa de uma categoria já criada. `cfg_categoria_cliente` entrou no array de RLS do V024.
+11. **Galeria de imagens do produto.** `produto.imagem` (uma imagem só) removida; criada
+    `produto_imagem` (V017) para várias imagens por produto: `id_produto_imagem integer PK`,
+    `id_tenant` (P8), `id_produto integer NOT NULL REFERENCES produto` (sem cascade),
+    `indice smallint NOT NULL` (ordem de exibição), `imagem text NOT NULL`,
+    `UNIQUE(id_tenant, id_produto, indice)`. Entrou no array de RLS do V024.
+12. **Seis ajustes pontuais pedidos pelo dono do produto** (V014/V016/V018/V019/V023) — só
+    script + documentação, banco **não** recriado/testado nesta rodada (nova convenção: só
+    recriar quando pedido explicitamente):
+    - `funcionario` (V016): +`telefone`; `funcionario_cpf_uk` virou `UNIQUE(id_tenant,
+      id_funcionario)` — como `id_funcionario` já é PK, isso não impõe nada além da PK; **CPF
+      deixou de ser único por tenant**.
+    - `venda` (V018): removido `id_funcionario` — vendedor/comissão por item ficam só em
+      `produto_movimento_detalhe.id_funcionario`.
+    - `cfg_geral` (V023): removido `moeda_devolucao`; adicionados `cfg_usa_variante_linha` e
+      `cfg_usa_variante_coluna` (`boolean NOT NULL DEFAULT true`).
+    - `empresa` (V014): novo campo `cfg_nome_etiqueta text NOT NULL` (texto/modelo da etiqueta
+      de produto).
+    - `produto_balanco` (V019): removidos `qtd_sistema` e `observacao`; `id_balanco` virou
+      `bigint` — **exceção deliberada** à convenção "PKs surrogate são `integer`" (volume de
+      contagens de inventário esperado maior que o das demais tabelas).
+    - `produto_movimento_detalhe` (V019): removido `saldo_apos` — o ledger continua imutável
+      (`REVOKE UPDATE, DELETE`, V024), mas deixa de gravar o saldo resultante por linha; esse
+      saldo passa a existir só materializado em `produto_estoque`.
+13. **Direção do controle de saldo de estoque em revisão.** O dono do produto avisou que a
+    remoção de `saldo_apos` (item 12) é compatível com um plano futuro: recriar
+    `SP_ATUALIZA_QUANTIDADE_ESTOQUE` como **stored procedure acionada por trigger** em
+    `produto_movimento_mestre`/`produto_movimento_detalhe` — o **oposto** do que está escrito
+    hoje em `V019` e na spec (§3.3.1/§3.3.4: "domínio Java, não trigger"). Detalhes ainda **não
+    definidos** ("vamos definir mais pra frente"); marcado 🔴 em `V019__estoque.sql` e na spec
+    para não ficar como decisão esquecida. Quando fechar, vira ADR e a migration do
+    trigger/procedure.
+14. **Redes sociais em `cliente`.** `whatsapp`, `instagram`, `facebook`, `tiktok` — `text`
+    nullable, sem validação de formato no banco (V016). `instagram`/`facebook` já existiam no
+    legado (§3.3.9) e tinham ficado de fora; `whatsapp`/`tiktok` são novos, sem equivalente
+    legado. Bloco de sequência de migrations (§3.5.1 da spec) reescrito nesta rodada para bater
+    com os números reais V013–V024 (estava com placeholder `V013+`/`V0xx` desde antes da
+    implementação).
+15. **Item 13 fechado: trigger de estoque implementada.** `trg_produto_movimento_detalhe_estoque`
+    (função `fn_atualiza_estoque_movimento()`, PL/pgSQL, fim do `V019__estoque.sql`) mantém
+    `produto_estoque.qtd_estoque` em `INSERT`/`UPDATE`/`DELETE` de `produto_movimento_detalhe`:
+    `credito_debito='C'` soma, `'D'` subtrai; `UPDATE` desfaz o efeito antigo e aplica o novo
+    (cobre troca de empresa/variação/tipo/quantidade); `DELETE` desfaz o efeito. Faz **UPSERT**
+    em `produto_estoque` — cria a linha na hora se não existir para o `(id_tenant, id_empresa,
+    id_variacao)`. Não existe mais `SP_ATUALIZA_QUANTIDADE_ESTOQUE` como objeto separado — a
+    lógica inteira está na função de trigger.
+    - **Reverte a regra de imutabilidade do item 12/13:** `produto_movimento_detalhe` saiu do
+      `REVOKE UPDATE, DELETE` do `V024` (só `produto_movimento_mestre` continua imutável) —
+      sem isso `niner_app` nunca conseguiria disparar as branches de `UPDATE`/`DELETE` da
+      trigger (o `REVOKE` bloquearia o comando antes de chegar nela).
+    - Escopo confirmado só em `qtd_estoque` — `reservado` continua fora (fluxo de reserva do
+      pedido, Q2/ADR-004, não muda).
+    - Roda como `niner_app` (SECURITY INVOKER, padrão): RLS de `produto_estoque` continua
+      valendo dentro da trigger, sem risco de vazar saldo entre tenants.
+    - Único trigger de banco do domínio até agora — todo o resto continua "sem trigger,
+      auditoria/saldo no domínio Java" (decisão original, ainda válida para as outras tabelas).
+16. **Achado real ao testar a trigger: FK simples não valida o tenant do registro referenciado
+    (P8).** Testando isolamento entre tenants (não pedido, verificação por conta própria antes
+    de dar a trigger por pronta), consegui — como tenant 2 — inserir em
+    `produto_movimento_detalhe` uma linha com `id_tenant=2` mas `id_empresa`/`id_variacao`/
+    `id_movimento` **do tenant 1**, e o INSERT passou. A trigger, obediente, criou uma linha em
+    `produto_estoque` com `id_tenant=2` apontando pra `id_empresa`/`id_variacao` de outro
+    tenant (`qtd_estoque` fabricado). Causa: FK simples (`REFERENCES tabela (id_x)`) só checa
+    se o ID existe em algum lugar — **RLS não é aplicado na checagem de integridade
+    referencial**. Isso não era bug da trigger; é uma lacuna em **toda** tabela de domínio com
+    FK pra outra tabela de domínio (~34 constraints em ~17 tabelas: `usuario`, `cliente`,
+    `funcionario`, `produto_categoria`, `produto_barra`, `produto_imagem`, `venda`,
+    `venda_devolucao`, `produto_estoque`, `produto_movimento_mestre`,
+    `produto_movimento_detalhe`, `produto_balanco`, `anuncio`, `pedido`, `pedido_item`,
+    `webhook_recebido` — todo o schema de fato).
+    - **Fix (2026-07-16, V014–V022):** toda tabela referenciada ganhou `UNIQUE (id_tenant,
+      id_<pk>)` (ex.: `empresa_id_empresa_uk`), e toda FK entre tabelas de domínio virou
+      **composta**: `FOREIGN KEY (id_tenant, id_x) REFERENCES tabela (id_tenant, id_x)`. FKs
+      nullable (`venda.id_cliente`, `produto_barra.id_variante_linha` etc.) continuam
+      funcionando — `MATCH SIMPLE` (padrão do Postgres) não checa a FK se qualquer coluna
+      envolvida for `NULL`.
+    - Convenção registrada no checklist de aprovação de spec (fim do documento) e em
+      `db/migration/README.md`/`spec-driven-erp-varejo.md` §3.1.1: toda FK nova entre tabelas
+      de domínio nasce composta, nunca simples.
 
 ### 2026-07-11 — Home institucional (concorrente do Bling) + trial 60 dias (ponta a ponta)
 

@@ -26,12 +26,15 @@ CREATE INDEX outbox_evento_id_tenant_ix ON outbox_evento (id_tenant);
 CREATE TABLE webhook_recebido (
   id            integer     GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   id_tenant     smallint    NOT NULL REFERENCES plataforma.tenant (id_tenant),
-  id_canal      integer     NOT NULL REFERENCES canal (id_canal),
+  id_canal      integer     NOT NULL,
   webhook_id    text        NOT NULL,               -- id do evento no marketplace (idempotência)
   recebido_em   timestamptz NOT NULL DEFAULT now(),
   processado_em timestamptz,
   erro          text,
-  CONSTRAINT webhook_recebido_uk UNIQUE (id_canal, webhook_id)
+  CONSTRAINT webhook_recebido_uk UNIQUE (id_canal, webhook_id),
+  -- FK composta (2026-07-16, P8) — ver comentário em usuario_empresa_fk (V015).
+  CONSTRAINT webhook_recebido_canal_fk FOREIGN KEY (id_tenant, id_canal)
+    REFERENCES canal (id_tenant, id_canal)
 );
 CREATE INDEX webhook_recebido_id_tenant_ix ON webhook_recebido (id_tenant);
 

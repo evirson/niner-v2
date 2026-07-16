@@ -52,6 +52,12 @@ de tenant.
 
 ## Pendências (fases seguintes)
 
-- Emissão/validação de JWT (`aud` tenant × plataforma, claim `tid`) — hoje `TODO(jwt)`.
-- Migrations de domínio V013+ (dependem de Q2/Q5/Q7) e as políticas RLS de domínio.
-- **Gate P8** (isolamento cross-tenant) só fecha com as tabelas de domínio.
+- Camada de domínio na API: repositórios/serviços/endpoints `/api/v1` de produto, estoque e
+  pedido (schema V013–V024 já existe; falta o código Spring Data JDBC sobre ele).
+- Backoffice `admin/` (staff, `/api/admin/**`).
+
+## Já resolvido
+
+- Emissão/validação de JWT (HS256, claim `tid`/`aud`) — login/signup emitem, `/api/v1` valida.
+- Migrations de domínio V013–V024 + políticas RLS (`FORCE`, V024) — ver `db/migration/README.md`.
+- **Gate P8** (isolamento cross-tenant) verde (`RlsIsolamentoTest`, Testcontainers).

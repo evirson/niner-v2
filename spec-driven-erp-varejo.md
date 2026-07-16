@@ -234,11 +234,21 @@ Decisões-chave (registrar cada uma como ADR — template na seção 6):
 **Estratégia: banco único + coluna `id_tenant` + Postgres RLS** (`FORCE ROW LEVEL SECURITY`). Escolhida sobre schema-per-tenant e db-per-tenant por aderência ao P6 (uma instância Postgres, uma migração) e ao ticket baixo do público-alvo (muitos lojistas pequenos). Isolamento imposto pelo kernel do banco = defesa em profundidade além do código (P8).
 
 - **Modelo tenant → empresa:** `tenant (conta_assinante)` **1:N** `empresa`. No v1 é **1:1** (uma assinatura = um CNPJ), mas já nasce 1:N para o multi-CNPJ futuro (P2) sem refazer schema. Fecha **Q6**: mantém-se `id_empresa` (granularidade de negócio: loja/depósito/CNPJ) **e** adiciona-se `id_tenant`.
-- **`id_tenant BIGINT` em toda tabela de domínio** (desnormalização deliberada: RLS usa um predicado simples e indexável, sem join na política). `empresa.id_tenant` FK → `plataforma.tenant`.
-- **Resolução por requisição:** login emite **JWT com claim `tid`** (id_tenant) + `sub` + `roles` (+ `emp`). Um `OncePerRequestFilter` (`TenantFilter`) valida a assinatura ativa e popula o **`TenantContext`** (**`ScopedValue`** no Java 25 — implementado na Fase 0). Um transaction manager dedicado (`TenantAwareTransactionManager`, sobre `JdbcTransactionManager`) executa **`select set_config('app.id_tenant', :tid, true)`** (equivalente parametrizável e injection-safe de `SET LOCAL`) logo após o início da transação; as políticas RLS usam `current_setting('app.id_tenant')::bigint` (via `plataforma.tenant_atual()`, V002). O valor é local à transação — some no commit/rollback, sem vazamento entre conexões do pool. **A garantia dura de isolamento é o RLS no banco** (P8); não há filtro de ORM (ver §3.2 — persistência é Spring Data JDBC, não JPA).
+- **`id_tenant SMALLINT` em toda tabela de domínio** (desnormalização deliberada: RLS usa um predicado simples e indexável, sem join na política). `empresa.id_tenant` FK → `plataforma.tenant`. `SMALLINT` (não `BIGINT`) por decisão explícita de 2026-07-16 — teto de 32.767 tenants, considerado suficiente para o público-alvo (micro/pequeno varejo); revisitar se o funil comercial aproximar desse limite.
+- **Resolução por requisição:** login emite **JWT com claim `tid`** (id_tenant) + `sub` + `roles` (+ `emp`). Um `OncePerRequestFilter` (`TenantFilter`) valida a assinatura ativa e popula o **`TenantContext`** (**`ScopedValue`** no Java 25 — implementado na Fase 0). Um transaction manager dedicado (`TenantAwareTransactionManager`, sobre `JdbcTransactionManager`) executa **`select set_config('app.id_tenant', :tid, true)`** (equivalente parametrizável e injection-safe de `SET LOCAL`) logo após o início da transação; as políticas RLS usam `current_setting('app.id_tenant')::smallint` (via `plataforma.tenant_atual()`, V002). O valor é local à transação — some no commit/rollback, sem vazamento entre conexões do pool. **A garantia dura de isolamento é o RLS no banco** (P8); não há filtro de ORM (ver §3.2 — persistência é Spring Data JDBC, não JPA).
 - **Roles Postgres:** aplicação roda como **`niner_app`** (sem `BYPASSRLS`, não é dona das tabelas); migrations rodam como **`niner_owner`**.
 - **Caminhos sem requisição (P8):** `outbox_evento` carrega `id_tenant`; o worker fica **fora** do RLS de tenant (é infraestrutura da plataforma) e, ao despachar cada evento, estabelece o `TenantContext` a partir de `evento.id_tenant` antes de aplicar efeitos de domínio. Webhook de marketplace resolve o tenant pelo `id_canal` que recebeu a notificação; webhook do gateway de cobrança age em `plataforma.*` (global).
 - **Módulo `plataforma` (control-plane)** é o **único** que enxerga cross-tenant; suas tabelas são **globais** e **não** entram no RLS de tenant (P9). Ver §3.3.11.
+- **FKs entre tabelas de domínio são sempre compostas `(id_tenant, id_x)` — não simples
+  (2026-07-16, achado real de teste, não teórico).** O Postgres **não aplica RLS na
+  checagem de integridade referencial**: com `FOREIGN KEY (id_empresa) REFERENCES empresa
+  (id_empresa)`, um tenant conseguia inserir um `produto_movimento_detalhe` com `id_tenant`
+  próprio mas `id_empresa`/`id_variacao` de **outro tenant** — e a trigger de estoque
+  (§3.3.4) materializava esse cruzamento como saldo fabricado em `produto_estoque`. O RLS
+  em `USING`/`WITH CHECK` só protege consultas/gravações **diretas**; não protege o que uma
+  FK "enxerga" como existente. Fix: toda tabela referenciada ganhou `UNIQUE (id_tenant,
+  id_<pk>)` e toda FK entre tabelas de domínio virou `FOREIGN KEY (id_tenant, id_x)
+  REFERENCES tabela (id_tenant, id_x)` — ~34 constraints em ~17 tabelas (V014–V022).
 
 ## 3.2 Stack e versões
 
@@ -270,23 +280,31 @@ Aplicar de forma sistemática ao gerar as migrations Flyway a partir de `db/*.tx
 | `FLOAT` para percentual (`perc_comissao`, `perc_desconto`, `taxa_administradora`) | `NUMERIC(5,2)` | |
 | `VARCHAR(1) CHECK IN ('S','N')` | `BOOLEAN` | `ativo`, `bloqueado`, `caixa_fechado`, `documento_pago`... |
 | `VARCHAR(1/2) CHECK` de domínio (`tipo_operacao`, `credito_debito`, `fisica_juridica`, `genero`, `status_sync`) | `ENUM` nativo **ou** `VARCHAR` + `CHECK` | usar ENUM quando o conjunto for estável |
-| `INTEGER ... GENERATED BY DEFAULT AS IDENTITY` (PK) | `BIGINT GENERATED ALWAYS AS IDENTITY` | migrar PKs para `BIGINT` por escala |
-| `CREATE GENERATOR GT_*` + `gen_id()` (arquivo `100_GERADORES.txt`) | `IDENTITY`/`SEQUENCE` | `id_venda`, `id_devolucao`, `id_transferencia`, `id_movimento`, `id_lote_recebimento` passam a IDENTITY |
-| `CREATE PROCEDURE` PSQL (`SP_ATUALIZA_QUANTIDADE_ESTOQUE`) | <span style="color:red">🔴 **mover para o domínio Java**</span> | manter saldo no serviço de estoque, na mesma transação da movimentação (P1/P3). PL/pgSQL só como fallback. |
+| `INTEGER ... GENERATED BY DEFAULT AS IDENTITY` (PK) | `id_tenant`: `SMALLINT GENERATED ALWAYS AS IDENTITY`; demais PKs surrogate: `INTEGER GENERATED ALWAYS AS IDENTITY` | decisão de 2026-07-16 (revê a orientação anterior de `BIGINT` genérico): `id_tenant` é a raiz do isolamento e todo FK para ele usa o mesmo tipo (`SMALLINT`); as demais PKs (`id_produto`, `id_pedido` etc.) usam `INTEGER`. FK sempre com o **mesmo tipo exato** da PK referenciada. |
+| `CREATE GENERATOR GT_*` + `gen_id()` (arquivo `100_GERADORES.txt`) | `IDENTITY`/`SEQUENCE` | `id_venda`, `id_devolucao`, `id_transferencia`, `id_movimento`, `id_lote_recebimento` passam a IDENTITY. `id_transferencia` continua **sem FK** — número vindo de um gerador externo, proposital (não existe tabela de transferência ainda). |
+| `CREATE PROCEDURE` PSQL (`SP_ATUALIZA_QUANTIDADE_ESTOQUE`) | ✅ **Resolvido (2026-07-16):** trigger `trg_produto_movimento_detalhe_estoque` | orientação anterior (mover para o domínio Java, nunca trigger) **revertida**. A procedure legada não é recriada como objeto separado — a lógica inteira vive na função de trigger `fn_atualiza_estoque_movimento()` (V019), acionada por `INSERT`/`UPDATE`/`DELETE` em `produto_movimento_detalhe`. Ver §3.3.4. |
 | `CREATE TRIGGER` de auditoria de data (`TG_*_INSERT_UPDATE`) | coluna `TIMESTAMPTZ DEFAULT now()` + preenchimento no serviço de domínio (mesma transação, P3) | remove os triggers `102_TRIGGERS.txt`. Persistência é Spring Data JDBC (§3.2), não JPA auditing |
 | `TIMESTAMP` | `TIMESTAMPTZ` | armazenar com fuso (UTC) |
 | `LOCALTIMESTAMP` | `now()` / relógio da app | |
 | `IMAGEM VARCHAR(200)` (caminho de arquivo) | manter URL/chave de object storage | não gravar binário no banco |
 
+**Convenções adicionais consolidadas nas migrations (2026-07-16):**
+- **Sem `ON DELETE CASCADE`** em nenhuma FK do domínio: apagar um registro com dependentes falha por violação de FK — a aplicação decide explicitamente o que fazer com os dependentes, nunca o schema por conta própria.
+- **E-mail de login sempre único por índice case-insensitive** (`UNIQUE INDEX ... (id_tenant, lower(email))` em `usuario`; `UNIQUE INDEX ... (lower(email))` em `plataforma.staff`) — evita duas contas coexistirem só por causa de maiúscula/minúscula.
+- **`produto_movimento_mestre` imutável ao nível de banco:** `niner_app` não recebe `UPDATE`/`DELETE` (V024), mesmo tratamento já dado a `plataforma.impersonacao_log` (V011). `produto_movimento_detalhe` **não** entra mais nessa regra desde 2026-07-16 — é corrigível/excluível, e a trigger `trg_produto_movimento_detalhe_estoque` (V019) mantém `produto_estoque.qtd_estoque` em dia a cada mudança (ver §3.3.4).
+- **Bootstrap de roles (`db/bootstrap/00_roles.sql`):** `ALTER DATABASE ... OWNER TO niner_owner` não dá a `niner_owner` privilégio de `CREATE` no schema `public` (schema pré-existente, dono é o superusuário de bootstrap da imagem) — como as migrations de domínio (V013+) criam objetos sem prefixo de schema (portanto em `public`), o bootstrap precisa de `GRANT CREATE ON SCHEMA public TO niner_owner` explícito, senão o Flyway falha em V013 rodando como `niner_owner` (`docker compose run --rm flyway`).
+
 ### 3.3.2 Módulo `identidade` (auth, empresas, permissões)
 
 ```sql
-empresa(id_empresa PK, id_tenant FK -> plataforma.tenant, razao_social, cnpj, inscricao,
-        endereco, numero, bairro, cidade, estado, cep, telefone, email, imagem_relatorio)
--- usuário do TENANT (lojista). email é único POR TENANT, não global.
+empresa(id_empresa PK, id_tenant FK -> plataforma.tenant, codigo_empresa,  -- nº sequencial por tenant, só p/ exibir em relatório (01, 02...); UNIQUE(id_tenant, codigo_empresa)
+        razao_social, cnpj, inscricao,
+        endereco, numero, bairro, cidade, estado, cep, telefone, email, imagem_relatorio,
+        cfg_nome_etiqueta)  -- NOT NULL: texto/modelo impresso na etiqueta de produto (2026-07-16)
+-- usuário do TENANT (lojista). email é único POR TENANT (case-insensitive), não global.
 usuario(id_usuario PK, id_tenant FK, nome_usuario, email, senha_hash,
         ativo BOOL, administrador BOOL,          -- papel ADMIN/OPERADOR deriva de administrador (R8)
-        UNIQUE(id_tenant, email))
+        UNIQUE INDEX(id_tenant, lower(email)))   -- mesmo padrão de plataforma.staff (§3.3.11)
 usuario_rotina(id_usuario FK, nome_rotina, PK(id_usuario, nome_rotina))  -- permissões finas legadas
 ```
 > **Duas populações de usuário separadas (P9, R18):** os usuários do lojista ficam em `usuario` (com `id_tenant`, sujeitos a RLS). Os usuários da **plataforma** (staff Vetor: `SUPER_ADMIN`/`SUPORTE`/`FINANCEIRO`) ficam em `plataforma.staff` (global, §3.3.11). **JWTs distintos por `aud`** (`tenant` × `plataforma`): a chain de `/api/v1/**` rejeita token de staff e a de `/api/admin/**` rejeita token de tenant.
@@ -310,49 +328,85 @@ produto(id_produto PK, ativo BOOL, marca, referencia, descricao,
         imagem, criado_em, alterado_em, reajustado_em)
 produto_categoria(id_produto FK, id_categoria FK, PK(id_produto, id_categoria))
 -- produto_barra é a VARIAÇÃO. Q7 (fechada): sku interno (chave) + ean opcional (GTIN real).
-produto_barra(sku PK,                              -- identificador INTERNO, obrigatório, único (ex-codigo_barra); imprimível como código de barras na loja
-              ean,                                  -- 🔴 novo: GTIN real (EAN-13/UPC), NULLABLE; UNIQUE quando preenchido
+produto_barra(id_variacao PK,                      -- surrogate; sku é a chave de negócio, não a PK física
+              sku,                                  -- identificador INTERNO, obrigatório, único por tenant (ex-codigo_barra); imprimível como código de barras na loja
+              ean,                                  -- GTIN real (EAN-13/UPC), NULLABLE; UNIQUE quando preenchido
               id_produto FK, id_variante_linha FK, id_variante_coluna FK)
 ```
 > **Mapeamento p/ a spec:** o par (`produto` + `produto_barra`) implementa `produto`+`variacao` do PRD (R1). A chave da variação é o **`sku`** (interno, papel do antigo `codigo_barra`; estrutura grupo+sequencial+dígito de `033_PRODUTOS_BARRA.txt`). Nas migrations de domínio (V013+), **todas as FKs que hoje apontam para `codigo_barra`** (estoque, movimento, pedido_item, anúncio…) passam a referenciar `sku`.
 
 > **SKU × EAN (Q7, fechada em 2026-07-10):** **separar** `sku` (interno, obrigatório, único por tenant — a chave usada em todo o domínio) de `ean` (**GTIN real, nullable**, `UNIQUE` parcial `WHERE ean IS NOT NULL`). O produto pode ser **cadastrado sem EAN** (loja física, sem marca); o EAN só é **exigido na publicação** em canal que pede GTIN — o adapter (P2/anti-corruption) manda `ean` como GTIN, e se estiver NULL bloqueia o *publicar anúncio* com Problem Details pedindo o EAN (ou usa o fluxo "sem GTIN" quando o canal permitir). Nunca empurrar o `sku` interno como se fosse EAN.
 
-<span style="color:red">🔴 Garantir unicidade de SKU (R1): `sku` é PK — ok; adicionar `UNIQUE` de `(id_produto, id_variante_linha, id_variante_coluna)` para impedir variação duplicada.</span>
+> **Galeria de imagens (2026-07-16):** o campo `imagem` saiu de `produto` (um produto pode ter
+> **várias** imagens) e virou tabela própria:
+> ```sql
+> produto_imagem(id_produto_imagem PK, id_tenant FK, id_produto FK,
+>                 indice SMALLINT, imagem TEXT,          -- URL/chave de object storage
+>                 UNIQUE(id_tenant, id_produto, indice))  -- indice controla a ordem de exibição
+> ```
+> Sem `ON DELETE CASCADE` (convenção do projeto): apagar um `produto` com imagens vinculadas
+> falha por FK até a aplicação remover as imagens primeiro.
+
+✅ **Resolvido (V017):** `sku` único por tenant (`UNIQUE(id_tenant, sku)`) e `UNIQUE(id_produto, id_variante_linha, id_variante_coluna)` impedindo variação duplicada.
 
 ### 3.3.4 Módulo `estoque` (saldo, movimentações, balanço)
 
 ```sql
--- saldo materializado por SKU × empresa
-produto_estoque(id_empresa FK, codigo_barra FK, qtd_estoque NUMERIC(14,3),
-                reservado NUMERIC(14,3),          -- 🔴 novo (P1/R5: reserva)
-                minimo NUMERIC(14,3),             -- 🔴 novo (estoque mínimo / alerta)
-                atualizado_em,                    -- 🔴 novo
-                PK(codigo_barra, id_empresa))
--- ledger de movimentação (imutável — P3)
-produto_movimento_mestre(id_movimento PK, tipo_movimento,   -- 1 compra,2 transf,3 devol,4 ajuste,5 venda
+-- saldo materializado por variação (SKU) × empresa
+produto_estoque(id_produto_estoque PK, id_empresa FK, id_variacao FK, qtd_estoque NUMERIC(14,3),
+                reservado NUMERIC(14,3),          -- P1/R5: reserva (Q2/ADR-004)
+                minimo NUMERIC(14,3),             -- estoque mínimo / alerta
+                disponivel NUMERIC(14,3) GENERATED ALWAYS AS (qtd_estoque - reservado) STORED,
+                atualizado_em,
+                UNIQUE(id_empresa, id_variacao))
+-- movimento (mestre): imutável — P3; niner_app SEM UPDATE/DELETE, V024
+produto_movimento_mestre(id_movimento PK, tipo_movimento,   -- COMPRA/TRANSFERENCIA/DEVOLUCAO/AJUSTE/VENDA/RESERVA/LIBERACAO_RESERVA
                          data_movimento, id_empresa FK, id_fornecedor FK,
-                         id_transferencia, id_devolucao FK, id_venda FK, nota_fiscal)
-produto_movimento_detalhe(localizador PK, id_movimento FK, id_empresa FK,
+                         id_transferencia,        -- sem FK: número vindo de gerador externo (proposital)
+                         id_devolucao FK, id_venda FK, nota_fiscal)
+-- movimento (detalhe): CORRIGÍVEL desde 2026-07-16 (niner_app tem UPDATE/DELETE, V024) —
+-- trigger trg_produto_movimento_detalhe_estoque recalcula produto_estoque.qtd_estoque
+produto_movimento_detalhe(id_movimento_detalhe PK, id_movimento FK, id_empresa FK,
                           id_funcionario FK, credito_debito,  -- C/D
-                          codigo_barra FK, qtd_produto NUMERIC(14,3),
+                          id_variacao FK, qtd_produto NUMERIC(14,3),
                           preco_custo NUMERIC(12,2), preco_venda NUMERIC(12,2),
                           valor_desconto NUMERIC(12,2), valor_acrescimo NUMERIC(12,2),
                           produto_oferta BOOL,
-                          saldo_apos NUMERIC(14,3),    -- 🔴 novo (P3: saldo resultante)
-                          origem)                       -- 🔴 novo (venda manual / canal X)
+                          origem)                       -- venda manual / canal X
 ```
-> **Regra de negócio (P1/P3):** a baixa/entrada de estoque e a linha em `produto_movimento_detalhe` acontecem **na mesma transação** no serviço de estoque Java. O saldo em `produto_estoque` é derivável, mas mantido materializado com verificação periódica de consistência. **Não** replicar a lógica via trigger/procedure de banco (a `SP_ATUALIZA_QUANTIDADE_ESTOQUE` legada é substituída pelo domínio).
+> **Regra de negócio (P1/P3) — decisão fechada em 2026-07-16 (reverte a orientação anterior
+> "domínio Java, nunca trigger"):** quem mantém `produto_estoque.qtd_estoque` é a trigger
+> `trg_produto_movimento_detalhe_estoque` (função `fn_atualiza_estoque_movimento()`, PL/pgSQL,
+> V019), acionada por `INSERT`/`UPDATE`/`DELETE` em `produto_movimento_detalhe`:
+> `credito_debito = 'C'` soma `qtd_produto`, `'D'` subtrai; `UPDATE` desfaz o efeito da linha
+> antiga e aplica o da nova (cobre mudança de empresa/variação/tipo/quantidade); `DELETE`
+> desfaz o efeito. A trigger faz **UPSERT** em `produto_estoque` — cria a linha na hora se
+> ainda não existir para o `(id_tenant, id_empresa, id_variacao)`, para o saldo nunca ficar
+> "invisível" por falta de linha pré-cadastrada (P1). Não existe mais
+> `SP_ATUALIZA_QUANTIDADE_ESTOQUE` como objeto separado — a lógica está toda na função de
+> trigger. Roda como `niner_app` (SECURITY INVOKER, padrão do Postgres): a política RLS de
+> `produto_estoque` continua valendo, sem risco de vazar saldo entre tenants.
+>
+> Consequência: `produto_movimento_detalhe` **deixou de ser imutável** (`niner_app` ganhou
+> `UPDATE`/`DELETE` de volta em V024) — só `produto_movimento_mestre` continua sob a regra P3
+> de "correção só por novo movimento compensatório, nunca edição".
 
-<span style="color:red">🔴 `produto_estoque` não tem `reservado`: sem isso não há como cumprir R5 (reserva ao importar pedido) nem P1 anti-overselling. Adicionar `reservado` e `minimo`.</span>
-<span style="color:red">🔴 Adicionar `saldo_apos` e `origem` ao detalhe para auditabilidade plena (P3).</span>
-<span style="color:red">🔴 Impedir saldo negativo sem flag explícita (R2) — constraint/validação no domínio.</span>
+✅ **Resolvido (V019):** `reservado`, `minimo` e `disponivel` (coluna gerada) em `produto_estoque`;
+`origem` em `produto_movimento_detalhe`. `saldo_apos` chegou a ser adicionado e foi **removido em
+2026-07-16** (decisão do produto) — o saldo resultante fica só materializado em `produto_estoque`,
+não mais snapshot por linha do ledger.
+
+<span style="color:red">🔴 Impedir saldo negativo sem flag explícita (R2) — hoje só há `CHECK (reservado >= 0)`; falta constraint/validação para `qtd_estoque`/`disponivel` nunca negativos sem flag explícita.</span>
 
 ```sql
 -- inventário / contagem
-produto_balanco(localizador PK, id_empresa FK, data_movimento,
-                codigo_barra FK, qtd_contagem NUMERIC(14,3))
+produto_balanco(id_balanco PK,               -- BIGINT (2026-07-16): volume de contagens esperado maior que as demais tabelas
+                id_empresa FK, data_balanco,
+                id_variacao FK, qtd_contagem NUMERIC(14,3))
 ```
+> `qtd_sistema` e `observacao` chegaram a ser adicionados e foram **removidos em 2026-07-16**
+> (decisão do produto) — a comparação contagem × saldo do sistema fica por conta da aplicação,
+> lendo `produto_estoque` no momento do balanço.
 
 ### 3.3.5 Módulo `pedidos` / vendas (loja física + marketplace)
 
@@ -360,25 +414,28 @@ produto_balanco(localizador PK, id_empresa FK, data_movimento,
 -- venda da loja física (legado)
 venda(id_venda PK, id_empresa FK, id_cliente FK, data_venda,
       tipo_operacao)                 -- V venda / D devolução
+-- venda ganhou id_funcionario (V018) e depois perdeu de novo (2026-07-16): vendedor/comissão
+-- por item ficam em produto_movimento_detalhe.id_funcionario, não em venda.
 venda_devolucao(id_devolucao PK, id_empresa FK, data_devolucao,
                 id_venda_credito, id_venda_debito,
                 id_vale_mercadoria, vale_usado BOOL)
 ```
-<span style="color:red">🔴 **Tabelas de marketplace ausentes no legado — criar (núcleo da Fase 2/R3–R7):**</span>
+✅ **Resolvido (V020/V021):** tabelas de marketplace, ausentes no legado, criadas.
 ```sql
--- 🔴 canal de venda (ML, Shopee, ...)
+-- canal de venda (ML, Shopee, ...)
 canal(id_canal PK, tipo ENUM('MERCADO_LIVRE','SHOPEE','AMAZON','ECOMMERCE'),
       nome, credenciais JSONB /* cifrado AES-GCM */, status, config JSONB)
--- 🔴 de-para anúncio ↔ SKU (R6)
-anuncio(id_anuncio PK, id_canal FK, codigo_barra FK, id_externo,
+-- de-para anúncio ↔ SKU (R6)
+anuncio(id_anuncio PK, id_canal FK, id_variacao FK, id_externo,
         preco NUMERIC(12,2),
         status_sync ENUM('OK','PENDENTE','ERRO'), ultimo_erro TEXT,
         UNIQUE(id_canal, id_externo))
--- 🔴 pedido de marketplace (fila única R5) — idempotência por (canal, id_externo)
+-- pedido de marketplace (fila única R5) — idempotência por (canal, id_externo)
 pedido(id_pedido PK, id_canal FK, id_externo, status, comprador JSONB,
-       total NUMERIC(12,2), frete NUMERIC(12,2), payload_bruto JSONB, criado_em,
+       total NUMERIC(12,2), frete NUMERIC(12,2), payload_bruto JSONB,
+       reserva_expira_em, criado_em,
        UNIQUE(id_canal, id_externo))
-pedido_item(id_pedido_item PK, id_pedido FK, codigo_barra FK, id_anuncio FK,
+pedido_item(id_pedido_item PK, id_pedido FK, id_variacao FK, id_anuncio FK,
             quantidade NUMERIC(14,3), preco_unit NUMERIC(12,2))
 ```
 <span style="color:red">🔴 Unificar o modelo de "pedido": o legado só tem `venda` (física). Decidir se `venda` e `pedido` (canal) convergem para uma fila única de expedição (R5, estados `recebido→pago→em separação→enviado→entregue/cancelado`) ou permanecem separados com uma view unificada.</span>
@@ -387,13 +444,14 @@ pedido_item(id_pedido_item PK, id_pedido FK, codigo_barra FK, id_anuncio FK,
 
 ### 3.3.6 Módulo `integracao` (outbox, webhooks)
 
-<span style="color:red">🔴 **Ausente no legado — criar (P2: async + idempotente):**</span>
+✅ **Resolvido (V022):** ausente no legado, criado (P2: async + idempotente).
 ```sql
--- 🔴 outbox: toda mutação de estoque/preço grava evento na MESMA transação
-outbox_evento(id PK, tipo, agregado_id, payload JSONB, tentativas,
-              proximo_retry, processado_em, erro)
--- 🔴 idempotência de webhooks recebidos
-webhook_recebido(id PK, id_canal FK, webhook_id UNIQUE, recebido_em, processado_em)
+-- outbox: toda mutação de estoque/preço grava evento na MESMA transação
+outbox_evento(id PK, id_tenant FK, tipo, agregado_id, payload JSONB, status, tentativas,
+              proximo_retry, processado_em, erro, criado_em)
+-- idempotência de webhooks recebidos
+webhook_recebido(id PK, id_tenant FK, id_canal FK, webhook_id, recebido_em, processado_em, erro,
+                  UNIQUE(id_canal, webhook_id))
 ```
 Worker `@Scheduled` consome `outbox_evento` com `SELECT ... FOR UPDATE SKIP LOCKED`, retry exponencial e dead-letter visível no painel (R7). Polling de segurança a cada 15 min cobre webhooks perdidos.
 
@@ -445,6 +503,16 @@ cfg_categoria_cliente(id_categoria_cliente PK, nome_categoria)
 ```
 <span style="color:red">🔴 `cfg_geral` no legado é tabela sem PK (singleton): no Postgres, garantir linha única (ex.: PK fixa `id = 1` + `CHECK (id = 1)`).</span>
 
+✅ **Resolvido (V016):** `cfg_categoria_cliente(id_categoria_cliente PK, id_tenant FK, nome_categoria,
+UNIQUE(id_tenant, nome_categoria))` — criada junto de `cliente` (mesmo arquivo/módulo, não em
+"configuração global"), pois `cliente.id_categoria_cliente` referencia essa tabela como FK.
+
+✅ **Resolvido (V023, ajustado 2026-07-16):** `cfg_geral` real não tem `moeda_devolucao`
+(removido) nem `nome_etiqueta` (esse ficou em `empresa.cfg_nome_etiqueta`, não em `cfg_geral` —
+ver §3.3.2). Ganhou `cfg_usa_variante_linha boolean NOT NULL DEFAULT true` e
+`cfg_usa_variante_coluna boolean NOT NULL DEFAULT true` (prefixo `cfg_` no nome da coluna,
+convenção nova a partir desta data).
+
 ### 3.3.9 Cadastros auxiliares
 
 ```sql
@@ -458,12 +526,27 @@ cliente(id_cliente PK, id_empresa FK, bloqueado BOOL, contato_crm BOOL,
         email, instagram, facebook, observacao, criado_em, alterado_em)
 funcionario(id_funcionario PK, nome_funcionario, fone_celular, perc_comissao NUMERIC(5,2))
 ```
+> **Implementado (V016):** `cliente`/`fornecedor`/`funcionario` nasceram com `id_tenant` (não
+> `id_empresa`) e um subconjunto simplificado de campos (`cpf_cnpj` único em vez de `cpf`; sem
+> `bloqueado`/`contato_crm` — ficam para quando houver demanda). `instagram`/`facebook` do
+> legado entraram em 2026-07-16, junto com `whatsapp` e `tiktok` (novos, sem equivalente no
+> legado) — as 4 colunas são `text` nullable, sem validação de formato no banco.
+> `id_categoria_cliente` (FK para `cfg_categoria_cliente`, ver §3.3.8) é **obrigatório**
+> (`NOT NULL`) — todo cliente precisa de uma categoria escolhida, sem valor padrão pré-cadastrado.
+> `nascimento` e `genero` (M/F/O no legado) viraram `data_nascimento DATE` e
+> `genero genero_cliente` (ENUM `MASCULINO`/`FEMININO`/`OUTROS`, tipo definido em V013) —
+> colunas nullable, mas **obrigatórias para pessoa física** via
+> `CHECK (NOT fisica_juridica OR (data_nascimento IS NOT NULL AND genero IS NOT NULL))`;
+> cliente pessoa jurídica (`fisica_juridica = false`) pode deixar ambas em branco.
+> `funcionario` ganhou `telefone` (2026-07-16). A constraint `funcionario_cpf_uk` virou
+> `UNIQUE(id_tenant, id_funcionario)` — como `id_funcionario` já é a PK, isso não impõe nada
+> além do que a PK já garante; **o CPF deixou de ser único por tenant** (decisão explícita).
 
 ### 3.3.10 Pendências transversais do modelo
 
 - <span style="color:red">🔴 **Preço por canal (P1/R-nice):** o legado tem um único `preco_venda` por produto. Para markup + comissão por canal, o preço de venda por canal fica em `anuncio.preco`; documentar a regra de precificação.</span>
 - <span style="color:red">🔴 **Kits/composições (P1):** um anúncio consumindo múltiplos SKUs não é suportado pelo modelo atual — prever tabela `kit_componente` se entrar no roadmap.</span>
-- <span style="color:red">🔴 **Auditoria imutável (P3):** confirmar que `produto_movimento_detalhe`, `pedido`, `anuncio` (sync) cobrem "quem/quando/origem/valor anterior→novo" para estoque **e preço**. Preço hoje não tem histórico — avaliar `produto_preco_historico`.</span>
+- <span style="color:red">🔴 **Auditoria imutável (P3):** parcialmente resolvido — `produto_movimento_mestre`/`produto_movimento_detalhe` já são imutáveis ao nível de banco (`niner_app` sem `UPDATE`/`DELETE`, V024) e cobrem "quem/quando/origem/saldo anterior→novo" para **estoque**. Falta o mesmo para **preço**: hoje não há histórico — avaliar `produto_preco_historico`.</span>
 - <span style="color:red">🔴 **Cifragem de credenciais (ADR-005):** `canal.credenciais` em `JSONB` cifrado (AES-GCM, chave fora do banco).</span>
 
 ### 3.3.11 Módulo `plataforma` (control-plane) — tabelas GLOBAIS
@@ -604,18 +687,33 @@ V010  plataforma.staff + impersonacao_log
 V011  grants de niner_app no schema plataforma
 V012  seed dos planos (🔴 preços provisórios — D1)
 ```
-**Domínio do lojista (a criar — cada tabela nasce com `id_tenant`):**
+**Domínio do lojista (criado — V013–V024, cada tabela nasce com `id_tenant`):**
 ```
-V013+ identidade.empresa (+id_tenant, FK->plataforma.tenant)
-      identidade.usuario (+id_tenant, senha_hash, UNIQUE(id_tenant,email)) + usuario_rotina
-      catalogo (cfg, produto, produto_barra) · estoque (produto_estoque +reservado/minimo,
-      movimento +saldo_apos/origem, balanco) · pedidos (venda; canal+anuncio credenciais
-      cifradas; pedido UNIQUE(canal,id_externo)) · integracao (outbox_evento COM id_tenant;
-      webhook_recebido) · cfg_geral (singleton POR tenant) +
-      cliente/fornecedor/funcionario   [financeiro.* NÃO — Q5 fechada, Fase 2]
-V0xx (final) RLS de domínio: ENABLE + FORCE ROW LEVEL SECURITY +
-      USING (id_tenant = plataforma.tenant_atual()) em TODAS as tabelas de tenant + grants
+V013  tipos ENUM de domínio (canal, pedido, movimento, outbox, genero_cliente...)
+V014  identidade.empresa (+id_tenant; codigo_empresa único/tenant; cfg_nome_etiqueta NOT NULL)
+V015  identidade.usuario (+id_tenant, UNIQUE(id_tenant,lower(email))) + usuario_rotina
+V016  cadastros: cfg_categoria_cliente · cliente (id_categoria_cliente NOT NULL;
+      data_nascimento/genero obrigatórios só p/ pessoa física; whatsapp/instagram/
+      facebook/tiktok) · fornecedor · funcionario (telefone; CPF não é mais único por tenant)
+V017  catalogo: cfg_categoria_produto/variante_linha/variante_coluna · produto (sem imagem) ·
+      produto_categoria · produto_barra (sku+ean, Q7) · produto_imagem (galeria, indice
+      único por produto)
+V018  vendas: venda (sem id_funcionario — vendedor/comissão em produto_movimento_detalhe) ·
+      venda_devolucao
+V019  estoque: produto_estoque (reservado/disponivel, Q2) · produto_movimento_mestre
+      (imutável) + produto_movimento_detalhe (corrigível; sem saldo_apos por linha) ·
+      produto_balanco (id_balanco BIGINT; sem qtd_sistema/observacao) · trigger
+      trg_produto_movimento_detalhe_estoque mantém produto_estoque.qtd_estoque
+V020  canais: canal (credenciais cifradas) · anuncio (de-para SKU, R6)
+V021  pedidos de canal: pedido (idempotente canal+id_externo) · pedido_item
+V022  integracao: outbox_evento (COM id_tenant) · webhook_recebido
+V023  cfg_geral (singleton POR tenant; cfg_usa_variante_linha/coluna; sem moeda_devolucao)
+V024  RLS de domínio (final): ENABLE + FORCE ROW LEVEL SECURITY +
+      USING (id_tenant = plataforma.tenant_atual()) em TODAS as tabelas de tenant + grants +
+      REVOKE UPDATE/DELETE só em produto_movimento_mestre (imutabilidade, P3)
+      [financeiro.* NÃO — Q5 fechada, Fase 2]
 ```
+Detalhe migration a migration (com ✅/🔴 de situação): `db/migration/README.md`.
 Racional de RLS num arquivo final: garante que **nenhuma** tabela de tenant fica sem política — auditável num único ponto e testável ("toda tabela de tenant tem RLS" vira teste de P8). As tabelas de `plataforma` são globais (P9) e **não** entram no RLS de tenant.
 
 ## 3.6 Requisitos não funcionais
@@ -782,6 +880,6 @@ Dependências: TASK-XXX
 - [ ] Non-goals explícitos
 - [ ] Contrato de API e migration esboçados
 - [ ] Nenhuma violação da Constituição (P1–P9)
-- [ ] Multi-tenant: recurso isolado por `id_tenant` + política RLS (P8); nada de plataforma misturado com dado de lojista (P9)
+- [ ] Multi-tenant: recurso isolado por `id_tenant` + política RLS (P8); nada de plataforma misturado com dado de lojista (P9); toda FK nova para outra tabela de domínio é **composta** `(id_tenant, id_x)`, nunca simples (§3.1.1, 2026-07-16)
 - [ ] Toda tela nova/alterada tem ajuda (manual de operação) + acesso a vídeo, com `chave_tela` definida (R22 / §3.7.1)
 - [ ] Questões bloqueantes respondidas

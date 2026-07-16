@@ -19,7 +19,7 @@ COMMENT ON TABLE plataforma.staff IS 'Staff da plataforma (SUPER_ADMIN/SUPORTE/F
 CREATE TABLE plataforma.impersonacao_log (
   id           integer     GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   id_staff     integer     NOT NULL REFERENCES plataforma.staff (id_staff),
-  id_tenant    integer     NOT NULL REFERENCES plataforma.tenant (id_tenant),
+  id_tenant    smallint    NOT NULL REFERENCES plataforma.tenant (id_tenant),
   iniciado_em  timestamptz NOT NULL DEFAULT now(),
   encerrado_em timestamptz,
   motivo       text
