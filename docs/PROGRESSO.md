@@ -199,6 +199,18 @@ domínio em `api/` ainda depende dessas tabelas, então deu para corrigir sem qu
     triggers, incluindo a antiga `SP_ATUALIZA_QUANTIDADE_ESTOQUE`) que não fazem mais falta
     como referência: a lógica de estoque já está na trigger real (`V019`, item 15) e o plano
     de contas já foi migrado (item 17).
+19. **`venda`/`venda_devolucao` (V018) perdem campos.** `venda` sem `valor_total`,
+    `observacao` e `criado_em`; `venda_devolucao` sem `criado_em`. `venda`/`venda_devolucao`
+    passam a ser as **únicas** tabelas do domínio sem `criado_em` (exceção deliberada à
+    convenção de auditoria — registrado em `db/migration/README.md`). Motivo do
+    `criado_em`, confirmado pelo dono do produto: `data_venda`/`data_devolucao` já cumprem
+    esse papel — não há fluxo de "criar rascunho hoje, confirmar depois" nessas duas
+    tabelas, então `criado_em` seria sempre igual e redundante. O total da venda passa a
+    ser sempre derivado somando `produto_movimento_detalhe` (tipo `VENDA`) — não fica mais
+    armazenado/duplicado em `venda.valor_total`.
+20. **Mais 2 arquivos legados removidos.** `db/040_VENDAS.txt` e
+    `db/041_VENDAS_DEVOLUCAO.txt` (dumps Firebird de `venda`/`venda_devolucao`) — schema já
+    migrado em V018 (item 19), sem falta de referência.
 
 ### 2026-07-11 — Home institucional (concorrente do Bling) + trial 60 dias (ponta a ponta)
 

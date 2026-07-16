@@ -49,7 +49,7 @@ RLS. Só depois os módulos de domínio do lojista e, por fim, as políticas RLS
 | **V015** | `identidade.usuario` (e-mail único por tenant, case-insensitive) + `usuario_rotina` | ✅ |
 | **V016** | cadastros: `cfg_categoria_cliente`, `cliente` (`id_categoria_cliente` NOT NULL; `data_nascimento`/`genero` obrigatórios só p/ pessoa física, `CHECK`; `whatsapp`/`instagram`/`facebook`/`tiktok`), `cfg_plano_contas` (PK composta `(id_tenant, id_plano_contas)`, prep. p/ DRE — Q5/ADR-010), `fornecedor` (`id_plano_contas` NOT NULL), `funcionario` (`telefone`) | ✅ |
 | **V017** | `catalogo`: configs, `produto` (sem `imagem`), `produto_categoria`, `produto_barra` (**Q7:** `sku` + `ean`), `produto_imagem` (galeria, `indice smallint` único por produto) | ✅ |
-| **V018** | vendas: `venda` (sem `id_funcionario` — comissão/vendedor ficam em `produto_movimento_detalhe`), `venda_devolucao` (R9; sem financeiro — Q5) | ✅ |
+| **V018** | vendas: `venda` (sem `id_funcionario`, `valor_total`, `observacao`, `criado_em` — comissão/vendedor e total ficam em `produto_movimento_detalhe`), `venda_devolucao` (sem `criado_em`) (R9; sem financeiro — Q5) | ✅ |
 | **V019** | `estoque`: `produto_estoque` (**Q2:** `reservado`, `disponivel`), `produto_movimento_mestre` (imutável) + `produto_movimento_detalhe` (sem `saldo_apos` por linha; corrigível, ver trigger), `produto_balanco` (`id_balanco BIGINT`, sem `qtd_sistema`/`observacao`), **trigger `trg_produto_movimento_detalhe_estoque`** (`fn_atualiza_estoque_movimento`) mantém `produto_estoque.qtd_estoque` em INSERT/UPDATE/DELETE do ledger | ✅ |
 | **V020** | `canais`: `canal` (credenciais cifradas), `anuncio` (de-para SKU, R6) | ✅ |
 | **V021** | pedidos de canal: `pedido` (idempotente `(canal,id_externo)`), `pedido_item` | ✅ |
@@ -126,3 +126,9 @@ Em desenvolvimento, recriar do zero (`flyway clean` + `migrate`) é aceitável.
   (Spring Data JDBC), **sem** JPA auditing (§3.3.1 / §3.2). Única exceção a "sem trigger de
   banco": `produto_estoque.qtd_estoque`, mantido por `trg_produto_movimento_detalhe_estoque`
   (V019, decisão de 2026-07-16) — todo o resto do domínio continua sem lógica em PL/pgSQL.
+- **`venda`/`venda_devolucao` (V018, 2026-07-16) não têm `criado_em`** — únicas tabelas do
+  domínio sem esse campo (exceção deliberada à convenção acima). Motivo: `data_venda`/
+  `data_devolucao` já cumprem o papel de timestamp de criação nessas duas tabelas — `criado_em`
+  seria redundante (seria sempre igual a `data_venda`/`data_devolucao`, já que nenhuma das
+  duas tem fluxo de "criar rascunho hoje, confirmar depois"). `venda` também perdeu
+  `valor_total` (derivado do ledger `produto_movimento_detalhe`) e `observacao`.

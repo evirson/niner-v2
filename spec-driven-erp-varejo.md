@@ -416,6 +416,9 @@ venda(id_venda PK, id_empresa FK, id_cliente FK, data_venda,
       tipo_operacao)                 -- V venda / D devolução
 -- venda ganhou id_funcionario (V018) e depois perdeu de novo (2026-07-16): vendedor/comissão
 -- por item ficam em produto_movimento_detalhe.id_funcionario, não em venda.
+-- venda também perdeu valor_total, observacao e criado_em (2026-07-16): total é derivado do
+-- ledger; venda/venda_devolucao são as únicas tabelas do domínio sem criado_em, porque
+-- data_venda/data_devolucao já cumprem esse papel (sem fluxo de rascunho→confirmação).
 venda_devolucao(id_devolucao PK, id_empresa FK, data_devolucao,
                 id_venda_credito, id_venda_debito,
                 id_vale_mercadoria, vale_usado BOOL)
@@ -714,8 +717,8 @@ V016  cadastros: cfg_categoria_cliente · cliente (id_categoria_cliente NOT NULL
 V017  catalogo: cfg_categoria_produto/variante_linha/variante_coluna · produto (sem imagem) ·
       produto_categoria · produto_barra (sku+ean, Q7) · produto_imagem (galeria, indice
       único por produto)
-V018  vendas: venda (sem id_funcionario — vendedor/comissão em produto_movimento_detalhe) ·
-      venda_devolucao
+V018  vendas: venda (sem id_funcionario/valor_total/observacao/criado_em — vendedor/
+      comissão/total em produto_movimento_detalhe) · venda_devolucao (sem criado_em)
 V019  estoque: produto_estoque (reservado/disponivel, Q2) · produto_movimento_mestre
       (imutável) + produto_movimento_detalhe (corrigível; sem saldo_apos por linha) ·
       produto_balanco (id_balanco BIGINT; sem qtd_sistema/observacao) · trigger

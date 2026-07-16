@@ -9,9 +9,6 @@ CREATE TABLE venda (
   id_cliente     integer,
   data_venda     timestamptz         NOT NULL DEFAULT now(),
   tipo_operacao  tipo_operacao_venda NOT NULL DEFAULT 'VENDA',
-  valor_total    numeric(12,2)       NOT NULL DEFAULT 0,
-  observacao     text,
-  criado_em      timestamptz         NOT NULL DEFAULT now(),
   -- base para FK composta (2026-07-16, P8) de venda_devolucao/produto_movimento_mestre.
   CONSTRAINT venda_id_venda_uk UNIQUE (id_tenant, id_venda),
   -- FKs compostas — ver comentário em usuario_empresa_fk (V015).
@@ -33,7 +30,6 @@ CREATE TABLE venda_devolucao (
   id_venda_debito    integer,
   id_vale_mercadoria text,
   vale_usado         boolean     NOT NULL DEFAULT false,
-  criado_em          timestamptz NOT NULL DEFAULT now(),
   -- base para FK composta (2026-07-16, P8) de produto_movimento_mestre.id_devolucao.
   CONSTRAINT venda_devolucao_id_uk UNIQUE (id_tenant, id_devolucao),
   -- FKs compostas — ver comentário em usuario_empresa_fk (V015).
@@ -46,4 +42,4 @@ CREATE TABLE venda_devolucao (
 );
 CREATE INDEX venda_devolucao_id_tenant_ix ON venda_devolucao (id_tenant);
 
-COMMENT ON TABLE venda IS 'Venda da loja física (R9). Sem financeiro no v1 (Q5). Itens no ledger de estoque (movimento VENDA). Funcionário/comissão por item ficam em produto_movimento_detalhe.id_funcionario, não aqui.';
+COMMENT ON TABLE venda IS 'Venda da loja física (R9). Sem financeiro no v1 (Q5). Itens no ledger de estoque (movimento VENDA). Funcionário/comissão por item ficam em produto_movimento_detalhe.id_funcionario, não aqui. Sem valor_total/observacao/criado_em (2026-07-16) — total é derivado do ledger, sem timestamp de auditoria nesta tabela.';
