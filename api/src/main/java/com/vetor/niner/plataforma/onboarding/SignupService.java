@@ -74,13 +74,15 @@ public class SignupService {
         jdbc.sql("INSERT INTO plataforma.uso_tenant (id_tenant, qtd_usuarios) VALUES (?, 1)")
                 .param(idTenant).update();
 
-        // 5) empresa (1:1 no v1) + configurações padrão da loja.
+        // 5) empresa (1:1 no v1) + configurações padrão da loja. codigo_empresa=1 (primeira
+        // empresa do tenant, Q6); cfg_nome_etiqueta recebe um modelo padrão (o lojista
+        // personaliza depois) — ambas NOT NULL sem DEFAULT em `empresa` (V014).
         long idEmpresa = jdbc.sql("""
-                        INSERT INTO empresa (id_tenant, razao_social)
-                        VALUES (?, ?)
+                        INSERT INTO empresa (id_tenant, codigo_empresa, razao_social, cfg_nome_etiqueta)
+                        VALUES (?, 1, ?, ?)
                         RETURNING id_empresa
                         """)
-                .params(idTenant, req.nomeLoja())
+                .params(idTenant, req.nomeLoja(), "{sku}\n{descricao}\n{preco_venda}")
                 .query(Long.class).single();
 
         jdbc.sql("INSERT INTO cfg_geral (id_tenant) VALUES (?)").param(idTenant).update();

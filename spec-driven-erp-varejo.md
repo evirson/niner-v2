@@ -166,7 +166,7 @@ Medição: métricas expostas via endpoint `/actuator` + tabela de eventos; aval
 | Q2 | ✅ **Fechada (2026-07-10):** reservar no **`recebido`** — o pedido importado já incrementa `produto_estoque.reservado` (alinha R5 + P1 zero-overselling), com **expiração** que devolve a reserva de pedidos que não pagam no prazo. Ver §3.3.5 / ADR-004. | Produto + Eng | — |
 | Q3 | Limite de rate das APIs (ML: ~X req/s por app) comporta quantos lojistas por app credential? | Engenharia | Não |
 | Q4 | Precisamos de LGPD DPA com os marketplaces para dados de comprador? | Jurídico | Não |
-| Q5 | ✅ **Fechada (2026-07-10), revisada em 2026-07-16:** o módulo `financeiro` do lojista **entra parcialmente no v1** — crediário (`tipo_carteira`/`moeda`/`contas_receber`) e caixa (`caixa_mestre`/`caixa_detalhe`) antecipados da Fase 2 (V025). `contas_pagar` e `conta_corrente(_movimento)` continuam **fora do v1**. Ver §3.3.7 / ADR-010 (revisado) / ADR-012. | Produto + Eng | — |
+| Q5 | ✅ **Fechada (2026-07-10), revisada em 2026-07-16 (duas vezes):** o módulo `financeiro` do lojista **entra no v1** — crediário (`tipo_carteira`/`moeda`/`contas_receber`), caixa (`caixa_mestre`/`caixa_detalhe`, V025) e `contas_pagar` (V026) antecipados da Fase 2. Só `conta_corrente(_movimento)` continua **fora do v1**. Ver §3.3.7 / ADR-010 (revisado) / ADR-012. | Produto + Eng | — |
 | Q6 | ✅ **Fechada (v2.0):** manter `id_empresa` **e** adicionar `id_tenant` como chave de isolamento. Relação `tenant 1:N empresa` (1:1 no v1). Ver §3.1.1 / ADR-006. | Produto + Eng | — |
 | Q7 | ✅ **Fechada (2026-07-10):** **separar** `sku` interno (obrigatório, único, chave do domínio) de `ean` (GTIN real, nullable, único quando preenchido). EAN exigido só na **publicação** em canal, não no cadastro. Ver §3.3.3. | Produto + Eng | — |
 
@@ -309,7 +309,7 @@ usuario_rotina(id_usuario FK, nome_rotina, PK(id_usuario, nome_rotina))  -- perm
 ```
 > **Duas populações de usuário separadas (P9, R18):** os usuários do lojista ficam em `usuario` (com `id_tenant`, sujeitos a RLS). Os usuários da **plataforma** (staff Vetor: `SUPER_ADMIN`/`SUPORTE`/`FINANCEIRO`) ficam em `plataforma.staff` (global, §3.3.11). **JWTs distintos por `aud`** (`tenant` × `plataforma`): a chain de `/api/v1/**` rejeita token de staff e a de `/api/admin/**` rejeita token de tenant.
 
-**Signup público atômico** (`POST /api/publico/assinar`, R12): numa **única transação** cria `tenant (status=TRIAL)` + `empresa (id_tenant)` + primeiro `usuario` (ADMIN, `senha_hash`) + `assinatura (status=TRIAL, trial_expira_em = now()+60d)` + linha inicial em `plataforma.uso_tenant`; dispara e-mail de boas-vindas via **outbox**. A atomicidade é trivial por tudo estar no mesmo banco/monólito (mais um ponto a favor da topologia de uma API).
+**Signup público atômico** (`POST /api/publico/assinar`, R12): numa **única transação** cria `tenant (status=TRIAL)` + `assinatura (status=TRIAL, trial_expira_em = now()+60d)` + linha inicial em `plataforma.uso_tenant` + `empresa (id_tenant, codigo_empresa=1, cfg_nome_etiqueta=<modelo padrão>)` + `cfg_geral (id_tenant)` + **7 linhas de `moeda`** (formas de recebimento padrão, §3.3.7/V025) + primeiro `usuario` (ADMIN, `senha_hash`); dispara e-mail de boas-vindas via **outbox**. A atomicidade é trivial por tudo estar no mesmo banco/monólito (mais um ponto a favor da topologia de uma API). `codigo_empresa`/`cfg_nome_etiqueta` (`empresa`, `NOT NULL` sem `DEFAULT`, V014) precisam de valor explícito no insert — bug encontrado e corrigido em 2026-07-16 ao recriar o banco do zero pela primeira vez desde que essas colunas viraram obrigatórias.
 
 <span style="color:red">🔴 Mapear `usuario.administrador` + `usuario_rotina` para os papéis `ADMIN`/`OPERADOR` (R8) — definir se v1 usa RBAC simples (2 papéis) ou mantém as rotinas granulares.</span>
 <span style="color:red">🔴 `senha` do legado é texto — no v1 é **hash** (BCrypt/Argon2) + JWT (P4/R8).</span>
@@ -458,11 +458,11 @@ webhook_recebido(id PK, id_tenant FK, id_canal FK, webhook_id, recebido_em, proc
 ```
 Worker `@Scheduled` consome `outbox_evento` com `SELECT ... FOR UPDATE SKIP LOCKED`, retry exponencial e dead-letter visível no painel (R7). Polling de segurança a cada 15 min cobre webhooks perdidos.
 
-### 3.3.7 Módulo `financeiro` (caixa, contas, conta corrente) — 🟡 **Parcial no v1 (Q5 revisada 2026-07-16 — ADR-010/ADR-012)**
+### 3.3.7 Módulo `financeiro` (caixa, contas, conta corrente) — 🟡 **Quase todo no v1 (Q5 revisada 2026-07-16 — ADR-010/ADR-012)**
 
-> ✅ **Q5 (2026-07-10 — ADR-010), revisada em 2026-07-16 (ADR-012):** o dono do produto antecipou **crediário e caixa** da Fase 2 para o v1 — mesmo movimento já feito com `cfg_plano_contas` (V016). Migration **V025** criou: `tipo_carteira`, `moeda`, `moeda_detalhe`, `contas_receber`/`contas_receber_detalhe`, `caixa_mestre`/`caixa_detalhe`. **Continuam fora do v1** (referência de modelagem apenas): `contas_pagar`, `conta_corrente`, `conta_corrente_movimento`. Venda manual (R9) continua sem gravar automaticamente em `contas_receber`/`caixa_detalhe` — a ligação venda→recebível é *feature* futura, ainda não implementada no domínio Java (só o schema existe).
+> ✅ **Q5 (2026-07-10 — ADR-010), revisada em 2026-07-16 (ADR-012, duas rodadas):** o dono do produto antecipou **crediário, caixa e contas a pagar** da Fase 2 para o v1 — mesmo movimento já feito com `cfg_plano_contas` (V016). Migration **V025** criou: `tipo_carteira`, `moeda`, `moeda_detalhe`, `contas_receber`/`contas_receber_detalhe`, `caixa_mestre`/`caixa_detalhe`. Migration **V026** criou `contas_pagar`. **Só continua fora do v1** (referência de modelagem apenas): `conta_corrente`, `conta_corrente_movimento`. Venda manual (R9) continua sem gravar automaticamente em `contas_receber`/`caixa_detalhe` — a ligação venda→recebível é *feature* futura, ainda não implementada no domínio Java (só o schema existe).
 >
-> **Diferenças do V025 real vs. o pseudo-schema legado abaixo:** todas as 7 tabelas nascem com `id_tenant` (P8) e FKs compostas `(id_tenant, id_x)`; dinheiro/percentual em `NUMERIC` (P7, não `FLOAT`); `documento_recebido`/`caixa_fechado` viram `boolean` (não `VARCHAR(1)` S/N); `contas_receber_detalhe` é **1:1** com `contas_receber` (PK `(id_tenant, id_conta_receber)`, sem PK própria); `caixa_detalhe.tipo_operacao` é ENUM `tipo_operacao_caixa` (`RECEBIMENTO_VENDA`/`RECEBIMENTO_PARCELA_CREDIARIO`/`DEBITO_CAIXA`/`CREDITO_CAIXA`/`TROCO`, mapeado do legado `RV/RP/DC/CC/TR`); `caixa_detalhe.credito_debito` reaproveita o ENUM `credito_debito` (`C`/`D`) já criado em V013 para o ledger de estoque; `caixa_detalhe` ganhou `criado_em` (ausente no legado — necessário para "quando" de cada lançamento, P3); `moeda` **não** tem seed global — é semeada **por tenant** no signup (`SignupService.assinar()`, logo após `cfg_geral`), mesmo padrão de `cfg_geral`.
+> **Diferenças do V025/V026 real vs. o pseudo-schema legado abaixo:** todas as 8 tabelas nascem com `id_tenant` (P8) e FKs compostas `(id_tenant, id_x)`; dinheiro/percentual em `NUMERIC` (P7, não `FLOAT`); `documento_recebido`/`documento_pago`/`caixa_fechado` viram `boolean` (não `VARCHAR(1)` S/N; `documento_pago` com `DEFAULT false`); `contas_receber_detalhe` é **1:1** com `contas_receber` (PK `(id_tenant, id_conta_receber)`, sem PK própria); `caixa_detalhe.tipo_operacao` é ENUM `tipo_operacao_caixa` (`RECEBIMENTO_VENDA`/`RECEBIMENTO_PARCELA_CREDIARIO`/`DEBITO_CAIXA`/`CREDITO_CAIXA`/`TROCO`, mapeado do legado `RV/RP/DC/CC/TR`); `caixa_detalhe.credito_debito` reaproveita o ENUM `credito_debito` (`C`/`D`) já criado em V013 para o ledger de estoque; `caixa_detalhe` ganhou `criado_em` (ausente no legado — necessário para "quando" de cada lançamento, P3); `moeda` **não** tem seed global — é semeada **por tenant** no signup (`SignupService.assinar()`, logo após `cfg_geral`); `contas_pagar.localizador` (nome do legado) virou **`id_conta_pagar`** (pedido explícito, quebra de propósito a consistência de nome com `caixa_detalhe.localizador`); `contas_pagar.nota_fiscal` é `integer` **nullable** sem `DEFAULT 0` (sem valor mágico) — a mesma padronização corrigiu `produto_movimento_mestre.nota_fiscal` (V019), que era `text`.
 
 O legado traz um financeiro completo que **não está no diagrama de módulos do §3.1** e tangencia o Non-goal §2.3 (PDV/frente de caixa fora do v1).
 
@@ -512,8 +512,10 @@ conta_corrente_movimento(localizador PK, id_conta_corrente FK, data_movimento,
 > - `tipo_carteira`, `moeda`, `moeda_detalhe`, `contas_receber`/`contas_receber_detalhe`,
 >   `caixa_mestre`/`caixa_detalhe` — criadas em **V025** (crediário + caixa). Ver diferenças
 >   do real vs. o pseudo-schema abaixo na nota no início desta seção.
-> - `contas_pagar`, `conta_corrente`, `conta_corrente_movimento` continuam **sem migration**,
->   só referência de modelagem para a Fase 2.
+> - `contas_pagar` — criada em **V026**. PK `id_conta_pagar` (renomeada do `localizador` do
+>   legado); `nota_fiscal integer` nullable, sem `DEFAULT 0`.
+> - `conta_corrente`, `conta_corrente_movimento` continuam **sem migration**, só referência de
+>   modelagem para a Fase 2.
 
 ### 3.3.8 Configuração global
 
@@ -741,7 +743,10 @@ V024  RLS de domínio (final p/ V014–V023): ENABLE + FORCE ROW LEVEL SECURITY 
 V025  financeiro (parcial, Q5 revisada 2026-07-16 — ADR-012): tipo_carteira, moeda,
       moeda_detalhe, contas_receber + contas_receber_detalhe (1:1), caixa_mestre +
       caixa_detalhe (ENUM tipo_operacao_caixa: RV/RP/DC/CC/TR do legado). RLS próprio no
-      mesmo arquivo (V024 já tinha rodado). contas_pagar/conta_corrente* continuam fora.
+      mesmo arquivo (V024 já tinha rodado).
+V026  financeiro: contas_pagar (Q5 revisada de novo, 2026-07-16 — ADR-012). PK
+      id_conta_pagar (renomeada de localizador); nota_fiscal integer nullable, sem
+      DEFAULT 0. RLS próprio no arquivo. conta_corrente* segue como único módulo fora do v1.
 ```
 Detalhe migration a migration (com ✅/🔴 de situação): `db/migration/README.md`.
 Racional de RLS num arquivo final: garante que **nenhuma** tabela de tenant fica sem política — auditável num único ponto e testável ("toda tabela de tenant tem RLS" vira teste de P8). As tabelas de `plataforma` são globais (P9) e **não** entram no RLS de tenant.
@@ -886,7 +891,7 @@ Data: · Decisores:
 Positivas: · Negativas/dívidas: · Gatilho de revisão: [métrica ou evento que faria rever]
 ```
 
-ADRs já previstos: ADR-001 monolito modular; ADR-002 outbox sobre Postgres sem broker; ADR-003 biblioteca de UI; **ADR-004 estratégia de reserva de estoque: reservar no `recebido` + expiração configurável por canal (Q2 fechada 2026-07-10; §3.3.5);** ADR-005 cifragem de credenciais; **ADR-006 isolamento de tenant (banco único + `id_tenant` + Postgres RLS; §3.1.1); ADR-007 topologia do control-plane (uma API/3 superfícies + 3 apps React, API stateless, supera o non-goal §2.3, gatilhos de split); ADR-008 adapter de gateway de cobrança (provedor a definir — D3); ADR-009 auth/identidade multi-tenant (duas populações de usuário, claims JWT por `aud`, papéis de staff × RBAC do tenant); ADR-010 financeiro do lojista fora do v1 (Q5 fechada 2026-07-10, **revisado por ADR-012**; §3.3.7); ADR-011 framework do site público: **Astro (SSG)** — decidido 2026-07-10, prioriza SEO/Core Web Vitals para a landing/planos; `web`/`admin` seguem React+Vite; **ADR-012 crediário + caixa antecipados da Fase 2 (revisão de Q5/ADR-010, 2026-07-16) — `tipo_carteira`/`moeda`/`contas_receber`/`caixa_mestre`/`caixa_detalhe` entram no v1 via V025; `contas_pagar`/`conta_corrente(_movimento)` continuam fora (§3.3.7).**
+ADRs já previstos: ADR-001 monolito modular; ADR-002 outbox sobre Postgres sem broker; ADR-003 biblioteca de UI; **ADR-004 estratégia de reserva de estoque: reservar no `recebido` + expiração configurável por canal (Q2 fechada 2026-07-10; §3.3.5);** ADR-005 cifragem de credenciais; **ADR-006 isolamento de tenant (banco único + `id_tenant` + Postgres RLS; §3.1.1); ADR-007 topologia do control-plane (uma API/3 superfícies + 3 apps React, API stateless, supera o non-goal §2.3, gatilhos de split); ADR-008 adapter de gateway de cobrança (provedor a definir — D3); ADR-009 auth/identidade multi-tenant (duas populações de usuário, claims JWT por `aud`, papéis de staff × RBAC do tenant); ADR-010 financeiro do lojista fora do v1 (Q5 fechada 2026-07-10, **revisado por ADR-012**; §3.3.7); ADR-011 framework do site público: **Astro (SSG)** — decidido 2026-07-10, prioriza SEO/Core Web Vitals para a landing/planos; `web`/`admin` seguem React+Vite; **ADR-012 crediário + caixa + contas a pagar antecipados da Fase 2 (revisão de Q5/ADR-010, 2026-07-16, em duas rodadas) — `tipo_carteira`/`moeda`/`contas_receber`/`caixa_mestre`/`caixa_detalhe` entram via V025; `contas_pagar` entra via V026; só `conta_corrente(_movimento)` continua fora (§3.3.7).**
 
 # 7. Template — Task
 

@@ -50,6 +50,32 @@ de tenant.
 > Sem isso o Ryuk (resource reaper) falha ao montar o `docker.sock`
 > (`operation not supported`).
 
+> **Sem JDK no host (ex.: Windows sem Java instalado) — rodar via container:** use a
+> mesma imagem do estágio de build do `Dockerfile` (`maven:3.9-eclipse-temurin-25`),
+> montando o **repo inteiro** (não só `api/` — o Flyway de teste usa `../db/migration`,
+> relativo, que precisa existir dentro do container) e o socket do Docker:
+> ```bash
+> docker run --rm \
+>   -v /var/run/docker.sock:/var/run/docker.sock \
+>   -v "<raiz-do-repo>:/workspace" \
+>   -v niner_maven_repo:/root/.m2 \
+>   -w /workspace/api \
+>   -e TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE=/var/run/docker.sock \
+>   -e TESTCONTAINERS_RYUK_DISABLED=true \
+>   -e TESTCONTAINERS_HOST_OVERRIDE=host.docker.internal \
+>   maven:3.9-eclipse-temurin-25 \
+>   mvn -B test
+> ```
+> Três coisas que quebram sem isso (achado em 2026-07-16, Docker Desktop no Windows):
+> 1. **Ryuk não conecta de volta** ao container do Maven (`--network host` não é
+>    honrado do jeito esperado pelo Docker Desktop) → `TESTCONTAINERS_RYUK_DISABLED=true`
+>    (sem reaper automático; containers de teste precisam de limpeza manual ocasional
+>    com `docker ps -a --filter ancestor=postgres:18`).
+> 2. **JDBC aponta para o gateway interno do Docker** (`172.17.0.1`), inalcançável de
+>    dentro de outro container → `TESTCONTAINERS_HOST_OVERRIDE=host.docker.internal`.
+> 3. **`../db/migration` não existe** se só a pasta `api/` for montada → monta o repo
+>    inteiro e roda com `-w /workspace/api`.
+
 ## Pendências (fases seguintes)
 
 - Camada de domínio na API: repositórios/serviços/endpoints `/api/v1` de produto, estoque e

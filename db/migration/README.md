@@ -56,13 +56,15 @@ RLS. Só depois os módulos de domínio do lojista e, por fim, as políticas RLS
 | **V022** | `integracao`: `outbox_evento`, `webhook_recebido` (P2) | ✅ |
 | **V023** | `cfg_geral` (singleton por tenant; `cfg_usa_variante_linha`/`cfg_usa_variante_coluna` boolean default true; sem `moeda_devolucao`) | ✅ |
 | **V024** | **RLS de domínio** (final para V014–V023): `ENABLE`+`FORCE` + `USING/WITH CHECK (id_tenant = plataforma.tenant_atual())` em todas as tabelas de tenant + grants de `niner_app` + `REVOKE UPDATE, DELETE` só em `produto_movimento_mestre` (imutabilidade, P3 — `produto_movimento_detalhe` ficou de fora desde 2026-07-16, ver trigger em V019) + guarda-corpo que falha se alguma tabela com `id_tenant` ficar sem RLS | ✅ |
-| **V025** | **`financeiro` (parcial) — crediário + caixa** (revisão de Q5/ADR-010, 2026-07-16): `tipo_carteira` (prazo/parcelas min-max/taxa adm), `moeda` (formas de recebimento, seed **por tenant** no signup — não global), `moeda_detalhe` (moeda × carteira), `contas_receber`/`contas_receber_detalhe` (1:1, taxas de cartão), `caixa_mestre`/`caixa_detalhe` (sessão de caixa + lançamentos, ENUM `tipo_operacao_caixa` mapeado do legado `RV/RP/DC/CC/TR`). Tem **RLS próprio** no mesmo arquivo (V024 já tinha rodado). `contas_pagar`/`conta_corrente*` continuam fora (§3.3.7) | ✅ |
+| **V025** | **`financeiro` (parcial) — crediário + caixa** (revisão de Q5/ADR-010, 2026-07-16): `tipo_carteira` (prazo/parcelas min-max/taxa adm), `moeda` (formas de recebimento, seed **por tenant** no signup — não global), `moeda_detalhe` (moeda × carteira), `contas_receber`/`contas_receber_detalhe` (1:1, taxas de cartão), `caixa_mestre`/`caixa_detalhe` (sessão de caixa + lançamentos, ENUM `tipo_operacao_caixa` mapeado do legado `RV/RP/DC/CC/TR`). Tem **RLS próprio** no mesmo arquivo (V024 já tinha rodado). | ✅ |
+| **V026** | **`financeiro` — `contas_pagar`** (mais uma revisão de Q5/ADR-010/ADR-012, 2026-07-16): PK renomeada de `localizador` (legado) para `id_conta_pagar`; `nota_fiscal integer` nullable (sem `DEFAULT 0`, sem valor mágico). RLS próprio no arquivo. Com esta migration, só `conta_corrente`/`conta_corrente_movimento` continuam fora do v1 (§3.3.7) | ✅ |
 
 > As tabelas do schema `plataforma` são **globais** (P9) e **não** entram no RLS de tenant.
 > O RLS (`FORCE`) se aplica a toda tabela de **domínio** do lojista — V014–V023 (ativado em V024)
-> e V025 (ativado no próprio arquivo, por ter sido criado depois do guarda-corpo de V024).
-> `financeiro` do lojista está **parcialmente** no v1 desde V025 (crediário/caixa); `contas_pagar`
-> e `conta_corrente(_movimento)` continuam fora (Q5/ADR-010 revisado — Fase 2).
+> e V025/V026 (cada uma com RLS próprio no arquivo, por terem sido criadas depois do
+> guarda-corpo de V024).
+> `financeiro` do lojista está no v1 desde V025/V026 (crediário, caixa, contas a pagar);
+> só `conta_corrente(_movimento)` continua fora (Q5/ADR-010 revisado — Fase 2).
 >
 > **FKs compostas (2026-07-16):** V014–V022 tiveram **todas** as FKs entre tabelas de
 > domínio convertidas de simples para compostas `(id_tenant, id_x)` — ~34 constraints em
@@ -157,3 +159,11 @@ Em desenvolvimento, recriar do zero (`flyway clean` + `migrate`) é aceitável.
   - RLS destas 7 tabelas está **no próprio V025**, não em V024 — o guarda-corpo de V024 rodou
     antes delas existirem e não as alcançaria; V025 repete o padrão (ENABLE+FORCE+policy+grants)
     e tem seu próprio guarda-corpo.
+- **`contas_pagar` (V026, 2026-07-16) revisa Q5/ADR-010/ADR-012 mais uma vez:** PK renomeada de
+  `localizador` (nome do legado, mantido em `caixa_detalhe`/V025) para **`id_conta_pagar`** —
+  pedido explícito do dono do produto, quebra a consistência de nome com `caixa_detalhe` de
+  propósito. `nota_fiscal` é `integer` **nullable**, sem `DEFAULT 0` (o legado tinha `DEFAULT 0`,
+  que é valor mágico para "sem nota fiscal"). Essa mesma padronização (`nota_fiscal integer`)
+  também corrigiu `produto_movimento_mestre.nota_fiscal` (V019), que era `text` — nenhum outro
+  lugar do schema tinha esse campo. `documento_pago` ganhou `DEFAULT false`, mesmo tratamento
+  de `contas_receber.documento_recebido` (V025). RLS próprio no arquivo (mesmo motivo de V025).

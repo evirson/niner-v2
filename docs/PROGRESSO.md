@@ -16,10 +16,11 @@ Projeto **spec-driven** em fase de fundação. A **API (Spring Boot 4 / Java 25)
 | `docs/padroes/` | Mockup de referência de UI (golden file, §3.7) — `TELA.rar` descompactado e removido |
 | `db/*.txt` | Schema **legado (Firebird)** versionado como referência (31 tabelas + generators, procedures, triggers) |
 | `CLAUDE.md` | Guia do repositório — atualizado para o SaaS multi-tenant (P8/P9, plataforma, `id_tenant`+RLS) |
-| `docker-compose.yml` | Infra local de dev: `db` (postgres:18, `niner_db`) + `flyway` (profile `migrate`) + **`api`** (Spring Boot, porta 8080, conecta como `niner_app`); **V001–V024 aplicadas e validadas em banco real** (control-plane + domínio do lojista + RLS) |
+| `docker-compose.yml` | Infra local de dev: `db` (postgres:18, `niner_db`) + `flyway` (profile `migrate`) + **`api`** (Spring Boot, porta 8080, conecta como `niner_app`); **V001–V026 aplicadas e validadas em banco real** (control-plane + domínio do lojista + financeiro parcial + RLS) — banco **recriado do zero em 2026-07-16** (volume `niner_pgdata` apagado e refeito) |
 | `db/migration/V013–V024` | Domínio do lojista (identidade, cadastros, catálogo com `sku`+`ean`, estoque com `reservado`/`disponivel`, vendas, canais, pedidos, integração/outbox, cfg_geral) + **RLS de domínio** (`FORCE` + política por `id_tenant`). **Gate P8 verde** (teste de isolamento cross-tenant automatizado). **Revisado em 2026-07-16** (ver linha do tempo): tipos padronizados (`id_tenant SMALLINT`, demais PKs `INTEGER`), sem `ON DELETE CASCADE`, ledger de estoque imutável via `REVOKE`, e-mail case-insensitive, fix de bootstrap (`GRANT CREATE ON SCHEMA public`) |
-| `db/migration/V025` | **Novo (2026-07-16) — `financeiro` parcial (revisão de Q5/ADR-010, ADR-012):** crediário (`tipo_carteira`, `moeda`, `moeda_detalhe`, `contas_receber`/`contas_receber_detalhe`) + caixa (`caixa_mestre`/`caixa_detalhe`). RLS próprio no arquivo (V024 já tinha rodado). `contas_pagar`/`conta_corrente*` continuam fora. Só schema — **script criado, banco não recriado/testado** (convenção da sessão: só rebuild quando pedido) |
-| `api/` | Spring Boot 4.0.7 / Java 25 (Maven). 3 superfícies com `SecurityFilterChain` separados; `TenantContext` (`ScopedValue`) + `TenantAwareTransactionManager`; **auth JWT HS256** (login/signup emitem, `/api/v1` valida `aud=tenant`); **trial self-service** (`POST /api/publico/assinar` → tenant+configs+ADMIN+assinatura TRIAL + token), `POST /api/publico/login`, `GET /api/v1/eu`. **11 testes verdes** (Testcontainers) + fluxo **verificado ao vivo** como `niner_app`. Persistência: **Spring Data JDBC**. Falta: domínio (repos/serviços/endpoints de produto/estoque/pedido) e os 3 fronts |
+| `db/migration/V025` | **`financeiro` parcial (revisão de Q5/ADR-010, ADR-012):** crediário (`tipo_carteira`, `moeda`, `moeda_detalhe`, `contas_receber`/`contas_receber_detalhe`) + caixa (`caixa_mestre`/`caixa_detalhe`). RLS próprio no arquivo (V024 já tinha rodado). Seed de `moeda` por tenant implementado no `SignupService`. **Aplicada e validada em banco real em 2026-07-16** (RLS `ENABLE`+`FORCE` confirmado nas 7 tabelas; moedas semeadas no signup conferidas via `psql`). |
+| `db/migration/V026` | **`contas_pagar`** (mais uma revisão de Q5/ADR-010/ADR-012): PK `id_conta_pagar` (renomeada de `localizador`), `nota_fiscal integer` nullable sem `DEFAULT 0` (padronização que também corrigiu `produto_movimento_mestre.nota_fiscal`, V019, de `text` para `integer`). RLS próprio no arquivo. Só `conta_corrente*` segue fora do v1. **Aplicada e validada em banco real em 2026-07-16** (schema/FKs/RLS conferidos via `psql`) |
+| `api/` | Spring Boot 4.0.7 / Java 25 (Maven). 3 superfícies com `SecurityFilterChain` separados; `TenantContext` (`ScopedValue`) + `TenantAwareTransactionManager`; **auth JWT HS256** (login/signup emitem, `/api/v1` valida `aud=tenant`); **trial self-service** (`POST /api/publico/assinar` → tenant+configs+moedas+ADMIN+assinatura TRIAL + token), `POST /api/publico/login`, `GET /api/v1/eu`. **11 testes verdes** (Testcontainers) + fluxo **verificado ao vivo** como `niner_app` contra o banco recriado (2026-07-16), inclusive o bugfix de `empresa.codigo_empresa`/`cfg_nome_etiqueta`. Persistência: **Spring Data JDBC**. Falta: domínio (repos/serviços/endpoints de produto/estoque/pedido) e os 3 fronts |
 | `site/` | Site público (Astro/SSG, ADR-011). **Home institucional "matadora"** (posicionamento concorrente do Bling): hero com painel animado + demo de sincronização, faixa de stats com contadores, contraste problema→solução, 3 passos, 6 recursos, canais (ML/Shopee/Amazon/balcão), planos (preços via `/api/publico/planos`), FAQ e CTA — tudo em CSS/SVG puro com **scroll-reveal** e **prefers-reduced-motion** (sem novas deps). Sistema visual em `src/styles/site.css` portado do golden `nainer_institucional`. `/assinar` (form → `POST /api/publico/assinar` → auto-login → `/bem-vindo`) e `/bem-vindo` mantidos. **Trial 60 dias** em toda a copy. Tema claro/escuro persistido. **Build SSG ok**; hero/reveal/contadores verificados via Playwright |
 | `web/` | **Novo — ERP do lojista (React 19 + Vite + TS)**. Auth JWT (login slug+email+senha; **handoff SSO** do site via `#token=`), shell (nav Painel/Produtos/Estoque/Pedidos/Canais + Sair), **Painel** real (`GET /api/v1/eu` via TanStack Query), placeholders "em construção". Design tokens §3.7 (claro/escuro). **Build ok**; fluxo **e2e verificado** (login + handoff). |
 | `admin/` | Ainda não criado (backoffice React 19 + Vite) |
@@ -29,6 +30,89 @@ Projeto **spec-driven** em fase de fundação. A **API (Spring Boot 4 / Java 25)
 ---
 
 ## Linha do tempo
+
+### 2026-07-16 — Banco recriado do zero: V001–V026 aplicadas, bug real encontrado e corrigido
+
+Dono do produto pediu para recriar a base de dados (primeira vez que isso roda desde as
+revisões de schema desta sessão — V014–V026 nunca tinham sido testadas contra um Postgres
+real do zero, só revisadas estaticamente).
+
+1. **Recriação:** `docker compose stop api db` + `rm -f` dos containers + `docker volume rm
+   niner_pgdata` + `docker compose up -d db` (saudável) + `docker compose run --rm flyway`.
+   **26 migrations aplicadas com sucesso** (V001–V026), incluindo os dois guarda-corpos de RLS
+   (V024 e V025) sem exceção — nenhuma tabela de tenant ficou sem RLS.
+2. **Bug real encontrado no smoke test do signup:** `POST /api/publico/assinar` retornava
+   erro ao inserir em `empresa` — `null value in column "codigo_empresa"` (constraint
+   `NOT NULL` sem `DEFAULT`, adicionada a `empresa` mais cedo nesta mesma sessão, V014). O
+   `SignupService.assinar()` só inserida `id_tenant`/`razao_social`, nunca tinha sido
+   atualizado para as colunas novas. Investigação revelou que `cfg_nome_etiqueta` (também
+   `NOT NULL` sem `DEFAULT`, mesma tabela) tinha o mesmo problema, só não aparecia ainda
+   porque o Postgres erra na primeira coluna `NOT NULL` vazia que encontra (`codigo_empresa`
+   vem antes na ordem de colunas).
+3. **Fix em `SignupService.java`:** o `INSERT INTO empresa` passou a enviar
+   `codigo_empresa = 1` (primeira empresa do tenant, Q6 — 1:1 no v1) e
+   `cfg_nome_etiqueta = '{sku}\n{descricao}\n{preco_venda}'` (modelo padrão de etiqueta,
+   o lojista personaliza depois — não existe tela para isso ainda). Imagem da API
+   reconstruída (`docker compose build api`) e o smoke test repetido com sucesso
+   (`201 Created`, tenant novo, token emitido).
+4. **Verificação em banco real (via `psql` como `niner_owner`):**
+   - As 7 linhas de `moeda` foram semeadas para o tenant de teste — mas só apareceram depois
+     de `set_config('app.id_tenant', ...)` na sessão do `psql`: confirma que o `FORCE ROW
+     LEVEL SECURITY` das tabelas novas (V025/V026) protege até o **dono** das tabelas, não só
+     `niner_app` (P8 funcionando como desenhado).
+   - RLS `ENABLE`+`FORCE` confirmado nas 8 tabelas novas (`tipo_carteira`, `moeda`,
+     `moeda_detalhe`, `contas_receber`, `contas_receber_detalhe`, `caixa_mestre`,
+     `caixa_detalhe`, `contas_pagar`).
+   - `\d contas_pagar` confirmou `id_conta_pagar` como PK, `nota_fiscal integer` nullable,
+     FKs compostas `(id_tenant, id_x)` para `empresa`/`fornecedor`/`cfg_plano_contas`.
+   - `produto_movimento_mestre.nota_fiscal` confirmado como `integer` (padronização do V026
+     aplicada de fato).
+5. **Pendência do dia resolvida: suíte `./mvnw test` rodada sem JDK no host.** Sem
+   `JAVA_HOME`/Java instalados no host, rodei a suíte dentro de um container com a mesma
+   imagem do estágio de build do `Dockerfile` (`maven:3.9-eclipse-temurin-25`), montando o
+   **repo inteiro** (não só `api/`) + o socket do Docker. Três problemas apareceram e foram
+   contornados (documentados em `api/README.md`, seção Testes):
+   - **Ryuk não conectava de volta** ao container do Maven (`--network host` não funciona
+     como esperado no Docker Desktop) → `TESTCONTAINERS_RYUK_DISABLED=true`.
+   - **JDBC apontava pro gateway interno do Docker** (`172.17.0.1`), inalcançável de dentro
+     de outro container → `TESTCONTAINERS_HOST_OVERRIDE=host.docker.internal` resolveu.
+   - **`../db/migration` não existia** dentro do container porque só `api/` estava montada
+     (o Flyway de teste usa esse caminho relativo) → montei o repo inteiro e rodei com
+     `-w /workspace/api`.
+   - **Resultado: 11 testes verdes** (`NinerApiApplicationTests` 1, `OnboardingTrialTest` 3,
+     `RlsIsolamentoTest` 1, `SuperficiesPingTest` 6) — incluindo o gate P8 e o fluxo de
+     signup completo (que já exercita o fix de `codigo_empresa`/`cfg_nome_etiqueta` do item
+     acima e o insert de `moeda`). Containers de teste órfãos (Ryuk desabilitado) conferidos
+     depois — nenhum ficou para trás.
+
+### 2026-07-16 — V026: contas_pagar antecipada (mais uma revisão de Q5/ADR-010 — ADR-012)
+
+Mesmo padrão do V025: dono do produto pediu análise antes de criar. DDL colado era, de novo,
+o legado Firebird (`db/050_CONTAS_PAGAR.txt`) quase sem conversão.
+
+1. **Achados corrigidos** (mesma lista de sempre): sem `id_tenant`; FKs simples e para
+   `EMPRESAS`/`FORNECEDORES` (nomes errados — são `empresa`/`fornecedor`); `FLOAT` em
+   `valor_pagar`/`valor_pago` (P7); `VARCHAR(1)` S/N em `documento_pago` (virou `boolean`);
+   `TIMESTAMP` em vez de `TIMESTAMPTZ`; `GENERATED BY DEFAULT` em vez de `GENERATED ALWAYS AS
+   IDENTITY`; `ID_PLANO_CONTAS VARCHAR(13)` precisando virar FK composta pro par
+   `(id_tenant, id_plano_contas)` de `cfg_plano_contas` (V016).
+2. **`nota_fiscal INTEGER DEFAULT 0`** — flagueado como inconsistente com
+   `produto_movimento_mestre.nota_fiscal` (V019), que já era `text` nullable. Dono do produto
+   decidiu **manter `integer`** (não `text`) — e pediu para **padronizar em todo o schema**:
+   `produto_movimento_mestre.nota_fiscal` mudou de `text` para `integer` (só essa outra
+   ocorrência existia). Ambas nullable, sem `DEFAULT 0` (valor mágico removido).
+3. **PK renomeada:** campo `localizador` (nome herdado do legado, usado em `caixa_detalhe`/V025)
+   virou **`id_conta_pagar`** nesta tabela — pedido explícito do dono do produto, quebrando de
+   propósito a consistência de nome com `caixa_detalhe`.
+4. **`documento_pago` ganhou `DEFAULT false`** — mesmo tratamento já dado a
+   `contas_receber.documento_recebido` (V025), confirmado pelo dono do produto.
+5. **Migration `V026__financeiro_contas_pagar.sql` criada** (arquivo novo, não dentro de V025)
+   — `contas_pagar` com `id_tenant`, FKs compostas, RLS próprio no arquivo (mesmo motivo de
+   V025: o guarda-corpo de V024 já tinha rodado antes desta tabela existir). Legado
+   `db/050_CONTAS_PAGAR.txt` removido (já migrado). Documentação sincronizada:
+   `db/migration/README.md`, `spec-driven-erp-varejo.md` (§2.7 Q5, §3.3.7, §3.5.1, ADR-012) e
+   este arquivo. **Banco não recriado/testado nesta rodada** (convenção da sessão). Com V026,
+   só `conta_corrente`/`conta_corrente_movimento` seguem fora do v1 (§3.3.7).
 
 ### 2026-07-16 — V025: crediário + caixa antecipados da Fase 2 (revisão de Q5/ADR-010 — ADR-012)
 
@@ -480,7 +564,7 @@ com autenticação JWT real protegendo o ERP.
 - **Decisões de negócio do SaaS (D1–D10)** — ver `docs/PLANO-DE-NEGOCIO.md`. Abertas: D1 preços, D3 gateway (adiado), D5 nome "Niner", D6 NFS-e da assinatura, D8 dunning, D9 metas, D10 comportamento do estado `INADIMPLENTE`.
 - **ADR-011 — framework do site público (SEO):** Astro × Next, "decidir depois" (não bloqueia o backend).
 
-> ✅ **Q5 — módulo `financeiro` do lojista:** fechada em 2026-07-10 — **fora do v1**; **revisada em 2026-07-16 (ADR-012)** — crediário (`tipo_carteira`/`moeda`/`contas_receber`) e caixa (`caixa_mestre`/`caixa_detalhe`) antecipados via **V025**. `contas_pagar`/`conta_corrente(_movimento)` continuam fora. R9 (venda manual) segue sem ligação automática ao financeiro (schema existe, domínio Java ainda não liga venda→recebível). Ver §3.3.7.
+> ✅ **Q5 — módulo `financeiro` do lojista:** fechada em 2026-07-10 — **fora do v1**; **revisada em 2026-07-16, em duas rodadas (ADR-012)** — crediário (`tipo_carteira`/`moeda`/`contas_receber`) e caixa (`caixa_mestre`/`caixa_detalhe`) via **V025**, depois `contas_pagar` via **V026**. Só `conta_corrente(_movimento)` continua fora. R9 (venda manual) segue sem ligação automática ao financeiro (schema existe, domínio Java ainda não liga venda→recebível). Ver §3.3.7.
 > ✅ **Q7 — SKU vs EAN:** fechada em 2026-07-10 — **separar** `sku` interno (obrigatório, único, chave do domínio; ex-`codigo_barra`) de `ean` (GTIN real, nullable, único quando preenchido). EAN exigido só na **publicação** em canal, não no cadastro. Nas migrations V013+, as FKs que apontavam para `codigo_barra` passam a referenciar `sku`. Ver §3.3.3.
 > ✅ **Q2 — estratégia de reserva:** fechada em 2026-07-10 — reservar no **`recebido`** (pedido importado já incrementa `reservado`), com expiração configurável por canal que devolve reservas não pagas. Alinha R5 + P1. Vira **ADR-004**; adicionar colunas `reservado`/`minimo` a `produto_estoque` nas migrations de domínio. Ver §3.3.5.
 > ✅ **Q6 — multi-empresa/tenant:** fechada em 2026-07-08 — manter `id_empresa` **e** adicionar `id_tenant` (banco único + RLS; `tenant 1:N empresa`, 1:1 no v1).

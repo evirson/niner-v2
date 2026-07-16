@@ -44,7 +44,7 @@ CREATE TABLE produto_movimento_mestre (
   id_venda         integer,
   id_transferencia integer,                     -- numero vindo de um gerador externo; sem FK (proposital)
   id_devolucao     integer,
-  nota_fiscal      text,
+  nota_fiscal      integer,                     -- numero da NF; integer (padronizado 2026-07-16, ver V026)
   -- base para FK composta (2026-07-16, P8) de produto_movimento_detalhe.id_movimento.
   CONSTRAINT produto_movimento_mestre_id_uk UNIQUE (id_tenant, id_movimento),
   -- FKs compostas — ver comentário em usuario_empresa_fk (V015).
