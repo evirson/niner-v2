@@ -5,17 +5,17 @@
 -- partir de evento.id_tenant antes de aplicar efeitos de domínio (P8).
 
 CREATE TABLE outbox_evento (
-  id            bigint      GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-  id_tenant     bigint      NOT NULL REFERENCES plataforma.tenant (id_tenant),
-  tipo          text        NOT NULL,               -- ex.: ESTOQUE_ATUALIZADO, PRECO_ATUALIZADO
+  id            integer       GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  id_tenant     smallint      NOT NULL REFERENCES plataforma.tenant (id_tenant),
+  tipo          text          NOT NULL,               -- ex.: ESTOQUE_ATUALIZADO, PRECO_ATUALIZADO
   agregado_id   text,                               -- id do agregado afetado (ex.: id_variacao)
-  payload       jsonb       NOT NULL,
+  payload       jsonb         NOT NULL,
   status        status_outbox NOT NULL DEFAULT 'PENDENTE',
-  tentativas    integer     NOT NULL DEFAULT 0,
-  proximo_retry timestamptz NOT NULL DEFAULT now(),
+  tentativas    integer       NOT NULL DEFAULT 0,
+  proximo_retry timestamptz   NOT NULL DEFAULT now(),
   processado_em timestamptz,
   erro          text,
-  criado_em     timestamptz NOT NULL DEFAULT now()
+  criado_em     timestamptz   NOT NULL DEFAULT now()
 );
 -- Índice do worker: pega pendentes/erro cujo retry já venceu (ordem de despacho).
 CREATE INDEX outbox_evento_fila_ix
@@ -24,9 +24,9 @@ CREATE INDEX outbox_evento_fila_ix
 CREATE INDEX outbox_evento_id_tenant_ix ON outbox_evento (id_tenant);
 
 CREATE TABLE webhook_recebido (
-  id            bigint      GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-  id_tenant     bigint      NOT NULL REFERENCES plataforma.tenant (id_tenant),
-  id_canal      bigint      NOT NULL REFERENCES canal (id_canal),
+  id            integer     GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  id_tenant     smallint    NOT NULL REFERENCES plataforma.tenant (id_tenant),
+  id_canal      integer     NOT NULL REFERENCES canal (id_canal),
   webhook_id    text        NOT NULL,               -- id do evento no marketplace (idempotência)
   recebido_em   timestamptz NOT NULL DEFAULT now(),
   processado_em timestamptz,

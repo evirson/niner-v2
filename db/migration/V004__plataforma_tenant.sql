@@ -2,7 +2,7 @@
 -- toda tabela de domínio referenciam este id. Global (P9), sem RLS de tenant.
 
 CREATE TABLE plataforma.tenant (
-  id_tenant     bigint      GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  id_tenant     smallint    GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   nome_conta    text        NOT NULL,
   slug          text        NOT NULL,
   email_contato text        NOT NULL,

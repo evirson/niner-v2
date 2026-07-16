@@ -2,7 +2,7 @@
 -- Limites NULL = ilimitado. Preços em NUMERIC (P7). Valores de fato ficam no seed (V012).
 
 CREATE TABLE plataforma.plano (
-  id_plano           bigint        GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  id_plano           integer        GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   nome               text          NOT NULL,
   descricao          text,
   ciclo_padrao       plataforma.ciclo_cobranca NOT NULL DEFAULT 'MENSAL',

@@ -3,29 +3,29 @@
 -- Adapter por marketplace implementa CanalDeVenda; o domínio nunca vê payload de ML/Shopee.
 
 CREATE TABLE canal (
-  id_canal      bigint      GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-  id_tenant     bigint      NOT NULL REFERENCES plataforma.tenant (id_tenant),
-  tipo          tipo_canal  NOT NULL,
-  nome          text        NOT NULL,
+  id_canal      integer      GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  id_tenant     smallint     NOT NULL REFERENCES plataforma.tenant (id_tenant),
+  tipo          tipo_canal   NOT NULL,
+  nome          text         NOT NULL,
   credenciais   jsonb,                              -- cifrado AES-GCM (ADR-005)
   status        status_canal NOT NULL DEFAULT 'DESCONECTADO',
   config        jsonb,
-  criado_em     timestamptz NOT NULL DEFAULT now(),
-  atualizado_em timestamptz NOT NULL DEFAULT now()
+  criado_em     timestamptz  NOT NULL DEFAULT now(),
+  atualizado_em timestamptz  NOT NULL DEFAULT now()
 );
 CREATE INDEX canal_id_tenant_ix ON canal (id_tenant);
 
 CREATE TABLE anuncio (
-  id_anuncio    bigint      GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-  id_tenant     bigint      NOT NULL REFERENCES plataforma.tenant (id_tenant),
-  id_canal      bigint      NOT NULL REFERENCES canal (id_canal) ON DELETE CASCADE,
-  id_variacao   bigint      NOT NULL REFERENCES produto_barra (id_variacao),   -- de-para com o SKU (R6)
-  id_externo    text        NOT NULL,               -- id do anúncio no marketplace
+  id_anuncio    integer        GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  id_tenant     smallint       NOT NULL REFERENCES plataforma.tenant (id_tenant),
+  id_canal      integer        NOT NULL REFERENCES canal (id_canal),
+  id_variacao   integer        NOT NULL REFERENCES produto_barra (id_variacao),   -- de-para com o SKU (R6)
+  id_externo    text           NOT NULL,               -- id do anúncio no marketplace
   preco         numeric(12,2),
-  status_sync   status_sync NOT NULL DEFAULT 'PENDENTE',
+  status_sync   status_sync    NOT NULL DEFAULT 'PENDENTE',
   ultimo_erro   text,
-  criado_em     timestamptz NOT NULL DEFAULT now(),
-  atualizado_em timestamptz NOT NULL DEFAULT now(),
+  criado_em     timestamptz    NOT NULL DEFAULT now(),
+  atualizado_em timestamptz    NOT NULL DEFAULT now(),
   CONSTRAINT anuncio_canal_externo_uk UNIQUE (id_canal, id_externo)
 );
 CREATE INDEX anuncio_id_tenant_ix ON anuncio (id_tenant);

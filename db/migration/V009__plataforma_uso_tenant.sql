@@ -3,7 +3,7 @@
 -- pedidos = contador da competência corrente (reseta quando o mês vira).
 
 CREATE TABLE plataforma.uso_tenant (
-  id_tenant           bigint      PRIMARY KEY REFERENCES plataforma.tenant (id_tenant),
+  id_tenant           smallint    PRIMARY KEY REFERENCES plataforma.tenant (id_tenant),
   qtd_canais          integer     NOT NULL DEFAULT 0 CHECK (qtd_canais      >= 0),
   qtd_produtos        integer     NOT NULL DEFAULT 0 CHECK (qtd_produtos    >= 0),
   qtd_usuarios        integer     NOT NULL DEFAULT 0 CHECK (qtd_usuarios    >= 0),

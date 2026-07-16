@@ -2,9 +2,9 @@
 -- No máximo UMA assinatura viva (não cancelada) por tenant.
 
 CREATE TABLE plataforma.assinatura (
-  id_assinatura         bigint      GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-  id_tenant             bigint      NOT NULL REFERENCES plataforma.tenant (id_tenant),
-  id_plano              bigint      NOT NULL REFERENCES plataforma.plano (id_plano),
+  id_assinatura         integer      GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  id_tenant             smallint     NOT NULL REFERENCES plataforma.tenant (id_tenant),
+  id_plano              integer      NOT NULL REFERENCES plataforma.plano (id_plano),
   status                plataforma.status_assinatura NOT NULL DEFAULT 'TRIAL',
   ciclo                 plataforma.ciclo_cobranca    NOT NULL DEFAULT 'MENSAL',
   trial_expira_em       timestamptz,

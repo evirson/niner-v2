@@ -2,8 +2,9 @@
 -- tenant 1:N empresa (1:1 no v1, Q6). Toda tabela de domínio nasce com id_tenant (P8).
 
 CREATE TABLE empresa (
-  id_empresa         bigint      GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-  id_tenant          bigint      NOT NULL REFERENCES plataforma.tenant (id_tenant),
+  id_empresa         integer     GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  id_tenant          smallint    NOT NULL REFERENCES plataforma.tenant (id_tenant),
+  codigo_empresa     smallint    NOT NULL,
   razao_social       text        NOT NULL,
   nome_fantasia      text,
   cnpj               text,

@@ -2,9 +2,9 @@
 -- Valores em NUMERIC (P7). Idempotência de cobrança e de transação de gateway (P2).
 
 CREATE TABLE plataforma.fatura (
-  id_fatura           bigint        GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-  id_assinatura       bigint        NOT NULL REFERENCES plataforma.assinatura (id_assinatura),
-  id_tenant           bigint        NOT NULL REFERENCES plataforma.tenant (id_tenant),
+  id_fatura           integer       GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  id_assinatura       integer       NOT NULL REFERENCES plataforma.assinatura (id_assinatura),
+  id_tenant           smallint      NOT NULL REFERENCES plataforma.tenant (id_tenant),
   competencia         date          NOT NULL,
   valor               numeric(12,2) NOT NULL CHECK (valor >= 0),
   vencimento          date          NOT NULL,
@@ -21,8 +21,8 @@ CREATE INDEX fatura_status_vencimento_ix ON plataforma.fatura (status, venciment
 COMMENT ON TABLE plataforma.fatura IS 'Fatura/cobranca da assinatura (R14/R16). id_tenant desnormalizado para consulta.';
 
 CREATE TABLE plataforma.pagamento (
-  id_pagamento         bigint        GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-  id_fatura            bigint        NOT NULL REFERENCES plataforma.fatura (id_fatura),
+  id_pagamento         integer       GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  id_fatura            integer       NOT NULL REFERENCES plataforma.fatura (id_fatura),
   metodo               plataforma.metodo_pagamento NOT NULL,
   gateway              text,
   id_gateway_transacao text,

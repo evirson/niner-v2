@@ -11,11 +11,11 @@
 -- As tabelas de PLATAFORMA (este schema) NÃO usam esta função (são globais, P9).
 
 CREATE OR REPLACE FUNCTION plataforma.tenant_atual()
-RETURNS bigint
+RETURNS smallint
 LANGUAGE sql
 STABLE
 AS $$
-  SELECT NULLIF(current_setting('app.id_tenant', true), '')::bigint;
+  SELECT NULLIF(current_setting('app.id_tenant', true), '')::smallint;
 $$;
 
 COMMENT ON FUNCTION plataforma.tenant_atual() IS

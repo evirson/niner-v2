@@ -2,7 +2,7 @@
 -- Parâmetros da loja. Campos de crediário ficam prontos, mas o crediário é Fase 2 (Q5).
 
 CREATE TABLE cfg_geral (
-  id_tenant                 bigint      PRIMARY KEY REFERENCES plataforma.tenant (id_tenant),
+  id_tenant                 smallint     PRIMARY KEY REFERENCES plataforma.tenant (id_tenant),
   percentual_desconto_venda numeric(5,2) NOT NULL DEFAULT 0,
   juros_crediario_dias      integer      NOT NULL DEFAULT 0,   -- Fase 2 (Q5)
   juros_crediario           numeric(5,2) NOT NULL DEFAULT 0,   -- Fase 2 (Q5)

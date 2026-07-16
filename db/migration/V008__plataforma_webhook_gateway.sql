@@ -3,7 +3,7 @@
 -- único; um worker consome com FOR UPDATE SKIP LOCKED e aplica efeitos via outbox (P2).
 
 CREATE TABLE plataforma.webhook_gateway (
-  id            bigint      GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  id            integer     GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   gateway       text        NOT NULL,
   evento_id     text        NOT NULL,
   tipo          text,

@@ -2,7 +2,7 @@
 -- População separada dos usuários do tenant (identidade.usuario, migration futura).
 
 CREATE TABLE plataforma.staff (
-  id_staff   bigint      GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  id_staff   integer     GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   nome       text        NOT NULL,
   email      text        NOT NULL,
   senha_hash text        NOT NULL,              -- BCrypt/Argon2 (nunca texto puro)
@@ -17,9 +17,9 @@ CREATE UNIQUE INDEX staff_email_uk ON plataforma.staff (lower(email));
 COMMENT ON TABLE plataforma.staff IS 'Staff da plataforma (SUPER_ADMIN/SUPORTE/FINANCEIRO). JWT aud=plataforma; sem claim tid (R18).';
 
 CREATE TABLE plataforma.impersonacao_log (
-  id           bigint      GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-  id_staff     bigint      NOT NULL REFERENCES plataforma.staff (id_staff),
-  id_tenant    bigint      NOT NULL REFERENCES plataforma.tenant (id_tenant),
+  id           integer     GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  id_staff     integer     NOT NULL REFERENCES plataforma.staff (id_staff),
+  id_tenant    integer     NOT NULL REFERENCES plataforma.tenant (id_tenant),
   iniciado_em  timestamptz NOT NULL DEFAULT now(),
   encerrado_em timestamptz,
   motivo       text

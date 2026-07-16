@@ -57,6 +57,21 @@ services:
       SPRING_DATASOURCE_PASSWORD: ${DB_APP_PASSWORD:-dev_app}
     ports: ["8080:8080"]
 
+  # pgAdmin — cliente web para inspecionar o niner_db em dev. Perfil `tools` (não sobe por padrão).
+  #   docker compose --profile tools up -d pgadmin   → http://localhost:5050
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: niner-pgadmin
+    profiles: [tools]
+    depends_on:
+      db: { condition: service_healthy }
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:-dev@niner.dev}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:-dev_pgadmin}
+    volumes:
+      - pgadmin-data:/var/lib/pgadmin
+    ports: ["5050:80"]
+
   # Site público (Astro/SSG, SEO — ADR-011). Dev server na 5175. Perfil `fronts`.
   # A base-URL da API é lida em runtime (site/public/config.js).
   site:
@@ -80,3 +95,4 @@ services:
 
 volumes:
   pgdata:
+  pgadmin-data:

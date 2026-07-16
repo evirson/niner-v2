@@ -4,9 +4,9 @@
 -- deriva de `administrador` (R8); `usuario_rotina` mantém permissões finas legadas.
 
 CREATE TABLE usuario (
-  id_usuario    bigint      GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-  id_tenant     bigint      NOT NULL REFERENCES plataforma.tenant (id_tenant),
-  id_empresa    bigint      REFERENCES empresa (id_empresa),   -- empresa de lotação (opcional)
+  id_usuario    integer     GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  id_tenant     smallint    NOT NULL REFERENCES plataforma.tenant (id_tenant),
+  id_empresa    integer     REFERENCES empresa (id_empresa),   -- empresa de lotação (opcional)
   nome_usuario  text        NOT NULL,
   email         text        NOT NULL,
   senha_hash    text        NOT NULL,
@@ -20,9 +20,9 @@ CREATE TABLE usuario (
 CREATE INDEX usuario_id_tenant_ix ON usuario (id_tenant);
 
 CREATE TABLE usuario_rotina (
-  id_usuario bigint NOT NULL REFERENCES usuario (id_usuario) ON DELETE CASCADE,
-  id_tenant  bigint NOT NULL REFERENCES plataforma.tenant (id_tenant),
-  nome_rotina text  NOT NULL,
+  id_usuario integer  NOT NULL REFERENCES usuario (id_usuario), 
+  id_tenant  smallint NOT NULL REFERENCES plataforma.tenant (id_tenant),
+  nome_rotina text    NOT NULL,
   CONSTRAINT usuario_rotina_pk PRIMARY KEY (id_usuario, nome_rotina)
 );
 
