@@ -50,6 +50,14 @@ de tenant.
 > Sem isso o Ryuk (resource reaper) falha ao montar o `docker.sock`
 > (`operation not supported`).
 
+> **JDK 25 nativo instalado (2026-07-21, Windows):** Eclipse Temurin 25 instalado via
+> `winget` neste host — `./mvnw test` roda **direto**, sem container Docker/Maven,
+> bem mais rápido (~41s para 26 testes vs. o caminho abaixo, que ainda funciona como
+> fallback em máquinas sem JDK/`winget`). Terminais novos detectam `JAVA_HOME`
+> automaticamente; um terminal já aberto no momento da instalação precisa reexportar
+> `JAVA_HOME`/`PATH` manualmente ou ser reaberto (o Windows só propaga variáveis de
+> ambiente para processos novos).
+
 > **Sem JDK no host (ex.: Windows sem Java instalado) — rodar via container:** use a
 > mesma imagem do estágio de build do `Dockerfile` (`maven:3.9-eclipse-temurin-25`),
 > montando o **repo inteiro** (não só `api/` — o Flyway de teste usa `../db/migration`,
@@ -88,7 +96,16 @@ de tenant.
 - Emissão/validação de JWT (HS256, claim `tid`/`aud`) — login/signup emitem, `/api/v1` valida.
 - Migrations de domínio V013–V026 + políticas RLS (`FORCE`, V024) — ver `db/migration/README.md`.
 - **Gate P8** (isolamento cross-tenant) verde (`RlsIsolamentoTest`, Testcontainers).
-- **Módulo `cadastros.cliente`** (2026-07-20) — CRUD completo de cliente + categoria de
+- **Módulo `cadastros.cliente`** (2026-07-20/21) — CRUD completo de cliente + categoria de
   cliente (`docs/telas/cliente.md`): `/api/v1/clientes` e `/api/v1/categorias-cliente`,
-  validação de CPF/CNPJ, normalização de texto para maiúsculas, exclusão com fallback para
-  inativar (venda associada). **19 testes verdes** (`ClienteCrudTest` + suíte anterior).
+  validação de CPF/CNPJ (dígito verificador + duplicidade), normalização de texto para
+  maiúsculas, celular/WhatsApp (11 dígitos + 3º dígito = 9), data de nascimento opcional
+  (só não pode ser hoje/futuro), exclusão com fallback para inativar (venda associada).
+  **10 testes** (`ClienteCrudTest`).
+- **Módulo `comum.telaconfig`** (novo, 2026-07-21, §3.7.2) — `GET/PUT
+  /api/v1/config-tela/{chaveTela}`: configuração por tenant de quais campos aparecem e são
+  obrigatórios em cada tela, reutilizável entre telas (`docs/telas/configuracao-tela.md`).
+  Só `ADMIN` grava (403 para `OPERADOR`, checado via claim `roles` do JWT — primeira
+  autorização por papel aplicada de fato num endpoint). **5 testes**
+  (`ConfiguracaoTelaTest`).
+- **26 testes verdes no total** (Testcontainers, Postgres 18 real).

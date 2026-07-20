@@ -1,7 +1,7 @@
 # Progresso do Projeto — niner-v2
 
 Registro cronológico das decisões e entregas. Atualizar a cada marco relevante.
-**Última atualização:** 2026-07-20
+**Última atualização:** 2026-07-21
 
 ---
 
@@ -24,9 +24,10 @@ demais módulos (produto/estoque/pedido/fornecedor/funcionário) e o app `admin/
 | `db/migration/V013–V024` | Domínio do lojista (identidade, cadastros, catálogo com `sku`+`ean`, estoque com `reservado`/`disponivel`, vendas, canais, pedidos, integração/outbox, cfg_geral) + **RLS de domínio** (`FORCE` + política por `id_tenant`). **Gate P8 verde** (teste de isolamento cross-tenant automatizado). **Revisado em 2026-07-16** (ver linha do tempo): tipos padronizados (`id_tenant SMALLINT`, demais PKs `INTEGER`), sem `ON DELETE CASCADE`, ledger de estoque imutável via `REVOKE`, e-mail case-insensitive, fix de bootstrap (`GRANT CREATE ON SCHEMA public`) |
 | `db/migration/V025` | **`financeiro` parcial (revisão de Q5/ADR-010, ADR-012):** crediário (`tipo_carteira`, `moeda`, `moeda_detalhe`, `contas_receber`/`contas_receber_detalhe`) + caixa (`caixa_mestre`/`caixa_detalhe`). RLS próprio no arquivo (V024 já tinha rodado). Seed de `moeda` por tenant implementado no `SignupService`. **Aplicada e validada em banco real em 2026-07-16** (RLS `ENABLE`+`FORCE` confirmado nas 7 tabelas; moedas semeadas no signup conferidas via `psql`). |
 | `db/migration/V026` | **`contas_pagar`** (mais uma revisão de Q5/ADR-010/ADR-012): PK `id_conta_pagar` (renomeada de `localizador`), `nota_fiscal integer` nullable sem `DEFAULT 0` (padronização que também corrigiu `produto_movimento_mestre.nota_fiscal`, V019, de `text` para `integer`). RLS próprio no arquivo. Só `conta_corrente*` segue fora do v1. **Aplicada e validada em banco real em 2026-07-16** (schema/FKs/RLS conferidos via `psql`) |
-| `api/` | Spring Boot 4.0.7 / Java 25 (Maven). 3 superfícies com `SecurityFilterChain` separados; `TenantContext` (`ScopedValue`) + `TenantAwareTransactionManager`; **auth JWT HS256** (login/signup emitem, `/api/v1` valida `aud=tenant`); **trial self-service** (`POST /api/publico/assinar` → tenant+configs+moedas+ADMIN+assinatura TRIAL + token), `POST /api/publico/login`, `GET /api/v1/eu`. **Módulo `cadastros.cliente` (novo, 2026-07-20):** CRUD completo de `GET/POST/PUT/DELETE /api/v1/clientes` + `GET/POST/PUT /api/v1/categorias-cliente`, validação de CPF/CNPJ (dígito verificador), normalização de texto para maiúsculas (defesa em profundidade), exclusão com fallback para inativar quando há venda associada. **19 testes verdes** (Testcontainers, 8 novos de `ClienteCrudTest`) + fluxo **verificado ao vivo** contra o banco recriado (2026-07-20). Persistência: **Spring Data JDBC**. Falta: domínio dos demais módulos (produto/estoque/pedido/fornecedor/funcionário) |
+| `db/migration/V027` | **`cfg_tela_campo`** (novo, 2026-07-21) — configuração por tenant de campos visíveis/obrigatórios por tela (`chave_tela`), reutilizável para qualquer tela futura. RLS próprio no arquivo. **Migration aditiva** — aplicada sem recriar o banco (`docker compose run --rm flyway`, só essa migration rodou). |
+| `api/` | Spring Boot 4.0.7 / Java 25 (Maven). 3 superfícies com `SecurityFilterChain` separados; `TenantContext` (`ScopedValue`) + `TenantAwareTransactionManager`; **auth JWT HS256** (login/signup emitem, `/api/v1` valida `aud=tenant`); **trial self-service** (`POST /api/publico/assinar` → tenant+configs+moedas+ADMIN+assinatura TRIAL + token), `POST /api/publico/login`, `GET /api/v1/eu`. **Módulo `cadastros.cliente` (2026-07-20/21):** CRUD completo de `GET/POST/PUT/DELETE /api/v1/clientes` + `GET/POST/PUT /api/v1/categorias-cliente`, validação de CPF/CNPJ (dígito verificador + duplicidade), normalização de texto para maiúsculas, celular/WhatsApp (11 dígitos + 3º=9), nascimento opcional (só não pode ser futuro), exclusão com fallback para inativar quando há venda associada. **Módulo `comum.telaconfig` (novo, 2026-07-21):** `GET/PUT /api/v1/config-tela/{chaveTela}` — quais campos aparecem/são obrigatórios por tenant, reutilizável entre telas; só ADMIN grava (403 para OPERADOR, checado a partir do claim `roles` do JWT). **26 testes verdes** (Testcontainers: `ClienteCrudTest` 10, `ConfiguracaoTelaTest` 5, + suíte anterior) + fluxo **verificado ao vivo**. Persistência: **Spring Data JDBC**. Falta: domínio dos demais módulos (produto/estoque/pedido/fornecedor/funcionário) |
 | `site/` | Site público (Astro/SSG, ADR-011). **Home institucional "matadora"** (posicionamento concorrente do Bling): hero com painel animado + demo de sincronização, faixa de stats com contadores, contraste problema→solução, 3 passos, 6 recursos, canais (ML/Shopee/Amazon/balcão), planos (preços via `/api/publico/planos`), FAQ e CTA — tudo em CSS/SVG puro com **scroll-reveal** e **prefers-reduced-motion** (sem novas deps). Sistema visual em `src/styles/site.css` portado do golden `nainer_institucional`. `/assinar` (form → `POST /api/publico/assinar` → auto-login → `/bem-vindo`) e `/bem-vindo` mantidos. **Trial 60 dias** em toda a copy. Tema claro/escuro persistido. **Build SSG ok**; hero/reveal/contadores verificados via Playwright |
-| `web/` | ERP do lojista (React 19 + Vite + TS). Auth JWT (login slug+email+senha; **handoff SSO** do site via `#token=`), shell (nav Painel/Produtos/Estoque/Pedidos/Canais/**Clientes** + Sair), **Painel** real (`GET /api/v1/eu` via TanStack Query). **Tela de Clientes completa (nova, 2026-07-20):** listagem com busca/filtro/paginação por cursor, formulário com grid de 12 colunas (§3.7), máscaras de CPF/CNPJ/telefone/CEP com validação de dígito verificador, autopreenchimento de endereço via ViaCEP, modal embutido de categoria (criar/renomear), exclusão com confirmação em modal próprio (sem `confirm()`/`alert()` nativos), `AjudaDaTela` (R22), convenção de **texto sempre em maiúsculas** e **foco automático** no primeiro campo. Demais áreas (Produtos/Estoque/Pedidos/Canais) ainda placeholder. Design tokens §3.7 (claro/escuro). **Build ok**; fluxo **e2e verificado no navegador**. |
+| `web/` | ERP do lojista (React 19 + Vite + TS). Auth JWT (login slug+email+senha; **handoff SSO** do site via `#token=`), shell (nav Painel/Produtos/Estoque/Pedidos/Canais/**Clientes** + Sair), **Painel** real (`GET /api/v1/eu` via TanStack Query). **Tela de Clientes completa** (2026-07-20/21): listagem com busca/filtro/paginação por cursor, formulário com grid de 12 colunas (§3.7) largura total (`.app-main` 1600px), máscaras com validação de dígito verificador/formato/duplicidade, validação por campo (blur + submit), pop-up de erro vermelho (`Toast.tsx`), autopreenchimento de endereço via ViaCEP, modal embutido de categoria, exclusão com confirmação em modal próprio, `AjudaDaTela` (R22), convenções de **maiúsculas sempre** e **foco automático**. **Tela de configuração de campos (nova, 2026-07-21):** `ConfiguracaoTelaCliente.tsx` (`/clientes/configuracao`, só `ADMIN` — `RequireAdmin.tsx`), acessível pelo ícone ⚙ ao lado da ajuda; o formulário lê essa config (`lib/configuracaoTela.ts`) e ajusta visibilidade/obrigatoriedade dos campos em tempo real. Demais áreas (Produtos/Estoque/Pedidos/Canais) ainda placeholder. Design tokens §3.7 (claro/escuro). **Build ok**; fluxo **e2e verificado no navegador**. |
 | `admin/` | Ainda não criado (backoffice React 19 + Vite) |
 
 **Stack alvo:** Java 25 + Spring Boot 4.x · PostgreSQL 18 (Docker, banco **`niner_db`**) · React 19 + Vite (3 apps) · Flyway · JWT. **SaaS multi-tenant** (banco único + `id_tenant` + Postgres RLS).
@@ -34,6 +35,124 @@ demais módulos (produto/estoque/pedido/fornecedor/funcionário) e o app `admin/
 ---
 
 ## Linha do tempo
+
+### 2026-07-21 — Ícones maiores (ajuda/configuração) + grid que se reajusta ao ocultar campo
+
+Dois ajustes de polimento visual, só frontend (sem mudança de backend/migration):
+
+1. **Ícones reais (Heroicons, MIT) no lugar de texto/emoji.** `web/src/components/Icones.tsx`
+   (novo) exporta `IconeAjuda` e `IconeEngrenagem` com o SVG original de
+   `cog-6-tooth`/`question-mark-circle` (baixado do repositório oficial
+   `tailwindlabs/heroicons`). Substituem o `?` de texto (`AjudaDaTela.tsx`) e o `⚙` de texto
+   (`ClienteForm.tsx`/`ClienteLista.tsx`). O botão `.ajuda-gatilho` (`styles.css`) cresceu de
+   34×34px para **46×46px**, ganhou fundo (`--surface-2`), borda e estado de hover/active
+   mais visível — pedido explícito do usuário por ícones "maiores e mais visíveis".
+
+2. **Grid se reajusta quando um campo fica oculto.** Antes, ocultar um campo pela tela de
+   configuração (`/clientes/configuracao`) deixava um vão vazio na linha (ex.: ocultar RG
+   fazia CPF/Nascimento/Gênero ficarem alinhados à esquerda com um buraco de 3 colunas à
+   direita). Agora cada linha configurável do formulário usa o componente novo
+   `LinhaGrid.tsx` + função `distribuirSpans()` (`lib/grid.ts`): os pesos relativos dos
+   campos visíveis (mesma escala dos antigos `col-N`) são redistribuídos para somar sempre
+   **12 colunas exatas**, via método dos maiores restos (evita erro de arredondamento). As
+   6 linhas do formulário que têm campo configurável passaram a usar `LinhaGrid`:
+   CPF/RG/Nascimento/Gênero · E-mail/Celular/Id. WhatsApp · Instagram/Facebook/TikTok ·
+   CEP/Endereço · Número/Complemento/Bairro · Cidade/UF.
+
+3. **Verificação:** `tsc -b` sem erros; testado ao vivo — com RG, Id. WhatsApp e Instagram
+   já ocultos (configuração salva de teste anterior), os campos restantes de cada linha
+   cresceram para preencher o espaço (ex.: CPF/Nascimento/Gênero cada um a 1/3 da linha em
+   vez de 1/4 com vão vazio), e os ícones de ajuda/configuração aparecem maiores no canto
+   superior direito com fundo circular.
+
+### 2026-07-21 — Configuração de tela (campos visíveis/obrigatórios), reutilizável entre telas
+
+Nova capacidade **transversal** (não é só do Cliente): o lojista (ADMIN) passa a poder
+escolher, por tenant, quais campos aparecem e quais são obrigatórios em cada tela do
+produto — pedido explicitamente como algo a reaproveitar nas "próximas telas" que vão ser
+desenvolvidas. Ver `docs/telas/configuracao-tela.md` (spec completa).
+
+1. **Migration nova (`V027__cfg_tela_campo.sql`)** — não mexe em nenhuma migration já
+   aplicada; o dev **não recriou o banco**, só rodou `docker compose run --rm flyway` (que
+   aplicou apenas a V027 em cima do schema já existente). Tabela `cfg_tela_campo`
+   (`id_tenant, chave_tela, campo` → `visivel`, `obrigatorio`), RLS próprio no arquivo,
+   `CHECK` impedindo campo obrigatório e oculto ao mesmo tempo.
+
+2. **Backend — módulo novo `comum.telaconfig`** (não é `cadastros.cliente`, é
+   propositalmente genérico): `ConfiguracaoTelaController`/`Service` —
+   `GET/PUT /api/v1/config-tela/{chaveTela}`. O registro de quais campos são configuráveis
+   em cada tela é um mapa estático no serviço (`CAMPOS_POR_TELA`); a primeira entrada é
+   `cadastros.cliente.form`, com os 16 campos "de negócio" do formulário (CPF/CNPJ até
+   Limite de crédito — Nome/Categoria são `NOT NULL` no banco e não entram; Data de
+   nascimento/Gênero têm regra própria já fechada e também não entram). Reaproveita a
+   convenção `chave_tela` já usada pelo catálogo de ajuda (R22). **Só ADMIN grava** — `403`
+   para `OPERADOR`, checado a partir do claim `roles` do JWT (primeira vez que uma
+   autorização por papel é de fato aplicada no projeto; R8 tinha essa intenção mas nunca
+   tinha sido implementada em nenhum endpoint até agora). Qualquer usuário do tenant **lê**
+   (o formulário precisa saber como se renderizar não importa o papel). **5 testes novos**
+   (`ConfiguracaoTelaTest`): default sem configuração, ADMIN salva e o GET reflete, OPERADOR
+   é rejeitado, campo não configurável é rejeitado, obrigatório+oculto é rejeitado.
+
+3. **Frontend:** `ConfiguracaoTelaCliente.tsx` (`/clientes/configuracao`) — tabela com
+   checkbox Visível/Obrigatório por campo (Obrigatório desabilita se Visível estiver
+   desmarcado, refletindo a regra do banco). `RequireAdmin.tsx` (novo, mesmo padrão de
+   `RequireAuth.tsx`) protege a rota — `OPERADOR` que acessar a URL direto volta pro Painel.
+   Ícone **⚙** ao lado do `?` de ajuda (`ClienteForm` e `ClienteLista`), visível só para
+   `ADMIN` (checado via `useEu()`, hook novo compartilhado — `Dashboard.tsx` também
+   refatorado pra usá-lo, em vez de duplicar a query). `ClienteForm` passou a ler a
+   configuração (`lib/configuracaoTela.ts`) e aplicar visibilidade/obrigatoriedade em tempo
+   real: campo oculto some do formulário (e da validação); campo obrigatório ganha `*` no
+   rótulo e passa a bloquear submit se vazio — em cima da validação por campo já existente
+   (blur + submit) da rodada anterior.
+
+4. **Verificação:** 26 testes de backend verdes; testado ao vivo no navegador — ocultar
+   Instagram fez o campo sumir do formulário, marcar E-mail como obrigatório fez aparecer
+   `*` no rótulo e bloquear o campo vazio (mensagem "Campo obrigatório." no blur e no
+   submit).
+
+### 2026-07-21 — Cliente: validações de UX (foco, tab, CEP, pop-up, campo a campo) + regras de negócio (nascimento, celular)
+
+Duas rodadas de refinamento pedidas pelo dono do produto depois de testar a tela manualmente
+(ver rodada de 2026-07-20 abaixo), sem mudança de escopo — só a tela de Cliente ficando mais
+madura. Nenhum código novo de módulo; tudo em `cadastros.cliente` e `web/`.
+
+**Rodada 1 — UX de formulário:**
+1. Foco automático agora vai para o campo **Nome** (não mais o checkbox "Cliente ativo",
+   que continua sendo o primeiro campo visualmente, só não recebe o foco).
+2. Botão "＋ Nova categoria" saiu da ordem de tabulação (`tabIndex={-1}`) — com a categoria
+   já escolhida, Tab vai direto para o CPF/CNPJ.
+3. CEP: mensagem "CEP inválido." tanto para formato incompleto (menos de 8 dígitos, ao sair
+   do campo) quanto para CEP não encontrado no ViaCEP (verificado assim que completa 8
+   dígitos, sem esperar o blur).
+4. **Pop-up de erro** (`web/src/components/Toast.tsx`, canto superior direito, fecha sozinho
+   ou no clique) substitui a mensagem que ficava no rodapé da página — usado no formulário de
+   cliente e no modal de categoria. Depois pedido para ficar **vermelho sólido com letras
+   brancas** (antes era neutro com borda vermelha).
+5. **Validação por campo**, não mais uma mensagem genérica só no rodapé: cada campo valida
+   ao sair dele (`onBlur`) e de novo no submit; erro aparece embaixo do campo específico.
+   `noValidate` no `<form>` para a validação customizada substituir a nativa do HTML5.
+
+**Rodada 2 — regras de negócio + layout:**
+6. **Data de nascimento**: não pode ser hoje nem no futuro (quando preenchida) — validado no
+   front e no back. **Depois revisto: deixou de ser obrigatória** mesmo para pessoa física
+   (só o gênero continua obrigatório) — a constraint `cliente_dados_pessoais_ck` (V016) foi
+   **editada** (banco ainda em construção) para exigir só `genero IS NOT NULL`; banco
+   recriado do zero para aplicar. Backend (`ClienteService.validar`) e frontend acompanham.
+7. **Celular/WhatsApp**: exigem 11 dígitos com o 3º dígito = 9 (padrão de celular BR) quando
+   preenchidos. Rótulo "Telefone" virou **"Celular"**; rótulo "WhatsApp" virou **"Id.
+   WhatsApp"**, com máscara própria (`mascararIdWhatsapp`, prefixo `@` + dígitos, mesma
+   convenção visual de Instagram/Facebook/TikTok) em vez do formato `(00) 00000-0000`.
+8. **CPF/CNPJ duplicado**: ao sair do campo, verifica se já existe outro cliente com aquele
+   documento (reaproveita `GET /api/v1/clientes?cpfCnpj=...&status=TODOS`, sem endpoint
+   novo) e avisa; na edição, ignora o próprio registro.
+9. **Layout horizontal**: `.app-main` (largura útil do conteúdo, todas as telas) foi de
+   `900px` para `1600px` — o formulário de cliente reaproveita o espaço juntando Nome +
+   Categoria numa linha e CPF + RG + Data de nascimento + Gênero na linha seguinte, em vez de
+   empilhado.
+
+**Verificação:** 21 testes de backend verdes (2 novos: nascimento no futuro rejeitado;
+pessoa física sem nascimento mas com gênero aceita). Todo o resto (foco, tab, CEP, pop-up,
+validação por campo, celular, WhatsApp, CPF duplicado, layout) testado ao vivo no navegador.
 
 ### 2026-07-20 — Primeira tela de domínio: Clientes (CRUD ponta a ponta) + convenções de UI
 

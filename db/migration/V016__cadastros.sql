@@ -40,9 +40,11 @@ CREATE TABLE cliente (
   criado_em            timestamptz   NOT NULL DEFAULT now(),
   atualizado_em        timestamptz   NOT NULL DEFAULT now(),
   CONSTRAINT cliente_documento_uk UNIQUE (id_tenant, cpf_cnpj),
-  -- data_nascimento/genero obrigatórios só para pessoa física; PJ não tem nascimento/gênero.
+  -- genero obrigatório só para pessoa física; PJ não tem gênero. data_nascimento é sempre
+  -- opcional (2026-07-21) — quando preenchida, a validade (não pode ser hoje/futuro) fica
+  -- por conta da aplicação, não do banco.
   CONSTRAINT cliente_dados_pessoais_ck CHECK (
-    NOT fisica_juridica OR (data_nascimento IS NOT NULL AND genero IS NOT NULL)
+    NOT fisica_juridica OR genero IS NOT NULL
   ),
   -- FK composta (2026-07-16, P8) — ver comentário em usuario_empresa_fk (V015).
   CONSTRAINT cliente_categoria_fk FOREIGN KEY (id_tenant, id_categoria_cliente)

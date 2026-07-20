@@ -117,7 +117,18 @@ input:focus-visible, select:focus-visible {
 }
 
 /* Ajuda da tela (R22) e modais */
-.ajuda-gatilho { border-radius: 999px; width: 34px; height: 34px; padding: 0; font-weight: 700; }
+.ajuda-gatilho {
+  border-radius: 999px; width: 46px; height: 46px; padding: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--surface-2); border: 1px solid var(--line-strong); color: var(--ink-muted);
+  transition: color .15s, border-color .15s, background-color .15s, transform .1s;
+}
+.ajuda-gatilho svg { width: 26px; height: 26px; }
+.ajuda-gatilho:hover {
+  color: var(--accent); border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+.ajuda-gatilho:active { transform: scale(0.94); }
 .modal-overlay {
   position: fixed; inset: 0; background: rgba(0, 0, 0, .45);
   display: flex; align-items: center; justify-content: center; padding: 20px; z-index: 100;
@@ -152,7 +163,7 @@ input:focus-visible, select:focus-visible {
 }
 .app-nav a:hover { background: var(--surface-2); color: var(--ink); }
 .app-nav a.active { background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--accent); }
-.app-main { flex: 1; padding: 28px; max-width: 900px; }
+.app-main { flex: 1; padding: 28px; max-width: 1600px; }
 
 /* Login */
 .login-wrap { min-height: 100vh; display: grid; place-items: center; padding: 20px; }
@@ -170,8 +181,34 @@ input:focus-visible, select:focus-visible {
 .col-9 { grid-column: span 9; }
 .col-12 { grid-column: span 12; }
 
+/* Formulário de cadastro (cliente e demais telas) — usa a largura toda do app-main. */
+.form-secoes-larga { max-width: none; }
+
+/* Erro por campo (validado no blur e no submit — docs/telas/cliente.md) */
+.erro-campo { color: var(--danger); font-size: 12px; margin: 4px 0 0; }
+
+/* Pop-up de erro/aviso — vermelho sólido com letras brancas, para chamar atenção
+   (substitui a mensagem que ficava no rodapé da página). */
+.toast {
+  position: fixed; top: 20px; right: 20px; z-index: 200; max-width: 360px;
+  display: flex; align-items: flex-start; gap: 12px;
+  background: var(--danger); border: none;
+  border-radius: var(--radius); padding: 14px 16px; box-shadow: 0 8px 24px rgba(0, 0, 0, .35);
+  color: #fff; font-size: 14px; font-weight: 500; animation: toast-entrada .2s ease-out;
+}
+.toast-fechar {
+  background: none; border: 0; color: #fff; opacity: .85; font-size: 18px; line-height: 1;
+  cursor: pointer; padding: 0; margin-left: auto;
+}
+.toast-fechar:hover { opacity: 1; }
+@keyframes toast-entrada {
+  from { opacity: 0; transform: translateY(-8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
 @media (max-width: 640px) {
   .app-body { flex-direction: column; }
   .app-nav { width: auto; flex-direction: row; overflow-x: auto; border-right: 0; border-bottom: 1px solid var(--line); }
   .form-grid > * { grid-column: span 12 !important; }
+  .toast { left: 20px; right: 20px; max-width: none; }
 }

@@ -34,9 +34,12 @@ seguem o contrato REST (snake_case do banco → camelCase no JSON, padrão dos d
 já implementados, ex. `OnboardingDtos`).
 
 **Ordem de exibição no formulário (2026-07-20, pedido do dono do produto):** `ativo` é o
-**primeiro campo da tela**, antes até do tipo de pessoa — e o formulário já abre com foco
-automático nele (`autoFocus`), tanto ao incluir quanto ao editar. Os demais campos seguem a
-tabela abaixo.
+**primeiro campo da tela**, antes até do tipo de pessoa, e aparece tanto ao incluir quanto ao
+editar. Os demais campos seguem a tabela abaixo.
+
+**Foco automático (revisto 2026-07-21):** o foco automático ao abrir a tela vai para o campo
+**Nome** — não mais para o checkbox "Cliente ativo" (que continua sendo o primeiro campo
+visualmente, só deixou de receber o foco).
 
 | Campo (banco) | Rótulo na tela | Componente | Máscara / formato | Tamanho na tela | Obrigatório | Regra |
 |---|---|---|---|---|---|---|
@@ -46,11 +49,11 @@ tabela abaixo.
 | `id_categoria_cliente` | Categoria | select (+ "＋ Nova categoria") | — | linha própria | **Sim** (NOT NULL no banco) | Ver seção "Categoria de cliente" abaixo |
 | `cpf_cnpj` | CPF / CNPJ | texto | `000.000.000-00` (PF) / `00.000.000/0000-00` (PJ), conforme `fisica_juridica` | 1/3 da linha | Não (nullable no banco) | Se preenchido: **valida dígito verificador** (algoritmo oficial); único por tenant quando preenchido |
 | `rg_ie` | RG / Inscrição Estadual | texto | — | 1/3 da linha (junto do CPF/CNPJ) | Não | Label muda para "Inscrição Estadual" quando Jurídica |
-| `data_nascimento` | Data de nascimento | date picker | `dd/mm/aaaa` | 1/3 da linha | **Condicional: obrigatório se Física** (CHECK do banco) | Campo **oculto** quando Jurídica |
+| `data_nascimento` | Data de nascimento | date picker | `dd/mm/aaaa` | 1/3 da linha | **Não** (2026-07-21 — deixou de ser obrigatória mesmo p/ Física) | Campo **oculto** quando Jurídica; quando preenchida, **não pode ser hoje nem no futuro** (validado no front e no back) |
 | `genero` | Gênero | select: Masculino / Feminino / Outros | — | 1/3 da linha (junto da data) | **Condicional: obrigatório se Física** (CHECK do banco) | Campo **oculto** quando Jurídica |
 | `email` | E-mail | texto | validação de formato e-mail (client-side) | metade da linha | Não | Única exceção à convenção de maiúsculas (item "Maiúsculas" abaixo) |
-| `telefone` | Telefone | texto | `(00) 0000-0000` ou `(00) 00000-0000` (aceita fixo e celular) | 1/4 da linha | Não | |
-| `whatsapp` | WhatsApp | texto | mesma máscara de telefone (só número, com DDD) | 1/4 da linha | Não | |
+| `telefone` | **Celular** (renomeado 2026-07-21, era "Telefone") | texto | `(00) 00000-0000` | 1/4 da linha | Não | Quando preenchido: **11 dígitos com o 3º dígito = 9** (padrão de celular BR) |
+| `whatsapp` | **Id. WhatsApp** (renomeado 2026-07-21, era "WhatsApp") | texto | `@` + dígitos (ex.: `@11999998888`, mesma convenção visual de Instagram/Facebook/TikTok) | 1/4 da linha | Não | Mesma regra do Celular (11 dígitos, 3º = 9) — só muda a máscara visual |
 | `instagram` | Instagram | texto | `@usuario` (sem link completo) | 1/3 da linha | Não | |
 | `facebook` | Facebook | texto | `@usuario` ou nome da página | 1/3 da linha | Não | |
 | `tiktok` | TikTok | texto | `@usuario` | 1/3 da linha | Não | |
@@ -71,6 +74,13 @@ Limite de crédito, Telefone/WhatsApp) dividem a linha com outros campos em vez 
 largura toda, para caber mais campos por linha. Nome/Razão Social e Categoria continuam em
 linha própria (podem ser longos). Colapsa para 1 coluna em telas ≤640px.
 
+**Grid se reajusta quando um campo é ocultado (2026-07-21):** para os campos configuráveis
+pela tela de configuração (`docs/telas/configuracao-tela.md`), ocultar um campo não deixa
+vão vazio na linha — os campos restantes da mesma linha crescem proporcionalmente para
+preencher as 12 colunas (`web/src/components/LinhaGrid.tsx` + `lib/grid.ts:distribuirSpans`,
+método dos maiores restos). Ex.: ocultando RG/Inscrição Estadual, CPF/CNPJ, Data de
+nascimento e Gênero passam de 3 colunas cada para 4 colunas cada.
+
 **Maiúsculas (2026-07-20, convenção de todo o projeto — ver spec §3.7):** todo campo de
 texto livre deste formulário (nome, RG/IE, redes sociais, endereço, número, complemento,
 bairro, cidade) é normalizado para **MAIÚSCULAS**, não importa o estado do teclado do
@@ -79,6 +89,20 @@ usuário — inclusive o endereço vindo do autopreenchimento por CEP (ViaCEP). 
 profundidade). **Única exceção: e-mail**, que mantém a caixa digitada pelo usuário. Campos
 não-texto (select, data, checkbox, CPF/CNPJ/telefone/CEP mascarados como dígitos) não se
 aplicam.
+
+**Validação por campo (2026-07-21):** cada campo com regra própria (Nome, Categoria,
+CPF/CNPJ, Data de nascimento, Gênero, E-mail, Celular, Id. WhatsApp, CEP) valida **ao sair do
+campo** (`blur`) e **de novo no submit** — não só no submit. Mensagem de erro aparece embaixo
+do campo específico (`.erro-campo`), não mais uma mensagem genérica só no rodapé. O CPF/CNPJ,
+além do dígito verificador, também **verifica se já existe outro cliente com aquele
+documento** ao sair do campo (reaproveita `GET /api/v1/clientes?cpfCnpj=...`, sem endpoint
+novo; na edição ignora o próprio registro). Erros de submissão que não são de um campo
+específico (ex.: falha de rede, conflito do servidor) aparecem como um **pop-up** no canto
+superior direito (vermelho sólido, letras brancas — `web/src/components/Toast.tsx`), não mais
+no rodapé da página.
+
+**Tab pula o botão de categoria (2026-07-21):** "＋ Nova categoria" tem `tabIndex={-1}` — com
+a categoria já escolhida, `Tab` vai direto da Categoria para o CPF/CNPJ.
 
 ## Categoria de cliente (`cfg_categoria_cliente`)
 
@@ -123,10 +147,15 @@ inativa em vez de excluir.**
 
 ## Critérios de aceitação (viram testes)
 
-- Dado um formulário de cliente Pessoa Física sem data de nascimento, quando salvo, então a
-  API rejeita com Problem Details (campo obrigatório para PF).
+- Dado um formulário de cliente Pessoa Física sem gênero, quando salvo, então a API rejeita
+  com Problem Details (gênero é obrigatório para PF; data de nascimento não é).
+- Dado um formulário de cliente Pessoa Física sem data de nascimento mas com gênero, quando
+  salvo, então é aceito normalmente (2026-07-21 — nascimento é sempre opcional).
 - Dado um formulário de cliente Pessoa Jurídica, quando salvo sem data de nascimento/gênero,
   então é aceito normalmente (campos não se aplicam a PJ).
+- Dado uma data de nascimento igual a hoje ou no futuro, quando salvo, então a API rejeita.
+- Dado um celular/Id. WhatsApp preenchido com menos de 11 dígitos ou 3º dígito diferente de
+  9, quando o campo perde o foco, então mostra erro de formato.
 - Dado um CPF com formato válido mas dígito verificador incorreto, quando salvo, então a API
   rejeita antes de chegar ao banco.
 - Dado um cliente sem `id_categoria_cliente` meio de uma requisição, quando salvo, então é
@@ -195,10 +224,14 @@ fallback estático, mas a tela já nasce com o gatilho de ajuda presente).
 ## Impacto no banco
 
 `cliente` e `cfg_categoria_cliente` já existiam (V016), com RLS ativo (V024). Nenhuma
-migration **nova** — mas em 2026-07-20, com o banco ainda em construção, a migration V016
-foi **editada** para adicionar `cliente.complemento` (`text`, nullable, entre `numero` e
-`bairro`), exigindo recriar o banco de dev do zero (`docker volume rm niner_pgdata` +
-`flyway migrate`) para aplicar a mudança à migration já rodada. Ver `db/migration/README.md`.
+migration **nova** — mas com o banco ainda em construção, a migration V016 foi **editada**
+duas vezes, cada uma exigindo recriar o banco de dev do zero (`docker volume rm niner_pgdata`
++ `flyway migrate`) para aplicar a mudança a uma migration já rodada. Ver
+`db/migration/README.md`.
+- **2026-07-20:** adiciona `cliente.complemento` (`text`, nullable, entre `numero` e `bairro`).
+- **2026-07-21:** relaxa `cliente_dados_pessoais_ck` — antes exigia `data_nascimento IS NOT
+  NULL AND genero IS NOT NULL` para pessoa física, agora só exige `genero IS NOT NULL`
+  (data de nascimento passou a ser sempre opcional).
 
 ## Impacto nas integrações
 

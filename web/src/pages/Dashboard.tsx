@@ -1,25 +1,14 @@
-import { useQuery } from '@tanstack/react-query'
 import { useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { api, ApiError } from '../lib/api'
+import { ApiError } from '../lib/api'
 import { useAuth } from '../lib/auth'
-
-interface Eu {
-  id_tenant: number
-  conta: { nomeConta: string; slug: string; status: string }
-  usuario: { nome: string; email: string; papel: string }
-  trial_expira_em: string | null
-}
+import { useEu } from '../lib/eu'
 
 /** Painel inicial: dá as boas-vindas e mostra o estado da conta/assinatura (via /api/v1/eu). */
 export default function Dashboard() {
   const { logout } = useAuth()
   const navigate = useNavigate()
-  const { data, isLoading, error } = useQuery({
-    queryKey: ['eu'],
-    queryFn: () => api<Eu>('/api/v1/eu'),
-    retry: false,
-  })
+  const { data, isLoading, error } = useEu()
 
   useEffect(() => {
     if (error instanceof ApiError && error.status === 401) {

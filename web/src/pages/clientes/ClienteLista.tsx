@@ -2,6 +2,7 @@ import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tansta
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import AjudaDaTela from '../../components/AjudaDaTela'
+import { IconeEngrenagem } from '../../components/Icones'
 import { ApiError } from '../../lib/api'
 import {
   excluirCliente,
@@ -10,7 +11,8 @@ import {
   type Cliente,
   type StatusCliente,
 } from '../../lib/clientes'
-import { mascararCpfCnpj, mascararTelefone } from '../../lib/masks'
+import { useEu } from '../../lib/eu'
+import { mascararCpfCnpj, mascararIdWhatsapp, mascararTelefone } from '../../lib/masks'
 
 export default function ClienteLista() {
   const [nome, setNome] = useState('')
@@ -48,6 +50,8 @@ export default function ClienteLista() {
   })
 
   const clientes: Cliente[] = data?.pages.flatMap((p) => p.itens) ?? []
+  const { data: eu } = useEu()
+  const ehAdmin = eu?.usuario.papel === 'ADMIN'
 
   return (
     <div>
@@ -57,6 +61,16 @@ export default function ClienteLista() {
           <h1 style={{ marginTop: 4 }}>Clientes</h1>
         </div>
         <div className="topbar-acoes">
+          {ehAdmin && (
+            <Link
+              className="btn ghost ajuda-gatilho"
+              to="/clientes/configuracao"
+              aria-label="Configurar tela de cliente"
+              title="Configurar campos desta tela"
+            >
+              <IconeEngrenagem />
+            </Link>
+          )}
           <AjudaDaTela chaveTela="cadastros.cliente.lista" />
           <Link className="btn" to="/clientes/novo">
             ＋ Novo cliente
@@ -111,7 +125,7 @@ export default function ClienteLista() {
                 <th>Nome / Razão Social</th>
                 <th>CPF/CNPJ</th>
                 <th>Categoria</th>
-                <th>Telefone</th>
+                <th>Celular</th>
                 <th>Cidade/UF</th>
                 <th>Status</th>
                 <th aria-label="Ações" />
@@ -124,7 +138,7 @@ export default function ClienteLista() {
                   <td className="mono">{c.cpfCnpj ? mascararCpfCnpj(c.cpfCnpj, c.fisicaJuridica) : '—'}</td>
                   <td>{c.nomeCategoria}</td>
                   <td className="mono">
-                    {c.telefone ? mascararTelefone(c.telefone) : c.whatsapp ? mascararTelefone(c.whatsapp) : '—'}
+                    {c.telefone ? mascararTelefone(c.telefone) : c.whatsapp ? mascararIdWhatsapp(c.whatsapp) : '—'}
                   </td>
                   <td>{c.cidade ? `${c.cidade}${c.estado ? '/' + c.estado : ''}` : '—'}</td>
                   <td>

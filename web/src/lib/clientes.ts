@@ -1,5 +1,5 @@
 import { api } from './api'
-import { mascararCep, mascararCpfCnpj, mascararTelefone, somenteDigitos } from './masks'
+import { mascararCep, mascararCpfCnpj, mascararIdWhatsapp, mascararTelefone, somenteDigitos } from './masks'
 import { maiusculas } from './texto'
 
 export type Genero = 'MASCULINO' | 'FEMININO' | 'OUTROS'
@@ -101,7 +101,7 @@ export function paraFormulario(c: Cliente): ClienteFormState {
     genero: c.genero ?? '',
     email: c.email ?? '',
     telefone: c.telefone ? mascararTelefone(c.telefone) : '',
-    whatsapp: c.whatsapp ? mascararTelefone(c.whatsapp) : '',
+    whatsapp: c.whatsapp ? mascararIdWhatsapp(c.whatsapp) : '',
     instagram: c.instagram ?? '',
     facebook: c.facebook ?? '',
     tiktok: c.tiktok ?? '',
@@ -185,6 +185,17 @@ export function listarClientes(filtros: FiltrosClientes): Promise<PaginaClientes
 
 export function buscarCliente(id: number): Promise<Cliente> {
   return api<Cliente>(`/api/v1/clientes/${id}`)
+}
+
+/**
+ * Verifica se já existe cliente com esse CPF/CNPJ (validado na saída do campo —
+ * docs/telas/cliente.md). Reaproveita a listagem existente, sem endpoint novo.
+ * `ignorarIdCliente` evita falso positivo ao editar o próprio cliente.
+ */
+export async function cpfCnpjJaExiste(cpfCnpjDigitos: string, ignorarIdCliente?: number): Promise<boolean> {
+  if (!cpfCnpjDigitos) return false
+  const pagina = await listarClientes({ cpfCnpj: cpfCnpjDigitos, status: 'TODOS' })
+  return pagina.itens.some((c) => c.idCliente !== ignorarIdCliente)
 }
 
 export function criarCliente(payload: ReturnType<typeof paraRequisicao>): Promise<Cliente> {

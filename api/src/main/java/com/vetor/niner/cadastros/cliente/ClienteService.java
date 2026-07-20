@@ -186,9 +186,13 @@ public class ClienteService {
     }
 
     private void validar(ClienteRequest req) {
-        if (req.fisicaJuridica() && (req.dataNascimento() == null || req.genero() == null)) {
-            throw new IllegalArgumentException(
-                    "Data de nascimento e gênero são obrigatórios para pessoa física.");
+        if (req.fisicaJuridica() && req.genero() == null) {
+            throw new IllegalArgumentException("Gênero é obrigatório para pessoa física.");
+        }
+        // Data de nascimento é sempre opcional (2026-07-21); quando preenchida, não pode ser
+        // hoje nem no futuro.
+        if (req.dataNascimento() != null && !req.dataNascimento().isBefore(LocalDate.now())) {
+            throw new IllegalArgumentException("Data de nascimento não pode ser hoje ou no futuro.");
         }
         if (req.cpfCnpj() != null && !req.cpfCnpj().isBlank() && !Documentos.valido(req.cpfCnpj())) {
             throw new IllegalArgumentException("CPF/CNPJ inválido (dígito verificador não confere).");

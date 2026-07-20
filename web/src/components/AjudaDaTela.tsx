@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { IconeAjuda } from './Icones'
 
 /**
  * Ajuda contextual obrigatória em toda tela (R22 / spec §3.7.1). O catálogo `ajuda_tela`
@@ -69,7 +70,7 @@ export default function AjudaDaTela({ chaveTela }: { chaveTela: string }) {
         aria-label={`Ajuda: ${conteudo.titulo}`}
         onClick={() => setAberto(true)}
       >
-        ?
+        <IconeAjuda />
       </button>
       {aberto && (
         <div className="modal-overlay" onClick={() => setAberto(false)}>

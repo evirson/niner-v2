@@ -88,6 +88,11 @@ services:
     image: node:26-alpine
     profiles: [fronts]
     working_dir: /app
+    environment:
+      # Bind mount do Docker Desktop no Windows não propaga eventos de arquivo de forma
+      # confiável para o watcher (chokidar) dentro do container — sem isso, edições feitas
+      # no host (fora do container) podem não aparecer no HMR do Vite (2026-07-21).
+      CHOKIDAR_USEPOLLING: "true"
     volumes:
       - ./web:/app
     command: sh -c "npm install && npm run dev -- --host"

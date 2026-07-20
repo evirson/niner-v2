@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { criarCategoria, listarCategorias, renomearCategoria } from '../lib/clientes'
 import { ApiError } from '../lib/api'
 import { maiusculas } from '../lib/texto'
+import Toast from './Toast'
 
 /**
  * Gestão embutida da categoria de cliente (docs/telas/cliente.md): criar e renomear,
@@ -19,26 +20,24 @@ export default function CategoriaClienteModal({
   const { data: categorias } = useQuery({ queryKey: ['categorias-cliente'], queryFn: listarCategorias })
   const [novoNome, setNovoNome] = useState('')
   const [edicoes, setEdicoes] = useState<Record<number, string>>({})
-  const [erro, setErro] = useState('')
+  const [toast, setToast] = useState('')
 
   const criar = useMutation({
     mutationFn: criarCategoria,
     onSuccess: (categoria) => {
       queryClient.invalidateQueries({ queryKey: ['categorias-cliente'] })
       setNovoNome('')
-      setErro('')
       aoCriar?.(categoria.idCategoriaCliente)
     },
-    onError: (e: unknown) => setErro(e instanceof ApiError ? e.message : 'Não foi possível criar a categoria.'),
+    onError: (e: unknown) => setToast(e instanceof ApiError ? e.message : 'Não foi possível criar a categoria.'),
   })
 
   const renomear = useMutation({
     mutationFn: ({ id, nome }: { id: number; nome: string }) => renomearCategoria(id, nome),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['categorias-cliente'] })
-      setErro('')
     },
-    onError: (e: unknown) => setErro(e instanceof ApiError ? e.message : 'Não foi possível renomear a categoria.'),
+    onError: (e: unknown) => setToast(e instanceof ApiError ? e.message : 'Não foi possível renomear a categoria.'),
   })
 
   return (
@@ -92,18 +91,14 @@ export default function CategoriaClienteModal({
           </button>
         </div>
 
-        {erro && (
-          <p role="alert" className="erro">
-            {erro}
-          </p>
-        )}
-
         <div className="ajuda-rodape">
           <button type="button" className="btn ghost" onClick={aoFechar}>
             Fechar
           </button>
         </div>
       </div>
+
+      {toast && <Toast mensagem={toast} aoFechar={() => setToast('')} />}
     </div>
   )
 }

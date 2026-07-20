@@ -1,4 +1,5 @@
 import { Navigate, Route, Routes } from 'react-router-dom'
+import RequireAdmin from './components/RequireAdmin'
 import RequireAuth from './components/RequireAuth'
 import Layout from './components/Layout'
 import Login from './pages/Login'
@@ -6,6 +7,7 @@ import Dashboard from './pages/Dashboard'
 import EmBreve from './pages/EmBreve'
 import ClienteLista from './pages/clientes/ClienteLista'
 import ClienteForm from './pages/clientes/ClienteForm'
+import ConfiguracaoTelaCliente from './pages/clientes/ConfiguracaoTelaCliente'
 
 export default function App() {
   return (
@@ -20,6 +22,9 @@ export default function App() {
           <Route path="/canais" element={<EmBreve titulo="Canais" />} />
           <Route path="/clientes" element={<ClienteLista />} />
           <Route path="/clientes/novo" element={<ClienteForm />} />
+          <Route element={<RequireAdmin />}>
+            <Route path="/clientes/configuracao" element={<ConfiguracaoTelaCliente />} />
+          </Route>
           <Route path="/clientes/:id" element={<ClienteForm />} />
         </Route>
       </Route>

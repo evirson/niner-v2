@@ -89,12 +89,44 @@ class ClienteCrudTest {
     }
 
     @Test
-    void clientePessoaFisicaSemNascimentoEhRejeitado() throws Exception {
+    void clientePessoaFisicaSemGeneroEhRejeitado() throws Exception {
+        String token = assinarNovoTenant("sem-genero");
+        long idCategoria = criarCategoria(token, "Padrão");
+
+        String cliente = """
+                {"fisicaJuridica":true,"nome":"Sem Genero","idCategoriaCliente":%d,
+                 "dataNascimento":"1990-05-10"}
+                """.formatted(idCategoria);
+
+        mvc.perform(post("/api/v1/clientes").header("Authorization", "Bearer " + token)
+                        .contentType(APPLICATION_JSON).content(cliente))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void clientePessoaFisicaSemNascimentoComGeneroEhAceito() throws Exception {
+        // Data de nascimento é sempre opcional (2026-07-21) — só o gênero é obrigatório para PF.
         String token = assinarNovoTenant("sem-nasc");
         long idCategoria = criarCategoria(token, "Padrão");
 
         String cliente = """
-                {"fisicaJuridica":true,"nome":"Sem Nascimento","idCategoriaCliente":%d}
+                {"fisicaJuridica":true,"nome":"Sem Nascimento","idCategoriaCliente":%d,"genero":"OUTROS"}
+                """.formatted(idCategoria);
+
+        mvc.perform(post("/api/v1/clientes").header("Authorization", "Bearer " + token)
+                        .contentType(APPLICATION_JSON).content(cliente))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.dataNascimento").doesNotExist());
+    }
+
+    @Test
+    void clienteComDataNascimentoNoFuturoEhRejeitado() throws Exception {
+        String token = assinarNovoTenant("nasc-futuro");
+        long idCategoria = criarCategoria(token, "Padrão");
+
+        String cliente = """
+                {"fisicaJuridica":true,"nome":"Nascimento Futuro","idCategoriaCliente":%d,
+                 "genero":"OUTROS","dataNascimento":"2999-01-01"}
                 """.formatted(idCategoria);
 
         mvc.perform(post("/api/v1/clientes").header("Authorization", "Bearer " + token)

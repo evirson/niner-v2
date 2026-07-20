@@ -35,6 +35,25 @@ export function mascararCep(valor: string): string {
   return aplicarMascara(digitos, '00000-000')
 }
 
+/**
+ * "Id. WhatsApp" — mesma convenção visual de Instagram/Facebook/TikTok (prefixo `@`), mas
+ * só dígitos depois do `@` (é o número do celular). Validado por {@link celularValido}.
+ */
+export function mascararIdWhatsapp(valor: string): string {
+  const digitos = somenteDigitos(valor).slice(0, 11)
+  return digitos ? `@${digitos}` : ''
+}
+
+/**
+ * {@code true} se vazio (telefone/WhatsApp são opcionais) ou se for um celular válido:
+ * 11 dígitos (DDD + 9 dígitos) com o terceiro dígito igual a 9 (docs/telas/cliente.md).
+ */
+export function celularValido(valor: string): boolean {
+  const d = somenteDigitos(valor)
+  if (!d) return true
+  return d.length === 11 && d[2] === '9'
+}
+
 /** {@code true} se vazio (opcional) ou se o dígito verificador de CPF/CNPJ confere. */
 export function documentoValido(valor: string): boolean {
   const d = somenteDigitos(valor)
