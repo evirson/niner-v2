@@ -22,4 +22,20 @@ public class GlobalExceptionHandler {
         pd.setType(URI.create("urn:niner:erro:estado-invalido"));
         return pd;
     }
+
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ProblemDetail tratarArgumentoInvalido(IllegalArgumentException ex) {
+        ProblemDetail pd = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, ex.getMessage());
+        pd.setTitle("Dado inválido");
+        pd.setType(URI.create("urn:niner:erro:validacao"));
+        return pd;
+    }
+
+    @ExceptionHandler(ConflitoDadosException.class)
+    public ProblemDetail tratarConflito(ConflitoDadosException ex) {
+        ProblemDetail pd = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, ex.getMessage());
+        pd.setTitle("Conflito de dados");
+        pd.setType(URI.create("urn:niner:erro:conflito"));
+        return pd;
+    }
 }

@@ -568,6 +568,10 @@ funcionario(id_funcionario PK, nome_funcionario, fone_celular, perc_comissao NUM
 > `funcionario` ganhou `telefone` (2026-07-16). A constraint `funcionario_cpf_uk` virou
 > `UNIQUE(id_tenant, id_funcionario)` — como `id_funcionario` já é a PK, isso não impõe nada
 > além do que a PK já garante; **o CPF deixou de ser único por tenant** (decisão explícita).
+> `cliente.complemento` (`text`, nullable) entrou em 2026-07-20 — pedido do dono do produto
+> para a primeira tela de cliente (`web/`, `docs/telas/cliente.md`), entre `numero` e `bairro`
+> no endereço (apto/bloco/sala etc.). Banco recriado do zero na mesma sessão (convenção do
+> projeto para alteração de coluna em migration já aplicada — §7).
 
 ### 3.3.10 Pendências transversais do modelo
 
@@ -789,6 +793,8 @@ Toda tela do frontend segue o **padrão de referência** em [`docs/padroes/cadas
 **Componentes.**
 - **Campo:** `label` (com `*` em `--danger` quando obrigatório) acima de `input`/`select` de fundo `--field-bg`, borda `--line-strong`, `border-radius: 7px`, padding `9px 10px`, largura total. Foco: sem outline default, borda `--focus` + `box-shadow` de 3px com `color-mix`.
 - **Botões:** `.btn` `font-weight 600`, `border-radius 8px`. Primário = `--btn-primary-bg`/`--btn-primary-text`; secundário = transparente com borda `--btn-secondary-border`. Hover por `filter: brightness(0.92)`.
+- **Texto sempre em maiúsculas (2026-07-20):** todo campo de texto livre (nome, endereço, redes sociais etc.) é normalizado para **MAIÚSCULAS** no front (`onChange` força o valor, não importa o estado do teclado/Caps Lock do usuário) e reforçado no backend como defesa em profundidade. Única exceção: **e-mail** (caixa preservada). Campos não-texto (select, data, checkbox, valores monetários/mascarados) não se aplicam.
+- **Foco automático:** ao abrir uma tela de inclusão ou edição, o primeiro campo do formulário recebe foco automaticamente (`autoFocus`), para o usuário já poder digitar sem clicar.
 
 **Acessibilidade (obrigatório).** `:focus-visible` com `outline: 2px solid var(--focus)` em todo controle; `aria-label` em botões de ícone; `aria-pressed` em toggles; regiões de feedback com `aria-live="polite"`; contraste AA nos dois temas. Português em todos os rótulos e no vocabulário de domínio (§CLAUDE.md).
 

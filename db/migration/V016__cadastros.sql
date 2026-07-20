@@ -30,6 +30,7 @@ CREATE TABLE cliente (
   tiktok               text,
   endereco             text,
   numero               text,
+  complemento          text,                                 -- apto/bloco/sala etc. (2026-07-20)
   bairro               text,
   cidade               text,
   estado               text,

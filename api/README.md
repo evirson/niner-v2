@@ -79,11 +79,16 @@ de tenant.
 ## Pendências (fases seguintes)
 
 - Camada de domínio na API: repositórios/serviços/endpoints `/api/v1` de produto, estoque e
-  pedido (schema V013–V024 já existe; falta o código Spring Data JDBC sobre ele).
+  pedido (schema V013–V024 já existe; falta o código Spring Data JDBC sobre ele). Fornecedor
+  e funcionário também (schema V016 já existe).
 - Backoffice `admin/` (staff, `/api/admin/**`).
 
 ## Já resolvido
 
 - Emissão/validação de JWT (HS256, claim `tid`/`aud`) — login/signup emitem, `/api/v1` valida.
-- Migrations de domínio V013–V024 + políticas RLS (`FORCE`, V024) — ver `db/migration/README.md`.
+- Migrations de domínio V013–V026 + políticas RLS (`FORCE`, V024) — ver `db/migration/README.md`.
 - **Gate P8** (isolamento cross-tenant) verde (`RlsIsolamentoTest`, Testcontainers).
+- **Módulo `cadastros.cliente`** (2026-07-20) — CRUD completo de cliente + categoria de
+  cliente (`docs/telas/cliente.md`): `/api/v1/clientes` e `/api/v1/categorias-cliente`,
+  validação de CPF/CNPJ, normalização de texto para maiúsculas, exclusão com fallback para
+  inativar (venda associada). **19 testes verdes** (`ClienteCrudTest` + suíte anterior).

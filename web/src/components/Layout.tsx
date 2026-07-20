@@ -7,6 +7,7 @@ const NAV = [
   { to: '/estoque', label: 'Estoque' },
   { to: '/pedidos', label: 'Pedidos' },
   { to: '/canais', label: 'Canais' },
+  { to: '/clientes', label: 'Clientes' },
 ]
 
 /** Shell do ERP: cabeçalho + navegação lateral + área de conteúdo. */

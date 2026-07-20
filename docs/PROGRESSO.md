@@ -1,13 +1,17 @@
 # Progresso do Projeto — niner-v2
 
 Registro cronológico das decisões e entregas. Atualizar a cada marco relevante.
-**Última atualização:** 2026-07-16
+**Última atualização:** 2026-07-20
 
 ---
 
 ## Estado atual
 
-Projeto **spec-driven** em fase de fundação. A **API (Spring Boot 4 / Java 25)** sobe com 3 superfícies + infra de contexto de tenant; o schema completo (control-plane + domínio do lojista, V001–V024) está criado, revisado e com RLS validado. Falta a camada de domínio na API (repos/serviços/endpoints de produto/estoque/pedido) e o app `admin/`.
+Projeto **spec-driven** em fase de fundação, com a **primeira tela de domínio completa e
+ponta a ponta**: Clientes (`cadastros.cliente`). A **API (Spring Boot 4 / Java 25)** sobe com
+3 superfícies + infra de contexto de tenant; o schema completo (control-plane + domínio do
+lojista, V001–V026) está criado, revisado e com RLS validado. Falta a camada de domínio dos
+demais módulos (produto/estoque/pedido/fornecedor/funcionário) e o app `admin/`.
 
 | Artefato | Situação |
 |---|---|
@@ -20,9 +24,9 @@ Projeto **spec-driven** em fase de fundação. A **API (Spring Boot 4 / Java 25)
 | `db/migration/V013–V024` | Domínio do lojista (identidade, cadastros, catálogo com `sku`+`ean`, estoque com `reservado`/`disponivel`, vendas, canais, pedidos, integração/outbox, cfg_geral) + **RLS de domínio** (`FORCE` + política por `id_tenant`). **Gate P8 verde** (teste de isolamento cross-tenant automatizado). **Revisado em 2026-07-16** (ver linha do tempo): tipos padronizados (`id_tenant SMALLINT`, demais PKs `INTEGER`), sem `ON DELETE CASCADE`, ledger de estoque imutável via `REVOKE`, e-mail case-insensitive, fix de bootstrap (`GRANT CREATE ON SCHEMA public`) |
 | `db/migration/V025` | **`financeiro` parcial (revisão de Q5/ADR-010, ADR-012):** crediário (`tipo_carteira`, `moeda`, `moeda_detalhe`, `contas_receber`/`contas_receber_detalhe`) + caixa (`caixa_mestre`/`caixa_detalhe`). RLS próprio no arquivo (V024 já tinha rodado). Seed de `moeda` por tenant implementado no `SignupService`. **Aplicada e validada em banco real em 2026-07-16** (RLS `ENABLE`+`FORCE` confirmado nas 7 tabelas; moedas semeadas no signup conferidas via `psql`). |
 | `db/migration/V026` | **`contas_pagar`** (mais uma revisão de Q5/ADR-010/ADR-012): PK `id_conta_pagar` (renomeada de `localizador`), `nota_fiscal integer` nullable sem `DEFAULT 0` (padronização que também corrigiu `produto_movimento_mestre.nota_fiscal`, V019, de `text` para `integer`). RLS próprio no arquivo. Só `conta_corrente*` segue fora do v1. **Aplicada e validada em banco real em 2026-07-16** (schema/FKs/RLS conferidos via `psql`) |
-| `api/` | Spring Boot 4.0.7 / Java 25 (Maven). 3 superfícies com `SecurityFilterChain` separados; `TenantContext` (`ScopedValue`) + `TenantAwareTransactionManager`; **auth JWT HS256** (login/signup emitem, `/api/v1` valida `aud=tenant`); **trial self-service** (`POST /api/publico/assinar` → tenant+configs+moedas+ADMIN+assinatura TRIAL + token), `POST /api/publico/login`, `GET /api/v1/eu`. **11 testes verdes** (Testcontainers) + fluxo **verificado ao vivo** como `niner_app` contra o banco recriado (2026-07-16), inclusive o bugfix de `empresa.codigo_empresa`/`cfg_nome_etiqueta`. Persistência: **Spring Data JDBC**. Falta: domínio (repos/serviços/endpoints de produto/estoque/pedido) e os 3 fronts |
+| `api/` | Spring Boot 4.0.7 / Java 25 (Maven). 3 superfícies com `SecurityFilterChain` separados; `TenantContext` (`ScopedValue`) + `TenantAwareTransactionManager`; **auth JWT HS256** (login/signup emitem, `/api/v1` valida `aud=tenant`); **trial self-service** (`POST /api/publico/assinar` → tenant+configs+moedas+ADMIN+assinatura TRIAL + token), `POST /api/publico/login`, `GET /api/v1/eu`. **Módulo `cadastros.cliente` (novo, 2026-07-20):** CRUD completo de `GET/POST/PUT/DELETE /api/v1/clientes` + `GET/POST/PUT /api/v1/categorias-cliente`, validação de CPF/CNPJ (dígito verificador), normalização de texto para maiúsculas (defesa em profundidade), exclusão com fallback para inativar quando há venda associada. **19 testes verdes** (Testcontainers, 8 novos de `ClienteCrudTest`) + fluxo **verificado ao vivo** contra o banco recriado (2026-07-20). Persistência: **Spring Data JDBC**. Falta: domínio dos demais módulos (produto/estoque/pedido/fornecedor/funcionário) |
 | `site/` | Site público (Astro/SSG, ADR-011). **Home institucional "matadora"** (posicionamento concorrente do Bling): hero com painel animado + demo de sincronização, faixa de stats com contadores, contraste problema→solução, 3 passos, 6 recursos, canais (ML/Shopee/Amazon/balcão), planos (preços via `/api/publico/planos`), FAQ e CTA — tudo em CSS/SVG puro com **scroll-reveal** e **prefers-reduced-motion** (sem novas deps). Sistema visual em `src/styles/site.css` portado do golden `nainer_institucional`. `/assinar` (form → `POST /api/publico/assinar` → auto-login → `/bem-vindo`) e `/bem-vindo` mantidos. **Trial 60 dias** em toda a copy. Tema claro/escuro persistido. **Build SSG ok**; hero/reveal/contadores verificados via Playwright |
-| `web/` | **Novo — ERP do lojista (React 19 + Vite + TS)**. Auth JWT (login slug+email+senha; **handoff SSO** do site via `#token=`), shell (nav Painel/Produtos/Estoque/Pedidos/Canais + Sair), **Painel** real (`GET /api/v1/eu` via TanStack Query), placeholders "em construção". Design tokens §3.7 (claro/escuro). **Build ok**; fluxo **e2e verificado** (login + handoff). |
+| `web/` | ERP do lojista (React 19 + Vite + TS). Auth JWT (login slug+email+senha; **handoff SSO** do site via `#token=`), shell (nav Painel/Produtos/Estoque/Pedidos/Canais/**Clientes** + Sair), **Painel** real (`GET /api/v1/eu` via TanStack Query). **Tela de Clientes completa (nova, 2026-07-20):** listagem com busca/filtro/paginação por cursor, formulário com grid de 12 colunas (§3.7), máscaras de CPF/CNPJ/telefone/CEP com validação de dígito verificador, autopreenchimento de endereço via ViaCEP, modal embutido de categoria (criar/renomear), exclusão com confirmação em modal próprio (sem `confirm()`/`alert()` nativos), `AjudaDaTela` (R22), convenção de **texto sempre em maiúsculas** e **foco automático** no primeiro campo. Demais áreas (Produtos/Estoque/Pedidos/Canais) ainda placeholder. Design tokens §3.7 (claro/escuro). **Build ok**; fluxo **e2e verificado no navegador**. |
 | `admin/` | Ainda não criado (backoffice React 19 + Vite) |
 
 **Stack alvo:** Java 25 + Spring Boot 4.x · PostgreSQL 18 (Docker, banco **`niner_db`**) · React 19 + Vite (3 apps) · Flyway · JWT. **SaaS multi-tenant** (banco único + `id_tenant` + Postgres RLS).
@@ -30,6 +34,79 @@ Projeto **spec-driven** em fase de fundação. A **API (Spring Boot 4 / Java 25)
 ---
 
 ## Linha do tempo
+
+### 2026-07-20 — Primeira tela de domínio: Clientes (CRUD ponta a ponta) + convenções de UI
+
+Primeira feature depois da fundação (Fase 0/1): CRUD completo de cliente, do spec à
+implementação, testado ao vivo no navegador. Também vira o campo de prova de duas convenções
+novas que passam a valer para **todas as telas futuras**.
+
+1. **Spec da feature (`docs/telas/cliente.md`)** — sessão de perguntas e respostas com o dono
+   do produto sobre a tabela `cliente`/`cfg_categoria_cliente` (V016): rótulos, máscaras,
+   obrigatoriedade, exclusão (inativar quando há venda associada, decisão explícita), gestão
+   de categoria embutida (modal criar+renomear), validação de dígito verificador de
+   CPF/CNPJ, autopreenchimento de endereço por CEP, permissão (ADMIN e OPERADOR, sem
+   restrição de R8).
+
+2. **Backend — módulo `cadastros.cliente` (novo pacote).** `ClienteController`/`ClienteService`
+   (`/api/v1/clientes`: listagem paginada por cursor com filtros nome/cpfCnpj/categoria/status,
+   criar, buscar, atualizar, excluir) e `CategoriaClienteController`/`CategoriaClienteService`
+   (`/api/v1/categorias-cliente`: criar, listar, renomear). `Documentos` valida CPF/CNPJ
+   (algoritmo do dígito verificador). Exclusão **verifica vínculo com `venda` antes de agir**
+   (não tenta `DELETE` e captura a violação de FK depois — no Postgres isso aborta o resto da
+   transação; teria exigido `SAVEPOINT`). `ConflitoDadosException` (409) e handler de
+   `IllegalArgumentException` (400) novos no `GlobalExceptionHandler`. **8 testes novos**
+   (`ClienteCrudTest`), suíte completa em 19 testes verdes.
+
+3. **Frontend — tela de Clientes (`web/`).** `ClienteLista`/`ClienteForm`,
+   `CategoriaClienteModal`, `AjudaDaTela` (R22 — primeiro componente de ajuda contextual do
+   projeto, conteúdo embutido como fallback estático até existir o catálogo `ajuda_tela` da
+   API), `lib/clientes.ts`, `lib/masks.ts` (máscaras + validação de documento), `lib/viacep.ts`.
+   Rotas `/clientes`, `/clientes/novo`, `/clientes/:id`.
+
+4. **Bugs encontrados testando ao vivo no navegador (não em teste automatizado):**
+   - `paraFormulario()` não reaplicava as máscaras (CPF/telefone/CEP apareciam crus ao abrir
+     "Editar") — corrigido.
+   - Uso de `confirm()`/`alert()` nativos do navegador para excluir cliente — trocado por um
+     modal de confirmação e um banner in-app (mais consistente com o design system e evita
+     diálogos que travam automação de navegador e são uma UX inferior num SPA).
+   - Datasource de teste (Testcontainers `@ServiceConnection`) conecta como o superusuário do
+     container, não como `niner_app` — uma listagem sem filtro via MockMvc via cross-tenant;
+     ajustado o teste para filtrar por nome (o gate de isolamento real continua sendo
+     `RlsIsolamentoTest`, que conecta como `niner_app` de propósito).
+
+5. **Cinco ajustes pedidos depois do primeiro teste ao vivo — duas viram convenção do
+   projeto, não só desta tela:**
+   - **`cliente.complemento`** (texto, nullable, entre `numero` e `bairro`) — coluna nova.
+     Banco ainda em construção: a coluna entrou **na própria migration V016** (não uma V027
+     nova), exigindo recriar o banco de dev do zero (`docker volume rm niner_pgdata` +
+     `flyway migrate`) para aplicar a mudança a uma migration já rodada.
+   - **Texto sempre em MAIÚSCULAS, projeto todo** (nova regra em §3.7 da spec): todo campo de
+     texto livre é normalizado no `onChange` do frontend (não importa o estado do teclado do
+     usuário) e reforçado no backend (`toUpperCase(Locale.ROOT)`) como defesa em profundidade
+     — inclusive valores vindos do autopreenchimento de CEP (ViaCEP retorna em
+     capitalizado/minúsculo). Única exceção: e-mail, que mantém a caixa digitada.
+   - **`Cliente ativo` virou o primeiro campo do formulário**, antes até do tipo de pessoa, e
+     passou a aparecer também na criação (antes só no editar).
+   - **Grid de 12 colunas do design system (§3.7) finalmente implementado** (documentado desde
+     a fundação, nunca usado): campos pequenos (CPF, RG, número, complemento, UF, limite de
+     crédito, telefone/WhatsApp) dividem linha com outros em vez de ocupar a largura toda.
+   - **Foco automático** no primeiro campo do formulário ao abrir (`autoFocus`), tanto ao
+     incluir quanto ao editar — também virou regra do design system (§3.7), não só desta tela.
+
+6. **Verificação:** banco recriado (V001–V026, agora com `complemento`); **19 testes verdes**;
+   fluxo completo testado ao vivo no navegador (Chrome, via automação) — signup → login
+   (handoff) → criar categoria (criar/renomear) → criar cliente PF com CPF mascarado/validado,
+   gênero/nascimento condicionais, CEP autopreenchendo endereço em maiúsculas → listagem com
+   filtro de status → excluir cliente com venda associada → inativa e mostra aviso → cliente
+   PJ com CNPJ inválido → erro inline correto → painel de Ajuda da Tela → grid compacto,
+   `Cliente ativo` como primeiro campo com foco automático, `Complemento` entre Número e
+   Bairro, tudo digitado em maiúsculas em tempo real.
+
+7. **Documentação sincronizada:** `docs/telas/cliente.md` (campos/tamanhos/ordem atualizados;
+   corrigida uma imprecisão — a exclusão sempre responde `200 OK` em JSON, nunca varia para
+   `204`), `spec-driven-erp-varejo.md` (§3.3.9 `cliente.complemento`; §3.7 convenções de
+   maiúsculas e foco automático), `db/migration/README.md` (V016).
 
 ### 2026-07-16 — Banco recriado do zero: V001–V026 aplicadas, bug real encontrado e corrigido
 
@@ -583,14 +660,17 @@ com autenticação JWT real protegendo o ERP.
 
 **Feito até 2026-07-10:** ✅ decisões de arquitetura (Q2/Q5/Q6/Q7 + ADRs) · ✅ esqueleto da API + 3 superfícies + contexto de tenant · ✅ domínio V013–V024 + RLS + **gate P8** · ✅ **trial self-service** (signup atômico + JWT + login + `/eu`) · ✅ **site** (Astro/SSG) · ✅ **web** (ERP: login + handoff SSO + painel). **Loop de aquisição fechado** (site → trial → web logado).
 
-**Retomar amanhã (2026-07-11) — ordem sugerida:**
+**Feito em 2026-07-20:** ✅ **primeira tela de domínio completa** — Clientes (`cadastros.cliente`): CRUD backend + frontend, categoria embutida, `AjudaDaTela` (R22), grid de 12 colunas (§3.7) finalmente em uso, convenções novas de projeto (maiúsculas sempre, foco automático no 1º campo).
 
-1. **⭐ Vertical slice de Produtos (começar por aqui):** valida a stack inteira ponta a ponta.
+**Retomar — ordem sugerida:**
+
+1. **Fornecedor / Funcionário** — mesmo padrão do Cliente (schema já existe desde V016), tela mais rápida de fazer agora que o padrão (grid, máscaras, `AjudaDaTela`, maiúsculas, exclusão com fallback) está estabelecido.
+2. **⭐ Vertical slice de Produtos:** valida a stack inteira ponta a ponta no core do produto.
    - Backend `/api/v1`: `GET /api/v1/produtos` (lista, cursor) + `POST /api/v1/produtos` (cria produto + variação com `sku`/`ean`) — camada Spring Data JDBC sobre `produto`/`produto_barra`, com o `TenantContext`/RLS já ligados. Atualizar `uso_tenant.qtd_produtos` (enforcement R19 depois).
    - Web: tela **Produtos** real (listar + criar) no lugar do placeholder, via TanStack Query.
-2. **Estoque:** `produto_estoque` (saldo/reserva) + movimentações (`POST /api/v1/estoque/movimentacoes`) → tela de estoque.
-3. **`admin/`** — backoffice da plataforma (lista/ficha de tenants R17, suspender/impersonar R18/R21).
-4. **R22** (`AjudaDaTela` + `ajuda_tela`) nos fronts; páginas de conteúdo/SEO no site.
-5. Decisões de negócio em aberto: D1 (preços), D3 (gateway), D5/D6/D8/D9/D10.
+3. **Estoque:** `produto_estoque` (saldo/reserva) + movimentações (`POST /api/v1/estoque/movimentacoes`) → tela de estoque.
+4. **`admin/`** — backoffice da plataforma (lista/ficha de tenants R17, suspender/impersonar R18/R21).
+5. **Catálogo `ajuda_tela` na API** (R22) — hoje `AjudaDaTela` (`web/`) embute o conteúdo como fallback estático; falta o endpoint/tabela real (§3.3.10/§3.7.1 da spec).
+6. Decisões de negócio em aberto: D1 (preços), D3 (gateway), D5/D6/D8/D9/D10.
 
 **Como subir o ambiente:** `docker compose up -d db && docker compose run --rm flyway` · API: `cd api && ./mvnw spring-boot:run` (ou `java -jar target/*.jar`) · fronts: `cd site && npm run dev` / `cd web && npm run dev`. Testes da API: `cd api && TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE=/var/run/docker.sock ./mvnw test` (Colima). ⚠️ Se a API der 401 no `/api/publico/**`, há instância velha presa na 8080 → `lsof -ti tcp:8080 | xargs kill -9`.

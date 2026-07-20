@@ -11,13 +11,13 @@ A **greenfield, spec-driven ERP** (product name **Niner**, DB `niner_db`) for sm
 - **Tenant Plane (the retailer's ERP)** — catalog, stock, orders, channels and the retailer's own internal finance (legacy `financeiro`, scope Q5). Every row isolated by `id_tenant`.
 - Vocabulary rule: *assinatura/plano/trial/mensalidade/gateway* = **platform** (Vetor charges the retailer); *caixa/crediário/contas a pagar-receber/conta corrente da loja* = **retailer's finance**. Never mix.
 
-Acquisition is self-service via a **public site** with a **14-day, no-card trial**; a **backoffice** manages tenants; billing charges subscribers (gateway **to be defined** — modelled behind an abstract adapter, manual billing at first).
+Acquisition is self-service via a **public site** with a **60-day, no-card trial**; a **backoffice** manages tenants; billing charges subscribers (gateway **to be defined** — modelled behind an abstract adapter, manual billing at first).
 
-**There is no application source code yet.** The repo currently contains only:
+**Implementation is underway** (see `docs/PROGRESSO.md` for the up-to-date, chronological state). As of 2026-07-20: `api/` (Spring Boot 4 / Java 25) has the control-plane + tenant-domain schema (`db/migration/V001`–`V026`), auth/signup/trial, and the first full domain screen (`cadastros.cliente` — CRUD + categoria); `web/` (React) has the ERP shell, login/handoff, painel, and the Clientes screen; `site/` (Astro) has the public landing + signup; `admin/` (backoffice) does not exist yet. The repo also contains:
 - `spec-driven-erp-varejo.md` — the governing document (Constitution + PRD + technical plan + templates), **v2.0 (SaaS pivot)**. Primary source of truth.
 - `docs/PLANO-DE-NEGOCIO.md` — the business plan (pricing, funnel, SaaS metrics, roadmap, open decisions D1–D10).
-- `docs/PROGRESSO.md` — progress log. `docs/padroes/` — UI reference mockup (golden file, spec §3.7).
-- `db/*.txt` — a **legacy** Firebird/InterBase schema (DDL, procedures, triggers, generators) from an *existing* retail ERP, kept for reference. It is **not** the schema of the system being built.
+- `docs/PROGRESSO.md` — progress log. `docs/padroes/` — UI reference mockup (golden file, spec §3.7). `docs/telas/` — per-screen feature specs (e.g. `cliente.md`).
+- `db/*.txt` — a **legacy** Firebird/InterBase schema (DDL, procedures, triggers, generators) from an *existing* retail ERP, kept for reference. It is **not** the schema of the system being built (converted per §3.3.1 into `db/migration/`).
 - `db/*.RAR` — archived dumps of the legacy database.
 
 Everything below flows from `spec-driven-erp-varejo.md`; read it before making any design decision.
@@ -56,11 +56,11 @@ Key patterns:
 - **Outbox pattern:** stock/price mutations write an event to `outbox_eventos` in the same transaction; a `@Scheduled` worker publishes to channels with exponential backoff + dead-letter.
 - **Idempotency:** imported orders keyed by natural key `(canal, id_externo)` with a unique constraint; processed webhooks record their `webhook_id`.
 
-The new core data model, API contract sample, and docker-compose layout live in spec §3.3–§3.5 (migration sequence V001–V091 in §3.5.1; control-plane tables in §3.3.11). The repo layout the plan assumes is `api/` (Spring Boot) + three React apps — `web/` (retailer ERP), `admin/` (platform backoffice), `site/` (public acquisition) — none created yet.
+The new core data model, API contract sample, and docker-compose layout live in spec §3.3–§3.5 (migration sequence V001–V091 in §3.5.1; control-plane tables in §3.3.11). The repo layout is `api/` (Spring Boot) + three React apps — `web/` (retailer ERP), `admin/` (platform backoffice, not yet created), `site/` (public acquisition).
 
 ## Build / run
 
-No build tooling exists yet — there is no `pom.xml`, `package.json`, or `docker-compose.yml` in the repo. When scaffolding, follow spec §3.5: dev is `docker compose up` bringing up `db` (postgres:18, DB `niner_db`), `api` (port 8080), `web` (5173), `admin` (5174), `site` (5175). Do not invent build/test commands in docs before the corresponding project is scaffolded.
+Per spec §3.5: `docker compose up -d db && docker compose run --rm flyway` brings up Postgres and applies `db/migration/`; `docker compose up -d --build api` (or `cd api && ./mvnw spring-boot:run`) for the API (port 8080, connects as `niner_app`); `cd web && npm run dev` (5173) and `cd site && npm run dev` (5175) for the fronts. API tests: `cd api && ./mvnw test` (Testcontainers — see `api/README.md` for the container-runtime workaround when no JDK is installed on the host). `admin/` has no build yet (not scaffolded).
 
 ## Conventions to honor when building
 
