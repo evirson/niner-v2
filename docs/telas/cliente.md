@@ -47,7 +47,7 @@ visualmente, só deixou de receber o foco).
 | `fisica_juridica` | Tipo de pessoa | radio: **Física** \| **Jurídica** | — | linha própria | Sim, default **Física** | Controla os campos abaixo (nascimento/gênero) e a máscara de `cpf_cnpj` |
 | `nome` | Nome / Razão Social | texto | — | linha própria (largo) | **Sim** (NOT NULL no banco) | Label muda para "Razão Social" quando Jurídica |
 | `id_categoria_cliente` | Categoria | select (+ "＋ Nova categoria") | — | linha própria | **Sim** (NOT NULL no banco) | Ver seção "Categoria de cliente" abaixo |
-| `cpf_cnpj` | CPF / CNPJ | texto | `000.000.000-00` (PF) / `00.000.000/0000-00` (PJ), conforme `fisica_juridica` | 1/3 da linha | Não (nullable no banco) | Se preenchido: **valida dígito verificador** (algoritmo oficial); único por tenant quando preenchido |
+| `cpf_cnpj` | CPF / CNPJ | texto | `000.000.000-00` (PF) / `00.000.000/0000-00` (PJ), conforme `fisica_juridica` | 1/3 da linha | Não (nullable no banco) | Se preenchido: **valida dígito verificador** (algoritmo oficial); único por tenant quando preenchido. **CNPJ é alfanumérico** (2026-07-21) — ver nota abaixo |
 | `rg_ie` | RG / Inscrição Estadual | texto | — | 1/3 da linha (junto do CPF/CNPJ) | Não | Label muda para "Inscrição Estadual" quando Jurídica |
 | `data_nascimento` | Data de nascimento | date picker | `dd/mm/aaaa` | 1/3 da linha | **Não** (2026-07-21 — deixou de ser obrigatória mesmo p/ Física) | Campo **oculto** quando Jurídica; quando preenchida, **não pode ser hoje nem no futuro** (validado no front e no back) |
 | `genero` | Gênero | select: Masculino / Feminino / Outros | — | 1/3 da linha (junto da data) | **Condicional: obrigatório se Física** (CHECK do banco) | Campo **oculto** quando Jurídica |
@@ -67,6 +67,29 @@ visualmente, só deixou de receber o foco).
 | `limite_credito` | Limite de crédito | numérico, moeda (`R$ 0,00`, mascarado — dígitos digitados = centavos) | `NUMERIC(12,2)` | campo pequeno (~1/3 da linha) | Não, default `0` | Campo **opcional exposto já no formulário**, mesmo o crediário (Fase 2) ainda não usar o valor de fato — só armazena |
 
 `id_cliente`, `criado_em`, `atualizado_em` não aparecem no formulário (gerados pelo banco/API).
+
+**CNPJ alfanumérico (2026-07-21) — implementação de referência para todo o projeto.** A partir
+de julho/2026 a Receita Federal emite CNPJ no formato alfanumérico (IN RFB 2.229/2024): as 12
+primeiras posições (raiz+ordem) aceitam dígitos `0-9` **ou** letras `A-Z` maiúsculas; os 2
+dígitos verificadores finais (posições 13-14) continuam sempre numéricos. CNPJs só-numéricos
+(formato antigo) continuam válidos. **CPF não muda** — 11 dígitos, só numérico, sem alteração.
+
+- **Algoritmo do dígito verificador:** valor de cada caractere = código ASCII menos 48 (dígitos
+  mantêm 0-9; letras viram 17-42). Pesos e módulo 11 são os mesmos de sempre — `[5,4,3,2,9,8,7,
+  6,5,4,3,2]` para o 1º dígito, `[6,5,4,3,2,9,8,7,6,5,4,3,2]` para o 2º (que inclui o 1º DV);
+  resto da divisão por 11 vira dígito por `resto < 2 ? 0 : 11 - resto`. Confirmado com o exemplo
+  oficial `12.ABC.345/01DE-35` antes de implementar.
+- **Frontend:** `web/src/lib/masks.ts` — `somenteAlfanumerico()` (maiúsculas, mantém `0-9A-Z`)
+  em vez de `somenteDigitos()` (que descartaria as letras) para o CNPJ; `cnpjValido()` usa
+  `charCodeAt(0) - 48` em vez de `Number()`. CPF continua com `somenteDigitos`, sem mudança.
+- **Backend:** `api/.../cadastros/cliente/Documentos.java` — `somenteAlfanumerico()` análoga;
+  `digitos()` já fazia `c - '0'` (coincidentemente já era "ASCII menos 48"), só faltava não
+  descartar as letras antes de calcular. `cliente.cpf_cnpj` já era `text` no banco — sem
+  migration.
+- **Convenção para outras tabelas:** qualquer campo de CNPJ novo no projeto (fornecedor,
+  empresa/tenant etc.) **deve reaproveitar essa mesma lógica** — nunca limpar o valor com um
+  "só dígitos" antes de validar/persistir CNPJ. Registrado também em `CLAUDE.md` (seção
+  "Conventions to honor when building").
 
 **Tamanho dos campos (2026-07-20):** o formulário usa o grid de 12 colunas do design system
 (§3.7 da spec) em vez de uma coluna única — campos curtos por natureza (Número, UF, CEP,
@@ -100,6 +123,13 @@ novo; na edição ignora o próprio registro). Erros de submissão que não são
 específico (ex.: falha de rede, conflito do servidor) aparecem como um **pop-up** no canto
 superior direito (vermelho sólido, letras brancas — `web/src/components/Toast.tsx`), não mais
 no rodapé da página.
+
+**Validação replicada no backend (2026-07-21):** até então, formato de e-mail/celular/
+WhatsApp/CEP e a obrigatoriedade configurável por tela (`cfg_tela_campo`) só eram checados no
+frontend — `ClienteService.validar` (backend) só cobria gênero/data de nascimento/dígito
+verificador de CPF-CNPJ. Corrigido: a API agora replica todas essas regras (defesa em
+profundidade — nunca confiar só no cliente da API), consultando `ConfiguracaoTelaService`
+para saber quais campos estão marcados obrigatórios no tenant atual.
 
 **Tab pula o botão de categoria (2026-07-21):** "＋ Nova categoria" tem `tabIndex={-1}` — com
 a categoria já escolhida, `Tab` vai direto da Categoria para o CPF/CNPJ.
@@ -142,26 +172,36 @@ já precisa criar uma.
 
 - **Colunas:** Nome/Razão Social, CPF/CNPJ, Categoria, Telefone/WhatsApp, Cidade/UF, Status
   (Ativo/Inativo).
-- **Ordenação:** por `nome` (empate resolvido por `id_cliente`) — não por ordem de cadastro.
+- **Ordenação por coluna (2026-07-21):** qualquer cabeçalho é clicável e ordena ASC/DESC
+  (clicar de novo inverte a direção); default é `nome` ASC, empate resolvido por
+  `id_cliente`. Cabeçalho da grade em **destaque visual** (fundo diferenciado, borda inferior
+  mais grossa) e cada coluna mostra um ícone **"⇅"** discreto indicando que é ordenável — a
+  coluna ativa no momento troca para **"▲"/"▼"** em cor de destaque. Backend:
+  `GET /api/v1/clientes?ordenarPor=&direcao=`, com allowlist de colunas (nunca concatena o
+  parâmetro direto na SQL).
 - **Busca:** por nome (contém, digitação sempre em maiúsculas) e por CPF/CNPJ (exato, ignorando
   máscara).
 - **Filtros:** por categoria; por status (Ativo/Inativo/Todos — default mostra só Ativos).
 - **Paginação:** por **número de página** (`GET /api/v1/clientes?pagina=&limite=`, `LIMIT`/
   `OFFSET` + contagem total no backend — não é cursor, para permitir pular direto para
-  qualquer página). Navegação em **janela deslizante** (2026-07-21, estilo inspirado no sistema
-  legado): até 7 números centrados na página atual, mais os botões **« primeira** / **‹
-  anterior** / **próxima ›** / **última »** nas pontas (desabilitados quando não fazem
-  sentido — ex.: "primeira"/"anterior" apagados na página 1). Clicar em um número, ou em
-  "primeira"/"última", pula direto para aquela página. Seletor de itens por página: 10/20/50,
-  **padrão 10**.
-- **Layout fixo (2026-07-21):** o cabeçalho da tela (título "Clientes" + barra de filtros) e o
-  rodapé (contagem de clientes + paginação) não rolam, assim como o menu lateral do ERP; só a
+  qualquer página). Navegação em **janela deslizante** (estilo inspirado no sistema legado):
+  até 7 números centrados na página atual, mais os botões **« primeira** / **‹ anterior** /
+  **próxima ›** / **última »** nas pontas (desabilitados quando não fazem sentido — ex.:
+  "primeira"/"anterior" apagados na página 1). Clicar em um número, ou em "primeira"/"última",
+  pula direto para aquela página. **Tamanho fixo em 50 itens por página** (2026-07-21, sem
+  seletor — era 10/20/50 configurável, o dono do produto pediu para simplificar).
+- **Layout fixo:** o cabeçalho da tela (título "Clientes" + barra de filtros) e o rodapé
+  (contagem de clientes + paginação) não rolam, assim como o menu lateral do ERP; só a
   tabela tem scroll próprio (`.lista-tela`/`.lista-topo`/`.lista-corpo`/`.lista-rodape` em
   `web/src/styles.css`, convenção do shell reaproveitável em outras telas de listagem).
-- **Ações por linha (2026-07-21):** ícones em vez de texto — quadrado **azul** (lápis) para
-  editar, **vermelho** (lixeira) para excluir (`.acao-editar`/`.acao-excluir` em
-  `web/src/styles.css`, token de cor novo `--info` para o azul). Sem ícone de "visualizar"
-  (verde) — não existe modo somente-leitura separado de editar nesta tela.
+- **Grid compacta (2026-07-21):** espaçamento vertical entre linhas reduzido
+  (`.table-compacta`, `padding: 6px 16px` em vez de `12px 16px`).
+- **Ações por linha:** três ícones em vez de texto — **verde** (olho) para visualizar em modo
+  somente-leitura (`/clientes/:id/visualizar`, reaproveita o `ClienteForm` com a prop
+  `somenteLeitura` — todo o formulário vira um `<fieldset disabled>`, sem botão Salvar),
+  **azul** (lápis) para editar, **vermelho** (lixeira) para excluir
+  (`.acao-visualizar`/`.acao-editar`/`.acao-excluir` em `web/src/styles.css`, tokens de cor
+  `--sucesso`/`--info`/`--danger`).
 
 ## Exclusão de cliente
 
@@ -214,8 +254,8 @@ inativa em vez de excluir.**
 ## Impacto no contrato de API
 
 ```
-GET    /api/v1/clientes?nome=&cpf_cnpj=&id_categoria_cliente=&status=&pagina=&limite=
-                                               lista paginada (número de página), busca/filtro
+GET    /api/v1/clientes?nome=&cpf_cnpj=&id_categoria_cliente=&status=&pagina=&limite=&ordenarPor=&direcao=
+                                               lista paginada (número de página), busca/filtro/ordenação
 POST   /api/v1/clientes                      cria cliente
 GET    /api/v1/clientes/{id}                 detalhe
 PUT    /api/v1/clientes/{id}                 atualiza cliente

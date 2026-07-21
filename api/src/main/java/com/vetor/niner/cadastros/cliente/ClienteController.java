@@ -30,8 +30,10 @@ public class ClienteController {
             @RequestParam(required = false) Long idCategoriaCliente,
             @RequestParam(required = false) String status,
             @RequestParam(required = false) Integer pagina,
-            @RequestParam(required = false) Integer limite) {
-        return service.listar(nome, cpfCnpj, idCategoriaCliente, status, pagina, limite);
+            @RequestParam(required = false) Integer limite,
+            @RequestParam(required = false) String ordenarPor,
+            @RequestParam(required = false) String direcao) {
+        return service.listar(nome, cpfCnpj, idCategoriaCliente, status, pagina, limite, ordenarPor, direcao);
     }
 
     @GetMapping("/{id}")

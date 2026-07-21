@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
+import { IconeEngrenagem } from '../../components/Icones'
 import Toast from '../../components/Toast'
 import { ApiError } from '../../lib/api'
 import {
@@ -70,65 +71,70 @@ export default function ConfiguracaoTelaCliente() {
     setCampos((atual) => atual.map((c) => (c.campo === campo ? { ...c, obrigatorio } : c)))
 
   return (
-    <div>
-      <div className="topbar-tela">
-        <div>
-          <p className="eyebrow">Cadastros</p>
-          <h1 style={{ marginTop: 4 }}>Configurar tela de Cliente</h1>
+    <div className="lista-tela">
+      <div className="lista-topo">
+        <div className="topbar-tela">
+          <div className="titulo-tela">
+            <IconeEngrenagem size={29} />
+            <h1>Configurar tela de Cliente</h1>
+          </div>
+          <div className="topbar-acoes">
+            <button type="button" className="btn ghost" onClick={() => navigate('/clientes')}>
+              Cancelar
+            </button>
+            <button type="button" className="btn" disabled={salvar.isPending} onClick={() => salvar.mutate(campos)}>
+              {salvar.isPending ? 'Salvando…' : 'Salvar'}
+            </button>
+          </div>
+        </div>
+
+        <div className="card">
+          <p className="muted" style={{ margin: 0 }}>
+            Escolha quais campos aparecem no formulário de cliente e quais são obrigatórios. Nome e
+            Categoria sempre aparecem e são sempre obrigatórios (não configuráveis).
+          </p>
         </div>
       </div>
 
-      <div className="card" style={{ marginTop: 16 }}>
-        <p className="muted" style={{ marginTop: 0 }}>
-          Escolha quais campos aparecem no formulário de cliente e quais são obrigatórios. Nome e
-          Categoria sempre aparecem e são sempre obrigatórios (não configuráveis).
-        </p>
-
-        {isLoading ? (
-          <p className="muted">Carregando…</p>
-        ) : (
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Campo</th>
-                <th>Visível</th>
-                <th>Obrigatório</th>
-              </tr>
-            </thead>
-            <tbody>
-              {campos.map((c) => (
-                <tr key={c.campo}>
-                  <td>{ROTULOS[c.campo] ?? c.campo}</td>
-                  <td>
-                    <input
-                      type="checkbox"
-                      aria-label={`Exibir ${ROTULOS[c.campo] ?? c.campo}`}
-                      checked={c.visivel}
-                      onChange={(e) => alternarVisivel(c.campo, e.target.checked)}
-                    />
-                  </td>
-                  <td>
-                    <input
-                      type="checkbox"
-                      aria-label={`Obrigatório ${ROTULOS[c.campo] ?? c.campo}`}
-                      checked={c.obrigatorio}
-                      disabled={!c.visivel}
-                      onChange={(e) => alternarObrigatorio(c.campo, e.target.checked)}
-                    />
-                  </td>
+      <div className="lista-corpo">
+        <div className="card">
+          {isLoading ? (
+            <p className="muted">Carregando…</p>
+          ) : (
+            <table className="table table-compacta table-config-campos">
+              <thead>
+                <tr>
+                  <th>Campo</th>
+                  <th className="col-checkbox">Visível</th>
+                  <th className="col-checkbox">Obrigatório</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-
-        <div className="footer-bar">
-          <button type="button" className="btn ghost" onClick={() => navigate('/clientes')}>
-            Cancelar
-          </button>
-          <button type="button" className="btn" disabled={salvar.isPending} onClick={() => salvar.mutate(campos)}>
-            {salvar.isPending ? 'Salvando…' : 'Salvar'}
-          </button>
+              </thead>
+              <tbody>
+                {campos.map((c) => (
+                  <tr key={c.campo}>
+                    <td>{ROTULOS[c.campo] ?? c.campo}</td>
+                    <td className="col-checkbox">
+                      <input
+                        type="checkbox"
+                        aria-label={`Exibir ${ROTULOS[c.campo] ?? c.campo}`}
+                        checked={c.visivel}
+                        onChange={(e) => alternarVisivel(c.campo, e.target.checked)}
+                      />
+                    </td>
+                    <td className="col-checkbox">
+                      <input
+                        type="checkbox"
+                        aria-label={`Obrigatório ${ROTULOS[c.campo] ?? c.campo}`}
+                        checked={c.obrigatorio}
+                        disabled={!c.visivel}
+                        onChange={(e) => alternarObrigatorio(c.campo, e.target.checked)}
+                      />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
         </div>
       </div>
 

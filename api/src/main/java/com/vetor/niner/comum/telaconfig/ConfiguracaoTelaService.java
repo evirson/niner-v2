@@ -42,8 +42,13 @@ public class ConfiguracaoTelaService {
     public List<ConfiguracaoCampoResponse> listar(String chaveTela) {
         List<String> campos = camposValidos(chaveTela);
 
+        // Filtro por id_tenant explícito além do RLS: defesa em profundidade (mesmo motivo do
+        // INSERT em ConfiguracaoTelaService.salvar/ClienteService.criar usar
+        // plataforma.tenant_atual() explicitamente) — também evita que o ambiente de teste
+        // (datasource conecta como superusuário, sem RLS) vaze configuração entre tenants.
         Map<String, ConfiguracaoCampoResponse> salvos = jdbc.sql("""
-                        SELECT campo, visivel, obrigatorio FROM cfg_tela_campo WHERE chave_tela = ?
+                        SELECT campo, visivel, obrigatorio FROM cfg_tela_campo
+                        WHERE chave_tela = ? AND id_tenant = plataforma.tenant_atual()
                         """)
                 .param(chaveTela)
                 .query((rs, n) -> new ConfiguracaoCampoResponse(

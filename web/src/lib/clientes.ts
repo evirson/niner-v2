@@ -6,6 +6,7 @@ import {
   mascararCpfCnpj,
   mascararIdWhatsapp,
   mascararTelefone,
+  somenteAlfanumerico,
   somenteDigitos,
 } from './masks'
 import { maiusculas } from './texto'
@@ -136,11 +137,19 @@ export function paraRequisicao(f: ClienteFormState) {
   const semMascara = (v: string) => (v ? somenteDigitos(v) : null)
   const semEspacos = (v: string) => (v.trim() ? v.trim() : null)
   const maiusculoOuNulo = (v: string) => (v.trim() ? maiusculas(v.trim()) : null)
+  // CNPJ é alfanumérico (Receita Federal, a partir de julho/2026) — não usar somenteDigitos
+  // aqui, senão as letras da raiz/ordem seriam descartadas antes de chegar na API. CPF
+  // continua só dígitos.
+  const cpfCnpjLimpo = f.cpfCnpj
+    ? f.fisicaJuridica
+      ? somenteDigitos(f.cpfCnpj)
+      : somenteAlfanumerico(f.cpfCnpj)
+    : null
   return {
     fisicaJuridica: f.fisicaJuridica,
     nome: maiusculas(f.nome.trim()),
     idCategoriaCliente: f.idCategoriaCliente,
-    cpfCnpj: semMascara(f.cpfCnpj),
+    cpfCnpj: cpfCnpjLimpo,
     rgIe: maiusculoOuNulo(f.rgIe),
     dataNascimento: f.fisicaJuridica && f.dataNascimento ? f.dataNascimento : null,
     genero: f.fisicaJuridica && f.genero ? f.genero : null,
@@ -175,6 +184,9 @@ export interface ExclusaoCliente {
   motivo: string | null
 }
 
+export type ColunaOrdenacao = 'nome' | 'cpfCnpj' | 'categoria' | 'telefone' | 'cidade' | 'status'
+export type DirecaoOrdenacao = 'ASC' | 'DESC'
+
 export interface FiltrosClientes {
   nome?: string
   cpfCnpj?: string
@@ -182,6 +194,8 @@ export interface FiltrosClientes {
   status?: StatusCliente
   pagina?: number
   tamanho?: number
+  ordenarPor?: ColunaOrdenacao
+  direcao?: DirecaoOrdenacao
 }
 
 export function listarClientes(filtros: FiltrosClientes): Promise<PaginaClientes> {
@@ -192,6 +206,8 @@ export function listarClientes(filtros: FiltrosClientes): Promise<PaginaClientes
   if (filtros.status) params.set('status', filtros.status)
   if (filtros.pagina) params.set('pagina', String(filtros.pagina))
   if (filtros.tamanho) params.set('limite', String(filtros.tamanho))
+  if (filtros.ordenarPor) params.set('ordenarPor', filtros.ordenarPor)
+  if (filtros.direcao) params.set('direcao', filtros.direcao)
   const query = params.toString()
   return api<PaginaClientes>(`/api/v1/clientes${query ? `?${query}` : ''}`)
 }

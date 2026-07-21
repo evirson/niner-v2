@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import AjudaDaTela from '../../components/AjudaDaTela'
 import CategoriaClienteModal from '../../components/CategoriaClienteModal'
-import { IconeEngrenagem } from '../../components/Icones'
+import { IconeCliente, IconeEngrenagem } from '../../components/Icones'
 import LinhaGrid from '../../components/LinhaGrid'
 import Toast from '../../components/Toast'
 import { ApiError } from '../../lib/api'
@@ -30,6 +30,7 @@ import {
   mascararIdWhatsapp,
   mascararMoeda,
   mascararTelefone,
+  somenteAlfanumerico,
   somenteDigitos,
 } from '../../lib/masks'
 import { maiusculas } from '../../lib/texto'
@@ -125,7 +126,7 @@ function validarCampo(
   }
 }
 
-export default function ClienteForm() {
+export default function ClienteForm({ somenteLeitura = false }: { somenteLeitura?: boolean }) {
   const { id } = useParams()
   const editando = Boolean(id)
   const navigate = useNavigate()
@@ -186,7 +187,8 @@ export default function ClienteForm() {
       setErros((e) => ({ ...e, cpfCnpj: 'CPF/CNPJ inválido — confira os dígitos.' }))
       return
     }
-    const jaExiste = await cpfCnpjJaExiste(somenteDigitos(form.cpfCnpj), editando ? Number(id) : undefined)
+    const documentoLimpo = form.fisicaJuridica ? somenteDigitos(form.cpfCnpj) : somenteAlfanumerico(form.cpfCnpj)
+    const jaExiste = await cpfCnpjJaExiste(documentoLimpo, editando ? Number(id) : undefined)
     setErros((e) => ({
       ...e,
       cpfCnpj: jaExiste ? `${form.fisicaJuridica ? 'CPF' : 'CNPJ'} já cadastrado para outro cliente.` : undefined,
@@ -230,6 +232,7 @@ export default function ClienteForm() {
 
   const submeter = (e: FormEvent) => {
     e.preventDefault()
+    if (somenteLeitura) return
 
     const cpfCnpjErro = (() => {
       if (!campoVisivel('cpfCnpj', mapaConfig)) return undefined
@@ -275,31 +278,40 @@ export default function ClienteForm() {
   }
 
   return (
-    <div>
-      <div className="topbar-tela">
-        <h1>Cliente</h1>
-        <div className="topbar-acoes">
-          {ehAdmin && (
-            <Link
-              className="btn ghost ajuda-gatilho"
-              to="/clientes/configuracao"
-              aria-label="Configurar tela de cliente"
-              title="Configurar campos desta tela"
-            >
-              <IconeEngrenagem />
-            </Link>
-          )}
-          <AjudaDaTela chaveTela={CHAVE_TELA} />
-          <button type="button" className="btn ghost" onClick={() => navigate('/clientes')}>
-            Cancelar
-          </button>
-          <button type="submit" form="form-cliente" className="btn" disabled={salvar.isPending}>
-            {salvar.isPending ? 'Salvando…' : 'Salvar'}
-          </button>
+    <div className="lista-tela">
+      <div className="lista-topo">
+        <div className="topbar-tela">
+          <div className="titulo-tela">
+            <IconeCliente size={34} />
+            <h1>Cliente</h1>
+          </div>
+          <div className="topbar-acoes">
+            {ehAdmin && (
+              <Link
+                className="btn ghost ajuda-gatilho"
+                to="/clientes/configuracao"
+                aria-label="Configurar tela de cliente"
+                title="Configurar campos desta tela"
+              >
+                <IconeEngrenagem />
+              </Link>
+            )}
+            <AjudaDaTela chaveTela={CHAVE_TELA} />
+            <button type="button" className="btn ghost" onClick={() => navigate('/clientes')}>
+              {somenteLeitura ? 'Voltar' : 'Cancelar'}
+            </button>
+            {!somenteLeitura && (
+              <button type="submit" form="form-cliente" className="btn" disabled={salvar.isPending}>
+                {salvar.isPending ? 'Salvando…' : 'Salvar'}
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
+      <div className="lista-corpo">
       <form id="form-cliente" className="card form-secoes form-secoes-larga" onSubmit={submeter} noValidate>
+      <fieldset disabled={somenteLeitura} className="form-fieldset">
         <section className="section">
           <p className="section-label">Identificação</p>
 
@@ -734,8 +746,9 @@ export default function ClienteForm() {
             </div>
           </section>
         )}
-
+      </fieldset>
       </form>
+      </div>
 
       {modalCategoriaAberto && (
         <CategoriaClienteModal

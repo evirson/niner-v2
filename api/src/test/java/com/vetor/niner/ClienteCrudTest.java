@@ -151,6 +151,40 @@ class ClienteCrudTest {
     }
 
     @Test
+    void cnpjAlfanumericoValidoEhAceitoEArmazenadoEmMaiusculas() throws Exception {
+        // CNPJ alfanumérico (Receita Federal, IN RFB 2.229/2024, a partir de julho/2026): as
+        // 12 primeiras posições podem ser letras — exemplo oficial "12.ABC.345/01DE-35"
+        // (dígitos verificadores 35 conferidos manualmente com o algoritmo módulo 11).
+        String token = assinarNovoTenant("cnpj-alfa");
+        long idCategoria = criarCategoria(token, "Atacado");
+
+        String cliente = """
+                {"fisicaJuridica":false,"nome":"Empresa Alfanumerica","idCategoriaCliente":%d,
+                 "cpfCnpj":"12.ABC.345/01DE-35"}
+                """.formatted(idCategoria);
+
+        mvc.perform(post("/api/v1/clientes").header("Authorization", "Bearer " + token)
+                        .contentType(APPLICATION_JSON).content(cliente))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.cpfCnpj").value("12ABC34501DE35"));
+    }
+
+    @Test
+    void cnpjAlfanumericoComDigitoVerificadorInvalidoEhRejeitado() throws Exception {
+        String token = assinarNovoTenant("cnpj-alfa-invalido");
+        long idCategoria = criarCategoria(token, "Atacado");
+
+        String cliente = """
+                {"fisicaJuridica":false,"nome":"Empresa Alfanumerica Invalida","idCategoriaCliente":%d,
+                 "cpfCnpj":"12.ABC.345/01DE-99"}
+                """.formatted(idCategoria);
+
+        mvc.perform(post("/api/v1/clientes").header("Authorization", "Bearer " + token)
+                        .contentType(APPLICATION_JSON).content(cliente))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
     void cpfComDigitoVerificadorInvalidoEhRejeitado() throws Exception {
         String token = assinarNovoTenant("cpf-invalido");
         long idCategoria = criarCategoria(token, "Padrão");
@@ -163,6 +197,110 @@ class ClienteCrudTest {
         mvc.perform(post("/api/v1/clientes").header("Authorization", "Bearer " + token)
                         .contentType(APPLICATION_JSON).content(cliente))
                 .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void emailComFormatoInvalidoEhRejeitado() throws Exception {
+        String token = assinarNovoTenant("email-invalido");
+        long idCategoria = criarCategoria(token, "Padrão");
+
+        String cliente = """
+                {"fisicaJuridica":false,"nome":"Email Invalido","idCategoriaCliente":%d,
+                 "email":"nao-e-um-email"}
+                """.formatted(idCategoria);
+
+        mvc.perform(post("/api/v1/clientes").header("Authorization", "Bearer " + token)
+                        .contentType(APPLICATION_JSON).content(cliente))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void celularForaDoPadraoEhRejeitado() throws Exception {
+        // Validação de formato (docs/telas/cliente.md): 11 dígitos com o 3º = 9. Antes
+        // (2026-07-21) só o frontend checava isso — a API aceitava qualquer texto.
+        String token = assinarNovoTenant("celular-invalido");
+        long idCategoria = criarCategoria(token, "Padrão");
+
+        String cliente = """
+                {"fisicaJuridica":false,"nome":"Celular Invalido","idCategoriaCliente":%d,
+                 "telefone":"1133334444"}
+                """.formatted(idCategoria);
+
+        mvc.perform(post("/api/v1/clientes").header("Authorization", "Bearer " + token)
+                        .contentType(APPLICATION_JSON).content(cliente))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void cepComMenosDeOitoDigitosEhRejeitado() throws Exception {
+        String token = assinarNovoTenant("cep-invalido");
+        long idCategoria = criarCategoria(token, "Padrão");
+
+        String cliente = """
+                {"fisicaJuridica":false,"nome":"Cep Invalido","idCategoriaCliente":%d,"cep":"12345"}
+                """.formatted(idCategoria);
+
+        mvc.perform(post("/api/v1/clientes").header("Authorization", "Bearer " + token)
+                        .contentType(APPLICATION_JSON).content(cliente))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void campoMarcadoObrigatorioNaConfiguracaoDeTelaEhExigidoNoBackend() throws Exception {
+        // A obrigatoriedade configurável (cfg_tela_campo, docs/telas/configuracao-tela.md) só
+        // era aplicada no frontend antes de 2026-07-21 — a API aceitava o campo vazio mesmo
+        // configurado como obrigatório. Este teste prova que agora a API também rejeita.
+        String token = assinarNovoTenant("campo-obrigatorio");
+        long idCategoria = criarCategoria(token, "Padrão");
+
+        mvc.perform(put("/api/v1/config-tela/cadastros.cliente.form").header("Authorization", "Bearer " + token)
+                        .contentType(APPLICATION_JSON)
+                        .content("[{\"campo\":\"email\",\"visivel\":true,\"obrigatorio\":true}]"))
+                .andExpect(status().isOk());
+
+        String clienteSemEmail = """
+                {"fisicaJuridica":false,"nome":"Sem Email","idCategoriaCliente":%d}
+                """.formatted(idCategoria);
+
+        mvc.perform(post("/api/v1/clientes").header("Authorization", "Bearer " + token)
+                        .contentType(APPLICATION_JSON).content(clienteSemEmail))
+                .andExpect(status().isBadRequest());
+
+        String clienteComEmail = """
+                {"fisicaJuridica":false,"nome":"Com Email","idCategoriaCliente":%d,"email":"a@b.com"}
+                """.formatted(idCategoria);
+
+        mvc.perform(post("/api/v1/clientes").header("Authorization", "Bearer " + token)
+                        .contentType(APPLICATION_JSON).content(clienteComEmail))
+                .andExpect(status().isCreated());
+    }
+
+    @Test
+    void listagemOrdenaPorColunaEDirecaoPedidas() throws Exception {
+        // Prefixo único (não só "A"/"B"/"C") para o filtro por nome não pegar clientes de
+        // outros testes — o datasource de teste não aplica RLS (ver comentário do primeiro
+        // teste desta classe), então a tabela `cliente` é efetivamente compartilhada aqui.
+        String token = assinarNovoTenant("ordenacao");
+        long idCategoria = criarCategoria(token, "Padrão");
+
+        criarClienteSimples(token, idCategoria, "ORDENACAOTESTE BETA");
+        criarClienteSimples(token, idCategoria, "ORDENACAOTESTE ALFA");
+        criarClienteSimples(token, idCategoria, "ORDENACAOTESTE GAMA");
+
+        mvc.perform(get("/api/v1/clientes").param("nome", "ORDENACAOTESTE")
+                        .param("ordenarPor", "nome").param("direcao", "DESC")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.itens[0].nome").value("ORDENACAOTESTE GAMA"));
+    }
+
+    private void criarClienteSimples(String token, long idCategoria, String nome) throws Exception {
+        String cliente = """
+                {"fisicaJuridica":false,"nome":"%s","idCategoriaCliente":%d}
+                """.formatted(nome, idCategoria);
+        mvc.perform(post("/api/v1/clientes").header("Authorization", "Bearer " + token)
+                        .contentType(APPLICATION_JSON).content(cliente))
+                .andExpect(status().isCreated());
     }
 
     @Test

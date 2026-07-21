@@ -5,7 +5,7 @@
   --field-bg: #e4e6e2; --field-text: #20262a; --label-color: #5c6660;
   --ink: #20262a; --ink-muted: #5c6660;
   --accent: #1f6f6b; --accent-ink: #ffffff;
-  --line: #dee2dc; --line-strong: #b9beb5; --danger: #a63d29; --info: #3060c0;
+  --line: #dee2dc; --line-strong: #b9beb5; --danger: #a63d29; --info: #3060c0; --sucesso: #2f9e44;
   --radius: 10px;
 }
 @media (prefers-color-scheme: dark) {
@@ -14,24 +14,44 @@
     --field-bg: #2a3336; --field-text: #e7ecec; --label-color: #93a19e;
     --ink: #e7ecec; --ink-muted: #93a19e;
     --accent: #4fbdb2; --accent-ink: #0b1416;
-    --line: #2a3538; --line-strong: #4a5457; --danger: #e2836a; --info: #6d9dff;
+    --line: #2a3538; --line-strong: #4a5457; --danger: #e2836a; --info: #6d9dff; --sucesso: #5cc27a;
   }
 }
 :root[data-theme='light'] {
   --ground: #f5f4f0; --surface: #ffffff; --surface-2: #edece6;
   --field-bg: #e4e6e2; --field-text: #20262a; --label-color: #5c6660;
   --ink: #20262a; --ink-muted: #5c6660; --accent: #1f6f6b; --accent-ink: #ffffff;
-  --line: #dee2dc; --line-strong: #b9beb5; --danger: #a63d29; --info: #3060c0;
+  --line: #dee2dc; --line-strong: #b9beb5; --danger: #a63d29; --info: #3060c0; --sucesso: #2f9e44;
 }
 :root[data-theme='dark'] {
   --ground: #12181a; --surface: #1a2225; --surface-2: #202a2d;
   --field-bg: #2a3336; --field-text: #e7ecec; --label-color: #93a19e;
   --ink: #e7ecec; --ink-muted: #93a19e; --accent: #4fbdb2; --accent-ink: #0b1416;
-  --line: #2a3538; --line-strong: #4a5457; --danger: #e2836a; --info: #6d9dff;
+  --line: #2a3538; --line-strong: #4a5457; --danger: #e2836a; --info: #6d9dff; --sucesso: #5cc27a;
 }
 
 * { box-sizing: border-box; }
-html, body, #root { height: 100%; }
+
+/* Barra de rolagem no padrão de cores da tela (2026-07-21) — o scrollbar nativo do navegador
+   (cinza claro) destoava do tema escuro. Usa os mesmos tokens de cor do resto do design
+   system, então acompanha sozinho o tema claro/escuro. */
+* { scrollbar-width: thin; scrollbar-color: var(--line-strong) var(--surface-2); }
+*::-webkit-scrollbar { width: 12px; height: 12px; }
+*::-webkit-scrollbar-track { background: var(--surface-2); }
+*::-webkit-scrollbar-thumb {
+  background: var(--line-strong); border-radius: 999px; border: 3px solid var(--surface-2);
+}
+*::-webkit-scrollbar-thumb:hover { background: var(--ink-muted); }
+
+/* Reset do fieldset nativo (usado para desabilitar telas em modo somente-leitura de uma vez —
+   `disabled` num fieldset cascata pra todo campo/botão descendente, sem repetir em cada um). */
+.form-fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
+/* `overflow: hidden` aqui é essencial, não cosmético: sem ele, se `.app` (height: 100vh)
+   ficar 1px mais alto que o viewport real por qualquer motivo (zoom do navegador, escala do
+   Windows, arredondamento) o documento inteiro passa a rolar — inclusive o menu lateral e
+   qualquer cabeçalho "fixo" — porque esse scroll do documento não passa pelos containers
+   internos (`.app-main`/`.lista-corpo`) que fazem o scroll controlado. */
+html, body, #root { height: 100%; overflow: hidden; }
 body {
   margin: 0; background: var(--ground); color: var(--ink);
   font: 15px/1.55 system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
@@ -83,6 +103,10 @@ input:focus-visible, select:focus-visible {
 .topbar-tela { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
 .topbar-acoes { display: flex; gap: 8px; align-items: center; }
 
+/* Ícone que identifica a função da tela, à esquerda do título (2026-07-21). */
+.titulo-tela { display: flex; align-items: center; gap: 10px; }
+.titulo-tela svg { color: var(--accent); flex-shrink: 0; }
+
 /* Tela de listagem com cabeçalho fixo e só a tabela rolando (Clientes e demais telas de
    cadastro): `.lista-topo` não rola; `.lista-corpo` é a única área com scroll. */
 .lista-tela { display: flex; flex-direction: column; height: 100%; }
@@ -106,15 +130,38 @@ input:focus-visible, select:focus-visible {
 .paginacao-numero.ativa { background: var(--accent); color: var(--accent-ink); border-color: transparent; }
 .paginacao-seta { padding: 7px 9px; display: inline-flex; align-items: center; }
 
-.table-wrap { overflow-x: auto; padding: 0; }
+/* `overflow-x: auto` sozinho já força um contexto de rolagem próprio neste elemento (o
+   navegador trata overflow-y como "auto" também quando só overflow-x é definido) — sem
+   `height: 100%` aqui, esse contexto nunca chega a rolar de verdade (quem rola é o
+   `.lista-corpo` por fora) e o cabeçalho `position: sticky` da tabela gruda nesse contexto
+   errado, "sumindo" ao rolar em vez de ficar fixo. */
+.table-wrap { overflow-x: auto; overflow-y: auto; height: 100%; padding: 0; }
 .table { width: 100%; border-collapse: collapse; font-size: 14px; }
 .table th, .table td { padding: 12px 16px; text-align: left; border-bottom: 1px solid var(--line); white-space: nowrap; }
-.table th { color: var(--label-color); font-size: 12px; text-transform: uppercase; letter-spacing: .5px; font-weight: 600; }
+.table th {
+  color: var(--label-color); font-size: 12px; text-transform: uppercase; letter-spacing: .5px;
+  font-weight: 700; background: var(--surface-2); border-bottom: 2px solid var(--line-strong);
+  position: sticky; top: 0; z-index: 1;
+}
 .table tbody tr:last-child td { border-bottom: 0; }
+/* Grid de dados mais densa (2026-07-21, pedido do dono do produto) — menos espaço vertical
+   entre linhas que o padrão de outras tabelas/cards do design system. */
+.table-compacta th, .table-compacta td { padding: 6px 16px; }
+
+/* Configuração de tela (Visível/Obrigatório): coluna estreita e centralizada — cabeçalho e
+   checkbox alinhados um embaixo do outro. Cabeçalho fixo (sticky) dentro do card com scroll. */
+.table-config-campos .col-checkbox { width: 140px; text-align: center; }
+
 .acoes-cell { display: flex; gap: 8px; }
 .acoes-cell .btn { padding: 7px 12px; font-size: 13px; }
 
-/* Ícones de ação por linha (editar/excluir) — quadrados coloridos, símbolo em vez de texto. */
+/* Cabeçalho de coluna ordenável (2026-07-21) — clique alterna ASC/DESC. */
+.th-ordenavel { cursor: pointer; user-select: none; }
+.th-ordenavel:hover { color: var(--ink); background: var(--surface); }
+.th-seta { display: inline-block; width: 14px; margin-left: 2px; color: var(--ink-muted); opacity: .45; }
+.th-seta-ativa { color: var(--accent); opacity: 1; font-weight: 700; }
+
+/* Ícones de ação por linha (visualizar/editar/excluir) — quadrados coloridos, símbolo em vez de texto. */
 .acao-icone {
   width: 32px; height: 32px; padding: 0; border: 0; border-radius: 8px;
   display: inline-flex; align-items: center; justify-content: center;
@@ -123,6 +170,7 @@ input:focus-visible, select:focus-visible {
 .acao-icone:hover { filter: brightness(1.1); }
 .acao-icone:active { transform: scale(0.94); }
 .acao-icone:disabled { opacity: .5; cursor: default; filter: none; }
+.acao-visualizar { background: var(--sucesso); }
 .acao-editar { background: var(--info); }
 .acao-excluir { background: var(--danger); }
 

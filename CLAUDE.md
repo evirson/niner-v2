@@ -64,7 +64,8 @@ Per spec §3.5: `docker compose up -d db && docker compose run --rm flyway` brin
 
 ## Conventions to honor when building
 
-- API: version in path (`/api/v1/...`); errors as Problem Details (RFC 9457); cursor pagination for lists; OpenAPI written **before** implementation (the contract is part of the feature spec).
+- API: version in path (`/api/v1/...`); errors as Problem Details (RFC 9457); list endpoints paginate by page number (`pagina`/`limite`, `LIMIT/OFFSET` + total count) — not cursor, so screens can jump to any page (revised 2026-07-21, see `docs/PROGRESSO.md`); OpenAPI written **before** implementation (the contract is part of the feature spec).
 - Flyway migrations under `db/migration`, versioned and reversible.
 - Channel credentials encrypted at rest (AES-GCM, key outside the DB); `JSONB` for raw integration payloads.
 - Everything (identifiers, table/column names, domain language) is in **Portuguese** — match the existing vocabulary (`produto`, `variacao`, `estoque`, `movimentacao_estoque`, `canal`, `anuncio`, `pedido`).
+- **CPF/CNPJ validation:** CPF is always 11 numeric digits (unchanged). CNPJ is **alphanumeric** since Receita Federal's IN RFB 2.229/2024 (rollout from July 2026): positions 1–12 (raiz+ordem) accept `0-9A-Z`, positions 13–14 (check digits) are always numeric. Check-digit algorithm: each character's value = ASCII code minus 48 (digits keep 0–9, letters become 17–42); same weights/mod-11 as before (`[5,4,3,2,9,8,7,6,5,4,3,2]` then `[6,5,4,3,2,9,8,7,6,5,4,3,2]`). **Any table with a CNPJ field must reuse this logic** — see `web/src/lib/masks.ts` (`somenteAlfanumerico`, `cnpjValido`) and `api/.../cadastros/cliente/Documentos.java` for the reference implementation; never strip letters with a digits-only cleaner before validating/persisting a CNPJ.

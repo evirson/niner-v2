@@ -5,6 +5,8 @@ import com.vetor.niner.cadastros.cliente.ClienteDtos.ClienteResponse;
 import com.vetor.niner.cadastros.cliente.ClienteDtos.ExclusaoClienteResponse;
 import com.vetor.niner.cadastros.cliente.ClienteDtos.Genero;
 import com.vetor.niner.cadastros.cliente.ClienteDtos.PaginaClientes;
+import com.vetor.niner.comum.telaconfig.ConfiguracaoTelaDtos.ConfiguracaoCampoResponse;
+import com.vetor.niner.comum.telaconfig.ConfiguracaoTelaService;
 import com.vetor.niner.comum.web.ConflitoDadosException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.DuplicateKeyException;
@@ -21,6 +23,9 @@ import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 import static org.springframework.http.HttpStatus.NOT_FOUND;
 
@@ -35,11 +40,33 @@ public class ClienteService {
 
     private static final int TAMANHO_PAGINA_PADRAO = 20;
     private static final int TAMANHO_PAGINA_MAXIMO = 100;
+    private static final String CHAVE_TELA_FORM = "cadastros.cliente.form";
+    private static final Pattern EMAIL_PATTERN = Pattern.compile("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$");
+
+    /** Colunas ordenáveis da listagem (§ tela de listagem) — chave da API -> expressão SQL. */
+    private static final Map<String, String> COLUNAS_ORDENAVEIS = Map.of(
+            "nome", "c.nome",
+            "cpfCnpj", "c.cpf_cnpj",
+            "categoria", "cc.nome_categoria",
+            "telefone", "c.telefone",
+            "cidade", "c.cidade",
+            "status", "c.ativo");
+
+    private static final Map<String, String> ROTULOS_CAMPO = Map.ofEntries(
+            Map.entry("cpfCnpj", "CPF/CNPJ"), Map.entry("rgIe", "RG/Inscrição Estadual"),
+            Map.entry("email", "E-mail"), Map.entry("telefone", "Celular"),
+            Map.entry("whatsapp", "Id. WhatsApp"), Map.entry("instagram", "Instagram"),
+            Map.entry("facebook", "Facebook"), Map.entry("tiktok", "TikTok"), Map.entry("cep", "CEP"),
+            Map.entry("endereco", "Endereço"), Map.entry("numero", "Número"),
+            Map.entry("complemento", "Complemento"), Map.entry("bairro", "Bairro"),
+            Map.entry("cidade", "Cidade"), Map.entry("estado", "UF"));
 
     private final JdbcClient jdbc;
+    private final ConfiguracaoTelaService configuracaoTelaService;
 
-    public ClienteService(JdbcClient jdbc) {
+    public ClienteService(JdbcClient jdbc, ConfiguracaoTelaService configuracaoTelaService) {
         this.jdbc = jdbc;
+        this.configuracaoTelaService = configuracaoTelaService;
     }
 
     /**
@@ -50,9 +77,14 @@ public class ClienteService {
      */
     @Transactional(readOnly = true)
     public PaginaClientes listar(String nome, String cpfCnpj, Long idCategoriaCliente,
-                                  String status, Integer pagina, Integer limite) {
+                                  String status, Integer pagina, Integer limite,
+                                  String ordenarPor, String direcao) {
         int tamanho = limite == null ? TAMANHO_PAGINA_PADRAO : Math.min(Math.max(limite, 1), TAMANHO_PAGINA_MAXIMO);
         int paginaAtual = pagina == null ? 1 : Math.max(pagina, 1);
+        // Map.of() é imutável e não aceita chave nula em getOrDefault — checar antes (ordenarPor
+        // é opcional na API, vem nulo quando o cliente não pede ordenação específica).
+        String colunaOrdenacao = ordenarPor == null ? "c.nome" : COLUNAS_ORDENAVEIS.getOrDefault(ordenarPor, "c.nome");
+        String direcaoOrdenacao = "DESC".equalsIgnoreCase(direcao) ? "DESC" : "ASC";
 
         StringBuilder filtro = new StringBuilder(" WHERE 1 = 1");
         List<Object> params = new ArrayList<>();
@@ -63,7 +95,7 @@ public class ClienteService {
         }
         if (cpfCnpj != null && !cpfCnpj.isBlank()) {
             filtro.append(" AND c.cpf_cnpj = ?");
-            params.add(Documentos.somenteDigitos(cpfCnpj));
+            params.add(Documentos.somenteAlfanumerico(cpfCnpj));
         }
         if (idCategoriaCliente != null) {
             filtro.append(" AND c.id_categoria_cliente = ?");
@@ -83,7 +115,12 @@ public class ClienteService {
         List<Object> paramsPagina = new ArrayList<>(params);
         paramsPagina.add((long) tamanho);
         paramsPagina.add((long) (paginaAtual - 1) * tamanho);
-        List<ClienteResponse> itens = jdbc.sql(SELECT_BASE + filtro + " ORDER BY c.nome, c.id_cliente LIMIT ? OFFSET ?")
+        // Colunas fixas no whitelist (COLUNAS_ORDENAVEIS) — nunca vem do cliente sem passar por
+        // esse mapa, então não há risco de injeção mesmo concatenando direto na SQL. Desempate
+        // sempre por id_cliente, na mesma direção, para a paginação ficar estável entre páginas.
+        String ordenacao = " ORDER BY " + colunaOrdenacao + " " + direcaoOrdenacao
+                + ", c.id_cliente " + direcaoOrdenacao + " LIMIT ? OFFSET ?";
+        List<ClienteResponse> itens = jdbc.sql(SELECT_BASE + filtro + ordenacao)
                 .params(paramsPagina)
                 .query(ClienteService::mapear)
                 .list();
@@ -191,6 +228,14 @@ public class ClienteService {
         return new ExclusaoClienteResponse("excluido", null);
     }
 
+    /**
+     * Validação de servidor (defesa em profundidade — o formulário já valida no frontend,
+     * mas a API nunca deve confiar só nisso: 2026-07-21, revisão pedida pelo dono do
+     * produto). Cobre formato (e-mail/celular/WhatsApp/CEP) e a obrigatoriedade configurável
+     * por tenant (`cfg_tela_campo`, mesma fonte usada pelo frontend em
+     * `ConfiguracaoTelaCliente`/`ClienteForm`) — campo obrigatório vazio é rejeitado aqui
+     * mesmo que o cliente da API não seja o `web/` (ex.: integração futura).
+     */
     private void validar(ClienteRequest req) {
         if (req.fisicaJuridica() && req.genero() == null) {
             throw new IllegalArgumentException("Gênero é obrigatório para pessoa física.");
@@ -203,6 +248,53 @@ public class ClienteService {
         if (req.cpfCnpj() != null && !req.cpfCnpj().isBlank() && !Documentos.valido(req.cpfCnpj())) {
             throw new IllegalArgumentException("CPF/CNPJ inválido (dígito verificador não confere).");
         }
+        if (req.email() != null && !req.email().isBlank() && !EMAIL_PATTERN.matcher(req.email()).matches()) {
+            throw new IllegalArgumentException("E-mail inválido.");
+        }
+        if (!celularValidoOuVazio(req.telefone())) {
+            throw new IllegalArgumentException("Celular deve ter 11 dígitos (DDD + 9XXXX-XXXX).");
+        }
+        if (!celularValidoOuVazio(req.whatsapp())) {
+            throw new IllegalArgumentException("Id. WhatsApp deve ter 11 dígitos (DDD + 9XXXX-XXXX).");
+        }
+        String cepDigitos = Documentos.somenteDigitos(req.cep());
+        if (cepDigitos != null && !cepDigitos.isEmpty() && cepDigitos.length() != 8) {
+            throw new IllegalArgumentException("CEP inválido.");
+        }
+
+        Map<String, ConfiguracaoCampoResponse> config = configuracaoTelaService.listar(CHAVE_TELA_FORM).stream()
+                .collect(Collectors.toMap(ConfiguracaoCampoResponse::campo, c -> c));
+        exigirSeObrigatorio(config, "cpfCnpj", req.cpfCnpj());
+        exigirSeObrigatorio(config, "rgIe", req.rgIe());
+        exigirSeObrigatorio(config, "email", req.email());
+        exigirSeObrigatorio(config, "telefone", req.telefone());
+        exigirSeObrigatorio(config, "whatsapp", req.whatsapp());
+        exigirSeObrigatorio(config, "instagram", req.instagram());
+        exigirSeObrigatorio(config, "facebook", req.facebook());
+        exigirSeObrigatorio(config, "tiktok", req.tiktok());
+        exigirSeObrigatorio(config, "cep", req.cep());
+        exigirSeObrigatorio(config, "endereco", req.endereco());
+        exigirSeObrigatorio(config, "numero", req.numero());
+        exigirSeObrigatorio(config, "complemento", req.complemento());
+        exigirSeObrigatorio(config, "bairro", req.bairro());
+        exigirSeObrigatorio(config, "cidade", req.cidade());
+        exigirSeObrigatorio(config, "estado", req.estado());
+    }
+
+    private static boolean celularValidoOuVazio(String valor) {
+        String d = Documentos.somenteDigitos(valor);
+        if (d == null || d.isEmpty()) {
+            return true;
+        }
+        return d.length() == 11 && d.charAt(2) == '9';
+    }
+
+    private static void exigirSeObrigatorio(Map<String, ConfiguracaoCampoResponse> config, String campo, String valor) {
+        ConfiguracaoCampoResponse c = config.get(campo);
+        if (c != null && c.obrigatorio() && (valor == null || valor.isBlank())) {
+            throw new IllegalArgumentException(
+                    ROTULOS_CAMPO.getOrDefault(campo, campo) + " é obrigatório.");
+        }
     }
 
     /**
@@ -213,7 +305,10 @@ public class ClienteService {
      * (caixa preservada, convenção usual de e-mail).
      */
     private static void adicionarCamposComuns(List<Object> params, ClienteRequest r) {
-        params.add(Documentos.somenteDigitos(r.cpfCnpj()));
+        // CNPJ é alfanumérico (Receita Federal, a partir de julho/2026) — não usar
+        // somenteDigitos aqui, senão as letras da raiz/ordem seriam descartadas. CPF
+        // continua só dígitos.
+        params.add(r.fisicaJuridica() ? Documentos.somenteDigitos(r.cpfCnpj()) : Documentos.somenteAlfanumerico(r.cpfCnpj()));
         params.add(trimMaiusculoOuNulo(r.rgIe()));
         params.add(r.dataNascimento());
         params.add(r.genero() == null ? null : r.genero().name());

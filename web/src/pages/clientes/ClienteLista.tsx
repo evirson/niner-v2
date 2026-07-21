@@ -3,9 +3,11 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import AjudaDaTela from '../../components/AjudaDaTela'
 import {
+  IconeCliente,
   IconeEditar,
   IconeEngrenagem,
   IconeExcluir,
+  IconeOlho,
   IconePaginaAnterior,
   IconePrimeiraPagina,
   IconeProximaPagina,
@@ -17,6 +19,7 @@ import {
   listarCategorias,
   listarClientes,
   type Cliente,
+  type ColunaOrdenacao,
   type StatusCliente,
 } from '../../lib/clientes'
 import { useEu } from '../../lib/eu'
@@ -24,6 +27,16 @@ import { mascararCpfCnpj, mascararIdWhatsapp, mascararTelefone } from '../../lib
 import { maiusculas } from '../../lib/texto'
 
 const JANELA_PAGINACAO = 7
+const TAMANHO_PAGINA = 50
+
+const COLUNAS: Array<{ chave: ColunaOrdenacao; rotulo: string }> = [
+  { chave: 'nome', rotulo: 'Nome / Razão Social' },
+  { chave: 'cpfCnpj', rotulo: 'CPF/CNPJ' },
+  { chave: 'categoria', rotulo: 'Categoria' },
+  { chave: 'telefone', rotulo: 'Celular' },
+  { chave: 'cidade', rotulo: 'Cidade/UF' },
+  { chave: 'status', rotulo: 'Status' },
+]
 
 /**
  * Monta a janela de números de página exibida na navegação (estilo grid de tabela legada):
@@ -42,7 +55,6 @@ export default function ClienteLista() {
   const [nome, setNome] = useState('')
   const [status, setStatus] = useState<StatusCliente>('ATIVOS')
   const [idCategoriaCliente, setIdCategoriaCliente] = useState<number | undefined>(undefined)
-  const [tamanhoPagina, setTamanhoPagina] = useState(10)
   const [clienteParaExcluir, setClienteParaExcluir] = useState<Cliente | null>(null)
   const [aviso, setAviso] = useState('')
   const queryClient = useQueryClient()
@@ -50,22 +62,36 @@ export default function ClienteLista() {
   const { data: categorias } = useQuery({ queryKey: ['categorias-cliente'], queryFn: listarCategorias })
 
   // Paginação por número de página (não por scroll infinito nem cursor — permite pular
-  // direto para qualquer página, inclusive a última).
+  // direto para qualquer página, inclusive a última). Tamanho fixo em 50 (2026-07-21, sem
+  // seletor — pedido do dono do produto).
   const [pagina, setPagina] = useState(1)
+  const [ordenarPor, setOrdenarPor] = useState<ColunaOrdenacao>('nome')
+  const [direcao, setDirecao] = useState<'ASC' | 'DESC'>('ASC')
 
   useEffect(() => {
     setPagina(1)
-  }, [nome, status, idCategoriaCliente, tamanhoPagina])
+  }, [nome, status, idCategoriaCliente, ordenarPor, direcao])
+
+  const ordenarPorColuna = (coluna: ColunaOrdenacao) => {
+    if (coluna === ordenarPor) {
+      setDirecao((d) => (d === 'ASC' ? 'DESC' : 'ASC'))
+    } else {
+      setOrdenarPor(coluna)
+      setDirecao('ASC')
+    }
+  }
 
   const { data, isLoading, isFetching } = useQuery({
-    queryKey: ['clientes', { nome, status, idCategoriaCliente, tamanhoPagina, pagina }],
+    queryKey: ['clientes', { nome, status, idCategoriaCliente, pagina, ordenarPor, direcao }],
     queryFn: () =>
       listarClientes({
         nome: nome || undefined,
         status,
         idCategoriaCliente,
         pagina,
-        tamanho: tamanhoPagina,
+        tamanho: TAMANHO_PAGINA,
+        ordenarPor,
+        direcao,
       }),
     placeholderData: (anterior) => anterior,
   })
@@ -97,7 +123,10 @@ export default function ClienteLista() {
     <div className="lista-tela">
       <div className="lista-topo">
         <div className="topbar-tela">
-          <h1>Clientes</h1>
+          <div className="titulo-tela">
+            <IconeCliente size={34} />
+            <h1>Clientes</h1>
+          </div>
           <div className="topbar-acoes">
             {ehAdmin && (
               <Link
@@ -149,15 +178,6 @@ export default function ClienteLista() {
             <option value="INATIVOS">Inativos</option>
             <option value="TODOS">Todos</option>
           </select>
-          <select
-            value={tamanhoPagina}
-            onChange={(e) => setTamanhoPagina(Number(e.target.value))}
-            aria-label="Itens por página"
-          >
-            <option value={10}>10 por página</option>
-            <option value={20}>20 por página</option>
-            <option value={50}>50 por página</option>
-          </select>
         </div>
       </div>
 
@@ -168,15 +188,26 @@ export default function ClienteLista() {
         ) : clientes.length === 0 ? (
           <p className="muted">Nenhum cliente encontrado.</p>
         ) : (
-          <table className="table">
+          <table className="table table-compacta">
             <thead>
               <tr>
-                <th>Nome / Razão Social</th>
-                <th>CPF/CNPJ</th>
-                <th>Categoria</th>
-                <th>Celular</th>
-                <th>Cidade/UF</th>
-                <th>Status</th>
+                {COLUNAS.map((c) => {
+                  const ativa = ordenarPor === c.chave
+                  return (
+                    <th
+                      key={c.chave}
+                      className="th-ordenavel"
+                      onClick={() => ordenarPorColuna(c.chave)}
+                      title="Clique para ordenar"
+                      aria-sort={ativa ? (direcao === 'ASC' ? 'ascending' : 'descending') : 'none'}
+                    >
+                      {c.rotulo}
+                      <span className={`th-seta ${ativa ? 'th-seta-ativa' : ''}`}>
+                        {ativa ? (direcao === 'ASC' ? '▲' : '▼') : '⇅'}
+                      </span>
+                    </th>
+                  )
+                })}
                 <th aria-label="Ações" />
               </tr>
             </thead>
@@ -194,6 +225,14 @@ export default function ClienteLista() {
                     <span className={`badge ${c.ativo ? '' : 'badge-inativo'}`}>{c.ativo ? 'Ativo' : 'Inativo'}</span>
                   </td>
                   <td className="acoes-cell">
+                    <Link
+                      className="acao-icone acao-visualizar"
+                      to={`/clientes/${c.idCliente}/visualizar`}
+                      aria-label={`Visualizar ${c.nome}`}
+                      title="Visualizar"
+                    >
+                      <IconeOlho />
+                    </Link>
                     <Link
                       className="acao-icone acao-editar"
                       to={`/clientes/${c.idCliente}`}

@@ -25,6 +25,7 @@ export default function App() {
           <Route element={<RequireAdmin />}>
             <Route path="/clientes/configuracao" element={<ConfiguracaoTelaCliente />} />
           </Route>
+          <Route path="/clientes/:id/visualizar" element={<ClienteForm somenteLeitura />} />
           <Route path="/clientes/:id" element={<ClienteForm />} />
         </Route>
       </Route>
