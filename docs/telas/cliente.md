@@ -148,15 +148,20 @@ já precisa criar uma.
 - **Filtros:** por categoria; por status (Ativo/Inativo/Todos — default mostra só Ativos).
 - **Paginação:** por **número de página** (`GET /api/v1/clientes?pagina=&limite=`, `LIMIT`/
   `OFFSET` + contagem total no backend — não é cursor, para permitir pular direto para
-  qualquer página). Navegação **numerada**: "1 2 3 4 5 … (penúltima) (última) →" (sem
-  reticências quando cabem todas as páginas, até 7); clicar em um número pula direto para
-  aquela página, sem precisar visitar as intermediárias. Seletor de itens por página: 10/20/50,
+  qualquer página). Navegação em **janela deslizante** (2026-07-21, estilo inspirado no sistema
+  legado): até 7 números centrados na página atual, mais os botões **« primeira** / **‹
+  anterior** / **próxima ›** / **última »** nas pontas (desabilitados quando não fazem
+  sentido — ex.: "primeira"/"anterior" apagados na página 1). Clicar em um número, ou em
+  "primeira"/"última", pula direto para aquela página. Seletor de itens por página: 10/20/50,
   **padrão 10**.
 - **Layout fixo (2026-07-21):** o cabeçalho da tela (título "Clientes" + barra de filtros) e o
   rodapé (contagem de clientes + paginação) não rolam, assim como o menu lateral do ERP; só a
   tabela tem scroll próprio (`.lista-tela`/`.lista-topo`/`.lista-corpo`/`.lista-rodape` em
   `web/src/styles.css`, convenção do shell reaproveitável em outras telas de listagem).
-- **Ações por linha:** Editar, Excluir.
+- **Ações por linha (2026-07-21):** ícones em vez de texto — quadrado **azul** (lápis) para
+  editar, **vermelho** (lixeira) para excluir (`.acao-editar`/`.acao-excluir` em
+  `web/src/styles.css`, token de cor novo `--info` para o azul). Sem ícone de "visualizar"
+  (verde) — não existe modo somente-leitura separado de editar nesta tela.
 
 ## Exclusão de cliente
 

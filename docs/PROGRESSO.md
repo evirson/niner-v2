@@ -27,7 +27,7 @@ demais módulos (produto/estoque/pedido/fornecedor/funcionário) e o app `admin/
 | `db/migration/V027` | **`cfg_tela_campo`** (novo, 2026-07-21) — configuração por tenant de campos visíveis/obrigatórios por tela (`chave_tela`), reutilizável para qualquer tela futura. RLS próprio no arquivo. **Migration aditiva** — aplicada sem recriar o banco (`docker compose run --rm flyway`, só essa migration rodou). |
 | `api/` | Spring Boot 4.0.7 / Java 25 (Maven). 3 superfícies com `SecurityFilterChain` separados; `TenantContext` (`ScopedValue`) + `TenantAwareTransactionManager`; **auth JWT HS256** (login/signup emitem, `/api/v1` valida `aud=tenant`); **trial self-service** (`POST /api/publico/assinar` → tenant+configs+moedas+ADMIN+assinatura TRIAL + token), `POST /api/publico/login`, `GET /api/v1/eu`. **Módulo `cadastros.cliente` (2026-07-20/21):** CRUD completo de `GET/POST/PUT/DELETE /api/v1/clientes` + `GET/POST/PUT /api/v1/categorias-cliente`, validação de CPF/CNPJ (dígito verificador + duplicidade), normalização de texto para maiúsculas, celular/WhatsApp (11 dígitos + 3º=9), nascimento opcional (só não pode ser futuro), exclusão com fallback para inativar quando há venda associada. **Listagem ordenada por `nome`, paginação por número de página** (2026-07-21, era por `id_cliente`/cursor) — `GET /api/v1/clientes?pagina=&limite=` com `LIMIT/OFFSET` + contagem total, para suportar a navegação numerada do frontend (pular direto para qualquer página). **Módulo `comum.telaconfig` (novo, 2026-07-21):** `GET/PUT /api/v1/config-tela/{chaveTela}` — quais campos aparecem/são obrigatórios por tenant, reutilizável entre telas; só ADMIN grava (403 para OPERADOR, checado a partir do claim `roles` do JWT). **26 testes verdes** (Testcontainers: `ClienteCrudTest` 10, `ConfiguracaoTelaTest` 5, + suíte anterior) + fluxo **verificado ao vivo**. Persistência: **Spring Data JDBC**. Falta: domínio dos demais módulos (produto/estoque/pedido/fornecedor/funcionário) |
 | `site/` | Site público (Astro/SSG, ADR-011). **Home institucional "matadora"** (posicionamento concorrente do Bling): hero com painel animado + demo de sincronização, faixa de stats com contadores, contraste problema→solução, 3 passos, 6 recursos, canais (ML/Shopee/Amazon/balcão), planos (preços via `/api/publico/planos`), FAQ e CTA — tudo em CSS/SVG puro com **scroll-reveal** e **prefers-reduced-motion** (sem novas deps). Sistema visual em `src/styles/site.css` portado do golden `nainer_institucional`. `/assinar` (form → `POST /api/publico/assinar` → auto-login → `/bem-vindo`) e `/bem-vindo` mantidos. **Trial 60 dias** em toda a copy. Tema claro/escuro persistido. **Build SSG ok**; hero/reveal/contadores verificados via Playwright |
-| `web/` | ERP do lojista (React 19 + Vite + TS). Auth JWT (login slug+email+senha; **handoff SSO** do site via `#token=`), shell (nav Painel/Produtos/Estoque/Pedidos/Canais/**Clientes** + Sair), **Painel** real (`GET /api/v1/eu` via TanStack Query). **Tela de Clientes completa** (2026-07-20/21): listagem com busca em maiúsculas/filtro/**paginação numerada** (1 2 3 … 9 10 →, pula direto para qualquer página, sem acúmulo em tela — 10/20/50 por página, padrão 10, ordenada por nome), formulário com cabeçalho enxuto ("Cliente" + Cancelar/Salvar no topo, 2026-07-21) e grid de 12 colunas (§3.7) largura total (`.app-main` 1600px), máscaras com validação de dígito verificador/formato/duplicidade (inclusive **limite de crédito em moeda**, 2026-07-21), validação por campo (blur + submit), pop-up de erro vermelho (`Toast.tsx`), autopreenchimento de endereço via ViaCEP, modal embutido de categoria, exclusão com confirmação em modal próprio, `AjudaDaTela` (R22), convenções de **maiúsculas sempre** e **foco automático**. **Tela de configuração de campos (nova, 2026-07-21):** `ConfiguracaoTelaCliente.tsx` (`/clientes/configuracao`, só `ADMIN` — `RequireAdmin.tsx`), acessível pelo ícone ⚙ ao lado da ajuda; o formulário lê essa config (`lib/configuracaoTela.ts`) e ajusta visibilidade/obrigatoriedade dos campos em tempo real. Demais áreas (Produtos/Estoque/Pedidos/Canais) ainda placeholder. **Shell do ERP com altura travada no viewport** (2026-07-21, convenção nova — `Layout.tsx`/`styles.css`): menu lateral e cabeçalho fixos, sem scroll de página inteira; `.app-main` é quem rola por padrão, e a tela de Clientes usa `.lista-tela`/`.lista-topo`/`.lista-corpo`/`.lista-rodape` para travar também a barra de filtros e o rodapé de paginação, deixando só a tabela com scroll próprio. Design tokens §3.7 (claro/escuro). **Build ok**; fluxo **e2e verificado no navegador**. |
+| `web/` | ERP do lojista (React 19 + Vite + TS). Auth JWT (login slug+email+senha; **handoff SSO** do site via `#token=`), shell (nav Painel/Produtos/Estoque/Pedidos/Canais/**Clientes** + Sair), **Painel** real (`GET /api/v1/eu` via TanStack Query). **Tela de Clientes completa** (2026-07-20/21): listagem com busca em maiúsculas/filtro/**paginação em janela deslizante com primeira/anterior/próxima/última** (pula direto para qualquer página, sem acúmulo em tela — 10/20/50 por página, padrão 10, ordenada por nome; estilo inspirado no sistema legado), **ações de linha por ícone colorido** (editar azul/excluir vermelho, sem texto), formulário com cabeçalho enxuto ("Cliente" + Cancelar/Salvar no topo, 2026-07-21) e grid de 12 colunas (§3.7) largura total (`.app-main` 1600px), máscaras com validação de dígito verificador/formato/duplicidade (inclusive **limite de crédito em moeda**, 2026-07-21), validação por campo (blur + submit), pop-up de erro vermelho (`Toast.tsx`), autopreenchimento de endereço via ViaCEP, modal embutido de categoria, exclusão com confirmação em modal próprio, `AjudaDaTela` (R22), convenções de **maiúsculas sempre** e **foco automático**. **Tela de configuração de campos (nova, 2026-07-21):** `ConfiguracaoTelaCliente.tsx` (`/clientes/configuracao`, só `ADMIN` — `RequireAdmin.tsx`), acessível pelo ícone ⚙ ao lado da ajuda; o formulário lê essa config (`lib/configuracaoTela.ts`) e ajusta visibilidade/obrigatoriedade dos campos em tempo real. Demais áreas (Produtos/Estoque/Pedidos/Canais) ainda placeholder. **Shell do ERP com altura travada no viewport** (2026-07-21, convenção nova — `Layout.tsx`/`styles.css`): menu lateral e cabeçalho fixos, sem scroll de página inteira; `.app-main` é quem rola por padrão, e a tela de Clientes usa `.lista-tela`/`.lista-topo`/`.lista-corpo`/`.lista-rodape` para travar também a barra de filtros e o rodapé de paginação, deixando só a tabela com scroll próprio. Design tokens §3.7 (claro/escuro). **Build ok**; fluxo **e2e verificado no navegador**. |
 | `admin/` | Ainda não criado (backoffice React 19 + Vite) |
 
 **Stack alvo:** Java 25 + Spring Boot 4.x · PostgreSQL 18 (Docker, banco **`niner_db`**) · React 19 + Vite (3 apps) · Flyway · JWT. **SaaS multi-tenant** (banco único + `id_tenant` + Postgres RLS).
@@ -35,6 +35,39 @@ demais módulos (produto/estoque/pedido/fornecedor/funcionário) e o app `admin/
 ---
 
 ## Linha do tempo
+
+### 2026-07-21 — Clientes: paginação em janela deslizante (estilo grid legado) + ações da linha viram ícones
+
+Duas mudanças visuais na listagem de Clientes, pedidas com uma captura de tela do sistema
+legado (Firebird/Delphi, tela `P119 - Cadastro de Produtos`) como referência de estilo —
+primeira vez que um mockup do sistema antigo é usado como golden file de um componente novo
+(não só o `docs/padroes/` já existente).
+
+1. **Paginação virou janela deslizante com primeira/anterior/próxima/última.** Antes: só
+   "1 2 3 4 5 … 9 10" (5 primeiras fixas + últimas 2). Agora: até 7 números **centrados na
+   página atual** (`JANELA_PAGINACAO = 7` em `ClienteLista.tsx`, função `paginasVisiveis`
+   recalculada a cada mudança de página — sem reticências, a janela desliza sozinha) mais
+   4 botões de ícone nas pontas — **primeira página** (`«`), **anterior** (`‹`), **próxima**
+   (`›`) e **última página** (`»`) —, cada um desabilitado quando não faz sentido (ex.:
+   "primeira"/"anterior" cinza na página 1). Ícones novos em `components/Icones.tsx`
+   (`IconePrimeiraPagina`/`IconePaginaAnterior`/`IconeProximaPagina`/`IconeUltimaPagina`,
+   Heroicons `chevron-double-left`/`chevron-left`/`chevron-right`/`chevron-double-right`).
+
+2. **Ações da linha (Editar/Excluir) viram ícones coloridos, não mais texto.** Mesma
+   referência do sistema legado tinha três símbolos (👁 verde/✏ azul/🗑 vermelho); o dono do
+   produto pediu só os dois que fazem sentido aqui — **não existe modo "só visualizar"**
+   separado de editar nesta tela, então o verde (observar) ficou de fora. Botões quadrados de
+   32×32, ícone branco: **azul** (`.acao-editar`, token novo `--info`) para editar, **vermelho**
+   (`.acao-excluir`, reaproveita `--danger`) para excluir — com `aria-label`/`title`
+   descritivos (`"Editar {nome}"`/`"Excluir {nome}"`) já que o texto visível some. Ícones novos
+   `IconeEditar` (pencil-square) e `IconeExcluir` (trash), mesmo padrão Heroicons outline dos
+   demais ícones do projeto.
+
+3. **Verificação:** `tsc -b` sem erros. Testado ao vivo no navegador com 92 clientes: ícones
+   azul/vermelho aparecem nítidos na tabela; clique em "última página" pulou direto pra
+   página 10 (janela reajustou para mostrar 4–10, "próxima"/"última" desabilitadas); clique em
+   "primeira página" voltou pra página 1 (janela 1–7, "primeira"/"anterior" desabilitadas).
+   Aprovado pelo dono do produto.
 
 ### 2026-07-21 — Cliente: cabeçalho do formulário enxuto (Cancelar/Salvar no topo), identificação numa linha, limite de crédito com máscara de moeda
 

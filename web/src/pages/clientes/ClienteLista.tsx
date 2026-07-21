@@ -2,7 +2,15 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import AjudaDaTela from '../../components/AjudaDaTela'
-import { IconeEngrenagem } from '../../components/Icones'
+import {
+  IconeEditar,
+  IconeEngrenagem,
+  IconeExcluir,
+  IconePaginaAnterior,
+  IconePrimeiraPagina,
+  IconeProximaPagina,
+  IconeUltimaPagina,
+} from '../../components/Icones'
 import { ApiError } from '../../lib/api'
 import {
   excluirCliente,
@@ -15,13 +23,19 @@ import { useEu } from '../../lib/eu'
 import { mascararCpfCnpj, mascararIdWhatsapp, mascararTelefone } from '../../lib/masks'
 import { maiusculas } from '../../lib/texto'
 
+const JANELA_PAGINACAO = 7
+
 /**
- * Monta a lista de páginas exibidas na navegação numerada: as 5 primeiras, reticências e as
- * 2 últimas (ex.: "1 2 3 4 5 … 9 10"). Sem reticências quando cabe tudo (até 7 páginas).
+ * Monta a janela de números de página exibida na navegação (estilo grid de tabela legada):
+ * até `JANELA_PAGINACAO` números centrados na página atual, sem reticências — os botões
+ * "primeira"/"última" nas pontas cobrem o resto.
  */
-function paginasVisiveis(total: number): Array<number | 'reticencias'> {
-  if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1)
-  return [1, 2, 3, 4, 5, 'reticencias', total - 1, total]
+function paginasVisiveis(atual: number, total: number): number[] {
+  if (total <= JANELA_PAGINACAO) return Array.from({ length: total }, (_, i) => i + 1)
+  let inicio = Math.max(1, atual - Math.floor(JANELA_PAGINACAO / 2))
+  const fim = Math.min(total, inicio + JANELA_PAGINACAO - 1)
+  inicio = Math.max(1, fim - JANELA_PAGINACAO + 1)
+  return Array.from({ length: fim - inicio + 1 }, (_, i) => inicio + i)
 }
 
 export default function ClienteLista() {
@@ -180,16 +194,23 @@ export default function ClienteLista() {
                     <span className={`badge ${c.ativo ? '' : 'badge-inativo'}`}>{c.ativo ? 'Ativo' : 'Inativo'}</span>
                   </td>
                   <td className="acoes-cell">
-                    <Link className="btn ghost" to={`/clientes/${c.idCliente}`}>
-                      Editar
+                    <Link
+                      className="acao-icone acao-editar"
+                      to={`/clientes/${c.idCliente}`}
+                      aria-label={`Editar ${c.nome}`}
+                      title="Editar"
+                    >
+                      <IconeEditar />
                     </Link>
                     <button
                       type="button"
-                      className="btn ghost"
+                      className="acao-icone acao-excluir"
                       disabled={excluir.isPending}
                       onClick={() => setClienteParaExcluir(c)}
+                      aria-label={`Excluir ${c.nome}`}
+                      title="Excluir"
                     >
-                      Excluir
+                      <IconeExcluir />
                     </button>
                   </td>
                 </tr>
@@ -208,32 +229,57 @@ export default function ClienteLista() {
               {isFetching && ' · atualizando…'}
             </span>
             <div className="paginacao-paginas">
-              {paginasVisiveis(totalPaginas).map((p, i) =>
-                p === 'reticencias' ? (
-                  <span key={`reticencias-${i}`} className="paginacao-reticencias">
-                    …
-                  </span>
-                ) : (
-                  <button
-                    key={p}
-                    type="button"
-                    className={`btn ghost paginacao-numero ${p === pagina ? 'ativa' : ''}`}
-                    onClick={() => setPagina(p)}
-                    disabled={isFetching}
-                    aria-current={p === pagina ? 'page' : undefined}
-                  >
-                    {p}
-                  </button>
-                ),
-              )}
               <button
                 type="button"
-                className="btn ghost"
+                className="btn ghost paginacao-seta"
+                onClick={() => setPagina(1)}
+                disabled={pagina <= 1 || isFetching}
+                aria-label="Primeira página"
+                title="Primeira página"
+              >
+                <IconePrimeiraPagina />
+              </button>
+              <button
+                type="button"
+                className="btn ghost paginacao-seta"
+                onClick={() => setPagina((p) => Math.max(1, p - 1))}
+                disabled={pagina <= 1 || isFetching}
+                aria-label="Página anterior"
+                title="Página anterior"
+              >
+                <IconePaginaAnterior />
+              </button>
+              {paginasVisiveis(pagina, totalPaginas).map((p) => (
+                <button
+                  key={p}
+                  type="button"
+                  className={`btn ghost paginacao-numero ${p === pagina ? 'ativa' : ''}`}
+                  onClick={() => setPagina(p)}
+                  disabled={isFetching}
+                  aria-current={p === pagina ? 'page' : undefined}
+                >
+                  {p}
+                </button>
+              ))}
+              <button
+                type="button"
+                className="btn ghost paginacao-seta"
                 onClick={() => setPagina((p) => Math.min(totalPaginas, p + 1))}
                 disabled={pagina >= totalPaginas || isFetching}
                 aria-label="Próxima página"
+                title="Próxima página"
               >
-                →
+                <IconeProximaPagina />
+              </button>
+              <button
+                type="button"
+                className="btn ghost paginacao-seta"
+                onClick={() => setPagina(totalPaginas)}
+                disabled={pagina >= totalPaginas || isFetching}
+                aria-label="Última página"
+                title="Última página"
+              >
+                <IconeUltimaPagina />
               </button>
             </div>
           </div>

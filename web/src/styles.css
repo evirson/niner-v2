@@ -5,7 +5,7 @@
   --field-bg: #e4e6e2; --field-text: #20262a; --label-color: #5c6660;
   --ink: #20262a; --ink-muted: #5c6660;
   --accent: #1f6f6b; --accent-ink: #ffffff;
-  --line: #dee2dc; --line-strong: #b9beb5; --danger: #a63d29;
+  --line: #dee2dc; --line-strong: #b9beb5; --danger: #a63d29; --info: #3060c0;
   --radius: 10px;
 }
 @media (prefers-color-scheme: dark) {
@@ -14,20 +14,20 @@
     --field-bg: #2a3336; --field-text: #e7ecec; --label-color: #93a19e;
     --ink: #e7ecec; --ink-muted: #93a19e;
     --accent: #4fbdb2; --accent-ink: #0b1416;
-    --line: #2a3538; --line-strong: #4a5457; --danger: #e2836a;
+    --line: #2a3538; --line-strong: #4a5457; --danger: #e2836a; --info: #6d9dff;
   }
 }
 :root[data-theme='light'] {
   --ground: #f5f4f0; --surface: #ffffff; --surface-2: #edece6;
   --field-bg: #e4e6e2; --field-text: #20262a; --label-color: #5c6660;
   --ink: #20262a; --ink-muted: #5c6660; --accent: #1f6f6b; --accent-ink: #ffffff;
-  --line: #dee2dc; --line-strong: #b9beb5; --danger: #a63d29;
+  --line: #dee2dc; --line-strong: #b9beb5; --danger: #a63d29; --info: #3060c0;
 }
 :root[data-theme='dark'] {
   --ground: #12181a; --surface: #1a2225; --surface-2: #202a2d;
   --field-bg: #2a3336; --field-text: #e7ecec; --label-color: #93a19e;
   --ink: #e7ecec; --ink-muted: #93a19e; --accent: #4fbdb2; --accent-ink: #0b1416;
-  --line: #2a3538; --line-strong: #4a5457; --danger: #e2836a;
+  --line: #2a3538; --line-strong: #4a5457; --danger: #e2836a; --info: #6d9dff;
 }
 
 * { box-sizing: border-box; }
@@ -104,7 +104,7 @@ input:focus-visible, select:focus-visible {
 .paginacao-paginas { display: flex; align-items: center; gap: 6px; }
 .paginacao-numero { min-width: 38px; padding: 7px 10px; text-align: center; }
 .paginacao-numero.ativa { background: var(--accent); color: var(--accent-ink); border-color: transparent; }
-.paginacao-reticencias { color: var(--ink-muted); padding: 0 4px; }
+.paginacao-seta { padding: 7px 9px; display: inline-flex; align-items: center; }
 
 .table-wrap { overflow-x: auto; padding: 0; }
 .table { width: 100%; border-collapse: collapse; font-size: 14px; }
@@ -113,6 +113,18 @@ input:focus-visible, select:focus-visible {
 .table tbody tr:last-child td { border-bottom: 0; }
 .acoes-cell { display: flex; gap: 8px; }
 .acoes-cell .btn { padding: 7px 12px; font-size: 13px; }
+
+/* Ícones de ação por linha (editar/excluir) — quadrados coloridos, símbolo em vez de texto. */
+.acao-icone {
+  width: 32px; height: 32px; padding: 0; border: 0; border-radius: 8px;
+  display: inline-flex; align-items: center; justify-content: center;
+  color: #fff; text-decoration: none; cursor: pointer; transition: filter .15s, transform .1s;
+}
+.acao-icone:hover { filter: brightness(1.1); }
+.acao-icone:active { transform: scale(0.94); }
+.acao-icone:disabled { opacity: .5; cursor: default; filter: none; }
+.acao-editar { background: var(--info); }
+.acao-excluir { background: var(--danger); }
 
 /* Formulário em seções (§3.7) */
 .form-secoes { margin-top: 16px; }
