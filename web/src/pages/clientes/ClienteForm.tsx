@@ -28,6 +28,7 @@ import {
   mascararCep,
   mascararCpfCnpj,
   mascararIdWhatsapp,
+  mascararMoeda,
   mascararTelefone,
   somenteDigitos,
 } from '../../lib/masks'
@@ -276,10 +277,7 @@ export default function ClienteForm() {
   return (
     <div>
       <div className="topbar-tela">
-        <div>
-          <p className="eyebrow">Cadastros</p>
-          <h1 style={{ marginTop: 4 }}>{editando ? 'Editar cliente' : 'Novo cliente'}</h1>
-        </div>
+        <h1>Cliente</h1>
         <div className="topbar-acoes">
           {ehAdmin && (
             <Link
@@ -292,41 +290,49 @@ export default function ClienteForm() {
             </Link>
           )}
           <AjudaDaTela chaveTela={CHAVE_TELA} />
+          <button type="button" className="btn ghost" onClick={() => navigate('/clientes')}>
+            Cancelar
+          </button>
+          <button type="submit" form="form-cliente" className="btn" disabled={salvar.isPending}>
+            {salvar.isPending ? 'Salvando…' : 'Salvar'}
+          </button>
         </div>
       </div>
 
-      <form className="card form-secoes form-secoes-larga" onSubmit={submeter} noValidate>
+      <form id="form-cliente" className="card form-secoes form-secoes-larga" onSubmit={submeter} noValidate>
         <section className="section">
           <p className="section-label">Identificação</p>
 
-          <label className="checkbox-linha" style={{ marginTop: 0 }}>
-            <input
-              type="checkbox"
-              checked={form.ativo}
-              onChange={(e) => setForm((f) => ({ ...f, ativo: e.target.checked }))}
-            />
-            Cliente ativo
-          </label>
+          <div className="identificacao-linha">
+            <label className="checkbox-linha" style={{ marginTop: 0 }}>
+              <input
+                type="checkbox"
+                checked={form.ativo}
+                onChange={(e) => setForm((f) => ({ ...f, ativo: e.target.checked }))}
+              />
+              Cliente ativo
+            </label>
 
-          <div className="radio-linha">
-            <label>
-              <input
-                type="radio"
-                name="fisicaJuridica"
-                checked={form.fisicaJuridica}
-                onChange={() => setForm((f) => ({ ...f, fisicaJuridica: true }))}
-              />{' '}
-              Pessoa Física
-            </label>
-            <label>
-              <input
-                type="radio"
-                name="fisicaJuridica"
-                checked={!form.fisicaJuridica}
-                onChange={() => setForm((f) => ({ ...f, fisicaJuridica: false }))}
-              />{' '}
-              Pessoa Jurídica
-            </label>
+            <div className="radio-linha" style={{ marginTop: 0 }}>
+              <label>
+                <input
+                  type="radio"
+                  name="fisicaJuridica"
+                  checked={form.fisicaJuridica}
+                  onChange={() => setForm((f) => ({ ...f, fisicaJuridica: true }))}
+                />{' '}
+                Pessoa Física
+              </label>
+              <label>
+                <input
+                  type="radio"
+                  name="fisicaJuridica"
+                  checked={!form.fisicaJuridica}
+                  onChange={() => setForm((f) => ({ ...f, fisicaJuridica: false }))}
+                />{' '}
+                Pessoa Jurídica
+              </label>
+            </div>
           </div>
 
           <div className="form-grid">
@@ -720,7 +726,7 @@ export default function ClienteForm() {
                   inputMode="decimal"
                   placeholder="0,00"
                   value={form.limiteCredito}
-                  onChange={(e) => setForm((f) => ({ ...f, limiteCredito: e.target.value }))}
+                  onChange={(e) => setForm((f) => ({ ...f, limiteCredito: mascararMoeda(e.target.value) }))}
                   onBlur={aoSairDoCampo('limiteCredito')}
                 />
                 {erros.limiteCredito && <p className="erro-campo">{erros.limiteCredito}</p>}
@@ -729,14 +735,6 @@ export default function ClienteForm() {
           </section>
         )}
 
-        <div className="footer-bar">
-          <button type="button" className="btn ghost" onClick={() => navigate('/clientes')}>
-            Cancelar
-          </button>
-          <button type="submit" className="btn" disabled={salvar.isPending}>
-            {salvar.isPending ? 'Salvando…' : 'Salvar'}
-          </button>
-        </div>
       </form>
 
       {modalCategoriaAberto && (

@@ -42,47 +42,53 @@ public class ClienteService {
         this.jdbc = jdbc;
     }
 
+    /**
+     * Listagem paginada por número de página (não mais por cursor — revisão de 2026-07-21:
+     * a navegação "1 2 3 … 10 20 >" pedida pelo dono do produto exige saber o total de
+     * páginas e pular direto para qualquer uma, o que um cursor opaco não permite). O
+     * volume de clientes por tenant é pequeno o bastante para {@code OFFSET} não pesar.
+     */
     @Transactional(readOnly = true)
     public PaginaClientes listar(String nome, String cpfCnpj, Long idCategoriaCliente,
-                                  String status, Long cursor, Integer limite) {
+                                  String status, Integer pagina, Integer limite) {
         int tamanho = limite == null ? TAMANHO_PAGINA_PADRAO : Math.min(Math.max(limite, 1), TAMANHO_PAGINA_MAXIMO);
+        int paginaAtual = pagina == null ? 1 : Math.max(pagina, 1);
 
-        StringBuilder sql = new StringBuilder(SELECT_BASE).append(" WHERE 1 = 1");
+        StringBuilder filtro = new StringBuilder(" WHERE 1 = 1");
         List<Object> params = new ArrayList<>();
 
         if (nome != null && !nome.isBlank()) {
-            sql.append(" AND c.nome ILIKE ?");
+            filtro.append(" AND c.nome ILIKE ?");
             params.add("%" + nome.trim() + "%");
         }
         if (cpfCnpj != null && !cpfCnpj.isBlank()) {
-            sql.append(" AND c.cpf_cnpj = ?");
+            filtro.append(" AND c.cpf_cnpj = ?");
             params.add(Documentos.somenteDigitos(cpfCnpj));
         }
         if (idCategoriaCliente != null) {
-            sql.append(" AND c.id_categoria_cliente = ?");
+            filtro.append(" AND c.id_categoria_cliente = ?");
             params.add(idCategoriaCliente);
         }
         switch (status == null ? "ATIVOS" : status.toUpperCase(Locale.ROOT)) {
-            case "INATIVOS" -> sql.append(" AND c.ativo = false");
+            case "INATIVOS" -> filtro.append(" AND c.ativo = false");
             case "TODOS" -> { /* sem filtro de status */ }
-            default -> sql.append(" AND c.ativo = true");
+            default -> filtro.append(" AND c.ativo = true");
         }
-        if (cursor != null) {
-            sql.append(" AND c.id_cliente > ?");
-            params.add(cursor);
-        }
-        sql.append(" ORDER BY c.id_cliente LIMIT ?");
-        params.add((long) (tamanho + 1));
 
-        List<ClienteResponse> linhas = jdbc.sql(sql.toString())
+        long totalItens = jdbc.sql("SELECT count(*) FROM cliente c" + filtro)
                 .params(params)
+                .query(Long.class).single();
+        int totalPaginas = totalItens == 0 ? 1 : (int) Math.ceil(totalItens / (double) tamanho);
+
+        List<Object> paramsPagina = new ArrayList<>(params);
+        paramsPagina.add((long) tamanho);
+        paramsPagina.add((long) (paginaAtual - 1) * tamanho);
+        List<ClienteResponse> itens = jdbc.sql(SELECT_BASE + filtro + " ORDER BY c.nome, c.id_cliente LIMIT ? OFFSET ?")
+                .params(paramsPagina)
                 .query(ClienteService::mapear)
                 .list();
 
-        boolean temMais = linhas.size() > tamanho;
-        List<ClienteResponse> pagina = temMais ? linhas.subList(0, tamanho) : linhas;
-        Long proximoCursor = temMais ? pagina.get(pagina.size() - 1).idCliente() : null;
-        return new PaginaClientes(pagina, proximoCursor);
+        return new PaginaClientes(itens, paginaAtual, tamanho, totalItens, totalPaginas);
     }
 
     @Transactional(readOnly = true)

@@ -35,6 +35,28 @@ export function mascararCep(valor: string): string {
   return aplicarMascara(digitos, '00000-000')
 }
 
+/** Formata um número (ex.: vindo da API) como moeda BR: "1234.5" -> "1.234,50". */
+export function formatarMoeda(valor: number): string {
+  return valor.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+}
+
+/**
+ * Máscara de campo monetário: os dígitos digitados são sempre lidos da direita para a
+ * esquerda como centavos (mesma convenção de caixas eletrônicos/apps de banco) — evita
+ * ambiguidade de separador decimal/milhar. Ex.: digitar "150000" vira "1.500,00".
+ */
+export function mascararMoeda(valor: string): string {
+  const digitos = somenteDigitos(valor)
+  if (!digitos) return ''
+  return formatarMoeda(Number(digitos) / 100)
+}
+
+/** Desfaz {@link mascararMoeda}, devolvendo o número para enviar à API. */
+export function desmascararMoeda(valor: string): number {
+  const digitos = somenteDigitos(valor)
+  return digitos ? Number(digitos) / 100 : 0
+}
+
 /**
  * "Id. WhatsApp" — mesma convenção visual de Instagram/Facebook/TikTok (prefixo `@`), mas
  * só dígitos depois do `@` (é o número do celular). Validado por {@link celularValido}.

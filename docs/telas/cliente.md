@@ -64,7 +64,7 @@ visualmente, só deixou de receber o foco).
 | `bairro` | Bairro | texto | — | campo médio/largo (junto de Número/Complemento) | Não | |
 | `cidade` | Cidade | texto | — | 3/4 da linha | Não | |
 | `estado` | UF | **select fixo com as 27 UFs** (AC…TO) | — | campo pequeno (~1/4 da linha, junto da Cidade) | Não | Coluna no banco continua `text` livre; só a UI restringe |
-| `limite_credito` | Limite de crédito | numérico, moeda (`R$ 0,00`) | `NUMERIC(12,2)` | campo pequeno (~1/3 da linha) | Não, default `0` | Campo **opcional exposto já no formulário**, mesmo o crediário (Fase 2) ainda não usar o valor de fato — só armazena |
+| `limite_credito` | Limite de crédito | numérico, moeda (`R$ 0,00`, mascarado — dígitos digitados = centavos) | `NUMERIC(12,2)` | campo pequeno (~1/3 da linha) | Não, default `0` | Campo **opcional exposto já no formulário**, mesmo o crediário (Fase 2) ainda não usar o valor de fato — só armazena |
 
 `id_cliente`, `criado_em`, `atualizado_em` não aparecem no formulário (gerados pelo banco/API).
 
@@ -104,6 +104,25 @@ no rodapé da página.
 **Tab pula o botão de categoria (2026-07-21):** "＋ Nova categoria" tem `tabIndex={-1}` — com
 a categoria já escolhida, `Tab` vai direto da Categoria para o CPF/CNPJ.
 
+**Cabeçalho enxuto, com Cancelar/Salvar no topo (2026-07-21):** o título deixou de variar
+entre "Novo cliente"/"Editar cliente" (e o "CADASTROS" acima dele) — agora é só **"Cliente"**,
+reduzindo a altura da faixa superior. Os botões **Cancelar**/**Salvar**, que ficavam num
+rodapé no fim da página, subiram para essa faixa, ao lado dos ícones de ajuda/configuração.
+Tecnicamente o botão Salvar (`type="submit"`) fica fora da árvore do `<form>` — associado via
+atributo HTML `form="form-cliente"` — porque o cabeçalho é renderizado antes do formulário no
+JSX; o `<form>` ganhou esse `id` só para viabilizar essa associação.
+
+**Linha de identificação compacta (2026-07-21):** o checkbox "Cliente ativo" e os rádios
+"Pessoa Física"/"Pessoa Jurídica" — antes em duas linhas — passaram a ficar lado a lado numa
+única linha (`.identificacao-linha` em `web/src/styles.css`).
+
+**Limite de crédito com máscara de moeda (2026-07-21):** o campo passou a mascarar a digitação
+como dinheiro (mesma convenção de caixa eletrônico/app de banco — os dígitos digitados são
+sempre os centavos, contados da direita para a esquerda; ex.: digitar "150000" mostra
+"1.500,00"), em vez de aceitar texto livre. Novas funções `mascararMoeda`/`formatarMoeda`/
+`desmascararMoeda` em `web/src/lib/masks.ts`; o valor existente (vindo da API como número) é
+formatado para exibição com `formatarMoeda` ao abrir o formulário de edição.
+
 ## Categoria de cliente (`cfg_categoria_cliente`)
 
 Tabela auxiliar simples: `id_categoria_cliente` PK, `nome_categoria` (único por tenant). Sem
@@ -123,9 +142,20 @@ já precisa criar uma.
 
 - **Colunas:** Nome/Razão Social, CPF/CNPJ, Categoria, Telefone/WhatsApp, Cidade/UF, Status
   (Ativo/Inativo).
-- **Busca:** por nome (contém) e por CPF/CNPJ (exato, ignorando máscara).
+- **Ordenação:** por `nome` (empate resolvido por `id_cliente`) — não por ordem de cadastro.
+- **Busca:** por nome (contém, digitação sempre em maiúsculas) e por CPF/CNPJ (exato, ignorando
+  máscara).
 - **Filtros:** por categoria; por status (Ativo/Inativo/Todos — default mostra só Ativos).
-- **Paginação:** por cursor, convenção da spec (§3.4).
+- **Paginação:** por **número de página** (`GET /api/v1/clientes?pagina=&limite=`, `LIMIT`/
+  `OFFSET` + contagem total no backend — não é cursor, para permitir pular direto para
+  qualquer página). Navegação **numerada**: "1 2 3 4 5 … (penúltima) (última) →" (sem
+  reticências quando cabem todas as páginas, até 7); clicar em um número pula direto para
+  aquela página, sem precisar visitar as intermediárias. Seletor de itens por página: 10/20/50,
+  **padrão 10**.
+- **Layout fixo (2026-07-21):** o cabeçalho da tela (título "Clientes" + barra de filtros) e o
+  rodapé (contagem de clientes + paginação) não rolam, assim como o menu lateral do ERP; só a
+  tabela tem scroll próprio (`.lista-tela`/`.lista-topo`/`.lista-corpo`/`.lista-rodape` em
+  `web/src/styles.css`, convenção do shell reaproveitável em outras telas de listagem).
 - **Ações por linha:** Editar, Excluir.
 
 ## Exclusão de cliente
@@ -179,8 +209,8 @@ inativa em vez de excluir.**
 ## Impacto no contrato de API
 
 ```
-GET    /api/v1/clientes?nome=&cpf_cnpj=&id_categoria_cliente=&ativo=&cursor=
-                                               lista paginada (cursor), busca/filtro
+GET    /api/v1/clientes?nome=&cpf_cnpj=&id_categoria_cliente=&status=&pagina=&limite=
+                                               lista paginada (número de página), busca/filtro
 POST   /api/v1/clientes                      cria cliente
 GET    /api/v1/clientes/{id}                 detalhe
 PUT    /api/v1/clientes/{id}                 atualiza cliente

@@ -79,8 +79,13 @@ public final class ClienteDtos {
             OffsetDateTime atualizadoEm) {
     }
 
-    /** Listagem paginada por cursor (§3.4): {@code proximoCursor} nulo = última página. */
-    public record PaginaClientes(List<ClienteResponse> itens, Long proximoCursor) {
+    /**
+     * Listagem paginada por número de página, ordenada por {@code nome} (2026-07-21 —
+     * substitui a paginação por cursor: a navegação numerada exige saber o total de páginas
+     * e permitir pular direto para qualquer uma).
+     */
+    public record PaginaClientes(
+            List<ClienteResponse> itens, int pagina, int tamanhoPagina, long totalItens, int totalPaginas) {
     }
 
     /** Resultado do DELETE: {@code acao} é {@code "excluido"} ou {@code "inativado"}. */

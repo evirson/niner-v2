@@ -25,9 +25,9 @@ demais módulos (produto/estoque/pedido/fornecedor/funcionário) e o app `admin/
 | `db/migration/V025` | **`financeiro` parcial (revisão de Q5/ADR-010, ADR-012):** crediário (`tipo_carteira`, `moeda`, `moeda_detalhe`, `contas_receber`/`contas_receber_detalhe`) + caixa (`caixa_mestre`/`caixa_detalhe`). RLS próprio no arquivo (V024 já tinha rodado). Seed de `moeda` por tenant implementado no `SignupService`. **Aplicada e validada em banco real em 2026-07-16** (RLS `ENABLE`+`FORCE` confirmado nas 7 tabelas; moedas semeadas no signup conferidas via `psql`). |
 | `db/migration/V026` | **`contas_pagar`** (mais uma revisão de Q5/ADR-010/ADR-012): PK `id_conta_pagar` (renomeada de `localizador`), `nota_fiscal integer` nullable sem `DEFAULT 0` (padronização que também corrigiu `produto_movimento_mestre.nota_fiscal`, V019, de `text` para `integer`). RLS próprio no arquivo. Só `conta_corrente*` segue fora do v1. **Aplicada e validada em banco real em 2026-07-16** (schema/FKs/RLS conferidos via `psql`) |
 | `db/migration/V027` | **`cfg_tela_campo`** (novo, 2026-07-21) — configuração por tenant de campos visíveis/obrigatórios por tela (`chave_tela`), reutilizável para qualquer tela futura. RLS próprio no arquivo. **Migration aditiva** — aplicada sem recriar o banco (`docker compose run --rm flyway`, só essa migration rodou). |
-| `api/` | Spring Boot 4.0.7 / Java 25 (Maven). 3 superfícies com `SecurityFilterChain` separados; `TenantContext` (`ScopedValue`) + `TenantAwareTransactionManager`; **auth JWT HS256** (login/signup emitem, `/api/v1` valida `aud=tenant`); **trial self-service** (`POST /api/publico/assinar` → tenant+configs+moedas+ADMIN+assinatura TRIAL + token), `POST /api/publico/login`, `GET /api/v1/eu`. **Módulo `cadastros.cliente` (2026-07-20/21):** CRUD completo de `GET/POST/PUT/DELETE /api/v1/clientes` + `GET/POST/PUT /api/v1/categorias-cliente`, validação de CPF/CNPJ (dígito verificador + duplicidade), normalização de texto para maiúsculas, celular/WhatsApp (11 dígitos + 3º=9), nascimento opcional (só não pode ser futuro), exclusão com fallback para inativar quando há venda associada. **Módulo `comum.telaconfig` (novo, 2026-07-21):** `GET/PUT /api/v1/config-tela/{chaveTela}` — quais campos aparecem/são obrigatórios por tenant, reutilizável entre telas; só ADMIN grava (403 para OPERADOR, checado a partir do claim `roles` do JWT). **26 testes verdes** (Testcontainers: `ClienteCrudTest` 10, `ConfiguracaoTelaTest` 5, + suíte anterior) + fluxo **verificado ao vivo**. Persistência: **Spring Data JDBC**. Falta: domínio dos demais módulos (produto/estoque/pedido/fornecedor/funcionário) |
+| `api/` | Spring Boot 4.0.7 / Java 25 (Maven). 3 superfícies com `SecurityFilterChain` separados; `TenantContext` (`ScopedValue`) + `TenantAwareTransactionManager`; **auth JWT HS256** (login/signup emitem, `/api/v1` valida `aud=tenant`); **trial self-service** (`POST /api/publico/assinar` → tenant+configs+moedas+ADMIN+assinatura TRIAL + token), `POST /api/publico/login`, `GET /api/v1/eu`. **Módulo `cadastros.cliente` (2026-07-20/21):** CRUD completo de `GET/POST/PUT/DELETE /api/v1/clientes` + `GET/POST/PUT /api/v1/categorias-cliente`, validação de CPF/CNPJ (dígito verificador + duplicidade), normalização de texto para maiúsculas, celular/WhatsApp (11 dígitos + 3º=9), nascimento opcional (só não pode ser futuro), exclusão com fallback para inativar quando há venda associada. **Listagem ordenada por `nome`, paginação por número de página** (2026-07-21, era por `id_cliente`/cursor) — `GET /api/v1/clientes?pagina=&limite=` com `LIMIT/OFFSET` + contagem total, para suportar a navegação numerada do frontend (pular direto para qualquer página). **Módulo `comum.telaconfig` (novo, 2026-07-21):** `GET/PUT /api/v1/config-tela/{chaveTela}` — quais campos aparecem/são obrigatórios por tenant, reutilizável entre telas; só ADMIN grava (403 para OPERADOR, checado a partir do claim `roles` do JWT). **26 testes verdes** (Testcontainers: `ClienteCrudTest` 10, `ConfiguracaoTelaTest` 5, + suíte anterior) + fluxo **verificado ao vivo**. Persistência: **Spring Data JDBC**. Falta: domínio dos demais módulos (produto/estoque/pedido/fornecedor/funcionário) |
 | `site/` | Site público (Astro/SSG, ADR-011). **Home institucional "matadora"** (posicionamento concorrente do Bling): hero com painel animado + demo de sincronização, faixa de stats com contadores, contraste problema→solução, 3 passos, 6 recursos, canais (ML/Shopee/Amazon/balcão), planos (preços via `/api/publico/planos`), FAQ e CTA — tudo em CSS/SVG puro com **scroll-reveal** e **prefers-reduced-motion** (sem novas deps). Sistema visual em `src/styles/site.css` portado do golden `nainer_institucional`. `/assinar` (form → `POST /api/publico/assinar` → auto-login → `/bem-vindo`) e `/bem-vindo` mantidos. **Trial 60 dias** em toda a copy. Tema claro/escuro persistido. **Build SSG ok**; hero/reveal/contadores verificados via Playwright |
-| `web/` | ERP do lojista (React 19 + Vite + TS). Auth JWT (login slug+email+senha; **handoff SSO** do site via `#token=`), shell (nav Painel/Produtos/Estoque/Pedidos/Canais/**Clientes** + Sair), **Painel** real (`GET /api/v1/eu` via TanStack Query). **Tela de Clientes completa** (2026-07-20/21): listagem com busca/filtro/paginação por cursor, formulário com grid de 12 colunas (§3.7) largura total (`.app-main` 1600px), máscaras com validação de dígito verificador/formato/duplicidade, validação por campo (blur + submit), pop-up de erro vermelho (`Toast.tsx`), autopreenchimento de endereço via ViaCEP, modal embutido de categoria, exclusão com confirmação em modal próprio, `AjudaDaTela` (R22), convenções de **maiúsculas sempre** e **foco automático**. **Tela de configuração de campos (nova, 2026-07-21):** `ConfiguracaoTelaCliente.tsx` (`/clientes/configuracao`, só `ADMIN` — `RequireAdmin.tsx`), acessível pelo ícone ⚙ ao lado da ajuda; o formulário lê essa config (`lib/configuracaoTela.ts`) e ajusta visibilidade/obrigatoriedade dos campos em tempo real. Demais áreas (Produtos/Estoque/Pedidos/Canais) ainda placeholder. Design tokens §3.7 (claro/escuro). **Build ok**; fluxo **e2e verificado no navegador**. |
+| `web/` | ERP do lojista (React 19 + Vite + TS). Auth JWT (login slug+email+senha; **handoff SSO** do site via `#token=`), shell (nav Painel/Produtos/Estoque/Pedidos/Canais/**Clientes** + Sair), **Painel** real (`GET /api/v1/eu` via TanStack Query). **Tela de Clientes completa** (2026-07-20/21): listagem com busca em maiúsculas/filtro/**paginação numerada** (1 2 3 … 9 10 →, pula direto para qualquer página, sem acúmulo em tela — 10/20/50 por página, padrão 10, ordenada por nome), formulário com cabeçalho enxuto ("Cliente" + Cancelar/Salvar no topo, 2026-07-21) e grid de 12 colunas (§3.7) largura total (`.app-main` 1600px), máscaras com validação de dígito verificador/formato/duplicidade (inclusive **limite de crédito em moeda**, 2026-07-21), validação por campo (blur + submit), pop-up de erro vermelho (`Toast.tsx`), autopreenchimento de endereço via ViaCEP, modal embutido de categoria, exclusão com confirmação em modal próprio, `AjudaDaTela` (R22), convenções de **maiúsculas sempre** e **foco automático**. **Tela de configuração de campos (nova, 2026-07-21):** `ConfiguracaoTelaCliente.tsx` (`/clientes/configuracao`, só `ADMIN` — `RequireAdmin.tsx`), acessível pelo ícone ⚙ ao lado da ajuda; o formulário lê essa config (`lib/configuracaoTela.ts`) e ajusta visibilidade/obrigatoriedade dos campos em tempo real. Demais áreas (Produtos/Estoque/Pedidos/Canais) ainda placeholder. **Shell do ERP com altura travada no viewport** (2026-07-21, convenção nova — `Layout.tsx`/`styles.css`): menu lateral e cabeçalho fixos, sem scroll de página inteira; `.app-main` é quem rola por padrão, e a tela de Clientes usa `.lista-tela`/`.lista-topo`/`.lista-corpo`/`.lista-rodape` para travar também a barra de filtros e o rodapé de paginação, deixando só a tabela com scroll próprio. Design tokens §3.7 (claro/escuro). **Build ok**; fluxo **e2e verificado no navegador**. |
 | `admin/` | Ainda não criado (backoffice React 19 + Vite) |
 
 **Stack alvo:** Java 25 + Spring Boot 4.x · PostgreSQL 18 (Docker, banco **`niner_db`**) · React 19 + Vite (3 apps) · Flyway · JWT. **SaaS multi-tenant** (banco único + `id_tenant` + Postgres RLS).
@@ -35,6 +35,102 @@ demais módulos (produto/estoque/pedido/fornecedor/funcionário) e o app `admin/
 ---
 
 ## Linha do tempo
+
+### 2026-07-21 — Cliente: cabeçalho do formulário enxuto (Cancelar/Salvar no topo), identificação numa linha, limite de crédito com máscara de moeda
+
+Três ajustes pontuais pedidos pelo dono do produto no formulário de cliente (`ClienteForm.tsx`),
+sem mudança de backend/migration — só frontend.
+
+1. **Cabeçalho enxuto com ações no topo.** O título deixou de variar entre "Novo cliente"/
+   "Editar cliente" (com "CADASTROS" acima) — agora é só **"Cliente"**. Os botões
+   **Cancelar**/**Salvar**, que ficavam num `footer-bar` no fim da página (exigindo rolar até
+   o final para salvar), subiram para a faixa superior, ao lado dos ícones de ajuda/
+   configuração. O botão Salvar (`type="submit"`) é renderizado fora da árvore do `<form>`
+   (o cabeçalho vem antes do formulário no JSX) — associado via atributo HTML padrão
+   `form="form-cliente"`, então continua disparando a validação e o submit normalmente.
+
+2. **Linha de identificação compacta.** O checkbox "Cliente ativo" e os rádios "Pessoa
+   Física"/"Pessoa Jurídica", antes em duas linhas separadas, passaram a ficar lado a lado
+   numa única linha (`.identificacao-linha`, novo em `web/src/styles.css`).
+
+3. **Limite de crédito com máscara de moeda.** O campo aceitava texto livre (só convertia
+   vírgula para ponto no envio); agora mascara a digitação como dinheiro — mesma convenção de
+   caixa eletrônico/app de banco: os dígitos digitados são sempre os centavos, contados da
+   direita para a esquerda (digitar "150000" mostra "1.500,00" em tempo real). Três funções
+   novas em `web/src/lib/masks.ts`: `mascararMoeda` (aplicada no `onChange`),
+   `desmascararMoeda` (desfaz para enviar à API) e `formatarMoeda` (formata o número vindo da
+   API ao abrir o formulário de edição — `lib/clientes.ts:paraFormulario`).
+
+4. **Verificação:** `tsc -b` sem erros. Testado ao vivo no navegador (cliente existente com
+   `limite_credito = 3006.79`): cabeçalho mostra só "Cliente" com Cancelar/Salvar junto dos
+   ícones; "Cliente ativo"/"Pessoa Física"/"Pessoa Jurídica" na mesma linha; campo de limite
+   de crédito abre já formatado "3.006,79"; digitar "150000" vira "1.500,00" em tempo real;
+   clique em Salvar (fora da árvore do `<form>`) disparou a validação normalmente (acusou CPF
+   inválido de um registro de teste com CPF fictício, confirmando que o `form="form-cliente"`
+   funciona). Aprovado pelo dono do produto.
+
+### 2026-07-21 — Clientes: paginação numerada (1 2 3 … 9 10) + shell fixo (menu/topo/rodapé sem scroll)
+
+Pedido do dono do produto depois de ver a listagem com 109 clientes de teste: a tela crescia
+indefinidamente ("Carregar mais" ia empilhando linhas), o menu lateral/cabeçalho rolavam junto
+com o conteúdo, e faltava pular direto para uma página qualquer. Duas rodadas no mesmo dia — a
+primeira trocou o scroll infinito por "← Anterior/Próxima →"; o dono do produto pediu em
+seguida uma grade numerada de páginas, o que forçou trocar o mecanismo de paginação por baixo.
+Vira **convenção nova do shell do ERP**, não só da tela de Clientes.
+
+1. **Backend — paginação por número de página, não mais por cursor.** `ClienteService.listar`
+   trocou o cursor opaco (`WHERE (nome, id) > (?, ?)`) por **`LIMIT`/`OFFSET`** com contagem
+   total (`SELECT count(*)` com os mesmos filtros) — necessário porque a navegação numerada
+   pedida ("1 2 3 4 5 … 9 10") exige saber quantas páginas existem no total e permitir pular
+   direto para qualquer uma, o que um cursor opaco não oferece. `ORDER BY nome, id_cliente`
+   mantido (empate resolvido pelo id). `PaginaClientes` passou a devolver
+   `{itens, pagina, tamanhoPagina, totalItens, totalPaginas}` em vez de `{itens, proximoCursor}`;
+   `GET /api/v1/clientes` trocou o parâmetro `cursor` por `pagina` (1-based). Volume de
+   clientes por tenant é pequeno o bastante para `OFFSET` não pesar — decisão registrada no
+   código, não vira ADR. Sem migration — só ordenação/paginação, schema não mudou. **10 testes
+   de `ClienteCrudTest` seguem verdes.**
+
+2. **Frontend — grade de páginas numeradas.** `ClienteLista.tsx` trocou o histórico de cursores
+   por um estado simples `pagina` (número, 1-based) — permite pular direto para qualquer página
+   sem precisar visitar as intermediárias. Nova função `paginasVisiveis()` monta a navegação
+   **"1 2 3 4 5 … (penúltima) (última) →"** (sem reticências quando cabem todas as páginas, até
+   7). Trocar nome/categoria/status/tamanho de página volta automaticamente para a página 1.
+   Seletor **itens por página** (10/20/50, **padrão 10**). `lib/clientes.ts` acompanhou os tipos
+   (`cursor` → `pagina`; `proximoCursor` → `pagina`/`tamanhoPagina`/`totalItens`/`totalPaginas`).
+
+3. **Busca por nome em maiúsculas.** O campo "Buscar por nome…" passou a normalizar o texto
+   digitado em tempo real (`maiusculas()`, mesma função usada nos formulários) — consistente
+   com a convenção de maiúsculas sempre (§3.7) e com o fato de os nomes já serem salvos em
+   maiúsculas no banco (busca por `ILIKE`, então a caixa em si não afeta o resultado, mas a UI
+   fica consistente com o resto da tela).
+
+4. **Rodapé da paginação fixo, só a tabela rola.** A grade de páginas saiu de dentro de
+   `.lista-corpo` (que rola) e virou uma terceira faixa, `.lista-rodape`
+   (`flex-shrink: 0`, mesmo tratamento de `.lista-topo`) — agora a tela de Clientes tem três
+   faixas: topo fixo (título+filtros), meio rolável (só a tabela) e rodapé fixo (contagem de
+   clientes + paginação numerada).
+
+5. **Shell do ERP com altura travada no viewport (`web/src/styles.css`).** Antes, `.app` só
+   tinha `min-height: 100vh` — qualquer tela com conteúdo alto (ex.: tabela de clientes)
+   crescia o `<body>` inteiro, arrastando o menu lateral (`.app-nav`) e o cabeçalho
+   (`.app-header`) para fora da viewport ao rolar. Agora `.app` usa `height: 100vh` +
+   `overflow: hidden`, e é `.app-main` quem ganha `overflow-y: auto` — o menu lateral e o
+   cabeçalho superior do ERP nunca mais rolam, em **qualquer tela**, não só Clientes.
+
+6. **Cabeçalho da listagem mais baixo.** Removido o texto "CADASTROS" (eyebrow) acima do
+   título — ficou só **"Clientes"** — reduzindo a altura da faixa superior. A tela usa três
+   classes novas (`styles.css`): `.lista-tela` (coluna, altura 100% do `.app-main`),
+   `.lista-topo` e `.lista-rodape` (fixos, `flex-shrink: 0`) e `.lista-corpo` (só a tabela,
+   `overflow-y: auto`). Convenção pensada para ser reaproveitada nas próximas telas de listagem
+   (Fornecedor/Funcionário/Produtos).
+
+7. **Verificação:** `mvn compile` limpo + `ClienteCrudTest` 10/10 verde; `tsc -b` sem erros; API
+   recompilada e reiniciada (`docker compose build api && docker compose up -d api`) —
+   `/actuator/health` OK. Testado ao vivo no navegador com 92 clientes ativos de teste: busca
+   "carlos" vira "CARLOS" ao digitar e filtra corretamente; clique direto na página 9 (sem
+   passar pelas intermediárias) mostra o bloco alfabético certo (TATIANE → UBIRAJARA); rodapé
+   com contagem ("92 clientes") e paginação continua visível e no lugar ao rolar a tabela; "→"
+   na última página (10) fica desabilitado. Aprovado pelo dono do produto.
 
 ### 2026-07-21 — Ícones maiores (ajuda/configuração) + grid que se reajusta ao ocultar campo
 

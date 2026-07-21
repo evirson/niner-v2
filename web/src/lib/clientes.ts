@@ -1,5 +1,13 @@
 import { api } from './api'
-import { mascararCep, mascararCpfCnpj, mascararIdWhatsapp, mascararTelefone, somenteDigitos } from './masks'
+import {
+  desmascararMoeda,
+  formatarMoeda,
+  mascararCep,
+  mascararCpfCnpj,
+  mascararIdWhatsapp,
+  mascararTelefone,
+  somenteDigitos,
+} from './masks'
 import { maiusculas } from './texto'
 
 export type Genero = 'MASCULINO' | 'FEMININO' | 'OUTROS'
@@ -112,7 +120,7 @@ export function paraFormulario(c: Cliente): ClienteFormState {
     bairro: c.bairro ?? '',
     cidade: c.cidade ?? '',
     estado: c.estado ?? '',
-    limiteCredito: c.limiteCredito ? String(c.limiteCredito) : '',
+    limiteCredito: c.limiteCredito ? formatarMoeda(c.limiteCredito) : '',
     ativo: c.ativo,
   }
 }
@@ -149,14 +157,17 @@ export function paraRequisicao(f: ClienteFormState) {
     bairro: maiusculoOuNulo(f.bairro),
     cidade: maiusculoOuNulo(f.cidade),
     estado: semEspacos(f.estado),
-    limiteCredito: f.limiteCredito ? Number(f.limiteCredito.replace(',', '.')) : 0,
+    limiteCredito: desmascararMoeda(f.limiteCredito),
     ativo: f.ativo,
   }
 }
 
 export interface PaginaClientes {
   itens: Cliente[]
-  proximoCursor: number | null
+  pagina: number
+  tamanhoPagina: number
+  totalItens: number
+  totalPaginas: number
 }
 
 export interface ExclusaoCliente {
@@ -169,7 +180,8 @@ export interface FiltrosClientes {
   cpfCnpj?: string
   idCategoriaCliente?: number
   status?: StatusCliente
-  cursor?: number
+  pagina?: number
+  tamanho?: number
 }
 
 export function listarClientes(filtros: FiltrosClientes): Promise<PaginaClientes> {
@@ -178,7 +190,8 @@ export function listarClientes(filtros: FiltrosClientes): Promise<PaginaClientes
   if (filtros.cpfCnpj) params.set('cpfCnpj', filtros.cpfCnpj)
   if (filtros.idCategoriaCliente) params.set('idCategoriaCliente', String(filtros.idCategoriaCliente))
   if (filtros.status) params.set('status', filtros.status)
-  if (filtros.cursor) params.set('cursor', String(filtros.cursor))
+  if (filtros.pagina) params.set('pagina', String(filtros.pagina))
+  if (filtros.tamanho) params.set('limite', String(filtros.tamanho))
   const query = params.toString()
   return api<PaginaClientes>(`/api/v1/clientes${query ? `?${query}` : ''}`)
 }

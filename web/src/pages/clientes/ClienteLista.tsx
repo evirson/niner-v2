@@ -1,5 +1,5 @@
-import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useState } from 'react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import AjudaDaTela from '../../components/AjudaDaTela'
 import { IconeEngrenagem } from '../../components/Icones'
@@ -13,24 +13,50 @@ import {
 } from '../../lib/clientes'
 import { useEu } from '../../lib/eu'
 import { mascararCpfCnpj, mascararIdWhatsapp, mascararTelefone } from '../../lib/masks'
+import { maiusculas } from '../../lib/texto'
+
+/**
+ * Monta a lista de páginas exibidas na navegação numerada: as 5 primeiras, reticências e as
+ * 2 últimas (ex.: "1 2 3 4 5 … 9 10"). Sem reticências quando cabe tudo (até 7 páginas).
+ */
+function paginasVisiveis(total: number): Array<number | 'reticencias'> {
+  if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1)
+  return [1, 2, 3, 4, 5, 'reticencias', total - 1, total]
+}
 
 export default function ClienteLista() {
   const [nome, setNome] = useState('')
   const [status, setStatus] = useState<StatusCliente>('ATIVOS')
   const [idCategoriaCliente, setIdCategoriaCliente] = useState<number | undefined>(undefined)
+  const [tamanhoPagina, setTamanhoPagina] = useState(10)
   const [clienteParaExcluir, setClienteParaExcluir] = useState<Cliente | null>(null)
   const [aviso, setAviso] = useState('')
   const queryClient = useQueryClient()
 
   const { data: categorias } = useQuery({ queryKey: ['categorias-cliente'], queryFn: listarCategorias })
 
-  const { data, fetchNextPage, hasNextPage, isFetchingNextPage, isLoading } = useInfiniteQuery({
-    queryKey: ['clientes', { nome, status, idCategoriaCliente }],
-    queryFn: ({ pageParam }) =>
-      listarClientes({ nome: nome || undefined, status, idCategoriaCliente, cursor: pageParam }),
-    initialPageParam: undefined as number | undefined,
-    getNextPageParam: (ultima) => ultima.proximoCursor ?? undefined,
+  // Paginação por número de página (não por scroll infinito nem cursor — permite pular
+  // direto para qualquer página, inclusive a última).
+  const [pagina, setPagina] = useState(1)
+
+  useEffect(() => {
+    setPagina(1)
+  }, [nome, status, idCategoriaCliente, tamanhoPagina])
+
+  const { data, isLoading, isFetching } = useQuery({
+    queryKey: ['clientes', { nome, status, idCategoriaCliente, tamanhoPagina, pagina }],
+    queryFn: () =>
+      listarClientes({
+        nome: nome || undefined,
+        status,
+        idCategoriaCliente,
+        pagina,
+        tamanho: tamanhoPagina,
+      }),
+    placeholderData: (anterior) => anterior,
   })
+
+  const totalPaginas = data?.totalPaginas ?? 1
 
   const excluir = useMutation({
     mutationFn: excluirCliente,
@@ -49,71 +75,80 @@ export default function ClienteLista() {
     },
   })
 
-  const clientes: Cliente[] = data?.pages.flatMap((p) => p.itens) ?? []
+  const clientes: Cliente[] = data?.itens ?? []
   const { data: eu } = useEu()
   const ehAdmin = eu?.usuario.papel === 'ADMIN'
 
   return (
-    <div>
-      <div className="topbar-tela">
-        <div>
-          <p className="eyebrow">Cadastros</p>
-          <h1 style={{ marginTop: 4 }}>Clientes</h1>
-        </div>
-        <div className="topbar-acoes">
-          {ehAdmin && (
-            <Link
-              className="btn ghost ajuda-gatilho"
-              to="/clientes/configuracao"
-              aria-label="Configurar tela de cliente"
-              title="Configurar campos desta tela"
-            >
-              <IconeEngrenagem />
+    <div className="lista-tela">
+      <div className="lista-topo">
+        <div className="topbar-tela">
+          <h1>Clientes</h1>
+          <div className="topbar-acoes">
+            {ehAdmin && (
+              <Link
+                className="btn ghost ajuda-gatilho"
+                to="/clientes/configuracao"
+                aria-label="Configurar tela de cliente"
+                title="Configurar campos desta tela"
+              >
+                <IconeEngrenagem />
+              </Link>
+            )}
+            <AjudaDaTela chaveTela="cadastros.cliente.lista" />
+            <Link className="btn" to="/clientes/novo">
+              ＋ Novo cliente
             </Link>
-          )}
-          <AjudaDaTela chaveTela="cadastros.cliente.lista" />
-          <Link className="btn" to="/clientes/novo">
-            ＋ Novo cliente
-          </Link>
+          </div>
+        </div>
+
+        {aviso && (
+          <div className="card aviso-banner" role="status">
+            <span>{aviso}</span>
+            <button type="button" className="btn ghost" onClick={() => setAviso('')}>
+              Ok
+            </button>
+          </div>
+        )}
+
+        <div className="card filtros-bar">
+          <input
+            placeholder="Buscar por nome…"
+            value={nome}
+            onChange={(e) => setNome(maiusculas(e.target.value))}
+            aria-label="Buscar por nome"
+          />
+          <select
+            value={idCategoriaCliente ?? ''}
+            onChange={(e) => setIdCategoriaCliente(e.target.value ? Number(e.target.value) : undefined)}
+            aria-label="Filtrar por categoria"
+          >
+            <option value="">Todas as categorias</option>
+            {categorias?.map((c) => (
+              <option key={c.idCategoriaCliente} value={c.idCategoriaCliente}>
+                {c.nomeCategoria}
+              </option>
+            ))}
+          </select>
+          <select value={status} onChange={(e) => setStatus(e.target.value as StatusCliente)} aria-label="Filtrar por status">
+            <option value="ATIVOS">Ativos</option>
+            <option value="INATIVOS">Inativos</option>
+            <option value="TODOS">Todos</option>
+          </select>
+          <select
+            value={tamanhoPagina}
+            onChange={(e) => setTamanhoPagina(Number(e.target.value))}
+            aria-label="Itens por página"
+          >
+            <option value={10}>10 por página</option>
+            <option value={20}>20 por página</option>
+            <option value={50}>50 por página</option>
+          </select>
         </div>
       </div>
 
-      {aviso && (
-        <div className="card aviso-banner" role="status">
-          <span>{aviso}</span>
-          <button type="button" className="btn ghost" onClick={() => setAviso('')}>
-            Ok
-          </button>
-        </div>
-      )}
-
-      <div className="card filtros-bar">
-        <input
-          placeholder="Buscar por nome…"
-          value={nome}
-          onChange={(e) => setNome(e.target.value)}
-          aria-label="Buscar por nome"
-        />
-        <select
-          value={idCategoriaCliente ?? ''}
-          onChange={(e) => setIdCategoriaCliente(e.target.value ? Number(e.target.value) : undefined)}
-          aria-label="Filtrar por categoria"
-        >
-          <option value="">Todas as categorias</option>
-          {categorias?.map((c) => (
-            <option key={c.idCategoriaCliente} value={c.idCategoriaCliente}>
-              {c.nomeCategoria}
-            </option>
-          ))}
-        </select>
-        <select value={status} onChange={(e) => setStatus(e.target.value as StatusCliente)} aria-label="Filtrar por status">
-          <option value="ATIVOS">Ativos</option>
-          <option value="INATIVOS">Inativos</option>
-          <option value="TODOS">Todos</option>
-        </select>
-      </div>
-
-      <div className="card table-wrap" style={{ marginTop: 16 }}>
+      <div className="lista-corpo">
+        <div className="card table-wrap">
         {isLoading ? (
           <p className="muted">Carregando…</p>
         ) : clientes.length === 0 ? (
@@ -162,18 +197,47 @@ export default function ClienteLista() {
             </tbody>
           </table>
         )}
+        </div>
       </div>
 
-      {hasNextPage && (
-        <button
-          type="button"
-          className="btn ghost"
-          style={{ marginTop: 12 }}
-          onClick={() => fetchNextPage()}
-          disabled={isFetchingNextPage}
-        >
-          {isFetchingNextPage ? 'Carregando…' : 'Carregar mais'}
-        </button>
+      {clientes.length > 0 && (
+        <div className="lista-rodape">
+          <div className="paginacao-bar">
+            <span className="muted">
+              {data?.totalItens} cliente{data?.totalItens === 1 ? '' : 's'}
+              {isFetching && ' · atualizando…'}
+            </span>
+            <div className="paginacao-paginas">
+              {paginasVisiveis(totalPaginas).map((p, i) =>
+                p === 'reticencias' ? (
+                  <span key={`reticencias-${i}`} className="paginacao-reticencias">
+                    …
+                  </span>
+                ) : (
+                  <button
+                    key={p}
+                    type="button"
+                    className={`btn ghost paginacao-numero ${p === pagina ? 'ativa' : ''}`}
+                    onClick={() => setPagina(p)}
+                    disabled={isFetching}
+                    aria-current={p === pagina ? 'page' : undefined}
+                  >
+                    {p}
+                  </button>
+                ),
+              )}
+              <button
+                type="button"
+                className="btn ghost"
+                onClick={() => setPagina((p) => Math.min(totalPaginas, p + 1))}
+                disabled={pagina >= totalPaginas || isFetching}
+                aria-label="Próxima página"
+              >
+                →
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {clienteParaExcluir && (
