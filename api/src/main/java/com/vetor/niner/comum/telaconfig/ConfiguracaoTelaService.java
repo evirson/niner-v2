@@ -30,7 +30,11 @@ public class ConfiguracaoTelaService {
             "cadastros.cliente.form", List.of(
                     "cpfCnpj", "rgIe", "email", "telefone", "whatsapp", "instagram", "facebook",
                     "tiktok", "cep", "endereco", "numero", "complemento", "bairro", "cidade",
-                    "estado", "limiteCredito"));
+                    "estado", "limiteCredito"),
+            "cadastros.funcionario.form", List.of("cpf", "telefone", "cargo", "percComissao"),
+            "cadastros.fornecedor.form", List.of(
+                    "nomeFantasia", "cnpj", "inscricaoEstadual", "email", "telefone", "cep",
+                    "endereco", "numero", "bairro", "cidade", "estado"));
 
     private final JdbcClient jdbc;
 

@@ -7,11 +7,14 @@ Registro cronológico das decisões e entregas. Atualizar a cada marco relevante
 
 ## Estado atual
 
-Projeto **spec-driven** em fase de fundação, com a **primeira tela de domínio completa e
-ponta a ponta**: Clientes (`cadastros.cliente`). A **API (Spring Boot 4 / Java 25)** sobe com
-3 superfícies + infra de contexto de tenant; o schema completo (control-plane + domínio do
-lojista, V001–V026) está criado, revisado e com RLS validado. Falta a camada de domínio dos
-demais módulos (produto/estoque/pedido/fornecedor/funcionário) e o app `admin/`.
+Projeto **spec-driven** em fase de fundação, com **quatro telas de cadastro completas e
+ponta a ponta**: Clientes (`cadastros.cliente`), Funcionários (`cadastros.funcionario`), Plano
+de Contas (`cadastros.planocontas`) e Fornecedores (`cadastros.fornecedor`), mais a primeira
+tela de **configuração de sistema** — Parâmetros do Sistema (`configuracao.geral`,
+2026-07-21, singleton por tenant, ADMIN-only, fora do padrão de cadastro). A **API (Spring
+Boot 4 / Java 25)** sobe com 3 superfícies + infra de contexto de tenant; o schema completo
+(control-plane + domínio do lojista, V001–V027) está criado, revisado e com RLS validado.
+Falta a camada de domínio dos demais módulos (produto/estoque/pedido) e o app `admin/`.
 
 | Artefato | Situação |
 |---|---|
@@ -25,9 +28,9 @@ demais módulos (produto/estoque/pedido/fornecedor/funcionário) e o app `admin/
 | `db/migration/V025` | **`financeiro` parcial (revisão de Q5/ADR-010, ADR-012):** crediário (`tipo_carteira`, `moeda`, `moeda_detalhe`, `contas_receber`/`contas_receber_detalhe`) + caixa (`caixa_mestre`/`caixa_detalhe`). RLS próprio no arquivo (V024 já tinha rodado). Seed de `moeda` por tenant implementado no `SignupService`. **Aplicada e validada em banco real em 2026-07-16** (RLS `ENABLE`+`FORCE` confirmado nas 7 tabelas; moedas semeadas no signup conferidas via `psql`). |
 | `db/migration/V026` | **`contas_pagar`** (mais uma revisão de Q5/ADR-010/ADR-012): PK `id_conta_pagar` (renomeada de `localizador`), `nota_fiscal integer` nullable sem `DEFAULT 0` (padronização que também corrigiu `produto_movimento_mestre.nota_fiscal`, V019, de `text` para `integer`). RLS próprio no arquivo. Só `conta_corrente*` segue fora do v1. **Aplicada e validada em banco real em 2026-07-16** (schema/FKs/RLS conferidos via `psql`) |
 | `db/migration/V027` | **`cfg_tela_campo`** (novo, 2026-07-21) — configuração por tenant de campos visíveis/obrigatórios por tela (`chave_tela`), reutilizável para qualquer tela futura. RLS próprio no arquivo. **Migration aditiva** — aplicada sem recriar o banco (`docker compose run --rm flyway`, só essa migration rodou). |
-| `api/` | Spring Boot 4.0.7 / Java 25 (Maven). 3 superfícies com `SecurityFilterChain` separados; `TenantContext` (`ScopedValue`) + `TenantAwareTransactionManager`; **auth JWT HS256** (login/signup emitem, `/api/v1` valida `aud=tenant`); **trial self-service** (`POST /api/publico/assinar` → tenant+configs+moedas+ADMIN+assinatura TRIAL + token), `POST /api/publico/login`, `GET /api/v1/eu`. **Módulo `cadastros.cliente` (2026-07-20/21):** CRUD completo de `GET/POST/PUT/DELETE /api/v1/clientes` + `GET/POST/PUT /api/v1/categorias-cliente`, validação de CPF/CNPJ (dígito verificador + duplicidade — **CNPJ alfanumérico desde 2026-07-21**, ver linha do tempo), normalização de texto para maiúsculas, celular/WhatsApp (11 dígitos + 3º=9), nascimento opcional (só não pode ser futuro), exclusão com fallback para inativar quando há venda associada. **Listagem ordenada por `nome` (ou pela coluna pedida), paginação por número de página** (2026-07-21, era por `id_cliente`/cursor) — `GET /api/v1/clientes?pagina=&limite=&ordenarPor=&direcao=` com `LIMIT/OFFSET` + contagem total + `ORDER BY` dinâmico (allowlist de colunas). **Validação de servidor reforçada (2026-07-21):** além do dígito verificador de CPF/CNPJ, agora também formato de e-mail/celular/WhatsApp/CEP e a obrigatoriedade configurável por tenant (`cfg_tela_campo`) — antes só o frontend checava isso. **Módulo `comum.telaconfig` (novo, 2026-07-21):** `GET/PUT /api/v1/config-tela/{chaveTela}` — quais campos aparecem/são obrigatórios por tenant, reutilizável entre telas; só ADMIN grava (403 para OPERADOR, checado a partir do claim `roles` do JWT); leitura filtrada por `id_tenant` explicitamente (defesa em profundidade, além do RLS). **31 testes verdes** (Testcontainers: `ClienteCrudTest` 15, `ConfiguracaoTelaTest` 5, + suíte anterior) + fluxo **verificado ao vivo**. Persistência: **Spring Data JDBC**. Falta: domínio dos demais módulos (produto/estoque/pedido/fornecedor/funcionário) |
+| `api/` | Spring Boot 4.0.7 / Java 25 (Maven). 3 superfícies com `SecurityFilterChain` separados; `TenantContext` (`ScopedValue`) + `TenantAwareTransactionManager`; **auth JWT HS256** (login/signup emitem, `/api/v1` valida `aud=tenant`); **trial self-service** (`POST /api/publico/assinar` → tenant+configs+moedas+ADMIN+assinatura TRIAL + token), `POST /api/publico/login`, `GET /api/v1/eu`. **Módulo `cadastros.cliente` (2026-07-20/21):** CRUD completo de `GET/POST/PUT/DELETE /api/v1/clientes` + `GET/POST/PUT /api/v1/categorias-cliente`, validação de CPF/CNPJ (dígito verificador + duplicidade — **CNPJ alfanumérico desde 2026-07-21**, ver linha do tempo), normalização de texto para maiúsculas, celular/WhatsApp (11 dígitos + 3º=9), nascimento opcional (só não pode ser futuro), exclusão com fallback para inativar quando há venda associada. **Listagem ordenada por `nome` (ou pela coluna pedida), paginação por número de página** (2026-07-21, era por `id_cliente`/cursor) — `GET /api/v1/clientes?pagina=&limite=&ordenarPor=&direcao=` com `LIMIT/OFFSET` + contagem total + `ORDER BY` dinâmico (allowlist de colunas). **Validação de servidor reforçada (2026-07-21):** além do dígito verificador de CPF/CNPJ, agora também formato de e-mail/celular/WhatsApp/CEP e a obrigatoriedade configurável por tenant (`cfg_tela_campo`) — antes só o frontend checava isso. **Módulo `cadastros.funcionario` (novo, 2026-07-21):** CRUD completo de `GET/POST/PUT/DELETE /api/v1/funcionarios` replicando o padrão do cliente (paginação por página, ordenação com allowlist, validação de CPF/celular/% comissão, obrigatoriedade configurável, exclusão com fallback para inativar quando há movimentação de estoque vinculada). Reaproveita `Documentos` (tornado público) para o dígito verificador do CPF; **CPF não é único** aqui (decisão de V016/§3.3.9, oposto do cliente). **Módulo `cadastros.planocontas` (novo, 2026-07-21):** CRUD de `GET/POST/PUT/DELETE /api/v1/planos-contas` — PK de negócio `text` (código contábil digitado pelo usuário, imutável após criar), exclusão **sem** fallback de inativar (tabela sem `ativo` — 409 com vínculo em fornecedor/contas_pagar), `tipoMovimento` validado contra o ENUM acentuado (CRÉDITO/DÉBITO/NEUTRO), busca única código-ou-descrição; sem registro em `cfg_tela_campo` (todos os campos NOT NULL, nada configurável). **Módulo `cadastros.fornecedor` (novo, 2026-07-21):** CRUD de `GET/POST/PUT/DELETE /api/v1/fornecedores` — mesmo padrão de Cliente/Funcionário (obrigatoriedade configurável, exclusão com fallback para inativar quando há movimentação de estoque ou conta a pagar vinculada); CNPJ sempre 14 caracteres (pessoa jurídica — CPF é rejeitado), telefone aceita fixo ou celular (10–11 dígitos, mais frouxo que a regra do cliente); `idPlanoContas` inexistente vira 400 amigável em vez de 500; listagem com filtro por plano de contas. Sem alteração de schema (tabela completa desde V016/V024). **Módulo `configuracao.geral` (novo, 2026-07-21):** `GET/PUT /api/v1/config-geral` sobre o singleton `cfg_geral` (V023, semeado no signup) — sem POST/DELETE; **somente ADMIN, inclusive na leitura** (diferente de `comum.telaconfig`, onde qualquer papel lê); validação só de faixa (percentuais 0–100, dias ≥ 0), já que a tabela inteira é NOT NULL. **Módulo `comum.telaconfig` (novo, 2026-07-21):** `GET/PUT /api/v1/config-tela/{chaveTela}` — quais campos aparecem/são obrigatórios por tenant, reutilizável entre telas (já com 3 telas registradas: `cadastros.cliente.form`, `cadastros.funcionario.form` e `cadastros.fornecedor.form`); só ADMIN grava (403 para OPERADOR, checado a partir do claim `roles` do JWT); leitura filtrada por `id_tenant` explicitamente (defesa em profundidade, além do RLS). **69 testes verdes** (Testcontainers: `ClienteCrudTest` 17, `FornecedorCrudTest` 12, `FuncionarioCrudTest` 10, `PlanoContasCrudTest` 8, `ConfiguracaoGeralTest` 6, `ConfiguracaoTelaTest` 5, + suíte anterior) + fluxo **verificado ao vivo**. Persistência: **Spring Data JDBC**. Falta: domínio dos demais módulos (produto/estoque/pedido) |
 | `site/` | Site público (Astro/SSG, ADR-011). **Home institucional "matadora"** (posicionamento concorrente do Bling): hero com painel animado + demo de sincronização, faixa de stats com contadores, contraste problema→solução, 3 passos, 6 recursos, canais (ML/Shopee/Amazon/balcão), planos (preços via `/api/publico/planos`), FAQ e CTA — tudo em CSS/SVG puro com **scroll-reveal** e **prefers-reduced-motion** (sem novas deps). Sistema visual em `src/styles/site.css` portado do golden `nainer_institucional`. `/assinar` (form → `POST /api/publico/assinar` → auto-login → `/bem-vindo`) e `/bem-vindo` mantidos. **Trial 60 dias** em toda a copy. Tema claro/escuro persistido. **Build SSG ok**; hero/reveal/contadores verificados via Playwright |
-| `web/` | ERP do lojista (React 19 + Vite + TS). Auth JWT (login slug+email+senha; **handoff SSO** do site via `#token=`), shell (nav Painel/Produtos/Estoque/Pedidos/Canais/**Clientes** + Sair), **Painel** real (`GET /api/v1/eu` via TanStack Query). **Tela de Clientes completa** (2026-07-20/21): ícone de identificação (pessoa) à esquerda do título, listagem com busca em maiúsculas/filtro/**paginação fixa em 50 itens, sem seletor** (janela deslizante de páginas com primeira/anterior/próxima/última, estilo inspirado no sistema legado)/**ordenação por coluna** (cabeçalho em destaque, ícone "⇅"/"▲"/"▼" em cada uma), **três ícones de ação por linha** (visualizar verde/editar azul/excluir vermelho, sem texto — visualizar abre `/clientes/:id/visualizar` em modo somente-leitura), grid mais compacta, formulário com cabeçalho enxuto ("Cliente" + Cancelar/Salvar no topo, topo fixo/só o corpo rola) e grid de 12 colunas (§3.7) largura total (`.app-main` 1600px), máscaras com validação de dígito verificador/formato/duplicidade (inclusive **CNPJ alfanumérico** e **limite de crédito em moeda**), validação por campo (blur + submit, replicada no backend — 2026-07-21), pop-up de erro vermelho (`Toast.tsx`), autopreenchimento de endereço via ViaCEP, modal embutido de categoria, exclusão com confirmação em modal próprio, `AjudaDaTela` (R22), convenções de **maiúsculas sempre** e **foco automático**. **Tela de configuração de campos** (`ConfiguracaoTelaCliente.tsx`, `/clientes/configuracao`, só `ADMIN` — `RequireAdmin.tsx`): cabeçalho enxuto com Cancelar/Salvar no topo (fixo, 2026-07-21), acessível pelo ícone ⚙ ao lado da ajuda; o formulário de Cliente lê essa config (`lib/configuracaoTela.ts`) e ajusta visibilidade/obrigatoriedade dos campos em tempo real. Demais áreas (Produtos/Estoque/Pedidos/Canais) ainda placeholder. **Shell do ERP com altura travada no viewport** (2026-07-21, convenção nova — `Layout.tsx`/`styles.css`): menu lateral e cabeçalho fixos, sem scroll de página inteira; `html`/`body`/`#root` com `overflow: hidden` (2026-07-21 — sem isso, qualquer 1px de folga faz o documento inteiro rolar) e `.app-main`/`.table-wrap` com altura própria fazendo o scroll de verdade, para o cabeçalho `position: sticky` das tabelas grudar no lugar certo; a tela de Clientes usa `.lista-tela`/`.lista-topo`/`.lista-corpo`/`.lista-rodape` para travar também a barra de filtros e o rodapé de paginação, deixando só a tabela com scroll próprio. Barra de rolagem no padrão de cores do tema (claro/escuro). Design tokens §3.7. **Build ok**; fluxo **e2e verificado no navegador**. |
+| `web/` | ERP do lojista (React 19 + Vite + TS). Auth JWT (login slug+email+senha; **handoff SSO** do site via `#token=`), shell (nav Painel/Produtos/Estoque/Pedidos/Canais/**Clientes** + Sair), **Painel** real (`GET /api/v1/eu` via TanStack Query). **Tela de Clientes completa** (2026-07-20/21): ícone de identificação (pessoa) à esquerda do título, listagem com busca em maiúsculas/filtro/**paginação fixa em 50 itens, sem seletor** (janela deslizante de páginas com primeira/anterior/próxima/última, estilo inspirado no sistema legado)/**ordenação por coluna** (cabeçalho em destaque, ícone "⇅"/"▲"/"▼" em cada uma), **três ícones de ação por linha** (visualizar verde/editar azul/excluir vermelho, sem texto — visualizar abre `/clientes/:id/visualizar` em modo somente-leitura), grid mais compacta, formulário com cabeçalho enxuto ("Cliente" + Cancelar/Salvar no topo, topo fixo/só o corpo rola) e grid de 12 colunas (§3.7) largura total (`.app-main` 1600px), máscaras com validação de dígito verificador/formato/duplicidade (inclusive **CNPJ alfanumérico** e **limite de crédito em moeda**), validação por campo (blur + submit, replicada no backend — 2026-07-21), pop-up de erro vermelho (`Toast.tsx`), autopreenchimento de endereço via ViaCEP, modal embutido de categoria, exclusão com confirmação em modal próprio, `AjudaDaTela` (R22), convenções de **maiúsculas sempre** e **foco automático**. **Tela de configuração de campos** (`ConfiguracaoTelaCliente.tsx`, `/clientes/configuracao`, só `ADMIN` — `RequireAdmin.tsx`): cabeçalho enxuto com Cancelar/Salvar no topo (fixo, 2026-07-21), acessível pelo ícone ⚙ ao lado da ajuda; o formulário de Cliente lê essa config (`lib/configuracaoTela.ts`) e ajusta visibilidade/obrigatoriedade dos campos em tempo real. **Tela de Funcionários completa (nova, 2026-07-21):** `pages/funcionarios/` (lista + formulário + configuração de tela), replicando integralmente o padrão do cliente — ícone próprio (maleta), ordenação por coluna, paginação fixa em 50, três ícones de ação, modo somente-leitura, máscara de percentual para "% Comissão". **Tela de Plano de Contas completa (nova, 2026-07-21):** `pages/planocontas/` (lista + formulário; sem tela de configuração — nada configurável), código contábil como PK de negócio nas rotas (`/planos-contas/3.1.001`), Código bloqueado na edição, sem filtro de status (tabela sem `ativo`), ícone próprio (prancheta). **Tela de Fornecedores completa (nova, 2026-07-21):** `pages/fornecedores/` (lista + formulário + configuração de tela), com um mecanismo novo — `PlanoContasModal.tsx`, criação rápida de plano de contas embutida no formulário (botão "＋ Novo" ao lado do select de Plano de Contas, mesmo papel do modal de categoria do cliente); filtro por plano de contas na listagem; ícone próprio (caminhão). **Parâmetros do Sistema (nova, 2026-07-21):** `pages/configuracaogeral/ConfiguracaoGeralForm.tsx` — primeira tela **fora** do padrão de cadastro: sem listagem/paginação/busca/modo somente-leitura/`InfoRegistro` (a tabela `cfg_geral` é singleton por tenant, sem `criado_em`); item de menu ("Parâmetros do Sistema") e a própria rota só aparecem/funcionam para ADMIN; ícone próprio (`IconeParametros`), deliberadamente diferente da engrenagem (⚙) usada como atalho de "configurar campos" em cada cadastro. **Campos informativos de auditoria** (`InfoRegistro.tsx` + `lib/datas.ts`, 2026-07-21): Código/Cadastrado em/Última alteração, somente leitura, no fim de todo formulário de cadastro (em Cliente, Funcionário, Plano de Contas e Fornecedor; o `codigo` aceita PK numérica ou texto). Demais áreas (Produtos/Estoque/Pedidos/Canais) ainda placeholder. **Shell do ERP com altura travada no viewport** (2026-07-21, convenção nova — `Layout.tsx`/`styles.css`): menu lateral e cabeçalho fixos, sem scroll de página inteira; `html`/`body`/`#root` com `overflow: hidden` (2026-07-21 — sem isso, qualquer 1px de folga faz o documento inteiro rolar) e `.app-main`/`.table-wrap` com altura própria fazendo o scroll de verdade, para o cabeçalho `position: sticky` das tabelas grudar no lugar certo; a tela de Clientes usa `.lista-tela`/`.lista-topo`/`.lista-corpo`/`.lista-rodape` para travar também a barra de filtros e o rodapé de paginação, deixando só a tabela com scroll próprio. Barra de rolagem no padrão de cores do tema (claro/escuro). Design tokens §3.7. **Build ok**; fluxo **e2e verificado no navegador**. |
 | `admin/` | Ainda não criado (backoffice React 19 + Vite) |
 
 **Stack alvo:** Java 25 + Spring Boot 4.x · PostgreSQL 18 (Docker, banco **`niner_db`**) · React 19 + Vite (3 apps) · Flyway · JWT. **SaaS multi-tenant** (banco único + `id_tenant` + Postgres RLS).
@@ -35,6 +38,210 @@ demais módulos (produto/estoque/pedido/fornecedor/funcionário) e o app `admin/
 ---
 
 ## Linha do tempo
+
+### 2026-07-21 — Parâmetros do Sistema (`cfg_geral`): primeira tela fora do padrão de cadastro
+
+Pedido do dono do produto. Diferente de toda tela anterior (Cliente/Funcionário/Fornecedor/
+Plano de Contas), `cfg_geral` é um **singleton por tenant** (semeado com valores padrão no
+signup) — a tela é só leitura/atualização, sem listagem, criação, exclusão, paginação,
+`InfoRegistro` ou modo somente-leitura. Ver `docs/telas/configuracao-geral.md` (spec completa,
+com a lista de particularidades estruturais).
+
+1. **Decisão de produto perguntada e confirmada antes de implementar:** acesso **somente
+   ADMIN** (leitura e escrita — mais restrito que os cadastros, onde OPERADOR também opera) e
+   os 4 campos de crediário (Fase 2/Q5, ainda sem módulo de crediário) aparecem editáveis
+   desde já, com aviso na tela, em vez de ficarem ocultos.
+
+2. **Backend — módulo novo `configuracao.geral`** (`GET/PUT /api/v1/config-geral`, sem
+   POST/DELETE). Ambos os endpoints verificam ADMIN a partir do claim `roles` do JWT (mesmo
+   mecanismo de `ConfiguracaoTelaService`), inclusive o `GET` — diferente da Configuração de
+   Tela, onde a leitura é liberada a qualquer papel. Validação de faixa (percentuais 0–100,
+   dias ≥ 0) — não há "campo obrigatório configurável" aqui, porque a tabela inteira é
+   `NOT NULL` desde V023.
+
+3. **Frontend — `pages/configuracaogeral/ConfiguracaoGeralForm.tsx`**: formulário único
+   (seções Vendas/Catálogo/Crediário), sem `InfoRegistro` (a tabela não tem `criado_em` nem um
+   código de registro — só "Última atualização" abaixo do título), ícone próprio
+   (`IconeParametros`) deliberadamente diferente da engrenagem usada como botão "configurar
+   esta tela" em cada cadastro (para não confundir as duas ideias), e item de menu
+   ("Parâmetros do Sistema") que só aparece para ADMIN — a rota em si também é protegida por
+   `RequireAdmin`, defesa em profundidade.
+
+4. **Verificação:** **6 testes novos** (`ConfiguracaoGeralTest`, incluindo bloqueio de
+   OPERADOR em leitura e escrita, e isolamento entre tenants) — suíte completa em **69/69
+   verdes**; `tsc -b` limpo; testado ao vivo (editar desconto e uma variante, salvar,
+   recarregar a página para confirmar persistência, depois restaurar os valores padrão).
+
+### 2026-07-21 — Quarta tela de domínio: Fornecedores (com criação rápida de plano de contas embutida)
+
+Pedido do dono do produto, na sequência natural do Plano de Contas: `fornecedor.id_plano_contas`
+é `NOT NULL` desde V016, então esta tela precisava resolver a criação/escolha do plano de
+contas sem forçar o usuário a sair da tela. Ver `docs/telas/fornecedor.md` (spec completa).
+
+1. **Backend — módulo novo `cadastros.fornecedor`** (`GET/POST/PUT/DELETE
+   /api/v1/fornecedores`), no padrão consolidado (paginação por página, ordenação com
+   allowlist, obrigatoriedade configurável por tenant, exclusão com fallback para inativar).
+   Sem mudança de schema — `fornecedor` já existia por completo desde V016/V024. Duas regras
+   específicas de fornecedor (pessoa jurídica, não física): CNPJ sempre com 14 caracteres
+   (CPF de 11 dígitos é rejeitado) e **telefone aceita fixo ou celular** (10–11 dígitos),
+   mais frouxo que a regra de celular-obrigatório do cliente — nova função `telefoneValido`
+   em `masks.ts` ao lado da `celularValido` existente. `idPlanoContas` inexistente vira 400
+   amigável (a `DataIntegrityViolationException` da FK é traduzida), não 500. O JOIN da
+   listagem com `cfg_plano_contas` inclui `id_tenant` na condição — a PK do plano é
+   composta, então o mesmo código existe em tenants diferentes; **o mesmo motivo exigiu
+   revisitar `PlanoContasService`**, que tinha o mesmo risco de vazamento cross-tenant em
+   ambiente sem RLS (SELECT/UPDATE/DELETE agora filtram `id_tenant = plataforma.tenant_atual()`
+   explicitamente — pego pela suíte completa, que só falha com >1 tenant usando o mesmo
+   código de plano).
+
+2. **Frontend — `web/src/pages/fornecedores/`** (lista + formulário + configuração de tela)
+   no padrão de Cliente/Funcionário, com um mecanismo novo: **`PlanoContasModal.tsx`**,
+   criação rápida de plano de contas embutida no formulário de fornecedor (botão "＋ Novo" ao
+   lado do select de Plano de Contas) — mesmo papel do modal de categoria do cliente. A
+   listagem ganhou filtro por plano de contas (select, não texto livre). Ícone próprio
+   (caminhão) e item "Fornecedores" no menu, entre Clientes e Funcionários.
+
+3. **Verificação:** **12 testes novos** (`FornecedorCrudTest`, incluindo o caso de plano de
+   contas inexistente, CNPJ alfanumérico, CPF rejeitado no campo CNPJ, telefone curto e
+   exclusão com fallback) — suíte completa em **63/63 verdes**; `tsc -b` limpo; testado ao
+   vivo criando um fornecedor completo pelo formulário (com o modal de plano de contas) e,
+   via API direta (mais confiável que repetir 10 vezes o formulário no navegador), mais **10
+   fornecedores** de dados variados (diferentes estados/regiões, com e sem campos opcionais)
+   — todos conferidos na listagem e reabrindo um deles para edição (select de plano de contas
+   populado corretamente).
+
+### 2026-07-21 — Terceira tela de domínio: Plano de Contas (+ `criado_em`/`atualizado_em` em `cfg_plano_contas`)
+
+Pedido do dono do produto em duas partes: adicionar os campos de auditoria que faltavam em
+`cfg_plano_contas` (a tabela nasceu em V016 sem eles) e construir a tela de cadastro. Ver
+`docs/telas/plano-contas.md` (spec completa). É a tela que destrava o cadastro de
+**Fornecedor** (`fornecedor.id_plano_contas` é `NOT NULL` sem seed — antes desta tela era
+impossível criar um fornecedor).
+
+1. **Schema:** `criado_em`/`atualizado_em` (`timestamptz NOT NULL DEFAULT now()`) adicionados
+   **na própria V016** (banco em construção — convenção do projeto, não migration nova);
+   `db/migration/README.md` atualizado. **Banco recriado do zero** (V001–V027) e massa de
+   teste restaurada na sequência: os 2 tenants assinados na mesma ordem (para
+   `loja-teste-manual` continuar sendo o tenant 2, que os seeds referenciam), 110 clientes,
+   funcionária Maria e o cliente com CNPJ alfanumérico recriados via seed/API.
+
+2. **Backend — módulo novo `cadastros.planocontas`** (`GET/POST/PUT/DELETE
+   /api/v1/planos-contas`), no padrão consolidado, com duas adaptações estruturais que vêm do
+   schema (não são escolhas): a **PK é a chave de negócio** (`id_plano_contas text`, o código
+   contábil ex. "3.1.001" — digitado pelo usuário ao criar, único por tenant, **imutável**
+   depois: o PUT usa o código do path e ignora o do corpo, provado por teste); e **não existe
+   `ativo`**, então a exclusão não tem fallback de inativar — com vínculo em
+   `fornecedor`/`contas_pagar`, responde **409** e nada muda. `tipoMovimento` validado contra
+   os valores exatos do ENUM `tipo_movimento_conta` (**com acentos**: CRÉDITO/DÉBITO/NEUTRO)
+   — DTO usa `String` + allowlist em vez de enum Java com identificadores acentuados. Busca
+   única (`busca`) cobre código OU descrição.
+
+3. **Sem configuração de campos para esta tela** (sem chave em `CAMPOS_POR_TELA`, sem ⚙):
+   todos os campos são NOT NULL — estruturalmente obrigatórios não são configuráveis
+   (docs/telas/configuracao-tela.md), não sobra nada para configurar.
+
+4. **Frontend — `web/src/pages/planocontas/`** (lista + formulário; sem tela de configuração)
+   + `lib/planoContas.ts` + ícone novo `IconePlanoContas` (prancheta) + item "Plano de Contas"
+   no menu + ajuda R22. Rotas usam o próprio código (`/planos-contas/3.1.001` — pontos são
+   URL-safe; `encodeURIComponent` por segurança). Na edição o Código aparece bloqueado
+   (`.campo-leitura`) e o foco automático pula direto para a Descrição. `InfoRegistro` passou
+   a aceitar **código texto** (prop `codigo: number | string`) — primeira tela cuja PK não é
+   numérica.
+
+5. **Verificação:** **8 testes novos** (`PlanoContasCrudTest`) — suíte completa em **51/51
+   verdes** (inclui: código imutável no PUT, 409 na exclusão com fornecedor vinculado, tipo
+   sem acento rejeitado); `tsc -b` limpo; testado ao vivo no navegador (criar "3.1.001 —
+   RECEITA DE VENDAS — CRÉDITO — DRE" → aparece na listagem; editar com código bloqueado e
+   Informações do registro preenchidas). Nota: durante o teste ao vivo, a extensão **Dark
+   Reader** do navegador reestilizou a página numa navegação (cores apagadas) — não é defeito
+   do app; as variáveis CSS do design system estavam intactas.
+
+### 2026-07-21 — Campos informativos de auditoria (código/cadastrado em/última alteração), somente leitura, em toda tela de cadastro
+
+Pedido do dono do produto logo depois da tela de Funcionário: os campos gerados pelo banco
+que até então só existiam na API (e estavam explicitamente documentados como "não aparecem no
+formulário") passam a ser **exibidos** nas telas, como informação — mas nunca editáveis. Vira
+**convenção do projeto**, não um detalhe de duas telas: `criado_em`/`atualizado_em` são
+declarados em **14 migrations**, ou seja, praticamente todo o domínio vai reutilizar isso.
+
+1. **Componente único (`web/src/components/InfoRegistro.tsx`)**, em vez de repetir o bloco em
+   cada formulário: recebe `codigo`/`criadoEm`/`atualizadoEm` e renderiza a seção
+   "Informações do registro" com os três campos. Toda tela de cadastro futura cuja tabela
+   tenha esses campos só precisa importar e passar os valores.
+
+2. **Somente leitura de verdade:** `readOnly` + `tabIndex={-1}` (ficam fora da navegação por
+   Tab, para não atrapalhar quem preenche o formulário no teclado) + classe nova
+   `.campo-leitura` (fundo transparente, texto apagado) para diferenciar visualmente de um
+   campo de entrada. Não são editáveis nem no modo de edição — só o banco os escreve.
+
+3. **Somem ao incluir** um registro novo (`if (!codigo) return null`) — não faz sentido
+   mostrar código/datas de algo que ainda não existe.
+
+4. **Formatação de data em `lib/datas.ts`** (`formatarDataHora`): ISO 8601/`timestamptz` da
+   API vira padrão brasileiro (`21/07/2026, 13:51`). Arquivo novo, genérico — primeiro
+   utilitário de data do projeto.
+
+5. **Aplicado em Cliente e Funcionário.** Verificação ao vivo: no cliente editado antes nesta
+   sessão, "Cadastrado em" (08:44) e "Última alteração" (11:00) aparecem **diferentes**, o que
+   confirma que os dois timestamps são reais e distintos (não um espelhando o outro); ao abrir
+   "novo funcionário" a seção não aparece, como esperado.
+
+### 2026-07-21 — Segunda tela de domínio: Funcionários (CRUD ponta a ponta, replicando o padrão de Cliente)
+
+Primeira tela construída **inteiramente sobre o padrão consolidado em `cadastros.cliente`** —
+o dono do produto pediu explicitamente para fazê-la sozinho, sem perguntas, como teste de que
+o padrão está de fato estabelecido e reproduzível. Ver `docs/telas/funcionario.md` (spec
+completa, escrita depois da implementação a pedido do dono do produto).
+
+1. **Backend — módulo novo `cadastros.funcionario`:** `FuncionarioController`/`Service`/`Dtos`
+   sobre a tabela `funcionario` (já existia desde V016, **sem migration nova**). Mesmo
+   desenho do cliente: `GET/POST/PUT/DELETE /api/v1/funcionarios`, paginação por número de
+   página + contagem total, `ORDER BY` dinâmico com allowlist de colunas, validação de
+   servidor (CPF com dígito verificador, celular 11 dígitos + 3º=9, % comissão entre 0 e 100)
+   e obrigatoriedade configurável por tenant (`cfg_tela_campo`, chave nova
+   `cadastros.funcionario.form` registrada em `ConfiguracaoTelaService`). Exclusão com
+   fallback para inativar quando há vínculo — aqui o vínculo é com
+   `produto_movimento_detalhe.id_funcionario` (ledger de estoque, V019), não com `venda`.
+
+2. **`Documentos` virou público** (era package-private em `cadastros.cliente`) para o módulo
+   de funcionário reaproveitar a validação de CPF em vez de duplicar o algoritmo do dígito
+   verificador. Funcionário é sempre pessoa física — a parte de CNPJ alfanumérico não se
+   aplica.
+
+3. **Diferenças deliberadas em relação ao cliente**, todas vindas do schema mais enxuto de
+   `funcionario` (não são simplificações arbitrárias): sem categoria (não existe
+   `cfg_categoria_funcionario`), sem CNPJ/tipo de pessoa, sem endereço/redes sociais/e-mail, e
+   **CPF não é único por tenant** — decisão já registrada em V016/§3.3.9 ("o CPF deixou de ser
+   único"), o oposto do cliente. Há um teste explícito provando que dois funcionários podem
+   ter o mesmo CPF. `id_empresa` não aparece no formulário: é preenchido automaticamente com a
+   única empresa do tenant (Q6, 1:1 no v1).
+
+4. **Frontend — `web/src/pages/funcionarios/`:** `FuncionarioLista`/`FuncionarioForm`/
+   `ConfiguracaoTelaFuncionario` + `lib/funcionarios.ts`, replicando tudo que a tela de
+   cliente consolidou: shell de altura travada, cabeçalho e rodapé fixos, ordenação por
+   coluna com cabeçalho em destaque, paginação em janela deslizante fixa em 50 itens, três
+   ícones de ação (visualizar verde/editar azul/excluir vermelho), modo somente-leitura via
+   `<fieldset disabled>`, grid compacta, maiúsculas sempre, validação por campo (blur +
+   submit), ajuda contextual (R22). Ícone novo `IconeFuncionario` (maleta) à esquerda do
+   título; item "Funcionários" no menu lateral.
+
+5. **Máscara de percentual reaproveitável** (`mascararPercentual`/`formatarPercentual`/
+   `desmascararPercentual` em `lib/masks.ts`) para o campo "% Comissão" — mesma técnica da
+   máscara de moeda já existente (dígitos digitados contam da direita para a esquerda como
+   centésimos: digitar "550" vira "5,50").
+
+6. **Layout do formulário ajustado depois do primeiro teste visual** (dois pedidos do dono do
+   produto): CPF e Celular passaram a dividir a mesma linha (6+6 colunas), e o Nome passou a
+   ocupar a linha inteira (12 colunas, era 8) — deixando as três linhas do formulário
+   simétricas. A seção "Contato" separada foi absorvida pela "Identificação" (com só um campo
+   de contato não se justificava).
+
+7. **Verificação:** **10 testes novos** (`FuncionarioCrudTest`) — suíte completa em **43/43
+   verdes**; `tsc -b` sem erros; API recompilada. Testado ao vivo no navegador: criar
+   funcionário com CPF/celular/cargo/comissão mascarados corretamente → salvou e apareceu na
+   listagem; modo visualizar com campos desabilitados; ordenação por coluna; e a configuração
+   de tela ponta a ponta (marcar "Cargo" como obrigatório fez o campo ganhar `*` e bloquear o
+   submit vazio).
 
 ### 2026-07-21 — CPF/CNPJ: suporte ao CNPJ alfanumérico (Receita Federal, a partir de julho/2026) — convenção para toda tabela com campo CNPJ
 
@@ -1104,14 +1311,15 @@ com autenticação JWT real protegendo o ERP.
 
 **Feito em 2026-07-20:** ✅ **primeira tela de domínio completa** — Clientes (`cadastros.cliente`): CRUD backend + frontend, categoria embutida, `AjudaDaTela` (R22), grid de 12 colunas (§3.7) finalmente em uso, convenções novas de projeto (maiúsculas sempre, foco automático no 1º campo).
 
+**Feito em 2026-07-21:** ✅ **padrão de tela de cadastro consolidado** (paginação por página + ordenação por coluna + ícones de ação + modo somente-leitura + configuração de campos por tenant + shell de altura travada + campos informativos de auditoria) e ✅ **segunda, terceira e quarta telas de domínio** — Funcionários (`cadastros.funcionario`), Plano de Contas (`cadastros.planocontas`, com `criado_em`/`atualizado_em` adicionados à V016) e Fornecedores (`cadastros.fornecedor`, com criação rápida de plano de contas embutida), todas construídas sobre esse padrão; ✅ **Parâmetros do Sistema** (`configuracao.geral`), primeira tela deliberadamente fora do padrão de cadastro (singleton por tenant, ADMIN-only).
+
 **Retomar — ordem sugerida:**
 
-1. **Fornecedor / Funcionário** — mesmo padrão do Cliente (schema já existe desde V016), tela mais rápida de fazer agora que o padrão (grid, máscaras, `AjudaDaTela`, maiúsculas, exclusão com fallback) está estabelecido.
-2. **⭐ Vertical slice de Produtos:** valida a stack inteira ponta a ponta no core do produto.
-   - Backend `/api/v1`: `GET /api/v1/produtos` (lista, cursor) + `POST /api/v1/produtos` (cria produto + variação com `sku`/`ean`) — camada Spring Data JDBC sobre `produto`/`produto_barra`, com o `TenantContext`/RLS já ligados. Atualizar `uso_tenant.qtd_produtos` (enforcement R19 depois).
+1. **⭐ Vertical slice de Produtos:** valida a stack inteira ponta a ponta no core do produto.
+   - Backend `/api/v1`: `GET /api/v1/produtos` (lista paginada) + `POST /api/v1/produtos` (cria produto + variação com `sku`/`ean`) — camada Spring Data JDBC sobre `produto`/`produto_barra`, com o `TenantContext`/RLS já ligados. Atualizar `uso_tenant.qtd_produtos` (enforcement R19 depois).
    - Web: tela **Produtos** real (listar + criar) no lugar do placeholder, via TanStack Query.
-3. **Estoque:** `produto_estoque` (saldo/reserva) + movimentações (`POST /api/v1/estoque/movimentacoes`) → tela de estoque.
-4. **`admin/`** — backoffice da plataforma (lista/ficha de tenants R17, suspender/impersonar R18/R21).
+2. **Estoque:** `produto_estoque` (saldo/reserva) + movimentações (`POST /api/v1/estoque/movimentacoes`) → tela de estoque.
+3. **`admin/`** — backoffice da plataforma (lista/ficha de tenants R17, suspender/impersonar R18/R21).
 5. **Catálogo `ajuda_tela` na API** (R22) — hoje `AjudaDaTela` (`web/`) embute o conteúdo como fallback estático; falta o endpoint/tabela real (§3.3.10/§3.7.1 da spec).
 6. Decisões de negócio em aberto: D1 (preços), D3 (gateway), D5/D6/D8/D9/D10.
 

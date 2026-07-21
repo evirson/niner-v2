@@ -267,6 +267,14 @@ input:focus-visible, select:focus-visible {
 /* Erro por campo (validado no blur e no submit — docs/telas/cliente.md) */
 .erro-campo { color: var(--danger); font-size: 12px; margin: 4px 0 0; }
 
+/* Campo informativo, gerado pelo banco (código/criado_em/atualizado_em) — nunca editável.
+   Visual "apagado" para diferenciar de um campo de entrada de verdade (InfoRegistro.tsx). */
+.campo-leitura {
+  background: transparent; border-color: var(--line); color: var(--ink-muted);
+  cursor: default;
+}
+.campo-leitura:focus-visible { outline: none; }
+
 /* Pop-up de erro/aviso — vermelho sólido com letras brancas, para chamar atenção
    (substitui a mensagem que ficava no rodapé da página). */
 .toast {

@@ -1,16 +1,18 @@
 package com.vetor.niner.cadastros.cliente;
 
 /**
- * Validação de CPF/CNPJ (dígito verificador) para o cadastro de cliente
- * (docs/telas/cliente.md — CPF/CNPJ é opcional, mas quando preenchido precisa ser válido).
+ * Validação de CPF/CNPJ (dígito verificador) — reaproveitada por qualquer módulo do domínio
+ * que tenha campo de CPF/CNPJ (cliente, funcionário, e futuros como fornecedor). CPF/CNPJ é
+ * sempre opcional; quando preenchido, precisa ser válido (docs/telas/cliente.md,
+ * CLAUDE.md — convenção de CNPJ alfanumérico).
  */
-final class Documentos {
+public final class Documentos {
 
     private Documentos() {
     }
 
     /** Remove tudo que não for dígito (máscara, pontuação). {@code null} vira {@code null}. */
-    static String somenteDigitos(String valor) {
+    public static String somenteDigitos(String valor) {
         return valor == null ? null : valor.replaceAll("\\D", "");
     }
 
@@ -20,7 +22,7 @@ final class Documentos {
      * 12 primeiras posições (raiz+ordem) podem ser letras A-Z ou dígitos; só os 2 dígitos
      * verificadores finais continuam numéricos. CPF não entra nessa mudança.
      */
-    static String somenteAlfanumerico(String valor) {
+    public static String somenteAlfanumerico(String valor) {
         return valor == null ? null : valor.toUpperCase(java.util.Locale.ROOT).replaceAll("[^0-9A-Z]", "");
     }
 
@@ -29,7 +31,7 @@ final class Documentos {
      * tem 11 dígitos (CPF) ou 14 caracteres (CNPJ, alfanumérico nas 12 primeiras posições)
      * com dígito verificador correto.
      */
-    static boolean valido(String documento) {
+    public static boolean valido(String documento) {
         String d = somenteAlfanumerico(documento);
         if (d == null || d.isBlank()) {
             return true;

@@ -75,6 +75,28 @@ export function desmascararMoeda(valor: string): number {
   return digitos ? Number(digitos) / 100 : 0
 }
 
+/** Formata um número como percentual BR: "5.5" -> "5,50". */
+export function formatarPercentual(valor: number): string {
+  return valor.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+}
+
+/**
+ * Máscara de campo percentual (ex.: comissão) — mesma convenção do campo de moeda: os
+ * dígitos digitados são sempre lidos da direita para a esquerda como centésimos, evitando
+ * ambiguidade de separador decimal. Ex.: digitar "550" vira "5,50".
+ */
+export function mascararPercentual(valor: string): string {
+  const digitos = somenteDigitos(valor)
+  if (!digitos) return ''
+  return formatarPercentual(Number(digitos) / 100)
+}
+
+/** Desfaz {@link mascararPercentual}, devolvendo o número para enviar à API. */
+export function desmascararPercentual(valor: string): number {
+  const digitos = somenteDigitos(valor)
+  return digitos ? Number(digitos) / 100 : 0
+}
+
 /**
  * "Id. WhatsApp" — mesma convenção visual de Instagram/Facebook/TikTok (prefixo `@`), mas
  * só dígitos depois do `@` (é o número do celular). Validado por {@link celularValido}.
@@ -92,6 +114,17 @@ export function celularValido(valor: string): boolean {
   const d = somenteDigitos(valor)
   if (!d) return true
   return d.length === 11 && d[2] === '9'
+}
+
+/**
+ * {@code true} se vazio ou se for um telefone com DDD, fixo OU celular (10–11 dígitos) —
+ * regra mais frouxa que {@link celularValido}, usada onde linha fixa é comum (ex.:
+ * fornecedor, docs/telas/fornecedor.md).
+ */
+export function telefoneValido(valor: string): boolean {
+  const d = somenteDigitos(valor)
+  if (!d) return true
+  return d.length === 10 || d.length === 11
 }
 
 /**

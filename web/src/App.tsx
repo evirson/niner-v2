@@ -8,6 +8,15 @@ import EmBreve from './pages/EmBreve'
 import ClienteLista from './pages/clientes/ClienteLista'
 import ClienteForm from './pages/clientes/ClienteForm'
 import ConfiguracaoTelaCliente from './pages/clientes/ConfiguracaoTelaCliente'
+import FuncionarioLista from './pages/funcionarios/FuncionarioLista'
+import FuncionarioForm from './pages/funcionarios/FuncionarioForm'
+import ConfiguracaoTelaFuncionario from './pages/funcionarios/ConfiguracaoTelaFuncionario'
+import PlanoContasLista from './pages/planocontas/PlanoContasLista'
+import PlanoContasForm from './pages/planocontas/PlanoContasForm'
+import FornecedorLista from './pages/fornecedores/FornecedorLista'
+import FornecedorForm from './pages/fornecedores/FornecedorForm'
+import ConfiguracaoTelaFornecedor from './pages/fornecedores/ConfiguracaoTelaFornecedor'
+import ConfiguracaoGeralForm from './pages/configuracaogeral/ConfiguracaoGeralForm'
 
 export default function App() {
   return (
@@ -27,6 +36,27 @@ export default function App() {
           </Route>
           <Route path="/clientes/:id/visualizar" element={<ClienteForm somenteLeitura />} />
           <Route path="/clientes/:id" element={<ClienteForm />} />
+          <Route path="/funcionarios" element={<FuncionarioLista />} />
+          <Route path="/funcionarios/novo" element={<FuncionarioForm />} />
+          <Route element={<RequireAdmin />}>
+            <Route path="/funcionarios/configuracao" element={<ConfiguracaoTelaFuncionario />} />
+          </Route>
+          <Route path="/funcionarios/:id/visualizar" element={<FuncionarioForm somenteLeitura />} />
+          <Route path="/funcionarios/:id" element={<FuncionarioForm />} />
+          <Route path="/planos-contas" element={<PlanoContasLista />} />
+          <Route path="/planos-contas/novo" element={<PlanoContasForm />} />
+          <Route path="/planos-contas/:codigo/visualizar" element={<PlanoContasForm somenteLeitura />} />
+          <Route path="/planos-contas/:codigo" element={<PlanoContasForm />} />
+          <Route path="/fornecedores" element={<FornecedorLista />} />
+          <Route path="/fornecedores/novo" element={<FornecedorForm />} />
+          <Route element={<RequireAdmin />}>
+            <Route path="/fornecedores/configuracao" element={<ConfiguracaoTelaFornecedor />} />
+          </Route>
+          <Route path="/fornecedores/:id/visualizar" element={<FornecedorForm somenteLeitura />} />
+          <Route path="/fornecedores/:id" element={<FornecedorForm />} />
+          <Route element={<RequireAdmin />}>
+            <Route path="/configuracoes-gerais" element={<ConfiguracaoGeralForm />} />
+          </Route>
         </Route>
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />

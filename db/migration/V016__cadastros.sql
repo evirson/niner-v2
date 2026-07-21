@@ -66,6 +66,8 @@ CREATE TABLE cfg_plano_contas (
   tipo_movimento     tipo_movimento_conta  NOT NULL,   -- CRÉDITO/DÉBITO/NEUTRO
   inclui_dre         boolean               NOT NULL,
   inclui_fluxo_caixa boolean               NOT NULL,
+  criado_em          timestamptz           NOT NULL DEFAULT now(),  -- 2026-07-21 (auditoria, convenção do domínio)
+  atualizado_em      timestamptz           NOT NULL DEFAULT now(),
   CONSTRAINT cfg_plano_contas_pk PRIMARY KEY (id_tenant, id_plano_contas)
 );
 CREATE INDEX cfg_plano_contas_id_tenant_ix ON cfg_plano_contas (id_tenant);

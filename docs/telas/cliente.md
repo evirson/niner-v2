@@ -66,7 +66,24 @@ visualmente, só deixou de receber o foco).
 | `estado` | UF | **select fixo com as 27 UFs** (AC…TO) | — | campo pequeno (~1/4 da linha, junto da Cidade) | Não | Coluna no banco continua `text` livre; só a UI restringe |
 | `limite_credito` | Limite de crédito | numérico, moeda (`R$ 0,00`, mascarado — dígitos digitados = centavos) | `NUMERIC(12,2)` | campo pequeno (~1/3 da linha) | Não, default `0` | Campo **opcional exposto já no formulário**, mesmo o crediário (Fase 2) ainda não usar o valor de fato — só armazena |
 
-`id_cliente`, `criado_em`, `atualizado_em` não aparecem no formulário (gerados pelo banco/API).
+`id_cliente`, `criado_em` e `atualizado_em` não são editáveis (gerados pelo banco/API), mas
+**aparecem como campos informativos** no fim do formulário — ver "Informações do registro"
+abaixo.
+
+**Informações do registro (2026-07-21) — convenção de todo o projeto.** Última seção do
+formulário, com os campos de auditoria que praticamente toda tabela do domínio carrega
+(14 migrations os declaram): **Código** (a PK — `id_cliente`, `id_funcionario`, …),
+**Cadastrado em** (`criado_em`) e **Última alteração** (`atualizado_em`), formatados em
+padrão brasileiro (`21/07/2026, 13:51`).
+
+- **Somente leitura, sempre:** `readOnly` + `tabIndex={-1}` (ficam fora da navegação por Tab)
+  + classe `.campo-leitura` (fundo transparente, texto apagado) para deixar visualmente óbvio
+  que não são campos de entrada. Não são editáveis nem no modo de edição.
+- **Somem ao incluir** um registro novo — ainda não existem valores para mostrar.
+- **Componente único reaproveitável:** `web/src/components/InfoRegistro.tsx` (+
+  `lib/datas.ts:formatarDataHora`). Toda tela de cadastro cuja tabela tenha esses campos deve
+  usá-lo, em vez de repetir o bloco — basta passar código/criadoEm/atualizadoEm. Já aplicado
+  em Cliente e Funcionário.
 
 **CNPJ alfanumérico (2026-07-21) — implementação de referência para todo o projeto.** A partir
 de julho/2026 a Receita Federal emite CNPJ no formato alfanumérico (IN RFB 2.229/2024): as 12

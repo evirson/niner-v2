@@ -4,6 +4,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import AjudaDaTela from '../../components/AjudaDaTela'
 import CategoriaClienteModal from '../../components/CategoriaClienteModal'
 import { IconeCliente, IconeEngrenagem } from '../../components/Icones'
+import InfoRegistro from '../../components/InfoRegistro'
 import LinhaGrid from '../../components/LinhaGrid'
 import Toast from '../../components/Toast'
 import { ApiError } from '../../lib/api'
@@ -746,6 +747,12 @@ export default function ClienteForm({ somenteLeitura = false }: { somenteLeitura
             </div>
           </section>
         )}
+
+        <InfoRegistro
+          codigo={clienteExistente?.idCliente}
+          criadoEm={clienteExistente?.criadoEm}
+          atualizadoEm={clienteExistente?.atualizadoEm}
+        />
       </fieldset>
       </form>
       </div>
