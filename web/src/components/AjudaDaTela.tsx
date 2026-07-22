@@ -140,6 +140,38 @@ const CONTEUDOS: Record<string, ConteudoAjuda> = {
     ],
     urlVideo: null,
   },
+  'catalogo.produto.lista': {
+    titulo: 'Produtos',
+    objetivo: 'Encontrar e gerenciar os produtos já cadastrados.',
+    passos: [
+      'Use a busca por descrição para encontrar um produto.',
+      'Filtre por categoria ou por status (Ativos, Inativos ou Todos).',
+      'Clique no ícone verde para visualizar, no azul para editar, ou no vermelho para excluir.',
+    ],
+    errosComuns: [
+      'Não encontro um produto: confira o filtro de status — ele pode estar inativo.',
+      'Não consigo excluir: o produto tem variações ou imagens associadas e foi inativado em vez de excluído.',
+    ],
+    urlVideo: null,
+  },
+  'catalogo.produto.form': {
+    titulo: 'Cadastro de produto',
+    objetivo: 'Cadastrar um produto novo ou editar um existente.',
+    passos: [
+      'Preencha a descrição e os preços de custo/venda — são os únicos campos obrigatórios por padrão.',
+      'Escolha uma ou mais categorias — a ordem da lista é a ordem de exibição do produto nas categorias.',
+      'Crie uma categoria nova pela opção "＋ Gerenciar categorias" sem sair da tela.',
+      'Se os Parâmetros do Sistema tiverem "variante em linha/coluna" habilitados, informe o nome usado nas variações deste produto (ex.: "Cor", "Tamanho").',
+      'Ao digitar o código NCM, a descrição aparece automaticamente ao lado, se o código estiver cadastrado.',
+      'Salve.',
+    ],
+    errosComuns: [
+      'Não vejo os campos de variante: confira os Parâmetros do Sistema (só ADMIN acessa) — eles controlam se o produto usa variante em linha e/ou coluna.',
+      'Categoria não aparece na lista: crie uma pela opção "＋ Gerenciar categorias".',
+      'Data final da oferta antes da inicial: corrija o intervalo de datas.',
+    ],
+    urlVideo: null,
+  },
   'cadastros.planocontas.form': {
     titulo: 'Cadastro de plano de contas',
     objetivo: 'Cadastrar uma conta nova do plano de contas ou editar uma existente.',

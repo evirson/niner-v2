@@ -52,6 +52,16 @@ export function buscarConfiguracaoGeral(): Promise<ConfiguracaoGeral> {
   return api<ConfiguracaoGeral>('/api/v1/config-geral')
 }
 
+export interface FlagsVariante {
+  usaVarianteLinha: boolean
+  usaVarianteColuna: boolean
+}
+
+/** Aberto a qualquer papel (diferente do resto de `cfg_geral`) — usado pelo cadastro de produto. */
+export function buscarFlagsVariante(): Promise<FlagsVariante> {
+  return api<FlagsVariante>('/api/v1/config-geral/flags-variante')
+}
+
 export function atualizarConfiguracaoGeral(payload: ReturnType<typeof paraRequisicao>): Promise<ConfiguracaoGeral> {
   return api<ConfiguracaoGeral>('/api/v1/config-geral', { method: 'PUT', body: JSON.stringify(payload) })
 }

@@ -48,7 +48,7 @@ RLS. Só depois os módulos de domínio do lojista e, por fim, as políticas RLS
 | **V014** | `identidade.empresa` (`codigo_empresa` único por tenant, só para exibição em relatório; `cfg_nome_etiqueta` obrigatório) | ✅ |
 | **V015** | `identidade.usuario` (e-mail único por tenant, case-insensitive) + `usuario_rotina` | ✅ |
 | **V016** | cadastros: `cfg_categoria_cliente`, `cliente` (`id_categoria_cliente` NOT NULL; `data_nascimento`/`genero` obrigatórios só p/ pessoa física, `CHECK`; `whatsapp`/`instagram`/`facebook`/`tiktok`; `complemento` entre `numero` e `bairro`, 2026-07-20), `cfg_plano_contas` (PK composta `(id_tenant, id_plano_contas)`, prep. p/ DRE — Q5/ADR-010; `criado_em`/`atualizado_em` adicionados em 2026-07-21 p/ a tela de cadastro), `fornecedor` (`id_plano_contas` NOT NULL), `funcionario` (`telefone`) | ✅ |
-| **V017** | `catalogo`: configs, `produto` (sem `imagem`), `produto_categoria`, `produto_barra` (**Q7:** `sku` + `ean`), `produto_imagem` (galeria, `indice smallint` único por produto) | ✅ |
+| **V017** | `catalogo`: configs, `cfg_produto_ncm` (referência de NCM, **GLOBAL sem `id_tenant`/RLS** — mantida por script, sem tela, 2026-07-22), `produto` (sem `imagem`, `codigo_ncm` agora FK para `cfg_produto_ncm`), `produto_categoria` (`indice smallint` único por produto — ordenação da categoria, 2026-07-22), `produto_barra` (**Q7:** `sku` + `ean`), `produto_imagem` (galeria, `indice smallint` único por produto) | ✅ |
 | **V018** | vendas: `venda` (sem `id_funcionario`, `valor_total`, `observacao`, `criado_em` — comissão/vendedor e total ficam em `produto_movimento_detalhe`), `venda_devolucao` (sem `criado_em`) (R9; sem financeiro — Q5) | ✅ |
 | **V019** | `estoque`: `produto_estoque` (**Q2:** `reservado`, `disponivel`), `produto_movimento_mestre` (imutável) + `produto_movimento_detalhe` (sem `saldo_apos` por linha; corrigível, ver trigger), `produto_balanco` (`id_balanco BIGINT`, sem `qtd_sistema`/`observacao`), **trigger `trg_produto_movimento_detalhe_estoque`** (`fn_atualiza_estoque_movimento`) mantém `produto_estoque.qtd_estoque` em INSERT/UPDATE/DELETE do ledger | ✅ |
 | **V020** | `canais`: `canal` (credenciais cifradas), `anuncio` (de-para SKU, R6) | ✅ |
@@ -63,7 +63,10 @@ RLS. Só depois os módulos de domínio do lojista e, por fim, as políticas RLS
 > As tabelas do schema `plataforma` são **globais** (P9) e **não** entram no RLS de tenant.
 > O RLS (`FORCE`) se aplica a toda tabela de **domínio** do lojista — V014–V023 (ativado em V024)
 > e V025/V026 (cada uma com RLS próprio no arquivo, por terem sido criadas depois do
-> guarda-corpo de V024).
+> guarda-corpo de V024). Segunda exceção, fora do schema `plataforma` (2026-07-22):
+> `public.cfg_produto_ncm` (V017) também é **global** — sem `id_tenant`, então o guarda-corpo de
+> V024 nem a enxerga; NCM é igual para todos os tenants, carregada por script como `niner_owner`
+> (único grant de escrita), `niner_app` só lê.
 > `financeiro` do lojista está no v1 desde V025/V026 (crediário, caixa, contas a pagar);
 > só `conta_corrente(_movimento)` continua fora (Q5/ADR-010 revisado — Fase 2).
 >

@@ -1,7 +1,9 @@
 import { api } from './api'
 import {
+  dataParaIso,
   desmascararMoeda,
   formatarMoeda,
+  isoParaData,
   mascararCep,
   mascararCpfCnpj,
   mascararIdWhatsapp,
@@ -106,7 +108,7 @@ export function paraFormulario(c: Cliente): ClienteFormState {
     idCategoriaCliente: c.idCategoriaCliente,
     cpfCnpj: c.cpfCnpj ? mascararCpfCnpj(c.cpfCnpj, c.fisicaJuridica) : '',
     rgIe: c.rgIe ?? '',
-    dataNascimento: c.dataNascimento ?? '',
+    dataNascimento: isoParaData(c.dataNascimento),
     genero: c.genero ?? '',
     email: c.email ?? '',
     telefone: c.telefone ? mascararTelefone(c.telefone) : '',
@@ -151,7 +153,7 @@ export function paraRequisicao(f: ClienteFormState) {
     idCategoriaCliente: f.idCategoriaCliente,
     cpfCnpj: cpfCnpjLimpo,
     rgIe: maiusculoOuNulo(f.rgIe),
-    dataNascimento: f.fisicaJuridica && f.dataNascimento ? f.dataNascimento : null,
+    dataNascimento: f.fisicaJuridica && f.dataNascimento ? dataParaIso(f.dataNascimento) : null,
     genero: f.fisicaJuridica && f.genero ? f.genero : null,
     email: semEspacos(f.email),
     telefone: semMascara(f.telefone),

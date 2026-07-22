@@ -17,6 +17,9 @@ import FornecedorLista from './pages/fornecedores/FornecedorLista'
 import FornecedorForm from './pages/fornecedores/FornecedorForm'
 import ConfiguracaoTelaFornecedor from './pages/fornecedores/ConfiguracaoTelaFornecedor'
 import ConfiguracaoGeralForm from './pages/configuracaogeral/ConfiguracaoGeralForm'
+import ProdutoLista from './pages/produtos/ProdutoLista'
+import ProdutoForm from './pages/produtos/ProdutoForm'
+import ConfiguracaoTelaProduto from './pages/produtos/ConfiguracaoTelaProduto'
 
 export default function App() {
   return (
@@ -25,7 +28,13 @@ export default function App() {
       <Route element={<RequireAuth />}>
         <Route element={<Layout />}>
           <Route path="/" element={<Dashboard />} />
-          <Route path="/produtos" element={<EmBreve titulo="Produtos" />} />
+          <Route path="/produtos" element={<ProdutoLista />} />
+          <Route path="/produtos/novo" element={<ProdutoForm />} />
+          <Route element={<RequireAdmin />}>
+            <Route path="/produtos/configuracao" element={<ConfiguracaoTelaProduto />} />
+          </Route>
+          <Route path="/produtos/:id/visualizar" element={<ProdutoForm somenteLeitura />} />
+          <Route path="/produtos/:id" element={<ProdutoForm />} />
           <Route path="/estoque" element={<EmBreve titulo="Estoque" />} />
           <Route path="/pedidos" element={<EmBreve titulo="Pedidos" />} />
           <Route path="/canais" element={<EmBreve titulo="Canais" />} />

@@ -31,6 +31,21 @@ CREATE TABLE cfg_variante_coluna (
 );
 CREATE INDEX cfg_variante_coluna_id_tenant_ix ON cfg_variante_coluna (id_tenant);
 
+-- cfg_produto_ncm — referência de NCM, GLOBAL (sem id_tenant/RLS, P9): o mesmo código NCM
+-- vale para qualquer tenant, mantida por script (carga/atualização da tabela oficial da
+-- Receita Federal) — sem tela de manutenção/CRUD via API.
+CREATE TABLE cfg_produto_ncm (
+  codigo_ncm    text          PRIMARY KEY,
+  descricao_ncm text          NOT NULL,
+  aliquota_ibpt numeric(10,2)
+);
+COMMENT ON TABLE cfg_produto_ncm IS 'Referência de NCM (código + descrição + alíquota IBPT), GLOBAL — igual para todos os tenants, sem RLS. Mantida por script, sem tela de manutenção.';
+-- niner_app só lê (mantida por script/carga, não pela aplicação) — sem entrar no laço de
+-- RLS/grants de V024 porque não tem id_tenant (guarda-corpo de P8 não se aplica a ela).
+GRANT SELECT ON cfg_produto_ncm TO niner_app;
+-- niner_owner é quem roda o script de carga/atualização (fora do tráfego da aplicação).
+GRANT SELECT, INSERT, UPDATE, DELETE ON cfg_produto_ncm TO niner_owner;
+
 CREATE TABLE produto (
   id_produto           integer       GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   id_tenant            smallint      NOT NULL REFERENCES plataforma.tenant (id_tenant),
@@ -44,7 +59,7 @@ CREATE TABLE produto (
   data_inicio_oferta   timestamptz,
   data_final_oferta    timestamptz,
   preco_oferta         numeric(12,2),
-  codigo_ncm           text,
+  codigo_ncm           text          REFERENCES cfg_produto_ncm (codigo_ncm),
   peso_bruto           numeric(14,3) NOT NULL DEFAULT 0,
   peso_liquido         numeric(14,3) NOT NULL DEFAULT 0,
   nome_variante_linha  text,
@@ -64,12 +79,14 @@ CREATE TABLE produto_categoria (
   id_produto   integer  NOT NULL,
   id_categoria integer  NOT NULL,
   id_tenant    smallint NOT NULL REFERENCES plataforma.tenant (id_tenant),
+  indice       smallint NOT NULL DEFAULT 0,  -- ordenação da categoria dentro do produto.
   CONSTRAINT produto_categoria_pk PRIMARY KEY (id_produto, id_categoria),
   -- FKs compostas (2026-07-16, P8) — ver comentário em usuario_empresa_fk (V015).
   CONSTRAINT produto_categoria_produto_fk FOREIGN KEY (id_tenant, id_produto)
     REFERENCES produto (id_tenant, id_produto),
   CONSTRAINT produto_categoria_categoria_fk FOREIGN KEY (id_tenant, id_categoria)
-    REFERENCES cfg_categoria_produto (id_tenant, id_categoria)
+    REFERENCES cfg_categoria_produto (id_tenant, id_categoria),
+  CONSTRAINT produto_categoria_indice_uk UNIQUE (id_tenant, id_produto, indice)
 );
 CREATE INDEX produto_categoria_id_tenant_ix ON produto_categoria (id_tenant);
 
@@ -117,6 +134,7 @@ CREATE INDEX produto_imagem_id_tenant_ix  ON produto_imagem (id_tenant);
 CREATE INDEX produto_imagem_id_produto_ix ON produto_imagem (id_tenant, id_produto);
 
 COMMENT ON TABLE  produto        IS 'Produto do catálogo (RLS). Compartilhado entre empresas do tenant (sem id_empresa).';
+COMMENT ON COLUMN produto_categoria.indice IS 'Ordenação da categoria dentro do produto (menor primeiro); único por produto.';
 COMMENT ON TABLE  produto_barra  IS 'Variação = SKU. Q7: sku interno (único/tenant) + ean opcional (GTIN, único quando preenchido).';
 COMMENT ON COLUMN produto_barra.sku IS 'Identificador interno obrigatório; chave de negócio da variação (ex-codigo_barra).';
 COMMENT ON COLUMN produto_barra.ean IS 'GTIN real; NULL permitido; exigido só na publicação em canal que pede GTIN.';

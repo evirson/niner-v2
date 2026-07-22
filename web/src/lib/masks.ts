@@ -53,26 +53,52 @@ export function mascararCep(valor: string): string {
   return aplicarMascara(digitos, '00000-000')
 }
 
-/** Formata um número (ex.: vindo da API) como moeda BR: "1234.5" -> "1.234,50". */
-export function formatarMoeda(valor: number): string {
-  return valor.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+/** NCM: sempre 8 dígitos, exibido como "9999.99.99" (docs/telas/produto.md). */
+export function mascararNcm(valor: string): string {
+  const digitos = somenteDigitos(valor).slice(0, 8)
+  return aplicarMascara(digitos, '0000.00.00')
 }
 
 /**
- * Máscara de campo monetário: os dígitos digitados são sempre lidos da direita para a
- * esquerda como centavos (mesma convenção de caixas eletrônicos/apps de banco) — evita
- * ambiguidade de separador decimal/milhar. Ex.: digitar "150000" vira "1.500,00".
+ * Data como campo de texto "dd/mm/aaaa" (2026-07-22, pedido do dono do produto) — substitui
+ * `<input type="date">` em todo o sistema: o nativo navega por segmentos (dia/mês/ano) e não
+ * dá pra "selecionar tudo e sobrescrever ao digitar", que é o comportamento pedido. Como campo
+ * de texto normal, `onFocus` com {@code .select()} já resolve.
  */
-export function mascararMoeda(valor: string): string {
-  const digitos = somenteDigitos(valor)
-  if (!digitos) return ''
-  return formatarMoeda(Number(digitos) / 100)
+export function mascararData(valor: string): string {
+  const digitos = somenteDigitos(valor).slice(0, 8)
+  return aplicarMascara(digitos, '00/00/0000')
 }
 
-/** Desfaz {@link mascararMoeda}, devolvendo o número para enviar à API. */
-export function desmascararMoeda(valor: string): number {
-  const digitos = somenteDigitos(valor)
-  return digitos ? Number(digitos) / 100 : 0
+/** {@code true} só quando "dd/mm/aaaa" tem os 8 dígitos e é uma data de calendário real. */
+export function dataValida(valor: string): boolean {
+  const m = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(valor)
+  if (!m) return false
+  const dia = Number(m[1]);
+  const mes = Number(m[2]);
+  const ano = Number(m[3])
+  if (mes < 1 || mes > 12) return false
+  const diasNoMes = new Date(ano, mes, 0).getDate()
+  return dia >= 1 && dia <= diasNoMes
+}
+
+/** "dd/mm/aaaa" -> "aaaa-mm-dd" (ISO, para comparar ou montar o payload da API). */
+export function dataParaIso(valor: string): string | null {
+  if (!dataValida(valor)) return null
+  const [dia, mes, ano] = valor.split('/')
+  return `${ano}-${mes}-${dia}`
+}
+
+/** "aaaa-mm-dd" (ISO, vindo da API) -> "dd/mm/aaaa" para exibir no campo. */
+export function isoParaData(iso: string | null | undefined): string {
+  if (!iso) return ''
+  const [ano, mes, dia] = iso.slice(0, 10).split('-')
+  return `${dia}/${mes}/${ano}`
+}
+
+/** Formata um número (ex.: vindo da API) como moeda BR: "1234.5" -> "1.234,50". */
+export function formatarMoeda(valor: number): string {
+  return valor.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
 
 /** Formata um número como percentual BR: "5.5" -> "5,50". */
@@ -80,21 +106,95 @@ export function formatarPercentual(valor: number): string {
   return valor.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
 
-/**
- * Máscara de campo percentual (ex.: comissão) — mesma convenção do campo de moeda: os
- * dígitos digitados são sempre lidos da direita para a esquerda como centésimos, evitando
- * ambiguidade de separador decimal. Ex.: digitar "550" vira "5,50".
- */
-export function mascararPercentual(valor: string): string {
-  const digitos = somenteDigitos(valor)
-  if (!digitos) return ''
-  return formatarPercentual(Number(digitos) / 100)
+/** Formata um número como peso BR, 3 casas (numeric(14,3), docs/telas/produto.md): "1.5" -> "1,500". */
+export function formatarPeso(valor: number): string {
+  return valor.toLocaleString('pt-BR', { minimumFractionDigits: 3, maximumFractionDigits: 3 })
 }
 
-/** Desfaz {@link mascararPercentual}, devolvendo o número para enviar à API. */
+function formatarParteInteira(digitos: string): string {
+  return digitos ? Number(digitos).toLocaleString('pt-BR') : ''
+}
+
+/**
+ * Máscara de campo decimal (moeda/percentual/peso) — digitação natural (2026-07-22, revisão
+ * pedida pelo dono do produto): o inteiro é digitado da esquerda para a direita, como um
+ * número comum; a vírgula abre até {@code casas} decimais (2 para moeda/percentual, 3 para
+ * peso — numeric(14,3)). Diferente da convenção anterior (dígitos sempre lidos da direita como
+ * centavos, tipo caixa eletrônico) — aqui NÃO se completa o decimal a cada tecla (isso
+ * impediria continuar digitando o inteiro); a finalização fica para
+ * {@link completarValorDecimal}, chamada no {@code onBlur} do campo.
+ */
+function mascararValorDecimal(valor: string, casas: number): string {
+  const limpo = valor.replace(/[^\d,]/g, '')
+  const posVirgula = limpo.indexOf(',')
+  if (posVirgula === -1) {
+    return formatarParteInteira(limpo)
+  }
+  const parteInteira = limpo.slice(0, posVirgula)
+  const parteDecimal = limpo.slice(posVirgula + 1).replace(/,/g, '').slice(0, casas)
+  return `${formatarParteInteira(parteInteira) || '0'},${parteDecimal}`
+}
+
+/**
+ * Completa o valor decimal ao sair do campo (item 1, pedido do dono do produto): sem vírgula
+ * nenhuma, ganha ",0…0" ({@code casas} zeros); com menos casas do que o esperado, completa com
+ * zero(s) à direita. Chamar sempre no {@code onBlur} de todo campo de moeda/percentual/peso.
+ */
+function completarValorDecimal(valor: string, casas: number): string {
+  if (!valor.trim()) return valor
+  if (!valor.includes(',')) return `${valor},${'0'.repeat(casas)}`
+  const [inteiro, decimal = ''] = valor.split(',')
+  return `${inteiro || '0'},${decimal.padEnd(casas, '0').slice(0, casas)}`
+}
+
+function desmascararValorDecimal(valor: string, casas: number): number {
+  if (!valor.trim()) return 0
+  const semMilhar = completarValorDecimal(valor, casas).replace(/\./g, '').replace(',', '.')
+  const n = Number(semMilhar)
+  return Number.isFinite(n) ? n : 0
+}
+
+export function mascararMoeda(valor: string): string {
+  return mascararValorDecimal(valor, 2)
+}
+
+/** Completa o campo de moeda ao sair dele — ver {@link completarValorDecimal}. */
+export function completarMoeda(valor: string): string {
+  return completarValorDecimal(valor, 2)
+}
+
+/** Desfaz {@link mascararMoeda}/{@link completarMoeda}, devolvendo o número para enviar à API. */
+export function desmascararMoeda(valor: string): number {
+  return desmascararValorDecimal(valor, 2)
+}
+
+export function mascararPercentual(valor: string): string {
+  return mascararValorDecimal(valor, 2)
+}
+
+/** Completa o campo de percentual ao sair dele — ver {@link completarValorDecimal}. */
+export function completarPercentual(valor: string): string {
+  return completarValorDecimal(valor, 2)
+}
+
+/** Desfaz {@link mascararPercentual}/{@link completarPercentual}, devolvendo o número para enviar à API. */
 export function desmascararPercentual(valor: string): number {
-  const digitos = somenteDigitos(valor)
-  return digitos ? Number(digitos) / 100 : 0
+  return desmascararValorDecimal(valor, 2)
+}
+
+/** Máscara de campo de peso (kg) — 3 casas decimais, numeric(14,3) (docs/telas/produto.md). */
+export function mascararPeso(valor: string): string {
+  return mascararValorDecimal(valor, 3)
+}
+
+/** Completa o campo de peso ao sair dele — ver {@link completarValorDecimal}. */
+export function completarPeso(valor: string): string {
+  return completarValorDecimal(valor, 3)
+}
+
+/** Desfaz {@link mascararPeso}/{@link completarPeso}, devolvendo o número para enviar à API. */
+export function desmascararPeso(valor: string): number {
+  return desmascararValorDecimal(valor, 3)
 }
 
 /**

@@ -18,7 +18,14 @@ import {
   paraRequisicao,
   type FuncionarioFormState,
 } from '../../lib/funcionarios'
-import { celularValido, documentoValido, mascararCpfCnpj, mascararPercentual, mascararTelefone } from '../../lib/masks'
+import {
+  celularValido,
+  completarPercentual,
+  documentoValido,
+  mascararCpfCnpj,
+  mascararPercentual,
+  mascararTelefone,
+} from '../../lib/masks'
 import { maiusculas } from '../../lib/texto'
 
 const CHAVE_TELA = 'cadastros.funcionario.form'
@@ -267,7 +274,10 @@ export default function FuncionarioForm({ somenteLeitura = false }: { somenteLei
                           onChange={(e) =>
                             setForm((f) => ({ ...f, percComissao: mascararPercentual(e.target.value) }))
                           }
-                          onBlur={aoSairDoCampo('percComissao')}
+                          onBlur={(e) => {
+                            setForm((f) => ({ ...f, percComissao: completarPercentual(f.percComissao) }))
+                            aoSairDoCampo('percComissao')(e)
+                          }}
                         />
                         {erros.percComissao && <p className="erro-campo">{erros.percComissao}</p>}
                       </>

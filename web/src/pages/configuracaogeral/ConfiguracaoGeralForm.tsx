@@ -12,7 +12,7 @@ import {
   type ConfiguracaoGeralFormState,
 } from '../../lib/configuracaoGeral'
 import { formatarDataHora } from '../../lib/datas'
-import { mascararPercentual } from '../../lib/masks'
+import { completarPercentual, desmascararPercentual, mascararPercentual } from '../../lib/masks'
 
 const CHAVE_TELA = 'configuracao.geral.form'
 
@@ -32,8 +32,7 @@ type ErrosCampo = Partial<Record<CampoValidavel, string>>
 /** Todos os campos são NOT NULL no banco (V023) — validação é só de faixa, nunca de "vazio". */
 function validarCampo(chave: CampoValidavel, f: ConfiguracaoGeralFormState): string | undefined {
   if (chave === 'percentualDescontoVenda' || chave === 'jurosCrediario' || chave === 'multaCrediario') {
-    const digitos = f[chave].replace(/\D/g, '')
-    const valor = digitos ? Number(digitos) / 100 : 0
+    const valor = desmascararPercentual(f[chave])
     return valor >= 0 && valor <= 100 ? undefined : 'Informe um percentual entre 0 e 100.'
   }
   const valor = Number(f[chave])
@@ -131,7 +130,10 @@ export default function ConfiguracaoGeralForm() {
                 onChange={(e) =>
                   setForm((f) => ({ ...f, percentualDescontoVenda: mascararPercentual(e.target.value) }))
                 }
-                onBlur={aoSairDoCampo('percentualDescontoVenda')}
+                onBlur={(e) => {
+                  setForm((f) => ({ ...f, percentualDescontoVenda: completarPercentual(f.percentualDescontoVenda) }))
+                  aoSairDoCampo('percentualDescontoVenda')(e)
+                }}
               />
               {erros.percentualDescontoVenda && <p className="erro-campo">{erros.percentualDescontoVenda}</p>}
             </div>
@@ -190,7 +192,10 @@ export default function ConfiguracaoGeralForm() {
                 id="jurosCrediario"
                 value={form.jurosCrediario}
                 onChange={(e) => setForm((f) => ({ ...f, jurosCrediario: mascararPercentual(e.target.value) }))}
-                onBlur={aoSairDoCampo('jurosCrediario')}
+                onBlur={(e) => {
+                  setForm((f) => ({ ...f, jurosCrediario: completarPercentual(f.jurosCrediario) }))
+                  aoSairDoCampo('jurosCrediario')(e)
+                }}
               />
               {erros.jurosCrediario && <p className="erro-campo">{erros.jurosCrediario}</p>}
             </div>
@@ -211,7 +216,10 @@ export default function ConfiguracaoGeralForm() {
                 id="multaCrediario"
                 value={form.multaCrediario}
                 onChange={(e) => setForm((f) => ({ ...f, multaCrediario: mascararPercentual(e.target.value) }))}
-                onBlur={aoSairDoCampo('multaCrediario')}
+                onBlur={(e) => {
+                  setForm((f) => ({ ...f, multaCrediario: completarPercentual(f.multaCrediario) }))
+                  aoSairDoCampo('multaCrediario')(e)
+                }}
               />
               {erros.multaCrediario && <p className="erro-campo">{erros.multaCrediario}</p>}
             </div>

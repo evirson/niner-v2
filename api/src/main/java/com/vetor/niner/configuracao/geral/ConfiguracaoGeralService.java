@@ -43,6 +43,28 @@ public class ConfiguracaoGeralService {
         return buscarSemChecarPapel();
     }
 
+    /**
+     * Só as duas flags de variante, sem checagem de papel — usado por {@code catalogo.Produto}
+     * (qualquer papel que cadastra produto precisa saber se os campos "nome da variante em
+     * linha/coluna" aparecem no formulário, diferente do restante de {@code cfg_geral}, que é
+     * ADMIN-only). {@code cfg_geral} nasce no signup (`SignupService`), mas o fallback
+     * {@code true}/{@code true} evita 404 caso a linha nunca tenha sido criada.
+     */
+    @Transactional(readOnly = true)
+    public FlagsVariante flagsVariante() {
+        return jdbc.sql("""
+                        SELECT cfg_usa_variante_linha, cfg_usa_variante_coluna FROM cfg_geral
+                        WHERE id_tenant = plataforma.tenant_atual()
+                        """)
+                .query((rs, n) -> new FlagsVariante(
+                        rs.getBoolean("cfg_usa_variante_linha"), rs.getBoolean("cfg_usa_variante_coluna")))
+                .optional()
+                .orElse(new FlagsVariante(true, true));
+    }
+
+    public record FlagsVariante(boolean usaVarianteLinha, boolean usaVarianteColuna) {
+    }
+
     @Transactional
     public ConfiguracaoGeralResponse atualizar(Jwt jwt, ConfiguracaoGeralRequest req) {
         exigirAdmin(jwt);

@@ -1,20 +1,26 @@
 # Progresso do Projeto — niner-v2
 
 Registro cronológico das decisões e entregas. Atualizar a cada marco relevante.
-**Última atualização:** 2026-07-21
+**Última atualização:** 2026-07-22
 
 ---
 
 ## Estado atual
 
-Projeto **spec-driven** em fase de fundação, com **quatro telas de cadastro completas e
+Projeto **spec-driven** em fase de fundação, com **cinco telas de cadastro completas e
 ponta a ponta**: Clientes (`cadastros.cliente`), Funcionários (`cadastros.funcionario`), Plano
-de Contas (`cadastros.planocontas`) e Fornecedores (`cadastros.fornecedor`), mais a primeira
+de Contas (`cadastros.planocontas`), Fornecedores (`cadastros.fornecedor`) e **Produtos**
+(`catalogo.produto`, 2026-07-22 — primeiro corte vertical do núcleo do catálogo, com categoria
+N:N ordenada, NCM como referência global e regras de precificação/oferta), mais a primeira
 tela de **configuração de sistema** — Parâmetros do Sistema (`configuracao.geral`,
 2026-07-21, singleton por tenant, ADMIN-only, fora do padrão de cadastro). A **API (Spring
 Boot 4 / Java 25)** sobe com 3 superfícies + infra de contexto de tenant; o schema completo
 (control-plane + domínio do lojista, V001–V027) está criado, revisado e com RLS validado.
-Falta a camada de domínio dos demais módulos (produto/estoque/pedido) e o app `admin/`.
+Falta a camada de domínio dos demais módulos (variação/estoque/pedido) e o app `admin/`.
+**Convenções de UI novas (2026-07-22), valem para todo campo do sistema daqui pra frente:**
+campo decimal (moeda/percentual/peso) com digitação natural (inteiro primeiro, vírgula abre
+decimais, completa só no `onBlur`) e campo de data como texto mascarado `dd/mm/aaaa` (não
+`<input type="date">` — ver §3.7 da spec).
 
 | Artefato | Situação |
 |---|---|
@@ -28,9 +34,9 @@ Falta a camada de domínio dos demais módulos (produto/estoque/pedido) e o app 
 | `db/migration/V025` | **`financeiro` parcial (revisão de Q5/ADR-010, ADR-012):** crediário (`tipo_carteira`, `moeda`, `moeda_detalhe`, `contas_receber`/`contas_receber_detalhe`) + caixa (`caixa_mestre`/`caixa_detalhe`). RLS próprio no arquivo (V024 já tinha rodado). Seed de `moeda` por tenant implementado no `SignupService`. **Aplicada e validada em banco real em 2026-07-16** (RLS `ENABLE`+`FORCE` confirmado nas 7 tabelas; moedas semeadas no signup conferidas via `psql`). |
 | `db/migration/V026` | **`contas_pagar`** (mais uma revisão de Q5/ADR-010/ADR-012): PK `id_conta_pagar` (renomeada de `localizador`), `nota_fiscal integer` nullable sem `DEFAULT 0` (padronização que também corrigiu `produto_movimento_mestre.nota_fiscal`, V019, de `text` para `integer`). RLS próprio no arquivo. Só `conta_corrente*` segue fora do v1. **Aplicada e validada em banco real em 2026-07-16** (schema/FKs/RLS conferidos via `psql`) |
 | `db/migration/V027` | **`cfg_tela_campo`** (novo, 2026-07-21) — configuração por tenant de campos visíveis/obrigatórios por tela (`chave_tela`), reutilizável para qualquer tela futura. RLS próprio no arquivo. **Migration aditiva** — aplicada sem recriar o banco (`docker compose run --rm flyway`, só essa migration rodou). |
-| `api/` | Spring Boot 4.0.7 / Java 25 (Maven). 3 superfícies com `SecurityFilterChain` separados; `TenantContext` (`ScopedValue`) + `TenantAwareTransactionManager`; **auth JWT HS256** (login/signup emitem, `/api/v1` valida `aud=tenant`); **trial self-service** (`POST /api/publico/assinar` → tenant+configs+moedas+ADMIN+assinatura TRIAL + token), `POST /api/publico/login`, `GET /api/v1/eu`. **Módulo `cadastros.cliente` (2026-07-20/21):** CRUD completo de `GET/POST/PUT/DELETE /api/v1/clientes` + `GET/POST/PUT /api/v1/categorias-cliente`, validação de CPF/CNPJ (dígito verificador + duplicidade — **CNPJ alfanumérico desde 2026-07-21**, ver linha do tempo), normalização de texto para maiúsculas, celular/WhatsApp (11 dígitos + 3º=9), nascimento opcional (só não pode ser futuro), exclusão com fallback para inativar quando há venda associada. **Listagem ordenada por `nome` (ou pela coluna pedida), paginação por número de página** (2026-07-21, era por `id_cliente`/cursor) — `GET /api/v1/clientes?pagina=&limite=&ordenarPor=&direcao=` com `LIMIT/OFFSET` + contagem total + `ORDER BY` dinâmico (allowlist de colunas). **Validação de servidor reforçada (2026-07-21):** além do dígito verificador de CPF/CNPJ, agora também formato de e-mail/celular/WhatsApp/CEP e a obrigatoriedade configurável por tenant (`cfg_tela_campo`) — antes só o frontend checava isso. **Módulo `cadastros.funcionario` (novo, 2026-07-21):** CRUD completo de `GET/POST/PUT/DELETE /api/v1/funcionarios` replicando o padrão do cliente (paginação por página, ordenação com allowlist, validação de CPF/celular/% comissão, obrigatoriedade configurável, exclusão com fallback para inativar quando há movimentação de estoque vinculada). Reaproveita `Documentos` (tornado público) para o dígito verificador do CPF; **CPF não é único** aqui (decisão de V016/§3.3.9, oposto do cliente). **Módulo `cadastros.planocontas` (novo, 2026-07-21):** CRUD de `GET/POST/PUT/DELETE /api/v1/planos-contas` — PK de negócio `text` (código contábil digitado pelo usuário, imutável após criar), exclusão **sem** fallback de inativar (tabela sem `ativo` — 409 com vínculo em fornecedor/contas_pagar), `tipoMovimento` validado contra o ENUM acentuado (CRÉDITO/DÉBITO/NEUTRO), busca única código-ou-descrição; sem registro em `cfg_tela_campo` (todos os campos NOT NULL, nada configurável). **Módulo `cadastros.fornecedor` (novo, 2026-07-21):** CRUD de `GET/POST/PUT/DELETE /api/v1/fornecedores` — mesmo padrão de Cliente/Funcionário (obrigatoriedade configurável, exclusão com fallback para inativar quando há movimentação de estoque ou conta a pagar vinculada); CNPJ sempre 14 caracteres (pessoa jurídica — CPF é rejeitado), telefone aceita fixo ou celular (10–11 dígitos, mais frouxo que a regra do cliente); `idPlanoContas` inexistente vira 400 amigável em vez de 500; listagem com filtro por plano de contas. Sem alteração de schema (tabela completa desde V016/V024). **Módulo `configuracao.geral` (novo, 2026-07-21):** `GET/PUT /api/v1/config-geral` sobre o singleton `cfg_geral` (V023, semeado no signup) — sem POST/DELETE; **somente ADMIN, inclusive na leitura** (diferente de `comum.telaconfig`, onde qualquer papel lê); validação só de faixa (percentuais 0–100, dias ≥ 0), já que a tabela inteira é NOT NULL. **Módulo `comum.telaconfig` (novo, 2026-07-21):** `GET/PUT /api/v1/config-tela/{chaveTela}` — quais campos aparecem/são obrigatórios por tenant, reutilizável entre telas (já com 3 telas registradas: `cadastros.cliente.form`, `cadastros.funcionario.form` e `cadastros.fornecedor.form`); só ADMIN grava (403 para OPERADOR, checado a partir do claim `roles` do JWT); leitura filtrada por `id_tenant` explicitamente (defesa em profundidade, além do RLS). **69 testes verdes** (Testcontainers: `ClienteCrudTest` 17, `FornecedorCrudTest` 12, `FuncionarioCrudTest` 10, `PlanoContasCrudTest` 8, `ConfiguracaoGeralTest` 6, `ConfiguracaoTelaTest` 5, + suíte anterior) + fluxo **verificado ao vivo**. Persistência: **Spring Data JDBC**. Falta: domínio dos demais módulos (produto/estoque/pedido) |
+| `api/` | Spring Boot 4.0.7 / Java 25 (Maven). 3 superfícies com `SecurityFilterChain` separados; `TenantContext` (`ScopedValue`) + `TenantAwareTransactionManager`; **auth JWT HS256** (login/signup emitem, `/api/v1` valida `aud=tenant`); **trial self-service** (`POST /api/publico/assinar` → tenant+configs+moedas+ADMIN+assinatura TRIAL + token), `POST /api/publico/login`, `GET /api/v1/eu`. **Módulo `cadastros.cliente` (2026-07-20/21):** CRUD completo de `GET/POST/PUT/DELETE /api/v1/clientes` + `GET/POST/PUT /api/v1/categorias-cliente`, validação de CPF/CNPJ (dígito verificador + duplicidade — **CNPJ alfanumérico desde 2026-07-21**, ver linha do tempo), normalização de texto para maiúsculas, celular/WhatsApp (11 dígitos + 3º=9), nascimento opcional (só não pode ser futuro), exclusão com fallback para inativar quando há venda associada. **Listagem ordenada por `nome` (ou pela coluna pedida), paginação por número de página** (2026-07-21, era por `id_cliente`/cursor) — `GET /api/v1/clientes?pagina=&limite=&ordenarPor=&direcao=` com `LIMIT/OFFSET` + contagem total + `ORDER BY` dinâmico (allowlist de colunas). **Validação de servidor reforçada (2026-07-21):** além do dígito verificador de CPF/CNPJ, agora também formato de e-mail/celular/WhatsApp/CEP e a obrigatoriedade configurável por tenant (`cfg_tela_campo`) — antes só o frontend checava isso. **Módulo `cadastros.funcionario` (novo, 2026-07-21):** CRUD completo de `GET/POST/PUT/DELETE /api/v1/funcionarios` replicando o padrão do cliente (paginação por página, ordenação com allowlist, validação de CPF/celular/% comissão, obrigatoriedade configurável, exclusão com fallback para inativar quando há movimentação de estoque vinculada). Reaproveita `Documentos` (tornado público) para o dígito verificador do CPF; **CPF não é único** aqui (decisão de V016/§3.3.9, oposto do cliente). **Módulo `cadastros.planocontas` (novo, 2026-07-21):** CRUD de `GET/POST/PUT/DELETE /api/v1/planos-contas` — PK de negócio `text` (código contábil digitado pelo usuário, imutável após criar), exclusão **sem** fallback de inativar (tabela sem `ativo` — 409 com vínculo em fornecedor/contas_pagar), `tipoMovimento` validado contra o ENUM acentuado (CRÉDITO/DÉBITO/NEUTRO), busca única código-ou-descrição; sem registro em `cfg_tela_campo` (todos os campos NOT NULL, nada configurável). **Módulo `cadastros.fornecedor` (novo, 2026-07-21):** CRUD de `GET/POST/PUT/DELETE /api/v1/fornecedores` — mesmo padrão de Cliente/Funcionário (obrigatoriedade configurável, exclusão com fallback para inativar quando há movimentação de estoque ou conta a pagar vinculada); CNPJ sempre 14 caracteres (pessoa jurídica — CPF é rejeitado), telefone aceita fixo ou celular (10–11 dígitos, mais frouxo que a regra do cliente); `idPlanoContas` inexistente vira 400 amigável em vez de 500; listagem com filtro por plano de contas. Sem alteração de schema (tabela completa desde V016/V024). **Módulo `configuracao.geral` (novo, 2026-07-21):** `GET/PUT /api/v1/config-geral` sobre o singleton `cfg_geral` (V023, semeado no signup) — sem POST/DELETE; **somente ADMIN, inclusive na leitura** (diferente de `comum.telaconfig`, onde qualquer papel lê); validação só de faixa (percentuais 0–100, dias ≥ 0), já que a tabela inteira é NOT NULL. **Módulo `comum.telaconfig` (novo, 2026-07-21):** `GET/PUT /api/v1/config-tela/{chaveTela}` — quais campos aparecem/são obrigatórios por tenant, reutilizável entre telas (já com 3 telas registradas: `cadastros.cliente.form`, `cadastros.funcionario.form` e `cadastros.fornecedor.form`); só ADMIN grava (403 para OPERADOR, checado a partir do claim `roles` do JWT); leitura filtrada por `id_tenant` explicitamente (defesa em profundidade, além do RLS). **69 testes verdes** (Testcontainers: `ClienteCrudTest` 17, `FornecedorCrudTest` 12, `FuncionarioCrudTest` 10, `PlanoContasCrudTest` 8, `ConfiguracaoGeralTest` 6, `ConfiguracaoTelaTest` 5, + suíte anterior) + fluxo **verificado ao vivo**. Persistência: **Spring Data JDBC**. **Módulo `catalogo.produto` (novo, 2026-07-22 — docs/telas/produto.md):** CRUD de `GET/POST/PUT/DELETE /api/v1/produtos` — categorias N:N com ordenação (`produto_categoria.indice` derivado da posição da lista recebida, substituição total a cada save), `nomeVarianteLinha`/`nomeVarianteColuna` forçados a `null` quando a flag correspondente de `cfg_geral` está desligada, regra da oferta tudo-ou-nada (início/final/preço, com data no passado/ordem/preço `< venda` validados), peso líquido ≤ peso bruto, exclusão com fallback para inativar quando há variação/imagem vinculada. **Módulo `catalogo` auxiliar:** `GET/POST/PUT /api/v1/categorias-produto` (mesmo padrão de categoria de cliente); `GET /api/v1/ncm/{codigo}` (consulta de `cfg_produto_ncm`, tabela global sem RLS, 404 amigável); `GET /api/v1/config-geral/flags-variante` (aberto a qualquer papel, diferente do resto de `cfg_geral`). **89 testes verdes** no total (`ProdutoCrudTest` 20 novos). Falta: domínio de variação/SKU (`produto_barra`), imagens (`produto_imagem`) e estoque/pedido |
 | `site/` | Site público (Astro/SSG, ADR-011). **Home institucional "matadora"** (posicionamento concorrente do Bling): hero com painel animado + demo de sincronização, faixa de stats com contadores, contraste problema→solução, 3 passos, 6 recursos, canais (ML/Shopee/Amazon/balcão), planos (preços via `/api/publico/planos`), FAQ e CTA — tudo em CSS/SVG puro com **scroll-reveal** e **prefers-reduced-motion** (sem novas deps). Sistema visual em `src/styles/site.css` portado do golden `nainer_institucional`. `/assinar` (form → `POST /api/publico/assinar` → auto-login → `/bem-vindo`) e `/bem-vindo` mantidos. **Trial 60 dias** em toda a copy. Tema claro/escuro persistido. **Build SSG ok**; hero/reveal/contadores verificados via Playwright |
-| `web/` | ERP do lojista (React 19 + Vite + TS). Auth JWT (login slug+email+senha; **handoff SSO** do site via `#token=`), shell (nav Painel/Produtos/Estoque/Pedidos/Canais/**Clientes** + Sair), **Painel** real (`GET /api/v1/eu` via TanStack Query). **Tela de Clientes completa** (2026-07-20/21): ícone de identificação (pessoa) à esquerda do título, listagem com busca em maiúsculas/filtro/**paginação fixa em 50 itens, sem seletor** (janela deslizante de páginas com primeira/anterior/próxima/última, estilo inspirado no sistema legado)/**ordenação por coluna** (cabeçalho em destaque, ícone "⇅"/"▲"/"▼" em cada uma), **três ícones de ação por linha** (visualizar verde/editar azul/excluir vermelho, sem texto — visualizar abre `/clientes/:id/visualizar` em modo somente-leitura), grid mais compacta, formulário com cabeçalho enxuto ("Cliente" + Cancelar/Salvar no topo, topo fixo/só o corpo rola) e grid de 12 colunas (§3.7) largura total (`.app-main` 1600px), máscaras com validação de dígito verificador/formato/duplicidade (inclusive **CNPJ alfanumérico** e **limite de crédito em moeda**), validação por campo (blur + submit, replicada no backend — 2026-07-21), pop-up de erro vermelho (`Toast.tsx`), autopreenchimento de endereço via ViaCEP, modal embutido de categoria, exclusão com confirmação em modal próprio, `AjudaDaTela` (R22), convenções de **maiúsculas sempre** e **foco automático**. **Tela de configuração de campos** (`ConfiguracaoTelaCliente.tsx`, `/clientes/configuracao`, só `ADMIN` — `RequireAdmin.tsx`): cabeçalho enxuto com Cancelar/Salvar no topo (fixo, 2026-07-21), acessível pelo ícone ⚙ ao lado da ajuda; o formulário de Cliente lê essa config (`lib/configuracaoTela.ts`) e ajusta visibilidade/obrigatoriedade dos campos em tempo real. **Tela de Funcionários completa (nova, 2026-07-21):** `pages/funcionarios/` (lista + formulário + configuração de tela), replicando integralmente o padrão do cliente — ícone próprio (maleta), ordenação por coluna, paginação fixa em 50, três ícones de ação, modo somente-leitura, máscara de percentual para "% Comissão". **Tela de Plano de Contas completa (nova, 2026-07-21):** `pages/planocontas/` (lista + formulário; sem tela de configuração — nada configurável), código contábil como PK de negócio nas rotas (`/planos-contas/3.1.001`), Código bloqueado na edição, sem filtro de status (tabela sem `ativo`), ícone próprio (prancheta). **Tela de Fornecedores completa (nova, 2026-07-21):** `pages/fornecedores/` (lista + formulário + configuração de tela), com um mecanismo novo — `PlanoContasModal.tsx`, criação rápida de plano de contas embutida no formulário (botão "＋ Novo" ao lado do select de Plano de Contas, mesmo papel do modal de categoria do cliente); filtro por plano de contas na listagem; ícone próprio (caminhão). **Parâmetros do Sistema (nova, 2026-07-21):** `pages/configuracaogeral/ConfiguracaoGeralForm.tsx` — primeira tela **fora** do padrão de cadastro: sem listagem/paginação/busca/modo somente-leitura/`InfoRegistro` (a tabela `cfg_geral` é singleton por tenant, sem `criado_em`); item de menu ("Parâmetros do Sistema") e a própria rota só aparecem/funcionam para ADMIN; ícone próprio (`IconeParametros`), deliberadamente diferente da engrenagem (⚙) usada como atalho de "configurar campos" em cada cadastro. **Campos informativos de auditoria** (`InfoRegistro.tsx` + `lib/datas.ts`, 2026-07-21): Código/Cadastrado em/Última alteração, somente leitura, no fim de todo formulário de cadastro (em Cliente, Funcionário, Plano de Contas e Fornecedor; o `codigo` aceita PK numérica ou texto). Demais áreas (Produtos/Estoque/Pedidos/Canais) ainda placeholder. **Shell do ERP com altura travada no viewport** (2026-07-21, convenção nova — `Layout.tsx`/`styles.css`): menu lateral e cabeçalho fixos, sem scroll de página inteira; `html`/`body`/`#root` com `overflow: hidden` (2026-07-21 — sem isso, qualquer 1px de folga faz o documento inteiro rolar) e `.app-main`/`.table-wrap` com altura própria fazendo o scroll de verdade, para o cabeçalho `position: sticky` das tabelas grudar no lugar certo; a tela de Clientes usa `.lista-tela`/`.lista-topo`/`.lista-corpo`/`.lista-rodape` para travar também a barra de filtros e o rodapé de paginação, deixando só a tabela com scroll próprio. Barra de rolagem no padrão de cores do tema (claro/escuro). Design tokens §3.7. **Build ok**; fluxo **e2e verificado no navegador**. |
+| `web/` | ERP do lojista (React 19 + Vite + TS). Auth JWT (login slug+email+senha; **handoff SSO** do site via `#token=`), shell (nav Painel/Produtos/Estoque/Pedidos/Canais/**Clientes** + Sair), **Painel** real (`GET /api/v1/eu` via TanStack Query). **Tela de Clientes completa** (2026-07-20/21): ícone de identificação (pessoa) à esquerda do título, listagem com busca em maiúsculas/filtro/**paginação fixa em 50 itens, sem seletor** (janela deslizante de páginas com primeira/anterior/próxima/última, estilo inspirado no sistema legado)/**ordenação por coluna** (cabeçalho em destaque, ícone "⇅"/"▲"/"▼" em cada uma), **três ícones de ação por linha** (visualizar verde/editar azul/excluir vermelho, sem texto — visualizar abre `/clientes/:id/visualizar` em modo somente-leitura), grid mais compacta, formulário com cabeçalho enxuto ("Cliente" + Cancelar/Salvar no topo, topo fixo/só o corpo rola) e grid de 12 colunas (§3.7) largura total (`.app-main` 1600px), máscaras com validação de dígito verificador/formato/duplicidade (inclusive **CNPJ alfanumérico** e **limite de crédito em moeda**), validação por campo (blur + submit, replicada no backend — 2026-07-21), pop-up de erro vermelho (`Toast.tsx`), autopreenchimento de endereço via ViaCEP, modal embutido de categoria, exclusão com confirmação em modal próprio, `AjudaDaTela` (R22), convenções de **maiúsculas sempre** e **foco automático**. **Tela de configuração de campos** (`ConfiguracaoTelaCliente.tsx`, `/clientes/configuracao`, só `ADMIN` — `RequireAdmin.tsx`): cabeçalho enxuto com Cancelar/Salvar no topo (fixo, 2026-07-21), acessível pelo ícone ⚙ ao lado da ajuda; o formulário de Cliente lê essa config (`lib/configuracaoTela.ts`) e ajusta visibilidade/obrigatoriedade dos campos em tempo real. **Tela de Funcionários completa (nova, 2026-07-21):** `pages/funcionarios/` (lista + formulário + configuração de tela), replicando integralmente o padrão do cliente — ícone próprio (maleta), ordenação por coluna, paginação fixa em 50, três ícones de ação, modo somente-leitura, máscara de percentual para "% Comissão". **Tela de Plano de Contas completa (nova, 2026-07-21):** `pages/planocontas/` (lista + formulário; sem tela de configuração — nada configurável), código contábil como PK de negócio nas rotas (`/planos-contas/3.1.001`), Código bloqueado na edição, sem filtro de status (tabela sem `ativo`), ícone próprio (prancheta). **Tela de Fornecedores completa (nova, 2026-07-21):** `pages/fornecedores/` (lista + formulário + configuração de tela), com um mecanismo novo — `PlanoContasModal.tsx`, criação rápida de plano de contas embutida no formulário (botão "＋ Novo" ao lado do select de Plano de Contas, mesmo papel do modal de categoria do cliente); filtro por plano de contas na listagem; ícone próprio (caminhão). **Parâmetros do Sistema (nova, 2026-07-21):** `pages/configuracaogeral/ConfiguracaoGeralForm.tsx` — primeira tela **fora** do padrão de cadastro: sem listagem/paginação/busca/modo somente-leitura/`InfoRegistro` (a tabela `cfg_geral` é singleton por tenant, sem `criado_em`); item de menu ("Parâmetros do Sistema") e a própria rota só aparecem/funcionam para ADMIN; ícone próprio (`IconeParametros`), deliberadamente diferente da engrenagem (⚙) usada como atalho de "configurar campos" em cada cadastro. **Campos informativos de auditoria** (`InfoRegistro.tsx` + `lib/datas.ts`, 2026-07-21): Código/Cadastrado em/Última alteração, somente leitura, no fim de todo formulário de cadastro (em Cliente, Funcionário, Plano de Contas e Fornecedor; o `codigo` aceita PK numérica ou texto). Demais áreas (Produtos/Estoque/Pedidos/Canais) ainda placeholder. **Shell do ERP com altura travada no viewport** (2026-07-21, convenção nova — `Layout.tsx`/`styles.css`): menu lateral e cabeçalho fixos, sem scroll de página inteira; `html`/`body`/`#root` com `overflow: hidden` (2026-07-21 — sem isso, qualquer 1px de folga faz o documento inteiro rolar) e `.app-main`/`.table-wrap` com altura própria fazendo o scroll de verdade, para o cabeçalho `position: sticky` das tabelas grudar no lugar certo; a tela de Clientes usa `.lista-tela`/`.lista-topo`/`.lista-corpo`/`.lista-rodape` para travar também a barra de filtros e o rodapé de paginação, deixando só a tabela com scroll próprio. Barra de rolagem no padrão de cores do tema (claro/escuro). Design tokens §3.7. **Build ok**; fluxo **e2e verificado no navegador**. **Tela de Produtos completa (nova, 2026-07-22 — `pages/produtos/`):** lista + formulário + configuração de tela, mesmo padrão; categorias com setas ▲/▼ de reordenação + modal de gestão embutida (`CategoriaProdutoModal.tsx`); seção "Dimensões e Variantes" só mostra nome de variante quando a flag correspondente de Parâmetros do Sistema está ligada; NCM com máscara `9999.99.99` e busca automática de descrição ao lado; preço de venda/% de venda recalculados ao vivo um a partir do outro; layout final: "Produto ativo" em linha própria, Descrição+Marca juntos, Referência+NCM+descrição do NCM juntos, os 6 campos de Preços numa única linha, Peso Bruto/Líquido+variantes numa única linha. **Convenções novas que valem pro sistema inteiro (2026-07-22):** campo decimal (moeda/percentual/peso) com digitação natural (`lib/masks.ts#mascararMoeda/mascararPercentual/mascararPeso` + `completar*` no `onBlur`) substituindo a antiga leitura de dígitos da direita; campo de data como texto mascarado `dd/mm/aaaa` (`mascararData`, `onFocus` com `.select()`) substituindo `<input type="date">` em Cliente (nascimento) e Produto (início/final de oferta) — o nativo não permite "selecionar tudo e sobrescrever ao digitar" em nenhum navegador. Ícone próprio (caixa/pacote). |
 | `admin/` | Ainda não criado (backoffice React 19 + Vite) |
 
 **Stack alvo:** Java 25 + Spring Boot 4.x · PostgreSQL 18 (Docker, banco **`niner_db`**) · React 19 + Vite (3 apps) · Flyway · JWT. **SaaS multi-tenant** (banco único + `id_tenant` + Postgres RLS).
@@ -38,6 +44,197 @@ Falta a camada de domínio dos demais módulos (produto/estoque/pedido) e o app 
 ---
 
 ## Linha do tempo
+
+### 2026-07-22 — Campo de data: texto mascarado `dd/mm/aaaa` em todo o sistema (não `<input type="date">`)
+
+Pedido do dono do produto: ao focar um `<input type="date">`, o foco fica "separado" em
+segmentos (dia → mês → ano) e não dá pra selecionar o campo inteiro e sobrescrever ao digitar.
+Confirmado com o dono do produto (`AskUserQuestion`) que essa é uma limitação real do HTML (não
+existe API pra isso em nenhum navegador) — a única forma de ter o comportamento pedido é trocar
+por um campo de texto mascarado, perdendo o calendário nativo.
+
+1. **`web/src/lib/masks.ts`:** `mascararData` (`dd/mm/aaaa`, mesmo `aplicarMascara` já usado
+   por CEP/telefone/NCM), `dataValida` (rejeita datas de calendário impossíveis, ex.:
+   "31/02/2026"), `dataParaIso`/`isoParaData` (conversão de/para o formato que a API espera).
+2. **`web/src/lib/datas.ts`:** novo `hojeISO()` compartilhado (fuso local, evita o desvio de
+   `toISOString()`, que é UTC) — usado por Cliente e Produto; corrige de brinde um bug latente
+   no "hoje" da validação de nascimento do Cliente, que usava UTC.
+3. **Três campos trocados** (`ClienteForm.tsx` nascimento; `ProdutoForm.tsx` início/final da
+   oferta): viram `<input>` de texto normal com `placeholder="dd/mm/aaaa"`,
+   `onFocus={(e) => e.target.select()}` (seleciona tudo, como qualquer campo de texto) e
+   `onChange` aplicando `mascararData`. `lib/clientes.ts`/`lib/produtos.ts` convertem
+   `dd/mm/aaaa` ↔ ISO na borda (payload da API / preenchimento a partir da resposta).
+   Validações de data (`errosOferta`, nascimento) passam a checar `dataValida` antes de comparar.
+4. **Verificação:** 89/89 testes do backend inalterados (o formato enviado à API continua o
+   mesmo ISO de sempre — só mudou a representação em tela). Testado ao vivo: digitação contínua
+   sem pular entre segmentos; clicar num campo já preenchido seleciona tudo e sobrescreve.
+
+### 2026-07-22 — Peso bruto/líquido: digitação natural (3 casas) + peso líquido ≤ peso bruto
+
+Dois pedidos do dono do produto: os campos de peso são `numeric(14,3)` (3 casas, diferente de
+moeda/percentual que têm 2) e precisavam da mesma digitação natural; e peso líquido não pode
+ser maior que peso bruto.
+
+1. **`web/src/lib/masks.ts`:** as funções de máscara decimal (`mascararMoeda`/`mascararPercentual`,
+   ver entrada abaixo) ganharam um parâmetro `casas` — `mascararPeso`/`completarPeso`/
+   `desmascararPeso` reusam a mesma lógica com `casas=3`. Novo `formatarPeso` (3 casas) para
+   pré-popular o campo ao editar um produto existente.
+2. **`ProdutoForm.tsx`:** peso bruto/líquido usam a máscara nova (antes eram texto livre sem
+   máscara nenhuma); nova validação `erroPesoLiquido` (ao sair de qualquer um dos dois campos)
+   + reforço no backend (`ProdutoService.validar`, 400 "Peso líquido deve ser menor ou igual ao
+   peso bruto.").
+3. **Verificação:** 2 novos testes em `ProdutoCrudTest` (peso líquido > bruto rejeitado; igual
+   aceito) — **89/89 testes verdes**. Testado ao vivo: `1` → `1,000` ao sair do campo; `1,5` >
+   `1,000` mostra o erro; `0,8` ≤ `1,000` aceita.
+
+### 2026-07-22 — Campos decimais: digitação natural em todo o sistema + preço de venda/% calculados ao vivo + regra da oferta
+
+Sete pedidos do dono do produto numa única rodada — o maior deles é uma mudança de convenção
+que afeta **todo campo monetário/percentual do sistema**, não só Produto.
+
+1. **Digitação natural (item 1, `web/src/lib/masks.ts`):** convenção antiga lia os dígitos
+   sempre da direita como centavos (tipo caixa eletrônico — digitar "150000" virava
+   "1.500,00"). Nova convenção: o inteiro é digitado normalmente da esquerda pra direita; a
+   vírgula abre até 2 casas decimais; sem vírgula nenhuma, o campo só ganha ",00" ao **sair do
+   campo** (`completarMoeda`/`completarPercentual`), nunca a cada tecla (isso impediria
+   continuar digitando o inteiro). Mesmas funções (`mascararMoeda`/`mascararPercentual`/
+   `desmascararMoeda`/`desmascararPercentual`), só a implementação interna mudou — todo
+   consumidor já existente (limite de crédito do Cliente, % comissão do Funcionário, 3
+   percentuais dos Parâmetros do Sistema, 4 campos de Produto) ganhou o comportamento novo sem
+   precisar trocar de função, só adicionando a chamada de `completar*` no `onBlur` de cada um
+   (`ClienteForm.tsx`, `FuncionarioForm.tsx`, `ConfiguracaoGeralForm.tsx` — este último também
+   ganhou a correção de `validarCampo` pra usar `desmascararPercentual` em vez de um cálculo de
+   dígitos própria, que ficaria errado com o formato novo).
+2. **Preço de venda automático (item 2, `ProdutoForm.tsx`):** editar Preço de Custo ou % de
+   Venda recalcula `Preço de Venda = Custo × (1 + %/100)` a cada tecla (só quando há custo > 0).
+3. **% de venda automático (item 3):** editar o Preço de Venda direto recalcula
+   `% = ((Venda − Custo) / Custo) × 100` (só quando há custo informado).
+4. **Regra da oferta — tudo ou nada (itens 4-7):** início, final e preço de oferta só valem
+   juntos — preencheu um, os três viram obrigatórios; início não pode ser no passado; final não
+   pode ser antes do início; preço de oferta tem que ser menor que o preço de venda (não `<=`).
+   Nova função `errosOferta` (frontend, ao vivo por campo) e `ProdutoService.validarOferta`
+   (backend, 400 com mensagem específica por regra) — mesma regra dos dois lados.
+5. **Verificação:** 6 novos testes em `ProdutoCrudTest` (oferta incompleta, início no passado,
+   final antes do início, preço de oferta ≥ venda, oferta válida com os 3 campos, mais o já
+   existente de datas) — **89/89 testes verdes** (antes de somar os de peso). Testado ao vivo
+   no navegador: `150` → `150,00`; custo 150 + 50% → venda 225,00; venda editada pra 180 → %
+   recalculado pra 20; cada regra da oferta reproduzida e corrigida uma a uma.
+
+### 2026-07-22 — Layout do formulário de Produto: reorganização pedida pelo dono do produto
+
+Cinco ajustes de leiaute no `ProdutoForm.tsx`, todos usando o `LinhaGrid` existente (que já
+redistribui a largura quando um campo configurável está oculto):
+
+1. NCM inválido (código digitado que não existe em `cfg_produto_ncm`) agora **limpa o campo e
+   avisa** ("Código NCM inválido — não encontrado."), em vez de só deixar a descrição em branco
+   silenciosamente.
+2. "Produto ativo" e "Descrição" viram uma linha só, com Descrição alinhada à direita (mesma
+   borda das linhas de baixo).
+3. Seção Categorias movida para logo abaixo de Identificação (antes vinha depois de Preços).
+4. Preço de Custo, % de Venda, Preço de Venda, Início/Final da oferta e Preço de Oferta —
+   6 campos numa linha só.
+5. Nome da Variante em Linha/Coluna + Peso Bruto/Líquido — 4 campos numa linha só (as seções
+   "Dimensões" e "Variantes", antes separadas, viraram uma só: "Dimensões e Variantes").
+
+### 2026-07-22 — Consulta de NCM no formulário de produto (descrição ao lado do código)
+
+Pedido do dono do produto: rótulo do campo por extenso e busca automática da descrição
+enquanto o usuário digita o código.
+
+1. **Backend — `GET /api/v1/ncm/{codigo}`** (novo `NcmController`/`NcmService`, módulo
+   `catalogo`): só leitura, sem POST/PUT/DELETE (mesma decisão de `cfg_produto_ncm` não ter
+   tela — script cuida da carga). Consulta direta por `codigo_ncm` (sem `tenant_atual()`: a
+   tabela é global). 404 amigável quando o código não existe.
+2. **Frontend — `ProdutoForm.tsx`:** rótulo do campo virou "NCM - Nomenclatura Comum do
+   Mercosul" (também na tela de configuração de campos e nas mensagens de obrigatoriedade do
+   backend). Ao sair do campo código (`onBlur`, mesmo estilo do autopreenchimento de CEP em
+   Cliente/Fornecedor), busca a descrição via `lib/ncm.ts#buscarNcm` e mostra num campo
+   somente-leitura ao lado (`peso: 4` código + `peso: 8` descrição, mesma linha do
+   `form-grid`); 404 não vira erro/toast, só limpa a descrição. Também busca ao abrir um
+   produto existente para edição.
+3. **Verificação:** 14 testes em `ProdutoCrudTest` (2 novos: NCM existente devolve descrição,
+   NCM inexistente devolve 404) + suíte completa verde. Testado ao vivo (container
+   reconstruído): NCM cadastrado devolve descrição, NCM inexistente devolve 404.
+
+### 2026-07-22 — `cfg_produto_ncm`: tabela global de referência de NCM
+
+Pedido do dono do produto: uma tabela que guarde código NCM + descrição para o campo
+`produto.codigo_ncm` (até então só texto livre, sem validação nem lookup).
+
+1. **`db/migration/V017__catalogo.sql`** — nova tabela `cfg_produto_ncm(codigo_ncm PK,
+   descricao_ncm NOT NULL, aliquota_ibpt NUMERIC(10,2))`. Diferente de toda outra tabela do
+   domínio: **sem `id_tenant` e sem RLS** — decisão explícita do dono do produto ("tabela de
+   uso geral, igual para todos os tenants"), mesma exceção de `plataforma.*` (P9), só que fora
+   daquele schema. Por não ter `id_tenant`, o guarda-corpo de P8 (V024) nem a enxerga — não
+   precisa de tratamento especial ali.
+2. **Sem tela de manutenção** (decisão explícita): a tabela é carregada/atualizada por script.
+   `niner_owner` (dono da tabela) recebeu `GRANT SELECT, INSERT, UPDATE, DELETE` explícito —
+   redundante em produção (ele já é dono), mas necessário no ambiente de teste (Testcontainers),
+   onde quem roda as migrations é o superusuário do container, não `niner_owner` de verdade.
+   `niner_app` só tem `GRANT SELECT` — a aplicação nunca escreve nessa tabela.
+3. **Vínculo com produto:** `produto.codigo_ncm` (V017) ganhou
+   `REFERENCES cfg_produto_ncm (codigo_ncm)` — FK simples (não composta, diferente do resto do
+   domínio: o alvo não tem `id_tenant`), continua `nullable` (produto pode não ter NCM ainda).
+4. **Efeito colateral corrigido:** o `catch (DataIntegrityViolationException)` de
+   `ProdutoService.criar/atualizar` tratava toda violação de FK como "categoria não existe" —
+   com a nova FK de NCM isso ficaria enganoso. Novo método `erroDeVinculo` inspeciona o nome da
+   constraint na causa raiz (mesmo princípio de `ClienteService.duplicidade`) e devolve "NCM
+   informado não existe." quando é o caso — 400, não 500.
+5. **Migration já aplicada neste ambiente local** (25h no ar): como editar uma migration já
+   rodada quebra o checksum do Flyway, apliquei o `CREATE TABLE`/`GRANT`/`ALTER TABLE ADD
+   CONSTRAINT` equivalente direto no Postgres local e rodei `flyway repair` para realinhar o
+   checksum (mesmo procedimento já usado para o `produto_categoria.indice`, nesta mesma
+   sessão) — sem recriar o banco, sem perder os tenants de teste já criados.
+6. **Verificação:** 12 testes em `ProdutoCrudTest` (incluindo NCM válido e inexistente,
+   inserido/consultado direto via SQL já que não há endpoint de escrita) + suíte completa —
+   **81/81 testes verdes**. Testado também ao vivo contra o servidor real (container
+   reconstruído): NCM cadastrado é aceito e devolvido no produto; NCM inexistente vira 400 com
+   `"NCM informado não existe."`.
+
+### 2026-07-22 — Quinta tela de domínio: Produtos (`catalogo.produto`) — primeiro corte vertical do catálogo
+
+Primeira tela do módulo `catalogo` (docs/telas/produto.md). Maior entrega de uma vez até aqui:
+CRUD completo de produto + duas particularidades estruturais que nenhuma tela anterior tinha
+(N:N com ordenação; campo controlado por configuração de **outra** tela).
+
+1. **Backend — módulo `catalogo` (novo):** `ProdutoController/Service/Dtos`
+   (`GET/POST/PUT/DELETE /api/v1/produtos`, mesmo padrão de paginação/ordenação/exclusão com
+   fallback do resto do domínio) + `CategoriaProdutoController/Service/Dtos`
+   (`GET/POST/PUT /api/v1/categorias-produto`, criar/listar/renomear, sem exclusão — mesmo
+   desenho da categoria de cliente).
+2. **Categorias N:N ordenadas:** o request de produto recebe `categorias` como lista de
+   `idCategoria` **na ordem escolhida pelo usuário**; o servidor deriva o `indice`
+   (`produto_categoria.indice`, adicionado nesta mesma sessão — ver entrada abaixo) da posição
+   na lista e substitui todas as linhas a cada save (apaga + reinsere, não faz *diff*).
+   Categoria duplicada ou inexistente na lista → 400, não 500.
+3. **Nome de variante controlado por `cfg_geral`:** `nomeVarianteLinha`/`nomeVarianteColuna` só
+   persistem se a respectiva flag (`cfg_usa_variante_linha`/`cfg_usa_variante_coluna`,
+   Parâmetros do Sistema) estiver ligada — o servidor força `null` quando desligada, mesmo que
+   o cliente envie valor. Flags expostas via `ConfiguracaoGeralService.flagsVariante()`
+   (método novo, sem checagem de ADMIN — diferente do resto de `cfg_geral`).
+4. **Frontend — `pages/produtos/`** (lista + formulário + configuração de tela): categorias com
+   setas de reordenação + botões "＋ Adicionar"/"＋ Gerenciar categorias"
+   (`CategoriaProdutoModal.tsx`); seção "Variantes" condicional às flags; ícone próprio.
+5. **Verificação:** 12 testes em `ProdutoCrudTest` (novo) + suíte completa — **80/80 testes
+   verdes** neste ponto. Testado ao vivo: categoria criada e vinculada ao produto, ordem
+   preservada.
+
+### 2026-07-22 — `produto_categoria.indice`: ordenação da categoria dentro do produto
+
+Campo novo pedido pelo dono do produto. Tabela `produto_categoria` ainda sem dados em
+qualquer ambiente, então a coluna entrou **direto na migration V017** (que já cria a tabela),
+sem `V028` nova — mesma convenção usada até aqui enquanto o banco não sobe em lugar real (ver
+`docs/migration/README.md`).
+
+1. **`db/migration/V017__catalogo.sql`:** `produto_categoria` ganhou
+   `indice SMALLINT NOT NULL DEFAULT 0` + `CONSTRAINT produto_categoria_indice_uk UNIQUE
+   (id_tenant, id_produto, indice)` — mesmo padrão já usado em `produto_imagem.indice` (V017,
+   2026-07-16) para a galeria de imagens. `COMMENT ON COLUMN` documentando o propósito.
+2. **Não houve rebuild do banco** (regra combinada: só editar + documentar; o dono do produto
+   pede o rebuild/teste explicitamente quando quiser).
+3. **Spec atualizada** (`spec-driven-erp-varejo.md` §3.3.3): `produto_categoria` no bloco de
+   modelo de dados + nota explicando a ordenação, ao lado da nota já existente sobre
+   `produto_imagem`. `db/migration/README.md` (linha da V017) também atualizado.
 
 ### 2026-07-21 — Parâmetros do Sistema (`cfg_geral`): primeira tela fora do padrão de cadastro
 

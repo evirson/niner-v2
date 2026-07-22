@@ -320,13 +320,16 @@ usuario_rotina(id_usuario FK, nome_rotina, PK(id_usuario, nome_rotina))  -- perm
 cfg_categoria_produto(id_categoria PK, nome_categoria)
 cfg_variante_linha(id_variante_linha PK, descricao)      -- ex.: cor
 cfg_variante_coluna(id_variante_coluna PK, descricao)    -- ex.: tamanho / voltagem
+-- cfg_produto_ncm é GLOBAL (sem id_tenant/RLS, P9) — igual para todos os tenants.
+cfg_produto_ncm(codigo_ncm PK, descricao_ncm, aliquota_ibpt NUMERIC(10,2))
 produto(id_produto PK, ativo BOOL, marca, referencia, descricao,
         preco_custo NUMERIC(12,2), percentual_venda NUMERIC(5,2),
         preco_venda NUMERIC(12,2), data_inicio_oferta, data_final_oferta,
-        preco_oferta NUMERIC(12,2), codigo_ncm, peso_bruto NUMERIC(14,3),
+        preco_oferta NUMERIC(12,2), codigo_ncm FK -> cfg_produto_ncm, peso_bruto NUMERIC(14,3),
         peso_liquido NUMERIC(14,3), nome_variante_linha, nome_variante_coluna,
         imagem, criado_em, alterado_em, reajustado_em)
-produto_categoria(id_produto FK, id_categoria FK, PK(id_produto, id_categoria))
+produto_categoria(id_produto FK, id_categoria FK, PK(id_produto, id_categoria),
+                   indice SMALLINT DEFAULT 0)    -- ordenação da categoria dentro do produto; UNIQUE(id_tenant, id_produto, indice)
 -- produto_barra é a VARIAÇÃO. Q7 (fechada): sku interno (chave) + ean opcional (GTIN real).
 produto_barra(id_variacao PK,                      -- surrogate; sku é a chave de negócio, não a PK física
               sku,                                  -- identificador INTERNO, obrigatório, único por tenant (ex-codigo_barra); imprimível como código de barras na loja
@@ -346,6 +349,19 @@ produto_barra(id_variacao PK,                      -- surrogate; sku é a chave 
 > ```
 > Sem `ON DELETE CASCADE` (convenção do projeto): apagar um `produto` com imagens vinculadas
 > falha por FK até a aplicação remover as imagens primeiro.
+
+> **Ordenação de categoria (2026-07-22):** `produto_categoria.indice SMALLINT NOT NULL DEFAULT 0`,
+> com `UNIQUE(id_tenant, id_produto, indice)` — mesmo padrão de `produto_imagem.indice`, controla
+> a ordem de exibição das categorias dentro de um produto.
+
+> **Tabela de referência de NCM (2026-07-22):** `cfg_produto_ncm(codigo_ncm PK, descricao_ncm,
+> aliquota_ibpt)` é a única tabela do módulo **sem `id_tenant`/RLS** — código NCM é o mesmo para
+> qualquer tenant (P9, mesma exceção de `plataforma.*`, só que fora daquele schema). **Sem tela
+> de manutenção**: é carregada/atualizada por script, rodando como `niner_owner` (dono da
+> tabela); `niner_app` só tem `GRANT SELECT`. `produto.codigo_ncm` referencia
+> `cfg_produto_ncm.codigo_ncm` (FK simples, não composta — o alvo não tem dimensão de tenant);
+> continua **nullable** (produto pode não ter NCM definido ainda). Um NCM inexistente ao
+> salvar produto vira 400 ("NCM informado não existe."), não 500.
 
 ✅ **Resolvido (V017):** `sku` único por tenant (`UNIQUE(id_tenant, sku)`) e `UNIQUE(id_produto, id_variante_linha, id_variante_coluna)` impedindo variação duplicada.
 
@@ -797,6 +813,8 @@ Toda tela do frontend segue o **padrão de referência** em [`docs/padroes/cadas
 - **Foco automático:** ao abrir uma tela de inclusão ou edição, o primeiro campo do formulário recebe foco automaticamente (`autoFocus`), para o usuário já poder digitar sem clicar.
 - **Ícones de cabeçalho (ajuda/configuração) (2026-07-21):** o gatilho de ajuda (§3.7.1) e o de configuração de tela (§3.7.2) usam ícones SVG reais (Heroicons, MIT), não texto/emoji — botão circular de 46×46px com fundo `--surface-2`, borda `--line-strong` e destaque de `--accent` no hover, para ficarem bem visíveis no canto superior direito de toda tela.
 - **Grid que se reajusta ao ocultar campo (2026-07-21):** quando um campo é ocultado pela configuração de tela (§3.7.2), os demais campos da mesma linha do grid de 12 colunas crescem proporcionalmente para preencher o espaço (método dos maiores restos sobre o peso `col-N` original), em vez de deixar um vão vazio.
+- **Campo decimal (moeda/percentual/peso) — digitação natural (2026-07-22):** o inteiro é digitado da esquerda para a direita, como um número comum (com separador de milhar ao vivo); a vírgula abre as casas decimais (2 para moeda/percentual, 3 para peso — `numeric(14,3)`). Sem vírgula nenhuma, o campo só ganha o decimal (`,00`/`,000`) ao **sair do campo** (`onBlur`), nunca a cada tecla — isso impediria continuar digitando o inteiro. Implementado uma vez em `web/src/lib/masks.ts` (`mascararMoeda/mascararPercentual/mascararPeso` + `completarMoeda/completarPercentual/completarPeso` no `onBlur` + `desmascararMoeda/desmascararPercentual/desmascararPeso` para o payload) e usado em todo campo monetário/percentual/peso do sistema.
+- **Campo de data — texto com máscara `dd/mm/aaaa`, não `<input type="date">` (2026-07-22):** o campo nativo navega por segmentos (dia/mês/ano) e não permite "selecionar tudo e sobrescrever ao digitar" em nenhum navegador — por isso todo campo de data do sistema é um campo de texto normal com máscara (`mascararData`), `onFocus` chamando `.select()` (seleciona o valor inteiro, como qualquer campo de texto) e conversão `dataParaIso`/`isoParaData` (`web/src/lib/masks.ts`) na borda (payload da API / preenchimento a partir da resposta). Perde o ícone de calendário nativo — decisão consciente, não lacuna.
 
 **Acessibilidade (obrigatório).** `:focus-visible` com `outline: 2px solid var(--focus)` em todo controle; `aria-label` em botões de ícone; `aria-pressed` em toggles; regiões de feedback com `aria-live="polite"`; contraste AA nos dois temas. Português em todos os rótulos e no vocabulário de domínio (§CLAUDE.md).
 

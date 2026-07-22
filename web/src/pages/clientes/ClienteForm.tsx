@@ -21,13 +21,18 @@ import {
   type Genero,
 } from '../../lib/clientes'
 import { buscarConfiguracaoTela, paraMapa, type ConfiguracaoCampo } from '../../lib/configuracaoTela'
+import { hojeISO } from '../../lib/datas'
 import { useEu } from '../../lib/eu'
 import {
   ESTADOS_UF,
   celularValido,
+  completarMoeda,
+  dataParaIso,
+  dataValida,
   documentoValido,
   mascararCep,
   mascararCpfCnpj,
+  mascararData,
   mascararIdWhatsapp,
   mascararMoeda,
   mascararTelefone,
@@ -101,10 +106,13 @@ function validarCampo(
     case 'idCategoriaCliente':
       return f.idCategoriaCliente ? undefined : 'Escolha uma categoria.'
     case 'dataNascimento': {
-      // Sempre opcional (2026-07-21); quando preenchida, só não pode ser hoje/futuro.
+      // Sempre opcional (2026-07-21); quando preenchida, precisa ser uma data real e não
+      // pode ser hoje/futuro.
       if (!f.dataNascimento) return undefined
-      const hoje = new Date().toISOString().slice(0, 10)
-      return f.dataNascimento < hoje ? undefined : 'Data de nascimento não pode ser hoje ou no futuro.'
+      if (!dataValida(f.dataNascimento)) return 'Data inválida.'
+      return dataParaIso(f.dataNascimento)! < hojeISO()
+        ? undefined
+        : 'Data de nascimento não pode ser hoje ou no futuro.'
     }
     case 'genero':
       return !f.fisicaJuridica || f.genero ? undefined : 'Obrigatório para pessoa física.'
@@ -430,9 +438,10 @@ export default function ClienteForm({ somenteLeitura = false }: { somenteLeitura
                       <label htmlFor="dataNascimento">Data de nascimento</label>
                       <input
                         id="dataNascimento"
-                        type="date"
+                        placeholder="dd/mm/aaaa"
                         value={form.dataNascimento}
-                        onChange={(e) => setForm((f) => ({ ...f, dataNascimento: e.target.value }))}
+                        onChange={(e) => setForm((f) => ({ ...f, dataNascimento: mascararData(e.target.value) }))}
+                        onFocus={(e) => e.target.select()}
                         onBlur={aoSairDoCampo('dataNascimento')}
                       />
                       {erros.dataNascimento && <p className="erro-campo">{erros.dataNascimento}</p>}
@@ -740,7 +749,10 @@ export default function ClienteForm({ somenteLeitura = false }: { somenteLeitura
                   placeholder="0,00"
                   value={form.limiteCredito}
                   onChange={(e) => setForm((f) => ({ ...f, limiteCredito: mascararMoeda(e.target.value) }))}
-                  onBlur={aoSairDoCampo('limiteCredito')}
+                  onBlur={(e) => {
+                    setForm((f) => ({ ...f, limiteCredito: completarMoeda(f.limiteCredito) }))
+                    aoSairDoCampo('limiteCredito')(e)
+                  }}
                 />
                 {erros.limiteCredito && <p className="erro-campo">{erros.limiteCredito}</p>}
               </div>

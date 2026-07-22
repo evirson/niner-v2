@@ -3,6 +3,12 @@
  * brasileiro. Usada nos campos informativos de auditoria (`criado_em`/`atualizado_em`), que
  * toda tabela do domínio carrega — ver `web/src/components/InfoRegistro.tsx`.
  */
+/** Data de hoje em "aaaa-mm-dd" (fuso local — evita o desvio de `toISOString`, que usa UTC). */
+export function hojeISO(): string {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
 export function formatarDataHora(iso: string | null | undefined): string {
   if (!iso) return '—'
   const d = new Date(iso)
