@@ -55,4 +55,8 @@ niner:
       - http://localhost:5174
   storage:                     # object storage das fotos de produto (ADR-013)
     bucket: ${NINER_STORAGE_BUCKET:niner-erp-dev}
-    base-url: ${NINER_STORAGE_BASE_URL:https://storage.googleapis.com}
+    # host vazio = GCS real (ADC/chave). Preenchido = emulador fake-gcs-server do compose,
+    # SEM credencial (dev): NINER_STORAGE_HOST=http://localhost:4443 e nada mais — a base-url
+    # herda o host automaticamente, então as URLs públicas das fotos já saem do emulador.
+    host: ${NINER_STORAGE_HOST:}
+    base-url: ${NINER_STORAGE_BASE_URL:${NINER_STORAGE_HOST:https://storage.googleapis.com}}

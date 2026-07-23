@@ -121,6 +121,30 @@ Transmita por **cofre de senhas** (1Password, Bitwarden) ou canal cifrado. **Nun
 e-mail, WhatsApp, Slack ou commit. No destino: coloque em `api/secrets/`, rode `chmod 600`,
 e confirme com `git check-ignore -v api/secrets/<arquivo>.json` que o git a ignora.
 
+### Opção C — SEM credencial: emulador local (2026-07-23, o caminho para desenvolver)
+
+Para **desenvolver a feature de fotos** não precisa de GCS real nenhum: o docker-compose tem
+o serviço `fake-gcs` (o mesmo `fsouza/fake-gcs-server` que o `ProdutoImagemCrudTest` usa via
+Testcontainers), e a API ganhou a propriedade `niner.storage.host` — preenchida, o cliente
+GCS aponta pro emulador com `NoCredentials` e cria o bucket sozinho na primeira gravação.
+
+```bash
+docker compose up -d fake-gcs                                  # emulador na porta 4443
+cd api && NINER_STORAGE_HOST=http://localhost:4443 ./mvnw spring-boot:run
+```
+
+No PowerShell: `$env:NINER_STORAGE_HOST = 'http://localhost:4443'; ./mvnw spring-boot:run`.
+
+Só isso — a `base-url` das URLs públicas herda o host automaticamente, então upload,
+exclusão, reordenação e **exibição no navegador** funcionam de ponta a ponta
+(validado em 2026-07-23: `POST /api/v1/produtos/2/imagens` → `http://localhost:4443/
+niner-erp-dev/tenants/1/produtos/2/<uuid>.webp` → HTTP 200 `image/webp`). As imagens ficam
+no volume `fake-gcs-data` e sobrevivem a restart do container. Host **vazio** (default) =
+comportamento antigo, GCS real via ADC/chave — nada muda em staging/produção.
+
+Use as Opções A/B apenas quando precisar validar contra o bucket `niner-erp-dev` de verdade
+(ex.: conferir política pública/CORS do GCS real antes de um release).
+
 Chaves são rastreáveis e revogáveis: `gcloud iam service-accounts keys list --iam-account=...`
 e `keys delete <KEY_ID>`.
 

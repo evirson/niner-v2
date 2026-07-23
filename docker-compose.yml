@@ -66,6 +66,20 @@ services:
       - ./api/secrets:/secrets:ro
     ports: ["8080:8080"]
 
+  # Emulador de GCS para dev SEM credencial (ADR-013) — mesmo fsouza/fake-gcs-server que o
+  # ProdutoImagemCrudTest usa via Testcontainers. Com ele no ar, a API roda com
+  # NINER_STORAGE_HOST=http://localhost:4443 e o upload/exclusão/exibição de fotos de produto
+  # funciona de ponta a ponta sem gcloud/ADC/chave (docs/infra/armazenamento-imagens.md §3,
+  # Opção C). Backend em filesystem + volume: as imagens sobrevivem a restart do container.
+  #   docker compose up -d fake-gcs
+  fake-gcs:
+    image: fsouza/fake-gcs-server:1.49
+    container_name: niner-fake-gcs
+    command: ["-scheme", "http", "-public-host", "localhost:4443", "-backend", "filesystem", "-filesystem-root", "/storage"]
+    volumes:
+      - fake-gcs-data:/storage
+    ports: ["4443:4443"]
+
   # pgAdmin — cliente web para inspecionar o niner_db em dev. Perfil `tools` (não sobe por padrão).
   #   docker compose --profile tools up -d pgadmin   → http://localhost:5050
   pgadmin:
@@ -110,3 +124,4 @@ services:
 volumes:
   pgdata:
   pgadmin-data:
+  fake-gcs-data:

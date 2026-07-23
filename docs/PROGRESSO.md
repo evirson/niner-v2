@@ -49,6 +49,24 @@ decimais, completa só no `onBlur`) e campo de data como texto mascarado `dd/mm/
 
 ## Linha do tempo
 
+### 2026-07-23 — Modo dev SEM credencial para fotos de produto (fake-gcs no compose, Opção C do handoff)
+
+O Claudio ficou travado na credencial do GCS (Opção A concedida, mas o ADC não destravou na
+máquina dele) justamente na reta final da galeria de fotos. Solução: eliminar a credencial do
+caminho de desenvolvimento. O docker-compose ganhou o serviço **`fake-gcs`**
+(`fsouza/fake-gcs-server:1.49`, porta 4443, backend filesystem + volume `fake-gcs-data` —
+imagens sobrevivem a restart), e a API a propriedade **`niner.storage.host`**
+(`NINER_STORAGE_HOST`): preenchida, `ArmazenamentoConfig` constrói o cliente com
+`NoCredentials` apontando pro emulador e cria o bucket sozinho; vazia (default), tudo como
+antes (GCS real via ADC/chave — staging/prod intactos). A `base-url` herda o host
+automaticamente (`${NINER_STORAGE_BASE_URL:${NINER_STORAGE_HOST:...}}`), então a URL pública
+que a galeria exibe já sai do emulador. Receita completa na **Opção C** de
+`docs/infra/armazenamento-imagens.md` §3 (2 comandos). Validado de ponta a ponta em banco
+real: login → `POST /api/v1/produtos/2/imagens` (multipart) → objeto criado no emulador →
+`GET http://localhost:4443/niner-erp-dev/tenants/1/produtos/2/<uuid>.webp` → **HTTP 200
+`image/webp`**. O `ProdutoImagemCrudTest` já usava o mesmo emulador — o modo dev só
+reaproveita em runtime o que o teste provou.
+
 ### 2026-07-23 — Galeria de fotos de produto implementada (ADR-013) + setup de credencial GCS em andamento
 
 Pedido do dono do produto: começar a implementação do handoff de object storage
