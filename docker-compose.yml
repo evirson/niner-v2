@@ -55,6 +55,15 @@ services:
       SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/niner_db
       SPRING_DATASOURCE_USERNAME: niner_app
       SPRING_DATASOURCE_PASSWORD: ${DB_APP_PASSWORD:-dev_app}
+      # Object storage das fotos de produto (ADR-013). Opção B do handoff (chave de conta de
+      # serviço) — dentro do container não existe ~/.config/gcloud do host, então a Opção A
+      # (ADC pessoal) só funciona rodando a API direto no host (`./mvnw spring-boot:run`).
+      # Sem chave em api/secrets/, a variável aponta pra um arquivo que não existe — isso só
+      # falha quando alguém tenta gravar/apagar uma imagem de verdade (cliente do GCS é lazy),
+      # nunca na subida do container.
+      GOOGLE_APPLICATION_CREDENTIALS: /secrets/gcs-niner-erp.json
+    volumes:
+      - ./api/secrets:/secrets:ro
     ports: ["8080:8080"]
 
   # pgAdmin — cliente web para inspecionar o niner_db em dev. Perfil `tools` (não sobe por padrão).

@@ -63,6 +63,7 @@ public final class ProdutoDtos {
             String nomeVarianteColuna,
             boolean ativo,
             List<CategoriaSelecionada> categorias,
+            List<ProdutoImagemDtos.ImagemResponse> imagens,
             OffsetDateTime criadoEm,
             OffsetDateTime atualizadoEm) {
     }

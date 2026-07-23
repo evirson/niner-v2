@@ -60,12 +60,15 @@ public class ProdutoService {
     private final JdbcClient jdbc;
     private final ConfiguracaoTelaService configuracaoTelaService;
     private final ConfiguracaoGeralService configuracaoGeralService;
+    private final ProdutoImagemService produtoImagemService;
 
     public ProdutoService(JdbcClient jdbc, ConfiguracaoTelaService configuracaoTelaService,
-                          ConfiguracaoGeralService configuracaoGeralService) {
+                          ConfiguracaoGeralService configuracaoGeralService,
+                          ProdutoImagemService produtoImagemService) {
         this.jdbc = jdbc;
         this.configuracaoTelaService = configuracaoTelaService;
         this.configuracaoGeralService = configuracaoGeralService;
+        this.produtoImagemService = produtoImagemService;
     }
 
     @Transactional(readOnly = true)
@@ -382,6 +385,7 @@ public class ProdutoService {
                 rs.getString("nome_variante_coluna"),
                 rs.getBoolean("ativo"),
                 buscarCategorias(id),
+                produtoImagemService.listar(id),
                 rs.getObject("criado_em", OffsetDateTime.class),
                 rs.getObject("atualizado_em", OffsetDateTime.class));
     }

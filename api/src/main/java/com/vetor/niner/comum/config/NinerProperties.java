@@ -7,10 +7,11 @@ import java.util.List;
 
 /**
  * Configuração da aplicação (prefixo {@code niner}): assinatura de JWT, parâmetros do
- * trial e CORS. Valores em {@code application.yml}; segredo do JWT via secret manager em prod.
+ * trial, CORS e object storage. Valores em {@code application.yml}; segredo do JWT via
+ * secret manager em prod.
  */
 @ConfigurationProperties("niner")
-public record NinerProperties(Jwt jwt, Trial trial, Cors cors) {
+public record NinerProperties(Jwt jwt, Trial trial, Cors cors, Storage storage) {
 
     public record Jwt(String secret, Duration expiracao, String emissor) {
     }
@@ -20,5 +21,9 @@ public record NinerProperties(Jwt jwt, Trial trial, Cors cors) {
 
     /** Origens permitidas dos fronts (site/web/admin) para CORS. */
     public record Cors(List<String> origins) {
+    }
+
+    /** Bucket/base-url do object storage das fotos de produto (ADR-013). */
+    public record Storage(String bucket, String baseUrl) {
     }
 }

@@ -1,4 +1,5 @@
 import { api } from './api'
+import type { ImagemProduto } from './produtoImagens'
 import {
   dataParaIso,
   desmascararMoeda,
@@ -39,6 +40,7 @@ export interface Produto {
   nomeVarianteColuna: string | null
   ativo: boolean
   categorias: CategoriaSelecionada[]
+  imagens: ImagemProduto[]
   criadoEm: string
   atualizadoEm: string
 }

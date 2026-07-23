@@ -20,3 +20,6 @@ niner:
   cors:
     origins:
       - http://localhost:5175
+  storage:
+    bucket: niner-erp-dev
+    base-url: https://storage.googleapis.com

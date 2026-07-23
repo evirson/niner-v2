@@ -11,12 +11,14 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import AjudaDaTela from '../../components/AjudaDaTela'
 import CategoriaProdutoModal from '../../components/CategoriaProdutoModal'
 import ConfirmarSalvarModal from '../../components/ConfirmarSalvarModal'
+import GaleriaImagensProduto from '../../components/GaleriaImagensProduto'
 import { IconeEngrenagem, IconeExcluir, IconeProduto, IconeSetaBaixo, IconeSetaCima } from '../../components/Icones'
 import InfoRegistro from '../../components/InfoRegistro'
 import LinhaGrid from '../../components/LinhaGrid'
 import Toast from '../../components/Toast'
 import { ApiError } from '../../lib/api'
 import { listarCategoriasProduto } from '../../lib/categoriasProduto'
+import type { ImagemProduto } from '../../lib/produtoImagens'
 import { buscarConfiguracaoTela, paraMapa, type ConfiguracaoCampo } from '../../lib/configuracaoTela'
 import { buscarFlagsVariante } from '../../lib/configuracaoGeral'
 import { hojeISO } from '../../lib/datas'
@@ -161,6 +163,7 @@ export default function ProdutoForm({ somenteLeitura = false }: { somenteLeitura
   const [categoriaParaAdicionar, setCategoriaParaAdicionar] = useState('')
   const [descricaoNcm, setDescricaoNcm] = useState('')
   const [confirmarSalvarAberto, setConfirmarSalvarAberto] = useState(false)
+  const [imagens, setImagens] = useState<ImagemProduto[]>([])
 
   /**
    * Busca a descrição do NCM digitado (mesmo estilo do autopreenchimento de CEP). Código que
@@ -214,6 +217,7 @@ export default function ProdutoForm({ somenteLeitura = false }: { somenteLeitura
   useEffect(() => {
     if (produtoExistente) {
       setForm(paraFormulario(produtoExistente))
+      setImagens(produtoExistente.imagens)
       buscarDescricaoDoNcm(produtoExistente.codigoNcm ?? '')
     }
   }, [produtoExistente])
@@ -805,6 +809,20 @@ export default function ProdutoForm({ somenteLeitura = false }: { somenteLeitura
                 ]}
               />
             </div>
+          </section>
+        )}
+
+        {editando ? (
+          <GaleriaImagensProduto
+            idProduto={Number(id)}
+            imagens={imagens}
+            somenteLeitura={somenteLeitura}
+            aoAtualizar={setImagens}
+          />
+        ) : (
+          <section className="section">
+            <p className="section-label">Fotos</p>
+            <p className="muted">Salve o produto primeiro para adicionar fotos.</p>
           </section>
         )}
 

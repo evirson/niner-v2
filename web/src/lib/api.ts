@@ -60,3 +60,32 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   if (res.status === 204) return undefined as T
   return (await res.json()) as T
 }
+
+/**
+ * Upload multipart (`FormData`) — nunca define `Content-Type` manualmente: o navegador
+ * precisa gerar o boundary sozinho, então usar {@link api} (que força `application/json`)
+ * quebraria o upload.
+ */
+export async function apiUpload<T>(path: string, formData: FormData, method: string = 'POST'): Promise<T> {
+  const token = getToken()
+  const res = await fetch(API_BASE + path, {
+    method,
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    body: formData,
+  })
+  if (res.status === 401) {
+    clearToken()
+    throw new ApiError(401, 'Sessão expirada.')
+  }
+  if (!res.ok) {
+    let msg = 'Ocorreu um erro.'
+    try {
+      const p = await res.json()
+      msg = p.detail || p.title || msg
+    } catch {
+      /* resposta sem corpo JSON */
+    }
+    throw new ApiError(res.status, msg)
+  }
+  return (await res.json()) as T
+}

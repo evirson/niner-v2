@@ -230,6 +230,21 @@ input:focus-visible, select:focus-visible {
 }
 .lista-categorias-produto .topbar-acoes .btn { padding: 4px 8px; }
 
+/* Galeria de fotos do produto (docs/infra/armazenamento-imagens.md, ADR-013) — grade de
+   miniaturas com ações sobrepostas (reordenar/excluir), mesmo princípio de setas da lista de
+   categorias, só que em cima de imagem em vez de texto. */
+.galeria-imagens-produto { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 12px; }
+.galeria-imagem-item {
+  position: relative; width: 120px; height: 120px; border-radius: var(--radius);
+  overflow: hidden; border: 1px solid var(--line); background: var(--surface-2);
+}
+.galeria-imagem-item img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.galeria-imagem-acoes {
+  position: absolute; inset: auto 0 0 0; display: flex; justify-content: center; gap: 2px;
+  padding: 4px; background: rgba(0, 0, 0, 0.55);
+}
+.galeria-imagem-acoes .btn { padding: 2px 6px; }
+
 .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; margin-top: 16px; }
 .passos { margin: 0 0 8px; padding-left: 20px; color: var(--ink); }
 .passos li { margin: 6px 0; }

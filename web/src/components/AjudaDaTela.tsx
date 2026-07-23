@@ -164,11 +164,13 @@ const CONTEUDOS: Record<string, ConteudoAjuda> = {
       'Se os Parâmetros do Sistema tiverem "variante em linha/coluna" habilitados, informe o nome usado nas variações deste produto (ex.: "Cor", "Tamanho").',
       'Ao digitar o código NCM, a descrição aparece automaticamente ao lado, se o código estiver cadastrado.',
       'Salve.',
+      'Depois de salvo, a seção "Fotos" permite adicionar até 6 imagens (JPEG/PNG/WebP) — use as setas pra reordenar e a lixeira pra excluir.',
     ],
     errosComuns: [
       'Não vejo os campos de variante: confira os Parâmetros do Sistema (só ADMIN acessa) — eles controlam se o produto usa variante em linha e/ou coluna.',
       'Categoria não aparece na lista: crie uma pela opção "＋ Gerenciar categorias".',
       'Data final da oferta antes da inicial: corrija o intervalo de datas.',
+      'Não consigo adicionar foto: o produto precisa estar salvo primeiro, e o limite é de 6 fotos por produto.',
     ],
     urlVideo: null,
   },
