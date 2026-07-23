@@ -49,6 +49,31 @@ decimais, completa só no `onBlur`) e campo de data como texto mascarado `dd/mm/
 
 ## Linha do tempo
 
+### 2026-07-23 — Spec de Entrada de Mercadorias iniciada (`docs/telas/entrada-mercadoria.md`, RASCUNHO)
+
+Início do módulo `estoque` pela porta de entrada: spec da tela de **entrada de mercadorias**
+(importação de XML NF-e modelo 55 + lançamento manual + fluxo de planilha modelo), escrita a
+quatro mãos e **pausada no meio da discussão** — o rascunho está completo estruturalmente
+(tabelas V019/V026 mapeadas, mapeamento XML→banco, contrato de API preliminar, critérios de
+aceitação), com as decisões já fechadas e as pendências registradas num bloco "Registro da
+discussão" no topo do próprio arquivo. Destaques do que já foi decidido: os três fluxos
+convergem para a mesma conferência/confirmação (1 mestre `COMPRA` + N detalhes `C`; saldo por
+trigger de V019, nunca via Java); XML idempotente pela chave de acesso (novas colunas
+`chave_nfe`/`serie` no mestre + tabela `entrada_xml` para o payload bruto — aprovadas, viram
+V028+); duplicatas do XML geram `contas_pagar`; rateio de frete/IPI/ST e reajuste de
+custo/preço serão configuráveis; correção de entrada confirmada permite edição direta **e**
+estorno, ambos com auditoria de UPDATE/DELETE (P3); haverá vínculo produto×fornecedor (match
+por `cProd` + conversão de unidade) e tabela de ligação usuário↔funcionário. Pendências da
+retomada (desenho físico das tabelas novas, onde mora a configuração, política de divergência
+de `vNF`, detalhamento da planilha) listadas no mesmo bloco. Nenhuma linha de código ainda —
+spec-driven (golden rule).
+
+Operacional do dia: ambiente local religado (conflito de porta 5432 com `finance-v-db`
+resolvido parando o outro container; `flyway repair` + `migrate` até V027 — checksums
+V006–V010 divergiam por edições antigas; `npm install` no `web/`). Banco estava vazio: criada
+loja de teste via `POST /api/publico/assinar` — slug `loja-teste`, `teste@teste.com` /
+`teste1234` (tenant 1, trial até 2026-09-21).
+
 ### 2026-07-23 — Sexta e sétima telas de domínio: Moeda e Tipo de Carteira (módulo `financeiro`)
 
 Pedido do dono do produto: telas de manutenção para `tipo_carteira`/`moeda`/`moeda_detalhe`
