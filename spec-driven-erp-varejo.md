@@ -354,6 +354,23 @@ produto_barra(id_variacao PK,                      -- surrogate; sku é a chave 
 > com `UNIQUE(id_tenant, id_produto, indice)` — mesmo padrão de `produto_imagem.indice`, controla
 > a ordem de exibição das categorias dentro de um produto.
 
+> **Gerador de código de barras interno do SKU (2026-07-22):** `produto_barra.sku` **sempre**
+> é gerado — nunca digitado pelo usuário — pela função `gerar_ean13_interno()` (V017),
+> estrutura `FIIISSSSSSSSD` (F=9 fixo; III=`id_banco`, 3 dígitos; SSSSSSSS=sequencial, 8
+> dígitos; D=dígito verificador EAN-13/GTIN padrão). Controle em `cfg_ean_gerador` — tabela
+> **GLOBAL** (sem `id_tenant`/RLS, P9, mesma exceção de `cfg_produto_ncm`): "banco" é a
+> *instância* de banco de dados (hoje só `niner_db`, `id_banco = 1`), não o tenant — o
+> sequencial é um contador único **compartilhado por todos os tenants** deste banco. Se um dia
+> houver sharding (uma segunda instância de banco para outro grupo de tenants), essa segunda
+> instância nasce com `id_banco = 2`, evitando colisão entre bancos. `niner_app` não tem grant
+> nenhum na tabela — só `EXECUTE` na função (`SECURITY DEFINER`, dono `niner_owner`).
+> 🔴 **Decisão em aberto:** hoje nada chama a função automaticamente (a tela/serviço de
+> variação ainda não existe). Quando for construída, o plano é o `ProdutoBarraService.criar()`
+> chamar a função explicitamente antes do `INSERT` (mesmo estilo de `plataforma.tenant_atual()`
+> nos demais módulos — derivado explícito no Java, não escondido em `DEFAULT`/`TRIGGER` da
+> coluna); um gatilho `BEFORE INSERT` que reforce isso no nível do banco (defesa em
+> profundidade) ficou **adiado** a pedido do dono do produto, para decidir quando a tela existir.
+
 > **Tabela de referência de NCM (2026-07-22):** `cfg_produto_ncm(codigo_ncm PK, descricao_ncm,
 > aliquota_ibpt)` é a única tabela do módulo **sem `id_tenant`/RLS** — código NCM é o mesmo para
 > qualquer tenant (P9, mesma exceção de `plataforma.*`, só que fora daquele schema). **Sem tela
