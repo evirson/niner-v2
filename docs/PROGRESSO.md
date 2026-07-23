@@ -46,6 +46,16 @@ decimais, completa só no `onBlur`) e campo de data como texto mascarado `dd/mm/
 
 ## Linha do tempo
 
+### 2026-07-23 — Acesso de dev ao bucket de imagens concedido ao Claudio (Opção A do handoff)
+
+Primeira concessão de acesso pela **Opção A** de `docs/infra/armazenamento-imagens.md` §3
+(ADC pessoal, sem arquivo de chave): a conta Google do Claudio Calixto
+(`claudiocalixto6969@gmail.com`) recebeu `roles/storage.objectAdmin` **apenas em
+`gs://niner-erp-dev`** — produção intocada, nenhuma chave privada trafegou. Feito pelo
+console web (aba Permissões do bucket), já que a máquina Windows atual não tem `gcloud`.
+Falta o lado dele: `gcloud auth application-default login` + teste de escrita da §7 do
+handoff. Registro da concessão adicionado à própria §3 do handoff.
+
 ### 2026-07-23 — Banco recriado do zero para teste manual geral + carga da tabela oficial de NCM
 
 Pedido do dono do produto: teste geral e manual de tudo que já foi construído até aqui.

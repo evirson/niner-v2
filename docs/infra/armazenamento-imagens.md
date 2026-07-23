@@ -94,6 +94,15 @@ Isso grava a *Application Default Credential* em `~/.config/gcloud/`. A bibliote
 Vantagens: nenhuma chave privada trafega, o acesso é revogável por pessoa, e um
 desenvolvedor nunca toca o bucket de produção.
 
+**Concessões já feitas por esta opção:**
+
+| Data | Dev | Conta Google | Escopo |
+|---|---|---|---|
+| 2026-07-23 | Claudio Calixto | `claudiocalixto6969@gmail.com` | `roles/storage.objectAdmin` em `gs://niner-erp-dev` (via console web) |
+
+Falta, do lado do Claudio: `gcloud auth application-default login` na máquina dele com essa
+conta, e o teste de escrita da seção 7 contra `gs://niner-erp-dev`.
+
 ⚠️ Ressalva: ADC de usuário **não assina URLs V4**. Isso só importaria se um dia
 mudássemos para leitura por signed URL — no desenho atual (bucket público) não é usado.
 
