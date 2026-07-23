@@ -8,3 +8,10 @@
 # Descompactação do padrão de telas (mantém-se só o HTML de referência)
 docs/padroes/TELA/
 docs/padroes/*.rar
+
+# env local de dev (portas)
+.env
+
+# Credenciais de object storage (chave JSON da conta de serviço do GCS) — nunca versionar
+api/secrets/
+*-service-account*.json

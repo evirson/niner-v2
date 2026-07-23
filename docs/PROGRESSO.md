@@ -1,7 +1,7 @@
 # Progresso do Projeto — niner-v2
 
 Registro cronológico das decisões e entregas. Atualizar a cada marco relevante.
-**Última atualização:** 2026-07-22
+**Última atualização:** 2026-07-23
 
 ---
 
@@ -27,6 +27,7 @@ decimais, completa só no `onBlur`) e campo de data como texto mascarado `dd/mm/
 | `spec-driven-erp-varejo.md` | **v2.0 — pivô SaaS multi-tenant** (Constituição P1–P9 + PRD R1–R21 + plano técnico + control-plane + migrations) |
 | `docs/PLANO-DE-NEGOCIO.md` | **Novo** — plano de negócio (planos/preços, trial, funil, métricas SaaS, roadmap, decisões D1–D10) |
 | `docs/padroes/` | Mockup de referência de UI (golden file, §3.7) — `TELA.rar` descompactado e removido |
+| `docs/infra/armazenamento-imagens.md` | **Novo (2026-07-23)** — object storage das fotos de produto (ADR-013). Infra no GCP **provisionada e testada**; código Java **não iniciado**. É o handoff da tarefa |
 | `db/*.txt` | Schema **legado (Firebird)** versionado como referência (31 tabelas + generators, procedures, triggers) |
 | `CLAUDE.md` | Guia do repositório — atualizado para o SaaS multi-tenant (P8/P9, plataforma, `id_tenant`+RLS) |
 | `docker-compose.yml` | Infra local de dev: `db` (postgres:18, `niner_db`) + `flyway` (profile `migrate`) + **`api`** (Spring Boot, porta 8080, conecta como `niner_app`); **V001–V026 aplicadas e validadas em banco real** (control-plane + domínio do lojista + financeiro parcial + RLS) — banco **recriado do zero em 2026-07-16** (volume `niner_pgdata` apagado e refeito) |
@@ -44,6 +45,54 @@ decimais, completa só no `onBlur`) e campo de data como texto mascarado `dd/mm/
 ---
 
 ## Linha do tempo
+
+### 2026-07-23 — Object storage das imagens de produto: infra provisionada (ADR-013)
+
+Sessão de **infraestrutura, não de código**. `produto_imagem` (V017) existia desde 2026-07-16
+com `imagem text` comentada como "URL/chave de object storage", mas o provedor nunca tinha
+sido escolhido — a tela de Produtos (próximo item do roadmap) não teria onde pôr as fotos.
+Escolhido **Firebase Storage/GCS**; infra criada e testada; **nenhuma linha de Java escrita**.
+
+1. **ADR-013 registrado** (spec §6) + nota em §3.3.3. Decisões, com o porquê:
+   - **Leitura pública** dos buckets. Não é descuido: ML/Shopee **rebuscam** a imagem por URL
+     (revalidação, republicação), e signed URL V4 dura no máximo 7 dias — o anúncio quebraria
+     em silêncio semanas depois. Consequência assumida: **só foto de produto entra nesses
+     buckets**; documento/XML/anexo exigem bucket privado e outra decisão.
+   - **Upload sempre pela API** (multipart), nunca navegador→bucket. Upload direto exigiria
+     identidade Firebase paralela ao nosso JWT + Security Rules — dois sistemas de auth para a
+     mesma regra, contra P8/P4.
+   - **A coluna guarda a chave, não a URL** (`tenants/{id_tenant}/produtos/{id_produto}/{uuid}.webp`),
+     com `id_tenant` sempre do `TenantContext` (P8) e `{uuid}` aleatório (bucket público ⇒
+     caminho não pode ser enumerável). Trocar de provedor vira config, não migration de dados.
+
+2. **Infra criada por `gcloud` e verificada:** projeto `niner-erp` (Blaze), buckets
+   `niner-erp.firebasestorage.app` (prod) e `niner-erp-dev` (dev), ambos `southamerica-east1`
+   (**região é imutável**), uniform bucket-level access, `allUsers`→`objectViewer`; conta de
+   serviço `niner-api-storage@niner-erp.iam.gserviceaccount.com` com `objectAdmin`
+   **apenas nos dois buckets**, nada no projeto. Testado: leitura anônima por `curl` → HTTP 200;
+   escrita/exclusão autenticado como a conta de serviço → ok.
+
+3. **Chave privada fora do git:** `.gitignore` ganhou `api/secrets/` e `*-service-account*.json`;
+   a chave vive em `api/secrets/gcs-niner-erp.json` (modo `600`) só na máquina do Evirson.
+   `docs/infra/armazenamento-imagens.md` §3 documenta as duas formas de o próximo dev obter
+   acesso — a recomendada é **ADC pessoal** (`gcloud auth application-default login` + papel no
+   bucket de dev), **sem arquivo de chave nenhum**.
+
+4. **`docs/infra/armazenamento-imagens.md` criado — é o handoff.** Estado provisionado,
+   credenciais, contrato (caminho, o que vai na coluna, fluxo de upload, ordem de exclusão),
+   TASK-A a TASK-D com critérios `Dado/Quando/Então`, riscos e comandos de verificação.
+
+5. **Pendências deixadas explícitas:** 🔴 **alerta de orçamento não criado** (Blaze é pós-pago
+   **sem teto** — responsável: Evirson, exige permissão de faturamento); 🟡 regras do Firebase
+   Storage não travadas em `if false` (cinto-e-suspensório, já que o SDK cliente não é usado);
+   🟡 `uso_tenant` não conta bytes por tenant (V028+ se o plano vier a limitar espaço — R19,
+   decisão de produto pendente); 🟡 dimensões/formatos exigidos por ML e Shopee **a confirmar
+   na doc oficial do canal** antes de virar validação.
+
+6. **Gatilho de revisão do ADR-013:** egress é o custo dominante deste caso de uso (servir a
+   foto, não guardá-la). Se pesar na fatura, migrar para **Cloudflare R2** (egress zero) — por
+   isso a TASK-A é uma interface `ArmazenamentoDeArquivos` com adapter, e por isso a coluna
+   guarda a chave.
 
 ### 2026-07-22 — Campo de data: texto mascarado `dd/mm/aaaa` em todo o sistema (não `<input type="date">`)
 
@@ -1512,9 +1561,17 @@ com autenticação JWT real protegendo o ERP.
 
 **Retomar — ordem sugerida:**
 
-1. **⭐ Vertical slice de Produtos:** valida a stack inteira ponta a ponta no core do produto.
-   - Backend `/api/v1`: `GET /api/v1/produtos` (lista paginada) + `POST /api/v1/produtos` (cria produto + variação com `sku`/`ean`) — camada Spring Data JDBC sobre `produto`/`produto_barra`, com o `TenantContext`/RLS já ligados. Atualizar `uso_tenant.qtd_produtos` (enforcement R19 depois).
-   - Web: tela **Produtos** real (listar + criar) no lugar do placeholder, via TanStack Query.
+1. **⭐ Completar o vertical slice de Produtos.** O CRUD de `produto` foi entregue em
+   2026-07-22 (`catalogo.produto`, ver linha do tempo); `docs/telas/produto.md` deixou
+   **variação e imagens explicitamente fora de escopo**. Falta:
+   - **Galeria de fotos (`produto_imagem`)** — object storage já **decidido e provisionado**
+     (ADR-013: Firebase/GCS, buckets criados e testados), mas **nenhuma linha de Java escrita**.
+     Ler `docs/infra/armazenamento-imagens.md` **antes de começar** — é o handoff, com TASK-A a
+     TASK-D e critérios de aceitação. Atenção à seção de credenciais: **a chave não vem pelo
+     git**, o próximo dev precisa de acesso concedido (o caminho recomendado dispensa arquivo
+     de chave).
+   - **Variação/SKU (`produto_barra`)** — schema pronto desde a V017, sem domínio nem tela.
+   - `uso_tenant.qtd_produtos` (enforcement R19).
 2. **Estoque:** `produto_estoque` (saldo/reserva) + movimentações (`POST /api/v1/estoque/movimentacoes`) → tela de estoque.
 3. **`admin/`** — backoffice da plataforma (lista/ficha de tenants R17, suspender/impersonar R18/R21).
 5. **Catálogo `ajuda_tela` na API** (R22) — hoje `AjudaDaTela` (`web/`) embute o conteúdo como fallback estático; falta o endpoint/tabela real (§3.3.10/§3.7.1 da spec).

@@ -363,6 +363,16 @@ produto_barra(id_variacao PK,                      -- surrogate; sku é a chave 
 > continua **nullable** (produto pode não ter NCM definido ainda). Um NCM inexistente ao
 > salvar produto vira 400 ("NCM informado não existe."), não 500.
 
+> ✅ **Object storage definido (2026-07-23 — ADR-013):** **Firebase Storage / GCS**, projeto
+> `niner-erp`, região `southamerica-east1`, buckets `niner-erp.firebasestorage.app` (prod) e
+> `niner-erp-dev` (dev), **leitura pública** (marketplaces buscam a imagem por URL e a rebuscam
+> depois — URL que expira quebra o anúncio). A coluna `imagem` guarda a **chave**, não a URL:
+> `tenants/{id_tenant}/produtos/{id_produto}/{uuid}.webp` — o `id_tenant` sempre vem do
+> `TenantContext` (P8) e o `{uuid}` é aleatório (o bucket é público; o caminho não pode ser
+> enumerável). Upload **sempre pela API** (multipart), nunca do navegador direto para o bucket.
+> Infra já provisionada e testada; **código ainda não escrito** — ver
+> `docs/infra/armazenamento-imagens.md` (handoff, credenciais e tasks).
+
 ✅ **Resolvido (V017):** `sku` único por tenant (`UNIQUE(id_tenant, sku)`) e `UNIQUE(id_produto, id_variante_linha, id_variante_coluna)` impedindo variação duplicada.
 
 ### 3.3.4 Módulo `estoque` (saldo, movimentações, balanço)
@@ -939,6 +949,30 @@ Positivas: · Negativas/dívidas: · Gatilho de revisão: [métrica ou evento qu
 ```
 
 ADRs já previstos: ADR-001 monolito modular; ADR-002 outbox sobre Postgres sem broker; ADR-003 biblioteca de UI; **ADR-004 estratégia de reserva de estoque: reservar no `recebido` + expiração configurável por canal (Q2 fechada 2026-07-10; §3.3.5);** ADR-005 cifragem de credenciais; **ADR-006 isolamento de tenant (banco único + `id_tenant` + Postgres RLS; §3.1.1); ADR-007 topologia do control-plane (uma API/3 superfícies + 3 apps React, API stateless, supera o non-goal §2.3, gatilhos de split); ADR-008 adapter de gateway de cobrança (provedor a definir — D3); ADR-009 auth/identidade multi-tenant (duas populações de usuário, claims JWT por `aud`, papéis de staff × RBAC do tenant); ADR-010 financeiro do lojista fora do v1 (Q5 fechada 2026-07-10, **revisado por ADR-012**; §3.3.7); ADR-011 framework do site público: **Astro (SSG)** — decidido 2026-07-10, prioriza SEO/Core Web Vitals para a landing/planos; `web`/`admin` seguem React+Vite; **ADR-012 crediário + caixa + contas a pagar antecipados da Fase 2 (revisão de Q5/ADR-010, 2026-07-16, em duas rodadas) — `tipo_carteira`/`moeda`/`contas_receber`/`caixa_mestre`/`caixa_detalhe` entram via V025; `contas_pagar` entra via V026; só `conta_corrente(_movimento)` continua fora (§3.3.7).**
+
+---
+
+# ADR-013: Object storage das imagens de produto — Firebase Storage (GCS)   Status: Aceito
+Data: 2026-07-23 · Decisores: Evirson (Vetor)
+
+## Contexto
+`produto_imagem` (V017) existe desde 2026-07-16 com `imagem text` comentada como "URL/chave de object storage", mas **nenhum provedor tinha sido escolhido** — a tela de Produtos não teria onde colocar as fotos. Duas forças decidem o desenho: (a) **P8** — o caminho do objeto precisa carregar o `id_tenant`, senão o isolamento acaba na borda do banco e não há como apagar/medir por tenant; (b) **marketplaces buscam a imagem por URL e a rebuscam depois** (revalidação, republicação), então URL que expira quebra o anúncio semanas depois, em silêncio. Signed URL V4 dura no máximo 7 dias — insuficiente por construção.
+
+## Decisão
+Imagens de produto vão para **Firebase Storage** (que é um bucket do Google Cloud Storage) no projeto `niner-erp`, região `southamerica-east1`, com **leitura pública** e **upload sempre através da nossa API**; a coluna `produto_imagem.imagem` guarda a **chave** do objeto, nunca a URL completa; o caminho é `tenants/{id_tenant}/produtos/{id_produto}/{uuid}.webp`; o acesso é encapsulado por uma interface `ArmazenamentoDeArquivos` com adapter por provedor, no mesmo espírito de `CanalDeVenda`.
+
+## Alternativas consideradas
+1. **Upload direto navegador → Firebase (SDK cliente + Security Rules)** — prós: não passa bytes pela API. Contras: exigiria uma identidade Firebase paralela ao nosso JWT e faria o isolamento de tenant depender de Security Rules — **dois sistemas de autenticação para a mesma regra**, contra P8/P4. Rejeitada.
+2. **Leitura por signed URL V4 em bucket privado** — prós: bucket não público. Contras: expira em ≤7 dias; o canal rebusca a imagem e o anúncio quebra depois. Rejeitada por incompatibilidade com o caso de uso.
+3. **Cloudflare R2** — prós: **egress zero** (o custo dominante deste caso de uso), API compatível com S3. Contras: fora do ecossistema Google já em uso. **Não descartada** — é o destino natural se o egress pesar; ver gatilho de revisão.
+4. **Binário no Postgres (`bytea`)** — inflaria backup e WAL sem ganho. Rejeitada (§3.3.1 já veda).
+
+## Consequências
+**Positivas:** URL pública estável, que é o que ML/Shopee precisam; isolamento de tenant visível no próprio storage (offboarding e medição por tenant viram prefixo); a API mantém o monopólio da identidade (P4/P8); trocar de provedor custa um adapter + variável de ambiente, não migration de dados.
+**Negativas/dívidas:** bucket público — **só foto de produto pode entrar nele** (documento, XML de nota e anexo exigem bucket privado e outra decisão); os bytes passam pela API, que precisa lidar com multipart e normalização de imagem; plano Blaze é pós-pago sem teto, exigindo alerta de orçamento; `plataforma.uso_tenant` ainda não conta bytes por tenant (V028+ se o plano vier a limitar espaço — R19).
+**Gatilho de revisão:** o egress aparecer de forma relevante na fatura do GCP, ou a necessidade de armazenar qualquer arquivo **não público** (aí o desenho ganha um segundo bucket privado, não substitui este).
+
+**Detalhamento operacional, estado provisionado e plano de implementação: `docs/infra/armazenamento-imagens.md`.**
 
 # 7. Template — Task
 
