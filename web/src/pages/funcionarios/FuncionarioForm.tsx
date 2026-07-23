@@ -1,7 +1,15 @@
-import { useEffect, useState, type ChangeEvent, type FocusEvent, type FormEvent } from 'react'
+import {
+  useEffect,
+  useState,
+  type ChangeEvent,
+  type FocusEvent,
+  type FormEvent,
+  type KeyboardEvent,
+} from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import AjudaDaTela from '../../components/AjudaDaTela'
+import ConfirmarSalvarModal from '../../components/ConfirmarSalvarModal'
 import { IconeEngrenagem, IconeFuncionario } from '../../components/Icones'
 import InfoRegistro from '../../components/InfoRegistro'
 import LinhaGrid from '../../components/LinhaGrid'
@@ -9,6 +17,7 @@ import Toast from '../../components/Toast'
 import { ApiError } from '../../lib/api'
 import { buscarConfiguracaoTela, paraMapa, type ConfiguracaoCampo } from '../../lib/configuracaoTela'
 import { useEu } from '../../lib/eu'
+import { aoTeclarEnterNoFormulario } from '../../lib/formularios'
 import {
   FUNCIONARIO_VAZIO,
   atualizarFuncionario,
@@ -83,6 +92,7 @@ export default function FuncionarioForm({ somenteLeitura = false }: { somenteLei
   const [form, setForm] = useState<FuncionarioFormState>(FUNCIONARIO_VAZIO)
   const [erros, setErros] = useState<ErrosCampo>({})
   const [toast, setToast] = useState('')
+  const [confirmarSalvarAberto, setConfirmarSalvarAberto] = useState(false)
 
   const { data: eu } = useEu()
   const ehAdmin = eu?.usuario.papel === 'ADMIN'
@@ -121,8 +131,7 @@ export default function FuncionarioForm({ somenteLeitura = false }: { somenteLei
   const aoSairDoCampo = (chave: CampoValidavel) => (_e: FocusEvent) =>
     setErros((atual) => ({ ...atual, [chave]: validarCampo(chave, form, mapaConfig) }))
 
-  const submeter = (e: FormEvent) => {
-    e.preventDefault()
+  const validarEEnviar = () => {
     if (somenteLeitura) return
 
     const novosErros: ErrosCampo = {
@@ -138,6 +147,11 @@ export default function FuncionarioForm({ somenteLeitura = false }: { somenteLei
       return
     }
     salvar.mutate()
+  }
+
+  const submeter = (e: FormEvent) => {
+    e.preventDefault()
+    validarEEnviar()
   }
 
   return (
@@ -173,7 +187,15 @@ export default function FuncionarioForm({ somenteLeitura = false }: { somenteLei
       </div>
 
       <div className="lista-corpo">
-      <form id="form-funcionario" className="card form-secoes form-secoes-larga" onSubmit={submeter} noValidate>
+      <form
+        id="form-funcionario"
+        className="card form-secoes form-secoes-larga"
+        onSubmit={submeter}
+        onKeyDown={(e: KeyboardEvent<HTMLFormElement>) => {
+          if (!somenteLeitura) aoTeclarEnterNoFormulario(e, () => setConfirmarSalvarAberto(true))
+        }}
+        noValidate
+      >
       <fieldset disabled={somenteLeitura} className="form-fieldset">
         <section className="section">
           <p className="section-label">Identificação</p>
@@ -297,6 +319,16 @@ export default function FuncionarioForm({ somenteLeitura = false }: { somenteLei
       </fieldset>
       </form>
       </div>
+
+      {confirmarSalvarAberto && (
+        <ConfirmarSalvarModal
+          aoConfirmar={() => {
+            setConfirmarSalvarAberto(false)
+            validarEEnviar()
+          }}
+          aoCancelar={() => setConfirmarSalvarAberto(false)}
+        />
+      )}
 
       {toast && <Toast mensagem={toast} aoFechar={() => setToast('')} />}
     </div>

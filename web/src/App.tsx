@@ -13,6 +13,10 @@ import FuncionarioForm from './pages/funcionarios/FuncionarioForm'
 import ConfiguracaoTelaFuncionario from './pages/funcionarios/ConfiguracaoTelaFuncionario'
 import PlanoContasLista from './pages/planocontas/PlanoContasLista'
 import PlanoContasForm from './pages/planocontas/PlanoContasForm'
+import MoedaLista from './pages/moeda/MoedaLista'
+import MoedaForm from './pages/moeda/MoedaForm'
+import TipoCarteiraLista from './pages/tipocarteira/TipoCarteiraLista'
+import TipoCarteiraForm from './pages/tipocarteira/TipoCarteiraForm'
 import FornecedorLista from './pages/fornecedores/FornecedorLista'
 import FornecedorForm from './pages/fornecedores/FornecedorForm'
 import ConfiguracaoTelaFornecedor from './pages/fornecedores/ConfiguracaoTelaFornecedor'
@@ -56,6 +60,14 @@ export default function App() {
           <Route path="/planos-contas/novo" element={<PlanoContasForm />} />
           <Route path="/planos-contas/:codigo/visualizar" element={<PlanoContasForm somenteLeitura />} />
           <Route path="/planos-contas/:codigo" element={<PlanoContasForm />} />
+          <Route path="/moedas" element={<MoedaLista />} />
+          <Route path="/moedas/novo" element={<MoedaForm />} />
+          <Route path="/moedas/:id/visualizar" element={<MoedaForm somenteLeitura />} />
+          <Route path="/moedas/:id" element={<MoedaForm />} />
+          <Route path="/tipos-carteira" element={<TipoCarteiraLista />} />
+          <Route path="/tipos-carteira/novo" element={<TipoCarteiraForm />} />
+          <Route path="/tipos-carteira/:id/visualizar" element={<TipoCarteiraForm somenteLeitura />} />
+          <Route path="/tipos-carteira/:id" element={<TipoCarteiraForm />} />
           <Route path="/fornecedores" element={<FornecedorLista />} />
           <Route path="/fornecedores/novo" element={<FornecedorForm />} />
           <Route element={<RequireAdmin />}>

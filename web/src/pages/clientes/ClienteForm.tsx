@@ -1,8 +1,16 @@
-import { useEffect, useState, type ChangeEvent, type FocusEvent, type FormEvent } from 'react'
+import {
+  useEffect,
+  useState,
+  type ChangeEvent,
+  type FocusEvent,
+  type FormEvent,
+  type KeyboardEvent,
+} from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import AjudaDaTela from '../../components/AjudaDaTela'
 import CategoriaClienteModal from '../../components/CategoriaClienteModal'
+import ConfirmarSalvarModal from '../../components/ConfirmarSalvarModal'
 import { IconeCliente, IconeEngrenagem } from '../../components/Icones'
 import InfoRegistro from '../../components/InfoRegistro'
 import LinhaGrid from '../../components/LinhaGrid'
@@ -23,6 +31,7 @@ import {
 import { buscarConfiguracaoTela, paraMapa, type ConfiguracaoCampo } from '../../lib/configuracaoTela'
 import { hojeISO } from '../../lib/datas'
 import { useEu } from '../../lib/eu'
+import { aoTeclarEnterNoFormulario } from '../../lib/formularios'
 import {
   ESTADOS_UF,
   celularValido,
@@ -145,6 +154,7 @@ export default function ClienteForm({ somenteLeitura = false }: { somenteLeitura
   const [erros, setErros] = useState<ErrosCampo>({})
   const [toast, setToast] = useState('')
   const [modalCategoriaAberto, setModalCategoriaAberto] = useState(false)
+  const [confirmarSalvarAberto, setConfirmarSalvarAberto] = useState(false)
 
   const { data: eu } = useEu()
   const ehAdmin = eu?.usuario.papel === 'ADMIN'
@@ -239,8 +249,7 @@ export default function ClienteForm({ somenteLeitura = false }: { somenteLeitura
     }
   }
 
-  const submeter = (e: FormEvent) => {
-    e.preventDefault()
+  const validarEEnviar = () => {
     if (somenteLeitura) return
 
     const cpfCnpjErro = (() => {
@@ -286,6 +295,11 @@ export default function ClienteForm({ somenteLeitura = false }: { somenteLeitura
     salvar.mutate()
   }
 
+  const submeter = (e: FormEvent) => {
+    e.preventDefault()
+    validarEEnviar()
+  }
+
   return (
     <div className="lista-tela">
       <div className="lista-topo">
@@ -319,7 +333,15 @@ export default function ClienteForm({ somenteLeitura = false }: { somenteLeitura
       </div>
 
       <div className="lista-corpo">
-      <form id="form-cliente" className="card form-secoes form-secoes-larga" onSubmit={submeter} noValidate>
+      <form
+        id="form-cliente"
+        className="card form-secoes form-secoes-larga"
+        onSubmit={submeter}
+        onKeyDown={(e: KeyboardEvent<HTMLFormElement>) => {
+          if (!somenteLeitura) aoTeclarEnterNoFormulario(e, () => setConfirmarSalvarAberto(true))
+        }}
+        noValidate
+      >
       <fieldset disabled={somenteLeitura} className="form-fieldset">
         <section className="section">
           <p className="section-label">Identificação</p>
@@ -777,6 +799,16 @@ export default function ClienteForm({ somenteLeitura = false }: { somenteLeitura
             setErros((e) => ({ ...e, idCategoriaCliente: undefined }))
             setModalCategoriaAberto(false)
           }}
+        />
+      )}
+
+      {confirmarSalvarAberto && (
+        <ConfirmarSalvarModal
+          aoConfirmar={() => {
+            setConfirmarSalvarAberto(false)
+            validarEEnviar()
+          }}
+          aoCancelar={() => setConfirmarSalvarAberto(false)}
         />
       )}
 

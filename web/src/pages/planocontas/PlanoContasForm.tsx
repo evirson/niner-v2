@@ -1,11 +1,20 @@
-import { useEffect, useState, type ChangeEvent, type FocusEvent, type FormEvent } from 'react'
+import {
+  useEffect,
+  useState,
+  type ChangeEvent,
+  type FocusEvent,
+  type FormEvent,
+  type KeyboardEvent,
+} from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useParams } from 'react-router-dom'
 import AjudaDaTela from '../../components/AjudaDaTela'
+import ConfirmarSalvarModal from '../../components/ConfirmarSalvarModal'
 import { IconePlanoContas } from '../../components/Icones'
 import InfoRegistro from '../../components/InfoRegistro'
 import Toast from '../../components/Toast'
 import { ApiError } from '../../lib/api'
+import { aoTeclarEnterNoFormulario } from '../../lib/formularios'
 import {
   PLANO_CONTAS_VAZIO,
   TIPOS_MOVIMENTO,
@@ -44,6 +53,7 @@ export default function PlanoContasForm({ somenteLeitura = false }: { somenteLei
   const [form, setForm] = useState<PlanoContasFormState>(PLANO_CONTAS_VAZIO)
   const [erros, setErros] = useState<ErrosCampo>({})
   const [toast, setToast] = useState('')
+  const [confirmarSalvarAberto, setConfirmarSalvarAberto] = useState(false)
 
   const { data: planoExistente } = useQuery({
     queryKey: ['plano-contas', codigo],
@@ -76,8 +86,7 @@ export default function PlanoContasForm({ somenteLeitura = false }: { somenteLei
   const aoSairDoCampo = (chave: CampoValidavel) => (_e: FocusEvent) =>
     setErros((atual) => ({ ...atual, [chave]: validarCampo(chave, form) }))
 
-  const submeter = (e: FormEvent) => {
-    e.preventDefault()
+  const validarEEnviar = () => {
     if (somenteLeitura) return
 
     const novosErros: ErrosCampo = {
@@ -91,6 +100,11 @@ export default function PlanoContasForm({ somenteLeitura = false }: { somenteLei
       return
     }
     salvar.mutate()
+  }
+
+  const submeter = (e: FormEvent) => {
+    e.preventDefault()
+    validarEEnviar()
   }
 
   return (
@@ -116,7 +130,15 @@ export default function PlanoContasForm({ somenteLeitura = false }: { somenteLei
       </div>
 
       <div className="lista-corpo">
-      <form id="form-plano-contas" className="card form-secoes form-secoes-larga" onSubmit={submeter} noValidate>
+      <form
+        id="form-plano-contas"
+        className="card form-secoes form-secoes-larga"
+        onSubmit={submeter}
+        onKeyDown={(e: KeyboardEvent<HTMLFormElement>) => {
+          if (!somenteLeitura) aoTeclarEnterNoFormulario(e, () => setConfirmarSalvarAberto(true))
+        }}
+        noValidate
+      >
       <fieldset disabled={somenteLeitura} className="form-fieldset">
         <section className="section">
           <p className="section-label">Identificação</p>
@@ -206,6 +228,16 @@ export default function PlanoContasForm({ somenteLeitura = false }: { somenteLei
       </fieldset>
       </form>
       </div>
+
+      {confirmarSalvarAberto && (
+        <ConfirmarSalvarModal
+          aoConfirmar={() => {
+            setConfirmarSalvarAberto(false)
+            validarEEnviar()
+          }}
+          aoCancelar={() => setConfirmarSalvarAberto(false)}
+        />
+      )}
 
       {toast && <Toast mensagem={toast} aoFechar={() => setToast('')} />}
     </div>

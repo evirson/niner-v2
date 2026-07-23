@@ -17,7 +17,9 @@ CREATE TABLE tipo_carteira (
   prazo_pagamento      integer      NOT NULL,      -- dias entre parcelas
   pc_minima            integer      NOT NULL,      -- nº mínimo de parcelas
   pc_maxima            integer      NOT NULL,      -- nº máximo de parcelas
-  taxa_administradora  numeric(5,2) NOT NULL DEFAULT 0,
+  taxa_administradora  numeric(5,2) DEFAULT 0,  -- opcional (2026-07-23): nem todo tipo de carteira cobra taxa
+  criado_em            timestamptz  NOT NULL DEFAULT now(),  -- 2026-07-23 (auditoria, convenção do domínio)
+  atualizado_em        timestamptz  NOT NULL DEFAULT now(),
   -- base para FK composta (P8) de moeda_detalhe/contas_receber.
   CONSTRAINT tipo_carteira_uk    UNIQUE (id_tenant, nome_carteira),
   CONSTRAINT tipo_carteira_id_uk UNIQUE (id_tenant, id_carteira),
@@ -32,8 +34,10 @@ CREATE TABLE moeda (
   id_moeda        integer      GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   id_tenant       smallint     NOT NULL REFERENCES plataforma.tenant (id_tenant),
   nome_moeda      text         NOT NULL,
-  perc_desconto   numeric(5,2) NOT NULL DEFAULT 0,
-  perc_acrescimo  numeric(5,2) NOT NULL DEFAULT 0,
+  perc_desconto   numeric(5,2) DEFAULT 0,  -- opcional (2026-07-23): ou desconto ou acréscimo, nunca os dois juntos
+  perc_acrescimo  numeric(5,2) DEFAULT 0,
+  criado_em       timestamptz  NOT NULL DEFAULT now(),  -- 2026-07-23 (auditoria, convenção do domínio)
+  atualizado_em   timestamptz  NOT NULL DEFAULT now(),
   -- base para FK composta (P8) de moeda_detalhe/caixa_detalhe.
   CONSTRAINT moeda_uk    UNIQUE (id_tenant, nome_moeda),
   CONSTRAINT moeda_id_uk UNIQUE (id_tenant, id_moeda)

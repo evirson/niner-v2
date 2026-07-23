@@ -1,8 +1,16 @@
-import { useEffect, useState, type ChangeEvent, type FocusEvent, type FormEvent } from 'react'
+import {
+  useEffect,
+  useState,
+  type ChangeEvent,
+  type FocusEvent,
+  type FormEvent,
+  type KeyboardEvent,
+} from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import AjudaDaTela from '../../components/AjudaDaTela'
 import CategoriaProdutoModal from '../../components/CategoriaProdutoModal'
+import ConfirmarSalvarModal from '../../components/ConfirmarSalvarModal'
 import { IconeEngrenagem, IconeExcluir, IconeProduto, IconeSetaBaixo, IconeSetaCima } from '../../components/Icones'
 import InfoRegistro from '../../components/InfoRegistro'
 import LinhaGrid from '../../components/LinhaGrid'
@@ -13,6 +21,7 @@ import { buscarConfiguracaoTela, paraMapa, type ConfiguracaoCampo } from '../../
 import { buscarFlagsVariante } from '../../lib/configuracaoGeral'
 import { hojeISO } from '../../lib/datas'
 import { useEu } from '../../lib/eu'
+import { aoTeclarEnterNoFormulario } from '../../lib/formularios'
 import {
   completarMoeda,
   completarPercentual,
@@ -151,6 +160,7 @@ export default function ProdutoForm({ somenteLeitura = false }: { somenteLeitura
   const [modalCategoriaAberto, setModalCategoriaAberto] = useState(false)
   const [categoriaParaAdicionar, setCategoriaParaAdicionar] = useState('')
   const [descricaoNcm, setDescricaoNcm] = useState('')
+  const [confirmarSalvarAberto, setConfirmarSalvarAberto] = useState(false)
 
   /**
    * Busca a descrição do NCM digitado (mesmo estilo do autopreenchimento de CEP). Código que
@@ -290,8 +300,7 @@ export default function ProdutoForm({ somenteLeitura = false }: { somenteLeitura
       return { ...f, categorias: lista }
     })
 
-  const submeter = (e: FormEvent) => {
-    e.preventDefault()
+  const validarEEnviar = () => {
     if (somenteLeitura) return
 
     const ofertaErros = errosOferta(form)
@@ -316,6 +325,11 @@ export default function ProdutoForm({ somenteLeitura = false }: { somenteLeitura
       return
     }
     salvar.mutate()
+  }
+
+  const submeter = (e: FormEvent) => {
+    e.preventDefault()
+    validarEEnviar()
   }
 
   return (
@@ -351,7 +365,15 @@ export default function ProdutoForm({ somenteLeitura = false }: { somenteLeitura
       </div>
 
       <div className="lista-corpo">
-      <form id="form-produto" className="card form-secoes form-secoes-larga" onSubmit={submeter} noValidate>
+      <form
+        id="form-produto"
+        className="card form-secoes form-secoes-larga"
+        onSubmit={submeter}
+        onKeyDown={(e: KeyboardEvent<HTMLFormElement>) => {
+          if (!somenteLeitura) aoTeclarEnterNoFormulario(e, () => setConfirmarSalvarAberto(true))
+        }}
+        noValidate
+      >
       <fieldset disabled={somenteLeitura} className="form-fieldset">
         <section className="section">
           <p className="section-label">Identificação</p>
@@ -804,6 +826,16 @@ export default function ProdutoForm({ somenteLeitura = false }: { somenteLeitura
               categorias: [...f.categorias, { idCategoria, nomeCategoria, indice: f.categorias.length }],
             }))
           }}
+        />
+      )}
+
+      {confirmarSalvarAberto && (
+        <ConfirmarSalvarModal
+          aoConfirmar={() => {
+            setConfirmarSalvarAberto(false)
+            validarEEnviar()
+          }}
+          aoCancelar={() => setConfirmarSalvarAberto(false)}
         />
       )}
 

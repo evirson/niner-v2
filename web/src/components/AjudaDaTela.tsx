@@ -187,6 +187,62 @@ const CONTEUDOS: Record<string, ConteudoAjuda> = {
     ],
     urlVideo: null,
   },
+  'financeiro.moeda.lista': {
+    titulo: 'Moeda',
+    objetivo: 'Encontrar e gerenciar as formas de recebimento (moedas) já cadastradas.',
+    passos: [
+      'Use a busca por nome para encontrar uma moeda.',
+      'Clique no ícone verde para visualizar, no azul para editar, ou no vermelho para excluir.',
+    ],
+    errosComuns: [
+      'Não consigo excluir: a moeda está em uso por um tipo de carteira ou já foi usada num lançamento de caixa — a exclusão é bloqueada.',
+      'Quero dizer em quais tipos de carteira (prazo/parcelas) esta moeda vale: isso é feito na tela Tipo de Carteira, não aqui.',
+    ],
+    urlVideo: null,
+  },
+  'financeiro.moeda.form': {
+    titulo: 'Cadastro de moeda',
+    objetivo: 'Cadastrar uma forma de recebimento nova ou editar uma existente.',
+    passos: [
+      'Preencha o nome (ex.: "PIX", "CARTÃO CRÉDITO").',
+      'Informe o % de desconto e o % de acréscimo aplicados na venda por essa forma de recebimento.',
+      'Salve.',
+    ],
+    errosComuns: [
+      'Nome já existe: cada moeda precisa de um nome único.',
+      'Percentual inválido: deve estar entre 0 e 100.',
+    ],
+    urlVideo: null,
+  },
+  'financeiro.tipocarteira.lista': {
+    titulo: 'Tipo de Carteira',
+    objetivo: 'Encontrar e gerenciar os tipos de carteira (prazo/parcelas/taxa do crediário, cartão etc.) já cadastrados.',
+    passos: [
+      'Use a busca por nome para encontrar um tipo de carteira.',
+      'A coluna "Moedas" mostra em quais formas de recebimento este tipo de carteira vale.',
+      'Clique no ícone verde para visualizar, no azul para editar, ou no vermelho para excluir.',
+    ],
+    errosComuns: [
+      'Não consigo excluir: o tipo de carteira está em uso em contas a receber — a exclusão é bloqueada.',
+    ],
+    urlVideo: null,
+  },
+  'financeiro.tipocarteira.form': {
+    titulo: 'Cadastro de tipo de carteira',
+    objetivo: 'Cadastrar um tipo de carteira novo (prazo/parcelas/taxa) ou editar um existente, e escolher em quais moedas ele vale.',
+    passos: [
+      'Preencha o nome, o prazo de pagamento (dias entre parcelas), o número mínimo/máximo de parcelas e a taxa administradora.',
+      'Marque as moedas (formas de recebimento) em que este tipo de carteira vale.',
+      'Se a moeda que você precisa ainda não existir, crie pela opção "＋ Nova moeda" sem sair da tela.',
+      'Salve.',
+    ],
+    errosComuns: [
+      'Nome já existe: cada tipo de carteira precisa de um nome único.',
+      'Parcela máxima menor que a mínima: corrija o intervalo.',
+      'Não vejo a moeda que quero: crie uma pela opção "＋ Nova moeda", ou cadastre-a antes na tela Moeda.',
+    ],
+    urlVideo: null,
+  },
 }
 
 export default function AjudaDaTela({ chaveTela }: { chaveTela: string }) {

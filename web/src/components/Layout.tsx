@@ -18,6 +18,8 @@ const NAV: ItemNav[] = [
   { to: '/fornecedores', label: 'Fornecedores' },
   { to: '/funcionarios', label: 'Funcionários' },
   { to: '/planos-contas', label: 'Plano de Contas' },
+  { to: '/moedas', label: 'Moeda' },
+  { to: '/tipos-carteira', label: 'Tipo de Carteira' },
 ]
 
 /** Só ADMIN vê este item — a rota em si também é protegida por `RequireAdmin` (defesa em profundidade). */

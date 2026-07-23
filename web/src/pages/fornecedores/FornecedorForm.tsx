@@ -1,7 +1,8 @@
-import { useEffect, useState, type ChangeEvent, type FocusEvent, type FormEvent } from 'react'
+import { useEffect, useState, type ChangeEvent, type FocusEvent, type FormEvent, type KeyboardEvent } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import AjudaDaTela from '../../components/AjudaDaTela'
+import ConfirmarSalvarModal from '../../components/ConfirmarSalvarModal'
 import { IconeEngrenagem, IconeFornecedor } from '../../components/Icones'
 import InfoRegistro from '../../components/InfoRegistro'
 import LinhaGrid from '../../components/LinhaGrid'
@@ -10,6 +11,7 @@ import Toast from '../../components/Toast'
 import { ApiError } from '../../lib/api'
 import { buscarConfiguracaoTela, paraMapa, type ConfiguracaoCampo } from '../../lib/configuracaoTela'
 import { useEu } from '../../lib/eu'
+import { aoTeclarEnterNoFormulario } from '../../lib/formularios'
 import {
   FORNECEDOR_VAZIO,
   atualizarFornecedor,
@@ -111,6 +113,7 @@ export default function FornecedorForm({ somenteLeitura = false }: { somenteLeit
   const [erros, setErros] = useState<ErrosCampo>({})
   const [toast, setToast] = useState('')
   const [modalPlanoAberto, setModalPlanoAberto] = useState(false)
+  const [confirmarSalvarAberto, setConfirmarSalvarAberto] = useState(false)
 
   const { data: eu } = useEu()
   const ehAdmin = eu?.usuario.papel === 'ADMIN'
@@ -208,8 +211,7 @@ export default function FornecedorForm({ somenteLeitura = false }: { somenteLeit
     }
   }
 
-  const submeter = (e: FormEvent) => {
-    e.preventDefault()
+  const validarEEnviar = () => {
     if (somenteLeitura) return
 
     const cnpjErro = (() => {
@@ -251,6 +253,11 @@ export default function FornecedorForm({ somenteLeitura = false }: { somenteLeit
     salvar.mutate()
   }
 
+  const submeter = (e: FormEvent) => {
+    e.preventDefault()
+    validarEEnviar()
+  }
+
   return (
     <div className="lista-tela">
       <div className="lista-topo">
@@ -284,7 +291,15 @@ export default function FornecedorForm({ somenteLeitura = false }: { somenteLeit
       </div>
 
       <div className="lista-corpo">
-      <form id="form-fornecedor" className="card form-secoes form-secoes-larga" onSubmit={submeter} noValidate>
+      <form
+        id="form-fornecedor"
+        className="card form-secoes form-secoes-larga"
+        onSubmit={submeter}
+        onKeyDown={(e: KeyboardEvent<HTMLFormElement>) => {
+          if (!somenteLeitura) aoTeclarEnterNoFormulario(e, () => setConfirmarSalvarAberto(true))
+        }}
+        noValidate
+      >
       <fieldset disabled={somenteLeitura} className="form-fieldset">
         <section className="section">
           <p className="section-label">Identificação</p>
@@ -585,6 +600,16 @@ export default function FornecedorForm({ somenteLeitura = false }: { somenteLeit
             setErros((e) => ({ ...e, idPlanoContas: undefined }))
             setModalPlanoAberto(false)
           }}
+        />
+      )}
+
+      {confirmarSalvarAberto && (
+        <ConfirmarSalvarModal
+          aoConfirmar={() => {
+            setConfirmarSalvarAberto(false)
+            validarEEnviar()
+          }}
+          aoCancelar={() => setConfirmarSalvarAberto(false)}
         />
       )}
 
