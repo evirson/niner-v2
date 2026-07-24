@@ -15,3 +15,6 @@ docs/padroes/*.rar
 # Credenciais de object storage (chave JSON da conta de serviço do GCS) — nunca versionar
 api/secrets/
 *-service-account*.json
+
+# Massa de teste local da entrada por XML (NF-e reais, 12MB+, com CNPJ/endereço do destinatário) — não versionar
+NFE_entradas_teste/
