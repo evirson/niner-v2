@@ -7,6 +7,13 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.web.servlet.MockMvc;
+import org.testcontainers.postgresql.PostgreSQLContainer;
+
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Statement;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.http.MediaType.APPLICATION_JSON;
@@ -28,6 +35,9 @@ class TipoCarteiraCrudTest {
     @Autowired
     MockMvc mvc;
 
+    @Autowired
+    PostgreSQLContainer postgres;
+
     private String assinarNovoTenant(String sufixo) throws Exception {
         String body = """
                 {"nomeLoja":"Loja Carteira %s","email":"dono%s@lojacarteira.com",
@@ -44,7 +54,7 @@ class TipoCarteiraCrudTest {
         String token = assinarNovoTenant("sem-moeda");
 
         String carteira = """
-                {"nomeCarteira":"crediario 30/60/90","prazoPagamento":30,
+                {"nomeCarteira":"crediario 30/60/90","categoriaCarteira":"CREDIARIO","prazoPagamento":30,
                  "pcMinima":1,"pcMaxima":3,"taxaAdministradora":2.5}
                 """;
 
@@ -52,6 +62,7 @@ class TipoCarteiraCrudTest {
                         .contentType(APPLICATION_JSON).content(carteira))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.nomeCarteira").value("CREDIARIO 30/60/90"))
+                .andExpect(jsonPath("$.categoriaCarteira").value("CREDIARIO"))
                 .andExpect(jsonPath("$.pcMinima").value(1))
                 .andExpect(jsonPath("$.pcMaxima").value(3))
                 .andExpect(jsonPath("$.moedas").isEmpty())
@@ -67,7 +78,7 @@ class TipoCarteiraCrudTest {
         String resp = mvc.perform(post("/api/v1/tipos-carteira").header("Authorization", "Bearer " + token)
                         .contentType(APPLICATION_JSON)
                         .content("""
-                                {"nomeCarteira":"CARTAO 3X","prazoPagamento":30,
+                                {"nomeCarteira":"CARTAO 3X","categoriaCarteira":"CARTAO_CREDITO","prazoPagamento":30,
                                  "pcMinima":1,"pcMaxima":3,"taxaAdministradora":0,"moedas":[%d,%d]}
                                 """.formatted(idCartao, idCrediario)))
                 .andExpect(status().isCreated())
@@ -87,7 +98,7 @@ class TipoCarteiraCrudTest {
         mvc.perform(put("/api/v1/tipos-carteira/" + id).header("Authorization", "Bearer " + token)
                         .contentType(APPLICATION_JSON)
                         .content("""
-                                {"nomeCarteira":"CARTEIRA ATUALIZA","prazoPagamento":30,
+                                {"nomeCarteira":"CARTEIRA ATUALIZA","categoriaCarteira":"CREDIARIO","prazoPagamento":30,
                                  "pcMinima":1,"pcMaxima":1,"taxaAdministradora":0,"moedas":[%d]}
                                 """.formatted(idDinheiro)))
                 .andExpect(status().isOk())
@@ -102,7 +113,7 @@ class TipoCarteiraCrudTest {
         mvc.perform(post("/api/v1/tipos-carteira").header("Authorization", "Bearer " + token)
                         .contentType(APPLICATION_JSON)
                         .content("""
-                                {"nomeCarteira":"CARTEIRA PARCELA INVALIDA","prazoPagamento":30,
+                                {"nomeCarteira":"CARTEIRA PARCELA INVALIDA","categoriaCarteira":"CREDIARIO","prazoPagamento":30,
                                  "pcMinima":5,"pcMaxima":2,"taxaAdministradora":0}
                                 """))
                 .andExpect(status().isBadRequest());
@@ -115,7 +126,7 @@ class TipoCarteiraCrudTest {
         mvc.perform(post("/api/v1/tipos-carteira").header("Authorization", "Bearer " + token)
                         .contentType(APPLICATION_JSON)
                         .content("""
-                                {"nomeCarteira":"CARTEIRA TAXA INVALIDA","prazoPagamento":30,
+                                {"nomeCarteira":"CARTEIRA TAXA INVALIDA","categoriaCarteira":"CREDIARIO","prazoPagamento":30,
                                  "pcMinima":1,"pcMaxima":1,"taxaAdministradora":-1}
                                 """))
                 .andExpect(status().isBadRequest());
@@ -129,12 +140,26 @@ class TipoCarteiraCrudTest {
         mvc.perform(post("/api/v1/tipos-carteira").header("Authorization", "Bearer " + token)
                         .contentType(APPLICATION_JSON)
                         .content("""
-                                {"nomeCarteira":"CARTEIRA SEM TAXA","prazoPagamento":0,
+                                {"nomeCarteira":"CARTEIRA SEM TAXA","categoriaCarteira":"AVISTA","prazoPagamento":0,
                                  "pcMinima":1,"pcMaxima":1}
                                 """))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.taxaAdministradora").value(org.hamcrest.Matchers.nullValue()))
                 .andExpect(jsonPath("$.prazoPagamento").value(0));
+    }
+
+    /** Categoria (2026-07-23) é obrigatória — histórico do cliente depende dela pra isolar crediário. */
+    @Test
+    void categoriaCarteiraAusenteEhRejeitada() throws Exception {
+        String token = assinarNovoTenant("categoria-ausente");
+
+        mvc.perform(post("/api/v1/tipos-carteira").header("Authorization", "Bearer " + token)
+                        .contentType(APPLICATION_JSON)
+                        .content("""
+                                {"nomeCarteira":"CARTEIRA SEM CATEGORIA","prazoPagamento":30,
+                                 "pcMinima":1,"pcMaxima":1,"taxaAdministradora":0}
+                                """))
+                .andExpect(status().isBadRequest());
     }
 
     @Test
@@ -145,7 +170,7 @@ class TipoCarteiraCrudTest {
         mvc.perform(post("/api/v1/tipos-carteira").header("Authorization", "Bearer " + token)
                         .contentType(APPLICATION_JSON)
                         .content("""
-                                {"nomeCarteira":"CARTEIRA MOEDA DUPLICADA","prazoPagamento":30,
+                                {"nomeCarteira":"CARTEIRA MOEDA DUPLICADA","categoriaCarteira":"CREDIARIO","prazoPagamento":30,
                                  "pcMinima":1,"pcMaxima":1,"taxaAdministradora":0,"moedas":[%d,%d]}
                                 """.formatted(idPix, idPix)))
                 .andExpect(status().isBadRequest());
@@ -158,7 +183,7 @@ class TipoCarteiraCrudTest {
         mvc.perform(post("/api/v1/tipos-carteira").header("Authorization", "Bearer " + token)
                         .contentType(APPLICATION_JSON)
                         .content("""
-                                {"nomeCarteira":"CARTEIRA MOEDA INEXISTENTE","prazoPagamento":30,
+                                {"nomeCarteira":"CARTEIRA MOEDA INEXISTENTE","categoriaCarteira":"CREDIARIO","prazoPagamento":30,
                                  "pcMinima":1,"pcMaxima":1,"taxaAdministradora":0,"moedas":[999999]}
                                 """))
                 .andExpect(status().isBadRequest());
@@ -172,7 +197,7 @@ class TipoCarteiraCrudTest {
         mvc.perform(post("/api/v1/tipos-carteira").header("Authorization", "Bearer " + token)
                         .contentType(APPLICATION_JSON)
                         .content("""
-                                {"nomeCarteira":"carteira unica","prazoPagamento":15,
+                                {"nomeCarteira":"carteira unica","categoriaCarteira":"CREDIARIO","prazoPagamento":15,
                                  "pcMinima":1,"pcMaxima":1,"taxaAdministradora":0}
                                 """))
                 .andExpect(status().isConflict());
@@ -194,6 +219,24 @@ class TipoCarteiraCrudTest {
         // A moeda continua existindo — só o vínculo (moeda_detalhe) foi removido junto.
         mvc.perform(get("/api/v1/moedas/" + idPix).header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk());
+    }
+
+    @Test
+    void excluirCarteiraComContaAReceberVinculadaRespondeConflito() throws Exception {
+        // Única FK bloqueante de tipo_carteira (moeda_detalhe é vínculo próprio, removido
+        // junto — ver excluirCarteiraSemVinculoApagaDeVerdadeERemoveVinculoDeMoeda acima).
+        String token = assinarNovoTenant("exclusao-vinculo");
+        long idTenant = extrairIdTenant(token);
+        long id = criarCarteira(token, "CARTEIRA COM VINCULO", 30, 1, 1, "0", java.util.List.of());
+
+        criarContaReceberComCarteira(idTenant, id);
+
+        mvc.perform(delete("/api/v1/tipos-carteira/" + id).header("Authorization", "Bearer " + token))
+                .andExpect(status().isConflict());
+
+        mvc.perform(get("/api/v1/tipos-carteira/" + id).header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.nomeCarteira").value("CARTEIRA COM VINCULO"));
     }
 
     @Test
@@ -225,11 +268,49 @@ class TipoCarteiraCrudTest {
         String resp = mvc.perform(post("/api/v1/tipos-carteira").header("Authorization", "Bearer " + token)
                         .contentType(APPLICATION_JSON)
                         .content("""
-                                {"nomeCarteira":"%s","prazoPagamento":%d,"pcMinima":%d,"pcMaxima":%d,
+                                {"nomeCarteira":"%s","categoriaCarteira":"CREDIARIO","prazoPagamento":%d,"pcMinima":%d,"pcMaxima":%d,
                                  "taxaAdministradora":%s,"moedas":%s}
                                 """.formatted(nome, prazoPagamento, pcMinima, pcMaxima, taxaAdministradora, moedasJson)))
                 .andExpect(status().isCreated())
                 .andReturn().getResponse().getContentAsString();
         return ((Number) JsonPath.read(resp, "$.idCarteira")).longValue();
+    }
+
+    private static long extrairIdTenant(String token) {
+        String[] partes = token.split("\\.");
+        String payload = new String(java.util.Base64.getUrlDecoder().decode(partes[1]));
+        Object tid = JsonPath.read(payload, "$.tid");
+        return ((Number) tid).longValue();
+    }
+
+    /**
+     * Insere uma venda + parcela mínimas referenciando a carteira — vínculo que bloqueia a
+     * exclusão. Não existe API de escrita pra venda/contas_receber ainda (mesmo caso de
+     * {@code ClienteHistoricoCrudTest}), então vai direto via JDBC.
+     */
+    private void criarContaReceberComCarteira(long idTenant, long idCarteira) throws Exception {
+        try (Connection c = DriverManager.getConnection(postgres.getJdbcUrl(), "niner_app", "dev_app");
+             Statement st = c.createStatement()) {
+            st.execute("SET app.id_tenant = " + idTenant);
+            long idEmpresa;
+            try (ResultSet rs = st.executeQuery("SELECT id_empresa FROM empresa LIMIT 1")) {
+                rs.next();
+                idEmpresa = rs.getLong(1);
+            }
+            long idVenda;
+            try (ResultSet rs = st.executeQuery(
+                    "INSERT INTO venda (id_tenant, id_empresa) VALUES (" + idTenant + ", " + idEmpresa
+                            + ") RETURNING id_venda")) {
+                rs.next();
+                idVenda = rs.getLong(1);
+            }
+            st.executeUpdate("""
+                    INSERT INTO contas_receber
+                        (id_tenant, id_venda, id_carteira, numero_parcela, data_vencimento, valor_receber)
+                    VALUES (%d, %d, %d, 1, now(), 100.00)
+                    """.formatted(idTenant, idVenda, idCarteira));
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
+        }
     }
 }

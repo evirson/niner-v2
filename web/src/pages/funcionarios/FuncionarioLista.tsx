@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
 import AjudaDaTela from '../../components/AjudaDaTela'
 import {
   IconeEditar,
@@ -13,6 +13,7 @@ import {
   IconeProximaPagina,
   IconeUltimaPagina,
 } from '../../components/Icones'
+import Toast, { type TipoToast } from '../../components/Toast'
 import { ApiError } from '../../lib/api'
 import {
   excluirFuncionario,
@@ -51,10 +52,18 @@ function paginasVisiveis(atual: number, total: number): number[] {
 }
 
 export default function FuncionarioLista() {
+  const location = useLocation()
   const [nome, setNome] = useState('')
   const [status, setStatus] = useState<StatusFuncionario>('ATIVOS')
   const [funcionarioParaExcluir, setFuncionarioParaExcluir] = useState<Funcionario | null>(null)
-  const [aviso, setAviso] = useState('')
+  const [aviso, setAviso] = useState<{ texto: string; tipo: TipoToast } | null>(
+    () => (location.state as { toast?: { texto: string; tipo: TipoToast } } | null)?.toast ?? null,
+  )
+
+  useEffect(() => {
+    if (location.state) window.history.replaceState({}, '')
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
   const queryClient = useQueryClient()
 
   const [pagina, setPagina] = useState(1)
@@ -95,15 +104,20 @@ export default function FuncionarioLista() {
     onSuccess: (resposta) => {
       queryClient.invalidateQueries({ queryKey: ['funcionarios'] })
       setFuncionarioParaExcluir(null)
-      setAviso(
-        resposta.acao === 'inativado'
-          ? (resposta.motivo ?? 'Funcionário inativado (possui vínculos).')
-          : 'Funcionário excluído.',
-      )
+      setAviso({
+        texto:
+          resposta.acao === 'inativado'
+            ? (resposta.motivo ?? 'Funcionário inativado (possui vínculos).')
+            : 'Funcionário excluído.',
+        tipo: 'sucesso',
+      })
     },
     onError: (e: unknown) => {
       setFuncionarioParaExcluir(null)
-      setAviso(e instanceof ApiError ? e.message : 'Não foi possível excluir o funcionário.')
+      setAviso({
+        texto: e instanceof ApiError ? e.message : 'Não foi possível excluir o funcionário.',
+        tipo: 'erro',
+      })
     },
   })
 
@@ -137,14 +151,7 @@ export default function FuncionarioLista() {
           </div>
         </div>
 
-        {aviso && (
-          <div className="card aviso-banner" role="status">
-            <span>{aviso}</span>
-            <button type="button" className="btn ghost" onClick={() => setAviso('')}>
-              Ok
-            </button>
-          </div>
-        )}
+        {aviso && <Toast mensagem={aviso.texto} tipo={aviso.tipo} aoFechar={() => setAviso(null)} />}
 
         <div className="card filtros-bar">
           <input

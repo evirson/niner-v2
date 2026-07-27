@@ -7,6 +7,7 @@ import Dashboard from './pages/Dashboard'
 import EmBreve from './pages/EmBreve'
 import ClienteLista from './pages/clientes/ClienteLista'
 import ClienteForm from './pages/clientes/ClienteForm'
+import ClienteHistorico from './pages/clientes/ClienteHistorico'
 import ConfiguracaoTelaCliente from './pages/clientes/ConfiguracaoTelaCliente'
 import FuncionarioLista from './pages/funcionarios/FuncionarioLista'
 import FuncionarioForm from './pages/funcionarios/FuncionarioForm'
@@ -48,6 +49,7 @@ export default function App() {
             <Route path="/clientes/configuracao" element={<ConfiguracaoTelaCliente />} />
           </Route>
           <Route path="/clientes/:id/visualizar" element={<ClienteForm somenteLeitura />} />
+          <Route path="/clientes/:id/historico" element={<ClienteHistorico />} />
           <Route path="/clientes/:id" element={<ClienteForm />} />
           <Route path="/funcionarios" element={<FuncionarioLista />} />
           <Route path="/funcionarios/novo" element={<FuncionarioForm />} />

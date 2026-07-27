@@ -55,6 +55,20 @@ const CONTEUDOS: Record<string, ConteudoAjuda> = {
     ],
     urlVideo: null,
   },
+  'cadastros.cliente.historico': {
+    titulo: 'Histórico do cliente',
+    objetivo: 'Ver as compras, as parcelas e o resumo do crediário deste cliente.',
+    passos: [
+      '"Histórico de Compras" lista as vendas físicas do cliente, com a loja e o valor de cada uma.',
+      '"Histórico de Parcelas" lista cada parcela (crediário, cartão etc.), com vencimento, pagamento e dias de atraso.',
+      '"Resumo das Parcelas de Crediário" soma só as parcelas de crediário em aberto: vencidas, a vencer e o total.',
+    ],
+    errosComuns: [
+      'Tela vazia: o cliente ainda não tem nenhuma venda registrada.',
+      '"Empresa de pagamento" em branco: a parcela ainda não foi baixada (paga).',
+    ],
+    urlVideo: null,
+  },
   'cadastros.funcionario.lista': {
     titulo: 'Funcionários',
     objetivo: 'Encontrar e gerenciar os funcionários já cadastrados.',

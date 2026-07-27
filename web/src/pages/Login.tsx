@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
+import Toast from '../components/Toast'
 import { api, ApiError } from '../lib/api'
 import { useAuth } from '../lib/auth'
 
@@ -55,11 +56,7 @@ export default function Login() {
         <label htmlFor="senha">Senha</label>
         <input id="senha" type="password" value={senha} onChange={(e) => setSenha(e.target.value)} required />
 
-        {erro && (
-          <p role="alert" className="erro">
-            {erro}
-          </p>
-        )}
+        {erro && <Toast mensagem={erro} aoFechar={() => setErro('')} />}
         <button className="btn" type="submit" disabled={carregando} style={{ width: '100%', marginTop: 12 }}>
           {carregando ? 'Entrando…' : 'Entrar'}
         </button>

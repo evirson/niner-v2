@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
 import AjudaDaTela from '../../components/AjudaDaTela'
 import {
   IconeEditar,
@@ -12,8 +12,10 @@ import {
   IconeTipoCarteira,
   IconeUltimaPagina,
 } from '../../components/Icones'
+import Toast, { type TipoToast } from '../../components/Toast'
 import { ApiError } from '../../lib/api'
 import {
+  ROTULO_CATEGORIA_CARTEIRA,
   excluirTipoCarteira,
   listarTiposCarteira,
   type ColunaOrdenacaoTipoCarteira,
@@ -51,9 +53,17 @@ function paginasVisiveis(atual: number, total: number): number[] {
  * vínculo (`moeda_detalhe`) é editado no formulário desta tela, não numa tela separada.
  */
 export default function TipoCarteiraLista() {
+  const location = useLocation()
   const [busca, setBusca] = useState('')
   const [carteiraParaExcluir, setCarteiraParaExcluir] = useState<TipoCarteira | null>(null)
-  const [aviso, setAviso] = useState('')
+  const [aviso, setAviso] = useState<{ texto: string; tipo: TipoToast } | null>(
+    () => (location.state as { toast?: { texto: string; tipo: TipoToast } } | null)?.toast ?? null,
+  )
+
+  useEffect(() => {
+    if (location.state) window.history.replaceState({}, '')
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
   const queryClient = useQueryClient()
 
   const [pagina, setPagina] = useState(1)
@@ -87,11 +97,14 @@ export default function TipoCarteiraLista() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['tipos-carteira'] })
       setCarteiraParaExcluir(null)
-      setAviso('Tipo de carteira excluído.')
+      setAviso({ texto: 'Tipo de carteira excluído.', tipo: 'sucesso' })
     },
     onError: (e: unknown) => {
       setCarteiraParaExcluir(null)
-      setAviso(e instanceof ApiError ? e.message : 'Não foi possível excluir o tipo de carteira.')
+      setAviso({
+        texto: e instanceof ApiError ? e.message : 'Não foi possível excluir o tipo de carteira.',
+        tipo: 'erro',
+      })
     },
   })
 
@@ -113,14 +126,7 @@ export default function TipoCarteiraLista() {
           </div>
         </div>
 
-        {aviso && (
-          <div className="card aviso-banner" role="status">
-            <span>{aviso}</span>
-            <button type="button" className="btn ghost" onClick={() => setAviso('')}>
-              Ok
-            </button>
-          </div>
-        )}
+        {aviso && <Toast mensagem={aviso.texto} tipo={aviso.tipo} aoFechar={() => setAviso(null)} />}
 
         <div className="card filtros-bar">
           <input
@@ -159,6 +165,7 @@ export default function TipoCarteiraLista() {
                     </th>
                   )
                 })}
+                <th>Categoria</th>
                 <th>Moedas</th>
                 <th aria-label="Ações" />
               </tr>
@@ -169,6 +176,7 @@ export default function TipoCarteiraLista() {
                   <td>{tc.nomeCarteira}</td>
                   <td>{tc.prazoPagamento}</td>
                   <td>{formatarTaxaOuTraco(tc.taxaAdministradora)}</td>
+                  <td>{ROTULO_CATEGORIA_CARTEIRA[tc.categoriaCarteira]}</td>
                   <td className="muted">
                     {tc.moedas.length ? tc.moedas.map((m) => m.nomeMoeda).join(', ') : '—'}
                   </td>

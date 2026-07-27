@@ -18,7 +18,7 @@ import LinhaGrid from '../../components/LinhaGrid'
 import Toast from '../../components/Toast'
 import { ApiError } from '../../lib/api'
 import { listarCategoriasProduto } from '../../lib/categoriasProduto'
-import type { ImagemProduto } from '../../lib/produtoImagens'
+import { enviarImagem, type ImagemProduto } from '../../lib/produtoImagens'
 import { buscarConfiguracaoTela, paraMapa, type ConfiguracaoCampo } from '../../lib/configuracaoTela'
 import { buscarFlagsVariante } from '../../lib/configuracaoGeral'
 import { hojeISO } from '../../lib/datas'
@@ -164,6 +164,7 @@ export default function ProdutoForm({ somenteLeitura = false }: { somenteLeitura
   const [descricaoNcm, setDescricaoNcm] = useState('')
   const [confirmarSalvarAberto, setConfirmarSalvarAberto] = useState(false)
   const [imagens, setImagens] = useState<ImagemProduto[]>([])
+  const [arquivosNovaFoto, setArquivosNovaFoto] = useState<File[]>([])
 
   /**
    * Busca a descrição do NCM digitado (mesmo estilo do autopreenchimento de CEP). Código que
@@ -225,9 +226,32 @@ export default function ProdutoForm({ somenteLeitura = false }: { somenteLeitura
   const salvar = useMutation({
     mutationFn: () =>
       editando ? atualizarProduto(Number(id), paraRequisicao(form)) : criarProduto(paraRequisicao(form)),
-    onSuccess: () => {
+    onSuccess: async (produtoSalvo) => {
       queryClient.invalidateQueries({ queryKey: ['produtos'] })
-      navigate('/produtos')
+
+      if (!editando && arquivosNovaFoto.length > 0) {
+        try {
+          for (const arquivo of arquivosNovaFoto) {
+            await enviarImagem(produtoSalvo.idProduto, arquivo)
+          }
+        } catch (e: unknown) {
+          setToast(
+            e instanceof ApiError
+              ? `Produto salvo, mas houve um problema ao enviar as fotos: ${e.message}`
+              : 'Produto salvo, mas não foi possível enviar as fotos.',
+          )
+          navigate(`/produtos/${produtoSalvo.idProduto}`)
+          return
+        }
+      }
+      navigate('/produtos', {
+        state: {
+          toast: {
+            texto: editando ? 'Produto atualizado com sucesso.' : 'Produto cadastrado com sucesso.',
+            tipo: 'sucesso',
+          },
+        },
+      })
     },
     onError: (e: unknown) => setToast(e instanceof ApiError ? e.message : 'Não foi possível salvar o produto.'),
   })
@@ -812,19 +836,14 @@ export default function ProdutoForm({ somenteLeitura = false }: { somenteLeitura
           </section>
         )}
 
-        {editando ? (
-          <GaleriaImagensProduto
-            idProduto={Number(id)}
-            imagens={imagens}
-            somenteLeitura={somenteLeitura}
-            aoAtualizar={setImagens}
-          />
-        ) : (
-          <section className="section">
-            <p className="section-label">Fotos</p>
-            <p className="muted">Salve o produto primeiro para adicionar fotos.</p>
-          </section>
-        )}
+        <GaleriaImagensProduto
+          idProduto={editando ? Number(id) : undefined}
+          imagens={imagens}
+          arquivosLocais={arquivosNovaFoto}
+          aoMudarArquivosLocais={setArquivosNovaFoto}
+          somenteLeitura={somenteLeitura}
+          aoAtualizar={setImagens}
+        />
 
         <InfoRegistro
           codigo={produtoExistente?.idProduto}

@@ -19,25 +19,30 @@ import { aoTeclarEnterNoFormulario } from '../../lib/formularios'
 import { completarPercentual, mascararPercentual } from '../../lib/masks'
 import { listarMoedas } from '../../lib/moedas'
 import {
+  ROTULO_CATEGORIA_CARTEIRA,
   TIPO_CARTEIRA_VAZIO,
   atualizarTipoCarteira,
   buscarTipoCarteira,
   criarTipoCarteira,
   paraFormulario,
   paraRequisicao,
+  type CategoriaCarteira,
   type TipoCarteiraFormState,
 } from '../../lib/tiposCarteira'
 import { maiusculas } from '../../lib/texto'
 
-type CampoValidavel = 'nomeCarteira' | 'prazoPagamento' | 'pcMinima' | 'pcMaxima'
+type CampoValidavel = 'nomeCarteira' | 'categoriaCarteira' | 'prazoPagamento' | 'pcMinima' | 'pcMaxima'
 type ErrosCampo = Partial<Record<CampoValidavel, string>>
 
-/** Nome, prazo e parcelas são obrigatórios (prazo/parcelas aceitam 0/1 normalmente — só não
- * podem ficar em branco); Taxa Administradora é opcional (2026-07-23, nem todo tipo de
- * carteira cobra taxa), mais a regra de parcelas (mesmo CHECK do banco: mínima ≥ 1, máxima ≥
- * mínima). */
+const CATEGORIAS_CARTEIRA: CategoriaCarteira[] = ['AVISTA', 'CARTAO_DEBITO', 'CARTAO_CREDITO', 'CREDIARIO']
+
+/** Nome, categoria, prazo e parcelas são obrigatórios (prazo/parcelas aceitam 0/1 normalmente
+ * — só não podem ficar em branco); Taxa Administradora é opcional (2026-07-23, nem todo tipo
+ * de carteira cobra taxa), mais a regra de parcelas (mesmo CHECK do banco: mínima ≥ 1, máxima
+ * ≥ mínima). */
 function validarCampo(chave: CampoValidavel, f: TipoCarteiraFormState): string | undefined {
   if (chave === 'nomeCarteira') return f.nomeCarteira.trim() ? undefined : 'Nome é obrigatório.'
+  if (chave === 'categoriaCarteira') return f.categoriaCarteira ? undefined : 'Categoria é obrigatória.'
   if (!f[chave].trim()) return 'Campo obrigatório.'
   if (chave === 'pcMinima' && Number(f.pcMinima) < 1) return 'Deve ser pelo menos 1.'
   if (chave === 'pcMaxima' && f.pcMinima.trim() && Number(f.pcMaxima) < Number(f.pcMinima)) {
@@ -97,7 +102,14 @@ export default function TipoCarteiraForm({ somenteLeitura = false }: { somenteLe
         : criarTipoCarteira(paraRequisicao(form)),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['tipos-carteira'] })
-      navigate('/tipos-carteira')
+      navigate('/tipos-carteira', {
+        state: {
+          toast: {
+            texto: editando ? 'Tipo de carteira atualizado com sucesso.' : 'Tipo de carteira cadastrado com sucesso.',
+            tipo: 'sucesso',
+          },
+        },
+      })
     },
     onError: (e: unknown) =>
       setToast(e instanceof ApiError ? e.message : 'Não foi possível salvar o tipo de carteira.'),
@@ -123,6 +135,7 @@ export default function TipoCarteiraForm({ somenteLeitura = false }: { somenteLe
 
     const novosErros: ErrosCampo = {
       nomeCarteira: validarCampo('nomeCarteira', form),
+      categoriaCarteira: validarCampo('categoriaCarteira', form),
       prazoPagamento: validarCampo('prazoPagamento', form),
       pcMinima: validarCampo('pcMinima', form),
       pcMaxima: validarCampo('pcMaxima', form),
@@ -177,7 +190,7 @@ export default function TipoCarteiraForm({ somenteLeitura = false }: { somenteLe
           <p className="section-label">Identificação</p>
 
           <div className="form-grid">
-            <div className="col-12">
+            <div className="col-8">
               <label htmlFor="nomeCarteira">Nome *</label>
               <input
                 id="nomeCarteira"
@@ -187,6 +200,25 @@ export default function TipoCarteiraForm({ somenteLeitura = false }: { somenteLe
                 onBlur={aoSairDoCampo('nomeCarteira')}
               />
               {erros.nomeCarteira && <p className="erro-campo">{erros.nomeCarteira}</p>}
+            </div>
+            <div className="col-4">
+              <label htmlFor="categoriaCarteira">Categoria *</label>
+              <select
+                id="categoriaCarteira"
+                value={form.categoriaCarteira}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, categoriaCarteira: e.target.value as CategoriaCarteira }))
+                }
+                onBlur={aoSairDoCampo('categoriaCarteira')}
+              >
+                <option value="">Selecione…</option>
+                {CATEGORIAS_CARTEIRA.map((c) => (
+                  <option key={c} value={c}>
+                    {ROTULO_CATEGORIA_CARTEIRA[c]}
+                  </option>
+                ))}
+              </select>
+              {erros.categoriaCarteira && <p className="erro-campo">{erros.categoriaCarteira}</p>}
             </div>
           </div>
         </section>

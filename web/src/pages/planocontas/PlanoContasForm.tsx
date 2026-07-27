@@ -72,7 +72,14 @@ export default function PlanoContasForm({ somenteLeitura = false }: { somenteLei
         : criarPlanoContas(paraRequisicao(form)),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['planos-contas'] })
-      navigate('/planos-contas')
+      navigate('/planos-contas', {
+        state: {
+          toast: {
+            texto: editando ? 'Plano de contas atualizado com sucesso.' : 'Plano de contas cadastrado com sucesso.',
+            tipo: 'sucesso',
+          },
+        },
+      })
     },
     onError: (e: unknown) =>
       setToast(e instanceof ApiError ? e.message : 'Não foi possível salvar o plano de contas.'),

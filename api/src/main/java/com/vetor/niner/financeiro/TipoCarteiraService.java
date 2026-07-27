@@ -1,6 +1,7 @@
 package com.vetor.niner.financeiro;
 
 import com.vetor.niner.comum.web.ConflitoDadosException;
+import com.vetor.niner.financeiro.TipoCarteiraDtos.CategoriaCarteira;
 import com.vetor.niner.financeiro.TipoCarteiraDtos.ExclusaoTipoCarteiraResponse;
 import com.vetor.niner.financeiro.TipoCarteiraDtos.MoedaSelecionada;
 import com.vetor.niner.financeiro.TipoCarteiraDtos.PaginaTiposCarteira;
@@ -99,12 +100,12 @@ public class TipoCarteiraService {
         try {
             long id = jdbc.sql("""
                             INSERT INTO tipo_carteira
-                                (id_tenant, nome_carteira, prazo_pagamento, pc_minima, pc_maxima, taxa_administradora)
-                            VALUES (plataforma.tenant_atual(), ?, ?, ?, ?, ?)
+                                (id_tenant, nome_carteira, categoria_carteira, prazo_pagamento, pc_minima, pc_maxima, taxa_administradora)
+                            VALUES (plataforma.tenant_atual(), ?, ?::categoria_carteira, ?, ?, ?, ?)
                             RETURNING id_carteira
                             """)
-                    .params(req.nomeCarteira().trim().toUpperCase(Locale.ROOT), req.prazoPagamento(),
-                            req.pcMinima(), req.pcMaxima(), req.taxaAdministradora())
+                    .params(req.nomeCarteira().trim().toUpperCase(Locale.ROOT), req.categoriaCarteira().name(),
+                            req.prazoPagamento(), req.pcMinima(), req.pcMaxima(), req.taxaAdministradora())
                     .query(Long.class).single();
             salvarMoedas(id, req.moedas());
             return buscar(id);
@@ -121,12 +122,12 @@ public class TipoCarteiraService {
         try {
             int linhas = jdbc.sql("""
                             UPDATE tipo_carteira SET
-                                nome_carteira = ?, prazo_pagamento = ?, pc_minima = ?, pc_maxima = ?,
-                                taxa_administradora = ?, atualizado_em = now()
+                                nome_carteira = ?, categoria_carteira = ?::categoria_carteira, prazo_pagamento = ?,
+                                pc_minima = ?, pc_maxima = ?, taxa_administradora = ?, atualizado_em = now()
                             WHERE id_tenant = plataforma.tenant_atual() AND id_carteira = ?
                             """)
-                    .params(req.nomeCarteira().trim().toUpperCase(Locale.ROOT), req.prazoPagamento(),
-                            req.pcMinima(), req.pcMaxima(), req.taxaAdministradora(), id)
+                    .params(req.nomeCarteira().trim().toUpperCase(Locale.ROOT), req.categoriaCarteira().name(),
+                            req.prazoPagamento(), req.pcMinima(), req.pcMaxima(), req.taxaAdministradora(), id)
                     .update();
             if (linhas == 0) {
                 throw new ResponseStatusException(NOT_FOUND, "Tipo de carteira não encontrado.");
@@ -239,7 +240,8 @@ public class TipoCarteiraService {
     }
 
     private static final String SELECT_BASE = """
-            SELECT tc.id_carteira, tc.nome_carteira, tc.prazo_pagamento, tc.pc_minima, tc.pc_maxima,
+            SELECT tc.id_carteira, tc.nome_carteira, tc.categoria_carteira::text AS categoria_carteira,
+                   tc.prazo_pagamento, tc.pc_minima, tc.pc_maxima,
                    tc.taxa_administradora, tc.criado_em, tc.atualizado_em
             FROM tipo_carteira tc
             """;
@@ -249,6 +251,7 @@ public class TipoCarteiraService {
         return new TipoCarteiraResponse(
                 id,
                 rs.getString("nome_carteira"),
+                CategoriaCarteira.valueOf(rs.getString("categoria_carteira")),
                 rs.getInt("prazo_pagamento"),
                 rs.getInt("pc_minima"),
                 rs.getInt("pc_maxima"),

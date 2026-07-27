@@ -144,7 +144,14 @@ export default function FornecedorForm({ somenteLeitura = false }: { somenteLeit
       editando ? atualizarFornecedor(Number(id), paraRequisicao(form)) : criarFornecedor(paraRequisicao(form)),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['fornecedores'] })
-      navigate('/fornecedores')
+      navigate('/fornecedores', {
+        state: {
+          toast: {
+            texto: editando ? 'Fornecedor atualizado com sucesso.' : 'Fornecedor cadastrado com sucesso.',
+            tipo: 'sucesso',
+          },
+        },
+      })
     },
     onError: (e: unknown) => setToast(e instanceof ApiError ? e.message : 'Não foi possível salvar o fornecedor.'),
   })

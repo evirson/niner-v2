@@ -52,7 +52,7 @@ export default function ConfiguracaoTelaFornecedor() {
     onSuccess: (resposta) => {
       queryClient.setQueryData(['config-tela', CHAVE_TELA], resposta)
       queryClient.invalidateQueries({ queryKey: ['config-tela', CHAVE_TELA] })
-      navigate('/fornecedores')
+      navigate('/fornecedores', { state: { toast: { texto: 'Configuração salva com sucesso.', tipo: 'sucesso' } } })
     },
     onError: (e: unknown) => setToast(e instanceof ApiError ? e.message : 'Não foi possível salvar a configuração.'),
   })

@@ -62,6 +62,12 @@ services:
       # falha quando alguém tenta gravar/apagar uma imagem de verdade (cliente do GCS é lazy),
       # nunca na subida do container.
       GOOGLE_APPLICATION_CREDENTIALS: /secrets/gcs-niner-erp.json
+      # Opção C (dev sem credencial nenhuma, docs/infra/armazenamento-imagens.md §3): com o
+      # serviço `fake-gcs` no ar, a API fala com ele (rede interna do compose) e as URLs
+      # públicas saem pela porta mapeada em localhost (o que o navegador do host consegue
+      # resolver — "fake-gcs" só existe dentro da rede do Docker). Vazio (produção) = GCS real.
+      NINER_STORAGE_HOST: ${NINER_STORAGE_HOST:-}
+      NINER_STORAGE_BASE_URL: ${NINER_STORAGE_BASE_URL:-}
     volumes:
       - ./api/secrets:/secrets:ro
     ports: ["8080:8080"]

@@ -11,7 +11,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import AjudaDaTela from '../../components/AjudaDaTela'
 import CategoriaClienteModal from '../../components/CategoriaClienteModal'
 import ConfirmarSalvarModal from '../../components/ConfirmarSalvarModal'
-import { IconeCliente, IconeEngrenagem } from '../../components/Icones'
+import { IconeCliente, IconeEngrenagem, IconeHistorico } from '../../components/Icones'
 import InfoRegistro from '../../components/InfoRegistro'
 import LinhaGrid from '../../components/LinhaGrid'
 import Toast from '../../components/Toast'
@@ -182,7 +182,14 @@ export default function ClienteForm({ somenteLeitura = false }: { somenteLeitura
       editando ? atualizarCliente(Number(id), paraRequisicao(form)) : criarCliente(paraRequisicao(form)),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['clientes'] })
-      navigate('/clientes')
+      navigate('/clientes', {
+        state: {
+          toast: {
+            texto: editando ? 'Cliente atualizado com sucesso.' : 'Cliente cadastrado com sucesso.',
+            tipo: 'sucesso',
+          },
+        },
+      })
     },
     onError: (e: unknown) => setToast(e instanceof ApiError ? e.message : 'Não foi possível salvar o cliente.'),
   })
@@ -320,6 +327,15 @@ export default function ClienteForm({ somenteLeitura = false }: { somenteLeitura
               </Link>
             )}
             <AjudaDaTela chaveTela={CHAVE_TELA} />
+            {editando && (
+              <Link
+                className="btn ghost"
+                to={`/clientes/${id}/historico`}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+              >
+                <IconeHistorico size={16} /> Histórico
+              </Link>
+            )}
             <button type="button" className="btn ghost" onClick={() => navigate('/clientes')}>
               {somenteLeitura ? 'Voltar' : 'Cancelar'}
             </button>

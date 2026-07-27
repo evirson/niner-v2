@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
 import AjudaDaTela from '../../components/AjudaDaTela'
 import {
   IconeEditar,
@@ -13,6 +13,7 @@ import {
   IconeProximaPagina,
   IconeUltimaPagina,
 } from '../../components/Icones'
+import Toast, { type TipoToast } from '../../components/Toast'
 import { ApiError } from '../../lib/api'
 import {
   excluirFornecedor,
@@ -51,11 +52,19 @@ function paginasVisiveis(atual: number, total: number): number[] {
 }
 
 export default function FornecedorLista() {
+  const location = useLocation()
   const [busca, setBusca] = useState('')
   const [status, setStatus] = useState<StatusFornecedor>('ATIVOS')
   const [idPlanoContas, setIdPlanoContas] = useState('')
   const [fornecedorParaExcluir, setFornecedorParaExcluir] = useState<Fornecedor | null>(null)
-  const [aviso, setAviso] = useState('')
+  const [aviso, setAviso] = useState<{ texto: string; tipo: TipoToast } | null>(
+    () => (location.state as { toast?: { texto: string; tipo: TipoToast } } | null)?.toast ?? null,
+  )
+
+  useEffect(() => {
+    if (location.state) window.history.replaceState({}, '')
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
   const queryClient = useQueryClient()
 
   // Filtro por plano de contas (análogo ao filtro de categoria do cliente).
@@ -103,15 +112,20 @@ export default function FornecedorLista() {
     onSuccess: (resposta) => {
       queryClient.invalidateQueries({ queryKey: ['fornecedores'] })
       setFornecedorParaExcluir(null)
-      setAviso(
-        resposta.acao === 'inativado'
-          ? (resposta.motivo ?? 'Fornecedor inativado (possui vínculos).')
-          : 'Fornecedor excluído.',
-      )
+      setAviso({
+        texto:
+          resposta.acao === 'inativado'
+            ? (resposta.motivo ?? 'Fornecedor inativado (possui vínculos).')
+            : 'Fornecedor excluído.',
+        tipo: 'sucesso',
+      })
     },
     onError: (e: unknown) => {
       setFornecedorParaExcluir(null)
-      setAviso(e instanceof ApiError ? e.message : 'Não foi possível excluir o fornecedor.')
+      setAviso({
+        texto: e instanceof ApiError ? e.message : 'Não foi possível excluir o fornecedor.',
+        tipo: 'erro',
+      })
     },
   })
 
@@ -145,14 +159,7 @@ export default function FornecedorLista() {
           </div>
         </div>
 
-        {aviso && (
-          <div className="card aviso-banner" role="status">
-            <span>{aviso}</span>
-            <button type="button" className="btn ghost" onClick={() => setAviso('')}>
-              Ok
-            </button>
-          </div>
-        )}
+        {aviso && <Toast mensagem={aviso.texto} tipo={aviso.tipo} aoFechar={() => setAviso(null)} />}
 
         <div className="card filtros-bar">
           <input

@@ -1,18 +1,20 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
 import AjudaDaTela from '../../components/AjudaDaTela'
 import {
   IconeCliente,
   IconeEditar,
   IconeEngrenagem,
   IconeExcluir,
+  IconeHistorico,
   IconeOlho,
   IconePaginaAnterior,
   IconePrimeiraPagina,
   IconeProximaPagina,
   IconeUltimaPagina,
 } from '../../components/Icones'
+import Toast, { type TipoToast } from '../../components/Toast'
 import { ApiError } from '../../lib/api'
 import {
   excluirCliente,
@@ -52,12 +54,22 @@ function paginasVisiveis(atual: number, total: number): number[] {
 }
 
 export default function ClienteLista() {
+  const location = useLocation()
   const [nome, setNome] = useState('')
   const [status, setStatus] = useState<StatusCliente>('ATIVOS')
   const [idCategoriaCliente, setIdCategoriaCliente] = useState<number | undefined>(undefined)
   const [clienteParaExcluir, setClienteParaExcluir] = useState<Cliente | null>(null)
-  const [aviso, setAviso] = useState('')
+  // Aviso de sucesso do formulário chega via `navigate(..., { state })` — lido uma vez no
+  // primeiro render e depois limpo do histórico, pra um refresh/voltar não repetir o popup.
+  const [aviso, setAviso] = useState<{ texto: string; tipo: TipoToast } | null>(
+    () => (location.state as { toast?: { texto: string; tipo: TipoToast } } | null)?.toast ?? null,
+  )
   const queryClient = useQueryClient()
+
+  useEffect(() => {
+    if (location.state) window.history.replaceState({}, '')
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const { data: categorias } = useQuery({ queryKey: ['categorias-cliente'], queryFn: listarCategorias })
 
@@ -103,15 +115,20 @@ export default function ClienteLista() {
     onSuccess: (resposta) => {
       queryClient.invalidateQueries({ queryKey: ['clientes'] })
       setClienteParaExcluir(null)
-      setAviso(
-        resposta.acao === 'inativado'
-          ? (resposta.motivo ?? 'Cliente inativado (possui vínculos).')
-          : 'Cliente excluído.',
-      )
+      setAviso({
+        texto:
+          resposta.acao === 'inativado'
+            ? (resposta.motivo ?? 'Cliente inativado (possui vínculos).')
+            : 'Cliente excluído.',
+        tipo: 'sucesso',
+      })
     },
     onError: (e: unknown) => {
       setClienteParaExcluir(null)
-      setAviso(e instanceof ApiError ? e.message : 'Não foi possível excluir o cliente.')
+      setAviso({
+        texto: e instanceof ApiError ? e.message : 'Não foi possível excluir o cliente.',
+        tipo: 'erro',
+      })
     },
   })
 
@@ -145,14 +162,7 @@ export default function ClienteLista() {
           </div>
         </div>
 
-        {aviso && (
-          <div className="card aviso-banner" role="status">
-            <span>{aviso}</span>
-            <button type="button" className="btn ghost" onClick={() => setAviso('')}>
-              Ok
-            </button>
-          </div>
-        )}
+        {aviso && <Toast mensagem={aviso.texto} tipo={aviso.tipo} aoFechar={() => setAviso(null)} />}
 
         <div className="card filtros-bar">
           <input
@@ -240,6 +250,14 @@ export default function ClienteLista() {
                       title="Editar"
                     >
                       <IconeEditar />
+                    </Link>
+                    <Link
+                      className="acao-icone acao-historico"
+                      to={`/clientes/${c.idCliente}/historico`}
+                      aria-label={`Histórico de ${c.nome}`}
+                      title="Histórico"
+                    >
+                      <IconeHistorico />
                     </Link>
                     <button
                       type="button"

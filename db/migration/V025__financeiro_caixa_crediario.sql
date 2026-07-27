@@ -9,17 +9,23 @@
 CREATE TYPE tipo_operacao_caixa AS ENUM
   ('RECEBIMENTO_VENDA', 'RECEBIMENTO_PARCELA_CREDIARIO', 'DEBITO_CAIXA', 'CREDITO_CAIXA', 'TROCO');
 
+-- Categoria fixa do tipo de carteira (2026-07-23, pedido do dono do produto — histórico do
+-- cliente precisa separar "crediário" de cartão/à vista programaticamente; nome_carteira é
+-- texto livre e não serve pra isso).
+CREATE TYPE categoria_carteira AS ENUM ('AVISTA', 'CARTAO_DEBITO', 'CARTAO_CREDITO', 'CREDIARIO');
+
 -- tipo_carteira (config): prazo de pagamento (crediário, cartão etc.), parcelas min/max, taxa adm.
 CREATE TABLE tipo_carteira (
-  id_carteira          integer      GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-  id_tenant            smallint     NOT NULL REFERENCES plataforma.tenant (id_tenant),
-  nome_carteira        text         NOT NULL,
-  prazo_pagamento      integer      NOT NULL,      -- dias entre parcelas
-  pc_minima            integer      NOT NULL,      -- nº mínimo de parcelas
-  pc_maxima            integer      NOT NULL,      -- nº máximo de parcelas
-  taxa_administradora  numeric(5,2) DEFAULT 0,  -- opcional (2026-07-23): nem todo tipo de carteira cobra taxa
-  criado_em            timestamptz  NOT NULL DEFAULT now(),  -- 2026-07-23 (auditoria, convenção do domínio)
-  atualizado_em        timestamptz  NOT NULL DEFAULT now(),
+  id_carteira          integer             GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  id_tenant            smallint            NOT NULL REFERENCES plataforma.tenant (id_tenant),
+  nome_carteira        text                NOT NULL,
+  categoria_carteira   categoria_carteira  NOT NULL DEFAULT 'AVISTA',  -- 2026-07-23
+  prazo_pagamento      integer             NOT NULL,      -- dias entre parcelas
+  pc_minima            integer             NOT NULL,      -- nº mínimo de parcelas
+  pc_maxima            integer             NOT NULL,      -- nº máximo de parcelas
+  taxa_administradora  numeric(5,2)        DEFAULT 0,  -- opcional (2026-07-23): nem todo tipo de carteira cobra taxa
+  criado_em            timestamptz         NOT NULL DEFAULT now(),  -- 2026-07-23 (auditoria, convenção do domínio)
+  atualizado_em        timestamptz         NOT NULL DEFAULT now(),
   -- base para FK composta (P8) de moeda_detalhe/contas_receber.
   CONSTRAINT tipo_carteira_uk    UNIQUE (id_tenant, nome_carteira),
   CONSTRAINT tipo_carteira_id_uk UNIQUE (id_tenant, id_carteira),
@@ -70,11 +76,14 @@ CREATE TABLE contas_receber (
   valor_recebido      numeric(12,2) NOT NULL DEFAULT 0,
   documento_recebido  boolean       NOT NULL DEFAULT false,
   id_lote_recebimento integer,        -- sem FK — nº de gerador externo, mesmo padrão de id_transferencia (V019)
+  id_empresa_pagamento integer,       -- 2026-07-23: loja onde a parcela foi paga; null até existir a baixa
   criado_em           timestamptz   NOT NULL DEFAULT now(),
   -- base para FK composta (P8) de contas_receber_detalhe.
   CONSTRAINT contas_receber_id_uk       UNIQUE (id_tenant, id_conta_receber),
   CONSTRAINT contas_receber_venda_fk    FOREIGN KEY (id_tenant, id_venda)    REFERENCES venda        (id_tenant, id_venda),
-  CONSTRAINT contas_receber_carteira_fk FOREIGN KEY (id_tenant, id_carteira) REFERENCES tipo_carteira (id_tenant, id_carteira)
+  CONSTRAINT contas_receber_carteira_fk FOREIGN KEY (id_tenant, id_carteira) REFERENCES tipo_carteira (id_tenant, id_carteira),
+  CONSTRAINT contas_receber_empresa_pagamento_fk FOREIGN KEY (id_tenant, id_empresa_pagamento)
+    REFERENCES empresa (id_tenant, id_empresa)
 );
 CREATE INDEX contas_receber_id_tenant_ix        ON contas_receber (id_tenant);
 CREATE INDEX contas_receber_vencimento_ix       ON contas_receber (id_tenant, data_vencimento);
@@ -182,9 +191,11 @@ BEGIN
 END $$;
 
 COMMENT ON TABLE tipo_carteira          IS 'Tipo de prazo/forma de pagamento (crediário, cartão etc.) com parcelas min/max e taxa adm. RLS.';
+COMMENT ON COLUMN tipo_carteira.categoria_carteira IS 'Categoria fixa (AVISTA/CARTAO_DEBITO/CARTAO_CREDITO/CREDIARIO) — usada pelo histórico do cliente pra isolar parcelas de crediário (2026-07-23).';
 COMMENT ON TABLE moeda                  IS 'Formas de recebimento válidas para venda (RLS). Seed por tenant no signup (SignupService), não global.';
 COMMENT ON TABLE moeda_detalhe          IS 'Associação moeda × tipo_carteira (RLS).';
 COMMENT ON TABLE contas_receber         IS 'Parcelas a receber da venda (RLS). Revisão de Q5/ADR-010 (2026-07-16): crediário antecipado da Fase 2.';
+COMMENT ON COLUMN contas_receber.id_empresa_pagamento IS 'Loja onde a parcela foi paga (2026-07-23) — null até existir a baixa de parcela (ainda não implementada).';
 COMMENT ON TABLE contas_receber_detalhe IS 'Detalhe 1:1 de contas_receber para taxas/autorização de cartão (RLS).';
 COMMENT ON TABLE caixa_mestre           IS 'Header de sessão de caixa (RLS). Revisão de Q5/ADR-010 (2026-07-16).';
 COMMENT ON TABLE caixa_detalhe          IS 'Lançamentos da sessão de caixa (RLS). tipo_operacao: RV=RECEBIMENTO_VENDA, RP=RECEBIMENTO_PARCELA_CREDIARIO, DC=DEBITO_CAIXA, CC=CREDITO_CAIXA, TR=TROCO (legado).';

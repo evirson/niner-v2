@@ -11,6 +11,7 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
 
 import java.sql.Connection;
 import java.sql.DriverManager;
+import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 
@@ -152,6 +153,24 @@ class PlanoContasCrudTest {
     }
 
     @Test
+    void excluirPlanoComCaixaVinculadoRespondeConflito() throws Exception {
+        // Terceira FK de cfg_plano_contas (V025/V026): caixa_detalhe. A pré-checagem de
+        // fornecedor/contas_pagar não cobre esta — precisa responder 409, não 500 genérico.
+        String token = assinarNovoTenant("exclusao-caixa");
+        criarPlanoSimples(token, "8.1.001", "COM CAIXA");
+        long idTenant = extrairIdTenant(token);
+
+        criarCaixaComPlano(idTenant, "8.1.001");
+
+        mvc.perform(delete("/api/v1/planos-contas/8.1.001").header("Authorization", "Bearer " + token))
+                .andExpect(status().isConflict());
+
+        mvc.perform(get("/api/v1/planos-contas/8.1.001").header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.descricao").value("COM CAIXA"));
+    }
+
+    @Test
     void listagemOrdenaPorColunaEDirecaoPedidas() throws Exception {
         String token = assinarNovoTenant("ordenacao");
         criarPlanoSimples(token, "6.1.001", "ORDPLANO BETA");
@@ -201,6 +220,48 @@ class PlanoContasCrudTest {
             st.executeUpdate(
                     "INSERT INTO fornecedor (id_tenant, id_plano_contas, razao_social) VALUES ("
                             + idTenant + ", '" + idPlanoContas + "', 'FORNECEDOR TESTE')");
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    /**
+     * Insere um caixa (mestre + detalhe) referenciando o plano — vínculo que bloqueia a
+     * exclusão, mas que a pré-checagem de {@code excluir()} não enumerava até este teste
+     * existir (achado do pedido "verifique todas as telas"). Reaproveita empresa/usuário
+     * admin e a moeda semeados pelo signup ({@code SignupService}).
+     */
+    private void criarCaixaComPlano(long idTenant, String idPlanoContas) throws Exception {
+        try (Connection c = DriverManager.getConnection(postgres.getJdbcUrl(), "niner_app", "dev_app");
+             Statement st = c.createStatement()) {
+            st.execute("SET app.id_tenant = " + idTenant);
+            long idEmpresa;
+            long idUsuario;
+            long idMoeda;
+            try (ResultSet rs = st.executeQuery("SELECT id_empresa FROM empresa LIMIT 1")) {
+                rs.next();
+                idEmpresa = rs.getLong(1);
+            }
+            try (ResultSet rs = st.executeQuery("SELECT id_usuario FROM usuario LIMIT 1")) {
+                rs.next();
+                idUsuario = rs.getLong(1);
+            }
+            try (ResultSet rs = st.executeQuery("SELECT id_moeda FROM moeda LIMIT 1")) {
+                rs.next();
+                idMoeda = rs.getLong(1);
+            }
+            long idCaixa;
+            try (ResultSet rs = st.executeQuery(
+                    "INSERT INTO caixa_mestre (id_tenant, id_empresa, id_usuario) VALUES ("
+                            + idTenant + ", " + idEmpresa + ", " + idUsuario + ") RETURNING id_caixa")) {
+                rs.next();
+                idCaixa = rs.getLong(1);
+            }
+            st.executeUpdate("""
+                    INSERT INTO caixa_detalhe
+                        (id_tenant, id_caixa, id_moeda, id_plano_contas, valor, tipo_operacao, credito_debito)
+                    VALUES (%d, %d, %d, '%s', 10.00, 'DEBITO_CAIXA', 'D')
+                    """.formatted(idTenant, idCaixa, idMoeda, idPlanoContas));
         } catch (SQLException e) {
             throw new RuntimeException(e);
         }

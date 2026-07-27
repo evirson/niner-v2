@@ -168,7 +168,7 @@ class MoedaCrudTest {
         mvc.perform(post("/api/v1/tipos-carteira").header("Authorization", "Bearer " + token)
                         .contentType(APPLICATION_JSON)
                         .content("""
-                                {"nomeCarteira":"CARTEIRA VINCULA MOEDA","prazoPagamento":30,
+                                {"nomeCarteira":"CARTEIRA VINCULA MOEDA","categoriaCarteira":"CREDIARIO","prazoPagamento":30,
                                  "pcMinima":1,"pcMaxima":3,"taxaAdministradora":0,"moedas":[%d]}
                                 """.formatted(idMoeda)))
                 .andExpect(status().isCreated());

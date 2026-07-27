@@ -2,7 +2,7 @@ import { useEffect, useState, type FocusEvent, type FormEvent } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import AjudaDaTela from '../../components/AjudaDaTela'
 import { IconeParametros } from '../../components/Icones'
-import Toast from '../../components/Toast'
+import Toast, { type TipoToast } from '../../components/Toast'
 import { ApiError } from '../../lib/api'
 import {
   atualizarConfiguracaoGeral,
@@ -51,6 +51,7 @@ export default function ConfiguracaoGeralForm() {
   const [form, setForm] = useState<ConfiguracaoGeralFormState>(VAZIO)
   const [erros, setErros] = useState<ErrosCampo>({})
   const [toast, setToast] = useState('')
+  const [toastTipo, setToastTipo] = useState<TipoToast>('erro')
 
   const { data: configuracao } = useQuery({
     queryKey: ['config-geral'],
@@ -65,10 +66,13 @@ export default function ConfiguracaoGeralForm() {
     mutationFn: () => atualizarConfiguracaoGeral(paraRequisicao(form)),
     onSuccess: (resposta) => {
       queryClient.setQueryData(['config-geral'], resposta)
+      setToastTipo('sucesso')
       setToast('Parâmetros salvos.')
     },
-    onError: (e: unknown) =>
-      setToast(e instanceof ApiError ? e.message : 'Não foi possível salvar os parâmetros.'),
+    onError: (e: unknown) => {
+      setToastTipo('erro')
+      setToast(e instanceof ApiError ? e.message : 'Não foi possível salvar os parâmetros.')
+    },
   })
 
   const aoSairDoCampo = (chave: CampoValidavel) => (_e: FocusEvent) =>
@@ -85,6 +89,7 @@ export default function ConfiguracaoGeralForm() {
     }
     setErros(novosErros)
     if (Object.values(novosErros).some(Boolean)) {
+      setToastTipo('erro')
       setToast('Corrija os campos destacados antes de salvar.')
       return
     }
@@ -228,7 +233,7 @@ export default function ConfiguracaoGeralForm() {
       </form>
       </div>
 
-      {toast && <Toast mensagem={toast} aoFechar={() => setToast('')} />}
+      {toast && <Toast mensagem={toast} tipo={toastTipo} aoFechar={() => setToast('')} />}
     </div>
   )
 }

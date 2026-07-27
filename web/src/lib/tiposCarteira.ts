@@ -8,12 +8,24 @@ export interface MoedaSelecionada {
   nomeMoeda: string
 }
 
+/** Categoria fixa do tipo de carteira (2026-07-23) — usada pelo histórico do cliente pra
+ * isolar parcelas de crediário das demais formas de pagamento. */
+export type CategoriaCarteira = 'AVISTA' | 'CARTAO_DEBITO' | 'CARTAO_CREDITO' | 'CREDIARIO'
+
+export const ROTULO_CATEGORIA_CARTEIRA: Record<CategoriaCarteira, string> = {
+  AVISTA: 'À Vista',
+  CARTAO_DEBITO: 'Cartão Débito',
+  CARTAO_CREDITO: 'Cartão Crédito',
+  CREDIARIO: 'Crediário',
+}
+
 /** Tipo de carteira (prazo/parcelas/taxa do crediário, cartão etc.) — gerencia embutido o
  * N:N com moeda: o fluxo é "criar um tipo de carteira e escolher em quais moedas ele vale".
  * `taxaAdministradora` é opcional (2026-07-23) — nem todo tipo de carteira cobra taxa. */
 export interface TipoCarteira {
   idCarteira: number
   nomeCarteira: string
+  categoriaCarteira: CategoriaCarteira
   prazoPagamento: number
   pcMinima: number
   pcMaxima: number
@@ -26,6 +38,7 @@ export interface TipoCarteira {
 /** Estado do formulário — strings para os campos numéricos casarem com inputs controlados. */
 export interface TipoCarteiraFormState {
   nomeCarteira: string
+  categoriaCarteira: CategoriaCarteira | ''
   prazoPagamento: string
   pcMinima: string
   pcMaxima: string
@@ -35,6 +48,7 @@ export interface TipoCarteiraFormState {
 
 export const TIPO_CARTEIRA_VAZIO: TipoCarteiraFormState = {
   nomeCarteira: '',
+  categoriaCarteira: '',
   prazoPagamento: '',
   pcMinima: '',
   pcMaxima: '',
@@ -45,6 +59,7 @@ export const TIPO_CARTEIRA_VAZIO: TipoCarteiraFormState = {
 export function paraFormulario(tc: TipoCarteira): TipoCarteiraFormState {
   return {
     nomeCarteira: tc.nomeCarteira,
+    categoriaCarteira: tc.categoriaCarteira,
     prazoPagamento: String(tc.prazoPagamento),
     pcMinima: String(tc.pcMinima),
     pcMaxima: String(tc.pcMaxima),
@@ -56,6 +71,7 @@ export function paraFormulario(tc: TipoCarteira): TipoCarteiraFormState {
 export function paraRequisicao(f: TipoCarteiraFormState) {
   return {
     nomeCarteira: maiusculas(f.nomeCarteira.trim()),
+    categoriaCarteira: f.categoriaCarteira || null,
     prazoPagamento: Number(f.prazoPagamento || 0),
     pcMinima: Number(f.pcMinima || 0),
     pcMaxima: Number(f.pcMaxima || 0),

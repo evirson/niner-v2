@@ -45,7 +45,7 @@ export default function ConfiguracaoTelaFuncionario() {
     onSuccess: (resposta) => {
       queryClient.setQueryData(['config-tela', CHAVE_TELA], resposta)
       queryClient.invalidateQueries({ queryKey: ['config-tela', CHAVE_TELA] })
-      navigate('/funcionarios')
+      navigate('/funcionarios', { state: { toast: { texto: 'Configuração salva com sucesso.', tipo: 'sucesso' } } })
     },
     onError: (e: unknown) => setToast(e instanceof ApiError ? e.message : 'Não foi possível salvar a configuração.'),
   })

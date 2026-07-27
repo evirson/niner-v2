@@ -20,11 +20,21 @@ public final class TipoCarteiraDtos {
     }
 
     /**
+     * Categoria fixa do tipo de carteira (2026-07-23) — permite ao histórico do cliente
+     * separar programaticamente parcelas de crediário das demais formas de pagamento
+     * (nome_carteira é texto livre e não serve pra isso).
+     */
+    public enum CategoriaCarteira {
+        AVISTA, CARTAO_DEBITO, CARTAO_CREDITO, CREDIARIO
+    }
+
+    /**
      * {@code taxaAdministradora} é opcional (2026-07-23, coluna sem {@code NOT NULL}) — nem
      * todo tipo de carteira cobra taxa administradora.
      */
     public record TipoCarteiraRequest(
             @NotBlank @Size(max = 60) String nomeCarteira,
+            @NotNull CategoriaCarteira categoriaCarteira,
             @NotNull Integer prazoPagamento,
             @NotNull Integer pcMinima,
             @NotNull Integer pcMaxima,
@@ -35,6 +45,7 @@ public final class TipoCarteiraDtos {
     public record TipoCarteiraResponse(
             long idCarteira,
             String nomeCarteira,
+            CategoriaCarteira categoriaCarteira,
             int prazoPagamento,
             int pcMinima,
             int pcMaxima,

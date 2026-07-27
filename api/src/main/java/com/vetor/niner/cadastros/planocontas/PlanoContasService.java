@@ -157,9 +157,12 @@ public class PlanoContasService {
 
     /**
      * Exclui de verdade — sem fallback de inativar ({@code cfg_plano_contas} não tem coluna
-     * {@code ativo}). Com vínculo em {@code fornecedor} ou {@code contas_pagar}, responde
+     * {@code ativo}). Com vínculo em {@code fornecedor}, {@code contas_pagar} ou
+     * {@code caixa_detalhe} (as três FKs que apontam pra esta tabela, V025/V026), responde
      * 409 e nada muda (checado antes do DELETE pelo mesmo motivo das outras telas: FK
-     * violada aborta o resto da transação no Postgres).
+     * violada aborta o resto da transação no Postgres). Se algum vínculo novo escapar desta
+     * lista, {@code GlobalExceptionHandler} ainda cobre a violação de FK crua com um 409
+     * genérico — mas o objetivo aqui é sempre a mensagem específica.
      */
     @Transactional
     public ExclusaoPlanoContasResponse excluir(String codigo) {
@@ -169,12 +172,14 @@ public class PlanoContasService {
                                        WHERE id_tenant = plataforma.tenant_atual() AND id_plano_contas = ?)
                             OR EXISTS (SELECT 1 FROM contas_pagar
                                        WHERE id_tenant = plataforma.tenant_atual() AND id_plano_contas = ?)
+                            OR EXISTS (SELECT 1 FROM caixa_detalhe
+                                       WHERE id_tenant = plataforma.tenant_atual() AND id_plano_contas = ?)
                         """)
-                .params(codigoNormalizado, codigoNormalizado)
+                .params(codigoNormalizado, codigoNormalizado, codigoNormalizado)
                 .query(Boolean.class).single());
         if (temVinculo) {
             throw new ConflitoDadosException(
-                    "Plano de contas em uso por fornecedor ou contas a pagar — não pode ser excluído.");
+                    "Plano de contas em uso por fornecedor, contas a pagar ou movimento de caixa — não pode ser excluído.");
         }
 
         int linhas = jdbc.sql(

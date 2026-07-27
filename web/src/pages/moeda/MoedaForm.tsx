@@ -76,7 +76,14 @@ export default function MoedaForm({ somenteLeitura = false }: { somenteLeitura?:
       editando ? atualizarMoeda(Number(id), paraRequisicao(form)) : criarMoeda(paraRequisicao(form)),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['moedas'] })
-      navigate('/moedas')
+      navigate('/moedas', {
+        state: {
+          toast: {
+            texto: editando ? 'Moeda atualizada com sucesso.' : 'Moeda cadastrada com sucesso.',
+            tipo: 'sucesso',
+          },
+        },
+      })
     },
     onError: (e: unknown) => setToast(e instanceof ApiError ? e.message : 'Não foi possível salvar a moeda.'),
   })

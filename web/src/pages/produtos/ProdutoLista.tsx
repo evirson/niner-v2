@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
 import AjudaDaTela from '../../components/AjudaDaTela'
 import {
   IconeEditar,
@@ -13,6 +13,7 @@ import {
   IconeProximaPagina,
   IconeUltimaPagina,
 } from '../../components/Icones'
+import Toast, { type TipoToast } from '../../components/Toast'
 import { ApiError } from '../../lib/api'
 import { listarCategoriasProduto } from '../../lib/categoriasProduto'
 import { useEu } from '../../lib/eu'
@@ -47,11 +48,19 @@ function paginasVisiveis(atual: number, total: number): number[] {
 }
 
 export default function ProdutoLista() {
+  const location = useLocation()
   const [busca, setBusca] = useState('')
   const [status, setStatus] = useState<StatusProduto>('ATIVOS')
   const [idCategoria, setIdCategoria] = useState('')
   const [produtoParaExcluir, setProdutoParaExcluir] = useState<Produto | null>(null)
-  const [aviso, setAviso] = useState('')
+  const [aviso, setAviso] = useState<{ texto: string; tipo: TipoToast } | null>(
+    () => (location.state as { toast?: { texto: string; tipo: TipoToast } } | null)?.toast ?? null,
+  )
+
+  useEffect(() => {
+    if (location.state) window.history.replaceState({}, '')
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
   const queryClient = useQueryClient()
 
   const { data: categorias } = useQuery({
@@ -98,15 +107,17 @@ export default function ProdutoLista() {
     onSuccess: (resposta) => {
       queryClient.invalidateQueries({ queryKey: ['produtos'] })
       setProdutoParaExcluir(null)
-      setAviso(
-        resposta.acao === 'inativado'
-          ? (resposta.motivo ?? 'Produto inativado (possui vínculos).')
-          : 'Produto excluído.',
-      )
+      setAviso({
+        texto:
+          resposta.acao === 'inativado'
+            ? (resposta.motivo ?? 'Produto inativado (possui vínculos).')
+            : 'Produto excluído.',
+        tipo: 'sucesso',
+      })
     },
     onError: (e: unknown) => {
       setProdutoParaExcluir(null)
-      setAviso(e instanceof ApiError ? e.message : 'Não foi possível excluir o produto.')
+      setAviso({ texto: e instanceof ApiError ? e.message : 'Não foi possível excluir o produto.', tipo: 'erro' })
     },
   })
 
@@ -140,14 +151,7 @@ export default function ProdutoLista() {
           </div>
         </div>
 
-        {aviso && (
-          <div className="card aviso-banner" role="status">
-            <span>{aviso}</span>
-            <button type="button" className="btn ghost" onClick={() => setAviso('')}>
-              Ok
-            </button>
-          </div>
-        )}
+        {aviso && <Toast mensagem={aviso.texto} tipo={aviso.tipo} aoFechar={() => setAviso(null)} />}
 
         <div className="card filtros-bar">
           <input

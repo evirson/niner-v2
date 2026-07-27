@@ -118,7 +118,14 @@ export default function FuncionarioForm({ somenteLeitura = false }: { somenteLei
       editando ? atualizarFuncionario(Number(id), paraRequisicao(form)) : criarFuncionario(paraRequisicao(form)),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['funcionarios'] })
-      navigate('/funcionarios')
+      navigate('/funcionarios', {
+        state: {
+          toast: {
+            texto: editando ? 'Funcionário atualizado com sucesso.' : 'Funcionário cadastrado com sucesso.',
+            tipo: 'sucesso',
+          },
+        },
+      })
     },
     onError: (e: unknown) => setToast(e instanceof ApiError ? e.message : 'Não foi possível salvar o funcionário.'),
   })

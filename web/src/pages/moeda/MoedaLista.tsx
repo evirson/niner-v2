@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
 import AjudaDaTela from '../../components/AjudaDaTela'
 import {
   IconeEditar,
@@ -12,6 +12,7 @@ import {
   IconeProximaPagina,
   IconeUltimaPagina,
 } from '../../components/Icones'
+import Toast, { type TipoToast } from '../../components/Toast'
 import { ApiError } from '../../lib/api'
 import { excluirMoeda, listarMoedas, type ColunaOrdenacaoMoeda, type Moeda } from '../../lib/moedas'
 import { maiusculas } from '../../lib/texto'
@@ -46,9 +47,17 @@ function paginasVisiveis(atual: number, total: number): number[] {
  * vínculo com tipo de carteira é gerido pela tela de Tipo de Carteira, não por aqui.
  */
 export default function MoedaLista() {
+  const location = useLocation()
   const [busca, setBusca] = useState('')
   const [moedaParaExcluir, setMoedaParaExcluir] = useState<Moeda | null>(null)
-  const [aviso, setAviso] = useState('')
+  const [aviso, setAviso] = useState<{ texto: string; tipo: TipoToast } | null>(
+    () => (location.state as { toast?: { texto: string; tipo: TipoToast } } | null)?.toast ?? null,
+  )
+
+  useEffect(() => {
+    if (location.state) window.history.replaceState({}, '')
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
   const queryClient = useQueryClient()
 
   const [pagina, setPagina] = useState(1)
@@ -82,11 +91,11 @@ export default function MoedaLista() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['moedas'] })
       setMoedaParaExcluir(null)
-      setAviso('Moeda excluída.')
+      setAviso({ texto: 'Moeda excluída.', tipo: 'sucesso' })
     },
     onError: (e: unknown) => {
       setMoedaParaExcluir(null)
-      setAviso(e instanceof ApiError ? e.message : 'Não foi possível excluir a moeda.')
+      setAviso({ texto: e instanceof ApiError ? e.message : 'Não foi possível excluir a moeda.', tipo: 'erro' })
     },
   })
 
@@ -108,14 +117,7 @@ export default function MoedaLista() {
           </div>
         </div>
 
-        {aviso && (
-          <div className="card aviso-banner" role="status">
-            <span>{aviso}</span>
-            <button type="button" className="btn ghost" onClick={() => setAviso('')}>
-              Ok
-            </button>
-          </div>
-        )}
+        {aviso && <Toast mensagem={aviso.texto} tipo={aviso.tipo} aoFechar={() => setAviso(null)} />}
 
         <div className="card filtros-bar">
           <input
