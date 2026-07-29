@@ -1,9 +1,17 @@
+import { useQuery } from '@tanstack/react-query'
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { IconeAjustar, IconeConfirmar, IconeDevolver, IconeLimpar, IconeLupa, IconePdv } from '../../components/Icones'
 import { ApiError } from '../../lib/api'
-import { formatarMoeda } from '../../lib/masks'
-import { buscarProdutoPorCodigo, type ItemLedger, type PdvProduto, type VendaEfetivada } from '../../lib/pdv'
+import { buscarPermiteQtdDecimal } from '../../lib/configuracaoGeral'
+import { formatarMoeda, formatarQuantidade } from '../../lib/masks'
+import {
+  buscarProdutoPorCodigo,
+  interpretarCodigoBarras,
+  type ItemLedger,
+  type PdvProduto,
+  type VendaEfetivada,
+} from '../../lib/pdv'
 import AlteraQuantidadeModal from './AlteraQuantidadeModal'
 import FormaPagamentoModal from './FormaPagamentoModal'
 import PesquisaProdutoModal from './PesquisaProdutoModal'
@@ -82,11 +90,13 @@ export default function Pdv() {
     linhasLedgerRef.current[novoIndice]?.focus()
   }
 
-  const lancarProduto = (produto: PdvProduto) => {
+  /** `qtd` é 1 por padrão (leitura simples) — "5*código" no campo de barras já manda a
+   *  quantidade digitada (ver {@link interpretarCodigoBarras}), somada se o item já estiver na venda. */
+  const lancarProduto = (produto: PdvProduto, qtd: number = 1) => {
     setLedger((atual) => {
       const existente = atual.find((i) => i.codigo === produto.sku)
       if (existente) {
-        return atual.map((i) => (i.codigo === produto.sku ? { ...i, qtd: i.qtd + 1 } : i))
+        return atual.map((i) => (i.codigo === produto.sku ? { ...i, qtd: i.qtd + qtd } : i))
       }
       return [
         ...atual,
@@ -95,7 +105,7 @@ export default function Pdv() {
           codigo: produto.sku,
           descricao: produto.descricaoProduto,
           variacao: variacaoTexto(produto),
-          qtd: 1,
+          qtd,
           precoUnit: produto.precoVenda,
           urlImagem: produto.urlImagem,
         },
@@ -104,10 +114,11 @@ export default function Pdv() {
     selecionarLinha(produto.sku)
   }
 
-  const lerCodigo = async (codigo: string) => {
+  const lerCodigo = async (valorDigitado: string) => {
+    const { qtd, codigo } = interpretarCodigoBarras(valorDigitado)
     try {
       const produto = await buscarProdutoPorCodigo(codigo)
-      lancarProduto(produto)
+      lancarProduto(produto, qtd)
     } catch (e) {
       mostrarFlash(e instanceof ApiError ? e.message : 'Não foi possível ler o código de barras.')
     }
@@ -115,9 +126,9 @@ export default function Pdv() {
 
   const aoDigitarBarras: React.KeyboardEventHandler<HTMLInputElement> = (e) => {
     if (e.key === 'Enter' && valorBarras.trim()) {
-      const codigo = valorBarras.trim()
+      const valor = valorBarras.trim()
       setValorBarras('')
-      lerCodigo(codigo)
+      lerCodigo(valor)
     }
   }
 
@@ -210,6 +221,8 @@ export default function Pdv() {
 
   const qtdTotal = ledger.reduce((soma, i) => soma + i.qtd, 0)
   const valorTotal = ledger.reduce((soma, i) => soma + totalLinha(i), 0)
+  const { data: cfgQtdDecimal } = useQuery({ queryKey: ['permite-qtd-decimal'], queryFn: buscarPermiteQtdDecimal })
+  const permiteQtdDecimal = cfgQtdDecimal?.cfgPermiteQtdDecimal ?? true
 
   return (
     <div className="lista-tela">
@@ -260,7 +273,9 @@ export default function Pdv() {
                 <div className="pdv-stats-produto">
                   <div className="pdv-stat-box">
                     <span className="pdv-rotulo">Quantidade</span>
-                    <span className="pdv-valor">{itemSelecionado ? itemSelecionado.qtd.toLocaleString('pt-BR') : '—'}</span>
+                    <span className="pdv-valor">
+                      {itemSelecionado ? formatarQuantidade(itemSelecionado.qtd, permiteQtdDecimal) : '—'}
+                    </span>
                   </div>
                   <div className="pdv-stat-box">
                     <span className="pdv-rotulo">Valor Unitário</span>
@@ -291,6 +306,7 @@ export default function Pdv() {
                   onKeyDown={aoDigitarBarras}
                 />
                 <p className="pdv-dica">Leia o código de barras do produto e pressione Enter.</p>
+                <p className="pdv-dica">Dica: "5*código" lança direto com quantidade 5.</p>
               </div>
 
               <div className="pdv-linha-fkeys">
@@ -359,7 +375,7 @@ export default function Pdv() {
                         {item.descricao}
                         {item.variacao && <span style={{ color: 'var(--ink-muted)', fontWeight: 400 }}> — {item.variacao}</span>}
                       </span>
-                      <span className="pdv-num">{item.qtd.toLocaleString('pt-BR')}</span>
+                      <span className="pdv-num">{formatarQuantidade(item.qtd, permiteQtdDecimal)}</span>
                       <span className="pdv-num">{moeda(item.precoUnit)}</span>
                       <span className="pdv-num">{moeda(totalLinha(item))}</span>
                     </div>
@@ -369,7 +385,7 @@ export default function Pdv() {
               <div className="pdv-ledger-rodape">
                 <div className="pdv-caixa-total">
                   <span className="pdv-rotulo">Qtd Itens</span>
-                  <span className="pdv-valor">{qtdTotal.toLocaleString('pt-BR')}</span>
+                  <span className="pdv-valor">{formatarQuantidade(qtdTotal, permiteQtdDecimal)}</span>
                 </div>
                 <div className="pdv-caixa-total pdv-total">
                   <span className="pdv-rotulo">Valor Total da Venda</span>

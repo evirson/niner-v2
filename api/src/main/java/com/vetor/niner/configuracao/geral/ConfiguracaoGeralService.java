@@ -27,7 +27,7 @@ public class ConfiguracaoGeralService {
     private static final String SELECT_BASE = """
             SELECT percentual_desconto_venda, juros_crediario_dias, juros_crediario,
                    multa_crediario_dias, multa_crediario, cfg_usa_variante_linha,
-                   cfg_usa_variante_coluna, atualizado_em
+                   cfg_usa_variante_coluna, cfg_permite_qtd_decimal, atualizado_em
             FROM cfg_geral
             WHERE id_tenant = plataforma.tenant_atual()
             """;
@@ -82,6 +82,24 @@ public class ConfiguracaoGeralService {
                 .orElse(BigDecimal.ZERO);
     }
 
+    /**
+     * Só a flag de quantidade decimal, sem checagem de papel — usada por PDV, Transferência de
+     * Produtos e Histórico do Cliente pra formatar/validar quantidade de produto. Mesmo
+     * fallback de {@code flagsVariante}/{@code percentualDescontoVenda}: {@code true} evita 404
+     * caso a linha nunca tenha sido criada (e preserva o comportamento de hoje, que já aceita
+     * quantidade decimal em qualquer lugar).
+     */
+    @Transactional(readOnly = true)
+    public boolean permiteQtdDecimalProduto() {
+        return jdbc.sql("""
+                        SELECT cfg_permite_qtd_decimal FROM cfg_geral
+                        WHERE id_tenant = plataforma.tenant_atual()
+                        """)
+                .query(Boolean.class)
+                .optional()
+                .orElse(true);
+    }
+
     @Transactional
     public ConfiguracaoGeralResponse atualizar(Jwt jwt, ConfiguracaoGeralRequest req) {
         exigirAdmin(jwt);
@@ -89,13 +107,13 @@ public class ConfiguracaoGeralService {
                         UPDATE cfg_geral SET
                             percentual_desconto_venda = ?, juros_crediario_dias = ?, juros_crediario = ?,
                             multa_crediario_dias = ?, multa_crediario = ?, cfg_usa_variante_linha = ?,
-                            cfg_usa_variante_coluna = ?, atualizado_em = now()
+                            cfg_usa_variante_coluna = ?, cfg_permite_qtd_decimal = ?, atualizado_em = now()
                         WHERE id_tenant = plataforma.tenant_atual()
                         """)
                 .params(List.of(
                         req.percentualDescontoVenda(), req.jurosCrediarioDias(), req.jurosCrediario(),
                         req.multaCrediarioDias(), req.multaCrediario(), req.cfgUsaVarianteLinha(),
-                        req.cfgUsaVarianteColuna()))
+                        req.cfgUsaVarianteColuna(), req.cfgPermiteQtdDecimal()))
                 .update();
         // Não deveria acontecer — a linha nasce no signup — mas 404 é mais honesto que
         // seguir em frente como se tivesse atualizado algo.
@@ -130,6 +148,7 @@ public class ConfiguracaoGeralService {
                 rs.getBigDecimal("multa_crediario"),
                 rs.getBoolean("cfg_usa_variante_linha"),
                 rs.getBoolean("cfg_usa_variante_coluna"),
+                rs.getBoolean("cfg_permite_qtd_decimal"),
                 rs.getObject("atualizado_em", OffsetDateTime.class));
     }
 }

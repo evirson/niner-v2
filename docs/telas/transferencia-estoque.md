@@ -69,12 +69,24 @@ tabela de negócio específica).
 | Empresa de Origem | texto somente-leitura | — | Sempre a empresa ativa da sessão (`GET /api/v1/eu`, campo `empresa`); nunca editável |
 | Empresa de Destino | select | **Sim** | `GET /api/v1/empresas`, excluindo a empresa de origem e as inativas |
 | Produtos | busca + lista | **Sim, ao menos um** | Reaproveita `PesquisaProdutoModal` do PDV (`GET /api/v1/pdv/produtos`) — mesma busca, mostra estoque por empresa, o que já dá visibilidade do saldo na origem antes de adicionar |
-| Quantidade (por item) | numérico, 3 casas (`numeric(14,3)`) | **Sim, > 0** | Sem limite contra o estoque da origem (revisado 2026-07-29, ver "Estoque negativo permitido" abaixo) — só não pode ser zero/negativa. |
+| Quantidade (por item) | numérico, até 3 casas (`numeric(14,3)`) **se** `cfg_permite_qtd_decimal` estiver ligado, senão inteiro | **Sim, > 0** | Sem limite contra o estoque da origem (revisado 2026-07-29, ver "Estoque negativo permitido" abaixo) — só não pode ser zero/negativa. |
 
 **Sem `cfg_tela_campo` nesta tela** — mesma decisão de `identidade.usuario`: os únicos campos
 são estruturalmente obrigatórios (destino + ao menos um item), não há o que tornar configurável
 por tenant. **Observações removido (2026-07-29)** — campo existia desde a v1 mas nunca foi
 usado; tirado do formulário e do payload (`criarTransferencia` sempre envia `observacoes: null`).
+
+**Quantidade decimal configurável (2026-07-29):** `cfg_geral.cfg_permite_qtd_decimal`
+(Parâmetros do Sistema) decide se o campo Quantidade aceita vírgula/3 casas ou só dígitos
+inteiros — mesma regra usada no PDV e no Histórico do Cliente (`docs/telas/configuracao-geral.md`).
+Validado também no servidor: com o parâmetro desligado, `POST /transferencias` rejeita (400)
+qualquer item com quantidade fracionária.
+
+**Sintaxe "quantidade\*código" no campo de código de barras (2026-07-29):** digitar
+`5*9001000000138` já adiciona o item com quantidade 5 em vez de sempre 1 — mesma função
+`interpretarCodigoBarras()` reaproveitada do PDV (`web/src/lib/pdv.ts`), útil quando o mesmo
+produto é transferido em lote. Sem `*`, o valor inteiro é o código e a quantidade é 1 (soma 1 se
+o item já estiver na lista). Dica exibida discretamente sob o campo de código de barras.
 
 **Fluxo de "Nova Transferência" (revisado 2026-07-29):** clicar em "Nova Transferência" abre a
 tela de produtos com um popup por cima (`EscolherDestinoModal.tsx`) mostrando a empresa de
@@ -110,8 +122,10 @@ volta para a listagem.
 - Dado uma transferência existente, quando excluída, então a quantidade de cada produto volta
   para a empresa de origem e sai da de destino — mesmo que o destino não tenha mais saldo
   suficiente para "devolver" (fica negativo).
+- Dado `cfg_permite_qtd_decimal` desligado, quando um item é enviado com quantidade fracionária,
+  então 400 e nada é gravado (2026-07-29).
 
-Cobertos por `TransferenciaCrudTest`. Suíte completa do projeto: 193/193 verdes (2026-07-29).
+Cobertos por `TransferenciaCrudTest`. Suíte completa do projeto: 203/203 verdes (2026-07-29).
 
 ## Impacto no contrato de API
 

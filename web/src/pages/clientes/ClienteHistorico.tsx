@@ -5,17 +5,14 @@ import AjudaDaTela from '../../components/AjudaDaTela'
 import { IconeHistorico, IconeSetaBaixo, IconeSetaCima } from '../../components/Icones'
 import { buscarHistoricoCliente } from '../../lib/clienteHistorico'
 import { buscarCliente } from '../../lib/clientes'
+import { buscarPermiteQtdDecimal } from '../../lib/configuracaoGeral'
 import { formatarDataHora } from '../../lib/datas'
-import { formatarMoeda } from '../../lib/masks'
+import { formatarMoeda, formatarQuantidade } from '../../lib/masks'
 
 const CHAVE_TELA = 'cadastros.cliente.historico'
 
 function moeda(valor: number): string {
   return `R$ ${formatarMoeda(valor)}`
-}
-
-function quantidade(valor: number): string {
-  return valor.toLocaleString('pt-BR', { maximumFractionDigits: 3 })
 }
 
 /**
@@ -45,6 +42,9 @@ export default function ClienteHistorico() {
     queryKey: ['cliente-historico', id],
     queryFn: () => buscarHistoricoCliente(idCliente),
   })
+
+  const { data: cfgQtdDecimal } = useQuery({ queryKey: ['permite-qtd-decimal'], queryFn: buscarPermiteQtdDecimal })
+  const permiteQtdDecimal = cfgQtdDecimal?.cfgPermiteQtdDecimal ?? true
 
   // Ao carregar, a primeira compra já vem selecionada — igual ao modelo, que sempre abre
   // com uma linha em destaque.
@@ -223,7 +223,7 @@ export default function ClienteHistorico() {
                               <td>{item.descricaoProduto}</td>
                               <td>{item.variacaoLinha ?? '—'}</td>
                               <td>{item.variacaoColuna ?? '—'}</td>
-                              <td className="mono">{quantidade(item.qtdVendida)}</td>
+                              <td className="mono">{formatarQuantidade(item.qtdVendida, permiteQtdDecimal)}</td>
                               <td>{moeda(item.precoVenda)}</td>
                             </tr>
                           ))}

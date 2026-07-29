@@ -61,7 +61,8 @@ class ConfiguracaoGeralTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.percentualDescontoVenda").value(0))
                 .andExpect(jsonPath("$.cfgUsaVarianteLinha").value(true))
-                .andExpect(jsonPath("$.cfgUsaVarianteColuna").value(true));
+                .andExpect(jsonPath("$.cfgUsaVarianteColuna").value(true))
+                .andExpect(jsonPath("$.cfgPermiteQtdDecimal").value(true));
     }
 
     @Test
@@ -71,7 +72,7 @@ class ConfiguracaoGeralTest {
         String corpo = """
                 {"percentualDescontoVenda":15.5,"jurosCrediarioDias":5,"jurosCrediario":2.5,
                  "multaCrediarioDias":10,"multaCrediario":3.0,"cfgUsaVarianteLinha":false,
-                 "cfgUsaVarianteColuna":true}
+                 "cfgUsaVarianteColuna":true,"cfgPermiteQtdDecimal":false}
                 """;
 
         mvc.perform(put("/api/v1/config-geral").header("Authorization", "Bearer " + token)
@@ -79,12 +80,28 @@ class ConfiguracaoGeralTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.percentualDescontoVenda").value(15.5))
                 .andExpect(jsonPath("$.jurosCrediarioDias").value(5))
-                .andExpect(jsonPath("$.cfgUsaVarianteLinha").value(false));
+                .andExpect(jsonPath("$.cfgUsaVarianteLinha").value(false))
+                .andExpect(jsonPath("$.cfgPermiteQtdDecimal").value(false));
 
         mvc.perform(get("/api/v1/config-geral").header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.percentualDescontoVenda").value(15.5))
                 .andExpect(jsonPath("$.multaCrediario").value(3.0));
+
+        // Endpoint público (sem checagem de papel) reflete o valor atualizado.
+        mvc.perform(get("/api/v1/config-geral/permite-qtd-decimal").header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.cfgPermiteQtdDecimal").value(false));
+    }
+
+    @Test
+    void permiteQtdDecimalAbertoAQualquerPapelInclusiveOperador() throws Exception {
+        String tokenAdmin = assinarNovoTenant("qtd-decimal-operador");
+        String tokenOperador = comoOperador(tokenAdmin);
+
+        mvc.perform(get("/api/v1/config-geral/permite-qtd-decimal").header("Authorization", "Bearer " + tokenOperador))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.cfgPermiteQtdDecimal").value(true));
     }
 
     @Test
@@ -98,7 +115,7 @@ class ConfiguracaoGeralTest {
         String corpo = """
                 {"percentualDescontoVenda":10,"jurosCrediarioDias":0,"jurosCrediario":0,
                  "multaCrediarioDias":0,"multaCrediario":0,"cfgUsaVarianteLinha":true,
-                 "cfgUsaVarianteColuna":true}
+                 "cfgUsaVarianteColuna":true,"cfgPermiteQtdDecimal":true}
                 """;
         mvc.perform(put("/api/v1/config-geral").header("Authorization", "Bearer " + tokenOperador)
                         .contentType(APPLICATION_JSON).content(corpo))
@@ -112,7 +129,7 @@ class ConfiguracaoGeralTest {
         String corpo = """
                 {"percentualDescontoVenda":150,"jurosCrediarioDias":0,"jurosCrediario":0,
                  "multaCrediarioDias":0,"multaCrediario":0,"cfgUsaVarianteLinha":true,
-                 "cfgUsaVarianteColuna":true}
+                 "cfgUsaVarianteColuna":true,"cfgPermiteQtdDecimal":true}
                 """;
         mvc.perform(put("/api/v1/config-geral").header("Authorization", "Bearer " + token)
                         .contentType(APPLICATION_JSON).content(corpo))
@@ -126,7 +143,7 @@ class ConfiguracaoGeralTest {
         String corpo = """
                 {"percentualDescontoVenda":10,"jurosCrediarioDias":-1,"jurosCrediario":0,
                  "multaCrediarioDias":0,"multaCrediario":0,"cfgUsaVarianteLinha":true,
-                 "cfgUsaVarianteColuna":true}
+                 "cfgUsaVarianteColuna":true,"cfgPermiteQtdDecimal":true}
                 """;
         mvc.perform(put("/api/v1/config-geral").header("Authorization", "Bearer " + token)
                         .contentType(APPLICATION_JSON).content(corpo))
@@ -143,7 +160,7 @@ class ConfiguracaoGeralTest {
                         .content("""
                                 {"percentualDescontoVenda":20,"jurosCrediarioDias":0,"jurosCrediario":0,
                                  "multaCrediarioDias":0,"multaCrediario":0,"cfgUsaVarianteLinha":true,
-                                 "cfgUsaVarianteColuna":true}
+                                 "cfgUsaVarianteColuna":true,"cfgPermiteQtdDecimal":true}
                                 """))
                 .andExpect(status().isOk());
 

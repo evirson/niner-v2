@@ -198,6 +198,34 @@ export function desmascararPeso(valor: string): number {
 }
 
 /**
+ * Quantidade de produto (2026-07-29, Parâmetros do Sistema — "Permite quantidade decimal para
+ * produtos") — 3 casas (mesma convenção de {@link mascararPeso}, numeric(14,3)) quando o tenant
+ * permite decimal; inteiro (sem vírgula nenhuma) quando não permite. Usar sempre estas funções
+ * em vez de {@link mascararPeso}/{@link formatarPeso} pra exibir/editar quantidade de produto —
+ * a máscara de peso é só reaproveitada por dentro quando o modo decimal está ligado.
+ */
+export function mascararQuantidade(valor: string, permiteDecimal: boolean): string {
+  return permiteDecimal ? mascararPeso(valor) : formatarParteInteira(somenteDigitos(valor))
+}
+
+/** Completa o campo de quantidade ao sair dele (sem efeito no modo inteiro) — ver {@link completarValorDecimal}. */
+export function completarQuantidade(valor: string, permiteDecimal: boolean): string {
+  return permiteDecimal ? completarPeso(valor) : valor
+}
+
+/** Desfaz {@link mascararQuantidade}/{@link completarQuantidade}, devolvendo o número para enviar à API. */
+export function desmascararQuantidade(valor: string, permiteDecimal: boolean): number {
+  if (permiteDecimal) return desmascararPeso(valor)
+  const n = Number(somenteDigitos(valor))
+  return Number.isFinite(n) ? n : 0
+}
+
+/** Formata um número (ex.: vindo da API) como quantidade: 3 casas se decimal, inteiro se não. */
+export function formatarQuantidade(valor: number, permiteDecimal: boolean): string {
+  return permiteDecimal ? formatarPeso(valor) : Math.round(valor).toLocaleString('pt-BR')
+}
+
+/**
  * "Id. WhatsApp" — mesma convenção visual de Instagram/Facebook/TikTok (prefixo `@`), mas
  * só dígitos depois do `@` (é o número do celular). Validado por {@link celularValido}.
  */

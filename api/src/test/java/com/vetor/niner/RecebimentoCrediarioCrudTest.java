@@ -99,7 +99,8 @@ class RecebimentoCrediarioCrudTest {
                         .contentType(APPLICATION_JSON)
                         .content("""
                                 {"percentualDescontoVenda":0,"jurosCrediarioDias":%d,"jurosCrediario":%s,
-                                 "multaCrediarioDias":%d,"multaCrediario":%s,"cfgUsaVarianteLinha":true,"cfgUsaVarianteColuna":true}
+                                 "multaCrediarioDias":%d,"multaCrediario":%s,"cfgUsaVarianteLinha":true,"cfgUsaVarianteColuna":true,
+                                 "cfgPermiteQtdDecimal":true}
                                 """.formatted(jurosCrediarioDias, jurosCrediario, multaCrediarioDias, multaCrediario)))
                 .andExpect(status().isOk());
     }

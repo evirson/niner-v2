@@ -24,6 +24,7 @@ const VAZIO: ConfiguracaoGeralFormState = {
   multaCrediario: '',
   cfgUsaVarianteLinha: true,
   cfgUsaVarianteColuna: true,
+  cfgPermiteQtdDecimal: true,
 }
 
 type CampoValidavel = 'percentualDescontoVenda' | 'jurosCrediarioDias' | 'jurosCrediario' | 'multaCrediarioDias' | 'multaCrediario'
@@ -168,6 +169,27 @@ export default function ConfiguracaoGeralForm() {
                 />
                 Usa variante em coluna (ex.: tamanho/voltagem)
               </label>
+            </div>
+          </div>
+        </section>
+
+        <section className="section">
+          <p className="section-label">Estoque</p>
+
+          <div className="form-grid">
+            <div className="col-6">
+              <label className="checkbox-linha" style={{ marginTop: 0 }}>
+                <input
+                  type="checkbox"
+                  checked={form.cfgPermiteQtdDecimal}
+                  onChange={(e) => setForm((f) => ({ ...f, cfgPermiteQtdDecimal: e.target.checked }))}
+                />
+                Permite quantidade decimal para produtos
+              </label>
+              <p className="muted" style={{ fontSize: 12, marginTop: 4 }}>
+                Ligado: quantidade de produto (venda, transferência, histórico) aceita até 3 casas
+                decimais (ex.: 1,500 kg). Desligado: quantidade sempre inteira.
+              </p>
             </div>
           </div>
         </section>

@@ -1,4 +1,7 @@
+import { useQuery } from '@tanstack/react-query'
 import { useState } from 'react'
+import { buscarPermiteQtdDecimal } from '../../lib/configuracaoGeral'
+import { formatarQuantidade } from '../../lib/masks'
 import type { ItemLedger } from '../../lib/pdv'
 
 /**
@@ -18,6 +21,8 @@ export default function AlteraQuantidadeModal({
   aoRemover: (codigo: string) => void
 }) {
   const [confirmandoRemocao, setConfirmandoRemocao] = useState<string | null>(null)
+  const { data: cfgQtdDecimal } = useQuery({ queryKey: ['permite-qtd-decimal'], queryFn: buscarPermiteQtdDecimal })
+  const permiteQtdDecimal = cfgQtdDecimal?.cfgPermiteQtdDecimal ?? true
 
   const diminuir = (item: ItemLedger) => {
     if (item.qtd <= 1) {
@@ -76,7 +81,7 @@ export default function AlteraQuantidadeModal({
                           <button type="button" aria-label="Diminuir quantidade" onClick={() => diminuir(item)}>
                             −
                           </button>
-                          <span className="pdv-qtd-atual">{item.qtd}</span>
+                          <span className="pdv-qtd-atual">{formatarQuantidade(item.qtd, permiteQtdDecimal)}</span>
                           <button
                             type="button"
                             aria-label="Aumentar quantidade"

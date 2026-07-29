@@ -1,5 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { useState } from 'react'
+import { buscarPermiteQtdDecimal } from '../../lib/configuracaoGeral'
+import { formatarQuantidade } from '../../lib/masks'
 import { buscarProdutosPdv, type PdvProduto } from '../../lib/pdv'
 
 /**
@@ -20,6 +22,8 @@ export default function PesquisaProdutoModal({
     queryKey: ['pdv-produtos', busca],
     queryFn: () => buscarProdutosPdv(busca),
   })
+  const { data: cfgQtdDecimal } = useQuery({ queryKey: ['permite-qtd-decimal'], queryFn: buscarPermiteQtdDecimal })
+  const permiteQtdDecimal = cfgQtdDecimal?.cfgPermiteQtdDecimal ?? true
 
   const empresas = resultados && resultados.length > 0 ? resultados[0].estoquePorEmpresa.map((e) => e.nomeEmpresa) : []
 
@@ -98,11 +102,11 @@ export default function PesquisaProdutoModal({
                     <td>{produto.variacaoColuna ?? '—'}</td>
                     {produto.estoquePorEmpresa.map((e) => (
                       <td key={e.codigoEmpresa} className="mono" style={{ textAlign: 'right' }}>
-                        {e.qtd.toLocaleString('pt-BR', { maximumFractionDigits: 3 })}
+                        {formatarQuantidade(e.qtd, permiteQtdDecimal)}
                       </td>
                     ))}
                     <td className="mono" style={{ textAlign: 'right' }}>
-                      <strong>{produto.estoqueTotal.toLocaleString('pt-BR', { maximumFractionDigits: 3 })}</strong>
+                      <strong>{formatarQuantidade(produto.estoqueTotal, permiteQtdDecimal)}</strong>
                     </td>
                   </tr>
                 ))

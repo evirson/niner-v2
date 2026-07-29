@@ -25,7 +25,8 @@ public final class ConfiguracaoGeralDtos {
             @NotNull @Min(0) Integer multaCrediarioDias,
             @NotNull @DecimalMin("0") @DecimalMax("100") BigDecimal multaCrediario,
             @NotNull Boolean cfgUsaVarianteLinha,
-            @NotNull Boolean cfgUsaVarianteColuna) {
+            @NotNull Boolean cfgUsaVarianteColuna,
+            @NotNull Boolean cfgPermiteQtdDecimal) {
     }
 
     public record ConfiguracaoGeralResponse(
@@ -36,10 +37,19 @@ public final class ConfiguracaoGeralDtos {
             BigDecimal multaCrediario,
             boolean cfgUsaVarianteLinha,
             boolean cfgUsaVarianteColuna,
+            boolean cfgPermiteQtdDecimal,
             OffsetDateTime atualizadoEm) {
     }
 
     /** Só o percentual de desconto promocional, sem checagem de papel — usado pelo PDV (F5). */
     public record DescontoVendaResponse(BigDecimal percentualDescontoVenda) {
+    }
+
+    /**
+     * Só a flag de quantidade decimal, sem checagem de papel — usada por PDV, Transferência de
+     * Produtos e Histórico do Cliente pra saber como formatar/validar quantidade de produto
+     * (3 casas quando {@code true}, inteiro quando {@code false}).
+     */
+    public record PermiteQtdDecimalResponse(boolean cfgPermiteQtdDecimal) {
     }
 }

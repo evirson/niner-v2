@@ -1,5 +1,6 @@
 package com.vetor.niner.estoque.transferencia;
 
+import com.vetor.niner.configuracao.geral.ConfiguracaoGeralService;
 import com.vetor.niner.estoque.transferencia.TransferenciaDtos.CriarTransferenciaRequest;
 import com.vetor.niner.estoque.transferencia.TransferenciaDtos.EmpresaResumo;
 import com.vetor.niner.estoque.transferencia.TransferenciaDtos.ItemTransferenciaRequest;
@@ -57,9 +58,11 @@ public class TransferenciaService {
                     """);
 
     private final JdbcClient jdbc;
+    private final ConfiguracaoGeralService configuracaoGeralService;
 
-    public TransferenciaService(JdbcClient jdbc) {
+    public TransferenciaService(JdbcClient jdbc, ConfiguracaoGeralService configuracaoGeralService) {
         this.jdbc = jdbc;
+        this.configuracaoGeralService = configuracaoGeralService;
     }
 
     @Transactional
@@ -244,8 +247,13 @@ public class TransferenciaService {
      * entrada ou saída (pedido direto do dono do produto, 2026-07-29).
      */
     private List<ItemResolvido> resolverItens(List<ItemTransferenciaRequest> itens, long idEmpresaOrigem) {
+        boolean permiteQtdDecimal = configuracaoGeralService.permiteQtdDecimalProduto();
         List<ItemResolvido> resolvidos = new ArrayList<>();
         for (ItemTransferenciaRequest item : itens) {
+            if (!permiteQtdDecimal && temParteDecimal(item.qtd())) {
+                throw new IllegalArgumentException(
+                        "Quantidade deve ser um número inteiro — este tenant não permite quantidade decimal de produtos (Parâmetros do Sistema).");
+            }
             boolean existe = Boolean.TRUE.equals(jdbc.sql("""
                             SELECT EXISTS (SELECT 1 FROM produto_barra pb
                                            JOIN produto p ON p.id_produto = pb.id_produto AND p.id_tenant = pb.id_tenant
@@ -313,6 +321,11 @@ public class TransferenciaService {
 
         return new TransferenciaResponse(cabecalho.idTransferencia(), cabecalho.origem(), cabecalho.destino(),
                 cabecalho.nomeUsuario(), cabecalho.data(), cabecalho.observacoes(), itens);
+    }
+
+    /** {@code true} se o valor tiver parte fracionária (ex.: 2.5), não importa a escala/zeros à direita. */
+    private static boolean temParteDecimal(BigDecimal valor) {
+        return valor.remainder(BigDecimal.ONE).compareTo(BigDecimal.ZERO) != 0;
     }
 
     private static ItemTransferenciaResponse mapearItem(ResultSet rs, int rowNum) throws SQLException {

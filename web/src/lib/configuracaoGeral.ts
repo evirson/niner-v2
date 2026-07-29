@@ -9,6 +9,7 @@ export interface ConfiguracaoGeral {
   multaCrediario: number
   cfgUsaVarianteLinha: boolean
   cfgUsaVarianteColuna: boolean
+  cfgPermiteQtdDecimal: boolean
   atualizadoEm: string
 }
 
@@ -21,6 +22,7 @@ export interface ConfiguracaoGeralFormState {
   multaCrediario: string
   cfgUsaVarianteLinha: boolean
   cfgUsaVarianteColuna: boolean
+  cfgPermiteQtdDecimal: boolean
 }
 
 export function paraFormulario(c: ConfiguracaoGeral): ConfiguracaoGeralFormState {
@@ -32,6 +34,7 @@ export function paraFormulario(c: ConfiguracaoGeral): ConfiguracaoGeralFormState
     multaCrediario: formatarPercentual(c.multaCrediario),
     cfgUsaVarianteLinha: c.cfgUsaVarianteLinha,
     cfgUsaVarianteColuna: c.cfgUsaVarianteColuna,
+    cfgPermiteQtdDecimal: c.cfgPermiteQtdDecimal,
   }
 }
 
@@ -45,6 +48,7 @@ export function paraRequisicao(f: ConfiguracaoGeralFormState) {
     multaCrediario: desmascararPercentual(f.multaCrediario),
     cfgUsaVarianteLinha: f.cfgUsaVarianteLinha,
     cfgUsaVarianteColuna: f.cfgUsaVarianteColuna,
+    cfgPermiteQtdDecimal: f.cfgPermiteQtdDecimal,
   }
 }
 
@@ -73,4 +77,16 @@ export function buscarDescontoVenda(): Promise<DescontoVenda> {
 
 export function atualizarConfiguracaoGeral(payload: ReturnType<typeof paraRequisicao>): Promise<ConfiguracaoGeral> {
   return api<ConfiguracaoGeral>('/api/v1/config-geral', { method: 'PUT', body: JSON.stringify(payload) })
+}
+
+export interface PermiteQtdDecimal {
+  cfgPermiteQtdDecimal: boolean
+}
+
+/**
+ * Aberto a qualquer papel (diferente do resto de `cfg_geral`) — usado por PDV, Transferência de
+ * Produtos e Histórico do Cliente pra saber como formatar/validar quantidade de produto.
+ */
+export function buscarPermiteQtdDecimal(): Promise<PermiteQtdDecimal> {
+  return api<PermiteQtdDecimal>('/api/v1/config-geral/permite-qtd-decimal')
 }

@@ -5,10 +5,11 @@ import AjudaDaTela from '../../components/AjudaDaTela'
 import { IconeEstoque, IconeExcluir, IconeLupa } from '../../components/Icones'
 import Toast from '../../components/Toast'
 import { ApiError } from '../../lib/api'
+import { buscarPermiteQtdDecimal } from '../../lib/configuracaoGeral'
 import { listarEmpresas } from '../../lib/empresas'
 import { useEu } from '../../lib/eu'
-import { completarPeso, desmascararPeso, formatarMoeda, formatarPeso, mascararPeso } from '../../lib/masks'
-import { buscarProdutoPorCodigo, type PdvProduto } from '../../lib/pdv'
+import { completarQuantidade, desmascararQuantidade, formatarMoeda, formatarQuantidade, mascararQuantidade } from '../../lib/masks'
+import { buscarProdutoPorCodigo, interpretarCodigoBarras, type PdvProduto } from '../../lib/pdv'
 import { criarTransferencia } from '../../lib/transferencias'
 import EscolherDestinoModal from './EscolherDestinoModal'
 import PesquisaProdutoModal from '../pdv/PesquisaProdutoModal'
@@ -43,6 +44,9 @@ export default function TransferenciaForm() {
   const empresaOrigem = empresas?.find((e) => e.idEmpresa === eu?.empresa.idEmpresa)
   const opcoesDestino = (empresas ?? []).filter((e) => e.ativo && e.idEmpresa !== eu?.empresa.idEmpresa)
 
+  const { data: cfgQtdDecimal } = useQuery({ queryKey: ['permite-qtd-decimal'], queryFn: buscarPermiteQtdDecimal })
+  const permiteQtdDecimal = cfgQtdDecimal?.cfgPermiteQtdDecimal ?? true
+
   const [idEmpresaDestino, setIdEmpresaDestino] = useState<number | ''>('')
   const [itens, setItens] = useState<ItemLinha[]>([])
   const [mostrarPesquisa, setMostrarPesquisa] = useState(false)
@@ -67,7 +71,7 @@ export default function TransferenciaForm() {
     mutationFn: () =>
       criarTransferencia({
         idEmpresaDestino: Number(idEmpresaDestino),
-        itens: itens.map((i) => ({ idVariacao: i.idVariacao, qtd: desmascararPeso(i.qtdTexto) })),
+        itens: itens.map((i) => ({ idVariacao: i.idVariacao, qtd: desmascararQuantidade(i.qtdTexto, permiteQtdDecimal) })),
         observacoes: null,
       }),
     onSuccess: () => {
@@ -80,14 +84,17 @@ export default function TransferenciaForm() {
   })
 
   // Lança um produto na lista — usado tanto pela leitura do código de barras quanto pela
-  // Pesquisa de Produto (mesma rotina do PDV): se a variação já está na lista, soma 1 na
-  // quantidade em vez de duplicar a linha.
-  const lancarProduto = (produto: PdvProduto) => {
+  // Pesquisa de Produto (mesma rotina do PDV): se a variação já está na lista, soma `qtd` na
+  // quantidade em vez de duplicar a linha. `qtd` é 1 por padrão (leitura simples) — "5*código"
+  // no campo de barras já manda a quantidade digitada (ver `interpretarCodigoBarras`).
+  const lancarProduto = (produto: PdvProduto, qtd: number = 1) => {
     setItens((atual) => {
       const existente = atual.find((i) => i.idVariacao === produto.idVariacao)
       if (existente) {
         return atual.map((i) =>
-          i.idVariacao === produto.idVariacao ? { ...i, qtdTexto: formatarPeso(desmascararPeso(i.qtdTexto) + 1) } : i,
+          i.idVariacao === produto.idVariacao
+            ? { ...i, qtdTexto: formatarQuantidade(desmascararQuantidade(i.qtdTexto, permiteQtdDecimal) + qtd, permiteQtdDecimal) }
+            : i,
         )
       }
       const estoqueNaOrigem = empresaOrigem
@@ -102,16 +109,17 @@ export default function TransferenciaForm() {
           sku: produto.sku,
           estoqueOrigem: estoqueNaOrigem,
           precoVenda: produto.precoVenda,
-          qtdTexto: formatarPeso(1),
+          qtdTexto: formatarQuantidade(qtd, permiteQtdDecimal),
         },
       ]
     })
   }
 
-  const lerCodigo = async (codigo: string) => {
+  const lerCodigo = async (valorDigitado: string) => {
+    const { qtd, codigo } = interpretarCodigoBarras(valorDigitado)
     try {
       const produto = await buscarProdutoPorCodigo(codigo)
-      lancarProduto(produto)
+      lancarProduto(produto, qtd)
     } catch (e) {
       setToast(e instanceof ApiError ? e.message : 'Não foi possível ler o código de barras.')
     }
@@ -119,9 +127,9 @@ export default function TransferenciaForm() {
 
   const aoDigitarBarras: React.KeyboardEventHandler<HTMLInputElement> = (e) => {
     if (e.key === 'Enter' && valorBarras.trim()) {
-      const codigo = valorBarras.trim()
+      const valor = valorBarras.trim()
       setValorBarras('')
-      lerCodigo(codigo)
+      lerCodigo(valor)
     }
   }
 
@@ -143,19 +151,23 @@ export default function TransferenciaForm() {
   }
 
   const alterarQtd = (idVariacao: number, texto: string) => {
-    setItens((atual) => atual.map((i) => (i.idVariacao === idVariacao ? { ...i, qtdTexto: mascararPeso(texto) } : i)))
+    setItens((atual) =>
+      atual.map((i) => (i.idVariacao === idVariacao ? { ...i, qtdTexto: mascararQuantidade(texto, permiteQtdDecimal) } : i)),
+    )
   }
 
   const aoSairQtd = (idVariacao: number) => {
-    setItens((atual) => atual.map((i) => (i.idVariacao === idVariacao ? { ...i, qtdTexto: completarPeso(i.qtdTexto) } : i)))
+    setItens((atual) =>
+      atual.map((i) => (i.idVariacao === idVariacao ? { ...i, qtdTexto: completarQuantidade(i.qtdTexto, permiteQtdDecimal) } : i)),
+    )
   }
 
   // Saldo negativo em estoque é permitido de propósito (2026-07-29) — só a quantidade
   // informada precisa ser maior que zero, não há mais bloqueio contra o saldo da origem.
-  const algumItemZerado = itens.some((i) => desmascararPeso(i.qtdTexto) <= 0)
+  const algumItemZerado = itens.some((i) => desmascararQuantidade(i.qtdTexto, permiteQtdDecimal) <= 0)
   const podeConfirmar = idEmpresaDestino !== '' && itens.length > 0 && !algumItemZerado
-  const qtdTotal = itens.reduce((soma, i) => soma + desmascararPeso(i.qtdTexto), 0)
-  const valorTotal = itens.reduce((soma, i) => soma + desmascararPeso(i.qtdTexto) * i.precoVenda, 0)
+  const qtdTotal = itens.reduce((soma, i) => soma + desmascararQuantidade(i.qtdTexto, permiteQtdDecimal), 0)
+  const valorTotal = itens.reduce((soma, i) => soma + desmascararQuantidade(i.qtdTexto, permiteQtdDecimal) * i.precoVenda, 0)
 
   const nomeDestino = opcoesDestino.find((e) => e.idEmpresa === idEmpresaDestino)
   const nomeDestinoTexto = nomeDestino ? (nomeDestino.nomeFantasia ?? nomeDestino.razaoSocial) : null
@@ -219,6 +231,7 @@ export default function TransferenciaForm() {
                   onKeyDown={aoDigitarBarras}
                 />
                 <p className="pdv-dica">Leia o código de barras do produto e pressione Enter.</p>
+                <p className="pdv-dica">Dica: "5*código" lança direto com quantidade 5.</p>
               </div>
               {/* Rótulo invisível com a mesma altura do rótulo real acima do campo de código de
                   barras — garante que o botão comece exatamente na mesma linha do input, em vez
@@ -259,19 +272,20 @@ export default function TransferenciaForm() {
                     </thead>
                     <tbody>
                       {itens.map((item) => {
-                        const qtdNumero = desmascararPeso(item.qtdTexto)
+                        const qtdNumero = desmascararQuantidade(item.qtdTexto, permiteQtdDecimal)
                         const zerado = qtdNumero <= 0
                         return (
                           <tr key={item.idVariacao}>
                             <td>{item.descricao}</td>
                             <td>{item.variacao ?? '—'}</td>
                             <td className="mono" style={{ textAlign: 'right' }}>
-                              {formatarPeso(item.estoqueOrigem)}
+                              {formatarQuantidade(item.estoqueOrigem, permiteQtdDecimal)}
                             </td>
                             <td style={{ textAlign: 'right' }}>
                               <input
                                 className="mono"
                                 style={{ width: 110, textAlign: 'right' }}
+                                inputMode={permiteQtdDecimal ? undefined : 'numeric'}
                                 value={item.qtdTexto}
                                 onChange={(e) => alterarQtd(item.idVariacao, e.target.value)}
                                 onBlur={() => aoSairQtd(item.idVariacao)}
@@ -306,7 +320,7 @@ export default function TransferenciaForm() {
                           <strong>Total</strong>
                         </td>
                         <td className="mono" style={{ textAlign: 'right' }}>
-                          <strong>{qtdTotal.toLocaleString('pt-BR', { maximumFractionDigits: 3 })}</strong>
+                          <strong>{formatarQuantidade(qtdTotal, permiteQtdDecimal)}</strong>
                         </td>
                         <td />
                         <td className="mono" style={{ textAlign: 'right' }}>

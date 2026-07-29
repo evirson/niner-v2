@@ -43,15 +43,16 @@ que já é ADMIN-only.
 
 ## Campos do formulário
 
-Tabela `cfg_geral` (V023). Seções: **Vendas**, **Catálogo**, **Crediário (Fase 2)** — esta
-última com um aviso de que o módulo de crediário ainda não existe, mas os valores já ficam
-editáveis e prontos (evita retrabalho de UI quando a Fase 2/Q5 chegar).
+Tabela `cfg_geral` (V023). Seções: **Vendas**, **Catálogo**, **Estoque** (2026-07-29), **Crediário
+(Fase 2)** — esta última com um aviso de que o módulo de crediário ainda não existe, mas os
+valores já ficam editáveis e prontos (evita retrabalho de UI quando a Fase 2/Q5 chegar).
 
 | Campo (banco) | Rótulo na tela | Componente | Regra |
 |---|---|---|---|
 | `percentual_desconto_venda` | Desconto máximo em venda (%) | percentual (máscara) | 0–100 |
 | `cfg_usa_variante_linha` | Usa variante em linha (ex.: cor) | checkbox | — |
 | `cfg_usa_variante_coluna` | Usa variante em coluna (ex.: tamanho/voltagem) | checkbox | — |
+| `cfg_permite_qtd_decimal` | Permite quantidade decimal para produtos | checkbox | — (default `true`) |
 | `juros_crediario_dias` | Juros após (dias) | inteiro | ≥ 0 |
 | `juros_crediario` | Juros (%) | percentual (máscara) | 0–100 |
 | `multa_crediario_dias` | Multa após (dias) | inteiro | ≥ 0 |
@@ -59,6 +60,17 @@ editáveis e prontos (evita retrabalho de UI quando a Fase 2/Q5 chegar).
 
 Campos percentuais reaproveitam `mascararPercentual`/`desmascararPercentual`/`formatarPercentual`
 (`web/src/lib/masks.ts`), a mesma máscara do "% Comissão" do Funcionário.
+
+**`cfg_permite_qtd_decimal` (2026-07-29):** liga/desliga se a quantidade de produto (venda,
+transferência, histórico do cliente) aceita até 3 casas decimais (`numeric(14,3)`, mesma
+convenção de peso) ou é sempre inteira. Ligado por padrão — preserva o comportamento que já
+existia antes deste parâmetro (quantidade sempre aceitava decimal em qualquer lugar). Lido por
+qualquer papel via `GET /api/v1/config-geral/permite-qtd-decimal` (PDV, Transferência de
+Produtos e Histórico do Cliente precisam do valor sem ser ADMIN) — mesmo padrão de
+`/flags-variante` e `/desconto-venda`. Validado também no servidor (`PdvVendaService`/
+`TransferenciaService` rejeitam com 400 uma quantidade fracionária quando o parâmetro está
+desligado), não é só uma máscara de UI. Detalhe completo de onde isso é aplicado:
+`docs/telas/pdv.md` e `docs/telas/transferencia-estoque.md`.
 
 ## Critérios de aceitação (viram testes)
 
@@ -71,14 +83,20 @@ Campos percentuais reaproveitam `mascararPercentual`/`desmascararPercentual`/`fo
 - Dado um número de dias negativo, quando salvo, então 400.
 - Dado dois tenants distintos, quando um atualiza seus parâmetros, então o outro não é
   afetado (isolamento).
+- Dado `cfg_permite_qtd_decimal` atualizado, quando consultado por `GET /permite-qtd-decimal`
+  (qualquer papel, inclusive OPERADOR), então reflete o valor salvo.
 
-Cobertos por `ConfiguracaoGeralTest` (6 testes) — suíte completa do projeto em **69/69 verdes**.
+Cobertos por `ConfiguracaoGeralTest` (8 testes, 2 novos em 2026-07-29) — suíte completa do
+projeto em **203/203 verdes**.
 
 ## Impacto no contrato de API
 
 ```
-GET /api/v1/config-geral    lê os parâmetros do tenant atual (ADMIN)
-PUT /api/v1/config-geral    atualiza (ADMIN) — todos os campos são obrigatórios no corpo
+GET  /api/v1/config-geral                    lê os parâmetros do tenant atual (ADMIN)
+PUT  /api/v1/config-geral                    atualiza (ADMIN) — todos os campos são obrigatórios no corpo
+GET  /api/v1/config-geral/flags-variante     usa variante em linha/coluna (qualquer papel)
+GET  /api/v1/config-geral/desconto-venda     percentual de desconto máximo (qualquer papel, PDV)
+GET  /api/v1/config-geral/permite-qtd-decimal  quantidade decimal ligada/desligada (qualquer papel)
 ```
 
 Sob `/api/v1/**` (JWT de tenant, RLS ativo — P8); 403 (Problem Details) para papel diferente
@@ -87,13 +105,15 @@ de ADMIN, verificado a partir do claim `roles` do JWT (mesmo mecanismo de
 
 ## Ajuda da tela (manual de operação + vídeo) — obrigatório (R22 / §3.7.1)
 
-- **`chave_tela`: `configuracao.geral.form`** — desconto máximo, uso de variantes,
-  juros/multa de crediário; erros comuns: só ADMIN acessa, percentuais entre 0–100.
-  `url_video`: NULL.
+- **`chave_tela`: `configuracao.geral.form`** — desconto máximo, uso de variantes, quantidade
+  decimal de produtos, juros/multa de crediário; erros comuns: só ADMIN acessa, percentuais
+  entre 0–100. `url_video`: NULL.
 
 ## Impacto no banco
 
-Nenhum — `cfg_geral` já existia por completo (V023, RLS via V024), semeada no signup.
+`cfg_permite_qtd_decimal boolean NOT NULL DEFAULT true` (coluna nova, 2026-07-29, dentro de
+`V023__cfg_geral.sql` — banco em construção, editada em vez de nova migration). O resto da
+tabela já existia por completo (V023, RLS via V024), semeada no signup.
 
 ## Impacto nas integrações
 

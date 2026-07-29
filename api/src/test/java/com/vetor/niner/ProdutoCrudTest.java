@@ -323,7 +323,7 @@ class ProdutoCrudTest {
                         .content("""
                                 {"percentualDescontoVenda":0,"jurosCrediarioDias":0,"jurosCrediario":0,
                                  "multaCrediarioDias":0,"multaCrediario":0,"cfgUsaVarianteLinha":false,
-                                 "cfgUsaVarianteColuna":true}
+                                 "cfgUsaVarianteColuna":true,"cfgPermiteQtdDecimal":true}
                                 """))
                 .andExpect(status().isOk());
 

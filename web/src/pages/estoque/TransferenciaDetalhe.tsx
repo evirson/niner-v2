@@ -2,7 +2,8 @@ import { useQuery } from '@tanstack/react-query'
 import { useNavigate, useParams } from 'react-router-dom'
 import AjudaDaTela from '../../components/AjudaDaTela'
 import { IconeEstoque } from '../../components/Icones'
-import { formatarPeso } from '../../lib/masks'
+import { buscarPermiteQtdDecimal } from '../../lib/configuracaoGeral'
+import { formatarQuantidade } from '../../lib/masks'
 import { buscarTransferencia } from '../../lib/transferencias'
 
 function formatarData(iso: string): string {
@@ -17,6 +18,8 @@ export default function TransferenciaDetalhe() {
     queryKey: ['transferencia', id],
     queryFn: () => buscarTransferencia(Number(id)),
   })
+  const { data: cfgQtdDecimal } = useQuery({ queryKey: ['permite-qtd-decimal'], queryFn: buscarPermiteQtdDecimal })
+  const permiteQtdDecimal = cfgQtdDecimal?.cfgPermiteQtdDecimal ?? true
 
   return (
     <div className="lista-tela">
@@ -97,7 +100,7 @@ export default function TransferenciaDetalhe() {
                         <td>{[item.variacaoLinha, item.variacaoColuna].filter(Boolean).join(' · ') || '—'}</td>
                         <td className="mono">{item.sku}</td>
                         <td className="mono" style={{ textAlign: 'right' }}>
-                          {formatarPeso(item.qtd)}
+                          {formatarQuantidade(item.qtd, permiteQtdDecimal)}
                         </td>
                       </tr>
                     ))}

@@ -58,9 +58,24 @@ tem linha em `produto_estoque`, conta como `0`) mais o total somado.
 A leitura por código de barras aceita **sku ou ean** (`produto_barra.sku = ? OR produto_barra.ean = ?`).
 404 amigável se não encontrar ou se o produto estiver inativo.
 
+**Sintaxe "quantidade\*código" (2026-07-29):** digitar `5*9001000000138` no campo de código de
+barras já lança o item com quantidade 5, em vez de sempre 1 — pedido do dono do produto pra não
+precisar ler/digitar o mesmo código várias vezes seguidas quando o cliente leva várias unidades
+do mesmo produto. Sem `*`, o valor inteiro é o código e a quantidade é 1 (comportamento de
+sempre — inclusive somando 1 se o item já estiver no carrinho). Dica exibida discretamente sob
+o campo de código de barras. Reaproveitado também na Transferência de Produtos — mesma função
+`interpretarCodigoBarras()` (`web/src/lib/pdv.ts`).
+
 A validação de estoque **não** acontece na busca/leitura (é só informativa — pode mudar entre a
 leitura e a efetivação); a validação que vale de verdade é a de dentro da transação de
 `POST /vendas`.
+
+**Quantidade decimal configurável (2026-07-29):** `cfg_geral.cfg_permite_qtd_decimal`
+(Parâmetros do Sistema, `docs/telas/configuracao-geral.md`) decide se a quantidade de produto
+aceita até 3 casas decimais ou é sempre inteira — vale pra exibição (estoque por empresa na
+pesquisa de produto, "Qtd" do carrinho, "Qtd Itens" do rodapé) e também pra validação: com o
+parâmetro desligado, `POST /vendas` rejeita (400) qualquer item com quantidade fracionária,
+mesmo vindo direto da API sem passar pela tela.
 
 ### Efetivar venda (F5) — split-tender + desconto da venda (revisão 2026-07-28)
 

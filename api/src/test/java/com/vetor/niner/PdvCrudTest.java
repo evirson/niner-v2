@@ -127,8 +127,20 @@ class PdvCrudTest {
                         .contentType(APPLICATION_JSON)
                         .content("""
                                 {"percentualDescontoVenda":%s,"jurosCrediarioDias":0,"jurosCrediario":0,
-                                 "multaCrediarioDias":0,"multaCrediario":0,"cfgUsaVarianteLinha":true,"cfgUsaVarianteColuna":true}
+                                 "multaCrediarioDias":0,"multaCrediario":0,"cfgUsaVarianteLinha":true,"cfgUsaVarianteColuna":true,
+                                 "cfgPermiteQtdDecimal":true}
                                 """.formatted(percentual)))
+                .andExpect(status().isOk());
+    }
+
+    private void definirPermiteQtdDecimal(String token, boolean permite) throws Exception {
+        mvc.perform(put("/api/v1/config-geral").header("Authorization", "Bearer " + token)
+                        .contentType(APPLICATION_JSON)
+                        .content("""
+                                {"percentualDescontoVenda":0,"jurosCrediarioDias":0,"jurosCrediario":0,
+                                 "multaCrediarioDias":0,"multaCrediario":0,"cfgUsaVarianteLinha":true,"cfgUsaVarianteColuna":true,
+                                 "cfgPermiteQtdDecimal":%s}
+                                """.formatted(permite)))
                 .andExpect(status().isOk());
     }
 
@@ -313,6 +325,36 @@ class PdvCrudTest {
             // Estoque baixado pela trigger (10 - 3 = 7).
             org.assertj.core.api.Assertions.assertThat(buscarQtdEstoque(c, idVariacao))
                     .isEqualByComparingTo("7.000");
+        }
+    }
+
+    @Test
+    void vendaComQuantidadeDecimalEhRejeitadaQuandoParametroDesligado() throws Exception {
+        String token = assinarNovoTenant("qtd-decimal-desligado");
+        long idTenant = extrairIdTenant(token);
+        long idProduto = criarProduto(token, "Produto Qtd Decimal", true);
+        long idCarteira = criarTipoCarteira(token, "DINHEIRO QTD DECIMAL", "AVISTA", 0, 1, 1);
+        long idCliente = criarCliente(token, "Cliente Qtd Decimal");
+        long idFuncionario = criarFuncionario(token, "Vendedor Qtd Decimal");
+        definirPermiteQtdDecimal(token, false);
+
+        try (Connection c = abrirConexao(idTenant)) {
+            long idEmpresa = buscarIdEmpresa(c);
+            long idVariacao = criarVariacao(c, idTenant, idProduto);
+            definirEstoque(c, idTenant, idEmpresa, idVariacao, new BigDecimal("10.000"));
+
+            String corpo = """
+                    {"itens":[{"idVariacao":%d,"qtd":2.500}],"descontoVenda":0,"idCliente":%d,"idFuncionario":%d,
+                     "pagamentos":[{"idCarteira":%d,"valorPago":125.00,"numeroParcelas":1}]}
+                    """.formatted(idVariacao, idCliente, idFuncionario, idCarteira);
+
+            mvc.perform(post("/api/v1/pdv/vendas").header("Authorization", "Bearer " + token)
+                            .contentType(APPLICATION_JSON).content(corpo))
+                    .andExpect(status().isBadRequest());
+
+            // Nada foi gravado — estoque continua intacto.
+            org.assertj.core.api.Assertions.assertThat(buscarQtdEstoque(c, idVariacao))
+                    .isEqualByComparingTo("10.000");
         }
     }
 

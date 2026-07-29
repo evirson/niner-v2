@@ -164,6 +164,47 @@ class TransferenciaCrudTest {
                 "esperado " + esperado + " mas era " + atual);
     }
 
+    /** `assinarNovoTenant` já devolve token ADMIN — PUT exige o corpo inteiro (sem campo nullable). */
+    private void definirPermiteQtdDecimal(String token, boolean permite) throws Exception {
+        mvc.perform(put("/api/v1/config-geral").header("Authorization", "Bearer " + token)
+                        .contentType(APPLICATION_JSON)
+                        .content("""
+                                {"percentualDescontoVenda":0,"jurosCrediarioDias":0,"jurosCrediario":0,
+                                 "multaCrediarioDias":0,"multaCrediario":0,"cfgUsaVarianteLinha":true,"cfgUsaVarianteColuna":true,
+                                 "cfgPermiteQtdDecimal":%s}
+                                """.formatted(permite)))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void transferenciaComQuantidadeDecimalEhRejeitadaQuandoParametroDesligado() throws Exception {
+        String token = assinarNovoTenant("qtd-decimal-desligado");
+        long idTenant = extrairIdTenant(token);
+        long idEmpresaOrigem = extrairIdEmpresa(token);
+        long idProduto = criarProduto(token, "Produto Qtd Decimal Transferencia");
+        definirPermiteQtdDecimal(token, false);
+
+        long idVariacao;
+        long idEmpresaDestino;
+        try (Connection c = abrirConexao(idTenant)) {
+            idVariacao = criarVariacao(c, idTenant, idProduto);
+            definirEstoque(c, idTenant, idEmpresaOrigem, idVariacao, new BigDecimal("10.000"));
+            idEmpresaDestino = criarSegundaEmpresa(c, idTenant);
+        }
+
+        String corpo = """
+                {"idEmpresaDestino":%d,"itens":[{"idVariacao":%d,"qtd":2.500}]}
+                """.formatted(idEmpresaDestino, idVariacao);
+
+        mvc.perform(post("/api/v1/estoque/transferencias").header("Authorization", "Bearer " + token)
+                        .contentType(APPLICATION_JSON).content(corpo))
+                .andExpect(status().isBadRequest());
+
+        try (Connection c = abrirConexao(idTenant)) {
+            assertEquals(new BigDecimal("10.000"), buscarQtdEstoque(c, idEmpresaOrigem, idVariacao));
+        }
+    }
+
     @Test
     void transferenciaComEstoqueInsuficienteEhAceitaEDeixaSaldoNegativoNaOrigem() throws Exception {
         // Saldo negativo é permitido de propósito em qualquer movimentação (2026-07-29) —

@@ -1,5 +1,6 @@
 package com.vetor.niner.vendas;
 
+import com.vetor.niner.configuracao.geral.ConfiguracaoGeralService;
 import com.vetor.niner.financeiro.TipoCarteiraDtos.CategoriaCarteira;
 import com.vetor.niner.vendas.PdvDtos.EfetivarVendaRequest;
 import com.vetor.niner.vendas.PdvDtos.ItemVendaRequest;
@@ -58,9 +59,11 @@ public class PdvVendaService {
     private static final BigDecimal TOLERANCIA_SALDO = new BigDecimal("0.01");
 
     private final JdbcClient jdbc;
+    private final ConfiguracaoGeralService configuracaoGeralService;
 
-    public PdvVendaService(JdbcClient jdbc) {
+    public PdvVendaService(JdbcClient jdbc, ConfiguracaoGeralService configuracaoGeralService) {
         this.jdbc = jdbc;
+        this.configuracaoGeralService = configuracaoGeralService;
     }
 
     @Transactional
@@ -173,6 +176,11 @@ public class PdvVendaService {
                 .orElseThrow(() -> new IllegalArgumentException("Tipo de carteira informado não existe."));
     }
 
+    /** {@code true} se o valor tiver parte fracionária (ex.: 2.5), não importa a escala/zeros à direita. */
+    private static boolean temParteDecimal(BigDecimal valor) {
+        return valor.remainder(BigDecimal.ONE).compareTo(BigDecimal.ZERO) != 0;
+    }
+
     private static boolean pagaNaHora(CategoriaCarteira categoria) {
         return categoria == CategoriaCarteira.AVISTA || categoria == CategoriaCarteira.CARTAO_DEBITO;
     }
@@ -281,11 +289,18 @@ public class PdvVendaService {
 
     /**
      * Resolve preço/variação de TODOS os itens antes de gravar. Não checa estoque disponível —
-     * saldo negativo é permitido de propósito em qualquer movimentação (2026-07-29).
+     * saldo negativo é permitido de propósito em qualquer movimentação (2026-07-29). Quantidade
+     * decimal só é aceita se {@code cfg_geral.cfg_permite_qtd_decimal} estiver ligado
+     * (Parâmetros do Sistema) — mesma regra em qualquer lugar que grava {@code qtd_produto}.
      */
     private List<ItemResolvido> resolverItens(List<ItemVendaRequest> itens, long idEmpresa) {
+        boolean permiteQtdDecimal = configuracaoGeralService.permiteQtdDecimalProduto();
         List<ItemResolvido> resolvidos = new ArrayList<>();
         for (ItemVendaRequest item : itens) {
+            if (!permiteQtdDecimal && temParteDecimal(item.qtd())) {
+                throw new IllegalArgumentException(
+                        "Quantidade deve ser um número inteiro — este tenant não permite quantidade decimal de produtos (Parâmetros do Sistema).");
+            }
             LinhaItem linha = jdbc.sql("""
                             SELECT p.descricao AS descricao_produto,
                                    vl.descricao AS variacao_linha, vc.descricao AS variacao_coluna,

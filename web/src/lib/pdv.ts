@@ -100,6 +100,21 @@ export function buscarProdutoPorCodigo(codigo: string): Promise<PdvProduto> {
   return api<PdvProduto>(`/api/v1/pdv/produtos/codigo/${encodeURIComponent(codigo)}`)
 }
 
+/**
+ * Aceita "quantidade*código" no campo de código de barras (ex.: "5*9001000000138" — quantidade
+ * 5, código 9001000000138), pra já lançar o item com a quantidade digitada em vez de sempre 1 —
+ * pedido do dono do produto (2026-07-29) pra não precisar ler o mesmo código várias vezes
+ * seguidas quando o cliente leva 5, 10 ou mais unidades do mesmo produto. Sem "*", o valor
+ * inteiro é o código de barras e a quantidade é 1 (comportamento de sempre). Usado tanto no PDV
+ * quanto na Transferência de Produtos — mesmo campo, mesma convenção.
+ */
+export function interpretarCodigoBarras(valor: string): { qtd: number; codigo: string } {
+  const m = /^(\d+)\*(.+)$/.exec(valor.trim())
+  if (!m) return { qtd: 1, codigo: valor.trim() }
+  const qtd = Number(m[1])
+  return { qtd: Number.isFinite(qtd) && qtd > 0 ? qtd : 1, codigo: m[2].trim() }
+}
+
 export function buscarClientesPdv(busca: string): Promise<PdvCliente[]> {
   const params = new URLSearchParams()
   if (busca) params.set('busca', busca)
