@@ -290,6 +290,35 @@ const CONTEUDOS: Record<string, ConteudoAjuda> = {
     ],
     urlVideo: null,
   },
+  'financeiro.recebimentocrediario.tela': {
+    titulo: 'Recebimento de Crediário',
+    objetivo: 'Receber uma ou mais parcelas de crediário em aberto de um cliente.',
+    passos: [
+      'Busque o cliente por nome, CPF ou celular (pelo menos um dos três).',
+      'Selecione uma ou mais parcelas em aberto — os totais no rodapé somam automaticamente.',
+      'Escolha a forma de pagamento (só aparecem carteiras liberadas para receber crediário) e informe o valor — pode combinar mais de uma forma.',
+      'Confirme em "Receber" quando o Saldo a Pagar chegar a zero.',
+    ],
+    errosComuns: [
+      'Nenhuma forma de pagamento aparece: cadastre ou libere uma em Tipo de Carteira, marcando "Permite receber parcelas de crediário".',
+      'Não acho o cliente: confira se o nome/CPF/celular digitado está correto — a busca não exige os três juntos.',
+    ],
+    urlVideo: null,
+  },
+  'financeiro.estornorecebimentocrediario.tela': {
+    titulo: 'Estorno de Recebimento de Crediário',
+    objetivo: 'Desfazer um recebimento de crediário já efetivado, reabrindo as parcelas e apagando os lançamentos de caixa.',
+    passos: [
+      'Informe o nome do cliente (obrigatório) — data inicial/final de recebimento são opcionais, pra estreitar a busca.',
+      'Cada linha é um recebimento inteiro (um "lote"), não uma parcela isolada.',
+      'Clique no ícone de estorno e confirme — todas as parcelas daquele lote voltam a ficar em aberto, mesmo que sejam de vendas/contratos diferentes recebidos juntos na mesma operação.',
+    ],
+    errosComuns: [
+      'Não acho o recebimento: confira o nome do cliente e o intervalo de datas — o filtro de cliente é sempre obrigatório.',
+      'Não é possível estornar parte de um lote — se ele cobriu várias parcelas juntas, o estorno desfaz todas de uma vez.',
+    ],
+    urlVideo: null,
+  },
 }
 
 export default function AjudaDaTela({ chaveTela }: { chaveTela: string }) {

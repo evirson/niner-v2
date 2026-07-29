@@ -31,6 +31,8 @@ export interface TipoCarteira {
   taxaAdministradora: number | null
   percDesconto: number | null
   percAcrescimo: number | null
+  /** Recebimento de Crediário (2026-07-29, RN007) — só carteiras marcadas aqui aparecem como opção de pagamento naquela tela. */
+  permiteReceberCrediario: boolean
   criadoEm: string
   atualizadoEm: string
 }
@@ -45,6 +47,7 @@ export interface TipoCarteiraFormState {
   taxaAdministradora: string
   percDesconto: string
   percAcrescimo: string
+  permiteReceberCrediario: boolean
 }
 
 export const TIPO_CARTEIRA_VAZIO: TipoCarteiraFormState = {
@@ -56,6 +59,7 @@ export const TIPO_CARTEIRA_VAZIO: TipoCarteiraFormState = {
   taxaAdministradora: '',
   percDesconto: '',
   percAcrescimo: '',
+  permiteReceberCrediario: false,
 }
 
 export function paraFormulario(tc: TipoCarteira): TipoCarteiraFormState {
@@ -68,6 +72,7 @@ export function paraFormulario(tc: TipoCarteira): TipoCarteiraFormState {
     taxaAdministradora: tc.taxaAdministradora == null ? '' : formatarPercentual(tc.taxaAdministradora),
     percDesconto: tc.percDesconto == null ? '' : formatarPercentual(tc.percDesconto),
     percAcrescimo: tc.percAcrescimo == null ? '' : formatarPercentual(tc.percAcrescimo),
+    permiteReceberCrediario: tc.permiteReceberCrediario,
   }
 }
 
@@ -87,6 +92,7 @@ export function paraRequisicao(f: TipoCarteiraFormState) {
     taxaAdministradora: f.taxaAdministradora.trim() ? desmascararPercentual(f.taxaAdministradora) : null,
     percDesconto: desmascararPercentualOuNulo(f.percDesconto),
     percAcrescimo: desmascararPercentualOuNulo(f.percAcrescimo),
+    permiteReceberCrediario: f.permiteReceberCrediario,
   }
 }
 

@@ -573,6 +573,8 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
 .pdv-resumo-desconto-inputs { display: flex; align-items: center; gap: 4px; }
 .pdv-resumo-valor-pago { font-weight: 700; font-size: 16px; }
 .pdv-resumo-valor-pago.pdv-resumo-fechado { color: var(--sucesso); }
+.pdv-caixa-total.pdv-resumo-fechado { border-color: var(--sucesso); }
+.pdv-caixa-total.pdv-resumo-fechado .pdv-valor { color: var(--sucesso); }
 
 .pdv-categorias-coluna { flex: 1; min-width: 150px; display: flex; flex-direction: column; gap: 10px; }
 .pdv-botao-categoria-coluna { flex: 1; font-size: 14px; font-weight: 700; }
@@ -589,3 +591,50 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
 .pdv-linha-valor-parcelas { display: flex; gap: 14px; align-items: flex-start; }
 .pdv-linha-valor-parcelas > div { flex: 1; display: flex; flex-direction: column; gap: 4px; }
 .pdv-campo-valor-pago, .pdv-campo-parcelas { max-width: 220px; }
+
+/* Recebimento de Crediário (2026-07-29, layout revisado) — grid de parcelas + barra lateral
+   fixa (Selecionadas/Valor Selecionado/Valor Recebido + botão Receber) lado a lado. A tela
+   inteira (`.recebimento-card`) preenche a altura de `.lista-corpo` (mesmo truque de
+   `.historico-coluna-esquerda`/`.table-wrap`, ver comentário acima de `.table-wrap`); só a
+   seção de parcelas cresce (`flex:1`) e só a grid dela rola — nada de scroll na tela toda
+   (pedido explícito: "não quero scroll vertical com exceção da grid de parcelas a receber"). */
+.recebimento-lista-corpo { overflow-y: hidden; display: flex; flex-direction: column; }
+.recebimento-card { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+.recebimento-card .section { padding: 14px 0; }
+.recebimento-card .pdv-area-pagamentos { min-height: 0; }
+.recebimento-secao-parcelas { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+/* min-height cobre o conteúdo natural da sidebar (3 caixas + botão Receber) — abaixo disso é
+   a grid que cede (rola por dentro), nunca a sidebar. */
+.recebimento-parcelas-layout { display: flex; gap: 14px; margin-top: 10px; flex: 1; min-height: 220px; align-items: stretch; }
+.recebimento-parcelas-grid { flex: 1; min-width: 0; min-height: 0; margin-top: 0; } /* altura/scroll já vêm de .table-wrap */
+.recebimento-parcelas-sidebar {
+  flex-shrink: 0; width: 220px; display: flex; flex-direction: column; gap: 10px; overflow-y: auto;
+}
+.recebimento-categorias-botoes { display: flex; flex-direction: column; gap: 10px; margin-top: 4px; }
+.recebimento-botao-receber { margin-top: 4px; padding: 14px; font-size: 15px; font-weight: 700; }
+
+/* Formas de pagamento lançadas (split-tender) em 4 colunas, em vez da tabela de 1 por linha.
+   Cartão mais enxuto (padding/gap menores) pra caber 4 por linha — fonte não muda. */
+.recebimento-pagamentos-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.recebimento-pagamento-card {
+  display: flex; align-items: center; justify-content: space-between; gap: 6px;
+  border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); padding: 6px 8px;
+}
+.recebimento-pagamento-card-info { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.recebimento-pagamento-card-nome {
+  font-weight: 600; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.recebimento-pagamento-card-info .muted { font-size: 11px; }
+.recebimento-pagamento-card-acoes { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.recebimento-pagamento-card-valor { font-weight: 700; font-size: 14px; }
+.recebimento-pagamento-card-acoes .acao-icone { width: 22px; height: 22px; font-size: 12px; }
+@media (max-width: 900px) {
+  .recebimento-pagamentos-grid { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 900px) {
+  .recebimento-lista-corpo { overflow-y: auto; }
+  .recebimento-card { height: auto; }
+  .recebimento-parcelas-layout { flex-direction: column; height: 420px; flex: none; }
+  .recebimento-parcelas-grid { height: 360px; }
+  .recebimento-parcelas-sidebar { width: 100%; flex-direction: row; flex-wrap: wrap; }
+}

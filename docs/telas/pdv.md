@@ -206,15 +206,18 @@ zerado **e** cliente **e** vendedor selecionados.
   implementada.
 - F2 Pesquisa Produto, F3 Altera Quantidade, F4 Limpa Tela — inalterados.
 
-### Baixa de estoque e validação de estoque insuficiente (P1)
+### Baixa de estoque — sem checagem de saldo (revisado 2026-07-29)
 
-Dentro da mesma transação, pra cada item: busca `produto_estoque.disponivel` da empresa
-resolvida (`0` se não existir linha); se `disponivel < qtd`, a transação inteira é abortada e a
-API responde **409** ("Estoque insuficiente para \<descrição + variação\>.") — nunca vende no
-negativo. Passando na validação, grava `produto_movimento_mestre` (`tipo_movimento = 'VENDA'`,
-vinculado à `venda`) + uma linha de `produto_movimento_detalhe` (`credito_debito = 'D'`) por
-item; a trigger `fn_atualiza_estoque_movimento` (já existente, V019) baixa `produto_estoque`
-sozinha — nenhuma lógica de baixa de estoque em Java.
+Dentro da mesma transação, pra cada item: resolve preço/variação em `PdvVendaService.
+resolverItens()`. **Não checa mais `produto_estoque.disponivel`** — pedido direto do dono do
+produto, 2026-07-29, vale pra qualquer movimentação de produto do sistema (entrada ou saída,
+não só PDV): venda é aceita e grava normalmente mesmo sem saldo suficiente, deixando
+`produto_estoque.qtd_estoque` negativo. Antes disso (2026-07-28 até 2026-07-29) a regra era o
+oposto — 409 e nada gravado se `disponivel < qtd` — texto histórico mantido só como referência
+de como funcionava. Grava `produto_movimento_mestre` (`tipo_movimento = 'VENDA'`, vinculado à
+`venda`) + uma linha de `produto_movimento_detalhe` (`credito_debito = 'D'`) por item; a trigger
+`fn_atualiza_estoque_movimento` (já existente, V019) baixa `produto_estoque` sozinha (nenhuma
+linha tem `CHECK` contra saldo negativo) — nenhuma lógica de baixa de estoque em Java.
 
 ## Contrato de API
 
@@ -286,7 +289,7 @@ Todos sob `/api/v1/**` (JWT de tenant, RLS ativo — P8). Erros em Problem Detai
 400 (item/variação/carteira/cliente/vendedor inexistente ou inativo, categoria×parcelas
 incompatível, `descontoVenda` acima do máximo permitido, `valorPago` de uma linha acima do teto
 da forma de pagamento com desconto próprio, soma das coberturas não fecha o saldo a pagar), 404
-(código de barras não encontrado), 409 (estoque insuficiente).
+(código de barras não encontrado). Não existe mais 409 por estoque insuficiente (2026-07-29).
 
 ## Critérios de aceitação (viram testes)
 
@@ -338,8 +341,8 @@ da forma de pagamento com desconto próprio, soma das coberturas não fecha o sa
 - **`chave_tela`: `vendas.pdv`** — F2 pesquisa produto (nome), F3 altera quantidade de um item já
   lançado, F4 limpa a venda em andamento, F5 reservado pra devolução de produto (ainda sem
   funcionalidade), F6 efetiva a venda (pede cliente, vendedor e forma de pagamento); leitura de
-  código de barras no campo próprio + Enter. Erro comum: "Estoque insuficiente" ao tentar vender
-  mais do que o disponível na loja. `url_video`: NULL.
+  código de barras no campo próprio + Enter. Vender mais do que o disponível na loja não é mais
+  um erro (2026-07-29) — a venda é aceita e o estoque fica negativo. `url_video`: NULL.
 
 ## Impacto no banco
 

@@ -141,6 +141,45 @@ export function IconePlanoContas({ size = 28 }: { size?: number }) {
   )
 }
 
+/** Ícone da tela de Recebimento de Crediário (recibo com confirmação) — fixa a função da tela ao lado do título. */
+export function IconeRecebimentoCrediario({ size = 28 }: { size?: number }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.6} stroke="currentColor" width={size} height={size} aria-hidden="true">
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M6 3h12a1 1 0 0 1 1 1v16.5l-2.5-1.5-2.5 1.5-2.5-1.5-2.5 1.5-2.5-1.5L5 20.5V4a1 1 0 0 1 1-1Z"
+      />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M8 8h8M8 11.5h4" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="m8.5 15 1.5 1.5L13.5 13" />
+    </svg>
+  )
+}
+
+/** Ícone da tela de Estorno de Recebimento de Crediário (recibo com seta de retorno) — fixa a função da tela ao lado do título. */
+export function IconeEstornoRecebimentoCrediario({ size = 28 }: { size?: number }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.6} stroke="currentColor" width={size} height={size} aria-hidden="true">
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M6 3h12a1 1 0 0 1 1 1v16.5l-2.5-1.5-2.5 1.5-2.5-1.5-2.5 1.5-2.5-1.5L5 20.5V4a1 1 0 0 1 1-1Z"
+      />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M8 8h8" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M9 14.5 7 12.5m0 0 2-2m-2 2h4.5a3 3 0 0 1 0 6H9.5" />
+    </svg>
+  )
+}
+
+/** Ícone de ação "estornar" por linha (seta de retorno) — mesma cor de excluir (.acao-excluir), ação de desfazer. */
+export function IconeEstornar({ size = 18 }: { size?: number }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor" width={size} height={size} aria-hidden="true">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M9 15 3 9m0 0 6-6M3 9h12a6 6 0 0 1 0 12h-3" />
+    </svg>
+  )
+}
+
 /** Ícone da tela de Tipo de Carteira (prazo/parcelas do crediário/cartão) — fixa a função da tela ao lado do título. */
 export function IconeTipoCarteira({ size = 28 }: { size?: number }) {
   return (

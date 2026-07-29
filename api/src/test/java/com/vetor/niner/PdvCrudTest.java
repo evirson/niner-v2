@@ -82,7 +82,7 @@ class PdvCrudTest {
                         .content("""
                                 {"nomeCarteira":"%s","categoriaCarteira":"%s","prazoPagamento":%d,
                                  "pcMinima":%d,"pcMaxima":%d,"taxaAdministradora":0,
-                                 "percDesconto":%s,"percAcrescimo":%s}
+                                 "percDesconto":%s,"percAcrescimo":%s,"permiteReceberCrediario":false}
                                 """.formatted(nome, categoria, prazoPagamento, pcMinima, pcMaxima,
                                 percDesconto == null ? "null" : percDesconto, percAcrescimo == null ? "null" : percAcrescimo)))
                 .andExpect(status().isCreated())
@@ -348,7 +348,9 @@ class PdvCrudTest {
     }
 
     @Test
-    void estoqueInsuficienteBloqueiaVendaComConflitoENaoGravaNada() throws Exception {
+    void estoqueInsuficienteNaoBloqueiaVendaEDeixaSaldoNegativo() throws Exception {
+        // Saldo negativo é permitido de propósito em qualquer movimentação (2026-07-29) — não
+        // há mais bloqueio de estoque insuficiente no PDV.
         String token = assinarNovoTenant("sem-estoque");
         long idTenant = extrairIdTenant(token);
         long idProduto = criarProduto(token, "Produto Sem Estoque", true);
@@ -368,10 +370,10 @@ class PdvCrudTest {
 
             mvc.perform(post("/api/v1/pdv/vendas").header("Authorization", "Bearer " + token)
                             .contentType(APPLICATION_JSON).content(corpo))
-                    .andExpect(status().isConflict());
+                    .andExpect(status().isCreated());
 
-            // Nada foi gravado — estoque continua 2.
-            org.assertj.core.api.Assertions.assertThat(buscarQtdEstoque(c, idVariacao)).isEqualByComparingTo("2.000");
+            // Vendeu 5 com só 2 em estoque — saldo fica negativo, venda gravada normalmente.
+            org.assertj.core.api.Assertions.assertThat(buscarQtdEstoque(c, idVariacao)).isEqualByComparingTo("-3.000");
         }
     }
 

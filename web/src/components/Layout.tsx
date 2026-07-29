@@ -12,8 +12,10 @@ import {
   IconeParametros,
   IconePdv,
   IconePedidos,
+  IconeEstornoRecebimentoCrediario,
   IconePlanoContas,
   IconeProduto,
+  IconeRecebimentoCrediario,
   IconeRecolherMenu,
   IconeTipoCarteira,
   IconeUsuario,
@@ -40,6 +42,8 @@ const NAV: ItemNav[] = [
   { to: '/funcionarios', label: 'Funcionários', icone: IconeFuncionario },
   { to: '/planos-contas', label: 'Plano de Contas', icone: IconePlanoContas },
   { to: '/tipos-carteira', label: 'Tipo de Carteira', icone: IconeTipoCarteira },
+  { to: '/recebimento-crediario', label: 'Recebimento de Crediário', icone: IconeRecebimentoCrediario },
+  { to: '/estorno-recebimento-crediario', label: 'Estorno de Crediário', icone: IconeEstornoRecebimentoCrediario },
 ]
 
 /** Só ADMIN vê este item — a rota em si também é protegida por `RequireAdmin` (defesa em profundidade). */

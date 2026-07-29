@@ -91,15 +91,21 @@ public class SignupService {
         // global, porque id_tenant é obrigatório (P8) e não existe no momento do Flyway. Mesmo
         // conjunto do legado (db/042_MOEDAS.txt), mas agora direto em tipo_carteira — moeda foi
         // absorvida em 2026-07-28 (motivo completo no topo de V025__financeiro_caixa_crediario.sql).
+        // permite_receber_crediario (2026-07-29, RN007 do Recebimento de Crediário): nasce ligado
+        // nas categorias explicitamente permitidas pela spec (À Vista/Débito/Crédito) — evita uma
+        // tela de recebimento vazia em tenant novo; CREDIARIO/vales seguem desligados (crediário
+        // não paga crediário, vale não estava nas categorias pedidas).
         jdbc.sql("""
-                        INSERT INTO tipo_carteira (id_tenant, nome_carteira, categoria_carteira, prazo_pagamento, pc_minima, pc_maxima) VALUES
-                            (?, 'DINHEIRO', 'AVISTA', 0, 1, 1),
-                            (?, 'PIX', 'AVISTA', 0, 1, 1),
-                            (?, 'CARTAO DEBITO', 'CARTAO_DEBITO', 1, 1, 1),
-                            (?, 'CARTAO CREDITO', 'CARTAO_CREDITO', 30, 1, 6),
-                            (?, 'CREDIARIO', 'CREDIARIO', 30, 1, 6),
-                            (?, 'VALE PRESENTE', 'AVISTA', 0, 1, 1),
-                            (?, 'VALE MERCADORIA', 'AVISTA', 0, 1, 1)
+                        INSERT INTO tipo_carteira
+                            (id_tenant, nome_carteira, categoria_carteira, prazo_pagamento, pc_minima, pc_maxima,
+                             permite_receber_crediario) VALUES
+                            (?, 'DINHEIRO', 'AVISTA', 0, 1, 1, true),
+                            (?, 'PIX', 'AVISTA', 0, 1, 1, true),
+                            (?, 'CARTAO DEBITO', 'CARTAO_DEBITO', 1, 1, 1, true),
+                            (?, 'CARTAO CREDITO', 'CARTAO_CREDITO', 30, 1, 6, true),
+                            (?, 'CREDIARIO', 'CREDIARIO', 30, 1, 6, false),
+                            (?, 'VALE PRESENTE', 'AVISTA', 0, 1, 1, false),
+                            (?, 'VALE MERCADORIA', 'AVISTA', 0, 1, 1, false)
                         """)
                 .params(idTenant, idTenant, idTenant, idTenant, idTenant, idTenant, idTenant)
                 .update();

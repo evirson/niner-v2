@@ -309,6 +309,22 @@ export default function TipoCarteiraForm({ somenteLeitura = false }: { somenteLe
           </div>
         </section>
 
+        <section className="section">
+          <p className="section-label">Recebimento de Crediário</p>
+          <label className="checkbox-linha" style={{ marginTop: 0 }}>
+            <input
+              type="checkbox"
+              checked={form.permiteReceberCrediario}
+              onChange={(e) => setForm((f) => ({ ...f, permiteReceberCrediario: e.target.checked }))}
+            />
+            Permite receber parcelas de crediário
+          </label>
+          <p className="muted" style={{ fontSize: 12, marginTop: 4 }}>
+            Só carteiras marcadas aqui aparecem como opção de pagamento na tela de Recebimento de
+            Crediário.
+          </p>
+        </section>
+
         <InfoRegistro
           codigo={carteiraExistente?.idCarteira}
           criadoEm={carteiraExistente?.criadoEm}

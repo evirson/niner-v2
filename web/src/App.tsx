@@ -29,6 +29,8 @@ import UsuarioForm from './pages/usuarios/UsuarioForm'
 import TransferenciaLista from './pages/estoque/TransferenciaLista'
 import TransferenciaForm from './pages/estoque/TransferenciaForm'
 import TransferenciaDetalhe from './pages/estoque/TransferenciaDetalhe'
+import EstornoRecebimentoCrediario from './pages/recebimentocrediario/EstornoRecebimentoCrediario'
+import RecebimentoCrediario from './pages/recebimentocrediario/RecebimentoCrediario'
 
 export default function App() {
   return (
@@ -38,6 +40,8 @@ export default function App() {
         <Route element={<Layout />}>
           <Route path="/" element={<Dashboard />} />
           <Route path="/pdv" element={<Pdv />} />
+          <Route path="/recebimento-crediario" element={<RecebimentoCrediario />} />
+          <Route path="/estorno-recebimento-crediario" element={<EstornoRecebimentoCrediario />} />
           <Route path="/produtos" element={<ProdutoLista />} />
           <Route path="/produtos/novo" element={<ProdutoForm />} />
           <Route element={<RequireAdmin />}>

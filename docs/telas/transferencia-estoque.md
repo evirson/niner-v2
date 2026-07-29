@@ -1,5 +1,5 @@
 # Spec: Transferência de Produtos Entre Empresas       Status: Aprovada
-Autor: Claudio Calixto (dono do produto) · Data: 2026-07-28 · Módulo(s): `estoque` (transferencia) · Fase: 1 — Núcleo do ERP
+Autor: Claudio Calixto (dono do produto) · Data: 2026-07-28, revisada 2026-07-29 · Módulo(s): `estoque` (transferencia) · Fase: 1 — Núcleo do ERP
 
 ## Problema
 
@@ -69,48 +69,89 @@ tabela de negócio específica).
 | Empresa de Origem | texto somente-leitura | — | Sempre a empresa ativa da sessão (`GET /api/v1/eu`, campo `empresa`); nunca editável |
 | Empresa de Destino | select | **Sim** | `GET /api/v1/empresas`, excluindo a empresa de origem e as inativas |
 | Produtos | busca + lista | **Sim, ao menos um** | Reaproveita `PesquisaProdutoModal` do PDV (`GET /api/v1/pdv/produtos`) — mesma busca, mostra estoque por empresa, o que já dá visibilidade do saldo na origem antes de adicionar |
-| Quantidade (por item) | numérico, 3 casas (`numeric(14,3)`) | **Sim, > 0** | Não pode passar do estoque disponível na origem — validado no front (aviso inline) e de novo no back (409 se passar) |
-| Observações | texto livre | Não | Livre, sem validação de formato |
+| Quantidade (por item) | numérico, 3 casas (`numeric(14,3)`) | **Sim, > 0** | Sem limite contra o estoque da origem (revisado 2026-07-29, ver "Estoque negativo permitido" abaixo) — só não pode ser zero/negativa. |
 
 **Sem `cfg_tela_campo` nesta tela** — mesma decisão de `identidade.usuario`: os únicos campos
 são estruturalmente obrigatórios (destino + ao menos um item), não há o que tornar configurável
-por tenant.
+por tenant. **Observações removido (2026-07-29)** — campo existia desde a v1 mas nunca foi
+usado; tirado do formulário e do payload (`criarTransferencia` sempre envia `observacoes: null`).
+
+**Fluxo de "Nova Transferência" (revisado 2026-07-29):** clicar em "Nova Transferência" abre a
+tela de produtos com um popup por cima (`EscolherDestinoModal.tsx`) mostrando a empresa de
+origem (somente leitura) e pedindo a de destino — só depois de confirmado o popup o campo de
+código de barras libera (mesmo mecanismo de foco automático de antes, só que disparado pela
+escolha no popup em vez de um select embutido na tela). O título da tela passa a mostrar
+"Nova Transferência · {origem} → {destino}" assim que os dois são conhecidos. Cancelar o popup
+volta para a listagem.
 
 ## Tela de listagem
 
-- **Colunas:** Data, Origem, Destino, Usuário, Itens (contagem).
-- Sem ordenação por coluna nem filtros na v1 — lista simples, mais recente primeiro
-  (`data_transferencia DESC`).
+- **Colunas:** Nº, Data, Origem, Destino, Usuário, Itens (contagem) — todas ordenáveis (clique
+  no cabeçalho, ▲/▼/⇅, revisado 2026-07-29; antes só havia Data/Origem/Destino/Usuário/Itens
+  sem ordenação nenhuma).
+- **Filtros (novo, 2026-07-29):** Data Inicial, Data Final, Nº da Transferência, Empresa de
+  Saída, Empresa de Entrada — nessa ordem na barra. `GET /api/v1/estoque/transferencias` ganhou
+  os query params `idTransferencia`/`idEmpresaOrigem`/`idEmpresaDestino`/`dataInicial`/
+  `dataFinal` (datas comparadas por `::date`, sem hora).
 - **Paginação:** por número de página, tamanho fixo em 50 — mesmo padrão do resto do projeto.
-- **Ação por linha:** só visualizar (ícone verde) — **sem editar nem excluir**, mesma decisão
-  de produto de uma venda: transferência já efetivada é um registro permanente do estoque
-  (P3, auditabilidade); `produto_movimento_mestre` já é imutável no banco desde V019/V024.
+- **Ação por linha:** visualizar (ícone verde) **e excluir (ícone vermelho, novo em
+  2026-07-29)** — ver "Exclusão de transferência" abaixo. Não existe editar.
 
 ## Critérios de aceitação (viram testes)
 
-- Dado um usuário logado na empresa A com estoque suficiente de um produto, quando transfere
-  para a empresa B, então o estoque de A diminui e o de B aumenta na mesma quantidade.
-- Dado um pedido de transferência maior que o estoque disponível na origem, quando enviado,
-  então a API rejeita com 409.
+- Dado um usuário logado na empresa A, quando transfere um produto para a empresa B, então o
+  estoque de A diminui e o de B aumenta na mesma quantidade — **mesmo que A não tenha saldo
+  suficiente** (revisado 2026-07-29, ver "Estoque negativo permitido").
 - Dado um pedido de transferência para a própria empresa de origem, então a API rejeita com 400.
 - Dado um `idEmpresaDestino` inexistente ou de outro tenant, então a API rejeita com 400.
 - Dado uma transferência criada, quando listada ou buscada por id, então aparecem os produtos e
   quantidades corretos.
 - Dado uma transferência de outro tenant, quando buscada por id, então não aparece (RLS).
+- Dado uma transferência existente, quando excluída, então a quantidade de cada produto volta
+  para a empresa de origem e sai da de destino — mesmo que o destino não tenha mais saldo
+  suficiente para "devolver" (fica negativo).
 
-Cobertos por `TransferenciaCrudTest` (6 testes). Suíte completa do projeto: 179/179 verdes.
+Cobertos por `TransferenciaCrudTest`. Suíte completa do projeto: 193/193 verdes (2026-07-29).
 
 ## Impacto no contrato de API
 
 ```
-GET  /api/v1/estoque/transferencias?pagina=&limite=   lista paginada
-GET  /api/v1/estoque/transferencias/{id}               detalhe (produtos e quantidades)
-POST /api/v1/estoque/transferencias                     cria transferência (empresa de origem = eid do JWT)
+GET    /api/v1/estoque/transferencias?pagina=&limite=&ordenarPor=&direcao=
+                                                         &idTransferencia=&idEmpresaOrigem=
+                                                         &idEmpresaDestino=&dataInicial=&dataFinal=
+                                                         lista paginada, filtrável e ordenável
+GET    /api/v1/estoque/transferencias/{id}               detalhe (produtos e quantidades)
+POST   /api/v1/estoque/transferencias                     cria transferência (empresa de origem = eid do JWT)
+DELETE /api/v1/estoque/transferencias/{id}                exclui — reverte o estoque (2026-07-29)
 ```
 
 Todos sob `/api/v1/**` (JWT de tenant, RLS ativo — P8). Aberto a ADMIN e OPERADOR (operação do
 dia a dia, mesma decisão de PDV/cadastros — não é sensível como `identidade.usuario`). Erros em
 Problem Details (RFC 9457).
+
+## Estoque negativo permitido (revisado 2026-07-29)
+
+Pedido direto do dono do produto, **vale para qualquer movimentação de produto do sistema**
+(entrada ou saída, não só transferência — PDV incluído): nenhuma rotina de movimentação de
+estoque deve checar/bloquear por saldo insuficiente. `TransferenciaService.resolverItens()` só
+valida que a variação existe e está ativa — não compara mais com `produto_estoque.disponivel`.
+O front (`TransferenciaForm.tsx`) não bloqueia mais o botão "Confirmar Transferência" nem mostra
+aviso de "maior que o estoque disponível". Mesma mudança em `PdvVendaService` (PDV) — ver
+`docs/telas/pdv.md`.
+
+## Exclusão de transferência (novo, 2026-07-29)
+
+Reverte o non-goal original desta spec ("sem cancelamento/estorno pela tela") — pedido direto
+do dono do produto. `produto_movimento_mestre` continua **fisicamente imutável** (`REVOKE
+UPDATE, DELETE ON produto_movimento_mestre FROM niner_app`, V024, P3) — isso não muda e não dá
+pra contornar pela API. A exclusão funciona apagando as linhas de `produto_movimento_detalhe`
+da transferência (origem 'D' e destino 'C'); a trigger já existente
+`fn_atualiza_estoque_movimento` (V019) devolve a quantidade à origem e retira do destino
+sozinha, **sem checagem de saldo** — a devolução acontece mesmo que o destino já tenha saído do
+saldo transferido (fica negativo, consistente com "Estoque negativo permitido" acima). Os dois
+cabeçalhos de `produto_movimento_mestre` ficam órfãos (sem linha de detalhe) — mesmo mecanismo
+já usado pra qualquer correção de ledger neste projeto. O cabeçalho `produto_transferencia` é
+apagado de verdade (sem `REVOKE` nele).
 
 ## Ajuda da tela (manual de operação + vídeo) — obrigatório (R22 / §3.7.1)
 
@@ -133,12 +174,14 @@ Nenhum.
 - **Reserva de estoque durante a transferência** — a baixa/alta é imediata (mesmo instante),
   sem estado "em trânsito". Se isso vier a ser necessário (ex.: transporte demorado entre
   lojas), é uma feature nova, não uma extensão trivial desta.
-- **Cancelamento/estorno de transferência pela tela** — `produto_movimento_mestre` é imutável
-  (P3); uma correção exigiria uma transferência de volta, feita manualmente pelo usuário, não
-  um botão "desfazer".
 - **Transferência parcial de uma linha já criada** (editar quantidade depois) — não existe
-  edição, só criação.
+  edição, só criação ou exclusão total (2026-07-29).
 - **Notificação para quem recebe** (usuário da empresa de destino não é avisado automaticamente).
+
+~~Cancelamento/estorno de transferência pela tela~~ — **implementado em 2026-07-29** (ver
+"Exclusão de transferência" acima), revertendo o non-goal original. `produto_movimento_mestre`
+continua imutável por grant do banco; a exclusão funciona apagando o detalhe do ledger (linha
+que sempre foi corrigível) e deixando o cabeçalho órfão.
 
 ## Questões abertas
 

@@ -34,6 +34,9 @@ public final class TipoCarteiraDtos {
      * (colunas sem {@code NOT NULL}) — nem todo tipo de carteira cobra taxa, e desconto/
      * acréscimo nunca coexistem com valor positivo ao mesmo tempo (checagem por valor > 0,
      * não presença — 2026-07-23, mesma regra herdada de {@code moeda}).
+     *
+     * <p>{@code permiteReceberCrediario} (2026-07-29, RN007 do Recebimento de Crediário): só
+     * carteiras marcadas aqui aparecem como opção de pagamento naquela tela.
      */
     public record TipoCarteiraRequest(
             @NotBlank @Size(max = 60) String nomeCarteira,
@@ -43,7 +46,8 @@ public final class TipoCarteiraDtos {
             @NotNull Integer pcMaxima,
             BigDecimal taxaAdministradora,
             BigDecimal percDesconto,
-            BigDecimal percAcrescimo) {
+            BigDecimal percAcrescimo,
+            @NotNull Boolean permiteReceberCrediario) {
     }
 
     public record TipoCarteiraResponse(
@@ -56,6 +60,7 @@ public final class TipoCarteiraDtos {
             BigDecimal taxaAdministradora,
             BigDecimal percDesconto,
             BigDecimal percAcrescimo,
+            boolean permiteReceberCrediario,
             OffsetDateTime criadoEm,
             OffsetDateTime atualizadoEm) {
     }

@@ -66,7 +66,8 @@ class TipoCarteiraCrudTest {
 
         String carteira = """
                 {"nomeCarteira":"crediario 30/60/90","categoriaCarteira":"CREDIARIO","prazoPagamento":30,
-                 "pcMinima":1,"pcMaxima":3,"taxaAdministradora":2.5,"percDesconto":0,"percAcrescimo":0}
+                 "pcMinima":1,"pcMaxima":3,"taxaAdministradora":2.5,"percDesconto":0,"percAcrescimo":0,
+                 "permiteReceberCrediario":false}
                 """;
 
         mvc.perform(post("/api/v1/tipos-carteira").header("Authorization", "Bearer " + token)
@@ -76,7 +77,22 @@ class TipoCarteiraCrudTest {
                 .andExpect(jsonPath("$.categoriaCarteira").value("CREDIARIO"))
                 .andExpect(jsonPath("$.pcMinima").value(1))
                 .andExpect(jsonPath("$.pcMaxima").value(3))
+                .andExpect(jsonPath("$.permiteReceberCrediario").value(false))
                 .andExpect(jsonPath("$.criadoEm").exists());
+    }
+
+    @Test
+    void carteiraPodeSerMarcadaPermiteReceberCrediario() throws Exception {
+        String token = assinarNovoTenant("permite-receber");
+
+        mvc.perform(post("/api/v1/tipos-carteira").header("Authorization", "Bearer " + token)
+                        .contentType(APPLICATION_JSON)
+                        .content("""
+                                {"nomeCarteira":"DINHEIRO CREDIARIO","categoriaCarteira":"AVISTA","prazoPagamento":0,
+                                 "pcMinima":1,"pcMaxima":1,"permiteReceberCrediario":true}
+                                """))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.permiteReceberCrediario").value(true));
     }
 
     /**
@@ -104,7 +120,7 @@ class TipoCarteiraCrudTest {
                         .contentType(APPLICATION_JSON)
                         .content("""
                                 {"nomeCarteira":"carteira unica","categoriaCarteira":"CREDIARIO","prazoPagamento":15,
-                                 "pcMinima":1,"pcMaxima":1,"taxaAdministradora":0}
+                                 "pcMinima":1,"pcMaxima":1,"taxaAdministradora":0,"permiteReceberCrediario":false}
                                 """))
                 .andExpect(status().isConflict());
     }
@@ -117,7 +133,7 @@ class TipoCarteiraCrudTest {
                         .contentType(APPLICATION_JSON)
                         .content("""
                                 {"nomeCarteira":"CARTEIRA PARCELA INVALIDA","categoriaCarteira":"CREDIARIO","prazoPagamento":30,
-                                 "pcMinima":5,"pcMaxima":2,"taxaAdministradora":0}
+                                 "pcMinima":5,"pcMaxima":2,"taxaAdministradora":0,"permiteReceberCrediario":false}
                                 """))
                 .andExpect(status().isBadRequest());
     }
@@ -130,7 +146,7 @@ class TipoCarteiraCrudTest {
                         .contentType(APPLICATION_JSON)
                         .content("""
                                 {"nomeCarteira":"CARTEIRA TAXA INVALIDA","categoriaCarteira":"CREDIARIO","prazoPagamento":30,
-                                 "pcMinima":1,"pcMaxima":1,"taxaAdministradora":-1}
+                                 "pcMinima":1,"pcMaxima":1,"taxaAdministradora":-1,"permiteReceberCrediario":false}
                                 """))
                 .andExpect(status().isBadRequest());
     }
@@ -144,7 +160,7 @@ class TipoCarteiraCrudTest {
                         .contentType(APPLICATION_JSON)
                         .content("""
                                 {"nomeCarteira":"CARTEIRA SEM TAXA","categoriaCarteira":"AVISTA","prazoPagamento":0,
-                                 "pcMinima":1,"pcMaxima":1}
+                                 "pcMinima":1,"pcMaxima":1,"permiteReceberCrediario":false}
                                 """))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.taxaAdministradora").value(org.hamcrest.Matchers.nullValue()))
@@ -160,7 +176,7 @@ class TipoCarteiraCrudTest {
                         .contentType(APPLICATION_JSON)
                         .content("""
                                 {"nomeCarteira":"CARTEIRA SEM CATEGORIA","prazoPagamento":30,
-                                 "pcMinima":1,"pcMaxima":1,"taxaAdministradora":0}
+                                 "pcMinima":1,"pcMaxima":1,"taxaAdministradora":0,"permiteReceberCrediario":false}
                                 """))
                 .andExpect(status().isBadRequest());
     }
@@ -173,7 +189,7 @@ class TipoCarteiraCrudTest {
                         .contentType(APPLICATION_JSON)
                         .content("""
                                 {"nomeCarteira":"CARTEIRA PERCENTUAL INVALIDO","categoriaCarteira":"AVISTA","prazoPagamento":0,
-                                 "pcMinima":1,"pcMaxima":1,"percDesconto":-1}
+                                 "pcMinima":1,"pcMaxima":1,"percDesconto":-1,"permiteReceberCrediario":false}
                                 """))
                 .andExpect(status().isBadRequest());
     }
@@ -187,7 +203,7 @@ class TipoCarteiraCrudTest {
                         .contentType(APPLICATION_JSON)
                         .content("""
                                 {"nomeCarteira":"CARTEIRA ACRESCIMO ALTO","categoriaCarteira":"CARTAO_CREDITO","prazoPagamento":30,
-                                 "pcMinima":1,"pcMaxima":6,"percAcrescimo":150}
+                                 "pcMinima":1,"pcMaxima":6,"percAcrescimo":150,"permiteReceberCrediario":false}
                                 """))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.percAcrescimo").value(150));
@@ -205,7 +221,7 @@ class TipoCarteiraCrudTest {
                         .contentType(APPLICATION_JSON)
                         .content("""
                                 {"nomeCarteira":"CARTEIRA NEUTRA","categoriaCarteira":"AVISTA","prazoPagamento":0,
-                                 "pcMinima":1,"pcMaxima":1,"percDesconto":0,"percAcrescimo":0}
+                                 "pcMinima":1,"pcMaxima":1,"percDesconto":0,"percAcrescimo":0,"permiteReceberCrediario":false}
                                 """))
                 .andExpect(status().isCreated());
     }
@@ -218,7 +234,7 @@ class TipoCarteiraCrudTest {
                         .contentType(APPLICATION_JSON)
                         .content("""
                                 {"nomeCarteira":"CARTEIRA INVALIDA","categoriaCarteira":"AVISTA","prazoPagamento":0,
-                                 "pcMinima":1,"pcMaxima":1,"percDesconto":5,"percAcrescimo":3}
+                                 "pcMinima":1,"pcMaxima":1,"percDesconto":5,"percAcrescimo":3,"permiteReceberCrediario":false}
                                 """))
                 .andExpect(status().isBadRequest());
     }
@@ -232,7 +248,7 @@ class TipoCarteiraCrudTest {
                         .contentType(APPLICATION_JSON)
                         .content("""
                                 {"nomeCarteira":"CARTEIRA ATUALIZA PCT","categoriaCarteira":"AVISTA","prazoPagamento":0,
-                                 "pcMinima":1,"pcMaxima":1,"percDesconto":5}
+                                 "pcMinima":1,"pcMaxima":1,"percDesconto":5,"permiteReceberCrediario":true}
                                 """))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.percDesconto").value(5));
@@ -300,7 +316,7 @@ class TipoCarteiraCrudTest {
                         .contentType(APPLICATION_JSON)
                         .content("""
                                 {"nomeCarteira":"%s","categoriaCarteira":"%s","prazoPagamento":%d,"pcMinima":%d,"pcMaxima":%d,
-                                 "taxaAdministradora":%s}
+                                 "taxaAdministradora":%s,"permiteReceberCrediario":false}
                                 """.formatted(nome, categoria, prazoPagamento, pcMinima, pcMaxima, taxaAdministradora)))
                 .andExpect(status().isCreated())
                 .andReturn().getResponse().getContentAsString();

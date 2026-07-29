@@ -94,7 +94,7 @@ class ClienteHistoricoCrudTest {
                         .contentType(APPLICATION_JSON)
                         .content("""
                                 {"nomeCarteira":"%s","categoriaCarteira":"%s","prazoPagamento":30,
-                                 "pcMinima":1,"pcMaxima":1,"taxaAdministradora":0}
+                                 "pcMinima":1,"pcMaxima":1,"taxaAdministradora":0,"permiteReceberCrediario":false}
                                 """.formatted(nome, categoria)))
                 .andExpect(status().isCreated())
                 .andReturn().getResponse().getContentAsString();

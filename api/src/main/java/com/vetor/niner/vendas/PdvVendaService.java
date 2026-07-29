@@ -1,6 +1,5 @@
 package com.vetor.niner.vendas;
 
-import com.vetor.niner.comum.web.ConflitoDadosException;
 import com.vetor.niner.financeiro.TipoCarteiraDtos.CategoriaCarteira;
 import com.vetor.niner.vendas.PdvDtos.EfetivarVendaRequest;
 import com.vetor.niner.vendas.PdvDtos.ItemVendaRequest;
@@ -18,9 +17,6 @@ import java.math.RoundingMode;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Objects;
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 /**
  * Efetiva a venda do PDV (F5, docs/telas/pdv.md) — grava tudo numa única transação: {@code
@@ -29,9 +25,9 @@ import java.util.stream.Stream;
  * parcela(s) em {@code contas_receber} a partir do(s) {@code tipo_carteira} escolhido(s).
  *
  * <p>Preço e variação de cada item são sempre resolvidos aqui a partir do {@code idVariacao} —
- * a tela nunca envia preço. Estoque insuficiente é checado **antes** de qualquer INSERT
- * (nenhuma linha de {@code produto_estoque} tem CHECK contra saldo negativo — a garantia de
- * "nunca vender no negativo" é só esta validação de serviço, P1).
+ * a tela nunca envia preço. Saldo negativo em {@code produto_estoque} é permitido de propósito
+ * (pedido direto do dono do produto, 2026-07-29, vale para toda movimentação de produto, entrada
+ * ou saída) — não há checagem de estoque disponível antes da venda, nem CHECK no banco.
  *
  * <p><b>Split-tender + desconto (2026-07-28, revisado):</b> uma venda pode ter várias linhas
  * de pagamento (formas de pagamento diferentes cobrindo pedaços da mesma venda). {@code
@@ -280,48 +276,38 @@ public class PdvVendaService {
         }
     }
 
-    private record LinhaItem(String descricaoProduto, String variacaoLinha, String variacaoColuna, BigDecimal precoVenda, BigDecimal disponivel) {
+    private record LinhaItem(String descricaoProduto, String variacaoLinha, String variacaoColuna, BigDecimal precoVenda) {
     }
 
-    /** Resolve preço/variação e valida estoque de TODOS os itens antes de gravar qualquer coisa. */
+    /**
+     * Resolve preço/variação de TODOS os itens antes de gravar. Não checa estoque disponível —
+     * saldo negativo é permitido de propósito em qualquer movimentação (2026-07-29).
+     */
     private List<ItemResolvido> resolverItens(List<ItemVendaRequest> itens, long idEmpresa) {
         List<ItemResolvido> resolvidos = new ArrayList<>();
         for (ItemVendaRequest item : itens) {
             LinhaItem linha = jdbc.sql("""
                             SELECT p.descricao AS descricao_produto,
                                    vl.descricao AS variacao_linha, vc.descricao AS variacao_coluna,
-                                   p.preco_venda,
-                                   COALESCE(pe.qtd_estoque, 0) - COALESCE(pe.reservado, 0) AS disponivel
+                                   p.preco_venda
                             FROM produto_barra pb
                             JOIN produto p ON p.id_produto = pb.id_produto AND p.id_tenant = pb.id_tenant
                             LEFT JOIN cfg_variante_linha vl
                                    ON vl.id_variante_linha = pb.id_variante_linha AND vl.id_tenant = pb.id_tenant
                             LEFT JOIN cfg_variante_coluna vc
                                    ON vc.id_variante_coluna = pb.id_variante_coluna AND vc.id_tenant = pb.id_tenant
-                            LEFT JOIN produto_estoque pe
-                                   ON pe.id_variacao = pb.id_variacao AND pe.id_empresa = ? AND pe.id_tenant = pb.id_tenant
                             WHERE pb.id_tenant = plataforma.tenant_atual() AND pb.id_variacao = ? AND p.ativo = true
                             """)
-                    .params(idEmpresa, item.idVariacao())
+                    .params(item.idVariacao())
                     .query((rs, n) -> new LinhaItem(
                             rs.getString("descricao_produto"), rs.getString("variacao_linha"), rs.getString("variacao_coluna"),
-                            rs.getBigDecimal("preco_venda"), rs.getBigDecimal("disponivel")))
+                            rs.getBigDecimal("preco_venda")))
                     .optional()
                     .orElseThrow(() -> new IllegalArgumentException("Produto informado não existe ou está inativo."));
 
-            if (linha.disponivel().compareTo(item.qtd()) < 0) {
-                throw new ConflitoDadosException("Estoque insuficiente para " + descricaoComVariacao(linha) + ".");
-            }
             resolvidos.add(new ItemResolvido(item.idVariacao(), item.qtd(), linha.precoVenda()));
         }
         return resolvidos;
-    }
-
-    private static String descricaoComVariacao(LinhaItem linha) {
-        String variacao = Stream.of(linha.variacaoLinha(), linha.variacaoColuna())
-                .filter(Objects::nonNull)
-                .collect(Collectors.joining(" · "));
-        return variacao.isEmpty() ? linha.descricaoProduto() : linha.descricaoProduto() + " (" + variacao + ")";
     }
 
     /**

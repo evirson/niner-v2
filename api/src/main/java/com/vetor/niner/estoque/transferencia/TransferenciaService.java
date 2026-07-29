@@ -1,6 +1,5 @@
 package com.vetor.niner.estoque.transferencia;
 
-import com.vetor.niner.comum.web.ConflitoDadosException;
 import com.vetor.niner.estoque.transferencia.TransferenciaDtos.CriarTransferenciaRequest;
 import com.vetor.niner.estoque.transferencia.TransferenciaDtos.EmpresaResumo;
 import com.vetor.niner.estoque.transferencia.TransferenciaDtos.ItemTransferenciaRequest;
@@ -16,9 +15,11 @@ import org.springframework.web.server.ResponseStatusException;
 import java.math.BigDecimal;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 import static org.springframework.http.HttpStatus.NOT_FOUND;
 
@@ -34,6 +35,26 @@ public class TransferenciaService {
 
     private static final int TAMANHO_PAGINA_PADRAO = 50;
     private static final int TAMANHO_PAGINA_MAXIMO = 100;
+
+    /**
+     * Colunas ordenáveis da listagem — chave da API -> expressão SQL. São expressões (não
+     * aliases do SELECT) porque a query de ids só seleciona {@code t.id_transferencia}
+     * ({@code JdbcClient.query(Long.class)} exige uma única coluna) — o ORDER BY referencia as
+     * tabelas dos JOINs diretamente, o que o Postgres aceita mesmo fora do SELECT list.
+     */
+    private static final Map<String, String> COLUNAS_ORDENAVEIS = Map.of(
+            "numero", "t.id_transferencia",
+            "data", "t.data_transferencia",
+            "origem", "COALESCE(eo.nome_fantasia, eo.razao_social)",
+            "destino", "COALESCE(ed.nome_fantasia, ed.razao_social)",
+            "usuario", "u.nome_usuario",
+            "itens", """
+                    (SELECT count(*) FROM produto_movimento_mestre pm
+                       JOIN produto_movimento_detalhe pmd
+                              ON pmd.id_movimento = pm.id_movimento AND pmd.id_tenant = pm.id_tenant
+                     WHERE pm.id_tenant = t.id_tenant AND pm.id_transferencia = t.id_transferencia
+                           AND pmd.credito_debito = 'D')
+                    """);
 
     private final JdbcClient jdbc;
 
@@ -85,21 +106,61 @@ public class TransferenciaService {
     }
 
     @Transactional(readOnly = true)
-    public PaginaTransferencias listar(Integer pagina, Integer limite) {
+    public PaginaTransferencias listar(Long idTransferencia, Long idEmpresaOrigem, Long idEmpresaDestino,
+                                        LocalDate dataInicial, LocalDate dataFinal, Integer pagina, Integer limite,
+                                        String ordenarPor, String direcao) {
         int tamanho = limite == null ? TAMANHO_PAGINA_PADRAO : Math.min(Math.max(limite, 1), TAMANHO_PAGINA_MAXIMO);
         int paginaAtual = pagina == null ? 1 : Math.max(pagina, 1);
+        String colunaOrdenacao =
+                ordenarPor == null ? "t.data_transferencia" : COLUNAS_ORDENAVEIS.getOrDefault(ordenarPor, "t.data_transferencia");
+        // Sem ordenarPor explícito, mantém o padrão histórico (mais recente primeiro); com
+        // coluna escolhida e sem direção, começa ascendente — mesmo padrão de clique em coluna
+        // do resto do projeto (FornecedorService etc.).
+        String direcaoOrdenacao = direcao != null
+                ? ("DESC".equalsIgnoreCase(direcao) ? "DESC" : "ASC")
+                : (ordenarPor == null ? "DESC" : "ASC");
 
-        long totalItens = jdbc.sql("SELECT count(*) FROM produto_transferencia WHERE id_tenant = plataforma.tenant_atual()")
+        StringBuilder filtro = new StringBuilder(" WHERE t.id_tenant = plataforma.tenant_atual()");
+        List<Object> params = new ArrayList<>();
+        if (idTransferencia != null) {
+            filtro.append(" AND t.id_transferencia = ?");
+            params.add(idTransferencia);
+        }
+        if (idEmpresaOrigem != null) {
+            filtro.append(" AND t.id_empresa_origem = ?");
+            params.add(idEmpresaOrigem);
+        }
+        if (idEmpresaDestino != null) {
+            filtro.append(" AND t.id_empresa_destino = ?");
+            params.add(idEmpresaDestino);
+        }
+        if (dataInicial != null) {
+            filtro.append(" AND t.data_transferencia::date >= ?");
+            params.add(dataInicial);
+        }
+        if (dataFinal != null) {
+            filtro.append(" AND t.data_transferencia::date <= ?");
+            params.add(dataFinal);
+        }
+
+        long totalItens = jdbc.sql("SELECT count(*) FROM produto_transferencia t" + filtro)
+                .params(params)
                 .query(Long.class).single();
         int totalPaginas = totalItens == 0 ? 1 : (int) Math.ceil(totalItens / (double) tamanho);
 
+        List<Object> paramsPagina = new ArrayList<>(params);
+        paramsPagina.add((long) tamanho);
+        paramsPagina.add((long) (paginaAtual - 1) * tamanho);
         List<Long> ids = jdbc.sql("""
-                        SELECT id_transferencia FROM produto_transferencia
-                        WHERE id_tenant = plataforma.tenant_atual()
-                        ORDER BY data_transferencia DESC, id_transferencia DESC
-                        LIMIT ? OFFSET ?
-                        """)
-                .params((long) tamanho, (long) (paginaAtual - 1) * tamanho)
+                        SELECT t.id_transferencia
+                        FROM produto_transferencia t
+                        JOIN empresa eo ON eo.id_empresa = t.id_empresa_origem AND eo.id_tenant = t.id_tenant
+                        JOIN empresa ed ON ed.id_empresa = t.id_empresa_destino AND ed.id_tenant = t.id_tenant
+                        JOIN usuario u ON u.id_usuario = t.id_usuario AND u.id_tenant = t.id_tenant
+                        """ + filtro
+                        + " ORDER BY " + colunaOrdenacao + " " + direcaoOrdenacao
+                        + ", t.id_transferencia " + direcaoOrdenacao + " LIMIT ? OFFSET ?")
+                .params(paramsPagina)
                 .query(Long.class).list();
 
         List<TransferenciaResponse> itens = ids.stream().map(this::montar).toList();
@@ -109,6 +170,44 @@ public class TransferenciaService {
     @Transactional(readOnly = true)
     public TransferenciaResponse buscar(long id) {
         return montar(id);
+    }
+
+    /**
+     * Exclusão completa de uma transferência (pedido direto do dono do produto, 2026-07-29) —
+     * reverte o non-goal original da spec ("sem cancelamento/estorno pela tela"). Apaga as
+     * linhas de {@code produto_movimento_detalhe} da transferência (origem 'D' e destino 'C');
+     * a trigger {@code fn_atualiza_estoque_movimento} (V019) devolve a quantidade à origem e
+     * retira do destino sozinha, sem checagem de saldo (pedido explícito: devolver pra origem
+     * mesmo que o destino já tenha saído do saldo transferido — {@code produto_estoque} não tem
+     * CHECK contra negativo). {@code produto_movimento_mestre} continua imutável por grant
+     * (REVOKE UPDATE, DELETE, V024) — os dois cabeçalhos de movimento ficam órfãos, sem linha de
+     * detalhe, o que é o mesmo mecanismo já usado pra qualquer correção de ledger neste projeto.
+     */
+    @Transactional
+    public void excluir(long id) {
+        boolean existe = Boolean.TRUE.equals(jdbc.sql("""
+                        SELECT EXISTS (SELECT 1 FROM produto_transferencia
+                                       WHERE id_tenant = plataforma.tenant_atual() AND id_transferencia = ?)
+                        """)
+                .param(id).query(Boolean.class).single());
+        if (!existe) {
+            throw new ResponseStatusException(NOT_FOUND, "Transferência não encontrada.");
+        }
+
+        jdbc.sql("""
+                        DELETE FROM produto_movimento_detalhe
+                        WHERE id_tenant = plataforma.tenant_atual()
+                              AND id_movimento IN (
+                                  SELECT id_movimento FROM produto_movimento_mestre
+                                  WHERE id_tenant = plataforma.tenant_atual() AND id_transferencia = ?
+                              )
+                        """)
+                .param(id)
+                .update();
+
+        jdbc.sql("DELETE FROM produto_transferencia WHERE id_tenant = plataforma.tenant_atual() AND id_transferencia = ?")
+                .param(id)
+                .update();
     }
 
     private void inserirDetalhe(long idMovimento, long idEmpresa, long idVariacao, String creditoDebito, BigDecimal qtd) {
@@ -140,32 +239,23 @@ public class TransferenciaService {
     }
 
     /**
-     * Valida cada item (variação existe e está ativa) e checa saldo disponível na empresa de
-     * origem **antes** de qualquer INSERT — {@code produto_estoque} não tem CHECK contra saldo
-     * negativo (mesmo motivo de {@code PdvVendaService.resolverItens}, P1).
+     * Valida que cada item (variação) existe e está ativo. Não checa saldo disponível na
+     * origem — saldo negativo é permitido de propósito em qualquer movimentação de produto,
+     * entrada ou saída (pedido direto do dono do produto, 2026-07-29).
      */
     private List<ItemResolvido> resolverItens(List<ItemTransferenciaRequest> itens, long idEmpresaOrigem) {
         List<ItemResolvido> resolvidos = new ArrayList<>();
         for (ItemTransferenciaRequest item : itens) {
-            var linha = jdbc.sql("""
-                            SELECT p.descricao AS descricao_produto,
-                                   COALESCE(pe.qtd_estoque, 0) - COALESCE(pe.reservado, 0) AS disponivel
-                            FROM produto_barra pb
-                            JOIN produto p ON p.id_produto = pb.id_produto AND p.id_tenant = pb.id_tenant
-                            LEFT JOIN produto_estoque pe
-                                   ON pe.id_variacao = pb.id_variacao AND pe.id_empresa = ? AND pe.id_tenant = pb.id_tenant
-                            WHERE pb.id_tenant = plataforma.tenant_atual() AND pb.id_variacao = ? AND p.ativo = true
+            boolean existe = Boolean.TRUE.equals(jdbc.sql("""
+                            SELECT EXISTS (SELECT 1 FROM produto_barra pb
+                                           JOIN produto p ON p.id_produto = pb.id_produto AND p.id_tenant = pb.id_tenant
+                                           WHERE pb.id_tenant = plataforma.tenant_atual()
+                                                 AND pb.id_variacao = ? AND p.ativo = true)
                             """)
-                    .params(idEmpresaOrigem, item.idVariacao())
-                    .query((rs, n) -> new Object[]{rs.getString("descricao_produto"), rs.getBigDecimal("disponivel")})
-                    .optional()
-                    .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Produto não encontrado para a variação informada."));
-
-            String descricao = (String) linha[0];
-            BigDecimal disponivel = (BigDecimal) linha[1];
-            if (disponivel.compareTo(item.qtd()) < 0) {
-                throw new ConflitoDadosException(
-                        "Estoque insuficiente para " + descricao + " na empresa de origem (disponível: " + disponivel + ").");
+                    .param(item.idVariacao())
+                    .query(Boolean.class).single());
+            if (!existe) {
+                throw new ResponseStatusException(NOT_FOUND, "Produto não encontrado para a variação informada.");
             }
             resolvidos.add(new ItemResolvido(item.idVariacao(), item.qtd()));
         }

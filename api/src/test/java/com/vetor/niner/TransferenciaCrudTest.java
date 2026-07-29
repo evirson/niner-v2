@@ -165,7 +165,9 @@ class TransferenciaCrudTest {
     }
 
     @Test
-    void transferenciaComEstoqueInsuficienteEhRejeitada() throws Exception {
+    void transferenciaComEstoqueInsuficienteEhAceitaEDeixaSaldoNegativoNaOrigem() throws Exception {
+        // Saldo negativo é permitido de propósito em qualquer movimentação (2026-07-29) —
+        // não há mais bloqueio de estoque insuficiente na transferência.
         String token = assinarNovoTenant("estoque-insuficiente");
         long idTenant = extrairIdTenant(token);
         long idEmpresaOrigem = extrairIdEmpresa(token);
@@ -185,7 +187,12 @@ class TransferenciaCrudTest {
 
         mvc.perform(post("/api/v1/estoque/transferencias").header("Authorization", "Bearer " + token)
                         .contentType(APPLICATION_JSON).content(corpo))
-                .andExpect(status().isConflict());
+                .andExpect(status().isCreated());
+
+        try (Connection c = abrirConexao(idTenant)) {
+            assertEquals(new BigDecimal("-3.000"), buscarQtdEstoque(c, idEmpresaOrigem, idVariacao));
+            assertEquals(new BigDecimal("5.000"), buscarQtdEstoque(c, idEmpresaDestino, idVariacao));
+        }
     }
 
     @Test

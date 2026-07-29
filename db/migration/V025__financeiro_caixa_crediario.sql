@@ -37,6 +37,10 @@ CREATE TABLE tipo_carteira (
   taxa_administradora  numeric(5,2)        DEFAULT 0,  -- opcional (2026-07-23): nem todo tipo de carteira cobra taxa
   perc_desconto        numeric(5,2)        DEFAULT 0,  -- 2026-07-28, vindo de `moeda`: ou desconto ou acréscimo, nunca os dois juntos
   perc_acrescimo       numeric(5,2)        DEFAULT 0,  -- 2026-07-28, vindo de `moeda`
+  -- 2026-07-29 (Recebimento de Crediário, RN007): só carteiras marcadas aqui aparecem como
+  -- opção de pagamento naquela tela — controla quais formas de pagamento (categoria AVISTA/
+  -- CARTAO_DEBITO/CARTAO_CREDITO) podem quitar parcela de crediário.
+  permite_receber_crediario boolean        NOT NULL DEFAULT false,
   criado_em            timestamptz         NOT NULL DEFAULT now(),  -- 2026-07-23 (auditoria, convenção do domínio)
   atualizado_em        timestamptz         NOT NULL DEFAULT now(),
   -- base para FK composta (P8) de contas_receber/caixa_detalhe.
@@ -91,6 +95,29 @@ CREATE TABLE contas_receber_detalhe (
 );
 CREATE INDEX contas_receber_detalhe_autorizacao_ix ON contas_receber_detalhe (id_tenant, numero_autorizacao);
 
+-- contas_receber_lote: cabeçalho de um recebimento de crediário (2026-07-29) — dá um número
+-- de verdade a `id_lote_recebimento` (até aqui só um "gerador externo" placeholder, mesmo
+-- padrão que `produto_transferencia` deu a `id_transferencia` em V019). Uma linha por operação
+-- de "Receber" na tela, cobrindo uma ou várias parcelas/vendas do mesmo cliente. Sem FK de
+-- `contas_receber`/`caixa_detalhe` pra cá — proposital, mesma decisão de não acoplar o ledger
+-- genérico a uma tabela de negócio específica (ver comentário de `produto_movimento_mestre.
+-- id_transferencia`).
+CREATE TABLE contas_receber_lote (
+  id_lote_recebimento integer       GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  id_tenant           smallint      NOT NULL REFERENCES plataforma.tenant (id_tenant),
+  id_cliente          integer       NOT NULL,
+  id_empresa          integer       NOT NULL,
+  id_usuario          integer       NOT NULL,
+  data_recebimento    timestamptz   NOT NULL DEFAULT now(),
+  valor_total         numeric(12,2) NOT NULL,
+  CONSTRAINT contas_receber_lote_id_uk       UNIQUE (id_tenant, id_lote_recebimento),
+  CONSTRAINT contas_receber_lote_cliente_fk  FOREIGN KEY (id_tenant, id_cliente) REFERENCES cliente  (id_tenant, id_cliente),
+  CONSTRAINT contas_receber_lote_empresa_fk  FOREIGN KEY (id_tenant, id_empresa) REFERENCES empresa  (id_tenant, id_empresa),
+  CONSTRAINT contas_receber_lote_usuario_fk  FOREIGN KEY (id_tenant, id_usuario) REFERENCES usuario  (id_tenant, id_usuario)
+);
+CREATE INDEX contas_receber_lote_id_tenant_ix ON contas_receber_lote (id_tenant);
+CREATE INDEX contas_receber_lote_cliente_ix   ON contas_receber_lote (id_tenant, id_cliente);
+
 -- caixa_mestre: header de uma sessão de caixa (abertura/fechamento, usuário responsável).
 CREATE TABLE caixa_mestre (
   id_caixa        integer       GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
@@ -143,7 +170,7 @@ DECLARE
   t text;
   tabelas text[] := ARRAY[
     'tipo_carteira',
-    'contas_receber', 'contas_receber_detalhe',
+    'contas_receber', 'contas_receber_detalhe', 'contas_receber_lote',
     'caixa_mestre', 'caixa_detalhe'
   ];
 BEGIN
@@ -181,9 +208,11 @@ COMMENT ON TABLE tipo_carteira          IS 'Forma de pagamento — categoria, pr
 COMMENT ON COLUMN tipo_carteira.categoria_carteira IS 'Categoria fixa (AVISTA/CARTAO_DEBITO/CARTAO_CREDITO/CREDIARIO) — usada pelo histórico do cliente pra isolar parcelas de crediário (2026-07-23).';
 COMMENT ON COLUMN tipo_carteira.perc_desconto IS 'Opcional (2026-07-28, vindo de `moeda`) — ou desconto ou acréscimo, nunca os dois juntos.';
 COMMENT ON COLUMN tipo_carteira.perc_acrescimo IS 'Opcional (2026-07-28, vindo de `moeda`).';
+COMMENT ON COLUMN tipo_carteira.permite_receber_crediario IS 'Recebimento de Crediário (2026-07-29, RN007) — só carteiras marcadas aqui aparecem como opção de pagamento naquela tela.';
 COMMENT ON TABLE contas_receber         IS 'Parcelas a receber da venda (RLS). Revisão de Q5/ADR-010 (2026-07-16): crediário antecipado da Fase 2.';
-COMMENT ON COLUMN contas_receber.id_empresa_pagamento IS 'Loja onde a parcela foi paga (2026-07-23) — null até existir a baixa de parcela (ainda não implementada).';
+COMMENT ON COLUMN contas_receber.id_empresa_pagamento IS 'Loja onde a parcela foi paga — null até existir a baixa de parcela (Recebimento de Crediário, 2026-07-29).';
 COMMENT ON TABLE contas_receber_detalhe IS 'Detalhe 1:1 de contas_receber para taxas/autorização de cartão (RLS).';
+COMMENT ON TABLE contas_receber_lote    IS 'Cabeçalho de um recebimento de crediário (RLS, 2026-07-29) — dá número real a id_lote_recebimento, pode cobrir várias parcelas/vendas do mesmo cliente numa só operação de "Receber".';
 COMMENT ON TABLE caixa_mestre           IS 'Header de sessão de caixa (RLS). Revisão de Q5/ADR-010 (2026-07-16).';
 COMMENT ON TABLE caixa_detalhe          IS 'Lançamentos da sessão de caixa (RLS). tipo_operacao: RV=RECEBIMENTO_VENDA, RP=RECEBIMENTO_PARCELA_CREDIARIO, DC=DEBITO_CAIXA, CC=CREDITO_CAIXA, TR=TROCO (legado).';
 COMMENT ON COLUMN caixa_detalhe.id_carteira IS 'Forma de pagamento do lançamento (2026-07-28: era id_moeda, apontava pra `moeda`, absorvida por tipo_carteira).';

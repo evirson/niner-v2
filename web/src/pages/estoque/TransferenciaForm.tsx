@@ -1,18 +1,23 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import AjudaDaTela from '../../components/AjudaDaTela'
-import { IconeEstoque, IconeExcluir } from '../../components/Icones'
+import { IconeEstoque, IconeExcluir, IconeLupa } from '../../components/Icones'
 import Toast from '../../components/Toast'
 import { ApiError } from '../../lib/api'
 import { listarEmpresas } from '../../lib/empresas'
 import { useEu } from '../../lib/eu'
-import { completarPeso, desmascararPeso, formatarPeso, mascararPeso } from '../../lib/masks'
-import type { PdvProduto } from '../../lib/pdv'
+import { completarPeso, desmascararPeso, formatarMoeda, formatarPeso, mascararPeso } from '../../lib/masks'
+import { buscarProdutoPorCodigo, type PdvProduto } from '../../lib/pdv'
 import { criarTransferencia } from '../../lib/transferencias'
+import EscolherDestinoModal from './EscolherDestinoModal'
 import PesquisaProdutoModal from '../pdv/PesquisaProdutoModal'
 
 const CHAVE_TELA = 'estoque.transferencia.form'
+
+function moeda(v: number): string {
+  return `R$ ${formatarMoeda(v)}`
+}
 
 interface ItemLinha {
   idVariacao: number
@@ -20,6 +25,7 @@ interface ItemLinha {
   variacao: string | null
   sku: string
   estoqueOrigem: number
+  precoVenda: number
   qtdTexto: string
 }
 
@@ -39,16 +45,30 @@ export default function TransferenciaForm() {
 
   const [idEmpresaDestino, setIdEmpresaDestino] = useState<number | ''>('')
   const [itens, setItens] = useState<ItemLinha[]>([])
-  const [observacoes, setObservacoes] = useState('')
   const [mostrarPesquisa, setMostrarPesquisa] = useState(false)
+  const [valorBarras, setValorBarras] = useState('')
   const [toast, setToast] = useState('')
+  const campoBarrasRef = useRef<HTMLInputElement>(null)
+  const barrasTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => {
+    return () => {
+      if (barrasTimeoutRef.current) clearTimeout(barrasTimeoutRef.current)
+    }
+  }, [])
+
+  // Escolhida a empresa de destino no popup, o foco já vai direto pro código de barras — mesma
+  // lógica de entrada única do PDV.
+  useEffect(() => {
+    if (idEmpresaDestino !== '') campoBarrasRef.current?.focus()
+  }, [idEmpresaDestino])
 
   const criar = useMutation({
     mutationFn: () =>
       criarTransferencia({
         idEmpresaDestino: Number(idEmpresaDestino),
         itens: itens.map((i) => ({ idVariacao: i.idVariacao, qtd: desmascararPeso(i.qtdTexto) })),
-        observacoes: observacoes.trim() || null,
+        observacoes: null,
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['transferencias'] })
@@ -59,26 +79,63 @@ export default function TransferenciaForm() {
     onError: (e: unknown) => setToast(e instanceof ApiError ? e.message : 'Não foi possível realizar a transferência.'),
   })
 
-  const adicionarProduto = (produto: PdvProduto) => {
-    setMostrarPesquisa(false)
-    if (itens.some((i) => i.idVariacao === produto.idVariacao)) {
-      setToast('Este produto já está na lista.')
-      return
+  // Lança um produto na lista — usado tanto pela leitura do código de barras quanto pela
+  // Pesquisa de Produto (mesma rotina do PDV): se a variação já está na lista, soma 1 na
+  // quantidade em vez de duplicar a linha.
+  const lancarProduto = (produto: PdvProduto) => {
+    setItens((atual) => {
+      const existente = atual.find((i) => i.idVariacao === produto.idVariacao)
+      if (existente) {
+        return atual.map((i) =>
+          i.idVariacao === produto.idVariacao ? { ...i, qtdTexto: formatarPeso(desmascararPeso(i.qtdTexto) + 1) } : i,
+        )
+      }
+      const estoqueNaOrigem = empresaOrigem
+        ? (produto.estoquePorEmpresa.find((e) => e.codigoEmpresa === empresaOrigem.codigoEmpresa)?.qtd ?? 0)
+        : 0
+      return [
+        ...atual,
+        {
+          idVariacao: produto.idVariacao,
+          descricao: produto.descricaoProduto,
+          variacao: variacaoTexto(produto),
+          sku: produto.sku,
+          estoqueOrigem: estoqueNaOrigem,
+          precoVenda: produto.precoVenda,
+          qtdTexto: formatarPeso(1),
+        },
+      ]
+    })
+  }
+
+  const lerCodigo = async (codigo: string) => {
+    try {
+      const produto = await buscarProdutoPorCodigo(codigo)
+      lancarProduto(produto)
+    } catch (e) {
+      setToast(e instanceof ApiError ? e.message : 'Não foi possível ler o código de barras.')
     }
-    const estoqueNaOrigem = empresaOrigem
-      ? (produto.estoquePorEmpresa.find((e) => e.codigoEmpresa === empresaOrigem.codigoEmpresa)?.qtd ?? 0)
-      : 0
-    setItens((atual) => [
-      ...atual,
-      {
-        idVariacao: produto.idVariacao,
-        descricao: produto.descricaoProduto,
-        variacao: variacaoTexto(produto),
-        sku: produto.sku,
-        estoqueOrigem: estoqueNaOrigem,
-        qtdTexto: formatarPeso(Math.min(1, estoqueNaOrigem)),
-      },
-    ])
+  }
+
+  const aoDigitarBarras: React.KeyboardEventHandler<HTMLInputElement> = (e) => {
+    if (e.key === 'Enter' && valorBarras.trim()) {
+      const codigo = valorBarras.trim()
+      setValorBarras('')
+      lerCodigo(codigo)
+    }
+  }
+
+  const aoSelecionarNaPesquisa = (produto: PdvProduto) => {
+    setMostrarPesquisa(false)
+    lancarProduto(produto)
+    // Preenche o código de barras brevemente (como se tivesse sido lido) antes de limpar e
+    // devolver o foco — mesma rotina de F2 do PDV.
+    setValorBarras(produto.sku)
+    if (barrasTimeoutRef.current) clearTimeout(barrasTimeoutRef.current)
+    barrasTimeoutRef.current = setTimeout(() => {
+      setValorBarras('')
+      campoBarrasRef.current?.focus()
+    }, 400)
   }
 
   const removerItem = (idVariacao: number) => {
@@ -93,9 +150,15 @@ export default function TransferenciaForm() {
     setItens((atual) => atual.map((i) => (i.idVariacao === idVariacao ? { ...i, qtdTexto: completarPeso(i.qtdTexto) } : i)))
   }
 
-  const algumItemExcedeEstoque = itens.some((i) => desmascararPeso(i.qtdTexto) > i.estoqueOrigem)
+  // Saldo negativo em estoque é permitido de propósito (2026-07-29) — só a quantidade
+  // informada precisa ser maior que zero, não há mais bloqueio contra o saldo da origem.
   const algumItemZerado = itens.some((i) => desmascararPeso(i.qtdTexto) <= 0)
-  const podeConfirmar = idEmpresaDestino !== '' && itens.length > 0 && !algumItemExcedeEstoque && !algumItemZerado
+  const podeConfirmar = idEmpresaDestino !== '' && itens.length > 0 && !algumItemZerado
+  const qtdTotal = itens.reduce((soma, i) => soma + desmascararPeso(i.qtdTexto), 0)
+  const valorTotal = itens.reduce((soma, i) => soma + desmascararPeso(i.qtdTexto) * i.precoVenda, 0)
+
+  const nomeDestino = opcoesDestino.find((e) => e.idEmpresa === idEmpresaDestino)
+  const nomeDestinoTexto = nomeDestino ? (nomeDestino.nomeFantasia ?? nomeDestino.razaoSocial) : null
 
   return (
     <div className="lista-tela">
@@ -103,7 +166,14 @@ export default function TransferenciaForm() {
         <div className="topbar-tela">
           <div className="titulo-tela">
             <IconeEstoque size={34} />
-            <h1>Nova Transferência</h1>
+            <h1>
+              Nova Transferência
+              {eu?.empresa && nomeDestinoTexto && (
+                <span style={{ color: 'var(--ink-muted)', fontWeight: 500, fontSize: 16, marginLeft: 10 }}>
+                  · {eu.empresa.nome} → {nomeDestinoTexto}
+                </span>
+              )}
+            </h1>
           </div>
           <div className="topbar-acoes">
             <AjudaDaTela chaveTela={CHAVE_TELA} />
@@ -125,116 +195,144 @@ export default function TransferenciaForm() {
       <div className="lista-corpo">
         <div className="card form-secoes form-secoes-larga">
           <section className="section">
-            <p className="section-label">Empresas</p>
-            <div className="form-grid">
-              <div className="col-6">
-                <label>Empresa de Origem</label>
-                <div className="pdv-selecao-valor">
-                  <span>{eu?.empresa.nome ?? '—'}</span>
-                </div>
-              </div>
-              <div className="col-6">
-                <label htmlFor="empresa-destino">Empresa de Destino *</label>
-                <select
-                  id="empresa-destino"
-                  value={idEmpresaDestino}
-                  onChange={(e) => setIdEmpresaDestino(e.target.value ? Number(e.target.value) : '')}
-                >
-                  <option value="">Selecione…</option>
-                  {opcoesDestino.map((emp) => (
-                    <option key={emp.idEmpresa} value={emp.idEmpresa}>
-                      {emp.nomeFantasia ?? emp.razaoSocial}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-          </section>
+            <p className="section-label" style={{ margin: 0 }}>
+              Produtos
+            </p>
 
-          <section className="section">
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <p className="section-label" style={{ margin: 0 }}>
-                Produtos
-              </p>
-              <button type="button" className="btn ghost" onClick={() => setMostrarPesquisa(true)}>
-                ＋ Adicionar Produto
-              </button>
+            <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start', marginTop: 10 }}>
+              <div className="pdv-campo-codigo-barras" style={{ flex: 1 }}>
+                <div className="pdv-rotulo">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.6}>
+                    <path d="M4 5v14M8 5v14M11 5v14M13 5v14M17 5v14M20 5v14" />
+                  </svg>
+                  Código de Barras
+                </div>
+                <input
+                  ref={campoBarrasRef}
+                  type="text"
+                  placeholder={idEmpresaDestino === '' ? 'Selecione a empresa de destino primeiro…' : 'Aguardando leitura…'}
+                  autoComplete="off"
+                  inputMode="numeric"
+                  disabled={idEmpresaDestino === ''}
+                  value={valorBarras}
+                  onChange={(e) => setValorBarras(e.target.value)}
+                  onKeyDown={aoDigitarBarras}
+                />
+                <p className="pdv-dica">Leia o código de barras do produto e pressione Enter.</p>
+              </div>
+              {/* Rótulo invisível com a mesma altura do rótulo real acima do campo de código de
+                  barras — garante que o botão comece exatamente na mesma linha do input, em vez
+                  de alinhar pelo fundo da coluna (que é mais alta por causa da dica abaixo). */}
+              <div style={{ display: 'flex', flexDirection: 'column' }}>
+                <div className="pdv-rotulo" style={{ visibility: 'hidden' }}>
+                  Pesquisar
+                </div>
+                <button
+                  type="button"
+                  className="btn ghost"
+                  style={{ height: 50, whiteSpace: 'nowrap' }}
+                  disabled={idEmpresaDestino === ''}
+                  onClick={() => setMostrarPesquisa(true)}
+                >
+                  <IconeLupa /> Pesquisar Produto
+                </button>
+              </div>
             </div>
 
             {itens.length === 0 ? (
-              <p className="muted" style={{ marginTop: 8 }}>
+              <p className="muted" style={{ marginTop: 12 }}>
                 Nenhum produto adicionado ainda.
               </p>
             ) : (
-              <div className="table-wrap" style={{ marginTop: 12 }}>
-                <table className="table table-compacta">
-                  <thead>
-                    <tr>
-                      <th>Descrição</th>
-                      <th>Variação</th>
-                      <th style={{ textAlign: 'right' }}>Estoque na Origem</th>
-                      <th style={{ textAlign: 'right' }}>Quantidade</th>
-                      <th aria-label="Ações" />
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {itens.map((item) => {
-                      const qtdNumero = desmascararPeso(item.qtdTexto)
-                      const excede = qtdNumero > item.estoqueOrigem
-                      const zerado = qtdNumero <= 0
-                      return (
-                        <tr key={item.idVariacao}>
-                          <td>{item.descricao}</td>
-                          <td>{item.variacao ?? '—'}</td>
-                          <td className="mono" style={{ textAlign: 'right' }}>
-                            {formatarPeso(item.estoqueOrigem)}
-                          </td>
-                          <td style={{ textAlign: 'right' }}>
-                            <input
-                              className="mono"
-                              style={{ width: 110, textAlign: 'right' }}
-                              value={item.qtdTexto}
-                              onChange={(e) => alterarQtd(item.idVariacao, e.target.value)}
-                              onBlur={() => aoSairQtd(item.idVariacao)}
-                              onFocus={(e) => e.target.select()}
-                            />
-                            {excede && <p className="erro-campo">Maior que o estoque disponível.</p>}
-                            {!excede && zerado && <p className="erro-campo">Informe uma quantidade maior que zero.</p>}
-                          </td>
-                          <td className="acoes-cell">
-                            <button
-                              type="button"
-                              className="acao-icone acao-excluir"
-                              onClick={() => removerItem(item.idVariacao)}
-                              aria-label={`Remover ${item.descricao}`}
-                              title="Remover"
-                            >
-                              <IconeExcluir />
-                            </button>
-                          </td>
-                        </tr>
-                      )
-                    })}
-                  </tbody>
-                </table>
-              </div>
+                <div className="table-wrap" style={{ marginTop: 12 }}>
+                  <table className="table table-compacta">
+                    <thead>
+                      <tr>
+                        <th>Descrição</th>
+                        <th>Variação</th>
+                        <th style={{ textAlign: 'right' }}>Estoque na Origem</th>
+                        <th style={{ textAlign: 'right' }}>Quantidade</th>
+                        <th style={{ textAlign: 'right' }}>Valor Unitário</th>
+                        <th style={{ textAlign: 'right' }}>Valor Total</th>
+                        <th aria-label="Ações" />
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {itens.map((item) => {
+                        const qtdNumero = desmascararPeso(item.qtdTexto)
+                        const zerado = qtdNumero <= 0
+                        return (
+                          <tr key={item.idVariacao}>
+                            <td>{item.descricao}</td>
+                            <td>{item.variacao ?? '—'}</td>
+                            <td className="mono" style={{ textAlign: 'right' }}>
+                              {formatarPeso(item.estoqueOrigem)}
+                            </td>
+                            <td style={{ textAlign: 'right' }}>
+                              <input
+                                className="mono"
+                                style={{ width: 110, textAlign: 'right' }}
+                                value={item.qtdTexto}
+                                onChange={(e) => alterarQtd(item.idVariacao, e.target.value)}
+                                onBlur={() => aoSairQtd(item.idVariacao)}
+                                onFocus={(e) => e.target.select()}
+                              />
+                              {zerado && <p className="erro-campo">Informe uma quantidade maior que zero.</p>}
+                            </td>
+                            <td className="mono" style={{ textAlign: 'right' }}>
+                              {moeda(item.precoVenda)}
+                            </td>
+                            <td className="mono" style={{ textAlign: 'right' }}>
+                              {moeda(qtdNumero * item.precoVenda)}
+                            </td>
+                            <td className="acoes-cell">
+                              <button
+                                type="button"
+                                className="acao-icone acao-excluir"
+                                onClick={() => removerItem(item.idVariacao)}
+                                aria-label={`Remover ${item.descricao}`}
+                                title="Remover"
+                              >
+                                <IconeExcluir />
+                              </button>
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                    <tfoot>
+                      <tr>
+                        <td colSpan={3}>
+                          <strong>Total</strong>
+                        </td>
+                        <td className="mono" style={{ textAlign: 'right' }}>
+                          <strong>{qtdTotal.toLocaleString('pt-BR', { maximumFractionDigits: 3 })}</strong>
+                        </td>
+                        <td />
+                        <td className="mono" style={{ textAlign: 'right' }}>
+                          <strong>{moeda(valorTotal)}</strong>
+                        </td>
+                        <td />
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
             )}
-          </section>
-
-          <section className="section">
-            <p className="section-label">Observações</p>
-            <textarea
-              rows={3}
-              value={observacoes}
-              onChange={(e) => setObservacoes(e.target.value)}
-              placeholder="Opcional"
-            />
           </section>
         </div>
       </div>
 
+      {idEmpresaDestino === '' && eu?.empresa && (
+        <EscolherDestinoModal
+          nomeOrigem={eu.empresa.nome}
+          opcoesDestino={opcoesDestino}
+          aoFechar={() => navigate('/estoque')}
+          aoConfirmar={(id) => setIdEmpresaDestino(id)}
+        />
+      )}
+
       {mostrarPesquisa && (
-        <PesquisaProdutoModal aoFechar={() => setMostrarPesquisa(false)} aoSelecionar={adicionarProduto} />
+        <PesquisaProdutoModal aoFechar={() => setMostrarPesquisa(false)} aoSelecionar={aoSelecionarNaPesquisa} />
       )}
 
       {toast && <Toast mensagem={toast} aoFechar={() => setToast('')} />}

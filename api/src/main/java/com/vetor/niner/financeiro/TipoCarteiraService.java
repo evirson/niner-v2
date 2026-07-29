@@ -102,13 +102,13 @@ public class TipoCarteiraService {
             long id = jdbc.sql("""
                             INSERT INTO tipo_carteira
                                 (id_tenant, nome_carteira, categoria_carteira, prazo_pagamento, pc_minima, pc_maxima,
-                                 taxa_administradora, perc_desconto, perc_acrescimo)
-                            VALUES (plataforma.tenant_atual(), ?, ?::categoria_carteira, ?, ?, ?, ?, ?, ?)
+                                 taxa_administradora, perc_desconto, perc_acrescimo, permite_receber_crediario)
+                            VALUES (plataforma.tenant_atual(), ?, ?::categoria_carteira, ?, ?, ?, ?, ?, ?, ?)
                             RETURNING id_carteira
                             """)
                     .params(req.nomeCarteira().trim().toUpperCase(Locale.ROOT), req.categoriaCarteira().name(),
                             req.prazoPagamento(), req.pcMinima(), req.pcMaxima(), req.taxaAdministradora(),
-                            req.percDesconto(), req.percAcrescimo())
+                            req.percDesconto(), req.percAcrescimo(), req.permiteReceberCrediario())
                     .query(Long.class).single();
             return buscar(id);
         } catch (DuplicateKeyException e) {
@@ -124,12 +124,12 @@ public class TipoCarteiraService {
                             UPDATE tipo_carteira SET
                                 nome_carteira = ?, categoria_carteira = ?::categoria_carteira, prazo_pagamento = ?,
                                 pc_minima = ?, pc_maxima = ?, taxa_administradora = ?,
-                                perc_desconto = ?, perc_acrescimo = ?, atualizado_em = now()
+                                perc_desconto = ?, perc_acrescimo = ?, permite_receber_crediario = ?, atualizado_em = now()
                             WHERE id_tenant = plataforma.tenant_atual() AND id_carteira = ?
                             """)
                     .params(req.nomeCarteira().trim().toUpperCase(Locale.ROOT), req.categoriaCarteira().name(),
                             req.prazoPagamento(), req.pcMinima(), req.pcMaxima(), req.taxaAdministradora(),
-                            req.percDesconto(), req.percAcrescimo(), id)
+                            req.percDesconto(), req.percAcrescimo(), req.permiteReceberCrediario(), id)
                     .update();
             if (linhas == 0) {
                 throw new ResponseStatusException(NOT_FOUND, "Tipo de carteira não encontrado.");
@@ -208,7 +208,8 @@ public class TipoCarteiraService {
     private static final String SELECT_BASE = """
             SELECT tc.id_carteira, tc.nome_carteira, tc.categoria_carteira::text AS categoria_carteira,
                    tc.prazo_pagamento, tc.pc_minima, tc.pc_maxima,
-                   tc.taxa_administradora, tc.perc_desconto, tc.perc_acrescimo, tc.criado_em, tc.atualizado_em
+                   tc.taxa_administradora, tc.perc_desconto, tc.perc_acrescimo, tc.permite_receber_crediario,
+                   tc.criado_em, tc.atualizado_em
             FROM tipo_carteira tc
             """;
 
@@ -223,6 +224,7 @@ public class TipoCarteiraService {
                 rs.getBigDecimal("taxa_administradora"),
                 rs.getBigDecimal("perc_desconto"),
                 rs.getBigDecimal("perc_acrescimo"),
+                rs.getBoolean("permite_receber_crediario"),
                 rs.getObject("criado_em", OffsetDateTime.class),
                 rs.getObject("atualizado_em", OffsetDateTime.class));
     }
