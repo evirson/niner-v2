@@ -9,6 +9,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.math.BigDecimal;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.OffsetDateTime;
@@ -63,6 +64,22 @@ public class ConfiguracaoGeralService {
     }
 
     public record FlagsVariante(boolean usaVarianteLinha, boolean usaVarianteColuna) {
+    }
+
+    /**
+     * Só o percentual de desconto promocional, sem checagem de papel — usado pelo PDV (F5,
+     * `PdvVendaService`) pra exibir "Desconto Promocional" antes de efetivar a venda. Mesmo
+     * fallback de {@code flagsVariante}: {@code 0} evita 404 caso a linha nunca tenha sido criada.
+     */
+    @Transactional(readOnly = true)
+    public BigDecimal percentualDescontoVenda() {
+        return jdbc.sql("""
+                        SELECT percentual_desconto_venda FROM cfg_geral
+                        WHERE id_tenant = plataforma.tenant_atual()
+                        """)
+                .query(BigDecimal.class)
+                .optional()
+                .orElse(BigDecimal.ZERO);
     }
 
     @Transactional

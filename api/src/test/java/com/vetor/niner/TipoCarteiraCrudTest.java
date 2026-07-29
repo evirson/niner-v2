@@ -15,17 +15,19 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 
-import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.http.MediaType.APPLICATION_JSON;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * CRUD de tipo de carteira — mesmo padrão de {@link PlanoContasCrudTest}. Particularidade
- * própria desta tela (2026-07-23, docs/PROGRESSO.md): gerencia embutido o N:N com moeda
- * ({@code moeda_detalhe}) — o fluxo é "criar um tipo de carteira e escolher em quais moedas
- * ele vale", não o inverso. Sem coluna {@code ativo}: exclusão sem fallback de inativar.
+ * CRUD de tipo de carteira — mesmo padrão de {@link PlanoContasCrudTest}. Absorveu o cadastro
+ * de {@code moeda} em 2026-07-28 (motivo completo no topo de {@code
+ * V025__financeiro_caixa_crediario.sql}): {@code percDesconto}/{@code percAcrescimo} vieram de
+ * lá, e a chave única agora é {@code (nome_carteira, categoria_carteira)} — a mesma bandeira
+ * pode existir uma vez por categoria (ex.: "HIPER" em débito e "HIPER" em crédito, prazo/taxa
+ * independentes), mas não duas vezes na mesma categoria. Sem coluna {@code ativo}: exclusão
+ * sem fallback de inativar.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -50,12 +52,21 @@ class TipoCarteiraCrudTest {
     }
 
     @Test
-    void criaTipoCarteiraSemMoedaVinculada() throws Exception {
-        String token = assinarNovoTenant("sem-moeda");
+    void tenantNovoJaNasceComSeteTiposDeCarteiraSemeados() throws Exception {
+        String token = assinarNovoTenant("seed");
+
+        mvc.perform(get("/api/v1/tipos-carteira").param("limite", "20").header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalItens").value(7));
+    }
+
+    @Test
+    void criaTipoCarteiraComDescontoEAcrescimo() throws Exception {
+        String token = assinarNovoTenant("com-desconto");
 
         String carteira = """
                 {"nomeCarteira":"crediario 30/60/90","categoriaCarteira":"CREDIARIO","prazoPagamento":30,
-                 "pcMinima":1,"pcMaxima":3,"taxaAdministradora":2.5}
+                 "pcMinima":1,"pcMaxima":3,"taxaAdministradora":2.5,"percDesconto":0,"percAcrescimo":0}
                 """;
 
         mvc.perform(post("/api/v1/tipos-carteira").header("Authorization", "Bearer " + token)
@@ -65,45 +76,37 @@ class TipoCarteiraCrudTest {
                 .andExpect(jsonPath("$.categoriaCarteira").value("CREDIARIO"))
                 .andExpect(jsonPath("$.pcMinima").value(1))
                 .andExpect(jsonPath("$.pcMaxima").value(3))
-                .andExpect(jsonPath("$.moedas").isEmpty())
                 .andExpect(jsonPath("$.criadoEm").exists());
     }
 
+    /**
+     * O motivo inteiro da junção com moeda (2026-07-28): a mesma bandeira em categorias
+     * diferentes tem prazo/parcelas/taxa diferentes — precisa poder existir como duas linhas.
+     */
     @Test
-    void criaTipoCarteiraComMoedasVinculadasENuncaAlteraOutroTenant() throws Exception {
-        String token = assinarNovoTenant("com-moedas");
-        long idCartao = buscarIdMoedaPorNome(token, "CARTAO CREDITO");
-        long idCrediario = buscarIdMoedaPorNome(token, "CREDIARIO");
+    void mesmoNomeEmCategoriasDiferentesEhPermitido() throws Exception {
+        String token = assinarNovoTenant("mesma-bandeira");
+        criarCarteira(token, "HIPER", "CARTAO_DEBITO", 1, 1, 1, "1.5");
+        criarCarteira(token, "HIPER", "CARTAO_CREDITO", 30, 1, 6, "2.8");
 
-        String resp = mvc.perform(post("/api/v1/tipos-carteira").header("Authorization", "Bearer " + token)
-                        .contentType(APPLICATION_JSON)
-                        .content("""
-                                {"nomeCarteira":"CARTAO 3X","categoriaCarteira":"CARTAO_CREDITO","prazoPagamento":30,
-                                 "pcMinima":1,"pcMaxima":3,"taxaAdministradora":0,"moedas":[%d,%d]}
-                                """.formatted(idCartao, idCrediario)))
-                .andExpect(status().isCreated())
-                .andReturn().getResponse().getContentAsString();
-
-        int qtdMoedas = JsonPath.read(resp, "$.moedas.length()");
-        assertThat(qtdMoedas).isEqualTo(2);
+        mvc.perform(get("/api/v1/tipos-carteira").param("busca", "HIPER").param("limite", "20")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalItens").value(2));
     }
 
     @Test
-    void atualizarSubstituiListaDeMoedas() throws Exception {
-        String token = assinarNovoTenant("atualiza-moedas");
-        long idPix = buscarIdMoedaPorNome(token, "PIX");
-        long idDinheiro = buscarIdMoedaPorNome(token, "DINHEIRO");
-        long id = criarCarteira(token, "CARTEIRA ATUALIZA", 30, 1, 1, "0", java.util.List.of(idPix));
+    void mesmoNomeNaMesmaCategoriaEhRejeitado() throws Exception {
+        String token = assinarNovoTenant("nome-duplicado");
+        criarCarteira(token, "CARTEIRA UNICA", "CREDIARIO", 30, 1, 1, "0");
 
-        mvc.perform(put("/api/v1/tipos-carteira/" + id).header("Authorization", "Bearer " + token)
+        mvc.perform(post("/api/v1/tipos-carteira").header("Authorization", "Bearer " + token)
                         .contentType(APPLICATION_JSON)
                         .content("""
-                                {"nomeCarteira":"CARTEIRA ATUALIZA","categoriaCarteira":"CREDIARIO","prazoPagamento":30,
-                                 "pcMinima":1,"pcMaxima":1,"taxaAdministradora":0,"moedas":[%d]}
-                                """.formatted(idDinheiro)))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.moedas[0].idMoeda").value(idDinheiro))
-                .andExpect(jsonPath("$.moedas.length()").value(1));
+                                {"nomeCarteira":"carteira unica","categoriaCarteira":"CREDIARIO","prazoPagamento":15,
+                                 "pcMinima":1,"pcMaxima":1,"taxaAdministradora":0}
+                                """))
+                .andExpect(status().isConflict());
     }
 
     @Test
@@ -163,51 +166,82 @@ class TipoCarteiraCrudTest {
     }
 
     @Test
-    void moedaDuplicadaNaListaEhRejeitada() throws Exception {
-        String token = assinarNovoTenant("moeda-duplicada");
-        long idPix = buscarIdMoedaPorNome(token, "PIX");
+    void percentualDescontoNegativoEhRejeitado() throws Exception {
+        String token = assinarNovoTenant("percentual-negativo");
 
         mvc.perform(post("/api/v1/tipos-carteira").header("Authorization", "Bearer " + token)
                         .contentType(APPLICATION_JSON)
                         .content("""
-                                {"nomeCarteira":"CARTEIRA MOEDA DUPLICADA","categoriaCarteira":"CREDIARIO","prazoPagamento":30,
-                                 "pcMinima":1,"pcMaxima":1,"taxaAdministradora":0,"moedas":[%d,%d]}
-                                """.formatted(idPix, idPix)))
+                                {"nomeCarteira":"CARTEIRA PERCENTUAL INVALIDO","categoriaCarteira":"AVISTA","prazoPagamento":0,
+                                 "pcMinima":1,"pcMaxima":1,"percDesconto":-1}
+                                """))
                 .andExpect(status().isBadRequest());
     }
 
+    /** Sem limite superior (2026-07-23, herdado de moeda) — só não pode ser negativo. */
     @Test
-    void moedaInexistenteNaListaEhRejeitada() throws Exception {
-        String token = assinarNovoTenant("moeda-inexistente");
+    void percentualAcimaDeCemEhAceito() throws Exception {
+        String token = assinarNovoTenant("percentual-alto");
 
         mvc.perform(post("/api/v1/tipos-carteira").header("Authorization", "Bearer " + token)
                         .contentType(APPLICATION_JSON)
                         .content("""
-                                {"nomeCarteira":"CARTEIRA MOEDA INEXISTENTE","categoriaCarteira":"CREDIARIO","prazoPagamento":30,
-                                 "pcMinima":1,"pcMaxima":1,"taxaAdministradora":0,"moedas":[999999]}
+                                {"nomeCarteira":"CARTEIRA ACRESCIMO ALTO","categoriaCarteira":"CARTAO_CREDITO","prazoPagamento":30,
+                                 "pcMinima":1,"pcMaxima":6,"percAcrescimo":150}
+                                """))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.percAcrescimo").value(150));
+    }
+
+    /**
+     * A checagem é por valor positivo, não por presença (2026-07-23, herdado de moeda) — 0/0 é
+     * o estado neutro normal (toda carteira semeada no signup nasce assim) e não pode rejeitar.
+     */
+    @Test
+    void descontoEAcrescimoZeradosJuntosSaoAceitos() throws Exception {
+        String token = assinarNovoTenant("zerados-juntos");
+
+        mvc.perform(post("/api/v1/tipos-carteira").header("Authorization", "Bearer " + token)
+                        .contentType(APPLICATION_JSON)
+                        .content("""
+                                {"nomeCarteira":"CARTEIRA NEUTRA","categoriaCarteira":"AVISTA","prazoPagamento":0,
+                                 "pcMinima":1,"pcMaxima":1,"percDesconto":0,"percAcrescimo":0}
+                                """))
+                .andExpect(status().isCreated());
+    }
+
+    @Test
+    void descontoEAcrescimoPositivosJuntosSaoRejeitados() throws Exception {
+        String token = assinarNovoTenant("ambos-positivos");
+
+        mvc.perform(post("/api/v1/tipos-carteira").header("Authorization", "Bearer " + token)
+                        .contentType(APPLICATION_JSON)
+                        .content("""
+                                {"nomeCarteira":"CARTEIRA INVALIDA","categoriaCarteira":"AVISTA","prazoPagamento":0,
+                                 "pcMinima":1,"pcMaxima":1,"percDesconto":5,"percAcrescimo":3}
                                 """))
                 .andExpect(status().isBadRequest());
     }
 
     @Test
-    void nomeDuplicadoEhRejeitado() throws Exception {
-        String token = assinarNovoTenant("nome-duplicado");
-        criarCarteira(token, "CARTEIRA UNICA", 30, 1, 1, "0", java.util.List.of());
+    void atualizarMudaPercentuais() throws Exception {
+        String token = assinarNovoTenant("atualiza-percentual");
+        long id = criarCarteira(token, "CARTEIRA ATUALIZA PCT", "AVISTA", 0, 1, 1, "0");
 
-        mvc.perform(post("/api/v1/tipos-carteira").header("Authorization", "Bearer " + token)
+        mvc.perform(put("/api/v1/tipos-carteira/" + id).header("Authorization", "Bearer " + token)
                         .contentType(APPLICATION_JSON)
                         .content("""
-                                {"nomeCarteira":"carteira unica","categoriaCarteira":"CREDIARIO","prazoPagamento":15,
-                                 "pcMinima":1,"pcMaxima":1,"taxaAdministradora":0}
+                                {"nomeCarteira":"CARTEIRA ATUALIZA PCT","categoriaCarteira":"AVISTA","prazoPagamento":0,
+                                 "pcMinima":1,"pcMaxima":1,"percDesconto":5}
                                 """))
-                .andExpect(status().isConflict());
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.percDesconto").value(5));
     }
 
     @Test
-    void excluirCarteiraSemVinculoApagaDeVerdadeERemoveVinculoDeMoeda() throws Exception {
+    void excluirCarteiraSemVinculoApagaDeVerdade() throws Exception {
         String token = assinarNovoTenant("exclusao-simples");
-        long idPix = buscarIdMoedaPorNome(token, "PIX");
-        long id = criarCarteira(token, "CARTEIRA SEM VINCULO", 30, 1, 1, "0", java.util.List.of(idPix));
+        long id = criarCarteira(token, "CARTEIRA SEM VINCULO", "CREDIARIO", 30, 1, 1, "0");
 
         mvc.perform(delete("/api/v1/tipos-carteira/" + id).header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk())
@@ -215,19 +249,13 @@ class TipoCarteiraCrudTest {
 
         mvc.perform(get("/api/v1/tipos-carteira/" + id).header("Authorization", "Bearer " + token))
                 .andExpect(status().isNotFound());
-
-        // A moeda continua existindo — só o vínculo (moeda_detalhe) foi removido junto.
-        mvc.perform(get("/api/v1/moedas/" + idPix).header("Authorization", "Bearer " + token))
-                .andExpect(status().isOk());
     }
 
     @Test
     void excluirCarteiraComContaAReceberVinculadaRespondeConflito() throws Exception {
-        // Única FK bloqueante de tipo_carteira (moeda_detalhe é vínculo próprio, removido
-        // junto — ver excluirCarteiraSemVinculoApagaDeVerdadeERemoveVinculoDeMoeda acima).
-        String token = assinarNovoTenant("exclusao-vinculo");
+        String token = assinarNovoTenant("exclusao-vinculo-cr");
         long idTenant = extrairIdTenant(token);
-        long id = criarCarteira(token, "CARTEIRA COM VINCULO", 30, 1, 1, "0", java.util.List.of());
+        long id = criarCarteira(token, "CARTEIRA COM VINCULO CR", "CREDIARIO", 30, 1, 1, "0");
 
         criarContaReceberComCarteira(idTenant, id);
 
@@ -236,15 +264,28 @@ class TipoCarteiraCrudTest {
 
         mvc.perform(get("/api/v1/tipos-carteira/" + id).header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.nomeCarteira").value("CARTEIRA COM VINCULO"));
+                .andExpect(jsonPath("$.nomeCarteira").value("CARTEIRA COM VINCULO CR"));
+    }
+
+    /** Vínculo novo desde que caixa_detalhe passou a referenciar tipo_carteira (2026-07-28). */
+    @Test
+    void excluirCarteiraComLancamentoDeCaixaVinculadoRespondeConflito() throws Exception {
+        String token = assinarNovoTenant("exclusao-vinculo-caixa");
+        long idTenant = extrairIdTenant(token);
+        long id = criarCarteira(token, "CARTEIRA COM VINCULO CAIXA", "AVISTA", 0, 1, 1, "0");
+
+        criarLancamentoDeCaixaComCarteira(idTenant, id);
+
+        mvc.perform(delete("/api/v1/tipos-carteira/" + id).header("Authorization", "Bearer " + token))
+                .andExpect(status().isConflict());
     }
 
     @Test
     void listagemOrdenaPorColunaEDirecaoPedidas() throws Exception {
         String token = assinarNovoTenant("ordenacao");
-        criarCarteira(token, "ORDCARTEIRA BETA", 30, 1, 1, "0", java.util.List.of());
-        criarCarteira(token, "ORDCARTEIRA ALFA", 30, 1, 1, "0", java.util.List.of());
-        criarCarteira(token, "ORDCARTEIRA GAMA", 30, 1, 1, "0", java.util.List.of());
+        criarCarteira(token, "ORDCARTEIRA BETA", "CREDIARIO", 30, 1, 1, "0");
+        criarCarteira(token, "ORDCARTEIRA ALFA", "CREDIARIO", 30, 1, 1, "0");
+        criarCarteira(token, "ORDCARTEIRA GAMA", "CREDIARIO", 30, 1, 1, "0");
 
         mvc.perform(get("/api/v1/tipos-carteira").param("busca", "ORDCARTEIRA")
                         .param("ordenarPor", "nomeCarteira").param("direcao", "DESC")
@@ -253,24 +294,14 @@ class TipoCarteiraCrudTest {
                 .andExpect(jsonPath("$.itens[0].nomeCarteira").value("ORDCARTEIRA GAMA"));
     }
 
-    private long buscarIdMoedaPorNome(String token, String nomeMoeda) throws Exception {
-        String resp = mvc.perform(get("/api/v1/moedas").param("busca", nomeMoeda).param("limite", "20")
-                        .header("Authorization", "Bearer " + token))
-                .andExpect(status().isOk())
-                .andReturn().getResponse().getContentAsString();
-        return ((Number) JsonPath.read(resp, "$.itens[0].idMoeda")).longValue();
-    }
-
-    private long criarCarteira(String token, String nome, int prazoPagamento, int pcMinima, int pcMaxima,
-                                String taxaAdministradora, java.util.List<Long> moedas) throws Exception {
-        String moedasJson = moedas.isEmpty() ? "[]"
-                : moedas.stream().map(String::valueOf).collect(java.util.stream.Collectors.joining(",", "[", "]"));
+    private long criarCarteira(String token, String nome, String categoria, int prazoPagamento, int pcMinima,
+                                int pcMaxima, String taxaAdministradora) throws Exception {
         String resp = mvc.perform(post("/api/v1/tipos-carteira").header("Authorization", "Bearer " + token)
                         .contentType(APPLICATION_JSON)
                         .content("""
-                                {"nomeCarteira":"%s","categoriaCarteira":"CREDIARIO","prazoPagamento":%d,"pcMinima":%d,"pcMaxima":%d,
-                                 "taxaAdministradora":%s,"moedas":%s}
-                                """.formatted(nome, prazoPagamento, pcMinima, pcMaxima, taxaAdministradora, moedasJson)))
+                                {"nomeCarteira":"%s","categoriaCarteira":"%s","prazoPagamento":%d,"pcMinima":%d,"pcMaxima":%d,
+                                 "taxaAdministradora":%s}
+                                """.formatted(nome, categoria, prazoPagamento, pcMinima, pcMaxima, taxaAdministradora)))
                 .andExpect(status().isCreated())
                 .andReturn().getResponse().getContentAsString();
         return ((Number) JsonPath.read(resp, "$.idCarteira")).longValue();
@@ -309,6 +340,37 @@ class TipoCarteiraCrudTest {
                         (id_tenant, id_venda, id_carteira, numero_parcela, data_vencimento, valor_receber)
                     VALUES (%d, %d, %d, 1, now(), 100.00)
                     """.formatted(idTenant, idVenda, idCarteira));
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    /** Insere um caixa (mestre + detalhe) referenciando a carteira — mesmo padrão de {@link PlanoContasCrudTest}. */
+    private void criarLancamentoDeCaixaComCarteira(long idTenant, long idCarteira) throws Exception {
+        try (Connection c = DriverManager.getConnection(postgres.getJdbcUrl(), "niner_app", "dev_app");
+             Statement st = c.createStatement()) {
+            st.execute("SET app.id_tenant = " + idTenant);
+            long idEmpresa;
+            long idUsuario;
+            try (ResultSet rs = st.executeQuery("SELECT id_empresa FROM empresa LIMIT 1")) {
+                rs.next();
+                idEmpresa = rs.getLong(1);
+            }
+            try (ResultSet rs = st.executeQuery("SELECT id_usuario FROM usuario LIMIT 1")) {
+                rs.next();
+                idUsuario = rs.getLong(1);
+            }
+            long idCaixa;
+            try (ResultSet rs = st.executeQuery(
+                    "INSERT INTO caixa_mestre (id_tenant, id_empresa, id_usuario) VALUES ("
+                            + idTenant + ", " + idEmpresa + ", " + idUsuario + ") RETURNING id_caixa")) {
+                rs.next();
+                idCaixa = rs.getLong(1);
+            }
+            st.executeUpdate("""
+                    INSERT INTO caixa_detalhe (id_tenant, id_caixa, id_carteira, valor, tipo_operacao, credito_debito)
+                    VALUES (%d, %d, %d, 10.00, 'DEBITO_CAIXA', 'D')
+                    """.formatted(idTenant, idCaixa, idCarteira));
         } catch (SQLException e) {
             throw new RuntimeException(e);
         }

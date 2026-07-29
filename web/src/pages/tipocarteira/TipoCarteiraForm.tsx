@@ -10,14 +10,12 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useParams } from 'react-router-dom'
 import AjudaDaTela from '../../components/AjudaDaTela'
 import ConfirmarSalvarModal from '../../components/ConfirmarSalvarModal'
-import { IconeFormaCartao, IconeFormaPix, IconeMoeda, IconeTipoCarteira } from '../../components/Icones'
+import { IconeTipoCarteira } from '../../components/Icones'
 import InfoRegistro from '../../components/InfoRegistro'
-import MoedaModal from '../../components/MoedaModal'
 import Toast from '../../components/Toast'
 import { ApiError } from '../../lib/api'
 import { aoTeclarEnterNoFormulario } from '../../lib/formularios'
 import { completarPercentual, mascararPercentual } from '../../lib/masks'
-import { listarMoedas } from '../../lib/moedas'
 import {
   ROTULO_CATEGORIA_CARTEIRA,
   TIPO_CARTEIRA_VAZIO,
@@ -37,9 +35,9 @@ type ErrosCampo = Partial<Record<CampoValidavel, string>>
 const CATEGORIAS_CARTEIRA: CategoriaCarteira[] = ['AVISTA', 'CARTAO_DEBITO', 'CARTAO_CREDITO', 'CREDIARIO']
 
 /** Nome, categoria, prazo e parcelas são obrigatórios (prazo/parcelas aceitam 0/1 normalmente
- * — só não podem ficar em branco); Taxa Administradora é opcional (2026-07-23, nem todo tipo
- * de carteira cobra taxa), mais a regra de parcelas (mesmo CHECK do banco: mínima ≥ 1, máxima
- * ≥ mínima). */
+ * — só não podem ficar em branco); Taxa Administradora e % Desconto/Acréscimo são opcionais
+ * (2026-07-23/28), mais a regra de parcelas (mesmo CHECK do banco: mínima ≥ 1, máxima ≥
+ * mínima). */
 function validarCampo(chave: CampoValidavel, f: TipoCarteiraFormState): string | undefined {
   if (chave === 'nomeCarteira') return f.nomeCarteira.trim() ? undefined : 'Nome é obrigatório.'
   if (chave === 'categoriaCarteira') return f.categoriaCarteira ? undefined : 'Categoria é obrigatória.'
@@ -51,22 +49,21 @@ function validarCampo(chave: CampoValidavel, f: TipoCarteiraFormState): string |
   return undefined
 }
 
-/** Ícone representativo por nome da moeda (heurística por palavra-chave — moeda é texto
- * livre, então nomes fora do padrão caem no ícone genérico). */
-function IconeDaMoeda({ nomeMoeda }: { nomeMoeda: string }) {
-  const nome = nomeMoeda.toUpperCase()
-  if (nome.includes('PIX')) return <IconeFormaPix size={18} />
-  if (nome.includes('CART')) return <IconeFormaCartao size={18} />
-  return <IconeMoeda size={18} />
+/** Valor > 0 digitado (ainda incompleto, sem passar por `completarPercentual`) — usado só
+ * para decidir se limpa o campo oposto, não para validação de verdade (essa é no submit). */
+function ehPositivo(valor: string): boolean {
+  const n = Number(valor.replace(',', '.'))
+  return Number.isFinite(n) && n > 0
 }
 
 /**
- * Formulário de tipo de carteira (prazo/parcelas/taxa do crediário, cartão etc.). Gerencia
- * embutido o vínculo N:N com moeda (`moeda_detalhe`, 2026-07-23) — checklist sem ordenação
- * (diferente da categoria de Produto): o fluxo é "criar um tipo de carteira e escolher em
- * quais moedas ele vale", com criação rápida de moeda embutida se a que falta ainda não
- * existir (`MoedaModal`, mesmo papel do `PlanoContasModal` em Fornecedor). Sem tela de
- * configuração de campos: todos são NOT NULL, nada a configurar.
+ * Formulário de tipo de carteira — forma de pagamento completa (categoria, prazo/parcelas/
+ * taxa administradora, desconto/acréscimo). Absorveu o cadastro de Moeda em 2026-07-28: a
+ * mesma bandeira (nome) pode existir uma vez por categoria (ex.: "HIPER" em débito e "HIPER"
+ * em crédito são dois cadastros distintos, com prazo/taxa próprios) — motivo completo em
+ * `docs/PROGRESSO.md`. % Desconto e % Acréscimo nunca coexistem com valor positivo: digitar
+ * um valor > 0 num deles limpa o outro automaticamente. Sem tela de configuração de campos:
+ * todos são NOT NULL ou opcionais fixos, nada a configurar por tenant.
  */
 export default function TipoCarteiraForm({ somenteLeitura = false }: { somenteLeitura?: boolean }) {
   const { id } = useParams()
@@ -78,7 +75,6 @@ export default function TipoCarteiraForm({ somenteLeitura = false }: { somenteLe
   const [erros, setErros] = useState<ErrosCampo>({})
   const [toast, setToast] = useState('')
   const [confirmarSalvarAberto, setConfirmarSalvarAberto] = useState(false)
-  const [modalMoedaAberto, setModalMoedaAberto] = useState(false)
 
   const { data: carteiraExistente } = useQuery({
     queryKey: ['tipo-carteira', id],
@@ -89,11 +85,6 @@ export default function TipoCarteiraForm({ somenteLeitura = false }: { somenteLe
   useEffect(() => {
     if (carteiraExistente) setForm(paraFormulario(carteiraExistente))
   }, [carteiraExistente])
-
-  const { data: moedas } = useQuery({
-    queryKey: ['moedas', 'select-tipo-carteira'],
-    queryFn: () => listarMoedas({ tamanho: 100 }),
-  })
 
   const salvar = useMutation({
     mutationFn: () =>
@@ -123,12 +114,6 @@ export default function TipoCarteiraForm({ somenteLeitura = false }: { somenteLe
 
   const aoSairDoCampo = (chave: CampoValidavel) => (_e: FocusEvent) =>
     setErros((atual) => ({ ...atual, [chave]: validarCampo(chave, form) }))
-
-  const alternarMoeda = (idMoeda: number) =>
-    setForm((f) => ({
-      ...f,
-      moedas: f.moedas.includes(idMoeda) ? f.moedas.filter((m) => m !== idMoeda) : [...f.moedas, idMoeda],
-    }))
 
   const validarEEnviar = () => {
     if (somenteLeitura) return
@@ -219,6 +204,10 @@ export default function TipoCarteiraForm({ somenteLeitura = false }: { somenteLe
                 ))}
               </select>
               {erros.categoriaCarteira && <p className="erro-campo">{erros.categoriaCarteira}</p>}
+              <p className="muted" style={{ fontSize: 12, marginTop: 4 }}>
+                A mesma bandeira pode ter um cadastro por categoria (ex.: "HIPER" em Débito e
+                em Crédito, com prazo/taxa próprios de cada um).
+              </p>
             </div>
           </div>
         </section>
@@ -275,36 +264,49 @@ export default function TipoCarteiraForm({ somenteLeitura = false }: { somenteLe
         </section>
 
         <section className="section">
-          <p className="section-label">Moedas em que este tipo de carteira vale</p>
+          <p className="section-label">Desconto / Acréscimo</p>
+          <p className="muted" style={{ marginTop: -4 }}>
+            Preencha desconto OU acréscimo — nunca os dois juntos. Deixe em branco se não se aplicar.
+          </p>
 
-          <div className="identificacao-linha" style={{ flexWrap: 'wrap', gap: '8px 24px' }}>
-            {(moedas?.itens ?? []).map((m) => (
-              <label
-                key={m.idMoeda}
-                className="checkbox-linha"
-                style={{ marginTop: 0, display: 'inline-flex', alignItems: 'center', gap: 6 }}
-              >
-                <input
-                  type="checkbox"
-                  checked={form.moedas.includes(m.idMoeda)}
-                  onChange={() => alternarMoeda(m.idMoeda)}
-                />
-                <IconeDaMoeda nomeMoeda={m.nomeMoeda} />
-                {m.nomeMoeda}
-              </label>
-            ))}
+          <div className="form-grid">
+            <div className="col-3">
+              <label htmlFor="percDesconto">% Desconto</label>
+              <input
+                id="percDesconto"
+                inputMode="decimal"
+                placeholder="0,00"
+                value={form.percDesconto}
+                onChange={(e) => {
+                  const valor = mascararPercentual(e.target.value)
+                  setForm((f) => ({
+                    ...f,
+                    percDesconto: valor,
+                    percAcrescimo: ehPositivo(valor) ? '' : f.percAcrescimo,
+                  }))
+                }}
+                onBlur={() => setForm((f) => ({ ...f, percDesconto: completarPercentual(f.percDesconto) }))}
+              />
+            </div>
+            <div className="col-3">
+              <label htmlFor="percAcrescimo">% Acréscimo</label>
+              <input
+                id="percAcrescimo"
+                inputMode="decimal"
+                placeholder="0,00"
+                value={form.percAcrescimo}
+                onChange={(e) => {
+                  const valor = mascararPercentual(e.target.value)
+                  setForm((f) => ({
+                    ...f,
+                    percAcrescimo: valor,
+                    percDesconto: ehPositivo(valor) ? '' : f.percDesconto,
+                  }))
+                }}
+                onBlur={() => setForm((f) => ({ ...f, percAcrescimo: completarPercentual(f.percAcrescimo) }))}
+              />
+            </div>
           </div>
-
-          {!somenteLeitura && (
-            <button
-              type="button"
-              className="btn ghost"
-              style={{ marginTop: 12 }}
-              onClick={() => setModalMoedaAberto(true)}
-            >
-              ＋ Nova moeda
-            </button>
-          )}
         </section>
 
         <InfoRegistro
@@ -315,16 +317,6 @@ export default function TipoCarteiraForm({ somenteLeitura = false }: { somenteLe
       </fieldset>
       </form>
       </div>
-
-      {modalMoedaAberto && (
-        <MoedaModal
-          aoFechar={() => setModalMoedaAberto(false)}
-          aoCriar={(idMoeda) => {
-            setForm((f) => ({ ...f, moedas: [...f.moedas, idMoeda] }))
-            setModalMoedaAberto(false)
-          }}
-        />
-      )}
 
       {confirmarSalvarAberto && (
         <ConfirmarSalvarModal

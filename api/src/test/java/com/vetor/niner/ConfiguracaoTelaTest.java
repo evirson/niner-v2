@@ -50,8 +50,9 @@ class ConfiguracaoTelaTest {
         String payload = new String(java.util.Base64.getUrlDecoder().decode(partes[1]));
         long idUsuario = Long.parseLong(JsonPath.read(payload, "$.sub").toString());
         long idTenant = ((Number) JsonPath.read(payload, "$.tid")).longValue();
+        long idEmpresa = ((Number) JsonPath.read(payload, "$.eid")).longValue();
         String email = JsonPath.read(payload, "$.email");
-        return tokens.emitir(idUsuario, idTenant, email, List.of("OPERADOR"));
+        return tokens.emitir(idUsuario, idTenant, idEmpresa, email, List.of("OPERADOR"));
     }
 
     @Test

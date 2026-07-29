@@ -3,11 +3,9 @@ package com.vetor.niner.financeiro;
 import com.vetor.niner.comum.web.ConflitoDadosException;
 import com.vetor.niner.financeiro.TipoCarteiraDtos.CategoriaCarteira;
 import com.vetor.niner.financeiro.TipoCarteiraDtos.ExclusaoTipoCarteiraResponse;
-import com.vetor.niner.financeiro.TipoCarteiraDtos.MoedaSelecionada;
 import com.vetor.niner.financeiro.TipoCarteiraDtos.PaginaTiposCarteira;
 import com.vetor.niner.financeiro.TipoCarteiraDtos.TipoCarteiraRequest;
 import com.vetor.niner.financeiro.TipoCarteiraDtos.TipoCarteiraResponse;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
@@ -26,13 +24,13 @@ import java.util.Map;
 import static org.springframework.http.HttpStatus.NOT_FOUND;
 
 /**
- * CRUD de tipo de carteira (prazo/parcelas/taxa do crediário, cartão etc.), tabela {@code
- * tipo_carteira} sob RLS de tenant (V025/V024). Tela que também gerencia o vínculo N:N com
- * moeda ({@code moeda_detalhe}, 2026-07-23 — decisão de produto: o fluxo natural é "criar um
- * tipo de carteira e escolher em quais moedas ele vale", não o inverso); {@code moeda_detalhe}
- * é substituída por inteiro a cada criação/atualização (apaga tudo e reinsere), sem índice —
- * diferente de {@code produto_categoria}, esta relação não tem ordem. Sem coluna {@code
- * ativo}: exclusão sem fallback de inativar.
+ * CRUD de tipo de carteira (categoria/prazo/parcelas/taxa/desconto/acréscimo de cada forma de
+ * pagamento), tabela {@code tipo_carteira} sob RLS de tenant (V025/V024). Absorveu o cadastro
+ * de {@code moeda} em 2026-07-28 (motivo completo no comentário de topo de V025): a mesma
+ * bandeira podia estar vinculada a mais de uma categoria via {@code moeda_detalhe}, mas
+ * prazo/parcelas/taxa são diferentes entre categorias — agora cada combinação categoria×nome é
+ * sua própria linha (chave única inclui a categoria). Sem coluna {@code ativo}: exclusão sem
+ * fallback de inativar.
  *
  * <p>Filtro por {@code id_tenant} explícito em toda consulta, além do RLS — indispensável
  * porque o ambiente de teste (Testcontainers) conecta como superusuário do container, que
@@ -47,7 +45,10 @@ public class TipoCarteiraService {
     private static final Map<String, String> COLUNAS_ORDENAVEIS = Map.of(
             "nomeCarteira", "tc.nome_carteira",
             "prazoPagamento", "tc.prazo_pagamento",
-            "taxaAdministradora", "tc.taxa_administradora");
+            "taxaAdministradora", "tc.taxa_administradora",
+            "categoriaCarteira", "tc.categoria_carteira",
+            "percDesconto", "tc.perc_desconto",
+            "percAcrescimo", "tc.perc_acrescimo");
 
     private final JdbcClient jdbc;
 
@@ -79,7 +80,7 @@ public class TipoCarteiraService {
                 + ", tc.id_carteira " + direcaoOrdenacao + " LIMIT ? OFFSET ?";
         List<TipoCarteiraResponse> itens = jdbc.sql(SELECT_BASE + filtro + ordenacao)
                 .params(paramsPagina)
-                .query(this::mapear)
+                .query(TipoCarteiraService::mapear)
                 .list();
 
         return new PaginaTiposCarteira(itens, paginaAtual, tamanho, totalItens, totalPaginas);
@@ -89,7 +90,7 @@ public class TipoCarteiraService {
     public TipoCarteiraResponse buscar(long id) {
         return jdbc.sql(SELECT_BASE + " WHERE tc.id_tenant = plataforma.tenant_atual() AND tc.id_carteira = ?")
                 .param(id)
-                .query(this::mapear)
+                .query(TipoCarteiraService::mapear)
                 .optional()
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Tipo de carteira não encontrado."));
     }
@@ -100,19 +101,18 @@ public class TipoCarteiraService {
         try {
             long id = jdbc.sql("""
                             INSERT INTO tipo_carteira
-                                (id_tenant, nome_carteira, categoria_carteira, prazo_pagamento, pc_minima, pc_maxima, taxa_administradora)
-                            VALUES (plataforma.tenant_atual(), ?, ?::categoria_carteira, ?, ?, ?, ?)
+                                (id_tenant, nome_carteira, categoria_carteira, prazo_pagamento, pc_minima, pc_maxima,
+                                 taxa_administradora, perc_desconto, perc_acrescimo)
+                            VALUES (plataforma.tenant_atual(), ?, ?::categoria_carteira, ?, ?, ?, ?, ?, ?)
                             RETURNING id_carteira
                             """)
                     .params(req.nomeCarteira().trim().toUpperCase(Locale.ROOT), req.categoriaCarteira().name(),
-                            req.prazoPagamento(), req.pcMinima(), req.pcMaxima(), req.taxaAdministradora())
+                            req.prazoPagamento(), req.pcMinima(), req.pcMaxima(), req.taxaAdministradora(),
+                            req.percDesconto(), req.percAcrescimo())
                     .query(Long.class).single();
-            salvarMoedas(id, req.moedas());
             return buscar(id);
         } catch (DuplicateKeyException e) {
-            throw new ConflitoDadosException("Já existe um tipo de carteira com esse nome.");
-        } catch (DataIntegrityViolationException e) {
-            throw erroDeVinculo(e);
+            throw new ConflitoDadosException("Já existe um tipo de carteira com esse nome nesta categoria.");
         }
     }
 
@@ -123,29 +123,27 @@ public class TipoCarteiraService {
             int linhas = jdbc.sql("""
                             UPDATE tipo_carteira SET
                                 nome_carteira = ?, categoria_carteira = ?::categoria_carteira, prazo_pagamento = ?,
-                                pc_minima = ?, pc_maxima = ?, taxa_administradora = ?, atualizado_em = now()
+                                pc_minima = ?, pc_maxima = ?, taxa_administradora = ?,
+                                perc_desconto = ?, perc_acrescimo = ?, atualizado_em = now()
                             WHERE id_tenant = plataforma.tenant_atual() AND id_carteira = ?
                             """)
                     .params(req.nomeCarteira().trim().toUpperCase(Locale.ROOT), req.categoriaCarteira().name(),
-                            req.prazoPagamento(), req.pcMinima(), req.pcMaxima(), req.taxaAdministradora(), id)
+                            req.prazoPagamento(), req.pcMinima(), req.pcMaxima(), req.taxaAdministradora(),
+                            req.percDesconto(), req.percAcrescimo(), id)
                     .update();
             if (linhas == 0) {
                 throw new ResponseStatusException(NOT_FOUND, "Tipo de carteira não encontrado.");
             }
-            salvarMoedas(id, req.moedas());
             return buscar(id);
         } catch (DuplicateKeyException e) {
-            throw new ConflitoDadosException("Já existe um tipo de carteira com esse nome.");
-        } catch (DataIntegrityViolationException e) {
-            throw erroDeVinculo(e);
+            throw new ConflitoDadosException("Já existe um tipo de carteira com esse nome nesta categoria.");
         }
     }
 
     /**
      * Exclui de verdade — sem fallback de inativar ({@code tipo_carteira} não tem coluna
-     * {@code ativo}). Com vínculo em {@code contas_receber} (já usado numa venda), responde
-     * 409 e nada muda; vínculo em {@code moeda_detalhe} é removido junto (a relação só existe
-     * por causa do tipo de carteira, mesmo princípio de {@code produto_categoria}).
+     * {@code ativo}). Com vínculo em {@code contas_receber} (já usado numa venda) ou {@code
+     * caixa_detalhe} (já usado num lançamento de caixa), responde 409 e nada muda.
      */
     @Transactional
     public ExclusaoTipoCarteiraResponse excluir(long id) {
@@ -153,15 +151,15 @@ public class TipoCarteiraService {
                 jdbc.sql("""
                                 SELECT EXISTS (SELECT 1 FROM contas_receber
                                                WHERE id_tenant = plataforma.tenant_atual() AND id_carteira = ?)
+                                    OR EXISTS (SELECT 1 FROM caixa_detalhe
+                                               WHERE id_tenant = plataforma.tenant_atual() AND id_carteira = ?)
                                 """)
-                        .param(id).query(Boolean.class).single());
+                        .params(id, id).query(Boolean.class).single());
         if (temDependente) {
             throw new ConflitoDadosException(
-                    "Tipo de carteira em uso em contas a receber — não pode ser excluído.");
+                    "Tipo de carteira em uso em contas a receber ou lançamento de caixa — não pode ser excluído.");
         }
 
-        jdbc.sql("DELETE FROM moeda_detalhe WHERE id_tenant = plataforma.tenant_atual() AND id_carteira = ?")
-                .param(id).update();
         int linhas = jdbc.sql("DELETE FROM tipo_carteira WHERE id_tenant = plataforma.tenant_atual() AND id_carteira = ?")
                 .param(id).update();
         if (linhas == 0) {
@@ -171,30 +169,11 @@ public class TipoCarteiraService {
     }
 
     /**
-     * Apaga todos os vínculos e reinsere a lista recebida — sem índice (a relação não tem
-     * ordem, diferente de {@code produto_categoria}).
-     */
-    private void salvarMoedas(long idCarteira, List<Long> moedas) {
-        jdbc.sql("DELETE FROM moeda_detalhe WHERE id_tenant = plataforma.tenant_atual() AND id_carteira = ?")
-                .param(idCarteira).update();
-        if (moedas == null) {
-            return;
-        }
-        for (Long idMoeda : moedas) {
-            jdbc.sql("""
-                            INSERT INTO moeda_detalhe (id_tenant, id_moeda, id_carteira)
-                            VALUES (plataforma.tenant_atual(), ?, ?)
-                            """)
-                    .params(idMoeda, idCarteira)
-                    .update();
-        }
-    }
-
-    /**
      * Validação de servidor (defesa em profundidade): parcelas mínima/máxima (mesmo CHECK do
-     * banco, mensagem amigável em vez de 500), percentual da taxa administradora e moeda
-     * duplicada na lista (rejeitada aqui porque só apareceria depois de já ter apagado os
-     * vínculos antigos).
+     * banco, mensagem amigável em vez de 500), taxa administradora, e desconto/acréscimo
+     * (herdado de {@code MoedaService}, 2026-07-28) — nunca coexistem *de verdade* no mesmo
+     * registro; a checagem é por **valor positivo**, não por presença — 0/0 (ou um dos dois em
+     * branco) é o estado neutro normal, não pode disparar o erro.
      */
     private static void validar(TipoCarteiraRequest req) {
         if (req.pcMinima() < 1) {
@@ -210,53 +189,40 @@ public class TipoCarteiraService {
         if (req.taxaAdministradora() != null && req.taxaAdministradora().compareTo(BigDecimal.ZERO) < 0) {
             throw new IllegalArgumentException("Taxa administradora não pode ser negativa.");
         }
-        if (req.moedas() != null) {
-            long distintas = req.moedas().stream().distinct().count();
-            if (distintas != req.moedas().size()) {
-                throw new IllegalArgumentException("Moeda duplicada na lista.");
-            }
+
+        boolean temDesconto = req.percDesconto() != null && req.percDesconto().compareTo(BigDecimal.ZERO) > 0;
+        boolean temAcrescimo = req.percAcrescimo() != null && req.percAcrescimo().compareTo(BigDecimal.ZERO) > 0;
+        if (temDesconto && temAcrescimo) {
+            throw new IllegalArgumentException("Informe % de desconto OU % de acréscimo — nunca os dois.");
         }
+        exigirNaoNegativoSePresente(req.percDesconto(), "% de desconto");
+        exigirNaoNegativoSePresente(req.percAcrescimo(), "% de acréscimo");
     }
 
-    /**
-     * Traduz a violação de FK crua (moeda_detalhe→moeda inexistente, ou de outro tenant) numa
-     * mensagem amigável (400, não 500) — mesmo princípio de {@code ProdutoService.erroDeVinculo}.
-     */
-    private static IllegalArgumentException erroDeVinculo(DataIntegrityViolationException e) {
-        return new IllegalArgumentException("Moeda informada não existe.");
-    }
-
-    private List<MoedaSelecionada> buscarMoedas(long idCarteira) {
-        return jdbc.sql("""
-                        SELECT m.id_moeda, m.nome_moeda
-                        FROM moeda_detalhe md
-                        JOIN moeda m ON m.id_moeda = md.id_moeda AND m.id_tenant = md.id_tenant
-                        WHERE md.id_tenant = plataforma.tenant_atual() AND md.id_carteira = ?
-                        ORDER BY m.nome_moeda
-                        """)
-                .param(idCarteira)
-                .query((rs, n) -> new MoedaSelecionada(rs.getLong("id_moeda"), rs.getString("nome_moeda")))
-                .list();
+    private static void exigirNaoNegativoSePresente(BigDecimal valor, String rotulo) {
+        if (valor != null && valor.compareTo(BigDecimal.ZERO) < 0) {
+            throw new IllegalArgumentException(rotulo + " não pode ser negativo.");
+        }
     }
 
     private static final String SELECT_BASE = """
             SELECT tc.id_carteira, tc.nome_carteira, tc.categoria_carteira::text AS categoria_carteira,
                    tc.prazo_pagamento, tc.pc_minima, tc.pc_maxima,
-                   tc.taxa_administradora, tc.criado_em, tc.atualizado_em
+                   tc.taxa_administradora, tc.perc_desconto, tc.perc_acrescimo, tc.criado_em, tc.atualizado_em
             FROM tipo_carteira tc
             """;
 
-    private TipoCarteiraResponse mapear(ResultSet rs, int rowNum) throws SQLException {
-        long id = rs.getLong("id_carteira");
+    private static TipoCarteiraResponse mapear(ResultSet rs, int rowNum) throws SQLException {
         return new TipoCarteiraResponse(
-                id,
+                rs.getLong("id_carteira"),
                 rs.getString("nome_carteira"),
                 CategoriaCarteira.valueOf(rs.getString("categoria_carteira")),
                 rs.getInt("prazo_pagamento"),
                 rs.getInt("pc_minima"),
                 rs.getInt("pc_maxima"),
                 rs.getBigDecimal("taxa_administradora"),
-                buscarMoedas(id),
+                rs.getBigDecimal("perc_desconto"),
+                rs.getBigDecimal("perc_acrescimo"),
                 rs.getObject("criado_em", OffsetDateTime.class),
                 rs.getObject("atualizado_em", OffsetDateTime.class));
     }

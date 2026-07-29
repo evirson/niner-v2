@@ -62,6 +62,15 @@ export function buscarFlagsVariante(): Promise<FlagsVariante> {
   return api<FlagsVariante>('/api/v1/config-geral/flags-variante')
 }
 
+export interface DescontoVenda {
+  percentualDescontoVenda: number
+}
+
+/** Aberto a qualquer papel (diferente do resto de `cfg_geral`) — usado pelo PDV (F5). */
+export function buscarDescontoVenda(): Promise<DescontoVenda> {
+  return api<DescontoVenda>('/api/v1/config-geral/desconto-venda')
+}
+
 export function atualizarConfiguracaoGeral(payload: ReturnType<typeof paraRequisicao>): Promise<ConfiguracaoGeral> {
   return api<ConfiguracaoGeral>('/api/v1/config-geral', { method: 'PUT', body: JSON.stringify(payload) })
 }

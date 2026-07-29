@@ -5,6 +5,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 
 import java.time.OffsetDateTime;
+import java.util.List;
 
 /** DTOs do onboarding público (signup do trial + login). */
 public final class OnboardingDtos {
@@ -30,13 +31,30 @@ public final class OnboardingDtos {
             OffsetDateTime trialExpiraEm) {
     }
 
-    /** Login de usuário do tenant (identificado pelo slug da loja). */
+    /**
+     * Login de usuário do tenant (identificado pelo slug da loja). {@code idEmpresa}
+     * (2026-07-28) é opcional — só é usado na segunda chamada, depois que a primeira responde
+     * {@code escolherEmpresa=true} porque o usuário tem acesso a mais de uma empresa (ver
+     * {@code SignupService.login}).
+     */
     public record LoginRequest(
             @NotBlank String slug,
             @NotBlank @Email String email,
-            @NotBlank String senha) {
+            @NotBlank String senha,
+            Long idEmpresa) {
     }
 
-    public record TokenResponse(String token, long idTenant, String slug) {
+    /** Uma empresa que o usuário pode escolher ao logar (`usuario_empresa`, 2026-07-28). */
+    public record EmpresaOpcaoLogin(long idEmpresa, String nomeEmpresa) {
+    }
+
+    /**
+     * {@code token} vem preenchido quando o login se completa. Quando o usuário tem acesso a
+     * mais de uma empresa e a requisição não informou {@code idEmpresa}, {@code token} vem
+     * {@code null} e {@code escolherEmpresa=true} — o front deve reapresentar as credenciais
+     * com o {@code idEmpresa} escolhido em {@code empresas}.
+     */
+    public record TokenResponse(
+            String token, long idTenant, String slug, boolean escolherEmpresa, List<EmpresaOpcaoLogin> empresas) {
     }
 }

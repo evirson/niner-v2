@@ -229,7 +229,9 @@ class PlanoContasCrudTest {
      * Insere um caixa (mestre + detalhe) referenciando o plano — vínculo que bloqueia a
      * exclusão, mas que a pré-checagem de {@code excluir()} não enumerava até este teste
      * existir (achado do pedido "verifique todas as telas"). Reaproveita empresa/usuário
-     * admin e a moeda semeados pelo signup ({@code SignupService}).
+     * admin e um tipo de carteira semeados pelo signup ({@code SignupService}) —
+     * {@code caixa_detalhe.id_carteira} referencia {@code tipo_carteira} desde 2026-07-28
+     * (era {@code id_moeda} → {@code moeda}, absorvida por {@code tipo_carteira}).
      */
     private void criarCaixaComPlano(long idTenant, String idPlanoContas) throws Exception {
         try (Connection c = DriverManager.getConnection(postgres.getJdbcUrl(), "niner_app", "dev_app");
@@ -237,7 +239,7 @@ class PlanoContasCrudTest {
             st.execute("SET app.id_tenant = " + idTenant);
             long idEmpresa;
             long idUsuario;
-            long idMoeda;
+            long idCarteira;
             try (ResultSet rs = st.executeQuery("SELECT id_empresa FROM empresa LIMIT 1")) {
                 rs.next();
                 idEmpresa = rs.getLong(1);
@@ -246,9 +248,9 @@ class PlanoContasCrudTest {
                 rs.next();
                 idUsuario = rs.getLong(1);
             }
-            try (ResultSet rs = st.executeQuery("SELECT id_moeda FROM moeda LIMIT 1")) {
+            try (ResultSet rs = st.executeQuery("SELECT id_carteira FROM tipo_carteira LIMIT 1")) {
                 rs.next();
-                idMoeda = rs.getLong(1);
+                idCarteira = rs.getLong(1);
             }
             long idCaixa;
             try (ResultSet rs = st.executeQuery(
@@ -259,9 +261,9 @@ class PlanoContasCrudTest {
             }
             st.executeUpdate("""
                     INSERT INTO caixa_detalhe
-                        (id_tenant, id_caixa, id_moeda, id_plano_contas, valor, tipo_operacao, credito_debito)
+                        (id_tenant, id_caixa, id_carteira, id_plano_contas, valor, tipo_operacao, credito_debito)
                     VALUES (%d, %d, %d, '%s', 10.00, 'DEBITO_CAIXA', 'D')
-                    """.formatted(idTenant, idCaixa, idMoeda, idPlanoContas));
+                    """.formatted(idTenant, idCaixa, idCarteira, idPlanoContas));
         } catch (SQLException e) {
             throw new RuntimeException(e);
         }

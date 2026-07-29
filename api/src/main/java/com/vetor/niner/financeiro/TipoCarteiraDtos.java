@@ -9,10 +9,11 @@ import java.time.OffsetDateTime;
 import java.util.List;
 
 /**
- * DTOs do cadastro de tipo de carteira (prazo/parcelas/taxa do crediário, cartão etc.). O
- * request recebe as moedas em que este tipo de carteira vale ({@code moedas}, lista de
- * {@code idMoeda}, sem ordem) — o servidor substitui {@code moeda_detalhe} por inteiro a
- * cada save (mesmo princípio de {@code produto_categoria}, só que sem índice).
+ * DTOs do cadastro de tipo de carteira (categoria/prazo/parcelas/taxa/desconto/acréscimo de
+ * cada forma de pagamento). Absorveu o cadastro de {@code moeda} em 2026-07-28 — {@code
+ * percDesconto}/{@code percAcrescimo} vieram de lá; não existe mais vínculo N:N (a mesma
+ * bandeira em categorias diferentes é uma linha por categoria — ex.: "HIPER" em
+ * CARTAO_DEBITO e "HIPER" em CARTAO_CREDITO, prazos/taxas independentes).
  */
 public final class TipoCarteiraDtos {
 
@@ -29,8 +30,10 @@ public final class TipoCarteiraDtos {
     }
 
     /**
-     * {@code taxaAdministradora} é opcional (2026-07-23, coluna sem {@code NOT NULL}) — nem
-     * todo tipo de carteira cobra taxa administradora.
+     * {@code taxaAdministradora}/{@code percDesconto}/{@code percAcrescimo} são opcionais
+     * (colunas sem {@code NOT NULL}) — nem todo tipo de carteira cobra taxa, e desconto/
+     * acréscimo nunca coexistem com valor positivo ao mesmo tempo (checagem por valor > 0,
+     * não presença — 2026-07-23, mesma regra herdada de {@code moeda}).
      */
     public record TipoCarteiraRequest(
             @NotBlank @Size(max = 60) String nomeCarteira,
@@ -39,7 +42,8 @@ public final class TipoCarteiraDtos {
             @NotNull Integer pcMinima,
             @NotNull Integer pcMaxima,
             BigDecimal taxaAdministradora,
-            List<Long> moedas) {
+            BigDecimal percDesconto,
+            BigDecimal percAcrescimo) {
     }
 
     public record TipoCarteiraResponse(
@@ -50,13 +54,10 @@ public final class TipoCarteiraDtos {
             int pcMinima,
             int pcMaxima,
             BigDecimal taxaAdministradora,
-            List<MoedaSelecionada> moedas,
+            BigDecimal percDesconto,
+            BigDecimal percAcrescimo,
             OffsetDateTime criadoEm,
             OffsetDateTime atualizadoEm) {
-    }
-
-    /** Moeda vinculada a este tipo de carteira ({@code moeda_detalhe}) — sem ordenação. */
-    public record MoedaSelecionada(long idMoeda, String nomeMoeda) {
     }
 
     /** Listagem paginada por número de página — mesmo padrão do resto do domínio. */
@@ -66,7 +67,7 @@ public final class TipoCarteiraDtos {
 
     /**
      * Resultado do DELETE: {@code tipo_carteira} não tem coluna {@code ativo} — sem fallback
-     * de inativar (com vínculo em {@code moeda_detalhe}/{@code contas_receber} responde 409).
+     * de inativar (com vínculo em {@code contas_receber}/{@code caixa_detalhe} responde 409).
      */
     public record ExclusaoTipoCarteiraResponse(String acao, String motivo) {
     }

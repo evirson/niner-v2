@@ -82,12 +82,12 @@ h1 { font-size: 26px; line-height: 1.2; }
 .big { font-size: 20px; font-weight: 700; margin: 0 0 4px; }
 
 label { display: block; color: var(--label-color); font-size: 13px; margin: 12px 0 6px; }
-input, select {
+input, select, textarea {
   width: 100%; padding: 11px 13px; border-radius: 8px;
   background: var(--field-bg); color: var(--field-text); border: 1px solid var(--line-strong);
   font-size: 15px; font-family: inherit;
 }
-input:focus-visible, select:focus-visible {
+input:focus-visible, select:focus-visible, textarea:focus-visible {
   outline: 2px solid var(--accent); outline-offset: 1px;
 }
 .mono { font-variant-numeric: tabular-nums; }
@@ -228,6 +228,10 @@ input:focus-visible, select:focus-visible {
   background: var(--surface); border-radius: var(--radius); border: 1px solid var(--line);
   padding: 24px; width: 100%; max-width: 480px; max-height: 85vh; overflow-y: auto;
 }
+/* Variante larga — pesquisa de produto do PDV (tabela com colunas de estoque por empresa). */
+.modal-largo { max-width: 1040px; }
+/* Variante média — altera quantidade do PDV (tabela de 2 colunas, espaço pro stepper/confirmação). */
+.modal-medio { max-width: 640px; }
 .ajuda-rodape { display: flex; justify-content: space-between; align-items: center; margin-top: 20px; }
 .lista-categorias { list-style: none; margin: 0 0 16px; padding: 0; display: flex; flex-direction: column; gap: 8px; }
 .lista-categorias li { display: flex; gap: 8px; }
@@ -307,17 +311,29 @@ input:focus-visible, select:focus-visible {
   height: 60px; flex-shrink: 0; display: flex; align-items: center; justify-content: space-between;
   padding: 0 20px; background: var(--surface-2); border-bottom: 1px solid var(--line);
 }
+.app-empresa-ativa { font-size: 13px; }
 .app-body { flex: 1; display: flex; min-height: 0; overflow: hidden; }
+/* Menu lateral retrátil (2026-07-28) — largura anima entre 200px e 56px; preferência
+   persistida em localStorage (Layout.tsx). Ícone por item (necessário pro modo recolhido,
+   que mostra só o ícone com o rótulo em `title`, tooltip nativo do navegador). */
 .app-nav {
   width: 200px; flex-shrink: 0; padding: 16px 12px; background: var(--surface);
   border-right: 1px solid var(--line); display: flex; flex-direction: column; gap: 4px;
-  overflow-y: auto;
+  overflow-y: auto; overflow-x: hidden; transition: width .15s ease;
 }
-.app-nav a {
-  display: block; padding: 9px 12px; border-radius: 8px; text-decoration: none;
-  color: var(--ink-muted); font-weight: 500;
+.app-nav-recolhido { width: 56px; padding: 16px 8px; }
+.app-nav a, .app-nav-toggle {
+  display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: 8px;
+  text-decoration: none; color: var(--ink-muted); font-weight: 500; white-space: nowrap;
 }
+.app-nav a svg, .app-nav-toggle svg { flex-shrink: 0; }
 .app-nav a:hover { background: var(--surface-2); color: var(--ink); }
+.app-nav-toggle {
+  margin-top: auto; flex-shrink: 0; border: 0; background: none; cursor: pointer;
+  font-size: 14px; font-family: inherit;
+}
+.app-nav-toggle:hover { background: var(--surface-2); color: var(--ink); }
+.app-nav-recolhido a, .app-nav-recolhido .app-nav-toggle { justify-content: center; padding: 9px; }
 .app-nav a.active { background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--accent); }
 .app-main { flex: 1; min-height: 0; overflow-y: auto; padding: 28px; max-width: 1600px; }
 
@@ -379,3 +395,197 @@ input:focus-visible, select:focus-visible {
   .form-grid > * { grid-column: span 12 !important; }
   .toast { left: 20px; right: 20px; max-width: none; }
 }
+
+/* PDV (Frente de Caixa, 2026-07-27) — rascunho de layout incorporado ao ERP. Tela só de
+   demonstração visual: estado local (catálogo fixo, sem chamada de API), nenhuma regra de
+   negócio real ainda (P4/§3.7 seguem valendo quando a feature de verdade for construída). */
+.pdv-frame {
+  flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 14px;
+  background: var(--surface); border: 1px solid var(--line-strong); border-radius: 16px;
+  padding: 16px; min-width: 0;
+}
+
+.pdv-barra-descricao {
+  flex-shrink: 0; background: var(--surface-2); border: 1px solid var(--line);
+  border-radius: var(--radius); padding: 14px 20px;
+  font-size: 19px; font-weight: 700; letter-spacing: .2px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.pdv-barra-descricao .pdv-variacao { color: var(--ink-muted); font-weight: 500; font-size: 15px; }
+
+.pdv-corpo {
+  flex: 1; min-height: 0; display: grid;
+  grid-template-columns: minmax(360px, 42%) 1fr; grid-template-rows: 1fr; gap: 14px;
+}
+
+.pdv-coluna-esq { display: flex; flex-direction: column; gap: 14px; min-height: 0; }
+
+.pdv-linha-produto { display: grid; grid-template-columns: 1fr 168px; gap: 14px; flex-shrink: 0; }
+
+.pdv-foto-produto {
+  height: 300px; background: var(--field-bg); border: 1px solid var(--line-strong);
+  border-radius: var(--radius); display: flex; flex-direction: column; align-items: center;
+  justify-content: center; gap: 10px; color: var(--ink-muted); position: relative;
+}
+.pdv-foto-produto svg { width: 56px; height: 56px; opacity: .5; }
+.pdv-foto-produto .pdv-rotulo { font-size: 13px; padding: 0 16px; text-align: center; }
+.pdv-foto-produto img { width: 100%; height: 100%; object-fit: contain; border-radius: var(--radius); }
+
+.pdv-stats-produto { display: flex; flex-direction: column; gap: 8px; }
+.pdv-stat-box {
+  flex: 1; display: flex; flex-direction: column; justify-content: center; gap: 2px;
+  background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--radius);
+  padding: 8px 12px;
+}
+.pdv-stat-box .pdv-rotulo { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--label-color); }
+.pdv-stat-box .pdv-valor { font-size: 18px; font-weight: 700; font-variant-numeric: tabular-nums; }
+
+.pdv-campo-codigo-barras { flex-shrink: 0; }
+.pdv-campo-codigo-barras .pdv-rotulo {
+  font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--label-color);
+  display: flex; align-items: center; gap: 6px; margin-bottom: 6px;
+}
+.pdv-campo-codigo-barras .pdv-rotulo svg { width: 14px; height: 14px; opacity: .8; }
+.pdv-campo-codigo-barras input {
+  width: 100%; padding: 12px 14px; border-radius: var(--radius); border: 1px solid var(--line-strong);
+  background: var(--field-bg); color: var(--field-text); font: 20px/1.2 'SFMono-Regular', Consolas, monospace;
+  letter-spacing: 1px;
+}
+.pdv-campo-codigo-barras input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.pdv-campo-codigo-barras .pdv-dica { margin-top: 5px; font-size: 11.5px; color: var(--ink-muted); }
+
+.pdv-linha-fkeys { flex: 1; min-height: 64px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+.pdv-tecla {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
+  padding: 12px 8px; border-radius: var(--radius); border: 1px solid var(--line-strong);
+  background: var(--surface-2); color: var(--ink); cursor: pointer; text-align: center;
+  font-size: 13px; font-weight: 600; transition: border-color .12s, transform .08s, background-color .12s;
+}
+.pdv-tecla .pdv-kbd {
+  font-size: 11px; font-weight: 700; color: var(--accent); border: 1px solid var(--line-strong);
+  border-radius: 5px; padding: 1px 6px; background: var(--surface);
+}
+.pdv-tecla:hover { border-color: var(--accent); }
+.pdv-tecla:active, .pdv-tecla.pdv-ativa { transform: scale(0.97); background: color-mix(in srgb, var(--accent) 16%, var(--surface-2)); }
+
+.pdv-tecla-venda {
+  flex-shrink: 0; margin-top: auto; min-height: 84px; display: flex; align-items: center;
+  justify-content: center; gap: 10px; padding: 16px; border-radius: var(--radius); border: none;
+  cursor: pointer; background: var(--accent); color: var(--accent-ink); font-size: 17px; font-weight: 700;
+  transition: filter .12s, transform .08s;
+}
+.pdv-tecla-venda .pdv-kbd {
+  font-size: 11px; font-weight: 700; border: 1px solid color-mix(in srgb, var(--accent-ink) 45%, transparent);
+  border-radius: 5px; padding: 1px 7px;
+}
+.pdv-tecla-venda:hover { filter: brightness(1.06); }
+.pdv-tecla-venda:active { transform: scale(0.99); }
+
+.pdv-coluna-dir { display: flex; flex-direction: column; min-height: 0; border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
+
+.pdv-ledger-cabecalho, .pdv-ledger-linha {
+  display: grid; grid-template-columns: 132px 1fr 70px 110px 120px; gap: 12px; align-items: center;
+}
+.pdv-ledger-cabecalho {
+  flex-shrink: 0; padding: 10px 16px; background: var(--surface-2); border-bottom: 1px solid var(--line);
+  font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--label-color); font-weight: 700;
+}
+.pdv-ledger-cabecalho .pdv-num { text-align: right; }
+
+.pdv-ledger-corpo { flex: 1; min-height: 0; overflow-y: auto; }
+.pdv-ledger-linha {
+  padding: 10px 16px; border-bottom: 1px solid var(--line); cursor: pointer; font-size: 14px;
+}
+.pdv-ledger-linha:last-child { border-bottom: 0; }
+.pdv-ledger-linha:hover { background: var(--surface-2); }
+.pdv-ledger-linha.pdv-selecionada { background: color-mix(in srgb, var(--accent) 14%, transparent); }
+.pdv-ledger-linha .pdv-cod { font-variant-numeric: tabular-nums; color: var(--ink-muted); font-size: 12.5px; }
+.pdv-ledger-linha .pdv-num { text-align: right; font-variant-numeric: tabular-nums; }
+.pdv-ledger-vazio { padding: 40px 16px; text-align: center; color: var(--ink-muted); font-size: 13.5px; }
+
+.pdv-ledger-rodape { flex-shrink: 0; display: grid; grid-template-columns: 180px 1fr; gap: 12px; padding: 12px; background: var(--surface-2); border-top: 1px solid var(--line); }
+.pdv-caixa-total {
+  min-height: 60px; display: flex; flex-direction: column; justify-content: center; gap: 2px;
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 10px 16px;
+}
+.pdv-caixa-total .pdv-rotulo { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--label-color); }
+.pdv-caixa-total .pdv-valor { font-size: 18px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.pdv-caixa-total.pdv-total { background: var(--accent); border-color: var(--accent); }
+.pdv-caixa-total.pdv-total .pdv-rotulo { color: color-mix(in srgb, var(--accent-ink) 75%, transparent); }
+.pdv-caixa-total.pdv-total .pdv-valor { color: var(--accent-ink); font-size: 26px; }
+
+.pdv-flash {
+  position: fixed; left: 50%; bottom: 28px; transform: translate(-50%, 12px); opacity: 0;
+  background: var(--sucesso); color: #08210f; font-weight: 700; padding: 12px 22px; border-radius: 999px;
+  box-shadow: 0 8px 24px rgba(0,0,0,.25); transition: opacity .18s, transform .18s; pointer-events: none;
+  font-size: 14px; z-index: 150;
+}
+.pdv-flash.pdv-show { opacity: 1; transform: translate(-50%, 0); }
+
+@media (max-width: 980px) {
+  .pdv-corpo { grid-template-columns: 1fr; grid-template-rows: auto auto; }
+  .pdv-coluna-dir { min-height: 360px; }
+}
+
+/* Modal F3 — Altera Quantidade: stepper por linha + confirmação inline antes de remover
+   (nunca remove direto ao chegar em zero — pede confirmação, mesma convenção do resto do
+   sistema de nunca executar uma exclusão sem avisar). */
+.pdv-stepper { display: flex; align-items: center; justify-content: center; gap: 10px; }
+.pdv-stepper button {
+  width: 30px; height: 30px; border-radius: 8px; border: 1px solid var(--line-strong);
+  background: var(--surface-2); color: var(--ink); font-size: 16px; font-weight: 700;
+  cursor: pointer; line-height: 1;
+}
+.pdv-stepper button:hover { border-color: var(--accent); color: var(--accent); }
+.pdv-stepper button:disabled { opacity: .4; cursor: default; }
+.pdv-stepper .pdv-qtd-atual { min-width: 28px; text-align: center; font-variant-numeric: tabular-nums; font-weight: 700; }
+
+.pdv-confirma-remocao {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px;
+  color: var(--danger); font-size: 13px; font-weight: 600;
+}
+.pdv-confirma-remocao .btn { padding: 6px 10px; font-size: 12.5px; white-space: nowrap; }
+
+/* Modal F5 — Forma de Pagamento: Cliente/Vendedor no topo (obrigatórios, 2026-07-28), resumo
+   (total/desconto gerencial/sub-total/desconto promocional/valor a pagar/valor pago) à
+   esquerda + coluna de categorias à direita, área inferior com a lista de pagamentos já
+   lançados (ou a edição da linha atual), rodapé fixo com Cancelar/Confirmar. */
+.pdv-modal-pagamento { padding-top: 14px; }
+.pdv-selecao-linha { display: flex; gap: 14px; margin-top: 4px; }
+.pdv-selecao-campo { flex: 1; display: flex; flex-direction: column; gap: 4px; }
+.pdv-selecao-valor {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  border: 1px solid var(--line); border-radius: var(--radius); padding: 8px 12px;
+  background: var(--surface-2); font-size: 14px;
+}
+.pdv-selecao-valor .btn { padding: 6px 12px; font-size: 12.5px; white-space: nowrap; }
+
+.pdv-pagamento-topo { display: flex; gap: 14px; margin-top: 10px; align-items: stretch; }
+.pdv-resumo-pagamento {
+  flex: 2; border: 1px solid var(--line); border-radius: var(--radius); padding: 10px 14px;
+  display: flex; flex-direction: column; gap: 4px; background: var(--surface-2);
+}
+.pdv-resumo-linha { display: flex; align-items: center; justify-content: space-between; font-size: 14px; }
+.pdv-resumo-total { font-size: 17px; font-weight: 700; }
+.pdv-resumo-divisor { padding-top: 8px; margin-top: 4px; border-top: 1px solid var(--line-strong); }
+.pdv-resumo-subtotal { font-weight: 700; font-size: 15px; }
+.pdv-resumo-desconto-gerencial label { display: flex; align-items: center; gap: 6px; }
+.pdv-resumo-desconto-inputs { display: flex; align-items: center; gap: 4px; }
+.pdv-resumo-valor-pago { font-weight: 700; font-size: 16px; }
+.pdv-resumo-valor-pago.pdv-resumo-fechado { color: var(--sucesso); }
+
+.pdv-categorias-coluna { flex: 1; min-width: 150px; display: flex; flex-direction: column; gap: 10px; }
+.pdv-botao-categoria-coluna { flex: 1; font-size: 14px; font-weight: 700; }
+.pdv-botao-categoria-coluna.pdv-botao-categoria-ativa {
+  border-color: var(--accent); background: color-mix(in srgb, var(--accent) 16%, var(--surface-2));
+}
+
+.pdv-area-pagamentos {
+  margin-top: 10px; border: 1px solid var(--line); border-radius: var(--radius);
+  padding: 14px; min-height: 180px;
+}
+.pdv-edicao-pagamento { display: flex; flex-direction: column; gap: 4px; }
+.pdv-campo-carteira { max-width: 320px; display: flex; flex-direction: column; gap: 4px; }
+.pdv-linha-valor-parcelas { display: flex; gap: 14px; align-items: flex-start; }
+.pdv-linha-valor-parcelas > div { flex: 1; display: flex; flex-direction: column; gap: 4px; }
+.pdv-campo-valor-pago, .pdv-campo-parcelas { max-width: 220px; }

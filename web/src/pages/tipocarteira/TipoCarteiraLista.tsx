@@ -30,9 +30,12 @@ const COLUNAS: Array<{ chave: ColunaOrdenacaoTipoCarteira; rotulo: string }> = [
   { chave: 'nomeCarteira', rotulo: 'Nome' },
   { chave: 'prazoPagamento', rotulo: 'Prazo (dias)' },
   { chave: 'taxaAdministradora', rotulo: 'Taxa Adm. (%)' },
+  { chave: 'categoriaCarteira', rotulo: 'Categoria' },
+  { chave: 'percDesconto', rotulo: '% Desconto' },
+  { chave: 'percAcrescimo', rotulo: '% Acréscimo' },
 ]
 
-/** `null` = tipo de carteira não cobra taxa administradora (2026-07-23, campo opcional). */
+/** `null` = não informado (taxa administradora, ou nem desconto nem acréscimo se aplicam). */
 function formatarTaxaOuTraco(valor: number | null): string {
   return valor == null ? '—' : `${valor.toFixed(2).replace('.', ',')}%`
 }
@@ -47,10 +50,10 @@ function paginasVisiveis(atual: number, total: number): number[] {
 }
 
 /**
- * Listagem de tipo de carteira (prazo/parcelas/taxa do crediário, cartão etc.). Sem filtro de
- * status e sem fallback de inativar na exclusão (não existe coluna `ativo`). A coluna
- * "Moedas" mostra, só leitura, quais formas de recebimento usam este tipo de carteira — o
- * vínculo (`moeda_detalhe`) é editado no formulário desta tela, não numa tela separada.
+ * Listagem de tipo de carteira — forma de pagamento completa (categoria/prazo/parcelas/taxa/
+ * desconto/acréscimo). Absorveu a listagem de Moeda em 2026-07-28 — colunas "% Desconto"/
+ * "% Acréscimo" vieram de lá. Sem filtro de status e sem fallback de inativar na exclusão
+ * (não existe coluna `ativo`).
  */
 export default function TipoCarteiraLista() {
   const location = useLocation()
@@ -165,8 +168,6 @@ export default function TipoCarteiraLista() {
                     </th>
                   )
                 })}
-                <th>Categoria</th>
-                <th>Moedas</th>
                 <th aria-label="Ações" />
               </tr>
             </thead>
@@ -177,9 +178,8 @@ export default function TipoCarteiraLista() {
                   <td>{tc.prazoPagamento}</td>
                   <td>{formatarTaxaOuTraco(tc.taxaAdministradora)}</td>
                   <td>{ROTULO_CATEGORIA_CARTEIRA[tc.categoriaCarteira]}</td>
-                  <td className="muted">
-                    {tc.moedas.length ? tc.moedas.map((m) => m.nomeMoeda).join(', ') : '—'}
-                  </td>
+                  <td>{formatarTaxaOuTraco(tc.percDesconto)}</td>
+                  <td>{formatarTaxaOuTraco(tc.percAcrescimo)}</td>
                   <td className="acoes-cell">
                     <Link
                       className="acao-icone acao-visualizar"
@@ -287,7 +287,7 @@ export default function TipoCarteiraLista() {
             <h2 style={{ marginTop: 0 }}>Excluir tipo de carteira?</h2>
             <p className="muted">
               Tem certeza que deseja excluir <strong>{carteiraParaExcluir.nomeCarteira}</strong>? Se
-              estiver em uso em contas a receber, a exclusão será bloqueada.
+              estiver em uso em contas a receber ou lançamento de caixa, a exclusão será bloqueada.
             </p>
             <div className="ajuda-rodape">
               <button type="button" className="btn ghost" onClick={() => setCarteiraParaExcluir(null)}>

@@ -4,7 +4,10 @@ import { api } from './api'
 export interface Eu {
   id_tenant: number
   conta: { nomeConta: string; slug: string; status: string }
-  usuario: { nome: string; email: string; papel: string }
+  usuario: { idUsuario: number; nome: string; email: string; papel: string }
+  /** Empresa ativa da sessão (escolhida no login, 2026-07-28) — todo cadastro feito nesta
+   *  sessão com coluna `id_empresa` usa esta empresa. */
+  empresa: { idEmpresa: number; nome: string }
   trial_expira_em: string | null
 }
 

@@ -10,8 +10,11 @@ import java.util.List;
 
 /**
  * Emite o access token (JWT HS256) de um usuário do tenant. Claims: {@code sub}
- * (id_usuario), {@code tid} (id_tenant), {@code aud=[tenant]}, {@code roles}, {@code email}.
- * O {@code tid} alimenta o {@code TenantContext}/RLS (P8, §3.1.1).
+ * (id_usuario), {@code tid} (id_tenant), {@code eid} (id_empresa ativa na sessão, 2026-07-28),
+ * {@code aud=[tenant]}, {@code roles}, {@code email}. O {@code tid} alimenta o
+ * {@code TenantContext}/RLS (P8, §3.1.1). {@code eid} é a empresa escolhida no login
+ * (docs/telas/login-empresa.md) — todo registro que o usuário cria com coluna
+ * {@code id_empresa} passa a usar esse valor, não mais "a primeira empresa do tenant".
  */
 @Service
 public class TokenService {
@@ -24,7 +27,7 @@ public class TokenService {
         this.props = props;
     }
 
-    public String emitir(long idUsuario, long idTenant, String email, List<String> roles) {
+    public String emitir(long idUsuario, long idTenant, long idEmpresa, String email, List<String> roles) {
         Instant agora = Instant.now();
         JwtClaimsSet claims = JwtClaimsSet.builder()
                 .issuer(props.jwt().emissor())
@@ -33,6 +36,7 @@ public class TokenService {
                 .subject(Long.toString(idUsuario))
                 .audience(List.of("tenant"))
                 .claim("tid", idTenant)
+                .claim("eid", idEmpresa)
                 .claim("email", email)
                 .claim("roles", roles)
                 .build();

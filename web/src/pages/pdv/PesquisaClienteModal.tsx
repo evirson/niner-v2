@@ -1,0 +1,105 @@
+import { useQuery } from '@tanstack/react-query'
+import { useState } from 'react'
+import { buscarClientesPdv, type PdvCliente } from '../../lib/pdv'
+
+/**
+ * F6 — Cliente da Venda (2026-07-28): busca por nome, CPF/CNPJ ou celular via
+ * `GET /api/v1/pdv/clientes` (só cliente ativo). Cliente é obrigatório pra confirmar a venda.
+ */
+export default function PesquisaClienteModal({
+  aoFechar,
+  aoSelecionar,
+}: {
+  aoFechar: () => void
+  aoSelecionar: (cliente: PdvCliente) => void
+}) {
+  const [busca, setBusca] = useState('')
+
+  const { data: resultados, isLoading, isError } = useQuery({
+    queryKey: ['pdv-clientes', busca],
+    queryFn: () => buscarClientesPdv(busca),
+  })
+
+  return (
+    <div className="modal-overlay" onClick={aoFechar}>
+      <div className="modal modal-largo" role="dialog" aria-label="Pesquisa de cliente" onClick={(e) => e.stopPropagation()}>
+        <h2 style={{ marginTop: 0 }}>Pesquisa de Cliente</h2>
+        <p className="muted" style={{ marginTop: 4 }}>
+          Digite o nome, CPF/CNPJ ou celular e clique numa linha (ou Enter/Espaço com o foco nela) pra selecionar.
+        </p>
+
+        <label htmlFor="pdv-busca-cliente">Nome, CPF/CNPJ ou Celular</label>
+        <input
+          id="pdv-busca-cliente"
+          autoFocus
+          placeholder="Ex.: MARIA, 111.444.777-35, 11988887777…"
+          value={busca}
+          onChange={(e) => setBusca(e.target.value.toUpperCase())}
+        />
+
+        <div className="table-wrap" style={{ marginTop: 16, maxHeight: 360 }}>
+          <table className="table table-compacta">
+            <thead>
+              <tr>
+                <th>Nome</th>
+                <th>CPF/CNPJ</th>
+                <th>Celular</th>
+              </tr>
+            </thead>
+            <tbody>
+              {isLoading ? (
+                <tr>
+                  <td colSpan={3}>
+                    <p className="muted" style={{ margin: '8px 0' }}>
+                      Buscando…
+                    </p>
+                  </td>
+                </tr>
+              ) : isError ? (
+                <tr>
+                  <td colSpan={3}>
+                    <p className="erro" style={{ margin: '8px 0' }}>
+                      Não foi possível buscar clientes.
+                    </p>
+                  </td>
+                </tr>
+              ) : !resultados || resultados.length === 0 ? (
+                <tr>
+                  <td colSpan={3}>
+                    <p className="muted" style={{ margin: '8px 0' }}>
+                      Nenhum cliente encontrado.
+                    </p>
+                  </td>
+                </tr>
+              ) : (
+                resultados.map((cliente) => (
+                  <tr
+                    key={cliente.idCliente}
+                    tabIndex={0}
+                    onClick={() => aoSelecionar(cliente)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault()
+                        aoSelecionar(cliente)
+                      }
+                    }}
+                  >
+                    <td>{cliente.nome}</td>
+                    <td className="mono">{cliente.cpfCnpj ?? '—'}</td>
+                    <td className="mono">{cliente.telefone ?? '—'}</td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        <div className="ajuda-rodape">
+          <button type="button" className="btn ghost" onClick={aoFechar}>
+            Fechar
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}

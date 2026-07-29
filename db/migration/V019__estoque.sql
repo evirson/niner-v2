@@ -108,6 +108,37 @@ CREATE TABLE produto_balanco (
 );
 CREATE INDEX produto_balanco_id_tenant_ix ON produto_balanco (id_tenant);
 
+-- Transferência de produtos entre empresas do mesmo tenant (2026-07-28, spec pendente vira
+-- realidade — id_transferencia em produto_movimento_mestre já existia como placeholder pra
+-- isso). Uma transferência gera DOIS produto_movimento_mestre (um por empresa, tipo_movimento
+-- 'TRANSFERENCIA'): o da origem com detalhe 'D' (sai), o do destino com detalhe 'C' (entra),
+-- ambos com o mesmo id_transferencia (esta tabela) — o valor concreto do "gerador externo"
+-- mencionado no comentário daquela coluna. Sem FK de produto_movimento_mestre.id_transferencia
+-- pra cá — mantido "proposital" como já estava documentado, pra não acoplar o ledger genérico
+-- a uma tabela de negócio específica.
+CREATE TABLE produto_transferencia (
+  id_transferencia   integer     GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  id_tenant          smallint    NOT NULL REFERENCES plataforma.tenant (id_tenant),
+  id_empresa_origem  integer     NOT NULL,
+  id_empresa_destino integer     NOT NULL,
+  id_usuario         integer     NOT NULL,
+  data_transferencia timestamptz NOT NULL DEFAULT now(),
+  observacoes        text,
+  CONSTRAINT produto_transferencia_id_uk UNIQUE (id_tenant, id_transferencia),
+  CONSTRAINT produto_transferencia_empresas_diferentes_ck CHECK (id_empresa_origem <> id_empresa_destino),
+  -- FKs compostas (P8) — mesmo motivo de usuario_empresa_fk (V015).
+  CONSTRAINT produto_transferencia_origem_fk FOREIGN KEY (id_tenant, id_empresa_origem)
+    REFERENCES empresa (id_tenant, id_empresa),
+  CONSTRAINT produto_transferencia_destino_fk FOREIGN KEY (id_tenant, id_empresa_destino)
+    REFERENCES empresa (id_tenant, id_empresa),
+  CONSTRAINT produto_transferencia_usuario_fk FOREIGN KEY (id_tenant, id_usuario)
+    REFERENCES usuario (id_tenant, id_usuario)
+);
+CREATE INDEX produto_transferencia_id_tenant_ix ON produto_transferencia (id_tenant);
+CREATE INDEX produto_transferencia_data_ix      ON produto_transferencia (id_tenant, data_transferencia);
+
+COMMENT ON TABLE produto_transferencia IS 'Cabeçalho de transferência de estoque entre empresas do tenant. Sujeita a RLS (V024).';
+
 COMMENT ON TABLE  produto_estoque IS 'Saldo materializado por variação × empresa (RLS). disponivel = qtd_estoque − reservado.';
 COMMENT ON COLUMN produto_estoque.reservado IS 'Reserva anti-overselling; sobe no RECEBIDO do pedido (Q2/ADR-004).';
 COMMENT ON TABLE  produto_movimento_detalhe IS 'Ledger de movimentação (grava origem, sem saldo_apos por linha). Corrigível via UPDATE/DELETE (2026-07-16) — trg_produto_movimento_detalhe_estoque recalcula produto_estoque.qtd_estoque a cada mudança.';

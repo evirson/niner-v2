@@ -2,6 +2,7 @@ package com.vetor.niner.configuracao.geral;
 
 import com.vetor.niner.configuracao.geral.ConfiguracaoGeralDtos.ConfiguracaoGeralRequest;
 import com.vetor.niner.configuracao.geral.ConfiguracaoGeralDtos.ConfiguracaoGeralResponse;
+import com.vetor.niner.configuracao.geral.ConfiguracaoGeralDtos.DescontoVendaResponse;
 import com.vetor.niner.configuracao.geral.ConfiguracaoGeralService.FlagsVariante;
 import jakarta.validation.Valid;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -11,9 +12,10 @@ import org.springframework.web.bind.annotation.*;
 /**
  * Parâmetros do sistema (docs/telas/configuracao-geral.md), superfície do tenant (`/api/v1`,
  * JWT + RLS). Somente ADMIN — verificado no serviço a partir do claim {@code roles} do JWT
- * (mesmo mecanismo de {@code ConfiguracaoTelaService}). Exceção: {@code /flags-variante}, aberto
- * a qualquer papel — o cadastro de produto (`catalogo.Produto`) precisa saber se os campos de
- * nome de variante aparecem no formulário, mesmo para quem não é ADMIN.
+ * (mesmo mecanismo de {@code ConfiguracaoTelaService}). Exceções abertas a qualquer papel:
+ * {@code /flags-variante} (cadastro de produto precisa saber se os campos de nome de variante
+ * aparecem no formulário) e {@code /desconto-venda} (PDV, F5, precisa do percentual de
+ * desconto promocional pra exibir antes de efetivar a venda).
  */
 @RestController
 @RequestMapping("/api/v1/config-geral")
@@ -38,5 +40,10 @@ public class ConfiguracaoGeralController {
     @GetMapping("/flags-variante")
     public FlagsVariante flagsVariante() {
         return service.flagsVariante();
+    }
+
+    @GetMapping("/desconto-venda")
+    public DescontoVendaResponse descontoVenda() {
+        return new DescontoVendaResponse(service.percentualDescontoVenda());
     }
 }

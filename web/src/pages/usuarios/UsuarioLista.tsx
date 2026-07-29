@@ -5,33 +5,36 @@ import AjudaDaTela from '../../components/AjudaDaTela'
 import {
   IconeEditar,
   IconeExcluir,
-  IconeMoeda,
   IconeOlho,
   IconePaginaAnterior,
   IconePrimeiraPagina,
   IconeProximaPagina,
   IconeUltimaPagina,
+  IconeUsuario,
 } from '../../components/Icones'
 import Toast, { type TipoToast } from '../../components/Toast'
 import { ApiError } from '../../lib/api'
-import { excluirMoeda, listarMoedas, type ColunaOrdenacaoMoeda, type Moeda } from '../../lib/moedas'
+import { useEu } from '../../lib/eu'
 import { maiusculas } from '../../lib/texto'
+import {
+  excluirUsuario,
+  listarUsuarios,
+  type ColunaOrdenacaoUsuario,
+  type StatusUsuario,
+  type Usuario,
+} from '../../lib/usuarios'
 
 const JANELA_PAGINACAO = 7
 const TAMANHO_PAGINA = 50
 
-const COLUNAS: Array<{ chave: ColunaOrdenacaoMoeda; rotulo: string }> = [
-  { chave: 'nomeMoeda', rotulo: 'Nome' },
-  { chave: 'percDesconto', rotulo: '% Desconto' },
-  { chave: 'percAcrescimo', rotulo: '% Acréscimo' },
+const COLUNAS: Array<{ chave: ColunaOrdenacaoUsuario; rotulo: string }> = [
+  { chave: 'nome', rotulo: 'Nome' },
+  { chave: 'email', rotulo: 'E-mail' },
+  { chave: 'papel', rotulo: 'Papel' },
+  { chave: 'status', rotulo: 'Status' },
 ]
 
-/** `null` = não informado (nem desconto nem acréscimo se aplicam a esta moeda). */
-function formatarPercentualOuTraco(valor: number | null): string {
-  return valor == null ? '—' : `${valor.toFixed(2).replace('.', ',')}%`
-}
-
-/** Janela de números de página — mesmo padrão do resto do domínio. */
+/** Mesma janela de paginação centrada na página atual de `cadastros.funcionario`. */
 function paginasVisiveis(atual: number, total: number): number[] {
   if (total <= JANELA_PAGINACAO) return Array.from({ length: total }, (_, i) => i + 1)
   let inicio = Math.max(1, atual - Math.floor(JANELA_PAGINACAO / 2))
@@ -40,16 +43,11 @@ function paginasVisiveis(atual: number, total: number): number[] {
   return Array.from({ length: fim - inicio + 1 }, (_, i) => inicio + i)
 }
 
-/**
- * Listagem de moeda (forma de recebimento). Já nasce com 7 linhas por tenant (seed no
- * signup) — a tela edita essas e permite criar novas. Sem filtro de status e sem fallback de
- * inativar na exclusão (não existe coluna `ativo` — com vínculo a API responde 409). O
- * vínculo com tipo de carteira é gerido pela tela de Tipo de Carteira, não por aqui.
- */
-export default function MoedaLista() {
+export default function UsuarioLista() {
   const location = useLocation()
-  const [busca, setBusca] = useState('')
-  const [moedaParaExcluir, setMoedaParaExcluir] = useState<Moeda | null>(null)
+  const [nome, setNome] = useState('')
+  const [status, setStatus] = useState<StatusUsuario>('ATIVOS')
+  const [usuarioParaExcluir, setUsuarioParaExcluir] = useState<Usuario | null>(null)
   const [aviso, setAviso] = useState<{ texto: string; tipo: TipoToast } | null>(
     () => (location.state as { toast?: { texto: string; tipo: TipoToast } } | null)?.toast ?? null,
   )
@@ -61,14 +59,14 @@ export default function MoedaLista() {
   const queryClient = useQueryClient()
 
   const [pagina, setPagina] = useState(1)
-  const [ordenarPor, setOrdenarPor] = useState<ColunaOrdenacaoMoeda>('nomeMoeda')
+  const [ordenarPor, setOrdenarPor] = useState<ColunaOrdenacaoUsuario>('nome')
   const [direcao, setDirecao] = useState<'ASC' | 'DESC'>('ASC')
 
   useEffect(() => {
     setPagina(1)
-  }, [busca, ordenarPor, direcao])
+  }, [nome, status, ordenarPor, direcao])
 
-  const ordenarPorColuna = (coluna: ColunaOrdenacaoMoeda) => {
+  const ordenarPorColuna = (coluna: ColunaOrdenacaoUsuario) => {
     if (coluna === ordenarPor) {
       setDirecao((d) => (d === 'ASC' ? 'DESC' : 'ASC'))
     } else {
@@ -78,41 +76,59 @@ export default function MoedaLista() {
   }
 
   const { data, isLoading, isFetching } = useQuery({
-    queryKey: ['moedas', { busca, pagina, ordenarPor, direcao }],
+    queryKey: ['usuarios', { nome, status, pagina, ordenarPor, direcao }],
     queryFn: () =>
-      listarMoedas({ busca: busca || undefined, pagina, tamanho: TAMANHO_PAGINA, ordenarPor, direcao }),
+      listarUsuarios({
+        nome: nome || undefined,
+        status,
+        pagina,
+        tamanho: TAMANHO_PAGINA,
+        ordenarPor,
+        direcao,
+      }),
     placeholderData: (anterior) => anterior,
   })
 
   const totalPaginas = data?.totalPaginas ?? 1
 
+  const { data: eu } = useEu()
+
   const excluir = useMutation({
-    mutationFn: excluirMoeda,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['moedas'] })
-      setMoedaParaExcluir(null)
-      setAviso({ texto: 'Moeda excluída.', tipo: 'sucesso' })
+    mutationFn: excluirUsuario,
+    onSuccess: (resposta) => {
+      queryClient.invalidateQueries({ queryKey: ['usuarios'] })
+      setUsuarioParaExcluir(null)
+      setAviso({
+        texto:
+          resposta.acao === 'inativado'
+            ? (resposta.motivo ?? 'Usuário inativado (possui vínculos).')
+            : 'Usuário excluído.',
+        tipo: 'sucesso',
+      })
     },
     onError: (e: unknown) => {
-      setMoedaParaExcluir(null)
-      setAviso({ texto: e instanceof ApiError ? e.message : 'Não foi possível excluir a moeda.', tipo: 'erro' })
+      setUsuarioParaExcluir(null)
+      setAviso({
+        texto: e instanceof ApiError ? e.message : 'Não foi possível excluir o usuário.',
+        tipo: 'erro',
+      })
     },
   })
 
-  const moedas: Moeda[] = data?.itens ?? []
+  const usuarios: Usuario[] = data?.itens ?? []
 
   return (
     <div className="lista-tela">
       <div className="lista-topo">
         <div className="topbar-tela">
           <div className="titulo-tela">
-            <IconeMoeda size={34} />
-            <h1>Moeda</h1>
+            <IconeUsuario size={34} />
+            <h1>Usuários</h1>
           </div>
           <div className="topbar-acoes">
-            <AjudaDaTela chaveTela="financeiro.moeda.lista" />
-            <Link className="btn" to="/moedas/novo">
-              ＋ Nova moeda
+            <AjudaDaTela chaveTela="identidade.usuario.lista" />
+            <Link className="btn" to="/usuarios/novo">
+              ＋ Novo usuário
             </Link>
           </div>
         </div>
@@ -121,11 +137,16 @@ export default function MoedaLista() {
 
         <div className="card filtros-bar">
           <input
-            placeholder="Buscar por nome…"
-            value={busca}
-            onChange={(e) => setBusca(maiusculas(e.target.value))}
-            aria-label="Buscar por nome"
+            placeholder="Buscar por nome ou e-mail…"
+            value={nome}
+            onChange={(e) => setNome(maiusculas(e.target.value))}
+            aria-label="Buscar por nome ou e-mail"
           />
+          <select value={status} onChange={(e) => setStatus(e.target.value as StatusUsuario)} aria-label="Filtrar por status">
+            <option value="ATIVOS">Ativos</option>
+            <option value="INATIVOS">Inativos</option>
+            <option value="TODOS">Todos</option>
+          </select>
         </div>
       </div>
 
@@ -133,8 +154,8 @@ export default function MoedaLista() {
         <div className="card table-wrap">
         {isLoading ? (
           <p className="muted">Carregando…</p>
-        ) : moedas.length === 0 ? (
-          <p className="muted">Nenhuma moeda encontrada.</p>
+        ) : usuarios.length === 0 ? (
+          <p className="muted">Nenhum usuário encontrado.</p>
         ) : (
           <table className="table table-compacta">
             <thead>
@@ -156,28 +177,37 @@ export default function MoedaLista() {
                     </th>
                   )
                 })}
+                <th>Empresas</th>
                 <th aria-label="Ações" />
               </tr>
             </thead>
             <tbody>
-              {moedas.map((m) => (
-                <tr key={m.idMoeda}>
-                  <td>{m.nomeMoeda}</td>
-                  <td>{formatarPercentualOuTraco(m.percDesconto)}</td>
-                  <td>{formatarPercentualOuTraco(m.percAcrescimo)}</td>
+              {usuarios.map((u) => (
+                <tr key={u.idUsuario}>
+                  <td>{u.nome}</td>
+                  <td className="mono">{u.email}</td>
+                  <td>
+                    <span className={`badge ${u.administrador ? '' : 'badge-inativo'}`}>
+                      {u.administrador ? 'Administrador' : 'Operador'}
+                    </span>
+                  </td>
+                  <td>
+                    <span className={`badge ${u.ativo ? '' : 'badge-inativo'}`}>{u.ativo ? 'Ativo' : 'Inativo'}</span>
+                  </td>
+                  <td>{u.empresas.map((e) => e.nomeEmpresa).join(', ') || '—'}</td>
                   <td className="acoes-cell">
                     <Link
                       className="acao-icone acao-visualizar"
-                      to={`/moedas/${m.idMoeda}/visualizar`}
-                      aria-label={`Visualizar ${m.nomeMoeda}`}
+                      to={`/usuarios/${u.idUsuario}/visualizar`}
+                      aria-label={`Visualizar ${u.nome}`}
                       title="Visualizar"
                     >
                       <IconeOlho />
                     </Link>
                     <Link
                       className="acao-icone acao-editar"
-                      to={`/moedas/${m.idMoeda}`}
-                      aria-label={`Editar ${m.nomeMoeda}`}
+                      to={`/usuarios/${u.idUsuario}`}
+                      aria-label={`Editar ${u.nome}`}
                       title="Editar"
                     >
                       <IconeEditar />
@@ -185,10 +215,10 @@ export default function MoedaLista() {
                     <button
                       type="button"
                       className="acao-icone acao-excluir"
-                      disabled={excluir.isPending}
-                      onClick={() => setMoedaParaExcluir(m)}
-                      aria-label={`Excluir ${m.nomeMoeda}`}
-                      title="Excluir"
+                      disabled={excluir.isPending || u.idUsuario === eu?.usuario.idUsuario}
+                      onClick={() => setUsuarioParaExcluir(u)}
+                      aria-label={`Excluir ${u.nome}`}
+                      title={u.idUsuario === eu?.usuario.idUsuario ? 'Você não pode excluir a própria conta' : 'Excluir'}
                     >
                       <IconeExcluir />
                     </button>
@@ -201,11 +231,11 @@ export default function MoedaLista() {
         </div>
       </div>
 
-      {moedas.length > 0 && (
+      {usuarios.length > 0 && (
         <div className="lista-rodape">
           <div className="paginacao-bar">
             <span className="muted">
-              {data?.totalItens} moeda{data?.totalItens === 1 ? '' : 's'}
+              {data?.totalItens} usuário{data?.totalItens === 1 ? '' : 's'}
               {isFetching && ' · atualizando…'}
             </span>
             <div className="paginacao-paginas">
@@ -266,23 +296,28 @@ export default function MoedaLista() {
         </div>
       )}
 
-      {moedaParaExcluir && (
-        <div className="modal-overlay" onClick={() => setMoedaParaExcluir(null)}>
-          <div className="modal" role="dialog" aria-label="Confirmar exclusão" onClick={(e) => e.stopPropagation()}>
-            <h2 style={{ marginTop: 0 }}>Excluir moeda?</h2>
+      {usuarioParaExcluir && (
+        <div className="modal-overlay" onClick={() => setUsuarioParaExcluir(null)}>
+          <div
+            className="modal"
+            role="dialog"
+            aria-label="Confirmar exclusão"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 style={{ marginTop: 0 }}>Excluir usuário?</h2>
             <p className="muted">
-              Tem certeza que deseja excluir <strong>{moedaParaExcluir.nomeMoeda}</strong>? Se estiver em
-              uso por um tipo de carteira ou lançamento de caixa, a exclusão será bloqueada.
+              Tem certeza que deseja excluir <strong>{usuarioParaExcluir.nome}</strong>? Se houver caixa(s)
+              associado(s), o usuário será inativado em vez de excluído.
             </p>
             <div className="ajuda-rodape">
-              <button type="button" className="btn ghost" onClick={() => setMoedaParaExcluir(null)}>
+              <button type="button" className="btn ghost" onClick={() => setUsuarioParaExcluir(null)}>
                 Cancelar
               </button>
               <button
                 type="button"
                 className="btn"
                 disabled={excluir.isPending}
-                onClick={() => excluir.mutate(moedaParaExcluir.idMoeda)}
+                onClick={() => excluir.mutate(usuarioParaExcluir.idUsuario)}
               >
                 {excluir.isPending ? 'Excluindo…' : 'Excluir'}
               </button>

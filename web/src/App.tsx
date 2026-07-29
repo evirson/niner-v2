@@ -5,6 +5,7 @@ import Layout from './components/Layout'
 import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
 import EmBreve from './pages/EmBreve'
+import Pdv from './pages/pdv/Pdv'
 import ClienteLista from './pages/clientes/ClienteLista'
 import ClienteForm from './pages/clientes/ClienteForm'
 import ClienteHistorico from './pages/clientes/ClienteHistorico'
@@ -14,8 +15,6 @@ import FuncionarioForm from './pages/funcionarios/FuncionarioForm'
 import ConfiguracaoTelaFuncionario from './pages/funcionarios/ConfiguracaoTelaFuncionario'
 import PlanoContasLista from './pages/planocontas/PlanoContasLista'
 import PlanoContasForm from './pages/planocontas/PlanoContasForm'
-import MoedaLista from './pages/moeda/MoedaLista'
-import MoedaForm from './pages/moeda/MoedaForm'
 import TipoCarteiraLista from './pages/tipocarteira/TipoCarteiraLista'
 import TipoCarteiraForm from './pages/tipocarteira/TipoCarteiraForm'
 import FornecedorLista from './pages/fornecedores/FornecedorLista'
@@ -25,6 +24,11 @@ import ConfiguracaoGeralForm from './pages/configuracaogeral/ConfiguracaoGeralFo
 import ProdutoLista from './pages/produtos/ProdutoLista'
 import ProdutoForm from './pages/produtos/ProdutoForm'
 import ConfiguracaoTelaProduto from './pages/produtos/ConfiguracaoTelaProduto'
+import UsuarioLista from './pages/usuarios/UsuarioLista'
+import UsuarioForm from './pages/usuarios/UsuarioForm'
+import TransferenciaLista from './pages/estoque/TransferenciaLista'
+import TransferenciaForm from './pages/estoque/TransferenciaForm'
+import TransferenciaDetalhe from './pages/estoque/TransferenciaDetalhe'
 
 export default function App() {
   return (
@@ -33,6 +37,7 @@ export default function App() {
       <Route element={<RequireAuth />}>
         <Route element={<Layout />}>
           <Route path="/" element={<Dashboard />} />
+          <Route path="/pdv" element={<Pdv />} />
           <Route path="/produtos" element={<ProdutoLista />} />
           <Route path="/produtos/novo" element={<ProdutoForm />} />
           <Route element={<RequireAdmin />}>
@@ -40,7 +45,9 @@ export default function App() {
           </Route>
           <Route path="/produtos/:id/visualizar" element={<ProdutoForm somenteLeitura />} />
           <Route path="/produtos/:id" element={<ProdutoForm />} />
-          <Route path="/estoque" element={<EmBreve titulo="Estoque" />} />
+          <Route path="/estoque" element={<TransferenciaLista />} />
+          <Route path="/estoque/nova" element={<TransferenciaForm />} />
+          <Route path="/estoque/:id" element={<TransferenciaDetalhe />} />
           <Route path="/pedidos" element={<EmBreve titulo="Pedidos" />} />
           <Route path="/canais" element={<EmBreve titulo="Canais" />} />
           <Route path="/clientes" element={<ClienteLista />} />
@@ -62,10 +69,6 @@ export default function App() {
           <Route path="/planos-contas/novo" element={<PlanoContasForm />} />
           <Route path="/planos-contas/:codigo/visualizar" element={<PlanoContasForm somenteLeitura />} />
           <Route path="/planos-contas/:codigo" element={<PlanoContasForm />} />
-          <Route path="/moedas" element={<MoedaLista />} />
-          <Route path="/moedas/novo" element={<MoedaForm />} />
-          <Route path="/moedas/:id/visualizar" element={<MoedaForm somenteLeitura />} />
-          <Route path="/moedas/:id" element={<MoedaForm />} />
           <Route path="/tipos-carteira" element={<TipoCarteiraLista />} />
           <Route path="/tipos-carteira/novo" element={<TipoCarteiraForm />} />
           <Route path="/tipos-carteira/:id/visualizar" element={<TipoCarteiraForm somenteLeitura />} />
@@ -79,6 +82,10 @@ export default function App() {
           <Route path="/fornecedores/:id" element={<FornecedorForm />} />
           <Route element={<RequireAdmin />}>
             <Route path="/configuracoes-gerais" element={<ConfiguracaoGeralForm />} />
+            <Route path="/usuarios" element={<UsuarioLista />} />
+            <Route path="/usuarios/novo" element={<UsuarioForm />} />
+            <Route path="/usuarios/:id/visualizar" element={<UsuarioForm somenteLeitura />} />
+            <Route path="/usuarios/:id" element={<UsuarioForm />} />
           </Route>
         </Route>
       </Route>

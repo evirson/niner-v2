@@ -12,7 +12,7 @@ DECLARE
   t text;
   tabelas text[] := ARRAY[
     -- identidade
-    'empresa', 'usuario', 'usuario_rotina',
+    'empresa', 'usuario', 'usuario_rotina', 'usuario_empresa',
     -- cadastros
     'cfg_categoria_cliente', 'cliente', 'cfg_plano_contas', 'fornecedor', 'funcionario',
     -- catalogo
@@ -22,6 +22,7 @@ DECLARE
     'venda', 'venda_devolucao',
     -- estoque
     'produto_estoque', 'produto_movimento_mestre', 'produto_movimento_detalhe', 'produto_balanco',
+    'produto_transferencia',
     -- canais / pedidos
     'canal', 'anuncio', 'pedido', 'pedido_item',
     -- integracao

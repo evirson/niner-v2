@@ -127,6 +127,64 @@ const CONTEUDOS: Record<string, ConteudoAjuda> = {
     ],
     urlVideo: null,
   },
+  'estoque.transferencia.lista': {
+    titulo: 'Transferências entre Empresas',
+    objetivo: 'Ver o histórico de transferências de produtos entre empresas e iniciar uma nova.',
+    passos: [
+      'Clique em "＋ Nova Transferência" para mover produtos da empresa atual para outra.',
+      'Clique no ícone verde para ver os detalhes (produtos e quantidades) de uma transferência já feita.',
+    ],
+    errosComuns: [
+      'Transferências já feitas não podem ser editadas nem excluídas — é um registro permanente do estoque, mesma regra de uma venda.',
+    ],
+    urlVideo: null,
+  },
+  'estoque.transferencia.form': {
+    titulo: 'Nova transferência entre empresas',
+    objetivo: 'Mover produtos da empresa em que você está logado para outra empresa do mesmo tenant.',
+    passos: [
+      'A empresa de origem é sempre a empresa em que você está logado no momento — não dá para mudar aqui.',
+      'Escolha a empresa de destino.',
+      'Use "＋ Adicionar Produto" para buscar e adicionar cada produto; ajuste a quantidade de cada um.',
+      'Confirme a transferência — o estoque sai da origem e entra no destino na mesma hora.',
+    ],
+    errosComuns: [
+      'Quantidade maior que o estoque disponível: reduza a quantidade — não é possível transferir mais do que existe na empresa de origem.',
+      'Para trocar de empresa de origem, é preciso sair e entrar de novo escolhendo outra empresa no login.',
+    ],
+    urlVideo: null,
+  },
+  'identidade.usuario.lista': {
+    titulo: 'Usuários',
+    objetivo: 'Encontrar e gerenciar os usuários que acessam o sistema.',
+    passos: [
+      'Use a busca por nome ou e-mail para encontrar um usuário.',
+      'Filtre por status (Ativos, Inativos ou Todos).',
+      'Clique no ícone verde para visualizar, no azul para editar, ou no vermelho para excluir.',
+    ],
+    errosComuns: [
+      'Só administradores acessam esta tela — usuários OPERADOR não têm este item no menu.',
+      'Não consigo excluir: o usuário tem caixa(s) associado(s) e foi inativado em vez de excluído; também não é possível excluir a própria conta.',
+    ],
+    urlVideo: null,
+  },
+  'identidade.usuario.form': {
+    titulo: 'Cadastro de usuário',
+    objetivo: 'Cadastrar um usuário novo ou editar um existente, e escolher em quais empresas ele pode operar.',
+    passos: [
+      'Preencha nome, e-mail e senha (obrigatórios para um usuário novo).',
+      'Marque "Administrador" para dar acesso total, incluindo Parâmetros do Sistema e esta própria tela de Usuários.',
+      'Marque ao menos uma empresa em "Empresas com acesso" — o usuário só opera nas empresas selecionadas.',
+      'Na edição, deixe a senha em branco para manter a senha atual.',
+      'Salve.',
+    ],
+    errosComuns: [
+      'E-mail já cadastrado: cada e-mail só pode pertencer a um usuário.',
+      'Nenhuma empresa selecionada: é obrigatório marcar ao menos uma.',
+      'A permissão fina por rotina/tela (além de Administrador/Operador) ainda não existe nesta versão.',
+    ],
+    urlVideo: null,
+  },
   'configuracao.geral.form': {
     titulo: 'Parâmetros do sistema',
     objetivo: 'Ajustar as regras gerais do tenant: desconto máximo em venda, uso de variantes de produto e taxas de crediário.',
@@ -203,59 +261,32 @@ const CONTEUDOS: Record<string, ConteudoAjuda> = {
     ],
     urlVideo: null,
   },
-  'financeiro.moeda.lista': {
-    titulo: 'Moeda',
-    objetivo: 'Encontrar e gerenciar as formas de recebimento (moedas) já cadastradas.',
-    passos: [
-      'Use a busca por nome para encontrar uma moeda.',
-      'Clique no ícone verde para visualizar, no azul para editar, ou no vermelho para excluir.',
-    ],
-    errosComuns: [
-      'Não consigo excluir: a moeda está em uso por um tipo de carteira ou já foi usada num lançamento de caixa — a exclusão é bloqueada.',
-      'Quero dizer em quais tipos de carteira (prazo/parcelas) esta moeda vale: isso é feito na tela Tipo de Carteira, não aqui.',
-    ],
-    urlVideo: null,
-  },
-  'financeiro.moeda.form': {
-    titulo: 'Cadastro de moeda',
-    objetivo: 'Cadastrar uma forma de recebimento nova ou editar uma existente.',
-    passos: [
-      'Preencha o nome (ex.: "PIX", "CARTÃO CRÉDITO").',
-      'Informe o % de desconto e o % de acréscimo aplicados na venda por essa forma de recebimento.',
-      'Salve.',
-    ],
-    errosComuns: [
-      'Nome já existe: cada moeda precisa de um nome único.',
-      'Percentual inválido: deve estar entre 0 e 100.',
-    ],
-    urlVideo: null,
-  },
   'financeiro.tipocarteira.lista': {
     titulo: 'Tipo de Carteira',
-    objetivo: 'Encontrar e gerenciar os tipos de carteira (prazo/parcelas/taxa do crediário, cartão etc.) já cadastrados.',
+    objetivo: 'Encontrar e gerenciar as formas de pagamento (categoria/prazo/parcelas/taxa/desconto/acréscimo) já cadastradas.',
     passos: [
       'Use a busca por nome para encontrar um tipo de carteira.',
-      'A coluna "Moedas" mostra em quais formas de recebimento este tipo de carteira vale.',
+      'As colunas "% Desconto"/"% Acréscimo" mostram o ajuste de preço aplicado por essa forma de pagamento.',
       'Clique no ícone verde para visualizar, no azul para editar, ou no vermelho para excluir.',
     ],
     errosComuns: [
-      'Não consigo excluir: o tipo de carteira está em uso em contas a receber — a exclusão é bloqueada.',
+      'Não consigo excluir: o tipo de carteira está em uso em contas a receber ou lançamento de caixa — a exclusão é bloqueada.',
     ],
     urlVideo: null,
   },
   'financeiro.tipocarteira.form': {
     titulo: 'Cadastro de tipo de carteira',
-    objetivo: 'Cadastrar um tipo de carteira novo (prazo/parcelas/taxa) ou editar um existente, e escolher em quais moedas ele vale.',
+    objetivo: 'Cadastrar uma forma de pagamento nova (categoria/prazo/parcelas/taxa/desconto/acréscimo) ou editar uma existente.',
     passos: [
-      'Preencha o nome, o prazo de pagamento (dias entre parcelas), o número mínimo/máximo de parcelas e a taxa administradora.',
-      'Marque as moedas (formas de recebimento) em que este tipo de carteira vale.',
-      'Se a moeda que você precisa ainda não existir, crie pela opção "＋ Nova moeda" sem sair da tela.',
+      'Preencha o nome, a categoria, o prazo de pagamento (dias entre parcelas), o número mínimo/máximo de parcelas e a taxa administradora.',
+      'A mesma bandeira pode ter um cadastro por categoria (ex.: "HIPER" em Cartão Débito e "HIPER" em Cartão Crédito), cada um com seu próprio prazo/taxa.',
+      'Informe o % de desconto OU o % de acréscimo aplicado na venda por essa forma de pagamento — nunca os dois juntos.',
       'Salve.',
     ],
     errosComuns: [
-      'Nome já existe: cada tipo de carteira precisa de um nome único.',
+      'Nome já existe: cada tipo de carteira precisa de um nome único dentro da mesma categoria (pode repetir em categorias diferentes).',
       'Parcela máxima menor que a mínima: corrija o intervalo.',
-      'Não vejo a moeda que quero: crie uma pela opção "＋ Nova moeda", ou cadastre-a antes na tela Moeda.',
+      'Informei desconto e acréscimo juntos: só um dos dois pode ter valor ao mesmo tempo.',
     ],
     urlVideo: null,
   },

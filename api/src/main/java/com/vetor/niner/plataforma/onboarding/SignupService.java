@@ -87,18 +87,19 @@ public class SignupService {
 
         jdbc.sql("INSERT INTO cfg_geral (id_tenant) VALUES (?)").param(idTenant).update();
 
-        // 5b) moedas padrão (formas de recebimento, §3.3.7/V025) — seed POR TENANT aqui,
-        // não em migration global, porque id_tenant é obrigatório (P8) e não existe no
-        // momento do Flyway. Mesmo conjunto do legado (db/042_MOEDAS.txt).
+        // 5b) formas de pagamento padrão (§3.3.7/V025) — seed POR TENANT aqui, não em migration
+        // global, porque id_tenant é obrigatório (P8) e não existe no momento do Flyway. Mesmo
+        // conjunto do legado (db/042_MOEDAS.txt), mas agora direto em tipo_carteira — moeda foi
+        // absorvida em 2026-07-28 (motivo completo no topo de V025__financeiro_caixa_crediario.sql).
         jdbc.sql("""
-                        INSERT INTO moeda (id_tenant, nome_moeda) VALUES
-                            (?, 'DINHEIRO'),
-                            (?, 'PIX'),
-                            (?, 'CARTAO DEBITO'),
-                            (?, 'CARTAO CREDITO'),
-                            (?, 'CREDIARIO'),
-                            (?, 'VALE PRESENTE'),
-                            (?, 'VALE MERCADORIA')
+                        INSERT INTO tipo_carteira (id_tenant, nome_carteira, categoria_carteira, prazo_pagamento, pc_minima, pc_maxima) VALUES
+                            (?, 'DINHEIRO', 'AVISTA', 0, 1, 1),
+                            (?, 'PIX', 'AVISTA', 0, 1, 1),
+                            (?, 'CARTAO DEBITO', 'CARTAO_DEBITO', 1, 1, 1),
+                            (?, 'CARTAO CREDITO', 'CARTAO_CREDITO', 30, 1, 6),
+                            (?, 'CREDIARIO', 'CREDIARIO', 30, 1, 6),
+                            (?, 'VALE PRESENTE', 'AVISTA', 0, 1, 1),
+                            (?, 'VALE MERCADORIA', 'AVISTA', 0, 1, 1)
                         """)
                 .params(idTenant, idTenant, idTenant, idTenant, idTenant, idTenant, idTenant)
                 .update();
@@ -112,11 +113,26 @@ public class SignupService {
                 .params(idTenant, idEmpresa, req.nomeAdmin(), req.email(), senhas.encode(req.senha()))
                 .query(Long.class).single();
 
-        // 7) token de primeiro acesso (auto-login) — leva o cliente direto ao sistema.
-        String token = tokens.emitir(idUsuario, idTenant, req.email(), List.of("ADMIN"));
+        // 6b) acesso à empresa recém-criada (usuario_empresa, V015/2026-07-28) — sem essa
+        // linha o primeiro login já cairia no caso "usuário sem empresa vinculada".
+        jdbc.sql("INSERT INTO usuario_empresa (id_tenant, id_usuario, id_empresa) VALUES (?, ?, ?)")
+                .params(idTenant, idUsuario, idEmpresa)
+                .update();
+
+        // 7) token de primeiro acesso (auto-login) — leva o cliente direto ao sistema, já com a
+        // empresa recém-criada como empresa ativa da sessão (eid).
+        String token = tokens.emitir(idUsuario, idTenant, idEmpresa, req.email(), List.of("ADMIN"));
         return new AssinarResponse(token, idTenant, slug, req.nomeLoja(), props.trial().plano(), trialExpiraEm);
     }
 
+    /**
+     * Login em duas voltas quando o usuário acessa mais de uma empresa
+     * (docs/telas/usuario.md, `usuario_empresa`, 2026-07-28): a primeira chamada (sem
+     * {@code idEmpresa}) valida a senha e, se houver mais de uma empresa, devolve a lista em
+     * vez do token ({@code escolherEmpresa=true}); o front reenvia as mesmas credenciais com o
+     * {@code idEmpresa} escolhido, que aí sim emite o token com a empresa ativa da sessão
+     * ({@code eid}). Com uma única empresa, resolve direto — sem segunda volta.
+     */
     @Transactional
     public TokenResponse login(LoginRequest req) {
         // Resolve o tenant pelo slug da loja (global) e estabelece o contexto para o RLS.
@@ -141,9 +157,41 @@ public class SignupService {
         if (usuario == null || !usuario.ativo() || !senhas.matches(req.senha(), usuario.senhaHash())) {
             throw new ResponseStatusException(UNAUTHORIZED, "Credenciais inválidas.");
         }
+
+        List<EmpresaOpcaoLogin> empresas = jdbc.sql("""
+                        SELECT e.id_empresa, COALESCE(e.nome_fantasia, e.razao_social) AS nome_empresa
+                        FROM usuario_empresa ue
+                        JOIN empresa e ON e.id_empresa = ue.id_empresa AND e.id_tenant = ue.id_tenant
+                        WHERE ue.id_usuario = ? AND ue.id_tenant = plataforma.tenant_atual()
+                        ORDER BY e.codigo_empresa ASC
+                        """)
+                .param(usuario.idUsuario())
+                .query((rs, n) -> new EmpresaOpcaoLogin(rs.getLong("id_empresa"), rs.getString("nome_empresa")))
+                .list();
+
+        if (empresas.isEmpty()) {
+            throw new ResponseStatusException(UNAUTHORIZED, "Usuário sem empresa vinculada. Contate o administrador.");
+        }
+
+        // idEmpresa informado (segunda volta ou já sabido pelo front) é sempre validado contra
+        // a lista de acesso, mesmo quando o usuário só tem uma empresa — nunca aceita "de
+        // graça" só porque bateu por coincidência de ser a única.
+        long idEmpresa;
+        if (req.idEmpresa() != null) {
+            boolean permitida = empresas.stream().anyMatch(e -> e.idEmpresa() == req.idEmpresa());
+            if (!permitida) {
+                throw new ResponseStatusException(UNAUTHORIZED, "Empresa inválida para este usuário.");
+            }
+            idEmpresa = req.idEmpresa();
+        } else if (empresas.size() == 1) {
+            idEmpresa = empresas.get(0).idEmpresa();
+        } else {
+            return new TokenResponse(null, idTenant, req.slug(), true, empresas);
+        }
+
         List<String> roles = List.of(usuario.administrador() ? "ADMIN" : "OPERADOR");
-        String token = tokens.emitir(usuario.idUsuario(), idTenant, req.email(), roles);
-        return new TokenResponse(token, idTenant, req.slug());
+        String token = tokens.emitir(usuario.idUsuario(), idTenant, idEmpresa, req.email(), roles);
+        return new TokenResponse(token, idTenant, req.slug(), false, List.of());
     }
 
     private record UsuarioAuth(long idUsuario, String senhaHash, boolean administrador, boolean ativo) {

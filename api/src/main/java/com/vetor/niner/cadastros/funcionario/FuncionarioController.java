@@ -6,6 +6,8 @@ import com.vetor.niner.cadastros.funcionario.FuncionarioDtos.FuncionarioResponse
 import com.vetor.niner.cadastros.funcionario.FuncionarioDtos.PaginaFuncionarios;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
 
 /**
@@ -41,8 +43,8 @@ public class FuncionarioController {
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    public FuncionarioResponse criar(@Valid @RequestBody FuncionarioRequest req) {
-        return service.criar(req);
+    public FuncionarioResponse criar(@AuthenticationPrincipal Jwt jwt, @Valid @RequestBody FuncionarioRequest req) {
+        return service.criar(jwt, req);
     }
 
     @PutMapping("/{id}")

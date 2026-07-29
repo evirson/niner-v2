@@ -1,9 +1,18 @@
 -- V025 — financeiro (parcial): crediário + caixa antecipados da Fase 2 (revisão de Q5/ADR-010,
--- decidida em 2026-07-16). Entram: tipo_carteira, moeda, moeda_detalhe, contas_receber(_detalhe),
--- caixa_mestre/caixa_detalhe. NÃO entram ainda: contas_pagar, conta_corrente(_movimento) — seguem
--- fora do v1 (§3.3.7). Todas as tabelas nascem com id_tenant (P8); FKs entre tabelas de domínio
--- são compostas (id_tenant, id_x), nunca simples (achado de 2026-07-16, RLS não protege
+-- decidida em 2026-07-16). Entram: tipo_carteira, contas_receber(_detalhe), caixa_mestre/
+-- caixa_detalhe. NÃO entram ainda: contas_pagar, conta_corrente(_movimento) — seguem fora do
+-- v1 (§3.3.7). Todas as tabelas nascem com id_tenant (P8); FKs entre tabelas de domínio são
+-- compostas (id_tenant, id_x), nunca simples (achado de 2026-07-16, RLS não protege
 -- integridade referencial).
+--
+-- 2026-07-28 (pedido do dono do produto): `moeda` foi absorvida por `tipo_carteira` e
+-- `moeda_detalhe` foi removida. Motivo: a mesma "moeda" (ex.: bandeira "HIPER") podia estar
+-- vinculada a mais de um tipo_carteira (Débito e Crédito), mas prazo/parcelas/taxa SÃO
+-- diferentes entre essas categorias — o N:N permitia (e escondia) taxa/prazo errados
+-- compartilhados entre linhas que na prática são configurações distintas. Cada combinação
+-- categoria×bandeira agora é uma linha própria de `tipo_carteira` (nome_carteira pode se
+-- repetir entre categorias — ex.: "HIPER" em CARTAO_DEBITO e "HIPER" em CARTAO_CREDITO — mas
+-- não dentro da mesma categoria).
 
 -- Natureza do lançamento de caixa (legado: RV/RP/DC/CC/TR).
 CREATE TYPE tipo_operacao_caixa AS ENUM
@@ -14,7 +23,9 @@ CREATE TYPE tipo_operacao_caixa AS ENUM
 -- texto livre e não serve pra isso).
 CREATE TYPE categoria_carteira AS ENUM ('AVISTA', 'CARTAO_DEBITO', 'CARTAO_CREDITO', 'CREDIARIO');
 
--- tipo_carteira (config): prazo de pagamento (crediário, cartão etc.), parcelas min/max, taxa adm.
+-- tipo_carteira (config): forma de pagamento — categoria, prazo/parcelas/taxa, e (2026-07-28,
+-- absorvido de `moeda`) desconto/acréscimo. Cada linha já é uma combinação específica
+-- categoria×bandeira (ex.: "HIPER"/CARTAO_DEBITO e "HIPER"/CARTAO_CREDITO são duas linhas).
 CREATE TABLE tipo_carteira (
   id_carteira          integer             GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   id_tenant            smallint            NOT NULL REFERENCES plataforma.tenant (id_tenant),
@@ -24,42 +35,18 @@ CREATE TABLE tipo_carteira (
   pc_minima            integer             NOT NULL,      -- nº mínimo de parcelas
   pc_maxima            integer             NOT NULL,      -- nº máximo de parcelas
   taxa_administradora  numeric(5,2)        DEFAULT 0,  -- opcional (2026-07-23): nem todo tipo de carteira cobra taxa
+  perc_desconto        numeric(5,2)        DEFAULT 0,  -- 2026-07-28, vindo de `moeda`: ou desconto ou acréscimo, nunca os dois juntos
+  perc_acrescimo       numeric(5,2)        DEFAULT 0,  -- 2026-07-28, vindo de `moeda`
   criado_em            timestamptz         NOT NULL DEFAULT now(),  -- 2026-07-23 (auditoria, convenção do domínio)
   atualizado_em        timestamptz         NOT NULL DEFAULT now(),
-  -- base para FK composta (P8) de moeda_detalhe/contas_receber.
-  CONSTRAINT tipo_carteira_uk    UNIQUE (id_tenant, nome_carteira),
+  -- base para FK composta (P8) de contas_receber/caixa_detalhe.
+  -- 2026-07-28: categoria entra na chave — a mesma bandeira (nome_carteira) pode existir uma
+  -- vez por categoria (é assim que "HIPER" débito e "HIPER" crédito coexistem).
+  CONSTRAINT tipo_carteira_uk    UNIQUE (id_tenant, nome_carteira, categoria_carteira),
   CONSTRAINT tipo_carteira_id_uk UNIQUE (id_tenant, id_carteira),
   CONSTRAINT tipo_carteira_parcelas_ck CHECK (pc_minima >= 1 AND pc_maxima >= pc_minima)
 );
 CREATE INDEX tipo_carteira_id_tenant_ix ON tipo_carteira (id_tenant);
-
--- moeda (config): formas de recebimento válidas para venda. Seed POR TENANT no signup
--- (SignupService, mesmo padrão de cfg_geral) — não é seed global de Flyway, porque id_tenant
--- é obrigatório e não existe ainda no momento da migration.
-CREATE TABLE moeda (
-  id_moeda        integer      GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-  id_tenant       smallint     NOT NULL REFERENCES plataforma.tenant (id_tenant),
-  nome_moeda      text         NOT NULL,
-  perc_desconto   numeric(5,2) DEFAULT 0,  -- opcional (2026-07-23): ou desconto ou acréscimo, nunca os dois juntos
-  perc_acrescimo  numeric(5,2) DEFAULT 0,
-  criado_em       timestamptz  NOT NULL DEFAULT now(),  -- 2026-07-23 (auditoria, convenção do domínio)
-  atualizado_em   timestamptz  NOT NULL DEFAULT now(),
-  -- base para FK composta (P8) de moeda_detalhe/caixa_detalhe.
-  CONSTRAINT moeda_uk    UNIQUE (id_tenant, nome_moeda),
-  CONSTRAINT moeda_id_uk UNIQUE (id_tenant, id_moeda)
-);
-CREATE INDEX moeda_id_tenant_ix ON moeda (id_tenant);
-
--- moeda_detalhe: associa a moeda ao(s) tipo(s) de carteira em que ela é válida.
-CREATE TABLE moeda_detalhe (
-  id_tenant   smallint NOT NULL REFERENCES plataforma.tenant (id_tenant),
-  id_moeda    integer  NOT NULL,
-  id_carteira integer  NOT NULL,
-  CONSTRAINT moeda_detalhe_pk          PRIMARY KEY (id_tenant, id_moeda, id_carteira),
-  CONSTRAINT moeda_detalhe_moeda_fk    FOREIGN KEY (id_tenant, id_moeda)    REFERENCES moeda        (id_tenant, id_moeda),
-  CONSTRAINT moeda_detalhe_carteira_fk FOREIGN KEY (id_tenant, id_carteira) REFERENCES tipo_carteira (id_tenant, id_carteira)
-);
-CREATE INDEX moeda_detalhe_id_tenant_ix ON moeda_detalhe (id_tenant);
 
 -- contas_receber: parcelas a receber da venda, ligadas ao tipo de carteira (crediário, cartão...).
 CREATE TABLE contas_receber (
@@ -130,7 +117,7 @@ CREATE TABLE caixa_detalhe (
   localizador         integer             GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   id_tenant           smallint            NOT NULL REFERENCES plataforma.tenant (id_tenant),
   id_caixa            integer             NOT NULL,
-  id_moeda            integer             NOT NULL,
+  id_carteira         integer             NOT NULL,  -- 2026-07-28: era id_moeda, moeda foi absorvida por tipo_carteira
   id_venda            integer,
   id_lote_recebimento integer,             -- sem FK — mesmo padrão de id_transferencia
   id_plano_contas     text,
@@ -140,7 +127,7 @@ CREATE TABLE caixa_detalhe (
   observacoes         text,
   criado_em           timestamptz         NOT NULL DEFAULT now(),  -- P3: "quando" de cada lançamento
   CONSTRAINT caixa_detalhe_caixa_fk        FOREIGN KEY (id_tenant, id_caixa)        REFERENCES caixa_mestre     (id_tenant, id_caixa),
-  CONSTRAINT caixa_detalhe_moeda_fk        FOREIGN KEY (id_tenant, id_moeda)        REFERENCES moeda            (id_tenant, id_moeda),
+  CONSTRAINT caixa_detalhe_carteira_fk     FOREIGN KEY (id_tenant, id_carteira)     REFERENCES tipo_carteira    (id_tenant, id_carteira),
   CONSTRAINT caixa_detalhe_venda_fk        FOREIGN KEY (id_tenant, id_venda)        REFERENCES venda            (id_tenant, id_venda),
   CONSTRAINT caixa_detalhe_plano_contas_fk FOREIGN KEY (id_tenant, id_plano_contas) REFERENCES cfg_plano_contas (id_tenant, id_plano_contas)
 );
@@ -155,7 +142,7 @@ DO $$
 DECLARE
   t text;
   tabelas text[] := ARRAY[
-    'tipo_carteira', 'moeda', 'moeda_detalhe',
+    'tipo_carteira',
     'contas_receber', 'contas_receber_detalhe',
     'caixa_mestre', 'caixa_detalhe'
   ];
@@ -190,12 +177,13 @@ BEGIN
   END IF;
 END $$;
 
-COMMENT ON TABLE tipo_carteira          IS 'Tipo de prazo/forma de pagamento (crediário, cartão etc.) com parcelas min/max e taxa adm. RLS.';
+COMMENT ON TABLE tipo_carteira          IS 'Forma de pagamento — categoria, prazo/parcelas/taxa e desconto/acréscimo (RLS). Absorveu `moeda` em 2026-07-28: cada linha já é uma combinação categoria×bandeira específica.';
 COMMENT ON COLUMN tipo_carteira.categoria_carteira IS 'Categoria fixa (AVISTA/CARTAO_DEBITO/CARTAO_CREDITO/CREDIARIO) — usada pelo histórico do cliente pra isolar parcelas de crediário (2026-07-23).';
-COMMENT ON TABLE moeda                  IS 'Formas de recebimento válidas para venda (RLS). Seed por tenant no signup (SignupService), não global.';
-COMMENT ON TABLE moeda_detalhe          IS 'Associação moeda × tipo_carteira (RLS).';
+COMMENT ON COLUMN tipo_carteira.perc_desconto IS 'Opcional (2026-07-28, vindo de `moeda`) — ou desconto ou acréscimo, nunca os dois juntos.';
+COMMENT ON COLUMN tipo_carteira.perc_acrescimo IS 'Opcional (2026-07-28, vindo de `moeda`).';
 COMMENT ON TABLE contas_receber         IS 'Parcelas a receber da venda (RLS). Revisão de Q5/ADR-010 (2026-07-16): crediário antecipado da Fase 2.';
 COMMENT ON COLUMN contas_receber.id_empresa_pagamento IS 'Loja onde a parcela foi paga (2026-07-23) — null até existir a baixa de parcela (ainda não implementada).';
 COMMENT ON TABLE contas_receber_detalhe IS 'Detalhe 1:1 de contas_receber para taxas/autorização de cartão (RLS).';
 COMMENT ON TABLE caixa_mestre           IS 'Header de sessão de caixa (RLS). Revisão de Q5/ADR-010 (2026-07-16).';
 COMMENT ON TABLE caixa_detalhe          IS 'Lançamentos da sessão de caixa (RLS). tipo_operacao: RV=RECEBIMENTO_VENDA, RP=RECEBIMENTO_PARCELA_CREDIARIO, DC=DEBITO_CAIXA, CC=CREDITO_CAIXA, TR=TROCO (legado).';
+COMMENT ON COLUMN caixa_detalhe.id_carteira IS 'Forma de pagamento do lançamento (2026-07-28: era id_moeda, apontava pra `moeda`, absorvida por tipo_carteira).';

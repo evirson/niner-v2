@@ -30,10 +30,12 @@ public class EuController {
     public Map<String, Object> eu(@AuthenticationPrincipal Jwt jwt) {
         long idTenant = ((Number) jwt.getClaim("tid")).longValue();
         long idUsuario = Long.parseLong(jwt.getSubject());
+        long idEmpresa = ((Number) jwt.getClaim("eid")).longValue();
 
-        var usuario = jdbc.sql("SELECT nome_usuario, email, administrador FROM usuario WHERE id_usuario = ?")
+        var usuario = jdbc.sql("SELECT id_usuario, nome_usuario, email, administrador FROM usuario WHERE id_usuario = ?")
                 .param(idUsuario)
                 .query((rs, n) -> Map.<String, Object>of(
+                        "idUsuario", rs.getLong("id_usuario"),
                         "nome", rs.getString("nome_usuario"),
                         "email", rs.getString("email"),
                         "papel", rs.getBoolean("administrador") ? "ADMIN" : "OPERADOR"))
@@ -47,6 +49,16 @@ public class EuController {
                         "status", rs.getString("status")))
                 .single();
 
+        // Empresa ativa da sessão (claim eid, 2026-07-28) — escolhida no login quando o
+        // usuário tem acesso a mais de uma (usuario_empresa). Exibida no header do front pra
+        // deixar claro em qual empresa os cadastros feitos nesta sessão vão cair.
+        var empresa = jdbc.sql("SELECT id_empresa, COALESCE(nome_fantasia, razao_social) AS nome FROM empresa WHERE id_empresa = ?")
+                .param(idEmpresa)
+                .query((rs, n) -> Map.<String, Object>of(
+                        "idEmpresa", rs.getLong("id_empresa"),
+                        "nome", rs.getString("nome")))
+                .single();
+
         OffsetDateTime trialExpiraEm = jdbc.sql(
                         "SELECT trial_expira_em FROM plataforma.assinatura WHERE id_tenant = ? AND status <> 'CANCELADA'")
                 .param(idTenant).query(OffsetDateTime.class).optional().orElse(null);
@@ -55,6 +67,7 @@ public class EuController {
         corpo.put("id_tenant", idTenant);
         corpo.put("conta", conta);
         corpo.put("usuario", usuario);
+        corpo.put("empresa", empresa);
         corpo.put("trial_expira_em", trialExpiraEm);
         return corpo;
     }

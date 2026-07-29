@@ -4,13 +4,25 @@ import Toast from '../components/Toast'
 import { api, ApiError } from '../lib/api'
 import { useAuth } from '../lib/auth'
 
-interface LoginResp {
-  token: string
-  idTenant: number
-  slug: string
+interface EmpresaOpcaoLogin {
+  idEmpresa: number
+  nomeEmpresa: string
 }
 
-/** Login do lojista: slug da loja + email + senha → token (JWT). */
+interface LoginResp {
+  token: string | null
+  idTenant: number
+  slug: string
+  escolherEmpresa: boolean
+  empresas: EmpresaOpcaoLogin[]
+}
+
+/**
+ * Login do lojista: slug da loja + email + senha → token (JWT). Quando o usuário tem acesso a
+ * mais de uma empresa (`usuario_empresa`, 2026-07-28), a API responde `escolherEmpresa=true`
+ * em vez do token — a tela troca pra uma segunda etapa pedindo qual empresa ele quer acessar
+ * nesta sessão; tudo que ele cadastrar depois (registros com `id_empresa`) usa essa escolha.
+ */
 export default function Login() {
   const { login } = useAuth()
   const navigate = useNavigate()
@@ -19,23 +31,74 @@ export default function Login() {
   const [senha, setSenha] = useState('')
   const [erro, setErro] = useState('')
   const [carregando, setCarregando] = useState(false)
+  const [empresas, setEmpresas] = useState<EmpresaOpcaoLogin[] | null>(null)
 
-  const submeter = async (e: FormEvent) => {
-    e.preventDefault()
+  const entrarComEmpresa = async (idEmpresa?: number) => {
     setErro('')
     setCarregando(true)
     try {
       const r = await api<LoginResp>('/api/publico/login', {
         method: 'POST',
-        body: JSON.stringify({ slug: slug.trim(), email: email.trim(), senha }),
+        body: JSON.stringify({ slug: slug.trim(), email: email.trim(), senha, idEmpresa }),
       })
-      login(r.token)
+      if (r.escolherEmpresa) {
+        setEmpresas(r.empresas)
+        return
+      }
+      login(r.token as string)
       navigate('/', { replace: true })
     } catch (err) {
       setErro(err instanceof ApiError ? err.message : 'Não foi possível entrar.')
+      setEmpresas(null)
     } finally {
       setCarregando(false)
     }
+  }
+
+  const submeter = (e: FormEvent) => {
+    e.preventDefault()
+    entrarComEmpresa()
+  }
+
+  if (empresas) {
+    return (
+      <div className="login-wrap">
+        <div className="card login-card">
+          <a className="brand" href="/" style={{ fontSize: 22 }}>
+            NI<span>NER</span>
+          </a>
+          <h1 style={{ fontSize: 22, margin: '8px 0 4px' }}>Qual empresa você quer acessar?</h1>
+          <p className="muted" style={{ marginTop: 0 }}>
+            Tudo que você cadastrar nesta sessão vai ficar registrado na empresa escolhida.
+          </p>
+
+          <div className="lista-categorias" style={{ marginTop: 12 }}>
+            {empresas.map((emp) => (
+              <button
+                key={emp.idEmpresa}
+                type="button"
+                className="btn ghost"
+                style={{ width: '100%', justifyContent: 'flex-start' }}
+                disabled={carregando}
+                onClick={() => entrarComEmpresa(emp.idEmpresa)}
+              >
+                {emp.nomeEmpresa}
+              </button>
+            ))}
+          </div>
+
+          {erro && <Toast mensagem={erro} aoFechar={() => setErro('')} />}
+          <button
+            type="button"
+            className="btn ghost"
+            style={{ width: '100%', marginTop: 12 }}
+            onClick={() => setEmpresas(null)}
+          >
+            Voltar
+          </button>
+        </div>
+      </div>
+    )
   }
 
   return (

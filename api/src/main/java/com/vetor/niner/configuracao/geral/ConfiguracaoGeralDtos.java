@@ -38,4 +38,8 @@ public final class ConfiguracaoGeralDtos {
             boolean cfgUsaVarianteColuna,
             OffsetDateTime atualizadoEm) {
     }
+
+    /** Só o percentual de desconto promocional, sem checagem de papel — usado pelo PDV (F5). */
+    public record DescontoVendaResponse(BigDecimal percentualDescontoVenda) {
+    }
 }

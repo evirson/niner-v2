@@ -9,6 +9,7 @@ import com.vetor.niner.comum.telaconfig.ConfiguracaoTelaDtos.ConfiguracaoCampoRe
 import com.vetor.niner.comum.telaconfig.ConfiguracaoTelaService;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
@@ -30,9 +31,10 @@ import static org.springframework.http.HttpStatus.NOT_FOUND;
  * tenant (V016/V024) — mesmo padrão consolidado em {@code cadastros.cliente}: toda leitura
  * já é restrita ao tenant do contexto atual (P8); o INSERT usa
  * {@code plataforma.tenant_atual()} explicitamente porque a política WITH CHECK exige o
- * valor (RLS não o preenche sozinho). {@code id_empresa} é preenchido automaticamente com a
- * única empresa do tenant (Q6 — tenant 1:N empresa, 1:1 no v1) — não existe seletor de
- * empresa no formulário ainda, não há necessidade enquanto só houver uma.
+ * valor (RLS não o preenche sozinho). {@code id_empresa} vem do claim {@code eid} do JWT
+ * (2026-07-28) — a empresa ativa da sessão, escolhida no login (docs/telas/usuario.md) — não
+ * existe seletor de empresa no formulário; o cadastro sempre cai na empresa em que o usuário
+ * está logado.
  *
  * <p>Diferenças deliberadas em relação a cliente: {@code cpf} não é único por tenant
  * (decisão de produto registrada em V016/§3.3.9 — "CPF deixou de ser único"), então não há
@@ -118,18 +120,20 @@ public class FuncionarioService {
     }
 
     @Transactional
-    public FuncionarioResponse criar(FuncionarioRequest req) {
+    public FuncionarioResponse criar(Jwt jwt, FuncionarioRequest req) {
         validar(req);
+        long idEmpresa = ((Number) jwt.getClaim("eid")).longValue();
+        List<Object> params = new ArrayList<>();
+        params.add(idEmpresa);
+        params.addAll(camposComuns(req));
         try {
             long id = jdbc.sql("""
                             INSERT INTO funcionario (id_tenant, id_empresa, nome, cpf, telefone, cargo,
                                 perc_comissao, ativo)
-                            VALUES (plataforma.tenant_atual(),
-                                (SELECT id_empresa FROM empresa WHERE id_tenant = plataforma.tenant_atual() LIMIT 1),
-                                ?, ?, ?, ?, ?, ?)
+                            VALUES (plataforma.tenant_atual(), ?, ?, ?, ?, ?, ?, ?)
                             RETURNING id_funcionario
                             """)
-                    .params(camposComuns(req))
+                    .params(params)
                     .query(Long.class).single();
             return buscar(id);
         } catch (DataIntegrityViolationException e) {
