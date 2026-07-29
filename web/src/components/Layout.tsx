@@ -34,7 +34,7 @@ const NAV: ItemNav[] = [
   { to: '/', label: 'Painel', icone: IconePainel, end: true },
   { to: '/pdv', label: 'PDV', icone: IconePdv },
   { to: '/produtos', label: 'Produtos', icone: IconeProduto },
-  { to: '/estoque', label: 'Estoque', icone: IconeEstoque },
+  { to: '/estoque', label: 'Transferência de Produtos', icone: IconeEstoque },
   { to: '/pedidos', label: 'Pedidos', icone: IconePedidos },
   { to: '/canais', label: 'Canais', icone: IconeCanais },
   { to: '/clientes', label: 'Clientes', icone: IconeCliente },

@@ -237,6 +237,19 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
 .lista-categorias li { display: flex; gap: 8px; }
 .lista-categorias .btn { white-space: nowrap; }
 
+/* Empresas com acesso (cadastro de Usuário) — grade de 6 colunas, um quadro por empresa, pra não
+   precisar de scroll vertical numa lista de N empresas. */
+.checklist-empresas-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; margin-top: 8px; }
+.checklist-empresa-card {
+  display: flex; align-items: center; gap: 8px; cursor: pointer;
+  border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); padding: 10px 12px;
+  color: var(--ink); font-size: 14px;
+}
+.checklist-empresa-card input { width: auto; }
+@media (max-width: 900px) {
+  .checklist-empresas-grid { grid-template-columns: repeat(2, 1fr); }
+}
+
 /* Categorias escolhidas no cadastro de produto (docs/telas/produto.md) — a ordem da lista é o
    `indice` enviado à API; setas sobem/descem, sem input (diferença do `.lista-categorias`, que
    é a gestão do catálogo de categorias em si). */

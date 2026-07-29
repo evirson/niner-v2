@@ -222,9 +222,9 @@ export default function UsuarioForm({ somenteLeitura = false }: { somenteLeitura
             O usuário só poderá operar nas empresas marcadas abaixo.
           </p>
 
-          <div className="lista-categorias">
+          <div className="checklist-empresas-grid">
             {(empresas ?? []).map((emp) => (
-              <label key={emp.idEmpresa} className="checkbox-linha">
+              <label key={emp.idEmpresa} className="checklist-empresa-card">
                 <input
                   type="checkbox"
                   checked={form.idsEmpresa.includes(emp.idEmpresa)}
