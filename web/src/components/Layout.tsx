@@ -8,6 +8,7 @@ import {
   IconeCliente,
   IconeContaCorrente,
   IconeEstoque,
+  IconeFechamentoCaixa,
   IconeFornecedor,
   IconeFuncionario,
   IconeMovimentoContaCorrente,
@@ -36,6 +37,7 @@ interface ItemNav {
 const NAV: ItemNav[] = [
   { to: '/', label: 'Painel', icone: IconePainel, end: true },
   { to: '/abertura-caixa', label: 'Abertura de Caixa', icone: IconeCaixa },
+  { to: '/fechamento-caixa', label: 'Fechamento de Caixa', icone: IconeFechamentoCaixa },
   { to: '/pdv', label: 'PDV', icone: IconePdv },
   { to: '/produtos', label: 'Produtos', icone: IconeProduto },
   { to: '/estoque', label: 'Transferência de Produtos', icone: IconeEstoque },

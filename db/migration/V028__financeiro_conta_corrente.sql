@@ -52,7 +52,8 @@ INSERT INTO cfg_banco (codigo_banco, nome_banco) VALUES
   ('748', 'SICREDI'),
   ('751', 'SCOTIABANK BRASIL'),
   ('752', 'BNP PARIBAS BRASIL'),
-  ('756', 'SICOOB');
+  ('756', 'SICOOB'),
+  ('999', 'CAIXA CENTRAL');
 
 -- conta_corrente: PK de negócio (id_tenant, id_conta_corrente) — o próprio número/código da
 -- conta bancária, digitado pelo usuário na criação e imutável depois (mesmo padrão de

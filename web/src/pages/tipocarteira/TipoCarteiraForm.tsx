@@ -7,7 +7,7 @@ import {
   type KeyboardEvent,
 } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import AjudaDaTela from '../../components/AjudaDaTela'
 import ConfirmarSalvarModal from '../../components/ConfirmarSalvarModal'
 import { IconeTipoCarteira } from '../../components/Icones'
@@ -27,6 +27,7 @@ import {
   type CategoriaCarteira,
   type TipoCarteiraFormState,
 } from '../../lib/tiposCarteira'
+import type { EstadoListaTipoCarteira } from './TipoCarteiraLista'
 import { maiusculas } from '../../lib/texto'
 
 type CampoValidavel = 'nomeCarteira' | 'categoriaCarteira' | 'prazoPagamento' | 'pcMinima' | 'pcMaxima'
@@ -69,7 +70,11 @@ export default function TipoCarteiraForm({ somenteLeitura = false }: { somenteLe
   const { id } = useParams()
   const editando = Boolean(id)
   const navigate = useNavigate()
+  const location = useLocation()
   const queryClient = useQueryClient()
+  // Estado da grade (busca/página/ordenação) recebido da lista — devolvido ao voltar (Salvar/
+  // Cancelar), pra grade não resetar (2026-07-30, pedido explícito).
+  const listaEstado = (location.state as { listaEstado?: EstadoListaTipoCarteira } | null)?.listaEstado
 
   const [form, setForm] = useState<TipoCarteiraFormState>(TIPO_CARTEIRA_VAZIO)
   const [erros, setErros] = useState<ErrosCampo>({})
@@ -99,6 +104,7 @@ export default function TipoCarteiraForm({ somenteLeitura = false }: { somenteLe
             texto: editando ? 'Tipo de carteira atualizado com sucesso.' : 'Tipo de carteira cadastrado com sucesso.',
             tipo: 'sucesso',
           },
+          listaEstado,
         },
       })
     },
@@ -148,7 +154,11 @@ export default function TipoCarteiraForm({ somenteLeitura = false }: { somenteLe
           </div>
           <div className="topbar-acoes">
             <AjudaDaTela chaveTela="financeiro.tipocarteira.form" />
-            <button type="button" className="btn ghost" onClick={() => navigate('/tipos-carteira')}>
+            <button
+              type="button"
+              className="btn ghost"
+              onClick={() => navigate('/tipos-carteira', { state: { listaEstado } })}
+            >
               {somenteLeitura ? 'Voltar' : 'Cancelar'}
             </button>
             {!somenteLeitura && (

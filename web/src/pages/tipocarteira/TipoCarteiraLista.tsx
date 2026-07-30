@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import AjudaDaTela from '../../components/AjudaDaTela'
 import {
@@ -25,6 +25,18 @@ import { maiusculas } from '../../lib/texto'
 
 const JANELA_PAGINACAO = 7
 const TAMANHO_PAGINA = 50
+
+/**
+ * Estado da grade (busca/página/ordenação) — viaja no `state` da navegação para o formulário
+ * (visualizar/editar) e volta dele (Salvar/Cancelar), pra grade não resetar pra página 1 /
+ * ordenação padrão ao voltar (2026-07-30, pedido explícito).
+ */
+export interface EstadoListaTipoCarteira {
+  busca: string
+  pagina: number
+  ordenarPor: ColunaOrdenacaoTipoCarteira
+  direcao: 'ASC' | 'DESC'
+}
 
 const COLUNAS: Array<{ chave: ColunaOrdenacaoTipoCarteira; rotulo: string }> = [
   { chave: 'nomeCarteira', rotulo: 'Nome' },
@@ -57,7 +69,10 @@ function paginasVisiveis(atual: number, total: number): number[] {
  */
 export default function TipoCarteiraLista() {
   const location = useLocation()
-  const [busca, setBusca] = useState('')
+  const estadoRecebido = (
+    location.state as { toast?: { texto: string; tipo: TipoToast }; listaEstado?: EstadoListaTipoCarteira } | null
+  )?.listaEstado
+  const [busca, setBusca] = useState(estadoRecebido?.busca ?? '')
   const [carteiraParaExcluir, setCarteiraParaExcluir] = useState<TipoCarteira | null>(null)
   const [aviso, setAviso] = useState<{ texto: string; tipo: TipoToast } | null>(
     () => (location.state as { toast?: { texto: string; tipo: TipoToast } } | null)?.toast ?? null,
@@ -69,11 +84,18 @@ export default function TipoCarteiraLista() {
   }, [])
   const queryClient = useQueryClient()
 
-  const [pagina, setPagina] = useState(1)
-  const [ordenarPor, setOrdenarPor] = useState<ColunaOrdenacaoTipoCarteira>('nomeCarteira')
-  const [direcao, setDirecao] = useState<'ASC' | 'DESC'>('ASC')
+  const [pagina, setPagina] = useState(estadoRecebido?.pagina ?? 1)
+  const [ordenarPor, setOrdenarPor] = useState<ColunaOrdenacaoTipoCarteira>(estadoRecebido?.ordenarPor ?? 'nomeCarteira')
+  const [direcao, setDirecao] = useState<'ASC' | 'DESC'>(estadoRecebido?.direcao ?? 'ASC')
 
+  // Pula a primeira execução: ao voltar do form com página/ordenação restauradas (ver acima),
+  // este efeito não pode zerar a página de novo — só reage a mudanças feitas pelo usuário depois.
+  const primeiraRenderizacao = useRef(true)
   useEffect(() => {
+    if (primeiraRenderizacao.current) {
+      primeiraRenderizacao.current = false
+      return
+    }
     setPagina(1)
   }, [busca, ordenarPor, direcao])
 
@@ -112,6 +134,7 @@ export default function TipoCarteiraLista() {
   })
 
   const carteiras: TipoCarteira[] = data?.itens ?? []
+  const estadoAtual: EstadoListaTipoCarteira = { busca, pagina, ordenarPor, direcao }
 
   return (
     <div className="lista-tela">
@@ -184,6 +207,7 @@ export default function TipoCarteiraLista() {
                     <Link
                       className="acao-icone acao-visualizar"
                       to={`/tipos-carteira/${tc.idCarteira}/visualizar`}
+                      state={{ listaEstado: estadoAtual }}
                       aria-label={`Visualizar ${tc.nomeCarteira}`}
                       title="Visualizar"
                     >
@@ -192,6 +216,7 @@ export default function TipoCarteiraLista() {
                     <Link
                       className="acao-icone acao-editar"
                       to={`/tipos-carteira/${tc.idCarteira}`}
+                      state={{ listaEstado: estadoAtual }}
                       aria-label={`Editar ${tc.nomeCarteira}`}
                       title="Editar"
                     >

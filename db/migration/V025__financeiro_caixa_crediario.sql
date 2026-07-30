@@ -129,12 +129,19 @@ CREATE TABLE caixa_mestre (
   data_abertura   timestamptz   NOT NULL DEFAULT now(),
   data_fechamento timestamptz,
   caixa_fechado   boolean       NOT NULL DEFAULT false,
+  -- Fechamento de Caixa (2026-07-30): conferência de dinheiro contado fisicamente pelo operador
+  -- antes de fechar (comparada com o total calculado de caixa_detalhe na tela, nunca recalculada
+  -- aqui) + quem de fato fechou (ADMIN pode fechar o caixa de outro usuário — nem sempre é
+  -- id_usuario). Ambos NULL enquanto o caixa está aberto.
+  valor_contado_dinheiro numeric(12,2),
+  id_usuario_fechamento  integer,
   observacoes     text,
   -- base para FK composta (P8) de caixa_detalhe.
   CONSTRAINT caixa_mestre_id_uk       UNIQUE (id_tenant, id_caixa),
   CONSTRAINT caixa_mestre_empresa_fk  FOREIGN KEY (id_tenant, id_empresa)  REFERENCES empresa (id_tenant, id_empresa),
   CONSTRAINT caixa_mestre_usuario_fk  FOREIGN KEY (id_tenant, id_usuario)  REFERENCES usuario (id_tenant, id_usuario),
-  CONSTRAINT caixa_mestre_carteira_fk FOREIGN KEY (id_tenant, id_carteira) REFERENCES tipo_carteira (id_tenant, id_carteira)
+  CONSTRAINT caixa_mestre_carteira_fk FOREIGN KEY (id_tenant, id_carteira) REFERENCES tipo_carteira (id_tenant, id_carteira),
+  CONSTRAINT caixa_mestre_usuario_fechamento_fk FOREIGN KEY (id_tenant, id_usuario_fechamento) REFERENCES usuario (id_tenant, id_usuario)
 );
 CREATE INDEX caixa_mestre_id_tenant_ix       ON caixa_mestre (id_tenant);
 CREATE INDEX caixa_mestre_data_abertura_ix   ON caixa_mestre (id_tenant, data_abertura);

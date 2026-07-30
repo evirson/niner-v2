@@ -27,7 +27,17 @@ import java.util.List;
  * parcela(s) em {@code contas_receber} a partir do(s) {@code tipo_carteira} escolhido(s). Exige
  * caixa aberto para o usuário/empresa do dia (2026-07-30, {@code financeiro.caixa.CaixaService})
  * antes de gravar qualquer coisa — a tela é responsável por pedir a abertura antes de chegar
- * aqui; a venda em si não lança nada em {@code caixa_detalhe} (fora de escopo por ora).
+ * aqui. Cada linha de pagamento à vista (AVISTA/CARTAO_DEBITO/CARTAO_CREDITO) também lança um
+ * crédito em {@code caixa_detalhe} (2026-07-30, revisão — antes só o Recebimento de Crediário
+ * gravava lá, o que deixava o Fechamento de Caixa sem nenhum total de venda do PDV). Linha de
+ * CREDIARIO fica de fora de propósito: é dinheiro que ainda não circulou — só vira lançamento
+ * de caixa quando a parcela for efetivamente recebida depois (RecebimentoCrediarioService),
+ * senão contaria em dobro. <b>Entrar no caixa não é o mesmo que já estar recebido</b>
+ * (2026-07-30, revisão): só AVISTA (dinheiro/Pix) já nasce com a parcela quitada em {@code
+ * contas_receber}; CARTAO_DEBITO/CARTAO_CREDITO entram no caixa na hora (é dinheiro do
+ * lojista), mas a parcela em {@code contas_receber} fica em aberto — o prazo de liquidação de
+ * cada bandeira já está em {@code tipo_carteira.prazo_pagamento} (débito costuma ser D+1) — até
+ * uma futura tela de conciliação de cartões baixar essas parcelas.
  *
  * <p>Preço e variação de cada item são sempre resolvidos aqui a partir do {@code idVariacao} —
  * a tela nunca envia preço. Saldo negativo em {@code produto_estoque} é permitido de propósito
@@ -76,7 +86,7 @@ public class PdvVendaService {
     public VendaEfetivadaResponse efetivarVenda(Jwt jwt, EfetivarVendaRequest req) {
         long idEmpresa = ((Number) jwt.getClaim("eid")).longValue();
         long idUsuario = Long.parseLong(jwt.getSubject());
-        caixaService.idCaixaAbertoObrigatorio(idEmpresa, idUsuario);
+        long idCaixa = caixaService.idCaixaAbertoObrigatorio(idEmpresa, idUsuario);
         long idCliente = validarCliente(req.idCliente());
         long idFuncionario = validarFuncionario(req.idFuncionario());
         List<ItemResolvido> itens = resolverItens(req.itens(), idEmpresa);
@@ -148,6 +158,16 @@ public class PdvVendaService {
             List<ParcelaGerada> parcelas = gerarEInserirParcelas(idVenda, linha, idEmpresa);
             pagamentos.add(new PagamentoGerado(linha.carteira().idCarteira(), linha.carteira().nomeCarteira(),
                     linha.valorPago(), parcelas));
+
+            if (linha.carteira().categoria() != CategoriaCarteira.CREDIARIO) {
+                jdbc.sql("""
+                                INSERT INTO caixa_detalhe
+                                    (id_tenant, id_caixa, id_carteira, id_venda, valor, tipo_operacao, credito_debito)
+                                VALUES (plataforma.tenant_atual(), ?, ?, ?, ?, 'RECEBIMENTO_VENDA', 'C')
+                                """)
+                        .params(idCaixa, linha.carteira().idCarteira(), idVenda, linha.valorPago())
+                        .update();
+            }
         }
 
         return new VendaEfetivadaResponse(idVenda, valorTotalProdutos, descontoVenda, valorLiquido, pagamentos);
@@ -189,12 +209,15 @@ public class PdvVendaService {
         return valor.remainder(BigDecimal.ONE).compareTo(BigDecimal.ZERO) != 0;
     }
 
-    private static boolean pagaNaHora(CategoriaCarteira categoria) {
+    /** AVISTA/CARTAO_DEBITO só aceitam pagamento em parcela única — não tem relação com a
+     *  parcela já estar recebida ou não em {@code contas_receber} (ver {@link
+     *  #gerarEInserirParcelas}). */
+    private static boolean aceitaApenasUmaParcela(CategoriaCarteira categoria) {
         return categoria == CategoriaCarteira.AVISTA || categoria == CategoriaCarteira.CARTAO_DEBITO;
     }
 
-    private static void validarParcelas(CarteiraInfo carteira, boolean pagaNaHora, int numeroParcelas) {
-        if (pagaNaHora && numeroParcelas != 1) {
+    private static void validarParcelas(CarteiraInfo carteira, boolean aceitaApenasUmaParcela, int numeroParcelas) {
+        if (aceitaApenasUmaParcela && numeroParcelas != 1) {
             throw new IllegalArgumentException("Forma de pagamento à vista aceita apenas 1 parcela.");
         }
         if (numeroParcelas < carteira.pcMinima() || numeroParcelas > carteira.pcMaxima()) {
@@ -213,7 +236,7 @@ public class PdvVendaService {
      * cadastro).
      */
     private record LinhaPagamentoResolvida(CarteiraInfo carteira, BigDecimal valorPago, int numeroParcelas,
-                                            boolean pagaNaHora, BigDecimal descontoLinha, BigDecimal acrescimoLinha,
+                                            BigDecimal descontoLinha, BigDecimal acrescimoLinha,
                                             BigDecimal cobertura) {
     }
 
@@ -227,8 +250,7 @@ public class PdvVendaService {
         BigDecimal saldoRestante = valorLiquido;
         for (PagamentoRequest pgto : pagamentos) {
             CarteiraInfo carteira = buscarCarteira(pgto.idCarteira());
-            boolean pagaNaHora = pagaNaHora(carteira.categoria());
-            validarParcelas(carteira, pagaNaHora, pgto.numeroParcelas());
+            validarParcelas(carteira, aceitaApenasUmaParcela(carteira.categoria()), pgto.numeroParcelas());
 
             BigDecimal percDesconto = carteira.percDesconto() == null ? BigDecimal.ZERO : carteira.percDesconto();
             BigDecimal percAcrescimo = carteira.percAcrescimo() == null ? BigDecimal.ZERO : carteira.percAcrescimo();
@@ -260,7 +282,7 @@ public class PdvVendaService {
             BigDecimal cobertura = pgto.valorPago().add(descontoLinha).subtract(acrescimoLinha);
 
             resolvidas.add(new LinhaPagamentoResolvida(
-                    carteira, pgto.valorPago(), pgto.numeroParcelas(), pagaNaHora, descontoLinha, acrescimoLinha, cobertura));
+                    carteira, pgto.valorPago(), pgto.numeroParcelas(), descontoLinha, acrescimoLinha, cobertura));
             saldoRestante = saldoRestante.subtract(cobertura);
         }
         return resolvidas;
@@ -369,14 +391,22 @@ public class PdvVendaService {
         BigDecimal valorBase = valorPago.divide(BigDecimal.valueOf(numeroParcelas), 2, RoundingMode.DOWN);
         BigDecimal ajusteUltima = valorPago.subtract(valorBase.multiply(BigDecimal.valueOf(numeroParcelas)));
         OffsetDateTime agora = OffsetDateTime.now();
+        // Só AVISTA (dinheiro/Pix) já nasce quitada. CARTAO_DEBITO/CARTAO_CREDITO já entraram no
+        // caixa (ver efetivarVenda), mas o dinheiro em si ainda não liquidou na conta do lojista
+        // — o prazo de cada bandeira é `tipo_carteira.prazo_pagamento` (débito costuma ser D+1,
+        // já usado abaixo no vencimento) — a parcela fica em aberto até a conciliação de cartões
+        // (ainda não construída) baixá-la. CREDIARIO segue em aberto até o Recebimento de
+        // Crediário baixar. (2026-07-30, revisão — antes CARTAO_DEBITO nascia quitado junto com
+        // AVISTA, mas entrar no caixa não é o mesmo que já estar recebido.)
+        boolean jaRecebido = linha.carteira().categoria() == CategoriaCarteira.AVISTA;
 
         List<ParcelaGerada> parcelas = new ArrayList<>();
         for (int n = 1; n <= numeroParcelas; n++) {
             BigDecimal valorParcela = n == numeroParcelas ? valorBase.add(ajusteUltima) : valorBase;
             OffsetDateTime vencimento = agora.plusDays((long) linha.carteira().prazoPagamento() * n);
-            OffsetDateTime dataRecebimento = linha.pagaNaHora() ? agora : null;
-            BigDecimal valorRecebido = linha.pagaNaHora() ? valorParcela : BigDecimal.ZERO;
-            Long idEmpresaPagamento = linha.pagaNaHora() ? idEmpresa : null;
+            OffsetDateTime dataRecebimento = jaRecebido ? agora : null;
+            BigDecimal valorRecebido = jaRecebido ? valorParcela : BigDecimal.ZERO;
+            Long idEmpresaPagamento = jaRecebido ? idEmpresa : null;
 
             jdbc.sql("""
                             INSERT INTO contas_receber
@@ -387,7 +417,7 @@ public class PdvVendaService {
                     .params(idVenda, linha.carteira().idCarteira(), n, vencimento, dataRecebimento, valorParcela, valorRecebido, idEmpresaPagamento)
                     .update();
 
-            parcelas.add(new ParcelaGerada(n, vencimento, valorParcela, linha.pagaNaHora()));
+            parcelas.add(new ParcelaGerada(n, vencimento, valorParcela, jaRecebido));
         }
         return parcelas;
     }

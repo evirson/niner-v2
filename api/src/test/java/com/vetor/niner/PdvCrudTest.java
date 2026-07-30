@@ -696,6 +696,143 @@ class PdvCrudTest {
         }
     }
 
+    /** Cada linha de pagamento à vista de dinheiro/lançamento de venda vira um crédito em
+     *  {@code caixa_detalhe} (2026-07-30) — CREDIARIO fica de fora de propósito, porque a
+     *  parcela ainda não foi recebida (só entra no caixa quando o Recebimento de Crediário
+     *  efetivamente baixar essa parcela depois). */
+    @Test
+    void efetivarVendaComVariasFormasLancaCaixaDetalheParaTodasMenosCrediario() throws Exception {
+        String token = assinarNovoTenant("caixa-detalhe-venda");
+        long idTenant = extrairIdTenant(token);
+        long idProduto = criarProduto(token, "Produto Caixa Detalhe", true);
+        long idCarteiraDinheiro = criarTipoCarteira(token, "DINHEIRO CAIXA DETALHE", "AVISTA", 0, 1, 1);
+        long idCarteiraCredito = criarTipoCarteira(token, "CREDITO CAIXA DETALHE", "CARTAO_CREDITO", 30, 1, 1);
+        long idCarteiraCrediario = criarTipoCarteira(token, "CREDIARIO CAIXA DETALHE", "CREDIARIO", 30, 1, 1);
+        long idCliente = criarCliente(token, "Cliente Caixa Detalhe");
+        long idFuncionario = criarFuncionario(token, "Vendedor Caixa Detalhe");
+        abrirCaixaDinheiro(token);
+
+        try (Connection c = abrirConexao(idTenant)) {
+            long idEmpresa = buscarIdEmpresa(c);
+            long idVariacao = criarVariacao(c, idTenant, idProduto);
+            definirEstoque(c, idTenant, idEmpresa, idVariacao, new BigDecimal("10.000"));
+
+            // 2 unidades a 50.00 = 100.00, cobertas por 3 formas: dinheiro (50) + crédito (30) +
+            // crediário (20) — sem desconto/acréscimo, cobertura = valorPago em cada linha.
+            String corpo = """
+                    {"itens":[{"idVariacao":%d,"qtd":2}],"descontoVenda":0,"idCliente":%d,"idFuncionario":%d,
+                     "pagamentos":[
+                        {"idCarteira":%d,"valorPago":50.00,"numeroParcelas":1},
+                        {"idCarteira":%d,"valorPago":30.00,"numeroParcelas":1},
+                        {"idCarteira":%d,"valorPago":20.00,"numeroParcelas":1}
+                     ]}
+                    """.formatted(idVariacao, idCliente, idFuncionario, idCarteiraDinheiro, idCarteiraCredito, idCarteiraCrediario);
+
+            String resp = mvc.perform(post("/api/v1/pdv/vendas").header("Authorization", "Bearer " + token)
+                            .contentType(APPLICATION_JSON).content(corpo))
+                    .andExpect(status().isCreated())
+                    .andReturn().getResponse().getContentAsString();
+            long idVenda = ((Number) JsonPath.read(resp, "$.idVenda")).longValue();
+
+            try (PreparedStatement ps = c.prepareStatement("""
+                    SELECT cd.id_carteira, cd.valor, cd.credito_debito::text, cd.tipo_operacao::text
+                    FROM caixa_detalhe cd WHERE cd.id_venda = ? ORDER BY cd.id_carteira
+                    """)) {
+                ps.setLong(1, idVenda);
+                try (ResultSet rs = ps.executeQuery()) {
+                    org.assertj.core.api.Assertions.assertThat(rs.next()).isTrue();
+                    long primeiraCarteira = rs.getLong("id_carteira");
+                    org.assertj.core.api.Assertions.assertThat(primeiraCarteira).isIn(idCarteiraDinheiro, idCarteiraCredito);
+                    org.assertj.core.api.Assertions.assertThat(rs.getString(3)).isEqualTo("C");
+                    org.assertj.core.api.Assertions.assertThat(rs.getString(4)).isEqualTo("RECEBIMENTO_VENDA");
+                    org.assertj.core.api.Assertions.assertThat(rs.next()).isTrue();
+                    org.assertj.core.api.Assertions.assertThat(rs.getLong("id_carteira")).isIn(idCarteiraDinheiro, idCarteiraCredito);
+                    org.assertj.core.api.Assertions.assertThat(rs.next()).isFalse();
+                }
+            }
+
+            try (PreparedStatement ps = c.prepareStatement(
+                    "SELECT count(*) FROM caixa_detalhe WHERE id_venda = ? AND id_carteira = ?")) {
+                ps.setLong(1, idVenda);
+                ps.setLong(2, idCarteiraCrediario);
+                try (ResultSet rs = ps.executeQuery()) {
+                    rs.next();
+                    org.assertj.core.api.Assertions.assertThat(rs.getInt(1)).isZero();
+                }
+            }
+        }
+    }
+
+    /** Débito entra no caixa na hora (dinheiro do lojista, ver teste acima), mas a parcela em
+     *  {@code contas_receber} fica em aberto — o prazo de liquidação da bandeira (D+1, aqui) só
+     *  fecha via uma futura conciliação de cartões, não na hora da venda (2026-07-30, revisão:
+     *  antes CARTAO_DEBITO nascia quitado junto com AVISTA). AVISTA continua nascendo quitado. */
+    @Test
+    void debitoFicaEmAbertoEmContasReceberMasAvistaJaNasceQuitado() throws Exception {
+        String token = assinarNovoTenant("debito-em-aberto");
+        long idTenant = extrairIdTenant(token);
+        long idProduto = criarProduto(token, "Produto Debito Em Aberto", true);
+        long idCarteiraDinheiro = criarTipoCarteira(token, "DINHEIRO DEBITO ABERTO", "AVISTA", 0, 1, 1);
+        long idCarteiraDebito = criarTipoCarteira(token, "DEBITO DEBITO ABERTO", "CARTAO_DEBITO", 1, 1, 1);
+        long idCliente = criarCliente(token, "Cliente Debito Em Aberto");
+        long idFuncionario = criarFuncionario(token, "Vendedor Debito Em Aberto");
+        abrirCaixaDinheiro(token);
+
+        try (Connection c = abrirConexao(idTenant)) {
+            long idEmpresa = buscarIdEmpresa(c);
+            long idVariacao = criarVariacao(c, idTenant, idProduto);
+            definirEstoque(c, idTenant, idEmpresa, idVariacao, new BigDecimal("10.000"));
+
+            // 2 unidades a 50.00 = 100.00: metade em dinheiro, metade no débito.
+            String corpo = """
+                    {"itens":[{"idVariacao":%d,"qtd":2}],"descontoVenda":0,"idCliente":%d,"idFuncionario":%d,
+                     "pagamentos":[
+                        {"idCarteira":%d,"valorPago":50.00,"numeroParcelas":1},
+                        {"idCarteira":%d,"valorPago":50.00,"numeroParcelas":1}
+                     ]}
+                    """.formatted(idVariacao, idCliente, idFuncionario, idCarteiraDinheiro, idCarteiraDebito);
+
+            String resp = mvc.perform(post("/api/v1/pdv/vendas").header("Authorization", "Bearer " + token)
+                            .contentType(APPLICATION_JSON).content(corpo))
+                    .andExpect(status().isCreated())
+                    .andExpect(jsonPath("$.pagamentos[0].parcelas[0].paga").value(true))
+                    .andExpect(jsonPath("$.pagamentos[1].parcelas[0].paga").value(false))
+                    .andReturn().getResponse().getContentAsString();
+            long idVenda = ((Number) JsonPath.read(resp, "$.idVenda")).longValue();
+
+            try (PreparedStatement ps = c.prepareStatement("""
+                    SELECT cr.id_carteira, cr.data_recebimento, cr.valor_recebido, cr.id_empresa_pagamento
+                    FROM contas_receber cr WHERE cr.id_venda = ? ORDER BY cr.id_carteira
+                    """)) {
+                ps.setLong(1, idVenda);
+                try (ResultSet rs = ps.executeQuery()) {
+                    org.assertj.core.api.Assertions.assertThat(rs.next()).isTrue();
+                    org.assertj.core.api.Assertions.assertThat(rs.getLong("id_carteira")).isEqualTo(idCarteiraDinheiro);
+                    org.assertj.core.api.Assertions.assertThat(rs.getObject("data_recebimento")).isNotNull();
+                    org.assertj.core.api.Assertions.assertThat(rs.getBigDecimal("valor_recebido")).isEqualByComparingTo("50.00");
+                    org.assertj.core.api.Assertions.assertThat(rs.getObject("id_empresa_pagamento")).isNotNull();
+
+                    org.assertj.core.api.Assertions.assertThat(rs.next()).isTrue();
+                    org.assertj.core.api.Assertions.assertThat(rs.getLong("id_carteira")).isEqualTo(idCarteiraDebito);
+                    org.assertj.core.api.Assertions.assertThat(rs.getObject("data_recebimento")).isNull();
+                    org.assertj.core.api.Assertions.assertThat(rs.getBigDecimal("valor_recebido")).isEqualByComparingTo("0.00");
+                    org.assertj.core.api.Assertions.assertThat(rs.getObject("id_empresa_pagamento")).isNull();
+                }
+            }
+
+            // Mas o débito já entrou no caixa na hora da venda (P1: caixa != contas_receber).
+            try (PreparedStatement ps = c.prepareStatement(
+                    "SELECT valor FROM caixa_detalhe WHERE id_venda = ? AND id_carteira = ?")) {
+                ps.setLong(1, idVenda);
+                ps.setLong(2, idCarteiraDebito);
+                try (ResultSet rs = ps.executeQuery()) {
+                    org.assertj.core.api.Assertions.assertThat(rs.next()).isTrue();
+                    org.assertj.core.api.Assertions.assertThat(rs.getBigDecimal(1)).isEqualByComparingTo("50.00");
+                }
+            }
+        }
+    }
+
     @Test
     void valorPagoAcimaDoMaximoPermitidoPelaFormaDePagamentoComDescontoRespondeErroDeValidacao() throws Exception {
         String token = assinarNovoTenant("valor-pago-acima-maximo");

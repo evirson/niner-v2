@@ -305,6 +305,22 @@ export function IconeMovimentoContaCorrente({ size = 28 }: { size?: number }) {
   )
 }
 
+/** Ícone da tela de Fechamento de Caixa (caixa + cadeado) — 2026-07-30. */
+export function IconeFechamentoCaixa({ size = 28 }: { size?: number }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.6} stroke="currentColor" width={size} height={size} aria-hidden="true">
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M2.25 6.75A2.25 2.25 0 0 1 4.5 4.5h9.75a2.25 2.25 0 0 1 2.25 2.25v3.375M2.25 6.75v9A2.25 2.25 0 0 0 4.5 18h6.375"
+      />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M6 8.25v.008" />
+      <rect x="13.5" y="13.5" width="8.25" height="7.5" rx="1.25" strokeLinecap="round" strokeLinejoin="round" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M15.375 13.5v-1.875a2.25 2.25 0 0 1 4.5 0V13.5" />
+    </svg>
+  )
+}
+
 export function IconeUltimaPagina({ size = 18 }: { size?: number }) {
   return (
     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" width={size} height={size} aria-hidden="true">

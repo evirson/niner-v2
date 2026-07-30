@@ -359,6 +359,22 @@ const CONTEUDOS: Record<string, ConteudoAjuda> = {
     ],
     urlVideo: null,
   },
+  'financeiro.fechamentocaixa.tela': {
+    titulo: 'Fechamento de Caixa',
+    objetivo: 'Encerrar o caixa do dia, conferindo o dinheiro contado contra o total do sistema.',
+    passos: [
+      'Administradores escolhem o usuário e a data do caixa a fechar; operadores só veem/fecham o próprio caixa, sem o campo de usuário.',
+      'A tela mostra os totais por tipo de carteira, em colunas separadas de crédito e débito, recalculados a partir dos lançamentos do caixa.',
+      'Informe quanto foi contado fisicamente em dinheiro — a tela mostra a diferença contra o valor esperado da carteira "Dinheiro".',
+      'Confirme em "Fechar Caixa". Depois de fechado, os valores ficam somente leitura.',
+      'Use "Visualizar Impressão" a qualquer momento para conferir o relatório em folha A4 antes de imprimir ou salvar em PDF.',
+    ],
+    errosComuns: [
+      'Um caixa já fechado não pode ser fechado de novo — a tela responde com um aviso de conflito.',
+      'Operadores que tentam informar outro usuário ou fechar o caixa de outra pessoa recebem acesso negado — só administradores podem.',
+    ],
+    urlVideo: null,
+  },
   'financeiro.recebimentocrediario.tela': {
     titulo: 'Recebimento de Crediário',
     objetivo: 'Receber uma ou mais parcelas de crediário em aberto de um cliente.',
