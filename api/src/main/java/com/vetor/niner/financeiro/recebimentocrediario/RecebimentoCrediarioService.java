@@ -6,17 +6,22 @@ import com.vetor.niner.financeiro.TipoCarteiraDtos.CategoriaCarteira;
 import com.vetor.niner.financeiro.caixa.CaixaService;
 import com.vetor.niner.financeiro.recebimentocrediario.RecebimentoCrediarioDtos.CarteiraDisponivelResponse;
 import com.vetor.niner.financeiro.recebimentocrediario.RecebimentoCrediarioDtos.ClienteCrediarioResponse;
+import com.vetor.niner.financeiro.recebimentocrediario.RecebimentoCrediarioDtos.ComprovanteRecebimentoResponse;
 import com.vetor.niner.financeiro.recebimentocrediario.RecebimentoCrediarioDtos.EfetivarRecebimentoRequest;
 import com.vetor.niner.financeiro.recebimentocrediario.RecebimentoCrediarioDtos.EstornoEfetivadoResponse;
 import com.vetor.niner.financeiro.recebimentocrediario.RecebimentoCrediarioDtos.LoteRecebimentoResponse;
+import com.vetor.niner.financeiro.recebimentocrediario.RecebimentoCrediarioDtos.PagamentoComprovanteResponse;
 import com.vetor.niner.financeiro.recebimentocrediario.RecebimentoCrediarioDtos.PagamentoRecebimentoRequest;
+import com.vetor.niner.financeiro.recebimentocrediario.RecebimentoCrediarioDtos.ParcelaComprovanteResponse;
 import com.vetor.niner.financeiro.recebimentocrediario.RecebimentoCrediarioDtos.ParcelaCrediarioResponse;
 import com.vetor.niner.financeiro.recebimentocrediario.RecebimentoCrediarioDtos.ParcelaDoLoteResponse;
 import com.vetor.niner.financeiro.recebimentocrediario.RecebimentoCrediarioDtos.RecebimentoEfetivadoResponse;
+import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -275,6 +280,74 @@ public class RecebimentoCrediarioService {
                         rs.getInt("total_parcelas"), rs.getObject("data_vencimento", OffsetDateTime.class),
                         rs.getBigDecimal("valor_recebido")))
                 .list();
+    }
+
+    /**
+     * Comprovante de pagamento pra impressão térmica 80mm (2026-07-30, {@code
+     * docs/telas/comprovante-recebimento-crediario.md}) — cabeçalho (empresa/cliente/data/caixa),
+     * uma linha por parcela do lote ({@code multaJuros} é a diferença entre o valor cobrado na
+     * hora e o valor original da parcela, nunca recalculado depois) e uma linha por forma de
+     * pagamento usada (soma de {@code caixa_detalhe.valor} por {@code id_carteira}).
+     */
+    @Transactional(readOnly = true)
+    public ComprovanteRecebimentoResponse buscarComprovante(long idLoteRecebimento) {
+        record Cabecalho(String nomeEmpresa, String nomeCliente, OffsetDateTime dataPagamento, BigDecimal valorTotal) {
+        }
+
+        Cabecalho cabecalho = jdbc.sql("""
+                        SELECT e.razao_social, c.nome, crl.data_recebimento, crl.valor_total
+                        FROM contas_receber_lote crl
+                        JOIN cliente c ON c.id_cliente = crl.id_cliente AND c.id_tenant = crl.id_tenant
+                        JOIN empresa e ON e.id_empresa = crl.id_empresa AND e.id_tenant = crl.id_tenant
+                        WHERE crl.id_tenant = plataforma.tenant_atual() AND crl.id_lote_recebimento = ?
+                        """)
+                .param(idLoteRecebimento)
+                .query((rs, n) -> new Cabecalho(
+                        rs.getString("razao_social"), rs.getString("nome"),
+                        rs.getObject("data_recebimento", OffsetDateTime.class), rs.getBigDecimal("valor_total")))
+                .optional()
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "O lote de recebimento #" + idLoteRecebimento + " não existe."));
+
+        long idCaixa = jdbc.sql("""
+                        SELECT DISTINCT id_caixa FROM caixa_detalhe
+                        WHERE id_tenant = plataforma.tenant_atual() AND id_lote_recebimento = ?
+                        """)
+                .param(idLoteRecebimento)
+                .query(Long.class)
+                .single();
+
+        List<ParcelaComprovanteResponse> parcelas = jdbc.sql("""
+                        SELECT cr.id_venda, cr.numero_parcela, cr.valor_receber, cr.valor_recebido, cr.data_vencimento,
+                               (SELECT count(*) FROM contas_receber cr2
+                                WHERE cr2.id_tenant = cr.id_tenant AND cr2.id_venda = cr.id_venda
+                                      AND cr2.id_carteira = cr.id_carteira) AS total_parcelas
+                        FROM contas_receber cr
+                        WHERE cr.id_tenant = plataforma.tenant_atual() AND cr.id_lote_recebimento = ?
+                        ORDER BY cr.id_venda ASC, cr.numero_parcela ASC
+                        """)
+                .param(idLoteRecebimento)
+                .query((rs, n) -> new ParcelaComprovanteResponse(
+                        rs.getLong("id_venda"), rs.getInt("numero_parcela"), rs.getInt("total_parcelas"),
+                        rs.getObject("data_vencimento", OffsetDateTime.class), rs.getBigDecimal("valor_receber"),
+                        rs.getBigDecimal("valor_recebido").subtract(rs.getBigDecimal("valor_receber")),
+                        rs.getBigDecimal("valor_recebido")))
+                .list();
+
+        List<PagamentoComprovanteResponse> pagamentos = jdbc.sql("""
+                        SELECT tc.nome_carteira, SUM(cd.valor) AS valor_pago
+                        FROM caixa_detalhe cd
+                        JOIN tipo_carteira tc ON tc.id_carteira = cd.id_carteira AND tc.id_tenant = cd.id_tenant
+                        WHERE cd.id_tenant = plataforma.tenant_atual() AND cd.id_lote_recebimento = ?
+                        GROUP BY tc.nome_carteira
+                        ORDER BY tc.nome_carteira ASC
+                        """)
+                .param(idLoteRecebimento)
+                .query((rs, n) -> new PagamentoComprovanteResponse(rs.getString("nome_carteira"), rs.getBigDecimal("valor_pago")))
+                .list();
+
+        return new ComprovanteRecebimentoResponse(idLoteRecebimento, idCaixa, cabecalho.nomeEmpresa(), cabecalho.nomeCliente(),
+                cabecalho.dataPagamento(), parcelas, cabecalho.valorTotal(), pagamentos);
     }
 
     /**

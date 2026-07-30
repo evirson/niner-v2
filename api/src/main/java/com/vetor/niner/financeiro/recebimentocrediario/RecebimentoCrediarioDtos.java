@@ -88,4 +88,34 @@ public final class RecebimentoCrediarioDtos {
             OffsetDateTime dataVencimento,
             BigDecimal valorRecebido) {
     }
+
+    /**
+     * Comprovante de pagamento de crediário (2026-07-30, impressão térmica 80mm) — uma linha por
+     * parcela do lote, {@code multaJuros} congelado no valor cobrado na hora do recebimento
+     * (nunca recalculado depois).
+     */
+    public record ParcelaComprovanteResponse(
+            long idVenda,
+            int numeroParcela,
+            int totalParcelas,
+            OffsetDateTime dataVencimento,
+            BigDecimal valorParcela,
+            BigDecimal multaJuros,
+            BigDecimal valorAPagar) {
+    }
+
+    /** Uma forma de pagamento usada no lote — soma de todos os lançamentos daquela carteira. */
+    public record PagamentoComprovanteResponse(String nomeCarteira, BigDecimal valorPago) {
+    }
+
+    public record ComprovanteRecebimentoResponse(
+            long idLoteRecebimento,
+            long idCaixa,
+            String nomeEmpresa,
+            String nomeCliente,
+            OffsetDateTime dataPagamento,
+            List<ParcelaComprovanteResponse> parcelas,
+            BigDecimal valorTotalAPagar,
+            List<PagamentoComprovanteResponse> pagamentos) {
+    }
 }

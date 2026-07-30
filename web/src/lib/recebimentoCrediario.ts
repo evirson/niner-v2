@@ -117,3 +117,37 @@ export function estornarLoteRecebimento(idLoteRecebimento: number): Promise<Esto
 export function listarParcelasDoLote(idLoteRecebimento: number): Promise<ParcelaDoLote[]> {
   return api<ParcelaDoLote[]>(`/api/v1/recebimento-crediario/estornos/${idLoteRecebimento}/parcelas`)
 }
+
+/**
+ * Comprovante de pagamento pra impressão térmica 80mm (2026-07-30). `multaJuros` já vem
+ * congelado no valor cobrado na hora do recebimento — nunca recalcular no front.
+ */
+export interface ParcelaComprovante {
+  idVenda: number
+  numeroParcela: number
+  totalParcelas: number
+  dataVencimento: string
+  valorParcela: number
+  multaJuros: number
+  valorAPagar: number
+}
+
+export interface PagamentoComprovante {
+  nomeCarteira: string
+  valorPago: number
+}
+
+export interface ComprovanteRecebimento {
+  idLoteRecebimento: number
+  idCaixa: number
+  nomeEmpresa: string
+  nomeCliente: string
+  dataPagamento: string
+  parcelas: ParcelaComprovante[]
+  valorTotalAPagar: number
+  pagamentos: PagamentoComprovante[]
+}
+
+export function buscarComprovanteRecebimento(idLoteRecebimento: number): Promise<ComprovanteRecebimento> {
+  return api<ComprovanteRecebimento>(`/api/v1/recebimento-crediario/${idLoteRecebimento}/comprovante`)
+}

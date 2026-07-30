@@ -16,6 +16,7 @@ import {
   type CarteiraDisponivel,
   type ClienteCrediario,
 } from '../../lib/recebimentoCrediario'
+import ComprovanteRecebimentoModal from './ComprovanteRecebimentoModal'
 import EscolherFormaPagamentoModal from './EscolherFormaPagamentoModal'
 import { ROTULO_CATEGORIA_CARTEIRA } from '../../lib/tiposCarteira'
 import { maiusculas } from '../../lib/texto'
@@ -63,6 +64,7 @@ export default function RecebimentoCrediario() {
   const [valorPagoTexto, setValorPagoTexto] = useState('')
   const [pagamentos, setPagamentos] = useState<LinhaPagamento[]>([])
   const [modalPagamentoAberto, setModalPagamentoAberto] = useState(false)
+  const [idLoteComprovante, setIdLoteComprovante] = useState<number | null>(null)
   const [toast, setToast] = useState<{ texto: string; tipo: TipoToast } | null>(null)
   const linhasRef = useRef<Array<HTMLTableRowElement | null>>([])
 
@@ -200,6 +202,7 @@ export default function RecebimentoCrediario() {
         tipo: 'sucesso',
       })
       trocarCliente()
+      setIdLoteComprovante(resultado.idLoteRecebimento)
     },
     onError: (e: unknown) =>
       setToast({ texto: e instanceof ApiError ? e.message : 'Não foi possível efetivar o recebimento.', tipo: 'erro' }),
@@ -499,6 +502,10 @@ export default function RecebimentoCrediario() {
       )}
 
       {toast && <Toast mensagem={toast.texto} tipo={toast.tipo} aoFechar={() => setToast(null)} />}
+
+      {idLoteComprovante !== null && (
+        <ComprovanteRecebimentoModal idLoteRecebimento={idLoteComprovante} aoFechar={() => setIdLoteComprovante(null)} />
+      )}
 
       {caixaFechado && (
         <AberturaCaixaModal

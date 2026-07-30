@@ -536,6 +536,77 @@ class RecebimentoCrediarioCrudTest {
         }
     }
 
+    // --- Comprovante de pagamento (2026-07-30, impressão térmica 80mm) --------------------
+
+    @Test
+    void comprovanteTrazCabecalhoParcelasEFormasDePagamento() throws Exception {
+        String token = assinarNovoTenant("comprovante");
+        long idTenant = extrairIdTenant(token);
+        long idCliente = criarCliente(token, "Cliente Comprovante");
+        long idCarteiraCrediario = criarTipoCarteira(token, "CREDIARIO COMPROVANTE", "CREDIARIO", false);
+        long idCarteiraDinheiro = criarTipoCarteira(token, "DINHEIRO COMPROVANTE", "AVISTA", true);
+        long idCarteiraCartao = criarTipoCarteira(token, "CARTAO COMPROVANTE", "CARTAO_CREDITO", true);
+        definirConfigCrediario(token, 0, "5", 0, "2");
+        abrirCaixaDinheiro(token);
+
+        long idConta1;
+        long idConta2;
+        long idVenda;
+        try (Connection c = abrirConexao(idTenant)) {
+            long idEmpresa = buscarIdEmpresa(c);
+            idVenda = criarVenda(c, idTenant, idEmpresa, idCliente);
+            // vencida há 10 dias: multa = 100 × 2% = 2.00; juros = 100 × 0.1%? não, config aqui é
+            // jurosCrediarioDias=0/jurosCrediario="5" (5% ao dia) × 10 dias = 50.00; total 152.00.
+            idConta1 = criarParcela(c, idTenant, idVenda, idCarteiraCrediario, 1, 10, "100.00", false);
+            idConta2 = criarParcela(c, idTenant, idVenda, idCarteiraCrediario, 2, 10, "50.00", false);
+        }
+
+        String corpo = """
+                {"idCliente":%d,"idsContaReceber":[%d,%d],
+                 "pagamentos":[{"idCarteira":%d,"valorPago":100.00},{"idCarteira":%d,"valorPago":128.00}]}
+                """.formatted(idCliente, idConta1, idConta2, idCarteiraDinheiro, idCarteiraCartao);
+        String resp = mvc.perform(post("/api/v1/recebimento-crediario").header("Authorization", "Bearer " + token)
+                        .contentType(APPLICATION_JSON).content(corpo))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        long idLote = ((Number) JsonPath.read(resp, "$.idLoteRecebimento")).longValue();
+        java.math.BigDecimal valorTotal = new java.math.BigDecimal(JsonPath.read(resp, "$.valorTotal").toString());
+
+        mvc.perform(get("/api/v1/recebimento-crediario/" + idLote + "/comprovante")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.idLoteRecebimento").value(idLote))
+                .andExpect(jsonPath("$.idCaixa").exists())
+                .andExpect(jsonPath("$.nomeCliente").value("CLIENTE COMPROVANTE"))
+                .andExpect(jsonPath("$.nomeEmpresa").exists())
+                .andExpect(jsonPath("$.dataPagamento").exists())
+                .andExpect(jsonPath("$.valorTotalAPagar").value(valorTotal.doubleValue()))
+                .andExpect(jsonPath("$.parcelas.length()").value(2))
+                .andExpect(jsonPath("$.parcelas[0].idVenda").value(idVenda))
+                .andExpect(jsonPath("$.parcelas[0].numeroParcela").value(1))
+                .andExpect(jsonPath("$.parcelas[0].totalParcelas").value(2))
+                .andExpect(jsonPath("$.parcelas[0].valorParcela").value(100.00))
+                .andExpect(jsonPath("$.parcelas[0].multaJuros").value(52.00))
+                .andExpect(jsonPath("$.parcelas[0].valorAPagar").value(152.00))
+                .andExpect(jsonPath("$.parcelas[1].valorParcela").value(50.00))
+                .andExpect(jsonPath("$.parcelas[1].multaJuros").value(26.00))
+                .andExpect(jsonPath("$.parcelas[1].valorAPagar").value(76.00))
+                .andExpect(jsonPath("$.pagamentos.length()").value(2))
+                .andExpect(jsonPath("$.pagamentos[*].nomeCarteira")
+                        .value(org.hamcrest.Matchers.containsInAnyOrder("CARTAO COMPROVANTE", "DINHEIRO COMPROVANTE")))
+                .andExpect(jsonPath("$.pagamentos[*].valorPago")
+                        .value(org.hamcrest.Matchers.containsInAnyOrder(100.00, 128.00)));
+    }
+
+    @Test
+    void comprovanteDeLoteInexistenteResponde404() throws Exception {
+        String token = assinarNovoTenant("comprovante-inexistente");
+
+        mvc.perform(get("/api/v1/recebimento-crediario/999999/comprovante")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isNotFound());
+    }
+
     @Test
     void efetivarParcelaJaRecebidaRespondeConflitoSemGravarNada() throws Exception {
         String token = assinarNovoTenant("ja-recebida");

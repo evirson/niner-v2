@@ -2,6 +2,7 @@ package com.vetor.niner.financeiro.recebimentocrediario;
 
 import com.vetor.niner.financeiro.recebimentocrediario.RecebimentoCrediarioDtos.CarteiraDisponivelResponse;
 import com.vetor.niner.financeiro.recebimentocrediario.RecebimentoCrediarioDtos.ClienteCrediarioResponse;
+import com.vetor.niner.financeiro.recebimentocrediario.RecebimentoCrediarioDtos.ComprovanteRecebimentoResponse;
 import com.vetor.niner.financeiro.recebimentocrediario.RecebimentoCrediarioDtos.EfetivarRecebimentoRequest;
 import com.vetor.niner.financeiro.recebimentocrediario.RecebimentoCrediarioDtos.EstornoEfetivadoResponse;
 import com.vetor.niner.financeiro.recebimentocrediario.RecebimentoCrediarioDtos.LoteRecebimentoResponse;
@@ -53,6 +54,11 @@ public class RecebimentoCrediarioController {
     public RecebimentoEfetivadoResponse efetivar(
             @AuthenticationPrincipal Jwt jwt, @Valid @RequestBody EfetivarRecebimentoRequest req) {
         return service.efetivarRecebimento(jwt, req);
+    }
+
+    @GetMapping("/{idLoteRecebimento}/comprovante")
+    public ComprovanteRecebimentoResponse buscarComprovante(@PathVariable long idLoteRecebimento) {
+        return service.buscarComprovante(idLoteRecebimento);
     }
 
     @GetMapping("/estornos")

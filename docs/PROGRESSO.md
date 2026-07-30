@@ -69,7 +69,9 @@ exclusão que violava FK sem avisar nada ao usuário). Em 2026-07-30, **Abertura
 (`financeiro.caixa`, docs/telas/abertura-caixa.md) ganhou tela própria — `caixa_mestre` volta a
 ter `id_carteira`/`saldo_inicial`, e PDV/Recebimento de Crediário passam a **exigir** caixa
 aberto (popup obrigatório ao entrar na tela) em vez de operar sem checar ou abrir sozinho em
-silêncio como antes.
+silêncio como antes. No mesmo dia, o Recebimento de Crediário ganhou **Comprovante de Pagamento**
+(docs/telas/comprovante-recebimento-crediario.md) — popup automático após efetivar, pronto pra
+impressão térmica 80mm ou PDF (`jsPDF`, dependência nova do `web/`).
 
 | Artefato | Situação |
 |---|---|
@@ -94,6 +96,64 @@ silêncio como antes.
 ---
 
 ## Linha do tempo
+
+### 2026-07-30 — Comprovante de Pagamento de Crediário (impressão térmica 80mm)
+
+Sessão seguinte à de Abertura de Caixa, no mesmo dia. Pedido com mockup ASCII completo de como
+o comprovante deveria ficar (cabeçalho, tabela de parcelas, forma de pagamento, data/
+identificação).
+
+1. **Endpoint novo** — `GET /api/v1/recebimento-crediario/{idLoteRecebimento}/comprovante`
+   (`RecebimentoCrediarioService.buscarComprovante`): cabeçalho (razão social da empresa, nome
+   do cliente, data do pagamento, `id_caixa`), uma linha por parcela (`multaJuros` = diferença
+   entre `valor_recebido` e `valor_receber`, congelada no momento do recebimento, nunca
+   recalculada) e uma linha por forma de pagamento (soma de `caixa_detalhe.valor` agrupada por
+   `id_carteira`). 404 se o lote não existir.
+
+2. **Duas decisões fechadas via `AskUserQuestion` antes de implementar:** (a) dois botões
+   separados — "Imprimir" (diálogo nativo do navegador) e "Salvar PDF" (gerado direto, sem
+   passar pelo diálogo) — em vez de um botão só; (b) popup abre automaticamente assim que o
+   recebimento é efetivado, sem gatilho manual.
+
+3. **Frontend:** `web/src/lib/comprovante.ts` — `montarLinhasComprovante()` monta o comprovante
+   como array de linhas de texto monoespaçado, fonte única de verdade reusada pela tela
+   (`<pre>`), pela impressão (`window.print()`, CSS isola só o elemento) e pelo PDF
+   (`gerarPdfComprovante()`, biblioteca **`jsPDF` nova** — única dependência nova do frontend
+   pra essa feature). `ComprovanteRecebimentoModal.tsx` plugado no `onSuccess` do `efetivar` em
+   `RecebimentoCrediario.tsx`.
+
+4. **Layout revisado 3 vezes depois do primeiro corte**, cada pedido curto e direto: (a) mesa de
+   ~70 colunas do mockup original não cabe fisicamente numa bobina de 80mm em fonte legível
+   (máx. ~42-48 colunas) — reorganizado em blocos por parcela; (b) totalizador "Total Pago"
+   entra depois da lista de formas de pagamento, e "Data Pagamento"/"Identificação" viram o
+   rodapé final (antes ficavam no meio, antes da lista de formas de pagamento); (c) "Valor a
+   Pagar" (total geral) renomeado pra "Total a Pagar" pra não ficar homônimo do "Vlr. a Pagar"
+   de cada parcela; (d) separadores `-`/`.` trocados por `—` (travessão) e `•` (marcador) —
+   escolhidos por ficarem dentro do WinAnsiEncoding (CP1252) que a fonte padrão do `jsPDF`
+   desenha sem precisar embutir uma fonte TTF nova (caracteres de desenho de caixa de verdade,
+   tipo ─/═, ficariam quebrados no PDF).
+
+5. **CSS de impressão pra bobina física** (pedido do usuário: "lembrando que vai sair numa
+   impressora térmica de fita, 80mm") — `@page { size: 80mm auto; margin: 0; }` (a impressão sem
+   isso tentava encaixar no tamanho de página padrão do sistema, A4/Carta) + fonte de impressão
+   reduzida (9px) com margem de 3mm, deixando as 42 colunas com folga real dentro dos 80mm
+   físicos (cálculo, ainda sem teste numa impressora térmica real).
+
+6. **Testes:** 2 novos em `RecebimentoCrediarioCrudTest`
+   (`comprovanteTrazCabecalhoParcelasEFormasDePagamento`, incluindo verificação da fórmula de
+   multa/juros congelada; `comprovanteDeLoteInexistenteResponde404`). **Suíte completa: 213/213
+   verdes.**
+
+7. **Verificação ao vivo:** efetivado um recebimento de teste real via navegador (dados
+   sintéticos criados/apagados no banco de dev, cliente real preservado) — achado e corrigido no
+   processo: **o container da API não tinha sido reconstruído** depois do endpoint novo, dando
+   404 (endpoint nem existia no jar rodando); rebuild resolveu. Aproveitado pra também corrigir
+   um bug real do popup (ficava preso em "Carregando…" pra sempre se a busca falhasse, sem
+   mostrar erro nenhum). "Salvar PDF" testado sem erro de console.
+
+**Documentação:** pedido explícito "documente, memorize, faça commit e push" — `docs/PROGRESSO.md`
+(esta entrada), `docs/telas/comprovante-recebimento-crediario.md` (spec nova, formato §5) e
+`docs/telas/recebimento-crediario.md` (contrato de API + referência à spec nova).
 
 ### 2026-07-30 — Abertura de Caixa (tela nova + popup obrigatório no PDV/Recebimento de Crediário)
 

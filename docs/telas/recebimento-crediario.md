@@ -192,7 +192,12 @@ GET  /api/v1/recebimento-crediario/clientes?nome=&cpf=&celular=   busca (1 filtr
 GET  /api/v1/recebimento-crediario/parcelas?idCliente=              parcelas em aberto + multa/juros
 GET  /api/v1/recebimento-crediario/carteiras                        formas de pagamento permitidas
 POST /api/v1/recebimento-crediario                                  efetiva o recebimento (transação única)
+GET  /api/v1/recebimento-crediario/{idLoteRecebimento}/comprovante  comprovante p/ impressão 80mm (2026-07-30)
 ```
+
+**Comprovante de pagamento (2026-07-30):** popup automático após efetivar, pronto pra
+impressão térmica 80mm ou PDF — spec própria em `docs/telas/comprovante-recebimento-
+crediario.md`.
 
 Todos sob `/api/v1/**` (JWT de tenant, RLS ativo — P8), abertos a ADMIN e OPERADOR (mesma
 decisão de PDV/Transferência — operação de caixa do dia a dia). Erros em Problem Details (RFC
