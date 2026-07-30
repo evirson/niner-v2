@@ -113,6 +113,24 @@ class RecebimentoCrediarioCrudTest {
         return c;
     }
 
+    /** Abre o caixa do dia usando o "DINHEIRO" semeado no signup (2026-07-30) — o recebimento
+     *  agora exige caixa aberto (financeiro.caixa.CaixaService) antes de efetivar; antes desta
+     *  data o serviço abria sozinho, em silêncio. */
+    private void abrirCaixaDinheiro(String token) throws Exception {
+        String resp = mvc.perform(get("/api/v1/caixa/carteiras").header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        java.util.List<java.util.Map<String, Object>> carteiras = JsonPath.read(resp, "$");
+        long idCarteira = carteiras.stream()
+                .filter(c -> "DINHEIRO".equals(c.get("nomeCarteira")))
+                .map(c -> ((Number) c.get("idCarteira")).longValue())
+                .findFirst().orElseThrow();
+        mvc.perform(post("/api/v1/caixa/abrir").header("Authorization", "Bearer " + token)
+                        .contentType(APPLICATION_JSON)
+                        .content("{\"idCarteira\":%d,\"saldoInicial\":100.00}".formatted(idCarteira)))
+                .andExpect(status().isOk());
+    }
+
     private long buscarIdEmpresa(Connection c) throws SQLException {
         try (Statement st = c.createStatement(); ResultSet rs = st.executeQuery("SELECT id_empresa FROM empresa LIMIT 1")) {
             rs.next();
@@ -351,13 +369,14 @@ class RecebimentoCrediarioCrudTest {
     }
 
     @Test
-    void efetivarComSucessoBaixaParcelaAbreCaixaEGravaLoteECaixaDetalhe() throws Exception {
+    void efetivarComSucessoBaixaParcelaEGravaLoteECaixaDetalhe() throws Exception {
         String token = assinarNovoTenant("fluxo-feliz");
         long idTenant = extrairIdTenant(token);
         long idCliente = criarCliente(token, "Cliente Fluxo Feliz");
         long idCarteiraCrediario = criarTipoCarteira(token, "CREDIARIO FELIZ", "CREDIARIO", false);
         long idCarteiraPaga = criarTipoCarteira(token, "DINHEIRO FELIZ", "AVISTA", true);
         definirConfigCrediario(token, 0, "0", 0, "0");
+        abrirCaixaDinheiro(token);
 
         long idContaReceber;
         long idVenda;
@@ -434,6 +453,7 @@ class RecebimentoCrediarioCrudTest {
         long idCarteiraDinheiro = criarTipoCarteira(token, "DINHEIRO SPLIT", "AVISTA", true);
         long idCarteiraCartao = criarTipoCarteira(token, "DEBITO SPLIT", "CARTAO_DEBITO", true);
         definirConfigCrediario(token, 0, "0", 0, "0");
+        abrirCaixaDinheiro(token);
 
         long idConta1;
         long idConta2;
@@ -487,6 +507,7 @@ class RecebimentoCrediarioCrudTest {
         long idCarteiraCrediario = criarTipoCarteira(token, "CREDIARIO CARTAO", "CREDIARIO", false);
         long idCarteiraCartao = criarTipoCarteira(token, "CREDITO CARTAO", "CARTAO_CREDITO", true);
         definirConfigCrediario(token, 0, "0", 0, "0");
+        abrirCaixaDinheiro(token);
 
         long idContaReceber;
         try (Connection c = abrirConexao(idTenant)) {
@@ -573,6 +594,37 @@ class RecebimentoCrediarioCrudTest {
                 .andExpect(status().isConflict());
     }
 
+    // --- Caixa aberto é obrigatório (2026-07-30) -------------------------------------------
+
+    @Test
+    void efetivarSemCaixaAbertoRespondeErroDeValidacaoENaoGravaNada() throws Exception {
+        String token = assinarNovoTenant("recebimento-sem-caixa");
+        long idTenant = extrairIdTenant(token);
+        long idCliente = criarCliente(token, "Cliente Recebimento Sem Caixa");
+        long idCarteiraCrediario = criarTipoCarteira(token, "CREDIARIO SEM CAIXA", "CREDIARIO", false);
+        long idCarteiraPaga = criarTipoCarteira(token, "DINHEIRO SEM CAIXA", "AVISTA", true);
+        // Sem abrirCaixaDinheiro(token) de propósito — nenhum caixa aberto hoje.
+
+        long idContaReceber;
+        try (Connection c = abrirConexao(idTenant)) {
+            long idEmpresa = buscarIdEmpresa(c);
+            long idVenda = criarVenda(c, idTenant, idEmpresa, idCliente);
+            idContaReceber = criarParcela(c, idTenant, idVenda, idCarteiraCrediario, 1, 0, "100.00", false);
+        }
+
+        String corpo = """
+                {"idCliente":%d,"idsContaReceber":[%d],"pagamentos":[{"idCarteira":%d,"valorPago":100.00}]}
+                """.formatted(idCliente, idContaReceber, idCarteiraPaga);
+
+        mvc.perform(post("/api/v1/recebimento-crediario").header("Authorization", "Bearer " + token)
+                        .contentType(APPLICATION_JSON).content(corpo))
+                .andExpect(status().isBadRequest());
+
+        try (Connection c = abrirConexao(idTenant)) {
+            assertTrue(!parcelaFoiRecebida(c, idContaReceber));
+        }
+    }
+
     // --- Estorno de recebimento (2026-07-29) ------------------------------------------------
 
     @Test
@@ -591,6 +643,7 @@ class RecebimentoCrediarioCrudTest {
         long idCarteiraCrediario = criarTipoCarteira(token, "CREDIARIO ESTORNO LISTAR", "CREDIARIO", false);
         long idCarteiraDinheiro = criarTipoCarteira(token, "DINHEIRO ESTORNO LISTAR", "AVISTA", true);
         definirConfigCrediario(token, 0, "0", 0, "0");
+        abrirCaixaDinheiro(token);
 
         long idConta1;
         long idConta2;
@@ -630,6 +683,7 @@ class RecebimentoCrediarioCrudTest {
         long idCarteiraCrediario = criarTipoCarteira(token, "CREDIARIO VISUALIZAR", "CREDIARIO", false);
         long idCarteiraDinheiro = criarTipoCarteira(token, "DINHEIRO VISUALIZAR", "AVISTA", true);
         definirConfigCrediario(token, 0, "0", 0, "0");
+        abrirCaixaDinheiro(token);
 
         long idConta1;
         long idConta2;
@@ -667,6 +721,7 @@ class RecebimentoCrediarioCrudTest {
         long idCarteiraCrediario = criarTipoCarteira(token, "CREDIARIO ESTORNAR", "CREDIARIO", false);
         long idCarteiraCartao = criarTipoCarteira(token, "CREDITO ESTORNAR", "CARTAO_CREDITO", true);
         definirConfigCrediario(token, 0, "0", 0, "0");
+        abrirCaixaDinheiro(token);
 
         long idConta1;
         long idConta2;
@@ -763,6 +818,7 @@ class RecebimentoCrediarioCrudTest {
         long idCarteiraCrediario = criarTipoCarteira(token, "CREDIARIO DUAS VEZES", "CREDIARIO", false);
         long idCarteiraDinheiro = criarTipoCarteira(token, "DINHEIRO DUAS VEZES", "AVISTA", true);
         definirConfigCrediario(token, 0, "0", 0, "0");
+        abrirCaixaDinheiro(token);
 
         long idConta;
         try (Connection c = abrirConexao(idTenant)) {
@@ -797,6 +853,7 @@ class RecebimentoCrediarioCrudTest {
         long idCarteiraCrediarioA = criarTipoCarteira(tokenA, "CREDIARIO ESTORNO ISOLAMENTO A", "CREDIARIO", false);
         long idCarteiraPagaA = criarTipoCarteira(tokenA, "AVISTA ESTORNO ISOLAMENTO A", "AVISTA", true);
         definirConfigCrediario(tokenA, 0, "0", 0, "0");
+        abrirCaixaDinheiro(tokenA);
 
         long idContaA;
         try (Connection c = abrirConexao(idTenantA)) {

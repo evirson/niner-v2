@@ -1,8 +1,10 @@
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import AberturaCaixaModal from '../../components/AberturaCaixaModal'
 import { IconeAjustar, IconeConfirmar, IconeDevolver, IconeLimpar, IconeLupa, IconePdv } from '../../components/Icones'
 import { ApiError } from '../../lib/api'
+import { buscarStatusCaixa } from '../../lib/caixa'
 import { buscarPermiteQtdDecimal } from '../../lib/configuracaoGeral'
 import { formatarMoeda, formatarQuantidade } from '../../lib/masks'
 import {
@@ -38,6 +40,9 @@ function variacaoTexto(produto: PdvProduto): string | null {
  */
 export default function Pdv() {
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
+  const { data: statusCaixa } = useQuery({ queryKey: ['caixa-status'], queryFn: buscarStatusCaixa })
+  const caixaFechado = statusCaixa !== undefined && !statusCaixa.aberto
   const [ledger, setLedger] = useState<ItemLedger[]>([])
   const [selecionado, setSelecionado] = useState<string | null>(null)
   const [valorBarras, setValorBarras] = useState('')
@@ -52,7 +57,7 @@ export default function Pdv() {
   const ativaTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const barrasTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  const algumModalAberto = mostrarPesquisa || mostrarAlteraQtd || mostrarFormaPagamento
+  const algumModalAberto = mostrarPesquisa || mostrarAlteraQtd || mostrarFormaPagamento || caixaFechado
 
   useEffect(() => {
     campoBarrasRef.current?.focus()
@@ -418,6 +423,13 @@ export default function Pdv() {
       )}
 
       {flashMsg && <div className="pdv-flash pdv-show">{flashMsg}</div>}
+
+      {caixaFechado && (
+        <AberturaCaixaModal
+          aoAbrir={() => queryClient.invalidateQueries({ queryKey: ['caixa-status'] })}
+          aoVoltar={() => navigate('/')}
+        />
+      )}
     </div>
   )
 }

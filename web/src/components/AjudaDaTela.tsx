@@ -290,6 +290,20 @@ const CONTEUDOS: Record<string, ConteudoAjuda> = {
     ],
     urlVideo: null,
   },
+  'financeiro.aberturacaixa.tela': {
+    titulo: 'Abertura de Caixa',
+    objetivo: 'Abrir o caixa do dia antes de vender no PDV ou receber crediário.',
+    passos: [
+      'Se já houver caixa aberto hoje para você, a tela só mostra o horário, a moeda e o saldo inicial.',
+      'Se não houver, escolha a moeda (tipo de carteira, geralmente "Dinheiro") e informe o saldo inicial.',
+      'Confirme em "Abrir Caixa" — a partir daí o PDV e o Recebimento de Crediário liberam a operação.',
+    ],
+    errosComuns: [
+      'PDV ou Recebimento de Crediário pedem a abertura sozinhos: é o mesmo formulário desta tela, num popup — nenhuma venda/recebimento acontece sem caixa aberto.',
+      'Cada usuário abre o próprio caixa por empresa/dia — não existe caixa compartilhado entre usuários.',
+    ],
+    urlVideo: null,
+  },
   'financeiro.recebimentocrediario.tela': {
     titulo: 'Recebimento de Crediário',
     objetivo: 'Receber uma ou mais parcelas de crediário em aberto de um cliente.',

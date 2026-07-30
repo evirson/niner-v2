@@ -3,6 +3,7 @@ import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { useAuth } from '../lib/auth'
 import { useEu } from '../lib/eu'
 import {
+  IconeCaixa,
   IconeCanais,
   IconeCliente,
   IconeEstoque,
@@ -32,6 +33,7 @@ interface ItemNav {
 
 const NAV: ItemNav[] = [
   { to: '/', label: 'Painel', icone: IconePainel, end: true },
+  { to: '/abertura-caixa', label: 'Abertura de Caixa', icone: IconeCaixa },
   { to: '/pdv', label: 'PDV', icone: IconePdv },
   { to: '/produtos', label: 'Produtos', icone: IconeProduto },
   { to: '/estoque', label: 'Transferência de Produtos', icone: IconeEstoque },

@@ -171,6 +171,21 @@ export function IconeEstornoRecebimentoCrediario({ size = 28 }: { size?: number 
   )
 }
 
+/** Ícone de Abertura de Caixa — nota de dinheiro (banco de notas), 2026-07-30. */
+export function IconeCaixa({ size = 28 }: { size?: number }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.6} stroke="currentColor" width={size} height={size} aria-hidden="true">
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M2.25 6.75A2.25 2.25 0 0 1 4.5 4.5h15a2.25 2.25 0 0 1 2.25 2.25v9A2.25 2.25 0 0 1 19.5 18h-15a2.25 2.25 0 0 1-2.25-2.25v-9Z"
+      />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M15 11.25a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M5.25 8.25v.008M18.75 14.25v.008" />
+    </svg>
+  )
+}
+
 /** Ícone de ação "estornar" por linha (seta de retorno) — mesma cor de excluir (.acao-excluir), ação de desfazer. */
 export function IconeEstornar({ size = 18 }: { size?: number }) {
   return (

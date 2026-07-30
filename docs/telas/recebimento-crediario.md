@@ -153,9 +153,12 @@ de autorização nesta tela (fica `NULL`).
 ## Caixa (RN011/RN012 + nota técnica do dono do produto)
 
 Todo recebimento grava em `caixa_detalhe` (`tipo_operacao = 'RECEBIMENTO_PARCELA_CREDIARIO'`,
-`credito_debito = 'C'`). Se não existir `caixa_mestre` aberto (`caixa_fechado = false`) pra esse
-usuário, nessa empresa, hoje, a API **abre um automaticamente** (`saldo_inicial = 0`) antes de
-lançar — pedido explícito, sem tela de abertura/fechamento de caixa ainda.
+`credito_debito = 'C'`). **Revisado em 2026-07-30** (`docs/telas/abertura-caixa.md`): a API não
+abre mais o caixa sozinha. Se não existir `caixa_mestre` aberto (`caixa_fechado = false`) pra
+esse usuário, nessa empresa, hoje, `efetivarRecebimento` responde 400 e nada é gravado
+(`CaixaService.idCaixaAbertoObrigatorio`) — a tela é responsável por pedir a abertura (popup
+obrigatório) antes de deixar o operador chegar até aqui. Comportamento antigo (até 2026-07-30):
+abria um caixa automaticamente com `saldo_inicial = 0`, sem pedir nada ao operador.
 
 ## Critérios de aceitação (viram testes)
 
@@ -236,8 +239,8 @@ Nenhum.
   exclusão em 2026-07-29 — aqui não foi pedido).
 - **Captura de número de autorização de cartão** — `contas_receber_detalhe.numero_autorizacao`
   fica `NULL`; a tela não tem campo pra isso.
-- **Tela de abertura/fechamento de caixa** — o caixa só é aberto automaticamente quando
-  necessário; não existe fluxo de fechamento nem sangria/suprimento ainda.
+- **Fechamento de caixa, sangria/suprimento** — a abertura ganhou tela própria em 2026-07-30
+  (`docs/telas/abertura-caixa.md`); fechamento continua sem fluxo.
 
 ## Questões abertas
 

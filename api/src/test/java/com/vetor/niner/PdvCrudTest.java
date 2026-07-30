@@ -133,6 +133,23 @@ class PdvCrudTest {
                 .andExpect(status().isOk());
     }
 
+    /** Abre o caixa do dia usando o "DINHEIRO" semeado no signup (2026-07-30) — a venda agora
+     *  exige caixa aberto (financeiro.caixa.CaixaService) antes de efetivar. */
+    private void abrirCaixaDinheiro(String token) throws Exception {
+        String resp = mvc.perform(get("/api/v1/caixa/carteiras").header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        java.util.List<java.util.Map<String, Object>> carteiras = JsonPath.read(resp, "$");
+        long idCarteira = carteiras.stream()
+                .filter(c -> "DINHEIRO".equals(c.get("nomeCarteira")))
+                .map(c -> ((Number) c.get("idCarteira")).longValue())
+                .findFirst().orElseThrow();
+        mvc.perform(post("/api/v1/caixa/abrir").header("Authorization", "Bearer " + token)
+                        .contentType(APPLICATION_JSON)
+                        .content("{\"idCarteira\":%d,\"saldoInicial\":100.00}".formatted(idCarteira)))
+                .andExpect(status().isOk());
+    }
+
     private void definirPermiteQtdDecimal(String token, boolean permite) throws Exception {
         mvc.perform(put("/api/v1/config-geral").header("Authorization", "Bearer " + token)
                         .contentType(APPLICATION_JSON)
@@ -299,6 +316,7 @@ class PdvCrudTest {
         long idCarteira = criarTipoCarteira(token, "DINHEIRO PDV", "AVISTA", 0, 1, 1);
         long idCliente = criarCliente(token, "Cliente Avista");
         long idFuncionario = criarFuncionario(token, "Vendedor Avista");
+        abrirCaixaDinheiro(token);
 
         try (Connection c = abrirConexao(idTenant)) {
             long idEmpresa = buscarIdEmpresa(c);
@@ -337,6 +355,7 @@ class PdvCrudTest {
         long idCliente = criarCliente(token, "Cliente Qtd Decimal");
         long idFuncionario = criarFuncionario(token, "Vendedor Qtd Decimal");
         definirPermiteQtdDecimal(token, false);
+        abrirCaixaDinheiro(token);
 
         try (Connection c = abrirConexao(idTenant)) {
             long idEmpresa = buscarIdEmpresa(c);
@@ -366,6 +385,7 @@ class PdvCrudTest {
         long idCarteira = criarTipoCarteira(token, "CREDIARIO PDV", "CREDIARIO", 30, 1, 6);
         long idCliente = criarCliente(token, "Cliente Crediario");
         long idFuncionario = criarFuncionario(token, "Vendedor Crediario");
+        abrirCaixaDinheiro(token);
 
         try (Connection c = abrirConexao(idTenant)) {
             long idEmpresa = buscarIdEmpresa(c);
@@ -399,6 +419,7 @@ class PdvCrudTest {
         long idCarteira = criarTipoCarteira(token, "DINHEIRO SEM ESTOQUE", "AVISTA", 0, 1, 1);
         long idCliente = criarCliente(token, "Cliente Sem Estoque");
         long idFuncionario = criarFuncionario(token, "Vendedor Sem Estoque");
+        abrirCaixaDinheiro(token);
 
         try (Connection c = abrirConexao(idTenant)) {
             long idEmpresa = buscarIdEmpresa(c);
@@ -427,6 +448,7 @@ class PdvCrudTest {
         long idCarteira = criarTipoCarteira(token, "CARTAO FORA FAIXA", "CARTAO_CREDITO", 30, 2, 6);
         long idCliente = criarCliente(token, "Cliente Fora Faixa");
         long idFuncionario = criarFuncionario(token, "Vendedor Fora Faixa");
+        abrirCaixaDinheiro(token);
 
         try (Connection c = abrirConexao(idTenant)) {
             long idEmpresa = buscarIdEmpresa(c);
@@ -452,6 +474,7 @@ class PdvCrudTest {
         long idCarteira = criarTipoCarteira(token, "DEBITO AVISTA", "CARTAO_DEBITO", 0, 1, 1);
         long idCliente = criarCliente(token, "Cliente Avista Parcelado");
         long idFuncionario = criarFuncionario(token, "Vendedor Avista Parcelado");
+        abrirCaixaDinheiro(token);
 
         try (Connection c = abrirConexao(idTenant)) {
             long idEmpresa = buscarIdEmpresa(c);
@@ -476,6 +499,7 @@ class PdvCrudTest {
         long idProduto = criarProduto(token, "Produto Carteira Inexistente", true);
         long idCliente = criarCliente(token, "Cliente Carteira Inexistente");
         long idFuncionario = criarFuncionario(token, "Vendedor Carteira Inexistente");
+        abrirCaixaDinheiro(token);
 
         try (Connection c = abrirConexao(idTenant)) {
             long idEmpresa = buscarIdEmpresa(c);
@@ -502,6 +526,7 @@ class PdvCrudTest {
         long idCarteiraB = criarTipoCarteira(tokenB, "DINHEIRO TENANT B", "AVISTA", 0, 1, 1);
         long idClienteB = criarCliente(tokenB, "Cliente Tenant B");
         long idFuncionarioB = criarFuncionario(tokenB, "Vendedor Tenant B");
+        abrirCaixaDinheiro(tokenB);
 
         long idVariacaoA;
         try (Connection c = abrirConexao(idTenantA)) {
@@ -535,6 +560,7 @@ class PdvCrudTest {
         long idCliente = criarCliente(token, "Cliente Desconto Informado");
         long idFuncionario = criarFuncionario(token, "Vendedor Desconto Informado");
         definirPercentualDescontoVenda(token, "10"); // desconto MÁXIMO permitido, não mais automático.
+        abrirCaixaDinheiro(token);
 
         try (Connection c = abrirConexao(idTenant)) {
             long idEmpresa = buscarIdEmpresa(c);
@@ -571,6 +597,7 @@ class PdvCrudTest {
         long idCliente = criarCliente(token, "Cliente Desconto Acima");
         long idFuncionario = criarFuncionario(token, "Vendedor Desconto Acima");
         definirPercentualDescontoVenda(token, "10");
+        abrirCaixaDinheiro(token);
 
         try (Connection c = abrirConexao(idTenant)) {
             long idEmpresa = buscarIdEmpresa(c);
@@ -599,6 +626,7 @@ class PdvCrudTest {
         long idCarteira = criarTipoCarteira(token, "DINHEIRO SEM DESCONTO MAXIMO", "AVISTA", 0, 1, 1);
         long idCliente = criarCliente(token, "Cliente Sem Desconto Maximo");
         long idFuncionario = criarFuncionario(token, "Vendedor Sem Desconto Maximo");
+        abrirCaixaDinheiro(token);
 
         try (Connection c = abrirConexao(idTenant)) {
             long idEmpresa = buscarIdEmpresa(c);
@@ -630,6 +658,7 @@ class PdvCrudTest {
         long idCarteiraDebito = criarTipoCarteira(token, "DEBITO SPLIT", "CARTAO_DEBITO", 1, 1, 1);
         long idCliente = criarCliente(token, "Cliente Split Tender");
         long idFuncionario = criarFuncionario(token, "Vendedor Split Tender");
+        abrirCaixaDinheiro(token);
 
         try (Connection c = abrirConexao(idTenant)) {
             long idEmpresa = buscarIdEmpresa(c);
@@ -680,6 +709,7 @@ class PdvCrudTest {
                 token, "DINHEIRO VALOR MAXIMO", "AVISTA", 0, 1, 1, new BigDecimal("10"), null);
         long idCliente = criarCliente(token, "Cliente Valor Maximo");
         long idFuncionario = criarFuncionario(token, "Vendedor Valor Maximo");
+        abrirCaixaDinheiro(token);
 
         try (Connection c = abrirConexao(idTenant)) {
             long idEmpresa = buscarIdEmpresa(c);
@@ -713,6 +743,7 @@ class PdvCrudTest {
                 token, "DINHEIRO FECHA SOZINHA", "AVISTA", 0, 1, 1, new BigDecimal("10"), null);
         long idCliente = criarCliente(token, "Cliente Fecha Sozinha");
         long idFuncionario = criarFuncionario(token, "Vendedor Fecha Sozinha");
+        abrirCaixaDinheiro(token);
 
         try (Connection c = abrirConexao(idTenant)) {
             long idEmpresa = buscarIdEmpresa(c);
@@ -747,6 +778,7 @@ class PdvCrudTest {
         long idCarteira = criarTipoCarteira(token, "DINHEIRO SALDO NAO FECHA", "AVISTA", 0, 1, 1);
         long idCliente = criarCliente(token, "Cliente Saldo Nao Fecha");
         long idFuncionario = criarFuncionario(token, "Vendedor Saldo Nao Fecha");
+        abrirCaixaDinheiro(token);
 
         try (Connection c = abrirConexao(idTenant)) {
             long idEmpresa = buscarIdEmpresa(c);
@@ -767,6 +799,36 @@ class PdvCrudTest {
         }
     }
 
+    // --- Caixa aberto é obrigatório (2026-07-30) -------------------------------------------
+
+    @Test
+    void vendaSemCaixaAbertoRespondeErroDeValidacaoENaoGravaNada() throws Exception {
+        String token = assinarNovoTenant("sem-caixa");
+        long idTenant = extrairIdTenant(token);
+        long idProduto = criarProduto(token, "Produto Sem Caixa", true);
+        long idCarteira = criarTipoCarteira(token, "DINHEIRO SEM CAIXA", "AVISTA", 0, 1, 1);
+        long idCliente = criarCliente(token, "Cliente Sem Caixa");
+        long idFuncionario = criarFuncionario(token, "Vendedor Sem Caixa");
+        // Sem abrirCaixaDinheiro(token) de propósito — nenhum caixa aberto hoje.
+
+        try (Connection c = abrirConexao(idTenant)) {
+            long idEmpresa = buscarIdEmpresa(c);
+            long idVariacao = criarVariacao(c, idTenant, idProduto);
+            definirEstoque(c, idTenant, idEmpresa, idVariacao, new BigDecimal("10.000"));
+
+            String corpo = """
+                    {"itens":[{"idVariacao":%d,"qtd":1}],"descontoVenda":0,"idCliente":%d,"idFuncionario":%d,
+                     "pagamentos":[{"idCarteira":%d,"valorPago":50.00,"numeroParcelas":1}]}
+                    """.formatted(idVariacao, idCliente, idFuncionario, idCarteira);
+
+            mvc.perform(post("/api/v1/pdv/vendas").header("Authorization", "Bearer " + token)
+                            .contentType(APPLICATION_JSON).content(corpo))
+                    .andExpect(status().isBadRequest());
+
+            org.assertj.core.api.Assertions.assertThat(buscarQtdEstoque(c, idVariacao)).isEqualByComparingTo("10.000");
+        }
+    }
+
     // --- Cliente e vendedor obrigatórios (2026-07-28) -------------------------------------
 
     @Test
@@ -776,6 +838,7 @@ class PdvCrudTest {
         long idProduto = criarProduto(token, "Produto Cliente Inexistente", true);
         long idCarteira = criarTipoCarteira(token, "DINHEIRO CLIENTE INEXISTENTE", "AVISTA", 0, 1, 1);
         long idFuncionario = criarFuncionario(token, "Vendedor Cliente Inexistente");
+        abrirCaixaDinheiro(token);
 
         try (Connection c = abrirConexao(idTenant)) {
             long idEmpresa = buscarIdEmpresa(c);
@@ -802,6 +865,7 @@ class PdvCrudTest {
         long idProduto = criarProduto(token, "Produto Funcionario Inexistente", true);
         long idCarteira = criarTipoCarteira(token, "DINHEIRO FUNCIONARIO INEXISTENTE", "AVISTA", 0, 1, 1);
         long idCliente = criarCliente(token, "Cliente Funcionario Inexistente");
+        abrirCaixaDinheiro(token);
 
         try (Connection c = abrirConexao(idTenant)) {
             long idEmpresa = buscarIdEmpresa(c);

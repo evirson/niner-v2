@@ -1,7 +1,7 @@
 # Progresso do Projeto — niner-v2
 
 Registro cronológico das decisões e entregas. Atualizar a cada marco relevante.
-**Última atualização:** 2026-07-29
+**Última atualização:** 2026-07-30
 
 ---
 
@@ -65,7 +65,11 @@ página — sempre `Toast.tsx` (canto superior direito, letra branca), vermelho
 (`tipo="erro"`, padrão) para erro/alerta, verde (`tipo="sucesso"`) para confirmação de
 sucesso (inclusive ao clicar Salvar num cadastro, que antes só navegava de volta pra lista
 sem avisar nada). Ver linha do tempo de 2026-07-24 pros detalhes e o que motivou (um bug de
-exclusão que violava FK sem avisar nada ao usuário).
+exclusão que violava FK sem avisar nada ao usuário). Em 2026-07-30, **Abertura de Caixa**
+(`financeiro.caixa`, docs/telas/abertura-caixa.md) ganhou tela própria — `caixa_mestre` volta a
+ter `id_carteira`/`saldo_inicial`, e PDV/Recebimento de Crediário passam a **exigir** caixa
+aberto (popup obrigatório ao entrar na tela) em vez de operar sem checar ou abrir sozinho em
+silêncio como antes.
 
 | Artefato | Situação |
 |---|---|
@@ -90,6 +94,76 @@ exclusão que violava FK sem avisar nada ao usuário).
 ---
 
 ## Linha do tempo
+
+### 2026-07-30 — Abertura de Caixa (tela nova + popup obrigatório no PDV/Recebimento de Crediário)
+
+Sessão iniciada com um pedido pontual de schema, que virou o gatilho da feature completa.
+
+1. **Remoção de `saldo_inicial`/`saldo_final` de `caixa_mestre`.** Pedido direto do dono do
+   produto, sem contexto adicional na hora — editado `V025__financeiro_caixa_crediario.sql`
+   (banco em construção) e aplicado com `ALTER TABLE` no banco de dev. Havia uma linha órfã de
+   teste (`id_caixa=9`, sem `caixa_detalhe` vinculado, resíduo de sessão anterior) que precisou
+   ser apagada antes do `ALTER COLUMN ... SET NOT NULL` conseguir rodar — `FORCE ROW LEVEL
+   SECURITY` escondia a linha da sessão sem `app.id_tenant` setado, foi preciso conectar como
+   `postgres` (superuser) pra enxergá-la.
+
+2. **Pergunta de esclarecimento: "quando vai efetivar venda/receber crediário e o caixa não está
+   aberto, o que faz?"** Investigação no código revelou dois comportamentos distintos e nenhum
+   deles satisfatório: o PDV nunca checava `caixa_mestre` (venda não toca em caixa até hoje); o
+   Recebimento de Crediário abria um caixa sozinho, em silêncio, sempre com saldo zero
+   (`RecebimentoCrediarioService.idCaixaAberto`, comportamento de 2026-07-29). Resposta ao dono
+   do produto documentada, sem mudança de código ainda.
+
+3. **Pedido direto, em 3 partes: criar tela de Abertura de Caixa; PDV e Recebimento de Crediário
+   passam a checar/abrir o caixa quando necessário.** Duas decisões fechadas via
+   `AskUserQuestion` antes de implementar: (a) saldo inicial é **uma linha só** (moeda + valor),
+   não um split-tender de várias moedas — confirma por que a coluna do item 1 tinha sido
+   removida, o desenho certo era reintroduzi-la já com FK pra `tipo_carteira`; (b) o popup de
+   abertura aparece **ao entrar na tela** do PDV/Recebimento (não só ao tentar efetivar).
+
+   **Schema:** `caixa_mestre` ganha de volta `id_carteira integer NOT NULL` (FK composta pra
+   `tipo_carteira`) + `saldo_inicial numeric(12,2) NOT NULL DEFAULT 0` — mesmo arquivo `V025`,
+   mesma convenção de banco em construção.
+
+   **Backend:** módulo novo `financeiro.caixa` — `CaixaService`/`CaixaController`/`CaixaDtos`,
+   três endpoints (`GET /status`, `GET /carteiras`, `POST /abrir`). `PdvVendaService` e
+   `RecebimentoCrediarioService` passam a chamar `CaixaService.idCaixaAbertoObrigatorio()` antes
+   de gravar qualquer coisa — 400 se não houver caixa aberto hoje pro usuário/empresa.
+   `RecebimentoCrediarioService.idCaixaAberto()` (a abertura automática e silenciosa) foi
+   **removido** — não existe mais abertura implícita em lugar nenhum do sistema.
+
+   **Frontend:** tela nova `AberturaCaixa.tsx` (rota `/abertura-caixa`, item de menu ao lado do
+   PDV, ícone novo `IconeCaixa`) — mostra os dados da abertura de hoje se já existir, senão o
+   formulário (moeda + saldo inicial, "Dinheiro" pré-selecionado por nome). Popup obrigatório
+   `AberturaCaixaModal.tsx` (mesmo formulário, sem opção de fechar — só "Voltar", que sai da
+   tela) reaproveitado dentro de `Pdv.tsx` e `RecebimentoCrediario.tsx`: as duas telas checam
+   `GET /caixa/status` ao carregar e bloqueiam a interação (inclusive os atalhos de teclado do
+   PDV) enquanto `aberto = false`. Campos do formulário fatorados em `CamposAberturaCaixa.tsx`,
+   reusado pela tela dedicada e pelo popup.
+
+   **Testes:** `CaixaCrudTest` novo (6 testes: status inicial, listagem de carteiras, abertura
+   com sucesso, abertura duplicada no mesmo dia → 409, carteira inexistente → 400, isolamento
+   entre tenants). Mais 2 testes novos (`vendaSemCaixaAbertoRespondeErroDeValidacaoENaoGravaNada`
+   em `PdvCrudTest`, `efetivarSemCaixaAbertoRespondeErroDeValidacaoENaoGravaNada` em
+   `RecebimentoCrediarioCrudTest`). Os 17 testes de venda de `PdvCrudTest` e os 8 de recebimento
+   de `RecebimentoCrediarioCrudTest` que esperavam sucesso ganharam uma chamada de abertura de
+   caixa no setup (helper `abrirCaixaDinheiro`, usa o tipo de carteira "DINHEIRO" semeado no
+   signup) — sem isso, todos quebrariam com a checagem nova. Mais 3 arquivos de teste
+   (`PlanoContasCrudTest`, `TipoCarteiraCrudTest`, `UsuarioCrudTest`) que inseriam `caixa_mestre`
+   direto via SQL bruto (pra testar bloqueio de exclusão por FK) precisaram passar a informar
+   `id_carteira`, agora `NOT NULL`. **Suíte completa: 211/211 testes verdes.**
+
+   **Verificação ao vivo:** navegador confirmou o popup bloqueando PDV/Recebimento com caixa
+   fechado, o formulário abrindo o caixa com sucesso, e as duas telas liberando a interação
+   depois. (Nota à parte: a extensão Dark Reader do Chrome usado na verificação causou uma
+   renderização visual estranha — sem `background` — no botão "Abrir Caixa" dentro do popup;
+   confirmado via `getComputedStyle`/inspeção do DOM que é artefato da extensão, não bug do CSS
+   da aplicação — o mesmo botão, mesma classe `.btn`, renderiza normalmente na tela dedicada.)
+   Caixa de teste aberto durante a verificação foi apagado do banco de dev ao final.
+
+**Documentação:** pedido explícito "documente e memorize" ao final da sessão — este registro,
+`docs/telas/abertura-caixa.md` (spec nova, formato §5) e atualização de
+`docs/telas/pdv.md`/`docs/telas/recebimento-crediario.md` com a exigência de caixa aberto.
 
 ### 2026-07-29 — Transferência de Produtos (filtros/ordenação/exclusão/popup), estoque negativo permitido em todo o sistema, e Recebimento de Crediário (módulo novo)
 

@@ -1,10 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import AberturaCaixaModal from '../../components/AberturaCaixaModal'
 import AjudaDaTela from '../../components/AjudaDaTela'
 import { IconeRecebimentoCrediario } from '../../components/Icones'
 import Toast, { type TipoToast } from '../../components/Toast'
 import { ApiError } from '../../lib/api'
+import { buscarStatusCaixa } from '../../lib/caixa'
 import { completarMoeda, desmascararMoeda, formatarMoeda, mascararMoeda } from '../../lib/masks'
 import {
   buscarClientesCrediario,
@@ -48,6 +50,8 @@ interface LinhaPagamento {
 export default function RecebimentoCrediario() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
+  const { data: statusCaixa } = useQuery({ queryKey: ['caixa-status'], queryFn: buscarStatusCaixa })
+  const caixaFechado = statusCaixa !== undefined && !statusCaixa.aberto
 
   const [nome, setNome] = useState('')
   const [cpf, setCpf] = useState('')
@@ -495,6 +499,13 @@ export default function RecebimentoCrediario() {
       )}
 
       {toast && <Toast mensagem={toast.texto} tipo={toast.tipo} aoFechar={() => setToast(null)} />}
+
+      {caixaFechado && (
+        <AberturaCaixaModal
+          aoAbrir={() => queryClient.invalidateQueries({ queryKey: ['caixa-status'] })}
+          aoVoltar={() => navigate('/')}
+        />
+      )}
     </div>
   )
 }

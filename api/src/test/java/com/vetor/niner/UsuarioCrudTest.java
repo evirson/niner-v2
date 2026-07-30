@@ -11,6 +11,7 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
 
 import java.sql.Connection;
 import java.sql.DriverManager;
+import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 
@@ -318,8 +319,13 @@ class UsuarioCrudTest {
         try (Connection c = DriverManager.getConnection(postgres.getJdbcUrl(), "niner_app", "dev_app");
              Statement st = c.createStatement()) {
             st.execute("SET app.id_tenant = " + idTenant);
-            st.executeUpdate("INSERT INTO caixa_mestre (id_tenant, id_empresa, id_usuario) VALUES ("
-                    + idTenant + ", " + idEmpresa + ", " + idUsuario + ")");
+            long idCarteira;
+            try (ResultSet rs = st.executeQuery("SELECT id_carteira FROM tipo_carteira LIMIT 1")) {
+                rs.next();
+                idCarteira = rs.getLong(1);
+            }
+            st.executeUpdate("INSERT INTO caixa_mestre (id_tenant, id_empresa, id_usuario, id_carteira) VALUES ("
+                    + idTenant + ", " + idEmpresa + ", " + idUsuario + ", " + idCarteira + ")");
         } catch (SQLException e) {
             throw new RuntimeException(e);
         }

@@ -234,6 +234,16 @@ de como funcionava. Grava `produto_movimento_mestre` (`tipo_movimento = 'VENDA'`
 `fn_atualiza_estoque_movimento` (já existente, V019) baixa `produto_estoque` sozinha (nenhuma
 linha tem `CHECK` contra saldo negativo) — nenhuma lógica de baixa de estoque em Java.
 
+### Caixa aberto obrigatório (novo, 2026-07-30)
+
+`PdvVendaService.efetivarVenda` chama `CaixaService.idCaixaAbertoObrigatorio(idEmpresa,
+idUsuario)` antes de gravar qualquer coisa — sem caixa aberto hoje pra esse usuário/empresa, 400
+e nada é gravado. Na tela, isso nunca deveria acontecer: `Pdv.tsx` checa `GET /api/v1/caixa/
+status` ao carregar e, se fechado, mostra um popup obrigatório (`AberturaCaixaModal.tsx`) antes
+de liberar qualquer ação — a checagem do serviço é rede de segurança contra chamada direta à
+API. A venda em si continua sem gravar nada em `caixa_detalhe` (fora de escopo). Ver
+`docs/telas/abertura-caixa.md`.
+
 ## Contrato de API
 
 ```
@@ -350,6 +360,8 @@ da forma de pagamento com desconto próprio, soma das coberturas não fecha o sa
   não aparece.
 - Dado uma venda efetivada com sucesso, então `venda.id_cliente` e todas as linhas de
   `produto_movimento_detalhe.id_funcionario` da venda batem com o cliente/vendedor escolhidos.
+- Dado nenhum caixa aberto hoje pro usuário/empresa, quando tenta efetivar a venda, então 400 e
+  nada é gravado (2026-07-30, `docs/telas/abertura-caixa.md`).
 
 ## Ajuda da tela (manual de operação + vídeo) — obrigatório (R22 / §3.7.1)
 

@@ -1,0 +1,41 @@
+package com.vetor.niner.financeiro.caixa;
+
+import com.vetor.niner.financeiro.caixa.CaixaDtos.AbrirCaixaRequest;
+import com.vetor.niner.financeiro.caixa.CaixaDtos.CaixaStatusResponse;
+import com.vetor.niner.financeiro.caixa.CaixaDtos.CarteiraParaAberturaResponse;
+import jakarta.validation.Valid;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
+
+/**
+ * Abertura de Caixa, superfície do tenant (`/api/v1`, JWT + RLS). Aberto a ADMIN e OPERADOR —
+ * mesma decisão de PDV/Recebimento de Crediário, que dependem deste caixa estar aberto.
+ */
+@RestController
+@RequestMapping("/api/v1/caixa")
+public class CaixaController {
+
+    private final CaixaService service;
+
+    public CaixaController(CaixaService service) {
+        this.service = service;
+    }
+
+    @GetMapping("/status")
+    public CaixaStatusResponse status(@AuthenticationPrincipal Jwt jwt) {
+        return service.status(jwt);
+    }
+
+    @GetMapping("/carteiras")
+    public List<CarteiraParaAberturaResponse> listarCarteirasParaAbertura() {
+        return service.listarCarteirasParaAbertura();
+    }
+
+    @PostMapping("/abrir")
+    public CaixaStatusResponse abrir(@AuthenticationPrincipal Jwt jwt, @Valid @RequestBody AbrirCaixaRequest req) {
+        return service.abrir(jwt, req);
+    }
+}

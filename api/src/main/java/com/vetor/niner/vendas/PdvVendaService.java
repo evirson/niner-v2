@@ -2,6 +2,7 @@ package com.vetor.niner.vendas;
 
 import com.vetor.niner.configuracao.geral.ConfiguracaoGeralService;
 import com.vetor.niner.financeiro.TipoCarteiraDtos.CategoriaCarteira;
+import com.vetor.niner.financeiro.caixa.CaixaService;
 import com.vetor.niner.vendas.PdvDtos.EfetivarVendaRequest;
 import com.vetor.niner.vendas.PdvDtos.ItemVendaRequest;
 import com.vetor.niner.vendas.PdvDtos.PagamentoGerado;
@@ -23,7 +24,10 @@ import java.util.List;
  * Efetiva a venda do PDV (F5, docs/telas/pdv.md) — grava tudo numa única transação: {@code
  * venda} + ledger de estoque ({@code produto_movimento_mestre/detalhe}, débito — a trigger
  * {@code fn_atualiza_estoque_movimento}, V019, baixa {@code produto_estoque} sozinha, P1) e a(s)
- * parcela(s) em {@code contas_receber} a partir do(s) {@code tipo_carteira} escolhido(s).
+ * parcela(s) em {@code contas_receber} a partir do(s) {@code tipo_carteira} escolhido(s). Exige
+ * caixa aberto para o usuário/empresa do dia (2026-07-30, {@code financeiro.caixa.CaixaService})
+ * antes de gravar qualquer coisa — a tela é responsável por pedir a abertura antes de chegar
+ * aqui; a venda em si não lança nada em {@code caixa_detalhe} (fora de escopo por ora).
  *
  * <p>Preço e variação de cada item são sempre resolvidos aqui a partir do {@code idVariacao} —
  * a tela nunca envia preço. Saldo negativo em {@code produto_estoque} é permitido de propósito
@@ -60,15 +64,19 @@ public class PdvVendaService {
 
     private final JdbcClient jdbc;
     private final ConfiguracaoGeralService configuracaoGeralService;
+    private final CaixaService caixaService;
 
-    public PdvVendaService(JdbcClient jdbc, ConfiguracaoGeralService configuracaoGeralService) {
+    public PdvVendaService(JdbcClient jdbc, ConfiguracaoGeralService configuracaoGeralService, CaixaService caixaService) {
         this.jdbc = jdbc;
         this.configuracaoGeralService = configuracaoGeralService;
+        this.caixaService = caixaService;
     }
 
     @Transactional
     public VendaEfetivadaResponse efetivarVenda(Jwt jwt, EfetivarVendaRequest req) {
         long idEmpresa = ((Number) jwt.getClaim("eid")).longValue();
+        long idUsuario = Long.parseLong(jwt.getSubject());
+        caixaService.idCaixaAbertoObrigatorio(idEmpresa, idUsuario);
         long idCliente = validarCliente(req.idCliente());
         long idFuncionario = validarFuncionario(req.idFuncionario());
         List<ItemResolvido> itens = resolverItens(req.itens(), idEmpresa);

@@ -3,6 +3,7 @@ package com.vetor.niner.financeiro.recebimentocrediario;
 import com.vetor.niner.cadastros.cliente.Documentos;
 import com.vetor.niner.comum.web.ConflitoDadosException;
 import com.vetor.niner.financeiro.TipoCarteiraDtos.CategoriaCarteira;
+import com.vetor.niner.financeiro.caixa.CaixaService;
 import com.vetor.niner.financeiro.recebimentocrediario.RecebimentoCrediarioDtos.CarteiraDisponivelResponse;
 import com.vetor.niner.financeiro.recebimentocrediario.RecebimentoCrediarioDtos.ClienteCrediarioResponse;
 import com.vetor.niner.financeiro.recebimentocrediario.RecebimentoCrediarioDtos.EfetivarRecebimentoRequest;
@@ -45,9 +46,11 @@ public class RecebimentoCrediarioService {
             " permite_receber_crediario = true AND categoria_carteira IN ('AVISTA','CARTAO_DEBITO','CARTAO_CREDITO')";
 
     private final JdbcClient jdbc;
+    private final CaixaService caixaService;
 
-    public RecebimentoCrediarioService(JdbcClient jdbc) {
+    public RecebimentoCrediarioService(JdbcClient jdbc, CaixaService caixaService) {
         this.jdbc = jdbc;
+        this.caixaService = caixaService;
     }
 
     @Transactional(readOnly = true)
@@ -171,7 +174,7 @@ public class RecebimentoCrediarioService {
 
         List<Alocacao> alocacoes = alocarPagamentos(parcelas, pagamentosAjustados);
 
-        long idCaixa = idCaixaAberto(idEmpresa, idUsuario);
+        long idCaixa = caixaService.idCaixaAbertoObrigatorio(idEmpresa, idUsuario);
 
         long idLote = jdbc.sql("""
                         INSERT INTO contas_receber_lote (id_tenant, id_cliente, id_empresa, id_usuario, valor_total)
@@ -432,26 +435,6 @@ public class RecebimentoCrediarioService {
             }
         }
         return alocacoes;
-    }
-
-    /** Abre o caixa do usuário na empresa/dia se ainda não houver um aberto (pedido do dono do produto). */
-    private long idCaixaAberto(long idEmpresa, long idUsuario) {
-        return jdbc.sql("""
-                        SELECT id_caixa FROM caixa_mestre
-                        WHERE id_tenant = plataforma.tenant_atual() AND id_empresa = ? AND id_usuario = ?
-                              AND caixa_fechado = false AND data_abertura::date = CURRENT_DATE
-                        ORDER BY data_abertura DESC LIMIT 1
-                        """)
-                .params(idEmpresa, idUsuario)
-                .query(Long.class)
-                .optional()
-                .orElseGet(() -> jdbc.sql("""
-                                INSERT INTO caixa_mestre (id_tenant, id_empresa, id_usuario)
-                                VALUES (plataforma.tenant_atual(), ?, ?)
-                                RETURNING id_caixa
-                                """)
-                        .params(idEmpresa, idUsuario)
-                        .query(Long.class).single());
     }
 
     private record ConfigCrediario(BigDecimal jurosCrediario, int jurosCrediarioDias,

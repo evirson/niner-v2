@@ -124,16 +124,17 @@ CREATE TABLE caixa_mestre (
   id_tenant       smallint      NOT NULL REFERENCES plataforma.tenant (id_tenant),
   id_empresa      integer       NOT NULL,
   id_usuario      integer       NOT NULL,
+  id_carteira     integer       NOT NULL,
+  saldo_inicial   numeric(12,2) NOT NULL DEFAULT 0,
   data_abertura   timestamptz   NOT NULL DEFAULT now(),
   data_fechamento timestamptz,
-  saldo_inicial   numeric(12,2) NOT NULL DEFAULT 0,
-  saldo_final     numeric(12,2) NOT NULL DEFAULT 0,
   caixa_fechado   boolean       NOT NULL DEFAULT false,
   observacoes     text,
   -- base para FK composta (P8) de caixa_detalhe.
-  CONSTRAINT caixa_mestre_id_uk      UNIQUE (id_tenant, id_caixa),
-  CONSTRAINT caixa_mestre_empresa_fk FOREIGN KEY (id_tenant, id_empresa) REFERENCES empresa (id_tenant, id_empresa),
-  CONSTRAINT caixa_mestre_usuario_fk FOREIGN KEY (id_tenant, id_usuario) REFERENCES usuario (id_tenant, id_usuario)
+  CONSTRAINT caixa_mestre_id_uk       UNIQUE (id_tenant, id_caixa),
+  CONSTRAINT caixa_mestre_empresa_fk  FOREIGN KEY (id_tenant, id_empresa)  REFERENCES empresa (id_tenant, id_empresa),
+  CONSTRAINT caixa_mestre_usuario_fk  FOREIGN KEY (id_tenant, id_usuario)  REFERENCES usuario (id_tenant, id_usuario),
+  CONSTRAINT caixa_mestre_carteira_fk FOREIGN KEY (id_tenant, id_carteira) REFERENCES tipo_carteira (id_tenant, id_carteira)
 );
 CREATE INDEX caixa_mestre_id_tenant_ix       ON caixa_mestre (id_tenant);
 CREATE INDEX caixa_mestre_data_abertura_ix   ON caixa_mestre (id_tenant, data_abertura);

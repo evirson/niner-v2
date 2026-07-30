@@ -254,8 +254,8 @@ class PlanoContasCrudTest {
             }
             long idCaixa;
             try (ResultSet rs = st.executeQuery(
-                    "INSERT INTO caixa_mestre (id_tenant, id_empresa, id_usuario) VALUES ("
-                            + idTenant + ", " + idEmpresa + ", " + idUsuario + ") RETURNING id_caixa")) {
+                    "INSERT INTO caixa_mestre (id_tenant, id_empresa, id_usuario, id_carteira) VALUES ("
+                            + idTenant + ", " + idEmpresa + ", " + idUsuario + ", " + idCarteira + ") RETURNING id_caixa")) {
                 rs.next();
                 idCaixa = rs.getLong(1);
             }
