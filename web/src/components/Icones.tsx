@@ -278,6 +278,33 @@ export function IconeHistorico({ size = 18 }: { size?: number }) {
   )
 }
 
+/** Ícone da tela de Conta Corrente (banco/agência) — 2026-07-30. */
+export function IconeContaCorrente({ size = 28 }: { size?: number }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.6} stroke="currentColor" width={size} height={size} aria-hidden="true">
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M2.25 21h19.5M4.5 21V9.75M19.5 21V9.75M2.25 9.75 12 3l9.75 6.75M7.5 21v-5.25a1.5 1.5 0 0 1 1.5-1.5h6a1.5 1.5 0 0 1 1.5 1.5V21"
+      />
+    </svg>
+  )
+}
+
+/** Ícone da tela de Movimentação de Conta Corrente (extrato/lançamento) — 2026-07-30. */
+export function IconeMovimentoContaCorrente({ size = 28 }: { size?: number }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.6} stroke="currentColor" width={size} height={size} aria-hidden="true">
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M6 3.75h9l3 3v13.5a.75.75 0 0 1-.75.75H6a.75.75 0 0 1-.75-.75V4.5A.75.75 0 0 1 6 3.75Z"
+      />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 9h7.5M8.25 12.75h4.5M8.25 16.5h7.5" />
+    </svg>
+  )
+}
+
 export function IconeUltimaPagina({ size = 18 }: { size?: number }) {
   return (
     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" width={size} height={size} aria-hidden="true">

@@ -71,7 +71,11 @@ ter `id_carteira`/`saldo_inicial`, e PDV/Recebimento de Crediário passam a **ex
 aberto (popup obrigatório ao entrar na tela) em vez de operar sem checar ou abrir sozinho em
 silêncio como antes. No mesmo dia, o Recebimento de Crediário ganhou **Comprovante de Pagamento**
 (docs/telas/comprovante-recebimento-crediario.md) — popup automático após efetivar, pronto pra
-impressão térmica 80mm ou PDF (`jsPDF`, dependência nova do `web/`).
+impressão térmica 80mm ou PDF (`jsPDF`, dependência nova do `web/`). Ainda em 2026-07-30, o
+módulo **`financeiro` fechou por completo** com **Conta Corrente** e **Movimentação de Conta
+Corrente** (docs/telas/conta-corrente.md, docs/telas/conta-corrente-movimento.md — última tabela
+do legado a entrar no v1, §3.3.7), incluindo autopreenchimento do nome do banco (`cfg_banco`,
+mesmo padrão do NCM) e os 3 últimos dumps Firebird removidos do `db/`.
 
 | Artefato | Situação |
 |---|---|
@@ -96,6 +100,59 @@ impressão térmica 80mm ou PDF (`jsPDF`, dependência nova do `web/`).
 ---
 
 ## Linha do tempo
+
+### 2026-07-30 — Conta Corrente + Movimentação de Conta Corrente (fecha o módulo `financeiro`)
+
+Sessão seguinte à do Comprovante de Pagamento, mesmo dia. Pedido com o DDL legado colado
+(`db/051_CONTA_CORRENTE.txt`/`052_CONTA_CORRENTE_MOVIMENTO.txt`) e 3 pedidos diretos: criar as
+tabelas, a tela de cadastro da conta e a tela de lançamento.
+
+1. **Decisão fechada via `AskUserQuestion` antes de codar:** `id_conta_corrente` vira PK de
+   negócio (o próprio número da conta, digitado e imutável — mesmo padrão de Plano de Contas),
+   não um id sequencial com o número guardado num campo à parte.
+
+2. **Schema (`V028__financeiro_conta_corrente.sql`, novo arquivo — última tabela do `financeiro`
+   legado a entrar no v1, §3.3.7):** `conta_corrente` (PK de negócio, FK pra `empresa`, `ativo`)
+   e `conta_corrente_movimento` (PK surrogate `localizador`, FK composta pra `conta_corrente` e
+   `cfg_plano_contas`, `credito_debito` reaproveitando o ENUM de V013). Diferente de
+   `caixa_detalhe`: ganhou `atualizado_em` além de `criado_em`, porque esta tela permite editar/
+   excluir um lançamento já gravado (é digitação manual, não efeito colateral automático).
+
+3. **Backend/frontend completos** (`com.vetor.niner.financeiro.contacorrente`): dois CRUDs —
+   Conta Corrente (fallback de inativar quando há movimento vinculado, mesmo padrão de
+   Fornecedor) e Movimentação (CRUD total). Duas telas novas no menu. 20 testes novos.
+
+4. **Pedido separado, mesmo dia: autopreenchimento do nome do banco.** "Na tela de conta
+   corrente, quando entrar com o ID do banco, mostrar o nome do banco" — mesmo padrão do NCM em
+   Produtos. `id_banco` deixou de ser texto livre e virou FK de verdade pra `cfg_banco` (nova,
+   global, sem RLS, seed de 34 bancos brasileiros comuns **dentro da própria migration** — não
+   num script separado como `cfg_produto_ncm`, porque a coluna é `NOT NULL` e a lista precisa
+   existir em qualquer ambiente que rode as migrations, inclusive Testcontainers/CI, não só no
+   banco de produção carregado à mão. Endpoint `GET /api/v1/bancos/{codigo}`, campo somente-
+   leitura ao lado do código no formulário, busca no `onBlur`. +3 testes.
+
+5. **Pedido separado: filtro de Data Inicial/Final na Movimentação.** Aproveitado pra corrigir
+   uma inconsistência de tipo que passou despercebida na implementação original — os parâmetros
+   tinham sido feitos `OffsetDateTime`/`ISO.DATE_TIME`, diferente do padrão já usado em Estorno
+   de Crediário (`LocalDate`/`ISO.DATE`, comparando `::date`). Corrigido pra bater com o padrão
+   do resto do projeto. +1 teste.
+
+6. **Pedido separado: filtros de Empresa e Plano de Contas + reordenação da barra de filtros.**
+   `idEmpresa` filtra via JOIN em `conta_corrente` (a tabela de lançamento não guarda empresa
+   direto). Ordem final pedida explicitamente: Data Inicial → Data Final → Empresa → Plano de
+   Contas → Conta Corrente → Documento → Compensado. +1 teste.
+
+7. **Limpeza:** os 3 últimos dumps legados removidos do git — `db/051_CONTA_CORRENTE.txt`,
+   `db/052_CONTA_CORRENTE_MOVIMENTO.txt` e `db/100_GERADORES.txt` (já migrados/sem uso). `db/`
+   não tem mais nenhum arquivo `.txt` de referência — a conversão do legado Firebird→Postgres
+   está com todas as tabelas do `financeiro` no v1.
+
+**238 testes de backend verdes no total** (era 213 no fim da sessão de Comprovante). Verificado
+ao vivo no navegador em cada rodada de mudança (autopreenchimento de banco, ordem dos filtros).
+
+**Documentação:** pedido explícito "documente tudo, memorize tudo" — `docs/telas/
+conta-corrente.md` e `docs/telas/conta-corrente-movimento.md` (specs novas, formato §5),
+`docs/PROGRESSO.md` (esta entrada).
 
 ### 2026-07-30 — Comprovante de Pagamento de Crediário (impressão térmica 80mm)
 
@@ -2728,7 +2785,7 @@ com autenticação JWT real protegendo o ERP.
 - **Decisões de negócio do SaaS (D1–D10)** — ver `docs/PLANO-DE-NEGOCIO.md`. Abertas: D1 preços, D3 gateway (adiado), D5 nome "Niner", D6 NFS-e da assinatura, D8 dunning, D9 metas, D10 comportamento do estado `INADIMPLENTE`.
 - **ADR-011 — framework do site público (SEO):** Astro × Next, "decidir depois" (não bloqueia o backend).
 
-> ✅ **Q5 — módulo `financeiro` do lojista:** fechada em 2026-07-10 — **fora do v1**; **revisada em 2026-07-16, em duas rodadas (ADR-012)** — crediário (`tipo_carteira`/`moeda`/`contas_receber`) e caixa (`caixa_mestre`/`caixa_detalhe`) via **V025**, depois `contas_pagar` via **V026**. Só `conta_corrente(_movimento)` continua fora. R9 (venda manual) segue sem ligação automática ao financeiro (schema existe, domínio Java ainda não liga venda→recebível). Ver §3.3.7.
+> ✅ **Q5 — módulo `financeiro` do lojista:** fechada em 2026-07-10 — **fora do v1**; **revisada em 2026-07-16, em duas rodadas (ADR-012)** — crediário (`tipo_carteira`/`moeda`/`contas_receber`) e caixa (`caixa_mestre`/`caixa_detalhe`) via **V025**, depois `contas_pagar` via **V026**, e **`conta_corrente`/`conta_corrente_movimento` via V028 (2026-07-30)** — módulo `financeiro` do legado **completo** no v1, nenhuma tabela fora. R9 (venda manual) segue sem ligação automática ao financeiro (schema existe, domínio Java ainda não liga venda→recebível). Ver §3.3.7.
 > ✅ **Q7 — SKU vs EAN:** fechada em 2026-07-10 — **separar** `sku` interno (obrigatório, único, chave do domínio; ex-`codigo_barra`) de `ean` (GTIN real, nullable, único quando preenchido). EAN exigido só na **publicação** em canal, não no cadastro. Nas migrations V013+, as FKs que apontavam para `codigo_barra` passam a referenciar `sku`. Ver §3.3.3.
 > ✅ **Q2 — estratégia de reserva:** fechada em 2026-07-10 — reservar no **`recebido`** (pedido importado já incrementa `reservado`), com expiração configurável por canal que devolve reservas não pagas. Alinha R5 + P1. Vira **ADR-004**; adicionar colunas `reservado`/`minimo` a `produto_estoque` nas migrations de domínio. Ver §3.3.5.
 > ✅ **Q6 — multi-empresa/tenant:** fechada em 2026-07-08 — manter `id_empresa` **e** adicionar `id_tenant` (banco único + RLS; `tenant 1:N empresa`, 1:1 no v1).

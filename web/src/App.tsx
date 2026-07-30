@@ -32,6 +32,10 @@ import TransferenciaDetalhe from './pages/estoque/TransferenciaDetalhe'
 import EstornoRecebimentoCrediario from './pages/recebimentocrediario/EstornoRecebimentoCrediario'
 import RecebimentoCrediario from './pages/recebimentocrediario/RecebimentoCrediario'
 import AberturaCaixa from './pages/caixa/AberturaCaixa'
+import ContaCorrenteLista from './pages/contacorrente/ContaCorrenteLista'
+import ContaCorrenteForm from './pages/contacorrente/ContaCorrenteForm'
+import ContaCorrenteMovimentoLista from './pages/contacorrente/ContaCorrenteMovimentoLista'
+import ContaCorrenteMovimentoForm from './pages/contacorrente/ContaCorrenteMovimentoForm'
 
 export default function App() {
   return (
@@ -79,6 +83,14 @@ export default function App() {
           <Route path="/tipos-carteira/novo" element={<TipoCarteiraForm />} />
           <Route path="/tipos-carteira/:id/visualizar" element={<TipoCarteiraForm somenteLeitura />} />
           <Route path="/tipos-carteira/:id" element={<TipoCarteiraForm />} />
+          <Route path="/contas-corrente" element={<ContaCorrenteLista />} />
+          <Route path="/contas-corrente/nova" element={<ContaCorrenteForm />} />
+          <Route path="/contas-corrente/:id/visualizar" element={<ContaCorrenteForm somenteLeitura />} />
+          <Route path="/contas-corrente/:id" element={<ContaCorrenteForm />} />
+          <Route path="/contas-corrente-movimento" element={<ContaCorrenteMovimentoLista />} />
+          <Route path="/contas-corrente-movimento/novo" element={<ContaCorrenteMovimentoForm />} />
+          <Route path="/contas-corrente-movimento/:id/visualizar" element={<ContaCorrenteMovimentoForm somenteLeitura />} />
+          <Route path="/contas-corrente-movimento/:id" element={<ContaCorrenteMovimentoForm />} />
           <Route path="/fornecedores" element={<FornecedorLista />} />
           <Route path="/fornecedores/novo" element={<FornecedorForm />} />
           <Route element={<RequireAdmin />}>

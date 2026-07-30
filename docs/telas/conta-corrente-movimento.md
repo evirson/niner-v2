@@ -1,0 +1,99 @@
+# Spec: Movimentação de Conta Corrente             Status: Aprovada
+Autor: Claudio Calixto (dono do produto) · Data: 2026-07-30 · Módulo(s): `financeiro` (contacorrente) · Fase: 2 — Crediário/Caixa (Q5/ADR-010)
+
+## Problema
+
+Ver `docs/telas/conta-corrente.md` — a conta em si já existe cadastrada, mas faltava onde
+lançar os movimentos do extrato (depósitos, saques, tarifas, transferências) manualmente.
+
+## Solução proposta
+
+Tela de cadastro completo (lista + form) pro lançamento — **diferente** de `caixa_detalhe`
+(ledger imutável, só leitura depois de gravado): aqui o operador pode editar ou excluir um
+lançamento já gravado, porque é digitação manual sujeita a erro de captura, não um efeito
+colateral automático de outra rotina.
+
+## Regras de negócio
+
+### Campos
+
+`localizador` (PK surrogate), `id_conta_corrente` (FK, obrigatório), `id_plano_contas` (FK,
+obrigatório), `data_movimento` (timestamptz, obrigatório), `numero_documento` (texto,
+obrigatório), `credito_debito` (`C`/`D`, reaproveita o ENUM `credito_debito` já criado em V013 —
+mesmo usado por `caixa_detalhe`), `compensado` (boolean, default false — marca se já foi
+confirmado no extrato do banco), `valor` (`numeric(12,2)`, > 0), `observacao` (texto, opcional).
+
+### CRUD completo, sem fallback de inativar
+
+Nada referencia `conta_corrente_movimento` — exclusão é sempre definitiva, sem checagem de
+vínculo (diferente de Conta Corrente/Plano de Contas, que têm FKs apontando pra elas).
+
+### Filtros da listagem (revisados 2x depois do primeiro corte)
+
+Ordem final na tela, da esquerda pra direita: **Data Inicial → Data Final → Empresa → Plano de
+Contas → Conta Corrente → Documento (busca) → Compensado**. `idEmpresa` filtra via JOIN em
+`conta_corrente` (a tabela de lançamento não tem `id_empresa` direto — vem da conta). Datas são
+`LocalDate` (não `OffsetDateTime` — comparação por `data_movimento::date`), mesmo padrão de
+`docs/telas/estorno-recebimento-crediario.md`.
+
+## Contrato de API
+
+```
+GET    /api/v1/contas-corrente-movimento   listagem paginada
+  ?idContaCorrente=&idEmpresa=&idPlanoContas=&busca=&dataInicial=&dataFinal=&compensado=
+GET    /api/v1/contas-corrente-movimento/{localizador}
+POST   /api/v1/contas-corrente-movimento
+PUT    /api/v1/contas-corrente-movimento/{localizador}
+DELETE /api/v1/contas-corrente-movimento/{localizador}
+```
+
+`compensado`: `TODOS`/`COMPENSADOS`/`PENDENTES`. Todos sob `/api/v1/**` (JWT de tenant, RLS
+ativo — P8), sem restrição de papel.
+
+## Critérios de aceitação (viram testes)
+
+- Dado dados completos, quando cria, então grava com sucesso (descrição da conta e do plano de
+  contas resolvidas por JOIN).
+- Dado `creditoDebito` fora de `C`/`D`, então 400.
+- Dado `valor` zero ou negativo, então 400.
+- Dado uma conta corrente ou plano de contas inexistente, então 400.
+- Dado um lançamento existente, quando atualiza valor/compensado, então grava a mudança.
+- Dado um lançamento existente, quando exclui, então apaga de verdade.
+- Dado filtro por conta corrente e por compensado, então filtra corretamente.
+- Dado filtro por intervalo de data, então só traz lançamentos dentro do intervalo.
+- Dado filtro por empresa e por plano de contas, então filtra corretamente.
+- Dado busca por número de documento, então encontra o lançamento certo.
+- Dado um lançamento de outro tenant, então não aparece na listagem nem pode ser buscado (RLS).
+
+Cobertos por `ContaCorrenteMovimentoCrudTest` (13 testes).
+
+## Ajuda da tela (manual de operação + vídeo) — obrigatório (R22 / §3.7.1)
+
+- **`chave_tela`: `financeiro.contacorrentemovimento.lista`** e
+  **`financeiro.contacorrentemovimento.form`** — ver `web/src/components/AjudaDaTela.tsx`.
+  `url_video`: `NULL` por ora.
+
+## Impacto no banco
+
+`db/migration/V028__financeiro_conta_corrente.sql` — tabela `conta_corrente_movimento`
+(`localizador integer GENERATED ALWAYS AS IDENTITY`, FKs compostas pra `conta_corrente` e
+`cfg_plano_contas`). RLS própria. `criado_em` **e** `atualizado_em` (diferente de
+`caixa_detalhe`, que só tem `criado_em` — ali o lançamento é imutável, aqui não).
+
+## Impacto nas integrações
+
+Nenhum.
+
+## Non-goals desta feature
+
+- **Conciliação bancária automática** — `compensado` é marcado manualmente pelo operador.
+- **Vínculo com Fechamento de Caixa** — são conceitos separados: conta corrente é extrato
+  bancário; caixa é o dinheiro/formas de pagamento físicas da loja.
+
+## Questões abertas
+
+Nenhuma bloqueante.
+
+## Métrica de sucesso
+
+Lançamento de um movimento em menos de 20 segundos.

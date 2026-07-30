@@ -290,6 +290,61 @@ const CONTEUDOS: Record<string, ConteudoAjuda> = {
     ],
     urlVideo: null,
   },
+  'financeiro.contacorrente.lista': {
+    titulo: 'Conta Corrente',
+    objetivo: 'Encontrar e gerenciar as contas bancárias já cadastradas.',
+    passos: [
+      'Use a busca por número da conta ou por descrição para encontrar uma conta.',
+      'Filtre por status (Ativas, Inativas ou Todas).',
+      'Clique no ícone verde para visualizar, no azul para editar, ou no vermelho para excluir.',
+    ],
+    errosComuns: [
+      'Não encontro uma conta: confira o filtro de status — ela pode estar inativa.',
+      'Não consigo excluir: a conta tem lançamentos associados e foi inativada em vez de excluída.',
+    ],
+    urlVideo: null,
+  },
+  'financeiro.contacorrente.form': {
+    titulo: 'Cadastro de conta corrente',
+    objetivo: 'Cadastrar uma conta corrente bancária nova ou editar uma existente.',
+    passos: [
+      'Informe o número da conta (ex.: "001-12345-6") — ele identifica a conta e não pode ser alterado depois.',
+      'Escolha a empresa dona da conta, o banco e a agência.',
+      'A descrição ajuda a reconhecer a conta nas telas de lançamento (ex.: "Conta Movimento Itaú").',
+      'Salve.',
+    ],
+    errosComuns: [
+      'Número já existe: cada conta corrente precisa de um número único.',
+      'Não consigo mudar o número: ele é o identificador da conta — exclua e crie outra, se ainda não estiver em uso.',
+    ],
+    urlVideo: null,
+  },
+  'financeiro.contacorrentemovimento.lista': {
+    titulo: 'Movimentação de Conta Corrente',
+    objetivo: 'Encontrar e gerenciar os lançamentos (extrato manual) de conta corrente.',
+    passos: [
+      'Use a busca por número do documento, ou filtre por conta corrente e por compensado.',
+      'Clique no ícone verde para visualizar, no azul para editar, ou no vermelho para excluir.',
+    ],
+    errosComuns: [
+      'Não encontro um lançamento: confira os filtros de conta corrente e de compensado.',
+    ],
+    urlVideo: null,
+  },
+  'financeiro.contacorrentemovimento.form': {
+    titulo: 'Lançamento de conta corrente',
+    objetivo: 'Lançar um movimento novo no extrato manual, ou editar um já existente.',
+    passos: [
+      'Escolha a conta corrente e o plano de contas do lançamento.',
+      'Informe a data, o número do documento, se é Crédito ou Débito, e o valor.',
+      'Marque "Compensado" quando o lançamento já tiver sido confirmado no extrato do banco.',
+      'Salve.',
+    ],
+    errosComuns: [
+      'Valor zerado: o valor do lançamento precisa ser maior que zero.',
+    ],
+    urlVideo: null,
+  },
   'financeiro.aberturacaixa.tela': {
     titulo: 'Abertura de Caixa',
     objetivo: 'Abrir o caixa do dia antes de vender no PDV ou receber crediário.',

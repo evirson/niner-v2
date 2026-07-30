@@ -1,0 +1,58 @@
+package com.vetor.niner.financeiro.contacorrente;
+
+import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
+
+import java.math.BigDecimal;
+import java.time.OffsetDateTime;
+import java.util.List;
+
+/** DTOs de lançamento (extrato manual) de Conta Corrente (docs/telas/conta-corrente-movimento.md). */
+public final class ContaCorrenteMovimentoDtos {
+
+    private ContaCorrenteMovimentoDtos() {
+    }
+
+    /**
+     * {@code creditoDebito} é texto validado contra "C"/"D" no serviço (o ENUM do banco não tem
+     * acento, mas seguimos o mesmo estilo de {@code PlanoContasDtos.tipoMovimento} — texto, não
+     * enum Java — pra não duplicar o conjunto de valores em dois lugares).
+     */
+    public record ContaCorrenteMovimentoRequest(
+            @NotBlank @Size(max = 20) String idContaCorrente,
+            @NotBlank @Size(max = 20) String idPlanoContas,
+            @NotNull OffsetDateTime dataMovimento,
+            @NotBlank @Size(max = 25) String numeroDocumento,
+            @NotBlank String creditoDebito,
+            Boolean compensado,
+            @NotNull @DecimalMin(value = "0.01") BigDecimal valor,
+            @Size(max = 1000) String observacao) {
+    }
+
+    public record ContaCorrenteMovimentoResponse(
+            long localizador,
+            String idContaCorrente,
+            String descricaoContaCorrente,
+            String idPlanoContas,
+            String descricaoPlanoContas,
+            OffsetDateTime dataMovimento,
+            String numeroDocumento,
+            String creditoDebito,
+            boolean compensado,
+            BigDecimal valor,
+            String observacao,
+            OffsetDateTime criadoEm,
+            OffsetDateTime atualizadoEm) {
+    }
+
+    /** Listagem paginada por número de página — mesmo padrão de {@code cadastros.cliente}. */
+    public record PaginaContaCorrenteMovimento(
+            List<ContaCorrenteMovimentoResponse> itens, int pagina, int tamanhoPagina, long totalItens, int totalPaginas) {
+    }
+
+    /** Sem fallback de inativar — lançamento não tem {@code ativo}, exclusão é sempre definitiva. */
+    public record ExclusaoContaCorrenteMovimentoResponse(String acao) {
+    }
+}
