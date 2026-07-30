@@ -139,14 +139,17 @@ mesma regra e responde **400** se algo tentar passar do limite.
 > se for mexer aqui de novo.
 
 - **Categoria `AVISTA` ou `CARTAO_DEBITO`:** a linha só aceita **1** parcela (400 se pedir mais —
-  dinheiro/PIX/débito não parcelam) — grava **1** linha em `contas_receber` já com
-  `data_recebimento`/`valor_recebido` preenchidos (a venda já foi paga no ato, na própria loja
-  resolvida em `id_empresa_pagamento`).
-- **Categoria `CARTAO_CREDITO` ou `CREDIARIO`:** grava **N** linhas em `contas_receber` **em
-  aberto** (`data_recebimento = null`, `valor_recebido = 0`), mesmo quando N=1 — é assim que o
-  sistema já trata cartão de crédito hoje (`ClienteHistoricoService`, resumo de crediário isola só
-  `categoria_carteira = CREDIARIO`, mas cartão de crédito também nasce em aberto na mesma tabela).
-  Vencimento da parcela N = `data_venda + (prazo_pagamento × N)` dias. Valor de cada parcela =
+  dinheiro/PIX/débito não parcelam).
+- **Só `AVISTA` (dinheiro/PIX) já nasce quitada** em `contas_receber` (`data_recebimento`/
+  `valor_recebido` preenchidos, `id_empresa_pagamento` resolvido) — é dinheiro que já circulou na
+  própria loja. **Revisado 2026-07-30:** `CARTAO_DEBITO` **deixou** desse grupo — mesmo aceitando
+  só 1 parcela, a parcela em `contas_receber` agora nasce **em aberto**, igual cartão de crédito
+  (ver abaixo), porque o prazo de liquidação da bandeira (`tipo_carteira.prazo_pagamento`, D+1
+  típico) ainda não passou; entrar no caixa (ver seção "Caixa" abaixo) não é o mesmo que já estar
+  recebido. Fica pendente até uma futura tela de conciliação de cartões baixar a parcela.
+- **Categoria `CARTAO_DEBITO`, `CARTAO_CREDITO` ou `CREDIARIO`:** grava **N** linhas em
+  `contas_receber` **em aberto** (`data_recebimento = null`, `valor_recebido = 0`), mesmo quando
+  N=1. Vencimento da parcela N = `data_venda + (prazo_pagamento × N)` dias. Valor de cada parcela =
   `valorPago da linha / numeroParcelas`, com o resto do arredondamento absorvido pela **última**
   parcela (a soma das parcelas de uma linha sempre bate exatamente com o `valorPago` dessa linha
   — nunca perde nem sobra centavo). **`contas_receber` grava sempre o `valorPago` literal de cada
@@ -234,15 +237,27 @@ de como funcionava. Grava `produto_movimento_mestre` (`tipo_movimento = 'VENDA'`
 `fn_atualiza_estoque_movimento` (já existente, V019) baixa `produto_estoque` sozinha (nenhuma
 linha tem `CHECK` contra saldo negativo) — nenhuma lógica de baixa de estoque em Java.
 
-### Caixa aberto obrigatório (novo, 2026-07-30)
+### Caixa aberto obrigatório (2026-07-30)
 
 `PdvVendaService.efetivarVenda` chama `CaixaService.idCaixaAbertoObrigatorio(idEmpresa,
 idUsuario)` antes de gravar qualquer coisa — sem caixa aberto hoje pra esse usuário/empresa, 400
 e nada é gravado. Na tela, isso nunca deveria acontecer: `Pdv.tsx` checa `GET /api/v1/caixa/
 status` ao carregar e, se fechado, mostra um popup obrigatório (`AberturaCaixaModal.tsx`) antes
 de liberar qualquer ação — a checagem do serviço é rede de segurança contra chamada direta à
-API. A venda em si continua sem gravar nada em `caixa_detalhe` (fora de escopo). Ver
-`docs/telas/abertura-caixa.md`.
+API. Ver `docs/telas/abertura-caixa.md`.
+
+### Venda lança em `caixa_detalhe` (revisado 2026-07-30 — antes fora de escopo)
+
+Cada linha de pagamento **à vista** (`AVISTA`/`CARTAO_DEBITO`/`CARTAO_CREDITO`) grava um crédito
+em `caixa_detalhe` (`tipo_operacao = 'RECEBIMENTO_VENDA'`, `credito_debito = 'C'`, `valor =
+valorPago` da linha) no momento da venda — antes disso só o Recebimento de Crediário gravava em
+`caixa_detalhe`, então o Fechamento de Caixa (`docs/telas/fechamento-caixa.md`) nunca mostrava
+nenhum total de venda do PDV, só o saldo inicial. **Linha de `CREDIARIO` fica de fora de
+propósito**: é dinheiro que ainda não circulou — só vira lançamento de caixa quando a parcela for
+efetivamente recebida depois (`RecebimentoCrediarioService`), senão contaria em dobro. Isso é
+independente do estado da parcela em `contas_receber` (seção anterior) — débito e crédito já
+entram no caixa na hora, mas a parcela correspondente fica em aberto até a conciliação de
+cartões.
 
 ## Contrato de API
 
@@ -332,6 +347,11 @@ da forma de pagamento com desconto próprio, soma das coberturas não fecha o sa
   batendo exatamente com o total.
 - Dado `numeroParcelas` fora de `[pcMinima, pcMaxima]` do tipo de carteira, então 400.
 - Dado categoria `AVISTA`/`CARTAO_DEBITO` com `numeroParcelas > 1`, então 400.
+- Dado uma venda com linhas de dinheiro, débito e crédito (2026-07-30), quando efetivada, então
+  todas as três lançam crédito em `caixa_detalhe`, mas só a linha de dinheiro nasce quitada em
+  `contas_receber` — débito e crédito ficam em aberto.
+- Dado uma venda com linha de `CREDIARIO`, quando efetivada, então essa linha **não** lança nada
+  em `caixa_detalhe` (só as demais formas de pagamento da mesma venda, se houver).
 - Dado um `idCarteira` ou `idVariacao` que não existe (ou é de outro tenant), então 400.
 - Dado uma venda efetivada com sucesso, então a leitura seguinte de estoque daquela variação já
   reflete a baixa (via trigger existente).

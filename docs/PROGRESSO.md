@@ -75,7 +75,18 @@ impressão térmica 80mm ou PDF (`jsPDF`, dependência nova do `web/`). Ainda em
 módulo **`financeiro` fechou por completo** com **Conta Corrente** e **Movimentação de Conta
 Corrente** (docs/telas/conta-corrente.md, docs/telas/conta-corrente-movimento.md — última tabela
 do legado a entrar no v1, §3.3.7), incluindo autopreenchimento do nome do banco (`cfg_banco`,
-mesmo padrão do NCM) e os 3 últimos dumps Firebird removidos do `db/`.
+mesmo padrão do NCM) e os 3 últimos dumps Firebird removidos do `db/`. Ainda em 2026-07-30, a
+Abertura de Caixa ganhou tela irmã, **Fechamento de Caixa** (docs/telas/fechamento-caixa.md):
+ADMIN fecha o caixa de qualquer usuário, OPERADOR só o próprio, totais recalculados de
+`caixa_detalhe` por tipo de carteira e conferência de dinheiro contado, impressão A4. Verificação
+manual dessa tela expôs que o **PDV nunca lançava em `caixa_detalhe`** (decisão antiga, "fora de
+escopo") — corrigido: toda venda à vista (dinheiro/Pix/débito/crédito) agora lança crédito no
+caixa na hora (crediário fica de fora, só conta quando a parcela for recebida depois); na mesma
+correção, **débito passou a nascer em aberto em `contas_receber`** (antes nascia quitado junto
+com dinheiro) — entra no caixa pro fechamento, mas fica pendente até uma futura conciliação de
+cartões baixar a parcela (ver `docs/telas/pdv.md`). `cfg_banco` ganhou o banco 999 - CAIXA
+CENTRAL. A grade de Tipo de Carteira também passou a manter busca/página/ordenação ao
+visualizar/editar um registro e voltar, em vez de resetar.
 
 | Artefato | Situação |
 |---|---|
@@ -100,6 +111,72 @@ mesmo padrão do NCM) e os 3 últimos dumps Firebird removidos do `db/`.
 ---
 
 ## Linha do tempo
+
+### 2026-07-30 — Fechamento de Caixa + PDV passa a lançar no caixa/contas a receber corretamente
+
+Sessão seguinte à de Conta Corrente, mesmo dia. Pedido direto, em 5 partes: ADMIN fecha o caixa
+de qualquer usuário, OPERADOR só o próprio; pedir a data do movimento; totalizar por tipo de
+carteira em colunas separadas de crédito/débito; opção de impressão com pré-visualização antes de
+imprimir/salvar PDF, em folha A4. Duas decisões fechadas via `AskUserQuestion` antes de codar:
+ADMIN escolhe o usuário por um select + campo de data (não uma lista clicável de caixas abertos);
+a rotina tem etapa de conferência de dinheiro contado (não só mostrar os totais calculados).
+
+1. **Backend (`financeiro.caixa`, estendido):** `caixa_mestre` ganhou `valor_contado_dinheiro
+   numeric(12,2)` e `id_usuario_fechamento integer` (FK composta pra `usuario` — pode ser
+   diferente de `id_usuario` quando ADMIN fecha o caixa de outra pessoa), editado dentro de
+   `V025__financeiro_caixa_crediario.sql` (banco em construção). `CaixaService.
+   buscarParaFechamento()`/`fechar()` novos: totais por tipo de carteira recalculados na hora a
+   partir de `caixa_detalhe` (nunca um campo gravado — `valorEsperado = saldoInicial +
+   totalCredito − totalDebito`), permissão dono-do-caixa-ou-ADMIN (mesmo mecanismo de
+   `ConfiguracaoGeralService`), 409 se o caixa já estiver fechado. `GET`/`POST
+   /api/v1/caixa/fechamento` novos em `CaixaController`.
+
+2. **Frontend:** tela nova `FechamentoCaixa.tsx` (menu ao lado de Abertura de Caixa) — select de
+   usuário só pra ADMIN, campo de data, tabela de totais por carteira, campo "Valor Contado em
+   Dinheiro" com diferença calculada contra a carteira "DINHEIRO", botão "Fechar Caixa".
+   `FechamentoCaixaPreviewModal.tsx` + `web/src/lib/fechamentoCaixaImpressao.ts` — relatório em
+   folha A4 (`@page` nomeada `fechamento-a4`, diferente do `@page` sem nome já usado pelo
+   Comprovante de Crediário, 80mm — os dois nunca imprimem juntos, mas `@page` é global ao
+   documento), mesmo padrão de "linhas de texto monoespaçado reusadas por tela/impressão/PDF" do
+   Comprovante (`jsPDF`, fonte courier). **11 testes novos** (`FechamentoCaixaCrudTest`).
+
+3. **Achado ao testar ao vivo no navegador — "fiz várias vendas e só aparece Dinheiro":** o PDV
+   nunca lançava nada em `caixa_detalhe` (decisão antiga, documentada como "fora de escopo por
+   ora" em `PdvVendaService`) — só o Recebimento de Crediário gravava lá. Corrigido, confirmado
+   com o dono do produto via `AskUserQuestion` antes de codar: cada linha de pagamento **à
+   vista** (`AVISTA`/`CARTAO_DEBITO`/`CARTAO_CREDITO`) de uma venda do PDV agora lança um crédito
+   em `caixa_detalhe` (`tipo_operacao = 'RECEBIMENTO_VENDA'`) no momento da venda; `CREDIARIO`
+   fica de fora de propósito (senão contaria em dobro quando a parcela fosse recebida depois).
+   **1 teste novo** em `PdvCrudTest`.
+
+4. **Segunda pergunta do usuário, mesmo assunto — "cartão de débito também grava em
+   `caixa_detalhe` E em `contas_receber`?"** Resposta revelou uma inconsistência: `CARTAO_DEBITO`
+   nascia **quitado** em `contas_receber` junto com `AVISTA` (mesmo `pagaNaHora()` de antes),
+   mas o usuário esclareceu que débito tem prazo de liquidação de **um dia** — entra no caixa na
+   hora (pro fechamento), mas a parcela em `contas_receber` deve ficar **em aberto**, igual
+   cartão de crédito, até uma futura tela de **conciliação de cartões** (mencionada como próximo
+   passo, ainda não construída) baixar. Corrigido: `pagaNaHora()` (renomeado
+   `aceitaApenasUmaParcela` — só regula "aceita 1 parcela só", não mais "já foi recebido") deixou
+   de controlar `data_recebimento`/`valor_recebido`/`id_empresa_pagamento`; um novo `jaRecebido`
+   local em `gerarEInserirParcelas()` é `true` só pra `AVISTA`. **1 teste novo** em `PdvCrudTest`
+   (dinheiro nasce quitado, débito nasce em aberto, mas os dois já entram no caixa).
+
+5. **Tipo de Carteira — grade mantém ordenação (pedido avulso, mesmo dia):** ao visualizar/
+   editar um tipo de carteira e voltar (Salvar ou Cancelar), a grade resetava pra página 1/
+   ordenação padrão — busca/página/ordenação agora viajam no `state` da navegação (`Link`
+   → form → `navigate` de volta) e são restauradas ao montar `TipoCarteiraLista` de novo; um
+   `useRef` evita que o `useEffect` que zera a página ao mudar filtro dispare também no restauro
+   inicial.
+
+6. **`cfg_banco` ganhou o banco 999 - CAIXA CENTRAL** (pedido avulso) — acrescentado ao seed de
+   `V028__financeiro_conta_corrente.sql` + `INSERT` aplicado no banco de dev (aditivo, nenhum
+   dado apagado).
+
+**251 testes de backend verdes no total** (238 + 13 novos: 11 `FechamentoCaixaCrudTest` + 2
+`PdvCrudTest`). Verificado ao vivo no navegador: venda real dividida em 4 formas de pagamento
+(dinheiro/Pix/débito/crédito) apareceu certa no Fechamento de Caixa; ADMIN consultando o caixa
+fechado de outro usuário via select; ordenação da grade de Tipo de Carteira preservada ao
+salvar/cancelar. Commitado e pushado (`59c46be`).
 
 ### 2026-07-30 — Conta Corrente + Movimentação de Conta Corrente (fecha o módulo `financeiro`)
 

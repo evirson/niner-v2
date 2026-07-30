@@ -75,10 +75,11 @@ saldo zero, na hora de gravar o primeiro lançamento do dia (comportamento antig
 em `docs/telas/recebimento-crediario.md`). A partir de agora, os dois **exigem** um caixa já
 aberto — nenhum dos dois abre nada sozinho.
 
-### Fechamento de caixa — fora de escopo
+### Fechamento de caixa
 
-`caixa_mestre.caixa_fechado`/`data_fechamento` já existem no schema (V025) mas continuam sem
-nenhuma tela ou rotina que os usa — só a abertura foi pedida nesta rodada.
+`caixa_mestre.caixa_fechado`/`data_fechamento` já existiam no schema (V025) mas ficaram sem
+nenhuma tela ou rotina até 2026-07-30, quando a Abertura ganhou uma tela irmã — ver
+`docs/telas/fechamento-caixa.md`.
 
 ## Contrato de API
 
@@ -131,7 +132,9 @@ Nenhum.
 
 ## Non-goals desta feature
 
-- **Fechamento de caixa, sangria/suprimento, conferência de valores** — só abertura.
+- **Fechamento de caixa** — construído em seguida, mesmo dia, ver `docs/telas/fechamento-
+  caixa.md`.
+- **Sangria/suprimento durante o dia** — fora de escopo.
 - **Múltiplas moedas no saldo inicial** — uma linha só (moeda + valor), ver decisão 1 acima.
 - **Histórico/relatório de aberturas** — a tela dedicada só mostra a abertura de hoje.
 
