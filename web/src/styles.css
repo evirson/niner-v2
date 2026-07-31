@@ -6,6 +6,12 @@
   --ink: #20262a; --ink-muted: #5c6660;
   --accent: #1f6f6b; --accent-ink: #ffffff;
   --line: #dee2dc; --line-strong: #b9beb5; --danger: #a63d29; --info: #3060c0; --sucesso: #2f9e44;
+  /* Trincas R,G,B (2026-07-31) — pra `rgba(var(--x-rgb), alpha)` no lugar de `color-mix()`:
+     html2canvas (captura de tela pro PDF do Relatório de Vendas) usa um parser de CSS mais
+     antigo que não entende `color-mix()` nem a serialização `color(srgb ...)` que o Chrome
+     devolve pra ele via `getComputedStyle` — quebra a captura da tela inteira (não só do
+     elemento com a regra), porque a lib clona o documento todo pra manter contexto. */
+  --accent-rgb: 31, 111, 107; --accent-ink-rgb: 255, 255, 255; --danger-rgb: 166, 61, 41;
   --radius: 10px;
 }
 @media (prefers-color-scheme: dark) {
@@ -15,6 +21,7 @@
     --ink: #e7ecec; --ink-muted: #93a19e;
     --accent: #4fbdb2; --accent-ink: #0b1416;
     --line: #2a3538; --line-strong: #4a5457; --danger: #e2836a; --info: #6d9dff; --sucesso: #5cc27a;
+    --accent-rgb: 79, 189, 178; --accent-ink-rgb: 11, 20, 22; --danger-rgb: 226, 131, 106;
   }
 }
 :root[data-theme='light'] {
@@ -22,12 +29,14 @@
   --field-bg: #e4e6e2; --field-text: #20262a; --label-color: #5c6660;
   --ink: #20262a; --ink-muted: #5c6660; --accent: #1f6f6b; --accent-ink: #ffffff;
   --line: #dee2dc; --line-strong: #b9beb5; --danger: #a63d29; --info: #3060c0; --sucesso: #2f9e44;
+  --accent-rgb: 31, 111, 107; --accent-ink-rgb: 255, 255, 255; --danger-rgb: 166, 61, 41;
 }
 :root[data-theme='dark'] {
   --ground: #12181a; --surface: #1a2225; --surface-2: #202a2d;
   --field-bg: #2a3336; --field-text: #e7ecec; --label-color: #93a19e;
   --ink: #e7ecec; --ink-muted: #93a19e; --accent: #4fbdb2; --accent-ink: #0b1416;
   --line: #2a3538; --line-strong: #4a5457; --danger: #e2836a; --info: #6d9dff; --sucesso: #5cc27a;
+  --accent-rgb: 79, 189, 178; --accent-ink-rgb: 11, 20, 22; --danger-rgb: 226, 131, 106;
 }
 
 * { box-sizing: border-box; }
@@ -96,8 +105,8 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
   display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 600;
   background: var(--surface-2); color: var(--ink-muted); border: 1px solid var(--line);
 }
-.badge-trial { background: color-mix(in srgb, var(--accent) 18%, transparent); color: var(--accent); border-color: transparent; }
-.badge-inativo { background: color-mix(in srgb, var(--danger) 16%, transparent); color: var(--danger); border-color: transparent; }
+.badge-trial { background: rgba(var(--accent-rgb), .18); color: var(--accent); border-color: transparent; }
+.badge-inativo { background: rgba(var(--danger-rgb), .16); color: var(--danger); border-color: transparent; }
 
 /* Telas de listagem/formulário (Clientes e demais cadastros) */
 .topbar-tela { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
@@ -116,6 +125,29 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
 
 .filtros-bar { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 16px; }
 .filtros-bar input, .filtros-bar select { width: auto; min-width: 180px; flex: 1; }
+
+/* Seletor de múltiplas empresas (EmpresaMultiSelect.tsx, 2026-07-31). */
+.empresa-multiselect { position: relative; }
+.empresa-multiselect-lista {
+  position: absolute; top: calc(100% + 4px); left: 0; z-index: 20; min-width: 240px;
+  background: var(--surface); border: 1px solid var(--line-strong); border-radius: var(--radius);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, .18); padding: 8px; max-height: 280px; overflow-y: auto;
+}
+.empresa-multiselect-limpar {
+  display: block; width: 100%; text-align: left; background: none; border: 0; padding: 8px;
+  border-radius: 6px; cursor: pointer; color: var(--accent); font-weight: 600; font-size: 14px;
+}
+.empresa-multiselect-limpar:hover { background: var(--surface-2); }
+.empresa-multiselect-item {
+  display: flex; align-items: center; gap: 8px; padding: 8px; margin: 0; border-radius: 6px;
+  font-size: 14px; color: var(--ink); cursor: pointer;
+}
+.empresa-multiselect-item:hover { background: var(--surface-2); }
+/* Especificidade extra (atributo) de propósito — `.filtros-bar input` (2 níveis) empurra
+   `width:auto;min-width:180px;flex:1` pra dentro do popover, já que ele é descendente do
+   `.filtros-bar` da tela que o usa; isso precisa vencer aquele cascade. */
+.empresa-multiselect-item input[type='checkbox'] { width: 16px; min-width: 0; flex: 0 0 auto; }
+.empresa-multiselect-item span { flex: 1; }
 
 .paginacao-bar {
   display: flex; justify-content: space-between; align-items: center; gap: 16px;
@@ -217,7 +249,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
 .ajuda-gatilho svg { width: 26px; height: 26px; }
 .ajuda-gatilho:hover {
   color: var(--accent); border-color: var(--accent);
-  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  background: rgba(var(--accent-rgb), .14);
 }
 .ajuda-gatilho:active { transform: scale(0.94); }
 .modal-overlay {
@@ -357,6 +389,34 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
 }
 
 .modal-lightbox { max-width: 90vw; max-height: 92vh; display: flex; flex-direction: column; }
+
+/* Relatório de Vendas (2026-07-31) — 1ª tela do padrão de relatório: KPIs "como se fossem
+   botões" (blocos grandes, não linhas de tabela), composição do faturamento, grade de
+   gráficos, grid totalizável. Mesmo recipiente visual de `.resumo-crediario-card`. */
+.relatorio-kpis-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+.relatorio-kpi-card {
+  background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--radius);
+  padding: 16px;
+}
+.relatorio-kpi-card p { margin: 4px 0; }
+.relatorio-kpi-valor { font-size: 22px; font-weight: 700; margin: 2px 0 8px; }
+.relatorio-composicao-grid {
+  display: grid; grid-template-columns: repeat(5, 1fr); gap: 16px; margin-top: 16px;
+}
+.relatorio-composicao-card { text-align: center; }
+.relatorio-composicao-card.destaque { background: rgba(var(--accent-rgb), .12); border-color: var(--accent); }
+.relatorio-graficos-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; margin-top: 16px; }
+.relatorio-grafico-card { min-height: 300px; display: flex; flex-direction: column; }
+.relatorio-grafico-card .section-label { margin-bottom: 12px; }
+@media (max-width: 1100px) {
+  .relatorio-kpis-grid { grid-template-columns: repeat(2, 1fr); }
+  .relatorio-composicao-grid { grid-template-columns: repeat(2, 1fr); }
+  .relatorio-graficos-grid { grid-template-columns: 1fr; }
+}
+@media (max-width: 600px) {
+  .relatorio-kpis-grid { grid-template-columns: 1fr; }
+  .relatorio-composicao-grid { grid-template-columns: 1fr; }
+}
 .lightbox-topo { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
 .lightbox-corpo { display: flex; align-items: center; gap: 12px; min-height: 0; flex: 1; }
 .lightbox-nav { flex: 0 0 auto; }
@@ -396,7 +456,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
 }
 .app-nav-toggle:hover { background: var(--surface-2); color: var(--ink); }
 .app-nav-recolhido a, .app-nav-recolhido .app-nav-toggle { justify-content: center; padding: 9px; }
-.app-nav a.active { background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--accent); }
+.app-nav a.active { background: rgba(var(--accent-rgb), .16); color: var(--accent); }
 .app-main { flex: 1; min-height: 0; overflow-y: auto; padding: 28px; max-width: 1600px; }
 
 /* Menu agrupado (2026-07-31) — cabeçalho de grupo é um botão que só alterna aberto/fechado
@@ -547,7 +607,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
   border-radius: 5px; padding: 1px 6px; background: var(--surface);
 }
 .pdv-tecla:hover { border-color: var(--accent); }
-.pdv-tecla:active, .pdv-tecla.pdv-ativa { transform: scale(0.97); background: color-mix(in srgb, var(--accent) 16%, var(--surface-2)); }
+.pdv-tecla:active, .pdv-tecla.pdv-ativa { transform: scale(0.97); background: rgba(var(--accent-rgb), .16); }
 
 .pdv-tecla-venda {
   flex-shrink: 0; margin-top: auto; min-height: 52px; display: flex; align-items: center;
@@ -556,7 +616,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
   transition: filter .12s, transform .08s;
 }
 .pdv-tecla-venda .pdv-kbd {
-  font-size: 11px; font-weight: 700; border: 1px solid color-mix(in srgb, var(--accent-ink) 45%, transparent);
+  font-size: 11px; font-weight: 700; border: 1px solid rgba(var(--accent-ink-rgb), .45);
   border-radius: 5px; padding: 1px 7px;
 }
 .pdv-tecla-venda:hover { filter: brightness(1.06); }
@@ -579,7 +639,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
 }
 .pdv-ledger-linha:last-child { border-bottom: 0; }
 .pdv-ledger-linha:hover { background: var(--surface-2); }
-.pdv-ledger-linha.pdv-selecionada { background: color-mix(in srgb, var(--accent) 14%, transparent); }
+.pdv-ledger-linha.pdv-selecionada { background: rgba(var(--accent-rgb), .14); }
 .pdv-ledger-linha .pdv-cod { font-variant-numeric: tabular-nums; color: var(--ink-muted); font-size: 12.5px; }
 .pdv-ledger-linha .pdv-num { text-align: right; font-variant-numeric: tabular-nums; }
 .pdv-ledger-vazio { padding: 40px 16px; text-align: center; color: var(--ink-muted); font-size: 13.5px; }
@@ -592,7 +652,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
 .pdv-caixa-total .pdv-rotulo { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--label-color); }
 .pdv-caixa-total .pdv-valor { font-size: 18px; font-weight: 700; font-variant-numeric: tabular-nums; }
 .pdv-caixa-total.pdv-total { background: var(--accent); border-color: var(--accent); }
-.pdv-caixa-total.pdv-total .pdv-rotulo { color: color-mix(in srgb, var(--accent-ink) 75%, transparent); }
+.pdv-caixa-total.pdv-total .pdv-rotulo { color: rgba(var(--accent-ink-rgb), .75); }
 .pdv-caixa-total.pdv-total .pdv-valor { color: var(--accent-ink); font-size: 26px; }
 
 .pdv-flash {
@@ -660,7 +720,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
 .pdv-categorias-coluna { flex: 1; min-width: 150px; display: flex; flex-direction: column; gap: 10px; }
 .pdv-botao-categoria-coluna { flex: 1; font-size: 14px; font-weight: 700; }
 .pdv-botao-categoria-coluna.pdv-botao-categoria-ativa {
-  border-color: var(--accent); background: color-mix(in srgb, var(--accent) 16%, var(--surface-2));
+  border-color: var(--accent); background: rgba(var(--accent-rgb), .16);
 }
 
 .pdv-area-pagamentos {

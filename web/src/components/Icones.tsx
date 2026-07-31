@@ -479,6 +479,15 @@ export function IconeCanais({ size = 22 }: { size?: number }) {
 }
 
 /** Duplo chevron — botão de recolher/expandir o menu lateral. */
+/** Gráfico de barras — item "Relatórios" do menu lateral e telas de relatório. */
+export function IconeRelatorio({ size = 28 }: { size?: number }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.6} stroke="currentColor" width={size} height={size} aria-hidden="true">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M4 20.25h16.5M6 20.25v-6M12 20.25V9M18 20.25v-15" />
+    </svg>
+  )
+}
+
 export function IconeRecolherMenu({ size = 18, recolhido = false }: { size?: number; recolhido?: boolean }) {
   return (
     <svg

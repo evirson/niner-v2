@@ -23,6 +23,7 @@ import {
   IconeProduto,
   IconeRecebimentoCrediario,
   IconeRecolherMenu,
+  IconeRelatorio,
   IconeSetaBaixo,
   IconeSetaCima,
   IconeTipoCarteira,
@@ -131,8 +132,8 @@ const MENU: NavGrupo[] = [
   {
     chave: 'relatorios',
     label: 'Relatórios',
-    icone: IconePainel,
-    itens: [],
+    icone: IconeRelatorio,
+    itens: [{ to: '/relatorio-vendas', label: 'Relatório de Vendas', icone: IconeRelatorio }],
   },
   {
     chave: 'implementacoes-futuras',
@@ -169,7 +170,7 @@ function carregarGruposAbertos(): Record<string, boolean> {
 }
 
 /** Remove itens/grupos exclusivos de ADMIN; grupos que ficam sem nenhum item visível somem
- * inteiros (exceto "Relatórios", vazio por design — placeholder até a tela existir). */
+ * inteiros. */
 function filtrarPorPapel(nos: NavNode[], isAdmin: boolean): NavNode[] {
   const resultado: NavNode[] = []
   for (const n of nos) {
@@ -259,7 +260,9 @@ export default function Layout() {
   const navigate = useNavigate()
   const { data: eu } = useEu()
   const isAdmin = eu?.usuario.papel === 'ADMIN'
-  const menu = filtrarPorPapel(MENU, isAdmin)
+  // MENU só tem NavGrupo no topo, e filtrarPorPapel preserva isso — o cast evita o TS2339
+  // pré-existente (grupo.chave) que apareceria por filtrarPorPapel devolver NavNode[] genérico.
+  const menu = filtrarPorPapel(MENU, isAdmin) as NavGrupo[]
 
   const [recolhido, setRecolhido] = useState(() => localStorage.getItem(CHAVE_RECOLHIDO) === '1')
   // "Espiada" ao passar o mouse/focar (2026-07-31, pedido do dono do produto): com o menu

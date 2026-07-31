@@ -39,6 +39,7 @@ import ContaCorrenteLista from './pages/contacorrente/ContaCorrenteLista'
 import ContaCorrenteForm from './pages/contacorrente/ContaCorrenteForm'
 import ContaCorrenteMovimentoLista from './pages/contacorrente/ContaCorrenteMovimentoLista'
 import ContaCorrenteMovimentoForm from './pages/contacorrente/ContaCorrenteMovimentoForm'
+import RelatorioVendas from './pages/relatorios/RelatorioVendas'
 
 export default function App() {
   return (
@@ -49,6 +50,7 @@ export default function App() {
           <Route path="/" element={<Dashboard />} />
           <Route path="/pdv" element={<Pdv />} />
           <Route path="/pesquisa-vendas" element={<PesquisaVendas />} />
+          <Route path="/relatorio-vendas" element={<RelatorioVendas />} />
           <Route path="/abertura-caixa" element={<AberturaCaixa />} />
           <Route path="/fechamento-caixa" element={<FechamentoCaixa />} />
           <Route path="/recebimento-crediario" element={<RecebimentoCrediario />} />

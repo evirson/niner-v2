@@ -435,6 +435,23 @@ const CONTEUDOS: Record<string, ConteudoAjuda> = {
     ],
     urlVideo: null,
   },
+  'relatorios.vendas.tela': {
+    titulo: 'Relatório de Vendas',
+    objetivo: 'Acompanhar o desempenho de vendas do período: KPIs, composição do faturamento, gráficos e um totalizador com drill-down.',
+    passos: [
+      'Escolha o período (presets ou "Personalizado"), a(s) empresa(s) — admin — e, opcionalmente, um vendedor.',
+      'Os cards no topo mostram ticket médio, % médio de desconto, devoluções e itens vendidos do período filtrado.',
+      '"Composição do Faturamento" mostra o caminho do valor bruto até a venda líquida.',
+      'Os 7 gráficos cobrem vendas por dia, top 10 de marcas/vendedores/clientes, formas de pagamento, por hora e por dia da semana.',
+      'Escolha "Totalizar Por" para agrupar a grid final (por data, cliente, vendedor, operador de caixa ou empresa) — clique numa linha agrupada para ver as vendas daquele grupo.',
+      '"Não Totalizar" já mostra a lista de vendas do período diretamente, sem agrupar.',
+    ],
+    errosComuns: [
+      'Devoluções sempre aparecem zeradas: o módulo de devolução ainda não existe no sistema.',
+      'Operadores sempre veem só a própria empresa da sessão, mesmo com mais de uma selecionada.',
+    ],
+    urlVideo: null,
+  },
 }
 
 export default function AjudaDaTela({ chaveTela }: { chaveTela: string }) {

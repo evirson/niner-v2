@@ -99,7 +99,16 @@ No mesmo dia, o **Fechamento de Caixa foi revisado**
 pra uma contagem **"às cegas"** por tipo de carteira (não só dinheiro) — só fecha se todas
 baterem, com tela de divergência e drill-down analítico quando não bate (ver linha do tempo).
 E o **menu lateral** ganhou expandir ao passar o mouse/focar quando está recolhido, recolhendo
-sozinho ao sair.
+sozinho ao sair. Ainda em 2026-07-31, o grupo de menu **Relatórios** (placeholder vazio desde a
+reorganização do menu) ganhou sua **primeira tela**, **Relatório de Vendas**
+(`relatorios.vendas`, docs/telas/relatorio-vendas.md) — define o padrão de tela de relatório do
+projeto (filtros → KPIs → composição do faturamento → 7 gráficos Recharts, nova dependência do
+`web/` → grid totalizável com drill-down em popup); qualquer papel, empresa em multi-select para
+ADMIN (`EmpresaMultiSelect.tsx`, 1º componente do tipo no projeto). Ganhou também um botão
+**"Gerar PDF"** que captura a própria tela como imagem (`html2canvas`, mais uma dependência nova)
+em vez de reconstruir os dados como texto — por causa disso, `color-mix()` foi **eliminado do
+`web/src/styles.css` inteiro** (trocado por `rgba()` com trincas RGB novas), incompatível com o
+parser de CSS do `html2canvas`.
 
 | Artefato | Situação |
 |---|---|
@@ -124,6 +133,93 @@ sozinho ao sair.
 ---
 
 ## Linha do tempo
+
+### 2026-07-31 — Relatório de Vendas (1ª tela do grupo Relatórios + padrão de tela de relatório)
+
+Pedido do dono do produto com o desenho da tela quase completo (filtros, KPIs, gráficos e grid
+já especificados por ele) — usado também para **definir o padrão de tela de relatório** que as
+próximas telas do grupo Relatórios (vazio até agora) vão reaproveitar. Planejado em modo de
+plano (poucas perguntas fechadas de decisão de dado, ver item 2) antes de implementar.
+
+1. **Decisões de modelagem confirmadas com o dono do produto antes de codar:**
+   - **Recharts** vira a 1ª biblioteca de gráfico do projeto (nova dependência do `web/`, mesmo
+     espírito de ter adicionado `jspdf` pro comprovante de crediário) — nenhuma existia até aqui.
+   - **"Operador de Caixa"** não existe como campo direto em `venda` — resolvido via
+     `venda → caixa_detalhe (RECEBIMENTO_VENDA) → caixa_mestre.id_usuario`.
+   - **"Vendedor" é 1 por venda, não rateado por item** — na prática já é assim, porque o PDV só
+     aceita um `idFuncionario` por venda inteira (campo único na efetivação, não por item).
+   - **Top 10 (Marcas/Vendedores/Clientes)** ranqueados por valor líquido, não por quantidade.
+   - **Gráfico "Recebimentos por Tipo de Carteira"** usa a forma de pagamento *da venda* dentro
+     do período (não a data de recebimento) — crediário entra mesmo sem ter sido recebido ainda.
+   - **Empresa em multi-select** pra ADMIN (`EmpresaMultiSelect.tsx`, novo componente, 1º do tipo
+     no projeto); OPERADOR fixo na própria empresa, mesmo padrão de sempre.
+2. **Backend** (`com.vetor.niner.vendas.relatorio`, novo pacote) — um dataset-base de 1 linha por
+   venda (não cancelada, dentro do filtro), montado numa query única agrupada por venda (LEFT
+   JOIN LATERAL pro operador de caixa, pra não multiplicar linha de item quando há split-tender);
+   todo o resto (KPIs, composição do faturamento, `porDia`/`porHora`/`porDiaSemana`,
+   Top 10 Vendedores/Clientes, totalizador) calculado em Java a partir dessa lista. Top 10 Marcas
+   e "por carteira" têm granularidade diferente (item do ledger e `contas_receber`,
+   respectivamente) — duas queries agregadas à parte, reaplicando os mesmos filtros.
+   `GET /api/v1/relatorios/vendas` (relatório completo) + `GET /api/v1/relatorios/vendas/detalhe`
+   (drill-down de um grupo do totalizador, reaplica filtros + a chave do grupo clicado).
+3. **Frontend** (`web/src/pages/relatorios/RelatorioVendas.tsx`) — painel de filtros (período com
+   6 presets calculados no front, mesmo precedente de `primeiroDiaDoMesISO()` da Pesquisa de
+   Vendas; `EmpresaMultiSelect`; lookup de vendedor já existente; totalizador), 4 cards de KPI
+   ("como se fossem botões", só informativos nesta v1), 5 blocos de composição do faturamento, 7
+   gráficos Recharts (1 linha + 4 barras horizontais + 2 colunas, todos de série única — cor
+   `--accent` do design system, sem legenda) e a grid final: `NAO_TOTALIZAR` já mostra a lista
+   analítica de vendas direto; qualquer outro totalizador agrupa e abre
+   `DrilldownTotalizadorModal.tsx` (popup, mesmo padrão de `DetalheVendaModal.tsx`) ao clicar
+   numa linha. Menu (`Layout.tsx`, grupo `relatorios` deixa de ser placeholder vazio), rota, ícone
+   novo (`IconeRelatorio`) e ajuda contextual (`AjudaDaTela`, chave `relatorios.vendas.tela`)
+   ligados.
+4. **Bug pré-existente encontrado e corrigido de passagem** (não relacionado à feature): `Layout.tsx`
+   tinha um erro de tipagem (`grupo.chave` em `NavNode` genérico) que travava `tsc -b` desde antes
+   desta sessão — corrigido com um cast de 1 linha (`as NavGrupo[]`), já que o arquivo estava
+   sendo editado mesmo. Um segundo erro pré-existente e não relacionado, em `PlanoContasModal.tsx`
+   (parece ligado à revisão do Plano de Contas Gerencial do mesmo dia), foi deixado como está —
+   não bloqueia `vite build` (bundling), só `tsc -b` (checagem de tipos).
+5. **Verificação:** 8 testes novos (`RelatorioVendasCrudTest`, Testcontainers) — KPIs/composição
+   batem com soma manual de um cenário conhecido, venda cancelada fora de tudo, OPERADOR não
+   força outra empresa, `NAO_TOTALIZAR` vs `VENDEDOR` (agrupamento + drill-down), Top 10 Marcas
+   por item mesmo em venda multi-marca, período > 400 dias, RLS entre tenants — suíte completa do
+   `api/` sem regressão. `tsc -b`/`vite build` do `web/` verdes (só o erro pré-existente do item 4
+   não relacionado ficou). **Testado ao vivo no Chrome** (login real contra o tenant de teste,
+   `docker compose up -d --build api`): todos os filtros, os 7 gráficos com dado real, totalizador
+   agrupado + drill-down e o multi-select de empresa exercitados na tela rodando de verdade — um
+   bug real de CSS achado nesse teste (o `EmpresaMultiSelect` herdava `width:100%`/`min-width:180px`
+   de `.filtros-bar input`, por estar aninhado dentro do mesmo container da tela que o usa) e
+   corrigido com um seletor mais específico.
+6. **Ajuste em seguida — "Recebimentos por Tipo de Carteira" separado por categoria.** O gráfico
+   agrupava só por `nome_carteira`, então "HIPER" débito/crédito (mesma bandeira, categorias
+   diferentes — já resolvido uma vez no Fechamento de Caixa) somavam numa barra só. Backend passou
+   a agrupar por `(nome_carteira, categoria_carteira)` (`LinhaCarteiraGrafico`, campos separados,
+   não um rótulo pronto). Rótulo no front (`rotulosPorCarteira()`, `lib/relatorioVendas.ts`):
+   cartão (`CARTAO_DEBITO`/`CARTAO_CREDITO`) **sempre** mostra "NOME Débito"/"NOME Crédito" — nem
+   só quando o nome se repete (1ª tentativa errada: escondia "VISA Crédito" quando só existe uma
+   categoria daquela bandeira) — à vista/crediário só o nome, sem categoria.
+7. **Botão "Gerar PDF", em duas rodadas.** 1ª versão gerava tabela de texto monoespaçada (mesmo
+   padrão do Fechamento de Caixa) — **rejeitada pelo dono do produto**: "quero que no pdf, gere
+   como está na tela, com os gráficos". Reescrita como **captura visual** da própria tela
+   (`web/src/lib/relatorioVendasCaptura.ts`): `html2canvas` rasteriza o bloco de KPIs/composição/
+   gráficos/grid (JPEG 92%, não PNG — em `scale:2` o PNG passava de 30-40MB) numa imagem única;
+   `jsPDF` (A4 paisagem) recorta em páginas. **Achado sério:** `html2canvas` clona o `<html>`
+   inteiro pra manter contexto, não só o elemento passado — qualquer CSS incompatível em
+   **qualquer lugar da página** (não só na área capturada) derruba a captura inteira. O projeto
+   usava `color-mix()` em ~9 regras (badges, menu ativo, telas de PDV); o Chrome devolve o valor
+   computado via `getComputedStyle` como `color(srgb ...)` (CSS Color 4), que o parser mais antigo
+   do `html2canvas` não entende. **`color-mix()` eliminado do projeto inteiro** (`styles.css`) —
+   trocado por `rgba(var(--accent-rgb), alfa)` com trincas R,G,B novas (`--accent-rgb`,
+   `--accent-ink-rgb`, `--danger-rgb`) nos 4 blocos de tema claro/escuro; mais `ignoreElements`
+   no `html2canvas()` pulando cabeçalho/menu/modais por padrão, defesa extra pro futuro. `recharts`
+   e `html2canvas` (novas dependências) verificados juntos: PDF final validado abrindo o arquivo
+   baixado de verdade (não só checando ausência de erro) — 2 páginas A4 paisagem, ~700KB (contra
+   ~38MB antes do ajuste JPEG), todos os 7 gráficos desenhados de verdade (não texto). **Revisão
+   em seguida:** a grid de vendas passou a capturar separada dos gráficos (dois refs, dois
+   `html2canvas` independentes) e sempre começa numa página nova (`doc.addPage()` forçado entre
+   os blocos); a grid ganhou `<tfoot>` de totais (na tela também, não só no PDF); toda página do
+   PDF ganhou "Página X de Y" no rodapé (`doc.getNumberOfPages()` + overlay de texto depois que
+   as páginas já existem).
 
 ### 2026-07-31 — Menu lateral agrupado + revisão de UX no PDV/Cancelamento de Venda
 
