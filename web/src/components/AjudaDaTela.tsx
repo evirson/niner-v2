@@ -361,17 +361,48 @@ const CONTEUDOS: Record<string, ConteudoAjuda> = {
   },
   'financeiro.fechamentocaixa.tela': {
     titulo: 'Fechamento de Caixa',
-    objetivo: 'Encerrar o caixa do dia, conferindo o dinheiro contado contra o total do sistema.',
+    objetivo: 'Encerrar o caixa do dia com uma contagem "às cegas" de cada tipo de carteira que teve movimento.',
     passos: [
       'Administradores escolhem o usuário e a data do caixa a fechar; operadores só veem/fecham o próprio caixa, sem o campo de usuário.',
-      'A tela mostra os totais por tipo de carteira, em colunas separadas de crédito e débito, recalculados a partir dos lançamentos do caixa.',
-      'Informe quanto foi contado fisicamente em dinheiro — a tela mostra a diferença contra o valor esperado da carteira "Dinheiro".',
-      'Confirme em "Fechar Caixa". Depois de fechado, os valores ficam somente leitura.',
-      'Use "Visualizar Impressão" a qualquer momento para conferir o relatório em folha A4 antes de imprimir ou salvar em PDF.',
+      'A tela mostra o nome de cada carteira com movimento no dia, sem revelar o valor esperado — informe quanto foi contado fisicamente em cada uma.',
+      'Confirme em "Fechar Caixa". Se todas baterem, o caixa fecha e a impressão fica disponível.',
+      'Se alguma não bater, a tela mostra a diferença por carteira — clique numa carteira pra conferir lançamento a lançamento o que compõe o valor esperado, corrija e tente de novo.',
+      'Use "Visualizar Impressão" depois de fechado pra conferir o relatório em folha A4 antes de imprimir ou salvar em PDF.',
     ],
     errosComuns: [
       'Um caixa já fechado não pode ser fechado de novo — a tela responde com um aviso de conflito.',
       'Operadores que tentam informar outro usuário ou fechar o caixa de outra pessoa recebem acesso negado — só administradores podem.',
+      'Faltar o valor contado de alguma carteira com movimento impede o fechamento.',
+    ],
+    urlVideo: null,
+  },
+  'vendas.pesquisavendas.tela': {
+    titulo: 'Pesquisa de Vendas',
+    objetivo: 'Localizar uma venda já registrada e ver, numa única tela, itens, movimentação de caixa e parcelas de crediário.',
+    passos: [
+      'Busque pelo número da venda (ignora os demais filtros) ou por um intervalo de datas — empresa (admin), situação, cliente e vendedor são filtros opcionais.',
+      'Clique numa linha do resultado para carregar o detalhamento logo abaixo: dados da venda, produtos vendidos, movimentação de caixa e parcelas de crediário.',
+      'Vendas canceladas aparecem sinalizadas na grid, mas não entram na soma do rodapé.',
+      'Esta tela é só de consulta — para cancelar uma venda, use Cancelamento de Venda.',
+    ],
+    errosComuns: [
+      'Operadores sempre pesquisam só a própria empresa da sessão, mesmo que tentem informar outra.',
+      'Sem número da venda, é preciso informar data inicial e final, com no máximo 365 dias de intervalo.',
+    ],
+    urlVideo: null,
+  },
+  'vendas.cancelamentovenda.lista': {
+    titulo: 'Cancelamento de Venda',
+    objetivo: 'Localizar uma venda finalizada e reverter completamente estoque, caixa e contas a receber.',
+    passos: [
+      'Busque pelo número da venda (ignora os demais filtros) ou por um intervalo de datas — empresa, cliente e vendedor são filtros opcionais.',
+      'Clique no ícone de visualizar na linha da venda para ver o resumo, os itens e as formas de pagamento antes de decidir.',
+      'Informe o motivo do cancelamento e confirme em "Sim, Cancelar Venda" — o estoque volta, os lançamentos de caixa e as parcelas em aberto são removidos, tudo numa única operação.',
+    ],
+    errosComuns: [
+      'Venda de crediário com alguma parcela já recebida nunca pode ser cancelada, nem por administrador — a tela mostra quais parcelas foram recebidas e orienta a estornar o recebimento primeiro.',
+      'É preciso ter o caixa de hoje aberto para cancelar — o sistema não sabe reabrir o caixa do dia original da venda.',
+      'Uma venda já cancelada não pode ser cancelada de novo.',
     ],
     urlVideo: null,
   },

@@ -43,6 +43,17 @@ export interface LinhaTotalCarteira {
   valorEsperado: number
 }
 
+/** Uma linha de conferência: `diferenca = valorContado - valorEsperado`. Só existe (fora da
+ *  resposta imediata de `fecharCaixa`) quando o caixa já está fechado de verdade — gravada em
+ *  `caixa_fechamento_conferencia` só no fechamento com sucesso (2026-07-30, fechamento "às cegas"). */
+export interface LinhaConferencia {
+  idCarteira: number
+  nomeCarteira: string
+  valorEsperado: number
+  valorContado: number
+  diferenca: number
+}
+
 export interface FechamentoCaixa {
   idCaixa: number
   idUsuario: number
@@ -52,12 +63,33 @@ export interface FechamentoCaixa {
   dataFechamento: string | null
   fechado: boolean
   linhas: LinhaTotalCarteira[]
-  valorContadoDinheiro: number | null
+  conferencia: LinhaConferencia[]
+}
+
+export interface ValorContado {
+  idCarteira: number
+  valorContado: number
 }
 
 export interface FecharCaixaRequest {
   idCaixa: number
-  valorContadoDinheiro: number
+  valoresContados: ValorContado[]
+}
+
+/** `fechado = false` quando alguma carteira não bateu — o caixa continua aberto e `linhas` traz
+ *  a divergência de cada carteira (esperado/contado/diferença), sem nada gravado. */
+export interface ResultadoFechamento {
+  idCaixa: number
+  fechado: boolean
+  linhas: LinhaConferencia[]
+}
+
+export interface LancamentoCarteira {
+  dataHora: string
+  tipoOperacao: string
+  creditoDebito: 'C' | 'D'
+  valor: number
+  origem: string
 }
 
 /** `idUsuario` omitido busca o próprio caixa do usuário logado — só ADMIN pode informar outro
@@ -69,6 +101,14 @@ export function buscarFechamentoCaixa(dataIso: string, idUsuario?: number): Prom
   return api<FechamentoCaixa>(`/api/v1/caixa/fechamento?${params.toString()}`)
 }
 
-export function fecharCaixa(payload: FecharCaixaRequest): Promise<FechamentoCaixa> {
-  return api<FechamentoCaixa>('/api/v1/caixa/fechamento', { method: 'POST', body: JSON.stringify(payload) })
+/** "Às cegas" (2026-07-30): manda o valor contado de cada carteira com movimento no dia; só
+ *  fecha de fato quando todas batem — senão devolve a divergência sem fechar nada. */
+export function fecharCaixa(payload: FecharCaixaRequest): Promise<ResultadoFechamento> {
+  return api<ResultadoFechamento>('/api/v1/caixa/fechamento', { method: 'POST', body: JSON.stringify(payload) })
+}
+
+/** Drill-down analítico de uma carteira dentro do caixa — pra conferir lançamento a lançamento
+ *  quando a conferência não bate. */
+export function listarLancamentosDaCarteira(idCaixa: number, idCarteira: number): Promise<LancamentoCarteira[]> {
+  return api<LancamentoCarteira[]>(`/api/v1/caixa/fechamento/${idCaixa}/carteiras/${idCarteira}/lancamentos`)
 }

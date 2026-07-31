@@ -1,6 +1,8 @@
 package com.vetor.niner.financeiro.caixa;
 
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 
 import java.math.BigDecimal;
@@ -51,11 +53,36 @@ public final class CaixaDtos {
             OffsetDateTime dataFechamento,
             boolean fechado,
             List<LinhaTotalCarteiraResponse> linhas,
-            BigDecimal valorContadoDinheiro) {
+            List<LinhaConferenciaResponse> conferencia) {
+    }
+
+    /** Valor contado pelo operador para UMA carteira — o fechamento "às cegas" (2026-07-30)
+     *  pede um valor por carteira com movimento no dia, não só dinheiro. */
+    public record ValorContadoRequest(
+            @NotNull Long idCarteira,
+            @NotNull @DecimalMin(value = "0") BigDecimal valorContado) {
     }
 
     public record FecharCaixaRequest(
             @NotNull Long idCaixa,
-            @NotNull @DecimalMin(value = "0") BigDecimal valorContadoDinheiro) {
+            @NotEmpty List<@Valid ValorContadoRequest> valoresContados) {
+    }
+
+    /** Uma linha de conferência: {@code diferenca = valorContado - valorEsperado}. Só é
+     *  persistida (`caixa_fechamento_conferencia`) quando TODAS as linhas fecham em zero —
+     *  senão o caixa continua aberto e a tela mostra a divergência sem gravar nada. */
+    public record LinhaConferenciaResponse(
+            long idCarteira, String nomeCarteira, BigDecimal valorEsperado, BigDecimal valorContado, BigDecimal diferenca) {
+    }
+
+    /** {@code fechado = false} quando alguma carteira não bateu — o caixa continua aberto e
+     *  {@code linhas} traz a divergência de cada carteira pra tela mostrar. */
+    public record ResultadoFechamentoResponse(long idCaixa, boolean fechado, List<LinhaConferenciaResponse> linhas) {
+    }
+
+    /** Lançamento analítico de uma carteira dentro do caixa — drill-down pedido na divergência,
+     *  pra o operador conferir lançamento a lançamento o que compõe o valor esperado. */
+    public record LancamentoCarteiraResponse(
+            OffsetDateTime dataHora, String tipoOperacao, String creditoDebito, BigDecimal valor, String origem) {
     }
 }

@@ -134,7 +134,7 @@ class ContaCorrenteCrudTest {
         mvc.perform(post("/api/v1/contas-corrente").header("Authorization", "Bearer " + token)
                         .contentType(APPLICATION_JSON)
                         .content("""
-                                {"idContaCorrente":"333-banco","idEmpresa":%d,"idBanco":"999","idAgencia":"0001",
+                                {"idContaCorrente":"333-banco","idEmpresa":%d,"idBanco":"888","idAgencia":"0001",
                                  "descricao":"conta banco invalido","ativo":true}
                                 """.formatted(idEmpresa)))
                 .andExpect(status().isBadRequest());

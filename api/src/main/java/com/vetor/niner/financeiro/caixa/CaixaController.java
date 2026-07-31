@@ -5,6 +5,8 @@ import com.vetor.niner.financeiro.caixa.CaixaDtos.CaixaStatusResponse;
 import com.vetor.niner.financeiro.caixa.CaixaDtos.CarteiraParaAberturaResponse;
 import com.vetor.niner.financeiro.caixa.CaixaDtos.FecharCaixaRequest;
 import com.vetor.niner.financeiro.caixa.CaixaDtos.FechamentoCaixaResponse;
+import com.vetor.niner.financeiro.caixa.CaixaDtos.LancamentoCarteiraResponse;
+import com.vetor.niner.financeiro.caixa.CaixaDtos.ResultadoFechamentoResponse;
 import jakarta.validation.Valid;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -52,7 +54,13 @@ public class CaixaController {
     }
 
     @PostMapping("/fechamento")
-    public FechamentoCaixaResponse fechar(@AuthenticationPrincipal Jwt jwt, @Valid @RequestBody FecharCaixaRequest req) {
+    public ResultadoFechamentoResponse fechar(@AuthenticationPrincipal Jwt jwt, @Valid @RequestBody FecharCaixaRequest req) {
         return service.fechar(jwt, req);
+    }
+
+    @GetMapping("/fechamento/{idCaixa}/carteiras/{idCarteira}/lancamentos")
+    public List<LancamentoCarteiraResponse> listarLancamentosDaCarteira(
+            @AuthenticationPrincipal Jwt jwt, @PathVariable long idCaixa, @PathVariable long idCarteira) {
+        return service.listarLancamentosDaCarteira(jwt, idCaixa, idCarteira);
     }
 }

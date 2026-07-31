@@ -50,7 +50,7 @@ class BancoCrudTest {
     void buscaPorCodigoInexistenteResponde404() throws Exception {
         String token = assinarNovoTenant("inexistente");
 
-        mvc.perform(get("/api/v1/bancos/999").header("Authorization", "Bearer " + token))
+        mvc.perform(get("/api/v1/bancos/888").header("Authorization", "Bearer " + token))
                 .andExpect(status().isNotFound());
     }
 }

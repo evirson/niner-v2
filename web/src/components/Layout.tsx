@@ -1,10 +1,11 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { useAuth } from '../lib/auth'
 import { useEu } from '../lib/eu'
 import {
   IconeCaixa,
   IconeCanais,
+  IconeCancelamentoVenda,
   IconeCliente,
   IconeContaCorrente,
   IconeEstoque,
@@ -16,6 +17,7 @@ import {
   IconeParametros,
   IconePdv,
   IconePedidos,
+  IconePesquisaVendas,
   IconeEstornoRecebimentoCrediario,
   IconePlanoContas,
   IconeProduto,
@@ -39,6 +41,7 @@ const NAV: ItemNav[] = [
   { to: '/abertura-caixa', label: 'Abertura de Caixa', icone: IconeCaixa },
   { to: '/fechamento-caixa', label: 'Fechamento de Caixa', icone: IconeFechamentoCaixa },
   { to: '/pdv', label: 'PDV', icone: IconePdv },
+  { to: '/pesquisa-vendas', label: 'Pesquisa de Vendas', icone: IconePesquisaVendas },
   { to: '/produtos', label: 'Produtos', icone: IconeProduto },
   { to: '/estoque', label: 'Transferência de Produtos', icone: IconeEstoque },
   { to: '/pedidos', label: 'Pedidos', icone: IconePedidos },
@@ -58,6 +61,7 @@ const NAV: ItemNav[] = [
 const NAV_ADMIN: ItemNav[] = [
   { to: '/usuarios', label: 'Usuários', icone: IconeUsuario },
   { to: '/configuracoes-gerais', label: 'Parâmetros do Sistema', icone: IconeParametros },
+  { to: '/cancelamento-venda', label: 'Cancelamento de Venda', icone: IconeCancelamentoVenda },
 ]
 
 /** Shell do ERP: cabeçalho + navegação lateral (retrátil, 2026-07-28) + área de conteúdo. */
@@ -68,6 +72,12 @@ export default function Layout() {
   const itensNav = eu?.usuario.papel === 'ADMIN' ? [...NAV, ...NAV_ADMIN] : NAV
 
   const [recolhido, setRecolhido] = useState(() => localStorage.getItem(CHAVE_RECOLHIDO) === '1')
+  // "Espiada" ao passar o mouse/focar (2026-07-31, pedido do dono do produto): com o menu
+  // recolhido, hover ou foco expande temporariamente sem alterar a preferência persistida;
+  // saindo do mouse ou do foco (pra fora do <nav>, não entre os próprios links) recolhe de novo.
+  const [expandidoPorInteracao, setExpandidoPorInteracao] = useState(false)
+  const navRef = useRef<HTMLElement>(null)
+  const mostrarExpandido = !recolhido || expandidoPorInteracao
 
   const alternarRecolhido = () => {
     setRecolhido((atual) => {
@@ -75,6 +85,11 @@ export default function Layout() {
       localStorage.setItem(CHAVE_RECOLHIDO, novo ? '1' : '0')
       return novo
     })
+  }
+
+  const aoSairDoFoco = (e: React.FocusEvent) => {
+    if (navRef.current && e.relatedTarget instanceof Node && navRef.current.contains(e.relatedTarget)) return
+    setExpandidoPorInteracao(false)
   }
 
   const sair = () => {
@@ -98,7 +113,14 @@ export default function Layout() {
         </button>
       </header>
       <div className="app-body">
-        <nav className={`app-nav${recolhido ? ' app-nav-recolhido' : ''}`}>
+        <nav
+          ref={navRef}
+          className={`app-nav${mostrarExpandido ? '' : ' app-nav-recolhido'}`}
+          onMouseEnter={() => setExpandidoPorInteracao(true)}
+          onMouseLeave={() => setExpandidoPorInteracao(false)}
+          onFocus={() => setExpandidoPorInteracao(true)}
+          onBlur={aoSairDoFoco}
+        >
           {itensNav.map((n) => {
             const Icone = n.icone
             return (
@@ -107,10 +129,10 @@ export default function Layout() {
                 to={n.to}
                 end={n.end}
                 className={({ isActive }) => (isActive ? 'active' : '')}
-                title={recolhido ? n.label : undefined}
+                title={mostrarExpandido ? undefined : n.label}
               >
                 <Icone size={20} />
-                {!recolhido && <span>{n.label}</span>}
+                {mostrarExpandido && <span>{n.label}</span>}
               </NavLink>
             )
           })}
@@ -121,7 +143,7 @@ export default function Layout() {
             title={recolhido ? 'Expandir menu' : 'Recolher menu'}
           >
             <IconeRecolherMenu recolhido={recolhido} />
-            {!recolhido && <span>Recolher</span>}
+            {mostrarExpandido && <span>Recolher</span>}
           </button>
         </nav>
         <main className="app-main">

@@ -171,6 +171,27 @@ CREATE INDEX caixa_detalhe_id_venda_ix         ON caixa_detalhe (id_tenant, id_v
 CREATE INDEX caixa_detalhe_lote_recebimento_ix ON caixa_detalhe (id_tenant, id_lote_recebimento);
 CREATE INDEX caixa_detalhe_plano_contas_ix     ON caixa_detalhe (id_tenant, id_plano_contas);
 
+-- Fechamento de Caixa "às cegas" (2026-07-30, revisão): o operador digita o valor contado de
+-- CADA tipo de carteira que teve movimento no dia, sem ver o valor esperado antes de digitar —
+-- daí uma linha por carteira em vez de um único `caixa_mestre.valor_contado_dinheiro` (coluna
+-- mantida sem uso — não apagar dado de caixas já fechados). Só grava quando os valores batem
+-- (todas as diferenças são zero); se não bater, `CaixaService.fechar()` nem chega a inserir
+-- aqui — a tela mostra a divergência sem fechar o caixa.
+CREATE TABLE caixa_fechamento_conferencia (
+  id_conferencia integer       GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  id_tenant      smallint      NOT NULL REFERENCES plataforma.tenant (id_tenant),
+  id_caixa       integer       NOT NULL,
+  id_carteira    integer       NOT NULL,
+  valor_esperado numeric(12,2) NOT NULL,
+  valor_contado  numeric(12,2) NOT NULL,
+  CONSTRAINT caixa_fechamento_conferencia_caixa_fk FOREIGN KEY (id_tenant, id_caixa)
+    REFERENCES caixa_mestre (id_tenant, id_caixa),
+  CONSTRAINT caixa_fechamento_conferencia_carteira_fk FOREIGN KEY (id_tenant, id_carteira)
+    REFERENCES tipo_carteira (id_tenant, id_carteira)
+);
+CREATE INDEX caixa_fechamento_conferencia_id_tenant_ix ON caixa_fechamento_conferencia (id_tenant);
+CREATE INDEX caixa_fechamento_conferencia_caixa_ix     ON caixa_fechamento_conferencia (id_tenant, id_caixa);
+
 -- RLS (P8) — V024 já rodou antes destas tabelas existirem, então o guard-corpo dele NÃO as
 -- alcança; este arquivo garante RLS aqui, mesmo padrão (ENABLE+FORCE+policy+grants) de V024.
 DO $$
@@ -179,7 +200,7 @@ DECLARE
   tabelas text[] := ARRAY[
     'tipo_carteira',
     'contas_receber', 'contas_receber_detalhe', 'contas_receber_lote',
-    'caixa_mestre', 'caixa_detalhe'
+    'caixa_mestre', 'caixa_detalhe', 'caixa_fechamento_conferencia'
   ];
 BEGIN
   FOREACH t IN ARRAY tabelas LOOP

@@ -9,13 +9,22 @@ CREATE TABLE venda (
   id_cliente     integer,
   data_venda     timestamptz         NOT NULL DEFAULT now(),
   tipo_operacao  tipo_operacao_venda NOT NULL DEFAULT 'VENDA',
+  -- Cancelamento de Venda (2026-07-30) — colunas direto aqui em vez de uma tabela de log
+  -- separada: já registram quem/quando/motivo (P3), e o ledger imutável de estoque
+  -- (produto_movimento tipo CANCELAMENTO) é o resto do rastro de auditoria.
+  cancelada               boolean     NOT NULL DEFAULT false,
+  data_cancelamento        timestamptz,
+  id_usuario_cancelamento  integer,
+  motivo_cancelamento      text,
   -- base para FK composta (2026-07-16, P8) de venda_devolucao/produto_movimento_mestre.
   CONSTRAINT venda_id_venda_uk UNIQUE (id_tenant, id_venda),
   -- FKs compostas — ver comentário em usuario_empresa_fk (V015).
   CONSTRAINT venda_empresa_fk FOREIGN KEY (id_tenant, id_empresa)
     REFERENCES empresa (id_tenant, id_empresa),
   CONSTRAINT venda_cliente_fk FOREIGN KEY (id_tenant, id_cliente)
-    REFERENCES cliente (id_tenant, id_cliente)
+    REFERENCES cliente (id_tenant, id_cliente),
+  CONSTRAINT venda_usuario_cancelamento_fk FOREIGN KEY (id_tenant, id_usuario_cancelamento)
+    REFERENCES usuario (id_tenant, id_usuario)
 );
 CREATE INDEX venda_id_tenant_ix  ON venda (id_tenant);
 CREATE INDEX venda_id_empresa_ix ON venda (id_tenant, id_empresa);
@@ -42,4 +51,4 @@ CREATE TABLE venda_devolucao (
 );
 CREATE INDEX venda_devolucao_id_tenant_ix ON venda_devolucao (id_tenant);
 
-COMMENT ON TABLE venda IS 'Venda da loja física (R9). Sem financeiro no v1 (Q5). Itens no ledger de estoque (movimento VENDA). Funcionário/comissão por item ficam em produto_movimento_detalhe.id_funcionario, não aqui. Sem valor_total/observacao/criado_em (2026-07-16) — total é derivado do ledger, sem timestamp de auditoria nesta tabela.';
+COMMENT ON TABLE venda IS 'Venda da loja física (R9). Sem financeiro no v1 (Q5). Itens no ledger de estoque (movimento VENDA). Funcionário/comissão por item ficam em produto_movimento_detalhe.id_funcionario, não aqui. Sem valor_total/observacao/criado_em (2026-07-16) — total é derivado do ledger, sem timestamp de auditoria nesta tabela. cancelada/data_cancelamento/id_usuario_cancelamento/motivo_cancelamento (2026-07-30) — Cancelamento de Venda; ver produto_movimento tipo CANCELAMENTO para o estorno de estoque.';

@@ -33,6 +33,8 @@ import EstornoRecebimentoCrediario from './pages/recebimentocrediario/EstornoRec
 import RecebimentoCrediario from './pages/recebimentocrediario/RecebimentoCrediario'
 import AberturaCaixa from './pages/caixa/AberturaCaixa'
 import FechamentoCaixa from './pages/caixa/FechamentoCaixa'
+import CancelamentoVenda from './pages/vendas/CancelamentoVenda'
+import PesquisaVendas from './pages/vendas/PesquisaVendas'
 import ContaCorrenteLista from './pages/contacorrente/ContaCorrenteLista'
 import ContaCorrenteForm from './pages/contacorrente/ContaCorrenteForm'
 import ContaCorrenteMovimentoLista from './pages/contacorrente/ContaCorrenteMovimentoLista'
@@ -46,6 +48,7 @@ export default function App() {
         <Route element={<Layout />}>
           <Route path="/" element={<Dashboard />} />
           <Route path="/pdv" element={<Pdv />} />
+          <Route path="/pesquisa-vendas" element={<PesquisaVendas />} />
           <Route path="/abertura-caixa" element={<AberturaCaixa />} />
           <Route path="/fechamento-caixa" element={<FechamentoCaixa />} />
           <Route path="/recebimento-crediario" element={<RecebimentoCrediario />} />
@@ -106,6 +109,7 @@ export default function App() {
             <Route path="/usuarios/novo" element={<UsuarioForm />} />
             <Route path="/usuarios/:id/visualizar" element={<UsuarioForm somenteLeitura />} />
             <Route path="/usuarios/:id" element={<UsuarioForm />} />
+            <Route path="/cancelamento-venda" element={<CancelamentoVenda />} />
           </Route>
         </Route>
       </Route>

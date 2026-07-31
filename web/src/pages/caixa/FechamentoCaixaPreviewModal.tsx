@@ -10,16 +10,12 @@ import { gerarPdfFechamento, montarLinhasFechamento } from '../../lib/fechamento
  */
 export default function FechamentoCaixaPreviewModal({
   fechamento,
-  linhaDinheiro,
-  valorContadoDinheiro,
   aoFechar,
 }: {
   fechamento: FechamentoCaixa
-  linhaDinheiro: { nomeCarteira: string; valorEsperado: number } | null
-  valorContadoDinheiro: number | null
   aoFechar: () => void
 }) {
-  const linhas = montarLinhasFechamento(fechamento, valorContadoDinheiro, linhaDinheiro)
+  const linhas = montarLinhasFechamento(fechamento)
 
   return (
     <div className="modal-overlay" onClick={aoFechar}>

@@ -10,6 +10,7 @@ import { formatarMoeda } from './masks'
 const LARGURA = 96
 
 const LARGURAS_COLUNA_TABELA = [30, 16, 16, 16, 18]
+const LARGURAS_COLUNA_CONFERENCIA = [30, 20, 20, 20]
 
 function linha(caractere: string = '—'): string {
   return caractere.repeat(LARGURA)
@@ -21,19 +22,12 @@ function centralizar(texto: string): string {
   return ' '.repeat(Math.floor(espacos / 2)) + t
 }
 
-function duasColunas(esquerda: string, direita: string): string {
-  const maxEsquerda = Math.max(0, LARGURA - direita.length - 1)
-  const e = esquerda.length > maxEsquerda ? esquerda.slice(0, maxEsquerda) : esquerda
-  const espacos = Math.max(1, LARGURA - e.length - direita.length)
-  return e + ' '.repeat(espacos) + direita
-}
-
 /** Primeira coluna alinhada à esquerda, as demais à direita — usada pelo cabeçalho e pelas
- *  linhas da tabela de totais por carteira. */
-function linhaTabela(valores: string[]): string {
+ *  linhas das tabelas de totais/conferência por carteira. */
+function linhaTabela(valores: string[], larguras: number[]): string {
   return valores
     .map((valor, indice) => {
-      const largura = LARGURAS_COLUNA_TABELA[indice]
+      const largura = larguras[indice]
       const v = valor.length > largura ? valor.slice(0, largura) : valor
       return indice === 0 ? v.padEnd(largura) : v.padStart(largura)
     })
@@ -58,14 +52,12 @@ function formatarDataHora(iso: string | null): string {
 /**
  * Monta o relatório de fechamento como linhas de texto monoespaçado (96 colunas, A4) — fonte
  * única de verdade reusada pela pré-visualização, pela impressão e pelo PDF, mesmo padrão de
- * `montarLinhasComprovante`. `valorContadoDinheiro`/`diferenca` só aparecem quando informados
- * (tela ainda não fechou o caixa) ou quando o caixa já está fechado (valor gravado).
+ * `montarLinhasComprovante`. A tabela de conferência (esperado/contado/diferença por carteira,
+ * "às cegas" — 2026-07-30) só existe depois que o caixa fecha de verdade (todas as carteiras
+ * bateram); a impressão só fica disponível nesse ponto, então `f.conferencia` sempre vem
+ * preenchida aqui.
  */
-export function montarLinhasFechamento(
-  f: FechamentoCaixa,
-  valorContadoDinheiro: number | null,
-  linhaDinheiro: { nomeCarteira: string; valorEsperado: number } | null,
-): string[] {
+export function montarLinhasFechamento(f: FechamentoCaixa): string[] {
   const linhas: string[] = []
   linhas.push(linha())
   linhas.push(centralizar(f.nomeEmpresa))
@@ -77,19 +69,28 @@ export function montarLinhasFechamento(
   linhas.push(`Abertura:   ${formatarDataHora(f.dataAbertura)}`)
   linhas.push(`Fechamento: ${formatarDataHora(f.dataFechamento)}`)
   linhas.push(linha())
-  linhas.push(linhaTabela(['CARTEIRA', 'SALDO INIC.', 'CRÉDITO', 'DÉBITO', 'ESPERADO']))
+  linhas.push(linhaTabela(['CARTEIRA', 'SALDO INIC.', 'CRÉDITO', 'DÉBITO', 'ESPERADO'], LARGURAS_COLUNA_TABELA))
   linhas.push(linha('•'))
   f.linhas.forEach((l) => {
     linhas.push(
-      linhaTabela([l.nomeCarteira, moeda(l.saldoInicial), moeda(l.totalCredito), moeda(l.totalDebito), moeda(l.valorEsperado)]),
+      linhaTabela(
+        [l.nomeCarteira, moeda(l.saldoInicial), moeda(l.totalCredito), moeda(l.totalDebito), moeda(l.valorEsperado)],
+        LARGURAS_COLUNA_TABELA,
+      ),
     )
   })
   linhas.push(linha())
 
-  if (valorContadoDinheiro !== null && linhaDinheiro) {
-    const diferenca = valorContadoDinheiro - linhaDinheiro.valorEsperado
-    linhas.push(duasColunas(`Contado em Dinheiro (${linhaDinheiro.nomeCarteira}):`, moeda(valorContadoDinheiro)))
-    linhas.push(duasColunas('Diferença:', moeda(diferenca)))
+  if (f.conferencia.length > 0) {
+    linhas.push(centralizar('CONFERÊNCIA (CONTAGEM ÀS CEGAS)'))
+    linhas.push(linha())
+    linhas.push(linhaTabela(['CARTEIRA', 'ESPERADO', 'CONTADO', 'DIFERENÇA'], LARGURAS_COLUNA_CONFERENCIA))
+    linhas.push(linha('•'))
+    f.conferencia.forEach((c) => {
+      linhas.push(
+        linhaTabela([c.nomeCarteira, moeda(c.valorEsperado), moeda(c.valorContado), moeda(c.diferenca)], LARGURAS_COLUNA_CONFERENCIA),
+      )
+    })
     linhas.push(linha())
   }
 

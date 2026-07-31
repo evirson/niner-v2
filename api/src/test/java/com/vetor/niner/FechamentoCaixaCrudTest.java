@@ -25,11 +25,13 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * Fechamento de Caixa (2026-07-30) — ADMIN fecha o caixa de qualquer usuário, OPERADOR só o
- * próprio; totais por tipo de carteira (crédito/débito separados) recalculados a partir de
- * {@code caixa_detalhe}; conferência de dinheiro contado gravada em {@code
- * caixa_mestre.valor_contado_dinheiro}. Mesmo padrão de setup de {@link RecebimentoCrediarioCrudTest}
- * (única forma de popular {@code caixa_detalhe} de verdade).
+ * Fechamento de Caixa (2026-07-30, revisado no mesmo dia pro fechamento "às cegas") — ADMIN
+ * fecha o caixa de qualquer usuário, OPERADOR só o próprio; totais por tipo de carteira
+ * (crédito/débito separados) recalculados a partir de {@code caixa_detalhe}. O operador informa
+ * o valor contado de CADA carteira com movimento; só fecha de fato quando todas batem — senão o
+ * caixa continua aberto e a resposta traz a divergência de cada carteira, gravada em {@code
+ * caixa_fechamento_conferencia} só no sucesso. Mesmo padrão de setup de {@link
+ * RecebimentoCrediarioCrudTest} (única forma de popular {@code caixa_detalhe} de verdade).
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -203,6 +205,27 @@ class FechamentoCaixaCrudTest {
                 .andExpect(status().isOk());
     }
 
+    private long buscarIdCarteiraDinheiro(String token) throws Exception {
+        String resp = mvc.perform(get("/api/v1/caixa/carteiras").header("Authorization", "Bearer " + token))
+                .andReturn().getResponse().getContentAsString();
+        java.util.List<java.util.Map<String, Object>> carteiras = JsonPath.read(resp, "$");
+        return carteiras.stream()
+                .filter(c -> "DINHEIRO".equals(c.get("nomeCarteira")))
+                .map(c -> ((Number) c.get("idCarteira")).longValue())
+                .findFirst().orElseThrow();
+    }
+
+    /** Monta o corpo de {@code POST /api/v1/caixa/fechamento} com um valor contado por carteira
+     *  — {@code valoresPorCarteira} é {idCarteira: "valor"}. */
+    private String corpoFechamento(long idCaixa, java.util.Map<Long, String> valoresPorCarteira) {
+        StringBuilder linhas = new StringBuilder();
+        for (var entrada : valoresPorCarteira.entrySet()) {
+            if (linhas.length() > 0) linhas.append(",");
+            linhas.append("{\"idCarteira\":%d,\"valorContado\":%s}".formatted(entrada.getKey(), entrada.getValue()));
+        }
+        return "{\"idCaixa\":%d,\"valoresContados\":[%s]}".formatted(idCaixa, linhas);
+    }
+
     /** Efetiva um recebimento de crediário de {@code valor} na carteira DINHEIRO, gerando um
      *  lançamento de crédito em {@code caixa_detalhe} do caixa aberto de {@code token}. */
     private void efetivarRecebimento(String token, long idTenant, String valor) throws Exception {
@@ -322,24 +345,110 @@ class FechamentoCaixaCrudTest {
         String tokenOperador = criarOperadorEFazerLogin(tenant.token(), tenant.slug(), "admin-fecha-outro");
         long idOperador = buscarIdUsuarioLogado(tokenOperador);
         abrirCaixaDinheiro(tokenOperador);
+        long idCarteiraDinheiro = buscarIdCarteiraDinheiro(tokenOperador);
         String hoje = LocalDate.now().toString();
 
         String resp = mvc.perform(get("/api/v1/caixa/status").header("Authorization", "Bearer " + tokenOperador))
                 .andReturn().getResponse().getContentAsString();
         long idCaixa = ((Number) JsonPath.read(resp, "$.idCaixa")).longValue();
 
+        // Só a carteira de abertura teve movimento (só o saldo inicial de 100.00) — contar 100.00 bate exato.
         mvc.perform(post("/api/v1/caixa/fechamento").header("Authorization", "Bearer " + tenant.token())
                         .contentType(APPLICATION_JSON)
-                        .content("{\"idCaixa\":%d,\"valorContadoDinheiro\":95.00}".formatted(idCaixa)))
+                        .content(corpoFechamento(idCaixa, java.util.Map.of(idCarteiraDinheiro, "100.00"))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.fechado").value(true))
-                .andExpect(jsonPath("$.valorContadoDinheiro").value(95.00));
+                .andExpect(jsonPath("$.linhas[0].diferenca").value(0));
 
         mvc.perform(get("/api/v1/caixa/fechamento").header("Authorization", "Bearer " + tenant.token())
                         .param("idUsuario", String.valueOf(idOperador))
                         .param("data", hoje))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.fechado").value(true));
+                .andExpect(jsonPath("$.fechado").value(true))
+                .andExpect(jsonPath("$.conferencia[0].valorEsperado").value(100.00))
+                .andExpect(jsonPath("$.conferencia[0].valorContado").value(100.00));
+    }
+
+    @Test
+    void fechamentoComDivergenciaNaoFechaEDevolveDiferencaPorCarteira() throws Exception {
+        TenantNovo tenant = assinarNovoTenant("divergencia");
+        abrirCaixaDinheiro(tenant.token());
+        long idCarteiraDinheiro = buscarIdCarteiraDinheiro(tenant.token());
+
+        String resp = mvc.perform(get("/api/v1/caixa/status").header("Authorization", "Bearer " + tenant.token()))
+                .andReturn().getResponse().getContentAsString();
+        long idCaixa = ((Number) JsonPath.read(resp, "$.idCaixa")).longValue();
+
+        // Esperado é 100.00 (só o saldo inicial); contando 90.00 gera divergência de -10.00.
+        mvc.perform(post("/api/v1/caixa/fechamento").header("Authorization", "Bearer " + tenant.token())
+                        .contentType(APPLICATION_JSON)
+                        .content(corpoFechamento(idCaixa, java.util.Map.of(idCarteiraDinheiro, "90.00"))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.fechado").value(false))
+                .andExpect(jsonPath("$.linhas[0].valorEsperado").value(100.00))
+                .andExpect(jsonPath("$.linhas[0].valorContado").value(90.00))
+                .andExpect(jsonPath("$.linhas[0].diferenca").value(-10.00));
+
+        // O caixa continua aberto — nada foi gravado.
+        mvc.perform(get("/api/v1/caixa/fechamento").header("Authorization", "Bearer " + tenant.token())
+                        .param("data", LocalDate.now().toString()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.fechado").value(false));
+    }
+
+    @Test
+    void fecharSemInformarTodasAsCarteirasRespondeErroDeValidacao() throws Exception {
+        TenantNovo tenant = assinarNovoTenant("carteira-faltando");
+        long idTenant = extrairIdTenant(tenant.token());
+        abrirCaixaDinheiro(tenant.token());
+        long idCarteiraDinheiro = buscarIdCarteiraDinheiro(tenant.token());
+        long idOutraCarteira = criarTipoCarteira(tenant.token(), "PIX FALTANDO", "AVISTA", false);
+
+        String resp = mvc.perform(get("/api/v1/caixa/status").header("Authorization", "Bearer " + tenant.token()))
+                .andReturn().getResponse().getContentAsString();
+        long idCaixa = ((Number) JsonPath.read(resp, "$.idCaixa")).longValue();
+
+        // Lança um movimento direto em caixa_detalhe pra uma segunda carteira ter movimento no dia
+        // (sem endpoint de venda avulsa nos testes — mesmo padrão de outros arquivos deste projeto).
+        try (Connection c = abrirConexao(idTenant); PreparedStatement ps = c.prepareStatement("""
+                INSERT INTO caixa_detalhe (id_tenant, id_caixa, id_carteira, valor, tipo_operacao, credito_debito)
+                VALUES (?, ?, ?, 30.00, 'RECEBIMENTO_VENDA', 'C')
+                """)) {
+            ps.setLong(1, idTenant);
+            ps.setLong(2, idCaixa);
+            ps.setLong(3, idOutraCarteira);
+            ps.execute();
+        }
+
+        // Só informa a carteira de abertura — falta a segunda, que também teve movimento.
+        mvc.perform(post("/api/v1/caixa/fechamento").header("Authorization", "Bearer " + tenant.token())
+                        .contentType(APPLICATION_JSON)
+                        .content(corpoFechamento(idCaixa, java.util.Map.of(idCarteiraDinheiro, "100.00"))))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void drillDownDeLancamentosDaCarteiraTrazAberturaEMovimentos() throws Exception {
+        TenantNovo tenant = assinarNovoTenant("drill-down");
+        long idTenant = extrairIdTenant(tenant.token());
+        definirConfigCrediario(tenant.token());
+        abrirCaixaDinheiro(tenant.token());
+        long idCarteiraDinheiro = buscarIdCarteiraDinheiro(tenant.token());
+        efetivarRecebimento(tenant.token(), idTenant, "50.00");
+
+        String resp = mvc.perform(get("/api/v1/caixa/status").header("Authorization", "Bearer " + tenant.token()))
+                .andReturn().getResponse().getContentAsString();
+        long idCaixa = ((Number) JsonPath.read(resp, "$.idCaixa")).longValue();
+
+        mvc.perform(get("/api/v1/caixa/fechamento/%d/carteiras/%d/lancamentos".formatted(idCaixa, idCarteiraDinheiro))
+                        .header("Authorization", "Bearer " + tenant.token()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(2))
+                .andExpect(jsonPath("$[0].tipoOperacao").value("ABERTURA_CAIXA"))
+                .andExpect(jsonPath("$[0].valor").value(100.00))
+                .andExpect(jsonPath("$[1].tipoOperacao").value("RECEBIMENTO_PARCELA_CREDIARIO"))
+                .andExpect(jsonPath("$[1].valor").value(50.00))
+                .andExpect(jsonPath("$[1].origem").value(org.hamcrest.Matchers.startsWith("Recebimento nº")));
     }
 
     @Test
@@ -347,6 +456,7 @@ class FechamentoCaixaCrudTest {
         TenantNovo tenant = assinarNovoTenant("operador-fecha-bloqueado");
         String tokenOperador = criarOperadorEFazerLogin(tenant.token(), tenant.slug(), "operador-fecha-bloqueado");
         abrirCaixaDinheiro(tenant.token());
+        long idCarteiraDinheiro = buscarIdCarteiraDinheiro(tenant.token());
 
         String resp = mvc.perform(get("/api/v1/caixa/status").header("Authorization", "Bearer " + tenant.token()))
                 .andReturn().getResponse().getContentAsString();
@@ -354,7 +464,7 @@ class FechamentoCaixaCrudTest {
 
         mvc.perform(post("/api/v1/caixa/fechamento").header("Authorization", "Bearer " + tokenOperador)
                         .contentType(APPLICATION_JSON)
-                        .content("{\"idCaixa\":%d,\"valorContadoDinheiro\":100.00}".formatted(idCaixa)))
+                        .content(corpoFechamento(idCaixa, java.util.Map.of(idCarteiraDinheiro, "100.00"))))
                 .andExpect(status().isForbidden());
     }
 
@@ -362,15 +472,17 @@ class FechamentoCaixaCrudTest {
     void fecharCaixaJaFechadoRespondeConflito() throws Exception {
         TenantNovo tenant = assinarNovoTenant("ja-fechado");
         abrirCaixaDinheiro(tenant.token());
+        long idCarteiraDinheiro = buscarIdCarteiraDinheiro(tenant.token());
 
         String resp = mvc.perform(get("/api/v1/caixa/status").header("Authorization", "Bearer " + tenant.token()))
                 .andReturn().getResponse().getContentAsString();
         long idCaixa = ((Number) JsonPath.read(resp, "$.idCaixa")).longValue();
-        String corpo = "{\"idCaixa\":%d,\"valorContadoDinheiro\":100.00}".formatted(idCaixa);
+        String corpo = corpoFechamento(idCaixa, java.util.Map.of(idCarteiraDinheiro, "100.00"));
 
         mvc.perform(post("/api/v1/caixa/fechamento").header("Authorization", "Bearer " + tenant.token())
                         .contentType(APPLICATION_JSON).content(corpo))
-                .andExpect(status().isOk());
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.fechado").value(true));
 
         mvc.perform(post("/api/v1/caixa/fechamento").header("Authorization", "Bearer " + tenant.token())
                         .contentType(APPLICATION_JSON).content(corpo))
@@ -383,7 +495,7 @@ class FechamentoCaixaCrudTest {
 
         mvc.perform(post("/api/v1/caixa/fechamento").header("Authorization", "Bearer " + tenant.token())
                         .contentType(APPLICATION_JSON)
-                        .content("{\"idCaixa\":999999,\"valorContadoDinheiro\":100.00}"))
+                        .content(corpoFechamento(999999, java.util.Map.of(1L, "100.00"))))
                 .andExpect(status().isNotFound());
     }
 

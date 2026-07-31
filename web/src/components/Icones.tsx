@@ -305,6 +305,21 @@ export function IconeMovimentoContaCorrente({ size = 28 }: { size?: number }) {
   )
 }
 
+/** Ícone da tela de Cancelamento de Venda (recibo + X) — 2026-07-30. */
+export function IconeCancelamentoVenda({ size = 28 }: { size?: number }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.6} stroke="currentColor" width={size} height={size} aria-hidden="true">
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M6 3.75h9l3 3v13.5a.75.75 0 0 1-.75.75H6a.75.75 0 0 1-.75-.75V4.5A.75.75 0 0 1 6 3.75Z"
+      />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 9h4.5" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 14.25l4.5 4.5m0-4.5l-4.5 4.5" />
+    </svg>
+  )
+}
+
 /** Ícone da tela de Fechamento de Caixa (caixa + cadeado) — 2026-07-30. */
 export function IconeFechamentoCaixa({ size = 28 }: { size?: number }) {
   return (
@@ -330,6 +345,22 @@ export function IconeUltimaPagina({ size = 18 }: { size?: number }) {
 }
 
 /** Ícone da tela de PDV (Frente de Caixa). */
+export function IconePesquisaVendas({ size = 28 }: { size?: number }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.6} stroke="currentColor" width={size} height={size} aria-hidden="true">
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M14.25 3.75h-8.5a.75.75 0 0 0-.75.75v15a.75.75 0 0 0 .75.75h6"
+      />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M14.25 3.75l3 3v3.5" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M7.5 9h5M7.5 12.5h3" />
+      <circle cx="16.75" cy="16.75" r="2.75" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="m19.75 19.75-1.6-1.6" />
+    </svg>
+  )
+}
+
 export function IconePdv({ size = 28 }: { size?: number }) {
   return (
     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.6} stroke="currentColor" width={size} height={size} aria-hidden="true">
