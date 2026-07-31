@@ -182,8 +182,9 @@ plano (poucas perguntas fechadas de decisão de dado, ver item 2) antes de imple
 5. **Verificação:** 8 testes novos (`RelatorioVendasCrudTest`, Testcontainers) — KPIs/composição
    batem com soma manual de um cenário conhecido, venda cancelada fora de tudo, OPERADOR não
    força outra empresa, `NAO_TOTALIZAR` vs `VENDEDOR` (agrupamento + drill-down), Top 10 Marcas
-   por item mesmo em venda multi-marca, período > 400 dias, RLS entre tenants — suíte completa do
-   `api/` sem regressão. `tsc -b`/`vite build` do `web/` verdes (só o erro pré-existente do item 4
+   por item mesmo em venda multi-marca, período > 400 dias, RLS entre tenants — **286 testes de
+   backend verdes no total**, suíte completa do `api/` sem regressão. `tsc -b`/`vite build` do
+   `web/` verdes (só o erro pré-existente do item 4
    não relacionado ficou). **Testado ao vivo no Chrome** (login real contra o tenant de teste,
    `docker compose up -d --build api`): todos os filtros, os 7 gráficos com dado real, totalizador
    agrupado + drill-down e o multi-select de empresa exercitados na tela rodando de verdade — um
