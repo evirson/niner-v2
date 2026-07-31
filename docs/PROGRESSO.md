@@ -125,6 +125,63 @@ sozinho ao sair.
 
 ## Linha do tempo
 
+### 2026-07-31 — Menu lateral agrupado + revisão de UX no PDV/Cancelamento de Venda
+
+Lote de 8 pedidos diretos do dono do produto ("Próximos passos"), todos de UI/UX — nenhuma
+mudança de schema.
+
+1. **Menu lateral reorganizado em grupos expansíveis** (`Layout.tsx`) — a lista plana de itens
+   virou uma árvore de até 3 níveis: **Frente de Loja** (PDV, Pesquisa de Vendas, Recebimento de
+   Crediário, **Caixa** [Abertura/Fechamento], **Cancelamentos** [Cancelamento de Vendas
+   admin-only, Estorno de Crediário]), **Estoque**, **Financeiro**, **Cadastros**,
+   **Configurações** (admin-only), **Relatórios** (grupo vazio de propósito — placeholder até a
+   tela existir, sem seta/sem clique) e **Implementações Futuras** (Painel, Pedidos, Canais —
+   saíram do destaque do menu principal mas continuam no projeto e acessíveis, só isolados no
+   fim). Cada grupo abre/fecha com clique no cabeçalho (seta ↑/↓, `IconeSetaCima`/`IconeSetaBaixo`
+   reaproveitados), estado persistido em `localStorage`
+   (`niner_nav_grupos_abertos`) por chave de grupo, igual ao recolher do menu inteiro já
+   existente. O modo **recolhido em ícones** (hover/foco expande temporariamente, já construído
+   em sessão anterior) passou a achatar a árvore inteira numa lista só de ícones — a nova
+   hierarquia é invisível nesse modo, preservando o comportamento de antes. Itens/grupos
+   `adminOnly` somem por completo pra quem não é ADMIN (inclusive o grupo Configurações inteiro).
+2. **`CancelamentoVendaModal.tsx` — cabeçalho e rodapé fixos, corpo rolável.** Três pedidos
+   pontuais: botão "✕" no canto superior direito no lugar do botão "Não" (que deixou de
+   existir); cabeçalho (até a linha Cliente/Vendedor) fixo sem scroll; e "Motivo do Cancelamento"
+   + botão "Sim, Cancelar Venda" fixos no rodapé, também sem scroll — só a lista de itens/formas
+   de pagamento/mensagem de bloqueio no meio rola (mesmo truque de `DetalheVendaModal`: flexbox
+   com `overflow:hidden` no modal e `overflow-y:auto` só na div do meio). Quando a venda já está
+   cancelada ou bloqueada por crediário recebido, o rodapé de ação some inteiro (o "✕" já fecha).
+3. **PDV — cadastro de cliente na venda (`PesquisaClienteModal.tsx`), em duas rodadas.** Primeira
+   rodada: botão "+ Novo Cliente" abrindo um formulário mínimo embutido (`ClienteRapidoModal`,
+   só nome/categoria/gênero/CPF/celular). Testado ao vivo e revisado no mesmo dia a pedido do
+   dono do produto — o formulário mínimo foi **substituído pela tela de cadastro de cliente
+   completa** (a mesma de `/clientes/novo`): `ClienteForm.tsx` ganhou dois props opcionais,
+   `aoSalvarComSucesso`/`aoCancelar` — quando fornecidos ("modo embutido"), o formulário chama
+   esses callbacks em vez de navegar pra `/clientes`, escondendo também o ícone de engrenagem
+   ("Configurar tela", que levaria pra fora da venda). Novo `ClienteFormModal.tsx` (em
+   `pages/pdv/`) embrulha o `ClienteForm` num modal que rola por dentro (mesmo truque de altura
+   fixa + flex column), sem sair da venda em andamento; ao salvar, o cliente recém-criado é
+   selecionado automaticamente e os dois modais fecham. `ClienteRapidoModal.tsx` foi removido
+   (superado). Ajuste de layout junto: o campo de busca "Nome, CPF/CNPJ ou Celular" e o botão
+   "+ Novo Cliente" ficavam desalinhados (rótulo empurrando só o campo pra baixo) — corrigido
+   colocando o rótulo numa linha própria acima, com input+botão na mesma `linha-com-botao` (igual
+   ao padrão já usado pra Categoria).
+4. **`FormaPagamentoModal.tsx` — regra de habilitação do "Confirmar Venda" revisada.** Antes, o
+   botão só habilitava com pagamento fechado **e** cliente **e** vendedor definidos (com uma
+   dica genérica no `title`). Pedido direto: o botão deve habilitar assim que a distribuição do
+   pagamento fechar o valor a pagar, **independente** de cliente/vendedor já estarem definidos;
+   só ao **clicar** em "Confirmar Venda" é que a falta de cliente e/ou vendedor bloqueia a
+   gravação, com um aviso (`Toast`) específico do que falta ("Defina o cliente…"/"Defina o
+   vendedor…"/"Defina o cliente e o vendedor…") — nunca grava a venda faltando um dos dois.
+5. **Ajuste visual — altura do botão "F6 Efetiva Venda"** (`.pdv-tecla-venda` em `styles.css`)
+   reduzida (`min-height` 84px→52px, padding 16px→10px 16px) — pedido direto do dono do produto
+   testando a tela.
+
+Nenhuma mudança de schema ou de contrato de API nesta sessão — só frontend (`web/`). Detalhe
+funcional completo em `docs/telas/pdv.md` (seções "Cliente e vendedor da venda" e "Layout da
+tela de Forma de Pagamento") e `docs/telas/cancelamento-venda.md` (seção de layout do popup);
+o menu lateral não tem spec de tela própria (é o shell do `Layout.tsx`, documentado só aqui).
+
 ### 2026-07-31 — Revisão do Plano de Contas Gerencial (DRE/DFC por conta, hierarquia, seed padrão)
 
 Pedido direto do dono do produto, com um script SQL completo já escrito (comentado, com a

@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { useState } from 'react'
 import { buscarClientesPdv, type PdvCliente } from '../../lib/pdv'
+import ClienteFormModal from './ClienteFormModal'
 
 /**
  * F6 — Cliente da Venda (2026-07-28): busca por nome, CPF/CNPJ ou celular via
@@ -14,6 +15,7 @@ export default function PesquisaClienteModal({
   aoSelecionar: (cliente: PdvCliente) => void
 }) {
   const [busca, setBusca] = useState('')
+  const [modalNovoClienteAberto, setModalNovoClienteAberto] = useState(false)
 
   const { data: resultados, isLoading, isError } = useQuery({
     queryKey: ['pdv-clientes', busca],
@@ -26,16 +28,23 @@ export default function PesquisaClienteModal({
         <h2 style={{ marginTop: 0 }}>Pesquisa de Cliente</h2>
         <p className="muted" style={{ marginTop: 4 }}>
           Digite o nome, CPF/CNPJ ou celular e clique numa linha (ou Enter/Espaço com o foco nela) pra selecionar.
+          Não encontrou? Cadastre um cliente novo sem sair da venda.
         </p>
 
         <label htmlFor="pdv-busca-cliente">Nome, CPF/CNPJ ou Celular</label>
-        <input
-          id="pdv-busca-cliente"
-          autoFocus
-          placeholder="Ex.: MARIA, 111.444.777-35, 11988887777…"
-          value={busca}
-          onChange={(e) => setBusca(e.target.value.toUpperCase())}
-        />
+        <div className="linha-com-botao">
+          <input
+            id="pdv-busca-cliente"
+            autoFocus
+            style={{ flex: 1 }}
+            placeholder="Ex.: MARIA, 111.444.777-35, 11988887777…"
+            value={busca}
+            onChange={(e) => setBusca(e.target.value.toUpperCase())}
+          />
+          <button type="button" className="btn ghost" onClick={() => setModalNovoClienteAberto(true)}>
+            ＋ Novo Cliente
+          </button>
+        </div>
 
         <div className="table-wrap" style={{ marginTop: 16, maxHeight: 360 }}>
           <table className="table table-compacta">
@@ -100,6 +109,13 @@ export default function PesquisaClienteModal({
           </button>
         </div>
       </div>
+
+      {modalNovoClienteAberto && (
+        <ClienteFormModal
+          aoFechar={() => setModalNovoClienteAberto(false)}
+          aoCriar={(cliente) => aoSelecionar(cliente)}
+        />
+      )}
     </div>
   )
 }

@@ -25,6 +25,7 @@ import {
   listarCategorias,
   paraFormulario,
   paraRequisicao,
+  type Cliente,
   type ClienteFormState,
   type Genero,
 } from '../../lib/clientes'
@@ -144,9 +145,25 @@ function validarCampo(
   }
 }
 
-export default function ClienteForm({ somenteLeitura = false }: { somenteLeitura?: boolean }) {
+/**
+ * `aoSalvarComSucesso`/`aoCancelar` (2026-07-31) — habilitam o "modo embutido": quando
+ * fornecidos (uso em `ClienteFormModal`, criação rápida dentro do PDV), o formulário chama
+ * esses callbacks em vez de navegar para `/clientes` — a mesma tela de cadastro, sem sair da
+ * venda em andamento. Sem eles, comportamento idêntico ao de sempre (rota `/clientes/novo`
+ * ou `/clientes/:id`).
+ */
+export default function ClienteForm({
+  somenteLeitura = false,
+  aoSalvarComSucesso,
+  aoCancelar,
+}: {
+  somenteLeitura?: boolean
+  aoSalvarComSucesso?: (cliente: Cliente) => void
+  aoCancelar?: () => void
+}) {
   const { id } = useParams()
   const editando = Boolean(id)
+  const embutido = Boolean(aoSalvarComSucesso)
   const navigate = useNavigate()
   const queryClient = useQueryClient()
 
@@ -180,8 +197,12 @@ export default function ClienteForm({ somenteLeitura = false }: { somenteLeitura
   const salvar = useMutation({
     mutationFn: () =>
       editando ? atualizarCliente(Number(id), paraRequisicao(form)) : criarCliente(paraRequisicao(form)),
-    onSuccess: () => {
+    onSuccess: (cliente) => {
       queryClient.invalidateQueries({ queryKey: ['clientes'] })
+      if (aoSalvarComSucesso) {
+        aoSalvarComSucesso(cliente)
+        return
+      }
       navigate('/clientes', {
         state: {
           toast: {
@@ -316,7 +337,7 @@ export default function ClienteForm({ somenteLeitura = false }: { somenteLeitura
             <h1>Cliente</h1>
           </div>
           <div className="topbar-acoes">
-            {ehAdmin && (
+            {ehAdmin && !embutido && (
               <Link
                 className="btn ghost ajuda-gatilho"
                 to="/clientes/configuracao"
@@ -327,7 +348,7 @@ export default function ClienteForm({ somenteLeitura = false }: { somenteLeitura
               </Link>
             )}
             <AjudaDaTela chaveTela={CHAVE_TELA} />
-            {editando && (
+            {editando && !embutido && (
               <Link
                 className="btn ghost"
                 to={`/clientes/${id}/historico`}
@@ -336,7 +357,7 @@ export default function ClienteForm({ somenteLeitura = false }: { somenteLeitura
                 <IconeHistorico size={16} /> Histórico
               </Link>
             )}
-            <button type="button" className="btn ghost" onClick={() => navigate('/clientes')}>
+            <button type="button" className="btn ghost" onClick={() => (aoCancelar ? aoCancelar() : navigate('/clientes'))}>
               {somenteLeitura ? 'Voltar' : 'Cancelar'}
             </button>
             {!somenteLeitura && (

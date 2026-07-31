@@ -269,7 +269,27 @@ export default function FormaPagamentoModal({
     onError: (e: unknown) => setToast(e instanceof ApiError ? e.message : 'Não foi possível efetivar a venda.'),
   })
 
-  const podeConfirmar = saldoFechado && clienteSelecionado !== null && vendedorSelecionado !== null
+  /** O botão libera assim que o pagamento fecha o saldo (2026-07-31, pedido do dono do
+   *  produto) — cliente/vendedor deixaram de travar o botão em si; a falta deles só é
+   *  cobrada ao clicar "Confirmar Venda" (`aoConfirmar`), com aviso específico do que falta,
+   *  pra não gravar a venda faltando um dos dois. */
+  const podeConfirmar = saldoFechado
+
+  const aoConfirmar = () => {
+    if (!clienteSelecionado && !vendedorSelecionado) {
+      setToast('Defina o cliente e o vendedor antes de confirmar a venda.')
+      return
+    }
+    if (!clienteSelecionado) {
+      setToast('Defina o cliente antes de confirmar a venda.')
+      return
+    }
+    if (!vendedorSelecionado) {
+      setToast('Defina o vendedor antes de confirmar a venda.')
+      return
+    }
+    efetivar.mutate()
+  }
 
   return (
     <div className="modal-overlay" onClick={aoFechar}>
@@ -561,8 +581,8 @@ export default function FormaPagamentoModal({
             type="button"
             className="btn"
             disabled={!podeConfirmar || efetivar.isPending}
-            title={!clienteSelecionado || !vendedorSelecionado ? 'Selecione o cliente e o vendedor.' : undefined}
-            onClick={() => efetivar.mutate()}
+            title={!saldoFechado ? 'Distribua o valor pago até fechar o valor a pagar.' : undefined}
+            onClick={aoConfirmar}
           >
             {efetivar.isPending ? 'Efetivando…' : 'Confirmar Venda'}
           </button>

@@ -65,8 +65,19 @@ export default function CancelamentoVendaModal({
 
   return (
     <div className="modal-overlay" onClick={aoFechar}>
-      <div className="modal modal-largo" role="dialog" aria-label="Cancelamento de venda" onClick={(e) => e.stopPropagation()}>
-        <h2 style={{ marginTop: 0 }}>Cancelamento de Venda nº {venda.idVenda}</h2>
+      <div
+        className="modal modal-largo"
+        role="dialog"
+        aria-label="Cancelamento de venda"
+        onClick={(e) => e.stopPropagation()}
+        style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
+      >
+        <div className="lightbox-topo" style={{ marginBottom: 12, flexShrink: 0 }}>
+          <h2 style={{ margin: 0 }}>Cancelamento de Venda nº {venda.idVenda}</h2>
+          <button type="button" className="btn ghost" onClick={aoFechar} aria-label="Fechar">
+            ✕
+          </button>
+        </div>
 
         {isLoading ? (
           <p className="muted">Carregando…</p>
@@ -74,7 +85,7 @@ export default function CancelamentoVendaModal({
           <p className="erro">{error instanceof ApiError ? error.message : 'Não foi possível carregar a venda.'}</p>
         ) : (
           <>
-            <div className="form-grid">
+            <div className="form-grid" style={{ flexShrink: 0, marginBottom: 16 }}>
               <div className="col-4">
                 <label>Empresa</label>
                 <div className="pdv-selecao-valor">
@@ -107,104 +118,106 @@ export default function CancelamentoVendaModal({
               </div>
             </div>
 
-            <p className="section-label" style={{ marginTop: 16 }}>
-              Itens (voltarão ao estoque)
-            </p>
-            <div className="table-wrap" style={{ maxHeight: 220 }}>
-              <table className="table table-compacta">
-                <thead>
-                  <tr>
-                    <th>Produto</th>
-                    <th>Variação</th>
-                    <th>Qtd.</th>
-                    <th>Preço</th>
-                    <th>Valor</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {detalhe.itens.map((item, indice) => (
-                    <tr key={indice}>
-                      <td>{item.descricaoProduto}</td>
-                      <td>{[item.variacaoLinha, item.variacaoColuna].filter(Boolean).join(' / ') || '—'}</td>
-                      <td className="mono">{item.qtd}</td>
-                      <td className="mono">{moeda(item.precoVenda)}</td>
-                      <td className="mono">{moeda(item.valorItem)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            <p className="section-label" style={{ marginTop: 16 }}>
-              Formas de Pagamento
-            </p>
-            <div className="table-wrap" style={{ maxHeight: 180 }}>
-              <table className="table table-compacta">
-                <thead>
-                  <tr>
-                    <th>Carteira</th>
-                    <th>Categoria</th>
-                    <th>Valor</th>
-                    <th>Situação</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {detalhe.pagamentos.map((p, indice) => (
-                    <tr key={indice}>
-                      <td>{p.nomeCarteira}</td>
-                      <td>{p.categoriaCarteira}</td>
-                      <td className="mono">{moeda(p.valorPago)}</td>
-                      <td>
-                        <span className={`badge ${p.quitado ? '' : 'badge-inativo'}`}>
-                          {p.quitado ? 'Quitado' : 'Em aberto'}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            {jaCancelada && (
-              <p className="erro" style={{ marginTop: 16 }}>
-                A venda nº {detalhe.idVenda} já foi cancelada em {formatarDataHora(detalhe.dataCancelamento)} por{' '}
-                {detalhe.nomeUsuarioCancelamento}. Motivo: {detalhe.motivoCancelamento}
+            <div style={{ overflowY: 'auto', flex: 1, minHeight: 0 }}>
+              <p className="section-label" style={{ marginTop: 0 }}>
+                Itens (voltarão ao estoque)
               </p>
-            )}
-
-            {!jaCancelada && bloqueada && (
-              <div style={{ marginTop: 16 }}>
-                <p className="erro">
-                  Esta venda é de crediário e já possui parcela(s) recebida(s). Não é possível cancelá-la, em
-                  nenhuma hipótese. Cancele os recebimentos, para depois cancelar a venda.
-                </p>
-                <div className="table-wrap" style={{ maxHeight: 160, marginTop: 8 }}>
-                  <table className="table table-compacta">
-                    <thead>
-                      <tr>
-                        <th>Parcela</th>
-                        <th>Vencimento</th>
-                        <th>Recebida em</th>
-                        <th>Valor Recebido</th>
+              <div className="table-wrap" style={{ maxHeight: 220 }}>
+                <table className="table table-compacta">
+                  <thead>
+                    <tr>
+                      <th>Produto</th>
+                      <th>Variação</th>
+                      <th>Qtd.</th>
+                      <th>Preço</th>
+                      <th>Valor</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {detalhe.itens.map((item, indice) => (
+                      <tr key={indice}>
+                        <td>{item.descricaoProduto}</td>
+                        <td>{[item.variacaoLinha, item.variacaoColuna].filter(Boolean).join(' / ') || '—'}</td>
+                        <td className="mono">{item.qtd}</td>
+                        <td className="mono">{moeda(item.precoVenda)}</td>
+                        <td className="mono">{moeda(item.valorItem)}</td>
                       </tr>
-                    </thead>
-                    <tbody>
-                      {detalhe.parcelasRecebidas.map((p, indice) => (
-                        <tr key={indice}>
-                          <td>{p.numeroParcela}</td>
-                          <td>{formatarDataHora(p.dataVencimento)}</td>
-                          <td>{formatarDataHora(p.dataRecebimento)}</td>
-                          <td className="mono">{moeda(p.valorRecebido)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                    ))}
+                  </tbody>
+                </table>
               </div>
-            )}
+
+              <p className="section-label" style={{ marginTop: 16 }}>
+                Formas de Pagamento
+              </p>
+              <div className="table-wrap" style={{ maxHeight: 180 }}>
+                <table className="table table-compacta">
+                  <thead>
+                    <tr>
+                      <th>Carteira</th>
+                      <th>Categoria</th>
+                      <th>Valor</th>
+                      <th>Situação</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {detalhe.pagamentos.map((p, indice) => (
+                      <tr key={indice}>
+                        <td>{p.nomeCarteira}</td>
+                        <td>{p.categoriaCarteira}</td>
+                        <td className="mono">{moeda(p.valorPago)}</td>
+                        <td>
+                          <span className={`badge ${p.quitado ? '' : 'badge-inativo'}`}>
+                            {p.quitado ? 'Quitado' : 'Em aberto'}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {jaCancelada && (
+                <p className="erro" style={{ marginTop: 16 }}>
+                  A venda nº {detalhe.idVenda} já foi cancelada em {formatarDataHora(detalhe.dataCancelamento)} por{' '}
+                  {detalhe.nomeUsuarioCancelamento}. Motivo: {detalhe.motivoCancelamento}
+                </p>
+              )}
+
+              {!jaCancelada && bloqueada && (
+                <div style={{ marginTop: 16 }}>
+                  <p className="erro">
+                    Esta venda é de crediário e já possui parcela(s) recebida(s). Não é possível cancelá-la, em
+                    nenhuma hipótese. Cancele os recebimentos, para depois cancelar a venda.
+                  </p>
+                  <div className="table-wrap" style={{ maxHeight: 160, marginTop: 8 }}>
+                    <table className="table table-compacta">
+                      <thead>
+                        <tr>
+                          <th>Parcela</th>
+                          <th>Vencimento</th>
+                          <th>Recebida em</th>
+                          <th>Valor Recebido</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {detalhe.parcelasRecebidas.map((p, indice) => (
+                          <tr key={indice}>
+                            <td>{p.numeroParcela}</td>
+                            <td>{formatarDataHora(p.dataVencimento)}</td>
+                            <td>{formatarDataHora(p.dataRecebimento)}</td>
+                            <td className="mono">{moeda(p.valorRecebido)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </div>
 
             {!jaCancelada && !bloqueada && (
-              <div style={{ marginTop: 16 }}>
+              <div style={{ flexShrink: 0, marginTop: 16 }}>
                 <label htmlFor="motivo-cancelamento">Motivo do Cancelamento *</label>
                 <textarea
                   id="motivo-cancelamento"
@@ -213,23 +226,16 @@ export default function CancelamentoVendaModal({
                   onChange={(e) => setMotivo(e.target.value.toUpperCase())}
                   autoFocus
                 />
+                {erro && <p className="erro-campo">{erro}</p>}
+                <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 12 }}>
+                  <button type="button" className="btn" disabled={cancelar.isPending} onClick={confirmar}>
+                    {cancelar.isPending ? 'Cancelando…' : 'Sim, Cancelar Venda'}
+                  </button>
+                </div>
               </div>
             )}
-
-            {erro && <p className="erro-campo">{erro}</p>}
           </>
         )}
-
-        <div className="ajuda-rodape">
-          <button type="button" className="btn ghost" onClick={aoFechar}>
-            {jaCancelada || bloqueada ? 'Fechar' : 'Não'}
-          </button>
-          {detalhe && !jaCancelada && !bloqueada && (
-            <button type="button" className="btn" disabled={cancelar.isPending} onClick={confirmar}>
-              {cancelar.isPending ? 'Cancelando…' : 'Sim, Cancelar Venda'}
-            </button>
-          )}
-        </div>
       </div>
     </div>
   )

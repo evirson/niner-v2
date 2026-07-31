@@ -219,6 +219,12 @@ já precisa criar uma.
   **azul** (lápis) para editar, **vermelho** (lixeira) para excluir
   (`.acao-visualizar`/`.acao-editar`/`.acao-excluir` em `web/src/styles.css`, tokens de cor
   `--sucesso`/`--info`/`--danger`).
+- **Modo embutido (2026-07-31):** `ClienteForm` ganhou os props opcionais
+  `aoSalvarComSucesso`/`aoCancelar` — quando fornecidos, o formulário chama esses callbacks em
+  vez de navegar para `/clientes` e esconde o ícone de engrenagem ("Configurar tela"). Reaproveitado
+  por `ClienteFormModal.tsx` (`web/src/pages/pdv/`) pra cadastrar cliente **sem sair da venda**
+  no PDV — ver `docs/telas/pdv.md`, seção "Cliente e vendedor da venda". Fora desse uso, o
+  comportamento da tela é idêntico ao de sempre.
 
 ## Exclusão de cliente
 

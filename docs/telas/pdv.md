@@ -188,6 +188,25 @@ opcionais como o desenho original (venda de balcão anônima) previa.
   spec, mencionada nas revisões anteriores desta spec, continua em aberto — mas deixou de
   bloquear o PDV: o vendedor é escolhido manualmente a cada venda, não inferido do login).
 
+**Cadastro de cliente sem sair da venda (2026-07-31).** `PesquisaClienteModal.tsx` ganhou um
+botão "+ Novo Cliente" ao lado do campo de busca. A primeira versão abria um formulário mínimo
+(nome/categoria/gênero/CPF/celular); revisado no mesmo dia a pedido do dono do produto pra abrir
+a **mesma tela de cadastro completa de cliente** (`ClienteForm.tsx`, a de `/clientes/novo` —
+Identificação/Contato/Endereço/Outros, categoria com criação rápida embutida, CEP autopreenchido
+via ViaCEP, todas as validações de sempre), dentro de um modal que rola por dentro
+(`ClienteFormModal.tsx`, novo, em `pages/pdv/`). `ClienteForm` ganhou dois props opcionais —
+`aoSalvarComSucesso`/`aoCancelar` — que, quando fornecidos, substituem a navegação pra
+`/clientes` por callbacks (seleciona o cliente recém-criado e fecha o modal, sem sair da venda em
+andamento); o ícone de engrenagem ("Configurar tela") some nesse modo, já que levaria pra fora da
+venda. Fora daí, o comportamento da tela de Cliente é idêntico ao de sempre.
+
+### Layout da tela de Pesquisa de Cliente (revisado 2026-07-31)
+
+O campo de busca "Nome, CPF/CNPJ ou Celular" e o botão "+ Novo Cliente" ficam na mesma linha,
+mesma altura (rótulo numa linha própria acima, input+botão juntos numa `linha-com-botao` —
+mesmo padrão já usado pra Categoria nos formulários de cadastro). Antes o rótulo empurrava só o
+campo de busca pra baixo, deixando o botão desalinhado por cima.
+
 ### Layout da tela de Forma de Pagamento (F6, 2026-07-28 — mockup do dono do produto)
 
 Reorganizada em blocos empilhados verticalmente, de cima pra baixo:
@@ -211,8 +230,15 @@ Reorganizada em blocos empilhados verticalmente, de cima pra baixo:
 "Valor a Pagar" e "Valor Pago" (2026-07-28, corrigido) são dinâmicos: caem/sobem conforme o
 operador lança formas de pagamento — `Valor a Pagar = Sub-Total − soma das coberturas das linhas
 já lançadas` (não só o desconto acumulado, que foi um bug corrigido no meio da sessão) e
-`Valor Pago = soma do valorPago das linhas já lançadas`. Confirmar Venda exige `Valor a Pagar`
-zerado **e** cliente **e** vendedor selecionados.
+`Valor Pago = soma do valorPago das linhas já lançadas`.
+
+**Habilitação do "Confirmar Venda" (revisado 2026-07-31).** O botão habilita assim que
+`Valor a Pagar` zera — **não** depende mais de cliente/vendedor já estarem selecionados (antes
+dependia dos três). A falta de cliente e/ou vendedor só é cobrada ao **clicar** no botão: se
+faltar um dos dois (ou os dois), a venda não é gravada e aparece um `Toast` de erro específico
+("Defina o cliente…"/"Defina o vendedor…"/"Defina o cliente e o vendedor antes de confirmar a
+venda."). Pedido direto do dono do produto — o operador pode fechar o pagamento primeiro e
+resolver cliente/vendedor depois, mas nunca grava faltando um dos dois.
 
 ### Teclas de atalho (revisão 2026-07-28 — F5/F6 renomeados)
 
@@ -223,6 +249,9 @@ zerado **e** cliente **e** vendedor selecionados.
   documentado antes) pra não deixar o navegador recarregar a página quando a funcionalidade for
   implementada.
 - F2 Pesquisa Produto, F3 Altera Quantidade, F4 Limpa Tela — inalterados.
+- O botão "F6 Efetiva Venda" teve a altura reduzida em 2026-07-31 (ajuste puramente visual,
+  `.pdv-tecla-venda` em `styles.css`) — pedido direto do dono do produto, sem mudança de
+  comportamento.
 
 ### Baixa de estoque — sem checagem de saldo (revisado 2026-07-29)
 

@@ -399,6 +399,25 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
 .app-nav a.active { background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--accent); }
 .app-main { flex: 1; min-height: 0; overflow-y: auto; padding: 28px; max-width: 1600px; }
 
+/* Menu agrupado (2026-07-31) — cabeçalho de grupo é um botão que só alterna aberto/fechado
+   (não navega); indentação por nível vem de `style.paddingLeft` inline (Layout.tsx), já que a
+   profundidade é dinâmica (até 3 níveis: Frente de Loja > Caixa > Abertura de Caixa). */
+.app-nav-grupo { display: flex; flex-direction: column; gap: 4px; }
+.app-nav-grupo-cabecalho {
+  display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: 8px;
+  border: 0; background: none; cursor: pointer; font-size: 14px; font-family: inherit;
+  font-weight: 600; color: var(--ink); text-align: left; white-space: nowrap;
+}
+.app-nav-grupo-cabecalho:hover { background: var(--surface-2); }
+.app-nav-grupo-cabecalho svg { flex-shrink: 0; }
+.app-nav-grupo-cabecalho span:nth-child(2) { flex: 1; }
+.app-nav-grupo-seta { display: flex; flex-shrink: 0; opacity: .6; }
+.app-nav-grupo-vazio {
+  display: flex; align-items: center; gap: 10px; padding: 9px 12px; white-space: nowrap;
+  color: var(--ink-muted); opacity: .5; cursor: default;
+}
+.app-nav-grupo-vazio svg { flex-shrink: 0; }
+
 /* Login */
 .login-wrap { min-height: 100vh; display: grid; place-items: center; padding: 20px; }
 .login-card { width: 100%; max-width: 380px; }
@@ -531,8 +550,8 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
 .pdv-tecla:active, .pdv-tecla.pdv-ativa { transform: scale(0.97); background: color-mix(in srgb, var(--accent) 16%, var(--surface-2)); }
 
 .pdv-tecla-venda {
-  flex-shrink: 0; margin-top: auto; min-height: 84px; display: flex; align-items: center;
-  justify-content: center; gap: 10px; padding: 16px; border-radius: var(--radius); border: none;
+  flex-shrink: 0; margin-top: auto; min-height: 52px; display: flex; align-items: center;
+  justify-content: center; gap: 10px; padding: 10px 16px; border-radius: var(--radius); border: none;
   cursor: pointer; background: var(--accent); color: var(--accent-ink); font-size: 17px; font-weight: 700;
   transition: filter .12s, transform .08s;
 }

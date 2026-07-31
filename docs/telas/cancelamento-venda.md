@@ -87,7 +87,16 @@ distinta no v1.
 ### RN-06 — Confirmação explícita
 
 O modal de cancelamento sempre mostra o resumo da venda + itens + formas de pagamento antes de
-qualquer ação; exige motivo não vazio; os botões são literalmente "Sim, Cancelar Venda" / "Não".
+qualquer ação; exige motivo não vazio; o botão de ação é "Sim, Cancelar Venda".
+
+**Layout do popup (revisado 2026-07-31).** Cabeçalho (até a linha Cliente/Vendedor) fixo, sem
+scroll; corpo (itens, formas de pagamento, mensagem de bloqueio quando aplicável) rola por
+dentro; "Motivo do Cancelamento" + o botão "Sim, Cancelar Venda" fixos no rodapé, também sem
+scroll (flexbox `overflow:hidden` no modal + `overflow-y:auto` só no meio, mesmo padrão de
+`DetalheVendaModal`). O botão "Não" foi **removido** — fechar é só o "✕" no canto superior
+direito do cabeçalho (funciona em qualquer estado: confirmação, já cancelada, ou bloqueada por
+crediário recebido). Quando a venda já está cancelada ou bloqueada, o rodapé de ação nem
+aparece — só o "✕" fecha o popup.
 
 ## O que o cancelamento reverte
 
