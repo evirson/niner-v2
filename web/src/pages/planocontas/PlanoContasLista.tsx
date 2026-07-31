@@ -15,10 +15,12 @@ import {
 import Toast, { type TipoToast } from '../../components/Toast'
 import { ApiError } from '../../lib/api'
 import {
+  ROTULO_TIPO_MOVIMENTO,
   excluirPlanoContas,
   listarPlanosContas,
   type ColunaOrdenacaoPlanoContas,
   type PlanoContas,
+  type StatusPlanoContas,
 } from '../../lib/planoContas'
 import { maiusculas } from '../../lib/texto'
 
@@ -29,8 +31,10 @@ const COLUNAS: Array<{ chave: ColunaOrdenacaoPlanoContas; rotulo: string }> = [
   { chave: 'codigo', rotulo: 'Código' },
   { chave: 'descricao', rotulo: 'Descrição' },
   { chave: 'tipoMovimento', rotulo: 'Tipo de movimento' },
+  { chave: 'natureza', rotulo: 'Natureza' },
   { chave: 'incluiDre', rotulo: 'DRE' },
   { chave: 'incluiFluxoCaixa', rotulo: 'Fluxo de caixa' },
+  { chave: 'status', rotulo: 'Status' },
 ]
 
 /**
@@ -46,15 +50,16 @@ function paginasVisiveis(atual: number, total: number): number[] {
 }
 
 /**
- * Listagem de plano de contas. Diferenças em relação a Clientes/Funcionários, vindas do
- * schema (`cfg_plano_contas`, V016): sem filtro de status e sem fallback de inativar na
- * exclusão (não existe coluna `ativo` — com vínculo a API responde 409), e sem tela de
- * configuração de campos (todos os campos são NOT NULL, nada a configurar — por isso também
- * não há ícone ⚙).
+ * Listagem de plano de contas — revisado 2026-07-31 (docs/telas/plano-contas.md): DRE/fluxo
+ * de caixa viraram classificação de verdade (grupo, não só flag) e a tabela ganhou `ativo`,
+ * então esta tela deixou de ser a única exceção sem filtro de status/fallback de inativar —
+ * agora segue o mesmo padrão de Cliente/Funcionário/Fornecedor. Ainda sem tela de configuração
+ * de campos (os campos realmente obrigatórios continuam estruturalmente NOT NULL).
  */
 export default function PlanoContasLista() {
   const location = useLocation()
   const [busca, setBusca] = useState('')
+  const [status, setStatus] = useState<StatusPlanoContas>('ATIVOS')
   const [planoParaExcluir, setPlanoParaExcluir] = useState<PlanoContas | null>(null)
   const [aviso, setAviso] = useState<{ texto: string; tipo: TipoToast } | null>(
     () => (location.state as { toast?: { texto: string; tipo: TipoToast } } | null)?.toast ?? null,
@@ -72,7 +77,7 @@ export default function PlanoContasLista() {
 
   useEffect(() => {
     setPagina(1)
-  }, [busca, ordenarPor, direcao])
+  }, [busca, status, ordenarPor, direcao])
 
   const ordenarPorColuna = (coluna: ColunaOrdenacaoPlanoContas) => {
     if (coluna === ordenarPor) {
@@ -84,10 +89,11 @@ export default function PlanoContasLista() {
   }
 
   const { data, isLoading, isFetching } = useQuery({
-    queryKey: ['planos-contas', { busca, pagina, ordenarPor, direcao }],
+    queryKey: ['planos-contas', { busca, status, pagina, ordenarPor, direcao }],
     queryFn: () =>
       listarPlanosContas({
         busca: busca || undefined,
+        status,
         pagina,
         tamanho: TAMANHO_PAGINA,
         ordenarPor,
@@ -100,10 +106,16 @@ export default function PlanoContasLista() {
 
   const excluir = useMutation({
     mutationFn: excluirPlanoContas,
-    onSuccess: () => {
+    onSuccess: (resposta) => {
       queryClient.invalidateQueries({ queryKey: ['planos-contas'] })
       setPlanoParaExcluir(null)
-      setAviso({ texto: 'Plano de contas excluído.', tipo: 'sucesso' })
+      setAviso({
+        texto:
+          resposta.acao === 'inativado'
+            ? (resposta.motivo ?? 'Plano de contas inativado (possui vínculos).')
+            : 'Plano de contas excluído.',
+        tipo: 'sucesso',
+      })
     },
     onError: (e: unknown) => {
       setPlanoParaExcluir(null)
@@ -141,6 +153,11 @@ export default function PlanoContasLista() {
             onChange={(e) => setBusca(maiusculas(e.target.value))}
             aria-label="Buscar por código ou descrição"
           />
+          <select value={status} onChange={(e) => setStatus(e.target.value as StatusPlanoContas)} aria-label="Filtrar por status">
+            <option value="ATIVOS">Ativos</option>
+            <option value="INATIVOS">Inativos</option>
+            <option value="TODOS">Todos</option>
+          </select>
         </div>
       </div>
 
@@ -177,11 +194,25 @@ export default function PlanoContasLista() {
             <tbody>
               {planos.map((p) => (
                 <tr key={p.idPlanoContas}>
-                  <td className="mono">{p.idPlanoContas}</td>
-                  <td>{p.descricao}</td>
-                  <td>{p.tipoMovimento}</td>
+                  <td className="mono" style={{ paddingLeft: (p.nivel - 1) * 16 }}>
+                    {p.idPlanoContas}
+                  </td>
+                  <td>
+                    {p.descricao}
+                    {p.padraoSistema && (
+                      <span className="muted" title="Conta padrão do sistema">
+                        {' '}
+                        🔒
+                      </span>
+                    )}
+                  </td>
+                  <td>{ROTULO_TIPO_MOVIMENTO[p.tipoMovimento]}</td>
+                  <td>{p.natureza === 'ANALITICA' ? 'Analítica' : 'Sintética'}</td>
                   <td>{p.incluiDre ? 'Sim' : '—'}</td>
                   <td>{p.incluiFluxoCaixa ? 'Sim' : '—'}</td>
+                  <td>
+                    <span className={`badge ${p.ativo ? '' : 'badge-inativo'}`}>{p.ativo ? 'Ativo' : 'Inativo'}</span>
+                  </td>
                   <td className="acoes-cell">
                     <Link
                       className="acao-icone acao-visualizar"
@@ -294,8 +325,9 @@ export default function PlanoContasLista() {
             <h2 style={{ marginTop: 0 }}>Excluir plano de contas?</h2>
             <p className="muted">
               Tem certeza que deseja excluir <strong>{planoParaExcluir.idPlanoContas} —{' '}
-              {planoParaExcluir.descricao}</strong>? Se estiver em uso por fornecedor ou contas a
-              pagar, a exclusão será bloqueada.
+              {planoParaExcluir.descricao}</strong>? Se for uma conta padrão do sistema, tiver
+              contas filhas, ou estiver em uso por fornecedor/contas a pagar/caixa/conta
+              corrente, ela será inativada em vez de excluída.
             </p>
             <div className="ajuda-rodape">
               <button type="button" className="btn ghost" onClick={() => setPlanoParaExcluir(null)}>

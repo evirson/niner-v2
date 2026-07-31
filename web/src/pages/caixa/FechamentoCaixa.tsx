@@ -5,7 +5,7 @@ import AjudaDaTela from '../../components/AjudaDaTela'
 import { IconeFechamentoCaixa } from '../../components/Icones'
 import Toast, { type TipoToast } from '../../components/Toast'
 import { ApiError } from '../../lib/api'
-import { buscarFechamentoCaixa, fecharCaixa, type ResultadoFechamento } from '../../lib/caixa'
+import { buscarFechamentoCaixa, fecharCaixa, rotuloCarteira, type ResultadoFechamento } from '../../lib/caixa'
 import { hojeISO } from '../../lib/datas'
 import { useEu } from '../../lib/eu'
 import { completarMoeda, dataParaIso, dataValida, desmascararMoeda, formatarMoeda, isoParaData, mascararData, mascararMoeda } from '../../lib/masks'
@@ -40,8 +40,9 @@ export default function FechamentoCaixa() {
   const [idUsuarioSelecionado, setIdUsuarioSelecionado] = useState<number | ''>('')
   const [dataTexto, setDataTexto] = useState(isoParaData(hojeISO()))
   const [valoresContados, setValoresContados] = useState<Record<number, string>>({})
+  const [erroContagem, setErroContagem] = useState('')
   const [resultadoDivergencia, setResultadoDivergencia] = useState<ResultadoFechamento | null>(null)
-  const [carteiraParaConferir, setCarteiraParaConferir] = useState<{ idCarteira: number; nomeCarteira: string } | null>(null)
+  const [carteiraParaConferir, setCarteiraParaConferir] = useState<{ idCarteira: number; rotulo: string } | null>(null)
   const [mostrarPreview, setMostrarPreview] = useState(false)
   const [toast, setToast] = useState<{ texto: string; tipo: TipoToast } | null>(null)
 
@@ -71,14 +72,18 @@ export default function FechamentoCaixa() {
   })
 
   // Novo caixa carregado — reseta a contagem às cegas e qualquer divergência da tentativa anterior.
+  // Campos nascem VAZIOS (não "0,00") — a tela só mostra carteiras que tiveram movimento, então
+  // nenhuma delas pode ficar sem contagem: um valor "0,00" só é aceito se o operador digitou de
+  // propósito, nunca como default silencioso (2026-07-31, pedido do dono do produto).
   useEffect(() => {
     if (!fechamento) return
     const iniciais: Record<number, string> = {}
     fechamento.linhas.forEach((l) => {
-      iniciais[l.idCarteira] = '0,00'
+      iniciais[l.idCarteira] = ''
     })
     setValoresContados(iniciais)
     setResultadoDivergencia(null)
+    setErroContagem('')
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fechamento?.idCaixa])
 
@@ -86,7 +91,7 @@ export default function FechamentoCaixa() {
     mutationFn: () => {
       const valoresContadosPayload = fechamento!.linhas.map((l) => ({
         idCarteira: l.idCarteira,
-        valorContado: desmascararMoeda(valoresContados[l.idCarteira] ?? '0,00'),
+        valorContado: desmascararMoeda(valoresContados[l.idCarteira] ?? ''),
       }))
       return fecharCaixa({ idCaixa: fechamento!.idCaixa, valoresContados: valoresContadosPayload })
     },
@@ -103,6 +108,16 @@ export default function FechamentoCaixa() {
     },
     onError: (e: unknown) => setToast({ texto: e instanceof ApiError ? e.message : 'Não foi possível fechar o caixa.', tipo: 'erro' }),
   })
+
+  const confirmarFechamento = () => {
+    const faltando = fechamento!.linhas.some((l) => !(valoresContados[l.idCarteira] ?? '').trim())
+    if (faltando) {
+      setErroContagem('Informe o valor contado de todas as carteiras — nenhuma pode ficar em branco.')
+      return
+    }
+    setErroContagem('')
+    fechar.mutate()
+  }
 
   const naoEncontrado = error instanceof ApiError && error.status === 404
 
@@ -199,29 +214,35 @@ export default function FechamentoCaixa() {
                   <div className="form-grid" style={{ marginTop: 8 }}>
                     {fechamento.linhas.map((l) => (
                       <div className="col-4" key={l.idCarteira}>
-                        <label htmlFor={`contado-${l.idCarteira}`}>{l.nomeCarteira} *</label>
+                        <label htmlFor={`contado-${l.idCarteira}`}>{rotuloCarteira(l)} *</label>
                         <input
                           id={`contado-${l.idCarteira}`}
                           className="mono"
                           inputMode="decimal"
-                          value={valoresContados[l.idCarteira] ?? '0,00'}
-                          onChange={(e) =>
+                          placeholder="0,00"
+                          value={valoresContados[l.idCarteira] ?? ''}
+                          onChange={(e) => {
+                            setErroContagem('')
                             setValoresContados((v) => ({ ...v, [l.idCarteira]: mascararMoeda(e.target.value) }))
-                          }
-                          onBlur={(e) =>
+                          }}
+                          onBlur={(e) => {
+                            // Campo vazio fica vazio (nunca completa sozinho pra "0,00") — só
+                            // um valor digitado de propósito é aceito, ver comentário no reset acima.
+                            if (!e.target.value.trim()) return
                             setValoresContados((v) => ({
                               ...v,
                               [l.idCarteira]: formatarMoeda(desmascararMoeda(completarMoeda(e.target.value))),
                             }))
-                          }
+                          }}
                           onFocus={(e) => e.target.select()}
                         />
                       </div>
                     ))}
                   </div>
+                  {erroContagem && <p className="erro-campo">{erroContagem}</p>}
                   <div className="ajuda-rodape">
                     <span />
-                    <button type="button" className="btn" disabled={fechar.isPending} onClick={() => fechar.mutate()}>
+                    <button type="button" className="btn" disabled={fechar.isPending} onClick={confirmarFechamento}>
                       {fechar.isPending ? 'Conferindo…' : 'Fechar Caixa'}
                     </button>
                   </div>
@@ -252,11 +273,11 @@ export default function FechamentoCaixa() {
                           return (
                             <tr
                               key={l.idCarteira}
-                              onClick={() => setCarteiraParaConferir({ idCarteira: l.idCarteira, nomeCarteira: l.nomeCarteira })}
+                              onClick={() => setCarteiraParaConferir({ idCarteira: l.idCarteira, rotulo: rotuloCarteira(l) })}
                               style={{ cursor: 'pointer' }}
                               title="Clique para ver os lançamentos desta carteira"
                             >
-                              <td>{l.nomeCarteira}</td>
+                              <td>{rotuloCarteira(l)}</td>
                               <td className="mono">{moeda(l.valorEsperado)}</td>
                               <td className="mono">{moeda(l.valorContado)}</td>
                               <td className="mono" style={bateu ? undefined : { color: 'var(--danger)' }}>
@@ -294,7 +315,7 @@ export default function FechamentoCaixa() {
                       <tbody>
                         {fechamento.linhas.map((l) => (
                           <tr key={l.idCarteira}>
-                            <td>{l.nomeCarteira}</td>
+                            <td>{rotuloCarteira(l)}</td>
                             <td className="mono">{moeda(l.saldoInicial)}</td>
                             <td className="mono">{moeda(l.totalCredito)}</td>
                             <td className="mono">{moeda(l.totalDebito)}</td>
@@ -321,7 +342,7 @@ export default function FechamentoCaixa() {
                       <tbody>
                         {fechamento.conferencia.map((c) => (
                           <tr key={c.idCarteira}>
-                            <td>{c.nomeCarteira}</td>
+                            <td>{rotuloCarteira(c)}</td>
                             <td className="mono">{moeda(c.valorEsperado)}</td>
                             <td className="mono">{moeda(c.valorContado)}</td>
                             <td className="mono">{moeda(c.diferenca)}</td>
@@ -352,7 +373,7 @@ export default function FechamentoCaixa() {
         <LancamentosCarteiraModal
           idCaixa={fechamento.idCaixa}
           idCarteira={carteiraParaConferir.idCarteira}
-          nomeCarteira={carteiraParaConferir.nomeCarteira}
+          nomeCarteira={carteiraParaConferir.rotulo}
           aoFechar={() => setCarteiraParaConferir(null)}
         />
       )}

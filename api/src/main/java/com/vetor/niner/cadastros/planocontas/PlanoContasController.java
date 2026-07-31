@@ -27,11 +27,12 @@ public class PlanoContasController {
     @GetMapping
     public PaginaPlanosContas listar(
             @RequestParam(required = false) String busca,
+            @RequestParam(required = false) String status,
             @RequestParam(required = false) Integer pagina,
             @RequestParam(required = false) Integer limite,
             @RequestParam(required = false) String ordenarPor,
             @RequestParam(required = false) String direcao) {
-        return service.listar(busca, pagina, limite, ordenarPor, direcao);
+        return service.listar(busca, status, pagina, limite, ordenarPor, direcao);
     }
 
     @GetMapping("/{codigo}")

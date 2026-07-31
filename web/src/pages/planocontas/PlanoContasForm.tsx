@@ -15,34 +15,54 @@ import InfoRegistro from '../../components/InfoRegistro'
 import Toast from '../../components/Toast'
 import { ApiError } from '../../lib/api'
 import { aoTeclarEnterNoFormulario } from '../../lib/formularios'
+import { codigoPlanoContasValido, mascararCodigoPlanoContas } from '../../lib/masks'
 import {
+  GRUPOS_DFC,
+  GRUPOS_DRE,
+  NATUREZAS,
   PLANO_CONTAS_VAZIO,
+  ROTULO_GRUPO_DFC,
+  ROTULO_GRUPO_DRE,
+  ROTULO_NATUREZA,
+  ROTULO_TIPO_MOVIMENTO,
   TIPOS_MOVIMENTO,
   atualizarPlanoContas,
   buscarPlanoContas,
   criarPlanoContas,
   paraFormulario,
   paraRequisicao,
+  type GrupoDfcConta,
+  type GrupoDreConta,
+  type NaturezaConta,
   type PlanoContasFormState,
   type TipoMovimentoConta,
 } from '../../lib/planoContas'
 import { maiusculas } from '../../lib/texto'
 
-type CampoValidavel = 'codigo' | 'descricao' | 'tipoMovimento'
+type CampoValidavel = 'codigo' | 'descricao' | 'tipoMovimento' | 'natureza' | 'grupoDre' | 'grupoDfc'
 type ErrosCampo = Partial<Record<CampoValidavel, string>>
 
-/** Todos os campos da tabela são NOT NULL — validação simples de obrigatoriedade. */
 function validarCampo(chave: CampoValidavel, f: PlanoContasFormState): string | undefined {
-  if (chave === 'codigo') return f.codigo.trim() ? undefined : 'Código é obrigatório.'
+  if (chave === 'codigo') {
+    if (!f.codigo.trim()) return 'Código é obrigatório.'
+    return codigoPlanoContasValido(mascararCodigoPlanoContas(f.codigo))
+      ? undefined
+      : 'Código incompleto — formato 9.99.999.999 (conta.subconta.item.subitem).'
+  }
   if (chave === 'descricao') return f.descricao.trim() ? undefined : 'Descrição é obrigatória.'
-  return f.tipoMovimento ? undefined : 'Escolha o tipo de movimento.'
+  if (chave === 'tipoMovimento') return f.tipoMovimento ? undefined : 'Escolha o tipo de movimento.'
+  if (chave === 'natureza') return f.natureza ? undefined : 'Escolha a natureza.'
+  if (chave === 'grupoDre') return !f.incluiDre || f.grupoDre ? undefined : 'Escolha o grupo da DRE.'
+  return !f.incluiFluxoCaixa || f.grupoDfc ? undefined : 'Escolha o grupo do fluxo de caixa.'
 }
 
 /**
- * Formulário de plano de contas. O código contábil é a própria PK de negócio — digitado
- * livremente ao criar (ex.: "3.1.001") e **imutável depois** (campo somente leitura na
- * edição; é referenciado por fornecedor/contas a pagar). Sem tela de configuração de campos:
- * todos são NOT NULL, nada a configurar.
+ * Formulário de plano de contas — revisado 2026-07-31 (docs/telas/plano-contas.md): DRE e
+ * fluxo de caixa passaram de flag solta para classificação de verdade (grupo próprio, exigido
+ * só quando a flag correspondente está marcada); `sinal`/`aceitaLancamento` são sempre
+ * derivados no servidor a partir de tipo de movimento/natureza — não aparecem como campo. O
+ * código contábil continua sendo a própria PK de negócio — digitado ao criar (agora com
+ * máscara fixa 9.99.999.999) e **imutável depois** (a hierarquia inteira é derivada dele).
  */
 export default function PlanoContasForm({ somenteLeitura = false }: { somenteLeitura?: boolean }) {
   const { codigo } = useParams()
@@ -85,9 +105,13 @@ export default function PlanoContasForm({ somenteLeitura = false }: { somenteLei
       setToast(e instanceof ApiError ? e.message : 'Não foi possível salvar o plano de contas.'),
   })
 
+  const aoMudarCodigo = (e: ChangeEvent<HTMLInputElement>) =>
+    setForm((f) => ({ ...f, codigo: mascararCodigoPlanoContas(e.target.value) }))
+
   /** onChange de campo de texto livre — sempre maiúsculas, não importa o teclado. */
-  const campo = (chave: 'codigo' | 'descricao') => (e: ChangeEvent<HTMLInputElement>) =>
-    setForm((f) => ({ ...f, [chave]: maiusculas(e.target.value) }))
+  const campo = (chave: 'descricao' | 'descricaoCurta' | 'idContaContabil' | 'idPlanoReferencial' | 'observacao') =>
+    (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
+      setForm((f) => ({ ...f, [chave]: maiusculas(e.target.value) }))
 
   /** Valida um campo ao sair dele. */
   const aoSairDoCampo = (chave: CampoValidavel) => (_e: FocusEvent) =>
@@ -100,6 +124,9 @@ export default function PlanoContasForm({ somenteLeitura = false }: { somenteLei
       codigo: validarCampo('codigo', form),
       descricao: validarCampo('descricao', form),
       tipoMovimento: validarCampo('tipoMovimento', form),
+      natureza: validarCampo('natureza', form),
+      grupoDre: validarCampo('grupoDre', form),
+      grupoDfc: validarCampo('grupoDfc', form),
     }
     setErros(novosErros)
     if (Object.values(novosErros).some(Boolean)) {
@@ -151,22 +178,22 @@ export default function PlanoContasForm({ somenteLeitura = false }: { somenteLei
           <p className="section-label">Identificação</p>
 
           <div className="form-grid">
-            <div className="col-4">
+            <div className="col-3">
               <label htmlFor="codigo">Código *</label>
               <input
                 id="codigo"
+                className={`mono${editando ? ' campo-leitura' : ''}`}
                 autoFocus={!editando}
-                placeholder="ex.: 3.1.001"
-                className={editando ? 'campo-leitura' : undefined}
+                placeholder="9.99.999.999"
                 readOnly={editando}
                 tabIndex={editando ? -1 : undefined}
                 value={form.codigo}
-                onChange={campo('codigo')}
+                onChange={aoMudarCodigo}
                 onBlur={aoSairDoCampo('codigo')}
               />
               {erros.codigo && <p className="erro-campo">{erros.codigo}</p>}
             </div>
-            <div className="col-8">
+            <div className="col-5">
               <label htmlFor="descricao">Descrição *</label>
               <input
                 id="descricao"
@@ -177,6 +204,15 @@ export default function PlanoContasForm({ somenteLeitura = false }: { somenteLei
               />
               {erros.descricao && <p className="erro-campo">{erros.descricao}</p>}
             </div>
+            <div className="col-4">
+              <label htmlFor="descricaoCurta">Descrição curta</label>
+              <input
+                id="descricaoCurta"
+                placeholder="p/ cupom, PDV, relatório estreito"
+                value={form.descricaoCurta}
+                onChange={campo('descricaoCurta')}
+              />
+            </div>
           </div>
         </section>
 
@@ -184,7 +220,7 @@ export default function PlanoContasForm({ somenteLeitura = false }: { somenteLei
           <p className="section-label">Classificação</p>
 
           <div className="form-grid">
-            <div className="col-4">
+            <div className="col-6">
               <label htmlFor="tipoMovimento">Tipo de movimento *</label>
               <select
                 id="tipoMovimento"
@@ -197,32 +233,169 @@ export default function PlanoContasForm({ somenteLeitura = false }: { somenteLei
                 <option value="">Selecione…</option>
                 {TIPOS_MOVIMENTO.map((t) => (
                   <option key={t} value={t}>
-                    {t}
+                    {ROTULO_TIPO_MOVIMENTO[t]}
                   </option>
                 ))}
               </select>
               {erros.tipoMovimento && <p className="erro-campo">{erros.tipoMovimento}</p>}
             </div>
-            <div className="col-8">
-              <label>Relatórios</label>
-              <div className="identificacao-linha" style={{ minHeight: 45, alignItems: 'center' }}>
-                <label className="checkbox-linha" style={{ marginTop: 0 }}>
-                  <input
-                    type="checkbox"
-                    checked={form.incluiDre}
-                    onChange={(e) => setForm((f) => ({ ...f, incluiDre: e.target.checked }))}
-                  />
-                  Compõe a DRE
-                </label>
-                <label className="checkbox-linha" style={{ marginTop: 0 }}>
-                  <input
-                    type="checkbox"
-                    checked={form.incluiFluxoCaixa}
-                    onChange={(e) => setForm((f) => ({ ...f, incluiFluxoCaixa: e.target.checked }))}
-                  />
-                  Compõe o fluxo de caixa
-                </label>
-              </div>
+            <div className="col-6">
+              <label htmlFor="natureza">Natureza *</label>
+              <select
+                id="natureza"
+                value={form.natureza}
+                onChange={(e) => setForm((f) => ({ ...f, natureza: e.target.value as NaturezaConta }))}
+                onBlur={aoSairDoCampo('natureza')}
+              >
+                <option value="">Selecione…</option>
+                {NATUREZAS.map((n) => (
+                  <option key={n} value={n}>
+                    {ROTULO_NATUREZA[n]}
+                  </option>
+                ))}
+              </select>
+              {erros.natureza && <p className="erro-campo">{erros.natureza}</p>}
+            </div>
+          </div>
+        </section>
+
+        <section className="section">
+          <p className="section-label">DRE e fluxo de caixa</p>
+          <p className="muted" style={{ marginTop: -4 }}>
+            Independentes um do outro — é isso que evita contar a mesma coisa duas vezes (ex.:
+            compra de mercadoria entra no fluxo de caixa, nunca na DRE; o CMV é o oposto).
+          </p>
+
+          <div className="form-grid">
+            <div className="col-3">
+              <label className="checkbox-linha">
+                <input
+                  type="checkbox"
+                  checked={form.incluiDre}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, incluiDre: e.target.checked, grupoDre: e.target.checked ? f.grupoDre : '' }))
+                  }
+                />
+                Compõe a DRE
+              </label>
+            </div>
+            <div className="col-3">
+              {form.incluiDre && (
+                <>
+                  <label htmlFor="grupoDre">Grupo da DRE *</label>
+                  <select
+                    id="grupoDre"
+                    value={form.grupoDre}
+                    onChange={(e) => setForm((f) => ({ ...f, grupoDre: e.target.value as GrupoDreConta }))}
+                    onBlur={aoSairDoCampo('grupoDre')}
+                  >
+                    <option value="">Selecione…</option>
+                    {GRUPOS_DRE.map((g) => (
+                      <option key={g} value={g}>
+                        {ROTULO_GRUPO_DRE[g]}
+                      </option>
+                    ))}
+                  </select>
+                  {erros.grupoDre && <p className="erro-campo">{erros.grupoDre}</p>}
+                </>
+              )}
+            </div>
+            <div className="col-3">
+              <label className="checkbox-linha">
+                <input
+                  type="checkbox"
+                  checked={form.incluiFluxoCaixa}
+                  onChange={(e) =>
+                    setForm((f) => ({
+                      ...f,
+                      incluiFluxoCaixa: e.target.checked,
+                      grupoDfc: e.target.checked ? f.grupoDfc : '',
+                    }))
+                  }
+                />
+                Compõe o fluxo de caixa
+              </label>
+            </div>
+            <div className="col-3">
+              {form.incluiFluxoCaixa && (
+                <>
+                  <label htmlFor="grupoDfc">Grupo do fluxo de caixa *</label>
+                  <select
+                    id="grupoDfc"
+                    value={form.grupoDfc}
+                    onChange={(e) => setForm((f) => ({ ...f, grupoDfc: e.target.value as GrupoDfcConta }))}
+                    onBlur={aoSairDoCampo('grupoDfc')}
+                  >
+                    <option value="">Selecione…</option>
+                    {GRUPOS_DFC.map((g) => (
+                      <option key={g} value={g}>
+                        {ROTULO_GRUPO_DFC[g]}
+                      </option>
+                    ))}
+                  </select>
+                  {erros.grupoDfc && <p className="erro-campo">{erros.grupoDfc}</p>}
+                </>
+              )}
+            </div>
+          </div>
+        </section>
+
+        <section className="section">
+          <p className="section-label">Exigências no lançamento</p>
+
+          <div className="form-grid">
+            <div className="col-4">
+              <label className="checkbox-linha">
+                <input
+                  type="checkbox"
+                  checked={form.exigeCentroCusto}
+                  onChange={(e) => setForm((f) => ({ ...f, exigeCentroCusto: e.target.checked }))}
+                />
+                Exige centro de custo
+              </label>
+            </div>
+            <div className="col-4">
+              <label className="checkbox-linha">
+                <input
+                  type="checkbox"
+                  checked={form.exigeContraparte}
+                  onChange={(e) => setForm((f) => ({ ...f, exigeContraparte: e.target.checked }))}
+                />
+                Exige contraparte (conta de destino)
+              </label>
+            </div>
+            <div className="col-4">
+              <label className="checkbox-linha">
+                <input
+                  type="checkbox"
+                  checked={form.exigeDocumento}
+                  onChange={(e) => setForm((f) => ({ ...f, exigeDocumento: e.target.checked }))}
+                />
+                Exige documento (NF/contrato)
+              </label>
+            </div>
+          </div>
+        </section>
+
+        <section className="section">
+          <p className="section-label">Integrações (opcional)</p>
+
+          <div className="form-grid">
+            <div className="col-6">
+              <label htmlFor="idContaContabil">Conta contábil (de-para SPED ECD)</label>
+              <input id="idContaContabil" value={form.idContaContabil} onChange={campo('idContaContabil')} />
+            </div>
+            <div className="col-6">
+              <label htmlFor="idPlanoReferencial">Plano referencial (de-para RFB)</label>
+              <input
+                id="idPlanoReferencial"
+                value={form.idPlanoReferencial}
+                onChange={campo('idPlanoReferencial')}
+              />
+            </div>
+            <div className="col-12">
+              <label htmlFor="observacao">Observação</label>
+              <textarea id="observacao" rows={2} value={form.observacao} onChange={campo('observacao')} />
             </div>
           </div>
         </section>

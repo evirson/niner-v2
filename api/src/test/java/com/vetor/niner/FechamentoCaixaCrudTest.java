@@ -18,6 +18,7 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.time.LocalDate;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.hasItem;
 import static org.springframework.http.MediaType.APPLICATION_JSON;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
@@ -337,6 +338,55 @@ class FechamentoCaixaCrudTest {
                 .andExpect(jsonPath("$.linhas[0].totalCredito").value(200.00))
                 .andExpect(jsonPath("$.linhas[0].totalDebito").value(0))
                 .andExpect(jsonPath("$.linhas[0].valorEsperado").value(300.00));
+    }
+
+    /** 2026-07-31 — a mesma bandeira pode ter um cadastro em débito e outro em crédito (mesmo
+     *  {@code nome_carteira}, {@code categoria_carteira} diferente); o fechamento tem que
+     *  mostrar as duas como linhas separadas, com os valores próprios de cada uma. */
+    @Test
+    void carteirasComMesmoNomeEmCategoriasDiferentesAparecemComoLinhasSeparadas() throws Exception {
+        TenantNovo tenant = assinarNovoTenant("mesmo-nome");
+        long idTenant = extrairIdTenant(tenant.token());
+        abrirCaixaDinheiro(tenant.token());
+        long idHiperDebito = criarTipoCarteira(tenant.token(), "HIPER", "CARTAO_DEBITO", true);
+        long idHiperCredito = criarTipoCarteira(tenant.token(), "HIPER", "CARTAO_CREDITO", true);
+
+        String status = mvc.perform(get("/api/v1/caixa/status").header("Authorization", "Bearer " + tenant.token()))
+                .andReturn().getResponse().getContentAsString();
+        long idCaixa = ((Number) JsonPath.read(status, "$.idCaixa")).longValue();
+
+        try (Connection c = abrirConexao(idTenant)) {
+            for (var par : java.util.List.of(
+                    java.util.Map.entry(idHiperDebito, "40.00"), java.util.Map.entry(idHiperCredito, "60.00"))) {
+                try (PreparedStatement ps = c.prepareStatement("""
+                        INSERT INTO caixa_detalhe (id_tenant, id_caixa, id_carteira, valor, tipo_operacao, credito_debito)
+                        VALUES (?, ?, ?, ?, 'RECEBIMENTO_VENDA', 'C')
+                        """)) {
+                    ps.setLong(1, idTenant);
+                    ps.setLong(2, idCaixa);
+                    ps.setLong(3, par.getKey());
+                    ps.setBigDecimal(4, new BigDecimal(par.getValue()));
+                    ps.execute();
+                }
+            }
+        }
+
+        String resp = mvc.perform(get("/api/v1/caixa/fechamento").header("Authorization", "Bearer " + tenant.token())
+                        .param("data", LocalDate.now().toString()))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+
+        java.util.List<java.util.Map<String, Object>> linhas = JsonPath.read(resp, "$.linhas");
+        java.util.List<java.util.Map<String, Object>> linhasHiper =
+                linhas.stream().filter(l -> "HIPER".equals(l.get("nomeCarteira"))).toList();
+        assertThat(linhasHiper).hasSize(2);
+
+        var debito = linhasHiper.stream().filter(l -> ((Number) l.get("idCarteira")).longValue() == idHiperDebito).findFirst().orElseThrow();
+        var credito = linhasHiper.stream().filter(l -> ((Number) l.get("idCarteira")).longValue() == idHiperCredito).findFirst().orElseThrow();
+        assertThat(debito.get("categoriaCarteira")).isEqualTo("CARTAO_DEBITO");
+        assertThat(((Number) debito.get("totalCredito")).doubleValue()).isEqualTo(40.00);
+        assertThat(credito.get("categoriaCarteira")).isEqualTo("CARTAO_CREDITO");
+        assertThat(((Number) credito.get("totalCredito")).doubleValue()).isEqualTo(60.00);
     }
 
     @Test

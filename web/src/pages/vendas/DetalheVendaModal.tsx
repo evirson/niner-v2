@@ -44,22 +44,38 @@ export default function DetalheVendaModal({ idVenda, aoFechar }: { idVenda: numb
 
   return (
     <div className="modal-overlay" onClick={aoFechar}>
-      <div className="modal modal-largo" role="dialog" aria-label={`Venda nº ${idVenda}`} onClick={(e) => e.stopPropagation()}>
+      <div
+        className="modal modal-largo"
+        role="dialog"
+        aria-label={`Venda nº ${idVenda}`}
+        onClick={(e) => e.stopPropagation()}
+        style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
+      >
+        <div className="lightbox-topo" style={{ marginBottom: 12, flexShrink: 0 }}>
+          <div className="titulo-tela">
+            {detalhe && (
+              <>
+                <h2 style={{ margin: 0 }}>Venda nº {detalhe.idVenda}</h2>
+                {detalhe.cancelada ? (
+                  <span className="badge badge-inativo">Cancelada</span>
+                ) : (
+                  <span className="badge">Faturada</span>
+                )}
+              </>
+            )}
+          </div>
+          <button type="button" className="btn ghost" onClick={aoFechar} aria-label="Fechar">
+            ✕
+          </button>
+        </div>
+
+        <div style={{ overflowY: 'auto', flex: 1, minHeight: 0 }}>
         {isLoading ? (
           <p className="muted">Carregando detalhamento…</p>
         ) : error || !detalhe ? (
           <p className="erro">{error instanceof ApiError ? error.message : 'Não foi possível carregar o detalhamento.'}</p>
         ) : (
           <>
-            <div className="titulo-tela" style={{ marginBottom: 12 }}>
-              <h2 style={{ margin: 0 }}>Venda nº {detalhe.idVenda}</h2>
-              {detalhe.cancelada ? (
-                <span className="badge badge-inativo">Cancelada</span>
-              ) : (
-                <span className="badge">Faturada</span>
-              )}
-            </div>
-
             <div className="form-grid" style={{ marginBottom: 16 }}>
               <div className="col-3">
                 <label htmlFor="det-empresa">Empresa</label>
@@ -181,46 +197,41 @@ export default function DetalheVendaModal({ idVenda, aoFechar }: { idVenda: numb
               )}
             </div>
 
-            <h3>Parcelas de crediário</h3>
-            <div className="table-wrap" style={{ maxHeight: 220 }}>
-              {!detalhe.temParcelasCredario ? (
-                <p className="muted">Esta venda não possui parcelas de crediário.</p>
-              ) : (
-                <table className="table table-compacta">
-                  <thead>
-                    <tr>
-                      <th>Parcela</th>
-                      <th>Vencimento</th>
-                      <th>Valor</th>
-                      <th>Situação</th>
-                      <th>Data de pagamento</th>
-                      <th>Valor pago</th>
-                      <th>Juros</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {detalhe.parcelas.map((p, indice) => (
-                      <tr key={indice}>
-                        <td className="mono">{p.numeroParcela}/{p.totalParcelas}</td>
-                        <td>{formatarData(p.dataVencimento)}</td>
-                        <td className="mono">{moeda(p.valor)}</td>
-                        <td style={{ color: corSituacaoParcela(p.situacao) }}>{rotuloSituacaoParcela(p.situacao)}</td>
-                        <td>{p.dataPagamento ? formatarData(p.dataPagamento) : '—'}</td>
-                        <td className="mono">{p.dataPagamento ? moeda(p.valorPago) : '—'}</td>
-                        <td className="mono">{moeda(p.valorJuros)}</td>
+            {detalhe.temParcelasCredario && (
+              <>
+                <h3>Parcelas de crediário</h3>
+                <div className="table-wrap" style={{ maxHeight: 220 }}>
+                  <table className="table table-compacta">
+                    <thead>
+                      <tr>
+                        <th>Parcela</th>
+                        <th>Vencimento</th>
+                        <th>Valor</th>
+                        <th>Situação</th>
+                        <th>Data de pagamento</th>
+                        <th>Valor pago</th>
+                        <th>Juros</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-            </div>
+                    </thead>
+                    <tbody>
+                      {detalhe.parcelas.map((p, indice) => (
+                        <tr key={indice}>
+                          <td className="mono">{p.numeroParcela}/{p.totalParcelas}</td>
+                          <td>{formatarData(p.dataVencimento)}</td>
+                          <td className="mono">{moeda(p.valor)}</td>
+                          <td style={{ color: corSituacaoParcela(p.situacao) }}>{rotuloSituacaoParcela(p.situacao)}</td>
+                          <td>{p.dataPagamento ? formatarData(p.dataPagamento) : '—'}</td>
+                          <td className="mono">{p.dataPagamento ? moeda(p.valorPago) : '—'}</td>
+                          <td className="mono">{moeda(p.valorJuros)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            )}
           </>
         )}
-
-        <div className="ajuda-rodape">
-          <button type="button" className="btn ghost" onClick={aoFechar}>
-            Fechar
-          </button>
         </div>
       </div>
     </div>

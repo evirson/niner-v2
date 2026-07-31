@@ -185,7 +185,7 @@ class ContaCorrenteCrudTest {
         mvc.perform(post("/api/v1/contas-corrente-movimento").header("Authorization", "Bearer " + token)
                         .contentType(APPLICATION_JSON)
                         .content("""
-                                {"idContaCorrente":"555","idPlanoContas":"1.1.001","dataMovimento":"2026-07-30T10:00:00Z",
+                                {"idContaCorrente":"555","idPlanoContas":"1.00.000.000","dataMovimento":"2026-07-30T10:00:00Z",
                                  "numeroDocumento":"DOC-1","creditoDebito":"C","valor":100.00}
                                 """))
                 .andExpect(status().isCreated());
@@ -271,7 +271,7 @@ class ContaCorrenteCrudTest {
         mvc.perform(post("/api/v1/planos-contas").header("Authorization", "Bearer " + token)
                         .contentType(APPLICATION_JSON)
                         .content("""
-                                {"codigo":"1.1.001","descricao":"receita teste","tipoMovimento":"CRÉDITO",
+                                {"codigo":"1.00.000.000","descricao":"receita teste","tipoMovimento":"CREDITO","natureza":"ANALITICA",
                                  "incluiDre":false,"incluiFluxoCaixa":false}
                                 """))
                 .andExpect(status().isCreated());

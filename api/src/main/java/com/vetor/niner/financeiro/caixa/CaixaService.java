@@ -11,6 +11,7 @@ import com.vetor.niner.financeiro.caixa.CaixaDtos.LinhaConferenciaResponse;
 import com.vetor.niner.financeiro.caixa.CaixaDtos.LinhaTotalCarteiraResponse;
 import com.vetor.niner.financeiro.caixa.CaixaDtos.ResultadoFechamentoResponse;
 import com.vetor.niner.financeiro.caixa.CaixaDtos.ValorContadoRequest;
+import com.vetor.niner.financeiro.TipoCarteiraDtos.CategoriaCarteira;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Service;
@@ -54,11 +55,18 @@ public class CaixaService {
                 .orElseGet(() -> new CaixaStatusResponse(false, null, null, null, null, null));
     }
 
+    /**
+     * Saldo inicial do caixa só pode ser em "Dinheiro" (2026-07-31, pedido do dono do produto) —
+     * cartão/PIX/crediário não têm "saldo inicial" de verdade, só recebem movimento durante o
+     * dia. Filtra por {@code categoria_carteira = 'AVISTA'} e {@code nome_carteira = 'DINHEIRO'}
+     * (semeada no signup, {@code SignupService}) em vez de listar todas as carteiras do tenant.
+     */
     @Transactional(readOnly = true)
     public List<CarteiraParaAberturaResponse> listarCarteirasParaAbertura() {
         return jdbc.sql("""
                         SELECT id_carteira, nome_carteira FROM tipo_carteira
                         WHERE id_tenant = plataforma.tenant_atual()
+                          AND categoria_carteira = 'AVISTA' AND nome_carteira = 'DINHEIRO'
                         ORDER BY nome_carteira ASC
                         """)
                 .query((rs, n) -> new CarteiraParaAberturaResponse(rs.getLong("id_carteira"), rs.getString("nome_carteira")))
@@ -121,10 +129,16 @@ public class CaixaService {
                 .optional();
     }
 
+    /** P4 — o front nunca é a única barreira: mesmo filtro de {@link #listarCarteirasParaAbertura}
+     *  reforçado aqui, senão um POST direto poderia abrir o caixa em qualquer carteira. */
     private void validarCarteira(long idCarteira) {
-        jdbc.sql("SELECT id_carteira FROM tipo_carteira WHERE id_tenant = plataforma.tenant_atual() AND id_carteira = ?")
+        jdbc.sql("""
+                        SELECT id_carteira FROM tipo_carteira
+                        WHERE id_tenant = plataforma.tenant_atual() AND id_carteira = ?
+                          AND categoria_carteira = 'AVISTA' AND nome_carteira = 'DINHEIRO'
+                        """)
                 .param(idCarteira).query(Long.class).optional()
-                .orElseThrow(() -> new IllegalArgumentException("Tipo de carteira informado não existe."));
+                .orElseThrow(() -> new IllegalArgumentException("O saldo inicial do caixa só pode ser aberto com a carteira \"Dinheiro\"."));
     }
 
     /**
@@ -187,7 +201,7 @@ public class CaixaService {
                 bate = false;
             }
             conferencia.add(new LinhaConferenciaResponse(
-                    linha.idCarteira(), linha.nomeCarteira(), linha.valorEsperado(), contado, diferenca));
+                    linha.idCarteira(), linha.nomeCarteira(), linha.categoriaCarteira(), linha.valorEsperado(), contado, diferenca));
         }
 
         if (!bate) {
@@ -308,52 +322,59 @@ public class CaixaService {
                 caixa.dataAbertura(), caixa.dataFechamento(), caixa.fechado(), linhas, conferencia);
     }
 
-    private record Cabecalho(String nomeUsuario, String nomeEmpresa, String nomeCarteiraAbertura) {
+    private record Cabecalho(
+            String nomeUsuario, String nomeEmpresa, String nomeCarteiraAbertura, CategoriaCarteira categoriaCarteiraAbertura) {
     }
 
     private Cabecalho buscarCabecalho(Caixa caixa) {
         return jdbc.sql("""
-                        SELECT u.nome_usuario AS nome_usuario, e.razao_social AS nome_empresa, tc.nome_carteira
+                        SELECT u.nome_usuario AS nome_usuario, e.razao_social AS nome_empresa,
+                               tc.nome_carteira, tc.categoria_carteira::text AS categoria_carteira
                         FROM usuario u, empresa e, tipo_carteira tc
                         WHERE u.id_tenant = plataforma.tenant_atual() AND u.id_usuario = ?
                               AND e.id_tenant = plataforma.tenant_atual() AND e.id_empresa = ?
                               AND tc.id_tenant = plataforma.tenant_atual() AND tc.id_carteira = ?
                         """)
                 .params(caixa.idUsuario(), caixa.idEmpresa(), caixa.idCarteira())
-                .query((rs, n) -> new Cabecalho(rs.getString("nome_usuario"), rs.getString("nome_empresa"), rs.getString("nome_carteira")))
+                .query((rs, n) -> new Cabecalho(rs.getString("nome_usuario"), rs.getString("nome_empresa"),
+                        rs.getString("nome_carteira"), CategoriaCarteira.valueOf(rs.getString("categoria_carteira"))))
                 .single();
     }
 
     /** Totais por tipo de carteira usados tanto na consulta (GET) quanto no fechamento (POST,
      *  pra comparar contra o valor contado) — única fonte de verdade do cálculo. */
     private List<LinhaTotalCarteiraResponse> calcularLinhas(Caixa caixa) {
-        String nomeCarteiraAbertura = buscarCabecalho(caixa).nomeCarteiraAbertura();
+        Cabecalho cabecalho = buscarCabecalho(caixa);
 
-        record Total(long idCarteira, String nomeCarteira, String creditoDebito, BigDecimal total) {
+        record Total(long idCarteira, String nomeCarteira, CategoriaCarteira categoriaCarteira, String creditoDebito, BigDecimal total) {
         }
         List<Total> totais = jdbc.sql("""
-                        SELECT cd.id_carteira, tc.nome_carteira, cd.credito_debito::text AS credito_debito, SUM(cd.valor) AS total
+                        SELECT cd.id_carteira, tc.nome_carteira, tc.categoria_carteira::text AS categoria_carteira,
+                               cd.credito_debito::text AS credito_debito, SUM(cd.valor) AS total
                         FROM caixa_detalhe cd
                         JOIN tipo_carteira tc ON tc.id_carteira = cd.id_carteira AND tc.id_tenant = cd.id_tenant
                         WHERE cd.id_tenant = plataforma.tenant_atual() AND cd.id_caixa = ?
-                        GROUP BY cd.id_carteira, tc.nome_carteira, cd.credito_debito
+                        GROUP BY cd.id_carteira, tc.nome_carteira, tc.categoria_carteira, cd.credito_debito
                         """)
                 .param(caixa.idCaixa())
                 .query((rs, n) -> new Total(
                         rs.getLong("id_carteira"), rs.getString("nome_carteira"),
+                        CategoriaCarteira.valueOf(rs.getString("categoria_carteira")),
                         rs.getString("credito_debito"), rs.getBigDecimal("total")))
                 .list();
 
-        record Acumulado(String nomeCarteira, BigDecimal credito, BigDecimal debito) {
+        record Acumulado(String nomeCarteira, CategoriaCarteira categoriaCarteira, BigDecimal credito, BigDecimal debito) {
         }
         Map<Long, Acumulado> porCarteira = new LinkedHashMap<>();
         // a carteira de abertura sempre aparece, mesmo sem nenhum lançamento (saldo_inicial sozinho).
-        porCarteira.put(caixa.idCarteira(), new Acumulado(nomeCarteiraAbertura, BigDecimal.ZERO, BigDecimal.ZERO));
+        porCarteira.put(caixa.idCarteira(), new Acumulado(
+                cabecalho.nomeCarteiraAbertura(), cabecalho.categoriaCarteiraAbertura(), BigDecimal.ZERO, BigDecimal.ZERO));
         for (Total t : totais) {
-            Acumulado atual = porCarteira.getOrDefault(t.idCarteira(), new Acumulado(t.nomeCarteira(), BigDecimal.ZERO, BigDecimal.ZERO));
+            Acumulado atual = porCarteira.getOrDefault(t.idCarteira(),
+                    new Acumulado(t.nomeCarteira(), t.categoriaCarteira(), BigDecimal.ZERO, BigDecimal.ZERO));
             porCarteira.put(t.idCarteira(), "C".equals(t.creditoDebito())
-                    ? new Acumulado(atual.nomeCarteira(), atual.credito().add(t.total()), atual.debito())
-                    : new Acumulado(atual.nomeCarteira(), atual.credito(), atual.debito().add(t.total())));
+                    ? new Acumulado(atual.nomeCarteira(), atual.categoriaCarteira(), atual.credito().add(t.total()), atual.debito())
+                    : new Acumulado(atual.nomeCarteira(), atual.categoriaCarteira(), atual.credito(), atual.debito().add(t.total())));
         }
 
         List<LinhaTotalCarteiraResponse> linhas = new ArrayList<>();
@@ -361,7 +382,7 @@ public class CaixaService {
             BigDecimal saldoInicial = entrada.getKey() == caixa.idCarteira() ? caixa.saldoInicial() : BigDecimal.ZERO;
             BigDecimal esperado = saldoInicial.add(entrada.getValue().credito()).subtract(entrada.getValue().debito());
             linhas.add(new LinhaTotalCarteiraResponse(
-                    entrada.getKey(), entrada.getValue().nomeCarteira(), saldoInicial,
+                    entrada.getKey(), entrada.getValue().nomeCarteira(), entrada.getValue().categoriaCarteira(), saldoInicial,
                     entrada.getValue().credito(), entrada.getValue().debito(), esperado));
         }
         linhas.sort(Comparator.comparing(LinhaTotalCarteiraResponse::nomeCarteira));
@@ -370,7 +391,8 @@ public class CaixaService {
 
     private List<LinhaConferenciaResponse> buscarConferencia(long idCaixa) {
         return jdbc.sql("""
-                        SELECT cfc.id_carteira, tc.nome_carteira, cfc.valor_esperado, cfc.valor_contado
+                        SELECT cfc.id_carteira, tc.nome_carteira, tc.categoria_carteira::text AS categoria_carteira,
+                               cfc.valor_esperado, cfc.valor_contado
                         FROM caixa_fechamento_conferencia cfc
                         JOIN tipo_carteira tc ON tc.id_carteira = cfc.id_carteira AND tc.id_tenant = cfc.id_tenant
                         WHERE cfc.id_tenant = plataforma.tenant_atual() AND cfc.id_caixa = ?
@@ -381,7 +403,8 @@ public class CaixaService {
                     BigDecimal esperado = rs.getBigDecimal("valor_esperado");
                     BigDecimal contado = rs.getBigDecimal("valor_contado");
                     return new LinhaConferenciaResponse(
-                            rs.getLong("id_carteira"), rs.getString("nome_carteira"), esperado, contado,
+                            rs.getLong("id_carteira"), rs.getString("nome_carteira"),
+                            CategoriaCarteira.valueOf(rs.getString("categoria_carteira")), esperado, contado,
                             contado.subtract(esperado));
                 })
                 .list();

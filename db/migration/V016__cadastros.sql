@@ -56,22 +56,208 @@ CREATE INDEX cliente_id_tenant_ix  ON cliente (id_tenant);
 CREATE INDEX cliente_nome_ix       ON cliente (id_tenant, nome);
 CREATE INDEX cliente_categoria_ix  ON cliente (id_tenant, id_categoria_cliente);
 
--- plano de contas (§3.3.7 do legado — preparação p/ relatórios/DRE futuros, fora do
--- financeiro completo que segue fora do v1, Q5/ADR-010). Chave de negócio (id_plano_contas)
--- é o código contábil (ex.: "3.1.001"), único POR TENANT — não é PK global.
+-- plano de contas GERENCIAL (§3.3.7 do legado — revisado por completo em 2026-07-31: DRE e
+-- fluxo de caixa deixam de ser só flags e viram classificação de verdade, com hierarquia de
+-- 4 níveis via máscara fixa "9.99.999.999" (conta.subconta.item.subitem). Substitui o desenho
+-- de 2026-07-21 (código texto livre + 3 flags soltas) — ver docs/telas/plano-contas.md.
+--
+-- PRINCÍPIO CENTRAL: inclui_dre e inclui_fluxo_caixa são INDEPENDENTES — isso é o que impede
+-- a duplicação entre resultado e caixa. Ex.: a COMPRA de mercadoria entra no fluxo de caixa
+-- (3.03) e NUNCA no DRE; o CMV entra no DRE (3.01) e NUNCA no fluxo de caixa — assim o
+-- estoque não é contado duas vezes. Mesmo princípio para amortização de principal (caixa
+-- sim, DRE não) e depreciação (DRE sim, caixa não — o desembolso já ocorreu no CAPEX).
 CREATE TABLE cfg_plano_contas (
-  id_tenant          smallint              NOT NULL REFERENCES plataforma.tenant (id_tenant),
-  id_plano_contas    text                  NOT NULL,
-  descricao          text                  NOT NULL,
-  tipo_movimento     tipo_movimento_conta  NOT NULL,   -- CRÉDITO/DÉBITO/NEUTRO
-  inclui_dre         boolean               NOT NULL,
-  inclui_fluxo_caixa boolean               NOT NULL,
-  criado_em          timestamptz           NOT NULL DEFAULT now(),  -- 2026-07-21 (auditoria, convenção do domínio)
-  atualizado_em      timestamptz           NOT NULL DEFAULT now(),
-  CONSTRAINT cfg_plano_contas_pk PRIMARY KEY (id_tenant, id_plano_contas)
+  id_tenant            smallint              NOT NULL REFERENCES plataforma.tenant (id_tenant),
+
+  -- Máscara fixa de 12 caracteres: 9.99.999.999. Largura fixa garante ordenação lexicográfica
+  -- correta e prefix-match ('1.01.%' pega toda a subárvore) sem função de normalização.
+  id_plano_contas      text                  NOT NULL,
+
+  descricao            text                  NOT NULL,
+  descricao_curta      text,                             -- p/ cupom, PDV, relatório estreito
+
+  tipo_movimento       tipo_movimento_conta  NOT NULL,    -- CREDITO/DEBITO/NEUTRO
+  natureza             natureza_conta        NOT NULL,    -- SINTETICA (agrupa) / ANALITICA (recebe lançamento)
+
+  -- Nível derivado da máscara: zeros à direita marcam o corte hierárquico.
+  nivel smallint GENERATED ALWAYS AS (
+    CASE
+      WHEN substring(id_plano_contas from  3 for 2) = '00'  THEN 1
+      WHEN substring(id_plano_contas from  6 for 3) = '000' THEN 2
+      WHEN substring(id_plano_contas from 10 for 3) = '000' THEN 3
+      ELSE 4
+    END
+  ) STORED,
+
+  -- Pai derivado — elimina a possibilidade de árvore inconsistente por digitação.
+  id_plano_contas_pai text GENERATED ALWAYS AS (
+    CASE
+      WHEN substring(id_plano_contas from  3 for 2) = '00'  THEN NULL
+      WHEN substring(id_plano_contas from  6 for 3) = '000'
+           THEN substring(id_plano_contas from 1 for 1) || '.00.000.000'
+      WHEN substring(id_plano_contas from 10 for 3) = '000'
+           THEN substring(id_plano_contas from 1 for 4) || '.000.000'
+      ELSE substring(id_plano_contas from 1 for 8) || '.000'
+    END
+  ) STORED,
+
+  inclui_dre           boolean               NOT NULL,
+  inclui_fluxo_caixa   boolean               NOT NULL,
+
+  grupo_dre            grupo_dre_conta       NOT NULL DEFAULT 'NAO_APLICA',
+  grupo_dfc            grupo_dfc_conta       NOT NULL DEFAULT 'NAO_APLICA',
+
+  -- +1 soma no resultado, -1 subtrai, 0 neutro — evita CASE espalhado nas queries de apuração.
+  sinal                smallint              NOT NULL,
+
+  -- Só analíticas recebem lançamento; sintéticas existem para totalizar/agrupar.
+  aceita_lancamento    boolean               NOT NULL,
+
+  exige_centro_custo   boolean               NOT NULL DEFAULT false,
+  exige_contraparte    boolean               NOT NULL DEFAULT false,  -- transferência: exige conta financeira de destino
+  exige_documento      boolean               NOT NULL DEFAULT false,  -- exige NF/contrato
+
+  id_conta_contabil    text,      -- de-para com a contabilidade / SPED ECD
+  id_plano_referencial text,      -- de-para com o plano referencial da RFB
+
+  padrao_sistema       boolean               NOT NULL DEFAULT false,  -- conta do template: não pode ser excluída
+  ativo                boolean               NOT NULL DEFAULT true,
+  observacao           text,
+
+  criado_em            timestamptz           NOT NULL DEFAULT now(),  -- 2026-07-21 (auditoria, convenção do domínio)
+  atualizado_em        timestamptz           NOT NULL DEFAULT now(),
+
+  CONSTRAINT cfg_plano_contas_pk PRIMARY KEY (id_tenant, id_plano_contas),
+
+  -- Hierarquia fechada dentro do tenant. DEFERRABLE p/ permitir carga em lote (pai e filho na
+  -- mesma transação) sem depender da ordem das linhas.
+  CONSTRAINT cfg_plano_contas_pai_fk FOREIGN KEY (id_tenant, id_plano_contas_pai)
+    REFERENCES cfg_plano_contas (id_tenant, id_plano_contas)
+    ON UPDATE NO ACTION ON DELETE NO ACTION DEFERRABLE INITIALLY DEFERRED,
+
+  CONSTRAINT cfg_plano_contas_mascara_ck
+    CHECK (id_plano_contas ~ '^[1-9]\.[0-9]{2}\.[0-9]{3}\.[0-9]{3}$'),
+
+  -- Sintética nunca recebe lançamento; analítica sempre recebe.
+  CONSTRAINT cfg_plano_contas_lancamento_ck
+    CHECK (aceita_lancamento = (natureza = 'ANALITICA')),
+
+  CONSTRAINT cfg_plano_contas_sinal_ck CHECK (sinal IN (-1, 0, 1)),
+
+  -- Coerência entre tipo de movimento e sinal do resultado.
+  CONSTRAINT cfg_plano_contas_tipo_sinal_ck
+    CHECK ( (tipo_movimento = 'CREDITO' AND sinal =  1)
+         OR (tipo_movimento = 'DEBITO'  AND sinal = -1)
+         OR (tipo_movimento = 'NEUTRO'  AND sinal =  0) ),
+
+  -- Conta neutra jamais entra no DRE — trava anti-duplicação.
+  CONSTRAINT cfg_plano_contas_neutro_ck
+    CHECK (tipo_movimento <> 'NEUTRO' OR inclui_dre = false),
+
+  -- Se entra no DRE precisa de linha; se não entra, não pode ter linha (idem DFC).
+  CONSTRAINT cfg_plano_contas_grupo_dre_ck CHECK (inclui_dre = (grupo_dre <> 'NAO_APLICA')),
+  CONSTRAINT cfg_plano_contas_grupo_dfc_ck CHECK (inclui_fluxo_caixa = (grupo_dfc <> 'NAO_APLICA')),
+
+  CONSTRAINT cfg_plano_contas_descricao_ck CHECK (length(btrim(descricao)) BETWEEN 3 AND 120)
 );
-CREATE INDEX cfg_plano_contas_id_tenant_ix ON cfg_plano_contas (id_tenant);
-CREATE INDEX cfg_plano_contas_descricao_ix ON cfg_plano_contas (id_tenant, descricao);
+
+-- Navegação da árvore (expandir filhos de um nó).
+CREATE INDEX cfg_plano_contas_pai_ix ON cfg_plano_contas (id_tenant, id_plano_contas_pai);
+
+-- Combo/autocomplete: só o que pode receber lançamento e está ativo.
+CREATE INDEX cfg_plano_contas_lancavel_ix
+    ON cfg_plano_contas (id_tenant, id_plano_contas) WHERE aceita_lancamento AND ativo;
+
+-- Apuração de DRE e DFC.
+CREATE INDEX cfg_plano_contas_dre_ix ON cfg_plano_contas (id_tenant, grupo_dre, id_plano_contas) WHERE inclui_dre;
+CREATE INDEX cfg_plano_contas_dfc_ix ON cfg_plano_contas (id_tenant, grupo_dfc, id_plano_contas) WHERE inclui_fluxo_caixa;
+
+-- Busca textual tolerante a acento e a fragmento no meio da palavra — substitui o índice
+-- B-tree antigo em (id_tenant, descricao), que só servia igualdade/prefixo exato.
+CREATE EXTENSION IF NOT EXISTS pg_trgm;
+CREATE EXTENSION IF NOT EXISTS unaccent;
+
+-- unaccent() é STABLE (não IMMUTABLE) — o Postgres recusa usá-la direto num índice de
+-- expressão. Wrapper IMMUTABLE (padrão conhecido pra esse caso — o dicionário referenciado
+-- é fixo em tempo de definição, então a função é de fato determinística).
+CREATE OR REPLACE FUNCTION unaccent_imutavel(text) RETURNS text AS $$
+    SELECT public.unaccent('public.unaccent', $1)
+$$ LANGUAGE sql IMMUTABLE STRICT PARALLEL SAFE;
+
+CREATE INDEX cfg_plano_contas_descricao_trgm_ix
+    ON cfg_plano_contas USING gin (lower(unaccent_imutavel(descricao)) gin_trgm_ops);
+
+-- Irmãos não podem ter a mesma descrição.
+CREATE UNIQUE INDEX cfg_plano_contas_irmao_uq
+    ON cfg_plano_contas (id_tenant, coalesce(id_plano_contas_pai, ''), lower(btrim(descricao)));
+
+-- De-para contábil único quando informado.
+CREATE UNIQUE INDEX cfg_plano_contas_contabil_uq
+    ON cfg_plano_contas (id_tenant, id_conta_contabil) WHERE id_conta_contabil IS NOT NULL;
+
+CREATE OR REPLACE FUNCTION trg_set_atualizado_em() RETURNS trigger AS $$
+BEGIN
+    NEW.atualizado_em := now();
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER cfg_plano_contas_atualizado_em_tg
+    BEFORE UPDATE ON cfg_plano_contas
+    FOR EACH ROW EXECUTE FUNCTION trg_set_atualizado_em();
+
+-- Impede excluir conta que tem filhos, e protege conta padrão do sistema (inative-a, em vez
+-- de excluir). Rede de segurança em nível de banco — o serviço já pré-checa o mesmo antes de
+-- tentar o DELETE, pra devolver uma mensagem amigável em vez de deixar a trigger disparar.
+CREATE OR REPLACE FUNCTION trg_cfg_plano_contas_guarda() RETURNS trigger AS $$
+BEGIN
+    IF TG_OP = 'DELETE' THEN
+        IF OLD.padrao_sistema THEN
+            RAISE EXCEPTION 'Conta % é padrão do sistema e não pode ser excluída. Inative-a.',
+                OLD.id_plano_contas;
+        END IF;
+        IF EXISTS (SELECT 1 FROM cfg_plano_contas f
+                    WHERE f.id_tenant = OLD.id_tenant
+                      AND f.id_plano_contas_pai = OLD.id_plano_contas) THEN
+            RAISE EXCEPTION 'Conta % possui contas filhas.', OLD.id_plano_contas;
+        END IF;
+        RETURN OLD;
+    END IF;
+
+    -- Não deixa ativar filha sob pai inativo.
+    IF NEW.ativo AND NEW.id_plano_contas_pai IS NOT NULL THEN
+        IF NOT EXISTS (SELECT 1 FROM cfg_plano_contas p
+                        WHERE p.id_tenant = NEW.id_tenant
+                          AND p.id_plano_contas = NEW.id_plano_contas_pai
+                          AND p.ativo) THEN
+            RAISE EXCEPTION 'Conta pai % está inativa.', NEW.id_plano_contas_pai;
+        END IF;
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE CONSTRAINT TRIGGER cfg_plano_contas_guarda_tg
+    AFTER INSERT OR UPDATE OR DELETE ON cfg_plano_contas
+    DEFERRABLE INITIALLY DEFERRED
+    FOR EACH ROW EXECUTE FUNCTION trg_cfg_plano_contas_guarda();
+
+-- RLS de cfg_plano_contas é aplicada centralmente em V024 (arquivo único, P8) — não repetir aqui.
+
+-- Árvore navegável (caminho completo + profundidade) — usada pela apuração e por qualquer
+-- tela futura de navegação hierárquica.
+CREATE OR REPLACE VIEW vw_plano_contas_arvore AS
+WITH RECURSIVE t AS (
+    SELECT c.*, c.descricao::text AS caminho, 0 AS profundidade
+      FROM cfg_plano_contas c
+     WHERE c.id_plano_contas_pai IS NULL
+    UNION ALL
+    SELECT f.*, t.caminho || ' > ' || f.descricao, t.profundidade + 1
+      FROM cfg_plano_contas f
+      JOIN t ON t.id_tenant = f.id_tenant
+            AND t.id_plano_contas = f.id_plano_contas_pai
+)
+SELECT * FROM t;
 
 CREATE TABLE fornecedor (
   id_fornecedor      integer     GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
@@ -122,6 +308,15 @@ CREATE INDEX funcionario_id_tenant_ix ON funcionario (id_tenant);
 
 COMMENT ON TABLE cfg_categoria_cliente IS 'Categoria de cliente (RLS). Referenciada por cliente.id_categoria_cliente (NOT NULL).';
 COMMENT ON TABLE cliente               IS 'Cliente do lojista (RLS). limite_credito preparado para crediário (Fase 2).';
-COMMENT ON TABLE cfg_plano_contas      IS 'Plano de contas (RLS). Preparação p/ relatórios/DRE (financeiro completo é Fase 2, Q5/ADR-010). Referenciada por fornecedor.id_plano_contas (NOT NULL).';
+COMMENT ON TABLE  cfg_plano_contas IS
+    'Plano de contas gerencial (RLS). Máscara 9.99.999.999 (conta.subconta.item.subitem), hierarquia de 4 níveis. Referenciada por fornecedor/contas_pagar/caixa_detalhe/conta_corrente_movimento.id_plano_contas (NOT NULL).';
+COMMENT ON COLUMN cfg_plano_contas.inclui_dre IS
+    'Afeta o resultado por COMPETÊNCIA. Falso para compra de estoque, CAPEX, amortização de principal e movimentos neutros.';
+COMMENT ON COLUMN cfg_plano_contas.inclui_fluxo_caixa IS
+    'Afeta a variação de disponibilidades no DFC consolidado. Falso para CMV, depreciação, provisões e transferências entre contas próprias.';
+COMMENT ON COLUMN cfg_plano_contas.nivel IS
+    'Derivado da máscara. 1=conta 2=subconta 3=item 4=subitem.';
+COMMENT ON COLUMN cfg_plano_contas.exige_contraparte IS
+    'Movimento exige conta financeira de destino (transferências, aplicações, sangria).';
 COMMENT ON TABLE fornecedor            IS 'Fornecedor do lojista (RLS).';
 COMMENT ON TABLE funcionario           IS 'Funcionário do lojista (RLS). Referenciado no ledger de estoque/venda.';

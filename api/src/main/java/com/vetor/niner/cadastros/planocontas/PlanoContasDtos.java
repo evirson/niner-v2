@@ -6,7 +6,8 @@ import jakarta.validation.constraints.Size;
 import java.time.OffsetDateTime;
 import java.util.List;
 
-/** DTOs do cadastro de plano de contas (docs/telas/plano-contas.md). */
+/** DTOs do cadastro de plano de contas (docs/telas/plano-contas.md), revisado 2026-07-31
+ *  (DRE/DFC por conta, hierarquia de 4 níveis via máscara). */
 public final class PlanoContasDtos {
 
     private PlanoContasDtos() {
@@ -14,25 +15,58 @@ public final class PlanoContasDtos {
 
     /**
      * Corpo de criação/atualização. {@code codigo} é a própria PK de negócio
-     * ({@code id_plano_contas}) — obrigatório ao criar; na atualização o código do path
-     * prevalece (o campo não é editável). {@code tipoMovimento} é texto validado contra
-     * CRÉDITO/DÉBITO/NEUTRO no serviço (o ENUM do banco tem acentos, então não usamos enum
-     * Java aqui). Todos os campos da tabela são NOT NULL — não há campo opcional.
+     * ({@code id_plano_contas}) — obrigatório ao criar, no formato {@code 9.99.999.999}; na
+     * atualização o código do path prevalece (o campo não é editável). {@code tipoMovimento}
+     * (CREDITO/DEBITO/NEUTRO) e {@code natureza} (SINTETICA/ANALITICA) são texto validado no
+     * serviço contra os ENUMs do banco. {@code grupoDre}/{@code grupoDfc} só são exigidos
+     * quando {@code incluiDre}/{@code incluiFluxoCaixa} são {@code true} — o servidor força
+     * "NAO_APLICA" quando a flag correspondente é falsa, ignorando o que vier no corpo.
+     * {@code sinal} e {@code aceitaLancamento} não entram aqui — são sempre derivados no
+     * servidor a partir de {@code tipoMovimento}/{@code natureza} (nunca informados pelo
+     * cliente). {@code ativo}/{@code padraoSistema} também não entram — não são editáveis via
+     * formulário (mesmo padrão de Cliente/Funcionário/Fornecedor: só o fluxo de exclusão
+     * alterna {@code ativo}).
      */
     public record PlanoContasRequest(
             @NotBlank @Size(max = 20) String codigo,
-            @NotBlank @Size(max = 120) String descricao,
+            @NotBlank @Size(min = 3, max = 120) String descricao,
+            @Size(max = 40) String descricaoCurta,
             @NotBlank String tipoMovimento,
+            @NotBlank String natureza,
             Boolean incluiDre,
-            Boolean incluiFluxoCaixa) {
+            String grupoDre,
+            Boolean incluiFluxoCaixa,
+            String grupoDfc,
+            Boolean exigeCentroCusto,
+            Boolean exigeContraparte,
+            Boolean exigeDocumento,
+            @Size(max = 30) String idContaContabil,
+            @Size(max = 30) String idPlanoReferencial,
+            @Size(max = 500) String observacao) {
     }
 
     public record PlanoContasResponse(
             String idPlanoContas,
             String descricao,
+            String descricaoCurta,
             String tipoMovimento,
+            String natureza,
+            int nivel,
+            String idPlanoContasPai,
             boolean incluiDre,
+            String grupoDre,
             boolean incluiFluxoCaixa,
+            String grupoDfc,
+            int sinal,
+            boolean aceitaLancamento,
+            boolean exigeCentroCusto,
+            boolean exigeContraparte,
+            boolean exigeDocumento,
+            String idContaContabil,
+            String idPlanoReferencial,
+            boolean padraoSistema,
+            boolean ativo,
+            String observacao,
             OffsetDateTime criadoEm,
             OffsetDateTime atualizadoEm) {
     }
@@ -43,9 +77,12 @@ public final class PlanoContasDtos {
     }
 
     /**
-     * Resultado do DELETE: aqui {@code acao} só pode ser {@code "excluido"} —
-     * {@code cfg_plano_contas} não tem coluna {@code ativo}, então não existe o fallback de
-     * inativar (com vínculo a API responde 409 e nada muda).
+     * Resultado do DELETE: {@code "excluido"} quando não há nenhum obstáculo, ou
+     * {@code "inativado"} (com {@code motivo}) quando a conta é padrão do sistema, tem contas
+     * filhas, ou está vinculada a fornecedor/contas a pagar/caixa/conta corrente — mesmo
+     * padrão de fallback já usado em Cliente/Funcionário/Fornecedor. {@code ativo} agora
+     * existe na tabela (novo em 2026-07-31), então este cadastro deixou de ser a exceção que
+     * só excluía de verdade.
      */
     public record ExclusaoPlanoContasResponse(String acao, String motivo) {
     }

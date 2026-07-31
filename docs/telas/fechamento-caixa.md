@@ -88,6 +88,18 @@ aparece na lista, mesmo com `totalCredito = totalDebito = 0` (só o `saldoInicia
 = saldoInicial + totalCredito − totalDebito` — `saldoInicial` só é diferente de zero na linha da
 carteira de abertura; as demais entram com `saldoInicial = 0`.
 
+### Carteiras com o mesmo nome em categorias diferentes (revisão 2026-07-31)
+
+A mesma bandeira pode ter um cadastro em débito e outro em crédito (`tipo_carteira_uk` permite o
+mesmo `nome_carteira` com `categoria_carteira` diferente — ex.: "HIPER" débito e "HIPER" crédito,
+duas linhas com `id_carteira` distintos, cadastradas na tela de Tipo de Carteira). Até 2026-07-31 as
+linhas de totais/conferência só traziam `nomeCarteira`, então duas carteiras homônimas apareciam
+sem nenhuma forma de diferenciar uma da outra na tela (mesmo já sendo somadas corretamente por
+`id_carteira` internamente). Corrigido acrescentando `categoriaCarteira` em toda linha
+(`LinhaTotalCarteiraResponse`/`LinhaConferenciaResponse`) — a tela/impressão mostram
+`"NOME — Categoria"` (ex.: `"HIPER — Cartão Débito"`, `"HIPER — Cartão Crédito"`), mesmo padrão já
+usado em `FormaPagamentoModal.tsx` do PDV (`rotuloCarteira()`, novo em `web/src/lib/caixa.ts`).
+
 ### Conferência às cegas — TODA carteira com movimento, não só "DINHEIRO"
 
 Revisão de 2026-07-30: a versão original comparava só uma carteira chamada "DINHEIRO"; o dono do
@@ -139,13 +151,13 @@ lança em `caixa_detalhe`").
 GET  /api/v1/caixa/fechamento?idUsuario=&data=
      busca o caixa (aberto ou fechado) de um usuário/data → { idCaixa, idUsuario, nomeUsuario,
      nomeEmpresa, dataAbertura, dataFechamento, fechado,
-     linhas: [{ idCarteira, nomeCarteira, saldoInicial, totalCredito, totalDebito, valorEsperado }],
-     conferencia: [{ idCarteira, nomeCarteira, valorEsperado, valorContado, diferenca }] }
-     -- `conferencia` só vem preenchida quando `fechado = true`.
+     linhas: [{ idCarteira, nomeCarteira, categoriaCarteira, saldoInicial, totalCredito, totalDebito, valorEsperado }],
+     conferencia: [{ idCarteira, nomeCarteira, categoriaCarteira, valorEsperado, valorContado, diferenca }] }
+     -- `conferencia` só vem preenchida quando `fechado = true`. `categoriaCarteira` desde 2026-07-31.
 
 POST /api/v1/caixa/fechamento
      { idCaixa, valoresContados: [{ idCarteira, valorContado }] }
-     → { idCaixa, fechado, linhas: [{ idCarteira, nomeCarteira, valorEsperado, valorContado, diferenca }] }
+     → { idCaixa, fechado, linhas: [{ idCarteira, nomeCarteira, categoriaCarteira, valorEsperado, valorContado, diferenca }] }
      -- `fechado = true` e a conferência foi gravada quando toda `diferenca` é zero;
      -- `fechado = false` (nada gravado) quando alguma carteira não bateu — `linhas` mostra
      -- onde está a divergência.
@@ -187,11 +199,14 @@ fechando/consultando o caixa de outro usuário), 404 (nenhum caixa para aquele u
 - Dado um caixa já fechado, quando tenta fechar de novo, então 409.
 - Dado um `idCaixa` inexistente (ou de outro tenant), então 404.
 - Dado o caixa de um tenant, então não aparece na busca de outro tenant (RLS).
+- Dado duas carteiras com o mesmo nome em categorias diferentes (ex.: "HIPER" débito e "HIPER"
+  crédito), quando ambas têm movimento no mesmo caixa, então aparecem como duas linhas separadas,
+  cada uma com sua própria `categoriaCarteira` e seus próprios totais (2026-07-31).
 
-Cobertos por `FechamentoCaixaCrudTest` (14 testes) + 2 testes em `PdvCrudTest` (venda com várias
+Cobertos por `FechamentoCaixaCrudTest` (15 testes) + 2 testes em `PdvCrudTest` (venda com várias
 formas de pagamento lança `caixa_detalhe` em todas menos crediário; débito fica em aberto em
-`contas_receber` mesmo já tendo entrado no caixa). Suíte completa do projeto: 264/264 verdes
-(2026-07-30, revisão "às cegas").
+`contas_receber` mesmo já tendo entrado no caixa). Suíte completa do projeto: 266/266 verdes
+(2026-07-31).
 
 ## Ajuda da tela (manual de operação + vídeo) — obrigatório (R22 / §3.7.1)
 

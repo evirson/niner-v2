@@ -31,10 +31,12 @@ de Crediário. Um `caixa_mestre` por usuário/empresa/dia:
 ## Decisões (confirmadas com o dono do produto via `AskUserQuestion` antes de implementar)
 
 1. **Saldo inicial: uma linha só (moeda + valor), não split-tender** (recomendado, escolhido). Um
-   campo de valor + um select de tipo de carteira, pré-selecionado em "Dinheiro" (por nome, case-
-   insensitive; se não existir uma carteira chamada exatamente "DINHEIRO", cai pra primeira da
-   lista em ordem alfabética). Diferente do split-tender de pagamento do PDV/Recebimento — aqui é
-   só uma referência de onde o saldo inicial "mora", não uma composição de várias formas.
+   campo de valor + a moeda do saldo inicial. Diferente do split-tender de pagamento do PDV/
+   Recebimento — aqui é só uma referência de onde o saldo inicial "mora", não uma composição de
+   várias formas. **Revisado em 2026-07-31** (pedido direto do dono do produto): deixou de ser um
+   select — o saldo inicial só pode ser aberto na carteira "Dinheiro" (cartão/PIX/crediário não
+   têm saldo inicial de verdade, só recebem movimento durante o dia). Ver seção "Revisão
+   2026-07-31" abaixo.
 2. **Gatilho do popup no PDV/Recebimento: ao entrar na tela, não só ao efetivar** (recomendado,
    escolhido). Assim que a tela carrega, se não há caixa aberto, o popup já aparece — o operador
    nunca chega a montar uma venda/recebimento pra só depois descobrir que precisa abrir o caixa.
@@ -85,14 +87,14 @@ nenhuma tela ou rotina até 2026-07-30, quando a Abertura ganhou uma tela irmã 
 
 ```
 GET  /api/v1/caixa/status     status do caixa de hoje (aberto/fechado, dados se aberto)
-GET  /api/v1/caixa/carteiras  lista de tipo_carteira do tenant, pra popular o select
+GET  /api/v1/caixa/carteiras  só a carteira "Dinheiro" do tenant (categoria AVISTA) — 2026-07-31
 POST /api/v1/caixa/abrir      { idCarteira, saldoInicial } → abre; 409 se já houver um aberto
 ```
 
 Todos sob `/api/v1/**` (JWT de tenant, RLS ativo — P8), abertos a ADMIN e OPERADOR (mesma decisão
 de PDV/Recebimento de Crediário — operação de caixa do dia a dia). Erros em Problem Details (RFC
-9457): 400 (`idCarteira` inexistente, `saldoInicial` negativo ou ausente), 409 (caixa já aberto
-hoje para este usuário/empresa).
+9457): 400 (`idCarteira` inexistente, diferente de "Dinheiro" — 2026-07-31 —, `saldoInicial`
+negativo ou ausente), 409 (caixa já aberto hoje para este usuário/empresa).
 
 ## Critérios de aceitação (viram testes)
 
@@ -137,6 +139,26 @@ Nenhum.
 - **Sangria/suprimento durante o dia** — fora de escopo.
 - **Múltiplas moedas no saldo inicial** — uma linha só (moeda + valor), ver decisão 1 acima.
 - **Histórico/relatório de aberturas** — a tela dedicada só mostra a abertura de hoje.
+
+## Revisão 2026-07-31 — saldo inicial só em "Dinheiro"
+
+Pedido direto do dono do produto, em teste manual: cartão/PIX/crediário não têm "saldo inicial"
+de verdade — só recebem movimento (crédito/débito em `caixa_detalhe`) durante o dia. Deixar
+qualquer carteira disponível na abertura não fazia sentido de negócio e ainda abria brecha pra
+abrir o caixa com a carteira errada por engano.
+
+- **Backend** (`CaixaService`): `listarCarteirasParaAbertura()` filtra
+  `categoria_carteira = 'AVISTA' AND nome_carteira = 'DINHEIRO'` em vez de listar todo
+  `tipo_carteira` do tenant. `validarCarteira()` (chamada em `abrir()`) reforça a mesma regra —
+  P4, nunca só o front barra; um `POST /caixa/abrir` direto com outra carteira responde 400
+  ("O saldo inicial do caixa só pode ser aberto com a carteira \"Dinheiro\".").
+- **Frontend** (`CamposAberturaCaixa.tsx`, reaproveitado pela tela dedicada e pelo popup
+  obrigatório do PDV/Recebimento): o select de moeda virou um campo fixo, somente leitura,
+  mostrando "DINHEIRO" (ou uma mensagem de erro se a carteira não existir — cadastro apagado ou
+  renomeado). Sem escolha nenhuma nesta tela a partir de agora.
+- **Testes:** +2 em `CaixaCrudTest` — a lista de carteiras só traz "Dinheiro" (não traz PIX,
+  também `AVISTA`, semeada no signup); abrir com outra carteira (PIX) responde 400. Suíte
+  completa do projeto: 266/266 verdes.
 
 ## Questões abertas
 

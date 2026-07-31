@@ -1,5 +1,6 @@
 package com.vetor.niner.financeiro.caixa;
 
+import com.vetor.niner.financeiro.TipoCarteiraDtos.CategoriaCarteira;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotEmpty;
@@ -37,10 +38,12 @@ public final class CaixaDtos {
      * Uma linha de totais do Fechamento de Caixa, por tipo de carteira. {@code saldoInicial}
      * só é diferente de zero na linha da carteira escolhida na abertura (V025). {@code
      * valorEsperado = saldoInicial + totalCredito - totalDebito} — nunca gravado, sempre
-     * recalculado na hora a partir de {@code caixa_detalhe}.
+     * recalculado na hora a partir de {@code caixa_detalhe}. {@code categoriaCarteira}
+     * (2026-07-31) distingue carteiras com o mesmo nome mas categorias diferentes — ex.:
+     * "HIPER" cadastrada em débito e em crédito, cada uma como uma linha própria aqui.
      */
     public record LinhaTotalCarteiraResponse(
-            long idCarteira, String nomeCarteira, BigDecimal saldoInicial,
+            long idCarteira, String nomeCarteira, CategoriaCarteira categoriaCarteira, BigDecimal saldoInicial,
             BigDecimal totalCredito, BigDecimal totalDebito, BigDecimal valorEsperado) {
     }
 
@@ -70,9 +73,11 @@ public final class CaixaDtos {
 
     /** Uma linha de conferência: {@code diferenca = valorContado - valorEsperado}. Só é
      *  persistida (`caixa_fechamento_conferencia`) quando TODAS as linhas fecham em zero —
-     *  senão o caixa continua aberto e a tela mostra a divergência sem gravar nada. */
+     *  senão o caixa continua aberto e a tela mostra a divergência sem gravar nada.
+     *  {@code categoriaCarteira} (2026-07-31), mesmo motivo de {@link LinhaTotalCarteiraResponse}. */
     public record LinhaConferenciaResponse(
-            long idCarteira, String nomeCarteira, BigDecimal valorEsperado, BigDecimal valorContado, BigDecimal diferenca) {
+            long idCarteira, String nomeCarteira, CategoriaCarteira categoriaCarteira,
+            BigDecimal valorEsperado, BigDecimal valorContado, BigDecimal diferenca) {
     }
 
     /** {@code fechado = false} quando alguma carteira não bateu — o caixa continua aberto e

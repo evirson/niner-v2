@@ -21,11 +21,15 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * CRUD de plano de contas (docs/telas/plano-contas.md) — mesmo padrão de
- * {@link ClienteCrudTest}: cada teste assina um tenant novo e usa o token real emitido.
- * Particularidades cobertas: PK de negócio {@code text} (código contábil), código imutável
- * na atualização, e exclusão SEM fallback de inativar (409 quando há vínculo — a tabela não
- * tem coluna {@code ativo}).
+ * CRUD de plano de contas (docs/telas/plano-contas.md), revisado 2026-07-31 — DRE/DFC por
+ * conta, hierarquia de 4 níveis via máscara {@code 9.99.999.999} (conta.subconta.item.subitem),
+ * {@code sinal}/{@code aceitaLancamento} sempre derivados no servidor. Particularidades ainda
+ * válidas: PK de negócio {@code text} (código contábil), código imutável na atualização. A
+ * tabela ganhou {@code ativo} nesta revisão — a exclusão passou a cair no mesmo fallback de
+ * inativar que Cliente/Funcionário/Fornecedor já tinham (antes era exceção, só excluía de
+ * verdade). Contas de nível 1 (subconta "00") não exigem pai — a maioria dos testes usa esse
+ * nível pra não precisar montar hierarquia; os testes que exercitam hierarquia de verdade
+ * constroem grupo→subconta→item→subitem explicitamente.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -49,41 +53,69 @@ class PlanoContasCrudTest {
         return JsonPath.read(resp, "$.token");
     }
 
+    private static long extrairIdTenant(String token) {
+        String[] partes = token.split("\\.");
+        String payload = new String(java.util.Base64.getUrlDecoder().decode(partes[1]));
+        Object tid = JsonPath.read(payload, "$.tid");
+        return ((Number) tid).longValue();
+    }
+
+    /** Cria uma conta simples de nível 1 (subconta "00") — não exige pai. */
+    private void criarPlanoSimples(String token, String codigo, String descricao) throws Exception {
+        mvc.perform(post("/api/v1/planos-contas").header("Authorization", "Bearer " + token)
+                        .contentType(APPLICATION_JSON)
+                        .content("""
+                                {"codigo":"%s","descricao":"%s","tipoMovimento":"NEUTRO","natureza":"ANALITICA",
+                                 "incluiDre":false,"incluiFluxoCaixa":false}
+                                """.formatted(codigo, descricao)))
+                .andExpect(status().isCreated());
+    }
+
     @Test
     void criaPlanoDeContasComDadosCompletos() throws Exception {
         String token = assinarNovoTenant("completo");
 
         String plano = """
-                {"codigo":"3.1.001","descricao":"receita de vendas","tipoMovimento":"CRÉDITO",
-                 "incluiDre":true,"incluiFluxoCaixa":true}
+                {"codigo":"1.00.000.000","descricao":"receita de vendas","tipoMovimento":"CREDITO",
+                 "natureza":"ANALITICA","incluiDre":true,"grupoDre":"RECEITA_BRUTA",
+                 "incluiFluxoCaixa":true,"grupoDfc":"OPERACIONAL"}
                 """;
 
         mvc.perform(post("/api/v1/planos-contas").header("Authorization", "Bearer " + token)
                         .contentType(APPLICATION_JSON).content(plano))
                 .andExpect(status().isCreated())
                 // Descrição normalizada para MAIÚSCULAS no servidor, convenção do projeto.
-                .andExpect(jsonPath("$.idPlanoContas").value("3.1.001"))
+                .andExpect(jsonPath("$.idPlanoContas").value("1.00.000.000"))
                 .andExpect(jsonPath("$.descricao").value("RECEITA DE VENDAS"))
-                .andExpect(jsonPath("$.tipoMovimento").value("CRÉDITO"))
+                .andExpect(jsonPath("$.tipoMovimento").value("CREDITO"))
+                .andExpect(jsonPath("$.natureza").value("ANALITICA"))
+                .andExpect(jsonPath("$.nivel").value(1))
+                .andExpect(jsonPath("$.idPlanoContasPai").doesNotExist())
+                .andExpect(jsonPath("$.sinal").value(1))
+                .andExpect(jsonPath("$.aceitaLancamento").value(true))
                 .andExpect(jsonPath("$.incluiDre").value(true))
+                .andExpect(jsonPath("$.grupoDre").value("RECEITA_BRUTA"))
+                .andExpect(jsonPath("$.grupoDfc").value("OPERACIONAL"))
+                .andExpect(jsonPath("$.padraoSistema").value(false))
+                .andExpect(jsonPath("$.ativo").value(true))
                 .andExpect(jsonPath("$.criadoEm").exists())
                 .andExpect(jsonPath("$.atualizadoEm").exists());
 
-        mvc.perform(get("/api/v1/planos-contas").param("busca", "3.1").header("Authorization", "Bearer " + token))
+        mvc.perform(get("/api/v1/planos-contas").param("busca", "1.00").header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.itens[0].idPlanoContas").value("3.1.001"));
+                .andExpect(jsonPath("$.itens[0].idPlanoContas").value("1.00.000.000"));
     }
 
     @Test
     void codigoDuplicadoEhRejeitado() throws Exception {
         String token = assinarNovoTenant("duplicado");
-        criarPlanoSimples(token, "1.1.001", "CAIXA GERAL");
+        criarPlanoSimples(token, "1.00.000.000", "CAIXA GERAL");
 
         mvc.perform(post("/api/v1/planos-contas").header("Authorization", "Bearer " + token)
                         .contentType(APPLICATION_JSON)
                         .content("""
-                                {"codigo":"1.1.001","descricao":"Outra descricao","tipoMovimento":"DÉBITO",
-                                 "incluiDre":false,"incluiFluxoCaixa":false}
+                                {"codigo":"1.00.000.000","descricao":"Outra descricao","tipoMovimento":"DEBITO",
+                                 "natureza":"ANALITICA","incluiDre":false,"incluiFluxoCaixa":false}
                                 """))
                 .andExpect(status().isConflict());
     }
@@ -95,87 +127,209 @@ class PlanoContasCrudTest {
         mvc.perform(post("/api/v1/planos-contas").header("Authorization", "Bearer " + token)
                         .contentType(APPLICATION_JSON)
                         .content("""
-                                {"codigo":"9.9.999","descricao":"Tipo errado","tipoMovimento":"CREDITO",
-                                 "incluiDre":false,"incluiFluxoCaixa":false}
+                                {"codigo":"9.00.000.000","descricao":"Tipo errado","tipoMovimento":"CRÉDITO",
+                                 "natureza":"ANALITICA","incluiDre":false,"incluiFluxoCaixa":false}
                                 """))
                 .andExpect(status().isBadRequest());
     }
 
     @Test
-    void atualizarMudaDescricaoMasNaoOCodigo() throws Exception {
-        String token = assinarNovoTenant("atualiza");
-        criarPlanoSimples(token, "2.1.001", "DESPESA ORIGINAL");
+    void naturezaInvalidaEhRejeitada() throws Exception {
+        String token = assinarNovoTenant("natureza-invalida");
 
-        // O corpo tenta trocar o código — o do path prevalece e o registro continua o mesmo.
-        mvc.perform(put("/api/v1/planos-contas/2.1.001").header("Authorization", "Bearer " + token)
+        mvc.perform(post("/api/v1/planos-contas").header("Authorization", "Bearer " + token)
                         .contentType(APPLICATION_JSON)
                         .content("""
-                                {"codigo":"9.9.999","descricao":"despesa corrigida","tipoMovimento":"DÉBITO",
-                                 "incluiDre":true,"incluiFluxoCaixa":false}
+                                {"codigo":"9.00.000.000","descricao":"Natureza errada","tipoMovimento":"NEUTRO",
+                                 "natureza":"OUTRA","incluiDre":false,"incluiFluxoCaixa":false}
+                                """))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void codigoForaDaMascaraEhRejeitado() throws Exception {
+        // Formato antigo ("3.1.001", livre) não existe mais — máscara fixa 9.99.999.999.
+        String token = assinarNovoTenant("mascara-invalida");
+
+        mvc.perform(post("/api/v1/planos-contas").header("Authorization", "Bearer " + token)
+                        .contentType(APPLICATION_JSON)
+                        .content("""
+                                {"codigo":"3.1.001","descricao":"Formato antigo","tipoMovimento":"NEUTRO",
+                                 "natureza":"ANALITICA","incluiDre":false,"incluiFluxoCaixa":false}
+                                """))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void contaNeutraNaoPodeComporADre() throws Exception {
+        String token = assinarNovoTenant("neutro-dre");
+
+        mvc.perform(post("/api/v1/planos-contas").header("Authorization", "Bearer " + token)
+                        .contentType(APPLICATION_JSON)
+                        .content("""
+                                {"codigo":"9.00.000.000","descricao":"Neutro com DRE","tipoMovimento":"NEUTRO",
+                                 "natureza":"ANALITICA","incluiDre":true,"grupoDre":"RECEITA_BRUTA",
+                                 "incluiFluxoCaixa":false}
+                                """))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void incluiDreSemGrupoEhRejeitado() throws Exception {
+        String token = assinarNovoTenant("dre-sem-grupo");
+
+        mvc.perform(post("/api/v1/planos-contas").header("Authorization", "Bearer " + token)
+                        .contentType(APPLICATION_JSON)
+                        .content("""
+                                {"codigo":"9.00.000.000","descricao":"Sem grupo","tipoMovimento":"CREDITO",
+                                 "natureza":"ANALITICA","incluiDre":true,"incluiFluxoCaixa":false}
+                                """))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void criarContaSemPaiExistenteRespondeErroAmigavel() throws Exception {
+        // "9.01.001.001" é nível 4 — exige que "9.01.001.000"/"9.01.000.000"/"9.00.000.000" já existam.
+        String token = assinarNovoTenant("sem-pai");
+
+        mvc.perform(post("/api/v1/planos-contas").header("Authorization", "Bearer " + token)
+                        .contentType(APPLICATION_JSON)
+                        .content("""
+                                {"codigo":"9.01.001.001","descricao":"Folha orfa","tipoMovimento":"NEUTRO",
+                                 "natureza":"ANALITICA","incluiDre":false,"incluiFluxoCaixa":false}
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.detail").value(org.hamcrest.Matchers.containsString("9.01.001.000")));
+    }
+
+    @Test
+    void hierarquiaCompletaDeQuatroNiveisFuncionaDeCimaParaBaixo() throws Exception {
+        String token = assinarNovoTenant("hierarquia");
+
+        criarPlanoSimples(token, "9.00.000.000", "GRUPO TESTE");
+        criarPlanoSimples(token, "9.01.000.000", "SUBCONTA TESTE");
+        criarPlanoSimples(token, "9.01.001.000", "ITEM TESTE");
+
+        mvc.perform(post("/api/v1/planos-contas").header("Authorization", "Bearer " + token)
+                        .contentType(APPLICATION_JSON)
+                        .content("""
+                                {"codigo":"9.01.001.001","descricao":"Subitem folha","tipoMovimento":"DEBITO",
+                                 "natureza":"ANALITICA","incluiDre":true,"grupoDre":"DESPESA_FIXA",
+                                 "incluiFluxoCaixa":true,"grupoDfc":"OPERACIONAL"}
+                                """))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.nivel").value(4))
+                .andExpect(jsonPath("$.idPlanoContasPai").value("9.01.001.000"))
+                .andExpect(jsonPath("$.sinal").value(-1));
+    }
+
+    @Test
+    void atualizarMudaDescricaoMasNaoOCodigo() throws Exception {
+        String token = assinarNovoTenant("atualiza");
+        criarPlanoSimples(token, "2.00.000.000", "DESPESA ORIGINAL");
+
+        // O corpo tenta trocar o código — o do path prevalece e o registro continua o mesmo.
+        mvc.perform(put("/api/v1/planos-contas/2.00.000.000").header("Authorization", "Bearer " + token)
+                        .contentType(APPLICATION_JSON)
+                        .content("""
+                                {"codigo":"9.99.999.999","descricao":"despesa corrigida","tipoMovimento":"DEBITO",
+                                 "natureza":"ANALITICA","incluiDre":true,"grupoDre":"DESPESA_FIXA",
+                                 "incluiFluxoCaixa":false}
                                 """))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.idPlanoContas").value("2.1.001"))
+                .andExpect(jsonPath("$.idPlanoContas").value("2.00.000.000"))
                 .andExpect(jsonPath("$.descricao").value("DESPESA CORRIGIDA"))
                 .andExpect(jsonPath("$.incluiDre").value(true));
 
-        mvc.perform(get("/api/v1/planos-contas/9.9.999").header("Authorization", "Bearer " + token))
+        mvc.perform(get("/api/v1/planos-contas/9.99.999.999").header("Authorization", "Bearer " + token))
                 .andExpect(status().isNotFound());
     }
 
     @Test
     void excluirPlanoSemVinculoApagaDeVerdade() throws Exception {
         String token = assinarNovoTenant("exclusao-simples");
-        criarPlanoSimples(token, "4.1.001", "SEM VINCULO");
+        criarPlanoSimples(token, "4.00.000.000", "SEM VINCULO");
 
-        mvc.perform(delete("/api/v1/planos-contas/4.1.001").header("Authorization", "Bearer " + token))
+        mvc.perform(delete("/api/v1/planos-contas/4.00.000.000").header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.acao").value("excluido"));
 
-        mvc.perform(get("/api/v1/planos-contas/4.1.001").header("Authorization", "Bearer " + token))
+        mvc.perform(get("/api/v1/planos-contas/4.00.000.000").header("Authorization", "Bearer " + token))
                 .andExpect(status().isNotFound());
     }
 
     @Test
-    void excluirPlanoComFornecedorVinculadoRespondeConflito() throws Exception {
-        // Sem coluna `ativo` não há fallback de inativar: com vínculo, 409 e nada muda.
+    void excluirPlanoComFornecedorVinculadoInativaEmVezDeExcluir() throws Exception {
+        // 2026-07-31: cfg_plano_contas ganhou `ativo` — mesmo fallback de Cliente/Funcionário/Fornecedor.
         String token = assinarNovoTenant("exclusao-vinculo");
-        criarPlanoSimples(token, "5.1.001", "COM FORNECEDOR");
+        criarPlanoSimples(token, "5.00.000.000", "COM FORNECEDOR");
         long idTenant = extrairIdTenant(token);
 
-        criarFornecedorComPlano(idTenant, "5.1.001");
+        criarFornecedorComPlano(idTenant, "5.00.000.000");
 
-        mvc.perform(delete("/api/v1/planos-contas/5.1.001").header("Authorization", "Bearer " + token))
-                .andExpect(status().isConflict());
-
-        mvc.perform(get("/api/v1/planos-contas/5.1.001").header("Authorization", "Bearer " + token))
+        mvc.perform(delete("/api/v1/planos-contas/5.00.000.000").header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.descricao").value("COM FORNECEDOR"));
+                .andExpect(jsonPath("$.acao").value("inativado"));
+
+        mvc.perform(get("/api/v1/planos-contas/5.00.000.000").header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.descricao").value("COM FORNECEDOR"))
+                .andExpect(jsonPath("$.ativo").value(false));
     }
 
     @Test
-    void excluirPlanoComCaixaVinculadoRespondeConflito() throws Exception {
-        // Terceira FK de cfg_plano_contas (V025/V026): caixa_detalhe. A pré-checagem de
-        // fornecedor/contas_pagar não cobre esta — precisa responder 409, não 500 genérico.
+    void excluirPlanoComCaixaVinculadoInativaEmVezDeExcluir() throws Exception {
         String token = assinarNovoTenant("exclusao-caixa");
-        criarPlanoSimples(token, "8.1.001", "COM CAIXA");
+        criarPlanoSimples(token, "8.00.000.000", "COM CAIXA");
         long idTenant = extrairIdTenant(token);
 
-        criarCaixaComPlano(idTenant, "8.1.001");
+        criarCaixaComPlano(idTenant, "8.00.000.000");
 
-        mvc.perform(delete("/api/v1/planos-contas/8.1.001").header("Authorization", "Bearer " + token))
-                .andExpect(status().isConflict());
-
-        mvc.perform(get("/api/v1/planos-contas/8.1.001").header("Authorization", "Bearer " + token))
+        mvc.perform(delete("/api/v1/planos-contas/8.00.000.000").header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.descricao").value("COM CAIXA"));
+                .andExpect(jsonPath("$.acao").value("inativado"));
+
+        mvc.perform(get("/api/v1/planos-contas/8.00.000.000").header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.ativo").value(false));
+    }
+
+    @Test
+    void excluirContaComFilhosInativaEmVezDeExcluir() throws Exception {
+        String token = assinarNovoTenant("exclusao-filhos");
+        criarPlanoSimples(token, "6.00.000.000", "GRUPO COM FILHO");
+        criarPlanoSimples(token, "6.01.000.000", "SUBCONTA FILHA");
+
+        mvc.perform(delete("/api/v1/planos-contas/6.00.000.000").header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.acao").value("inativado"));
+
+        mvc.perform(get("/api/v1/planos-contas/6.00.000.000").header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.ativo").value(false));
+    }
+
+    @Test
+    void excluirContaPadraoDoSistemaInativaEmVezDeExcluir() throws Exception {
+        // padrao_sistema nunca é setável via API (só o seed padrão grava true) — insere direto
+        // via SQL pra simular uma conta do template, mesmo padrão de setup já usado neste arquivo.
+        String token = assinarNovoTenant("exclusao-padrao");
+        long idTenant = extrairIdTenant(token);
+        criarPlanoSimples(token, "7.00.000.000", "CONTA PADRAO");
+        marcarComoPadraoSistema(idTenant, "7.00.000.000");
+
+        mvc.perform(delete("/api/v1/planos-contas/7.00.000.000").header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.acao").value("inativado"))
+                .andExpect(jsonPath("$.motivo").value(org.hamcrest.Matchers.containsString("padrão")));
     }
 
     @Test
     void listagemOrdenaPorColunaEDirecaoPedidas() throws Exception {
         String token = assinarNovoTenant("ordenacao");
-        criarPlanoSimples(token, "6.1.001", "ORDPLANO BETA");
-        criarPlanoSimples(token, "6.1.002", "ORDPLANO ALFA");
-        criarPlanoSimples(token, "6.1.003", "ORDPLANO GAMA");
+        criarPlanoSimples(token, "1.00.000.000", "ORDPLANO BETA");
+        criarPlanoSimples(token, "2.00.000.000", "ORDPLANO ALFA");
+        criarPlanoSimples(token, "3.00.000.000", "ORDPLANO GAMA");
 
         mvc.perform(get("/api/v1/planos-contas").param("busca", "ORDPLANO")
                         .param("ordenarPor", "descricao").param("direcao", "DESC")
@@ -187,32 +341,50 @@ class PlanoContasCrudTest {
     @Test
     void buscaEncontraPorDescricao() throws Exception {
         String token = assinarNovoTenant("busca");
-        criarPlanoSimples(token, "7.1.001", "ALUGUEL DA LOJA");
+        criarPlanoSimples(token, "7.00.000.000", "ALUGUEL DA LOJA");
 
         mvc.perform(get("/api/v1/planos-contas").param("busca", "ALUGUEL")
                         .header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.itens[0].idPlanoContas").value("7.1.001"));
+                .andExpect(jsonPath("$.itens[0].idPlanoContas").value("7.00.000.000"));
     }
 
-    private void criarPlanoSimples(String token, String codigo, String descricao) throws Exception {
-        mvc.perform(post("/api/v1/planos-contas").header("Authorization", "Bearer " + token)
-                        .contentType(APPLICATION_JSON)
-                        .content("""
-                                {"codigo":"%s","descricao":"%s","tipoMovimento":"NEUTRO",
-                                 "incluiDre":false,"incluiFluxoCaixa":false}
-                                """.formatted(codigo, descricao)))
-                .andExpect(status().isCreated());
+    @Test
+    void filtroDeStatusRespeitaAtivosInativosETodos() throws Exception {
+        // A segunda conta precisa de um vínculo pra exclusão cair no fallback de inativar —
+        // sem vínculo, excluir() apaga de verdade e ela some da tabela (não fica "inativa").
+        String token = assinarNovoTenant("status");
+        long idTenant = extrairIdTenant(token);
+        criarPlanoSimples(token, "1.00.000.000", "STATUSPLANO ATIVA");
+        criarPlanoSimples(token, "2.00.000.000", "STATUSPLANO INATIVA");
+        criarFornecedorComPlano(idTenant, "2.00.000.000");
+        mvc.perform(delete("/api/v1/planos-contas/2.00.000.000").header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.acao").value("inativado"));
+
+        mvc.perform(get("/api/v1/planos-contas").param("busca", "STATUSPLANO")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalItens").value(1));
+
+        mvc.perform(get("/api/v1/planos-contas").param("busca", "STATUSPLANO").param("status", "TODOS")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalItens").value(2));
     }
 
-    private static long extrairIdTenant(String token) {
-        String[] partes = token.split("\\.");
-        String payload = new String(java.util.Base64.getUrlDecoder().decode(partes[1]));
-        Object tid = JsonPath.read(payload, "$.tid");
-        return ((Number) tid).longValue();
+    @Test
+    void isolamentoEntreTenantsNoMesmoCodigo() throws Exception {
+        // PK composta (id_tenant, id_plano_contas) — o MESMO código em tenants diferentes.
+        String tokenA = assinarNovoTenant("isolamento-a");
+        String tokenB = assinarNovoTenant("isolamento-b");
+        criarPlanoSimples(tokenA, "1.00.000.000", "CONTA DO TENANT A");
+
+        mvc.perform(get("/api/v1/planos-contas/1.00.000.000").header("Authorization", "Bearer " + tokenB))
+                .andExpect(status().isNotFound());
     }
 
-    /** Insere um fornecedor mínimo referenciando o plano — vínculo que bloqueia a exclusão. */
+    /** Insere um fornecedor mínimo referenciando o plano — vínculo que passa a inativar a exclusão. */
     private void criarFornecedorComPlano(long idTenant, String idPlanoContas) throws Exception {
         try (Connection c = DriverManager.getConnection(postgres.getJdbcUrl(), "niner_app", "dev_app");
              Statement st = c.createStatement()) {
@@ -226,12 +398,8 @@ class PlanoContasCrudTest {
     }
 
     /**
-     * Insere um caixa (mestre + detalhe) referenciando o plano — vínculo que bloqueia a
-     * exclusão, mas que a pré-checagem de {@code excluir()} não enumerava até este teste
-     * existir (achado do pedido "verifique todas as telas"). Reaproveita empresa/usuário
-     * admin e um tipo de carteira semeados pelo signup ({@code SignupService}) —
-     * {@code caixa_detalhe.id_carteira} referencia {@code tipo_carteira} desde 2026-07-28
-     * (era {@code id_moeda} → {@code moeda}, absorvida por {@code tipo_carteira}).
+     * Insere um caixa (mestre + detalhe) referenciando o plano — vínculo que passa a inativar a
+     * exclusão. Reaproveita empresa/usuário admin e um tipo de carteira semeados pelo signup.
      */
     private void criarCaixaComPlano(long idTenant, String idPlanoContas) throws Exception {
         try (Connection c = DriverManager.getConnection(postgres.getJdbcUrl(), "niner_app", "dev_app");
@@ -264,6 +432,20 @@ class PlanoContasCrudTest {
                         (id_tenant, id_caixa, id_carteira, id_plano_contas, valor, tipo_operacao, credito_debito)
                     VALUES (%d, %d, %d, '%s', 10.00, 'DEBITO_CAIXA', 'D')
                     """.formatted(idTenant, idCaixa, idCarteira, idPlanoContas));
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    /** {@code padrao_sistema} só é gravado pelo script de seed — simula isso pra testar a
+     *  proteção contra exclusão sem depender do seed real (que roda fora das migrations). */
+    private void marcarComoPadraoSistema(long idTenant, String idPlanoContas) throws Exception {
+        try (Connection c = DriverManager.getConnection(postgres.getJdbcUrl(), "niner_app", "dev_app");
+             Statement st = c.createStatement()) {
+            st.execute("SET app.id_tenant = " + idTenant);
+            st.executeUpdate(
+                    "UPDATE cfg_plano_contas SET padrao_sistema = true WHERE id_tenant = " + idTenant
+                            + " AND id_plano_contas = '" + idPlanoContas + "'");
         } catch (SQLException e) {
             throw new RuntimeException(e);
         }

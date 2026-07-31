@@ -60,6 +60,20 @@ export function mascararNcm(valor: string): string {
 }
 
 /**
+ * Código do plano de contas: máscara fixa "9.99.999.999" (conta.subconta.item.subitem —
+ * docs/telas/plano-contas.md, revisão 2026-07-31). 1+2+3+3 = 9 dígitos.
+ */
+export function mascararCodigoPlanoContas(valor: string): string {
+  const digitos = somenteDigitos(valor).slice(0, 9)
+  return aplicarMascara(digitos, '0.00.000.000')
+}
+
+/** {@code true} só quando o código está completo e no formato "9.99.999.999" (1º dígito 1-9). */
+export function codigoPlanoContasValido(valor: string): boolean {
+  return /^[1-9]\.[0-9]{2}\.[0-9]{3}\.[0-9]{3}$/.test(valor)
+}
+
+/**
  * Data como campo de texto "dd/mm/aaaa" (2026-07-22, pedido do dono do produto) — substitui
  * `<input type="date">` em todo o sistema: o nativo navega por segmentos (dia/mês/ano) e não
  * dá pra "selecionar tudo e sobrescrever ao digitar", que é o comportamento pedido. Como campo

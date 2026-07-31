@@ -48,6 +48,23 @@ class CaixaCrudTest {
                 .findFirst().orElseThrow();
     }
 
+    /** Busca uma carteira que **não** é a Dinheiro (ex.: PIX, também AVISTA, semeada no signup)
+     *  pra exercitar a restrição de 2026-07-31 — abertura de caixa só aceita "Dinheiro". */
+    private long buscarIdCarteiraNaoDinheiro(String token) throws Exception {
+        // /api/v1/caixa/carteiras já vem filtrado só pra Dinheiro (2026-07-31) — busca a lista
+        // completa no cadastro de Tipo de Carteira, que não tem esse filtro.
+        String respTipoCarteira = mvc.perform(get("/api/v1/tipos-carteira?limite=50").header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        java.util.Map<String, Object> pagina = JsonPath.read(respTipoCarteira, "$");
+        @SuppressWarnings("unchecked")
+        java.util.List<java.util.Map<String, Object>> itens = (java.util.List<java.util.Map<String, Object>>) pagina.get("itens");
+        return itens.stream()
+                .filter(c -> "PIX".equals(c.get("nomeCarteira")))
+                .map(c -> ((Number) c.get("idCarteira")).longValue())
+                .findFirst().orElseThrow();
+    }
+
     @Test
     void statusInicialNaoTemCaixaAberto() throws Exception {
         String token = assinarNovoTenant("status-inicial");
@@ -66,6 +83,33 @@ class CaixaCrudTest {
         mvc.perform(get("/api/v1/caixa/carteiras").header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[*].nomeCarteira").value(org.hamcrest.Matchers.hasItem("DINHEIRO")));
+    }
+
+    /** 2026-07-31 — saldo inicial só pode ser em "Dinheiro"; PIX/cartão/crediário (também
+     *  semeadas no signup) não podem aparecer nem ser aceitas na abertura. */
+    @Test
+    void listarCarteirasParaAberturaSoTrazDinheiro() throws Exception {
+        String token = assinarNovoTenant("so-dinheiro");
+
+        mvc.perform(get("/api/v1/caixa/carteiras").header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].nomeCarteira").value("DINHEIRO"));
+    }
+
+    @Test
+    void abrirCaixaComCarteiraDiferenteDeDinheiroRespondeErroDeValidacao() throws Exception {
+        String token = assinarNovoTenant("carteira-nao-dinheiro");
+        long idCarteiraPix = buscarIdCarteiraNaoDinheiro(token);
+
+        mvc.perform(post("/api/v1/caixa/abrir").header("Authorization", "Bearer " + token)
+                        .contentType(APPLICATION_JSON)
+                        .content("{\"idCarteira\":%d,\"saldoInicial\":100.00}".formatted(idCarteiraPix)))
+                .andExpect(status().isBadRequest());
+
+        mvc.perform(get("/api/v1/caixa/status").header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.aberto").value(false));
     }
 
     @Test

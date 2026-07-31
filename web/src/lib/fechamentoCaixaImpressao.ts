@@ -1,5 +1,5 @@
 import { jsPDF } from 'jspdf'
-import type { FechamentoCaixa } from './caixa'
+import { rotuloCarteira, type FechamentoCaixa } from './caixa'
 import { formatarMoeda } from './masks'
 
 /**
@@ -9,8 +9,10 @@ import { formatarMoeda } from './masks'
  */
 const LARGURA = 96
 
-const LARGURAS_COLUNA_TABELA = [30, 16, 16, 16, 18]
-const LARGURAS_COLUNA_CONFERENCIA = [30, 20, 20, 20]
+// coluna "CARTEIRA" alargada em 2026-07-31 pra caber "NOME — Categoria" (ex.: "VALE MERCADORIA —
+// Cartão Crédito", o rótulo mais longo possível) sem truncar.
+const LARGURAS_COLUNA_TABELA = [34, 16, 16, 16, 18]
+const LARGURAS_COLUNA_CONFERENCIA = [34, 20, 20, 20]
 
 function linha(caractere: string = '—'): string {
   return caractere.repeat(LARGURA)
@@ -74,7 +76,7 @@ export function montarLinhasFechamento(f: FechamentoCaixa): string[] {
   f.linhas.forEach((l) => {
     linhas.push(
       linhaTabela(
-        [l.nomeCarteira, moeda(l.saldoInicial), moeda(l.totalCredito), moeda(l.totalDebito), moeda(l.valorEsperado)],
+        [rotuloCarteira(l), moeda(l.saldoInicial), moeda(l.totalCredito), moeda(l.totalDebito), moeda(l.valorEsperado)],
         LARGURAS_COLUNA_TABELA,
       ),
     )
@@ -88,7 +90,7 @@ export function montarLinhasFechamento(f: FechamentoCaixa): string[] {
     linhas.push(linha('•'))
     f.conferencia.forEach((c) => {
       linhas.push(
-        linhaTabela([c.nomeCarteira, moeda(c.valorEsperado), moeda(c.valorContado), moeda(c.diferenca)], LARGURAS_COLUNA_CONFERENCIA),
+        linhaTabela([rotuloCarteira(c), moeda(c.valorEsperado), moeda(c.valorContado), moeda(c.diferenca)], LARGURAS_COLUNA_CONFERENCIA),
       )
     })
     linhas.push(linha())

@@ -39,8 +39,7 @@ export default function AberturaCaixa() {
 
   useEffect(() => {
     if (idCarteira !== '' || !carteiras || carteiras.length === 0) return
-    const dinheiro = carteiras.find((c) => c.nomeCarteira.trim().toUpperCase() === 'DINHEIRO')
-    setIdCarteira((dinheiro ?? carteiras[0]).idCarteira)
+    setIdCarteira(carteiras[0].idCarteira)
   }, [carteiras, idCarteira])
 
   const abrir = useMutation({
@@ -108,9 +107,7 @@ export default function AberturaCaixa() {
               </p>
               <CamposAberturaCaixa
                 carteiras={carteiras ?? []}
-                idCarteira={idCarteira}
                 valorTexto={valorTexto}
-                aoMudarCarteira={setIdCarteira}
                 aoMudarValor={(t) => setValorTexto(mascararMoeda(t))}
                 aoFinalizarValor={(t) => setValorTexto(formatarMoeda(desmascararMoeda(completarMoeda(t))))}
               />

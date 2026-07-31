@@ -1,4 +1,5 @@
 import { api } from './api'
+import { ROTULO_CATEGORIA_CARTEIRA, type CategoriaCarteira } from './tiposCarteira'
 
 /** `aberto = false` deixa os demais campos `null` — não há caixa hoje para o usuário/empresa. */
 export interface CaixaStatus {
@@ -33,10 +34,13 @@ export function abrirCaixa(payload: AbrirCaixaRequest): Promise<CaixaStatus> {
 }
 
 /** Uma linha de totais do Fechamento de Caixa, por tipo de carteira (2026-07-30). `valorEsperado`
- *  é sempre recalculado no servidor a partir de `caixa_detalhe` — nunca vem de um campo gravado. */
+ *  é sempre recalculado no servidor a partir de `caixa_detalhe` — nunca vem de um campo gravado.
+ *  `categoriaCarteira` (2026-07-31) distingue carteiras com o mesmo nome em categorias
+ *  diferentes (ex.: "HIPER" cadastrada em débito e em crédito) — ver `rotuloCarteira`. */
 export interface LinhaTotalCarteira {
   idCarteira: number
   nomeCarteira: string
+  categoriaCarteira: CategoriaCarteira
   saldoInicial: number
   totalCredito: number
   totalDebito: number
@@ -49,9 +53,16 @@ export interface LinhaTotalCarteira {
 export interface LinhaConferencia {
   idCarteira: number
   nomeCarteira: string
+  categoriaCarteira: CategoriaCarteira
   valorEsperado: number
   valorContado: number
   diferenca: number
+}
+
+/** "HIPER — Cartão Débito" — rótulo pra distinguir carteiras com o mesmo nome em categorias
+ *  diferentes (2026-07-31), mesmo padrão já usado em `FormaPagamentoModal.tsx`. */
+export function rotuloCarteira(l: { nomeCarteira: string; categoriaCarteira: CategoriaCarteira }): string {
+  return `${l.nomeCarteira} — ${ROTULO_CATEGORIA_CARTEIRA[l.categoriaCarteira]}`
 }
 
 export interface FechamentoCaixa {

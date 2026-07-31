@@ -37,4 +37,22 @@ CREATE TYPE genero_cliente AS ENUM ('MASCULINO', 'FEMININO', 'OUTROS');
 -- Natureza do lançamento no plano de contas (legado: C/D/N, por extenso desde 2026-07-16).
 -- Usado em cfg_plano_contas.tipo_movimento (V016). Diferente de credito_debito (ledger de
 -- estoque); 'NEUTRO' cobre conta sintética/agrupadora que não recebe lançamento direto.
-CREATE TYPE tipo_movimento_conta AS ENUM ('CRÉDITO', 'DÉBITO', 'NEUTRO');
+-- Sem acento desde 2026-07-31 (revisão do plano de contas gerencial) — identificadores
+-- acentuados complicavam o DTO Java (String + allowlist em vez de enum); valores existentes
+-- migrados via ALTER TYPE ... RENAME VALUE (dado preservado, só o rótulo mudou).
+CREATE TYPE tipo_movimento_conta AS ENUM ('CREDITO', 'DEBITO', 'NEUTRO');
+
+-- Se a conta é sintética (agrupadora, não recebe lançamento) ou analítica (recebe lançamento
+-- direto). Novo em 2026-07-31, plano de contas gerencial (docs/telas/plano-contas.md).
+CREATE TYPE natureza_conta AS ENUM ('SINTETICA', 'ANALITICA');
+
+-- Linha do DRE gerencial que a conta ocupa (permite montar a demonstração sem hardcode de
+-- código). 'NAO_APLICA' é obrigatório quando inclui_dre = false (CHECK em cfg_plano_contas).
+CREATE TYPE grupo_dre_conta AS ENUM (
+    'RECEITA_BRUTA', 'DEDUCOES', 'CUSTO_VARIAVEL', 'DESPESA_FIXA', 'DEPRECIACAO',
+    'RESULTADO_FINANCEIRO', 'NAO_OPERACIONAL', 'TRIBUTO_LUCRO', 'NAO_APLICA'
+);
+
+-- Bloco do DFC (demonstração de fluxo de caixa, método direto) que a conta ocupa.
+-- 'NAO_APLICA' é obrigatório quando inclui_fluxo_caixa = false (CHECK em cfg_plano_contas).
+CREATE TYPE grupo_dfc_conta AS ENUM ('OPERACIONAL', 'INVESTIMENTO', 'FINANCIAMENTO', 'NAO_APLICA');
