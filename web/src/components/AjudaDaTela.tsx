@@ -444,8 +444,8 @@ const CONTEUDOS: Record<string, ConteudoAjuda> = {
       '"Composição do Faturamento" mostra o caminho do valor bruto até a venda líquida.',
       'Os 7 gráficos cobrem vendas por dia, top 10 de marcas/vendedores/clientes, formas de pagamento, por hora e por dia da semana.',
       'Escolha "Totalizar Por" para agrupar a grid final (por data, cliente, vendedor, operador de caixa ou empresa) — clique numa linha agrupada para ver as vendas daquele grupo.',
-      '"Não Totalizar" já mostra a lista de vendas do período diretamente, sem agrupar, já com a linha de total no rodapé.',
-      '"Gerar PDF" baixa a tela como está (com os gráficos desenhados) em PDF — a grid de vendas sempre começa numa página nova, com total no fim e numeração de página em todas.',
+      '"Não Totalizar" já mostra a lista de vendas do período diretamente, sem agrupar, em ordem cronológica (data/hora da venda), já com a linha de total no rodapé.',
+      '"Gerar PDF" baixa a tela como está (com os gráficos desenhados) em PDF: a 1ª página traz os filtros aplicados, o título e a numeração/data de geração repetem no topo de todas as páginas, e o rodapé de cada página mostra a empresa logada e "Niner ERP" — a grid de vendas sempre começa numa página nova, com total no fim.',
     ],
     errosComuns: [
       'Devoluções sempre aparecem zeradas: o módulo de devolução ainda não existe no sistema.',

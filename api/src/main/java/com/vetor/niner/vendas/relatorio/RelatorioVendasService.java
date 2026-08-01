@@ -145,7 +145,8 @@ public class RelatorioVendasService {
                 ) op ON true
                 """
                 + filtro.clausula()
-                + " GROUP BY v.id_venda, v.id_empresa, e.razao_social, v.data_venda, v.id_cliente, cli.nome";
+                + " GROUP BY v.id_venda, v.id_empresa, e.razao_social, v.data_venda, v.id_cliente, cli.nome"
+                + " ORDER BY v.data_venda";
 
         return jdbc.sql(sql)
                 .params(filtro.params())

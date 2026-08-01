@@ -393,6 +393,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
 /* Relatório de Vendas (2026-07-31) — 1ª tela do padrão de relatório: KPIs "como se fossem
    botões" (blocos grandes, não linhas de tabela), composição do faturamento, grade de
    gráficos, grid totalizável. Mesmo recipiente visual de `.resumo-crediario-card`. */
+.relatorio-filtros-aplicados { display: flex; flex-wrap: wrap; gap: 6px 28px; font-size: 13px; }
 .relatorio-kpis-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
 .relatorio-kpi-card {
   background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--radius);
@@ -400,11 +401,15 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
 }
 .relatorio-kpi-card p { margin: 4px 0; }
 .relatorio-kpi-valor { font-size: 22px; font-weight: 700; margin: 2px 0 8px; }
+.relatorio-kpi-valor.cor-accent { color: var(--accent); }
+.relatorio-kpi-valor.cor-danger { color: var(--danger); }
+.relatorio-kpi-valor.cor-sucesso { color: var(--sucesso); }
 .relatorio-composicao-grid {
   display: grid; grid-template-columns: repeat(5, 1fr); gap: 16px; margin-top: 16px;
 }
 .relatorio-composicao-card { text-align: center; }
 .relatorio-composicao-card.destaque { background: rgba(var(--accent-rgb), .12); border-color: var(--accent); }
+.relatorio-composicao-card.destaque .relatorio-kpi-valor { color: var(--accent); }
 .relatorio-graficos-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; margin-top: 16px; }
 .relatorio-grafico-card { min-height: 300px; display: flex; flex-direction: column; }
 .relatorio-grafico-card .section-label { margin-bottom: 12px; }
