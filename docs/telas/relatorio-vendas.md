@@ -93,17 +93,24 @@ havia uma tela desse tipo antes para servir de precedente.
 
 ## Resumo do Período (KPIs)
 
-| Card | Linha principal | Linha secundária |
-|---|---|---|
-| Ticket Médio | Valor (`SUM(valorLíquido)/nVendas`) | Nº Vendas |
-| % Médio de Desconto | `SUM(desconto)/SUM(bruto)*100` (ponderado) | Valor Desconto |
-| Devoluções | `valorDevolução/SUM(bruto)*100` | Valor Devolução |
-| Itens Vendidos / Média | `SUM(qtdItens)` | Média de itens por venda |
+| Card | Linha principal | Linha secundária | Cor do valor |
+|---|---|---|---|
+| Ticket Médio | Valor (`SUM(valorLíquido)/nVendas`) | Nº Vendas | `--accent` |
+| % Médio de Desconto | `SUM(desconto)/SUM(bruto)*100` (ponderado) | Valor Desconto | `--danger` |
+| Devoluções | `valorDevolução/SUM(bruto)*100` | Valor Devolução | `--danger` |
+| Itens Vendidos / Média | `SUM(qtdItens)` | Média de itens por venda | `--accent` |
 
 ## Composição do Faturamento
 
 Valor Bruto · Descontos · Acréscimos · Devoluções · **Venda Líquida** = `Bruto − Descontos +
 Acréscimos − Devoluções`.
+
+**Cores (2026-08-01, pedido explícito: "colocar cores nos valores... em harmonia com as cores do
+projeto")** — só tokens já existentes no design system (nenhuma cor nova), pela semântica de
+ganho/perda no faturamento: Descontos e Devoluções em `--danger` (reduzem o líquido), Acréscimos
+em `--sucesso` (aumenta o líquido), Valor Bruto sem cor especial (base neutra), Venda Líquida em
+`--accent` (já tinha destaque de fundo/borda, ganhou também o texto). Mesmo critério nos KPIs
+acima. Ver `.relatorio-kpi-valor.cor-*` em `web/src/styles.css`.
 
 ## Gráficos (7)
 
@@ -116,8 +123,11 @@ Acréscimos − Devoluções`.
 6. **Por Hora da Venda** — coluna, 24 buckets (00–23), zero-preenchido.
 7. **Por Dia da Semana** — coluna, Segunda…Domingo, zero-preenchido.
 
-Todo gráfico usa uma única cor (o accent do design system — cada gráfico é uma série só, sem
-necessidade de legenda) e tooltip ao passar o mouse.
+Cada gráfico é uma série só, sem necessidade de legenda, com tooltip ao passar o mouse. **Cor
+(revisado 2026-08-01):** os 7 cards alternam entre `--accent` e `--info` (Valor Vendido por Dia,
+Top Vendedores, Recebimentos por Carteira e Por Dia da Semana em `--accent`; Top Marcas, Top
+Clientes e Por Hora em `--info`) — só pra dar variedade visual entre os cards, não semântica; por
+isso `--danger`/`--sucesso` (que carregam "perda"/"ganho" nos KPIs acima) ficam de fora daqui.
 
 ## PDF
 
@@ -165,13 +175,54 @@ nenhuma classe nova — usar as trincas RGB (`--accent-rgb`/`--accent-ink-rgb`/`
    também (não só no PDF), consistente com o resto do app.
 3. **"Página X de Y" em toda página**, texto sobreposto por cima da imagem depois que todas as
    páginas já foram desenhadas (`doc.getNumberOfPages()` + `doc.setPage(i)` + `doc.text(...)`
-   no canto inferior direito).
+   no canto inferior direito). **Superado pela revisão de 2026-08-01 abaixo** — saiu do rodapé,
+   foi pro cabeçalho.
+
+**Revisão 2026-08-01 — filtros aplicados + cabeçalho/rodapé em toda página, seguindo o modelo do
+ERP legado (`RELATORIO_COMISSOES.PDF`, relatório de Comissões do sistema Mitryus).** Três pedidos
+em sequência do dono do produto:
+
+1. **Descrição dos filtros aplicados, antes de qualquer dado.** Vira uma seção "Filtros Aplicados"
+   (Período, Empresa(s), Vendedor, Totalizar por) dentro de `topoRef`, capturada junto pelo mesmo
+   `html2canvas` — sai no mesmo tamanho de fonte do resto da tela, sem precisar de uma página só de
+   texto nativo (1ª tentativa, native `jsPDF` text numa página de rosto, **rejeitada**: "ficou
+   muito grande numa folha", refeita nesse estilo compacto). **Só existe no PDF, nunca na tela** —
+   a seção só entra no DOM enquanto `gerandoPdf === true` (`{gerandoPdf && (...)}` em
+   `RelatorioVendas.tsx`), então o `handleGerarPdf` precisa esperar 2 `requestAnimationFrame`
+   depois do `setGerandoPdf(true)` antes de chamar a captura — senão o React ainda não comitou o
+   nó novo e o `html2canvas` roda contra o DOM antigo, sem a seção.
+2. **Título + paginação + data/hora no cabeçalho de toda página** (não só a 1ª, e não mais no
+   rodapé) — texto nativo `jsPDF`, desenhado por cima da imagem depois que todas as páginas já
+   existem (mesma ideia de antes, só que virou cabeçalho: título em negrito à esquerda, "Página X
+   de Y" + data/hora de geração à direita, régua fina abaixo).
+3. **Rodapé em toda página:** empresa **logada na sessão** à esquerda (`eu.empresa.nome` — fixa,
+   não muda com o filtro de empresa, que já aparece em "Filtros Aplicados" e pode ser "Todas as
+   empresas" pro ADMIN) e `"Niner ERP"` fixo à direita.
+
+**Como o cabeçalho/rodapé abrem espaço sem cortar conteúdo:** `desenharElementoPaginado()` reserva
+`ALTURA_CABECALHO_MM` (16mm) e `ALTURA_RODAPE_MM` (10mm) subtraindo do cálculo de altura útil por
+página (a paginação da imagem passa a fatiar em `alturaPagina − cabeçalho − rodapé`, não mais
+`alturaPagina` inteira) e desloca a imagem pra baixo por `ALTURA_CABECALHO_MM` — depois de colar a
+imagem, repinta as duas faixas com `corFundo` (a mesma cor de fundo do tema, calculada de
+`getComputedStyle(...).getPropertyValue('--ground')`) pra tapar qualquer sobra da fatia anterior/
+seguinte que vaze pra dentro delas, e só then desenha o texto por cima. `desenharCabecalhoERodape()`
+roda por último, depois que todas as páginas (topo + grid) já existem, igual já fazia a numeração
+antiga.
+
+**Backup de segurança:** antes dessa revisão, o dono do produto pediu explicitamente pra "memorizar
+antes de fazer" — os 3 arquivos afetados (`RelatorioVendas.tsx`, `relatorioVendasCaptura.ts`,
+`styles.css`) foram copiados pra um diretório de scratchpad da sessão antes de qualquer edição, pra
+reverter sem depender de memória de conversa se o resultado não agradasse. Não sobrevive entre
+sessões (é `/tmp` de sessão) — se precisar reverter numa sessão futura, usar `git diff`/histórico.
 
 ## Grid totalizada + drill-down
 
 - **`totalizarPor = NAO_TOTALIZAR`:** a grid já mostra a lista analítica de vendas do período
   direto (Empresa | Nº Venda | Data/Hora | Cliente | Vendedor | Operador | Qtd Produtos | Valor
-  Venda | Acréscimos | Descontos | Valor Líquido) — sem agrupamento, sem clique necessário.
+  Venda | Acréscimos | Descontos | Valor Líquido) — sem agrupamento, sem clique necessário, em
+  **ordem cronológica** (`ORDER BY v.data_venda` na query-base, `RelatorioVendasService.
+  buscarLinhasBase()` — antes não tinha `ORDER BY` nenhum e a ordem saía arbitrária do `GROUP BY`
+  do Postgres; corrigido 2026-08-01, vale também pro drill-down por grupo, que usa a mesma lista).
 - **Qualquer outro totalizador:** a grid mostra Nome do Totalizador | Nº de Vendas | Valor da
   Venda, uma linha por grupo, ordenada por valor decrescente. Clicar numa linha abre
   `DrilldownTotalizadorModal.tsx` (popup, mesmo padrão de `DetalheVendaModal.tsx`) com a lista

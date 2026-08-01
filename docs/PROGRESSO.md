@@ -1,7 +1,7 @@
 # Progresso do Projeto — niner-v2
 
 Registro cronológico das decisões e entregas. Atualizar a cada marco relevante.
-**Última atualização:** 2026-07-31
+**Última atualização:** 2026-08-01
 
 ---
 
@@ -133,6 +133,50 @@ parser de CSS do `html2canvas`.
 ---
 
 ## Linha do tempo
+
+### 2026-08-01 — Relatório de Vendas: ordenação, cores e PDF no modelo do ERP legado
+
+Sessão de ajustes pedidos em testes manuais sobre o Relatório de Vendas (`docs/telas/
+relatorio-vendas.md`), todos em cima da entrega de 2026-07-31 ([[project_relatorio_vendas]]).
+Nenhuma tela nova; só refinamento. Detalhe completo na memória canônica da feature (mesmo
+arquivo, seção "2026-08-01"), resumo aqui:
+
+1. **Ordenação cronológica corrigida** — `RelatorioVendasService.buscarLinhasBase()` não tinha
+   `ORDER BY` nenhum; a lista analítica (grid "Vendas do Período" e o drill-down por totalizador)
+   saía na ordem arbitrária que o `GROUP BY` do Postgres devolvia. Fix de 1 linha: `ORDER BY
+   v.data_venda` na query-base.
+2. **Cores nos valores e nos gráficos** — pedido explícito: "cores que fiquem em harmonia com as
+   cores do projeto". Só tokens já existentes no design system (nenhuma cor nova): Descontos/
+   Devoluções em `--danger`, Acréscimos em `--sucesso`, Venda Líquida/Ticket Médio/Itens Vendidos
+   em `--accent`; os 7 cards de gráfico alternam `--accent`/`--info` (identidade visual entre
+   cards, não semântica de ganho/perda).
+3. **PDF: seção "Filtros Aplicados" só no PDF, nunca na tela** — entra no DOM só enquanto
+   `gerandoPdf === true` (dentro de `topoRef`, capturada junto pelo `html2canvas`); precisou de
+   2 `requestAnimationFrame` depois do `setState` pra garantir que o React já comitou o nó antes
+   da captura. 1ª tentativa foi uma página de rosto em texto nativo do `jsPDF` — **rejeitada**
+   ("ficou muito grande numa folha"), substituída por essa seção compacta no mesmo tamanho de
+   fonte do resto da tela.
+4. **PDF: cabeçalho e rodapé repetidos em toda página**, seguindo o modelo de um relatório do ERP
+   legado (Mitryus, `RELATORIO_COMISSOES.PDF`) trazido pelo dono do produto — título + "Página X
+   de Y" + data/hora de geração subiram do rodapé pro cabeçalho (antes só tinha a numeração,
+   pequena e só na última). Rodapé ganhou empresa **logada na sessão** (`eu.empresa.nome`, fixa —
+   não confundir com a empresa do filtro, que fica em "Filtros Aplicados" e pode ser "Todas as
+   empresas" pro ADMIN) e `"Niner ERP"` fixo. `desenharElementoPaginado()` passou a reservar
+   16mm/10mm de cabeçalho/rodapé por página (repintados com a cor de fundo do tema por cima de
+   qualquer sobra da imagem capturada) antes de desenhar o texto nativo por cima.
+
+**`AjudaDaTela.tsx`** (`relatorios.vendas.tela`) atualizado com a ordenação cronológica e o novo
+comportamento do "Gerar PDF" (ver [[feedback_checklist_documentar_tudo]] — não esquecer a ajuda
+da tela, não só a spec do repositório).
+
+**Verificação:** `RelatorioVendasCrudTest` (8 testes) e suíte completa do `api/` rodadas depois do
+`ORDER BY` — **295 testes de backend, 0 falhas**. `tsc --noEmit` do `web/` limpo a cada etapa.
+Testado ao vivo no Chrome (login real `loja-teste-manual`/`teste@niner.dev`/`teste1234`): troca de
+período pra "Últimos 12 Meses", "Gerar PDF", PDF de 3 páginas baixado e lido (`Read` do Claude
+Code) — filtros só na página 1, título/paginação/data em todas, rodapé com empresa+"Niner ERP" em
+todas, grid cronológica confirmada visualmente.
+
+Commitado e pushado (ver commit no topo do `git log`).
 
 ### 2026-07-31 — Relatório de Vendas (1ª tela do grupo Relatórios + padrão de tela de relatório)
 
