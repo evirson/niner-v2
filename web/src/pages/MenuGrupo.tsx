@@ -1,6 +1,7 @@
 import { Link, useParams } from 'react-router-dom'
+import { IconeVoltar } from '../components/Icones'
 import { useEu } from '../lib/eu'
-import { acharGrupo, eGrupo, filtrarPorPapel, MENU, type NavGrupo, type NavItem } from '../lib/menu'
+import { acharGrupo, acharPai, eGrupo, filtrarPorPapel, MENU, rotaDoGrupo, type NavGrupo, type NavItem } from '../lib/menu'
 
 function CardDeItem({ item }: { item: NavItem }) {
   const Icone = item.icone
@@ -17,50 +18,31 @@ function CardDeItem({ item }: { item: NavItem }) {
   )
 }
 
-/** Subcard: um filho dentro do card de um subgrupo (Caixa, Cancelamentos). Mesma informação do
- * card normal, em escala menor, para a hierarquia ficar visível sem virar outro nível de
- * navegação — o operador vê a área inteira numa tela só. */
-function SubCard({ item }: { item: NavItem }) {
-  const Icone = item.icone
+/** Card de um subgrupo (Caixa, Cancelamentos): abre o próximo nível — a página-hub do próprio
+ * subgrupo, onde os filhos aparecem como cards. A contagem de telas antecipa o que tem lá
+ * dentro, já que o conteúdo não fica visível aqui. */
+function CardDeSubgrupo({ grupo }: { grupo: NavGrupo }) {
+  const Icone = grupo.icone
+  const quantidade = grupo.itens.length
   return (
-    <Link className="menu-subcard" to={item.to}>
-      <span className="menu-subcard-icone">
-        <Icone size={20} />
+    <Link className="menu-card" to={rotaDoGrupo(grupo.chave)}>
+      <span className="menu-card-icone">
+        <Icone size={26} />
       </span>
       <span className="menu-card-texto">
-        <strong className="menu-subcard-nome">{item.label}</strong>
-        <span className="menu-subcard-descricao">{item.descricao}</span>
+        <strong className="menu-card-nome">{grupo.label}</strong>
+        <span className="menu-card-descricao">{grupo.descricao}</span>
+        <span className="menu-card-contagem">
+          {quantidade} {quantidade === 1 ? 'tela' : 'telas'}
+        </span>
       </span>
     </Link>
   )
 }
 
-/** Card de um subgrupo: cabeçalho com ícone/nome/descrição e os filhos como subcards dentro. */
-function CardDeSubgrupo({ grupo }: { grupo: NavGrupo }) {
-  const Icone = grupo.icone
-  return (
-    <section className="menu-card menu-card-subgrupo">
-      <div className="menu-card-subgrupo-cabecalho">
-        <span className="menu-card-icone">
-          <Icone size={26} />
-        </span>
-        <span className="menu-card-texto">
-          <strong className="menu-card-nome">{grupo.label}</strong>
-          <span className="menu-card-descricao">{grupo.descricao}</span>
-        </span>
-      </div>
-      <div className="menu-subcards">
-        {grupo.itens.map((filho) =>
-          eGrupo(filho) ? <CardDeSubgrupo key={filho.chave} grupo={filho} /> : <SubCard key={filho.to} item={filho} />,
-        )}
-      </div>
-    </section>
-  )
-}
-
 /** Página-hub de um grupo do menu (2026-08-03): a lateral só lista os grupos principais, e é
- * aqui que a área se abre — um card por filho, com ícone, nome e o que a tela faz; subgrupos
- * viram card com subcards dentro. */
+ * aqui que a área se abre — um card por filho, com ícone, nome e o que a tela faz. Um filho que
+ * é subgrupo abre o próximo nível, com seta de retorno para o grupo de cima. */
 export default function MenuGrupo() {
   const { grupo: chave } = useParams<{ grupo: string }>()
   const { data: eu } = useEu()
@@ -68,6 +50,7 @@ export default function MenuGrupo() {
 
   const menu = filtrarPorPapel(MENU, isAdmin)
   const grupo = chave ? acharGrupo(menu, chave) : null
+  const pai = chave ? acharPai(menu, chave) : null
 
   if (!grupo) {
     return (
@@ -86,10 +69,18 @@ export default function MenuGrupo() {
 
   return (
     <div>
-      <div className="titulo-tela">
-        <Icone size={34} />
-        <h1>{grupo.label}</h1>
+      <div className="menu-hub-topo">
+        {pai && (
+          <Link className="menu-hub-voltar" to={rotaDoGrupo(pai.chave)} title={`Voltar para ${pai.label}`} aria-label={`Voltar para ${pai.label}`}>
+            <IconeVoltar size={20} />
+          </Link>
+        )}
+        <div className="titulo-tela">
+          <Icone size={34} />
+          <h1>{grupo.label}</h1>
+        </div>
       </div>
+      {pai && <p className="eyebrow menu-hub-trilha">{pai.label}</p>}
       <p className="muted menu-hub-descricao">{grupo.descricao}</p>
 
       {grupo.itens.length === 0 ? (

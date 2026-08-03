@@ -3,7 +3,7 @@ import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { useAuth } from '../lib/auth'
 import { useEu } from '../lib/eu'
 import { filtrarPorPapel, MENU, rotaDoGrupo, type NavGrupo } from '../lib/menu'
-import { IconeMenuHamburguer } from './Icones'
+import { IconeAlfinete, IconeMenuHamburguer } from './Icones'
 
 const CHAVE_RECOLHIDO = 'niner_nav_recolhido'
 
@@ -72,15 +72,19 @@ export default function Layout() {
           onFocus={() => setExpandidoPorInteracao(true)}
           onBlur={aoSairDoFoco}
         >
-          {/* Hambúrguer no topo (2026-08-03, padrão mobile) — antes ficava no rodapé do menu. */}
+          {/* Hambúrguer/alfinete no topo (2026-08-03, padrão mobile) — antes ficava no rodapé.
+              O ícone reflete a PREFERÊNCIA salva, não o que está na tela: com o menu no modo
+              retrátil, a "espiada" do hover o deixa visualmente igual ao travado em aberto, e
+              sem esse contraste o usuário não sabe em qual dos dois está. */}
           <button
             type="button"
-            className="app-nav-toggle"
+            className={`app-nav-toggle${recolhido ? '' : ' app-nav-toggle-fixo'}`}
             onClick={alternarRecolhido}
-            aria-expanded={!recolhido}
-            title={recolhido ? 'Expandir menu' : 'Recolher menu'}
+            aria-pressed={!recolhido}
+            aria-label={recolhido ? 'Menu retrátil. Travar em aberto' : 'Menu travado em aberto. Voltar ao modo retrátil'}
+            title={recolhido ? 'Menu retrátil — clique para travar em aberto' : 'Menu travado em aberto — clique para voltar ao modo retrátil'}
           >
-            <IconeMenuHamburguer size={20} />
+            {recolhido ? <IconeMenuHamburguer size={20} /> : <IconeAlfinete size={20} />}
             {mostrarExpandido && <span>Menu</span>}
           </button>
           {menu.map((grupo) => {

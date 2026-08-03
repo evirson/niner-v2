@@ -143,16 +143,22 @@ endpoint foi tocado — a mudança é inteira no shell do `web/`.
 1. **Hambúrguer no topo do menu** (padrão mobile), não mais no rodapé. Com a árvore aberta, o
    botão de recolher saía da área visível e exigia rolar a navegação inteira. Novo
    `IconeMenuHamburguer` em `Icones.tsx`; a persistência (`niner_nav_recolhido`) e a "espiada"
-   no hover/foco continuam iguais.
+   no hover/foco continuam iguais. O botão **alterna de ícone e rótulo conforme a preferência
+   salva** — alfinete em destaque quando travado em aberto, hambúrguer quando no modo retrátil.
+   Sem isso não dava para distinguir os dois estados: a espiada do hover deixa o menu retrátil
+   visualmente idêntico ao fixo, mesma largura e mesmos rótulos. O rótulo continua sendo só
+   "Menu" nos dois casos — trocar o texto junto com o ícone era redundante.
 2. **A lateral passou a listar só os sete grupos principais.** A árvore de sub-itens saiu: eram
    sete grupos, dois subgrupos e ~20 telas empilhados numa coluna de 200px. No modo recolhido a
    faixa de 56px agora mostra os ícones dos grupos, não mais as telas achatadas
    (`achatarFolhas()` ficou sem uso e saiu).
 3. **Página-hub por grupo** — nova rota `/menu/:grupo` (`MenuGrupo.tsx`). Cada grupo abre uma
-   tela de **cards** com ícone, nome e uma frase do que a tela faz; um subgrupo (Caixa,
-   Cancelamentos) vira um card com seus filhos como **subcards** dentro, então a área inteira
-   cabe numa tela só. Prefixo `/menu/` porque as chaves de grupo colidem com rotas existentes
-   (`estoque` já é a Transferência de Produtos).
+   tela de **cards** com ícone, nome e uma frase do que a tela faz. Um subgrupo (Caixa,
+   Cancelamentos) é **um nível a mais**: o card mostra a contagem de telas e abre o hub do
+   próprio subgrupo, que traz **seta de retorno** para o pai (`acharPai()`) e o nome dele como
+   trilha. Chegou-se a testar o subgrupo com os filhos abertos dentro do card, mas ficava
+   pesado e sem hierarquia clara. Prefixo `/menu/` porque as chaves de grupo colidem com rotas
+   existentes (`estoque` já é a Transferência de Produtos).
 4. **O menu virou dado**, em `web/src/lib/menu.ts` — estava embutido no `Layout.tsx`. `Layout` e
    `MenuGrupo` leem a mesma árvore, e cada item ganhou um campo `descricao` **obrigatório**
    (é o conteúdo do card). Acrescentar tela ao sistema continua sendo editar `MENU`.

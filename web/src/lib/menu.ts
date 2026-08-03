@@ -305,3 +305,15 @@ export function acharGrupo(nos: NavNode[], chave: string): NavGrupo | null {
   }
   return null
 }
+
+/** Grupo que contém `chave`, ou null se ela é de primeiro nível. Alimenta a seta de retorno da
+ * página-hub: de `/menu/caixa` volta-se para `/menu/frente-loja`, não para o painel. */
+export function acharPai(nos: NavNode[], chave: string, pai: NavGrupo | null = null): NavGrupo | null {
+  for (const n of nos) {
+    if (!eGrupo(n)) continue
+    if (n.chave === chave) return pai
+    const achado = acharPai(n.itens, chave, n)
+    if (achado) return achado
+  }
+  return null
+}
