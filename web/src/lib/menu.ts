@@ -295,6 +295,60 @@ export function filtrarPorPapel(nos: NavNode[], isAdmin: boolean): NavNode[] {
   return resultado
 }
 
+/** Uma tela indexada para a busca do cabeçalho, com o caminho de grupos até ela. */
+export interface TelaBuscavel {
+  item: NavItem
+  /** Ex.: `['Frente de Loja', 'Caixa']` — vira a trilha mostrada no resultado. */
+  trilha: string[]
+}
+
+/** Achata a árvore em telas navegáveis, guardando o caminho de grupos de cada uma. Espera
+ * receber o menu **já filtrado por papel** — quem chama é que sabe se o usuário é ADMIN. */
+export function listarTelas(nos: NavNode[], trilha: string[] = []): TelaBuscavel[] {
+  const telas: TelaBuscavel[] = []
+  for (const n of nos) {
+    if (eGrupo(n)) telas.push(...listarTelas(n.itens, [...trilha, n.label]))
+    else telas.push({ item: n, trilha })
+  }
+  return telas
+}
+
+/** Minúsculas e sem acento — "crediario" tem que achar "Crediário". */
+export function normalizar(texto: string): string {
+  return texto
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim()
+}
+
+/** Pontua uma tela contra o termo já normalizado: quanto menor, mais relevante; `null` = não
+ * bate. Começar com o termo vale mais que contê-lo no meio, e bater no nome da tela vale mais
+ * que bater na trilha ou na descrição — quem digita "caixa" quer as telas de Caixa antes de
+ * "Conta Corrente… fluxo de caixa". */
+export function pontuarTela(tela: TelaBuscavel, termo: string): number | null {
+  const nome = normalizar(tela.item.label)
+  if (nome.startsWith(termo)) return 0
+  // Cada palavra do nome conta: "vendas" acha "Pesquisa de Vendas" antes de quem só contém.
+  if (nome.split(/\s+/).some((p) => p.startsWith(termo))) return 1
+  if (nome.includes(termo)) return 2
+  if (normalizar(tela.trilha.join(' ')).includes(termo)) return 3
+  if (normalizar(tela.item.descricao).includes(termo)) return 4
+  return null
+}
+
+/** Telas que casam com o termo, da mais relevante para a menos. Termo vazio devolve nada. */
+export function buscarTelas(telas: TelaBuscavel[], termo: string, limite = 8): TelaBuscavel[] {
+  const t = normalizar(termo)
+  if (!t) return []
+  return telas
+    .map((tela) => ({ tela, ponto: pontuarTela(tela, t) }))
+    .filter((r): r is { tela: TelaBuscavel; ponto: number } => r.ponto !== null)
+    .sort((a, b) => a.ponto - b.ponto || a.tela.item.label.localeCompare(b.tela.item.label, 'pt-BR'))
+    .slice(0, limite)
+    .map((r) => r.tela)
+}
+
 /** Procura um grupo pela chave em qualquer nível (a página-hub aceita subgrupos como `caixa`). */
 export function acharGrupo(nos: NavNode[], chave: string): NavGrupo | null {
   for (const n of nos) {

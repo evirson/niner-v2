@@ -18,20 +18,22 @@ três incômodos apontados pelo dono do produto:
 
 ## Solução proposta
 
-Três mudanças no shell, sem tocar em nenhuma tela de domínio:
+Quatro mudanças no shell, sem tocar em nenhuma tela de domínio:
 
 1. **Hambúrguer no topo** (`IconeMenuHamburguer`, novo em `Icones.tsx`): o botão de recolher/
    expandir passa a ser a primeira linha do `<nav>`, com divisória abaixo separando-o da
    navegação. Comportamento e persistência (`localStorage` `niner_nav_recolhido`) inalterados,
-   inclusive a "espiada" no hover/foco com o menu recolhido. O botão **alterna de ícone e de
-   rótulo conforme a preferência salva** — alfinete/"Menu fixo" quando travado em aberto,
-   hambúrguer/"Menu retrátil" quando não.
+   inclusive a "espiada" no hover/foco com o menu recolhido. O botão **alterna de ícone conforme
+   a preferência salva** — alfinete quando travado em aberto, hambúrguer quando no modo
+   retrátil; o rótulo é sempre "Menu".
 2. **A lateral lista apenas os grupos principais.** Sete links, um por grupo, cada um levando à
    página-hub daquela área. Sem árvore, sem seta de expandir, sem sub-item na lateral.
 3. **Página-hub por grupo** (`/menu/:grupo`, `MenuGrupo.tsx`): a área de conteúdo mostra os
    filhos do grupo como **cards** — ícone, nome e uma frase do que a tela faz. Um filho que é
-   subgrupo (Caixa, Cancelamentos) vira um **card com subcards dentro**, então a hierarquia
-   aparece inteira numa tela só.
+   subgrupo (Caixa, Cancelamentos) abre o próximo nível, com seta de retorno.
+4. **Busca de telas no cabeçalho** (`BuscaDeTelas.tsx`): campo à direita do header, com
+   **Ctrl+K** (ou ⌘K) de qualquer lugar do ERP, navegação por setas e Enter para abrir. É a
+   contrapartida do custo de navegar por hub — o acesso direto que a lateral deixou de dar.
 
 ## Decisões de escopo
 
@@ -70,7 +72,19 @@ Três mudanças no shell, sem tocar em nenhuma tela de domínio:
    agora com um campo `descricao` obrigatório.
 7. **`descricao` é obrigatória em item e em grupo** (tipo, não convenção). É o que dá conteúdo
    ao card; um item sem descrição renderizaria um card vazio pela metade.
-8. **Filtro por papel vale no hub também.** `MenuGrupo` roda `filtrarPorPapel` com o papel de
+8. **A busca do cabeçalho indexa telas, não grupos.** O que se quer abrir é uma tela; o grupo é
+   só o caminho. Mas o termo casa também contra a **trilha** e a **descrição**, então "caixa"
+   traz Abertura/Fechamento (nome), e "cancelamento" traz o que está sob *Cancelamentos* mesmo
+   quando o nome da tela não repete a palavra. A ordenação é por relevância —
+   `pontuarTela()`/`buscarTelas()` ficam em `menu.ts`, não no componente: é lógica de dados e
+   assim dá para exercitá-la sem montar React. Comparação **sem acento e sem caixa**
+   (`normalizar()`): "crediario" tem que achar "Crediário".
+9. **Layout do cabeçalho em 3 colunas.** Marca à esquerda, **nome da loja centralizado**, busca
+   e Sair à direita (pedido do dono do produto). As colunas laterais são `1fr` para que a loja
+   fique no centro **da tela**, não no espaço que sobra — o bloco da direita é bem mais largo
+   que a marca. O elemento da loja é renderizado mesmo vazio, senão a coluna some e o
+   alinhamento quebra quando não há empresa na sessão.
+10. **Filtro por papel vale no hub também.** `MenuGrupo` roda `filtrarPorPapel` com o papel de
    `/api/v1/eu` antes de montar os cards, então *Cancelamento de Vendas* (ADMIN) não aparece
    para OPERADOR, e `/menu/configuracoes` acessado na unha por um OPERADOR cai no estado
    "Área não encontrada". Isso é conveniência de UI: **a autorização de verdade continua no
@@ -148,11 +162,37 @@ Quando a página monta
 Então vejo o estado "Área não encontrada" com link de volta ao painel, sem erro de runtime
 ```
 
+```
+Dado que estou em qualquer tela do ERP
+Quando pressiono Ctrl+K (ou ⌘K)
+Então o campo de busca do cabeçalho recebe o foco com o conteúdo selecionado
+```
+
+```
+Dado que digito "crediario" (sem acento) na busca
+Quando a lista aparece
+Então vejo Recebimento de Crediário e Estorno de Crediário
+E cada resultado mostra ícone, nome, descrição e a trilha de grupos
+E setas ↑/↓ movem a seleção e Enter abre a tela selecionada
+E Esc limpa o termo; com o termo já vazio, Esc tira o foco do campo
+```
+
+```
+Dado que sou OPERADOR e busco "cancelamento"
+Quando a lista aparece
+Então vejo apenas Estorno de Crediário — Cancelamento de Vendas é ADMIN-only
+```
+
+```
+Dado que busco um termo sem correspondência
+Quando a lista aparece
+Então vejo "Nenhuma tela encontrada para …", sem resultado algum
+```
+
 ## Fora de escopo
 
-- Busca/atalho de teclado sobre o menu (Ctrl+K) — cogitado, não pedido. Fica mais relevante
-  agora que a tela não está mais a um clique; candidato natural à próxima iteração.
-- Favoritos ou "acessados recentemente" nos hubs.
+- Busca sobre **dados** (cliente, produto, venda) — a do cabeçalho é só de telas.
+- Favoritos ou "acessados recentemente" nos hubs e na busca.
 - Redesenhar o Painel (`/`) como launcher de tudo — avaliado e descartado em favor do hub por
   grupo, que mantém a rota `/` como resumo da conta.
 - `AjudaDaTela` (R22) nos hubs: o card já traz a explicação; um ícone de ajuda sobre uma tela
@@ -162,9 +202,10 @@ Então vejo o estado "Área não encontrada" com link de volta ao painel, sem er
 
 | Arquivo | Papel |
 |---|---|
-| `web/src/lib/menu.ts` | **novo** — tipos, `MENU` (com `descricao`), `filtrarPorPapel`, `acharGrupo`, `rotaDoGrupo` |
+| `web/src/components/BuscaDeTelas.tsx` | **novo** — busca de telas do cabeçalho (Ctrl+K, setas, Enter) |
+| `web/src/lib/menu.ts` | **novo** — tipos, `MENU` (com `descricao`), `filtrarPorPapel`, `acharGrupo`, `acharPai`, `rotaDoGrupo`, `listarTelas`, `normalizar`, `pontuarTela`, `buscarTelas` |
 | `web/src/pages/MenuGrupo.tsx` | **novo** — página-hub: cards das telas e cards-com-subcards dos subgrupos |
-| `web/src/components/Layout.tsx` | hambúrguer no topo; lateral reduzida aos grupos principais; menu importado de `lib/menu` |
-| `web/src/components/Icones.tsx` | **novo** `IconeMenuHamburguer` |
+| `web/src/components/Layout.tsx` | hambúrguer/alfinete no topo; lateral reduzida aos grupos principais; cabeçalho em 3 colunas com a busca |
+| `web/src/components/Icones.tsx` | **novos** `IconeMenuHamburguer`, `IconeAlfinete`, `IconeVoltar` |
 | `web/src/App.tsx` | rota `/menu/:grupo` |
-| `web/src/styles.css` | `.app-nav-toggle` no topo, `.menu-card*`, `.menu-subcard*`; saíram os `.app-nav-grupo*` |
+| `web/src/styles.css` | `.app-nav-toggle` no topo, cabeçalho em grid, `.busca-telas*`, `.menu-card*`, `.menu-hub-*`; saíram os `.app-nav-grupo*` |

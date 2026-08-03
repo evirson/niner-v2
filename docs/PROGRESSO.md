@@ -167,10 +167,20 @@ endpoint foi tocado — a mudança é inteira no shell do `web/`.
    `/menu/configuracoes` na unha cai em "Área não encontrada". Continua sendo só conveniência de
    UI — a autorização de verdade segue no servidor (P4).
 
-**Custo assumido:** chegar a uma tela agora são dois passos (grupo → card) em vez de um. Troca
-consciente: a lateral vira um índice curto e estável, e a descoberta do que existe em cada área
-passa a ter explicação. Um atalho de busca (Ctrl+K) fica como candidato natural da próxima
-iteração — está registrado no "Fora de escopo" da spec.
+6. **Busca de telas no cabeçalho** (`BuscaDeTelas.tsx`) — resposta direta ao custo do item
+   anterior: chegar a uma tela virou dois cliques, então o campo dá o acesso em um atalho.
+   **Ctrl+K** (ou ⌘K) de qualquer lugar do ERP, ↑/↓ para navegar, Enter para abrir, Esc para
+   limpar/sair. Casa contra nome, trilha de grupos e descrição, **sem acento e sem caixa**
+   (`normalizar()` — "crediario" acha "Crediário"), ordenado por relevância. A pontuação
+   (`pontuarTela()`/`buscarTelas()`) ficou em `menu.ts`, não no componente: é lógica de dados,
+   e assim pôde ser exercitada fora do React. Conferido com o menu real: 22 telas para ADMIN e
+   19 para OPERADOR, e buscar "cancelamento" como OPERADOR devolve só o Estorno de Crediário.
+7. **Cabeçalho em 3 colunas** — marca à esquerda, **nome da loja centralizado**, busca e Sair à
+   direita. Laterais em `1fr` para a loja ficar no centro da tela, não no espaço que sobra.
+
+**Custo assumido:** chegar a uma tela pelo menu agora são dois passos (grupo → card) em vez de
+um. Troca consciente: a lateral vira um índice curto e estável, a descoberta do que existe em
+cada área passa a ter explicação, e quem já sabe o nome da tela usa o Ctrl+K.
 
 **Pendência encontrada de passagem (não corrigida, não é desta entrega):** `cd web && npm run
 build` já falhava em `main` antes desta branch — `PlanoContasModal.tsx:35` chama o handler de

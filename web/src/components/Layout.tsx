@@ -3,6 +3,7 @@ import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { useAuth } from '../lib/auth'
 import { useEu } from '../lib/eu'
 import { filtrarPorPapel, MENU, rotaDoGrupo, type NavGrupo } from '../lib/menu'
+import BuscaDeTelas from './BuscaDeTelas'
 import { IconeAlfinete, IconeMenuHamburguer } from './Icones'
 
 const CHAVE_RECOLHIDO = 'niner_nav_recolhido'
@@ -54,14 +55,17 @@ export default function Layout() {
         <a className="brand" href="/">
           NI<span>NER</span>
         </a>
-        {eu?.empresa && (
-          <span className="muted app-empresa-ativa" title="Empresa ativa nesta sessão">
-            {eu.empresa.nome}
-          </span>
-        )}
-        <button className="btn ghost" onClick={sair}>
-          Sair
-        </button>
+        {/* Sempre renderizado, mesmo vazio: é a coluna do meio do grid do cabeçalho, e é ela
+            que mantém o nome da loja centralizado na tela independentemente das laterais. */}
+        <span className="muted app-empresa-ativa" title="Empresa ativa nesta sessão">
+          {eu?.empresa?.nome ?? ''}
+        </span>
+        <div className="app-header-direita">
+          <BuscaDeTelas />
+          <button className="btn ghost" onClick={sair}>
+            Sair
+          </button>
+        </div>
       </header>
       <div className="app-body">
         <nav
