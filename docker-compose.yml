@@ -81,10 +81,12 @@ services:
   fake-gcs:
     image: fsouza/fake-gcs-server:1.49
     container_name: niner-fake-gcs
-    command: ["-scheme", "http", "-public-host", "localhost:4443", "-backend", "filesystem", "-filesystem-root", "/storage"]
+    # -public-host é o endereço que aparece nas URLs devolvidas pelo emulador, então tem que
+    # ser a porta publicada no host (o que o navegador resolve), não a interna do container.
+    command: ["-scheme", "http", "-public-host", "localhost:${NINER_FAKE_GCS_PORT:-4443}", "-backend", "filesystem", "-filesystem-root", "/storage"]
     volumes:
       - fake-gcs-data:/storage
-    ports: ["4443:4443"]
+    ports: ["${NINER_FAKE_GCS_PORT:-4443}:4443"]
 
   # pgAdmin — cliente web para inspecionar o niner_db em dev. Perfil `tools` (não sobe por padrão).
   #   docker compose --profile tools up -d pgadmin   → http://localhost:5050
