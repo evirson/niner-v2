@@ -22,7 +22,7 @@ services:
       - pgdata:/var/lib/postgresql
       # 00_roles.sql roda uma única vez no primeiro init, como superusuário, já em niner_db
       - ./db/bootstrap:/docker-entrypoint-initdb.d:ro
-    ports: ["5432:5432"]
+    ports: ["${NINER_DB_PORT:-5432}:5432"]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d niner_db"]
       interval: 5s
@@ -70,7 +70,7 @@ services:
       NINER_STORAGE_BASE_URL: ${NINER_STORAGE_BASE_URL:-}
     volumes:
       - ./api/secrets:/secrets:ro
-    ports: ["8080:8080"]
+    ports: ["${NINER_API_PORT:-8080}:8080"]
 
   # Emulador de GCS para dev SEM credencial (ADR-013) — mesmo fsouza/fake-gcs-server que o
   # ProdutoImagemCrudTest usa via Testcontainers. Com ele no ar, a API roda com
@@ -99,7 +99,7 @@ services:
       PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:-dev_pgadmin}
     volumes:
       - pgadmin-data:/var/lib/pgadmin
-    ports: ["5050:80"]
+    ports: ["${NINER_PGADMIN_PORT:-5050}:80"]
 
   # Site público (Astro/SSG, SEO — ADR-011). Dev server na 5175. Perfil `fronts`.
   # A base-URL da API é lida em runtime (site/public/config.js).
@@ -110,7 +110,7 @@ services:
     volumes:
       - ./site:/app
     command: sh -c "npm install && npm run dev -- --host"
-    ports: ["5175:5175"]
+    ports: ["${NINER_SITE_PORT:-5175}:5175"]
 
   # App do ERP do lojista (React + Vite). Dev server na 5173. Perfil `fronts`.
   web:
@@ -125,7 +125,7 @@ services:
     volumes:
       - ./web:/app
     command: sh -c "npm install && npm run dev -- --host"
-    ports: ["5173:5173"]
+    ports: ["${NINER_WEB_PORT:-5173}:5173"]
 
 volumes:
   pgdata:
