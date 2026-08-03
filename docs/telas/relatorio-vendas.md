@@ -138,8 +138,8 @@ própria tela, o usuário já está olhando pra ela).
 **Pedido explícito do dono do produto: "gere como está na tela, com os gráficos"** — diferente do
 padrão textual monoespaçado usado no Fechamento de Caixa/Comprovante de Crediário (que reconstrói
 os dados como tabela ASCII). Aqui o PDF é uma **captura visual** do próprio conteúdo renderizado
-(`html2canvas` rasteriza o bloco de KPIs/composição/gráficos/grid tal como está na tela — mesmo
-tema claro/escuro, mesmas cores — vira uma imagem única; `jsPDF`, folha A4 **paisagem**, recorta
+(`html2canvas` rasteriza o bloco de KPIs/composição/gráficos/grid tal como está na tela — vira
+uma imagem única; `jsPDF`, folha A4 **paisagem**, recorta
 essa imagem em páginas deslocando o Y a cada nova página). Os 7 gráficos saem como desenho de
 verdade (linha/barras), não como tabela de números — só assim faz sentido pedir "com os gráficos".
 Formato JPEG a 92% (não PNG) — a imagem completa em `scale: 2` facilmente passava de 30-40MB em
@@ -203,17 +203,43 @@ em sequência do dono do produto:
 `ALTURA_CABECALHO_MM` (16mm) e `ALTURA_RODAPE_MM` (10mm) subtraindo do cálculo de altura útil por
 página (a paginação da imagem passa a fatiar em `alturaPagina − cabeçalho − rodapé`, não mais
 `alturaPagina` inteira) e desloca a imagem pra baixo por `ALTURA_CABECALHO_MM` — depois de colar a
-imagem, repinta as duas faixas com `corFundo` (a mesma cor de fundo do tema, calculada de
-`getComputedStyle(...).getPropertyValue('--ground')`) pra tapar qualquer sobra da fatia anterior/
-seguinte que vaze pra dentro delas, e só then desenha o texto por cima. `desenharCabecalhoERodape()`
-roda por último, depois que todas as páginas (topo + grid) já existem, igual já fazia a numeração
-antiga.
+imagem, repinta as duas faixas com a cor de fundo do PDF (`COR_FUNDO_PDF` — constante fixa desde a
+revisão de 2026-08-02 abaixo; antes disso era calculada de `getComputedStyle(...).getPropertyValue
+('--ground')` na página real) pra tapar qualquer sobra da fatia anterior/seguinte que vaze pra
+dentro delas, e só então desenha o texto por cima. `desenharCabecalhoERodape()` roda por último,
+depois que todas as páginas (topo + grid) já existem, igual já fazia a numeração antiga.
 
 **Backup de segurança:** antes dessa revisão, o dono do produto pediu explicitamente pra "memorizar
 antes de fazer" — os 3 arquivos afetados (`RelatorioVendas.tsx`, `relatorioVendasCaptura.ts`,
 `styles.css`) foram copiados pra um diretório de scratchpad da sessão antes de qualquer edição, pra
 reverter sem depender de memória de conversa se o resultado não agradasse. Não sobrevive entre
 sessões (é `/tmp` de sessão) — se precisar reverter numa sessão futura, usar `git diff`/histórico.
+
+**Revisão 2026-08-02 — PDF sempre em tema claro, mesmo com o app em dark.** Pedido explícito do
+dono do produto: a impressão em tema escuro gasta muito mais tinta. Como o app **não tem toggle de
+tema** (o dark hoje só vem de `prefers-color-scheme: dark` do SO/navegador; `styles.css` já definia
+`:root[data-theme='light']`/`[data-theme='dark']` sem nada nunca setar esse atributo), a 1ª versão
+forçava `document.documentElement.setAttribute('data-theme', 'light')` na página **real** antes de
+capturar — funcionava, mas causava um "flash" visível: o app inteiro (menu, cabeçalho, tudo)
+piscava pra claro por 1-2s e voltava pro dark depois. **Corrigido no mesmo dia:** `html2canvas`
+sempre clona o `<html>` inteiro num iframe fora de tela antes de rasterizar (é por isso que existe
+o `ignoreElements`); a lib expõe `onclone?: (document, element) => void`, chamado só nesse clone,
+antes de renderizar. `OPCOES_CAPTURA.onclone` (`relatorioVendasCaptura.ts`) seta
+`data-theme='light'` **só no documento clonado** — a página visível nunca muda, zero flash, e o
+clone (que é o que vira a imagem) sai claro do mesmo jeito, porque o CSS carregado no clone é o
+mesmo (`:root[data-theme='light']` tem especificidade maior que a media query). Como o PDF passa a
+ser claro por construção, `corFundo`/`corTexto` deixaram de ser calculados via `getComputedStyle` da
+página real (que pode estar dark) e viraram constantes fixas (`COR_FUNDO_PDF`/`COR_TEXTO_PDF`,
+mesmos valores de `:root[data-theme='light']`) — `gerarPdfCapturaRelatorioVendas()` perdeu esses 2
+parâmetros, `handleGerarPdf()` não toca mais em `document.documentElement`.
+
+**Mesmo dia — margem lateral de 3mm na imagem.** A imagem capturada (KPIs/gráficos/grid) encostava
+nas bordas esquerda/direita da página (x=0 até a largura da página), enquanto o cabeçalho/rodapé em
+texto nativo já tinha ~10mm. `desenharElementoPaginado()` ganhou `MARGEM_LATERAL_MM = 3`: a imagem é
+desenhada com `larguraImagem = larguraPagina - 2*MARGEM_LATERAL_MM` a partir de `x=MARGEM_LATERAL_MM`
+(era `x=0`, largura cheia) — os `doc.rect(...)` de preenchimento de fundo continuam full-width, então
+essa faixa de 3mm de cada lado fica visível como margem sem precisar de lógica extra. Cabeçalho/
+rodapé nativos não mudaram (pedido foi só sobre "o relatório que está sendo gerado", a imagem).
 
 ## Grid totalizada + drill-down
 

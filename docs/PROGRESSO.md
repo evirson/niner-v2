@@ -1,7 +1,7 @@
 # Progresso do Projeto — niner-v2
 
 Registro cronológico das decisões e entregas. Atualizar a cada marco relevante.
-**Última atualização:** 2026-08-01
+**Última atualização:** 2026-08-02
 
 ---
 
@@ -133,6 +133,31 @@ parser de CSS do `html2canvas`.
 ---
 
 ## Linha do tempo
+
+### 2026-08-02 — PDF do Relatório de Vendas sempre em tema claro + levantamento de relatórios financeiros
+
+1. **PDF sempre com fundo branco, mesmo com o app em tema escuro** (`docs/telas/
+   relatorio-vendas.md`, seção "PDF") — pedido explícito: impressão em dark gasta muito mais
+   tinta. O app não tem toggle de tema (dark só vem de `prefers-color-scheme` do navegador);
+   `styles.css` já tinha `:root[data-theme='light']`/`[data-theme='dark']` prontos, sem nada
+   nunca setar o atributo. 1ª versão forçava `data-theme="light"` na página real antes de
+   capturar — causava um "flash" visível (app inteiro piscava claro/escuro). **Corrigido no
+   mesmo dia:** usa `onclone` do `html2canvas` (roda só no clone fora de tela que a lib já
+   monta pra rasterizar) — a página visível nunca muda, zero flash. Também ganhou **3mm de
+   margem lateral** na imagem capturada (encostava nas bordas antes). `AjudaDaTela` atualizada.
+2. **Levantamento de relatórios futuros, a pedido do dono do produto** — análise das tabelas do
+   módulo `financeiro` (`contas_receber(_detalhe/_lote)`, `caixa_mestre/_detalhe/
+   _conferencia`, `contas_pagar`, `conta_corrente(_movimento)`, `tipo_carteira`,
+   `cfg_plano_contas`) e sugestão de 8 relatórios possíveis no mesmo estilo do Relatório de
+   Vendas: Contas a Receber/Recebidas, Contas a Pagar, Fluxo de Caixa, DRE/DFC Gerencial
+   (usando a hierarquia do Plano de Contas), Extrato de Conta Corrente, Comissão de
+   Vendedores, Curva ABC de produtos/clientes, Ruptura/Giro de Estoque. **Nada implementado**
+   — o dono do produto pediu para pausar justamente o de Contas a Receber/Recebidas (o
+   primeiro da lista, mais próximo de implementar) para analisar melhor antes de decidir.
+
+**Verificação:** mudança só em `web/` (sem tocar backend) — `tsc --noEmit` limpo a cada etapa.
+**Não testado ao vivo no Chrome nesta sessão** (extensão Claude in Chrome não conectou); pedida
+confirmação visual ao dono do produto. **Nada commitado ainda** — só editado localmente.
 
 ### 2026-08-01 — Relatório de Vendas: ordenação, cores e PDF no modelo do ERP legado
 

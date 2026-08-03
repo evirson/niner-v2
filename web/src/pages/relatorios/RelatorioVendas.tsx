@@ -246,11 +246,11 @@ export default function RelatorioVendas() {
     setGerandoPdf(true)
     try {
       await aguardarPintura()
-      const corFundo = getComputedStyle(document.documentElement).getPropertyValue('--ground').trim() || '#12181a'
-      const corTexto = getComputedStyle(document.documentElement).getPropertyValue('--ink').trim() || '#20262a'
       // Rodapé mostra a empresa logada na sessão (fixa), não a lista de empresas do filtro —
-      // essa já aparece em "Filtros Aplicados" e pode ser "Todas as empresas" (ADMIN).
-      await gerarPdfCapturaRelatorioVendas(topoRef.current, gridRef.current, corFundo, corTexto, eu?.empresa.nome ?? '—')
+      // essa já aparece em "Filtros Aplicados" e pode ser "Todas as empresas" (ADMIN). O PDF
+      // sai sempre em tema claro (forçado dentro de `onclone` do html2canvas, só no clone que
+      // vira a captura — a tela real nunca muda de tema).
+      await gerarPdfCapturaRelatorioVendas(topoRef.current, gridRef.current, eu?.empresa.nome ?? '—')
     } finally {
       setGerandoPdf(false)
     }

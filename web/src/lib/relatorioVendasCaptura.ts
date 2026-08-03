@@ -8,13 +8,30 @@ const OPCOES_CAPTURA = {
   // passado) — ignora o resto do app (menu lateral, cabeçalho, popups) tanto por
   // performance quanto porque só o conteúdo do relatório interessa na captura.
   ignoreElements: (el: Element) => el.closest('.app-header, .app-nav, .modal-overlay') !== null,
+  // PDF sai sempre em tema claro, mesmo com o app em dark (pedido explícito: economizar tinta
+  // na impressão) — mas SEM mudar o tema da página real visível (isso causava um "flash" pro
+  // usuário: o app inteiro piscava pra claro e voltava). `onclone` roda só no clone fora de
+  // tela que o html2canvas já monta internamente pra rasterizar; `styles.css` já tem
+  // `:root[data-theme='light']` pronto (especificidade maior que a media query
+  // `prefers-color-scheme`), só nunca era setado por ninguém.
+  onclone: (doc: Document) => {
+    doc.documentElement.setAttribute('data-theme', 'light')
+  },
 } as const
 
 // Faixas reservadas em toda página pro cabeçalho/rodapé nativos do jsPDF (título/paginação e
 // empresa/sistema) — desenhadas por cima da imagem capturada, nunca fazem parte do html2canvas.
 const ALTURA_CABECALHO_MM = 16
 const ALTURA_RODAPE_MM = 10
+// Respiro lateral pedido explicitamente (2026-08-02): a imagem capturada não encosta mais nas
+// bordas esquerda/direita da página — só a imagem, os preenchimentos de fundo (cabeçalho/rodapé/
+// página inteira) continuam full-width, é o que sobra visível como essa margem.
+const MARGEM_LATERAL_MM = 3
 const CINZA_NEUTRO: [number, number, number] = [130, 130, 130]
+// PDF é sempre claro por construção (ver onclone acima) — cores fixas, mesmos valores de
+// `:root[data-theme='light']` em styles.css. Não depende mais do tema da página real.
+const COR_FUNDO_PDF = '#f5f4f0'
+const COR_TEXTO_PDF = '#20262a'
 
 function hexParaRgb(hex: string): [number, number, number] {
   const limpo = hex.replace('#', '').trim()
@@ -27,29 +44,31 @@ function hexParaRgb(hex: string): [number, number, number] {
  *  (chamador decide quando chamar `doc.addPage()` antes). Recorta a imagem inteira em fatias do
  *  tamanho útil da página (descontando as faixas de cabeçalho/rodapé) deslocando o Y a cada nova
  *  página, mesmo truque de qualquer exportação "print a screenshot to multi-page PDF". A imagem é
- *  pintada por baixo, então a faixa de cabeçalho/rodapé é sempre recoberta com `corFundo` depois
- *  — tanto pra abrir espaço pro texto nativo quanto pra tapar qualquer sobra da fatia anterior/
- *  seguinte que vaze pra dentro dessas faixas. Devolve quantas páginas usou. */
-async function desenharElementoPaginado(doc: jsPDF, elemento: HTMLElement, corFundo: string): Promise<number> {
-  const canvas = await html2canvas(elemento, { ...OPCOES_CAPTURA, backgroundColor: corFundo })
+ *  pintada por baixo, então a faixa de cabeçalho/rodapé é sempre recoberta com `COR_FUNDO_PDF`
+ *  depois — tanto pra abrir espaço pro texto nativo quanto pra tapar qualquer sobra da fatia
+ *  anterior/seguinte que vaze pra dentro dessas faixas. Devolve quantas páginas usou. */
+async function desenharElementoPaginado(doc: jsPDF, elemento: HTMLElement): Promise<number> {
+  const canvas = await html2canvas(elemento, { ...OPCOES_CAPTURA, backgroundColor: COR_FUNDO_PDF })
 
   const larguraPagina = doc.internal.pageSize.getWidth()
   const alturaPagina = doc.internal.pageSize.getHeight()
   const alturaUtil = alturaPagina - ALTURA_CABECALHO_MM - ALTURA_RODAPE_MM
-  const larguraImagem = larguraPagina
+  // Imagem recuada 3mm de cada lado (MARGEM_LATERAL_MM) — o preenchimento de fundo abaixo
+  // continua full-width, então essa faixa fica visível como margem sem precisar de mais nada.
+  const larguraImagem = larguraPagina - 2 * MARGEM_LATERAL_MM
   const alturaImagem = (canvas.height * larguraImagem) / canvas.width
   // JPEG, não PNG — o conteúdo é UI plana (sem foto), mas em `scale: 2` um PNG sem perdas de
   // uma tela inteira passa fácil de 30-40MB; JPEG a 92% cai pra poucos MB sem serrilhado
   // perceptível em texto/gráficos nesse tamanho.
   const imagem = canvas.toDataURL('image/jpeg', 0.92)
-  const [r, g, b] = hexParaRgb(corFundo)
+  const [r, g, b] = hexParaRgb(COR_FUNDO_PDF)
 
   const totalPaginas = Math.max(1, Math.ceil(alturaImagem / alturaUtil))
   for (let pagina = 0; pagina < totalPaginas; pagina++) {
     if (pagina > 0) doc.addPage()
     doc.setFillColor(r, g, b)
     doc.rect(0, 0, larguraPagina, alturaPagina, 'F')
-    doc.addImage(imagem, 'JPEG', 0, ALTURA_CABECALHO_MM - pagina * alturaUtil, larguraImagem, alturaImagem)
+    doc.addImage(imagem, 'JPEG', MARGEM_LATERAL_MM, ALTURA_CABECALHO_MM - pagina * alturaUtil, larguraImagem, alturaImagem)
     doc.setFillColor(r, g, b)
     doc.rect(0, 0, larguraPagina, ALTURA_CABECALHO_MM, 'F')
     doc.rect(0, alturaPagina - ALTURA_RODAPE_MM, larguraPagina, ALTURA_RODAPE_MM, 'F')
@@ -120,17 +139,15 @@ function desenharCabecalhoERodape(
 export async function gerarPdfCapturaRelatorioVendas(
   topoEl: HTMLElement,
   gridEl: HTMLElement,
-  corFundo: string,
-  corTexto: string,
   rodapeEsquerda: string,
 ): Promise<void> {
   const doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'landscape' })
 
-  await desenharElementoPaginado(doc, topoEl, corFundo)
+  await desenharElementoPaginado(doc, topoEl)
   doc.addPage()
-  await desenharElementoPaginado(doc, gridEl, corFundo)
+  await desenharElementoPaginado(doc, gridEl)
 
-  desenharCabecalhoERodape(doc, corTexto, 'Relatório de Vendas', new Date().toLocaleString('pt-BR'), rodapeEsquerda, 'Niner ERP')
+  desenharCabecalhoERodape(doc, COR_TEXTO_PDF, 'Relatório de Vendas', new Date().toLocaleString('pt-BR'), rodapeEsquerda, 'Niner ERP')
 
   doc.save('relatorio-de-vendas.pdf')
 }
