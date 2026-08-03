@@ -1,7 +1,7 @@
 # Progresso do Projeto — niner-v2
 
 Registro cronológico das decisões e entregas. Atualizar a cada marco relevante.
-**Última atualização:** 2026-08-01
+**Última atualização:** 2026-08-03
 
 ---
 
@@ -133,6 +133,44 @@ parser de CSS do `html2canvas`.
 ---
 
 ## Linha do tempo
+
+### 2026-08-03 — Menu principal: hambúrguer no topo, lateral só com grupos, hub de cards
+
+Reformulação da navegação do ERP, pedida pelo dono do produto. Spec em
+`docs/telas/menu-principal.md`. Branch `feat/menu-retratil-cards`. Nenhuma tela de domínio nem
+endpoint foi tocado — a mudança é inteira no shell do `web/`.
+
+1. **Hambúrguer no topo do menu** (padrão mobile), não mais no rodapé. Com a árvore aberta, o
+   botão de recolher saía da área visível e exigia rolar a navegação inteira. Novo
+   `IconeMenuHamburguer` em `Icones.tsx`; a persistência (`niner_nav_recolhido`) e a "espiada"
+   no hover/foco continuam iguais.
+2. **A lateral passou a listar só os sete grupos principais.** A árvore de sub-itens saiu: eram
+   sete grupos, dois subgrupos e ~20 telas empilhados numa coluna de 200px. No modo recolhido a
+   faixa de 56px agora mostra os ícones dos grupos, não mais as telas achatadas
+   (`achatarFolhas()` ficou sem uso e saiu).
+3. **Página-hub por grupo** — nova rota `/menu/:grupo` (`MenuGrupo.tsx`). Cada grupo abre uma
+   tela de **cards** com ícone, nome e uma frase do que a tela faz; um subgrupo (Caixa,
+   Cancelamentos) vira um card com seus filhos como **subcards** dentro, então a área inteira
+   cabe numa tela só. Prefixo `/menu/` porque as chaves de grupo colidem com rotas existentes
+   (`estoque` já é a Transferência de Produtos).
+4. **O menu virou dado**, em `web/src/lib/menu.ts` — estava embutido no `Layout.tsx`. `Layout` e
+   `MenuGrupo` leem a mesma árvore, e cada item ganhou um campo `descricao` **obrigatório**
+   (é o conteúdo do card). Acrescentar tela ao sistema continua sendo editar `MENU`.
+5. **Filtro por papel também no hub.** `MenuGrupo` roda `filtrarPorPapel` antes de montar os
+   cards: OPERADOR não vê o grupo Configurações nem o card de Cancelamento de Vendas, e
+   `/menu/configuracoes` na unha cai em "Área não encontrada". Continua sendo só conveniência de
+   UI — a autorização de verdade segue no servidor (P4).
+
+**Custo assumido:** chegar a uma tela agora são dois passos (grupo → card) em vez de um. Troca
+consciente: a lateral vira um índice curto e estável, e a descoberta do que existe em cada área
+passa a ter explicação. Um atalho de busca (Ctrl+K) fica como candidato natural da próxima
+iteração — está registrado no "Fora de escopo" da spec.
+
+**Pendência encontrada de passagem (não corrigida, não é desta entrega):** `cd web && npm run
+build` já falhava em `main` antes desta branch — `PlanoContasModal.tsx:35` chama o handler de
+salvar com um objeto parcial (`TS2345`, faltam `descricaoCurta`, `natureza`, `grupoDre`,
+`grupoDfc` e mais 6 campos). `npx tsc --noEmit` passa e o dev server compila, então o erro só
+aparece no `tsc -b` do build de produção.
 
 ### 2026-08-01 — Relatório de Vendas: ordenação, cores e PDF no modelo do ERP legado
 

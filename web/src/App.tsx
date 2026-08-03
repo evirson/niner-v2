@@ -5,6 +5,7 @@ import Layout from './components/Layout'
 import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
 import EmBreve from './pages/EmBreve'
+import MenuGrupo from './pages/MenuGrupo'
 import Pdv from './pages/pdv/Pdv'
 import ClienteLista from './pages/clientes/ClienteLista'
 import ClienteForm from './pages/clientes/ClienteForm'
@@ -48,6 +49,9 @@ export default function App() {
       <Route element={<RequireAuth />}>
         <Route element={<Layout />}>
           <Route path="/" element={<Dashboard />} />
+          {/* Página-hub de um grupo do menu (cards dos filhos, 2026-08-03). Prefixo /menu/ para
+              não colidir com as rotas das telas (`/estoque` já é a Transferência). */}
+          <Route path="/menu/:grupo" element={<MenuGrupo />} />
           <Route path="/pdv" element={<Pdv />} />
           <Route path="/pesquisa-vendas" element={<PesquisaVendas />} />
           <Route path="/relatorio-vendas" element={<RelatorioVendas />} />
