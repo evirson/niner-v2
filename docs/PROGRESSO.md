@@ -1,7 +1,7 @@
 # Progresso do Projeto — niner-v2
 
 Registro cronológico das decisões e entregas. Atualizar a cada marco relevante.
-**Última atualização:** 2026-08-03
+**Última atualização:** 2026-08-04
 
 ---
 
@@ -108,7 +108,16 @@ ADMIN (`EmpresaMultiSelect.tsx`, 1º componente do tipo no projeto). Ganhou tamb
 **"Gerar PDF"** que captura a própria tela como imagem (`html2canvas`, mais uma dependência nova)
 em vez de reconstruir os dados como texto — por causa disso, `color-mix()` foi **eliminado do
 `web/src/styles.css` inteiro** (trocado por `rgba()` com trincas RGB novas), incompatível com o
-parser de CSS do `html2canvas`.
+parser de CSS do `html2canvas`. O grupo **Relatórios** ganhou mais 3 telas em seguida: **Relatório
+de Comissões** (`relatorios.comissoes`, 2026-08-03), **Contas a Receber / Recebidas**
+(`relatorios.contasreceber`, 2026-08-03) e **Relatório de Estoque** (`relatorios.estoque`,
+2026-08-04, com seletor de Modelo Inventário/Sintético/Analítico e colunas dinâmicas por empresa).
+O módulo `vendas` ganhou **Devolução de Produtos + Vale-Mercadoria** (2026-08-03, resgatável no
+PDV) e o módulo `estoque` ganhou a **Rotina de Contagem de Estoque** (2026-08-04, 4 telas:
+Contagem/Diferenças/Efetivar Balanço/Zerar Contagem) — ver linha do tempo pros detalhes de cada
+uma. Ver também `docs/telas/relatorio-comissoes.md`, `docs/telas/relatorio-contas-receber.md`,
+`docs/telas/contagem-estoque.md`, `docs/telas/relatorio-estoque.md` e `docs/telas/
+devolucao-produtos.md`.
 
 | Artefato | Situação |
 |---|---|
@@ -133,6 +142,172 @@ parser de CSS do `html2canvas`.
 ---
 
 ## Linha do tempo
+
+### 2026-08-04 — Menu: Produtos movido de Estoque para Cadastros
+
+Ajuste de navegação pedido pelo dono do produto: a tela de cadastro do catálogo (`/produtos`)
+morava dentro do grupo de menu **Estoque** desde que foi criada (2026-07-22) — mudou para o grupo
+**Cadastros** (junto de Clientes/Fornecedores/Funcionários), por ser um cadastro como os outros,
+não uma rotina de movimentação. Só `web/src/lib/menu.ts` mudou (item saiu de `itens` de
+`estoque` e entrou em `itens` de `cadastros`, no fim da lista) — a descrição do grupo Estoque foi
+reescrita para não citar mais "catálogo de produtos" (`'Movimentação de quantidades entre
+empresas e conferência de estoque físico.'`). Rota (`/produtos`), componente e permissões não
+mudaram — só a localização no menu.
+
+### 2026-08-04 — Relatório de Estoque (4ª tela do grupo Relatórios)
+
+Nova tela `/relatorio-estoque` (`relatorios.estoque.tela`, `docs/telas/relatorio-estoque.md`),
+qualquer papel. Uma única tela com um seletor de **Modelo** (Inventário/Sintético/Analítico, mesmo
+padrão do totalizador Analítico×Agrupado do Relatório de Vendas) trocando as colunas da grid —
+filtros comuns aos 3 modelos: Empresas (ADMIN multi-select, nenhuma = todas ativas; OPERADOR só a
+própria), Marca e Categorias (multi-seleção, novo componente genérico `MultiSelectGenerico.tsx`,
+generalização de `EmpresaMultiSelect.tsx`), Tipo de Quantidade (Todos/Diferente de Zero/Zerada) e
+Situação do Produto (Ativos/Inativos/Todos, mesmo critério de `ProdutoService.listar`). Inventário
+soma tudo por produto num total só + custo (unitário do cadastro × total); Sintético abre uma
+coluna de quantidade por empresa selecionada (mais total); Analítico é a mesma ideia por
+**variação** (linha × coluna), sem totalizador. As colunas de empresa são **dinâmicas e
+posicionais** (`colunasEmpresa` + `qtdPorEmpresa` alinhados por índice, não por chave) e resolvidas
+**antes** da consulta principal — uma empresa sem nenhuma movimentação em lugar nenhum ainda
+aparece como coluna zerada. Endpoint novo de apoio: `GET /api/v1/produtos/marcas` (distinct,
+não-vazio, ordenado) para popular o filtro de Marca. 11 testes novos (`RelatorioEstoqueCrudTest`).
+
+### 2026-08-04 — Rotina de Contagem de Estoque (4 telas novas) + 4 correções pós-uso real
+
+Quatro telas novas dentro do grupo **Estoque** (submenu "Contagem de Estoque"), abertas a ADMIN e
+OPERADOR, sempre escopadas à empresa ativa da sessão — `docs/telas/contagem-estoque.md`:
+**Contagem de Estoque** (`/estoque/contagem`, só um campo de código de barras, mesma sintaxe
+"qtd*código" do PDV/Transferência, cada leitura soma na quantidade já contada), **Diferenças de
+Estoque** (`/estoque/diferencas`, compara a contagem ativa com `produto_estoque`, padrão visual de
+relatório), **Efetivar Balanço** (`/estoque/efetivar-balanco`, grava um `produto_movimento_mestre`
+tipo `AJUSTE` — enum que já existia sem uso — com uma linha de detalhe por variação com diferença,
+e zera a contagem) e **Zerar Contagem de Estoque** (`/estoque/zerar-contagem`, apaga a contagem em
+andamento ou desfaz a última efetivação). `produto_balanco` (V019, editada — banco em construção)
+ganhou a coluna `id_movimento` (nullable): em vez de apagar as linhas do balanço ao efetivar, elas
+são marcadas com o movimento gerado — é o que permite **desfazer** depois (apaga o
+`produto_movimento_detalhe` daquele movimento, a trigger reverte `produto_estoque` sozinha, e
+libera as linhas de volta pro balanço ativo) sem precisar de tabela de snapshot; reversão por
+delta é correta mesmo com movimentações de estoque no meio-tempo. Desenho do "desfazer" proposto
+pelo assistente e aprovado sem alterações, após o dono do produto pedir sugestões explicitamente.
+15 testes novos (`BalancoEstoqueCrudTest`).
+
+**4 correções reportadas depois de uso real na tela**, mesma sessão:
+1. Leitura de código de barras aparecia como falha ("Não foi possível ler o código de barras")
+   mesmo gravando certinho no banco — os endpoints de escrita (void) devolviam 200/201 com corpo
+   vazio, e o `api()` do frontend só tratava 204 como "sem corpo"; `res.json()` num corpo vazio
+   lança `SyntaxError`. Corrigido nos dois lados: endpoints agora `@ResponseStatus(NO_CONTENT)`
+   (204) e `web/src/lib/api.ts` passou a ler como texto primeiro, só fazendo `JSON.parse` se não
+   estiver vazio (cobre qualquer status sem corpo, não só 204 — protege contra a mesma classe de
+   bug em endpoints futuros).
+2. Diferenças de Estoque não distinguia "nenhuma contagem em andamento" de "contagem bate com o
+   estoque" — as duas vinham vazias com a mesma mensagem. `DiferencasResponse` ganhou
+   `existeContagemAtiva`, e a tela mostra uma mensagem diferente pra cada caso.
+3. Efetivar Balanço não avisava quando não havia contagem pra efetivar (só quando não havia
+   diferença) — corrigido, com mensagem própria e botão desabilitado.
+4. Zerar Contagem exigia só um clique de confirmação num popup — passou a exigir digitar "zerar
+   estoque" no campo antes do botão habilitar (mesmo padrão adotado também em Efetivar Balanço,
+   "efetiva contagem", que ganhou junto os totais contado/em estoque na confirmação).
+
+Depois, mais 3 ajustes pedidos: **(1)** o multiplicador "qtd*código" da Contagem de Estoque ganhou
+um teto de 1000 por leitura (só nesta tela, validação no frontend, não afeta PDV/Transferência);
+**(2)** o PDF de Diferenças de Estoque passou a mostrar a empresa da contagem numa seção "Filtros
+Aplicados" acima da grid; **(3)** já cobertos no item 4 acima (Efetivar/Zerar com confirmação por
+texto).
+
+### 2026-08-03 — Relatório de Contas a Receber / Recebidas (3ª tela do grupo Relatórios)
+
+Nova tela `/relatorio-contas-receber` (`relatorios.contasreceber.tela`,
+`docs/telas/relatorio-contas-receber.md`), qualquer papel — mesmo padrão de tela do Relatório de
+Comissões (popup de filtros → grid banda clássica com subtotal por empresa + total geral), mas com
+**três períodos independentes** (venda/vencimento/recebimento, pelo menos um obrigatório) em vez
+de um só, mais filtros de Status da Parcela (Todos/Em Aberto/Recebidas) e Forma de Pagamento
+(Todos/Crediário/Cartão Débito/Cartão Crédito). Só as categorias `CARTAO_DEBITO`, `CARTAO_CREDITO`
+e `CREDIARIO` aparecem (À Vista e Vale-Mercadoria nascem sempre quitados na hora). Valor líquido
+sempre com a taxa **atual** do cadastro de Tipo de Carteira (não a que vigorava na data da venda);
+crediário nunca tem taxa. "01/06" (parcela/total) é sempre o total verdadeiro da linha de
+pagamento (mesma venda + mesmo tipo de carteira), via subconsulta correlacionada — ignora os
+filtros do WHERE externo, uma parcela "3/3" continua "3/3" mesmo filtrando só recebidas. 9 testes
+novos (`RelatorioContasReceberCrudTest`).
+
+### 2026-08-03 — Relatório de Comissões (2ª tela do grupo Relatórios)
+
+Nova tela `/relatorio-comissoes` (`relatorios.comissoes.tela`,
+`docs/telas/relatorio-comissoes.md`), qualquer papel — segunda tela do grupo Relatórios, mais
+simples que o Relatório de Vendas (sem KPIs/gráficos): popup de filtros (período + empresas) →
+grid com uma linha por funcionário (por empresa, se houver mais de uma) → subtotal por empresa +
+total geral. `valorVenda`/`valorDevolucao` vêm direto do ledger (`produto_movimento_detalhe`,
+tipos `VENDA`/`DEVOLUCAO`, combinados com `FULL OUTER JOIN` pra cobrir quem só apareceu numa
+devolução); `valorLiquido = valorVenda − valorDevolucao`; `valorComissao = valorLiquido ×
+percComissao/100` (`funcionario.perc_comissao`, cadastral, nunca usado até aqui). **Nenhuma
+comissão é de fato paga/lançada** — é só um cálculo de consulta. Funcionário de uma devolução é o
+vendedor da venda original, resolvido pela tela de Devolução de Produtos. 6 testes novos
+(`RelatorioComissoesCrudTest`).
+
+### 2026-08-03 — Devolução de Produtos + Vale-Mercadoria (resgate no PDV) + simplificação do PDV
+
+Nova tela do grupo **Frente de Loja** (`vendas.devolucaoproduto`, `docs/telas/devolucao-produtos.md`)
+e uma extensão relevante do PDV/Cancelamento de Venda pra fechar o ciclo completo do vale-mercadoria
+(gerar → imprimir → resgatar → cancelar sem perder o crédito). ADMIN e OPERADOR têm acesso.
+
+1. **Devolução de Produtos** — tela nova: número da venda opcional (só resolve o vendedor,
+   `produto_movimento_detalhe.id_funcionario`, pra uma futura comissão — o número em si **não**
+   é persistido em lugar nenhum) + grid de leitura de código de barras idêntica ao padrão do
+   PDV/Transferência (mesmo `lib/pdv.ts`, mesmo `PesquisaProdutoModal`). Ao gravar, devolve a
+   quantidade de cada item ao estoque via `produto_movimento_mestre`
+   (`tipo_movimento = 'DEVOLUCAO'`, valor do enum existente desde a V013 original, nunca usado
+   até aqui) + `produto_movimento_detalhe` (`credito_debito = 'C'`), mesmo mecanismo de
+   estoque de sempre (trigger `fn_atualiza_estoque_movimento`, sem lógica de estoque em Java).
+
+2. **Toda devolução gera um vale-mercadoria** (pedido do dono do produto, revisão do escopo
+   original que previa "sem efeito financeiro"): usa a tabela `venda_devolucao` (existente desde
+   a V018 original de vendas, nunca referenciada por nenhum código até hoje) — `id_devolucao`
+   (a própria PK) é o **número do vale** impresso; `id_venda_credito` grava o número da venda
+   opcional informado na devolução (redefinição desta coluna: originalmente pensada pra um
+   cenário de troca). O valor do vale nunca é gravado como coluna — é sempre derivado somando
+   os itens do movimento `DEVOLUCAO` vinculado (`produto_movimento_mestre.id_devolucao`, FK que
+   já existia). Popup automático pós-gravação com o comprovante (número + valor + itens),
+   impressão térmica 80mm + PDF — mesmo padrão do Comprovante de Recebimento de Crediário
+   (`ComprovanteValeModal.tsx`, `lib/comprovante.ts`).
+
+3. **Resgate do vale no PDV — reaproveitando uma carteira que já existia.** Em vez de inventar
+   um mecanismo de pagamento novo, o vale passou a ser resgatado através do tipo de carteira
+   "VALE MERCADORIA" que já era seedado em todo tenant desde o signup (ideia do dono do
+   produto) — só mudou a **categoria** dela de `AVISTA` para um valor novo do enum
+   `categoria_carteira`, **`VALE_MERCADORIA`** (editado direto na `V025`, banco em construção).
+   No split-tender do PDV, a categoria "Vale-Mercadoria" pede o **número do vale** (não um valor
+   digitado) — o servidor busca o valor de verdade e ignora qualquer valor mandado pelo cliente
+   (mesmo princípio de todo o PDV: preço nunca vem do front). Paga na hora, como À Vista
+   (`PdvVendaService.gerarEInserirParcelas`/`aceitaApenasUmaParcela`); ao efetivar a venda, marca
+   `venda_devolucao.vale_usado = true` + `id_venda_debito` **atomicamente** (`WHERE vale_usado =
+   false`, trava otimista contra resgate concorrente do mesmo vale em duas vendas simultâneas).
+   Bloqueios: vale já usado → 409; vale maior que o saldo a pagar → 400 (decisão do dono do
+   produto: "sem troco em vale", sem sobra parcial — o schema só guarda usado/não usado, nunca
+   saldo remanescente). Como o vale já é uma carteira normal, o Fechamento de Caixa **já
+   totalizava sozinho** — nenhuma mudança lá.
+
+4. **Cancelamento de Venda reabre o vale.** Se a venda que resgatou um vale for cancelada, o
+   vale volta a valer (`vale_usado = false`, `id_venda_debito = NULL`), dentro da mesma
+   transação do cancelamento — senão o cliente perderia o crédito de um vale cuja venda de
+   resgate foi desfeita. Sem rastro de que já tinha sido usado uma vez (mesma filosofia de
+   exclusão física já usada ali pra `caixa_detalhe`/`contas_receber`).
+
+5. **"VALE PRESENTE" removido do seed do signup** (`SignupService`) — era só um rótulo À Vista
+   sem nenhuma lógica por trás, e conviver ao lado do vale de verdade (`VALE MERCADORIA`) ficaria
+   confuso. Removido também das 2 empresas de teste que já tinham essa linha (sem nenhum
+   lançamento em `caixa_detalhe`/`contas_receber` usando ela — checado antes de apagar).
+
+6. **PDV simplificado** — o atalho **F5 "Devolver Produto"** (reservado desde 2026-07-28, nunca
+   teve funcionalidade) foi **removido**: a tela de Devolução de Produtos cobre esse caso agora.
+   **F6 "Efetiva Venda" virou F5** (só uma letra sobrando faria menos sentido que preencher o
+   vão). A grid de atalhos F2–F4 (que era `grid-template-columns: repeat(4, 1fr)`, pensada pra 4
+   botões) passou pra `repeat(3, 1fr)` — sem isso os 3 botões restantes ficavam à esquerda com
+   um vão vazio à direita.
+
+7. **10 testes novos** (`DevolucaoProdutoCrudTest` + `ValeMercadoriaCrudTest`, incluindo split-
+   tender vale+dinheiro, vale reusado, vale maior que a venda, resgate sem número informado, e
+   cancelamento reabrindo o vale) + 1 teste ajustado (seed caiu de 7 para 6 carteiras). Suíte
+   completa: **295/295**. Testado manualmente ponta a ponta no navegador (gerar vale → imprimir
+   → resgatar em split-tender → conferir no banco → Fechamento de Caixa totalizando sozinho).
+   Nada commitado ainda ao final da sessão.
 
 ### 2026-08-03 — Menu principal: hambúrguer no topo, lateral só com grupos, hub de cards
 

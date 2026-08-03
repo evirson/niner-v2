@@ -1,5 +1,6 @@
 import { jsPDF } from 'jspdf'
 import type { ComprovanteRecebimento } from './recebimentoCrediario'
+import type { DevolucaoEfetivada } from './devolucaoProduto'
 import { formatarMoeda } from './masks'
 
 /**
@@ -113,4 +114,57 @@ export function gerarPdfComprovante(linhas: string[], idLoteRecebimento: number)
     doc.text(texto, margem, margem + (indice + 1) * alturaLinha)
   })
   doc.save(`comprovante-crediario-${idLoteRecebimento}.pdf`)
+}
+
+/** Comprovante do vale-mercadoria emitido por uma devolução (2026-08-03) — mesmo padrão visual
+ *  de `montarLinhasComprovante`, mas mais simples (sem parcelas/formas de pagamento). O número
+ *  do vale (`idDevolucao`) é o dado mais importante da bobina — é o que o cliente apresenta
+ *  depois pra resgatar o crédito numa venda futura. */
+export function montarLinhasComprovanteVale(d: DevolucaoEfetivada, nomeEmpresa: string): string[] {
+  const linhas: string[] = []
+  linhas.push(linha())
+  linhas.push(centralizar(nomeEmpresa))
+  linhas.push(linha())
+  linhas.push(centralizar('VALE-MERCADORIA'))
+  linhas.push(centralizar('DEVOLUCAO DE PRODUTOS'))
+  linhas.push(linha())
+  linhas.push(duasColunas('Vale nº:', String(d.idDevolucao)))
+  linhas.push(duasColunas('Valor do Vale:', moeda(d.valorVale)))
+  linhas.push(linha())
+  linhas.push('Itens devolvidos:')
+  d.itens.forEach((item) => {
+    const descricao = item.variacaoLinha || item.variacaoColuna
+      ? `${item.descricaoProduto} (${[item.variacaoLinha, item.variacaoColuna].filter(Boolean).join(' · ')})`
+      : item.descricaoProduto
+    linhas.push(`  ${formatarQuantidadeSimples(item.qtd)}x ${descricao}`)
+  })
+  linhas.push(linha())
+  if (d.nomeFuncionario) linhas.push(`Vendedor original: ${d.nomeFuncionario}`)
+  linhas.push(`Data: ${formatarDataHora(d.dataMovimento)}`)
+  linhas.push(linha())
+  linhas.push(centralizar('Apresente este vale para'))
+  linhas.push(centralizar('usar o credito numa compra futura.'))
+  linhas.push(linha())
+
+  return linhas
+}
+
+function formatarQuantidadeSimples(qtd: number): string {
+  return Number.isInteger(qtd) ? String(qtd) : qtd.toString().replace('.', ',')
+}
+
+/** Mesmo mecanismo de {@link gerarPdfComprovante}, nome de arquivo próprio do vale. */
+export function gerarPdfComprovanteVale(linhas: string[], idDevolucao: number): void {
+  const margem = 4
+  const tamanhoFonte = 8
+  const alturaLinha = 3.6
+  const altura = margem * 2 + linhas.length * alturaLinha
+
+  const doc = new jsPDF({ unit: 'mm', format: [80, altura] })
+  doc.setFont('courier', 'normal')
+  doc.setFontSize(tamanhoFonte)
+  linhas.forEach((texto, indice) => {
+    doc.text(texto, margem, margem + (indice + 1) * alturaLinha)
+  })
+  doc.save(`vale-mercadoria-${idDevolucao}.pdf`)
 }

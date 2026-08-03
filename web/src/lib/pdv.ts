@@ -54,6 +54,9 @@ export interface PagamentoRequest {
   idCarteira: number
   valorPago: number
   numeroParcelas: number
+  /** Obrigatório só quando a carteira escolhida é VALE_MERCADORIA — número do vale
+   *  (`venda_devolucao.id_devolucao`) sendo resgatado (2026-08-03). */
+  idDevolucao?: number
 }
 
 export interface EfetivarVendaRequest {

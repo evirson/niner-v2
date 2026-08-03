@@ -20,8 +20,12 @@ CREATE TYPE tipo_operacao_caixa AS ENUM
 
 -- Categoria fixa do tipo de carteira (2026-07-23, pedido do dono do produto — histórico do
 -- cliente precisa separar "crediário" de cartão/à vista programaticamente; nome_carteira é
--- texto livre e não serve pra isso).
-CREATE TYPE categoria_carteira AS ENUM ('AVISTA', 'CARTAO_DEBITO', 'CARTAO_CREDITO', 'CREDIARIO');
+-- texto livre e não serve pra isso). VALE_MERCADORIA (2026-08-03): resgate de vale-mercadoria
+-- gerado pela Devolução de Produtos (venda_devolucao/V018) — paga na hora igual AVISTA (ver
+-- PdvVendaService), mas distinta pra exigir o número do vale e marcar venda_devolucao.
+-- vale_usado/id_venda_debito na efetivação, em vez de aceitar qualquer valor digitado.
+CREATE TYPE categoria_carteira AS ENUM
+  ('AVISTA', 'CARTAO_DEBITO', 'CARTAO_CREDITO', 'CREDIARIO', 'VALE_MERCADORIA');
 
 -- tipo_carteira (config): forma de pagamento — categoria, prazo/parcelas/taxa, e (2026-07-28,
 -- absorvido de `moeda`) desconto/acréscimo. Cada linha já é uma combinação específica

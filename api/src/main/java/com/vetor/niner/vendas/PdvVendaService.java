@@ -1,5 +1,6 @@
 package com.vetor.niner.vendas;
 
+import com.vetor.niner.comum.web.ConflitoDadosException;
 import com.vetor.niner.configuracao.geral.ConfiguracaoGeralService;
 import com.vetor.niner.financeiro.TipoCarteiraDtos.CategoriaCarteira;
 import com.vetor.niner.financeiro.caixa.CaixaService;
@@ -13,6 +14,7 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -168,6 +170,24 @@ public class PdvVendaService {
                         .params(idCaixa, linha.carteira().idCarteira(), idVenda, linha.valorPago())
                         .update();
             }
+
+            // Marca o vale como usado só agora (idVenda já existe pra virar id_venda_debito) —
+            // WHERE vale_usado = false funciona como trava otimista contra resgate concorrente do
+            // mesmo vale em duas vendas simultâneas: se outra transação já consumiu o vale entre
+            // resolverPagamentos (leitura) e aqui, esta atualização afeta 0 linhas e a venda inteira
+            // falha (2026-08-03).
+            if (linha.idDevolucao() != null) {
+                int atualizados = jdbc.sql("""
+                                UPDATE venda_devolucao SET vale_usado = true, id_venda_debito = ?
+                                WHERE id_tenant = plataforma.tenant_atual() AND id_devolucao = ? AND vale_usado = false
+                                """)
+                        .params(idVenda, linha.idDevolucao())
+                        .update();
+                if (atualizados == 0) {
+                    throw new ConflitoDadosException(
+                            "O vale-mercadoria nº " + linha.idDevolucao() + " já foi usado em outra venda.");
+                }
+            }
         }
 
         return new VendaEfetivadaResponse(idVenda, valorTotalProdutos, descontoVenda, valorLiquido, pagamentos);
@@ -209,11 +229,12 @@ public class PdvVendaService {
         return valor.remainder(BigDecimal.ONE).compareTo(BigDecimal.ZERO) != 0;
     }
 
-    /** AVISTA/CARTAO_DEBITO só aceitam pagamento em parcela única — não tem relação com a
-     *  parcela já estar recebida ou não em {@code contas_receber} (ver {@link
+    /** AVISTA/CARTAO_DEBITO/VALE_MERCADORIA só aceitam pagamento em parcela única — não tem
+     *  relação com a parcela já estar recebida ou não em {@code contas_receber} (ver {@link
      *  #gerarEInserirParcelas}). */
     private static boolean aceitaApenasUmaParcela(CategoriaCarteira categoria) {
-        return categoria == CategoriaCarteira.AVISTA || categoria == CategoriaCarteira.CARTAO_DEBITO;
+        return categoria == CategoriaCarteira.AVISTA || categoria == CategoriaCarteira.CARTAO_DEBITO
+                || categoria == CategoriaCarteira.VALE_MERCADORIA;
     }
 
     private static void validarParcelas(CarteiraInfo carteira, boolean aceitaApenasUmaParcela, int numeroParcelas) {
@@ -233,17 +254,56 @@ public class PdvVendaService {
      * não um percentual sobre o que está sendo coberto). Desconto faz a linha cobrir mais saldo
      * do que o valor tendido; acréscimo cobre menos (a diferença é custo da forma de pagamento,
      * não abate dívida). `tipo_carteira` nunca tem os dois setados ao mesmo tempo (validado no
-     * cadastro).
+     * cadastro). {@code idDevolucao} (2026-08-03) só é não-nulo em linhas VALE_MERCADORIA —
+     * carregado até o loop final de {@link #efetivarVenda} pra marcar o vale como usado.
      */
     private record LinhaPagamentoResolvida(CarteiraInfo carteira, BigDecimal valorPago, int numeroParcelas,
                                             BigDecimal descontoLinha, BigDecimal acrescimoLinha,
-                                            BigDecimal cobertura) {
+                                            BigDecimal cobertura, Long idDevolucao) {
+    }
+
+    private record ValeInfo(BigDecimal valor, boolean usado) {
+    }
+
+    /** Resolve o valor de um vale-mercadoria (soma dos itens do movimento DEVOLUCAO vinculado —
+     *  mesma conta de {@code DevolucaoProdutoService.buscarVale}, mas sem depender daquele
+     *  service: cada serviço consulta o schema direto, mesmo padrão do resto do projeto). 404 se
+     *  o vale não existir (ou for de outro tenant, RLS). */
+    private ValeInfo resolverVale(long idDevolucao) {
+        record Cabecalho(boolean valeUsado) {
+        }
+        Cabecalho c = jdbc.sql("""
+                        SELECT vale_usado FROM venda_devolucao
+                        WHERE id_tenant = plataforma.tenant_atual() AND id_devolucao = ?
+                        """)
+                .param(idDevolucao)
+                .query((rs, n) -> new Cabecalho(rs.getBoolean("vale_usado")))
+                .optional()
+                .orElseThrow(() -> new ResponseStatusException(
+                        org.springframework.http.HttpStatus.NOT_FOUND, "Vale-mercadoria não encontrado."));
+
+        BigDecimal valor = jdbc.sql("""
+                        SELECT COALESCE(SUM(pmd.qtd_produto * pmd.preco_venda), 0)
+                        FROM produto_movimento_mestre pmm
+                        JOIN produto_movimento_detalhe pmd
+                               ON pmd.id_movimento = pmm.id_movimento AND pmd.id_tenant = pmm.id_tenant
+                        WHERE pmm.id_tenant = plataforma.tenant_atual() AND pmm.id_devolucao = ?
+                              AND pmm.tipo_movimento = 'DEVOLUCAO'
+                        """)
+                .param(idDevolucao).query(BigDecimal.class).single();
+
+        return new ValeInfo(valor, c.valeUsado());
     }
 
     /**
      * Processa as linhas na ordem em que chegam (mesma ordem em que a tela vai lançando),
      * mantendo o saldo restante corrente — necessário porque o limite de {@code valorPago}
      * de uma linha com desconto próprio depende do saldo que ainda falta cobrir antes dela.
+     * VALE_MERCADORIA (2026-08-03) é resolvida à parte: {@code valorPago} do request é ignorado
+     * — o valor de fato vem do vale (nunca confia em valor vindo do cliente, mesmo princípio de
+     * qualquer preço nesta classe); sem desconto/acréscimo (a carteira nasce com os dois zerados,
+     * ver seed). Um vale já usado é 409; um vale maior que o saldo que ainda falta pagar é 400
+     * (RN: "não é possível usar um vale maior que a venda", decisão do dono do produto).
      */
     private List<LinhaPagamentoResolvida> resolverPagamentos(List<PagamentoRequest> pagamentos, BigDecimal valorLiquido) {
         List<LinhaPagamentoResolvida> resolvidas = new ArrayList<>();
@@ -251,6 +311,27 @@ public class PdvVendaService {
         for (PagamentoRequest pgto : pagamentos) {
             CarteiraInfo carteira = buscarCarteira(pgto.idCarteira());
             validarParcelas(carteira, aceitaApenasUmaParcela(carteira.categoria()), pgto.numeroParcelas());
+
+            if (carteira.categoria() == CategoriaCarteira.VALE_MERCADORIA) {
+                if (pgto.idDevolucao() == null) {
+                    throw new IllegalArgumentException("Informe o número do vale-mercadoria.");
+                }
+                ValeInfo vale = resolverVale(pgto.idDevolucao());
+                if (vale.usado()) {
+                    throw new ConflitoDadosException("O vale-mercadoria nº " + pgto.idDevolucao() + " já foi usado.");
+                }
+                if (vale.valor().compareTo(saldoRestante.max(BigDecimal.ZERO).add(TOLERANCIA_SALDO)) > 0) {
+                    throw new IllegalArgumentException(
+                            "O vale-mercadoria nº " + pgto.idDevolucao() + " vale R$ " + vale.valor()
+                                    + ", maior que o saldo a pagar de R$ " + saldoRestante
+                                    + " — não é possível usar um vale maior que a venda.");
+                }
+                resolvidas.add(new LinhaPagamentoResolvida(
+                        carteira, vale.valor(), pgto.numeroParcelas(), BigDecimal.ZERO, BigDecimal.ZERO, vale.valor(),
+                        pgto.idDevolucao()));
+                saldoRestante = saldoRestante.subtract(vale.valor());
+                continue;
+            }
 
             BigDecimal percDesconto = carteira.percDesconto() == null ? BigDecimal.ZERO : carteira.percDesconto();
             BigDecimal percAcrescimo = carteira.percAcrescimo() == null ? BigDecimal.ZERO : carteira.percAcrescimo();
@@ -282,7 +363,7 @@ public class PdvVendaService {
             BigDecimal cobertura = pgto.valorPago().add(descontoLinha).subtract(acrescimoLinha);
 
             resolvidas.add(new LinhaPagamentoResolvida(
-                    carteira, pgto.valorPago(), pgto.numeroParcelas(), descontoLinha, acrescimoLinha, cobertura));
+                    carteira, pgto.valorPago(), pgto.numeroParcelas(), descontoLinha, acrescimoLinha, cobertura, null));
             saldoRestante = saldoRestante.subtract(cobertura);
         }
         return resolvidas;
@@ -391,14 +472,16 @@ public class PdvVendaService {
         BigDecimal valorBase = valorPago.divide(BigDecimal.valueOf(numeroParcelas), 2, RoundingMode.DOWN);
         BigDecimal ajusteUltima = valorPago.subtract(valorBase.multiply(BigDecimal.valueOf(numeroParcelas)));
         OffsetDateTime agora = OffsetDateTime.now();
-        // Só AVISTA (dinheiro/Pix) já nasce quitada. CARTAO_DEBITO/CARTAO_CREDITO já entraram no
-        // caixa (ver efetivarVenda), mas o dinheiro em si ainda não liquidou na conta do lojista
-        // — o prazo de cada bandeira é `tipo_carteira.prazo_pagamento` (débito costuma ser D+1,
-        // já usado abaixo no vencimento) — a parcela fica em aberto até a conciliação de cartões
-        // (ainda não construída) baixá-la. CREDIARIO segue em aberto até o Recebimento de
+        // AVISTA (dinheiro/Pix) e VALE_MERCADORIA (2026-08-03: resgate é liquidação instantânea —
+        // o vale já era um crédito líquido) nascem quitadas. CARTAO_DEBITO/CARTAO_CREDITO já
+        // entraram no caixa (ver efetivarVenda), mas o dinheiro em si ainda não liquidou na conta
+        // do lojista — o prazo de cada bandeira é `tipo_carteira.prazo_pagamento` (débito costuma
+        // ser D+1, já usado abaixo no vencimento) — a parcela fica em aberto até a conciliação de
+        // cartões (ainda não construída) baixá-la. CREDIARIO segue em aberto até o Recebimento de
         // Crediário baixar. (2026-07-30, revisão — antes CARTAO_DEBITO nascia quitado junto com
         // AVISTA, mas entrar no caixa não é o mesmo que já estar recebido.)
-        boolean jaRecebido = linha.carteira().categoria() == CategoriaCarteira.AVISTA;
+        boolean jaRecebido = linha.carteira().categoria() == CategoriaCarteira.AVISTA
+                || linha.carteira().categoria() == CategoriaCarteira.VALE_MERCADORIA;
 
         List<ParcelaGerada> parcelas = new ArrayList<>();
         for (int n = 1; n <= numeroParcelas; n++) {

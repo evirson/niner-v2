@@ -115,6 +115,10 @@ falhar, rollback completo:
 - **Contas a receber:** `DELETE FROM contas_receber_detalhe` (detalhe de cartão, se houver) e
   depois `DELETE FROM contas_receber WHERE id_venda = ?` — remove todas as parcelas geradas pela
   venda (quitadas ou em aberto; RN-03 já garantiu que nenhuma é de crediário recebido).
+- **Vale-mercadoria (2026-08-03):** `UPDATE venda_devolucao SET vale_usado = false,
+  id_venda_debito = NULL WHERE id_venda_debito = ?` — se a venda tiver resgatado um vale
+  (`docs/telas/devolucao-produtos.md`), ele volta a valer pro cliente usar numa venda futura, sem
+  deixar rastro de que já tinha sido usado (mesma exclusão física dos itens acima).
 - **Comissão, fiscal, TEF:** fora do v1 (ver decisões de escopo).
 
 `venda` grava `cancelada = true`, `data_cancelamento`, `id_usuario_cancelamento` (pode ser
@@ -156,10 +160,13 @@ bloqueio de crediário — RN-03).
 - Dado o número de uma venda, quando buscado, então ignora os demais filtros (inclusive um
   intervalo de datas que não bateria).
 - Dado uma venda de um tenant, então não aparece nem pode ser cancelada por outro tenant (RLS).
+- Dado uma venda que resgatou um vale-mercadoria, quando cancelada, então o vale volta a
+  `vale_usado = false`/`id_venda_debito = NULL` e pode ser usado numa venda futura (2026-08-03,
+  coberto em `ValeMercadoriaCrudTest`).
 
-Cobertos por `CancelamentoVendaCrudTest` (10 testes). Vendas de teste são geradas pelo endpoint
-real do PDV (não inseridas via SQL bruto), pra exercitar o ledger de verdade. Suíte completa do
-projeto: 261/261 verdes (2026-07-30).
+Cobertos por `CancelamentoVendaCrudTest` (10 testes) + 1 teste em `ValeMercadoriaCrudTest`
+(reabertura do vale). Vendas de teste são geradas pelo endpoint real do PDV (não inseridas via
+SQL bruto), pra exercitar o ledger de verdade. Suíte completa do projeto: 295/295 (2026-08-03).
 
 ## Ajuda da tela (manual de operação + vídeo) — obrigatório (R22 / §3.7.1)
 
@@ -173,7 +180,8 @@ projeto: 261/261 verdes (2026-07-30).
   editado dentro de `V018__vendas.sql` (banco em construção, sem nova migration numerada).
 - `tipo_movimento` (ENUM, V013) ganha o valor `CANCELAMENTO`.
 - Nenhuma tabela nova — reaproveita `produto_movimento_mestre/detalhe`, `caixa_detalhe`,
-  `contas_receber`/`contas_receber_detalhe` já existentes.
+  `contas_receber`/`contas_receber_detalhe` já existentes, e (2026-08-03) `venda_devolucao`
+  (reabertura de vale-mercadoria — ver `docs/telas/devolucao-produtos.md`).
 
 ## Impacto nas integrações
 

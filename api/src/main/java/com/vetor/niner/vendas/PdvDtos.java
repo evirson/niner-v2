@@ -53,12 +53,17 @@ public final class PdvDtos {
      * nessa forma de pagamento (o que efetivamente circula: dinheiro entregue, valor cobrado no
      * cartão). O quanto essa linha abate do saldo a pagar (a "cobertura") é calculado no
      * servidor a partir do desconto/acréscimo do {@code tipo_carteira} — nunca enviado pelo
-     * cliente.
+     * cliente. {@code idDevolucao} (2026-08-03) é obrigatório só quando o {@code tipo_carteira}
+     * escolhido é da categoria {@code VALE_MERCADORIA} — identifica qual vale
+     * (`venda_devolucao.id_devolucao`) está sendo resgatado; o servidor ignora {@code
+     * valorPago} nesse caso e usa o valor de fato do vale (mesmo princípio de nunca confiar em
+     * valor vindo do cliente).
      */
     public record PagamentoRequest(
             @NotNull Long idCarteira,
             @NotNull @DecimalMin(value = "0.01") BigDecimal valorPago,
-            @NotNull @Min(1) Integer numeroParcelas) {
+            @NotNull @Min(1) Integer numeroParcelas,
+            Long idDevolucao) {
     }
 
     /**

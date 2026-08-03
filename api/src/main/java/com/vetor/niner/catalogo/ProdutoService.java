@@ -120,6 +120,19 @@ public class ProdutoService {
         return new PaginaProdutos(itens, paginaAtual, tamanho, totalItens, totalPaginas);
     }
 
+    /** Marcas distintas cadastradas no tenant (não-vazias), pra popular o filtro de Marca do
+     *  Relatório de Estoque — RLS já restringe a leitura de {@code produto} ao tenant atual. */
+    @Transactional(readOnly = true)
+    public List<String> listarMarcas() {
+        return jdbc.sql("""
+                        SELECT DISTINCT marca FROM produto
+                        WHERE id_tenant = plataforma.tenant_atual() AND marca IS NOT NULL AND marca <> ''
+                        ORDER BY marca
+                        """)
+                .query(String.class)
+                .list();
+    }
+
     @Transactional(readOnly = true)
     public ProdutoResponse buscar(long id) {
         return jdbc.sql(SELECT_BASE + " WHERE p.id_produto = ?")

@@ -191,3 +191,7 @@ export function atualizarProduto(id: number, payload: ReturnType<typeof paraRequ
 export function excluirProduto(id: number): Promise<ExclusaoProduto> {
   return api<ExclusaoProduto>(`/api/v1/produtos/${id}`, { method: 'DELETE' })
 }
+
+export function listarMarcas(): Promise<string[]> {
+  return api<string[]>('/api/v1/produtos/marcas')
+}

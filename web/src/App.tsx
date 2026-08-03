@@ -30,17 +30,25 @@ import UsuarioForm from './pages/usuarios/UsuarioForm'
 import TransferenciaLista from './pages/estoque/TransferenciaLista'
 import TransferenciaForm from './pages/estoque/TransferenciaForm'
 import TransferenciaDetalhe from './pages/estoque/TransferenciaDetalhe'
+import ContagemEstoque from './pages/estoque/ContagemEstoque'
+import ZerarContagemEstoque from './pages/estoque/ZerarContagemEstoque'
+import DiferencasEstoque from './pages/estoque/DiferencasEstoque'
+import EfetivarBalanco from './pages/estoque/EfetivarBalanco'
 import EstornoRecebimentoCrediario from './pages/recebimentocrediario/EstornoRecebimentoCrediario'
 import RecebimentoCrediario from './pages/recebimentocrediario/RecebimentoCrediario'
 import AberturaCaixa from './pages/caixa/AberturaCaixa'
 import FechamentoCaixa from './pages/caixa/FechamentoCaixa'
 import CancelamentoVenda from './pages/vendas/CancelamentoVenda'
 import PesquisaVendas from './pages/vendas/PesquisaVendas'
+import DevolucaoProduto from './pages/vendas/DevolucaoProduto'
 import ContaCorrenteLista from './pages/contacorrente/ContaCorrenteLista'
 import ContaCorrenteForm from './pages/contacorrente/ContaCorrenteForm'
 import ContaCorrenteMovimentoLista from './pages/contacorrente/ContaCorrenteMovimentoLista'
 import ContaCorrenteMovimentoForm from './pages/contacorrente/ContaCorrenteMovimentoForm'
 import RelatorioVendas from './pages/relatorios/RelatorioVendas'
+import RelatorioComissoes from './pages/relatorios/RelatorioComissoes'
+import RelatorioContasReceber from './pages/relatorios/RelatorioContasReceber'
+import RelatorioEstoque from './pages/relatorios/RelatorioEstoque'
 
 export default function App() {
   return (
@@ -54,7 +62,11 @@ export default function App() {
           <Route path="/menu/:grupo" element={<MenuGrupo />} />
           <Route path="/pdv" element={<Pdv />} />
           <Route path="/pesquisa-vendas" element={<PesquisaVendas />} />
+          <Route path="/devolucao-produto" element={<DevolucaoProduto />} />
           <Route path="/relatorio-vendas" element={<RelatorioVendas />} />
+          <Route path="/relatorio-comissoes" element={<RelatorioComissoes />} />
+          <Route path="/relatorio-contas-receber" element={<RelatorioContasReceber />} />
+          <Route path="/relatorio-estoque" element={<RelatorioEstoque />} />
           <Route path="/abertura-caixa" element={<AberturaCaixa />} />
           <Route path="/fechamento-caixa" element={<FechamentoCaixa />} />
           <Route path="/recebimento-crediario" element={<RecebimentoCrediario />} />
@@ -68,6 +80,10 @@ export default function App() {
           <Route path="/produtos/:id" element={<ProdutoForm />} />
           <Route path="/estoque" element={<TransferenciaLista />} />
           <Route path="/estoque/nova" element={<TransferenciaForm />} />
+          <Route path="/estoque/contagem" element={<ContagemEstoque />} />
+          <Route path="/estoque/zerar-contagem" element={<ZerarContagemEstoque />} />
+          <Route path="/estoque/diferencas" element={<DiferencasEstoque />} />
+          <Route path="/estoque/efetivar-balanco" element={<EfetivarBalanco />} />
           <Route path="/estoque/:id" element={<TransferenciaDetalhe />} />
           <Route path="/pedidos" element={<EmBreve titulo="Pedidos" />} />
           <Route path="/canais" element={<EmBreve titulo="Canais" />} />

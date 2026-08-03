@@ -26,7 +26,7 @@ public final class TipoCarteiraDtos {
      * (nome_carteira é texto livre e não serve pra isso).
      */
     public enum CategoriaCarteira {
-        AVISTA, CARTAO_DEBITO, CARTAO_CREDITO, CREDIARIO
+        AVISTA, CARTAO_DEBITO, CARTAO_CREDITO, CREDIARIO, VALE_MERCADORIA
     }
 
     /**

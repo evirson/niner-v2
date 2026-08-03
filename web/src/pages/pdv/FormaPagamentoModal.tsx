@@ -3,6 +3,7 @@ import { useMemo, useState } from 'react'
 import Toast from '../../components/Toast'
 import { ApiError } from '../../lib/api'
 import { buscarDescontoVenda } from '../../lib/configuracaoGeral'
+import { buscarVale, type ValeMercadoria } from '../../lib/devolucaoProduto'
 import type { Funcionario } from '../../lib/funcionarios'
 import {
   completarMoeda,
@@ -24,7 +25,7 @@ import {
 import PesquisaClienteModal from './PesquisaClienteModal'
 import PesquisaVendedorModal from './PesquisaVendedorModal'
 
-const CATEGORIAS_ORDEM: CategoriaCarteira[] = ['AVISTA', 'CARTAO_DEBITO', 'CARTAO_CREDITO', 'CREDIARIO']
+const CATEGORIAS_ORDEM: CategoriaCarteira[] = ['AVISTA', 'CARTAO_DEBITO', 'CARTAO_CREDITO', 'CREDIARIO', 'VALE_MERCADORIA']
 
 function moeda(v: number): string {
   return `R$ ${formatarMoeda(v)}`
@@ -34,9 +35,9 @@ function arredondar2(v: number): number {
   return Math.round((v + Number.EPSILON) * 100) / 100
 }
 
-/** À vista/débito só aceitam 1 parcela (regra também reforçada no backend). */
+/** À vista/débito/vale-mercadoria só aceitam 1 parcela (regra também reforçada no backend). */
 function pagaNaHora(categoria: CategoriaCarteira): boolean {
-  return categoria === 'AVISTA' || categoria === 'CARTAO_DEBITO'
+  return categoria === 'AVISTA' || categoria === 'CARTAO_DEBITO' || categoria === 'VALE_MERCADORIA'
 }
 
 /** Mesma fórmula do backend (`PdvVendaService.resolverPagamentos`) — só pra pré-visualizar.
@@ -68,13 +69,15 @@ function calcularPrevia(valorPago: number, numeroParcelas: number, prazoPagament
   return parcelas
 }
 
-/** Uma linha de pagamento já lançada nesta venda (estado local, antes de confirmar). */
+/** Uma linha de pagamento já lançada nesta venda (estado local, antes de confirmar).
+ *  `idDevolucao` (2026-08-03) só existe em linhas VALE_MERCADORIA — número do vale resgatado. */
 interface LinhaLocal {
   chave: string
   carteira: TipoCarteira
   valorPago: number
   numeroParcelas: number
   cobertura: number
+  idDevolucao?: number
 }
 
 const TOLERANCIA_SALDO = 0.01
@@ -122,6 +125,13 @@ export default function FormaPagamentoModal({
   const [valorPagoTexto, setValorPagoTexto] = useState('')
   const [numeroParcelasEdicao, setNumeroParcelasEdicao] = useState(1)
   const [toast, setToast] = useState('')
+  /** Resgate de vale-mercadoria (2026-08-03) — número digitado, resultado da busca (ou erro) e
+   *  estado de carregamento; separado do restante da edição porque o valor não é digitável, só
+   *  vem do vale encontrado. */
+  const [numeroValeTexto, setNumeroValeTexto] = useState('')
+  const [valeResolvido, setValeResolvido] = useState<ValeMercadoria | null>(null)
+  const [buscandoVale, setBuscandoVale] = useState(false)
+  const [erroVale, setErroVale] = useState<string | null>(null)
   /** Cliente e vendedor são obrigatórios em toda venda do PDV (2026-07-28). */
   const [clienteSelecionado, setClienteSelecionado] = useState<PdvCliente | null>(null)
   const [vendedorSelecionado, setVendedorSelecionado] = useState<Funcionario | null>(null)
@@ -213,6 +223,35 @@ export default function FormaPagamentoModal({
     setIdCarteiraEdicao(unica?.idCarteira ?? null)
     setNumeroParcelasEdicao(unica && pagaNaHora(unica.categoriaCarteira) ? 1 : (unica?.pcMinima ?? 1))
     setValorPagoTexto(formatarMoeda(calcularValorPagoMaximo(saldoAPagar, unica)))
+    setNumeroValeTexto('')
+    setValeResolvido(null)
+    setErroVale(null)
+  }
+
+  const buscarValeMercadoria = async () => {
+    const numero = Number(numeroValeTexto.trim())
+    if (!numeroValeTexto.trim() || !Number.isFinite(numero) || numero <= 0) return
+    setBuscandoVale(true)
+    setErroVale(null)
+    setValeResolvido(null)
+    try {
+      const vale = await buscarVale(numero)
+      if (vale.valeUsado) {
+        setErroVale(`O vale nº ${numero} já foi usado.`)
+        return
+      }
+      if (vale.valorVale > saldoAPagar + TOLERANCIA_SALDO) {
+        setErroVale(
+          `O vale nº ${numero} vale ${moeda(vale.valorVale)}, maior que o saldo a pagar de ${moeda(Math.max(saldoAPagar, 0))} — não é possível usar um vale maior que a venda.`,
+        )
+        return
+      }
+      setValeResolvido(vale)
+    } catch (e) {
+      setErroVale(e instanceof ApiError ? e.message : 'Não foi possível localizar o vale-mercadoria.')
+    } finally {
+      setBuscandoVale(false)
+    }
   }
 
   /** Trocar de tipo de carteira (dropdown, quando a categoria tem mais de uma) já traz o Valor
@@ -228,10 +267,28 @@ export default function FormaPagamentoModal({
     setCategoriaAberta(null)
     setIdCarteiraEdicao(null)
     setValorPagoTexto('')
+    setNumeroValeTexto('')
+    setValeResolvido(null)
+    setErroVale(null)
   }
 
   const adicionarPagamento = () => {
-    if (!carteiraEdicao || valorPagoNumero <= 0) return
+    if (!carteiraEdicao) return
+    if (carteiraEdicao.categoriaCarteira === 'VALE_MERCADORIA') {
+      if (!valeResolvido) return
+      const linha: LinhaLocal = {
+        chave: `${carteiraEdicao.idCarteira}-${Date.now()}`,
+        carteira: carteiraEdicao,
+        valorPago: valeResolvido.valorVale,
+        numeroParcelas: 1,
+        cobertura: valeResolvido.valorVale,
+        idDevolucao: valeResolvido.idDevolucao,
+      }
+      setPagamentos((atual) => [...atual, linha])
+      voltarParaCategorias()
+      return
+    }
+    if (valorPagoNumero <= 0) return
     const linha: LinhaLocal = {
       chave: `${carteiraEdicao.idCarteira}-${Date.now()}`,
       carteira: carteiraEdicao,
@@ -256,6 +313,7 @@ export default function FormaPagamentoModal({
         idCarteira: p.carteira.idCarteira,
         valorPago: p.valorPago,
         numeroParcelas: p.numeroParcelas,
+        idDevolucao: p.idDevolucao,
       }))
       return efetivarVenda({
         itens: itens.map((i) => ({ idVariacao: i.idVariacao, qtd: i.qtd })),
@@ -429,6 +487,7 @@ export default function FormaPagamentoModal({
                       <tr key={p.chave}>
                         <td>
                           {p.carteira.nomeCarteira} — {ROTULO_CATEGORIA_CARTEIRA[p.carteira.categoriaCarteira]}
+                          {p.idDevolucao ? ` (vale nº ${p.idDevolucao})` : ''}
                         </td>
                         <td className="mono" style={{ textAlign: 'right' }}>
                           {moeda(p.valorPago)}
@@ -476,7 +535,37 @@ export default function FormaPagamentoModal({
                   </div>
                 )}
 
-                {carteiraEdicao && (
+                {carteiraEdicao && categoriaAberta === 'VALE_MERCADORIA' && (
+                  <div className="pdv-campo-valor-pago">
+                    <label htmlFor="pdv-numero-vale">Número do Vale *</label>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <input
+                        id="pdv-numero-vale"
+                        className="mono"
+                        autoFocus
+                        inputMode="numeric"
+                        style={{ width: 110 }}
+                        value={numeroValeTexto}
+                        onChange={(e) => {
+                          setNumeroValeTexto(e.target.value.replace(/\D/g, ''))
+                          setValeResolvido(null)
+                          setErroVale(null)
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault()
+                            buscarValeMercadoria()
+                          }
+                        }}
+                      />
+                      <button type="button" className="btn ghost" disabled={buscandoVale} onClick={buscarValeMercadoria}>
+                        {buscandoVale ? 'Buscando…' : 'Buscar'}
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {carteiraEdicao && categoriaAberta !== 'VALE_MERCADORIA' && (
                   <div className="pdv-campo-valor-pago">
                     <label htmlFor="pdv-valor-pago">Valor Pago *</label>
                     <input
@@ -495,7 +584,7 @@ export default function FormaPagamentoModal({
                   </div>
                 )}
 
-                {carteiraEdicao && !soAVistaEdicao && opcoesParcelasEdicao.length > 1 && (
+                {carteiraEdicao && categoriaAberta !== 'VALE_MERCADORIA' && !soAVistaEdicao && opcoesParcelasEdicao.length > 1 && (
                   <div className="pdv-campo-parcelas">
                     <label htmlFor="pdv-parcelas-edicao">Número de Parcelas *</label>
                     <select
@@ -513,7 +602,22 @@ export default function FormaPagamentoModal({
                 )}
               </div>
 
-              {carteiraEdicao && (
+              {carteiraEdicao && categoriaAberta === 'VALE_MERCADORIA' && (
+                <>
+                  {erroVale && (
+                    <p className="erro-campo" style={{ marginTop: 4 }}>
+                      {erroVale}
+                    </p>
+                  )}
+                  {valeResolvido && (
+                    <p className="muted" style={{ marginTop: 4 }}>
+                      Vale nº {valeResolvido.idDevolucao} — valor: <strong>{moeda(valeResolvido.valorVale)}</strong>
+                    </p>
+                  )}
+                </>
+              )}
+
+              {carteiraEdicao && categoriaAberta !== 'VALE_MERCADORIA' && (
                 <>
                   {carteiraEdicao.percDesconto ? (
                     <p className="muted" style={{ marginTop: 4 }}>
@@ -563,7 +667,10 @@ export default function FormaPagamentoModal({
                 <button
                   type="button"
                   className="btn"
-                  disabled={!carteiraEdicao || valorPagoNumero <= 0}
+                  disabled={
+                    !carteiraEdicao ||
+                    (categoriaAberta === 'VALE_MERCADORIA' ? !valeResolvido : valorPagoNumero <= 0)
+                  }
                   onClick={adicionarPagamento}
                 >
                   Adicionar Pagamento

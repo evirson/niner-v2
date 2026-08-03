@@ -8,6 +8,8 @@ import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
+
 /**
  * CRUD de produtos (docs/telas/produto.md), superfície do tenant (`/api/v1`, JWT + RLS). Sem
  * restrição de papel: ADMIN e OPERADOR têm acesso completo (mesma decisão dos demais cadastros).
@@ -33,6 +35,11 @@ public class ProdutoController {
             @RequestParam(required = false) String ordenarPor,
             @RequestParam(required = false) String direcao) {
         return service.listar(descricao, marca, idCategoria, status, pagina, limite, ordenarPor, direcao);
+    }
+
+    @GetMapping("/marcas")
+    public List<String> listarMarcas() {
+        return service.listarMarcas();
     }
 
     @GetMapping("/{id}")

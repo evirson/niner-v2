@@ -181,3 +181,15 @@ Em desenvolvimento, recriar do zero (`flyway clean` + `migrate`) é aceitável.
   a coluna entrou direto na migration V016 já existente, em vez de uma V027 nova; o dev
   precisou recriar o banco do zero (`docker volume rm niner_pgdata` + `flyway migrate`)
   para aplicar a mudança à migration já rodada.
+- **`categoria_carteira` ganha `VALE_MERCADORIA` (V025, 2026-08-03):** editado direto no
+  `CREATE TYPE` já existente (banco em construção, mesma convenção acima) — resgate de
+  vale-mercadoria emitido pela Devolução de Produtos (`docs/telas/devolucao-produtos.md`) via
+  uma carteira normal de split-tender, em vez de um mecanismo de pagamento novo. A carteira
+  "VALE MERCADORIA", seedada por tenant desde o signup (`SignupService`), passou de categoria
+  `AVISTA` para `VALE_MERCADORIA`; "VALE PRESENTE" (outro rótulo `AVISTA` sem nenhuma lógica,
+  seedado desde sempre) foi removida do seed — não fazia sentido conviver ao lado do vale de
+  verdade. No banco de dev existente, as duas mudanças foram aplicadas por `ALTER TYPE ADD
+  VALUE`/`UPDATE`/`DELETE` diretos (via `docker exec psql`), sem recriar o volume — o Flyway
+  só vai reclamar de checksum divergente em V025 se algum dia rodar `flyway migrate`/`validate`
+  de novo contra esse mesmo banco (mesmo risco aceito em toda edição de migration já aplicada,
+  ver convenção acima).

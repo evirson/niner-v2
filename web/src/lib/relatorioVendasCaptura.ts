@@ -1,6 +1,34 @@
 import html2canvas from 'html2canvas'
 import { jsPDF } from 'jspdf'
 
+/** A grid (segunda captura, `gridEl`) usa `.grid-altura-fixa` (cabeçalho/rodapé fixos, só as
+ *  linhas rolam — ver styles.css) — sem isto, o html2canvas capturaria só a altura MÁXIMA
+ *  configurada (60vh) em vez de todas as linhas, mesmo com o `.table-wrap` internamente
+ *  "correto". html2canvas clona o documento inteiro pra computar layout, então qualquer
+ *  ancestral entre o alvo e a `<html>` que ainda limite altura/overflow corta o desenho — por
+ *  isso aqui a gente sobe a árvore a partir do `.relatorio-grid-conteudo` (só no clone isolado,
+ *  nunca na página real) zerando altura/overflow/flex de cada ancestral, até a `<html>` (mesmo
+ *  mecanismo de `relatorioContasReceberCaptura.ts`). Rodar isto também na captura de `topoEl`
+ *  (KPIs/gráficos) é inofensivo — ele não tem essa classe, então o seletor não encontra nada. */
+function liberarAlturaDosAncestrais(doc: Document, seletorAlvo: string): void {
+  let el: HTMLElement | null = doc.querySelector(seletorAlvo)
+  while (el) {
+    el.style.overflow = 'visible'
+    el.style.height = 'auto'
+    el.style.maxHeight = 'none'
+    el.style.flex = 'none'
+    el = el.parentElement
+  }
+  // A própria grid tem altura máxima própria (`.grid-altura-fixa`, ver styles.css) — diferente
+  // do Contas a Receber/Comissões (onde quem corta é um ANCESTRAL do alvo), aqui quem corta é
+  // um DESCENDENTE do alvo (`.table-wrap` dentro de `.relatorio-grid-conteudo`); subir a árvore
+  // a partir do alvo nunca alcança isso, por isso o passo extra abaixo.
+  doc.querySelectorAll<HTMLElement>('.grid-altura-fixa').forEach((elemento) => {
+    elemento.style.maxHeight = 'none'
+    elemento.style.overflow = 'visible'
+  })
+}
+
 const OPCOES_CAPTURA = {
   scale: 2,
   useCORS: true,
@@ -16,6 +44,7 @@ const OPCOES_CAPTURA = {
   // `prefers-color-scheme`), só nunca era setado por ninguém.
   onclone: (doc: Document) => {
     doc.documentElement.setAttribute('data-theme', 'light')
+    liberarAlturaDosAncestrais(doc, '.relatorio-grid-conteudo')
   },
 } as const
 

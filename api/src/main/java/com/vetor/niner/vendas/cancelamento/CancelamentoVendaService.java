@@ -258,6 +258,18 @@ public class CancelamentoVendaService {
                 .param(idVenda)
                 .update();
 
+        // Reabre qualquer vale-mercadoria resgatado nesta venda (2026-08-03, pedido do dono do
+        // produto) — a venda que consumiu o vale foi desfeita, então o crédito volta a valer
+        // pro cliente usar numa venda futura. Sem rastro de que já foi usado uma vez (mesma
+        // filosofia da exclusão física de caixa_detalhe/contas_receber acima); WHERE
+        // id_venda_debito = ? já cobre o caso raro de mais de um vale na mesma venda (split-tender).
+        jdbc.sql("""
+                        UPDATE venda_devolucao SET vale_usado = false, id_venda_debito = NULL
+                        WHERE id_tenant = plataforma.tenant_atual() AND id_venda_debito = ?
+                        """)
+                .param(idVenda)
+                .update();
+
         return new CancelamentoEfetivadoResponse(idVenda, agora);
     }
 

@@ -320,6 +320,21 @@ export function IconeCancelamentoVenda({ size = 28 }: { size?: number }) {
   )
 }
 
+/** Ícone da tela de Devolução de Produtos (caixa + seta de retorno) — 2026-08-03. */
+export function IconeDevolucaoProduto({ size = 28 }: { size?: number }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.6} stroke="currentColor" width={size} height={size} aria-hidden="true">
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M3.75 8.25 12 3.75l8.25 4.5v7.5L12 20.25l-8.25-4.5v-7.5Z"
+      />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 8.25 12 12.75l8.25-4.5M12 12.75v7.5" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M9.5 14.5 7 12.5m0 0 2-2m-2 2h4.5" />
+    </svg>
+  )
+}
+
 /** Ícone da tela de Fechamento de Caixa (caixa + cadeado) — 2026-07-30. */
 export function IconeFechamentoCaixa({ size = 28 }: { size?: number }) {
   return (

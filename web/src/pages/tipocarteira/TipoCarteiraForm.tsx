@@ -33,7 +33,13 @@ import { maiusculas } from '../../lib/texto'
 type CampoValidavel = 'nomeCarteira' | 'categoriaCarteira' | 'prazoPagamento' | 'pcMinima' | 'pcMaxima'
 type ErrosCampo = Partial<Record<CampoValidavel, string>>
 
-const CATEGORIAS_CARTEIRA: CategoriaCarteira[] = ['AVISTA', 'CARTAO_DEBITO', 'CARTAO_CREDITO', 'CREDIARIO']
+const CATEGORIAS_CARTEIRA: CategoriaCarteira[] = [
+  'AVISTA',
+  'CARTAO_DEBITO',
+  'CARTAO_CREDITO',
+  'CREDIARIO',
+  'VALE_MERCADORIA',
+]
 
 /** Nome, categoria, prazo e parcelas são obrigatórios (prazo/parcelas aceitam 0/1 normalmente
  * — só não podem ficar em branco); Taxa Administradora e % Desconto/Acréscimo são opcionais

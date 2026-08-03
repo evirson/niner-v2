@@ -52,12 +52,12 @@ class TipoCarteiraCrudTest {
     }
 
     @Test
-    void tenantNovoJaNasceComSeteTiposDeCarteiraSemeados() throws Exception {
+    void tenantNovoJaNasceComSeisTiposDeCarteiraSemeados() throws Exception {
         String token = assinarNovoTenant("seed");
 
         mvc.perform(get("/api/v1/tipos-carteira").param("limite", "20").header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.totalItens").value(7));
+                .andExpect(jsonPath("$.totalItens").value(6));
     }
 
     @Test

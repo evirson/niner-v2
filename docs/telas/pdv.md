@@ -240,18 +240,29 @@ faltar um dos dois (ou os dois), a venda não é gravada e aparece um `Toast` de
 venda."). Pedido direto do dono do produto — o operador pode fechar o pagamento primeiro e
 resolver cliente/vendedor depois, mas nunca grava faltando um dos dois.
 
-### Teclas de atalho (revisão 2026-07-28 — F5/F6 renomeados)
+### Teclas de atalho (revisão 2026-08-03 — F5 Devolver Produto removido, Efetiva Venda voltou a ser F5)
 
-- **F6 Efetiva Venda** (era F5) — abre a tela de Forma de Pagamento.
-- **F5 Devolver Produto** (novo, reservado) — só o botão/atalho existem, **sem funcionalidade**
-  ainda (pedido explícito do dono do produto: "por enquanto não precisa codificar nada"). O
-  `preventDefault()` do F5 físico já está implementado (mesma lição do bug de F-keys físicas
-  documentado antes) pra não deixar o navegador recarregar a página quando a funcionalidade for
-  implementada.
-- F2 Pesquisa Produto, F3 Altera Quantidade, F4 Limpa Tela — inalterados.
-- O botão "F6 Efetiva Venda" teve a altura reduzida em 2026-07-31 (ajuste puramente visual,
+- **F5 Efetiva Venda** (era F6, de 2026-07-28 até 2026-08-03) — abre a tela de Forma de
+  Pagamento.
+- ~~F5 Devolver Produto~~ — **removido em 2026-08-03**. Era um atalho/botão reservado desde
+  2026-07-28, nunca teve funcionalidade nenhuma; a tela **Devolução de Produtos**
+  (`docs/telas/devolucao-produtos.md`, `/devolucao-produto`, menu "Frente de Loja") cobre esse
+  caso agora, então o slot F5 do PDV foi liberado e reaproveitado pela Efetiva Venda.
+- F2 Pesquisa Produto, F3 Altera Quantidade, F4 Limpa Tela — inalterados. A grid de botões
+  (`.pdv-linha-fkeys`) passou de `grid-template-columns: repeat(4, 1fr)` para `repeat(3, 1fr)`
+  — com Devolver Produto removido, 3 botões numa grade pensada pra 4 ficavam à esquerda com um
+  vão vazio à direita.
+- O botão "Efetiva Venda" teve a altura reduzida em 2026-07-31 (ajuste puramente visual,
   `.pdv-tecla-venda` em `styles.css`) — pedido direto do dono do produto, sem mudança de
   comportamento.
+
+### Vale-Mercadoria como forma de pagamento (2026-08-03)
+
+Nova categoria de carteira no split-tender, ao lado de À Vista/Cartão Débito/Cartão Crédito/
+Crediário — ver `docs/telas/devolucao-produtos.md` ("Resgate no PDV") para o desenho completo:
+pede o **número do vale** (não um valor digitado), busca o valor de verdade no servidor, paga
+na hora, e bloqueia vale já usado (409) ou maior que o saldo a pagar (400). A carteira "VALE
+MERCADORIA" já existia desde o signup — só mudou de categoria (`AVISTA` → `VALE_MERCADORIA`).
 
 ### Baixa de estoque — sem checagem de saldo (revisado 2026-07-29)
 
@@ -415,10 +426,11 @@ da forma de pagamento com desconto próprio, soma das coberturas não fecha o sa
 ## Ajuda da tela (manual de operação + vídeo) — obrigatório (R22 / §3.7.1)
 
 - **`chave_tela`: `vendas.pdv`** — F2 pesquisa produto (nome), F3 altera quantidade de um item já
-  lançado, F4 limpa a venda em andamento, F5 reservado pra devolução de produto (ainda sem
-  funcionalidade), F6 efetiva a venda (pede cliente, vendedor e forma de pagamento); leitura de
-  código de barras no campo próprio + Enter. Vender mais do que o disponível na loja não é mais
-  um erro (2026-07-29) — a venda é aceita e o estoque fica negativo. `url_video`: NULL.
+  lançado, F4 limpa a venda em andamento, F5 efetiva a venda (pede cliente, vendedor e forma de
+  pagamento — inclusive Vale-Mercadoria, digitando o número do vale); leitura de código de
+  barras no campo próprio + Enter. Devolução de produtos ganhou tela própria
+  (`docs/telas/devolucao-produtos.md`), fora do PDV. Vender mais do que o disponível na loja não
+  é mais um erro (2026-07-29) — a venda é aceita e o estoque fica negativo. `url_video`: NULL.
 
 ## Impacto no banco
 

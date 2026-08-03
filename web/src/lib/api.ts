@@ -57,8 +57,15 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
     }
     throw new ApiError(res.status, msg)
   }
-  if (res.status === 204) return undefined as T
-  return (await res.json()) as T
+  // Corpo vazio não é exclusividade do 204 — um endpoint `void` sem `@ResponseStatus` explícito
+  // no Spring vira 200 OK com corpo vazio, e `res.json()` nesse corpo lança `SyntaxError`
+  // (`Unexpected end of JSON input`), fazendo esta função rejeitar mesmo com a chamada tendo
+  // funcionado (2026-08-04, bug real: Contagem de Estoque tratava leitura bem-sucedida como
+  // falha). Ler como texto primeiro e só fazer `JSON.parse` se não estiver vazio cobre 204 e
+  // qualquer outro status sem corpo, sem depender de cada controller acertar a anotação.
+  const texto = await res.text()
+  if (!texto) return undefined as T
+  return JSON.parse(texto) as T
 }
 
 /**

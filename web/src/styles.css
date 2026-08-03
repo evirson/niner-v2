@@ -179,6 +179,9 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
 .table tbody tr[tabindex] { cursor: pointer; }
 .table tbody tr[tabindex]:hover td { background: var(--surface-2); }
 .table tbody tr.linha-selecionada td { background: var(--accent); color: var(--accent-ink); }
+/* Subtotal de grupo dentro da própria grid (banda clássica, Relatório de Comissões) — mesmo
+   fundo do <tfoot>, mas sem a borda grossa de "fim da tabela". */
+.table tbody tr.linha-subtotal td { background: var(--surface-2); border-top: 1px solid var(--line-strong); }
 .table tbody tr[tabindex]:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 /* Grid de dados mais densa (2026-07-21, pedido do dono do produto) — menos espaço vertical
    entre linhas que o padrão de outras tabelas/cards do design system. */
@@ -394,6 +397,34 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
    botões" (blocos grandes, não linhas de tabela), composição do faturamento, grade de
    gráficos, grid totalizável. Mesmo recipiente visual de `.resumo-crediario-card`. */
 .relatorio-filtros-aplicados { display: flex; flex-wrap: wrap; gap: 6px 28px; font-size: 13px; }
+
+/* Contas a Receber / Recebidas (2026-08-03): cabeçalho das colunas e o Total Geral (tfoot)
+   ficam fixos, só a grid de parcelas rola — mesmo truque de `.recebimento-lista-corpo`
+   (overflow no `.lista-corpo` desligado, quem cresce/rola é só o `.table-wrap`). Durante a
+   captura do PDF (`.pdf-expandido`) a altura volta a ser natural — senão o html2canvas
+   recorta a imagem na altura visível da tela em vez de trazer todas as linhas. */
+.relatorio-corpo-fixo { overflow-y: hidden; display: flex; flex-direction: column; }
+.relatorio-corpo-fixo .relatorio-conteudo { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.relatorio-corpo-fixo .table-wrap { flex: 1; min-height: 0; }
+.relatorio-corpo-fixo .table tfoot td { position: sticky; bottom: 0; z-index: 1; }
+/* Grid de 12 colunas (2026-08-03) — espaçamento horizontal mais estreito que o padrão
+   `.table-compacta` pra caber sem precisar de scroll horizontal na maioria das telas. */
+.tabela-adensada th, .tabela-adensada td { padding-left: 8px; padding-right: 8px; }
+.relatorio-corpo-fixo .relatorio-conteudo.pdf-expandido { display: block; }
+.relatorio-corpo-fixo .table-wrap.pdf-expandido { flex: none; height: auto; overflow: visible; }
+.relatorio-corpo-fixo .table-wrap.pdf-expandido .table tfoot td { position: static; }
+
+/* Relatório de Vendas (2026-08-03): diferente de Contas a Receber/Comissões (que travam a tela
+   inteira via `.relatorio-corpo-fixo`, porque não têm mais nada além da grid), aqui tem bastante
+   conteúdo ANTES da grid (KPIs, composição, 7 gráficos) — travar a rolagem da tela inteira
+   deixaria tudo isso espremido acima de uma grid de altura fixa. Em vez disso só a própria grid
+   ganha altura máxima (a página continua rolando normalmente até chegar nela); dentro dela,
+   cabeçalho fixo (`.table th` já é sticky globalmente) e rodapé fixo, só as linhas rolam. Durante
+   a captura do PDF a grid é capturada separadamente (sempre em página nova) e o `onclone` de
+   `relatorioVendasCaptura.ts` desclipa os ancestrais do `.relatorio-grid-conteudo`, senão o
+   html2canvas cortaria na altura máxima em vez de trazer todas as linhas. */
+.grid-altura-fixa { max-height: 60vh; }
+.grid-altura-fixa .table tfoot td { position: sticky; bottom: 0; z-index: 1; }
 .relatorio-kpis-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
 .relatorio-kpi-card {
   background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--radius);
@@ -538,7 +569,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
 .menu-hub-descricao { margin: 6px 0 0; max-width: 70ch; }
 .menu-cards {
   display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 14px; margin-top: 20px; align-items: start;
+  gap: 14px; margin-top: 20px;
 }
 .menu-card {
   display: flex; align-items: flex-start; gap: 14px; padding: 16px;
@@ -714,7 +745,7 @@ a.menu-card:hover {
 .pdv-campo-codigo-barras input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .pdv-campo-codigo-barras .pdv-dica { margin-top: 5px; font-size: 11.5px; color: var(--ink-muted); }
 
-.pdv-linha-fkeys { flex: 1; min-height: 64px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+.pdv-linha-fkeys { flex: 1; min-height: 64px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
 .pdv-tecla {
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
   padding: 12px 8px; border-radius: var(--radius); border: 1px solid var(--line-strong);

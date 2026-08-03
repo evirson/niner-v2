@@ -3,14 +3,17 @@ import { desmascararPercentual, formatarPercentual } from './masks'
 import { maiusculas } from './texto'
 
 /** Categoria fixa do tipo de carteira (2026-07-23) — usada pelo histórico do cliente pra
- * isolar parcelas de crediário das demais formas de pagamento. */
-export type CategoriaCarteira = 'AVISTA' | 'CARTAO_DEBITO' | 'CARTAO_CREDITO' | 'CREDIARIO'
+ * isolar parcelas de crediário das demais formas de pagamento. VALE_MERCADORIA (2026-08-03):
+ * resgate do vale-mercadoria gerado pela Devolução de Produtos — paga na hora igual À Vista, mas
+ * exige o número do vale em vez de aceitar qualquer valor digitado (ver FormaPagamentoModal). */
+export type CategoriaCarteira = 'AVISTA' | 'CARTAO_DEBITO' | 'CARTAO_CREDITO' | 'CREDIARIO' | 'VALE_MERCADORIA'
 
 export const ROTULO_CATEGORIA_CARTEIRA: Record<CategoriaCarteira, string> = {
   AVISTA: 'À Vista',
   CARTAO_DEBITO: 'Cartão Débito',
   CARTAO_CREDITO: 'Cartão Crédito',
   CREDIARIO: 'Crediário',
+  VALE_MERCADORIA: 'Vale-Mercadoria',
 }
 
 /**

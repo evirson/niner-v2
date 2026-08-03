@@ -92,7 +92,15 @@ CREATE INDEX produto_movimento_detalhe_id_tenant_ix  ON produto_movimento_detalh
 CREATE INDEX produto_movimento_detalhe_id_movimento_ix ON produto_movimento_detalhe (id_movimento);
 CREATE INDEX produto_movimento_detalhe_variacao_ix   ON produto_movimento_detalhe (id_tenant, id_variacao);
 
--- Balanço/contagem de estoque.
+-- Balanço/contagem de estoque. Sem UNIQUE em (id_tenant, id_empresa, id_variacao) de propósito:
+-- cada leitura de código de barras insere uma linha nova (ledger, não upsert) — "quantidade
+-- contada" de um produto é a SOMA das linhas ativas dele, mesmo espírito de
+-- produto_movimento_detalhe. `id_movimento` (2026-08-04, Rotina de Contagem de Estoque) é NULL
+-- enquanto a linha está no balanço ATIVO (ainda não efetivada); ao efetivar, em vez de apagar as
+-- linhas, elas são marcadas com o id do produto_movimento_mestre (tipo_movimento AJUSTE) gerado
+-- — isso é o que permite desfazer a última efetivação depois: apaga o ledger daquele movimento
+-- (a trigger reverte o estoque sozinha) e libera essas linhas de volta pro balanço ativo
+-- (id_movimento = NULL de novo), sem precisar de tabela de snapshot separada.
 CREATE TABLE produto_balanco (
   id_balanco    bigint        GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   id_tenant     smallint      NOT NULL REFERENCES plataforma.tenant (id_tenant),
@@ -100,13 +108,19 @@ CREATE TABLE produto_balanco (
   id_variacao   integer       NOT NULL,
   data_balanco  timestamptz   NOT NULL DEFAULT now(),
   qtd_contagem  numeric(14,3) NOT NULL DEFAULT 0,
+  id_movimento  integer,
   -- FKs compostas (2026-07-16, P8) — ver comentário em usuario_empresa_fk (V015).
   CONSTRAINT produto_balanco_empresa_fk FOREIGN KEY (id_tenant, id_empresa)
     REFERENCES empresa (id_tenant, id_empresa),
   CONSTRAINT produto_balanco_variacao_fk FOREIGN KEY (id_tenant, id_variacao)
-    REFERENCES produto_barra (id_tenant, id_variacao)
+    REFERENCES produto_barra (id_tenant, id_variacao),
+  CONSTRAINT produto_balanco_movimento_fk FOREIGN KEY (id_tenant, id_movimento)
+    REFERENCES produto_movimento_mestre (id_tenant, id_movimento)
 );
 CREATE INDEX produto_balanco_id_tenant_ix ON produto_balanco (id_tenant);
+-- Cobre tanto "soma do balanço ativo por empresa/variação" (id_movimento IS NULL) quanto
+-- "todas as linhas de uma efetivação" (id_movimento = X, usado pelo desfazer).
+CREATE INDEX produto_balanco_empresa_movimento_ix ON produto_balanco (id_tenant, id_empresa, id_movimento);
 
 -- Transferência de produtos entre empresas do mesmo tenant (2026-07-28, spec pendente vira
 -- realidade — id_transferencia em produto_movimento_mestre já existia como placeholder pra

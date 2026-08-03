@@ -2,7 +2,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import AberturaCaixaModal from '../../components/AberturaCaixaModal'
-import { IconeAjustar, IconeConfirmar, IconeDevolver, IconeLimpar, IconeLupa, IconePdv } from '../../components/Icones'
+import { IconeAjustar, IconeConfirmar, IconeLimpar, IconeLupa, IconePdv } from '../../components/Icones'
 import { ApiError } from '../../lib/api'
 import { buscarStatusCaixa } from '../../lib/caixa'
 import { buscarPermiteQtdDecimal } from '../../lib/configuracaoGeral'
@@ -180,19 +180,12 @@ export default function Pdv() {
     campoBarrasRef.current?.focus()
   }
 
-  const f6EfetivaVenda = () => {
+  const f5EfetivaVenda = () => {
     if (ledger.length === 0) {
       mostrarFlash('Nenhum item na venda.')
       return
     }
     setMostrarFormaPagamento(true)
-  }
-
-  /** Ainda sem funcionalidade — só o botão/atalho reservados (pedido do dono do produto,
-   *  2026-07-28). Mantém `preventDefault` no F5 físico pra não deixar o navegador recarregar
-   *  a página (mesmo cuidado do bug corrigido nas outras F-keys). */
-  const f5DevolverProduto = () => {
-    piscarTecla('f5')
   }
 
   const aoVendaEfetivada = (resultado: VendaEfetivada) => {
@@ -216,8 +209,7 @@ export default function Pdv() {
       if (e.key === 'F2') { e.preventDefault(); f2Pesquisa(); return }
       if (e.key === 'F3') { e.preventDefault(); f3AlteraQtd(); return }
       if (e.key === 'F4') { e.preventDefault(); f4LimpaTela(); return }
-      if (e.key === 'F5') { e.preventDefault(); f5DevolverProduto(); return }
-      if (e.key === 'F6') { e.preventDefault(); f6EfetivaVenda(); return }
+      if (e.key === 'F5') { e.preventDefault(); f5EfetivaVenda(); return }
     }
     document.addEventListener('keydown', aoTeclar)
     return () => document.removeEventListener('keydown', aoTeclar)
@@ -333,17 +325,11 @@ export default function Pdv() {
                     <span className="pdv-kbd">F4</span> Limpa Tela
                   </span>
                 </div>
-                <div className={`pdv-tecla${teclaAtiva === 'f5' ? ' pdv-ativa' : ''}`} onClick={f5DevolverProduto}>
-                  <IconeDevolver />
-                  <span>
-                    <span className="pdv-kbd">F5</span> Devolver Produto
-                  </span>
-                </div>
               </div>
 
-              <button type="button" className="pdv-tecla-venda" onClick={f6EfetivaVenda}>
+              <button type="button" className="pdv-tecla-venda" onClick={f5EfetivaVenda}>
                 <IconeConfirmar size={24} />
-                <span className="pdv-kbd">F6</span>Efetiva Venda
+                <span className="pdv-kbd">F5</span>Efetiva Venda
               </button>
             </div>
 
