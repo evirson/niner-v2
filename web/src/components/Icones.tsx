@@ -488,6 +488,46 @@ export function IconeRelatorio({ size = 28 }: { size?: number }) {
   )
 }
 
+/** Seta de retorno da página-hub (2026-08-03) — sobe um nível na hierarquia do menu. */
+export function IconeVoltar({ size = 20 }: { size?: number }) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor"
+      width={size} height={size} aria-hidden="true"
+    >
+      <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5 3 12m0 0 7.5-7.5M3 12h18" />
+    </svg>
+  )
+}
+
+/** Alfinete do topo do menu (2026-08-03) — estado "travado em aberto". Faz par com o
+ * hambúrguer, que marca o modo retrátil: como a "espiada" no hover deixa o menu recolhido
+ * visualmente idêntico ao fixo, é o ícone que diz em qual dos dois o usuário está. */
+export function IconeAlfinete({ size = 20 }: { size?: number }) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor"
+      width={size} height={size} aria-hidden="true"
+    >
+      <path strokeLinecap="round" strokeLinejoin="round" d="M9.5 3.5h5l-.8 5.2 3.3 3.3H6l3.3-3.3-.8-5.2Z" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M12 12v8.5" />
+    </svg>
+  )
+}
+
+/** Hambúrguer do topo do menu lateral (2026-08-03) — padrão mobile: o controle de recolher/
+ * expandir fica na primeira linha da navegação, não no rodapé. */
+export function IconeMenuHamburguer({ size = 20 }: { size?: number }) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor"
+      width={size} height={size} aria-hidden="true"
+    >
+      <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5M3.75 17.25h16.5" />
+    </svg>
+  )
+}
+
 export function IconeRecolherMenu({ size = 18, recolhido = false }: { size?: number; recolhido?: boolean }) {
   return (
     <svg

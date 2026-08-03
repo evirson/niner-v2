@@ -1,7 +1,7 @@
 # Progresso do Projeto — niner-v2
 
 Registro cronológico das decisões e entregas. Atualizar a cada marco relevante.
-**Última atualização:** 2026-08-02
+**Última atualização:** 2026-08-03
 
 ---
 
@@ -134,6 +134,60 @@ parser de CSS do `html2canvas`.
 
 ## Linha do tempo
 
+### 2026-08-03 — Menu principal: hambúrguer no topo, lateral só com grupos, hub de cards
+
+Reformulação da navegação do ERP, pedida pelo dono do produto. Spec em
+`docs/telas/menu-principal.md`. Branch `feat/menu-retratil-cards`. Nenhuma tela de domínio nem
+endpoint foi tocado — a mudança é inteira no shell do `web/`.
+
+1. **Hambúrguer no topo do menu** (padrão mobile), não mais no rodapé. Com a árvore aberta, o
+   botão de recolher saía da área visível e exigia rolar a navegação inteira. Novo
+   `IconeMenuHamburguer` em `Icones.tsx`; a persistência (`niner_nav_recolhido`) e a "espiada"
+   no hover/foco continuam iguais. O botão **alterna de ícone e rótulo conforme a preferência
+   salva** — alfinete em destaque quando travado em aberto, hambúrguer quando no modo retrátil.
+   Sem isso não dava para distinguir os dois estados: a espiada do hover deixa o menu retrátil
+   visualmente idêntico ao fixo, mesma largura e mesmos rótulos. O rótulo continua sendo só
+   "Menu" nos dois casos — trocar o texto junto com o ícone era redundante.
+2. **A lateral passou a listar só os sete grupos principais.** A árvore de sub-itens saiu: eram
+   sete grupos, dois subgrupos e ~20 telas empilhados numa coluna de 200px. No modo recolhido a
+   faixa de 56px agora mostra os ícones dos grupos, não mais as telas achatadas
+   (`achatarFolhas()` ficou sem uso e saiu).
+3. **Página-hub por grupo** — nova rota `/menu/:grupo` (`MenuGrupo.tsx`). Cada grupo abre uma
+   tela de **cards** com ícone, nome e uma frase do que a tela faz. Um subgrupo (Caixa,
+   Cancelamentos) é **um nível a mais**: o card mostra a contagem de telas e abre o hub do
+   próprio subgrupo, que traz **seta de retorno** para o pai (`acharPai()`) e o nome dele como
+   trilha. Chegou-se a testar o subgrupo com os filhos abertos dentro do card, mas ficava
+   pesado e sem hierarquia clara. Prefixo `/menu/` porque as chaves de grupo colidem com rotas
+   existentes (`estoque` já é a Transferência de Produtos).
+4. **O menu virou dado**, em `web/src/lib/menu.ts` — estava embutido no `Layout.tsx`. `Layout` e
+   `MenuGrupo` leem a mesma árvore, e cada item ganhou um campo `descricao` **obrigatório**
+   (é o conteúdo do card). Acrescentar tela ao sistema continua sendo editar `MENU`.
+5. **Filtro por papel também no hub.** `MenuGrupo` roda `filtrarPorPapel` antes de montar os
+   cards: OPERADOR não vê o grupo Configurações nem o card de Cancelamento de Vendas, e
+   `/menu/configuracoes` na unha cai em "Área não encontrada". Continua sendo só conveniência de
+   UI — a autorização de verdade segue no servidor (P4).
+
+6. **Busca de telas no cabeçalho** (`BuscaDeTelas.tsx`) — resposta direta ao custo do item
+   anterior: chegar a uma tela virou dois cliques, então o campo dá o acesso em um atalho.
+   **Ctrl+K** (ou ⌘K) de qualquer lugar do ERP, ↑/↓ para navegar, Enter para abrir, Esc para
+   limpar/sair. Casa contra nome, trilha de grupos e descrição, **sem acento e sem caixa**
+   (`normalizar()` — "crediario" acha "Crediário"), ordenado por relevância. A pontuação
+   (`pontuarTela()`/`buscarTelas()`) ficou em `menu.ts`, não no componente: é lógica de dados,
+   e assim pôde ser exercitada fora do React. Conferido com o menu real: 22 telas para ADMIN e
+   19 para OPERADOR, e buscar "cancelamento" como OPERADOR devolve só o Estorno de Crediário.
+7. **Cabeçalho em 3 colunas** — marca à esquerda, **nome da loja centralizado**, busca e Sair à
+   direita. Laterais em `1fr` para a loja ficar no centro da tela, não no espaço que sobra.
+
+**Custo assumido:** chegar a uma tela pelo menu agora são dois passos (grupo → card) em vez de
+um. Troca consciente: a lateral vira um índice curto e estável, a descoberta do que existe em
+cada área passa a ter explicação, e quem já sabe o nome da tela usa o Ctrl+K.
+
+**Pendência encontrada de passagem (não corrigida, não é desta entrega):** `cd web && npm run
+build` já falhava em `main` antes desta branch — `PlanoContasModal.tsx:35` chama o handler de
+salvar com um objeto parcial (`TS2345`, faltam `descricaoCurta`, `natureza`, `grupoDre`,
+`grupoDfc` e mais 6 campos). `npx tsc --noEmit` passa e o dev server compila, então o erro só
+aparece no `tsc -b` do build de produção.
+
 ### 2026-08-02 — PDF do Relatório de Vendas sempre em tema claro + levantamento de relatórios financeiros
 
 1. **PDF sempre com fundo branco, mesmo com o app em tema escuro** (`docs/telas/
@@ -158,6 +212,7 @@ parser de CSS do `html2canvas`.
 **Verificação:** mudança só em `web/` (sem tocar backend) — `tsc --noEmit` limpo a cada etapa.
 **Não testado ao vivo no Chrome nesta sessão** (extensão Claude in Chrome não conectou); pedida
 confirmação visual ao dono do produto. **Nada commitado ainda** — só editado localmente.
+
 
 ### 2026-08-01 — Relatório de Vendas: ordenação, cores e PDF no modelo do ERP legado
 
