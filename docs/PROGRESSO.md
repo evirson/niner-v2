@@ -145,6 +145,16 @@ devolucao-produtos.md`.
 
 ## Linha do tempo
 
+### 2026-08-04 — Botão de fechar (✕) removido das páginas-hub de grupo do menu
+
+Ajuste pedido pelo dono do produto: as páginas-hub de grupo/subgrupo (`MenuGrupo.tsx` —
+Frente de Loja, Estoque, Financeiro, Cadastros, Configurações, Relatórios, Implementações
+Futuras, e os subgrupos Caixa/Cancelamentos) não são um passo dentro de um fluxo, são a página
+de entrada de cada área — não faz sentido ter um botão de "fechar" ali, só a navegação normal
+pela lateral (e, pra subgrupos, a seta de "voltar" pro grupo pai, que já existia e continua).
+`BotaoFecharTela` removido desse único componente; nenhuma outra tela foi tocada — o botão segue
+em todas as telas de cadastro/lista/relatório/formulário como antes.
+
 ### 2026-08-04 — Implementações Futuras: 9 áreas novas no grupo
 
 Pedido do dono do produto: listar no menu, sem construir ainda, 9 áreas já previstas pro projeto
