@@ -9,6 +9,7 @@ import {
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import AjudaDaTela from '../../components/AjudaDaTela'
+import { BotaoFecharTela } from '../../components/BotaoFecharTela'
 import CategoriaProdutoModal from '../../components/CategoriaProdutoModal'
 import ConfirmarSalvarModal from '../../components/ConfirmarSalvarModal'
 import GaleriaImagensProduto from '../../components/GaleriaImagensProduto'
@@ -380,9 +381,7 @@ export default function ProdutoForm({ somenteLeitura = false }: { somenteLeitura
               </Link>
             )}
             <AjudaDaTela chaveTela={CHAVE_TELA} />
-            <button type="button" className="btn ghost" onClick={() => navigate('/produtos')}>
-              {somenteLeitura ? 'Voltar' : 'Cancelar'}
-            </button>
+            <BotaoFecharTela />
             {!somenteLeitura && (
               <button type="submit" form="form-produto" className="btn" disabled={salvar.isPending}>
                 {salvar.isPending ? 'Salvando…' : 'Salvar'}

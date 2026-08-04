@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import AjudaDaTela from '../../components/AjudaDaTela'
+import { BotaoFecharTela } from '../../components/BotaoFecharTela'
 import { IconeEstornar, IconeEstornoRecebimentoCrediario, IconeOlho } from '../../components/Icones'
 import Toast, { type TipoToast } from '../../components/Toast'
 import { ApiError } from '../../lib/api'
@@ -83,6 +84,7 @@ export default function EstornoRecebimentoCrediario() {
           </div>
           <div className="topbar-acoes">
             <AjudaDaTela chaveTela="financeiro.estornorecebimentocrediario.tela" />
+            <BotaoFecharTela />
           </div>
         </div>
 

@@ -584,6 +584,25 @@ const CONTEUDOS: Record<string, ConteudoAjuda> = {
     ],
     urlVideo: null,
   },
+  'relatorios.movimentacaoprodutos.tela': {
+    titulo: 'Movimentação de Produtos',
+    objetivo: 'Ver o histórico de tudo que entrou e saiu do estoque (Kardex) — diferente do Relatório de Estoque, que mostra só o saldo atual.',
+    passos: [
+      'Escolha o Modelo no popup de filtros: Analítico (uma linha por movimento, no período), Kardex por Produto (escolha um produto e uma empresa — mostra a ficha cronológica com saldo corrido) ou Sintético (totais por tipo de movimento).',
+      'No Analítico/Sintético, filtre por Empresas (só ADMIN), Tipo de Movimento (Compra, Transferência, Devolução, Ajuste, Venda, Reserva, Liberação de Reserva, Cancelamento), Marca e Categorias.',
+      'No Kardex, escolha a Empresa (só ADMIN) e busque o Produto pelo botão — o relatório mostra Saldo Inicial (tudo antes do período) e Saldo Final, com o saldo após cada movimento.',
+      'A coluna Documento mostra de onde veio o movimento: nº da venda, da transferência, da devolução, fornecedor + nota fiscal (compra) ou o texto de origem (ex.: "contagem de estoque").',
+      'O KPI "Saída Física"/"Entrada Física" e o gráfico "Movimentação por Tipo" ignoram Reserva/Liberação de Reserva de propósito — não são movimentação física real, é só reserva de saldo pra pedido de canal.',
+      '"Top Ajustes Negativos por Produto" mostra onde o estoque físico deu menos do que o sistema esperava (contagem) — é o indicador de quebra/perda/furto.',
+      '"Gerar PDF" captura os KPIs/gráficos (ou o cabeçalho do Kardex) numa página e a grid noutra.',
+    ],
+    errosComuns: [
+      'Compra e Reserva/Liberação de Reserva ainda não têm tela própria que grave esses tipos — o filtro já lista os 8, mas só aparecem linhas quando essas telas existirem.',
+      'O custo é o gravado no próprio movimento (histórico, de quando ele aconteceu). Movimentos gerados antes de 2026-08-04 não tinham esse valor gravado — pra esses, o relatório usa o custo ATUAL do cadastro do produto como aproximação.',
+      'O Kardex soma TODOS os tipos de movimento no saldo corrido, inclusive Reserva/Liberação de Reserva — é o único jeito de bater com o saldo real do sistema.',
+    ],
+    urlVideo: null,
+  },
 }
 
 export default function AjudaDaTela({ chaveTela }: { chaveTela: string }) {

@@ -13,6 +13,7 @@ import {
   YAxis,
 } from 'recharts'
 import AjudaDaTela from '../../components/AjudaDaTela'
+import { BotaoFecharTela } from '../../components/BotaoFecharTela'
 import { IconeRelatorio } from '../../components/Icones'
 import { ApiError } from '../../lib/api'
 import { useEu } from '../../lib/eu'
@@ -329,9 +330,7 @@ export default function RelatorioVendas() {
                 {gerandoPdf ? 'Gerando PDF…' : 'Gerar PDF'}
               </button>
             )}
-            <button type="button" className="btn ghost" onClick={() => navigate('/')}>
-              Voltar
-            </button>
+            <BotaoFecharTela />
           </div>
         </div>
       </div>

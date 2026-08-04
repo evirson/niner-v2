@@ -543,6 +543,15 @@ export function IconeMenuHamburguer({ size = 20 }: { size?: number }) {
   )
 }
 
+/** X — botão de fechar tela, canto superior direito de toda tela (2026-08-04). */
+export function IconeFechar({ size = 20 }: { size?: number }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" width={size} height={size} aria-hidden="true">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
+    </svg>
+  )
+}
+
 export function IconeRecolherMenu({ size = 18, recolhido = false }: { size?: number; recolhido?: boolean }) {
   return (
     <svg

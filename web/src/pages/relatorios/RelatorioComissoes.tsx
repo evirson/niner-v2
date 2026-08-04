@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { Fragment, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import AjudaDaTela from '../../components/AjudaDaTela'
+import { BotaoFecharTela } from '../../components/BotaoFecharTela'
 import { IconeRelatorio } from '../../components/Icones'
 import { ApiError } from '../../lib/api'
 import { useEu } from '../../lib/eu'
@@ -22,6 +23,8 @@ const COLUNAS: Array<{ chave: ColunaOrdenacaoComissao; rotulo: string; alinhamen
   { chave: 'valorVenda', rotulo: 'Valor da Venda', alinhamento: 'right' },
   { chave: 'valorDevolucao', rotulo: 'Valor da Devolução', alinhamento: 'right' },
   { chave: 'valorLiquido', rotulo: 'Valor Líquido', alinhamento: 'right' },
+  { chave: 'quantidadeVendas', rotulo: 'Nº Vendas', alinhamento: 'right' },
+  { chave: 'ticketMedio', rotulo: 'Ticket Médio', alinhamento: 'right' },
   { chave: 'percComissao', rotulo: '% Comissão', alinhamento: 'right' },
   { chave: 'valorComissao', rotulo: 'Valor Comissão', alinhamento: 'right' },
 ]
@@ -159,9 +162,7 @@ export default function RelatorioComissoes() {
                 {gerandoPdf ? 'Gerando PDF…' : 'Gerar PDF'}
               </button>
             )}
-            <button type="button" className="btn ghost" onClick={() => navigate('/')}>
-              Voltar
-            </button>
+            <BotaoFecharTela />
           </div>
         </div>
       </div>
@@ -238,6 +239,8 @@ export default function RelatorioComissoes() {
                             <td className="mono" style={{ textAlign: 'right' }}>{moeda(linha.valorVenda)}</td>
                             <td className="mono" style={{ textAlign: 'right' }}>{moeda(linha.valorDevolucao)}</td>
                             <td className="mono" style={{ textAlign: 'right' }}>{moeda(linha.valorLiquido)}</td>
+                            <td className="mono" style={{ textAlign: 'right' }}>{linha.quantidadeVendas}</td>
+                            <td className="mono" style={{ textAlign: 'right' }}>{moeda(linha.ticketMedio)}</td>
                             <td className="mono" style={{ textAlign: 'right' }}>{percentual(linha.percComissao)}</td>
                             <td className="mono" style={{ textAlign: 'right' }}>{moeda(linha.valorComissao)}</td>
                           </tr>
@@ -249,6 +252,8 @@ export default function RelatorioComissoes() {
                               <td className="mono" style={{ textAlign: 'right' }}><strong>{moeda(subtotal.valorVenda)}</strong></td>
                               <td className="mono" style={{ textAlign: 'right' }}><strong>{moeda(subtotal.valorDevolucao)}</strong></td>
                               <td className="mono" style={{ textAlign: 'right' }}><strong>{moeda(subtotal.valorLiquido)}</strong></td>
+                              <td className="mono" style={{ textAlign: 'right' }}><strong>{subtotal.quantidadeVendas}</strong></td>
+                              <td className="mono" style={{ textAlign: 'right' }}><strong>{moeda(subtotal.ticketMedio)}</strong></td>
                               <td />
                               <td className="mono" style={{ textAlign: 'right' }}><strong>{moeda(subtotal.valorComissao)}</strong></td>
                             </tr>
@@ -265,6 +270,8 @@ export default function RelatorioComissoes() {
                       <td className="mono" style={{ textAlign: 'right' }}><strong>{moeda(data.totalGeral.valorVenda)}</strong></td>
                       <td className="mono" style={{ textAlign: 'right' }}><strong>{moeda(data.totalGeral.valorDevolucao)}</strong></td>
                       <td className="mono" style={{ textAlign: 'right' }}><strong>{moeda(data.totalGeral.valorLiquido)}</strong></td>
+                      <td className="mono" style={{ textAlign: 'right' }}><strong>{data.totalGeral.quantidadeVendas}</strong></td>
+                      <td className="mono" style={{ textAlign: 'right' }}><strong>{moeda(data.totalGeral.ticketMedio)}</strong></td>
                       <td />
                       <td className="mono" style={{ textAlign: 'right' }}><strong>{moeda(data.totalGeral.valorComissao)}</strong></td>
                     </tr>

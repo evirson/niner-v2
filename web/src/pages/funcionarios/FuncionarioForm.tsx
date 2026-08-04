@@ -9,6 +9,7 @@ import {
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import AjudaDaTela from '../../components/AjudaDaTela'
+import { BotaoFecharTela } from '../../components/BotaoFecharTela'
 import ConfirmarSalvarModal from '../../components/ConfirmarSalvarModal'
 import { IconeEngrenagem, IconeFuncionario } from '../../components/Icones'
 import InfoRegistro from '../../components/InfoRegistro'
@@ -181,9 +182,7 @@ export default function FuncionarioForm({ somenteLeitura = false }: { somenteLei
               </Link>
             )}
             <AjudaDaTela chaveTela={CHAVE_TELA} />
-            <button type="button" className="btn ghost" onClick={() => navigate('/funcionarios')}>
-              {somenteLeitura ? 'Voltar' : 'Cancelar'}
-            </button>
+            <BotaoFecharTela />
             {!somenteLeitura && (
               <button type="submit" form="form-funcionario" className="btn" disabled={salvar.isPending}>
                 {salvar.isPending ? 'Salvando…' : 'Salvar'}

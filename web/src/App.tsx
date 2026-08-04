@@ -49,6 +49,7 @@ import RelatorioVendas from './pages/relatorios/RelatorioVendas'
 import RelatorioComissoes from './pages/relatorios/RelatorioComissoes'
 import RelatorioContasReceber from './pages/relatorios/RelatorioContasReceber'
 import RelatorioEstoque from './pages/relatorios/RelatorioEstoque'
+import RelatorioMovimentacaoProdutos from './pages/relatorios/RelatorioMovimentacaoProdutos'
 
 export default function App() {
   return (
@@ -67,6 +68,7 @@ export default function App() {
           <Route path="/relatorio-comissoes" element={<RelatorioComissoes />} />
           <Route path="/relatorio-contas-receber" element={<RelatorioContasReceber />} />
           <Route path="/relatorio-estoque" element={<RelatorioEstoque />} />
+          <Route path="/relatorio-movimentacao-produtos" element={<RelatorioMovimentacaoProdutos />} />
           <Route path="/abertura-caixa" element={<AberturaCaixa />} />
           <Route path="/fechamento-caixa" element={<FechamentoCaixa />} />
           <Route path="/recebimento-crediario" element={<RecebimentoCrediario />} />
@@ -87,6 +89,18 @@ export default function App() {
           <Route path="/estoque/:id" element={<TransferenciaDetalhe />} />
           <Route path="/pedidos" element={<EmBreve titulo="Pedidos" />} />
           <Route path="/canais" element={<EmBreve titulo="Canais" />} />
+          <Route path="/etiqueta-configuracao" element={<EmBreve titulo="Configuração de Etiqueta de Produtos" />} />
+          <Route path="/etiqueta-emissao" element={<EmBreve titulo="Emissão de Etiqueta de Produtos" />} />
+          <Route path="/crm" element={<EmBreve titulo="CRM" />} />
+          <Route path="/bi-dashboard" element={<EmBreve titulo="BI Dashboard" />} />
+          <Route path="/importacao-dados" element={<EmBreve titulo="Importação de Dados" />} />
+          <Route path="/entrada-produtos-compra" element={<EmBreve titulo="Entrada de Produtos por Compra" />} />
+          <Route path="/relatorio-contas-pagar" element={<EmBreve titulo="Relatório de Contas a Pagar / Pagas" />} />
+          <Route
+            path="/relatorio-movimentacao-bancaria"
+            element={<EmBreve titulo="Relatório de Movimentação Bancária" />}
+          />
+          <Route path="/integracao-marketplace" element={<EmBreve titulo="Integração com Marketplace" />} />
           <Route path="/clientes" element={<ClienteLista />} />
           <Route path="/clientes/novo" element={<ClienteForm />} />
           <Route element={<RequireAdmin />}>

@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
+import { IconeFechar } from '../../components/Icones'
 import { ApiError } from '../../lib/api'
 import { buscarDetalhePesquisaVenda } from '../../lib/pesquisaVendas'
 import { formatarMoeda, mascararCpfCnpj } from '../../lib/masks'
@@ -64,8 +65,8 @@ export default function DetalheVendaModal({ idVenda, aoFechar }: { idVenda: numb
               </>
             )}
           </div>
-          <button type="button" className="btn ghost" onClick={aoFechar} aria-label="Fechar">
-            ✕
+          <button type="button" className="btn ghost btn-fechar-tela" onClick={aoFechar} aria-label="Fechar" title="Fechar">
+            <IconeFechar />
           </button>
         </div>
 

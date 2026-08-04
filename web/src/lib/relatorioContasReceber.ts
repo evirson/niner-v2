@@ -1,4 +1,5 @@
 import { api } from './api'
+import type { LinhaCarteiraGrafico } from './relatorioVendas'
 
 export interface LinhaContaReceber {
   idEmpresa: number
@@ -16,7 +17,17 @@ export interface LinhaContaReceber {
   dataRecebimento: string | null
   valorBruto: number
   taxaAdministrativa: number
+  valorTaxaAdministrativa: number
   valorLiquido: number
+}
+
+/** Um KPI por carteira (nome + categoria) — soma de valor líquido das parcelas em aberto do
+ *  filtro atual, separada em vencida (vencimento no passado) e a vencer (hoje ou no futuro). */
+export interface KpiFormaPagamento {
+  nomeCarteira: string
+  categoriaCarteira: 'CARTAO_DEBITO' | 'CARTAO_CREDITO' | 'CREDIARIO'
+  valorVencido: number
+  valorAVencer: number
 }
 
 export type StatusParcela = 'ABERTO' | 'RECEBIDA'
@@ -36,6 +47,7 @@ export type ColunaOrdenacaoContaReceber =
   | 'nomeEmpresaPagamento'
   | 'valorBruto'
   | 'taxaAdministrativa'
+  | 'valorTaxaAdministrativa'
   | 'valorLiquido'
 
 export type DirecaoOrdenacao = 'ASC' | 'DESC'
@@ -44,11 +56,13 @@ export interface SubtotalEmpresaContaReceber {
   idEmpresa: number
   nomeEmpresa: string
   valorBruto: number
+  valorTaxaAdministrativa: number
   valorLiquido: number
 }
 
 export interface TotalGeralContaReceber {
   valorBruto: number
+  valorTaxaAdministrativa: number
   valorLiquido: number
 }
 
@@ -56,6 +70,8 @@ export interface RelatorioContasReceber {
   linhas: LinhaContaReceber[]
   subtotaisPorEmpresa: SubtotalEmpresaContaReceber[]
   totalGeral: TotalGeralContaReceber
+  graficoPorFormaPagamento: LinhaCarteiraGrafico[]
+  kpisPorFormaPagamento: KpiFormaPagamento[]
 }
 
 /** Cada período é opcional, mas pelo menos um precisa vir completo (validado no servidor). */

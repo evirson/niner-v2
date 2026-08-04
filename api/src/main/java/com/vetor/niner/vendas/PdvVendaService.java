@@ -147,10 +147,10 @@ public class PdvVendaService {
             jdbc.sql("""
                             INSERT INTO produto_movimento_detalhe
                                 (id_tenant, id_movimento, id_empresa, id_variacao, credito_debito, qtd_produto,
-                                 preco_venda, valor_desconto, valor_acrescimo, id_funcionario)
-                            VALUES (plataforma.tenant_atual(), ?, ?, ?, 'D', ?, ?, ?, ?, ?)
+                                 preco_venda, preco_custo, valor_desconto, valor_acrescimo, id_funcionario)
+                            VALUES (plataforma.tenant_atual(), ?, ?, ?, 'D', ?, ?, ?, ?, ?, ?)
                             """)
-                    .params(idMovimento, idEmpresa, item.idVariacao(), item.qtd(), item.precoVenda(),
+                    .params(idMovimento, idEmpresa, item.idVariacao(), item.qtd(), item.precoVenda(), item.precoCusto(),
                             descontoPorItem.get(i), acrescimoPorItem.get(i), idFuncionario)
                     .update();
         }
@@ -389,13 +389,13 @@ public class PdvVendaService {
                 .orElseThrow(() -> new IllegalArgumentException("Vendedor informado não existe ou está inativo."));
     }
 
-    private record ItemResolvido(long idVariacao, BigDecimal qtd, BigDecimal precoVenda) {
+    private record ItemResolvido(long idVariacao, BigDecimal qtd, BigDecimal precoVenda, BigDecimal precoCusto) {
         BigDecimal valorItem() {
             return precoVenda.multiply(qtd);
         }
     }
 
-    private record LinhaItem(String descricaoProduto, String variacaoLinha, String variacaoColuna, BigDecimal precoVenda) {
+    private record LinhaItem(String descricaoProduto, String variacaoLinha, String variacaoColuna, BigDecimal precoVenda, BigDecimal precoCusto) {
     }
 
     /**
@@ -415,7 +415,7 @@ public class PdvVendaService {
             LinhaItem linha = jdbc.sql("""
                             SELECT p.descricao AS descricao_produto,
                                    vl.descricao AS variacao_linha, vc.descricao AS variacao_coluna,
-                                   p.preco_venda
+                                   p.preco_venda, p.preco_custo
                             FROM produto_barra pb
                             JOIN produto p ON p.id_produto = pb.id_produto AND p.id_tenant = pb.id_tenant
                             LEFT JOIN cfg_variante_linha vl
@@ -427,11 +427,11 @@ public class PdvVendaService {
                     .params(item.idVariacao())
                     .query((rs, n) -> new LinhaItem(
                             rs.getString("descricao_produto"), rs.getString("variacao_linha"), rs.getString("variacao_coluna"),
-                            rs.getBigDecimal("preco_venda")))
+                            rs.getBigDecimal("preco_venda"), rs.getBigDecimal("preco_custo")))
                     .optional()
                     .orElseThrow(() -> new IllegalArgumentException("Produto informado não existe ou está inativo."));
 
-            resolvidos.add(new ItemResolvido(item.idVariacao(), item.qtd(), linha.precoVenda()));
+            resolvidos.add(new ItemResolvido(item.idVariacao(), item.qtd(), linha.precoVenda(), linha.precoCusto()));
         }
         return resolvidos;
     }

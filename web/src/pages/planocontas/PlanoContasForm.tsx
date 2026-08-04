@@ -9,6 +9,7 @@ import {
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useParams } from 'react-router-dom'
 import AjudaDaTela from '../../components/AjudaDaTela'
+import { BotaoFecharTela } from '../../components/BotaoFecharTela'
 import ConfirmarSalvarModal from '../../components/ConfirmarSalvarModal'
 import { IconePlanoContas } from '../../components/Icones'
 import InfoRegistro from '../../components/InfoRegistro'
@@ -151,9 +152,7 @@ export default function PlanoContasForm({ somenteLeitura = false }: { somenteLei
           </div>
           <div className="topbar-acoes">
             <AjudaDaTela chaveTela="cadastros.planocontas.form" />
-            <button type="button" className="btn ghost" onClick={() => navigate('/planos-contas')}>
-              {somenteLeitura ? 'Voltar' : 'Cancelar'}
-            </button>
+            <BotaoFecharTela />
             {!somenteLeitura && (
               <button type="submit" form="form-plano-contas" className="btn" disabled={salvar.isPending}>
                 {salvar.isPending ? 'Salvando…' : 'Salvar'}

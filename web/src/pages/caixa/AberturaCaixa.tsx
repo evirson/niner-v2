@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import AjudaDaTela from '../../components/AjudaDaTela'
+import { BotaoFecharTela } from '../../components/BotaoFecharTela'
 import CamposAberturaCaixa from '../../components/CamposAberturaCaixa'
 import { IconeCaixa } from '../../components/Icones'
 import Toast, { type TipoToast } from '../../components/Toast'
@@ -64,9 +65,7 @@ export default function AberturaCaixa() {
           </div>
           <div className="topbar-acoes">
             <AjudaDaTela chaveTela="financeiro.aberturacaixa.tela" />
-            <button type="button" className="btn ghost" onClick={() => navigate('/')}>
-              Voltar
-            </button>
+            <BotaoFecharTela />
           </div>
         </div>
       </div>

@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
+import { IconeFechar } from '../../components/Icones'
 import { ApiError } from '../../lib/api'
 import {
   buscarDetalheParaCancelamento,
@@ -74,8 +75,8 @@ export default function CancelamentoVendaModal({
       >
         <div className="lightbox-topo" style={{ marginBottom: 12, flexShrink: 0 }}>
           <h2 style={{ margin: 0 }}>Cancelamento de Venda nº {venda.idVenda}</h2>
-          <button type="button" className="btn ghost" onClick={aoFechar} aria-label="Fechar">
-            ✕
+          <button type="button" className="btn ghost btn-fechar-tela" onClick={aoFechar} aria-label="Fechar" title="Fechar">
+            <IconeFechar />
           </button>
         </div>
 

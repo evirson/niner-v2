@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent, type KeyboardEvent } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { IconeExcluir, IconePaginaAnterior, IconeProximaPagina, IconeSetaBaixo, IconeSetaCima } from './Icones'
+import { IconeExcluir, IconeFechar, IconePaginaAnterior, IconeProximaPagina, IconeSetaBaixo, IconeSetaCima } from './Icones'
 import { ApiError } from '../lib/api'
 import {
   MAX_IMAGENS_POR_PRODUTO,
@@ -261,11 +261,12 @@ export default function GaleriaImagensProduto({
               </span>
               <button
                 type="button"
-                className="btn ghost"
+                className="btn ghost btn-fechar-tela"
                 onClick={() => setIndiceAmpliado(null)}
                 aria-label="Fechar"
+                title="Fechar"
               >
-                ✕
+                <IconeFechar />
               </button>
             </div>
             <div className="lightbox-corpo">

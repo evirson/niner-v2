@@ -277,10 +277,10 @@ public class CancelamentoVendaService {
      *  CANCELAMENTO) + um {@code produto_movimento_detalhe} 'C' por item (a trigger já existente
      *  baixa/soma {@code produto_estoque} sozinha, mesmo mecanismo do PDV/Transferência). */
     private void estornarEstoque(long idEmpresa, long idVenda) {
-        record ItemVendido(long idVariacao, BigDecimal qtd, BigDecimal precoVenda, Long idFuncionario) {
+        record ItemVendido(long idVariacao, BigDecimal qtd, BigDecimal precoVenda, BigDecimal precoCusto, Long idFuncionario) {
         }
         List<ItemVendido> itensVendidos = jdbc.sql("""
-                        SELECT pmd.id_variacao, pmd.qtd_produto, pmd.preco_venda, pmd.id_funcionario
+                        SELECT pmd.id_variacao, pmd.qtd_produto, pmd.preco_venda, pmd.preco_custo, pmd.id_funcionario
                         FROM produto_movimento_mestre pmm
                         JOIN produto_movimento_detalhe pmd
                                ON pmd.id_movimento = pmm.id_movimento AND pmd.id_tenant = pmm.id_tenant
@@ -290,7 +290,7 @@ public class CancelamentoVendaService {
                 .param(idVenda)
                 .query((rs, n) -> new ItemVendido(
                         rs.getLong("id_variacao"), rs.getBigDecimal("qtd_produto"), rs.getBigDecimal("preco_venda"),
-                        getLongOuNulo(rs, "id_funcionario")))
+                        rs.getBigDecimal("preco_custo"), getLongOuNulo(rs, "id_funcionario")))
                 .list();
         if (itensVendidos.isEmpty()) return;
 
@@ -302,13 +302,16 @@ public class CancelamentoVendaService {
                 .params(idEmpresa, idVenda).query(Long.class).single();
 
         for (ItemVendido item : itensVendidos) {
+            // preco_custo repete o da VENDA original (não uma nova leitura de produto.preco_custo)
+            // — cancelamento é a reversão exata daquela venda, o custo tem que ser o mesmo que
+            // saiu, mesmo que o cadastro do produto já tenha mudado de preço desde então.
             jdbc.sql("""
                             INSERT INTO produto_movimento_detalhe
                                 (id_tenant, id_movimento, id_empresa, id_variacao, credito_debito, qtd_produto,
-                                 preco_venda, id_funcionario)
-                            VALUES (plataforma.tenant_atual(), ?, ?, ?, 'C', ?, ?, ?)
+                                 preco_venda, preco_custo, id_funcionario)
+                            VALUES (plataforma.tenant_atual(), ?, ?, ?, 'C', ?, ?, ?, ?)
                             """)
-                    .params(idMovimento, idEmpresa, item.idVariacao(), item.qtd(), item.precoVenda(), item.idFuncionario())
+                    .params(idMovimento, idEmpresa, item.idVariacao(), item.qtd(), item.precoVenda(), item.precoCusto(), item.idFuncionario())
                     .update();
         }
     }

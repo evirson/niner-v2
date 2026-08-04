@@ -163,12 +163,18 @@ public class BalancoEstoqueService {
         for (LinhaDiferenca linha : diferencas) {
             String creditoDebito = linha.diferenca().signum() > 0 ? "C" : "D";
             BigDecimal qtdAbsoluta = linha.diferenca().abs();
+            // preco_custo (2026-08-04) vem de um SELECT/JOIN em vez de bind param — LinhaDiferenca
+            // é DTO público (usado por DiferencasEstoque.tsx) e não precisa carregar custo só pra
+            // isto; o custo ATUAL do cadastro é buscado na hora do INSERT.
             jdbc.sql("""
                             INSERT INTO produto_movimento_detalhe
-                                (id_tenant, id_movimento, id_empresa, id_variacao, credito_debito, qtd_produto, origem)
-                            VALUES (plataforma.tenant_atual(), ?, ?, ?, ?::credito_debito, ?, 'contagem de estoque')
+                                (id_tenant, id_movimento, id_empresa, id_variacao, credito_debito, qtd_produto, preco_custo, origem)
+                            SELECT plataforma.tenant_atual(), ?, ?, pb.id_variacao, ?::credito_debito, ?, p.preco_custo, 'contagem de estoque'
+                            FROM produto_barra pb
+                            JOIN produto p ON p.id_produto = pb.id_produto AND p.id_tenant = pb.id_tenant
+                            WHERE pb.id_tenant = plataforma.tenant_atual() AND pb.id_variacao = ?
                             """)
-                    .params(idMovimento, idEmpresa, linha.idVariacao(), creditoDebito, qtdAbsoluta)
+                    .params(idMovimento, idEmpresa, creditoDebito, qtdAbsoluta, linha.idVariacao())
                     .update();
         }
 

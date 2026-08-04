@@ -139,9 +139,170 @@ devolucao-produtos.md`.
 
 **Stack alvo:** Java 25 + Spring Boot 4.x · PostgreSQL 18 (Docker, banco **`niner_db`**) · React 19 + Vite (3 apps) · Flyway · JWT. **SaaS multi-tenant** (banco único + `id_tenant` + Postgres RLS).
 
+**Sessão de 2026-08-04 (continuação, depois do commit `4ac997b`):** toda tela do sistema ganhou um **botão de fechar (✕)** no canto superior direito (`BotaoFecharTela.tsx`, volta pra tela anterior real via histórico do navegador — `navigate(-1)` — não uma rota fixa); **Enter passou a mudar de campo igual Tab** em qualquer `<input>`/`<select>` do sistema (`lib/formularios.ts`: `aoTeclarEnterNoFormulario` nas telas de cadastro, `iniciarNavegacaoGlobalPorEnter` no resto), preservando os poucos campos com Enter próprio (leitor de código de barras, buscas); os relatórios de **Comissões** (colunas Nº Vendas/Ticket Médio) e **Contas a Receber** (KPIs + gráfico "por forma de pagamento", coluna Valor Taxa Adm.) ganharam uma 2ª rodada de melhorias; nasceu a **5ª tela de Relatórios**, **Movimentação de Produtos** (Kardex, `docs/telas/relatorio-movimentacao-produtos.md` — 3 modelos: Analítico, Kardex por Produto com saldo corrido, Sintético por tipo de movimento), cujos testes descobriram que **nenhum service gravava `produto_movimento_detalhe.preco_custo`** — corrigido na raiz nos 5 services que escrevem no ledger (Pdv/Devolução/Cancelamento/Transferência/Balanço); e o grupo **Implementações Futuras** ganhou 9 áreas ainda não construídas (Etiqueta de Produtos — configuração e emissão —, CRM, BI Dashboard, Importação de Dados, Entrada de Produtos por Compra, Contas a Pagar/Pagas, Movimentação Bancária, Integração com Marketplace), todas como páginas `EmBreve` sem lógica. Ver linha do tempo de 2026-08-04 (topo, entradas mais recentes primeiro) pro detalhe completo. Tudo commitado e pushado ao final desta sessão.
+
 ---
 
 ## Linha do tempo
+
+### 2026-08-04 — Implementações Futuras: 9 áreas novas no grupo
+
+Pedido do dono do produto: listar no menu, sem construir ainda, 9 áreas já previstas pro projeto
+— Configuração de Etiqueta de Produtos, Emissão de Etiqueta de Produtos, CRM, BI Dashboard,
+Importação de Dados, Entrada de Produtos por Compra (o tipo de movimento `COMPRA` do Kardex,
+ver abaixo), Relatório de Contas a Pagar/Pagas, Relatório de Movimentação Bancária e Integração
+com Marketplace. Mesmo padrão já usado por Painel/Pedidos/Canais nesse grupo: entrada em
+`web/src/lib/menu.ts` (ícone reaproveitado de um já existente, sem criar SVG novo) + rota em
+`App.tsx` apontando pro componente genérico `EmBreve` (`web/src/pages/EmBreve.tsx` — só um card
+"Esta área está em construção", zero lógica).
+
+### 2026-08-04 — Correção na raiz: `produto_movimento_detalhe.preco_custo` não era gravado
+
+Descoberto pelos testes do Relatório de Movimentação de Produtos (abaixo): nenhum dos 5 services
+que gravam o ledger de estoque (`PdvVendaService`, `DevolucaoProdutoService`,
+`CancelamentoVendaService`, `TransferenciaService`, `BalancoEstoqueService`) preenchia a coluna
+`preco_custo` no INSERT — ficava sempre no `DEFAULT 0` do schema, silenciosamente, desde que a
+tabela existe. O relatório só teria valorização zerada em praticamente 100% dos movimentos reais,
+o que expôs o gap; o dono do produto pediu a correção na raiz (não só um paliativo no relatório).
+
+Cada service passou a ler `produto.preco_custo` junto da consulta que já fazia (mesmo padrão nos
+4 primeiros: thread o valor por um record `ItemResolvido`/`LinhaItem` até o INSERT) e gravar a
+coluna:
+- **Pdv/Devolução/Transferência:** leem o custo ATUAL do cadastro do produto no momento do
+  movimento.
+- **Cancelamento:** não lê o cadastro — repete o `preco_custo` já gravado na linha da **VENDA
+  original** que está sendo cancelada (`produto_movimento_detalhe` da venda, não uma nova
+  consulta a `produto`). É a reversão exata daquela venda; o custo do produto pode ter mudado
+  entre a venda e o cancelamento, e o estorno tem que refletir o valor histórico, não o atual.
+- **Balanço:** único que não threadeou o valor por Java — o `LinhaDiferenca` (DTO já público,
+  usado por `DiferencasEstoque.tsx`) não ganhou campo novo; o INSERT virou um
+  `INSERT ... SELECT ... FROM produto_barra JOIN produto` que busca `preco_custo` direto no SQL.
+
+Verificado ponta a ponta em ambiente real (não só nos testes): venda de um produto com custo
+cadastrado em R$ 50,00 no PDV, e o `produto_movimento_detalhe` da VENDA gravou
+`preco_custo = 50.00` (antes da correção, seria `0.00`, como ainda aparece nas linhas antigas do
+ledger, gravadas antes deste fix). Nenhum teste dos 9 arquivos afetados quebrou
+(`PdvCrudTest`, `DevolucaoProdutoCrudTest`, `CancelamentoVendaCrudTest`, `TransferenciaCrudTest`,
+`BalancoEstoqueCrudTest`, `RelatorioMovimentacaoProdutosCrudTest`, `RelatorioComissoesCrudTest`,
+`RelatorioContasReceberCrudTest`, `RelatorioEstoqueCrudTest`).
+
+**Gap remanescente, aceito de propósito:** linhas do ledger gravadas ANTES deste fix continuam
+com `preco_custo = 0` pra sempre (não dá pra reconstruir custo histórico que nunca foi
+capturado) — o Relatório de Movimentação de Produtos usa o custo ATUAL do cadastro como fallback
+só pra essas linhas antigas (`COALESCE(NULLIF(pmd.preco_custo, 0), p.preco_custo)`).
+
+### 2026-08-04 — Relatório de Movimentação de Produtos (Kardex) — nova tela, 5ª de Relatórios
+
+Pedido do dono do produto, com a ressalva explícita de "se comportar como um expert em estoque e
+logista": um relatório sobre o ledger transacional (`produto_movimento_mestre`/
+`produto_movimento_detalhe`, §3.3.4), diferente do Relatório de Estoque (que é só a fotografia do
+saldo atual). Cobre os 8 tipos de `tipo_movimento` do ENUM — `COMPRA`, `TRANSFERENCIA`,
+`DEVOLUCAO`, `AJUSTE`, `VENDA`, `RESERVA`, `LIBERACAO_RESERVA`, `CANCELAMENTO` — mesmo os 3 que
+ainda não têm tela própria que os gere (`COMPRA` — entrada de mercadoria por fornecedor, ver
+"Implementações Futuras" acima — e `RESERVA`/`LIBERACAO_RESERVA` — integração de pedidos de
+canal): o relatório já nasce preparado pros 8, só não produz linha nenhuma dos 3 até essas telas
+existirem. Detalhe completo em `docs/telas/relatorio-movimentacao-produtos.md`.
+
+Três modelos alternativos, mesmo padrão de `Totalizador` já usado no Relatório de Vendas/Estoque
+(campo discriminador na resposta):
+- **Analítico** — uma linha por movimento, coluna Documento contextualizada por tipo (nº da
+  venda/transferência/devolução, fornecedor+NF pra compra, texto livre `origem` pros demais, ex.:
+  "contagem de estoque").
+- **Kardex por Produto** — uma variação + uma empresa por vez, ficha cronológica com **saldo
+  corrido calculado em Java** (o schema não guarda saldo por linha de propósito, P3), somando
+  **todos** os 8 tipos sem exceção — é o único jeito de bater com `produto_estoque.qtd_estoque`
+  de verdade, já que a trigger `fn_atualiza_estoque_movimento` (V019) também não distingue tipo,
+  só `credito_debito`. Traz saldo inicial (soma de tudo antes do período) e saldo final.
+- **Sintético** — totais por tipo de movimento (quantidade e valor de entrada/saída).
+
+`RESERVA`/`LIBERACAO_RESERVA` são tratados como **não físicos** (`movimentoFisico = false`) —
+reserva de saldo (`produto_estoque.reservado`), não uma movimentação real de produto — e por isso
+excluídos dos KPIs "Entrada/Saída Física" e do gráfico "Movimentação por Tipo" no Analítico/
+Sintético, mas somados normalmente no saldo corrido do Kardex (que precisa bater com o sistema).
+Valorização sempre por CUSTO (`preco_custo`), nunca por venda — aqui é contábil/Kardex, diferente
+de Vendas/Comissões. KPI extra sem equivalente em nenhum outro relatório do sistema: "Top Ajustes
+Negativos por Produto" (`AJUSTE` com `credito_debito = 'D'` ranqueado por produto) — indicador de
+quebra/perda/furto.
+
+Layout já nasceu no padrão `.grid-altura-fixa` (página rola normal, só a grid tem altura própria)
+em vez do antigo `.relatorio-corpo-fixo` — lição aprendida do bug de Contas a Receber (acima):
+qualquer relatório com KPIs/gráfico acima da grid colapsa com o padrão antigo. PDF por captura
+visual (`html2canvas`+`jsPDF`), mesmo padrão de 2 refs (cabeçalho numa página, grid noutra) dos
+demais relatórios do grupo. Arquivos novos: `RelatorioMovimentacaoProdutosDtos/Service/
+Controller.java` + `package-info.java` (módulo `estoque.relatoriomovimentacao`),
+`RelatorioMovimentacaoProdutosCrudTest.java` (10 testes), `lib/relatorioMovimentacaoProdutos.ts`,
+`lib/relatorioMovimentacaoProdutosCaptura.ts`, `pages/relatorios/RelatorioMovimentacaoProdutos.tsx`
++ `FiltrosMovimentacaoProdutosModal.tsx` + `PesquisaVariacaoModal.tsx`, entrada em `menu.ts`/
+`App.tsx`/`AjudaDaTela.tsx` (R22).
+
+### 2026-08-04 — Relatório de Comissões e Contas a Receber: 2ª rodada de melhorias
+
+**Comissões:** duas colunas novas na grid — Nº Vendas (`COUNT(DISTINCT v.id_venda)` por
+empresa+funcionário, nova subconsulta na CTE `vendas`) e Ticket Médio (`valorLíquido ÷
+quantidadeVendas`, zero quando não há venda no período — nunca divide por zero), com subtotal
+por empresa e total geral recalculados a partir da soma agregada (não é média das médias de
+cada linha).
+
+**Contas a Receber:** nova seção "Recebimentos por Forma de Pagamento" — um KPI por carteira
+(nome + categoria, mesmo desambiguador de `LinhaCarteiraGrafico` do Relatório de Vendas, já que
+a mesma bandeira pode existir em mais de uma categoria) mostrando Vencido/A vencer (só parcelas
+sem `data_recebimento` do filtro já aplicado na tela, vencida = vencimento no passado — mesmo
+critério de `PesquisaVendaService`/`ClienteHistoricoService`) + um gráfico de barras (valor
+líquido por carteira, reaproveitando `LinhaCarteiraGrafico`/`rotulosPorCarteira` já existentes).
+Nova coluna **Valor Taxa Adm.** (o valor monetário da taxa, não só o %), logo depois de "Taxa
+Adm.", totalizada no subtotal por empresa e no total geral. Espaçamento das colunas da grid
+reduzido (padding/font-size só nesta tabela, via classe `.tabela-contas-receber`) pra caber sem
+scroll horizontal com a coluna nova.
+
+**Mudança de arquitetura da tela (bug pego em teste manual):** o layout antigo
+(`.relatorio-corpo-fixo`, corpo da tela travado só pra grid rolar por dentro) colapsava a altura
+da tabela pra 0px assim que KPIs+gráfico entraram acima dela no mesmo container flex. Trocado
+pelo mesmo padrão já usado no Relatório de Vendas — página rola normal (`.lista-corpo` sem
+`relatorio-corpo-fixo`), grid com altura própria via `.grid-altura-fixa` (60vh, rolagem interna)
+— incluindo o ajuste equivalente em `relatorioContasReceberCaptura.ts` (mesmo mecanismo de
+"desclipar `.grid-altura-fixa` no clone do html2canvas" que `relatorioVendasCaptura.ts` já tinha)
+pro PDF continuar capturando a tabela inteira, não só os 60vh visíveis na tela.
+
+### 2026-08-04 — Enter muda de campo igual Tab, em todo o sistema
+
+Pedido do dono do produto: continuar podendo usar Tab, mas também poder usar Enter pra navegar
+entre campos (até então Enter só tinha comportamento nativo do navegador, ou nada). Dois
+mecanismos novos em `web/src/lib/formularios.ts`:
+- **`aoTeclarEnterNoFormulario`** (telas de cadastro, dentro de `<form>`): Enter tenta focar o
+  próximo campo primeiro (mesma ordem que Tab usaria, pulando botões de propósito); só no
+  **último campo** do formulário é que cai no comportamento antigo — abre o popup "Salvar
+  dados?" (mecanismo de 2026-07-23, preservado intacto).
+- **`iniciarNavegacaoGlobalPorEnter`** (tudo fora de `<form>` — PDV, filtros de lista, telas
+  financeiras sem o padrão de cadastro, popups de busca): um único listener no `document`,
+  ligado uma vez em `main.tsx`, cobre o resto do sistema sem precisar tocar tela por tela.
+  Escopo da busca pelo "próximo campo" é o container mais próximo (`.modal`, senão `.card`,
+  senão `.lista-tela`) — nunca o documento inteiro, pra não vazar foco pra trás de um popup
+  aberto.
+- Campos com Enter de propósito próprio (leitor de código de barras do PDV/Contagem de
+  Estoque/Transferência/Devolução de Produtos, busca por nº de venda) continuam intocados — o
+  listener global respeita `e.defaultPrevented`, então só foi preciso adicionar
+  `preventDefault()` a 4 handlers que ainda não chamavam (os outros ~9 já chamavam, por outros
+  motivos, e já ficavam de fora de graça).
+- **Ajuste no mesmo dia** (reportado após teste manual): Enter não funcionava dentro de
+  `<select>` (combo) — a origem válida do Enter foi ampliada de "só `<input>` de texto" pra
+  "`<input>` de texto + `<select>`". `<textarea>` continua de fora de propósito (Enter ali tem
+  que quebrar linha, não mudar de campo).
+
+### 2026-08-04 — Botão de fechar (✕) em toda tela do sistema
+
+Pedido do dono do produto: toda tela (cadastro, lista, relatório, PDV, popup) ganhou um botão ✕
+no canto superior direito — mesmo padrão visual que os popups de detalhe já usavam (ex.
+`DetalheVendaModal`), agora generalizado e substituindo os antigos botões de texto
+"Voltar"/"Cancelar". Componente novo `web/src/components/BotaoFecharTela.tsx` + ícone
+`IconeFechar` em `Icones.tsx`; ~46 arquivos tocados (praticamente toda tela do sistema).
+
+**Bug reportado em teste manual e corrigido no mesmo dia:** a primeira versão navegava pra uma
+rota fixa (ex.: sempre `/`), o que "pulava" telas intermediárias em fluxos aninhados (Estoque →
+Contagem de Estoque → Zerar Contagem de Estoque → ✕ ia direto pro painel, não pra Contagem de
+Estoque). Corrigido pra usar `navigate(-1)` (volta um passo real no histórico do navegador, não
+uma rota fixa) — `BotaoFecharTela` hoje só aceita um `onClick` customizado nos 2 casos que
+realmente precisam: formulário de Cliente embutido (fecha via callback do componente pai) e
+Tipo de Carteira (precisa re-anexar o estado de filtros/paginação da lista ao voltar).
 
 ### 2026-08-04 — Menu: Produtos movido de Estoque para Cadastros
 

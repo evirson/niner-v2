@@ -2,6 +2,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import AberturaCaixaModal from '../../components/AberturaCaixaModal'
+import { BotaoFecharTela } from '../../components/BotaoFecharTela'
 import { IconeAjustar, IconeConfirmar, IconeLimpar, IconeLupa, IconePdv } from '../../components/Icones'
 import { ApiError } from '../../lib/api'
 import { buscarStatusCaixa } from '../../lib/caixa'
@@ -131,6 +132,7 @@ export default function Pdv() {
 
   const aoDigitarBarras: React.KeyboardEventHandler<HTMLInputElement> = (e) => {
     if (e.key === 'Enter' && valorBarras.trim()) {
+      e.preventDefault()
       const valor = valorBarras.trim()
       setValorBarras('')
       lerCodigo(valor)
@@ -230,9 +232,7 @@ export default function Pdv() {
             <h1>PDV — Frente de Caixa</h1>
           </div>
           <div className="topbar-acoes">
-            <button type="button" className="btn ghost" onClick={() => navigate('/')}>
-              Voltar
-            </button>
+            <BotaoFecharTela />
           </div>
         </div>
       </div>

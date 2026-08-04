@@ -1,4 +1,5 @@
 import { Link, useParams } from 'react-router-dom'
+import { BotaoFecharTela } from '../components/BotaoFecharTela'
 import { IconeVoltar } from '../components/Icones'
 import { useEu } from '../lib/eu'
 import { acharGrupo, acharPai, eGrupo, filtrarPorPapel, MENU, rotaDoGrupo, type NavGrupo, type NavItem } from '../lib/menu'
@@ -70,15 +71,18 @@ export default function MenuGrupo() {
   return (
     <div>
       <div className="menu-hub-topo">
-        {pai && (
-          <Link className="menu-hub-voltar" to={rotaDoGrupo(pai.chave)} title={`Voltar para ${pai.label}`} aria-label={`Voltar para ${pai.label}`}>
-            <IconeVoltar size={20} />
-          </Link>
-        )}
-        <div className="titulo-tela">
-          <Icone size={34} />
-          <h1>{grupo.label}</h1>
+        <div className="menu-hub-topo-esquerda">
+          {pai && (
+            <Link className="menu-hub-voltar" to={rotaDoGrupo(pai.chave)} title={`Voltar para ${pai.label}`} aria-label={`Voltar para ${pai.label}`}>
+              <IconeVoltar size={20} />
+            </Link>
+          )}
+          <div className="titulo-tela">
+            <Icone size={34} />
+            <h1>{grupo.label}</h1>
+          </div>
         </div>
+        <BotaoFecharTela />
       </div>
       {pai && <p className="eyebrow menu-hub-trilha">{pai.label}</p>}
       <p className="muted menu-hub-descricao">{grupo.descricao}</p>

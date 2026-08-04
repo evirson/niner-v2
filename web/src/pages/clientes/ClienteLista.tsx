@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import AjudaDaTela from '../../components/AjudaDaTela'
+import { BotaoFecharTela } from '../../components/BotaoFecharTela'
 import {
   IconeCliente,
   IconeEditar,
@@ -159,6 +160,7 @@ export default function ClienteLista() {
             <Link className="btn" to="/clientes/novo">
               ＋ Novo cliente
             </Link>
+            <BotaoFecharTela />
           </div>
         </div>
 

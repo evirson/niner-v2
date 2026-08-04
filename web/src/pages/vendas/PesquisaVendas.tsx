@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import AjudaDaTela from '../../components/AjudaDaTela'
+import { BotaoFecharTela } from '../../components/BotaoFecharTela'
 import { IconePesquisaVendas } from '../../components/Icones'
 import { ApiError } from '../../lib/api'
 import { hojeISO } from '../../lib/datas'
@@ -145,9 +146,7 @@ export default function PesquisaVendas() {
           </div>
           <div className="topbar-acoes">
             <AjudaDaTela chaveTela="vendas.pesquisavendas.tela" />
-            <button type="button" className="btn ghost" onClick={() => navigate('/')}>
-              Voltar
-            </button>
+            <BotaoFecharTela />
           </div>
         </div>
 

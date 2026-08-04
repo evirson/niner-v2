@@ -1,6 +1,7 @@
 import { useEffect, useState, type FocusEvent, type FormEvent } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import AjudaDaTela from '../../components/AjudaDaTela'
+import { BotaoFecharTela } from '../../components/BotaoFecharTela'
 import { IconeParametros } from '../../components/Icones'
 import Toast, { type TipoToast } from '../../components/Toast'
 import { ApiError } from '../../lib/api'
@@ -12,6 +13,7 @@ import {
   type ConfiguracaoGeralFormState,
 } from '../../lib/configuracaoGeral'
 import { formatarDataHora } from '../../lib/datas'
+import { aoTeclarEnterNoFormulario } from '../../lib/formularios'
 import { completarPercentual, desmascararPercentual, mascararPercentual } from '../../lib/masks'
 
 const CHAVE_TELA = 'configuracao.geral.form'
@@ -117,12 +119,19 @@ export default function ConfiguracaoGeralForm() {
             <button type="submit" form="form-config-geral" className="btn" disabled={salvar.isPending}>
               {salvar.isPending ? 'Salvando…' : 'Salvar'}
             </button>
+            <BotaoFecharTela />
           </div>
         </div>
       </div>
 
       <div className="lista-corpo">
-      <form id="form-config-geral" className="card form-secoes form-secoes-larga" onSubmit={submeter} noValidate>
+      <form
+        id="form-config-geral"
+        className="card form-secoes form-secoes-larga"
+        onSubmit={submeter}
+        onKeyDown={aoTeclarEnterNoFormulario}
+        noValidate
+      >
         <section className="section">
           <p className="section-label">Vendas</p>
 

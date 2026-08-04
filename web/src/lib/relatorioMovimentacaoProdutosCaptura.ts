@@ -1,16 +1,10 @@
 import html2canvas from 'html2canvas'
 import { jsPDF } from 'jspdf'
 
-/** A tela usa `.lista-corpo` normal (a página inteira rola) e a grid (`.grid-altura-fixa`,
- *  2026-08-04) tem altura própria limitada a 60vh com rolagem interna — sem isto, o html2canvas
- *  capturaria só essa altura máxima em vez de todas as linhas. html2canvas clona o documento
- *  inteiro pra computar layout, então qualquer ancestral entre o alvo e a `<html>` que ainda
- *  limite altura/overflow corta o desenho — por isso aqui a gente sobe a árvore a partir do alvo
- *  (só no clone isolado, nunca na página real) zerando altura/overflow/flex de cada ancestral,
- *  até a `<html>` (mesmo mecanismo de `relatorioVendasCaptura.ts`). A própria grid tem altura
- *  máxima PRÓPRIA (`.grid-altura-fixa`) — diferente do que os ancestrais cortam, aqui quem corta
- *  é um DESCENDENTE do alvo, então a subida pela árvore nunca alcança isso; por isso o passo
- *  extra abaixo. */
+/** Mesmo mecanismo de `relatorioVendasCaptura.ts` — a grid (`.grid-altura-fixa`, 60vh com
+ *  rolagem interna) precisa ser desclipada no clone isolado que o html2canvas monta, senão a
+ *  captura sai cortada na altura máxima em vez de todas as linhas. Rodar isto também na captura
+ *  do topo (KPIs/gráficos/cabeçalho do Kardex) é inofensivo — ele não tem essa classe. */
 function liberarAlturaDosAncestrais(doc: Document, seletorAlvo: string): void {
   let el: HTMLElement | null = doc.querySelector(seletorAlvo)
   while (el) {
@@ -26,16 +20,13 @@ function liberarAlturaDosAncestrais(doc: Document, seletorAlvo: string): void {
   })
 }
 
-// Mesmo mecanismo de `relatorioComissoesCaptura.ts`/`relatorioVendasCaptura.ts` (tema claro via
-// onclone, sem flash na tela; cabeçalho/rodapé nativos por página) — duplicado de propósito,
-// mesmo padrão de independência entre módulos de relatório já adotado no projeto.
 const OPCOES_CAPTURA = {
   scale: 2,
   useCORS: true,
   ignoreElements: (el: Element) => el.closest('.app-header, .app-nav, .modal-overlay') !== null,
   onclone: (doc: Document) => {
     doc.documentElement.setAttribute('data-theme', 'light')
-    liberarAlturaDosAncestrais(doc, '.relatorio-conteudo')
+    liberarAlturaDosAncestrais(doc, '.relatorio-grid-conteudo')
   },
 } as const
 
@@ -109,14 +100,21 @@ function desenharCabecalhoERodape(doc: jsPDF, titulo: string, dataHoraGeracao: s
   }
 }
 
-/** Gera o PDF do Relatório de Contas a Receber / Recebidas como captura visual — mesmo padrão
- *  do Relatório de Comissões (um único elemento: filtros aplicados + grid banda). */
-export async function gerarPdfCapturaRelatorioContasReceber(elemento: HTMLElement, rodapeEsquerda: string): Promise<void> {
+/** Gera o PDF do Relatório de Movimentação de Produtos como captura visual — mesmo padrão do
+ *  Relatório de Vendas: `topoEl` (filtros aplicados + KPIs/gráficos ou cabeçalho do Kardex) e
+ *  `gridEl` capturados separadamente, grid sempre numa página nova. */
+export async function gerarPdfCapturaRelatorioMovimentacaoProdutos(
+  topoEl: HTMLElement,
+  gridEl: HTMLElement,
+  rodapeEsquerda: string,
+): Promise<void> {
   const doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'landscape' })
 
-  await desenharElementoPaginado(doc, elemento)
+  await desenharElementoPaginado(doc, topoEl)
+  doc.addPage()
+  await desenharElementoPaginado(doc, gridEl)
 
-  desenharCabecalhoERodape(doc, 'Relatório de Contas a Receber / Recebidas', new Date().toLocaleString('pt-BR'), rodapeEsquerda, 'Niner ERP')
+  desenharCabecalhoERodape(doc, 'Relatório de Movimentação de Produtos', new Date().toLocaleString('pt-BR'), rodapeEsquerda, 'Niner ERP')
 
-  doc.save('relatorio-de-contas-a-receber.pdf')
+  doc.save('relatorio-de-movimentacao-de-produtos.pdf')
 }

@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import AjudaDaTela from '../../components/AjudaDaTela'
+import { BotaoFecharTela } from '../../components/BotaoFecharTela'
 import { IconeRelatorio } from '../../components/Icones'
 import { listarCategoriasProduto } from '../../lib/categoriasProduto'
 import { ApiError } from '../../lib/api'
@@ -243,9 +244,7 @@ export default function RelatorioEstoque() {
                 {gerandoPdf ? 'Gerando PDF…' : 'Gerar PDF'}
               </button>
             )}
-            <button type="button" className="btn ghost" onClick={() => navigate('/')}>
-              Voltar
-            </button>
+            <BotaoFecharTela />
           </div>
         </div>
       </div>

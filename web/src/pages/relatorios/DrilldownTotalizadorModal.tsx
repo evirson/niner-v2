@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
+import { IconeFechar } from '../../components/Icones'
 import { ApiError } from '../../lib/api'
 import { formatarMoeda } from '../../lib/masks'
 import { buscarDetalheTotalizador, type FiltrosRelatorioVendas } from '../../lib/relatorioVendas'
@@ -51,8 +52,8 @@ export default function DrilldownTotalizadorModal({
           <div className="titulo-tela">
             <h2 style={{ margin: 0 }}>{nomeGrupo}</h2>
           </div>
-          <button type="button" className="btn ghost" onClick={aoFechar} aria-label="Fechar">
-            ✕
+          <button type="button" className="btn ghost btn-fechar-tela" onClick={aoFechar} aria-label="Fechar" title="Fechar">
+            <IconeFechar />
           </button>
         </div>
 

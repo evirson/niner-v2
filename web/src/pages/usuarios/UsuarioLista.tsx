@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import AjudaDaTela from '../../components/AjudaDaTela'
+import { BotaoFecharTela } from '../../components/BotaoFecharTela'
 import {
   IconeEditar,
   IconeExcluir,
@@ -130,6 +131,7 @@ export default function UsuarioLista() {
             <Link className="btn" to="/usuarios/novo">
               ＋ Novo usuário
             </Link>
+            <BotaoFecharTela />
           </div>
         </div>
 

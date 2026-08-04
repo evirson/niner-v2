@@ -31,6 +31,7 @@ public final class RelatorioContasReceberDtos {
             OffsetDateTime dataRecebimento,
             BigDecimal valorBruto,
             BigDecimal taxaAdministrativa,
+            BigDecimal valorTaxaAdministrativa,
             BigDecimal valorLiquido) {
     }
 
@@ -38,17 +39,40 @@ public final class RelatorioContasReceberDtos {
             long idEmpresa,
             String nomeEmpresa,
             BigDecimal valorBruto,
+            BigDecimal valorTaxaAdministrativa,
             BigDecimal valorLiquido) {
     }
 
     public record TotalGeralContaReceber(
             BigDecimal valorBruto,
+            BigDecimal valorTaxaAdministrativa,
             BigDecimal valorLiquido) {
+    }
+
+    /** Um ponto por carteira (nome + categoria, mesmo desambiguador de {@code
+     *  LinhaCarteiraGrafico} do Relatório de Vendas — a mesma bandeira pode existir em mais de
+     *  uma categoria) — soma de {@code valorLiquido} das parcelas do filtro atual, usado tanto
+     *  pelo gráfico quanto pelos KPIs de vencido/a vencer. */
+    public record PontoFormaPagamento(
+            String nomeCarteira,
+            String categoriaCarteira,
+            BigDecimal valor) {
+    }
+
+    /** Só considera parcelas ainda não recebidas (dentro do filtro já aplicado na tela) —
+     *  vencida = vencimento no passado, a vencer = vencimento hoje ou no futuro. */
+    public record KpiFormaPagamento(
+            String nomeCarteira,
+            String categoriaCarteira,
+            BigDecimal valorVencido,
+            BigDecimal valorAVencer) {
     }
 
     public record RelatorioContasReceberResponse(
             List<LinhaContaReceber> linhas,
             List<SubtotalEmpresaContaReceber> subtotaisPorEmpresa,
-            TotalGeralContaReceber totalGeral) {
+            TotalGeralContaReceber totalGeral,
+            List<PontoFormaPagamento> graficoPorFormaPagamento,
+            List<KpiFormaPagamento> kpisPorFormaPagamento) {
     }
 }

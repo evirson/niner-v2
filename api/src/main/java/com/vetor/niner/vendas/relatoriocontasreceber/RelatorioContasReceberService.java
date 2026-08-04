@@ -1,6 +1,8 @@
 package com.vetor.niner.vendas.relatoriocontasreceber;
 
+import com.vetor.niner.vendas.relatoriocontasreceber.RelatorioContasReceberDtos.KpiFormaPagamento;
 import com.vetor.niner.vendas.relatoriocontasreceber.RelatorioContasReceberDtos.LinhaContaReceber;
+import com.vetor.niner.vendas.relatoriocontasreceber.RelatorioContasReceberDtos.PontoFormaPagamento;
 import com.vetor.niner.vendas.relatoriocontasreceber.RelatorioContasReceberDtos.RelatorioContasReceberResponse;
 import com.vetor.niner.vendas.relatoriocontasreceber.RelatorioContasReceberDtos.SubtotalEmpresaContaReceber;
 import com.vetor.niner.vendas.relatoriocontasreceber.RelatorioContasReceberDtos.TotalGeralContaReceber;
@@ -50,6 +52,7 @@ public class RelatorioContasReceberService {
             Map.entry("nomeEmpresaPagamento", "ep.razao_social"),
             Map.entry("valorBruto", "cr.valor_receber"),
             Map.entry("taxaAdministrativa", "tc.taxa_administradora"),
+            Map.entry("valorTaxaAdministrativa", "(cr.valor_receber * COALESCE(tc.taxa_administradora, 0) / 100)"),
             Map.entry("valorLiquido", "(cr.valor_receber - cr.valor_receber * COALESCE(tc.taxa_administradora, 0) / 100)"));
 
     private final JdbcClient jdbc;
@@ -89,8 +92,10 @@ public class RelatorioContasReceberService {
 
         List<SubtotalEmpresaContaReceber> subtotais = calcularSubtotais(linhas);
         TotalGeralContaReceber totalGeral = calcularTotalGeral(linhas);
+        List<PontoFormaPagamento> graficoPorFormaPagamento = calcularGraficoPorFormaPagamento(linhas);
+        List<KpiFormaPagamento> kpisPorFormaPagamento = calcularKpisPorFormaPagamento(linhas);
 
-        return new RelatorioContasReceberResponse(linhas, subtotais, totalGeral);
+        return new RelatorioContasReceberResponse(linhas, subtotais, totalGeral, graficoPorFormaPagamento, kpisPorFormaPagamento);
     }
 
     private void validarPeriodo(String nome, LocalDate inicial, LocalDate fim) {
@@ -185,8 +190,9 @@ public class RelatorioContasReceberService {
                 .query((rs, n) -> {
                     BigDecimal valorBruto = rs.getBigDecimal("valor_bruto");
                     BigDecimal taxa = rs.getBigDecimal("taxa_administrativa");
-                    BigDecimal valorLiquido = valorBruto.subtract(
-                            valorBruto.multiply(taxa).divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP));
+                    BigDecimal valorTaxaAdministrativa = valorBruto.multiply(taxa)
+                            .divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
+                    BigDecimal valorLiquido = valorBruto.subtract(valorTaxaAdministrativa);
                     return new LinhaContaReceber(
                             rs.getLong("id_empresa"), rs.getString("nome_empresa"), rs.getString("nome_empresa_pagamento"),
                             rs.getLong("id_venda"), getLongOuNulo(rs, "id_cliente"), rs.getString("nome_cliente"),
@@ -194,7 +200,7 @@ public class RelatorioContasReceberService {
                             rs.getInt("numero_parcela"), rs.getInt("total_parcelas"),
                             rs.getObject("data_venda", OffsetDateTime.class), rs.getObject("data_vencimento", OffsetDateTime.class),
                             rs.getObject("data_recebimento", OffsetDateTime.class),
-                            valorBruto, taxa, valorLiquido);
+                            valorBruto, taxa, valorTaxaAdministrativa, valorLiquido);
                 })
                 .list();
     }
@@ -222,24 +228,72 @@ public class RelatorioContasReceberService {
         LinkedHashMap<Long, Acumulador> porEmpresa = new LinkedHashMap<>();
         for (LinhaContaReceber l : linhas) {
             Acumulador acc = porEmpresa.computeIfAbsent(l.idEmpresa(),
-                    k -> new Acumulador(l.nomeEmpresa(), new BigDecimal[]{BigDecimal.ZERO, BigDecimal.ZERO}));
+                    k -> new Acumulador(l.nomeEmpresa(), new BigDecimal[]{BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO}));
             acc.valores()[0] = acc.valores()[0].add(l.valorBruto());
-            acc.valores()[1] = acc.valores()[1].add(l.valorLiquido());
+            acc.valores()[1] = acc.valores()[1].add(l.valorTaxaAdministrativa());
+            acc.valores()[2] = acc.valores()[2].add(l.valorLiquido());
         }
         List<SubtotalEmpresaContaReceber> subtotais = new ArrayList<>();
         porEmpresa.forEach((idEmpresa, acc) -> subtotais.add(
-                new SubtotalEmpresaContaReceber(idEmpresa, acc.nomeEmpresa(), acc.valores()[0], acc.valores()[1])));
+                new SubtotalEmpresaContaReceber(idEmpresa, acc.nomeEmpresa(), acc.valores()[0], acc.valores()[1], acc.valores()[2])));
         return subtotais;
     }
 
     private static TotalGeralContaReceber calcularTotalGeral(List<LinhaContaReceber> linhas) {
         BigDecimal valorBruto = BigDecimal.ZERO;
+        BigDecimal valorTaxaAdministrativa = BigDecimal.ZERO;
         BigDecimal valorLiquido = BigDecimal.ZERO;
         for (LinhaContaReceber l : linhas) {
             valorBruto = valorBruto.add(l.valorBruto());
+            valorTaxaAdministrativa = valorTaxaAdministrativa.add(l.valorTaxaAdministrativa());
             valorLiquido = valorLiquido.add(l.valorLiquido());
         }
-        return new TotalGeralContaReceber(valorBruto, valorLiquido);
+        return new TotalGeralContaReceber(valorBruto, valorTaxaAdministrativa, valorLiquido);
+    }
+
+    /** Agrupa por carteira (nome + categoria) somando {@code valorLiquido} das parcelas do
+     *  filtro atual — ordenado do maior pro menor valor, pro gráfico ficar legível. */
+    private static List<PontoFormaPagamento> calcularGraficoPorFormaPagamento(List<LinhaContaReceber> linhas) {
+        record Acumulador(String nomeCarteira, String categoriaCarteira, BigDecimal[] valor) {
+        }
+        LinkedHashMap<String, Acumulador> porCarteira = new LinkedHashMap<>();
+        for (LinhaContaReceber l : linhas) {
+            String chave = l.nomeCarteira() + "|" + l.categoriaCarteira();
+            Acumulador acc = porCarteira.computeIfAbsent(chave,
+                    k -> new Acumulador(l.nomeCarteira(), l.categoriaCarteira(), new BigDecimal[]{BigDecimal.ZERO}));
+            acc.valor()[0] = acc.valor()[0].add(l.valorLiquido());
+        }
+        List<PontoFormaPagamento> pontos = new ArrayList<>();
+        porCarteira.forEach((chave, acc) -> pontos.add(new PontoFormaPagamento(acc.nomeCarteira(), acc.categoriaCarteira(), acc.valor()[0])));
+        pontos.sort((a, b) -> b.valor().compareTo(a.valor()));
+        return pontos;
+    }
+
+    /** Só parcelas ainda não recebidas (dentro do filtro já aplicado) — vencida = vencimento no
+     *  passado ({@code now()}, mesmo critério de {@code PesquisaVendaService}/{@code
+     *  ClienteHistoricoService} pra "vencida"), a vencer = vencimento hoje ou no futuro.
+     *  Ordenado pela exposição total (vencido + a vencer) do maior pro menor. */
+    private static List<KpiFormaPagamento> calcularKpisPorFormaPagamento(List<LinhaContaReceber> linhas) {
+        record Acumulador(String nomeCarteira, String categoriaCarteira, BigDecimal[] valores) {
+        }
+        OffsetDateTime agora = OffsetDateTime.now();
+        LinkedHashMap<String, Acumulador> porCarteira = new LinkedHashMap<>();
+        for (LinhaContaReceber l : linhas) {
+            if (l.dataRecebimento() != null) continue;
+            String chave = l.nomeCarteira() + "|" + l.categoriaCarteira();
+            Acumulador acc = porCarteira.computeIfAbsent(chave,
+                    k -> new Acumulador(l.nomeCarteira(), l.categoriaCarteira(), new BigDecimal[]{BigDecimal.ZERO, BigDecimal.ZERO}));
+            if (l.dataVencimento().isBefore(agora)) {
+                acc.valores()[0] = acc.valores()[0].add(l.valorLiquido());
+            } else {
+                acc.valores()[1] = acc.valores()[1].add(l.valorLiquido());
+            }
+        }
+        List<KpiFormaPagamento> kpis = new ArrayList<>();
+        porCarteira.forEach((chave, acc) -> kpis.add(
+                new KpiFormaPagamento(acc.nomeCarteira(), acc.categoriaCarteira(), acc.valores()[0], acc.valores()[1])));
+        kpis.sort((a, b) -> b.valorVencido().add(b.valorAVencer()).compareTo(a.valorVencido().add(a.valorAVencer())));
+        return kpis;
     }
 
     private static Long getLongOuNulo(ResultSet rs, String coluna) throws SQLException {

@@ -9,6 +9,7 @@ import {
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import AjudaDaTela from '../../components/AjudaDaTela'
+import { BotaoFecharTela } from '../../components/BotaoFecharTela'
 import CategoriaClienteModal from '../../components/CategoriaClienteModal'
 import ConfirmarSalvarModal from '../../components/ConfirmarSalvarModal'
 import { IconeCliente, IconeEngrenagem, IconeHistorico } from '../../components/Icones'
@@ -357,9 +358,7 @@ export default function ClienteForm({
                 <IconeHistorico size={16} /> Histórico
               </Link>
             )}
-            <button type="button" className="btn ghost" onClick={() => (aoCancelar ? aoCancelar() : navigate('/clientes'))}>
-              {somenteLeitura ? 'Voltar' : 'Cancelar'}
-            </button>
+            <BotaoFecharTela onClick={aoCancelar} />
             {!somenteLeitura && (
               <button type="submit" form="form-cliente" className="btn" disabled={salvar.isPending}>
                 {salvar.isPending ? 'Salvando…' : 'Salvar'}

@@ -1,7 +1,9 @@
 import { useQuery } from '@tanstack/react-query'
 import { Fragment, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { BarChart, Bar, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import AjudaDaTela from '../../components/AjudaDaTela'
+import { BotaoFecharTela } from '../../components/BotaoFecharTela'
 import { IconeRelatorio } from '../../components/Icones'
 import { ApiError } from '../../lib/api'
 import { formatarSoData } from '../../lib/datas'
@@ -15,6 +17,7 @@ import {
   type FiltrosRelatorioContasReceber,
 } from '../../lib/relatorioContasReceber'
 import { gerarPdfCapturaRelatorioContasReceber } from '../../lib/relatorioContasReceberCaptura'
+import { rotulosPorCarteira } from '../../lib/relatorioVendas'
 import FiltrosContasReceberModal, {
   FILTROS_VAZIOS,
   OPCOES_CATEGORIA,
@@ -40,6 +43,7 @@ const COLUNAS: Array<{ chave: ColunaOrdenacaoContaReceber; rotulo: string; alinh
   { chave: 'nomeEmpresaPagamento', rotulo: 'Empresa Pagamento' },
   { chave: 'valorBruto', rotulo: 'Valor Bruto', alinhamento: 'right' },
   { chave: 'taxaAdministrativa', rotulo: 'Taxa Adm.', alinhamento: 'right' },
+  { chave: 'valorTaxaAdministrativa', rotulo: 'Valor Taxa Adm.', alinhamento: 'right' },
   { chave: 'valorLiquido', rotulo: 'Valor Líquido', alinhamento: 'right' },
 ]
 
@@ -49,6 +53,26 @@ function moeda(v: number): string {
 
 function percentual(v: number): string {
   return `${formatarMoeda(v)}%`
+}
+
+const estiloTooltipGrafico = { background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 8, fontSize: 13 }
+const estiloEixoGrafico = { fontSize: 12, fill: 'var(--ink-muted)' }
+
+/** Mesmo componente de `RelatorioVendas.tsx` ("Recebimentos por Tipo de Carteira") — duplicado
+ *  de propósito, cada relatório define seus próprios gráficos locais (não existe módulo
+ *  compartilhado de gráficos no projeto ainda). */
+function GraficoBarraHorizontal({ dados, cor = 'var(--accent)' }: { dados: { rotulo: string; valor: number }[]; cor?: string }) {
+  return (
+    <ResponsiveContainer width="100%" height={Math.max(160, dados.length * 32)}>
+      <BarChart data={dados} layout="vertical" margin={{ top: 4, right: 24, left: 0, bottom: 4 }}>
+        <CartesianGrid strokeDasharray="0" stroke="var(--line)" horizontal={false} />
+        <XAxis type="number" tick={estiloEixoGrafico} axisLine={{ stroke: 'var(--line)' }} tickLine={false} tickFormatter={(v) => moeda(v)} />
+        <YAxis type="category" dataKey="rotulo" tick={estiloEixoGrafico} axisLine={false} tickLine={false} width={140} />
+        <Tooltip contentStyle={estiloTooltipGrafico} formatter={(valor) => [moeda(Number(valor)), 'Valor líquido']} />
+        <Bar dataKey="valor" fill={cor} radius={[0, 4, 4, 0]} maxBarSize={22} />
+      </BarChart>
+    </ResponsiveContainer>
+  )
 }
 
 /** "01/06" — número da parcela sobre o total de parcelas da mesma linha de pagamento. */
@@ -205,14 +229,12 @@ export default function RelatorioContasReceber() {
                 {gerandoPdf ? 'Gerando PDF…' : 'Gerar PDF'}
               </button>
             )}
-            <button type="button" className="btn ghost" onClick={() => navigate('/')}>
-              Voltar
-            </button>
+            <BotaoFecharTela />
           </div>
         </div>
       </div>
 
-      <div className="lista-corpo relatorio-corpo-fixo">
+      <div className="lista-corpo">
         {!relatorioGerado ? (
           <p className="muted">Use o botão Filtros para gerar o relatório.</p>
         ) : isLoading ? (
@@ -220,7 +242,7 @@ export default function RelatorioContasReceber() {
         ) : error || !data ? (
           <p className="erro">{error instanceof ApiError ? error.message : 'Não foi possível gerar o relatório.'}</p>
         ) : (
-          <div ref={conteudoRef} className={`relatorio-conteudo${gerandoPdf ? ' pdf-expandido' : ''}`}>
+          <div ref={conteudoRef} className="relatorio-conteudo">
             {isFetching && <p className="muted">Atualizando…</p>}
 
             {gerandoPdf && (
@@ -238,13 +260,45 @@ export default function RelatorioContasReceber() {
             )}
 
             <p className="section-label" style={{ marginTop: gerandoPdf ? 24 : 0 }}>
+              Recebimentos por Forma de Pagamento
+            </p>
+            {data.kpisPorFormaPagamento.length === 0 ? (
+              <p className="muted">Nenhuma parcela em aberto para os filtros informados.</p>
+            ) : (
+              <div className="relatorio-kpis-forma-pagamento">
+                {data.kpisPorFormaPagamento.map((k) => (
+                  <div key={`${k.nomeCarteira}-${k.categoriaCarteira}`} className="relatorio-kpi-card kpi-forma-pagamento-card">
+                    <p className="kpi-forma-pagamento-nome">
+                      {rotulosPorCarteira([{ nomeCarteira: k.nomeCarteira, categoriaCarteira: k.categoriaCarteira, valor: 0 }])[0].rotulo}
+                    </p>
+                    <p className="kpi-forma-pagamento-linha">
+                      <span className="muted">Vencido</span>
+                      <span className="valor cor-danger">{moeda(k.valorVencido)}</span>
+                    </p>
+                    <p className="kpi-forma-pagamento-linha">
+                      <span className="muted">A vencer</span>
+                      <span className="valor cor-accent">{moeda(k.valorAVencer)}</span>
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {data.graficoPorFormaPagamento.length > 0 && (
+              <div className="card relatorio-grafico-card" style={{ marginTop: 16, minHeight: 'auto' }}>
+                <p className="section-label">Valor Líquido por Forma de Pagamento</p>
+                <GraficoBarraHorizontal dados={rotulosPorCarteira(data.graficoPorFormaPagamento)} cor="var(--accent)" />
+              </div>
+            )}
+
+            <p className="section-label" style={{ marginTop: 24 }}>
               Parcelas
             </p>
-            <div className={`card table-wrap${gerandoPdf ? ' pdf-expandido' : ''}`}>
+            <div className="card table-wrap grid-altura-fixa">
               {data.linhas.length === 0 ? (
                 <p className="muted">Nenhuma parcela encontrada para os filtros informados.</p>
               ) : (
-                <table className="table table-compacta tabela-adensada">
+                <table className="table table-compacta tabela-adensada tabela-contas-receber">
                   <thead>
                     <tr>
                       {COLUNAS.map((c) => {
@@ -290,6 +344,7 @@ export default function RelatorioContasReceber() {
                             <td>{linha.nomeEmpresaPagamento ?? '—'}</td>
                             <td className="mono" style={{ textAlign: 'right' }}>{moeda(linha.valorBruto)}</td>
                             <td className="mono" style={{ textAlign: 'right' }}>{percentual(linha.taxaAdministrativa)}</td>
+                            <td className="mono" style={{ textAlign: 'right' }}>{moeda(linha.valorTaxaAdministrativa)}</td>
                             <td className="mono" style={{ textAlign: 'right' }}>{moeda(linha.valorLiquido)}</td>
                           </tr>
                           {subtotal && (
@@ -299,6 +354,7 @@ export default function RelatorioContasReceber() {
                               </td>
                               <td className="mono" style={{ textAlign: 'right' }}><strong>{moeda(subtotal.valorBruto)}</strong></td>
                               <td />
+                              <td className="mono" style={{ textAlign: 'right' }}><strong>{moeda(subtotal.valorTaxaAdministrativa)}</strong></td>
                               <td className="mono" style={{ textAlign: 'right' }}><strong>{moeda(subtotal.valorLiquido)}</strong></td>
                             </tr>
                           )}
@@ -313,6 +369,7 @@ export default function RelatorioContasReceber() {
                       </td>
                       <td className="mono" style={{ textAlign: 'right' }}><strong>{moeda(data.totalGeral.valorBruto)}</strong></td>
                       <td />
+                      <td className="mono" style={{ textAlign: 'right' }}><strong>{moeda(data.totalGeral.valorTaxaAdministrativa)}</strong></td>
                       <td className="mono" style={{ textAlign: 'right' }}><strong>{moeda(data.totalGeral.valorLiquido)}</strong></td>
                     </tr>
                   </tfoot>

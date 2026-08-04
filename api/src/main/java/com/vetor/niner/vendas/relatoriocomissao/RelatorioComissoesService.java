@@ -37,14 +37,18 @@ public class RelatorioComissoesService {
     // escolhida pelo usuário sempre entra como critério SECUNDÁRIO dentro de cada empresa (mesmo
     // truque do Relatório de Contas a Receber). valorLiquido/valorComissao não existem como
     // coluna no SELECT (são calculados em Java) — repete a expressão aqui pra poder ordenar.
-    private static final Map<String, String> COLUNAS_ORDENAVEIS = Map.of(
-            "nomeEmpresa", "e.razao_social",
-            "nomeFuncionario", "fn.nome",
-            "valorVenda", "valor_venda",
-            "valorDevolucao", "valor_devolucao",
-            "valorLiquido", "(COALESCE(v.valor_venda, 0) - COALESCE(d.valor_devolucao, 0))",
-            "percComissao", "perc_comissao",
-            "valorComissao", "(COALESCE(v.valor_venda, 0) - COALESCE(d.valor_devolucao, 0)) * fn.perc_comissao / 100");
+    private static final Map<String, String> COLUNAS_ORDENAVEIS = Map.ofEntries(
+            Map.entry("nomeEmpresa", "e.razao_social"),
+            Map.entry("nomeFuncionario", "fn.nome"),
+            Map.entry("valorVenda", "valor_venda"),
+            Map.entry("valorDevolucao", "valor_devolucao"),
+            Map.entry("valorLiquido", "(COALESCE(v.valor_venda, 0) - COALESCE(d.valor_devolucao, 0))"),
+            Map.entry("percComissao", "perc_comissao"),
+            Map.entry("valorComissao", "(COALESCE(v.valor_venda, 0) - COALESCE(d.valor_devolucao, 0)) * fn.perc_comissao / 100"),
+            Map.entry("quantidadeVendas", "qtd_vendas"),
+            Map.entry("ticketMedio",
+                    "CASE WHEN COALESCE(qtd_vendas, 0) = 0 THEN 0"
+                            + " ELSE (COALESCE(v.valor_venda, 0) - COALESCE(d.valor_devolucao, 0)) / qtd_vendas END"));
 
     private final JdbcClient jdbc;
 
@@ -113,7 +117,8 @@ public class RelatorioComissoesService {
         String sql = """
                 WITH vendas AS (
                     SELECT v.id_empresa, pmd.id_funcionario,
-                           SUM(pmd.qtd_produto * pmd.preco_venda - pmd.valor_desconto + pmd.valor_acrescimo) AS valor_venda
+                           SUM(pmd.qtd_produto * pmd.preco_venda - pmd.valor_desconto + pmd.valor_acrescimo) AS valor_venda,
+                           COUNT(DISTINCT v.id_venda) AS qtd_vendas
                     FROM venda v
                     JOIN produto_movimento_mestre pmm
                            ON pmm.id_venda = v.id_venda AND pmm.id_tenant = v.id_tenant AND pmm.tipo_movimento = 'VENDA'
@@ -142,7 +147,7 @@ public class RelatorioComissoesService {
                 SELECT COALESCE(v.id_empresa, d.id_empresa) AS id_empresa, e.razao_social AS nome_empresa,
                        COALESCE(v.id_funcionario, d.id_funcionario) AS id_funcionario, fn.nome AS nome_funcionario,
                        COALESCE(v.valor_venda, 0) AS valor_venda, COALESCE(d.valor_devolucao, 0) AS valor_devolucao,
-                       fn.perc_comissao AS perc_comissao
+                       fn.perc_comissao AS perc_comissao, COALESCE(v.qtd_vendas, 0) AS qtd_vendas
                 FROM vendas v
                 FULL OUTER JOIN devolucoes d ON d.id_funcionario = v.id_funcionario AND d.id_empresa = v.id_empresa
                 JOIN empresa e ON e.id_empresa = COALESCE(v.id_empresa, d.id_empresa) AND e.id_tenant = plataforma.tenant_atual()
@@ -167,12 +172,23 @@ public class RelatorioComissoesService {
                     BigDecimal percComissao = rs.getBigDecimal("perc_comissao");
                     BigDecimal valorComissao = valorLiquido.multiply(percComissao)
                             .divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
+                    int quantidadeVendas = rs.getInt("qtd_vendas");
+                    BigDecimal ticketMedio = calcularTicketMedio(valorLiquido, quantidadeVendas);
                     return new LinhaComissao(
                             rs.getLong("id_empresa"), rs.getString("nome_empresa"),
                             rs.getLong("id_funcionario"), rs.getString("nome_funcionario"),
-                            valorVenda, valorDevolucao, valorLiquido, percComissao, valorComissao);
+                            valorVenda, valorDevolucao, valorLiquido, percComissao, valorComissao,
+                            quantidadeVendas, ticketMedio);
                 })
                 .list();
+    }
+
+    /** Ticket médio = valor líquido ÷ quantidade de vendas; zero quando não há venda no período
+     *  (funcionário que só aparece por devolução) — nunca divide por zero. */
+    private static BigDecimal calcularTicketMedio(BigDecimal valorLiquido, int quantidadeVendas) {
+        return quantidadeVendas == 0
+                ? BigDecimal.ZERO
+                : valorLiquido.divide(BigDecimal.valueOf(quantidadeVendas), 2, RoundingMode.HALF_UP);
     }
 
     private static String montarOrdenacao(String ordenarPor, String direcao) {
@@ -188,20 +204,22 @@ public class RelatorioComissoesService {
     /** Preserva a ordem de primeira aparição (já vem ordenado por empresa) — não precisa
      *  reordenar de novo. */
     private static List<SubtotalEmpresa> calcularSubtotais(List<LinhaComissao> linhas) {
-        record Acumulador(String nomeEmpresa, BigDecimal[] valores) {
+        record Acumulador(String nomeEmpresa, BigDecimal[] valores, int[] quantidadeVendas) {
         }
         LinkedHashMap<Long, Acumulador> porEmpresa = new LinkedHashMap<>();
         for (LinhaComissao l : linhas) {
             Acumulador acc = porEmpresa.computeIfAbsent(l.idEmpresa(),
-                    k -> new Acumulador(l.nomeEmpresa(), new BigDecimal[]{BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO}));
+                    k -> new Acumulador(l.nomeEmpresa(), new BigDecimal[]{BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO}, new int[]{0}));
             acc.valores()[0] = acc.valores()[0].add(l.valorVenda());
             acc.valores()[1] = acc.valores()[1].add(l.valorDevolucao());
             acc.valores()[2] = acc.valores()[2].add(l.valorLiquido());
             acc.valores()[3] = acc.valores()[3].add(l.valorComissao());
+            acc.quantidadeVendas()[0] += l.quantidadeVendas();
         }
         List<SubtotalEmpresa> subtotais = new ArrayList<>();
         porEmpresa.forEach((idEmpresa, acc) -> subtotais.add(new SubtotalEmpresa(
-                idEmpresa, acc.nomeEmpresa(), acc.valores()[0], acc.valores()[1], acc.valores()[2], acc.valores()[3])));
+                idEmpresa, acc.nomeEmpresa(), acc.valores()[0], acc.valores()[1], acc.valores()[2], acc.valores()[3],
+                acc.quantidadeVendas()[0], calcularTicketMedio(acc.valores()[2], acc.quantidadeVendas()[0]))));
         return subtotais;
     }
 
@@ -210,13 +228,17 @@ public class RelatorioComissoesService {
         BigDecimal valorDevolucao = BigDecimal.ZERO;
         BigDecimal valorLiquido = BigDecimal.ZERO;
         BigDecimal valorComissao = BigDecimal.ZERO;
+        int quantidadeVendas = 0;
         for (LinhaComissao l : linhas) {
             valorVenda = valorVenda.add(l.valorVenda());
             valorDevolucao = valorDevolucao.add(l.valorDevolucao());
             valorLiquido = valorLiquido.add(l.valorLiquido());
             valorComissao = valorComissao.add(l.valorComissao());
+            quantidadeVendas += l.quantidadeVendas();
         }
-        return new TotalGeralComissao(valorVenda, valorDevolucao, valorLiquido, valorComissao);
+        return new TotalGeralComissao(
+                valorVenda, valorDevolucao, valorLiquido, valorComissao,
+                quantidadeVendas, calcularTicketMedio(valorLiquido, quantidadeVendas));
     }
 
     private static boolean ehAdmin(Jwt jwt) {

@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import AjudaDaTela from '../../components/AjudaDaTela'
+import { BotaoFecharTela } from '../../components/BotaoFecharTela'
 import { IconeHistorico, IconeSetaBaixo, IconeSetaCima } from '../../components/Icones'
 import { buscarHistoricoCliente } from '../../lib/clienteHistorico'
 import { buscarCliente } from '../../lib/clientes'
@@ -89,9 +90,7 @@ export default function ClienteHistorico() {
           </div>
           <div className="topbar-acoes">
             <AjudaDaTela chaveTela={CHAVE_TELA} />
-            <button type="button" className="btn ghost" onClick={() => navigate('/clientes')}>
-              Voltar
-            </button>
+            <BotaoFecharTela />
           </div>
         </div>
       </div>

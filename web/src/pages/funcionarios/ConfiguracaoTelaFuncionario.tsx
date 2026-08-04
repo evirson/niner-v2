@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
+import { BotaoFecharTela } from '../../components/BotaoFecharTela'
 import { IconeEngrenagem } from '../../components/Icones'
 import Toast from '../../components/Toast'
 import { ApiError } from '../../lib/api'
@@ -67,9 +68,7 @@ export default function ConfiguracaoTelaFuncionario() {
             <h1>Configurar tela de Funcionário</h1>
           </div>
           <div className="topbar-acoes">
-            <button type="button" className="btn ghost" onClick={() => navigate('/funcionarios')}>
-              Cancelar
-            </button>
+            <BotaoFecharTela />
             <button type="button" className="btn" disabled={salvar.isPending} onClick={() => salvar.mutate(campos)}>
               {salvar.isPending ? 'Salvando…' : 'Salvar'}
             </button>

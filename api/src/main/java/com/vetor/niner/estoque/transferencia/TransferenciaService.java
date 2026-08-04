@@ -92,7 +92,7 @@ public class TransferenciaService {
                         """)
                 .params(idEmpresaOrigem, idTransferencia).query(Long.class).single();
         for (ItemResolvido item : itens) {
-            inserirDetalhe(idMovimentoOrigem, idEmpresaOrigem, item.idVariacao(), "D", item.qtd());
+            inserirDetalhe(idMovimentoOrigem, idEmpresaOrigem, item.idVariacao(), "D", item.qtd(), item.precoCusto());
         }
 
         long idMovimentoDestino = jdbc.sql("""
@@ -102,7 +102,7 @@ public class TransferenciaService {
                         """)
                 .params(req.idEmpresaDestino(), idTransferencia).query(Long.class).single();
         for (ItemResolvido item : itens) {
-            inserirDetalhe(idMovimentoDestino, req.idEmpresaDestino(), item.idVariacao(), "C", item.qtd());
+            inserirDetalhe(idMovimentoDestino, req.idEmpresaDestino(), item.idVariacao(), "C", item.qtd(), item.precoCusto());
         }
 
         return montar(idTransferencia);
@@ -213,17 +213,17 @@ public class TransferenciaService {
                 .update();
     }
 
-    private void inserirDetalhe(long idMovimento, long idEmpresa, long idVariacao, String creditoDebito, BigDecimal qtd) {
+    private void inserirDetalhe(long idMovimento, long idEmpresa, long idVariacao, String creditoDebito, BigDecimal qtd, BigDecimal precoCusto) {
         // credito_debito é um ENUM do Postgres — precisa de cast explícito, o driver não
         // converte um bind param de String sozinho (diferente de um literal 'D'/'C' na SQL,
         // que o Postgres já infere pelo tipo da coluna — por isso aqui não dá pra ser literal
         // porque o valor varia por chamada, origem 'D' × destino 'C').
         jdbc.sql("""
                         INSERT INTO produto_movimento_detalhe
-                            (id_tenant, id_movimento, id_empresa, id_variacao, credito_debito, qtd_produto, origem)
-                        VALUES (plataforma.tenant_atual(), ?, ?, ?, ?::credito_debito, ?, 'transferência entre empresas')
+                            (id_tenant, id_movimento, id_empresa, id_variacao, credito_debito, qtd_produto, preco_custo, origem)
+                        VALUES (plataforma.tenant_atual(), ?, ?, ?, ?::credito_debito, ?, ?, 'transferência entre empresas')
                         """)
-                .params(idMovimento, idEmpresa, idVariacao, creditoDebito, qtd)
+                .params(idMovimento, idEmpresa, idVariacao, creditoDebito, qtd, precoCusto)
                 .update();
     }
 
@@ -238,13 +238,14 @@ public class TransferenciaService {
         }
     }
 
-    private record ItemResolvido(long idVariacao, BigDecimal qtd) {
+    private record ItemResolvido(long idVariacao, BigDecimal qtd, BigDecimal precoCusto) {
     }
 
     /**
-     * Valida que cada item (variação) existe e está ativo. Não checa saldo disponível na
-     * origem — saldo negativo é permitido de propósito em qualquer movimentação de produto,
-     * entrada ou saída (pedido direto do dono do produto, 2026-07-29).
+     * Valida que cada item (variação) existe e está ativo, e resolve o custo atual do cadastro
+     * (gravado no ledger — 2026-08-04). Não checa saldo disponível na origem — saldo negativo é
+     * permitido de propósito em qualquer movimentação de produto, entrada ou saída (pedido
+     * direto do dono do produto, 2026-07-29).
      */
     private List<ItemResolvido> resolverItens(List<ItemTransferenciaRequest> itens, long idEmpresaOrigem) {
         boolean permiteQtdDecimal = configuracaoGeralService.permiteQtdDecimalProduto();
@@ -254,18 +255,16 @@ public class TransferenciaService {
                 throw new IllegalArgumentException(
                         "Quantidade deve ser um número inteiro — este tenant não permite quantidade decimal de produtos (Parâmetros do Sistema).");
             }
-            boolean existe = Boolean.TRUE.equals(jdbc.sql("""
-                            SELECT EXISTS (SELECT 1 FROM produto_barra pb
-                                           JOIN produto p ON p.id_produto = pb.id_produto AND p.id_tenant = pb.id_tenant
-                                           WHERE pb.id_tenant = plataforma.tenant_atual()
-                                                 AND pb.id_variacao = ? AND p.ativo = true)
+            BigDecimal precoCusto = jdbc.sql("""
+                            SELECT p.preco_custo FROM produto_barra pb
+                            JOIN produto p ON p.id_produto = pb.id_produto AND p.id_tenant = pb.id_tenant
+                            WHERE pb.id_tenant = plataforma.tenant_atual() AND pb.id_variacao = ? AND p.ativo = true
                             """)
                     .param(item.idVariacao())
-                    .query(Boolean.class).single());
-            if (!existe) {
-                throw new ResponseStatusException(NOT_FOUND, "Produto não encontrado para a variação informada.");
-            }
-            resolvidos.add(new ItemResolvido(item.idVariacao(), item.qtd()));
+                    .query(BigDecimal.class)
+                    .optional()
+                    .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Produto não encontrado para a variação informada."));
+            resolvidos.add(new ItemResolvido(item.idVariacao(), item.qtd(), precoCusto));
         }
         return resolvidos;
     }

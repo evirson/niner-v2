@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useRef, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import AjudaDaTela from '../../components/AjudaDaTela'
+import { BotaoFecharTela } from '../../components/BotaoFecharTela'
 import {
   IconeEditar,
   IconeExcluir,
@@ -149,6 +150,7 @@ export default function TipoCarteiraLista() {
             <Link className="btn" to="/tipos-carteira/novo">
               ＋ Novo tipo de carteira
             </Link>
+            <BotaoFecharTela />
           </div>
         </div>
 

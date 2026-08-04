@@ -112,6 +112,10 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
 .topbar-tela { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
 .topbar-acoes { display: flex; gap: 8px; align-items: center; }
 
+/* Botão de fechar (X) — canto superior direito de toda tela (2026-08-04). Quadrado, ícone
+   centralizado, em vez do padding retangular padrão de `.btn`. */
+.btn-fechar-tela { display: inline-flex; align-items: center; justify-content: center; padding: 8px; }
+
 /* Ícone que identifica a função da tela, à esquerda do título (2026-07-21). */
 .titulo-tela { display: flex; align-items: center; gap: 10px; }
 .titulo-tela svg { color: var(--accent); flex-shrink: 0; }
@@ -453,6 +457,24 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
   .relatorio-kpis-grid { grid-template-columns: 1fr; }
   .relatorio-composicao-grid { grid-template-columns: 1fr; }
 }
+
+/* KPIs "por forma de pagamento" (Contas a Receber, 2026-08-04) — quantidade de carteiras é
+   dinâmica (não um número fixo de cards como `.relatorio-kpis-grid`), então usa auto-fill em vez
+   de `repeat(N, 1fr)`. Cada card mostra 2 valores (vencido/a vencer), não 1 + linha secundária. */
+.relatorio-kpis-forma-pagamento { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 12px; }
+.kpi-forma-pagamento-card { padding: 10px 14px; }
+.kpi-forma-pagamento-nome { font-size: 13px; font-weight: 600; margin: 0 0 8px; }
+.kpi-forma-pagamento-linha { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; font-size: 12.5px; margin: 3px 0; }
+.kpi-forma-pagamento-linha .valor { font-weight: 700; font-variant-numeric: tabular-nums; }
+
+/* Grid do Contas a Receber ganhou mais colunas (2026-08-04, valor da taxa administrativa) —
+   aperta o espaçamento horizontal além do `.tabela-adensada` padrão só nesta tabela, pra não
+   precisar de scroll horizontal. */
+.tabela-adensada.tabela-contas-receber th, .tabela-adensada.tabela-contas-receber td { padding-left: 3px; padding-right: 3px; font-size: 11.5px; }
+
+/* Analítico do Relatório de Movimentação de Produtos (2026-08-04) — 12 colunas, mesmo aperto do
+   Contas a Receber. */
+.tabela-adensada.tabela-movimentacao-produtos th, .tabela-adensada.tabela-movimentacao-produtos td { padding-left: 4px; padding-right: 4px; font-size: 12px; }
 .lightbox-topo { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
 .lightbox-corpo { display: flex; align-items: center; gap: 12px; min-height: 0; flex: 1; }
 .lightbox-nav { flex: 0 0 auto; }
@@ -596,7 +618,8 @@ a.menu-card:hover {
 }
 
 /* Seta de retorno: só existe quando o hub tem um nível acima (subgrupo). */
-.menu-hub-topo { display: flex; align-items: center; gap: 10px; }
+.menu-hub-topo { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.menu-hub-topo-esquerda { display: flex; align-items: center; gap: 10px; }
 .menu-hub-voltar {
   display: grid; place-items: center; flex-shrink: 0; width: 38px; height: 38px;
   border-radius: 10px; border: 1px solid var(--line); background: var(--surface);

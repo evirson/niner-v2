@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import AjudaDaTela from '../../components/AjudaDaTela'
+import { BotaoFecharTela } from '../../components/BotaoFecharTela'
 import { IconeEstoque, IconeExcluir, IconeLupa } from '../../components/Icones'
 import Toast from '../../components/Toast'
 import { ApiError } from '../../lib/api'
@@ -127,6 +128,7 @@ export default function TransferenciaForm() {
 
   const aoDigitarBarras: React.KeyboardEventHandler<HTMLInputElement> = (e) => {
     if (e.key === 'Enter' && valorBarras.trim()) {
+      e.preventDefault()
       const valor = valorBarras.trim()
       setValorBarras('')
       lerCodigo(valor)
@@ -189,9 +191,7 @@ export default function TransferenciaForm() {
           </div>
           <div className="topbar-acoes">
             <AjudaDaTela chaveTela={CHAVE_TELA} />
-            <button type="button" className="btn ghost" onClick={() => navigate('/estoque')}>
-              Cancelar
-            </button>
+            <BotaoFecharTela />
             <button
               type="button"
               className="btn"

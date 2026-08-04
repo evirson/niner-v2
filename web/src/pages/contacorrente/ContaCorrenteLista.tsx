@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import AjudaDaTela from '../../components/AjudaDaTela'
+import { BotaoFecharTela } from '../../components/BotaoFecharTela'
 import {
   IconeContaCorrente,
   IconeEditar,
@@ -126,6 +127,7 @@ export default function ContaCorrenteLista() {
             <Link className="btn" to="/contas-corrente/nova">
               ＋ Nova conta corrente
             </Link>
+            <BotaoFecharTela />
           </div>
         </div>
 

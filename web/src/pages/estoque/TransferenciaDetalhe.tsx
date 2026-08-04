@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate, useParams } from 'react-router-dom'
 import AjudaDaTela from '../../components/AjudaDaTela'
+import { BotaoFecharTela } from '../../components/BotaoFecharTela'
 import { IconeEstoque } from '../../components/Icones'
 import { buscarPermiteQtdDecimal } from '../../lib/configuracaoGeral'
 import { formatarQuantidade } from '../../lib/masks'
@@ -31,9 +32,7 @@ export default function TransferenciaDetalhe() {
           </div>
           <div className="topbar-acoes">
             <AjudaDaTela chaveTela="estoque.transferencia.lista" />
-            <button type="button" className="btn ghost" onClick={() => navigate('/estoque')}>
-              Voltar
-            </button>
+            <BotaoFecharTela />
           </div>
         </div>
       </div>

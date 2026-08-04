@@ -2,6 +2,7 @@ import { useEffect, useState, type ChangeEvent, type FocusEvent, type FormEvent,
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useParams } from 'react-router-dom'
 import AjudaDaTela from '../../components/AjudaDaTela'
+import { BotaoFecharTela } from '../../components/BotaoFecharTela'
 import ConfirmarSalvarModal from '../../components/ConfirmarSalvarModal'
 import { IconeMovimentoContaCorrente } from '../../components/Icones'
 import InfoRegistro from '../../components/InfoRegistro'
@@ -125,9 +126,7 @@ export default function ContaCorrenteMovimentoForm({ somenteLeitura = false }: {
           </div>
           <div className="topbar-acoes">
             <AjudaDaTela chaveTela="financeiro.contacorrentemovimento.form" />
-            <button type="button" className="btn ghost" onClick={() => navigate('/contas-corrente-movimento')}>
-              {somenteLeitura ? 'Voltar' : 'Cancelar'}
-            </button>
+            <BotaoFecharTela />
             {!somenteLeitura && (
               <button type="submit" form="form-conta-corrente-movimento" className="btn" disabled={salvar.isPending}>
                 {salvar.isPending ? 'Salvando…' : 'Salvar'}

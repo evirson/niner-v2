@@ -9,6 +9,7 @@ import {
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import AjudaDaTela from '../../components/AjudaDaTela'
+import { BotaoFecharTela } from '../../components/BotaoFecharTela'
 import ConfirmarSalvarModal from '../../components/ConfirmarSalvarModal'
 import { IconeTipoCarteira } from '../../components/Icones'
 import InfoRegistro from '../../components/InfoRegistro'
@@ -160,13 +161,7 @@ export default function TipoCarteiraForm({ somenteLeitura = false }: { somenteLe
           </div>
           <div className="topbar-acoes">
             <AjudaDaTela chaveTela="financeiro.tipocarteira.form" />
-            <button
-              type="button"
-              className="btn ghost"
-              onClick={() => navigate('/tipos-carteira', { state: { listaEstado } })}
-            >
-              {somenteLeitura ? 'Voltar' : 'Cancelar'}
-            </button>
+            <BotaoFecharTela onClick={() => navigate('/tipos-carteira', { state: { listaEstado } })} />
             {!somenteLeitura && (
               <button type="submit" form="form-tipo-carteira" className="btn" disabled={salvar.isPending}>
                 {salvar.isPending ? 'Salvando…' : 'Salvar'}

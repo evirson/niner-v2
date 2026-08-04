@@ -10,6 +10,8 @@ export interface LinhaComissao {
   valorLiquido: number
   percComissao: number
   valorComissao: number
+  quantidadeVendas: number
+  ticketMedio: number
 }
 
 export interface SubtotalEmpresa {
@@ -19,6 +21,8 @@ export interface SubtotalEmpresa {
   valorDevolucao: number
   valorLiquido: number
   valorComissao: number
+  quantidadeVendas: number
+  ticketMedio: number
 }
 
 export interface TotalGeralComissao {
@@ -26,6 +30,8 @@ export interface TotalGeralComissao {
   valorDevolucao: number
   valorLiquido: number
   valorComissao: number
+  quantidadeVendas: number
+  ticketMedio: number
 }
 
 export interface RelatorioComissoes {
@@ -43,6 +49,8 @@ export type ColunaOrdenacaoComissao =
   | 'valorLiquido'
   | 'percComissao'
   | 'valorComissao'
+  | 'quantidadeVendas'
+  | 'ticketMedio'
 
 export type DirecaoOrdenacao = 'ASC' | 'DESC'
 

@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import AjudaDaTela from '../../components/AjudaDaTela'
+import { BotaoFecharTela } from '../../components/BotaoFecharTela'
 import {
   IconeEditar,
   IconeEngrenagem,
@@ -148,6 +149,7 @@ export default function ProdutoLista() {
             <Link className="btn" to="/produtos/novo">
               ＋ Novo produto
             </Link>
+            <BotaoFecharTela />
           </div>
         </div>
 

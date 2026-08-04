@@ -20,7 +20,9 @@ public final class RelatorioComissoesDtos {
             BigDecimal valorDevolucao,
             BigDecimal valorLiquido,
             BigDecimal percComissao,
-            BigDecimal valorComissao) {
+            BigDecimal valorComissao,
+            int quantidadeVendas,
+            BigDecimal ticketMedio) {
     }
 
     public record SubtotalEmpresa(
@@ -29,14 +31,18 @@ public final class RelatorioComissoesDtos {
             BigDecimal valorVenda,
             BigDecimal valorDevolucao,
             BigDecimal valorLiquido,
-            BigDecimal valorComissao) {
+            BigDecimal valorComissao,
+            int quantidadeVendas,
+            BigDecimal ticketMedio) {
     }
 
     public record TotalGeralComissao(
             BigDecimal valorVenda,
             BigDecimal valorDevolucao,
             BigDecimal valorLiquido,
-            BigDecimal valorComissao) {
+            BigDecimal valorComissao,
+            int quantidadeVendas,
+            BigDecimal ticketMedio) {
     }
 
     /** {@code linhas} já vem ordenada — por nome do funcionário quando há só uma empresa no
