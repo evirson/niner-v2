@@ -952,3 +952,50 @@ a.menu-card:hover {
   .recebimento-parcelas-grid { height: 360px; }
   .recebimento-parcelas-sidebar { width: 100%; flex-direction: row; flex-wrap: wrap; }
 }
+
+/* Editor de Configuração de Etiqueta de Produtos (2026-08-04) — canvas com régua em mm,
+   drag-and-drop (Pointer Events, sem biblioteca) e prévia do rolo. O "papel" da etiqueta
+   (.editor-etiqueta-canvas e a prévia do rolo) é sempre branco/preto, nunca segue o tema
+   claro/escuro do app — mesmo raciocínio do PDF do Relatório de Vendas: é a simulação de um
+   objeto físico impresso, não uma superfície de UI. */
+.editor-etiqueta { display: flex; flex-direction: column; gap: 14px; }
+.editor-etiqueta-toolbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.editor-etiqueta-corpo { display: flex; gap: 18px; align-items: flex-start; flex-wrap: wrap; }
+
+.editor-etiqueta-paleta { display: flex; flex-direction: column; gap: 6px; min-width: 200px; }
+.editor-etiqueta-paleta-item { justify-content: flex-start; text-align: left; }
+
+.editor-etiqueta-area { overflow: auto; padding-bottom: 4px; }
+.editor-etiqueta-regua-h { position: relative; height: 16px; }
+.editor-etiqueta-marca-h {
+  position: absolute; top: 0; height: 6px; border-left: 1px solid var(--line-strong);
+  font-size: 9px; color: var(--ink-muted); padding-left: 2px; line-height: 1;
+}
+.editor-etiqueta-marca-h.marca-maior { height: 12px; }
+.editor-etiqueta-regua-v { position: relative; width: 22px; flex-shrink: 0; }
+.editor-etiqueta-marca-v {
+  position: absolute; left: 0; width: 6px; border-top: 1px solid var(--line-strong);
+  font-size: 9px; color: var(--ink-muted); line-height: 1;
+}
+.editor-etiqueta-marca-v.marca-maior { width: 14px; }
+
+.editor-etiqueta-canvas {
+  position: relative; background: #fff; border: 1px solid var(--line-strong);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, .2); flex-shrink: 0;
+}
+.editor-etiqueta-area-segura { position: absolute; border: 1px dashed rgba(0, 0, 0, .35); pointer-events: none; }
+.editor-etiqueta-campo { cursor: grab; touch-action: none; }
+.editor-etiqueta-campo:active { cursor: grabbing; }
+.editor-etiqueta-campo:focus-visible { outline-color: var(--accent) !important; }
+
+.editor-etiqueta-painel { min-width: 220px; display: flex; flex-direction: column; gap: 10px; }
+.editor-etiqueta-painel-topo { display: flex; align-items: center; justify-content: space-between; }
+.editor-etiqueta-painel-grade { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.campo-mm-label input { width: 100%; }
+.campo-checkbox { display: flex; align-items: center; gap: 8px; flex-direction: row; }
+.campo-checkbox input { width: auto; }
+.editor-etiqueta-segmentado { display: flex; gap: 4px; }
+.editor-etiqueta-segmentado .btn.ativa { background: var(--accent); color: var(--accent-ink); border-color: transparent; }
+
+.editor-etiqueta-rolo-preview { overflow-x: auto; padding: 10px; background: var(--surface-2); border-radius: var(--radius); }
+.editor-etiqueta-rolo-etiqueta { background: #fff; border: 1px solid var(--line-strong); }

@@ -139,11 +139,75 @@ devolucao-produtos.md`.
 
 **Stack alvo:** Java 25 + Spring Boot 4.x · PostgreSQL 18 (Docker, banco **`niner_db`**) · React 19 + Vite (3 apps) · Flyway · JWT. **SaaS multi-tenant** (banco único + `id_tenant` + Postgres RLS).
 
-**Sessão de 2026-08-04 (continuação, depois do commit `4ac997b`):** toda tela do sistema ganhou um **botão de fechar (✕)** no canto superior direito (`BotaoFecharTela.tsx`, volta pra tela anterior real via histórico do navegador — `navigate(-1)` — não uma rota fixa); **Enter passou a mudar de campo igual Tab** em qualquer `<input>`/`<select>` do sistema (`lib/formularios.ts`: `aoTeclarEnterNoFormulario` nas telas de cadastro, `iniciarNavegacaoGlobalPorEnter` no resto), preservando os poucos campos com Enter próprio (leitor de código de barras, buscas); os relatórios de **Comissões** (colunas Nº Vendas/Ticket Médio) e **Contas a Receber** (KPIs + gráfico "por forma de pagamento", coluna Valor Taxa Adm.) ganharam uma 2ª rodada de melhorias; nasceu a **5ª tela de Relatórios**, **Movimentação de Produtos** (Kardex, `docs/telas/relatorio-movimentacao-produtos.md` — 3 modelos: Analítico, Kardex por Produto com saldo corrido, Sintético por tipo de movimento), cujos testes descobriram que **nenhum service gravava `produto_movimento_detalhe.preco_custo`** — corrigido na raiz nos 5 services que escrevem no ledger (Pdv/Devolução/Cancelamento/Transferência/Balanço); e o grupo **Implementações Futuras** ganhou 9 áreas ainda não construídas (Etiqueta de Produtos — configuração e emissão —, CRM, BI Dashboard, Importação de Dados, Entrada de Produtos por Compra, Contas a Pagar/Pagas, Movimentação Bancária, Integração com Marketplace), todas como páginas `EmBreve` sem lógica. Ver linha do tempo de 2026-08-04 (topo, entradas mais recentes primeiro) pro detalhe completo. Tudo commitado e pushado ao final desta sessão.
+**Sessão de 2026-08-04 (continuação, depois do commit `4ac997b`):** toda tela do sistema ganhou um **botão de fechar (✕)** no canto superior direito (`BotaoFecharTela.tsx`, volta pra tela anterior real via histórico do navegador — `navigate(-1)` — não uma rota fixa); **Enter passou a mudar de campo igual Tab** em qualquer `<input>`/`<select>` do sistema (`lib/formularios.ts`: `aoTeclarEnterNoFormulario` nas telas de cadastro, `iniciarNavegacaoGlobalPorEnter` no resto), preservando os poucos campos com Enter próprio (leitor de código de barras, buscas); os relatórios de **Comissões** (colunas Nº Vendas/Ticket Médio) e **Contas a Receber** (KPIs + gráfico "por forma de pagamento", coluna Valor Taxa Adm.) ganharam uma 2ª rodada de melhorias; nasceu a **5ª tela de Relatórios**, **Movimentação de Produtos** (Kardex, `docs/telas/relatorio-movimentacao-produtos.md` — 3 modelos: Analítico, Kardex por Produto com saldo corrido, Sintético por tipo de movimento), cujos testes descobriram que **nenhum service gravava `produto_movimento_detalhe.preco_custo`** — corrigido na raiz nos 5 services que escrevem no ledger (Pdv/Devolução/Cancelamento/Transferência/Balanço); e o grupo **Implementações Futuras** ganhou 9 áreas ainda não construídas (Etiqueta de Produtos — configuração e emissão —, CRM, BI Dashboard, Importação de Dados, Entrada de Produtos por Compra, Contas a Pagar/Pagas, Movimentação Bancária, Integração com Marketplace), todas como páginas `EmBreve` sem lógica; o botão de fechar (✕) foi removido das páginas-hub de grupo do menu (não fazem sentido como "fechar", são ponto de entrada); e nasceu **Configuração de Etiqueta de Produtos** (V029 + tela, `docs/telas/configuracao-etiqueta.md`) — cadastro com editor visual de arraste (régua em mm, código de barras real via `jsbarcode`, produto de exemplo real), agora em Configurações (não mais Implementações Futuras). Ver linha do tempo de 2026-08-04 (topo, entradas mais recentes primeiro) pro detalhe completo. Tudo commitado e pushado ao final de cada sessão do dia.
 
 ---
 
 ## Linha do tempo
+
+### 2026-08-04 — Tela de Configuração de Etiqueta de Produtos (editor visual de arraste)
+
+Em cima do modelo de dados (V029, entrada anterior desta linha do tempo): a tela sai de
+Implementações Futuras e entra em Configurações (ADMIN-only, junto de Usuários/Parâmetros do
+Sistema). CRUD padrão (`docs/telas/configuracao-etiqueta.md`) mais um editor visual sem
+precedente no projeto — o usuário digita as dimensões do cabeçalho e **arrasta** os campos pra
+posicionar dentro de uma etiqueta desenhada em escala real de milímetros (`EditorEtiquetaCanvas.tsx`
+— régua mm, zoom, paleta de campos, Pointer Events nativos sem biblioteca de drag-and-drop, snap
+de 0,5mm, nudge por teclado, aviso visual quando um campo invade a borda configurada), painel de
+propriedades (`PainelPropriedadesCampo.tsx`) e código de barras renderizado de verdade
+(`jsbarcode`, dependência nova) — inclusive com um botão "Escolher produto de exemplo" que troca
+os placeholders genéricos por dados reais de um produto do catálogo.
+
+**2 bugs pegos só no teste manual ao vivo, nenhum teste automatizado cobria:** `import * as
+JsBarcode from 'jsbarcode'` tipava certo no `tsc` mas quebrava em runtime no Vite (`TypeError:
+JsBarcode is not a function` — trocado pra `import JsBarcode from 'jsbarcode'`); e mutações
+rápidas em sequência (2 cliques rápidos na paleta, ou segurar uma seta do teclado) podiam se
+perder, porque a função de mutação lia o array de campos fechado numa prop desatualizada em vez
+de sempre partir do estado mais recente — corrigido trocando pra um updater funcional (padrão do
+React), verificado ao vivo via console (2 cliques síncronos passaram a resultar nos 2 campos, não
+mais só 1; nudge de teclado em sequência passou a somar certo, 5,5mm em vez de só 5mm).
+
+Testado ao vivo ponta a ponta (criar com produto de exemplo real → salvar → visualizar → excluir).
+Suíte de backend inteira e `tsc --noEmit` limpos. Detalhe completo em
+`docs/telas/configuracao-etiqueta.md`.
+
+### 2026-08-04 — Modelo de dados de Configuração de Etiqueta de Produtos (V029)
+
+Início da rotina de "Configuração de Etiqueta de Produtos" (uma das 9 áreas de Implementações
+Futuras, mesma sessão). Só o schema nesta primeira etapa — a tela ainda não foi construída, ver
+`docs/telas/configuracao-etiqueta.md`. Três decisões de escopo confirmadas com o dono do produto
+antes de desenhar as tabelas: configuração **por tenant** (não por empresa, mesma lógica de
+`produto`), **várias configurações nomeadas** (cadastro completo, não singleton — bate com as 2
+telas separadas do menu, Configuração e Emissão), e **posicionamento livre x/y** de cada campo
+dentro da etiqueta desde a 1ª fase (não só empilhamento automático).
+
+3 tabelas novas (`db/migration/V029__cfg_etiqueta.sql`, todas com RLS/P8): `cfg_etiqueta_config`
+(cabeçalho — rolo/etiqueta/bordas em mm, `numero_colunas` `CHECK` 1 a 6), `cfg_etiqueta_coluna`
+(filha — posição inicial de cada coluna no rolo físico, valor explícito por coluna, não calculado
+por fórmula, pra suportar rolos com espaçamento irregular), `cfg_etiqueta_campo` (filha — qual
+campo aparece, posição x/y relativa à própria etiqueta, fonte/tamanho/negrito/alinhamento,
+`fundo_preto` — fundo preto/letra branca vs. padrão letra preta/sem fundo). O desenho foi
+validado contra um PDF real de etiqueta impressa fornecido pelo dono do produto (nome da loja em
+fundo preto no topo, descrição, variação cor/tamanho, código de barras com dígitos legíveis
+embaixo, preço em destaque) — confirmou o padrão fundo-preto/fundo-branco por campo e que o
+código impresso é o `SKU_BARRAS` interno (EAN-13 de 13 dígitos, bate com `gerar_ean13_interno()`).
+
+**Novo ENUM `campo_etiqueta`** (10 valores fixos, mesmo idioma de `tipo_movimento`): mapeiam pra
+colunas já existentes — `NOME_EMPRESA` (`empresa.cfg_nome_etiqueta`, existe desde V014, nunca
+lido por nenhuma tela até agora), `DESCRICAO_PRODUTO`/`MARCA`/`REFERENCIA`/`PRECO_VENDA`/
+`PRECO_OFERTA` (`produto`), `SKU_BARRAS`/`EAN_BARRAS` (`produto_barra`), `VARIANTE_LINHA`/
+`VARIANTE_COLUNA` (`cfg_variante_linha`/`cfg_variante_coluna`). Nenhuma tabela nova para esses 7
+campos que já existiam. `fonte_etiqueta` (ENUM `ARIAL`/`COURIER`/`TIMES_NEW_ROMAN`) é
+**provisório** — a lista real depende de uma decisão ainda em aberto (impressora térmica
+dedicada ZPL/EPL vs. impressão via navegador), fácil de estender depois via `ALTER TYPE ADD
+VALUE` (banco em construção).
+
+**Aplicada no banco de dev** (`docker compose run --rm flyway`) — precisou `flyway repair`
+primeiro por causa de checksum drift em V019/V025 (editadas em sessões anteriores sem recriar o
+volume, já documentado na linha do tempo dessas datas); a aplicação de V029 em si foi limpa, sem
+precisar recriar o banco (migration só aditiva, tabelas novas). Próximo passo (fora desta
+sessão): o dono do produto vai passar instruções pra codificar a tela de Configuração de
+Etiqueta em cima deste schema.
 
 ### 2026-08-04 — Botão de fechar (✕) removido das páginas-hub de grupo do menu
 

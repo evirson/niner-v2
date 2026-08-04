@@ -9,6 +9,7 @@ import {
   IconeDevolucaoProduto,
   IconeEstoque,
   IconeEstornoRecebimentoCrediario,
+  IconeEtiqueta,
   IconeFechamentoCaixa,
   IconeFornecedor,
   IconeFuncionario,
@@ -269,6 +270,12 @@ export const MENU: NavGrupo[] = [
         icone: IconeParametros,
         descricao: 'Desconto máximo na venda, juros e multa do crediário e os nomes das variações do produto.',
       },
+      {
+        to: '/etiqueta-configuracao',
+        label: 'Configuração de Etiqueta de Produtos',
+        icone: IconeEtiqueta,
+        descricao: 'Layout de impressão da etiqueta de código de barras dos produtos: rolo, colunas e campos.',
+      },
     ],
   },
   {
@@ -333,12 +340,6 @@ export const MENU: NavGrupo[] = [
         label: 'Canais',
         icone: IconeCanais,
         descricao: 'Conexão com Mercado Livre, Shopee e demais canais de venda. Em construção.',
-      },
-      {
-        to: '/etiqueta-configuracao',
-        label: 'Configuração de Etiqueta de Produtos',
-        icone: IconeParametros,
-        descricao: 'Layout e campos da etiqueta impressa nos produtos. Em construção.',
       },
       {
         to: '/etiqueta-emissao',

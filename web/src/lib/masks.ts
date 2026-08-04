@@ -125,6 +125,11 @@ export function formatarPeso(valor: number): string {
   return valor.toLocaleString('pt-BR', { minimumFractionDigits: 3, maximumFractionDigits: 3 })
 }
 
+/** Formata um número como medida em mm BR, 2 casas (numeric(6,2), Configuração de Etiqueta): "3.5" -> "3,50". */
+export function formatarEtiquetaMm(valor: number): string {
+  return valor.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+}
+
 function formatarParteInteira(digitos: string): string {
   return digitos ? Number(digitos).toLocaleString('pt-BR') : ''
 }
@@ -209,6 +214,21 @@ export function completarPeso(valor: string): string {
 /** Desfaz {@link mascararPeso}/{@link completarPeso}, devolvendo o número para enviar à API. */
 export function desmascararPeso(valor: string): number {
   return desmascararValorDecimal(valor, 3)
+}
+
+/** Máscara de campo de medida em mm (Configuração de Etiqueta) — 2 casas, numeric(6,2). */
+export function mascararEtiquetaMm(valor: string): string {
+  return mascararValorDecimal(valor, 2)
+}
+
+/** Completa o campo de mm ao sair dele — ver {@link completarValorDecimal}. */
+export function completarEtiquetaMm(valor: string): string {
+  return completarValorDecimal(valor, 2)
+}
+
+/** Desfaz {@link mascararEtiquetaMm}/{@link completarEtiquetaMm}, devolvendo o número para enviar à API. */
+export function desmascararEtiquetaMm(valor: string): number {
+  return desmascararValorDecimal(valor, 2)
 }
 
 /**

@@ -27,6 +27,8 @@ import ProdutoForm from './pages/produtos/ProdutoForm'
 import ConfiguracaoTelaProduto from './pages/produtos/ConfiguracaoTelaProduto'
 import UsuarioLista from './pages/usuarios/UsuarioLista'
 import UsuarioForm from './pages/usuarios/UsuarioForm'
+import EtiquetaConfigLista from './pages/etiquetaconfig/EtiquetaConfigLista'
+import EtiquetaConfigForm from './pages/etiquetaconfig/EtiquetaConfigForm'
 import TransferenciaLista from './pages/estoque/TransferenciaLista'
 import TransferenciaForm from './pages/estoque/TransferenciaForm'
 import TransferenciaDetalhe from './pages/estoque/TransferenciaDetalhe'
@@ -89,7 +91,6 @@ export default function App() {
           <Route path="/estoque/:id" element={<TransferenciaDetalhe />} />
           <Route path="/pedidos" element={<EmBreve titulo="Pedidos" />} />
           <Route path="/canais" element={<EmBreve titulo="Canais" />} />
-          <Route path="/etiqueta-configuracao" element={<EmBreve titulo="Configuração de Etiqueta de Produtos" />} />
           <Route path="/etiqueta-emissao" element={<EmBreve titulo="Emissão de Etiqueta de Produtos" />} />
           <Route path="/crm" element={<EmBreve titulo="CRM" />} />
           <Route path="/bi-dashboard" element={<EmBreve titulo="BI Dashboard" />} />
@@ -146,6 +147,10 @@ export default function App() {
             <Route path="/usuarios/:id/visualizar" element={<UsuarioForm somenteLeitura />} />
             <Route path="/usuarios/:id" element={<UsuarioForm />} />
             <Route path="/cancelamento-venda" element={<CancelamentoVenda />} />
+            <Route path="/etiqueta-configuracao" element={<EtiquetaConfigLista />} />
+            <Route path="/etiqueta-configuracao/novo" element={<EtiquetaConfigForm />} />
+            <Route path="/etiqueta-configuracao/:id/visualizar" element={<EtiquetaConfigForm somenteLeitura />} />
+            <Route path="/etiqueta-configuracao/:id" element={<EtiquetaConfigForm />} />
           </Route>
         </Route>
       </Route>

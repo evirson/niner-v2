@@ -603,6 +603,40 @@ const CONTEUDOS: Record<string, ConteudoAjuda> = {
     ],
     urlVideo: null,
   },
+  'configuracoes.etiquetaconfig.lista': {
+    titulo: 'Configuração de Etiqueta de Produtos',
+    objetivo: 'Ver e gerenciar os layouts de etiqueta de código de barras já cadastrados.',
+    passos: [
+      'Um tenant pode ter várias configurações nomeadas — impressoras/rolos diferentes por loja ou situação.',
+      'Clique em "Nova configuração" pra montar um layout do zero, ou em "Editar" pra ajustar um já existente.',
+      '"Visualizar" abre o layout em modo só leitura, sem risco de mudar nada por engano.',
+    ],
+    errosComuns: [
+      'Esta tela só monta o LAYOUT — a impressão de verdade fica pra "Emissão de Etiqueta de Produtos" (ainda em Implementações Futuras).',
+    ],
+    urlVideo: null,
+  },
+  'configuracoes.etiquetaconfig.form': {
+    titulo: 'Configuração de Etiqueta de Produtos',
+    objetivo: 'Montar visualmente o layout de uma etiqueta: dimensões do rolo, colunas e quais campos aparecem, onde e como.',
+    passos: [
+      'Preencha a largura do rolo, o número de colunas (1 a 6), o tamanho da etiqueta e as bordas — tudo em milímetros.',
+      'Ajuste a posição de cada coluna no rolo (a distância do início do rolo até cada etiqueta) — o valor é livre, não é calculado sozinho.',
+      'No editor visual, clique num campo da paleta (à esquerda) pra colocá-lo na etiqueta — ele aparece com uma posição padrão.',
+      'Arraste o campo pra posicioná-lo; use as setas do teclado pra ajustar fino (Shift+seta move 5mm de uma vez).',
+      'Clique num campo já colocado pra abrir o painel de propriedades (à direita) e ajustar posição exata, tamanho, fonte, negrito, fundo preto/letra branca e alinhamento.',
+      'Pra código de barras (SKU/EAN), marque "Mostrar os dígitos embaixo" se quiser o número legível junto com as barras.',
+      'Use "Escolher produto de exemplo" pra pré-visualizar a etiqueta com dados reais de um produto do seu catálogo — opcional, sem escolher aparece texto genérico.',
+      'A régua em milímetros e o zoom (canto superior do editor) ajudam a posicionar com precisão.',
+      'A "Prévia do rolo completo" embaixo do editor mostra como as etiquetas ficam lado a lado no rolo físico, uma por coluna configurada.',
+    ],
+    errosComuns: [
+      'Um campo com contorno vermelho está invadindo a margem de borda configurada — é só um aviso, não impede salvar, mas pode cortar na impressão real.',
+      'O código de barras aqui é só uma simulação de layout (formato genérico) — não é a simbologia exata que vai sair impressa de verdade.',
+      'Deletar (tecla Delete/Backspace com o campo selecionado) remove o campo da etiqueta — ele volta pra paleta e pode ser adicionado de novo.',
+    ],
+    urlVideo: null,
+  },
 }
 
 export default function AjudaDaTela({ chaveTela }: { chaveTela: string }) {
