@@ -154,10 +154,17 @@ QUANTIDADE_ESTOQUE_1..QUANTIDADE_ESTOQUE_9` (9 colunas fixas — teto de 9 empre
   (`produto_movimento_mestre`/`produto_movimento_detalhe`, mesmo padrão de
   `BalancoEstoqueService.efetivar`) — nunca um `INSERT` direto em `produto_estoque` (quem mantém
   esse saldo é a trigger `fn_atualiza_estoque_movimento`, P1/P3).
-- **NCM:** precisa existir em `cfg_produto_ncm`; não existindo, a linha (ou o grupo, se for o
-  campo vencedor da divergência) é rejeitada com o mesmo erro do cadastro manual.
+- **NCM:** opcional, e diferente do cadastro manual — código que não existe em
+  `cfg_produto_ncm` (ou vem em formato inválido) entra como **vazio**, não rejeita a linha
+  (2026-08-06, pedido do dono do produto: violação de FK não é motivo pra barrar a importação
+  inteira). Antes de checar, tira toda pontuação (ex. `6402.99.90` → `64029990`, formato comum
+  de planilha) — a tabela de referência guarda só os 8 dígitos.
 - **Regra da oferta** (tudo-ou-nada, início não-passado, fim ≥ início, preço de oferta < venda) e
   **peso líquido ≤ bruto** — reaproveitam `ProdutoService.validarOferta`/validação de peso.
+  `PRECO_OFERTA = "0"` é tratado como "não preenchido" (2026-08-06) — planilha exportada de outro
+  sistema costuma trazer zero em vez de célula vazia numa coluna numérica, e uma oferta de R$
+  0,00 não é um caso de negócio real; sem essa normalização, "0" sozinho disparava a exigência
+  das duas datas de oferta por engano.
 
 ### 4. `contas_receber` (só crediário)
 

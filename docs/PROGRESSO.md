@@ -151,6 +151,50 @@ sintética pra crediário importado sem mexer em schema) e **Exportação de Dad
 
 ## Linha do tempo
 
+### 2026-08-06 — Papeleta de Venda (PDV) + Guia de Transferência + correções na Importação de Dados
+
+Sessão de continuação do mesmo dia. Três frentes:
+
+**Papeleta de Venda** (`docs/telas/papeleta-venda.md`) — o PDV efetivava a venda (F5) mas nunca
+teve nenhum comprovante impresso; mesma lacuna que existia no Recebimento de Crediário antes do
+comprovante de 2026-07-30. Popup automático pós-F5, impressão térmica 80mm, mas **64 colunas**
+(mockup exato do dono do produto), maior que as 42 já usadas no comprovante de crediário/vale —
+resolvido com fonte `Lucida Console` (pedido explícito, fonte do console do Windows, desenhada
+pra ficar legível em tamanho pequeno) em vez de espremer o layout; o PDF não consegue seguir essa
+fonte (proprietária, sem TTF embutível) e cai pra courier ~5pt, só backup — o botão "Imprimir" é
+o caminho recomendado. `venda` ganhou a coluna `id_caixa` (migration `V025`, editada) porque só
+pagamento que não é CREDIARIO grava em `caixa_detalhe` — sem isso não dava pra saber o "Operador"
+numa venda 100% crediário. Duas rodadas de ajuste no mesmo dia: removida a totalização de itens
+da linha "TOTAL A PAGAR" (não pedida), e novo bloco "PARCELAS A VENCER DE CREDIARIO" (37 colunas,
+mockup próprio) sempre que a venda tiver pagamento nessa categoria, com o rótulo "VALOR A PAGAR
+EM" (não "VALOR PAGO EM") nessas linhas — dinheiro que ainda não circulou.
+
+**Guia de Transferência de Produtos** (`docs/telas/guia-transferencia.md`) — mesma lacuna do lado
+de Transferência de Produtos: transferência gravada, mas nada impresso pra acompanhar a
+mercadoria. Diferente da papeleta: **folha A4** (escolha explícita do dono do produto — lista de
+itens pode ser longa, documento é pra arquivar), mesmo mecanismo do Fechamento de Caixa, com
+linhas de assinatura no rodapé ("Conferido por (Origem)" / "Recebido por (Destino)"), únicas no
+projeto. 100% frontend — a resposta de `GET /api/v1/estoque/transferencias/{id}` já trazia tudo.
+No mesmo pacote, corrigido um bug relacionado na mesma tela: o X às vezes reabria o popup "Nova
+Transferência" em vez de fechar — causa raiz era o popup de escolher destino fechando com
+`navigate('/estoque')` (empilha histórico) em vez de `navigate(-1)` (convenção do resto do
+sistema), deixando uma entrada fantasma que o X da lista (também `navigate(-1)`) podia revisitar.
+
+**Importação de Dados** — dois bugs reais achados por teste manual com a validação de verdade:
+NCM inexistente (ou em formato inválido, ex. planilha com pontuação `6402.99.90`) travava a linha
+inteira por violação de FK — agora entra como vazio, mesma filosofia de "não é motivo pra barrar
+a importação inteira"; e `PRECO_OFERTA = "0"` (comum em export de outro sistema, zero em vez de
+célula vazia) disparava por engano a exigência das duas datas de oferta — normalizado pra "não
+preenchido" antes da validação tudo-ou-nada.
+
+Também entraram 2 itens novos em Implementações Futuras: **Reimpressão de Papeleta de Venda** e
+**Reimpressão de Recebimento de Crediário** (nenhuma das duas tem tela de "ver comprovante depois
+de fechar o popup" ainda).
+
+Sem testes automatizados em nenhuma das três frentes (compilação/typecheck limpos + testes
+manuais via API real com dados reais do tenant de teste, sempre revertidos depois — não suíte
+JUnit). Commitado/pushado (`488935d`).
+
 ### 2026-08-06 — Rotina de Importação de Dados + Rotina de Exportação de Dados (grupo Configurações)
 
 Duas features novas, irmãs uma da outra, as primeiras do grupo **Configurações** voltadas pra

@@ -133,6 +133,7 @@ const CONTEUDOS: Record<string, ConteudoAjuda> = {
     passos: [
       'Clique em "＋ Nova Transferência" para mover produtos da empresa atual para outra.',
       'Clique no ícone verde para ver os detalhes (produtos e quantidades) de uma transferência já feita.',
+      'Na tela de detalhes, use "Imprimir Guia" para gerar a Guia de Transferência (folha A4, com linhas de assinatura para conferência na origem e recebimento no destino).',
     ],
     errosComuns: [
       'Transferências já feitas não podem ser editadas nem excluídas — é um registro permanente do estoque, mesma regra de uma venda.',
