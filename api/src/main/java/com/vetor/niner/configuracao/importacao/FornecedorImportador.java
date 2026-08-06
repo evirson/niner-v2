@@ -67,7 +67,7 @@ public class FornecedorImportador implements ImportadorDeTabela {
     public RelatorioImportacao processar(List<LinhaCsv> linhas, JsonNode escolhas, boolean confirmar, Jwt jwt) {
         String idPlanoContas = resolverPlanoContas(escolhas);
 
-        int importadas = 0, ignoradas = 0, rejeitadas = 0;
+        int importadas = 0, ignoradas = 0;
         List<LinhaErro> erros = new ArrayList<>();
 
         for (LinhaCsv linha : linhas) {
@@ -80,14 +80,13 @@ public class FornecedorImportador implements ImportadorDeTabela {
                 fornecedorService.criar(montarRequest(linha, idPlanoContas));
                 importadas++;
             } catch (RuntimeException e) {
-                rejeitadas++;
-                erros.add(new LinhaErro(linha.numeroLinha(), mensagem(e)));
+                erros.add(LinhaErro.de(linha.numeroLinha(), e));
             }
         }
 
-        RelatorioImportacao relatorio = new RelatorioImportacao(
-                confirmar, linhas.size(), importadas, ignoradas, rejeitadas, erros, List.of(), List.of());
-        if (!confirmar) {
+        RelatorioImportacao relatorio =
+                RelatorioImportacao.concluir(confirmar, linhas.size(), importadas, ignoradas, erros, List.of());
+        if (!relatorio.confirmado()) {
             throw new SimulacaoConcluidaException(relatorio);
         }
         return relatorio;
@@ -150,7 +149,7 @@ public class FornecedorImportador implements ImportadorDeTabela {
                 linha.valor("NOME_FANTASIA"),
                 linha.valor("CNPJ"),
                 linha.valor("INSCRICAO_ESTADUAL"),
-                linha.valor("EMAIL"),
+                ImportacaoCsv.semEspacos(linha.valor("EMAIL")),
                 linha.valor("TELEFONE"),
                 linha.valor("CEP"),
                 linha.valor("ENDERECO"),
@@ -159,10 +158,5 @@ public class FornecedorImportador implements ImportadorDeTabela {
                 linha.valor("CIDADE"),
                 linha.valor("ESTADO"),
                 true);
-    }
-
-    private static String mensagem(RuntimeException e) {
-        String msg = e.getMessage();
-        return (msg == null || msg.isBlank()) ? "Erro ao processar a linha (" + e.getClass().getSimpleName() + ")." : msg;
     }
 }

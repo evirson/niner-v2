@@ -108,6 +108,11 @@ export default function App() {
           <Route path="/fluxo-caixa" element={<EmBreve titulo="Fluxo de Caixa" />} />
           <Route path="/lucratividade" element={<EmBreve titulo="Lucratividade" />} />
           <Route path="/integracao-marketplace" element={<EmBreve titulo="Integração com Marketplace" />} />
+          <Route path="/reimpressao-papeleta-venda" element={<EmBreve titulo="Reimpressão de Papeleta de Venda" />} />
+          <Route
+            path="/reimpressao-recebimento-crediario"
+            element={<EmBreve titulo="Reimpressão de Recebimento de Crediário" />}
+          />
           <Route path="/clientes" element={<ClienteLista />} />
           <Route path="/clientes/novo" element={<ClienteForm />} />
           <Route element={<RequireAdmin />}>

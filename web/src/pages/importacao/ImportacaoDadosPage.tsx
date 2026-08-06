@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import AjudaDaTela from '../../components/AjudaDaTela'
 import { BotaoFecharTela } from '../../components/BotaoFecharTela'
+import GaugeProgresso from '../../components/GaugeProgresso'
 import { IconePedidos } from '../../components/Icones'
 import Toast, { type TipoToast } from '../../components/Toast'
 import { ApiError } from '../../lib/api'
@@ -32,6 +33,10 @@ type Etapa = 'tabela' | 'arquivo' | 'escolhas' | 'previa' | 'concluido'
  * por tabela: categoria única do arquivo, plano de contas único, carteira de crediário única, ou
  * — só para produto — mapear colunas de estoque para empresa e confirmar o rótulo da variante) →
  * prévia (dry-run, nada é gravado) → confirmar (grava de verdade).
+ *
+ * Layout (2026-08-06, pedido do dono do produto): mesmo padrão do resto do sistema —
+ * `.lista-topo` (título) e `.lista-rodape` (botões da etapa atual) fixos, só `.lista-corpo`
+ * rola — importante na prévia, onde a lista de linhas com erro pode ser longa.
  */
 export default function ImportacaoDadosPage() {
   const [etapa, setEtapa] = useState<Etapa>('tabela')
@@ -121,6 +126,13 @@ export default function ImportacaoDadosPage() {
     mutationFn: () => processarImportacao(tabela!.chave, arquivo!, montarEscolhas(), true),
     onSuccess: (r) => {
       setRelatorio(r)
+      // Defesa extra (o botão já fica desabilitado com erro): o backend só confirma de
+      // verdade quando não sobrou nenhuma linha com erro — "tudo ou nada" (2026-08-06).
+      if (!r.confirmado) {
+        setToastTipo('erro')
+        setToast('Nada foi importado — corrija as linhas com erro e tente de novo.')
+        return
+      }
       setEtapa('concluido')
       setToastTipo('sucesso')
       setToast('Importação concluída.')
@@ -209,6 +221,14 @@ export default function ImportacaoDadosPage() {
     }
   }
 
+  const rotuloProcessando = analisarMut.isPending
+    ? 'Analisando o arquivo…'
+    : previaMut.isPending
+      ? 'Processando a prévia…'
+      : confirmarMut.isPending
+        ? 'Gravando a importação…'
+        : null
+
   return (
     <div className="lista-tela">
       <div className="lista-topo">
@@ -229,6 +249,10 @@ export default function ImportacaoDadosPage() {
 
       <div className="lista-corpo">
         <div className="card" style={{ padding: 24 }}>
+          {rotuloProcessando ? (
+            <GaugeProgresso rotulo={rotuloProcessando} />
+          ) : (
+          <>
           {etapa === 'tabela' && (
             <>
               <p className="section-label">1. Escolha a tabela</p>
@@ -261,19 +285,6 @@ export default function ImportacaoDadosPage() {
                   accept=".csv,text/csv"
                   onChange={(e) => setArquivo(e.target.files?.[0] ?? null)}
                 />
-              </div>
-              <div className="wizard-acoes">
-                <button type="button" className="btn ghost" onClick={reiniciar}>
-                  Voltar
-                </button>
-                <button
-                  type="button"
-                  className="btn"
-                  disabled={!arquivo || analisarMut.isPending}
-                  onClick={avancarParaEscolhas}
-                >
-                  {analisarMut.isPending ? 'Analisando…' : 'Continuar'}
-                </button>
               </div>
             </>
           )}
@@ -517,20 +528,6 @@ export default function ImportacaoDadosPage() {
                   )}
                 </div>
               )}
-
-              <div className="wizard-acoes">
-                <button type="button" className="btn ghost" onClick={() => setEtapa('arquivo')}>
-                  Voltar
-                </button>
-                <button
-                  type="button"
-                  className="btn"
-                  disabled={!escolhasValidas() || previaMut.isPending}
-                  onClick={() => previaMut.mutate()}
-                >
-                  {previaMut.isPending ? 'Processando…' : 'Ver prévia'}
-                </button>
-              </div>
             </>
           )}
 
@@ -539,10 +536,22 @@ export default function ImportacaoDadosPage() {
               <p className="section-label">{etapa === 'previa' ? '4. Prévia (nada foi gravado ainda)' : 'Importação concluída'}</p>
               <div className="form-grid" style={{ marginTop: 12 }}>
                 <div className="col-3"><strong>{relatorio.totalLinhas}</strong><p className="muted">linhas no arquivo</p></div>
-                <div className="col-3"><strong>{relatorio.linhasImportadas}</strong><p className="muted">importadas</p></div>
+                <div className="col-3">
+                  <strong>{relatorio.linhasImportadas}</strong>
+                  <p className="muted">{etapa === 'concluido' ? 'importadas' : 'ok para importar'}</p>
+                </div>
                 <div className="col-3"><strong>{relatorio.linhasIgnoradas}</strong><p className="muted">já existiam (ignoradas)</p></div>
                 <div className="col-3"><strong>{relatorio.linhasRejeitadas}</strong><p className="muted">rejeitadas</p></div>
               </div>
+
+              {etapa === 'previa' && relatorio.erros.length > 0 && (
+                <p style={{ marginTop: 16, color: 'var(--danger)', fontWeight: 600 }}>
+                  {relatorio.erros.length === 1
+                    ? 'Corrija a linha com erro listada abaixo'
+                    : `Corrija as ${relatorio.erros.length} linhas com erro listadas abaixo`}{' '}
+                  e envie o arquivo de novo — nenhum dado será importado enquanto houver erro no arquivo.
+                </p>
+              )}
 
               {relatorio.avisos.length > 0 && (
                 <div style={{ marginTop: 16 }}>
@@ -562,6 +571,8 @@ export default function ImportacaoDadosPage() {
                     <thead>
                       <tr>
                         <th>Linha</th>
+                        <th>Campo</th>
+                        <th>Valor recebido</th>
                         <th>Motivo</th>
                       </tr>
                     </thead>
@@ -569,6 +580,8 @@ export default function ImportacaoDadosPage() {
                       {relatorio.erros.map((e, i) => (
                         <tr key={i}>
                           <td>{e.linha}</td>
+                          <td>{e.campo ?? '—'}</td>
+                          <td>{e.valor ?? '—'}</td>
                           <td>{e.motivo}</td>
                         </tr>
                       ))}
@@ -576,29 +589,67 @@ export default function ImportacaoDadosPage() {
                   </table>
                 </div>
               )}
-
-              <div className="wizard-acoes">
-                {etapa === 'previa' ? (
-                  <>
-                    <button type="button" className="btn ghost" onClick={() => setEtapa('escolhas')}>
-                      Voltar
-                    </button>
-                    <button
-                      type="button"
-                      className="btn"
-                      disabled={confirmarMut.isPending || relatorio.linhasImportadas === 0}
-                      onClick={() => confirmarMut.mutate()}
-                    >
-                      {confirmarMut.isPending ? 'Gravando…' : 'Confirmar importação'}
-                    </button>
-                  </>
-                ) : (
-                  <button type="button" className="btn" onClick={reiniciar}>
-                    Nova importação
-                  </button>
-                )}
-              </div>
             </>
+          )}
+          </>
+          )}
+        </div>
+      </div>
+
+      <div className="lista-rodape">
+        <div className="wizard-acoes" style={{ margin: '12px 24px' }}>
+          {etapa === 'arquivo' && (
+            <>
+              <button type="button" className="btn ghost" onClick={reiniciar}>
+                Voltar
+              </button>
+              <button
+                type="button"
+                className="btn"
+                disabled={!arquivo || analisarMut.isPending}
+                onClick={avancarParaEscolhas}
+              >
+                {analisarMut.isPending ? 'Analisando…' : 'Continuar'}
+              </button>
+            </>
+          )}
+
+          {etapa === 'escolhas' && (
+            <>
+              <button type="button" className="btn ghost" onClick={() => setEtapa('arquivo')}>
+                Voltar
+              </button>
+              <button
+                type="button"
+                className="btn"
+                disabled={!escolhasValidas() || previaMut.isPending}
+                onClick={() => previaMut.mutate()}
+              >
+                {previaMut.isPending ? 'Processando…' : 'Ver prévia'}
+              </button>
+            </>
+          )}
+
+          {etapa === 'previa' && relatorio && (
+            <>
+              <button type="button" className="btn ghost" onClick={() => setEtapa('escolhas')}>
+                Voltar
+              </button>
+              <button
+                type="button"
+                className="btn"
+                disabled={confirmarMut.isPending || relatorio.erros.length > 0 || relatorio.linhasImportadas === 0}
+                onClick={() => confirmarMut.mutate()}
+              >
+                {confirmarMut.isPending ? 'Gravando…' : 'Confirmar importação'}
+              </button>
+            </>
+          )}
+
+          {etapa === 'concluido' && (
+            <button type="button" className="btn" onClick={reiniciar}>
+              Nova importação
+            </button>
           )}
         </div>
       </div>

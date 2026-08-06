@@ -249,3 +249,13 @@ COMMENT ON TABLE contas_receber_lote    IS 'Cabeçalho de um recebimento de cred
 COMMENT ON TABLE caixa_mestre           IS 'Header de sessão de caixa (RLS). Revisão de Q5/ADR-010 (2026-07-16).';
 COMMENT ON TABLE caixa_detalhe          IS 'Lançamentos da sessão de caixa (RLS). tipo_operacao: RV=RECEBIMENTO_VENDA, RP=RECEBIMENTO_PARCELA_CREDIARIO, DC=DEBITO_CAIXA, CC=CREDITO_CAIXA, TR=TROCO (legado).';
 COMMENT ON COLUMN caixa_detalhe.id_carteira IS 'Forma de pagamento do lançamento (2026-07-28: era id_moeda, apontava pra `moeda`, absorvida por tipo_carteira).';
+
+-- Papeleta de Venda (2026-08-06, docs/telas/pdv.md): venda.id_caixa só pode ser criado aqui,
+-- depois de caixa_mestre existir. Guarda qual sessão de caixa processou a venda — sem isso não
+-- dá pra descobrir o "Operador" da papeleta numa venda 100% CREDIARIO, porque só linhas de
+-- pagamento que NÃO são CREDIARIO geram lançamento em caixa_detalhe (ver PdvVendaService,
+-- efetivarVenda já resolve idCaixa antes de gravar — só faltava persistir).
+ALTER TABLE venda ADD COLUMN id_caixa integer;
+ALTER TABLE venda ADD CONSTRAINT venda_caixa_fk FOREIGN KEY (id_tenant, id_caixa)
+  REFERENCES caixa_mestre (id_tenant, id_caixa);
+COMMENT ON COLUMN venda.id_caixa IS 'Sessão de caixa que processou a venda (2026-08-06) — dá o "Operador" (caixa_mestre.id_usuario) da papeleta de venda mesmo em venda 100% CREDIARIO, que não grava caixa_detalhe.';

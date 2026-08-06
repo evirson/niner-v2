@@ -4,12 +4,17 @@ import com.vetor.niner.comum.web.ConflitoDadosException;
 import com.vetor.niner.configuracao.geral.ConfiguracaoGeralService;
 import com.vetor.niner.financeiro.TipoCarteiraDtos.CategoriaCarteira;
 import com.vetor.niner.financeiro.caixa.CaixaService;
+import com.vetor.niner.vendas.PdvDtos.ComprovanteVendaResponse;
 import com.vetor.niner.vendas.PdvDtos.EfetivarVendaRequest;
+import com.vetor.niner.vendas.PdvDtos.ItemComprovanteVenda;
 import com.vetor.niner.vendas.PdvDtos.ItemVendaRequest;
+import com.vetor.niner.vendas.PdvDtos.PagamentoComprovanteVenda;
 import com.vetor.niner.vendas.PdvDtos.PagamentoGerado;
 import com.vetor.niner.vendas.PdvDtos.PagamentoRequest;
+import com.vetor.niner.vendas.PdvDtos.ParcelaComprovanteVenda;
 import com.vetor.niner.vendas.PdvDtos.ParcelaGerada;
 import com.vetor.niner.vendas.PdvDtos.VendaEfetivadaResponse;
+import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Service;
@@ -130,10 +135,11 @@ public class PdvVendaService {
         List<BigDecimal> acrescimoPorItem = ratear(totalAcrescimo, pesos, valorTotalProdutos);
 
         long idVenda = jdbc.sql("""
-                        INSERT INTO venda (id_tenant, id_empresa, id_cliente) VALUES (plataforma.tenant_atual(), ?, ?)
+                        INSERT INTO venda (id_tenant, id_empresa, id_cliente, id_caixa)
+                        VALUES (plataforma.tenant_atual(), ?, ?, ?)
                         RETURNING id_venda
                         """)
-                .params(idEmpresa, idCliente).query(Long.class).single();
+                .params(idEmpresa, idCliente, idCaixa).query(Long.class).single();
 
         long idMovimento = jdbc.sql("""
                         INSERT INTO produto_movimento_mestre (id_tenant, id_empresa, tipo_movimento, id_venda)
@@ -191,6 +197,140 @@ public class PdvVendaService {
         }
 
         return new VendaEfetivadaResponse(idVenda, valorTotalProdutos, descontoVenda, valorLiquido, pagamentos);
+    }
+
+    /**
+     * Papeleta de venda pra impressão térmica 80mm (2026-08-06, docs/telas/pdv.md), aberta
+     * automaticamente após {@link #efetivarVenda}. Só lê o que já foi persistido — nenhuma conta
+     * de desconto/acréscimo é refeita aqui; {@code subtotal}/{@code descontos}/{@code
+     * acrescimos} vêm somados direto de {@code produto_movimento_detalhe} (rateio já gravado por
+     * {@code efetivarVenda}), e {@code totalAPagar = subtotal − descontos + acrescimos} bate
+     * matematicamente com a soma de {@code pagamentos} (que vem de {@code contas_receber.
+     * valor_receber} — cobre AVISTA/CARTAO/CREDIARIO/VALE_MERCADORIA igualmente, já que toda
+     * linha de pagamento grava lá, mesmo as que não entram em {@code caixa_detalhe}).
+     */
+    @Transactional(readOnly = true)
+    public ComprovanteVendaResponse buscarComprovante(long idVenda) {
+        record Cabecalho(String nomeEmpresa, int codigoEmpresa, OffsetDateTime dataVenda,
+                          String nomeCliente, String nomeOperador) {
+        }
+
+        Cabecalho cabecalho = jdbc.sql("""
+                        SELECT e.razao_social AS nome_empresa, e.codigo_empresa, v.data_venda,
+                               c.nome AS nome_cliente, uop.nome_usuario AS nome_operador
+                        FROM venda v
+                        JOIN empresa e ON e.id_tenant = v.id_tenant AND e.id_empresa = v.id_empresa
+                        LEFT JOIN cliente c ON c.id_tenant = v.id_tenant AND c.id_cliente = v.id_cliente
+                        LEFT JOIN caixa_mestre cm ON cm.id_tenant = v.id_tenant AND cm.id_caixa = v.id_caixa
+                        LEFT JOIN usuario uop ON uop.id_tenant = v.id_tenant AND uop.id_usuario = cm.id_usuario
+                        WHERE v.id_tenant = plataforma.tenant_atual() AND v.id_venda = ?
+                        """)
+                .param(idVenda)
+                .query((rs, n) -> new Cabecalho(
+                        rs.getString("nome_empresa"), rs.getInt("codigo_empresa"),
+                        rs.getObject("data_venda", OffsetDateTime.class),
+                        rs.getString("nome_cliente"), rs.getString("nome_operador")))
+                .optional()
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "A venda #" + idVenda + " não existe."));
+
+        String nomeVendedor = jdbc.sql("""
+                        SELECT f.nome
+                        FROM produto_movimento_mestre pmm
+                        JOIN produto_movimento_detalhe pmd
+                               ON pmd.id_tenant = pmm.id_tenant AND pmd.id_movimento = pmm.id_movimento
+                        JOIN funcionario f ON f.id_tenant = pmd.id_tenant AND f.id_funcionario = pmd.id_funcionario
+                        WHERE pmm.id_tenant = plataforma.tenant_atual() AND pmm.id_venda = ? AND pmm.tipo_movimento = 'VENDA'
+                        LIMIT 1
+                        """)
+                .param(idVenda)
+                .query(String.class)
+                .optional()
+                .orElse(null);
+
+        List<ItemComprovanteVenda> itens = jdbc.sql("""
+                        SELECT pb.sku, p.descricao AS descricao_produto,
+                               vl.descricao AS variacao_linha, vc.descricao AS variacao_coluna,
+                               pmd.qtd_produto, pmd.preco_venda, (pmd.qtd_produto * pmd.preco_venda) AS valor_total
+                        FROM produto_movimento_mestre pmm
+                        JOIN produto_movimento_detalhe pmd
+                               ON pmd.id_tenant = pmm.id_tenant AND pmd.id_movimento = pmm.id_movimento
+                        JOIN produto_barra pb ON pb.id_tenant = pmd.id_tenant AND pb.id_variacao = pmd.id_variacao
+                        JOIN produto p ON p.id_tenant = pb.id_tenant AND p.id_produto = pb.id_produto
+                        LEFT JOIN cfg_variante_linha vl
+                               ON vl.id_tenant = pb.id_tenant AND vl.id_variante_linha = pb.id_variante_linha
+                        LEFT JOIN cfg_variante_coluna vc
+                               ON vc.id_tenant = pb.id_tenant AND vc.id_variante_coluna = pb.id_variante_coluna
+                        WHERE pmm.id_tenant = plataforma.tenant_atual() AND pmm.id_venda = ? AND pmm.tipo_movimento = 'VENDA'
+                        ORDER BY pmd.id_movimento_detalhe
+                        """)
+                .param(idVenda)
+                .query((rs, n) -> new ItemComprovanteVenda(
+                        rs.getString("sku"), rs.getString("descricao_produto"),
+                        rs.getString("variacao_linha"), rs.getString("variacao_coluna"),
+                        rs.getBigDecimal("qtd_produto"), rs.getBigDecimal("preco_venda"), rs.getBigDecimal("valor_total")))
+                .list();
+
+        record Totais(BigDecimal subtotal, BigDecimal descontos, BigDecimal acrescimos) {
+        }
+        Totais totais = jdbc.sql("""
+                        SELECT COALESCE(SUM(pmd.qtd_produto * pmd.preco_venda), 0) AS subtotal,
+                               COALESCE(SUM(pmd.valor_desconto), 0) AS descontos,
+                               COALESCE(SUM(pmd.valor_acrescimo), 0) AS acrescimos
+                        FROM produto_movimento_mestre pmm
+                        JOIN produto_movimento_detalhe pmd
+                               ON pmd.id_tenant = pmm.id_tenant AND pmd.id_movimento = pmm.id_movimento
+                        WHERE pmm.id_tenant = plataforma.tenant_atual() AND pmm.id_venda = ? AND pmm.tipo_movimento = 'VENDA'
+                        """)
+                .param(idVenda)
+                .query((rs, n) -> new Totais(
+                        rs.getBigDecimal("subtotal"), rs.getBigDecimal("descontos"), rs.getBigDecimal("acrescimos")))
+                .single();
+
+        List<PagamentoComprovanteVenda> pagamentos = jdbc.sql("""
+                        SELECT tc.nome_carteira, tc.categoria_carteira::text AS categoria_carteira,
+                               SUM(cr.valor_receber) AS valor_pago
+                        FROM contas_receber cr
+                        JOIN tipo_carteira tc ON tc.id_tenant = cr.id_tenant AND tc.id_carteira = cr.id_carteira
+                        WHERE cr.id_tenant = plataforma.tenant_atual() AND cr.id_venda = ?
+                        GROUP BY tc.id_carteira, tc.nome_carteira, tc.categoria_carteira
+                        ORDER BY MIN(cr.id_conta_receber)
+                        """)
+                .param(idVenda)
+                .query((rs, n) -> new PagamentoComprovanteVenda(
+                        rs.getString("nome_carteira"), "CREDIARIO".equals(rs.getString("categoria_carteira")),
+                        rs.getBigDecimal("valor_pago")))
+                .list();
+
+        // Parcelas de CREDIARIO (2026-08-06) — a papeleta lista as parcelas em aberto pro
+        // consumidor conferir vencimento/valor; filtra por categoria (não por data_recebimento
+        // NULL) porque CARTAO_DEBITO/CARTAO_CREDITO também ficam em aberto até a conciliação
+        // (ver PdvVendaService.efetivarVenda), mas isso não é "crediário" pro cliente.
+        List<ParcelaComprovanteVenda> parcelasCrediario = jdbc.sql("""
+                        SELECT cr.numero_parcela,
+                               (SELECT count(*) FROM contas_receber cr2
+                                WHERE cr2.id_tenant = cr.id_tenant AND cr2.id_venda = cr.id_venda
+                                      AND cr2.id_carteira = cr.id_carteira) AS total_parcelas,
+                               cr.data_vencimento, cr.valor_receber
+                        FROM contas_receber cr
+                        JOIN tipo_carteira tc ON tc.id_tenant = cr.id_tenant AND tc.id_carteira = cr.id_carteira
+                        WHERE cr.id_tenant = plataforma.tenant_atual() AND cr.id_venda = ?
+                              AND tc.categoria_carteira = 'CREDIARIO'
+                        ORDER BY cr.numero_parcela
+                        """)
+                .param(idVenda)
+                .query((rs, n) -> new ParcelaComprovanteVenda(
+                        rs.getInt("numero_parcela"), rs.getInt("total_parcelas"),
+                        rs.getObject("data_vencimento", OffsetDateTime.class), rs.getBigDecimal("valor_receber")))
+                .list();
+
+        BigDecimal totalAPagar = totais.subtotal().subtract(totais.descontos()).add(totais.acrescimos());
+
+        return new ComprovanteVendaResponse(
+                idVenda, cabecalho.nomeEmpresa(), cabecalho.codigoEmpresa(), cabecalho.dataVenda(),
+                cabecalho.nomeCliente(), nomeVendedor, cabecalho.nomeOperador(),
+                itens, totais.subtotal(), totais.descontos(), totais.acrescimos(), totalAPagar,
+                pagamentos, parcelasCrediario);
     }
 
     private BigDecimal buscarPercentualDescontoVenda() {

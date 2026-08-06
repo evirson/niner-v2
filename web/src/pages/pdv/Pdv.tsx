@@ -16,6 +16,7 @@ import {
   type VendaEfetivada,
 } from '../../lib/pdv'
 import AlteraQuantidadeModal from './AlteraQuantidadeModal'
+import ComprovantePapeletaModal from './ComprovantePapeletaModal'
 import FormaPagamentoModal from './FormaPagamentoModal'
 import PesquisaProdutoModal from './PesquisaProdutoModal'
 
@@ -52,13 +53,15 @@ export default function Pdv() {
   const [mostrarPesquisa, setMostrarPesquisa] = useState(false)
   const [mostrarAlteraQtd, setMostrarAlteraQtd] = useState(false)
   const [mostrarFormaPagamento, setMostrarFormaPagamento] = useState(false)
+  const [idVendaPapeleta, setIdVendaPapeleta] = useState<number | null>(null)
   const campoBarrasRef = useRef<HTMLInputElement>(null)
   const linhasLedgerRef = useRef<Array<HTMLDivElement | null>>([])
   const flashTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const ativaTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const barrasTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  const algumModalAberto = mostrarPesquisa || mostrarAlteraQtd || mostrarFormaPagamento || caixaFechado
+  const algumModalAberto =
+    mostrarPesquisa || mostrarAlteraQtd || mostrarFormaPagamento || idVendaPapeleta !== null || caixaFechado
 
   useEffect(() => {
     campoBarrasRef.current?.focus()
@@ -195,7 +198,7 @@ export default function Pdv() {
     mostrarFlash(`Venda #${resultado.idVenda} efetivada — ${moeda(resultado.valorLiquido)}.`)
     setLedger([])
     setSelecionado(null)
-    campoBarrasRef.current?.focus()
+    setIdVendaPapeleta(resultado.idVenda)
   }
 
   useEffect(() => {
@@ -405,6 +408,15 @@ export default function Pdv() {
           valorTotal={valorTotal}
           aoFechar={() => setMostrarFormaPagamento(false)}
           aoEfetivada={aoVendaEfetivada}
+        />
+      )}
+      {idVendaPapeleta !== null && (
+        <ComprovantePapeletaModal
+          idVenda={idVendaPapeleta}
+          aoFechar={() => {
+            setIdVendaPapeleta(null)
+            campoBarrasRef.current?.focus()
+          }}
         />
       )}
 

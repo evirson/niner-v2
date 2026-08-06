@@ -298,6 +298,28 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
   }
 }
 
+/* Papeleta de venda do PDV (2026-08-06, docs/telas/pdv.md) — mesma bobina térmica 80mm do
+   comprovante de crediário acima (reaproveita o `@page` sem nome), mas 64 colunas (mockup do
+   dono do produto) em vez de 42. 'Lucida Console' — pedido explícito do dono do produto pra
+   resolver a largura — é a fonte de sistema do Windows desenhada pra ficar legível em tamanho
+   bem pequeno (era a fonte do console do Windows); ainda assim o tamanho tem que ser bem menor
+   que o do comprovante de crediário pra 64 colunas caberem fisicamente nos 80mm (mesma conta:
+   ~6px cabe com folga equivalente à do comprovante de crediário a 9px/42 colunas). */
+.papeleta-preview {
+  width: fit-content; margin: 16px auto; padding: 12px 14px;
+  background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--radius);
+  font-family: 'Lucida Console', 'Courier New', Courier, monospace; font-size: 11px; line-height: 1.3;
+  white-space: pre; color: var(--ink);
+}
+@media print {
+  .papeleta-imprimir, .papeleta-imprimir * { visibility: visible; }
+  .papeleta-imprimir {
+    position: absolute; top: 0; left: 0; width: 80mm; margin: 0; padding: 2mm 2mm; border: 0;
+    background: none; color: #000;
+    font-family: 'Lucida Console', 'Courier New', Courier, monospace; font-size: 6px; line-height: 1.3;
+  }
+}
+
 /* Fechamento de Caixa (2026-07-30, docs/telas/fechamento-caixa.md) — relatório em folha A4,
    diferente do Comprovante de Pagamento de Crediário (80mm, bobina térmica, ver acima). Página
    nomeada (`page: fechamento-a4`) porque o `@page` sem nome já está reservado pra 80mm — os dois
@@ -317,6 +339,28 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
   .fechamento-imprimir, .fechamento-imprimir * { visibility: visible; }
   .fechamento-imprimir {
     page: fechamento-a4;
+    position: absolute; top: 0; left: 0; width: auto; margin: 0; padding: 0; border: 0;
+    background: none; color: #000; font-size: 11px; line-height: 1.4;
+  }
+}
+
+/* Guia de Transferência de Produtos (2026-08-06, docs/telas/pdv.md) — folha A4, mesmo mecanismo
+   do Fechamento de Caixa acima (texto monoespaçado 96 colunas); página nomeada própria em vez de
+   reaproveitar `fechamento-a4` só por independência entre as duas features. */
+.guia-transferencia-preview {
+  width: fit-content; margin: 16px auto; padding: 14px 18px;
+  background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--radius);
+  font-family: 'Courier New', Courier, monospace; font-size: 12px; line-height: 1.4;
+  white-space: pre; color: var(--ink); max-width: 100%; overflow-x: auto;
+}
+@page guia-transferencia-a4 {
+  size: A4;
+  margin: 15mm;
+}
+@media print {
+  .guia-transferencia-imprimir, .guia-transferencia-imprimir * { visibility: visible; }
+  .guia-transferencia-imprimir {
+    page: guia-transferencia-a4;
     position: absolute; top: 0; left: 0; width: auto; margin: 0; padding: 0; border: 0;
     background: none; color: #000; font-size: 11px; line-height: 1.4;
   }
@@ -719,6 +763,16 @@ a.menu-card:hover {
 .wizard-acoes { display: flex; gap: 12px; margin-top: 24px; }
 .wizard-acoes .btn { min-width: 200px; text-align: center; }
 .wizard-tabela-btn { width: 100%; height: 100%; text-align: left; padding: 16px; display: flex; flex-direction: column; }
+
+/* Gauge de progresso (GaugeProgresso.tsx) — anel indeterminado mostrado durante análise/prévia/
+   confirmação da importação (2026-08-06). */
+.gauge-progresso { display: flex; flex-direction: column; align-items: center; padding: 48px 16px; }
+.gauge-progresso-trilha { fill: none; stroke: var(--line); stroke-width: 8; }
+.gauge-progresso-anel {
+  fill: none; stroke: var(--accent); stroke-width: 8; stroke-linecap: round;
+  transition: stroke-dashoffset 0.15s linear;
+}
+.gauge-progresso-numero { fill: var(--ink); font-size: 18px; font-weight: 600; font-variant-numeric: tabular-nums; }
 
 /* PDV (Frente de Caixa, 2026-07-27) — rascunho de layout incorporado ao ERP. Tela só de
    demonstração visual: estado local (catálogo fixo, sem chamada de API), nenhuma regra de

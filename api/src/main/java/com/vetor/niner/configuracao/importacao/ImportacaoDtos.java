@@ -1,5 +1,6 @@
 package com.vetor.niner.configuracao.importacao;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /** DTOs da Rotina de Importação de Dados (docs/telas/importacao-dados.md). */
@@ -11,7 +12,21 @@ public final class ImportacaoDtos {
     public record TabelaImportavel(String chave, String titulo, String descricao) {
     }
 
-    public record LinhaErro(int linha, String motivo) {
+    /** {@code campo}/{@code valor} vêm preenchidos quando o erro é de conversão de um campo
+     *  específico (data/decimal/inteiro inválidos — {@link CampoInvalidoException}); ficam
+     *  {@code null} pra erros de regra de negócio que não apontam pra um valor cru específico
+     *  (ex.: "Gênero é obrigatório para pessoa física.") — a tela mostra "—" nesse caso. */
+    public record LinhaErro(int linha, String motivo, String campo, String valor) {
+
+        static LinhaErro de(int linha, RuntimeException e) {
+            if (e instanceof CampoInvalidoException cie) {
+                return new LinhaErro(linha, cie.getMessage(), cie.campo(), cie.valor());
+            }
+            String msg = e.getMessage();
+            String motivo = (msg == null || msg.isBlank())
+                    ? "Erro ao processar a linha (" + e.getClass().getSimpleName() + ")." : msg;
+            return new LinhaErro(linha, motivo, null, null);
+        }
     }
 
     /**
@@ -34,6 +49,29 @@ public final class ImportacaoDtos {
 
         public static RelatorioImportacao pendente(List<String> pendencias) {
             return new RelatorioImportacao(false, 0, 0, 0, 0, List.of(), List.of(), pendencias);
+        }
+
+        /**
+         * Monta o relatório final de uma execução — "tudo ou nada" (2026-08-06, pedido do dono
+         * do produto: revoga a ideia anterior de importar as linhas boas e só rejeitar as
+         * ruins). Só marca {@code confirmado=true} (e o chamador só commita) quando
+         * {@code confirmar=true} **e** não sobrou nenhuma linha com erro — um arquivo com
+         * qualquer linha inválida não importa nada, mesmo as linhas que estariam certas.
+         * {@code linhasImportadas}/{@code linhasIgnoradas} nunca mentem: são sempre a contagem
+         * de "o que aconteceria" — o rótulo de tela é que muda conforme {@code confirmado}
+         * (prévia = "prontas para importar"; confirmado de verdade = "importadas").
+         */
+        public static RelatorioImportacao concluir(boolean confirmar, int totalLinhas, int linhasImportadas,
+                                                     int linhasIgnoradas, List<LinhaErro> erros, List<String> avisos) {
+            boolean confirmado = confirmar && erros.isEmpty();
+            List<String> avisosFinais = avisos;
+            if (confirmar && !erros.isEmpty()) {
+                avisosFinais = new ArrayList<>(avisos);
+                avisosFinais.add("Nada foi importado: corrija a" + (erros.size() > 1 ? "s " + erros.size() + " linhas" : " linha")
+                        + " com erro listada" + (erros.size() > 1 ? "s" : "") + " abaixo e envie o arquivo novamente.");
+            }
+            return new RelatorioImportacao(confirmado, totalLinhas, linhasImportadas, linhasIgnoradas, erros.size(),
+                    erros, avisosFinais, List.of());
         }
     }
 }

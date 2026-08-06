@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
+import { useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import AjudaDaTela from '../../components/AjudaDaTela'
 import { BotaoFecharTela } from '../../components/BotaoFecharTela'
@@ -6,6 +7,7 @@ import { IconeEstoque } from '../../components/Icones'
 import { buscarPermiteQtdDecimal } from '../../lib/configuracaoGeral'
 import { formatarQuantidade } from '../../lib/masks'
 import { buscarTransferencia } from '../../lib/transferencias'
+import GuiaTransferenciaModal from './GuiaTransferenciaModal'
 
 function formatarData(iso: string): string {
   return new Date(iso).toLocaleString('pt-BR')
@@ -21,6 +23,7 @@ export default function TransferenciaDetalhe() {
   })
   const { data: cfgQtdDecimal } = useQuery({ queryKey: ['permite-qtd-decimal'], queryFn: buscarPermiteQtdDecimal })
   const permiteQtdDecimal = cfgQtdDecimal?.cfgPermiteQtdDecimal ?? true
+  const [mostrarGuia, setMostrarGuia] = useState(false)
 
   return (
     <div className="lista-tela">
@@ -32,6 +35,11 @@ export default function TransferenciaDetalhe() {
           </div>
           <div className="topbar-acoes">
             <AjudaDaTela chaveTela="estoque.transferencia.lista" />
+            {transferencia && (
+              <button type="button" className="btn ghost" onClick={() => setMostrarGuia(true)}>
+                Imprimir Guia
+              </button>
+            )}
             <BotaoFecharTela />
           </div>
         </div>
@@ -110,6 +118,14 @@ export default function TransferenciaDetalhe() {
           </div>
         )}
       </div>
+
+      {mostrarGuia && transferencia && (
+        <GuiaTransferenciaModal
+          transferencia={transferencia}
+          permiteQtdDecimal={permiteQtdDecimal}
+          aoFechar={() => setMostrarGuia(false)}
+        />
+      )}
     </div>
   )
 }

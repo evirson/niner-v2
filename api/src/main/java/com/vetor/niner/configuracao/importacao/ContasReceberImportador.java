@@ -21,7 +21,6 @@ import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 
@@ -29,8 +28,10 @@ import java.util.Optional;
  * Importação de {@code contas_receber} — só crediário (docs/telas/importacao-dados.md, seção
  * "4. contas_receber"). Uma carteira de crediário única (existente ou nova) vale para todo o
  * arquivo. O cliente é resolvido por CPF/CNPJ contra a base ao vivo (não depende de
- * {@code cliente.csv} ter sido importado na mesma sessão); a empresa, por nome. As linhas são
- * agrupadas por (cliente, empresa) e cada grupo gera UMA venda sintética
+ * {@code cliente.csv} ter sido importado na mesma sessão); a empresa, pelo {@code codigo_empresa}
+ * (2026-08-06 — trocado de nome/fantasia pra código: mais curto de digitar na planilha e sem
+ * ambiguidade de maiúscula/acento). As linhas são agrupadas por (cliente, empresa) e cada grupo
+ * gera UMA venda sintética
  * ({@code tipo_operacao='VENDA'} default, sem item associado) com {@code data_venda} = menor
  * vencimento do grupo — contorna {@code contas_receber.id_venda NOT NULL} sem alterar o schema.
  * Parcela já paga (tem {@code DATA_RECEBIMENTO}) nasce marcada como recebida, mas NUNCA gera
@@ -65,8 +66,8 @@ public class ContasReceberImportador implements ImportadorDeTabela {
     @Override
     public byte[] modeloCsv() {
         String cabecalho = "CPF_CNPJ;EMPRESA;NUMERO_PARCELA;DATA_VENCIMENTO;DATA_RECEBIMENTO;VALOR_RECEBER;VALOR_JUROS;VALOR_DESCONTO;VALOR_RECEBIDO";
-        String exemplo1 = "123.456.789-09;MINHA LOJA LTDA;1;10/09/2026;;150,00;0;0;0";
-        String exemplo2 = "123.456.789-09;MINHA LOJA LTDA;2;10/10/2026;;150,00;0;0;0";
+        String exemplo1 = "123.456.789-09;1;1;10/09/2026;;150,00;0;0;0";
+        String exemplo2 = "123.456.789-09;1;2;10/10/2026;;150,00;0;0;0";
         return (cabecalho + "\r\n" + exemplo1 + "\r\n" + exemplo2 + "\r\n").getBytes(StandardCharsets.UTF_8);
     }
 
@@ -92,27 +93,27 @@ public class ContasReceberImportador implements ImportadorDeTabela {
                 }
                 long idCliente = buscarIdCliente(cpfCnpj).orElseThrow(() -> new IllegalArgumentException(
                         "Nenhum cliente cadastrado com o CPF/CNPJ \"" + linha.valor("CPF_CNPJ") + "\"."));
-                String nomeEmpresa = linha.valor("EMPRESA");
-                if (nomeEmpresa == null) {
+                Integer codigoEmpresa = ImportacaoCsv.inteiro("EMPRESA", linha.valor("EMPRESA"));
+                if (codigoEmpresa == null) {
                     throw new IllegalArgumentException("EMPRESA é obrigatório.");
                 }
-                long idEmpresa = buscarIdEmpresa(nomeEmpresa).orElseThrow(() -> new IllegalArgumentException(
-                        "Nenhuma empresa cadastrada com o nome \"" + nomeEmpresa + "\"."));
+                long idEmpresa = buscarIdEmpresa(codigoEmpresa).orElseThrow(() -> new IllegalArgumentException(
+                        "Nenhuma empresa cadastrada com o código " + codigoEmpresa + "."));
 
-                Integer numeroParcela = ImportacaoCsv.inteiro(linha.valor("NUMERO_PARCELA"));
+                Integer numeroParcela = ImportacaoCsv.inteiro("NUMERO_PARCELA", linha.valor("NUMERO_PARCELA"));
                 if (numeroParcela == null) {
                     throw new IllegalArgumentException("NUMERO_PARCELA é obrigatório.");
                 }
-                LocalDate vencimento = ImportacaoCsv.data(linha.valor("DATA_VENCIMENTO"));
+                LocalDate vencimento = ImportacaoCsv.data("DATA_VENCIMENTO", linha.valor("DATA_VENCIMENTO"));
                 if (vencimento == null) {
                     throw new IllegalArgumentException("DATA_VENCIMENTO é obrigatório.");
                 }
-                BigDecimal valorReceber = ImportacaoCsv.decimal(linha.valor("VALOR_RECEBER"));
+                BigDecimal valorReceber = ImportacaoCsv.decimal("VALOR_RECEBER", linha.valor("VALOR_RECEBER"));
                 if (valorReceber == null || valorReceber.signum() <= 0) {
                     throw new IllegalArgumentException("VALOR_RECEBER deve ser maior que zero.");
                 }
-                LocalDate recebimento = ImportacaoCsv.data(linha.valor("DATA_RECEBIMENTO"));
-                BigDecimal valorRecebido = ImportacaoCsv.decimal(linha.valor("VALOR_RECEBIDO"));
+                LocalDate recebimento = ImportacaoCsv.data("DATA_RECEBIMENTO", linha.valor("DATA_RECEBIMENTO"));
+                BigDecimal valorRecebido = ImportacaoCsv.decimal("VALOR_RECEBIDO", linha.valor("VALOR_RECEBIDO"));
 
                 String chaveGrupo = idCliente + "|" + idEmpresa;
                 grupos.computeIfAbsent(chaveGrupo, k -> new ArrayList<>()).add(new LinhaResolvida(
@@ -120,7 +121,7 @@ public class ContasReceberImportador implements ImportadorDeTabela {
                         inicioDoDia(vencimento), recebimento == null ? null : inicioDoDia(recebimento),
                         valorReceber, recebimento != null && valorRecebido != null ? valorRecebido : BigDecimal.ZERO));
             } catch (RuntimeException e) {
-                erros.add(new LinhaErro(linha.numeroLinha(), mensagem(e)));
+                erros.add(LinhaErro.de(linha.numeroLinha(), e));
             }
         }
 
@@ -152,17 +153,14 @@ public class ContasReceberImportador implements ImportadorDeTabela {
                             .update();
                     importadas++;
                 } catch (RuntimeException e) {
-                    erros.add(new LinhaErro(r.origem().numeroLinha(), mensagem(e)));
+                    erros.add(LinhaErro.de(r.origem().numeroLinha(), e));
                 }
             }
         }
 
-        int rejeitadas = erros.size();
-        RelatorioImportacao relatorio = new RelatorioImportacao(
-                confirmar, linhas.size(), importadas, 0, rejeitadas, erros,
-                List.of("Nenhum lançamento de caixa é criado para parcelas já pagas — só o histórico é marcado."),
-                List.of());
-        if (!confirmar) {
+        RelatorioImportacao relatorio = RelatorioImportacao.concluir(confirmar, linhas.size(), importadas, 0, erros,
+                List.of("Nenhum lançamento de caixa é criado para parcelas já pagas — só o histórico é marcado."));
+        if (!relatorio.confirmado()) {
             throw new SimulacaoConcluidaException(relatorio);
         }
         return relatorio;
@@ -219,15 +217,12 @@ public class ContasReceberImportador implements ImportadorDeTabela {
                 .query(Long.class).optional();
     }
 
-    private Optional<Long> buscarIdEmpresa(String nome) {
-        String nomeNormalizado = nome.trim().toUpperCase(Locale.ROOT);
+    private Optional<Long> buscarIdEmpresa(int codigoEmpresa) {
         return jdbc.sql("""
                         SELECT id_empresa FROM empresa
-                        WHERE id_tenant = plataforma.tenant_atual()
-                              AND (UPPER(razao_social) = ? OR UPPER(nome_fantasia) = ?)
-                        LIMIT 1
+                        WHERE id_tenant = plataforma.tenant_atual() AND codigo_empresa = ?
                         """)
-                .params(nomeNormalizado, nomeNormalizado)
+                .param(codigoEmpresa)
                 .query(Long.class).optional();
     }
 
@@ -235,8 +230,4 @@ public class ContasReceberImportador implements ImportadorDeTabela {
         return data.atStartOfDay(ZoneId.systemDefault()).toOffsetDateTime();
     }
 
-    private static String mensagem(RuntimeException e) {
-        String msg = e.getMessage();
-        return (msg == null || msg.isBlank()) ? "Erro ao processar a linha (" + e.getClass().getSimpleName() + ")." : msg;
-    }
 }

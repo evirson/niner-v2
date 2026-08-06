@@ -110,4 +110,51 @@ public final class PdvDtos {
             BigDecimal valorLiquido,
             List<PagamentoGerado> pagamentos) {
     }
+
+    /** Uma linha de item da papeleta de venda (2026-08-06) — {@code valorTotal} é bruto
+     *  ({@code valorUnitario × qtd}); desconto/acréscimo só aparecem somados no rodapé da
+     *  papeleta, nunca por item (mesmo formato do mockup pedido pelo dono do produto). */
+    public record ItemComprovanteVenda(
+            String sku, String descricaoProduto, String variacaoLinha, String variacaoColuna,
+            BigDecimal qtd, BigDecimal valorUnitario, BigDecimal valorTotal) {
+    }
+
+    /** {@code crediario} (2026-08-06) diferencia o rótulo na papeleta: "VALOR PAGO EM" (dinheiro/
+     *  cartão, já circulou) vs "VALOR A PAGAR EM" (crediário, ainda em aberto — ver parcelas). */
+    public record PagamentoComprovanteVenda(String nomeCarteira, boolean crediario, BigDecimal valorPago) {
+    }
+
+    /** Uma parcela de CREDIARIO em aberto (2026-08-06) — a papeleta lista todas pro consumidor
+     *  conferir vencimento/valor; só aparece na papeleta quando a venda teve pagamento nessa
+     *  categoria (lista vazia = nenhuma linha de crediário nessa venda). */
+    public record ParcelaComprovanteVenda(
+            int numeroParcela, int totalParcelas, OffsetDateTime dataVencimento, BigDecimal valorParcela) {
+    }
+
+    /**
+     * Papeleta de venda pra impressão térmica 80mm (2026-08-06, docs/telas/pdv.md) — aberta
+     * automaticamente após F5 efetivar a venda. {@code subtotal}/{@code descontos}/{@code
+     * acrescimos} vêm somados direto de {@code produto_movimento_detalhe} (não recalculados a
+     * partir da regra de negócio do split-tender) — é o valor de fato gravado, garantindo que
+     * bate com {@code totalAPagar = subtotal − descontos + acrescimos}, que por sua vez bate com
+     * a soma de {@code pagamentos} (ver PdvVendaService.buscarComprovante). {@code nomeOperador}
+     * vem de {@code venda.id_caixa → caixa_mestre.id_usuario} — {@code null} em venda gravada
+     * antes dessa coluna existir.
+     */
+    public record ComprovanteVendaResponse(
+            long idVenda,
+            String nomeEmpresa,
+            int codigoEmpresa,
+            OffsetDateTime dataVenda,
+            String nomeCliente,
+            String nomeVendedor,
+            String nomeOperador,
+            List<ItemComprovanteVenda> itens,
+            BigDecimal subtotal,
+            BigDecimal descontos,
+            BigDecimal acrescimos,
+            BigDecimal totalAPagar,
+            List<PagamentoComprovanteVenda> pagamentos,
+            List<ParcelaComprovanteVenda> parcelasCrediario) {
+    }
 }

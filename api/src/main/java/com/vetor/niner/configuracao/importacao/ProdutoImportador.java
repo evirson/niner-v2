@@ -164,17 +164,15 @@ public class ProdutoImportador implements ImportadorDeTabela {
                 importadas += processarGrupo(entradaGrupo.getKey(), linhasGrupo, rotulos, mapeamentoEmpresas,
                         movimentoPorEmpresa, avisos);
             } catch (RuntimeException e) {
-                String motivo = mensagem(e);
                 for (LinhaCsv l : linhasGrupo) {
-                    erros.add(new LinhaErro(l.numeroLinha(), motivo));
+                    erros.add(LinhaErro.de(l.numeroLinha(), e));
                 }
             }
         }
 
-        int rejeitadas = erros.size();
-        RelatorioImportacao relatorio = new RelatorioImportacao(
-                confirmar, linhas.size(), importadas, 0, rejeitadas, erros, avisos, List.of());
-        if (!confirmar) {
+        RelatorioImportacao relatorio =
+                RelatorioImportacao.concluir(confirmar, linhas.size(), importadas, 0, erros, avisos);
+        if (!relatorio.confirmado()) {
             throw new SimulacaoConcluidaException(relatorio);
         }
         return relatorio;
@@ -244,23 +242,57 @@ public class ProdutoImportador implements ImportadorDeTabela {
             return existente.get();
         }
 
-        BigDecimal precoCusto = ImportacaoCsv.decimal(vencedora.valor("PRECO_CUSTO"));
-        BigDecimal percentualVenda = ImportacaoCsv.decimal(vencedora.valor("PERCENTUAL_VENDA"));
-        BigDecimal precoVenda = ImportacaoCsv.decimal(vencedora.valor("PRECO_VENDA"));
+        BigDecimal precoCusto = ImportacaoCsv.decimal("PRECO_CUSTO", vencedora.valor("PRECO_CUSTO"));
+        BigDecimal percentualVenda = ImportacaoCsv.decimal("PERCENTUAL_VENDA", vencedora.valor("PERCENTUAL_VENDA"));
+        BigDecimal precoVenda = ImportacaoCsv.decimal("PRECO_VENDA", vencedora.valor("PRECO_VENDA"));
         if (precoCusto == null || percentualVenda == null || precoVenda == null) {
             throw new IllegalArgumentException("PRECO_CUSTO, PERCENTUAL_VENDA e PRECO_VENDA são obrigatórios.");
         }
 
+        // Início/final/preço de oferta são opcionais em conjunto (regra "tudo ou nada" —
+        // preencheu um, os três viram obrigatórios; nenhum preenchido, produto nasce sem
+        // oferta). PRECO_OFERTA = "0" é tratado como "não preenchido" (não `0,00`): planilha
+        // exportada de outro sistema costuma trazer zero em vez de célula vazia em coluna
+        // numérica, e uma oferta de R$ 0,00 não é um caso de negócio real — sem essa
+        // normalização, "0" sozinho na coluna disparava a exigência das duas datas por engano
+        // (2026-08-06, achado real de teste).
+        BigDecimal precoOferta = ImportacaoCsv.decimal("PRECO_OFERTA", vencedora.valor("PRECO_OFERTA"));
+        if (precoOferta != null && precoOferta.signum() == 0) {
+            precoOferta = null;
+        }
+
         ProdutoRequest req = new ProdutoRequest(
                 descricao, marca, referencia, precoCusto, percentualVenda, precoVenda,
-                inicioDoDiaOuNulo(ImportacaoCsv.data(vencedora.valor("DATA_INICIO_OFERTA"))),
-                inicioDoDiaOuNulo(ImportacaoCsv.data(vencedora.valor("DATA_FINAL_OFERTA"))),
-                ImportacaoCsv.decimal(vencedora.valor("PRECO_OFERTA")),
-                vencedora.valor("CODIGO_NCM"),
-                ImportacaoCsv.decimal(vencedora.valor("PESO_BRUTO")),
-                ImportacaoCsv.decimal(vencedora.valor("PESO_LIQUIDO")),
+                inicioDoDiaOuNulo(ImportacaoCsv.data("DATA_INICIO_OFERTA", vencedora.valor("DATA_INICIO_OFERTA"))),
+                inicioDoDiaOuNulo(ImportacaoCsv.data("DATA_FINAL_OFERTA", vencedora.valor("DATA_FINAL_OFERTA"))),
+                precoOferta,
+                ncmExistenteOuNulo(vencedora.valor("CODIGO_NCM")),
+                ImportacaoCsv.decimal("PESO_BRUTO", vencedora.valor("PESO_BRUTO")),
+                ImportacaoCsv.decimal("PESO_LIQUIDO", vencedora.valor("PESO_LIQUIDO")),
                 rotuloLinha, rotuloColuna, true, List.of());
         return produtoService.criar(req).idProduto();
+    }
+
+    /**
+     * NCM é opcional e é referência (FK) para {@code cfg_produto_ncm} — código que não existe
+     * na tabela (ou vazio, ou em formato inválido) entra como {@code null} em vez de rejeitar a
+     * linha (pedido do dono do produto, 2026-08-06): a violação de FK não é motivo para barrar
+     * a importação inteira. Remove pontuação antes de conferir (planilha comum traz NCM como
+     * "6402.99.90"; a tabela de referência guarda só os 8 dígitos, ex. "64029990") — se depois
+     * de limpo ainda não bater com nenhum código cadastrado, é tratado como inválido.
+     */
+    private String ncmExistenteOuNulo(String codigoNcm) {
+        if (codigoNcm == null || codigoNcm.isBlank()) {
+            return null;
+        }
+        String codigoN = codigoNcm.replaceAll("[^0-9]", "");
+        if (codigoN.isEmpty()) {
+            return null;
+        }
+        Boolean existe = jdbc.sql("SELECT EXISTS (SELECT 1 FROM cfg_produto_ncm WHERE codigo_ncm = ?)")
+                .param(codigoN)
+                .query(Boolean.class).single();
+        return Boolean.TRUE.equals(existe) ? codigoN : null;
     }
 
     private int processarVariacao(long idProduto, List<LinhaCsv> subgrupo, Map<Integer, Long> mapeamentoEmpresas,
@@ -278,7 +310,7 @@ public class ProdutoImportador implements ImportadorDeTabela {
             String coluna = "QUANTIDADE_ESTOQUE_" + mapeamento.getKey();
             BigDecimal total = BigDecimal.ZERO;
             for (LinhaCsv l : subgrupo) {
-                BigDecimal v = ImportacaoCsv.decimal(l.valor(coluna));
+                BigDecimal v = ImportacaoCsv.decimal(coluna, l.valor(coluna));
                 if (v != null) {
                     total = total.add(v);
                 }
@@ -402,7 +434,7 @@ public class ProdutoImportador implements ImportadorDeTabela {
 
     private static BigDecimal decimalSeguro(String valor) {
         try {
-            return ImportacaoCsv.decimal(valor);
+            return ImportacaoCsv.decimal("valor", valor);
         } catch (IllegalArgumentException e) {
             return null;
         }
@@ -465,10 +497,5 @@ public class ProdutoImportador implements ImportadorDeTabela {
 
     private static OffsetDateTime inicioDoDiaOuNulo(LocalDate data) {
         return data == null ? null : data.atStartOfDay(ZoneId.systemDefault()).toOffsetDateTime();
-    }
-
-    private static String mensagem(RuntimeException e) {
-        String msg = e.getMessage();
-        return (msg == null || msg.isBlank()) ? "Erro ao processar o produto (" + e.getClass().getSimpleName() + ")." : msg;
     }
 }

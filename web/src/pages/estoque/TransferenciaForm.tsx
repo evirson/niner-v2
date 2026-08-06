@@ -340,7 +340,7 @@ export default function TransferenciaForm() {
         <EscolherDestinoModal
           nomeOrigem={eu.empresa.nome}
           opcoesDestino={opcoesDestino}
-          aoFechar={() => navigate('/estoque')}
+          aoFechar={() => navigate(-1)}
           aoConfirmar={(id) => setIdEmpresaDestino(id)}
         />
       )}

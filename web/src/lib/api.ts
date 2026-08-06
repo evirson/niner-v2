@@ -10,6 +10,11 @@ export function setToken(t: string): void {
 }
 export function clearToken(): void {
   localStorage.removeItem(TOKEN_KEY)
+  // Avisa o AuthProvider (contexto React, em memória) de que o token morreu — sem isso,
+  // RequireAuth continuava achando que o usuário estava logado (o estado em memória não
+  // reagia a mudanças feitas fora do React, como esta) e não mandava de volta pro /login
+  // sozinho depois de uma sessão expirar (2026-08-06, bug real encontrado em teste manual).
+  window.dispatchEvent(new Event('niner:sessao-expirada'))
 }
 
 /**
@@ -32,6 +37,31 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * Um 401 quer dizer coisas diferentes conforme havia ou não um token sendo usado:
+ * - Com token (chamada autenticada que a API rejeitou) → a sessão morreu de verdade
+ *   ("Sessão expirada.", limpa o token).
+ * - Sem token (ex.: `/api/publico/login` com credenciais erradas) → não é sessão nenhuma,
+ *   é a própria tentativa de login/ação pública sendo rejeitada — mostra o motivo real que
+ *   o backend mandou (`detail`/`title`, ex. "Credenciais inválidas."), sem mascarar.
+ * Bug real encontrado em teste manual (2026-08-06): antes disso, TODO 401 — inclusive login
+ * com senha errada — virava "Sessão expirada.", escondendo o motivo verdadeiro.
+ */
+async function tratarNaoAutorizado(res: Response, tokenUsado: string | null): Promise<never> {
+  if (tokenUsado) {
+    clearToken()
+    throw new ApiError(401, 'Sessão expirada.')
+  }
+  let msg = 'Não autorizado.'
+  try {
+    const p = await res.json()
+    msg = p.detail || p.title || msg
+  } catch {
+    /* resposta sem corpo JSON */
+  }
+  throw new ApiError(401, msg)
+}
+
 /** Fetch autenticado à API. Injeta o Bearer token e trata Problem Details (RFC 9457). */
 export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   const token = getToken()
@@ -44,8 +74,7 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
     },
   })
   if (res.status === 401) {
-    clearToken()
-    throw new ApiError(401, 'Sessão expirada.')
+    return tratarNaoAutorizado(res, token)
   }
   if (!res.ok) {
     let msg = 'Ocorreu um erro.'
@@ -81,8 +110,7 @@ export async function apiUpload<T>(path: string, formData: FormData, method: str
     body: formData,
   })
   if (res.status === 401) {
-    clearToken()
-    throw new ApiError(401, 'Sessão expirada.')
+    return tratarNaoAutorizado(res, token)
   }
   if (!res.ok) {
     let msg = 'Ocorreu um erro.'

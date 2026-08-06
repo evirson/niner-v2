@@ -5,14 +5,15 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
+import java.time.DateTimeException;
 import java.time.LocalDate;
-import java.time.format.DateTimeFormatter;
-import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * Leitura de CSV da Rotina de Importação de Dados (docs/telas/importacao-dados.md). Formato
@@ -22,7 +23,11 @@ import java.util.Map;
  */
 public final class ImportacaoCsv {
 
-    private static final DateTimeFormatter FORMATO_DATA = DateTimeFormatter.ofPattern("dd/MM/uuuu");
+    /** dd/mm/aaaa tolerante: separador `/`, `-` ou `.`; dia/mês com 1 ou 2 dígitos; qualquer
+     *  coisa depois da data (hora, minuto, segundo — ex. "28.07.1980 00:00:00") é ignorada, não
+     *  precisa bater o resto da string (2026-08-06, planilhas exportadas de outros sistemas
+     *  costumam vir com timestamp completo mesmo em coluna de "só data"). */
+    private static final Pattern PADRAO_DATA = Pattern.compile("^(\\d{1,2})[/\\-.](\\d{1,2})[/\\-.](\\d{4})");
 
     private ImportacaoCsv() {
     }
@@ -112,8 +117,10 @@ public final class ImportacaoCsv {
 
     /** Decimal BR ("1.234,56" ou "35,00"). Sem vírgula, assume que já está em formato simples
      *  ("100") — só remove separador de milhar quando há vírgula decimal presente, pra não
-     *  confundir "3.5" americano por engano com "3.500". */
-    public static BigDecimal decimal(String valor) {
+     *  confundir "3.5" americano por engano com "3.500". {@code campo} é o nome da coluna
+     *  (ex. "PRECO_CUSTO") — entra na mensagem de erro pra quem for corrigir a planilha saber
+     *  exatamente qual coluna revisar, não só o valor cru. */
+    public static BigDecimal decimal(String campo, String valor) {
         if (valor == null || valor.isBlank()) {
             return null;
         }
@@ -124,30 +131,44 @@ public final class ImportacaoCsv {
         try {
             return new BigDecimal(s);
         } catch (NumberFormatException e) {
-            throw new IllegalArgumentException("Valor numérico inválido: \"" + valor + "\".");
+            throw new CampoInvalidoException(campo, valor, "valor numérico inválido");
         }
     }
 
-    public static Integer inteiro(String valor) {
+    public static Integer inteiro(String campo, String valor) {
         if (valor == null || valor.isBlank()) {
             return null;
         }
         try {
             return Integer.valueOf(valor.trim());
         } catch (NumberFormatException e) {
-            throw new IllegalArgumentException("Valor inteiro inválido: \"" + valor + "\".");
+            throw new CampoInvalidoException(campo, valor, "valor inteiro inválido");
         }
     }
 
-    public static LocalDate data(String valor) {
+    /** Aceita {@code /}, {@code -} ou {@code .} como separador e ignora qualquer hora/minuto/
+     *  segundo depois da data — ver {@link #PADRAO_DATA}. */
+    public static LocalDate data(String campo, String valor) {
         if (valor == null || valor.isBlank()) {
             return null;
         }
-        try {
-            return LocalDate.parse(valor.trim(), FORMATO_DATA);
-        } catch (DateTimeParseException e) {
-            throw new IllegalArgumentException("Data inválida (use dd/mm/aaaa): \"" + valor + "\".");
+        Matcher m = PADRAO_DATA.matcher(valor.trim());
+        if (!m.find()) {
+            throw new CampoInvalidoException(campo, valor, "data inválida (use dd/mm/aaaa)");
         }
+        try {
+            return LocalDate.of(Integer.parseInt(m.group(3)), Integer.parseInt(m.group(2)), Integer.parseInt(m.group(1)));
+        } catch (DateTimeException e) {
+            throw new CampoInvalidoException(campo, valor, "data inválida (use dd/mm/aaaa)");
+        }
+    }
+
+    /** Remove todo espaço em branco de dentro do valor (não só nas pontas — {@link LinhaCsv#valor}
+     *  já dá trim) — usado em campos que nunca têm espaço de verdade (ex.: e-mail), onde um
+     *  espaço no meio quase sempre é sujeira de copiar/colar de outro sistema, não dado real
+     *  (2026-08-06, pedido do dono do produto pro campo EMAIL da importação). */
+    public static String semEspacos(String valor) {
+        return valor == null ? null : valor.replaceAll("\\s+", "");
     }
 
     public static boolean booleano(String valor, boolean padrao) {

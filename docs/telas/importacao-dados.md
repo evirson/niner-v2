@@ -173,8 +173,9 @@ de `cliente.csv` ter sido importado na mesma sessão — funciona mesmo dias dep
 encontrado → linha **rejeitada**, cai no relatório de erro. Cliente sem CPF/CNPJ cadastrado não
 tem como ter crediário importado por esta rotina (limitação conhecida, aceita).
 
-**Resolução da empresa:** por nome (`razão social` **ou** `nome fantasia`, sem diferenciar
-maiúsculas/minúsculas) contra as empresas do tenant. Não encontrada → linha rejeitada.
+**Resolução da empresa:** pelo `codigo_empresa` (o código curto da empresa, ex. `1`, `2` — visível
+na tela de Empresas; 2026-08-06, trocado de nome/fantasia pra código: mais curto de digitar e sem
+ambiguidade de maiúscula/acento). Código inexistente → linha rejeitada.
 
 **Venda sintética (contorna `contas_receber.id_venda NOT NULL` sem mexer no schema):** as linhas
 são agrupadas por **`(cliente, empresa)`** — pra cada grupo, uma única linha é inserida em `venda`

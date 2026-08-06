@@ -10,6 +10,10 @@ export interface TabelaImportavel {
 export interface LinhaErro {
   linha: number
   motivo: string
+  /** Preenchidos só quando o erro é de conversão de um campo específico (data/número
+   *  inválidos) — `null` para erros de regra de negócio sem um valor cru associado. */
+  campo: string | null
+  valor: string | null
 }
 
 export interface RelatorioImportacao {

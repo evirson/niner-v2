@@ -128,3 +128,55 @@ export function buscarClientesPdv(busca: string): Promise<PdvCliente[]> {
 export function efetivarVenda(payload: EfetivarVendaRequest): Promise<VendaEfetivada> {
   return api<VendaEfetivada>('/api/v1/pdv/vendas', { method: 'POST', body: JSON.stringify(payload) })
 }
+
+/** Uma linha de item da papeleta de venda (2026-08-06) — `valorTotal` é bruto (unitário × qtd);
+ *  desconto/acréscimo só aparecem somados no rodapé da papeleta, nunca por item. */
+export interface ItemComprovanteVenda {
+  sku: string
+  descricaoProduto: string
+  variacaoLinha: string | null
+  variacaoColuna: string | null
+  qtd: number
+  valorUnitario: number
+  valorTotal: number
+}
+
+/** `crediario` diferencia o rótulo na papeleta: "VALOR PAGO EM" (já circulou) vs "VALOR A PAGAR
+ *  EM" (crediário, ainda em aberto — ver `parcelasCrediario`). */
+export interface PagamentoComprovanteVenda {
+  nomeCarteira: string
+  crediario: boolean
+  valorPago: number
+}
+
+/** Uma parcela de CREDIARIO em aberto (2026-08-06) — só existe na papeleta quando a venda teve
+ *  pagamento nessa categoria (`parcelasCrediario` vem `[]` senão). */
+export interface ParcelaComprovanteVenda {
+  numeroParcela: number
+  totalParcelas: number
+  dataVencimento: string
+  valorParcela: number
+}
+
+/** Papeleta de venda pra impressão térmica 80mm, buscada logo após o F5 efetivar a venda.
+ *  `nomeVendedor`/`nomeOperador` podem vir `null` (venda gravada antes de existir vínculo). */
+export interface ComprovanteVenda {
+  idVenda: number
+  nomeEmpresa: string
+  codigoEmpresa: number
+  dataVenda: string
+  nomeCliente: string | null
+  nomeVendedor: string | null
+  nomeOperador: string | null
+  itens: ItemComprovanteVenda[]
+  subtotal: number
+  descontos: number
+  acrescimos: number
+  totalAPagar: number
+  pagamentos: PagamentoComprovanteVenda[]
+  parcelasCrediario: ParcelaComprovanteVenda[]
+}
+
+export function buscarComprovanteVenda(idVenda: number): Promise<ComprovanteVenda> {
+  return api<ComprovanteVenda>(`/api/v1/pdv/vendas/${idVenda}/comprovante`)
+}
