@@ -107,11 +107,31 @@ Cobertos por `RecebimentoCrediarioCrudTest` (+2 testes:
 `comprovanteTrazCabecalhoParcelasEFormasDePagamento`, `comprovanteDeLoteInexistenteResponde404`).
 Suíte completa do projeto: 213/213 verdes (2026-07-30).
 
+## Reimpressão (2026-08-06 — deixou de ser non-goal)
+
+Tela nova, **Reimpressão de Recebimento de Crediário**
+(`/reimpressao-recebimento-crediario`, `ReimpressaoRecebimentoCrediario.tsx`, grupo de menu
+"Frente de Loja › Reimpressões") — 100% frontend, reaproveita o endpoint que o Estorno de
+Crediário já usava pra achar lotes (`GET /api/v1/recebimento-crediario/estornos`), só sem a ação
+de estornar:
+
+- Filtros: **nome do cliente** (obrigatório — mesma regra do Estorno, evita busca sem limite) +
+  data inicial/final do recebimento (opcionais).
+- Grid com um lote por linha (data, cliente, qtd. de parcelas, valor total, formas de pagamento
+  usadas) — mesmas colunas do Estorno, sem a ação de estornar.
+- Clicar numa linha abre `ComprovanteRecebimentoModal` com a prop `reimpressao` ligada.
+  `montarLinhasComprovante(c, reimpressao)` ganha um segundo parâmetro opcional: quando `true`,
+  troca o título "COMPROVANTE DE PAGAMENTO / DE CREDIARIO" por **"REIMPRESSÃO DE PAPELETA DE /
+  RECEBIMENTO DE CREDIARIO"** e acrescenta **"Impresso em: dd/mm/aaaa hh:mm"** (data/hora da
+  reimpressão) no final, depois da linha "Identificacao".
+
+Testado com um lote real (2 parcelas, R$ 371,40).
+
 ## Ajuda da tela (manual de operação + vídeo) — obrigatório (R22 / §3.7.1)
 
-Não se aplica — o comprovante é um popup automático dentro do fluxo de Recebimento de
-Crediário (`financeiro.recebimentocrediario.tela`), não uma tela própria com rotina de
-navegação.
+O popup em si (pós-efetivar) não se aplica — é automático dentro do fluxo de Recebimento de
+Crediário (`financeiro.recebimentocrediario.tela`), sem rotina de navegação própria. A tela de
+**Reimpressão** tem a sua: `financeiro.reimpressaorecebimentocrediario.tela`.
 
 ## Impacto no banco
 
@@ -124,7 +144,6 @@ Nenhum.
 
 ## Non-goals desta feature
 
-- **Reimpressão depois de fechar o popup** — sem botão de "ver comprovante" na listagem/estorno.
 - **Layout configurável (logo, campos extras, papel de tamanhos diferentes)** — só 80mm, layout
   fixo.
 - **Impressão direta via ESC/POS (bytes crus pra impressora)** — passa pelo driver do sistema

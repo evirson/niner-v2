@@ -126,11 +126,30 @@ existir (ou for de outro tenant — RLS).
 Sem testes automatizados ainda (compilação/typecheck limpos + testes manuais via API real,
 descritos acima, não suíte JUnit).
 
+## Reimpressão (2026-08-06, mesmo dia — deixou de ser non-goal)
+
+Tela nova, **Reimpressão de Papeleta de Venda** (`/reimpressao-papeleta-venda`,
+`ReimpressaoPapeletaVenda.tsx`, grupo de menu "Frente de Loja › Reimpressões", junto com a
+reimpressão de crediário abaixo) — 100% frontend, zero endpoint novo:
+
+- Filtros: **Nº da venda** (ignora os demais quando preenchido) **ou** **data inicial + data
+  final + cliente** (popup de busca, mesmo componente do PDV) — reaproveita
+  `GET /api/v1/vendas/pesquisa` (Pesquisa de Vendas), que já tinha exatamente esses filtros.
+- Grid com os dados da venda (empresa, nº, data, cliente, vendedor, valor, situação).
+- Clicar numa linha abre `ComprovantePapeletaModal` com a prop `reimpressao` ligada — o mesmo
+  componente do popup pós-F5, sem duplicar lógica de montagem do papel.
+  `montarLinhasComprovanteVenda(c, reimpressao)` ganha um segundo parâmetro opcional: quando
+  `true`, insere **"REIMPRESSÃO DE PAPELETA DE VENDA"** centralizado logo abaixo do nome da
+  empresa e acrescenta **"Impresso em: dd/mm/aaaa hh:mm"** (data/hora da reimpressão, não da
+  venda) no final, antes do último divisor.
+
+Testado com venda real, inclusive uma venda sintética de importação (sem itens/vendedor/
+operador) — os campos vazios caem certinho em "(não informado)".
+
 ## Ajuda da tela (manual de operação + vídeo) — obrigatório (R22 / §3.7.1)
 
-Não se aplica — a papeleta é um popup automático dentro do fluxo do PDV
-(`vendas.pdv`, sem `AjudaDaTela` própria — o próprio PDV também não tem uma ainda), não uma tela
-própria com rotina de navegação.
+O popup em si (pós-F5) não se aplica — é automático dentro do fluxo do PDV, sem `AjudaDaTela`
+própria. A tela de **Reimpressão** tem a sua: `vendas.reimpressaopapeleta.tela`.
 
 ## Impacto no banco
 
@@ -144,8 +163,6 @@ Nenhum.
 
 ## Non-goals desta feature
 
-- **Reimpressão depois de fechar o popup** — sem botão de "ver papeleta" na Pesquisa de Vendas;
-  item registrado em Implementações Futuras ("Reimpressão de Papeleta de Venda").
 - **Layout configurável (logo, campos extras, papel de tamanhos diferentes)** — só 80mm/64
   colunas, layout fixo.
 - **Impressão direta via ESC/POS** — passa pelo driver do sistema operacional via diálogo de

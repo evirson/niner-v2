@@ -151,6 +151,33 @@ sintética pra crediário importado sem mexer em schema) e **Exportação de Dad
 
 ## Linha do tempo
 
+### 2026-08-06 — Reimpressão de Papeleta de Venda e de Recebimento de Crediário (3ª sessão do dia)
+
+Fecha os dois itens que tinham entrado em Implementações Futuras horas antes, no mesmo dia
+([[project_papeleta_venda]]/entrada anterior desta linha do tempo). Nenhuma das duas precisou de
+endpoint novo — as duas telas são 100% frontend, reaproveitando busca já existente:
+
+- **Reimpressão de Papeleta de Venda** — filtra por Nº da venda, ou por período + cliente
+  (reaproveita `GET /api/v1/vendas/pesquisa`, o mesmo endpoint da Pesquisa de Vendas). Abre a
+  papeleta com `reimpressao` ligado: título vira "REIMPRESSÃO DE PAPELETA DE VENDA" e ganha
+  "Impresso em: dd/mm/aaaa hh:mm" no final.
+- **Reimpressão de Recebimento de Crediário** — filtra por cliente (obrigatório, mesma regra do
+  Estorno de Crediário) + período (reaproveita `GET /recebimento-crediario/estornos`, mesmo
+  endpoint do Estorno, só sem a ação de estornar). Mesmo tratamento de título/rodapé no
+  comprovante existente.
+
+Ambas reaproveitam o componente de popup já existente (`ComprovantePapeletaModal`/
+`ComprovanteRecebimentoModal`) com uma prop `reimpressao` nova — as funções de montagem do papel
+(`montarLinhasComprovanteVenda`/`montarLinhasComprovante`, `web/src/lib/comprovante.ts`) ganharam
+um segundo parâmetro opcional em vez de duplicar a lógica de layout.
+
+Pedido seguinte, mesmo dia: os dois itens de menu foram **agregados num submenu "Reimpressões"**
+(mesmo padrão de "Caixa"/"Cancelamentos" dentro de Frente de Loja) em vez de ficarem soltos.
+
+Sem testes automatizados (typecheck limpo + teste manual com venda/recebimento reais do tenant
+de teste — feature 100% frontend, sem lógica de backend nova pra testar). Commitado/pushado
+(`885d114`).
+
 ### 2026-08-06 — Papeleta de Venda (PDV) + Guia de Transferência + correções na Importação de Dados
 
 Sessão de continuação do mesmo dia. Três frentes:
