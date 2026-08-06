@@ -60,13 +60,18 @@ function formatarDataHora(iso: string): string {
  * de verdade reusada pela pré-visualização na tela, pela impressão (window.print) e pelo PDF
  * (jsPDF com fonte courier), garantindo que os três saem idênticos.
  */
-export function montarLinhasComprovante(c: ComprovanteRecebimento): string[] {
+export function montarLinhasComprovante(c: ComprovanteRecebimento, reimpressao: boolean = false): string[] {
   const linhas: string[] = []
   linhas.push(linha())
   linhas.push(centralizar(c.nomeEmpresa))
   linhas.push(linha())
-  linhas.push(centralizar('COMPROVANTE DE PAGAMENTO'))
-  linhas.push(centralizar('DE CREDIARIO'))
+  if (reimpressao) {
+    linhas.push(centralizar('REIMPRESSÃO DE PAPELETA DE'))
+    linhas.push(centralizar('RECEBIMENTO DE CREDIARIO'))
+  } else {
+    linhas.push(centralizar('COMPROVANTE DE PAGAMENTO'))
+    linhas.push(centralizar('DE CREDIARIO'))
+  }
   linhas.push(linha())
   linhas.push(`Cliente: ${c.nomeCliente}`)
   linhas.push(linha())
@@ -93,6 +98,10 @@ export function montarLinhasComprovante(c: ComprovanteRecebimento): string[] {
   linhas.push(`Data Pagamento: ${formatarDataHora(c.dataPagamento)}`)
   linhas.push(`Identificacao: ${c.idCaixa}-${c.idLoteRecebimento}`)
   linhas.push(linha())
+  if (reimpressao) {
+    linhas.push(`Impresso em: ${formatarDataHora(new Date().toISOString())}`)
+    linhas.push(linha())
+  }
 
   return linhas
 }
@@ -252,13 +261,17 @@ function montarDescricaoEmLinhas(descricaoProduto: string, variacaoLinha: string
   return linhas
 }
 
-export function montarLinhasComprovanteVenda(c: ComprovanteVenda): string[] {
+export function montarLinhasComprovanteVenda(c: ComprovanteVenda, reimpressao: boolean = false): string[] {
   const linhas: string[] = []
   linhas.push(linhaVenda())
   linhas.push(centralizarVenda('***  DOCUMENTO SEM VALOR FISCAL  ***'))
   linhas.push(linhaVenda())
   linhas.push(centralizarVenda(`${c.nomeEmpresa} (Loja ${c.codigoEmpresa})`))
   linhas.push(linhaVenda())
+  if (reimpressao) {
+    linhas.push(centralizarVenda('REIMPRESSÃO DE PAPELETA DE VENDA'))
+    linhas.push(linhaVenda())
+  }
   linhas.push(campoVenda('Id. Venda..:', String(c.idVenda)))
   linhas.push(campoVenda('Cliente....:', c.nomeCliente ?? '(não informado)'))
   linhas.push(campoVenda('Vendedor...:', c.nomeVendedor ?? '(não informado)'))
@@ -311,6 +324,11 @@ export function montarLinhasComprovanteVenda(c: ComprovanteVenda): string[] {
       const parc = `${String(p.numeroParcela).padStart(2, '0')}/${String(p.totalParcelas).padStart(2, '0')}`
       linhas.push(linhaParcelaCrediario(parc, formatarData(p.dataVencimento), formatarMoeda(p.valorParcela)))
     })
+    linhas.push(linhaVenda())
+  }
+
+  if (reimpressao) {
+    linhas.push(campoVenda('Impresso em:', formatarDataHora(new Date().toISOString())))
     linhas.push(linhaVenda())
   }
 

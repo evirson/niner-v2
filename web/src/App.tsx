@@ -38,10 +38,12 @@ import DiferencasEstoque from './pages/estoque/DiferencasEstoque'
 import EfetivarBalanco from './pages/estoque/EfetivarBalanco'
 import EstornoRecebimentoCrediario from './pages/recebimentocrediario/EstornoRecebimentoCrediario'
 import RecebimentoCrediario from './pages/recebimentocrediario/RecebimentoCrediario'
+import ReimpressaoRecebimentoCrediario from './pages/recebimentocrediario/ReimpressaoRecebimentoCrediario'
 import AberturaCaixa from './pages/caixa/AberturaCaixa'
 import FechamentoCaixa from './pages/caixa/FechamentoCaixa'
 import CancelamentoVenda from './pages/vendas/CancelamentoVenda'
 import PesquisaVendas from './pages/vendas/PesquisaVendas'
+import ReimpressaoPapeletaVenda from './pages/vendas/ReimpressaoPapeletaVenda'
 import DevolucaoProduto from './pages/vendas/DevolucaoProduto'
 import ContaCorrenteLista from './pages/contacorrente/ContaCorrenteLista'
 import ContaCorrenteForm from './pages/contacorrente/ContaCorrenteForm'
@@ -69,6 +71,7 @@ export default function App() {
           <Route path="/menu/:grupo" element={<MenuGrupo />} />
           <Route path="/pdv" element={<Pdv />} />
           <Route path="/pesquisa-vendas" element={<PesquisaVendas />} />
+          <Route path="/reimpressao-papeleta-venda" element={<ReimpressaoPapeletaVenda />} />
           <Route path="/devolucao-produto" element={<DevolucaoProduto />} />
           <Route path="/relatorio-vendas" element={<RelatorioVendas />} />
           <Route path="/relatorio-comissoes" element={<RelatorioComissoes />} />
@@ -81,6 +84,7 @@ export default function App() {
           <Route path="/fechamento-caixa" element={<FechamentoCaixa />} />
           <Route path="/recebimento-crediario" element={<RecebimentoCrediario />} />
           <Route path="/estorno-recebimento-crediario" element={<EstornoRecebimentoCrediario />} />
+          <Route path="/reimpressao-recebimento-crediario" element={<ReimpressaoRecebimentoCrediario />} />
           <Route path="/produtos" element={<ProdutoLista />} />
           <Route path="/produtos/novo" element={<ProdutoForm />} />
           <Route element={<RequireAdmin />}>
@@ -108,11 +112,6 @@ export default function App() {
           <Route path="/fluxo-caixa" element={<EmBreve titulo="Fluxo de Caixa" />} />
           <Route path="/lucratividade" element={<EmBreve titulo="Lucratividade" />} />
           <Route path="/integracao-marketplace" element={<EmBreve titulo="Integração com Marketplace" />} />
-          <Route path="/reimpressao-papeleta-venda" element={<EmBreve titulo="Reimpressão de Papeleta de Venda" />} />
-          <Route
-            path="/reimpressao-recebimento-crediario"
-            element={<EmBreve titulo="Reimpressão de Recebimento de Crediário" />}
-          />
           <Route path="/clientes" element={<ClienteLista />} />
           <Route path="/clientes/novo" element={<ClienteForm />} />
           <Route element={<RequireAdmin />}>

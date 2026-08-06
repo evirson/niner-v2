@@ -9,8 +9,21 @@ import { buscarComprovanteVenda } from '../../lib/pdv'
  * Pagamento de Crediário: "Imprimir" usa o diálogo nativo do navegador (só `.papeleta-imprimir`
  * fica visível na impressão, via CSS — ver `styles.css`); "Salvar PDF" gera o arquivo direto com
  * `jsPDF`, sem passar pelo diálogo.
+ *
+ * `reimpressao` (2026-08-06) — usado pela tela de Reimpressão de Papeleta de Venda
+ * (`ReimpressaoPapeletaVenda.tsx`): mesmo componente, muda só o título do popup e injeta uma
+ * linha "REIMPRESSÃO DE PAPELETA DE VENDA" + "Impresso em: <data/hora atual>" no final da
+ * papeleta (`montarLinhasComprovanteVenda`) — nunca no fluxo normal pós-F5.
  */
-export default function ComprovantePapeletaModal({ idVenda, aoFechar }: { idVenda: number; aoFechar: () => void }) {
+export default function ComprovantePapeletaModal({
+  idVenda,
+  reimpressao = false,
+  aoFechar,
+}: {
+  idVenda: number
+  reimpressao?: boolean
+  aoFechar: () => void
+}) {
   const {
     data: comprovante,
     isLoading,
@@ -21,12 +34,17 @@ export default function ComprovantePapeletaModal({ idVenda, aoFechar }: { idVend
     retry: 1,
   })
 
-  const linhas = comprovante ? montarLinhasComprovanteVenda(comprovante) : []
+  const linhas = comprovante ? montarLinhasComprovanteVenda(comprovante, reimpressao) : []
 
   return (
     <div className="modal-overlay" onClick={aoFechar}>
-      <div className="modal modal-medio" role="dialog" aria-label="Papeleta de venda" onClick={(e) => e.stopPropagation()}>
-        <h2 style={{ marginTop: 0 }}>Papeleta de Venda</h2>
+      <div
+        className="modal modal-medio"
+        role="dialog"
+        aria-label={reimpressao ? 'Reimpressão de papeleta de venda' : 'Papeleta de venda'}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h2 style={{ marginTop: 0 }}>{reimpressao ? 'Reimpressão de Papeleta de Venda' : 'Papeleta de Venda'}</h2>
 
         {isLoading ? (
           <p className="muted">Carregando…</p>

@@ -139,6 +139,26 @@ export const MENU: NavGrupo[] = [
           },
         ],
       },
+      {
+        chave: 'reimpressoes',
+        label: 'Reimpressões',
+        icone: IconePdv,
+        descricao: 'Localiza uma venda ou um recebimento já efetivado e reimprime a papeleta.',
+        itens: [
+          {
+            to: '/reimpressao-papeleta-venda',
+            label: 'Reimpressão de Papeleta de Venda',
+            icone: IconePdv,
+            descricao: 'Localiza uma venda por número, período ou cliente e reimprime a papeleta.',
+          },
+          {
+            to: '/reimpressao-recebimento-crediario',
+            label: 'Reimpressão de Recebimento de Crediário',
+            icone: IconeRecebimentoCrediario,
+            descricao: 'Localiza um recebimento por cliente e período e reimprime a papeleta.',
+          },
+        ],
+      },
     ],
   },
   {
@@ -412,18 +432,6 @@ export const MENU: NavGrupo[] = [
         label: 'Integração com Marketplace',
         icone: IconeCanais,
         descricao: 'Publicação de anúncios e sincronização automática de estoque/preço nos canais. Em construção.',
-      },
-      {
-        to: '/reimpressao-papeleta-venda',
-        label: 'Reimpressão de Papeleta de Venda',
-        icone: IconePdv,
-        descricao: 'Reimprime a papeleta de uma venda já efetivada, a partir do número da venda. Em construção.',
-      },
-      {
-        to: '/reimpressao-recebimento-crediario',
-        label: 'Reimpressão de Recebimento de Crediário',
-        icone: IconeRecebimentoCrediario,
-        descricao: 'Reimprime o comprovante de um recebimento de crediário já efetivado. Em construção.',
       },
     ],
   },

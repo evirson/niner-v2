@@ -392,6 +392,18 @@ const CONTEUDOS: Record<string, ConteudoAjuda> = {
     ],
     urlVideo: null,
   },
+  'vendas.reimpressaopapeleta.tela': {
+    titulo: 'Reimpressão de Papeleta de Venda',
+    objetivo: 'Localizar uma venda já efetivada e reimprimir a papeleta (mesmo layout da 1ª via, com "REIMPRESSÃO" e a data/hora da reimpressão).',
+    passos: [
+      'Busque pelo número da venda (ignora os demais filtros) ou por um intervalo de datas — cliente é opcional.',
+      'Clique numa linha do resultado para abrir a papeleta e imprimir ou salvar em PDF.',
+    ],
+    errosComuns: [
+      'Sem número da venda, é preciso informar data inicial e final.',
+    ],
+    urlVideo: null,
+  },
   'vendas.cancelamentovenda.lista': {
     titulo: 'Cancelamento de Venda',
     objetivo: 'Localizar uma venda finalizada e reverter completamente estoque, caixa e contas a receber.',
@@ -450,6 +462,19 @@ const CONTEUDOS: Record<string, ConteudoAjuda> = {
     errosComuns: [
       'Não acho o recebimento: confira o nome do cliente e o intervalo de datas — o filtro de cliente é sempre obrigatório.',
       'Não é possível estornar parte de um lote — se ele cobriu várias parcelas juntas, o estorno desfaz todas de uma vez.',
+    ],
+    urlVideo: null,
+  },
+  'financeiro.reimpressaorecebimentocrediario.tela': {
+    titulo: 'Reimpressão de Papeleta de Recebimento de Crediário',
+    objetivo: 'Localizar um recebimento de crediário já efetivado e reimprimir a papeleta (mesmo layout da 1ª via, com "REIMPRESSÃO" e a data/hora da reimpressão).',
+    passos: [
+      'Informe o nome do cliente (obrigatório) — data inicial/final de recebimento são opcionais, pra estreitar a busca.',
+      'Cada linha é um recebimento inteiro (um "lote"), não uma parcela isolada.',
+      'Clique numa linha do resultado para abrir a papeleta e imprimir ou salvar em PDF.',
+    ],
+    errosComuns: [
+      'Não acho o recebimento: confira o nome do cliente e o intervalo de datas — o filtro de cliente é sempre obrigatório.',
     ],
     urlVideo: null,
   },

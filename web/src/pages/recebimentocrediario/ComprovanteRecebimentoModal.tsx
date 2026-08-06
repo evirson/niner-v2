@@ -6,15 +6,23 @@ import { buscarComprovanteRecebimento } from '../../lib/recebimentoCrediario'
 /**
  * Comprovante de pagamento de crediário, formatado pra bobina térmica de 80mm (2026-07-30).
  * Abre automaticamente logo após um recebimento efetivado com sucesso (`RecebimentoCrediario.
- * tsx`). "Imprimir" usa o diálogo nativo do navegador (só o `.comprovante-imprimir` fica visível
+ * tsx`). "Imprimir" usa o diálogo nativo do navegador (só `.comprovante-imprimir` fica visível
  * na impressão, via CSS — ver `styles.css`); "Salvar PDF" gera o arquivo direto com `jsPDF`, sem
  * passar pelo diálogo (pedido explícito, dois botões separados).
+ *
+ * `reimpressao` (2026-08-06) — usado pela tela de Reimpressão de Papeleta de Recebimento de
+ * Crediário (`ReimpressaoRecebimentoCrediario.tsx`): mesmo componente, muda só o título do popup
+ * e troca o título do papel ("COMPROVANTE DE PAGAMENTO DE CREDIARIO" → "REIMPRESSÃO DE PAPELETA
+ * DE RECEBIMENTO DE CREDIARIO") + acrescenta "Impresso em: <data/hora atual>" no final
+ * (`montarLinhasComprovante`) — nunca no fluxo normal pós-efetivar.
  */
 export default function ComprovanteRecebimentoModal({
   idLoteRecebimento,
+  reimpressao = false,
   aoFechar,
 }: {
   idLoteRecebimento: number
+  reimpressao?: boolean
   aoFechar: () => void
 }) {
   const {
@@ -27,12 +35,19 @@ export default function ComprovanteRecebimentoModal({
     retry: 1,
   })
 
-  const linhas = comprovante ? montarLinhasComprovante(comprovante) : []
+  const linhas = comprovante ? montarLinhasComprovante(comprovante, reimpressao) : []
 
   return (
     <div className="modal-overlay" onClick={aoFechar}>
-      <div className="modal modal-medio" role="dialog" aria-label="Comprovante de pagamento" onClick={(e) => e.stopPropagation()}>
-        <h2 style={{ marginTop: 0 }}>Comprovante de Pagamento</h2>
+      <div
+        className="modal modal-medio"
+        role="dialog"
+        aria-label={reimpressao ? 'Reimpressão de papeleta de recebimento de crediário' : 'Comprovante de pagamento'}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h2 style={{ marginTop: 0 }}>
+          {reimpressao ? 'Reimpressão de Papeleta de Recebimento de Crediário' : 'Comprovante de Pagamento'}
+        </h2>
 
         {isLoading ? (
           <p className="muted">Carregando…</p>
