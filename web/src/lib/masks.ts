@@ -110,6 +110,25 @@ export function isoParaData(iso: string | null | undefined): string {
   return `${dia}/${mes}/${ano}`
 }
 
+/** Máscara "dd-mm" (sem ano) — filtro de aniversário (CRM, 2026-08-05): dia/mês que se repete
+ * todo ano, não uma data completa. Mesma convenção dia-primeiro de `mascararData`. */
+export function mascararDiaMes(valor: string): string {
+  const digitos = somenteDigitos(valor).slice(0, 4)
+  return aplicarMascara(digitos, '00-00')
+}
+
+/** {@code true} só quando "dd-mm" tem os 4 dígitos e é um dia/mês de calendário real (considera
+ * fevereiro com 29 dias — é um dia recorrente todo ano, não uma data de um ano específico). */
+export function diaMesValido(valor: string): boolean {
+  const m = /^(\d{2})-(\d{2})$/.exec(valor)
+  if (!m) return false
+  const dia = Number(m[1])
+  const mes = Number(m[2])
+  if (mes < 1 || mes > 12) return false
+  const diasNoMes = new Date(2000, mes, 0).getDate()
+  return dia >= 1 && dia <= diasNoMes
+}
+
 /** Formata um número (ex.: vindo da API) como moeda BR: "1234.5" -> "1.234,50". */
 export function formatarMoeda(valor: number): string {
   return valor.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })

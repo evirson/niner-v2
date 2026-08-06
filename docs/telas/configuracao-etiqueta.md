@@ -1,8 +1,20 @@
 # Configuração de Etiqueta de Produtos
 
-**Status (2026-08-04):** modelo de dados e tela completos e testados ao vivo (CRUD, drag-and-drop,
-código de barras real, produto de exemplo). Só "Emissão de Etiqueta de Produtos" (impressão de
-verdade) continua em Implementações Futuras — esta tela é só o editor de layout.
+**Status (2026-08-05):** modelo de dados e tela completos e testados ao vivo (CRUD, drag-and-drop,
+redimensionar por mouse, código de barras real, produto de exemplo). "Emissão de Etiqueta de
+Produtos" (impressão de verdade ligada a produto/estoque, `docs/telas/etiqueta-emissao.md`) **já
+existe** — reaproveita 100% os endpoints desta tela (`GET /api/v1/etiquetas-config[/{id}]`), zero
+código novo aqui. Esta tela também tem um **Teste de Impressão** próprio (ver seção no fim) que
+imprime o layout configurado de verdade, sem depender da Emissão. Revisão de UX em 2026-08-05 (ver
+linha do tempo do dia em `docs/PROGRESSO.md`), em três rodadas na mesma data: **rodada 1** —
+campos reduzidos de 10 para 4 (Marca/Referência/Variação passaram a ser concatenados dentro da
+Descrição), redimensionamento por mouse, sincronização ao vivo entre editor e prévia do rolo,
+quebra de linha em texto longo, proporção do código de barras corrigida, e busca de produto de
+exemplo passou a incluir produtos sem variação/SKU cadastrado; **rodada 2** — máximo de colunas do
+rolo reduzido de 6 para 4, cabeçalho do formulário reorganizado em 3 colunas lado a lado (menos
+rolagem vertical) e o botão **Testar Impressão**; **rodada 3** — código de barras `EAN13` de
+verdade (era `CODE128`), quadro/borda em volta de cada etiqueta no Teste de Impressão, e o painel
+de propriedades do campo virou popup.
 
 ## Contexto
 
@@ -29,7 +41,8 @@ pelo dono do produto: nome da loja em fundo preto/letra branca no topo, descriç
 
 ### `cfg_etiqueta_config` — cabeçalho
 
-Uma linha por configuração nomeada: `nome`, `largura_rolo_mm`, `numero_colunas` (`CHECK` 1 a 6),
+Uma linha por configuração nomeada: `nome`, `largura_rolo_mm`, `numero_colunas` (`CHECK` 1 a 4 —
+era 1 a 6, reduzido em 2026-08-05 a pedido do dono do produto; ver seção de ajustes no fim),
 `largura_etiqueta_mm`, `altura_etiqueta_mm`, 4 bordas (`borda_superior/inferior/esquerda/
 direita_mm`), `ativo` (fallback de inativar, mesmo padrão do resto do sistema).
 
@@ -53,23 +66,30 @@ fundo), `alinhamento` (ENUM `alinhamento_etiqueta_campo`), `exibir_texto_legivel
 
 `UNIQUE (id_config_etiqueta, campo)` — cada campo aparece no máximo uma vez por configuração.
 
-### ENUM `campo_etiqueta` — os 10 campos possíveis, mapeados pra colunas reais já existentes
+### ENUM `campo_etiqueta` — os 4 campos possíveis, mapeados pra colunas reais já existentes
 
 | Valor | Origem |
 |---|---|
 | `NOME_EMPRESA` | `empresa.cfg_nome_etiqueta` (já existe desde V014, nunca lido por nenhuma tela até agora) |
-| `DESCRICAO_PRODUTO` | `produto.descricao` |
-| `MARCA` | `produto.marca` |
-| `REFERENCIA` | `produto.referencia` |
+| `DESCRICAO_PRODUTO` | `produto.descricao` — **concatenada** (ver abaixo) |
 | `PRECO_VENDA` | `produto.preco_venda` |
-| `PRECO_OFERTA` | `produto.preco_oferta` |
 | `SKU_BARRAS` | `produto_barra.sku` (código de barras interno, sempre `gerar_ean13_interno()`) |
-| `EAN_BARRAS` | `produto_barra.ean` (GTIN do fabricante, nullable) |
-| `VARIANTE_LINHA` | `cfg_variante_linha.descricao` (via `produto_barra.id_variante_linha`, nullable) |
-| `VARIANTE_COLUNA` | `cfg_variante_coluna.descricao` (via `produto_barra.id_variante_coluna`, nullable) |
 
-Nenhuma tabela nova pra esses 7 campos que já existiam — só referenciados via o ENUM, não
-duplicados.
+Nenhuma tabela nova pra esses campos — só referenciados via o ENUM, não duplicados.
+
+**Revisão de 2026-08-05 — de 10 campos pra 4 (pedido do dono do produto):** `MARCA`, `REFERENCIA`,
+`PRECO_OFERTA`, `EAN_BARRAS`, `VARIANTE_LINHA` e `VARIANTE_COLUNA` deixaram de ser campos
+posicionáveis separadamente. `PRECO_OFERTA`/`EAN_BARRAS` foram removidos por completo (ninguém
+usava, `ProdutoExemplo`/`ProdutoExemploResponse` também perderam esses dois campos). Já
+`MARCA`/`REFERENCIA`/`VARIANTE_LINHA`/`VARIANTE_COLUNA` continuam existindo como dado bruto no
+endpoint de produto-exemplo, mas agora são **concatenados automaticamente dentro de
+`DESCRICAO_PRODUTO`** — a função `montarDescricaoImpressa` (`web/src/lib/etiquetaConfig.ts`) junta
+descrição + marca + referência + variação de linha + variação de coluna nessa ordem, **pulando
+qualquer pedaço vazio ou que já apareça dentro da descrição** (comparação sem diferenciar
+maiúsculas/minúsculas — evita repetir "ADIDAS ADIDAS" quando a marca já está escrita na
+descrição). Objetivo: só um campo pra posicionar/arrastar em vez de cinco. Migration `V029`
+editada no lugar (banco em construção, nenhuma configuração salva usava os 6 valores removidos —
+checado antes de editar).
 
 ### ENUM `fonte_etiqueta` — provisório
 
@@ -146,11 +166,122 @@ visualizar (confere que tudo persistiu — nome, dimensões, bordas, colunas, po
 campo) → excluir (real, com popup de confirmação). Suíte de backend inteira (`mvn test`) e
 `tsc --noEmit` limpos depois das correções.
 
+## Ajustes de 2026-08-05 (todos testados ao vivo no navegador)
+
+1. **Texto que não cabe na largura do campo agora quebra linha** (`CampoEtiquetaVisual.tsx`) —
+   era `whiteSpace: nowrap` + `textOverflow: ellipsis` (cortava com "..."), virou `whiteSpace:
+   normal` + `wordBreak/overflowWrap: break-word`.
+2. **Prévia do rolo completo passou a atualizar em tempo real enquanto o usuário digita** posição/
+   largura/altura no painel de propriedades, não só ao arrastar com o mouse (que já era ao vivo) —
+   `CampoMm` (`PainelPropriedadesCampo.tsx`) comprometia o valor só no `onBlur`; agora comprometa a
+   cada tecla também, com uma flag `focado` pra evitar que o próprio eco do `onChange` (valor
+   volta como prop, reformatado) apague o que o usuário está digitando no meio da palavra.
+3. **Redimensionar campo por mouse** — alça (quadradinho) no canto inferior-direito do campo
+   selecionado, arrastável (`aoIniciarRedimensionar`/`aoMoverRedimensionar` em
+   `EditorEtiquetaCanvas.tsx`, mesmo raciocínio do arraste de posição já existente: tamanho
+   ABSOLUTO calculado a partir do início do gesto, snap de 0,5mm, mínimo de 2mm, não deixa passar
+   da borda direita/inferior da etiqueta). Antes só dava pra редimensionar digitando o número.
+4. **Código de barras desproporcional entre o editor grande e a prévia pequena do rolo** — causa:
+   o `viewBox` que o `jsbarcode` gera tem largura fixa (função só do texto codificado) mas altura
+   variável (função da escala do desenho), então a proporção do `viewBox` mudava entre editor/
+   prévia e o SVG (sem `preserveAspectRatio`) deixava espaço vazio ao redor das barras — mais sobra
+   quanto menor a escala, fazendo o código parecer menor na prévia. Corrigido com
+   `preserveAspectRatio="none"` no `<svg>`, esticando as barras pra preencher a caixa inteira nos
+   dois lugares.
+5. **Busca de "produto de exemplo" só trazia produtos com variação/SKU cadastrado** — como a tela
+   de variação/SKU ainda não existe, quase nenhum produto novo tem linha em `produto_barra`, então
+   a busca voltava vazia (ou só os poucos produtos de teste com SKU inserido manualmente no banco
+   em sessões anteriores). `EtiquetaConfigService.buscarProdutosExemplo` trocou a base da query de
+   `produto_barra` (INNER JOIN) pra `produto` (LEFT JOIN em `produto_barra`) — todo produto ativo
+   aparece agora, com ou sem variação; sem SKU real, o código de barras da prévia cai no valor de
+   mentirinha (mesmo comportamento de quando nenhum produto está selecionado).
+
+## Ajustes de 2026-08-05, rodada 2 (layout compacto + Teste de Impressão)
+
+1. **Máximo de colunas do rolo: 6 → 4** (pedido direto do dono do produto). Alterado em 3 camadas
+   pra não ficar inconsistente: `CHECK (numero_colunas BETWEEN 1 AND 4)` em `V029` (migration
+   editada no lugar — banco em construção), mensagem de validação em
+   `EtiquetaConfigService.validar()` ("Número de colunas deve ser entre 1 e 4"), e as opções do
+   `<select>` no `EtiquetaConfigForm.tsx` (`OPCOES_NUMERO_COLUNAS`, era `[1,2,3,4,5,6]`). 11 testes
+   de `EtiquetaConfigCrudTest` continuam verdes (o teste de limite usa `numeroColunas: 7`, que
+   segue inválido nos dois casos, não precisou mudar).
+
+2. **Cabeçalho do formulário reorganizado em 3 colunas lado a lado**, pra reduzir a rolagem
+   vertical — pedido veio com um mockup ASCII exato do layout desejado. Antes eram 4 seções
+   empilhadas (Identificação / Rolo e Etiqueta / Bordas / Posição das Colunas), cada uma ocupando a
+   largura toda com os campos em linha. Agora: uma linha só no topo com "Ativa" (checkbox estreito)
+   + "Nome" (campo largo), e logo abaixo **3 cartões (`.etiqueta-subcard`) lado a lado** — "Rolo e
+   Etiqueta (mm)", "Bordas (mm)" e "Posição das Colunas (mm)" — cada um com os próprios campos
+   empilhados verticalmente dentro do cartão (não mais em grade horizontal). "Campos da Etiqueta"
+   (produto de exemplo + editor visual) continua embaixo, ocupando a largura toda.
+   - **Bug pego no teste ao vivo:** o cabeçalho usa `col-10` (grid de 12 colunas, §3.7) pro campo
+     Nome, mas essa classe **nunca existiu** em `styles.css` — só ia até `col-9` e depois `col-12`
+     direto. Sem CSS correspondente, o `div` caía no comportamento padrão do grid (`span 1`), e o
+     campo Nome renderizava com ~110px de largura em vez de ocupar quase a linha toda. Corrigido
+     adicionando `.col-10 { grid-column: span 10; }` ao grid de colunas em `styles.css` — confirmado
+     visualmente depois (campo Nome ocupando a largura esperada).
+
+3. **Botão "Testar Impressão"** — pedido novo: um jeito de imprimir fisicamente N cópias do layout
+   configurado pra testar numa impressora real, sem depender da futura tela de Emissão (que precisa
+   de produto/estoque reais e ainda nem foi especificada). Fica no topo da tela
+   (`topbar-acoes`, fora do `<fieldset disabled>` — funciona também no modo somente-leitura),
+   habilitado só quando há rolo/etiqueta/altura preenchidos e ao menos 1 campo posicionado
+   (`podeImprimir`).
+   - **Fluxo:** clicar abre `TesteImpressaoModal.tsx` (novo arquivo) perguntando a quantidade
+     (inteiro, 1 a 200, mesmo padrão visual de `ConfirmarSalvarModal`). Confirmando, fecha o modal
+     e dispara a impressão.
+   - **Distribuição das etiquetas** (`linhasParaImprimir`, `web/src/lib/etiquetaConfig.ts`): enche
+     as colunas configuradas uma linha por vez, na ordem física do rolo (`numeroColuna` crescente)
+     — ex.: 3 colunas + 8 etiquetas → linhas de 3/3/2. Função pura, sem estado, só recebe
+     quantidade + array de colunas.
+   - **Escala física exata:** reaproveita `CampoEtiquetaVisual.tsx` (mesmo componente do editor e
+     da prévia do rolo — nada duplicado), mas com `escalaPxPorMm = MM_PARA_PX_IMPRESSAO = 96/25,4`
+     (a equivalência padrão que o navegador usa entre CSS px e mm físicos ao imprimir), não o
+     `PX_POR_MM_BASE` do editor (zoom de tela arbitrário). Isso faz 1mm configurado sair como 1mm
+     impresso de verdade, sem precisar de unidades CSS `mm` nos elementos.
+   - **Tamanho de página dinâmico:** a largura do rolo é configurável por tenant (diferente do
+     80mm fixo do Comprovante de Crediário ou do A4 do Fechamento de Caixa, que já usam a mesma
+     técnica de isolamento — `styles.css`). Por isso o `@page` não é estático: `EtiquetaConfigForm`
+     injeta um `<style>` em runtime (`@page etiqueta-teste-impressao { size: ${larguraRoloMm}mm
+     auto; margin: 0; }`, altura `auto` pro driver cortar no fim do conteúdo — mesmo raciocínio do
+     rolo térmico contínuo) e remove esse `<style>` depois (evento `afterprint` ou cleanup do
+     `useEffect`, o que vier primeiro). O isolamento visual (esconder o resto do app, mostrar só as
+     etiquetas) é a mesma regra estática de sempre em `styles.css`
+     (`.etiqueta-imprimir, .etiqueta-imprimir * { visibility: visible; }`), já que `body *
+     {visibility:hidden}` já é global desde o Comprovante.
+   - **Testado ao vivo** interceptando `window.print` (pra não travar a automação com o diálogo
+     nativo do SO): distribuição 3+3+2 confirmada pra 8 etiquetas/3 colunas, largura da linha
+     batendo exatamente `110mm × 96/25,4 = 415,748px`, `@page` injetado com o valor certo do rolo, e
+     limpeza (remoção do `<style>` e do conteúdo) confirmada depois do `afterprint`. Visualmente
+     (forçando a região a aparecer na tela, fora do `@media print`) as etiquetas saem com nome da
+     empresa, descrição, preço e código de barras reais — mesma aparência do editor/prévia do rolo.
+
+## Ajustes de 2026-08-05, rodada 3 (EAN-13 real + quadro no Teste de Impressão + popup de propriedades)
+
+Três pedidos pontuais, cada um testado ao vivo antes do próximo.
+
+1. **Código de barras `CODE128` → `EAN13` de verdade** (`CampoEtiquetaVisual.tsx`, `jsbarcode`).
+   Pergunta neutra do usuário primeiro ("o padrão é EAN-13?"), implementação só depois de
+   confirmado que era isso mesmo que ele queria — seguro trocar porque `sku` sempre vem de
+   `gerar_ean13_interno()` (13 dígitos, dígito verificador correto por construção, nunca falha a
+   validação do `EAN13` em produção). Achado de quebra um bug real: o valor de exemplo
+   (`VALOR_BARRA_EXEMPLO`, usado no editor antes de escolher um produto real) tinha o dígito
+   verificador **errado** desde que foi escrito — nunca importava com `CODE128` (que não valida
+   nada), mas com `EAN13` (que valida e recusa desenhar se não bater) ficaria em branco. Corrigido
+   de `'9000000000017'` para `'9000000000018'`.
+2. **Quadro (borda 1px preta) em volta de cada etiqueta no Teste de Impressão** — guia de corte
+   pra testar em papel comum antes do rolo de etiqueta de verdade. `box-sizing: border-box`
+   (global) garante que a borda fica **por dentro** do tamanho configurado, não estoura a etiqueta
+   vizinha.
+3. **Painel de propriedades do campo virou popup** (`PainelPropriedadesCampo.tsx`) — antes ficava
+   fixo ao lado do canvas, disputando espaço horizontal e forçando scroll em telas menores. Agora
+   abre em `.modal-overlay`/`.modal` (mesmo padrão do resto do sistema) ao selecionar um campo;
+   `EditorEtiquetaCanvas.tsx` deixou de renderizar o painel inline. Sincronização ao vivo com o
+   canvas/prévia do rolo continua funcionando com o popup aberto (testado: mover um slider no
+   popup atualiza a posição do campo no canvas atrás, em tempo real).
+
 ## Pendências explícitas, fora do escopo desta migration
 
-- **Lógica de emissão** (qual empresa, se `PRECO_OFERTA` está dentro da janela de datas, como
-  tratar `VARIANTE_LINHA`/`VARIANTE_COLUNA` nulos) — fica pra quando a tela de Emissão for
-  especificada, não é responsabilidade do schema.
 - **Estilo "contorno" (borda preta, sem preenchimento)** — reparado no PDF de referência (a caixa
   do tamanho "M"), mas não pedido; `fundo_preto` cobre só o binário preto-cheio/sem-fundo pedido.
   Se vier a ser pedido, é um campo novo (`estilo_fundo` com 3 valores em vez de boolean).

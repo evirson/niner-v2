@@ -11,7 +11,7 @@ function rotuloVariacao(p: ProdutoExemplo): string | null {
 /**
  * Busca de produto de exemplo pra pré-visualizar a etiqueta com dado real (2026-08-04) — mesmo
  * padrão visual de `PesquisaVariacaoModal.tsx` do Kardex, mas endpoint/DTO próprios (aquele não
- * tem referência/preço/EAN, que o editor de etiqueta precisa).
+ * tem referência/preço, que o editor de etiqueta precisa).
  */
 export default function ProdutoExemploModal({
   aoFechar,

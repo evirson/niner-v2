@@ -4,14 +4,17 @@ import {
   CAMPOS_DE_BARRAS,
   CSS_ALINHAMENTO_ETIQUETA,
   CSS_FONTE_ETIQUETA,
+  montarDescricaoImpressa,
   type CampoEtiquetaPosicionado,
   type ProdutoExemplo,
 } from '../../lib/etiquetaConfig'
 import { formatarMoeda } from '../../lib/masks'
 
-/** Valor de mentirinha, formato válido de EAN-13, só pra o código de barras ter uma cara real
- * quando nenhum produto de exemplo foi escolhido — layout, não impressão de verdade. */
-const VALOR_BARRA_EXEMPLO = '9000000000017'
+/** Valor de mentirinha, EAN-13 válido de verdade (dígito verificador conferido — obrigatório
+ * agora que o desenho usa o formato `EAN13`, que valida o dígito e recusa desenhar se não bater),
+ * só pra o código de barras ter uma cara real quando nenhum produto de exemplo foi escolhido —
+ * layout, não impressão de verdade. */
+const VALOR_BARRA_EXEMPLO = '9000000000018'
 
 function ehCampoDeBarras(campo: CampoEtiquetaPosicionado['campo']): boolean {
   return (CAMPOS_DE_BARRAS as string[]).includes(campo)
@@ -22,33 +25,32 @@ function valorTextoDoCampo(campo: CampoEtiquetaPosicionado, produto: ProdutoExem
     case 'NOME_EMPRESA':
       return nomeEmpresa
     case 'DESCRICAO_PRODUTO':
-      return produto?.descricao ?? 'Descrição do Produto'
-    case 'MARCA':
-      return produto?.marca ?? 'Marca'
-    case 'REFERENCIA':
-      return produto?.referencia ?? 'REF: 000000'
+      return montarDescricaoImpressa(produto)
     case 'PRECO_VENDA':
       return `R$ ${formatarMoeda(produto?.precoVenda ?? 99.9)}`
-    case 'PRECO_OFERTA':
-      return `R$ ${formatarMoeda(produto?.precoOferta ?? produto?.precoVenda ?? 79.9)}`
-    case 'VARIANTE_LINHA':
-      return produto?.variacaoLinha ?? 'Cor'
-    case 'VARIANTE_COLUNA':
-      return produto?.variacaoColuna ?? 'Tam'
     default:
       return ''
   }
 }
 
-function valorDeBarrasDoCampo(campo: CampoEtiquetaPosicionado, produto: ProdutoExemplo | null): string {
-  if (campo.campo === 'SKU_BARRAS') return produto?.sku ?? VALOR_BARRA_EXEMPLO
-  return produto?.ean ?? VALOR_BARRA_EXEMPLO
+function valorDeBarrasDoCampo(_campo: CampoEtiquetaPosicionado, produto: ProdutoExemplo | null): string {
+  return produto?.sku ?? VALOR_BARRA_EXEMPLO
 }
 
-/** Renderiza o código de barras de verdade (SVG, `jsbarcode`) — CODE128 sempre, mesmo pra
- * SKU/EAN (que são EAN-13): CODE128 aceita qualquer string sem validar dígito verificador, então
- * nunca quebra o editor com um valor incompleto/inválido — aqui o que importa é o layout, não a
- * simbologia exata de impressão (isso é responsabilidade da futura tela de Emissão). */
+/** Renderiza o código de barras de verdade (SVG, `jsbarcode`) — **sempre `EAN13`** (2026-08-05,
+ * pedido do dono do produto: a tela tem que imprimir no formato real, não um placeholder
+ * genérico). Seguro porque `sku` **sempre** vem de `gerar_ean13_interno()` (13 dígitos, dígito
+ * verificador correto por construção — `CLAUDE.md`) ou do valor de exemplo fixo acima, também
+ * válido — nunca um valor livre digitado. O `try/catch` continua como rede de segurança (deixa o
+ * SVG em branco em vez de derrubar a tela) para qualquer valor inesperado que escape dessa
+ * garantia, já que `format: 'EAN13'` do jsbarcode **valida** o dígito verificador e recusa
+ * desenhar se não bater (diferente do CODE128 anterior, que aceitava qualquer string).
+ * `preserveAspectRatio="none"` (2026-08-05): o `viewBox` que o jsbarcode gera tem a largura
+ * sempre fixa (função só do texto codificado, não da escala do desenho) mas a altura muda com
+ * `alturaPx` — então a PROPORÇÃO do viewBox varia entre o editor grande e a prévia do rolo
+ * pequena, e sem essa flag o SVG preserva a proporção original ("meet") deixando espaço vazio
+ * ao redor das barras, mais sobra quanto menor a escala. Esticar sem manter proporção garante
+ * que as barras preencham a caixa inteira nos dois lugares, do mesmo jeito. */
 function CodigoDeBarras({ valor, larguraPx, alturaPx, exibirTexto }: {
   valor: string
   larguraPx: number
@@ -60,8 +62,8 @@ function CodigoDeBarras({ valor, larguraPx, alturaPx, exibirTexto }: {
   useEffect(() => {
     if (!svgRef.current || larguraPx <= 0 || alturaPx <= 0) return
     try {
-      JsBarcode(svgRef.current, valor || '0', {
-        format: 'CODE128',
+      JsBarcode(svgRef.current, valor || VALOR_BARRA_EXEMPLO, {
+        format: 'EAN13',
         width: 2,
         height: exibirTexto ? Math.max(alturaPx - 14, 10) : alturaPx,
         displayValue: exibirTexto,
@@ -74,7 +76,15 @@ function CodigoDeBarras({ valor, larguraPx, alturaPx, exibirTexto }: {
     }
   }, [valor, larguraPx, alturaPx, exibirTexto])
 
-  return <svg ref={svgRef} width={larguraPx} height={alturaPx} style={{ display: 'block' }} />
+  return (
+    <svg
+      ref={svgRef}
+      width={larguraPx}
+      height={alturaPx}
+      preserveAspectRatio="none"
+      style={{ display: 'block' }}
+    />
+  )
 }
 
 /**
@@ -114,8 +124,9 @@ export default function CampoEtiquetaVisual({
     background: campo.fundoPreto ? '#000' : 'transparent',
     overflow: 'hidden',
     lineHeight: 1.15,
-    whiteSpace: 'nowrap',
-    textOverflow: 'ellipsis',
+    whiteSpace: 'normal',
+    wordBreak: 'break-word',
+    overflowWrap: 'break-word',
     display: 'flex',
     alignItems: 'center',
     justifyContent: campo.alinhamento === 'CENTRO' ? 'center' : campo.alinhamento === 'DIREITA' ? 'flex-end' : 'flex-start',

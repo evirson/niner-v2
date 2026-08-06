@@ -170,20 +170,25 @@ public class EtiquetaConfigService {
     /**
      * Produtos/variações pra pré-visualizar a etiqueta com dado real — mesmo padrão de busca de
      * {@code RelatorioMovimentacaoProdutosService.buscarVariacoes}, DTO mais rico (referência,
-     * preço, EAN, janela de oferta) que a tela precisa e o Kardex não expõe.
+     * preço) que a tela precisa e o Kardex não expõe. Base é {@code produto} (não
+     * {@code produto_barra}) com `LEFT JOIN`: a tela de variação/SKU ainda não existe
+     * (docs/PROGRESSO.md), então a maioria dos produtos cadastrados não tem nenhuma linha em
+     * {@code produto_barra} ainda — excluí-los faria a busca voltar vazia pra praticamente todo
+     * mundo. Sem variação, cai no SKU/EAN de mentirinha do canvas (mesmo comportamento de sem
+     * produto nenhum selecionado).
      */
     @Transactional(readOnly = true)
     public List<ProdutoExemploResponse> buscarProdutosExemplo(String busca) {
         String filtroBusca = (busca == null || busca.isBlank()) ? "" : " AND (p.descricao ILIKE ? OR pb.sku ILIKE ?)";
         String sql = """
-                SELECT pb.id_variacao, pb.sku, pb.ean, p.descricao, p.marca, p.referencia,
-                       p.preco_venda, p.preco_oferta, p.data_inicio_oferta, p.data_final_oferta,
+                SELECT COALESCE(pb.id_variacao, -p.id_produto) AS id_variacao, pb.sku,
+                       p.descricao, p.marca, p.referencia, p.preco_venda,
                        vl.descricao AS variacao_linha, vc.descricao AS variacao_coluna
-                FROM produto_barra pb
-                JOIN produto p ON p.id_produto = pb.id_produto AND p.id_tenant = pb.id_tenant
+                FROM produto p
+                LEFT JOIN produto_barra pb ON pb.id_produto = p.id_produto AND pb.id_tenant = p.id_tenant
                 LEFT JOIN cfg_variante_linha vl ON vl.id_variante_linha = pb.id_variante_linha AND vl.id_tenant = pb.id_tenant
                 LEFT JOIN cfg_variante_coluna vc ON vc.id_variante_coluna = pb.id_variante_coluna AND vc.id_tenant = pb.id_tenant
-                WHERE pb.id_tenant = plataforma.tenant_atual()
+                WHERE p.id_tenant = plataforma.tenant_atual() AND p.ativo
                 """
                 + filtroBusca
                 + " ORDER BY p.descricao LIMIT 10";
@@ -194,11 +199,9 @@ public class EtiquetaConfigService {
             query = query.params(List.of(curinga, curinga));
         }
         return query.query((rs, n) -> new ProdutoExemploResponse(
-                        rs.getLong("id_variacao"), rs.getString("sku"), rs.getString("ean"),
+                        rs.getLong("id_variacao"), rs.getString("sku"),
                         rs.getString("descricao"), rs.getString("marca"), rs.getString("referencia"),
-                        rs.getBigDecimal("preco_venda"), rs.getBigDecimal("preco_oferta"),
-                        rs.getObject("data_inicio_oferta", OffsetDateTime.class),
-                        rs.getObject("data_final_oferta", OffsetDateTime.class),
+                        rs.getBigDecimal("preco_venda"),
                         rs.getString("variacao_linha"), rs.getString("variacao_coluna")))
                 .list();
     }
@@ -244,8 +247,8 @@ public class EtiquetaConfigService {
      * {@code ProdutoService.validar}).
      */
     private static void validar(EtiquetaConfigRequest req) {
-        if (req.numeroColunas() < 1 || req.numeroColunas() > 6) {
-            throw new IllegalArgumentException("Número de colunas deve ser entre 1 e 6.");
+        if (req.numeroColunas() < 1 || req.numeroColunas() > 4) {
+            throw new IllegalArgumentException("Número de colunas deve ser entre 1 e 4.");
         }
         if (req.colunas().size() != req.numeroColunas()) {
             throw new IllegalArgumentException("A quantidade de colunas informadas não bate com o número de colunas.");

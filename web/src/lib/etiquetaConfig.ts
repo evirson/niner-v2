@@ -2,42 +2,32 @@ import { api } from './api'
 import { desmascararEtiquetaMm, formatarEtiquetaMm } from './masks'
 import { maiusculas } from './texto'
 
-/** Os 10 campos possíveis numa etiqueta — cada um mapeia pra uma coluna já existente no schema
- * (ver docs/telas/configuracao-etiqueta.md). */
+/** Os 4 campos possíveis numa etiqueta — cada um mapeia pra uma coluna já existente no schema
+ * (ver docs/telas/configuracao-etiqueta.md). Marca/Referência/Variação de Linha/Variação de
+ * Coluna não são mais campos próprios (2026-08-05, pedido do dono do produto): entram
+ * automaticamente dentro de `DESCRICAO_PRODUTO` via {@link montarDescricaoImpressa}, pra não
+ * precisar posicionar 5 campos separados só pra imprimir a descrição completa. */
 export type CampoEtiqueta =
   | 'NOME_EMPRESA'
   | 'DESCRICAO_PRODUTO'
-  | 'MARCA'
-  | 'REFERENCIA'
   | 'PRECO_VENDA'
-  | 'PRECO_OFERTA'
   | 'SKU_BARRAS'
-  | 'EAN_BARRAS'
-  | 'VARIANTE_LINHA'
-  | 'VARIANTE_COLUNA'
 
 export const ROTULO_CAMPO_ETIQUETA: Record<CampoEtiqueta, string> = {
   NOME_EMPRESA: 'Nome da Empresa',
   DESCRICAO_PRODUTO: 'Descrição do Produto',
-  MARCA: 'Marca',
-  REFERENCIA: 'Referência',
   PRECO_VENDA: 'Preço de Venda',
-  PRECO_OFERTA: 'Preço de Oferta',
   SKU_BARRAS: 'Código de Barras (SKU)',
-  EAN_BARRAS: 'Código de Barras (EAN)',
-  VARIANTE_LINHA: 'Variação de Linha (ex.: cor)',
-  VARIANTE_COLUNA: 'Variação de Coluna (ex.: tamanho)',
 }
 
 /** Ordem fixa de exibição na paleta — mesma ordem em que o dono do produto listou os campos. */
 export const TODOS_OS_CAMPOS: CampoEtiqueta[] = [
-  'NOME_EMPRESA', 'DESCRICAO_PRODUTO', 'MARCA', 'REFERENCIA', 'PRECO_VENDA', 'PRECO_OFERTA',
-  'SKU_BARRAS', 'EAN_BARRAS', 'VARIANTE_LINHA', 'VARIANTE_COLUNA',
+  'NOME_EMPRESA', 'DESCRICAO_PRODUTO', 'PRECO_VENDA', 'SKU_BARRAS',
 ]
 
 /** Campos de código de barras — únicos onde `exibirTextoLegivel` faz sentido e onde o canvas
  * desenha um código de barras de verdade em vez de texto. */
-export const CAMPOS_DE_BARRAS: CampoEtiqueta[] = ['SKU_BARRAS', 'EAN_BARRAS']
+export const CAMPOS_DE_BARRAS: CampoEtiqueta[] = ['SKU_BARRAS']
 
 /** Provisório (docs/telas/configuracao-etiqueta.md) — depende da tecnologia de impressão ainda
  * não decidida. */
@@ -229,24 +219,65 @@ export function excluirEtiquetaConfig(id: number): Promise<ExclusaoEtiquetaConfi
 }
 
 /** Produto de exemplo pra pré-visualizar a etiqueta com dado real (2026-08-04). DTO próprio —
- * não reaproveita `VariacaoEncontrada` do Kardex, que não tem referência/preço/EAN. */
+ * não reaproveita `VariacaoEncontrada` do Kardex, que não tem referência/preço. */
 export interface ProdutoExemplo {
   idVariacao: number
   sku: string
-  ean: string | null
   descricao: string
   marca: string | null
   referencia: string | null
   precoVenda: number
-  precoOferta: number | null
-  dataInicioOferta: string | null
-  dataFinalOferta: string | null
   variacaoLinha: string | null
   variacaoColuna: string | null
+}
+
+/**
+ * Descrição "completa" impressa no campo `DESCRICAO_PRODUTO` (2026-08-05, pedido do dono do
+ * produto): concatena descrição + marca + referência + variação de linha + variação de coluna,
+ * nessa ordem, pulando qualquer pedaço vazio OU que já apareça dentro da descrição (comparação
+ * sem diferenciar maiúsculas/minúsculas, mas os 5 campos já nascem em maiúsculas — convenção do
+ * projeto — então normalmente é comparação direta) — evita repetir "ADIDAS ADIDAS" quando a
+ * marca já está escrita na descrição, por exemplo. Sem produto de exemplo, cai no texto
+ * genérico de layout (sem simular marca/referência/variação, que não existem ainda).
+ */
+export function montarDescricaoImpressa(produto: ProdutoExemplo | null): string {
+  if (!produto) return 'Descrição do Produto'
+  const descricao = produto.descricao.trim()
+  const complementos = [produto.marca, produto.referencia, produto.variacaoLinha, produto.variacaoColuna]
+  const partes = [descricao]
+  for (const complemento of complementos) {
+    const valor = complemento?.trim()
+    if (valor && !descricao.toUpperCase().includes(valor.toUpperCase())) {
+      partes.push(valor)
+    }
+  }
+  return partes.join(' ')
 }
 
 export function buscarProdutosExemplo(busca: string): Promise<ProdutoExemplo[]> {
   const params = new URLSearchParams()
   if (busca) params.set('busca', busca)
   return api<ProdutoExemplo[]>(`/api/v1/etiquetas-config/produtos-exemplo?${params.toString()}`)
+}
+
+/** Conversão mm→px pro Teste de Impressão (2026-08-05): 96 px CSS = 1 polegada = 25,4mm, a
+ * mesma equivalência que o navegador usa ao mandar a página pra impressora — diferente do
+ * `PX_POR_MM_BASE` do editor (zoom de tela arbitrário), aqui o valor precisa corresponder ao
+ * tamanho físico real impresso (a página em si é dimensionada em mm via `@page`). */
+export const MM_PARA_PX_IMPRESSAO = 96 / 25.4
+
+/** Distribui `quantidade` etiquetas pelas colunas configuradas, uma linha por vez — mesmo jeito
+ * que o rolo físico avança sob a impressora. A última linha pode ficar parcial (ex.: 3 colunas,
+ * 8 etiquetas → 3+3+2). */
+export function linhasParaImprimir(quantidade: number, colunas: ColunaEtiqueta[]): ColunaEtiqueta[][] {
+  if (colunas.length === 0 || quantidade <= 0) return []
+  const ordenadas = [...colunas].sort((a, b) => a.numeroColuna - b.numeroColuna)
+  const linhas: ColunaEtiqueta[][] = []
+  let restante = quantidade
+  while (restante > 0) {
+    const tamanho = Math.min(ordenadas.length, restante)
+    linhas.push(ordenadas.slice(0, tamanho))
+    restante -= tamanho
+  }
+  return linhas
 }

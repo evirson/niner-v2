@@ -18,6 +18,7 @@ const ZOOM_PASSO = 0.25
 const SNAP_MM = 0.5
 const NUDGE_MM = 0.5
 const NUDGE_MM_SHIFT = 5
+const TAMANHO_MINIMO_MM = 2
 
 function arredondarParaSnap(mm: number): number {
   return Math.round(mm / SNAP_MM) * SNAP_MM
@@ -111,6 +112,7 @@ export default function EditorEtiquetaCanvas({
   const [zoom, setZoom] = useState(1)
   const [campoSelecionado, setCampoSelecionado] = useState<CampoEtiqueta | null>(null)
   const arrastoRef = useRef<{ campo: CampoEtiqueta; inicioPxX: number; inicioPxY: number; inicioMmX: number; inicioMmY: number } | null>(null)
+  const redimensionoRef = useRef<{ campo: CampoEtiqueta; inicioPxX: number; inicioPxY: number; inicioLarguraMm: number; inicioAlturaMm: number } | null>(null)
 
   const escala = PX_POR_MM_BASE * zoom
   const nomeEmpresaExemplo = 'NOME DA LOJA'
@@ -135,6 +137,20 @@ export default function EditorEtiquetaCanvas({
     const xClamp = clamp(arredondarParaSnap(xMm), 0, Math.max(0, largura - larguraCampo))
     const yClamp = clamp(arredondarParaSnap(yMm), 0, Math.max(0, altura - alturaCampo))
     atualizarCampo(chave, { posicaoXMm: xClamp, posicaoYMm: yClamp })
+  }
+
+  /** Tamanho ABSOLUTO (redimensionamento pela alça — mesmo raciocínio de `atualizarPosicao`:
+   * cada pointermove calcula a partir do tamanho no início do gesto, não incrementalmente).
+   * Não deixa passar da borda direita/inferior da etiqueta (a posição X/Y do campo não muda ao
+   * redimensionar, só cresce/encolhe pra direita/baixo) nem ficar menor que `TAMANHO_MINIMO_MM`. */
+  function atualizarTamanho(chave: CampoEtiqueta, larguraMmNovo: number, alturaMmNovo: number) {
+    const atual = campos.find((c) => c.campo === chave)
+    if (!atual) return
+    const larguraMaxima = Math.max(TAMANHO_MINIMO_MM, largura - atual.posicaoXMm)
+    const alturaMaxima = Math.max(TAMANHO_MINIMO_MM, altura - atual.posicaoYMm)
+    const larguraClamp = clamp(arredondarParaSnap(larguraMmNovo), TAMANHO_MINIMO_MM, larguraMaxima)
+    const alturaClamp = clamp(arredondarParaSnap(alturaMmNovo), TAMANHO_MINIMO_MM, alturaMaxima)
+    atualizarCampo(chave, { larguraMm: larguraClamp, alturaMm: alturaClamp })
   }
 
   /** Delta relativo (nudge do teclado) — soma dentro do próprio updater, a partir do campo mais
@@ -203,6 +219,33 @@ export default function EditorEtiquetaCanvas({
     arrastoRef.current = null
   }
 
+  /** Alça no canto inferior-direito do campo selecionado — `stopPropagation` no pointerdown pra
+   * não disparar `aoIniciarArraste` do campo por baixo (moveria em vez de redimensionar). */
+  function aoIniciarRedimensionar(e: React.PointerEvent<HTMLDivElement>, campo: CampoEtiquetaPosicionado) {
+    e.stopPropagation()
+    e.currentTarget.setPointerCapture(e.pointerId)
+    setCampoSelecionado(campo.campo)
+    redimensionoRef.current = {
+      campo: campo.campo,
+      inicioPxX: e.clientX,
+      inicioPxY: e.clientY,
+      inicioLarguraMm: campo.larguraMm ?? 0,
+      inicioAlturaMm: campo.alturaMm ?? 0,
+    }
+  }
+
+  function aoMoverRedimensionar(e: React.PointerEvent<HTMLDivElement>) {
+    const redimensiono = redimensionoRef.current
+    if (!redimensiono) return
+    const deltaMmX = (e.clientX - redimensiono.inicioPxX) / escala
+    const deltaMmY = (e.clientY - redimensiono.inicioPxY) / escala
+    atualizarTamanho(redimensiono.campo, redimensiono.inicioLarguraMm + deltaMmX, redimensiono.inicioAlturaMm + deltaMmY)
+  }
+
+  function aoSoltarRedimensionar() {
+    redimensionoRef.current = null
+  }
+
   function aoTeclarNoCampo(e: React.KeyboardEvent<HTMLDivElement>, campo: CampoEtiquetaPosicionado) {
     if (e.key === 'Delete' || e.key === 'Backspace') {
       e.preventDefault()
@@ -247,7 +290,8 @@ export default function EditorEtiquetaCanvas({
           Redefinir
         </button>
         <span className="muted" style={{ marginLeft: 'auto' }}>
-          Arraste os campos pra posicionar · setas do teclado ajustam fino (Shift = 5mm) · Delete remove
+          Arraste os campos pra posicionar · arraste a alça no canto pra redimensionar · setas do teclado
+          ajustam fino (Shift = 5mm) · Delete remove
         </span>
       </div>
 
@@ -277,8 +321,14 @@ export default function EditorEtiquetaCanvas({
             <div
               className="editor-etiqueta-canvas"
               style={{ width: largura * escala, height: altura * escala }}
-              onPointerMove={aoMoverArraste}
-              onPointerUp={aoSoltarArraste}
+              onPointerMove={(e) => {
+                aoMoverArraste(e)
+                aoMoverRedimensionar(e)
+              }}
+              onPointerUp={() => {
+                aoSoltarArraste()
+                aoSoltarRedimensionar()
+              }}
               onClick={() => setCampoSelecionado(null)}
             >
               <div
@@ -317,16 +367,31 @@ export default function EditorEtiquetaCanvas({
                   }}
                 />
               ))}
+              {campoSelecionadoObj && (
+                <div
+                  className="editor-etiqueta-redimensionar"
+                  title="Arraste pra redimensionar"
+                  style={{
+                    left: (campoSelecionadoObj.posicaoXMm + (campoSelecionadoObj.larguraMm ?? 10)) * escala - 5,
+                    top: (campoSelecionadoObj.posicaoYMm + (campoSelecionadoObj.alturaMm ?? 6)) * escala - 5,
+                  }}
+                  onPointerDown={(e) => aoIniciarRedimensionar(e, campoSelecionadoObj)}
+                  onClick={(e) => e.stopPropagation()}
+                />
+              )}
             </div>
           </div>
         </div>
+      </div>
 
+      {campoSelecionadoObj && (
         <PainelPropriedadesCampo
           campo={campoSelecionadoObj}
           aoMudar={(c) => atualizarCampo(c.campo, c)}
           aoRemover={() => campoSelecionado && removerCampo(campoSelecionado)}
+          aoFechar={() => setCampoSelecionado(null)}
         />
-      </div>
+      )}
 
       {colunas.length > 0 && (
         <div>

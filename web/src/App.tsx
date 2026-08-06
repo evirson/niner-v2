@@ -52,6 +52,8 @@ import RelatorioComissoes from './pages/relatorios/RelatorioComissoes'
 import RelatorioContasReceber from './pages/relatorios/RelatorioContasReceber'
 import RelatorioEstoque from './pages/relatorios/RelatorioEstoque'
 import RelatorioMovimentacaoProdutos from './pages/relatorios/RelatorioMovimentacaoProdutos'
+import CrmForm from './pages/crm/CrmForm'
+import EtiquetaEmissaoForm from './pages/etiquetaemissao/EtiquetaEmissaoForm'
 
 export default function App() {
   return (
@@ -71,6 +73,8 @@ export default function App() {
           <Route path="/relatorio-contas-receber" element={<RelatorioContasReceber />} />
           <Route path="/relatorio-estoque" element={<RelatorioEstoque />} />
           <Route path="/relatorio-movimentacao-produtos" element={<RelatorioMovimentacaoProdutos />} />
+          <Route path="/crm" element={<CrmForm />} />
+          <Route path="/etiqueta-emissao" element={<EtiquetaEmissaoForm />} />
           <Route path="/abertura-caixa" element={<AberturaCaixa />} />
           <Route path="/fechamento-caixa" element={<FechamentoCaixa />} />
           <Route path="/recebimento-crediario" element={<RecebimentoCrediario />} />
@@ -91,8 +95,6 @@ export default function App() {
           <Route path="/estoque/:id" element={<TransferenciaDetalhe />} />
           <Route path="/pedidos" element={<EmBreve titulo="Pedidos" />} />
           <Route path="/canais" element={<EmBreve titulo="Canais" />} />
-          <Route path="/etiqueta-emissao" element={<EmBreve titulo="Emissão de Etiqueta de Produtos" />} />
-          <Route path="/crm" element={<EmBreve titulo="CRM" />} />
           <Route path="/bi-dashboard" element={<EmBreve titulo="BI Dashboard" />} />
           <Route path="/importacao-dados" element={<EmBreve titulo="Importação de Dados" />} />
           <Route path="/entrada-produtos-compra" element={<EmBreve titulo="Entrada de Produtos por Compra" />} />

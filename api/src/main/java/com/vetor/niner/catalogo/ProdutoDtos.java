@@ -1,6 +1,5 @@
 package com.vetor.niner.catalogo;
 
-import jakarta.validation.constraints.DecimalMax;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -28,7 +27,7 @@ public final class ProdutoDtos {
             @Size(max = 60) String marca,
             @Size(max = 60) String referencia,
             @NotNull @DecimalMin("0") BigDecimal precoCusto,
-            @NotNull @DecimalMin("0") @DecimalMax("100") BigDecimal percentualVenda,
+            @NotNull @DecimalMin("0") BigDecimal percentualVenda,
             @NotNull @DecimalMin("0") BigDecimal precoVenda,
             OffsetDateTime dataInicioOferta,
             OffsetDateTime dataFinalOferta,

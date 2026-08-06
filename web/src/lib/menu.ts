@@ -314,6 +314,18 @@ export const MENU: NavGrupo[] = [
         icone: IconeRelatorio,
         descricao: 'Kardex do estoque: analítico, ficha por produto com saldo corrido, ou totais por tipo de movimento.',
       },
+      {
+        to: '/crm',
+        label: 'CRM',
+        icone: IconeCliente,
+        descricao: 'Filtre clientes por perfil e histórico de compras e exporte a lista para planilha Excel.',
+      },
+      {
+        to: '/etiqueta-emissao',
+        label: 'Emissão de Etiqueta de Produtos',
+        icone: IconeEtiqueta,
+        descricao: 'Selecione produtos (individual, por entrada ou por estoque) e imprima etiquetas em lote.',
+      },
     ],
   },
   {
@@ -340,18 +352,6 @@ export const MENU: NavGrupo[] = [
         label: 'Canais',
         icone: IconeCanais,
         descricao: 'Conexão com Mercado Livre, Shopee e demais canais de venda. Em construção.',
-      },
-      {
-        to: '/etiqueta-emissao',
-        label: 'Emissão de Etiqueta de Produtos',
-        icone: IconeProduto,
-        descricao: 'Impressão de etiquetas em lote a partir do cadastro de produtos. Em construção.',
-      },
-      {
-        to: '/crm',
-        label: 'CRM',
-        icone: IconeCliente,
-        descricao: 'Relacionamento e histórico de contato com clientes. Em construção.',
       },
       {
         to: '/bi-dashboard',

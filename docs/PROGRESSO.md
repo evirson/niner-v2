@@ -1,7 +1,7 @@
 # Progresso do Projeto — niner-v2
 
 Registro cronológico das decisões e entregas. Atualizar a cada marco relevante.
-**Última atualização:** 2026-08-04
+**Última atualização:** 2026-08-05
 
 ---
 
@@ -141,9 +141,186 @@ devolucao-produtos.md`.
 
 **Sessão de 2026-08-04 (continuação, depois do commit `4ac997b`):** toda tela do sistema ganhou um **botão de fechar (✕)** no canto superior direito (`BotaoFecharTela.tsx`, volta pra tela anterior real via histórico do navegador — `navigate(-1)` — não uma rota fixa); **Enter passou a mudar de campo igual Tab** em qualquer `<input>`/`<select>` do sistema (`lib/formularios.ts`: `aoTeclarEnterNoFormulario` nas telas de cadastro, `iniciarNavegacaoGlobalPorEnter` no resto), preservando os poucos campos com Enter próprio (leitor de código de barras, buscas); os relatórios de **Comissões** (colunas Nº Vendas/Ticket Médio) e **Contas a Receber** (KPIs + gráfico "por forma de pagamento", coluna Valor Taxa Adm.) ganharam uma 2ª rodada de melhorias; nasceu a **5ª tela de Relatórios**, **Movimentação de Produtos** (Kardex, `docs/telas/relatorio-movimentacao-produtos.md` — 3 modelos: Analítico, Kardex por Produto com saldo corrido, Sintético por tipo de movimento), cujos testes descobriram que **nenhum service gravava `produto_movimento_detalhe.preco_custo`** — corrigido na raiz nos 5 services que escrevem no ledger (Pdv/Devolução/Cancelamento/Transferência/Balanço); e o grupo **Implementações Futuras** ganhou 9 áreas ainda não construídas (Etiqueta de Produtos — configuração e emissão —, CRM, BI Dashboard, Importação de Dados, Entrada de Produtos por Compra, Contas a Pagar/Pagas, Movimentação Bancária, Integração com Marketplace), todas como páginas `EmBreve` sem lógica; o botão de fechar (✕) foi removido das páginas-hub de grupo do menu (não fazem sentido como "fechar", são ponto de entrada); e nasceu **Configuração de Etiqueta de Produtos** (V029 + tela, `docs/telas/configuracao-etiqueta.md`) — cadastro com editor visual de arraste (régua em mm, código de barras real via `jsbarcode`, produto de exemplo real), agora em Configurações (não mais Implementações Futuras). Ver linha do tempo de 2026-08-04 (topo, entradas mais recentes primeiro) pro detalhe completo. Tudo commitado e pushado ao final de cada sessão do dia.
 
+**Sessão de 2026-08-05:** Configuração de Etiqueta passou por três rodadas de refinamento (campos 10→4 concatenados na Descrição, máximo de colunas do rolo 6→4, cabeçalho em 3 cartões, botão **Testar Impressão**, código de barras `EAN13` de verdade, quadro no Teste de Impressão, painel de propriedades virou popup — `docs/telas/configuracao-etiqueta.md`) mais dois bugs reais corrigidos em Produto (margem de venda acima de 100% rejeitada; busca de produto de exemplo quase sempre vazia). Nasceram duas telas novas no grupo **Relatórios**, saindo de Implementações Futuras: **CRM** (`cadastros.crm`, `docs/telas/crm.md`) — filtra clientes por perfil e histórico de compras, exporta 11 colunas pra planilha Excel (`write-excel-file`) — e **Emissão de Etiqueta de Produtos** (`configuracao.etiquetaemissao`, `docs/telas/etiqueta-emissao.md`) — 3 formas de selecionar produtos (Individual, com criação automática de SKU e obrigatoriedade de variação por produto; Por Entradas; Por Estoques), grade local editável, imprime em lote com produto diferente por etiqueta, reaproveitando o layout já configurado em Configuração de Etiqueta. Nasceu `ProdutoBarraService` (`com.vetor.niner.catalogo`) — acha-ou-cria uma variação de produto chamando `gerar_ean13_interno()`, primeira peça de domínio real sobre `produto_barra`. Ver linha do tempo de 2026-08-05 (topo) pro detalhe completo de cada rodada. Suíte de backend: **386 testes**.
+
 ---
 
 ## Linha do tempo
+
+### 2026-08-05 — Emissão de Etiqueta: SKU criado na hora, obrigatoriedade por produto, Limpar Lista
+
+Quinta sessão do dia — 3 ajustes pontuais sobre a tela de Emissão de Etiqueta de Produtos
+construída na sessão anterior (ver `docs/telas/etiqueta-emissao.md`, seção "Rodada 2", pra detalhe
+completo).
+
+1. **Modo Individual deixa de exigir SKU pré-cadastrado.** Antes, só produtos que já tinham
+   `produto_barra` apareciam na busca (útil pra imprimir de novo, inútil pra um produto recém
+   cadastrado). Agora qualquer produto ativo aparece; ao escolher linha/coluna e clicar "Adicionar
+   à Lista", o backend acha a variação se já existir ou **cria na hora** (`gerar_ean13_interno()`).
+2. **Linha/coluna viram obrigatórias no modo Individual quando o PRODUTO usa aquela dimensão** —
+   resolvido como configuração **por produto** (`produto.nome_variante_linha`/`nome_variante_coluna`
+   não nulos), não a flag global de tenant que só controla o cadastro de Produto. Rótulo do
+   seletor usa o nome real da dimensão (ex.: "COR *", "TAMANHO *").
+3. **Botão "Limpar Lista"** na grade — esvazia todos os produtos selecionados de uma vez.
+
+**Novo serviço de domínio, não específico desta tela:** `ProdutoBarraService`/`ProdutoBarraDtos`
+(`com.vetor.niner.catalogo`, não `etiquetaemissao`) — o `CLAUDE.md` já antecipava esse
+nome/método exato desde 2026-07-22 ("quando for construir produto_barra/o serviço de variação,
+chame `gerar_ean13_interno()` explicitamente no `ProdutoBarraService.criar()`"). Endpoint novo
+`GET /api/v1/etiqueta-emissao/variantes` (catálogo inteiro do tenant) substitui o antigo `GET
+.../produtos/{id}/variacoes` (removido). Testado ao vivo: produto com variação exigiu os dois
+seletores e gerou SKU novo (`9001000000305`) ao adicionar; produto sem variação não mostrou
+seletor nenhum; Limpar Lista esvaziou a grade. `AjudaDaTela.tsx` corrigido (texto antigo dizia que
+precisava de SKU pré-cadastrado). **14 testes** de `EtiquetaEmissaoCrudTest` (era 10), **386** no
+backend inteiro.
+
+### 2026-08-05 — Emissão de Etiqueta de Produtos (1ª implementação real da área)
+
+Quarta sessão do dia. Até então só um placeholder "Em construção" desde 2026-08-04. Detalhe
+completo em `docs/telas/etiqueta-emissao.md`. Resumo:
+
+1. **3 formas de selecionar produtos**, cada uma resultando no mesmo formato de linha
+   (`ProdutoEmissaoResponse`, compatível com o `ProdutoExemplo` já usado em Configuração de
+   Etiqueta): **Individual** (busca 1 produto, refina por variação, digita quantidade), **Por
+   Entradas** (período/fornecedor/nota fiscal — ao menos 1 obrigatório — quantidade vem da soma de
+   compras) e **Por Estoques** (empresa obrigatória + categoria opcional — quantidade vem do saldo
+   em estoque).
+2. **Grade 100% local** (excluir item, editar quantidade) — sem endpoint próprio, sem
+   persistência, só monta a sequência de impressão no clique de "Emitir Etiquetas".
+3. **Escolha do modelo antes de imprimir** — reaproveita 100% os endpoints já existentes de
+   Configuração de Etiqueta, zero código novo nesse passo.
+4. **Impressão em lote generalizada** — o mecanismo do "Testar Impressão" (que imprime N cópias de
+   UM produto) virou "imprimir 1 produto por posição, cada posição podendo ser diferente": a grade
+   é achatada numa sequência (`montarSequenciaImpressao`) e distribuída pelas colunas do rolo,
+   cada etiqueta renderizando com o produto daquela posição específica.
+
+⚠️ **Achado confirmado por pesquisa antes de codificar:** nenhum service do sistema grava
+`produto_movimento_mestre.tipo_movimento='COMPRA'` ainda ("Entrada de Produtos por Compra" é outra
+área de Implementações Futuras, não construída) — o modo "Por Entradas" é uma consulta real contra
+o schema existente, só não vai ter dado até aquela tela (ou carga manual) existir; documentado
+explicitamente no código e no `AjudaDaTela` pra não parecer bug. Saiu de "Implementações Futuras"
+e entrou no grupo "Relatórios" do menu (ícone `IconeEtiqueta`). Backend novo
+(`com.vetor.niner.configuracao.etiquetaemissao`), sem tabela nova, **10 testes**
+(`EtiquetaEmissaoCrudTest`), **382** no backend inteiro. Testado ao vivo ponta a ponta, inclusive
+conferindo via JS que cada etiqueta da sequência impressa tem o SKU certo na posição certa (não só
+a contagem total).
+
+### 2026-08-05 — CRM: +3 colunas de saída (Valor Total Comprado, Ticket Médio, Dias sem Comprar)
+
+Continuação da terceira sessão do dia, logo após a primeira implementação do CRM (ver entrada
+abaixo). Pedido separado: mais 3 colunas na planilha exportada — **Valor Total Comprado**,
+**Ticket Médio** (`valor_total / nº_de_compras`, com `NULLIF` no divisor) e **Nº de Dias sem
+Comprar** (`current_date - última_compra`). Total de colunas de saída: 8 → 11 (ver
+`docs/telas/crm.md`, Item 3, pra detalhe completo).
+
+**Bug real achado pelos próprios testes automatizados:** `rs.getObject(coluna, Long.class)` pra
+ler `dias_sem_ultima_compra` (resultado de subtração de datas, tipo `integer` no Postgres) fazia a
+chamada inteira falhar com **HTTP 409** e uma mensagem de exclusão ("Registro em uso... não pode
+ser excluído" — pensada pro fluxo de `DELETE`, não `GET`), porque a coerção do driver JDBC do
+Postgres pra `Long` via `getObject(String, Class)` não é confiável pra `int4`. Corrigido com o
+padrão já usado em `RelatorioContasReceberService.getLongOuNulo`: `rs.getLong(col)` +
+`rs.wasNull()`. **15 testes** de CRM (era 14), **372** no backend inteiro (nessa época — a
+contagem citada nas entradas seguintes já reflete as sessões posteriores).
+
+### 2026-08-05 — CRM (1ª tela real da área) + EAN-13/quadro/popup na Config. de Etiqueta
+
+Terceira sessão do dia. Dois blocos: fechamento de pendências da Configuração de Etiqueta (3
+pedidos pontuais) e a primeira implementação de verdade da área **CRM** (até então só um
+placeholder no menu, ver entrada de "Implementações Futuras" abaixo).
+
+1. **Configuração de Etiqueta — EAN-13 de verdade + quadro no Teste de Impressão + popup de
+   propriedades** (detalhe completo em `docs/telas/configuracao-etiqueta.md`):
+   - Código de barras trocou de `CODE128` pra **`EAN13`** de verdade em `CampoEtiquetaVisual.tsx`
+     — seguro porque `sku` sempre vem de `gerar_ean13_interno()` (13 dígitos, dígito verificador
+     correto por construção). De quebra, achado e corrigido um bug real: o valor de exemplo
+     (`VALOR_BARRA_EXEMPLO`) tinha o dígito verificador **errado** desde que foi escrito — nunca
+     importava com `CODE128` (que não valida), mas quebraria (ficaria em branco) com `EAN13`
+     (que valida e recusa desenhar se não bater). Corrigido de `'9000000000017'` pra
+     `'9000000000018'`.
+   - Cada etiqueta do **Teste de Impressão** ganhou um **quadro** (borda 1px preta) ao redor —
+     guia de corte pra testar em papel comum antes do rolo de etiqueta de verdade. `box-sizing:
+     border-box` (global) garante que a borda fica por dentro do tamanho configurado.
+   - O **painel de propriedades do campo** (posição/tamanho/fonte/estilo) virou **popup**
+     (`.modal-overlay`/`.modal`, mesmo padrão do resto do sistema) em vez de ficar fixo ao lado do
+     canvas — pedido explícito pra melhor visualização e menos disputa de espaço. A sincronização
+     ao vivo com o canvas/prévia do rolo continua funcionando com o popup aberto.
+2. **CRM — primeira tela real da área** (`docs/telas/crm.md`): filtra clientes por perfil (nome
+   inicial/final por primeira letra, gênero, idade, aniversário mês/dia, categoria, período de
+   cadastro, dias sem comprar) e por produtos comprados (período, categoria, variação de linha/
+   coluna — exige que todos batam na MESMA linha de venda), e exporta a lista em planilha Excel
+   (`.xlsx`, dados sempre completos: nome, nascimento, gênero, e-mail, celular, primeira/última
+   compra, nº de compras). Tela sem scroll (pedido explícito) — os dois grupos de filtro (13
+   campos ao todo) viraram popup, só o checklist de 8 colunas de saída fica inline. Saiu de
+   "Implementações Futuras" e entrou no grupo "Relatórios" do menu. Backend novo
+   (`com.vetor.niner.cadastros.crm`, 14 testes) sem tabela nova — só lê schema já existente.
+   Biblioteca de Excel: **`write-excel-file`**, não `xlsx`/SheetJS (vulnerabilidade alta sem
+   correção disponível via npm) nem `exceljs` (moderada, transitiva, e ~100 pacotes a mais só pra
+   um caso de uso write-only) — zero dependências novas no `npm audit`.
+
+### 2026-08-05 — Revisão da Configuração de Etiqueta + correção de dois bugs reais em Produto
+
+Sessão de ajustes finos sobre a Configuração de Etiqueta de Produtos (nasceu no dia anterior) mais
+duas correções de bug encontradas testando o cadastro de Produto na prática.
+
+1. **Configuração de Etiqueta — 6 ajustes, todos testados ao vivo no navegador** (ver
+   `docs/telas/configuracao-etiqueta.md`, seção "Ajustes de 2026-08-05", pra detalhe completo):
+   - Campos reduzidos de **10 pra 4**: `EAN_BARRAS`/`PRECO_OFERTA` removidos por completo (sem uso);
+     `MARCA`/`REFERENCIA`/`VARIANTE_LINHA`/`VARIANTE_COLUNA` deixaram de ser campos posicionáveis
+     próprios e passaram a ser **concatenados automaticamente** dentro de `DESCRICAO_PRODUTO`
+     (`montarDescricaoImpressa`, `web/src/lib/etiquetaConfig.ts`) — descrição + marca + referência +
+     variação de linha + variação de coluna, nessa ordem, pulando qualquer pedaço vazio ou que já
+     apareça na descrição (evita "ADIDAS ADIDAS" repetido). Objetivo: um campo só pra arrastar em
+     vez de cinco. Enum `campo_etiqueta` editado na própria `V029` (banco em construção, nenhuma
+     config salva usava os 6 valores removidos — checado antes de editar).
+   - Texto que não cabe na largura do campo agora **quebra linha** em vez de cortar com "...".
+   - Prévia do rolo completo passou a **atualizar em tempo real** enquanto o usuário digita
+     posição/tamanho no painel de propriedades (antes só ao arrastar com o mouse).
+   - **Redimensionar por mouse** — alça no canto do campo selecionado, arrastável (antes só dava
+     pra mudar tamanho digitando o número).
+   - Código de barras desproporcional entre o editor grande e a prévia pequena — `viewBox` do
+     `jsbarcode` tinha proporção inconsistente entre as duas escalas; corrigido com
+     `preserveAspectRatio="none"`.
+   - Busca de "produto de exemplo" só trazia produtos com variação/SKU cadastrado (tela que ainda
+     não existe) — quase sempre vazia. Query trocada de `produto_barra` (INNER JOIN) pra `produto`
+     (LEFT JOIN) — todo produto ativo aparece agora, com ou sem variação.
+2. **Bug real corrigido: cadastro de Produto rejeitava margem acima de 100%** com erro genérico
+   "Invalid request content." (mesma mensagem do Spring pra JSON malformado, sem detalhe por campo
+   — difícil de diagnosticar). Causa: `percentualVenda` tinha `@DecimalMax("100")` em
+   `ProdutoDtos.java`; um calçado com markup de 150% (custo R$125 → venda R$312,50) estourava a
+   validação. Confirmado com o dono do produto que margem >100% é caso de uso real; `@DecimalMax`
+   removido (coluna já é `numeric(5,2)`, sem mudança de schema). Ver `docs/telas/produto.md`,
+   Particularidade 4.
+3. Suíte de backend (`EtiquetaConfigCrudTest`, 3 casos ajustados pra usar `PRECO_VENDA` em vez do
+   `MARCA` removido como campo de exemplo nos testes) segue verde.
+
+### 2026-08-05 — Configuração de Etiqueta: layout compacto (3 colunas) + botão Testar Impressão
+
+Segunda sessão do dia sobre a Configuração de Etiqueta de Produtos — dois pedidos novos do dono
+do produto, cada um implementado e testado ao vivo antes do seguinte (detalhe completo em
+`docs/telas/configuracao-etiqueta.md`, seção "Ajustes de 2026-08-05, rodada 2").
+
+1. **Máximo de colunas do rolo: 6 → 4**, em 3 camadas — `CHECK` do banco (`V029`, editada no
+   lugar), validação do backend (`EtiquetaConfigService`, mensagem "entre 1 e 4") e o `<select>`
+   do frontend. 11 testes de `EtiquetaConfigCrudTest` seguem verdes.
+2. **Cabeçalho do formulário reorganizado em 3 colunas lado a lado** ("Rolo e Etiqueta" / "Bordas"
+   / "Posição das Colunas", cada uma com os campos empilhados dentro), a partir de um mockup ASCII
+   do dono do produto — reduz bastante a rolagem vertical da tela. **Bug pego no teste ao vivo:**
+   o cabeçalho usava `col-10` (grid de 12 colunas, §3.7) pro campo Nome, mas essa classe nunca
+   existiu em `styles.css` (só ia até `col-9`, depois pulava pra `col-12`) — o campo renderizava
+   com ~110px em vez da largura esperada. Corrigido adicionando `.col-10` ao grid.
+3. **Botão "Testar Impressão"** (novo) — imprime N cópias do layout configurado, em escala física
+   real, direto no diálogo de impressão do navegador, sem depender da futura tela de Emissão
+   (que precisa de produto/estoque reais). Pede a quantidade num modal (`TesteImpressaoModal.tsx`,
+   1 a 200), distribui pelas colunas configuradas uma linha por vez (`linhasParaImprimir`, mesmo
+   jeito que o rolo físico avança), reaproveita `CampoEtiquetaVisual.tsx` (mesmo componente do
+   editor/prévia) com escala `96px/25,4mm` (equivalência real que o navegador usa ao imprimir, não
+   o zoom de tela do editor), e injeta um `@page` dinâmico (`size: ${larguraRolo}mm auto`) em
+   runtime — a largura do rolo é configurável por tenant, diferente do 80mm fixo do Comprovante de
+   Crediário/A4 do Fechamento de Caixa, que já usam a mesma técnica de isolamento visual
+   (`styles.css`, `.etiqueta-imprimir`). Testado ao vivo interceptando `window.print` (evitar
+   travar a automação): distribuição 3+3+2 pra 8 etiquetas/3 colunas confirmada, largura em px
+   batendo exatamente com o mm configurado (110mm → 415,748px), limpeza do `<style>` injetado e do
+   conteúdo confirmada depois do `afterprint`.
 
 ### 2026-08-04 — Tela de Configuração de Etiqueta de Produtos (editor visual de arraste)
 

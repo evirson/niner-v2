@@ -8,18 +8,20 @@
 --   cfg_etiqueta_coluna — filha: posição inicial de cada coluna de etiqueta no rolo físico
 --     (1 a numero_colunas do cabeçalho; não é calculada por fórmula porque rolos com espaçamento
 --     irregular entre colunas existem na prática).
---   cfg_etiqueta_campo  — filha: quais dos 10 campos possíveis aparecem em cada configuração,
+--   cfg_etiqueta_campo  — filha: quais dos 4 campos possíveis aparecem em cada configuração,
 --     com posição livre (x/y, em mm, relativa ao canto superior-esquerdo da própria etiqueta —
 --     não do rolo) e estilo (fonte, tamanho, negrito, fundo preto/letra branca ou o padrão letra
 --     preta/fundo branco, alinhamento). Modelo validado contra um PDF real de etiqueta impressa
 --     fornecido pelo dono do produto (ver docs/telas/configuracao-etiqueta.md).
 
+-- Marca/Referência/Variação de Linha/Variação de Coluna não são campos próprios (2026-08-05,
+-- pedido do dono do produto): o front concatena os 4 dentro de DESCRICAO_PRODUTO (pulando o que
+-- já aparecer na descrição), pra não precisar posicionar 5 campos separados só pra imprimir a
+-- descrição completa — os dados brutos continuam vindo do endpoint de produto de exemplo.
 CREATE TYPE campo_etiqueta AS ENUM (
-  'NOME_EMPRESA', 'DESCRICAO_PRODUTO', 'MARCA', 'REFERENCIA',
-  'PRECO_VENDA', 'PRECO_OFERTA', 'SKU_BARRAS', 'EAN_BARRAS',
-  'VARIANTE_LINHA', 'VARIANTE_COLUNA'
+  'NOME_EMPRESA', 'DESCRICAO_PRODUTO', 'PRECO_VENDA', 'SKU_BARRAS'
 );
-COMMENT ON TYPE campo_etiqueta IS 'Campos possíveis numa etiqueta de produto — cada valor mapeia pra uma coluna real (ver docs/telas/configuracao-etiqueta.md): NOME_EMPRESA->empresa.cfg_nome_etiqueta, DESCRICAO_PRODUTO->produto.descricao, MARCA->produto.marca, REFERENCIA->produto.referencia, PRECO_VENDA->produto.preco_venda, PRECO_OFERTA->produto.preco_oferta, SKU_BARRAS->produto_barra.sku, EAN_BARRAS->produto_barra.ean, VARIANTE_LINHA->cfg_variante_linha.descricao, VARIANTE_COLUNA->cfg_variante_coluna.descricao.';
+COMMENT ON TYPE campo_etiqueta IS 'Campos possíveis numa etiqueta de produto — cada valor mapeia pra uma coluna real (ver docs/telas/configuracao-etiqueta.md): NOME_EMPRESA->empresa.cfg_nome_etiqueta, DESCRICAO_PRODUTO->produto.descricao (concatenada no front com marca/referência/variação, ver comentário acima), PRECO_VENDA->produto.preco_venda, SKU_BARRAS->produto_barra.sku.';
 
 CREATE TYPE alinhamento_etiqueta_campo AS ENUM ('ESQUERDA', 'CENTRO', 'DIREITA');
 
@@ -41,7 +43,7 @@ CREATE TABLE cfg_etiqueta_config (
   ativo               boolean       NOT NULL DEFAULT true,
   criado_em           timestamptz   NOT NULL DEFAULT now(),
   atualizado_em       timestamptz   NOT NULL DEFAULT now(),
-  CONSTRAINT cfg_etiqueta_config_numero_colunas_ck CHECK (numero_colunas BETWEEN 1 AND 6),
+  CONSTRAINT cfg_etiqueta_config_numero_colunas_ck CHECK (numero_colunas BETWEEN 1 AND 4),
   CONSTRAINT cfg_etiqueta_config_nome_uk UNIQUE (id_tenant, nome),
   -- base para FK composta (id_tenant, id_config_etiqueta) das duas tabelas filhas abaixo.
   CONSTRAINT cfg_etiqueta_config_id_uk UNIQUE (id_tenant, id_config_etiqueta)

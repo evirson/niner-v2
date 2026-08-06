@@ -10,9 +10,11 @@ import Toast from '../../components/Toast'
 import { ApiError } from '../../lib/api'
 import {
   ETIQUETA_CONFIG_VAZIA,
+  MM_PARA_PX_IMPRESSAO,
   atualizarEtiquetaConfig,
   buscarEtiquetaConfig,
   criarEtiquetaConfig,
+  linhasParaImprimir,
   paraFormulario,
   paraRequisicao,
   type CampoEtiquetaPosicionado,
@@ -23,14 +25,16 @@ import {
 import { aoTeclarEnterNoFormulario } from '../../lib/formularios'
 import { completarEtiquetaMm, desmascararEtiquetaMm, formatarEtiquetaMm, mascararEtiquetaMm } from '../../lib/masks'
 import { maiusculas } from '../../lib/texto'
+import CampoEtiquetaVisual from './CampoEtiquetaVisual'
 import EditorEtiquetaCanvas from './EditorEtiquetaCanvas'
 import ProdutoExemploModal from './ProdutoExemploModal'
+import TesteImpressaoModal from './TesteImpressaoModal'
 import type { EstadoListaEtiquetaConfig } from './EtiquetaConfigLista'
 
 type CampoValidavel = 'nome' | 'larguraRoloMm' | 'larguraEtiquetaMm' | 'alturaEtiquetaMm'
 type ErrosCampo = Partial<Record<CampoValidavel, string>>
 
-const OPCOES_NUMERO_COLUNAS = [1, 2, 3, 4, 5, 6]
+const OPCOES_NUMERO_COLUNAS = [1, 2, 3, 4]
 
 function validarCampo(chave: CampoValidavel, f: EtiquetaConfigFormState): string | undefined {
   if (chave === 'nome') return f.nome.trim() ? undefined : 'Nome é obrigatório.'
@@ -68,6 +72,8 @@ export default function EtiquetaConfigForm({ somenteLeitura = false }: { somente
   const [confirmarSalvarAberto, setConfirmarSalvarAberto] = useState(false)
   const [produtoExemplo, setProdutoExemplo] = useState<ProdutoExemplo | null>(null)
   const [buscaProdutoAberta, setBuscaProdutoAberta] = useState(false)
+  const [testeImpressaoAberto, setTesteImpressaoAberto] = useState(false)
+  const [quantidadeImprimir, setQuantidadeImprimir] = useState(0)
 
   const { data: configExistente } = useQuery({
     queryKey: ['etiqueta-config', id],
@@ -78,6 +84,35 @@ export default function EtiquetaConfigForm({ somenteLeitura = false }: { somente
   useEffect(() => {
     if (configExistente) setForm(paraFormulario(configExistente))
   }, [configExistente])
+
+  const podeImprimir =
+    form.colunas.length > 0 &&
+    form.campos.length > 0 &&
+    desmascararEtiquetaMm(form.larguraRoloMm) > 0 &&
+    desmascararEtiquetaMm(form.larguraEtiquetaMm) > 0 &&
+    desmascararEtiquetaMm(form.alturaEtiquetaMm) > 0
+
+  /** Dispara o diálogo de impressão do navegador quando `quantidadeImprimir` vira > 0 — o
+   * tamanho da página (`@page`, em mm) precisa ser injetado aqui porque a largura do rolo é
+   * configurável por tenant, diferente do 80mm fixo do Comprovante de Crediário/A4 do Fechamento
+   * de Caixa (styles.css). Removido de novo em `afterprint` (fecha o diálogo do SO) e no cleanup
+   * (usuário troca a quantidade de novo ou sai da tela no meio do caminho). */
+  useEffect(() => {
+    if (quantidadeImprimir <= 0) return
+    const larguraRoloMm = desmascararEtiquetaMm(form.larguraRoloMm) || 0
+    const estilo = document.createElement('style')
+    estilo.textContent = `@page etiqueta-teste-impressao { size: ${larguraRoloMm}mm auto; margin: 0; }`
+    document.head.appendChild(estilo)
+    const aoTerminarImpressao = () => setQuantidadeImprimir(0)
+    window.addEventListener('afterprint', aoTerminarImpressao)
+    const temporizador = window.setTimeout(() => window.print(), 60)
+    return () => {
+      window.clearTimeout(temporizador)
+      window.removeEventListener('afterprint', aoTerminarImpressao)
+      estilo.remove()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [quantidadeImprimir])
 
   const salvar = useMutation({
     mutationFn: () =>
@@ -179,6 +214,15 @@ export default function EtiquetaConfigForm({ somenteLeitura = false }: { somente
           </div>
           <div className="topbar-acoes">
             <AjudaDaTela chaveTela="configuracoes.etiquetaconfig.form" />
+            <button
+              type="button"
+              className="btn ghost"
+              disabled={!podeImprimir}
+              title={podeImprimir ? undefined : 'Preencha o rolo/etiqueta e adicione ao menos 1 campo antes de testar.'}
+              onClick={() => setTesteImpressaoAberto(true)}
+            >
+              Testar Impressão
+            </button>
             <BotaoFecharTela onClick={() => navigate('/etiqueta-configuracao', { state: { listaEstado } })} />
             {!somenteLeitura && (
               <button type="submit" form="form-etiqueta-config" className="btn" disabled={salvar.isPending}>
@@ -201,102 +245,95 @@ export default function EtiquetaConfigForm({ somenteLeitura = false }: { somente
         >
           <fieldset disabled={somenteLeitura} className="form-fieldset">
             <section className="section">
-              <p className="section-label">Identificação</p>
               <div className="form-grid">
-                <div className="col-8">
-                  <label htmlFor="nome">Nome *</label>
-                  <input id="nome" autoFocus value={form.nome} onChange={campoTexto('nome')} onBlur={aoSairDoCampo('nome')} />
-                  {erros.nome && <p className="erro-campo">{erros.nome}</p>}
-                </div>
-                <div className="col-4">
+                <div className="col-2">
                   <label className="checkbox-linha" style={{ marginTop: 22 }}>
                     <input type="checkbox" checked={form.ativo} onChange={(e) => setForm((f) => ({ ...f, ativo: e.target.checked }))} />
                     Ativa
                   </label>
                 </div>
-              </div>
-            </section>
-
-            <section className="section">
-              <p className="section-label">Rolo e Etiqueta (mm)</p>
-              <div className="form-grid">
-                <div className="col-3">
-                  <label htmlFor="larguraRoloMm">Largura do Rolo *</label>
-                  <input id="larguraRoloMm" inputMode="decimal" placeholder="0,00" value={form.larguraRoloMm}
-                    onChange={campoMm('larguraRoloMm')} onBlur={aoSairDoCampoMm('larguraRoloMm')} />
-                  {erros.larguraRoloMm && <p className="erro-campo">{erros.larguraRoloMm}</p>}
-                </div>
-                <div className="col-3">
-                  <label htmlFor="numeroColunas">Número de Colunas *</label>
-                  <select id="numeroColunas" value={form.numeroColunas} onChange={aoMudarNumeroColunas}>
-                    {OPCOES_NUMERO_COLUNAS.map((n) => (
-                      <option key={n} value={n}>
-                        {n}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="col-3">
-                  <label htmlFor="larguraEtiquetaMm">Largura da Etiqueta *</label>
-                  <input id="larguraEtiquetaMm" inputMode="decimal" placeholder="0,00" value={form.larguraEtiquetaMm}
-                    onChange={campoMm('larguraEtiquetaMm')} onBlur={aoSairDoCampoMm('larguraEtiquetaMm')} />
-                  {erros.larguraEtiquetaMm && <p className="erro-campo">{erros.larguraEtiquetaMm}</p>}
-                </div>
-                <div className="col-3">
-                  <label htmlFor="alturaEtiquetaMm">Altura da Etiqueta *</label>
-                  <input id="alturaEtiquetaMm" inputMode="decimal" placeholder="0,00" value={form.alturaEtiquetaMm}
-                    onChange={campoMm('alturaEtiquetaMm')} onBlur={aoSairDoCampoMm('alturaEtiquetaMm')} />
-                  {erros.alturaEtiquetaMm && <p className="erro-campo">{erros.alturaEtiquetaMm}</p>}
+                <div className="col-10">
+                  <label htmlFor="nome">Nome *</label>
+                  <input id="nome" autoFocus value={form.nome} onChange={campoTexto('nome')} onBlur={aoSairDoCampo('nome')} />
+                  {erros.nome && <p className="erro-campo">{erros.nome}</p>}
                 </div>
               </div>
             </section>
 
             <section className="section">
-              <p className="section-label">Bordas (mm)</p>
-              <div className="form-grid">
-                <div className="col-3">
-                  <label htmlFor="bordaSuperiorMm">Superior</label>
-                  <input id="bordaSuperiorMm" inputMode="decimal" placeholder="0,00" value={form.bordaSuperiorMm}
-                    onChange={campoMm('bordaSuperiorMm')} onBlur={aoSairDoCampoMm('bordaSuperiorMm')} />
-                </div>
-                <div className="col-3">
-                  <label htmlFor="bordaInferiorMm">Inferior</label>
-                  <input id="bordaInferiorMm" inputMode="decimal" placeholder="0,00" value={form.bordaInferiorMm}
-                    onChange={campoMm('bordaInferiorMm')} onBlur={aoSairDoCampoMm('bordaInferiorMm')} />
-                </div>
-                <div className="col-3">
-                  <label htmlFor="bordaEsquerdaMm">Esquerda</label>
-                  <input id="bordaEsquerdaMm" inputMode="decimal" placeholder="0,00" value={form.bordaEsquerdaMm}
-                    onChange={campoMm('bordaEsquerdaMm')} onBlur={aoSairDoCampoMm('bordaEsquerdaMm')} />
-                </div>
-                <div className="col-3">
-                  <label htmlFor="bordaDireitaMm">Direita</label>
-                  <input id="bordaDireitaMm" inputMode="decimal" placeholder="0,00" value={form.bordaDireitaMm}
-                    onChange={campoMm('bordaDireitaMm')} onBlur={aoSairDoCampoMm('bordaDireitaMm')} />
-                </div>
-              </div>
-            </section>
+              <div className="form-grid etiqueta-config-linha">
+                <div className="col-4">
+                  <div className="card etiqueta-subcard">
+                    <p className="card-title">Rolo e Etiqueta (mm)</p>
+                    <label htmlFor="larguraRoloMm">Largura do Rolo *</label>
+                    <input id="larguraRoloMm" inputMode="decimal" placeholder="0,00" value={form.larguraRoloMm}
+                      onChange={campoMm('larguraRoloMm')} onBlur={aoSairDoCampoMm('larguraRoloMm')} />
+                    {erros.larguraRoloMm && <p className="erro-campo">{erros.larguraRoloMm}</p>}
 
-            <section className="section">
-              <p className="section-label">Posição de Cada Coluna no Rolo (mm)</p>
-              <p className="muted" style={{ marginTop: -4 }}>
-                Distância do início do rolo até o início de cada etiqueta — valor livre, não é calculado
-                automaticamente (rolos com espaçamento irregular existem na prática).
-              </p>
-              <div className="form-grid">
-                {form.colunas.map((coluna) => (
-                  <div className="col-3" key={coluna.numeroColuna}>
-                    <label htmlFor={`coluna-${coluna.numeroColuna}`}>Coluna {coluna.numeroColuna}</label>
-                    <input
-                      id={`coluna-${coluna.numeroColuna}`}
-                      inputMode="decimal"
-                      placeholder="0,00"
-                      defaultValue={formatarEtiquetaMm(coluna.posicaoInicialMm)}
-                      onChange={(e) => aoMudarPosicaoColuna(coluna.numeroColuna, mascararEtiquetaMm(e.target.value))}
-                      onBlur={(e) => aoMudarPosicaoColuna(coluna.numeroColuna, completarEtiquetaMm(e.target.value))}
-                    />
+                    <label htmlFor="numeroColunas">Número de Colunas *</label>
+                    <select id="numeroColunas" value={form.numeroColunas} onChange={aoMudarNumeroColunas}>
+                      {OPCOES_NUMERO_COLUNAS.map((n) => (
+                        <option key={n} value={n}>
+                          {n}
+                        </option>
+                      ))}
+                    </select>
+
+                    <label htmlFor="larguraEtiquetaMm">Largura da Etiqueta *</label>
+                    <input id="larguraEtiquetaMm" inputMode="decimal" placeholder="0,00" value={form.larguraEtiquetaMm}
+                      onChange={campoMm('larguraEtiquetaMm')} onBlur={aoSairDoCampoMm('larguraEtiquetaMm')} />
+                    {erros.larguraEtiquetaMm && <p className="erro-campo">{erros.larguraEtiquetaMm}</p>}
+
+                    <label htmlFor="alturaEtiquetaMm">Altura da Etiqueta *</label>
+                    <input id="alturaEtiquetaMm" inputMode="decimal" placeholder="0,00" value={form.alturaEtiquetaMm}
+                      onChange={campoMm('alturaEtiquetaMm')} onBlur={aoSairDoCampoMm('alturaEtiquetaMm')} />
+                    {erros.alturaEtiquetaMm && <p className="erro-campo">{erros.alturaEtiquetaMm}</p>}
                   </div>
-                ))}
+                </div>
+
+                <div className="col-4">
+                  <div className="card etiqueta-subcard">
+                    <p className="card-title">Bordas (mm)</p>
+                    <label htmlFor="bordaSuperiorMm">Superior</label>
+                    <input id="bordaSuperiorMm" inputMode="decimal" placeholder="0,00" value={form.bordaSuperiorMm}
+                      onChange={campoMm('bordaSuperiorMm')} onBlur={aoSairDoCampoMm('bordaSuperiorMm')} />
+
+                    <label htmlFor="bordaInferiorMm">Inferior</label>
+                    <input id="bordaInferiorMm" inputMode="decimal" placeholder="0,00" value={form.bordaInferiorMm}
+                      onChange={campoMm('bordaInferiorMm')} onBlur={aoSairDoCampoMm('bordaInferiorMm')} />
+
+                    <label htmlFor="bordaEsquerdaMm">Esquerda</label>
+                    <input id="bordaEsquerdaMm" inputMode="decimal" placeholder="0,00" value={form.bordaEsquerdaMm}
+                      onChange={campoMm('bordaEsquerdaMm')} onBlur={aoSairDoCampoMm('bordaEsquerdaMm')} />
+
+                    <label htmlFor="bordaDireitaMm">Direita</label>
+                    <input id="bordaDireitaMm" inputMode="decimal" placeholder="0,00" value={form.bordaDireitaMm}
+                      onChange={campoMm('bordaDireitaMm')} onBlur={aoSairDoCampoMm('bordaDireitaMm')} />
+                  </div>
+                </div>
+
+                <div className="col-4">
+                  <div className="card etiqueta-subcard">
+                    <p className="card-title">Posição das Colunas (mm)</p>
+                    <p className="muted etiqueta-subcard-ajuda">
+                      Distância do início do rolo até o início de cada etiqueta — valor livre, não calculado
+                      automaticamente.
+                    </p>
+                    {form.colunas.map((coluna) => (
+                      <div key={coluna.numeroColuna}>
+                        <label htmlFor={`coluna-${coluna.numeroColuna}`}>Coluna {coluna.numeroColuna}</label>
+                        <input
+                          id={`coluna-${coluna.numeroColuna}`}
+                          inputMode="decimal"
+                          placeholder="0,00"
+                          defaultValue={formatarEtiquetaMm(coluna.posicaoInicialMm)}
+                          onChange={(e) => aoMudarPosicaoColuna(coluna.numeroColuna, mascararEtiquetaMm(e.target.value))}
+                          onBlur={(e) => aoMudarPosicaoColuna(coluna.numeroColuna, completarEtiquetaMm(e.target.value))}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
               </div>
             </section>
 
@@ -368,6 +405,64 @@ export default function EtiquetaConfigForm({ somenteLeitura = false }: { somente
             setBuscaProdutoAberta(false)
           }}
         />
+      )}
+
+      {testeImpressaoAberto && (
+        <TesteImpressaoModal
+          aoFechar={() => setTesteImpressaoAberto(false)}
+          aoConfirmar={(quantidade) => {
+            setTesteImpressaoAberto(false)
+            setQuantidadeImprimir(quantidade)
+          }}
+        />
+      )}
+
+      {/* Fora da tela (só existe pro navegador imprimir) — `.etiqueta-imprimir` (styles.css) fica
+          escondida na visualização normal e isolada em `@media print`, mesma técnica do
+          Comprovante de Crediário/Fechamento de Caixa. `escalaPxPorMm=MM_PARA_PX_IMPRESSAO`
+          reaproveita `CampoEtiquetaVisual` já mapeando mm→px na escala física real (96dpi), não
+          no zoom de tela do editor. Cada etiqueta ganha um quadro (`border`, 2026-08-05, só aqui
+          no Teste de Impressão) pra servir de guia de corte ao testar em papel comum, antes do
+          rolo de etiqueta de verdade — `box-sizing: border-box` (global) garante que a borda fica
+          por dentro do tamanho configurado, sem deslocar a coluna seguinte. */}
+      {quantidadeImprimir > 0 && (
+        <div className="etiqueta-imprimir">
+          {linhasParaImprimir(quantidadeImprimir, form.colunas).map((colunasDaLinha, indiceLinha) => (
+            <div
+              key={indiceLinha}
+              style={{
+                position: 'relative',
+                width: (desmascararEtiquetaMm(form.larguraRoloMm) || 0) * MM_PARA_PX_IMPRESSAO,
+                height: (desmascararEtiquetaMm(form.alturaEtiquetaMm) || 0) * MM_PARA_PX_IMPRESSAO,
+              }}
+            >
+              {colunasDaLinha.map((coluna) => (
+                <div
+                  key={coluna.numeroColuna}
+                  style={{
+                    position: 'absolute',
+                    left: coluna.posicaoInicialMm * MM_PARA_PX_IMPRESSAO,
+                    top: 0,
+                    width: (desmascararEtiquetaMm(form.larguraEtiquetaMm) || 0) * MM_PARA_PX_IMPRESSAO,
+                    height: (desmascararEtiquetaMm(form.alturaEtiquetaMm) || 0) * MM_PARA_PX_IMPRESSAO,
+                    background: '#fff',
+                    border: '1px solid #000',
+                  }}
+                >
+                  {form.campos.map((c) => (
+                    <CampoEtiquetaVisual
+                      key={c.campo}
+                      campo={c}
+                      escalaPxPorMm={MM_PARA_PX_IMPRESSAO}
+                      produtoExemplo={produtoExemplo}
+                      nomeEmpresaExemplo="NOME DA LOJA"
+                    />
+                  ))}
+                </div>
+              ))}
+            </div>
+          ))}
+        </div>
       )}
 
       {toast && <Toast mensagem={toast} aoFechar={() => setToast('')} />}

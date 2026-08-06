@@ -643,6 +643,7 @@ a.menu-card:hover {
 .col-7 { grid-column: span 7; }
 .col-8 { grid-column: span 8; }
 .col-9 { grid-column: span 9; }
+.col-10 { grid-column: span 10; }
 .col-12 { grid-column: span 12; }
 
 /* Formulário de cadastro (cliente e demais telas) — usa a largura toda do app-main. */
@@ -987,6 +988,11 @@ a.menu-card:hover {
 .editor-etiqueta-campo { cursor: grab; touch-action: none; }
 .editor-etiqueta-campo:active { cursor: grabbing; }
 .editor-etiqueta-campo:focus-visible { outline-color: var(--accent) !important; }
+.editor-etiqueta-redimensionar {
+  position: absolute; width: 10px; height: 10px;
+  background: var(--accent); border: 1px solid #fff; border-radius: 2px;
+  cursor: nwse-resize; touch-action: none;
+}
 
 .editor-etiqueta-painel { min-width: 220px; display: flex; flex-direction: column; gap: 10px; }
 .editor-etiqueta-painel-topo { display: flex; align-items: center; justify-content: space-between; }
@@ -999,3 +1005,26 @@ a.menu-card:hover {
 
 .editor-etiqueta-rolo-preview { overflow-x: auto; padding: 10px; background: var(--surface-2); border-radius: var(--radius); }
 .editor-etiqueta-rolo-etiqueta { background: #fff; border: 1px solid var(--line-strong); }
+
+/* Layout compacto do cabeçalho da Configuração de Etiqueta (2026-08-05): rolo/etiqueta, bordas
+   e posição das colunas lado a lado (não empilhados) pra caber sem rolagem vertical. */
+.etiqueta-config-linha { align-items: stretch; }
+.etiqueta-config-linha .col-4 { display: flex; }
+.etiqueta-subcard { flex: 1; padding: 16px; display: flex; flex-direction: column; }
+.etiqueta-subcard label { margin: 10px 0 4px; }
+.etiqueta-subcard label:first-of-type { margin-top: 0; }
+.etiqueta-subcard-ajuda { margin: 0 0 4px; font-size: 12px; }
+
+/* Teste de Impressão da Configuração de Etiqueta (2026-08-05) — imprime N cópias reais do
+   layout configurado, na escala física exata, direto no diálogo do navegador (mesma técnica de
+   isolamento do Comprovante de Crediário/Fechamento de Caixa acima: `body * {visibility:hidden}`
+   já é global, só falta marcar esta classe como visível). O tamanho da página (`@page
+   etiqueta-teste-impressao`) é injetado em runtime por `EtiquetaConfigForm.tsx` — a largura do
+   rolo é configurável por tenant, não um valor fixo como o 80mm do comprovante. */
+@media print {
+  .etiqueta-imprimir, .etiqueta-imprimir * { visibility: visible; }
+  .etiqueta-imprimir {
+    page: etiqueta-teste-impressao;
+    position: absolute; top: 0; left: 0; margin: 0; padding: 0; border: 0; background: none;
+  }
+}

@@ -133,8 +133,8 @@ class EtiquetaConfigCrudTest {
         String corpo = """
                 {"nome":"ETIQUETA CAMPO REPETIDO","larguraRoloMm":50,"numeroColunas":1,"larguraEtiquetaMm":34,
                  "alturaEtiquetaMm":30,"colunas":[{"numeroColuna":1,"posicaoInicialMm":3}],
-                 "campos":[{"campo":"MARCA","posicaoXMm":0,"posicaoYMm":0,"fonte":"ARIAL","negrito":false,"fundoPreto":false,"alinhamento":"ESQUERDA"},
-                           {"campo":"MARCA","posicaoXMm":0,"posicaoYMm":10,"fonte":"ARIAL","negrito":false,"fundoPreto":false,"alinhamento":"ESQUERDA"}]}
+                 "campos":[{"campo":"PRECO_VENDA","posicaoXMm":0,"posicaoYMm":0,"fonte":"ARIAL","negrito":false,"fundoPreto":false,"alinhamento":"ESQUERDA"},
+                           {"campo":"PRECO_VENDA","posicaoXMm":0,"posicaoYMm":10,"fonte":"ARIAL","negrito":false,"fundoPreto":false,"alinhamento":"ESQUERDA"}]}
                 """;
 
         mvc.perform(post("/api/v1/etiquetas-config").header("Authorization", "Bearer " + token)
@@ -148,7 +148,7 @@ class EtiquetaConfigCrudTest {
         String corpo = """
                 {"nome":"ETIQUETA CAMPO FORA","larguraRoloMm":50,"numeroColunas":1,"larguraEtiquetaMm":34,
                  "alturaEtiquetaMm":30,"colunas":[{"numeroColuna":1,"posicaoInicialMm":3}],
-                 "campos":[{"campo":"MARCA","posicaoXMm":30,"posicaoYMm":0,"larguraMm":10,"alturaMm":5,
+                 "campos":[{"campo":"PRECO_VENDA","posicaoXMm":30,"posicaoYMm":0,"larguraMm":10,"alturaMm":5,
                             "fonte":"ARIAL","negrito":false,"fundoPreto":false,"alinhamento":"ESQUERDA"}]}
                 """;
 

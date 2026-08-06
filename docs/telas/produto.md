@@ -92,6 +92,14 @@ no frontend (o backend não recalcula, apenas persiste os três valores enviados
 - Editar **Preço de Venda** direto → recalcula `% de Venda = ((Venda − Custo) / Custo) × 100`
   (só quando há custo informado > 0).
 
+**Bug corrigido em 2026-08-05:** `percentualVenda` tinha `@DecimalMax("100")` no backend
+(`ProdutoDtos.java`), rejeitando qualquer margem acima de 100% (venda > 2× o custo) com um erro
+genérico do Spring ("Invalid request content.", a mesma mensagem de JSON malformado — por isso
+difícil de diagnosticar; não tem `detail` por campo nesse tipo de falha de validação). Confirmado
+com o dono do produto que margem acima de 100% é um caso de uso real (ex.: calçados com markup de
+150%); a restrição de `@DecimalMax` foi removida — a coluna já é `numeric(5,2)` (até 999,99%), sem
+necessidade de mudança de schema.
+
 ## Particularidade 5: regra da oferta (início/final/preço) — tudo ou nada
 
 `data_inicio_oferta`, `data_final_oferta` e `preco_oferta` só são válidos **em conjunto**:
@@ -237,7 +245,13 @@ próximo corte), não do produto "pai".
 ## Non-goals desta feature
 
 - Variação/SKU (`produto_barra`) e galeria de imagens (`produto_imagem`) — schema pronto desde
-  V017, sem CRUD ainda; ficam para o próximo corte vertical (Estoque).
+  V017, sem CRUD ainda; ficam para o próximo corte vertical (Estoque). **Atualizado 2026-08-05:**
+  nasceu `ProdutoBarraService` (`com.vetor.niner.catalogo`, `obterOuCriar`), mas é infraestrutura
+  de domínio consumida pela tela **Emissão de Etiqueta de Produtos**
+  (`docs/telas/etiqueta-emissao.md`) — acha ou cria a variação (chamando
+  `gerar_ean13_interno()`) na hora de emitir uma etiqueta; continua **sem tela própria** de
+  listar/editar/excluir variação, e o cadastro de Produto em si segue sem tocar em
+  `produto_barra`.
 - Reajuste em massa de preços, histórico de preço (`reajustado_em` existe na coluna, sem uso
   ainda).
 - Importação em lote (planilha).

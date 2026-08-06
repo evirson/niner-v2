@@ -22,11 +22,15 @@ public final class EtiquetaConfigDtos {
     private EtiquetaConfigDtos() {
     }
 
-    /** Os 10 campos possíveis numa etiqueta — cada um mapeia pra uma coluna já existente no
-     * schema (ver comentário do tipo `campo_etiqueta` em V029). */
+    /** Os 4 campos possíveis numa etiqueta — cada um mapeia pra uma coluna já existente no
+     * schema (ver comentário do tipo `campo_etiqueta` em V029). Marca/Referência/Variação de
+     * Linha/Variação de Coluna não são mais campos próprios (2026-08-05, pedido do dono do
+     * produto): o front concatena esses 4 dentro de {@code DESCRICAO_PRODUTO} (pulando o que já
+     * aparecer na descrição), então o back só precisa continuar expondo os dados brutos em
+     * {@link ProdutoExemploResponse} — a composição do texto final é responsabilidade da tela
+     * (hoje o editor, futuramente a tela de Emissão), não deste enum. */
     public enum CampoEtiqueta {
-        NOME_EMPRESA, DESCRICAO_PRODUTO, MARCA, REFERENCIA, PRECO_VENDA, PRECO_OFERTA,
-        SKU_BARRAS, EAN_BARRAS, VARIANTE_LINHA, VARIANTE_COLUNA
+        NOME_EMPRESA, DESCRICAO_PRODUTO, PRECO_VENDA, SKU_BARRAS
     }
 
     /** Provisório — depende da tecnologia de impressão ainda não decidida (impressora térmica
@@ -52,9 +56,9 @@ public final class EtiquetaConfigDtos {
     /**
      * Um campo posicionado na etiqueta. {@code posicaoXMm}/{@code posicaoYMm} são relativos ao
      * canto superior-esquerdo da PRÓPRIA etiqueta (não do rolo). {@code tamanhoFontePt}/
-     * {@code negrito} só fazem sentido pros 8 campos de texto (mais o texto legível do código de
+     * {@code negrito} só fazem sentido pros 3 campos de texto (mais o texto legível do código de
      * barras, se {@code exibirTextoLegivel}); {@code exibirTextoLegivel} só faz sentido pra
-     * {@code SKU_BARRAS}/{@code EAN_BARRAS}. Não há `CHECK` cruzado no banco pra essas
+     * {@code SKU_BARRAS}. Não há `CHECK` cruzado no banco pra essas
      * combinações — é regra de formulário, validada de novo no servidor.
      */
     public record CampoRequest(
@@ -136,19 +140,15 @@ public final class EtiquetaConfigDtos {
     /**
      * Produto de exemplo pra pré-visualizar a etiqueta com dado real (2026-08-04, pedido do dono
      * do produto). Endpoint/DTO próprios — não reaproveita {@code VariacaoEncontrada} do Kardex
-     * porque falta referência/preço/EAN, que a prévia da etiqueta precisa.
+     * porque falta referência/preço, que a prévia da etiqueta precisa.
      */
     public record ProdutoExemploResponse(
             long idVariacao,
             String sku,
-            String ean,
             String descricao,
             String marca,
             String referencia,
             BigDecimal precoVenda,
-            BigDecimal precoOferta,
-            OffsetDateTime dataInicioOferta,
-            OffsetDateTime dataFinalOferta,
             String variacaoLinha,
             String variacaoColuna) {
     }
