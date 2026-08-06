@@ -711,6 +711,15 @@ a.menu-card:hover {
   .toast { left: 20px; right: 20px; max-width: none; }
 }
 
+/* Rotina de Importação de Dados (docs/telas/importacao-dados.md, 2026-08-06) — botões de
+   transição de etapa sempre do mesmo tamanho/alinhamento entre as etapas (mesmo container em
+   toda etapa, min-width fixo pra "Voltar"/"Confirmar importação"/"Ver prévia" não variarem de
+   largura conforme o texto) e os cards de escolha de tabela com altura igual na mesma linha
+   (o grid já estica os itens — faltava o botão em si preencher 100% da altura do item). */
+.wizard-acoes { display: flex; gap: 12px; margin-top: 24px; }
+.wizard-acoes .btn { min-width: 200px; text-align: center; }
+.wizard-tabela-btn { width: 100%; height: 100%; text-align: left; padding: 16px; display: flex; flex-direction: column; }
+
 /* PDV (Frente de Caixa, 2026-07-27) — rascunho de layout incorporado ao ERP. Tela só de
    demonstração visual: estado local (catálogo fixo, sem chamada de API), nenhuma regra de
    negócio real ainda (P4/§3.7 seguem valendo quando a feature de verdade for construída). */

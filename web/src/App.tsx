@@ -54,6 +54,8 @@ import RelatorioEstoque from './pages/relatorios/RelatorioEstoque'
 import RelatorioMovimentacaoProdutos from './pages/relatorios/RelatorioMovimentacaoProdutos'
 import CrmForm from './pages/crm/CrmForm'
 import EtiquetaEmissaoForm from './pages/etiquetaemissao/EtiquetaEmissaoForm'
+import ImportacaoDadosPage from './pages/importacao/ImportacaoDadosPage'
+import ExportacaoDadosPage from './pages/exportacao/ExportacaoDadosPage'
 
 export default function App() {
   return (
@@ -96,13 +98,15 @@ export default function App() {
           <Route path="/pedidos" element={<EmBreve titulo="Pedidos" />} />
           <Route path="/canais" element={<EmBreve titulo="Canais" />} />
           <Route path="/bi-dashboard" element={<EmBreve titulo="BI Dashboard" />} />
-          <Route path="/importacao-dados" element={<EmBreve titulo="Importação de Dados" />} />
           <Route path="/entrada-produtos-compra" element={<EmBreve titulo="Entrada de Produtos por Compra" />} />
           <Route path="/relatorio-contas-pagar" element={<EmBreve titulo="Relatório de Contas a Pagar / Pagas" />} />
           <Route
             path="/relatorio-movimentacao-bancaria"
             element={<EmBreve titulo="Relatório de Movimentação Bancária" />}
           />
+          <Route path="/dre" element={<EmBreve titulo="DRE" />} />
+          <Route path="/fluxo-caixa" element={<EmBreve titulo="Fluxo de Caixa" />} />
+          <Route path="/lucratividade" element={<EmBreve titulo="Lucratividade" />} />
           <Route path="/integracao-marketplace" element={<EmBreve titulo="Integração com Marketplace" />} />
           <Route path="/clientes" element={<ClienteLista />} />
           <Route path="/clientes/novo" element={<ClienteForm />} />
@@ -143,6 +147,8 @@ export default function App() {
           <Route path="/fornecedores/:id/visualizar" element={<FornecedorForm somenteLeitura />} />
           <Route path="/fornecedores/:id" element={<FornecedorForm />} />
           <Route element={<RequireAdmin />}>
+            <Route path="/importacao-dados" element={<ImportacaoDadosPage />} />
+            <Route path="/exportacao-dados" element={<ExportacaoDadosPage />} />
             <Route path="/configuracoes-gerais" element={<ConfiguracaoGeralForm />} />
             <Route path="/usuarios" element={<UsuarioLista />} />
             <Route path="/usuarios/novo" element={<UsuarioForm />} />

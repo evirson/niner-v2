@@ -1,7 +1,7 @@
 # Progresso do Projeto — niner-v2
 
 Registro cronológico das decisões e entregas. Atualizar a cada marco relevante.
-**Última atualização:** 2026-08-05
+**Última atualização:** 2026-08-06
 
 ---
 
@@ -117,7 +117,11 @@ PDV) e o módulo `estoque` ganhou a **Rotina de Contagem de Estoque** (2026-08-0
 Contagem/Diferenças/Efetivar Balanço/Zerar Contagem) — ver linha do tempo pros detalhes de cada
 uma. Ver também `docs/telas/relatorio-comissoes.md`, `docs/telas/relatorio-contas-receber.md`,
 `docs/telas/contagem-estoque.md`, `docs/telas/relatorio-estoque.md` e `docs/telas/
-devolucao-produtos.md`.
+devolucao-produtos.md`. Em 2026-08-06, o grupo **Configurações** ganhou duas rotinas irmãs de
+migração de dados: **Importação de Dados** (`docs/telas/importacao-dados.md` — CSV, 4 tabelas:
+cliente/fornecedor/produto/contas_receber-crediário, dry-run via rollback de transação, venda
+sintética pra crediário importado sem mexer em schema) e **Exportação de Dados**
+(`docs/telas/exportacao-dados.md` — Excel gerado no navegador, 9 tabelas, só leitura).
 
 | Artefato | Situação |
 |---|---|
@@ -146,6 +150,50 @@ devolucao-produtos.md`.
 ---
 
 ## Linha do tempo
+
+### 2026-08-06 — Rotina de Importação de Dados + Rotina de Exportação de Dados (grupo Configurações)
+
+Duas features novas, irmãs uma da outra, as primeiras do grupo **Configurações** voltadas pra
+migração/integração de dados em vez de parametrização do sistema.
+
+**Importação de Dados** (`docs/telas/importacao-dados.md`) — carga inicial por **CSV**, `ADMIN`-only,
+cobrindo 4 tabelas: `cliente`, `fornecedor`, `produto` (com variação/SKU e saldo inicial de
+estoque) e `contas_receber` (só crediário). Precedida de uma sessão longa de descoberta (estudo
+do schema completo do banco pra levantar todas as tabelas candidatas, depois planilhas `.xlsx`
+de exemplo geradas com `write-excel-file/node` — hoje obsoletas, o botão "Baixar modelo" da
+própria tela gera o `.csv` real) e negociação linha a linha das regras de negócio com o dono do
+produto. Decisões centrais: categoria/plano de contas/carteira de crediário são **uma escolha
+única pro arquivo inteiro** (não uma coluna por linha); dedup de cliente/fornecedor por CPF/CNPJ
+já existente (reaproveita, não duplica); produto usa formato achatado (`DESCRICAO+MARCA+REFERENCIA`
+agrupa variações da mesma linha, unificação por par linha/coluna soma estoque, divergência de
+dado resolvida pela linha de maior preço de venda); `contas_receber` **não exigiu nenhuma
+migration** — o problema de `id_venda NOT NULL` sem importar `venda` foi resolvido agrupando
+parcelas por `(cliente, empresa)` e criando uma **venda sintética** por grupo (`data_venda` =
+menor vencimento), em vez da alternativa cogitada de tornar a coluna nullable; parcela já paga
+nasce marcada como recebida mas **nunca** gera `caixa_detalhe` (lançamento retroativo quebraria o
+Fechamento de Caixa). Prévia (dry-run) implementada sem duplicar lógica: cada importador roda o
+código de verdade dentro de uma transação e lança uma exceção de propósito no fim quando
+`confirmar=false`, só pra acionar rollback automático do Spring. Migration nova, `V030`, só a
+tabela de auditoria `importacao_lote` (nenhuma tabela existente foi alterada). Menu movido de
+"Implementações Futuras" pra "Configurações".
+
+**Exportação de Dados** (`docs/telas/exportacao-dados.md`) — irmã "de saída", bem mais simples
+(só leitura, sem escolha prévia, sem migration): 9 tabelas (Empresas, Clientes, Fornecedores,
+Funcionários, Contas a Receber/Recebidas, Contas a Pagar/Pagas, Código de Barras, Plano de
+Contas, Estoque), cada uma uma única consulta SQL sem parâmetro, com os próprios aliases de
+coluna do `SELECT` já em português virando o cabeçalho da planilha direto (datas e booleanos já
+formatados em SQL). Duas das fontes (`contas_pagar`, `produto_barra`) não tinham nenhuma tela ou
+consulta no sistema até esta feature. Planilha gerada 100% no navegador com `write-excel-file`,
+mesmo padrão já usado no CRM — zero dependência nova.
+
+Ajustes de UI no mesmo dia, pós-teste manual: botões de transição de etapa da Importação
+padronizados em tamanho/alinhamento (`.wizard-acoes`, `min-width` fixo) e correção de um bug em
+que o subtítulo da tabela escolhida ficava "grudado" embaixo do título da tela ao clicar Voltar
+(o botão trocava de etapa sem limpar o estado). Também entraram 3 itens placeholder em
+"Implementações Futuras": **DRE**, **Fluxo de Caixa** e **Lucratividade**.
+
+Sem testes automatizados ainda em nenhuma das duas features (compilação/typecheck limpos e
+smoke test manual de endpoint, não suíte JUnit).
 
 ### 2026-08-05 — Emissão de Etiqueta: SKU criado na hora, obrigatoriedade por produto, Limpar Lista
 

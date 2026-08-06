@@ -675,6 +675,36 @@ const CONTEUDOS: Record<string, ConteudoAjuda> = {
     ],
     urlVideo: null,
   },
+  'configuracao.importacao': {
+    titulo: 'Importação de Dados',
+    objetivo: 'Trazer cadastros e saldo de crediário de um sistema anterior para o Niner, via arquivo CSV.',
+    passos: [
+      'Escolha a tabela (Clientes, Fornecedores, Produtos ou Contas a Receber).',
+      'Baixe o modelo .csv e preencha fora do sistema, seguindo o formato indicado (delimitador ";", decimal com vírgula, datas dd/mm/aaaa).',
+      'Envie o arquivo preenchido.',
+      'Resolva as escolhas prévias pedidas (ex.: categoria de cliente, plano de contas, carteira de crediário, ou mapeamento das colunas de estoque para as empresas).',
+      'Revise a prévia — quantas linhas seriam importadas, ignoradas (já existiam) ou rejeitadas, com o motivo de cada rejeição.',
+      'Clique em "Confirmar importação" para gravar de verdade.',
+    ],
+    errosComuns: [
+      'Linha rejeitada: veja o motivo na lista de erros, corrija só aquela linha no arquivo original e reenvie.',
+      'Cliente/fornecedor "ignorado": já existia um cadastro com o mesmo CPF/CNPJ — o sistema reaproveitou em vez de duplicar.',
+      'Contas a Receber: o cliente precisa já estar cadastrado (com CPF/CNPJ preenchido) e a empresa precisa bater com o nome cadastrado.',
+    ],
+    urlVideo: null,
+  },
+  'configuracao.exportacao': {
+    titulo: 'Exportação de Dados',
+    objetivo: 'Baixar em planilha Excel (.xlsx) tudo que já está cadastrado no Niner — clientes, fornecedores, produtos, estoque, financeiro etc.',
+    passos: [
+      'Escolha a tabela desejada.',
+      'A planilha é gerada e baixada automaticamente, com todos os registros já cadastrados.',
+    ],
+    errosComuns: [
+      '"Nenhum registro encontrado": a tabela escolhida ainda não tem nenhum dado cadastrado neste tenant.',
+    ],
+    urlVideo: null,
+  },
 }
 
 export default function AjudaDaTela({ chaveTela }: { chaveTela: string }) {

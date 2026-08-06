@@ -276,6 +276,18 @@ export const MENU: NavGrupo[] = [
         icone: IconeEtiqueta,
         descricao: 'Layout de impressão da etiqueta de código de barras dos produtos: rolo, colunas e campos.',
       },
+      {
+        to: '/importacao-dados',
+        label: 'Importação de Dados',
+        icone: IconePedidos,
+        descricao: 'Carga inicial de clientes, fornecedores, produtos e crediário em aberto a partir de um arquivo CSV.',
+      },
+      {
+        to: '/exportacao-dados',
+        label: 'Exportação de Dados',
+        icone: IconePedidos,
+        descricao: 'Baixe em planilha Excel empresas, clientes, fornecedores, funcionários, financeiro, estoque e código de barras.',
+      },
     ],
   },
   {
@@ -360,12 +372,6 @@ export const MENU: NavGrupo[] = [
         descricao: 'Painel gerencial com indicadores consolidados do negócio. Em construção.',
       },
       {
-        to: '/importacao-dados',
-        label: 'Importação de Dados',
-        icone: IconePedidos,
-        descricao: 'Carga inicial de cadastros e movimentos a partir de planilhas ou sistemas legados. Em construção.',
-      },
-      {
         to: '/entrada-produtos-compra',
         label: 'Entrada de Produtos por Compra',
         icone: IconeEstoque,
@@ -382,6 +388,24 @@ export const MENU: NavGrupo[] = [
         label: 'Relatório de Movimentação Bancária',
         icone: IconeContaCorrente,
         descricao: 'Extrato consolidado das contas correntes da loja. Em construção.',
+      },
+      {
+        to: '/dre',
+        label: 'DRE',
+        icone: IconeRelatorio,
+        descricao: 'Demonstração do Resultado do Exercício, por grupo do Plano de Contas Gerencial. Em construção.',
+      },
+      {
+        to: '/fluxo-caixa',
+        label: 'Fluxo de Caixa',
+        icone: IconeRelatorio,
+        descricao: 'Entradas e saídas de caixa por grupo do Plano de Contas Gerencial. Em construção.',
+      },
+      {
+        to: '/lucratividade',
+        label: 'Lucratividade',
+        icone: IconeRelatorio,
+        descricao: 'Margem por produto, categoria ou período, cruzando preço de venda e custo. Em construção.',
       },
       {
         to: '/integracao-marketplace',

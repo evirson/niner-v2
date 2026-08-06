@@ -1,0 +1,242 @@
+package com.vetor.niner.configuracao.importacao;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.vetor.niner.cadastros.cliente.Documentos;
+import com.vetor.niner.configuracao.importacao.ImportacaoCsv.LinhaCsv;
+import com.vetor.niner.configuracao.importacao.ImportacaoDtos.LinhaErro;
+import com.vetor.niner.configuracao.importacao.ImportacaoDtos.RelatorioImportacao;
+import com.vetor.niner.financeiro.TipoCarteiraDtos.CategoriaCarteira;
+import com.vetor.niner.financeiro.TipoCarteiraDtos.TipoCarteiraRequest;
+import com.vetor.niner.financeiro.TipoCarteiraService;
+import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
+import java.time.LocalDate;
+import java.time.OffsetDateTime;
+import java.time.ZoneId;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Optional;
+
+/**
+ * Importação de {@code contas_receber} — só crediário (docs/telas/importacao-dados.md, seção
+ * "4. contas_receber"). Uma carteira de crediário única (existente ou nova) vale para todo o
+ * arquivo. O cliente é resolvido por CPF/CNPJ contra a base ao vivo (não depende de
+ * {@code cliente.csv} ter sido importado na mesma sessão); a empresa, por nome. As linhas são
+ * agrupadas por (cliente, empresa) e cada grupo gera UMA venda sintética
+ * ({@code tipo_operacao='VENDA'} default, sem item associado) com {@code data_venda} = menor
+ * vencimento do grupo — contorna {@code contas_receber.id_venda NOT NULL} sem alterar o schema.
+ * Parcela já paga (tem {@code DATA_RECEBIMENTO}) nasce marcada como recebida, mas NUNCA gera
+ * {@code caixa_detalhe} — lançar caixa retroativo quebraria a conciliação do Fechamento de Caixa.
+ */
+@Service
+public class ContasReceberImportador implements ImportadorDeTabela {
+
+    private final JdbcClient jdbc;
+    private final TipoCarteiraService tipoCarteiraService;
+
+    public ContasReceberImportador(JdbcClient jdbc, TipoCarteiraService tipoCarteiraService) {
+        this.jdbc = jdbc;
+        this.tipoCarteiraService = tipoCarteiraService;
+    }
+
+    @Override
+    public String chave() {
+        return "contas_receber";
+    }
+
+    @Override
+    public String titulo() {
+        return "Contas a Receber (crediário)";
+    }
+
+    @Override
+    public String descricao() {
+        return "Parcelas de crediário em aberto (ou já pagas) de clientes já cadastrados. Pede uma carteira de crediário para o arquivo inteiro.";
+    }
+
+    @Override
+    public byte[] modeloCsv() {
+        String cabecalho = "CPF_CNPJ;EMPRESA;NUMERO_PARCELA;DATA_VENCIMENTO;DATA_RECEBIMENTO;VALOR_RECEBER;VALOR_JUROS;VALOR_DESCONTO;VALOR_RECEBIDO";
+        String exemplo1 = "123.456.789-09;MINHA LOJA LTDA;1;10/09/2026;;150,00;0;0;0";
+        String exemplo2 = "123.456.789-09;MINHA LOJA LTDA;2;10/10/2026;;150,00;0;0;0";
+        return (cabecalho + "\r\n" + exemplo1 + "\r\n" + exemplo2 + "\r\n").getBytes(StandardCharsets.UTF_8);
+    }
+
+    @Override
+    @Transactional
+    public RelatorioImportacao processar(List<LinhaCsv> linhas, JsonNode escolhas, boolean confirmar, Jwt jwt) {
+        long idCarteira = resolverCarteiraCrediario(escolhas);
+
+        record LinhaResolvida(LinhaCsv origem, long idCliente, long idEmpresa, int numeroParcela,
+                               OffsetDateTime dataVencimento, OffsetDateTime dataRecebimento,
+                               BigDecimal valorReceber, BigDecimal valorRecebido) {
+        }
+
+        List<LinhaErro> erros = new ArrayList<>();
+        // Agrupa por (idCliente, idEmpresa), preservando a ordem de primeira ocorrência.
+        Map<String, List<LinhaResolvida>> grupos = new LinkedHashMap<>();
+
+        for (LinhaCsv linha : linhas) {
+            try {
+                String cpfCnpj = Documentos.somenteAlfanumerico(linha.valor("CPF_CNPJ"));
+                if (cpfCnpj == null || cpfCnpj.isBlank()) {
+                    throw new IllegalArgumentException("CPF_CNPJ é obrigatório.");
+                }
+                long idCliente = buscarIdCliente(cpfCnpj).orElseThrow(() -> new IllegalArgumentException(
+                        "Nenhum cliente cadastrado com o CPF/CNPJ \"" + linha.valor("CPF_CNPJ") + "\"."));
+                String nomeEmpresa = linha.valor("EMPRESA");
+                if (nomeEmpresa == null) {
+                    throw new IllegalArgumentException("EMPRESA é obrigatório.");
+                }
+                long idEmpresa = buscarIdEmpresa(nomeEmpresa).orElseThrow(() -> new IllegalArgumentException(
+                        "Nenhuma empresa cadastrada com o nome \"" + nomeEmpresa + "\"."));
+
+                Integer numeroParcela = ImportacaoCsv.inteiro(linha.valor("NUMERO_PARCELA"));
+                if (numeroParcela == null) {
+                    throw new IllegalArgumentException("NUMERO_PARCELA é obrigatório.");
+                }
+                LocalDate vencimento = ImportacaoCsv.data(linha.valor("DATA_VENCIMENTO"));
+                if (vencimento == null) {
+                    throw new IllegalArgumentException("DATA_VENCIMENTO é obrigatório.");
+                }
+                BigDecimal valorReceber = ImportacaoCsv.decimal(linha.valor("VALOR_RECEBER"));
+                if (valorReceber == null || valorReceber.signum() <= 0) {
+                    throw new IllegalArgumentException("VALOR_RECEBER deve ser maior que zero.");
+                }
+                LocalDate recebimento = ImportacaoCsv.data(linha.valor("DATA_RECEBIMENTO"));
+                BigDecimal valorRecebido = ImportacaoCsv.decimal(linha.valor("VALOR_RECEBIDO"));
+
+                String chaveGrupo = idCliente + "|" + idEmpresa;
+                grupos.computeIfAbsent(chaveGrupo, k -> new ArrayList<>()).add(new LinhaResolvida(
+                        linha, idCliente, idEmpresa, numeroParcela,
+                        inicioDoDia(vencimento), recebimento == null ? null : inicioDoDia(recebimento),
+                        valorReceber, recebimento != null && valorRecebido != null ? valorRecebido : BigDecimal.ZERO));
+            } catch (RuntimeException e) {
+                erros.add(new LinhaErro(linha.numeroLinha(), mensagem(e)));
+            }
+        }
+
+        int importadas = 0;
+        for (List<LinhaResolvida> grupo : grupos.values()) {
+            OffsetDateTime dataVenda = grupo.stream().map(LinhaResolvida::dataVencimento)
+                    .min(OffsetDateTime::compareTo).orElseThrow();
+            long idCliente = grupo.get(0).idCliente();
+            long idEmpresa = grupo.get(0).idEmpresa();
+
+            long idVenda = jdbc.sql("""
+                            INSERT INTO venda (id_tenant, id_empresa, id_cliente, data_venda)
+                            VALUES (plataforma.tenant_atual(), ?, ?, ?)
+                            RETURNING id_venda
+                            """)
+                    .params(idEmpresa, idCliente, dataVenda)
+                    .query(Long.class).single();
+
+            for (LinhaResolvida r : grupo) {
+                try {
+                    jdbc.sql("""
+                                    INSERT INTO contas_receber
+                                        (id_tenant, id_venda, id_carteira, numero_parcela, data_vencimento,
+                                         data_recebimento, valor_receber, valor_recebido, documento_recebido)
+                                    VALUES (plataforma.tenant_atual(), ?, ?, ?, ?, ?, ?, ?, ?)
+                                    """)
+                            .params(idVenda, idCarteira, r.numeroParcela(), r.dataVencimento(), r.dataRecebimento(),
+                                    r.valorReceber(), r.valorRecebido(), r.dataRecebimento() != null)
+                            .update();
+                    importadas++;
+                } catch (RuntimeException e) {
+                    erros.add(new LinhaErro(r.origem().numeroLinha(), mensagem(e)));
+                }
+            }
+        }
+
+        int rejeitadas = erros.size();
+        RelatorioImportacao relatorio = new RelatorioImportacao(
+                confirmar, linhas.size(), importadas, 0, rejeitadas, erros,
+                List.of("Nenhum lançamento de caixa é criado para parcelas já pagas — só o histórico é marcado."),
+                List.of());
+        if (!confirmar) {
+            throw new SimulacaoConcluidaException(relatorio);
+        }
+        return relatorio;
+    }
+
+    /** {@code escolhas}: {@code {"idCarteira": 5}} OU
+     *  {@code {"novaCarteira": {"nomeCarteira": "...", "prazoPagamento": 30, "pcMinima": 1, "pcMaxima": 12}}}
+     *  — categoria sempre CREDIARIO, permite receber crediário sempre true. */
+    private long resolverCarteiraCrediario(JsonNode escolhas) {
+        if (escolhas != null && escolhas.hasNonNull("idCarteira")) {
+            long id = escolhas.get("idCarteira").asLong();
+            String categoria = jdbc.sql("""
+                            SELECT categoria_carteira::text FROM tipo_carteira
+                            WHERE id_tenant = plataforma.tenant_atual() AND id_carteira = ?
+                            """)
+                    .param(id).query(String.class).optional()
+                    .orElseThrow(() -> new IllegalArgumentException("Carteira informada não existe."));
+            if (!"CREDIARIO".equals(categoria)) {
+                throw new IllegalArgumentException("A carteira escolhida não é do tipo crediário.");
+            }
+            return id;
+        }
+        if (escolhas != null && escolhas.hasNonNull("novaCarteira")) {
+            JsonNode n = escolhas.get("novaCarteira");
+            String nome = textoObrigatorio(n, "nomeCarteira", "Nome da nova carteira de crediário");
+            Integer prazo = n.hasNonNull("prazoPagamento") ? n.get("prazoPagamento").asInt() : null;
+            Integer pcMinima = n.hasNonNull("pcMinima") ? n.get("pcMinima").asInt() : null;
+            Integer pcMaxima = n.hasNonNull("pcMaxima") ? n.get("pcMaxima").asInt() : null;
+            if (prazo == null || pcMinima == null || pcMaxima == null) {
+                throw new IllegalArgumentException(
+                        "Informe prazo de pagamento e nº mínimo/máximo de parcelas da nova carteira.");
+            }
+            var criada = tipoCarteiraService.criar(new TipoCarteiraRequest(
+                    nome, CategoriaCarteira.CREDIARIO, prazo, pcMinima, pcMaxima, null, null, null, true));
+            return criada.idCarteira();
+        }
+        throw new IllegalArgumentException(
+                "Escolha uma carteira de crediário existente ou informe os dados de uma nova antes de importar.");
+    }
+
+    private static String textoObrigatorio(JsonNode n, String campo, String rotulo) {
+        if (n == null || !n.hasNonNull(campo) || n.get(campo).asText("").isBlank()) {
+            throw new IllegalArgumentException(rotulo + " é obrigatório.");
+        }
+        return n.get(campo).asText().trim();
+    }
+
+    private Optional<Long> buscarIdCliente(String cpfCnpjNormalizado) {
+        return jdbc.sql("""
+                        SELECT id_cliente FROM cliente
+                        WHERE id_tenant = plataforma.tenant_atual() AND cpf_cnpj = ?
+                        """)
+                .param(cpfCnpjNormalizado)
+                .query(Long.class).optional();
+    }
+
+    private Optional<Long> buscarIdEmpresa(String nome) {
+        String nomeNormalizado = nome.trim().toUpperCase(Locale.ROOT);
+        return jdbc.sql("""
+                        SELECT id_empresa FROM empresa
+                        WHERE id_tenant = plataforma.tenant_atual()
+                              AND (UPPER(razao_social) = ? OR UPPER(nome_fantasia) = ?)
+                        LIMIT 1
+                        """)
+                .params(nomeNormalizado, nomeNormalizado)
+                .query(Long.class).optional();
+    }
+
+    private static OffsetDateTime inicioDoDia(LocalDate data) {
+        return data.atStartOfDay(ZoneId.systemDefault()).toOffsetDateTime();
+    }
+
+    private static String mensagem(RuntimeException e) {
+        String msg = e.getMessage();
+        return (msg == null || msg.isBlank()) ? "Erro ao processar a linha (" + e.getClass().getSimpleName() + ")." : msg;
+    }
+}
