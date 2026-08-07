@@ -154,11 +154,51 @@ passaram a ter cabeçalho/rodapé fixos, com scroll só na pré-visualização.
 
 **Sessão de 2026-08-05:** Configuração de Etiqueta passou por três rodadas de refinamento (campos 10→4 concatenados na Descrição, máximo de colunas do rolo 6→4, cabeçalho em 3 cartões, botão **Testar Impressão**, código de barras `EAN13` de verdade, quadro no Teste de Impressão, painel de propriedades virou popup — `docs/telas/configuracao-etiqueta.md`) mais dois bugs reais corrigidos em Produto (margem de venda acima de 100% rejeitada; busca de produto de exemplo quase sempre vazia). Nasceram duas telas novas no grupo **Relatórios**, saindo de Implementações Futuras: **CRM** (`cadastros.crm`, `docs/telas/crm.md`) — filtra clientes por perfil e histórico de compras, exporta 11 colunas pra planilha Excel (`write-excel-file`) — e **Emissão de Etiqueta de Produtos** (`configuracao.etiquetaemissao`, `docs/telas/etiqueta-emissao.md`) — 3 formas de selecionar produtos (Individual, com criação automática de SKU e obrigatoriedade de variação por produto; Por Entradas; Por Estoques), grade local editável, imprime em lote com produto diferente por etiqueta, reaproveitando o layout já configurado em Configuração de Etiqueta. Nasceu `ProdutoBarraService` (`com.vetor.niner.catalogo`) — acha-ou-cria uma variação de produto chamando `gerar_ean13_interno()`, primeira peça de domínio real sobre `produto_barra`. Ver linha do tempo de 2026-08-05 (topo) pro detalhe completo de cada rodada. Suíte de backend: **386 testes**.
 
-**Sessão de 2026-08-07:** o comprovante de Recebimento de Crediário e a Papeleta de Venda (com suas reimpressões) ganharam **envio por WhatsApp** (`comum.arquivocompartilhado` — cache de PDF em memória, sem custo, sem object storage, token expira em 24h, limite de 20 arquivos/tenant somando os 4 fluxos) e **layout fixo** (título/rodapé sempre visíveis, só a pré-visualização rola). Na sequência, a tela de **CRM** passou por duas rodadas revisando o fluxo original de 2026-08-05: primeiro ganhou uma **grid de resultado** (cabeçalho fixo, ordenação por coluna, total, scroll só nos dados), depois os filtros/colunas viraram um **popup obrigatório que abre sozinho ao entrar na tela** (com `GaugeProgresso` — reaproveitado da Rotina de Importação de Dados — enquanto a busca roda) e o botão "Gerar Planilha Excel" subiu pra linha do título. Ver linha do tempo de 2026-08-07 (topo, duas entradas) pro detalhe completo.
+**Sessão de 2026-08-07:** o comprovante de Recebimento de Crediário e a Papeleta de Venda (com suas reimpressões) ganharam **envio por WhatsApp** (`comum.arquivocompartilhado` — cache de PDF em memória, sem custo, sem object storage, token expira em 24h, limite de 20 arquivos/tenant somando os 4 fluxos) e **layout fixo** (título/rodapé sempre visíveis, só a pré-visualização rola). Na sequência, a tela de **CRM** passou por duas rodadas revisando o fluxo original de 2026-08-05: primeiro ganhou uma **grid de resultado** (cabeçalho fixo, ordenação por coluna, total, scroll só nos dados), depois os filtros/colunas viraram um **popup obrigatório que abre sozinho ao entrar na tela** (com `GaugeProgresso` — reaproveitado da Rotina de Importação de Dados — enquanto a busca roda) e o botão "Gerar Planilha Excel" subiu pra linha do título. Numa terceira sessão do mesmo dia — recuperada depois que o terminal foi fechado sem pedido explícito de commit/documentação, mas com todo o código intacto no working tree —, o PDV passou a **validar limite de crédito do cliente** no crediário (`cliente.limite_credito`, campo que existia desde a V016 mas nunca era checado) e o comprovante de vale-mercadoria da devolução foi **padronizado com o layout de 64 colunas/Lucida Console da Papeleta de Venda**, ganhando também "Enviar por WhatsApp"; erros de confirmação de venda passaram de `Toast` para um popup dedicado (`AvisoModal`). Ver linha do tempo de 2026-08-07 (topo, três entradas) pro detalhe completo.
 
 ---
 
 ## Linha do tempo
+
+### 2026-08-07 — Limite de crédito no PDV + comprovante de vale padronizado com a papeleta
+
+Terceira sessão do dia. O terminal foi fechado sem que o dono do produto pedisse pra documentar
+o que tinha sido feito — mas fechar o terminal só encerra a conversa, o código já escrito
+continuava intacto e não commitado no working tree. Reconstruído a partir do `git diff` e
+registrado aqui a pedido do dono do produto (rodar os testes → commitar → documentar).
+
+1. **Limite de crédito no PDV** (`PdvVendaService.validarLimiteCredito`) — `cliente.limite_credito`
+   existia desde a V016 (`db/migration/V016__cadastros.sql`) como campo "pronto para quando o
+   crediário existisse", mas nunca era checado. Agora, toda venda com alguma linha `CREDIARIO`
+   soma o crediário já em aberto do cliente (mesmo filtro de
+   `ClienteHistoricoService.buscarResumoCrediario`: `contas_receber` com `data_recebimento IS
+   NULL`) com o crediário desta venda; se o cliente tiver `limite_credito > 0` (≤ 0 = sem limite,
+   não bloqueia nada) e a soma passar do limite, a venda é rejeitada. Testes novos em
+   `PdvCrudTest.java`.
+2. **Erros de confirmação de venda viraram popup, não toast** — `AvisoModal.tsx` (componente
+   novo, `role="alertdialog"`, mesmo visual de cabeçalho/✕ das telas de detalhe) substitui o
+   `Toast` em `FormaPagamentoModal` para erros de regra de negócio rejeitados pelo servidor
+   (limite de crédito, saldo que não fecha etc.) — mensagem importante o bastante pra exigir
+   leitura, não deve sumir sozinha em 6s no meio do fluxo de pagamento.
+3. **Comprovante de vale-mercadoria padronizado com a Papeleta de Venda** —
+   `ComprovanteValeModal.tsx` trocou o layout próprio de 42 colunas (`.comprovante-preview`,
+   fonte Courier) pela tabela de 64 colunas / fonte Lucida Console da Papeleta de Venda
+   (`.papeleta-preview`/`.papeleta-imprimir`), com cabeçalho/rodapé fixos (só a
+   pré-visualização rola) e o botão **"Enviar por WhatsApp"** (mesmo mecanismo do comprovante de
+   crediário/papeleta — `comum.arquivocompartilhado`, ver entrada anterior). Como
+   `venda_devolucao` não tem vínculo com cliente (devolução é anônima), não há telefone pra
+   pré-preencher — o operador digita na hora (`telefoneInicial={null}`). Backend:
+   `ItemDevolucaoResponse` ganhou `sku` e `valorTotal` (mesmas colunas de `ItemComprovanteVenda`)
+   pra reaproveitar a mesma tabela de itens da papeleta.
+4. **`AjudaDaTela`** ganhou a entrada `pdv.tela` — o PDV nunca tinha tido ajuda documentada
+   apesar de ser a tela mais usada do sistema.
+5. **Menu** ganhou itens "Em construção" (sem tela/rota real, só placeholder `EmBreve`):
+   Cobrança de Crediário em Atraso, Módulo Fiscal (NFC-e/NF-e/Cancelamento/Exportação XML) e
+   Cancelamento de Devolução de Produtos.
+6. **Parâmetros do Sistema** — texto da seção Crediário atualizado: não é mais "Fase 2, ainda
+   não implementado" (já é usado pelo Recebimento de Crediário desde 2026-07-29).
+
+Suíte de backend rodada ponta a ponta antes do commit — verde. Commit único: `0228218`.
 
 ### 2026-08-07 — CRM: grid de resultado, popup obrigatório de filtros + gauge, botão no título
 
