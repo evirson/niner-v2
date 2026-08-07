@@ -1,6 +1,6 @@
 import writeExcelFile from 'write-excel-file/browser'
 import { api } from './api'
-import { dataParaIso, isoParaData } from './masks'
+import { dataParaIso, formatarMoeda, isoParaData, mascararTelefone } from './masks'
 
 export interface OpcaoCrm {
   id: number
@@ -188,6 +188,67 @@ function valorCelula(cliente: ClienteCrm, coluna: ColunaSaidaCrm): string | numb
       return cliente.ticketMedio ?? ''
     case 'diasSemUltimaCompra':
       return cliente.diasSemUltimaCompra ?? ''
+  }
+}
+
+/**
+ * Valor "cru" de uma coluna, pra ordenação client-side na grid (2026-08-07) — diferente de
+ * {@link valorCelula}, nunca formata (datas ficam em ISO, que ordena certo como string; nunca
+ * `dd/mm/aaaa`, que ordenaria errado lexicograficamente).
+ */
+export function valorOrdenacaoCrm(cliente: ClienteCrm, coluna: ColunaSaidaCrm): string | number | null {
+  switch (coluna) {
+    case 'nome':
+      return cliente.nome
+    case 'dataNascimento':
+      return cliente.dataNascimento
+    case 'genero':
+      return cliente.genero
+    case 'email':
+      return cliente.email
+    case 'celular':
+      return cliente.celular
+    case 'primeiraCompra':
+      return cliente.primeiraCompra
+    case 'ultimaCompra':
+      return cliente.ultimaCompra
+    case 'numeroCompras':
+      return cliente.numeroCompras
+    case 'valorTotalCompras':
+      return cliente.valorTotalCompras
+    case 'ticketMedio':
+      return cliente.ticketMedio
+    case 'diasSemUltimaCompra':
+      return cliente.diasSemUltimaCompra
+  }
+}
+
+/** Valor formatado pra exibir na grid de resultado (2026-08-07) — celular mascarado, datas
+ *  `dd/mm/aaaa`, valores monetários com `R$`, `—` pros campos vazios. */
+export function formatarCelulaCrm(cliente: ClienteCrm, coluna: ColunaSaidaCrm): string {
+  switch (coluna) {
+    case 'nome':
+      return cliente.nome
+    case 'dataNascimento':
+      return cliente.dataNascimento ? isoParaData(cliente.dataNascimento) : '—'
+    case 'genero':
+      return cliente.genero ? ROTULO_GENERO_CRM[cliente.genero] : '—'
+    case 'email':
+      return cliente.email ?? '—'
+    case 'celular':
+      return cliente.celular ? mascararTelefone(cliente.celular) : '—'
+    case 'primeiraCompra':
+      return cliente.primeiraCompra ? isoParaData(cliente.primeiraCompra) : '—'
+    case 'ultimaCompra':
+      return cliente.ultimaCompra ? isoParaData(cliente.ultimaCompra) : '—'
+    case 'numeroCompras':
+      return String(cliente.numeroCompras)
+    case 'valorTotalCompras':
+      return `R$ ${formatarMoeda(cliente.valorTotalCompras)}`
+    case 'ticketMedio':
+      return cliente.ticketMedio != null ? `R$ ${formatarMoeda(cliente.ticketMedio)}` : '—'
+    case 'diasSemUltimaCompra':
+      return cliente.diasSemUltimaCompra != null ? String(cliente.diasSemUltimaCompra) : '—'
   }
 }
 
