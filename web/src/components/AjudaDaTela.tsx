@@ -397,10 +397,12 @@ const CONTEUDOS: Record<string, ConteudoAjuda> = {
     objetivo: 'Localizar uma venda já efetivada e reimprimir a papeleta (mesmo layout da 1ª via, com "REIMPRESSÃO" e a data/hora da reimpressão).',
     passos: [
       'Busque pelo número da venda (ignora os demais filtros) ou por um intervalo de datas — cliente é opcional.',
-      'Clique numa linha do resultado para abrir a papeleta e imprimir ou salvar em PDF.',
+      'Clique numa linha do resultado para abrir a papeleta — imprima, salve em PDF ou envie por WhatsApp.',
+      'Em "Enviar por WhatsApp", confirme (ou corrija) o celular do cliente no popup antes de continuar — o WhatsApp abre com o link de download já preenchido, e quem envia de fato é você, na própria conversa.',
     ],
     errosComuns: [
       'Sem número da venda, é preciso informar data inicial e final.',
+      'O link enviado pelo WhatsApp expira em 24 horas — depois disso, é preciso reimprimir e enviar de novo.',
     ],
     urlVideo: null,
   },
@@ -443,11 +445,13 @@ const CONTEUDOS: Record<string, ConteudoAjuda> = {
       'Busque o cliente por nome, CPF ou celular (pelo menos um dos três).',
       'Selecione uma ou mais parcelas em aberto — os totais no rodapé somam automaticamente.',
       'Escolha a forma de pagamento (só aparecem carteiras liberadas para receber crediário) e informe o valor — pode combinar mais de uma forma.',
-      'Confirme em "Receber" quando o Saldo a Pagar chegar a zero.',
+      'Confirme em "Receber" quando o Saldo a Pagar chegar a zero — o comprovante abre sozinho, com opção de imprimir, salvar em PDF ou enviar por WhatsApp.',
+      'Em "Enviar por WhatsApp", confirme (ou corrija) o celular do cliente no popup antes de continuar — o WhatsApp abre com o link de download já preenchido, e quem envia de fato é você, na própria conversa.',
     ],
     errosComuns: [
       'Nenhuma forma de pagamento aparece: cadastre ou libere uma em Tipo de Carteira, marcando "Permite receber parcelas de crediário".',
       'Não acho o cliente: confira se o nome/CPF/celular digitado está correto — a busca não exige os três juntos.',
+      'O link enviado pelo WhatsApp expira em 24 horas — depois disso, use a Reimpressão de Recebimento de Crediário e envie de novo.',
     ],
     urlVideo: null,
   },
@@ -471,10 +475,12 @@ const CONTEUDOS: Record<string, ConteudoAjuda> = {
     passos: [
       'Informe o nome do cliente (obrigatório) — data inicial/final de recebimento são opcionais, pra estreitar a busca.',
       'Cada linha é um recebimento inteiro (um "lote"), não uma parcela isolada.',
-      'Clique numa linha do resultado para abrir a papeleta e imprimir ou salvar em PDF.',
+      'Clique numa linha do resultado para abrir a papeleta — imprima, salve em PDF ou envie por WhatsApp.',
+      'Em "Enviar por WhatsApp", confirme (ou corrija) o celular do cliente no popup antes de continuar — o WhatsApp abre com o link de download já preenchido, e quem envia de fato é você, na própria conversa.',
     ],
     errosComuns: [
       'Não acho o recebimento: confira o nome do cliente e o intervalo de datas — o filtro de cliente é sempre obrigatório.',
+      'O link enviado pelo WhatsApp expira em 24 horas — depois disso, é preciso reimprimir e enviar de novo.',
     ],
     urlVideo: null,
   },

@@ -11,7 +11,7 @@ import java.util.List;
  * secret manager em prod.
  */
 @ConfigurationProperties("niner")
-public record NinerProperties(Jwt jwt, Trial trial, Cors cors, Storage storage) {
+public record NinerProperties(Jwt jwt, Trial trial, Cors cors, Storage storage, ArquivoCompartilhado arquivoCompartilhado) {
 
     public record Jwt(String secret, Duration expiracao, String emissor) {
     }
@@ -27,5 +27,11 @@ public record NinerProperties(Jwt jwt, Trial trial, Cors cors, Storage storage) 
      * = GCS real (ADC/chave); preenchido (ex.: {@code http://localhost:4443}) = emulador
      * fake-gcs-server, sem credencial — modo dev, ver docs/infra/armazenamento-imagens.md §3. */
     public record Storage(String bucket, String baseUrl, String host) {
+    }
+
+    /** Cache temporário em memória de {@code comum.arquivocompartilhado} (ex.: comprovante
+     * compartilhado por link do WhatsApp) — nunca vai pro banco nem pro object storage, de
+     * propósito (custo zero, sem bucket novo); some sozinho após {@code expiracaoHoras}. */
+    public record ArquivoCompartilhado(int expiracaoHoras) {
     }
 }

@@ -142,6 +142,7 @@ export interface ComprovanteRecebimento {
   idCaixa: number
   nomeEmpresa: string
   nomeCliente: string
+  telefoneCliente: string | null
   dataPagamento: string
   parcelas: ParcelaComprovante[]
   valorTotalAPagar: number

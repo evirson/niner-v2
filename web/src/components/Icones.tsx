@@ -156,6 +156,17 @@ export function IconeRecebimentoCrediario({ size = 28 }: { size?: number }) {
   )
 }
 
+/** Ícone de "enviar" (avião de papel) — usado no botão "Enviar por WhatsApp" do comprovante de
+ *  recebimento de crediário; genérico de propósito (não é o logotipo do WhatsApp), consistente
+ *  com o resto do design system (Heroicons outline). */
+export function IconeWhatsapp({ size = 22 }: { size?: number }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.6} stroke="currentColor" width={size} height={size} aria-hidden="true">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M6 12 3.269 3.126A59.768 59.768 0 0 1 21.485 12 59.77 59.77 0 0 1 3.27 20.876L5.999 12Zm0 0h7.5" />
+    </svg>
+  )
+}
+
 /** Ícone da tela de Estorno de Recebimento de Crediário (recibo com seta de retorno) — fixa a função da tela ao lado do título. */
 export function IconeEstornoRecebimentoCrediario({ size = 28 }: { size?: number }) {
   return (

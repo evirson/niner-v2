@@ -107,11 +107,12 @@ export function montarLinhasComprovante(c: ComprovanteRecebimento, reimpressao: 
 }
 
 /**
- * Gera o PDF direto (sem passar pelo diálogo de impressão do navegador — pedido explícito,
- * 2026-07-30), página no tamanho exato da bobina (80mm de largura, altura dinâmica conforme o
- * número de linhas), fonte courier monoespaçada pra alinhar exatamente igual à pré-visualização.
+ * Monta o documento jsPDF do comprovante de crediário (80mm de largura, altura dinâmica conforme
+ * o número de linhas, fonte courier monoespaçada pra alinhar exatamente igual à pré-visualização)
+ * — fonte única de verdade reusada tanto pra baixar o arquivo ({@link gerarPdfComprovante}) quanto
+ * pra gerar o Blob que sobe pro compartilhamento por link ({@link gerarBlobComprovante}).
  */
-export function gerarPdfComprovante(linhas: string[], idLoteRecebimento: number): void {
+function montarDocumentoComprovante(linhas: string[]): jsPDF {
   const margem = 4
   const tamanhoFonte = 8
   const alturaLinha = 3.6
@@ -123,7 +124,23 @@ export function gerarPdfComprovante(linhas: string[], idLoteRecebimento: number)
   linhas.forEach((texto, indice) => {
     doc.text(texto, margem, margem + (indice + 1) * alturaLinha)
   })
-  doc.save(`comprovante-crediario-${idLoteRecebimento}.pdf`)
+  return doc
+}
+
+/**
+ * Gera o PDF direto (sem passar pelo diálogo de impressão do navegador — pedido explícito,
+ * 2026-07-30).
+ */
+export function gerarPdfComprovante(linhas: string[], idLoteRecebimento: number): void {
+  montarDocumentoComprovante(linhas).save(`comprovante-crediario-${idLoteRecebimento}.pdf`)
+}
+
+/**
+ * Mesmo documento de {@link gerarPdfComprovante}, mas devolve o Blob em vez de baixar — usado
+ * pra subir o PDF pro compartilhamento por link (envio por WhatsApp, `lib/compartilhamento.ts`).
+ */
+export function gerarBlobComprovante(linhas: string[]): Blob {
+  return montarDocumentoComprovante(linhas).output('blob')
 }
 
 /** Comprovante do vale-mercadoria emitido por uma devolução (2026-08-03) — mesmo padrão visual
@@ -336,12 +353,14 @@ export function montarLinhasComprovanteVenda(c: ComprovanteVenda, reimpressao: b
 }
 
 /**
- * PDF da papeleta — mesmo mecanismo de {@link gerarPdfComprovante}, mas fonte courier ~5pt (em
- * vez de 8pt/42 colunas): é o tamanho que cabe fisicamente 64 colunas em 80mm de largura (ver
- * comentário no topo desta seção) — bem menor que o ideal, o caminho recomendado pra imprimir de
- * verdade é o botão "Imprimir" (Lucida Console, via CSS), não este PDF.
+ * Monta o documento jsPDF da papeleta de venda — fonte courier ~5pt (em vez de 8pt/42 colunas):
+ * é o tamanho que cabe fisicamente 64 colunas em 80mm de largura (ver comentário no topo desta
+ * seção) — bem menor que o ideal, o caminho recomendado pra imprimir de verdade é o botão
+ * "Imprimir" (Lucida Console, via CSS), não este PDF. Fonte única de verdade reusada tanto pra
+ * baixar ({@link gerarPdfComprovanteVenda}) quanto pro Blob do compartilhamento por WhatsApp
+ * ({@link gerarBlobComprovanteVenda}).
  */
-export function gerarPdfComprovanteVenda(linhas: string[], idVenda: number): void {
+function montarDocumentoComprovanteVenda(linhas: string[]): jsPDF {
   const margem = 4
   const tamanhoFonte = 5
   const alturaLinha = 2.6
@@ -353,5 +372,15 @@ export function gerarPdfComprovanteVenda(linhas: string[], idVenda: number): voi
   linhas.forEach((texto, indice) => {
     doc.text(texto, margem, margem + (indice + 1) * alturaLinha)
   })
-  doc.save(`papeleta-venda-${idVenda}.pdf`)
+  return doc
+}
+
+export function gerarPdfComprovanteVenda(linhas: string[], idVenda: number): void {
+  montarDocumentoComprovanteVenda(linhas).save(`papeleta-venda-${idVenda}.pdf`)
+}
+
+/** Mesmo documento de {@link gerarPdfComprovanteVenda}, mas devolve o Blob em vez de baixar —
+ *  usado pra subir a papeleta pro compartilhamento por link (envio por WhatsApp). */
+export function gerarBlobComprovanteVenda(linhas: string[]): Blob {
+  return montarDocumentoComprovanteVenda(linhas).output('blob')
 }

@@ -147,6 +147,7 @@ public final class PdvDtos {
             int codigoEmpresa,
             OffsetDateTime dataVenda,
             String nomeCliente,
+            String telefoneCliente,
             String nomeVendedor,
             String nomeOperador,
             List<ItemComprovanteVenda> itens,

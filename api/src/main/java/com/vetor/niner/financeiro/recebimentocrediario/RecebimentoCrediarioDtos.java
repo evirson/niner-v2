@@ -113,6 +113,7 @@ public final class RecebimentoCrediarioDtos {
             long idCaixa,
             String nomeEmpresa,
             String nomeCliente,
+            String telefoneCliente,
             OffsetDateTime dataPagamento,
             List<ParcelaComprovanteResponse> parcelas,
             BigDecimal valorTotalAPagar,

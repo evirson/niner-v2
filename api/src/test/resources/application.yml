@@ -23,3 +23,5 @@ niner:
   storage:
     bucket: niner-erp-dev
     base-url: https://storage.googleapis.com
+  arquivo-compartilhado:
+    expiracao-horas: 24

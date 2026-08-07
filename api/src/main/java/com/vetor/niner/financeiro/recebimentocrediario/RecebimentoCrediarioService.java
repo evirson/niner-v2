@@ -291,11 +291,13 @@ public class RecebimentoCrediarioService {
      */
     @Transactional(readOnly = true)
     public ComprovanteRecebimentoResponse buscarComprovante(long idLoteRecebimento) {
-        record Cabecalho(String nomeEmpresa, String nomeCliente, OffsetDateTime dataPagamento, BigDecimal valorTotal) {
+        record Cabecalho(
+                String nomeEmpresa, String nomeCliente, String telefoneCliente,
+                OffsetDateTime dataPagamento, BigDecimal valorTotal) {
         }
 
         Cabecalho cabecalho = jdbc.sql("""
-                        SELECT e.razao_social, c.nome, crl.data_recebimento, crl.valor_total
+                        SELECT e.razao_social, c.nome, c.telefone, crl.data_recebimento, crl.valor_total
                         FROM contas_receber_lote crl
                         JOIN cliente c ON c.id_cliente = crl.id_cliente AND c.id_tenant = crl.id_tenant
                         JOIN empresa e ON e.id_empresa = crl.id_empresa AND e.id_tenant = crl.id_tenant
@@ -303,7 +305,7 @@ public class RecebimentoCrediarioService {
                         """)
                 .param(idLoteRecebimento)
                 .query((rs, n) -> new Cabecalho(
-                        rs.getString("razao_social"), rs.getString("nome"),
+                        rs.getString("razao_social"), rs.getString("nome"), rs.getString("telefone"),
                         rs.getObject("data_recebimento", OffsetDateTime.class), rs.getBigDecimal("valor_total")))
                 .optional()
                 .orElseThrow(() -> new ResponseStatusException(
@@ -347,7 +349,7 @@ public class RecebimentoCrediarioService {
                 .list();
 
         return new ComprovanteRecebimentoResponse(idLoteRecebimento, idCaixa, cabecalho.nomeEmpresa(), cabecalho.nomeCliente(),
-                cabecalho.dataPagamento(), parcelas, cabecalho.valorTotal(), pagamentos);
+                cabecalho.telefoneCliente(), cabecalho.dataPagamento(), parcelas, cabecalho.valorTotal(), pagamentos);
     }
 
     /**

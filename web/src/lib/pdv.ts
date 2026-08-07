@@ -166,6 +166,7 @@ export interface ComprovanteVenda {
   codigoEmpresa: number
   dataVenda: string
   nomeCliente: string | null
+  telefoneCliente: string | null
   nomeVendedor: string | null
   nomeOperador: string | null
   itens: ItemComprovanteVenda[]
