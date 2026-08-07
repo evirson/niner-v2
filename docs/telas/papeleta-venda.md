@@ -94,6 +94,7 @@ existir (ou for de outro tenant — RLS).
   "codigoEmpresa": 1,
   "dataVenda": "2026-08-06T21:09:16Z",
   "nomeCliente": "IRENE BARBOSA",
+  "telefoneCliente": "42998195577",
   "nomeVendedor": "PEDRO SOUZA LIMA",
   "nomeOperador": "Administrador Teste",
   "itens": [
@@ -146,10 +147,31 @@ reimpressão de crediário abaixo) — 100% frontend, zero endpoint novo:
 Testado com venda real, inclusive uma venda sintética de importação (sem itens/vendedor/
 operador) — os campos vazios caem certinho em "(não informado)".
 
+## Envio por WhatsApp (2026-08-07)
+
+Terceiro botão no rodapé do popup (além de Imprimir/Salvar PDF), presente tanto no fluxo normal
+(pós-F5) quanto na Reimpressão. Mesmo mecanismo do Comprovante de Pagamento de Crediário: clicar
+em **"Enviar por WhatsApp"** abre `EnviarWhatsAppModal.tsx` (componente genérico, reaproveitado
+dos dois comprovantes) com o celular do cliente (`telefoneCliente`, campo novo desta rodada) já
+preenchido, mas editável — só ao confirmar ali é que a papeleta vira Blob (mesmo `jsPDF` de
+"Salvar PDF"), sobe pro cache temporário da API e abre um link `wa.me` com a mensagem e o link de
+download prontos. Quem de fato envia é o operador, na própria conversa do WhatsApp — não é
+integração automática. Detalhe completo do mecanismo compartilhado (por que `wa.me`, como o
+arquivo é guardado, o limite de 20 por tenant — somado com os outros 3 fluxos que usam o mesmo
+cache, não 20 só pra papeleta —, gaps conhecidos): `docs/infra/compartilhamento-arquivo-temporario.md`.
+
+## Layout do popup — cabeçalho e rodapé fixos (2026-08-07)
+
+O popup (fluxo normal e Reimpressão) passou a ter o título e a faixa de botões sempre visíveis —
+só a pré-visualização (`<pre>`) rola por dentro quando a papeleta é longa. Mesmo mecanismo já
+usado em `CancelamentoVendaModal.tsx` (`.modal` em coluna flex com `overflow:hidden`; título e
+rodapé com `flexShrink:0`; miolo com `overflow-y:auto; flex:1; min-height:0`).
+
 ## Ajuda da tela (manual de operação + vídeo) — obrigatório (R22 / §3.7.1)
 
 O popup em si (pós-F5) não se aplica — é automático dentro do fluxo do PDV, sem `AjudaDaTela`
-própria. A tela de **Reimpressão** tem a sua: `vendas.reimpressaopapeleta.tela`.
+própria. A tela de **Reimpressão** tem a sua: `vendas.reimpressaopapeleta.tela`, atualizada
+(2026-08-07) pra mencionar o botão de WhatsApp.
 
 ## Impacto no banco
 

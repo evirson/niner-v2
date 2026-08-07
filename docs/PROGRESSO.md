@@ -1,7 +1,7 @@
 # Progresso do Projeto — niner-v2
 
 Registro cronológico das decisões e entregas. Atualizar a cada marco relevante.
-**Última atualização:** 2026-08-06
+**Última atualização:** 2026-08-07
 
 ---
 
@@ -121,7 +121,13 @@ devolucao-produtos.md`. Em 2026-08-06, o grupo **Configurações** ganhou duas r
 migração de dados: **Importação de Dados** (`docs/telas/importacao-dados.md` — CSV, 4 tabelas:
 cliente/fornecedor/produto/contas_receber-crediário, dry-run via rollback de transação, venda
 sintética pra crediário importado sem mexer em schema) e **Exportação de Dados**
-(`docs/telas/exportacao-dados.md` — Excel gerado no navegador, 9 tabelas, só leitura).
+(`docs/telas/exportacao-dados.md` — Excel gerado no navegador, 9 tabelas, só leitura). Em
+2026-08-07, o Comprovante de Pagamento de Crediário e a Papeleta de Venda (com as respectivas
+telas de Reimpressão) ganharam a opção **"Enviar por WhatsApp"** — popup de confirmação do celular
+do cliente, PDF gerado no navegador e compartilhado por um link temporário que vive só em memória
+na API (24h, sem custo de object storage, limite de 20 arquivos por tenant somando os 4 fluxos —
+ver `docs/infra/compartilhamento-arquivo-temporario.md`) — e os quatro popups de comprovante
+passaram a ter cabeçalho/rodapé fixos, com scroll só na pré-visualização.
 
 | Artefato | Situação |
 |---|---|
@@ -129,6 +135,7 @@ sintética pra crediário importado sem mexer em schema) e **Exportação de Dad
 | `docs/PLANO-DE-NEGOCIO.md` | **Novo** — plano de negócio (planos/preços, trial, funil, métricas SaaS, roadmap, decisões D1–D10) |
 | `docs/padroes/` | Mockup de referência de UI (golden file, §3.7) — `TELA.rar` descompactado e removido |
 | `docs/infra/armazenamento-imagens.md` | Object storage das fotos de produto (ADR-013). Infra no GCP **provisionada e testada**; **código Java implementado em 2026-07-23** (`comum.armazenamento` + `catalogo.ProdutoImagemService`, ver linha do tempo) — só falta credencial real (Opção A, ADC pessoal do Claudio) pra upload funcionar de ponta a ponta fora dos testes |
+| `docs/infra/compartilhamento-arquivo-temporario.md` | **Novo (2026-08-07)** — `comum.arquivocompartilhado`: cache de PDF em memória (não é object storage), token aleatório, expiração 24h, limite de 20 arquivos/tenant. Usado hoje pelo "Enviar por WhatsApp" dos comprovantes de crediário e venda |
 | `db/*.txt` | Schema **legado (Firebird)** versionado como referência (31 tabelas + generators, procedures, triggers) |
 | `CLAUDE.md` | Guia do repositório — atualizado para o SaaS multi-tenant (P8/P9, plataforma, `id_tenant`+RLS) |
 | `docker-compose.yml` | Infra local de dev: `db` (postgres:18, `niner_db`) + `flyway` (profile `migrate`) + **`api`** (Spring Boot, porta 8080, conecta como `niner_app`); **V001–V026 aplicadas e validadas em banco real** (control-plane + domínio do lojista + financeiro parcial + RLS) — banco **recriado do zero em 2026-07-16** (volume `niner_pgdata` apagado e refeito) |
@@ -150,6 +157,79 @@ sintética pra crediário importado sem mexer em schema) e **Exportação de Dad
 ---
 
 ## Linha do tempo
+
+### 2026-08-07 — Envio de comprovante por WhatsApp (crediário + venda) e layout fixo dos popups
+
+Pedido do dono do produto, explicitamente como **estudo de caso** antes de qualquer código: "na
+tela de recebimento de crediário, quando aparece o comprovante de parcelas recebidas, quero uma
+opção de envio deste comprovante, em PDF, por WhatsApp". A sessão passou por uma análise técnica
+completa, duas rodadas de refinamento pedidas pelo próprio dono do produto (custo/segurança e
+confirmação do destinatário), e por fim a extensão da mesma capacidade pra Papeleta de Venda.
+
+1. **Análise (sem código) de 3 caminhos técnicos** — link `wa.me` (zero infra, mensagem com link,
+   sem anexo de verdade), WhatsApp Cloud API oficial (anexo real, mas exige conta comercial,
+   número por tenant, template aprovado pela Meta, custo por conversa) e automação não-oficial
+   (Baileys/whatsapp-web.js, descartada — viola Termos de Uso, risco de banimento). O dono do
+   produto escolheu **`wa.me`**, com o destinatário sempre sendo `cliente.telefone` (não
+   `cliente.whatsapp`, que é um handle, não telefone).
+2. **Hospedagem sem custo** — proposta inicial de bucket GCS foi rejeitada pelo dono do produto
+   ("vai ter custo"); resolvido com um **cache em memória dentro da própria API**
+   (`comum.arquivocompartilhado`, pacote novo): token UUID aleatório, expiração configurável (24h
+   padrão, `niner.arquivo-compartilhado.expiracao-horas`), dois mecanismos de limpeza (sob
+   demanda no `GET` + varredura `@Scheduled` a cada 1h — exigiu `@EnableScheduling` e um bean
+   `Clock`, nenhum dos dois existia antes). PDF gerado no **navegador** (reaproveita o `jsPDF` já
+   usado por "Salvar PDF", sem duplicar a montagem do layout em Java).
+3. **Achado de segurança, reportado e corrigido na mesma sessão** — ao perguntar diretamente "vai
+   consumir muita memória ou tem algo aberto que permite invasão?", a resposta honesta revelou um
+   buraco real: nada limitava quantos uploads um tenant podia empilhar, e como o cache é
+   compartilhado entre todos os tenants do processo, isso permitia um "vizinho barulhento" (um
+   tenant só derrubando a API por `OutOfMemoryError` pra todos). Corrigido com **limite de 20
+   arquivos por tenant** — ao chegar o 21º, o mais antigo daquele mesmo tenant é apagado. A
+   contagem soma os quatro fluxos que usam o mecanismo (papeleta de venda, reimpressão de
+   papeleta, comprovante de crediário, reimpressão de crediário) — não é 20 por fluxo. Detalhe
+   completo (incluindo os gaps que ficaram de fora, como teto de memória total e log de auditoria):
+   `docs/infra/compartilhamento-arquivo-temporario.md`.
+4. **Popup de confirmação do destinatário, pedido numa rodada seguinte** — o botão nunca dispara o
+   envio direto: sempre abre `EnviarWhatsAppModal.tsx` (componente genérico, reaproveitável),
+   pré-preenchido com o celular do cliente mas **editável**, com validação só ao clicar "OK" (erro
+   inline, mesmo padrão de `TesteImpressaoModal.tsx`). Só depois de confirmado é que o PDF é
+   gerado/enviado.
+5. **Estendido pra Papeleta de Venda** (mesma sessão, pedido explícito) — mesmo botão, mesmo
+   popup, no `ComprovantePapeletaModal.tsx` (cobre também a Reimpressão de Papeleta de Venda, já
+   que é o mesmo componente). Os dois endpoints de comprovante (`GET .../recebimento-crediario/
+   {id}/comprovante` e `GET .../pdv/vendas/{id}/comprovante`) ganharam o campo `telefoneCliente`.
+6. **Layout fixo nos 4 popups de comprovante** (pedido separado, mesma sessão) — título e rodapé
+   de botões (Fechar/Enviar por WhatsApp/Salvar PDF/Imprimir) ficam sempre visíveis; só a
+   pré-visualização rola por dentro quando o comprovante é longo. Mesmo mecanismo já usado em
+   `CancelamentoVendaModal.tsx` (`.modal` em coluna flex, `overflow:hidden`; cabeçalho/rodapé
+   `flexShrink:0`; miolo `overflow-y:auto`).
+
+**Backend:** pacote novo `comum.arquivocompartilhado` (`ArquivoCompartilhadoService`/`Controller`/
+`Dtos`) — `POST /api/v1/arquivos-compartilhados` (autenticado, qualquer papel) + `GET
+/api/publico/arquivos-compartilhados/{token}` (público, sem JWT — o cliente final não tem conta no
+sistema). `RecebimentoCrediarioDtos`/`Service` e `PdvDtos`/`PdvVendaService` ganharam
+`telefoneCliente` na resposta do comprovante (mesma coluna `cliente.telefone` de sempre, nenhuma
+migration nova). **8 testes novos** (`ArquivoCompartilhadoCrudTest`, incluindo os 2 do limite de
+20/tenant) — suíte completa do backend verde (incluindo `RecebimentoCrediarioCrudTest`/
+`PdvCrudTest`/`ValeMercadoriaCrudTest`, que exercitam os DTOs alterados).
+
+**Frontend:** `lib/whatsapp.ts` (monta o link `wa.me`) e `lib/compartilhamento.ts` (upload +
+monta a URL pública) novos; `lib/comprovante.ts` ganhou `gerarBlobComprovante`/
+`gerarBlobComprovanteVenda` (mesmo motor de PDF de sempre, extraído pra também devolver Blob, sem
+duplicar o layout); `components/EnviarWhatsAppModal.tsx` novo; `IconeWhatsapp` novo (avião de
+papel, Heroicons outline — genérico de propósito, não o logotipo do WhatsApp, consistente com o
+resto do design system). `tsc --noEmit` limpo em cada rodada.
+
+**Verificação:** ambiente de dev reconstruído (`docker compose up -d --build api`) a cada mudança
+de backend; testado com clientes reais do banco de dev (celular cadastrado) e com o próprio dono
+do produto confirmando o comportamento do popup de confirmação e do limite de 20/tenant.
+
+**Documentação:** pedido explícito "documente e memorize todas as implementações feitas" —
+`docs/infra/compartilhamento-arquivo-temporario.md` (spec nova), `docs/telas/
+comprovante-recebimento-crediario.md` e `docs/telas/papeleta-venda.md` (seções novas + JSON de
+exemplo atualizado), `AjudaDaTela.tsx` (3 entradas atualizadas: `financeiro.
+recebimentocrediario.tela`, `financeiro.reimpressaorecebimentocrediario.tela`, `vendas.
+reimpressaopapeleta.tela`), este registro.
 
 ### 2026-08-06 — Reimpressão de Papeleta de Venda e de Recebimento de Crediário (3ª sessão do dia)
 

@@ -85,6 +85,7 @@ tenant — RLS).
   "idCaixa": 12,
   "nomeEmpresa": "Loja Teste Manual",
   "nomeCliente": "CLAUDIO CALIXTO",
+  "telefoneCliente": "41984133869",
   "dataPagamento": "2026-07-30T15:06:13Z",
   "parcelas": [
     { "idVenda": 20, "numeroParcela": 1, "totalParcelas": 1, "dataVencimento": "...",
@@ -127,11 +128,32 @@ de estornar:
 
 Testado com um lote real (2 parcelas, R$ 371,40).
 
+## Envio por WhatsApp (2026-08-07)
+
+Terceiro botão no rodapé do popup (além de Imprimir/Salvar PDF), presente tanto no fluxo normal
+(pós-efetivar) quanto na Reimpressão. Clicar em **"Enviar por WhatsApp"** abre um popup de
+confirmação (`EnviarWhatsAppModal.tsx`, componente genérico e reutilizável) com o celular do
+cliente (`telefoneCliente`, campo novo desta rodada) já preenchido, mas editável — só ao confirmar
+ali é que o PDF é gerado (mesmo `jsPDF` de "Salvar PDF", como Blob em vez de baixar), sobe pro
+cache temporário da API e abre um link `wa.me` com a mensagem e o link de download já prontos.
+Quem de fato envia é o operador, clicando em "Enviar" na conversa do WhatsApp — não é uma
+integração automática. Detalhe completo do mecanismo (por que `wa.me` em vez da API oficial, como
+o arquivo é guardado, o limite de 20 por tenant, os gaps conhecidos):
+`docs/infra/compartilhamento-arquivo-temporario.md`.
+
+## Layout do popup — cabeçalho e rodapé fixos (2026-08-07)
+
+O popup (fluxo normal e Reimpressão) passou a ter o título e a faixa de botões sempre visíveis —
+só a pré-visualização (`<pre>`) rola por dentro quando o comprovante é longo. Mesmo mecanismo já
+usado em `CancelamentoVendaModal.tsx` (`.modal` em coluna flex com `overflow:hidden`; título e
+rodapé com `flexShrink:0`; miolo com `overflow-y:auto; flex:1; min-height:0`).
+
 ## Ajuda da tela (manual de operação + vídeo) — obrigatório (R22 / §3.7.1)
 
 O popup em si (pós-efetivar) não se aplica — é automático dentro do fluxo de Recebimento de
 Crediário (`financeiro.recebimentocrediario.tela`), sem rotina de navegação própria. A tela de
-**Reimpressão** tem a sua: `financeiro.reimpressaorecebimentocrediario.tela`.
+**Reimpressão** tem a sua: `financeiro.reimpressaorecebimentocrediario.tela`. As duas entradas
+foram atualizadas (2026-08-07) pra mencionar o botão de WhatsApp.
 
 ## Impacto no banco
 
