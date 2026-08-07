@@ -1,5 +1,6 @@
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { useMemo, useState } from 'react'
+import AvisoModal from '../../components/AvisoModal'
 import Toast from '../../components/Toast'
 import { ApiError } from '../../lib/api'
 import { buscarDescontoVenda } from '../../lib/configuracaoGeral'
@@ -125,6 +126,11 @@ export default function FormaPagamentoModal({
   const [valorPagoTexto, setValorPagoTexto] = useState('')
   const [numeroParcelasEdicao, setNumeroParcelasEdicao] = useState(1)
   const [toast, setToast] = useState('')
+  /** Erro ao confirmar a venda (regra de negócio rejeitada pelo servidor — desconto acima do
+   *  máximo, saldo que não fecha, limite de crédito excedido etc.) vira popup centralizado em
+   *  vez de toast: é uma mensagem que merece leitura com calma, não um aviso rápido que pode
+   *  passar despercebido no meio do fluxo de pagamento. */
+  const [erroConfirmacao, setErroConfirmacao] = useState('')
   /** Resgate de vale-mercadoria (2026-08-03) — número digitado, resultado da busca (ou erro) e
    *  estado de carregamento; separado do restante da edição porque o valor não é digitável, só
    *  vem do vale encontrado. */
@@ -324,7 +330,8 @@ export default function FormaPagamentoModal({
       })
     },
     onSuccess: (resultado) => aoEfetivada(resultado),
-    onError: (e: unknown) => setToast(e instanceof ApiError ? e.message : 'Não foi possível efetivar a venda.'),
+    onError: (e: unknown) =>
+      setErroConfirmacao(e instanceof ApiError ? e.message : 'Não foi possível efetivar a venda.'),
   })
 
   /** O botão libera assim que o pagamento fecha o saldo (2026-07-31, pedido do dono do
@@ -697,6 +704,13 @@ export default function FormaPagamentoModal({
       </div>
 
       {toast && <Toast mensagem={toast} aoFechar={() => setToast('')} />}
+      {erroConfirmacao && (
+        <AvisoModal
+          titulo="Não foi possível confirmar a venda"
+          mensagem={erroConfirmacao}
+          aoFechar={() => setErroConfirmacao('')}
+        />
+      )}
 
       {mostrarPesquisaCliente && (
         <PesquisaClienteModal

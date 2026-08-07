@@ -204,10 +204,10 @@ export default function ConfiguracaoGeralForm() {
         </section>
 
         <section className="section">
-          <p className="section-label">Crediário (Fase 2)</p>
+          <p className="section-label">Crediário</p>
           <p className="muted" style={{ marginTop: -4 }}>
-            O módulo de crediário ainda não está implementado — estes valores ficam prontos para quando
-            estiver.
+            Usados pela tela de Recebimento de Crediário para calcular multa e juros automaticamente
+            sobre parcelas vencidas.
           </p>
 
           <div className="form-grid">

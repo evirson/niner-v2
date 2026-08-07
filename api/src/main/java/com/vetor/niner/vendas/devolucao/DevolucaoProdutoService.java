@@ -109,10 +109,11 @@ public class DevolucaoProdutoService {
                             """)
                     .params(idMovimento, idEmpresa, item.idVariacao(), item.qtd(), item.precoVenda(), item.precoCusto(), idFuncionario)
                     .update();
+            BigDecimal valorTotalItem = item.precoVenda().multiply(item.qtd());
             itensResponse.add(new ItemDevolucaoResponse(
-                    item.idVariacao(), item.descricaoProduto(), item.variacaoLinha(), item.variacaoColuna(),
-                    item.qtd(), item.precoVenda()));
-            valorVale = valorVale.add(item.precoVenda().multiply(item.qtd()));
+                    item.idVariacao(), item.sku(), item.descricaoProduto(), item.variacaoLinha(), item.variacaoColuna(),
+                    item.qtd(), item.precoVenda(), valorTotalItem));
+            valorVale = valorVale.add(valorTotalItem);
         }
 
         return new DevolucaoEfetivadaResponse(
@@ -176,7 +177,7 @@ public class DevolucaoProdutoService {
     }
 
     private record ItemResolvido(long idVariacao, BigDecimal qtd, BigDecimal precoVenda, BigDecimal precoCusto,
-                                  String descricaoProduto, String variacaoLinha, String variacaoColuna) {
+                                  String sku, String descricaoProduto, String variacaoLinha, String variacaoColuna) {
     }
 
     /** Resolve descrição/variação/preço de cada item a partir do {@code idVariacao} — a tela
@@ -192,7 +193,7 @@ public class DevolucaoProdutoService {
                         "Quantidade deve ser um número inteiro — este tenant não permite quantidade decimal de produtos (Parâmetros do Sistema).");
             }
             LinhaItem linha = jdbc.sql("""
-                            SELECT p.descricao AS descricao_produto,
+                            SELECT pb.sku, p.descricao AS descricao_produto,
                                    vl.descricao AS variacao_linha, vc.descricao AS variacao_coluna,
                                    p.preco_venda, p.preco_custo
                             FROM produto_barra pb
@@ -205,18 +206,19 @@ public class DevolucaoProdutoService {
                             """)
                     .param(item.idVariacao())
                     .query((rs, n) -> new LinhaItem(
-                            rs.getString("descricao_produto"), rs.getString("variacao_linha"), rs.getString("variacao_coluna"),
+                            rs.getString("sku"), rs.getString("descricao_produto"),
+                            rs.getString("variacao_linha"), rs.getString("variacao_coluna"),
                             rs.getBigDecimal("preco_venda"), rs.getBigDecimal("preco_custo")))
                     .optional()
                     .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Produto informado não existe ou está inativo."));
 
             resolvidos.add(new ItemResolvido(item.idVariacao(), item.qtd(), linha.precoVenda(), linha.precoCusto(),
-                    linha.descricaoProduto(), linha.variacaoLinha(), linha.variacaoColuna()));
+                    linha.sku(), linha.descricaoProduto(), linha.variacaoLinha(), linha.variacaoColuna()));
         }
         return resolvidos;
     }
 
-    private record LinhaItem(String descricaoProduto, String variacaoLinha, String variacaoColuna, BigDecimal precoVenda, BigDecimal precoCusto) {
+    private record LinhaItem(String sku, String descricaoProduto, String variacaoLinha, String variacaoColuna, BigDecimal precoVenda, BigDecimal precoCusto) {
     }
 
     /** {@code true} se o valor tiver parte fracionária (ex.: 2.5), não importa a escala/zeros à direita. */

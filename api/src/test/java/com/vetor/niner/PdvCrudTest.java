@@ -113,6 +113,20 @@ class PdvCrudTest {
         return ((Number) JsonPath.read(resp, "$.idCliente")).longValue();
     }
 
+    /** Mesmo papel de {@link #criarCliente}, mas define {@code limiteCredito} explicitamente —
+     *  usado só nos testes da RN de limite de crédito em crediário. */
+    private long criarClienteComLimiteCredito(String token, String nome, String limiteCredito) throws Exception {
+        long idCategoria = criarCategoriaCliente(token, "PADRAO " + nome);
+        String resp = mvc.perform(post("/api/v1/clientes").header("Authorization", "Bearer " + token)
+                        .contentType(APPLICATION_JSON)
+                        .content("""
+                                {"fisicaJuridica":false,"nome":"%s","idCategoriaCliente":%d,"limiteCredito":%s}
+                                """.formatted(nome, idCategoria, limiteCredito)))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        return ((Number) JsonPath.read(resp, "$.idCliente")).longValue();
+    }
+
     private long criarFuncionario(String token, String nome) throws Exception {
         String resp = mvc.perform(post("/api/v1/funcionarios").header("Authorization", "Bearer " + token)
                         .contentType(APPLICATION_JSON).content("{\"nome\":\"%s\"}".formatted(nome)))
@@ -489,6 +503,93 @@ class PdvCrudTest {
             mvc.perform(post("/api/v1/pdv/vendas").header("Authorization", "Bearer " + token)
                             .contentType(APPLICATION_JSON).content(corpo))
                     .andExpect(status().isBadRequest());
+        }
+    }
+
+    @Test
+    void crediarioAcimaDoLimiteDeCreditoDoClienteRespondeErroDeValidacao() throws Exception {
+        String token = assinarNovoTenant("limite-credito");
+        long idTenant = extrairIdTenant(token);
+        long idProduto = criarProduto(token, "Produto Limite Credito", true);
+        long idCarteira = criarTipoCarteira(token, "CREDIARIO LIMITE", "CREDIARIO", 30, 1, 1);
+        long idCliente = criarClienteComLimiteCredito(token, "Cliente Limite Credito", "40.00");
+        long idFuncionario = criarFuncionario(token, "Vendedor Limite Credito");
+        abrirCaixaDinheiro(token);
+
+        try (Connection c = abrirConexao(idTenant)) {
+            long idEmpresa = buscarIdEmpresa(c);
+            long idVariacao = criarVariacao(c, idTenant, idProduto);
+            definirEstoque(c, idTenant, idEmpresa, idVariacao, new BigDecimal("10.000"));
+
+            // Limite de R$ 40,00, venda inteira em crediário de R$ 50,00 — excede.
+            String corpo = """
+                    {"itens":[{"idVariacao":%d,"qtd":1}],"descontoVenda":0,"idCliente":%d,"idFuncionario":%d,
+                     "pagamentos":[{"idCarteira":%d,"valorPago":50.00,"numeroParcelas":1}]}
+                    """.formatted(idVariacao, idCliente, idFuncionario, idCarteira);
+
+            mvc.perform(post("/api/v1/pdv/vendas").header("Authorization", "Bearer " + token)
+                            .contentType(APPLICATION_JSON).content(corpo))
+                    .andExpect(status().isBadRequest());
+        }
+    }
+
+    @Test
+    void crediarioSomaParcelasJaEmAbertoAoConferirOLimiteDeCredito() throws Exception {
+        String token = assinarNovoTenant("limite-credito-soma");
+        long idTenant = extrairIdTenant(token);
+        long idProduto = criarProduto(token, "Produto Limite Credito Soma", true);
+        long idCarteira = criarTipoCarteira(token, "CREDIARIO LIMITE SOMA", "CREDIARIO", 30, 1, 1);
+        long idCliente = criarClienteComLimiteCredito(token, "Cliente Limite Credito Soma", "60.00");
+        long idFuncionario = criarFuncionario(token, "Vendedor Limite Credito Soma");
+        abrirCaixaDinheiro(token);
+
+        try (Connection c = abrirConexao(idTenant)) {
+            long idEmpresa = buscarIdEmpresa(c);
+            long idVariacao = criarVariacao(c, idTenant, idProduto);
+            definirEstoque(c, idTenant, idEmpresa, idVariacao, new BigDecimal("10.000"));
+
+            String corpo = """
+                    {"itens":[{"idVariacao":%d,"qtd":1}],"descontoVenda":0,"idCliente":%d,"idFuncionario":%d,
+                     "pagamentos":[{"idCarteira":%d,"valorPago":50.00,"numeroParcelas":1}]}
+                    """.formatted(idVariacao, idCliente, idFuncionario, idCarteira);
+
+            // 1ª venda em crediário: R$ 50,00, dentro do limite de R$ 60,00 — passa e fica em aberto.
+            mvc.perform(post("/api/v1/pdv/vendas").header("Authorization", "Bearer " + token)
+                            .contentType(APPLICATION_JSON).content(corpo))
+                    .andExpect(status().isCreated());
+
+            // 2ª venda: mais R$ 50,00 em crediário — somado ao R$ 50,00 já em aberto, dá R$ 100,00,
+            // acima do limite de R$ 60,00, mesmo que cada venda isolada não passe do limite sozinha.
+            mvc.perform(post("/api/v1/pdv/vendas").header("Authorization", "Bearer " + token)
+                            .contentType(APPLICATION_JSON).content(corpo))
+                    .andExpect(status().isBadRequest());
+        }
+    }
+
+    @Test
+    void limiteDeCreditoZeroOuNaoDefinidoNaoBloqueiaCrediario() throws Exception {
+        String token = assinarNovoTenant("sem-limite-credito");
+        long idTenant = extrairIdTenant(token);
+        long idProduto = criarProduto(token, "Produto Sem Limite Credito", true);
+        long idCarteira = criarTipoCarteira(token, "CREDIARIO SEM LIMITE", "CREDIARIO", 30, 1, 1);
+        // Cliente sem limiteCredito informado — fica com o padrão 0 do banco, ou seja, sem limite.
+        long idCliente = criarCliente(token, "Cliente Sem Limite Credito");
+        long idFuncionario = criarFuncionario(token, "Vendedor Sem Limite Credito");
+        abrirCaixaDinheiro(token);
+
+        try (Connection c = abrirConexao(idTenant)) {
+            long idEmpresa = buscarIdEmpresa(c);
+            long idVariacao = criarVariacao(c, idTenant, idProduto);
+            definirEstoque(c, idTenant, idEmpresa, idVariacao, new BigDecimal("10.000"));
+
+            String corpo = """
+                    {"itens":[{"idVariacao":%d,"qtd":1}],"descontoVenda":0,"idCliente":%d,"idFuncionario":%d,
+                     "pagamentos":[{"idCarteira":%d,"valorPago":50.00,"numeroParcelas":1}]}
+                    """.formatted(idVariacao, idCliente, idFuncionario, idCarteira);
+
+            mvc.perform(post("/api/v1/pdv/vendas").header("Authorization", "Bearer " + token)
+                            .contentType(APPLICATION_JSON).content(corpo))
+                    .andExpect(status().isCreated());
         }
     }
 

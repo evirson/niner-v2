@@ -2,6 +2,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import AberturaCaixaModal from '../../components/AberturaCaixaModal'
+import AjudaDaTela from '../../components/AjudaDaTela'
 import { BotaoFecharTela } from '../../components/BotaoFecharTela'
 import { IconeAjustar, IconeConfirmar, IconeLimpar, IconeLupa, IconePdv } from '../../components/Icones'
 import { ApiError } from '../../lib/api'
@@ -235,6 +236,7 @@ export default function Pdv() {
             <h1>PDV — Frente de Caixa</h1>
           </div>
           <div className="topbar-acoes">
+            <AjudaDaTela chaveTela="pdv.tela" />
             <BotaoFecharTela />
           </div>
         </div>

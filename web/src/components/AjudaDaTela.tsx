@@ -438,6 +438,27 @@ const CONTEUDOS: Record<string, ConteudoAjuda> = {
     ],
     urlVideo: null,
   },
+  'pdv.tela': {
+    titulo: 'PDV — Frente de Caixa',
+    objetivo: 'Lançar os itens de uma venda por código de barras ou busca, escolher a forma de pagamento (inclusive dividindo entre várias formas) e efetivar a venda.',
+    passos: [
+      'Antes de vender, é preciso abrir o caixa do dia — se ainda não estiver aberto, um popup obrigatório pede o saldo inicial em Dinheiro.',
+      'Leia o código de barras no campo "Código de Barras" (aceita SKU ou EAN) — o item entra direto na lista. Digite "5*código" para lançar 5 unidades de uma vez, sem precisar ler o código 5 vezes.',
+      '"F2 Pesquisa Produto" busca por nome quando não tem o código em mãos — mostra o estoque por empresa.',
+      '"F3 Altera Quantidade" corrige a quantidade do item selecionado na lista de produtos vendidos (navegue com ↑/↓).',
+      '"F4 Limpa Tela" remove todos os itens lançados e recomeça a venda, com confirmação antes de apagar.',
+      '"F5 Efetiva Venda" abre a Forma de Pagamento: escolha Cliente e Vendedor (os dois são obrigatórios), aplique um desconto (até o máximo definido em Parâmetros do Sistema) e lance uma ou mais formas de pagamento — dinheiro, cartão, crediário ou vale-mercadoria — até fechar o valor a pagar.',
+      'Depois de confirmar, a Papeleta de Venda abre automaticamente, pronta para imprimir, salvar em PDF ou enviar por WhatsApp.',
+    ],
+    errosComuns: [
+      'Sem caixa aberto no dia, nenhuma venda é efetivada — abra o caixa antes de lançar produtos.',
+      '"Confirmar Venda" só libera quando as formas de pagamento lançadas fecham exatamente o valor a pagar, com Cliente e Vendedor selecionados.',
+      'Vender mais do que tem em estoque é permitido de propósito — o saldo fica negativo, sem bloqueio.',
+      'Crediário tem limite de crédito: se o cliente tiver um limite de crédito cadastrado (maior que zero), o valor em crediário desta venda somado às parcelas de crediário já em aberto não pode ultrapassar o limite.',
+      'Um vale-mercadoria maior que o valor a pagar não pode ser usado sozinho — sobra de vale não gera troco.',
+    ],
+    urlVideo: null,
+  },
   'financeiro.recebimentocrediario.tela': {
     titulo: 'Recebimento de Crediário',
     objetivo: 'Receber uma ou mais parcelas de crediário em aberto de um cliente.',

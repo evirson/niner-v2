@@ -143,57 +143,8 @@ export function gerarBlobComprovante(linhas: string[]): Blob {
   return montarDocumentoComprovante(linhas).output('blob')
 }
 
-/** Comprovante do vale-mercadoria emitido por uma devolução (2026-08-03) — mesmo padrão visual
- *  de `montarLinhasComprovante`, mas mais simples (sem parcelas/formas de pagamento). O número
- *  do vale (`idDevolucao`) é o dado mais importante da bobina — é o que o cliente apresenta
- *  depois pra resgatar o crédito numa venda futura. */
-export function montarLinhasComprovanteVale(d: DevolucaoEfetivada, nomeEmpresa: string): string[] {
-  const linhas: string[] = []
-  linhas.push(linha())
-  linhas.push(centralizar(nomeEmpresa))
-  linhas.push(linha())
-  linhas.push(centralizar('VALE-MERCADORIA'))
-  linhas.push(centralizar('DEVOLUCAO DE PRODUTOS'))
-  linhas.push(linha())
-  linhas.push(duasColunas('Vale nº:', String(d.idDevolucao)))
-  linhas.push(duasColunas('Valor do Vale:', moeda(d.valorVale)))
-  linhas.push(linha())
-  linhas.push('Itens devolvidos:')
-  d.itens.forEach((item) => {
-    const descricao = item.variacaoLinha || item.variacaoColuna
-      ? `${item.descricaoProduto} (${[item.variacaoLinha, item.variacaoColuna].filter(Boolean).join(' · ')})`
-      : item.descricaoProduto
-    linhas.push(`  ${formatarQuantidadeSimples(item.qtd)}x ${descricao}`)
-  })
-  linhas.push(linha())
-  if (d.nomeFuncionario) linhas.push(`Vendedor original: ${d.nomeFuncionario}`)
-  linhas.push(`Data: ${formatarDataHora(d.dataMovimento)}`)
-  linhas.push(linha())
-  linhas.push(centralizar('Apresente este vale para'))
-  linhas.push(centralizar('usar o credito numa compra futura.'))
-  linhas.push(linha())
-
-  return linhas
-}
-
 function formatarQuantidadeSimples(qtd: number): string {
   return Number.isInteger(qtd) ? String(qtd) : qtd.toString().replace('.', ',')
-}
-
-/** Mesmo mecanismo de {@link gerarPdfComprovante}, nome de arquivo próprio do vale. */
-export function gerarPdfComprovanteVale(linhas: string[], idDevolucao: number): void {
-  const margem = 4
-  const tamanhoFonte = 8
-  const alturaLinha = 3.6
-  const altura = margem * 2 + linhas.length * alturaLinha
-
-  const doc = new jsPDF({ unit: 'mm', format: [80, altura] })
-  doc.setFont('courier', 'normal')
-  doc.setFontSize(tamanhoFonte)
-  linhas.forEach((texto, indice) => {
-    doc.text(texto, margem, margem + (indice + 1) * alturaLinha)
-  })
-  doc.save(`vale-mercadoria-${idDevolucao}.pdf`)
 }
 
 /**
@@ -383,4 +334,91 @@ export function gerarPdfComprovanteVenda(linhas: string[], idVenda: number): voi
  *  usado pra subir a papeleta pro compartilhamento por link (envio por WhatsApp). */
 export function gerarBlobComprovanteVenda(linhas: string[]): Blob {
   return montarDocumentoComprovanteVenda(linhas).output('blob')
+}
+
+/**
+ * Vale-mercadoria emitido por uma devolução (2026-08-03) — desde 2026-08-07 usa a MESMA tabela
+ * de itens (64 colunas, CODIGO/DESCRICAO DOS PRODUTOS/QTD/UNITARIO/TOTAL) e as mesmas funções de
+ * layout da papeleta de venda (`linhaVenda`/`centralizarVenda`/`colEsq`/`colDir`/`campoVenda`/
+ * `linhaResumoVenda`/`montarDescricaoEmLinhas`) — pedido explícito do dono do produto pra
+ * padronizar a impressão dos itens entre os dois comprovantes que saem na mesma bobina física
+ * (antes o vale usava um layout de 42 colunas próprio, mais simples). O número do vale
+ * (`idDevolucao`) é o dado mais importante da bobina — é o que o cliente apresenta depois pra
+ * resgatar o crédito numa venda futura.
+ */
+export function montarLinhasComprovanteVale(d: DevolucaoEfetivada, nomeEmpresa: string): string[] {
+  const linhas: string[] = []
+  linhas.push(linhaVenda())
+  linhas.push(centralizarVenda('VALE-MERCADORIA'))
+  linhas.push(centralizarVenda('DEVOLUCAO DE PRODUTOS'))
+  linhas.push(linhaVenda())
+  linhas.push(centralizarVenda(nomeEmpresa))
+  linhas.push(linhaVenda())
+  linhas.push(campoVenda('Vale n°....:', String(d.idDevolucao)))
+  if (d.nomeFuncionario) linhas.push(campoVenda('Vendedor...:', d.nomeFuncionario))
+  linhas.push(campoVenda('Data.......:', formatarDataHora(d.dataMovimento)))
+  linhas.push(linhaVenda())
+  linhas.push(
+    [
+      colEsq('CODIGO', COL_CODIGO),
+      colEsq('DESCRICAO DOS PRODUTOS', COL_DESCRICAO),
+      colDir('QTD', COL_QTD),
+      colDir('UNITARIO', COL_UNITARIO),
+      colDir('TOTAL', COL_TOTAL),
+    ].join(' '),
+  )
+  linhas.push(linhaVenda())
+
+  d.itens.forEach((item) => {
+    const [desc1, desc2, desc3] = montarDescricaoEmLinhas(item.descricaoProduto, item.variacaoLinha, item.variacaoColuna)
+    linhas.push(
+      [
+        colEsq(item.sku, COL_CODIGO),
+        colEsq(desc1, COL_DESCRICAO),
+        colDir(formatarQuantidadeSimples(item.qtd), COL_QTD),
+        colDir(formatarMoeda(item.precoVenda), COL_UNITARIO),
+        colDir(formatarMoeda(item.valorTotal), COL_TOTAL),
+      ].join(' '),
+    )
+    if (desc2) linhas.push(' '.repeat(COL_CODIGO + 1) + colEsq(desc2, COL_DESCRICAO))
+    if (desc3) linhas.push(' '.repeat(COL_CODIGO + 1) + colEsq(desc3, COL_DESCRICAO))
+  })
+
+  linhas.push(linhaVenda())
+  linhas.push(linhaResumoVenda('VALOR DO VALE..:', formatarMoeda(d.valorVale)))
+  linhas.push(linhaVenda())
+  linhas.push(centralizarVenda('Apresente este vale para'))
+  linhas.push(centralizarVenda('usar o credito numa compra futura.'))
+  linhas.push(linhaVenda())
+
+  return linhas
+}
+
+/** Mesmo documento de {@link montarDocumentoComprovanteVenda} (mesma largura/fonte, agora que o
+ *  vale usa a tabela de 64 colunas) — fonte única de verdade reusada tanto pra baixar o arquivo
+ *  ({@link gerarPdfComprovanteVale}) quanto pra gerar o Blob do compartilhamento por WhatsApp
+ *  ({@link gerarBlobComprovanteVale}). */
+function montarDocumentoComprovanteVale(linhas: string[]): jsPDF {
+  const margem = 4
+  const tamanhoFonte = 5
+  const alturaLinha = 2.6
+  const altura = margem * 2 + linhas.length * alturaLinha
+
+  const doc = new jsPDF({ unit: 'mm', format: [80, altura] })
+  doc.setFont('courier', 'normal')
+  doc.setFontSize(tamanhoFonte)
+  linhas.forEach((texto, indice) => {
+    doc.text(texto, margem, margem + (indice + 1) * alturaLinha)
+  })
+  return doc
+}
+
+/** Mesmo mecanismo de {@link gerarPdfComprovanteVenda}, nome de arquivo próprio do vale. */
+export function gerarPdfComprovanteVale(linhas: string[], idDevolucao: number): void {
+  montarDocumentoComprovanteVale(linhas).save(`vale-mercadoria-${idDevolucao}.pdf`)
+}
+
+/** Mesmo documento de {@link gerarPdfComprovanteVale}, mas devolve o Blob em vez de baixar. */
+export function gerarBlobComprovanteVale(linhas: string[]): Blob {
+  return montarDocumentoComprovanteVale(linhas).output('blob')
 }

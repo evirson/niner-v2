@@ -433,6 +433,50 @@ export const MENU: NavGrupo[] = [
         icone: IconeCanais,
         descricao: 'Publicação de anúncios e sincronização automática de estoque/preço nos canais. Em construção.',
       },
+      {
+        to: '/cobranca-crediario-atraso',
+        label: 'Cobrança de Crediário em Atraso',
+        icone: IconeRecebimentoCrediario,
+        descricao: 'Régua de cobrança das parcelas de crediário vencidas e não pagas. Em construção.',
+      },
+      {
+        chave: 'modulo-fiscal',
+        label: 'Módulo Fiscal',
+        icone: IconePlanoContas,
+        descricao: 'Emissão e cancelamento de documentos fiscais eletrônicos. Em construção.',
+        itens: [
+          {
+            to: '/nfce',
+            label: 'Nota Fiscal - NFC-e',
+            icone: IconePlanoContas,
+            descricao: 'Emissão de Nota Fiscal de Consumidor Eletrônica para as vendas do PDV. Em construção.',
+          },
+          {
+            to: '/nfe',
+            label: 'Nota Fiscal - NF-e',
+            icone: IconePlanoContas,
+            descricao: 'Emissão de Nota Fiscal Eletrônica para vendas e transferências entre empresas. Em construção.',
+          },
+          {
+            to: '/cancelamento-documento-fiscal',
+            label: 'Cancelamento de Documento Fiscal',
+            icone: IconeCancelamentoVenda,
+            descricao: 'Cancela uma NFC-e ou NF-e já emitida, dentro do prazo permitido pela SEFAZ. Em construção.',
+          },
+          {
+            to: '/exportacao-xml-fiscal',
+            label: 'Exportação de XML',
+            icone: IconePlanoContas,
+            descricao: 'Baixa o XML das notas fiscais emitidas (NFC-e/NF-e) para contabilidade ou SEFAZ. Em construção.',
+          },
+        ],
+      },
+      {
+        to: '/cancelamento-devolucao-produtos',
+        label: 'Cancelamento de Devolução de Produtos',
+        icone: IconeCancelamentoVenda,
+        descricao: 'Desfaz uma devolução já registrada, revertendo o estoque e invalidando o vale-mercadoria gerado. Em construção.',
+      },
     ],
   },
 ]

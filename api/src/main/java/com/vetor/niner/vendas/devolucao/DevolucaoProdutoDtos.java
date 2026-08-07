@@ -29,13 +29,18 @@ public final class DevolucaoProdutoDtos {
     public record VendedorDaVendaResponse(long numeroVenda, Long idFuncionario, String nomeFuncionario) {
     }
 
+    /** {@code sku}/{@code valorTotal} (2026-08-07) — mesmas colunas de {@code ItemComprovanteVenda}
+     *  (PdvDtos), pra a papeleta do vale-mercadoria usar a mesma tabela de itens da papeleta de
+     *  venda; {@code valorTotal} é bruto ({@code precoVenda × qtd}). */
     public record ItemDevolucaoResponse(
             long idVariacao,
+            String sku,
             String descricaoProduto,
             String variacaoLinha,
             String variacaoColuna,
             BigDecimal qtd,
-            BigDecimal precoVenda) {
+            BigDecimal precoVenda,
+            BigDecimal valorTotal) {
     }
 
     /** {@code idDevolucao} (`venda_devolucao.id_devolucao`) É o número do vale-mercadoria

@@ -125,6 +125,8 @@ public class PdvVendaService {
                     "Os pagamentos informados (R$ " + totalCobertura + ") não fecham o saldo a pagar (R$ " + valorLiquido + ").");
         }
 
+        validarLimiteCredito(idCliente, linhas);
+
         BigDecimal totalDesconto = descontoVenda.add(linhas.stream()
                 .map(LinhaPagamentoResolvida::descontoLinha).reduce(BigDecimal.ZERO, BigDecimal::add));
         BigDecimal totalAcrescimo = linhas.stream()
@@ -518,6 +520,53 @@ public class PdvVendaService {
                         """)
                 .param(idCliente).query(Long.class).optional()
                 .orElseThrow(() -> new IllegalArgumentException("Cliente informado não existe ou está inativo."));
+    }
+
+    /**
+     * Limite de crédito ({@code cliente.limite_credito}, RN nova) — só se aplica quando a venda
+     * tem alguma linha CREDIARIO e o cliente tem limite definido ({@code &gt; 0}; {@code &lt;= 0}
+     * significa sem limite, não checa nada). {@code valorEmAberto} soma as parcelas de CREDIARIO
+     * já em aberto do cliente em QUALQUER venda anterior ({@code data_recebimento IS NULL} —
+     * mesmo filtro de {@code RecebimentoCrediarioService}/{@code ClienteHistoricoService.
+     * buscarResumoCrediario}); somado ao CREDIARIO desta venda (ainda não gravado), não pode
+     * passar do limite.
+     */
+    private void validarLimiteCredito(long idCliente, List<LinhaPagamentoResolvida> linhas) {
+        BigDecimal valorCrediarioNestaVenda = linhas.stream()
+                .filter(l -> l.carteira().categoria() == CategoriaCarteira.CREDIARIO)
+                .map(LinhaPagamentoResolvida::valorPago)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        if (valorCrediarioNestaVenda.compareTo(BigDecimal.ZERO) == 0) {
+            return;
+        }
+
+        BigDecimal limiteCredito = jdbc.sql("""
+                        SELECT limite_credito FROM cliente
+                        WHERE id_tenant = plataforma.tenant_atual() AND id_cliente = ?
+                        """)
+                .param(idCliente).query(BigDecimal.class).single();
+        if (limiteCredito.compareTo(BigDecimal.ZERO) <= 0) {
+            return;
+        }
+
+        BigDecimal valorEmAberto = jdbc.sql("""
+                        SELECT COALESCE(SUM(cr.valor_receber), 0)
+                        FROM contas_receber cr
+                        JOIN venda v ON v.id_tenant = cr.id_tenant AND v.id_venda = cr.id_venda
+                        JOIN tipo_carteira tc ON tc.id_tenant = cr.id_tenant AND tc.id_carteira = cr.id_carteira
+                        WHERE cr.id_tenant = plataforma.tenant_atual() AND v.id_cliente = ?
+                              AND tc.categoria_carteira = 'CREDIARIO' AND cr.data_recebimento IS NULL
+                        """)
+                .param(idCliente).query(BigDecimal.class).single();
+
+        BigDecimal totalComprometido = valorEmAberto.add(valorCrediarioNestaVenda);
+        if (totalComprometido.compareTo(limiteCredito.add(TOLERANCIA_SALDO)) > 0) {
+            throw new IllegalArgumentException(
+                    "Limite de crédito excedido — o cliente já tem R$ " + valorEmAberto
+                            + " em parcelas de crediário em aberto; somado aos R$ " + valorCrediarioNestaVenda
+                            + " desta venda, o total de R$ " + totalComprometido
+                            + " ultrapassa o limite de crédito de R$ " + limiteCredito + ".");
+        }
     }
 
     private long validarFuncionario(long idFuncionario) {

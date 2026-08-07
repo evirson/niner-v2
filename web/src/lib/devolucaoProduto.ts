@@ -19,11 +19,13 @@ export interface VendedorDaVenda {
 
 export interface ItemDevolucaoResponse {
   idVariacao: number
+  sku: string
   descricaoProduto: string
   variacaoLinha: string | null
   variacaoColuna: string | null
   qtd: number
   precoVenda: number
+  valorTotal: number
 }
 
 /** `idDevolucao` é o número do vale-mercadoria gerado (toda devolução gera um, 2026-08-03);
