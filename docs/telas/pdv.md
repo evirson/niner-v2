@@ -256,6 +256,25 @@ resolver cliente/vendedor depois, mas nunca grava faltando um dos dois.
   `.pdv-tecla-venda` em `styles.css`) — pedido direto do dono do produto, sem mudança de
   comportamento.
 
+### Limite de crédito no crediário (2026-08-07)
+
+`cliente.limite_credito` existe desde a V016 (`db/migration/V016__cadastros.sql`) como campo
+"pronto para quando o crediário existisse", mas nunca era checado até aqui.
+`PdvVendaService.validarLimiteCredito()` roda depois que as coberturas já fecharam o saldo (não
+antes) e só entra em ação quando a venda tem alguma linha `CREDIARIO`: soma o crediário **já em
+aberto** do cliente (mesmo filtro de `ClienteHistoricoService.buscarResumoCrediario` —
+`contas_receber` com `data_recebimento IS NULL`, de qualquer venda anterior) com o `valorPago`
+das linhas `CREDIARIO` desta venda. Se `limite_credito > 0` (`<= 0` significa **sem limite**, não
+bloqueia nada) e a soma passar do limite (com a mesma tolerância de R$0,01 do resto do PDV), a
+venda é rejeitada — 400, nada é gravado. A mensagem de erro devolve os três valores (em aberto,
+desta venda, limite) pro operador entender o motivo.
+
+Na tela, esse erro (e qualquer outro erro de confirmação vindo do servidor — saldo que não
+fecha, cliente/vendedor inválido) deixou de aparecer como `Toast` e passou a abrir um popup
+dedicado (`AvisoModal.tsx`, `role="alertdialog"`) — mensagem importante o bastante pra exigir
+leitura antes de o operador seguir, em vez de um aviso que pode passar despercebido no meio do
+fluxo de pagamento.
+
 ### Vale-Mercadoria como forma de pagamento (2026-08-03)
 
 Nova categoria de carteira no split-tender, ao lado de À Vista/Cartão Débito/Cartão Crédito/
@@ -368,8 +387,9 @@ do percentual):
 Todos sob `/api/v1/**` (JWT de tenant, RLS ativo — P8). Erros em Problem Details (RFC 9457):
 400 (item/variação/carteira/cliente/vendedor inexistente ou inativo, categoria×parcelas
 incompatível, `descontoVenda` acima do máximo permitido, `valorPago` de uma linha acima do teto
-da forma de pagamento com desconto próprio, soma das coberturas não fecha o saldo a pagar), 404
-(código de barras não encontrado). Não existe mais 409 por estoque insuficiente (2026-07-29).
+da forma de pagamento com desconto próprio, soma das coberturas não fecha o saldo a pagar,
+crediário desta venda somado ao já em aberto ultrapassa `cliente.limite_credito` — 2026-08-07),
+404 (código de barras não encontrado). Não existe mais 409 por estoque insuficiente (2026-07-29).
 
 ## Critérios de aceitação (viram testes)
 
@@ -422,15 +442,22 @@ da forma de pagamento com desconto próprio, soma das coberturas não fecha o sa
   `produto_movimento_detalhe.id_funcionario` da venda batem com o cliente/vendedor escolhidos.
 - Dado nenhum caixa aberto hoje pro usuário/empresa, quando tenta efetivar a venda, então 400 e
   nada é gravado (2026-07-30, `docs/telas/abertura-caixa.md`).
+- Dado um cliente com `limite_credito > 0`, quando o crediário já em aberto somado ao crediário
+  desta venda ultrapassa o limite, então 400 e nada é gravado (2026-08-07). Dado
+  `limite_credito <= 0` (sem limite definido), então nenhuma venda em crediário é bloqueada por
+  esse motivo, não importa o valor.
 
 ## Ajuda da tela (manual de operação + vídeo) — obrigatório (R22 / §3.7.1)
 
-- **`chave_tela`: `vendas.pdv`** — F2 pesquisa produto (nome), F3 altera quantidade de um item já
-  lançado, F4 limpa a venda em andamento, F5 efetiva a venda (pede cliente, vendedor e forma de
-  pagamento — inclusive Vale-Mercadoria, digitando o número do vale); leitura de código de
-  barras no campo próprio + Enter. Devolução de produtos ganhou tela própria
-  (`docs/telas/devolucao-produtos.md`), fora do PDV. Vender mais do que o disponível na loja não
-  é mais um erro (2026-07-29) — a venda é aceita e o estoque fica negativo. `url_video`: NULL.
+- **`chave_tela`: `pdv.tela`** (`AjudaDaTela.tsx`, entrada criada só em 2026-08-07 — a tela mais
+  usada do sistema tinha ficado sem ajuda documentada até então) — F2 pesquisa produto (nome),
+  F3 altera quantidade de um item já lançado, F4 limpa a venda em andamento, F5 efetiva a venda
+  (pede cliente, vendedor e forma de pagamento — inclusive Vale-Mercadoria, digitando o número
+  do vale); leitura de código de barras no campo próprio + Enter. Devolução de produtos ganhou
+  tela própria (`docs/telas/devolucao-produtos.md`), fora do PDV. Vender mais do que o
+  disponível na loja não é mais um erro (2026-07-29) — a venda é aceita e o estoque fica
+  negativo. Crediário respeita o limite de crédito do cliente quando ele tiver um definido
+  (2026-08-07). `url_video`: NULL.
 
 ## Impacto no banco
 

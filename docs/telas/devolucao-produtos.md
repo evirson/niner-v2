@@ -65,8 +65,18 @@ Reaproveita a tabela `venda_devolucao` (existente desde `V018`, nunca usada até
   resgatado numa venda futura (ver "Resgate no PDV" abaixo) — `false`/`NULL` enquanto não usado.
 
 Ao gravar a devolução, um popup automático (`ComprovanteValeModal.tsx`) mostra o número e o
-valor do vale, com "Salvar PDF" e "Imprimir" — mesmo padrão visual do Comprovante de Recebimento
-de Crediário (térmica 80mm + `jsPDF`, `lib/comprovante.ts`).
+valor do vale, com "Salvar PDF", "Imprimir" e "Enviar por WhatsApp". Até 2026-08-07 usava um
+layout próprio de 42 colunas (fonte Courier, `.comprovante-preview`), mesmo padrão do
+Comprovante de Recebimento de Crediário; **desde 2026-08-07** foi padronizado com o layout de
+**64 colunas / fonte Lucida Console da Papeleta de Venda** (`.papeleta-preview`/
+`.papeleta-imprimir`, `ComprovantePapeletaModal.tsx`) — pedido do dono do produto pra uniformizar
+a impressão dos itens entre os dois comprovantes que saem na mesma bobina térmica física.
+"Enviar por WhatsApp" reaproveita o mesmo mecanismo da Papeleta de Venda/Comprovante de
+Crediário (`comum.arquivocompartilhado`, ver `docs/infra/compartilhamento-arquivo-temporario.md`)
+— como `venda_devolucao` não tem vínculo com cliente (devolução é anônima), não há telefone pra
+pré-preencher, o operador digita na hora. Backend: `ItemDevolucaoResponse` ganhou `sku` e
+`valorTotal` (mesmas colunas de `ItemComprovanteVenda`, PDV) pra reaproveitar a mesma tabela de
+itens da papeleta em vez de duplicar a montagem do layout.
 
 ### Resgate no PDV
 

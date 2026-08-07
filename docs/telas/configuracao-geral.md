@@ -43,9 +43,11 @@ que já é ADMIN-only.
 
 ## Campos do formulário
 
-Tabela `cfg_geral` (V023). Seções: **Vendas**, **Catálogo**, **Estoque** (2026-07-29), **Crediário
-(Fase 2)** — esta última com um aviso de que o módulo de crediário ainda não existe, mas os
-valores já ficam editáveis e prontos (evita retrabalho de UI quando a Fase 2/Q5 chegar).
+Tabela `cfg_geral` (V023). Seções: **Vendas**, **Catálogo**, **Estoque** (2026-07-29),
+**Crediário** — esta última nasceu rotulada "(Fase 2)" com um aviso de que o módulo ainda não
+existia; o crediário saiu do papel em 2026-07-29 (Recebimento de Crediário calcula multa/juros
+automaticamente sobre parcelas vencidas usando esses quatro campos) e o rótulo/aviso da tela
+foram corrigidos só em **2026-08-07**, quando a discrepância foi notada.
 
 | Campo (banco) | Rótulo na tela | Componente | Regra |
 |---|---|---|---|
