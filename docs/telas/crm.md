@@ -7,6 +7,15 @@ planilha Excel. Sem grid de pré-visualização de propósito (ver "Decisões de
 (mesmo dia):** +3 colunas de saída (Valor Total Comprado, Ticket Médio, Nº de Dias sem Comprar —
 ver Item 3), 11 no total.
 
+**Revisão de fluxo (2026-08-07, duas rodadas no mesmo dia — reverte a decisão "sem grid" acima):**
+pedido explícito do dono do produto pra ver o resultado na própria tela antes de exportar. 1ª
+rodada: "Localizar Clientes" carrega uma grid de resultado (cabeçalho fixo, ordenação por coluna,
+total, scroll só nos dados). 2ª rodada, mesmo dia: os filtros/colunas saíram da tela e viraram um
+**popup obrigatório que abre sozinho ao entrar na tela** (com `GaugeProgresso` — o mesmo anel de
+progresso indeterminado da Rotina de Importação de Dados — enquanto a busca roda), e o botão
+"Gerar Planilha Excel" subiu pra linha do título (mesmo lugar de ações primárias como "＋ Novo
+cliente" noutras telas). Ver "Frontend" pra detalhe de cada rodada.
+
 ## Contexto
 
 Ferramenta de segmentação de clientes pra campanha/relacionamento (a essência de um CRM básico):
@@ -18,10 +27,13 @@ use popup quando precisar.
 
 ## Decisões de escopo (não perguntadas — resolvidas por analogia com o resto do sistema)
 
-- **Sem grid de pré-visualização.** O pedido não menciona ver os clientes na tela antes de baixar,
-  só filtrar → gerar. Como a lista pode ter qualquer tamanho, uma grid arriscaria voltar a
+- ~~**Sem grid de pré-visualização.** O pedido não menciona ver os clientes na tela antes de
+  baixar, só filtrar → gerar. Como a lista pode ter qualquer tamanho, uma grid arriscaria voltar a
   precisar de scroll — o requisito mais explícito do pedido. "Gerar Planilha Excel" busca e baixa
-  na mesma ação; o toast de sucesso mostra quantos clientes entraram.
+  na mesma ação; o toast de sucesso mostra quantos clientes entraram.~~ **Revertido em
+  2026-08-07** — pedido explícito de mostrar a grid antes de gerar. O requisito "sem scroll na
+  tela" continua valendo, só que agora resolvido com `.grid-altura-fixa` (scroll contido dentro da
+  grid, igual às telas de Relatório) em vez de não ter grid nenhuma. Ver "Frontend".
 - **Escopo por empresa, silencioso.** `cliente` não é por empresa (compartilhado no tenant), mas
   `venda` é. Sem seletor de empresa na tela (não pedido) — aplicada a mesma regra silenciosa de
   todo relatório do sistema: OPERADOR só enxerga compras da própria empresa ativa (claim `eid`);
@@ -93,7 +105,10 @@ nova consulta.
 
 ## Item 4 — Formato da Geração
 
-Só Planilha Excel (`.xlsx`) — única opção pedida, sem seletor de formato. Gerada 100% no
+Só Planilha Excel (`.xlsx`) — única opção pedida, sem seletor de formato. Desde 2026-08-07 o botão
+"Gerar Planilha Excel" não fica mais numa seção própria no corpo da tela — foi pra linha do título
+(ver "Frontend"); mantido aqui só pela regra de negócio (formato único, exporta o que já foi
+localizado). Gerada 100% no
 navegador com a lib **`write-excel-file`**, não `xlsx`/SheetJS: a `xlsx` publicada no npm tem uma
 vulnerabilidade alta (prototype pollution) **sem correção disponível** — o SheetJS moveu a
 distribuição de versões corrigidas pro CDN próprio, fora do fluxo padrão `npm install`. Avaliada
@@ -143,24 +158,58 @@ padrão já usado em `RelatorioContasReceberService.getLongOuNulo`: `rs.getLong(
 
 `web/src/pages/crm/` — `CrmForm.tsx` (tela principal) + `FiltrosClientesModal.tsx` +
 `FiltrosProdutosModal.tsx` (os 2 popups, ambos `.modal-overlay`/`.modal modal-largo`, estado
-controlado pelo pai — sem "aplicar/cancelar" separado, já que nada acontece de verdade até "Gerar
-Planilha Excel", editar ao vivo é seguro). `web/src/lib/crm.ts` reúne tipos, chamadas de API e
+controlado pelo pai — sem "aplicar/cancelar" separado, já que nada acontece de verdade até
+"Localizar Clientes", editar ao vivo é seguro). `web/src/lib/crm.ts` reúne tipos, chamadas de API,
 `exportarClientesCrmExcel` (monta o schema de colunas do `write-excel-file` a partir da lista de
-`ColunaSaidaCrm` marcada).
-
-Tela principal: cabeçalho padrão + 2 botões que abrem os popups (mostram quantos filtros estão
-ativos, ex. "Filtros de Clientes (3 ativos)") + checklist compacto de 11 checkboxes (Dados Para
-Geração, era 8 antes da rodada 2, todos marcados por padrão) + um botão só ("Gerar Planilha
-Excel"). Cabe inteira sem scroll em qualquer resolução razoável — verificado ao vivo.
+`ColunaSaidaCrm` marcada) e, desde 2026-08-07, `valorOrdenacaoCrm`/`formatarCelulaCrm` (valor bruto
+pra ordenar vs. texto formatado pra célula da grid — mascarado/`R$`/`dd/mm/aaaa` conforme a
+coluna).
 
 Novo helper de máscara **`dd-mm`** (sem ano) em `web/src/lib/masks.ts`
 (`mascararDiaMes`/`diaMesValido`) — só pro filtro de aniversário, que é um dia recorrente todo ano,
 não uma data de um ano específico.
 
-**Testado ao vivo:** popup de Filtros de Clientes (todos os 8 campos, dropdown de categoria
-carregando dado real do tenant), popup de Filtros de Produtos Comprados, geração de planilha sem
-filtro nenhum (3 clientes reais do tenant de teste, arquivo `.xlsx` válido conferido byte a byte —
-cabeçalhos certos, dados certos, incluindo Celular = `cliente.telefone`).
+### Fluxo da tela (2026-08-07, duas rodadas)
+
+**1ª rodada — grid de resultado.** "Localizar Clientes" (`useMutation` chamando
+`buscarClientesCrm`) carrega a lista na própria tela antes de exportar. A grid usa o mesmo padrão
+de cabeçalho fixo + ordenação por coluna do resto do sistema (`.th-ordenavel`, setas
+`⇅`/`▲`/`▼`, `aria-sort`), mas **100% client-side**: como não há paginação (é sempre o resultado
+inteiro do filtro, pensado pra exportação), ordenar não precisa de round-trip — só reordena
+(`useMemo`) o array já carregado, usando o valor bruto (`valorOrdenacaoCrm`), nunca o texto já
+formatado (evita ordenar `dd/mm/aaaa` como string). Scroll contido só na grid via
+`.table-wrap.grid-altura-fixa` (mesmo mecanismo das telas de Relatório: `max-height: 60vh`,
+cabeçalho `position: sticky; top: 0` — já é regra global do projeto — e `<tfoot>` com o total
+também sticky no rodapé da grid) — o resto da tela não rola.
+
+**2ª rodada — popup obrigatório + gauge.** Os filtros e o checklist de colunas saíram do corpo da
+tela e viraram um único popup (`.modal-overlay`/`.modal modal-largo`, sem `onClick` de fechar no
+overlay — só sai clicando em "Localizar Clientes", de propósito, já que a ação tem efeito real
+de rede) que **abre sozinho ao montar a tela** (`useState(true)`). Dentro dele: os 2 botões que
+abrem os popups de filtro (aninhados, mostram quantos filtros estão ativos) + o checklist de 11
+checkboxes de colunas. Ao clicar em "Localizar Clientes": o popup fecha, `clientes` volta a
+`null` e a busca dispara — enquanto `localizar.isPending`, a tela mostra só um
+`<GaugeProgresso rotulo="Localizando clientes…" />` (componente já existente, criado
+2026-08-06 pra Rotina de Importação de Dados — reaproveitado sem nenhuma mudança); ao terminar, a
+grid aparece. Um botão novo, **"Alterar Filtros e Colunas"**, reabre o mesmo popup mantendo a
+seleção atual (filtros e colunas não se perdem).
+
+**Botão "Gerar Planilha Excel" na linha do título.** Não fica mais numa seção do corpo — foi pra
+`topbar-acoes`, ao lado do ícone de ajuda (mesmo lugar de ações primárias como "＋ Novo cliente"
+noutras telas de cadastro). Fica desabilitado até localizar clientes ao menos uma vez
+(`!clientes || clientes.length === 0`) e continua exportando só o que já está carregado, sem
+buscar de novo.
+
+**Testado ao vivo (Chrome, `mcp__claude-in-chrome`):** popup abrindo sozinho ao entrar; "Localizar
+Clientes" fechando o popup e carregando a grid (7195 clientes reais do tenant de teste); clique no
+cabeçalho "Nome" alternando ASC/DESC de verdade (conferido nome do primeiro registro mudando de
+"ADELIR..." pra "ZENAIDE..."); cabeçalho e rodapé (`Total: N clientes`) `position: sticky`
+confirmados via DOM enquanto a grid é rolada por `javascript_tool`; "Gerar Planilha Excel"
+desabilitado (`opacity: 0.6`) antes de localizar e habilitado depois; "Alterar Filtros e Colunas"
+reabrindo o popup com a seleção anterior intacta. Geração de planilha em si (sem filtro nenhum, 3
+clientes reais, arquivo `.xlsx` válido conferido byte a byte) testada na 1ª implementação
+(2026-08-05) e não voltou a ser reconferida byte a byte nesta revisão de fluxo — só o gatilho
+(habilitado/desabilitado) mudou de lugar, não a lógica de exportação em si.
 
 ## Pendências explícitas, fora do escopo desta tela
 

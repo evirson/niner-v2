@@ -154,9 +154,46 @@ passaram a ter cabeçalho/rodapé fixos, com scroll só na pré-visualização.
 
 **Sessão de 2026-08-05:** Configuração de Etiqueta passou por três rodadas de refinamento (campos 10→4 concatenados na Descrição, máximo de colunas do rolo 6→4, cabeçalho em 3 cartões, botão **Testar Impressão**, código de barras `EAN13` de verdade, quadro no Teste de Impressão, painel de propriedades virou popup — `docs/telas/configuracao-etiqueta.md`) mais dois bugs reais corrigidos em Produto (margem de venda acima de 100% rejeitada; busca de produto de exemplo quase sempre vazia). Nasceram duas telas novas no grupo **Relatórios**, saindo de Implementações Futuras: **CRM** (`cadastros.crm`, `docs/telas/crm.md`) — filtra clientes por perfil e histórico de compras, exporta 11 colunas pra planilha Excel (`write-excel-file`) — e **Emissão de Etiqueta de Produtos** (`configuracao.etiquetaemissao`, `docs/telas/etiqueta-emissao.md`) — 3 formas de selecionar produtos (Individual, com criação automática de SKU e obrigatoriedade de variação por produto; Por Entradas; Por Estoques), grade local editável, imprime em lote com produto diferente por etiqueta, reaproveitando o layout já configurado em Configuração de Etiqueta. Nasceu `ProdutoBarraService` (`com.vetor.niner.catalogo`) — acha-ou-cria uma variação de produto chamando `gerar_ean13_interno()`, primeira peça de domínio real sobre `produto_barra`. Ver linha do tempo de 2026-08-05 (topo) pro detalhe completo de cada rodada. Suíte de backend: **386 testes**.
 
+**Sessão de 2026-08-07:** o comprovante de Recebimento de Crediário e a Papeleta de Venda (com suas reimpressões) ganharam **envio por WhatsApp** (`comum.arquivocompartilhado` — cache de PDF em memória, sem custo, sem object storage, token expira em 24h, limite de 20 arquivos/tenant somando os 4 fluxos) e **layout fixo** (título/rodapé sempre visíveis, só a pré-visualização rola). Na sequência, a tela de **CRM** passou por duas rodadas revisando o fluxo original de 2026-08-05: primeiro ganhou uma **grid de resultado** (cabeçalho fixo, ordenação por coluna, total, scroll só nos dados), depois os filtros/colunas viraram um **popup obrigatório que abre sozinho ao entrar na tela** (com `GaugeProgresso` — reaproveitado da Rotina de Importação de Dados — enquanto a busca roda) e o botão "Gerar Planilha Excel" subiu pra linha do título. Ver linha do tempo de 2026-08-07 (topo, duas entradas) pro detalhe completo.
+
 ---
 
 ## Linha do tempo
+
+### 2026-08-07 — CRM: grid de resultado, popup obrigatório de filtros + gauge, botão no título
+
+Continuação da sessão do dia, depois do envio de comprovante por WhatsApp (entrada seguinte). Duas
+rodadas de pedidos do dono do produto revisando o fluxo da tela de CRM (`docs/telas/crm.md`), que
+desde 2026-08-05 só filtrava e baixava direto, sem mostrar nada na tela.
+
+1. **Grid de resultado (1ª rodada)** — pedido: botão "Localizar Clientes", grid com título fixo e
+   ordenação por coluna (como o resto do sistema), total de clientes, scroll só nos dados. Sem
+   mudança de backend: `web/src/lib/crm.ts` ganhou `valorOrdenacaoCrm` (valor bruto pra comparar —
+   nunca o texto já formatado, que ordenaria `dd/mm/aaaa` como string) e `formatarCelulaCrm`
+   (texto de cada célula). A grid usa `.table-wrap.grid-altura-fixa` (mesmo mecanismo das telas de
+   Relatório — `max-height: 60vh`, cabeçalho `sticky` já é regra global, `<tfoot>` com o total
+   também `sticky`) e o padrão `.th-ordenavel`/`⇅`/`▲`/`▼`/`aria-sort` de sempre, 100%
+   client-side (`useMemo`, sem round-trip pra reordenar — a resposta já é o resultado inteiro do
+   filtro, pensado pra exportação, sem paginação). Testado ao vivo no Chrome
+   (`mcp__claude-in-chrome`): 7195 clientes reais do tenant de teste, ordenação ASC/DESC
+   conferida, `overflow-y`/`position: sticky` do cabeçalho e do rodapé confirmados via DOM.
+2. **Popup obrigatório + `GaugeProgresso` (2ª rodada, mesmo dia)** — pedido: ao entrar na tela,
+   abrir um popup com os filtros e os dados pra geração; ao sair do popup, mostrar uma "gauge" de
+   localização de dados e só depois a grid. Os filtros/checklist de colunas saíram do corpo da
+   tela e viraram um único popup (`.modal-overlay`/`.modal modal-largo`, sem fechar ao clicar fora
+   — só via "Localizar Clientes", de propósito, já que a ação dispara uma busca de verdade) que
+   **abre sozinho ao montar a tela**. A "gauge" pedida já existia no projeto —
+   `GaugeProgresso.tsx`, criado 2026-08-06 pra Rotina de Importação de Dados (anel de progresso
+   indeterminado, sobe suave até ~92% enquanto espera) — reaproveitado sem nenhuma mudança.
+   "Alterar Filtros e Colunas" (botão novo) reabre o mesmo popup mantendo a seleção atual.
+3. **Botão "Gerar Planilha Excel" pra linha do título (pedido em seguida, mesmo dia)** — saiu da
+   seção "Formato da Geração" do corpo (removida) e foi pra `topbar-acoes`, ao lado do ícone de
+   ajuda — mesmo lugar de ações primárias como "＋ Novo cliente" nas telas de cadastro. Continua
+   desabilitado até localizar clientes ao menos uma vez.
+
+`AjudaDaTela.tsx` (`crm.tela`) atualizada pra descrever o fluxo novo. Sem migration, sem endpoint
+novo — mudança 100% frontend. `npx tsc --noEmit` limpo a cada rodada; cada uma testada ao vivo no
+Chrome antes de seguir pra próxima.
 
 ### 2026-08-07 — Envio de comprovante por WhatsApp (crediário + venda) e layout fixo dos popups
 
