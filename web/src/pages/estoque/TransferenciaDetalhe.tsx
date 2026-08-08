@@ -104,7 +104,7 @@ export default function TransferenciaDetalhe() {
                     {transferencia.itens.map((item) => (
                       <tr key={item.idVariacao}>
                         <td>{item.descricaoProduto}</td>
-                        <td>{[item.variacaoLinha, item.variacaoColuna].filter(Boolean).join(' · ') || '—'}</td>
+                        <td>{[item.variacaoCor, item.variacaoTamanho].filter(Boolean).join(' · ') || '—'}</td>
                         <td className="mono">{item.sku}</td>
                         <td className="mono" style={{ textAlign: 'right' }}>
                           {formatarQuantidade(item.qtd, permiteQtdDecimal)}

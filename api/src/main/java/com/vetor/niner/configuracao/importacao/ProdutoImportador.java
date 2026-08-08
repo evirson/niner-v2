@@ -1,10 +1,13 @@
 package com.vetor.niner.configuracao.importacao;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.vetor.niner.catalogo.GradeDtos.GradeResponse;
+import com.vetor.niner.catalogo.GradeService;
 import com.vetor.niner.catalogo.ProdutoBarraDtos.ProdutoBarraResponse;
 import com.vetor.niner.catalogo.ProdutoBarraService;
 import com.vetor.niner.catalogo.ProdutoDtos.ProdutoRequest;
 import com.vetor.niner.catalogo.ProdutoService;
+import com.vetor.niner.configuracao.geral.ConfiguracaoGeralService;
 import com.vetor.niner.configuracao.importacao.ImportacaoCsv.LinhaCsv;
 import com.vetor.niner.configuracao.importacao.ImportacaoDtos.LinhaErro;
 import com.vetor.niner.configuracao.importacao.ImportacaoDtos.RelatorioImportacao;
@@ -33,29 +36,38 @@ import java.util.Set;
  * Importação de {@code produto} (docs/telas/importacao-dados.md, seção "3. produto") — a mais
  * complexa das quatro. Formato achatado: cada linha do CSV é uma variação (cor/tamanho) de um
  * produto maior. Ver {@link #analisar} para o passo prévio (mapeamento de colunas de estoque →
- * empresa + rótulo de variante sugerido), consumido por um endpoint dedicado
- * ({@code POST /api/v1/importacao/produto/analise}) — fora da interface genérica
- * {@link ImportadorDeTabela} porque nenhuma outra tabela precisa desse tipo de reconhecimento
- * prévio estruturado.
+ * empresa), consumido por um endpoint dedicado ({@code POST /api/v1/importacao/produto/analise})
+ * — fora da interface genérica {@link ImportadorDeTabela} porque nenhuma outra tabela precisa
+ * desse tipo de reconhecimento prévio estruturado.
+ *
+ * <p><b>Cor/grade (2026-08-08):</b> {@code DESCRICAO_VARIANTE_LINHA}/{@code
+ * DESCRICAO_VARIANTE_COLUNA} viraram {@code DESCRICAO_COR}/{@code DESCRICAO_TAMANHO}, e o antigo
+ * "rótulo de variante" escolhido interativamente após o upload deixou de existir — cor/tamanho
+ * têm nome fixo no sistema todo, não mais configurável por produto. No lugar, quando o tenant usa
+ * cor/grade ({@code cfg_geral.cfg_usa_cor_grade}), toda linha com {@code DESCRICAO_TAMANHO}
+ * precisa também trazer {@code NOME_GRADE} — o nome da grade daquele produto (achada por nome, ou
+ * criada na hora com os tamanhos distintos encontrados nas linhas do grupo, na ordem de primeira
+ * aparição). Quando o tenant não usa cor/grade, essas três colunas são ignoradas (mesmo princípio
+ * de "campo oculto ⇒ servidor ignora" usado no resto do sistema) — produto nasce com 1 SKU só.
  */
 @Service
 public class ProdutoImportador implements ImportadorDeTabela {
 
     private static final int QTD_COLUNAS_ESTOQUE = 9;
 
-    private static final Set<String> CORES_CONHECIDAS = Set.of(
-            "AZUL", "VERMELHO", "VERDE", "AMARELO", "PRETO", "BRANCO", "ROSA", "CINZA", "MARROM",
-            "ROXO", "LARANJA", "BEGE", "DOURADO", "PRATA", "VINHO", "AZUL MARINHO", "VERDE MUSGO", "OFF WHITE");
-    private static final Set<String> TAMANHOS_LETRA = Set.of("PP", "P", "M", "G", "GG", "XG", "XGG", "UNICO", "U");
-
     private final JdbcClient jdbc;
     private final ProdutoService produtoService;
     private final ProdutoBarraService produtoBarraService;
+    private final ConfiguracaoGeralService configuracaoGeralService;
+    private final GradeService gradeService;
 
-    public ProdutoImportador(JdbcClient jdbc, ProdutoService produtoService, ProdutoBarraService produtoBarraService) {
+    public ProdutoImportador(JdbcClient jdbc, ProdutoService produtoService, ProdutoBarraService produtoBarraService,
+                              ConfiguracaoGeralService configuracaoGeralService, GradeService gradeService) {
         this.jdbc = jdbc;
         this.produtoService = produtoService;
         this.produtoBarraService = produtoBarraService;
+        this.configuracaoGeralService = configuracaoGeralService;
+        this.gradeService = gradeService;
     }
 
     @Override
@@ -70,39 +82,33 @@ public class ProdutoImportador implements ImportadorDeTabela {
 
     @Override
     public String descricao() {
-        return "Produtos, variações (cor/tamanho) e saldo inicial de estoque por empresa. Pede análise prévia do arquivo.";
+        return "Produtos, variações (cor/tamanho, quando o tenant usa grade) e saldo inicial de estoque por empresa. Pede análise prévia do arquivo.";
     }
 
     @Override
     public byte[] modeloCsv() {
         StringBuilder cabecalho = new StringBuilder(
                 "MARCA;REFERENCIA;DESCRICAO;PRECO_CUSTO;PERCENTUAL_VENDA;PRECO_VENDA;DATA_INICIO_OFERTA;"
-                        + "DATA_FINAL_OFERTA;PRECO_OFERTA;CODIGO_NCM;PESO_BRUTO;PESO_LIQUIDO;DESCRICAO_VARIANTE_LINHA;"
-                        + "DESCRICAO_VARIANTE_COLUNA;EAN_CODIGO_BARRAS");
+                        + "DATA_FINAL_OFERTA;PRECO_OFERTA;CODIGO_NCM;PESO_BRUTO;PESO_LIQUIDO;NOME_GRADE;DESCRICAO_COR;"
+                        + "DESCRICAO_TAMANHO;EAN_CODIGO_BARRAS");
         for (int i = 1; i <= QTD_COLUNAS_ESTOQUE; i++) {
             cabecalho.append(";QUANTIDADE_ESTOQUE_").append(i);
         }
-        String linha1 = "BEIRA MAR;SAND-001;SANDALIA RASTEIRA VERAO;35,00;100;70,00;;;;6402.99.90;0,350;0,300;AZUL;M;7891234567895;10;;;;;;;;";
-        String linha2 = "BEIRA MAR;SAND-001;SANDALIA RASTEIRA VERAO;35,00;100;70,00;;;;6402.99.90;0,350;0,300;AZUL;G;;5;;;;;;;;";
+        String linha1 = "BEIRA MAR;SAND-001;SANDALIA RASTEIRA VERAO;35,00;100;70,00;;;;6402.99.90;0,350;0,300;GRADE 35-40;AZUL;36;7891234567895;10;;;;;;;;";
+        String linha2 = "BEIRA MAR;SAND-001;SANDALIA RASTEIRA VERAO;35,00;100;70,00;;;;6402.99.90;0,350;0,300;GRADE 35-40;AZUL;37;;5;;;;;;;;";
         return (cabecalho + "\r\n" + linha1 + "\r\n" + linha2 + "\r\n").getBytes(StandardCharsets.UTF_8);
     }
 
     // ---------------------------------------------------------------------------------------
-    // Passo prévio: análise do arquivo (colunas de estoque com dado + rótulo de variante sugerido)
+    // Passo prévio: análise do arquivo (colunas de estoque com dado)
     // ---------------------------------------------------------------------------------------
 
-    public record GrupoDetectado(String chave, String descricao, String marca, String referencia,
-                                  boolean usaLinha, boolean usaColuna,
-                                  String rotuloLinhaSugerido, String rotuloColunaSugerido) {
-    }
-
-    public record AnaliseProduto(List<String> colunasEstoqueComDado, List<GrupoDetectado> grupos) {
+    public record AnaliseProduto(List<String> colunasEstoqueComDado) {
     }
 
     @Transactional(readOnly = true)
     public AnaliseProduto analisar(MultipartFile arquivo) {
         List<LinhaCsv> linhas = ImportacaoCsv.ler(arquivo);
-        Map<String, List<LinhaCsv>> grupos = agrupar(linhas);
 
         List<String> colunas = new ArrayList<>();
         for (int i = 1; i <= QTD_COLUNAS_ESTOQUE; i++) {
@@ -115,29 +121,7 @@ public class ProdutoImportador implements ImportadorDeTabela {
                 colunas.add(coluna);
             }
         }
-
-        List<GrupoDetectado> detectados = new ArrayList<>();
-        for (Map.Entry<String, List<LinhaCsv>> e : grupos.entrySet()) {
-            List<LinhaCsv> linhasGrupo = e.getValue();
-            LinhaCsv primeira = linhasGrupo.get(0);
-            Set<String> valoresLinha = new LinkedHashSet<>();
-            Set<String> valoresColuna = new LinkedHashSet<>();
-            for (LinhaCsv l : linhasGrupo) {
-                String vl = l.valor("DESCRICAO_VARIANTE_LINHA");
-                String vc = l.valor("DESCRICAO_VARIANTE_COLUNA");
-                if (vl != null) valoresLinha.add(vl.toUpperCase(Locale.ROOT));
-                if (vc != null) valoresColuna.add(vc.toUpperCase(Locale.ROOT));
-            }
-            detectados.add(new GrupoDetectado(
-                    e.getKey(),
-                    valorOu(primeira, "DESCRICAO", ""),
-                    valorOu(primeira, "MARCA", ""),
-                    valorOu(primeira, "REFERENCIA", ""),
-                    !valoresLinha.isEmpty(), !valoresColuna.isEmpty(),
-                    sugerirRotulo(valoresLinha, false), sugerirRotulo(valoresColuna, true)));
-        }
-
-        return new AnaliseProduto(colunas, detectados);
+        return new AnaliseProduto(colunas);
     }
 
     // ---------------------------------------------------------------------------------------
@@ -148,7 +132,7 @@ public class ProdutoImportador implements ImportadorDeTabela {
     @Transactional
     public RelatorioImportacao processar(List<LinhaCsv> linhas, JsonNode escolhas, boolean confirmar, Jwt jwt) {
         Map<Integer, Long> mapeamentoEmpresas = lerMapeamentoEmpresas(escolhas);
-        JsonNode rotulos = escolhas == null ? null : escolhas.get("rotulos");
+        boolean usaCorGrade = configuracaoGeralService.usaCorGrade();
 
         Map<String, List<LinhaCsv>> grupos = agrupar(linhas);
         List<LinhaErro> erros = new ArrayList<>();
@@ -161,8 +145,7 @@ public class ProdutoImportador implements ImportadorDeTabela {
         for (Map.Entry<String, List<LinhaCsv>> entradaGrupo : grupos.entrySet()) {
             List<LinhaCsv> linhasGrupo = entradaGrupo.getValue();
             try {
-                importadas += processarGrupo(entradaGrupo.getKey(), linhasGrupo, rotulos, mapeamentoEmpresas,
-                        movimentoPorEmpresa, avisos);
+                importadas += processarGrupo(linhasGrupo, usaCorGrade, mapeamentoEmpresas, movimentoPorEmpresa, avisos);
             } catch (RuntimeException e) {
                 for (LinhaCsv l : linhasGrupo) {
                     erros.add(LinhaErro.de(l.numeroLinha(), e));
@@ -181,39 +164,25 @@ public class ProdutoImportador implements ImportadorDeTabela {
     /** Processa um grupo (= um produto) inteiro; retorna quantas linhas do CSV foram cobertas
      *  por variações criadas/atualizadas com sucesso. Lança se o produto em si não puder ser
      *  criado — nesse caso NENHUMA linha do grupo é considerada importada (ver chamador). */
-    private int processarGrupo(String chaveGrupo, List<LinhaCsv> linhasGrupo, JsonNode rotulos,
-                                Map<Integer, Long> mapeamentoEmpresas, Map<Long, Long> movimentoPorEmpresa,
-                                List<String> avisos) {
+    private int processarGrupo(List<LinhaCsv> linhasGrupo, boolean usaCorGrade, Map<Integer, Long> mapeamentoEmpresas,
+                                Map<Long, Long> movimentoPorEmpresa, List<String> avisos) {
         LinhaCsv vencedora = escolherVencedora(linhasGrupo);
         String descricao = exigir(vencedora, "DESCRICAO");
         String marca = vencedora.valor("MARCA");
         String referencia = vencedora.valor("REFERENCIA");
 
-        boolean grupoUsaLinha = linhasGrupo.stream().anyMatch(l -> l.valor("DESCRICAO_VARIANTE_LINHA") != null);
-        boolean grupoUsaColuna = linhasGrupo.stream().anyMatch(l -> l.valor("DESCRICAO_VARIANTE_COLUNA") != null);
-        String rotuloLinha = null;
-        String rotuloColuna = null;
-        if (rotulos != null && rotulos.has(chaveGrupo)) {
-            JsonNode r = rotulos.get(chaveGrupo);
-            rotuloLinha = r.hasNonNull("linha") ? r.get("linha").asText(null) : null;
-            rotuloColuna = r.hasNonNull("coluna") ? r.get("coluna").asText(null) : null;
-        }
-        if (grupoUsaLinha && (rotuloLinha == null || rotuloLinha.isBlank())) {
-            throw new IllegalArgumentException("Falta o rótulo da variante em linha (ex.: \"Cor\") para este produto.");
-        }
-        if (grupoUsaColuna && (rotuloColuna == null || rotuloColuna.isBlank())) {
-            throw new IllegalArgumentException("Falta o rótulo da variante em coluna (ex.: \"Tamanho\") para este produto.");
-        }
+        Long idGrade = usaCorGrade ? resolverGrade(linhasGrupo) : null;
 
-        long idProduto = obterOuCriarProduto(vencedora, descricao, marca, referencia, rotuloLinha, rotuloColuna);
+        long idProduto = obterOuCriarProduto(vencedora, descricao, marca, referencia, idGrade);
 
-        // Une linhas do grupo pela combinação (variante linha, variante coluna) — mesma variação
-        // física, quantidades de estoque somadas.
+        // Une linhas do grupo pela combinação (cor, tamanho) — mesma variação física, quantidades
+        // de estoque somadas.
         Map<String, List<LinhaCsv>> subgrupos = new LinkedHashMap<>();
         for (LinhaCsv l : linhasGrupo) {
-            String vl = l.valor("DESCRICAO_VARIANTE_LINHA");
-            String vc = l.valor("DESCRICAO_VARIANTE_COLUNA");
-            String chaveSub = (vl == null ? "" : vl.toUpperCase(Locale.ROOT)) + "||" + (vc == null ? "" : vc.toUpperCase(Locale.ROOT));
+            String cor = l.valor("DESCRICAO_COR");
+            String tamanho = l.valor("DESCRICAO_TAMANHO");
+            String chaveSub = (cor == null ? "" : cor.toUpperCase(Locale.ROOT)) + "||"
+                    + (tamanho == null ? "" : tamanho.toUpperCase(Locale.ROOT));
             subgrupos.computeIfAbsent(chaveSub, k -> new ArrayList<>()).add(l);
         }
 
@@ -224,8 +193,34 @@ public class ProdutoImportador implements ImportadorDeTabela {
         return cobertas;
     }
 
-    private long obterOuCriarProduto(LinhaCsv vencedora, String descricao, String marca, String referencia,
-                                      String rotuloLinha, String rotuloColuna) {
+    /** Acha (ou cria) a grade deste grupo a partir de {@code NOME_GRADE} + os tamanhos distintos
+     *  em {@code DESCRICAO_TAMANHO} (ordem de primeira aparição no arquivo). Exigido — tenant usa
+     *  cor/grade, então todo produto precisa de uma (mesma regra de {@code ProdutoService}). */
+    private Long resolverGrade(List<LinhaCsv> linhasGrupo) {
+        Set<String> nomesGrade = new LinkedHashSet<>();
+        LinkedHashSet<String> tamanhos = new LinkedHashSet<>();
+        for (LinhaCsv l : linhasGrupo) {
+            String nomeGrade = l.valor("NOME_GRADE");
+            if (nomeGrade != null && !nomeGrade.isBlank()) {
+                nomesGrade.add(nomeGrade.trim().toUpperCase(Locale.ROOT));
+            }
+            String tamanho = l.valor("DESCRICAO_TAMANHO");
+            if (tamanho != null && !tamanho.isBlank()) {
+                tamanhos.add(tamanho.trim().toUpperCase(Locale.ROOT));
+            }
+        }
+        if (nomesGrade.isEmpty()) {
+            throw new IllegalArgumentException("NOME_GRADE é obrigatório — este tenant usa cor/grade (Parâmetros do Sistema).");
+        }
+        if (nomesGrade.size() > 1) {
+            throw new IllegalArgumentException("NOME_GRADE divergente entre linhas do mesmo produto: " + nomesGrade + ".");
+        }
+        List<Long> idsTamanho = tamanhos.stream().map(this::idTamanhoOuCriar).toList();
+        GradeResponse grade = gradeService.obterOuCriarPorNome(nomesGrade.iterator().next(), idsTamanho);
+        return grade.idGrade();
+    }
+
+    private long obterOuCriarProduto(LinhaCsv vencedora, String descricao, String marca, String referencia, Long idGrade) {
         String descricaoN = descricao.trim().toUpperCase(Locale.ROOT);
         String marcaN = marca == null ? "" : marca.trim().toUpperCase(Locale.ROOT);
         String referenciaN = referencia == null ? "" : referencia.trim().toUpperCase(Locale.ROOT);
@@ -269,7 +264,7 @@ public class ProdutoImportador implements ImportadorDeTabela {
                 ncmExistenteOuNulo(vencedora.valor("CODIGO_NCM")),
                 ImportacaoCsv.decimal("PESO_BRUTO", vencedora.valor("PESO_BRUTO")),
                 ImportacaoCsv.decimal("PESO_LIQUIDO", vencedora.valor("PESO_LIQUIDO")),
-                rotuloLinha, rotuloColuna, true, List.of());
+                idGrade, true, List.of());
         return produtoService.criar(req).idProduto();
     }
 
@@ -298,10 +293,10 @@ public class ProdutoImportador implements ImportadorDeTabela {
     private int processarVariacao(long idProduto, List<LinhaCsv> subgrupo, Map<Integer, Long> mapeamentoEmpresas,
                                    Map<Long, Long> movimentoPorEmpresa, List<String> avisos) {
         LinhaCsv primeira = subgrupo.get(0);
-        Long idVarianteLinha = idVarianteOuNulo(primeira.valor("DESCRICAO_VARIANTE_LINHA"), true);
-        Long idVarianteColuna = idVarianteOuNulo(primeira.valor("DESCRICAO_VARIANTE_COLUNA"), false);
+        Long idCor = idCorOuNulo(primeira.valor("DESCRICAO_COR"));
+        Long idTamanho = idTamanhoOuNulo(primeira.valor("DESCRICAO_TAMANHO"));
 
-        ProdutoBarraResponse variacao = produtoBarraService.obterOuCriar(idProduto, idVarianteLinha, idVarianteColuna);
+        ProdutoBarraResponse variacao = produtoBarraService.obterOuCriar(idProduto, idCor, idTamanho);
         atualizarEanSeNecessario(variacao, subgrupo, avisos);
 
         // Soma quantidade por coluna de estoque mapeada, através de todas as linhas do subgrupo
@@ -373,13 +368,25 @@ public class ProdutoImportador implements ImportadorDeTabela {
         }
     }
 
-    private Long idVarianteOuNulo(String descricao, boolean linha) {
+    private Long idCorOuNulo(String descricao) {
+        return idOuNulo("cfg_cor", "id_cor", descricao);
+    }
+
+    private Long idTamanhoOuNulo(String descricao) {
+        return idOuNulo("cfg_tamanho", "id_tamanho", descricao);
+    }
+
+    private long idTamanhoOuCriar(String descricao) {
+        return idOuNulo("cfg_tamanho", "id_tamanho", descricao);
+    }
+
+    /** Acha (ou cria) a linha de {@code cfg_cor}/{@code cfg_tamanho} com essa descrição — mesmo
+     *  princípio de find-or-create usado no resto da importação (fornecedor/categoria por nome). */
+    private Long idOuNulo(String tabela, String coluna, String descricao) {
         if (descricao == null || descricao.isBlank()) {
             return null;
         }
         String d = descricao.trim().toUpperCase(Locale.ROOT);
-        String tabela = linha ? "cfg_variante_linha" : "cfg_variante_coluna";
-        String coluna = linha ? "id_variante_linha" : "id_variante_coluna";
         Optional<Long> existente = jdbc.sql(
                         "SELECT " + coluna + " FROM " + tabela + " WHERE id_tenant = plataforma.tenant_atual() AND descricao = ?")
                 .param(d).query(Long.class).optional();
@@ -440,28 +447,6 @@ public class ProdutoImportador implements ImportadorDeTabela {
         }
     }
 
-    private static String sugerirRotulo(Set<String> valores, boolean coluna) {
-        if (valores.isEmpty()) {
-            return null;
-        }
-        if (valores.stream().allMatch(CORES_CONHECIDAS::contains)) {
-            return "Cor";
-        }
-        if (valores.stream().allMatch(v -> TAMANHOS_LETRA.contains(v) || tamanhoNumericoPlausivel(v))) {
-            return "Tamanho";
-        }
-        return coluna ? "Variação em Coluna" : "Variação em Linha";
-    }
-
-    private static boolean tamanhoNumericoPlausivel(String v) {
-        try {
-            int n = Integer.parseInt(v);
-            return n >= 33 && n <= 48;
-        } catch (NumberFormatException e) {
-            return false;
-        }
-    }
-
     /** {@code escolhas.mapeamentoEmpresas}: {@code {"QUANTIDADE_ESTOQUE_1": 10, "QUANTIDADE_ESTOQUE_3": 12}}
      *  — chave = nome da coluna, valor = id da empresa. Colunas do arquivo sem dado nenhum não
      *  precisam estar aqui (o front só pergunta pelas que {@link #analisar} detectou com dado). */
@@ -480,11 +465,6 @@ public class ProdutoImportador implements ImportadorDeTabela {
             mapa.put(numero, campo.getValue().asLong());
         }
         return mapa;
-    }
-
-    private static String valorOu(LinhaCsv l, String coluna, String padrao) {
-        String v = l.valor(coluna);
-        return v == null ? padrao : v;
     }
 
     private static String exigir(LinhaCsv l, String coluna) {

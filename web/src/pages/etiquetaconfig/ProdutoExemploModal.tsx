@@ -4,8 +4,8 @@ import { buscarProdutosExemplo, type ProdutoExemplo } from '../../lib/etiquetaCo
 import { formatarMoeda } from '../../lib/masks'
 
 function rotuloVariacao(p: ProdutoExemplo): string | null {
-  if (!p.variacaoLinha && !p.variacaoColuna) return null
-  return [p.variacaoLinha, p.variacaoColuna].filter(Boolean).join(' · ')
+  if (!p.variacaoCor && !p.variacaoTamanho) return null
+  return [p.variacaoCor, p.variacaoTamanho].filter(Boolean).join(' · ')
 }
 
 /**

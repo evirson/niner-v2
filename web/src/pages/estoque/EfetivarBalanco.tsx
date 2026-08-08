@@ -108,8 +108,8 @@ export default function EfetivarBalanco() {
                   <thead>
                     <tr>
                       <th>Descrição</th>
-                      <th>Variação Linha</th>
-                      <th>Variação Coluna</th>
+                      <th>Cor</th>
+                      <th>Tamanho</th>
                       <th style={{ textAlign: 'right' }}>Qtd Estoque</th>
                       <th style={{ textAlign: 'right' }}>Qtd Contada</th>
                       <th style={{ textAlign: 'right' }}>Diferença</th>
@@ -119,8 +119,8 @@ export default function EfetivarBalanco() {
                     {linhas.map((linha) => (
                       <tr key={linha.idVariacao}>
                         <td>{linha.descricaoProduto}</td>
-                        <td>{linha.variacaoLinha ?? '—'}</td>
-                        <td>{linha.variacaoColuna ?? '—'}</td>
+                        <td>{linha.variacaoCor ?? '—'}</td>
+                        <td>{linha.variacaoTamanho ?? '—'}</td>
                         <td className="mono" style={{ textAlign: 'right' }}>{formatarQuantidade(linha.qtdEstoque, permiteQtdDecimal)}</td>
                         <td className="mono" style={{ textAlign: 'right' }}>{formatarQuantidade(linha.qtdContada, permiteQtdDecimal)}</td>
                         <td className="mono" style={{ textAlign: 'right', color: corDiferenca(linha.diferenca) }}>

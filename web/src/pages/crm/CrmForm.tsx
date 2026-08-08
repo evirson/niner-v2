@@ -289,8 +289,8 @@ export default function CrmForm() {
       {filtrosProdutosAberto && (
         <FiltrosProdutosModal
           categoriasProduto={opcoes?.categoriasProduto ?? []}
-          variantesLinha={opcoes?.variantesLinha ?? []}
-          variantesColuna={opcoes?.variantesColuna ?? []}
+          cores={opcoes?.cores ?? []}
+          tamanhos={opcoes?.tamanhos ?? []}
           valor={filtrosProdutos}
           aoMudar={setFiltrosProdutos}
           aoFechar={() => setFiltrosProdutosAberto(false)}

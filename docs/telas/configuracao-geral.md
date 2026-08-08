@@ -4,7 +4,7 @@ Autor: Claudio Calixto (dono do produto) · Data: 2026-07-21 · Módulo(s): `con
 ## Problema
 
 A tabela `cfg_geral` (V023) guarda os parâmetros gerais do tenant — percentual máximo de
-desconto em venda, uso de variantes de produto (linha/coluna) e as taxas de crediário (Fase
+desconto em venda, uso de cor/grade em produto e as taxas de crediário (Fase
 2, Q5) — e já é semeada com valores padrão no signup (`SignupService.assinar`), mas não tinha
 endpoint nem tela. Sem esta tela, o lojista não tem como ajustar esses parâmetros.
 
@@ -52,8 +52,7 @@ foram corrigidos só em **2026-08-07**, quando a discrepância foi notada.
 | Campo (banco) | Rótulo na tela | Componente | Regra |
 |---|---|---|---|
 | `percentual_desconto_venda` | Desconto máximo em venda (%) | percentual (máscara) | 0–100 |
-| `cfg_usa_variante_linha` | Usa variante em linha (ex.: cor) | checkbox | — |
-| `cfg_usa_variante_coluna` | Usa variante em coluna (ex.: tamanho/voltagem) | checkbox | — |
+| `cfg_usa_cor_grade` | Usa cor/grade (calçados, confecções) | checkbox | — (default `false`, 2026-08-08; era duas flags separadas de linha/coluna) |
 | `cfg_permite_qtd_decimal` | Permite quantidade decimal para produtos | checkbox | — (default `true`) |
 | `juros_crediario_dias` | Juros após (dias) | inteiro | ≥ 0 |
 | `juros_crediario` | Juros (%) | percentual (máscara) | 0–100 |
@@ -69,7 +68,7 @@ convenção de peso) ou é sempre inteira. Ligado por padrão — preserva o com
 existia antes deste parâmetro (quantidade sempre aceitava decimal em qualquer lugar). Lido por
 qualquer papel via `GET /api/v1/config-geral/permite-qtd-decimal` (PDV, Transferência de
 Produtos e Histórico do Cliente precisam do valor sem ser ADMIN) — mesmo padrão de
-`/flags-variante` e `/desconto-venda`. Validado também no servidor (`PdvVendaService`/
+`/usa-cor-grade` e `/desconto-venda`. Validado também no servidor (`PdvVendaService`/
 `TransferenciaService` rejeitam com 400 uma quantidade fracionária quando o parâmetro está
 desligado), não é só uma máscara de UI. Detalhe completo de onde isso é aplicado:
 `docs/telas/pdv.md` e `docs/telas/transferencia-estoque.md`.
@@ -77,7 +76,7 @@ desligado), não é só uma máscara de UI. Detalhe completo de onde isso é apl
 ## Critérios de aceitação (viram testes)
 
 - Dado um tenant recém-assinado, quando consulta `GET /api/v1/config-geral`, então recebe os
-  valores padrão do banco (desconto 0%, variantes ligadas).
+  valores padrão do banco (desconto 0%, cor/grade desligada).
 - Dado um ADMIN, quando atualiza os parâmetros, então o `GET` seguinte reflete os novos
   valores e `atualizadoEm` muda.
 - Dado um OPERADOR, quando tenta ler ou gravar, então 403 nos dois casos.
@@ -96,7 +95,7 @@ projeto em **203/203 verdes**.
 ```
 GET  /api/v1/config-geral                    lê os parâmetros do tenant atual (ADMIN)
 PUT  /api/v1/config-geral                    atualiza (ADMIN) — todos os campos são obrigatórios no corpo
-GET  /api/v1/config-geral/flags-variante     usa variante em linha/coluna (qualquer papel)
+GET  /api/v1/config-geral/usa-cor-grade      usa cor/grade (qualquer papel)
 GET  /api/v1/config-geral/desconto-venda     percentual de desconto máximo (qualquer papel, PDV)
 GET  /api/v1/config-geral/permite-qtd-decimal  quantidade decimal ligada/desligada (qualquer papel)
 ```
@@ -107,7 +106,7 @@ de ADMIN, verificado a partir do claim `roles` do JWT (mesmo mecanismo de
 
 ## Ajuda da tela (manual de operação + vídeo) — obrigatório (R22 / §3.7.1)
 
-- **`chave_tela`: `configuracao.geral.form`** — desconto máximo, uso de variantes, quantidade
+- **`chave_tela`: `configuracao.geral.form`** — desconto máximo, uso de cor/grade, quantidade
   decimal de produtos, juros/multa de crediário; erros comuns: só ADMIN acessa, percentuais
   entre 0–100. `url_video`: NULL.
 

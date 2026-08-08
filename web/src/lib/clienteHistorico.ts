@@ -9,12 +9,12 @@ export interface VendaHistorico {
   qtdProdutos: number
 }
 
-/** `variacaoLinha`/`variacaoColuna` são `null` quando o produto não usa variação. */
+/** `variacaoCor`/`variacaoTamanho` são `null` quando o produto não usa variação. */
 export interface ItemVendaHistorico {
   idVenda: number
   descricaoProduto: string
-  variacaoLinha: string | null
-  variacaoColuna: string | null
+  variacaoCor: string | null
+  variacaoTamanho: string | null
   qtdVendida: number
   precoVenda: number
 }

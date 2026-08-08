@@ -77,7 +77,8 @@ public class FuncionarioService {
         String colunaOrdenacao = ordenarPor == null ? "f.nome" : COLUNAS_ORDENAVEIS.getOrDefault(ordenarPor, "f.nome");
         String direcaoOrdenacao = "DESC".equalsIgnoreCase(direcao) ? "DESC" : "ASC";
 
-        StringBuilder filtro = new StringBuilder(" WHERE 1 = 1");
+        // id_tenant explícito (defesa em profundidade) — ver comentário em ProdutoService.listar.
+        StringBuilder filtro = new StringBuilder(" WHERE f.id_tenant = plataforma.tenant_atual()");
         List<Object> params = new ArrayList<>();
 
         if (nome != null && !nome.isBlank()) {
@@ -112,7 +113,7 @@ public class FuncionarioService {
 
     @Transactional(readOnly = true)
     public FuncionarioResponse buscar(long id) {
-        return jdbc.sql(SELECT_BASE + " WHERE f.id_funcionario = ?")
+        return jdbc.sql(SELECT_BASE + " WHERE f.id_tenant = plataforma.tenant_atual() AND f.id_funcionario = ?")
                 .param(id)
                 .query(FuncionarioService::mapear)
                 .optional()
@@ -151,7 +152,7 @@ public class FuncionarioService {
                             UPDATE funcionario SET
                                 nome = ?, cpf = ?, telefone = ?, cargo = ?, perc_comissao = ?, ativo = ?,
                                 atualizado_em = now()
-                            WHERE id_funcionario = ?
+                            WHERE id_funcionario = ? AND id_tenant = plataforma.tenant_atual()
                             """)
                     .params(params)
                     .update();
@@ -173,12 +174,17 @@ public class FuncionarioService {
     @Transactional
     public ExclusaoFuncionarioResponse excluir(long id) {
         boolean temMovimento = Boolean.TRUE.equals(
-                jdbc.sql("SELECT EXISTS (SELECT 1 FROM produto_movimento_detalhe WHERE id_funcionario = ?)")
+                jdbc.sql("""
+                                SELECT EXISTS (SELECT 1 FROM produto_movimento_detalhe
+                                               WHERE id_tenant = plataforma.tenant_atual() AND id_funcionario = ?)
+                                """)
                         .param(id).query(Boolean.class).single());
 
         if (temMovimento) {
-            int linhas = jdbc.sql(
-                            "UPDATE funcionario SET ativo = false, atualizado_em = now() WHERE id_funcionario = ?")
+            int linhas = jdbc.sql("""
+                            UPDATE funcionario SET ativo = false, atualizado_em = now()
+                            WHERE id_funcionario = ? AND id_tenant = plataforma.tenant_atual()
+                            """)
                     .param(id).update();
             if (linhas == 0) {
                 throw new ResponseStatusException(NOT_FOUND, "Funcionário não encontrado.");
@@ -186,7 +192,8 @@ public class FuncionarioService {
             return new ExclusaoFuncionarioResponse("inativado", "Funcionário possui movimentações associadas.");
         }
 
-        int linhas = jdbc.sql("DELETE FROM funcionario WHERE id_funcionario = ?").param(id).update();
+        int linhas = jdbc.sql("DELETE FROM funcionario WHERE id_funcionario = ? AND id_tenant = plataforma.tenant_atual()")
+                .param(id).update();
         if (linhas == 0) {
             throw new ResponseStatusException(NOT_FOUND, "Funcionário não encontrado.");
         }

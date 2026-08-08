@@ -30,7 +30,7 @@ resposta de `POST /api/v1/pdv/vendas`). Pré-visualização em texto monoespaça
    (~5pt), só pra caber fisicamente; **o botão "Imprimir" é o caminho recomendado**, o PDF é mais
    um registro de backup.
 2. **Descrição do produto em até 3 linhas fixas** (25 caracteres cada, quebra literal — não por
-   palavra): concatena `descricaoProduto + variacaoLinha (se tiver) + variacaoColuna (se tiver)`
+   palavra): concatena `descricaoProduto + variacaoCor (se tiver) + variacaoTamanho (se tiver)`
    num texto só, depois corta em blocos de 25 caracteres; as linhas de continuação não usadas
    ficam em branco (todo item sempre reserva o mesmo espaço vertical fixo).
 3. **NCM inexistente ou inválido = venda em branco, nunca rejeitada** — não aplicável aqui
@@ -99,7 +99,7 @@ existir (ou for de outro tenant — RLS).
   "nomeOperador": "Administrador Teste",
   "itens": [
     { "sku": "9001000000053", "descricaoProduto": "TEN FEM ALL STAR CHUCK TAYLOR REF: CT33430003",
-      "variacaoLinha": "CAFE COM LEITE", "variacaoColuna": "33", "qtd": 1.0,
+      "variacaoCor": "CAFE COM LEITE", "variacaoTamanho": "33", "qtd": 1.0,
       "valorUnitario": 319.90, "valorTotal": 319.90 }
   ],
   "subtotal": 319.90,

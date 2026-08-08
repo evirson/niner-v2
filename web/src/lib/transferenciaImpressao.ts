@@ -72,7 +72,7 @@ export function montarLinhasGuiaTransferencia(t: Transferencia, permiteQtdDecima
   )
   linhas.push(linha())
   t.itens.forEach((item) => {
-    const variacao = [item.variacaoLinha, item.variacaoColuna].filter(Boolean).join(' · ')
+    const variacao = [item.variacaoCor, item.variacaoTamanho].filter(Boolean).join(' · ')
     linhas.push(
       [
         colEsq(item.sku, COL_CODIGO),

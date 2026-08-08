@@ -43,8 +43,7 @@ grupo **"Implementações Futuras"**, apontando pra `<EmBreve>`. Esta feature mo
 2. **Baixar o modelo `.csv`** daquela tabela (cabeçalho + 1-2 linhas de exemplo).
 3. **Enviar o arquivo preenchido.**
 4. **Escolhas prévias** (só as que se aplicam à tabela — ver seção por tabela abaixo): categoria
-   de cliente, plano de contas, carteira de crediário, mapeamento de coluna de estoque → empresa,
-   confirmação/edição do nome da variante (Cor/Tamanho) detectado automaticamente.
+   de cliente, plano de contas, carteira de crediário, mapeamento de coluna de estoque → empresa.
 5. **Prévia (dry-run):** o servidor processa o arquivo por inteiro sem gravar nada, e devolve:
    quantas linhas serão importadas, quantas rejeitadas (com o motivo, linha a linha), e avisos que
    não bloqueiam (ex.: dado divergente entre linhas que serão unificadas).
@@ -62,13 +61,16 @@ o relatório já montado) só pra acionar o rollback automático do Spring. `Imp
 captura essa exceção e devolve o relatório sem que nada tenha sido persistido. Evita ter dois
 caminhos de código (um "de verdade" e um "só valida") — é sempre o mesmo, só muda se commita.
 
-**Produto tem um passo a mais (análise prévia):** como as escolhas de `produto` dependem do que
-está NO arquivo (quais colunas de estoque têm dado, quais produtos têm variação), o front chama
+**Produto tem um passo a mais (análise prévia):** como a única escolha prévia de `produto` que
+depende do CONTEÚDO do arquivo é o mapeamento de colunas de estoque, o front chama
 `POST /api/v1/importacao/produto/analise` (só o arquivo, sem escolhas) antes da etapa 4 — devolve
-`{ colunasEstoqueComDado, grupos: [{ chave, descricao, marca, referencia, usaLinha, usaColuna,
-rotuloLinhaSugerido, rotuloColunaSugerido }] }`. O front monta a etapa de escolhas a partir dessa
-resposta; as outras 3 tabelas pulam direto pra etapa de escolhas (não precisam analisar o arquivo
-antes de saber o que perguntar).
+`{ colunasEstoqueComDado }` (só as `QUANTIDADE_ESTOQUE_N` que têm algum valor `> 0` em alguma
+linha). O front monta a etapa de escolhas (mapeamento coluna → empresa) a partir dessa resposta;
+as outras 3 tabelas pulam direto pra etapa de escolhas. **Simplificado em 2026-08-08:** a análise
+já teve um passo extra de detecção de grupos/rótulo de variante (`usaLinha`/`usaColuna`,
+`rotuloLinhaSugerido`/`rotuloColunaSugerido`, editável antes de confirmar) — removido junto com o
+modelo de "variante em linha/coluna com nome livre" (ver seção 3 abaixo); cor/tamanho agora têm
+nome fixo no sistema, então não há mais nada pra detectar/confirmar sobre rótulo.
 
 ## Formato do arquivo
 
@@ -117,7 +119,7 @@ classificação).
 
 **Colunas do CSV:** `MARCA, REFERENCIA, DESCRICAO, PRECO_CUSTO, PERCENTUAL_VENDA, PRECO_VENDA,
 DATA_INICIO_OFERTA, DATA_FINAL_OFERTA, PRECO_OFERTA, CODIGO_NCM, PESO_BRUTO, PESO_LIQUIDO,
-DESCRICAO_VARIANTE_LINHA, DESCRICAO_VARIANTE_COLUNA, EAN_CODIGO_BARRAS,
+NOME_GRADE, DESCRICAO_COR, DESCRICAO_TAMANHO, EAN_CODIGO_BARRAS,
 QUANTIDADE_ESTOQUE_1..QUANTIDADE_ESTOQUE_9` (9 colunas fixas — teto de 9 empresas por arquivo).
 
 **Formato achatado — 1 linha pode ser 1 variação de um produto maior:**
@@ -125,28 +127,34 @@ QUANTIDADE_ESTOQUE_1..QUANTIDADE_ESTOQUE_9` (9 colunas fixas — teto de 9 empre
   MAIÚSCULAS) são o **mesmo produto**; cada linha do grupo vira uma **variação**
   (`produto_barra`) desse produto.
 - **Unificação:** dentro do mesmo grupo, linhas com o **mesmo par**
-  `DESCRICAO_VARIANTE_LINHA`/`DESCRICAO_VARIANTE_COLUNA` são a **mesma variação** — as
-  quantidades de estoque (por coluna 1–9) são **somadas** entre essas linhas, em vez de gerar
-  duplicidade (que violaria a constraint `produto_barra_variacao_uk`).
+  `DESCRICAO_COR`/`DESCRICAO_TAMANHO` são a **mesma variação** — as quantidades de estoque (por
+  coluna 1–9) são **somadas** entre essas linhas, em vez de gerar duplicidade (que violaria a
+  constraint `produto_barra_variacao_uk`).
 - **EAN em linhas unificadas:** usa o primeiro `EAN_CODIGO_BARRAS` não-vazio encontrado; se houver
   dois EANs diferentes entre as linhas unificadas, gera um **aviso** (não erro) citando ambos.
 - **Dado de produto divergente entre linhas do mesmo grupo** (ex.: `PESO_BRUTO`/`CODIGO_NCM`
   diferentes): vence a linha com **maior `PRECO_VENDA`**; empate decide pelo maior
   `PRECO_CUSTO`. Essa linha fornece todos os campos de nível-produto para o grupo inteiro. Gera
   aviso listando a divergência.
-- **Variante_linha/coluna — cadastro automático:** todo valor novo de `DESCRICAO_VARIANTE_LINHA`/
-  `DESCRICAO_VARIANTE_COLUNA` que ainda não existir em `cfg_variante_linha`/`cfg_variante_coluna`
-  é cadastrado automaticamente durante a importação.
-- **Rótulo da variante (`produto.nome_variante_linha`/`nome_variante_coluna`) — detecção
-  automática:** compara os valores usados contra um dicionário fixo —
-  cores conhecidas (AZUL, VERMELHO, VERDE, AMARELO, PRETO, BRANCO, ROSA, CINZA, MARROM, ROXO,
-  LARANJA, BEGE, DOURADO, PRATA, VINHO...) rotula **"Cor"**; tamanhos-letra (PP/P/M/G/GG/XG) ou
-  faixa numérica plausível de calçado/roupa (33–48) rotula **"Tamanho"**; não reconhecendo,
-  usa um nome genérico ("Variação em Linha"/"Variação em Coluna"). O nome detectado aparece
-  **editável** na tela de prévia, por produto, antes de confirmar.
-- **SKU nunca vem do arquivo:** toda variação criada chama `gerar_ean13_interno()` (mesmo
-  mecanismo já usado por `ProdutoBarraService`), igual ao cadastro manual; `EAN_CODIGO_BARRAS` só
-  preenche a coluna `ean` (GTIN real), quando vier preenchida.
+- **Cor/grade (revisado 2026-08-08) — substituiu o par genérico `DESCRICAO_VARIANTE_LINHA`/
+  `DESCRICAO_VARIANTE_COLUNA`.** O antigo passo de "rótulo de variante detectado automaticamente,
+  editável na prévia" **deixou de existir** — cor e tamanho agora têm nome fixo no sistema todo
+  (não mais configurável por produto), então não há mais nada pra detectar/confirmar sobre
+  rótulo. Regra atual, só quando o tenant usa cor/grade (`cfg_geral.cfg_usa_cor_grade`):
+  - Toda linha com `DESCRICAO_TAMANHO` preenchida também precisa trazer `NOME_GRADE` — o nome da
+    grade daquele produto. Ausente → erro ("`NOME_GRADE` é obrigatório — este tenant usa
+    cor/grade."); divergente entre linhas do mesmo grupo → erro (uma única grade por produto).
+  - A grade é **achada por nome** (case-insensitive) ou **criada na hora**
+    (`GradeService.obterOuCriarPorNome`), com os tamanhos distintos encontrados nas linhas do
+    grupo, **na ordem de primeira aparição no arquivo** (essa ordem vira a ordem da grade).
+  - Todo valor novo de `DESCRICAO_COR`/`DESCRICAO_TAMANHO` que ainda não existir em
+    `cfg_cor`/`cfg_tamanho` é cadastrado automaticamente durante a importação.
+  - Quando o tenant **não** usa cor/grade, as três colunas (`NOME_GRADE`, `DESCRICAO_COR`,
+    `DESCRICAO_TAMANHO`) são ignoradas (mesmo princípio de "campo oculto ⇒ servidor ignora, não
+    rejeita" usado no resto do sistema) — cada produto nasce com 1 SKU só.
+- **SKU nunca vem do arquivo:** toda variação criada chama `gerar_ean13_interno()` (via
+  `ProdutoBarraService.obterOuCriar`, mesmo mecanismo do cadastro manual e da Emissão de
+  Etiqueta); `EAN_CODIGO_BARRAS` só preenche a coluna `ean` (GTIN real), quando vier preenchida.
 - **Estoque:** o servidor inspeciona quais das 9 colunas têm algum valor `> 0` no arquivo inteiro
   e devolve essa lista pro front pedir, por coluna, **"a qual empresa corresponde?"** (select com
   as empresas cadastradas no tenant) — é uma escolha prévia, uma vez por coluna usada, não por
@@ -220,7 +228,7 @@ Caixa em ciclos que nunca existiram no Niner. A parcela fica só historicamente 
 - Dado um CSV de fornecedores sem nenhum plano de contas escolhido na tela, quando enviado o
   arquivo, então a API rejeita a chamada (400) antes de processar qualquer linha.
 - Dado um CSV de produto com 3 linhas do mesmo grupo (mesma descrição/marca/referência) e 2 delas
-  com o mesmo par linha/coluna de variação, quando importado, então nasce 1 produto com 2
+  com o mesmo par cor/tamanho de variação, quando importado, então nasce 1 produto com 2
   variações, e a quantidade de estoque das 2 linhas unificadas é somada.
 - Dado um CSV de produto com `QUANTIDADE_ESTOQUE_1` preenchida e mapeada pra uma empresa, quando
   confirmado, então existe um `produto_movimento_mestre` tipo `AJUSTE` e `produto_estoque`
@@ -245,9 +253,8 @@ POST /api/v1/importacao/{tabela}/processar           multipart: arquivo + escolh
                                                       → relatório (linhas ok/erro/avisos); só
                                                       grava quando confirmar=true
 POST /api/v1/importacao/produto/analise              só produto: multipart (só arquivo) → colunas
-                                                      de estoque com dado + grupos detectados com
-                                                      rótulo de variante sugerido (passo prévio à
-                                                      tela de escolhas dessa tabela)
+                                                      de estoque com dado (passo prévio ao
+                                                      mapeamento coluna → empresa)
 ```
 
 Todos sob `/api/v1/**` (JWT de tenant, RLS ativo — P8), `ADMIN`-only. Erros em Problem Details.

@@ -1,0 +1,193 @@
+package com.vetor.niner.catalogo;
+
+import com.vetor.niner.catalogo.GradeDtos.GradeRequest;
+import com.vetor.niner.catalogo.GradeDtos.GradeResponse;
+import com.vetor.niner.catalogo.TamanhoDtos.TamanhoResponse;
+import com.vetor.niner.comum.web.ConflitoDadosException;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.DuplicateKeyException;
+import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
+
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Optional;
+
+import static org.springframework.http.HttpStatus.NOT_FOUND;
+
+/**
+ * CRUD (criar/listar/atualizar, sem exclusão — protegida pela FK de {@code produto.id_grade})
+ * da grade ({@code cfg_grade}) — curva de tamanhos nomeada (ex.: "Grade 36-44"), gerida
+ * embutida no formulário de Produto (modal "＋ Gerenciar Grades", docs/telas/produto.md), mesmo
+ * espírito de {@code CategoriaProdutoService}. Guarda até {@value #MAX_TAMANHOS} tamanhos em
+ * ordem nas colunas fixas {@code id_tamanho1..20} (V017, decisão do dono do produto,
+ * 2026-08-08) — este service empacota/desempacota essa lista pro cliente da API nunca ver os
+ * slots, só um {@code List<Long>} ordenado.
+ */
+@Service
+public class GradeService {
+
+    private static final int MAX_TAMANHOS = 20;
+
+    private final JdbcClient jdbc;
+
+    public GradeService(JdbcClient jdbc) {
+        this.jdbc = jdbc;
+    }
+
+    @Transactional(readOnly = true)
+    public List<GradeResponse> listar() {
+        List<GradeBruta> brutas = jdbc.sql(SELECT_COLUNAS + " FROM cfg_grade WHERE id_tenant = plataforma.tenant_atual() ORDER BY descricao")
+                .query(GradeService::mapearBruta)
+                .list();
+        Map<Long, TamanhoResponse> tamanhos = resolverTamanhos(brutas);
+        return brutas.stream().map(b -> montarResponse(b, tamanhos)).toList();
+    }
+
+    @Transactional(readOnly = true)
+    public GradeResponse buscar(long id) {
+        GradeBruta bruta = jdbc.sql(SELECT_COLUNAS + " FROM cfg_grade WHERE id_grade = ? AND id_tenant = plataforma.tenant_atual()")
+                .param(id)
+                .query(GradeService::mapearBruta)
+                .optional()
+                .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Grade não encontrada."));
+        return montarResponse(bruta, resolverTamanhos(List.of(bruta)));
+    }
+
+    /** Acha a grade já cadastrada com esse nome, ou cria na hora com os tamanhos informados —
+     * usado pela Importação de Dados (idempotente: reimportar o mesmo arquivo acha a grade já
+     * criada na 1ª vez, em vez de tentar duplicar). Diferente de {@link #criar}, não lança
+     * {@code ConflitoDadosException} para nome já existente — assume a grade já cadastrada como
+     * a correta e ignora {@code idsTamanho}. */
+    @Transactional
+    public GradeResponse obterOuCriarPorNome(String descricao, List<Long> idsTamanho) {
+        String nome = descricao.trim().toUpperCase(Locale.ROOT);
+        Optional<Long> existente = jdbc.sql("""
+                        SELECT id_grade FROM cfg_grade
+                        WHERE id_tenant = plataforma.tenant_atual() AND descricao = ?
+                        """)
+                .param(nome).query(Long.class).optional();
+        if (existente.isPresent()) {
+            return buscar(existente.get());
+        }
+        return criar(new GradeRequest(nome, idsTamanho));
+    }
+
+    @Transactional
+    public GradeResponse criar(GradeRequest req) {
+        String descricao = validarEDescricao(req);
+        List<Object> params = new ArrayList<>();
+        params.add(descricao);
+        params.addAll(empacotarSlots(req.idsTamanho()));
+        try {
+            long id = jdbc.sql("""
+                            INSERT INTO cfg_grade (id_tenant, descricao, %s)
+                            VALUES (plataforma.tenant_atual(), ?, %s)
+                            RETURNING id_grade
+                            """.formatted(COLUNAS_SLOT, PLACEHOLDERS_SLOT))
+                    .params(params)
+                    .query(Long.class).single();
+            return buscar(id);
+        } catch (DuplicateKeyException e) {
+            throw new ConflitoDadosException("Já existe uma grade com esse nome.");
+        } catch (DataIntegrityViolationException e) {
+            throw new IllegalArgumentException("Tamanho informado não existe.");
+        }
+    }
+
+    @Transactional
+    public GradeResponse atualizar(long id, GradeRequest req) {
+        String descricao = validarEDescricao(req);
+        List<Object> params = new ArrayList<>();
+        params.add(descricao);
+        params.addAll(empacotarSlots(req.idsTamanho()));
+        params.add(id);
+        try {
+            int linhas = jdbc.sql("UPDATE cfg_grade SET descricao = ?, " + ATRIBUICOES_SLOT
+                            + " WHERE id_grade = ? AND id_tenant = plataforma.tenant_atual()")
+                    .params(params)
+                    .update();
+            if (linhas == 0) {
+                throw new ResponseStatusException(NOT_FOUND, "Grade não encontrada.");
+            }
+            return buscar(id);
+        } catch (DuplicateKeyException e) {
+            throw new ConflitoDadosException("Já existe uma grade com esse nome.");
+        } catch (DataIntegrityViolationException e) {
+            throw new IllegalArgumentException("Tamanho informado não existe.");
+        }
+    }
+
+    private static String validarEDescricao(GradeRequest req) {
+        if (req.idsTamanho() != null) {
+            if (req.idsTamanho().size() > MAX_TAMANHOS) {
+                throw new IllegalArgumentException("Uma grade aceita no máximo " + MAX_TAMANHOS + " tamanhos.");
+            }
+            long distintos = req.idsTamanho().stream().distinct().count();
+            if (distintos != req.idsTamanho().size()) {
+                throw new IllegalArgumentException("Tamanho duplicado na grade.");
+            }
+        }
+        return req.descricao().trim().toUpperCase(Locale.ROOT);
+    }
+
+    /** Posição na lista (0..19) vira slot 1..20; slots além do tamanho da lista ficam {@code
+     * NULL} (não 0 — convenção do projeto para "sem valor" em FK opcional). */
+    private static List<Object> empacotarSlots(List<Long> idsTamanho) {
+        List<Object> slots = new ArrayList<>(MAX_TAMANHOS);
+        for (int i = 0; i < MAX_TAMANHOS; i++) {
+            slots.add(idsTamanho != null && i < idsTamanho.size() ? idsTamanho.get(i) : null);
+        }
+        return slots;
+    }
+
+    private Map<Long, TamanhoResponse> resolverTamanhos(List<GradeBruta> brutas) {
+        List<Long> ids = brutas.stream().flatMap(b -> b.idsTamanho().stream()).distinct().toList();
+        Map<Long, TamanhoResponse> mapa = new LinkedHashMap<>();
+        if (ids.isEmpty()) {
+            return mapa;
+        }
+        String placeholders = String.join(",", ids.stream().map(i -> "?").toList());
+        for (TamanhoResponse t : jdbc.sql("SELECT id_tamanho, descricao FROM cfg_tamanho "
+                        + "WHERE id_tenant = plataforma.tenant_atual() AND id_tamanho IN (" + placeholders + ")")
+                .params(ids)
+                .query((rs, n) -> new TamanhoResponse(rs.getLong("id_tamanho"), rs.getString("descricao")))
+                .list()) {
+            mapa.put(t.idTamanho(), t);
+        }
+        return mapa;
+    }
+
+    private static GradeResponse montarResponse(GradeBruta b, Map<Long, TamanhoResponse> tamanhos) {
+        List<TamanhoResponse> lista = b.idsTamanho().stream().map(tamanhos::get).toList();
+        return new GradeResponse(b.idGrade(), b.descricao(), lista);
+    }
+
+    private record GradeBruta(long idGrade, String descricao, List<Long> idsTamanho) {
+    }
+
+    private static final String COLUNAS_SLOT = String.join(", ",
+            java.util.stream.IntStream.rangeClosed(1, MAX_TAMANHOS).mapToObj(i -> "id_tamanho" + i).toList());
+    private static final String PLACEHOLDERS_SLOT = String.join(", ", java.util.Collections.nCopies(MAX_TAMANHOS, "?"));
+    private static final String ATRIBUICOES_SLOT = String.join(", ",
+            java.util.stream.IntStream.rangeClosed(1, MAX_TAMANHOS).mapToObj(i -> "id_tamanho" + i + " = ?").toList());
+    private static final String SELECT_COLUNAS = "SELECT id_grade, descricao, " + COLUNAS_SLOT;
+
+    private static GradeBruta mapearBruta(ResultSet rs, int rowNum) throws SQLException {
+        List<Long> ids = new ArrayList<>();
+        for (int i = 1; i <= MAX_TAMANHOS; i++) {
+            long v = rs.getLong("id_tamanho" + i);
+            if (!rs.wasNull()) {
+                ids.add(v);
+            }
+        }
+        return new GradeBruta(rs.getLong("id_grade"), rs.getString("descricao"), ids);
+    }
+}

@@ -32,7 +32,7 @@ public final class RelatorioEstoqueDtos {
 
     public record LinhaAnalitica(
             String descricaoProduto, String marca, String referencia,
-            String variacaoLinha, String variacaoColuna,
+            String variacaoCor, String variacaoTamanho,
             List<BigDecimal> qtdPorEmpresa, BigDecimal qtdTotal) {
     }
 

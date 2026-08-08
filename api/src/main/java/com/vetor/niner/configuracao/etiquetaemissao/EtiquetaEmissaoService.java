@@ -3,8 +3,6 @@ package com.vetor.niner.configuracao.etiquetaemissao;
 import com.vetor.niner.catalogo.ProdutoBarraService;
 import com.vetor.niner.catalogo.ProdutoBarraDtos.ProdutoBarraResponse;
 import com.vetor.niner.configuracao.etiquetaemissao.EtiquetaEmissaoDtos.FornecedorOpcaoResponse;
-import com.vetor.niner.configuracao.etiquetaemissao.EtiquetaEmissaoDtos.OpcaoVarianteResponse;
-import com.vetor.niner.configuracao.etiquetaemissao.EtiquetaEmissaoDtos.OpcoesVarianteResponse;
 import com.vetor.niner.configuracao.etiquetaemissao.EtiquetaEmissaoDtos.ProdutoEmissaoResponse;
 import com.vetor.niner.configuracao.etiquetaemissao.EtiquetaEmissaoDtos.ProdutoOpcaoResponse;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -12,6 +10,8 @@ import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
@@ -24,12 +24,12 @@ public class EtiquetaEmissaoService {
 
     private static final String CAMPOS_VARIACAO = """
             pb.id_variacao, pb.sku, p.descricao, p.marca, p.referencia, p.preco_venda,
-            vl.descricao AS variacao_linha, vc.descricao AS variacao_coluna
+            co.descricao AS variacao_cor, ta.descricao AS variacao_tamanho
             """;
 
     private static final String JOINS_VARIANTES = """
-            LEFT JOIN cfg_variante_linha vl ON vl.id_variante_linha = pb.id_variante_linha AND vl.id_tenant = pb.id_tenant
-            LEFT JOIN cfg_variante_coluna vc ON vc.id_variante_coluna = pb.id_variante_coluna AND vc.id_tenant = pb.id_tenant
+            LEFT JOIN cfg_cor co ON co.id_cor = pb.id_cor AND co.id_tenant = pb.id_tenant
+            LEFT JOIN cfg_tamanho ta ON ta.id_tamanho = pb.id_tamanho AND ta.id_tenant = pb.id_tenant
             """;
 
     private final JdbcClient jdbc;
@@ -46,8 +46,7 @@ public class EtiquetaEmissaoService {
     public List<ProdutoOpcaoResponse> buscarProdutos(String busca) {
         String filtro = (busca == null || busca.isBlank()) ? "" : " AND p.descricao ILIKE ?";
         var query = jdbc.sql("""
-                SELECT p.id_produto, p.descricao, p.marca, p.referencia,
-                       p.nome_variante_linha, p.nome_variante_coluna
+                SELECT p.id_produto, p.descricao, p.marca, p.referencia, p.id_grade
                 FROM produto p
                 WHERE p.id_tenant = plataforma.tenant_atual() AND p.ativo
                 """ + filtro + " ORDER BY p.descricao LIMIT 10");
@@ -56,34 +55,27 @@ public class EtiquetaEmissaoService {
         }
         return query.query((rs, n) -> new ProdutoOpcaoResponse(
                         rs.getLong("id_produto"), rs.getString("descricao"), rs.getString("marca"), rs.getString("referencia"),
-                        rs.getString("nome_variante_linha"), rs.getString("nome_variante_coluna")))
+                        getLongOuNulo(rs, "id_grade")))
                 .list();
     }
 
-    /** Tenant inteiro — não filtrado pelo produto, porque no modo Individual o usuário pode
-     * escolher uma combinação linha/coluna que essa variação ainda não tem (aí é criada). */
-    @Transactional(readOnly = true)
-    public OpcoesVarianteResponse buscarOpcoesVariante() {
-        return new OpcoesVarianteResponse(
-                buscarOpcoes("SELECT id_variante_linha AS id, descricao FROM cfg_variante_linha "
-                        + "WHERE id_tenant = plataforma.tenant_atual() ORDER BY descricao"),
-                buscarOpcoes("SELECT id_variante_coluna AS id, descricao FROM cfg_variante_coluna "
-                        + "WHERE id_tenant = plataforma.tenant_atual() ORDER BY descricao"));
-    }
-
-    private List<OpcaoVarianteResponse> buscarOpcoes(String sql) {
-        return jdbc.sql(sql).query((rs, n) -> new OpcaoVarianteResponse(rs.getLong("id"), rs.getString("descricao"))).list();
+    /** {@code rs.getObject(coluna, Long.class)} não converte `integer` (o tipo real de
+     * `produto.id_grade`) pra `Long` de forma confiável no driver — mesmo padrão já usado em
+     * {@code CrmService.getLongOuNulo}. */
+    private static Long getLongOuNulo(ResultSet rs, String coluna) throws SQLException {
+        long valor = rs.getLong(coluna);
+        return rs.wasNull() ? null : valor;
     }
 
     /** Acha (ou cria, se ainda não existir) a variação escolhida no modo Individual — delega pra
-     * {@code ProdutoBarraService}, que também valida se linha/coluna são obrigatórias pra este
-     * produto. */
+     * {@code ProdutoBarraService}, que também valida se cor/tamanho são obrigatórios pra este
+     * produto (produto com grade) e se o tamanho pertence à grade dele. */
     @Transactional
-    public ProdutoEmissaoResponse obterOuCriarVariacao(long idProduto, Long idVarianteLinha, Long idVarianteColuna) {
-        ProdutoBarraResponse r = produtoBarraService.obterOuCriar(idProduto, idVarianteLinha, idVarianteColuna);
+    public ProdutoEmissaoResponse obterOuCriarVariacao(long idProduto, Long idCor, Long idTamanho) {
+        ProdutoBarraResponse r = produtoBarraService.obterOuCriar(idProduto, idCor, idTamanho);
         return new ProdutoEmissaoResponse(
                 r.idVariacao(), r.sku(), r.descricao(), r.marca(), r.referencia(), r.precoVenda(),
-                r.variacaoLinha(), r.variacaoColuna(), null);
+                r.variacaoCor(), r.variacaoTamanho(), null);
     }
 
     @Transactional(readOnly = true)
@@ -135,7 +127,7 @@ public class EtiquetaEmissaoService {
         }
         sql.append("""
                  GROUP BY pb.id_variacao, pb.sku, p.descricao, p.marca, p.referencia, p.preco_venda,
-                          vl.descricao, vc.descricao
+                          co.descricao, ta.descricao
                  ORDER BY p.descricao
                 """);
 
@@ -175,8 +167,8 @@ public class EtiquetaEmissaoService {
             throws java.sql.SQLException {
         return new ProdutoEmissaoResponse(
                 rs.getLong("id_variacao"), rs.getString("sku"), rs.getString("descricao"), rs.getString("marca"),
-                rs.getString("referencia"), rs.getBigDecimal("preco_venda"), rs.getString("variacao_linha"),
-                rs.getString("variacao_coluna"), quantidadeSugerida);
+                rs.getString("referencia"), rs.getBigDecimal("preco_venda"), rs.getString("variacao_cor"),
+                rs.getString("variacao_tamanho"), quantidadeSugerida);
     }
 
     private long resolverEmpresaObrigatoria(Jwt jwt, Long idEmpresaSolicitada) {

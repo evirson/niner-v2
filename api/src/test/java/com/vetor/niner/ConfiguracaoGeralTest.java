@@ -60,8 +60,7 @@ class ConfiguracaoGeralTest {
         mvc.perform(get("/api/v1/config-geral").header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.percentualDescontoVenda").value(0))
-                .andExpect(jsonPath("$.cfgUsaVarianteLinha").value(true))
-                .andExpect(jsonPath("$.cfgUsaVarianteColuna").value(true))
+                .andExpect(jsonPath("$.cfgUsaCorGrade").value(false))
                 .andExpect(jsonPath("$.cfgPermiteQtdDecimal").value(true));
     }
 
@@ -71,8 +70,8 @@ class ConfiguracaoGeralTest {
 
         String corpo = """
                 {"percentualDescontoVenda":15.5,"jurosCrediarioDias":5,"jurosCrediario":2.5,
-                 "multaCrediarioDias":10,"multaCrediario":3.0,"cfgUsaVarianteLinha":false,
-                 "cfgUsaVarianteColuna":true,"cfgPermiteQtdDecimal":false}
+                 "multaCrediarioDias":10,"multaCrediario":3.0,"cfgUsaCorGrade":true,
+                 "cfgPermiteQtdDecimal":false}
                 """;
 
         mvc.perform(put("/api/v1/config-geral").header("Authorization", "Bearer " + token)
@@ -80,7 +79,7 @@ class ConfiguracaoGeralTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.percentualDescontoVenda").value(15.5))
                 .andExpect(jsonPath("$.jurosCrediarioDias").value(5))
-                .andExpect(jsonPath("$.cfgUsaVarianteLinha").value(false))
+                .andExpect(jsonPath("$.cfgUsaCorGrade").value(true))
                 .andExpect(jsonPath("$.cfgPermiteQtdDecimal").value(false));
 
         mvc.perform(get("/api/v1/config-geral").header("Authorization", "Bearer " + token))
@@ -114,8 +113,7 @@ class ConfiguracaoGeralTest {
 
         String corpo = """
                 {"percentualDescontoVenda":10,"jurosCrediarioDias":0,"jurosCrediario":0,
-                 "multaCrediarioDias":0,"multaCrediario":0,"cfgUsaVarianteLinha":true,
-                 "cfgUsaVarianteColuna":true,"cfgPermiteQtdDecimal":true}
+                 "multaCrediarioDias":0,"multaCrediario":0,"cfgUsaCorGrade":true,"cfgPermiteQtdDecimal":true}
                 """;
         mvc.perform(put("/api/v1/config-geral").header("Authorization", "Bearer " + tokenOperador)
                         .contentType(APPLICATION_JSON).content(corpo))
@@ -128,8 +126,7 @@ class ConfiguracaoGeralTest {
 
         String corpo = """
                 {"percentualDescontoVenda":150,"jurosCrediarioDias":0,"jurosCrediario":0,
-                 "multaCrediarioDias":0,"multaCrediario":0,"cfgUsaVarianteLinha":true,
-                 "cfgUsaVarianteColuna":true,"cfgPermiteQtdDecimal":true}
+                 "multaCrediarioDias":0,"multaCrediario":0,"cfgUsaCorGrade":true,"cfgPermiteQtdDecimal":true}
                 """;
         mvc.perform(put("/api/v1/config-geral").header("Authorization", "Bearer " + token)
                         .contentType(APPLICATION_JSON).content(corpo))
@@ -142,8 +139,7 @@ class ConfiguracaoGeralTest {
 
         String corpo = """
                 {"percentualDescontoVenda":10,"jurosCrediarioDias":-1,"jurosCrediario":0,
-                 "multaCrediarioDias":0,"multaCrediario":0,"cfgUsaVarianteLinha":true,
-                 "cfgUsaVarianteColuna":true,"cfgPermiteQtdDecimal":true}
+                 "multaCrediarioDias":0,"multaCrediario":0,"cfgUsaCorGrade":true,"cfgPermiteQtdDecimal":true}
                 """;
         mvc.perform(put("/api/v1/config-geral").header("Authorization", "Bearer " + token)
                         .contentType(APPLICATION_JSON).content(corpo))
@@ -159,8 +155,8 @@ class ConfiguracaoGeralTest {
                         .contentType(APPLICATION_JSON)
                         .content("""
                                 {"percentualDescontoVenda":20,"jurosCrediarioDias":0,"jurosCrediario":0,
-                                 "multaCrediarioDias":0,"multaCrediario":0,"cfgUsaVarianteLinha":true,
-                                 "cfgUsaVarianteColuna":true,"cfgPermiteQtdDecimal":true}
+                                 "multaCrediarioDias":0,"multaCrediario":0,"cfgUsaCorGrade":true,
+                                 "cfgPermiteQtdDecimal":true}
                                 """))
                 .andExpect(status().isOk());
 

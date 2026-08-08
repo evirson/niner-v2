@@ -299,17 +299,15 @@ public class TransferenciaService {
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Transferência não encontrada."));
 
         List<ItemTransferenciaResponse> itens = jdbc.sql("""
-                        SELECT pb.id_variacao, p.descricao AS descricao_produto, vl.descricao AS variacao_linha,
-                               vc.descricao AS variacao_coluna, pb.sku, pmd.qtd_produto
+                        SELECT pb.id_variacao, p.descricao AS descricao_produto, co.descricao AS variacao_cor,
+                               ta.descricao AS variacao_tamanho, pb.sku, pmd.qtd_produto
                         FROM produto_movimento_mestre pm
                         JOIN produto_movimento_detalhe pmd
                                ON pmd.id_movimento = pm.id_movimento AND pmd.id_tenant = pm.id_tenant
                         JOIN produto_barra pb ON pb.id_variacao = pmd.id_variacao AND pb.id_tenant = pmd.id_tenant
                         JOIN produto p ON p.id_produto = pb.id_produto AND p.id_tenant = pb.id_tenant
-                        LEFT JOIN cfg_variante_linha vl
-                               ON vl.id_variante_linha = pb.id_variante_linha AND vl.id_tenant = pb.id_tenant
-                        LEFT JOIN cfg_variante_coluna vc
-                               ON vc.id_variante_coluna = pb.id_variante_coluna AND vc.id_tenant = pb.id_tenant
+                        LEFT JOIN cfg_cor co ON co.id_cor = pb.id_cor AND co.id_tenant = pb.id_tenant
+                        LEFT JOIN cfg_tamanho ta ON ta.id_tamanho = pb.id_tamanho AND ta.id_tenant = pb.id_tenant
                         WHERE pm.id_tenant = plataforma.tenant_atual() AND pm.id_transferencia = ?
                               AND pmd.credito_debito = 'D'
                         ORDER BY pmd.id_movimento_detalhe ASC
@@ -329,7 +327,7 @@ public class TransferenciaService {
 
     private static ItemTransferenciaResponse mapearItem(ResultSet rs, int rowNum) throws SQLException {
         return new ItemTransferenciaResponse(
-                rs.getLong("id_variacao"), rs.getString("descricao_produto"), rs.getString("variacao_linha"),
-                rs.getString("variacao_coluna"), rs.getString("sku"), rs.getBigDecimal("qtd_produto"));
+                rs.getLong("id_variacao"), rs.getString("descricao_produto"), rs.getString("variacao_cor"),
+                rs.getString("variacao_tamanho"), rs.getString("sku"), rs.getBigDecimal("qtd_produto"));
     }
 }

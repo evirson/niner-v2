@@ -84,11 +84,11 @@ public class RelatorioMovimentacaoProdutosService {
         String filtroBusca = (busca == null || busca.isBlank()) ? "" : " AND (p.descricao ILIKE ? OR pb.sku ILIKE ?)";
         String sql = """
                 SELECT pb.id_variacao, pb.sku, p.descricao AS descricao_produto, p.marca,
-                       vl.descricao AS variacao_linha, vc.descricao AS variacao_coluna
+                       co.descricao AS variacao_cor, ta.descricao AS variacao_tamanho
                 FROM produto_barra pb
                 JOIN produto p ON p.id_produto = pb.id_produto AND p.id_tenant = pb.id_tenant
-                LEFT JOIN cfg_variante_linha vl ON vl.id_variante_linha = pb.id_variante_linha AND vl.id_tenant = pb.id_tenant
-                LEFT JOIN cfg_variante_coluna vc ON vc.id_variante_coluna = pb.id_variante_coluna AND vc.id_tenant = pb.id_tenant
+                LEFT JOIN cfg_cor co ON co.id_cor = pb.id_cor AND co.id_tenant = pb.id_tenant
+                LEFT JOIN cfg_tamanho ta ON ta.id_tamanho = pb.id_tamanho AND ta.id_tenant = pb.id_tenant
                 WHERE pb.id_tenant = plataforma.tenant_atual()
                 """
                 + filtroBusca
@@ -101,7 +101,7 @@ public class RelatorioMovimentacaoProdutosService {
         }
         return query.query((rs, n) -> new VariacaoEncontrada(
                         rs.getLong("id_variacao"), rs.getString("sku"), rs.getString("descricao_produto"),
-                        rs.getString("marca"), rs.getString("variacao_linha"), rs.getString("variacao_coluna")))
+                        rs.getString("marca"), rs.getString("variacao_cor"), rs.getString("variacao_tamanho")))
                 .list();
     }
 
@@ -174,7 +174,7 @@ public class RelatorioMovimentacaoProdutosService {
                 SELECT pmd.id_empresa, COALESCE(e.nome_fantasia, e.razao_social) AS nome_empresa,
                        pmm.data_movimento, pmm.tipo_movimento::text AS tipo_movimento,
                        pmd.id_variacao, pb.sku, p.descricao AS descricao_produto, p.marca,
-                       vl.descricao AS variacao_linha, vc.descricao AS variacao_coluna,
+                       co.descricao AS variacao_cor, ta.descricao AS variacao_tamanho,
                        pmd.credito_debito::text AS credito_debito, pmd.qtd_produto,
                        COALESCE(NULLIF(pmd.preco_custo, 0), p.preco_custo) AS preco_custo,
                        pmm.id_venda, pmm.id_transferencia, pmm.id_devolucao, pmm.nota_fiscal,
@@ -185,8 +185,8 @@ public class RelatorioMovimentacaoProdutosService {
                 JOIN empresa e ON e.id_empresa = pmd.id_empresa AND e.id_tenant = pmd.id_tenant
                 JOIN produto_barra pb ON pb.id_variacao = pmd.id_variacao AND pb.id_tenant = pmd.id_tenant
                 JOIN produto p ON p.id_produto = pb.id_produto AND p.id_tenant = pb.id_tenant
-                LEFT JOIN cfg_variante_linha vl ON vl.id_variante_linha = pb.id_variante_linha AND vl.id_tenant = pb.id_tenant
-                LEFT JOIN cfg_variante_coluna vc ON vc.id_variante_coluna = pb.id_variante_coluna AND vc.id_tenant = pb.id_tenant
+                LEFT JOIN cfg_cor co ON co.id_cor = pb.id_cor AND co.id_tenant = pb.id_tenant
+                LEFT JOIN cfg_tamanho ta ON ta.id_tamanho = pb.id_tamanho AND ta.id_tenant = pb.id_tenant
                 LEFT JOIN fornecedor forn ON forn.id_fornecedor = pmm.id_fornecedor AND forn.id_tenant = pmm.id_tenant
                 LEFT JOIN funcionario fn ON fn.id_funcionario = pmd.id_funcionario AND fn.id_tenant = pmd.id_tenant
                 """
@@ -210,7 +210,7 @@ public class RelatorioMovimentacaoProdutosService {
                             rs.getLong("id_empresa"), rs.getString("nome_empresa"),
                             rs.getObject("data_movimento", OffsetDateTime.class), tipo, !TIPOS_NAO_FISICOS.contains(tipo),
                             rs.getLong("id_variacao"), rs.getString("sku"), rs.getString("descricao_produto"), rs.getString("marca"),
-                            rs.getString("variacao_linha"), rs.getString("variacao_coluna"), entrada, saida, custo,
+                            rs.getString("variacao_cor"), rs.getString("variacao_tamanho"), entrada, saida, custo,
                             qtd.multiply(custo), documento, rs.getString("nome_funcionario"));
                 })
                 .list();
@@ -356,7 +356,7 @@ public class RelatorioMovimentacaoProdutosService {
 
         CabecalhoKardex cabecalhoComSaldos = new CabecalhoKardex(
                 cabecalho.idVariacao(), cabecalho.sku(), cabecalho.descricaoProduto(), cabecalho.marca(),
-                cabecalho.variacaoLinha(), cabecalho.variacaoColuna(), cabecalho.idEmpresa(), cabecalho.nomeEmpresa(),
+                cabecalho.variacaoCor(), cabecalho.variacaoTamanho(), cabecalho.idEmpresa(), cabecalho.nomeEmpresa(),
                 saldoInicial, saldoCorrido[0]);
 
         return new RelatorioMovimentacaoProdutosResponse(
@@ -366,12 +366,12 @@ public class RelatorioMovimentacaoProdutosService {
     private CabecalhoKardex buscarCabecalhoKardex(long idVariacao, long idEmpresa) {
         String sql = """
                 SELECT pb.id_variacao, pb.sku, p.descricao AS descricao_produto, p.marca,
-                       vl.descricao AS variacao_linha, vc.descricao AS variacao_coluna,
+                       co.descricao AS variacao_cor, ta.descricao AS variacao_tamanho,
                        emp.id_empresa, COALESCE(emp.nome_fantasia, emp.razao_social) AS nome_empresa
                 FROM produto_barra pb
                 JOIN produto p ON p.id_produto = pb.id_produto AND p.id_tenant = pb.id_tenant
-                LEFT JOIN cfg_variante_linha vl ON vl.id_variante_linha = pb.id_variante_linha AND vl.id_tenant = pb.id_tenant
-                LEFT JOIN cfg_variante_coluna vc ON vc.id_variante_coluna = pb.id_variante_coluna AND vc.id_tenant = pb.id_tenant
+                LEFT JOIN cfg_cor co ON co.id_cor = pb.id_cor AND co.id_tenant = pb.id_tenant
+                LEFT JOIN cfg_tamanho ta ON ta.id_tamanho = pb.id_tamanho AND ta.id_tenant = pb.id_tenant
                 JOIN empresa emp ON emp.id_tenant = pb.id_tenant AND emp.id_empresa = ?
                 WHERE pb.id_tenant = plataforma.tenant_atual() AND pb.id_variacao = ?
                 """;
@@ -379,7 +379,7 @@ public class RelatorioMovimentacaoProdutosService {
                 .params(idEmpresa, idVariacao)
                 .query((rs, n) -> new CabecalhoKardex(
                         rs.getLong("id_variacao"), rs.getString("sku"), rs.getString("descricao_produto"), rs.getString("marca"),
-                        rs.getString("variacao_linha"), rs.getString("variacao_coluna"),
+                        rs.getString("variacao_cor"), rs.getString("variacao_tamanho"),
                         rs.getLong("id_empresa"), rs.getString("nome_empresa"), null, null))
                 .optional()
                 .orElse(null);

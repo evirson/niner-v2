@@ -41,8 +41,8 @@ public class CrmService {
             Integer diasSemComprasMinimo,
             LocalDate comprasDe, LocalDate comprasAte,
             List<Long> idsCategoriaProduto,
-            List<Long> idsVarianteLinha,
-            List<Long> idsVarianteColuna) {
+            List<Long> idsCor,
+            List<Long> idsTamanho) {
     }
 
     @Transactional(readOnly = true)
@@ -52,9 +52,9 @@ public class CrmService {
                         + "WHERE id_tenant = plataforma.tenant_atual() ORDER BY nome_categoria"),
                 buscarOpcoes("SELECT id_categoria AS id, nome_categoria AS rotulo FROM cfg_categoria_produto "
                         + "WHERE id_tenant = plataforma.tenant_atual() ORDER BY nome_categoria"),
-                buscarOpcoes("SELECT id_variante_linha AS id, descricao AS rotulo FROM cfg_variante_linha "
+                buscarOpcoes("SELECT id_cor AS id, descricao AS rotulo FROM cfg_cor "
                         + "WHERE id_tenant = plataforma.tenant_atual() ORDER BY descricao"),
-                buscarOpcoes("SELECT id_variante_coluna AS id, descricao AS rotulo FROM cfg_variante_coluna "
+                buscarOpcoes("SELECT id_tamanho AS id, descricao AS rotulo FROM cfg_tamanho "
                         + "WHERE id_tenant = plataforma.tenant_atual() ORDER BY descricao"));
     }
 
@@ -183,13 +183,13 @@ public class CrmService {
                 exists.append(" AND pc2.id_categoria IN (").append(placeholders(f.idsCategoriaProduto().size())).append(")");
                 paramsExists.addAll(f.idsCategoriaProduto());
             }
-            if (f.idsVarianteLinha() != null && !f.idsVarianteLinha().isEmpty()) {
-                exists.append(" AND pb2.id_variante_linha IN (").append(placeholders(f.idsVarianteLinha().size())).append(")");
-                paramsExists.addAll(f.idsVarianteLinha());
+            if (f.idsCor() != null && !f.idsCor().isEmpty()) {
+                exists.append(" AND pb2.id_cor IN (").append(placeholders(f.idsCor().size())).append(")");
+                paramsExists.addAll(f.idsCor());
             }
-            if (f.idsVarianteColuna() != null && !f.idsVarianteColuna().isEmpty()) {
-                exists.append(" AND pb2.id_variante_coluna IN (").append(placeholders(f.idsVarianteColuna().size())).append(")");
-                paramsExists.addAll(f.idsVarianteColuna());
+            if (f.idsTamanho() != null && !f.idsTamanho().isEmpty()) {
+                exists.append(" AND pb2.id_tamanho IN (").append(placeholders(f.idsTamanho().size())).append(")");
+                paramsExists.addAll(f.idsTamanho());
             }
             exists.append(")");
             sql.append(exists);
@@ -219,8 +219,8 @@ public class CrmService {
     private boolean temFiltroProdutos(FiltrosCrm f) {
         return (f.comprasDe() != null && f.comprasAte() != null)
                 || (f.idsCategoriaProduto() != null && !f.idsCategoriaProduto().isEmpty())
-                || (f.idsVarianteLinha() != null && !f.idsVarianteLinha().isEmpty())
-                || (f.idsVarianteColuna() != null && !f.idsVarianteColuna().isEmpty());
+                || (f.idsCor() != null && !f.idsCor().isEmpty())
+                || (f.idsTamanho() != null && !f.idsTamanho().isEmpty());
     }
 
     /** OPERADOR só vê compras da própria empresa ativa (claim {@code eid}); ADMIN vê todas —

@@ -74,7 +74,7 @@ public class PdvProdutoService {
      * pra URL pública — só depende do produto, então é igual em toda linha de uma mesma variação.
      */
     private record LinhaEstoque(
-            long idVariacao, String descricaoProduto, String variacaoLinha, String variacaoColuna,
+            long idVariacao, String descricaoProduto, String variacaoCor, String variacaoTamanho,
             String sku, BigDecimal precoVenda, String urlImagem,
             int codigoEmpresa, String nomeEmpresa, BigDecimal qtdEstoque) {
     }
@@ -84,8 +84,8 @@ public class PdvProdutoService {
         return new LinhaEstoque(
                 rs.getLong("id_variacao"),
                 rs.getString("descricao_produto"),
-                rs.getString("variacao_linha"),
-                rs.getString("variacao_coluna"),
+                rs.getString("variacao_cor"),
+                rs.getString("variacao_tamanho"),
                 rs.getString("sku"),
                 rs.getBigDecimal("preco_venda"),
                 chaveImagem == null ? null : armazenamento.urlPublica(chaveImagem),
@@ -113,7 +113,7 @@ public class PdvProdutoService {
                 total = total.add(linha.qtdEstoque());
             }
             resultado.add(new PdvProdutoResponse(
-                    primeira.idVariacao(), primeira.descricaoProduto(), primeira.variacaoLinha(), primeira.variacaoColuna(),
+                    primeira.idVariacao(), primeira.descricaoProduto(), primeira.variacaoCor(), primeira.variacaoTamanho(),
                     primeira.sku(), primeira.precoVenda(), estoquePorEmpresa, total, primeira.urlImagem()));
         }
         return resultado;
@@ -121,20 +121,18 @@ public class PdvProdutoService {
 
     private static final String VARIACOES_BASE = """
             SELECT pb.id_variacao, p.descricao AS descricao_produto,
-                   vl.descricao AS variacao_linha, vc.descricao AS variacao_coluna,
+                   co.descricao AS variacao_cor, ta.descricao AS variacao_tamanho,
                    pb.sku, p.preco_venda, pi.imagem AS imagem_produto
             FROM produto_barra pb
             JOIN produto p ON p.id_produto = pb.id_produto AND p.id_tenant = pb.id_tenant
-            LEFT JOIN cfg_variante_linha vl
-                   ON vl.id_variante_linha = pb.id_variante_linha AND vl.id_tenant = pb.id_tenant
-            LEFT JOIN cfg_variante_coluna vc
-                   ON vc.id_variante_coluna = pb.id_variante_coluna AND vc.id_tenant = pb.id_tenant
+            LEFT JOIN cfg_cor co ON co.id_cor = pb.id_cor AND co.id_tenant = pb.id_tenant
+            LEFT JOIN cfg_tamanho ta ON ta.id_tamanho = pb.id_tamanho AND ta.id_tenant = pb.id_tenant
             LEFT JOIN produto_imagem pi
                    ON pi.id_produto = p.id_produto AND pi.id_tenant = p.id_tenant AND pi.indice = 0
             """;
 
     private static final String ESTOQUE_POR_EMPRESA = """
-            SELECT v.id_variacao, v.descricao_produto, v.variacao_linha, v.variacao_coluna, v.sku, v.preco_venda,
+            SELECT v.id_variacao, v.descricao_produto, v.variacao_cor, v.variacao_tamanho, v.sku, v.preco_venda,
                    v.imagem_produto,
                    e.codigo_empresa, COALESCE(e.nome_fantasia, e.razao_social) AS nome_empresa,
                    COALESCE(pe.qtd_estoque, 0) AS qtd_estoque

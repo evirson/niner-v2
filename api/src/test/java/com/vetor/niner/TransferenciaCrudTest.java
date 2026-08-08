@@ -170,7 +170,7 @@ class TransferenciaCrudTest {
                         .contentType(APPLICATION_JSON)
                         .content("""
                                 {"percentualDescontoVenda":0,"jurosCrediarioDias":0,"jurosCrediario":0,
-                                 "multaCrediarioDias":0,"multaCrediario":0,"cfgUsaVarianteLinha":true,"cfgUsaVarianteColuna":true,
+                                 "multaCrediarioDias":0,"multaCrediario":0,"cfgUsaCorGrade":false,
                                  "cfgPermiteQtdDecimal":%s}
                                 """.formatted(permite)))
                 .andExpect(status().isOk());

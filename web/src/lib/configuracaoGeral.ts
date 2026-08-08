@@ -7,8 +7,7 @@ export interface ConfiguracaoGeral {
   jurosCrediario: number
   multaCrediarioDias: number
   multaCrediario: number
-  cfgUsaVarianteLinha: boolean
-  cfgUsaVarianteColuna: boolean
+  cfgUsaCorGrade: boolean
   cfgPermiteQtdDecimal: boolean
   atualizadoEm: string
 }
@@ -20,8 +19,7 @@ export interface ConfiguracaoGeralFormState {
   jurosCrediario: string
   multaCrediarioDias: string
   multaCrediario: string
-  cfgUsaVarianteLinha: boolean
-  cfgUsaVarianteColuna: boolean
+  cfgUsaCorGrade: boolean
   cfgPermiteQtdDecimal: boolean
 }
 
@@ -32,8 +30,7 @@ export function paraFormulario(c: ConfiguracaoGeral): ConfiguracaoGeralFormState
     jurosCrediario: formatarPercentual(c.jurosCrediario),
     multaCrediarioDias: String(c.multaCrediarioDias),
     multaCrediario: formatarPercentual(c.multaCrediario),
-    cfgUsaVarianteLinha: c.cfgUsaVarianteLinha,
-    cfgUsaVarianteColuna: c.cfgUsaVarianteColuna,
+    cfgUsaCorGrade: c.cfgUsaCorGrade,
     cfgPermiteQtdDecimal: c.cfgPermiteQtdDecimal,
   }
 }
@@ -46,8 +43,7 @@ export function paraRequisicao(f: ConfiguracaoGeralFormState) {
     jurosCrediario: desmascararPercentual(f.jurosCrediario),
     multaCrediarioDias: Number(f.multaCrediarioDias) || 0,
     multaCrediario: desmascararPercentual(f.multaCrediario),
-    cfgUsaVarianteLinha: f.cfgUsaVarianteLinha,
-    cfgUsaVarianteColuna: f.cfgUsaVarianteColuna,
+    cfgUsaCorGrade: f.cfgUsaCorGrade,
     cfgPermiteQtdDecimal: f.cfgPermiteQtdDecimal,
   }
 }
@@ -56,14 +52,14 @@ export function buscarConfiguracaoGeral(): Promise<ConfiguracaoGeral> {
   return api<ConfiguracaoGeral>('/api/v1/config-geral')
 }
 
-export interface FlagsVariante {
-  usaVarianteLinha: boolean
-  usaVarianteColuna: boolean
+export interface UsaCorGrade {
+  cfgUsaCorGrade: boolean
 }
 
-/** Aberto a qualquer papel (diferente do resto de `cfg_geral`) — usado pelo cadastro de produto. */
-export function buscarFlagsVariante(): Promise<FlagsVariante> {
-  return api<FlagsVariante>('/api/v1/config-geral/flags-variante')
+/** Aberto a qualquer papel (diferente do resto de `cfg_geral`) — usado pelo cadastro de produto
+ *  (campo Grade) e pela Emissão de Etiqueta. */
+export function buscarUsaCorGrade(): Promise<UsaCorGrade> {
+  return api<UsaCorGrade>('/api/v1/config-geral/usa-cor-grade')
 }
 
 export interface DescontoVenda {

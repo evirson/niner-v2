@@ -252,24 +252,22 @@ public class PdvVendaService {
 
         List<ItemComprovanteVenda> itens = jdbc.sql("""
                         SELECT pb.sku, p.descricao AS descricao_produto,
-                               vl.descricao AS variacao_linha, vc.descricao AS variacao_coluna,
+                               co.descricao AS variacao_cor, ta.descricao AS variacao_tamanho,
                                pmd.qtd_produto, pmd.preco_venda, (pmd.qtd_produto * pmd.preco_venda) AS valor_total
                         FROM produto_movimento_mestre pmm
                         JOIN produto_movimento_detalhe pmd
                                ON pmd.id_tenant = pmm.id_tenant AND pmd.id_movimento = pmm.id_movimento
                         JOIN produto_barra pb ON pb.id_tenant = pmd.id_tenant AND pb.id_variacao = pmd.id_variacao
                         JOIN produto p ON p.id_tenant = pb.id_tenant AND p.id_produto = pb.id_produto
-                        LEFT JOIN cfg_variante_linha vl
-                               ON vl.id_tenant = pb.id_tenant AND vl.id_variante_linha = pb.id_variante_linha
-                        LEFT JOIN cfg_variante_coluna vc
-                               ON vc.id_tenant = pb.id_tenant AND vc.id_variante_coluna = pb.id_variante_coluna
+                        LEFT JOIN cfg_cor co ON co.id_tenant = pb.id_tenant AND co.id_cor = pb.id_cor
+                        LEFT JOIN cfg_tamanho ta ON ta.id_tenant = pb.id_tenant AND ta.id_tamanho = pb.id_tamanho
                         WHERE pmm.id_tenant = plataforma.tenant_atual() AND pmm.id_venda = ? AND pmm.tipo_movimento = 'VENDA'
                         ORDER BY pmd.id_movimento_detalhe
                         """)
                 .param(idVenda)
                 .query((rs, n) -> new ItemComprovanteVenda(
                         rs.getString("sku"), rs.getString("descricao_produto"),
-                        rs.getString("variacao_linha"), rs.getString("variacao_coluna"),
+                        rs.getString("variacao_cor"), rs.getString("variacao_tamanho"),
                         rs.getBigDecimal("qtd_produto"), rs.getBigDecimal("preco_venda"), rs.getBigDecimal("valor_total")))
                 .list();
 
@@ -584,7 +582,7 @@ public class PdvVendaService {
         }
     }
 
-    private record LinhaItem(String descricaoProduto, String variacaoLinha, String variacaoColuna, BigDecimal precoVenda, BigDecimal precoCusto) {
+    private record LinhaItem(String descricaoProduto, String variacaoCor, String variacaoTamanho, BigDecimal precoVenda, BigDecimal precoCusto) {
     }
 
     /**
@@ -603,19 +601,17 @@ public class PdvVendaService {
             }
             LinhaItem linha = jdbc.sql("""
                             SELECT p.descricao AS descricao_produto,
-                                   vl.descricao AS variacao_linha, vc.descricao AS variacao_coluna,
+                                   co.descricao AS variacao_cor, ta.descricao AS variacao_tamanho,
                                    p.preco_venda, p.preco_custo
                             FROM produto_barra pb
                             JOIN produto p ON p.id_produto = pb.id_produto AND p.id_tenant = pb.id_tenant
-                            LEFT JOIN cfg_variante_linha vl
-                                   ON vl.id_variante_linha = pb.id_variante_linha AND vl.id_tenant = pb.id_tenant
-                            LEFT JOIN cfg_variante_coluna vc
-                                   ON vc.id_variante_coluna = pb.id_variante_coluna AND vc.id_tenant = pb.id_tenant
+                            LEFT JOIN cfg_cor co ON co.id_cor = pb.id_cor AND co.id_tenant = pb.id_tenant
+                            LEFT JOIN cfg_tamanho ta ON ta.id_tamanho = pb.id_tamanho AND ta.id_tenant = pb.id_tenant
                             WHERE pb.id_tenant = plataforma.tenant_atual() AND pb.id_variacao = ? AND p.ativo = true
                             """)
                     .params(item.idVariacao())
                     .query((rs, n) -> new LinhaItem(
-                            rs.getString("descricao_produto"), rs.getString("variacao_linha"), rs.getString("variacao_coluna"),
+                            rs.getString("descricao_produto"), rs.getString("variacao_cor"), rs.getString("variacao_tamanho"),
                             rs.getBigDecimal("preco_venda"), rs.getBigDecimal("preco_custo")))
                     .optional()
                     .orElseThrow(() -> new IllegalArgumentException("Produto informado não existe ou está inativo."));

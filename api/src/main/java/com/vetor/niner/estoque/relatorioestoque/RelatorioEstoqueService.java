@@ -144,12 +144,12 @@ public class RelatorioEstoqueService {
 
         String sql = """
                 SELECT p.id_produto, p.descricao AS descricao_produto, p.marca, p.referencia,
-                       pb.id_variacao, vl.descricao AS variacao_linha, vc.descricao AS variacao_coluna,
+                       pb.id_variacao, co.descricao AS variacao_cor, ta.descricao AS variacao_tamanho,
                        emp.id_empresa, COALESCE(pe.qtd_estoque, 0) AS qtd_estoque
                 FROM produto p
                 JOIN produto_barra pb ON pb.id_tenant = p.id_tenant AND pb.id_produto = p.id_produto
-                LEFT JOIN cfg_variante_linha vl ON vl.id_tenant = pb.id_tenant AND vl.id_variante_linha = pb.id_variante_linha
-                LEFT JOIN cfg_variante_coluna vc ON vc.id_tenant = pb.id_tenant AND vc.id_variante_coluna = pb.id_variante_coluna
+                LEFT JOIN cfg_cor co ON co.id_tenant = pb.id_tenant AND co.id_cor = pb.id_cor
+                LEFT JOIN cfg_tamanho ta ON ta.id_tenant = pb.id_tenant AND ta.id_tamanho = pb.id_tamanho
                 JOIN empresa emp ON emp.id_tenant = p.id_tenant AND emp.id_empresa IN (%s)
                 LEFT JOIN produto_estoque pe ON pe.id_tenant = p.id_tenant AND pe.id_variacao = pb.id_variacao
                                              AND pe.id_empresa = emp.id_empresa
@@ -158,14 +158,14 @@ public class RelatorioEstoqueService {
                 + " ORDER BY p.descricao, pb.id_variacao, emp.id_empresa";
 
         record Bruta(long idProduto, String descricao, String marca, String referencia, long idVariacao,
-                      String variacaoLinha, String variacaoColuna, long idEmpresa, BigDecimal qtd) {
+                      String variacaoCor, String variacaoTamanho, long idEmpresa, BigDecimal qtd) {
         }
 
         List<Bruta> brutas = jdbc.sql(sql)
                 .params(params)
                 .query((rs, n) -> new Bruta(
                         rs.getLong("id_produto"), rs.getString("descricao_produto"), rs.getString("marca"), rs.getString("referencia"),
-                        rs.getLong("id_variacao"), rs.getString("variacao_linha"), rs.getString("variacao_coluna"),
+                        rs.getLong("id_variacao"), rs.getString("variacao_cor"), rs.getString("variacao_tamanho"),
                         rs.getLong("id_empresa"), rs.getBigDecimal("qtd_estoque")))
                 .list();
 
@@ -175,8 +175,8 @@ public class RelatorioEstoqueService {
         }
         int n = colunas.size();
 
-        record Acumulador(String descricao, String marca, String referencia, String variacaoLinha,
-                           String variacaoColuna, BigDecimal[] qtds) {
+        record Acumulador(String descricao, String marca, String referencia, String variacaoCor,
+                           String variacaoTamanho, BigDecimal[] qtds) {
         }
 
         // Analítico agrupa por variação (id_variacao); Sintético agrupa por produto (id_produto) —
@@ -187,7 +187,7 @@ public class RelatorioEstoqueService {
         for (Bruta b : brutas) {
             long chave = modelo == ModeloRelatorioEstoque.ANALITICO ? b.idVariacao() : b.idProduto();
             Acumulador acc = porChave.computeIfAbsent(chave, k -> new Acumulador(
-                    b.descricao(), b.marca(), b.referencia(), b.variacaoLinha(), b.variacaoColuna(), new BigDecimal[n]));
+                    b.descricao(), b.marca(), b.referencia(), b.variacaoCor(), b.variacaoTamanho(), new BigDecimal[n]));
             Integer indice = indiceEmpresa.get(b.idEmpresa());
             if (indice == null) continue;
             BigDecimal atual = acc.qtds()[indice];
@@ -204,7 +204,7 @@ public class RelatorioEstoqueService {
                 List<BigDecimal> qtdPorEmpresa = paraLista(acc.qtds());
                 BigDecimal qtdTotal = somar(qtdPorEmpresa);
                 linhas.add(new LinhaAnalitica(
-                        acc.descricao(), acc.marca(), acc.referencia(), acc.variacaoLinha(), acc.variacaoColuna(),
+                        acc.descricao(), acc.marca(), acc.referencia(), acc.variacaoCor(), acc.variacaoTamanho(),
                         qtdPorEmpresa, qtdTotal));
             }
             linhas = filtrarPorTipoQuantidade(linhas, tipoQuantidade, LinhaAnalitica::qtdTotal);

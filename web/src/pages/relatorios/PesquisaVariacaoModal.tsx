@@ -3,8 +3,8 @@ import { useState } from 'react'
 import { buscarVariacoesMovimentacao, type VariacaoEncontrada } from '../../lib/relatorioMovimentacaoProdutos'
 
 function rotuloVariacao(v: VariacaoEncontrada): string | null {
-  if (!v.variacaoLinha && !v.variacaoColuna) return null
-  return [v.variacaoLinha, v.variacaoColuna].filter(Boolean).join(' · ')
+  if (!v.variacaoCor && !v.variacaoTamanho) return null
+  return [v.variacaoCor, v.variacaoTamanho].filter(Boolean).join(' · ')
 }
 
 /**

@@ -27,20 +27,11 @@ export interface RelatorioImportacao {
   pendencias: string[]
 }
 
-export interface GrupoDetectado {
-  chave: string
-  descricao: string
-  marca: string
-  referencia: string
-  usaLinha: boolean
-  usaColuna: boolean
-  rotuloLinhaSugerido: string | null
-  rotuloColunaSugerido: string | null
-}
-
+/** Só as colunas de estoque com dado (2026-08-08) — o passo de "escolher rótulo da variante"
+ *  deixou de existir: cor/tamanho têm nome fixo no sistema todo, e a grade de cada produto vem
+ *  direto das colunas `NOME_GRADE`/`DESCRICAO_COR`/`DESCRICAO_TAMANHO` do próprio arquivo. */
 export interface AnaliseProduto {
   colunasEstoqueComDado: string[]
-  grupos: GrupoDetectado[]
 }
 
 export function listarTabelasImportacao(): Promise<TabelaImportavel[]> {

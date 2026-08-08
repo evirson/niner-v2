@@ -24,8 +24,7 @@ const VAZIO: ConfiguracaoGeralFormState = {
   jurosCrediario: '',
   multaCrediarioDias: '0',
   multaCrediario: '',
-  cfgUsaVarianteLinha: true,
-  cfgUsaVarianteColuna: true,
+  cfgUsaCorGrade: false,
   cfgPermiteQtdDecimal: true,
 }
 
@@ -163,21 +162,16 @@ export default function ConfiguracaoGeralForm() {
               <label className="checkbox-linha" style={{ marginTop: 0 }}>
                 <input
                   type="checkbox"
-                  checked={form.cfgUsaVarianteLinha}
-                  onChange={(e) => setForm((f) => ({ ...f, cfgUsaVarianteLinha: e.target.checked }))}
+                  checked={form.cfgUsaCorGrade}
+                  onChange={(e) => setForm((f) => ({ ...f, cfgUsaCorGrade: e.target.checked }))}
                 />
-                Usa variante em linha (ex.: cor)
+                Usa cor/grade — calçados e confecções
               </label>
-            </div>
-            <div className="col-6">
-              <label className="checkbox-linha" style={{ marginTop: 0 }}>
-                <input
-                  type="checkbox"
-                  checked={form.cfgUsaVarianteColuna}
-                  onChange={(e) => setForm((f) => ({ ...f, cfgUsaVarianteColuna: e.target.checked }))}
-                />
-                Usa variante em coluna (ex.: tamanho/voltagem)
-              </label>
+              <p className="muted" style={{ fontSize: 12, marginTop: 4 }}>
+                Ligado: o cadastro de Produto ganha o campo Grade (obrigatório) e as variações
+                passam a ter cor e tamanho. Desligado: cada produto é seu próprio SKU (a maioria
+                dos segmentos — utilidades domésticas, brinquedos, cosméticos, armarinhos, óticas…).
+              </p>
             </div>
           </div>
         </section>

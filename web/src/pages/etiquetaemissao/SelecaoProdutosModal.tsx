@@ -1,13 +1,14 @@
-import { useMutation, useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { useEu } from '../../lib/eu'
 import { ApiError } from '../../lib/api'
 import { listarEmpresas } from '../../lib/empresas'
 import { listarCategoriasProduto } from '../../lib/categoriasProduto'
+import { criarCor, listarCores } from '../../lib/cores'
+import { buscarGrade } from '../../lib/grades'
 import {
   FILTROS_ENTRADAS_EMISSAO_VAZIO,
   buscarFornecedoresEmissao,
-  buscarOpcoesVarianteEmissao,
   buscarPorEntradas,
   buscarPorEstoques,
   buscarProdutosEmissao,
@@ -20,23 +21,27 @@ import {
   type ProdutoOpcaoEmissao,
 } from '../../lib/etiquetaEmissao'
 import { mascararData } from '../../lib/masks'
+import { maiusculas } from '../../lib/texto'
 
 type ModoSelecao = 'INDIVIDUAL' | 'ENTRADAS' | 'ESTOQUES'
 
 /**
- * Modo Individual (item 1.1; revisado 2026-08-05) — busca QUALQUER produto ativo, com ou sem
- * variação/SKU já cadastrado. Se o produto usa variação de linha e/ou coluna (configurado no
- * cadastro dele — `nomeVarianteLinha`/`nomeVarianteColuna`), o respectivo seletor aparece como
- * OBRIGATÓRIO (item 2 do pedido); as opções vêm do catálogo inteiro do tenant, não só do que já
- * existe pra este produto — o "Adicionar" pode CRIAR o SKU na hora (item 1 do pedido) via
- * `criarOuObterVariacaoEmissao`, que acha a combinação se já existir ou cria (backend valida a
- * obrigatoriedade de novo, defesa em profundidade).
+ * Modo Individual (item 1.1; revisado 2026-08-05; cor/grade 2026-08-08) — busca QUALQUER produto
+ * ativo, com ou sem variação/SKU já cadastrado. Se o produto usa grade (`idGrade` não nulo), os
+ * seletores de cor e tamanho aparecem como OBRIGATÓRIOS (item 2 do pedido) — tamanho vem só dos
+ * tamanhos daquela grade (`GET /api/v1/grades/{idGrade}`), cor vem do catálogo inteiro do tenant
+ * (`GET /api/v1/cores`), com "+ Nova cor" embutido (válvula de escape enquanto a Entrada de
+ * Produtos, onde cor nasceria na compra, não existe). O "Adicionar" pode CRIAR o SKU na hora
+ * (item 1 do pedido) via `criarOuObterVariacaoEmissao`, que acha a combinação se já existir ou
+ * cria (backend valida a obrigatoriedade de novo, defesa em profundidade).
  */
 function SelecaoIndividual({ aoAdicionar }: { aoAdicionar: (itens: ItemEmissao[]) => void }) {
+  const queryClient = useQueryClient()
   const [busca, setBusca] = useState('')
   const [produtoEscolhido, setProdutoEscolhido] = useState<ProdutoOpcaoEmissao | null>(null)
-  const [idVarianteLinha, setIdVarianteLinha] = useState<number | ''>('')
-  const [idVarianteColuna, setIdVarianteColuna] = useState<number | ''>('')
+  const [idCor, setIdCor] = useState<number | ''>('')
+  const [idTamanho, setIdTamanho] = useState<number | ''>('')
+  const [novaCorNome, setNovaCorNome] = useState('')
   const [quantidade, setQuantidade] = useState('1')
   const [erro, setErro] = useState('')
 
@@ -46,37 +51,49 @@ function SelecaoIndividual({ aoAdicionar }: { aoAdicionar: (itens: ItemEmissao[]
     enabled: busca.trim().length > 0 && !produtoEscolhido,
   })
 
-  const { data: opcoesVariante } = useQuery({
-    queryKey: ['etiqueta-emissao-variantes'],
-    queryFn: buscarOpcoesVarianteEmissao,
+  const usaGrade = produtoEscolhido?.idGrade != null
+
+  const { data: grade } = useQuery({
+    queryKey: ['grade', produtoEscolhido?.idGrade],
+    queryFn: () => buscarGrade(produtoEscolhido!.idGrade!),
+    enabled: usaGrade,
   })
 
-  const precisaLinha = Boolean(produtoEscolhido?.nomeVarianteLinha)
-  const precisaColuna = Boolean(produtoEscolhido?.nomeVarianteColuna)
+  const { data: cores } = useQuery({ queryKey: ['cores'], queryFn: listarCores, enabled: usaGrade })
+
+  const criarNovaCor = useMutation({
+    mutationFn: criarCor,
+    onSuccess: (cor) => {
+      queryClient.invalidateQueries({ queryKey: ['cores'] })
+      setIdCor(cor.idCor)
+      setNovaCorNome('')
+    },
+    onError: (e: unknown) => setErro(e instanceof ApiError ? e.message : 'Não foi possível criar a cor.'),
+  })
 
   function trocarProduto() {
     setProdutoEscolhido(null)
-    setIdVarianteLinha('')
-    setIdVarianteColuna('')
+    setIdCor('')
+    setIdTamanho('')
     setErro('')
   }
 
   const adicionar = useMutation({
     mutationFn: async () => {
       if (!produtoEscolhido) throw new ApiError(400, 'Escolha um produto.')
-      if (precisaLinha && idVarianteLinha === '') {
-        throw new ApiError(400, `Informe a variação de "${produtoEscolhido.nomeVarianteLinha}".`)
+      if (usaGrade && idCor === '') {
+        throw new ApiError(400, 'Informe a cor.')
       }
-      if (precisaColuna && idVarianteColuna === '') {
-        throw new ApiError(400, `Informe a variação de "${produtoEscolhido.nomeVarianteColuna}".`)
+      if (usaGrade && idTamanho === '') {
+        throw new ApiError(400, 'Informe o tamanho.')
       }
       const qtd = Number(quantidade)
       if (!quantidade.trim() || !Number.isInteger(qtd) || qtd < 1) {
         throw new ApiError(400, 'Informe uma quantidade de etiquetas inteira maior que zero.')
       }
       const variacao = await criarOuObterVariacaoEmissao(produtoEscolhido.idProduto, {
-        idVarianteLinha: precisaLinha ? (idVarianteLinha as number) : null,
-        idVarianteColuna: precisaColuna ? (idVarianteColuna as number) : null,
+        idCor: usaGrade ? (idCor as number) : null,
+        idTamanho: usaGrade ? (idTamanho as number) : null,
       })
       return produtoEmissaoParaItem(variacao, qtd)
     },
@@ -124,42 +141,51 @@ function SelecaoIndividual({ aoAdicionar }: { aoAdicionar: (itens: ItemEmissao[]
         </>
       )}
 
-      {produtoEscolhido && (precisaLinha || precisaColuna) && (
+      {produtoEscolhido && usaGrade && (
         <div className="form-grid" style={{ marginTop: 12 }}>
-          {precisaLinha && (
-            <div className="col-6">
-              <label htmlFor="emissao-linha">{produtoEscolhido.nomeVarianteLinha} *</label>
-              <select
-                id="emissao-linha"
-                value={idVarianteLinha}
-                onChange={(e) => setIdVarianteLinha(e.target.value === '' ? '' : Number(e.target.value))}
-              >
+          <div className="col-6">
+            <label htmlFor="emissao-cor">Cor *</label>
+            <div className="linha-com-botao">
+              <select id="emissao-cor" value={idCor} onChange={(e) => setIdCor(e.target.value === '' ? '' : Number(e.target.value))}>
                 <option value="">Selecione…</option>
-                {(opcoesVariante?.variantesLinha ?? []).map((v) => (
-                  <option key={v.id} value={v.id}>
-                    {v.descricao}
+                {(cores ?? []).map((c) => (
+                  <option key={c.idCor} value={c.idCor}>
+                    {c.descricao}
                   </option>
                 ))}
               </select>
             </div>
-          )}
-          {precisaColuna && (
-            <div className="col-6">
-              <label htmlFor="emissao-coluna">{produtoEscolhido.nomeVarianteColuna} *</label>
-              <select
-                id="emissao-coluna"
-                value={idVarianteColuna}
-                onChange={(e) => setIdVarianteColuna(e.target.value === '' ? '' : Number(e.target.value))}
+            <div className="linha-com-botao" style={{ marginTop: 4 }}>
+              <input
+                placeholder="+ Nova cor…"
+                value={novaCorNome}
+                onChange={(e) => setNovaCorNome(maiusculas(e.target.value))}
+              />
+              <button
+                type="button"
+                className="btn ghost"
+                disabled={!novaCorNome.trim() || criarNovaCor.isPending}
+                onClick={() => criarNovaCor.mutate(novaCorNome.trim())}
               >
-                <option value="">Selecione…</option>
-                {(opcoesVariante?.variantesColuna ?? []).map((v) => (
-                  <option key={v.id} value={v.id}>
-                    {v.descricao}
-                  </option>
-                ))}
-              </select>
+                ＋ Nova cor
+              </button>
             </div>
-          )}
+          </div>
+          <div className="col-6">
+            <label htmlFor="emissao-tamanho">Tamanho *</label>
+            <select
+              id="emissao-tamanho"
+              value={idTamanho}
+              onChange={(e) => setIdTamanho(e.target.value === '' ? '' : Number(e.target.value))}
+            >
+              <option value="">Selecione…</option>
+              {(grade?.tamanhos ?? []).map((t) => (
+                <option key={t.idTamanho} value={t.idTamanho}>
+                  {t.descricao}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
       )}
 

@@ -3,8 +3,8 @@ import { desmascararEtiquetaMm, formatarEtiquetaMm } from './masks'
 import { maiusculas } from './texto'
 
 /** Os 4 campos possíveis numa etiqueta — cada um mapeia pra uma coluna já existente no schema
- * (ver docs/telas/configuracao-etiqueta.md). Marca/Referência/Variação de Linha/Variação de
- * Coluna não são mais campos próprios (2026-08-05, pedido do dono do produto): entram
+ * (ver docs/telas/configuracao-etiqueta.md). Marca/Referência/Cor/Tamanho não são mais campos
+ * próprios (2026-08-05, pedido do dono do produto): entram
  * automaticamente dentro de `DESCRICAO_PRODUTO` via {@link montarDescricaoImpressa}, pra não
  * precisar posicionar 5 campos separados só pra imprimir a descrição completa. */
 export type CampoEtiqueta =
@@ -227,15 +227,15 @@ export interface ProdutoExemplo {
   marca: string | null
   referencia: string | null
   precoVenda: number
-  variacaoLinha: string | null
-  variacaoColuna: string | null
+  variacaoCor: string | null
+  variacaoTamanho: string | null
 }
 
 /**
  * Descrição "completa" impressa no campo `DESCRICAO_PRODUTO` (2026-08-05, pedido do dono do
- * produto): concatena descrição + marca + referência + variação de linha + variação de coluna,
- * nessa ordem, pulando qualquer pedaço vazio OU que já apareça dentro da descrição (comparação
- * sem diferenciar maiúsculas/minúsculas, mas os 5 campos já nascem em maiúsculas — convenção do
+ * produto): concatena descrição + marca + referência + cor + tamanho (2026-08-08, substituiu
+ * variação de linha/coluna), nessa ordem, pulando qualquer pedaço vazio OU que já apareça dentro
+ * da descrição (comparação sem diferenciar maiúsculas/minúsculas, mas os 5 campos já nascem em maiúsculas — convenção do
  * projeto — então normalmente é comparação direta) — evita repetir "ADIDAS ADIDAS" quando a
  * marca já está escrita na descrição, por exemplo. Sem produto de exemplo, cai no texto
  * genérico de layout (sem simular marca/referência/variação, que não existem ainda).
@@ -243,7 +243,7 @@ export interface ProdutoExemplo {
 export function montarDescricaoImpressa(produto: ProdutoExemplo | null): string {
   if (!produto) return 'Descrição do Produto'
   const descricao = produto.descricao.trim()
-  const complementos = [produto.marca, produto.referencia, produto.variacaoLinha, produto.variacaoColuna]
+  const complementos = [produto.marca, produto.referencia, produto.variacaoCor, produto.variacaoTamanho]
   const partes = [descricao]
   for (const complemento of complementos) {
     const valor = complemento?.trim()

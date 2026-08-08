@@ -2,31 +2,21 @@ import { api } from './api'
 import type { ProdutoExemplo } from './etiquetaConfig'
 import { dataParaIso } from './masks'
 
-/** `nomeVarianteLinha`/`nomeVarianteColuna` (2026-08-05, revisão) — não nulos quando ESTE produto
- * usa aquela dimensão (configurado no cadastro dele, não uma flag global de tenant); dizem à tela
- * de seleção Individual se o respectivo seletor de variação deve aparecer, e como obrigatório. */
+/** `idGrade` (2026-08-08, substitui `nomeVarianteLinha`/`nomeVarianteColuna`) — não nulo quando
+ * ESTE produto usa grade; diz à tela de seleção Individual se os seletores de cor/tamanho devem
+ * aparecer, e como obrigatórios. O de tamanho vem de `GET /api/v1/grades/{idGrade}` (já
+ * ordenado); o de cor vem de `GET /api/v1/cores` (tenant inteiro, + "+ Nova cor"). */
 export interface ProdutoOpcaoEmissao {
   idProduto: number
   descricao: string
   marca: string | null
   referencia: string | null
-  nomeVarianteLinha: string | null
-  nomeVarianteColuna: string | null
+  idGrade: number | null
 }
 
 export interface FornecedorOpcaoEmissao {
   idFornecedor: number
   razaoSocial: string
-}
-
-export interface OpcaoVarianteEmissao {
-  id: number
-  descricao: string
-}
-
-export interface OpcoesVarianteEmissao {
-  variantesLinha: OpcaoVarianteEmissao[]
-  variantesColuna: OpcaoVarianteEmissao[]
 }
 
 /** Uma variação vinda do backend — mesmo shape de `ProdutoExemplo`, + a quantidade sugerida
@@ -45,8 +35,8 @@ export interface ItemEmissao {
   marca: string | null
   referencia: string | null
   precoVenda: number
-  variacaoLinha: string | null
-  variacaoColuna: string | null
+  variacaoCor: string | null
+  variacaoTamanho: string | null
   quantidade: number
 }
 
@@ -56,16 +46,12 @@ export function buscarProdutosEmissao(busca: string): Promise<ProdutoOpcaoEmissa
   return api<ProdutoOpcaoEmissao[]>(`/api/v1/etiqueta-emissao/produtos?${params.toString()}`)
 }
 
-export function buscarOpcoesVarianteEmissao(): Promise<OpcoesVarianteEmissao> {
-  return api<OpcoesVarianteEmissao>('/api/v1/etiqueta-emissao/variantes')
-}
-
-/** Acha a variação (produto + linha + coluna) já cadastrada, ou CRIA na hora se ainda não existir
+/** Acha a variação (produto + cor + tamanho) já cadastrada, ou CRIA na hora se ainda não existir
  * (item 1 do pedido de revisão, 2026-08-05) — só o modo Individual precisa disso; Por Entradas/
  * Por Estoques só trazem variação que já existe (senão não teria movimento/estoque). */
 export function criarOuObterVariacaoEmissao(
   idProduto: number,
-  variacao: { idVarianteLinha: number | null; idVarianteColuna: number | null },
+  variacao: { idCor: number | null; idTamanho: number | null },
 ): Promise<ProdutoEmissao> {
   return api<ProdutoEmissao>(`/api/v1/etiqueta-emissao/produtos/${idProduto}/variacao`, {
     method: 'POST',
@@ -124,8 +110,8 @@ export function produtoEmissaoParaItem(p: ProdutoEmissao, quantidade: number): I
     marca: p.marca,
     referencia: p.referencia,
     precoVenda: p.precoVenda,
-    variacaoLinha: p.variacaoLinha,
-    variacaoColuna: p.variacaoColuna,
+    variacaoCor: p.variacaoCor,
+    variacaoTamanho: p.variacaoTamanho,
     quantidade,
   }
 }
@@ -138,8 +124,8 @@ export function paraProdutoExemplo(item: ItemEmissao): ProdutoExemplo {
     marca: item.marca,
     referencia: item.referencia,
     precoVenda: item.precoVenda,
-    variacaoLinha: item.variacaoLinha,
-    variacaoColuna: item.variacaoColuna,
+    variacaoCor: item.variacaoCor,
+    variacaoTamanho: item.variacaoTamanho,
   }
 }
 

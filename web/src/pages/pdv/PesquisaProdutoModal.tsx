@@ -49,8 +49,8 @@ export default function PesquisaProdutoModal({
             <thead>
               <tr>
                 <th>Descrição</th>
-                <th>Variação de Linha</th>
-                <th>Variação de Coluna</th>
+                <th>Cor</th>
+                <th>Tamanho</th>
                 {empresas.map((nome) => (
                   <th key={nome} style={{ textAlign: 'right' }}>
                     {nome}
@@ -98,8 +98,8 @@ export default function PesquisaProdutoModal({
                     }}
                   >
                     <td>{produto.descricaoProduto}</td>
-                    <td>{produto.variacaoLinha ?? '—'}</td>
-                    <td>{produto.variacaoColuna ?? '—'}</td>
+                    <td>{produto.variacaoCor ?? '—'}</td>
+                    <td>{produto.variacaoTamanho ?? '—'}</td>
                     {produto.estoquePorEmpresa.map((e) => (
                       <td key={e.codigoEmpresa} className="mono" style={{ textAlign: 'right' }}>
                         {formatarQuantidade(e.qtd, permiteQtdDecimal)}

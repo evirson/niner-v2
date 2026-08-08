@@ -108,19 +108,17 @@ public class BalancoEstoqueService {
     public List<LinhaContagem> listarContagemAtiva(Jwt jwt) {
         long idEmpresa = idEmpresaSessao(jwt);
         return jdbc.sql("""
-                        SELECT pb.id_variacao, p.descricao AS descricao_produto, vl.descricao AS variacao_linha,
-                               vc.descricao AS variacao_coluna, pbr.sku, SUM(pb.qtd_contagem) AS qtd_contada
+                        SELECT pb.id_variacao, p.descricao AS descricao_produto, co.descricao AS variacao_cor,
+                               ta.descricao AS variacao_tamanho, pbr.sku, SUM(pb.qtd_contagem) AS qtd_contada
                         FROM produto_balanco pb
                         JOIN produto_barra pbr ON pbr.id_variacao = pb.id_variacao AND pbr.id_tenant = pb.id_tenant
                         JOIN produto p ON p.id_produto = pbr.id_produto AND p.id_tenant = pbr.id_tenant
-                        LEFT JOIN cfg_variante_linha vl
-                               ON vl.id_variante_linha = pbr.id_variante_linha AND vl.id_tenant = pbr.id_tenant
-                        LEFT JOIN cfg_variante_coluna vc
-                               ON vc.id_variante_coluna = pbr.id_variante_coluna AND vc.id_tenant = pbr.id_tenant
+                        LEFT JOIN cfg_cor co ON co.id_cor = pbr.id_cor AND co.id_tenant = pbr.id_tenant
+                        LEFT JOIN cfg_tamanho ta ON ta.id_tamanho = pbr.id_tamanho AND ta.id_tenant = pbr.id_tenant
                         WHERE pb.id_tenant = plataforma.tenant_atual() AND pb.id_empresa = ? AND pb.id_movimento IS NULL
-                        GROUP BY pb.id_variacao, p.descricao, vl.descricao, vc.descricao, pbr.sku
+                        GROUP BY pb.id_variacao, p.descricao, co.descricao, ta.descricao, pbr.sku
                         HAVING SUM(pb.qtd_contagem) <> 0
-                        ORDER BY p.descricao, vl.descricao, vc.descricao
+                        ORDER BY p.descricao, co.descricao, ta.descricao
                         """)
                 .param(idEmpresa)
                 .query(BalancoEstoqueService::mapearLinhaContagem)
@@ -304,8 +302,8 @@ public class BalancoEstoqueService {
                             WHERE id_tenant = plataforma.tenant_atual() AND id_empresa = ?
                         )
                         SELECT COALESCE(c.id_variacao, e.id_variacao) AS id_variacao,
-                               p.descricao AS descricao_produto, vl.descricao AS variacao_linha,
-                               vc.descricao AS variacao_coluna, pbr.sku,
+                               p.descricao AS descricao_produto, co.descricao AS variacao_cor,
+                               ta.descricao AS variacao_tamanho, pbr.sku,
                                COALESCE(e.qtd_estoque, 0) AS qtd_estoque,
                                COALESCE(c.qtd_contada, 0) AS qtd_contada,
                                COALESCE(c.qtd_contada, 0) - COALESCE(e.qtd_estoque, 0) AS diferenca
@@ -314,10 +312,8 @@ public class BalancoEstoqueService {
                         JOIN produto_barra pbr
                                ON pbr.id_variacao = COALESCE(c.id_variacao, e.id_variacao) AND pbr.id_tenant = plataforma.tenant_atual()
                         JOIN produto p ON p.id_produto = pbr.id_produto AND p.id_tenant = pbr.id_tenant
-                        LEFT JOIN cfg_variante_linha vl
-                               ON vl.id_variante_linha = pbr.id_variante_linha AND vl.id_tenant = pbr.id_tenant
-                        LEFT JOIN cfg_variante_coluna vc
-                               ON vc.id_variante_coluna = pbr.id_variante_coluna AND vc.id_tenant = pbr.id_tenant
+                        LEFT JOIN cfg_cor co ON co.id_cor = pbr.id_cor AND co.id_tenant = pbr.id_tenant
+                        LEFT JOIN cfg_tamanho ta ON ta.id_tamanho = pbr.id_tamanho AND ta.id_tenant = pbr.id_tenant
                         WHERE COALESCE(c.qtd_contada, 0) <> COALESCE(e.qtd_estoque, 0)
                               AND (
                                   c.id_variacao IS NOT NULL
@@ -327,7 +323,7 @@ public class BalancoEstoqueService {
                                             AND pb2.id_variacao = e.id_variacao
                                   )
                               )
-                        ORDER BY p.descricao, vl.descricao, vc.descricao
+                        ORDER BY p.descricao, co.descricao, ta.descricao
                         """)
                 .params(idEmpresa, idEmpresa, idEmpresa)
                 .query(BalancoEstoqueService::mapearLinhaDiferenca)
@@ -361,14 +357,14 @@ public class BalancoEstoqueService {
 
     private static LinhaContagem mapearLinhaContagem(ResultSet rs, int rowNum) throws SQLException {
         return new LinhaContagem(
-                rs.getLong("id_variacao"), rs.getString("descricao_produto"), rs.getString("variacao_linha"),
-                rs.getString("variacao_coluna"), rs.getString("sku"), rs.getBigDecimal("qtd_contada"));
+                rs.getLong("id_variacao"), rs.getString("descricao_produto"), rs.getString("variacao_cor"),
+                rs.getString("variacao_tamanho"), rs.getString("sku"), rs.getBigDecimal("qtd_contada"));
     }
 
     private static LinhaDiferenca mapearLinhaDiferenca(ResultSet rs, int rowNum) throws SQLException {
         return new LinhaDiferenca(
-                rs.getLong("id_variacao"), rs.getString("descricao_produto"), rs.getString("variacao_linha"),
-                rs.getString("variacao_coluna"), rs.getString("sku"),
+                rs.getLong("id_variacao"), rs.getString("descricao_produto"), rs.getString("variacao_cor"),
+                rs.getString("variacao_tamanho"), rs.getString("sku"),
                 rs.getBigDecimal("qtd_estoque"), rs.getBigDecimal("qtd_contada"), rs.getBigDecimal("diferenca"));
     }
 

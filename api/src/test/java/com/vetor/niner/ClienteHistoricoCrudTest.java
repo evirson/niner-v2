@@ -129,9 +129,9 @@ class ClienteHistoricoCrudTest {
         }
     }
 
-    private long criarVarianteLinha(Connection c, long idTenant, String descricao) throws SQLException {
+    private long criarCor(Connection c, long idTenant, String descricao) throws SQLException {
         try (PreparedStatement ps = c.prepareStatement(
-                "INSERT INTO cfg_variante_linha (id_tenant, descricao) VALUES (?, ?) RETURNING id_variante_linha")) {
+                "INSERT INTO cfg_cor (id_tenant, descricao) VALUES (?, ?) RETURNING id_cor")) {
             ps.setLong(1, idTenant);
             ps.setString(2, descricao);
             try (ResultSet rs = ps.executeQuery()) {
@@ -141,9 +141,9 @@ class ClienteHistoricoCrudTest {
         }
     }
 
-    private long criarVarianteColuna(Connection c, long idTenant, String descricao) throws SQLException {
+    private long criarTamanho(Connection c, long idTenant, String descricao) throws SQLException {
         try (PreparedStatement ps = c.prepareStatement(
-                "INSERT INTO cfg_variante_coluna (id_tenant, descricao) VALUES (?, ?) RETURNING id_variante_coluna")) {
+                "INSERT INTO cfg_tamanho (id_tenant, descricao) VALUES (?, ?) RETURNING id_tamanho")) {
             ps.setLong(1, idTenant);
             ps.setString(2, descricao);
             try (ResultSet rs = ps.executeQuery()) {
@@ -153,15 +153,15 @@ class ClienteHistoricoCrudTest {
         }
     }
 
-    private long criarVariacaoComVariante(Connection c, long idTenant, long idProduto,
-                                           long idVarianteLinha, long idVarianteColuna) throws SQLException {
+    private long criarVariacaoComCorETamanho(Connection c, long idTenant, long idProduto,
+                                              long idCor, long idTamanho) throws SQLException {
         try (PreparedStatement ps = c.prepareStatement(
-                "INSERT INTO produto_barra (id_tenant, id_produto, id_variante_linha, id_variante_coluna, sku) "
+                "INSERT INTO produto_barra (id_tenant, id_produto, id_cor, id_tamanho, sku) "
                         + "VALUES (?, ?, ?, ?, gerar_ean13_interno()) RETURNING id_variacao")) {
             ps.setLong(1, idTenant);
             ps.setLong(2, idProduto);
-            ps.setLong(3, idVarianteLinha);
-            ps.setLong(4, idVarianteColuna);
+            ps.setLong(3, idCor);
+            ps.setLong(4, idTamanho);
             try (ResultSet rs = ps.executeQuery()) {
                 rs.next();
                 return rs.getLong(1);
@@ -294,8 +294,8 @@ class ClienteHistoricoCrudTest {
                     .andExpect(jsonPath("$.produtos.length()").value(1))
                     .andExpect(jsonPath("$.produtos[0].idVenda").value(idVenda))
                     .andExpect(jsonPath("$.produtos[0].descricaoProduto").value("PRODUTO SEM VARIAÇÃO"))
-                    .andExpect(jsonPath("$.produtos[0].variacaoLinha").doesNotExist())
-                    .andExpect(jsonPath("$.produtos[0].variacaoColuna").doesNotExist())
+                    .andExpect(jsonPath("$.produtos[0].variacaoCor").doesNotExist())
+                    .andExpect(jsonPath("$.produtos[0].variacaoTamanho").doesNotExist())
                     .andExpect(jsonPath("$.produtos[0].qtdVendida").value(2.0))
                     .andExpect(jsonPath("$.produtos[0].precoVenda").value(9.75));
         }
@@ -311,17 +311,17 @@ class ClienteHistoricoCrudTest {
 
         try (Connection c = abrirConexao(idTenant)) {
             long idEmpresa = buscarIdEmpresa(c);
-            long idVarianteLinha = criarVarianteLinha(c, idTenant, "TAMANHO");
-            long idVarianteColuna = criarVarianteColuna(c, idTenant, "COR");
-            long idVariacao = criarVariacaoComVariante(c, idTenant, idProduto, idVarianteLinha, idVarianteColuna);
+            long idCor = criarCor(c, idTenant, "AZUL");
+            long idTamanho = criarTamanho(c, idTenant, "40");
+            long idVariacao = criarVariacaoComCorETamanho(c, idTenant, idProduto, idCor, idTamanho);
             long idVenda = criarVenda(c, idTenant, idEmpresa, idCliente, OffsetDateTime.now());
             criarMovimentoVenda(c, idTenant, idEmpresa, idVenda, idVariacao,
                     new BigDecimal("1.000"), new BigDecimal("50.00"), BigDecimal.ZERO, BigDecimal.ZERO);
 
             mvc.perform(get("/api/v1/clientes/" + idCliente + "/historico").header("Authorization", "Bearer " + token))
                     .andExpect(status().isOk())
-                    .andExpect(jsonPath("$.produtos[0].variacaoLinha").value("TAMANHO"))
-                    .andExpect(jsonPath("$.produtos[0].variacaoColuna").value("COR"))
+                    .andExpect(jsonPath("$.produtos[0].variacaoCor").value("AZUL"))
+                    .andExpect(jsonPath("$.produtos[0].variacaoTamanho").value("40"))
                     .andExpect(jsonPath("$.produtos[0].precoVenda").value(50.00));
         }
     }

@@ -24,8 +24,8 @@ export interface PaginaVendasCancelamento {
 
 export interface ItemVendaDetalhe {
   descricaoProduto: string
-  variacaoLinha: string | null
-  variacaoColuna: string | null
+  variacaoCor: string | null
+  variacaoTamanho: string | null
   qtd: number
   precoVenda: number
   valorItem: number

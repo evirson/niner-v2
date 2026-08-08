@@ -10,8 +10,8 @@ export interface OpcaoCrm {
 export interface OpcoesCrm {
   categoriasCliente: OpcaoCrm[]
   categoriasProduto: OpcaoCrm[]
-  variantesLinha: OpcaoCrm[]
-  variantesColuna: OpcaoCrm[]
+  cores: OpcaoCrm[]
+  tamanhos: OpcaoCrm[]
 }
 
 export type GeneroCrm = 'MASCULINO' | 'FEMININO' | 'OUTROS'
@@ -72,16 +72,16 @@ export interface FiltrosProdutosCrm {
   comprasDe: string
   comprasAte: string
   idsCategoriaProduto: number[]
-  idsVarianteLinha: number[]
-  idsVarianteColuna: number[]
+  idsCor: number[]
+  idsTamanho: number[]
 }
 
 export const FILTROS_PRODUTOS_CRM_VAZIO: FiltrosProdutosCrm = {
   comprasDe: '',
   comprasAte: '',
   idsCategoriaProduto: [],
-  idsVarianteLinha: [],
-  idsVarianteColuna: [],
+  idsCor: [],
+  idsTamanho: [],
 }
 
 export function contarFiltrosClientesAtivos(f: FiltrosClientesCrm): number {
@@ -101,8 +101,8 @@ export function contarFiltrosProdutosAtivos(f: FiltrosProdutosCrm): number {
   let n = 0
   if (f.comprasDe.trim() || f.comprasAte.trim()) n++
   if (f.idsCategoriaProduto.length > 0) n++
-  if (f.idsVarianteLinha.length > 0) n++
-  if (f.idsVarianteColuna.length > 0) n++
+  if (f.idsCor.length > 0) n++
+  if (f.idsTamanho.length > 0) n++
   return n
 }
 
@@ -126,8 +126,8 @@ export function buscarClientesCrm(fc: FiltrosClientesCrm, fp: FiltrosProdutosCrm
   if (fp.comprasDe.trim()) params.set('comprasDe', dataParaIso(fp.comprasDe) ?? '')
   if (fp.comprasAte.trim()) params.set('comprasAte', dataParaIso(fp.comprasAte) ?? '')
   fp.idsCategoriaProduto.forEach((id) => params.append('idsCategoriaProduto', String(id)))
-  fp.idsVarianteLinha.forEach((id) => params.append('idsVarianteLinha', String(id)))
-  fp.idsVarianteColuna.forEach((id) => params.append('idsVarianteColuna', String(id)))
+  fp.idsCor.forEach((id) => params.append('idsCor', String(id)))
+  fp.idsTamanho.forEach((id) => params.append('idsTamanho', String(id)))
 
   const query = params.toString()
   return api<ClienteCrm[]>(`/api/v1/crm/clientes${query ? `?${query}` : ''}`)

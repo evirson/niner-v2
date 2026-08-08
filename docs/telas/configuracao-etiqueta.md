@@ -27,7 +27,7 @@ pelo dono do produto: nome da loja em fundo preto/letra branca no topo, descriç
 
 ## Decisões de escopo (perguntadas e confirmadas nesta sessão)
 
-- **Por tenant, não por empresa** — mesma lógica de `produto`/`cfg_variante_linha`, que já são
+- **Por tenant, não por empresa** — mesma lógica de `produto`/`cfg_cor`, que já são
   por tenant. A tela de Emissão (futura) ainda escolhe a empresa (pro `cfg_nome_etiqueta` e pro
   preço), só o layout da etiqueta é compartilhado entre as empresas do tenant.
 - **Várias configurações nomeadas** (cadastro completo, não singleton) — o usuário cria

@@ -70,8 +70,8 @@ use popup quando precisar.
 |---|---|---|
 | 2.1 | Período de Compras | `venda.data_venda` |
 | 2.2 | Categoria de Produtos Comprados | `cfg_categoria_produto` via `produto_categoria` |
-| 2.3 | Variação de Linha | `cfg_variante_linha` |
-| 2.4 | Variação de Coluna | `cfg_variante_coluna` |
+| 2.3 | Cor | `cfg_cor` |
+| 2.4 | Tamanho | `cfg_tamanho` |
 
 **Regra importante:** quando qualquer um destes 4 está preenchido, o filtro vira um `EXISTS`
 exigindo que **todos os ativos batam na MESMA linha de venda** (o mesmo item comprado), não em
@@ -121,12 +121,11 @@ elimina a superfície de ataque das duas outras.
 
 `com.vetor.niner.cadastros.crm` — `CrmController`/`Service`/`Dtos`, sem tabela nova (lê só de
 `cliente`/`venda`/`produto_movimento_mestre`/`produto_movimento_detalhe`/`produto_barra`/
-`produto_categoria`/`cfg_categoria_cliente`/`cfg_categoria_produto`/`cfg_variante_linha`/
-`cfg_variante_coluna`, todas já existentes). Dois endpoints, `/api/v1/**` (qualquer papel, só
-leitura):
+`produto_categoria`/`cfg_categoria_cliente`/`cfg_categoria_produto`/`cfg_cor`/`cfg_tamanho`,
+todas já existentes). Dois endpoints, `/api/v1/**` (qualquer papel, só leitura):
 
-- `GET /api/v1/crm/opcoes` — as 4 listas de dropdown (categorias de cliente/produto, variantes de
-  linha/coluna) do tenant, pra popular os `MultiSelectGenerico` dos dois popups.
+- `GET /api/v1/crm/opcoes` — as 4 listas de dropdown (categorias de cliente/produto, cores,
+  tamanhos) do tenant, pra popular os `MultiSelectGenerico` dos dois popups.
 - `GET /api/v1/crm/clientes` — os 15 filtros como `@RequestParam` (mesmo estilo de
   `RelatorioContasReceberController`: `List<Long>`/`List<String>` para multi-seleção, LocalDate
   pros períodos), devolve a lista de `ClienteCrmResponse`.

@@ -31,8 +31,9 @@ type Etapa = 'tabela' | 'arquivo' | 'escolhas' | 'previa' | 'concluido'
  *
  * Fluxo: escolher tabela → baixar modelo/enviar arquivo → resolver escolhas prévias (que variam
  * por tabela: categoria única do arquivo, plano de contas único, carteira de crediário única, ou
- * — só para produto — mapear colunas de estoque para empresa e confirmar o rótulo da variante) →
- * prévia (dry-run, nada é gravado) → confirmar (grava de verdade).
+ * — só para produto — mapear colunas de estoque para empresa) → prévia (dry-run, nada é gravado)
+ * → confirmar (grava de verdade). Cor/tamanho/grade (2026-08-08) vêm direto das colunas do
+ * arquivo (`DESCRICAO_COR`/`DESCRICAO_TAMANHO`/`NOME_GRADE`), sem passo interativo de rótulo.
  *
  * Layout (2026-08-06, pedido do dono do produto): mesmo padrão do resto do sistema —
  * `.lista-topo` (título) e `.lista-rodape` (botões da etapa atual) fixos, só `.lista-corpo`
@@ -64,7 +65,6 @@ export default function ImportacaoDadosPage() {
   // produto
   const [analise, setAnalise] = useState<AnaliseProduto | null>(null)
   const [mapeamentoEmpresas, setMapeamentoEmpresas] = useState<Record<string, number | ''>>({})
-  const [rotulos, setRotulos] = useState<Record<string, { linha: string; coluna: string }>>({})
 
   const { data: tabelas } = useQuery({ queryKey: ['importacao-tabelas'], queryFn: listarTabelasImportacao })
   const { data: categorias } = useQuery({
@@ -98,11 +98,6 @@ export default function ImportacaoDadosPage() {
     mutationFn: (f: File) => analisarProduto(f),
     onSuccess: (a) => {
       setAnalise(a)
-      const rot: Record<string, { linha: string; coluna: string }> = {}
-      a.grupos.forEach((g) => {
-        rot[g.chave] = { linha: g.rotuloLinhaSugerido ?? '', coluna: g.rotuloColunaSugerido ?? '' }
-      })
-      setRotulos(rot)
       const mapa: Record<string, number | ''> = {}
       a.colunasEstoqueComDado.forEach((c) => {
         mapa[c] = ''
@@ -159,7 +154,7 @@ export default function ImportacaoDadosPage() {
               },
             }
       case 'produto':
-        return { mapeamentoEmpresas, rotulos }
+        return { mapeamentoEmpresas }
       default:
         return {}
     }
@@ -178,10 +173,7 @@ export default function ImportacaoDadosPage() {
         return carteiraModo === 'existente' ? idCarteira !== '' : novaCarteira.nomeCarteira.trim() !== ''
       case 'produto': {
         const semMapeamento = Object.values(mapeamentoEmpresas).some((v) => v === '')
-        const semRotulo = (analise?.grupos ?? []).some(
-          (g) => (g.usaLinha && !rotulos[g.chave]?.linha.trim()) || (g.usaColuna && !rotulos[g.chave]?.coluna.trim()),
-        )
-        return !semMapeamento && !semRotulo
+        return !semMapeamento
       }
       default:
         return true
@@ -484,46 +476,7 @@ export default function ImportacaoDadosPage() {
                     </>
                   )}
 
-                  {analise.grupos.some((g) => g.usaLinha || g.usaColuna) && (
-                    <>
-                      <p className="muted" style={{ marginTop: 16 }}>
-                        Confirme (ou corrija) o rótulo da variante detectado para cada produto com variação.
-                      </p>
-                      {analise.grupos
-                        .filter((g) => g.usaLinha || g.usaColuna)
-                        .map((g) => (
-                          <div className="form-grid" key={g.chave} style={{ marginBottom: 8 }}>
-                            <div className="col-6">
-                              <label>{g.descricao} {g.marca && `— ${g.marca}`}</label>
-                            </div>
-                            {g.usaLinha && (
-                              <div className="col-3">
-                                <input
-                                  placeholder="Rótulo da variante em linha (ex.: Cor)"
-                                  value={rotulos[g.chave]?.linha ?? ''}
-                                  onChange={(e) =>
-                                    setRotulos((r) => ({ ...r, [g.chave]: { ...r[g.chave], linha: e.target.value, coluna: r[g.chave]?.coluna ?? '' } }))
-                                  }
-                                />
-                              </div>
-                            )}
-                            {g.usaColuna && (
-                              <div className="col-3">
-                                <input
-                                  placeholder="Rótulo da variante em coluna (ex.: Tamanho)"
-                                  value={rotulos[g.chave]?.coluna ?? ''}
-                                  onChange={(e) =>
-                                    setRotulos((r) => ({ ...r, [g.chave]: { ...r[g.chave], coluna: e.target.value, linha: r[g.chave]?.linha ?? '' } }))
-                                  }
-                                />
-                              </div>
-                            )}
-                          </div>
-                        ))}
-                    </>
-                  )}
-
-                  {analise.colunasEstoqueComDado.length === 0 && !analise.grupos.some((g) => g.usaLinha || g.usaColuna) && (
+                  {analise.colunasEstoqueComDado.length === 0 && (
                     <p className="muted">Nenhuma escolha adicional necessária para este arquivo.</p>
                   )}
                 </div>

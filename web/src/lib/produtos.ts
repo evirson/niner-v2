@@ -36,8 +36,8 @@ export interface Produto {
   codigoNcm: string | null
   pesoBruto: number
   pesoLiquido: number
-  nomeVarianteLinha: string | null
-  nomeVarianteColuna: string | null
+  idGrade: number | null
+  descricaoGrade: string | null
   ativo: boolean
   categorias: CategoriaSelecionada[]
   imagens: ImagemProduto[]
@@ -59,8 +59,8 @@ export interface ProdutoFormState {
   codigoNcm: string
   pesoBruto: string
   pesoLiquido: string
-  nomeVarianteLinha: string
-  nomeVarianteColuna: string
+  idGrade: number | null
+  descricaoGrade: string | null
   ativo: boolean
   /** Categorias escolhidas, na ordem de exibição — o índice na lista é o `indice` enviado à API. */
   categorias: CategoriaSelecionada[]
@@ -79,8 +79,8 @@ export const PRODUTO_VAZIO: ProdutoFormState = {
   codigoNcm: '',
   pesoBruto: '',
   pesoLiquido: '',
-  nomeVarianteLinha: '',
-  nomeVarianteColuna: '',
+  idGrade: null,
+  descricaoGrade: null,
   ativo: true,
   categorias: [],
 }
@@ -105,8 +105,8 @@ export function paraFormulario(p: Produto): ProdutoFormState {
     codigoNcm: p.codigoNcm ? mascararNcm(p.codigoNcm) : '',
     pesoBruto: formatarPeso(p.pesoBruto ?? 0),
     pesoLiquido: formatarPeso(p.pesoLiquido ?? 0),
-    nomeVarianteLinha: p.nomeVarianteLinha ?? '',
-    nomeVarianteColuna: p.nomeVarianteColuna ?? '',
+    idGrade: p.idGrade,
+    descricaoGrade: p.descricaoGrade,
     ativo: p.ativo,
     categorias: [...p.categorias].sort((a, b) => a.indice - b.indice),
   }
@@ -128,8 +128,7 @@ export function paraRequisicao(f: ProdutoFormState) {
     codigoNcm: f.codigoNcm ? somenteDigitos(f.codigoNcm) : null,
     pesoBruto: desmascararPeso(f.pesoBruto),
     pesoLiquido: desmascararPeso(f.pesoLiquido),
-    nomeVarianteLinha: maiusculoOuNulo(f.nomeVarianteLinha),
-    nomeVarianteColuna: maiusculoOuNulo(f.nomeVarianteColuna),
+    idGrade: f.idGrade,
     ativo: f.ativo,
     categorias: f.categorias.map((c) => c.idCategoria),
   }

@@ -31,7 +31,7 @@ public final class PesquisaVendaDtos {
     }
 
     public record ItemVendaPesquisaResponse(
-            String codigo, String descricaoProduto, String variacaoLinha, String variacaoColuna,
+            String codigo, String descricaoProduto, String variacaoCor, String variacaoTamanho,
             BigDecimal qtd, BigDecimal valorUnitario, BigDecimal valorDesconto, BigDecimal valorItem) {
     }
 

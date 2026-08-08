@@ -7,10 +7,10 @@ public class ProdutoBarraDtos {
     private ProdutoBarraDtos() {
     }
 
-    public record CriarVariacaoRequest(Long idVarianteLinha, Long idVarianteColuna) {
+    public record CriarVariacaoRequest(Long idCor, Long idTamanho) {
     }
 
-    /** Uma variação (linha do `produto_barra`) já com os dados do produto/variantes resolvidos —
+    /** Uma variação (linha do `produto_barra`) já com os dados do produto/cor/tamanho resolvidos —
      * mesmo shape usado em outros lugares que mostram "produto + variação" (ex.: `EtiquetaConfigDtos
      * .ProdutoExemploResponse`), pra quem consome poder reaproveitar sem conversão. */
     public record ProdutoBarraResponse(
@@ -20,7 +20,7 @@ public class ProdutoBarraDtos {
             String marca,
             String referencia,
             BigDecimal precoVenda,
-            String variacaoLinha,
-            String variacaoColuna) {
+            String variacaoCor,
+            String variacaoTamanho) {
     }
 }

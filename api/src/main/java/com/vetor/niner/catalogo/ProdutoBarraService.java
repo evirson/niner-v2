@@ -11,6 +11,7 @@ import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.IntStream;
 
 import static org.springframework.http.HttpStatus.NOT_FOUND;
 
@@ -27,16 +28,21 @@ import static org.springframework.http.HttpStatus.NOT_FOUND;
  * {@code EanGeradorTest}) — nunca aceito do cliente, mesmo estilo de {@code
  * plataforma.tenant_atual()} usado no resto do domínio (aviso explícito em {@code CLAUDE.md}).
  *
- * <p><b>Obrigatoriedade de linha/coluna é por PRODUTO</b>, não uma flag global: se
- * {@code produto.nome_variante_linha} está preenchido, ESTE produto usa a dimensão "linha" e
- * {@code idVarianteLinha} passa a ser obrigatório pra ele (mesmo raciocínio pro `nome_variante_coluna`/
- * coluna) — dois produtos do mesmo tenant podem ter combinações diferentes (cor+tamanho, só
- * tamanho, ou nenhuma), mesmo com as flags globais {@code cfg_usa_variante_linha}/{@code
- * cfg_usa_variante_coluna} (Parâmetros do Sistema) ligadas — essas só controlam se o CAMPO
- * aparece no cadastro do produto, o preenchimento em si é opcional por produto.
+ * <p><b>Cor + tamanho (2026-08-08)</b> substituem o antigo par genérico linha/coluna: a
+ * obrigatoriedade agora é por {@code produto.id_grade}, não mais por nome configurado em cada
+ * produto — se o produto tem grade, cor e tamanho são **ambos** obrigatórios na variação (decisão
+ * do dono do produto), e o tamanho escolhido precisa pertencer à grade do produto (não é
+ * qualquer tamanho do tenant). Sem grade, cor/tamanho são forçados a {@code null} — mesmo
+ * princípio de "campo oculto ⇒ servidor ignora, não rejeita" usado no resto do sistema. A cor em
+ * si ainda não tem tela de cadastro própria (nasce embutida na Emissão de Etiqueta, válvula de
+ * escape enquanto a Entrada de Produtos — onde cor nasceria na prática, na compra — não existe).
  */
 @Service
 public class ProdutoBarraService {
+
+    private static final int MAX_TAMANHOS_GRADE = 20;
+    private static final String COLUNAS_GRADE = String.join(", ",
+            IntStream.rangeClosed(1, MAX_TAMANHOS_GRADE).mapToObj(i -> "g.id_tamanho" + i).toList());
 
     private final JdbcClient jdbc;
 
@@ -44,52 +50,100 @@ public class ProdutoBarraService {
         this.jdbc = jdbc;
     }
 
-    /** Acha a variação já cadastrada pra essa combinação produto/linha/coluna, ou cria na hora
+    /** Acha a variação já cadastrada pra essa combinação produto/cor/tamanho, ou cria na hora
      * (gera o SKU, insere) — idempotente do ponto de vista de quem chama. */
     @Transactional
-    public ProdutoBarraResponse obterOuCriar(long idProduto, Long idVarianteLinha, Long idVarianteColuna) {
-        validarObrigatoriedade(idProduto, idVarianteLinha, idVarianteColuna);
-        return buscarPorCombinacao(idProduto, idVarianteLinha, idVarianteColuna)
-                .orElseGet(() -> criar(idProduto, idVarianteLinha, idVarianteColuna));
+    public ProdutoBarraResponse obterOuCriar(long idProduto, Long idCorPedido, Long idTamanhoPedido) {
+        Long idGrade = buscarIdGrade(idProduto);
+        Long idCor = idGrade == null ? null : idCorPedido;
+        Long idTamanho = idGrade == null ? null : idTamanhoPedido;
+        validarObrigatoriedade(idProduto, idGrade, idCor, idTamanho);
+        return buscarPorCombinacao(idProduto, idCor, idTamanho)
+                .orElseGet(() -> criar(idProduto, idCor, idTamanho));
     }
 
-    private void validarObrigatoriedade(long idProduto, Long idVarianteLinha, Long idVarianteColuna) {
-        String[] nomes = jdbc.sql("""
-                        SELECT nome_variante_linha, nome_variante_coluna FROM produto
+    /** Envelope não-nulo em volta de {@code idGrade} — necessário porque tanto {@code
+     * .query(rowMapper).optional()} (sobre o valor mapeado) quanto {@code Optional.map(fn)}
+     * (quando {@code fn} devolve null) colapsam pra {@code Optional.empty()} — uma linha
+     * existente com {@code id_grade IS NULL} (produto sem grade) virava indistinguível de
+     * "produto não encontrado", disparando 404 por engano (achado real de teste, 2026-08-08).
+     * Por isso extrai o campo DEPOIS de resolver a presença da linha, nunca via `.map`. */
+    private record LinhaProduto(Long idGrade) {
+    }
+
+    private Long buscarIdGrade(long idProduto) {
+        List<LinhaProduto> lista = jdbc.sql("""
+                        SELECT id_grade FROM produto
                         WHERE id_tenant = plataforma.tenant_atual() AND id_produto = ?
                         """)
                 .param(idProduto)
-                .query((rs, n) -> new String[]{rs.getString("nome_variante_linha"), rs.getString("nome_variante_coluna")})
-                .optional()
-                .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Produto não encontrado."));
-
-        if (nomes[0] != null && idVarianteLinha == null) {
-            throw new IllegalArgumentException("Este produto exige a variação de \"" + nomes[0] + "\".");
+                .query((rs, n) -> new LinhaProduto(getLongOuNulo(rs, "id_grade")))
+                .list();
+        if (lista.isEmpty()) {
+            throw new ResponseStatusException(NOT_FOUND, "Produto não encontrado.");
         }
-        if (nomes[1] != null && idVarianteColuna == null) {
-            throw new IllegalArgumentException("Este produto exige a variação de \"" + nomes[1] + "\".");
+        return lista.get(0).idGrade();
+    }
+
+    /** {@code rs.getObject(coluna, Long.class)} não converte `integer` (o tipo real de
+     * `produto.id_grade`) pra `Long` de forma confiável no driver — mesmo padrão já usado em
+     * {@code CrmService.getLongOuNulo}. */
+    private static Long getLongOuNulo(ResultSet rs, String coluna) throws SQLException {
+        long valor = rs.getLong(coluna);
+        return rs.wasNull() ? null : valor;
+    }
+
+    private void validarObrigatoriedade(long idProduto, Long idGrade, Long idCor, Long idTamanho) {
+        if (idGrade == null) {
+            return;
+        }
+        if (idCor == null) {
+            throw new IllegalArgumentException("Este produto exige cor.");
+        }
+        if (idTamanho == null) {
+            throw new IllegalArgumentException("Este produto exige tamanho.");
+        }
+        boolean pertenceAGrade = Boolean.TRUE.equals(
+                jdbc.sql("""
+                                SELECT EXISTS (
+                                    SELECT 1 FROM produto p
+                                    JOIN cfg_grade g ON g.id_grade = p.id_grade AND g.id_tenant = p.id_tenant
+                                    WHERE p.id_tenant = plataforma.tenant_atual() AND p.id_produto = ?
+                                      AND ? IN (%s)
+                                )
+                                """.formatted(COLUNAS_GRADE))
+                        .params(idProduto, idTamanho)
+                        .query(Boolean.class).single());
+        if (!pertenceAGrade) {
+            throw new IllegalArgumentException("Tamanho informado não pertence à grade deste produto.");
         }
     }
 
-    private Optional<ProdutoBarraResponse> buscarPorCombinacao(long idProduto, Long idVarianteLinha, Long idVarianteColuna) {
+    private Optional<ProdutoBarraResponse> buscarPorCombinacao(long idProduto, Long idCor, Long idTamanho) {
         StringBuilder sql = new StringBuilder(SELECT_BASE + " WHERE pb.id_tenant = plataforma.tenant_atual() AND pb.id_produto = ?");
         List<Object> params = new ArrayList<>();
         params.add(idProduto);
-        sql.append(idVarianteLinha == null ? " AND pb.id_variante_linha IS NULL" : " AND pb.id_variante_linha = ?");
-        if (idVarianteLinha != null) params.add(idVarianteLinha);
-        sql.append(idVarianteColuna == null ? " AND pb.id_variante_coluna IS NULL" : " AND pb.id_variante_coluna = ?");
-        if (idVarianteColuna != null) params.add(idVarianteColuna);
+        sql.append(idCor == null ? " AND pb.id_cor IS NULL" : " AND pb.id_cor = ?");
+        if (idCor != null) params.add(idCor);
+        sql.append(idTamanho == null ? " AND pb.id_tamanho IS NULL" : " AND pb.id_tamanho = ?");
+        if (idTamanho != null) params.add(idTamanho);
 
         return jdbc.sql(sql.toString()).params(params).query(ProdutoBarraService::mapear).optional();
     }
 
-    private ProdutoBarraResponse criar(long idProduto, Long idVarianteLinha, Long idVarianteColuna) {
+    private ProdutoBarraResponse criar(long idProduto, Long idCor, Long idTamanho) {
+        // SqlParameterValue explícito pra id_cor/id_tamanho: sem isso, uma variação sem grade
+        // (ambos null) faz o driver JDBC do Postgres falhar ("conversion to class java.lang.Long
+        // from int4 not supported") — mesmo achado do id_grade em ProdutoService, 2026-08-08.
         long idVariacao = jdbc.sql("""
-                        INSERT INTO produto_barra (id_tenant, id_produto, id_variante_linha, id_variante_coluna, sku)
+                        INSERT INTO produto_barra (id_tenant, id_produto, id_cor, id_tamanho, sku)
                         VALUES (plataforma.tenant_atual(), ?, ?, ?, gerar_ean13_interno())
                         RETURNING id_variacao
                         """)
-                .params(java.util.Arrays.asList(idProduto, idVarianteLinha, idVarianteColuna))
+                .params(java.util.Arrays.asList(
+                        idProduto,
+                        new org.springframework.jdbc.core.SqlParameterValue(java.sql.Types.INTEGER, idCor),
+                        new org.springframework.jdbc.core.SqlParameterValue(java.sql.Types.INTEGER, idTamanho)))
                 .query(Long.class)
                 .single();
 
@@ -101,17 +155,17 @@ public class ProdutoBarraService {
 
     private static final String SELECT_BASE = """
             SELECT pb.id_variacao, pb.sku, p.descricao, p.marca, p.referencia, p.preco_venda,
-                   vl.descricao AS variacao_linha, vc.descricao AS variacao_coluna
+                   co.descricao AS variacao_cor, ta.descricao AS variacao_tamanho
             FROM produto_barra pb
             JOIN produto p ON p.id_produto = pb.id_produto AND p.id_tenant = pb.id_tenant
-            LEFT JOIN cfg_variante_linha vl ON vl.id_variante_linha = pb.id_variante_linha AND vl.id_tenant = pb.id_tenant
-            LEFT JOIN cfg_variante_coluna vc ON vc.id_variante_coluna = pb.id_variante_coluna AND vc.id_tenant = pb.id_tenant
+            LEFT JOIN cfg_cor co ON co.id_cor = pb.id_cor AND co.id_tenant = pb.id_tenant
+            LEFT JOIN cfg_tamanho ta ON ta.id_tamanho = pb.id_tamanho AND ta.id_tenant = pb.id_tenant
             """;
 
     private static ProdutoBarraResponse mapear(ResultSet rs, int n) throws SQLException {
         return new ProdutoBarraResponse(
                 rs.getLong("id_variacao"), rs.getString("sku"), rs.getString("descricao"), rs.getString("marca"),
-                rs.getString("referencia"), rs.getBigDecimal("preco_venda"), rs.getString("variacao_linha"),
-                rs.getString("variacao_coluna"));
+                rs.getString("referencia"), rs.getBigDecimal("preco_venda"), rs.getString("variacao_cor"),
+                rs.getString("variacao_tamanho"));
     }
 }

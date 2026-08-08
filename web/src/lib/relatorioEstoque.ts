@@ -31,8 +31,8 @@ export interface LinhaAnalitica {
   descricaoProduto: string
   marca: string | null
   referencia: string | null
-  variacaoLinha: string | null
-  variacaoColuna: string | null
+  variacaoCor: string | null
+  variacaoTamanho: string | null
   qtdPorEmpresa: number[]
   qtdTotal: number
 }

@@ -138,7 +138,7 @@ export default function CancelamentoVendaModal({
                     {detalhe.itens.map((item, indice) => (
                       <tr key={indice}>
                         <td>{item.descricaoProduto}</td>
-                        <td>{[item.variacaoLinha, item.variacaoColuna].filter(Boolean).join(' / ') || '—'}</td>
+                        <td>{[item.variacaoCor, item.variacaoTamanho].filter(Boolean).join(' / ') || '—'}</td>
                         <td className="mono">{item.qtd}</td>
                         <td className="mono">{moeda(item.precoVenda)}</td>
                         <td className="mono">{moeda(item.valorItem)}</td>

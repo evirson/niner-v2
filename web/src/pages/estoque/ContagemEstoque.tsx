@@ -162,8 +162,8 @@ export default function ContagemEstoque() {
                   <thead>
                     <tr>
                       <th>Descrição</th>
-                      <th>Variação Linha</th>
-                      <th>Variação Coluna</th>
+                      <th>Cor</th>
+                      <th>Tamanho</th>
                       <th style={{ textAlign: 'right' }}>Quantidade Contada</th>
                       <th aria-label="Ações" />
                     </tr>
@@ -172,8 +172,8 @@ export default function ContagemEstoque() {
                     {(linhas ?? []).map((linha) => (
                       <tr key={linha.idVariacao}>
                         <td>{linha.descricaoProduto}</td>
-                        <td>{linha.variacaoLinha ?? '—'}</td>
-                        <td>{linha.variacaoColuna ?? '—'}</td>
+                        <td>{linha.variacaoCor ?? '—'}</td>
+                        <td>{linha.variacaoTamanho ?? '—'}</td>
                         <td style={{ textAlign: 'right' }}>
                           <input
                             className="mono"

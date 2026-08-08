@@ -22,14 +22,14 @@ public final class PdvDtos {
 
     /**
      * Uma variação (`produto_barra`) — cada linha do resultado de busca/leitura é uma
-     * variação, nunca um produto agrupado. `variacaoLinha`/`variacaoColuna` são `null` quando
-     * o produto não usa variação.
+     * variação, nunca um produto agrupado. `variacaoCor`/`variacaoTamanho` são `null` quando
+     * o produto não usa grade.
      */
     public record PdvProdutoResponse(
             long idVariacao,
             String descricaoProduto,
-            String variacaoLinha,
-            String variacaoColuna,
+            String variacaoCor,
+            String variacaoTamanho,
             String sku,
             BigDecimal precoVenda,
             List<EstoqueEmpresa> estoquePorEmpresa,
@@ -115,7 +115,7 @@ public final class PdvDtos {
      *  ({@code valorUnitario × qtd}); desconto/acréscimo só aparecem somados no rodapé da
      *  papeleta, nunca por item (mesmo formato do mockup pedido pelo dono do produto). */
     public record ItemComprovanteVenda(
-            String sku, String descricaoProduto, String variacaoLinha, String variacaoColuna,
+            String sku, String descricaoProduto, String variacaoCor, String variacaoTamanho,
             BigDecimal qtd, BigDecimal valorUnitario, BigDecimal valorTotal) {
     }
 

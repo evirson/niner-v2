@@ -36,8 +36,8 @@ public final class DevolucaoProdutoDtos {
             long idVariacao,
             String sku,
             String descricaoProduto,
-            String variacaoLinha,
-            String variacaoColuna,
+            String variacaoCor,
+            String variacaoTamanho,
             BigDecimal qtd,
             BigDecimal precoVenda,
             BigDecimal valorTotal) {

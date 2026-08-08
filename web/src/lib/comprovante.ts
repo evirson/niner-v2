@@ -216,11 +216,11 @@ function linhaParcelaCrediario(parc: string, vencimento: string, valor: string):
   return colEsq(parc, COL_PARC) + ' '.repeat(6) + colEsq(vencimento, COL_VENCIMENTO) + ' '.repeat(3) + colDir(valor, COL_VALOR_PARC)
 }
 
-/** Concatena descrição + variante de linha (se tiver) + variante de coluna (se tiver) e quebra
- *  em blocos fixos de `COL_DESCRICAO` caracteres — sempre 3 linhas (as 2 últimas em branco
- *  quando o texto não preenche), mesmo layout fixo do mockup pedido pelo dono do produto. */
-function montarDescricaoEmLinhas(descricaoProduto: string, variacaoLinha: string | null, variacaoColuna: string | null): string[] {
-  const texto = [descricaoProduto, variacaoLinha, variacaoColuna].filter(Boolean).join(' ')
+/** Concatena descrição + cor (se tiver) + tamanho (se tiver) e quebra em blocos fixos de
+ *  `COL_DESCRICAO` caracteres — sempre 3 linhas (as 2 últimas em branco quando o texto não
+ *  preenche), mesmo layout fixo do mockup pedido pelo dono do produto. */
+function montarDescricaoEmLinhas(descricaoProduto: string, variacaoCor: string | null, variacaoTamanho: string | null): string[] {
+  const texto = [descricaoProduto, variacaoCor, variacaoTamanho].filter(Boolean).join(' ')
   const linhas: string[] = []
   for (let i = 0; i < texto.length && linhas.length < 3; i += COL_DESCRICAO) {
     linhas.push(texto.slice(i, i + COL_DESCRICAO))
@@ -258,7 +258,7 @@ export function montarLinhasComprovanteVenda(c: ComprovanteVenda, reimpressao: b
   linhas.push(linhaVenda())
 
   c.itens.forEach((item) => {
-    const [desc1, desc2, desc3] = montarDescricaoEmLinhas(item.descricaoProduto, item.variacaoLinha, item.variacaoColuna)
+    const [desc1, desc2, desc3] = montarDescricaoEmLinhas(item.descricaoProduto, item.variacaoCor, item.variacaoTamanho)
     linhas.push(
       [
         colEsq(item.sku, COL_CODIGO),
@@ -370,7 +370,7 @@ export function montarLinhasComprovanteVale(d: DevolucaoEfetivada, nomeEmpresa: 
   linhas.push(linhaVenda())
 
   d.itens.forEach((item) => {
-    const [desc1, desc2, desc3] = montarDescricaoEmLinhas(item.descricaoProduto, item.variacaoLinha, item.variacaoColuna)
+    const [desc1, desc2, desc3] = montarDescricaoEmLinhas(item.descricaoProduto, item.variacaoCor, item.variacaoTamanho)
     linhas.push(
       [
         colEsq(item.sku, COL_CODIGO),

@@ -53,7 +53,7 @@ const TODOS_OS_TIPOS: TipoMovimentoProduto[] = [
 ]
 
 function rotuloVariacaoSelecionada(v: VariacaoEncontrada): string {
-  const variacao = [v.variacaoLinha, v.variacaoColuna].filter(Boolean).join(' · ')
+  const variacao = [v.variacaoCor, v.variacaoTamanho].filter(Boolean).join(' · ')
   return `${v.sku} — ${v.descricaoProduto}${variacao ? ` (${variacao})` : ''}`
 }
 

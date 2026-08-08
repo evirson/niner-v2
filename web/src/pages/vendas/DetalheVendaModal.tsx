@@ -152,8 +152,8 @@ export default function DetalheVendaModal({ idVenda, aoFechar }: { idVenda: numb
                       <td className="mono">{item.codigo}</td>
                       <td>
                         {item.descricaoProduto}
-                        {(item.variacaoLinha || item.variacaoColuna) && (
-                          <span className="muted"> ({[item.variacaoLinha, item.variacaoColuna].filter(Boolean).join(' / ')})</span>
+                        {(item.variacaoCor || item.variacaoTamanho) && (
+                          <span className="muted"> ({[item.variacaoCor, item.variacaoTamanho].filter(Boolean).join(' / ')})</span>
                         )}
                       </td>
                       <td className="mono">{item.qtd}</td>

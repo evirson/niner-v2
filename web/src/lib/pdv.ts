@@ -7,12 +7,12 @@ export interface EstoqueEmpresa {
   qtd: number
 }
 
-/** Uma variação (`produto_barra`) — `variacaoLinha`/`variacaoColuna` são `null` sem variação. */
+/** Uma variação (`produto_barra`) — `variacaoCor`/`variacaoTamanho` são `null` sem variação. */
 export interface PdvProduto {
   idVariacao: number
   descricaoProduto: string
-  variacaoLinha: string | null
-  variacaoColuna: string | null
+  variacaoCor: string | null
+  variacaoTamanho: string | null
   sku: string
   precoVenda: number
   estoquePorEmpresa: EstoqueEmpresa[]
@@ -134,8 +134,8 @@ export function efetivarVenda(payload: EfetivarVendaRequest): Promise<VendaEfeti
 export interface ItemComprovanteVenda {
   sku: string
   descricaoProduto: string
-  variacaoLinha: string | null
-  variacaoColuna: string | null
+  variacaoCor: string | null
+  variacaoTamanho: string | null
   qtd: number
   valorUnitario: number
   valorTotal: number

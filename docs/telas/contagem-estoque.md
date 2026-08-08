@@ -99,14 +99,14 @@ balanço ativo" (`id_movimento IS NULL`) quanto "todas as linhas de uma efetiva�
 ### 1. Contagem de Estoque
 
 Campo único de código de barras (foco automático ao abrir); grid abaixo mostra
-Descrição/Variação Linha/Variação Coluna/Quantidade Contada de cada produto já lido — vem sempre
+Descrição/Cor/Tamanho/Quantidade Contada de cada produto já lido — vem sempre
 do servidor (React Query), não é um rascunho local. Quantidade editável direto na grid (corrige
 sem reler); ícone de excluir remove a linha inteira sem afetar as demais.
 
 ### 2. Diferenças de Estoque
 
 Sem popup de filtro (não existe filtro — sempre a contagem ativa da empresa logada). Colunas:
-Descrição | Variação Linha | Variação Coluna | Qtd Estoque | Qtd Contada | Diferença (cor: verde
+Descrição | Cor | Tamanho | Qtd Estoque | Qtd Contada | Diferença (cor: verde
 sobra, vermelho falta) — todas ordenáveis, cabeçalho/rodapé fixos. Duas mensagens de vazio
 diferentes: **sem nenhuma contagem em andamento** (`existeContagemAtiva = false`) vs. **contagem
 bate exatamente com o estoque** (`existeContagemAtiva = true`, `linhas` vazia) — 2026-08-04,
@@ -130,12 +130,12 @@ total de produtos ajustados, botão que só aparece se há algo pra desfazer).
 ## Contrato de API
 
 ```
-GET    /api/v1/estoque/balanco/contagem              → [{idVariacao,descricaoProduto,variacaoLinha,variacaoColuna,sku,qtdContada}]
+GET    /api/v1/estoque/balanco/contagem              → [{idVariacao,descricaoProduto,variacaoCor,variacaoTamanho,sku,qtdContada}]
 POST   /api/v1/estoque/balanco/contagem   {idVariacao,qtd}         → 204
 PUT    /api/v1/estoque/balanco/contagem/{idVariacao}  {qtdContada} → 204
 DELETE /api/v1/estoque/balanco/contagem/{idVariacao}                → 204
 DELETE /api/v1/estoque/balanco/contagem                             → 204  (zera tudo)
-GET    /api/v1/estoque/balanco/diferencas             → {existeContagemAtiva, linhas:[{idVariacao,descricaoProduto,variacaoLinha,variacaoColuna,sku,qtdEstoque,qtdContada,diferenca}]}
+GET    /api/v1/estoque/balanco/diferencas             → {existeContagemAtiva, linhas:[{idVariacao,descricaoProduto,variacaoCor,variacaoTamanho,sku,qtdEstoque,qtdContada,diferenca}]}
 POST   /api/v1/estoque/balanco/efetivar               → {idMovimento,totalProdutosAjustados,dataEfetivacao}
 GET    /api/v1/estoque/balanco/ultima-efetivacao      → {existe,idMovimento,dataEfetivacao,totalProdutos}
 POST   /api/v1/estoque/balanco/desfazer               → 204

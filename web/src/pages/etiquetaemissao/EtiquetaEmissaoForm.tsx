@@ -147,7 +147,7 @@ export default function EtiquetaEmissaoForm() {
                       <tr key={item.idVariacao}>
                         <td>{item.descricao}</td>
                         <td>{item.marca ?? '—'}</td>
-                        <td>{[item.variacaoLinha, item.variacaoColuna].filter(Boolean).join(' · ') || '—'}</td>
+                        <td>{[item.variacaoCor, item.variacaoTamanho].filter(Boolean).join(' · ') || '—'}</td>
                         <td className="mono">{item.sku}</td>
                         <td>
                           <input

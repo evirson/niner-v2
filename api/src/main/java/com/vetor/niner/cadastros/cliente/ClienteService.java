@@ -86,7 +86,8 @@ public class ClienteService {
         String colunaOrdenacao = ordenarPor == null ? "c.nome" : COLUNAS_ORDENAVEIS.getOrDefault(ordenarPor, "c.nome");
         String direcaoOrdenacao = "DESC".equalsIgnoreCase(direcao) ? "DESC" : "ASC";
 
-        StringBuilder filtro = new StringBuilder(" WHERE 1 = 1");
+        // id_tenant explícito (defesa em profundidade) — ver comentário em ProdutoService.listar.
+        StringBuilder filtro = new StringBuilder(" WHERE c.id_tenant = plataforma.tenant_atual()");
         List<Object> params = new ArrayList<>();
 
         if (nome != null && !nome.isBlank()) {
@@ -130,7 +131,7 @@ public class ClienteService {
 
     @Transactional(readOnly = true)
     public ClienteResponse buscar(long id) {
-        return jdbc.sql(SELECT_BASE + " WHERE c.id_cliente = ?")
+        return jdbc.sql(SELECT_BASE + " WHERE c.id_tenant = plataforma.tenant_atual() AND c.id_cliente = ?")
                 .param(id)
                 .query(ClienteService::mapear)
                 .optional()
@@ -184,7 +185,7 @@ public class ClienteService {
                                 telefone = ?, whatsapp = ?, instagram = ?, facebook = ?, tiktok = ?,
                                 cep = ?, endereco = ?, numero = ?, complemento = ?, bairro = ?,
                                 cidade = ?, estado = ?, limite_credito = ?, ativo = ?, atualizado_em = now()
-                            WHERE id_cliente = ?
+                            WHERE id_cliente = ? AND id_tenant = plataforma.tenant_atual()
                             """)
                     .params(params)
                     .update();
@@ -209,11 +210,14 @@ public class ClienteService {
     @Transactional
     public ExclusaoClienteResponse excluir(long id) {
         boolean temVenda = Boolean.TRUE.equals(
-                jdbc.sql("SELECT EXISTS (SELECT 1 FROM venda WHERE id_cliente = ?)")
+                jdbc.sql("SELECT EXISTS (SELECT 1 FROM venda WHERE id_tenant = plataforma.tenant_atual() AND id_cliente = ?)")
                         .param(id).query(Boolean.class).single());
 
         if (temVenda) {
-            int linhas = jdbc.sql("UPDATE cliente SET ativo = false, atualizado_em = now() WHERE id_cliente = ?")
+            int linhas = jdbc.sql("""
+                            UPDATE cliente SET ativo = false, atualizado_em = now()
+                            WHERE id_cliente = ? AND id_tenant = plataforma.tenant_atual()
+                            """)
                     .param(id).update();
             if (linhas == 0) {
                 throw new ResponseStatusException(NOT_FOUND, "Cliente não encontrado.");
@@ -221,7 +225,8 @@ public class ClienteService {
             return new ExclusaoClienteResponse("inativado", "Cliente possui vendas associadas.");
         }
 
-        int linhas = jdbc.sql("DELETE FROM cliente WHERE id_cliente = ?").param(id).update();
+        int linhas = jdbc.sql("DELETE FROM cliente WHERE id_cliente = ? AND id_tenant = plataforma.tenant_atual()")
+                .param(id).update();
         if (linhas == 0) {
             throw new ResponseStatusException(NOT_FOUND, "Cliente não encontrado.");
         }
@@ -352,7 +357,7 @@ public class ClienteService {
                    c.facebook, c.tiktok, c.cep, c.endereco, c.numero, c.complemento, c.bairro,
                    c.cidade, c.estado, c.limite_credito, c.ativo, c.criado_em, c.atualizado_em
             FROM cliente c
-            JOIN cfg_categoria_cliente cc ON cc.id_categoria_cliente = c.id_categoria_cliente
+            JOIN cfg_categoria_cliente cc ON cc.id_categoria_cliente = c.id_categoria_cliente AND cc.id_tenant = c.id_tenant
             """;
 
     private static ClienteResponse mapear(ResultSet rs, int rowNum) throws SQLException {

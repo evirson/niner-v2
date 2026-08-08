@@ -120,43 +120,53 @@ class EtiquetaEmissaoCrudTest {
         }
     }
 
-    private long criarProdutoComVariantes(String token, String descricao, String nomeVarianteLinha, String nomeVarianteColuna)
-            throws Exception {
+    private void ativarCorGrade(String token) throws Exception {
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put("/api/v1/config-geral")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(APPLICATION_JSON)
+                        .content("""
+                                {"percentualDescontoVenda":0,"jurosCrediarioDias":0,"jurosCrediario":0,
+                                 "multaCrediarioDias":0,"multaCrediario":0,"cfgUsaCorGrade":true,
+                                 "cfgPermiteQtdDecimal":true}
+                                """))
+                .andExpect(status().isOk());
+    }
+
+    private long criarCor(String token, String descricao) throws Exception {
+        String resp = mvc.perform(post("/api/v1/cores").header("Authorization", "Bearer " + token)
+                        .contentType(APPLICATION_JSON).content("{\"descricao\":\"%s\"}".formatted(descricao)))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        return ((Number) JsonPath.read(resp, "$.idCor")).longValue();
+    }
+
+    private long criarTamanho(String token, String descricao) throws Exception {
+        String resp = mvc.perform(post("/api/v1/tamanhos").header("Authorization", "Bearer " + token)
+                        .contentType(APPLICATION_JSON).content("{\"descricao\":\"%s\"}".formatted(descricao)))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        return ((Number) JsonPath.read(resp, "$.idTamanho")).longValue();
+    }
+
+    private long criarGrade(String token, String descricao, long idTamanho) throws Exception {
+        String resp = mvc.perform(post("/api/v1/grades").header("Authorization", "Bearer " + token)
+                        .contentType(APPLICATION_JSON)
+                        .content("{\"descricao\":\"%s\",\"idsTamanho\":[%d]}".formatted(descricao, idTamanho)))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        return ((Number) JsonPath.read(resp, "$.idGrade")).longValue();
+    }
+
+    private long criarProdutoComGrade(String token, String descricao, long idGrade) throws Exception {
         String resp = mvc.perform(post("/api/v1/produtos").header("Authorization", "Bearer " + token)
                         .contentType(APPLICATION_JSON)
                         .content("""
                                 {"descricao":"%s","precoCusto":"10.00","percentualVenda":"10","precoVenda":"11.00",
-                                 "nomeVarianteLinha":%s,"nomeVarianteColuna":%s}
-                                """.formatted(descricao,
-                                nomeVarianteLinha == null ? "null" : "\"" + nomeVarianteLinha + "\"",
-                                nomeVarianteColuna == null ? "null" : "\"" + nomeVarianteColuna + "\"")))
+                                 "idGrade":%d}
+                                """.formatted(descricao, idGrade)))
                 .andExpect(status().isCreated())
                 .andReturn().getResponse().getContentAsString();
         return ((Number) JsonPath.read(resp, "$.idProduto")).longValue();
-    }
-
-    private long criarVarianteLinha(Connection c, long idTenant, String descricao) throws SQLException {
-        try (PreparedStatement ps = c.prepareStatement(
-                "INSERT INTO cfg_variante_linha (id_tenant, descricao) VALUES (?, ?) RETURNING id_variante_linha")) {
-            ps.setLong(1, idTenant);
-            ps.setString(2, descricao);
-            try (ResultSet rs = ps.executeQuery()) {
-                rs.next();
-                return rs.getLong(1);
-            }
-        }
-    }
-
-    private long criarVarianteColuna(Connection c, long idTenant, String descricao) throws SQLException {
-        try (PreparedStatement ps = c.prepareStatement(
-                "INSERT INTO cfg_variante_coluna (id_tenant, descricao) VALUES (?, ?) RETURNING id_variante_coluna")) {
-            ps.setLong(1, idTenant);
-            ps.setString(2, descricao);
-            try (ResultSet rs = ps.executeQuery()) {
-                rs.next();
-                return rs.getLong(1);
-            }
-        }
     }
 
     private void criarEstoque(Connection c, long idTenant, long idEmpresa, long idVariacao, BigDecimal qtd) throws SQLException {
@@ -218,34 +228,21 @@ class EtiquetaEmissaoCrudTest {
     }
 
     @Test
-    void buscarProdutosTrazNomeDasVariantesQuandoOProdutoUsa() throws Exception {
-        String token = assinarNovoTenant("produtos-nomes-variante");
-        criarProdutoComVariantes(token, "Camiseta Com Variante", "COR", "TAMANHO");
+    void buscarProdutosTrazIdGradeQuandoOProdutoUsa() throws Exception {
+        String token = assinarNovoTenant("produtos-grade");
+        ativarCorGrade(token);
+        long idTamanho = criarTamanho(token, "38");
+        long idGrade = criarGrade(token, "Grade Única", idTamanho);
+        criarProdutoComGrade(token, "Camiseta Com Grade", idGrade);
 
         mvc.perform(get("/api/v1/etiqueta-emissao/produtos").header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[0].nomeVarianteLinha").value("COR"))
-                .andExpect(jsonPath("$[0].nomeVarianteColuna").value("TAMANHO"));
+                .andExpect(jsonPath("$[0].idGrade").value(idGrade));
     }
 
     @Test
-    void buscarOpcoesVarianteRetornaCatalogoDoTenant() throws Exception {
-        String token = assinarNovoTenant("opcoes-variante");
-        long idTenant = extrairIdTenant(token);
-        try (Connection c = abrirConexao(idTenant)) {
-            criarVarianteLinha(c, idTenant, "AZUL");
-            criarVarianteColuna(c, idTenant, "38");
-        }
-
-        mvc.perform(get("/api/v1/etiqueta-emissao/variantes").header("Authorization", "Bearer " + token))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.variantesLinha[0].descricao").value("AZUL"))
-                .andExpect(jsonPath("$.variantesColuna[0].descricao").value("38"));
-    }
-
-    @Test
-    void obterOuCriarVariacaoCriaSkuNovoQuandoProdutoNaoUsaVariante() throws Exception {
-        String token = assinarNovoTenant("criar-sem-variante");
+    void obterOuCriarVariacaoCriaSkuNovoQuandoProdutoNaoUsaGrade() throws Exception {
+        String token = assinarNovoTenant("criar-sem-grade");
         long idProduto = criarProduto(token, "Produto Simples");
 
         String resp = mvc.perform(post("/api/v1/etiqueta-emissao/produtos/" + idProduto + "/variacao")
@@ -258,9 +255,12 @@ class EtiquetaEmissaoCrudTest {
     }
 
     @Test
-    void obterOuCriarVariacaoExigeLinhaQuandoOProdutoUsaEssaDimensao() throws Exception {
-        String token = assinarNovoTenant("exige-linha");
-        long idProduto = criarProdutoComVariantes(token, "Bota Com Cor", "COR", null);
+    void obterOuCriarVariacaoExigeCorETamanhoQuandoOProdutoUsaGrade() throws Exception {
+        String token = assinarNovoTenant("exige-cor-tamanho");
+        ativarCorGrade(token);
+        long idTamanho = criarTamanho(token, "38");
+        long idGrade = criarGrade(token, "Grade Bota", idTamanho);
+        long idProduto = criarProdutoComGrade(token, "Bota Com Grade", idGrade);
 
         mvc.perform(post("/api/v1/etiqueta-emissao/produtos/" + idProduto + "/variacao")
                         .header("Authorization", "Bearer " + token).contentType(APPLICATION_JSON).content("{}"))
@@ -268,24 +268,21 @@ class EtiquetaEmissaoCrudTest {
     }
 
     @Test
-    void obterOuCriarVariacaoComLinhaEColunaCriaEDepoisReaproveitaAMesma() throws Exception {
+    void obterOuCriarVariacaoComCorETamanhoCriaEDepoisReaproveitaAMesma() throws Exception {
         String token = assinarNovoTenant("cria-e-reaproveita");
-        long idTenant = extrairIdTenant(token);
-        long idProduto = criarProdutoComVariantes(token, "Bota Cor Tamanho", "COR", "TAMANHO");
-        long idLinha;
-        long idColuna;
-        try (Connection c = abrirConexao(idTenant)) {
-            idLinha = criarVarianteLinha(c, idTenant, "AZUL");
-            idColuna = criarVarianteColuna(c, idTenant, "38");
-        }
+        ativarCorGrade(token);
+        long idTamanho = criarTamanho(token, "38");
+        long idGrade = criarGrade(token, "Grade Bota 2", idTamanho);
+        long idProduto = criarProdutoComGrade(token, "Bota Cor Tamanho", idGrade);
+        long idCor = criarCor(token, "AZUL");
 
-        String corpo = "{\"idVarianteLinha\":%d,\"idVarianteColuna\":%d}".formatted(idLinha, idColuna);
+        String corpo = "{\"idCor\":%d,\"idTamanho\":%d}".formatted(idCor, idTamanho);
 
         String primeira = mvc.perform(post("/api/v1/etiqueta-emissao/produtos/" + idProduto + "/variacao")
                         .header("Authorization", "Bearer " + token).contentType(APPLICATION_JSON).content(corpo))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.variacaoLinha").value("AZUL"))
-                .andExpect(jsonPath("$.variacaoColuna").value("38"))
+                .andExpect(jsonPath("$.variacaoCor").value("AZUL"))
+                .andExpect(jsonPath("$.variacaoTamanho").value("38"))
                 .andReturn().getResponse().getContentAsString();
         long idVariacaoPrimeira = ((Number) JsonPath.read(primeira, "$.idVariacao")).longValue();
 
@@ -297,6 +294,23 @@ class EtiquetaEmissaoCrudTest {
         long idVariacaoSegunda = ((Number) JsonPath.read(segunda, "$.idVariacao")).longValue();
 
         assertThat(idVariacaoSegunda).isEqualTo(idVariacaoPrimeira);
+    }
+
+    @Test
+    void obterOuCriarVariacaoRejeitaTamanhoForaDaGradeDoProduto() throws Exception {
+        String token = assinarNovoTenant("tamanho-fora-grade");
+        ativarCorGrade(token);
+        long idTamanhoDaGrade = criarTamanho(token, "38");
+        long idTamanhoDeOutraGrade = criarTamanho(token, "50");
+        long idGrade = criarGrade(token, "Grade Restrita", idTamanhoDaGrade);
+        long idProduto = criarProdutoComGrade(token, "Bota Grade Restrita", idGrade);
+        long idCor = criarCor(token, "PRETO");
+
+        String corpo = "{\"idCor\":%d,\"idTamanho\":%d}".formatted(idCor, idTamanhoDeOutraGrade);
+
+        mvc.perform(post("/api/v1/etiqueta-emissao/produtos/" + idProduto + "/variacao")
+                        .header("Authorization", "Bearer " + token).contentType(APPLICATION_JSON).content(corpo))
+                .andExpect(status().isBadRequest());
     }
 
     @Test

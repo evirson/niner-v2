@@ -21,8 +21,8 @@ export interface ItemDevolucaoResponse {
   idVariacao: number
   sku: string
   descricaoProduto: string
-  variacaoLinha: string | null
-  variacaoColuna: string | null
+  variacaoCor: string | null
+  variacaoTamanho: string | null
   qtd: number
   precoVenda: number
   valorTotal: number

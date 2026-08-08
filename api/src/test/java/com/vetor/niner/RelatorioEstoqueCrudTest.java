@@ -20,6 +20,7 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.nullValue;
 import static org.springframework.http.MediaType.APPLICATION_JSON;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -231,7 +232,8 @@ class RelatorioEstoqueCrudTest {
                         .param("modelo", "ANALITICO"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.linhasAnalitico.length()").value(2))
-                .andExpect(jsonPath("$.linhasAnalitico[0].variacaoLinha").doesNotExist())
+                .andExpect(jsonPath("$.linhasAnalitico[0].variacaoCor").value(nullValue()))
+                .andExpect(jsonPath("$.linhasAnalitico[0].variacaoTamanho").value(nullValue()))
                 .andExpect(jsonPath("$.totalInventario").doesNotExist())
                 .andExpect(jsonPath("$.totalSintetico").doesNotExist());
     }

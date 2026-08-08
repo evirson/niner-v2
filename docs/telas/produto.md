@@ -47,20 +47,50 @@ ID). O modelo:
 - Categoria duplicada na lista, ou uma categoria que não existe (mais provável: removida do
   cache do navegador depois de excluída em outra aba) → 400 do servidor, não 500.
 
-## Particularidade 2: nome da variante — condicionado aos Parâmetros do Sistema
+## Particularidade 2: cor + grade — condicionado aos Parâmetros do Sistema (revisado 2026-08-08)
 
-`produto.nome_variante_linha`/`nome_variante_coluna` (ex.: "Cor", "Tamanho") só fazem sentido se
-o tenant realmente usa variação em linha/coluna — configurado **em outra tela**,
-`cfg_geral.cfg_usa_variante_linha`/`cfg_usa_variante_coluna` (`configuracao.geral`,
-docs/telas/configuracao-geral.md). Novo endpoint **aberto a qualquer papel** (diferente do
-resto de `cfg_geral`, que é ADMIN-only): `GET /api/v1/config-geral/flags-variante` →
-`{usaVarianteLinha, usaVarianteColuna}`. No formulário de produto:
+**Substituiu o modelo anterior de "variante em linha/coluna" genérica.** O par
+`nome_variante_linha`/`nome_variante_coluna` (rótulo livre por produto, ex.: "Cor"/"Tamanho" mas
+também podia ser qualquer outra coisa) resolvia mal o caso real do dono do produto: segmentos como
+calçados/confecções variam por **cor × grade** (uma curva de numeração nomeada e ORDENADA, ex.
+"Grade 36-44" = tamanhos 36,37,38…44 em ordem, não uma lista solta), enquanto segmentos como
+utilidades domésticas/brinquedos/cosméticos/óticas normalmente não variam (1 produto = 1
+SKU). Variantes de voltagem (110V/220V) ficaram **fora de escopo** — como o preço muda entre elas,
+viram produtos separados, não uma variação do mesmo produto.
 
-- Os dois campos só aparecem (seção "Dimensões e Variantes") se a respectiva flag estiver
-  ligada.
-- O servidor **força `null`** em `nomeVarianteLinha`/`nomeVarianteColuna` quando a flag
-  correspondente está desligada, mesmo que o cliente da API envie um valor — o campo está
-  oculto, então qualquer valor é ignorado, não rejeitado.
+Modelo novo:
+
+- `cfg_cor(id_cor, id_tenant, descricao)` / `cfg_tamanho(id_tamanho, id_tenant, descricao)` —
+  catálogos simples do tenant (nome livre, ex. "AZUL", "38"). `cfg_tamanho` ainda **não tem tela
+  de cadastro própria** — nasce embutida no popup "＋ Gerenciar Grades" do próprio formulário de
+  Produto (ver abaixo); `cfg_cor` nasce embutida na Emissão de Etiqueta
+  (`docs/telas/etiqueta-emissao.md`) como válvula de escape **temporária**, até a tela de Entrada
+  de Produtos (onde cor nasceria na prática, na compra) existir.
+- `cfg_grade(id_grade, id_tenant, descricao, id_tamanho1..id_tamanho20)` — uma grade é uma
+  **curva nomeada e ordenada** de até 20 tamanhos (20 colunas fixas com FK para `cfg_tamanho`,
+  nullable — não uma tabela de associação N:N solta, porque a ORDEM importa e é pequena/estável o
+  suficiente pra não justificar uma tabela filha). Mantida via popup "＋ Gerenciar Grades"
+  (`GradeModal.tsx`) no formulário de Produto: lista/cria/edita grades, com a lista de tamanhos
+  reordenável (▲/▼) e um "+ Novo tamanho" inline.
+- `produto.id_grade` (nullable, FK `cfg_grade`) substitui `nome_variante_linha`/
+  `nome_variante_coluna` — um produto usa variação se, e só se, tiver uma grade escolhida.
+- `produto_barra.id_cor`/`id_tamanho` (nullable, FKs) substituem `id_variante_linha`/
+  `id_variante_coluna`; `produto_barra_variacao_uk` virou `UNIQUE(id_produto, id_cor,
+  id_tamanho)`.
+- **Cor é obrigatória sempre que o produto tem grade** (decisão do dono do produto, confirmada
+  explicitamente) — diferente de tamanho, que é restrito às opções da grade do produto mas
+  igualmente obrigatório quando há grade. Regra e mensagens em
+  `ProdutoBarraService.validarObrigatoriedade` (também usada aqui indiretamente — é o mesmo
+  service que a Emissão de Etiqueta consome).
+- `cfg_geral.cfg_usa_cor_grade` (renomeado de `cfg_usa_variante_linha`/`cfg_usa_variante_coluna`
+  — os dois viraram um único checkbox, já que a decisão passou a ser binária: usa cor+grade, ou
+  não usa nada) continua controlando só a **visibilidade do campo Grade** no formulário de
+  Produto, não a obrigatoriedade em si (essa é por produto: se tem grade, cor+tamanho são
+  obrigatórios na variação; sem grade, são forçados a `null`). Endpoint aberto a qualquer papel:
+  `GET /api/v1/config-geral/usa-cor-grade` → `{usaCorGrade}`.
+- Geração em lote de todas as combinações cor×grade de uma vez (`Entrada de Produtos`) e uma tela
+  de cadastro própria pra `cfg_cor` ficaram **deliberadamente fora desta rodada** — vão nascer
+  junto da tela de Entrada de Produtos (individual ou por XML), ainda não construída.
 
 ## Particularidade 3: NCM — referência global, sem tela de manutenção
 
@@ -127,7 +157,7 @@ Tabela `produto` (V017). **Foco automático** no campo Descrição. Layout: "Pro
 linha própria; Descrição + Marca na mesma linha; Referência + NCM (estreito) + Descrição do NCM
 na mesma linha; os 6 campos de Preços (Custo, % Venda, Venda, Início/Final da oferta, Preço de
 Oferta) numa única linha que se reajusta quando os opcionais estão ocultos; Dimensões e
-Variantes (Nome da Variante em Linha/Coluna, Peso Bruto/Líquido) numa única linha.
+Variantes (select de Grade + botão "＋ Gerenciar Grades", Peso Bruto/Líquido) numa única linha.
 
 | Campo (banco) | Rótulo na tela | Componente | Obrigatório | Regra |
 |---|---|---|---|---|
@@ -143,8 +173,7 @@ Variantes (Nome da Variante em Linha/Coluna, Peso Bruto/Líquido) numa única li
 | `preco_oferta` | Preço de Oferta (R$) | moeda | Condicional (regra da oferta) | Menor que o preço de venda |
 | `peso_bruto` | Peso Bruto (kg) | peso (3 casas) | Configurável | ≥ peso líquido |
 | `peso_liquido` | Peso Líquido (kg) | peso (3 casas) | Configurável | ≤ peso bruto |
-| `nome_variante_linha` | Nome da Variante em Linha | texto | Não configurável (controlado por `cfg_geral`) | Só aparece se `cfg_usa_variante_linha` |
-| `nome_variante_coluna` | Nome da Variante em Coluna | texto | Não configurável (controlado por `cfg_geral`) | Só aparece se `cfg_usa_variante_coluna` |
+| `id_grade` | Grade | select + "＋ Gerenciar Grades" | Não configurável (controlado por `cfg_geral`) | Só aparece se `cfg_usa_cor_grade`; FK `cfg_grade` |
 | `ativo` | Produto ativo | checkbox | — | Ativo ao criar por padrão |
 | *(N:N)* `produto_categoria` | Categorias | lista ordenável + seletor | Não | Ver Particularidade 1 |
 
@@ -189,13 +218,14 @@ variação (`produto_barra`) ou imagem (`produto_imagem`) vinculada, o DELETE **
 - Dado final da oferta anterior ao início, quando salvo, então 400.
 - Dado preço de oferta maior ou igual ao preço de venda, quando salvo, então 400.
 - Dado peso líquido maior que peso bruto, quando salvo, então 400; igual é aceito.
-- Dado `cfg_geral.cfg_usa_variante_linha = false`, quando um `nomeVarianteLinha` é enviado,
-  então o servidor grava `null` (ignora, não rejeita).
+- Dado `cfg_geral.cfg_usa_cor_grade = false`, quando um `idGrade` é enviado, então o servidor
+  grava `null` (ignora, não rejeita).
 - Dado `ordenarPor`/`direcao`, então a listagem respeita a coluna e direção pedidas.
 - Dado um produto sem vínculo, quando excluído, então deixa de existir.
 - Dado um produto vinculado a uma variação, quando excluído, então é inativado, não apagado.
 
-Cobertos por `ProdutoCrudTest` (20 testes) — suíte completa do projeto em **89/89 verdes**.
+Cobertos por `ProdutoCrudTest` (20 testes) — suíte completa do projeto em **405/405 verdes**
+(inclui `CorGradeTamanhoCrudTest`, novo em 2026-08-08).
 
 ## Impacto no contrato de API
 
@@ -212,7 +242,20 @@ PUT    /api/v1/categorias-produto/{id}         renomeia
 
 GET    /api/v1/ncm/{codigo}                    consulta (404 se não cadastrado) — só leitura
 
-GET    /api/v1/config-geral/flags-variante     {usaVarianteLinha, usaVarianteColuna} — qualquer papel
+GET    /api/v1/config-geral/usa-cor-grade      {usaCorGrade} — qualquer papel
+
+GET    /api/v1/cores                           lista cfg_cor do tenant
+POST   /api/v1/cores                           cria
+PUT    /api/v1/cores/{id}                      renomeia
+
+GET    /api/v1/tamanhos                        lista cfg_tamanho do tenant
+POST   /api/v1/tamanhos                        cria
+PUT    /api/v1/tamanhos/{id}                   renomeia
+
+GET    /api/v1/grades                          lista cfg_grade do tenant (com tamanhos ordenados)
+GET    /api/v1/grades/{id}                     detalhe
+POST   /api/v1/grades                          cria (descricao + até 20 idsTamanho ordenados)
+PUT    /api/v1/grades/{id}                     atualiza
 ```
 
 Todos sob `/api/v1/**` (JWT de tenant, RLS ativo — P8, exceto `cfg_produto_ncm`/NCM que é
@@ -224,9 +267,9 @@ global). Erros em Problem Details (RFC 9457).
   status; ícones de visualizar/editar/excluir; erro comum: exclusão vira inativação quando há
   variação/imagem vinculada. `url_video`: NULL.
 - **`chave_tela`: `catalogo.produto.form`** — descrição e preços obrigatórios; categorias
-  múltiplas com ordem; nome de variante controlado pelos Parâmetros do Sistema; NCM com busca
-  automática de descrição; regra da oferta (tudo ou nada); peso líquido ≤ peso bruto.
-  `url_video`: NULL.
+  múltiplas com ordem; grade (cor+tamanho) controlada pelos Parâmetros do Sistema, com "＋
+  Gerenciar Grades" embutido; NCM com busca automática de descrição; regra da oferta (tudo ou
+  nada); peso líquido ≤ peso bruto. `url_video`: NULL.
 
 ## Impacto no banco
 
@@ -236,6 +279,16 @@ nova — ver `docs/PROGRESSO.md`):
 - `produto_categoria.indice SMALLINT NOT NULL DEFAULT 0` + `UNIQUE(id_tenant, id_produto, indice)`.
 - Nova tabela `cfg_produto_ncm` (global, sem RLS) + `produto.codigo_ncm` ganhou
   `REFERENCES cfg_produto_ncm (codigo_ncm)`.
+- **2026-08-08 (dentro da própria V017, banco recriado):** `cfg_variante_linha`/
+  `cfg_variante_coluna` → `cfg_cor(id_cor, id_tenant, descricao)` /
+  `cfg_tamanho(id_tamanho, id_tenant, descricao)`; nova `cfg_grade(id_grade, id_tenant,
+  descricao, id_tamanho1..id_tamanho20)` (20 colunas fixas nullable, FK cada uma pra
+  `cfg_tamanho`); `produto.nome_variante_linha`/`nome_variante_coluna` → `produto.id_grade` (FK
+  `cfg_grade`); `produto_barra.id_variante_linha`/`id_variante_coluna` → `id_cor`/`id_tamanho`
+  (FKs `cfg_cor`/`cfg_tamanho`); `produto_barra_variacao_uk` virou `UNIQUE(id_produto, id_cor,
+  id_tamanho)`. `cfg_geral.cfg_usa_variante_linha`/`cfg_usa_variante_coluna` (V023) viraram um
+  único `cfg_usa_cor_grade boolean NOT NULL DEFAULT false`. RLS (V024): tabela array trocou
+  `cfg_variante_linha`/`cfg_variante_coluna` por `cfg_cor`/`cfg_tamanho`/`cfg_grade`.
 
 ## Impacto nas integrações
 
@@ -252,6 +305,12 @@ próximo corte), não do produto "pai".
   `gerar_ean13_interno()`) na hora de emitir uma etiqueta; continua **sem tela própria** de
   listar/editar/excluir variação, e o cadastro de Produto em si segue sem tocar em
   `produto_barra`.
+- **Entrada de Produtos** (individual ou por XML) — onde `cfg_cor` nasceria naturalmente (na
+  compra) e onde faria sentido gerar em lote todas as combinações cor×grade de um produto de
+  uma vez. Adiada de propósito (2026-08-08): a geração em lote **não** entrou nesta rodada;
+  `cfg_cor` usa a Emissão de Etiqueta como válvula de escape até lá.
+- Tela de cadastro dedicada para `cfg_cor` — nasce embutida (Emissão de Etiqueta), sem tela
+  própria, pelo mesmo motivo acima.
 - Reajuste em massa de preços, histórico de preço (`reajustado_em` existe na coluna, sem uso
   ainda).
 - Importação em lote (planilha).

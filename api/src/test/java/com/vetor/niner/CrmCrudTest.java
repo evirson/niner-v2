@@ -119,15 +119,15 @@ class CrmCrudTest {
         }
     }
 
-    private long criarVariacao(Connection c, long idTenant, long idProduto, Long idVarianteLinha, Long idVarianteColuna)
+    private long criarVariacao(Connection c, long idTenant, long idProduto, Long idCor, Long idTamanho)
             throws SQLException {
         try (PreparedStatement ps = c.prepareStatement(
-                "INSERT INTO produto_barra (id_tenant, id_produto, id_variante_linha, id_variante_coluna, sku) "
+                "INSERT INTO produto_barra (id_tenant, id_produto, id_cor, id_tamanho, sku) "
                         + "VALUES (?, ?, ?, ?, gerar_ean13_interno()) RETURNING id_variacao")) {
             ps.setLong(1, idTenant);
             ps.setLong(2, idProduto);
-            if (idVarianteLinha != null) ps.setLong(3, idVarianteLinha); else ps.setNull(3, java.sql.Types.INTEGER);
-            if (idVarianteColuna != null) ps.setLong(4, idVarianteColuna); else ps.setNull(4, java.sql.Types.INTEGER);
+            if (idCor != null) ps.setLong(3, idCor); else ps.setNull(3, java.sql.Types.INTEGER);
+            if (idTamanho != null) ps.setLong(4, idTamanho); else ps.setNull(4, java.sql.Types.INTEGER);
             try (ResultSet rs = ps.executeQuery()) {
                 rs.next();
                 return rs.getLong(1);
@@ -135,9 +135,9 @@ class CrmCrudTest {
         }
     }
 
-    private long criarVarianteLinha(Connection c, long idTenant, String descricao) throws SQLException {
+    private long criarCor(Connection c, long idTenant, String descricao) throws SQLException {
         try (PreparedStatement ps = c.prepareStatement(
-                "INSERT INTO cfg_variante_linha (id_tenant, descricao) VALUES (?, ?) RETURNING id_variante_linha")) {
+                "INSERT INTO cfg_cor (id_tenant, descricao) VALUES (?, ?) RETURNING id_cor")) {
             ps.setLong(1, idTenant);
             ps.setString(2, descricao);
             try (ResultSet rs = ps.executeQuery()) {
@@ -147,9 +147,9 @@ class CrmCrudTest {
         }
     }
 
-    private long criarVarianteColuna(Connection c, long idTenant, String descricao) throws SQLException {
+    private long criarTamanho(Connection c, long idTenant, String descricao) throws SQLException {
         try (PreparedStatement ps = c.prepareStatement(
-                "INSERT INTO cfg_variante_coluna (id_tenant, descricao) VALUES (?, ?) RETURNING id_variante_coluna")) {
+                "INSERT INTO cfg_tamanho (id_tenant, descricao) VALUES (?, ?) RETURNING id_tamanho")) {
             ps.setLong(1, idTenant);
             ps.setString(2, descricao);
             try (ResultSet rs = ps.executeQuery()) {
@@ -210,22 +210,22 @@ class CrmCrudTest {
     }
 
     @Test
-    void opcoesRetornaCategoriasEVariantesDoTenant() throws Exception {
+    void opcoesRetornaCategoriasCoresETamanhosDoTenant() throws Exception {
         String token = assinarNovoTenant("opcoes");
         criarCategoriaCliente(token, "VIP");
         criarCategoriaProduto(token, "Calçados");
         long idTenant = extrairIdTenant(token);
         try (Connection c = abrirConexao(idTenant)) {
-            criarVarianteLinha(c, idTenant, "AZUL");
-            criarVarianteColuna(c, idTenant, "38");
+            criarCor(c, idTenant, "AZUL");
+            criarTamanho(c, idTenant, "38");
         }
 
         mvc.perform(get("/api/v1/crm/opcoes").header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.categoriasCliente[0].rotulo").value("VIP"))
                 .andExpect(jsonPath("$.categoriasProduto[0].rotulo").value("CALÇADOS"))
-                .andExpect(jsonPath("$.variantesLinha[0].rotulo").value("AZUL"))
-                .andExpect(jsonPath("$.variantesColuna[0].rotulo").value("38"));
+                .andExpect(jsonPath("$.cores[0].rotulo").value("AZUL"))
+                .andExpect(jsonPath("$.tamanhos[0].rotulo").value("38"));
     }
 
     @Test
@@ -401,28 +401,28 @@ class CrmCrudTest {
 
         try (Connection c = abrirConexao(idTenant)) {
             long idEmpresa = buscarIdEmpresa(c);
-            long idVarianteAzul = criarVarianteLinha(c, idTenant, "AZUL");
-            long idVariante36 = criarVarianteColuna(c, idTenant, "36");
+            long idCorAzul = criarCor(c, idTenant, "AZUL");
+            long idTamanho36 = criarTamanho(c, idTenant, "36");
 
             // Cliente alvo: UMA compra de bota AZUL/36 (categoria Calçados) — deve bater no filtro
-            // categoria=Calçados + linha=AZUL juntos, porque é a MESMA linha de venda.
-            long idVariacaoBota = criarVariacao(c, idTenant, idBota, idVarianteAzul, idVariante36);
+            // categoria=Calçados + cor=AZUL juntos, porque é a MESMA linha de venda.
+            long idVariacaoBota = criarVariacao(c, idTenant, idBota, idCorAzul, idTamanho36);
             long idVendaAlvo = criarVenda(c, idTenant, idEmpresa, idClienteAlvo, OffsetDateTime.now());
             criarMovimentoVenda(c, idTenant, idEmpresa, idVendaAlvo, idVariacaoBota);
 
-            // Cliente fora: comprou categoria Calçados (bota, sem variante) E, em outra compra,
-            // uma camisa AZUL — a combinação categoria=Calçados + linha=AZUL NÃO deve bater porque
+            // Cliente fora: comprou categoria Calçados (bota, sem cor) E, em outra compra,
+            // uma camisa AZUL — a combinação categoria=Calçados + cor=AZUL NÃO deve bater porque
             // não é a mesma linha de venda (itens diferentes).
-            long idVariacaoBotaSemVariante = criarVariacao(c, idTenant, idBota, null, null);
+            long idVariacaoBotaSemCor = criarVariacao(c, idTenant, idBota, null, null);
             long idVendaBotaFora = criarVenda(c, idTenant, idEmpresa, idClienteFora, OffsetDateTime.now());
-            criarMovimentoVenda(c, idTenant, idEmpresa, idVendaBotaFora, idVariacaoBotaSemVariante);
-            long idVariacaoCamisaAzul = criarVariacao(c, idTenant, idCamisa, idVarianteAzul, null);
+            criarMovimentoVenda(c, idTenant, idEmpresa, idVendaBotaFora, idVariacaoBotaSemCor);
+            long idVariacaoCamisaAzul = criarVariacao(c, idTenant, idCamisa, idCorAzul, null);
             long idVendaCamisaFora = criarVenda(c, idTenant, idEmpresa, idClienteFora, OffsetDateTime.now());
             criarMovimentoVenda(c, idTenant, idEmpresa, idVendaCamisaFora, idVariacaoCamisaAzul);
 
             mvc.perform(get("/api/v1/crm/clientes").header("Authorization", "Bearer " + token)
                             .param("idsCategoriaProduto", String.valueOf(idCategoriaCalcados))
-                            .param("idsVarianteLinha", String.valueOf(idVarianteAzul)))
+                            .param("idsCor", String.valueOf(idCorAzul)))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.length()").value(1))
                     .andExpect(jsonPath("$[0].idCliente").value(idClienteAlvo));

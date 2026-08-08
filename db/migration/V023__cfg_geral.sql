@@ -8,8 +8,7 @@ CREATE TABLE cfg_geral (
   juros_crediario           numeric(5,2) NOT NULL DEFAULT 0,   -- Fase 2 (Q5)
   multa_crediario_dias      integer      NOT NULL DEFAULT 0,   -- Fase 2 (Q5)
   multa_crediario           numeric(5,2) NOT NULL DEFAULT 0,   -- Fase 2 (Q5)
-  cfg_usa_variante_linha    boolean      NOT NULL DEFAULT true,
-  cfg_usa_variante_coluna   boolean      NOT NULL DEFAULT true,
+  cfg_usa_cor_grade         boolean      NOT NULL DEFAULT false,  -- 2026-08-08: variação por cor+grade de tamanho (calçados/confecções); substitui cfg_usa_variante_linha/coluna
   cfg_permite_qtd_decimal   boolean      NOT NULL DEFAULT true,  -- 2026-07-29: qtd de produto com 3 casas (numeric(14,3)) quando true, inteiro quando false — vale em PDV/Transferência/Histórico
   atualizado_em             timestamptz  NOT NULL DEFAULT now()
 );

@@ -13,23 +13,81 @@ CREATE TABLE cfg_categoria_produto (
 );
 CREATE INDEX cfg_categoria_produto_id_tenant_ix ON cfg_categoria_produto (id_tenant);
 
-CREATE TABLE cfg_variante_linha (
-  id_variante_linha integer  GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+-- cfg_cor/cfg_tamanho substituem cfg_variante_linha/cfg_variante_coluna (2026-08-08): o sistema
+-- deixou de suportar variação genérica de 2 dimensões (qualquer rótulo, ex.: "voltagem") e passou
+-- a modelar especificamente cor + tamanho (grade), único par de dimensões que varia de verdade
+-- SEM mudar o cadastro do produto (calçados/confecções) — casos como voltagem mudam o preço, logo
+-- viram produtos distintos, não variação. Ver docs/telas/produto.md.
+CREATE TABLE cfg_cor (
+  id_cor        integer      GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   id_tenant     smallint     NOT NULL REFERENCES plataforma.tenant (id_tenant),
-  descricao     text         NOT NULL,                 -- ex.: cor
-  CONSTRAINT cfg_variante_linha_uk UNIQUE (id_tenant, descricao),
-  CONSTRAINT cfg_variante_linha_id_uk UNIQUE (id_tenant, id_variante_linha)
+  descricao     text         NOT NULL,
+  CONSTRAINT cfg_cor_uk UNIQUE (id_tenant, descricao),
+  CONSTRAINT cfg_cor_id_uk UNIQUE (id_tenant, id_cor)
 );
-CREATE INDEX cfg_variante_linha_id_tenant_ix ON cfg_variante_linha (id_tenant);
+CREATE INDEX cfg_cor_id_tenant_ix ON cfg_cor (id_tenant);
 
-CREATE TABLE cfg_variante_coluna (
-  id_variante_coluna integer GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+CREATE TABLE cfg_tamanho (
+  id_tamanho    integer      GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   id_tenant     smallint     NOT NULL REFERENCES plataforma.tenant (id_tenant),
-  descricao     text         NOT NULL,                 -- ex.: tamanho / voltagem
-  CONSTRAINT cfg_variante_coluna_uk UNIQUE (id_tenant, descricao),
-  CONSTRAINT cfg_variante_coluna_id_uk UNIQUE (id_tenant, id_variante_coluna)
+  descricao     text         NOT NULL,
+  CONSTRAINT cfg_tamanho_uk UNIQUE (id_tenant, descricao),
+  CONSTRAINT cfg_tamanho_id_uk UNIQUE (id_tenant, id_tamanho)
 );
-CREATE INDEX cfg_variante_coluna_id_tenant_ix ON cfg_variante_coluna (id_tenant);
+CREATE INDEX cfg_tamanho_id_tenant_ix ON cfg_tamanho (id_tenant);
+
+-- cfg_grade: uma "grade de numeração" nomeada (ex.: "Grade 36-44", "Grade PP-GG"), até 20 tamanhos
+-- em ordem (folga deliberada sobre o uso real, que raramente passa de 15 — decisão do dono do
+-- produto, 2026-08-08). NULL (não 0) representa slot vazio, mesma convenção do resto do projeto
+-- (produto.codigo_ncm, produto_barra.ean) — evita precisar de uma linha "cfg_tamanho id=0" fake.
+CREATE TABLE cfg_grade (
+  id_grade      integer      GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  id_tenant     smallint     NOT NULL REFERENCES plataforma.tenant (id_tenant),
+  descricao     text         NOT NULL,
+  id_tamanho1   integer,
+  id_tamanho2   integer,
+  id_tamanho3   integer,
+  id_tamanho4   integer,
+  id_tamanho5   integer,
+  id_tamanho6   integer,
+  id_tamanho7   integer,
+  id_tamanho8   integer,
+  id_tamanho9   integer,
+  id_tamanho10  integer,
+  id_tamanho11  integer,
+  id_tamanho12  integer,
+  id_tamanho13  integer,
+  id_tamanho14  integer,
+  id_tamanho15  integer,
+  id_tamanho16  integer,
+  id_tamanho17  integer,
+  id_tamanho18  integer,
+  id_tamanho19  integer,
+  id_tamanho20  integer,
+  CONSTRAINT cfg_grade_uk UNIQUE (id_tenant, descricao),
+  CONSTRAINT cfg_grade_id_uk UNIQUE (id_tenant, id_grade),
+  CONSTRAINT cfg_grade_tamanho1_fk  FOREIGN KEY (id_tenant, id_tamanho1)  REFERENCES cfg_tamanho (id_tenant, id_tamanho),
+  CONSTRAINT cfg_grade_tamanho2_fk  FOREIGN KEY (id_tenant, id_tamanho2)  REFERENCES cfg_tamanho (id_tenant, id_tamanho),
+  CONSTRAINT cfg_grade_tamanho3_fk  FOREIGN KEY (id_tenant, id_tamanho3)  REFERENCES cfg_tamanho (id_tenant, id_tamanho),
+  CONSTRAINT cfg_grade_tamanho4_fk  FOREIGN KEY (id_tenant, id_tamanho4)  REFERENCES cfg_tamanho (id_tenant, id_tamanho),
+  CONSTRAINT cfg_grade_tamanho5_fk  FOREIGN KEY (id_tenant, id_tamanho5)  REFERENCES cfg_tamanho (id_tenant, id_tamanho),
+  CONSTRAINT cfg_grade_tamanho6_fk  FOREIGN KEY (id_tenant, id_tamanho6)  REFERENCES cfg_tamanho (id_tenant, id_tamanho),
+  CONSTRAINT cfg_grade_tamanho7_fk  FOREIGN KEY (id_tenant, id_tamanho7)  REFERENCES cfg_tamanho (id_tenant, id_tamanho),
+  CONSTRAINT cfg_grade_tamanho8_fk  FOREIGN KEY (id_tenant, id_tamanho8)  REFERENCES cfg_tamanho (id_tenant, id_tamanho),
+  CONSTRAINT cfg_grade_tamanho9_fk  FOREIGN KEY (id_tenant, id_tamanho9)  REFERENCES cfg_tamanho (id_tenant, id_tamanho),
+  CONSTRAINT cfg_grade_tamanho10_fk FOREIGN KEY (id_tenant, id_tamanho10) REFERENCES cfg_tamanho (id_tenant, id_tamanho),
+  CONSTRAINT cfg_grade_tamanho11_fk FOREIGN KEY (id_tenant, id_tamanho11) REFERENCES cfg_tamanho (id_tenant, id_tamanho),
+  CONSTRAINT cfg_grade_tamanho12_fk FOREIGN KEY (id_tenant, id_tamanho12) REFERENCES cfg_tamanho (id_tenant, id_tamanho),
+  CONSTRAINT cfg_grade_tamanho13_fk FOREIGN KEY (id_tenant, id_tamanho13) REFERENCES cfg_tamanho (id_tenant, id_tamanho),
+  CONSTRAINT cfg_grade_tamanho14_fk FOREIGN KEY (id_tenant, id_tamanho14) REFERENCES cfg_tamanho (id_tenant, id_tamanho),
+  CONSTRAINT cfg_grade_tamanho15_fk FOREIGN KEY (id_tenant, id_tamanho15) REFERENCES cfg_tamanho (id_tenant, id_tamanho),
+  CONSTRAINT cfg_grade_tamanho16_fk FOREIGN KEY (id_tenant, id_tamanho16) REFERENCES cfg_tamanho (id_tenant, id_tamanho),
+  CONSTRAINT cfg_grade_tamanho17_fk FOREIGN KEY (id_tenant, id_tamanho17) REFERENCES cfg_tamanho (id_tenant, id_tamanho),
+  CONSTRAINT cfg_grade_tamanho18_fk FOREIGN KEY (id_tenant, id_tamanho18) REFERENCES cfg_tamanho (id_tenant, id_tamanho),
+  CONSTRAINT cfg_grade_tamanho19_fk FOREIGN KEY (id_tenant, id_tamanho19) REFERENCES cfg_tamanho (id_tenant, id_tamanho),
+  CONSTRAINT cfg_grade_tamanho20_fk FOREIGN KEY (id_tenant, id_tamanho20) REFERENCES cfg_tamanho (id_tenant, id_tamanho)
+);
+CREATE INDEX cfg_grade_id_tenant_ix ON cfg_grade (id_tenant);
 
 -- cfg_produto_ncm — referência de NCM, GLOBAL (sem id_tenant/RLS, P9): o mesmo código NCM
 -- vale para qualquer tenant, mantida por script (carga/atualização da tabela oficial da
@@ -114,13 +172,14 @@ CREATE TABLE produto (
   codigo_ncm           text          REFERENCES cfg_produto_ncm (codigo_ncm),
   peso_bruto           numeric(14,3) NOT NULL DEFAULT 0,
   peso_liquido         numeric(14,3) NOT NULL DEFAULT 0,
-  nome_variante_linha  text,
-  nome_variante_coluna text,
+  id_grade             integer,      -- grade de tamanhos deste produto; obrigatório (checado em
+                                      -- serviço) quando cfg_geral.cfg_usa_cor_grade = true (2026-08-08)
   criado_em            timestamptz   NOT NULL DEFAULT now(),
   atualizado_em        timestamptz   NOT NULL DEFAULT now(),
   reajustado_em        timestamptz,
   -- base para FK composta (2026-07-16, P8) — ver comentário em empresa_id_empresa_uk (V014).
-  CONSTRAINT produto_id_produto_uk UNIQUE (id_tenant, id_produto)
+  CONSTRAINT produto_id_produto_uk UNIQUE (id_tenant, id_produto),
+  CONSTRAINT produto_grade_fk FOREIGN KEY (id_tenant, id_grade) REFERENCES cfg_grade (id_tenant, id_grade)
 );
 CREATE INDEX produto_id_tenant_ix  ON produto (id_tenant);
 CREATE INDEX produto_descricao_ix  ON produto (id_tenant, descricao);
@@ -142,28 +201,31 @@ CREATE TABLE produto_categoria (
 );
 CREATE INDEX produto_categoria_id_tenant_ix ON produto_categoria (id_tenant);
 
--- produto_barra = VARIAÇÃO (1 por produto × linha × coluna). Q7: sku + ean.
+-- produto_barra = VARIAÇÃO (1 por produto × cor × tamanho, ou 1 única sem cor/tamanho quando o
+-- produto não usa grade). Q7: sku + ean. id_cor/id_tamanho substituem id_variante_linha/coluna
+-- (2026-08-08) — quando o produto usa grade (produto.id_grade preenchido), os dois são
+-- obrigatórios juntos (checado em serviço, ProdutoBarraService); quando não usa, ficam NULL.
 CREATE TABLE produto_barra (
   id_variacao        integer     GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   id_tenant          smallint    NOT NULL REFERENCES plataforma.tenant (id_tenant),
   id_produto         integer     NOT NULL,
-  id_variante_linha  integer,
-  id_variante_coluna integer,
+  id_cor             integer,
+  id_tamanho         integer,
   sku                text        NOT NULL,            -- código de barras interno, SEMPRE gerado por gerar_ean13_interno() — nunca digitado
   ean                text,                            -- GTIN real (EAN-13/UPC), NULLABLE
   criado_em          timestamptz NOT NULL DEFAULT now(),
   atualizado_em      timestamptz NOT NULL DEFAULT now(),
   CONSTRAINT produto_barra_sku_uk UNIQUE (id_tenant, sku),
-  CONSTRAINT produto_barra_variacao_uk UNIQUE (id_produto, id_variante_linha, id_variante_coluna),
+  CONSTRAINT produto_barra_variacao_uk UNIQUE (id_produto, id_cor, id_tamanho),
   -- base para FK composta (2026-07-16, P8) de estoque/canais/pedidos que referenciam a variação.
   CONSTRAINT produto_barra_id_variacao_uk UNIQUE (id_tenant, id_variacao),
   -- FKs compostas — ver comentário em usuario_empresa_fk (V015).
   CONSTRAINT produto_barra_produto_fk FOREIGN KEY (id_tenant, id_produto)
     REFERENCES produto (id_tenant, id_produto),
-  CONSTRAINT produto_barra_variante_linha_fk FOREIGN KEY (id_tenant, id_variante_linha)
-    REFERENCES cfg_variante_linha (id_tenant, id_variante_linha),
-  CONSTRAINT produto_barra_variante_coluna_fk FOREIGN KEY (id_tenant, id_variante_coluna)
-    REFERENCES cfg_variante_coluna (id_tenant, id_variante_coluna)
+  CONSTRAINT produto_barra_cor_fk FOREIGN KEY (id_tenant, id_cor)
+    REFERENCES cfg_cor (id_tenant, id_cor),
+  CONSTRAINT produto_barra_tamanho_fk FOREIGN KEY (id_tenant, id_tamanho)
+    REFERENCES cfg_tamanho (id_tenant, id_tamanho)
 );
 -- EAN único por tenant SÓ quando preenchido (produto sem EAN é permitido — Q7).
 CREATE UNIQUE INDEX produto_barra_ean_uk ON produto_barra (id_tenant, ean) WHERE ean IS NOT NULL;

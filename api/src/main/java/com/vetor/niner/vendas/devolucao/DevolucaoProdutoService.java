@@ -111,7 +111,7 @@ public class DevolucaoProdutoService {
                     .update();
             BigDecimal valorTotalItem = item.precoVenda().multiply(item.qtd());
             itensResponse.add(new ItemDevolucaoResponse(
-                    item.idVariacao(), item.sku(), item.descricaoProduto(), item.variacaoLinha(), item.variacaoColuna(),
+                    item.idVariacao(), item.sku(), item.descricaoProduto(), item.variacaoCor(), item.variacaoTamanho(),
                     item.qtd(), item.precoVenda(), valorTotalItem));
             valorVale = valorVale.add(valorTotalItem);
         }
@@ -177,7 +177,7 @@ public class DevolucaoProdutoService {
     }
 
     private record ItemResolvido(long idVariacao, BigDecimal qtd, BigDecimal precoVenda, BigDecimal precoCusto,
-                                  String sku, String descricaoProduto, String variacaoLinha, String variacaoColuna) {
+                                  String sku, String descricaoProduto, String variacaoCor, String variacaoTamanho) {
     }
 
     /** Resolve descrição/variação/preço de cada item a partir do {@code idVariacao} — a tela
@@ -194,31 +194,29 @@ public class DevolucaoProdutoService {
             }
             LinhaItem linha = jdbc.sql("""
                             SELECT pb.sku, p.descricao AS descricao_produto,
-                                   vl.descricao AS variacao_linha, vc.descricao AS variacao_coluna,
+                                   co.descricao AS variacao_cor, ta.descricao AS variacao_tamanho,
                                    p.preco_venda, p.preco_custo
                             FROM produto_barra pb
                             JOIN produto p ON p.id_produto = pb.id_produto AND p.id_tenant = pb.id_tenant
-                            LEFT JOIN cfg_variante_linha vl
-                                   ON vl.id_variante_linha = pb.id_variante_linha AND vl.id_tenant = pb.id_tenant
-                            LEFT JOIN cfg_variante_coluna vc
-                                   ON vc.id_variante_coluna = pb.id_variante_coluna AND vc.id_tenant = pb.id_tenant
+                            LEFT JOIN cfg_cor co ON co.id_cor = pb.id_cor AND co.id_tenant = pb.id_tenant
+                            LEFT JOIN cfg_tamanho ta ON ta.id_tamanho = pb.id_tamanho AND ta.id_tenant = pb.id_tenant
                             WHERE pb.id_tenant = plataforma.tenant_atual() AND pb.id_variacao = ? AND p.ativo = true
                             """)
                     .param(item.idVariacao())
                     .query((rs, n) -> new LinhaItem(
                             rs.getString("sku"), rs.getString("descricao_produto"),
-                            rs.getString("variacao_linha"), rs.getString("variacao_coluna"),
+                            rs.getString("variacao_cor"), rs.getString("variacao_tamanho"),
                             rs.getBigDecimal("preco_venda"), rs.getBigDecimal("preco_custo")))
                     .optional()
                     .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Produto informado não existe ou está inativo."));
 
             resolvidos.add(new ItemResolvido(item.idVariacao(), item.qtd(), linha.precoVenda(), linha.precoCusto(),
-                    linha.sku(), linha.descricaoProduto(), linha.variacaoLinha(), linha.variacaoColuna()));
+                    linha.sku(), linha.descricaoProduto(), linha.variacaoCor(), linha.variacaoTamanho()));
         }
         return resolvidos;
     }
 
-    private record LinhaItem(String sku, String descricaoProduto, String variacaoLinha, String variacaoColuna, BigDecimal precoVenda, BigDecimal precoCusto) {
+    private record LinhaItem(String sku, String descricaoProduto, String variacaoCor, String variacaoTamanho, BigDecimal precoVenda, BigDecimal precoCusto) {
     }
 
     /** {@code true} se o valor tiver parte fracionária (ex.: 2.5), não importa a escala/zeros à direita. */

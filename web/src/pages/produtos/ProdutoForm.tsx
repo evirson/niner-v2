@@ -13,6 +13,7 @@ import { BotaoFecharTela } from '../../components/BotaoFecharTela'
 import CategoriaProdutoModal from '../../components/CategoriaProdutoModal'
 import ConfirmarSalvarModal from '../../components/ConfirmarSalvarModal'
 import GaleriaImagensProduto from '../../components/GaleriaImagensProduto'
+import GradeModal from '../../components/GradeModal'
 import { IconeEngrenagem, IconeExcluir, IconeProduto, IconeSetaBaixo, IconeSetaCima } from '../../components/Icones'
 import InfoRegistro from '../../components/InfoRegistro'
 import LinhaGrid from '../../components/LinhaGrid'
@@ -21,8 +22,9 @@ import { ApiError } from '../../lib/api'
 import { listarCategoriasProduto } from '../../lib/categoriasProduto'
 import { enviarImagem, type ImagemProduto } from '../../lib/produtoImagens'
 import { buscarConfiguracaoTela, paraMapa, type ConfiguracaoCampo } from '../../lib/configuracaoTela'
-import { buscarFlagsVariante } from '../../lib/configuracaoGeral'
+import { buscarUsaCorGrade } from '../../lib/configuracaoGeral'
 import { hojeISO } from '../../lib/datas'
+import { listarGrades } from '../../lib/grades'
 import { useEu } from '../../lib/eu'
 import { aoTeclarEnterNoFormulario } from '../../lib/formularios'
 import {
@@ -58,7 +60,7 @@ import { maiusculas } from '../../lib/texto'
 const CHAVE_TELA = 'catalogo.produto.form'
 
 /** Campos de texto livre do formulário sujeitos à convenção de maiúsculas do projeto. */
-type CampoMaiusculo = 'descricao' | 'marca' | 'referencia' | 'nomeVarianteLinha' | 'nomeVarianteColuna'
+type CampoMaiusculo = 'descricao' | 'marca' | 'referencia'
 
 /** Campos configuráveis pela tela de configuração — mesma lista de `CAMPOS_POR_TELA` no backend. */
 type CampoConfiguravel =
@@ -72,7 +74,7 @@ type CampoConfiguravel =
   | 'precoOferta'
 
 type CampoValidavel = 'descricao' | 'precoCusto' | 'percentualVenda' | 'precoVenda' | CampoConfiguravel
-type ErrosCampo = Partial<Record<CampoValidavel, string>>
+type ErrosCampo = Partial<Record<CampoValidavel, string>> & { idGrade?: string }
 
 function campoVisivel(campo: CampoConfiguravel, mapa: Map<string, ConfiguracaoCampo>): boolean {
   return mapa.get(campo)?.visivel ?? true
@@ -166,6 +168,7 @@ export default function ProdutoForm({ somenteLeitura = false }: { somenteLeitura
   const [confirmarSalvarAberto, setConfirmarSalvarAberto] = useState(false)
   const [imagens, setImagens] = useState<ImagemProduto[]>([])
   const [arquivosNovaFoto, setArquivosNovaFoto] = useState<File[]>([])
+  const [modalGradeAberto, setModalGradeAberto] = useState(false)
 
   /**
    * Busca a descrição do NCM digitado (mesmo estilo do autopreenchimento de CEP). Código que
@@ -197,14 +200,20 @@ export default function ProdutoForm({ somenteLeitura = false }: { somenteLeitura
   })
   const mapaConfig = paraMapa(configuracao)
 
-  const { data: flagsVariante } = useQuery({
-    queryKey: ['config-geral', 'flags-variante'],
-    queryFn: buscarFlagsVariante,
+  const { data: usaCorGrade } = useQuery({
+    queryKey: ['config-geral', 'usa-cor-grade'],
+    queryFn: buscarUsaCorGrade,
   })
 
   const { data: categorias } = useQuery({
     queryKey: ['categorias-produto'],
     queryFn: listarCategoriasProduto,
+  })
+
+  const { data: grades } = useQuery({
+    queryKey: ['grades'],
+    queryFn: listarGrades,
+    enabled: Boolean(usaCorGrade?.cfgUsaCorGrade),
   })
   const categoriasDisponiveis = (categorias ?? []).filter(
     (c) => !form.categorias.some((fc) => fc.idCategoria === c.idCategoria),
@@ -347,6 +356,7 @@ export default function ProdutoForm({ somenteLeitura = false }: { somenteLeitura
       dataInicioOferta: ofertaErros.dataInicioOferta,
       dataFinalOferta: ofertaErros.dataFinalOferta,
       precoOferta: ofertaErros.precoOferta,
+      idGrade: usaCorGrade?.cfgUsaCorGrade && !form.idGrade ? 'Grade é obrigatória.' : undefined,
     }
     setErros(novosErros)
     if (Object.values(novosErros).some(Boolean)) {
@@ -738,13 +748,13 @@ export default function ProdutoForm({ somenteLeitura = false }: { somenteLeitura
         </section>
 
         {(campoVisivel('pesoBruto', mapaConfig) || campoVisivel('pesoLiquido', mapaConfig)
-          || flagsVariante?.usaVarianteLinha || flagsVariante?.usaVarianteColuna) && (
+          || usaCorGrade?.cfgUsaCorGrade) && (
           <section className="section">
-            <p className="section-label">Dimensões e Variantes</p>
-            {(flagsVariante?.usaVarianteLinha || flagsVariante?.usaVarianteColuna) && (
+            <p className="section-label">Dimensões e Grade</p>
+            {usaCorGrade?.cfgUsaCorGrade && (
               <p className="muted" style={{ marginTop: 0 }}>
-                Nome da variante usado nas variações (SKUs) deste produto — ex.: "Cor" para linha,
-                "Tamanho" para coluna. Controlado pelos Parâmetros do Sistema.
+                Grade de tamanhos deste produto — a cor de cada variação é definida depois, na
+                Entrada de Produtos.
               </p>
             )}
 
@@ -752,32 +762,40 @@ export default function ProdutoForm({ somenteLeitura = false }: { somenteLeitura
               <LinhaGrid
                 itens={[
                   {
-                    visivel: Boolean(flagsVariante?.usaVarianteLinha),
-                    peso: 3,
+                    visivel: Boolean(usaCorGrade?.cfgUsaCorGrade),
+                    peso: 4,
                     children: (
                       <>
-                        <label htmlFor="nomeVarianteLinha">Nome da Variante em Linha</label>
-                        <input
-                          id="nomeVarianteLinha"
-                          placeholder="ex.: COR"
-                          value={form.nomeVarianteLinha}
-                          onChange={campo('nomeVarianteLinha')}
-                        />
-                      </>
-                    ),
-                  },
-                  {
-                    visivel: Boolean(flagsVariante?.usaVarianteColuna),
-                    peso: 3,
-                    children: (
-                      <>
-                        <label htmlFor="nomeVarianteColuna">Nome da Variante em Coluna</label>
-                        <input
-                          id="nomeVarianteColuna"
-                          placeholder="ex.: TAMANHO"
-                          value={form.nomeVarianteColuna}
-                          onChange={campo('nomeVarianteColuna')}
-                        />
+                        <label htmlFor="idGrade">Grade *</label>
+                        <div className="linha-com-botao">
+                          <select
+                            id="idGrade"
+                            value={form.idGrade ?? ''}
+                            onChange={(e) =>
+                              setForm((f) => ({ ...f, idGrade: e.target.value ? Number(e.target.value) : null }))
+                            }
+                            onBlur={() =>
+                              setErros((atual) => ({
+                                ...atual,
+                                idGrade: usaCorGrade?.cfgUsaCorGrade && !form.idGrade ? 'Grade é obrigatória.' : undefined,
+                              }))
+                            }
+                          >
+                            <option value="">Selecione…</option>
+                            {form.idGrade && !grades?.some((g) => g.idGrade === form.idGrade) && (
+                              <option value={form.idGrade}>{form.descricaoGrade}</option>
+                            )}
+                            {grades?.map((g) => (
+                              <option key={g.idGrade} value={g.idGrade}>
+                                {g.descricao}
+                              </option>
+                            ))}
+                          </select>
+                          <button type="button" tabIndex={-1} className="btn ghost" onClick={() => setModalGradeAberto(true)}>
+                            ＋ Gerenciar Grades
+                          </button>
+                        </div>
+                        {erros.idGrade && <p className="erro-campo">{erros.idGrade}</p>}
                       </>
                     ),
                   },
@@ -861,6 +879,16 @@ export default function ProdutoForm({ somenteLeitura = false }: { somenteLeitura
               ...f,
               categorias: [...f.categorias, { idCategoria, nomeCategoria, indice: f.categorias.length }],
             }))
+          }}
+        />
+      )}
+
+      {modalGradeAberto && (
+        <GradeModal
+          aoFechar={() => setModalGradeAberto(false)}
+          aoSelecionar={(idGrade, descricaoGrade) => {
+            setForm((f) => ({ ...f, idGrade, descricaoGrade }))
+            setErros((e) => ({ ...e, idGrade: undefined }))
           }}
         />
       )}

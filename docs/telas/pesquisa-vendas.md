@@ -239,7 +239,7 @@ GET /api/v1/vendas/pesquisa/{idVenda}
     → { idVenda, idEmpresa, nomeEmpresa, dataVenda, idCliente, nomeCliente, cpfCnpj, fisicaJuridica,
         idFuncionario, nomeFuncionario, condicaoPagamento, desconto, valorTotal, recebido, aReceber,
         cancelada, dataCancelamento, nomeUsuarioCancelamento, motivoCancelamento,
-        itens: [{ codigo, descricaoProduto, variacaoLinha, variacaoColuna, qtd, valorUnitario,
+        itens: [{ codigo, descricaoProduto, variacaoCor, variacaoTamanho, qtd, valorUnitario,
                    valorDesconto, valorItem }],
         movimentosCaixa: [{ dataHora, tipoOperacao, nomeCarteira, origem, creditoDebito, valor }],
         temParcelasCredario: boolean,

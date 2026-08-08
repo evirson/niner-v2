@@ -77,7 +77,8 @@ public class FornecedorService {
                 ordenarPor == null ? "f.razao_social" : COLUNAS_ORDENAVEIS.getOrDefault(ordenarPor, "f.razao_social");
         String direcaoOrdenacao = "DESC".equalsIgnoreCase(direcao) ? "DESC" : "ASC";
 
-        StringBuilder filtro = new StringBuilder(" WHERE 1 = 1");
+        // id_tenant explícito (defesa em profundidade) — ver comentário em ProdutoService.listar.
+        StringBuilder filtro = new StringBuilder(" WHERE f.id_tenant = plataforma.tenant_atual()");
         List<Object> params = new ArrayList<>();
 
         if (razaoSocial != null && !razaoSocial.isBlank()) {
@@ -122,7 +123,7 @@ public class FornecedorService {
 
     @Transactional(readOnly = true)
     public FornecedorResponse buscar(long id) {
-        return jdbc.sql(SELECT_BASE + " WHERE f.id_fornecedor = ?")
+        return jdbc.sql(SELECT_BASE + " WHERE f.id_tenant = plataforma.tenant_atual() AND f.id_fornecedor = ?")
                 .param(id)
                 .query(FornecedorService::mapear)
                 .optional()
@@ -169,7 +170,7 @@ public class FornecedorService {
                                 inscricao_estadual = ?, email = ?, telefone = ?, cep = ?, endereco = ?,
                                 numero = ?, bairro = ?, cidade = ?, estado = ?, ativo = ?,
                                 atualizado_em = now()
-                            WHERE id_fornecedor = ?
+                            WHERE id_fornecedor = ? AND id_tenant = plataforma.tenant_atual()
                             """)
                     .params(params)
                     .update();
@@ -193,14 +194,19 @@ public class FornecedorService {
     @Transactional
     public ExclusaoFornecedorResponse excluir(long id) {
         boolean temVinculo = Boolean.TRUE.equals(jdbc.sql("""
-                        SELECT EXISTS (SELECT 1 FROM produto_movimento_mestre WHERE id_fornecedor = ?)
-                            OR EXISTS (SELECT 1 FROM contas_pagar WHERE id_fornecedor = ?)
+                        SELECT EXISTS (SELECT 1 FROM produto_movimento_mestre
+                                       WHERE id_tenant = plataforma.tenant_atual() AND id_fornecedor = ?)
+                            OR EXISTS (SELECT 1 FROM contas_pagar
+                                       WHERE id_tenant = plataforma.tenant_atual() AND id_fornecedor = ?)
                         """)
                 .params(id, id)
                 .query(Boolean.class).single());
 
         if (temVinculo) {
-            int linhas = jdbc.sql("UPDATE fornecedor SET ativo = false, atualizado_em = now() WHERE id_fornecedor = ?")
+            int linhas = jdbc.sql("""
+                            UPDATE fornecedor SET ativo = false, atualizado_em = now()
+                            WHERE id_fornecedor = ? AND id_tenant = plataforma.tenant_atual()
+                            """)
                     .param(id).update();
             if (linhas == 0) {
                 throw new ResponseStatusException(NOT_FOUND, "Fornecedor não encontrado.");
@@ -209,7 +215,8 @@ public class FornecedorService {
                     "Fornecedor possui movimentações ou contas a pagar associadas.");
         }
 
-        int linhas = jdbc.sql("DELETE FROM fornecedor WHERE id_fornecedor = ?").param(id).update();
+        int linhas = jdbc.sql("DELETE FROM fornecedor WHERE id_fornecedor = ? AND id_tenant = plataforma.tenant_atual()")
+                .param(id).update();
         if (linhas == 0) {
             throw new ResponseStatusException(NOT_FOUND, "Fornecedor não encontrado.");
         }

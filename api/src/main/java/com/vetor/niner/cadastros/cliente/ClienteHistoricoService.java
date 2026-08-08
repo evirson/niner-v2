@@ -89,7 +89,7 @@ public class ClienteHistoricoService {
     private java.util.List<ItemVendaHistorico> buscarProdutos(long idCliente) {
         return jdbc.sql("""
                         SELECT v.id_venda, p.descricao AS descricao_produto,
-                               vl.descricao AS variacao_linha, vc.descricao AS variacao_coluna,
+                               co.descricao AS variacao_cor, ta.descricao AS variacao_tamanho,
                                pmd.qtd_produto AS qtd_vendida,
                                pmd.preco_venda, pmd.valor_desconto, pmd.valor_acrescimo
                         FROM venda v
@@ -101,10 +101,8 @@ public class ClienteHistoricoService {
                               AND pmd.credito_debito = 'D'
                         JOIN produto_barra pb ON pb.id_variacao = pmd.id_variacao AND pb.id_tenant = pmd.id_tenant
                         JOIN produto p        ON p.id_produto = pb.id_produto AND p.id_tenant = pb.id_tenant
-                        LEFT JOIN cfg_variante_linha vl
-                               ON vl.id_variante_linha = pb.id_variante_linha AND vl.id_tenant = pb.id_tenant
-                        LEFT JOIN cfg_variante_coluna vc
-                               ON vc.id_variante_coluna = pb.id_variante_coluna AND vc.id_tenant = pb.id_tenant
+                        LEFT JOIN cfg_cor co ON co.id_cor = pb.id_cor AND co.id_tenant = pb.id_tenant
+                        LEFT JOIN cfg_tamanho ta ON ta.id_tamanho = pb.id_tamanho AND ta.id_tenant = pb.id_tenant
                         WHERE v.id_tenant = plataforma.tenant_atual() AND v.id_cliente = ?
                         ORDER BY v.data_venda DESC, v.id_venda DESC, p.descricao ASC
                         """)
@@ -125,8 +123,8 @@ public class ClienteHistoricoService {
         return new ItemVendaHistorico(
                 rs.getLong("id_venda"),
                 rs.getString("descricao_produto"),
-                rs.getString("variacao_linha"),
-                rs.getString("variacao_coluna"),
+                rs.getString("variacao_cor"),
+                rs.getString("variacao_tamanho"),
                 qtd,
                 precoVendaLiquido);
     }

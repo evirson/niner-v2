@@ -18,7 +18,7 @@
  *
  * <p><b>Filtros de produtos comprados</b> (opcionais; quando qualquer um está ativo, vira um
  * `EXISTS` exigindo que TODOS os ativos batam na MESMA linha de venda — mesmo item, não compras
- * diferentes): período de compra, categoria de produto, variação de linha, variação de coluna.
+ * diferentes): período de compra, categoria de produto, cor, tamanho.
  * "Compra" = {@code produto_movimento_detalhe} de uma venda não cancelada
  * ({@code tipo_movimento='VENDA'}, {@code credito_debito='D'}, {@code venda.cancelada=false}) —
  * mesma definição de {@code ClienteHistoricoService.buscarCompras}, exceto que aqui vendas

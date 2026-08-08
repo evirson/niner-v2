@@ -210,8 +210,8 @@ export default function ClienteHistorico() {
                         <thead>
                           <tr>
                             <th>Descrição do Produto</th>
-                            <th>Variação de Linha</th>
-                            <th>Variação de Coluna</th>
+                            <th>Cor</th>
+                            <th>Tamanho</th>
                             <th>Qtd Vendida</th>
                             <th>Preço de Venda</th>
                           </tr>
@@ -220,8 +220,8 @@ export default function ClienteHistorico() {
                           {produtosExibidos.map((item, indice) => (
                             <tr key={`${item.idVenda}-${indice}`}>
                               <td>{item.descricaoProduto}</td>
-                              <td>{item.variacaoLinha ?? '—'}</td>
-                              <td>{item.variacaoColuna ?? '—'}</td>
+                              <td>{item.variacaoCor ?? '—'}</td>
+                              <td>{item.variacaoTamanho ?? '—'}</td>
                               <td className="mono">{formatarQuantidade(item.qtdVendida, permiteQtdDecimal)}</td>
                               <td>{moeda(item.precoVenda)}</td>
                             </tr>

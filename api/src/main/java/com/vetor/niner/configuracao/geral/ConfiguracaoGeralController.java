@@ -4,7 +4,7 @@ import com.vetor.niner.configuracao.geral.ConfiguracaoGeralDtos.ConfiguracaoGera
 import com.vetor.niner.configuracao.geral.ConfiguracaoGeralDtos.ConfiguracaoGeralResponse;
 import com.vetor.niner.configuracao.geral.ConfiguracaoGeralDtos.DescontoVendaResponse;
 import com.vetor.niner.configuracao.geral.ConfiguracaoGeralDtos.PermiteQtdDecimalResponse;
-import com.vetor.niner.configuracao.geral.ConfiguracaoGeralService.FlagsVariante;
+import com.vetor.niner.configuracao.geral.ConfiguracaoGeralDtos.UsaCorGradeResponse;
 import jakarta.validation.Valid;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -14,8 +14,8 @@ import org.springframework.web.bind.annotation.*;
  * Parâmetros do sistema (docs/telas/configuracao-geral.md), superfície do tenant (`/api/v1`,
  * JWT + RLS). Somente ADMIN — verificado no serviço a partir do claim {@code roles} do JWT
  * (mesmo mecanismo de {@code ConfiguracaoTelaService}). Exceções abertas a qualquer papel:
- * {@code /flags-variante} (cadastro de produto precisa saber se os campos de nome de variante
- * aparecem no formulário), {@code /desconto-venda} (PDV, F5, precisa do percentual de
+ * {@code /usa-cor-grade} (cadastro de produto e Emissão de Etiqueta precisam saber se o campo
+ * Grade aparece), {@code /desconto-venda} (PDV, F5, precisa do percentual de
  * desconto promocional pra exibir antes de efetivar a venda) e {@code /permite-qtd-decimal}
  * (PDV/Transferência/Histórico do Cliente precisam saber se quantidade de produto aceita
  * decimais, pra formatar/validar a entrada).
@@ -40,9 +40,9 @@ public class ConfiguracaoGeralController {
         return service.atualizar(jwt, req);
     }
 
-    @GetMapping("/flags-variante")
-    public FlagsVariante flagsVariante() {
-        return service.flagsVariante();
+    @GetMapping("/usa-cor-grade")
+    public UsaCorGradeResponse usaCorGrade() {
+        return new UsaCorGradeResponse(service.usaCorGrade());
     }
 
     @GetMapping("/desconto-venda")

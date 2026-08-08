@@ -9,15 +9,15 @@ public class CrmDtos {
     private CrmDtos() {
     }
 
-    /** Item de dropdown (categoria de cliente/produto, variação de linha/coluna) — id + rótulo. */
+    /** Item de dropdown (categoria de cliente/produto, cor/tamanho) — id + rótulo. */
     public record OpcaoCrm(long id, String rotulo) {
     }
 
     public record OpcoesCrmResponse(
             List<OpcaoCrm> categoriasCliente,
             List<OpcaoCrm> categoriasProduto,
-            List<OpcaoCrm> variantesLinha,
-            List<OpcaoCrm> variantesColuna) {
+            List<OpcaoCrm> cores,
+            List<OpcaoCrm> tamanhos) {
     }
 
     /** Uma linha do resultado — todas as colunas sempre calculadas; o frontend decide quais

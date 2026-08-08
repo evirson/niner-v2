@@ -4,8 +4,8 @@ import { api } from './api'
 export interface LinhaContagem {
   idVariacao: number
   descricaoProduto: string
-  variacaoLinha: string | null
-  variacaoColuna: string | null
+  variacaoCor: string | null
+  variacaoTamanho: string | null
   sku: string
   qtdContada: number
 }
@@ -13,8 +13,8 @@ export interface LinhaContagem {
 export interface LinhaDiferenca {
   idVariacao: number
   descricaoProduto: string
-  variacaoLinha: string | null
-  variacaoColuna: string | null
+  variacaoCor: string | null
+  variacaoTamanho: string | null
   sku: string
   qtdEstoque: number
   qtdContada: number

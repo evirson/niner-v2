@@ -32,8 +32,8 @@ interface ItemLinha {
 }
 
 function variacaoTexto(p: PdvProduto): string | null {
-  if (!p.variacaoLinha && !p.variacaoColuna) return null
-  return [p.variacaoLinha, p.variacaoColuna].filter(Boolean).join(' · ')
+  if (!p.variacaoCor && !p.variacaoTamanho) return null
+  return [p.variacaoCor, p.variacaoTamanho].filter(Boolean).join(' · ')
 }
 
 export default function TransferenciaForm() {

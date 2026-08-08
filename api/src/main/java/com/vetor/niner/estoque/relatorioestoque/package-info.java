@@ -11,7 +11,7 @@
  *       aberta por empresa (uma coluna por empresa selecionada) mais uma coluna de total. Cada
  *       coluna de quantidade é totalizada no rodapé.</li>
  *   <li><b>ANALITICO</b> — uma linha por VARIAÇÃO (não por produto), com as mesmas colunas de
- *       empresa do Sintético mais Variação de Linha/Coluna. Sem totalização (não pedido).</li>
+ *       empresa do Sintético mais Cor/Tamanho. Sem totalização (não pedido).</li>
  * </ul>
  *
  * <p><b>Colunas dinâmicas por empresa</b> (Sintético/Analítico): a resposta traz {@code

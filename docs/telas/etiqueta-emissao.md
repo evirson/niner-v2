@@ -7,7 +7,9 @@ Configuração de Etiqueta (`docs/telas/configuracao-etiqueta.md`) → imprime e
 podendo ser de um produto/variação diferente. Duas rodadas na mesma data: **rodada 1** —
 implementação completa (3 modos de seleção, grade, impressão em lote); **rodada 2** — modo
 Individual deixou de exigir SKU pré-cadastrado (cria na hora), linha/coluna viraram obrigatórias
-por produto, e nasceu o botão "Limpar Lista".
+por produto, e nasceu o botão "Limpar Lista". **2026-08-08:** modelo de variação "linha/coluna"
+(rótulo livre por produto) substituído por **cor + grade** (curva de tamanhos nomeada e
+ordenada) — ver seções abaixo e `docs/telas/produto.md`.
 
 ## Contexto
 
@@ -58,14 +60,16 @@ Busca **qualquer produto ativo**, com ou sem variação/SKU (`produto_barra`) j�
 a rodada 2 (ver abaixo), não é mais preciso ter SKU pré-cadastrado pra emitir etiqueta de um
 produto novo.
 
-- Se o produto usa variação de linha e/ou coluna (`produto.nome_variante_linha`/
-  `nome_variante_coluna` não nulos — configurado **por produto**, no cadastro dele, não uma flag
-  global de tenant), o respectivo seletor aparece na tela como **obrigatório**, com o próprio nome
-  da dimensão como rótulo (ex.: "COR *", "TAMANHO *" em vez de um genérico "Variação de
-  Linha/Coluna"). As opções vêm do **catálogo inteiro do tenant** (`GET
-  /api/v1/etiqueta-emissao/variantes`), não só das variações que já existem pra este produto
-  específico.
-- Se o produto não usa nenhuma das duas dimensões, nenhum seletor aparece — só a quantidade.
+- Se o produto usa grade (`produto.id_grade` não nulo — configurado **por produto**, no cadastro
+  dele, não uma flag global de tenant), os seletores **Cor** e **Tamanho** aparecem como
+  **obrigatórios** (revisado 2026-08-08: o antigo par genérico linha/coluna, com rótulo livre por
+  produto, virou este par fixo cor+tamanho). Cor vem do **catálogo inteiro do tenant** (`GET
+  /api/v1/cores`), com "+ Nova cor" inline (`POST /api/v1/cores`) — continua sendo a válvula de
+  escape temporária pra `cfg_cor` (sem tela própria, ver `docs/telas/produto.md`). Tamanho vem
+  **restrito à grade do produto** (`GET /api/v1/grades/{idGrade}`), não do catálogo inteiro de
+  tamanhos do tenant — coerente com a regra de `ProdutoBarraService.validarObrigatoriedade`
+  (tamanho tem que pertencer à grade).
+- Se o produto não usa grade, nenhum seletor aparece — só a quantidade.
 - "Adicionar à Lista" chama `POST /api/v1/etiqueta-emissao/produtos/{idProduto}/variacao`, que
   **acha** a combinação produto+linha+coluna se já existir, ou **cria na hora** (gera o SKU via
   `gerar_ean13_interno()`) se ainda não existir — sempre resulta em exatamente 1 item novo na
@@ -113,24 +117,28 @@ Pedido em 3 itens sobre a tela já construída na rodada 1:
 3. Botão para limpar todos os produtos selecionados.
 
 **Leitura da obrigatoriedade (item 2 era ambíguo — "se nas configuração são obrigatórias"):**
-resolvido como **por-PRODUTO**, via `produto.nome_variante_linha`/`nome_variante_coluna` (não nulo
-= este produto usa aquela dimensão), e **não** a flag global de tenant
-(`cfg_usa_variante_linha`/`coluna`, que só controla se o campo aparece no cadastro de Produto). É
-a mesma fonte que já decide o rótulo do seletor.
+resolvido como **por-PRODUTO**, via `produto.id_grade` (não nulo = este produto usa variação), e
+**não** a flag global de tenant (`cfg_usa_cor_grade`, que só controla se o campo Grade aparece no
+cadastro de Produto).
 
 **Novo serviço de domínio, não específico desta tela:** `ProdutoBarraService` + `ProdutoBarraDtos`
 (pacote `com.vetor.niner.catalogo`, não `etiquetaemissao`) — o `CLAUDE.md` já antecipava esse
 nome/método exato ("quando for construir produto_barra/o serviço de variação, chame
 `gerar_ean13_interno()` explicitamente no `ProdutoBarraService.criar()`"), então virou
 infraestrutura de domínio compartilhada, reaproveitável por qualquer tela futura que precise
-achar-ou-criar uma variação — não só esta. `obterOuCriar(idProduto, idVarianteLinha,
-idVarianteColuna)`: valida a obrigatoriedade (mesma regra acima, reforçada no servidor — defesa em
-profundidade, já que o frontend também valida), busca a combinação exata (`IS NULL`-aware quando
-linha/coluna não se aplicam ao produto), cria com `gerar_ean13_interno()` se não achar.
+achar-ou-criar uma variação — não só esta. `obterOuCriar(idProduto, idCor, idTamanho)`: valida a
+obrigatoriedade (mesma regra acima, reforçada no servidor — defesa em profundidade, já que o
+frontend também valida; também checa que o tamanho pertence à grade do produto), busca a
+combinação exata (`IS NULL`-aware quando o produto não usa grade), cria com
+`gerar_ean13_interno()` se não achar.
 
-Endpoint novo `GET /api/v1/etiqueta-emissao/variantes` (catálogo inteiro do tenant) substituiu o
-antigo `GET .../produtos/{id}/variacoes` (removido — trazia só as variações já existentes de UM
-produto, que deixou de fazer sentido quando o produto pode não ter nenhuma ainda).
+**Revisado 2026-08-08 (cor/grade substitui linha/coluna):** o endpoint
+`GET /api/v1/etiqueta-emissao/variantes` (catálogo genérico de linha/coluna do tenant) foi
+**removido** — `OpcaoVarianteResponse`/`OpcoesVarianteResponse` não existem mais. No lugar, o
+frontend busca cor e tamanho **de fontes separadas e mais específicas**: cor do catálogo inteiro
+do tenant (`GET /api/v1/cores`), tamanho restrito à grade do produto selecionado
+(`GET /api/v1/grades/{idGrade}`) — reflete que tamanho não é mais uma dimensão livre do tenant,
+é sempre relativo a uma grade.
 
 **Testado ao vivo:** produto com variação "BOTA FEMININA AS-250" (usa COR+TAMANHO) exigiu os dois
 seletores, mensagem de validação citou o nome real do produto ("Informe a variação de \"COR\".")
@@ -147,9 +155,8 @@ reaproveita `cfg_etiqueta_config`) — sem tabela nova. Qualquer papel (`ADMIN`/
 
 | Método | Caminho | O quê |
 |---|---|---|
-| `GET` | `/etiqueta-emissao/produtos` | Busca produtos ativos (descrição/SKU), com nome das variantes do produto quando ele usa. |
-| `GET` | `/etiqueta-emissao/variantes` | Catálogo inteiro do tenant (todas as variantes de linha e de coluna cadastradas). |
-| `POST` | `/etiqueta-emissao/produtos/{idProduto}/variacao` | Acha ou cria a variação (delega pro `ProdutoBarraService`, módulo `catalogo`). Único endpoint com efeito colateral real. |
+| `GET` | `/etiqueta-emissao/produtos` | Busca produtos ativos (descrição/SKU), com `idGrade` quando o produto usa. |
+| `POST` | `/etiqueta-emissao/produtos/{idProduto}/variacao` | Acha ou cria a variação (delega pro `ProdutoBarraService`, módulo `catalogo`). Único endpoint com efeito colateral real. Cor via `GET/POST /api/v1/cores`, tamanho via `GET /api/v1/grades/{idGrade}` (endpoints do módulo `catalogo`, não deste controller). |
 | `GET` | `/etiqueta-emissao/fornecedores` | Busca leve de fornecedor (não existia endpoint enxuto no projeto, só o paginado completo). |
 | `GET` | `/etiqueta-emissao/entradas` | Modo Por Entradas — exige ao menos 1 dos 3 filtros. |
 | `GET` | `/etiqueta-emissao/estoques` | Modo Por Estoques — empresa obrigatória (ADMIN explícita, OPERADOR via `eid`). |
@@ -157,14 +164,13 @@ reaproveita `cfg_etiqueta_config`) — sem tabela nova. Qualquer papel (`ADMIN`/
 `ProdutoBarraService`/`ProdutoBarraDtos` (pacote `catalogo`, ver "Rodada 2" acima) — infraestrutura
 de domínio compartilhada, consumida por este controller mas não pertencente a ele.
 
-**14 testes** (`EtiquetaEmissaoCrudTest.java`): busca traz todos os produtos ativos com ou sem
-variação, busca traz o nome das variantes quando o produto usa, opções de variante retornam o
-catálogo do tenant, criar variação gera SKU novo quando o produto não usa variante, criar variação
-exige linha quando o produto usa essa dimensão, criar variação com linha e coluna acha e depois
-reaproveita a mesma (não duplica), busca de fornecedores só ativos, Por Entradas rejeita sem filtro
-nenhum, Por Entradas soma quantidade de várias compras da mesma variação, Por Entradas filtra por
-nota fiscal, Por Estoques exige empresa pra ADMIN, Por Estoques só traz quantidade positiva, Por
-Estoques filtra por categoria, e isolamento de tenant (RLS). Suíte de backend inteira: **386/386**.
+Testes (`EtiquetaEmissaoCrudTest.java`): busca traz todos os produtos ativos com ou sem variação,
+criar variação gera SKU novo quando o produto não usa grade, criar variação exige cor/tamanho
+quando o produto usa grade, criar variação com cor e tamanho acha e depois reaproveita a mesma
+(não duplica), busca de fornecedores só ativos, Por Entradas rejeita sem filtro nenhum, Por
+Entradas soma quantidade de várias compras da mesma variação, Por Entradas filtra por nota fiscal,
+Por Estoques exige empresa pra ADMIN, Por Estoques só traz quantidade positiva, Por Estoques
+filtra por categoria, e isolamento de tenant (RLS). Suíte de backend inteira: **405/405**.
 
 ## Frontend
 

@@ -8,8 +8,8 @@ export interface EmpresaResumo {
 export interface ItemTransferencia {
   idVariacao: number
   descricaoProduto: string
-  variacaoLinha: string | null
-  variacaoColuna: string | null
+  variacaoCor: string | null
+  variacaoTamanho: string | null
   sku: string
   qtd: number
 }

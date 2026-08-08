@@ -33,7 +33,7 @@ public final class CancelamentoVendaDtos {
     }
 
     public record ItemVendaDetalhe(
-            String descricaoProduto, String variacaoLinha, String variacaoColuna,
+            String descricaoProduto, String variacaoCor, String variacaoTamanho,
             BigDecimal qtd, BigDecimal precoVenda, BigDecimal valorItem) {
     }
 

@@ -48,7 +48,7 @@ Todas confirmadas com o dono do produto durante o planejamento:
 |---|---|---|---|
 | **Inventário** | Produto (soma variações e empresas) | Descrição, Marca, Referência, Qtd Total, Custo Unitário (`produto.preco_custo`, tenant-wide), Custo Total (`qtdTotal × custoUnitario`) | Sim — Qtd Total e Custo Total no rodapé |
 | **Sintético** | Produto (soma variações, abre por empresa) | Descrição, Marca, Referência, **uma coluna por empresa selecionada**, Qtd Total | Sim — cada coluna de quantidade no rodapé |
-| **Analítico** | Variação (linha × coluna) | Descrição, Marca, Referência, Variação Linha, Variação Coluna, **uma coluna por empresa selecionada**, Qtd Total | Não (não pedido) |
+| **Analítico** | Variação (cor × tamanho) | Descrição, Marca, Referência, Cor, Tamanho, **uma coluna por empresa selecionada**, Qtd Total | Não (não pedido) |
 
 **Colunas dinâmicas por empresa** (Sintético/Analítico): a resposta traz `colunasEmpresa` (id +
 nome, ordem fixa) e cada linha traz `qtdPorEmpresa` como lista **posicional**, na mesma ordem —
@@ -83,7 +83,7 @@ GET /api/v1/relatorios/estoque?modelo=INVENTARIO|SINTETICO|ANALITICO
       colunasEmpresa: [{idEmpresa,nomeEmpresa}],           // só Sintético/Analítico
       linhasInventario: [{descricaoProduto,marca,referencia,qtdTotal,custoUnitario,custoTotal}],
       linhasSintetico: [{descricaoProduto,marca,referencia,qtdPorEmpresa:[...],qtdTotal}],
-      linhasAnalitico: [{descricaoProduto,marca,referencia,variacaoLinha,variacaoColuna,qtdPorEmpresa:[...],qtdTotal}],
+      linhasAnalitico: [{descricaoProduto,marca,referencia,variacaoCor,variacaoTamanho,qtdPorEmpresa:[...],qtdTotal}],
       totalInventario: {qtdTotal,custoTotal} | null,
       totalSintetico: {qtdPorEmpresa:[...],qtdTotal} | null }
 

@@ -11,13 +11,13 @@ import { gerarPdfCapturaDiferencasEstoque } from '../../lib/estoqueDiferencasCap
 import { useEu } from '../../lib/eu'
 import { formatarQuantidade } from '../../lib/masks'
 
-type Coluna = 'descricaoProduto' | 'variacaoLinha' | 'variacaoColuna' | 'qtdEstoque' | 'qtdContada' | 'diferenca'
+type Coluna = 'descricaoProduto' | 'variacaoCor' | 'variacaoTamanho' | 'qtdEstoque' | 'qtdContada' | 'diferenca'
 type Direcao = 'ASC' | 'DESC'
 
 const COLUNAS: Array<{ chave: Coluna; rotulo: string; alinhamento?: 'right' }> = [
   { chave: 'descricaoProduto', rotulo: 'Descrição' },
-  { chave: 'variacaoLinha', rotulo: 'Variação Linha' },
-  { chave: 'variacaoColuna', rotulo: 'Variação Coluna' },
+  { chave: 'variacaoCor', rotulo: 'Cor' },
+  { chave: 'variacaoTamanho', rotulo: 'Tamanho' },
   { chave: 'qtdEstoque', rotulo: 'Qtd Estoque', alinhamento: 'right' },
   { chave: 'qtdContada', rotulo: 'Qtd Contada', alinhamento: 'right' },
   { chave: 'diferenca', rotulo: 'Diferença', alinhamento: 'right' },
@@ -165,8 +165,8 @@ export default function DiferencasEstoque() {
                     {linhas.map((linha) => (
                       <tr key={linha.idVariacao}>
                         <td>{linha.descricaoProduto}</td>
-                        <td>{linha.variacaoLinha ?? '—'}</td>
-                        <td>{linha.variacaoColuna ?? '—'}</td>
+                        <td>{linha.variacaoCor ?? '—'}</td>
+                        <td>{linha.variacaoTamanho ?? '—'}</td>
                         <td className="mono" style={{ textAlign: 'right' }}>{formatarQuantidade(linha.qtdEstoque, permiteQtdDecimal)}</td>
                         <td className="mono" style={{ textAlign: 'right' }}>{formatarQuantidade(linha.qtdContada, permiteQtdDecimal)}</td>
                         <td className="mono" style={{ textAlign: 'right', color: corDiferenca(linha.diferenca) }}>

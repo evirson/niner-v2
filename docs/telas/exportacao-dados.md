@@ -47,9 +47,9 @@ exibir.
 | 4 | `funcionario` | Funcionários | `funcionario` |
 | 5 | `contas_receber` | Contas a Receber / Recebidas | `contas_receber` + `venda` + `cliente` + `empresa` + `tipo_carteira` |
 | 6 | `contas_pagar` | Contas a Pagar / Pagas | `contas_pagar` + `fornecedor` + `empresa` + `cfg_plano_contas` |
-| 7 | `codigo_barras` | Código de Barras | `produto_barra` + `produto` + `cfg_variante_linha`/`coluna` |
+| 7 | `codigo_barras` | Código de Barras | `produto_barra` + `produto` + `cfg_cor`/`cfg_tamanho` |
 | 8 | `plano_contas` | Plano de Contas | `cfg_plano_contas` |
-| 9 | `estoque` | Estoque | `produto_estoque` + `produto_barra` + `produto` + `empresa` + variantes |
+| 9 | `estoque` | Estoque | `produto_estoque` + `produto_barra` + `produto` + `empresa` + `cfg_cor`/`cfg_tamanho` |
 
 Duas dessas fontes (`contas_pagar`, `produto_barra`) **não tinham nenhuma tela ou consulta
 existente no sistema** até esta feature — as consultas de exportação foram a primeira vez que

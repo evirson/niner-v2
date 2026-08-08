@@ -50,12 +50,12 @@ public class CrmController {
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate comprasDe,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate comprasAte,
             @RequestParam(required = false) List<Long> idsCategoriaProduto,
-            @RequestParam(required = false) List<Long> idsVarianteLinha,
-            @RequestParam(required = false) List<Long> idsVarianteColuna) {
+            @RequestParam(required = false) List<Long> idsCor,
+            @RequestParam(required = false) List<Long> idsTamanho) {
         FiltrosCrm filtros = new FiltrosCrm(
                 clienteInicial, clienteFinal, generos, idadeDe, idadeAte, aniversarioDe, aniversarioAte,
                 idsCategoriaCliente, cadastroDe, cadastroAte, diasSemComprasMinimo, comprasDe, comprasAte,
-                idsCategoriaProduto, idsVarianteLinha, idsVarianteColuna);
+                idsCategoriaProduto, idsCor, idsTamanho);
         return service.buscarClientes(jwt, filtros);
     }
 }

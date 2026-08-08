@@ -340,8 +340,8 @@ Ambos os `GET` devolvem o mesmo formato de item (uma variação):
 {
   "idVariacao": 42,
   "descricaoProduto": "TÊNIS ESPORTIVO RUNNER",
-  "variacaoLinha": "40",
-  "variacaoColuna": "AZUL",
+  "variacaoCor": "AZUL",
+  "variacaoTamanho": "40",
   "sku": "9001000000123",
   "precoVenda": 189.90,
   "estoquePorEmpresa": [{ "codigoEmpresa": 1, "nomeEmpresa": "LOJA MATRIZ", "qtd": 5.000 }],
@@ -394,7 +394,7 @@ crediário desta venda somado ao já em aberto ultrapassa `cliente.limite_credit
 ## Critérios de aceitação (viram testes)
 
 - Dado um termo de busca, quando ele bate com a descrição de um produto ativo, então a variação
-  aparece no resultado com preço, variação de linha/coluna e estoque por empresa + total.
+  aparece no resultado com preço, cor/tamanho e estoque por empresa + total.
 - Dado um produto inativo, quando buscado, então não aparece.
 - Dado um sku ou ean existente, quando lido, então devolve o mesmo formato; se não existir ou o
   produto estiver inativo, 404.

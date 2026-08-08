@@ -2,7 +2,6 @@ package com.vetor.niner.configuracao.etiquetaemissao;
 
 import com.vetor.niner.catalogo.ProdutoBarraDtos.CriarVariacaoRequest;
 import com.vetor.niner.configuracao.etiquetaemissao.EtiquetaEmissaoDtos.FornecedorOpcaoResponse;
-import com.vetor.niner.configuracao.etiquetaemissao.EtiquetaEmissaoDtos.OpcoesVarianteResponse;
 import com.vetor.niner.configuracao.etiquetaemissao.EtiquetaEmissaoDtos.ProdutoEmissaoResponse;
 import com.vetor.niner.configuracao.etiquetaemissao.EtiquetaEmissaoDtos.ProdutoOpcaoResponse;
 import jakarta.validation.Valid;
@@ -43,18 +42,15 @@ public class EtiquetaEmissaoController {
         return service.buscarProdutos(busca);
     }
 
-    @GetMapping("/variantes")
-    public OpcoesVarianteResponse buscarOpcoesVariante() {
-        return service.buscarOpcoesVariante();
-    }
-
-    /** Acha a variação (produto + linha + coluna) já cadastrada, ou cria na hora se ainda não
+    /** Acha a variação (produto + cor + tamanho) já cadastrada, ou cria na hora se ainda não
      * existir — item 1 do pedido de revisão (2026-08-05): no modo Individual, produto sem SKU
-     * ainda não é um bloqueio. */
+     * ainda não é um bloqueio. Cor vem de {@code GET /api/v1/cores} (+ "+ Nova cor" via
+     * {@code POST /api/v1/cores}); tamanho vem de {@code GET /api/v1/grades/{idGrade}}, restrito
+     * à grade do produto ({@code ProdutoOpcaoResponse.idGrade}). */
     @PostMapping("/produtos/{idProduto}/variacao")
     @ResponseStatus(HttpStatus.OK)
     public ProdutoEmissaoResponse obterOuCriarVariacao(@PathVariable long idProduto, @Valid @RequestBody CriarVariacaoRequest req) {
-        return service.obterOuCriarVariacao(idProduto, req.idVarianteLinha(), req.idVarianteColuna());
+        return service.obterOuCriarVariacao(idProduto, req.idCor(), req.idTamanho());
     }
 
     @GetMapping("/fornecedores")

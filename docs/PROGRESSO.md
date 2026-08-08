@@ -1,7 +1,7 @@
 # Progresso do Projeto — niner-v2
 
 Registro cronológico das decisões e entregas. Atualizar a cada marco relevante.
-**Última atualização:** 2026-08-07
+**Última atualização:** 2026-08-08
 
 ---
 
@@ -154,11 +154,164 @@ passaram a ter cabeçalho/rodapé fixos, com scroll só na pré-visualização.
 
 **Sessão de 2026-08-05:** Configuração de Etiqueta passou por três rodadas de refinamento (campos 10→4 concatenados na Descrição, máximo de colunas do rolo 6→4, cabeçalho em 3 cartões, botão **Testar Impressão**, código de barras `EAN13` de verdade, quadro no Teste de Impressão, painel de propriedades virou popup — `docs/telas/configuracao-etiqueta.md`) mais dois bugs reais corrigidos em Produto (margem de venda acima de 100% rejeitada; busca de produto de exemplo quase sempre vazia). Nasceram duas telas novas no grupo **Relatórios**, saindo de Implementações Futuras: **CRM** (`cadastros.crm`, `docs/telas/crm.md`) — filtra clientes por perfil e histórico de compras, exporta 11 colunas pra planilha Excel (`write-excel-file`) — e **Emissão de Etiqueta de Produtos** (`configuracao.etiquetaemissao`, `docs/telas/etiqueta-emissao.md`) — 3 formas de selecionar produtos (Individual, com criação automática de SKU e obrigatoriedade de variação por produto; Por Entradas; Por Estoques), grade local editável, imprime em lote com produto diferente por etiqueta, reaproveitando o layout já configurado em Configuração de Etiqueta. Nasceu `ProdutoBarraService` (`com.vetor.niner.catalogo`) — acha-ou-cria uma variação de produto chamando `gerar_ean13_interno()`, primeira peça de domínio real sobre `produto_barra`. Ver linha do tempo de 2026-08-05 (topo) pro detalhe completo de cada rodada. Suíte de backend: **386 testes**.
 
+**Sessão de 2026-08-08:** o modelo de variação de produto foi revisado a pedido do dono do
+produto — o par genérico "variante em linha/coluna" (rótulo livre por produto) não resolvia bem o
+caso de calçados/confecções, que variam por **cor × grade** (uma curva de tamanhos nomeada e
+ORDENADA, ex. "Grade 36-44"). Nasceram `cfg_cor`/`cfg_tamanho`/`cfg_grade` (esta com 20 colunas
+fixas de slot, mantendo a ordem sem precisar de tabela filha), `produto.id_grade` substituiu
+`nome_variante_linha`/`nome_variante_coluna`, `produto_barra.id_cor`/`id_tamanho` substituíram
+`id_variante_linha`/`id_variante_coluna`, e `cfg_geral` ganhou um único `cfg_usa_cor_grade`
+(era duas flags). Cor nasce sem tela própria (válvula de escape via Emissão de Etiqueta) até a
+tela de Entrada de Produtos existir; geração em lote de todas as combinações cor×grade também
+ficou para essa tela futura. Consumido por `ProdutoBarraService` (regra: grade presente ⇒ cor E
+tamanho obrigatórios, tamanho restrito à grade do produto), por `GradeModal.tsx` (novo, popup
+"＋ Gerenciar Grades" embutido no formulário de Produto) e pela Rotina de Importação de Dados
+(o antigo passo de "detectar e confirmar rótulo de variante" foi removido — cor/tamanho têm nome
+fixo agora, `ProdutoImportador` resolve a grade por nome via `GradeService.obterOuCriarPorNome`).
+**Durante os testes desta feature, um achado sério e não relacionado:** uma query que dependia só
+da política RLS (sem `id_tenant` explícito no SQL) vazou/alterou uma linha de outro tenant, de
+forma reproduzível — testado também contra código antigo intocado (`CategoriaProdutoService`),
+que vazou do mesmo jeito. A pedido explícito do dono do produto ("o que é de um tenant só pode
+ser visto no próprio tenant"), uma auditoria cobriu `api/src/main` inteiro (3 buscas em
+paralelo) e todo `service`/`controller` sem o filtro explícito foi corrigido — inclusive
+`SignupService.login()`, onde o risco era autenticação cross-tenant, não só leitura indevida.
+Detalhe completo, causa suspeita e a lista de arquivos corrigidos:
+`docs/infra/isolamento-tenant-rls.md`; convenção nova registrada em `CLAUDE.md`. Depois, ao subir
+o ambiente pra teste manual (banco de dev recriado, API reconstruída, seeds recarregados), uma
+pergunta direta do dono do produto sobre a impressão de etiqueta motivou uma varredura completa
+atrás de rótulos/comentários/specs que a renomeação mecânica tinha deixado pra trás (~15 arquivos,
+incluindo uma asserção de teste que checava um nome de campo que nunca existiu de verdade). Suíte
+de backend depois de tudo: **405/405 verdes**. Ver linha do tempo de 2026-08-08 (topo) pro detalhe
+completo.
+
 **Sessão de 2026-08-07:** o comprovante de Recebimento de Crediário e a Papeleta de Venda (com suas reimpressões) ganharam **envio por WhatsApp** (`comum.arquivocompartilhado` — cache de PDF em memória, sem custo, sem object storage, token expira em 24h, limite de 20 arquivos/tenant somando os 4 fluxos) e **layout fixo** (título/rodapé sempre visíveis, só a pré-visualização rola). Na sequência, a tela de **CRM** passou por duas rodadas revisando o fluxo original de 2026-08-05: primeiro ganhou uma **grid de resultado** (cabeçalho fixo, ordenação por coluna, total, scroll só nos dados), depois os filtros/colunas viraram um **popup obrigatório que abre sozinho ao entrar na tela** (com `GaugeProgresso` — reaproveitado da Rotina de Importação de Dados — enquanto a busca roda) e o botão "Gerar Planilha Excel" subiu pra linha do título. Numa terceira sessão do mesmo dia — recuperada depois que o terminal foi fechado sem pedido explícito de commit/documentação, mas com todo o código intacto no working tree —, o PDV passou a **validar limite de crédito do cliente** no crediário (`cliente.limite_credito`, campo que existia desde a V016 mas nunca era checado) e o comprovante de vale-mercadoria da devolução foi **padronizado com o layout de 64 colunas/Lucida Console da Papeleta de Venda**, ganhando também "Enviar por WhatsApp"; erros de confirmação de venda passaram de `Toast` para um popup dedicado (`AvisoModal`). Ver linha do tempo de 2026-08-07 (topo, três entradas) pro detalhe completo.
 
 ---
 
 ## Linha do tempo
+
+### 2026-08-08 — Cor + Grade (substitui variante linha/coluna) + auditoria de isolamento de tenant (P8)
+
+**Parte 1 — modelo de variação revisado.** Pedido do dono do produto: o par genérico "variante em
+linha/coluna" (rótulo livre, configurado por produto) resolvia mal segmentos como calçados e
+confecções, onde a variação real é **cor × grade** — grade sendo uma curva de tamanhos nomeada e
+**ordenada** (ex. "Grade 36-44" = 36,37,38…44, nessa ordem), com até ~20 tamanhos. Segmentos como
+utilidades domésticas, brinquedos, cosméticos, armarinhos e óticas normalmente não variam (1
+produto = 1 SKU). Variantes de voltagem (110V/220V) ficaram **fora de escopo** — como o preço
+muda, viram produtos separados, não uma variação do mesmo produto.
+
+Decisões fechadas com o dono do produto antes de codificar:
+1. Geração em lote de todas as combinações cor×grade de um produto — desejada, mas **adiada**
+   pra tela de Entrada de Produtos (individual ou por XML), ainda não construída.
+2. Manutenção de grade fica **embutida** na tela de Produto (popup "＋ Gerenciar Grades");
+   manutenção de cor fica **fora de escopo por ora**, com uma válvula de escape temporária.
+3. Cor é **obrigatória** sempre que o produto tem grade (não opcional/condicional).
+
+**Schema (dentro das migrations existentes — banco em construção, sem migration nova):**
+`cfg_variante_linha`/`cfg_variante_coluna` (V017) → `cfg_cor(id_cor, id_tenant, descricao)` /
+`cfg_tamanho(id_tamanho, id_tenant, descricao)`; nova `cfg_grade(id_grade, id_tenant, descricao,
+id_tamanho1..id_tamanho20)` — 20 colunas fixas nullable, cada uma com FK pra `cfg_tamanho` (não
+uma tabela de associação N:N solta, porque a ORDEM é o que importa e o teto é pequeno e estável).
+`produto.nome_variante_linha`/`nome_variante_coluna` → `produto.id_grade` (FK `cfg_grade`).
+`produto_barra.id_variante_linha`/`id_variante_coluna` → `id_cor`/`id_tamanho` (FKs);
+`produto_barra_variacao_uk` virou `UNIQUE(id_produto, id_cor, id_tamanho)`. `cfg_geral`
+(V023): `cfg_usa_variante_linha`/`cfg_usa_variante_coluna` (duas flags) → `cfg_usa_cor_grade`
+(uma só, `DEFAULT false`). RLS (V024): array de tabelas trocou `cfg_variante_linha`/
+`cfg_variante_coluna` por `cfg_cor`/`cfg_tamanho`/`cfg_grade`. Banco recriado do zero (pedido
+explícito do dono do produto — "vai ajustar a rotina de importação também, aí eu importo de
+novo"), sem preservar dado existente.
+
+**Backend novo:** `CorService`/`CorController`, `TamanhoService`/`TamanhoController`,
+`GradeService`/`GradeController` (`com.vetor.niner.catalogo`) — `GradeService` empacota a lista
+ordenada de `idsTamanho` recebida nas 20 colunas fixas (`empacotarSlots`) e desempacota de volta
+(`resolverTamanhos`), e tem `obterOuCriarPorNome` (achar-ou-criar idempotente, usado pela
+importação). `ProdutoBarraService.obterOuCriar` agora resolve `produto.id_grade`, força cor/
+tamanho a `null` quando o produto não usa grade, e valida (quando usa) que cor E tamanho vieram
+preenchidos e que o tamanho pertence à grade do produto — não a qualquer tamanho do tenant.
+`ProdutoService`/`ConfiguracaoGeralService`/`EtiquetaEmissaoService` e ~16 arquivos periféricos
+(Devolução, PDV, Importação, Exportação, Configuração de Etiqueta, relatórios de Movimentação/
+Estoque, Transferência, Cancelamento de Venda, Pesquisa de Vendas, Histórico do Cliente, CRM)
+foram atualizados mecanicamente (renomeação de campos/parâmetros) sem mudança de comportamento
+fora do próprio modelo de variação.
+
+**Frontend:** `ProdutoForm.tsx` ganhou o select de Grade + botão "＋ Gerenciar Grades" (novo
+`GradeModal.tsx` — lista/cria/edita grade, lista de tamanhos reordenável com "+ Novo tamanho"
+inline); `ConfiguracaoGeralForm.tsx` reduziu duas flags a um checkbox; `SelecaoProdutosModal.tsx`
+(Emissão de Etiqueta) busca a grade do produto e a lista de cores do tenant, com "+ Nova cor"
+inline; `ImportacaoDadosPage.tsx` perdeu o passo de confirmar/editar rótulo de variante detectado
+(não existe mais — cor/tamanho têm nome fixo agora). `npx tsc --noEmit` limpo no fim.
+
+**Três bugs de JDBC/Postgres descobertos e corrigidos durante a implementação** (documentados em
+detalhe nos comentários dos arquivos afetados, não repetidos aqui): (1) binding de `null` num
+parâmetro `Long` contra uma coluna `integer` falha sem `SqlParameterValue(Types.INTEGER, ...)`
+explícito; (2) `rs.getObject(coluna, Long.class)` tem o mesmo problema na leitura — a correção é
+o idioma já usado no projeto, `rs.getLong(col)` + `rs.wasNull()`; (3) `Optional.map(fn)` (e
+`.query(rowMapper).optional()`) colapsa pra `Optional.empty()` quando o valor mapeado é `null`,
+não só quando a linha não existe — um produto sem grade (`id_grade IS NULL`) virava 404 por
+engano; corrigido extraindo o campo depois de resolver a presença da linha, nunca via `.map()`
+encadeado.
+
+**Testes:** `CorGradeTamanhoCrudTest.java` novo (CRUD de cor/tamanho/grade + isolamento entre
+tenants); `ProdutoCrudTest`/`ConfiguracaoGeralTest`/`EtiquetaEmissaoCrudTest`/`CrmCrudTest`/
+`FechamentoCaixaCrudTest`/`RecebimentoCrediarioCrudTest`/`TransferenciaCrudTest`/`PdvCrudTest`/
+`ClienteHistoricoCrudTest` atualizados para o novo modelo.
+
+**Parte 2 — achado de segurança e auditoria de isolamento de tenant (P8).** O teste de isolamento
+de `CorGradeTamanhoCrudTest` reproduziu, de forma determinística, uma linha de **outro tenant**
+sendo lida/alterada por uma query que dependia só da política RLS — sem `id_tenant =
+plataforma.tenant_atual()` explícito no SQL. Testado também contra `CategoriaProdutoService`
+(código antigo, de 2026-07-22, não tocado nesta feature) — vazou do mesmo jeito, provando que não
+era um problema do código novo, e sim uma lacuna estrutural em como o projeto vinha escrevendo
+SQL. Causa raiz não totalmente diagnosticada (suspeita: cache de plano genérico do
+Postgres/JDBC interagindo com a qual do RLS entre transações com valores diferentes de
+`app.id_tenant`), mas corrigida de forma reproduzível com defesa em profundidade.
+
+Comunicado o achado ao dono do produto — que respondeu com uma diretriz direta: **"o que é de um
+tenant só pode ser visto no próprio tenant, não pode vazar pra outros tenant"** — interpretada
+(e confirmada pelo contexto) como instrução para auditar o `api/src/main` inteiro, não só corrigir
+os arquivos já tocados. Três buscas em paralelo mapearam todo `service`/`controller` do domínio;
+cada achado foi corrigido com o mesmo padrão (filtro `id_tenant` explícito em `listar`/`buscar`/
+`atualizar`/`excluir`, incluindo `EXISTS` de dependência e `JOIN`s entre tabelas com RLS):
+`ProdutoService`, `CategoriaProdutoService`, `FuncionarioService`, `FornecedorService`,
+`ClienteService`, `CategoriaClienteService`, `EuController` (lookups de `usuario`/`empresa` por
+claim do JWT), e — o de maior risco — `SignupService.login()`, onde um vazamento significaria
+**autenticação cross-tenant**, não só leitura indevida. Suíte de backend depois de todas as
+correções: **405/405 verdes**, sem regressão. Detalhe completo, o padrão exato de correção e a
+lista de arquivos: `docs/infra/isolamento-tenant-rls.md`; convenção permanente registrada em
+`CLAUDE.md` ("Conventions to honor when building") para todo service novo nascer já com o filtro.
+
+**Parte 3 — subida do ambiente + limpeza final de rótulos.** Pedido do dono do produto pra testar
+manualmente: banco de dev (`niner-db`) recriado (schema desatualizado, já que as migrations
+editadas neste dia não tinham sido reaplicadas nele), imagem da API reconstruída com o código da
+sessão, tenant de teste recriado (`loja-teste-manual`/`teste@niner.dev`, mesmo padrão de sempre),
+seeds de NCM (~51 exemplos — o CSV completo de 10.442 códigos não estava mais disponível
+localmente) e Plano de Contas (336 contas) recarregados.
+
+Ao testar a impressão de etiqueta, o dono do produto perguntou diretamente se "variação de
+linha"/"variação de coluna" tinham sido substituídas por cor/tamanho na impressão — a resposta
+funcional era sim (o campo `DESCRICAO_PRODUTO` já concatenava `variacaoCor`/`variacaoTamanho`
+corretamente), mas a pergunta motivou uma varredura completa do repositório atrás de rótulos e
+comentários esquecidos pela renomeação mecânica anterior. Achados e corrigidos: cabeçalhos de
+coluna ainda dizendo "Variação Linha"/"Variação Coluna" (ou "Variação de Linha"/"Variação de
+Coluna") em `RelatorioEstoque.tsx`, `DiferencasEstoque.tsx`, `ClienteHistorico.tsx`,
+`ContagemEstoque.tsx`, `EfetivarBalanco.tsx` e `PesquisaProdutoModal.tsx`; três textos de ajuda
+(`AjudaDaTela.tsx`, telas de CRM e Emissão de Etiqueta) com a mesma linguagem antiga; comentários
+desatualizados em `EtiquetaConfigDtos.java`, `ProdutoDtos.java` (mantido, é nota histórica
+correta), `package-info.java` de `crm` e `estoque.relatorioestoque`; e cinco specs
+(`docs/telas/pdv.md`, `papeleta-venda.md`, `relatorio-estoque.md`, `contagem-estoque.md`,
+`pesquisa-vendas.md`) com exemplos de JSON/tabelas de contrato ainda usando os nomes de campo
+antigos (`variacaoLinha`/`variacaoColuna`) — não cobertos pela rodada de documentação anterior
+porque essas telas não tinham sido mecanicamente renomeadas (o campo já nascia certo no backend,
+só a doc é que ficou pra trás). Um achado à parte, mais sério: um teste
+(`RelatorioEstoqueCrudTest.analiticoTrazUmaLinhaPorVariacaoSemTotalizarNoBackend`) verificava
+`jsonPath("...variacaoLinha").doesNotExist()` — como esse nome de campo nunca existiu de verdade
+(o real é `variacaoCor`/`variacaoTamanho`, sempre presentes no JSON, só `null` quando o produto
+não usa grade), a asserção sempre passava sem testar nada; corrigida para checar
+`.value(nullValue())` nos dois campos certos. Suíte de backend depois de tudo: **405/405 verdes**
+(mesmo total); frontend `tsc --noEmit` limpo.
+
+Nada commitado ao fim desta sessão — aguardando decisão do dono do produto sobre separar o
+commit da feature (cor/grade) do commit da correção de segurança (RLS).
 
 ### 2026-08-07 — Limite de crédito no PDV + comprovante de vale padronizado com a papeleta
 

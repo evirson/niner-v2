@@ -14,15 +14,15 @@ function paraItens(opcoes: OpcaoCrm[]): Array<{ chave: string; rotulo: string }>
  */
 export default function FiltrosProdutosModal({
   categoriasProduto,
-  variantesLinha,
-  variantesColuna,
+  cores,
+  tamanhos,
   valor,
   aoMudar,
   aoFechar,
 }: {
   categoriasProduto: OpcaoCrm[]
-  variantesLinha: OpcaoCrm[]
-  variantesColuna: OpcaoCrm[]
+  cores: OpcaoCrm[]
+  tamanhos: OpcaoCrm[]
   valor: FiltrosProdutosCrm
   aoMudar: (f: FiltrosProdutosCrm) => void
   aoFechar: () => void
@@ -73,23 +73,23 @@ export default function FiltrosProdutosModal({
           </div>
 
           <div className="col-6">
-            <label>Variação de Linha</label>
+            <label>Cor</label>
             <div>
               <MultiSelectGenerico
-                itens={paraItens(variantesLinha)}
-                selecionadas={valor.idsVarianteLinha.map(String)}
-                aoAlterar={(chaves) => campo('idsVarianteLinha', chaves.map(Number))}
+                itens={paraItens(cores)}
+                selecionadas={valor.idsCor.map(String)}
+                aoAlterar={(chaves) => campo('idsCor', chaves.map(Number))}
                 rotuloTodos="Todas"
               />
             </div>
           </div>
           <div className="col-6">
-            <label>Variação de Coluna</label>
+            <label>Tamanho</label>
             <div>
               <MultiSelectGenerico
-                itens={paraItens(variantesColuna)}
-                selecionadas={valor.idsVarianteColuna.map(String)}
-                aoAlterar={(chaves) => campo('idsVarianteColuna', chaves.map(Number))}
+                itens={paraItens(tamanhos)}
+                selecionadas={valor.idsTamanho.map(String)}
+                aoAlterar={(chaves) => campo('idsTamanho', chaves.map(Number))}
                 rotuloTodos="Todas"
               />
             </div>

@@ -26,13 +26,13 @@ public final class RelatorioMovimentacaoProdutosDtos {
     public record LinhaAnalitica(
             long idEmpresa, String nomeEmpresa, OffsetDateTime dataMovimento, String tipoMovimento,
             boolean movimentoFisico, long idVariacao, String sku, String descricaoProduto, String marca,
-            String variacaoLinha, String variacaoColuna, BigDecimal entrada, BigDecimal saida,
+            String variacaoCor, String variacaoTamanho, BigDecimal entrada, BigDecimal saida,
             BigDecimal custoUnitario, BigDecimal valorMovimentado, String documento, String nomeFuncionario) {
     }
 
     public record CabecalhoKardex(
             long idVariacao, String sku, String descricaoProduto, String marca,
-            String variacaoLinha, String variacaoColuna, long idEmpresa, String nomeEmpresa,
+            String variacaoCor, String variacaoTamanho, long idEmpresa, String nomeEmpresa,
             BigDecimal saldoInicial, BigDecimal saldoFinal) {
     }
 
@@ -64,7 +64,7 @@ public final class RelatorioMovimentacaoProdutosDtos {
     /** Resultado de busca de variação pro seletor do Kardex (popup {@code PesquisaVariacaoModal}). */
     public record VariacaoEncontrada(
             long idVariacao, String sku, String descricaoProduto, String marca,
-            String variacaoLinha, String variacaoColuna) {
+            String variacaoCor, String variacaoTamanho) {
     }
 
     /** Só os campos do {@code modelo} pedido vêm preenchidos — mesmo padrão do Relatório de

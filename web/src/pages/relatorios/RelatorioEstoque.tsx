@@ -449,8 +449,8 @@ export default function RelatorioEstoque() {
                             { chave: 'descricaoProduto', rotulo: 'Descrição' },
                             { chave: 'marca', rotulo: 'Marca' },
                             { chave: 'referencia', rotulo: 'Referência' },
-                            { chave: 'variacaoLinha', rotulo: 'Variação Linha' },
-                            { chave: 'variacaoColuna', rotulo: 'Variação Coluna' },
+                            { chave: 'variacaoCor', rotulo: 'Cor' },
+                            { chave: 'variacaoTamanho', rotulo: 'Tamanho' },
                           ] satisfies Array<{ chave: string; rotulo: string }>
                         ).map((c) => {
                           const ativa = ordenarPorAnalitico === c.chave
@@ -502,8 +502,8 @@ export default function RelatorioEstoque() {
                           <td>{linha.descricaoProduto}</td>
                           <td>{linha.marca ?? '—'}</td>
                           <td>{linha.referencia ?? '—'}</td>
-                          <td>{linha.variacaoLinha ?? '—'}</td>
-                          <td>{linha.variacaoColuna ?? '—'}</td>
+                          <td>{linha.variacaoCor ?? '—'}</td>
+                          <td>{linha.variacaoTamanho ?? '—'}</td>
                           {linha.qtdPorEmpresa.map((qtd, i) => (
                             <td key={i} className="mono" style={{ textAlign: 'right' }}>
                               {formatarQuantidade(qtd, permiteQtdDecimal)}

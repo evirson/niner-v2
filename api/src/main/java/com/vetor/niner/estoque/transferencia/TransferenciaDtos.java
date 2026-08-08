@@ -37,8 +37,8 @@ public final class TransferenciaDtos {
     public record ItemTransferenciaResponse(
             long idVariacao,
             String descricaoProduto,
-            String variacaoLinha,
-            String variacaoColuna,
+            String variacaoCor,
+            String variacaoTamanho,
             String sku,
             BigDecimal qtd) {
     }

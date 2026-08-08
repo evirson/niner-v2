@@ -23,9 +23,10 @@ public final class EtiquetaConfigDtos {
     }
 
     /** Os 4 campos possíveis numa etiqueta — cada um mapeia pra uma coluna já existente no
-     * schema (ver comentário do tipo `campo_etiqueta` em V029). Marca/Referência/Variação de
-     * Linha/Variação de Coluna não são mais campos próprios (2026-08-05, pedido do dono do
-     * produto): o front concatena esses 4 dentro de {@code DESCRICAO_PRODUTO} (pulando o que já
+     * schema (ver comentário do tipo `campo_etiqueta` em V029). Marca/Referência/Cor/Tamanho
+     * não são mais campos próprios (2026-08-05, pedido do dono do produto; cor/tamanho
+     * substituíram variação de linha/coluna em 2026-08-08): o front concatena esses 4 dentro de
+     * {@code DESCRICAO_PRODUTO} (pulando o que já
      * aparecer na descrição), então o back só precisa continuar expondo os dados brutos em
      * {@link ProdutoExemploResponse} — a composição do texto final é responsabilidade da tela
      * (hoje o editor, futuramente a tela de Emissão), não deste enum. */
@@ -149,7 +150,7 @@ public final class EtiquetaConfigDtos {
             String marca,
             String referencia,
             BigDecimal precoVenda,
-            String variacaoLinha,
-            String variacaoColuna) {
+            String variacaoCor,
+            String variacaoTamanho) {
     }
 }

@@ -374,8 +374,8 @@ public class CancelamentoVendaService {
 
     private List<ItemVendaDetalhe> buscarItens(long idVenda) {
         return jdbc.sql("""
-                        SELECT p.descricao AS descricao_produto, vl.descricao AS variacao_linha,
-                               vc.descricao AS variacao_coluna, pmd.qtd_produto, pmd.preco_venda,
+                        SELECT p.descricao AS descricao_produto, co.descricao AS variacao_cor,
+                               ta.descricao AS variacao_tamanho, pmd.qtd_produto, pmd.preco_venda,
                                pmd.qtd_produto * pmd.preco_venda - pmd.valor_desconto + pmd.valor_acrescimo AS valor_item
                         FROM produto_movimento_mestre pmm
                         JOIN produto_movimento_detalhe pmd
@@ -383,16 +383,14 @@ public class CancelamentoVendaService {
                               AND pmd.credito_debito = 'D'
                         JOIN produto_barra pb ON pb.id_variacao = pmd.id_variacao AND pb.id_tenant = pmd.id_tenant
                         JOIN produto p        ON p.id_produto = pb.id_produto AND p.id_tenant = pb.id_tenant
-                        LEFT JOIN cfg_variante_linha vl
-                               ON vl.id_variante_linha = pb.id_variante_linha AND vl.id_tenant = pb.id_tenant
-                        LEFT JOIN cfg_variante_coluna vc
-                               ON vc.id_variante_coluna = pb.id_variante_coluna AND vc.id_tenant = pb.id_tenant
+                        LEFT JOIN cfg_cor co ON co.id_cor = pb.id_cor AND co.id_tenant = pb.id_tenant
+                        LEFT JOIN cfg_tamanho ta ON ta.id_tamanho = pb.id_tamanho AND ta.id_tenant = pb.id_tenant
                         WHERE pmm.id_tenant = plataforma.tenant_atual() AND pmm.id_venda = ? AND pmm.tipo_movimento = 'VENDA'
                         ORDER BY pmd.id_movimento_detalhe
                         """)
                 .param(idVenda)
                 .query((rs, n) -> new ItemVendaDetalhe(
-                        rs.getString("descricao_produto"), rs.getString("variacao_linha"), rs.getString("variacao_coluna"),
+                        rs.getString("descricao_produto"), rs.getString("variacao_cor"), rs.getString("variacao_tamanho"),
                         rs.getBigDecimal("qtd_produto"), rs.getBigDecimal("preco_venda"), rs.getBigDecimal("valor_item")))
                 .list();
     }

@@ -1,7 +1,6 @@
 package com.vetor.niner.configuracao.etiquetaemissao;
 
 import java.math.BigDecimal;
-import java.util.List;
 
 public class EtiquetaEmissaoDtos {
 
@@ -10,21 +9,15 @@ public class EtiquetaEmissaoDtos {
 
     /** Resultado da busca de produto (modo Individual, 2026-08-05) — QUALQUER produto ativo, com
      * ou sem `produto_barra` já cadastrado (o modo Individual pode CRIAR a variação na hora — ver
-     * `ProdutoBarraService`). `nomeVarianteLinha`/`nomeVarianteColuna` (não nulos quando o
-     * PRODUTO usa aquela dimensão — configurado no cadastro dele) dizem ao frontend se o
-     * respectivo seletor de variação deve aparecer, e como obrigatório. */
+     * `ProdutoBarraService`). {@code idGrade} (não nulo quando o PRODUTO usa cor/grade) diz ao
+     * frontend se os seletores de cor/tamanho devem aparecer (como obrigatórios) — o de tamanho
+     * é montado a partir de `GET /api/v1/grades/{idGrade}` (lista já ordenada), o de cor a partir
+     * de `GET /api/v1/cores` (tenant inteiro, sem restrição por produto). */
     public record ProdutoOpcaoResponse(
-            long idProduto, String descricao, String marca, String referencia,
-            String nomeVarianteLinha, String nomeVarianteColuna) {
+            long idProduto, String descricao, String marca, String referencia, Long idGrade) {
     }
 
     public record FornecedorOpcaoResponse(long idFornecedor, String razaoSocial) {
-    }
-
-    public record OpcaoVarianteResponse(long id, String descricao) {
-    }
-
-    public record OpcoesVarianteResponse(List<OpcaoVarianteResponse> variantesLinha, List<OpcaoVarianteResponse> variantesColuna) {
     }
 
     /** Uma variação pronta pra virar linha da grade de emissão — mesmo shape de
@@ -38,8 +31,8 @@ public class EtiquetaEmissaoDtos {
             String marca,
             String referencia,
             BigDecimal precoVenda,
-            String variacaoLinha,
-            String variacaoColuna,
+            String variacaoCor,
+            String variacaoTamanho,
             BigDecimal quantidadeSugerida) {
     }
 }

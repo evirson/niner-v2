@@ -152,11 +152,14 @@ public class SignupService {
         jdbc.sql("SELECT set_config('app.id_tenant', ?, true)")
                 .param(Long.toString(idTenant)).query(String.class).single();
 
+        // id_tenant explícito (defesa em profundidade) — ver comentário em ProdutoService.listar.
+        // Aqui é o caminho de autenticação: um vazamento de RLS nesta query específica
+        // significaria autenticação cross-tenant, não só leitura indevida.
         var usuario = jdbc.sql("""
                         SELECT id_usuario, senha_hash, administrador, ativo
-                        FROM usuario WHERE email = ?
+                        FROM usuario WHERE id_tenant = ? AND email = ?
                         """)
-                .param(req.email())
+                .params(idTenant, req.email())
                 .query((rs, n) -> new UsuarioAuth(
                         rs.getLong("id_usuario"), rs.getString("senha_hash"),
                         rs.getBoolean("administrador"), rs.getBoolean("ativo")))

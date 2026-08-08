@@ -260,7 +260,7 @@ export default function RelatorioMovimentacaoProdutos() {
 
   const linhaComVariacao = (l: LinhaAnaliticaMovimentacao) => ({
     ...l,
-    variacao: [l.variacaoLinha, l.variacaoColuna].filter(Boolean).join(' · ') || null,
+    variacao: [l.variacaoCor, l.variacaoTamanho].filter(Boolean).join(' · ') || null,
   })
 
   const linhasAnalitico = ordenar(
@@ -340,8 +340,8 @@ export default function RelatorioMovimentacaoProdutos() {
                 <>
                   <p className="section-label" style={{ marginTop: gerandoPdf ? 24 : 0 }}>
                     {data.cabecalhoKardex.sku} — {data.cabecalhoKardex.descricaoProduto}
-                    {data.cabecalhoKardex.variacaoLinha || data.cabecalhoKardex.variacaoColuna
-                      ? ` (${[data.cabecalhoKardex.variacaoLinha, data.cabecalhoKardex.variacaoColuna].filter(Boolean).join(' · ')})`
+                    {data.cabecalhoKardex.variacaoCor || data.cabecalhoKardex.variacaoTamanho
+                      ? ` (${[data.cabecalhoKardex.variacaoCor, data.cabecalhoKardex.variacaoTamanho].filter(Boolean).join(' · ')})`
                       : ''}
                   </p>
                   <div className="relatorio-kpis-grid">

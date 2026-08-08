@@ -168,12 +168,12 @@ public class ExportacaoService {
     private static final String SQL_CODIGO_BARRAS = """
             SELECT pb.sku AS "SKU (Código Interno)", pb.ean AS "EAN",
                    p.descricao AS "Produto", p.marca AS "Marca", p.referencia AS "Referência",
-                   vl.descricao AS "Variação (Linha)", vc.descricao AS "Variação (Coluna)",
+                   co.descricao AS "Cor", ta.descricao AS "Tamanho",
                    p.preco_venda AS "Preço de Venda"
             FROM produto_barra pb
             JOIN produto p ON p.id_produto = pb.id_produto AND p.id_tenant = pb.id_tenant
-            LEFT JOIN cfg_variante_linha vl ON vl.id_variante_linha = pb.id_variante_linha AND vl.id_tenant = pb.id_tenant
-            LEFT JOIN cfg_variante_coluna vc ON vc.id_variante_coluna = pb.id_variante_coluna AND vc.id_tenant = pb.id_tenant
+            LEFT JOIN cfg_cor co ON co.id_cor = pb.id_cor AND co.id_tenant = pb.id_tenant
+            LEFT JOIN cfg_tamanho ta ON ta.id_tamanho = pb.id_tamanho AND ta.id_tenant = pb.id_tenant
             WHERE pb.id_tenant = plataforma.tenant_atual()
             ORDER BY p.descricao
             """;
@@ -192,15 +192,15 @@ public class ExportacaoService {
 
     private static final String SQL_ESTOQUE = """
             SELECT e.razao_social AS "Empresa", p.descricao AS "Produto", p.marca AS "Marca", p.referencia AS "Referência",
-                   pb.sku AS "SKU", vl.descricao AS "Variação (Linha)", vc.descricao AS "Variação (Coluna)",
+                   pb.sku AS "SKU", co.descricao AS "Cor", ta.descricao AS "Tamanho",
                    pe.qtd_estoque AS "Qtd. em Estoque", pe.reservado AS "Reservado", pe.disponivel AS "Disponível",
                    pe.minimo AS "Estoque Mínimo"
             FROM produto_estoque pe
             JOIN empresa e ON e.id_empresa = pe.id_empresa AND e.id_tenant = pe.id_tenant
             JOIN produto_barra pb ON pb.id_variacao = pe.id_variacao AND pb.id_tenant = pe.id_tenant
             JOIN produto p ON p.id_produto = pb.id_produto AND p.id_tenant = pb.id_tenant
-            LEFT JOIN cfg_variante_linha vl ON vl.id_variante_linha = pb.id_variante_linha AND vl.id_tenant = pb.id_tenant
-            LEFT JOIN cfg_variante_coluna vc ON vc.id_variante_coluna = pb.id_variante_coluna AND vc.id_tenant = pb.id_tenant
+            LEFT JOIN cfg_cor co ON co.id_cor = pb.id_cor AND co.id_tenant = pb.id_tenant
+            LEFT JOIN cfg_tamanho ta ON ta.id_tamanho = pb.id_tamanho AND ta.id_tenant = pb.id_tenant
             WHERE pe.id_tenant = plataforma.tenant_atual()
             ORDER BY e.razao_social, p.descricao
             """;

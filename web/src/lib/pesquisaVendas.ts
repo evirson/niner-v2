@@ -26,8 +26,8 @@ export interface PaginaVendasPesquisa {
 export interface ItemVendaPesquisa {
   codigo: string
   descricaoProduto: string
-  variacaoLinha: string | null
-  variacaoColuna: string | null
+  variacaoCor: string | null
+  variacaoTamanho: string | null
   qtd: number
   valorUnitario: number
   valorDesconto: number

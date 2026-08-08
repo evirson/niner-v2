@@ -183,11 +183,11 @@ public class EtiquetaConfigService {
         String sql = """
                 SELECT COALESCE(pb.id_variacao, -p.id_produto) AS id_variacao, pb.sku,
                        p.descricao, p.marca, p.referencia, p.preco_venda,
-                       vl.descricao AS variacao_linha, vc.descricao AS variacao_coluna
+                       co.descricao AS variacao_cor, ta.descricao AS variacao_tamanho
                 FROM produto p
                 LEFT JOIN produto_barra pb ON pb.id_produto = p.id_produto AND pb.id_tenant = p.id_tenant
-                LEFT JOIN cfg_variante_linha vl ON vl.id_variante_linha = pb.id_variante_linha AND vl.id_tenant = pb.id_tenant
-                LEFT JOIN cfg_variante_coluna vc ON vc.id_variante_coluna = pb.id_variante_coluna AND vc.id_tenant = pb.id_tenant
+                LEFT JOIN cfg_cor co ON co.id_cor = pb.id_cor AND co.id_tenant = pb.id_tenant
+                LEFT JOIN cfg_tamanho ta ON ta.id_tamanho = pb.id_tamanho AND ta.id_tenant = pb.id_tenant
                 WHERE p.id_tenant = plataforma.tenant_atual() AND p.ativo
                 """
                 + filtroBusca
@@ -202,7 +202,7 @@ public class EtiquetaConfigService {
                         rs.getLong("id_variacao"), rs.getString("sku"),
                         rs.getString("descricao"), rs.getString("marca"), rs.getString("referencia"),
                         rs.getBigDecimal("preco_venda"),
-                        rs.getString("variacao_linha"), rs.getString("variacao_coluna")))
+                        rs.getString("variacao_cor"), rs.getString("variacao_tamanho")))
                 .list();
     }
 

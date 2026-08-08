@@ -8,7 +8,6 @@ import com.vetor.niner.catalogo.ProdutoDtos.ProdutoResponse;
 import com.vetor.niner.comum.telaconfig.ConfiguracaoTelaDtos.ConfiguracaoCampoResponse;
 import com.vetor.niner.comum.telaconfig.ConfiguracaoTelaService;
 import com.vetor.niner.configuracao.geral.ConfiguracaoGeralService;
-import com.vetor.niner.configuracao.geral.ConfiguracaoGeralService.FlagsVariante;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
@@ -79,7 +78,11 @@ public class ProdutoService {
         String colunaOrdenacao = ordenarPor == null ? "p.descricao" : COLUNAS_ORDENAVEIS.getOrDefault(ordenarPor, "p.descricao");
         String direcaoOrdenacao = "DESC".equalsIgnoreCase(direcao) ? "DESC" : "ASC";
 
-        StringBuilder filtro = new StringBuilder(" WHERE 1 = 1");
+        // id_tenant explícito (defesa em profundidade) — sem isso, uma query com poucos/nenhum
+        // parâmetro amarrado dependendo só de RLS pode devolver linha de outro tenant sob certas
+        // condições de cache de plano do driver JDBC/Postgres (achado real de teste, 2026-08-08,
+        // reproduzido em CorService/CategoriaProdutoService).
+        StringBuilder filtro = new StringBuilder(" WHERE p.id_tenant = plataforma.tenant_atual()");
         List<Object> params = new ArrayList<>();
 
         if (descricao != null && !descricao.isBlank()) {
@@ -91,7 +94,8 @@ public class ProdutoService {
             params.add("%" + marca.trim() + "%");
         }
         if (idCategoria != null) {
-            filtro.append(" AND EXISTS (SELECT 1 FROM produto_categoria pc WHERE pc.id_produto = p.id_produto AND pc.id_categoria = ?)");
+            filtro.append(" AND EXISTS (SELECT 1 FROM produto_categoria pc WHERE pc.id_tenant = plataforma.tenant_atual()"
+                    + " AND pc.id_produto = p.id_produto AND pc.id_categoria = ?)");
             params.add(idCategoria);
         }
         switch (status == null ? "ATIVOS" : status.toUpperCase(Locale.ROOT)) {
@@ -135,7 +139,7 @@ public class ProdutoService {
 
     @Transactional(readOnly = true)
     public ProdutoResponse buscar(long id) {
-        return jdbc.sql(SELECT_BASE + " WHERE p.id_produto = ?")
+        return jdbc.sql(SELECT_BASE + " WHERE p.id_tenant = plataforma.tenant_atual() AND p.id_produto = ?")
                 .param(id)
                 .query(this::mapear)
                 .optional()
@@ -144,17 +148,17 @@ public class ProdutoService {
 
     @Transactional
     public ProdutoResponse criar(ProdutoRequest req) {
-        validar(req);
-        FlagsVariante flags = configuracaoGeralService.flagsVariante();
+        boolean usaCorGrade = configuracaoGeralService.usaCorGrade();
+        validar(req, usaCorGrade);
         List<Object> params = new ArrayList<>();
-        adicionarCamposComuns(params, req, flags);
+        adicionarCamposComuns(params, req, usaCorGrade);
 
         try {
             long id = jdbc.sql("""
                             INSERT INTO produto (id_tenant, ativo, marca, referencia, descricao, preco_custo,
                                 percentual_venda, preco_venda, data_inicio_oferta, data_final_oferta, preco_oferta,
-                                codigo_ncm, peso_bruto, peso_liquido, nome_variante_linha, nome_variante_coluna)
-                            VALUES (plataforma.tenant_atual(), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                codigo_ncm, peso_bruto, peso_liquido, id_grade)
+                            VALUES (plataforma.tenant_atual(), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                             RETURNING id_produto
                             """)
                     .params(params)
@@ -168,10 +172,10 @@ public class ProdutoService {
 
     @Transactional
     public ProdutoResponse atualizar(long id, ProdutoRequest req) {
-        validar(req);
-        FlagsVariante flags = configuracaoGeralService.flagsVariante();
+        boolean usaCorGrade = configuracaoGeralService.usaCorGrade();
+        validar(req, usaCorGrade);
         List<Object> params = new ArrayList<>();
-        adicionarCamposComuns(params, req, flags);
+        adicionarCamposComuns(params, req, usaCorGrade);
         params.add(id);
 
         try {
@@ -180,8 +184,8 @@ public class ProdutoService {
                                 ativo = ?, marca = ?, referencia = ?, descricao = ?, preco_custo = ?,
                                 percentual_venda = ?, preco_venda = ?, data_inicio_oferta = ?, data_final_oferta = ?,
                                 preco_oferta = ?, codigo_ncm = ?, peso_bruto = ?, peso_liquido = ?,
-                                nome_variante_linha = ?, nome_variante_coluna = ?, atualizado_em = now()
-                            WHERE id_produto = ?
+                                id_grade = ?, atualizado_em = now()
+                            WHERE id_produto = ? AND id_tenant = plataforma.tenant_atual()
                             """)
                     .params(params)
                     .update();
@@ -207,13 +211,18 @@ public class ProdutoService {
     public ExclusaoProdutoResponse excluir(long id) {
         boolean temDependente = Boolean.TRUE.equals(
                 jdbc.sql("""
-                                SELECT EXISTS (SELECT 1 FROM produto_barra WHERE id_produto = ?)
-                                    OR EXISTS (SELECT 1 FROM produto_imagem WHERE id_produto = ?)
+                                SELECT EXISTS (SELECT 1 FROM produto_barra
+                                               WHERE id_tenant = plataforma.tenant_atual() AND id_produto = ?)
+                                    OR EXISTS (SELECT 1 FROM produto_imagem
+                                               WHERE id_tenant = plataforma.tenant_atual() AND id_produto = ?)
                                 """)
                         .params(id, id).query(Boolean.class).single());
 
         if (temDependente) {
-            int linhas = jdbc.sql("UPDATE produto SET ativo = false, atualizado_em = now() WHERE id_produto = ?")
+            int linhas = jdbc.sql("""
+                            UPDATE produto SET ativo = false, atualizado_em = now()
+                            WHERE id_produto = ? AND id_tenant = plataforma.tenant_atual()
+                            """)
                     .param(id).update();
             if (linhas == 0) {
                 throw new ResponseStatusException(NOT_FOUND, "Produto não encontrado.");
@@ -221,8 +230,10 @@ public class ProdutoService {
             return new ExclusaoProdutoResponse("inativado", "Produto possui variações ou imagens associadas.");
         }
 
-        jdbc.sql("DELETE FROM produto_categoria WHERE id_produto = ?").param(id).update();
-        int linhas = jdbc.sql("DELETE FROM produto WHERE id_produto = ?").param(id).update();
+        jdbc.sql("DELETE FROM produto_categoria WHERE id_produto = ? AND id_tenant = plataforma.tenant_atual()")
+                .param(id).update();
+        int linhas = jdbc.sql("DELETE FROM produto WHERE id_produto = ? AND id_tenant = plataforma.tenant_atual()")
+                .param(id).update();
         if (linhas == 0) {
             throw new ResponseStatusException(NOT_FOUND, "Produto não encontrado.");
         }
@@ -234,7 +245,8 @@ public class ProdutoService {
      * posição na lista (0, 1, 2…), não um valor escolhido pelo cliente da API.
      */
     private void salvarCategorias(long idProduto, List<Long> categorias) {
-        jdbc.sql("DELETE FROM produto_categoria WHERE id_produto = ?").param(idProduto).update();
+        jdbc.sql("DELETE FROM produto_categoria WHERE id_produto = ? AND id_tenant = plataforma.tenant_atual()")
+                .param(idProduto).update();
         if (categorias == null) {
             return;
         }
@@ -256,12 +268,15 @@ public class ProdutoService {
      * lista é rejeitada aqui porque viraria uma dupla violação de PK só detectável depois de
      * já ter apagado as categorias antigas.
      */
-    private void validar(ProdutoRequest req) {
+    private void validar(ProdutoRequest req, boolean usaCorGrade) {
         validarOferta(req);
         BigDecimal pesoBruto = req.pesoBruto() == null ? BigDecimal.ZERO : req.pesoBruto();
         BigDecimal pesoLiquido = req.pesoLiquido() == null ? BigDecimal.ZERO : req.pesoLiquido();
         if (pesoLiquido.compareTo(pesoBruto) > 0) {
             throw new IllegalArgumentException("Peso líquido deve ser menor ou igual ao peso bruto.");
+        }
+        if (usaCorGrade && req.idGrade() == null) {
+            throw new IllegalArgumentException("Grade é obrigatória para este tenant.");
         }
         if (req.categorias() != null) {
             long distintas = req.categorias().stream().distinct().count();
@@ -329,12 +344,12 @@ public class ProdutoService {
 
     /**
      * Campos comuns a INSERT/UPDATE, na mesma ordem em que aparecem nas duas SQLs acima. Texto
-     * livre em MAIÚSCULAS (convenção do projeto). {@code nomeVarianteLinha}/{@code
-     * nomeVarianteColuna} são forçados a {@code null} quando o tenant não usa a respectiva
-     * variante ({@code cfg_geral.cfg_usa_variante_linha}/{@code cfg_usa_variante_coluna}) —
-     * o campo fica oculto no formulário, então qualquer valor enviado é ignorado, não rejeitado.
+     * livre em MAIÚSCULAS (convenção do projeto). {@code idGrade} é forçado a {@code null}
+     * quando o tenant não usa cor/grade ({@code cfg_geral.cfg_usa_cor_grade}) — o campo fica
+     * oculto no formulário, então qualquer valor enviado é ignorado, não rejeitado; quando o
+     * tenant usa, a obrigatoriedade já foi checada em {@code validar}.
      */
-    private static void adicionarCamposComuns(List<Object> params, ProdutoRequest r, FlagsVariante flags) {
+    private static void adicionarCamposComuns(List<Object> params, ProdutoRequest r, boolean usaCorGrade) {
         params.add(r.ativo() == null || r.ativo());
         params.add(trimMaiusculoOuNulo(r.marca()));
         params.add(trimMaiusculoOuNulo(r.referencia()));
@@ -348,8 +363,20 @@ public class ProdutoService {
         params.add(trimMaiusculoOuNulo(r.codigoNcm()));
         params.add(r.pesoBruto() == null ? BigDecimal.ZERO : r.pesoBruto());
         params.add(r.pesoLiquido() == null ? BigDecimal.ZERO : r.pesoLiquido());
-        params.add(flags.usaVarianteLinha() ? trimMaiusculoOuNulo(r.nomeVarianteLinha()) : null);
-        params.add(flags.usaVarianteColuna() ? trimMaiusculoOuNulo(r.nomeVarianteColuna()) : null);
+        // SqlParameterValue explícito: sem isso, um id_grade nulo (produto sem grade) faz o driver
+        // JDBC do Postgres falhar ("conversion to class java.lang.Long from int4 not supported") —
+        // achado real de teste, 2026-08-08. id_grade é `integer` (não bigint); o tipo precisa ser
+        // dito na hora do bind, não inferido do valor (que é null).
+        params.add(new org.springframework.jdbc.core.SqlParameterValue(
+                java.sql.Types.INTEGER, usaCorGrade ? r.idGrade() : null));
+    }
+
+    /** {@code rs.getObject(coluna, Long.class)} não converte `integer` (o tipo real de
+     * `produto.id_grade`) pra `Long` de forma confiável no driver — mesmo padrão já usado em
+     * {@code CrmService.getLongOuNulo}. */
+    private static Long getLongOuNulo(ResultSet rs, String coluna) throws SQLException {
+        long valor = rs.getLong(coluna);
+        return rs.wasNull() ? null : valor;
     }
 
     private static String trimMaiusculoOuNulo(String s) {
@@ -360,8 +387,8 @@ public class ProdutoService {
         return jdbc.sql("""
                         SELECT pc.id_categoria, cc.nome_categoria, pc.indice
                         FROM produto_categoria pc
-                        JOIN cfg_categoria_produto cc ON cc.id_categoria = pc.id_categoria
-                        WHERE pc.id_produto = ?
+                        JOIN cfg_categoria_produto cc ON cc.id_categoria = pc.id_categoria AND cc.id_tenant = pc.id_tenant
+                        WHERE pc.id_tenant = plataforma.tenant_atual() AND pc.id_produto = ?
                         ORDER BY pc.indice
                         """)
                 .param(idProduto)
@@ -373,9 +400,10 @@ public class ProdutoService {
     private static final String SELECT_BASE = """
             SELECT p.id_produto, p.descricao, p.marca, p.referencia, p.preco_custo, p.percentual_venda,
                    p.preco_venda, p.data_inicio_oferta, p.data_final_oferta, p.preco_oferta, p.codigo_ncm,
-                   p.peso_bruto, p.peso_liquido, p.nome_variante_linha, p.nome_variante_coluna, p.ativo,
+                   p.peso_bruto, p.peso_liquido, p.id_grade, g.descricao AS descricao_grade, p.ativo,
                    p.criado_em, p.atualizado_em
             FROM produto p
+            LEFT JOIN cfg_grade g ON g.id_grade = p.id_grade AND g.id_tenant = p.id_tenant
             """;
 
     private ProdutoResponse mapear(ResultSet rs, int rowNum) throws SQLException {
@@ -394,8 +422,8 @@ public class ProdutoService {
                 rs.getString("codigo_ncm"),
                 rs.getBigDecimal("peso_bruto"),
                 rs.getBigDecimal("peso_liquido"),
-                rs.getString("nome_variante_linha"),
-                rs.getString("nome_variante_coluna"),
+                getLongOuNulo(rs, "id_grade"),
+                rs.getString("descricao_grade"),
                 rs.getBoolean("ativo"),
                 buscarCategorias(id),
                 produtoImagemService.listar(id),

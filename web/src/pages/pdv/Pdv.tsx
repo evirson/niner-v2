@@ -30,8 +30,8 @@ function totalLinha(item: ItemLedger): number {
 }
 
 function variacaoTexto(produto: PdvProduto): string | null {
-  if (!produto.variacaoLinha && !produto.variacaoColuna) return null
-  return [produto.variacaoLinha, produto.variacaoColuna].filter(Boolean).join(' · ')
+  if (!produto.variacaoCor && !produto.variacaoTamanho) return null
+  return [produto.variacaoCor, produto.variacaoTamanho].filter(Boolean).join(' · ')
 }
 
 /**

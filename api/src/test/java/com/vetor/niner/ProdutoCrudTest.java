@@ -314,28 +314,78 @@ class ProdutoCrudTest {
     }
 
     @Test
-    void nomeDaVarianteEhIgnoradoQuandoFlagDaRespectivaVarianteEstaDesligada() throws Exception {
-        String token = assinarNovoTenant("variante-desligada");
-
-        // cfg_geral nasce com as duas flags ligadas (V023) — desliga só a de linha.
-        mvc.perform(put("/api/v1/config-geral").header("Authorization", "Bearer " + token)
-                        .contentType(APPLICATION_JSON)
-                        .content("""
-                                {"percentualDescontoVenda":0,"jurosCrediarioDias":0,"jurosCrediario":0,
-                                 "multaCrediarioDias":0,"multaCrediario":0,"cfgUsaVarianteLinha":false,
-                                 "cfgUsaVarianteColuna":true,"cfgPermiteQtdDecimal":true}
-                                """))
-                .andExpect(status().isOk());
+    void idGradeEhIgnoradoQuandoTenantNaoUsaCorGrade() throws Exception {
+        String token = assinarNovoTenant("cor-grade-desligado");
+        // cfg_geral nasce com cfgUsaCorGrade=false (V023 default) — não precisa desligar.
 
         mvc.perform(post("/api/v1/produtos").header("Authorization", "Bearer " + token)
                         .contentType(APPLICATION_JSON)
                         .content("""
                                 {"descricao":"Camiseta","precoCusto":"1.00","percentualVenda":"0","precoVenda":"1.00",
-                                 "nomeVarianteLinha":"COR","nomeVarianteColuna":"TAMANHO"}
+                                 "idGrade":999999}
                                 """))
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.nomeVarianteLinha").doesNotExist())
-                .andExpect(jsonPath("$.nomeVarianteColuna").value("TAMANHO"));
+                .andExpect(jsonPath("$.idGrade").doesNotExist());
+    }
+
+    @Test
+    void idGradeEhObrigatorioQuandoTenantUsaCorGrade() throws Exception {
+        String token = assinarNovoTenant("cor-grade-obrigatorio");
+        ativarCorGrade(token);
+
+        mvc.perform(post("/api/v1/produtos").header("Authorization", "Bearer " + token)
+                        .contentType(APPLICATION_JSON)
+                        .content("""
+                                {"descricao":"Sapato","precoCusto":"1.00","percentualVenda":"0","precoVenda":"1.00"}
+                                """))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void produtoComGradeEhAceitoQuandoTenantUsaCorGrade() throws Exception {
+        String token = assinarNovoTenant("cor-grade-aceito");
+        ativarCorGrade(token);
+        long idTamanho = criarTamanho(token, "36");
+        long idGrade = criarGrade(token, "Grade 36", idTamanho);
+
+        mvc.perform(post("/api/v1/produtos").header("Authorization", "Bearer " + token)
+                        .contentType(APPLICATION_JSON)
+                        .content("""
+                                {"descricao":"Sapato","precoCusto":"1.00","percentualVenda":"0","precoVenda":"1.00",
+                                 "idGrade":%d}
+                                """.formatted(idGrade)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.idGrade").value(idGrade))
+                .andExpect(jsonPath("$.descricaoGrade").value("GRADE 36"));
+    }
+
+    private void ativarCorGrade(String token) throws Exception {
+        mvc.perform(put("/api/v1/config-geral").header("Authorization", "Bearer " + token)
+                        .contentType(APPLICATION_JSON)
+                        .content("""
+                                {"percentualDescontoVenda":0,"jurosCrediarioDias":0,"jurosCrediario":0,
+                                 "multaCrediarioDias":0,"multaCrediario":0,"cfgUsaCorGrade":true,
+                                 "cfgPermiteQtdDecimal":true}
+                                """))
+                .andExpect(status().isOk());
+    }
+
+    private long criarTamanho(String token, String descricao) throws Exception {
+        String resp = mvc.perform(post("/api/v1/tamanhos").header("Authorization", "Bearer " + token)
+                        .contentType(APPLICATION_JSON)
+                        .content("{\"descricao\":\"%s\"}".formatted(descricao)))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        return ((Number) JsonPath.read(resp, "$.idTamanho")).longValue();
+    }
+
+    private long criarGrade(String token, String descricao, long idTamanho) throws Exception {
+        String resp = mvc.perform(post("/api/v1/grades").header("Authorization", "Bearer " + token)
+                        .contentType(APPLICATION_JSON)
+                        .content("{\"descricao\":\"%s\",\"idsTamanho\":[%d]}".formatted(descricao, idTamanho)))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        return ((Number) JsonPath.read(resp, "$.idGrade")).longValue();
     }
 
     @Test

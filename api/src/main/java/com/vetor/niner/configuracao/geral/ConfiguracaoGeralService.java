@@ -26,8 +26,8 @@ public class ConfiguracaoGeralService {
 
     private static final String SELECT_BASE = """
             SELECT percentual_desconto_venda, juros_crediario_dias, juros_crediario,
-                   multa_crediario_dias, multa_crediario, cfg_usa_variante_linha,
-                   cfg_usa_variante_coluna, cfg_permite_qtd_decimal, atualizado_em
+                   multa_crediario_dias, multa_crediario, cfg_usa_cor_grade,
+                   cfg_permite_qtd_decimal, atualizado_em
             FROM cfg_geral
             WHERE id_tenant = plataforma.tenant_atual()
             """;
@@ -45,31 +45,28 @@ public class ConfiguracaoGeralService {
     }
 
     /**
-     * Só as duas flags de variante, sem checagem de papel — usado por {@code catalogo.Produto}
-     * (qualquer papel que cadastra produto precisa saber se os campos "nome da variante em
-     * linha/coluna" aparecem no formulário, diferente do restante de {@code cfg_geral}, que é
-     * ADMIN-only). {@code cfg_geral} nasce no signup (`SignupService`), mas o fallback
-     * {@code true}/{@code true} evita 404 caso a linha nunca tenha sido criada.
+     * Só a flag de cor/grade, sem checagem de papel — usado por {@code catalogo.Produto}
+     * (qualquer papel que cadastra produto precisa saber se o campo "Grade" aparece no
+     * formulário, diferente do restante de {@code cfg_geral}, que é ADMIN-only) e pela Emissão
+     * de Etiqueta. {@code cfg_geral} nasce no signup (`SignupService`), mas o fallback
+     * {@code false} evita 404 caso a linha nunca tenha sido criada (e preserva o padrão: sem
+     * configuração explícita, o tenant não usa cor/grade).
      */
     @Transactional(readOnly = true)
-    public FlagsVariante flagsVariante() {
+    public boolean usaCorGrade() {
         return jdbc.sql("""
-                        SELECT cfg_usa_variante_linha, cfg_usa_variante_coluna FROM cfg_geral
+                        SELECT cfg_usa_cor_grade FROM cfg_geral
                         WHERE id_tenant = plataforma.tenant_atual()
                         """)
-                .query((rs, n) -> new FlagsVariante(
-                        rs.getBoolean("cfg_usa_variante_linha"), rs.getBoolean("cfg_usa_variante_coluna")))
+                .query(Boolean.class)
                 .optional()
-                .orElse(new FlagsVariante(true, true));
-    }
-
-    public record FlagsVariante(boolean usaVarianteLinha, boolean usaVarianteColuna) {
+                .orElse(false);
     }
 
     /**
      * Só o percentual de desconto promocional, sem checagem de papel — usado pelo PDV (F5,
      * `PdvVendaService`) pra exibir "Desconto Promocional" antes de efetivar a venda. Mesmo
-     * fallback de {@code flagsVariante}: {@code 0} evita 404 caso a linha nunca tenha sido criada.
+     * fallback de {@code usaCorGrade}: {@code 0} evita 404 caso a linha nunca tenha sido criada.
      */
     @Transactional(readOnly = true)
     public BigDecimal percentualDescontoVenda() {
@@ -85,7 +82,7 @@ public class ConfiguracaoGeralService {
     /**
      * Só a flag de quantidade decimal, sem checagem de papel — usada por PDV, Transferência de
      * Produtos e Histórico do Cliente pra formatar/validar quantidade de produto. Mesmo
-     * fallback de {@code flagsVariante}/{@code percentualDescontoVenda}: {@code true} evita 404
+     * fallback de {@code usaCorGrade}/{@code percentualDescontoVenda}: {@code true} evita 404
      * caso a linha nunca tenha sido criada (e preserva o comportamento de hoje, que já aceita
      * quantidade decimal em qualquer lugar).
      */
@@ -106,14 +103,14 @@ public class ConfiguracaoGeralService {
         int linhas = jdbc.sql("""
                         UPDATE cfg_geral SET
                             percentual_desconto_venda = ?, juros_crediario_dias = ?, juros_crediario = ?,
-                            multa_crediario_dias = ?, multa_crediario = ?, cfg_usa_variante_linha = ?,
-                            cfg_usa_variante_coluna = ?, cfg_permite_qtd_decimal = ?, atualizado_em = now()
+                            multa_crediario_dias = ?, multa_crediario = ?, cfg_usa_cor_grade = ?,
+                            cfg_permite_qtd_decimal = ?, atualizado_em = now()
                         WHERE id_tenant = plataforma.tenant_atual()
                         """)
                 .params(List.of(
                         req.percentualDescontoVenda(), req.jurosCrediarioDias(), req.jurosCrediario(),
-                        req.multaCrediarioDias(), req.multaCrediario(), req.cfgUsaVarianteLinha(),
-                        req.cfgUsaVarianteColuna(), req.cfgPermiteQtdDecimal()))
+                        req.multaCrediarioDias(), req.multaCrediario(), req.cfgUsaCorGrade(),
+                        req.cfgPermiteQtdDecimal()))
                 .update();
         // Não deveria acontecer — a linha nasce no signup — mas 404 é mais honesto que
         // seguir em frente como se tivesse atualizado algo.
@@ -146,8 +143,7 @@ public class ConfiguracaoGeralService {
                 rs.getBigDecimal("juros_crediario"),
                 rs.getInt("multa_crediario_dias"),
                 rs.getBigDecimal("multa_crediario"),
-                rs.getBoolean("cfg_usa_variante_linha"),
-                rs.getBoolean("cfg_usa_variante_coluna"),
+                rs.getBoolean("cfg_usa_cor_grade"),
                 rs.getBoolean("cfg_permite_qtd_decimal"),
                 rs.getObject("atualizado_em", OffsetDateTime.class));
     }

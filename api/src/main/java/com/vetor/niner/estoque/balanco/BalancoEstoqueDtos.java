@@ -22,8 +22,8 @@ public final class BalancoEstoqueDtos {
     public record LinhaContagem(
             long idVariacao,
             String descricaoProduto,
-            String variacaoLinha,
-            String variacaoColuna,
+            String variacaoCor,
+            String variacaoTamanho,
             String sku,
             BigDecimal qtdContada) {
     }
@@ -31,8 +31,8 @@ public final class BalancoEstoqueDtos {
     public record LinhaDiferenca(
             long idVariacao,
             String descricaoProduto,
-            String variacaoLinha,
-            String variacaoColuna,
+            String variacaoCor,
+            String variacaoTamanho,
             String sku,
             BigDecimal qtdEstoque,
             BigDecimal qtdContada,

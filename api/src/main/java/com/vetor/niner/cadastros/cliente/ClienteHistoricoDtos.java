@@ -26,17 +26,16 @@ public final class ClienteHistoricoDtos {
 
     /**
      * Um produto vendido numa compra (linha de débito do ledger de estoque, 2026-07-27, pedido
-     * do dono do produto — painel "Produtos da Compra"). {@code variacaoLinha}/{@code
-     * variacaoColuna} são {@code null} quando o produto não usa variação (ou a dimensão
-     * correspondente está desligada). {@code precoVenda} é o preço unitário líquido já
-     * considerando desconto/acréscimo da linha: {@code ((qtd*preçoVenda - desconto + acréscimo)
-     * / qtd)}.
+     * do dono do produto — painel "Produtos da Compra"). {@code variacaoCor}/{@code
+     * variacaoTamanho} são {@code null} quando o produto não usa grade. {@code precoVenda} é o
+     * preço unitário líquido já considerando desconto/acréscimo da linha: {@code
+     * ((qtd*preçoVenda - desconto + acréscimo) / qtd)}.
      */
     public record ItemVendaHistorico(
             long idVenda,
             String descricaoProduto,
-            String variacaoLinha,
-            String variacaoColuna,
+            String variacaoCor,
+            String variacaoTamanho,
             BigDecimal qtdVendida,
             BigDecimal precoVenda) {
     }

@@ -22,8 +22,8 @@ export interface LinhaAnaliticaMovimentacao {
   sku: string
   descricaoProduto: string
   marca: string | null
-  variacaoLinha: string | null
-  variacaoColuna: string | null
+  variacaoCor: string | null
+  variacaoTamanho: string | null
   entrada: number
   saida: number
   custoUnitario: number
@@ -37,8 +37,8 @@ export interface CabecalhoKardex {
   sku: string
   descricaoProduto: string
   marca: string | null
-  variacaoLinha: string | null
-  variacaoColuna: string | null
+  variacaoCor: string | null
+  variacaoTamanho: string | null
   idEmpresa: number
   nomeEmpresa: string
   saldoInicial: number
@@ -89,8 +89,8 @@ export interface VariacaoEncontrada {
   sku: string
   descricaoProduto: string
   marca: string | null
-  variacaoLinha: string | null
-  variacaoColuna: string | null
+  variacaoCor: string | null
+  variacaoTamanho: string | null
 }
 
 /** Só os campos do `modelo` pedido vêm preenchidos — mesmo padrão dos demais relatórios. */

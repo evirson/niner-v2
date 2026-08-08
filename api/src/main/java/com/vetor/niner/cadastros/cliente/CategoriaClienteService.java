@@ -30,9 +30,11 @@ public class CategoriaClienteService {
 
     @Transactional(readOnly = true)
     public List<CategoriaResponse> listar() {
+        // id_tenant explícito (defesa em profundidade) — ver comentário em ProdutoService.listar.
         return jdbc.sql("""
                         SELECT id_categoria_cliente, nome_categoria
                         FROM cfg_categoria_cliente
+                        WHERE id_tenant = plataforma.tenant_atual()
                         ORDER BY nome_categoria
                         """)
                 .query((rs, n) -> new CategoriaResponse(
@@ -61,7 +63,10 @@ public class CategoriaClienteService {
     public CategoriaResponse renomear(long id, CategoriaRequest req) {
         String nome = req.nomeCategoria().trim().toUpperCase(Locale.ROOT);
         try {
-            int linhas = jdbc.sql("UPDATE cfg_categoria_cliente SET nome_categoria = ? WHERE id_categoria_cliente = ?")
+            int linhas = jdbc.sql("""
+                            UPDATE cfg_categoria_cliente SET nome_categoria = ?
+                            WHERE id_categoria_cliente = ? AND id_tenant = plataforma.tenant_atual()
+                            """)
                     .params(nome, id)
                     .update();
             if (linhas == 0) {

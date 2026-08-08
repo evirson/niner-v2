@@ -29,8 +29,8 @@ const ROTULOS: Record<string, string> = {
  * Configuração de tela do Produto (ADMIN, docs/telas/configuracao-tela.md): escolhe quais
  * campos aparecem no formulário e quais são obrigatórios. Descrição, preço de custo, % de
  * venda e preço de venda não aparecem aqui — são estruturalmente obrigatórios, não
- * configuráveis. Nome da variante em linha/coluna também não entram: são controlados pelos
- * Parâmetros do Sistema (`cfg_geral`), não por esta tela.
+ * configuráveis. Grade também não entra: é controlada pelos Parâmetros do Sistema
+ * (`cfg_geral.cfg_usa_cor_grade`), não por esta tela.
  */
 export default function ConfiguracaoTelaProduto() {
   const navigate = useNavigate()

@@ -19,8 +19,10 @@ public final class ProdutoDtos {
      * Corpo de criação/atualização. {@code categorias} é a lista de {@code idCategoria} na
      * ordem escolhida pelo usuário — o servidor deriva o {@code indice} (0, 1, 2…) da posição
      * na lista, então o cliente não precisa (nem deve) enviar índices manualmente.
-     * {@code nomeVarianteLinha}/{@code nomeVarianteColuna} só têm efeito se o tenant usar a
-     * respectiva variante em {@code cfg_geral} (verificado no serviço).
+     * {@code idGrade} é obrigatório (400 se ausente) quando o tenant usa cor/grade em
+     * {@code cfg_geral.cfg_usa_cor_grade} (verificado no serviço); ignorado (gravado como
+     * {@code null}) quando o tenant não usa — mesmo princípio dos antigos
+     * {@code nomeVarianteLinha}/{@code nomeVarianteColuna}.
      */
     public record ProdutoRequest(
             @NotBlank @Size(max = 200) String descricao,
@@ -35,8 +37,7 @@ public final class ProdutoDtos {
             @Size(max = 20) String codigoNcm,
             BigDecimal pesoBruto,
             BigDecimal pesoLiquido,
-            @Size(max = 60) String nomeVarianteLinha,
-            @Size(max = 60) String nomeVarianteColuna,
+            Long idGrade,
             Boolean ativo,
             List<Long> categorias) {
     }
@@ -58,8 +59,8 @@ public final class ProdutoDtos {
             String codigoNcm,
             BigDecimal pesoBruto,
             BigDecimal pesoLiquido,
-            String nomeVarianteLinha,
-            String nomeVarianteColuna,
+            Long idGrade,
+            String descricaoGrade,
             boolean ativo,
             List<CategoriaSelecionada> categorias,
             List<ProdutoImagemDtos.ImagemResponse> imagens,

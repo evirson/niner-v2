@@ -32,8 +32,9 @@ public class EuController {
         long idUsuario = Long.parseLong(jwt.getSubject());
         long idEmpresa = ((Number) jwt.getClaim("eid")).longValue();
 
-        var usuario = jdbc.sql("SELECT id_usuario, nome_usuario, email, administrador FROM usuario WHERE id_usuario = ?")
-                .param(idUsuario)
+        var usuario = jdbc.sql(
+                        "SELECT id_usuario, nome_usuario, email, administrador FROM usuario WHERE id_tenant = ? AND id_usuario = ?")
+                .params(idTenant, idUsuario)
                 .query((rs, n) -> Map.<String, Object>of(
                         "idUsuario", rs.getLong("id_usuario"),
                         "nome", rs.getString("nome_usuario"),
@@ -52,8 +53,9 @@ public class EuController {
         // Empresa ativa da sessão (claim eid, 2026-07-28) — escolhida no login quando o
         // usuário tem acesso a mais de uma (usuario_empresa). Exibida no header do front pra
         // deixar claro em qual empresa os cadastros feitos nesta sessão vão cair.
-        var empresa = jdbc.sql("SELECT id_empresa, COALESCE(nome_fantasia, razao_social) AS nome FROM empresa WHERE id_empresa = ?")
-                .param(idEmpresa)
+        var empresa = jdbc.sql(
+                        "SELECT id_empresa, COALESCE(nome_fantasia, razao_social) AS nome FROM empresa WHERE id_tenant = ? AND id_empresa = ?")
+                .params(idTenant, idEmpresa)
                 .query((rs, n) -> Map.<String, Object>of(
                         "idEmpresa", rs.getLong("id_empresa"),
                         "nome", rs.getString("nome")))

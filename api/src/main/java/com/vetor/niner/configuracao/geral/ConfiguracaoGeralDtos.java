@@ -24,8 +24,7 @@ public final class ConfiguracaoGeralDtos {
             @NotNull @DecimalMin("0") @DecimalMax("100") BigDecimal jurosCrediario,
             @NotNull @Min(0) Integer multaCrediarioDias,
             @NotNull @DecimalMin("0") @DecimalMax("100") BigDecimal multaCrediario,
-            @NotNull Boolean cfgUsaVarianteLinha,
-            @NotNull Boolean cfgUsaVarianteColuna,
+            @NotNull Boolean cfgUsaCorGrade,
             @NotNull Boolean cfgPermiteQtdDecimal) {
     }
 
@@ -35,10 +34,14 @@ public final class ConfiguracaoGeralDtos {
             BigDecimal jurosCrediario,
             int multaCrediarioDias,
             BigDecimal multaCrediario,
-            boolean cfgUsaVarianteLinha,
-            boolean cfgUsaVarianteColuna,
+            boolean cfgUsaCorGrade,
             boolean cfgPermiteQtdDecimal,
             OffsetDateTime atualizadoEm) {
+    }
+
+    /** Só a flag de cor/grade, sem checagem de papel — usada por {@code catalogo.Produto} (o
+     * campo Grade só aparece no formulário quando o tenant usa) e pela Emissão de Etiqueta. */
+    public record UsaCorGradeResponse(boolean cfgUsaCorGrade) {
     }
 
     /** Só o percentual de desconto promocional, sem checagem de papel — usado pelo PDV (F5). */
