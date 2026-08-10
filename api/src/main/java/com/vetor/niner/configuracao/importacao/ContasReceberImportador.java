@@ -2,9 +2,9 @@ package com.vetor.niner.configuracao.importacao;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.vetor.niner.cadastros.cliente.Documentos;
-import com.vetor.niner.configuracao.importacao.ImportacaoCsv.LinhaCsv;
 import com.vetor.niner.configuracao.importacao.ImportacaoDtos.LinhaErro;
 import com.vetor.niner.configuracao.importacao.ImportacaoDtos.RelatorioImportacao;
+import com.vetor.niner.configuracao.importacao.ImportacaoPlanilha.LinhaPlanilha;
 import com.vetor.niner.financeiro.TipoCarteiraDtos.CategoriaCarteira;
 import com.vetor.niner.financeiro.TipoCarteiraDtos.TipoCarteiraRequest;
 import com.vetor.niner.financeiro.TipoCarteiraService;
@@ -14,11 +14,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
-import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -42,10 +42,12 @@ public class ContasReceberImportador implements ImportadorDeTabela {
 
     private final JdbcClient jdbc;
     private final TipoCarteiraService tipoCarteiraService;
+    private final ImportacaoSavepointExecutor savepoints;
 
-    public ContasReceberImportador(JdbcClient jdbc, TipoCarteiraService tipoCarteiraService) {
+    public ContasReceberImportador(JdbcClient jdbc, TipoCarteiraService tipoCarteiraService, ImportacaoSavepointExecutor savepoints) {
         this.jdbc = jdbc;
         this.tipoCarteiraService = tipoCarteiraService;
+        this.savepoints = savepoints;
     }
 
     @Override
@@ -63,20 +65,24 @@ public class ContasReceberImportador implements ImportadorDeTabela {
         return "Parcelas de crediário em aberto (ou já pagas) de clientes já cadastrados. Pede uma carteira de crediário para o arquivo inteiro.";
     }
 
+    private static final String[] COLUNAS = {
+            "CPF_CNPJ", "EMPRESA", "NUMERO_PARCELA", "DATA_VENCIMENTO", "DATA_RECEBIMENTO",
+            "VALOR_RECEBER", "VALOR_JUROS", "VALOR_DESCONTO", "VALOR_RECEBIDO",
+    };
+
     @Override
-    public byte[] modeloCsv() {
-        String cabecalho = "CPF_CNPJ;EMPRESA;NUMERO_PARCELA;DATA_VENCIMENTO;DATA_RECEBIMENTO;VALOR_RECEBER;VALOR_JUROS;VALOR_DESCONTO;VALOR_RECEBIDO";
-        String exemplo1 = "123.456.789-09;1;1;10/09/2026;;150,00;0;0;0";
-        String exemplo2 = "123.456.789-09;1;2;10/10/2026;;150,00;0;0;0";
-        return (cabecalho + "\r\n" + exemplo1 + "\r\n" + exemplo2 + "\r\n").getBytes(StandardCharsets.UTF_8);
+    public byte[] modeloPlanilha() {
+        String[] exemplo1 = {"123.456.789-09", "1", "1", "10/09/2026", "", "150,00", "0", "0", "0"};
+        String[] exemplo2 = {"123.456.789-09", "1", "2", "10/10/2026", "", "150,00", "0", "0", "0"};
+        return ImportacaoPlanilha.gerarModelo(COLUNAS, exemplo1, exemplo2);
     }
 
     @Override
     @Transactional
-    public RelatorioImportacao processar(List<LinhaCsv> linhas, JsonNode escolhas, boolean confirmar, Jwt jwt) {
+    public RelatorioImportacao processar(List<LinhaPlanilha> linhas, JsonNode escolhas, boolean confirmar, Jwt jwt) {
         long idCarteira = resolverCarteiraCrediario(escolhas);
 
-        record LinhaResolvida(LinhaCsv origem, long idCliente, long idEmpresa, int numeroParcela,
+        record LinhaResolvida(LinhaPlanilha origem, long idCliente, long idEmpresa, int numeroParcela,
                                OffsetDateTime dataVencimento, OffsetDateTime dataRecebimento,
                                BigDecimal valorReceber, BigDecimal valorRecebido) {
         }
@@ -84,36 +90,43 @@ public class ContasReceberImportador implements ImportadorDeTabela {
         List<LinhaErro> erros = new ArrayList<>();
         // Agrupa por (idCliente, idEmpresa), preservando a ordem de primeira ocorrência.
         Map<String, List<LinhaResolvida>> grupos = new LinkedHashMap<>();
+        // Cache de cliente/empresa por chamada (2026-08-11) — variável LOCAL, não campo da
+        // classe (o importador é um singleton Spring, compartilhado entre requisições/tenants).
+        // Achado real: planilha de 300 mil parcelas repetindo o mesmo CPF fazia 300 mil SELECTs
+        // sequenciais no banco, um por linha, sem necessidade — é exatamente esse cliente/essa
+        // empresa que se repete em toda parcela da mesma pessoa.
+        Map<String, Optional<Long>> clienteCache = new HashMap<>();
+        Map<Integer, Optional<Long>> empresaCache = new HashMap<>();
 
-        for (LinhaCsv linha : linhas) {
+        for (LinhaPlanilha linha : linhas) {
             try {
                 String cpfCnpj = Documentos.somenteAlfanumerico(linha.valor("CPF_CNPJ"));
                 if (cpfCnpj == null || cpfCnpj.isBlank()) {
                     throw new IllegalArgumentException("CPF_CNPJ é obrigatório.");
                 }
-                long idCliente = buscarIdCliente(cpfCnpj).orElseThrow(() -> new IllegalArgumentException(
+                long idCliente = clienteCache.computeIfAbsent(cpfCnpj, this::buscarIdCliente).orElseThrow(() -> new IllegalArgumentException(
                         "Nenhum cliente cadastrado com o CPF/CNPJ \"" + linha.valor("CPF_CNPJ") + "\"."));
-                Integer codigoEmpresa = ImportacaoCsv.inteiro("EMPRESA", linha.valor("EMPRESA"));
+                Integer codigoEmpresa = ImportacaoPlanilha.inteiro("EMPRESA", linha.valor("EMPRESA"));
                 if (codigoEmpresa == null) {
                     throw new IllegalArgumentException("EMPRESA é obrigatório.");
                 }
-                long idEmpresa = buscarIdEmpresa(codigoEmpresa).orElseThrow(() -> new IllegalArgumentException(
+                long idEmpresa = empresaCache.computeIfAbsent(codigoEmpresa, this::buscarIdEmpresa).orElseThrow(() -> new IllegalArgumentException(
                         "Nenhuma empresa cadastrada com o código " + codigoEmpresa + "."));
 
-                Integer numeroParcela = ImportacaoCsv.inteiro("NUMERO_PARCELA", linha.valor("NUMERO_PARCELA"));
+                Integer numeroParcela = ImportacaoPlanilha.inteiro("NUMERO_PARCELA", linha.valor("NUMERO_PARCELA"));
                 if (numeroParcela == null) {
                     throw new IllegalArgumentException("NUMERO_PARCELA é obrigatório.");
                 }
-                LocalDate vencimento = ImportacaoCsv.data("DATA_VENCIMENTO", linha.valor("DATA_VENCIMENTO"));
+                LocalDate vencimento = ImportacaoPlanilha.data("DATA_VENCIMENTO", linha.valor("DATA_VENCIMENTO"));
                 if (vencimento == null) {
                     throw new IllegalArgumentException("DATA_VENCIMENTO é obrigatório.");
                 }
-                BigDecimal valorReceber = ImportacaoCsv.decimal("VALOR_RECEBER", linha.valor("VALOR_RECEBER"));
+                BigDecimal valorReceber = ImportacaoPlanilha.decimal("VALOR_RECEBER", linha.valor("VALOR_RECEBER"));
                 if (valorReceber == null || valorReceber.signum() <= 0) {
                     throw new IllegalArgumentException("VALOR_RECEBER deve ser maior que zero.");
                 }
-                LocalDate recebimento = ImportacaoCsv.data("DATA_RECEBIMENTO", linha.valor("DATA_RECEBIMENTO"));
-                BigDecimal valorRecebido = ImportacaoCsv.decimal("VALOR_RECEBIDO", linha.valor("VALOR_RECEBIDO"));
+                LocalDate recebimento = ImportacaoPlanilha.data("DATA_RECEBIMENTO", linha.valor("DATA_RECEBIMENTO"));
+                BigDecimal valorRecebido = ImportacaoPlanilha.decimal("VALOR_RECEBIDO", linha.valor("VALOR_RECEBIDO"));
 
                 String chaveGrupo = idCliente + "|" + idEmpresa;
                 grupos.computeIfAbsent(chaveGrupo, k -> new ArrayList<>()).add(new LinhaResolvida(
@@ -122,6 +135,8 @@ public class ContasReceberImportador implements ImportadorDeTabela {
                         valorReceber, recebimento != null && valorRecebido != null ? valorRecebido : BigDecimal.ZERO));
             } catch (RuntimeException e) {
                 erros.add(LinhaErro.de(linha.numeroLinha(), e));
+            } finally {
+                ImportacaoProgressoContext.avancar();
             }
         }
 
@@ -132,17 +147,20 @@ public class ContasReceberImportador implements ImportadorDeTabela {
             long idCliente = grupo.get(0).idCliente();
             long idEmpresa = grupo.get(0).idEmpresa();
 
-            long idVenda = jdbc.sql("""
+            // SAVEPOINT por venda sintética (2026-08-11): uma falha de banco aqui (ou na parcela
+            // abaixo) não pode deixar a transação do arquivo inteiro "abortada" para os grupos
+            // seguintes — mesmo bug/fix de ProdutoImportador, ver ImportacaoSavepointExecutor.
+            Long idVenda = savepoints.executar(() -> jdbc.sql("""
                             INSERT INTO venda (id_tenant, id_empresa, id_cliente, data_venda)
                             VALUES (plataforma.tenant_atual(), ?, ?, ?)
                             RETURNING id_venda
                             """)
                     .params(idEmpresa, idCliente, dataVenda)
-                    .query(Long.class).single();
+                    .query(Long.class).single());
 
             for (LinhaResolvida r : grupo) {
                 try {
-                    jdbc.sql("""
+                    savepoints.executarSemRetorno(() -> jdbc.sql("""
                                     INSERT INTO contas_receber
                                         (id_tenant, id_venda, id_carteira, numero_parcela, data_vencimento,
                                          data_recebimento, valor_receber, valor_recebido, documento_recebido)
@@ -150,7 +168,7 @@ public class ContasReceberImportador implements ImportadorDeTabela {
                                     """)
                             .params(idVenda, idCarteira, r.numeroParcela(), r.dataVencimento(), r.dataRecebimento(),
                                     r.valorReceber(), r.valorRecebido(), r.dataRecebimento() != null)
-                            .update();
+                            .update());
                     importadas++;
                 } catch (RuntimeException e) {
                     erros.add(LinhaErro.de(r.origem().numeroLinha(), e));

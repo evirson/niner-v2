@@ -297,10 +297,42 @@ export const MENU: NavGrupo[] = [
         descricao: 'Layout de impressão da etiqueta de código de barras dos produtos: rolo, colunas e campos.',
       },
       {
-        to: '/importacao-dados',
+        chave: 'importacao-dados',
         label: 'Importação de Dados',
         icone: IconePedidos,
-        descricao: 'Carga inicial de clientes, fornecedores, produtos e crediário em aberto a partir de um arquivo CSV.',
+        descricao: 'Carga inicial de clientes, fornecedores, produtos, crediário em aberto e estoque, uma tabela por vez.',
+        itens: [
+          {
+            to: '/importacao-dados/clientes',
+            label: 'Clientes',
+            icone: IconeCliente,
+            descricao: 'Importa clientes a partir de uma planilha Excel (.xlsx ou .xls).',
+          },
+          {
+            to: '/importacao-dados/contas-receber',
+            label: 'Contas a Receber',
+            icone: IconeRecebimentoCrediario,
+            descricao: 'Importa o saldo devedor de crediário a partir de uma planilha Excel (.xlsx ou .xls) — o cliente precisa já estar cadastrado.',
+          },
+          {
+            to: '/importacao-dados/fornecedores',
+            label: 'Fornecedores',
+            icone: IconeFornecedor,
+            descricao: 'Importa fornecedores a partir de uma planilha Excel (.xlsx ou .xls).',
+          },
+          {
+            to: '/importacao-dados/produtos',
+            label: 'Produtos',
+            icone: IconeProduto,
+            descricao: 'Importa o catálogo, com a grade de tamanhos de cada produto, a partir de uma planilha Excel (.xlsx ou .xls).',
+          },
+          {
+            to: '/importacao-dados/estoque',
+            label: 'Estoque Inicial',
+            icone: IconeEstoque,
+            descricao: 'Importa o saldo inicial de estoque a partir de uma planilha Excel (.xlsx ou .xls) — o produto precisa já ter sido importado.',
+          },
+        ],
       },
       {
         to: '/exportacao-dados',

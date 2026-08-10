@@ -1,8 +1,9 @@
 package com.vetor.niner.configuracao.importacao;
 
+import com.vetor.niner.configuracao.importacao.ImportacaoDtos.DeteccaoArquivo;
+import com.vetor.niner.configuracao.importacao.ImportacaoDtos.ProgressoResponse;
 import com.vetor.niner.configuracao.importacao.ImportacaoDtos.RelatorioImportacao;
 import com.vetor.niner.configuracao.importacao.ImportacaoDtos.TabelaImportavel;
-import com.vetor.niner.configuracao.importacao.ProdutoImportador.AnaliseProduto;
 import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -29,21 +30,9 @@ import java.util.List;
 public class ImportacaoController {
 
     private final ImportacaoService service;
-    private final ProdutoImportador produtoImportador;
 
-    public ImportacaoController(ImportacaoService service, ProdutoImportador produtoImportador) {
+    public ImportacaoController(ImportacaoService service) {
         this.service = service;
-        this.produtoImportador = produtoImportador;
-    }
-
-    /** Passo prévio da importação de produto: detecta colunas de estoque com dado (para o
-     *  front pedir o mapeamento pra empresa) e sugere rótulo de variante por grupo de produto —
-     *  ver {@link ProdutoImportador#analisar}. Não faz parte da interface genérica porque
-     *  nenhuma outra tabela precisa desse reconhecimento estruturado. */
-    @PostMapping(value = "/produto/analise", consumes = "multipart/form-data")
-    public AnaliseProduto analisarProduto(@AuthenticationPrincipal Jwt jwt, @RequestPart("arquivo") MultipartFile arquivo) {
-        service.validarAdmin(jwt);
-        return produtoImportador.analisar(arquivo);
     }
 
     @GetMapping("/tabelas")
@@ -51,14 +40,22 @@ public class ImportacaoController {
         return service.listarTabelas(jwt);
     }
 
+    /** Detecção automática de tipo de arquivo (tela única de importação, 2026-08-09) — lê só o
+     *  cabeçalho, sem processar nenhuma linha. {@code tabela} vem {@code null} quando não deu
+     *  pra identificar com confiança (a tela pede escolha manual nesse caso). */
+    @PostMapping(value = "/detectar", consumes = "multipart/form-data")
+    public DeteccaoArquivo detectar(@AuthenticationPrincipal Jwt jwt, @RequestPart("arquivo") MultipartFile arquivo) {
+        return service.detectar(jwt, arquivo);
+    }
+
     @GetMapping("/{tabela}/modelo")
     public ResponseEntity<byte[]> modelo(@AuthenticationPrincipal Jwt jwt, @PathVariable String tabela) {
-        byte[] csv = service.modelo(jwt, tabela);
+        byte[] planilha = service.modelo(jwt, tabela);
         return ResponseEntity.ok()
-                .contentType(MediaType.parseMediaType("text/csv; charset=UTF-8"))
+                .contentType(MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
                 .header(HttpHeaders.CONTENT_DISPOSITION,
-                        ContentDisposition.attachment().filename(tabela + "_modelo.csv").build().toString())
-                .body(csv);
+                        ContentDisposition.attachment().filename(tabela + "_modelo.xlsx").build().toString())
+                .body(planilha);
     }
 
     /**
@@ -71,7 +68,16 @@ public class ImportacaoController {
                                           @PathVariable String tabela,
                                           @RequestPart("arquivo") MultipartFile arquivo,
                                           @RequestPart(value = "escolhas", required = false) String escolhas,
-                                          @RequestParam(value = "confirmar", defaultValue = "false") boolean confirmar) {
-        return service.processar(jwt, tabela, arquivo, escolhas, confirmar);
+                                          @RequestParam(value = "confirmar", defaultValue = "false") boolean confirmar,
+                                          @RequestParam(value = "idProgresso", required = false) String idProgresso) {
+        return service.processar(jwt, tabela, arquivo, escolhas, confirmar, idProgresso);
+    }
+
+    /** Polling de progresso (2026-08-11) — a tela consulta isto a cada poucos milissegundos
+     *  enquanto {@code /processar} está em voo, pro gauge mostrar registro atual/total real em
+     *  vez de só uma animação. */
+    @GetMapping("/progresso/{idProgresso}")
+    public ProgressoResponse progresso(@AuthenticationPrincipal Jwt jwt, @PathVariable String idProgresso) {
+        return service.progresso(jwt, idProgresso);
     }
 }

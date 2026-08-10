@@ -174,6 +174,12 @@ CREATE TABLE produto (
   peso_liquido         numeric(14,3) NOT NULL DEFAULT 0,
   id_grade             integer,      -- grade de tamanhos deste produto; obrigatório (checado em
                                       -- serviço) quando cfg_geral.cfg_usa_cor_grade = true (2026-08-08)
+  codigo_importacao    text,         -- código do sistema de origem (CODIGO_PRODUTO da planilha
+                                      -- de migração, 2026-08-09) — NÃO é o id_produto; só existe
+                                      -- pra a Rotina de Importação de Dados achar de volta o
+                                      -- produto certo numa planilha separada (ex.: ESTOQUES.csv,
+                                      -- que sempre é importada DEPOIS de PRODUTOS.csv). Nunca
+                                      -- editável pelo cadastro manual.
   criado_em            timestamptz   NOT NULL DEFAULT now(),
   atualizado_em        timestamptz   NOT NULL DEFAULT now(),
   reajustado_em        timestamptz,
@@ -185,6 +191,9 @@ CREATE INDEX produto_id_tenant_ix  ON produto (id_tenant);
 CREATE INDEX produto_descricao_ix  ON produto (id_tenant, descricao);
 CREATE INDEX produto_marca_ix      ON produto (id_tenant, marca);
 CREATE INDEX produto_referencia_ix ON produto (id_tenant, referencia);
+-- Único por tenant SÓ quando preenchido (mesmo padrão de produto_barra.ean) — produto cadastrado
+-- manualmente (sem CODIGO_PRODUTO nenhum) não entra nessa exigência.
+CREATE UNIQUE INDEX produto_codigo_importacao_uk ON produto (id_tenant, codigo_importacao) WHERE codigo_importacao IS NOT NULL;
 
 CREATE TABLE produto_categoria (
   id_produto   integer  NOT NULL,
@@ -248,6 +257,7 @@ CREATE INDEX produto_imagem_id_tenant_ix  ON produto_imagem (id_tenant);
 CREATE INDEX produto_imagem_id_produto_ix ON produto_imagem (id_tenant, id_produto);
 
 COMMENT ON TABLE  produto        IS 'Produto do catálogo (RLS). Compartilhado entre empresas do tenant (sem id_empresa).';
+COMMENT ON COLUMN produto.codigo_importacao IS 'Código do sistema de origem (planilha de migração) — não é o id_produto; usado só pra achar o produto de volta numa importação de outra tabela (ex.: estoque), único por tenant quando preenchido.';
 COMMENT ON COLUMN produto_categoria.indice IS 'Ordenação da categoria dentro do produto (menor primeiro); único por produto.';
 COMMENT ON TABLE  produto_barra  IS 'Variação = SKU. Q7: sku interno (único/tenant) + ean opcional (GTIN, único quando preenchido).';
 COMMENT ON COLUMN produto_barra.sku IS 'Código de barras interno (EAN-13), chave de negócio da variação (ex-codigo_barra); SEMPRE gerado por gerar_ean13_interno(), nunca digitado pelo usuário.';

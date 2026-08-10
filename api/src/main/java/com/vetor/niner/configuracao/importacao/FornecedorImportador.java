@@ -6,15 +6,14 @@ import com.vetor.niner.cadastros.fornecedor.FornecedorDtos.FornecedorRequest;
 import com.vetor.niner.cadastros.fornecedor.FornecedorService;
 import com.vetor.niner.cadastros.planocontas.PlanoContasDtos.PlanoContasRequest;
 import com.vetor.niner.cadastros.planocontas.PlanoContasService;
-import com.vetor.niner.configuracao.importacao.ImportacaoCsv.LinhaCsv;
 import com.vetor.niner.configuracao.importacao.ImportacaoDtos.LinhaErro;
 import com.vetor.niner.configuracao.importacao.ImportacaoDtos.RelatorioImportacao;
+import com.vetor.niner.configuracao.importacao.ImportacaoPlanilha.LinhaPlanilha;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -23,19 +22,29 @@ import java.util.Locale;
  * Importação de {@code fornecedor} (docs/telas/importacao-dados.md, seção "2. fornecedor"). Um
  * plano de contas único (existente, por código, ou novo, criado na hora com os campos mínimos)
  * vale para todo o arquivo — {@code fornecedor.id_plano_contas} é NOT NULL e o layout de origem
- * normalmente não tem essa classificação. Dedup por CNPJ, mesmo padrão do cliente.
+ * normalmente não tem essa classificação. Dedup por CNPJ, mesmo padrão do cliente. TELEFONE não
+ * passa pela validação de 10–11 dígitos do cadastro manual (2026-08-09, pedido do dono do
+ * produto) — planilha migrada traz o campo em formato livre e isso não deve rejeitar a linha.
  */
 @Service
 public class FornecedorImportador implements ImportadorDeTabela {
 
+    private static final String[] COLUNAS = {
+            "RAZAO_SOCIAL", "NOME_FANTASIA", "CNPJ", "INSCRICAO_ESTADUAL", "EMAIL", "TELEFONE",
+            "ENDERECO", "NUMERO", "BAIRRO", "CIDADE", "ESTADO", "CEP",
+    };
+
     private final JdbcClient jdbc;
     private final FornecedorService fornecedorService;
     private final PlanoContasService planoContasService;
+    private final ImportacaoSavepointExecutor savepoints;
 
-    public FornecedorImportador(JdbcClient jdbc, FornecedorService fornecedorService, PlanoContasService planoContasService) {
+    public FornecedorImportador(JdbcClient jdbc, FornecedorService fornecedorService, PlanoContasService planoContasService,
+                                 ImportacaoSavepointExecutor savepoints) {
         this.jdbc = jdbc;
         this.fornecedorService = fornecedorService;
         this.planoContasService = planoContasService;
+        this.savepoints = savepoints;
     }
 
     @Override
@@ -54,33 +63,38 @@ public class FornecedorImportador implements ImportadorDeTabela {
     }
 
     @Override
-    public byte[] modeloCsv() {
-        String cabecalho = "RAZAO_SOCIAL;NOME_FANTASIA;CNPJ;INSCRICAO_ESTADUAL;EMAIL;TELEFONE;"
-                + "ENDERECO;NUMERO;BAIRRO;CIDADE;ESTADO;CEP";
-        String exemplo = "INDUSTRIA DE CALCADOS ABC LTDA;CALCADOS ABC;12.345.678/0001-95;;vendas@abc.com;"
-                + "(11) 3222-1111;AV PAULISTA;2000;BELA VISTA;SAO PAULO;SP;01310-000";
-        return (cabecalho + "\r\n" + exemplo + "\r\n").getBytes(StandardCharsets.UTF_8);
+    public byte[] modeloPlanilha() {
+        String[] exemplo = {"INDUSTRIA DE CALCADOS ABC LTDA", "CALCADOS ABC", "12.345.678/0001-95", "",
+                "vendas@abc.com", "(11) 3222-1111", "AV PAULISTA", "2000", "BELA VISTA", "SAO PAULO", "SP", "01310-000"};
+        return ImportacaoPlanilha.gerarModelo(COLUNAS, exemplo);
     }
 
     @Override
     @Transactional
-    public RelatorioImportacao processar(List<LinhaCsv> linhas, JsonNode escolhas, boolean confirmar, Jwt jwt) {
+    public RelatorioImportacao processar(List<LinhaPlanilha> linhas, JsonNode escolhas, boolean confirmar, Jwt jwt) {
         String idPlanoContas = resolverPlanoContas(escolhas);
 
         int importadas = 0, ignoradas = 0;
         List<LinhaErro> erros = new ArrayList<>();
 
-        for (LinhaCsv linha : linhas) {
+        for (LinhaPlanilha linha : linhas) {
             try {
+                // CNPJ inválido não entra na checagem de duplicidade — igual a "sem CNPJ", já
+                // que o valor gravado vai ser vazio mesmo (ver montarRequest). Só compara CNPJ
+                // que é, ao mesmo tempo, preenchido e válido.
                 String cnpjNormalizado = Documentos.somenteAlfanumerico(linha.valor("CNPJ"));
-                if (cnpjNormalizado != null && !cnpjNormalizado.isBlank() && jaExiste(cnpjNormalizado)) {
+                boolean cnpjPreenchidoEValido = cnpjNormalizado != null && !cnpjNormalizado.isBlank()
+                        && FornecedorService.cnpjValido(cnpjNormalizado);
+                if (cnpjPreenchidoEValido && jaExiste(cnpjNormalizado)) {
                     ignoradas++;
                     continue;
                 }
-                fornecedorService.criar(montarRequest(linha, idPlanoContas));
+                savepoints.executarSemRetorno(() -> fornecedorService.criar(montarRequest(linha, idPlanoContas), false));
                 importadas++;
             } catch (RuntimeException e) {
                 erros.add(LinhaErro.de(linha.numeroLinha(), e));
+            } finally {
+                ImportacaoProgressoContext.avancar();
             }
         }
 
@@ -138,18 +152,29 @@ public class FornecedorImportador implements ImportadorDeTabela {
                 .query(Long.class).optional().isPresent();
     }
 
-    private static FornecedorRequest montarRequest(LinhaCsv linha, String idPlanoContas) {
+    private static FornecedorRequest montarRequest(LinhaPlanilha linha, String idPlanoContas) {
         String razaoSocial = linha.valor("RAZAO_SOCIAL");
         if (razaoSocial == null) {
             throw new IllegalArgumentException("RAZAO_SOCIAL é obrigatório.");
+        }
+        // E-mail/CNPJ inválidos não rejeitam a linha — entram em branco (pedido do dono do
+        // produto, 2026-08-11 os dois): planilha migrada de outro sistema traz esses campos
+        // sujos/incompletos com frequência, mesmo espírito do TELEFONE sem validação (2026-08-09).
+        String email = ImportacaoPlanilha.semEspacos(linha.valor("EMAIL"));
+        if (!FornecedorService.emailValido(email)) {
+            email = null;
+        }
+        String cnpj = linha.valor("CNPJ");
+        if (!FornecedorService.cnpjValido(cnpj)) {
+            cnpj = null;
         }
         return new FornecedorRequest(
                 razaoSocial,
                 idPlanoContas,
                 linha.valor("NOME_FANTASIA"),
-                linha.valor("CNPJ"),
+                cnpj,
                 linha.valor("INSCRICAO_ESTADUAL"),
-                ImportacaoCsv.semEspacos(linha.valor("EMAIL")),
+                email,
                 linha.valor("TELEFONE"),
                 linha.valor("CEP"),
                 linha.valor("ENDERECO"),

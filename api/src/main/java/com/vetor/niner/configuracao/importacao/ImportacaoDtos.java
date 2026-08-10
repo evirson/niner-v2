@@ -12,6 +12,20 @@ public final class ImportacaoDtos {
     public record TabelaImportavel(String chave, String titulo, String descricao) {
     }
 
+    /** Resultado da detecção automática de tipo de arquivo (2026-08-09) — {@code tabela} vem
+     *  {@code null} quando nenhuma tabela cadastrada bate com confiança suficiente com as
+     *  colunas do arquivo (arquivo fora do padrão, ou de uma tabela não suportada); nesse caso
+     *  a tela pede pro usuário escolher manualmente. {@code colunasArquivo} é devolvido mesmo
+     *  sem detecção, para a tela poder mostrar o que foi lido do cabeçalho. */
+    public record DeteccaoArquivo(String tabela, List<String> colunasArquivo) {
+    }
+
+    /** Progresso "ao vivo" de uma importação em andamento (2026-08-11), consultado por polling
+     *  enquanto {@code /processar} está em voo — ver {@link ImportacaoProgressoRegistry}.
+     *  {@code etapa} é {@code "leitura"}, {@code "validando"} ou {@code "importando"}. */
+    public record ProgressoResponse(String etapa, int atual, int total) {
+    }
+
     /** {@code campo}/{@code valor} vêm preenchidos quando o erro é de conversão de um campo
      *  específico (data/decimal/inteiro inválidos — {@link CampoInvalidoException}); ficam
      *  {@code null} pra erros de regra de negócio que não apontam pra um valor cru específico

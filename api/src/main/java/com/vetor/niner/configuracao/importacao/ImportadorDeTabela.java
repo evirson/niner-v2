@@ -1,8 +1,8 @@
 package com.vetor.niner.configuracao.importacao;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.vetor.niner.configuracao.importacao.ImportacaoCsv.LinhaCsv;
 import com.vetor.niner.configuracao.importacao.ImportacaoDtos.RelatorioImportacao;
+import com.vetor.niner.configuracao.importacao.ImportacaoPlanilha.LinhaPlanilha;
 import org.springframework.security.oauth2.jwt.Jwt;
 
 import java.util.List;
@@ -26,8 +26,16 @@ public interface ImportadorDeTabela {
 
     String descricao();
 
-    /** Modelo `.csv` (cabeçalho + linhas de exemplo), pronto para download. */
-    byte[] modeloCsv();
+    /** Modelo `.xlsx` (cabeçalho + linhas de exemplo), pronto para download. */
+    byte[] modeloPlanilha();
 
-    RelatorioImportacao processar(List<LinhaCsv> linhas, JsonNode escolhas, boolean confirmar, Jwt jwt);
+    RelatorioImportacao processar(List<LinhaPlanilha> linhas, JsonNode escolhas, boolean confirmar, Jwt jwt);
+
+    /** Cabeçalho de {@link #modeloPlanilha()} (em MAIÚSCULAS) — única fonte de verdade das colunas
+     *  esperadas, reaproveitada pela detecção automática de tipo de arquivo
+     *  ({@link ImportacaoService#detectar}, 2026-08-09): em vez de manter uma segunda lista de
+     *  colunas por tabela, a detecção só lê o mesmo cabeçalho que já descreve o modelo baixável. */
+    default List<String> colunasEsperadas() {
+        return ImportacaoPlanilha.lerCabecalhoDeBytes(modeloPlanilha());
+    }
 }

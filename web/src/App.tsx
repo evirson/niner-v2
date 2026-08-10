@@ -56,7 +56,7 @@ import RelatorioEstoque from './pages/relatorios/RelatorioEstoque'
 import RelatorioMovimentacaoProdutos from './pages/relatorios/RelatorioMovimentacaoProdutos'
 import CrmForm from './pages/crm/CrmForm'
 import EtiquetaEmissaoForm from './pages/etiquetaemissao/EtiquetaEmissaoForm'
-import ImportacaoDadosPage from './pages/importacao/ImportacaoDadosPage'
+import ImportacaoTabelaPage from './pages/importacao/ImportacaoTabelaPage'
 import ExportacaoDadosPage from './pages/exportacao/ExportacaoDadosPage'
 
 export default function App() {
@@ -157,7 +157,11 @@ export default function App() {
           <Route path="/fornecedores/:id/visualizar" element={<FornecedorForm somenteLeitura />} />
           <Route path="/fornecedores/:id" element={<FornecedorForm />} />
           <Route element={<RequireAdmin />}>
-            <Route path="/importacao-dados" element={<ImportacaoDadosPage />} />
+            <Route path="/importacao-dados/clientes" element={<ImportacaoTabelaPage tabela="cliente" />} />
+            <Route path="/importacao-dados/contas-receber" element={<ImportacaoTabelaPage tabela="contas_receber" />} />
+            <Route path="/importacao-dados/fornecedores" element={<ImportacaoTabelaPage tabela="fornecedor" />} />
+            <Route path="/importacao-dados/produtos" element={<ImportacaoTabelaPage tabela="produto" />} />
+            <Route path="/importacao-dados/estoque" element={<ImportacaoTabelaPage tabela="estoque" />} />
             <Route path="/exportacao-dados" element={<ExportacaoDadosPage />} />
             <Route path="/configuracoes-gerais" element={<ConfiguracaoGeralForm />} />
             <Route path="/usuarios" element={<UsuarioLista />} />

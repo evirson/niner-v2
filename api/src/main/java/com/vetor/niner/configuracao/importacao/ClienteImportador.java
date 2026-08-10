@@ -7,15 +7,14 @@ import com.vetor.niner.cadastros.cliente.ClienteDtos.ClienteRequest;
 import com.vetor.niner.cadastros.cliente.ClienteDtos.Genero;
 import com.vetor.niner.cadastros.cliente.ClienteService;
 import com.vetor.niner.cadastros.cliente.Documentos;
-import com.vetor.niner.configuracao.importacao.ImportacaoCsv.LinhaCsv;
 import com.vetor.niner.configuracao.importacao.ImportacaoDtos.LinhaErro;
 import com.vetor.niner.configuracao.importacao.ImportacaoDtos.RelatorioImportacao;
+import com.vetor.niner.configuracao.importacao.ImportacaoPlanilha.LinhaPlanilha;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -30,14 +29,22 @@ import java.util.Optional;
 @Service
 public class ClienteImportador implements ImportadorDeTabela {
 
+    private static final String[] COLUNAS = {
+            "NOME", "TIPO_PESSOA", "CPF_CNPJ", "RG_IE", "DATA_NASCIMENTO", "GENERO", "EMAIL", "TELEFONE",
+            "ENDERECO", "NUMERO", "COMPLEMENTO", "BAIRRO", "CIDADE", "ESTADO", "CEP", "LIMITE_CREDITO",
+    };
+
     private final JdbcClient jdbc;
     private final ClienteService clienteService;
     private final CategoriaClienteService categoriaClienteService;
+    private final ImportacaoSavepointExecutor savepoints;
 
-    public ClienteImportador(JdbcClient jdbc, ClienteService clienteService, CategoriaClienteService categoriaClienteService) {
+    public ClienteImportador(JdbcClient jdbc, ClienteService clienteService, CategoriaClienteService categoriaClienteService,
+                              ImportacaoSavepointExecutor savepoints) {
         this.jdbc = jdbc;
         this.clienteService = clienteService;
         this.categoriaClienteService = categoriaClienteService;
+        this.savepoints = savepoints;
     }
 
     @Override
@@ -56,35 +63,36 @@ public class ClienteImportador implements ImportadorDeTabela {
     }
 
     @Override
-    public byte[] modeloCsv() {
-        String cabecalho = "NOME;TIPO_PESSOA;CPF_CNPJ;RG_IE;DATA_NASCIMENTO;GENERO;EMAIL;TELEFONE;"
-                + "ENDERECO;NUMERO;COMPLEMENTO;BAIRRO;CIDADE;ESTADO;CEP;LIMITE_CREDITO";
-        String exemploPf = "MARIA DA SILVA;FISICA;123.456.789-09;;15/03/1990;FEMININO;maria@email.com;"
-                + "(11) 99999-8888;AV PAULISTA;1000;APTO 12;BELA VISTA;SAO PAULO;SP;01310-000;500,00";
-        String exemploPj = "COMERCIO DE ROUPAS LTDA;JURIDICA;12.345.678/0001-95;;;;contato@comercio.com;"
-                + "(11) 3333-4444;;;;;;;0";
-        return (cabecalho + "\r\n" + exemploPf + "\r\n" + exemploPj + "\r\n").getBytes(StandardCharsets.UTF_8);
+    public byte[] modeloPlanilha() {
+        String[] exemploPf = {"MARIA DA SILVA", "FISICA", "123.456.789-09", "", "15/03/1990", "FEMININO",
+                "maria@email.com", "(11) 99999-8888", "AV PAULISTA", "1000", "APTO 12", "BELA VISTA",
+                "SAO PAULO", "SP", "01310-000", "500,00"};
+        String[] exemploPj = {"COMERCIO DE ROUPAS LTDA", "JURIDICA", "12.345.678/0001-95", "", "", "",
+                "contato@comercio.com", "(11) 3333-4444", "", "", "", "", "", "", "", "0"};
+        return ImportacaoPlanilha.gerarModelo(COLUNAS, exemploPf, exemploPj);
     }
 
     @Override
     @Transactional
-    public RelatorioImportacao processar(List<LinhaCsv> linhas, JsonNode escolhas, boolean confirmar, Jwt jwt) {
+    public RelatorioImportacao processar(List<LinhaPlanilha> linhas, JsonNode escolhas, boolean confirmar, Jwt jwt) {
         int idCategoria = resolverCategoria(escolhas);
 
         int importadas = 0, ignoradas = 0;
         List<LinhaErro> erros = new ArrayList<>();
 
-        for (LinhaCsv linha : linhas) {
+        for (LinhaPlanilha linha : linhas) {
             try {
                 String cpfCnpjNormalizado = Documentos.somenteAlfanumerico(linha.valor("CPF_CNPJ"));
                 if (cpfCnpjNormalizado != null && !cpfCnpjNormalizado.isBlank() && jaExiste(cpfCnpjNormalizado)) {
                     ignoradas++;
                     continue;
                 }
-                clienteService.criar(montarRequest(linha, idCategoria));
+                savepoints.executarSemRetorno(() -> clienteService.criar(montarRequest(linha, idCategoria)));
                 importadas++;
             } catch (RuntimeException e) {
                 erros.add(LinhaErro.de(linha.numeroLinha(), e));
+            } finally {
+                ImportacaoProgressoContext.avancar();
             }
         }
 
@@ -129,7 +137,7 @@ public class ClienteImportador implements ImportadorDeTabela {
                 .query(Long.class).optional().isPresent();
     }
 
-    private static ClienteRequest montarRequest(LinhaCsv linha, int idCategoria) {
+    private static ClienteRequest montarRequest(LinhaPlanilha linha, int idCategoria) {
         String tipoPessoa = linha.valor("TIPO_PESSOA");
         boolean fisicaJuridica = !"JURIDICA".equalsIgnoreCase(tipoPessoa);
         String generoTxt = linha.valor("GENERO");
@@ -149,9 +157,9 @@ public class ClienteImportador implements ImportadorDeTabela {
                 idCategoria,
                 linha.valor("CPF_CNPJ"),
                 linha.valor("RG_IE"),
-                ImportacaoCsv.data("DATA_NASCIMENTO", linha.valor("DATA_NASCIMENTO")),
+                ImportacaoPlanilha.data("DATA_NASCIMENTO", linha.valor("DATA_NASCIMENTO")),
                 genero,
-                ImportacaoCsv.semEspacos(linha.valor("EMAIL")),
+                ImportacaoPlanilha.semEspacos(linha.valor("EMAIL")),
                 linha.valor("TELEFONE"),
                 null, null, null, null, // whatsapp/instagram/facebook/tiktok fora do escopo desta importação
                 linha.valor("CEP"),
@@ -161,7 +169,7 @@ public class ClienteImportador implements ImportadorDeTabela {
                 linha.valor("BAIRRO"),
                 linha.valor("CIDADE"),
                 linha.valor("ESTADO"),
-                ImportacaoCsv.decimal("LIMITE_CREDITO", linha.valor("LIMITE_CREDITO")),
+                ImportacaoPlanilha.decimal("LIMITE_CREDITO", linha.valor("LIMITE_CREDITO")),
                 true);
     }
 }

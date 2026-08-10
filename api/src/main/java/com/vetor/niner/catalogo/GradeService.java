@@ -80,6 +80,47 @@ public class GradeService {
         return criar(new GradeRequest(nome, idsTamanho));
     }
 
+    /** Acha a grade cujo CONTEÚDO (sequência ORDENADA de tamanhos, slot a slot) é exatamente
+     * igual à informada, ou cria uma nova — usado quando a origem não traz nome de grade nenhum
+     * (Rotina de Importação de Dados, layout "uma linha = um produto" com {@code TAMANHO_1..20},
+     * 2026-08-09). Diferente de {@link #obterOuCriarPorNome} (casa por nome), aqui "já existe" é
+     * definido pelo conteúdo — o nome é só um rótulo gerado ({@code nomeSugerido}), com sufixo
+     * numérico se já estiver em uso por outra grade de conteúdo diferente. */
+    @Transactional
+    public GradeResponse obterOuCriarPorTamanhos(List<Long> idsTamanho, String nomeSugerido) {
+        Optional<Long> existente = buscarIdPorSlots(idsTamanho);
+        if (existente.isPresent()) {
+            return buscar(existente.get());
+        }
+        return criar(new GradeRequest(nomeUnico(nomeSugerido), idsTamanho));
+    }
+
+    private Optional<Long> buscarIdPorSlots(List<Long> idsTamanho) {
+        List<Object> slots = empacotarSlots(idsTamanho);
+        return jdbc.sql("SELECT id_grade FROM cfg_grade WHERE id_tenant = plataforma.tenant_atual() AND "
+                        + IGUALDADE_SLOT)
+                .params(slots)
+                .query(Long.class).optional();
+    }
+
+    /** {@code base} normalizado, com sufixo {@code " (2)"}, {@code " (3)"}... se já estiver em
+     * uso por outra grade (conteúdo já provado diferente por {@link #buscarIdPorSlots}). */
+    private String nomeUnico(String base) {
+        String nome = base.trim().toUpperCase(Locale.ROOT);
+        for (int sufixo = 2; existeNome(nome); sufixo++) {
+            nome = base.trim().toUpperCase(Locale.ROOT) + " (" + sufixo + ")";
+        }
+        return nome;
+    }
+
+    private boolean existeNome(String nome) {
+        return Boolean.TRUE.equals(jdbc.sql("""
+                        SELECT EXISTS (SELECT 1 FROM cfg_grade
+                                       WHERE id_tenant = plataforma.tenant_atual() AND descricao = ?)
+                        """)
+                .param(nome).query(Boolean.class).single());
+    }
+
     @Transactional
     public GradeResponse criar(GradeRequest req) {
         String descricao = validarEDescricao(req);
@@ -179,6 +220,12 @@ public class GradeService {
     private static final String ATRIBUICOES_SLOT = String.join(", ",
             java.util.stream.IntStream.rangeClosed(1, MAX_TAMANHOS).mapToObj(i -> "id_tamanho" + i + " = ?").toList());
     private static final String SELECT_COLUNAS = "SELECT id_grade, descricao, " + COLUNAS_SLOT;
+    /** {@code IS NOT DISTINCT FROM} (não {@code =}) porque slots não usados são {@code NULL} —
+     * comparação NULL-safe para casar duas grades com o mesmo comprimento (ex.: ambas com só
+     * 15 tamanhos preenchidos e o resto NULL). */
+    private static final String IGUALDADE_SLOT = String.join(" AND ",
+            java.util.stream.IntStream.rangeClosed(1, MAX_TAMANHOS)
+                    .mapToObj(i -> "id_tamanho" + i + " IS NOT DISTINCT FROM ?").toList());
 
     private static GradeBruta mapearBruta(ResultSet rs, int rowNum) throws SQLException {
         List<Long> ids = new ArrayList<>();

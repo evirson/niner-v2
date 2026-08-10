@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import AjudaDaTela from '../../components/AjudaDaTela'
 import { BotaoFecharTela } from '../../components/BotaoFecharTela'
+import GaugeProgresso from '../../components/GaugeProgresso'
 import { IconePedidos } from '../../components/Icones'
 import Toast, { type TipoToast } from '../../components/Toast'
 import { ApiError } from '../../lib/api'
@@ -11,6 +12,12 @@ import {
   listarTabelasExportacao,
   type TabelaExportavel,
 } from '../../lib/exportacao'
+
+/** A exportação é 1 consulta no banco (sem loop linha a linha no backend pra reportar progresso
+ *  de verdade, diferente da Importação de Dados) — então o gauge aqui usa o mesmo modo simulado
+ *  já usado no CRM (`GaugeProgresso` sem `atual`/`total`), só trocando o rótulo entre as duas
+ *  fases reais do processo: buscar os dados e montar o arquivo no navegador. */
+type FaseExportacao = 'buscando' | 'gerando'
 
 const CHAVE_TELA = 'configuracao.exportacao'
 
@@ -24,16 +31,19 @@ export default function ExportacaoDadosPage() {
   const [toast, setToast] = useState('')
   const [toastTipo, setToastTipo] = useState<TipoToast>('erro')
   const [tabelaEmAndamento, setTabelaEmAndamento] = useState<string | null>(null)
+  const [fase, setFase] = useState<FaseExportacao>('buscando')
 
   const { data: tabelas } = useQuery({ queryKey: ['exportacao-tabelas'], queryFn: listarTabelasExportacao })
 
   const exportarMut = useMutation({
     mutationFn: async (t: TabelaExportavel) => {
       setTabelaEmAndamento(t.chave)
+      setFase('buscando')
       const linhas = await buscarDadosExportacao(t.chave)
       if (linhas.length === 0) {
         throw new Error(`Nenhum registro encontrado em "${t.titulo}".`)
       }
+      setFase('gerando')
       await exportarParaExcel(t.chave, t.titulo, linhas)
       return linhas.length
     },
@@ -48,6 +58,8 @@ export default function ExportacaoDadosPage() {
       setTabelaEmAndamento(null)
     },
   })
+
+  const tituloEmAndamento = tabelas?.find((t) => t.chave === tabelaEmAndamento)?.titulo ?? ''
 
   return (
     <div className="lista-tela">
@@ -79,12 +91,24 @@ export default function ExportacaoDadosPage() {
                 >
                   <strong>{t.titulo}</strong>
                   <p className="muted" style={{ margin: '4px 0 0' }}>
-                    {tabelaEmAndamento === t.chave && exportarMut.isPending ? 'Gerando planilha…' : 'Baixar .xlsx'}
+                    {tabelaEmAndamento === t.chave && exportarMut.isPending
+                      ? (fase === 'buscando' ? 'Buscando dados…' : 'Gerando planilha…')
+                      : 'Baixar .xlsx'}
                   </p>
                 </button>
               </div>
             ))}
           </div>
+
+          {exportarMut.isPending && (
+            <div style={{ marginTop: 24 }}>
+              <GaugeProgresso
+                rotulo={
+                  (fase === 'buscando' ? 'Buscando dados de "' : 'Gerando planilha de "') + tituloEmAndamento + '"…'
+                }
+              />
+            </div>
+          )}
         </div>
       </div>
 

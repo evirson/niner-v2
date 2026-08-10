@@ -79,6 +79,13 @@
 			<artifactId>postgresql</artifactId>
 			<scope>runtime</scope>
 		</dependency>
+		<!-- Leitura/geração de planilha Excel nativa (.xlsx/.xls) da Rotina de Importação de Dados —
+		     poi-ooxml traz poi (HSSF, .xls legado) transitivamente, WorkbookFactory lê os dois formatos. -->
+		<dependency>
+			<groupId>org.apache.poi</groupId>
+			<artifactId>poi-ooxml</artifactId>
+			<version>5.5.1</version>
+		</dependency>
 		<!-- Object storage das fotos de produto (ADR-013, docs/infra/armazenamento-imagens.md).
 		     Só o cliente de GCS (Firebase Storage *é* GCS) — não o firebase-admin inteiro. -->
 		<dependency>

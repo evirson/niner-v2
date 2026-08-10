@@ -23,11 +23,13 @@ spring:
     problemdetails:
       enabled: true
 
-  # Upload de foto de produto (ADR-013) — arquivo bruto antes da normalização/redimensionamento.
+  # Upload de foto de produto (ADR-013) e CSV da Rotina de Importação de Dados (carga inicial de
+  # migração). Sem limite (2026-08-09, pedido explícito do dono do produto): a planilha de
+  # migração não deve ser truncada nem rejeitada por tamanho de arquivo/número de linhas.
   servlet:
     multipart:
-      max-file-size: 10MB
-      max-request-size: 10MB
+      max-file-size: -1
+      max-request-size: -1
 
 management:
   endpoints:

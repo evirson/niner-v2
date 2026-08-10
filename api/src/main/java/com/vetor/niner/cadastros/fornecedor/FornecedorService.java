@@ -43,6 +43,21 @@ public class FornecedorService {
     private static final String CHAVE_TELA_FORM = "cadastros.fornecedor.form";
     private static final Pattern EMAIL_PATTERN = Pattern.compile("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$");
 
+    /** Exposto para {@link com.vetor.niner.configuracao.importacao.FornecedorImportador} —
+     *  mesma regra do cadastro manual, sem duplicar o padrão. */
+    public static boolean emailValido(String email) {
+        return email == null || email.isBlank() || EMAIL_PATTERN.matcher(email).matches();
+    }
+
+    /** Exposto para {@link com.vetor.niner.configuracao.importacao.FornecedorImportador} —
+     *  mesma regra do cadastro manual (CNPJ alfanumérico, 14 caracteres, dígito verificador),
+     *  sem duplicar o padrão. */
+    public static boolean cnpjValido(String cnpj) {
+        String cnpjNormalizado = Documentos.somenteAlfanumerico(cnpj);
+        return cnpjNormalizado == null || cnpjNormalizado.isEmpty()
+                || (cnpjNormalizado.length() == 14 && Documentos.valido(cnpjNormalizado));
+    }
+
     /** Colunas ordenáveis da listagem — chave da API -> expressão SQL. */
     private static final Map<String, String> COLUNAS_ORDENAVEIS = Map.of(
             "razaoSocial", "f.razao_social",
@@ -132,7 +147,19 @@ public class FornecedorService {
 
     @Transactional
     public FornecedorResponse criar(FornecedorRequest req) {
-        validar(req);
+        return criar(req, true);
+    }
+
+    /**
+     * {@code validarTelefone=false}: usado só pela Rotina de Importação de Dados (pedido do
+     * dono do produto, 2026-08-09) — planilha migrada de outro sistema traz telefone em
+     * formato livre (ramal, número incompleto etc.) e não deve travar a linha inteira por
+     * causa disso; o telefone é gravado como veio (só dígitos, mesma normalização de sempre),
+     * sem a exigência de 10–11 dígitos. Cadastro manual (controller) sempre valida.
+     */
+    @Transactional
+    public FornecedorResponse criar(FornecedorRequest req, boolean validarTelefone) {
+        validar(req, validarTelefone);
         List<Object> params = new ArrayList<>();
         params.add(req.razaoSocial().trim().toUpperCase(Locale.ROOT));
         params.add(req.idPlanoContas().trim().toUpperCase(Locale.ROOT));
@@ -230,6 +257,10 @@ public class FornecedorService {
      * que a do cliente, que exige celular), CEP e a obrigatoriedade configurável por tenant.
      */
     private void validar(FornecedorRequest req) {
+        validar(req, true);
+    }
+
+    private void validar(FornecedorRequest req, boolean validarTelefone) {
         String cnpj = Documentos.somenteAlfanumerico(req.cnpj());
         if (cnpj != null && !cnpj.isEmpty() && (cnpj.length() != 14 || !Documentos.valido(cnpj))) {
             throw new IllegalArgumentException("CNPJ inválido (dígito verificador não confere).");
@@ -237,9 +268,11 @@ public class FornecedorService {
         if (req.email() != null && !req.email().isBlank() && !EMAIL_PATTERN.matcher(req.email()).matches()) {
             throw new IllegalArgumentException("E-mail inválido.");
         }
-        String telefone = Documentos.somenteDigitos(req.telefone());
-        if (telefone != null && !telefone.isEmpty() && (telefone.length() < 10 || telefone.length() > 11)) {
-            throw new IllegalArgumentException("Telefone deve ter 10 ou 11 dígitos (com DDD).");
+        if (validarTelefone) {
+            String telefone = Documentos.somenteDigitos(req.telefone());
+            if (telefone != null && !telefone.isEmpty() && (telefone.length() < 10 || telefone.length() > 11)) {
+                throw new IllegalArgumentException("Telefone deve ter 10 ou 11 dígitos (com DDD).");
+            }
         }
         String cepDigitos = Documentos.somenteDigitos(req.cep());
         if (cepDigitos != null && !cepDigitos.isEmpty() && cepDigitos.length() != 8) {

@@ -9,7 +9,11 @@ import org.springframework.web.server.ResponseStatusException;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.stream.IntStream;
 
@@ -51,13 +55,29 @@ public class ProdutoBarraService {
     }
 
     /** Acha a variação já cadastrada pra essa combinação produto/cor/tamanho, ou cria na hora
-     * (gera o SKU, insere) — idempotente do ponto de vista de quem chama. */
+     * (gera o SKU, insere) — idempotente do ponto de vista de quem chama. Sempre exige que o
+     * tamanho pertença à grade do produto (ver {@link #obterOuCriar(long, Long, Long, boolean)}
+     * pra quando isso não deve valer). */
     @Transactional
     public ProdutoBarraResponse obterOuCriar(long idProduto, Long idCorPedido, Long idTamanhoPedido) {
+        return obterOuCriar(idProduto, idCorPedido, idTamanhoPedido, true);
+    }
+
+    /**
+     * {@code validarGrade=false}: usado só pela Rotina de Importação de Dados (Estoque,
+     * 2026-08-11) — planilha migrada de outro sistema pode trazer um {@code NOME_TAMANHO} que
+     * não está na sequência da grade do produto (ex. "UN1" numa grade que só tem "UN") sem que
+     * isso seja, de fato, um erro; o dono do produto pediu que o tamanho seja aceito e a
+     * variação criada mesmo assim. Emissão de Etiqueta (cadastro manual, ação deliberada de
+     * quem está no balcão) continua sempre exigindo que o tamanho pertença à grade — chama o
+     * overload de 3 parâmetros acima, sem mudança de comportamento.
+     */
+    @Transactional
+    public ProdutoBarraResponse obterOuCriar(long idProduto, Long idCorPedido, Long idTamanhoPedido, boolean validarGrade) {
         Long idGrade = buscarIdGrade(idProduto);
         Long idCor = idGrade == null ? null : idCorPedido;
         Long idTamanho = idGrade == null ? null : idTamanhoPedido;
-        validarObrigatoriedade(idProduto, idGrade, idCor, idTamanho);
+        validarObrigatoriedade(idProduto, idGrade, idCor, idTamanho, validarGrade);
         return buscarPorCombinacao(idProduto, idCor, idTamanho)
                 .orElseGet(() -> criar(idProduto, idCor, idTamanho));
     }
@@ -93,7 +113,7 @@ public class ProdutoBarraService {
         return rs.wasNull() ? null : valor;
     }
 
-    private void validarObrigatoriedade(long idProduto, Long idGrade, Long idCor, Long idTamanho) {
+    private void validarObrigatoriedade(long idProduto, Long idGrade, Long idCor, Long idTamanho, boolean validarGrade) {
         if (idGrade == null) {
             return;
         }
@@ -102,6 +122,9 @@ public class ProdutoBarraService {
         }
         if (idTamanho == null) {
             throw new IllegalArgumentException("Este produto exige tamanho.");
+        }
+        if (!validarGrade) {
+            return;
         }
         boolean pertenceAGrade = Boolean.TRUE.equals(
                 jdbc.sql("""
@@ -117,6 +140,102 @@ public class ProdutoBarraService {
         if (!pertenceAGrade) {
             throw new IllegalArgumentException("Tamanho informado não pertence à grade deste produto.");
         }
+    }
+
+    /** Resumo leve de uma variação (id_variacao, cor, tamanho, sku, ean) — usado só pelo
+     *  pré-fetch em lote da Rotina de Importação de Dados (Estoque, 2026-08-11), pra evitar 1
+     *  SELECT por combinação produto/cor/tamanho num arquivo com milhares de linhas (achado
+     *  real: planilha de 22 mil linhas levando quase 8 minutos, dominado por ida-e-volta ao
+     *  banco por linha, não por nenhuma consulta lenta em si). */
+    public record VariacaoResumo(long idVariacao, Long idCor, Long idTamanho, String sku, String ean) {
+    }
+
+    /** Busca em lote o {@code id_grade} de vários produtos de uma vez — evita 1 SELECT por
+     *  grupo quando o mesmo produto se repete em várias combinações cor/tamanho (o caso normal
+     *  numa planilha de estoque). */
+    public Map<Long, Long> buscarGradesEmLote(Collection<Long> idsProduto) {
+        if (idsProduto.isEmpty()) {
+            return Map.of();
+        }
+        List<Long> lista = new ArrayList<>(idsProduto);
+        Map<Long, Long> resultado = new HashMap<>();
+        jdbc.sql("""
+                        SELECT id_produto, id_grade FROM produto
+                        WHERE id_tenant = plataforma.tenant_atual() AND id_produto IN (%s)
+                        """.formatted(placeholders(lista.size())))
+                .params(lista)
+                .query((rs, n) -> resultado.put(rs.getLong("id_produto"), getLongOuNulo(rs, "id_grade")))
+                .list();
+        return resultado;
+    }
+
+    /** Busca em lote as variações já cadastradas pra um conjunto de produtos — evita 1 SELECT
+     *  por combinação produto/cor/tamanho, o que domina o tempo de uma importação de estoque
+     *  grande. Chave do mapa: mesma convenção {@code idProduto+"|"+idCor+"|"+idTamanho} (vazio
+     *  no lugar de {@code null}) já usada em {@code EstoqueImportador}. */
+    public Map<String, VariacaoResumo> buscarVariacoesEmLote(Collection<Long> idsProduto) {
+        if (idsProduto.isEmpty()) {
+            return Map.of();
+        }
+        List<Long> lista = new ArrayList<>(idsProduto);
+        Map<String, VariacaoResumo> resultado = new HashMap<>();
+        jdbc.sql("""
+                        SELECT id_variacao, id_produto, id_cor, id_tamanho, sku, ean FROM produto_barra
+                        WHERE id_tenant = plataforma.tenant_atual() AND id_produto IN (%s)
+                        """.formatted(placeholders(lista.size())))
+                .params(lista)
+                .query((rs, n) -> {
+                    long idProduto = rs.getLong("id_produto");
+                    Long idCor = getLongOuNulo(rs, "id_cor");
+                    Long idTamanho = getLongOuNulo(rs, "id_tamanho");
+                    String chave = idProduto + "|" + (idCor == null ? "" : idCor) + "|" + (idTamanho == null ? "" : idTamanho);
+                    return resultado.put(chave, new VariacaoResumo(
+                            rs.getLong("id_variacao"), idCor, idTamanho, rs.getString("sku"), rs.getString("ean")));
+                })
+                .list();
+        return resultado;
+    }
+
+    /**
+     * Cria uma variação pra importação em massa (2026-08-11) — recebe {@code idGrade} já
+     * resolvido (quem chama fez um pré-fetch em lote via {@link #buscarGradesEmLote}) em vez de
+     * buscar de novo, e não faz o SELECT de volta com os dados completos de produto/cor/tamanho
+     * ({@link #criar} devolve isso pra uso interativo — a importação em massa não precisa). Só
+     * deve ser chamada depois que o chamador já conferiu, via {@link #buscarVariacoesEmLote},
+     * que a combinação ainda não existe. Continua exigindo cor/tamanho quando o produto tem
+     * grade, mas — mesmo espírito do parâmetro {@code validarGrade} de
+     * {@link #obterOuCriar(long, Long, Long, boolean)} — não valida que o tamanho pertence à
+     * grade.
+     */
+    public VariacaoResumo criarParaImportacaoEmMassa(long idProduto, Long idGrade, Long idCorPedido, Long idTamanhoPedido) {
+        Long idCor = idGrade == null ? null : idCorPedido;
+        Long idTamanho = idGrade == null ? null : idTamanhoPedido;
+        if (idGrade != null && idCor == null) {
+            throw new IllegalArgumentException("Este produto exige cor.");
+        }
+        if (idGrade != null && idTamanho == null) {
+            throw new IllegalArgumentException("Este produto exige tamanho.");
+        }
+        record NovaVariacao(long idVariacao, String sku) {
+        }
+        // SqlParameterValue explícito pra id_cor/id_tamanho — mesmo achado de `criar()` abaixo
+        // (sem isso, uma variação sem grade, ambos null, falha no driver JDBC do Postgres).
+        NovaVariacao nova = jdbc.sql("""
+                        INSERT INTO produto_barra (id_tenant, id_produto, id_cor, id_tamanho, sku)
+                        VALUES (plataforma.tenant_atual(), ?, ?, ?, gerar_ean13_interno())
+                        RETURNING id_variacao, sku
+                        """)
+                .params(java.util.Arrays.asList(
+                        idProduto,
+                        new org.springframework.jdbc.core.SqlParameterValue(java.sql.Types.INTEGER, idCor),
+                        new org.springframework.jdbc.core.SqlParameterValue(java.sql.Types.INTEGER, idTamanho)))
+                .query((rs, n) -> new NovaVariacao(rs.getLong("id_variacao"), rs.getString("sku")))
+                .single();
+        return new VariacaoResumo(nova.idVariacao(), idCor, idTamanho, nova.sku(), null);
+    }
+
+    private static String placeholders(int quantidade) {
+        return String.join(",", Collections.nCopies(quantidade, "?"));
     }
 
     private Optional<ProdutoBarraResponse> buscarPorCombinacao(long idProduto, Long idCor, Long idTamanho) {
