@@ -254,9 +254,69 @@ não só o relatório da API) — ver linha do tempo de 2026-08-10/11 (topo) pro
 
 **Sessão de 2026-08-07:** o comprovante de Recebimento de Crediário e a Papeleta de Venda (com suas reimpressões) ganharam **envio por WhatsApp** (`comum.arquivocompartilhado` — cache de PDF em memória, sem custo, sem object storage, token expira em 24h, limite de 20 arquivos/tenant somando os 4 fluxos) e **layout fixo** (título/rodapé sempre visíveis, só a pré-visualização rola). Na sequência, a tela de **CRM** passou por duas rodadas revisando o fluxo original de 2026-08-05: primeiro ganhou uma **grid de resultado** (cabeçalho fixo, ordenação por coluna, total, scroll só nos dados), depois os filtros/colunas viraram um **popup obrigatório que abre sozinho ao entrar na tela** (com `GaugeProgresso` — reaproveitado da Rotina de Importação de Dados — enquanto a busca roda) e o botão "Gerar Planilha Excel" subiu pra linha do título. Numa terceira sessão do mesmo dia — recuperada depois que o terminal foi fechado sem pedido explícito de commit/documentação, mas com todo o código intacto no working tree —, o PDV passou a **validar limite de crédito do cliente** no crediário (`cliente.limite_credito`, campo que existia desde a V016 mas nunca era checado) e o comprovante de vale-mercadoria da devolução foi **padronizado com o layout de 64 colunas/Lucida Console da Papeleta de Venda**, ganhando também "Enviar por WhatsApp"; erros de confirmação de venda passaram de `Toast` para um popup dedicado (`AvisoModal`). Ver linha do tempo de 2026-08-07 (topo, três entradas) pro detalhe completo.
 
+**Sessão de 2026-08-11 (nova, depois da reformulação da Importação de Dados):** nasceu o
+**Cancelamento de Devolução de Produtos** (`vendas.cancelamentodevolucao`,
+`docs/telas/cancelamento-devolucao-produtos.md`) — desfaz um vale-mercadoria ainda não usado,
+retirando do estoque a quantidade que a devolução original tinha colocado de volta
+(`tipo_movimento = 'CANCELAMENTO_DEVOLUCAO'`, novo). Tela em Frente de Loja → Cancelamentos com
+popup obrigatório de filtros (nº do vale ou período); ADMIN e OPERADOR, mas **OPERADOR restrito à
+empresa em que está logado** — diferente de todas as outras telas ADMIN+OPERADOR do sistema, que
+não têm esse recorte. Motivou correção de consistência em código já existente: `PdvVendaService`
+e a busca de vale usada pelo PDV (`DevolucaoProdutoService.buscarVale`) passaram a bloquear
+também um vale **cancelado**, não só usado. Suíte de backend segue **405/405 verdes**
+(nenhum teste novo — pendência registrada na spec da feature, ver linha do tempo).
+
 ---
 
 ## Linha do tempo
+
+### 2026-08-11 — Cancelamento de Devolução de Produtos
+
+Nova sessão, pedido direto do dono do produto: fechar a lacuna simétrica ao Cancelamento de
+Venda, mas para o vale-mercadoria gerado por uma Devolução de Produtos
+(`docs/telas/cancelamento-devolucao-produtos.md`, novo). Tela em
+`/cancelamento-devolucao-produtos` (Frente de Loja → Cancelamentos), ADMIN e OPERADOR — diferente
+do Cancelamento de Venda (ADMIN-only), mas com uma restrição própria: **OPERADOR só enxerga e
+cancela devoluções da empresa em que está logado** (claim `eid`), ADMIN cancela de qualquer
+empresa do tenant. Filtros (nº do vale OU intervalo de datas) ficam num **popup obrigatório ao
+entrar na tela**, pedido explícito — diferente da barra de filtros inline do Cancelamento de
+Venda.
+
+Schema (`venda_devolucao`, editado dentro de `V018__vendas.sql`): ganhou
+`cancelada/data_cancelamento/id_usuario_cancelamento/motivo_cancelamento`, mesmo padrão de
+`venda.cancelada`. Novo valor de `tipo_movimento` (`V013`): `CANCELAMENTO_DEVOLUCAO` — dedicado,
+não reaproveita `CANCELAMENTO` da venda, para o Kardex distinguir qual operação foi revertida
+(precisou atualizar os 4 lugares que enumeravam `tipo_movimento` manualmente: DTO e switch de
+origem do Relatório de Movimentação de Produtos, enum e rótulos no frontend). Só é permitido
+cancelar um vale ainda **não usado** (`vale_usado = false`) — regra central do pedido; um vale já
+resgatado numa venda só pode ser desfeito cancelando essa venda primeiro (Cancelamento de Venda,
+que já reabre o vale).
+
+Estorno de estoque segue o mesmo mecanismo de sempre: novo `produto_movimento_mestre` +
+`produto_movimento_detalhe` `'D'` por item (inverso do `'C'` da devolução original), a trigger já
+existente ajusta `produto_estoque` sozinha. Backend novo em
+`com.vetor.niner.vendas.cancelamentodevolucao` (Controller/Service/Dtos).
+
+**Consistência corrigida em código já existente, achada durante a implementação (não pedida
+explicitamente, mas necessária):** sem isso, um vale cancelado continuaria resgatável no PDV — o
+estoque já teria sido retirado de novo pelo cancelamento, então o resgate daria crédito sem
+lastro. Duas checagens novas: `PdvVendaService.resolverVale` (bloqueio real no split-tender, 409)
+e `DevolucaoProdutoService.buscarVale`/`FormaPagamentoModal.tsx` (a consulta que o PDV faz *antes*
+de tentar pagar, pra mostrar o erro na busca em vez de só na tentativa de envio).
+
+Testado ao vivo (API via curl + tela via navegador): vale gerado, estoque creditado, cancelado —
+estoque debitado de volta a zero, segunda tentativa de cancelar 409, tentativa de resgate no PDV
+409 (backend e busca do vale no frontend). Escopo por empresa testado criando um usuário OPERADOR
+de teste restrito a uma filial: só via/cancelava a própria devolução, 403 na de outra empresa;
+ADMIN via as duas. Todos os dados de teste (devoluções, movimentos, o usuário OPERADOR) apagados
+ao final. Suíte de backend depois de tudo: **405/405 verdes** (sem teste novo — ver "Pendência"
+abaixo).
+
+**Pendência aberta:** esta feature **não tem suíte JUnit própria ainda**
+(`CancelamentoDevolucaoCrudTest` não existe) — diferente de toda rotina irmã do sistema
+(`CancelamentoVendaCrudTest`, `DevolucaoProdutoCrudTest`, `ValeMercadoriaCrudTest`), verificada só
+manualmente até aqui. P5 da constituição pede teste automatizado por critério de aceitação antes
+do merge; registrado como questão aberta em `docs/telas/cancelamento-devolucao-produtos.md`.
 
 ### 2026-08-11 (continuação) — dedup de Produto por CODIGO_PRODUTO, tamanho fora da grade no Estoque, 2ª rodada de otimização (7,8x) e gauge na Exportação
 

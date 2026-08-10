@@ -106,6 +106,14 @@ senão o cliente perderia o crédito de um vale cuja venda de resgate foi desfei
 que já tinha sido usado uma vez, mesma filosofia da exclusão física já usada ali para
 `caixa_detalhe`/`contas_receber`.
 
+### Cancelamento da própria devolução (2026-08-11)
+
+Ver `docs/telas/cancelamento-devolucao-produtos.md` — desfaz a devolução em si (não a venda que a
+resgatou), só permitido enquanto o vale ainda não foi usado (`vale_usado = false`). `venda_devolucao`
+ganhou `cancelada/data_cancelamento/id_usuario_cancelamento/motivo_cancelamento`; `buscarVale()`
+(usada aqui e pelo PDV) e `PdvVendaService.resolverVale()` passaram a checar `cancelada` também,
+não só `vale_usado` — um vale cancelado nunca é resgatável.
+
 ## User stories
 
 - Como operador de caixa, quero opcionalmente informar o número de uma venda pra que o sistema

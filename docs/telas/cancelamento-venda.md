@@ -204,6 +204,13 @@ Nenhum — comissão, fiscal e TEF ficam fora do v1 (ver decisões de escopo).
 - Conciliação de cartões (baixar parcelas de débito/crédito quando a operadora liquidar) —
   mencionada pelo dono do produto como próximo passo relacionado, fora desta feature.
 
+## Feature relacionada
+
+`docs/telas/cancelamento-devolucao-produtos.md` (2026-08-11) cancela o vale-mercadoria de uma
+**devolução**, não uma venda — acesso ADMIN+OPERADOR (aqui é ADMIN-only) com OPERADOR restrito à
+empresa logada. Se a venda cancelada aqui tiver resgatado um vale, ele é reaberto (seção acima);
+se em vez disso for a *devolução* que precisa ser desfeita, é a outra tela.
+
 ## Métrica de sucesso
 
 Cancelamento de uma venda simples (busca → confirmação → efetivação) em menos de 30 segundos,
