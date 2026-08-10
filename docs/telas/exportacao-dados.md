@@ -1,5 +1,5 @@
 # Spec: Rotina de Exportação de Dados                  Status: Implementada
-Autor: Claudio Calixto (dono do produto) + Claude · Data: 2026-08-06 · Módulo(s): `configuracao` (exportacao) · Fase: 1 — Núcleo do ERP
+Autor: Claudio Calixto (dono do produto) + Claude · Data: 2026-08-06, gauge de progresso 2026-08-11 · Módulo(s): `configuracao` (exportacao) · Fase: 1 — Núcleo do ERP
 
 ## Problema
 
@@ -60,7 +60,13 @@ esses dados viraram visíveis de alguma forma pro usuário.
 1. Escolhe a tabela (grid de botões, mesma estética visual da etapa 1 da Importação —
    `.wizard-tabela-btn`).
 2. Clique dispara: busca os dados (`GET /api/v1/exportacao/{tabela}`), gera a planilha no
-   navegador e baixa (`{tabela}-AAAA-MM-DD.xlsx`).
+   navegador e baixa (`{tabela}-AAAA-MM-DD.xlsx`). **Enquanto isso, um `GaugeProgresso` aparece na
+   tela (2026-08-11, pedido do dono do produto — "como na tela de importação")**, alternando o
+   rótulo entre as duas fases reais do processo: "Buscando dados..." (aguardando a resposta da
+   API) e "Gerando planilha..." (montando o `.xlsx` no navegador). Diferente da Importação, esse
+   gauge é **simulado** (sobe suavemente até ~92%, sem número de registro real) — a exportação é
+   uma única consulta SQL por tabela, sem loop linha a linha no backend pra reportar progresso de
+   verdade; mesmo modo já usado no CRM (busca de clientes/produtos), não um componente novo.
 3. Toast de sucesso com a contagem de linhas exportadas, ou erro (ex.: "Nenhum registro
    encontrado").
 
@@ -92,13 +98,18 @@ Todos sob `/api/v1/**` (JWT de tenant, RLS ativo — P8), `ADMIN`-only. Erros em
 porque devolve `List<Map<String,Object>>` pronto — sem parâmetro nenhum pra bindar, não compensa
 escrever 9 `RowMapper` manuais. Frontend: `web/src/pages/exportacao/ExportacaoDadosPage.tsx` +
 `web/src/lib/exportacao.ts` — planilha gerada 100% no navegador com `write-excel-file`, mesmo
-padrão já usado no CRM (`web/src/lib/crm.ts`), sem dependência nova.
+padrão já usado no CRM (`web/src/lib/crm.ts`), sem dependência nova. **2026-08-11:** a página
+ganhou um estado `fase` (`'buscando' | 'gerando'`), setado nos dois pontos do `mutationFn` da
+mutation de exportação, e renderiza `GaugeProgresso` (`web/src/components/GaugeProgresso.tsx`,
+mesmo componente da Importação de Dados) enquanto `exportarMut.isPending` — sem alteração nenhuma
+no backend, é só reaproveitar um componente já genérico com um rótulo diferente por fase.
 
 ## Ajuda da tela (manual de operação) — obrigatório (R22 / §3.7.1)
 
 - **`chave_tela`: `configuracao.exportacao`**
   - Objetivo: baixar em planilha Excel tudo que já está cadastrado no Niner.
-  - Passos: (1) escolha a tabela; (2) a planilha é gerada e baixada automaticamente.
+  - Passos: (1) escolha a tabela; (2) enquanto os dados são buscados e a planilha é montada, um
+    indicador de progresso aparece na tela; (3) a planilha é gerada e baixada automaticamente.
   - Erros comuns: "Nenhum registro encontrado" → a tabela escolhida ainda não tem dado
     cadastrado neste tenant.
   - `url_video`: `NULL` por ora.

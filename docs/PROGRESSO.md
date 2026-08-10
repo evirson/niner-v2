@@ -1,7 +1,7 @@
 # Progresso do Projeto — niner-v2
 
 Registro cronológico das decisões e entregas. Atualizar a cada marco relevante.
-**Última atualização:** 2026-08-08
+**Última atualização:** 2026-08-11
 
 ---
 
@@ -184,11 +184,371 @@ incluindo uma asserção de teste que checava um nome de campo que nunca existiu
 de backend depois de tudo: **405/405 verdes**. Ver linha do tempo de 2026-08-08 (topo) pro detalhe
 completo.
 
+**Sessão de 2026-08-09:** a Rotina de Importação de Dados passou por uma reformulação grande, em
+várias rodadas, testando com os arquivos reais do dono do produto. Primeiro, dois bugs pontuais:
+upload de arquivo grande (`CONTAS_RECEBER.csv`, 26,6 MB) batia no limite de 10 MB herdado do upload
+de foto de produto — corrigido junto com um achado colateral (um `413` do Tomcat some antes do
+filtro de CORS, então o front mostrava "Ocorreu um erro." genérico em vez do motivo real); depois,
+a pedido explícito, o limite foi removido de vez (`max-file-size`/`max-request-size: -1`) — não há
+mais teto de tamanho de arquivo nem de número de linhas em nenhuma importação. E a importação de
+Fornecedores parou de validar formato do campo `TELEFONE` (`FornecedorService.criar` ganhou uma
+sobrecarga `validarTelefone=false`, só usada pela importação — o cadastro manual continua
+validando). Na sequência, o **formato do CSV de Produtos mudou de estrutura na origem**: em vez do
+antigo "achatado" (uma linha = uma variação, com `NOME_GRADE`/`DESCRICAO_COR`/EAN/estoque),
+**uma linha agora é um produto inteiro**, com `TAMANHO_1..20` formando a grade direto nas colunas —
+`ProdutoImportador` foi reescrito (a grade "já existe" passou a ser definida pelo CONTEÚDO da
+sequência de tamanhos, não por nome, via `GradeService.obterOuCriarPorTamanhos`, novo) e uma coluna
+nova, `produto.codigo_importacao` (editada na V017, não é o `id_produto`), passou a guardar o
+`CODIGO_PRODUTO` da planilha de origem. Isso abriu caminho pra uma **5ª tabela de importação,
+Estoque** (`EstoqueImportador`, novo — sempre depois de Produtos, liga pelo `codigo_importacao`,
+resolve cor/tamanho/EAN/quantidade por empresa igual o antigo formato de produto fazia). Por fim, a
+tela virou **uma tela única**: o usuário localiza quantos arquivos quiser de uma vez, o tipo de
+cada um é **identificado automaticamente** (`POST /api/v1/importacao/detectar`, por similaridade de
+Jaccard contra o cabeçalho de cada tabela — 100% de acerto nos 5 arquivos reais testados), cada
+arquivo ganha um cartão com "Validar" próprio, e um botão único "Importar" só libera quando tudo
+estiver validado sem erro — com uma exceção deliberada pra Estoque/Contas a Receber poderem
+depender de Produtos/Clientes **na mesma leva** (mostra "Pendente" em vez de erro, checagem de
+verdade acontece na hora certa da importação sequencial). **Bug real encontrado testando com os
+arquivos grandes de verdade:** a tela nova não conferia `relatorio.confirmado` antes de marcar um
+arquivo como importado — como o sistema é "tudo ou nada" por arquivo, uma chamada com
+`confirmar=true` e alguma linha com erro real volta `200 OK` com `confirmado:false` e **nada
+gravado**, e a tela mostrava "Importação concluída" mesmo assim; corrigido, e nesse processo
+descoberto que o par de arquivos de exemplo (`ESTOQUES.csv`/`PRODUTOS.csv`) tem 357 linhas com
+`CODIGO_PRODUTO` que não existe em nenhum dos dois — dado real do lojista, não bug. Zerado o banco
+de dev a pedido (recriado do zero) e semeado com 5 empresas, 5 vendedores e o plano de contas
+padrão completo (336 contas, script já existente). Suíte de backend: **405/405 verdes**. Ver linha
+do tempo de 2026-08-09 (topo) pro detalhe completo.
+
+**Sessões de 2026-08-10/11 — Rotina de Importação de Dados, reformulação + correções de produção:**
+a tela única multi-arquivo virou um **hub com 5 telas dedicadas** (uma por tabela, ordem de
+dependência: Clientes → Contas a Receber → Fornecedores → Produtos → Estoque Inicial), o formato
+de arquivo trocou de CSV para **planilha Excel nativa** (`.xlsx`/`.xls`, Apache POI). No dia
+seguinte, testando com dados reais e grandes de verdade (planilha de Contas a Receber com 660 mil
+linhas), apareceram e foram corrigidos **3 bugs de produção genuínos**: (1) uma exceção de banco
+numa linha (não só erro de validação) deixava a transação "abortada" e derrubava em cascata toda
+linha seguinte do arquivo (Postgres `25P02`) — corrigido com **SAVEPOINT por linha**
+(`ImportacaoSavepointExecutor`, `PROPAGATION_NESTED`) nos 5 importadores; (2) a leitura de `.xlsx`
+carregava o arquivo inteiro em memória (DOM) antes de processar a primeira célula — pra um arquivo
+grande isso é a maior parte do tempo, "muda" pro progresso — corrigido trocando pra **leitura em
+streaming (SAX)**, só pra `.xlsx` (`.xls` legado, capado em 65.536 linhas pelo próprio formato,
+ficou em DOM); (3) `ContasReceberImportador`/`EstoqueImportador`/`ProdutoImportador` faziam uma
+consulta ao banco **por linha** pra achar cliente/empresa/produto/cor/tamanho, sem cache — numa
+planilha repetindo o mesmo valor em centenas de milhares de linhas (o caso normal), isso virava
+uma consulta redundante por linha; corrigido com **cache local por chamada** nos 3 importadores.
+Resultado medido: 300 mil linhas repetindo o mesmo CPF, que antes ficava mais de 1 minuto travada
+sem previsão de terminar, agora completa em 3min25s. Também nesse período: **progresso "ao vivo"**
+(registro atual/total real, não simulado) nas 3 etapas leitura/validação/importação, via polling
+(`GET /importacao/progresso/{id}`) + `ScopedValue` no backend (mesmo padrão de `TenantContext`);
+zip-bomb do Apache POI dando falso positivo em planilha grande e legítima; e-mail/CNPJ inválidos
+do Fornecedor deixaram de rejeitar a linha (entram em branco, mesmo espírito do TELEFONE); e
+exclusão mútua de empresa nas 5 colunas de quantidade da Importação de Estoque (com mínimo de 1
+mapeada, não mais as 5). **Na continuação da mesma sessão**, testando com os arquivos reais
+completos (~22 mil linhas cada): dedup de Produto passou a considerar `CODIGO_PRODUTO` além de
+descrição+marca+referência (14 pares de produtos diferentes estavam sendo tratados como
+duplicata); tamanho fora da grade do produto deixou de ser erro na importação de Estoque; uma 2ª
+rodada de otimização (pré-busca em lote no `ProdutoBarraService`) derrubou o tempo de validação de
+7min46s pra 59,7s (~7,8x) num arquivo real de 22.483 linhas; e a tela de **Exportação de Dados**
+ganhou o mesmo `GaugeProgresso` (modo simulado, sem loop linha a linha no backend pra progresso
+real). Tudo testado ao vivo (planilhas geradas com `write-excel-file`, dados conferidos no banco,
+não só o relatório da API) — ver linha do tempo de 2026-08-10/11 (topo) pro detalhe completo.
+
 **Sessão de 2026-08-07:** o comprovante de Recebimento de Crediário e a Papeleta de Venda (com suas reimpressões) ganharam **envio por WhatsApp** (`comum.arquivocompartilhado` — cache de PDF em memória, sem custo, sem object storage, token expira em 24h, limite de 20 arquivos/tenant somando os 4 fluxos) e **layout fixo** (título/rodapé sempre visíveis, só a pré-visualização rola). Na sequência, a tela de **CRM** passou por duas rodadas revisando o fluxo original de 2026-08-05: primeiro ganhou uma **grid de resultado** (cabeçalho fixo, ordenação por coluna, total, scroll só nos dados), depois os filtros/colunas viraram um **popup obrigatório que abre sozinho ao entrar na tela** (com `GaugeProgresso` — reaproveitado da Rotina de Importação de Dados — enquanto a busca roda) e o botão "Gerar Planilha Excel" subiu pra linha do título. Numa terceira sessão do mesmo dia — recuperada depois que o terminal foi fechado sem pedido explícito de commit/documentação, mas com todo o código intacto no working tree —, o PDV passou a **validar limite de crédito do cliente** no crediário (`cliente.limite_credito`, campo que existia desde a V016 mas nunca era checado) e o comprovante de vale-mercadoria da devolução foi **padronizado com o layout de 64 colunas/Lucida Console da Papeleta de Venda**, ganhando também "Enviar por WhatsApp"; erros de confirmação de venda passaram de `Toast` para um popup dedicado (`AvisoModal`). Ver linha do tempo de 2026-08-07 (topo, três entradas) pro detalhe completo.
 
 ---
 
 ## Linha do tempo
+
+### 2026-08-11 (continuação) — dedup de Produto por CODIGO_PRODUTO, tamanho fora da grade no Estoque, 2ª rodada de otimização (7,8x) e gauge na Exportação
+
+Mesma sessão, depois de testar as correções anteriores com os arquivos reais completos do dono do
+produto (`PRODUTOS.xlsx`, `ESTOQUE.xlsx`, ~22 mil linhas cada). Mais 4 achados/pedidos:
+
+1. **Dedup de `produto` passou a considerar `CODIGO_PRODUTO`, não só `DESCRICAO+MARCA+REFERENCIA`.**
+   Achado testando a planilha real: 14 pares de linhas com a mesma descrição+marca+referência
+   (coincidência de texto) mas `CODIGO_PRODUTO` diferente — são produtos DIFERENTES no sistema de
+   origem, e o dedup antigo estava descartando um dos dois como "duplicata". Corrigido
+   (`ProdutoImportador.produtoJaExiste`, comparação `codigo_importacao IS NOT DISTINCT FROM ?` —
+   NULL-safe, então continua funcionando pra linhas sem código). Resultado: as 15 linhas que antes
+   ficavam "já existem" passaram a importar (3.593/3.593, 0 ignoradas).
+2. **Estoque: tamanho fora da grade do produto deixou de ser erro.** Achado real: linhas com
+   `NOME_TAMANHO="UN1"` pra um produto de grade "UN" (só um tamanho) — o dono do produto confirmou
+   que isso não é engano, é só uma variação que o sistema de origem não tinha na grade cadastrada.
+   `ProdutoBarraService.obterOuCriar` ganhou um parâmetro `validarGrade` (a Estoque chama com
+   `false`; a Emissão de Etiqueta, cadastro manual, continua exigindo). Testado com o arquivo real
+   completo (22.483 linhas): 100% prontas, 0 erro.
+3. **2ª rodada de otimização de performance — 7min46s → 59,7s (~7,8x) num teste justo (banco
+   vazio, arquivo real de 22.483 linhas).** O fix de N+1 da sessão anterior (cache local) não
+   cobria a 2ª fase do `EstoqueImportador` (criar a variação por grupo), que ainda fazia até 4
+   consultas por grupo sem cache possível (cada grupo já é único). Trocado por pré-busca em lote:
+   `ProdutoBarraService.buscarGradesEmLote`/`buscarVariacoesEmLote` (2 consultas totais pros
+   produtos do arquivo, em vez de milhares) + `criarParaImportacaoEmMassa` (sem o SELECT de volta
+   que a versão interativa faz). **Achado em aberto, não investigado:** a gravação de verdade
+   (`confirmar=true`, 4min41s) ficou bem mais lenta que a simulação equivalente (59,7s, só
+   ROLLBACK no final) — mesma corretude nos dois casos, suspeita de custo de commit/fsync numa
+   transação desse tamanho.
+4. **Gauge de progresso na tela de Exportação de Dados** (pedido do dono do produto, "como na
+   tela de importação") — reaproveita `GaugeProgresso` em modo simulado (a exportação é 1 consulta
+   SQL por tabela, sem loop linha a linha no backend pra reportar progresso real), alternando o
+   rótulo entre "Buscando dados..." e "Gerando planilha...". Mesmo padrão já usado no CRM, sem
+   mudança no backend.
+
+Restauração de dados: os testes de performance exigiram apagar e reimportar `produto_barra`/
+`produto_estoque`/movimentação (dados reais do dono do produto, não só teste) — restaurados ao
+final via reimportação real do mesmo arquivo, confirmado no banco.
+
+### 2026-08-11 — Rotina de Importação de Dados: 3 bugs de produção corrigidos (savepoint, streaming, N+1) + progresso ao vivo + CNPJ/e-mail inválidos
+
+Sessão inteira em cima da reformulação do dia anterior, motivada por testes reais do dono do
+produto com arquivos grandes de verdade (o maior: Contas a Receber, 660.479 linhas) —
+`docs/telas/importacao-dados.md` ganhou 3 seções novas cobrindo tudo isto.
+
+**1. "current transaction is aborted" ao validar Produtos — bug real de produção.** Todo
+`ImportadorDeTabela.processar()` roda o arquivo inteiro numa única `@Transactional`; o
+`catch (RuntimeException e)` por linha pega a exceção em Java, mas se ela vier de uma violação
+real no banco (não só validação de campo), a conexão Postgres fica "abortada" (`25P02`) e toda
+linha seguinte falha em cascata, mesmo válida — reproduzido de propósito (`PESO_BRUTO` estourando
+`numeric(14,3)` no meio do arquivo) antes de corrigir. **Corrigido com SAVEPOINT por linha**: nova
+classe `ImportacaoSavepointExecutor` (`TransactionTemplate` `PROPAGATION_NESTED`), aplicada aos
+**5 importadores** (o mesmo bug latente existia em todos, só não tinha sido reproduzido ainda).
+Exige `nestedTransactionAllowed=true` no `TenantAwareTransactionManager` (setado em
+`TenantConfig` — `doBegin` não é re-executado numa transação `NESTED`, então `app.id_tenant` não é
+reafetado no meio do arquivo, P8 intacto). Testado: arquivo de 4 linhas, a 2ª estourando o banco de
+propósito → só ela rejeitada, as outras 3 importadas (antes, as 2 seguintes também quebrariam).
+
+**2. Planilha de ~700 mil linhas falhando com "Não foi possível ler o arquivo".** Causa real
+escondida pelo catch genérico: duas proteções do Apache POI contra "zip bomb" (razão mínima de
+inflação + teto de array de bytes) davam falso positivo numa planilha grande e legítima.
+Desligadas (`ZipSecureFile.setMinInflateRatio(0)` + `IOUtils.setByteArrayMaxOverride`) num bloco
+`static` de `ImportacaoPlanilha`, coerente com a política de "sem limite de arquivo" já vigente. O
+catch também passou a logar a exceção real (antes só devolvia a mensagem genérica ao usuário).
+
+**3. Reprodução de propósito do "parado em 100% por 10+ minutos" relatado pelo dono do produto**
+achou **duas causas raiz distintas**, as duas corrigidas:
+   - **Leitura de `.xlsx` em DOM era muda pro progresso.** `WorkbookFactory`/`XSSFWorkbook` monta
+     o arquivo inteiro em memória antes de processar a 1ª célula — pra 660 mil linhas, essa
+     montagem é a maior parte do tempo, e o contador só incrementava DEPOIS. Trocado por
+     **leitura em streaming (SAX)** só pra `.xlsx` (`XSSFReader`+`XSSFSheetXMLHandler`,
+     `ImportacaoPlanilha.lerXlsxEmStreaming`) — processa uma linha do XML por vez, progresso real
+     desde a primeira linha. `.xls` legado ficou em DOM (BIFF8 trava em 65.536 linhas por conta
+     própria, nunca sofre desse problema). Peça-chave: `DataFormatter.formatRawCellContents`
+     sobrescrito (`DataFormatterComDataFixa`) pra sempre normalizar data pra `dd/mm/aaaa`
+     ignorando o formato de EXIBIÇÃO da célula de origem (testado com 3 formatos diferentes na
+     mesma planilha — os 3 converteram certo). Detecção de tipo de arquivo (`/detectar`), que só
+     lê a 1ª linha, caiu de "proporcional ao tamanho do arquivo" pra **0,28s** num arquivo de
+     300 mil linhas/9MB (aborta o parse SAX logo após a 1ª linha via exceção de propósito).
+   - **N+1 query real**: com a leitura já rápida, `ContasReceberImportador` ainda ficava preso —
+     busca o cliente pelo CPF **numa consulta por linha**, sem cache; numa planilha repetindo o
+     mesmo CPF em centenas de milhares de parcelas (caso normal), isso é uma consulta redundante
+     por linha. Confirmado ao vivo via `pg_stat_activity` (como superuser — `niner_owner` sozinho
+     não vê `state`/`query` de outra role — e com `SET app.id_tenant` antes, porque RLS `FORCE`
+     esconde tudo até do dono da tabela): a mesma query rodando havia mais de 1 minuto, disparada
+     300 mil vezes em sequência. **Corrigido com cache local por chamada** (nunca campo de
+     classe — os importadores são singleton Spring) em 3 importadores com o mesmo padrão:
+     `ContasReceberImportador` (cliente/empresa), `EstoqueImportador` (produto/cor/tamanho, com
+     savepoint só no acerto de cache ausente), `ProdutoImportador` (tamanho da grade).
+     Testado: 300 mil linhas, mesmo CPF repetido → **3min25s pra terminar** (antes: mais de 1
+     minuto só na 1ª fase, sem previsão de terminar). Ainda pode valer a pena agrupar os `INSERT`s
+     em lote no futuro se isso se mostrar devagar demais na prática — mudaria a granularidade do
+     relato de erro por linha, então ficou como decisão em aberto, não feita sem perguntar.
+
+**4. Progresso "ao vivo" (registro atual/total) nas 3 etapas — leitura, validação, importação.**
+Pedido do dono do produto, perguntado antes de implementar (a chamada é síncrona, sem isso não
+existe "atual" de verdade): total contado no NAVEGADOR ao escolher o arquivo (`read-excel-file`,
+novo pacote, roda em Web Worker), atual reportado pelo BACKEND via polling
+(`GET /importacao/progresso/{id}` a cada 400ms). Backend usa o mesmo padrão de `TenantContext`
+(P8): `ImportacaoProgressoContext` (`ScopedValue`, Java 25) ligado só durante
+`ImportacaoService.processar()`, lido por código profundo sem passar parâmetro em toda assinatura;
+`ImportacaoProgressoRegistry` (mapa em memória) é o que permite a requisição de polling, numa
+thread diferente, ler o progresso. `GaugeProgresso.tsx` ganhou modo de progresso real (percentual +
+"X de Y registros") quando `atual`/`total` são passados, mantendo o modo simulado antigo pra quando
+não há número real (ex. `/detectar`). Testado ao vivo no navegador com 15 mil linhas: gauge
+saltando 2% → 33% → 63% → 85% → 100% em tempo real.
+
+**5. Duas correções pequenas de dados, pedidas pelo dono do produto:** e-mail e CNPJ inválidos na
+importação de Fornecedores deixaram de rejeitar a linha — entram em branco (mesmo espírito do
+TELEFONE, 2026-08-09; `FornecedorService.emailValido`/`cnpjValido`, métodos novos expostos só pra
+isso). Estoque Inicial: uma empresa já escolhida numa coluna de quantidade some das opções das
+outras 4 (exclusão mútua), e a validação da tela deixou de exigir as 5 colunas preenchidas (agora
+1 basta) — consequência obrigatória da exclusão mútua pra não travar tenant com menos de 5
+empresas.
+
+Todas as correções testadas ao vivo (planilhas geradas com `write-excel-file`, dados conferidos no
+banco via `psql`, não só o relatório da API) — nenhum teste automatizado ainda (mesma lacuna já
+registrada, feature segue sem suíte JUnit própria). `mvn compile`/`tsc --noEmit` limpos em cada
+rodada. Nada commitado ao final da sessão.
+
+### 2026-08-10 — Rotina de Importação de Dados: hub com 5 telas (substitui a tela única) + Excel nativo (.xlsx/.xls) substitui CSV
+
+Duas reformulações grandes da mesma feature, pedidas pelo dono do produto no mesmo dia, mais duas
+correções de acabamento encontradas testando a segunda — `docs/telas/importacao-dados.md` reescrita
+de novo (3ª vez em 3 dias: 2026-08-06 → 2026-08-09 → 2026-08-10).
+
+**Parte 1 — tela única multi-arquivo (2026-08-09) virou hub + 5 telas dedicadas.** Pedido direto:
+"botões separados (telas) dentro do botão Importar Dados", na ordem **Clientes → Contas a Receber →
+Fornecedores → Produtos → Estoque Inicial** — ordem que, por acaso feliz, já resolve sozinha a
+dependência entre tabelas (Contas a Receber precisa de Cliente, Estoque precisa de Produto, ambas
+vêm depois). "Importação de Dados" virou um `NavGrupo` em `web/src/lib/menu.ts` com 5 `NavItem`
+filhos — o hub em si **não precisou de nenhuma página nova**, o padrão genérico `MenuGrupo.tsx` +
+rota `/menu/:grupo` (já usado por todo grupo do menu) já renderiza os cards sozinho. As 5 rotas
+(`/importacao-dados/clientes`, `.../contas-receber`, `.../fornecedores`, `.../produtos`,
+`.../estoque`) apontam pro mesmo componente novo, `ImportacaoTabelaPage.tsx` (substitui
+`ImportacaoDadosPage.tsx`), parametrizado por `tabela`, cuidando de **um arquivo por vez**: escolher
+→ escolhas prévias → Validar → Importar → "Nova importação". Toda a lógica de detecção automática
+de tipo (multi-cartão) e de "pendência" entre arquivos da mesma leva **desapareceu** — deixou de
+fazer sentido já que cada tabela tem sua própria tela e sua própria confirmação imediata (ver Parte
+3 abaixo — parte da detecção **voltou** no mesmo dia, com outro propósito).
+
+**Parte 2 — formato de importação trocado de CSV para Excel nativo (.xlsx/.xls).** Não foi
+"adicionar Excel como opção" — foi **substituir** o CSV por completo, parser incluído. Nova
+dependência `org.apache.poi:poi-ooxml` 5.5.1 no `api/pom.xml` (cobre `.xls` legado via HSSF
+transitivamente — `WorkbookFactory` autodetecta o formato). `ImportacaoCsv.java` foi renomeado e
+reescrito como `ImportacaoPlanilha.java`: célula tipada do Excel é normalizada de volta pro mesmo
+texto que os parsers de campo (`decimal`/`data`/`inteiro`/`booleano`) já esperavam do CSV — célula
+numérica formatada como data vira texto `dd/mm/aaaa`, célula numérica comum vira texto plano sem
+separador de milhar (`BigDecimal.stripTrailingZeros().toPlainString()`, resolve de graça o risco de
+"36" virar "36.0"). Resultado: **os 5 `*Importador.java` não mudaram nenhuma regra de negócio** —
+só o find-replace mecânico `LinhaCsv`→`LinhaPlanilha`/`ImportacaoCsv.`→`ImportacaoPlanilha.` e
+`modeloCsv()`→`modeloPlanilha()` (que agora gera um `.xlsx` de verdade via uma função nova,
+`gerarModelo`, em vez de montar texto `;`-separado na mão). `GET /{tabela}/modelo` devolve
+`Content-Type` de Excel e nome de arquivo `.xlsx`. Verificado com `mvn compile` limpo e teste real
+no navegador: baixar o `.xlsx` gerado pela própria tela e reimportar esse mesmo arquivo.
+
+**Parte 3 — duas correções pedidas depois de testar a Parte 2 (mesmo dia):**
+1. **Textos ainda falavam em "arquivo CSV"** em 7 lugares (`web/src/lib/menu.ts` — descrições dos 5
+   cards do hub — e `ImportacaoTabelaPage.tsx` — subtítulos das telas de Clientes/Fornecedores).
+   Todos reescritos pra citar "planilha Excel (.xlsx ou .xls)" explicitamente, extensão incluída.
+2. **Nada impedia escolher a planilha errada** — ex. selecionar `FORNECEDORES.xlsx` na tela de
+   Importar Clientes só dava erro (sem sentido, tipo "RAZAO_SOCIAL" lido como se fosse "NOME") na
+   hora de clicar "Validar", tarde demais. Corrigido reaproveitando a **mesma detecção por Jaccard**
+   de 2026-08-09 (`POST /api/v1/importacao/detectar`, que tinha ficado sem chamador no frontend
+   desde a Parte 1) — agora chamada assim que o usuário escolhe o arquivo
+   (`onSelecionarArquivo`), comparando o `tabela` detectado com a tabela da própria tela: não bate →
+   mensagem clara ("Essa planilha parece ser de 'X', não de 'Y'. Escolha o arquivo correto.") e o
+   arquivo é **rejeitado ali mesmo** (nunca chega a "Arquivo selecionado"); bate → segue o fluxo
+   normal. `GET /tabelas` segue sem chamador (só `/detectar` voltou a ser usado, com propósito
+   diferente do original). Testado ao vivo: planilha de Fornecedores barrada na tela de Clientes com
+   a mensagem certa; planilha de Clientes na tela de Clientes segue normal.
+
+Também nesta sessão: botão nativo "Escolher ficheiro" (texto de navegador em PT-PT, não
+customizável via CSS/props) trocado por um botão próprio da aplicação, "Escolher planilha" (input
+real fica oculto, disparado via `ref.click()`).
+
+### 2026-08-09 — Rotina de Importação de Dados: tela única + detecção automática + Estoque (5ª tabela) + correções
+
+Sessão inteira dentro da Rotina de Importação de Dados (`docs/telas/importacao-dados.md`,
+reescrita por completo ao final), em resposta a testes manuais reais do dono do produto com seus
+próprios arquivos (`CLIENTES.csv`, `FORNECEDORES.csv`, `PRODUTOS.csv`, `CONTAS_RECEBER.csv`,
+`ESTOQUES.csv`).
+
+**Parte 1 — dois bugs pontuais de upload.** `CONTAS_RECEBER.csv` (26,6 MB) batia em `413` — o
+limite `spring.servlet.multipart.max-file-size`/`max-request-size` em `application.yml` era
+`10MB`, herdado do upload de foto de produto (ADR-013), baixo demais pra planilha de migração.
+Achado colateral: um `413` do Tomcat é rejeitado antes do filtro de CORS adicionar seus headers,
+então o navegador não consegue nem ler o corpo do erro — vira uma falha "opaca" de rede, e a tela
+mostrava "Ocorreu um erro." genérico em vez do motivo real. Corrigido pra `50MB`; horas depois, a
+pedido explícito e categórico do dono do produto ("não quero que você coloque limites... nem
+limites de tamanho de arquivo, e nem limites do número de linhas"), o limite virou `-1`
+(ilimitado) — não há teto de tamanho de arquivo/requisição, e o parser (`ImportacaoCsv.ler`) nunca
+teve limite de linhas.
+
+**Parte 2 — Fornecedores: telefone sem validação de formato.** Planilha migrada de outro sistema
+traz telefone livre (ramal, número incompleto), e isso não deve rejeitar a linha inteira.
+`FornecedorService.criar(FornecedorRequest)` virou uma chamada pra
+`criar(req, validarTelefone=true)`; a importação (`FornecedorImportador`) passa `false` — só ela,
+o cadastro manual (controller) continua validando os 10–11 dígitos como sempre.
+
+**Parte 3 — Produtos: mudança de estrutura da planilha de origem.** O formato real que o dono do
+produto ia importar mudou: em vez do "achatado" (uma linha = uma variação, com
+`NOME_GRADE`/`DESCRICAO_COR`/`DESCRICAO_TAMANHO`/EAN/9 colunas de estoque, formato da sessão de
+2026-08-08), a planilha real tem **uma linha por produto inteiro**, com `CODIGO_PRODUTO` (código
+de ligação com uma 2ª planilha, não é o `id_produto`) e `TAMANHO_1..20` formando a grade direto
+nas colunas, sem cor/EAN/estoque nenhum. `ProdutoImportador` foi reescrito: por linha, acha/cria o
+produto (dedup por `DESCRICAO+MARCA+REFERENCIA`, igual antes) e resolve a grade a partir da
+sequência de `TAMANHO_N` — como a planilha não traz nome de grade nenhum, "já existe" passou a ser
+definido pelo **conteúdo** (a sequência ordenada de tamanhos), não por nome:
+`GradeService.obterOuCriarPorTamanhos` (novo) busca por igualdade slot-a-slot
+(`IS NOT DISTINCT FROM`, NULL-safe) contra `cfg_grade`, e só cria (com nome gerado, ex.
+"GRADE 33-47", sufixo numérico se colidir) quando não acha. Testado com o arquivo real de 6.304
+linhas: só 8 sequências de tamanho distintas, confirmando que o dedup por conteúdo evita criar uma
+grade por produto. Variação (cor/tamanho), EAN e estoque inicial **saíram** desta importação —
+ficam pra Entrada de Produtos (ainda não construída, decisão já registrada em 2026-08-08).
+
+**Parte 4 — coluna nova `produto.codigo_importacao` + Estoque, a 5ª tabela.** Pra ligar a planilha
+de Estoque à de Produtos, o `CODIGO_PRODUTO` de cada linha da planilha de Produtos precisou ser
+guardado em algum lugar — `produto.codigo_importacao text` (editada na `V017__catalogo.sql`, banco
+em construção, sem migration nova; `UNIQUE(id_tenant, codigo_importacao)` parcial, mesmo padrão de
+`produto_barra.ean`), gravada fora de `ProdutoRequest`/`ProdutoService` (o cadastro manual não tem
+esse conceito) direto pelo importador. Com isso, nasceu `EstoqueImportador` (5ª tabela,
+`docs/telas/importacao-dados.md` §5): por linha, acha o produto pelo `codigo_importacao`, acha/cria
+cor e tamanho (`NOME_COR`/`NOME_TAMANHO`), acha/cria a variação (`ProdutoBarraService.obterOuCriar`
+— mesmo service da Emissão de Etiqueta/cadastro manual, já sabe forçar cor/tamanho a `NULL` quando
+o produto não usa grade), atualiza o EAN se ainda não tiver, e lança quantidade por empresa
+(mapeamento pedido ao usuário) como movimento `AJUSTE`, igual o formato antigo de produto fazia —
+linhas duplicadas da mesma variação são agrupadas e somadas antes de lançar.
+
+**Parte 5 — tela única, com detecção automática de tipo de arquivo.** Pedido do dono do produto:
+substituir o wizard "escolher tabela → um arquivo de cada vez" por uma tela única, onde o usuário
+localiza quantos arquivos quiser e o tipo de cada um é identificado sozinho. Backend:
+`ImportadorDeTabela` ganhou um método `default colunasEsperadas()` (deriva as colunas esperadas do
+cabeçalho de `modeloCsv()` — nunca duas listas de colunas mantidas à parte);
+`POST /api/v1/importacao/detectar` (novo, `ImportacaoCsv.lerCabecalho`, só lê o cabeçalho) compara
+por **similaridade de Jaccard** (interseção/união) contra cada tabela cadastrada — não contagem
+bruta, pra não favorecer por acaso uma tabela de cabeçalho grande (produto, 33 colunas) sobre uma
+pequena (fornecedor, 12); só considera detectado com Jaccard ≥ 0,5 e margem ≥ 0,1 sobre a 2ª
+colocada, senão devolve `tabela: null` e a tela pede escolha manual. Testado com os 5 arquivos
+reais: **100% identificados corretamente** (inclusive um com erro de digitação no cabeçalho,
+`TG_IE` em vez de `RG_IE`, que ainda passou do limiar). Frontend: `ImportacaoDadosPage.tsx`
+reescrita — um `CartaoArquivo` por arquivo adicionado (tipo detectado + escolhas prévias daquela
+tabela embutidas + botão "Validar" próprio), botão global "Importar" que só libera quando todo
+arquivo está validado sem erro, processando em sequência por `ORDEM_IMPORTACAO`
+(cliente/fornecedor/produto antes de contas_receber/estoque, mesmo que adicionados fora de ordem).
+`GaugeProgresso` (já existente) em toda etapa assíncrona (detectar/validar/importar) — pedido
+explícito pra nenhuma etapa parecer travada.
+
+**Achado de design durante o teste — dependência entre arquivos da mesma leva.** A prévia
+(dry-run) nunca grava nada, então validar Estoque **antes** de Produtos ter sido confirmado de
+verdade sempre mostra "produto não encontrado", mesmo os dois arquivos estando na mesma leva.
+Resolvido com uma exceção: quando os ÚNICOS erros da prévia batem com o padrão esperado de
+dependência (por texto da mensagem) E o arquivo da dependência também está na lista, a linha conta
+como "pronta" (mostra "Pendente — depende de X, conferido na importação") — a checagem de verdade
+acontece no momento certo, durante a importação sequencial real.
+
+**Bug real encontrado testando com o arquivo grande de verdade (`ESTOQUES.csv`, 71.156 linhas).**
+A 1ª versão da tela nova, ao rodar o lote, só checava se a chamada HTTP não tinha lançado exceção
+— mas o sistema é "tudo ou nada" por arquivo: uma chamada com `confirmar=true` e QUALQUER linha
+com erro real volta `200 OK` normalmente, só que com `confirmado:false` e **nada persistido**. A
+tela mostrava "Importação concluída — 70.799 linhas importadas" sem uma linha sequer ter sido
+gravada (confirmado direto no banco: `produto_barra`/`produto_estoque` zerados). Corrigido em
+`importarTudo()`: agora confere `relatorio.confirmado` explicitamente e, se `false`, marca o
+arquivo como falha, mostra os erros reais e para o lote ali (arquivos já confirmados antes na
+mesma sequência continuam gravados — cada um é sua própria transação). No processo, descoberto que
+o par de arquivos de exemplo tem **357 linhas com `CODIGO_PRODUTO` que não existe em nenhum dos
+dois arquivos** — dado real do lojista (arquivos de amostra parciais), não bug do sistema; com a
+regra tudo-ou-nada, o `ESTOQUES.csv` completo nunca vai importar de verdade até essas linhas serem
+corrigidas ou removidas.
+
+**Parte 6 — zerar banco + semear dados de teste (pedido à parte, mesma sessão).** Banco de dev
+recriado do zero (`docker volume rm niner_pgdata` + migrations reaplicadas), tenant de teste
+recriado (`loja-teste-manual`/`teste@niner.dev`/`Teste@123`, ADMIN), e semeado direto via SQL (sem
+endpoint de criação — não existe hoje um `POST` de empresa na API, só `GET /api/v1/empresas`): 5
+empresas (matriz + 4 filiais, CNPJs com dígito verificador válido, admin com acesso às 5 via
+`usuario_empresa`), 5 funcionários/vendedores (CPFs válidos, cargo VENDEDOR, comissão 4,5–5%), e o
+plano de contas padrão completo (336 contas, `db/scripts/seed_plano_contas_padrao.sql`, script já
+existente desde 2026-07-31).
+
+**Lições de ambiente registradas em memória:** o `curl` deste ambiente Windows/Git Bash é um build
+nativo `mingw32` — `-F arquivo=@/tmp/...` (caminho estilo MSYS) falha silenciosamente
+(`CURLE_READ_ERROR`/exit 26) ou trava a conexão; precisa de caminho Windows real
+(`C:/pasta/arquivo`) tanto pro arquivo de entrada quanto pro `-o` de saída. E: **tempo decorrido
+real entre chamadas de ferramenta do agente é sempre maior que a soma das esperas explícitas**
+(overhead de rede/captura de tela/raciocínio do próprio agente) — subestimar isso levou a concluir
+erroneamente, na 1ª rodada, que uma importação grande tinha terminado rápido; a forma confiável de
+confirmar é sempre checar o estado real no banco, nunca só o texto de sucesso da tela.
+
+Suíte de backend depois de tudo: **405/405 verdes**; `tsc --noEmit` limpo. Testado ponta-a-ponta
+via navegador com os 5 arquivos reais (upload → detecção → validação → importação → confirmação no
+banco), incluindo os dois cenários do bug (sucesso real e falha real). Nada commitado ao fim desta
+sessão.
 
 ### 2026-08-08 — Cor + Grade (substitui variante linha/coluna) + auditoria de isolamento de tenant (P8)
 
