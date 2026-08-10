@@ -242,6 +242,10 @@ export default function FormaPagamentoModal({
     setValeResolvido(null)
     try {
       const vale = await buscarVale(numero)
+      if (vale.cancelada) {
+        setErroVale(`O vale nº ${numero} foi cancelado.`)
+        return
+      }
       if (vale.valeUsado) {
         setErroVale(`O vale nº ${numero} já foi usado.`)
         return

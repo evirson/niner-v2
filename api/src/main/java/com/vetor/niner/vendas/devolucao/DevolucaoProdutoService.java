@@ -126,17 +126,18 @@ public class DevolucaoProdutoService {
      *  soma dos itens do movimento DEVOLUCAO vinculado, nunca gravado como coluna própria. */
     @Transactional(readOnly = true)
     public ValeMercadoriaResponse buscarVale(long idDevolucao) {
-        record Cabecalho(long idDevolucao, OffsetDateTime dataDevolucao, boolean valeUsado,
+        record Cabecalho(long idDevolucao, OffsetDateTime dataDevolucao, boolean valeUsado, boolean cancelada,
                           Long idVendaCredito, Long idVendaDebito) {
         }
         Cabecalho c = jdbc.sql("""
-                        SELECT id_devolucao, data_devolucao, vale_usado, id_venda_credito, id_venda_debito
+                        SELECT id_devolucao, data_devolucao, vale_usado, cancelada, id_venda_credito, id_venda_debito
                         FROM venda_devolucao WHERE id_tenant = plataforma.tenant_atual() AND id_devolucao = ?
                         """)
                 .param(idDevolucao)
                 .query((rs, n) -> new Cabecalho(
                         rs.getLong("id_devolucao"), rs.getObject("data_devolucao", OffsetDateTime.class),
-                        rs.getBoolean("vale_usado"), getLongOuNulo(rs, "id_venda_credito"), getLongOuNulo(rs, "id_venda_debito")))
+                        rs.getBoolean("vale_usado"), rs.getBoolean("cancelada"),
+                        getLongOuNulo(rs, "id_venda_credito"), getLongOuNulo(rs, "id_venda_debito")))
                 .optional()
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Vale-mercadoria não encontrado."));
 
@@ -151,7 +152,7 @@ public class DevolucaoProdutoService {
                 .param(idDevolucao).query(BigDecimal.class).single();
 
         return new ValeMercadoriaResponse(
-                c.idDevolucao(), valorVale, c.valeUsado(), c.dataDevolucao(), c.idVendaCredito(), c.idVendaDebito());
+                c.idDevolucao(), valorVale, c.valeUsado(), c.cancelada(), c.dataDevolucao(), c.idVendaCredito(), c.idVendaDebito());
     }
 
     private record FuncionarioVenda(Long idFuncionario, String nomeFuncionario) {

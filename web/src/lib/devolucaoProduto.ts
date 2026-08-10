@@ -44,6 +44,7 @@ export interface ValeMercadoria {
   idDevolucao: number
   valorVale: number
   valeUsado: boolean
+  cancelada: boolean
   dataDevolucao: string
   idVendaCredito: number | null
   idVendaDebito: number | null

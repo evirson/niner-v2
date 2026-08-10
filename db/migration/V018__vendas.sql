@@ -39,6 +39,14 @@ CREATE TABLE venda_devolucao (
   id_venda_debito    integer,
   id_vale_mercadoria text,
   vale_usado         boolean     NOT NULL DEFAULT false,
+  -- Cancelamento de Devolução de Produtos (2026-08-11) — mesmo padrão de venda.cancelada acima:
+  -- colunas direto aqui (quem/quando/motivo, P3) em vez de tabela de log separada; o ledger
+  -- imutável de estoque (produto_movimento tipo CANCELAMENTO_DEVOLUCAO) é o resto do rastro.
+  -- Só é permitido cancelar um vale ainda não usado (vale_usado = false).
+  cancelada               boolean     NOT NULL DEFAULT false,
+  data_cancelamento        timestamptz,
+  id_usuario_cancelamento  integer,
+  motivo_cancelamento      text,
   -- base para FK composta (2026-07-16, P8) de produto_movimento_mestre.id_devolucao.
   CONSTRAINT venda_devolucao_id_uk UNIQUE (id_tenant, id_devolucao),
   -- FKs compostas — ver comentário em usuario_empresa_fk (V015).
@@ -47,8 +55,11 @@ CREATE TABLE venda_devolucao (
   CONSTRAINT venda_devolucao_credito_fk FOREIGN KEY (id_tenant, id_venda_credito)
     REFERENCES venda (id_tenant, id_venda),
   CONSTRAINT venda_devolucao_debito_fk FOREIGN KEY (id_tenant, id_venda_debito)
-    REFERENCES venda (id_tenant, id_venda)
+    REFERENCES venda (id_tenant, id_venda),
+  CONSTRAINT venda_devolucao_usuario_cancelamento_fk FOREIGN KEY (id_tenant, id_usuario_cancelamento)
+    REFERENCES usuario (id_tenant, id_usuario)
 );
 CREATE INDEX venda_devolucao_id_tenant_ix ON venda_devolucao (id_tenant);
 
 COMMENT ON TABLE venda IS 'Venda da loja física (R9). Sem financeiro no v1 (Q5). Itens no ledger de estoque (movimento VENDA). Funcionário/comissão por item ficam em produto_movimento_detalhe.id_funcionario, não aqui. Sem valor_total/observacao/criado_em (2026-07-16) — total é derivado do ledger, sem timestamp de auditoria nesta tabela. cancelada/data_cancelamento/id_usuario_cancelamento/motivo_cancelamento (2026-07-30) — Cancelamento de Venda; ver produto_movimento tipo CANCELAMENTO para o estorno de estoque.';
+COMMENT ON TABLE venda_devolucao IS 'Vale-mercadoria gerado por uma devolução (id_devolucao = número do vale). Valor sempre derivado do ledger (produto_movimento tipo DEVOLUCAO), nunca gravado como coluna. cancelada/data_cancelamento/id_usuario_cancelamento/motivo_cancelamento (2026-08-11) — Cancelamento de Devolução de Produtos, só permitido com vale_usado = false; ver produto_movimento tipo CANCELAMENTO_DEVOLUCAO para o estorno de estoque.';

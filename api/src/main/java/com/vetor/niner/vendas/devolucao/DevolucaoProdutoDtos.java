@@ -62,6 +62,7 @@ public final class DevolucaoProdutoDtos {
             long idDevolucao,
             BigDecimal valorVale,
             boolean valeUsado,
+            boolean cancelada,
             OffsetDateTime dataDevolucao,
             Long idVendaCredito,
             Long idVendaDebito) {

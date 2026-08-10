@@ -18,9 +18,13 @@ CREATE TYPE status_pedido AS ENUM
 -- CANCELAMENTO (2026-07-30): estorno de venda (Cancelamento de Venda) — devolve ao estoque a
 -- quantidade de cada item, distinto de DEVOLUCAO (troca/devolução via venda_devolucao, ainda
 -- não implementada) porque não é uma nova operação comercial, é a reversão total da venda.
+-- CANCELAMENTO_DEVOLUCAO (2026-08-11): estorno de uma devolução (Cancelamento de Devolução de
+-- Produtos) — tira do estoque a quantidade que a devolução original tinha colocado de volta;
+-- valor próprio (não reaproveita CANCELAMENTO) para o Kardex/relatórios distinguirem qual
+-- operação está sendo revertida.
 CREATE TYPE tipo_movimento AS ENUM
   ('COMPRA', 'TRANSFERENCIA', 'DEVOLUCAO', 'AJUSTE', 'VENDA', 'RESERVA', 'LIBERACAO_RESERVA',
-   'CANCELAMENTO');
+   'CANCELAMENTO', 'CANCELAMENTO_DEVOLUCAO');
 
 -- Natureza do lançamento no ledger de estoque.
 CREATE TYPE credito_debito AS ENUM ('C', 'D');

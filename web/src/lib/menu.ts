@@ -137,6 +137,12 @@ export const MENU: NavGrupo[] = [
             icone: IconeEstornoRecebimentoCrediario,
             descricao: 'Desfaz um recebimento de parcela lançado por engano e reabre o título do cliente.',
           },
+          {
+            to: '/cancelamento-devolucao-produtos',
+            label: 'Cancelamento de Devolução de Produtos',
+            icone: IconeCancelamentoVenda,
+            descricao: 'Cancela um vale-mercadoria gerado por devolução, revertendo o estoque — só se o vale ainda não foi usado.',
+          },
         ],
       },
       {
@@ -502,12 +508,6 @@ export const MENU: NavGrupo[] = [
             descricao: 'Baixa o XML das notas fiscais emitidas (NFC-e/NF-e) para contabilidade ou SEFAZ. Em construção.',
           },
         ],
-      },
-      {
-        to: '/cancelamento-devolucao-produtos',
-        label: 'Cancelamento de Devolução de Produtos',
-        icone: IconeCancelamentoVenda,
-        descricao: 'Desfaz uma devolução já registrada, revertendo o estoque e invalidando o vale-mercadoria gerado. Em construção.',
       },
     ],
   },

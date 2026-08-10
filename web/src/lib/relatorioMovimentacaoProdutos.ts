@@ -11,6 +11,7 @@ export type TipoMovimentoProduto =
   | 'RESERVA'
   | 'LIBERACAO_RESERVA'
   | 'CANCELAMENTO'
+  | 'CANCELAMENTO_DEVOLUCAO'
 
 export interface LinhaAnaliticaMovimentacao {
   idEmpresa: number

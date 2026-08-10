@@ -46,10 +46,12 @@ export const ROTULO_TIPO_MOVIMENTO: Record<TipoMovimentoProduto, string> = {
   RESERVA: 'Reserva',
   LIBERACAO_RESERVA: 'Liberação de Reserva',
   CANCELAMENTO: 'Cancelamento',
+  CANCELAMENTO_DEVOLUCAO: 'Cancelamento de Devolução',
 }
 
 const TODOS_OS_TIPOS: TipoMovimentoProduto[] = [
   'COMPRA', 'TRANSFERENCIA', 'DEVOLUCAO', 'AJUSTE', 'VENDA', 'RESERVA', 'LIBERACAO_RESERVA', 'CANCELAMENTO',
+  'CANCELAMENTO_DEVOLUCAO',
 ]
 
 function rotuloVariacaoSelecionada(v: VariacaoEncontrada): string {

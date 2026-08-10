@@ -225,7 +225,7 @@ public class RelatorioMovimentacaoProdutosService {
         return switch (tipo) {
             case "VENDA", "CANCELAMENTO" -> idVenda != null ? "Venda #" + idVenda : origemOuTraco(origem);
             case "TRANSFERENCIA" -> idTransferencia != null ? "Transferência #" + idTransferencia : origemOuTraco(origem);
-            case "DEVOLUCAO" -> idDevolucao != null ? "Devolução #" + idDevolucao : origemOuTraco(origem);
+            case "DEVOLUCAO", "CANCELAMENTO_DEVOLUCAO" -> idDevolucao != null ? "Devolução #" + idDevolucao : origemOuTraco(origem);
             case "COMPRA" -> (nomeFornecedor != null ? nomeFornecedor : "Compra") + (notaFiscal != null ? " — NF " + notaFiscal : "");
             default -> origemOuTraco(origem);
         };

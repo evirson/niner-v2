@@ -402,22 +402,24 @@ public class PdvVendaService {
                                             BigDecimal cobertura, Long idDevolucao) {
     }
 
-    private record ValeInfo(BigDecimal valor, boolean usado) {
+    private record ValeInfo(BigDecimal valor, boolean usado, boolean cancelado) {
     }
 
     /** Resolve o valor de um vale-mercadoria (soma dos itens do movimento DEVOLUCAO vinculado —
      *  mesma conta de {@code DevolucaoProdutoService.buscarVale}, mas sem depender daquele
      *  service: cada serviço consulta o schema direto, mesmo padrão do resto do projeto). 404 se
-     *  o vale não existir (ou for de outro tenant, RLS). */
+     *  o vale não existir (ou for de outro tenant, RLS). {@code cancelado} (2026-08-11, ver
+     *  {@code CancelamentoDevolucaoService}) bloqueia o resgate igual a um vale já usado — um
+     *  vale cancelado não tem mais lastro em estoque. */
     private ValeInfo resolverVale(long idDevolucao) {
-        record Cabecalho(boolean valeUsado) {
+        record Cabecalho(boolean valeUsado, boolean cancelada) {
         }
         Cabecalho c = jdbc.sql("""
-                        SELECT vale_usado FROM venda_devolucao
+                        SELECT vale_usado, cancelada FROM venda_devolucao
                         WHERE id_tenant = plataforma.tenant_atual() AND id_devolucao = ?
                         """)
                 .param(idDevolucao)
-                .query((rs, n) -> new Cabecalho(rs.getBoolean("vale_usado")))
+                .query((rs, n) -> new Cabecalho(rs.getBoolean("vale_usado"), rs.getBoolean("cancelada")))
                 .optional()
                 .orElseThrow(() -> new ResponseStatusException(
                         org.springframework.http.HttpStatus.NOT_FOUND, "Vale-mercadoria não encontrado."));
@@ -432,7 +434,7 @@ public class PdvVendaService {
                         """)
                 .param(idDevolucao).query(BigDecimal.class).single();
 
-        return new ValeInfo(valor, c.valeUsado());
+        return new ValeInfo(valor, c.valeUsado(), c.cancelada());
     }
 
     /**
@@ -459,6 +461,9 @@ public class PdvVendaService {
                 ValeInfo vale = resolverVale(pgto.idDevolucao());
                 if (vale.usado()) {
                     throw new ConflitoDadosException("O vale-mercadoria nº " + pgto.idDevolucao() + " já foi usado.");
+                }
+                if (vale.cancelado()) {
+                    throw new ConflitoDadosException("O vale-mercadoria nº " + pgto.idDevolucao() + " foi cancelado.");
                 }
                 if (vale.valor().compareTo(saldoRestante.max(BigDecimal.ZERO).add(TOLERANCIA_SALDO)) > 0) {
                     throw new IllegalArgumentException(

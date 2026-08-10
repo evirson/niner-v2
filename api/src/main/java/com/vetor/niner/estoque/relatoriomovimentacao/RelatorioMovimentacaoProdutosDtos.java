@@ -17,7 +17,8 @@ public final class RelatorioMovimentacaoProdutosDtos {
      *  LIBERACAO_RESERVA ainda não têm nenhuma tela que grave esses tipos — o relatório já nasce
      *  preparado pra eles mesmo assim. */
     public enum TipoMovimentoProduto {
-        COMPRA, TRANSFERENCIA, DEVOLUCAO, AJUSTE, VENDA, RESERVA, LIBERACAO_RESERVA, CANCELAMENTO
+        COMPRA, TRANSFERENCIA, DEVOLUCAO, AJUSTE, VENDA, RESERVA, LIBERACAO_RESERVA, CANCELAMENTO,
+        CANCELAMENTO_DEVOLUCAO
     }
 
     /** Uma linha por movimento (Analítico). {@code movimentoFisico} = falso só para RESERVA/

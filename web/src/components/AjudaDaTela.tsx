@@ -421,6 +421,22 @@ const CONTEUDOS: Record<string, ConteudoAjuda> = {
     ],
     urlVideo: null,
   },
+  'vendas.cancelamentodevolucao.lista': {
+    titulo: 'Cancelamento de Devolução de Produtos',
+    objetivo: 'Localizar um vale-mercadoria ainda não usado e cancelá-lo, retirando do estoque a quantidade que a devolução tinha devolvido.',
+    passos: [
+      'No popup inicial, informe o número do vale (ignora as datas) ou um intervalo de datas da devolução.',
+      'A grid mostra só vales ainda canceláveis — não usados e não cancelados.',
+      'Clique no ícone de visualizar na linha do vale para ver o resumo e os itens que vão sair do estoque.',
+      'Informe o motivo do cancelamento e confirme em "Sim, Cancelar Devolução".',
+    ],
+    errosComuns: [
+      'Um vale já usado numa venda não pode ser cancelado — cancele antes a venda que o consumiu (Cancelamento de Venda), se for o caso.',
+      'Uma devolução já cancelada não pode ser cancelada de novo.',
+      'Operador só enxerga e cancela devoluções da empresa em que está logado — administrador cancela de qualquer empresa.',
+    ],
+    urlVideo: null,
+  },
   'vendas.devolucaoproduto.form': {
     titulo: 'Devolução de Produtos',
     objetivo: 'Devolver ao estoque produtos que o cliente trouxe de volta e emitir um vale-mercadoria pelo crédito.',

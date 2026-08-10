@@ -45,6 +45,7 @@ import CancelamentoVenda from './pages/vendas/CancelamentoVenda'
 import PesquisaVendas from './pages/vendas/PesquisaVendas'
 import ReimpressaoPapeletaVenda from './pages/vendas/ReimpressaoPapeletaVenda'
 import DevolucaoProduto from './pages/vendas/DevolucaoProduto'
+import CancelamentoDevolucao from './pages/vendas/CancelamentoDevolucao'
 import ContaCorrenteLista from './pages/contacorrente/ContaCorrenteLista'
 import ContaCorrenteForm from './pages/contacorrente/ContaCorrenteForm'
 import ContaCorrenteMovimentoLista from './pages/contacorrente/ContaCorrenteMovimentoLista'
@@ -117,7 +118,7 @@ export default function App() {
           <Route path="/nfe" element={<EmBreve titulo="Nota Fiscal - NF-e" />} />
           <Route path="/cancelamento-documento-fiscal" element={<EmBreve titulo="Cancelamento de Documento Fiscal" />} />
           <Route path="/exportacao-xml-fiscal" element={<EmBreve titulo="Exportação de XML" />} />
-          <Route path="/cancelamento-devolucao-produtos" element={<EmBreve titulo="Cancelamento de Devolução de Produtos" />} />
+          <Route path="/cancelamento-devolucao-produtos" element={<CancelamentoDevolucao />} />
           <Route path="/clientes" element={<ClienteLista />} />
           <Route path="/clientes/novo" element={<ClienteForm />} />
           <Route element={<RequireAdmin />}>
