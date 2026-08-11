@@ -54,6 +54,7 @@ foram corrigidos só em **2026-08-07**, quando a discrepância foi notada.
 | `percentual_desconto_venda` | Desconto máximo em venda (%) | percentual (máscara) | 0–100 |
 | `cfg_usa_cor_grade` | Usa cor/grade (calçados, confecções) | checkbox | — (default `false`, 2026-08-08; era duas flags separadas de linha/coluna) |
 | `cfg_permite_qtd_decimal` | Permite quantidade decimal para produtos | checkbox | — (default `true`) |
+| `cfg_exige_numero_venda_devolucao` | Exigir número da venda na Devolução de Produtos | checkbox | — (default `false`, 2026-08-11) |
 | `juros_crediario_dias` | Juros após (dias) | inteiro | ≥ 0 |
 | `juros_crediario` | Juros (%) | percentual (máscara) | 0–100 |
 | `multa_crediario_dias` | Multa após (dias) | inteiro | ≥ 0 |
@@ -73,6 +74,17 @@ Produtos e Histórico do Cliente precisam do valor sem ser ADMIN) — mesmo padr
 desligado), não é só uma máscara de UI. Detalhe completo de onde isso é aplicado:
 `docs/telas/pdv.md` e `docs/telas/transferencia-estoque.md`.
 
+**`cfg_exige_numero_venda_devolucao` (2026-08-11):** liga/desliga se o campo "Número da Venda"
+é obrigatório na Devolução de Produtos. Desligado por padrão — preserva o comportamento
+original (campo opcional, devolução sem vínculo com nenhuma venda). Ligado, a tela exige o
+número antes de gravar **e** só permite devolver produtos que a venda de fato vendeu, até a
+quantidade ainda não devolvida dela — o vínculo obrigatório é o que torna essa restrição
+possível de aplicar (sem uma venda de referência não há o que validar). Lido por qualquer papel
+via `GET /api/v1/config-geral/exige-numero-venda-devolucao` (mesmo padrão das outras flags
+leves) e validado também no servidor (`DevolucaoProdutoService.efetivar` rejeita com 400 se a
+venda não foi informada e a flag está ligada). Detalhe completo do que a restrição faz e como o
+foco inicial do campo muda de acordo com esta flag: `docs/telas/devolucao-produtos.md`.
+
 ## Critérios de aceitação (viram testes)
 
 - Dado um tenant recém-assinado, quando consulta `GET /api/v1/config-geral`, então recebe os
@@ -86,9 +98,26 @@ desligado), não é só uma máscara de UI. Detalhe completo de onde isso é apl
   afetado (isolamento).
 - Dado `cfg_permite_qtd_decimal` atualizado, quando consultado por `GET /permite-qtd-decimal`
   (qualquer papel, inclusive OPERADOR), então reflete o valor salvo.
+- Dado `cfg_exige_numero_venda_devolucao` atualizado, quando consultado por
+  `GET /exige-numero-venda-devolucao` (qualquer papel), então reflete o valor salvo.
 
-Cobertos por `ConfiguracaoGeralTest` (8 testes, 2 novos em 2026-07-29) — suíte completa do
-projeto em **203/203 verdes**.
+Cobertos por `ConfiguracaoGeralTest` (7 testes). Ver também `DevolucaoProdutoCrudTest` pro
+critério "sem número da venda, quando a flag exige, então 400" (validação cruzada entre os dois
+módulos).
+
+## Bug corrigido (2026-08-11) — cache do React Query desatualizado nas telas que leem as flags leves
+
+Ao salvar, `ConfiguracaoGeralForm.tsx` só atualizava o cache da própria query (`['config-geral']`)
+— as 4 flags leves (`usa-cor-grade`, `desconto-venda`, `permite-qtd-decimal`,
+`exige-numero-venda-devolucao`), cada uma com sua própria query key, continuavam servindo o
+valor antigo em cache pra qualquer tela que já tivesse sido visitada nesta sessão do navegador
+(a navegação do sistema é toda client-side via React Router, sem recarregar a página, então o
+cache do `QueryClient` sobrevive entre telas). Sintoma: mudar um parâmetro aqui e ir direto pra
+outra tela (Produto, PDV, Devolução de Produtos) sem recarregar o navegador podia mostrar o
+comportamento antigo até o cache expirar sozinho. Corrigido invalidando as 4 queries no
+`onSuccess` do salvar — `queryClient.invalidateQueries({ queryKey: [...] })` pra cada uma.
+Detalhe completo (incluindo o efeito colateral do lado do consumidor, que também precisou de
+ajuste): [[feedback_react_query_cache_entre_telas]] (memória) e `docs/telas/devolucao-produtos.md`.
 
 ## Impacto no contrato de API
 
@@ -98,6 +127,7 @@ PUT  /api/v1/config-geral                    atualiza (ADMIN) — todos os campo
 GET  /api/v1/config-geral/usa-cor-grade      usa cor/grade (qualquer papel)
 GET  /api/v1/config-geral/desconto-venda     percentual de desconto máximo (qualquer papel, PDV)
 GET  /api/v1/config-geral/permite-qtd-decimal  quantidade decimal ligada/desligada (qualquer papel)
+GET  /api/v1/config-geral/exige-numero-venda-devolucao  nº da venda obrigatório na devolução? (qualquer papel)
 ```
 
 Sob `/api/v1/**` (JWT de tenant, RLS ativo — P8); 403 (Problem Details) para papel diferente
@@ -106,15 +136,17 @@ de ADMIN, verificado a partir do claim `roles` do JWT (mesmo mecanismo de
 
 ## Ajuda da tela (manual de operação + vídeo) — obrigatório (R22 / §3.7.1)
 
-- **`chave_tela`: `configuracao.geral.form`** — desconto máximo, uso de cor/grade, quantidade
-  decimal de produtos, juros/multa de crediário; erros comuns: só ADMIN acessa, percentuais
-  entre 0–100. `url_video`: NULL.
+- **`chave_tela`: `configuracao.geral.form`** — desconto máximo, exigência de venda na
+  devolução, uso de cor/grade, quantidade decimal de produtos, juros/multa de crediário; erros
+  comuns: só ADMIN acessa, percentuais entre 0–100. `url_video`: NULL.
 
 ## Impacto no banco
 
 `cfg_permite_qtd_decimal boolean NOT NULL DEFAULT true` (coluna nova, 2026-07-29, dentro de
-`V023__cfg_geral.sql` — banco em construção, editada em vez de nova migration). O resto da
-tabela já existia por completo (V023, RLS via V024), semeada no signup.
+`V023__cfg_geral.sql` — banco em construção, editada em vez de nova migration).
+`cfg_exige_numero_venda_devolucao boolean NOT NULL DEFAULT false` (coluna nova, 2026-08-11,
+mesmo padrão — dentro de `V023__cfg_geral.sql`). O resto da tabela já existia por completo
+(V023, RLS via V024), semeada no signup.
 
 ## Impacto nas integrações
 

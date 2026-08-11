@@ -15,9 +15,10 @@ Devolução" esperando esse dado (`RelatorioVendasService.buscarValorDevolucao`)
 
 Tela nova (`/devolucao-produto`, menu "Frente de Loja", ADMIN e OPERADOR) que:
 
-1. Pede opcionalmente o **número da venda** — só para localizar o vendedor daquela venda (não é
-   obrigatório e não fica gravado na devolução; serve unicamente para, no futuro, calcular a
-   comissão de quem vendeu — ver RN-01).
+1. Pede o **número da venda** (opcional ou obrigatório, conforme
+   `cfg_geral.cfg_exige_numero_venda_devolucao` — ver "Restrição a produtos vendidos" abaixo) —
+   ao sair do campo, busca automaticamente o vendedor daquela venda (RN-01) **e**, desde
+   2026-08-11, os itens que ela vendeu, restringindo o que pode ser devolvido.
 2. Deixa digitar/ler **código de barras** repetidamente, empilhando uma grid de itens (mesmo
    padrão de leitura do PDV/Transferência de Estoque — `lib/pdv.ts:interpretarCodigoBarras` +
    `buscarProdutoPorCodigo`, mesmo `PesquisaProdutoModal`), cada linha com produto + quantidade
@@ -27,13 +28,14 @@ Tela nova (`/devolucao-produto`, menu "Frente de Loja", ADMIN e OPERADOR) que:
 
 ## Decisões de escopo (fechadas)
 
-**Sem vínculo persistido entre a devolução e a venda original.** O número da venda informado
-serve só para resolver o vendedor (RN-01) — não fica gravado em `venda_devolucao` nem em
-nenhuma outra tabela. Consequência aceita conscientemente: não há como reconciliar depois "esta
-devolução veio desta venda", nem validar que a quantidade devolvida bate com o que foi vendido
-naquela venda — o operador pode devolver qualquer código de barras, de qualquer venda ou
-nenhuma, em qualquer quantidade (equivalente a uma entrada de estoque manual rotulada
-"devolução"). Não existe limite/alerta de quantidade.
+**Vínculo com a venda original: persistido desde o início (`venda_devolucao.id_venda_credito`,
+ver "Vale-mercadoria" abaixo), mas só passou a *restringir* a devolução em 2026-08-11.** Até
+então o número era só um dado auxiliar pra resolver o vendedor (RN-01) — o operador podia
+devolver qualquer código de barras, de qualquer venda ou nenhuma, em qualquer quantidade
+(equivalente a uma entrada de estoque manual rotulada "devolução"). Pedido do dono do produto:
+"só pode devolver produtos que foram vendidos" — ver "Restrição a produtos vendidos" abaixo pro
+desenho completo (o que mudou, o que continuou igual, e a configuração que liga/desliga a
+obrigatoriedade do campo).
 
 **Comissão: só o dado fica pronto, nenhum cálculo existe ainda.** `funcionario.perc_comissao` é
 puramente cadastral em todo o sistema — nenhuma venda "credita" comissão de verdade hoje. A
@@ -78,6 +80,12 @@ pré-preencher, o operador digita na hora. Backend: `ItemDevolucaoResponse` ganh
 `valorTotal` (mesmas colunas de `ItemComprovanteVenda`, PDV) pra reaproveitar a mesma tabela de
 itens da papeleta em vez de duplicar a montagem do layout.
 
+**Bug corrigido (2026-08-11):** o "Salvar PDF" do vale saía com a largura errada (colunas da
+direita cortadas) sempre que a devolução tinha poucos itens — causa raiz e correção (piso de 80mm
+na altura calculada, jsPDF inverte largura/altura em orientação retrato quando `largura > altura`)
+documentados em `docs/telas/papeleta-venda.md` (seção "Bug corrigido"), já que a mesma função
+(`comprovante.ts`) gera os três comprovantes térmicos do sistema.
+
 ### Resgate no PDV
 
 Em vez de um mecanismo de pagamento novo, o resgate usa o tipo de carteira **"VALE MERCADORIA"**,
@@ -114,6 +122,64 @@ ganhou `cancelada/data_cancelamento/id_usuario_cancelamento/motivo_cancelamento`
 (usada aqui e pelo PDV) e `PdvVendaService.resolverVale()` passaram a checar `cancelada` também,
 não só `vale_usado` — um vale cancelado nunca é resgatável.
 
+## Restrição a produtos vendidos (2026-08-11)
+
+Pedido direto do dono do produto: "se entrar com o número da venda, já pega o vendedor
+automaticamente, e só pode devolver produtos que foram vendidos". Duas mudanças de comportamento
+distintas, implementadas juntas:
+
+### Busca automática do vendedor (sem botão)
+
+O botão "Buscar Vendedor" foi removido — a busca dispara sozinha ao sair do campo (`onBlur`) ou
+no Enter (`aoDigitarNumeroVenda`, já existia). `GET /vendas/devolucao/vendedor` passou a
+responder também a lista de itens vendidos naquela venda (`itens: ItemVendaOrigemResponse[]`,
+com `qtdVendida` e `qtdDisponivelDevolucao` por item), reaproveitando a mesma chamada que já
+buscava o vendedor — um único request alimenta as duas mudanças.
+
+### Restrição de itens (`RN-06`)
+
+Quando o número da venda é informado (e resolve com sucesso), a tela só aceita lançar produtos
+presentes nos itens daquela venda, até `qtdDisponivelDevolucao` (= quantidade vendida menos o
+que já foi devolvido em devoluções **não canceladas** da mesma venda — uma devolução cancelada
+não conta contra o limite, já que o cancelamento reverteu o estoque, ver
+`docs/telas/cancelamento-devolucao-produtos.md`). Mecânica escolhida (via `AskUserQuestion`):
+**código de barras + bloqueio**, não uma lista de itens pra escolher — mantém a leitura livre já
+existente, só rejeita com uma mensagem clara (toast) o que não pertence à venda ou excede o
+disponível, tanto na leitura por código de barras quanto na Pesquisa de Produto. Um item já
+lançado na grade que deixar de ser válido (ex.: o operador trocou o número da venda depois de já
+ter lançado itens) mostra o erro na própria linha e bloqueia "Gravar Devolução" até ser
+corrigido/removido — não é apagado silenciosamente.
+
+**Validado no servidor, não só na tela (P4).** `DevolucaoProdutoService.efetivar()` recalcula a
+mesma disponibilidade e rejeita com 400 se algum item não pertence à venda ou excede o
+disponível — a tela é só uma conveniência de UX, a regra de verdade vive no backend. Sem o
+número da venda informado, nenhuma restrição se aplica (comportamento livre de sempre).
+
+### Número da venda obrigatório ou opcional, por configuração
+
+Novo parâmetro em Parâmetros do Sistema (`configuracao.geral`,
+`cfg_geral.cfg_exige_numero_venda_devolucao`, default `false` — ver
+`docs/telas/configuracao-geral.md`):
+quando ligado, o campo "Número da Venda" vira obrigatório (rótulo `*`, mensagem de erro inline,
+"Gravar Devolução" bloqueado sem ele) — decisão do dono do produto (via `AskUserQuestion`) de
+manter o campo **opcional por padrão**, restringindo só quando preenchido; o parâmetro existe
+pra quem quiser forçar a obrigatoriedade em todo o tenant. Validado também no servidor
+(`efetivar()` rejeita com 400 se a flag está ligada e `numeroVenda` não veio).
+
+### Foco inicial do campo depende da configuração
+
+Ao abrir a tela (ou depois de gravar uma devolução, quando o formulário volta ao estado
+inicial): se `cfg_exige_numero_venda_devolucao` está ligada, o foco vai direto pro campo "Número
+da Venda" (o operador precisa preenchê-lo antes de tudo); desligada, o foco continua indo pro
+campo "Código de Barras", como sempre foi. **Bug corrigido no mesmo dia:** o efeito de foco
+inicial rodava assim que a query da configuração retornava *qualquer* valor, inclusive um valor
+em cache desatualizado (React Query, `staleTime` padrão 0 — uma tela já visitada nesta sessão do
+navegador serve o cache na hora enquanto busca uma versão fresca por trás, e a navegação do
+sistema é toda client-side, sem recarregar a página). Corrigido esperando `isFetching` virar
+`false` antes de decidir o foco, e invalidando o cache das 4 flags leves de `cfg_geral`
+(`ConfiguracaoGeralForm.tsx`, `onSuccess` do salvar) pra qualquer tela já aberta reagir na hora.
+Detalhe técnico completo: [[feedback_react_query_cache_entre_telas]] (memória).
+
 ## User stories
 
 - Como operador de caixa, quero opcionalmente informar o número de uma venda pra que o sistema
@@ -129,13 +195,14 @@ não só `vale_usado` — um vale cancelado nunca é resgatável.
 
 ## Regras de negócio
 
-### RN-01 — Identificação do vendedor via número da venda (opcional)
+### RN-01 — Identificação automática do vendedor via número da venda
 
-Se informado, resolve o vendedor buscando `produto_movimento_detalhe.id_funcionario` dos itens
-de `produto_movimento_mestre` com `tipo_movimento = 'VENDA'` e `id_venda` = informado (mesmo
-dado que o PDV grava — um vendedor por venda, não por item). Se a venda não existir (ou for de
-outro tenant — RLS), retorna 404 no lookup (`GET /vendedor`); no `POST` de efetivação, se não
-resolver, a devolução segue sem vendedor (não bloqueia).
+Se informado (obrigatório ou não, ver RN-06), resolve o vendedor buscando
+`produto_movimento_detalhe.id_funcionario` dos itens de `produto_movimento_mestre` com
+`tipo_movimento = 'VENDA'` e `id_venda` = informado (mesmo dado que o PDV grava — um vendedor
+por venda, não por item). Dispara sozinho ao sair do campo ou no Enter, sem botão (2026-08-11).
+Se a venda não existir (ou for de outro tenant — RLS), retorna 404 no lookup (`GET /vendedor`);
+no `POST` de efetivação, se não resolver, a devolução segue sem vendedor (não bloqueia).
 
 ### RN-02 — Grid de leitura de código de barras
 
@@ -159,12 +226,22 @@ Ver "Resgate no PDV" acima.
 
 Ver "Cancelamento de Venda reabre o vale" acima.
 
+### RN-06 — Restrição a produtos vendidos (2026-08-11)
+
+Ver "Restrição a produtos vendidos" acima. Resumo: com o número da venda informado, só é
+permitido lançar itens presentes nela, até a quantidade ainda não devolvida
+(`qtdVendida − qtdDevolvidaEmDevoluçõesNãoCanceladas`); validado no servidor
+(`DevolucaoProdutoService.efetivar`, 400) e replicado na tela pra feedback imediato. Sem número
+de venda, sem restrição. `cfg_geral.cfg_exige_numero_venda_devolucao` controla se o campo é
+obrigatório.
+
 ## Contrato de API
 
 ```
-GET  /api/v1/vendas/devolucao/vendedor?numeroVenda=123    → { idFuncionario, nomeFuncionario } | 404
+GET  /api/v1/vendas/devolucao/vendedor?numeroVenda=123    → { numeroVenda, idFuncionario, nomeFuncionario, itens: [{ idVariacao, sku, descricaoProduto, variacaoCor, variacaoTamanho, qtdVendida, qtdDisponivelDevolucao }] } | 404
 GET  /api/v1/vendas/devolucao/vale/{idDevolucao}           → { valorVale, valeUsado, dataDevolucao, idVendaCredito, idVendaDebito }
 GET  /api/v1/pdv/produtos/codigo/{codigo}                  → reaproveita o endpoint já existente do PDV
+GET  /api/v1/config-geral/exige-numero-venda-devolucao     → { cfgExigeNumeroVendaDevolucao } (qualquer papel)
 POST /api/v1/vendas/devolucao
      { numeroVenda?: number, itens: [{ idVariacao, qtd }] }
      → { idMovimento, idDevolucao, valorVale, dataMovimento, idFuncionario, nomeFuncionario, itens }
@@ -173,15 +250,17 @@ POST /api/v1/vendas/devolucao
 `POST /api/v1/pdv/vendas` (`PdvVendaService`) ganhou o campo opcional `idDevolucao` em cada linha
 de `pagamentos[]` — obrigatório só quando `idCarteira` aponta pra uma carteira de categoria
 `VALE_MERCADORIA`. Erros em Problem Details: 400 (grid vazia, quantidade inválida, número do
-vale ausente numa linha `VALE_MERCADORIA`, vale maior que o saldo a pagar), 404 (venda/variação/
-vale inexistente ou de outro tenant), 409 (vale já usado).
+vale ausente numa linha `VALE_MERCADORIA`, vale maior que o saldo a pagar, **produto fora da
+venda informada, quantidade maior que a disponível na venda, ou número da venda ausente quando
+`cfg_exige_numero_venda_devolucao` está ligada** — 2026-08-11), 404 (venda/variação/vale
+inexistente ou de outro tenant), 409 (vale já usado).
 
 ## Critérios de aceitação
 
 - Dado um número de venda existente, quando informado, então o vendedor daquela venda é
-  resolvido e exibido, sem gravar o número da venda em lugar nenhum.
-- Dado nenhum número de venda informado, quando a devolução é gravada, então segue sem vendedor
-  associado (não bloqueia).
+  resolvido e exibido automaticamente (sem clique em botão).
+- Dado nenhum número de venda informado (quando o campo não é obrigatório, ver RN-06), quando a
+  devolução é gravada, então segue sem vendedor associado e sem restrição de itens.
 - Dado um código de barras lido N vezes (ou `N*código`), quando a grid é montada, então soma a
   quantidade na mesma linha em vez de duplicar.
 - Dado uma grid com itens, quando "Gravar Devolução" é confirmado, então cada item volta ao
@@ -196,9 +275,19 @@ vale inexistente ou de outro tenant), 409 (vale já usado).
 - Dado uma venda que usou um vale, quando cancelada (Cancelamento de Venda), então o vale volta
   a `vale_usado = false`/`id_venda_debito = NULL` e pode ser usado numa venda futura.
 - Dado um tenant, então nunca enxerga nem afeta estoque/venda/vale de outro tenant (RLS, P8).
+- Dado um número de venda informado, quando o campo perde o foco (ou Enter), então o vendedor e
+  os itens vendidos são buscados automaticamente, sem clique em nenhum botão.
+- Dado um número de venda informado e resolvido, quando um produto que não faz parte dela é lido
+  ou pesquisado, então é rejeitado (tela) e, se enviado direto pro `POST`, rejeitado com 400.
+- Dado um número de venda informado, quando a quantidade lançada de um item excede o que ainda
+  não foi devolvido dela, então é rejeitada (tela e servidor).
+- Dado um item já devolvido (não cancelado) de uma venda, quando a mesma venda é consultada de
+  novo, então `qtdDisponivelDevolucao` reflete o desconto; uma devolução cancelada não desconta.
+- Dado `cfg_exige_numero_venda_devolucao` ligada, quando a devolução é gravada sem número de
+  venda, então 400.
 
-Cobertos por `DevolucaoProdutoCrudTest` (5 testes) e `ValeMercadoriaCrudTest` (6 testes,
-incluindo o cancelamento reabrindo o vale). Suíte completa do projeto: 295/295.
+Cobertos por `DevolucaoProdutoCrudTest` (10 testes) e `ValeMercadoriaCrudTest` (6 testes,
+incluindo o cancelamento reabrindo o vale). Suíte completa do projeto: 410/410.
 
 ## Ajuda da tela (manual de operação + vídeo) — obrigatório (R22 / §3.7.1)
 
@@ -213,6 +302,9 @@ incluindo o cancelamento reabrindo o vale). Suíte completa do projeto: 295/295.
 - Nenhuma tabela nova — reaproveita `produto_movimento_mestre/detalhe` (`tipo_movimento =
   'DEVOLUCAO'`, já existia desde `V013`) e `venda_devolucao` (já existia desde `V018`, agora
   finalmente usada).
+- `cfg_geral.cfg_exige_numero_venda_devolucao boolean NOT NULL DEFAULT false` (coluna nova,
+  2026-08-11, dentro de `V023__cfg_geral.sql` — banco em construção, editada em vez de nova
+  migration). Ver `docs/telas/configuracao-geral.md`.
 
 ## Impacto nas integrações
 
@@ -221,8 +313,6 @@ hoje).
 
 ## Non-goals
 
-- Vínculo persistido entre a devolução e a venda original (rastreabilidade venda↔devolução).
-- Validação de quantidade devolvida contra quantidade vendida.
 - Cálculo de comissão de fato — só o dado (`id_funcionario`) fica pronto.
 - Uso do fluxo de troca de `venda_devolucao` (`id_venda_credito` como geradora de uma nova
   venda) — a coluna existe e é preenchida, mas não dispara nenhuma lógica de troca.

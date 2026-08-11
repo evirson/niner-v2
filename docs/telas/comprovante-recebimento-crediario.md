@@ -67,7 +67,10 @@ parcela já paga, mas reforça que não há recálculo).
 isso o navegador tenta encaixar a impressão no tamanho de página padrão do sistema (A4/Carta) em
 vez do rolo contínuo. Fonte de impressão reduzida (9px/~6,75pt) com 3mm de margem lateral: 42
 colunas ocupam ~60mm de conteúdo, com folga real dentro dos 80mm físicos. O PDF usa página
-`[80mm, altura dinâmica]`, margem de 4mm, fonte courier 8pt — mesma folga.
+`[80mm, altura dinâmica]`, margem de 4mm, fonte courier 8pt — mesma folga. **2026-08-11:** a
+altura dinâmica agora tem um piso de 80mm — sem ele, um comprovante curto o bastante fazia o jsPDF
+inverter largura/altura (bug achado no Vale-Mercadoria, que costuma ter só 1 item; corrigido nas
+três variantes de `comprovante.ts`, detalhe em `docs/telas/papeleta-venda.md`).
 
 ## Contrato de API
 

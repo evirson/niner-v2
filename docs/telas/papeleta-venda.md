@@ -61,6 +61,21 @@ linhas de texto — reusado idêntico pela pré-visualização (`<pre>`), pela i
 `montarLinhasFechamento` (Fechamento de Caixa), mas com constantes de largura/coluna próprias
 (`LARGURA_VENDA = 64`, não reaproveita `LARGURA = 42` do resto do arquivo).
 
+### Bug corrigido (2026-08-11) — jsPDF invertia largura/altura em comprovantes curtos
+
+`montarDocumentoComprovante*` (as três variantes: crediário, venda, vale) criam o PDF com
+`new jsPDF({ unit: 'mm', format: [80, altura] })`, onde `altura` é calculada a partir do número de
+linhas do comprovante. O jsPDF, em orientação retrato (padrão quando `orientation` não é passado),
+**troca largura por altura sempre que `largura > altura`** (é assim que garante que "retrato" seja
+sempre mais alto que largo). Como a papeleta de venda normalmente tem itens/blocos suficientes pra
+ultrapassar 80mm de altura, o bug nunca apareceu nela — mas o Vale-Mercadoria
+([[project_devolucao_produtos_vale_mercadoria]], mesmas funções desde 2026-08-07) costuma ter só 1
+item, ficando abaixo de 80mm de altura: a página saía com ~57mm de largura em vez de 80mm,
+cortando as colunas da direita (TOTAL, valor do vale). Corrigido impondo um piso de 80mm na altura
+calculada (`Math.max(LARGURA_MM, margem*2 + linhas.length*alturaLinha)`, constante `LARGURA_MM`
+nova no topo de `comprovante.ts`) nas três funções — nunca reintroduzir `format: [80, altura]` sem
+esse piso em nenhum comprovante novo que reaproveite este padrão.
+
 ### `venda.id_caixa` — necessário pro "Operador" em venda 100% crediário
 
 `venda` ganhou a coluna `id_caixa` (migration `V025`, editada — banco ainda em construção, sem

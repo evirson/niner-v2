@@ -266,9 +266,120 @@ e a busca de vale usada pelo PDV (`DevolucaoProdutoService.buscarVale`) passaram
 também um vale **cancelado**, não só usado. Suíte de backend segue **405/405 verdes**
 (nenhum teste novo — pendência registrada na spec da feature, ver linha do tempo).
 
+**Sessão de 2026-08-11 (continuação):** dois ajustes pequenos na tela nova. O popup obrigatório
+de filtros do Cancelamento de Devolução ganhou um botão **"Fechar"** (`navigate(-1)`) — sem ele
+não havia como sair da tela sem confirmar os filtros primeiro, já que o popup cobre o ✕ da
+topbar. E foi corrigido um bug real no gerador de PDF dos comprovantes térmicos
+(`web/src/lib/comprovante.ts`): o `jsPDF`, em orientação retrato, troca largura por altura sempre
+que `largura > altura` — um comprovante curto (Vale-Mercadoria com poucos itens é o caso comum)
+tinha a altura calculada abaixo de 80mm e saía com a página invertida, cortando as colunas da
+direita. Corrigido com um piso de 80mm na altura, nas três variantes que geram PDF (crediário,
+papeleta de venda, vale). Detalhe técnico em `docs/telas/papeleta-venda.md`.
+
+**Sessão de 2026-08-11 (continuação 2):** a Devolução de Produtos ganhou **restrição a produtos
+vendidos** — pedido explícito do dono do produto, fechando um non-goal que a spec original
+deixava aberto. Com o número da venda informado, o vendedor passou a ser buscado
+**automaticamente** (sem botão) e a tela só aceita devolver produtos que a venda vendeu, até a
+quantidade ainda não devolvida — validado no servidor, não só na tela. Ganhou também um novo
+**parâmetro em Parâmetros do Sistema** ("Exigir número da venda na Devolução de Produtos",
+`cfg_geral.cfg_exige_numero_venda_devolucao`, default desligado) que torna o campo obrigatório
+quando ligado, e o **foco inicial da tela** passou a depender dessa configuração (número da
+venda quando obrigatório, código de barras quando opcional). No meio do caminho, um bug real de
+cache do React Query foi encontrado e corrigido: salvar em Parâmetros do Sistema não invalidava
+o cache das flags leves usadas por outras telas, então a Devolução de Produtos podia continuar
+mostrando o comportamento antigo depois de mudar a configuração, se o usuário navegasse (SPA,
+sem recarregar a página) em vez de dar F5. Suíte de backend: **410/410 verdes** (5 testes novos
+nesta sessão: 4 da restrição a produtos vendidos + 1 da obrigatoriedade condicional). Detalhe
+completo em `docs/telas/devolucao-produtos.md` e `docs/telas/configuracao-geral.md`.
+
 ---
 
 ## Linha do tempo
+
+### 2026-08-11 (continuação 2) — Devolução de Produtos: restrição a produtos vendidos + config + bug de cache
+
+Mesma sessão, pedido direto do dono do produto: "se entrar com o número da venda, já pega o
+vendedor automaticamente, e só pode devolver produtos que foram vendidos" —
+`docs/telas/devolucao-produtos.md`, seção "Restrição a produtos vendidos" tem o desenho
+completo; aqui só a linha do tempo.
+
+**1. Busca automática do vendedor.** Botão "Buscar Vendedor" removido — dispara sozinha ao sair
+do campo (`onBlur`) ou no Enter. `GET /vendas/devolucao/vendedor` passou a responder também os
+itens vendidos naquela venda (`itens: ItemVendaOrigemResponse[]`, com `qtdVendida`/
+`qtdDisponivelDevolucao`), reaproveitando a mesma chamada.
+
+**2. Restrição de itens (`RN-06`).** Com o número da venda resolvido, a tela só aceita lançar
+produtos presentes nela, até a quantidade ainda não devolvida (descontando devoluções não
+canceladas da mesma venda). Mecânica escolhida via `AskUserQuestion`: código de barras + bloqueio
+(toast), não uma lista pra escolher — mantém a leitura livre já existente. Validado também no
+servidor (`DevolucaoProdutoService.efetivar`, 400), não só na tela (P4). 4 testes novos em
+`DevolucaoProdutoCrudTest`.
+
+**3. Novo parâmetro em Parâmetros do Sistema** — "Exigir número da venda na Devolução de
+Produtos" (`cfg_geral.cfg_exige_numero_venda_devolucao`, coluna nova dentro de `V023__cfg_geral.sql`,
+default desligado). Ligado, o campo vira obrigatório na tela (e no servidor). Novo endpoint leve
+`GET /config-geral/exige-numero-venda-devolucao` (qualquer papel, mesmo padrão de
+`/permite-qtd-decimal`). 1 teste novo em `DevolucaoProdutoCrudTest` + assertions novas em
+`ConfiguracaoGeralTest`; 7 arquivos de teste existentes precisaram do novo campo obrigatório no
+corpo do `PUT /config-geral`.
+
+**4. Foco inicial condicional** — obrigatório: foco vai pro "Número da Venda" ao abrir a tela (e
+depois de gravar, quando o formulário reseta); opcional: foco continua no "Código de Barras",
+como sempre foi.
+
+**5. Bug real encontrado e corrigido: cache do React Query entre telas.** O usuário reportou que
+o item 4 "não estava fazendo o que foi pedido" — investigação mostrou que `ConfiguracaoGeralForm.tsx`,
+ao salvar, só atualizava o cache da própria query (`['config-geral']`); as 4 flags leves
+(`usa-cor-grade`, `desconto-venda`, `permite-qtd-decimal`, `exige-numero-venda-devolucao`), cada
+uma com sua própria query key, continuavam servindo o valor antigo em cache pra qualquer tela já
+visitada nesta sessão do navegador — a navegação do sistema é toda client-side (React Router),
+sem recarregar a página, então o cache sobrevive entre telas. O primeiro teste desse recurso
+tinha passado por acidente: cada verificação usava navegação por URL (recarga completa,
+zerando o cache) em vez de clicar no menu como um usuário real faria. Corrigido em duas frentes:
+`ConfiguracaoGeralForm.tsx` invalida as 4 queries no `onSuccess` do salvar; `DevolucaoProduto.tsx`
+espera `isFetching` virar `false` antes de decidir o foco, em vez de usar o primeiro valor
+disponível (que podia ser cache desatualizado). Reproduzido e confirmado corrigido navegando de
+verdade pelo menu lateral (sem reload) nos dois sentidos.
+
+Suíte de backend completa: **410/410 verdes**.
+
+### 2026-08-11 (continuação) — botão Fechar no popup de filtros + bug de largura no PDF dos comprovantes térmicos
+
+Mesma sessão do Cancelamento de Devolução de Produtos, dois pedidos curtos depois de testar a
+tela pronta.
+
+**1. Botão "Fechar" no popup obrigatório de filtros** (`CancelamentoDevolucao.tsx`) — o popup
+(`filtrosAberto`) é a única forma de entrada na tela, e cobre visualmente o ✕ da topbar
+(`BotaoFecharTela`, `.modal-overlay` fica por cima); sem um botão dedicado, não havia como sair da
+tela sem antes confirmar (ou forçar) os filtros. Adicionado `useNavigate` + botão ghost "Fechar"
+que chama `navigate(-1)` — mesmo padrão do resto do sistema
+([[project_botao_fechar_tela]]: todo `aoFechar` que navega usa histórico real, nunca rota fixa).
+Testado ao vivo: volta pro Painel (última tela real do histórico), não pra uma rota hardcoded.
+
+**2. Bug real no PDF dos comprovantes térmicos** — pedido do dono do produto pra comparar a
+papeleta de venda com o vale-mercadoria de devolução (ele reportou o nome do produto "saindo da
+papeleta" no vale). Investigação mostrou que o layout em si já estava correto e idêntico entre os
+dois desde 2026-08-07 (mesmas funções em `comprovante.ts`) — o problema real estava em
+`montarDocumentoComprovante*` (as três variantes: crediário, venda, vale), que criam a página com
+`new jsPDF({ unit: 'mm', format: [80, altura] })`, `altura` calculada a partir do número de linhas
+do comprovante. O jsPDF, em orientação retrato (padrão), **troca largura por altura sempre que
+`largura > altura`** — a papeleta de venda quase sempre tem itens/blocos suficientes pra passar de
+80mm de altura, então nunca disparava o bug; o Vale-Mercadoria, que costuma ter 1 item só, ficava
+abaixo de 80mm e saía com a página de ~57mm de largura em vez de 80mm, cortando a coluna TOTAL e o
+valor do vale. Corrigido impondo um piso de 80mm na altura calculada (constante `LARGURA_MM` nova,
+`Math.max(LARGURA_MM, margem*2 + linhas.length*alturaLinha)`) nas três funções.
+
+Confirmado ao vivo, comparando bytes do PDF antes/depois: gerei um vale real (1 item) com o código
+antigo — página cortada, exatamente como reportado — apliquei o fix, gerei outro vale — página
+correta, largura e colunas idênticas à papeleta de venda de referência. Dados de teste (2 vales,
+movimentos de estoque) apagados do banco depois (`DELETE` em `produto_movimento_detalhe`/`_mestre`
++ `venda_devolucao`; a trigger `fn_atualiza_estoque_movimento` reverteu o estoque sozinha ao
+apagar o detalhe, [[feedback_trigger_estoque_reage_delete]]).
+
+Arquivos: `web/src/pages/vendas/CancelamentoDevolucao.tsx` (botão Fechar),
+`web/src/lib/comprovante.ts` (fix do PDF), `docs/telas/papeleta-venda.md` (detalhe técnico do
+bug), `docs/telas/devolucao-produtos.md` e `docs/telas/comprovante-recebimento-crediario.md`
+(referência cruzada pro mesmo fix, já que as três variantes compartilham a função).
 
 ### 2026-08-11 — Cancelamento de Devolução de Produtos
 
