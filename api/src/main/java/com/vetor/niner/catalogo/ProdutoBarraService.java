@@ -60,7 +60,7 @@ public class ProdutoBarraService {
      * pra quando isso não deve valer). */
     @Transactional
     public ProdutoBarraResponse obterOuCriar(long idProduto, Long idCorPedido, Long idTamanhoPedido) {
-        return obterOuCriar(idProduto, idCorPedido, idTamanhoPedido, true);
+        return obterOuCriar(idProduto, idCorPedido, idTamanhoPedido, true, null);
     }
 
     /**
@@ -74,12 +74,24 @@ public class ProdutoBarraService {
      */
     @Transactional
     public ProdutoBarraResponse obterOuCriar(long idProduto, Long idCorPedido, Long idTamanhoPedido, boolean validarGrade) {
+        return obterOuCriar(idProduto, idCorPedido, idTamanhoPedido, validarGrade, null);
+    }
+
+    /**
+     * {@code ean} (2026-08-11, Entrada de Produtos por Compra) é o código de barras real do
+     * fabricante — só é gravado se esta chamada de fato CRIA a variação; se já existe uma
+     * variação pra essa combinação produto/cor/tamanho, o {@code ean} enviado é ignorado (nunca
+     * sobrescreve o que já estava lá). Único ponto de entrada que grava {@code ean} — os outros
+     * overloads chamam este com {@code ean = null}.
+     */
+    @Transactional
+    public ProdutoBarraResponse obterOuCriar(long idProduto, Long idCorPedido, Long idTamanhoPedido, boolean validarGrade, String ean) {
         Long idGrade = buscarIdGrade(idProduto);
         Long idCor = idGrade == null ? null : idCorPedido;
         Long idTamanho = idGrade == null ? null : idTamanhoPedido;
         validarObrigatoriedade(idProduto, idGrade, idCor, idTamanho, validarGrade);
         return buscarPorCombinacao(idProduto, idCor, idTamanho)
-                .orElseGet(() -> criar(idProduto, idCor, idTamanho));
+                .orElseGet(() -> criar(idProduto, idCor, idTamanho, ean));
     }
 
     /** Envelope não-nulo em volta de {@code idGrade} — necessário porque tanto {@code
@@ -250,19 +262,20 @@ public class ProdutoBarraService {
         return jdbc.sql(sql.toString()).params(params).query(ProdutoBarraService::mapear).optional();
     }
 
-    private ProdutoBarraResponse criar(long idProduto, Long idCor, Long idTamanho) {
+    private ProdutoBarraResponse criar(long idProduto, Long idCor, Long idTamanho, String ean) {
         // SqlParameterValue explícito pra id_cor/id_tamanho: sem isso, uma variação sem grade
         // (ambos null) faz o driver JDBC do Postgres falhar ("conversion to class java.lang.Long
         // from int4 not supported") — mesmo achado do id_grade em ProdutoService, 2026-08-08.
         long idVariacao = jdbc.sql("""
-                        INSERT INTO produto_barra (id_tenant, id_produto, id_cor, id_tamanho, sku)
-                        VALUES (plataforma.tenant_atual(), ?, ?, ?, gerar_ean13_interno())
+                        INSERT INTO produto_barra (id_tenant, id_produto, id_cor, id_tamanho, sku, ean)
+                        VALUES (plataforma.tenant_atual(), ?, ?, ?, gerar_ean13_interno(), ?)
                         RETURNING id_variacao
                         """)
                 .params(java.util.Arrays.asList(
                         idProduto,
                         new org.springframework.jdbc.core.SqlParameterValue(java.sql.Types.INTEGER, idCor),
-                        new org.springframework.jdbc.core.SqlParameterValue(java.sql.Types.INTEGER, idTamanho)))
+                        new org.springframework.jdbc.core.SqlParameterValue(java.sql.Types.INTEGER, idTamanho),
+                        ean))
                 .query(Long.class)
                 .single();
 
@@ -273,7 +286,7 @@ public class ProdutoBarraService {
     }
 
     private static final String SELECT_BASE = """
-            SELECT pb.id_variacao, pb.sku, p.descricao, p.marca, p.referencia, p.preco_venda,
+            SELECT pb.id_variacao, pb.sku, pb.ean, p.descricao, p.marca, p.referencia, p.preco_venda,
                    co.descricao AS variacao_cor, ta.descricao AS variacao_tamanho
             FROM produto_barra pb
             JOIN produto p ON p.id_produto = pb.id_produto AND p.id_tenant = pb.id_tenant
@@ -283,8 +296,8 @@ public class ProdutoBarraService {
 
     private static ProdutoBarraResponse mapear(ResultSet rs, int n) throws SQLException {
         return new ProdutoBarraResponse(
-                rs.getLong("id_variacao"), rs.getString("sku"), rs.getString("descricao"), rs.getString("marca"),
-                rs.getString("referencia"), rs.getBigDecimal("preco_venda"), rs.getString("variacao_cor"),
-                rs.getString("variacao_tamanho"));
+                rs.getLong("id_variacao"), rs.getString("sku"), rs.getString("ean"), rs.getString("descricao"),
+                rs.getString("marca"), rs.getString("referencia"), rs.getBigDecimal("preco_venda"),
+                rs.getString("variacao_cor"), rs.getString("variacao_tamanho"));
     }
 }

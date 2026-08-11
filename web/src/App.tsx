@@ -36,6 +36,9 @@ import ContagemEstoque from './pages/estoque/ContagemEstoque'
 import ZerarContagemEstoque from './pages/estoque/ZerarContagemEstoque'
 import DiferencasEstoque from './pages/estoque/DiferencasEstoque'
 import EfetivarBalanco from './pages/estoque/EfetivarBalanco'
+import EntradaMercadoriaLista from './pages/estoque/entrada/EntradaMercadoriaLista'
+import EntradaMercadoriaForm from './pages/estoque/entrada/EntradaMercadoriaForm'
+import EntradaMercadoriaDetalhe from './pages/estoque/entrada/EntradaMercadoriaDetalhe'
 import EstornoRecebimentoCrediario from './pages/recebimentocrediario/EstornoRecebimentoCrediario'
 import RecebimentoCrediario from './pages/recebimentocrediario/RecebimentoCrediario'
 import ReimpressaoRecebimentoCrediario from './pages/recebimentocrediario/ReimpressaoRecebimentoCrediario'
@@ -103,7 +106,9 @@ export default function App() {
           <Route path="/pedidos" element={<EmBreve titulo="Pedidos" />} />
           <Route path="/canais" element={<EmBreve titulo="Canais" />} />
           <Route path="/bi-dashboard" element={<EmBreve titulo="BI Dashboard" />} />
-          <Route path="/entrada-produtos-compra" element={<EmBreve titulo="Entrada de Produtos por Compra" />} />
+          <Route path="/entrada-produtos-compra" element={<EntradaMercadoriaLista />} />
+          <Route path="/entrada-produtos-compra/nova" element={<EntradaMercadoriaForm />} />
+          <Route path="/entrada-produtos-compra/:id" element={<EntradaMercadoriaDetalhe />} />
           <Route path="/relatorio-contas-pagar" element={<EmBreve titulo="Relatório de Contas a Pagar / Pagas" />} />
           <Route
             path="/relatorio-movimentacao-bancaria"

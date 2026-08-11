@@ -174,6 +174,12 @@ export const MENU: NavGrupo[] = [
     descricao: 'Movimentação de quantidades entre empresas e conferência de estoque físico.',
     itens: [
       {
+        to: '/entrada-produtos-compra',
+        label: 'Entrada de Produtos por Compra',
+        icone: IconeEstoque,
+        descricao: 'Recebe mercadoria de fornecedor (XML de NF-e, lançamento manual ou planilha), gerando movimento de estoque tipo COMPRA.',
+      },
+      {
         to: '/estoque',
         label: 'Transferência de Produtos',
         icone: IconeEstoque,
@@ -428,12 +434,6 @@ export const MENU: NavGrupo[] = [
         label: 'BI Dashboard',
         icone: IconePainel,
         descricao: 'Painel gerencial com indicadores consolidados do negócio. Em construção.',
-      },
-      {
-        to: '/entrada-produtos-compra',
-        label: 'Entrada de Produtos por Compra',
-        icone: IconeEstoque,
-        descricao: 'Recebimento de mercadoria de fornecedor, gerando movimento de estoque tipo COMPRA. Em construção.',
       },
       {
         to: '/relatorio-contas-pagar',

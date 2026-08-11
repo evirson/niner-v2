@@ -144,6 +144,29 @@ class ProdutoCrudTest {
                 .andExpect(status().isNotFound());
     }
 
+    /** Pesquisa por nome (2026-08-13) — quem cadastra um produto nem sempre sabe o código NCM
+     *  de cabeça. */
+    @Test
+    void pesquisaNcmPorNomeDevolveCorrespondencias() throws Exception {
+        String token = assinarNovoTenant("ncm-busca-nome");
+        criarNcm("61092000", "CAMISETAS REGATA DE MALHA");
+        criarNcm("64041200", "CALCADOS DE TENIS ESPORTIVO");
+
+        mvc.perform(get("/api/v1/ncm?busca=camiseta").header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].codigoNcm").value("61092000"));
+    }
+
+    @Test
+    void pesquisaNcmSemTermoDevolveListaVazia() throws Exception {
+        String token = assinarNovoTenant("ncm-busca-vazia");
+
+        mvc.perform(get("/api/v1/ncm").header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(0));
+    }
+
     @Test
     void produtoSemDescricaoEhRejeitado() throws Exception {
         String token = assinarNovoTenant("sem-descricao");
@@ -365,7 +388,9 @@ class ProdutoCrudTest {
                         .content("""
                                 {"percentualDescontoVenda":0,"jurosCrediarioDias":0,"jurosCrediario":0,
                                  "multaCrediarioDias":0,"multaCrediario":0,"cfgUsaCorGrade":true,
-                                 "cfgPermiteQtdDecimal":true,"cfgExigeNumeroVendaDevolucao":false}
+                                 "cfgPermiteQtdDecimal":true,"cfgExigeNumeroVendaDevolucao":false,
+                                 "cfgRateiaFreteEntrada":false,"cfgReajustaPrecoEntrada":false,
+                                 "idPlanoContasCompraMercadoria":"3.03.001.001"}
                                 """))
                 .andExpect(status().isOk());
     }
@@ -431,6 +456,32 @@ class ProdutoCrudTest {
         mvc.perform(get("/api/v1/produtos/" + id).header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.ativo").value(false));
+    }
+
+    @Test
+    void criarVariacaoGravaEanQuandoInformado() throws Exception {
+        String token = assinarNovoTenant("variacao-ean");
+        long id = criarProdutoSimples(token, "Produto Variacao Com Ean");
+
+        String resp = mvc.perform(post("/api/v1/produtos/" + id + "/variacoes")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(APPLICATION_JSON)
+                        .content("{\"ean\":\"7900282887111\"}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.ean").value("7900282887111"))
+                .andExpect(jsonPath("$.sku").isNotEmpty())
+                .andReturn().getResponse().getContentAsString();
+        long idVariacao = ((Number) JsonPath.read(resp, "$.idVariacao")).longValue();
+
+        // Chamar de novo com a MESMA combinação (produto sem grade, cor/tamanho sempre null)
+        // acha a variação existente — o novo ean enviado é ignorado, não sobrescreve.
+        mvc.perform(post("/api/v1/produtos/" + id + "/variacoes")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(APPLICATION_JSON)
+                        .content("{\"ean\":\"0000000000000\"}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.idVariacao").value(idVariacao))
+                .andExpect(jsonPath("$.ean").value("7900282887111"));
     }
 
     private long criarProdutoSimples(String token, String descricao) throws Exception {

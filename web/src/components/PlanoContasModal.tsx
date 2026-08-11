@@ -36,6 +36,10 @@ export default function PlanoContasModal({
         codigo: maiusculas(codigo.trim()),
         descricao: maiusculas(descricao.trim()),
         tipoMovimento: tipoMovimento as TipoMovimentoConta,
+        // Criação rápida sempre gera uma conta analítica (aceita lançamento direto) — é
+        // exatamente o que quem está criando na hora precisa (ex.: plano de contas do
+        // fornecedor); sintética (agrupadora) só faz sentido na gestão completa da tela própria.
+        natureza: 'ANALITICA',
         incluiDre,
         incluiFluxoCaixa,
       }),

@@ -171,7 +171,9 @@ class TransferenciaCrudTest {
                         .content("""
                                 {"percentualDescontoVenda":0,"jurosCrediarioDias":0,"jurosCrediario":0,
                                  "multaCrediarioDias":0,"multaCrediario":0,"cfgUsaCorGrade":false,
-                                 "cfgPermiteQtdDecimal":%s,"cfgExigeNumeroVendaDevolucao":false}
+                                 "cfgPermiteQtdDecimal":%s,"cfgExigeNumeroVendaDevolucao":false,
+                                 "cfgRateiaFreteEntrada":false,"cfgReajustaPrecoEntrada":false,
+                                 "idPlanoContasCompraMercadoria":"3.03.001.001"}
                                 """.formatted(permite)))
                 .andExpect(status().isOk());
     }

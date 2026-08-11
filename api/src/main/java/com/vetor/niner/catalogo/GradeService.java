@@ -166,6 +166,26 @@ public class GradeService {
         }
     }
 
+    /** Garante que {@code idTamanho} faça parte da grade — se já estiver em algum slot, não faz
+     * nada; senão anexa no próximo slot livre (extensão automática, usada pelo fluxo Planilha da
+     * Entrada de Produtos, 2026-08-13: uma variação de tamanho nova pra um produto já cadastrado
+     * é uma ampliação legítima da curva, o mesmo que o usuário faria manualmente em "＋ Gerenciar
+     * Grades"). Lança se a grade já estiver com os {@value #MAX_TAMANHOS} slots ocupados —
+     * quem chama decide se isso vira pendência pro usuário resolver à mão. */
+    @Transactional
+    public void garantirTamanhoNaGrade(long idGrade, long idTamanho) {
+        GradeResponse grade = buscar(idGrade);
+        if (grade.tamanhos().stream().anyMatch(t -> t.idTamanho() == idTamanho)) {
+            return;
+        }
+        if (grade.tamanhos().size() >= MAX_TAMANHOS) {
+            throw new IllegalArgumentException("a grade \"" + grade.descricao() + "\" já tem " + MAX_TAMANHOS + " tamanhos.");
+        }
+        List<Long> idsAtualizados = new ArrayList<>(grade.tamanhos().stream().map(TamanhoResponse::idTamanho).toList());
+        idsAtualizados.add(idTamanho);
+        atualizar(idGrade, new GradeRequest(grade.descricao(), idsAtualizados));
+    }
+
     private static String validarEDescricao(GradeRequest req) {
         if (req.idsTamanho() != null) {
             if (req.idsTamanho().size() > MAX_TAMANHOS) {

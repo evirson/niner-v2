@@ -329,7 +329,9 @@ class PlanoContasCrudTest {
         String token = assinarNovoTenant("ordenacao");
         criarPlanoSimples(token, "1.00.000.000", "ORDPLANO BETA");
         criarPlanoSimples(token, "2.00.000.000", "ORDPLANO ALFA");
-        criarPlanoSimples(token, "3.00.000.000", "ORDPLANO GAMA");
+        // 4.00.000.000, não 3.00.000.000: esse já nasce seedado (V032, "CUSTOS VARIÁVEIS") pra
+        // a Entrada de Produtos por Compra.
+        criarPlanoSimples(token, "4.00.000.000", "ORDPLANO GAMA");
 
         mvc.perform(get("/api/v1/planos-contas").param("busca", "ORDPLANO")
                         .param("ordenarPor", "descricao").param("direcao", "DESC")

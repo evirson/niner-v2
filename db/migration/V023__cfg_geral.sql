@@ -11,6 +11,8 @@ CREATE TABLE cfg_geral (
   cfg_usa_cor_grade         boolean      NOT NULL DEFAULT false,  -- 2026-08-08: variação por cor+grade de tamanho (calçados/confecções); substitui cfg_usa_variante_linha/coluna
   cfg_permite_qtd_decimal   boolean      NOT NULL DEFAULT true,  -- 2026-07-29: qtd de produto com 3 casas (numeric(14,3)) quando true, inteiro quando false — vale em PDV/Transferência/Histórico
   cfg_exige_numero_venda_devolucao boolean NOT NULL DEFAULT false,  -- 2026-08-11: true exige o nº da venda de origem na Devolução de Produtos (obrigatório pra restringir a produtos vendidos); false = opcional, como sempre foi
+  cfg_rateia_frete_entrada boolean NOT NULL DEFAULT false,  -- 2026-08-11 (Entrada de Produtos): true rateia frete/IPI/ICMS-ST no custo unitário do item (grava em produto_movimento_detalhe.valor_acrescimo); false = ignora
+  cfg_reajusta_preco_entrada boolean NOT NULL DEFAULT false,  -- 2026-08-11 (Entrada de Produtos): true atualiza produto.preco_custo/preco_venda/reajustado_em a partir do custo da entrada; false = só grava o movimento, preço do produto não muda
   atualizado_em             timestamptz  NOT NULL DEFAULT now()
 );
 

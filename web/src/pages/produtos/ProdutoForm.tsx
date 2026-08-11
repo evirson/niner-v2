@@ -14,9 +14,10 @@ import CategoriaProdutoModal from '../../components/CategoriaProdutoModal'
 import ConfirmarSalvarModal from '../../components/ConfirmarSalvarModal'
 import GaleriaImagensProduto from '../../components/GaleriaImagensProduto'
 import GradeModal from '../../components/GradeModal'
-import { IconeEngrenagem, IconeExcluir, IconeProduto, IconeSetaBaixo, IconeSetaCima } from '../../components/Icones'
+import { IconeEngrenagem, IconeExcluir, IconeLupa, IconeProduto, IconeSetaBaixo, IconeSetaCima } from '../../components/Icones'
 import InfoRegistro from '../../components/InfoRegistro'
 import LinhaGrid from '../../components/LinhaGrid'
+import PesquisaNcmModal from '../../components/PesquisaNcmModal'
 import Toast from '../../components/Toast'
 import { ApiError } from '../../lib/api'
 import { listarCategoriasProduto } from '../../lib/categoriasProduto'
@@ -169,6 +170,7 @@ export default function ProdutoForm({ somenteLeitura = false }: { somenteLeitura
   const [imagens, setImagens] = useState<ImagemProduto[]>([])
   const [arquivosNovaFoto, setArquivosNovaFoto] = useState<File[]>([])
   const [modalGradeAberto, setModalGradeAberto] = useState(false)
+  const [modalNcmAberto, setModalNcmAberto] = useState(false)
 
   /**
    * Busca a descrição do NCM digitado (mesmo estilo do autopreenchimento de CEP). Código que
@@ -488,16 +490,28 @@ export default function ProdutoForm({ somenteLeitura = false }: { somenteLeitura
                       <label htmlFor="codigoNcm">
                         NCM{campoObrigatorio('codigoNcm', mapaConfig) && ' *'}
                       </label>
-                      <input
-                        id="codigoNcm"
-                        placeholder="9999.99.99"
-                        value={form.codigoNcm}
-                        onChange={(e) => setForm((f) => ({ ...f, codigoNcm: mascararNcm(e.target.value) }))}
-                        onBlur={(e) => {
-                          aoSairDoCampo('codigoNcm')(e)
-                          buscarDescricaoDoNcm(somenteDigitos(e.target.value))
-                        }}
-                      />
+                      <div className="linha-com-botao">
+                        <input
+                          id="codigoNcm"
+                          placeholder="9999.99.99"
+                          value={form.codigoNcm}
+                          onChange={(e) => setForm((f) => ({ ...f, codigoNcm: mascararNcm(e.target.value) }))}
+                          onBlur={(e) => {
+                            aoSairDoCampo('codigoNcm')(e)
+                            buscarDescricaoDoNcm(somenteDigitos(e.target.value))
+                          }}
+                        />
+                        <button
+                          type="button"
+                          tabIndex={-1}
+                          className="btn ghost"
+                          onClick={() => setModalNcmAberto(true)}
+                          aria-label="Pesquisar NCM por nome"
+                          title="Pesquisar NCM por nome"
+                        >
+                          <IconeLupa />
+                        </button>
+                      </div>
                       {erros.codigoNcm && <p className="erro-campo">{erros.codigoNcm}</p>}
                     </>
                   ),
@@ -889,6 +903,18 @@ export default function ProdutoForm({ somenteLeitura = false }: { somenteLeitura
           aoSelecionar={(idGrade, descricaoGrade) => {
             setForm((f) => ({ ...f, idGrade, descricaoGrade }))
             setErros((e) => ({ ...e, idGrade: undefined }))
+          }}
+        />
+      )}
+
+      {modalNcmAberto && (
+        <PesquisaNcmModal
+          aoFechar={() => setModalNcmAberto(false)}
+          aoSelecionar={(ncm) => {
+            setForm((f) => ({ ...f, codigoNcm: mascararNcm(ncm.codigoNcm) }))
+            setDescricaoNcm(ncm.descricaoNcm)
+            setErros((e) => ({ ...e, codigoNcm: undefined }))
+            setModalNcmAberto(false)
           }}
         />
       )}

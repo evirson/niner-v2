@@ -194,3 +194,29 @@ export function excluirProduto(id: number): Promise<ExclusaoProduto> {
 export function listarMarcas(): Promise<string[]> {
   return api<string[]>('/api/v1/produtos/marcas')
 }
+
+/** Uma variação (`produto_barra`) já com produto/cor/tamanho resolvidos. `ean` (2026-08-11,
+ *  Entrada de Produtos por Compra) é o código de barras do fabricante, distinto do `sku` interno. */
+export interface VariacaoProduto {
+  idVariacao: number
+  sku: string
+  ean: string | null
+  descricao: string
+  marca: string | null
+  referencia: string | null
+  precoVenda: number
+  variacaoCor: string | null
+  variacaoTamanho: string | null
+}
+
+/** Acha a variação já cadastrada pra essa combinação produto/cor/tamanho, ou cria na hora
+ *  (gera o SKU). `ean` só é gravado se esta chamada de fato criar a variação. */
+export function criarVariacao(
+  idProduto: number,
+  variacao: { idCor: number | null; idTamanho: number | null; ean?: string | null },
+): Promise<VariacaoProduto> {
+  return api<VariacaoProduto>(`/api/v1/produtos/${idProduto}/variacoes`, {
+    method: 'POST',
+    body: JSON.stringify(variacao),
+  })
+}

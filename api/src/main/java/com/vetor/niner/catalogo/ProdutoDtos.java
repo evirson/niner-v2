@@ -65,7 +65,8 @@ public final class ProdutoDtos {
             List<CategoriaSelecionada> categorias,
             List<ProdutoImagemDtos.ImagemResponse> imagens,
             OffsetDateTime criadoEm,
-            OffsetDateTime atualizadoEm) {
+            OffsetDateTime atualizadoEm,
+            OffsetDateTime reajustadoEm) {
     }
 
     /** Listagem paginada por número de página, mesmo padrão de `cadastros.*` (2026-07-21). */

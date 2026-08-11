@@ -1,6 +1,8 @@
 package com.vetor.niner.identidade.empresa;
 
 import com.vetor.niner.identidade.empresa.EmpresaDtos.EmpresaResponse;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -21,5 +23,12 @@ public class EmpresaController {
     @GetMapping
     public List<EmpresaResponse> listar() {
         return service.listar();
+    }
+
+    /** Empresas que o usuário logado pode operar (ADMIN: todas; OPERADOR: só as liberadas) —
+     *  usado pela Entrada de Produtos por Compra pra escolher em qual empresa dar entrada. */
+    @GetMapping("/permitidas")
+    public List<EmpresaResponse> listarPermitidas(@AuthenticationPrincipal Jwt jwt) {
+        return service.listarPermitidas(jwt);
     }
 }

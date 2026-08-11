@@ -5,6 +5,8 @@ import com.vetor.niner.configuracao.geral.ConfiguracaoGeralDtos.ConfiguracaoGera
 import com.vetor.niner.configuracao.geral.ConfiguracaoGeralDtos.DescontoVendaResponse;
 import com.vetor.niner.configuracao.geral.ConfiguracaoGeralDtos.ExigeNumeroVendaDevolucaoResponse;
 import com.vetor.niner.configuracao.geral.ConfiguracaoGeralDtos.PermiteQtdDecimalResponse;
+import com.vetor.niner.configuracao.geral.ConfiguracaoGeralDtos.RateiaFreteEntradaResponse;
+import com.vetor.niner.configuracao.geral.ConfiguracaoGeralDtos.ReajustaPrecoEntradaResponse;
 import com.vetor.niner.configuracao.geral.ConfiguracaoGeralDtos.UsaCorGradeResponse;
 import jakarta.validation.Valid;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -19,8 +21,10 @@ import org.springframework.web.bind.annotation.*;
  * Grade aparece), {@code /desconto-venda} (PDV, F5, precisa do percentual de
  * desconto promocional pra exibir antes de efetivar a venda), {@code /permite-qtd-decimal}
  * (PDV/Transferência/Histórico do Cliente precisam saber se quantidade de produto aceita
- * decimais, pra formatar/validar a entrada) e {@code /exige-numero-venda-devolucao} (Devolução
- * de Produtos precisa saber se o número da venda de origem é obrigatório antes de gravar).
+ * decimais, pra formatar/validar a entrada), {@code /exige-numero-venda-devolucao} (Devolução
+ * de Produtos precisa saber se o número da venda de origem é obrigatório antes de gravar) e
+ * {@code /rateia-frete-entrada}/{@code /reajusta-preco-entrada} (Entrada de Produtos por Compra
+ * precisa das duas antes de confirmar uma entrada).
  */
 @RestController
 @RequestMapping("/api/v1/config-geral")
@@ -60,5 +64,15 @@ public class ConfiguracaoGeralController {
     @GetMapping("/exige-numero-venda-devolucao")
     public ExigeNumeroVendaDevolucaoResponse exigeNumeroVendaDevolucao() {
         return new ExigeNumeroVendaDevolucaoResponse(service.exigeNumeroVendaDevolucao());
+    }
+
+    @GetMapping("/rateia-frete-entrada")
+    public RateiaFreteEntradaResponse rateiaFreteEntrada() {
+        return new RateiaFreteEntradaResponse(service.rateiaFreteEntrada());
+    }
+
+    @GetMapping("/reajusta-preco-entrada")
+    public ReajustaPrecoEntradaResponse reajustaPrecoEntrada() {
+        return new ReajustaPrecoEntradaResponse(service.reajustaPrecoEntrada());
     }
 }

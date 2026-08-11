@@ -315,7 +315,7 @@ public final class ImportacaoPlanilha {
     /** Monta um `.xlsx` com a linha de cabeçalho + as linhas de exemplo dadas (células de texto —
      *  são só exemplos ilustrativos, não precisam de tipo nativo). Célula vazia/nula não é
      *  criada (fica em branco), mesmo efeito de campo vazio entre `;` no antigo CSV. */
-    static byte[] gerarModelo(String[] colunas, String[]... linhasExemplo) {
+    public static byte[] gerarModelo(String[] colunas, String[]... linhasExemplo) {
         try (Workbook workbook = new XSSFWorkbook()) {
             Sheet sheet = workbook.createSheet("Modelo");
             Row cabecalho = sheet.createRow(0);

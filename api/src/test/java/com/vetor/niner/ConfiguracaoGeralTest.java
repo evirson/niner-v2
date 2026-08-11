@@ -62,7 +62,9 @@ class ConfiguracaoGeralTest {
                 .andExpect(jsonPath("$.percentualDescontoVenda").value(0))
                 .andExpect(jsonPath("$.cfgUsaCorGrade").value(false))
                 .andExpect(jsonPath("$.cfgPermiteQtdDecimal").value(true))
-                .andExpect(jsonPath("$.cfgExigeNumeroVendaDevolucao").value(false));
+                .andExpect(jsonPath("$.cfgExigeNumeroVendaDevolucao").value(false))
+                .andExpect(jsonPath("$.cfgRateiaFreteEntrada").value(false))
+                .andExpect(jsonPath("$.cfgReajustaPrecoEntrada").value(false));
     }
 
     @Test
@@ -72,7 +74,9 @@ class ConfiguracaoGeralTest {
         String corpo = """
                 {"percentualDescontoVenda":15.5,"jurosCrediarioDias":5,"jurosCrediario":2.5,
                  "multaCrediarioDias":10,"multaCrediario":3.0,"cfgUsaCorGrade":true,
-                 "cfgPermiteQtdDecimal":false,"cfgExigeNumeroVendaDevolucao":true}
+                 "cfgPermiteQtdDecimal":false,"cfgExigeNumeroVendaDevolucao":true,
+                 "cfgRateiaFreteEntrada":true,"cfgReajustaPrecoEntrada":true,
+                 "idPlanoContasCompraMercadoria":"3.03.001.001"}
                 """;
 
         mvc.perform(put("/api/v1/config-geral").header("Authorization", "Bearer " + token)
@@ -82,7 +86,9 @@ class ConfiguracaoGeralTest {
                 .andExpect(jsonPath("$.jurosCrediarioDias").value(5))
                 .andExpect(jsonPath("$.cfgUsaCorGrade").value(true))
                 .andExpect(jsonPath("$.cfgPermiteQtdDecimal").value(false))
-                .andExpect(jsonPath("$.cfgExigeNumeroVendaDevolucao").value(true));
+                .andExpect(jsonPath("$.cfgExigeNumeroVendaDevolucao").value(true))
+                .andExpect(jsonPath("$.cfgRateiaFreteEntrada").value(true))
+                .andExpect(jsonPath("$.cfgReajustaPrecoEntrada").value(true));
 
         mvc.perform(get("/api/v1/config-geral").header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk())
@@ -96,6 +102,12 @@ class ConfiguracaoGeralTest {
         mvc.perform(get("/api/v1/config-geral/exige-numero-venda-devolucao").header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.cfgExigeNumeroVendaDevolucao").value(true));
+        mvc.perform(get("/api/v1/config-geral/rateia-frete-entrada").header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.cfgRateiaFreteEntrada").value(true));
+        mvc.perform(get("/api/v1/config-geral/reajusta-preco-entrada").header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.cfgReajustaPrecoEntrada").value(true));
     }
 
     @Test
@@ -119,7 +131,8 @@ class ConfiguracaoGeralTest {
         String corpo = """
                 {"percentualDescontoVenda":10,"jurosCrediarioDias":0,"jurosCrediario":0,
                  "multaCrediarioDias":0,"multaCrediario":0,"cfgUsaCorGrade":true,"cfgPermiteQtdDecimal":true,
-                 "cfgExigeNumeroVendaDevolucao":false}
+                 "cfgExigeNumeroVendaDevolucao":false,"cfgRateiaFreteEntrada":false,"cfgReajustaPrecoEntrada":false,
+                 "idPlanoContasCompraMercadoria":"3.03.001.001"}
                 """;
         mvc.perform(put("/api/v1/config-geral").header("Authorization", "Bearer " + tokenOperador)
                         .contentType(APPLICATION_JSON).content(corpo))
@@ -133,7 +146,8 @@ class ConfiguracaoGeralTest {
         String corpo = """
                 {"percentualDescontoVenda":150,"jurosCrediarioDias":0,"jurosCrediario":0,
                  "multaCrediarioDias":0,"multaCrediario":0,"cfgUsaCorGrade":true,"cfgPermiteQtdDecimal":true,
-                 "cfgExigeNumeroVendaDevolucao":false}
+                 "cfgExigeNumeroVendaDevolucao":false,"cfgRateiaFreteEntrada":false,"cfgReajustaPrecoEntrada":false,
+                 "idPlanoContasCompraMercadoria":"3.03.001.001"}
                 """;
         mvc.perform(put("/api/v1/config-geral").header("Authorization", "Bearer " + token)
                         .contentType(APPLICATION_JSON).content(corpo))
@@ -147,7 +161,8 @@ class ConfiguracaoGeralTest {
         String corpo = """
                 {"percentualDescontoVenda":10,"jurosCrediarioDias":-1,"jurosCrediario":0,
                  "multaCrediarioDias":0,"multaCrediario":0,"cfgUsaCorGrade":true,"cfgPermiteQtdDecimal":true,
-                 "cfgExigeNumeroVendaDevolucao":false}
+                 "cfgExigeNumeroVendaDevolucao":false,"cfgRateiaFreteEntrada":false,"cfgReajustaPrecoEntrada":false,
+                 "idPlanoContasCompraMercadoria":"3.03.001.001"}
                 """;
         mvc.perform(put("/api/v1/config-geral").header("Authorization", "Bearer " + token)
                         .contentType(APPLICATION_JSON).content(corpo))
@@ -164,7 +179,9 @@ class ConfiguracaoGeralTest {
                         .content("""
                                 {"percentualDescontoVenda":20,"jurosCrediarioDias":0,"jurosCrediario":0,
                                  "multaCrediarioDias":0,"multaCrediario":0,"cfgUsaCorGrade":true,
-                                 "cfgPermiteQtdDecimal":true,"cfgExigeNumeroVendaDevolucao":false}
+                                 "cfgPermiteQtdDecimal":true,"cfgExigeNumeroVendaDevolucao":false,
+                                 "cfgRateiaFreteEntrada":false,"cfgReajustaPrecoEntrada":false,
+                 "idPlanoContasCompraMercadoria":"3.03.001.001"}
                                 """))
                 .andExpect(status().isOk());
 

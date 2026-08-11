@@ -10,6 +10,9 @@ export interface ConfiguracaoGeral {
   cfgUsaCorGrade: boolean
   cfgPermiteQtdDecimal: boolean
   cfgExigeNumeroVendaDevolucao: boolean
+  cfgRateiaFreteEntrada: boolean
+  cfgReajustaPrecoEntrada: boolean
+  idPlanoContasCompraMercadoria: string
   atualizadoEm: string
 }
 
@@ -23,6 +26,9 @@ export interface ConfiguracaoGeralFormState {
   cfgUsaCorGrade: boolean
   cfgPermiteQtdDecimal: boolean
   cfgExigeNumeroVendaDevolucao: boolean
+  cfgRateiaFreteEntrada: boolean
+  cfgReajustaPrecoEntrada: boolean
+  idPlanoContasCompraMercadoria: string
 }
 
 export function paraFormulario(c: ConfiguracaoGeral): ConfiguracaoGeralFormState {
@@ -35,6 +41,9 @@ export function paraFormulario(c: ConfiguracaoGeral): ConfiguracaoGeralFormState
     cfgUsaCorGrade: c.cfgUsaCorGrade,
     cfgPermiteQtdDecimal: c.cfgPermiteQtdDecimal,
     cfgExigeNumeroVendaDevolucao: c.cfgExigeNumeroVendaDevolucao,
+    cfgRateiaFreteEntrada: c.cfgRateiaFreteEntrada,
+    cfgReajustaPrecoEntrada: c.cfgReajustaPrecoEntrada,
+    idPlanoContasCompraMercadoria: c.idPlanoContasCompraMercadoria,
   }
 }
 
@@ -49,6 +58,9 @@ export function paraRequisicao(f: ConfiguracaoGeralFormState) {
     cfgUsaCorGrade: f.cfgUsaCorGrade,
     cfgPermiteQtdDecimal: f.cfgPermiteQtdDecimal,
     cfgExigeNumeroVendaDevolucao: f.cfgExigeNumeroVendaDevolucao,
+    cfgRateiaFreteEntrada: f.cfgRateiaFreteEntrada,
+    cfgReajustaPrecoEntrada: f.cfgReajustaPrecoEntrada,
+    idPlanoContasCompraMercadoria: f.idPlanoContasCompraMercadoria,
   }
 }
 
@@ -99,4 +111,24 @@ export interface ExigeNumeroVendaDevolucao {
  *  Produtos pra saber se o campo "Número da Venda" é obrigatório antes de gravar. */
 export function buscarExigeNumeroVendaDevolucao(): Promise<ExigeNumeroVendaDevolucao> {
   return api<ExigeNumeroVendaDevolucao>('/api/v1/config-geral/exige-numero-venda-devolucao')
+}
+
+export interface RateiaFreteEntrada {
+  cfgRateiaFreteEntrada: boolean
+}
+
+/** Aberto a qualquer papel (diferente do resto de `cfg_geral`) — usado pela Entrada de Produtos
+ *  por Compra pra decidir se rateia frete/IPI/ICMS-ST no custo do item. */
+export function buscarRateiaFreteEntrada(): Promise<RateiaFreteEntrada> {
+  return api<RateiaFreteEntrada>('/api/v1/config-geral/rateia-frete-entrada')
+}
+
+export interface ReajustaPrecoEntrada {
+  cfgReajustaPrecoEntrada: boolean
+}
+
+/** Aberto a qualquer papel (diferente do resto de `cfg_geral`) — usado pela Entrada de Produtos
+ *  por Compra pra decidir se atualiza o preço do produto a partir do custo da entrada. */
+export function buscarReajustaPrecoEntrada(): Promise<ReajustaPrecoEntrada> {
+  return api<ReajustaPrecoEntrada>('/api/v1/config-geral/reajusta-preco-entrada')
 }

@@ -1,5 +1,7 @@
 package com.vetor.niner.catalogo;
 
+import com.vetor.niner.catalogo.ProdutoBarraDtos.CriarVariacaoRequest;
+import com.vetor.niner.catalogo.ProdutoBarraDtos.ProdutoBarraResponse;
 import com.vetor.niner.catalogo.ProdutoDtos.ExclusaoProdutoResponse;
 import com.vetor.niner.catalogo.ProdutoDtos.PaginaProdutos;
 import com.vetor.niner.catalogo.ProdutoDtos.ProdutoRequest;
@@ -19,9 +21,11 @@ import java.util.List;
 public class ProdutoController {
 
     private final ProdutoService service;
+    private final ProdutoBarraService produtoBarraService;
 
-    public ProdutoController(ProdutoService service) {
+    public ProdutoController(ProdutoService service, ProdutoBarraService produtoBarraService) {
         this.service = service;
+        this.produtoBarraService = produtoBarraService;
     }
 
     @GetMapping
@@ -61,5 +65,16 @@ public class ProdutoController {
     @DeleteMapping("/{id}")
     public ExclusaoProdutoResponse excluir(@PathVariable long id) {
         return service.excluir(id);
+    }
+
+    /** Acha a variação (cor+tamanho) já cadastrada pra este produto, ou cria na hora — usado
+     *  pela Entrada de Produtos por Compra (cadastro rápido de variação, com o `ean`/código de
+     *  barras do fabricante quando a entrada vem de um XML). {@code idProduto} tem que já
+     *  existir; ver {@link ProdutoBarraService#obterOuCriar(long, Long, Long, boolean, String)}
+     *  pras regras de obrigatoriedade de cor/tamanho quando o produto usa grade. */
+    @PostMapping("/{idProduto}/variacoes")
+    @ResponseStatus(HttpStatus.CREATED)
+    public ProdutoBarraResponse criarVariacao(@PathVariable long idProduto, @RequestBody CriarVariacaoRequest req) {
+        return produtoBarraService.obterOuCriar(idProduto, req.idCor(), req.idTamanho(), true, req.ean());
     }
 }

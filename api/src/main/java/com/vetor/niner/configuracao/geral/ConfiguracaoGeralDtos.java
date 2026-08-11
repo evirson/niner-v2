@@ -3,6 +3,7 @@ package com.vetor.niner.configuracao.geral;
 import jakarta.validation.constraints.DecimalMax;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 
 import java.math.BigDecimal;
@@ -26,7 +27,10 @@ public final class ConfiguracaoGeralDtos {
             @NotNull @DecimalMin("0") @DecimalMax("100") BigDecimal multaCrediario,
             @NotNull Boolean cfgUsaCorGrade,
             @NotNull Boolean cfgPermiteQtdDecimal,
-            @NotNull Boolean cfgExigeNumeroVendaDevolucao) {
+            @NotNull Boolean cfgExigeNumeroVendaDevolucao,
+            @NotNull Boolean cfgRateiaFreteEntrada,
+            @NotNull Boolean cfgReajustaPrecoEntrada,
+            @NotBlank String idPlanoContasCompraMercadoria) {
     }
 
     public record ConfiguracaoGeralResponse(
@@ -38,6 +42,9 @@ public final class ConfiguracaoGeralDtos {
             boolean cfgUsaCorGrade,
             boolean cfgPermiteQtdDecimal,
             boolean cfgExigeNumeroVendaDevolucao,
+            boolean cfgRateiaFreteEntrada,
+            boolean cfgReajustaPrecoEntrada,
+            String idPlanoContasCompraMercadoria,
             OffsetDateTime atualizadoEm) {
     }
 
@@ -62,5 +69,15 @@ public final class ConfiguracaoGeralDtos {
      *  usada pela própria tela (`vendas.devolucao`) pra saber se o campo "Número da Venda" é
      *  obrigatório antes mesmo de tentar gravar. */
     public record ExigeNumeroVendaDevolucaoResponse(boolean cfgExigeNumeroVendaDevolucao) {
+    }
+
+    /** Só a flag de rateio de frete/IPI/ICMS-ST no custo, sem checagem de papel — usada pela
+     *  Entrada de Produtos por Compra pra decidir se o rateio entra em `valor_acrescimo`. */
+    public record RateiaFreteEntradaResponse(boolean cfgRateiaFreteEntrada) {
+    }
+
+    /** Só a flag de reajuste automático de preço na entrada, sem checagem de papel — usada pela
+     *  Entrada de Produtos por Compra pra decidir se atualiza `produto.preco_custo`/`preco_venda`. */
+    public record ReajustaPrecoEntradaResponse(boolean cfgReajustaPrecoEntrada) {
     }
 }

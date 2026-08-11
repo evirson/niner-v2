@@ -401,7 +401,7 @@ public class ProdutoService {
             SELECT p.id_produto, p.descricao, p.marca, p.referencia, p.preco_custo, p.percentual_venda,
                    p.preco_venda, p.data_inicio_oferta, p.data_final_oferta, p.preco_oferta, p.codigo_ncm,
                    p.peso_bruto, p.peso_liquido, p.id_grade, g.descricao AS descricao_grade, p.ativo,
-                   p.criado_em, p.atualizado_em
+                   p.criado_em, p.atualizado_em, p.reajustado_em
             FROM produto p
             LEFT JOIN cfg_grade g ON g.id_grade = p.id_grade AND g.id_tenant = p.id_tenant
             """;
@@ -428,6 +428,7 @@ public class ProdutoService {
                 buscarCategorias(id),
                 produtoImagemService.listar(id),
                 rs.getObject("criado_em", OffsetDateTime.class),
-                rs.getObject("atualizado_em", OffsetDateTime.class));
+                rs.getObject("atualizado_em", OffsetDateTime.class),
+                rs.getObject("reajustado_em", OffsetDateTime.class));
     }
 }

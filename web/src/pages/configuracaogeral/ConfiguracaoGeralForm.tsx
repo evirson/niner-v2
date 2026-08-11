@@ -15,6 +15,7 @@ import {
 import { formatarDataHora } from '../../lib/datas'
 import { aoTeclarEnterNoFormulario } from '../../lib/formularios'
 import { completarPercentual, desmascararPercentual, mascararPercentual } from '../../lib/masks'
+import { listarPlanosContas } from '../../lib/planoContas'
 
 const CHAVE_TELA = 'configuracao.geral.form'
 
@@ -27,6 +28,9 @@ const VAZIO: ConfiguracaoGeralFormState = {
   cfgUsaCorGrade: false,
   cfgPermiteQtdDecimal: true,
   cfgExigeNumeroVendaDevolucao: false,
+  cfgRateiaFreteEntrada: false,
+  cfgReajustaPrecoEntrada: false,
+  idPlanoContasCompraMercadoria: '',
 }
 
 type CampoValidavel = 'percentualDescontoVenda' | 'jurosCrediarioDias' | 'jurosCrediario' | 'multaCrediarioDias' | 'multaCrediario'
@@ -61,6 +65,12 @@ export default function ConfiguracaoGeralForm() {
     queryFn: buscarConfiguracaoGeral,
   })
 
+  const { data: planos } = useQuery({
+    queryKey: ['planos-contas', 'config-geral-compra-mercadoria'],
+    queryFn: () => listarPlanosContas({ tamanho: 200 }),
+  })
+  const planosAnaliticos = (planos?.itens ?? []).filter((p) => p.natureza === 'ANALITICA' && p.ativo)
+
   useEffect(() => {
     if (configuracao) setForm(paraFormulario(configuracao))
   }, [configuracao])
@@ -77,6 +87,8 @@ export default function ConfiguracaoGeralForm() {
       queryClient.invalidateQueries({ queryKey: ['desconto-venda'] })
       queryClient.invalidateQueries({ queryKey: ['permite-qtd-decimal'] })
       queryClient.invalidateQueries({ queryKey: ['exige-numero-venda-devolucao'] })
+      queryClient.invalidateQueries({ queryKey: ['rateia-frete-entrada'] })
+      queryClient.invalidateQueries({ queryKey: ['reajusta-preco-entrada'] })
       setToastTipo('sucesso')
       setToast('Parâmetros salvos.')
     },
@@ -216,6 +228,63 @@ export default function ConfiguracaoGeralForm() {
               <p className="muted" style={{ fontSize: 12, marginTop: 4 }}>
                 Ligado: quantidade de produto (venda, transferência, histórico) aceita até 3 casas
                 decimais (ex.: 1,500 kg). Desligado: quantidade sempre inteira.
+              </p>
+            </div>
+          </div>
+        </section>
+
+        <section className="section">
+          <p className="section-label">Compras</p>
+          <p className="muted" style={{ marginTop: -4 }}>
+            Usados pela Entrada de Produtos por Compra ao confirmar uma nota.
+          </p>
+
+          <div className="form-grid">
+            <div className="col-6">
+              <label className="checkbox-linha" style={{ marginTop: 0 }}>
+                <input
+                  type="checkbox"
+                  checked={form.cfgRateiaFreteEntrada}
+                  onChange={(e) => setForm((f) => ({ ...f, cfgRateiaFreteEntrada: e.target.checked }))}
+                />
+                Ratear frete/IPI/ICMS-ST no custo do item
+              </label>
+              <p className="muted" style={{ fontSize: 12, marginTop: 4 }}>
+                Ligado: o valor de frete/IPI/ICMS-ST da nota é distribuído entre os itens e somado
+                ao custo unitário de cada um. Desligado: só o valor do produto vira custo.
+              </p>
+            </div>
+            <div className="col-6">
+              <label className="checkbox-linha" style={{ marginTop: 0 }}>
+                <input
+                  type="checkbox"
+                  checked={form.cfgReajustaPrecoEntrada}
+                  onChange={(e) => setForm((f) => ({ ...f, cfgReajustaPrecoEntrada: e.target.checked }))}
+                />
+                Reajustar preço do produto automaticamente
+              </label>
+              <p className="muted" style={{ fontSize: 12, marginTop: 4 }}>
+                Ligado: ao confirmar a entrada, o custo e o preço de venda do produto são
+                atualizados pelo valor da compra. Desligado: só o movimento de estoque é gravado,
+                o preço do produto não muda.
+              </p>
+            </div>
+            <div className="col-6">
+              <label htmlFor="idPlanoContasCompraMercadoria">Plano de Contas da Compra *</label>
+              <select
+                id="idPlanoContasCompraMercadoria"
+                value={form.idPlanoContasCompraMercadoria}
+                onChange={(e) => setForm((f) => ({ ...f, idPlanoContasCompraMercadoria: e.target.value }))}
+              >
+                {planosAnaliticos.map((p) => (
+                  <option key={p.idPlanoContas} value={p.idPlanoContas}>
+                    {p.idPlanoContas} — {p.descricao}
+                  </option>
+                ))}
+              </select>
+              <p className="muted" style={{ fontSize: 12, marginTop: 4 }}>
+                Plano de contas usado nas contas a pagar geradas pela Entrada de Produtos por
+                Compra — não é o plano do fornecedor, é uma conta de custo do próprio tenant.
               </p>
             </div>
           </div>

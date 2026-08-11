@@ -45,6 +45,11 @@ CREATE TABLE produto_movimento_mestre (
   id_transferencia integer,                     -- numero vindo de um gerador externo; sem FK (proposital)
   id_devolucao     integer,
   nota_fiscal      integer,                     -- numero da NF; integer (padronizado 2026-07-16, ver V026)
+  id_usuario       integer,                     -- 2026-08-11 (Entrada de Produtos): quem confirmou o movimento;
+                                                 -- nullable porque nenhum outro fluxo grava isso ainda
+  chave_nfe        text,                        -- 2026-08-11: chave de acesso da NF-e (44 digitos), so' preenchida
+                                                 -- na Entrada via XML; idempotencia do import (P2, ver UK abaixo)
+  serie_nota       smallint,                    -- 2026-08-11: serie da NF, so' preenchida na Entrada via XML
   -- base para FK composta (2026-07-16, P8) de produto_movimento_detalhe.id_movimento.
   CONSTRAINT produto_movimento_mestre_id_uk UNIQUE (id_tenant, id_movimento),
   -- FKs compostas — ver comentário em usuario_empresa_fk (V015).
@@ -55,8 +60,13 @@ CREATE TABLE produto_movimento_mestre (
   CONSTRAINT produto_movimento_mestre_venda_fk FOREIGN KEY (id_tenant, id_venda)
     REFERENCES venda (id_tenant, id_venda),
   CONSTRAINT produto_movimento_mestre_devolucao_fk FOREIGN KEY (id_tenant, id_devolucao)
-    REFERENCES venda_devolucao (id_tenant, id_devolucao)
+    REFERENCES venda_devolucao (id_tenant, id_devolucao),
+  CONSTRAINT produto_movimento_mestre_usuario_fk FOREIGN KEY (id_tenant, id_usuario)
+    REFERENCES usuario (id_tenant, id_usuario)
 );
+-- Idempotencia do import de XML (P2): a mesma nota nunca gera 2 movimentos pro mesmo tenant.
+CREATE UNIQUE INDEX produto_movimento_mestre_chave_nfe_uk
+  ON produto_movimento_mestre (id_tenant, chave_nfe) WHERE chave_nfe IS NOT NULL;
 CREATE INDEX produto_movimento_mestre_id_tenant_ix ON produto_movimento_mestre (id_tenant);
 CREATE INDEX produto_movimento_mestre_data_ix      ON produto_movimento_mestre (id_tenant, data_movimento);
 

@@ -27,7 +27,9 @@ public class ConfiguracaoGeralService {
     private static final String SELECT_BASE = """
             SELECT percentual_desconto_venda, juros_crediario_dias, juros_crediario,
                    multa_crediario_dias, multa_crediario, cfg_usa_cor_grade,
-                   cfg_permite_qtd_decimal, cfg_exige_numero_venda_devolucao, atualizado_em
+                   cfg_permite_qtd_decimal, cfg_exige_numero_venda_devolucao,
+                   cfg_rateia_frete_entrada, cfg_reajusta_preco_entrada,
+                   id_plano_contas_compra_mercadoria, atualizado_em
             FROM cfg_geral
             WHERE id_tenant = plataforma.tenant_atual()
             """;
@@ -114,6 +116,55 @@ public class ConfiguracaoGeralService {
                 .orElse(false);
     }
 
+    /**
+     * Só a flag de rateio de frete/IPI/ICMS-ST no custo, sem checagem de papel — usada pela
+     * Entrada de Produtos por Compra. Mesmo fallback das outras flags leves: {@code false}
+     * preserva o comportamento de sempre (sem rateio) quando a linha nunca foi criada.
+     */
+    @Transactional(readOnly = true)
+    public boolean rateiaFreteEntrada() {
+        return jdbc.sql("""
+                        SELECT cfg_rateia_frete_entrada FROM cfg_geral
+                        WHERE id_tenant = plataforma.tenant_atual()
+                        """)
+                .query(Boolean.class)
+                .optional()
+                .orElse(false);
+    }
+
+    /**
+     * Só a flag de reajuste automático de preço na entrada, sem checagem de papel — usada pela
+     * Entrada de Produtos por Compra. Mesmo fallback: {@code false} preserva o comportamento de
+     * sempre (preço do produto não muda sozinho) quando a linha nunca foi criada.
+     */
+    @Transactional(readOnly = true)
+    public boolean reajustaPrecoEntrada() {
+        return jdbc.sql("""
+                        SELECT cfg_reajusta_preco_entrada FROM cfg_geral
+                        WHERE id_tenant = plataforma.tenant_atual()
+                        """)
+                .query(Boolean.class)
+                .optional()
+                .orElse(false);
+    }
+
+    /**
+     * Só o plano de contas usado nas contas a pagar geradas pela Entrada de Produtos por
+     * Compra, sem checagem de papel — a linha nasce no signup/migration V032 (nunca deveria
+     * faltar), mas o fallback preserva a conta padrão do sistema caso, por algum motivo, a
+     * linha ainda não exista.
+     */
+    @Transactional(readOnly = true)
+    public String idPlanoContasCompraMercadoria() {
+        return jdbc.sql("""
+                        SELECT id_plano_contas_compra_mercadoria FROM cfg_geral
+                        WHERE id_tenant = plataforma.tenant_atual()
+                        """)
+                .query(String.class)
+                .optional()
+                .orElse("3.03.001.001");
+    }
+
     @Transactional
     public ConfiguracaoGeralResponse atualizar(Jwt jwt, ConfiguracaoGeralRequest req) {
         exigirAdmin(jwt);
@@ -121,13 +172,17 @@ public class ConfiguracaoGeralService {
                         UPDATE cfg_geral SET
                             percentual_desconto_venda = ?, juros_crediario_dias = ?, juros_crediario = ?,
                             multa_crediario_dias = ?, multa_crediario = ?, cfg_usa_cor_grade = ?,
-                            cfg_permite_qtd_decimal = ?, cfg_exige_numero_venda_devolucao = ?, atualizado_em = now()
+                            cfg_permite_qtd_decimal = ?, cfg_exige_numero_venda_devolucao = ?,
+                            cfg_rateia_frete_entrada = ?, cfg_reajusta_preco_entrada = ?,
+                            id_plano_contas_compra_mercadoria = ?, atualizado_em = now()
                         WHERE id_tenant = plataforma.tenant_atual()
                         """)
                 .params(List.of(
                         req.percentualDescontoVenda(), req.jurosCrediarioDias(), req.jurosCrediario(),
                         req.multaCrediarioDias(), req.multaCrediario(), req.cfgUsaCorGrade(),
-                        req.cfgPermiteQtdDecimal(), req.cfgExigeNumeroVendaDevolucao()))
+                        req.cfgPermiteQtdDecimal(), req.cfgExigeNumeroVendaDevolucao(),
+                        req.cfgRateiaFreteEntrada(), req.cfgReajustaPrecoEntrada(),
+                        req.idPlanoContasCompraMercadoria()))
                 .update();
         // Não deveria acontecer — a linha nasce no signup — mas 404 é mais honesto que
         // seguir em frente como se tivesse atualizado algo.
@@ -163,6 +218,9 @@ public class ConfiguracaoGeralService {
                 rs.getBoolean("cfg_usa_cor_grade"),
                 rs.getBoolean("cfg_permite_qtd_decimal"),
                 rs.getBoolean("cfg_exige_numero_venda_devolucao"),
+                rs.getBoolean("cfg_rateia_frete_entrada"),
+                rs.getBoolean("cfg_reajusta_preco_entrada"),
+                rs.getString("id_plano_contas_compra_mercadoria"),
                 rs.getObject("atualizado_em", OffsetDateTime.class));
     }
 }
