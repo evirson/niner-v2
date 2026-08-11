@@ -100,7 +100,7 @@ class RecebimentoCrediarioCrudTest {
                         .content("""
                                 {"percentualDescontoVenda":0,"jurosCrediarioDias":%d,"jurosCrediario":%s,
                                  "multaCrediarioDias":%d,"multaCrediario":%s,"cfgUsaCorGrade":false,
-                                 "cfgPermiteQtdDecimal":true}
+                                 "cfgPermiteQtdDecimal":true,"cfgExigeNumeroVendaDevolucao":false}
                                 """.formatted(jurosCrediarioDias, jurosCrediario, multaCrediarioDias, multaCrediario)))
                 .andExpect(status().isOk());
     }

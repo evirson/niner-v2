@@ -25,7 +25,8 @@ public final class ConfiguracaoGeralDtos {
             @NotNull @Min(0) Integer multaCrediarioDias,
             @NotNull @DecimalMin("0") @DecimalMax("100") BigDecimal multaCrediario,
             @NotNull Boolean cfgUsaCorGrade,
-            @NotNull Boolean cfgPermiteQtdDecimal) {
+            @NotNull Boolean cfgPermiteQtdDecimal,
+            @NotNull Boolean cfgExigeNumeroVendaDevolucao) {
     }
 
     public record ConfiguracaoGeralResponse(
@@ -36,6 +37,7 @@ public final class ConfiguracaoGeralDtos {
             BigDecimal multaCrediario,
             boolean cfgUsaCorGrade,
             boolean cfgPermiteQtdDecimal,
+            boolean cfgExigeNumeroVendaDevolucao,
             OffsetDateTime atualizadoEm) {
     }
 
@@ -54,5 +56,11 @@ public final class ConfiguracaoGeralDtos {
      * (3 casas quando {@code true}, inteiro quando {@code false}).
      */
     public record PermiteQtdDecimalResponse(boolean cfgPermiteQtdDecimal) {
+    }
+
+    /** Só a flag de exigência do número da venda na Devolução de Produtos, sem checagem de papel —
+     *  usada pela própria tela (`vendas.devolucao`) pra saber se o campo "Número da Venda" é
+     *  obrigatório antes mesmo de tentar gravar. */
+    public record ExigeNumeroVendaDevolucaoResponse(boolean cfgExigeNumeroVendaDevolucao) {
     }
 }

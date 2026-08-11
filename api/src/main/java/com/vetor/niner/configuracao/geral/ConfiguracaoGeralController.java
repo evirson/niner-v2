@@ -3,6 +3,7 @@ package com.vetor.niner.configuracao.geral;
 import com.vetor.niner.configuracao.geral.ConfiguracaoGeralDtos.ConfiguracaoGeralRequest;
 import com.vetor.niner.configuracao.geral.ConfiguracaoGeralDtos.ConfiguracaoGeralResponse;
 import com.vetor.niner.configuracao.geral.ConfiguracaoGeralDtos.DescontoVendaResponse;
+import com.vetor.niner.configuracao.geral.ConfiguracaoGeralDtos.ExigeNumeroVendaDevolucaoResponse;
 import com.vetor.niner.configuracao.geral.ConfiguracaoGeralDtos.PermiteQtdDecimalResponse;
 import com.vetor.niner.configuracao.geral.ConfiguracaoGeralDtos.UsaCorGradeResponse;
 import jakarta.validation.Valid;
@@ -16,9 +17,10 @@ import org.springframework.web.bind.annotation.*;
  * (mesmo mecanismo de {@code ConfiguracaoTelaService}). Exceções abertas a qualquer papel:
  * {@code /usa-cor-grade} (cadastro de produto e Emissão de Etiqueta precisam saber se o campo
  * Grade aparece), {@code /desconto-venda} (PDV, F5, precisa do percentual de
- * desconto promocional pra exibir antes de efetivar a venda) e {@code /permite-qtd-decimal}
+ * desconto promocional pra exibir antes de efetivar a venda), {@code /permite-qtd-decimal}
  * (PDV/Transferência/Histórico do Cliente precisam saber se quantidade de produto aceita
- * decimais, pra formatar/validar a entrada).
+ * decimais, pra formatar/validar a entrada) e {@code /exige-numero-venda-devolucao} (Devolução
+ * de Produtos precisa saber se o número da venda de origem é obrigatório antes de gravar).
  */
 @RestController
 @RequestMapping("/api/v1/config-geral")
@@ -53,5 +55,10 @@ public class ConfiguracaoGeralController {
     @GetMapping("/permite-qtd-decimal")
     public PermiteQtdDecimalResponse permiteQtdDecimal() {
         return new PermiteQtdDecimalResponse(service.permiteQtdDecimalProduto());
+    }
+
+    @GetMapping("/exige-numero-venda-devolucao")
+    public ExigeNumeroVendaDevolucaoResponse exigeNumeroVendaDevolucao() {
+        return new ExigeNumeroVendaDevolucaoResponse(service.exigeNumeroVendaDevolucao());
     }
 }

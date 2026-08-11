@@ -5,6 +5,7 @@ import com.vetor.niner.vendas.devolucao.DevolucaoProdutoDtos.DevolucaoEfetivadaR
 import com.vetor.niner.vendas.devolucao.DevolucaoProdutoDtos.EfetivarDevolucaoRequest;
 import com.vetor.niner.vendas.devolucao.DevolucaoProdutoDtos.ItemDevolucaoRequest;
 import com.vetor.niner.vendas.devolucao.DevolucaoProdutoDtos.ItemDevolucaoResponse;
+import com.vetor.niner.vendas.devolucao.DevolucaoProdutoDtos.ItemVendaOrigemResponse;
 import com.vetor.niner.vendas.devolucao.DevolucaoProdutoDtos.ValeMercadoriaResponse;
 import com.vetor.niner.vendas.devolucao.DevolucaoProdutoDtos.VendedorDaVendaResponse;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -19,6 +20,8 @@ import java.sql.SQLException;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 import static org.springframework.http.HttpStatus.NOT_FOUND;
 
@@ -55,7 +58,8 @@ public class DevolucaoProdutoService {
             throw new ResponseStatusException(NOT_FOUND, "Venda não encontrada.");
         }
         FuncionarioVenda fv = buscarFuncionarioDaVenda(numeroVenda);
-        return new VendedorDaVendaResponse(numeroVenda, fv.idFuncionario(), fv.nomeFuncionario());
+        List<ItemVendaOrigemResponse> itens = buscarItensDisponiveisParaDevolucao(numeroVenda);
+        return new VendedorDaVendaResponse(numeroVenda, fv.idFuncionario(), fv.nomeFuncionario(), itens);
     }
 
     /**
@@ -74,15 +78,42 @@ public class DevolucaoProdutoService {
     public DevolucaoEfetivadaResponse efetivar(Jwt jwt, EfetivarDevolucaoRequest req) {
         long idEmpresa = ((Number) jwt.getClaim("eid")).longValue();
 
+        if (req.numeroVenda() == null && configuracaoGeralService.exigeNumeroVendaDevolucao()) {
+            throw new IllegalArgumentException(
+                    "Informe o número da venda de origem — obrigatório neste tenant (Parâmetros do Sistema).");
+        }
+
         Long idFuncionario = null;
         String nomeFuncionario = null;
+        Map<Long, BigDecimal> disponivelPorVariacao = null;
         if (req.numeroVenda() != null) {
             FuncionarioVenda fv = buscarFuncionarioDaVenda(req.numeroVenda());
             idFuncionario = fv.idFuncionario();
             nomeFuncionario = fv.nomeFuncionario();
+            disponivelPorVariacao = buscarItensDisponiveisParaDevolucao(req.numeroVenda()).stream()
+                    .collect(Collectors.toMap(ItemVendaOrigemResponse::idVariacao, ItemVendaOrigemResponse::qtdDisponivelDevolucao));
         }
 
         List<ItemResolvido> itens = resolverItens(req.itens());
+
+        // Quando a venda de origem é informada, só é permitido devolver produtos que ela vendeu,
+        // até o que ainda não foi devolvido dela — validado aqui (não só na tela, P4) porque é a
+        // única linha de defesa real contra uma chamada direta à API.
+        if (disponivelPorVariacao != null) {
+            for (ItemResolvido item : itens) {
+                BigDecimal disponivel = disponivelPorVariacao.get(item.idVariacao());
+                if (disponivel == null) {
+                    throw new IllegalArgumentException(
+                            "O produto \"%s\" não faz parte da venda nº %d.".formatted(item.descricaoProduto(), req.numeroVenda()));
+                }
+                if (item.qtd().compareTo(disponivel) > 0) {
+                    throw new IllegalArgumentException(
+                            "Quantidade a devolver do produto \"%s\" (%s) maior que a disponível na venda nº %d (%s)."
+                                    .formatted(item.descricaoProduto(), item.qtd().stripTrailingZeros().toPlainString(),
+                                            req.numeroVenda(), disponivel.stripTrailingZeros().toPlainString()));
+                }
+            }
+        }
 
         long idDevolucao = jdbc.sql("""
                         INSERT INTO venda_devolucao (id_tenant, id_empresa, id_venda_credito)
@@ -153,6 +184,68 @@ public class DevolucaoProdutoService {
 
         return new ValeMercadoriaResponse(
                 c.idDevolucao(), valorVale, c.valeUsado(), c.cancelada(), c.dataDevolucao(), c.idVendaCredito(), c.idVendaDebito());
+    }
+
+    /** Itens vendidos numa venda, com quanto ainda pode ser devolvido de cada um — quantidade
+     *  vendida menos o que já foi devolvido em devoluções **não canceladas** da mesma venda
+     *  ({@code venda_devolucao.id_venda_credito}, cancelamento reverte o estoque então não deve
+     *  contar contra o limite). Base tanto pra alimentar a tela (via {@link #buscarVendedorDaVenda})
+     *  quanto pra validar de verdade em {@link #efetivar}. Venda inexistente ou sem itens de
+     *  venda devolve lista vazia (não lança erro aqui — quem chama decide o que fazer). */
+    private List<ItemVendaOrigemResponse> buscarItensDisponiveisParaDevolucao(long idVenda) {
+        record ItemVendido(long idVariacao, String sku, String descricaoProduto, String variacaoCor,
+                            String variacaoTamanho, BigDecimal qtdVendida) {
+        }
+        List<ItemVendido> vendidos = jdbc.sql("""
+                        SELECT pb.id_variacao, pb.sku, p.descricao AS descricao_produto,
+                               co.descricao AS variacao_cor, ta.descricao AS variacao_tamanho,
+                               SUM(pmd.qtd_produto) AS qtd_vendida
+                        FROM produto_movimento_mestre pmm
+                        JOIN produto_movimento_detalhe pmd
+                               ON pmd.id_movimento = pmm.id_movimento AND pmd.id_tenant = pmm.id_tenant
+                        JOIN produto_barra pb ON pb.id_variacao = pmd.id_variacao AND pb.id_tenant = pmd.id_tenant
+                        JOIN produto p ON p.id_produto = pb.id_produto AND p.id_tenant = pb.id_tenant
+                        LEFT JOIN cfg_cor co ON co.id_cor = pb.id_cor AND co.id_tenant = pb.id_tenant
+                        LEFT JOIN cfg_tamanho ta ON ta.id_tamanho = pb.id_tamanho AND ta.id_tenant = pb.id_tenant
+                        WHERE pmm.id_tenant = plataforma.tenant_atual() AND pmm.id_venda = ? AND pmm.tipo_movimento = 'VENDA'
+                        GROUP BY pb.id_variacao, pb.sku, p.descricao, co.descricao, ta.descricao
+                        """)
+                .param(idVenda)
+                .query((rs, n) -> new ItemVendido(
+                        rs.getLong("id_variacao"), rs.getString("sku"), rs.getString("descricao_produto"),
+                        rs.getString("variacao_cor"), rs.getString("variacao_tamanho"), rs.getBigDecimal("qtd_vendida")))
+                .list();
+        if (vendidos.isEmpty()) {
+            return List.of();
+        }
+
+        record ItemDevolvido(long idVariacao, BigDecimal qtdDevolvida) {
+        }
+        Map<Long, BigDecimal> jaDevolvido = jdbc.sql("""
+                        SELECT pmd.id_variacao, SUM(pmd.qtd_produto) AS qtd_devolvida
+                        FROM venda_devolucao vd
+                        JOIN produto_movimento_mestre pmm
+                               ON pmm.id_devolucao = vd.id_devolucao AND pmm.id_tenant = vd.id_tenant
+                               AND pmm.tipo_movimento = 'DEVOLUCAO'
+                        JOIN produto_movimento_detalhe pmd ON pmd.id_movimento = pmm.id_movimento AND pmd.id_tenant = pmm.id_tenant
+                        WHERE vd.id_tenant = plataforma.tenant_atual() AND vd.id_venda_credito = ? AND vd.cancelada = false
+                        GROUP BY pmd.id_variacao
+                        """)
+                .param(idVenda)
+                .query((rs, n) -> new ItemDevolvido(rs.getLong("id_variacao"), rs.getBigDecimal("qtd_devolvida")))
+                .list()
+                .stream()
+                .collect(Collectors.toMap(ItemDevolvido::idVariacao, ItemDevolvido::qtdDevolvida));
+
+        List<ItemVendaOrigemResponse> resultado = new ArrayList<>();
+        for (ItemVendido v : vendidos) {
+            BigDecimal devolvido = jaDevolvido.getOrDefault(v.idVariacao(), BigDecimal.ZERO);
+            BigDecimal disponivel = v.qtdVendida().subtract(devolvido).max(BigDecimal.ZERO);
+            resultado.add(new ItemVendaOrigemResponse(
+                    v.idVariacao(), v.sku(), v.descricaoProduto(), v.variacaoCor(), v.variacaoTamanho(),
+                    v.qtdVendida(), disponivel));
+        }
+        return resultado;
     }
 
     private record FuncionarioVenda(Long idFuncionario, String nomeFuncionario) {

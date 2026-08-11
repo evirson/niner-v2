@@ -139,7 +139,7 @@ class FechamentoCaixaCrudTest {
                         .content("""
                                 {"percentualDescontoVenda":0,"jurosCrediarioDias":0,"jurosCrediario":0,
                                  "multaCrediarioDias":0,"multaCrediario":0,"cfgUsaCorGrade":false,
-                                 "cfgPermiteQtdDecimal":true}
+                                 "cfgPermiteQtdDecimal":true,"cfgExigeNumeroVendaDevolucao":false}
                                 """))
                 .andExpect(status().isOk());
     }

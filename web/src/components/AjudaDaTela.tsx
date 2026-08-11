@@ -188,9 +188,10 @@ const CONTEUDOS: Record<string, ConteudoAjuda> = {
   },
   'configuracao.geral.form': {
     titulo: 'Parâmetros do sistema',
-    objetivo: 'Ajustar as regras gerais do tenant: desconto máximo em venda, uso de cor/grade e taxas de crediário.',
+    objetivo: 'Ajustar as regras gerais do tenant: desconto máximo em venda, exigência de venda na devolução, uso de cor/grade e taxas de crediário.',
     passos: [
       'Informe o desconto máximo permitido em uma venda.',
+      'Marque "Exigir número da venda na Devolução de Produtos" se quiser bloquear devoluções sem vínculo com uma venda — a tela passa a exigir o número da venda e só aceita produtos que ela vendeu.',
       'Marque "Usa cor/grade" se o tenant é de calçados ou confecções — liga o campo Grade no cadastro de Produto e as variações passam a ter cor e tamanho.',
       'Preencha os prazos e percentuais de juros/multa do crediário — ficam prontos para quando o módulo de crediário existir.',
       'Salve.',
@@ -441,14 +442,14 @@ const CONTEUDOS: Record<string, ConteudoAjuda> = {
     titulo: 'Devolução de Produtos',
     objetivo: 'Devolver ao estoque produtos que o cliente trouxe de volta e emitir um vale-mercadoria pelo crédito.',
     passos: [
-      'Informe o número da venda (opcional) e clique em "Buscar Vendedor" só se quiser identificar quem vendeu — não fica gravado na devolução, serve apenas para no futuro descontar a comissão do vendedor.',
+      'Informe o número da venda e saia do campo — o vendedor é identificado automaticamente. A partir daí, só é possível devolver produtos que fizeram parte daquela venda, até a quantidade ainda não devolvida dela. O campo pode ser opcional ou obrigatório dependendo da configuração do tenant (Parâmetros do Sistema); quando opcional e deixado em branco, a devolução não tem vínculo com nenhuma venda.',
       'Leia o código de barras de cada produto devolvido — a grid vai empilhando os itens, somando a quantidade se o mesmo código for lido de novo.',
       'Ajuste a quantidade de qualquer linha direto na grid, se precisar.',
       'Clique em "Gravar Devolução" — cada item volta ao estoque da empresa atual e um vale-mercadoria é emitido automaticamente, com um comprovante pronto para imprimir ou salvar em PDF.',
       'O cliente usa esse vale numa compra futura, no PDV: escolhe "Vale-Mercadoria" como forma de pagamento e digita o número do vale impresso.',
     ],
     errosComuns: [
-      'Não valida se a quantidade devolvida bate com o que foi vendido naquela venda — não há vínculo entre a devolução e a venda informada.',
+      'Com a venda informada: um produto que não fez parte dela, ou uma quantidade maior que a ainda disponível, é bloqueado (na leitura ou ao gravar) com uma mensagem explicando o motivo.',
       'O vale é sempre consumido por inteiro — se a compra futura for menor que o valor do vale, o sistema bloqueia o uso (sem troco em vale).',
       'Um vale já usado não pode ser usado de novo — o PDV mostra o erro na hora de digitar o número.',
     ],

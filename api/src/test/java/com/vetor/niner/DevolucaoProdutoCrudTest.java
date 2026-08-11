@@ -24,9 +24,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * Devolução de Produtos (docs/telas/devolucao-produtos.md) — devolve estoque sem vínculo com
- * nenhuma venda; o número da venda (opcional) só resolve o vendedor, gravado em cada linha do
- * movimento para uma futura comissão. ADMIN e OPERADOR têm acesso (sem restrição de papel).
+ * Devolução de Produtos (docs/telas/devolucao-produtos.md) — sem o número da venda, devolve
+ * estoque livremente (sem vínculo com nenhuma venda). Com o número da venda, além de resolver o
+ * vendedor (gravado em cada linha do movimento para uma futura comissão), a partir de 2026-08-11
+ * só é permitido devolver produtos que ela vendeu, até a quantidade ainda não devolvida dela
+ * (validado no servidor, não só na tela). ADMIN e OPERADOR têm acesso (sem restrição de papel).
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -195,6 +197,18 @@ class DevolucaoProdutoCrudTest {
         return ((Number) JsonPath.read(resp, "$.idVenda")).longValue();
     }
 
+    /** `assinarNovoTenant` já devolve token ADMIN — PUT exige o corpo inteiro (sem campo nullable). */
+    private void definirExigeNumeroVendaDevolucao(String token, boolean exige) throws Exception {
+        mvc.perform(put("/api/v1/config-geral").header("Authorization", "Bearer " + token)
+                        .contentType(APPLICATION_JSON)
+                        .content("""
+                                {"percentualDescontoVenda":0,"jurosCrediarioDias":0,"jurosCrediario":0,
+                                 "multaCrediarioDias":0,"multaCrediario":0,"cfgUsaCorGrade":false,
+                                 "cfgPermiteQtdDecimal":true,"cfgExigeNumeroVendaDevolucao":%s}
+                                """.formatted(exige)))
+                .andExpect(status().isOk());
+    }
+
     private int contarLinhas(Connection c, String sql, long param) throws SQLException {
         try (PreparedStatement ps = c.prepareStatement(sql)) {
             ps.setLong(1, param);
@@ -233,6 +247,33 @@ class DevolucaoProdutoCrudTest {
                     "SELECT count(*) FROM produto_movimento_detalhe pmd JOIN produto_movimento_mestre pmm "
                             + "ON pmm.id_movimento = pmd.id_movimento WHERE pmd.id_variacao = ? AND pmm.tipo_movimento = 'DEVOLUCAO'",
                     idVariacao)).isEqualTo(1);
+        }
+    }
+
+    @Test
+    void devolverSemNumeroDeVendaQuandoConfiguracaoExigeRespondeDadoInvalido() throws Exception {
+        TenantNovo tenant = assinarNovoTenant("exige-numero-venda");
+        long idTenant = extrairIdTenant(tenant.token());
+        long idProduto = criarProduto(tenant.token(), "Produto Exige Numero Venda");
+        definirExigeNumeroVendaDevolucao(tenant.token(), true);
+
+        long idVariacao;
+        try (Connection c = abrirConexao(idTenant)) {
+            long idEmpresa = buscarIdEmpresa(c);
+            idVariacao = criarVariacao(c, idTenant, idProduto);
+            definirEstoque(c, idTenant, idEmpresa, idVariacao, new BigDecimal("3.000"));
+        }
+
+        String corpo = """
+                {"numeroVenda":null,"itens":[{"idVariacao":%d,"qtd":1}]}
+                """.formatted(idVariacao);
+        mvc.perform(post("/api/v1/vendas/devolucao").header("Authorization", "Bearer " + tenant.token())
+                        .contentType(APPLICATION_JSON).content(corpo))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.detail").value(org.hamcrest.Matchers.containsString("Informe o número da venda")));
+
+        try (Connection c = abrirConexao(idTenant)) {
+            assertThat(buscarQtdEstoque(c, idVariacao)).isEqualByComparingTo("3.000");
         }
     }
 
@@ -303,6 +344,136 @@ class DevolucaoProdutoCrudTest {
         mvc.perform(post("/api/v1/vendas/devolucao").header("Authorization", "Bearer " + tenant.token())
                         .contentType(APPLICATION_JSON).content(corpo))
                 .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void vendedorDaVendaTrazItensVendidosComQuantidadeDisponivelParaDevolucao() throws Exception {
+        TenantNovo tenant = assinarNovoTenant("itens-venda-origem");
+        long idTenant = extrairIdTenant(tenant.token());
+        long idProduto = criarProduto(tenant.token(), "Produto Itens Venda Origem");
+        long idCarteira = criarTipoCarteira(tenant.token(), "DINHEIRO ITENS VENDA", "AVISTA");
+        long idCliente = criarCliente(tenant.token(), "Cliente Itens Venda Origem");
+        long idFuncionario = criarFuncionario(tenant.token(), "Vendedor Itens Venda Origem");
+        abrirCaixaDinheiro(tenant.token());
+
+        long idVariacao;
+        long idVenda;
+        try (Connection c = abrirConexao(idTenant)) {
+            long idEmpresa = buscarIdEmpresa(c);
+            idVariacao = criarVariacao(c, idTenant, idProduto);
+            definirEstoque(c, idTenant, idEmpresa, idVariacao, new BigDecimal("10.000"));
+            idVenda = efetivarVenda(tenant.token(), idVariacao, idCliente, idFuncionario, idCarteira, "50.00", 1);
+        }
+
+        mvc.perform(get("/api/v1/vendas/devolucao/vendedor").header("Authorization", "Bearer " + tenant.token())
+                        .param("numeroVenda", String.valueOf(idVenda)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.itens.length()").value(1))
+                .andExpect(jsonPath("$.itens[0].idVariacao").value(idVariacao))
+                .andExpect(jsonPath("$.itens[0].qtdVendida").value(1))
+                .andExpect(jsonPath("$.itens[0].qtdDisponivelDevolucao").value(1));
+    }
+
+    @Test
+    void devolverProdutoQueNaoFezParteDaVendaInformadaRespondeDadoInvalido() throws Exception {
+        TenantNovo tenant = assinarNovoTenant("produto-fora-da-venda");
+        long idTenant = extrairIdTenant(tenant.token());
+        long idProdutoVendido = criarProduto(tenant.token(), "Produto Vendido Fora Venda");
+        long idProdutoNaoVendido = criarProduto(tenant.token(), "Produto Nao Vendido Fora Venda");
+        long idCarteira = criarTipoCarteira(tenant.token(), "DINHEIRO FORA VENDA", "AVISTA");
+        long idCliente = criarCliente(tenant.token(), "Cliente Fora Venda");
+        long idFuncionario = criarFuncionario(tenant.token(), "Vendedor Fora Venda");
+        abrirCaixaDinheiro(tenant.token());
+
+        long idVariacaoVendida;
+        long idVariacaoNaoVendida;
+        long idVenda;
+        try (Connection c = abrirConexao(idTenant)) {
+            long idEmpresa = buscarIdEmpresa(c);
+            idVariacaoVendida = criarVariacao(c, idTenant, idProdutoVendido);
+            idVariacaoNaoVendida = criarVariacao(c, idTenant, idProdutoNaoVendido);
+            definirEstoque(c, idTenant, idEmpresa, idVariacaoVendida, new BigDecimal("5.000"));
+            definirEstoque(c, idTenant, idEmpresa, idVariacaoNaoVendida, new BigDecimal("5.000"));
+            idVenda = efetivarVenda(tenant.token(), idVariacaoVendida, idCliente, idFuncionario, idCarteira, "50.00", 1);
+        }
+
+        String corpo = """
+                {"numeroVenda":%d,"itens":[{"idVariacao":%d,"qtd":1}]}
+                """.formatted(idVenda, idVariacaoNaoVendida);
+        mvc.perform(post("/api/v1/vendas/devolucao").header("Authorization", "Bearer " + tenant.token())
+                        .contentType(APPLICATION_JSON).content(corpo))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.detail").value(org.hamcrest.Matchers.containsString("não faz parte da venda")));
+
+        try (Connection c = abrirConexao(idTenant)) {
+            assertThat(buscarQtdEstoque(c, idVariacaoNaoVendida)).isEqualByComparingTo("5.000");
+        }
+    }
+
+    @Test
+    void devolverQuantidadeMaiorQueAVendidaRespondeDadoInvalido() throws Exception {
+        TenantNovo tenant = assinarNovoTenant("qtd-maior-que-vendida");
+        long idTenant = extrairIdTenant(tenant.token());
+        long idProduto = criarProduto(tenant.token(), "Produto Qtd Maior Vendida");
+        long idCarteira = criarTipoCarteira(tenant.token(), "DINHEIRO QTD MAIOR", "AVISTA");
+        long idCliente = criarCliente(tenant.token(), "Cliente Qtd Maior");
+        long idFuncionario = criarFuncionario(tenant.token(), "Vendedor Qtd Maior");
+        abrirCaixaDinheiro(tenant.token());
+
+        long idVariacao;
+        long idVenda;
+        try (Connection c = abrirConexao(idTenant)) {
+            long idEmpresa = buscarIdEmpresa(c);
+            idVariacao = criarVariacao(c, idTenant, idProduto);
+            definirEstoque(c, idTenant, idEmpresa, idVariacao, new BigDecimal("5.000"));
+            idVenda = efetivarVenda(tenant.token(), idVariacao, idCliente, idFuncionario, idCarteira, "50.00", 1);
+        }
+
+        String corpo = """
+                {"numeroVenda":%d,"itens":[{"idVariacao":%d,"qtd":2}]}
+                """.formatted(idVenda, idVariacao);
+        mvc.perform(post("/api/v1/vendas/devolucao").header("Authorization", "Bearer " + tenant.token())
+                        .contentType(APPLICATION_JSON).content(corpo))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.detail").value(org.hamcrest.Matchers.containsString("maior que a disponível")));
+    }
+
+    @Test
+    void devolucaoAnteriorDaMesmaVendaReduzQuantidadeDisponivelParaAProxima() throws Exception {
+        TenantNovo tenant = assinarNovoTenant("reduz-disponivel");
+        long idTenant = extrairIdTenant(tenant.token());
+        long idProduto = criarProduto(tenant.token(), "Produto Reduz Disponivel");
+        long idCarteira = criarTipoCarteira(tenant.token(), "DINHEIRO REDUZ DISPONIVEL", "AVISTA");
+        long idCliente = criarCliente(tenant.token(), "Cliente Reduz Disponivel");
+        long idFuncionario = criarFuncionario(tenant.token(), "Vendedor Reduz Disponivel");
+        abrirCaixaDinheiro(tenant.token());
+
+        long idVariacao;
+        long idVenda;
+        try (Connection c = abrirConexao(idTenant)) {
+            long idEmpresa = buscarIdEmpresa(c);
+            idVariacao = criarVariacao(c, idTenant, idProduto);
+            definirEstoque(c, idTenant, idEmpresa, idVariacao, new BigDecimal("5.000"));
+            idVenda = efetivarVenda(tenant.token(), idVariacao, idCliente, idFuncionario, idCarteira, "50.00", 1);
+        }
+
+        // Devolve 1 das 2 unidades vendidas — 1 unidade ainda deve estar disponível.
+        String corpoPrimeiraDevolucao = """
+                {"numeroVenda":%d,"itens":[{"idVariacao":%d,"qtd":1}]}
+                """.formatted(idVenda, idVariacao);
+        mvc.perform(post("/api/v1/vendas/devolucao").header("Authorization", "Bearer " + tenant.token())
+                        .contentType(APPLICATION_JSON).content(corpoPrimeiraDevolucao))
+                .andExpect(status().isCreated());
+
+        mvc.perform(get("/api/v1/vendas/devolucao/vendedor").header("Authorization", "Bearer " + tenant.token())
+                        .param("numeroVenda", String.valueOf(idVenda)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.itens[0].qtdDisponivelDevolucao").value(0));
+
+        // A segunda tentativa de devolver mais 1 unidade (só sobrava 0) deve ser rejeitada.
+        mvc.perform(post("/api/v1/vendas/devolucao").header("Authorization", "Bearer " + tenant.token())
+                        .contentType(APPLICATION_JSON).content(corpoPrimeiraDevolucao))
+                .andExpect(status().isBadRequest());
     }
 
     @Test

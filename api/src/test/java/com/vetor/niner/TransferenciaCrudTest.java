@@ -171,7 +171,7 @@ class TransferenciaCrudTest {
                         .content("""
                                 {"percentualDescontoVenda":0,"jurosCrediarioDias":0,"jurosCrediario":0,
                                  "multaCrediarioDias":0,"multaCrediario":0,"cfgUsaCorGrade":false,
-                                 "cfgPermiteQtdDecimal":%s}
+                                 "cfgPermiteQtdDecimal":%s,"cfgExigeNumeroVendaDevolucao":false}
                                 """.formatted(permite)))
                 .andExpect(status().isOk());
     }

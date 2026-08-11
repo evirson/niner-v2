@@ -26,7 +26,22 @@ public final class DevolucaoProdutoDtos {
             @NotEmpty List<@Valid ItemDevolucaoRequest> itens) {
     }
 
-    public record VendedorDaVendaResponse(long numeroVenda, Long idFuncionario, String nomeFuncionario) {
+    /** Item vendido numa venda, com quanto ainda pode ser devolvido dela — {@code qtdDisponivelDevolucao}
+     *  já desconta devoluções anteriores (não canceladas) da mesma venda. Usado pra restringir o
+     *  que a tela permite lançar quando o número da venda é informado (2026-08-11): a tela só
+     *  aceita produtos presentes nesta lista, até o limite de {@code qtdDisponivelDevolucao}. */
+    public record ItemVendaOrigemResponse(
+            long idVariacao,
+            String sku,
+            String descricaoProduto,
+            String variacaoCor,
+            String variacaoTamanho,
+            BigDecimal qtdVendida,
+            BigDecimal qtdDisponivelDevolucao) {
+    }
+
+    public record VendedorDaVendaResponse(
+            long numeroVenda, Long idFuncionario, String nomeFuncionario, List<ItemVendaOrigemResponse> itens) {
     }
 
     /** {@code sku}/{@code valorTotal} (2026-08-07) — mesmas colunas de {@code ItemComprovanteVenda}

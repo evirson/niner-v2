@@ -9,6 +9,7 @@ export interface ConfiguracaoGeral {
   multaCrediario: number
   cfgUsaCorGrade: boolean
   cfgPermiteQtdDecimal: boolean
+  cfgExigeNumeroVendaDevolucao: boolean
   atualizadoEm: string
 }
 
@@ -21,6 +22,7 @@ export interface ConfiguracaoGeralFormState {
   multaCrediario: string
   cfgUsaCorGrade: boolean
   cfgPermiteQtdDecimal: boolean
+  cfgExigeNumeroVendaDevolucao: boolean
 }
 
 export function paraFormulario(c: ConfiguracaoGeral): ConfiguracaoGeralFormState {
@@ -32,6 +34,7 @@ export function paraFormulario(c: ConfiguracaoGeral): ConfiguracaoGeralFormState
     multaCrediario: formatarPercentual(c.multaCrediario),
     cfgUsaCorGrade: c.cfgUsaCorGrade,
     cfgPermiteQtdDecimal: c.cfgPermiteQtdDecimal,
+    cfgExigeNumeroVendaDevolucao: c.cfgExigeNumeroVendaDevolucao,
   }
 }
 
@@ -45,6 +48,7 @@ export function paraRequisicao(f: ConfiguracaoGeralFormState) {
     multaCrediario: desmascararPercentual(f.multaCrediario),
     cfgUsaCorGrade: f.cfgUsaCorGrade,
     cfgPermiteQtdDecimal: f.cfgPermiteQtdDecimal,
+    cfgExigeNumeroVendaDevolucao: f.cfgExigeNumeroVendaDevolucao,
   }
 }
 
@@ -85,4 +89,14 @@ export interface PermiteQtdDecimal {
  */
 export function buscarPermiteQtdDecimal(): Promise<PermiteQtdDecimal> {
   return api<PermiteQtdDecimal>('/api/v1/config-geral/permite-qtd-decimal')
+}
+
+export interface ExigeNumeroVendaDevolucao {
+  cfgExigeNumeroVendaDevolucao: boolean
+}
+
+/** Aberto a qualquer papel (diferente do resto de `cfg_geral`) — usado pela Devolução de
+ *  Produtos pra saber se o campo "Número da Venda" é obrigatório antes de gravar. */
+export function buscarExigeNumeroVendaDevolucao(): Promise<ExigeNumeroVendaDevolucao> {
+  return api<ExigeNumeroVendaDevolucao>('/api/v1/config-geral/exige-numero-venda-devolucao')
 }

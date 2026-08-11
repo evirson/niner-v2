@@ -11,10 +11,24 @@ export interface EfetivarDevolucaoRequest {
   itens: ItemDevolucaoRequest[]
 }
 
+/** Item vendido na venda de origem, com quanto ainda pode ser devolvido dele (`qtdVendida` menos
+ *  o que já foi devolvido em devoluções não canceladas da mesma venda) — quando a venda é
+ *  informada, a tela só aceita produtos presentes nesta lista, até `qtdDisponivelDevolucao`. */
+export interface ItemVendaOrigem {
+  idVariacao: number
+  sku: string
+  descricaoProduto: string
+  variacaoCor: string | null
+  variacaoTamanho: string | null
+  qtdVendida: number
+  qtdDisponivelDevolucao: number
+}
+
 export interface VendedorDaVenda {
   numeroVenda: number
   idFuncionario: number | null
   nomeFuncionario: string | null
+  itens: ItemVendaOrigem[]
 }
 
 export interface ItemDevolucaoResponse {

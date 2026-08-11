@@ -27,7 +27,7 @@ public class ConfiguracaoGeralService {
     private static final String SELECT_BASE = """
             SELECT percentual_desconto_venda, juros_crediario_dias, juros_crediario,
                    multa_crediario_dias, multa_crediario, cfg_usa_cor_grade,
-                   cfg_permite_qtd_decimal, atualizado_em
+                   cfg_permite_qtd_decimal, cfg_exige_numero_venda_devolucao, atualizado_em
             FROM cfg_geral
             WHERE id_tenant = plataforma.tenant_atual()
             """;
@@ -97,6 +97,23 @@ public class ConfiguracaoGeralService {
                 .orElse(true);
     }
 
+    /**
+     * Só a flag de exigência do número da venda na Devolução de Produtos, sem checagem de papel —
+     * usada pela própria tela (`vendas.devolucao`, front e back) pra saber se o campo "Número da
+     * Venda" é obrigatório. Mesmo fallback das outras flags leves: {@code false} evita 404 caso a
+     * linha nunca tenha sido criada, e preserva o comportamento de sempre (opcional).
+     */
+    @Transactional(readOnly = true)
+    public boolean exigeNumeroVendaDevolucao() {
+        return jdbc.sql("""
+                        SELECT cfg_exige_numero_venda_devolucao FROM cfg_geral
+                        WHERE id_tenant = plataforma.tenant_atual()
+                        """)
+                .query(Boolean.class)
+                .optional()
+                .orElse(false);
+    }
+
     @Transactional
     public ConfiguracaoGeralResponse atualizar(Jwt jwt, ConfiguracaoGeralRequest req) {
         exigirAdmin(jwt);
@@ -104,13 +121,13 @@ public class ConfiguracaoGeralService {
                         UPDATE cfg_geral SET
                             percentual_desconto_venda = ?, juros_crediario_dias = ?, juros_crediario = ?,
                             multa_crediario_dias = ?, multa_crediario = ?, cfg_usa_cor_grade = ?,
-                            cfg_permite_qtd_decimal = ?, atualizado_em = now()
+                            cfg_permite_qtd_decimal = ?, cfg_exige_numero_venda_devolucao = ?, atualizado_em = now()
                         WHERE id_tenant = plataforma.tenant_atual()
                         """)
                 .params(List.of(
                         req.percentualDescontoVenda(), req.jurosCrediarioDias(), req.jurosCrediario(),
                         req.multaCrediarioDias(), req.multaCrediario(), req.cfgUsaCorGrade(),
-                        req.cfgPermiteQtdDecimal()))
+                        req.cfgPermiteQtdDecimal(), req.cfgExigeNumeroVendaDevolucao()))
                 .update();
         // Não deveria acontecer — a linha nasce no signup — mas 404 é mais honesto que
         // seguir em frente como se tivesse atualizado algo.
@@ -145,6 +162,7 @@ public class ConfiguracaoGeralService {
                 rs.getBigDecimal("multa_crediario"),
                 rs.getBoolean("cfg_usa_cor_grade"),
                 rs.getBoolean("cfg_permite_qtd_decimal"),
+                rs.getBoolean("cfg_exige_numero_venda_devolucao"),
                 rs.getObject("atualizado_em", OffsetDateTime.class));
     }
 }

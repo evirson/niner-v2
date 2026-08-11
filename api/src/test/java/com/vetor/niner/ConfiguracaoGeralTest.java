@@ -61,7 +61,8 @@ class ConfiguracaoGeralTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.percentualDescontoVenda").value(0))
                 .andExpect(jsonPath("$.cfgUsaCorGrade").value(false))
-                .andExpect(jsonPath("$.cfgPermiteQtdDecimal").value(true));
+                .andExpect(jsonPath("$.cfgPermiteQtdDecimal").value(true))
+                .andExpect(jsonPath("$.cfgExigeNumeroVendaDevolucao").value(false));
     }
 
     @Test
@@ -71,7 +72,7 @@ class ConfiguracaoGeralTest {
         String corpo = """
                 {"percentualDescontoVenda":15.5,"jurosCrediarioDias":5,"jurosCrediario":2.5,
                  "multaCrediarioDias":10,"multaCrediario":3.0,"cfgUsaCorGrade":true,
-                 "cfgPermiteQtdDecimal":false}
+                 "cfgPermiteQtdDecimal":false,"cfgExigeNumeroVendaDevolucao":true}
                 """;
 
         mvc.perform(put("/api/v1/config-geral").header("Authorization", "Bearer " + token)
@@ -80,7 +81,8 @@ class ConfiguracaoGeralTest {
                 .andExpect(jsonPath("$.percentualDescontoVenda").value(15.5))
                 .andExpect(jsonPath("$.jurosCrediarioDias").value(5))
                 .andExpect(jsonPath("$.cfgUsaCorGrade").value(true))
-                .andExpect(jsonPath("$.cfgPermiteQtdDecimal").value(false));
+                .andExpect(jsonPath("$.cfgPermiteQtdDecimal").value(false))
+                .andExpect(jsonPath("$.cfgExigeNumeroVendaDevolucao").value(true));
 
         mvc.perform(get("/api/v1/config-geral").header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk())
@@ -91,6 +93,9 @@ class ConfiguracaoGeralTest {
         mvc.perform(get("/api/v1/config-geral/permite-qtd-decimal").header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.cfgPermiteQtdDecimal").value(false));
+        mvc.perform(get("/api/v1/config-geral/exige-numero-venda-devolucao").header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.cfgExigeNumeroVendaDevolucao").value(true));
     }
 
     @Test
@@ -113,7 +118,8 @@ class ConfiguracaoGeralTest {
 
         String corpo = """
                 {"percentualDescontoVenda":10,"jurosCrediarioDias":0,"jurosCrediario":0,
-                 "multaCrediarioDias":0,"multaCrediario":0,"cfgUsaCorGrade":true,"cfgPermiteQtdDecimal":true}
+                 "multaCrediarioDias":0,"multaCrediario":0,"cfgUsaCorGrade":true,"cfgPermiteQtdDecimal":true,
+                 "cfgExigeNumeroVendaDevolucao":false}
                 """;
         mvc.perform(put("/api/v1/config-geral").header("Authorization", "Bearer " + tokenOperador)
                         .contentType(APPLICATION_JSON).content(corpo))
@@ -126,7 +132,8 @@ class ConfiguracaoGeralTest {
 
         String corpo = """
                 {"percentualDescontoVenda":150,"jurosCrediarioDias":0,"jurosCrediario":0,
-                 "multaCrediarioDias":0,"multaCrediario":0,"cfgUsaCorGrade":true,"cfgPermiteQtdDecimal":true}
+                 "multaCrediarioDias":0,"multaCrediario":0,"cfgUsaCorGrade":true,"cfgPermiteQtdDecimal":true,
+                 "cfgExigeNumeroVendaDevolucao":false}
                 """;
         mvc.perform(put("/api/v1/config-geral").header("Authorization", "Bearer " + token)
                         .contentType(APPLICATION_JSON).content(corpo))
@@ -139,7 +146,8 @@ class ConfiguracaoGeralTest {
 
         String corpo = """
                 {"percentualDescontoVenda":10,"jurosCrediarioDias":-1,"jurosCrediario":0,
-                 "multaCrediarioDias":0,"multaCrediario":0,"cfgUsaCorGrade":true,"cfgPermiteQtdDecimal":true}
+                 "multaCrediarioDias":0,"multaCrediario":0,"cfgUsaCorGrade":true,"cfgPermiteQtdDecimal":true,
+                 "cfgExigeNumeroVendaDevolucao":false}
                 """;
         mvc.perform(put("/api/v1/config-geral").header("Authorization", "Bearer " + token)
                         .contentType(APPLICATION_JSON).content(corpo))
@@ -156,7 +164,7 @@ class ConfiguracaoGeralTest {
                         .content("""
                                 {"percentualDescontoVenda":20,"jurosCrediarioDias":0,"jurosCrediario":0,
                                  "multaCrediarioDias":0,"multaCrediario":0,"cfgUsaCorGrade":true,
-                                 "cfgPermiteQtdDecimal":true}
+                                 "cfgPermiteQtdDecimal":true,"cfgExigeNumeroVendaDevolucao":false}
                                 """))
                 .andExpect(status().isOk());
 

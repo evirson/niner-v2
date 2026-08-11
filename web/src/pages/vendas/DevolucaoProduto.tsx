@@ -1,12 +1,12 @@
 import { useMutation, useQuery } from '@tanstack/react-query'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import AjudaDaTela from '../../components/AjudaDaTela'
 import { BotaoFecharTela } from '../../components/BotaoFecharTela'
 import { IconeDevolucaoProduto, IconeExcluir, IconeLupa } from '../../components/Icones'
 import Toast from '../../components/Toast'
 import { ApiError } from '../../lib/api'
-import { buscarPermiteQtdDecimal } from '../../lib/configuracaoGeral'
+import { buscarExigeNumeroVendaDevolucao, buscarPermiteQtdDecimal } from '../../lib/configuracaoGeral'
 import {
   buscarVendedorDaVenda,
   efetivarDevolucao,
@@ -45,6 +45,12 @@ export default function DevolucaoProduto() {
   const { data: cfgQtdDecimal } = useQuery({ queryKey: ['permite-qtd-decimal'], queryFn: buscarPermiteQtdDecimal })
   const permiteQtdDecimal = cfgQtdDecimal?.cfgPermiteQtdDecimal ?? true
 
+  const { data: cfgExigeVenda, isFetching: buscandoCfgExigeVenda } = useQuery({
+    queryKey: ['exige-numero-venda-devolucao'],
+    queryFn: buscarExigeNumeroVendaDevolucao,
+  })
+  const exigeNumeroVenda = cfgExigeVenda?.cfgExigeNumeroVendaDevolucao ?? false
+
   const [numeroVendaTexto, setNumeroVendaTexto] = useState('')
   const [vendedor, setVendedor] = useState<VendedorDaVenda | null>(null)
   const [buscandoVendedor, setBuscandoVendedor] = useState(false)
@@ -56,15 +62,45 @@ export default function DevolucaoProduto() {
   /** Vale gerado pela última devolução gravada — abre o comprovante automaticamente (2026-08-03). */
   const [valeGerado, setValeGerado] = useState<DevolucaoEfetivada | null>(null)
   const campoBarrasRef = useRef<HTMLInputElement>(null)
+  const numeroVendaRef = useRef<HTMLInputElement>(null)
   const barrasTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  /** Evita repetir o foco inicial a cada refetch da config (ex.: volta o foco pro código de
+   *  barras enquanto o operador já está digitando em outro campo) — só roda uma vez, assim que
+   *  `cfgExigeVenda` chega pela primeira vez. */
+  const focoInicialFeito = useRef(false)
 
   useEffect(() => {
-    campoBarrasRef.current?.focus()
     return () => {
       if (barrasTimeoutRef.current) clearTimeout(barrasTimeoutRef.current)
     }
   }, [])
 
+  /** Foco do campo inicial depende da configuração (2026-08-11, pedido do dono do produto): se
+   *  o número da venda é obrigatório, o operador precisa preenchê-lo antes de tudo — foco vai pra
+   *  lá. Senão, o fluxo de sempre continua sendo ler o código de barras direto. Reusado tanto na
+   *  abertura da tela quanto depois de gravar uma devolução (o formulário volta ao estado inicial). */
+  const focarCampoInicial = () => {
+    if (exigeNumeroVenda) {
+      numeroVendaRef.current?.focus()
+    } else {
+      campoBarrasRef.current?.focus()
+    }
+  }
+
+  useEffect(() => {
+    // `staleTime` padrão é 0 — se a tela já tinha sido visitada nesta sessão (navegação por SPA,
+    // não recarga de página), `cfgExigeVenda` chega preenchido com o valor em CACHE na primeira
+    // renderização, mesmo que esteja desatualizado (ex.: acabou de mudar em Parâmetros do
+    // Sistema), enquanto uma nova busca roda por trás. Esperar `!buscandoCfgExigeVenda` garante
+    // que o foco só decide depois que o valor realmente confirmado do servidor chegou.
+    if (cfgExigeVenda === undefined || buscandoCfgExigeVenda || focoInicialFeito.current) return
+    focoInicialFeito.current = true
+    focarCampoInicial()
+  }, [cfgExigeVenda, buscandoCfgExigeVenda, exigeNumeroVenda])
+
+  /** Dispara sozinha ao sair do campo (`onBlur`) ou no Enter — sem botão manual (pedido do dono
+   *  do produto, 2026-08-11). Além do vendedor, a resposta traz os itens vendidos naquela venda:
+   *  a partir daqui a tela só aceita devolver produtos que constam dela (ver `mapaDisponivel`). */
   const buscarVendedor = async () => {
     const numero = Number(numeroVendaTexto.trim())
     if (!numeroVendaTexto.trim() || !Number.isFinite(numero) || numero <= 0) {
@@ -91,6 +127,32 @@ export default function DevolucaoProduto() {
       e.preventDefault()
       buscarVendedor()
     }
+  }
+
+  /** `null` = sem restrição (nenhuma venda informada/resolvida — qualquer produto pode ser
+   *  devolvido, como sempre foi). Quando preenchido, mapeia `idVariacao -> quantidade ainda
+   *  disponível pra devolução` daquela venda (já descontando devoluções anteriores dela). */
+  const mapaDisponivel = useMemo(() => {
+    if (!vendedor) return null
+    const mapa = new Map<number, number>()
+    vendedor.itens.forEach((it) => mapa.set(it.idVariacao, it.qtdDisponivelDevolucao))
+    return mapa
+  }, [vendedor])
+
+  /** Mensagem de erro do item (ou `null` se estiver tudo certo) — mesma regra usada tanto pra
+   *  bloquear na leitura/pesquisa (toast, antes de lançar) quanto pra sinalizar na grade um item
+   *  que já estava lá e deixou de ser válido (ex.: trocou o número da venda). */
+  const erroDoItem = (idVariacao: number, qtd: number): string | null => {
+    if (qtd <= 0) return 'Informe uma quantidade maior que zero.'
+    if (!mapaDisponivel) return null
+    const disponivel = mapaDisponivel.get(idVariacao)
+    if (disponivel === undefined) {
+      return `Este produto não faz parte da venda nº ${numeroVendaTexto}.`
+    }
+    if (qtd > disponivel) {
+      return `Só é possível devolver ${formatarQuantidade(disponivel, permiteQtdDecimal)} unidade(s) deste produto na venda nº ${numeroVendaTexto}.`
+    }
+    return null
   }
 
   const efetivar = useMutation({
@@ -134,10 +196,29 @@ export default function DevolucaoProduto() {
     })
   }
 
+  /** Quantidade já lançada na grade pra essa variação (0 se ainda não foi lançada) — soma-se ao
+   *  que está sendo lançado agora antes de validar contra `mapaDisponivel`. */
+  const qtdJaNaGrade = (idVariacao: number): number => {
+    const existente = itens.find((i) => i.idVariacao === idVariacao)
+    return existente ? desmascararQuantidade(existente.qtdTexto, permiteQtdDecimal) : 0
+  }
+
+  /** `true` se pode lançar — já mostra o toast de erro e retorna `false` quando não pode, pra
+   *  `lerCodigo`/`aoSelecionarNaPesquisa` só chamarem `lancarProduto` no caminho feliz. */
+  const validarAntesDeLancar = (idVariacao: number, qtd: number): boolean => {
+    const erro = erroDoItem(idVariacao, qtdJaNaGrade(idVariacao) + qtd)
+    if (erro) {
+      setToast({ texto: erro, tipo: 'erro' })
+      return false
+    }
+    return true
+  }
+
   const lerCodigo = async (valorDigitado: string) => {
     const { qtd, codigo } = interpretarCodigoBarras(valorDigitado)
     try {
       const produto = await buscarProdutoPorCodigo(codigo)
+      if (!validarAntesDeLancar(produto.idVariacao, qtd)) return
       lancarProduto(produto, qtd)
     } catch (e) {
       setToast({ texto: e instanceof ApiError ? e.message : 'Não foi possível ler o código de barras.', tipo: 'erro' })
@@ -155,6 +236,7 @@ export default function DevolucaoProduto() {
 
   const aoSelecionarNaPesquisa = (produto: PdvProduto) => {
     setMostrarPesquisa(false)
+    if (!validarAntesDeLancar(produto.idVariacao, 1)) return
     lancarProduto(produto)
     setValorBarras(produto.sku)
     if (barrasTimeoutRef.current) clearTimeout(barrasTimeoutRef.current)
@@ -180,8 +262,9 @@ export default function DevolucaoProduto() {
     )
   }
 
-  const algumItemZerado = itens.some((i) => desmascararQuantidade(i.qtdTexto, permiteQtdDecimal) <= 0)
-  const podeConfirmar = itens.length > 0 && !algumItemZerado
+  const algumItemComErro = itens.some((i) => erroDoItem(i.idVariacao, desmascararQuantidade(i.qtdTexto, permiteQtdDecimal)) !== null)
+  const faltaNumeroVendaObrigatorio = exigeNumeroVenda && !numeroVendaTexto.trim()
+  const podeConfirmar = itens.length > 0 && !algumItemComErro && !faltaNumeroVendaObrigatorio
   const qtdTotal = itens.reduce((soma, i) => soma + desmascararQuantidade(i.qtdTexto, permiteQtdDecimal), 0)
   const valorTotal = itens.reduce((soma, i) => soma + desmascararQuantidade(i.qtdTexto, permiteQtdDecimal) * i.precoVenda, 0)
 
@@ -212,36 +295,42 @@ export default function DevolucaoProduto() {
         <div className="card form-secoes form-secoes-larga">
           <section className="section">
             <p className="section-label" style={{ margin: 0 }}>
-              Venda de Origem (opcional)
+              Venda de Origem{exigeNumeroVenda ? '' : ' (opcional)'}
             </p>
             <p className="muted" style={{ marginTop: 4 }}>
-              Informe o número da venda só para identificar o vendedor — não fica registrado na devolução, serve
-              apenas para, no futuro, descontar a comissão de quem vendeu.
+              {exigeNumeroVenda
+                ? 'Informe o número da venda para identificar o vendedor automaticamente — só é possível devolver produtos que fizeram parte dela, até a quantidade ainda não devolvida.'
+                : 'Informe o número da venda para identificar o vendedor automaticamente — a partir daí só é possível devolver produtos que fizeram parte dela, até a quantidade ainda não devolvida. Deixe em branco para uma devolução sem vínculo, como antes.'}
             </p>
             <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end', marginTop: 10 }}>
               <div style={{ maxWidth: 220 }}>
-                <label>Número da Venda</label>
+                <label>Número da Venda{exigeNumeroVenda ? ' *' : ''}</label>
                 <input
+                  ref={numeroVendaRef}
                   type="text"
                   inputMode="numeric"
                   autoComplete="off"
-                  placeholder="Opcional"
+                  placeholder={exigeNumeroVenda ? 'Obrigatório' : 'Opcional'}
                   value={numeroVendaTexto}
                   onChange={(e) => {
                     setNumeroVendaTexto(e.target.value.replace(/\D/g, ''))
                     setVendedor(null)
                   }}
                   onKeyDown={aoDigitarNumeroVenda}
+                  onBlur={buscarVendedor}
                 />
+                {faltaNumeroVendaObrigatorio && <p className="erro-campo">Informe o número da venda de origem.</p>}
               </div>
-              <button type="button" className="btn ghost" onClick={buscarVendedor} disabled={buscandoVendedor}>
-                {buscandoVendedor ? 'Buscando…' : 'Buscar Vendedor'}
-              </button>
-              {vendedor && (
+              {buscandoVendedor && <p className="muted" style={{ margin: 0 }}>Buscando…</p>}
+              {!buscandoVendedor && vendedor && (
                 <p className="muted" style={{ margin: 0 }}>
                   {vendedor.idFuncionario
                     ? <>Vendedor: <strong>{vendedor.nomeFuncionario}</strong></>
                     : 'Sem vendedor associado a esta venda.'}
+                  {' · '}
+                  {vendedor.itens.length > 0
+                    ? `${vendedor.itens.length} produto(s) diferentes vendidos, disponíveis pra devolução.`
+                    : 'Nenhum item de venda encontrado nesta venda.'}
                 </p>
               )}
             </div>
@@ -303,7 +392,7 @@ export default function DevolucaoProduto() {
                   <tbody>
                     {itens.map((item) => {
                       const qtdNumero = desmascararQuantidade(item.qtdTexto, permiteQtdDecimal)
-                      const zerado = qtdNumero <= 0
+                      const erro = erroDoItem(item.idVariacao, qtdNumero)
                       return (
                         <tr key={item.idVariacao}>
                           <td>{item.descricao}</td>
@@ -318,7 +407,7 @@ export default function DevolucaoProduto() {
                               onBlur={() => aoSairQtd(item.idVariacao)}
                               onFocus={(e) => e.target.select()}
                             />
-                            {zerado && <p className="erro-campo">Informe uma quantidade maior que zero.</p>}
+                            {erro && <p className="erro-campo">{erro}</p>}
                           </td>
                           <td className="mono" style={{ textAlign: 'right' }}>
                             {moeda(item.precoVenda)}
@@ -373,7 +462,7 @@ export default function DevolucaoProduto() {
           nomeEmpresa={eu?.empresa.nome ?? '—'}
           aoFechar={() => {
             setValeGerado(null)
-            campoBarrasRef.current?.focus()
+            focarCampoInicial()
           }}
         />
       )}

@@ -26,6 +26,7 @@ const VAZIO: ConfiguracaoGeralFormState = {
   multaCrediario: '',
   cfgUsaCorGrade: false,
   cfgPermiteQtdDecimal: true,
+  cfgExigeNumeroVendaDevolucao: false,
 }
 
 type CampoValidavel = 'percentualDescontoVenda' | 'jurosCrediarioDias' | 'jurosCrediario' | 'multaCrediarioDias' | 'multaCrediario'
@@ -68,6 +69,14 @@ export default function ConfiguracaoGeralForm() {
     mutationFn: () => atualizarConfiguracaoGeral(paraRequisicao(form)),
     onSuccess: (resposta) => {
       queryClient.setQueryData(['config-geral'], resposta)
+      // As flags "leves" (abertas a qualquer papel, usadas por outras telas — Produto, PDV,
+      // Transferência, Devolução de Produtos etc.) vivem em query keys próprias, separadas de
+      // `config-geral`; sem invalidar aqui, uma tela já visitada nesta sessão (navegação por
+      // SPA, sem recarregar a página) continua servindo o valor antigo do cache até expirar.
+      queryClient.invalidateQueries({ queryKey: ['usa-cor-grade'] })
+      queryClient.invalidateQueries({ queryKey: ['desconto-venda'] })
+      queryClient.invalidateQueries({ queryKey: ['permite-qtd-decimal'] })
+      queryClient.invalidateQueries({ queryKey: ['exige-numero-venda-devolucao'] })
       setToastTipo('sucesso')
       setToast('Parâmetros salvos.')
     },
@@ -150,6 +159,21 @@ export default function ConfiguracaoGeralForm() {
                 }}
               />
               {erros.percentualDescontoVenda && <p className="erro-campo">{erros.percentualDescontoVenda}</p>}
+            </div>
+            <div className="col-6">
+              <label className="checkbox-linha" style={{ marginTop: 0 }}>
+                <input
+                  type="checkbox"
+                  checked={form.cfgExigeNumeroVendaDevolucao}
+                  onChange={(e) => setForm((f) => ({ ...f, cfgExigeNumeroVendaDevolucao: e.target.checked }))}
+                />
+                Exigir número da venda na Devolução de Produtos
+              </label>
+              <p className="muted" style={{ fontSize: 12, marginTop: 4 }}>
+                Ligado: o operador precisa informar o número da venda de origem antes de gravar a
+                devolução, e só pode devolver produtos que fizeram parte dela. Desligado: o campo
+                continua opcional (padrão) — sem ele, qualquer produto pode ser devolvido livremente.
+              </p>
             </div>
           </div>
         </section>
