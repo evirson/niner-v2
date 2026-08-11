@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { useEffect, useRef, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import AjudaDaTela from '../../components/AjudaDaTela'
 import { BotaoFecharTela } from '../../components/BotaoFecharTela'
 import { IconeCancelamentoVenda, IconeOlho } from '../../components/Icones'
@@ -54,6 +55,7 @@ function paginasVisiveis(atual: number, total: number): number[] {
  * do dono do produto: "só existe cancelamento se o vale ainda não foi usado".
  */
 export default function CancelamentoDevolucao() {
+  const navigate = useNavigate()
   const [filtrosAberto, setFiltrosAberto] = useState(true)
   const [idDevolucaoTexto, setIdDevolucaoTexto] = useState('')
   const [dataInicialTexto, setDataInicialTexto] = useState(isoParaData(primeiroDiaDoMesISO()))
@@ -298,7 +300,10 @@ export default function CancelamentoDevolucao() {
 
             {erroFiltros && <p className="erro-campo">{erroFiltros}</p>}
 
-            <div className="ajuda-rodape" style={{ justifyContent: 'flex-end' }}>
+            <div className="ajuda-rodape">
+              <button type="button" className="btn ghost" onClick={() => navigate(-1)}>
+                Fechar
+              </button>
               <button type="button" className="btn" onClick={confirmarFiltros}>
                 Localizar Devoluções
               </button>

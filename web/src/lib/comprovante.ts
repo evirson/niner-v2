@@ -107,6 +107,17 @@ export function montarLinhasComprovante(c: ComprovanteRecebimento, reimpressao: 
 }
 
 /**
+ * Largura fixa (mm) de toda bobina térmica gerada por este arquivo — usada também como piso da
+ * altura calculada (ver {@link LARGURA_MM} nos comentários de cada `montarDocumento*`: o jsPDF, em
+ * orientação retrato, troca largura por altura sempre que `largura > altura`; sem esse piso, um
+ * comprovante curto — poucos itens/parcelas — vira uma página mais estreita que 80mm e corta as
+ * colunas da direita. Bug real encontrado 2026-08-11 comparando o vale-mercadoria — que costuma
+ * ter só 1 item, caindo abaixo do piso — com a papeleta de venda, que raramente é curta o
+ * suficiente pra disparar a troca).
+ */
+const LARGURA_MM = 80
+
+/**
  * Monta o documento jsPDF do comprovante de crediário (80mm de largura, altura dinâmica conforme
  * o número de linhas, fonte courier monoespaçada pra alinhar exatamente igual à pré-visualização)
  * — fonte única de verdade reusada tanto pra baixar o arquivo ({@link gerarPdfComprovante}) quanto
@@ -116,9 +127,9 @@ function montarDocumentoComprovante(linhas: string[]): jsPDF {
   const margem = 4
   const tamanhoFonte = 8
   const alturaLinha = 3.6
-  const altura = margem * 2 + linhas.length * alturaLinha
+  const altura = Math.max(LARGURA_MM, margem * 2 + linhas.length * alturaLinha)
 
-  const doc = new jsPDF({ unit: 'mm', format: [80, altura] })
+  const doc = new jsPDF({ unit: 'mm', format: [LARGURA_MM, altura] })
   doc.setFont('courier', 'normal')
   doc.setFontSize(tamanhoFonte)
   linhas.forEach((texto, indice) => {
@@ -315,9 +326,9 @@ function montarDocumentoComprovanteVenda(linhas: string[]): jsPDF {
   const margem = 4
   const tamanhoFonte = 5
   const alturaLinha = 2.6
-  const altura = margem * 2 + linhas.length * alturaLinha
+  const altura = Math.max(LARGURA_MM, margem * 2 + linhas.length * alturaLinha)
 
-  const doc = new jsPDF({ unit: 'mm', format: [80, altura] })
+  const doc = new jsPDF({ unit: 'mm', format: [LARGURA_MM, altura] })
   doc.setFont('courier', 'normal')
   doc.setFontSize(tamanhoFonte)
   linhas.forEach((texto, indice) => {
@@ -402,9 +413,9 @@ function montarDocumentoComprovanteVale(linhas: string[]): jsPDF {
   const margem = 4
   const tamanhoFonte = 5
   const alturaLinha = 2.6
-  const altura = margem * 2 + linhas.length * alturaLinha
+  const altura = Math.max(LARGURA_MM, margem * 2 + linhas.length * alturaLinha)
 
-  const doc = new jsPDF({ unit: 'mm', format: [80, altura] })
+  const doc = new jsPDF({ unit: 'mm', format: [LARGURA_MM, altura] })
   doc.setFont('courier', 'normal')
   doc.setFontSize(tamanhoFonte)
   linhas.forEach((texto, indice) => {
