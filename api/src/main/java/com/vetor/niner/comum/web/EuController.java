@@ -1,5 +1,6 @@
 package com.vetor.niner.comum.web;
 
+import com.vetor.niner.identidade.usuario.HorarioAcessoService;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -20,9 +21,11 @@ import java.util.Map;
 public class EuController {
 
     private final JdbcClient jdbc;
+    private final HorarioAcessoService horarioAcesso;
 
-    public EuController(JdbcClient jdbc) {
+    public EuController(JdbcClient jdbc, HorarioAcessoService horarioAcesso) {
         this.jdbc = jdbc;
+        this.horarioAcesso = horarioAcesso;
     }
 
     @GetMapping("/api/v1/eu")
@@ -71,6 +74,12 @@ public class EuController {
         corpo.put("usuario", usuario);
         corpo.put("empresa", empresa);
         corpo.put("trial_expira_em", trialExpiraEm);
+        // Contagem regressiva do aviso visual de horário de acesso (HorarioAcessoGuard,
+        // 2026-08-14) — null na imensa maioria das chamadas (ADMIN, controle desligado, ou
+        // dentro do horário normal); só vem preenchido nos minutos finais de tolerância antes
+        // do bloqueio de verdade (HorarioAcessoFilter, mesma janela de graça).
+        corpo.put("segundosRestantesTolerancia",
+                horarioAcesso.segundosRestantesTolerancia(idUsuario, HorarioAcessoService.TOLERANCIA_MINUTOS_PADRAO));
         return corpo;
     }
 }

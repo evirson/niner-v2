@@ -10,6 +10,7 @@ import Toast from '../../components/Toast'
 import { ApiError } from '../../lib/api'
 import { listarEmpresas } from '../../lib/empresas'
 import { aoTeclarEnterNoFormulario } from '../../lib/formularios'
+import { horaValida, mascararHora } from '../../lib/masks'
 import {
   USUARIO_VAZIO,
   atualizarUsuario,
@@ -23,6 +24,30 @@ import { maiusculas } from '../../lib/texto'
 
 const CHAVE_TELA = 'identidade.usuario.form'
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+const NOMES_DIA_SEMANA: Record<number, string> = {
+  1: 'Segunda-feira',
+  2: 'Terça-feira',
+  3: 'Quarta-feira',
+  4: 'Quinta-feira',
+  5: 'Sexta-feira',
+  6: 'Sábado',
+  7: 'Domingo',
+}
+
+/** {@code true} só quando os horários estão consistentes pra gravar: cada dia tem os dois
+ *  campos preenchidos (com fim depois do início) ou os dois em branco (sem acesso naquele
+ *  dia) — mesma regra validada de novo no backend (`UsuarioService.validar`). */
+function horariosValidos(f: UsuarioFormState): boolean {
+  if (!f.controlaHorarioAcesso) return true
+  return f.horarios.every((h) => {
+    const inicioPreenchido = h.horaInicio.trim() !== ''
+    const fimPreenchido = h.horaFim.trim() !== ''
+    if (!inicioPreenchido && !fimPreenchido) return true
+    if (inicioPreenchido !== fimPreenchido) return false
+    if (!horaValida(h.horaInicio) || !horaValida(h.horaFim)) return false
+    return h.horaFim > h.horaInicio
+  })
+}
 
 type CampoValidavel = 'nome' | 'email' | 'senha' | 'idsEmpresa'
 type ErrosCampo = Partial<Record<CampoValidavel, string>>
@@ -97,6 +122,15 @@ export default function UsuarioForm({ somenteLeitura = false }: { somenteLeitura
     }))
   }
 
+  const alterarHorario = (indice: number, campo: 'horaInicio' | 'horaFim') => (e: ChangeEvent<HTMLInputElement>) => {
+    const valor = mascararHora(e.target.value)
+    setForm((f) => {
+      const horarios = [...f.horarios]
+      horarios[indice] = { ...horarios[indice], [campo]: valor }
+      return { ...f, horarios }
+    })
+  }
+
   const validarEEnviar = () => {
     if (somenteLeitura) return
 
@@ -109,6 +143,12 @@ export default function UsuarioForm({ somenteLeitura = false }: { somenteLeitura
     setErros(novosErros)
     if (Object.values(novosErros).some(Boolean)) {
       setToast('Corrija os campos destacados antes de salvar.')
+      return
+    }
+    if (!horariosValidos(form)) {
+      setToast(
+        'Informe início e fim do horário de acesso juntos (com o fim depois do início), ou deixe os dois em branco para o dia sem acesso.',
+      )
       return
     }
     salvar.mutate()
@@ -235,6 +275,63 @@ export default function UsuarioForm({ somenteLeitura = false }: { somenteLeitura
           </div>
           {erros.idsEmpresa && <p className="erro-campo">{erros.idsEmpresa}</p>}
         </section>
+
+        {!usuarioExistente?.administrador && (
+          <section className="section">
+            <p className="section-label">Horário de acesso</p>
+
+            <label className="checkbox-linha" style={{ marginTop: 0 }}>
+              <input
+                type="checkbox"
+                checked={form.controlaHorarioAcesso}
+                onChange={(e) => setForm((f) => ({ ...f, controlaHorarioAcesso: e.target.checked }))}
+              />
+              Controla horário de acesso
+            </label>
+            <p className="muted" style={{ marginTop: 0 }}>
+              Fora dos dias e horários abaixo, o usuário não consegue fazer login nem continuar
+              trabalhando. Deixe início e fim em branco para não liberar acesso naquele dia (ex.:
+              folga). O horário considerado é sempre o do servidor.
+            </p>
+
+            {form.controlaHorarioAcesso && (
+              <table className="table-compacta">
+                <thead>
+                  <tr>
+                    <th>Dia da semana</th>
+                    <th>Início</th>
+                    <th>Fim</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {form.horarios.map((h, i) => (
+                    <tr key={h.diaSemana}>
+                      <td>{NOMES_DIA_SEMANA[h.diaSemana]}</td>
+                      <td>
+                        <input
+                          value={h.horaInicio}
+                          placeholder="--:--"
+                          style={{ width: 70 }}
+                          onFocus={(e) => e.target.select()}
+                          onChange={alterarHorario(i, 'horaInicio')}
+                        />
+                      </td>
+                      <td>
+                        <input
+                          value={h.horaFim}
+                          placeholder="--:--"
+                          style={{ width: 70 }}
+                          onFocus={(e) => e.target.select()}
+                          onChange={alterarHorario(i, 'horaFim')}
+                        />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </section>
+        )}
 
         <InfoRegistro
           codigo={usuarioExistente?.idUsuario}

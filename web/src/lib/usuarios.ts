@@ -1,4 +1,5 @@
 import { api } from './api'
+import { horaParaIso, isoParaHora } from './masks'
 import { maiusculas } from './texto'
 
 export type StatusUsuario = 'ATIVOS' | 'INATIVOS' | 'TODOS'
@@ -8,6 +9,14 @@ export interface EmpresaAcesso {
   nomeEmpresa: string
 }
 
+/** Um dia da semana (1=segunda..7=domingo, ISO) do horário de acesso permitido — os dois
+ *  horários nulos juntos = sem acesso naquele dia (docs/telas/usuario.md, 2026-08-14). */
+export interface HorarioAcesso {
+  diaSemana: number
+  horaInicio: string | null
+  horaFim: string | null
+}
+
 export interface Usuario {
   idUsuario: number
   nome: string
@@ -15,8 +24,22 @@ export interface Usuario {
   ativo: boolean
   administrador: boolean
   empresas: EmpresaAcesso[]
+  controlaHorarioAcesso: boolean
+  horarios: HorarioAcesso[]
   criadoEm: string
   atualizadoEm: string
+}
+
+/** Uma linha da tabela de horário no formulário — sempre as 7 posições (Segunda..Domingo) em
+ *  memória; `horaInicio`/`horaFim` em branco = sem acesso naquele dia. */
+export interface HorarioAcessoFormState {
+  diaSemana: number
+  horaInicio: string
+  horaFim: string
+}
+
+function horariosEmBranco(): HorarioAcessoFormState[] {
+  return Array.from({ length: 7 }, (_, i) => ({ diaSemana: i + 1, horaInicio: '', horaFim: '' }))
 }
 
 /**
@@ -31,6 +54,8 @@ export interface UsuarioFormState {
   senha: string
   ativo: boolean
   idsEmpresa: number[]
+  controlaHorarioAcesso: boolean
+  horarios: HorarioAcessoFormState[]
 }
 
 export const USUARIO_VAZIO: UsuarioFormState = {
@@ -39,15 +64,25 @@ export const USUARIO_VAZIO: UsuarioFormState = {
   senha: '',
   ativo: true,
   idsEmpresa: [],
+  controlaHorarioAcesso: false,
+  horarios: horariosEmBranco(),
 }
 
 export function paraFormulario(u: Usuario): UsuarioFormState {
+  const porDia = new Map(u.horarios.map((h) => [h.diaSemana, h]))
   return {
     nome: u.nome,
     email: u.email,
     senha: '',
     ativo: u.ativo,
     idsEmpresa: u.empresas.map((e) => e.idEmpresa),
+    controlaHorarioAcesso: u.controlaHorarioAcesso,
+    horarios: horariosEmBranco().map((vazio) => {
+      const h = porDia.get(vazio.diaSemana)
+      return h
+        ? { diaSemana: h.diaSemana, horaInicio: isoParaHora(h.horaInicio), horaFim: isoParaHora(h.horaFim) }
+        : vazio
+    }),
   }
 }
 
@@ -58,6 +93,12 @@ export function paraRequisicao(f: UsuarioFormState) {
     senha: f.senha.trim() ? f.senha : null,
     ativo: f.ativo,
     idsEmpresa: f.idsEmpresa,
+    controlaHorarioAcesso: f.controlaHorarioAcesso,
+    horarios: f.horarios.map((h) => ({
+      diaSemana: h.diaSemana,
+      horaInicio: horaParaIso(h.horaInicio),
+      horaFim: horaParaIso(h.horaFim),
+    })),
   }
 }
 

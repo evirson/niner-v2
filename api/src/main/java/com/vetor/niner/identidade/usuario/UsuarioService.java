@@ -3,6 +3,8 @@ package com.vetor.niner.identidade.usuario;
 import com.vetor.niner.comum.web.ConflitoDadosException;
 import com.vetor.niner.identidade.usuario.UsuarioDtos.EmpresaAcesso;
 import com.vetor.niner.identidade.usuario.UsuarioDtos.ExclusaoUsuarioResponse;
+import com.vetor.niner.identidade.usuario.UsuarioDtos.HorarioAcessoRequest;
+import com.vetor.niner.identidade.usuario.UsuarioDtos.HorarioAcessoResponse;
 import com.vetor.niner.identidade.usuario.UsuarioDtos.PaginaUsuarios;
 import com.vetor.niner.identidade.usuario.UsuarioDtos.UsuarioRequest;
 import com.vetor.niner.identidade.usuario.UsuarioDtos.UsuarioResponse;
@@ -15,11 +17,14 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.time.LocalTime;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 import static org.springframework.http.HttpStatus.FORBIDDEN;
 import static org.springframework.http.HttpStatus.NOT_FOUND;
@@ -120,15 +125,17 @@ public class UsuarioService {
         validar(req, true);
         try {
             long id = jdbc.sql("""
-                            INSERT INTO usuario (id_tenant, id_empresa, nome_usuario, email, senha_hash, ativo, administrador)
-                            VALUES (plataforma.tenant_atual(), ?, ?, ?, ?, ?, ?)
+                            INSERT INTO usuario (id_tenant, id_empresa, nome_usuario, email, senha_hash, ativo,
+                                                  administrador, controla_horario_acesso)
+                            VALUES (plataforma.tenant_atual(), ?, ?, ?, ?, ?, ?, ?)
                             RETURNING id_usuario
                             """)
                     .params(req.idsEmpresa().get(0), req.nome().trim().toUpperCase(Locale.ROOT),
                             req.email().trim().toLowerCase(Locale.ROOT), senhas.encode(req.senha()),
-                            req.ativo() == null || req.ativo(), false)
+                            req.ativo() == null || req.ativo(), false, Boolean.TRUE.equals(req.controlaHorarioAcesso()))
                     .query(Long.class).single();
             salvarEmpresas(id, req.idsEmpresa());
+            salvarHorarios(id, Boolean.TRUE.equals(req.controlaHorarioAcesso()), req.horarios());
             return montar(id);
         } catch (DuplicateKeyException e) {
             throw duplicidade(e);
@@ -147,7 +154,7 @@ public class UsuarioService {
             List<Object> params = new ArrayList<>(List.of(
                     req.idsEmpresa().get(0), req.nome().trim().toUpperCase(Locale.ROOT),
                     req.email().trim().toLowerCase(Locale.ROOT),
-                    req.ativo() == null || req.ativo()));
+                    req.ativo() == null || req.ativo(), Boolean.TRUE.equals(req.controlaHorarioAcesso())));
             String setSenha = "";
             if (req.senha() != null && !req.senha().isBlank()) {
                 setSenha = ", senha_hash = ?";
@@ -155,7 +162,8 @@ public class UsuarioService {
             }
             params.add(id);
             int linhas = jdbc.sql("""
-                            UPDATE usuario SET id_empresa = ?, nome_usuario = ?, email = ?, ativo = ?
+                            UPDATE usuario SET id_empresa = ?, nome_usuario = ?, email = ?, ativo = ?,
+                                                controla_horario_acesso = ?
                             """ + setSenha + """
                             , atualizado_em = now()
                             WHERE id_usuario = ? AND id_tenant = plataforma.tenant_atual()
@@ -166,6 +174,7 @@ public class UsuarioService {
                 throw new ResponseStatusException(NOT_FOUND, "Usuário não encontrado.");
             }
             salvarEmpresas(id, req.idsEmpresa());
+            salvarHorarios(id, Boolean.TRUE.equals(req.controlaHorarioAcesso()), req.horarios());
             return montar(id);
         } catch (DuplicateKeyException e) {
             throw duplicidade(e);
@@ -222,6 +231,41 @@ public class UsuarioService {
         if (req.idsEmpresa() == null || req.idsEmpresa().isEmpty()) {
             throw new IllegalArgumentException("Selecione ao menos uma empresa que o usuário poderá acessar.");
         }
+        if (Boolean.TRUE.equals(req.controlaHorarioAcesso())) {
+            List<HorarioAcessoRequest> horarios = req.horarios() == null ? List.of() : req.horarios();
+            Set<Integer> dias = horarios.stream().map(HorarioAcessoRequest::diaSemana).collect(Collectors.toSet());
+            if (dias.size() != horarios.size() || !dias.equals(Set.of(1, 2, 3, 4, 5, 6, 7))) {
+                throw new IllegalArgumentException(
+                        "Informe o horário (ou deixe em branco para sem acesso) dos 7 dias da semana.");
+            }
+            for (HorarioAcessoRequest h : horarios) {
+                if ((h.horaInicio() == null) != (h.horaFim() == null)) {
+                    throw new IllegalArgumentException("Informe início e fim do horário juntos, ou deixe os dois em branco.");
+                }
+                if (h.horaInicio() != null && !h.horaFim().isAfter(h.horaInicio())) {
+                    throw new IllegalArgumentException("O horário final deve ser depois do horário inicial.");
+                }
+            }
+        }
+    }
+
+    /** Substitui por completo os horários de acesso do usuário — mesmo idioma "apaga tudo e
+     *  reinsere" de {@link #salvarEmpresas}. Com o controle desligado, só limpa (nada fica
+     *  gravado nem aplicado — coerente com "desligado, não pede nem aplica horário nenhum"). */
+    private void salvarHorarios(long idUsuario, boolean controla, List<HorarioAcessoRequest> horarios) {
+        jdbc.sql("DELETE FROM usuario_horario_acesso WHERE id_usuario = ? AND id_tenant = plataforma.tenant_atual()")
+                .param(idUsuario).update();
+        if (!controla || horarios == null) {
+            return;
+        }
+        for (HorarioAcessoRequest h : horarios) {
+            jdbc.sql("""
+                            INSERT INTO usuario_horario_acesso (id_tenant, id_usuario, dia_semana, hora_inicio, hora_fim)
+                            VALUES (plataforma.tenant_atual(), ?, ?, ?, ?)
+                            """)
+                    .params(idUsuario, h.diaSemana(), h.horaInicio(), h.horaFim())
+                    .update();
+        }
     }
 
     /** Substitui por completo a lista de empresas do usuário — mesmo idioma de "apaga tudo e reinsere". */
@@ -238,15 +282,20 @@ public class UsuarioService {
         }
     }
 
+    private record UsuarioBase(String nome, String email, boolean ativo, boolean administrador,
+            boolean controlaHorarioAcesso, OffsetDateTime criadoEm, OffsetDateTime atualizadoEm) {
+    }
+
     private UsuarioResponse montar(long id) {
-        UsuarioResponse base = jdbc.sql("""
-                        SELECT id_usuario, nome_usuario, email, ativo, administrador, criado_em, atualizado_em
+        UsuarioBase base = jdbc.sql("""
+                        SELECT nome_usuario, email, ativo, administrador, controla_horario_acesso,
+                               criado_em, atualizado_em
                         FROM usuario WHERE id_usuario = ? AND id_tenant = plataforma.tenant_atual()
                         """)
                 .param(id)
-                .query((rs, n) -> new UsuarioResponse(
-                        rs.getLong("id_usuario"), rs.getString("nome_usuario"), rs.getString("email"),
-                        rs.getBoolean("ativo"), rs.getBoolean("administrador"), List.of(),
+                .query((rs, n) -> new UsuarioBase(
+                        rs.getString("nome_usuario"), rs.getString("email"),
+                        rs.getBoolean("ativo"), rs.getBoolean("administrador"), rs.getBoolean("controla_horario_acesso"),
                         rs.getObject("criado_em", OffsetDateTime.class),
                         rs.getObject("atualizado_em", OffsetDateTime.class)))
                 .optional()
@@ -263,8 +312,18 @@ public class UsuarioService {
                 .query((rs, n) -> new EmpresaAcesso(rs.getLong("id_empresa"), rs.getString("nome_empresa")))
                 .list();
 
-        return new UsuarioResponse(base.idUsuario(), base.nome(), base.email(), base.ativo(), base.administrador(),
-                empresas, base.criadoEm(), base.atualizadoEm());
+        List<HorarioAcessoResponse> horarios = jdbc.sql("""
+                        SELECT dia_semana, hora_inicio, hora_fim FROM usuario_horario_acesso
+                        WHERE id_usuario = ? AND id_tenant = plataforma.tenant_atual()
+                        ORDER BY dia_semana ASC
+                        """)
+                .param(id)
+                .query((rs, n) -> new HorarioAcessoResponse(rs.getInt("dia_semana"),
+                        rs.getObject("hora_inicio", LocalTime.class), rs.getObject("hora_fim", LocalTime.class)))
+                .list();
+
+        return new UsuarioResponse(id, base.nome(), base.email(), base.ativo(), base.administrador(),
+                empresas, base.controlaHorarioAcesso(), horarios, base.criadoEm(), base.atualizadoEm());
     }
 
     private static void exigirAdmin(Jwt jwt) {

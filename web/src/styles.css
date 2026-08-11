@@ -774,6 +774,22 @@ a.menu-card:hover {
 }
 .gauge-progresso-numero { fill: var(--ink); font-size: 18px; font-weight: 600; font-variant-numeric: tabular-nums; }
 
+/* Aviso de horário de acesso quase no fim (HorarioAcessoGuard.tsx, 2026-08-14) — anel no canto
+   superior esquerdo, contagem regressiva dos minutos de tolerância antes do logoff automático.
+   Cor de alerta (--danger) desde o primeiro segundo: ao contrário do gauge-progresso (que é uma
+   ação neutra em andamento), este é sempre um aviso. */
+.horario-acesso-aviso {
+  position: fixed; top: 20px; left: 20px; z-index: 200;
+  display: flex; align-items: center; gap: 10px;
+  background: var(--surface); border: 1px solid var(--danger); border-radius: var(--radius);
+  padding: 8px 14px 8px 8px; box-shadow: 0 8px 24px rgba(0, 0, 0, .35);
+  animation: toast-entrada .2s ease-out;
+}
+.horario-acesso-aviso-trilha { fill: none; stroke: var(--line); stroke-width: 6; }
+.horario-acesso-aviso-anel { fill: none; stroke: var(--danger); stroke-width: 6; stroke-linecap: round; transition: stroke-dashoffset 1s linear; }
+.horario-acesso-aviso-numero { fill: var(--danger); font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.horario-acesso-aviso-texto { color: var(--ink); font-size: 13px; font-weight: 500; max-width: 160px; }
+
 /* PDV (Frente de Caixa, 2026-07-27) — rascunho de layout incorporado ao ERP. Tela só de
    demonstração visual: estado local (catálogo fixo, sem chamada de API), nenhuma regra de
    negócio real ainda (P4/§3.7 seguem valendo quando a feature de verdade for construída). */

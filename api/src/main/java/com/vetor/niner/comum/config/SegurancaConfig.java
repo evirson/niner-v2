@@ -1,5 +1,6 @@
 package com.vetor.niner.comum.config;
 
+import com.vetor.niner.comum.tenant.HorarioAcessoFilter;
 import com.vetor.niner.comum.tenant.TenantFilter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -51,7 +52,8 @@ public class SegurancaConfig {
 
     @Bean
     @Order(2)
-    SecurityFilterChain tenantFilterChain(HttpSecurity http, TenantFilter tenantFilter) throws Exception {
+    SecurityFilterChain tenantFilterChain(
+            HttpSecurity http, TenantFilter tenantFilter, HorarioAcessoFilter horarioAcessoFilter) throws Exception {
         http
                 .securityMatcher("/api/v1/**")
                 .authorizeHttpRequests(auth -> auth.anyRequest().authenticated())
@@ -61,7 +63,10 @@ public class SegurancaConfig {
                 .csrf(AbstractHttpConfigurer::disable)
                 .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 // estabelece o TenantContext após a autenticação, dentro da cadeia do tenant
-                .addFilterAfter(tenantFilter, AuthorizationFilter.class);
+                .addFilterAfter(tenantFilter, AuthorizationFilter.class)
+                // horário de acesso (2026-08-14) — precisa vir DEPOIS do TenantFilter: consulta
+                // plataforma.tenant_atual(), que só resolve com o TenantContext já ativo.
+                .addFilterAfter(horarioAcessoFilter, TenantFilter.class);
         return http.build();
     }
 

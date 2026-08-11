@@ -129,6 +129,33 @@ export function diaMesValido(valor: string): boolean {
   return dia >= 1 && dia <= diasNoMes
 }
 
+/** Máscara "HH:MM" (horário de acesso por dia da semana, 2026-08-14). */
+export function mascararHora(valor: string): string {
+  const digitos = somenteDigitos(valor).slice(0, 4)
+  return aplicarMascara(digitos, '00:00')
+}
+
+/** {@code true} só quando "HH:MM" tem os 4 dígitos e é um horário real (00-23 / 00-59). */
+export function horaValida(valor: string): boolean {
+  const m = /^(\d{2}):(\d{2})$/.exec(valor)
+  if (!m) return false
+  const hora = Number(m[1])
+  const minuto = Number(m[2])
+  return hora >= 0 && hora <= 23 && minuto >= 0 && minuto <= 59
+}
+
+/** "HH:MM" -> "HH:MM:00" (LocalTime da API). */
+export function horaParaIso(valor: string): string | null {
+  if (!horaValida(valor)) return null
+  return `${valor}:00`
+}
+
+/** "HH:MM:SS" (vindo da API) -> "HH:MM" para exibir no campo. */
+export function isoParaHora(iso: string | null | undefined): string {
+  if (!iso) return ''
+  return iso.slice(0, 5)
+}
+
 /** Formata um número (ex.: vindo da API) como moeda BR: "1234.5" -> "1.234,50". */
 export function formatarMoeda(valor: number): string {
   return valor.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })

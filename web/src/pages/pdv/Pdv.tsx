@@ -16,6 +16,7 @@ import {
   type PdvProduto,
   type VendaEfetivada,
 } from '../../lib/pdv'
+import { useRotinaCritica } from '../../lib/rotinaCritica'
 import AlteraQuantidadeModal from './AlteraQuantidadeModal'
 import ComprovantePapeletaModal from './ComprovantePapeletaModal'
 import FormaPagamentoModal from './FormaPagamentoModal'
@@ -44,6 +45,7 @@ function variacaoTexto(produto: PdvProduto): string | null {
 export default function Pdv() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
+  const { setEmAndamento } = useRotinaCritica()
   const { data: statusCaixa } = useQuery({ queryKey: ['caixa-status'], queryFn: buscarStatusCaixa })
   const caixaFechado = statusCaixa !== undefined && !statusCaixa.aberto
   const [ledger, setLedger] = useState<ItemLedger[]>([])
@@ -191,6 +193,9 @@ export default function Pdv() {
       mostrarFlash('Nenhum item na venda.')
       return
     }
+    // Rotina crítica (docs/telas/usuario.md, 2026-08-14): do início da forma de pagamento até
+    // fechar o comprovante — o logoff automático por fim de horário de acesso espera terminar.
+    setEmAndamento(true)
     setMostrarFormaPagamento(true)
   }
 
@@ -408,7 +413,11 @@ export default function Pdv() {
         <FormaPagamentoModal
           itens={ledger}
           valorTotal={valorTotal}
-          aoFechar={() => setMostrarFormaPagamento(false)}
+          aoFechar={() => {
+            // Cancelou sem efetivar — libera a rotina crítica; a venda nunca chegou a existir.
+            setMostrarFormaPagamento(false)
+            setEmAndamento(false)
+          }}
           aoEfetivada={aoVendaEfetivada}
         />
       )}
@@ -418,6 +427,9 @@ export default function Pdv() {
           aoFechar={() => {
             setIdVendaPapeleta(null)
             campoBarrasRef.current?.focus()
+            // Só libera a rotina crítica aqui: venda efetivada e comprovante já fechado
+            // (impresso/enviado ou dispensado) — não antes.
+            setEmAndamento(false)
           }}
         />
       )}

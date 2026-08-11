@@ -5,6 +5,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.net.URI;
 
@@ -30,6 +31,19 @@ public class GlobalExceptionHandler {
         pd.setTitle("Dado inválido");
         pd.setType(URI.create("urn:niner:erro:validacao"));
         return pd;
+    }
+
+    /**
+     * {@code ResponseStatusException(status, motivo)} — usado em vários serviços (login,
+     * validações pontuais) — não ganha corpo Problem Details de graça: sem este handler ela
+     * chega ao cliente como status certo mas corpo vazio, e o front (que lê {@code p.detail})
+     * cai no genérico "Ocorreu um erro.", escondendo o motivo real que o backend já tinha
+     * (bug real encontrado ao testar a rejeição de login por horário de acesso, 2026-08-14 —
+     * afetava também "Credenciais inválidas." e todo outro uso já existente desta exceção).
+     */
+    @ExceptionHandler(ResponseStatusException.class)
+    public ProblemDetail tratarStatusException(ResponseStatusException ex) {
+        return ProblemDetail.forStatusAndDetail(ex.getStatusCode(), ex.getReason());
     }
 
     @ExceptionHandler(ConflitoDadosException.class)

@@ -2,6 +2,7 @@ package com.vetor.niner.plataforma.onboarding;
 
 import com.vetor.niner.comum.config.NinerProperties;
 import com.vetor.niner.comum.seguranca.TokenService;
+import com.vetor.niner.identidade.usuario.HorarioAcessoService;
 import com.vetor.niner.plataforma.onboarding.OnboardingDtos.*;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -14,6 +15,7 @@ import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Locale;
 
+import static org.springframework.http.HttpStatus.FORBIDDEN;
 import static org.springframework.http.HttpStatus.UNAUTHORIZED;
 
 /**
@@ -31,12 +33,15 @@ public class SignupService {
     private final PasswordEncoder senhas;
     private final TokenService tokens;
     private final NinerProperties props;
+    private final HorarioAcessoService horarioAcesso;
 
-    public SignupService(JdbcClient jdbc, PasswordEncoder senhas, TokenService tokens, NinerProperties props) {
+    public SignupService(JdbcClient jdbc, PasswordEncoder senhas, TokenService tokens, NinerProperties props,
+            HorarioAcessoService horarioAcesso) {
         this.jdbc = jdbc;
         this.senhas = senhas;
         this.tokens = tokens;
         this.props = props;
+        this.horarioAcesso = horarioAcesso;
     }
 
     @Transactional
@@ -85,7 +90,31 @@ public class SignupService {
                 .params(idTenant, req.nomeLoja(), "{sku}\n{descricao}\n{preco_venda}")
                 .query(Long.class).single();
 
-        jdbc.sql("INSERT INTO cfg_geral (id_tenant) VALUES (?)").param(idTenant).update();
+        // 5a) plano de contas mínimo pra Entrada de Produtos (mesma árvore de V032, replicada
+        // aqui pra tenant novo nascer coerente sem depender da migration). id_plano_contas_pai/
+        // nivel são colunas geradas a partir do código — nunca informadas. FK de hierarquia e
+        // trigger de guarda já são DEFERRABLE INITIALLY DEFERRED (V016), então os 4 níveis
+        // podem entrar juntos sem ordem especial.
+        jdbc.sql("""
+                        INSERT INTO cfg_plano_contas (
+                            id_tenant, id_plano_contas, descricao, tipo_movimento, natureza,
+                            inclui_dre, inclui_fluxo_caixa, grupo_dre, grupo_dfc, sinal,
+                            aceita_lancamento, exige_contraparte, padrao_sistema
+                        ) VALUES
+                            (?, '3.00.000.000', 'CUSTOS VARIÁVEIS', 'DEBITO', 'SINTETICA',
+                                true, true, 'CUSTO_VARIAVEL', 'OPERACIONAL', -1, false, false, true),
+                            (?, '3.03.000.000', 'Compras e Custos de Aquisição de Estoque', 'DEBITO', 'SINTETICA',
+                                false, true, 'NAO_APLICA', 'OPERACIONAL', -1, false, false, true),
+                            (?, '3.03.001.000', 'Aquisição de Mercadoria', 'DEBITO', 'SINTETICA',
+                                false, true, 'NAO_APLICA', 'OPERACIONAL', -1, false, false, true),
+                            (?, '3.03.001.001', 'Compra de Mercadoria para Revenda', 'DEBITO', 'ANALITICA',
+                                false, true, 'NAO_APLICA', 'OPERACIONAL', -1, true, false, true)
+                        """)
+                .params(idTenant, idTenant, idTenant, idTenant)
+                .update();
+
+        jdbc.sql("INSERT INTO cfg_geral (id_tenant, id_plano_contas_compra_mercadoria) VALUES (?, '3.03.001.001')")
+                .param(idTenant).update();
 
         // 5b) formas de pagamento padrão (§3.3.7/V025) — seed POR TENANT aqui, não em migration
         // global, porque id_tenant é obrigatório (P8) e não existe no momento do Flyway. Mesmo
@@ -167,6 +196,13 @@ public class SignupService {
 
         if (usuario == null || !usuario.ativo() || !senhas.matches(req.senha(), usuario.senhaHash())) {
             throw new ResponseStatusException(UNAUTHORIZED, "Credenciais inválidas.");
+        }
+
+        // Horário de acesso (2026-08-14) — sem tolerância nenhuma aqui: não existe "rotina em
+        // andamento" pra proteger numa sessão que ainda nem começou (a tolerância padrão só
+        // vale pro filtro por requisição, HorarioAcessoFilter, que pode pegar uma venda no meio).
+        if (!horarioAcesso.podeAcessarAgora(usuario.idUsuario(), 0)) {
+            throw new ResponseStatusException(FORBIDDEN, HorarioAcessoService.MENSAGEM_FORA_DA_JANELA);
         }
 
         List<EmpresaOpcaoLogin> empresas = jdbc.sql("""
