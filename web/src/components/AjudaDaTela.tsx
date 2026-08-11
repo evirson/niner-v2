@@ -127,6 +127,37 @@ const CONTEUDOS: Record<string, ConteudoAjuda> = {
     ],
     urlVideo: null,
   },
+  'estoque.entrada.lista': {
+    titulo: 'Entrada de Produtos por Compra',
+    objetivo: 'Ver o histórico de entradas de mercadoria e iniciar uma nova.',
+    passos: [
+      'Clique em "＋ Nova Entrada" para registrar o recebimento de mercadoria de um fornecedor.',
+      'Use os filtros de fornecedor e número da nota para localizar uma entrada já lançada.',
+      'Clique no ícone verde para ver os detalhes (itens, quantidades e custos) de uma entrada já confirmada.',
+    ],
+    errosComuns: [
+      'Entradas já confirmadas não podem ser excluídas — o cabeçalho é um registro permanente (P3); a correção é editar a quantidade/custo de um item já lançado, direto na tela de detalhes.',
+      'Entrada por XML de NF-e ainda não está disponível — só os fluxos manual (item a item) e por planilha funcionam por enquanto.',
+    ],
+    urlVideo: null,
+  },
+  'estoque.entrada.form': {
+    titulo: 'Nova entrada de mercadoria',
+    objetivo: 'Registrar a compra de mercadoria de um fornecedor, dando entrada no estoque item a item ou por planilha.',
+    passos: [
+      'Escolha o fornecedor e, se o tenant tiver mais de uma empresa, em qual empresa a mercadoria está entrando (Administrador escolhe qualquer uma; Operador só as empresas liberadas para ele).',
+      'No lançamento Individual, busque cada produto (SKU, descrição ou código de barras) e informe quantidade e custo unitário.',
+      'No lançamento por Planilha, baixe o modelo, preencha e envie de volta — o sistema tenta casar cada linha com o cadastro (por código de barras do fabricante, ou por descrição/marca/referência e cor/tamanho da grade) e cria cor/tamanho novos automaticamente quando fizer sentido; linhas que não casarem ficam pendentes de resolução antes de confirmar.',
+      'Se quiser gerar as parcelas em Contas a Pagar, informe número da duplicata, vencimento e valor de cada parcela.',
+      'Confirme a entrada — o estoque sobe na mesma hora (trigger do banco, o serviço não mexe em saldo na mão).',
+    ],
+    errosComuns: [
+      'Fornecedor é sempre obrigatório, mesmo em ajustes sem nota fiscal.',
+      'Rateio de frete/IPI/ICMS-ST no custo e o reajuste automático de preço só têm efeito se as flags correspondentes estiverem ligadas em Parâmetros do Sistema (Configurações).',
+      'Uma nota fiscal com a mesma chave de acesso já importada antes é rejeitada — não duplica estoque.',
+    ],
+    urlVideo: null,
+  },
   'estoque.transferencia.lista': {
     titulo: 'Transferências entre Empresas',
     objetivo: 'Ver o histórico de transferências de produtos entre empresas e iniciar uma nova.',
@@ -171,29 +202,35 @@ const CONTEUDOS: Record<string, ConteudoAjuda> = {
   },
   'identidade.usuario.form': {
     titulo: 'Cadastro de usuário',
-    objetivo: 'Cadastrar um usuário novo ou editar um existente, e escolher em quais empresas ele pode operar.',
+    objetivo: 'Cadastrar um usuário novo ou editar um existente, escolher em quais empresas ele pode operar e, se quiser, restringir os dias/horários em que ele pode acessar o sistema.',
     passos: [
       'Preencha nome, e-mail e senha (obrigatórios para um usuário novo).',
-      'Marque "Administrador" para dar acesso total, incluindo Parâmetros do Sistema e esta própria tela de Usuários.',
       'Marque ao menos uma empresa em "Empresas com acesso" — o usuário só opera nas empresas selecionadas.',
+      'Para restringir quando o usuário pode trabalhar, marque "Controla horário de acesso" e preencha início/fim de cada dia da semana — deixe os dois campos em branco num dia para não liberar acesso nele (ex.: folga). Nunca aparece no cadastro do Administrador, que não é afetado por esta regra.',
       'Na edição, deixe a senha em branco para manter a senha atual.',
       'Salve.',
     ],
     errosComuns: [
       'E-mail já cadastrado: cada e-mail só pode pertencer a um usuário.',
       'Nenhuma empresa selecionada: é obrigatório marcar ao menos uma.',
+      'Só existe um Administrador por loja, definido na assinatura — esta tela não cria nem promove Administrador; ao editar o Administrador, o formulário mostra um aviso somente-leitura em vez de um campo.',
+      'Horário de acesso: se marcar "Controla horário de acesso", é preciso preencher início E fim juntos em cada dia usado (com o fim depois do início) — deixar só um dos dois preenchido, ou o fim antes do início, é rejeitado ao salvar.',
+      'Fora do horário liberado, o usuário não consegue fazer login; já logado, o sistema avisa com um contador de 15 minutos antes de encerrar a sessão sozinho — mas nunca no meio de uma venda em andamento no PDV, que sempre termina antes do encerramento.',
       'A permissão fina por rotina/tela (além de Administrador/Operador) ainda não existe nesta versão.',
     ],
     urlVideo: null,
   },
   'configuracao.geral.form': {
     titulo: 'Parâmetros do sistema',
-    objetivo: 'Ajustar as regras gerais do tenant: desconto máximo em venda, exigência de venda na devolução, uso de cor/grade e taxas de crediário.',
+    objetivo: 'Ajustar as regras gerais do tenant: desconto máximo em venda, exigência de venda na devolução, uso de cor/grade, taxas de crediário e regras da Entrada de Produtos por Compra.',
     passos: [
       'Informe o desconto máximo permitido em uma venda.',
       'Marque "Exigir número da venda na Devolução de Produtos" se quiser bloquear devoluções sem vínculo com uma venda — a tela passa a exigir o número da venda e só aceita produtos que ela vendeu.',
       'Marque "Usa cor/grade" se o tenant é de calçados ou confecções — liga o campo Grade no cadastro de Produto e as variações passam a ter cor e tamanho.',
       'Preencha os prazos e percentuais de juros/multa do crediário — ficam prontos para quando o módulo de crediário existir.',
+      'Marque "Ratear frete/IPI/ICMS-ST no custo" se quiser que o valor de rateio informado numa Entrada de Produtos seja distribuído proporcionalmente entre os itens da nota.',
+      'Marque "Reajustar preço na entrada" se quiser que o custo/preço de venda do produto sejam atualizados automaticamente a cada Entrada de Produtos.',
+      'Escolha o plano de contas usado nas contas a pagar geradas pela Entrada de Produtos por Compra.',
       'Salve.',
     ],
     errosComuns: [

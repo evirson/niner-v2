@@ -1,7 +1,7 @@
 # Progresso do Projeto — niner-v2
 
 Registro cronológico das decisões e entregas. Atualizar a cada marco relevante.
-**Última atualização:** 2026-08-11
+**Última atualização:** 2026-08-14
 
 ---
 
@@ -292,9 +292,110 @@ sem recarregar a página) em vez de dar F5. Suíte de backend: **410/410 verdes*
 nesta sessão: 4 da restrição a produtos vendidos + 1 da obrigatoriedade condicional). Detalhe
 completo em `docs/telas/devolucao-produtos.md` e `docs/telas/configuracao-geral.md`.
 
+**Sessão de 2026-08-11/12:** retomada da spec pausada **Entrada de Produtos por Compra**
+(`docs/telas/entrada-mercadoria.md`) — décima primeira tela de domínio, módulo `estoque`.
+Fluxos **Manual** e **Planilha** implementados (confirmação comum grava o ledger existente,
+V019, saldo sobe por trigger); **Fluxo XML e atalho de emissão de etiqueta ficaram pendentes**
+(fases 3 e 5). Rateio de frete/reajuste de preço configuráveis em Parâmetros do Sistema,
+`contas_pagar` opcional a partir de parcelas informadas, plano de contas de compra dedicado
+(`cfg_geral.id_plano_contas_compra_mercadoria`, V032), vínculo `produto_fornecedor` (V031) pra
+acelerar o match de importações futuras, cadastro rápido embutido de produto/fornecedor/NCM, e
+escolha de empresa (ADMIN: todas do tenant; OPERADOR: só as liberadas,
+`GET /api/v1/empresas/permitidas`). Ver linha do tempo e `docs/telas/entrada-mercadoria.md`
+para o estado exato do que falta.
+
+**Sessão de 2026-08-14:** **Horário de Acesso por Dia da Semana**, adicionado ao Cadastro de
+Usuários (`docs/telas/usuario.md`) — restringe quando um `OPERADOR` pode logar/trabalhar, com
+janela por dia da semana e checkbox `controla_horario_acesso` (ADMIN nunca é afetado). Login
+sem tolerância; chamadas autenticadas com **15 minutos** de tolerância (pra não cortar uma
+venda no meio do PDV) e um aviso visual — anel circular com contagem regressiva no canto
+superior esquerdo — nos minutos finais, usando um novo mecanismo genérico de "rotina crítica em
+andamento" (`web/src/lib/rotinaCritica.tsx`) que adia o logoff automático até o PDV terminar a
+venda em curso. Dois bugs reais corrigidos na verificação manual: `ResponseStatusException` sem
+corpo Problem Details (afetava também "Credenciais inválidas." do login) e `time + interval` do
+Postgres embrulhando na virada da meia-noite (quebrava a tolerância pra expedientes que fecham
+nos últimos 15 minutos do dia). Suíte de backend: **444/444 verdes**. Ver linha do tempo e
+`docs/telas/usuario.md`, seção "Horário de acesso por dia da semana".
+
 ---
 
 ## Linha do tempo
+
+### 2026-08-14 — Horário de Acesso por Dia da Semana (Cadastro de Usuários) + aviso visual de contagem regressiva
+
+Pedido de segurança do dono do produto: restringir quando um `OPERADOR` pode fazer login e
+continuar trabalhando, com uma janela de horário por dia da semana — nunca se aplica ao ADMIN.
+`usuario.controla_horario_acesso` (checkbox por usuário) + tabela nova `usuario_horario_acesso`
+(V033, 7 linhas por usuário quando ligado, `dia_semana` ISO 1..7, `hora_inicio`/`hora_fim`
+nulos juntos = sem acesso naquele dia). Dois pontos de bloqueio com tolerâncias diferentes —
+resolve a tensão "bloquear fora do horário" × "nunca cortar uma venda no meio": login
+(`SignupService.login`) com tolerância **zero**; toda chamada autenticada em `/api/v1/**`
+(`HorarioAcessoFilter`, novo, registrado logo após o filtro de tenant) com **15 minutos** de
+tolerância (revisado de 30 para 15 a pedido do dono do produto, ver abaixo). Único ponto de
+verdade da regra: `HorarioAcessoService.podeAcessarAgora`, uma query SQL usando `now()` do
+servidor Postgres — nunca o relógio do processo Java nem do cliente, requisito explícito.
+
+**Aviso visual de contagem regressiva** (pedido numa segunda rodada, mesmo dia): `GET
+/api/v1/eu` ganhou `segundosRestantesTolerancia` (preenchido só nos 15 minutos finais de
+tolerância); o frontend (`HorarioAcessoGuard.tsx`, novo, montado em toda rota autenticada via
+`RequireAuth.tsx`) polla a cada 30s e mostra um anel circular vermelho no canto superior
+esquerdo, mm:ss contando 15:00→00:00 em tempo real, resincronizado a servidor a cada poll. Ao
+zerar (local ou por um 403 do backend), aciona o mesmo mecanismo de **logoff gracioso** já
+existente: novo contexto genérico "rotina crítica em andamento"
+(`web/src/lib/rotinaCritica.tsx`, `RotinaCriticaProvider`) — o logoff automático só acontece
+quando a flag está `false`; o único consumidor por enquanto é o PDV (`Pdv.tsx`), que liga a
+flag ao abrir a forma de pagamento e desliga tanto ao cancelar quanto ao fechar o comprovante,
+nunca deixando uma venda ser cortada no meio.
+
+**Dois bugs reais encontrados na verificação manual ao vivo** (não em teste automatizado
+isolado — só apareceram testando contra a API rodando de verdade):
+1. `ResponseStatusException` (usada pelo login e por vários outros serviços) não virava corpo
+   Problem Details sozinha, mesmo com `spring.mvc.problemdetails.enabled=true` — chegava ao
+   cliente com status certo mas corpo vazio; o front caía no genérico "Ocorreu um erro.",
+   escondendo o motivo real (afetava até "Credenciais inválidas." do login, não só este
+   recurso). Corrigido com um `@ExceptionHandler(ResponseStatusException.class)` explícito em
+   `GlobalExceptionHandler`.
+2. `time + interval` do Postgres embrulha na virada da meia-noite (`23:50 + 15min` vira
+   `00:05`, limite superior *menor* que o inferior) — quebrava a tolerância sempre que o fim do
+   expediente caía nos últimos `toleranciaMinutos` do dia. Corrigido somando a tolerância no
+   domínio de TIMESTAMP (`current_date + hora`) em vez de `time` puro; regressão coberta com
+   timestamps fixos (não depende do horário real da suíte).
+
+Também corrigido no caminho: um campo `boolean` primitivo em record de request DTO
+(`controlaHorarioAcesso`) quebrava com `MismatchedInputException` sempre que o JSON não mandava
+a chave — 20 testes existentes de `UsuarioCrudTest`/outros passaram a falhar; trocado para
+`Boolean` (boxed), mesmo padrão já usado por `ativo` no mesmo record. Suíte de backend:
+**444/444 verdes**. Detalhe completo em `docs/telas/usuario.md`, seção "Horário de acesso por
+dia da semana".
+
+### 2026-08-11/12 — Entrada de Produtos por Compra (Fluxo Manual + Planilha), retomando a spec pausada em 2026-07-23
+
+Retomada da spec `docs/telas/entrada-mercadoria.md` (RASCUNHO pausado desde 2026-07-23, todas
+as questões em aberto respondidas "sim" pelo dono do produto). Implementados os fluxos
+**Manual** (busca de produto item a item) e **Planilha** (modelo baixável, preview que casa
+cada linha por EAN → descrição+marca+referência (+ cor/tamanho da grade) → cria cor/tamanho
+novos automaticamente quando a confiança é alta, linha sem match fica pendente) — confirmação
+comum aos dois grava `produto_movimento_mestre` (`COMPRA`) + N `produto_movimento_detalhe`
+(`C`) numa transação, saldo sobe via trigger existente (V019), sem escrita manual de estoque.
+**Fluxo XML (Fase 3) e atalho de emissão de etiqueta (Fase 5) ficaram pendentes** — a tela já
+oferece "Por XML" mas avisa que ainda não está disponível.
+
+Rateio de frete/IPI/ICMS-ST no custo e reajuste automático de `preco_custo`/`preco_venda` —
+ambos **configuráveis** (`cfg_geral.cfg_rateia_frete_entrada`/`cfg_reajusta_preco_entrada`,
+Parâmetros do Sistema, default desligado). `contas_pagar` gerado a partir de parcelas opcionais
+no corpo da confirmação, usando `cfg_geral.id_plano_contas_compra_mercadoria` — **não** mais a
+conta do fornecedor (`fornecedor.id_plano_contas`), que era o campo errado pra isso; V032 semeia
+a árvore mínima até "3.03.001.001 Compra de Mercadoria para Revenda" pra tenants sem essa conta
+ainda. Tabela nova `produto_fornecedor` (V031) aprende o código do fornecedor (cProd) por
+variação a cada entrada, acelerando o match de importações futuras, sem tornar fornecedor
+obrigatório no cadastro do produto. Cadastro rápido embutido de produto/fornecedor/NCM direto
+na tela de conferência quando um item não casa (`ProdutoQuickCreateModal.tsx`,
+`FornecedorQuickCreateModal.tsx`, `PesquisaNcmModal.tsx`). Multi-empresa: `GET
+/api/v1/empresas/permitidas` (ADMIN vê todas do tenant, OPERADOR só as ligadas a ele em
+`usuario_empresa`) deixa escolher em qual empresa a mercadoria entra. Correção pós-confirmação
+por edição direta do item (`PUT .../itens/{idDetalhe}`, trigger já desfaz o delta antigo e
+aplica o novo) — sem tabela de histórico de UPDATE/DELETE por ora. Detalhe completo,
+inclusive o que ficou pendente, em `docs/telas/entrada-mercadoria.md`.
 
 ### 2026-08-11 (continuação 2) — Devolução de Produtos: restrição a produtos vendidos + config + bug de cache
 

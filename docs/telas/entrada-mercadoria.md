@@ -1,9 +1,62 @@
-# Spec: Entrada de Mercadorias (XML NF-e + lançamento manual)      Status: RASCUNHO
-Autor: Evirson (dono do produto) + Claude · Data: 2026-07-23 · Módulo(s): `estoque` (entrada) · Fase: 1 — Núcleo do ERP
+# Spec: Entrada de Mercadorias (XML NF-e + lançamento manual)      Status: Implementada parcialmente
+Autor: Evirson (dono do produto) + Claude · Data: 2026-07-23, implementação 2026-08-11/12 · Módulo(s): `estoque` (entrada) · Fase: 1 — Núcleo do ERP
 
-> **⚠️ RASCUNHO** — estrutura, tabelas e mapeamentos preenchidos a partir do schema existente
-> (V019/V026, nada de tabela nova até segunda ordem). As seções marcadas com
-> **[COMPLEMENTAR]** precisam da explicação/decisão do Evirson antes de a spec ser aprovada.
+> **Estado de implementação (2026-08-12).** Todas as "Questões abertas" abaixo foram
+> respondidas "sim" pelo dono do produto e a maioria dos **[COMPLEMENTAR]** ao longo do
+> documento reflete decisões já tomadas durante a implementação (mantidos no corpo do texto
+> como registro histórico da discussão, mesmo já resolvidos na prática) — implementado:
+> - **Fluxo manual** completo: tela de conferência item a item, confirmação grava
+>   `produto_movimento_mestre` (`COMPRA`) + N `produto_movimento_detalhe` (`C`) numa
+>   transação, saldo sobe via trigger (V019), sem escrita manual de estoque.
+> - **Fluxo Planilha** completo: modelo baixável (`GET .../planilha/modelo`), preview que casa
+>   cada linha por EAN → descrição+marca+referência (+ cor/tamanho da grade quando o produto
+>   usa grade) → cadastra cor/tamanho novos automaticamente quando a confiança é alta, linha
+>   sem match fica pendente de resolução manual antes de confirmar.
+> - **Rateio de frete/IPI/ICMS-ST no custo** e **reajuste automático de `preco_custo`/
+>   `preco_venda`** — ambos configuráveis (`cfg_geral.cfg_rateia_frete_entrada` /
+>   `cfg_reajusta_preco_entrada`, Parâmetros do Sistema), desligados por padrão.
+> - **`contas_pagar`** gerado a partir de parcelas informadas no corpo da confirmação
+>   (opcional — Manual/Planilha só geram se o operador preencher; o XML preencheria a partir
+>   de `cobr/dup`, ainda não implementado). Conta contábil vem de
+>   `cfg_geral.id_plano_contas_compra_mercadoria` (não mais de `fornecedor.id_plano_contas`,
+>   que era a conta do fornecedor, errado para este uso — corrigido em V032).
+> - **`produto_fornecedor`** (V031): vínculo código-do-fornecedor × variação, aprendido a cada
+>   entrada — acelera o match de importações futuras do mesmo fornecedor. Fornecedor **não**
+>   é obrigatório no cadastro do produto (decisão da questão 4).
+> - **Cadastro rápido embutido** de produto/fornecedor/NCM direto na tela de conferência
+>   (`ProdutoQuickCreateModal.tsx`, `FornecedorQuickCreateModal.tsx`, `PesquisaNcmModal.tsx`)
+>   quando um item não casa com o cadastro.
+> - **Multi-empresa**: `GET /api/v1/empresas/permitidas` (ADMIN vê todas do tenant, OPERADOR
+>   só as ligadas a ele em `usuario_empresa`) — o formulário deixa escolher em qual empresa a
+>   mercadoria está entrando.
+> - **Correção pós-confirmação** (questão 7): edição direta do item (`PUT
+>   .../itens/{idDetalhe}`), a trigger de estoque já desfaz o delta antigo e aplica o novo;
+>   **sem** tabela de histórico de UPDATE/DELETE por ora (pendência registrada, não bloqueante).
+> - Schema definido em `V031__estoque_entrada.sql` (`entrada_xml`, `produto_fornecedor`) e
+>   `V032__entrada_planilha.sql` (`cfg_geral.id_plano_contas_compra_mercadoria` + seed do plano
+>   de contas de compra) — ver "Impacto no banco" abaixo pelo desenho final (difere um pouco
+>   do proposto no rascunho original).
+>
+> **Pendente (não implementado ainda):**
+> - **Fase 3 — Fluxo XML**: upload do `.xml` da NF-e, parse, casamento de fornecedor/itens e
+>   pré-entrada para conferência. A tabela `entrada_xml` (payload bruto, auditoria P3) e os
+>   campos `chaveNfe`/`serieNota`/`xmlBruto` no contrato de confirmação já existem prontos
+>   para receber este fluxo; a tela mostra a opção "Por XML" mas exibe "ainda não está
+>   disponível" quando selecionada.
+> - **Fase 5 — Atalho de Emissão de Etiquetas**: ação rápida para imprimir etiquetas dos
+>   produtos recém-recebidos direto a partir de uma entrada confirmada.
+> - Questão 8 (quem confirmou o movimento) resolvida **mais simples** do que o rascunho
+>   original propunha: nenhuma tabela `usuario↔funcionário` nova — `id_usuario` foi direto
+>   pra `produto_movimento_mestre` (FK pra `usuario`, nullable porque nenhum outro fluxo grava
+>   ainda), não `id_funcionario` no detalhe como o rascunho cogitava.
+>
+> Seções abaixo preservadas como registro da discussão original; onde o texto conflitar com o
+> resumo acima, o resumo acima reflete o que está implementado de fato.
+
+> **⚠️ RASCUNHO original (2026-07-23)** — estrutura, tabelas e mapeamentos preenchidos a partir
+> do schema existente (V019/V026, nada de tabela nova até segunda ordem). As seções marcadas
+> com **[COMPLEMENTAR]** precisavam da explicação/decisão do Evirson antes de a spec ser
+> aprovada — a maioria foi respondida durante a implementação, ver bloco acima.
 
 > **Registro da discussão (2026-07-23) — estado ao pausar.** Decisões já fechadas pelo dono
 > do produto (a incorporar no corpo da spec na retomada):
@@ -193,35 +246,50 @@ Rascunho — refinar junto com as decisões acima:
   mesma transação (P2).
 - **[COMPLEMENTAR]** — critérios de contas a pagar / atualização de custo, conforme decisões.
 
-## Impacto no contrato de API (rascunho — OpenAPI antes da implementação)
+## Impacto no contrato de API (implementado — difere do rascunho original)
 
 ```
-POST   /api/v1/estoque/entradas/xml          multipart: arquivo .xml → pré-entrada (parse, matches, pendências) — NÃO grava
-POST   /api/v1/estoque/entradas              confirma a entrada {idFornecedor, notaFiscal, itens:[{idVariacao, qtd, precoCusto, ...}], chaveNfe?}
-GET    /api/v1/estoque/entradas?pagina=&limite=&ordenarPor=&direcao=&idFornecedor=&notaFiscal=
-GET    /api/v1/estoque/entradas/{id}         detalhe (mestre + itens)
+POST   /api/v1/estoque/entradas                       confirma a entrada — comum aos 3 fluxos
+                                                        {idFornecedor, idEmpresa?, notaFiscal?, dataMovimento?,
+                                                         chaveNfe?, serieNota?, xmlBruto?, valorRateio?,
+                                                         itens:[{idVariacao, qtd, precoCusto}],
+                                                         contasPagar?:[{numeroDuplicata?, dataVencimento, valor}]}
+GET    /api/v1/estoque/entradas?idFornecedor=&notaFiscal=&pagina=&limite=&ordenarPor=&direcao=   lista paginada
+GET    /api/v1/estoque/entradas/{id}                   detalhe (mestre + itens)
+PUT    /api/v1/estoque/entradas/{id}/itens/{idDetalhe}  corrige qtd/precoCusto de um item já confirmado
+POST   /api/v1/estoque/entradas/planilha/preview        multipart: planilha → linhas casadas/pendentes, NÃO grava
+GET    /api/v1/estoque/entradas/planilha/modelo         baixa o modelo .xlsx em branco
 ```
 
-Todos sob `/api/v1/**` (JWT tenant, RLS — P8). Erros em Problem Details (RFC 9457).
-A spec-mãe (§3.4) previa `POST /api/v1/estoque/movimentacoes` genérico; esta spec o
-especializa em `entradas` — **[COMPLEMENTAR]**: manter o genérico para AJUSTE ou não.
+Todos sob `/api/v1/**` (JWT tenant, RLS — P8), papéis ADMIN e OPERADOR sem distinção (mesmo
+nível de Transferência de Estoque/Devolução de Produtos). Erros em Problem Details (RFC 9457).
+Ainda não existe `POST .../xml` (Fase 3, pendente) — quando existir, deve devolver a mesma
+forma de pré-entrada do fluxo Planilha e alimentar o mesmo `POST /api/v1/estoque/entradas` de
+confirmação, reaproveitando `chaveNfe`/`serieNota`/`xmlBruto` já presentes no contrato.
 
-## Impacto no banco
+## Impacto no banco (implementado — V019 alterada + V031/V032 novas, banco ainda em construção)
 
-As tabelas do ledger já cobrem o fluxo. Três lacunas identificadas, a decidir se viram
-migration (V028+) ou ficam de fora:
+As três lacunas identificadas no rascunho original foram todas resolvidas, como propostas:
 
-1. **Chave de acesso da NF-e** — não há onde guardar os 44 dígitos, e ela é a chave natural
-   de idempotência do XML (P2). Proposta: `produto_movimento_mestre.chave_nfe text` +
-   `UNIQUE (id_tenant, chave_nfe) WHERE chave_nfe IS NOT NULL`.
-2. **Série da NF** — `nota_fiscal` guarda só o número; nota de fornecedores diferentes ou
-   séries diferentes podem colidir na exibição (não há constraint, então não bloqueia).
-   Proposta: coluna `serie_nota smallint` no mestre, ou deixar só na chave/XML bruto.
-3. **XML bruto (P3/auditoria)** — guardar o XML da nota importada. Proposta: tabela
-   `entrada_xml (id_movimento FK, chave_nfe, payload xml/text, importado_em)` com RLS, ou
-   coluna `JSONB` no mestre. Convenção do projeto: `JSONB` para payloads de integração.
+1. **Chave de acesso da NF-e** — `produto_movimento_mestre.chave_nfe text` +
+   `UNIQUE (id_tenant, chave_nfe) WHERE chave_nfe IS NOT NULL` (idempotência P2). Adicionada
+   direto em `V019__estoque.sql` (banco ainda em construção — schema muda nas migrations já
+   existentes, não em `V028+`, ver `docs/PROGRESSO.md`), junto com `id_usuario` (quem
+   confirmou, FK pra `usuario`) e `serie_nota smallint`.
+2. **XML bruto (P3/auditoria)** — tabela `entrada_xml (id_tenant, id_movimento, xml_bruto
+   text, importado_em)`, RLS, `db/migration/V031__estoque_entrada.sql`. Ainda sem gravação
+   real (Fase 3 pendente), mas o contrato de confirmação já aceita `xmlBruto` opcional.
 
-**[COMPLEMENTAR]** — aprovar/rejeitar cada uma das três.
+Duas tabelas novas além do proposto no rascunho:
+
+3. **`produto_fornecedor`** (V031) — vínculo `codigo_fornecedor` (cProd do XML) × `id_variacao`
+   + `unidade_compra`/`fator_conversao` (conversão de unidade de compra→venda, questão 6),
+   `UNIQUE (id_tenant, id_fornecedor, codigo_fornecedor)`.
+4. **`cfg_geral.id_plano_contas_compra_mercadoria`** (V032) — FK composta pro plano de contas
+   usado nas `contas_pagar` geradas pela entrada; V032 também semeia a árvore mínima até
+   "3.03.001.001 Compra de Mercadoria para Revenda" pra tenants que ainda não a tinham.
+   `cfg_geral.cfg_rateia_frete_entrada`/`cfg_reajusta_preco_entrada` (booleans, default
+   `false`) foram direto em `V023__cfg_geral.sql` (banco em construção).
 
 ## Impacto nas integrações
 
@@ -237,7 +305,7 @@ Nenhum adapter novo — só o evento. Sem canal ativo na Fase 1, sem efeito vis�
 - Devolução ao fornecedor (tipo `DEVOLUCAO` — spec própria).
 - **[COMPLEMENTAR]** — confirmar a lista.
 
-## Questões abertas (bloqueiam a aprovação)
+## Questões abertas (todas respondidas — ver "Estado de implementação" no topo)
 
 1. Rateio de frete/IPI/ICMS-ST no custo unitário — sim/não/configurável? sim, configurável
 2. Atualizar `produto.preco_custo` na entrada e recalcular `preco_venda` pelo
@@ -252,8 +320,9 @@ Nenhum adapter novo — só o evento. Sem canal ativo na Fase 1, sem efeito vis�
 
 ## Ajuda da tela (R22 / §3.7.1)
 
-- **`chave_tela`: `estoque.entrada.lista`** — **[COMPLEMENTAR]** após fechar a UI.
-- **`chave_tela`: `estoque.entrada.form`** — **[COMPLEMENTAR]** após fechar a UI.
+- **`chave_tela`: `estoque.entrada.lista`** e **`estoque.entrada.form`** — ver
+  `web/src/components/AjudaDaTela.tsx`. `urlVideo`: `null` por ora. A tela de detalhes
+  (`EntradaMercadoriaDetalhe.tsx`) reaproveita a chave `.lista`, não tem entrada própria.
 
 ## Métrica de sucesso
 
