@@ -22,7 +22,7 @@ import {
   somenteDigitos,
 } from '../lib/masks'
 import { buscarNcm } from '../lib/ncm'
-import { PRODUTO_VAZIO, criarProduto, criarVariacao, paraRequisicao, type ProdutoFormState, type VariacaoProduto } from '../lib/produtos'
+import { PRODUTO_VAZIO, criarProduto, criarVariacao, paraRequisicao, type Produto, type ProdutoFormState, type VariacaoProduto } from '../lib/produtos'
 import { criarTamanho, listarTamanhos } from '../lib/tamanhos'
 import { maiusculas } from '../lib/texto'
 import CategoriaProdutoModal from './CategoriaProdutoModal'
@@ -55,10 +55,23 @@ import Toast from './Toast'
 export default function ProdutoQuickCreateModal({
   aoFechar,
   aoCriar,
+  aoCriarComGrade,
+  exigirVariacaoAoCriar = true,
   valorInicial,
 }: {
   aoFechar: () => void
   aoCriar?: (variacao: VariacaoProduto) => void
+  /** Quando `false` e o produto criado usa grade, os campos Cor/Tamanho nem aparecem e nenhuma
+   *  variação é criada aqui — só o produto, devolvido via `aoCriarComGrade` (2026-08-16, "＋
+   *  Cadastrar Produto" do fluxo Individual da Entrada: a escolha de cor + quantidade por
+   *  tamanho já acontece no popup de pesquisa/lançamento logo em seguida — pedir de novo aqui
+   *  seria redundante e bloquearia o cadastro por antecipação). Produto SEM grade sempre cria a
+   *  variação (idCor/idTamanho nulos) e chama `aoCriar`, independente deste flag — não há nada
+   *  a decidir nesse caso. Default `true` preserva o comportamento de sempre (Planilha da
+   *  Entrada, que já resolve cor/tamanho — automaticamente ou via os selects manuais). */
+  exigirVariacaoAoCriar?: boolean
+  /** Só chamado quando `exigirVariacaoAoCriar=false` e o produto criado usa grade — ver acima. */
+  aoCriarComGrade?: (produto: Produto) => void
   /** Pré-preenchimento (fluxo Planilha da Entrada, 2026-08-12) — quando a linha da planilha não
    *  achou o produto, a tela já abre o cadastro rápido com o que a planilha trouxe. */
   valorInicial?: { descricao?: string; marca?: string; referencia?: string; precoCusto?: string; ean?: string; cor?: string; tamanho?: string }
@@ -179,15 +192,23 @@ export default function ProdutoQuickCreateModal({
   const criar = useMutation({
     mutationFn: async () => {
       const produto = await criarProduto(paraRequisicao(form))
-      return criarVariacao(produto.idProduto, {
+      if (!exigirVariacaoAoCriar && produto.idGrade != null) {
+        return { semVariacao: true as const, produto }
+      }
+      const variacao = await criarVariacao(produto.idProduto, {
         idCor: usaCorGrade && form.idGrade != null ? (idCor as number) : null,
         idTamanho: usaCorGrade && form.idGrade != null ? (idTamanho as number) : null,
         ean: ean.trim() ? ean.trim() : null,
       })
+      return { semVariacao: false as const, variacao }
     },
-    onSuccess: (variacao) => {
+    onSuccess: (resultado) => {
       queryClient.invalidateQueries({ queryKey: ['produtos'] })
-      aoCriar?.(variacao)
+      if (resultado.semVariacao) {
+        aoCriarComGrade?.(resultado.produto)
+      } else {
+        aoCriar?.(resultado.variacao)
+      }
     },
     onError: (e: unknown) => setToast(e instanceof ApiError ? e.message : 'Não foi possível criar o produto.'),
   })
@@ -257,11 +278,16 @@ export default function ProdutoQuickCreateModal({
    *  continua editável — não há nenhum código já conhecido pra guardar. */
   const eanAutomatico = Boolean(valorInicial?.ean)
 
-  const precisaCorTamanho = usaCorGrade && form.idGrade != null
+  const precisaCorTamanho = usaCorGrade && form.idGrade != null && exigirVariacaoAoCriar
+  /** Preço de venda não pode ficar abaixo do preço de custo (2026-08-17, regra do projeto
+   *  inteiro) — o servidor também recusa (`ProdutoService.validarPrecos`), isto aqui só evita a
+   *  ida-e-volta ao servidor pra descobrir o mesmo erro. */
+  const precoVendaMenorQueCusto = desmascararMoeda(form.precoVenda) < desmascararMoeda(form.precoCusto)
   const valido =
     form.descricao.trim() &&
     form.precoCusto.trim() &&
     form.percentualVenda.trim() &&
+    !precoVendaMenorQueCusto &&
     (!usaCorGrade || form.idGrade != null) &&
     (!precisaCorTamanho || (idCor !== '' && idTamanho !== ''))
 
@@ -406,6 +432,7 @@ export default function ProdutoQuickCreateModal({
               onBlur={() => setForm((f) => ({ ...f, precoVenda: completarMoeda(f.precoVenda) }))}
               onFocus={(e) => e.target.select()}
             />
+            {precoVendaMenorQueCusto && <p className="erro-campo">Não pode ser menor que o preço de custo.</p>}
           </div>
           {!eanAutomatico && (
             <div className="col-2">

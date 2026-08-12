@@ -1,11 +1,19 @@
 import { api, apiUpload, ApiError, getToken } from './api'
 import { API_BASE } from './config'
 
-/** Um item lançado no ledger da entrada (mesmo shape do detalhe gravado em `produto_movimento_detalhe`). */
+/** Um item lançado no ledger da entrada (mesmo shape do detalhe gravado em `produto_movimento_detalhe`).
+ *  `precoVenda` (2026-08-15, fluxo Individual com grade) só vem preenchido quando o item passou
+ *  pelo grid de tamanhos (custo + %venda do produto sugerem o valor, editável antes de lançar) —
+ *  quando presente, vira o novo `preco_venda` do produto na confirmação. */
 export interface ItemEntradaRequest {
   idVariacao: number
   qtd: number
   precoCusto: number
+  precoVenda?: number | null
+  /** Código do produto no fornecedor (`cProd` do XML, 2026-08-18) — quando presente, a
+   *  confirmação aprende/atualiza `produto_fornecedor`: a próxima nota do mesmo fornecedor com
+   *  este código já resolve sozinha. Só o fluxo XML preenche. */
+  codigoFornecedor?: string | null
 }
 
 /** Uma duplicata/parcela opcional a gerar em `contas_pagar` — sempre opcional no fluxo Manual. */
@@ -62,6 +70,8 @@ export interface EntradaResumoResponse {
   qtdItens: number
   valorTotal: number
   origem: string
+  /** Cancelamento de Entrada (2026-08-19) — grid principal mostra a linha marcada, sem esconder. */
+  cancelada: boolean
 }
 
 export interface PaginaEntradas {
@@ -95,6 +105,23 @@ export interface EntradaDetalheResponse {
   dataMovimento: string
   valorTotal: number
   itens: ItemEntradaDetalheResponse[]
+  cancelada: boolean
+  dataCancelamento: string | null
+  motivoCancelamento: string | null
+}
+
+export interface CancelamentoEntradaEfetivadoResponse {
+  idMovimento: number
+  dataCancelamento: string
+}
+
+/** Cancelamento de Entrada (2026-08-19) — ADMIN-only, ver docs do backend
+ *  (`EntradaMercadoriaService#cancelar`) pra regras de bloqueio. */
+export function cancelarEntrada(idMovimento: number, motivo: string): Promise<CancelamentoEntradaEfetivadoResponse> {
+  return api<CancelamentoEntradaEfetivadoResponse>(`/api/v1/estoque/entradas/${idMovimento}/cancelar`, {
+    method: 'POST',
+    body: JSON.stringify({ motivo }),
+  })
 }
 
 export type ColunaOrdenacaoEntrada = 'dataMovimento' | 'fornecedor' | 'notaFiscal'
@@ -102,7 +129,12 @@ export type DirecaoOrdenacao = 'ASC' | 'DESC'
 
 export interface FiltrosEntradas {
   idFornecedor?: number
+  idEmpresa?: number
   notaFiscal?: number
+  /** "aaaa-mm-dd" */
+  dataInicial?: string
+  /** "aaaa-mm-dd" */
+  dataFinal?: string
   pagina?: number
   tamanho?: number
   ordenarPor?: ColunaOrdenacaoEntrada
@@ -112,7 +144,10 @@ export interface FiltrosEntradas {
 export function listarEntradas(filtros: FiltrosEntradas): Promise<PaginaEntradas> {
   const params = new URLSearchParams()
   if (filtros.idFornecedor) params.set('idFornecedor', String(filtros.idFornecedor))
+  if (filtros.idEmpresa) params.set('idEmpresa', String(filtros.idEmpresa))
   if (filtros.notaFiscal) params.set('notaFiscal', String(filtros.notaFiscal))
+  if (filtros.dataInicial) params.set('dataInicial', filtros.dataInicial)
+  if (filtros.dataFinal) params.set('dataFinal', filtros.dataFinal)
   if (filtros.pagina) params.set('pagina', String(filtros.pagina))
   if (filtros.tamanho) params.set('limite', String(filtros.tamanho))
   if (filtros.ordenarPor) params.set('ordenarPor', filtros.ordenarPor)
@@ -153,6 +188,10 @@ export interface ItemPlanilhaPreviewResponse {
   idProdutoEncontrado: number | null
   idGradeEncontrada: number | null
   motivoPendencia: string | null
+  /** `cProd` do XML (2026-08-18) — `null` no fluxo Planilha. `cor`/`tamanho` acima são só
+   *  PALPITE nesse caso (nunca resolvem/cadastram sozinhos — o XML sempre exige confirmação
+   *  manual do operador, diferente da Planilha). */
+  codigoFornecedor: string | null
 }
 
 export function previewPlanilhaEntrada(arquivo: File): Promise<ItemPlanilhaPreviewResponse[]> {
@@ -180,6 +219,77 @@ export async function baixarModeloPlanilhaEntrada(): Promise<void> {
   a.click()
   a.remove()
   URL.revokeObjectURL(url)
+}
+
+/** Resultado da pesquisa de produto do fluxo Individual (2026-08-15) — nível produto (não
+ *  variação): sem cor/tamanho/estoque, só o necessário pra escolher o produto e montar a grade
+ *  de tamanhos + custo/%venda/preço de venda em seguida. `idGrade` nulo ⇒ produto sem grade. */
+export interface ProdutoOpcaoEntrada {
+  idProduto: number
+  descricao: string
+  marca: string | null
+  referencia: string | null
+  idGrade: number | null
+  precoCusto: number
+  percentualVenda: number
+}
+
+export function buscarProdutosEntrada(busca: string, marca: string, referencia: string): Promise<ProdutoOpcaoEntrada[]> {
+  const params = new URLSearchParams()
+  if (busca) params.set('busca', busca)
+  if (marca) params.set('marca', marca)
+  if (referencia) params.set('referencia', referencia)
+  const query = params.toString()
+  return api<ProdutoOpcaoEntrada[]>(`/api/v1/estoque/entradas/produtos${query ? `?${query}` : ''}`)
+}
+
+/** Fornecedor casado pelo CNPJ do emitente do XML (2026-08-18, Fase 3) — `idFornecedor` nulo
+ *  ⇒ não achou no cadastro; os demais campos vêm do próprio XML, prontos pra pré-preencher o
+ *  cadastro rápido de fornecedor se o operador optar por criar um novo. */
+export interface FornecedorXmlPreview {
+  idFornecedor: number | null
+  cnpj: string | null
+  razaoSocial: string | null
+  nomeFantasia: string | null
+  inscricaoEstadual: string | null
+  endereco: string | null
+  numero: string | null
+  bairro: string | null
+  cidade: string | null
+  estado: string | null
+  cep: string | null
+  telefone: string | null
+}
+
+export interface DuplicataXmlPreview {
+  numeroDuplicata: string | null
+  dataVencimento: string
+  valor: number
+}
+
+/** Pré-entrada do fluxo XML (2026-08-18, Fase 3) — parse do arquivo + tentativa de casar cada
+ *  item (EAN → `produto_fornecedor` aprendido → pendência), sem gravar nada. `xmlBruto` deve
+ *  ser reenviado, sem alteração nenhuma, no `POST /api/v1/estoque/entradas` de confirmação. */
+export interface EntradaXmlPreview {
+  chaveNfe: string
+  serieNota: number | null
+  notaFiscal: number | null
+  dataEmissao: string | null
+  chaveJaImportada: boolean
+  fornecedor: FornecedorXmlPreview
+  /** Empresa do tenant casada pelo CNPJ do destinatário (`dest/CNPJ`) do XML (2026-08-19) —
+   *  `null` sem match (mantém o padrão de sempre: empresa da sessão, trocável no select). */
+  idEmpresaEncontrada: number | null
+  valorTotalNota: number
+  duplicatas: DuplicataXmlPreview[]
+  itens: ItemPlanilhaPreviewResponse[]
+  xmlBruto: string
+}
+
+export function previewXmlEntrada(arquivo: File): Promise<EntradaXmlPreview> {
+  const fd = new FormData()
+  fd.append('arquivo', arquivo)
+  return apiUpload('/api/v1/estoque/entradas/xml/preview', fd)
 }
 
 export function atualizarItemEntrada(

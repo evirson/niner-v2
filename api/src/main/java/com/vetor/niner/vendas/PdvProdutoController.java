@@ -21,8 +21,11 @@ public class PdvProdutoController {
     }
 
     @GetMapping
-    public List<PdvProdutoResponse> buscar(@RequestParam(required = false) String busca) {
-        return service.buscar(busca);
+    public List<PdvProdutoResponse> buscar(
+            @RequestParam(required = false) String busca,
+            @RequestParam(required = false) String marca,
+            @RequestParam(required = false) String referencia) {
+        return service.buscar(busca, marca, referencia);
     }
 
     @GetMapping("/codigo/{codigo}")

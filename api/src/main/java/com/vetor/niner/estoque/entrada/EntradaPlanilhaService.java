@@ -239,20 +239,20 @@ public class EntradaPlanilhaService {
             ProdutoBarraResponse v) {
         return new ItemPlanilhaPreviewResponse(linha.numeroLinha(), nomeProduto, marca, referencia, cor, tamanho, ean,
                 qtd, custoUnitario, true, v.idVariacao(), v.sku(), v.descricao(), v.variacaoCor(), v.variacaoTamanho(),
-                null, null, null);
+                null, null, null, null);
     }
 
     private static ItemPlanilhaPreviewResponse pendente(LinhaPlanilha linha, String nomeProduto, String marca,
             String referencia, String cor, String tamanho, String ean, BigDecimal qtd, BigDecimal custoUnitario,
             String motivo) {
         return new ItemPlanilhaPreviewResponse(linha.numeroLinha(), nomeProduto, marca, referencia, cor, tamanho, ean,
-                qtd, custoUnitario, false, null, null, null, null, null, null, null, motivo);
+                qtd, custoUnitario, false, null, null, null, null, null, null, null, motivo, null);
     }
 
     private static ItemPlanilhaPreviewResponse pendenteComProduto(LinhaPlanilha linha, String nomeProduto, String marca,
             String referencia, String cor, String tamanho, String ean, BigDecimal qtd, BigDecimal custoUnitario,
             long idProduto, Long idGrade, String motivo) {
         return new ItemPlanilhaPreviewResponse(linha.numeroLinha(), nomeProduto, marca, referencia, cor, tamanho, ean,
-                qtd, custoUnitario, false, null, null, null, null, null, idProduto, idGrade, motivo);
+                qtd, custoUnitario, false, null, null, null, null, null, idProduto, idGrade, motivo, null);
     }
 }

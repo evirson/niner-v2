@@ -20,7 +20,7 @@ export default function PesquisaProdutoModal({
 
   const { data: resultados, isLoading, isError } = useQuery({
     queryKey: ['pdv-produtos', busca],
-    queryFn: () => buscarProdutosPdv(busca),
+    queryFn: () => buscarProdutosPdv({ busca }),
   })
   const { data: cfgQtdDecimal } = useQuery({ queryKey: ['permite-qtd-decimal'], queryFn: buscarPermiteQtdDecimal })
   const permiteQtdDecimal = cfgQtdDecimal?.cfgPermiteQtdDecimal ?? true

@@ -10,6 +10,7 @@ import { buscarPermiteQtdDecimal } from '../../lib/configuracaoGeral'
 import { ajustarContagem, listarContagemAtiva, registrarContagem, removerContagem, type LinhaContagem } from '../../lib/estoqueBalanco'
 import { completarQuantidade, desmascararQuantidade, formatarQuantidade, mascararQuantidade } from '../../lib/masks'
 import { buscarProdutoPorCodigo, interpretarCodigoBarras } from '../../lib/pdv'
+import { maiusculas } from '../../lib/texto'
 
 const CHAVE_TELA = 'estoque.contagem'
 const QTD_MAXIMA_POR_LEITURA = 1000
@@ -140,7 +141,7 @@ export default function ContagemEstoque() {
                 autoComplete="off"
                 inputMode="numeric"
                 value={valorBarras}
-                onChange={(e) => setValorBarras(e.target.value)}
+                onChange={(e) => setValorBarras(maiusculas(e.target.value))}
                 onKeyDown={aoDigitarBarras}
               />
               <p className="pdv-dica">Leia o código de barras do produto e pressione Enter.</p>

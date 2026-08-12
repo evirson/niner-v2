@@ -35,7 +35,11 @@ public final class PdvDtos {
             List<EstoqueEmpresa> estoquePorEmpresa,
             BigDecimal estoqueTotal,
             /** URL pública da primeira foto da galeria do produto (indice 0), {@code null} se não tiver foto. */
-            String urlImagem) {
+            String urlImagem,
+            /** Marca/referência do produto (2026-08-15) — usados como filtro de busca na
+             *  Entrada de Produtos por Compra, exibidos no resultado para desambiguar. */
+            String marca,
+            String referencia) {
     }
 
     /** Preço nunca vem do cliente — só `idVariacao` + `qtd`; o servidor resolve o preço. */

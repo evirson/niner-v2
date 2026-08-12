@@ -12,6 +12,7 @@ import { useEu } from '../../lib/eu'
 import { completarQuantidade, desmascararQuantidade, formatarMoeda, formatarQuantidade, mascararQuantidade } from '../../lib/masks'
 import { buscarProdutoPorCodigo, interpretarCodigoBarras, type PdvProduto } from '../../lib/pdv'
 import { criarTransferencia } from '../../lib/transferencias'
+import { maiusculas } from '../../lib/texto'
 import EscolherDestinoModal from './EscolherDestinoModal'
 import PesquisaProdutoModal from '../pdv/PesquisaProdutoModal'
 
@@ -227,7 +228,7 @@ export default function TransferenciaForm() {
                   inputMode="numeric"
                   disabled={idEmpresaDestino === ''}
                   value={valorBarras}
-                  onChange={(e) => setValorBarras(e.target.value)}
+                  onChange={(e) => setValorBarras(maiusculas(e.target.value))}
                   onKeyDown={aoDigitarBarras}
                 />
                 <p className="pdv-dica">Leia o código de barras do produto e pressione Enter.</p>

@@ -16,6 +16,7 @@ import {
 import Toast, { type TipoToast } from '../../components/Toast'
 import { ApiError } from '../../lib/api'
 import { listarOpcoesContaCorrente } from '../../lib/contaCorrente'
+import { maiusculas } from '../../lib/texto'
 import {
   excluirMovimento,
   listarMovimentos,
@@ -209,7 +210,7 @@ export default function ContaCorrenteMovimentoLista() {
           <input
             placeholder="Buscar por número do documento…"
             value={busca}
-            onChange={(e) => setBusca(e.target.value)}
+            onChange={(e) => setBusca(maiusculas(e.target.value))}
             aria-label="Buscar por número do documento"
           />
           <select value={compensado} onChange={(e) => setCompensado(e.target.value as FiltroCompensado)} aria-label="Filtrar por compensado">

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ApiError } from '../lib/api'
 import {
@@ -8,10 +8,9 @@ import {
   type Fornecedor,
   type FornecedorFormState,
 } from '../lib/fornecedores'
-import { listarPlanosContas } from '../lib/planoContas'
+import { buscarConfiguracaoGeral } from '../lib/configuracaoGeral'
 import { ESTADOS_UF, mascararCep, mascararCpfCnpj, mascararTelefone } from '../lib/masks'
 import { maiusculas } from '../lib/texto'
-import PlanoContasModal from './PlanoContasModal'
 import Toast from './Toast'
 
 /**
@@ -27,22 +26,34 @@ import Toast from './Toast'
 export default function FornecedorQuickCreateModal({
   aoFechar,
   aoCriar,
+  valorInicial,
 }: {
   aoFechar: () => void
   aoCriar?: (fornecedor: Fornecedor) => void
+  /** Pré-preenchimento (fluxo XML da Entrada, 2026-08-18) — quando o CNPJ do emitente não bate
+   *  com nenhum fornecedor cadastrado, a tela já abre o cadastro rápido com o que o XML trouxe
+   *  (razão social, CNPJ, endereço…), igual ao cadastro rápido de produto já faz com a Planilha. */
+  valorInicial?: Partial<FornecedorFormState>
 }) {
   const queryClient = useQueryClient()
-  const [form, setForm] = useState<FornecedorFormState>(FORNECEDOR_VAZIO)
-  const [modalPlanoAberto, setModalPlanoAberto] = useState(false)
+  const [form, setForm] = useState<FornecedorFormState>({ ...FORNECEDOR_VAZIO, ...valorInicial })
   const [toast, setToast] = useState('')
+
+  // Plano de Contas nunca é escolhido aqui (2026-08-19, pedido do dono do produto) — este modal
+  // só existe dentro da Entrada de Produtos por Compra, então a conta é sempre a mesma:
+  // `cfg_geral.id_plano_contas_compra_mercadoria`. Atribuído por baixo dos panos, sem campo na
+  // tela; se `cfg_geral` ainda não tiver carregado quando o operador clicar "Criar", o botão
+  // continua desabilitado (mesmo `valido` de sempre) até o valor chegar.
+  const { data: cfgGeral } = useQuery({ queryKey: ['config-geral'], queryFn: buscarConfiguracaoGeral })
+  useEffect(() => {
+    if (cfgGeral?.idPlanoContasCompraMercadoria && !form.idPlanoContas) {
+      setForm((f) => ({ ...f, idPlanoContas: cfgGeral.idPlanoContasCompraMercadoria }))
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cfgGeral?.idPlanoContasCompraMercadoria])
 
   const campo = (chave: keyof FornecedorFormState) => (e: React.ChangeEvent<HTMLInputElement>) =>
     setForm((f) => ({ ...f, [chave]: maiusculas(e.target.value) }))
-
-  const { data: planos } = useQuery({
-    queryKey: ['planos-contas', 'entrada-mercadoria'],
-    queryFn: () => listarPlanosContas({ tamanho: 100 }),
-  })
 
   const criar = useMutation({
     mutationFn: () => criarFornecedor(paraRequisicao(form)),
@@ -64,29 +75,9 @@ export default function FornecedorQuickCreateModal({
         </p>
 
         <div className="form-grid">
-          <div className="col-8">
+          <div className="col-12">
             <label htmlFor="modal-fornecedor-razao">Razão Social *</label>
             <input id="modal-fornecedor-razao" autoFocus value={form.razaoSocial} onChange={campo('razaoSocial')} />
-          </div>
-          <div className="col-4">
-            <label htmlFor="modal-fornecedor-plano">Plano de Contas *</label>
-            <div className="linha-com-botao">
-              <select
-                id="modal-fornecedor-plano"
-                value={form.idPlanoContas}
-                onChange={(e) => setForm((f) => ({ ...f, idPlanoContas: e.target.value }))}
-              >
-                <option value="">Selecione…</option>
-                {planos?.itens.map((p) => (
-                  <option key={p.idPlanoContas} value={p.idPlanoContas}>
-                    {p.idPlanoContas} — {p.descricao}
-                  </option>
-                ))}
-              </select>
-              <button type="button" tabIndex={-1} className="btn ghost" onClick={() => setModalPlanoAberto(true)}>
-                ＋ Novo
-              </button>
-            </div>
           </div>
 
           <div className="col-4">
@@ -174,16 +165,6 @@ export default function FornecedorQuickCreateModal({
           </button>
         </div>
       </div>
-
-      {modalPlanoAberto && (
-        <PlanoContasModal
-          aoFechar={() => setModalPlanoAberto(false)}
-          aoCriar={(idPlano) => {
-            setForm((f) => ({ ...f, idPlanoContas: idPlano }))
-            setModalPlanoAberto(false)
-          }}
-        />
-      )}
 
       {toast && <Toast mensagem={toast} aoFechar={() => setToast('')} />}
     </div>

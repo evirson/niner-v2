@@ -19,6 +19,8 @@ export interface PdvProduto {
   estoqueTotal: number
   /** URL pública da primeira foto da galeria do produto (indice 0), `null` se não tiver foto. */
   urlImagem: string | null
+  marca: string | null
+  referencia: string | null
 }
 
 export interface ItemVendaRequest {
@@ -92,9 +94,17 @@ export interface VendaEfetivada {
   pagamentos: PagamentoGerado[]
 }
 
-export function buscarProdutosPdv(busca: string): Promise<PdvProduto[]> {
+export interface FiltrosBuscaProdutoPdv {
+  busca?: string
+  marca?: string
+  referencia?: string
+}
+
+export function buscarProdutosPdv(filtros: FiltrosBuscaProdutoPdv): Promise<PdvProduto[]> {
   const params = new URLSearchParams()
-  if (busca) params.set('busca', busca)
+  if (filtros.busca) params.set('busca', filtros.busca)
+  if (filtros.marca) params.set('marca', filtros.marca)
+  if (filtros.referencia) params.set('referencia', filtros.referencia)
   const query = params.toString()
   return api<PdvProduto[]>(`/api/v1/pdv/produtos${query ? `?${query}` : ''}`)
 }

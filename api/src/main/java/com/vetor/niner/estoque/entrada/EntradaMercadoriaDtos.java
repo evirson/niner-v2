@@ -2,6 +2,7 @@ package com.vetor.niner.estoque.entrada;
 
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 
@@ -19,7 +20,21 @@ public final class EntradaMercadoriaDtos {
     public record ItemEntradaRequest(
             @NotNull Long idVariacao,
             @NotNull @DecimalMin(value = "0.001") BigDecimal qtd,
-            @NotNull @DecimalMin(value = "0") BigDecimal precoCusto) {
+            @NotNull @DecimalMin(value = "0") BigDecimal precoCusto,
+            /** Preço de venda informado pelo operador nesta entrada (2026-08-15, fluxo
+             *  Individual com grade — custo + % de venda do produto sugerem o valor, editável
+             *  antes de lançar). Quando presente, vira o novo {@code produto.preco_venda} na
+             *  confirmação, **independente** de {@code cfg_reajusta_preco_entrada} (o operador
+             *  já decidiu o preço na hora de lançar). Ausente preserva o comportamento de
+             *  sempre: snapshot do detalhe = preço atual do produto, só reajusta automático se
+             *  a flag estiver ligada. */
+            BigDecimal precoVenda,
+            /** Código do produto no fornecedor (`cProd` do XML, 2026-08-18) — quando presente,
+             *  a confirmação grava/atualiza {@code produto_fornecedor} (aprendizado: a próxima
+             *  nota do mesmo fornecedor com este código já resolve sozinha, sem depender de
+             *  EAN nem de heurística de texto). Só o fluxo XML preenche; Manual/Planilha
+             *  deixam ausente. */
+            String codigoFornecedor) {
     }
 
     /** Uma parcela/duplicata a gerar em `contas_pagar` — sempre opcional (Manual/Planilha só
@@ -90,7 +105,10 @@ public final class EntradaMercadoriaDtos {
             Integer notaFiscal,
             int qtdItens,
             BigDecimal valorTotal,
-            String origem) {
+            String origem,
+            /** Cancelamento de Entrada (2026-08-19) — grid principal mostra a linha marcada,
+             *  sem esconder (mesmo princípio de `venda.cancelada`); não pode cancelar de novo. */
+            boolean cancelada) {
     }
 
     public record PaginaEntradas(
@@ -106,7 +124,18 @@ public final class EntradaMercadoriaDtos {
             String chaveNfe,
             OffsetDateTime dataMovimento,
             BigDecimal valorTotal,
-            List<ItemEntradaDetalheResponse> itens) {
+            List<ItemEntradaDetalheResponse> itens,
+            boolean cancelada,
+            OffsetDateTime dataCancelamento,
+            String motivoCancelamento) {
+    }
+
+    /** Corpo do `POST /{id}/cancelar` — mesmo contrato de
+     *  {@code CancelamentoVendaDtos.CancelarVendaRequest}/{@code CancelarDevolucaoRequest}. */
+    public record CancelarEntradaRequest(@NotBlank String motivo) {
+    }
+
+    public record CancelamentoEntradaEfetivadoResponse(long idMovimento, OffsetDateTime dataCancelamento) {
     }
 
     /** Item do detalhe — {@code idMovimentoDetalhe} identifica a linha pra edição
@@ -160,6 +189,77 @@ public final class EntradaMercadoriaDtos {
             String variacaoTamanho,
             Long idProdutoEncontrado,
             Long idGradeEncontrada,
-            String motivoPendencia) {
+            String motivoPendencia,
+            /** `cProd` do XML (2026-08-18, fluxo XML — ausente/`null` no fluxo Planilha) —
+             *  segue junto até a confirmação pra alimentar o aprendizado de
+             *  {@code produto_fornecedor} (ver {@link ItemEntradaRequest#codigoFornecedor}),
+             *  mesmo quando a linha já resolveu sozinha por EAN. Cor/tamanho aqui são só
+             *  PALPITE pra ajudar o operador a escolher mais rápido — o XML nunca cadastra cor
+             *  ou tamanho novo sozinho, sempre exige confirmação manual (diferente da
+             *  Planilha, que o dono do produto pediu pra cadastrar automático). */
+            String codigoFornecedor) {
+    }
+
+    /**
+     * Resultado da pesquisa de produto do fluxo Individual (2026-08-15) — busca por
+     * nome/marca/referência, nível produto (não variação): não traz cor/tamanho nem estoque,
+     * só o necessário pra escolher o produto e, na sequência, montar a grade de tamanhos +
+     * custo/% de venda/preço de venda. {@code idGrade} nulo ⇒ produto sem grade, a tela pede só
+     * uma quantidade em vez do grid de tamanhos.
+     */
+    public record ProdutoOpcaoEntradaResponse(
+            long idProduto, String descricao, String marca, String referencia,
+            Long idGrade, BigDecimal precoCusto, BigDecimal percentualVenda) {
+    }
+
+    /** Fornecedor casado pelo CNPJ do emitente do XML (2026-08-18, Fase 3) —
+     *  {@code idFornecedor} nulo ⇒ não achou no cadastro; os demais campos vêm do próprio XML
+     *  (`emit`), prontos pra pré-preencher o cadastro rápido de fornecedor se o operador optar
+     *  por criar um novo em vez de escolher um existente. */
+    public record FornecedorXmlPreviewResponse(
+            Long idFornecedor,
+            String cnpj,
+            String razaoSocial,
+            String nomeFantasia,
+            String inscricaoEstadual,
+            String endereco,
+            String numero,
+            String bairro,
+            String cidade,
+            String estado,
+            String cep,
+            String telefone) {
+    }
+
+    /** Uma duplicata (`cobr/dup` do XML) — mesmo shape de {@link ContaPagarEntradaRequest}, só
+     *  que ainda em modo de conferência (a tela pode deixar o operador editar antes de
+     *  confirmar). */
+    public record DuplicataXmlPreviewResponse(String numeroDuplicata, LocalDate dataVencimento, BigDecimal valor) {
+    }
+
+    /**
+     * Pré-entrada do fluxo XML (2026-08-18, Fase 3, docs/telas/entrada-mercadoria.md) — parse
+     * do arquivo + tentativa de casar cada item, sem gravar nada (mesmo espírito do preview da
+     * Planilha). {@code xmlBruto} volta pro cliente pra ser reenviado, sem alteração, no
+     * {@code POST /api/v1/estoque/entradas} de confirmação (auditoria P3, `entrada_xml`).
+     * {@code chaveJaImportada} avisa a idempotência (P2) antes mesmo de tentar confirmar — a
+     * confirmação valida de novo (defesa em profundidade), mas a tela pode bloquear cedo.
+     */
+    public record EntradaXmlPreviewResponse(
+            String chaveNfe,
+            Integer serieNota,
+            Integer notaFiscal,
+            OffsetDateTime dataEmissao,
+            boolean chaveJaImportada,
+            FornecedorXmlPreviewResponse fornecedor,
+            /** Empresa do tenant casada pelo CNPJ do destinatário (`dest/CNPJ`) do XML
+             *  (2026-08-19) — `null` sem match (nenhuma empresa do tenant tem esse CNPJ
+             *  cadastrado, ou o XML não trouxe `dest`); a tela cai no padrão de sempre (empresa
+             *  da sessão) e o operador pode trocar manualmente no select, que continua ali. */
+            Long idEmpresaEncontrada,
+            BigDecimal valorTotalNota,
+            List<DuplicataXmlPreviewResponse> duplicatas,
+            List<ItemPlanilhaPreviewResponse> itens,
+            String xmlBruto) {
     }
 }

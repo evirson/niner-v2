@@ -15,8 +15,11 @@ import {
   baixarModeloPlanilhaEntrada,
   efetivarEntrada,
   previewPlanilhaEntrada,
+  previewXmlEntrada,
   type EntradaEfetivadaResponse,
+  type FornecedorXmlPreview,
   type ItemPlanilhaPreviewResponse,
+  type ProdutoOpcaoEntrada,
 } from '../../../lib/entradaMercadoria'
 import { useEu } from '../../../lib/eu'
 import { buscarFornecedoresEmissao, type FornecedorOpcaoEmissao } from '../../../lib/etiquetaEmissao'
@@ -29,14 +32,17 @@ import {
   desmascararQuantidade,
   formatarMoeda,
   formatarQuantidade,
+  isoParaData,
+  mascararCpfCnpj,
   mascararData,
   mascararMoeda,
   mascararQuantidade,
 } from '../../../lib/masks'
-import { buscarProdutoPorCodigo, interpretarCodigoBarras, type PdvProduto } from '../../../lib/pdv'
-import { criarVariacao, type VariacaoProduto } from '../../../lib/produtos'
+import type { PdvProduto } from '../../../lib/pdv'
+import { criarVariacao, type Produto, type VariacaoProduto } from '../../../lib/produtos'
 import { maiusculas } from '../../../lib/texto'
 import PesquisaProdutoModal from '../../pdv/PesquisaProdutoModal'
+import PesquisaProdutoEntradaModal, { type ItemResolvidoEntrada } from './PesquisaProdutoEntradaModal'
 
 function moeda(v: number): string {
   return `R$ ${formatarMoeda(v)}`
@@ -50,6 +56,14 @@ interface ItemLinha {
   variacao: string | null
   qtdTexto: string
   custoTexto: string
+  /** Preço de venda do lote (2026-08-15, popup de pesquisa com grade de tamanhos) — só vem
+   *  preenchido quando o item nasceu daquele fluxo (custo + %venda do produto sugeriram o
+   *  valor); demais fluxos (Planilha, Cadastrar Produto) deixam vazio e o comportamento de
+   *  sempre continua (backend usa o `preco_venda` atual do produto como snapshot). */
+  precoVendaTexto: string
+  /** `cProd` do XML (2026-08-18) — presente só quando o item nasceu do fluxo XML; alimenta o
+   *  aprendizado de `produto_fornecedor` na confirmação. */
+  codigoFornecedor?: string | null
 }
 
 interface ParcelaLinha {
@@ -107,6 +121,30 @@ function LinhaPendentePlanilha({
   const [idTamanho, setIdTamanho] = useState<number | ''>('')
   const [novaCorNome, setNovaCorNome] = useState('')
   const [erro, setErro] = useState('')
+
+  // Pré-seleciona o palpite (`linha.cor`/`linha.tamanho`) nos selects QUANDO ele bate com uma
+  // opção que já existe no cadastro — o operador ainda vê o select, ainda pode trocar, e nada é
+  // gravado até clicar "Confirmar" (mesma exigência de sempre: nunca resolve sozinho). Sem isso,
+  // o sistema já sabia o tamanho (mostrado na coluna Cor/Tamanho) mas obrigava reescolher a
+  // mesma coisa do zero — pedido do dono do produto, 2026-08-19: "voce ja identificou o
+  // tamanho, pq esta pedindo pra cadastrar o tamanho". Não afeta a Planilha na prática: lá, uma
+  // pendência só chega em `temProduto` quando cor/tamanho NÃO bateram com confiança — se
+  // batessem, já teria resolvido sozinha antes de virar pendência.
+  useEffect(() => {
+    if (idCor === '' && linha.cor && cores) {
+      const bate = cores.find((c) => c.descricao.toUpperCase() === linha.cor!.toUpperCase())
+      if (bate) setIdCor(bate.idCor)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cores, linha.cor])
+
+  useEffect(() => {
+    if (idTamanho === '' && linha.tamanho && grade) {
+      const bate = grade.tamanhos.find((t) => t.descricao.toUpperCase() === linha.tamanho!.toUpperCase())
+      if (bate) setIdTamanho(bate.idTamanho)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [grade, linha.tamanho])
 
   const criarNovaCor = useMutation({
     mutationFn: criarCor,
@@ -235,13 +273,17 @@ export default function EntradaMercadoriaForm() {
   const fornecedorInputRef = useRef<HTMLInputElement>(null)
   const primeiraDuplicataRef = useRef<HTMLInputElement>(null)
   const [numeroParcelasTexto, setNumeroParcelasTexto] = useState('')
-  /** Só relevante no fluxo Planilha, que é dividido em abas (2026-08-12). */
-  const [abaPlanilha, setAbaPlanilha] = useState<'GERAL' | 'PRODUTOS' | 'FINANCEIRO'>('GERAL')
-  /** Sub-abas da aba "2. Produtos" (2026-08-13): "Localizados" (itens já lançados) e "Não
-   *  Localizados" (pendências da planilha) — cada uma com título e totalização fixos, só a
+  /** Estrutura de 3 abas (1. Dados Gerais / 2. Produtos / 3. Financeiro) — originalmente só do
+   *  fluxo Planilha (2026-08-12), estendida ao Individual (2026-08-15) e ao XML (2026-08-18) —
+   *  os 3 fluxos convergem na mesma confirmação e compartilham a mesma organização. */
+  const temAbas = modo === 'PLANILHA' || modo === 'INDIVIDUAL' || modo === 'XML'
+  const [aba, setAba] = useState<'GERAL' | 'PRODUTOS' | 'FINANCEIRO'>('GERAL')
+  /** Sub-abas da aba "2. Produtos" do Planilha (2026-08-13): "Localizados" (itens já lançados) e
+   *  "Não Localizados" (pendências da planilha) — cada uma com título e totalização fixos, só a
    *  grid de dados rola (`grid-altura-fixa`). Resolver uma pendência já move a linha pra
    *  "Localizados" sozinho (o dado sai de `pendentes` e entra em `itens`); não força a troca de
-   *  sub-aba, pra não atrapalhar quem está resolvendo várias pendências em sequência. */
+   *  sub-aba, pra não atrapalhar quem está resolvendo várias pendências em sequência. O
+   *  Individual não tem pendências (não importa planilha), então não usa esta sub-aba. */
   const [abaProdutos, setAbaProdutos] = useState<'LOCALIZADOS' | 'NAO_LOCALIZADOS'>('LOCALIZADOS')
 
   const { data: empresasPermitidas } = useQuery({ queryKey: ['empresas-permitidas'], queryFn: listarEmpresasPermitidas })
@@ -254,29 +296,54 @@ export default function EntradaMercadoriaForm() {
   }, [empresasPermitidas, eu, idEmpresaEscolhida])
 
   // Foco automático no Fornecedor: assim que um fluxo é escolhido, e de novo toda vez que o
-  // usuário volta pra aba "1. Dados Gerais" do Planilha (pedido do dono do produto, 2026-08-12).
+  // usuário volta pra aba "1. Dados Gerais" (pedido do dono do produto, 2026-08-12; estendido
+  // ao Individual em 2026-08-15 junto com a mesma estrutura de abas).
   useEffect(() => {
     if (modo === null) return
-    if (modo === 'PLANILHA' && abaPlanilha !== 'GERAL') return
+    if (temAbas && aba !== 'GERAL') return
     if (fornecedorEscolhido) return
     fornecedorInputRef.current?.focus()
-  }, [modo, abaPlanilha, fornecedorEscolhido])
+  }, [modo, temAbas, aba, fornecedorEscolhido])
 
   const [itens, setItens] = useState<ItemLinha[]>([])
   const [valorRateioTexto, setValorRateioTexto] = useState('')
   const [parcelas, setParcelas] = useState<ParcelaLinha[]>([])
 
   const [mostrarPesquisa, setMostrarPesquisa] = useState(false)
+  /** Popup de pesquisa (Nome/Marca/Referência) da aba "2. Produtos" do fluxo Individual
+   *  (2026-08-15) — distinto de `mostrarPesquisa`, que resolve pendências do fluxo Planilha. */
+  const [mostrarPesquisaEntrada, setMostrarPesquisaEntrada] = useState(false)
+  /** Preenchido só quando "＋ Cadastrar Produto" acaba de criar um produto COM grade
+   *  (2026-08-16) — pula a busca do popup de pesquisa e já abre direto no passo de Cor +
+   *  quantidade por tamanho pra esse produto recém-criado. */
+  const [produtoInicialPesquisa, setProdutoInicialPesquisa] = useState<ProdutoOpcaoEntrada | undefined>(undefined)
   const [modalProdutoAberto, setModalProdutoAberto] = useState(false)
-  const [valorBarras, setValorBarras] = useState('')
   const [toast, setToast] = useState<{ texto: string; tipo: 'erro' | 'sucesso' } | null>(null)
   const [entradaGravada, setEntradaGravada] = useState<EntradaEfetivadaResponse | null>(null)
-  const campoBarrasRef = useRef<HTMLInputElement>(null)
 
   const [arquivoPlanilha, setArquivoPlanilha] = useState<File | null>(null)
   const [pendentes, setPendentes] = useState<ItemPlanilhaPreviewResponse[]>([])
   const [pendenteEmResolucao, setPendenteEmResolucao] = useState<number | null>(null)
   const inputArquivoRef = useRef<HTMLInputElement>(null)
+
+  /** Fluxo XML (Fase 3, 2026-08-18) — `xmlBruto`/`chaveNfeXml`/`serieNotaXml` seguem pro
+   *  payload de confirmação sem alteração nenhuma (auditoria P3, idempotência P2).
+   *  `fornecedorXmlSemCadastro` só fica preenchido quando o CNPJ do emitente não bate com
+   *  nenhum fornecedor já cadastrado — oferece cadastro rápido pré-preenchido com o que o XML
+   *  trouxe. `chaveJaImportada` bloqueia a confirmação cedo, antes mesmo de tentar (o servidor
+   *  também valida de novo, defesa em profundidade). */
+  const [arquivoXml, setArquivoXml] = useState<File | null>(null)
+  const inputArquivoXmlRef = useRef<HTMLInputElement>(null)
+  const [xmlBruto, setXmlBruto] = useState<string | null>(null)
+  const [chaveNfeXml, setChaveNfeXml] = useState<string | null>(null)
+  const [serieNotaXml, setSerieNotaXml] = useState<number | null>(null)
+  const [chaveJaImportada, setChaveJaImportada] = useState(false)
+  const [fornecedorXmlSemCadastro, setFornecedorXmlSemCadastro] = useState<FornecedorXmlPreview | null>(null)
+  /** O XML já trouxe as duplicatas prontas (`cobr/dup`) — nesse caso "Nº de Parcelas" nem
+   *  aparece (2026-08-19, pedido do dono do produto: "não preciso definir... já está descrito
+   *  no XML"). Só quando o XML NÃO tem parcelamento descrito é que a tela volta a oferecer o
+   *  campo, pro operador escolher se quer dividir mesmo assim. */
+  const [xmlTemDuplicatas, setXmlTemDuplicatas] = useState(false)
 
   const { data: fornecedores } = useQuery({
     queryKey: ['etiqueta-emissao-fornecedores', buscaFornecedor],
@@ -294,13 +361,22 @@ export default function EntradaMercadoriaForm() {
             : i,
         )
       }
-      return [...atual, { idVariacao, descricao, variacao, qtdTexto: formatarQuantidade(qtd, permiteQtdDecimal), custoTexto: '' }]
+      return [...atual, { idVariacao, descricao, variacao, qtdTexto: formatarQuantidade(qtd, permiteQtdDecimal), custoTexto: '', precoVendaTexto: '' }]
     })
   }
 
-  /** Lança um item já com o custo definido (vindo da planilha, que traz custo por linha —
-   *  diferente do fluxo Individual, onde o custo é digitado depois). */
-  const lancarItemComCusto = (idVariacao: number, descricao: string, variacao: string | null, qtd: number, custo: number) => {
+  /** Lança um item já com o custo definido (vindo da planilha ou do XML, que trazem custo por
+   *  linha — diferente do fluxo Individual, onde o custo é digitado depois). `codigoFornecedor`
+   *  (2026-08-18) só vem preenchido no fluxo XML — segue até a confirmação pra alimentar o
+   *  aprendizado de `produto_fornecedor`. */
+  const lancarItemComCusto = (
+    idVariacao: number,
+    descricao: string,
+    variacao: string | null,
+    qtd: number,
+    custo: number,
+    codigoFornecedor?: string | null,
+  ) => {
     setItens((atual) => {
       const existente = atual.find((i) => i.idVariacao === idVariacao)
       if (existente) {
@@ -310,31 +386,59 @@ export default function EntradaMercadoriaForm() {
                 ...i,
                 qtdTexto: formatarQuantidade(desmascararQuantidade(i.qtdTexto, permiteQtdDecimal) + qtd, permiteQtdDecimal),
                 custoTexto: formatarMoeda(custo),
+                codigoFornecedor: codigoFornecedor ?? i.codigoFornecedor,
               }
             : i,
         )
       }
-      return [...atual, { idVariacao, descricao, variacao, qtdTexto: formatarQuantidade(qtd, permiteQtdDecimal), custoTexto: formatarMoeda(custo) }]
+      return [
+        ...atual,
+        {
+          idVariacao,
+          descricao,
+          variacao,
+          qtdTexto: formatarQuantidade(qtd, permiteQtdDecimal),
+          custoTexto: formatarMoeda(custo),
+          precoVendaTexto: '',
+          codigoFornecedor,
+        },
+      ]
     })
   }
 
-  const lerCodigo = async (valorDigitado: string) => {
-    const { qtd, codigo } = interpretarCodigoBarras(valorDigitado)
-    try {
-      const produto = await buscarProdutoPorCodigo(codigo)
-      lancarProduto(produto.idVariacao, produto.descricaoProduto, variacaoTexto(produto), qtd)
-    } catch (e) {
-      setToast({ texto: e instanceof ApiError ? e.message : 'Não foi possível ler o código de barras.', tipo: 'erro' })
-    }
-  }
-
-  const aoDigitarBarras: React.KeyboardEventHandler<HTMLInputElement> = (e) => {
-    if (e.key === 'Enter' && valorBarras.trim()) {
-      e.preventDefault()
-      const valor = valorBarras.trim()
-      setValorBarras('')
-      lerCodigo(valor)
-    }
+  /** Lança um lote de variações já resolvidas (achadas ou criadas) vindo do popup de pesquisa
+   *  com grade de tamanhos (2026-08-15) — todas compartilham o mesmo custo/preço de venda
+   *  digitados uma única vez para o lote inteiro. */
+  const lancarItensComCustoEPreco = (novosItens: { idVariacao: number; descricao: string; variacao: string | null; qtd: number }[], custo: number, precoVenda: number) => {
+    setItens((atual) => {
+      let resultado = atual
+      for (const novo of novosItens) {
+        const existente = resultado.find((i) => i.idVariacao === novo.idVariacao)
+        resultado = existente
+          ? resultado.map((i) =>
+              i.idVariacao === novo.idVariacao
+                ? {
+                    ...i,
+                    qtdTexto: formatarQuantidade(desmascararQuantidade(i.qtdTexto, permiteQtdDecimal) + novo.qtd, permiteQtdDecimal),
+                    custoTexto: formatarMoeda(custo),
+                    precoVendaTexto: formatarMoeda(precoVenda),
+                  }
+                : i,
+            )
+          : [
+              ...resultado,
+              {
+                idVariacao: novo.idVariacao,
+                descricao: novo.descricao,
+                variacao: novo.variacao,
+                qtdTexto: formatarQuantidade(novo.qtd, permiteQtdDecimal),
+                custoTexto: formatarMoeda(custo),
+                precoVendaTexto: formatarMoeda(precoVenda),
+              },
+            ]
+      }
+      return resultado
+    })
   }
 
   const removerPendente = (numeroLinha: number) => setPendentes((atual) => atual.filter((p) => p.numeroLinha !== numeroLinha))
@@ -344,7 +448,14 @@ export default function EntradaMercadoriaForm() {
     if (pendenteEmResolucao != null) {
       const linha = pendentes.find((p) => p.numeroLinha === pendenteEmResolucao)
       if (linha) {
-        lancarItemComCusto(produto.idVariacao, produto.descricaoProduto, variacaoTexto(produto), linha.qtd ?? 1, linha.custoUnitario ?? 0)
+        lancarItemComCusto(
+          produto.idVariacao,
+          produto.descricaoProduto,
+          variacaoTexto(produto),
+          linha.qtd ?? 1,
+          linha.custoUnitario ?? 0,
+          linha.codigoFornecedor,
+        )
         removerPendente(pendenteEmResolucao)
       }
       setPendenteEmResolucao(null)
@@ -353,12 +464,28 @@ export default function EntradaMercadoriaForm() {
     lancarProduto(produto.idVariacao, produto.descricaoProduto, variacaoTexto(produto))
   }
 
+  /** Popup Nome/Marca/Referência + grade de tamanhos da aba "2. Produtos" do fluxo Individual
+   *  (2026-08-15) — o popup já resolve/cria a(s) variação(ões) e devolve prontas, com custo/
+   *  preço de venda do lote inteiro (um custo digitado vale pra todos os tamanhos lançados). */
+  const aoAdicionarDaPesquisaEntrada = (itens: ItemResolvidoEntrada[], custo: number, precoVenda: number) => {
+    setMostrarPesquisaEntrada(false)
+    setProdutoInicialPesquisa(undefined)
+    lancarItensComCustoEPreco(itens, custo, precoVenda)
+  }
+
   const aoCriarProduto = (variacao: VariacaoProduto) => {
     setModalProdutoAberto(false)
     if (pendenteEmResolucao != null) {
       const linha = pendentes.find((p) => p.numeroLinha === pendenteEmResolucao)
       if (linha) {
-        lancarItemComCusto(variacao.idVariacao, variacao.descricao, variacaoTexto(variacao), linha.qtd ?? 1, linha.custoUnitario ?? 0)
+        lancarItemComCusto(
+          variacao.idVariacao,
+          variacao.descricao,
+          variacaoTexto(variacao),
+          linha.qtd ?? 1,
+          linha.custoUnitario ?? 0,
+          linha.codigoFornecedor,
+        )
         removerPendente(pendenteEmResolucao)
       }
       setPendenteEmResolucao(null)
@@ -367,6 +494,65 @@ export default function EntradaMercadoriaForm() {
     }
     lancarProduto(variacao.idVariacao, variacao.descricao, variacaoTexto(variacao))
     setToast({ texto: 'Produto cadastrado e adicionado à entrada.', tipo: 'sucesso' })
+  }
+
+  const normalizarNomeProduto = (nome: string) => nome.trim().toUpperCase().replace(/\s+/g, ' ')
+
+  /** "＋ Cadastrar Produto" criou um produto COM grade, sem variação nenhuma ainda. Dois
+   *  contextos bem diferentes usam este mesmo callback:
+   *  - Individual (2026-08-16, `pendenteEmResolucao == null`): cor/tamanho/quantidade não fazem
+   *    sentido pedir naquele modal — é decidido no popup de pesquisa, que já abre direto no
+   *    passo 2 pra esse produto.
+   *  - Pendência do XML (2026-08-19, `pendenteEmResolucao != null` e `modo === 'XML'`, único
+   *    fluxo que hoje chega aqui com pendência): a linha que estava sendo resolvida — e
+   *    QUALQUER OUTRA pendência ainda sem produto cujo nome (já sem cor/tamanho, ver
+   *    `EntradaXmlService`) bata com o produto recém-criado — passa a ter `idProdutoEncontrado`
+   *    preenchido, sem precisar cadastrar de novo. A própria grid "Não Localizados" já sabe
+   *    pedir cor/tamanho quando isso acontece (`LinhaPendentePlanilha`, branch `temProduto`) —
+   *    pedido do dono do produto: "verificar nos outros que ainda estao indefinidos, se nao é o
+   *    mesmo produto, verifica isso pelo nome, ai so pede pra definir, cor e tamanho". */
+  const aoCriarProdutoComGrade = (produto: Produto) => {
+    setModalProdutoAberto(false)
+
+    if (pendenteEmResolucao != null) {
+      const nomeAlvo = normalizarNomeProduto(produto.descricao)
+      let qtdAtualizadas = 0
+      setPendentes((atual) =>
+        atual.map((p) => {
+          // A linha que disparou o cadastro sempre entra, mesmo que o operador tenha editado a
+          // descrição dentro do modal (o nome já não bate mais com `p.nomeProduto`); as demais
+          // só entram por nome igual (produto que ela mesma não cadastrou, mas é a mesma peça).
+          const éLinhaAtual = p.numeroLinha === pendenteEmResolucao
+          const mesmoNome = p.idProdutoEncontrado == null && p.nomeProduto != null && normalizarNomeProduto(p.nomeProduto) === nomeAlvo
+          if (éLinhaAtual || mesmoNome) {
+            qtdAtualizadas++
+            return { ...p, idProdutoEncontrado: produto.idProduto, idGradeEncontrada: produto.idGrade }
+          }
+          return p
+        }),
+      )
+      setPendenteEmResolucao(null)
+      setToast({
+        texto:
+          qtdAtualizadas > 1
+            ? `Produto cadastrado — defina cor e tamanho nas ${qtdAtualizadas} linhas encontradas com este nome.`
+            : 'Produto cadastrado — defina a cor e o tamanho abaixo.',
+        tipo: 'sucesso',
+      })
+      return
+    }
+
+    setProdutoInicialPesquisa({
+      idProduto: produto.idProduto,
+      descricao: produto.descricao,
+      marca: produto.marca,
+      referencia: produto.referencia,
+      idGrade: produto.idGrade,
+      precoCusto: produto.precoCusto,
+      percentualVenda: produto.percentualVenda,
+    })
+    setMostrarPesquisaEntrada(true)
+    setToast({ texto: 'Produto cadastrado — escolha a cor e as quantidades.', tipo: 'sucesso' })
   }
 
   const removerItem = (idVariacao: number) => setItens((atual) => atual.filter((i) => i.idVariacao !== idVariacao))
@@ -414,15 +600,16 @@ export default function EntradaMercadoriaForm() {
   }, [numeroParcelasTexto, valorTotal, parcelas.length])
 
   // Foco automático na 1ª duplicata ao entrar na aba "3. Financeiro" (pedido do dono do
-  // produto, 2026-08-13) — as parcelas já chegam com Nº/valor calculados (ver efeito acima),
-  // falta só a data/duplicata de cada uma, então o cursor já pousa pronto pra digitar.
+  // produto, 2026-08-13; vale pros dois fluxos desde 2026-08-15) — as parcelas já chegam com
+  // Nº/valor calculados (ver efeito acima), falta só a data/duplicata de cada uma, então o
+  // cursor já pousa pronto pra digitar.
   useEffect(() => {
-    if (modo !== 'PLANILHA' || abaPlanilha !== 'FINANCEIRO') return
+    if (!temAbas || aba !== 'FINANCEIRO') return
     primeiraDuplicataRef.current?.focus()
     // parcelas.length entra na dependência pra tentar de novo quando as linhas nascem depois
     // (efeito de auto-split roda em outro ciclo — na 1ª renderização da aba, a ref ainda não existe).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [modo, abaPlanilha, parcelas.length])
+  }, [temAbas, aba, parcelas.length])
 
   const processarPlanilha = useMutation({
     mutationFn: () => previewPlanilhaEntrada(arquivoPlanilha!),
@@ -451,6 +638,76 @@ export default function EntradaMercadoriaForm() {
     onError: (e: unknown) => setToast({ texto: e instanceof ApiError ? e.message : 'Não foi possível processar a planilha.', tipo: 'erro' }),
   })
 
+  /** Fluxo XML (Fase 3, 2026-08-18) — mesmo shape de item que a Planilha (`resolvido`/
+   *  pendência), então reaproveita a mesma lógica de separar Localizados/Não Localizados; a
+   *  diferença fica só no que preenche além dos itens: fornecedor (auto-seleciona se achou pelo
+   *  CNPJ, senão oferece cadastro rápido pré-preenchido), Nº Nota Fiscal, e as parcelas (vêm
+   *  prontas do `cobr/dup` do XML, não do "Nº de Parcelas" dividido igualmente). */
+  const processarXml = useMutation({
+    mutationFn: () => previewXmlEntrada(arquivoXml!),
+    onSuccess: (preview) => {
+      setXmlBruto(preview.xmlBruto)
+      setChaveNfeXml(preview.chaveNfe)
+      setSerieNotaXml(preview.serieNota)
+      setChaveJaImportada(preview.chaveJaImportada)
+      if (preview.notaFiscal != null) setNotaFiscalTexto(String(preview.notaFiscal))
+      if (preview.dataEmissao) setDataEntradaTexto(isoParaData(preview.dataEmissao))
+
+      if (preview.fornecedor.idFornecedor != null) {
+        setFornecedorEscolhido({ idFornecedor: preview.fornecedor.idFornecedor, razaoSocial: preview.fornecedor.razaoSocial ?? '' })
+        setFornecedorXmlSemCadastro(null)
+      } else {
+        // CNPJ do emitente não bate com nenhum fornecedor cadastrado — já abre o cadastro
+        // rápido preenchido com os dados do XML (2026-08-19, pedido do dono do produto: "já
+        // trazer a tela de cadastro do fornecedor"), sem exigir um clique extra em "Cadastrar
+        // agora". O operador ainda pode fechar e escolher um fornecedor existente na busca.
+        setFornecedorXmlSemCadastro(preview.fornecedor)
+        setModalFornecedorAberto(true)
+      }
+
+      // Empresa destinatária no XML — CNPJ do `dest` casado contra o cadastro de empresas do
+      // tenant (2026-08-19); sem match, mantém o padrão de sempre (empresa da sessão) e o
+      // operador escolhe manualmente no select, que continua disponível.
+      if (preview.idEmpresaEncontrada != null) setIdEmpresaEscolhida(preview.idEmpresaEncontrada)
+
+      setXmlTemDuplicatas(preview.duplicatas.length > 0)
+      if (preview.duplicatas.length > 0) {
+        setParcelas(
+          preview.duplicatas.map((d) => ({
+            numeroDuplicata: d.numeroDuplicata ?? '',
+            dataVencimentoTexto: isoParaData(d.dataVencimento),
+            valorTexto: formatarMoeda(d.valor),
+          })),
+        )
+      }
+
+      const resolvidas = preview.itens.filter((l) => l.resolvido)
+      const novasPendentes = preview.itens.filter((l) => !l.resolvido)
+      resolvidas.forEach((l) => {
+        lancarItemComCusto(
+          l.idVariacao!,
+          l.descricaoProduto ?? l.nomeProduto ?? '—',
+          l.variacaoCor || l.variacaoTamanho ? [l.variacaoCor, l.variacaoTamanho].filter(Boolean).join(' · ') : null,
+          l.qtd ?? 0,
+          l.custoUnitario ?? 0,
+          l.codigoFornecedor,
+        )
+      })
+      setPendentes((atual) => [...atual, ...novasPendentes])
+      setAbaProdutos(novasPendentes.length > 0 ? 'NAO_LOCALIZADOS' : 'LOCALIZADOS')
+      setArquivoXml(null)
+      if (inputArquivoXmlRef.current) inputArquivoXmlRef.current.value = ''
+      setToast(
+        preview.chaveJaImportada
+          ? { texto: 'Esta nota fiscal já foi importada antes — não é possível confirmar de novo.', tipo: 'erro' }
+          : novasPendentes.length === 0
+            ? { texto: `${resolvidas.length} produto(s) processado(s) com sucesso.`, tipo: 'sucesso' }
+            : { texto: `${resolvidas.length} resolvido(s), ${novasPendentes.length} pendente(s) — resolva abaixo antes de confirmar.`, tipo: 'erro' },
+      )
+    },
+    onError: (e: unknown) => setToast({ texto: e instanceof ApiError ? e.message : 'Não foi possível processar o XML.', tipo: 'erro' }),
+  })
+
   const baixarModelo = useMutation({
     mutationFn: baixarModeloPlanilhaEntrada,
     onError: (e: unknown) => setToast({ texto: e instanceof ApiError ? e.message : 'Não foi possível baixar o modelo.', tipo: 'erro' }),
@@ -458,10 +715,11 @@ export default function EntradaMercadoriaForm() {
 
   const algumCustoZerado = itens.some((i) => desmascararMoeda(i.custoTexto || '0') <= 0)
   const algumaParcelaIncompleta = parcelas.some((p) => !p.dataVencimentoTexto.trim() || desmascararMoeda(p.valorTexto || '0') <= 0)
-  // "Pode mudar pra trás, nunca pra frente" (2026-08-12) — só vale pro Planilha, onde o campo
-  // é exibido; comparação de string "aaaa-mm-dd" já ordena cronologicamente.
+  // "Pode mudar pra trás, nunca pra frente" (2026-08-12) — vale pros dois fluxos com abas
+  // (Planilha e, desde 2026-08-15, Individual), onde o campo é exibido; comparação de string
+  // "aaaa-mm-dd" já ordena cronologicamente.
   const dataEntradaIso = dataEntradaTexto.trim() ? dataParaIso(dataEntradaTexto) : null
-  const dataEntradaInvalida = modo === 'PLANILHA' && dataEntradaIso != null && dataEntradaIso > dataParaIso(hojeBr())!
+  const dataEntradaInvalida = temAbas && dataEntradaIso != null && dataEntradaIso > dataParaIso(hojeBr())!
 
   /** Total das parcelas precisa bater com o total dos produtos lançados (2026-08-14, pedido do
    *  dono do produto) — comparado em centavos pra não sofrer de imprecisão de ponto flutuante.
@@ -472,10 +730,9 @@ export default function EntradaMercadoriaForm() {
   const totalParcelasNaoBate = parcelas.length > 0 && Math.round(valorParcelasTotal * 100) !== Math.round(valorTotal * 100)
 
   /** Vencimento de nenhuma parcela pode ser anterior à Data da Entrada informada (2026-08-14,
-   *  pedido do dono do produto) — só se aplica ao Planilha, onde esse campo existe (Individual
-   *  não pede Data da Entrada, o backend grava `now()`). */
+   *  pedido do dono do produto) — vale pros dois fluxos com abas, onde esse campo existe. */
   const parcelaComVencimentoAntesDaEntrada =
-    modo === 'PLANILHA' &&
+    temAbas &&
     dataEntradaIso != null &&
     parcelas.some((p) => {
       const vencimentoIso = p.dataVencimentoTexto.trim() ? dataParaIso(p.dataVencimentoTexto) : null
@@ -490,7 +747,8 @@ export default function EntradaMercadoriaForm() {
     !algumaParcelaIncompleta &&
     !dataEntradaInvalida &&
     !totalParcelasNaoBate &&
-    !parcelaComVencimentoAntesDaEntrada
+    !parcelaComVencimentoAntesDaEntrada &&
+    !chaveJaImportada
 
   const efetivar = useMutation({
     mutationFn: () =>
@@ -498,14 +756,19 @@ export default function EntradaMercadoriaForm() {
         idFornecedor: fornecedorEscolhido!.idFornecedor,
         idEmpresa: idEmpresaEscolhida === '' ? null : idEmpresaEscolhida,
         notaFiscal: notaFiscalTexto.trim() ? Number(notaFiscalTexto.trim()) : null,
-        // Só o Planilha mostra/usa este campo — Individual continua sem enviar (backend grava
-        // `now()`, com hora exata, em vez de meia-noite da data escolhida aqui por padrão).
-        dataMovimento: modo === 'PLANILHA' ? dataEntradaIso : null,
+        // Os três fluxos com abas mostram/usam este campo (Individual e XML passaram a pedir/
+        // preencher Data da Entrada em 2026-08-15/18, igual ao Planilha).
+        dataMovimento: temAbas ? dataEntradaIso : null,
+        chaveNfe: modo === 'XML' ? chaveNfeXml : null,
+        serieNota: modo === 'XML' ? serieNotaXml : null,
+        xmlBruto: modo === 'XML' ? xmlBruto : null,
         valorRateio: valorRateioTexto.trim() ? desmascararMoeda(valorRateioTexto) : null,
         itens: itens.map((i) => ({
           idVariacao: i.idVariacao,
           qtd: desmascararQuantidade(i.qtdTexto, permiteQtdDecimal),
           precoCusto: desmascararMoeda(i.custoTexto || '0'),
+          precoVenda: i.precoVendaTexto ? desmascararMoeda(i.precoVendaTexto) : undefined,
+          codigoFornecedor: i.codigoFornecedor,
         })),
         contasPagar:
           parcelas.length > 0
@@ -620,10 +883,13 @@ export default function EntradaMercadoriaForm() {
     </>
   )
 
-  /** Fornecedor + empresa + nota fiscal + nº de parcelas (+ rateio, quando ligado) — comum aos
-   *  fluxos Individual e Planilha. `comDataEntrada` só entra na aba "Dados Gerais" do Planilha
-   *  (pedido do dono do produto, 2026-08-12) — Individual continua sem esse campo. */
-  const renderCamposIdentificacao = (comDataEntrada: boolean) => (
+  /** Fornecedor + empresa + nota fiscal + Data da Entrada + nº de parcelas (+ rateio, quando
+   *  ligado) — a aba "1. Dados Gerais" dos três fluxos com abas. No XML (2026-08-19), Nº Nota
+   *  Fiscal e Data da Entrada viram texto (o XML já traz os dois, sem necessidade de digitar
+   *  nem de editar) e Nº de Parcelas some quando o XML já trouxe as duplicatas prontas
+   *  (`cobr/dup`) — só reaparece se a nota não tiver parcelamento descrito, pra deixar o
+   *  operador escolher se quer dividir mesmo assim. */
+  const renderCamposIdentificacao = () => (
     <div className="form-grid" style={{ marginTop: 10 }}>
       <div className="col-6">
         <label htmlFor="entrada-fornecedor">Fornecedor *</label>
@@ -689,17 +955,27 @@ export default function EntradaMercadoriaForm() {
       )}
       <div className="col-3">
         <label htmlFor="entrada-nota">Nº Nota Fiscal</label>
-        <input
-          id="entrada-nota"
-          inputMode="numeric"
-          value={notaFiscalTexto}
-          onChange={(e) => setNotaFiscalTexto(e.target.value.replace(/\D/g, ''))}
-          placeholder="Opcional"
-        />
+        {modo === 'XML' ? (
+          <p className="muted" style={{ marginTop: 8 }}>
+            {notaFiscalTexto || '—'}
+          </p>
+        ) : (
+          <input
+            id="entrada-nota"
+            inputMode="numeric"
+            value={notaFiscalTexto}
+            onChange={(e) => setNotaFiscalTexto(e.target.value.replace(/\D/g, ''))}
+            placeholder="Opcional"
+          />
+        )}
       </div>
-      {comDataEntrada && (
-        <div className="col-3">
-          <label htmlFor="entrada-data-entrada">Data da Entrada</label>
+      <div className="col-3">
+        <label htmlFor="entrada-data-entrada">Data da Entrada</label>
+        {modo === 'XML' ? (
+          <p className="muted" style={{ marginTop: 8 }}>
+            {dataEntradaTexto || '—'}
+          </p>
+        ) : (
           <input
             id="entrada-data-entrada"
             placeholder="dd/mm/aaaa"
@@ -707,19 +983,21 @@ export default function EntradaMercadoriaForm() {
             onChange={(e) => setDataEntradaTexto(mascararData(e.target.value))}
             onFocus={(e) => e.target.select()}
           />
-          {dataEntradaInvalida && <p className="erro-campo">Não é possível informar uma data futura.</p>}
+        )}
+        {dataEntradaInvalida && <p className="erro-campo">Não é possível informar uma data futura.</p>}
+      </div>
+      {!(modo === 'XML' && xmlTemDuplicatas) && (
+        <div className="col-3">
+          <label htmlFor="entrada-parcelas">Nº de Parcelas</label>
+          <input
+            id="entrada-parcelas"
+            inputMode="numeric"
+            value={numeroParcelasTexto}
+            onChange={(e) => setNumeroParcelasTexto(e.target.value.replace(/\D/g, '').slice(0, 2))}
+            placeholder="Opcional"
+          />
         </div>
       )}
-      <div className="col-3">
-        <label htmlFor="entrada-parcelas">Nº de Parcelas</label>
-        <input
-          id="entrada-parcelas"
-          inputMode="numeric"
-          value={numeroParcelasTexto}
-          onChange={(e) => setNumeroParcelasTexto(e.target.value.replace(/\D/g, '').slice(0, 2))}
-          placeholder="Opcional"
-        />
-      </div>
       {rateiaFrete && (
         <div className="col-3">
           <label htmlFor="entrada-rateio">Frete/Acréscimo a Ratear</label>
@@ -764,7 +1042,7 @@ export default function EntradaMercadoriaForm() {
               {parcelas.map((p, i) => {
                 const vencimentoIso = p.dataVencimentoTexto.trim() ? dataParaIso(p.dataVencimentoTexto) : null
                 const vencimentoAntesDaEntrada =
-                  modo === 'PLANILHA' && dataEntradaIso != null && vencimentoIso != null && vencimentoIso < dataEntradaIso
+                  temAbas && dataEntradaIso != null && vencimentoIso != null && vencimentoIso < dataEntradaIso
                 return (
                 <tr key={i}>
                   <td className="mono" style={{ textAlign: 'right' }}>
@@ -774,7 +1052,7 @@ export default function EntradaMercadoriaForm() {
                     <input
                       ref={i === 0 ? primeiraDuplicataRef : undefined}
                       value={p.numeroDuplicata}
-                      onChange={(e) => alterarParcela(i, 'numeroDuplicata', e.target.value)}
+                      onChange={(e) => alterarParcela(i, 'numeroDuplicata', maiusculas(e.target.value))}
                       placeholder="Opcional"
                     />
                   </td>
@@ -883,11 +1161,17 @@ export default function EntradaMercadoriaForm() {
                     setValorRateioTexto('')
                     setNotaFiscalTexto('')
                     setDataEntradaTexto(hojeBr())
-                    setAbaPlanilha('GERAL')
+                    setAba('GERAL')
                     setAbaProdutos('LOCALIZADOS')
                     setNumeroParcelasTexto('')
                     setFornecedorEscolhido(null)
                     setBuscaFornecedor('')
+                    setArquivoXml(null)
+                    setXmlBruto(null)
+                    setChaveNfeXml(null)
+                    setSerieNotaXml(null)
+                    setChaveJaImportada(false)
+                    setFornecedorXmlSemCadastro(null)
                   }}
                 >
                   Nova Entrada
@@ -898,146 +1182,253 @@ export default function EntradaMercadoriaForm() {
             <p className="muted">Escolha o fluxo de entrada para continuar.</p>
           ) : (
             <>
-              {modo === 'PLANILHA' && (
+              {temAbas && (
                 <>
                   <section className="section">
                     <div className="editor-etiqueta-segmentado">
-                      <button type="button" className={`btn ghost ${abaPlanilha === 'GERAL' ? 'ativa' : ''}`} onClick={() => setAbaPlanilha('GERAL')}>
+                      <button type="button" className={`btn ghost ${aba === 'GERAL' ? 'ativa' : ''}`} onClick={() => setAba('GERAL')}>
                         1. Dados Gerais
                       </button>
-                      <button type="button" className={`btn ghost ${abaPlanilha === 'PRODUTOS' ? 'ativa' : ''}`} onClick={() => setAbaPlanilha('PRODUTOS')}>
+                      <button type="button" className={`btn ghost ${aba === 'PRODUTOS' ? 'ativa' : ''}`} onClick={() => setAba('PRODUTOS')}>
                         2. Produtos {itens.length > 0 && `(${itens.length})`}
                       </button>
                       <button
                         type="button"
-                        className={`btn ghost ${abaPlanilha === 'FINANCEIRO' ? 'ativa' : ''}`}
-                        onClick={() => setAbaPlanilha('FINANCEIRO')}
+                        className={`btn ghost ${aba === 'FINANCEIRO' ? 'ativa' : ''}`}
+                        onClick={() => setAba('FINANCEIRO')}
                       >
                         3. Financeiro {parcelas.length > 0 && `(${parcelas.length})`}
                       </button>
                     </div>
                   </section>
 
-                  {abaPlanilha === 'GERAL' && (
+                  {aba === 'GERAL' && (
                     <section className="section">
                       <p className="section-label" style={{ margin: 0 }}>
                         Dados Gerais
                       </p>
-                      {renderCamposIdentificacao(true)}
 
-                      <p className="section-label" style={{ margin: '20px 0 0' }}>
-                        Arquivo da Planilha
-                      </p>
-                      <p className="muted" style={{ marginTop: 4 }}>
-                        Colunas esperadas: NOME DO PRODUTO, MARCA, REFERENCIA, COR, TAMANHO, CODIGO BARRAS FABRICANTE, QTD, CUSTO UNITARIO.
-                      </p>
-                      <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginTop: 10, flexWrap: 'wrap' }}>
-                        <input
-                          ref={inputArquivoRef}
-                          type="file"
-                          accept=".xlsx,.xls"
-                          style={{ display: 'none' }}
-                          onChange={(e) => setArquivoPlanilha(e.target.files?.[0] ?? null)}
-                        />
-                        <button type="button" className="btn ghost" onClick={() => inputArquivoRef.current?.click()}>
-                          Escolher Arquivo…
-                        </button>
-                        <span className="muted">{arquivoPlanilha?.name ?? 'Nenhum arquivo selecionado.'}</span>
-                        <button
-                          type="button"
-                          className="btn"
-                          disabled={!arquivoPlanilha || processarPlanilha.isPending}
-                          onClick={() => {
-                            processarPlanilha.mutate(undefined, { onSuccess: () => setAbaPlanilha('PRODUTOS') })
-                          }}
-                        >
-                          {processarPlanilha.isPending ? 'Processando…' : 'Processar Planilha'}
-                        </button>
-                        <button type="button" className="btn ghost" disabled={baixarModelo.isPending} onClick={() => baixarModelo.mutate()}>
-                          Baixar Modelo
-                        </button>
-                      </div>
-                    </section>
-                  )}
-
-                  {abaPlanilha === 'PRODUTOS' && (
-                    <section className="section">
-                      <div className="editor-etiqueta-segmentado" style={{ marginBottom: 12 }}>
-                        <button
-                          type="button"
-                          className={`btn ghost ${abaProdutos === 'LOCALIZADOS' ? 'ativa' : ''}`}
-                          onClick={() => setAbaProdutos('LOCALIZADOS')}
-                        >
-                          Localizados {itens.length > 0 && `(${itens.length})`}
-                        </button>
-                        <button
-                          type="button"
-                          className={`btn ghost ${abaProdutos === 'NAO_LOCALIZADOS' ? 'ativa' : ''}`}
-                          onClick={() => setAbaProdutos('NAO_LOCALIZADOS')}
-                        >
-                          Não Localizados {pendentes.length > 0 && `(${pendentes.length})`}
-                        </button>
-                      </div>
-
-                      {abaProdutos === 'LOCALIZADOS' ? (
+                      {modo === 'XML' && (
                         <>
-                          <p className="section-label" style={{ margin: 0 }}>
-                            Localizados
+                          <p className="section-label" style={{ margin: '8px 0 0' }}>
+                            Arquivo da Nota Fiscal (XML)
                           </p>
-                          {renderGradeItens(true)}
-                        </>
-                      ) : (
-                        <>
-                          <p className="section-label" style={{ margin: 0 }}>
-                            Não Localizados
+                          <p className="muted" style={{ marginTop: 4 }}>
+                            Envie o XML da NF-e (modelo 55) primeiro — fornecedor, empresa, Nº da nota, data e parcelas são
+                            identificados automaticamente a partir dele.
                           </p>
-                          {pendentes.length === 0 ? (
-                            <p className="muted" style={{ marginTop: 12 }}>
-                              Nenhuma pendência — todas as linhas da planilha foram localizadas.
+                          <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginTop: 10, flexWrap: 'wrap' }}>
+                            <input
+                              ref={inputArquivoXmlRef}
+                              type="file"
+                              accept=".xml"
+                              style={{ display: 'none' }}
+                              onChange={(e) => setArquivoXml(e.target.files?.[0] ?? null)}
+                            />
+                            <button type="button" className="btn ghost" onClick={() => inputArquivoXmlRef.current?.click()}>
+                              Escolher Arquivo…
+                            </button>
+                            <span className="muted">
+                              {arquivoXml?.name ?? (chaveNfeXml ? `Nota ${notaFiscalTexto || '—'} processada.` : 'Nenhum arquivo selecionado.')}
+                            </span>
+                            <button
+                              type="button"
+                              className="btn"
+                              disabled={!arquivoXml || processarXml.isPending}
+                              onClick={() => {
+                                processarXml.mutate(undefined, { onSuccess: () => setAba('PRODUTOS') })
+                              }}
+                            >
+                              {processarXml.isPending ? 'Processando…' : 'Processar XML'}
+                            </button>
+                          </div>
+                          {chaveJaImportada && (
+                            <p className="erro-campo" style={{ marginTop: 8 }}>
+                              Esta nota fiscal já foi importada antes (chave {chaveNfeXml}) — não é possível confirmar de novo.
                             </p>
-                          ) : (
-                            <div className="table-wrap grid-altura-fixa" style={{ marginTop: 12 }}>
-                              <table className="table table-compacta">
-                                <thead>
-                                  <tr>
-                                    <th>Linha</th>
-                                    <th>Produto</th>
-                                    <th>Cor/Tamanho da Planilha</th>
-                                    <th style={{ textAlign: 'right' }}>Qtd</th>
-                                    <th>Resolução</th>
-                                  </tr>
-                                </thead>
-                                <tbody>
-                                  {pendentes.map((linha) => (
-                                    <LinhaPendentePlanilha
-                                      key={linha.numeroLinha}
-                                      linha={linha}
-                                      permiteQtdDecimal={permiteQtdDecimal}
-                                      onIgnorar={() => removerPendente(linha.numeroLinha)}
-                                      onPesquisar={() => {
-                                        setPendenteEmResolucao(linha.numeroLinha)
-                                        setMostrarPesquisa(true)
-                                      }}
-                                      onCadastrar={() => {
-                                        setPendenteEmResolucao(linha.numeroLinha)
-                                        setModalProdutoAberto(true)
-                                      }}
-                                      onResolvido={(v) => {
-                                        lancarItemComCusto(v.idVariacao, v.descricao, variacaoTexto(v), linha.qtd ?? 1, linha.custoUnitario ?? 0)
-                                        removerPendente(linha.numeroLinha)
-                                      }}
-                                    />
-                                  ))}
-                                </tbody>
-                              </table>
-                            </div>
                           )}
+                        </>
+                      )}
+
+                      {(modo !== 'XML' || chaveNfeXml) && (
+                        <>
+                          {modo === 'XML' && (
+                            <p className="section-label" style={{ margin: '20px 0 0' }}>
+                              Dados da Nota
+                            </p>
+                          )}
+                          {renderCamposIdentificacao()}
+
+                          {fornecedorXmlSemCadastro && !fornecedorEscolhido && (
+                            <p className="muted" style={{ marginTop: 8 }}>
+                              Fornecedor do XML — <strong>{fornecedorXmlSemCadastro.razaoSocial}</strong>
+                              {fornecedorXmlSemCadastro.cnpj ? ` (CNPJ ${fornecedorXmlSemCadastro.cnpj})` : ''} — não está cadastrado.{' '}
+                              <button type="button" className="btn ghost" onClick={() => setModalFornecedorAberto(true)}>
+                                ＋ Cadastrar agora
+                              </button>
+                            </p>
+                          )}
+                        </>
+                      )}
+
+                      {modo === 'PLANILHA' && (
+                        <>
+                          <p className="section-label" style={{ margin: '20px 0 0' }}>
+                            Arquivo da Planilha
+                          </p>
+                          <p className="muted" style={{ marginTop: 4 }}>
+                            Colunas esperadas: NOME DO PRODUTO, MARCA, REFERENCIA, COR, TAMANHO, CODIGO BARRAS FABRICANTE, QTD, CUSTO UNITARIO.
+                          </p>
+                          <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginTop: 10, flexWrap: 'wrap' }}>
+                            <input
+                              ref={inputArquivoRef}
+                              type="file"
+                              accept=".xlsx,.xls"
+                              style={{ display: 'none' }}
+                              onChange={(e) => setArquivoPlanilha(e.target.files?.[0] ?? null)}
+                            />
+                            <button type="button" className="btn ghost" onClick={() => inputArquivoRef.current?.click()}>
+                              Escolher Arquivo…
+                            </button>
+                            <span className="muted">{arquivoPlanilha?.name ?? 'Nenhum arquivo selecionado.'}</span>
+                            <button
+                              type="button"
+                              className="btn"
+                              disabled={!arquivoPlanilha || processarPlanilha.isPending}
+                              onClick={() => {
+                                processarPlanilha.mutate(undefined, { onSuccess: () => setAba('PRODUTOS') })
+                              }}
+                            >
+                              {processarPlanilha.isPending ? 'Processando…' : 'Processar Planilha'}
+                            </button>
+                            <button type="button" className="btn ghost" disabled={baixarModelo.isPending} onClick={() => baixarModelo.mutate()}>
+                              Baixar Modelo
+                            </button>
+                          </div>
                         </>
                       )}
                     </section>
                   )}
 
-                  {abaPlanilha === 'FINANCEIRO' && (
+                  {aba === 'PRODUTOS' && (
+                    <section className="section">
+                      {modo === 'PLANILHA' || modo === 'XML' ? (
+                        <>
+                          <div className="editor-etiqueta-segmentado" style={{ marginBottom: 12 }}>
+                            <button
+                              type="button"
+                              className={`btn ghost ${abaProdutos === 'LOCALIZADOS' ? 'ativa' : ''}`}
+                              onClick={() => setAbaProdutos('LOCALIZADOS')}
+                            >
+                              Localizados {itens.length > 0 && `(${itens.length})`}
+                            </button>
+                            <button
+                              type="button"
+                              className={`btn ghost ${abaProdutos === 'NAO_LOCALIZADOS' ? 'ativa' : ''}`}
+                              onClick={() => setAbaProdutos('NAO_LOCALIZADOS')}
+                            >
+                              Não Localizados {pendentes.length > 0 && `(${pendentes.length})`}
+                            </button>
+                          </div>
+
+                          {abaProdutos === 'LOCALIZADOS' ? (
+                            <>
+                              <p className="section-label" style={{ margin: 0 }}>
+                                Localizados
+                              </p>
+                              {renderGradeItens(true)}
+                            </>
+                          ) : (
+                            <>
+                              <p className="section-label" style={{ margin: 0 }}>
+                                Não Localizados
+                              </p>
+                              {pendentes.length === 0 ? (
+                                <p className="muted" style={{ marginTop: 12 }}>
+                                  Nenhuma pendência — todos os itens foram localizados.
+                                </p>
+                              ) : (
+                                <div className="table-wrap grid-altura-fixa" style={{ marginTop: 12 }}>
+                                  <table className="table table-compacta">
+                                    <thead>
+                                      <tr>
+                                        <th>Linha</th>
+                                        <th>Produto</th>
+                                        <th>Cor/Tamanho</th>
+                                        <th style={{ textAlign: 'right' }}>Qtd</th>
+                                        <th>Resolução</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody>
+                                      {pendentes.map((linha) => (
+                                        <LinhaPendentePlanilha
+                                          key={linha.numeroLinha}
+                                          linha={linha}
+                                          permiteQtdDecimal={permiteQtdDecimal}
+                                          onIgnorar={() => removerPendente(linha.numeroLinha)}
+                                          onPesquisar={() => {
+                                            setPendenteEmResolucao(linha.numeroLinha)
+                                            setMostrarPesquisa(true)
+                                          }}
+                                          onCadastrar={() => {
+                                            setPendenteEmResolucao(linha.numeroLinha)
+                                            setModalProdutoAberto(true)
+                                          }}
+                                          onResolvido={(v) => {
+                                            lancarItemComCusto(
+                                              v.idVariacao,
+                                              v.descricao,
+                                              variacaoTexto(v),
+                                              linha.qtd ?? 1,
+                                              linha.custoUnitario ?? 0,
+                                              linha.codigoFornecedor,
+                                            )
+                                            removerPendente(linha.numeroLinha)
+                                          }}
+                                        />
+                                      ))}
+                                    </tbody>
+                                  </table>
+                                </div>
+                              )}
+                            </>
+                          )}
+                        </>
+                      ) : (
+                        <>
+                          <p className="section-label" style={{ margin: 0 }}>
+                            Produtos
+                          </p>
+                          <div style={{ display: 'flex', gap: 12, marginTop: 10 }}>
+                            <button
+                              type="button"
+                              className="btn ghost"
+                              onClick={() => {
+                                setPendenteEmResolucao(null)
+                                setProdutoInicialPesquisa(undefined)
+                                setMostrarPesquisaEntrada(true)
+                              }}
+                            >
+                              <IconeLupa /> Pesquisar Produto
+                            </button>
+                            <button
+                              type="button"
+                              className="btn ghost"
+                              onClick={() => {
+                                setPendenteEmResolucao(null)
+                                setModalProdutoAberto(true)
+                              }}
+                            >
+                              ＋ Cadastrar Produto
+                            </button>
+                          </div>
+                          {renderGradeItens(false)}
+                        </>
+                      )}
+                    </section>
+                  )}
+
+                  {aba === 'FINANCEIRO' && (
                     <section className="section">
                       <p className="section-label" style={{ margin: 0 }}>
                         Financeiro
@@ -1047,94 +1438,12 @@ export default function EntradaMercadoriaForm() {
                   )}
                 </>
               )}
-
-              {modo === 'INDIVIDUAL' && (
-                <>
-                  <section className="section">
-                    <p className="section-label" style={{ margin: 0 }}>
-                      Identificação
-                    </p>
-                    {renderCamposIdentificacao(false)}
-                  </section>
-
-                  <section className="section">
-                    <p className="section-label" style={{ margin: 0 }}>
-                      Produtos
-                    </p>
-
-                    <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start', marginTop: 10 }}>
-                      <div className="pdv-campo-codigo-barras" style={{ flex: 1 }}>
-                        <div className="pdv-rotulo">
-                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.6}>
-                            <path d="M4 5v14M8 5v14M11 5v14M13 5v14M17 5v14M20 5v14" />
-                          </svg>
-                          Código de Barras
-                        </div>
-                        <input
-                          ref={campoBarrasRef}
-                          type="text"
-                          placeholder="Aguardando leitura…"
-                          autoComplete="off"
-                          inputMode="numeric"
-                          value={valorBarras}
-                          onChange={(e) => setValorBarras(e.target.value)}
-                          onKeyDown={aoDigitarBarras}
-                        />
-                        <p className="pdv-dica">Leia o código de barras do produto recebido e pressione Enter.</p>
-                        <p className="pdv-dica">Dica: "5*código" lança direto com quantidade 5.</p>
-                      </div>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                        <div className="pdv-rotulo" style={{ visibility: 'hidden' }}>
-                          Ações
-                        </div>
-                        <button
-                          type="button"
-                          className="btn ghost"
-                          style={{ height: 50, whiteSpace: 'nowrap' }}
-                          onClick={() => {
-                            setPendenteEmResolucao(null)
-                            setMostrarPesquisa(true)
-                          }}
-                        >
-                          <IconeLupa /> Pesquisar Produto
-                        </button>
-                        <button
-                          type="button"
-                          className="btn ghost"
-                          style={{ whiteSpace: 'nowrap' }}
-                          onClick={() => {
-                            setPendenteEmResolucao(null)
-                            setModalProdutoAberto(true)
-                          }}
-                        >
-                          ＋ Cadastrar Produto
-                        </button>
-                      </div>
-                    </div>
-
-                    {renderGradeItens(false)}
-                  </section>
-
-                  <section className="section">
-                    <p className="section-label" style={{ margin: 0 }}>
-                      Contas a Pagar (opcional)
-                    </p>
-                    {renderContasPagar()}
-                  </section>
-                </>
-              )}
-
-              {modo === 'XML' && (
-                <section className="section">
-                  <p className="muted">Entrada por XML de NF-e ainda não está disponível.</p>
-                </section>
-              )}
             </>
           )}
         </div>
       </div>
 
-      {modo === 'PLANILHA' && abaPlanilha === 'PRODUTOS' && abaProdutos === 'LOCALIZADOS' && !entradaGravada && (
+      {(modo === 'PLANILHA' || modo === 'XML') && aba === 'PRODUTOS' && abaProdutos === 'LOCALIZADOS' && !entradaGravada && (
         <div className="lista-rodape">
           <div className="card" style={{ display: 'flex', justifyContent: 'flex-end', gap: 32, padding: '14px 24px' }}>
             <span>
@@ -1170,7 +1479,7 @@ export default function EntradaMercadoriaForm() {
               <button type="button" className="btn" onClick={() => setModo('INDIVIDUAL')}>
                 Individual
               </button>
-              <button type="button" className="btn ghost" disabled title="Em breve">
+              <button type="button" className="btn" onClick={() => setModo('XML')}>
                 Por XML
               </button>
             </div>
@@ -1187,6 +1496,16 @@ export default function EntradaMercadoriaForm() {
           aoSelecionar={aoSelecionarNaPesquisa}
         />
       )}
+      {mostrarPesquisaEntrada && (
+        <PesquisaProdutoEntradaModal
+          aoFechar={() => {
+            setMostrarPesquisaEntrada(false)
+            setProdutoInicialPesquisa(undefined)
+          }}
+          aoAdicionar={aoAdicionarDaPesquisaEntrada}
+          produtoInicial={produtoInicialPesquisa}
+        />
+      )}
       {modalProdutoAberto && (
         <ProdutoQuickCreateModal
           aoFechar={() => {
@@ -1194,6 +1513,13 @@ export default function EntradaMercadoriaForm() {
             setPendenteEmResolucao(null)
           }}
           aoCriar={aoCriarProduto}
+          aoCriarComGrade={aoCriarProdutoComGrade}
+          // XML nunca exige cor/tamanho no cadastro rápido, mesmo resolvendo uma pendência
+          // (2026-08-19, pedido do dono do produto: "quando chamar pra cadastrar o produto, nao
+          // precisa pedir cor e tamanho la") — a variação é definida depois, direto na linha da
+          // grid "Não Localizados" (ver `aoCriarProdutoComGrade`). Planilha continua exigindo:
+          // lá a confiança é maior porque foi o próprio lojista quem preencheu cor/tamanho.
+          exigirVariacaoAoCriar={pendenteEmResolucao != null && modo !== 'XML'}
           valorInicial={
             pendenteEmResolucao != null
               ? (() => {
@@ -1205,8 +1531,13 @@ export default function EntradaMercadoriaForm() {
                         referencia: linha.referencia ?? '',
                         precoCusto: linha.custoUnitario != null ? formatarMoeda(linha.custoUnitario) : '',
                         ean: linha.codigoBarrasFabricante ?? '',
-                        cor: linha.cor ?? undefined,
-                        tamanho: linha.tamanho ?? undefined,
+                        // XML nunca cadastra cor/tamanho sozinho (2026-08-18, pedido do dono do
+                        // produto — confiança menor que a Planilha, que o próprio lojista
+                        // preencheu): omitir aqui impede o auto-resolve/auto-cadastro silencioso
+                        // do modal, forçando os selects manuais (ou "＋ Nova cor"/"＋ Novo
+                        // tamanho", ação explícita) mesmo quando o texto do XML já "bateria".
+                        cor: modo === 'XML' ? undefined : (linha.cor ?? undefined),
+                        tamanho: modo === 'XML' ? undefined : (linha.tamanho ?? undefined),
                       }
                     : undefined
                 })()
@@ -1219,8 +1550,26 @@ export default function EntradaMercadoriaForm() {
           aoFechar={() => setModalFornecedorAberto(false)}
           aoCriar={(fornecedor) => {
             setFornecedorEscolhido({ idFornecedor: fornecedor.idFornecedor, razaoSocial: fornecedor.razaoSocial })
+            setFornecedorXmlSemCadastro(null)
             setModalFornecedorAberto(false)
           }}
+          valorInicial={
+            modo === 'XML' && fornecedorXmlSemCadastro
+              ? {
+                  razaoSocial: fornecedorXmlSemCadastro.razaoSocial ?? '',
+                  nomeFantasia: fornecedorXmlSemCadastro.nomeFantasia ?? '',
+                  cnpj: fornecedorXmlSemCadastro.cnpj ? mascararCpfCnpj(fornecedorXmlSemCadastro.cnpj, false) : '',
+                  inscricaoEstadual: fornecedorXmlSemCadastro.inscricaoEstadual ?? '',
+                  endereco: fornecedorXmlSemCadastro.endereco ?? '',
+                  numero: fornecedorXmlSemCadastro.numero ?? '',
+                  bairro: fornecedorXmlSemCadastro.bairro ?? '',
+                  cidade: fornecedorXmlSemCadastro.cidade ?? '',
+                  estado: fornecedorXmlSemCadastro.estado ?? '',
+                  cep: fornecedorXmlSemCadastro.cep ?? '',
+                  telefone: fornecedorXmlSemCadastro.telefone ?? '',
+                }
+              : undefined
+          }
         />
       )}
 

@@ -9,6 +9,7 @@ import { ApiError } from '../../lib/api'
 import { buscarPermiteQtdDecimal } from '../../lib/configuracaoGeral'
 import { desfazerUltimaEfetivacao, listarContagemAtiva, obterUltimaEfetivacao, zerarContagem } from '../../lib/estoqueBalanco'
 import { formatarQuantidade } from '../../lib/masks'
+import { maiusculas } from '../../lib/texto'
 
 const CHAVE_TELA = 'estoque.zerar-contagem'
 const FRASE_CONFIRMACAO_ZERAR = 'zerar estoque'
@@ -183,7 +184,7 @@ export default function ZerarContagemEstoque() {
               type="text"
               autoFocus
               value={textoConfirmacaoZerar}
-              onChange={(e) => setTextoConfirmacaoZerar(e.target.value)}
+              onChange={(e) => setTextoConfirmacaoZerar(maiusculas(e.target.value))}
               disabled={zerar.isPending}
               placeholder={FRASE_CONFIRMACAO_ZERAR}
             />

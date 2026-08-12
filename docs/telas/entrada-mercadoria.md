@@ -1,7 +1,7 @@
-# Spec: Entrada de Mercadorias (XML NF-e + lançamento manual)      Status: Implementada parcialmente
-Autor: Evirson (dono do produto) + Claude · Data: 2026-07-23, implementação 2026-08-11/12 · Módulo(s): `estoque` (entrada) · Fase: 1 — Núcleo do ERP
+# Spec: Entrada de Mercadorias (XML NF-e + lançamento manual)      Status: Implementada (falta só Fase 5 — atalho de etiqueta)
+Autor: Evirson (dono do produto) + Claude · Data: 2026-07-23, implementação 2026-08-11/12 (Manual+Planilha), 2026-08-18/19 (XML, Cancelamento, Filtros) · Módulo(s): `estoque` (entrada) · Fase: 1 — Núcleo do ERP
 
-> **Estado de implementação (2026-08-12).** Todas as "Questões abertas" abaixo foram
+> **Estado de implementação (2026-08-19).** Todas as "Questões abertas" abaixo foram
 > respondidas "sim" pelo dono do produto e a maioria dos **[COMPLEMENTAR]** ao longo do
 > documento reflete decisões já tomadas durante a implementação (mantidos no corpo do texto
 > como registro histórico da discussão, mesmo já resolvidos na prática) — implementado:
@@ -36,15 +36,51 @@ Autor: Evirson (dono do produto) + Claude · Data: 2026-07-23, implementação 2
 >   `V032__entrada_planilha.sql` (`cfg_geral.id_plano_contas_compra_mercadoria` + seed do plano
 >   de contas de compra) — ver "Impacto no banco" abaixo pelo desenho final (difere um pouco
 >   do proposto no rascunho original).
+> - **Fase 3 — Fluxo XML (2026-08-18/19)** — `NfeXmlParser.java` (DOM sem namespace, XXE-safe)
+>   + `EntradaXmlService.java`. A aba "Dados Gerais" pede o **upload do XML primeiro**;
+>   fornecedor/empresa/nota/data/parcelas só aparecem depois de processar. Fornecedor casado
+>   pelo CNPJ do `emit` — sem match, `FornecedorQuickCreateModal` abre sozinho, pré-preenchido,
+>   já atribuindo `cfg_geral.id_plano_contas_compra_mercadoria` por baixo (não é campo da tela
+>   em nenhum dos 3 fluxos). Empresa casada pelo CNPJ do `dest` contra `empresa.cnpj` (hoje
+>   normalmente vazio — não existe tela de cadastro de empresa ainda, só `GET
+>   /api/v1/empresas`). Nota fiscal e data sempre do XML, somente-leitura. Parcelas: só pede
+>   número manualmente se o XML não trouxer `cobr/dup` — se trouxer, vêm automáticas.
+>   Matching de item: EAN (`produto_barra.ean`) → `produto_fornecedor` aprendido (`cProd`) →
+>   heurística de texto (só sugestão) → pendência manual. Cor/tamanho **nunca** são cadastrados
+>   sozinhos no XML (diferente da Planilha) — sempre exigem confirmação manual do operador;
+>   quando o palpite bate com uma opção já existente no cadastro, vem **pré-selecionado** (não
+>   auto-criado). Pendência sem produto: o `nomeProduto` sobra sem a cor/tamanho identificados
+>   (removidos do texto), e cadastrar UM item da pendência propaga automaticamente
+>   `idProdutoEncontrado`/`idGradeEncontrada` para as OUTRAS linhas com o mesmo nome
+>   normalizado — evita recadastrar o mesmo produto em tamanhos diferentes. Testado ponta a
+>   ponta com 2 NF-es reais (Dakota Calçados 36 itens; A. Grings S.A., `nfe-grings.xml`, no
+>   `EntradaXmlCrudTest`, 8 testes).
+> - **Cancelamento (2026-08-19)** — `POST /api/v1/estoque/entradas/{id}/cancelar`, ADMIN-only.
+>   Mestre original nunca é apagado/editado — ganha `cancelado`/`data_cancelamento`/
+>   `id_usuario_cancelamento`/`motivo_cancelamento` (mesmo padrão de `venda.cancelada`); o
+>   estorno de estoque é um NOVO `produto_movimento_mestre` tipo `CANCELAMENTO` com
+>   `credito_debito='D'` por item (a trigger de V019 reverte `produto_estoque` sozinha).
+>   `contas_pagar` geradas pela entrada são deletadas. Bloqueios: já cancelada → 409; conta a
+>   pagar já quitada → 409 (hoje inatingível na prática, sem tela de baixa ainda — mantido como
+>   defesa em profundidade). Reimportar a mesma NF-e depois de cancelar funciona (o índice
+>   único de idempotência ganhou `AND cancelado = false`). Precisou de `GRANT UPDATE` **de
+>   coluna** (não de tabela) em `produto_movimento_mestre` pra `niner_app`, furando a
+>   imutabilidade P3 só nas 4 colunas novas — os testes JUnit não pegaram essa lacuna porque
+>   rodam com o superusuário do Testcontainers, não com `niner_app` de verdade. Ícone vermelho
+>   ao lado do de visualizar na grid, só visível pra ADMIN e quando `!cancelada`; linha
+>   cancelada ganha badge "Cancelada" e continua na grid.
+> - **Filtros da listagem (2026-08-19)** — popup obrigatório ao entrar na tela (mesmo padrão do
+>   CRM/Cancelamento de Devolução): Fornecedor (busca por texto), Empresa, Nº Nota Fiscal, Data
+>   Início/Fim. Todos os campos opcionais (em branco = lista tudo). Dois botões no popup:
+>   "Localizar" e "＋ Nova entrada" (pula a busca, vai direto pro formulário). Bug de fuso
+>   horário achado e corrigido nesta rodada: a sessão do Postgres roda em UTC mas a tela mostra
+>   data em horário local do navegador — filtro de data e gravação de `dataMovimento` agora
+>   usam `(coluna AT TIME ZONE 'America/Sao_Paulo')` em vez de comparar/gravar em UTC puro.
 >
 > **Pendente (não implementado ainda):**
-> - **Fase 3 — Fluxo XML**: upload do `.xml` da NF-e, parse, casamento de fornecedor/itens e
->   pré-entrada para conferência. A tabela `entrada_xml` (payload bruto, auditoria P3) e os
->   campos `chaveNfe`/`serieNota`/`xmlBruto` no contrato de confirmação já existem prontos
->   para receber este fluxo; a tela mostra a opção "Por XML" mas exibe "ainda não está
->   disponível" quando selecionada.
 > - **Fase 5 — Atalho de Emissão de Etiquetas**: ação rápida para imprimir etiquetas dos
->   produtos recém-recebidos direto a partir de uma entrada confirmada.
+>   produtos recém-recebidos direto a partir de uma entrada confirmada. Único item que falta
+>   para esta feature ser considerada 100% completa.
 > - Questão 8 (quem confirmou o movimento) resolvida **mais simples** do que o rascunho
 >   original propunha: nenhuma tabela `usuario↔funcionário` nova — `id_usuario` foi direto
 >   pra `produto_movimento_mestre` (FK pra `usuario`, nullable porque nenhum outro fluxo grava
@@ -259,13 +295,16 @@ GET    /api/v1/estoque/entradas/{id}                   detalhe (mestre + itens)
 PUT    /api/v1/estoque/entradas/{id}/itens/{idDetalhe}  corrige qtd/precoCusto de um item já confirmado
 POST   /api/v1/estoque/entradas/planilha/preview        multipart: planilha → linhas casadas/pendentes, NÃO grava
 GET    /api/v1/estoque/entradas/planilha/modelo         baixa o modelo .xlsx em branco
+POST   /api/v1/estoque/entradas/xml/preview             multipart: XML da NF-e → pré-entrada (fornecedor/empresa/
+                                                         itens casados ou pendentes), NÃO grava
+POST   /api/v1/estoque/entradas/{id}/cancelar           ADMIN-only — {motivoCancelamento}; estorna estoque e
+                                                         apaga contas_pagar geradas pela entrada
 ```
 
-Todos sob `/api/v1/**` (JWT tenant, RLS — P8), papéis ADMIN e OPERADOR sem distinção (mesmo
-nível de Transferência de Estoque/Devolução de Produtos). Erros em Problem Details (RFC 9457).
-Ainda não existe `POST .../xml` (Fase 3, pendente) — quando existir, deve devolver a mesma
-forma de pré-entrada do fluxo Planilha e alimentar o mesmo `POST /api/v1/estoque/entradas` de
-confirmação, reaproveitando `chaveNfe`/`serieNota`/`xmlBruto` já presentes no contrato.
+Todos sob `/api/v1/**` (JWT tenant, RLS — P8). `POST .../cancelar` é ADMIN-only; os demais são
+ADMIN e OPERADOR sem distinção (mesmo nível de Transferência de Estoque/Devolução de
+Produtos). Erros em Problem Details (RFC 9457). `GET /api/v1/estoque/entradas` aceita também
+`idEmpresa`/`dataInicial`/`dataFinal` (filtros da listagem, 2026-08-19).
 
 ## Impacto no banco (implementado — V019 alterada + V031/V032 novas, banco ainda em construção)
 
@@ -290,6 +329,15 @@ Duas tabelas novas além do proposto no rascunho:
    "3.03.001.001 Compra de Mercadoria para Revenda" pra tenants que ainda não a tinham.
    `cfg_geral.cfg_rateia_frete_entrada`/`cfg_reajusta_preco_entrada` (booleans, default
    `false`) foram direto em `V023__cfg_geral.sql` (banco em construção).
+5. **Cancelamento (2026-08-19)** — `produto_movimento_mestre` ganhou
+   `cancelado`/`data_cancelamento`/`id_usuario_cancelamento`/`motivo_cancelamento` (editado em
+   `V019__estoque.sql`, mesmo padrão de `venda.cancelada`); `contas_pagar.id_movimento` (V026,
+   editado in-place) liga cada duplicata gerada à entrada de origem, permitindo apagá-las no
+   cancelamento. `produto_movimento_mestre_chave_nfe_uk` (idempotência do XML) ganhou `AND
+   cancelado = false` pra permitir reimportar a mesma NF-e depois de cancelar.
+   `V024__rls_dominio.sql` ganhou `GRANT UPDATE (cancelado, data_cancelamento,
+   id_usuario_cancelamento, motivo_cancelamento) ON produto_movimento_mestre TO niner_app` —
+   grant de coluna, não de tabela, preservando a imutabilidade P3 do resto da linha.
 
 ## Impacto nas integrações
 

@@ -52,6 +52,17 @@ END $$;
 -- a trigger disparar de verdade.
 REVOKE UPDATE, DELETE ON produto_movimento_mestre FROM niner_app;
 
+-- Cancelamento de Entrada (2026-08-19) — exceção estreita e deliberada à imutabilidade acima:
+-- GRANT DE COLUNA, não de tabela. niner_app pode marcar cancelado/data_cancelamento/
+-- id_usuario_cancelamento/motivo_cancelamento (a "capa" de auditoria do cancelamento), mas
+-- continua SEM permissão de UPDATE em qualquer coluna de negócio (id_empresa, tipo_movimento,
+-- id_fornecedor, nota_fiscal, chave_nfe, data_movimento…) — o movimento em si permanece
+-- imutável; o estorno de fato é um novo produto_movimento_mestre (tipo CANCELAMENTO), nunca
+-- uma edição do original. Column-level GRANT precisa ser reafirmado explicitamente mesmo tendo
+-- feito REVOKE de tabela acima (REVOKE de tabela não reintroduz automaticamente colunas).
+GRANT UPDATE (cancelado, data_cancelamento, id_usuario_cancelamento, motivo_cancelamento)
+  ON produto_movimento_mestre TO niner_app;
+
 -- Guarda-corpo (P8): falha a migration se alguma tabela de tenant (tem coluna id_tenant,
 -- fora do schema plataforma) ficar SEM RLS habilitado. Torna a garantia auto-verificável.
 DO $$

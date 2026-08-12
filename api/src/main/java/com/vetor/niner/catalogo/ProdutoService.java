@@ -269,6 +269,7 @@ public class ProdutoService {
      * já ter apagado as categorias antigas.
      */
     private void validar(ProdutoRequest req, boolean usaCorGrade) {
+        validarPrecos(req);
         validarOferta(req);
         BigDecimal pesoBruto = req.pesoBruto() == null ? BigDecimal.ZERO : req.pesoBruto();
         BigDecimal pesoLiquido = req.pesoLiquido() == null ? BigDecimal.ZERO : req.pesoLiquido();
@@ -290,6 +291,17 @@ public class ProdutoService {
         exigirSeObrigatorio(config, "marca", req.marca());
         exigirSeObrigatorio(config, "referencia", req.referencia());
         exigirSeObrigatorio(config, "codigoNcm", req.codigoNcm());
+    }
+
+    /**
+     * Preço de venda nunca pode ficar abaixo do preço de custo (2026-08-17, regra do projeto
+     * inteiro — mesma checagem replicada no cliente em {@code ProdutoForm.tsx}/
+     * {@code ProdutoQuickCreateModal.tsx}, reforçada aqui como defesa em profundidade).
+     */
+    private static void validarPrecos(ProdutoRequest req) {
+        if (req.precoVenda().compareTo(req.precoCusto()) < 0) {
+            throw new IllegalArgumentException("Preço de venda não pode ser menor que o preço de custo.");
+        }
     }
 
     /**

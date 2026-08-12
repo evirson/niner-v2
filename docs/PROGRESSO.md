@@ -1,7 +1,7 @@
 # Progresso do Projeto — niner-v2
 
 Registro cronológico das decisões e entregas. Atualizar a cada marco relevante.
-**Última atualização:** 2026-08-14
+**Última atualização:** 2026-08-19
 
 ---
 
@@ -295,8 +295,9 @@ completo em `docs/telas/devolucao-produtos.md` e `docs/telas/configuracao-geral.
 **Sessão de 2026-08-11/12:** retomada da spec pausada **Entrada de Produtos por Compra**
 (`docs/telas/entrada-mercadoria.md`) — décima primeira tela de domínio, módulo `estoque`.
 Fluxos **Manual** e **Planilha** implementados (confirmação comum grava o ledger existente,
-V019, saldo sobe por trigger); **Fluxo XML e atalho de emissão de etiqueta ficaram pendentes**
-(fases 3 e 5). Rateio de frete/reajuste de preço configuráveis em Parâmetros do Sistema,
+V019, saldo sobe por trigger); **Fluxo XML e atalho de emissão de etiqueta ficaram pendentes
+nesta sessão** (fases 3 e 5 — fase 3 completada em 2026-08-18/19, ver abaixo). Rateio de
+frete/reajuste de preço configuráveis em Parâmetros do Sistema,
 `contas_pagar` opcional a partir de parcelas informadas, plano de contas de compra dedicado
 (`cfg_geral.id_plano_contas_compra_mercadoria`, V032), vínculo `produto_fornecedor` (V031) pra
 acelerar o match de importações futuras, cadastro rápido embutido de produto/fornecedor/NCM, e
@@ -317,9 +318,131 @@ Postgres embrulhando na virada da meia-noite (quebrava a tolerância pra expedie
 nos últimos 15 minutos do dia). Suíte de backend: **444/444 verdes**. Ver linha do tempo e
 `docs/telas/usuario.md`, seção "Horário de acesso por dia da semana".
 
+**Sessão de 2026-08-18/19:** retomada da Entrada de Produtos por Compra para fechar o **Fluxo
+XML** (Fase 3, pendente desde 08-11/12) — upload da NF-e primeiro, fornecedor/empresa/nota/
+parcelas resolvidos automaticamente a partir dela, cadastro rápido de fornecedor pré-preenchido
+quando não há match por CNPJ, matching de item por EAN → código do fornecedor aprendido →
+heurística de texto → pendência manual, cor/tamanho sempre exigindo confirmação do operador.
+Testado com 2 NF-es reais. Com isso a feature fica completa (só falta a Fase 5, não bloqueante).
+Na sequência, mesma leva de sessões: **Cancelamento de Entrada de Produtos** (ícone na grid,
+ADMIN-only, mesmo padrão de Cancelamento de Venda/Devolução — estorna estoque e apaga as
+`contas_pagar` da entrada) e **Filtros da listagem de Entrada de Produtos** (popup obrigatório
++ correção de um bug real de fuso horário em filtro de data). Ver `docs/telas/
+entrada-mercadoria.md` para o desenho completo dos três.
+
+**Sessão de 2026-08-19 (continuação):** nova tela **Contas a Pagar / Pagas**
+(`docs/telas/contas-pagar.md`, novo) no módulo Financeiro — CRUD completo sobre a tabela
+`contas_pagar` (V026), que até aqui só era escrita internamente pela Entrada de Produtos.
+Popup de filtros obrigatório (Fornecedor, Empresa, Nota Fiscal, Duplicata, período de
+Vencimento/Pagamento); não existe ação de "Pagar" separada — editar a conta preenchendo Data de
+Pagamento/Valor Pago/Documento Pago é a baixa. Dois bugs pegos só testando ao vivo no navegador
+(coluna Duplicata esquecida na grid; mensagem de erro fantasma no campo Fornecedor depois de
+escolher um pelo typeahead), ambos corrigidos. Suíte de backend: **472/472 verdes** (11 testes
+novos, `ContaPagarCrudTest`). Ver `docs/telas/contas-pagar.md`.
+
 ---
 
 ## Linha do tempo
+
+### 2026-08-19 (continuação) — Contas a Pagar / Pagas: CRUD completo sobre tabela pré-existente
+
+Nova tela no módulo **Financeiro** (`docs/telas/contas-pagar.md`, novo), pedido direto do dono
+do produto: "Desenvolver a Tela Contas a Pagar / Pagas". A tabela `contas_pagar` já existia
+desde V026 (2026-07-16), mas só era escrita internamente pela Entrada de Produtos por Compra
+(`com.vetor.niner.estoque.entrada.ContasPagarService`, helper de INSERT sem tela própria) — não
+havia como consultar, corrigir, excluir ou dar baixa numa duplicata de fornecedor. Novo pacote
+`com.vetor.niner.financeiro.contaspagar` (Controller/Service/Dtos, singular, deliberadamente
+distinto do helper pré-existente) implementa o CRUD completo (`GET`/`GET {id}`/`POST`/`PUT`/
+`DELETE`, `/api/v1/contas-pagar`), sem restrição de papel.
+
+**Não existe endpoint/tela de "Pagar" separado** — pedido explícito listou só Visualizar/
+Editar/Excluir na grid; editar preenchendo Data de Pagamento/Valor Pago/Documento Pago **é** a
+baixa (nota explicativa visível no formulário). Popup de filtros obrigatório ao entrar na tela
+(Fornecedor, Empresa, Nota Fiscal, Duplicata, período de Vencimento, período de Pagamento),
+mesmo padrão da Entrada de Produtos/CRM. `contas_pagar` ganhou `criado_em`/`atualizado_em`
+(edição in-place de V026, banco em construção) para satisfazer a seção de auditoria obrigatória
+em toda tela de cadastro; sem `ativo` — exclusão é sempre definitiva, mesmo padrão de
+`conta_corrente_movimento`, inclusive em linhas geradas por uma Entrada (`idMovimento`
+preenchido — se a entrada for cancelada depois, o `DELETE` do Cancelamento de Entrada só
+encontra 0 linhas).
+
+**Dois bugs pegos só testando ao vivo no navegador** (não pelo `tsc`/testes automatizados):
+1. A grid esqueceu a coluna **Duplicata**, pedida explicitamente — corrigida adicionando-a
+   como coluna não ordenável (o backend não expõe `numeroDuplicata` em
+   `COLUNAS_ORDENAVEIS`).
+2. Selecionar um fornecedor no typeahead deixava a mensagem "Escolha o fornecedor." visível
+   mesmo com o campo preenchido — o `onBlur` do campo de busca já tinha marcado o erro antes do
+   clique na linha da tabela ser processado; `escolherFornecedor()` agora limpa o erro também.
+
+Suíte de backend completa: **472/472 verdes** (11 testes novos, `ContaPagarCrudTest`).
+
+### 2026-08-19 — Filtros da Entrada de Produtos por Compra + bug real de fuso horário
+
+Mesma sessão de continuação, `EntradaMercadoriaLista.tsx` ganhou popup de filtros obrigatório
+ao entrar na tela (Fornecedor, Empresa, Nº Nota Fiscal, Data Início/Fim), mesmo padrão do
+CRM/Cancelamento de Devolução — nenhum campo obrigatório aqui (em branco lista tudo), dois
+botões no popup ("Localizar" e "＋ Nova entrada", que pula a busca).
+
+**Bug de fuso horário achado e corrigido.** A sessão do Postgres roda em UTC, mas a tela mostra
+data em horário local do navegador — filtrar por `data_movimento >= 'aaaa-mm-dd 00:00 UTC'`
+fazia uma entrada lançada à noite em Brasília (já virada de dia em UTC) cair no dia errado do
+filtro. Corrigido com `(pmm.data_movimento AT TIME ZONE 'America/Sao_Paulo')::date` na
+comparação — primeiro uso desse padrão no projeto. Mesma causa raiz também corrigida na
+gravação (`EntradaMercadoriaService.efetivar`, que gravava meia-noite UTC em vez de meia-noite
+de Brasília para `dataMovimento`). **Possível problema sistêmico não corrigido:**
+`CancelamentoVendaService`/`CancelamentoDevolucaoService` usam `coluna::date BETWEEN ? AND ?`
+sem `AT TIME ZONE` nos próprios filtros de período — mesma classe de bug, não mexido agora (fora
+do pedido), vale revisar se aparecer reclamação de filtro "perdendo" registro perto da meia-noite.
+
+### 2026-08-19 — Cancelamento de Entrada de Produtos por Compra
+
+Pedido direto do dono do produto: "na tela de entrada de produtos compra, na grid principal tem
+a opção de visualização, coloque uma opção de exclusão tb" — esclarecido como cancelamento
+auditável (P3), mesmo padrão de Cancelamento de Venda/Devolução, não exclusão física.
+`POST /api/v1/estoque/entradas/{id}/cancelar`, ADMIN-only. O `produto_movimento_mestre`
+original nunca é apagado nem editado — ganha `cancelado`/`data_cancelamento`/
+`id_usuario_cancelamento`/`motivo_cancelamento` (editado em V019, mesmo padrão de
+`venda.cancelada`); o estorno de estoque é um novo `produto_movimento_mestre` tipo
+`CANCELAMENTO` com `credito_debito='D'` por item, revertido sozinho pela trigger já existente.
+`contas_pagar` geradas pela entrada são deletadas — exigiu a coluna nova
+`contas_pagar.id_movimento` (V026, editado in-place), já que `nota_fiscal`+`id_fornecedor`
+sozinhos não garantem identificar as duplicatas de uma entrada específica. Bloqueios: já
+cancelada → 409; conta a pagar já quitada → 409 (hoje inatingível na prática, sem tela de baixa
+até esta sessão — ver entrada de Contas a Pagar acima). Reimportar a mesma NF-e depois de
+cancelar passou a funcionar (`produto_movimento_mestre_chave_nfe_uk` ganhou `AND cancelado =
+false`).
+
+**Bug real pego só testando ao vivo, não pelos 7 testes automatizados** (`CancelamentoEntradaCrudTest`
+roda com o superusuário do Testcontainers, não como `niner_app`): V024 revoga `UPDATE`/`DELETE`
+de `produto_movimento_mestre` para `niner_app` inteira (imutabilidade P3); corrigido com um
+`GRANT UPDATE` **de coluna** (as 4 colunas novas, não a linha toda) — grant de coluna é uma
+técnica nova no projeto, mantém a imutabilidade do restante do registro intacta.
+
+**⚠️ Incidente não resolvido:** logo depois de cancelar uma entrada legitimamente, 7 outras
+entradas foram canceladas sozinhas ~90s depois, sem ação do operador — causa raiz não
+identificada apesar de investigação extensa; dados corrigidos manualmente. Registrado em
+memória (`feedback_incidente_cancelamentos_fantasma`) como alerta para testes futuros de
+cancelamento em lote.
+
+### 2026-08-18/19 — Entrada de Produtos por Compra: Fluxo XML (Fase 3), fechando a feature
+
+Retomada de `docs/telas/entrada-mercadoria.md`, que desde 2026-08-11/12 tinha só os fluxos
+Manual e Planilha prontos (Fase 3 — Fluxo XML — pendente). `NfeXmlParser.java` (DOM sem
+namespace, XXE-safe) + `EntradaXmlService.java`: a aba "Dados Gerais" pede o **upload do XML
+primeiro** (pedido explícito) — fornecedor, empresa, nota, data e parcelas só aparecem depois de
+processado, nenhum é digitado à mão quando o XML já traz o dado. Fornecedor casado pelo CNPJ do
+`emit`; sem match, `FornecedorQuickCreateModal` abre sozinho, pré-preenchido, atribuindo
+`cfg_geral.id_plano_contas_compra_mercadoria` por baixo dos panos (não é mais campo visível em
+nenhum dos 3 fluxos). Matching de item: EAN → `produto_fornecedor` aprendido (`cProd`) →
+heurística de texto (só sugestão) → pendência manual. Cor/tamanho nunca são cadastrados
+sozinhos no fluxo XML — sempre exigem confirmação manual, mesmo quando o palpite bate com uma
+opção já existente (nesse caso vem pré-selecionado, nunca cria nada novo sozinho). Pendências
+sem produto propagam `idProdutoEncontrado`/`idGradeEncontrada` para outras linhas do mesmo nome
+normalizado ao cadastrar uma delas, evitando recadastro. Testado ponta a ponta com 2 NF-es reais
+(Dakota Calçados, 36 itens; A. Grings S.A., `nfe-grings.xml`) — `EntradaXmlCrudTest`, 8 testes.
+
+Com isso, a Entrada de Produtos por Compra fica **completa** nos 3 fluxos (Manual/Planilha/XML);
+falta só a Fase 5 (atalho de emissão de etiqueta a partir de uma entrada), não bloqueante.
 
 ### 2026-08-14 — Horário de Acesso por Dia da Semana (Cadastro de Usuários) + aviso visual de contagem regressiva
 
@@ -377,8 +500,10 @@ cada linha por EAN → descrição+marca+referência (+ cor/tamanho da grade) �
 novos automaticamente quando a confiança é alta, linha sem match fica pendente) — confirmação
 comum aos dois grava `produto_movimento_mestre` (`COMPRA`) + N `produto_movimento_detalhe`
 (`C`) numa transação, saldo sobe via trigger existente (V019), sem escrita manual de estoque.
-**Fluxo XML (Fase 3) e atalho de emissão de etiqueta (Fase 5) ficaram pendentes** — a tela já
-oferece "Por XML" mas avisa que ainda não está disponível.
+**Fluxo XML (Fase 3) e atalho de emissão de etiqueta (Fase 5) ficaram pendentes nesta rodada** —
+a tela já oferece "Por XML" mas avisa que ainda não está disponível. *(Atualização: Fase 3 foi
+implementada em 2026-08-18/19 — ver entrada "Entrada de Produtos por Compra: Fluxo XML" acima;
+só a Fase 5 continua pendente.)*
 
 Rateio de frete/IPI/ICMS-ST no custo e reajuste automático de `preco_custo`/`preco_venda` —
 ambos **configuráveis** (`cfg_geral.cfg_rateia_frete_entrada`/`cfg_reajusta_preco_entrada`,

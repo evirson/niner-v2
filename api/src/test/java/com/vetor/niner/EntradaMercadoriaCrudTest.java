@@ -336,6 +336,68 @@ class EntradaMercadoriaCrudTest {
                 .andExpect(status().isNotFound());
     }
 
+    /** Filtros da grid principal (2026-08-19, popup obrigatório "Fornecedor, Empresa, Nota
+     *  Fiscal, Data Início/Fim") — idFornecedor/notaFiscal já eram cobertos; idEmpresa e o
+     *  período (dataInicial/dataFinal) são novos. */
+    @Test
+    void filtraPorEmpresaEPorPeriodo() throws Exception {
+        TenantSlug tenant = assinarComSlug("filtros");
+        long idFornecedor = criarFornecedor(tenant.token(), "Fornecedor Filtros");
+        long idProduto = criarProduto(tenant.token(), "Produto Filtros");
+        long idVariacao = criarVariacao(tenant.token(), idProduto);
+        long idTenant = extrairIdTenant(tenant.token());
+        long idPrimeiraEmpresa = buscarPrimeiraEmpresa(tenant.token());
+        long idSegundaEmpresa = inserirSegundaEmpresa(idTenant, "SEGUNDA EMPRESA FILTROS");
+
+        // Data explícita (não "agora") — evita flakiness perto da virada do dia: o filtro
+        // bucketiza por dia CIVIL de Brasília (AT TIME ZONE 'America/Sao_Paulo'), não UTC, então
+        // comparar contra `LocalDate.now()` do processo de teste (que pode estar em UTC) seria
+        // instável entre ~21h-23h59 de Brasília.
+        String corpoRecente = """
+                {"idFornecedor":%d,"idEmpresa":%d,"dataMovimento":"2026-06-15",
+                 "itens":[{"idVariacao":%d,"qtd":1,"precoCusto":10.00}]}
+                """.formatted(idFornecedor, idPrimeiraEmpresa, idVariacao);
+        String respRecente = mvc.perform(post("/api/v1/estoque/entradas").header("Authorization", "Bearer " + tenant.token())
+                        .contentType(APPLICATION_JSON).content(corpoRecente))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        long idMovimentoRecente = ((Number) JsonPath.read(respRecente, "$.idMovimento")).longValue();
+
+        String corpoAntigo = """
+                {"idFornecedor":%d,"idEmpresa":%d,"dataMovimento":"2020-01-01",
+                 "itens":[{"idVariacao":%d,"qtd":1,"precoCusto":10.00}]}
+                """.formatted(idFornecedor, idSegundaEmpresa, idVariacao);
+        String respAntigo = mvc.perform(post("/api/v1/estoque/entradas").header("Authorization", "Bearer " + tenant.token())
+                        .contentType(APPLICATION_JSON).content(corpoAntigo))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        long idMovimentoAntigo = ((Number) JsonPath.read(respAntigo, "$.idMovimento")).longValue();
+
+        // idEmpresa: só a entrada da segunda empresa.
+        String respFiltroEmpresa = mvc.perform(get("/api/v1/estoque/entradas?idEmpresa=" + idSegundaEmpresa)
+                        .header("Authorization", "Bearer " + tenant.token()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.itens.length()").value(1))
+                .andReturn().getResponse().getContentAsString();
+        assertThat(((Number) JsonPath.read(respFiltroEmpresa, "$.itens[0].idMovimento")).longValue())
+                .isEqualTo(idMovimentoAntigo);
+
+        // Período: só a entrada recente (a antiga é de 2020, fora da janela).
+        String respFiltroPeriodo = mvc.perform(get("/api/v1/estoque/entradas?dataInicial=2026-06-15&dataFinal=2026-06-15")
+                        .header("Authorization", "Bearer " + tenant.token()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.itens.length()").value(1))
+                .andReturn().getResponse().getContentAsString();
+        assertThat(((Number) JsonPath.read(respFiltroPeriodo, "$.itens[0].idMovimento")).longValue())
+                .isEqualTo(idMovimentoRecente);
+
+        // Fora do período (2019 inteiro): nenhuma.
+        mvc.perform(get("/api/v1/estoque/entradas?dataInicial=2019-01-01&dataFinal=2019-12-31")
+                        .header("Authorization", "Bearer " + tenant.token()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.itens.length()").value(0));
+    }
+
     private record TenantENota(String token, long idTenant, long idFornecedor, long idProduto, long idVariacao) {
     }
 

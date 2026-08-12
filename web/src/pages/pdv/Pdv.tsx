@@ -17,6 +17,7 @@ import {
   type VendaEfetivada,
 } from '../../lib/pdv'
 import { useRotinaCritica } from '../../lib/rotinaCritica'
+import { maiusculas } from '../../lib/texto'
 import AlteraQuantidadeModal from './AlteraQuantidadeModal'
 import ComprovantePapeletaModal from './ComprovantePapeletaModal'
 import FormaPagamentoModal from './FormaPagamentoModal'
@@ -309,7 +310,7 @@ export default function Pdv() {
                   autoComplete="off"
                   inputMode="numeric"
                   value={valorBarras}
-                  onChange={(e) => setValorBarras(e.target.value)}
+                  onChange={(e) => setValorBarras(maiusculas(e.target.value))}
                   onKeyDown={aoDigitarBarras}
                 />
                 <p className="pdv-dica">Leia o código de barras do produto e pressione Enter.</p>

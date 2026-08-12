@@ -53,6 +53,8 @@ import ContaCorrenteLista from './pages/contacorrente/ContaCorrenteLista'
 import ContaCorrenteForm from './pages/contacorrente/ContaCorrenteForm'
 import ContaCorrenteMovimentoLista from './pages/contacorrente/ContaCorrenteMovimentoLista'
 import ContaCorrenteMovimentoForm from './pages/contacorrente/ContaCorrenteMovimentoForm'
+import ContasPagarLista from './pages/financeiro/contaspagar/ContasPagarLista'
+import ContasPagarForm from './pages/financeiro/contaspagar/ContasPagarForm'
 import RelatorioVendas from './pages/relatorios/RelatorioVendas'
 import RelatorioComissoes from './pages/relatorios/RelatorioComissoes'
 import RelatorioContasReceber from './pages/relatorios/RelatorioContasReceber'
@@ -155,6 +157,10 @@ export default function App() {
           <Route path="/contas-corrente-movimento/novo" element={<ContaCorrenteMovimentoForm />} />
           <Route path="/contas-corrente-movimento/:id/visualizar" element={<ContaCorrenteMovimentoForm somenteLeitura />} />
           <Route path="/contas-corrente-movimento/:id" element={<ContaCorrenteMovimentoForm />} />
+          <Route path="/contas-pagar" element={<ContasPagarLista />} />
+          <Route path="/contas-pagar/nova" element={<ContasPagarForm />} />
+          <Route path="/contas-pagar/:id/visualizar" element={<ContasPagarForm somenteLeitura />} />
+          <Route path="/contas-pagar/:id" element={<ContasPagarForm />} />
           <Route path="/fornecedores" element={<FornecedorLista />} />
           <Route path="/fornecedores/novo" element={<FornecedorForm />} />
           <Route element={<RequireAdmin />}>

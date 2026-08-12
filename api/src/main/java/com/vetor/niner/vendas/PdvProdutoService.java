@@ -45,13 +45,18 @@ public class PdvProdutoService {
     }
 
     @Transactional(readOnly = true)
-    public List<PdvProdutoResponse> buscar(String busca) {
-        String filtro = busca == null || busca.isBlank() ? "%" : "%" + busca.trim().toUpperCase(Locale.ROOT) + "%";
+    public List<PdvProdutoResponse> buscar(String busca, String marca, String referencia) {
         List<LinhaEstoque> linhas = jdbc.sql(CTE_VARIACOES_BUSCA)
-                .params(filtro, LIMITE_BUSCA)
+                .params(paraFiltro(busca), paraFiltro(marca), paraFiltro(referencia), LIMITE_BUSCA)
                 .query(this::mapearLinha)
                 .list();
         return agrupar(linhas);
+    }
+
+    /** {@code null}/branco vira {@code "%"} (não filtra); senão {@code ILIKE} parcial, maiúsculo
+     *  (mesma convenção de "digitação livre sempre maiúscula" do resto do projeto). */
+    private static String paraFiltro(String valor) {
+        return valor == null || valor.isBlank() ? "%" : "%" + valor.trim().toUpperCase(Locale.ROOT) + "%";
     }
 
     @Transactional(readOnly = true)
@@ -75,7 +80,7 @@ public class PdvProdutoService {
      */
     private record LinhaEstoque(
             long idVariacao, String descricaoProduto, String variacaoCor, String variacaoTamanho,
-            String sku, BigDecimal precoVenda, String urlImagem,
+            String sku, BigDecimal precoVenda, String urlImagem, String marca, String referencia,
             int codigoEmpresa, String nomeEmpresa, BigDecimal qtdEstoque) {
     }
 
@@ -89,6 +94,8 @@ public class PdvProdutoService {
                 rs.getString("sku"),
                 rs.getBigDecimal("preco_venda"),
                 chaveImagem == null ? null : armazenamento.urlPublica(chaveImagem),
+                rs.getString("marca"),
+                rs.getString("referencia"),
                 rs.getInt("codigo_empresa"),
                 rs.getString("nome_empresa"),
                 rs.getBigDecimal("qtd_estoque"));
@@ -114,7 +121,8 @@ public class PdvProdutoService {
             }
             resultado.add(new PdvProdutoResponse(
                     primeira.idVariacao(), primeira.descricaoProduto(), primeira.variacaoCor(), primeira.variacaoTamanho(),
-                    primeira.sku(), primeira.precoVenda(), estoquePorEmpresa, total, primeira.urlImagem()));
+                    primeira.sku(), primeira.precoVenda(), estoquePorEmpresa, total, primeira.urlImagem(),
+                    primeira.marca(), primeira.referencia()));
         }
         return resultado;
     }
@@ -122,7 +130,7 @@ public class PdvProdutoService {
     private static final String VARIACOES_BASE = """
             SELECT pb.id_variacao, p.descricao AS descricao_produto,
                    co.descricao AS variacao_cor, ta.descricao AS variacao_tamanho,
-                   pb.sku, p.preco_venda, pi.imagem AS imagem_produto
+                   pb.sku, p.preco_venda, pi.imagem AS imagem_produto, p.marca, p.referencia
             FROM produto_barra pb
             JOIN produto p ON p.id_produto = pb.id_produto AND p.id_tenant = pb.id_tenant
             LEFT JOIN cfg_cor co ON co.id_cor = pb.id_cor AND co.id_tenant = pb.id_tenant
@@ -133,7 +141,7 @@ public class PdvProdutoService {
 
     private static final String ESTOQUE_POR_EMPRESA = """
             SELECT v.id_variacao, v.descricao_produto, v.variacao_cor, v.variacao_tamanho, v.sku, v.preco_venda,
-                   v.imagem_produto,
+                   v.imagem_produto, v.marca, v.referencia,
                    e.codigo_empresa, COALESCE(e.nome_fantasia, e.razao_social) AS nome_empresa,
                    COALESCE(pe.qtd_estoque, 0) AS qtd_estoque
             FROM variacoes v
@@ -144,9 +152,13 @@ public class PdvProdutoService {
             WHERE e.id_tenant = plataforma.tenant_atual() AND e.ativo = true
             """;
 
-    /** Filtra e limita ANTES de expandir por empresa — senão o LIMIT cortaria linhas no meio de uma variação. */
+    /** Filtra e limita ANTES de expandir por empresa — senão o LIMIT cortaria linhas no meio de uma
+     *  variação. {@code marca}/{@code referencia} entram como filtro adicional (2026-08-15, popup de
+     *  pesquisa da Entrada de Produtos por Compra) — {@code COALESCE} pq as duas colunas são nullable
+     *  e {@code NULL ILIKE '%'} nunca é {@code true}. */
     private static final String CTE_VARIACOES_BUSCA = "WITH variacoes AS (" + VARIACOES_BASE + """
-            WHERE pb.id_tenant = plataforma.tenant_atual() AND p.ativo = true AND p.descricao ILIKE ?
+            WHERE pb.id_tenant = plataforma.tenant_atual() AND p.ativo = true
+              AND p.descricao ILIKE ? AND COALESCE(p.marca, '') ILIKE ? AND COALESCE(p.referencia, '') ILIKE ?
             ORDER BY p.descricao ASC, pb.id_variacao ASC
             LIMIT ?
             )

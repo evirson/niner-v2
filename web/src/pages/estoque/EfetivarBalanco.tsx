@@ -9,6 +9,7 @@ import { ApiError } from '../../lib/api'
 import { buscarPermiteQtdDecimal } from '../../lib/configuracaoGeral'
 import { efetivarBalanco, obterDiferencas } from '../../lib/estoqueBalanco'
 import { formatarQuantidade } from '../../lib/masks'
+import { maiusculas } from '../../lib/texto'
 
 const FRASE_CONFIRMACAO_EFETIVAR = 'efetiva contagem'
 
@@ -179,7 +180,7 @@ export default function EfetivarBalanco() {
               type="text"
               autoFocus
               value={textoConfirmacaoEfetivar}
-              onChange={(e) => setTextoConfirmacaoEfetivar(e.target.value)}
+              onChange={(e) => setTextoConfirmacaoEfetivar(maiusculas(e.target.value))}
               disabled={efetivar.isPending}
               placeholder={FRASE_CONFIRMACAO_EFETIVAR}
             />

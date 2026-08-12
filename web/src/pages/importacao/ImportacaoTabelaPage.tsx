@@ -17,6 +17,7 @@ import {
   type ProgressoImportacao,
   type RelatorioImportacao,
 } from '../../lib/importacao'
+import { mascararCodigoPlanoContas } from '../../lib/masks'
 import { listarPlanosContas } from '../../lib/planoContas'
 import { listarTiposCarteira } from '../../lib/tiposCarteira'
 
@@ -463,7 +464,9 @@ export default function ImportacaoTabelaPage({ tabela }: { tabela: Tabela }) {
                         <label>Código (9.99.999.999)</label>
                         <input
                           value={escolhas.novoPlano.codigo}
-                          onChange={(e) => alterarEscolhas({ ...escolhas, novoPlano: { ...escolhas.novoPlano, codigo: e.target.value } })}
+                          onChange={(e) =>
+                            alterarEscolhas({ ...escolhas, novoPlano: { ...escolhas.novoPlano, codigo: mascararCodigoPlanoContas(e.target.value) } })
+                          }
                         />
                       </div>
                       <div className="col-5">

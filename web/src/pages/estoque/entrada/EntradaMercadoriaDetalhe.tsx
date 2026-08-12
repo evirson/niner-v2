@@ -74,6 +74,15 @@ export default function EntradaMercadoriaDetalhe() {
               </div>
             </section>
 
+            {entrada.cancelada && (
+              <section className="section">
+                <p className="erro-campo" style={{ margin: 0 }}>
+                  Entrada cancelada em {entrada.dataCancelamento ? formatarData(entrada.dataCancelamento) : '—'}.
+                  {entrada.motivoCancelamento ? ` Motivo: ${entrada.motivoCancelamento}` : ''}
+                </p>
+              </section>
+            )}
+
             <section className="section">
               <p className="section-label" style={{ margin: 0 }}>
                 Produtos

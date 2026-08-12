@@ -263,7 +263,7 @@ export default function ContaCorrenteMovimentoForm({ somenteLeitura = false }: {
               <input
                 id="observacao"
                 value={form.observacao}
-                onChange={(e) => setForm((f) => ({ ...f, observacao: e.target.value }))}
+                onChange={(e) => setForm((f) => ({ ...f, observacao: maiusculas(e.target.value) }))}
               />
             </div>
           </div>

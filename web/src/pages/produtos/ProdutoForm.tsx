@@ -139,8 +139,13 @@ function validarCampo(chave: CampoValidavel, f: ProdutoFormState, mapaConfig: Ma
   if (chave === 'descricao') {
     return f.descricao.trim() ? undefined : 'Descrição é obrigatória.'
   }
-  if (chave === 'precoCusto' || chave === 'precoVenda') {
-    return f[chave].trim() ? undefined : 'Campo obrigatório.'
+  if (chave === 'precoCusto') {
+    return f.precoCusto.trim() ? undefined : 'Campo obrigatório.'
+  }
+  if (chave === 'precoVenda') {
+    if (!f.precoVenda.trim()) return 'Campo obrigatório.'
+    if (desmascararMoeda(f.precoVenda) < desmascararMoeda(f.precoCusto)) return 'Não pode ser menor que o preço de custo.'
+    return undefined
   }
   if (chave === 'percentualVenda') {
     return f.percentualVenda.trim() ? undefined : 'Campo obrigatório.'
@@ -277,6 +282,11 @@ export default function ProdutoForm({ somenteLeitura = false }: { somenteLeitura
 
   /** Reavalia a regra da oferta (itens 4-7) — chamado ao sair de qualquer um dos 3 campos. */
   const revalidarOferta = () => setErros((atual) => ({ ...atual, ...errosOferta(form) }))
+
+  /** Preço de venda não pode ficar abaixo do preço de custo (2026-08-17, regra do projeto
+   *  inteiro) — chamado ao sair de custo, % de venda ou do próprio preço de venda, já que
+   *  qualquer um dos três pode mudar a relação entre eles. */
+  const revalidarPrecoVenda = () => setErros((atual) => ({ ...atual, precoVenda: validarCampo('precoVenda', form, mapaConfig) }))
 
   /** Reavalia peso líquido ≤ peso bruto — chamado ao sair de qualquer um dos dois campos. */
   const revalidarPeso = () => setErros((atual) => ({ ...atual, pesoLiquido: erroPesoLiquido(form) }))
@@ -644,6 +654,7 @@ export default function ProdutoForm({ somenteLeitura = false }: { somenteLeitura
                         onBlur={(e) => {
                           setForm((f) => ({ ...f, precoCusto: completarMoeda(f.precoCusto) }))
                           aoSairDoCampo('precoCusto')(e)
+                          revalidarPrecoVenda()
                         }}
                       />
                       {erros.precoCusto && <p className="erro-campo">{erros.precoCusto}</p>}
@@ -665,6 +676,7 @@ export default function ProdutoForm({ somenteLeitura = false }: { somenteLeitura
                         onBlur={(e) => {
                           setForm((f) => ({ ...f, percentualVenda: completarPercentual(f.percentualVenda) }))
                           aoSairDoCampo('percentualVenda')(e)
+                          revalidarPrecoVenda()
                         }}
                       />
                       {erros.percentualVenda && <p className="erro-campo">{erros.percentualVenda}</p>}

@@ -46,7 +46,12 @@ import static org.springframework.http.HttpStatus.NOT_FOUND;
 public class PlanoContasService {
 
     private static final int TAMANHO_PAGINA_PADRAO = 20;
-    private static final int TAMANHO_PAGINA_MAXIMO = 100;
+    // 500, não 100 — várias telas (FornecedorForm, ContaCorrenteMovimentoForm, o cadastro rápido
+    // de fornecedor da Entrada de Produtos por Compra…) pedem tamanho=100 justamente pra carregar
+    // o plano de contas INTEIRO num <select>, não pra paginar; com 336 contas já seedadas hoje,
+    // o cap de 100 cortava a lista e um valor default vindo de fora (ex.: `cfg_geral`) podia cair
+    // fora da página carregada, deixando o <select> sem a opção correspondente (2026-08-19).
+    private static final int TAMANHO_PAGINA_MAXIMO = 500;
 
     private static final Pattern MASCARA_CODIGO = Pattern.compile("^[1-9]\\.[0-9]{2}\\.[0-9]{3}\\.[0-9]{3}$");
 

@@ -7,6 +7,11 @@ CREATE TABLE contas_pagar (
   id_empresa         integer       NOT NULL,
   id_fornecedor      integer       NOT NULL,
   id_plano_contas    text          NOT NULL,
+  id_movimento       integer,                     -- 2026-08-19: entrada de compra que originou esta duplicata
+                                                    -- (Cancelamento de Entrada estorna por aqui, não mais por
+                                                    -- nota_fiscal+fornecedor, que não é garantidamente único);
+                                                    -- nullable porque hoje só a Entrada grava contas_pagar
+                                                    -- (ver ContasPagarService), mas a coluna não presume isso
   nota_fiscal        integer,                     -- numero da NF; nullable, sem valor mágico (2026-07-16)
   numero_duplicata   text,
   data_lancamento    timestamptz   NOT NULL,
@@ -16,14 +21,22 @@ CREATE TABLE contas_pagar (
   valor_pago         numeric(12,2) NOT NULL DEFAULT 0,
   documento_pago     boolean       NOT NULL DEFAULT false,
   observacoes        text,
+  -- 2026-08-19 (tela Contas a Pagar / Pagas) — InfoRegistro.tsx (convenção do projeto) precisa
+  -- desses dois em toda tela de cadastro; não existiam porque até aqui só EntradaMercadoriaService
+  -- gravava aqui (insert-only, sem tela própria).
+  criado_em          timestamptz   NOT NULL DEFAULT now(),
+  atualizado_em      timestamptz   NOT NULL DEFAULT now(),
   CONSTRAINT contas_pagar_empresa_fk FOREIGN KEY (id_tenant, id_empresa)
     REFERENCES empresa (id_tenant, id_empresa),
   CONSTRAINT contas_pagar_fornecedor_fk FOREIGN KEY (id_tenant, id_fornecedor)
     REFERENCES fornecedor (id_tenant, id_fornecedor),
   CONSTRAINT contas_pagar_plano_contas_fk FOREIGN KEY (id_tenant, id_plano_contas)
-    REFERENCES cfg_plano_contas (id_tenant, id_plano_contas)
+    REFERENCES cfg_plano_contas (id_tenant, id_plano_contas),
+  CONSTRAINT contas_pagar_movimento_fk FOREIGN KEY (id_tenant, id_movimento)
+    REFERENCES produto_movimento_mestre (id_tenant, id_movimento)
 );
 CREATE INDEX contas_pagar_id_tenant_ix        ON contas_pagar (id_tenant);
+CREATE INDEX contas_pagar_id_movimento_ix     ON contas_pagar (id_tenant, id_movimento);
 CREATE INDEX contas_pagar_nota_fiscal_ix      ON contas_pagar (id_tenant, nota_fiscal);
 CREATE INDEX contas_pagar_numero_duplicata_ix ON contas_pagar (id_tenant, numero_duplicata);
 CREATE INDEX contas_pagar_data_lancamento_ix  ON contas_pagar (id_tenant, data_lancamento);

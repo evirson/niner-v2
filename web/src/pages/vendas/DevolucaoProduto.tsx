@@ -16,6 +16,7 @@ import {
 import { useEu } from '../../lib/eu'
 import { completarQuantidade, desmascararQuantidade, formatarMoeda, formatarQuantidade, mascararQuantidade } from '../../lib/masks'
 import { buscarProdutoPorCodigo, interpretarCodigoBarras, type PdvProduto } from '../../lib/pdv'
+import { maiusculas } from '../../lib/texto'
 import PesquisaProdutoModal from '../pdv/PesquisaProdutoModal'
 import ComprovanteValeModal from './ComprovanteValeModal'
 
@@ -356,7 +357,7 @@ export default function DevolucaoProduto() {
                   autoComplete="off"
                   inputMode="numeric"
                   value={valorBarras}
-                  onChange={(e) => setValorBarras(e.target.value)}
+                  onChange={(e) => setValorBarras(maiusculas(e.target.value))}
                   onKeyDown={aoDigitarBarras}
                 />
                 <p className="pdv-dica">Leia o código de barras do produto devolvido e pressione Enter.</p>

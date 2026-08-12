@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useEu } from '../lib/eu'
 import { buscarTelas, filtrarPorPapel, listarTelas, MENU, type TelaBuscavel } from '../lib/menu'
+import { maiusculas } from '../lib/texto'
 import { IconeLupa } from './Icones'
 
 const MAX_RESULTADOS = 8
@@ -96,7 +97,7 @@ export default function BuscaDeTelas() {
         aria-expanded={mostrarLista}
         aria-controls="busca-telas-lista"
         onChange={(e) => {
-          setTermo(e.target.value)
+          setTermo(maiusculas(e.target.value))
           setAberto(true)
         }}
         onFocus={() => setAberto(true)}
