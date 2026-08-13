@@ -34,7 +34,9 @@ Ordem final na tela, da esquerda pra direita: **Data Inicial → Data Final → 
 Contas → Conta Corrente → Documento (busca) → Compensado**. `idEmpresa` filtra via JOIN em
 `conta_corrente` (a tabela de lançamento não tem `id_empresa` direto — vem da conta). Datas são
 `LocalDate` (não `OffsetDateTime` — comparação por `data_movimento::date`), mesmo padrão de
-`docs/telas/estorno-recebimento-crediario.md`.
+`docs/telas/estorno-recebimento-crediario.md`. Filtro de Plano de Contas usa `SeletorPlanoContas`
+(busca por código ou nome, 2026-08-22 — antes era `<select>` nativo `limite=100`; ver
+`docs/telas/plano-contas.md`), mesmo componente do campo do formulário desta tela.
 
 ## Contrato de API
 

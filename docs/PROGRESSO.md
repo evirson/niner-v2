@@ -365,11 +365,30 @@ removidas por completo — tela, schema e banco — as seções "Exigências no 
 (`id_conta_contabil`/`id_plano_referencial`): nenhum lançamento do sistema as lia, não afetam
 DRE/DFC. Suíte de backend: **474/474 verdes** (mesma contagem — testes de hierarquia convertidos
 de 4 para 3 níveis, nenhum teste novo/removido). Ver `docs/telas/plano-contas.md` (atualizado)
-e a linha do tempo abaixo para o detalhe técnico completo.
+e a linha do tempo abaixo para o detalhe técnico completo. Uma auditoria posterior, no mesmo
+dia (pedido repetido de "documente/memorize tudo"), achou e corrigiu referências cruzadas
+esquecidas em specs de outras telas, e fechou os 2 filtros de listagem (Fornecedores,
+Movimentação de Conta Corrente) que ainda não tinham migrado pro `SeletorPlanoContas`.
 
 ---
 
 ## Linha do tempo
+
+### 2026-08-22 — Fecha os 2 filtros de plano de contas que faltavam migrar pro SeletorPlanoContas
+
+Gap achado na auditoria abaixo, fechado no mesmo dia a pedido do dono do produto: os filtros de
+plano de contas nas listagens de Fornecedores e Movimentação de Conta Corrente também trocaram
+o `<select>` nativo (`limite=100`) pelo `SeletorPlanoContas`. Precisou de uma melhoria no
+componente que os usos em formulário não exigiam: apagar o texto e sair do campo (ou apertar
+Enter vazio) agora limpa o valor (`onChange('')`) — num filtro, "vazio" é um estado válido
+("todos"), diferente do formulário, onde o campo é sempre obrigatório. Ganhou também `ariaLabel`
+(filtros não têm `<label>` visível) e `width:100%` explícito no input (a regra CSS
+`.filtros-bar input { width:auto; min-width:180px }` tem mais especificidade que o `width:100%`
+global, e o componente nunca tinha sido usado dentro de `.filtros-bar` antes). Testado ao vivo
+nas duas telas: busca por código/nome, "limpar" voltando pro placeholder, layout correto mesmo
+na tela com 7 filtros (Movimentação de Conta Corrente). `tsc --noEmit` limpo
+(`noUnusedLocals`/`noUnusedParameters` confirmam que as queries antigas foram removidas por
+completo, não só desconectadas da tela).
 
 ### 2026-08-22 (auditoria) — segunda passada de "documente/memorize tudo" achou mais 4 lacunas
 

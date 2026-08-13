@@ -14,6 +14,7 @@ import {
   IconeProximaPagina,
   IconeUltimaPagina,
 } from '../../components/Icones'
+import SeletorPlanoContas from '../../components/SeletorPlanoContas'
 import Toast, { type TipoToast } from '../../components/Toast'
 import { ApiError } from '../../lib/api'
 import {
@@ -23,7 +24,6 @@ import {
   type Fornecedor,
   type StatusFornecedor,
 } from '../../lib/fornecedores'
-import { listarPlanosContas } from '../../lib/planoContas'
 import { useEu } from '../../lib/eu'
 import { mascararCpfCnpj, mascararTelefone } from '../../lib/masks'
 import { maiusculas } from '../../lib/texto'
@@ -67,12 +67,6 @@ export default function FornecedorLista() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
   const queryClient = useQueryClient()
-
-  // Filtro por plano de contas (análogo ao filtro de categoria do cliente).
-  const { data: planos } = useQuery({
-    queryKey: ['planos-contas', 'filtro-fornecedor'],
-    queryFn: () => listarPlanosContas({ tamanho: 100 }),
-  })
 
   const [pagina, setPagina] = useState(1)
   const [ordenarPor, setOrdenarPor] = useState<ColunaOrdenacaoFornecedor>('razaoSocial')
@@ -171,18 +165,12 @@ export default function FornecedorLista() {
             onChange={(e) => setBusca(maiusculas(e.target.value))}
             aria-label="Buscar por razão social ou nome fantasia"
           />
-          <select
+          <SeletorPlanoContas
             value={idPlanoContas}
-            onChange={(e) => setIdPlanoContas(e.target.value)}
-            aria-label="Filtrar por plano de contas"
-          >
-            <option value="">Todos os planos de contas</option>
-            {planos?.itens.map((p) => (
-              <option key={p.idPlanoContas} value={p.idPlanoContas}>
-                {p.idPlanoContas} — {p.descricao}
-              </option>
-            ))}
-          </select>
+            onChange={setIdPlanoContas}
+            placeholder="Todos os planos de contas"
+            ariaLabel="Filtrar por plano de contas"
+          />
           <select value={status} onChange={(e) => setStatus(e.target.value as StatusFornecedor)} aria-label="Filtrar por status">
             <option value="ATIVOS">Ativos</option>
             <option value="INATIVOS">Inativos</option>

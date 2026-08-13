@@ -13,6 +13,7 @@ import {
   IconeProximaPagina,
   IconeUltimaPagina,
 } from '../../components/Icones'
+import SeletorPlanoContas from '../../components/SeletorPlanoContas'
 import Toast, { type TipoToast } from '../../components/Toast'
 import { ApiError } from '../../lib/api'
 import { listarOpcoesContaCorrente } from '../../lib/contaCorrente'
@@ -26,7 +27,6 @@ import {
 } from '../../lib/contaCorrenteMovimento'
 import { listarEmpresas } from '../../lib/empresas'
 import { dataParaIso, dataValida, formatarMoeda, mascararData } from '../../lib/masks'
-import { listarPlanosContas } from '../../lib/planoContas'
 
 const JANELA_PAGINACAO = 7
 const TAMANHO_PAGINA = 50
@@ -96,10 +96,6 @@ export default function ContaCorrenteMovimentoLista() {
 
   const { data: contas } = useQuery({ queryKey: ['contas-corrente-opcoes'], queryFn: listarOpcoesContaCorrente })
   const { data: empresas } = useQuery({ queryKey: ['empresas'], queryFn: listarEmpresas })
-  const { data: planos } = useQuery({
-    queryKey: ['planos-contas', 'select-movimento-lista'],
-    queryFn: () => listarPlanosContas({ tamanho: 100 }),
-  })
 
   const dataInicialIso = dataValida(dataInicialTexto) ? dataParaIso(dataInicialTexto) : undefined
   const dataFinalIso = dataValida(dataFinalTexto) ? dataParaIso(dataFinalTexto) : undefined
@@ -192,14 +188,12 @@ export default function ContaCorrenteMovimentoLista() {
               </option>
             ))}
           </select>
-          <select value={idPlanoContas} onChange={(e) => setIdPlanoContas(e.target.value)} aria-label="Filtrar por plano de contas">
-            <option value="">Todos os planos de contas</option>
-            {planos?.itens.map((p) => (
-              <option key={p.idPlanoContas} value={p.idPlanoContas}>
-                {p.idPlanoContas} — {p.descricao}
-              </option>
-            ))}
-          </select>
+          <SeletorPlanoContas
+            value={idPlanoContas}
+            onChange={setIdPlanoContas}
+            placeholder="Todos os planos de contas"
+            ariaLabel="Filtrar por plano de contas"
+          />
           <select value={idContaCorrente} onChange={(e) => setIdContaCorrente(e.target.value)} aria-label="Filtrar por conta corrente">
             <option value="">Todas as contas</option>
             {contas?.map((c) => (

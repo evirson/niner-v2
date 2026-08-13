@@ -33,9 +33,10 @@ com:
   rápida (código, descrição, tipo de movimento, DRE/fluxo de caixa) que, ao salvar, já
   seleciona a conta recém-criada no formulário de fornecedor. A gestão completa (editar,
   excluir) continua exclusiva da tela própria `/planos-contas`;
-- Um **filtro por plano de contas** na listagem de fornecedores — continua um `<select>` nativo
-  (`limite=100`, não migrado pro `SeletorPlanoContas` nesta rodada; ver "Non-goals" abaixo),
-  não texto livre (os planos são uma lista fechada);
+- Um **filtro por plano de contas** na listagem de fornecedores, também com `SeletorPlanoContas`
+  (migrado em 2026-08-22, junto do filtro equivalente em
+  `financeiro.contacorrentemovimento.lista` — antes ambos eram `<select>` nativo com
+  `limite=100`), não texto livre (os planos são uma lista fechada);
 - O backend rejeita com **400** (não 500) um `idPlanoContas` que não existe
   (`DataIntegrityViolationException` da FK capturada e traduzida em `IllegalArgumentException`
   "Plano de contas informado não existe.").
@@ -69,7 +70,8 @@ A obrigatoriedade configurada é **reforçada no backend** (`FornecedorService.v
   ordenáveis (allowlist no backend). Ordenação default: Razão Social ASC.
 - **Busca:** único campo cobrindo razão social **ou** nome fantasia (`ILIKE` nos dois), em
   maiúsculas — o lojista muitas vezes só conhece o fornecedor pelo fantasia.
-- **Filtro por plano de contas** (select) e **filtro de status** (Ativos/Inativos/Todos).
+- **Filtro por plano de contas** (`SeletorPlanoContas`, busca código/nome) e **filtro de
+  status** (Ativos/Inativos/Todos).
 - Paginação em janela deslizante (50 fixos), layout fixo, três ícones de ação — idêntico ao
   padrão (`docs/telas/cliente.md`).
 
@@ -135,11 +137,6 @@ Nenhum.
 
 ## Non-goals desta feature
 
-- **Filtro de plano de contas na listagem migrar para `SeletorPlanoContas`** (2026-08-22) — só o
-  campo do *formulário* foi migrado; o filtro da *lista* continua um `<select>` nativo
-  (`limite=100`), funcional hoje (o plano padrão tem 76 contas) mas sujeito ao mesmo risco de
-  corte por paginação que o formulário tinha antes da migração, se o tenant passar de 100
-  contas customizadas. Mesmo caso em `financeiro.contacorrentemovimento.lista`.
 - Múltiplos contatos/telefones por fornecedor (um único conjunto de contato nesta versão).
 - Vínculo com produtos/itens fornecidos (fica para o módulo de catálogo/compras).
 - Condições comerciais (prazo de pagamento, desconto padrão) — fica para o módulo financeiro

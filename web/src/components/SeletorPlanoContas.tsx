@@ -12,6 +12,13 @@ import { listarPlanosContas, type PlanoContas } from '../lib/planoContas'
  *
  * Carrega o plano inteiro numa query só (tamanho 500 — o plano padrão 9.99.999 tem ~76 contas)
  * e filtra no cliente: sem o problema de select truncado por paginação (2026-08-19).
+ *
+ * Suporta limpar o valor (`onChange('')`) apagando o texto e saindo do campo (blur) ou
+ * apertando Enter com o campo vazio — necessário pros usos como FILTRO de listagem (Fornecedores,
+ * Movimentação de Conta Corrente, 2026-08-22), onde "vazio" tem o significado válido de "todos".
+ * Nos formulários onde o campo é obrigatório, a validação do próprio formulário já acusa "campo
+ * vazio" no blur, então deixar limpar também ali é consistente (mesmo padrão de qualquer
+ * typeahead: apagar o texto e sair some com a seleção).
  */
 export default function SeletorPlanoContas({
   id,
@@ -21,6 +28,7 @@ export default function SeletorPlanoContas({
   apenasAnaliticas = false,
   autoFocus = false,
   placeholder = 'Código ou nome da conta…',
+  ariaLabel,
 }: {
   id?: string
   value: string
@@ -30,6 +38,8 @@ export default function SeletorPlanoContas({
   apenasAnaliticas?: boolean
   autoFocus?: boolean
   placeholder?: string
+  /** Acessibilidade — usar quando o campo não tem `<label htmlFor>` visível (ex.: filtro de lista). */
+  ariaLabel?: string
 }) {
   const { data } = useQuery({
     queryKey: ['planos-contas', 'seletor'],
@@ -77,7 +87,9 @@ export default function SeletorPlanoContas({
         ref={inputRef}
         autoFocus={autoFocus}
         placeholder={placeholder}
+        aria-label={ariaLabel}
         value={exibicao}
+        style={{ width: '100%' }}
         onFocus={(e) => e.target.select()}
         onChange={(e) => {
           setTexto(e.target.value)
@@ -85,8 +97,13 @@ export default function SeletorPlanoContas({
           setDestaque(0)
         }}
         onBlur={() => {
-          // Sem escolha explícita, volta a exibir o valor atual (rows usam onMouseDown com
+          // Campo apagado (texto vazio) e o usuário saiu sem escolher nada = limpa o valor
+          // (necessário pro uso como filtro, onde vazio = "todos"). Sem apagar nada, sem
+          // escolha explícita, volta a exibir o valor atual (rows usam onMouseDown com
           // preventDefault, então clicar numa linha não passa por aqui).
+          if (editando && texto.trim() === '' && value) {
+            onChange('')
+          }
           setEditando(false)
           setTexto('')
           onBlur?.()
@@ -102,7 +119,13 @@ export default function SeletorPlanoContas({
           } else if (e.key === 'Enter') {
             e.preventDefault()
             e.stopPropagation()
-            if (filtradas.length > 0) escolher(filtradas[Math.min(destaque, filtradas.length - 1)])
+            if (texto.trim() === '') {
+              onChange('')
+              setEditando(false)
+              setTexto('')
+            } else if (filtradas.length > 0) {
+              escolher(filtradas[Math.min(destaque, filtradas.length - 1)])
+            }
           } else if (e.key === 'Escape') {
             setEditando(false)
             setTexto('')
