@@ -549,9 +549,10 @@ conta_corrente_movimento(localizador PK, id_conta_corrente FK, data_movimento,
 > - `cfg_plano_contas` — criada em **V016** (junto de `identidade`/cadastros), preparação
 >   para relatórios/DRE futuros. PK `(id_tenant, id_plano_contas)` (P8 — chave de negócio
 >   não pode ser PK sozinha, precisa do tenant); `tipo_movimento` vira ENUM
->   `tipo_movimento_conta` (`'CRÉDITO'`/`'DÉBITO'`/`'NEUTRO'`, por extenso, V013);
->   `inclui_dre`/`inclui_fluxo_caixa` viram `boolean`. `fornecedor.id_plano_contas`
->   (§3.3.9) referencia essa tabela, `NOT NULL`.
+>   `tipo_movimento_conta` (`'CREDITO'`/`'DEBITO'`/`'NEUTRO'`, por extenso, sem acento desde a
+>   revisão de 2026-07-31, V013); `inclui_dre`/`inclui_fluxo_caixa` viram `boolean`.
+>   `fornecedor.id_plano_contas` (§3.3.9) referencia essa tabela, `NOT NULL`. Máscara do código
+>   encurtada de 4 pra 3 níveis em 2026-08-22 (`9.99.999`) — ver `docs/telas/plano-contas.md`.
 > - `tipo_carteira`, `moeda`, `moeda_detalhe`, `contas_receber`/`contas_receber_detalhe`,
 >   `caixa_mestre`/`caixa_detalhe` — criadas em **V025** (crediário + caixa). Ver diferenças
 >   do real vs. o pseudo-schema abaixo na nota no início desta seção.

@@ -371,6 +371,24 @@ e a linha do tempo abaixo para o detalhe técnico completo.
 
 ## Linha do tempo
 
+### 2026-08-22 (auditoria) — segunda passada de "documente/memorize tudo" achou mais 4 lacunas
+
+Pedido repetido na mesma sessão ("agora documente tudo e memorize tudo" de novo) — mesmo sinal
+já visto em 2026-07-31 (ver `feedback_checklist_documentar_tudo`, memória): a primeira passada
+cobre bem a feature em si, mas erra referências cruzadas em specs de OUTRAS telas. `grep` do
+termo trocado (`select`/`plano de contas`) em todo `docs/telas/*.md` achou: **1)**
+`docs/telas/fornecedor.md` ainda descrevia o campo do formulário como `<select>` (virou
+`SeletorPlanoContas`) e ainda dizia "Plano de Contas, que não tem `ativo`" (errado desde
+07-31, nem era desta sessão). **2)** `docs/telas/contas-pagar.md` descrevia o workaround antigo
+("select, tamanho:500 — evita o bug de dropdown truncado"). **3)** `docs/telas/
+importacao-dados.md` não mencionava a busca por nome. **4)** `spec-driven-erp-varejo.md` (spec
+principal) ainda mostrava `tipo_movimento_conta` com acento, removido desde 07-31. Todas
+corrigidas. **Gap real encontrado e conscientemente NÃO corrigido** (documentado como Non-goal
+em vez de implementado sem pedir): só os campos de **formulário** migraram pro
+`SeletorPlanoContas` — os filtros de plano de contas nas listagens de Fornecedores e
+Movimentação de Conta Corrente continuam `<select>` nativo (`tamanho:100`), funcional hoje mas
+sujeito ao mesmo risco de corte se o tenant passar de 100 contas.
+
 ### 2026-08-22 — Plano de Contas: máscara encurtada para 9.99.999, SeletorPlanoContas (busca código/nome), remoção de Exigências/Integrações
 
 Revisão pedida pelo dono do produto depois de olhar o cadastro em uso: `1.02.002.000` (12

@@ -77,8 +77,9 @@ Entrada de Produtos e Filtros de Entrada, 2026-08-19). Gravação de data usa me
   componente de formulário), editar (azul), excluir (vermelho, com popup de confirmação
   mostrando fornecedor/vencimento/valor antes de confirmar).
 - **Formulário**: Fornecedor (typeahead + "Trocar", mesmo padrão da Entrada de Produtos),
-  Empresa (select), Plano de Contas (select, `tamanho: 500` — evita o bug de dropdown truncado
-  quando o tenant tem centenas de contas), Nº Nota Fiscal, Duplicata, Data de
+  Empresa (select), Plano de Contas (`SeletorPlanoContas` — busca por código ou por nome,
+  2026-08-22; antes era um `<select>` com `tamanho: 500` só pra evitar o bug de dropdown
+  truncado — ver `docs/telas/plano-contas.md`), Nº Nota Fiscal, Duplicata, Data de
   Lançamento/Vencimento (obrigatórias, mascaradas `dd/mm/aaaa`), Valor a Pagar (obrigatório,
   máscara de moeda), seção "Pagamento" (Data de Pagamento, Valor Pago, "Documento Pago" — com o
   aviso de que não existe tela de baixa separada), Observações, `InfoRegistro` (auditoria).

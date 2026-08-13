@@ -14,8 +14,8 @@ exista), mas sem endpoint/UI. A tela de Plano de Contas (`docs/telas/plano-conta
 
 Quarta tela de domínio, no mesmo padrão consolidado por Cliente/Funcionário/Plano de Contas
 (`docs/telas/cliente.md`). A única particularidade estrutural é o vínculo obrigatório com
-plano de contas — resolvido com um select + criação rápida embutida (mesmo mecanismo do
-"＋ Nova categoria" do cliente), e não com uma nova classe de tela. Papéis `ADMIN` e
+plano de contas — resolvido com um seletor de plano de contas + criação rápida embutida (mesmo
+mecanismo do "＋ Nova categoria" do cliente), e não com uma nova classe de tela. Papéis `ADMIN` e
 `OPERADOR` têm acesso completo (R8 não se aplica).
 
 ## Particularidade estrutural: vínculo obrigatório com plano de contas
@@ -24,14 +24,18 @@ plano de contas — resolvido com um select + criação rápida embutida (mesmo 
 `cfg_plano_contas`) e **não há linha padrão pré-cadastrada** — é responsabilidade do lojista
 ter ao menos um plano de contas antes de cadastrar o primeiro fornecedor. A tela resolve isso
 com:
-- Um **select "Plano de Contas"** no formulário, ao lado da Razão Social, populado por
-  `GET /api/v1/planos-contas?limite=100` (mesma tela usada pelo filtro da listagem);
-- Um botão **"＋ Novo"** ao lado do select que abre `PlanoContasModal` — um modal de criação
+- No **formulário**, ao lado da Razão Social: o componente `SeletorPlanoContas`
+  (`web/src/components/SeletorPlanoContas.tsx`, 2026-08-22 — antes era um `<select>` nativo
+  populado por `GET /api/v1/planos-contas?limite=100`) — busca por prefixo de código ou por
+  nome, carrega o plano inteiro (`limite=500`) e filtra no cliente, sem risco de o valor cair
+  fora de uma página carregada;
+- Um botão **"＋ Novo"** ao lado do seletor que abre `PlanoContasModal` — um modal de criação
   rápida (código, descrição, tipo de movimento, DRE/fluxo de caixa) que, ao salvar, já
   seleciona a conta recém-criada no formulário de fornecedor. A gestão completa (editar,
   excluir) continua exclusiva da tela própria `/planos-contas`;
-- Um **filtro por plano de contas** na listagem de fornecedores (select, não texto livre —
-  os planos são uma lista fechada);
+- Um **filtro por plano de contas** na listagem de fornecedores — continua um `<select>` nativo
+  (`limite=100`, não migrado pro `SeletorPlanoContas` nesta rodada; ver "Non-goals" abaixo),
+  não texto livre (os planos são uma lista fechada);
 - O backend rejeita com **400** (não 500) um `idPlanoContas` que não existe
   (`DataIntegrityViolationException` da FK capturada e traduzida em `IllegalArgumentException`
   "Plano de contas informado não existe.").
@@ -44,7 +48,7 @@ Tabela `fornecedor` (V016). **Foco automático** no campo Razão Social ao abrir
 | Campo (banco) | Rótulo na tela | Componente | Obrigatório | Regra |
 |---|---|---|---|---|
 | `razao_social` | Razão Social | texto | **Sim** (NOT NULL) | MAIÚSCULAS |
-| `id_plano_contas` | Plano de Contas | select + botão "＋ Novo" | **Sim** (NOT NULL) | Deve existir; ver seção acima |
+| `id_plano_contas` | Plano de Contas | `SeletorPlanoContas` (busca código/nome) + botão "＋ Novo" | **Sim** (NOT NULL) | Deve existir; ver seção acima |
 | `nome_fantasia` | Nome Fantasia | texto | Configurável | MAIÚSCULAS |
 | `cnpj` | CNPJ | texto com máscara | Configurável | Alfanumérico (CLAUDE.md), 14 caracteres, dígito verificador, único por tenant; sempre pessoa jurídica — CPF não é aceito |
 | `inscricao_estadual` | Inscrição Estadual | texto | Configurável | MAIÚSCULAS |
@@ -71,8 +75,8 @@ A obrigatoriedade configurada é **reforçada no backend** (`FornecedorService.v
 
 ## Exclusão de fornecedor
 
-Segue o padrão de Cliente/Funcionário (**com** fallback, diferente do Plano de Contas, que
-não tem `ativo`): se o fornecedor tiver vínculo em `produto_movimento_mestre` (compras/entradas
+Segue o padrão de Cliente/Funcionário/Plano de Contas (com fallback): se o fornecedor tiver
+vínculo em `produto_movimento_mestre` (compras/entradas
 de estoque, V019) **ou** em `contas_pagar` (V026), o DELETE **inativa** (`ativo = false`) em
 vez de apagar, e retorna `{"acao":"inativado","motivo":"..."}`. Sem vínculo, apaga de verdade
 (`{"acao":"excluido"}`).
@@ -131,6 +135,11 @@ Nenhum.
 
 ## Non-goals desta feature
 
+- **Filtro de plano de contas na listagem migrar para `SeletorPlanoContas`** (2026-08-22) — só o
+  campo do *formulário* foi migrado; o filtro da *lista* continua um `<select>` nativo
+  (`limite=100`), funcional hoje (o plano padrão tem 76 contas) mas sujeito ao mesmo risco de
+  corte por paginação que o formulário tinha antes da migração, se o tenant passar de 100
+  contas customizadas. Mesmo caso em `financeiro.contacorrentemovimento.lista`.
 - Múltiplos contatos/telefones por fornecedor (um único conjunto de contato nesta versão).
 - Vínculo com produtos/itens fornecidos (fica para o módulo de catálogo/compras).
 - Condições comerciais (prazo de pagamento, desconto padrão) — fica para o módulo financeiro

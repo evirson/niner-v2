@@ -332,10 +332,10 @@ Validação de PF/PJ, gênero obrigatório pra PF, datas não-futuras etc. — m
 **Colunas da planilha:** `RAZAO_SOCIAL, NOME_FANTASIA, CNPJ, INSCRICAO_ESTADUAL, EMAIL, TELEFONE,
 ENDERECO, NUMERO, BAIRRO, CIDADE, ESTADO, CEP`.
 
-**Escolha prévia:** um **plano de contas** (existente, escolhido pelo código; ou novo, cadastrado
-na hora) — aplicado a **todos** os fornecedores deste arquivo (`fornecedor.id_plano_contas` é
-`NOT NULL` e o layout não tem essa coluna, já que o sistema antigo normalmente não tem essa
-classificação).
+**Escolha prévia:** um **plano de contas** (existente, escolhido via `SeletorPlanoContas` —
+busca por código ou por nome, 2026-08-22; ou novo, cadastrado na hora) — aplicado a **todos** os
+fornecedores deste arquivo (`fornecedor.id_plano_contas` é `NOT NULL` e o layout não tem essa
+coluna, já que o sistema antigo normalmente não tem essa classificação).
 
 **Dedup:** mesma regra do cliente, com `CNPJ` em vez de CPF/CNPJ — já existe → não insere,
 reaproveita. Só compara quando o `CNPJ` da linha é, ao mesmo tempo, preenchido **e válido**
