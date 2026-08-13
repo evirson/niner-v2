@@ -92,14 +92,18 @@ influenciam DRE/DFC. Ver "Histórico".)*
 
 ### Seleção de plano de contas em outras telas (2026-08-22)
 
-Todo lugar do sistema que pede um plano de contas (Fornecedor, Contas a Pagar, Movimentação de
-Conta Corrente, Parâmetros do Sistema, Importação de Dados) usa o componente
-`SeletorPlanoContas` (`web/src/components/SeletorPlanoContas.tsx`) em vez de um `<select>`
-simples: digitar dígitos/pontos busca por **prefixo de código** ("401" acha `4.01.xxx`); digitar
-texto busca **na descrição**. Carrega o plano inteiro e filtra no cliente — não sofre do
-problema de "select truncado por paginação". O cadastro rápido de fornecedor da Entrada de
-Produtos por Compra (`FornecedorQuickCreateModal`) é a única exceção: não mostra esse campo, a
-conta é sempre a configurada em Parâmetros do Sistema, atribuída sem interação do operador.
+Todo lugar do sistema que pede um plano de contas — seja pra **atribuir** (formulário de
+Fornecedor, Contas a Pagar, Movimentação de Conta Corrente, Parâmetros do Sistema, Importação de
+Dados) seja pra **filtrar** (listagem de Fornecedores e de Movimentação de Conta Corrente) — usa
+o componente `SeletorPlanoContas` (`web/src/components/SeletorPlanoContas.tsx`) em vez de um
+`<select>` simples: digitar dígitos/pontos busca por **prefixo de código** ("401" acha
+`4.01.xxx`); digitar texto busca **na descrição**. Carrega o plano inteiro e filtra no cliente —
+não sofre do problema de "select truncado por paginação". Nos filtros de listagem, apagar o
+texto e sair do campo (ou apertar Enter vazio) limpa o valor (`onChange('')`) — "vazio" é um
+estado válido ali ("todos"), diferente do formulário, onde o campo é sempre obrigatório. O
+cadastro rápido de fornecedor da Entrada de Produtos por Compra (`FornecedorQuickCreateModal`) é
+a única exceção que não usa o componente: não mostra o campo, a conta é sempre a configurada em
+Parâmetros do Sistema, atribuída sem interação do operador.
 
 ### `ativo` — a tela deixou de ser a exceção
 

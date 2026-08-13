@@ -374,6 +374,21 @@ Movimentação de Conta Corrente) que ainda não tinham migrado pro `SeletorPlan
 
 ## Linha do tempo
 
+### 2026-08-22 (auditoria 3) — terceira passada de "documente/memorize tudo" achou staleness DENTRO do produto
+
+Pedido "documente/memorize tudo" pela terceira vez na mesma sessão, depois de fechar os 2
+filtros de lista. Desta vez a lacuna não estava em `docs/`, estava em código user-facing:
+**1)** `AjudaDaTela.tsx` da tela `financeiro.contacorrentemovimento.lista` só descrevia 2 dos 7
+filtros reais (Data Inicial/Final, Empresa e Plano de Contas nem apareciam) — staleness
+pré-existente, achada só por ter acabado de mexer nessa tela. **2)** o docstring do próprio
+`SeletorPlanoContas.tsx` ainda dizia "substitui os `<select>` nos formulários", sem mencionar
+que virou também o seletor dos 2 filtros de lista migrados poucos minutos antes, na mesma
+sessão. Ambos corrigidos, junto com a seção "Seleção de plano de contas em outras telas" de
+`docs/telas/plano-contas.md`, que também só descrevia o caso de formulário. Lição registrada em
+`feedback_checklist_documentar_tudo` (memória): comentário/docstring de componente próprio
+precisa da mesma reauditoria que uma spec em `docs/` — não é só documentação de repositório que
+fica stale, é qualquer texto que descreve "onde a coisa é usada".
+
 ### 2026-08-22 — Fecha os 2 filtros de plano de contas que faltavam migrar pro SeletorPlanoContas
 
 Gap achado na auditoria abaixo, fechado no mesmo dia a pedido do dono do produto: os filtros de

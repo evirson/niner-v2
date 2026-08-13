@@ -4,11 +4,13 @@ import { listarPlanosContas, type PlanoContas } from '../lib/planoContas'
 
 /**
  * Seletor de plano de contas com busca por CÓDIGO ou por NOME (2026-08-13, pedido do dono do
- * produto) — substitui os `<select>` de plano de contas nos formulários (Fornecedor, Contas a
- * Pagar, Movimentação de Conta Corrente, Parâmetros do Sistema…). Digitando dígitos/pontos
- * ("401", "4.01.001") busca por prefixo de código; digitando texto livre busca na descrição.
- * Enter escolhe a linha destacada (setas ↑/↓ movem o destaque) e NÃO dispara o Enter-como-Tab
- * do formulário (stopPropagation só enquanto a lista está aberta); clique escolhe qualquer uma.
+ * produto) — substitui os `<select>` de plano de contas em formulários (Fornecedor, Contas a
+ * Pagar, Movimentação de Conta Corrente, Parâmetros do Sistema, Importação de Dados) e em
+ * filtros de listagem (Fornecedores, Movimentação de Conta Corrente — migrados em 2026-08-22,
+ * ver seção de "limpar" abaixo). Digitando dígitos/pontos ("401", "4.01.001") busca por prefixo
+ * de código; digitando texto livre busca na descrição. Enter escolhe a linha destacada (setas
+ * ↑/↓ movem o destaque) e NÃO dispara o Enter-como-Tab do formulário (stopPropagation só
+ * enquanto a lista está aberta); clique escolhe qualquer uma.
  *
  * Carrega o plano inteiro numa query só (tamanho 500 — o plano padrão 9.99.999 tem ~76 contas)
  * e filtra no cliente: sem o problema de select truncado por paginação (2026-08-19).

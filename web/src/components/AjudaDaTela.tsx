@@ -367,11 +367,11 @@ const CONTEUDOS: Record<string, ConteudoAjuda> = {
     titulo: 'Movimentação de Conta Corrente',
     objetivo: 'Encontrar e gerenciar os lançamentos (extrato manual) de conta corrente.',
     passos: [
-      'Use a busca por número do documento, ou filtre por conta corrente e por compensado.',
+      'Use a busca por número do documento, ou filtre por período, empresa, plano de contas, conta corrente e "Compensado".',
       'Clique no ícone verde para visualizar, no azul para editar, ou no vermelho para excluir.',
     ],
     errosComuns: [
-      'Não encontro um lançamento: confira os filtros de conta corrente e de compensado.',
+      'Não encontro um lançamento: confira os filtros — período, empresa, plano de contas, conta corrente e "Compensado" combinam entre si (todos precisam bater).',
     ],
     urlVideo: null,
   },
