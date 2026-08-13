@@ -165,6 +165,7 @@ export default function FornecedorLista() {
 
         <div className="card filtros-bar">
           <input
+            autoFocus
             placeholder="Buscar por razão social ou fantasia…"
             value={busca}
             onChange={(e) => setBusca(maiusculas(e.target.value))}

@@ -5,6 +5,7 @@ import com.vetor.niner.configuracao.geral.ConfiguracaoGeralDtos.ConfiguracaoGera
 import com.vetor.niner.configuracao.geral.ConfiguracaoGeralDtos.DescontoVendaResponse;
 import com.vetor.niner.configuracao.geral.ConfiguracaoGeralDtos.ExigeNumeroVendaDevolucaoResponse;
 import com.vetor.niner.configuracao.geral.ConfiguracaoGeralDtos.PermiteQtdDecimalResponse;
+import com.vetor.niner.configuracao.geral.ConfiguracaoGeralDtos.PlanoContasCompraMercadoriaResponse;
 import com.vetor.niner.configuracao.geral.ConfiguracaoGeralDtos.RateiaFreteEntradaResponse;
 import com.vetor.niner.configuracao.geral.ConfiguracaoGeralDtos.ReajustaPrecoEntradaResponse;
 import com.vetor.niner.configuracao.geral.ConfiguracaoGeralDtos.UsaCorGradeResponse;
@@ -22,9 +23,11 @@ import org.springframework.web.bind.annotation.*;
  * desconto promocional pra exibir antes de efetivar a venda), {@code /permite-qtd-decimal}
  * (PDV/Transferência/Histórico do Cliente precisam saber se quantidade de produto aceita
  * decimais, pra formatar/validar a entrada), {@code /exige-numero-venda-devolucao} (Devolução
- * de Produtos precisa saber se o número da venda de origem é obrigatório antes de gravar) e
+ * de Produtos precisa saber se o número da venda de origem é obrigatório antes de gravar),
  * {@code /rateia-frete-entrada}/{@code /reajusta-preco-entrada} (Entrada de Produtos por Compra
- * precisa das duas antes de confirmar uma entrada).
+ * precisa das duas antes de confirmar uma entrada) e {@code /plano-contas-compra-mercadoria}
+ * (cadastro rápido de fornecedor embutido na Entrada de Produtos por Compra, pra preencher o
+ * plano de contas padrão sem exigir ADMIN).
  */
 @RestController
 @RequestMapping("/api/v1/config-geral")
@@ -74,5 +77,10 @@ public class ConfiguracaoGeralController {
     @GetMapping("/reajusta-preco-entrada")
     public ReajustaPrecoEntradaResponse reajustaPrecoEntrada() {
         return new ReajustaPrecoEntradaResponse(service.reajustaPrecoEntrada());
+    }
+
+    @GetMapping("/plano-contas-compra-mercadoria")
+    public PlanoContasCompraMercadoriaResponse planoContasCompraMercadoria() {
+        return new PlanoContasCompraMercadoriaResponse(service.idPlanoContasCompraMercadoria());
     }
 }

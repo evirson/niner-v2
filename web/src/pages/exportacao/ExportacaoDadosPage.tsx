@@ -80,7 +80,10 @@ export default function ExportacaoDadosPage() {
         <div className="card" style={{ padding: 24 }}>
           <p className="section-label">Escolha a tabela</p>
           <p className="muted">Cada clique baixa uma planilha .xlsx com todos os registros já cadastrados.</p>
-          <div className="form-grid" style={{ marginTop: 12 }}>
+          {/* gap vertical de 14px — o .form-grid padrão não tem espaçamento entre linhas
+              (gap: 0 16px) e os botões ficavam colados; 14px casa com o .menu-cards da tela
+              de Relatórios. */}
+          <div className="form-grid" style={{ marginTop: 12, gap: '14px 16px' }}>
             {(tabelas ?? []).map((t) => (
               <div className="col-4" key={t.chave}>
                 <button

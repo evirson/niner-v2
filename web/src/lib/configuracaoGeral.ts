@@ -68,6 +68,17 @@ export function buscarConfiguracaoGeral(): Promise<ConfiguracaoGeral> {
   return api<ConfiguracaoGeral>('/api/v1/config-geral')
 }
 
+export interface PlanoContasCompraMercadoria {
+  idPlanoContasCompraMercadoria: string
+}
+
+/** Sem checagem de papel — usado pelo cadastro rápido de fornecedor (Entrada de Produtos por
+ *  Compra) pra preencher o plano de contas padrão sem exigir ADMIN (diferente de
+ *  `buscarConfiguracaoGeral`, que é ADMIN-only). */
+export function buscarPlanoContasCompraMercadoria(): Promise<PlanoContasCompraMercadoria> {
+  return api<PlanoContasCompraMercadoria>('/api/v1/config-geral/plano-contas-compra-mercadoria')
+}
+
 export interface UsaCorGrade {
   cfgUsaCorGrade: boolean
 }

@@ -93,27 +93,25 @@ public class SignupService {
         // 5a) plano de contas mínimo pra Entrada de Produtos (mesma árvore de V032, replicada
         // aqui pra tenant novo nascer coerente sem depender da migration). id_plano_contas_pai/
         // nivel são colunas geradas a partir do código — nunca informadas. FK de hierarquia e
-        // trigger de guarda já são DEFERRABLE INITIALLY DEFERRED (V016), então os 4 níveis
-        // podem entrar juntos sem ordem especial.
+        // trigger de guarda já são DEFERRABLE INITIALLY DEFERRED (V016), então os 3 níveis
+        // (máscara 9.99.999, revisão 2026-08-13) podem entrar juntos sem ordem especial.
         jdbc.sql("""
                         INSERT INTO cfg_plano_contas (
                             id_tenant, id_plano_contas, descricao, tipo_movimento, natureza,
                             inclui_dre, inclui_fluxo_caixa, grupo_dre, grupo_dfc, sinal,
-                            aceita_lancamento, exige_contraparte, padrao_sistema
+                            aceita_lancamento, padrao_sistema
                         ) VALUES
-                            (?, '3.00.000.000', 'CUSTOS VARIÁVEIS', 'DEBITO', 'SINTETICA',
-                                true, true, 'CUSTO_VARIAVEL', 'OPERACIONAL', -1, false, false, true),
-                            (?, '3.03.000.000', 'Compras e Custos de Aquisição de Estoque', 'DEBITO', 'SINTETICA',
-                                false, true, 'NAO_APLICA', 'OPERACIONAL', -1, false, false, true),
-                            (?, '3.03.001.000', 'Aquisição de Mercadoria', 'DEBITO', 'SINTETICA',
-                                false, true, 'NAO_APLICA', 'OPERACIONAL', -1, false, false, true),
-                            (?, '3.03.001.001', 'Compra de Mercadoria para Revenda', 'DEBITO', 'ANALITICA',
-                                false, true, 'NAO_APLICA', 'OPERACIONAL', -1, true, false, true)
+                            (?, '3.00.000', 'CUSTOS VARIÁVEIS', 'DEBITO', 'SINTETICA',
+                                true, true, 'CUSTO_VARIAVEL', 'OPERACIONAL', -1, false, true),
+                            (?, '3.03.000', 'Compras de Mercadoria', 'DEBITO', 'SINTETICA',
+                                false, true, 'NAO_APLICA', 'OPERACIONAL', -1, false, true),
+                            (?, '3.03.001', 'Compra de Mercadoria para Revenda', 'DEBITO', 'ANALITICA',
+                                false, true, 'NAO_APLICA', 'OPERACIONAL', -1, true, true)
                         """)
-                .params(idTenant, idTenant, idTenant, idTenant)
+                .params(idTenant, idTenant, idTenant)
                 .update();
 
-        jdbc.sql("INSERT INTO cfg_geral (id_tenant, id_plano_contas_compra_mercadoria) VALUES (?, '3.03.001.001')")
+        jdbc.sql("INSERT INTO cfg_geral (id_tenant, id_plano_contas_compra_mercadoria) VALUES (?, '3.03.001')")
                 .param(idTenant).update();
 
         // 5a2) cor/tamanho/grade PADRÃO (2026-08-20) — sempre id=1 (id_cor/id_tamanho/id_grade

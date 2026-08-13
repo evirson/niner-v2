@@ -248,7 +248,7 @@ const CONTEUDOS: Record<string, ConteudoAjuda> = {
     titulo: 'Plano de Contas',
     objetivo: 'Encontrar e gerenciar as contas do plano de contas (usadas por fornecedores, contas a pagar e relatórios).',
     passos: [
-      'Use a busca por código (ex.: "3.1") ou por descrição.',
+      'Use a busca por código (ex.: "4.01") ou por descrição.',
       'Clique no ícone verde para visualizar, no azul para editar, ou no vermelho para excluir.',
     ],
     errosComuns: [
@@ -294,7 +294,7 @@ const CONTEUDOS: Record<string, ConteudoAjuda> = {
     titulo: 'Cadastro de plano de contas',
     objetivo: 'Cadastrar uma conta nova do plano de contas ou editar uma existente.',
     passos: [
-      'Informe o código contábil (ex.: "3.1.001") — ele identifica a conta e não pode ser alterado depois.',
+      'Informe o código contábil no formato 9.99.999 (ex.: "4.01.001") — ele identifica a conta e não pode ser alterado depois.',
       'Preencha a descrição e escolha o tipo de movimento (Crédito, Débito ou Neutro).',
       'Marque se a conta compõe a DRE e/ou o fluxo de caixa.',
       'Salve.',

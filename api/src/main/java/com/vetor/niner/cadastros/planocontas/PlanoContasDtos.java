@@ -15,7 +15,7 @@ public final class PlanoContasDtos {
 
     /**
      * Corpo de criação/atualização. {@code codigo} é a própria PK de negócio
-     * ({@code id_plano_contas}) — obrigatório ao criar, no formato {@code 9.99.999.999}; na
+     * ({@code id_plano_contas}) — obrigatório ao criar, no formato {@code 9.99.999}; na
      * atualização o código do path prevalece (o campo não é editável). {@code tipoMovimento}
      * (CREDITO/DEBITO/NEUTRO) e {@code natureza} (SINTETICA/ANALITICA) são texto validado no
      * serviço contra os ENUMs do banco. {@code grupoDre}/{@code grupoDfc} só são exigidos
@@ -37,11 +37,6 @@ public final class PlanoContasDtos {
             String grupoDre,
             Boolean incluiFluxoCaixa,
             String grupoDfc,
-            Boolean exigeCentroCusto,
-            Boolean exigeContraparte,
-            Boolean exigeDocumento,
-            @Size(max = 30) String idContaContabil,
-            @Size(max = 30) String idPlanoReferencial,
             @Size(max = 500) String observacao) {
     }
 
@@ -59,11 +54,6 @@ public final class PlanoContasDtos {
             String grupoDfc,
             int sinal,
             boolean aceitaLancamento,
-            boolean exigeCentroCusto,
-            boolean exigeContraparte,
-            boolean exigeDocumento,
-            String idContaContabil,
-            String idPlanoReferencial,
             boolean padraoSistema,
             boolean ativo,
             String observacao,

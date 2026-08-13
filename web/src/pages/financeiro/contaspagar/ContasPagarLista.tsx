@@ -397,6 +397,7 @@ export default function ContasPagarLista() {
                   <>
                     <input
                       id="filtro-cp-fornecedor"
+                      autoFocus
                       placeholder="Buscar fornecedor…"
                       value={buscaFornecedor}
                       onChange={(e) => setBuscaFornecedor(e.target.value.toUpperCase())}

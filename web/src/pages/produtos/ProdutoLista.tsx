@@ -157,6 +157,7 @@ export default function ProdutoLista() {
 
         <div className="card filtros-bar">
           <input
+            autoFocus
             placeholder="Buscar por descrição…"
             value={busca}
             onChange={(e) => setBusca(maiusculas(e.target.value))}

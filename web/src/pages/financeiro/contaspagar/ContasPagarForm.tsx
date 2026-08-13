@@ -22,7 +22,7 @@ import { listarEmpresasPermitidas } from '../../../lib/empresas'
 import { buscarFornecedoresEmissao, type FornecedorOpcaoEmissao } from '../../../lib/etiquetaEmissao'
 import { aoTeclarEnterNoFormulario } from '../../../lib/formularios'
 import { completarMoeda, dataValida, desmascararMoeda, formatarMoeda, isoParaData, mascararData, mascararMoeda } from '../../../lib/masks'
-import { listarPlanosContas } from '../../../lib/planoContas'
+import SeletorPlanoContas from '../../../components/SeletorPlanoContas'
 import { maiusculas } from '../../../lib/texto'
 
 type CampoValidavel = 'idFornecedor' | 'idEmpresa' | 'idPlanoContas' | 'dataLancamentoTexto' | 'dataVencimentoTexto' | 'valorPagarTexto'
@@ -70,10 +70,6 @@ export default function ContasPagarForm({ somenteLeitura = false }: { somenteLei
   })
 
   const { data: empresas } = useQuery({ queryKey: ['empresas-permitidas'], queryFn: listarEmpresasPermitidas })
-  const { data: planos } = useQuery({
-    queryKey: ['planos-contas', 'select-contas-pagar'],
-    queryFn: () => listarPlanosContas({ tamanho: 500 }),
-  })
   const { data: fornecedoresEncontrados } = useQuery({
     queryKey: ['etiqueta-emissao-fornecedores', buscaFornecedor],
     queryFn: () => buscarFornecedoresEmissao(buscaFornecedor),
@@ -236,19 +232,15 @@ export default function ContasPagarForm({ somenteLeitura = false }: { somenteLei
               <div className="form-grid">
                 <div className="col-4">
                   <label htmlFor="cp-plano-contas">Plano de Contas *</label>
-                  <select
+                  <SeletorPlanoContas
                     id="cp-plano-contas"
                     value={form.idPlanoContas}
-                    onChange={(e) => setForm((f) => ({ ...f, idPlanoContas: e.target.value }))}
-                    onBlur={aoSairDoCampo('idPlanoContas')}
-                  >
-                    <option value="">Selecione…</option>
-                    {planos?.itens.map((p) => (
-                      <option key={p.idPlanoContas} value={p.idPlanoContas}>
-                        {p.idPlanoContas} — {p.descricao}
-                      </option>
-                    ))}
-                  </select>
+                    onChange={(idPlanoContas) => {
+                      setForm((f) => ({ ...f, idPlanoContas }))
+                      setErros((atual) => ({ ...atual, idPlanoContas: undefined }))
+                    }}
+                    onBlur={() => setErros((atual) => ({ ...atual, idPlanoContas: validarCampo('idPlanoContas', form) }))}
+                  />
                   {erros.idPlanoContas && <p className="erro-campo">{erros.idPlanoContas}</p>}
                 </div>
                 <div className="col-4">

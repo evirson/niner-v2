@@ -168,6 +168,7 @@ export default function ClienteLista() {
 
         <div className="card filtros-bar">
           <input
+            autoFocus
             placeholder="Buscar por nome…"
             value={nome}
             onChange={(e) => setNome(maiusculas(e.target.value))}

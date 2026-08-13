@@ -23,7 +23,7 @@ import {
   paraRequisicao,
   type FornecedorFormState,
 } from '../../lib/fornecedores'
-import { listarPlanosContas } from '../../lib/planoContas'
+import SeletorPlanoContas from '../../components/SeletorPlanoContas'
 import {
   ESTADOS_UF,
   documentoValido,
@@ -124,11 +124,6 @@ export default function FornecedorForm({ somenteLeitura = false }: { somenteLeit
     queryFn: () => buscarConfiguracaoTela(CHAVE_TELA),
   })
   const mapaConfig = paraMapa(configuracao)
-
-  const { data: planos } = useQuery({
-    queryKey: ['planos-contas', 'select-fornecedor'],
-    queryFn: () => listarPlanosContas({ tamanho: 100 }),
-  })
 
   const { data: fornecedorExistente } = useQuery({
     queryKey: ['fornecedor', id],
@@ -336,19 +331,15 @@ export default function FornecedorForm({ somenteLeitura = false }: { somenteLeit
             <div className="col-4">
               <label htmlFor="planoContas">Plano de Contas *</label>
               <div className="linha-com-botao">
-                <select
+                <SeletorPlanoContas
                   id="planoContas"
                   value={form.idPlanoContas}
-                  onChange={(e) => setForm((f) => ({ ...f, idPlanoContas: e.target.value }))}
-                  onBlur={aoSairDoCampo('idPlanoContas')}
-                >
-                  <option value="">Selecione…</option>
-                  {planos?.itens.map((p) => (
-                    <option key={p.idPlanoContas} value={p.idPlanoContas}>
-                      {p.idPlanoContas} — {p.descricao}
-                    </option>
-                  ))}
-                </select>
+                  onChange={(idPlanoContas) => {
+                    setForm((f) => ({ ...f, idPlanoContas }))
+                    setErros((atual) => ({ ...atual, idPlanoContas: undefined }))
+                  }}
+                  onBlur={() => setErros((atual) => ({ ...atual, idPlanoContas: validarCampo('idPlanoContas', form, mapaConfig) }))}
+                />
                 {/* fora da ordem de tabulação, como o "+ Nova categoria" do cliente */}
                 <button
                   type="button"

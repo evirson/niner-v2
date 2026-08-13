@@ -21,7 +21,7 @@ import {
   type CreditoDebito,
 } from '../../lib/contaCorrenteMovimento'
 import { completarMoeda, dataValida, desmascararMoeda, formatarMoeda, mascararData, mascararMoeda } from '../../lib/masks'
-import { listarPlanosContas } from '../../lib/planoContas'
+import SeletorPlanoContas from '../../components/SeletorPlanoContas'
 import { maiusculas } from '../../lib/texto'
 
 type CampoValidavel = 'idContaCorrente' | 'idPlanoContas' | 'dataMovimento' | 'numeroDocumento' | 'creditoDebito' | 'valorTexto'
@@ -63,10 +63,6 @@ export default function ContaCorrenteMovimentoForm({ somenteLeitura = false }: {
   })
 
   const { data: contas } = useQuery({ queryKey: ['contas-corrente-opcoes'], queryFn: listarOpcoesContaCorrente })
-  const { data: planos } = useQuery({
-    queryKey: ['planos-contas', 'select-movimento'],
-    queryFn: () => listarPlanosContas({ tamanho: 100 }),
-  })
 
   useEffect(() => {
     if (movimentoExistente) setForm(paraFormulario(movimentoExistente))
@@ -171,19 +167,15 @@ export default function ContaCorrenteMovimentoForm({ somenteLeitura = false }: {
             </div>
             <div className="col-6">
               <label htmlFor="idPlanoContas">Plano de Contas *</label>
-              <select
+              <SeletorPlanoContas
                 id="idPlanoContas"
                 value={form.idPlanoContas}
-                onChange={(e) => setForm((f) => ({ ...f, idPlanoContas: e.target.value }))}
-                onBlur={aoSairDoCampo('idPlanoContas')}
-              >
-                <option value="">Selecione…</option>
-                {planos?.itens.map((p) => (
-                  <option key={p.idPlanoContas} value={p.idPlanoContas}>
-                    {p.idPlanoContas} — {p.descricao}
-                  </option>
-                ))}
-              </select>
+                onChange={(idPlanoContas) => {
+                  setForm((f) => ({ ...f, idPlanoContas }))
+                  setErros((atual) => ({ ...atual, idPlanoContas: undefined }))
+                }}
+                onBlur={() => setErros((atual) => ({ ...atual, idPlanoContas: validarCampo('idPlanoContas', form) }))}
+              />
               {erros.idPlanoContas && <p className="erro-campo">{erros.idPlanoContas}</p>}
             </div>
           </div>

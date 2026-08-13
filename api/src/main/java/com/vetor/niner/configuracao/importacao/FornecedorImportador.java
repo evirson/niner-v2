@@ -107,7 +107,7 @@ public class FornecedorImportador implements ImportadorDeTabela {
     }
 
     /**
-     * {@code escolhas}: {@code {"idPlanoContas": "3.03.001.000"}} OU
+     * {@code escolhas}: {@code {"idPlanoContas": "3.03.001"}} OU
      * {@code {"novoPlanoContas": {"codigo": "...", "descricao": "...", "tipoMovimento": "DEBITO", "natureza": "ANALITICA"}}}
      * — o plano novo nasce sem DRE/fluxo de caixa (o usuário pode completar a classificação
      * depois, na tela de Plano de Contas).
@@ -128,7 +128,7 @@ public class FornecedorImportador implements ImportadorDeTabela {
             String natureza = textoObrigatorio(n, "natureza", "Natureza do novo plano de contas");
             planoContasService.criar(new PlanoContasRequest(
                     codigo, descricao, null, tipoMovimento, natureza,
-                    false, null, false, null, false, false, false, null, null,
+                    false, null, false, null,
                     "Criado pela Rotina de Importação de Dados."));
             return codigo.trim().toUpperCase(Locale.ROOT);
         }

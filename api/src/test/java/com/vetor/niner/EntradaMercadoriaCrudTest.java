@@ -69,10 +69,10 @@ class EntradaMercadoriaCrudTest {
     }
 
     private long criarFornecedor(String token, String razaoSocial) throws Exception {
-        criarPlano(token, "2.00.000.000");
+        criarPlano(token, "2.00.000");
         String resp = mvc.perform(post("/api/v1/fornecedores").header("Authorization", "Bearer " + token)
                         .contentType(APPLICATION_JSON)
-                        .content("{\"razaoSocial\":\"%s\",\"idPlanoContas\":\"2.00.000.000\"}".formatted(razaoSocial)))
+                        .content("{\"razaoSocial\":\"%s\",\"idPlanoContas\":\"2.00.000\"}".formatted(razaoSocial)))
                 .andExpect(status().isCreated())
                 .andReturn().getResponse().getContentAsString();
         return ((Number) JsonPath.read(resp, "$.idFornecedor")).longValue();
@@ -106,7 +106,7 @@ class EntradaMercadoriaCrudTest {
                                  "multaCrediarioDias":0,"multaCrediario":0,"cfgUsaCorGrade":false,
                                  "cfgPermiteQtdDecimal":true,"cfgExigeNumeroVendaDevolucao":false,
                                  "cfgRateiaFreteEntrada":%s,"cfgReajustaPrecoEntrada":%s,
-                                 "idPlanoContasCompraMercadoria":"3.03.001.001"}
+                                 "idPlanoContasCompraMercadoria":"3.03.001"}
                                 """.formatted(rateiaFrete, reajustaPreco)))
                 .andExpect(status().isOk());
     }
@@ -187,8 +187,8 @@ class EntradaMercadoriaCrudTest {
             try (ResultSet rs = ps.executeQuery()) {
                 assertThat(rs.next()).isTrue();
                 // 2026-08-12: contas_pagar da Entrada usa o plano de contas de CUSTO configurado em
-                // cfg_geral (padrão "3.03.001.001", seed do signup) — não mais o plano do fornecedor.
-                assertThat(rs.getString("id_plano_contas")).isEqualTo("3.03.001.001");
+                // cfg_geral (padrão "3.03.001", seed do signup) — não mais o plano do fornecedor.
+                assertThat(rs.getString("id_plano_contas")).isEqualTo("3.03.001");
                 assertThat(rs.getBigDecimal("valor_pagar")).isEqualByComparingTo("10.00");
                 assertThat(rs.getInt("nota_fiscal")).isEqualTo(456);
             }

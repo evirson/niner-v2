@@ -69,8 +69,10 @@ CREATE INDEX cliente_categoria_ix  ON cliente (id_tenant, id_categoria_cliente);
 CREATE TABLE cfg_plano_contas (
   id_tenant            smallint              NOT NULL REFERENCES plataforma.tenant (id_tenant),
 
-  -- Máscara fixa de 12 caracteres: 9.99.999.999. Largura fixa garante ordenação lexicográfica
-  -- correta e prefix-match ('1.01.%' pega toda a subárvore) sem função de normalização.
+  -- Máscara fixa de 8 caracteres: 9.99.999 (grupo.família.conta — encurtada de 9.99.999.999
+  -- em 2026-08-13, pedido do dono do produto: foco em pequenos negócios, 4 níveis era
+  -- complexidade demais). Largura fixa garante ordenação lexicográfica correta e prefix-match
+  -- ('1.01.%' pega toda a subárvore) sem função de normalização.
   id_plano_contas      text                  NOT NULL,
 
   descricao            text                  NOT NULL,
@@ -80,24 +82,22 @@ CREATE TABLE cfg_plano_contas (
   natureza             natureza_conta        NOT NULL,    -- SINTETICA (agrupa) / ANALITICA (recebe lançamento)
 
   -- Nível derivado da máscara: zeros à direita marcam o corte hierárquico.
+  -- 1 = grupo (X.00.000), 2 = família (X.YY.000), 3 = conta (X.YY.ZZZ).
   nivel smallint GENERATED ALWAYS AS (
     CASE
-      WHEN substring(id_plano_contas from  3 for 2) = '00'  THEN 1
-      WHEN substring(id_plano_contas from  6 for 3) = '000' THEN 2
-      WHEN substring(id_plano_contas from 10 for 3) = '000' THEN 3
-      ELSE 4
+      WHEN substring(id_plano_contas from 3 for 2) = '00'  THEN 1
+      WHEN substring(id_plano_contas from 6 for 3) = '000' THEN 2
+      ELSE 3
     END
   ) STORED,
 
   -- Pai derivado — elimina a possibilidade de árvore inconsistente por digitação.
   id_plano_contas_pai text GENERATED ALWAYS AS (
     CASE
-      WHEN substring(id_plano_contas from  3 for 2) = '00'  THEN NULL
-      WHEN substring(id_plano_contas from  6 for 3) = '000'
-           THEN substring(id_plano_contas from 1 for 1) || '.00.000.000'
-      WHEN substring(id_plano_contas from 10 for 3) = '000'
-           THEN substring(id_plano_contas from 1 for 4) || '.000.000'
-      ELSE substring(id_plano_contas from 1 for 8) || '.000'
+      WHEN substring(id_plano_contas from 3 for 2) = '00'  THEN NULL
+      WHEN substring(id_plano_contas from 6 for 3) = '000'
+           THEN substring(id_plano_contas from 1 for 1) || '.00.000'
+      ELSE substring(id_plano_contas from 1 for 4) || '.000'
     END
   ) STORED,
 
@@ -113,12 +113,9 @@ CREATE TABLE cfg_plano_contas (
   -- Só analíticas recebem lançamento; sintéticas existem para totalizar/agrupar.
   aceita_lancamento    boolean               NOT NULL,
 
-  exige_centro_custo   boolean               NOT NULL DEFAULT false,
-  exige_contraparte    boolean               NOT NULL DEFAULT false,  -- transferência: exige conta financeira de destino
-  exige_documento      boolean               NOT NULL DEFAULT false,  -- exige NF/contrato
-
-  id_conta_contabil    text,      -- de-para com a contabilidade / SPED ECD
-  id_plano_referencial text,      -- de-para com o plano referencial da RFB
+  -- 2026-08-13: removidos exige_centro_custo/exige_contraparte/exige_documento (travas de
+  -- lançamento nunca implementadas) e id_conta_contabil/id_plano_referencial (de-para
+  -- SPED/RFB) — complexidade sem uso para o público-alvo; nada disso alimenta DRE/DFC.
 
   padrao_sistema       boolean               NOT NULL DEFAULT false,  -- conta do template: não pode ser excluída
   ativo                boolean               NOT NULL DEFAULT true,
@@ -136,7 +133,7 @@ CREATE TABLE cfg_plano_contas (
     ON UPDATE NO ACTION ON DELETE NO ACTION DEFERRABLE INITIALLY DEFERRED,
 
   CONSTRAINT cfg_plano_contas_mascara_ck
-    CHECK (id_plano_contas ~ '^[1-9]\.[0-9]{2}\.[0-9]{3}\.[0-9]{3}$'),
+    CHECK (id_plano_contas ~ '^[1-9]\.[0-9]{2}\.[0-9]{3}$'),
 
   -- Sintética nunca recebe lançamento; analítica sempre recebe.
   CONSTRAINT cfg_plano_contas_lancamento_ck
@@ -190,10 +187,6 @@ CREATE INDEX cfg_plano_contas_descricao_trgm_ix
 -- Irmãos não podem ter a mesma descrição.
 CREATE UNIQUE INDEX cfg_plano_contas_irmao_uq
     ON cfg_plano_contas (id_tenant, coalesce(id_plano_contas_pai, ''), lower(btrim(descricao)));
-
--- De-para contábil único quando informado.
-CREATE UNIQUE INDEX cfg_plano_contas_contabil_uq
-    ON cfg_plano_contas (id_tenant, id_conta_contabil) WHERE id_conta_contabil IS NOT NULL;
 
 CREATE OR REPLACE FUNCTION trg_set_atualizado_em() RETURNS trigger AS $$
 BEGIN
@@ -315,8 +308,6 @@ COMMENT ON COLUMN cfg_plano_contas.inclui_dre IS
 COMMENT ON COLUMN cfg_plano_contas.inclui_fluxo_caixa IS
     'Afeta a variação de disponibilidades no DFC consolidado. Falso para CMV, depreciação, provisões e transferências entre contas próprias.';
 COMMENT ON COLUMN cfg_plano_contas.nivel IS
-    'Derivado da máscara. 1=conta 2=subconta 3=item 4=subitem.';
-COMMENT ON COLUMN cfg_plano_contas.exige_contraparte IS
-    'Movimento exige conta financeira de destino (transferências, aplicações, sangria).';
+    'Derivado da máscara. 1=grupo 2=família 3=conta.';
 COMMENT ON TABLE fornecedor            IS 'Fornecedor do lojista (RLS).';
 COMMENT ON TABLE funcionario           IS 'Funcionário do lojista (RLS). Referenciado no ledger de estoque/venda.';

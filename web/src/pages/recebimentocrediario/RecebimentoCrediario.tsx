@@ -251,7 +251,7 @@ export default function RecebimentoCrediario() {
               <div className="form-grid">
                 <div className="col-4">
                   <label htmlFor="busca-nome">Nome</label>
-                  <input id="busca-nome" value={nome} onChange={(e) => setNome(maiusculas(e.target.value))} />
+                  <input id="busca-nome" autoFocus value={nome} onChange={(e) => setNome(maiusculas(e.target.value))} />
                 </div>
                 <div className="col-4">
                   <label htmlFor="busca-cpf">CPF</label>

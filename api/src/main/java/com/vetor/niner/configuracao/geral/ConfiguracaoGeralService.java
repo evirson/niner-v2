@@ -162,7 +162,7 @@ public class ConfiguracaoGeralService {
                         """)
                 .query(String.class)
                 .optional()
-                .orElse("3.03.001.001");
+                .orElse("3.03.001");
     }
 
     @Transactional

@@ -60,17 +60,17 @@ export function mascararNcm(valor: string): string {
 }
 
 /**
- * Código do plano de contas: máscara fixa "9.99.999.999" (conta.subconta.item.subitem —
- * docs/telas/plano-contas.md, revisão 2026-07-31). 1+2+3+3 = 9 dígitos.
+ * Código do plano de contas: máscara fixa "9.99.999" (grupo.família.conta —
+ * docs/telas/plano-contas.md, encurtada de 9.99.999.999 em 2026-08-13). 1+2+3 = 6 dígitos.
  */
 export function mascararCodigoPlanoContas(valor: string): string {
-  const digitos = somenteDigitos(valor).slice(0, 9)
-  return aplicarMascara(digitos, '0.00.000.000')
+  const digitos = somenteDigitos(valor).slice(0, 6)
+  return aplicarMascara(digitos, '0.00.000')
 }
 
-/** {@code true} só quando o código está completo e no formato "9.99.999.999" (1º dígito 1-9). */
+/** {@code true} só quando o código está completo e no formato "9.99.999" (1º dígito 1-9). */
 export function codigoPlanoContasValido(valor: string): boolean {
-  return /^[1-9]\.[0-9]{2}\.[0-9]{3}\.[0-9]{3}$/.test(valor)
+  return /^[1-9]\.[0-9]{2}\.[0-9]{3}$/.test(valor)
 }
 
 /**

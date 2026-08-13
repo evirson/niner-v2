@@ -48,7 +48,7 @@ function validarCampo(chave: CampoValidavel, f: PlanoContasFormState): string | 
     if (!f.codigo.trim()) return 'Código é obrigatório.'
     return codigoPlanoContasValido(mascararCodigoPlanoContas(f.codigo))
       ? undefined
-      : 'Código incompleto — formato 9.99.999.999 (conta.subconta.item.subitem).'
+      : 'Código incompleto — formato 9.99.999 (grupo.família.conta).'
   }
   if (chave === 'descricao') return f.descricao.trim() ? undefined : 'Descrição é obrigatória.'
   if (chave === 'tipoMovimento') return f.tipoMovimento ? undefined : 'Escolha o tipo de movimento.'
@@ -63,7 +63,7 @@ function validarCampo(chave: CampoValidavel, f: PlanoContasFormState): string | 
  * só quando a flag correspondente está marcada); `sinal`/`aceitaLancamento` são sempre
  * derivados no servidor a partir de tipo de movimento/natureza — não aparecem como campo. O
  * código contábil continua sendo a própria PK de negócio — digitado ao criar (agora com
- * máscara fixa 9.99.999.999) e **imutável depois** (a hierarquia inteira é derivada dele).
+ * máscara fixa 9.99.999) e **imutável depois** (a hierarquia inteira é derivada dele).
  */
 export default function PlanoContasForm({ somenteLeitura = false }: { somenteLeitura?: boolean }) {
   const { codigo } = useParams()
@@ -110,7 +110,7 @@ export default function PlanoContasForm({ somenteLeitura = false }: { somenteLei
     setForm((f) => ({ ...f, codigo: mascararCodigoPlanoContas(e.target.value) }))
 
   /** onChange de campo de texto livre — sempre maiúsculas, não importa o teclado. */
-  const campo = (chave: 'descricao' | 'descricaoCurta' | 'idContaContabil' | 'idPlanoReferencial' | 'observacao') =>
+  const campo = (chave: 'descricao' | 'descricaoCurta' | 'observacao') =>
     (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
       setForm((f) => ({ ...f, [chave]: maiusculas(e.target.value) }))
 
@@ -183,7 +183,7 @@ export default function PlanoContasForm({ somenteLeitura = false }: { somenteLei
                 id="codigo"
                 className={`mono${editando ? ' campo-leitura' : ''}`}
                 autoFocus={!editando}
-                placeholder="9.99.999.999"
+                placeholder="9.99.999"
                 readOnly={editando}
                 tabIndex={editando ? -1 : undefined}
                 value={form.codigo}
@@ -339,59 +339,13 @@ export default function PlanoContasForm({ somenteLeitura = false }: { somenteLei
           </div>
         </section>
 
+        {/* Seções "Exigências no lançamento" e "Integrações" removidas em 2026-08-13 (pedido do
+            dono do produto): flags nunca implementadas nos lançamentos e de-para SPED/RFB sem
+            uso pro público-alvo — colunas removidas do schema junto. Não influenciam DRE/DFC. */}
         <section className="section">
-          <p className="section-label">Exigências no lançamento</p>
+          <p className="section-label">Observação</p>
 
           <div className="form-grid">
-            <div className="col-4">
-              <label className="checkbox-linha">
-                <input
-                  type="checkbox"
-                  checked={form.exigeCentroCusto}
-                  onChange={(e) => setForm((f) => ({ ...f, exigeCentroCusto: e.target.checked }))}
-                />
-                Exige centro de custo
-              </label>
-            </div>
-            <div className="col-4">
-              <label className="checkbox-linha">
-                <input
-                  type="checkbox"
-                  checked={form.exigeContraparte}
-                  onChange={(e) => setForm((f) => ({ ...f, exigeContraparte: e.target.checked }))}
-                />
-                Exige contraparte (conta de destino)
-              </label>
-            </div>
-            <div className="col-4">
-              <label className="checkbox-linha">
-                <input
-                  type="checkbox"
-                  checked={form.exigeDocumento}
-                  onChange={(e) => setForm((f) => ({ ...f, exigeDocumento: e.target.checked }))}
-                />
-                Exige documento (NF/contrato)
-              </label>
-            </div>
-          </div>
-        </section>
-
-        <section className="section">
-          <p className="section-label">Integrações (opcional)</p>
-
-          <div className="form-grid">
-            <div className="col-6">
-              <label htmlFor="idContaContabil">Conta contábil (de-para SPED ECD)</label>
-              <input id="idContaContabil" value={form.idContaContabil} onChange={campo('idContaContabil')} />
-            </div>
-            <div className="col-6">
-              <label htmlFor="idPlanoReferencial">Plano referencial (de-para RFB)</label>
-              <input
-                id="idPlanoReferencial"
-                value={form.idPlanoReferencial}
-                onChange={campo('idPlanoReferencial')}
-              />
-            </div>
             <div className="col-12">
               <label htmlFor="observacao">Observação</label>
               <textarea id="observacao" rows={2} value={form.observacao} onChange={campo('observacao')} />

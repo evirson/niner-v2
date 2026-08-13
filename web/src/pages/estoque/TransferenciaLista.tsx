@@ -145,6 +145,7 @@ export default function TransferenciaLista() {
 
         <div className="card filtros-bar">
           <input
+            autoFocus
             placeholder="Data inicial"
             value={dataInicialTexto}
             onChange={(e) => setDataInicialTexto(mascararData(e.target.value))}

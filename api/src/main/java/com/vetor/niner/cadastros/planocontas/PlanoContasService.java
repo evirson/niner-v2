@@ -27,7 +27,9 @@ import static org.springframework.http.HttpStatus.NOT_FOUND;
  * CRUD de plano de contas (docs/telas/plano-contas.md). Tabela {@code cfg_plano_contas} sob
  * RLS de tenant (V016/V024) — revisado por completo em 2026-07-31: DRE e fluxo de caixa
  * deixaram de ser flags soltas e viraram classificação de verdade (grupo + sinal), com
- * hierarquia de 4 níveis via máscara fixa {@code 9.99.999.999}. PK de negócio {@code text}
+ * hierarquia via máscara fixa — encurtada em 2026-08-13 de 4 níveis ({@code 9.99.999.999})
+ * para 3 níveis ({@code 9.99.999}, grupo.família.conta), pedido do dono do produto: foco em
+ * pequenos negócios. PK de negócio {@code text}
  * (o código contábil, digitado pelo usuário e imutável após a criação) continua igual à
  * versão anterior; a novidade estrutural é que a tabela agora tem {@code ativo}, então este
  * cadastro ganhou o mesmo fallback de inativar na exclusão que os demais já tinham (antes
@@ -53,7 +55,7 @@ public class PlanoContasService {
     // fora da página carregada, deixando o <select> sem a opção correspondente (2026-08-19).
     private static final int TAMANHO_PAGINA_MAXIMO = 500;
 
-    private static final Pattern MASCARA_CODIGO = Pattern.compile("^[1-9]\\.[0-9]{2}\\.[0-9]{3}\\.[0-9]{3}$");
+    private static final Pattern MASCARA_CODIGO = Pattern.compile("^[1-9]\\.[0-9]{2}\\.[0-9]{3}$");
 
     /** Valores dos ENUMs do banco (V013) — sem acento desde 2026-07-31. */
     private static final Set<String> TIPOS_MOVIMENTO = Set.of("CREDITO", "DEBITO", "NEUTRO");
@@ -154,10 +156,9 @@ public class PlanoContasService {
             jdbc.sql("""
                             INSERT INTO cfg_plano_contas (id_tenant, id_plano_contas, descricao, descricao_curta,
                                 tipo_movimento, natureza, inclui_dre, grupo_dre, inclui_fluxo_caixa, grupo_dfc,
-                                sinal, aceita_lancamento, exige_centro_custo, exige_contraparte, exige_documento,
-                                id_conta_contabil, id_plano_referencial, observacao)
+                                sinal, aceita_lancamento, observacao)
                             VALUES (plataforma.tenant_atual(), ?, ?, ?, ?::tipo_movimento_conta, ?::natureza_conta,
-                                ?, ?::grupo_dre_conta, ?, ?::grupo_dfc_conta, ?, ?, ?, ?, ?, ?, ?, ?)
+                                ?, ?::grupo_dre_conta, ?, ?::grupo_dfc_conta, ?, ?, ?)
                             """)
                     .params(codigo,
                             req.descricao().trim().toUpperCase(Locale.ROOT),
@@ -168,11 +169,6 @@ public class PlanoContasService {
                             incluiCx, incluiCx ? req.grupoDfc() : "NAO_APLICA",
                             calcularSinal(req.tipoMovimento()),
                             "ANALITICA".equals(natureza),
-                            Boolean.TRUE.equals(req.exigeCentroCusto()),
-                            Boolean.TRUE.equals(req.exigeContraparte()),
-                            Boolean.TRUE.equals(req.exigeDocumento()),
-                            textoOuNulo(req.idContaContabil()),
-                            textoOuNulo(req.idPlanoReferencial()),
                             textoOuNulo(req.observacao()))
                     .update();
             return buscar(codigo);
@@ -195,9 +191,7 @@ public class PlanoContasService {
                             descricao = ?, descricao_curta = ?, tipo_movimento = ?::tipo_movimento_conta,
                             natureza = ?::natureza_conta, inclui_dre = ?, grupo_dre = ?::grupo_dre_conta,
                             inclui_fluxo_caixa = ?, grupo_dfc = ?::grupo_dfc_conta, sinal = ?,
-                            aceita_lancamento = ?, exige_centro_custo = ?, exige_contraparte = ?,
-                            exige_documento = ?, id_conta_contabil = ?, id_plano_referencial = ?,
-                            observacao = ?
+                            aceita_lancamento = ?, observacao = ?
                         WHERE id_tenant = plataforma.tenant_atual() AND id_plano_contas = ?
                         """)
                 .params(req.descricao().trim().toUpperCase(Locale.ROOT),
@@ -208,11 +202,6 @@ public class PlanoContasService {
                         incluiCx, incluiCx ? req.grupoDfc() : "NAO_APLICA",
                         calcularSinal(req.tipoMovimento()),
                         "ANALITICA".equals(natureza),
-                        Boolean.TRUE.equals(req.exigeCentroCusto()),
-                        Boolean.TRUE.equals(req.exigeContraparte()),
-                        Boolean.TRUE.equals(req.exigeDocumento()),
-                        textoOuNulo(req.idContaContabil()),
-                        textoOuNulo(req.idPlanoReferencial()),
                         textoOuNulo(req.observacao()),
                         codigoNormalizado)
                 .update();
@@ -305,7 +294,7 @@ public class PlanoContasService {
         String codigo = req.codigo() == null ? "" : req.codigo().trim().toUpperCase(Locale.ROOT);
         if (!MASCARA_CODIGO.matcher(codigo).matches()) {
             throw new IllegalArgumentException(
-                    "Código deve seguir o formato 9.99.999.999 (conta.subconta.item.subitem).");
+                    "Código deve seguir o formato 9.99.999 (grupo.família.conta).");
         }
         String tipoMovimento = req.tipoMovimento() == null ? "" : req.tipoMovimento().toUpperCase(Locale.ROOT);
         if (!TIPOS_MOVIMENTO.contains(tipoMovimento)) {
@@ -345,9 +334,8 @@ public class PlanoContasService {
      */
     private static String calcularPai(String codigo) {
         if (codigo.substring(2, 4).equals("00")) return null;
-        if (codigo.substring(5, 8).equals("000")) return codigo.substring(0, 1) + ".00.000.000";
-        if (codigo.substring(9, 12).equals("000")) return codigo.substring(0, 4) + ".000.000";
-        return codigo.substring(0, 8) + ".000";
+        if (codigo.substring(5, 8).equals("000")) return codigo.substring(0, 1) + ".00.000";
+        return codigo.substring(0, 4) + ".000";
     }
 
     /** Código contábil sempre em maiúsculas e sem espaços nas pontas (é a PK de negócio). */
@@ -368,8 +356,6 @@ public class PlanoContasService {
                    p.inclui_dre, p.grupo_dre::text AS grupo_dre,
                    p.inclui_fluxo_caixa, p.grupo_dfc::text AS grupo_dfc,
                    p.sinal, p.aceita_lancamento,
-                   p.exige_centro_custo, p.exige_contraparte, p.exige_documento,
-                   p.id_conta_contabil, p.id_plano_referencial,
                    p.padrao_sistema, p.ativo, p.observacao,
                    p.criado_em, p.atualizado_em
             FROM cfg_plano_contas p
@@ -390,11 +376,6 @@ public class PlanoContasService {
                 rs.getString("grupo_dfc"),
                 rs.getInt("sinal"),
                 rs.getBoolean("aceita_lancamento"),
-                rs.getBoolean("exige_centro_custo"),
-                rs.getBoolean("exige_contraparte"),
-                rs.getBoolean("exige_documento"),
-                rs.getString("id_conta_contabil"),
-                rs.getString("id_plano_referencial"),
                 rs.getBoolean("padrao_sistema"),
                 rs.getBoolean("ativo"),
                 rs.getString("observacao"),

@@ -76,7 +76,7 @@ class ConfiguracaoGeralTest {
                  "multaCrediarioDias":10,"multaCrediario":3.0,"cfgUsaCorGrade":true,
                  "cfgPermiteQtdDecimal":false,"cfgExigeNumeroVendaDevolucao":true,
                  "cfgRateiaFreteEntrada":true,"cfgReajustaPrecoEntrada":true,
-                 "idPlanoContasCompraMercadoria":"3.03.001.001"}
+                 "idPlanoContasCompraMercadoria":"3.03.001"}
                 """;
 
         mvc.perform(put("/api/v1/config-geral").header("Authorization", "Bearer " + token)
@@ -132,7 +132,7 @@ class ConfiguracaoGeralTest {
                 {"percentualDescontoVenda":10,"jurosCrediarioDias":0,"jurosCrediario":0,
                  "multaCrediarioDias":0,"multaCrediario":0,"cfgUsaCorGrade":true,"cfgPermiteQtdDecimal":true,
                  "cfgExigeNumeroVendaDevolucao":false,"cfgRateiaFreteEntrada":false,"cfgReajustaPrecoEntrada":false,
-                 "idPlanoContasCompraMercadoria":"3.03.001.001"}
+                 "idPlanoContasCompraMercadoria":"3.03.001"}
                 """;
         mvc.perform(put("/api/v1/config-geral").header("Authorization", "Bearer " + tokenOperador)
                         .contentType(APPLICATION_JSON).content(corpo))
@@ -147,7 +147,7 @@ class ConfiguracaoGeralTest {
                 {"percentualDescontoVenda":150,"jurosCrediarioDias":0,"jurosCrediario":0,
                  "multaCrediarioDias":0,"multaCrediario":0,"cfgUsaCorGrade":true,"cfgPermiteQtdDecimal":true,
                  "cfgExigeNumeroVendaDevolucao":false,"cfgRateiaFreteEntrada":false,"cfgReajustaPrecoEntrada":false,
-                 "idPlanoContasCompraMercadoria":"3.03.001.001"}
+                 "idPlanoContasCompraMercadoria":"3.03.001"}
                 """;
         mvc.perform(put("/api/v1/config-geral").header("Authorization", "Bearer " + token)
                         .contentType(APPLICATION_JSON).content(corpo))
@@ -162,7 +162,7 @@ class ConfiguracaoGeralTest {
                 {"percentualDescontoVenda":10,"jurosCrediarioDias":-1,"jurosCrediario":0,
                  "multaCrediarioDias":0,"multaCrediario":0,"cfgUsaCorGrade":true,"cfgPermiteQtdDecimal":true,
                  "cfgExigeNumeroVendaDevolucao":false,"cfgRateiaFreteEntrada":false,"cfgReajustaPrecoEntrada":false,
-                 "idPlanoContasCompraMercadoria":"3.03.001.001"}
+                 "idPlanoContasCompraMercadoria":"3.03.001"}
                 """;
         mvc.perform(put("/api/v1/config-geral").header("Authorization", "Bearer " + token)
                         .contentType(APPLICATION_JSON).content(corpo))
@@ -181,7 +181,7 @@ class ConfiguracaoGeralTest {
                                  "multaCrediarioDias":0,"multaCrediario":0,"cfgUsaCorGrade":true,
                                  "cfgPermiteQtdDecimal":true,"cfgExigeNumeroVendaDevolucao":false,
                                  "cfgRateiaFreteEntrada":false,"cfgReajustaPrecoEntrada":false,
-                 "idPlanoContasCompraMercadoria":"3.03.001.001"}
+                 "idPlanoContasCompraMercadoria":"3.03.001"}
                                 """))
                 .andExpect(status().isOk());
 

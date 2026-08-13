@@ -135,6 +135,7 @@ export default function ContaCorrenteLista() {
 
         <div className="card filtros-bar">
           <input
+            autoFocus
             placeholder="Buscar por conta ou descrição…"
             value={busca}
             onChange={(e) => setBusca(maiusculas(e.target.value))}

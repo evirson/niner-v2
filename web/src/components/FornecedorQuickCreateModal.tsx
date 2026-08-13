@@ -8,7 +8,7 @@ import {
   type Fornecedor,
   type FornecedorFormState,
 } from '../lib/fornecedores'
-import { buscarConfiguracaoGeral } from '../lib/configuracaoGeral'
+import { buscarPlanoContasCompraMercadoria } from '../lib/configuracaoGeral'
 import { ESTADOS_UF, mascararCep, mascararCpfCnpj, mascararTelefone } from '../lib/masks'
 import { maiusculas } from '../lib/texto'
 import Toast from './Toast'
@@ -42,15 +42,21 @@ export default function FornecedorQuickCreateModal({
   // Plano de Contas nunca é escolhido aqui (2026-08-19, pedido do dono do produto) — este modal
   // só existe dentro da Entrada de Produtos por Compra, então a conta é sempre a mesma:
   // `cfg_geral.id_plano_contas_compra_mercadoria`. Atribuído por baixo dos panos, sem campo na
-  // tela; se `cfg_geral` ainda não tiver carregado quando o operador clicar "Criar", o botão
-  // continua desabilitado (mesmo `valido` de sempre) até o valor chegar.
-  const { data: cfgGeral } = useQuery({ queryKey: ['config-geral'], queryFn: buscarConfiguracaoGeral })
+  // tela; se ainda não tiver carregado quando o operador clicar "Criar", o botão continua
+  // desabilitado (mesmo `valido` de sempre) até o valor chegar. Busca por
+  // `/plano-contas-compra-mercadoria` (sem checagem de papel) — não pelo `/config-geral`
+  // completo, que é ADMIN-only e quebrava esse preenchimento pra quem faz entrada sem ser ADMIN
+  // (2026-08-24, achado ao investigar o campo chegando vazio no fornecedor criado por OPERADOR).
+  const { data: planoContasCompra } = useQuery({
+    queryKey: ['config-geral', 'plano-contas-compra-mercadoria'],
+    queryFn: buscarPlanoContasCompraMercadoria,
+  })
   useEffect(() => {
-    if (cfgGeral?.idPlanoContasCompraMercadoria && !form.idPlanoContas) {
-      setForm((f) => ({ ...f, idPlanoContas: cfgGeral.idPlanoContasCompraMercadoria }))
+    if (planoContasCompra?.idPlanoContasCompraMercadoria && !form.idPlanoContas) {
+      setForm((f) => ({ ...f, idPlanoContas: planoContasCompra.idPlanoContasCompraMercadoria }))
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cfgGeral?.idPlanoContasCompraMercadoria])
+  }, [planoContasCompra?.idPlanoContasCompraMercadoria])
 
   const campo = (chave: keyof FornecedorFormState) => (e: React.ChangeEvent<HTMLInputElement>) =>
     setForm((f) => ({ ...f, [chave]: maiusculas(e.target.value) }))

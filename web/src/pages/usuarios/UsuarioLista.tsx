@@ -139,6 +139,7 @@ export default function UsuarioLista() {
 
         <div className="card filtros-bar">
           <input
+            autoFocus
             placeholder="Buscar por nome ou e-mail…"
             value={nome}
             onChange={(e) => setNome(maiusculas(e.target.value))}

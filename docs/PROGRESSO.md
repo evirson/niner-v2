@@ -1,7 +1,7 @@
 # Progresso do Projeto — niner-v2
 
 Registro cronológico das decisões e entregas. Atualizar a cada marco relevante.
-**Última atualização:** 2026-08-21
+**Última atualização:** 2026-08-22
 
 ---
 
@@ -340,9 +340,144 @@ Pagamento/Valor Pago/Documento Pago é a baixa. Dois bugs pegos só testando ao 
 escolher um pelo typeahead), ambos corrigidos. Suíte de backend: **472/472 verdes** (11 testes
 novos, `ContaPagarCrudTest`). Ver `docs/telas/contas-pagar.md`.
 
+**Sessão de 2026-08-22:** três entregas independentes. (1) **Fix real** — o cadastro rápido de
+fornecedor embutido na Entrada de Produtos por Compra (`FornecedorQuickCreateModal`) só
+preenchia o plano de contas padrão de compra quando quem estava logado era `ADMIN`, porque
+reusava o endpoint completo de Parâmetros do Sistema (`GET /api/v1/config-geral`, ADMIN-only) só
+pra ler um campo — `OPERADOR` recebia 403 silencioso e o campo ficava vazio. Corrigido com um
+endpoint novo sem checagem de papel, `GET /api/v1/config-geral/plano-contas-compra-mercadoria`
+(mesmo padrão de `/usa-cor-grade`/`/rateia-frete-entrada`), reproduzido e confirmado ao vivo
+(403 → 200 pro mesmo usuário OPERADOR). (2) **Foco automático** adicionado a 15 telas de lista/
+localização (Pesquisa de Vendas, Recebimento de Crediário, Reimpressão de Papeleta de Venda/
+Recebimento, Transferência de Produtos, Conta Corrente, Movimentação de Conta Corrente, Tipo de
+Carteira, Contas a Pagar, Clientes, Fornecedores, Funcionários, Produtos, Usuários, Configuração
+de Etiqueta) e espaçamento vertical corrigido entre os botões da Exportação de Dados. (3) **Plano
+de Contas simplificado** (pedido do dono do produto, "código muito grande pra pequeno negócio"):
+máscara encurtada de `9.99.999.999` (4 níveis, ~200 contas no plano padrão) para `9.99.999`
+(3 níveis — grupo.família.conta, 76 contas no plano padrão), com DRE/fluxo de caixa continuando
+100% independentes da máscara (grupo+sinal, inalterados); banco de dev convertido ao vivo sem
+perder nenhum dado (fornecedores e configuração geral remapeados do código antigo pro novo antes
+do DROP das colunas geradas antigas). Componente novo `SeletorPlanoContas` (busca por prefixo de
+código OU por nome, combobox único) substituiu os `<select>` truncados em Fornecedor, Contas a
+Pagar, Movimentação de Conta Corrente, Parâmetros do Sistema e Importação de Dados. Na sequência,
+removidas por completo — tela, schema e banco — as seções "Exigências no lançamento"
+(`exige_centro_custo`/`exige_contraparte`/`exige_documento`) e "Integrações"
+(`id_conta_contabil`/`id_plano_referencial`): nenhum lançamento do sistema as lia, não afetam
+DRE/DFC. Suíte de backend: **474/474 verdes** (mesma contagem — testes de hierarquia convertidos
+de 4 para 3 níveis, nenhum teste novo/removido). Ver `docs/telas/plano-contas.md` (atualizado)
+e a linha do tempo abaixo para o detalhe técnico completo.
+
 ---
 
 ## Linha do tempo
+
+### 2026-08-22 — Plano de Contas: máscara encurtada para 9.99.999, SeletorPlanoContas (busca código/nome), remoção de Exigências/Integrações
+
+Revisão pedida pelo dono do produto depois de olhar o cadastro em uso: `1.02.002.000` (12
+caracteres) é complexidade de contabilidade formal, não de pequeno varejo. Três perguntas
+guiaram a conversa — "precisa ser tão grande?", "isso vira DRE e Fluxo de Caixa mesmo?", "esses
+campos de Exigências/Integrações servem pra quê?" — e as respostas viraram três mudanças.
+
+1. **Máscara `9.99.999.999` → `9.99.999`** (4 níveis → 3: grupo.família.conta, 12 → 8
+   caracteres). Opções A (só enxugar o seed)/B (`9.99` puro, 4 caracteres)/C (abolir hierarquia)
+   foram apresentadas antes; o formato escolhido no fim (`9.99.999`) é intermediário — preserva
+   o nível de família (subtotal de "Pessoal"/"Ocupação" etc. na DRE), só corta o último nível
+   (subitem), que concentrava 249 das 336 contas do plano antigo e quase nunca era usado.
+   **O motor de DRE/DFC não muda**: ele sempre leu `grupo_dre`/`grupo_dfc`/`sinal` por conta,
+   nunca a máscara do código — os dois relatórios continuam saindo exatamente iguais.
+   - `V016__cadastros.sql`: `nivel` (1–3) e `id_plano_contas_pai` (colunas geradas) recalculados
+     pra 3 blocos; CHECK de máscara `^[1-9]\.[0-9]{2}\.[0-9]{3}$`.
+   - `V032__entrada_planilha.sql` e `SignupService`: árvore mínima e `cfg_geral.id_plano_contas_
+     compra_mercadoria` migrados de `3.03.001.001` pra `3.03.001`.
+   - `PlanoContasService`: regex, mensagem de erro, e `calcularPai()` (pré-checagem amigável de
+     hierarquia) ajustados pra 3 níveis.
+   - **Banco de dev convertido ao vivo, dado nenhum perdido**: os 3 tenants existentes tinham só
+     `3.03.001.001` referenciado (3 fornecedores + `cfg_geral` dos 3 tenants) — remapeado pro
+     código novo **antes** de dropar as colunas geradas antigas e recriá-las já na máscara nova;
+     as 336 contas antigas saíram, o seed novo (76 contas) entrou. `vw_plano_contas_arvore`
+     (`SELECT *`) precisou ser derrubada e recriada na mesma transação (dependia das colunas).
+   - **Seed novo** (`db/scripts/seed_plano_contas_padrao.sql`, reescrito): 76 contas (8 grupos,
+     19 famílias, 49 analíticas) — plano genérico de pequeno varejo (não mais específico de
+     calçados/confecções). Grupo 7 (Movimentos Neutros e Sócios) é a resposta a "vai ter conta
+     que não entra em DRE nem em Fluxo de Caixa" — sangria/suprimento, transferência entre
+     contas, liquidação de cartão/crediário, nenhuma delas conta como resultado nem como
+     variação de caixa "de negócio" (evita duplicar o que já aparece na venda/recebimento).
+   - Máscara/validação no front (`web/src/lib/masks.ts`, `mascararCodigoPlanoContas`/
+     `codigoPlanoContasValido`), `AjudaDaTela.tsx` (`cadastros.planocontas.form`), formulário e
+     testes de hierarquia (`PlanoContasCrudTest`) todos ajustados pra 3 níveis.
+
+2. **`SeletorPlanoContas.tsx` (componente novo)** — pedido explícito: "poder entrar como código,
+   mas também pesquisar pelo nome da conta", em todo lugar que hoje pede plano de contas.
+   Combobox único: digitar dígitos/pontos busca por **prefixo de código** ("401" acha
+   `4.01.xxx`); digitar texto busca **na descrição**. Carrega o plano inteiro (tamanho 500,
+   ~76 contas no padrão) e filtra no cliente — não herda o bug de "select truncado por
+   paginação" que telas antigas tinham. Enter escolhe a linha destacada (setas navegam,
+   `stopPropagation` pra não conflitar com o Enter-como-Tab do formulário), clique escolhe
+   (`onMouseDown`+`preventDefault` pra sobreviver ao blur), contas sintéticas aparecem em
+   negrito. Bug pego em teste ao vivo no navegador e corrigido: sem selecionar o texto exibido
+   após a escolha, digitar de novo **anexava** ao código escolhido em vez de substituí-lo.
+   Substituiu os `<select>` de plano de contas em: `FornecedorForm`, `ContasPagarForm`,
+   `ContaCorrenteMovimentoForm`, `ConfiguracaoGeralForm` (com a opção `apenasAnaliticas`) e
+   `ImportacaoTabelaPage`. O cadastro rápido de fornecedor da Entrada de Produtos
+   (`FornecedorQuickCreateModal`) continua **sem** esse campo — a conta é sempre a de compra
+   configurada, atribuída sem interação do operador (decisão de 2026-08-19, mantida).
+
+3. **Removidas por completo — tela, schema, banco** — as seções "Exigências no lançamento"
+   (`exige_centro_custo`/`exige_contraparte`/`exige_documento`) e "Integrações" (`id_conta_
+   contabil`/`id_plano_referencial`, de-para SPED ECD/plano referencial RFB). Antes de remover,
+   auditado (`grep`) que nenhuma tela de lançamento (PDV, caixa, contas a pagar, movimentação de
+   conta corrente) lia essas flags — foram desenhadas como trava/integração *futura* e nunca
+   ficaram funcionais; confirmado que a remoção **não** afeta DRE/DFC (que não dependem delas).
+   Índice `cfg_plano_contas_contabil_uq` removido junto. `PlanoContasDtos`/`Service`/
+   `FornecedorImportador` (que criava conta pela Importação de Dados) e `web/src/lib/
+   planoContas.ts`/`PlanoContasForm.tsx` ajustados — a seção "Integrações" virou uma seção
+   simples só com Observação.
+
+**Verificação:** suíte de backend **474/474 verdes** (conversão mecânica de códigos nos testes +
+teste de hierarquia reescrito pra 3 níveis; nenhum teste novo, nenhum removido — mesma
+contagem antes/depois das duas rodadas). `tsc --noEmit` limpo. API rebuildada duas vezes
+(máscara nova, depois remoção dos campos) e testada ao vivo via curl e navegador: criação/edição/
+exclusão de conta no formato novo, endpoint antigo rejeitando o formato de 12 caracteres,
+resposta da API sem os 5 campos removidos, busca por código e por nome no `SeletorPlanoContas`
+funcionando na tela de Fornecedor. `docs/telas/plano-contas.md` atualizado por completo (máscara,
+tabela de campos, contrato de API, seed, critérios de aceitação).
+
+### 2026-08-22 — Foco automático em 15 telas de lista + espaçamento na Exportação de Dados
+
+Pedido direto, lista fechada de telas: `autoFocus` adicionado ao campo principal de busca/
+localização de Pesquisa de Vendas e Reimpressão de Papeleta de Venda (Nº da venda), Recebimento
+de Crediário e Reimpressão de Papeleta de Recebimento de Crediário (Nome do cliente — dentro do
+popup de filtros, no caso da reimpressão), Transferência de Produtos e Movimentação de Conta
+Corrente (Data inicial), Conta Corrente (busca por conta/descrição), Tipo de Carteira/Clientes/
+Funcionários/Usuários/Configuração de Etiqueta (busca por nome), Fornecedores (busca por razão
+social), Produtos (busca por descrição) e Contas a Pagar (campo Fornecedor, dentro do popup de
+filtros obrigatório). Confirmado que o popup de Abertura de Caixa (Recebimento de Crediário) não
+conflita com o foco — é um overlay com foco próprio, o campo de busca só recebe foco quando o
+caixa já está aberto. Na Exportação de Dados, os botões de tabela ficavam colados porque o
+`.form-grid` padrão do projeto não tem espaçamento vertical entre linhas (pensado pra
+formulários, onde o label já cria respiro) — aplicado `gap: 14px 16px` só nessa grade, casando
+com o espaçamento de `.menu-cards` da tela de Relatórios. `tsc --noEmit` limpo; sem impacto em
+backend.
+
+### 2026-08-22 — Fix: cadastro rápido de fornecedor na Entrada de Produtos não preenchia o plano de contas para papel não-ADMIN
+
+Achado ao investigar por que o campo "plano de contas" do fornecedor, criado pelo cadastro
+rápido embutido na Entrada de Produtos por Compra, às vezes não vinha preenchido com o padrão
+configurado em Parâmetros do Sistema. Causa: `FornecedorQuickCreateModal.tsx` chamava
+`GET /api/v1/config-geral` (o endpoint **completo** de Parâmetros do Sistema) só pra ler
+`idPlanoContasCompraMercadoria` — e esse endpoint é **ADMIN-only**, checado dentro do próprio
+`ConfiguracaoGeralService`. Pra qualquer usuário `OPERADOR` (o caso mais comum de quem faz
+entrada de mercadoria no dia a dia), a chamada voltava 403 silencioso, a query React Query ficava
+sem dado, e o `useEffect` que atribui o plano de contas por baixo dos panos nunca disparava.
+O próprio `ConfiguracaoGeralService` já tinha o método certo pra isso —
+`idPlanoContasCompraMercadoria()`, **sem checagem de papel**, com fallback pro código padrão —
+só faltava uma rota. Adicionado `GET /api/v1/config-geral/plano-contas-compra-mercadoria` (mesmo
+padrão já usado por `/usa-cor-grade`, `/rateia-frete-entrada`, `/reajusta-preco-entrada`: flags
+liberadas a qualquer papel autenticado, sem passar pelo `buscar()` completo) e trocada a chamada
+do modal pra esse endpoint. Reproduzido e confirmado ao vivo com um usuário `OPERADOR` real: 403
+no endpoint antigo, 200 com o valor certo no novo. Suíte de backend segue **474/474 verdes**
+(nenhum teste novo — a cobertura de ponta a ponta foi feita via curl/navegador, não automatizada
+nesta sessão).
 
 ### 2026-08-21 — Cor/Grade padrão (sentinela código 1), dados reais de NCM, sincronismo de NCM no XML e ajustes na grid da Entrada por XML
 

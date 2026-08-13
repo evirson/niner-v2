@@ -107,6 +107,7 @@ export default function ReimpressaoPapeletaVenda() {
 
         <div className="card filtros-bar">
           <input
+            autoFocus
             placeholder="Nº da venda…"
             value={numeroVendaTexto}
             onChange={(e) => setNumeroVendaTexto(e.target.value.replace(/\D/g, ''))}

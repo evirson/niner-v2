@@ -80,4 +80,10 @@ public final class ConfiguracaoGeralDtos {
      *  Entrada de Produtos por Compra pra decidir se atualiza `produto.preco_custo`/`preco_venda`. */
     public record ReajustaPrecoEntradaResponse(boolean cfgReajustaPrecoEntrada) {
     }
+
+    /** Só o plano de contas padrão de compra, sem checagem de papel — usado pelo cadastro rápido
+     *  de fornecedor embutido na Entrada de Produtos por Compra (`FornecedorQuickCreateModal`),
+     *  acionado por qualquer papel que faz entrada, não só ADMIN. */
+    public record PlanoContasCompraMercadoriaResponse(String idPlanoContasCompraMercadoria) {
+    }
 }

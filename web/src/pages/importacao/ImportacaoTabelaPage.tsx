@@ -18,7 +18,7 @@ import {
   type RelatorioImportacao,
 } from '../../lib/importacao'
 import { mascararCodigoPlanoContas } from '../../lib/masks'
-import { listarPlanosContas } from '../../lib/planoContas'
+import SeletorPlanoContas from '../../components/SeletorPlanoContas'
 import { listarTiposCarteira } from '../../lib/tiposCarteira'
 
 export type Tabela = 'cliente' | 'fornecedor' | 'produto' | 'contas_receber' | 'estoque'
@@ -199,11 +199,6 @@ export default function ImportacaoTabelaPage({ tabela }: { tabela: Tabela }) {
   }
 
   const { data: categorias } = useQuery({ queryKey: ['categorias-cliente-importacao'], queryFn: listarCategorias, enabled: tabela === 'cliente' })
-  const { data: planos } = useQuery({
-    queryKey: ['planos-contas-importacao'],
-    queryFn: () => listarPlanosContas({ tamanho: 100 }),
-    enabled: tabela === 'fornecedor',
-  })
   const { data: carteirasPagina } = useQuery({
     queryKey: ['tipos-carteira-importacao'],
     queryFn: () => listarTiposCarteira({ tamanho: 100 }),
@@ -439,16 +434,12 @@ export default function ImportacaoTabelaPage({ tabela }: { tabela: Tabela }) {
                     Plano de contas existente
                   </label>
                   {escolhas.planoModo === 'existente' && (
-                    <select
-                      value={escolhas.idPlanoContas}
-                      onChange={(e) => alterarEscolhas({ ...escolhas, idPlanoContas: e.target.value })}
-                      style={{ marginBottom: 12 }}
-                    >
-                      <option value="">Selecione…</option>
-                      {(planos?.itens ?? []).map((p) => (
-                        <option key={p.idPlanoContas} value={p.idPlanoContas}>{p.idPlanoContas} — {p.descricao}</option>
-                      ))}
-                    </select>
+                    <div style={{ marginBottom: 12 }}>
+                      <SeletorPlanoContas
+                        value={escolhas.idPlanoContas}
+                        onChange={(idPlanoContas) => alterarEscolhas({ ...escolhas, idPlanoContas })}
+                      />
+                    </div>
                   )}
                   <label className="radio-linha">
                     <input
@@ -461,7 +452,7 @@ export default function ImportacaoTabelaPage({ tabela }: { tabela: Tabela }) {
                   {escolhas.planoModo === 'novo' && (
                     <div className="form-grid">
                       <div className="col-3">
-                        <label>Código (9.99.999.999)</label>
+                        <label>Código (9.99.999)</label>
                         <input
                           value={escolhas.novoPlano.codigo}
                           onChange={(e) =>

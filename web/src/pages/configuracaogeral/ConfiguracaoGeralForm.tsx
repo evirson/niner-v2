@@ -15,7 +15,7 @@ import {
 import { formatarDataHora } from '../../lib/datas'
 import { aoTeclarEnterNoFormulario } from '../../lib/formularios'
 import { completarPercentual, desmascararPercentual, mascararPercentual } from '../../lib/masks'
-import { listarPlanosContas } from '../../lib/planoContas'
+import SeletorPlanoContas from '../../components/SeletorPlanoContas'
 
 const CHAVE_TELA = 'configuracao.geral.form'
 
@@ -65,11 +65,6 @@ export default function ConfiguracaoGeralForm() {
     queryFn: buscarConfiguracaoGeral,
   })
 
-  const { data: planos } = useQuery({
-    queryKey: ['planos-contas', 'config-geral-compra-mercadoria'],
-    queryFn: () => listarPlanosContas({ tamanho: 200 }),
-  })
-  const planosAnaliticos = (planos?.itens ?? []).filter((p) => p.natureza === 'ANALITICA' && p.ativo)
 
   useEffect(() => {
     if (configuracao) setForm(paraFormulario(configuracao))
@@ -271,17 +266,12 @@ export default function ConfiguracaoGeralForm() {
             </div>
             <div className="col-6">
               <label htmlFor="idPlanoContasCompraMercadoria">Plano de Contas da Compra *</label>
-              <select
+              <SeletorPlanoContas
                 id="idPlanoContasCompraMercadoria"
                 value={form.idPlanoContasCompraMercadoria}
-                onChange={(e) => setForm((f) => ({ ...f, idPlanoContasCompraMercadoria: e.target.value }))}
-              >
-                {planosAnaliticos.map((p) => (
-                  <option key={p.idPlanoContas} value={p.idPlanoContas}>
-                    {p.idPlanoContas} — {p.descricao}
-                  </option>
-                ))}
-              </select>
+                onChange={(idPlanoContasCompraMercadoria) => setForm((f) => ({ ...f, idPlanoContasCompraMercadoria }))}
+                apenasAnaliticas
+              />
               <p className="muted" style={{ fontSize: 12, marginTop: 4 }}>
                 Plano de contas usado nas contas a pagar geradas pela Entrada de Produtos por
                 Compra — não é o plano do fornecedor, é uma conta de custo do próprio tenant.

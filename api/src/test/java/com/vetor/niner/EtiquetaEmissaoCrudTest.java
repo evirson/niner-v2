@@ -83,10 +83,10 @@ class EtiquetaEmissaoCrudTest {
     }
 
     private long criarFornecedor(String token, String razaoSocial) throws Exception {
-        criarPlanoContas(token, "2.00.000.000");
+        criarPlanoContas(token, "2.00.000");
         String resp = mvc.perform(post("/api/v1/fornecedores").header("Authorization", "Bearer " + token)
                         .contentType(APPLICATION_JSON)
-                        .content("{\"razaoSocial\":\"" + razaoSocial + "\",\"idPlanoContas\":\"2.00.000.000\"}"))
+                        .content("{\"razaoSocial\":\"" + razaoSocial + "\",\"idPlanoContas\":\"2.00.000\"}"))
                 .andExpect(status().isCreated())
                 .andReturn().getResponse().getContentAsString();
         return ((Number) JsonPath.read(resp, "$.idFornecedor")).longValue();
@@ -129,7 +129,7 @@ class EtiquetaEmissaoCrudTest {
                                  "multaCrediarioDias":0,"multaCrediario":0,"cfgUsaCorGrade":true,
                                  "cfgPermiteQtdDecimal":true,"cfgExigeNumeroVendaDevolucao":false,
                                  "cfgRateiaFreteEntrada":false,"cfgReajustaPrecoEntrada":false,
-                                 "idPlanoContasCompraMercadoria":"3.03.001.001"}
+                                 "idPlanoContasCompraMercadoria":"3.03.001"}
                                 """))
                 .andExpect(status().isOk());
     }

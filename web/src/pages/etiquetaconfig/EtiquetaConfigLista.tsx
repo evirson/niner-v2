@@ -144,6 +144,7 @@ export default function EtiquetaConfigLista() {
 
         <div className="card filtros-bar">
           <input
+            autoFocus
             placeholder="Buscar por nome…"
             value={busca}
             onChange={(e) => setBusca(maiusculas(e.target.value))}

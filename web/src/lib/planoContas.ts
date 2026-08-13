@@ -60,13 +60,13 @@ export const ROTULO_GRUPO_DFC: Record<GrupoDfcConta, string> = {
 }
 
 export interface PlanoContas {
-  /** Código contábil (ex.: "3.03.001.001") — a própria PK de negócio, imutável após criar. */
+  /** Código contábil (ex.: "3.03.001") — a própria PK de negócio, imutável após criar. */
   idPlanoContas: string
   descricao: string
   descricaoCurta: string | null
   tipoMovimento: TipoMovimentoConta
   natureza: NaturezaConta
-  /** 1=conta 2=subconta 3=item 4=subitem — derivado da máscara, nunca editável. */
+  /** 1=grupo 2=família 3=conta — derivado da máscara, nunca editável. */
   nivel: number
   idPlanoContasPai: string | null
   incluiDre: boolean
@@ -77,11 +77,6 @@ export interface PlanoContas {
   sinal: number
   /** Derivado da natureza (natureza=ANALITICA), nunca editável. */
   aceitaLancamento: boolean
-  exigeCentroCusto: boolean
-  exigeContraparte: boolean
-  exigeDocumento: boolean
-  idContaContabil: string | null
-  idPlanoReferencial: string | null
   padraoSistema: boolean
   ativo: boolean
   observacao: string | null
@@ -100,11 +95,6 @@ export interface PlanoContasFormState {
   grupoDre: GrupoDreConta | ''
   incluiFluxoCaixa: boolean
   grupoDfc: GrupoDfcConta | ''
-  exigeCentroCusto: boolean
-  exigeContraparte: boolean
-  exigeDocumento: boolean
-  idContaContabil: string
-  idPlanoReferencial: string
   observacao: string
 }
 
@@ -118,11 +108,6 @@ export const PLANO_CONTAS_VAZIO: PlanoContasFormState = {
   grupoDre: '',
   incluiFluxoCaixa: false,
   grupoDfc: '',
-  exigeCentroCusto: false,
-  exigeContraparte: false,
-  exigeDocumento: false,
-  idContaContabil: '',
-  idPlanoReferencial: '',
   observacao: '',
 }
 
@@ -137,11 +122,6 @@ export function paraFormulario(p: PlanoContas): PlanoContasFormState {
     grupoDre: p.incluiDre ? p.grupoDre : '',
     incluiFluxoCaixa: p.incluiFluxoCaixa,
     grupoDfc: p.incluiFluxoCaixa ? p.grupoDfc : '',
-    exigeCentroCusto: p.exigeCentroCusto,
-    exigeContraparte: p.exigeContraparte,
-    exigeDocumento: p.exigeDocumento,
-    idContaContabil: p.idContaContabil ?? '',
-    idPlanoReferencial: p.idPlanoReferencial ?? '',
     observacao: p.observacao ?? '',
   }
 }
@@ -158,11 +138,6 @@ export function paraRequisicao(f: PlanoContasFormState) {
     grupoDre: f.incluiDre ? f.grupoDre || null : null,
     incluiFluxoCaixa: f.incluiFluxoCaixa,
     grupoDfc: f.incluiFluxoCaixa ? f.grupoDfc || null : null,
-    exigeCentroCusto: f.exigeCentroCusto,
-    exigeContraparte: f.exigeContraparte,
-    exigeDocumento: f.exigeDocumento,
-    idContaContabil: f.idContaContabil.trim() ? maiusculas(f.idContaContabil.trim()) : null,
-    idPlanoReferencial: f.idPlanoReferencial.trim() ? maiusculas(f.idPlanoReferencial.trim()) : null,
     observacao: f.observacao.trim() ? maiusculas(f.observacao.trim()) : null,
   }
 }
