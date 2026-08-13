@@ -346,7 +346,9 @@ Duas tabelas novas além do proposto no rascunho:
    `UNIQUE (id_tenant, id_fornecedor, codigo_fornecedor)`.
 4. **`cfg_geral.id_plano_contas_compra_mercadoria`** (V032) — FK composta pro plano de contas
    usado nas `contas_pagar` geradas pela entrada; V032 também semeia a árvore mínima até
-   "3.03.001.001 Compra de Mercadoria para Revenda" pra tenants que ainda não a tinham.
+   "3.03.001 Compra de Mercadoria para Revenda" pra tenants que ainda não a tinham (código
+   `3.03.001` desde 2026-08-22 — era `3.03.001.001` antes da máscara do plano de contas
+   encurtar de 4 pra 3 níveis, ver `docs/telas/plano-contas.md`).
    `cfg_geral.cfg_rateia_frete_entrada`/`cfg_reajusta_preco_entrada` (booleans, default
    `false`) foram direto em `V023__cfg_geral.sql` (banco em construção).
 5. **Cancelamento (2026-08-19)** — `produto_movimento_mestre` ganhou

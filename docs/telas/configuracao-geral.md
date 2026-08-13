@@ -119,6 +119,20 @@ comportamento antigo até o cache expirar sozinho. Corrigido invalidando as 4 qu
 Detalhe completo (incluindo o efeito colateral do lado do consumidor, que também precisou de
 ajuste): [[feedback_react_query_cache_entre_telas]] (memória) e `docs/telas/devolucao-produtos.md`.
 
+## Bug corrigido (2026-08-22) — plano de contas de compra não chegava pra usuário OPERADOR
+
+O cadastro rápido de fornecedor embutido na Entrada de Produtos por Compra
+(`FornecedorQuickCreateModal.tsx`) buscava `id_plano_contas_compra_mercadoria` chamando o
+endpoint **completo** (`GET /api/v1/config-geral`, ADMIN-only) só pra ler esse único campo —
+pra qualquer usuário `OPERADOR` (o caso mais comum de quem faz entrada de mercadoria), a
+chamada voltava 403 e o campo ficava vazio, silenciosamente. Corrigido com o endpoint
+`GET /api/v1/config-geral/plano-contas-compra-mercadoria` (sem checagem de papel, mesmo padrão
+de `/usa-cor-grade`/`/permite-qtd-decimal` acima), reaproveitando um método de serviço que já
+existia (`ConfiguracaoGeralService.idPlanoContasCompraMercadoria()`, usado internamente por
+`EntradaMercadoriaService`) mas nunca tinha rota própria. Reproduzido e confirmado ao vivo com
+usuário `OPERADOR` real: 403 no endpoint antigo, 200 no novo. Detalhe completo:
+`docs/telas/entrada-mercadoria.md` e `docs/telas/plano-contas.md`.
+
 ## Impacto no contrato de API
 
 ```
@@ -128,6 +142,9 @@ GET  /api/v1/config-geral/usa-cor-grade      usa cor/grade (qualquer papel)
 GET  /api/v1/config-geral/desconto-venda     percentual de desconto máximo (qualquer papel, PDV)
 GET  /api/v1/config-geral/permite-qtd-decimal  quantidade decimal ligada/desligada (qualquer papel)
 GET  /api/v1/config-geral/exige-numero-venda-devolucao  nº da venda obrigatório na devolução? (qualquer papel)
+GET  /api/v1/config-geral/rateia-frete-entrada     rateia frete/IPI/ICMS-ST no custo? (qualquer papel, Entrada de Produtos)
+GET  /api/v1/config-geral/reajusta-preco-entrada   reajusta preço na entrada? (qualquer papel, Entrada de Produtos)
+GET  /api/v1/config-geral/plano-contas-compra-mercadoria  plano de contas padrão de compra (qualquer papel — 2026-08-22, ver "Bug corrigido" acima)
 ```
 
 Sob `/api/v1/**` (JWT de tenant, RLS ativo — P8); 403 (Problem Details) para papel diferente
