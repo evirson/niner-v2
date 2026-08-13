@@ -125,6 +125,121 @@ class EntradaXmlCrudTest {
         return new MockMultipartFile("arquivo", "nfe-grings.xml", "text/xml", bytes);
     }
 
+    /**
+     * Insere um NCM diretamente (não há endpoint de escrita — {@code cfg_produto_ncm} é
+     * mantida por script, global, sem tenant). Conecta como {@code niner_owner}: {@code
+     * niner_app} só tem SELECT nessa tabela (V017) — mesmo padrão de {@code ProdutoCrudTest}.
+     */
+    private void criarNcm(String codigo, String descricao) throws SQLException {
+        try (Connection c = DriverManager.getConnection(postgres.getJdbcUrl(), "niner_owner", "dev_owner");
+             Statement st = c.createStatement()) {
+            // ON CONFLICT DO NOTHING: cfg_produto_ncm é GLOBAL (sem tenant), compartilhada por
+            // TODOS os métodos de teste desta classe no mesmo container — sem isso, o 2º teste
+            // que precisar do mesmo código bate em "duplicate key".
+            st.executeUpdate("INSERT INTO cfg_produto_ncm (codigo_ncm, descricao_ncm) VALUES ('"
+                    + codigo + "', '" + descricao + "') ON CONFLICT (codigo_ncm) DO NOTHING");
+        }
+    }
+
+    private long criarProdutoComNcm(String token, String descricao, String ncm) throws Exception {
+        String resp = mvc.perform(post("/api/v1/produtos").header("Authorization", "Bearer " + token)
+                        .contentType(APPLICATION_JSON)
+                        .content("""
+                                {"descricao":"%s","precoCusto":"10.00","percentualVenda":"100","precoVenda":"20.00",
+                                 "codigoNcm":"%s"}
+                                """.formatted(descricao, ncm)))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        return ((Number) JsonPath.read(resp, "$.idProduto")).longValue();
+    }
+
+    private String buscarCodigoNcm(long idTenant, long idProduto) throws SQLException {
+        try (Connection c = abrirConexao(idTenant);
+             PreparedStatement ps = c.prepareStatement(
+                     "SELECT codigo_ncm FROM produto WHERE id_tenant = ? AND id_produto = ?")) {
+            ps.setLong(1, idTenant);
+            ps.setLong(2, idProduto);
+            try (var rs = ps.executeQuery()) {
+                assertThat(rs.next()).isTrue();
+                return rs.getString(1);
+            }
+        }
+    }
+
+    /** O item 1 da NF-e real da Dakota (EAN_ITEM_1/CPROD_ITEM_1) traz {@code <NCM>64029190</NCM>}
+     *  — motivou o pedido do dono do produto: "o NCM do XML sempre vale, mesmo que o produto já
+     *  tenha outro cadastrado". */
+    @Test
+    void confirmarEntradaSubstituiNcmDoProdutoPeloDoXmlQuandoDiferente() throws Exception {
+        String token = assinarNovoTenant("ncmsubstitui");
+        long idTenant = extrairIdTenant(token);
+        long idFornecedor = criarFornecedor(token, "FORNECEDOR NCM SUBSTITUI", null);
+        criarNcm("64029190", "CALCADOS DE COURO");
+        criarNcm("99998888", "NCM ANTIGO TESTE ENTRADA XML");
+        long idProduto = criarProdutoComNcm(token, "BOTA COM NCM ANTIGO", "99998888");
+        long idVariacao = criarVariacao(token, idProduto, EAN_ITEM_1);
+
+        String resp = mvc.perform(multipart("/api/v1/estoque/entradas/xml/preview")
+                        .file(xmlDakota()).header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        Map<String, Object> item1 = JsonPath.read(resp, "$.itens[0]");
+        assertThat((Boolean) item1.get("resolvido")).isTrue();
+        assertThat((String) item1.get("ncm")).isEqualTo("64029190");
+
+        assertThat(buscarCodigoNcm(idTenant, idProduto)).isEqualTo("99998888");
+
+        mvc.perform(post("/api/v1/estoque/entradas").header("Authorization", "Bearer " + token)
+                        .contentType(APPLICATION_JSON)
+                        .content("""
+                                {"idFornecedor":%d,"itens":[{"idVariacao":%d,"qtd":1,"precoCusto":10.00,
+                                 "codigoFornecedor":"%s","ncm":"64029190"}]}
+                                """.formatted(idFornecedor, idVariacao, CPROD_ITEM_1)))
+                .andExpect(status().isCreated());
+
+        assertThat(buscarCodigoNcm(idTenant, idProduto)).isEqualTo("64029190");
+    }
+
+    /** Pendência (produto não encontrado) também traz o NCM do XML, já validado contra
+     *  {@code cfg_produto_ncm} — a tela usa isso pra pré-preencher o cadastro rápido. */
+    @Test
+    void pendenciaTrazNcmDoXmlQuandoEleExisteNoCadastroDeNcm() throws Exception {
+        String token = assinarNovoTenant("ncmpendencia");
+        criarNcm("64029190", "CALCADOS DE COURO");
+
+        String resp = mvc.perform(multipart("/api/v1/estoque/entradas/xml/preview")
+                        .file(xmlDakota()).header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+
+        Map<String, Object> item1 = JsonPath.read(resp, "$.itens[0]");
+        assertThat((Boolean) item1.get("resolvido")).isFalse();
+        assertThat((String) item1.get("ncm")).isEqualTo("64029190");
+    }
+
+    /** Bug relatado (2026-08-20): NCM não vinha preenchido no cadastro rápido a partir de uma
+     *  pendência — causa raiz era validar o NCM contra {@code cfg_produto_ncm} antes de mostrar
+     *  QUALQUER coisa (a base local, ao contrário da oficial da Receita, normalmente não tem o
+     *  código do XML cadastrado). Pendência não grava nada — só pré-preenche um campo — então o
+     *  NCM cru do XML tem que aparecer independente de existir na base local ou não (diferente
+     *  da linha resolvida, que vai virar um UPDATE de verdade e por isso continua validando
+     *  antes). Este teste deliberadamente NÃO chama {@code criarNcm} — mesmo que outro método
+     *  desta classe já tenha semeado esse código (tabela global, compartilhada no container),
+     *  a asserção vale igual, já que pendência não depende mais disso. */
+    @Test
+    void pendenciaTrazNcmDoXmlMesmoQuandoEleNaoExisteNoCadastroDeNcm() throws Exception {
+        String token = assinarNovoTenant("ncmpendenciacru");
+
+        String resp = mvc.perform(multipart("/api/v1/estoque/entradas/xml/preview")
+                        .file(xmlDakota()).header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+
+        Map<String, Object> item1 = JsonPath.read(resp, "$.itens[0]");
+        assertThat((Boolean) item1.get("resolvido")).isFalse();
+        assertThat((String) item1.get("ncm")).isEqualTo("64029190");
+    }
+
     @Test
     void parseiaCabecalhoDaNotaReal() throws Exception {
         String token = assinarNovoTenant("cabecalho");

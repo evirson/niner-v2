@@ -67,13 +67,26 @@ class RlsIsolamentoTest {
         }
     }
 
+    /** {@code produto.id_grade} é {@code NOT NULL DEFAULT 1} (V017, 2026-08-20) com FK pra
+     *  {@code cfg_grade} — todo tenant precisa da cor/tamanho/grade PADRÃO (id=1) antes de
+     *  qualquer INSERT em {@code produto}, mesmo criado cru como aqui (SignupService faz isso
+     *  no fluxo real). */
     private static long inserirTenant(Statement st, String slug) throws SQLException {
+        long idTenant;
         try (ResultSet rs = st.executeQuery(
                 "INSERT INTO plataforma.tenant(nome_conta, slug, email_contato) VALUES ('"
                         + slug + "','" + slug + "','" + slug + "@x') RETURNING id_tenant")) {
             rs.next();
-            return rs.getLong(1);
+            idTenant = rs.getLong(1);
         }
+        // RLS FORCE exige app.id_tenant setado pra passar no WITH CHECK — o teste só faz esse
+        // SET depois, na sequência do próprio método de teste; aqui precisa do contexto local.
+        st.execute("SET app.id_tenant = " + idTenant);
+        st.executeUpdate("INSERT INTO cfg_cor (id_tenant, id_cor, descricao) VALUES (" + idTenant + ", 1, '')");
+        st.executeUpdate("INSERT INTO cfg_tamanho (id_tenant, id_tamanho, descricao) VALUES (" + idTenant + ", 1, 'UN')");
+        st.executeUpdate("INSERT INTO cfg_grade (id_tenant, id_grade, descricao, id_tamanho1) VALUES ("
+                + idTenant + ", 1, 'PADRÃO', 1)");
+        return idTenant;
     }
 
     private static long contar(Statement st, String sql) throws SQLException {
@@ -86,8 +99,14 @@ class RlsIsolamentoTest {
     private static void limpar(Statement st, long t1, long t2) throws SQLException {
         st.execute("SET app.id_tenant = " + t1);
         st.executeUpdate("DELETE FROM produto");
+        st.executeUpdate("DELETE FROM cfg_grade");
+        st.executeUpdate("DELETE FROM cfg_tamanho");
+        st.executeUpdate("DELETE FROM cfg_cor");
         st.execute("SET app.id_tenant = " + t2);
         st.executeUpdate("DELETE FROM produto");
+        st.executeUpdate("DELETE FROM cfg_grade");
+        st.executeUpdate("DELETE FROM cfg_tamanho");
+        st.executeUpdate("DELETE FROM cfg_cor");
         st.executeUpdate("DELETE FROM plataforma.tenant WHERE id_tenant IN (" + t1 + ", " + t2 + ")");
     }
 }

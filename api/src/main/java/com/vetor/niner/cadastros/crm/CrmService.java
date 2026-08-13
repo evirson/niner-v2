@@ -53,9 +53,9 @@ public class CrmService {
                 buscarOpcoes("SELECT id_categoria AS id, nome_categoria AS rotulo FROM cfg_categoria_produto "
                         + "WHERE id_tenant = plataforma.tenant_atual() ORDER BY nome_categoria"),
                 buscarOpcoes("SELECT id_cor AS id, descricao AS rotulo FROM cfg_cor "
-                        + "WHERE id_tenant = plataforma.tenant_atual() ORDER BY descricao"),
+                        + "WHERE id_tenant = plataforma.tenant_atual() AND id_cor <> 1 ORDER BY descricao"),
                 buscarOpcoes("SELECT id_tamanho AS id, descricao AS rotulo FROM cfg_tamanho "
-                        + "WHERE id_tenant = plataforma.tenant_atual() ORDER BY descricao"));
+                        + "WHERE id_tenant = plataforma.tenant_atual() AND id_tamanho <> 1 ORDER BY descricao"));
     }
 
     private List<OpcaoCrm> buscarOpcoes(String sql) {

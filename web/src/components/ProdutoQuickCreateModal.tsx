@@ -73,8 +73,9 @@ export default function ProdutoQuickCreateModal({
   /** Só chamado quando `exigirVariacaoAoCriar=false` e o produto criado usa grade — ver acima. */
   aoCriarComGrade?: (produto: Produto) => void
   /** Pré-preenchimento (fluxo Planilha da Entrada, 2026-08-12) — quando a linha da planilha não
-   *  achou o produto, a tela já abre o cadastro rápido com o que a planilha trouxe. */
-  valorInicial?: { descricao?: string; marca?: string; referencia?: string; precoCusto?: string; ean?: string; cor?: string; tamanho?: string }
+   *  achou o produto, a tela já abre o cadastro rápido com o que a planilha trouxe. `ncm`
+   *  (2026-08-20, fluxo XML) já vem validado contra o cadastro de NCM. */
+  valorInicial?: { descricao?: string; marca?: string; referencia?: string; precoCusto?: string; ean?: string; cor?: string; tamanho?: string; ncm?: string }
 }) {
   const queryClient = useQueryClient()
   const [form, setForm] = useState<ProdutoFormState>({
@@ -83,6 +84,7 @@ export default function ProdutoQuickCreateModal({
     marca: valorInicial?.marca ?? '',
     referencia: valorInicial?.referencia ?? '',
     precoCusto: valorInicial?.precoCusto ?? '',
+    codigoNcm: valorInicial?.ncm ? mascararNcm(valorInicial.ncm) : '',
   })
   const [ean, setEan] = useState(valorInicial?.ean ?? '')
   const [idCor, setIdCor] = useState<number | ''>('')
@@ -128,6 +130,21 @@ export default function ProdutoQuickCreateModal({
     }
     setDescricaoNcm(ncm.descricaoNcm)
   }
+
+  // NCM pré-preenchido pelo XML (2026-08-20) — o dígito já está no form desde o useState acima;
+  // aqui só busca a DESCRIÇÃO (campo somente-leitura), sem reaproveitar `buscarDescricaoDoNcm`
+  // (que limpa `codigoNcm` quando não acha — certo pro operador digitando à mão um código que
+  // não existe, errado aqui: a base LOCAL de NCM costuma estar incompleta — a oficial da Receita
+  // tem milhares de códigos — e o número que veio do XML é real mesmo sem descrição cadastrada;
+  // apagar o pré-preenchimento reproduzia exatamente o bug relatado, "não vem preenchido").
+  useEffect(() => {
+    if (valorInicial?.ncm) {
+      buscarNcm(valorInicial.ncm).then((ncm) => {
+        if (ncm) setDescricaoNcm(ncm.descricaoNcm)
+      })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const criarNovaCor = useMutation({
     mutationFn: criarCor,

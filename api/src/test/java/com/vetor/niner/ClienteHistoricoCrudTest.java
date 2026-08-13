@@ -130,10 +130,15 @@ class ClienteHistoricoCrudTest {
     }
 
     private long criarCor(Connection c, long idTenant, String descricao) throws SQLException {
-        try (PreparedStatement ps = c.prepareStatement(
-                "INSERT INTO cfg_cor (id_tenant, descricao) VALUES (?, ?) RETURNING id_cor")) {
+        // id_cor não é mais IDENTITY (V017, 2026-08-20) — calculado por tenant.
+        try (PreparedStatement ps = c.prepareStatement("""
+                INSERT INTO cfg_cor (id_tenant, id_cor, descricao)
+                VALUES (?, COALESCE((SELECT MAX(id_cor) FROM cfg_cor WHERE id_tenant = ?), 0) + 1, ?)
+                RETURNING id_cor
+                """)) {
             ps.setLong(1, idTenant);
-            ps.setString(2, descricao);
+            ps.setLong(2, idTenant);
+            ps.setString(3, descricao);
             try (ResultSet rs = ps.executeQuery()) {
                 rs.next();
                 return rs.getLong(1);
@@ -142,10 +147,15 @@ class ClienteHistoricoCrudTest {
     }
 
     private long criarTamanho(Connection c, long idTenant, String descricao) throws SQLException {
-        try (PreparedStatement ps = c.prepareStatement(
-                "INSERT INTO cfg_tamanho (id_tenant, descricao) VALUES (?, ?) RETURNING id_tamanho")) {
+        // id_tamanho não é mais IDENTITY (V017, 2026-08-20) — calculado por tenant.
+        try (PreparedStatement ps = c.prepareStatement("""
+                INSERT INTO cfg_tamanho (id_tenant, id_tamanho, descricao)
+                VALUES (?, COALESCE((SELECT MAX(id_tamanho) FROM cfg_tamanho WHERE id_tenant = ?), 0) + 1, ?)
+                RETURNING id_tamanho
+                """)) {
             ps.setLong(1, idTenant);
-            ps.setString(2, descricao);
+            ps.setLong(2, idTenant);
+            ps.setString(3, descricao);
             try (ResultSet rs = ps.executeQuery()) {
                 rs.next();
                 return rs.getLong(1);

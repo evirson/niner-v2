@@ -116,6 +116,17 @@ public class SignupService {
         jdbc.sql("INSERT INTO cfg_geral (id_tenant, id_plano_contas_compra_mercadoria) VALUES (?, '3.03.001.001')")
                 .param(idTenant).update();
 
+        // 5a2) cor/tamanho/grade PADRÃO (2026-08-20) — sempre id=1 (id_cor/id_tamanho/id_grade
+        // não são mais IDENTITY, ver V017): usados internamente quando o tenant não usa cor/grade
+        // ou um produto específico não tem variação de verdade, nunca exibidos/referenciados em
+        // tela nenhuma (todo JOIN de exibição exclui id=1; CorService/TamanhoService/GradeService.
+        // listar() também). Precisam nascer ANTES de qualquer outra cor/tamanho/grade do tenant,
+        // pra garantir que ninguém mais ocupe o código 1.
+        jdbc.sql("INSERT INTO cfg_cor (id_tenant, id_cor, descricao) VALUES (?, 1, '')").param(idTenant).update();
+        jdbc.sql("INSERT INTO cfg_tamanho (id_tenant, id_tamanho, descricao) VALUES (?, 1, 'UN')").param(idTenant).update();
+        jdbc.sql("INSERT INTO cfg_grade (id_tenant, id_grade, descricao, id_tamanho1) VALUES (?, 1, 'PADRÃO', 1)")
+                .param(idTenant).update();
+
         // 5b) formas de pagamento padrão (§3.3.7/V025) — seed POR TENANT aqui, não em migration
         // global, porque id_tenant é obrigatório (P8) e não existe no momento do Flyway. Mesmo
         // conjunto do legado (db/042_MOEDAS.txt), mas agora direto em tipo_carteira — moeda foi

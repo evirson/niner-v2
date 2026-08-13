@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import AjudaDaTela from '../../../components/AjudaDaTela'
 import { BotaoFecharTela } from '../../../components/BotaoFecharTela'
@@ -8,7 +8,7 @@ import FornecedorQuickCreateModal from '../../../components/FornecedorQuickCreat
 import ProdutoQuickCreateModal from '../../../components/ProdutoQuickCreateModal'
 import Toast from '../../../components/Toast'
 import { ApiError } from '../../../lib/api'
-import { buscarPermiteQtdDecimal, buscarRateiaFreteEntrada } from '../../../lib/configuracaoGeral'
+import { buscarPermiteQtdDecimal, buscarRateiaFreteEntrada, buscarUsaCorGrade } from '../../../lib/configuracaoGeral'
 import { criarCor, listarCores } from '../../../lib/cores'
 import { listarEmpresasPermitidas, type Empresa } from '../../../lib/empresas'
 import {
@@ -64,6 +64,9 @@ interface ItemLinha {
   /** `cProd` do XML (2026-08-18) — presente só quando o item nasceu do fluxo XML; alimenta o
    *  aprendizado de `produto_fornecedor` na confirmação. */
   codigoFornecedor?: string | null
+  /** NCM do XML (2026-08-20) — presente só quando o item nasceu do fluxo XML; substitui o NCM
+   *  do produto na confirmação se vier diferente do já cadastrado. */
+  ncm?: string | null
 }
 
 interface ParcelaLinha {
@@ -111,11 +114,17 @@ function LinhaPendentePlanilha({
 }) {
   const queryClient = useQueryClient()
   const temProduto = linha.idProdutoEncontrado != null
-  const { data: cores } = useQuery({ queryKey: ['cores'], queryFn: listarCores, enabled: temProduto })
+  // Produto achado/cadastrado sem grade (idGradeEncontrada nulo — inclusive quando "Usa
+  // Cor/Grade" está desligado no parâmetro do sistema, que faz o backend ignorar a grade do
+  // produto por completo) não pede cor/tamanho nenhum: confirma direto (2026-08-20). Antes desta
+  // correção o formulário de Cor/Tamanho aparecia mesmo sem grade e travava — o select de
+  // Tamanho nunca tinha opção nenhuma pra escolher.
+  const usaGrade = temProduto && linha.idGradeEncontrada != null
+  const { data: cores } = useQuery({ queryKey: ['cores'], queryFn: listarCores, enabled: usaGrade })
   const { data: grade } = useQuery({
     queryKey: ['grade', linha.idGradeEncontrada],
     queryFn: () => buscarGrade(linha.idGradeEncontrada!),
-    enabled: temProduto && linha.idGradeEncontrada != null,
+    enabled: usaGrade,
   })
   const [idCor, setIdCor] = useState<number | ''>('')
   const [idTamanho, setIdTamanho] = useState<number | ''>('')
@@ -185,45 +194,54 @@ function LinhaPendentePlanilha({
         {erro && <p className="erro-campo">{erro}</p>}
         {temProduto ? (
           <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', flexWrap: 'wrap', marginTop: 6 }}>
-            <div>
-              <label style={{ fontSize: 12 }}>Cor</label>
-              <select value={idCor} onChange={(e) => setIdCor(e.target.value === '' ? '' : Number(e.target.value))}>
-                <option value="">Selecione…</option>
-                {(cores ?? []).map((c) => (
-                  <option key={c.idCor} value={c.idCor}>
-                    {c.descricao}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="linha-com-botao">
-              <input
-                placeholder="+ Nova cor…"
-                value={novaCorNome}
-                onChange={(e) => setNovaCorNome(maiusculas(e.target.value))}
-                style={{ width: 100 }}
-              />
-              <button
-                type="button"
-                className="btn ghost"
-                disabled={!novaCorNome.trim() || criarNovaCor.isPending}
-                onClick={() => criarNovaCor.mutate(novaCorNome.trim())}
-              >
-                ＋
-              </button>
-            </div>
-            <div>
-              <label style={{ fontSize: 12 }}>Tamanho</label>
-              <select value={idTamanho} onChange={(e) => setIdTamanho(e.target.value === '' ? '' : Number(e.target.value))}>
-                <option value="">Selecione…</option>
-                {(grade?.tamanhos ?? []).map((t) => (
-                  <option key={t.idTamanho} value={t.idTamanho}>
-                    {t.descricao}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <button type="button" className="btn" disabled={idCor === '' || idTamanho === '' || confirmar.isPending} onClick={() => confirmar.mutate()}>
+            {usaGrade && (
+              <>
+                <div>
+                  <label style={{ fontSize: 12 }}>Cor</label>
+                  <select value={idCor} onChange={(e) => setIdCor(e.target.value === '' ? '' : Number(e.target.value))}>
+                    <option value="">Selecione…</option>
+                    {(cores ?? []).map((c) => (
+                      <option key={c.idCor} value={c.idCor}>
+                        {c.descricao}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="linha-com-botao">
+                  <input
+                    placeholder="+ Nova cor…"
+                    value={novaCorNome}
+                    onChange={(e) => setNovaCorNome(maiusculas(e.target.value))}
+                    style={{ width: 100 }}
+                  />
+                  <button
+                    type="button"
+                    className="btn ghost"
+                    disabled={!novaCorNome.trim() || criarNovaCor.isPending}
+                    onClick={() => criarNovaCor.mutate(novaCorNome.trim())}
+                  >
+                    ＋
+                  </button>
+                </div>
+                <div>
+                  <label style={{ fontSize: 12 }}>Tamanho</label>
+                  <select value={idTamanho} onChange={(e) => setIdTamanho(e.target.value === '' ? '' : Number(e.target.value))}>
+                    <option value="">Selecione…</option>
+                    {(grade?.tamanhos ?? []).map((t) => (
+                      <option key={t.idTamanho} value={t.idTamanho}>
+                        {t.descricao}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </>
+            )}
+            <button
+              type="button"
+              className="btn"
+              disabled={(usaGrade && (idCor === '' || idTamanho === '')) || confirmar.isPending}
+              onClick={() => confirmar.mutate()}
+            >
               {confirmar.isPending ? 'Vinculando…' : 'Confirmar'}
             </button>
             <button type="button" className="btn ghost" onClick={onIgnorar}>
@@ -248,6 +266,61 @@ function LinhaPendentePlanilha({
   )
 }
 
+/** Uma linha (ou grupo de linhas com o mesmo nome — ver `pendentesAgrupados`) da grid "Não
+ *  Localizados" quando "Usa Cor/Grade" está desligado (2026-08-20) — sem coluna Cor/Tamanho
+ *  (nunca tem nada relevante pra mostrar) e sem o formulário de cor/tamanho de
+ *  `LinhaPendentePlanilha` (nunca chega pendência "produto achado, falta cor/tamanho" com o
+ *  parâmetro desligado — ver `EntradaXmlService`/`EntradaPlanilhaService`). Pesquisar/＋Cadastrar/
+ *  Ignorar aplicam à TODAS as linhas do grupo de uma vez. */
+function LinhaPendenteSemGrade({
+  linhas,
+  permiteQtdDecimal,
+  onIgnorar,
+  onPesquisar,
+  onCadastrar,
+}: {
+  linhas: ItemPlanilhaPreviewResponse[]
+  permiteQtdDecimal: boolean
+  onIgnorar: () => void
+  onPesquisar: () => void
+  onCadastrar: () => void
+}) {
+  const primeira = linhas[0]
+  const qtdTotal = linhas.reduce((acc, p) => acc + (p.qtd ?? 0), 0)
+  return (
+    <tr>
+      <td className="mono">
+        {primeira.numeroLinha}
+        {linhas.length > 1 && ` (+${linhas.length - 1})`}
+      </td>
+      <td>
+        {primeira.nomeProduto ?? '—'}
+        {primeira.marca ? ` · ${primeira.marca}` : ''}
+      </td>
+      <td className="mono" style={{ textAlign: 'right' }}>
+        {formatarQuantidade(qtdTotal, permiteQtdDecimal)}
+      </td>
+      <td>
+        <p className="erro-campo" style={{ margin: 0 }}>
+          {primeira.motivoPendencia}
+          {linhas.length > 1 && ` (${linhas.length} linhas com este nome)`}
+        </p>
+        <div style={{ display: 'flex', gap: 8, marginTop: 6, flexWrap: 'wrap' }}>
+          <button type="button" className="btn ghost" onClick={onPesquisar}>
+            <IconeLupa /> Pesquisar
+          </button>
+          <button type="button" className="btn ghost" onClick={onCadastrar}>
+            ＋ Cadastrar
+          </button>
+          <button type="button" className="btn ghost" onClick={onIgnorar}>
+            Ignorar linha{linhas.length > 1 ? 's' : ''}
+          </button>
+        </div>
+      </td>
+    </tr>
+  )
+}
+
 /** Entrada de Produtos por Compra (docs/telas/entrada-mercadoria.md) — 3 fluxos convergindo na
  *  mesma confirmação: Planilha Excel e Individual já funcionam; XML fica pra depois. */
 export default function EntradaMercadoriaForm() {
@@ -262,6 +335,12 @@ export default function EntradaMercadoriaForm() {
   const permiteQtdDecimal = cfgQtdDecimal?.cfgPermiteQtdDecimal ?? true
   const { data: cfgRateia } = useQuery({ queryKey: ['rateia-frete-entrada'], queryFn: buscarRateiaFreteEntrada })
   const rateiaFrete = cfgRateia?.cfgRateiaFreteEntrada ?? false
+  // "Usa Cor/Grade" desligado (2026-08-20): a grid "Localizados" esconde a coluna Variação (nunca
+  // tem nada pra mostrar — todo produto usa a variação PADRÃO) e "＋ Cadastrar Produto" some as
+  // pendências IRMÃS (mesmo nome, já sem cor/tamanho no texto — ver EntradaXmlService) direto na
+  // mesma linha, em vez de deixar cada uma virar um produto duplicado (ver aoCriarProduto).
+  const { data: cfgUsaCorGrade } = useQuery({ queryKey: ['usa-cor-grade'], queryFn: buscarUsaCorGrade })
+  const usaCorGrade = cfgUsaCorGrade?.cfgUsaCorGrade ?? false
 
   const [buscaFornecedor, setBuscaFornecedor] = useState('')
   const [fornecedorEscolhido, setFornecedorEscolhido] = useState<FornecedorOpcaoEmissao | null>(null)
@@ -367,8 +446,9 @@ export default function EntradaMercadoriaForm() {
 
   /** Lança um item já com o custo definido (vindo da planilha ou do XML, que trazem custo por
    *  linha — diferente do fluxo Individual, onde o custo é digitado depois). `codigoFornecedor`
-   *  (2026-08-18) só vem preenchido no fluxo XML — segue até a confirmação pra alimentar o
-   *  aprendizado de `produto_fornecedor`. */
+   *  (2026-08-18) e `ncm` (2026-08-20) só vêm preenchidos no fluxo XML — seguem até a
+   *  confirmação pra alimentar o aprendizado de `produto_fornecedor` e substituir o NCM do
+   *  produto se vier diferente. */
   const lancarItemComCusto = (
     idVariacao: number,
     descricao: string,
@@ -376,6 +456,7 @@ export default function EntradaMercadoriaForm() {
     qtd: number,
     custo: number,
     codigoFornecedor?: string | null,
+    ncm?: string | null,
   ) => {
     setItens((atual) => {
       const existente = atual.find((i) => i.idVariacao === idVariacao)
@@ -387,6 +468,7 @@ export default function EntradaMercadoriaForm() {
                 qtdTexto: formatarQuantidade(desmascararQuantidade(i.qtdTexto, permiteQtdDecimal) + qtd, permiteQtdDecimal),
                 custoTexto: formatarMoeda(custo),
                 codigoFornecedor: codigoFornecedor ?? i.codigoFornecedor,
+                ncm: ncm ?? i.ncm,
               }
             : i,
         )
@@ -401,6 +483,7 @@ export default function EntradaMercadoriaForm() {
           custoTexto: formatarMoeda(custo),
           precoVendaTexto: '',
           codigoFornecedor,
+          ncm,
         },
       ]
     })
@@ -443,20 +526,47 @@ export default function EntradaMercadoriaForm() {
 
   const removerPendente = (numeroLinha: number) => setPendentes((atual) => atual.filter((p) => p.numeroLinha !== numeroLinha))
 
+  const normalizarNomeProduto = (nome: string) => nome.trim().toUpperCase().replace(/\s+/g, ' ')
+
+  /** "Usa Cor/Grade" desligado (2026-08-20): a grid "Não Localizados" agrupa TODAS as pendências
+   *  sem produto (`idProdutoEncontrado == null`) que têm o mesmo nome numa única linha (soma de
+   *  QTD) — sem grade, um SAPATO XPTO tamanho 34/35/36/… é o mesmo produto entrando várias vezes,
+   *  não pendências distintas. Cada grupo resolve de uma vez só (Pesquisar/＋Cadastrar/Ignorar
+   *  aplicam a todas as linhas do grupo — ver `aoSelecionarNaPesquisa`/`aoCriarProduto`). Com o
+   *  parâmetro ligado, cada linha continua isolada (grupo de 1), pois cor/tamanho reais tornam as
+   *  linhas produtos distintos de verdade. */
+  const pendentesAgrupados = useMemo(() => {
+    if (usaCorGrade) return pendentes.map((p) => [p])
+    const mapa = new Map<string, ItemPlanilhaPreviewResponse[]>()
+    for (const p of pendentes) {
+      const chave = p.idProdutoEncontrado == null && p.nomeProduto != null ? normalizarNomeProduto(p.nomeProduto) : `__linha_${p.numeroLinha}`
+      const lista = mapa.get(chave) ?? []
+      lista.push(p)
+      mapa.set(chave, lista)
+    }
+    return Array.from(mapa.values())
+  }, [pendentes, usaCorGrade])
+
   const aoSelecionarNaPesquisa = (produto: PdvProduto) => {
     setMostrarPesquisa(false)
     if (pendenteEmResolucao != null) {
-      const linha = pendentes.find((p) => p.numeroLinha === pendenteEmResolucao)
-      if (linha) {
-        lancarItemComCusto(
-          produto.idVariacao,
-          produto.descricaoProduto,
-          variacaoTexto(produto),
-          linha.qtd ?? 1,
-          linha.custoUnitario ?? 0,
-          linha.codigoFornecedor,
-        )
-        removerPendente(pendenteEmResolucao)
+      const linhaAtual = pendentes.find((p) => p.numeroLinha === pendenteEmResolucao)
+      if (linhaAtual) {
+        const nomeAlvo = normalizarNomeProduto(linhaAtual.nomeProduto ?? '')
+        const irmas = usaCorGrade
+          ? [linhaAtual]
+          : pendentes.filter(
+              (p) =>
+                p.numeroLinha === pendenteEmResolucao ||
+                (p.idProdutoEncontrado == null && p.nomeProduto != null && normalizarNomeProduto(p.nomeProduto) === nomeAlvo),
+            )
+        irmas.forEach((p) => {
+          lancarItemComCusto(produto.idVariacao, produto.descricaoProduto, variacaoTexto(produto), p.qtd ?? 1, p.custoUnitario ?? 0, p.codigoFornecedor, p.ncm)
+        })
+        setPendentes((atual) => atual.filter((p) => !irmas.some((i) => i.numeroLinha === p.numeroLinha)))
+        if (irmas.length > 1) {
+          setToast({ texto: `${irmas.length} linhas com este nome foram somadas na mesma entrada.`, tipo: 'sucesso' })
+        }
       }
       setPendenteEmResolucao(null)
       return
@@ -473,30 +583,42 @@ export default function EntradaMercadoriaForm() {
     lancarItensComCustoEPreco(itens, custo, precoVenda)
   }
 
+  /** "＋ Cadastrar Produto" criou um produto SEM grade — a variação já vem pronta (única
+   *  possível, cor/tamanho PADRÃO). Diferente de {@link aoCriarProdutoComGrade} (grade real:
+   *  cada linha ainda precisa escolher cor/tamanho, só marca `idProdutoEncontrado`), aqui não
+   *  sobra NADA pra decidir por linha — então toda pendência IRMÃ (mesmo nome já sem cor/tamanho
+   *  no texto, ver `EntradaXmlService`/`EntradaPlanilhaService`) é resolvida de uma vez, somando
+   *  direto na mesma linha da grid "Localizados" (2026-08-20, pedido do dono do produto: sem
+   *  grade, produto com o mesmo nome vira UMA linha só, não um cadastro duplicado por linha). */
   const aoCriarProduto = (variacao: VariacaoProduto) => {
     setModalProdutoAberto(false)
     if (pendenteEmResolucao != null) {
-      const linha = pendentes.find((p) => p.numeroLinha === pendenteEmResolucao)
-      if (linha) {
-        lancarItemComCusto(
-          variacao.idVariacao,
-          variacao.descricao,
-          variacaoTexto(variacao),
-          linha.qtd ?? 1,
-          linha.custoUnitario ?? 0,
-          linha.codigoFornecedor,
+      const linhaAtual = pendentes.find((p) => p.numeroLinha === pendenteEmResolucao)
+      if (linhaAtual) {
+        const nomeAlvo = normalizarNomeProduto(variacao.descricao)
+        const irmas = pendentes.filter(
+          (p) =>
+            p.numeroLinha === pendenteEmResolucao ||
+            (p.idProdutoEncontrado == null && p.nomeProduto != null && normalizarNomeProduto(p.nomeProduto) === nomeAlvo),
         )
-        removerPendente(pendenteEmResolucao)
+        irmas.forEach((p) => {
+          lancarItemComCusto(variacao.idVariacao, variacao.descricao, variacaoTexto(variacao), p.qtd ?? 1, p.custoUnitario ?? 0, p.codigoFornecedor, p.ncm)
+        })
+        setPendentes((atual) => atual.filter((p) => !irmas.some((i) => i.numeroLinha === p.numeroLinha)))
+        setToast({
+          texto:
+            irmas.length > 1
+              ? `Produto cadastrado — ${irmas.length} linhas com este nome foram somadas na mesma entrada.`
+              : 'Produto cadastrado e adicionado à entrada.',
+          tipo: 'sucesso',
+        })
       }
       setPendenteEmResolucao(null)
-      setToast({ texto: 'Produto cadastrado e adicionado à entrada.', tipo: 'sucesso' })
       return
     }
     lancarProduto(variacao.idVariacao, variacao.descricao, variacaoTexto(variacao))
     setToast({ texto: 'Produto cadastrado e adicionado à entrada.', tipo: 'sucesso' })
   }
-
-  const normalizarNomeProduto = (nome: string) => nome.trim().toUpperCase().replace(/\s+/g, ' ')
 
   /** "＋ Cadastrar Produto" criou um produto COM grade, sem variação nenhuma ainda. Dois
    *  contextos bem diferentes usam este mesmo callback:
@@ -691,6 +813,7 @@ export default function EntradaMercadoriaForm() {
           l.qtd ?? 0,
           l.custoUnitario ?? 0,
           l.codigoFornecedor,
+          l.ncm,
         )
       })
       setPendentes((atual) => [...atual, ...novasPendentes])
@@ -769,6 +892,7 @@ export default function EntradaMercadoriaForm() {
           precoCusto: desmascararMoeda(i.custoTexto || '0'),
           precoVenda: i.precoVendaTexto ? desmascararMoeda(i.precoVendaTexto) : undefined,
           codigoFornecedor: i.codigoFornecedor,
+          ncm: i.ncm,
         })),
         contasPagar:
           parcelas.length > 0
@@ -803,7 +927,7 @@ export default function EntradaMercadoriaForm() {
             <thead>
               <tr>
                 <th>Descrição</th>
-                <th>Variação</th>
+                {usaCorGrade && <th>Variação</th>}
                 <th style={{ textAlign: 'right' }}>Quantidade</th>
                 <th style={{ textAlign: 'right' }}>Preço de Custo</th>
                 <th style={{ textAlign: 'right' }}>Valor Total</th>
@@ -817,7 +941,7 @@ export default function EntradaMercadoriaForm() {
                 return (
                   <tr key={item.idVariacao}>
                     <td>{item.descricao}</td>
-                    <td>{item.variacao ?? '—'}</td>
+                    {usaCorGrade && <td>{item.variacao ?? '—'}</td>}
                     <td style={{ textAlign: 'right' }}>
                       <input
                         className="mono"
@@ -865,7 +989,7 @@ export default function EntradaMercadoriaForm() {
                   <td>
                     <strong>Total</strong>
                   </td>
-                  <td />
+                  {usaCorGrade && <td />}
                   <td className="mono" style={{ textAlign: 'right' }}>
                     <strong>{formatarQuantidade(qtdTotal, permiteQtdDecimal)}</strong>
                   </td>
@@ -1354,39 +1478,58 @@ export default function EntradaMercadoriaForm() {
                                       <tr>
                                         <th>Linha</th>
                                         <th>Produto</th>
-                                        <th>Cor/Tamanho</th>
+                                        {usaCorGrade && <th>Cor/Tamanho</th>}
                                         <th style={{ textAlign: 'right' }}>Qtd</th>
                                         <th>Resolução</th>
                                       </tr>
                                     </thead>
                                     <tbody>
-                                      {pendentes.map((linha) => (
-                                        <LinhaPendentePlanilha
-                                          key={linha.numeroLinha}
-                                          linha={linha}
-                                          permiteQtdDecimal={permiteQtdDecimal}
-                                          onIgnorar={() => removerPendente(linha.numeroLinha)}
-                                          onPesquisar={() => {
-                                            setPendenteEmResolucao(linha.numeroLinha)
-                                            setMostrarPesquisa(true)
-                                          }}
-                                          onCadastrar={() => {
-                                            setPendenteEmResolucao(linha.numeroLinha)
-                                            setModalProdutoAberto(true)
-                                          }}
-                                          onResolvido={(v) => {
-                                            lancarItemComCusto(
-                                              v.idVariacao,
-                                              v.descricao,
-                                              variacaoTexto(v),
-                                              linha.qtd ?? 1,
-                                              linha.custoUnitario ?? 0,
-                                              linha.codigoFornecedor,
-                                            )
-                                            removerPendente(linha.numeroLinha)
-                                          }}
-                                        />
-                                      ))}
+                                      {usaCorGrade
+                                        ? pendentes.map((linha) => (
+                                            <LinhaPendentePlanilha
+                                              key={linha.numeroLinha}
+                                              linha={linha}
+                                              permiteQtdDecimal={permiteQtdDecimal}
+                                              onIgnorar={() => removerPendente(linha.numeroLinha)}
+                                              onPesquisar={() => {
+                                                setPendenteEmResolucao(linha.numeroLinha)
+                                                setMostrarPesquisa(true)
+                                              }}
+                                              onCadastrar={() => {
+                                                setPendenteEmResolucao(linha.numeroLinha)
+                                                setModalProdutoAberto(true)
+                                              }}
+                                              onResolvido={(v) => {
+                                                lancarItemComCusto(
+                                                  v.idVariacao,
+                                                  v.descricao,
+                                                  variacaoTexto(v),
+                                                  linha.qtd ?? 1,
+                                                  linha.custoUnitario ?? 0,
+                                                  linha.codigoFornecedor,
+                                                )
+                                                removerPendente(linha.numeroLinha)
+                                              }}
+                                            />
+                                          ))
+                                        : pendentesAgrupados.map((grupo) => (
+                                            <LinhaPendenteSemGrade
+                                              key={grupo[0].numeroLinha}
+                                              linhas={grupo}
+                                              permiteQtdDecimal={permiteQtdDecimal}
+                                              onIgnorar={() =>
+                                                setPendentes((atual) => atual.filter((p) => !grupo.some((g) => g.numeroLinha === p.numeroLinha)))
+                                              }
+                                              onPesquisar={() => {
+                                                setPendenteEmResolucao(grupo[0].numeroLinha)
+                                                setMostrarPesquisa(true)
+                                              }}
+                                              onCadastrar={() => {
+                                                setPendenteEmResolucao(grupo[0].numeroLinha)
+                                                setModalProdutoAberto(true)
+                                              }}
+                                            />
+                                          ))}
                                     </tbody>
                                   </table>
                                 </div>
@@ -1538,6 +1681,10 @@ export default function EntradaMercadoriaForm() {
                         // tamanho", ação explícita) mesmo quando o texto do XML já "bateria".
                         cor: modo === 'XML' ? undefined : (linha.cor ?? undefined),
                         tamanho: modo === 'XML' ? undefined : (linha.tamanho ?? undefined),
+                        // NCM do XML (2026-08-20) — já validado contra o cadastro de NCM em
+                        // EntradaXmlService, pré-preenche o campo pra não obrigar o operador a
+                        // digitar de novo algo que a nota fiscal já trouxe.
+                        ncm: linha.ncm ?? undefined,
                       }
                     : undefined
                 })()

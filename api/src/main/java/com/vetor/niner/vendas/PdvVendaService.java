@@ -259,8 +259,8 @@ public class PdvVendaService {
                                ON pmd.id_tenant = pmm.id_tenant AND pmd.id_movimento = pmm.id_movimento
                         JOIN produto_barra pb ON pb.id_tenant = pmd.id_tenant AND pb.id_variacao = pmd.id_variacao
                         JOIN produto p ON p.id_tenant = pb.id_tenant AND p.id_produto = pb.id_produto
-                        LEFT JOIN cfg_cor co ON co.id_tenant = pb.id_tenant AND co.id_cor = pb.id_cor
-                        LEFT JOIN cfg_tamanho ta ON ta.id_tenant = pb.id_tenant AND ta.id_tamanho = pb.id_tamanho
+                        LEFT JOIN cfg_cor co ON co.id_tenant = pb.id_tenant AND co.id_cor = pb.id_cor AND co.id_cor <> 1
+                        LEFT JOIN cfg_tamanho ta ON ta.id_tenant = pb.id_tenant AND ta.id_tamanho = pb.id_tamanho AND ta.id_tamanho <> 1
                         WHERE pmm.id_tenant = plataforma.tenant_atual() AND pmm.id_venda = ? AND pmm.tipo_movimento = 'VENDA'
                         ORDER BY pmd.id_movimento_detalhe
                         """)
@@ -610,8 +610,8 @@ public class PdvVendaService {
                                    p.preco_venda, p.preco_custo
                             FROM produto_barra pb
                             JOIN produto p ON p.id_produto = pb.id_produto AND p.id_tenant = pb.id_tenant
-                            LEFT JOIN cfg_cor co ON co.id_cor = pb.id_cor AND co.id_tenant = pb.id_tenant
-                            LEFT JOIN cfg_tamanho ta ON ta.id_tamanho = pb.id_tamanho AND ta.id_tenant = pb.id_tenant
+                            LEFT JOIN cfg_cor co ON co.id_cor = pb.id_cor AND co.id_tenant = pb.id_tenant AND co.id_cor <> 1
+                            LEFT JOIN cfg_tamanho ta ON ta.id_tamanho = pb.id_tamanho AND ta.id_tenant = pb.id_tenant AND ta.id_tamanho <> 1
                             WHERE pb.id_tenant = plataforma.tenant_atual() AND pb.id_variacao = ? AND p.ativo = true
                             """)
                     .params(item.idVariacao())

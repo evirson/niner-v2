@@ -1,7 +1,7 @@
 # Progresso do Projeto — niner-v2
 
 Registro cronológico das decisões e entregas. Atualizar a cada marco relevante.
-**Última atualização:** 2026-08-19
+**Última atualização:** 2026-08-21
 
 ---
 
@@ -343,6 +343,91 @@ novos, `ContaPagarCrudTest`). Ver `docs/telas/contas-pagar.md`.
 ---
 
 ## Linha do tempo
+
+### 2026-08-21 — Cor/Grade padrão (sentinela código 1), dados reais de NCM, sincronismo de NCM no XML e ajustes na grid da Entrada por XML
+
+**1) Cor/Tamanho/Grade "PADRÃO" sempre gravados internamente, nunca mostrados (pedido explícito
+do dono do produto).** Quando o tenant não usa cor/grade, o sistema passou a gravar sempre
+`id_cor=1` (nome vazio), `id_tamanho=1` (nome "UN") e `id_grade=1` (descrição "PADRÃO", único
+tamanho "UN") em vez de valores nulos — assim, se o tenant ligar "Usa Cor/Grade" no futuro, o
+dado já está estruturalmente consistente. Exigência explícita: o código tem que ser literalmente
+`1`, igual em todos os tenants — não "um valor qualquer marcado como padrão". Como
+`cfg_cor`/`cfg_tamanho`/`cfg_grade` usavam `GENERATED ALWAYS AS IDENTITY` (sequência única
+global), a PK virou composta `(id_tenant, id_col)` com o valor calculado em Java
+(`COALESCE(MAX(id)+1, 1)` por tenant) em vez de depender do gerador do Postgres —
+`SignupService` passou a inserir as 3 linhas padrão pra todo tenant novo. `produto.id_grade` e
+`produto_barra.id_cor`/`id_tamanho` viraram `NOT NULL DEFAULT 1`. Toda listagem/JOIN de
+cor/tamanho/grade exclui `id=1` (~21 arquivos), e a API traduz `1` de volta pra `null` na
+resposta — o contrato do frontend não mudou. Ver `[[project_cor_grade_tamanho]]` na memória.
+
+**2) `cfg_produto_ncm` populada com os ~10.515 códigos NCM reais da Receita Federal**, via API
+pública do Portal Único Siscomex (hierarquia de descrição reconstruída por prefixo de código, já
+que o dash-count da fonte original é inconsistente no nível mais profundo). `aliquota_ibpt = 0.00`
+em todas as linhas (pedido explícito — não temos essa fonte de dados ainda).
+
+**3) NCM da Entrada por XML sincroniza com o cadastro do produto**, sempre valendo o NCM do XML
+quando ele difere do já cadastrado (`EntradaMercadoriaService.efetivar`); quando o produto não é
+localizado, o NCM do XML já vem preenchido na pendência/cadastro rápido — **bug corrigido**: a
+1ª versão validava o NCM contra `cfg_produto_ncm` antes mesmo de mostrar, zerando qualquer NCM
+real ainda ausente da base local (incompleta na época); a correção separa NCM bruto (mostrado
+sempre) de NCM validado (só usado no UPDATE final).
+
+**4) Grid da Entrada por XML/Planilha, com "Usa Cor/Grade" desligado**: a coluna Cor/Tamanho some
+tanto em "Localizados" quanto em "Não Localizados", e linhas com o mesmo nome de produto (ex.:
+uma grade legada de calçado, um tamanho por linha do XML) aparecem **agrupadas numa única linha**
+com a quantidade somada — resolver ("Pesquisar"/"＋ Cadastrar") ou ignorar essa linha aplica à
+TODAS as linhas do grupo de uma vez. Antes, cada tamanho virava uma pendência separada mesmo sem
+grade em uso. Tentativa de ordenar a grid por descrição+cor+tamanho foi pedida e depois revertida
+pelo dono do produto — a ordem correta é a mesma ordem em que os itens aparecem no XML.
+
+**5) Zeragens de dados a pedido do dono do produto** (banco ainda em construção, sem preservar
+dado de teste): produto/movimentação/vendas/tamanho/cor/grade; depois cliente/fornecedor/
+importação_lote/caixa_mestre/contas_receber_lote (`cfg_produto_ncm` explicitamente preservada);
+e por fim fornecedor/produto/movimentação/contas_pagar/código de barras — nesta última, o trigger
+de estoque (`fn_atualiza_estoque_movimento`) reage ao `DELETE` de `produto_movimento_detalhe`
+devolvendo saldo pra `produto_estoque`, então a ordem de exclusão teve que deletar o detalhe
+ANTES do estoque (e o estoque de novo depois) pra não sobrar FK pendurada.
+
+Suíte de backend **474/474 verdes**, `tsc --noEmit` limpo. Verificado ao vivo no navegador
+(browser automation) em todos os itens acima antes de fechar a sessão.
+
+### 2026-08-20 — Entrada de Produtos por Compra ignora "Usa Cor/Grade" desligado por completo
+
+Pedido direto do dono do produto: com o parâmetro **"Usa Cor/Grade" desmarcado** em Parâmetros
+do Sistema, a Entrada de Produtos não deve pedir nem mostrar Cor/Tamanho para nenhum produto —
+nem no cadastro rápido de produto novo, nem para produtos que já tinham grade cadastrada de uma
+sessão anterior (achados **3605 produtos com `id_grade` preenchido** no tenant de teste
+`loja-teste-manual`, mesmo com o parâmetro já desligado no banco).
+
+**Decisão tomada com o dono do produto antes de codificar:** produto com grade legada, com o
+parâmetro desligado, passa a ser tratado como produto simples em toda a Entrada — a grade é
+ignorada por completo, mesmo que o produto tenha mais de uma cor/tamanho já cadastrados (nesse
+caso a entrada lança tudo numa variação "genérica" nova, cor/tamanho nulos, em vez de perguntar
+qual delas). Ver `[[project_cor_grade_tamanho]]`/`[[project_entrada_mercadoria]]` na memória.
+
+**Correções (3 arquivos):**
+- `EntradaPlanilhaService.java` (fluxo Planilha) — passou a consultar
+  `ConfiguracaoGeralService.usaCorGrade()` uma vez no `preview()` e zera `idGrade` internamente
+  quando a flag está desligada, antes de decidir se COR/TAMANHO são obrigatórias na planilha —
+  produto com grade legada some da exigência e resolve direto (variação com cor/tamanho nulos).
+- `PesquisaProdutoEntradaModal.tsx` (fluxo Individual) — `usaGrade` deixou de olhar só
+  `produtoEscolhido.idGrade`; agora também busca `buscarUsaCorGrade()` e só pede Cor + grade de
+  tamanhos quando as duas coisas são verdadeiras. Sem grade aplicável, mostra um único campo de
+  Quantidade — verificado ao vivo no navegador com um produto de grade legada.
+- `EntradaMercadoriaForm.tsx` (`LinhaPendentePlanilha`, resolução de pendência do Planilha/XML) —
+  **bug real de travamento corrigido**: o formulário de Cor/Tamanho aparecia pra QUALQUER
+  pendência com produto achado (`temProduto`), mesmo quando o produto não tinha grade nenhuma —
+  nesse caso o select de Tamanho ficava sempre vazio (grade nunca carregada) e o botão
+  "Confirmar" nunca habilitava, travando a resolução. Corrigido checando
+  `linha.idGradeEncontrada != null` antes de exigir/mostrar os selects.
+
+`ProdutoQuickCreateModal.tsx` ("＋ Cadastrar Produto" embutido na Entrada) já escondia o campo
+Grade corretamente quando a flag está desligada — não precisou de mudança.
+
+Sem testes novos (comportamento já coberto pela suíte de Entrada existente,
+`EntradaPlanilhaCrudTest`/`EntradaMercadoriaCrudTest`, 22 testes, todos verdes); suíte de backend
+completa **472/472 verdes**, `tsc --noEmit` e `mvn compile` limpos. Servidor reiniciado
+(`docker compose restart api web`) e validado ao vivo no navegador antes de fechar a sessão.
 
 ### 2026-08-19 (continuação) — Contas a Pagar / Pagas: CRUD completo sobre tabela pré-existente
 

@@ -3,6 +3,7 @@ package com.vetor.niner.estoque.entrada;
 import com.vetor.niner.catalogo.GradeService;
 import com.vetor.niner.catalogo.ProdutoBarraDtos.ProdutoBarraResponse;
 import com.vetor.niner.catalogo.ProdutoBarraService;
+import com.vetor.niner.configuracao.geral.ConfiguracaoGeralService;
 import com.vetor.niner.configuracao.importacao.ImportacaoPlanilha;
 import com.vetor.niner.configuracao.importacao.ImportacaoPlanilha.LinhaPlanilha;
 import com.vetor.niner.estoque.entrada.EntradaMercadoriaDtos.ItemPlanilhaPreviewResponse;
@@ -51,11 +52,14 @@ public class EntradaPlanilhaService {
     private final JdbcClient jdbc;
     private final ProdutoBarraService produtoBarraService;
     private final GradeService gradeService;
+    private final ConfiguracaoGeralService configuracaoGeralService;
 
-    public EntradaPlanilhaService(JdbcClient jdbc, ProdutoBarraService produtoBarraService, GradeService gradeService) {
+    public EntradaPlanilhaService(JdbcClient jdbc, ProdutoBarraService produtoBarraService, GradeService gradeService,
+            ConfiguracaoGeralService configuracaoGeralService) {
         this.jdbc = jdbc;
         this.produtoBarraService = produtoBarraService;
         this.gradeService = gradeService;
+        this.configuracaoGeralService = configuracaoGeralService;
     }
 
     public byte[] modelo() {
@@ -66,14 +70,15 @@ public class EntradaPlanilhaService {
     @Transactional
     public List<ItemPlanilhaPreviewResponse> preview(MultipartFile arquivo) {
         List<LinhaPlanilha> linhas = ImportacaoPlanilha.ler(arquivo);
+        boolean usaCorGrade = configuracaoGeralService.usaCorGrade();
         List<ItemPlanilhaPreviewResponse> resultado = new ArrayList<>();
         for (LinhaPlanilha linha : linhas) {
-            resultado.add(resolverLinha(linha));
+            resultado.add(resolverLinha(linha, usaCorGrade));
         }
         return resultado;
     }
 
-    private ItemPlanilhaPreviewResponse resolverLinha(LinhaPlanilha linha) {
+    private ItemPlanilhaPreviewResponse resolverLinha(LinhaPlanilha linha, boolean usaCorGrade) {
         String nomeProduto = linha.valor("NOME DO PRODUTO");
         String marca = linha.valor("MARCA");
         String referencia = linha.valor("REFERENCIA");
@@ -115,25 +120,30 @@ public class EntradaPlanilhaService {
         }
 
         LinhaProduto p = produto.get();
+        // Parâmetro "Usa Cor/Grade" desligado: grade do produto (mesmo que já cadastrada de
+        // antes) é ignorada por completo — tratado como produto simples, sem pedir COR/TAMANHO
+        // (2026-08-20, pedido do dono do produto). id_grade=1 (PADRÃO, reservada/invisível — ver
+        // SignupService) também conta como "sem grade de verdade", mesmo com o parâmetro ligado.
+        Long idGrade = (usaCorGrade && p.idGrade() != 1) ? p.idGrade() : null;
 
-        if (p.idGrade() != null && cor == null) {
+        if (idGrade != null && cor == null) {
             return pendenteComProduto(linha, nomeProduto, marca, referencia, cor, tamanho, ean, qtd, custoUnitario,
-                    p.idProduto(), p.idGrade(), "Coluna COR vazia — obrigatória para este produto.");
+                    p.idProduto(), idGrade, "Coluna COR vazia — obrigatória para este produto.");
         }
-        if (p.idGrade() != null && tamanho == null) {
+        if (idGrade != null && tamanho == null) {
             return pendenteComProduto(linha, nomeProduto, marca, referencia, cor, tamanho, ean, qtd, custoUnitario,
-                    p.idProduto(), p.idGrade(), "Coluna TAMANHO vazia — obrigatória para este produto.");
+                    p.idProduto(), idGrade, "Coluna TAMANHO vazia — obrigatória para este produto.");
         }
 
-        Long idCor = p.idGrade() == null ? null : corOuCriar(cor);
+        Long idCor = idGrade == null ? null : corOuCriar(cor);
         Long idTamanho = null;
-        if (p.idGrade() != null) {
+        if (idGrade != null) {
             long idTamanhoCatalogo = tamanhoOuCriar(tamanho);
             try {
-                gradeService.garantirTamanhoNaGrade(p.idGrade(), idTamanhoCatalogo);
+                gradeService.garantirTamanhoNaGrade(idGrade, idTamanhoCatalogo);
             } catch (RuntimeException e) {
                 return pendenteComProduto(linha, nomeProduto, marca, referencia, cor, tamanho, ean, qtd, custoUnitario,
-                        p.idProduto(), p.idGrade(), "Não foi possível adicionar o tamanho \"" + tamanho + "\": " + e.getMessage());
+                        p.idProduto(), idGrade, "Não foi possível adicionar o tamanho \"" + tamanho + "\": " + e.getMessage());
             }
             idTamanho = idTamanhoCatalogo;
         }
@@ -143,11 +153,11 @@ public class EntradaPlanilhaService {
             return resolvido(linha, nomeProduto, marca, referencia, cor, tamanho, ean, qtd, custoUnitario, v);
         } catch (RuntimeException e) {
             return pendenteComProduto(linha, nomeProduto, marca, referencia, cor, tamanho, ean, qtd, custoUnitario,
-                    p.idProduto(), p.idGrade(), e.getMessage());
+                    p.idProduto(), idGrade, e.getMessage());
         }
     }
 
-    private record LinhaProduto(long idProduto, Long idGrade) {
+    private record LinhaProduto(long idProduto, long idGrade) {
     }
 
     private Optional<LinhaProduto> buscarProduto(String nomeProduto, String marca, String referencia) {
@@ -162,20 +172,14 @@ public class EntradaPlanilhaService {
                         LIMIT 1
                         """)
                 .params(descricaoN, marcaN, referenciaN)
-                .query((rs, n) -> new LinhaProduto(rs.getLong("id_produto"), getLongOuNulo(rs, "id_grade")))
+                .query((rs, n) -> new LinhaProduto(rs.getLong("id_produto"), rs.getLong("id_grade")))
                 .optional();
-    }
-
-    /** {@code rs.getObject(coluna, Long.class)} não converte `integer` pra `Long` de forma
-     *  confiável no driver — mesmo padrão já usado em {@code ProdutoBarraService}/{@code CrmService}. */
-    private static Long getLongOuNulo(java.sql.ResultSet rs, String coluna) throws java.sql.SQLException {
-        long valor = rs.getLong(coluna);
-        return rs.wasNull() ? null : valor;
     }
 
     /** Acha (por nome, mesmo idioma exato do resto da tela) ou cadastra a cor na hora — cor não
      *  depende de grade, é uma lista solta por tenant, então não há nada além do cadastro em si
-     *  a garantir (2026-08-13). */
+     *  a garantir (2026-08-13). {@code id_cor} não é mais IDENTITY (V017, 2026-08-20): calculado
+     *  por tenant, mesmo padrão de {@code CorService.criar}. */
     private long corOuCriar(String cor) {
         String nome = cor.trim().toUpperCase(Locale.ROOT);
         Optional<Long> existente = jdbc.sql("""
@@ -187,8 +191,10 @@ public class EntradaPlanilhaService {
             return existente.get();
         }
         return jdbc.sql("""
-                        INSERT INTO cfg_cor (id_tenant, descricao)
-                        VALUES (plataforma.tenant_atual(), ?)
+                        INSERT INTO cfg_cor (id_tenant, id_cor, descricao)
+                        VALUES (plataforma.tenant_atual(),
+                            COALESCE((SELECT MAX(id_cor) FROM cfg_cor WHERE id_tenant = plataforma.tenant_atual()), 0) + 1,
+                            ?)
                         RETURNING id_cor
                         """)
                 .param(nome).query(Long.class).single();
@@ -197,7 +203,9 @@ public class EntradaPlanilhaService {
     /** Acha ou cadastra o tamanho no catálogo do tenant ({@code cfg_tamanho}) — mesmo princípio
      *  find-or-create de {@code ProdutoImportador.idTamanhoOuCriar}. Só resolve a existência do
      *  tamanho em si; pertencer (ou não) à grade do produto casado é responsabilidade de quem
-     *  chama, via {@link GradeService#garantirTamanhoNaGrade}. */
+     *  chama, via {@link GradeService#garantirTamanhoNaGrade}. {@code id_tamanho} não é mais
+     *  IDENTITY (V017, 2026-08-20): calculado por tenant, mesmo padrão de
+     *  {@code TamanhoService.criar}. */
     private long tamanhoOuCriar(String tamanho) {
         String nome = tamanho.trim().toUpperCase(Locale.ROOT);
         Optional<Long> existente = jdbc.sql("""
@@ -209,8 +217,10 @@ public class EntradaPlanilhaService {
             return existente.get();
         }
         return jdbc.sql("""
-                        INSERT INTO cfg_tamanho (id_tenant, descricao)
-                        VALUES (plataforma.tenant_atual(), ?)
+                        INSERT INTO cfg_tamanho (id_tenant, id_tamanho, descricao)
+                        VALUES (plataforma.tenant_atual(),
+                            COALESCE((SELECT MAX(id_tamanho) FROM cfg_tamanho WHERE id_tenant = plataforma.tenant_atual()), 0) + 1,
+                            ?)
                         RETURNING id_tamanho
                         """)
                 .param(nome).query(Long.class).single();
@@ -222,8 +232,8 @@ public class EntradaPlanilhaService {
                                co.descricao AS variacao_cor, ta.descricao AS variacao_tamanho
                         FROM produto_barra pb
                         JOIN produto p ON p.id_produto = pb.id_produto AND p.id_tenant = pb.id_tenant
-                        LEFT JOIN cfg_cor co ON co.id_cor = pb.id_cor AND co.id_tenant = pb.id_tenant
-                        LEFT JOIN cfg_tamanho ta ON ta.id_tamanho = pb.id_tamanho AND ta.id_tenant = pb.id_tenant
+                        LEFT JOIN cfg_cor co ON co.id_cor = pb.id_cor AND co.id_tenant = pb.id_tenant AND co.id_cor <> 1
+                        LEFT JOIN cfg_tamanho ta ON ta.id_tamanho = pb.id_tamanho AND ta.id_tenant = pb.id_tenant AND ta.id_tamanho <> 1
                         WHERE pb.id_tenant = plataforma.tenant_atual() AND pb.ean = ? AND p.ativo = true
                         """)
                 .param(ean)
@@ -239,20 +249,20 @@ public class EntradaPlanilhaService {
             ProdutoBarraResponse v) {
         return new ItemPlanilhaPreviewResponse(linha.numeroLinha(), nomeProduto, marca, referencia, cor, tamanho, ean,
                 qtd, custoUnitario, true, v.idVariacao(), v.sku(), v.descricao(), v.variacaoCor(), v.variacaoTamanho(),
-                null, null, null, null);
+                null, null, null, null, null);
     }
 
     private static ItemPlanilhaPreviewResponse pendente(LinhaPlanilha linha, String nomeProduto, String marca,
             String referencia, String cor, String tamanho, String ean, BigDecimal qtd, BigDecimal custoUnitario,
             String motivo) {
         return new ItemPlanilhaPreviewResponse(linha.numeroLinha(), nomeProduto, marca, referencia, cor, tamanho, ean,
-                qtd, custoUnitario, false, null, null, null, null, null, null, null, motivo, null);
+                qtd, custoUnitario, false, null, null, null, null, null, null, null, motivo, null, null);
     }
 
     private static ItemPlanilhaPreviewResponse pendenteComProduto(LinhaPlanilha linha, String nomeProduto, String marca,
             String referencia, String cor, String tamanho, String ean, BigDecimal qtd, BigDecimal custoUnitario,
             long idProduto, Long idGrade, String motivo) {
         return new ItemPlanilhaPreviewResponse(linha.numeroLinha(), nomeProduto, marca, referencia, cor, tamanho, ean,
-                qtd, custoUnitario, false, null, null, null, null, null, idProduto, idGrade, motivo, null);
+                qtd, custoUnitario, false, null, null, null, null, null, idProduto, idGrade, motivo, null, null);
     }
 }

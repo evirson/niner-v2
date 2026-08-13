@@ -263,6 +263,8 @@ public class ProdutoImportador implements ImportadorDeTabela {
         return id;
     }
 
+    /** {@code id_tamanho} não é mais IDENTITY (V017, 2026-08-20): calculado por tenant, mesmo
+     *  padrão de {@code TamanhoService.criar}. */
     private long idTamanhoOuCriar(String descricao) {
         Optional<Long> existente = jdbc.sql("""
                         SELECT id_tamanho FROM cfg_tamanho
@@ -273,8 +275,10 @@ public class ProdutoImportador implements ImportadorDeTabela {
             return existente.get();
         }
         return jdbc.sql("""
-                        INSERT INTO cfg_tamanho (id_tenant, descricao)
-                        VALUES (plataforma.tenant_atual(), ?)
+                        INSERT INTO cfg_tamanho (id_tenant, id_tamanho, descricao)
+                        VALUES (plataforma.tenant_atual(),
+                            COALESCE((SELECT MAX(id_tamanho) FROM cfg_tamanho WHERE id_tenant = plataforma.tenant_atual()), 0) + 1,
+                            ?)
                         RETURNING id_tamanho
                         """)
                 .param(descricao).query(Long.class).single();

@@ -18,30 +18,48 @@ CREATE INDEX cfg_categoria_produto_id_tenant_ix ON cfg_categoria_produto (id_ten
 -- a modelar especificamente cor + tamanho (grade), único par de dimensões que varia de verdade
 -- SEM mudar o cadastro do produto (calçados/confecções) — casos como voltagem mudam o preço, logo
 -- viram produtos distintos, não variação. Ver docs/telas/produto.md.
+--
+-- id_cor/id_tamanho/id_grade NÃO usam mais IDENTITY global (2026-08-20) — cada tenant tem sua
+-- PRÓPRIA numeração (PK composta id_tenant+id_col, id calculado pela aplicação como
+-- MAX(id_col)+1 por tenant). Isso é proposital: garante que TODO tenant tenha, literalmente,
+-- código 1 reservado para a cor/tamanho/grade "PADRÃO" (nome '' / 'UN' / 'PADRÃO', ver
+-- SignupService) — usada internamente quando o tenant não usa cor/grade (cfg_geral.cfg_usa_cor_
+-- grade = false) ou quando um produto específico não participa de variação, SEM NUNCA aparecer
+-- na tela nem ser referenciada em nenhum lugar do sistema (todo JOIN de exibição exclui id=1;
+-- listar() das 3 telas de manutenção também exclui id=1). Se o id fosse global (IDENTITY único
+-- pra tabela inteira), só o primeiríssimo tenant do sistema poderia ter código 1 — os demais
+-- teriam qualquer outro número, quebrando essa garantia.
 CREATE TABLE cfg_cor (
-  id_cor        integer      GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  id_cor        integer      NOT NULL,
   id_tenant     smallint     NOT NULL REFERENCES plataforma.tenant (id_tenant),
   descricao     text         NOT NULL,
-  CONSTRAINT cfg_cor_uk UNIQUE (id_tenant, descricao),
-  CONSTRAINT cfg_cor_id_uk UNIQUE (id_tenant, id_cor)
+  CONSTRAINT cfg_cor_pk PRIMARY KEY (id_tenant, id_cor)
 );
 CREATE INDEX cfg_cor_id_tenant_ix ON cfg_cor (id_tenant);
+-- Unicidade de nome exclui a cor PADRÃO (id_cor=1) — ela pode ter o mesmo nome de uma cor REAL
+-- já cadastrada (ex.: descricao='' coincidindo por acaso) sem violar nada, já que nunca aparece
+-- lado a lado com o cadastro real (não é listada). Índice parcial, não CONSTRAINT (que não aceita WHERE).
+CREATE UNIQUE INDEX cfg_cor_uk ON cfg_cor (id_tenant, descricao) WHERE id_cor <> 1;
+COMMENT ON TABLE cfg_cor IS 'Cores do tenant. id_cor=1 é reservado para a cor PADRÃO (descricao=""), criada no signup — nunca listada/exibida.';
 
 CREATE TABLE cfg_tamanho (
-  id_tamanho    integer      GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  id_tamanho    integer      NOT NULL,
   id_tenant     smallint     NOT NULL REFERENCES plataforma.tenant (id_tenant),
   descricao     text         NOT NULL,
-  CONSTRAINT cfg_tamanho_uk UNIQUE (id_tenant, descricao),
-  CONSTRAINT cfg_tamanho_id_uk UNIQUE (id_tenant, id_tamanho)
+  CONSTRAINT cfg_tamanho_pk PRIMARY KEY (id_tenant, id_tamanho)
 );
 CREATE INDEX cfg_tamanho_id_tenant_ix ON cfg_tamanho (id_tenant);
+-- Mesma lógica do índice parcial de cfg_cor_uk acima — tamanho PADRÃO (id_tamanho=1) fica de
+-- fora da unicidade de nome, pode coincidir com um tamanho real chamado "UN".
+CREATE UNIQUE INDEX cfg_tamanho_uk ON cfg_tamanho (id_tenant, descricao) WHERE id_tamanho <> 1;
+COMMENT ON TABLE cfg_tamanho IS 'Tamanhos do tenant. id_tamanho=1 é reservado para o tamanho PADRÃO (descricao=''UN''), criado no signup — nunca listado/exibido.';
 
 -- cfg_grade: uma "grade de numeração" nomeada (ex.: "Grade 36-44", "Grade PP-GG"), até 20 tamanhos
 -- em ordem (folga deliberada sobre o uso real, que raramente passa de 15 — decisão do dono do
 -- produto, 2026-08-08). NULL (não 0) representa slot vazio, mesma convenção do resto do projeto
 -- (produto.codigo_ncm, produto_barra.ean) — evita precisar de uma linha "cfg_tamanho id=0" fake.
 CREATE TABLE cfg_grade (
-  id_grade      integer      GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  id_grade      integer      NOT NULL,
   id_tenant     smallint     NOT NULL REFERENCES plataforma.tenant (id_tenant),
   descricao     text         NOT NULL,
   id_tamanho1   integer,
@@ -64,8 +82,7 @@ CREATE TABLE cfg_grade (
   id_tamanho18  integer,
   id_tamanho19  integer,
   id_tamanho20  integer,
-  CONSTRAINT cfg_grade_uk UNIQUE (id_tenant, descricao),
-  CONSTRAINT cfg_grade_id_uk UNIQUE (id_tenant, id_grade),
+  CONSTRAINT cfg_grade_pk PRIMARY KEY (id_tenant, id_grade),
   CONSTRAINT cfg_grade_tamanho1_fk  FOREIGN KEY (id_tenant, id_tamanho1)  REFERENCES cfg_tamanho (id_tenant, id_tamanho),
   CONSTRAINT cfg_grade_tamanho2_fk  FOREIGN KEY (id_tenant, id_tamanho2)  REFERENCES cfg_tamanho (id_tenant, id_tamanho),
   CONSTRAINT cfg_grade_tamanho3_fk  FOREIGN KEY (id_tenant, id_tamanho3)  REFERENCES cfg_tamanho (id_tenant, id_tamanho),
@@ -88,6 +105,10 @@ CREATE TABLE cfg_grade (
   CONSTRAINT cfg_grade_tamanho20_fk FOREIGN KEY (id_tenant, id_tamanho20) REFERENCES cfg_tamanho (id_tenant, id_tamanho)
 );
 CREATE INDEX cfg_grade_id_tenant_ix ON cfg_grade (id_tenant);
+-- Mesma lógica do índice parcial de cfg_cor_uk (acima) — grade PADRÃO (id_grade=1) fica de fora
+-- da unicidade de nome.
+CREATE UNIQUE INDEX cfg_grade_uk ON cfg_grade (id_tenant, descricao) WHERE id_grade <> 1;
+COMMENT ON TABLE cfg_grade IS 'Grades do tenant. id_grade=1 é reservado para a grade PADRÃO (descricao=''PADRÃO'', 1 slot = tamanho PADRÃO), criada no signup — nunca listada/exibida.';
 
 -- cfg_produto_ncm — referência de NCM, GLOBAL (sem id_tenant/RLS, P9): o mesmo código NCM
 -- vale para qualquer tenant, mantida por script (carga/atualização da tabela oficial da
@@ -172,8 +193,10 @@ CREATE TABLE produto (
   codigo_ncm           text          REFERENCES cfg_produto_ncm (codigo_ncm),
   peso_bruto           numeric(14,3) NOT NULL DEFAULT 0,
   peso_liquido         numeric(14,3) NOT NULL DEFAULT 0,
-  id_grade             integer,      -- grade de tamanhos deste produto; obrigatório (checado em
-                                      -- serviço) quando cfg_geral.cfg_usa_cor_grade = true (2026-08-08)
+  id_grade             integer       NOT NULL DEFAULT 1,  -- grade de tamanhos deste produto; 1 =
+                                      -- grade PADRÃO (produto não usa variação de verdade); grade
+                                      -- REAL obrigatória (checada em serviço) quando cfg_geral.
+                                      -- cfg_usa_cor_grade = true (2026-08-08; NOT NULL 2026-08-20)
   codigo_importacao    text,         -- código do sistema de origem (CODIGO_PRODUTO da planilha
                                       -- de migração, 2026-08-09) — NÃO é o id_produto; só existe
                                       -- pra a Rotina de Importação de Dados achar de volta o
@@ -210,16 +233,18 @@ CREATE TABLE produto_categoria (
 );
 CREATE INDEX produto_categoria_id_tenant_ix ON produto_categoria (id_tenant);
 
--- produto_barra = VARIAÇÃO (1 por produto × cor × tamanho, ou 1 única sem cor/tamanho quando o
--- produto não usa grade). Q7: sku + ean. id_cor/id_tamanho substituem id_variante_linha/coluna
--- (2026-08-08) — quando o produto usa grade (produto.id_grade preenchido), os dois são
--- obrigatórios juntos (checado em serviço, ProdutoBarraService); quando não usa, ficam NULL.
+-- produto_barra = VARIAÇÃO (1 por produto × cor × tamanho, ou 1 única com cor/tamanho PADRÃO
+-- quando o produto não usa grade de verdade). Q7: sku + ean. id_cor/id_tamanho substituem
+-- id_variante_linha/coluna (2026-08-08) — quando o produto usa grade real (produto.id_grade <> 1),
+-- os dois são obrigatórios juntos com valor real (checado em serviço, ProdutoBarraService);
+-- quando não usa, ambos gravam 1 (PADRÃO) em vez de NULL (2026-08-20) — nunca exibidos/
+-- referenciados (ProdutoBarraService traduz 1 -> null na resposta da API).
 CREATE TABLE produto_barra (
   id_variacao        integer     GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   id_tenant          smallint    NOT NULL REFERENCES plataforma.tenant (id_tenant),
   id_produto         integer     NOT NULL,
-  id_cor             integer,
-  id_tamanho         integer,
+  id_cor             integer     NOT NULL DEFAULT 1,
+  id_tamanho         integer     NOT NULL DEFAULT 1,
   sku                text        NOT NULL,            -- código de barras interno, SEMPRE gerado por gerar_ean13_interno() — nunca digitado
   ean                text,                            -- GTIN real (EAN-13/UPC), NULLABLE
   criado_em          timestamptz NOT NULL DEFAULT now(),

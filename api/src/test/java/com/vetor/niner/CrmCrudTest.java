@@ -119,6 +119,8 @@ class CrmCrudTest {
         }
     }
 
+    /** {@code idCor}/{@code idTamanho} nulos = sem variação de verdade — grava 1 (cor/tamanho
+     *  PADRÃO, 2026-08-20) em vez de NULL (coluna é NOT NULL desde a V017). */
     private long criarVariacao(Connection c, long idTenant, long idProduto, Long idCor, Long idTamanho)
             throws SQLException {
         try (PreparedStatement ps = c.prepareStatement(
@@ -126,8 +128,8 @@ class CrmCrudTest {
                         + "VALUES (?, ?, ?, ?, gerar_ean13_interno()) RETURNING id_variacao")) {
             ps.setLong(1, idTenant);
             ps.setLong(2, idProduto);
-            if (idCor != null) ps.setLong(3, idCor); else ps.setNull(3, java.sql.Types.INTEGER);
-            if (idTamanho != null) ps.setLong(4, idTamanho); else ps.setNull(4, java.sql.Types.INTEGER);
+            ps.setLong(3, idCor != null ? idCor : 1L);
+            ps.setLong(4, idTamanho != null ? idTamanho : 1L);
             try (ResultSet rs = ps.executeQuery()) {
                 rs.next();
                 return rs.getLong(1);
@@ -136,10 +138,15 @@ class CrmCrudTest {
     }
 
     private long criarCor(Connection c, long idTenant, String descricao) throws SQLException {
-        try (PreparedStatement ps = c.prepareStatement(
-                "INSERT INTO cfg_cor (id_tenant, descricao) VALUES (?, ?) RETURNING id_cor")) {
+        // id_cor não é mais IDENTITY (V017, 2026-08-20) — calculado por tenant.
+        try (PreparedStatement ps = c.prepareStatement("""
+                INSERT INTO cfg_cor (id_tenant, id_cor, descricao)
+                VALUES (?, COALESCE((SELECT MAX(id_cor) FROM cfg_cor WHERE id_tenant = ?), 0) + 1, ?)
+                RETURNING id_cor
+                """)) {
             ps.setLong(1, idTenant);
-            ps.setString(2, descricao);
+            ps.setLong(2, idTenant);
+            ps.setString(3, descricao);
             try (ResultSet rs = ps.executeQuery()) {
                 rs.next();
                 return rs.getLong(1);
@@ -148,10 +155,15 @@ class CrmCrudTest {
     }
 
     private long criarTamanho(Connection c, long idTenant, String descricao) throws SQLException {
-        try (PreparedStatement ps = c.prepareStatement(
-                "INSERT INTO cfg_tamanho (id_tenant, descricao) VALUES (?, ?) RETURNING id_tamanho")) {
+        // id_tamanho não é mais IDENTITY (V017, 2026-08-20) — calculado por tenant.
+        try (PreparedStatement ps = c.prepareStatement("""
+                INSERT INTO cfg_tamanho (id_tenant, id_tamanho, descricao)
+                VALUES (?, COALESCE((SELECT MAX(id_tamanho) FROM cfg_tamanho WHERE id_tenant = ?), 0) + 1, ?)
+                RETURNING id_tamanho
+                """)) {
             ps.setLong(1, idTenant);
-            ps.setString(2, descricao);
+            ps.setLong(2, idTenant);
+            ps.setString(3, descricao);
             try (ResultSet rs = ps.executeQuery()) {
                 rs.next();
                 return rs.getLong(1);

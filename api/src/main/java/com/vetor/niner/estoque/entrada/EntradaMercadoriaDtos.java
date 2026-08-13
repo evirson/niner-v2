@@ -34,7 +34,13 @@ public final class EntradaMercadoriaDtos {
              *  nota do mesmo fornecedor com este código já resolve sozinha, sem depender de
              *  EAN nem de heurística de texto). Só o fluxo XML preenche; Manual/Planilha
              *  deixam ausente. */
-            String codigoFornecedor) {
+            String codigoFornecedor,
+            /** NCM do item no XML (2026-08-20) — quando presente e diferente do
+             *  {@code produto.codigo_ncm} já cadastrado, a confirmação SUBSTITUI (o NCM do XML
+             *  sempre vale, pedido do dono do produto). Só o fluxo XML preenche; já validado
+             *  contra {@code cfg_produto_ncm} no preview (nunca chega aqui um código que não
+             *  exista na referência). */
+            String ncm) {
     }
 
     /** Uma parcela/duplicata a gerar em `contas_pagar` — sempre opcional (Manual/Planilha só
@@ -197,7 +203,17 @@ public final class EntradaMercadoriaDtos {
              *  PALPITE pra ajudar o operador a escolher mais rápido — o XML nunca cadastra cor
              *  ou tamanho novo sozinho, sempre exige confirmação manual (diferente da
              *  Planilha, que o dono do produto pediu pra cadastrar automático). */
-            String codigoFornecedor) {
+            String codigoFornecedor,
+            /** NCM do item (2026-08-20, fluxo XML — ausente/`null` no fluxo Planilha, que não
+             *  tem coluna de NCM). Em linha resolvida, JÁ VALIDADO contra {@code
+             *  cfg_produto_ncm} (vai virar um UPDATE em {@code produto.codigo_ncm} na
+             *  confirmação se vier diferente do já cadastrado — ver {@link ItemEntradaRequest#ncm}
+             *  — um código desconhecido quebraria a confirmação com erro de FK, por isso
+             *  valida antes). Em pendência (produto não encontrado), vem CRU/sem validar — só
+             *  pré-preenche um campo de formulário, não grava nada; validar aqui faria o campo
+             *  vir vazio sempre que a base local de NCM estiver incompleta (o comum — a base
+             *  oficial da Receita tem milhares de códigos). */
+            String ncm) {
     }
 
     /**

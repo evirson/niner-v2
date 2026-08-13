@@ -142,6 +142,40 @@ class RelatorioEstoqueCrudTest {
         }
     }
 
+    /** 2ª (ou 3ª...) variação do MESMO produto (2026-08-20) — {@code criarVariacao(c, idTenant,
+     *  idProduto)} sempre grava cor/tamanho PADRÃO (id=1), então duas chamadas pro mesmo produto
+     *  colidiriam em {@code produto_barra_variacao_uk}; este overload usa um tamanho real e
+     *  distinto pra cada variação extra. */
+    private long criarVariacaoComTamanho(Connection c, long idTenant, long idProduto, String descricaoTamanho) throws SQLException {
+        long idTamanho;
+        try (PreparedStatement ps = c.prepareStatement("""
+                INSERT INTO cfg_tamanho (id_tenant, id_tamanho, descricao)
+                VALUES (?, COALESCE((SELECT MAX(id_tamanho) FROM cfg_tamanho WHERE id_tenant = ?), 0) + 1, ?)
+                RETURNING id_tamanho
+                """)) {
+            ps.setLong(1, idTenant);
+            ps.setLong(2, idTenant);
+            ps.setString(3, descricaoTamanho);
+            try (ResultSet rs = ps.executeQuery()) {
+                rs.next();
+                idTamanho = rs.getLong(1);
+            }
+        }
+        try (PreparedStatement ps = c.prepareStatement("""
+                INSERT INTO produto_barra (id_tenant, id_produto, id_tamanho, sku)
+                VALUES (?, ?, ?, gerar_ean13_interno())
+                RETURNING id_variacao
+                """)) {
+            ps.setLong(1, idTenant);
+            ps.setLong(2, idProduto);
+            ps.setLong(3, idTamanho);
+            try (ResultSet rs = ps.executeQuery()) {
+                rs.next();
+                return rs.getLong(1);
+            }
+        }
+    }
+
     private void definirEstoque(Connection c, long idTenant, long idEmpresa, long idVariacao, BigDecimal qtd) throws SQLException {
         try (PreparedStatement ps = c.prepareStatement("""
                 INSERT INTO produto_estoque (id_tenant, id_empresa, id_variacao, qtd_estoque) VALUES (?, ?, ?, ?)
@@ -164,7 +198,7 @@ class RelatorioEstoqueCrudTest {
             long idEmpresa1 = buscarIdEmpresaViaConexao(c);
             long idEmpresa2 = criarSegundaEmpresa(c, idTenant);
             long idVariacao1 = criarVariacao(c, idTenant, idProduto);
-            long idVariacao2 = criarVariacao(c, idTenant, idProduto);
+            long idVariacao2 = criarVariacaoComTamanho(c, idTenant, idProduto, "38");
             definirEstoque(c, idTenant, idEmpresa1, idVariacao1, new BigDecimal("3.000"));
             definirEstoque(c, idTenant, idEmpresa1, idVariacao2, new BigDecimal("2.000"));
             definirEstoque(c, idTenant, idEmpresa2, idVariacao1, new BigDecimal("5.000"));
@@ -223,7 +257,7 @@ class RelatorioEstoqueCrudTest {
         try (Connection c = abrirConexao(idTenant)) {
             long idEmpresa = buscarIdEmpresaViaConexao(c);
             long idVariacao1 = criarVariacao(c, idTenant, idProduto);
-            long idVariacao2 = criarVariacao(c, idTenant, idProduto);
+            long idVariacao2 = criarVariacaoComTamanho(c, idTenant, idProduto, "40");
             definirEstoque(c, idTenant, idEmpresa, idVariacao1, new BigDecimal("1.000"));
             definirEstoque(c, idTenant, idEmpresa, idVariacao2, new BigDecimal("2.000"));
         }

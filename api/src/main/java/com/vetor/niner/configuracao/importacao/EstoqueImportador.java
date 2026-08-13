@@ -283,7 +283,11 @@ public class EstoqueImportador implements ImportadorDeTabela {
     }
 
     /** Acha (ou cria) a linha de {@code cfg_cor}/{@code cfg_tamanho} com essa descrição — mesmo
-     *  princípio de find-or-create usado no resto da importação (fornecedor/categoria por nome). */
+     *  princípio de find-or-create usado no resto da importação (fornecedor/categoria por nome).
+     *  {@code tabela}/{@code coluna} são sempre literais internos (nunca vêm do arquivo
+     *  importado), então a concatenação dinâmica não é risco de injeção. {@code id_cor}/
+     *  {@code id_tamanho} não são mais IDENTITY (V017, 2026-08-20): calculados por tenant, mesmo
+     *  padrão de {@code CorService}/{@code TamanhoService}. */
     private Long idOuNulo(String tabela, String coluna, String descricao) {
         if (descricao == null || descricao.isBlank()) {
             return null;
@@ -295,7 +299,10 @@ public class EstoqueImportador implements ImportadorDeTabela {
         if (existente.isPresent()) {
             return existente.get();
         }
-        return jdbc.sql("INSERT INTO " + tabela + " (id_tenant, descricao) VALUES (plataforma.tenant_atual(), ?) RETURNING " + coluna)
+        return jdbc.sql(
+                        "INSERT INTO " + tabela + " (id_tenant, " + coluna + ", descricao) VALUES (plataforma.tenant_atual(), "
+                                + "COALESCE((SELECT MAX(" + coluna + ") FROM " + tabela + " WHERE id_tenant = plataforma.tenant_atual()), 0) + 1, "
+                                + "?) RETURNING " + coluna)
                 .param(d).query(Long.class).single();
     }
 

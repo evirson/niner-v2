@@ -3,7 +3,7 @@ import { useState } from 'react'
 import CorQuickCreateModal from '../../../components/CorQuickCreateModal'
 import { IconeFechar } from '../../../components/Icones'
 import { ApiError } from '../../../lib/api'
-import { buscarPermiteQtdDecimal } from '../../../lib/configuracaoGeral'
+import { buscarPermiteQtdDecimal, buscarUsaCorGrade } from '../../../lib/configuracaoGeral'
 import { listarCores } from '../../../lib/cores'
 import { buscarProdutosEntrada, type ProdutoOpcaoEntrada } from '../../../lib/entradaMercadoria'
 import { buscarGrade } from '../../../lib/grades'
@@ -74,6 +74,7 @@ export default function PesquisaProdutoEntradaModal({
 }) {
   const { data: cfgQtdDecimal } = useQuery({ queryKey: ['permite-qtd-decimal'], queryFn: buscarPermiteQtdDecimal })
   const permiteQtdDecimal = cfgQtdDecimal?.cfgPermiteQtdDecimal ?? true
+  const { data: cfgUsaCorGrade } = useQuery({ queryKey: ['usa-cor-grade'], queryFn: buscarUsaCorGrade })
 
   const [nome, setNome] = useState('')
   const [marca, setMarca] = useState('')
@@ -86,7 +87,10 @@ export default function PesquisaProdutoEntradaModal({
     enabled: !produtoEscolhido,
   })
 
-  const usaGrade = produtoEscolhido?.idGrade != null
+  // Parâmetro "Usa Cor/Grade" desligado ignora a grade do produto por completo, mesmo que ele já
+  // tenha uma cadastrada de antes (2026-08-20, pedido do dono do produto) — trata como produto
+  // simples, um único campo de Quantidade.
+  const usaGrade = Boolean(cfgUsaCorGrade?.cfgUsaCorGrade) && produtoEscolhido?.idGrade != null
   const [idCor, setIdCor] = useState<number | ''>('')
   const [modalCorAberto, setModalCorAberto] = useState(false)
   const [qtdsPorTamanho, setQtdsPorTamanho] = useState<Record<number, string>>({})

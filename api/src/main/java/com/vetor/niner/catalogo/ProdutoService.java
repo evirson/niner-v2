@@ -356,10 +356,11 @@ public class ProdutoService {
 
     /**
      * Campos comuns a INSERT/UPDATE, na mesma ordem em que aparecem nas duas SQLs acima. Texto
-     * livre em MAIÚSCULAS (convenção do projeto). {@code idGrade} é forçado a {@code null}
-     * quando o tenant não usa cor/grade ({@code cfg_geral.cfg_usa_cor_grade}) — o campo fica
-     * oculto no formulário, então qualquer valor enviado é ignorado, não rejeitado; quando o
-     * tenant usa, a obrigatoriedade já foi checada em {@code validar}.
+     * livre em MAIÚSCULAS (convenção do projeto). {@code idGrade} grava 1 (grade PADRÃO,
+     * reservada/invisível — 2026-08-20, ver {@code SignupService}) quando o tenant não usa
+     * cor/grade ({@code cfg_geral.cfg_usa_cor_grade}) ou o campo não foi enviado — o campo fica
+     * oculto no formulário, então qualquer valor enviado nesse caso é ignorado, não rejeitado;
+     * quando o tenant usa, a obrigatoriedade já foi checada em {@code validar}.
      */
     private static void adicionarCamposComuns(List<Object> params, ProdutoRequest r, boolean usaCorGrade) {
         params.add(r.ativo() == null || r.ativo());
@@ -375,20 +376,7 @@ public class ProdutoService {
         params.add(trimMaiusculoOuNulo(r.codigoNcm()));
         params.add(r.pesoBruto() == null ? BigDecimal.ZERO : r.pesoBruto());
         params.add(r.pesoLiquido() == null ? BigDecimal.ZERO : r.pesoLiquido());
-        // SqlParameterValue explícito: sem isso, um id_grade nulo (produto sem grade) faz o driver
-        // JDBC do Postgres falhar ("conversion to class java.lang.Long from int4 not supported") —
-        // achado real de teste, 2026-08-08. id_grade é `integer` (não bigint); o tipo precisa ser
-        // dito na hora do bind, não inferido do valor (que é null).
-        params.add(new org.springframework.jdbc.core.SqlParameterValue(
-                java.sql.Types.INTEGER, usaCorGrade ? r.idGrade() : null));
-    }
-
-    /** {@code rs.getObject(coluna, Long.class)} não converte `integer` (o tipo real de
-     * `produto.id_grade`) pra `Long` de forma confiável no driver — mesmo padrão já usado em
-     * {@code CrmService.getLongOuNulo}. */
-    private static Long getLongOuNulo(ResultSet rs, String coluna) throws SQLException {
-        long valor = rs.getLong(coluna);
-        return rs.wasNull() ? null : valor;
+        params.add(usaCorGrade && r.idGrade() != null ? r.idGrade() : 1L);
     }
 
     private static String trimMaiusculoOuNulo(String s) {
@@ -415,11 +403,15 @@ public class ProdutoService {
                    p.peso_bruto, p.peso_liquido, p.id_grade, g.descricao AS descricao_grade, p.ativo,
                    p.criado_em, p.atualizado_em, p.reajustado_em
             FROM produto p
-            LEFT JOIN cfg_grade g ON g.id_grade = p.id_grade AND g.id_tenant = p.id_tenant
+            LEFT JOIN cfg_grade g ON g.id_grade = p.id_grade AND g.id_tenant = p.id_tenant AND g.id_grade <> 1
             """;
 
+    /** id_grade=1 é a grade PADRÃO (2026-08-20, reservada/invisível, ver {@code SignupService})
+     *  — a API nunca expõe esse valor: um produto sem grade de verdade devolve {@code idGrade
+     *  null} pro cliente, exatamente como antes de {@code id_grade} virar {@code NOT NULL}. */
     private ProdutoResponse mapear(ResultSet rs, int rowNum) throws SQLException {
         long id = rs.getLong("id_produto");
+        long idGrade = rs.getLong("id_grade");
         return new ProdutoResponse(
                 id,
                 rs.getString("descricao"),
@@ -434,7 +426,7 @@ public class ProdutoService {
                 rs.getString("codigo_ncm"),
                 rs.getBigDecimal("peso_bruto"),
                 rs.getBigDecimal("peso_liquido"),
-                getLongOuNulo(rs, "id_grade"),
+                idGrade == 1 ? null : idGrade,
                 rs.getString("descricao_grade"),
                 rs.getBoolean("ativo"),
                 buscarCategorias(id),

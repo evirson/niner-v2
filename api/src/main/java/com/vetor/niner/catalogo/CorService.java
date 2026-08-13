@@ -19,6 +19,10 @@ import static org.springframework.http.HttpStatus.NOT_FOUND;
  * da cor ({@code cfg_cor}). Sem tela própria: criada embutida na Emissão de Etiqueta
  * ("+ Nova cor") — a Entrada de Produtos, onde cor nasceria de verdade (na compra), ainda não
  * existe (docs/telas/entrada-mercadoria.md, rascunho). Tabela sob RLS de tenant (V017/V024).
+ *
+ * <p><b>id_cor=1 é a cor PADRÃO</b> (2026-08-20, ver {@code SignupService}) — reservada,
+ * invisível, nunca listada/renomeável por aqui. {@code id_cor} não é mais {@code IDENTITY}
+ * (V017): cada tenant tem sua própria numeração, calculada aqui como {@code MAX(id_cor)+1}.
  */
 @Service
 public class CorService {
@@ -31,7 +35,11 @@ public class CorService {
 
     @Transactional(readOnly = true)
     public List<CorResponse> listar() {
-        return jdbc.sql("SELECT id_cor, descricao FROM cfg_cor WHERE id_tenant = plataforma.tenant_atual() ORDER BY descricao")
+        return jdbc.sql("""
+                        SELECT id_cor, descricao FROM cfg_cor
+                        WHERE id_tenant = plataforma.tenant_atual() AND id_cor <> 1
+                        ORDER BY descricao
+                        """)
                 .query((rs, n) -> new CorResponse(rs.getLong("id_cor"), rs.getString("descricao")))
                 .list();
     }
@@ -41,8 +49,10 @@ public class CorService {
         String descricao = req.descricao().trim().toUpperCase(Locale.ROOT);
         try {
             long id = jdbc.sql("""
-                            INSERT INTO cfg_cor (id_tenant, descricao)
-                            VALUES (plataforma.tenant_atual(), ?)
+                            INSERT INTO cfg_cor (id_tenant, id_cor, descricao)
+                            VALUES (plataforma.tenant_atual(),
+                                COALESCE((SELECT MAX(id_cor) FROM cfg_cor WHERE id_tenant = plataforma.tenant_atual()), 0) + 1,
+                                ?)
                             RETURNING id_cor
                             """)
                     .param(descricao)
@@ -55,6 +65,9 @@ public class CorService {
 
     @Transactional
     public CorResponse renomear(long id, CorRequest req) {
+        if (id == 1) {
+            throw new ResponseStatusException(NOT_FOUND, "Cor não encontrada.");
+        }
         String descricao = req.descricao().trim().toUpperCase(Locale.ROOT);
         try {
             int linhas = jdbc.sql("UPDATE cfg_cor SET descricao = ? WHERE id_cor = ? AND id_tenant = plataforma.tenant_atual()")

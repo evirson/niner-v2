@@ -133,8 +133,8 @@ public class PdvProdutoService {
                    pb.sku, p.preco_venda, pi.imagem AS imagem_produto, p.marca, p.referencia
             FROM produto_barra pb
             JOIN produto p ON p.id_produto = pb.id_produto AND p.id_tenant = pb.id_tenant
-            LEFT JOIN cfg_cor co ON co.id_cor = pb.id_cor AND co.id_tenant = pb.id_tenant
-            LEFT JOIN cfg_tamanho ta ON ta.id_tamanho = pb.id_tamanho AND ta.id_tenant = pb.id_tenant
+            LEFT JOIN cfg_cor co ON co.id_cor = pb.id_cor AND co.id_tenant = pb.id_tenant AND co.id_cor <> 1
+            LEFT JOIN cfg_tamanho ta ON ta.id_tamanho = pb.id_tamanho AND ta.id_tenant = pb.id_tenant AND ta.id_tamanho <> 1
             LEFT JOIN produto_imagem pi
                    ON pi.id_produto = p.id_produto AND pi.id_tenant = p.id_tenant AND pi.indice = 0
             """;

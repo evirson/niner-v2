@@ -30,6 +30,10 @@ import static org.springframework.http.HttpStatus.NOT_FOUND;
  * ordem nas colunas fixas {@code id_tamanho1..20} (V017, decisão do dono do produto,
  * 2026-08-08) — este service empacota/desempacota essa lista pro cliente da API nunca ver os
  * slots, só um {@code List<Long>} ordenado.
+ *
+ * <p><b>id_grade=1 é a grade PADRÃO</b> (2026-08-20, ver {@code SignupService}) — reservada,
+ * invisível, nunca listada/editável por aqui. {@code id_grade} não é mais {@code IDENTITY}
+ * (V017): cada tenant tem sua própria numeração, calculada aqui como {@code MAX(id_grade)+1}.
  */
 @Service
 public class GradeService {
@@ -44,7 +48,8 @@ public class GradeService {
 
     @Transactional(readOnly = true)
     public List<GradeResponse> listar() {
-        List<GradeBruta> brutas = jdbc.sql(SELECT_COLUNAS + " FROM cfg_grade WHERE id_tenant = plataforma.tenant_atual() ORDER BY descricao")
+        List<GradeBruta> brutas = jdbc.sql(SELECT_COLUNAS
+                        + " FROM cfg_grade WHERE id_tenant = plataforma.tenant_atual() AND id_grade <> 1 ORDER BY descricao")
                 .query(GradeService::mapearBruta)
                 .list();
         Map<Long, TamanhoResponse> tamanhos = resolverTamanhos(brutas);
@@ -53,6 +58,9 @@ public class GradeService {
 
     @Transactional(readOnly = true)
     public GradeResponse buscar(long id) {
+        if (id == 1) {
+            throw new ResponseStatusException(NOT_FOUND, "Grade não encontrada.");
+        }
         GradeBruta bruta = jdbc.sql(SELECT_COLUNAS + " FROM cfg_grade WHERE id_grade = ? AND id_tenant = plataforma.tenant_atual()")
                 .param(id)
                 .query(GradeService::mapearBruta)
@@ -125,12 +133,14 @@ public class GradeService {
     public GradeResponse criar(GradeRequest req) {
         String descricao = validarEDescricao(req);
         List<Object> params = new ArrayList<>();
-        params.add(descricao);
         params.addAll(empacotarSlots(req.idsTamanho()));
+        params.add(0, descricao);
         try {
             long id = jdbc.sql("""
-                            INSERT INTO cfg_grade (id_tenant, descricao, %s)
-                            VALUES (plataforma.tenant_atual(), ?, %s)
+                            INSERT INTO cfg_grade (id_tenant, id_grade, descricao, %s)
+                            VALUES (plataforma.tenant_atual(),
+                                COALESCE((SELECT MAX(id_grade) FROM cfg_grade WHERE id_tenant = plataforma.tenant_atual()), 0) + 1,
+                                ?, %s)
                             RETURNING id_grade
                             """.formatted(COLUNAS_SLOT, PLACEHOLDERS_SLOT))
                     .params(params)
@@ -145,6 +155,9 @@ public class GradeService {
 
     @Transactional
     public GradeResponse atualizar(long id, GradeRequest req) {
+        if (id == 1) {
+            throw new ResponseStatusException(NOT_FOUND, "Grade não encontrada.");
+        }
         String descricao = validarEDescricao(req);
         List<Object> params = new ArrayList<>();
         params.add(descricao);

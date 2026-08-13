@@ -306,8 +306,8 @@ public class TransferenciaService {
                                ON pmd.id_movimento = pm.id_movimento AND pmd.id_tenant = pm.id_tenant
                         JOIN produto_barra pb ON pb.id_variacao = pmd.id_variacao AND pb.id_tenant = pmd.id_tenant
                         JOIN produto p ON p.id_produto = pb.id_produto AND p.id_tenant = pb.id_tenant
-                        LEFT JOIN cfg_cor co ON co.id_cor = pb.id_cor AND co.id_tenant = pb.id_tenant
-                        LEFT JOIN cfg_tamanho ta ON ta.id_tamanho = pb.id_tamanho AND ta.id_tenant = pb.id_tenant
+                        LEFT JOIN cfg_cor co ON co.id_cor = pb.id_cor AND co.id_tenant = pb.id_tenant AND co.id_cor <> 1
+                        LEFT JOIN cfg_tamanho ta ON ta.id_tamanho = pb.id_tamanho AND ta.id_tenant = pb.id_tenant AND ta.id_tamanho <> 1
                         WHERE pm.id_tenant = plataforma.tenant_atual() AND pm.id_transferencia = ?
                               AND pmd.credito_debito = 'D'
                         ORDER BY pmd.id_movimento_detalhe ASC

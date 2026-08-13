@@ -87,8 +87,8 @@ public class RelatorioMovimentacaoProdutosService {
                        co.descricao AS variacao_cor, ta.descricao AS variacao_tamanho
                 FROM produto_barra pb
                 JOIN produto p ON p.id_produto = pb.id_produto AND p.id_tenant = pb.id_tenant
-                LEFT JOIN cfg_cor co ON co.id_cor = pb.id_cor AND co.id_tenant = pb.id_tenant
-                LEFT JOIN cfg_tamanho ta ON ta.id_tamanho = pb.id_tamanho AND ta.id_tenant = pb.id_tenant
+                LEFT JOIN cfg_cor co ON co.id_cor = pb.id_cor AND co.id_tenant = pb.id_tenant AND co.id_cor <> 1
+                LEFT JOIN cfg_tamanho ta ON ta.id_tamanho = pb.id_tamanho AND ta.id_tenant = pb.id_tenant AND ta.id_tamanho <> 1
                 WHERE pb.id_tenant = plataforma.tenant_atual()
                 """
                 + filtroBusca
@@ -185,8 +185,8 @@ public class RelatorioMovimentacaoProdutosService {
                 JOIN empresa e ON e.id_empresa = pmd.id_empresa AND e.id_tenant = pmd.id_tenant
                 JOIN produto_barra pb ON pb.id_variacao = pmd.id_variacao AND pb.id_tenant = pmd.id_tenant
                 JOIN produto p ON p.id_produto = pb.id_produto AND p.id_tenant = pb.id_tenant
-                LEFT JOIN cfg_cor co ON co.id_cor = pb.id_cor AND co.id_tenant = pb.id_tenant
-                LEFT JOIN cfg_tamanho ta ON ta.id_tamanho = pb.id_tamanho AND ta.id_tenant = pb.id_tenant
+                LEFT JOIN cfg_cor co ON co.id_cor = pb.id_cor AND co.id_tenant = pb.id_tenant AND co.id_cor <> 1
+                LEFT JOIN cfg_tamanho ta ON ta.id_tamanho = pb.id_tamanho AND ta.id_tenant = pb.id_tenant AND ta.id_tamanho <> 1
                 LEFT JOIN fornecedor forn ON forn.id_fornecedor = pmm.id_fornecedor AND forn.id_tenant = pmm.id_tenant
                 LEFT JOIN funcionario fn ON fn.id_funcionario = pmd.id_funcionario AND fn.id_tenant = pmd.id_tenant
                 """
@@ -370,8 +370,8 @@ public class RelatorioMovimentacaoProdutosService {
                        emp.id_empresa, COALESCE(emp.nome_fantasia, emp.razao_social) AS nome_empresa
                 FROM produto_barra pb
                 JOIN produto p ON p.id_produto = pb.id_produto AND p.id_tenant = pb.id_tenant
-                LEFT JOIN cfg_cor co ON co.id_cor = pb.id_cor AND co.id_tenant = pb.id_tenant
-                LEFT JOIN cfg_tamanho ta ON ta.id_tamanho = pb.id_tamanho AND ta.id_tenant = pb.id_tenant
+                LEFT JOIN cfg_cor co ON co.id_cor = pb.id_cor AND co.id_tenant = pb.id_tenant AND co.id_cor <> 1
+                LEFT JOIN cfg_tamanho ta ON ta.id_tamanho = pb.id_tamanho AND ta.id_tenant = pb.id_tenant AND ta.id_tamanho <> 1
                 JOIN empresa emp ON emp.id_tenant = pb.id_tenant AND emp.id_empresa = ?
                 WHERE pb.id_tenant = plataforma.tenant_atual() AND pb.id_variacao = ?
                 """;

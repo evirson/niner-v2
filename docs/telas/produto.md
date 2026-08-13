@@ -72,11 +72,24 @@ Modelo novo:
   suficiente pra não justificar uma tabela filha). Mantida via popup "＋ Gerenciar Grades"
   (`GradeModal.tsx`) no formulário de Produto: lista/cria/edita grades, com a lista de tamanhos
   reordenável (▲/▼) e um "+ Novo tamanho" inline.
-- `produto.id_grade` (nullable, FK `cfg_grade`) substitui `nome_variante_linha`/
-  `nome_variante_coluna` — um produto usa variação se, e só se, tiver uma grade escolhida.
-- `produto_barra.id_cor`/`id_tamanho` (nullable, FKs) substituem `id_variante_linha`/
-  `id_variante_coluna`; `produto_barra_variacao_uk` virou `UNIQUE(id_produto, id_cor,
-  id_tamanho)`.
+- `produto.id_grade` (FK `cfg_grade`) substitui `nome_variante_linha`/`nome_variante_coluna` — um
+  produto usa variação de verdade se, e só se, tiver uma grade **diferente da PADRÃO** escolhida
+  (ver nota abaixo).
+- `produto_barra.id_cor`/`id_tamanho` (FKs) substituem `id_variante_linha`/`id_variante_coluna`;
+  `produto_barra_variacao_uk` virou `UNIQUE(id_produto, id_cor, id_tamanho)`.
+
+> **Cor/Tamanho/Grade "PADRÃO", sentinela código 1 (2026-08-21).** `cfg_cor`/`cfg_tamanho`/
+> `cfg_grade` deixaram de ser nullable em `produto`/`produto_barra` — todo tenant nasce (via
+> `SignupService`) com uma linha `id_cor=1` (nome vazio), `id_tamanho=1` (nome "UN") e
+> `id_grade=1` (descrição "PADRÃO", único tamanho "UN"), e `produto.id_grade`/
+> `produto_barra.id_cor`/`id_tamanho` são `NOT NULL DEFAULT 1`. Quando o tenant não usa cor/grade
+> (`cfg_geral.cfg_usa_cor_grade = false`), TODO produto/variação grava esse `1` internamente —
+> nunca `null` — mas nenhuma tela mostra ou menciona essas linhas (listagens/JOINs excluem
+> `id=1`, a API traduz `1` de volta pra `null` na resposta). Motivo: se o tenant ligar cor/grade
+> no futuro, o dado já está estruturalmente consistente, sem migração. `id_cor`/`id_tamanho`/
+> `id_grade` são calculados em Java por tenant (`COALESCE(MAX(id)+1, 1)`), não mais
+> `GENERATED ALWAYS AS IDENTITY` — a PK de cada tabela virou composta `(id_tenant, id_col)`. Ver
+> `[[project_cor_grade_tamanho]]` na memória.
 - **Cor é obrigatória sempre que o produto tem grade** (decisão do dono do produto, confirmada
   explicitamente) — diferente de tamanho, que é restrito às opções da grade do produto mas
   igualmente obrigatório quando há grade. Regra e mensagens em

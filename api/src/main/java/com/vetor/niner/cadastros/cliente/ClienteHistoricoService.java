@@ -101,8 +101,8 @@ public class ClienteHistoricoService {
                               AND pmd.credito_debito = 'D'
                         JOIN produto_barra pb ON pb.id_variacao = pmd.id_variacao AND pb.id_tenant = pmd.id_tenant
                         JOIN produto p        ON p.id_produto = pb.id_produto AND p.id_tenant = pb.id_tenant
-                        LEFT JOIN cfg_cor co ON co.id_cor = pb.id_cor AND co.id_tenant = pb.id_tenant
-                        LEFT JOIN cfg_tamanho ta ON ta.id_tamanho = pb.id_tamanho AND ta.id_tenant = pb.id_tenant
+                        LEFT JOIN cfg_cor co ON co.id_cor = pb.id_cor AND co.id_tenant = pb.id_tenant AND co.id_cor <> 1
+                        LEFT JOIN cfg_tamanho ta ON ta.id_tamanho = pb.id_tamanho AND ta.id_tenant = pb.id_tenant AND ta.id_tamanho <> 1
                         WHERE v.id_tenant = plataforma.tenant_atual() AND v.id_cliente = ?
                         ORDER BY v.data_venda DESC, v.id_venda DESC, p.descricao ASC
                         """)

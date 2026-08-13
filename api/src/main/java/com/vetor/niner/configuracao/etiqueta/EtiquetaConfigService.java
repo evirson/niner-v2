@@ -186,8 +186,8 @@ public class EtiquetaConfigService {
                        co.descricao AS variacao_cor, ta.descricao AS variacao_tamanho
                 FROM produto p
                 LEFT JOIN produto_barra pb ON pb.id_produto = p.id_produto AND pb.id_tenant = p.id_tenant
-                LEFT JOIN cfg_cor co ON co.id_cor = pb.id_cor AND co.id_tenant = pb.id_tenant
-                LEFT JOIN cfg_tamanho ta ON ta.id_tamanho = pb.id_tamanho AND ta.id_tenant = pb.id_tenant
+                LEFT JOIN cfg_cor co ON co.id_cor = pb.id_cor AND co.id_tenant = pb.id_tenant AND co.id_cor <> 1
+                LEFT JOIN cfg_tamanho ta ON ta.id_tamanho = pb.id_tamanho AND ta.id_tenant = pb.id_tenant AND ta.id_tamanho <> 1
                 WHERE p.id_tenant = plataforma.tenant_atual() AND p.ativo
                 """
                 + filtroBusca

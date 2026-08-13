@@ -18,6 +18,10 @@ import static org.springframework.http.HttpStatus.NOT_FOUND;
  * CRUD (criar/listar/renomear, sem exclusão — mesmo padrão de {@code CategoriaProdutoService})
  * do tamanho ({@code cfg_tamanho}). Sem tela própria: criado embutido no modal "Gerenciar
  * Grades" da tela de Produto (docs/telas/produto.md). Tabela sob RLS de tenant (V017/V024).
+ *
+ * <p><b>id_tamanho=1 é o tamanho PADRÃO</b> (2026-08-20, ver {@code SignupService}) — reservado,
+ * invisível, nunca listado/renomeável por aqui. {@code id_tamanho} não é mais {@code IDENTITY}
+ * (V017): cada tenant tem sua própria numeração, calculada aqui como {@code MAX(id_tamanho)+1}.
  */
 @Service
 public class TamanhoService {
@@ -30,7 +34,11 @@ public class TamanhoService {
 
     @Transactional(readOnly = true)
     public List<TamanhoResponse> listar() {
-        return jdbc.sql("SELECT id_tamanho, descricao FROM cfg_tamanho WHERE id_tenant = plataforma.tenant_atual() ORDER BY descricao")
+        return jdbc.sql("""
+                        SELECT id_tamanho, descricao FROM cfg_tamanho
+                        WHERE id_tenant = plataforma.tenant_atual() AND id_tamanho <> 1
+                        ORDER BY descricao
+                        """)
                 .query((rs, n) -> new TamanhoResponse(rs.getLong("id_tamanho"), rs.getString("descricao")))
                 .list();
     }
@@ -40,8 +48,10 @@ public class TamanhoService {
         String descricao = req.descricao().trim().toUpperCase(Locale.ROOT);
         try {
             long id = jdbc.sql("""
-                            INSERT INTO cfg_tamanho (id_tenant, descricao)
-                            VALUES (plataforma.tenant_atual(), ?)
+                            INSERT INTO cfg_tamanho (id_tenant, id_tamanho, descricao)
+                            VALUES (plataforma.tenant_atual(),
+                                COALESCE((SELECT MAX(id_tamanho) FROM cfg_tamanho WHERE id_tenant = plataforma.tenant_atual()), 0) + 1,
+                                ?)
                             RETURNING id_tamanho
                             """)
                     .param(descricao)
@@ -54,6 +64,9 @@ public class TamanhoService {
 
     @Transactional
     public TamanhoResponse renomear(long id, TamanhoRequest req) {
+        if (id == 1) {
+            throw new ResponseStatusException(NOT_FOUND, "Tamanho não encontrado.");
+        }
         String descricao = req.descricao().trim().toUpperCase(Locale.ROOT);
         try {
             int linhas = jdbc.sql("UPDATE cfg_tamanho SET descricao = ? WHERE id_tamanho = ? AND id_tenant = plataforma.tenant_atual()")

@@ -172,8 +172,8 @@ public class ExportacaoService {
                    p.preco_venda AS "Preço de Venda"
             FROM produto_barra pb
             JOIN produto p ON p.id_produto = pb.id_produto AND p.id_tenant = pb.id_tenant
-            LEFT JOIN cfg_cor co ON co.id_cor = pb.id_cor AND co.id_tenant = pb.id_tenant
-            LEFT JOIN cfg_tamanho ta ON ta.id_tamanho = pb.id_tamanho AND ta.id_tenant = pb.id_tenant
+            LEFT JOIN cfg_cor co ON co.id_cor = pb.id_cor AND co.id_tenant = pb.id_tenant AND co.id_cor <> 1
+            LEFT JOIN cfg_tamanho ta ON ta.id_tamanho = pb.id_tamanho AND ta.id_tenant = pb.id_tenant AND ta.id_tamanho <> 1
             WHERE pb.id_tenant = plataforma.tenant_atual()
             ORDER BY p.descricao
             """;
@@ -199,8 +199,8 @@ public class ExportacaoService {
             JOIN empresa e ON e.id_empresa = pe.id_empresa AND e.id_tenant = pe.id_tenant
             JOIN produto_barra pb ON pb.id_variacao = pe.id_variacao AND pb.id_tenant = pe.id_tenant
             JOIN produto p ON p.id_produto = pb.id_produto AND p.id_tenant = pb.id_tenant
-            LEFT JOIN cfg_cor co ON co.id_cor = pb.id_cor AND co.id_tenant = pb.id_tenant
-            LEFT JOIN cfg_tamanho ta ON ta.id_tamanho = pb.id_tamanho AND ta.id_tenant = pb.id_tenant
+            LEFT JOIN cfg_cor co ON co.id_cor = pb.id_cor AND co.id_tenant = pb.id_tenant AND co.id_cor <> 1
+            LEFT JOIN cfg_tamanho ta ON ta.id_tamanho = pb.id_tamanho AND ta.id_tenant = pb.id_tenant AND ta.id_tamanho <> 1
             WHERE pe.id_tenant = plataforma.tenant_atual()
             ORDER BY e.razao_social, p.descricao
             """;

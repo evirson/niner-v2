@@ -198,6 +198,19 @@ public class EntradaMercadoriaService {
                         .update();
             }
 
+            // NCM do XML sempre vale (2026-08-20, pedido do dono do produto): se o item trouxe
+            // um NCM (já validado contra cfg_produto_ncm em EntradaXmlService) e ele é diferente
+            // do que o produto já tem cadastrado, SUBSTITUI — não é sugestão, é correção. Só
+            // grava quando de fato muda, pra não bater atualizado_em à toa em toda entrada.
+            if (item.ncm() != null && !item.ncm().equals(item.codigoNcmAtual())) {
+                jdbc.sql("""
+                                UPDATE produto SET codigo_ncm = ?, atualizado_em = now()
+                                WHERE id_tenant = plataforma.tenant_atual() AND id_produto = ?
+                                """)
+                        .params(item.ncm(), item.idProduto())
+                        .update();
+            }
+
             BigDecimal valorTotalItem = item.precoCusto().multiply(item.qtd()).add(valorAcrescimo);
             valorTotalNota = valorTotalNota.add(valorTotalItem);
             itensResponse.add(new ItemEntradaResponse(item.idVariacao(), item.sku(), item.descricaoProduto(),
@@ -366,8 +379,8 @@ public class EntradaMercadoriaService {
                         FROM produto_movimento_detalhe d
                         JOIN produto_barra pb ON pb.id_tenant = d.id_tenant AND pb.id_variacao = d.id_variacao
                         JOIN produto p ON p.id_tenant = pb.id_tenant AND p.id_produto = pb.id_produto
-                        LEFT JOIN cfg_cor co ON co.id_tenant = pb.id_tenant AND co.id_cor = pb.id_cor
-                        LEFT JOIN cfg_tamanho ta ON ta.id_tenant = pb.id_tenant AND ta.id_tamanho = pb.id_tamanho
+                        LEFT JOIN cfg_cor co ON co.id_tenant = pb.id_tenant AND co.id_cor = pb.id_cor AND co.id_cor <> 1
+                        LEFT JOIN cfg_tamanho ta ON ta.id_tenant = pb.id_tenant AND ta.id_tamanho = pb.id_tamanho AND ta.id_tamanho <> 1
                         WHERE d.id_tenant = plataforma.tenant_atual() AND d.id_movimento = ?
                         ORDER BY d.id_movimento_detalhe
                         """)
@@ -576,11 +589,20 @@ public class EntradaMercadoriaService {
                                   /** `cProd` do XML (2026-08-18) — `null` fora do fluxo XML.
                                    *  Alimenta o aprendizado de {@code produto_fornecedor} em
                                    *  {@link #efetivar}, mesmo em item resolvido por EAN. */
-                                  String codigoFornecedor) {
+                                  String codigoFornecedor,
+                                  /** NCM do XML (2026-08-20, `ItemEntradaRequest.ncm`) — `null`
+                                   *  fora do fluxo XML. Substitui {@code codigoNcmAtual} na
+                                   *  confirmação quando os dois vierem diferentes (o NCM do XML
+                                   *  sempre vale — ver {@link #efetivar}). */
+                                  String ncm,
+                                  /** {@code produto.codigo_ncm} já cadastrado — usado só pra
+                                   *  decidir se {@code ncm} é de fato diferente, evitando um
+                                   *  UPDATE à toa quando já bate. */
+                                  String codigoNcmAtual) {
     }
 
     private record LinhaVariacao(long idProduto, String sku, String descricaoProduto, BigDecimal precoVenda,
-                                  BigDecimal percentualVenda, String variacaoCor, String variacaoTamanho) {
+                                  BigDecimal percentualVenda, String codigoNcm, String variacaoCor, String variacaoTamanho) {
     }
 
     /** Resolve descrição/variação/preço-de-venda-atual de cada item a partir do {@code
@@ -593,17 +615,18 @@ public class EntradaMercadoriaService {
         for (ItemEntradaRequest item : itens) {
             LinhaVariacao linha = jdbc.sql("""
                             SELECT p.id_produto, pb.sku, p.descricao AS descricao_produto, p.preco_venda,
-                                   p.percentual_venda, co.descricao AS variacao_cor, ta.descricao AS variacao_tamanho
+                                   p.percentual_venda, p.codigo_ncm, co.descricao AS variacao_cor,
+                                   ta.descricao AS variacao_tamanho
                             FROM produto_barra pb
                             JOIN produto p ON p.id_produto = pb.id_produto AND p.id_tenant = pb.id_tenant
-                            LEFT JOIN cfg_cor co ON co.id_cor = pb.id_cor AND co.id_tenant = pb.id_tenant
-                            LEFT JOIN cfg_tamanho ta ON ta.id_tamanho = pb.id_tamanho AND ta.id_tenant = pb.id_tenant
+                            LEFT JOIN cfg_cor co ON co.id_cor = pb.id_cor AND co.id_tenant = pb.id_tenant AND co.id_cor <> 1
+                            LEFT JOIN cfg_tamanho ta ON ta.id_tamanho = pb.id_tamanho AND ta.id_tenant = pb.id_tenant AND ta.id_tamanho <> 1
                             WHERE pb.id_tenant = plataforma.tenant_atual() AND pb.id_variacao = ? AND p.ativo = true
                             """)
                     .param(item.idVariacao())
                     .query((rs, n) -> new LinhaVariacao(rs.getLong("id_produto"), rs.getString("sku"),
                             rs.getString("descricao_produto"), rs.getBigDecimal("preco_venda"),
-                            rs.getBigDecimal("percentual_venda"), rs.getString("variacao_cor"),
+                            rs.getBigDecimal("percentual_venda"), rs.getString("codigo_ncm"), rs.getString("variacao_cor"),
                             rs.getString("variacao_tamanho")))
                     .optional()
                     .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Produto informado não existe ou está inativo."));
@@ -611,7 +634,8 @@ public class EntradaMercadoriaService {
             BigDecimal precoVendaAtual = item.precoVenda() != null ? item.precoVenda() : linha.precoVenda();
             resolvidos.add(new ItemResolvido(item.idVariacao(), linha.idProduto(), item.qtd(), item.precoCusto(),
                     precoVendaAtual, linha.percentualVenda(), linha.sku(), linha.descricaoProduto(),
-                    linha.variacaoCor(), linha.variacaoTamanho(), item.precoVenda(), item.codigoFornecedor()));
+                    linha.variacaoCor(), linha.variacaoTamanho(), item.precoVenda(), item.codigoFornecedor(),
+                    item.ncm(), linha.codigoNcm()));
         }
         return resolvidos;
     }

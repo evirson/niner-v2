@@ -300,10 +300,14 @@ class ValeMercadoriaCrudTest {
                 .andExpect(status().isCreated());
 
         // Segunda tentativa de usar o mesmo vale — precisa de outra venda igual pra tentar de novo.
+        // Produto NOVO pra essa 2ª variação (2026-08-20): produto_barra_variacao_uk agora é
+        // violável de verdade sem cor/tamanho — id_cor/id_tamanho gravam 1 (PADRÃO) em vez de
+        // NULL, então 2 variações "sem variação" do MESMO produto colidiriam.
+        long idProdutoVenda2 = criarProdutoComPreco(tenant.token(), "Produto Vendido Reuso 2", "30.00");
         long idVariacaoVenda2;
         try (Connection c = abrirConexao(idTenant)) {
             long idEmpresa = buscarIdEmpresa(c);
-            idVariacaoVenda2 = criarVariacao(c, idTenant, idProdutoVenda);
+            idVariacaoVenda2 = criarVariacao(c, idTenant, idProdutoVenda2);
             definirEstoque(c, idTenant, idEmpresa, idVariacaoVenda2, new BigDecimal("10.000"));
         }
         String corpoVenda2 = """
@@ -457,11 +461,15 @@ class ValeMercadoriaCrudTest {
             }
         }
 
-        // O vale reaberto pode ser usado numa nova venda.
+        // O vale reaberto pode ser usado numa nova venda. Produto NOVO pra essa 2ª variação
+        // (2026-08-20): produto_barra_variacao_uk agora é violável de verdade sem cor/tamanho —
+        // id_cor/id_tamanho gravam 1 (PADRÃO) em vez de NULL, então 2 variações "sem variação"
+        // do MESMO produto colidiriam.
+        long idProdutoVenda2 = criarProdutoComPreco(tenant.token(), "Produto Vendido Cancelamento 2", "80.00");
         long idVariacaoVenda2;
         try (Connection c = abrirConexao(idTenant)) {
             long idEmpresa = buscarIdEmpresa(c);
-            idVariacaoVenda2 = criarVariacao(c, idTenant, idProdutoVenda);
+            idVariacaoVenda2 = criarVariacao(c, idTenant, idProdutoVenda2);
             definirEstoque(c, idTenant, idEmpresa, idVariacaoVenda2, new BigDecimal("10.000"));
         }
         String corpoVenda2 = """

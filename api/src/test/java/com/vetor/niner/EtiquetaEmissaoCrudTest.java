@@ -363,11 +363,15 @@ class EtiquetaEmissaoCrudTest {
         String token = assinarNovoTenant("entradas-nota");
         long idTenant = extrairIdTenant(token);
         long idProduto = criarProduto(token, "Bermuda Entrada");
+        // 2 produtos distintos pra 2 variações "sem cor/tamanho" (2026-08-20): id_cor/id_tamanho
+        // gravam 1 (PADRÃO) em vez de NULL — 2 variações do MESMO produto sem cor/tamanho
+        // colidiriam em produto_barra_variacao_uk.
+        long idProduto2 = criarProduto(token, "Bermuda Entrada 2");
 
         try (Connection c = abrirConexao(idTenant)) {
             long idEmpresa = buscarIdEmpresa(c);
             long idVariacao1 = criarVariacao(c, idTenant, idProduto);
-            long idVariacao2 = criarVariacao(c, idTenant, idProduto);
+            long idVariacao2 = criarVariacao(c, idTenant, idProduto2);
             criarMovimentoCompra(c, idTenant, idEmpresa, idVariacao1, new BigDecimal("3.000"),
                     OffsetDateTime.now(), null, 500);
             criarMovimentoCompra(c, idTenant, idEmpresa, idVariacao2, new BigDecimal("7.000"),
@@ -394,12 +398,15 @@ class EtiquetaEmissaoCrudTest {
         String token = assinarNovoTenant("estoque-positivo");
         long idTenant = extrairIdTenant(token);
         long idProduto = criarProduto(token, "Produto Estoque");
+        // 2 produtos distintos pra 2 variações "sem cor/tamanho" (2026-08-20) — ver comentário
+        // em buscarPorEntradasFiltraPorNotaFiscal.
+        long idProduto2 = criarProduto(token, "Produto Estoque 2");
 
         long idEmpresa;
         try (Connection c = abrirConexao(idTenant)) {
             idEmpresa = buscarIdEmpresa(c);
             long idVariacaoComEstoque = criarVariacao(c, idTenant, idProduto);
-            long idVariacaoZerada = criarVariacao(c, idTenant, idProduto);
+            long idVariacaoZerada = criarVariacao(c, idTenant, idProduto2);
             criarEstoque(c, idTenant, idEmpresa, idVariacaoComEstoque, new BigDecimal("8.000"));
             criarEstoque(c, idTenant, idEmpresa, idVariacaoZerada, BigDecimal.ZERO);
         }

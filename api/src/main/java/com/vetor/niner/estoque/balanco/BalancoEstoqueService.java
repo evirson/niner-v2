@@ -113,8 +113,8 @@ public class BalancoEstoqueService {
                         FROM produto_balanco pb
                         JOIN produto_barra pbr ON pbr.id_variacao = pb.id_variacao AND pbr.id_tenant = pb.id_tenant
                         JOIN produto p ON p.id_produto = pbr.id_produto AND p.id_tenant = pbr.id_tenant
-                        LEFT JOIN cfg_cor co ON co.id_cor = pbr.id_cor AND co.id_tenant = pbr.id_tenant
-                        LEFT JOIN cfg_tamanho ta ON ta.id_tamanho = pbr.id_tamanho AND ta.id_tenant = pbr.id_tenant
+                        LEFT JOIN cfg_cor co ON co.id_cor = pbr.id_cor AND co.id_tenant = pbr.id_tenant AND co.id_cor <> 1
+                        LEFT JOIN cfg_tamanho ta ON ta.id_tamanho = pbr.id_tamanho AND ta.id_tenant = pbr.id_tenant AND ta.id_tamanho <> 1
                         WHERE pb.id_tenant = plataforma.tenant_atual() AND pb.id_empresa = ? AND pb.id_movimento IS NULL
                         GROUP BY pb.id_variacao, p.descricao, co.descricao, ta.descricao, pbr.sku
                         HAVING SUM(pb.qtd_contagem) <> 0
@@ -312,8 +312,8 @@ public class BalancoEstoqueService {
                         JOIN produto_barra pbr
                                ON pbr.id_variacao = COALESCE(c.id_variacao, e.id_variacao) AND pbr.id_tenant = plataforma.tenant_atual()
                         JOIN produto p ON p.id_produto = pbr.id_produto AND p.id_tenant = pbr.id_tenant
-                        LEFT JOIN cfg_cor co ON co.id_cor = pbr.id_cor AND co.id_tenant = pbr.id_tenant
-                        LEFT JOIN cfg_tamanho ta ON ta.id_tamanho = pbr.id_tamanho AND ta.id_tenant = pbr.id_tenant
+                        LEFT JOIN cfg_cor co ON co.id_cor = pbr.id_cor AND co.id_tenant = pbr.id_tenant AND co.id_cor <> 1
+                        LEFT JOIN cfg_tamanho ta ON ta.id_tamanho = pbr.id_tamanho AND ta.id_tenant = pbr.id_tenant AND ta.id_tamanho <> 1
                         WHERE COALESCE(c.qtd_contada, 0) <> COALESCE(e.qtd_estoque, 0)
                               AND (
                                   c.id_variacao IS NOT NULL

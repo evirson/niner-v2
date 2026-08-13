@@ -14,6 +14,9 @@ export interface ItemEntradaRequest {
    *  confirmação aprende/atualiza `produto_fornecedor`: a próxima nota do mesmo fornecedor com
    *  este código já resolve sozinha. Só o fluxo XML preenche. */
   codigoFornecedor?: string | null
+  /** NCM do XML (2026-08-20) — quando presente e diferente do NCM já cadastrado no produto, a
+   *  confirmação SUBSTITUI (o NCM do XML sempre vale). Só o fluxo XML preenche. */
+  ncm?: string | null
 }
 
 /** Uma duplicata/parcela opcional a gerar em `contas_pagar` — sempre opcional no fluxo Manual. */
@@ -192,6 +195,10 @@ export interface ItemPlanilhaPreviewResponse {
    *  PALPITE nesse caso (nunca resolvem/cadastram sozinhos — o XML sempre exige confirmação
    *  manual do operador, diferente da Planilha). */
   codigoFornecedor: string | null
+  /** NCM do XML, já validado contra o cadastro de NCM (2026-08-20) — `null` no fluxo Planilha
+   *  (sem coluna de NCM). Em linha resolvida, segue até a confirmação e substitui o NCM do
+   *  produto se vier diferente. Em pendência, pré-preenche o NCM do cadastro rápido. */
+  ncm: string | null
 }
 
 export function previewPlanilhaEntrada(arquivo: File): Promise<ItemPlanilhaPreviewResponse[]> {

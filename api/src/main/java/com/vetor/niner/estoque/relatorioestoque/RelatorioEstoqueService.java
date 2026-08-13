@@ -148,8 +148,8 @@ public class RelatorioEstoqueService {
                        emp.id_empresa, COALESCE(pe.qtd_estoque, 0) AS qtd_estoque
                 FROM produto p
                 JOIN produto_barra pb ON pb.id_tenant = p.id_tenant AND pb.id_produto = p.id_produto
-                LEFT JOIN cfg_cor co ON co.id_tenant = pb.id_tenant AND co.id_cor = pb.id_cor
-                LEFT JOIN cfg_tamanho ta ON ta.id_tenant = pb.id_tenant AND ta.id_tamanho = pb.id_tamanho
+                LEFT JOIN cfg_cor co ON co.id_tenant = pb.id_tenant AND co.id_cor = pb.id_cor AND co.id_cor <> 1
+                LEFT JOIN cfg_tamanho ta ON ta.id_tenant = pb.id_tenant AND ta.id_tamanho = pb.id_tamanho AND ta.id_tamanho <> 1
                 JOIN empresa emp ON emp.id_tenant = p.id_tenant AND emp.id_empresa IN (%s)
                 LEFT JOIN produto_estoque pe ON pe.id_tenant = p.id_tenant AND pe.id_variacao = pb.id_variacao
                                              AND pe.id_empresa = emp.id_empresa

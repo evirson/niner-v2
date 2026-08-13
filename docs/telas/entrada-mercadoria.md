@@ -1,7 +1,7 @@
 # Spec: Entrada de Mercadorias (XML NF-e + lançamento manual)      Status: Implementada (falta só Fase 5 — atalho de etiqueta)
-Autor: Evirson (dono do produto) + Claude · Data: 2026-07-23, implementação 2026-08-11/12 (Manual+Planilha), 2026-08-18/19 (XML, Cancelamento, Filtros) · Módulo(s): `estoque` (entrada) · Fase: 1 — Núcleo do ERP
+Autor: Evirson (dono do produto) + Claude · Data: 2026-07-23, implementação 2026-08-11/12 (Manual+Planilha), 2026-08-18/19 (XML, Cancelamento, Filtros), 2026-08-20 (respeito ao parâmetro "Usa Cor/Grade") · Módulo(s): `estoque` (entrada) · Fase: 1 — Núcleo do ERP
 
-> **Estado de implementação (2026-08-19).** Todas as "Questões abertas" abaixo foram
+> **Estado de implementação (2026-08-20).** Todas as "Questões abertas" abaixo foram
 > respondidas "sim" pelo dono do produto e a maioria dos **[COMPLEMENTAR]** ao longo do
 > documento reflete decisões já tomadas durante a implementação (mantidos no corpo do texto
 > como registro histórico da discussão, mesmo já resolvidos na prática) — implementado:
@@ -76,6 +76,26 @@ Autor: Evirson (dono do produto) + Claude · Data: 2026-07-23, implementação 2
 >   horário achado e corrigido nesta rodada: a sessão do Postgres roda em UTC mas a tela mostra
 >   data em horário local do navegador — filtro de data e gravação de `dataMovimento` agora
 >   usam `(coluna AT TIME ZONE 'America/Sao_Paulo')` em vez de comparar/gravar em UTC puro.
+> - **Parâmetro "Usa Cor/Grade" desligado (2026-08-20)** — nenhum dos 3 fluxos pede ou mostra
+>   Cor/Tamanho, mesmo para um produto que já tenha `id_grade` gravado de uma sessão anterior
+>   (a grade é ignorada por completo enquanto o parâmetro estiver desligado — decisão explícita
+>   do dono do produto, não só um bloqueio para produto novo). `EntradaPlanilhaService` zera
+>   `idGrade` internamente quando `cfg_geral.cfg_usa_cor_grade = false`;
+>   `PesquisaProdutoEntradaModal` (fluxo Individual) passou a checar a flag global, não só o
+>   `idGrade` do produto escolhido; `LinhaPendentePlanilha` (pendência do Planilha/XML) só exibe
+>   os selects de Cor/Tamanho quando a linha resolvida realmente tem grade — antes disso havia
+>   um bug de travamento (produto sem grade caindo nessa tela ficava com o select de Tamanho
+>   sempre vazio e o "Confirmar" nunca habilitava).
+> - **Grid "Localizados"/"Não Localizados" agrupada por nome (2026-08-21)** — com "Usa Cor/Grade"
+>   desligado, a coluna Cor/Tamanho some das duas grids e linhas com o mesmo nome de produto
+>   (`pendentesAgrupados`, `LinhaPendenteSemGrade`) somam em uma só (quantidade total); "＋
+>   Cadastrar"/"Pesquisar"/"Ignorar" na linha agrupada resolvem/ignoram TODAS as linhas do grupo
+>   de uma vez (`aoCriarProduto`/`aoSelecionarNaPesquisa`). Ordem dos itens localizados segue a
+>   ordem do XML/planilha — não é reordenada por descrição/cor/tamanho (pedido revertido).
+> - **NCM do XML sincroniza com o cadastro do produto** — `EntradaMercadoriaService.efetivar`
+>   substitui `produto.codigo_ncm` pelo NCM do XML quando diferente; produto não localizado leva
+>   o NCM do XML (não validado) pro cadastro rápido, mesmo quando esse código ainda não existe em
+>   `cfg_produto_ncm`.
 >
 > **Pendente (não implementado ainda):**
 > - **Fase 5 — Atalho de Emissão de Etiquetas**: ação rápida para imprimir etiquetas dos

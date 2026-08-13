@@ -120,18 +120,28 @@ public class EntradaXmlService {
     private ItemPlanilhaPreviewResponse resolverItem(int numeroLinha, ItemNfe item, Long idFornecedor,
                                                        List<String> coresConhecidas, List<String> tamanhosConhecidos) {
         BigDecimal custoUnitario = custoLiquido(item);
+        // NCM do XML sempre vale (2026-08-20, pedido do dono do produto). Dois usos, dois graus
+        // de confiança: em PENDÊNCIA (só pré-preenche um campo de formulário, sem gravar nada),
+        // o dígito cru do XML basta — validar contra cfg_produto_ncm aqui faria o campo vir
+        // vazio sempre que a base de NCM local estiver incompleta (o normal: a base oficial da
+        // Receita tem milhares de códigos, ninguém carrega isso à mão num ambiente de teste),
+        // que era exatamente o bug relatado ("não vem preenchido"). Em linha RESOLVIDA, o NCM
+        // vai direto pra um UPDATE em produto.codigo_ncm (FK pra cfg_produto_ncm) na confirmação
+        // — aí sim precisa validar antes, senão um código desconhecido quebraria a confirmação
+        // inteira com erro de FK.
+        String ncmBruto = limparNcm(item.ncm());
 
         if (item.cEan() != null) {
             Optional<ProdutoBarraResponse> porEan = buscarVariacaoPorEan(item.cEan());
             if (porEan.isPresent()) {
-                return resolvido(numeroLinha, item, custoUnitario, porEan.get());
+                return resolvido(numeroLinha, item, custoUnitario, porEan.get(), ncmExistenteOuNulo(ncmBruto));
             }
         }
 
         if (idFornecedor != null && item.cProd() != null) {
             Optional<ProdutoBarraResponse> porCodigo = buscarVariacaoPorCodigoFornecedor(idFornecedor, item.cProd());
             if (porCodigo.isPresent()) {
-                return resolvido(numeroLinha, item, custoUnitario, porCodigo.get());
+                return resolvido(numeroLinha, item, custoUnitario, porCodigo.get(), ncmExistenteOuNulo(ncmBruto));
             }
         }
 
@@ -144,7 +154,34 @@ public class EntradaXmlService {
         String motivo = "Produto não encontrado (sem EAN/código de fornecedor já conhecido) — pesquise ou cadastre.";
         return new ItemPlanilhaPreviewResponse(numeroLinha, nomeSemVariacao, null, null, corPalpite, tamanhoPalpite,
                 item.cEan(), item.qtd(), custoUnitario, false, null, null, null, null, null, null, null, motivo,
-                item.cProd());
+                item.cProd(), ncmBruto);
+    }
+
+    /** Só limpa (dígitos, mesmo formato gravado no banco) — sem checar se existe em {@code
+     *  cfg_produto_ncm}. Usado pra pré-preencher o cadastro rápido numa pendência: se o código
+     *  não existir de fato, o próprio cadastro do produto recusa na hora de salvar (mensagem
+     *  amigável já tratada em {@code ProdutoService}), não precisa barrar aqui. */
+    private static String limparNcm(String codigoNcm) {
+        if (codigoNcm == null || codigoNcm.isBlank()) {
+            return null;
+        }
+        String codigoN = codigoNcm.replaceAll("[^0-9]", "");
+        return codigoN.isEmpty() ? null : codigoN;
+    }
+
+    /** Acha (por código, mesmo idioma exato de {@code ProdutoImportador.ncmExistenteOuNulo}) o
+     *  NCM na referência global — código que não existe (ou vem vazio/em formato inválido) volta
+     *  {@code null} em vez de propagar algo que faria a confirmação falhar por violação de FK
+     *  (2026-08-20). Só usado pra linha RESOLVIDA (vai virar UPDATE) — ver {@link #limparNcm}
+     *  pra pendência. */
+    private String ncmExistenteOuNulo(String ncmBruto) {
+        if (ncmBruto == null) {
+            return null;
+        }
+        Boolean existe = jdbc.sql("SELECT EXISTS (SELECT 1 FROM cfg_produto_ncm WHERE codigo_ncm = ?)")
+                .param(ncmBruto)
+                .query(Boolean.class).single();
+        return Boolean.TRUE.equals(existe) ? ncmBruto : null;
     }
 
     /** Custo líquido do item = (qtd × preço unitário − desconto da linha) ÷ qtd — não confia em
@@ -159,10 +196,10 @@ public class EntradaXmlService {
     }
 
     private static ItemPlanilhaPreviewResponse resolvido(int numeroLinha, ItemNfe item, BigDecimal custoUnitario,
-                                                           ProdutoBarraResponse v) {
+                                                           ProdutoBarraResponse v, String ncm) {
         return new ItemPlanilhaPreviewResponse(numeroLinha, item.xProd(), null, null, null, null, item.cEan(),
                 item.qtd(), custoUnitario, true, v.idVariacao(), v.sku(), v.descricao(), v.variacaoCor(),
-                v.variacaoTamanho(), null, null, null, item.cProd());
+                v.variacaoTamanho(), null, null, null, item.cProd(), ncm);
     }
 
     private Optional<ProdutoBarraResponse> buscarVariacaoPorEan(String ean) {
@@ -171,8 +208,8 @@ public class EntradaXmlService {
                                co.descricao AS variacao_cor, ta.descricao AS variacao_tamanho
                         FROM produto_barra pb
                         JOIN produto p ON p.id_produto = pb.id_produto AND p.id_tenant = pb.id_tenant
-                        LEFT JOIN cfg_cor co ON co.id_cor = pb.id_cor AND co.id_tenant = pb.id_tenant
-                        LEFT JOIN cfg_tamanho ta ON ta.id_tamanho = pb.id_tamanho AND ta.id_tenant = pb.id_tenant
+                        LEFT JOIN cfg_cor co ON co.id_cor = pb.id_cor AND co.id_tenant = pb.id_tenant AND co.id_cor <> 1
+                        LEFT JOIN cfg_tamanho ta ON ta.id_tamanho = pb.id_tamanho AND ta.id_tenant = pb.id_tenant AND ta.id_tamanho <> 1
                         WHERE pb.id_tenant = plataforma.tenant_atual() AND pb.ean = ? AND p.ativo = true
                         """)
                 .param(ean)
@@ -187,8 +224,8 @@ public class EntradaXmlService {
                         FROM produto_fornecedor pf
                         JOIN produto_barra pb ON pb.id_tenant = pf.id_tenant AND pb.id_variacao = pf.id_variacao
                         JOIN produto p ON p.id_produto = pb.id_produto AND p.id_tenant = pb.id_tenant
-                        LEFT JOIN cfg_cor co ON co.id_cor = pb.id_cor AND co.id_tenant = pb.id_tenant
-                        LEFT JOIN cfg_tamanho ta ON ta.id_tamanho = pb.id_tamanho AND ta.id_tenant = pb.id_tenant
+                        LEFT JOIN cfg_cor co ON co.id_cor = pb.id_cor AND co.id_tenant = pb.id_tenant AND co.id_cor <> 1
+                        LEFT JOIN cfg_tamanho ta ON ta.id_tamanho = pb.id_tamanho AND ta.id_tenant = pb.id_tenant AND ta.id_tamanho <> 1
                         WHERE pf.id_tenant = plataforma.tenant_atual() AND pf.id_fornecedor = ?
                           AND pf.codigo_fornecedor = ? AND p.ativo = true
                         """)
@@ -240,8 +277,12 @@ public class EntradaXmlService {
 
     private List<String> listarDescricoes(String tabela) {
         // {@code tabela} nunca vem do cliente — só chamado com as duas constantes literais
-        // abaixo ("cfg_cor"/"cfg_tamanho"), sem risco de injeção.
-        return jdbc.sql("SELECT descricao FROM " + tabela + " WHERE id_tenant = plataforma.tenant_atual()")
+        // abaixo ("cfg_cor"/"cfg_tamanho"), sem risco de injeção. Exclui id=1 (cor/tamanho
+        // PADRÃO, 2026-08-20) — sem isso, a cor PADRÃO (descricao='') vira candidata no
+        // heurístico de `adivinharCor` e pode "casar" com qualquer texto que tenha espaço
+        // duplo, retornando um palpite falso em vez de nenhum.
+        String colunaId = tabela.equals("cfg_cor") ? "id_cor" : "id_tamanho";
+        return jdbc.sql("SELECT descricao FROM " + tabela + " WHERE id_tenant = plataforma.tenant_atual() AND " + colunaId + " <> 1")
                 .query(String.class)
                 .list();
     }
