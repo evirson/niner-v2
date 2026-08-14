@@ -7,6 +7,8 @@ import com.vetor.niner.financeiro.contaspagar.ContaPagarDtos.PaginaContasPagar;
 import jakarta.validation.Valid;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
@@ -51,13 +53,16 @@ public class ContaPagarController {
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    public ContaPagarResponse criar(@Valid @RequestBody ContaPagarRequest req) {
-        return service.criar(req);
+    public ContaPagarResponse criar(@AuthenticationPrincipal Jwt jwt, @Valid @RequestBody ContaPagarRequest req) {
+        return service.criar(jwt, req);
     }
 
+    // O JWT entra aqui por causa da baixa em dinheiro: o movimento vai pro caixa ABERTO do usuário
+    // (2026-08-23, docs/telas/fluxo-caixa.md).
     @PutMapping("/{id}")
-    public ContaPagarResponse atualizar(@PathVariable long id, @Valid @RequestBody ContaPagarRequest req) {
-        return service.atualizar(id, req);
+    public ContaPagarResponse atualizar(
+            @AuthenticationPrincipal Jwt jwt, @PathVariable long id, @Valid @RequestBody ContaPagarRequest req) {
+        return service.atualizar(jwt, id, req);
     }
 
     @DeleteMapping("/{id}")

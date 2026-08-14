@@ -2,6 +2,10 @@ import { api } from './api'
 import { dataParaIso, desmascararMoeda, formatarMoeda, isoParaData } from './masks'
 import { maiusculas } from './texto'
 
+/** De onde saiu o dinheiro ao dar baixa (2026-08-23) — obrigatório quando há data de pagamento;
+ *  é o que gera o movimento de caixa/conta corrente que alimenta o Fluxo de Caixa. */
+export type OrigemPagamento = 'CAIXA' | 'CONTA_CORRENTE'
+
 export interface ContaPagar {
   idContaPagar: number
   idFornecedor: number
@@ -18,6 +22,11 @@ export interface ContaPagar {
   valorPagar: number
   valorPago: number
   documentoPago: boolean
+  /** De onde saiu o dinheiro na baixa (2026-08-23) — derivado do movimento gerado; 
+ull para
+   *  conta ainda não paga, ou paga antes dessa regra existir. */
+  origemPagamento: OrigemPagamento | null
+  idContaCorrente: string | null
   observacoes: string | null
   idMovimento: number | null
   criadoEm: string
@@ -38,6 +47,8 @@ export interface ContaPagarFormState {
   valorPagarTexto: string
   valorPagoTexto: string
   documentoPago: boolean
+  origemPagamento: OrigemPagamento | ''
+  idContaCorrente: string
   observacoes: string
 }
 
@@ -55,6 +66,8 @@ export function contaPagarVazia(hojeTexto: string): ContaPagarFormState {
     valorPagarTexto: '0,00',
     valorPagoTexto: '0,00',
     documentoPago: false,
+    origemPagamento: '',
+    idContaCorrente: '',
     observacoes: '',
   }
 }
@@ -73,6 +86,8 @@ export function paraFormulario(c: ContaPagar): ContaPagarFormState {
     valorPagarTexto: formatarMoeda(c.valorPagar),
     valorPagoTexto: formatarMoeda(c.valorPago),
     documentoPago: c.documentoPago,
+    origemPagamento: c.origemPagamento ?? '',
+    idContaCorrente: c.idContaCorrente ?? '',
     observacoes: c.observacoes ?? '',
   }
 }
@@ -94,6 +109,8 @@ export function paraRequisicao(f: ContaPagarFormState) {
     valorPagar: desmascararMoeda(f.valorPagarTexto),
     valorPago: desmascararMoeda(f.valorPagoTexto),
     documentoPago: f.documentoPago,
+    origemPagamento: f.origemPagamento === '' ? null : f.origemPagamento,
+    idContaCorrente: f.idContaCorrente.trim() ? f.idContaCorrente.trim() : null,
     observacoes: f.observacoes.trim() ? maiusculas(f.observacoes.trim()) : null,
   }
 }

@@ -84,6 +84,26 @@ Entrada de Produtos e Filtros de Entrada, 2026-08-19). Gravação de data usa me
   máscara de moeda), seção "Pagamento" (Data de Pagamento, Valor Pago, "Documento Pago" — com o
   aviso de que não existe tela de baixa separada), Observações, `InfoRegistro` (auditoria).
 
+## A baixa gera movimento de dinheiro (2026-08-23)
+
+Mudança que veio do Fluxo de Caixa (`docs/telas/fluxo-caixa.md`, Parte 1) e que altera o
+comportamento **desta** tela:
+
+- Ao preencher a Data de Pagamento, aparece **"De onde saiu o dinheiro"** (obrigatório): **Caixa
+  da loja** ou **Conta corrente** (+ qual conta). O `PUT`/`POST` ganharam `origemPagamento` e
+  `idContaCorrente`.
+- O sistema grava a saída na mesma transação: `caixa_detalhe` (`DEBITO_CAIXA`, no **caixa aberto
+  do usuário** — exige caixa aberto, mesma convenção do PDV/Recebimento) ou
+  `conta_corrente_movimento` (débito). Antes disso, pagar uma conta **não movimentava dinheiro
+  em lugar nenhum**, e por isso o fluxo de caixa realizado ficaria sem saídas.
+- **Desfazer a baixa apaga o movimento** (vínculo `id_conta_pagar` nas duas tabelas). Trocar a
+  origem ou corrigir o valor regrava — a estratégia é "apaga e regrava".
+- **Exceção deliberada:** conta que já estava paga **antes** desta mudança pode ser editada sem
+  informar origem (senão qualquer edição dela devolveria 400 para sempre). A origem só é exigida
+  em **baixa nova**.
+- A resposta da API traz `origemPagamento`/`idContaCorrente` **derivados do movimento** — não há
+  coluna nova em `contas_pagar`, para não existir estado duplicado saindo de sincronia.
+
 ## Contrato de API
 
 ```

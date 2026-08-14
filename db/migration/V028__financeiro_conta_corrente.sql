@@ -87,6 +87,7 @@ CREATE TABLE conta_corrente_movimento (
   localizador        integer        GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   id_tenant          smallint       NOT NULL REFERENCES plataforma.tenant (id_tenant),
   id_conta_corrente  text           NOT NULL,
+  id_conta_pagar     integer,                 -- 2026-08-23 (Fluxo de Caixa): saída gerada pela baixa de uma conta a pagar (sem FK, mesmo motivo do caixa_detalhe) — permite apagar o movimento quando a baixa é desfeita
   id_plano_contas    text           NOT NULL,
   data_movimento     timestamptz    NOT NULL,
   numero_documento   text           NOT NULL,
@@ -104,6 +105,7 @@ CREATE TABLE conta_corrente_movimento (
 CREATE INDEX conta_corrente_movimento_id_tenant_ix        ON conta_corrente_movimento (id_tenant);
 CREATE INDEX conta_corrente_movimento_conta_ix             ON conta_corrente_movimento (id_tenant, id_conta_corrente);
 CREATE INDEX conta_corrente_movimento_data_movimento_ix     ON conta_corrente_movimento (id_tenant, data_movimento);
+CREATE INDEX conta_corrente_movimento_conta_pagar_ix        ON conta_corrente_movimento (id_tenant, id_conta_pagar);
 CREATE INDEX conta_corrente_movimento_numero_documento_ix   ON conta_corrente_movimento (id_tenant, numero_documento);
 
 -- RLS (P8) — mesmo padrão de V025/V026.

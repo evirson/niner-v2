@@ -16,7 +16,9 @@ import {
   paraFormulario,
   paraRequisicao,
   type ContaPagarFormState,
+  type OrigemPagamento,
 } from '../../../lib/contasPagar'
+import { listarContasCorrente } from '../../../lib/contaCorrente'
 import { hojeISO } from '../../../lib/datas'
 import { listarEmpresasPermitidas } from '../../../lib/empresas'
 import { buscarFornecedoresEmissao, type FornecedorOpcaoEmissao } from '../../../lib/etiquetaEmissao'
@@ -70,6 +72,14 @@ export default function ContasPagarForm({ somenteLeitura = false }: { somenteLei
   })
 
   const { data: empresas } = useQuery({ queryKey: ['empresas-permitidas'], queryFn: listarEmpresasPermitidas })
+  // Contas correntes ativas, para a baixa em banco (2026-08-23). `tamanho: 200` porque o seletor
+  // é um <select> simples — o tenant típico tem poucas contas, mas o limite evita o corte
+  // silencioso já visto em outras telas (feedback "select truncado por paginação").
+  const { data: paginaContasCorrente } = useQuery({
+    queryKey: ['contas-corrente-ativas'],
+    queryFn: () => listarContasCorrente({ status: 'ATIVOS', pagina: 1, tamanho: 200 }),
+  })
+  const contasCorrente = paginaContasCorrente?.itens
   const { data: fornecedoresEncontrados } = useQuery({
     queryKey: ['etiqueta-emissao-fornecedores', buscaFornecedor],
     queryFn: () => buscarFornecedoresEmissao(buscaFornecedor),
@@ -363,6 +373,52 @@ export default function ContasPagarForm({ somenteLeitura = false }: { somenteLei
                   </div>
                 </div>
               </div>
+
+              {/* Origem do dinheiro (2026-08-23) — só aparece quando há data de pagamento, porque
+                  só aí ela é obrigatória. É o que faz o pagamento virar movimento de caixa ou de
+                  conta corrente e alimentar o Fluxo de Caixa (docs/telas/fluxo-caixa.md). */}
+              {form.dataPagamentoTexto.trim() !== '' && (
+                <div className="form-grid">
+                  <div className="col-4">
+                    <label htmlFor="cp-origem-pagamento">De onde saiu o dinheiro *</label>
+                    <select
+                      id="cp-origem-pagamento"
+                      value={form.origemPagamento}
+                      onChange={(e) =>
+                        setForm((f) => ({ ...f, origemPagamento: e.target.value as OrigemPagamento | '' }))
+                      }
+                    >
+                      <option value="">Selecione…</option>
+                      <option value="CAIXA">Caixa da loja (dinheiro)</option>
+                      <option value="CONTA_CORRENTE">Conta corrente (banco)</option>
+                    </select>
+                  </div>
+                  {form.origemPagamento === 'CONTA_CORRENTE' && (
+                    <div className="col-4">
+                      <label htmlFor="cp-conta-corrente">Conta corrente *</label>
+                      <select
+                        id="cp-conta-corrente"
+                        value={form.idContaCorrente}
+                        onChange={(e) => setForm((f) => ({ ...f, idContaCorrente: e.target.value }))}
+                      >
+                        <option value="">Selecione…</option>
+                        {(contasCorrente ?? []).map((c) => (
+                          <option key={c.idContaCorrente} value={c.idContaCorrente}>
+                            {c.idContaCorrente} — {c.descricao}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+                  <div className="col-4">
+                    <p className="muted" style={{ fontSize: 12, marginTop: 28 }}>
+                      {form.origemPagamento === 'CAIXA'
+                        ? 'A saída é lançada no seu caixa aberto — é preciso ter caixa aberto.'
+                        : 'A saída é lançada como débito na conta corrente escolhida.'}
+                    </p>
+                  </div>
+                </div>
+              )}
 
               <div className="form-grid">
                 <div className="col-12">

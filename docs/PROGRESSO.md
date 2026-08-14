@@ -374,6 +374,203 @@ Movimentação de Conta Corrente) que ainda não tinham migrado pro `SeletorPlan
 
 ## Linha do tempo
 
+### 2026-08-23 — Fluxo de Caixa (realizado + projeção) e a baixa que passou a mover dinheiro de verdade
+
+Pedido do dono do produto logo depois da DRE: "preciso montar o relatório de fluxo de caixa, o que
+você sugere?". A investigação achou um problema estrutural que **decidia o formato do relatório**,
+e por isso a feature saiu em duas partes. Spec: `docs/telas/fluxo-caixa.md`.
+
+**O problema:** um fluxo de caixa promete `saldo inicial + entradas − saídas = saldo real`. No
+Niner essa conta não fechava, porque **dar baixa numa conta a pagar não gravava movimento nenhum**
+— só preenchia `contas_pagar.data_pagamento`. Venda e recebimento de crediário passavam por
+`caixa_detalhe`; movimento bancário manual, por `conta_corrente_movimento`; **a saída de dinheiro,
+por lugar nenhum**. Montar o DFC pelas tabelas de dinheiro daria um relatório quase sem saídas;
+montá-lo por lançamento daria um que não bate com o extrato — e fluxo de caixa que não bate com o
+extrato o lojista abandona na segunda semana.
+
+**Parte 1 — a baixa passou a mover dinheiro.** Ao registrar o pagamento, o operador informa **de
+onde saiu** (Caixa da loja ou Conta corrente) e o sistema grava a saída na mesma transação:
+`caixa_detalhe` (`DEBITO_CAIXA`, no caixa **aberto** do usuário — mesma convenção do PDV) ou
+`conta_corrente_movimento` (débito). As duas tabelas ganharam `id_conta_pagar` (nullable, **sem
+FK** de propósito: excluir a conta não pode travar por causa de dinheiro que já saiu), e é esse
+vínculo que permite **apagar o movimento quando a baixa é desfeita** — sem ele sobraria dinheiro
+fantasma saindo do caixa. Estratégia "apaga e regrava", que cobre num só caminho baixa desfeita,
+troca de origem e correção de valor.
+
+**Exceção que dois testes existentes revelaram:** exigir a origem em *toda* edição travaria para
+sempre qualquer conta paga **antes** desta mudança (mudar uma observação devolveria 400 sem saída,
+porque ela nunca terá movimento vinculado). A regra final distingue **baixa nova** (exige origem)
+de **conta já paga** (edição não mexe no movimento).
+
+**Parte 2 — a tela, com duas abas** (escolha do dono do produto, para não criar duas telas
+parecidas):
+- **Realizado** — método direto por atividade (operacional/investimento/financiamento), lendo
+  **só movimento de dinheiro**, classificado por `grupo_dfc` com fallback por `tipo_operacao` para
+  o que o PDV grava sem plano de contas. **Conciliação no rodapé fixo**: saldo calculado × saldo
+  real de hoje, com a diferença exposta quando não bate — é o que dá confiança no número.
+- **Projeção** — parte do saldo de hoje e soma contas a receber/pagar **em aberto** por
+  vencimento, agrupadas por dia/semana/mês, com saldo acumulado e **alerta da primeira data em que
+  fica negativo**. Vencidos entram no primeiro balde marcados como "inclui vencidos" — jogá-los na
+  data original faria o saldo mentir sobre o presente. Non-goal explícito: **não inventa venda
+  futura**, só compromisso já registrado.
+
+**Achado que mudou o desenho (pego pelo teste):** `saldoFinal` vinha **−150,00** onde o dinheiro
+real era **850,00**. Causa: `caixa_mestre.saldo_inicial` é dinheiro que entra na gaveta **sem
+gerar linha em `caixa_detalhe`** — o saldo acumulado já o considerava, mas faltava a contrapartida
+dentro do período. Agora a abertura de caixa entra como linha de entrada operacional, e a
+conciliação fecha em zero. Sem isso, a promessa central do relatório quebrava justamente no caso
+mais comum: o primeiro dia de uso.
+
+**Efeito colateral bom:** a **questão aberta nº 1 da DRE** (dupla contagem no regime de caixa)
+ficou **resolvida na origem** — o pagamento passou a ter um lugar único e canônico.
+
+**Verificação:** **491/491 testes de backend verdes** (486 + 5 do fluxo: baixa virando saída,
+período sem movimento, alerta de saldo negativo, vencido no primeiro balde, isolamento entre
+tenants; mais 3 em `ContaPagarCrudTest` para o ciclo baixa → movimento → desfazer). `tsc -b`
+exit 0. Testado ao vivo nas duas abas com dado real: a venda de R$ 161,82 aparece como
+"Recebimento de venda" em atividades operacionais e o rodapé confirma "confere com o saldo
+calculado"; a projeção parte de R$ 161,82, encontra uma conta a pagar de R$ 50,00 e projeta
+R$ 111,82. **Pendente:** olhar o PDF renderizado desta tela e testar com massa maior.
+
+### 2026-08-23 — ⚠️ `tsc --noEmit` no `web/` não checava nada (e o repositório acumulava 19 erros)
+
+Descoberto no meio da Parte 1: escrevi um `<select>` usando uma variável **inexistente** e o
+`npx tsc --noEmit` passou limpo. O `web/tsconfig.json` é do tipo *solution* (`"files": []` +
+`references`); com `--noEmit` o TypeScript ignora as referências e checa **zero arquivos**,
+saindo sempre com sucesso. O comando que de fato checa é **`tsc -b`** (o que o `npm run build`
+usa).
+
+Consequência: entradas anteriores deste PROGRESSO que citam "`tsc --noEmit` limpo" descreviam uma
+verificação vazia — e por baixo dela o repositório já acumulava **19 erros reais em 16 arquivos**,
+nenhum deles introduzido nesta sessão (confirmado cruzando com `git status`):
+- 12 × `TS6133` (variável/import declarado e nunca usado — quase todos um `navigate` sobrando)
+- `TS2305` em `ImportacaoTabelaPage` (importava `IconeComponente` de `components/Icones`; o tipo
+  vive em `lib/menu.ts`)
+- `TS2345` em `PlanoContasModal` (resíduo da revisão do plano de contas de 08-22: faltavam 4
+  campos que viraram parte do contrato)
+- 4 × `TS2345` em `RelatorioEstoque`: a restrição genérica `T extends Record<string, unknown> &
+  { qtdPorEmpresa: number[] }` **nunca aceitaria** `LinhaSintetica`/`LinhaAnalitica`, porque
+  **interface não ganha assinatura de índice implícita** em TypeScript. Restrição reduzida ao que
+  a função realmente usa, com cast no acesso dinâmico.
+
+Todos corrigidos a pedido do dono do produto — **`tsc -b` agora sai com exit 0**. Convenção nova:
+**usar `tsc -b`, nunca `--noEmit`**, neste repositório. Descoberto também que `npm run build`
+falha **no host** (binding nativo `@rolldown/binding-win32-x64-msvc` ausente, bug conhecido do npm
+com dependências opcionais) — dentro do container o bundle compila normalmente.
+
+### 2026-08-23 — Relatório de DRE (dois regimes) — primeira demonstração de resultado do produto
+
+Pedido do dono do produto: "preciso montar meu DRE, com regime de competência e de caixa — tem
+algo mais que precisamos fazer, como o mercado faz?". A resposta útil não estava nos dois regimes
+(que ele já tinha desenhado certo), e sim em **de onde vêm os números**: cinco linhas essenciais
+da DRE existem no plano de contas mas **nada escreve nelas** — CMV, taxas de cartão, comissões,
+descontos e devoluções. Spec completa em `docs/telas/relatorio-dre.md` (escrita e aprovada antes
+do código, fluxo spec-driven).
+
+**Decisão central — relatório híbrido.** As cinco linhas são **derivadas do movimento real** na
+consulta (venda/ledger/carteira/devolução) e o resto vem somado de `contas_pagar` por
+`id_plano_contas` → `grupo_dre` → `sinal`. A alternativa (gerar lançamento contábil a cada venda)
+mexeria em PDV/cancelamento/devolução e criaria risco de o lançado divergir do movimento.
+
+**Três coisas que o plano de contas já tinha certas** e que evitam os erros clássicos de DRE de
+pequena empresa: `3.03.001 Compra de Mercadoria` com `inclui_dre = false` (compra é estoque, não
+despesa — o custo entra como CMV quando a mercadoria sai vendida, com o custo real gravado na
+linha da venda); grupo 7 (Movimentos Neutros e Sócios) mantendo distribuição de lucro fora do
+resultado; e a separação `CUSTO_VARIAVEL` × `DESPESA_FIXA`, que dá a linha de margem de
+contribuição de graça.
+
+**Semântica de data por regime:** competência usa `venda.data_venda` e
+`contas_pagar.data_lancamento` (o fato gerador — não o vencimento, que é data de tesouraria);
+caixa usa `contas_receber.data_recebimento` e `contas_pagar.data_pagamento`. No caixa, **CMV e
+comissão entram proporcionais ao recebido** (recebi 30% da venda → 30% do custo) e juros/multa
+recebidos viram resultado financeiro, não receita de venda.
+
+**Escopo v1 escolhido pelo dono do produto:** dois regimes + **AV** (% sobre a receita líquida) e
+**AH** (vs período anterior ou mesmo período do ano anterior, sempre com o mesmo número de dias).
+Ponto de equilíbrio, visão de 12 meses e drill-down ficaram como Non-goals — a resposta da API já
+nasceu compatível com os três. **ADMIN-only** nos três níveis (menu, rota e 403 na API).
+
+**Dois achados durante a implementação, ambos com correção no desenho:**
+1. **O `SignupService` semeia só 3 contas** (a árvore mínima da conta de compra); o plano padrão
+   de 76 contas é um seed à parte. A 1ª versão perguntava o grupo de DRE ao plano de contas do
+   tenant e a DRE de um tenant novo veio **zerada mesmo com vendas** — o teste pegou. Agora as
+   linhas derivadas carregam o próprio grupo em código, e o plano só fornece o nome quando a conta
+   existe. Consequência que virou questão aberta: **despesas só aparecem se o lojista tiver contas
+   de despesa cadastradas**.
+2. **Dar baixa em Contas a Pagar não gera lançamento de caixa nem de conta corrente** (verificado
+   no código) — somar as três fontes no regime de caixa duplicaria o pagamento. Regra adotada:
+   saída sai de `contas_pagar`, e `conta_corrente_movimento` entra **só** para contas de receita,
+   que o Contas a Pagar não produz. O aviso está na ajuda da tela.
+
+**Segunda rodada no mesmo dia — padrão de tela de relatório.** A tela nasceu sem os botões que
+todo relatório tem; o dono do produto apontou ("é um relatório, então precisa seguir o padrão").
+Ganhou a barra `? · Filtros · Gerar PDF · ✕`, a estrutura `.relatorio-corpo-fixo`/
+`.relatorio-conteudo`, e `lib/relatorioDreCaptura.ts` (captura visual, tema claro só no clone,
+cabeçalho/rodapé nativos por página). Duas divergências conscientes do padrão: **PDF em retrato**
+(a DRE tem poucas colunas e muitas linhas; é o formato que o contador espera) e **regime + período
+no subtítulo do cabeçalho** de todas as páginas.
+
+**Verificação:** **483/483 testes de backend verdes** (476 + 7 novos cobrindo os critérios da
+spec: venda à vista, crediário nos dois regimes, venda cancelada, compra de mercadoria fora da
+DRE, despesa lançada × paga, 403 para OPERADOR e o cálculo do período comparado). `tsc --noEmit`
+limpo. Testado ao vivo com **venda real** (R$ 161,82, custo R$ 89,90, vendedor 5%): receita
+161,82 − CMV 89,90 − comissão 8,09 = **margem 63,83**, e os dois regimes iguais porque a venda foi
+à vista e recebida no mesmo dia. PDF gerado e conferido no arquivo: A4 retrato (MediaBox 595×842),
+1 página, 286 KB. **Pendente:** olhar o PDF renderizado (não há `pdftoppm` nesta máquina) —
+passado ao dono do produto.
+
+**Massa de teste criada no tenant `loja-dev-claudio`** (pela API, fluxo real): 3 categorias, 2
+fornecedores, 10 produtos com NCM real e variação/SKU gerada, mais cliente/funcionário/venda do
+teste da DRE. Dois tropeços registrados: os NCMs "de cabeça" não existiam na base da Receita, e
+`POST /api/v1/produtos` **não cria a variação** — sem `produto_barra` o produto é invisível para
+a Entrada de Produtos e para o PDV.
+
+### 2026-08-23 — Seletor de tema Claro/Escuro/Automático no cabeçalho (fecha uma pendência de §3.7)
+
+Pergunta do dono do produto: "temos o tema dark, como criamos um light também?". A investigação
+mudou a resposta — **o tema claro já existia e já rodava em produção**; faltava só o interruptor.
+
+**O que já existia:** `styles.css` sempre teve as duas paletas (§3.7 — `:root` é a **clara**, a
+media query `prefers-color-scheme: dark` é a escura), mais os overrides `:root[data-theme='light']`
+e `[data-theme='dark']`. E a paleta clara não era teórica: desde 2026-08-02 **toda geração de PDF
+já renderiza o app inteiro em claro**, forçando `data-theme='light'` no clone do documento antes
+do `html2canvas` (6 arquivos `lib/*Captura.ts`). Ou seja, o risco de "tema novo nunca visto" era
+zero. O que faltava era alguém escrever o atributo — como ninguém escrevia, o ERP seguia o SO, e
+com Windows em escuro só se via o escuro. A spec §3.7 **já mandava** existir o toggle ("o toggle
+do usuário vence a preferência do sistema"), então isto fecha uma pendência antiga.
+
+**Decisões (as três perguntadas ao dono do produto):** preferência em `localStorage` por navegador
+(sem migration, sem endpoint — e permite caixa claro / escritório escuro na mesma loja); **três
+estados**, com `Automático` de padrão (não escreve atributo = comportamento histórico); controle
+como ícone no cabeçalho, entre a busca de telas e o "Sair".
+
+**Implementação:** `lib/tema.ts` + `components/SeletorTema.tsx` (novos), `IconeSol`/`IconeLua`/
+`IconeMonitor`, CSS do menu, e um **script inline no `<head>` do `index.html`** que aplica o tema
+antes da primeira pintura — sem ele, quem escolhesse "Claro" veria um flash escuro a cada F5,
+porque o bundle React só roda depois do primeiro paint. Esse trecho é deliberadamente duplicado em
+JS puro; as duas cópias precisam andar juntas. O ícone do gatilho reflete o tema **em uso** (com
+`Automático`, sol ou lua conforme o SO, com listener de `matchMedia` pra acompanhar a troca ao
+vivo). **Nenhuma tela precisou ser tocada**: toda cor do projeto sai de token, inclusive os
+gráficos Recharts. Declarado também `color-scheme` nos blocos de tema, pelos controles nativos
+(lista do `<select>`, scrollbar, autofill), que não leem os tokens do design system.
+
+**Armadilha de diagnóstico (vale mais que a feature):** testando ao vivo, depois de recarregar a
+página o ERP voltava a aparecer escuro com "Claro" selecionado. Cheguei a atribuir ao modo escuro
+forçado do Chrome e a escrever um comentário no CSS com esse diagnóstico. Estava **errado**:
+inspecionando o DOM, `data-theme` era `light` e `--ground` valia `#f5f4f0` (claro), mas o `body`
+pintava `rgb(30,28,20)` — e mesmo `color-scheme: only light` inline não mudava nada. A causa era a
+extensão **Dark Reader** instalada naquele Chrome, que injeta `<style class="darkreader--root-vars">`
+e reescreve os tokens por cima. Não há CSS do lado da página que resolva. O comentário foi
+corrigido para não deixar um diagnóstico falso no código, e o aviso está em
+`docs/telas/menu-principal.md`: se um lojista disser que o tema claro "não funciona", checar
+extensão de navegador **antes** de procurar bug no CSS.
+
+**Verificação:** `tsc --noEmit` limpo. Testado ao vivo no Chrome: o seletor aparece no cabeçalho, o
+menu abre com as 3 opções (a ativa destacada), e a troca para "Claro" reveste o app inteiro na
+hora, sem recarregar (captura do Painel claro guardada na conversa). **A passada visual tela a
+tela ficou pendente** — o Chrome usado na automação tem Dark Reader ativo, o que impede avaliar
+contraste de verdade; precisa ser feita num navegador sem a extensão.
+
 ### 2026-08-23 — Entrada de Produtos: botão Fechar no popup de filtros, bug da divisão de duplicatas e o parâmetro que torna a consistência opcional
 
 Sessão de três pedidos encadeados do dono do produto, todos na Entrada de Produtos por Compra —
@@ -2302,7 +2499,8 @@ aparece no `tsc -b` do build de produção.
 
 1. **PDF sempre com fundo branco, mesmo com o app em tema escuro** (`docs/telas/
    relatorio-vendas.md`, seção "PDF") — pedido explícito: impressão em dark gasta muito mais
-   tinta. O app não tem toggle de tema (dark só vem de `prefers-color-scheme` do navegador);
+   tinta. O app não tinha toggle de tema à época (dark só vinha de `prefers-color-scheme` do
+   navegador; o seletor Claro/Escuro/Automático do cabeçalho só nasceu em 2026-08-23);
    `styles.css` já tinha `:root[data-theme='light']`/`[data-theme='dark']` prontos, sem nada
    nunca setar o atributo. 1ª versão forçava `data-theme="light"` na página real antes de
    capturar — causava um "flash" visível (app inteiro piscava claro/escuro). **Corrigido no

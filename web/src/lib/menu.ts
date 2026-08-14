@@ -398,6 +398,19 @@ export const MENU: NavGrupo[] = [
         descricao: 'Kardex do estoque: analítico, ficha por produto com saldo corrido, ou totais por tipo de movimento.',
       },
       {
+        to: '/fluxo-caixa',
+        label: 'Fluxo de Caixa',
+        icone: IconeRelatorio,
+        descricao: 'Entradas e saídas de dinheiro por atividade, e a projeção do saldo a partir das contas a receber e a pagar.',
+      },
+      {
+        to: '/relatorio-dre',
+        label: 'DRE — Demonstração do Resultado',
+        icone: IconeRelatorio,
+        descricao: 'Lucro do período em regime de competência ou de caixa, com CMV, margem e comparação com o período anterior.',
+        adminOnly: true,
+      },
+      {
         to: '/crm',
         label: 'CRM',
         icone: IconeCliente,

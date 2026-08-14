@@ -59,6 +59,8 @@ import RelatorioVendas from './pages/relatorios/RelatorioVendas'
 import RelatorioComissoes from './pages/relatorios/RelatorioComissoes'
 import RelatorioContasReceber from './pages/relatorios/RelatorioContasReceber'
 import RelatorioEstoque from './pages/relatorios/RelatorioEstoque'
+import FluxoCaixa from './pages/relatorios/FluxoCaixa'
+import RelatorioDre from './pages/relatorios/RelatorioDre'
 import RelatorioMovimentacaoProdutos from './pages/relatorios/RelatorioMovimentacaoProdutos'
 import CrmForm from './pages/crm/CrmForm'
 import EtiquetaEmissaoForm from './pages/etiquetaemissao/EtiquetaEmissaoForm'
@@ -84,6 +86,12 @@ export default function App() {
           <Route path="/relatorio-contas-receber" element={<RelatorioContasReceber />} />
           <Route path="/relatorio-estoque" element={<RelatorioEstoque />} />
           <Route path="/relatorio-movimentacao-produtos" element={<RelatorioMovimentacaoProdutos />} />
+          {/* Fluxo de Caixa é aberto (só entrada/saída de dinheiro); a DRE, não. */}
+          <Route path="/fluxo-caixa" element={<FluxoCaixa />} />
+          {/* DRE é ADMIN-only (expõe lucro, despesa e pró-labore) — a API também devolve 403. */}
+          <Route element={<RequireAdmin />}>
+            <Route path="/relatorio-dre" element={<RelatorioDre />} />
+          </Route>
           <Route path="/crm" element={<CrmForm />} />
           <Route path="/etiqueta-emissao" element={<EtiquetaEmissaoForm />} />
           <Route path="/abertura-caixa" element={<AberturaCaixa />} />

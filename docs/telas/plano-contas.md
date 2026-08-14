@@ -64,6 +64,15 @@ customização. Grupo `9` inteiro também fica reservado (o seed só usa grupos 
 
 ### DRE e fluxo de caixa — classificação, não mais flag solto
 
+> **Consumidor real desde 2026-08-23:** o `grupo_dre`/`sinal`/`inclui_dre` desta tela deixaram de
+> ser preparação para o futuro — são a espinha do **Relatório de DRE**
+> (`docs/telas/relatorio-dre.md`). Duas consequências práticas ao mexer aqui: (1) manter
+> `inclui_dre = false` nas contas de compra de mercadoria (3.03.x) é o que impede a DRE de contar
+> o estoque duas vezes, junto com o CMV; (2) a DRE **não depende** deste cadastro para as linhas
+> derivadas do movimento (receita, CMV, comissão, taxa, desconto, devolução) — elas carregam o
+> próprio grupo em código, porque o signup semeia só 3 contas e um tenant novo não teria onde
+> classificá-las.
+
 `inclui_dre`/`inclui_fluxo_caixa` continuam existindo, mas agora cada um tem um **grupo** obrigatório
 quando `true` (`grupo_dre`/`grupo_dfc`, ENUMs `grupo_dre_conta`/`grupo_dfc_conta`) e forçado pra
 `NAO_APLICA` quando `false` — o servidor ignora o que o cliente mandar nesse caso. **Princípio
