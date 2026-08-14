@@ -495,7 +495,7 @@ o signup semear o plano inteiro).
 do lojista está inteiro no v1 desde V028 — a spec ainda dizia "não entra no v1"); sequência de
 migrations completada até V033 (a spec parava em V026 e o roadmap citava uma faixa "V001–V091"
 que nunca existiu); paginação **por número de página**, não cursor; **saldo negativo é permitido
-de propósito** (R2 revisto em 2026-08-12 — a spec ainda pedia constraint pra impedir);
+de propósito** (R2 revisto em 2026-07-29 — a spec ainda pedia constraint pra impedir);
 `gerar_ean13_interno()` deixou de ser "nada chama"; `color-mix()` documentado como **proibido**
 (quebra o PDF por captura); `ajuda_tela` marcada como **não implementada** (o texto vive no
 front); §3.3 e o `docker-compose` do §3.5 marcados como desenho, com ponteiro pra fonte de

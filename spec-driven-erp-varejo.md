@@ -453,7 +453,7 @@ produto_movimento_detalhe(id_movimento_detalhe PK, id_movimento FK, id_empresa F
 2026-07-16** (decisão do produto) — o saldo resultante fica só materializado em `produto_estoque`,
 não mais snapshot por linha do ledger.
 
-✅ **R2 revisto pelo dono do produto em 2026-08-12 — saldo negativo é PERMITIDO, de propósito.**
+✅ **R2 revisto pelo dono do produto em 2026-07-29 — saldo negativo é PERMITIDO, de propósito.**
 Nenhuma movimentação do sistema (venda no PDV, transferência entre empresas, devolução, balanço)
 bloqueia por saldo insuficiente: o lançamento passa e o saldo fica negativo. Razão de negócio: no
 varejo pequeno o estoque físico frequentemente está à frente do cadastro (mercadoria chegou e não
