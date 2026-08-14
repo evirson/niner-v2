@@ -9,7 +9,7 @@ import { listarCategoriasProduto } from '../../lib/categoriasProduto'
 import { ApiError } from '../../lib/api'
 import { listarEmpresas } from '../../lib/empresas'
 import { useEu } from '../../lib/eu'
-import { dataParaIso, dataValida, formatarMoeda, formatarQuantidade, isoParaData } from '../../lib/masks'
+import { dataParaIso, dataValida, formatarMoeda, formatarQuantidade } from '../../lib/masks'
 import { listarMarcas } from '../../lib/produtos'
 import {
   gerarRelatorioMovimentacaoProdutos,

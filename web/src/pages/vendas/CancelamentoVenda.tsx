@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { useEffect, useRef, useState } from 'react'
-import { useLocation, useNavigate } from 'react-router-dom'
+import { useLocation } from 'react-router-dom'
 import AjudaDaTela from '../../components/AjudaDaTela'
 import { BotaoFecharTela } from '../../components/BotaoFecharTela'
 import { IconeCancelamentoVenda, IconeOlho } from '../../components/Icones'
@@ -61,7 +61,6 @@ function paginasVisiveis(atual: number, total: number): number[] {
  * confirmação, que também mostra tudo que será revertido.
  */
 export default function CancelamentoVenda() {
-  const navigate = useNavigate()
   const location = useLocation()
 
   const [numeroVendaTexto, setNumeroVendaTexto] = useState('')

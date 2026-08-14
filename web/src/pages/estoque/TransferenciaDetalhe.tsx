@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useParams } from 'react-router-dom'
 import AjudaDaTela from '../../components/AjudaDaTela'
 import { BotaoFecharTela } from '../../components/BotaoFecharTela'
 import { IconeEstoque } from '../../components/Icones'
@@ -15,7 +15,6 @@ function formatarData(iso: string): string {
 
 export default function TransferenciaDetalhe() {
   const { id } = useParams()
-  const navigate = useNavigate()
 
   const { data: transferencia, isLoading } = useQuery({
     queryKey: ['transferencia', id],

@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { useEffect, useRef, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useParams } from 'react-router-dom'
 import AjudaDaTela from '../../components/AjudaDaTela'
 import { BotaoFecharTela } from '../../components/BotaoFecharTela'
 import { IconeHistorico, IconeSetaBaixo, IconeSetaCima } from '../../components/Icones'
@@ -24,7 +24,6 @@ function moeda(valor: number): string {
  */
 export default function ClienteHistorico() {
   const { id } = useParams()
-  const navigate = useNavigate()
   const idCliente = Number(id)
 
   // Linha selecionada de cada grid — clique, Enter/Espaço ou ▲/▼ destaca a linha, como uma

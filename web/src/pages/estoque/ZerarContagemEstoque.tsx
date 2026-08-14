@@ -1,6 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 import AjudaDaTela from '../../components/AjudaDaTela'
 import { BotaoFecharTela } from '../../components/BotaoFecharTela'
 import { IconeEstoque } from '../../components/Icones'
@@ -27,7 +26,6 @@ function formatarDataHora(iso: string): string {
  * empresa em que o usuário está logado.
  */
 export default function ZerarContagemEstoque() {
-  const navigate = useNavigate()
   const queryClient = useQueryClient()
   const [toast, setToast] = useState<{ texto: string; tipo: 'erro' | 'sucesso' } | null>(null)
   const [confirmandoZerar, setConfirmandoZerar] = useState(false)

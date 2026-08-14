@@ -1,6 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 import AjudaDaTela from '../../components/AjudaDaTela'
 import { BotaoFecharTela } from '../../components/BotaoFecharTela'
 import { IconeFechamentoCaixa } from '../../components/Icones'
@@ -33,7 +32,6 @@ function formatarDataHora(iso: string | null): string {
  * bem-sucedido ({@link FechamentoCaixaPreviewModal}).
  */
 export default function FechamentoCaixa() {
-  const navigate = useNavigate()
   const queryClient = useQueryClient()
   const { data: eu } = useEu()
   const ehAdmin = eu?.usuario.papel === 'ADMIN'

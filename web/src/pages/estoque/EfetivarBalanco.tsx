@@ -1,6 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 import AjudaDaTela from '../../components/AjudaDaTela'
 import { BotaoFecharTela } from '../../components/BotaoFecharTela'
 import { IconeConfirmar } from '../../components/Icones'
@@ -21,7 +20,6 @@ const FRASE_CONFIRMACAO_EFETIVAR = 'efetiva contagem'
  * a frase de confirmação (2026-08-04, mesmo padrão de "Zerar Contagem de Estoque").
  */
 export default function EfetivarBalanco() {
-  const navigate = useNavigate()
   const queryClient = useQueryClient()
   const [confirmando, setConfirmando] = useState(false)
   const [textoConfirmacaoEfetivar, setTextoConfirmacaoEfetivar] = useState('')

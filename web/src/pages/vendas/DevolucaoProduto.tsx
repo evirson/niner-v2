@@ -1,6 +1,5 @@
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 import AjudaDaTela from '../../components/AjudaDaTela'
 import { BotaoFecharTela } from '../../components/BotaoFecharTela'
 import { IconeDevolucaoProduto, IconeExcluir, IconeLupa } from '../../components/Icones'
@@ -40,7 +39,6 @@ function variacaoTexto(p: PdvProduto): string | null {
 }
 
 export default function DevolucaoProduto() {
-  const navigate = useNavigate()
   const { data: eu } = useEu()
 
   const { data: cfgQtdDecimal } = useQuery({ queryKey: ['permite-qtd-decimal'], queryFn: buscarPermiteQtdDecimal })

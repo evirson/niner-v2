@@ -40,8 +40,12 @@ function compararValores(a: unknown, b: unknown): number {
 }
 
 /** Ordena linhas que têm `qtdPorEmpresa` (Sintético/Analítico) — chave `empresa-N` compara pelo
- *  índice N da lista posicional; qualquer outra chave é um campo comum (descrição/marca/...). */
-function ordenarComEmpresa<T extends Record<string, unknown> & { qtdPorEmpresa: number[] }>(
+ *  índice N da lista posicional; qualquer outra chave é um campo comum (descrição/marca/...).
+ *
+ *  A restrição é só `{ qtdPorEmpresa: number[] }`: exigir também `Record<string, unknown>` fazia
+ *  `LinhaSintetica`/`LinhaAnalitica` (interfaces) não casarem — interface não ganha assinatura de
+ *  índice implícita em TypeScript, e o acesso dinâmico por `chave` é resolvido no cast abaixo. */
+function ordenarComEmpresa<T extends { qtdPorEmpresa: number[] }>(
   linhas: T[],
   chave: string,
   direcao: Direcao,
@@ -53,7 +57,10 @@ function ordenarComEmpresa<T extends Record<string, unknown> & { qtdPorEmpresa: 
       const indice = Number(chave.slice('empresa-'.length))
       cmp = (a.qtdPorEmpresa[indice] ?? 0) - (b.qtdPorEmpresa[indice] ?? 0)
     } else {
-      cmp = compararValores(a[chave] ?? '', b[chave] ?? '')
+      cmp = compararValores(
+        (a as Record<string, unknown>)[chave] ?? '',
+        (b as Record<string, unknown>)[chave] ?? '',
+      )
     }
     return direcao === 'ASC' ? cmp : -cmp
   })

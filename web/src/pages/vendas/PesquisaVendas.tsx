@@ -1,6 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
 import { useEffect, useRef, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 import AjudaDaTela from '../../components/AjudaDaTela'
 import { BotaoFecharTela } from '../../components/BotaoFecharTela'
 import { IconePesquisaVendas } from '../../components/Icones'
@@ -63,7 +62,6 @@ function paginasVisiveis(atual: number, total: number): number[] {
  * recebimentos ao mesmo tempo); rola internamente, sem afetar o scroll da tela.
  */
 export default function PesquisaVendas() {
-  const navigate = useNavigate()
   const { data: eu } = useEu()
   const ehAdmin = eu?.usuario.papel === 'ADMIN'
 

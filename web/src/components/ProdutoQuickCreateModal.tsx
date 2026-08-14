@@ -11,7 +11,6 @@ import {
   completarPeso,
   desmascararMoeda,
   desmascararPercentual,
-  desmascararPeso,
   formatarMoeda,
   formatarPercentual,
   mascararData,

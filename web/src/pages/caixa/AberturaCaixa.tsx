@@ -1,6 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 import AjudaDaTela from '../../components/AjudaDaTela'
 import { BotaoFecharTela } from '../../components/BotaoFecharTela'
 import CamposAberturaCaixa from '../../components/CamposAberturaCaixa'
@@ -25,7 +24,6 @@ function formatarDataHora(iso: string): string {
  * popup obrigatório ({@link AberturaCaixaModal}) quando detectam caixa fechado.
  */
 export default function AberturaCaixa() {
-  const navigate = useNavigate()
   const queryClient = useQueryClient()
   const [idCarteira, setIdCarteira] = useState<number | ''>('')
   const [valorTexto, setValorTexto] = useState('0,00')

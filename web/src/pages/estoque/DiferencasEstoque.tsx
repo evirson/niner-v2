@@ -1,6 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
 import { useRef, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 import AjudaDaTela from '../../components/AjudaDaTela'
 import { BotaoFecharTela } from '../../components/BotaoFecharTela'
 import { IconeRelatorio } from '../../components/Icones'
@@ -47,7 +46,6 @@ function ordenarLinhas(linhas: LinhaDiferenca[], coluna: Coluna, direcao: Direca
  * inclusive produto em estoque nunca escaneado no balanço ativo).
  */
 export default function DiferencasEstoque() {
-  const navigate = useNavigate()
   const { data: eu } = useEu()
   const [ordenarPor, setOrdenarPor] = useState<Coluna>('descricaoProduto')
   const [direcao, setDirecao] = useState<Direcao>('ASC')

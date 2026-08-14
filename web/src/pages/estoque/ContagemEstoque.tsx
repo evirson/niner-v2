@@ -1,6 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useRef, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 import AjudaDaTela from '../../components/AjudaDaTela'
 import { BotaoFecharTela } from '../../components/BotaoFecharTela'
 import { IconeExcluir, IconeEstoque } from '../../components/Icones'
@@ -25,7 +24,6 @@ const QTD_MAXIMA_POR_LEITURA = 1000
  * inteira sem afetar as demais.
  */
 export default function ContagemEstoque() {
-  const navigate = useNavigate()
   const queryClient = useQueryClient()
   const [valorBarras, setValorBarras] = useState('')
   const [toast, setToast] = useState<{ texto: string; tipo: 'erro' | 'sucesso' } | null>(null)
