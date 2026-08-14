@@ -159,19 +159,24 @@ function formatarQuantidadeSimples(qtd: number): string {
 }
 
 /**
- * Papeleta de venda do PDV (2026-08-06) — layout largo (64 colunas) pedido pelo dono do produto,
- * diferente das outras duas bobinas deste arquivo (42 colunas). A largura maior só cabe numa
- * bobina de 80mm com uma fonte mais condensada que a courier usada acima — a pré-visualização e
- * a impressão (`window.print`) usam `font-family: 'Lucida Console'` (`.papeleta-imprimir`,
- * `styles.css`), decisão do dono do produto pra resolver isso. O PDF (`gerarPdfComprovanteVenda`)
- * não consegue seguir a mesma fonte: 'Lucida Console' é proprietária da Microsoft e o jsPDF só
- * embute fontes TTF que a gente empacota — não há uma embutível aqui, então o PDF cai pra
- * 'courier' (nativa do jsPDF) num tamanho bem menor (~5pt) só pra caber as 64 colunas fisicamente
- * nos 80mm; a impressão direta (Lucida Console, tela/bobina real) é o caminho recomendado.
+ * Papeleta de venda do PDV — **42 colunas, item em 2 linhas** (revisão de 2026-08-24).
+ *
+ * <p>A versão original tinha 64 colunas numa única linha por item. Impressa numa bobina real o
+ * resultado era ilegível, e a conta explica: o papel tem 80mm mas a **área de impressão é 72mm**;
+ * descontando a margem sobram ~68mm, o que dá 1,06mm por caractere — fonte de ~6px. Pior, o CSS
+ * declarava `width: 80mm`, então o driver ainda encolhia tudo em 10% pra caber nos 72mm.
+ *
+ * <p>Solução pedida pelo dono do produto: **quebrar o item em duas linhas** em vez de espremer a
+ * largura. A primeira traz código de barras + o que couber do nome; a segunda, quantidade × preço
+ * unitário e o total. Com 42 colunas (o mesmo padrão das outras bobinas deste arquivo, e o padrão
+ * clássico de térmica 80mm), cada caractere ganha ~1,6mm e a fonte sobe pra ~10px — legível.
+ *
+ * <p>O PDF acompanha a mesma tabela (é a mesma função de montagem) e pôde subir de ~5pt pra 8pt.
  */
-const LARGURA_VENDA = 64
+const LARGURA_VENDA = 42
 const COL_CODIGO = 13
-const COL_DESCRICAO = 25
+/** Nome do produto na 1ª linha do item: o que sobra depois do código e do espaço separador. */
+const COL_DESCRICAO = LARGURA_VENDA - COL_CODIGO - 1
 const COL_QTD = 3
 const COL_UNITARIO = 9
 const COL_TOTAL = 10
@@ -199,7 +204,8 @@ function colDir(texto: string, largura: number): string {
   return t.padStart(largura)
 }
 
-/** Linha de cabeçalho tipo "Id. Venda..: valor" — rótulo já vem com os pontos, só concatena. */
+/** Linha de cabeçalho tipo "Nº Venda...: valor" — rótulo já vem com os pontos, só concatena.
+ *  Todos os rótulos têm 12 caracteres de propósito: é o que mantém os valores alinhados. */
 function campoVenda(rotulo: string, valor: string): string {
   return `${rotulo} ${valor}`
 }
@@ -227,17 +233,25 @@ function linhaParcelaCrediario(parc: string, vencimento: string, valor: string):
   return colEsq(parc, COL_PARC) + ' '.repeat(6) + colEsq(vencimento, COL_VENCIMENTO) + ' '.repeat(3) + colDir(valor, COL_VALOR_PARC)
 }
 
-/** Concatena descrição + cor (se tiver) + tamanho (se tiver) e quebra em blocos fixos de
- *  `COL_DESCRICAO` caracteres — sempre 3 linhas (as 2 últimas em branco quando o texto não
- *  preenche), mesmo layout fixo do mockup pedido pelo dono do produto. */
+/** Concatena descrição + cor (se tiver) + tamanho (se tiver) e quebra em blocos de
+ *  `COL_DESCRICAO` caracteres — no máximo 3 linhas. Diferente da versão de 64 colunas, **não
+ *  devolve mais linhas em branco de enchimento**: com o item já ocupando 2 linhas, cada linha
+ *  vazia extra viraria papel desperdiçado em toda venda. */
 function montarDescricaoEmLinhas(descricaoProduto: string, variacaoCor: string | null, variacaoTamanho: string | null): string[] {
   const texto = [descricaoProduto, variacaoCor, variacaoTamanho].filter(Boolean).join(' ')
   const linhas: string[] = []
   for (let i = 0; i < texto.length && linhas.length < 3; i += COL_DESCRICAO) {
     linhas.push(texto.slice(i, i + COL_DESCRICAO))
   }
-  while (linhas.length < 3) linhas.push('')
-  return linhas
+  return linhas.length > 0 ? linhas : ['']
+}
+
+/** 2ª linha do item: `qtd x unitário` recuado sob o nome, e o total alinhado à direita da bobina.
+ *  O recuo é o mesmo do nome (largura do código + separador), pra amarrar visualmente as duas
+ *  linhas do mesmo item. */
+function linhaValoresItem(qtd: string, unitario: string, total: string): string {
+  const esquerda = ' '.repeat(COL_CODIGO + 1) + colDir(qtd, COL_QTD) + ' x ' + colDir(unitario, COL_UNITARIO)
+  return colEsq(esquerda, LARGURA_VENDA - COL_TOTAL) + colDir(total, COL_TOTAL)
 }
 
 export function montarLinhasComprovanteVenda(c: ComprovanteVenda, reimpressao: boolean = false): string[] {
@@ -251,36 +265,28 @@ export function montarLinhasComprovanteVenda(c: ComprovanteVenda, reimpressao: b
     linhas.push(centralizarVenda('REIMPRESSÃO DE PAPELETA DE VENDA'))
     linhas.push(linhaVenda())
   }
-  linhas.push(campoVenda('Id. Venda..:', String(c.idVenda)))
+  linhas.push(campoVenda('Nº Venda...:', String(c.idVenda)))
   linhas.push(campoVenda('Cliente....:', c.nomeCliente ?? '(não informado)'))
   linhas.push(campoVenda('Vendedor...:', c.nomeVendedor ?? '(não informado)'))
   linhas.push(campoVenda('Operador...:', c.nomeOperador ?? '(não informado)'))
   linhas.push(campoVenda('Data.......:', formatarDataHora(c.dataVenda)))
   linhas.push(linhaVenda())
-  linhas.push(
-    [
-      colEsq('CODIGO', COL_CODIGO),
-      colEsq('DESCRICAO DOS PRODUTOS', COL_DESCRICAO),
-      colDir('QTD', COL_QTD),
-      colDir('UNITARIO', COL_UNITARIO),
-      colDir('TOTAL', COL_TOTAL),
-    ].join(' '),
-  )
+  // Cabeçalho da tabela em 2 linhas, espelhando o formato do item (código+nome / valores).
+  linhas.push(`${colEsq('CODIGO', COL_CODIGO)} ${colEsq('DESCRICAO DO PRODUTO', COL_DESCRICAO)}`)
+  linhas.push(colEsq(' '.repeat(COL_CODIGO + 1) + 'QTD x UNITARIO', LARGURA_VENDA - COL_TOTAL) + colDir('TOTAL', COL_TOTAL))
   linhas.push(linhaVenda())
 
   c.itens.forEach((item) => {
-    const [desc1, desc2, desc3] = montarDescricaoEmLinhas(item.descricaoProduto, item.variacaoCor, item.variacaoTamanho)
-    linhas.push(
-      [
-        colEsq(item.sku, COL_CODIGO),
-        colEsq(desc1, COL_DESCRICAO),
-        colDir(formatarQuantidadeSimples(item.qtd), COL_QTD),
-        colDir(formatarMoeda(item.valorUnitario), COL_UNITARIO),
-        colDir(formatarMoeda(item.valorTotal), COL_TOTAL),
-      ].join(' '),
-    )
-    if (desc2) linhas.push(' '.repeat(COL_CODIGO + 1) + colEsq(desc2, COL_DESCRICAO))
-    if (desc3) linhas.push(' '.repeat(COL_CODIGO + 1) + colEsq(desc3, COL_DESCRICAO))
+    const [desc1, ...descRestante] = montarDescricaoEmLinhas(item.descricaoProduto, item.variacaoCor, item.variacaoTamanho)
+    linhas.push(`${colEsq(item.sku, COL_CODIGO)} ${colEsq(desc1, COL_DESCRICAO)}`)
+    descRestante.forEach((linhaDesc) => {
+      linhas.push(' '.repeat(COL_CODIGO + 1) + colEsq(linhaDesc, COL_DESCRICAO))
+    })
+    linhas.push(linhaValoresItem(
+      formatarQuantidadeSimples(item.qtd),
+      formatarMoeda(item.valorUnitario),
+      formatarMoeda(item.valorTotal),
+    ))
   })
 
   linhas.push(linhaVenda())
@@ -315,17 +321,18 @@ export function montarLinhasComprovanteVenda(c: ComprovanteVenda, reimpressao: b
 }
 
 /**
- * Monta o documento jsPDF da papeleta de venda — fonte courier ~5pt (em vez de 8pt/42 colunas):
- * é o tamanho que cabe fisicamente 64 colunas em 80mm de largura (ver comentário no topo desta
- * seção) — bem menor que o ideal, o caminho recomendado pra imprimir de verdade é o botão
- * "Imprimir" (Lucida Console, via CSS), não este PDF. Fonte única de verdade reusada tanto pra
+ * Monta o documento jsPDF da papeleta de venda — courier 8pt, a mesma dos outros comprovantes
+ * desta bobina desde que a papeleta passou a 42 colunas (2026-08-24; antes era ~5pt pra espremer
+ * 64 colunas em 80mm). Fonte única de verdade reusada tanto pra
  * baixar ({@link gerarPdfComprovanteVenda}) quanto pro Blob do compartilhamento por WhatsApp
  * ({@link gerarBlobComprovanteVenda}).
  */
 function montarDocumentoComprovanteVenda(linhas: string[]): jsPDF {
   const margem = 4
-  const tamanhoFonte = 5
-  const alturaLinha = 2.6
+  // 8pt (era 5pt): com a papeleta em 42 colunas (2026-08-24) cabe a mesma fonte dos outros
+  // comprovantes desta bobina — 42 × ~1,7mm ≈ 71mm dentro dos 80mm menos as margens.
+  const tamanhoFonte = 8
+  const alturaLinha = 3.6
   const altura = Math.max(LARGURA_MM, margem * 2 + linhas.length * alturaLinha)
 
   const doc = new jsPDF({ unit: 'mm', format: [LARGURA_MM, altura] })
@@ -349,7 +356,7 @@ export function gerarBlobComprovanteVenda(linhas: string[]): Blob {
 
 /**
  * Vale-mercadoria emitido por uma devolução (2026-08-03) — desde 2026-08-07 usa a MESMA tabela
- * de itens (64 colunas, CODIGO/DESCRICAO DOS PRODUTOS/QTD/UNITARIO/TOTAL) e as mesmas funções de
+ * de itens (42 colunas, item em 2 linhas desde 2026-08-24) e as mesmas funções de
  * layout da papeleta de venda (`linhaVenda`/`centralizarVenda`/`colEsq`/`colDir`/`campoVenda`/
  * `linhaResumoVenda`/`montarDescricaoEmLinhas`) — pedido explícito do dono do produto pra
  * padronizar a impressão dos itens entre os dois comprovantes que saem na mesma bobina física
@@ -369,30 +376,23 @@ export function montarLinhasComprovanteVale(d: DevolucaoEfetivada, nomeEmpresa: 
   if (d.nomeFuncionario) linhas.push(campoVenda('Vendedor...:', d.nomeFuncionario))
   linhas.push(campoVenda('Data.......:', formatarDataHora(d.dataMovimento)))
   linhas.push(linhaVenda())
-  linhas.push(
-    [
-      colEsq('CODIGO', COL_CODIGO),
-      colEsq('DESCRICAO DOS PRODUTOS', COL_DESCRICAO),
-      colDir('QTD', COL_QTD),
-      colDir('UNITARIO', COL_UNITARIO),
-      colDir('TOTAL', COL_TOTAL),
-    ].join(' '),
-  )
+  // Mesma tabela de 2 linhas por item da papeleta (2026-08-24) — os dois comprovantes saem na
+  // mesma bobina física, então continuam compartilhando o layout.
+  linhas.push(`${colEsq('CODIGO', COL_CODIGO)} ${colEsq('DESCRICAO DO PRODUTO', COL_DESCRICAO)}`)
+  linhas.push(colEsq(' '.repeat(COL_CODIGO + 1) + 'QTD x UNITARIO', LARGURA_VENDA - COL_TOTAL) + colDir('TOTAL', COL_TOTAL))
   linhas.push(linhaVenda())
 
   d.itens.forEach((item) => {
-    const [desc1, desc2, desc3] = montarDescricaoEmLinhas(item.descricaoProduto, item.variacaoCor, item.variacaoTamanho)
-    linhas.push(
-      [
-        colEsq(item.sku, COL_CODIGO),
-        colEsq(desc1, COL_DESCRICAO),
-        colDir(formatarQuantidadeSimples(item.qtd), COL_QTD),
-        colDir(formatarMoeda(item.precoVenda), COL_UNITARIO),
-        colDir(formatarMoeda(item.valorTotal), COL_TOTAL),
-      ].join(' '),
-    )
-    if (desc2) linhas.push(' '.repeat(COL_CODIGO + 1) + colEsq(desc2, COL_DESCRICAO))
-    if (desc3) linhas.push(' '.repeat(COL_CODIGO + 1) + colEsq(desc3, COL_DESCRICAO))
+    const [desc1, ...descRestante] = montarDescricaoEmLinhas(item.descricaoProduto, item.variacaoCor, item.variacaoTamanho)
+    linhas.push(`${colEsq(item.sku, COL_CODIGO)} ${colEsq(desc1, COL_DESCRICAO)}`)
+    descRestante.forEach((linhaDesc) => {
+      linhas.push(' '.repeat(COL_CODIGO + 1) + colEsq(linhaDesc, COL_DESCRICAO))
+    })
+    linhas.push(linhaValoresItem(
+      formatarQuantidadeSimples(item.qtd),
+      formatarMoeda(item.precoVenda),
+      formatarMoeda(item.valorTotal),
+    ))
   })
 
   linhas.push(linhaVenda())
@@ -406,7 +406,7 @@ export function montarLinhasComprovanteVale(d: DevolucaoEfetivada, nomeEmpresa: 
 }
 
 /** Mesmo documento de {@link montarDocumentoComprovanteVenda} (mesma largura/fonte, agora que o
- *  vale usa a tabela de 64 colunas) — fonte única de verdade reusada tanto pra baixar o arquivo
+ *  vale usa a mesma tabela de 42 colunas da papeleta) — fonte única de verdade reusada tanto pra baixar o arquivo
  *  ({@link gerarPdfComprovanteVale}) quanto pra gerar o Blob do compartilhamento por WhatsApp
  *  ({@link gerarBlobComprovanteVale}). */
 function montarDocumentoComprovanteVale(linhas: string[]): jsPDF {

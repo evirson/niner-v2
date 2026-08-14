@@ -18,21 +18,24 @@ resposta de `POST /api/v1/pdv/vendas`). Pré-visualização em texto monoespaça
 
 ## Decisões (confirmadas com o dono do produto)
 
-1. **64 colunas, não as 42 já usadas no comprovante de crediário/vale** — mockup exato fornecido
-   pelo dono do produto (código 13 + descrição 25 + qtd 3 + unitário 9 + total 10, com espaços
-   separadores = 64). Fisicamente mais apertado que o padrão anterior (uma linha de 64 colunas
-   em 80mm exige fonte bem menor, ~6px/impressão real); resolvido com **`font-family: 'Lucida
-   Console'`** (pedido explícito do dono do produto) em vez de forçar um layout mais estreito —
-   Lucida Console foi desenhada pela Microsoft especificamente pra ficar legível em tamanho
-   pequeno (era a fonte padrão do console do Windows). O PDF (`gerarPdfComprovanteVenda`) **não
-   consegue** usar essa fonte — é proprietária da Microsoft e o `jsPDF` só embute TTF empacotado
-   no projeto — então cai pra `courier` (fonte nativa do `jsPDF`) num tamanho ainda menor
-   (~5pt), só pra caber fisicamente; **o botão "Imprimir" é o caminho recomendado**, o PDF é mais
-   um registro de backup.
-2. **Descrição do produto em até 3 linhas fixas** (25 caracteres cada, quebra literal — não por
+1. ⚠️ **42 colunas, item em 2 linhas** — **revisto em 2026-08-24 depois da primeira impressão em
+   bobina real**. A versão original era de 64 colunas numa linha por item (mockup do dono do
+   produto: código 13 + descrição 25 + qtd 3 + unitário 9 + total 10 + separadores), apostando na
+   `Lucida Console` para caber. Impresso de verdade, saiu **ilegível** — e a conta explica por
+   quê: o papel tem 80mm, mas a **área de impressão é ~72mm**; descontada a margem sobram ~68mm,
+   o que dá 1,06mm por caractere, ou seja fonte de ~6px.
+
+   O layout novo, pedido pelo dono do produto, **quebra o item em duas linhas em vez de espremer
+   a largura**: a 1ª traz `código de barras + o que couber do nome` (28 caracteres), a 2ª traz
+   `qtd × unitário` recuado e o `total` alinhado à direita. Com 42 colunas — o padrão clássico de
+   térmica 80mm, e o mesmo do comprovante de crediário/vale — cada caractere ganha ~1,6mm.
+   Ganho colateral: nomes longos que antes quebravam (ex.: "SANDALIA RASTEIRA FEMININA") passaram
+   a caber inteiros numa linha. O PDF acompanha a mesma montagem e subiu de ~5pt para **8pt**.
+2. **Descrição do produto em até 3 linhas** (28 caracteres cada, quebra literal — não por
    palavra): concatena `descricaoProduto + variacaoCor (se tiver) + variacaoTamanho (se tiver)`
-   num texto só, depois corta em blocos de 25 caracteres; as linhas de continuação não usadas
-   ficam em branco (todo item sempre reserva o mesmo espaço vertical fixo).
+   num texto só, depois corta em blocos. Desde a revisão de 2026-08-24 **não há mais linhas em
+   branco de enchimento** — com o item já ocupando 2 linhas, reservar espaço vertical fixo
+   desperdiçaria papel em toda venda.
 3. **NCM inexistente ou inválido = venda em branco, nunca rejeitada** — não aplicável aqui
    diretamente (é regra da importação, `ProdutoImportador`), citado só porque a papeleta lê
    `produto.codigo_ncm` do mesmo jeito; não há validação de NCM na venda em si.
@@ -46,6 +49,24 @@ resposta de `POST /api/v1/pdv/vendas`). Pré-visualização em texto monoespaça
    'CREDIARIO'`, não por parcela em aberto — `CARTAO_DEBITO`/`CARTAO_CREDITO` também ficam em
    aberto até a conciliação (ver `PdvVendaService.efetivarVenda`), mas isso não é "crediário" pro
    cliente que está lendo a papeleta.
+
+## CSS de impressão — o que cada valor resolve (2026-08-24)
+
+Três ajustes, todos descobertos imprimindo em bobina real e conferindo a foto do resultado. Valem
+como referência para qualquer outro documento térmico do produto:
+
+| Regra | Por quê |
+|---|---|
+| `width: 75mm` (era 80mm) | Prometer 80mm ao navegador quando a impressora marca ~72–75mm faz o **driver encolher tudo** pra caber — a fonte já pequena diminuía mais ~10%. |
+| `left: 0` | A origem do CSS na impressão **já é o começo da área imprimível**, não a borda do papel. Um `left: 4mm` que existiu por uma rodada empurrou o conteúdo pra direita e cortou o fim das linhas ("TOTAL" saiu "TOTAI"). |
+| `font-weight: bold` | Impressão térmica é **1 bit**: cada ponto sai preto ou não sai. Haste fina cai em meio-tom, o navegador dissolve em cinza e a cabeça marca só parte dos pontos — é o que faz a letra sair "falhada". Negrito faz cada haste cobrir um ponto inteiro. |
+| `print-color-adjust: exact` | Impede o navegador de clarear o preto pra "economizar tinta" — regra sem sentido em térmica. |
+| `font-family: Consolas, …` | Haste mais grossa e hinting melhor em corpo pequeno que a Lucida Console, e **mais estreita** (~0,55em contra 0,6em). |
+| `font-size: 11.5px` | ⚠️ **Calibrado para a Consolas**: 42 × 0,55 × 11,5px ≈ 70mm, dentro dos 73mm úteis. Nas fontes de reserva (0,6em) o mesmo tamanho daria ~77mm e voltaria a cortar à direita — se a Consolas faltar no parque de máquinas, baixar o `font-size` junto. |
+
+Se depois disso a impressão ainda sair fraca, **não é mais CSS**: é densidade da impressora
+(`Density`/`Darkness`) ou o modo de meio-tom do driver — `Halftone` em modo texto/nenhum imprime
+preto sólido, em vez de dissolver o cinza em pontos alternados.
 6. **Rótulo condicional por categoria da carteira** (revisão 2026-08-06) — "VALOR PAGO EM" pra
    dinheiro/cartão (dinheiro já circulou); **"VALOR A PAGAR EM"** pra CREDIARIO (ainda em aberto,
    ver o bloco de parcelas). `PagamentoComprovanteVenda.crediario: boolean` carrega essa

@@ -69,10 +69,14 @@ Reaproveita a tabela `venda_devolucao` (existente desde `V018`, nunca usada até
 Ao gravar a devolução, um popup automático (`ComprovanteValeModal.tsx`) mostra o número e o
 valor do vale, com "Salvar PDF", "Imprimir" e "Enviar por WhatsApp". Até 2026-08-07 usava um
 layout próprio de 42 colunas (fonte Courier, `.comprovante-preview`), mesmo padrão do
-Comprovante de Recebimento de Crediário; **desde 2026-08-07** foi padronizado com o layout de
-**64 colunas / fonte Lucida Console da Papeleta de Venda** (`.papeleta-preview`/
-`.papeleta-imprimir`, `ComprovantePapeletaModal.tsx`) — pedido do dono do produto pra uniformizar
-a impressão dos itens entre os dois comprovantes que saem na mesma bobina térmica física.
+Comprovante de Recebimento de Crediário; **desde 2026-08-07** foi padronizado com o layout da
+Papeleta de Venda (`.papeleta-preview`/`.papeleta-imprimir`, `ComprovantePapeletaModal.tsx`) —
+pedido do dono do produto pra uniformizar a impressão dos itens entre os dois comprovantes que
+saem na mesma bobina térmica física. Esse layout compartilhado **mudou em 2026-08-24**: deixou de
+ser 64 colunas numa linha por item (fonte Lucida Console) e passou a **42 colunas com o item em 2
+linhas** (Consolas em negrito), porque a versão anterior saía ilegível na bobina real — o vale
+acompanhou automaticamente, já que usa as mesmas funções de montagem. Ver
+`docs/telas/papeleta-venda.md`.
 "Enviar por WhatsApp" reaproveita o mesmo mecanismo da Papeleta de Venda/Comprovante de
 Crediário (`comum.arquivocompartilhado`, ver `docs/infra/compartilhamento-arquivo-temporario.md`)
 — como `venda_devolucao` não tem vínculo com cliente (devolução é anônima), não há telefone pra

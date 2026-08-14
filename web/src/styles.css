@@ -311,25 +311,49 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
   }
 }
 
-/* Papeleta de venda do PDV (2026-08-06, docs/telas/pdv.md) — mesma bobina térmica 80mm do
-   comprovante de crediário acima (reaproveita o `@page` sem nome), mas 64 colunas (mockup do
-   dono do produto) em vez de 42. 'Lucida Console' — pedido explícito do dono do produto pra
-   resolver a largura — é a fonte de sistema do Windows desenhada pra ficar legível em tamanho
-   bem pequeno (era a fonte do console do Windows); ainda assim o tamanho tem que ser bem menor
-   que o do comprovante de crediário pra 64 colunas caberem fisicamente nos 80mm (mesma conta:
-   ~6px cabe com folga equivalente à do comprovante de crediário a 9px/42 colunas). */
+/* Papeleta de venda do PDV (2026-08-06, docs/telas/pdv.md) — bobina térmica 80mm, reaproveita o
+   `@page` sem nome.
+
+   REVISÃO 2026-08-24 — a impressão real saía ilegível, por dois problemas somados:
+   1. A largura era 64 colunas. O papel tem 80mm mas a ÁREA DE IMPRESSÃO é 72mm; menos a margem
+      sobram ~68mm, o que dá 1,06mm por caractere → fonte de ~6px. Agora são 42 colunas (o padrão
+      clássico de térmica 80mm, e o mesmo das outras bobinas deste arquivo), com o item quebrado
+      em 2 linhas (código+nome / qtd × unitário e total) — ver `comprovante.ts`. A 42 colunas cada
+      caractere ganha ~1,6mm e a fonte sobe pra 10px.
+   2. `width: 80mm` prometia ao navegador uma faixa maior do que a impressora consegue marcar, e o
+      driver encolhia tudo ~10% pra caber nos 72mm — reduzindo ainda mais a fonte já pequena.
+      Agora a caixa tem os 72mm reais, centrada na página de 80mm. */
 .papeleta-preview {
   width: fit-content; margin: 16px auto; padding: 12px 14px;
   background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--radius);
-  font-family: 'Lucida Console', 'Courier New', Courier, monospace; font-size: 11px; line-height: 1.3;
+  font-family: 'Lucida Console', 'Courier New', Courier, monospace; font-size: 13px; line-height: 1.35;
   white-space: pre; color: var(--ink);
 }
 @media print {
   .papeleta-imprimir, .papeleta-imprimir * { visibility: visible; }
   .papeleta-imprimir {
-    position: absolute; top: 0; left: 0; width: 80mm; margin: 0; padding: 2mm 2mm; border: 0;
+    /* `left: 0`, não 4mm: a origem do CSS na impressão JÁ é o começo da área imprimível, não a
+       borda física do papel. O deslocamento de 4mm que existiu aqui (2026-08-24) empurrava o
+       conteúdo pra direita e o fim das linhas caía fora dos 72mm — o cupom saía com margem à
+       esquerda e cortado à direita ("TOTAL" virava "TOTAI"). */
+    position: absolute; top: 0; left: 0; width: 75mm; margin: 0; padding: 2mm 1mm; border: 0;
     background: none; color: #000;
-    font-family: 'Lucida Console', 'Courier New', Courier, monospace; font-size: 6px; line-height: 1.3;
+    /* Consolas na frente da Lucida Console: mesma família monoespaçada, mas com haste mais
+       grossa e hinting melhor em corpo pequeno — é a que sobrevive melhor à cabeça térmica.
+       Também é mais ESTREITA (~0,55em contra 0,6em da Lucida), e é isso que permite o corpo
+       maior abaixo: 42 × 0,55 × 11,5px ≈ 70mm, dentro dos 73mm úteis (75mm menos as margens).
+       ⚠️ O tamanho está calibrado PRA CONSOLAS. Nas fontes de reserva (0,6em) 11,5px daria
+       ~77mm e voltaria a cortar à direita — se um dia a Consolas sumir do parque de máquinas,
+       baixar junto o `font-size`. */
+    font-family: Consolas, 'Lucida Console', 'Courier New', Courier, monospace; font-size: 11.5px; line-height: 1.35;
+    /* Impressão térmica é 1 bit: cada ponto sai preto ou não sai. O traço fino da Lucida Console
+       cai em cima de meio-tom, o navegador dissolve em cinza e a cabeça térmica marca só parte
+       dos pontos — é isso que faz a letra sair "falhada" (2026-08-24). `bold` engrossa o traço
+       o bastante pra cada haste cobrir um ponto inteiro; `print-color-adjust: exact` impede o
+       navegador de clarear o preto pra "economizar tinta", regra que não faz sentido em térmica. */
+    font-weight: bold;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
   }
 }
 

@@ -374,6 +374,46 @@ Movimentação de Conta Corrente) que ainda não tinham migrado pro `SeletorPlan
 
 ## Linha do tempo
 
+### 2026-08-24 — Papeleta de venda legível na bobina real (42 colunas, item em 2 linhas)
+
+Primeira impressão da papeleta numa impressora térmica de verdade — e ela saiu **ilegível**. O
+dono do produto mandou a foto do cupom ao lado do PDF (que estava bom) e a comparação foi o que
+permitiu diagnosticar: o problema não era a fonte, eram **dois erros somados de largura**.
+
+1. **64 colunas não cabem.** O papel tem 80mm, mas a **área de impressão é ~72mm**; descontada a
+   margem sobram ~68mm, o que dá 1,06mm por caractere — fonte de ~6px. A aposta original (usar
+   `Lucida Console`, desenhada pra ficar legível em corpo pequeno) não vence essa conta.
+2. **O CSS declarava `width: 80mm`.** Prometer ao navegador uma faixa maior do que a impressora
+   marca faz o **driver encolher tudo** pra caber — a fonte já pequena diminuía mais ~10%.
+
+**Solução, pedida pelo dono do produto:** quebrar o item em **duas linhas** em vez de espremer a
+largura. A 1ª traz código de barras + o que couber do nome (28 caracteres); a 2ª, `qtd ×
+unitário` recuado e o total à direita. Com **42 colunas** — o padrão clássico de térmica 80mm e o
+mesmo do comprovante de crediário/vale — cada caractere ganha ~1,6mm. O vale-mercadoria
+acompanhou de graça (compartilha as funções de montagem), e o PDF subiu de ~5pt pra 8pt.
+
+**Depois vieram três rodadas de refinamento, cada uma a partir de uma foto do cupom impresso:**
+- *"as letras estão falhadas"* → **`font-weight: bold`** + `print-color-adjust: exact`. Impressão
+  térmica é 1 bit: cada ponto sai preto ou não sai. Haste fina cai em meio-tom, o navegador
+  dissolve em cinza e a cabeça marca só parte dos pontos — é exatamente o "picotado" da foto.
+- *"o texto está deslocado pra direita e cortando"* → **erro meu na rodada anterior**: eu tinha
+  posto `left: 4mm` supondo que a origem do CSS fosse a borda física do papel. Não é: a origem
+  **já é o começo da área imprimível**, então os 4mm foram somados e o fim das linhas caiu fora
+  ("TOTAL" saiu "TOTAI"). Voltou pra `left: 0`.
+- *"sobra espaço à direita"* → alargar a caixa sozinho **não resolveria**: o texto é que não
+  preenchia (a Consolas, adotada por ter haste mais grossa, é ~0,55em contra 0,6em da Lucida).
+  O que usa o espaço é subir a fonte: **75mm de caixa + 11,5px**, dando 42 × 0,55 × 11,5 ≈ 70mm
+  dentro dos 73mm úteis. ⚠️ O tamanho fica **calibrado pra Consolas** — nas fontes de reserva o
+  mesmo valor voltaria a cortar; está avisado no CSS e na spec.
+
+Também no pedido: o rótulo `Id. Venda..:` virou **`Nº Venda...:`** (conferido que continua com 12
+caracteres, como os outros quatro rótulos do cabeçalho — é isso que mantém a coluna de valores
+alinhada).
+
+Aprovado pelo dono do produto na impressão real. `tsc -b` limpo; a tabela de layout do CSS de
+impressão, com o porquê de cada valor, ficou em `docs/telas/papeleta-venda.md` como referência
+para qualquer outro documento térmico do produto.
+
 ### 2026-08-23 (fechamento) — as 4 pendências abertas do dia, resolvidas
 
 **1) Signup passa a aplicar o plano de contas padrão completo.** Era a questão aberta da DRE: um
