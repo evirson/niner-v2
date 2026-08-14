@@ -55,6 +55,10 @@ foram corrigidos só em **2026-08-07**, quando a discrepância foi notada.
 | `cfg_usa_cor_grade` | Usa cor/grade (calçados, confecções) | checkbox | — (default `false`, 2026-08-08; era duas flags separadas de linha/coluna) |
 | `cfg_permite_qtd_decimal` | Permite quantidade decimal para produtos | checkbox | — (default `true`) |
 | `cfg_exige_numero_venda_devolucao` | Exigir número da venda na Devolução de Produtos | checkbox | — (default `false`, 2026-08-11) |
+| `cfg_rateia_frete_entrada` | Ratear frete/IPI/ICMS-ST no custo do item | checkbox | — (default `false`, 2026-08-11) |
+| `cfg_reajusta_preco_entrada` | Reajustar preço do produto automaticamente | checkbox | — (default `false`, 2026-08-11) |
+| `cfg_consiste_valor_contas_pagar` | Consistir valor das contas a pagar na entrada | checkbox | — (**default `true`**, 2026-08-23) |
+| `id_plano_contas_compra_mercadoria` | Plano de Contas da Compra | `SeletorPlanoContas` (`apenasAnaliticas`) | obrigatório |
 | `juros_crediario_dias` | Juros após (dias) | inteiro | ≥ 0 |
 | `juros_crediario` | Juros (%) | percentual (máscara) | 0–100 |
 | `multa_crediario_dias` | Multa após (dias) | inteiro | ≥ 0 |
@@ -85,6 +89,21 @@ leves) e validado também no servidor (`DevolucaoProdutoService.efetivar` rejeit
 venda não foi informada e a flag está ligada). Detalhe completo do que a restrição faz e como o
 foco inicial do campo muda de acordo com esta flag: `docs/telas/devolucao-produtos.md`.
 
+**`cfg_consiste_valor_contas_pagar` (2026-08-23):** liga/desliga a exigência de que a soma das
+duplicatas lançadas na Entrada de Produtos por Compra seja **igual ao total dos produtos
+lançados** — entrada de R$ 1.500,00 só confirma com duplicatas somando R$ 1.500,00. **Ligado por
+padrão**, ao contrário das outras flags de Compras: essa consistência já existia fixa na tela
+desde 2026-08-14, então o default preserva o comportamento de sempre (e o fallback do serviço,
+quando a linha de `cfg_geral` não existe, também é `true` — diferente das demais flags leves,
+cujo fallback é `false`). Desligada, a divergência é permitida — caso real de adiantamento,
+parte da nota paga à vista ou nota parcialmente financiada. Base de comparação: o total dos
+produtos **sem** o rateio de frete/IPI/ICMS-ST, que é o que a tela exibe em "Total dos produtos"
+(comparar com o valor já rateado rejeitaria a nota por uma diferença que o operador não enxerga).
+Lida por qualquer papel via `GET /api/v1/config-geral/consiste-valor-contas-pagar` (mesmo padrão
+das outras flags leves) e **validada também no servidor** (`EntradaMercadoriaService.registrar`
+rejeita com 400 antes de gravar qualquer coisa — a transação inteira é revertida, nem movimento
+de estoque nem conta a pagar sobram). Detalhe do efeito na tela: `docs/telas/entrada-mercadoria.md`.
+
 ## Critérios de aceitação (viram testes)
 
 - Dado um tenant recém-assinado, quando consulta `GET /api/v1/config-geral`, então recebe os
@@ -100,10 +119,16 @@ foco inicial do campo muda de acordo com esta flag: `docs/telas/devolucao-produt
   (qualquer papel, inclusive OPERADOR), então reflete o valor salvo.
 - Dado `cfg_exige_numero_venda_devolucao` atualizado, quando consultado por
   `GET /exige-numero-venda-devolucao` (qualquer papel), então reflete o valor salvo.
+- Dado um tenant recém-assinado, quando consulta `GET /api/v1/config-geral`, então
+  `cfgConsisteValorContasPagar` vem `true` (default do banco).
+- Dado `cfg_consiste_valor_contas_pagar` atualizado, quando consultado por
+  `GET /consiste-valor-contas-pagar` (qualquer papel), então reflete o valor salvo.
 
 Cobertos por `ConfiguracaoGeralTest` (7 testes). Ver também `DevolucaoProdutoCrudTest` pro
-critério "sem número da venda, quando a flag exige, então 400" (validação cruzada entre os dois
-módulos).
+critério "sem número da venda, quando a flag exige, então 400" e `EntradaMercadoriaCrudTest`
+(`comConsistenciaLigadaRejeitaDuplicataComTotalDiferente` /
+`comConsistenciaDesligadaAceitaDuplicataComTotalDiferente`, 2026-08-23) pro par de critérios da
+consistência de contas a pagar — validação cruzada entre os módulos.
 
 ## Bug corrigido (2026-08-11) — cache do React Query desatualizado nas telas que leem as flags leves
 
@@ -144,6 +169,7 @@ GET  /api/v1/config-geral/permite-qtd-decimal  quantidade decimal ligada/desliga
 GET  /api/v1/config-geral/exige-numero-venda-devolucao  nº da venda obrigatório na devolução? (qualquer papel)
 GET  /api/v1/config-geral/rateia-frete-entrada     rateia frete/IPI/ICMS-ST no custo? (qualquer papel, Entrada de Produtos)
 GET  /api/v1/config-geral/reajusta-preco-entrada   reajusta preço na entrada? (qualquer papel, Entrada de Produtos)
+GET  /api/v1/config-geral/consiste-valor-contas-pagar  duplicatas têm de somar o total dos produtos? (qualquer papel, Entrada de Produtos — 2026-08-23)
 GET  /api/v1/config-geral/plano-contas-compra-mercadoria  plano de contas padrão de compra (qualquer papel — 2026-08-22, ver "Bug corrigido" acima)
 ```
 
@@ -154,16 +180,22 @@ de ADMIN, verificado a partir do claim `roles` do JWT (mesmo mecanismo de
 ## Ajuda da tela (manual de operação + vídeo) — obrigatório (R22 / §3.7.1)
 
 - **`chave_tela`: `configuracao.geral.form`** — desconto máximo, exigência de venda na
-  devolução, uso de cor/grade, quantidade decimal de produtos, juros/multa de crediário; erros
-  comuns: só ADMIN acessa, percentuais entre 0–100. `url_video`: NULL.
+  devolução, uso de cor/grade, quantidade decimal de produtos, juros/multa de crediário e as
+  regras de Compras (rateio de frete, reajuste de preço, consistência do valor das contas a
+  pagar, plano de contas da compra); erros comuns: só ADMIN acessa, percentuais entre 0–100.
+  `url_video`: NULL.
 
 ## Impacto no banco
 
 `cfg_permite_qtd_decimal boolean NOT NULL DEFAULT true` (coluna nova, 2026-07-29, dentro de
 `V023__cfg_geral.sql` — banco em construção, editada em vez de nova migration).
 `cfg_exige_numero_venda_devolucao boolean NOT NULL DEFAULT false` (coluna nova, 2026-08-11,
-mesmo padrão — dentro de `V023__cfg_geral.sql`). O resto da tabela já existia por completo
-(V023, RLS via V024), semeada no signup.
+mesmo padrão — dentro de `V023__cfg_geral.sql`).
+`cfg_consiste_valor_contas_pagar boolean NOT NULL DEFAULT true` (coluna nova, 2026-08-23, mesmo
+padrão — dentro de `V023__cfg_geral.sql`; aplicada no banco de dev por `ALTER TABLE ... ADD
+COLUMN IF NOT EXISTS` + `flyway repair`, sem recriar o banco, e sem `GRANT` novo porque os
+privilégios de `cfg_geral` para `niner_app` são de tabela inteira, não por coluna). O resto da
+tabela já existia por completo (V023, RLS via V024), semeada no signup.
 
 ## Impacto nas integrações
 

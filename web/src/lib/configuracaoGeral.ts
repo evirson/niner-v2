@@ -12,6 +12,7 @@ export interface ConfiguracaoGeral {
   cfgExigeNumeroVendaDevolucao: boolean
   cfgRateiaFreteEntrada: boolean
   cfgReajustaPrecoEntrada: boolean
+  cfgConsisteValorContasPagar: boolean
   idPlanoContasCompraMercadoria: string
   atualizadoEm: string
 }
@@ -28,6 +29,7 @@ export interface ConfiguracaoGeralFormState {
   cfgExigeNumeroVendaDevolucao: boolean
   cfgRateiaFreteEntrada: boolean
   cfgReajustaPrecoEntrada: boolean
+  cfgConsisteValorContasPagar: boolean
   idPlanoContasCompraMercadoria: string
 }
 
@@ -43,6 +45,7 @@ export function paraFormulario(c: ConfiguracaoGeral): ConfiguracaoGeralFormState
     cfgExigeNumeroVendaDevolucao: c.cfgExigeNumeroVendaDevolucao,
     cfgRateiaFreteEntrada: c.cfgRateiaFreteEntrada,
     cfgReajustaPrecoEntrada: c.cfgReajustaPrecoEntrada,
+    cfgConsisteValorContasPagar: c.cfgConsisteValorContasPagar,
     idPlanoContasCompraMercadoria: c.idPlanoContasCompraMercadoria,
   }
 }
@@ -60,6 +63,7 @@ export function paraRequisicao(f: ConfiguracaoGeralFormState) {
     cfgExigeNumeroVendaDevolucao: f.cfgExigeNumeroVendaDevolucao,
     cfgRateiaFreteEntrada: f.cfgRateiaFreteEntrada,
     cfgReajustaPrecoEntrada: f.cfgReajustaPrecoEntrada,
+    cfgConsisteValorContasPagar: f.cfgConsisteValorContasPagar,
     idPlanoContasCompraMercadoria: f.idPlanoContasCompraMercadoria,
   }
 }
@@ -142,4 +146,14 @@ export interface ReajustaPrecoEntrada {
  *  por Compra pra decidir se atualiza o preço do produto a partir do custo da entrada. */
 export function buscarReajustaPrecoEntrada(): Promise<ReajustaPrecoEntrada> {
   return api<ReajustaPrecoEntrada>('/api/v1/config-geral/reajusta-preco-entrada')
+}
+
+export interface ConsisteValorContasPagar {
+  cfgConsisteValorContasPagar: boolean
+}
+
+/** Aberto a qualquer papel (diferente do resto de `cfg_geral`) — usado pela Entrada de Produtos
+ *  por Compra pra decidir se a soma das duplicatas é obrigada a bater com o total dos produtos. */
+export function buscarConsisteValorContasPagar(): Promise<ConsisteValorContasPagar> {
+  return api<ConsisteValorContasPagar>('/api/v1/config-geral/consiste-valor-contas-pagar')
 }

@@ -140,7 +140,7 @@ class FechamentoCaixaCrudTest {
                                 {"percentualDescontoVenda":0,"jurosCrediarioDias":0,"jurosCrediario":0,
                                  "multaCrediarioDias":0,"multaCrediario":0,"cfgUsaCorGrade":false,
                                  "cfgPermiteQtdDecimal":true,"cfgExigeNumeroVendaDevolucao":false,
-                                 "cfgRateiaFreteEntrada":false,"cfgReajustaPrecoEntrada":false,
+                                 "cfgRateiaFreteEntrada":false,"cfgReajustaPrecoEntrada":false,"cfgConsisteValorContasPagar":false,
                                  "idPlanoContasCompraMercadoria":"3.03.001"}
                                 """))
                 .andExpect(status().isOk());

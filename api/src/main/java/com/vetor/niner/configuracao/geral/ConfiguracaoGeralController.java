@@ -2,6 +2,7 @@ package com.vetor.niner.configuracao.geral;
 
 import com.vetor.niner.configuracao.geral.ConfiguracaoGeralDtos.ConfiguracaoGeralRequest;
 import com.vetor.niner.configuracao.geral.ConfiguracaoGeralDtos.ConfiguracaoGeralResponse;
+import com.vetor.niner.configuracao.geral.ConfiguracaoGeralDtos.ConsisteValorContasPagarResponse;
 import com.vetor.niner.configuracao.geral.ConfiguracaoGeralDtos.DescontoVendaResponse;
 import com.vetor.niner.configuracao.geral.ConfiguracaoGeralDtos.ExigeNumeroVendaDevolucaoResponse;
 import com.vetor.niner.configuracao.geral.ConfiguracaoGeralDtos.PermiteQtdDecimalResponse;
@@ -77,6 +78,11 @@ public class ConfiguracaoGeralController {
     @GetMapping("/reajusta-preco-entrada")
     public ReajustaPrecoEntradaResponse reajustaPrecoEntrada() {
         return new ReajustaPrecoEntradaResponse(service.reajustaPrecoEntrada());
+    }
+
+    @GetMapping("/consiste-valor-contas-pagar")
+    public ConsisteValorContasPagarResponse consisteValorContasPagar() {
+        return new ConsisteValorContasPagarResponse(service.consisteValorContasPagar());
     }
 
     @GetMapping("/plano-contas-compra-mercadoria")

@@ -15,6 +15,17 @@ Autor: Evirson (dono do produto) + Claude · Data: 2026-07-23, implementação 2
 > - **Rateio de frete/IPI/ICMS-ST no custo** e **reajuste automático de `preco_custo`/
 >   `preco_venda`** — ambos configuráveis (`cfg_geral.cfg_rateia_frete_entrada` /
 >   `cfg_reajusta_preco_entrada`, Parâmetros do Sistema), desligados por padrão.
+> - **Consistência do valor das contas a pagar (2026-08-23)** — a soma das duplicatas precisa
+>   bater com o total dos produtos lançados (regra de 2026-08-14), agora **configurável** em
+>   `cfg_geral.cfg_consiste_valor_contas_pagar` (Parâmetros do Sistema, "Consistir valor das
+>   contas a pagar na entrada"), **ligada por padrão** — desligada, permite divergência
+>   (adiantamento, parte à vista). Aplicada na tela (bloqueia Confirmar + aviso) **e** no
+>   servidor (`EntradaMercadoriaService`, 400 antes de gravar qualquer coisa). Base de
+>   comparação é o total dos produtos **sem** o rateio de frete/IPI/ICMS-ST. Na mesma data foi
+>   corrigido um bug da divisão automática das parcelas: ela travava no primeiro total válido
+>   (`parcelas.length > 0`) e, como o total muda a cada tecla digitada no custo, digitar "150,00"
+>   com 3 parcelas já definidas gerava 0,34/0,33/0,33 (o "1" do começo) em vez de 50,00 cada —
+>   agora a divisão acompanha quantidade/custo até o operador editar um valor de parcela à mão.
 > - **`contas_pagar`** gerado a partir de parcelas informadas no corpo da confirmação
 >   (opcional — Manual/Planilha só geram se o operador preencher; o XML preencheria a partir
 >   de `cobr/dup`, ainda não implementado). Conta contábil vem de
@@ -71,8 +82,10 @@ Autor: Evirson (dono do produto) + Claude · Data: 2026-07-23, implementação 2
 >   cancelada ganha badge "Cancelada" e continua na grid.
 > - **Filtros da listagem (2026-08-19)** — popup obrigatório ao entrar na tela (mesmo padrão do
 >   CRM/Cancelamento de Devolução): Fornecedor (busca por texto), Empresa, Nº Nota Fiscal, Data
->   Início/Fim. Todos os campos opcionais (em branco = lista tudo). Dois botões no popup:
->   "Localizar" e "＋ Nova entrada" (pula a busca, vai direto pro formulário). Bug de fuso
+>   Início/Fim. Todos os campos opcionais (em branco = lista tudo). Três botões no popup:
+>   "Fechar" (volta pra tela anterior via `navigate(-1)`, mesma convenção do `BotaoFecharTela`;
+>   acrescentado em 2026-08-23), "＋ Nova entrada" (pula a busca, vai direto pro formulário) e
+>   "Localizar". Bug de fuso
 >   horário achado e corrigido nesta rodada: a sessão do Postgres roda em UTC mas a tela mostra
 >   data em horário local do navegador — filtro de data e gravação de `dataMovimento` agora
 >   usam `(coluna AT TIME ZONE 'America/Sao_Paulo')` em vez de comparar/gravar em UTC puro.

@@ -30,6 +30,7 @@ public final class ConfiguracaoGeralDtos {
             @NotNull Boolean cfgExigeNumeroVendaDevolucao,
             @NotNull Boolean cfgRateiaFreteEntrada,
             @NotNull Boolean cfgReajustaPrecoEntrada,
+            @NotNull Boolean cfgConsisteValorContasPagar,
             @NotBlank String idPlanoContasCompraMercadoria) {
     }
 
@@ -44,6 +45,7 @@ public final class ConfiguracaoGeralDtos {
             boolean cfgExigeNumeroVendaDevolucao,
             boolean cfgRateiaFreteEntrada,
             boolean cfgReajustaPrecoEntrada,
+            boolean cfgConsisteValorContasPagar,
             String idPlanoContasCompraMercadoria,
             OffsetDateTime atualizadoEm) {
     }
@@ -79,6 +81,12 @@ public final class ConfiguracaoGeralDtos {
     /** Só a flag de reajuste automático de preço na entrada, sem checagem de papel — usada pela
      *  Entrada de Produtos por Compra pra decidir se atualiza `produto.preco_custo`/`preco_venda`. */
     public record ReajustaPrecoEntradaResponse(boolean cfgReajustaPrecoEntrada) {
+    }
+
+    /** Só a flag de consistência do valor das contas a pagar da entrada (2026-08-23), sem checagem
+     *  de papel — usada pela Entrada de Produtos por Compra pra decidir se a soma das duplicatas
+     *  é obrigada a bater com o total dos produtos lançados. */
+    public record ConsisteValorContasPagarResponse(boolean cfgConsisteValorContasPagar) {
     }
 
     /** Só o plano de contas padrão de compra, sem checagem de papel — usado pelo cadastro rápido

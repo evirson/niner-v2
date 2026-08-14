@@ -29,6 +29,7 @@ public class ConfiguracaoGeralService {
                    multa_crediario_dias, multa_crediario, cfg_usa_cor_grade,
                    cfg_permite_qtd_decimal, cfg_exige_numero_venda_devolucao,
                    cfg_rateia_frete_entrada, cfg_reajusta_preco_entrada,
+                   cfg_consiste_valor_contas_pagar,
                    id_plano_contas_compra_mercadoria, atualizado_em
             FROM cfg_geral
             WHERE id_tenant = plataforma.tenant_atual()
@@ -149,6 +150,24 @@ public class ConfiguracaoGeralService {
     }
 
     /**
+     * Só a flag de consistência entre o total dos produtos e a soma das duplicatas na Entrada de
+     * Produtos por Compra (2026-08-23), sem checagem de papel — usada pela própria tela e pela
+     * validação de servidor de {@code EntradaMercadoriaService}. Fallback {@code true}: a
+     * consistência era fixa antes deste parâmetro existir, então a ausência da linha preserva o
+     * comportamento de sempre (diferente das outras flags leves, cujo fallback é {@code false}).
+     */
+    @Transactional(readOnly = true)
+    public boolean consisteValorContasPagar() {
+        return jdbc.sql("""
+                        SELECT cfg_consiste_valor_contas_pagar FROM cfg_geral
+                        WHERE id_tenant = plataforma.tenant_atual()
+                        """)
+                .query(Boolean.class)
+                .optional()
+                .orElse(true);
+    }
+
+    /**
      * Só o plano de contas usado nas contas a pagar geradas pela Entrada de Produtos por
      * Compra, sem checagem de papel — a linha nasce no signup/migration V032 (nunca deveria
      * faltar), mas o fallback preserva a conta padrão do sistema caso, por algum motivo, a
@@ -174,6 +193,7 @@ public class ConfiguracaoGeralService {
                             multa_crediario_dias = ?, multa_crediario = ?, cfg_usa_cor_grade = ?,
                             cfg_permite_qtd_decimal = ?, cfg_exige_numero_venda_devolucao = ?,
                             cfg_rateia_frete_entrada = ?, cfg_reajusta_preco_entrada = ?,
+                            cfg_consiste_valor_contas_pagar = ?,
                             id_plano_contas_compra_mercadoria = ?, atualizado_em = now()
                         WHERE id_tenant = plataforma.tenant_atual()
                         """)
@@ -182,6 +202,7 @@ public class ConfiguracaoGeralService {
                         req.multaCrediarioDias(), req.multaCrediario(), req.cfgUsaCorGrade(),
                         req.cfgPermiteQtdDecimal(), req.cfgExigeNumeroVendaDevolucao(),
                         req.cfgRateiaFreteEntrada(), req.cfgReajustaPrecoEntrada(),
+                        req.cfgConsisteValorContasPagar(),
                         req.idPlanoContasCompraMercadoria()))
                 .update();
         // Não deveria acontecer — a linha nasce no signup — mas 404 é mais honesto que
@@ -220,6 +241,7 @@ public class ConfiguracaoGeralService {
                 rs.getBoolean("cfg_exige_numero_venda_devolucao"),
                 rs.getBoolean("cfg_rateia_frete_entrada"),
                 rs.getBoolean("cfg_reajusta_preco_entrada"),
+                rs.getBoolean("cfg_consiste_valor_contas_pagar"),
                 rs.getString("id_plano_contas_compra_mercadoria"),
                 rs.getObject("atualizado_em", OffsetDateTime.class));
     }

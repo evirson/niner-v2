@@ -99,6 +99,11 @@ class EntradaMercadoriaCrudTest {
     }
 
     private void definirCfgGeral(String token, boolean rateiaFrete, boolean reajustaPreco) throws Exception {
+        definirCfgGeral(token, rateiaFrete, reajustaPreco, false);
+    }
+
+    private void definirCfgGeral(String token, boolean rateiaFrete, boolean reajustaPreco,
+            boolean consisteValorContasPagar) throws Exception {
         mvc.perform(put("/api/v1/config-geral").header("Authorization", "Bearer " + token)
                         .contentType(APPLICATION_JSON)
                         .content("""
@@ -106,8 +111,9 @@ class EntradaMercadoriaCrudTest {
                                  "multaCrediarioDias":0,"multaCrediario":0,"cfgUsaCorGrade":false,
                                  "cfgPermiteQtdDecimal":true,"cfgExigeNumeroVendaDevolucao":false,
                                  "cfgRateiaFreteEntrada":%s,"cfgReajustaPrecoEntrada":%s,
+                                 "cfgConsisteValorContasPagar":%s,
                                  "idPlanoContasCompraMercadoria":"3.03.001"}
-                                """.formatted(rateiaFrete, reajustaPreco)))
+                                """.formatted(rateiaFrete, reajustaPreco, consisteValorContasPagar)))
                 .andExpect(status().isOk());
     }
 
@@ -191,6 +197,77 @@ class EntradaMercadoriaCrudTest {
                 assertThat(rs.getString("id_plano_contas")).isEqualTo("3.03.001");
                 assertThat(rs.getBigDecimal("valor_pagar")).isEqualByComparingTo("10.00");
                 assertThat(rs.getInt("nota_fiscal")).isEqualTo(456);
+            }
+        }
+    }
+
+    /**
+     * `cfg_consiste_valor_contas_pagar` ligado (2026-08-23, o padrão): a soma das duplicatas
+     * precisa ser igual ao total dos produtos. A tela já bloqueia, mas a regra é reaplicada no
+     * servidor — a API não confia só no frontend.
+     */
+    @Test
+    void comConsistenciaLigadaRejeitaDuplicataComTotalDiferente() throws Exception {
+        TenantENota tenant = prepararTenantComProduto("consiste-liga");
+        definirCfgGeral(tenant.token(), false, false, true);
+
+        // Produtos: 2 × 50,00 = 100,00. Duplicatas: 60,00. Não bate.
+        String corpo = """
+                {"idFornecedor":%d,"notaFiscal":789,
+                 "itens":[{"idVariacao":%d,"qtd":2,"precoCusto":50.00}],
+                 "contasPagar":[{"numeroDuplicata":"001","dataVencimento":"2026-09-10","valor":60.00}]}
+                """.formatted(tenant.idFornecedor(), tenant.idVariacao());
+
+        mvc.perform(post("/api/v1/estoque/entradas").header("Authorization", "Bearer " + tenant.token())
+                        .contentType(APPLICATION_JSON).content(corpo))
+                .andExpect(status().isBadRequest());
+
+        // Nada foi gravado: nem conta a pagar, nem o movimento de estoque (a validação roda
+        // dentro da mesma transação, que é revertida inteira).
+        try (Connection c = abrirConexao(tenant.idTenant())) {
+            try (PreparedStatement ps = c.prepareStatement(
+                    "SELECT count(*) FROM contas_pagar WHERE id_fornecedor = ?")) {
+                ps.setLong(1, tenant.idFornecedor());
+                try (ResultSet rs = ps.executeQuery()) {
+                    rs.next();
+                    assertThat(rs.getLong(1)).isZero();
+                }
+            }
+            try (PreparedStatement ps = c.prepareStatement(
+                    "SELECT count(*) FROM produto_movimento_mestre WHERE id_fornecedor = ?")) {
+                ps.setLong(1, tenant.idFornecedor());
+                try (ResultSet rs = ps.executeQuery()) {
+                    rs.next();
+                    assertThat(rs.getLong(1)).isZero();
+                }
+            }
+        }
+    }
+
+    /** Mesma entrada divergente passa com o parâmetro desligado (adiantamento, parte à vista). */
+    @Test
+    void comConsistenciaDesligadaAceitaDuplicataComTotalDiferente() throws Exception {
+        TenantENota tenant = prepararTenantComProduto("consiste-desliga");
+        definirCfgGeral(tenant.token(), false, false, false);
+
+        String corpo = """
+                {"idFornecedor":%d,"notaFiscal":790,
+                 "itens":[{"idVariacao":%d,"qtd":2,"precoCusto":50.00}],
+                 "contasPagar":[{"numeroDuplicata":"001","dataVencimento":"2026-09-10","valor":60.00}]}
+                """.formatted(tenant.idFornecedor(), tenant.idVariacao());
+
+        mvc.perform(post("/api/v1/estoque/entradas").header("Authorization", "Bearer " + tenant.token())
+                        .contentType(APPLICATION_JSON).content(corpo))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.valorTotal").value(100.00));
+
+        try (Connection c = abrirConexao(tenant.idTenant());
+             PreparedStatement ps = c.prepareStatement(
+                     "SELECT valor_pagar FROM contas_pagar WHERE id_fornecedor = ?")) {
+            ps.setLong(1, tenant.idFornecedor());
+            try (ResultSet rs = ps.executeQuery()) {
+                assertThat(rs.next()).isTrue();
+                assertThat(rs.getBigDecimal("valor_pagar")).isEqualByComparingTo("60.00");
             }
         }
     }

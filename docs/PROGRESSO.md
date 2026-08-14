@@ -1,7 +1,7 @@
 # Progresso do Projeto — niner-v2
 
 Registro cronológico das decisões e entregas. Atualizar a cada marco relevante.
-**Última atualização:** 2026-08-22
+**Última atualização:** 2026-08-23
 
 ---
 
@@ -373,6 +373,71 @@ Movimentação de Conta Corrente) que ainda não tinham migrado pro `SeletorPlan
 ---
 
 ## Linha do tempo
+
+### 2026-08-23 — Entrada de Produtos: botão Fechar no popup de filtros, bug da divisão de duplicatas e o parâmetro que torna a consistência opcional
+
+Sessão de três pedidos encadeados do dono do produto, todos na Entrada de Produtos por Compra —
+o segundo é um **bug real de produto** achado testando ao vivo, e o terceiro nasceu da conversa
+sobre ele.
+
+**1) Botão "Fechar" no popup de filtros.** O popup obrigatório da listagem
+(`EntradaMercadoriaLista.tsx`, convenção de 2026-08-19) só tinha "Localizar" e "＋ Nova entrada":
+quem abria a tela por engano não tinha saída sem executar uma das duas ações. Ganhou um terceiro
+botão, à esquerda, com `navigate(-1)` — mesma mecânica do `BotaoFecharTela` do cabeçalho e do
+popup do Cancelamento de Devolução, que já tinha esse botão desde que nasceu.
+
+**2) Bug: as duplicatas eram divididas pelo total errado.** Reproduzido pelo dono do produto —
+1 unidade a R$ 150,00 em 3 duplicatas gerou **0,34 / 0,33 / 0,33** (total R$ 1,00) em vez de
+50,00 cada. A conta em si (resto do arredondamento na primeira parcela) estava certa desde
+2026-08-13; **o que estava errado era o momento em que ela rodava**. O `useEffect` que divide
+`valorTotal` por N parava de recalcular assim que existisse qualquer parcela
+(`parcelas.length > 0` na guarda) — e como `valorTotal` é recalculado a cada tecla digitada no
+custo do item, o primeiro dígito ("1") já criava as 3 parcelas e travava a divisão; os dígitos
+seguintes ("15", "150,00") eram ignorados. Só acontecia na ordem "Nº de Parcelas antes do custo",
+que é justamente a ordem natural da tela (o campo fica na aba 1, o custo na aba 2).
+Correção: a guarda `parcelas.length > 0` deu lugar a um estado explícito `parcelasEditadas`,
+ligado **só** quando o operador digita ou remove um *valor* de parcela — mexer em Nº Duplicata/
+Data não congela mais nada, e a divisão passa a acompanhar qualquer mudança de quantidade/custo
+até essa edição manual acontecer. Mudar o Nº de Parcelas destrava de novo (é o gesto de "divida
+tudo outra vez"); quando só o valor precisa ser refeito e a contagem não mudou, Nº Duplicata/Data
+já preenchidos são preservados; duplicatas vindas do XML (`xmlTemDuplicatas`) seguem intocadas.
+
+**3) Parâmetro novo: "Consistir valor das contas a pagar na entrada"
+(`cfg_geral.cfg_consiste_valor_contas_pagar`).** A regra "soma das duplicatas = total dos
+produtos" existia **fixa** desde 2026-08-14; o dono do produto pediu para torná-la opcional
+(adiantamento, parte da nota à vista, nota parcialmente financiada são casos reais em que a
+divergência é legítima). Décimo-primeiro campo de Parâmetros do Sistema, seção **Compras**:
+- **Default `true`**, ao contrário das outras flags de Compras (que nascem desligadas) — preserva
+  o comportamento que a tela já tinha. O fallback do serviço, quando a linha de `cfg_geral` não
+  existe, também é `true` (as demais flags leves usam `false`).
+- **Base de comparação: o total dos produtos SEM o rateio de frete/IPI/ICMS-ST** — é o número que
+  a tela mostra em "Total dos produtos". Comparar contra o total já rateado reprovaria a nota por
+  uma diferença que o operador não tem como enxergar.
+- **Validada também no servidor** (`EntradaMercadoriaService.registrar`, 400 + Problem Details
+  antes de qualquer INSERT — a transação inteira é revertida, não sobra movimento de estoque nem
+  conta a pagar). Até aqui a regra só existia no frontend; a API não confiava só no cliente em
+  nenhuma outra regra desta feature e não começaria por esta.
+- Endpoint leve novo `GET /api/v1/config-geral/consiste-valor-contas-pagar` (qualquer papel,
+  mesmo padrão de `/usa-cor-grade`, `/rateia-frete-entrada`, `/plano-contas-compra-mercadoria`) —
+  a Entrada de Produtos é operada majoritariamente por `OPERADOR`, que não pode ler o endpoint
+  completo (ADMIN-only), a mesma armadilha já documentada no fix de 2026-08-22.
+
+**Banco:** coluna nova dentro de `V023__cfg_geral.sql` (banco em construção, migration editada em
+vez de nova). Aplicada no dev com `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` +
+`docker compose run --rm flyway ... repair`, sem recriar o banco e sem perder dado; **nenhum
+`GRANT` novo foi preciso** — os privilégios de `cfg_geral` para `niner_app` são de tabela inteira,
+não por coluna (diferente do caso de `produto_movimento_mestre` em 2026-08-19).
+
+**Verificação:** suíte de backend **476/476 verdes** (474 + 2 novos em `EntradaMercadoriaCrudTest`:
+com a flag ligada, duplicata divergente devolve 400 e não grava nem `contas_pagar` nem
+`produto_movimento_mestre`; com ela desligada, a mesma entrada é aceita e a conta a pagar nasce
+com o valor divergente). `ConfiguracaoGeralTest` ganhou as asserções do default `true`, do
+round-trip do PUT e do endpoint leve. `tsc --noEmit` limpo. API rebuildada e testada ao vivo via
+API: `GET` da flag, `PUT` desligando, endpoint leve refletindo `false`, `PUT` religando —
+deixada no padrão. **O teste ao vivo na tela ficou pendente**: os 3 tenants do banco de dev estão
+sem produto cadastrado (efeito da conversão de plano de contas de 08-22), então não dá para
+lançar uma entrada sem antes criar massa de teste — oferecido ao dono do produto, ainda não
+respondido.
 
 ### 2026-08-22 (auditoria 3) — terceira passada de "documente/memorize tudo" achou staleness DENTRO do produto
 

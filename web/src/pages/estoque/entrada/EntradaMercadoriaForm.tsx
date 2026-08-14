@@ -8,7 +8,12 @@ import FornecedorQuickCreateModal from '../../../components/FornecedorQuickCreat
 import ProdutoQuickCreateModal from '../../../components/ProdutoQuickCreateModal'
 import Toast from '../../../components/Toast'
 import { ApiError } from '../../../lib/api'
-import { buscarPermiteQtdDecimal, buscarRateiaFreteEntrada, buscarUsaCorGrade } from '../../../lib/configuracaoGeral'
+import {
+  buscarConsisteValorContasPagar,
+  buscarPermiteQtdDecimal,
+  buscarRateiaFreteEntrada,
+  buscarUsaCorGrade,
+} from '../../../lib/configuracaoGeral'
 import { criarCor, listarCores } from '../../../lib/cores'
 import { listarEmpresasPermitidas, type Empresa } from '../../../lib/empresas'
 import {
@@ -335,6 +340,13 @@ export default function EntradaMercadoriaForm() {
   const permiteQtdDecimal = cfgQtdDecimal?.cfgPermiteQtdDecimal ?? true
   const { data: cfgRateia } = useQuery({ queryKey: ['rateia-frete-entrada'], queryFn: buscarRateiaFreteEntrada })
   const rateiaFrete = cfgRateia?.cfgRateiaFreteEntrada ?? false
+  const { data: cfgConsisteContasPagar } = useQuery({
+    queryKey: ['consiste-valor-contas-pagar'],
+    queryFn: buscarConsisteValorContasPagar,
+  })
+  // `true` como padrão: a consistência existia fixa antes do parâmetro (2026-08-23), então
+  // enquanto a resposta não chega a tela se comporta como sempre se comportou.
+  const consisteValorContasPagar = cfgConsisteContasPagar?.cfgConsisteValorContasPagar ?? true
   // "Usa Cor/Grade" desligado (2026-08-20): a grid "Localizados" esconde a coluna Variação (nunca
   // tem nada pra mostrar — todo produto usa a variação PADRÃO) e "＋ Cadastrar Produto" some as
   // pendências IRMÃS (mesmo nome, já sem cor/tamanho no texto — ver EntradaXmlService) direto na
@@ -387,6 +399,10 @@ export default function EntradaMercadoriaForm() {
   const [itens, setItens] = useState<ItemLinha[]>([])
   const [valorRateioTexto, setValorRateioTexto] = useState('')
   const [parcelas, setParcelas] = useState<ParcelaLinha[]>([])
+  /** Trava da divisão automática das parcelas (ver o efeito que divide `valorTotal` por N):
+   *  vira `true` quando o operador digita/remove um valor de parcela à mão, e volta a `false`
+   *  quando ele muda o Nº de Parcelas (que é o pedido explícito de "recalcule de novo"). */
+  const [parcelasEditadas, setParcelasEditadas] = useState(false)
 
   const [mostrarPesquisa, setMostrarPesquisa] = useState(false)
   /** Popup de pesquisa (Nome/Marca/Referência) da aba "2. Produtos" do fluxo Individual
@@ -691,9 +707,16 @@ export default function EntradaMercadoriaForm() {
   const aoSairCusto = (idVariacao: number) =>
     setItens((atual) => atual.map((i) => (i.idVariacao === idVariacao ? { ...i, custoTexto: completarMoeda(i.custoTexto) } : i)))
 
-  const removerParcela = (indice: number) => setParcelas((atual) => atual.filter((_, i) => i !== indice))
-  const alterarParcela = (indice: number, campo: keyof ParcelaLinha, valor: string) =>
+  const removerParcela = (indice: number) => {
+    setParcelasEditadas(true)
+    setParcelas((atual) => atual.filter((_, i) => i !== indice))
+  }
+  const alterarParcela = (indice: number, campo: keyof ParcelaLinha, valor: string) => {
+    // Só o valor digitado à mão congela a divisão automática — mexer em Nº Duplicata/Data não
+    // deve impedir que as parcelas acompanhem uma correção posterior no custo dos produtos.
+    if (campo === 'valorTexto') setParcelasEditadas(true)
     setParcelas((atual) => atual.map((p, i) => (i === indice ? { ...p, [campo]: valor } : p)))
+  }
 
   const qtdTotal = itens.reduce((soma, i) => soma + desmascararQuantidade(i.qtdTexto, permiteQtdDecimal), 0)
   const valorTotal = itens.reduce(
@@ -702,24 +725,35 @@ export default function EntradaMercadoriaForm() {
   )
 
   /** Assim que o Nº de Parcelas (aba "Dados Gerais"/Identificação) e o valor total dos produtos
-   *  estiverem os dois prontos — nessa ordem ou na outra, tanto faz — e ainda não há nenhuma
-   *  parcela lançada, já divide o total em N parcelas iguais e joga o valor de cada uma
-   *  (2026-08-13, pedido do dono do produto): resto do arredondamento fecha na PRIMEIRA parcela
-   *  (não na última — mudou de ideia em relação à 1ª versão desta função), Nº Duplicata/Data
-   *  ficam em branco pro usuário preencher. Sem botão "＋ Adicionar Parcela": o Nº de Parcelas já
-   *  é a única fonte da contagem. Não mexe em parcelas já existentes (o usuário pode ter
-   *  editado). */
+   *  estiverem os dois prontos — nessa ordem ou na outra, tanto faz — divide o total em N
+   *  parcelas iguais e joga o valor de cada uma (2026-08-13, pedido do dono do produto): resto
+   *  do arredondamento fecha na PRIMEIRA parcela (não na última — mudou de ideia em relação à
+   *  1ª versão desta função), Nº Duplicata/Data ficam em branco pro usuário preencher. Sem botão
+   *  "＋ Adicionar Parcela": o Nº de Parcelas já é a única fonte da contagem.
+   *
+   *  **A divisão acompanha o total até o operador mexer nos valores à mão** (bug corrigido em
+   *  2026-08-23): a versão anterior parava de recalcular assim que existisse qualquer parcela
+   *  (`parcelas.length > 0`), e como `valorTotal` muda a cada tecla digitada no custo do item, o
+   *  primeiro dígito já congelava a divisão — digitar 3 parcelas e depois um custo de "150,00"
+   *  gerava 0,34/0,33/0,33 (total 1,00, o "1" recém-digitado) em vez de 50,00 cada. Agora só
+   *  `parcelasEditadas` (valor de alguma parcela alterado/removido à mão) ou duplicatas vindas do
+   *  XML congelam o cálculo; enquanto isso, Nº Duplicata/Data já preenchidos são preservados
+   *  quando só o valor precisa ser refeito. */
   useEffect(() => {
     const n = Number(numeroParcelasTexto)
-    if (!n || n < 1 || n > 12 || parcelas.length > 0 || valorTotal <= 0) return
+    if (parcelasEditadas || xmlTemDuplicatas) return
+    if (!n || n < 1 || n > 12 || valorTotal <= 0) return
     const valorBase = Math.floor((valorTotal / n) * 100) / 100
-    const novas: ParcelaLinha[] = Array.from({ length: n }, (_, i) => ({
-      numeroDuplicata: '',
-      dataVencimentoTexto: '',
-      valorTexto: formatarMoeda(i === 0 ? Number((valorTotal - valorBase * (n - 1)).toFixed(2)) : valorBase),
-    }))
-    setParcelas(novas)
-  }, [numeroParcelasTexto, valorTotal, parcelas.length])
+    const valorDe = (i: number) =>
+      formatarMoeda(i === 0 ? Number((valorTotal - valorBase * (n - 1)).toFixed(2)) : valorBase)
+    setParcelas((atual) => {
+      if (atual.length !== n) {
+        return Array.from({ length: n }, (_, i) => ({ numeroDuplicata: '', dataVencimentoTexto: '', valorTexto: valorDe(i) }))
+      }
+      if (atual.every((p, i) => p.valorTexto === valorDe(i))) return atual
+      return atual.map((p, i) => ({ ...p, valorTexto: valorDe(i) }))
+    })
+  }, [numeroParcelasTexto, valorTotal, parcelasEditadas, xmlTemDuplicatas])
 
   // Foco automático na 1ª duplicata ao entrar na aba "3. Financeiro" (pedido do dono do
   // produto, 2026-08-13; vale pros dois fluxos desde 2026-08-15) — as parcelas já chegam com
@@ -848,9 +882,18 @@ export default function EntradaMercadoriaForm() {
    *  dono do produto) — comparado em centavos pra não sofrer de imprecisão de ponto flutuante.
    *  Só entra em jogo quando existe alguma parcela (Contas a Pagar continua opcional: nenhuma
    *  parcela lançada não bloqueia nada). Vale pros dois fluxos (Individual e Planilha), já que
-   *  os dois compartilham a mesma seção de Contas a Pagar. */
+   *  os dois compartilham a mesma seção de Contas a Pagar.
+   *
+   *  Desde 2026-08-23 a regra é **configurável** — "Consistir valor das contas a pagar na
+   *  entrada", em Parâmetros do Sistema (ligada por padrão, que é como a tela sempre se
+   *  comportou). Desligada, a divergência é permitida (adiantamento, parte à vista, nota
+   *  parcialmente financiada) e nem o bloqueio nem o aviso aparecem. A mesma regra é
+   *  reaplicada no servidor (`EntradaMercadoriaService`), não só aqui (P4). */
   const valorParcelasTotal = parcelas.reduce((soma, p) => soma + desmascararMoeda(p.valorTexto || '0'), 0)
-  const totalParcelasNaoBate = parcelas.length > 0 && Math.round(valorParcelasTotal * 100) !== Math.round(valorTotal * 100)
+  const totalParcelasNaoBate =
+    consisteValorContasPagar &&
+    parcelas.length > 0 &&
+    Math.round(valorParcelasTotal * 100) !== Math.round(valorTotal * 100)
 
   /** Vencimento de nenhuma parcela pode ser anterior à Data da Entrada informada (2026-08-14,
    *  pedido do dono do produto) — vale pros dois fluxos com abas, onde esse campo existe. */
@@ -1117,7 +1160,12 @@ export default function EntradaMercadoriaForm() {
             id="entrada-parcelas"
             inputMode="numeric"
             value={numeroParcelasTexto}
-            onChange={(e) => setNumeroParcelasTexto(e.target.value.replace(/\D/g, '').slice(0, 2))}
+            onChange={(e) => {
+              // Mudar o Nº de Parcelas é o gesto de "divida tudo de novo" — destrava a divisão
+              // automática mesmo que o operador já tivesse editado algum valor à mão.
+              setParcelasEditadas(false)
+              setNumeroParcelasTexto(e.target.value.replace(/\D/g, '').slice(0, 2))
+            }}
             placeholder="Opcional"
           />
         </div>
@@ -1282,6 +1330,7 @@ export default function EntradaMercadoriaForm() {
                     setItens([])
                     setPendentes([])
                     setParcelas([])
+                    setParcelasEditadas(false)
                     setValorRateioTexto('')
                     setNotaFiscalTexto('')
                     setDataEntradaTexto(hojeBr())

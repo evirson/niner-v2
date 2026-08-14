@@ -67,8 +67,9 @@ export default function EntradaMercadoriaLista() {
 
   /** Popup de filtros obrigatório ao entrar na tela (mesmo padrão do CRM/Cancelamento de
    *  Devolução, 2026-08-19) — "Localizar" aplica os filtros (todos opcionais: em branco
-   *  equivale a listar tudo, igual o comportamento de sempre) e "＋ Nova entrada" pula a busca
-   *  direto pra tela de criação. */
+   *  equivale a listar tudo, igual o comportamento de sempre), "＋ Nova entrada" pula a busca
+   *  direto pra tela de criação e "Fechar" volta pra tela anterior (`navigate(-1)`, mesmo
+   *  comportamento do BotaoFecharTela do cabeçalho) sem abrir a listagem. */
   const [filtrosAberto, setFiltrosAberto] = useState(true)
   const [buscaFornecedor, setBuscaFornecedor] = useState('')
   const [fornecedorEscolhido, setFornecedorEscolhido] = useState<FornecedorOpcaoEmissao | null>(null)
@@ -426,6 +427,9 @@ export default function EntradaMercadoriaLista() {
             </div>
 
             <div className="ajuda-rodape">
+              <button type="button" className="btn ghost" onClick={() => navigate(-1)}>
+                Fechar
+              </button>
               <button type="button" className="btn ghost" onClick={() => navigate('/entrada-produtos-compra/nova')}>
                 ＋ Nova entrada
               </button>

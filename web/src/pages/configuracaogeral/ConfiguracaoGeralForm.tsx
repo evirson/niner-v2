@@ -30,6 +30,7 @@ const VAZIO: ConfiguracaoGeralFormState = {
   cfgExigeNumeroVendaDevolucao: false,
   cfgRateiaFreteEntrada: false,
   cfgReajustaPrecoEntrada: false,
+  cfgConsisteValorContasPagar: true,
   idPlanoContasCompraMercadoria: '',
 }
 
@@ -84,6 +85,7 @@ export default function ConfiguracaoGeralForm() {
       queryClient.invalidateQueries({ queryKey: ['exige-numero-venda-devolucao'] })
       queryClient.invalidateQueries({ queryKey: ['rateia-frete-entrada'] })
       queryClient.invalidateQueries({ queryKey: ['reajusta-preco-entrada'] })
+      queryClient.invalidateQueries({ queryKey: ['consiste-valor-contas-pagar'] })
       setToastTipo('sucesso')
       setToast('Parâmetros salvos.')
     },
@@ -262,6 +264,22 @@ export default function ConfiguracaoGeralForm() {
                 Ligado: ao confirmar a entrada, o custo e o preço de venda do produto são
                 atualizados pelo valor da compra. Desligado: só o movimento de estoque é gravado,
                 o preço do produto não muda.
+              </p>
+            </div>
+            <div className="col-6">
+              <label className="checkbox-linha" style={{ marginTop: 0 }}>
+                <input
+                  type="checkbox"
+                  checked={form.cfgConsisteValorContasPagar}
+                  onChange={(e) => setForm((f) => ({ ...f, cfgConsisteValorContasPagar: e.target.checked }))}
+                />
+                Consistir valor das contas a pagar na entrada
+              </label>
+              <p className="muted" style={{ fontSize: 12, marginTop: 4 }}>
+                Ligado: a soma das duplicatas precisa ser igual ao total dos produtos lançados —
+                uma entrada de R$ 1.500,00 só é confirmada com duplicatas somando R$ 1.500,00.
+                Desligado: a divergência é permitida (adiantamento, parte à vista, nota
+                parcialmente financiada).
               </p>
             </div>
             <div className="col-6">

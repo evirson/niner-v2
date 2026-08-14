@@ -136,6 +136,9 @@ public class EntradaMercadoriaService {
 
         List<ItemEntradaResponse> itensResponse = new ArrayList<>();
         BigDecimal valorTotalNota = BigDecimal.ZERO;
+        // Sem o rateio de frete/IPI/ICMS-ST — é o "total dos produtos" que a tela exibe e a base
+        // da consistência com as duplicatas (ver a checagem depois do laço).
+        BigDecimal valorTotalProdutos = BigDecimal.ZERO;
         for (ItemResolvido item : itens) {
             BigDecimal valorAcrescimo = BigDecimal.ZERO;
             if (rateia && baseRateio.compareTo(BigDecimal.ZERO) > 0) {
@@ -213,6 +216,7 @@ public class EntradaMercadoriaService {
 
             BigDecimal valorTotalItem = item.precoCusto().multiply(item.qtd()).add(valorAcrescimo);
             valorTotalNota = valorTotalNota.add(valorTotalItem);
+            valorTotalProdutos = valorTotalProdutos.add(item.precoCusto().multiply(item.qtd()));
             itensResponse.add(new ItemEntradaResponse(item.idVariacao(), item.sku(), item.descricaoProduto(),
                     item.variacaoCor(), item.variacaoTamanho(), item.qtd(), item.precoCusto(), valorTotalItem));
         }
@@ -223,6 +227,26 @@ public class EntradaMercadoriaService {
                             VALUES (plataforma.tenant_atual(), ?, ?)
                             """)
                     .params(idMovimento, req.xmlBruto()).update();
+        }
+
+        // Consistência entre o total dos produtos e a soma das duplicatas (2026-08-14 na tela;
+        // virou o parâmetro `cfg_consiste_valor_contas_pagar` em 2026-08-23, ligado por padrão).
+        // Defesa em profundidade: a tela já bloqueia Confirmar, mas a API não confiava só no
+        // frontend em nenhuma outra regra desta feature e não deve começar aqui.
+        // A base de comparação é o total dos produtos SEM o rateio de frete/IPI/ICMS-ST — a
+        // mesma que a tela mostra em "Total dos produtos" —, senão uma nota com rateio ligado
+        // seria rejeitada por uma diferença que o operador não tem como enxergar.
+        if (req.contasPagar() != null && !req.contasPagar().isEmpty()
+                && configuracaoGeralService.consisteValorContasPagar()) {
+            BigDecimal somaDuplicatas = req.contasPagar().stream()
+                    .map(ContaPagarEntradaRequest::valor)
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+            if (somaDuplicatas.compareTo(valorTotalProdutos.setScale(2, RoundingMode.HALF_UP)) != 0) {
+                throw new IllegalArgumentException(
+                        "A soma das duplicatas (%s) precisa ser igual ao total dos produtos (%s)."
+                                .formatted(somaDuplicatas.setScale(2, RoundingMode.HALF_UP),
+                                        valorTotalProdutos.setScale(2, RoundingMode.HALF_UP)));
+            }
         }
 
         if (req.contasPagar() != null) {
