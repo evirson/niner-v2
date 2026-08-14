@@ -414,6 +414,15 @@ Aprovado pelo dono do produto na impressão real. `tsc -b` limpo; a tabela de la
 impressão, com o porquê de cada valor, ficou em `docs/telas/papeleta-venda.md` como referência
 para qualquer outro documento térmico do produto.
 
+**Na sequência, o Comprovante de Pagamento de Crediário recebeu a mesma calibragem** — e serviu
+de prova de que a receita é reutilizável: ele tinha exatamente os mesmos três defeitos
+(`width: 80mm` maior que a área imprimível, fonte 9px sem negrito), pelo mesmo motivo — a regra
+original foi escrita no papel, nunca testada numa bobina. `width: 75mm`, Consolas 11,5px em
+negrito e `print-color-adjust: exact`; a pré-visualização na tela passou a usar a mesma família,
+já que existe pra mostrar como sai no papel. **Não precisou mexer no layout**: ele já era 42
+colunas — essa é a diferença para a papeleta, que era 64 e exigiu a reorganização em duas linhas.
+Aprovado na impressão real também.
+
 ### 2026-08-23 (fechamento) — as 4 pendências abertas do dia, resolvidas
 
 **1) Signup passa a aplicar o plano de contas padrão completo.** Era a questão aberta da DRE: um

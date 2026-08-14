@@ -63,11 +63,28 @@ parcela já paga, mas reforça que não há recálculo).
 
 ### Impressão pra bobina física de 80mm (não só a pré-visualização)
 
-`@page { size: 80mm auto; margin: 0; }` (CSS global, único uso de impressão no app hoje) — sem
-isso o navegador tenta encaixar a impressão no tamanho de página padrão do sistema (A4/Carta) em
-vez do rolo contínuo. Fonte de impressão reduzida (9px/~6,75pt) com 3mm de margem lateral: 42
-colunas ocupam ~60mm de conteúdo, com folga real dentro dos 80mm físicos. O PDF usa página
-`[80mm, altura dinâmica]`, margem de 4mm, fonte courier 8pt — mesma folga. **2026-08-11:** a
+`@page { size: 80mm auto; margin: 0; }` (CSS global) — sem isso o navegador tenta encaixar a
+impressão no tamanho de página padrão do sistema (A4/Carta) em vez do rolo contínuo.
+
+**Revisão de 2026-08-24 — calibragem para a bobina real.** A regra original (`width: 80mm`, fonte
+9px, margem lateral de 3mm) foi escrita no papel, não testada na impressora; quando a Papeleta de
+Venda foi impressa de verdade, os três defeitos apareceram e valiam igualmente aqui, porque os
+dois documentos saem na **mesma bobina física**:
+
+| Antes | Agora | Por quê |
+|---|---|---|
+| `width: 80mm` | `75mm` | 80mm é a largura do **papel**, não a **imprimível** (~72–75mm). Prometer mais faz o driver **encolher tudo** pra caber. |
+| `font-size: 9px`, Courier | `11.5px`, **Consolas** | 42 colunas ocupavam só ~60mm dos 80mm — sobrava margem e a letra era menor do que precisava. Com a Consolas (~0,55em) 42 × 0,55 × 11,5px ≈ 70mm dos 73mm úteis. |
+| sem `font-weight` | **`bold`** + `print-color-adjust: exact` | Térmica é 1 bit: haste fina cai em meio-tom e sai "falhada". |
+
+⚠️ O `font-size` está **calibrado para a Consolas**; nas fontes de reserva (0,6em) o mesmo valor
+estoura a largura e corta à direita. A pré-visualização na tela passou a usar a mesma família, já
+que ela existe pra mostrar como vai sair no papel. Tabela completa com o raciocínio e um guia de
+diagnóstico pela foto do cupom: `docs/telas/papeleta-venda.md`.
+
+**Não precisou mexer no layout** — o comprovante já era 42 colunas (diferente da papeleta, que
+era 64 e precisou virar item em 2 linhas). O PDF usa página
+`[80mm, altura dinâmica]`, margem de 4mm, fonte courier 8pt. **2026-08-11:** a
 altura dinâmica agora tem um piso de 80mm — sem ele, um comprovante curto o bastante fazia o jsPDF
 inverter largura/altura (bug achado no Vale-Mercadoria, que costuma ter só 1 item; corrigido nas
 três variantes de `comprovante.ts`, detalhe em `docs/telas/papeleta-venda.md`).
