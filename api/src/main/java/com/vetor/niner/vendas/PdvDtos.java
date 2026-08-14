@@ -36,7 +36,7 @@ public final class PdvDtos {
             BigDecimal estoqueTotal,
             /** URL pública da primeira foto da galeria do produto (indice 0), {@code null} se não tiver foto. */
             String urlImagem,
-            /** Marca/referência do produto (2026-08-15) — usados como filtro de busca na
+            /** Marca/referência do produto (2026-08-12) — usados como filtro de busca na
              *  Entrada de Produtos por Compra, exibidos no resultado para desambiguar. */
             String marca,
             String referencia) {

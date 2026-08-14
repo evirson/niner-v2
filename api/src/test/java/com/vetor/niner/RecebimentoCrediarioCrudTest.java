@@ -700,6 +700,62 @@ class RecebimentoCrediarioCrudTest {
 
     // --- Estorno de recebimento (2026-07-29) ------------------------------------------------
 
+    /**
+     * Caixa fechado barra o estorno (2026-08-14). Antes, o DELETE em {@code caixa_detalhe} era
+     * incondicional: estornar um recebimento de um dia já fechado apagava a linha em silêncio e a
+     * conferência gravada em {@code caixa_fechamento_conferencia} passava a afirmar um total que
+     * não existia mais. A saída é reabrir o caixa (ADMIN) e refazer o estorno.
+     */
+    @Test
+    void estornarLoteComCaixaFechadoEhRecusadoEDeixaTudoComoEstava() throws Exception {
+        String token = assinarNovoTenant("estorno-caixa-fechado");
+        long idTenant = extrairIdTenant(token);
+        long idCliente = criarCliente(token, "Cliente Estorno Caixa Fechado");
+        long idCarteiraCrediario = criarTipoCarteira(token, "CREDIARIO CX FECHADO", "CREDIARIO", false);
+        long idCarteiraDinheiro = criarTipoCarteira(token, "DINHEIRO CX FECHADO", "AVISTA", true);
+        definirConfigCrediario(token, 0, "0", 0, "0");
+        abrirCaixaDinheiro(token);
+
+        long idConta;
+        try (Connection c = abrirConexao(idTenant)) {
+            long idEmpresa = buscarIdEmpresa(c);
+            long idVenda = criarVenda(c, idTenant, idEmpresa, idCliente);
+            idConta = criarParcela(c, idTenant, idVenda, idCarteiraCrediario, 1, 0, "150.00", false);
+        }
+
+        String resp = mvc.perform(post("/api/v1/recebimento-crediario").header("Authorization", "Bearer " + token)
+                        .contentType(APPLICATION_JSON)
+                        .content("""
+                                {"idCliente":%d,"idsContaReceber":[%d],"pagamentos":[{"idCarteira":%d,"valorPago":150.00}]}
+                                """.formatted(idCliente, idConta, idCarteiraDinheiro)))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        long idLote = ((Number) JsonPath.read(resp, "$.idLoteRecebimento")).longValue();
+
+        // Fecha o caixa direto no banco — o que importa aqui é o estado, não o fluxo de contagem.
+        try (Connection c = abrirConexao(idTenant);
+             Statement st = c.createStatement()) {
+            st.executeUpdate("UPDATE caixa_mestre SET caixa_fechado = true, data_fechamento = now()");
+        }
+
+        mvc.perform(post("/api/v1/recebimento-crediario/estornos/" + idLote)
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isConflict());
+
+        // Nada pode ter sido desfeito pela metade: a parcela continua recebida e o lote existe.
+        try (Connection c = abrirConexao(idTenant)) {
+            assertTrue(parcelaFoiRecebida(c, idConta));
+            try (PreparedStatement ps = c.prepareStatement(
+                    "SELECT count(*) FROM contas_receber_lote WHERE id_lote_recebimento = ?")) {
+                ps.setLong(1, idLote);
+                try (ResultSet rs = ps.executeQuery()) {
+                    rs.next();
+                    assertEquals(1, rs.getInt(1));
+                }
+            }
+        }
+    }
+
     @Test
     void listarLotesSemNomeClienteEhRejeitado() throws Exception {
         String token = assinarNovoTenant("estorno-sem-nome");

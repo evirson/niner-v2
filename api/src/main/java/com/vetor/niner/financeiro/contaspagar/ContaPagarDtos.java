@@ -16,7 +16,7 @@ public final class ContaPagarDtos {
     }
 
     /**
-     * De onde saiu o dinheiro ao dar baixa (2026-08-23, Fluxo de Caixa). Obrigatório quando
+     * De onde saiu o dinheiro ao dar baixa (2026-08-14, Fluxo de Caixa). Obrigatório quando
      * {@code dataPagamento} é informada — é o que faz o pagamento virar movimento de dinheiro de
      * verdade, e sem isso o fluxo de caixa realizado ficaria sem as saídas.
      */
@@ -32,7 +32,7 @@ public final class ContaPagarDtos {
      * campos — não existe endpoint separado de "dar baixa" (a tela só pediu Visualizar/Editar/
      * Excluir); editar uma conta preenchendo esses três campos É a baixa.
      *
-     * <p>Desde 2026-08-23 a baixa também exige {@code origemPagamento} (+ {@code idContaCorrente}
+     * <p>Desde 2026-08-14 a baixa também exige {@code origemPagamento} (+ {@code idContaCorrente}
      * quando for CONTA_CORRENTE) — ver {@code docs/telas/fluxo-caixa.md}.
      */
     public record ContaPagarRequest(

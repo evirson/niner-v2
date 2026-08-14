@@ -29,7 +29,7 @@ public class NcmController {
         return service.buscar(codigo);
     }
 
-    /** Pesquisa por nome (2026-08-13) — {@code /api/v1/ncm?busca=...}, separado de
+    /** Pesquisa por nome (2026-08-11) — {@code /api/v1/ncm?busca=...}, separado de
      *  {@code /{codigo}} (paths distintos, sem ambiguidade de mapeamento). */
     @GetMapping
     public List<NcmResponse> buscarPorNome(@RequestParam(required = false) String busca) {

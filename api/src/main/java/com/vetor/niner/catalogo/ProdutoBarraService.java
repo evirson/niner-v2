@@ -37,7 +37,7 @@ import static org.springframework.http.HttpStatus.NOT_FOUND;
  * produto — se o produto tem grade REAL (id_grade &lt;&gt; 1), cor e tamanho são **ambos**
  * obrigatórios na variação (decisão do dono do produto), e o tamanho escolhido precisa pertencer
  * à grade do produto (não é qualquer tamanho do tenant). Sem grade real (id_grade = 1, a grade
- * PADRÃO — 2026-08-20, ver {@code SignupService}), cor/tamanho são forçados a 1 (cor/tamanho
+ * PADRÃO — 2026-08-13, ver {@code SignupService}), cor/tamanho são forçados a 1 (cor/tamanho
  * PADRÃO) em vez de {@code null} — mesmo princípio de "campo oculto ⇒ servidor ignora, não
  * rejeita" usado no resto do sistema, mas armazenando o sentinela reservado em vez de NULL (nunca
  * exibido: {@link #mapear} traduz 1 de volta para {@code null} na resposta da API). A cor em
@@ -68,7 +68,7 @@ public class ProdutoBarraService {
 
     /**
      * {@code validarGrade=false}: usado só pela Rotina de Importação de Dados (Estoque,
-     * 2026-08-11) — planilha migrada de outro sistema pode trazer um {@code NOME_TAMANHO} que
+     * 2026-08-10) — planilha migrada de outro sistema pode trazer um {@code NOME_TAMANHO} que
      * não está na sequência da grade do produto (ex. "UN1" numa grade que só tem "UN") sem que
      * isso seja, de fato, um erro; o dono do produto pediu que o tamanho seja aceito e a
      * variação criada mesmo assim. Emissão de Etiqueta (cadastro manual, ação deliberada de
@@ -93,7 +93,7 @@ public class ProdutoBarraService {
         // Long.valueOf(1), não `1L`: `cond ? 1L : idCorPedido` promove o ternário pro tipo
         // primitivo `long` (um dos operandos é primitivo), o que faz o Java tentar unboxar
         // idCorPedido MESMO quando ele é null e essa é a metade certa a escolher — NPE real
-        // pego só testando com produto de grade real e cor/tamanho ausentes (2026-08-20).
+        // pego só testando com produto de grade real e cor/tamanho ausentes (2026-08-13).
         Long idCor = idGrade == 1 ? Long.valueOf(1) : idCorPedido;
         Long idTamanho = idGrade == 1 ? Long.valueOf(1) : idTamanhoPedido;
         validarObrigatoriedade(idProduto, idGrade, idCor, idTamanho, validarGrade);
@@ -101,7 +101,7 @@ public class ProdutoBarraService {
                 .orElseGet(() -> criar(idProduto, idCor, idTamanho, ean));
     }
 
-    /** {@code id_grade} de {@code produto} — {@code NOT NULL} desde 2026-08-20 (V017); 1 é a
+    /** {@code id_grade} de {@code produto} — {@code NOT NULL} desde 2026-08-13 (V017); 1 é a
      *  grade PADRÃO (sem variação de verdade), qualquer outro valor é grade real. */
     private record LinhaProduto(long idGrade) {
     }
@@ -150,7 +150,7 @@ public class ProdutoBarraService {
     }
 
     /** Resumo leve de uma variação (id_variacao, cor, tamanho, sku, ean) — usado só pelo
-     *  pré-fetch em lote da Rotina de Importação de Dados (Estoque, 2026-08-11), pra evitar 1
+     *  pré-fetch em lote da Rotina de Importação de Dados (Estoque, 2026-08-10), pra evitar 1
      *  SELECT por combinação produto/cor/tamanho num arquivo com milhares de linhas (achado
      *  real: planilha de 22 mil linhas levando quase 8 minutos, dominado por ida-e-volta ao
      *  banco por linha, não por nenhuma consulta lenta em si). */
@@ -159,7 +159,7 @@ public class ProdutoBarraService {
 
     /** Busca em lote o {@code id_grade} de vários produtos de uma vez — evita 1 SELECT por
      *  grupo quando o mesmo produto se repete em várias combinações cor/tamanho (o caso normal
-     *  numa planilha de estoque). 1 (grade PADRÃO, 2026-08-20) volta como {@code null} — o
+     *  numa planilha de estoque). 1 (grade PADRÃO, 2026-08-13) volta como {@code null} — o
      *  contrato público desta classe continua sendo "null = produto sem grade de verdade". */
     public Map<Long, Long> buscarGradesEmLote(Collection<Long> idsProduto) {
         if (idsProduto.isEmpty()) {
@@ -184,7 +184,7 @@ public class ProdutoBarraService {
      *  por combinação produto/cor/tamanho, o que domina o tempo de uma importação de estoque
      *  grande. Chave do mapa: mesma convenção {@code idProduto+"|"+idCor+"|"+idTamanho} (vazio
      *  no lugar de {@code null}) já usada em {@code EstoqueImportador}. Cor/tamanho PADRÃO
-     *  (id=1, 2026-08-20) voltam como {@code null}, tanto na chave quanto em {@link VariacaoResumo}
+     *  (id=1, 2026-08-13) voltam como {@code null}, tanto na chave quanto em {@link VariacaoResumo}
      *  — contrato público inalterado. */
     public Map<String, VariacaoResumo> buscarVariacoesEmLote(Collection<Long> idsProduto) {
         if (idsProduto.isEmpty()) {
@@ -212,7 +212,7 @@ public class ProdutoBarraService {
     }
 
     /**
-     * Cria uma variação pra importação em massa (2026-08-11) — recebe {@code idGrade} já
+     * Cria uma variação pra importação em massa (2026-08-10) — recebe {@code idGrade} já
      * resolvido (quem chama fez um pré-fetch em lote via {@link #buscarGradesEmLote}) em vez de
      * buscar de novo, e não faz o SELECT de volta com os dados completos de produto/cor/tamanho
      * ({@link #criar} devolve isso pra uso interativo — a importação em massa não precisa). Só
@@ -271,7 +271,7 @@ public class ProdutoBarraService {
                 .single();
     }
 
-    // JOINs excluem id=1 (cor/tamanho PADRÃO, 2026-08-20) — vira NULL na resposta (LEFT JOIN sem
+    // JOINs excluem id=1 (cor/tamanho PADRÃO, 2026-08-13) — vira NULL na resposta (LEFT JOIN sem
     // match), nunca "" / "UN" vazando pro usuário.
     private static final String SELECT_BASE = """
             SELECT pb.id_variacao, pb.sku, pb.ean, p.descricao, p.marca, p.referencia, p.preco_venda,

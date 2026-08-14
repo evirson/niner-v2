@@ -24,7 +24,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * Cancelamento de Entrada (2026-08-19, `POST /api/v1/estoque/entradas/{id}/cancelar`) — mesmo
+ * Cancelamento de Entrada (2026-08-12, `POST /api/v1/estoque/entradas/{id}/cancelar`) — mesmo
  * padrão de {@code CancelamentoVendaService}/{@code CancelamentoDevolucaoService}: ADMIN-only,
  * o {@code produto_movimento_mestre} original nunca é apagado (P3), o estorno de estoque é um
  * novo movimento (tipo CANCELAMENTO), e as duplicatas em {@code contas_pagar} são apagadas.
@@ -310,7 +310,7 @@ class CancelamentoEntradaCrudTest {
 
     /** Cancelar uma entrada importada por XML libera a `chave_nfe` pra reimportar a MESMA nota
      *  corrigida — sem isso, o índice único (`WHERE chave_nfe IS NOT NULL AND cancelado = false`,
-     *  2026-08-19) bloquearia pra sempre, mesmo depois de cancelada. */
+     *  2026-08-12) bloquearia pra sempre, mesmo depois de cancelada. */
     @Test
     void cancelamentoDeEntradaXmlLiberaChaveNfeParaReimportar() throws Exception {
         TenantENota tenant = prepararTenantComProduto("libera-chave");

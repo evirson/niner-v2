@@ -1,5 +1,5 @@
 # Spec: Contas a Pagar / Pagas             Status: Aprovada
-Autor: Claudio Calixto (dono do produto) · Data: 2026-08-19 · Módulo(s): `financeiro` (contaspagar) · Fase: 2 — Crediário/Caixa (Q5/ADR-010)
+Autor: Claudio Calixto (dono do produto) · Data: 2026-08-12 · Módulo(s): `financeiro` (contaspagar) · Fase: 2 — Crediário/Caixa (Q5/ADR-010)
 
 ## Problema
 
@@ -50,17 +50,40 @@ um `DELETE` definitivo, mesmo em linhas com `idMovimento` preenchido (geradas po
 se a entrada de origem for cancelada depois, o `DELETE ... WHERE id_movimento = ?` do
 Cancelamento de Entrada simplesmente não encontra mais nada para apagar.
 
-> ⚠️ **Bug conhecido, em aberto — excluir conta já baixada deixa dinheiro fantasma.**
-> `ContaPagarService.excluir()` (`api/src/main/java/com/vetor/niner/financeiro/contaspagar/ContaPagarService.java:308-316`)
-> apaga **só** a linha de `contas_pagar`. O DELETE dos movimentos de dinheiro
-> (`caixa_detalhe` / `conta_corrente_movimento` por `id_conta_pagar`) existe **apenas** dentro de
-> `sincronizarMovimentoDeDinheiro` (`:157-160`), que é chamado no POST e no PUT — nunca no DELETE.
-> E como `id_conta_pagar` nessas duas tabelas foi criado **sem FK de propósito**
+> ✅ **Bug corrigido em 2026-08-14 — excluir conta já baixada não deixa mais dinheiro fantasma.**
+> Até esta data, `ContaPagarService.excluir()` apagava **só** a linha de `contas_pagar`: o DELETE
+> dos movimentos de dinheiro (`caixa_detalhe` / `conta_corrente_movimento` por `id_conta_pagar`)
+> existia **apenas** dentro de `sincronizarMovimentoDeDinheiro`, chamado no POST e no PUT — nunca
+> no DELETE. E como `id_conta_pagar` nessas duas tabelas foi criado **sem FK de propósito**
 > (`db/migration/V025__financeiro_caixa_crediario.sql:162`, `V028__financeiro_conta_corrente.sql:90`),
-> o banco também não cascateia nada. Resultado: excluir uma conta **já baixada** deixa a saída de
-> caixa/banco lançada para sempre, órfã e sem como rastrear a origem — o fechamento de caixa e o
-> fluxo de caixa continuam contando esse débito. Correção pendente: chamar o mesmo DELETE por
-> `id_conta_pagar` dentro de `excluir()`.
+> o banco também não cascateava nada: excluir uma conta **já baixada** deixava a saída de
+> caixa/banco lançada para sempre, órfã, sem nenhuma conta que a justificasse — e o fechamento de
+> caixa e o fluxo de caixa continuavam contando esse débito.
+> Agora `excluir()` apaga os dois movimentos **antes** de apagar a conta, com o mesmo par de
+> DELETEs de `sincronizarMovimentoDeDinheiro`
+> (`api/src/main/java/com/vetor/niner/financeiro/contaspagar/ContaPagarService.java:326-341`).
+> A assinatura virou `excluir(Jwt jwt, long idContaPagar)` — o controller passa o JWT, porque a
+> exclusão agora também consulta o caixa (ver abaixo).
+> A **reabertura** da conta (tirar a Data de Pagamento na edição) já desfazia o movimento
+> corretamente via `sincronizarMovimentoNaEdicao`; o que mudou é que os dois caminhos passam pelo
+> mesmo guard de caixa fechado.
+
+### Caixa fechado bloqueia desfazer o dinheiro (2026-08-14)
+
+Apagar um `caixa_detalhe` de um caixa **já fechado** faria a conferência gravada em
+`caixa_fechamento_conferencia` afirmar um total que não existe mais. Por isso, tanto
+`excluir()` (`ContaPagarService.java:326-328`) quanto `sincronizarMovimentoDeDinheiro()`
+(`:157-160` — que cobre a baixa, a troca de origem e a reabertura da conta) chamam antes
+`CaixaService.exigirCaixaAbertoParaDesfazer(VinculoCaixa.CONTA_PAGAR, idContaPagar)`.
+
+Se o caixa vinculado estiver fechado, a operação responde **409** sem escrever nada:
+
+> Esta operação mexe no caixa nº X, que já está fechado. Reabra o caixa em Frente de Loja › Caixa ›
+> Fechamento de Caixa (só o ADMIN pode reabrir) e refaça a operação.
+
+O caminho indicado existe desde a mesma data — ver `docs/telas/fechamento-caixa.md`, seção
+"Reabertura de caixa". Baixa paga por **conta corrente** não passa por caixa nenhum, então nunca
+esbarra nesse bloqueio.
 
 ### Popup de filtros obrigatório
 
@@ -75,7 +98,7 @@ direto para o cadastro.
 A sessão do Postgres roda em UTC, mas a tela mostra datas em horário local do navegador —
 `dataVencimentoInicial/Final` e `dataPagamentoInicial/Final` comparam com
 `(coluna AT TIME ZONE 'America/Sao_Paulo')::date`, não a coluna crua (mesmo padrão adotado em
-Entrada de Produtos e Filtros de Entrada, 2026-08-19). Gravação de data usa meio-dia UTC
+Entrada de Produtos e Filtros de Entrada, 2026-08-12). Gravação de data usa meio-dia UTC
 (`T12:00:00Z`), não meia-noite, para não sofrer o mesmo efeito de fuso ao exibir de volta.
 
 ## Tela
@@ -90,13 +113,13 @@ Entrada de Produtos e Filtros de Entrada, 2026-08-19). Gravação de data usa me
   mostrando fornecedor/vencimento/valor antes de confirmar).
 - **Formulário**: Fornecedor (typeahead + "Trocar", mesmo padrão da Entrada de Produtos),
   Empresa (select), Plano de Contas (`SeletorPlanoContas` — busca por código ou por nome,
-  2026-08-22; antes era um `<select>` com `tamanho: 500` só pra evitar o bug de dropdown
+  2026-08-13; antes era um `<select>` com `tamanho: 500` só pra evitar o bug de dropdown
   truncado — ver `docs/telas/plano-contas.md`), Nº Nota Fiscal, Duplicata, Data de
   Lançamento/Vencimento (obrigatórias, mascaradas `dd/mm/aaaa`), Valor a Pagar (obrigatório,
   máscara de moeda), seção "Pagamento" (Data de Pagamento, Valor Pago, "Documento Pago" — com o
   aviso de que não existe tela de baixa separada), Observações, `InfoRegistro` (auditoria).
 
-## A baixa gera movimento de dinheiro (2026-08-23)
+## A baixa gera movimento de dinheiro (2026-08-14)
 
 Mudança que veio do Fluxo de Caixa (`docs/telas/fluxo-caixa.md`, Parte 1) e que altera o
 comportamento **desta** tela:
@@ -149,6 +172,13 @@ de produto do resto do módulo Financeiro — Conta Corrente/Movimentação).
   estava paga antes desta mudança (`baixaNovaSemOrigemEhRejeitada`).
 - Dado uma conta existente, quando exclui, então apaga de verdade, mesmo se tiver
   `idMovimento` preenchido.
+- Dado uma conta **já baixada em dinheiro**, quando exclui, então o `caixa_detalhe` gerado pela
+  baixa é apagado junto — não sobra movimento órfão
+  (`excluirContaPagarBaixadaApagaOMovimentoDeCaixaJunto`, 2026-08-14).
+- Dado uma conta baixada num caixa **já fechado**, quando tenta excluir, então 409 e nada é
+  apagado (`excluirContaPagarComCaixaFechadoEhRecusado`, 2026-08-14).
+- Dado uma conta baixada num caixa **já fechado**, quando tenta reabri-la (limpar a Data de
+  Pagamento na edição), então 409 (`reabrirContaPagarComCaixaFechadoEhRecusado`, 2026-08-14).
 - Dado filtro por fornecedor e por empresa, então filtra corretamente.
 - Dado filtro por nota fiscal e por duplicata (busca parcial), então filtra corretamente.
 - Dado filtro por intervalo de vencimento, então só traz contas com vencimento dentro do
@@ -156,13 +186,15 @@ de produto do resto do módulo Financeiro — Conta Corrente/Movimentação).
 - Dado filtro por intervalo de pagamento, então só traz contas pagas dentro do intervalo.
 - Dado uma conta de outro tenant, então não aparece na listagem nem pode ser buscada (RLS).
 
-Cobertos por `ContaPagarCrudTest` (14 testes) — suíte completa do projeto em **492/492 verdes
-(2026-08-24)**.
+Cobertos por `ContaPagarCrudTest` (17 testes — 3 deles acrescentados em 2026-08-14 com a correção
+do movimento órfão e o guard de caixa fechado) — suíte completa do projeto em **500/500 verdes
+(2026-08-14)**.
 
 ## Ajuda da tela (manual de operação + vídeo) — obrigatório (R22 / §3.7.1)
 
 - **`chave_tela`: `financeiro.contaspagar.lista`** e **`financeiro.contaspagar.form`** — ver
-  `web/src/components/AjudaDaTela.tsx`. `url_video`: `NULL` por ora.
+  `web/src/components/AjudaDaTela.tsx`. `url_video`: `NULL` por ora. Em 2026-08-14 os erros comuns
+  ganharam a mensagem de caixa fechado, com o caminho da reabertura (`AjudaDaTela.tsx:460`).
 
 ## Impacto no banco
 

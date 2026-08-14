@@ -26,7 +26,7 @@ import java.util.Map;
  * Relatório de DRE gerencial (docs/telas/relatorio-dre.md) — dois regimes sobre a mesma estrutura
  * de linhas, montada a partir de {@code cfg_plano_contas.grupo_dre}/{@code sinal}.
  *
- * <p><b>Relatório híbrido, por decisão de produto (2026-08-23):</b> cinco linhas essenciais não
+ * <p><b>Relatório híbrido, por decisão de produto (2026-08-14):</b> cinco linhas essenciais não
  * têm lançamento contábil no sistema (CMV, taxas de cartão, comissões, descontos e devoluções) —
  * elas são <b>derivadas do movimento real</b> aqui, na consulta, e o resto vem somado dos
  * lançamentos. A alternativa (gerar lançamento a cada venda) mexeria no PDV/cancelamento/devolução
@@ -41,7 +41,7 @@ import java.util.Map;
  * (RECEITA_BRUTA/RESULTADO_FINANCEIRO), que o Contas a Pagar não consegue produzir. Sem essa
  * separação, um pagamento baixado em Contas a Pagar e também lançado na Movimentação de Conta
  * Corrente sairia duas vezes — as tabelas são independentes, dar baixa não gera movimento de
- * caixa (verificado no código em 2026-08-23).
+ * caixa (verificado no código em 2026-08-14).
  */
 @Service
 public class DreService {
@@ -74,7 +74,7 @@ public class DreService {
      * completo de 76 contas é um seed à parte (`db/scripts/seed_plano_contas_padrao.sql`) que nem
      * todo tenant aplicou. Se a receita/CMV dependessem de `1.01.001`/`3.01.001` existirem em
      * `cfg_plano_contas`, a DRE de um tenant novo viria zerada mesmo com vendas — foi exatamente
-     * o que aconteceu no primeiro teste (2026-08-23). O código da conta segue sendo usado como
+     * o que aconteceu no primeiro teste (2026-08-14). O código da conta segue sendo usado como
      * chave de exibição, e a descrição cadastrada pelo lojista prevalece quando a conta existe.
      */
     private record Derivada(String grupo, String idPlanoContas, String descricao, BigDecimal valor) {
@@ -105,7 +105,7 @@ public class DreService {
         return montarResposta(regimeEfetivo, new PeriodoDre(dataInicial, dataFinal), periodoComparado, atual, comparado);
     }
 
-    /** ADMIN-only (decisão de 2026-08-23): a DRE expõe lucro, despesa e pró-labore. Mesmo
+    /** ADMIN-only (decisão de 2026-08-14): a DRE expõe lucro, despesa e pró-labore. Mesmo
      *  mecanismo de {@code ConfiguracaoTelaService.exigirAdmin} — claim `roles` do JWT. */
     private static void exigirAdmin(Jwt jwt) {
         if (!ehAdmin(jwt)) {

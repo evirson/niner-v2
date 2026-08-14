@@ -55,7 +55,7 @@ function formatarData(iso: string | null): string {
 /**
  * Contas a Pagar / Pagas (docs/telas/contas-pagar.md) — mesmo padrão de popup de filtros
  * obrigatório ao entrar na tela do fluxo de filtros de Entrada de Produtos por Compra
- * (2026-08-19): "Localizar" aplica os filtros (todos opcionais — em branco lista tudo) e
+ * (2026-08-12): "Localizar" aplica os filtros (todos opcionais — em branco lista tudo) e
  * "＋ Nova Conta a Pagar" pula a busca direto pra criação. Grid/ações no padrão de
  * `ContaCorrenteMovimentoLista` (PK surrogate, editável, sem `ativo` — exclusão é sempre
  * definitiva).

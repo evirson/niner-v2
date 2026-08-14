@@ -2,7 +2,7 @@ import { api } from './api'
 import { dataParaIso, desmascararMoeda, formatarMoeda, isoParaData } from './masks'
 import { maiusculas } from './texto'
 
-/** De onde saiu o dinheiro ao dar baixa (2026-08-23) — obrigatório quando há data de pagamento;
+/** De onde saiu o dinheiro ao dar baixa (2026-08-14) — obrigatório quando há data de pagamento;
  *  é o que gera o movimento de caixa/conta corrente que alimenta o Fluxo de Caixa. */
 export type OrigemPagamento = 'CAIXA' | 'CONTA_CORRENTE'
 
@@ -22,7 +22,7 @@ export interface ContaPagar {
   valorPagar: number
   valorPago: number
   documentoPago: boolean
-  /** De onde saiu o dinheiro na baixa (2026-08-23) — derivado do movimento gerado; 
+  /** De onde saiu o dinheiro na baixa (2026-08-14) — derivado do movimento gerado; 
 ull para
    *  conta ainda não paga, ou paga antes dessa regra existir. */
   origemPagamento: OrigemPagamento | null
@@ -94,7 +94,7 @@ export function paraFormulario(c: ContaPagar): ContaPagarFormState {
 
 /** Datas viram meio-dia UTC (não meia-noite) antes de ir pro servidor — evita o fuso virar o
  *  dia ao converter de volta pra exibição (mesmo princípio já usado em
- *  `contaCorrenteMovimento.ts` e corrigido em `EntradaMercadoriaService`, 2026-08-19). Campos já
+ *  `contaCorrenteMovimento.ts` e corrigido em `EntradaMercadoriaService`, 2026-08-12). Campos já
  *  validados (dd/mm/aaaa) antes de chamar esta função. */
 export function paraRequisicao(f: ContaPagarFormState) {
   return {

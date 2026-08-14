@@ -203,7 +203,7 @@ class EntradaMercadoriaCrudTest {
     }
 
     /**
-     * `cfg_consiste_valor_contas_pagar` ligado (2026-08-23, o padrão): a soma das duplicatas
+     * `cfg_consiste_valor_contas_pagar` ligado (2026-08-14, o padrão): a soma das duplicatas
      * precisa ser igual ao total dos produtos. A tela já bloqueia, mas a regra é reaplicada no
      * servidor — a API não confia só no frontend.
      */
@@ -414,7 +414,7 @@ class EntradaMercadoriaCrudTest {
                 .andExpect(status().isNotFound());
     }
 
-    /** Filtros da grid principal (2026-08-19, popup obrigatório "Fornecedor, Empresa, Nota
+    /** Filtros da grid principal (2026-08-12, popup obrigatório "Fornecedor, Empresa, Nota
      *  Fiscal, Data Início/Fim") — idFornecedor/notaFiscal já eram cobertos; idEmpresa e o
      *  período (dataInicial/dataFinal) são novos. */
     @Test

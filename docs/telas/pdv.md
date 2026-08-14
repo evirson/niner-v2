@@ -331,7 +331,7 @@ cartões.
 GET  /api/v1/pdv/produtos?busca=&marca=&referencia=
                                                busca por descrição (ILIKE, até 20 resultados);
                                                `marca`/`referencia` são filtros adicionais
-                                               (2026-08-15, usados pela Entrada de Produtos)
+                                               (2026-08-12, usados pela Entrada de Produtos)
 GET  /api/v1/pdv/produtos/codigo/{codigo}      leitura por sku OU ean — 404 amigável
 GET  /api/v1/pdv/clientes?busca=              busca por nome/CPF-CNPJ/celular (novo, 2026-07-28)
 POST /api/v1/pdv/vendas                        efetiva a venda (itens + forma de pagamento + cliente/vendedor)
@@ -363,7 +363,7 @@ Ambos os `GET` devolvem o mesmo formato de item (uma variação):
 ```
 
 `urlImagem` é a URL pública da **primeira foto da galeria** do produto (índice 0), `null` quando
-não há foto — ver `docs/infra/armazenamento-imagens.md`. `marca`/`referencia` (2026-08-15) vêm do
+não há foto — ver `docs/infra/armazenamento-imagens.md`. `marca`/`referencia` (2026-08-12) vêm do
 produto e servem tanto de filtro de busca quanto de desambiguação visual no resultado.
 
 `GET /api/v1/config-geral/desconto-venda` (aberto a qualquer papel — diferente do resto de

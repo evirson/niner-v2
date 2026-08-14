@@ -1,6 +1,6 @@
 # Spec: Rotina de Importação de Dados                  Status: Implementada
-Autor: Claudio Calixto (dono do produto) + Claude · Data: 2026-08-06, reformulada 2026-08-09,
-reformulada de novo 2026-08-10, correções e melhorias 2026-08-11 · Módulo(s): `configuracao`
+Autor: Claudio Calixto (dono do produto) + Claude · Data: 2026-08-06, reformulada 2026-08-10,
+reformulada de novo 2026-08-10, correções e melhorias 2026-08-10 · Módulo(s): `configuracao`
 (importacao) · Fase: 1 — Núcleo do ERP
 
 ## Problema
@@ -26,9 +26,9 @@ crediário).
 > sua própria tabela. A ordem dos botões **é a própria ordem de dependência**: Contas a Receber
 > precisa de Cliente já importado, Estoque Inicial precisa de Produto já importado, e ambas vêm
 > depois na lista. Como cada tabela agora é confirmada na sua própria tela (não faz mais parte de um
-> lote), **a lógica de "pendência"/"conferido na importação" da versão de 2026-08-09 deixou de
+> lote), **a lógica de "pendência"/"conferido na importação" da versão de 2026-08-10 deixou de
 > existir** — validar Estoque Inicial sem ter importado Produtos antes mostra o erro real na hora
-> ("Nenhum produto importado com CODIGO_PRODUTO..."), sem fingir "pendente". A versão de 2026-08-09
+> ("Nenhum produto importado com CODIGO_PRODUTO..."), sem fingir "pendente". A versão de 2026-08-10
 > (tela única com detecção automática) está preservada abaixo só como contexto histórico onde citada.
 
 Desenhada pra crescer: cada tabela é um módulo de importação independente no backend (mesma
@@ -90,7 +90,7 @@ tenha sido persistido.
 **"Tudo ou nada" — `confirmado` pode vir `false` mesmo com `confirmar=true`:** um arquivo com
 QUALQUER linha com erro real não grava NADA, mesmo pedindo `confirmar=true` — `concluir()`
 (`ImportacaoDtos`) só marca `confirmado=true` quando `confirmar=true` **e** a lista de erros está
-vazia. **Achado real de bug (2026-08-09, ainda válido na versão de 2026-08-10):** a tela precisa
+vazia. **Achado real de bug (2026-08-10, ainda válido na versão atual):** a tela precisa
 checar `relatorio.confirmado` explicitamente antes de considerar a importação bem-sucedida — só
 checar "a chamada não lançou exceção" não basta, porque uma chamada com `confirmar=true` e linhas
 com erro retorna `200 OK` normalmente, só que com `confirmado: false` e nada persistido. A 1ª versão
@@ -100,9 +100,9 @@ referenciando produtos inexistentes) — corrigido então em `importarTudo()`, e
 `importar()` de `ImportacaoTabelaPage.tsx` (2026-08-10): se `!relatorio.confirmado`, marca a tela
 como `'falha'` e mostra os erros reais, sem considerar nada importado.
 
-### Histórico (versão 2026-08-09, superada) — detecção automática pra escolher a tabela, e dependência na mesma leva
+### Histórico (versão 2026-08-10, superada) — detecção automática pra escolher a tabela, e dependência na mesma leva
 
-A versão de tela única (2026-08-09 a 2026-08-10) tinha `POST /api/v1/importacao/detectar`
+A versão de tela única (2026-08-10, substituída no mesmo dia) tinha `POST /api/v1/importacao/detectar`
 (similaridade de Jaccard entre o cabeçalho do arquivo e `ImportadorDeTabela.colunasEsperadas()`) para
 identificar o tipo de cada arquivo sem o usuário escolher manualmente, e uma lógica de "pendência"
 para não mostrar erro quando `estoque`/`contas_receber` eram validados antes de `produto`/`cliente`
@@ -117,7 +117,7 @@ planilha de Fornecedores na tela de Importar Clientes — só na hora de "Valida
 sentido (`RAZAO_SOCIAL` interpretado como se fosse `NOME`, etc.), tarde demais pra o usuário entender
 o que houve. Agora, assim que um arquivo é escolhido (`onSelecionarArquivo`,
 `ImportacaoTabelaPage.tsx`), a tela chama `POST /api/v1/importacao/detectar` — o mesmo endpoint e a
-mesma detecção por Jaccard de 2026-08-09 — e compara o `tabela` detectado com a tabela **da própria
+mesma detecção por Jaccard de 2026-08-10 — e compara o `tabela` detectado com a tabela **da própria
 tela** (não mais pra preencher um seletor, é uma checagem binária: bate ou não bate). Não bate →
 mensagem clara ("Essa planilha parece ser de \"X\", não de \"Y\". Escolha o arquivo correto." ou,
 se a detecção não teve confiança suficiente, um aviso genérico pra conferir as colunas), o arquivo
@@ -126,7 +126,7 @@ Validar continua desabilitado) — barra ali mesmo, antes de qualquer chamada de
 linha. Bate → segue o fluxo normal. `GET /tabelas` segue existindo no backend sem chamador (só
 `/detectar` voltou a ser usado).
 
-### SAVEPOINT por linha — sem isso, uma linha ruim quebrava as seguintes em cascata (2026-08-11)
+### SAVEPOINT por linha — sem isso, uma linha ruim quebrava as seguintes em cascata (2026-08-10)
 
 **Bug real de produção, achado validando uma planilha de Produtos:** a tela mostrava "current
 transaction is aborted, commands ignored until end of transaction block" (Postgres `25P02`).
@@ -147,7 +147,7 @@ reafetado no meio do arquivo). Testado ao vivo: arquivo com 4 linhas, a 2ª prop
 estourando o banco → só ela rejeitada, as outras 3 importadas normalmente (antes do fix, as 2
 seguintes também quebrariam com o erro genérico de transação abortada).
 
-### Cache local contra consulta redundante por linha (N+1) — 2026-08-11
+### Cache local contra consulta redundante por linha (N+1) — 2026-08-10
 
 **Segunda causa real do "travado" em arquivo grande** (a primeira foi a leitura em DOM, ver
 "Formato do arquivo" abaixo): `ContasReceberImportador` busca o cliente pelo CPF **numa consulta
@@ -177,7 +177,7 @@ agrupar os `INSERT`s em lote por venda (JDBC batch), mas isso muda a granularida
 erro (uma parcela ruim passaria a invalidar as outras do mesmo grupo) — decisão de produto, em
 aberto, não feita sem perguntar.
 
-### 2ª rodada de otimização — pré-busca em lote na gravação do Estoque (2026-08-11, mesmo dia)
+### 2ª rodada de otimização — pré-busca em lote na gravação do Estoque (2026-08-10, mesmo dia)
 
 O fix acima cobriu a 1ª fase (leitura/resolução) do `EstoqueImportador`, mas a 2ª fase (criar a
 variação/código de barras por grupo produto+cor+tamanho) ainda fazia até 4 consultas **por grupo**
@@ -216,7 +216,7 @@ contra 59,7s no mesmo arquivo. Não investigado a fundo ainda (suspeita: custo d
 numa transação desse tamanho, não um problema de corretude — a contagem final bateu certinho); se
 isso incomodar na prática, vale investigar depois.
 
-### Progresso "ao vivo" (registro atual/total) nas 3 etapas — leitura, validação, importação (2026-08-11)
+### Progresso "ao vivo" (registro atual/total) nas 3 etapas — leitura, validação, importação (2026-08-10)
 
 Pedido do dono do produto: as gauges de leitura/validação/importação mostrarem também o total de
 registros e o registro atual, não só um anel girando sem número.
@@ -259,7 +259,7 @@ via Apache POI (`org.apache.poi:poi-ooxml`, que também cobre `.xls` legado via 
 um `.csv` antigo) devolve erro claro ("Não foi possível ler o arquivo — envie uma planilha Excel
 (.xlsx ou .xls)."), não tenta processar.
 
-**`.xlsx` lê em streaming (SAX), `.xls` legado lê em memória (DOM) — 2026-08-11.** Achado real
+**`.xlsx` lê em streaming (SAX), `.xls` legado lê em memória (DOM) — 2026-08-10.** Achado real
 testando com a planilha de Contas a Receber do dono do produto (660.479 linhas): o modo antigo
 (`WorkbookFactory`/`XSSFWorkbook`, DOM) monta o arquivo inteiro em memória ANTES de processar a
 primeira célula — pra um arquivo desse tamanho, essa montagem é a maior parte do tempo gasto, e
@@ -283,7 +283,7 @@ científica); célula de texto com data ou número digitado também é aceita, n
 peso líquido ≤ bruto, regra da oferta tudo-ou-nada etc.) **reaproveita exatamente as mesmas regras
 e mensagens** dos `Service.validar()` já existentes em cada cadastro manual — não duplica lógica.
 
-**Sem limite de tamanho de arquivo/requisição (2026-08-09, pedido explícito do dono do produto):**
+**Sem limite de tamanho de arquivo/requisição (2026-08-10, pedido explícito do dono do produto):**
 `spring.servlet.multipart.max-file-size`/`max-request-size` em `application.yml` valem `-1`
 (ilimitado) — antes eram `10MB` (herdado do limite de upload de foto de produto, ADR-013), o que
 rejeitava (`413`) arquivos de migração maiores, tipicamente `contas_receber`/`estoque` com dezenas
@@ -294,7 +294,7 @@ linhas no parser (`ImportacaoPlanilha.ler`) — processa o arquivo inteiro, por 
 (`.xlsx` em streaming, ver "Formato do arquivo" acima — testado com centenas de milhares de linhas).
 
 **Duas proteções do Apache POI contra "zip bomb" davam falso positivo em planilha grande e
-legítima (2026-08-11):** a razão mínima de inflação (recusa se o XML descompactado for grande
+legítima (2026-08-10):** a razão mínima de inflação (recusa se o XML descompactado for grande
 demais em relação ao `.xlsx` comprimido — comum em planilha com muita célula e pouco texto por
 célula) e o tamanho máximo de array de bytes ao ler uma entrada do zip. Achado real: a planilha de
 Contas a Receber (~700 mil linhas) falhava com "Não foi possível ler o arquivo" — a causa real
@@ -333,16 +333,16 @@ Validação de PF/PJ, gênero obrigatório pra PF, datas não-futuras etc. — m
 ENDERECO, NUMERO, BAIRRO, CIDADE, ESTADO, CEP`.
 
 **Escolha prévia:** um **plano de contas** (existente, escolhido via `SeletorPlanoContas` —
-busca por código ou por nome, 2026-08-22; ou novo, cadastrado na hora) — aplicado a **todos** os
+busca por código ou por nome, 2026-08-13; ou novo, cadastrado na hora) — aplicado a **todos** os
 fornecedores deste arquivo (`fornecedor.id_plano_contas` é `NOT NULL` e o layout não tem essa
 coluna, já que o sistema antigo normalmente não tem essa classificação).
 
 **Dedup:** mesma regra do cliente, com `CNPJ` em vez de CPF/CNPJ — já existe → não insere,
 reaproveita. Só compara quando o `CNPJ` da linha é, ao mesmo tempo, preenchido **e válido**
-(2026-08-11) — um CNPJ inválido não entra na comparação (o valor gravado vai ser vazio mesmo, ver
+(2026-08-10) — um CNPJ inválido não entra na comparação (o valor gravado vai ser vazio mesmo, ver
 abaixo), então é tratado como "sem CNPJ" pra fins de duplicidade: sempre cria novo.
 
-**`TELEFONE` sem validação de formato (2026-08-09, pedido explícito do dono do produto):**
+**`TELEFONE` sem validação de formato (2026-08-10, pedido explícito do dono do produto):**
 diferente do cadastro manual (`FornecedorService.criar`, que exige 10–11 dígitos), a importação
 chama `criar(req, validarTelefone=false)` — uma sobrecarga nova em `FornecedorService` (o cadastro
 manual, via controller, continua chamando `criar(req)`, que valida como sempre). Planilha migrada de
@@ -350,7 +350,7 @@ outro sistema costuma trazer telefone em formato livre (ramal, número incomplet
 travar a linha inteira; o valor é gravado como veio (só dígitos, mesma normalização de sempre), sem
 a exigência de 10–11 dígitos.
 
-**`EMAIL`/`CNPJ` inválidos não rejeitam a linha — entram em branco (2026-08-11, mesmo espírito do
+**`EMAIL`/`CNPJ` inválidos não rejeitam a linha — entram em branco (2026-08-10, mesmo espírito do
 TELEFONE acima).** Planilha migrada de outro sistema traz esses dois campos sujos/incompletos com
 frequência (e-mail sem `@`, CNPJ com dígito verificador que não confere) — em vez de rejeitar a
 linha inteira por causa disso, `FornecedorImportador.montarRequest` valida os dois com a mesma
@@ -361,7 +361,7 @@ errado foi importada normalmente, com `cnpj: null` gravado.
 
 ### 3. `produto`
 
-**Reformulado em 2026-08-09 (mudança de estrutura da planilha de origem) — substitui o formato
+**Reformulado em 2026-08-10 (mudança de estrutura da planilha de origem) — substitui o formato
 "achatado" anterior.** Agora **uma linha da planilha é um produto inteiro**, sem cor/EAN/estoque.
 
 **Colunas da planilha:** `CODIGO_PRODUTO, MARCA, REFERENCIA, DESCRICAO, PRECO_CUSTO, PERCENTUAL_VENDA,
@@ -373,14 +373,14 @@ produto).
 
 **Por linha:**
 - Acha ou cria o produto (dedup por `DESCRICAO+MARCA+REFERENCIA` **e** `CODIGO_PRODUTO`
-  — 2026-08-11, achado real testando com a planilha de verdade do dono do produto: duas linhas
+  — 2026-08-10, achado real testando com a planilha de verdade do dono do produto: duas linhas
   podem ter a mesma `DESCRICAO+MARCA+REFERENCIA` por coincidência de texto mas serem produtos
   DIFERENTES no sistema de origem, cada um com seu próprio `CODIGO_PRODUTO`. Só conta como "já
   existe" quando os três textos batem **e** o `codigo_importacao` também bate — comparação
   NULL-safe (`IS NOT DISTINCT FROM`), então duas linhas sem `CODIGO_PRODUTO` continuam caindo no
   critério antigo, comparando só pela descrição. Já existe → conta como "já existia", não recria,
   não atualiza.
-- **`CODIGO_PRODUTO` → `produto.codigo_importacao` (coluna nova, 2026-08-09):** grava o código do
+- **`CODIGO_PRODUTO` → `produto.codigo_importacao` (coluna nova, 2026-08-10):** grava o código do
   sistema de origem direto na tabela `produto` (fora de `ProdutoRequest`/`ProdutoService.criar` — o
   cadastro manual não tem esse conceito), só quando informado. **Não é o `id_produto`** — é só a
   chave de ligação que a Importação de Estoque usa depois para achar o produto certo numa planilha
@@ -399,7 +399,7 @@ produto).
 - Quando o tenant **não** usa cor/grade, as colunas `TAMANHO_N` são ignoradas (produto nasce com 1
   SKU só, sem grade).
 
-**Fora de escopo desta importação (2026-08-09) — variação, EAN e estoque inicial saíram daqui**,
+**Fora de escopo desta importação (2026-08-10) — variação, EAN e estoque inicial saíram daqui**,
 ficam para a **Entrada de Produtos** (ainda não construída — é lá que a geração em lote de
 combinações cor×grade nasce naturalmente, na compra, decisão já registrada em `docs/telas/produto.md`
 2026-08-08). O saldo inicial de estoque tem sua própria tabela agora — ver seção 5 abaixo.
@@ -445,14 +445,14 @@ são agrupadas por **`(cliente, empresa)`** — pra cada grupo, uma única linha
 cria `caixa_detalhe` — lançar caixa retroativo quebraria a conciliação "às cegas" do Fechamento de
 Caixa.
 
-### 5. `estoque` (novo, 2026-08-09) — tabela irmã de `produto`, sempre importada DEPOIS
+### 5. `estoque` (novo, 2026-08-10) — tabela irmã de `produto`, sempre importada DEPOIS
 
 **Colunas da planilha:** `CODIGO_PRODUTO, EAN_CODIGO_BARRAS, NOME_COR, NOME_TAMANHO,
 QUANTIDADE_ESTOQUE_1..QUANTIDADE_ESTOQUE_5` (5 colunas fixas de quantidade, uma por empresa).
 
 **Escolha prévia:** a qual **empresa** cada uma das 5 colunas de quantidade corresponde (select por
 coluna) — igual ao mapeamento que existia no antigo formato de `produto`. **Não precisa preencher
-as 5** (2026-08-11) — o backend (`EstoqueImportador.lerMapeamentoEmpresas`) já aceitava mapeamento
+as 5** (2026-08-10) — o backend (`EstoqueImportador.lerMapeamentoEmpresas`) já aceitava mapeamento
 parcial, só a validação da tela exigia as 5 sem necessidade; agora basta **1** mapeada. Uma empresa
 já escolhida numa coluna **some das opções das outras 4** (exclusão mútua no `<select>`,
 `ImportacaoTabelaPage.tsx`) — impede escolher a mesma empresa duas vezes, e é justamente essa
@@ -471,7 +471,7 @@ preencher todas sem repetir).
   cor/tamanho são forçados à **sentinela `1`**, não a `NULL`
   (`api/src/main/java/com/vetor/niner/catalogo/ProdutoBarraService.java:97-99`) — mesmo princípio
   de "campo oculto ⇒ servidor ignora". **Não exige que o
-  tamanho pertença à sequência da grade do produto (2026-08-11)** — achado real: planilha
+  tamanho pertença à sequência da grade do produto (2026-08-10)** — achado real: planilha
   migrada trazia `NOME_TAMANHO="UN1"` numa grade que só tinha `"UN"`, e isso não é um erro de
   verdade nesse contexto, é só o sistema de origem sendo menos rígido. `ProdutoBarraService`
   ganhou um parâmetro `validarGrade` (`obterOuCriar(..., boolean validarGrade)`) — a importação
@@ -504,10 +504,10 @@ GET  /api/v1/importacao/{tabela}/modelo              baixa o .xlsx de modelo (ca
 POST /api/v1/importacao/detectar                     multipart: só arquivo → { tabela|null, colunasArquivo }
 POST /api/v1/importacao/{tabela}/processar           multipart: arquivo + escolhas prévias (JSON)
                                                       + confirmar=true|false (default false)
-                                                      + idProgresso (opcional, 2026-08-11)
+                                                      + idProgresso (opcional, 2026-08-10)
                                                       → relatório (linhas ok/erro/avisos); só
                                                       grava quando confirmar=true E erros vazio
-GET  /api/v1/importacao/progresso/{idProgresso}      progresso "ao vivo" (2026-08-11), consultado
+GET  /api/v1/importacao/progresso/{idProgresso}      progresso "ao vivo" (2026-08-10), consultado
                                                       por polling enquanto /processar está em voo
                                                       → { etapa, atual, total }
 ```
@@ -522,7 +522,7 @@ planilha errada.
 
 Todos sob `/api/v1/**` (JWT de tenant, RLS ativo — P8), `ADMIN`-only. Erros em Problem Details.
 `POST /api/v1/importacao/produto/analise` (passo de análise de colunas de estoque do formato antigo
-de produto) foi **removido em 2026-08-09** — o novo formato de produto não tem estoque nem precisa
+de produto) foi **removido em 2026-08-10** — o novo formato de produto não tem estoque nem precisa
 de análise prévia nenhuma.
 
 **Shape de `escolhas` (JSON livre, um por tabela):**
@@ -540,22 +540,22 @@ estoque:         { "mapeamentoEmpresas": { "QUANTIDADE_ESTOQUE_1": 10, ... } }
 `ImportacaoController`/`ImportacaoService` (dispatcher genérico + detecção, ADMIN-only checado uma
 vez), `ImportacaoPlanilha` (leitura de planilha via Apache POI — `org.apache.poi:poi-ooxml`,
 2026-08-10, substituiu o antigo parser de CSV; **streaming SAX pra `.xlsx` + DOM pra `.xls`,
-2026-08-11**, ver "Formato do arquivo") `ImportadorDeTabela` (interface, com
+2026-08-10**, ver "Formato do arquivo") `ImportadorDeTabela` (interface, com
 `colunasEsperadas()` default) + `ClienteImportador`/`FornecedorImportador`/
 `ProdutoImportador`/`ContasReceberImportador`/`EstoqueImportador` (um bean Spring por tabela,
-descobertos automaticamente via `List<ImportadorDeTabela>`). **Novo em 2026-08-11:**
+descobertos automaticamente via `List<ImportadorDeTabela>`). **Novo em 2026-08-10:**
 `ImportacaoSavepointExecutor` (savepoint por linha, ver seção própria acima),
 `ImportacaoProgressoContext`/`ImportacaoProgressoRegistry`/`ProgressoImportacao` (progresso ao
 vivo, ver seção própria acima). `ProdutoBarraService` (`api/.../catalogo/`, compartilhado com a
-Emissão de Etiqueta) ganhou, também em 2026-08-11: `obterOuCriar(..., boolean validarGrade)`,
+Emissão de Etiqueta) ganhou, também em 2026-08-10: `obterOuCriar(..., boolean validarGrade)`,
 `buscarGradesEmLote`/`buscarVariacoesEmLote`/`criarParaImportacaoEmMassa` (pré-busca em lote, só
 usados pela importação — ver "2ª rodada de otimização" acima).
 Frontend (2026-08-10): grupo `importacao-dados` em `web/src/lib/menu.ts` (hub automático via
 `/menu/:grupo` + `MenuGrupo.tsx`, sem página de hub própria) com 5 rotas filhas registradas em
 `App.tsx`, todas renderizando `web/src/pages/importacao/ImportacaoTabelaPage.tsx` (um componente só,
-parametrizado por `tabela`, um arquivo por vez) + `web/src/lib/importacao.ts` (2026-08-11 ganhou
+parametrizado por `tabela`, um arquivo por vez) + `web/src/lib/importacao.ts` (2026-08-10 ganhou
 `contarLinhasPlanilha`/`buscarProgressoImportacao`, e a dependência nova `read-excel-file`) +
-`web/src/components/GaugeProgresso.tsx` (2026-08-11, ganhou modo de progresso real).
+`web/src/components/GaugeProgresso.tsx` (2026-08-10, ganhou modo de progresso real).
 
 ## Ajuda da tela (manual de operação + vídeo) — obrigatório (R22 / §3.7.1)
 
@@ -574,7 +574,7 @@ importacao_lote(id_lote PK, id_tenant FK, tabela text, nome_arquivo text, id_usu
 ```
 RLS por `id_tenant`, mesmo padrão de todo o domínio.
 
-**Coluna nova em `produto` (2026-08-09, editada em `V017__catalogo.sql` — banco em construção, sem
+**Coluna nova em `produto` (2026-08-10, editada em `V017__catalogo.sql` — banco em construção, sem
 migration própria):**
 ```sql
 produto.codigo_importacao text  -- código do sistema de origem; NÃO é o id_produto
@@ -582,7 +582,7 @@ CREATE UNIQUE INDEX produto_codigo_importacao_uk ON produto (id_tenant, codigo_i
   WHERE codigo_importacao IS NOT NULL;
 ```
 
-**Upload sem limite (2026-08-09, editado em `application.yml`):**
+**Upload sem limite (2026-08-10, editado em `application.yml`):**
 ```yaml
 spring.servlet.multipart.max-file-size: -1
 spring.servlet.multipart.max-request-size: -1
@@ -605,7 +605,7 @@ Nenhum.
   de Produtos (não construída) + a importação de Estoque (esta feature, seção 5).
 - Importar mais de um arquivo da mesma tabela numa mesma visita à tela (fluxo é 1 arquivo → "Nova
   importação" → repete, sem sair da tela).
-- **Testes automatizados** — a feature (incluindo as reformulações de 2026-08-09 e 2026-08-10) foi
+- **Testes automatizados** — a feature (incluindo as reformulações de 2026-08-10 (duas rodadas no mesmo dia)) foi
   implementada e testada manualmente (compilação limpa do backend, typecheck limpo do frontend,
   testes ponta-a-ponta via browser), mas ainda não tem suíte JUnit própria.
 

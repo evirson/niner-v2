@@ -25,7 +25,7 @@ public class ContasPagarService {
 
     /** Grava 1 duplicata. Chamado dentro da mesma transação de
      *  {@link EntradaMercadoriaService#efetivar}, nunca isoladamente. {@code idMovimento}
-     *  (2026-08-19) é o vínculo que o Cancelamento de Entrada usa pra estornar exatamente as
+     *  (2026-08-12) é o vínculo que o Cancelamento de Entrada usa pra estornar exatamente as
      *  duplicatas desta entrada — antes não existia, e nota_fiscal+fornecedor não é
      *  garantidamente único o bastante pra isso. */
     @Transactional

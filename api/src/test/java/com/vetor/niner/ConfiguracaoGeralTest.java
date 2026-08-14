@@ -65,7 +65,7 @@ class ConfiguracaoGeralTest {
                 .andExpect(jsonPath("$.cfgExigeNumeroVendaDevolucao").value(false))
                 .andExpect(jsonPath("$.cfgRateiaFreteEntrada").value(false))
                 .andExpect(jsonPath("$.cfgReajustaPrecoEntrada").value(false))
-                // DEFAULT true (2026-08-23): a consistência entre duplicatas e total dos produtos
+                // DEFAULT true (2026-08-14): a consistência entre duplicatas e total dos produtos
                 // era fixa antes de virar parâmetro, então o tenant novo nasce com ela ligada.
                 .andExpect(jsonPath("$.cfgConsisteValorContasPagar").value(true));
     }

@@ -19,6 +19,16 @@ export interface FornecedorOpcaoEmissao {
   razaoSocial: string
 }
 
+/** Origem "Emitir Etiquetas desta Nota" (2026-08-14) — o que a Entrada de Produtos por Compra
+ * manda pela query string pra esta tela abrir já filtrada. O `nomeFornecedor` viaja junto de
+ * propósito: o endpoint de fornecedores busca por texto, não por id, então sem ele a tela
+ * precisaria de uma chamada extra só pra mostrar de quem é a nota. */
+export interface OrigemEntrada {
+  idFornecedor: number
+  nomeFornecedor: string
+  notaFiscal: string
+}
+
 /** Uma variação vinda do backend — mesmo shape de `ProdutoExemplo`, + a quantidade sugerida
  * (nula no modo Individual, calculada nos modos Por Entradas/Por Estoques). */
 export interface ProdutoEmissao extends ProdutoExemplo {

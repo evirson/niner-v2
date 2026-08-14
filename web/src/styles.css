@@ -13,7 +13,7 @@
      elemento com a regra), porque a lib clona o documento todo pra manter contexto. */
   --accent-rgb: 31, 111, 107; --accent-ink-rgb: 255, 255, 255; --danger-rgb: 166, 61, 41;
   --radius: 10px;
-  /* `color-scheme` declarado (2026-08-23): diz ao navegador em qual esquema a página está, o que
+  /* `color-scheme` declarado (2026-08-14): diz ao navegador em qual esquema a página está, o que
      faz os controles NATIVOS (lista suspensa do <select>, scrollbar padrão, destaque de autofill,
      caret) virem na paleta certa em vez de sempre na clara — eles não leem os tokens do design
      system. Também é o sinal padrão de "esta página já se tema sozinha" para o modo escuro
@@ -21,7 +21,7 @@
      ⚠️ Isso NÃO vence a extensão Dark Reader: ela injeta `<style class="darkreader--root-vars">`
      e reescreve os tokens direto, então quem tiver a extensão ativa vê o ERP escuro mesmo com o
      tema claro selecionado — é comportamento da extensão, não bug do produto (diagnosticado ao
-     vivo em 2026-08-23; a saída é o usuário desativar a extensão para o domínio do ERP). */
+     vivo em 2026-08-14; a saída é o usuário desativar a extensão para o domínio do ERP). */
   color-scheme: light;
 }
 @media (prefers-color-scheme: dark) {
@@ -292,7 +292,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
 .comprovante-preview {
   width: fit-content; margin: 16px auto; padding: 12px 14px;
   background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--radius);
-  /* Mesma família da impressão (Consolas) desde 2026-08-24: a pré-visualização existe pra mostrar
+  /* Mesma família da impressão (Consolas) desde 2026-08-14: a pré-visualização existe pra mostrar
      como vai sair no papel, então usar Courier aqui e Consolas lá desalinhava os dois. */
   font-family: Consolas, 'Lucida Console', 'Courier New', Courier, monospace; font-size: 13px; line-height: 1.35;
   white-space: pre; color: var(--ink);
@@ -307,7 +307,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
 @media print {
   body * { visibility: hidden; }
   .comprovante-imprimir, .comprovante-imprimir * { visibility: visible; }
-  /* Mesma calibragem da papeleta de venda (2026-08-24) — os dois saem na MESMA bobina física, e
+  /* Mesma calibragem da papeleta de venda (2026-08-14) — os dois saem na MESMA bobina física, e
      o comprovante tinha os mesmos três defeitos que a papeleta tinha antes da revisão:
      `width: 80mm` (maior que a área imprimível, fazia o driver encolher tudo), fonte sem negrito
      (haste fina + térmica de 1 bit = letra falhada) e corpo pequeno demais pras 42 colunas.
@@ -327,7 +327,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
 /* Papeleta de venda do PDV (2026-08-06, docs/telas/pdv.md) — bobina térmica 80mm, reaproveita o
    `@page` sem nome.
 
-   REVISÃO 2026-08-24 — a impressão real saía ilegível, por dois problemas somados:
+   REVISÃO 2026-08-14 — a impressão real saía ilegível, por dois problemas somados:
    1. A largura era 64 colunas. O papel tem 80mm mas a ÁREA DE IMPRESSÃO é 72mm; menos a margem
       sobram ~68mm, o que dá 1,06mm por caractere → fonte de ~6px. Agora são 42 colunas (o padrão
       clássico de térmica 80mm, e o mesmo das outras bobinas deste arquivo), com o item quebrado
@@ -346,7 +346,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
   .papeleta-imprimir, .papeleta-imprimir * { visibility: visible; }
   .papeleta-imprimir {
     /* `left: 0`, não 4mm: a origem do CSS na impressão JÁ é o começo da área imprimível, não a
-       borda física do papel. O deslocamento de 4mm que existiu aqui (2026-08-24) empurrava o
+       borda física do papel. O deslocamento de 4mm que existiu aqui (2026-08-14) empurrava o
        conteúdo pra direita e o fim das linhas caía fora dos 72mm — o cupom saía com margem à
        esquerda e cortado à direita ("TOTAL" virava "TOTAI"). */
     position: absolute; top: 0; left: 0; width: 75mm; margin: 0; padding: 2mm 1mm; border: 0;
@@ -361,7 +361,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
     font-family: Consolas, 'Lucida Console', 'Courier New', Courier, monospace; font-size: 11.5px; line-height: 1.35;
     /* Impressão térmica é 1 bit: cada ponto sai preto ou não sai. O traço fino da Lucida Console
        cai em cima de meio-tom, o navegador dissolve em cinza e a cabeça térmica marca só parte
-       dos pontos — é isso que faz a letra sair "falhada" (2026-08-24). `bold` engrossa o traço
+       dos pontos — é isso que faz a letra sair "falhada" (2026-08-14). `bold` engrossa o traço
        o bastante pra cada haste cobrir um ponto inteiro; `print-color-adjust: exact` impede o
        navegador de clarear o preto pra "economizar tinta", regra que não faz sentido em térmica. */
     font-weight: bold;
@@ -824,7 +824,7 @@ a.menu-card:hover {
 }
 .gauge-progresso-numero { fill: var(--ink); font-size: 18px; font-weight: 600; font-variant-numeric: tabular-nums; }
 
-/* Aviso de horário de acesso quase no fim (HorarioAcessoGuard.tsx, 2026-08-14) — anel no canto
+/* Aviso de horário de acesso quase no fim (HorarioAcessoGuard.tsx, 2026-08-11) — anel no canto
    superior esquerdo, contagem regressiva dos minutos de tolerância antes do logoff automático.
    Cor de alerta (--danger) desde o primeiro segundo: ao contrário do gauge-progresso (que é uma
    ação neutra em andamento), este é sempre um aviso. */
@@ -1158,7 +1158,7 @@ a.menu-card:hover {
   }
 }
 
-/* Seletor de tema do cabeçalho (2026-08-23) — Claro / Escuro / Automático. Todas as cores saem
+/* Seletor de tema do cabeçalho (2026-08-14) — Claro / Escuro / Automático. Todas as cores saem
    de token, então o próprio seletor acompanha o tema que ele mesmo troca. */
 .seletor-tema { position: relative; flex-shrink: 0; }
 .seletor-tema-gatilho {
@@ -1182,7 +1182,7 @@ a.menu-card:hover {
 .seletor-tema-opcao:hover { background: var(--surface-2); }
 .seletor-tema-opcao-ativa { background: rgba(var(--accent-rgb), .14); color: var(--accent); font-weight: 600; }
 
-/* DRE (2026-08-23) — hierarquia visual da demonstração: grupo em destaque, conta recuada e
+/* DRE (2026-08-14) — hierarquia visual da demonstração: grupo em destaque, conta recuada e
    discreta, subtotal com faixa. Tudo em token, acompanha claro/escuro. */
 .dre-tabela td { padding-top: 5px; padding-bottom: 5px; }
 .dre-linha-grupo td { font-weight: 600; }
@@ -1192,7 +1192,7 @@ a.menu-card:hover {
   border-top: 1px solid var(--line-strong); border-bottom: 1px solid var(--line-strong);
 }
 
-/* Abas do Fluxo de Caixa (2026-08-23) — Realizado x Projeção na mesma tela. Fica no topo fixo,
+/* Abas do Fluxo de Caixa (2026-08-14) — Realizado x Projeção na mesma tela. Fica no topo fixo,
    acima da barra de filtros, e a ativa é marcada por borda inferior na cor de destaque. */
 .abas-fluxo { display: flex; gap: 4px; border-bottom: 1px solid var(--line); margin-bottom: 10px; }
 .aba-fluxo {

@@ -4,6 +4,7 @@ import com.vetor.niner.cadastros.cliente.Documentos;
 import com.vetor.niner.comum.web.ConflitoDadosException;
 import com.vetor.niner.financeiro.TipoCarteiraDtos.CategoriaCarteira;
 import com.vetor.niner.financeiro.caixa.CaixaService;
+import com.vetor.niner.financeiro.caixa.CaixaService.VinculoCaixa;
 import com.vetor.niner.financeiro.recebimentocrediario.RecebimentoCrediarioDtos.CarteiraDisponivelResponse;
 import com.vetor.niner.financeiro.recebimentocrediario.RecebimentoCrediarioDtos.ClienteCrediarioResponse;
 import com.vetor.niner.financeiro.recebimentocrediario.RecebimentoCrediarioDtos.ComprovanteRecebimentoResponse;
@@ -362,9 +363,18 @@ public class RecebimentoCrediarioService {
      * apagar de verdade, mesmo padrão já usado na exclusão de Transferência de Produtos). Nunca
      * mexe em {@code caixa_mestre} — pode ter lançamentos de outros lotes do mesmo dia/usuário/
      * empresa.
+     *
+     * <p><b>Caixa fechado bloqueia o estorno (2026-08-14).</b> Antes, o DELETE em
+     * {@code caixa_detalhe} era incondicional: estornar um recebimento de um dia já fechado
+     * apagava a linha em silêncio e a conferência gravada em
+     * {@code caixa_fechamento_conferencia} passava a afirmar um total que não existia mais.
+     * Agora o estorno recusa e manda reabrir o caixa (ADMIN, em Fechamento de Caixa) — ver
+     * {@link CaixaService#exigirCaixaAbertoParaDesfazer}.
      */
     @Transactional
     public EstornoEfetivadoResponse estornarLote(long idLoteRecebimento) {
+        caixaService.exigirCaixaAbertoParaDesfazer(VinculoCaixa.LOTE_RECEBIMENTO, idLoteRecebimento);
+
         BigDecimal valorTotal = jdbc.sql("""
                         SELECT valor_total FROM contas_receber_lote
                         WHERE id_tenant = plataforma.tenant_atual() AND id_lote_recebimento = ?

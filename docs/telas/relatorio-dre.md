@@ -1,6 +1,6 @@
 # Relatório de DRE (Demonstração do Resultado) — `relatorios.dre`
 
-> Status: **implementado em 2026-08-23** (backend + tela), aprovado pelo dono do produto. Três
+> Status: **implementado em 2026-08-14** (backend + tela), aprovado pelo dono do produto. Três
 > pontos mudaram durante a implementação, por descoberta no código — estão marcados com
 > **[revisto na implementação]** abaixo.
 
@@ -58,7 +58,7 @@ equilíbrio é Non-goal desta versão.
 
 Cinco linhas essenciais **não têm lançamento contábil** no sistema: existem no plano de contas,
 mas nada escreve nelas. A DRE as **deriva do movimento real** no momento da consulta (decisão do
-dono do produto, 2026-08-23 — a alternativa, gerar lançamentos a cada venda, mexeria no PDV,
+dono do produto, 2026-08-14 — a alternativa, gerar lançamentos a cada venda, mexeria no PDV,
 no cancelamento e na devolução, e criaria risco de o lançado divergir do movimento):
 
 | Linha | Conta | Origem derivada |
@@ -80,7 +80,7 @@ de `1.01.001`/`3.01.001` existirem, a DRE de um tenant novo viria **zerada mesmo
 exatamente o que aconteceu. O código da conta continua sendo a chave de exibição, e a descrição
 cadastrada pelo lojista prevalece quando a conta existe no plano dele.
 
-> **Atualizado em 2026-08-23:** o seed manual acabou — `SignupService.java:99-116` copia as **76
+> **Atualizado em 2026-08-14:** o seed manual acabou — `SignupService.java:99-116` copia as **76
 > contas** de `cfg_plano_contas_padrao` (tabela modelo global semeada em
 > `db/migration/V016__cadastros.sql:345-472`) para todo tenant novo. A decisão acima **continua
 > valendo assim mesmo**: as linhas derivadas não podem quebrar se o lojista renomear ou excluir a
@@ -89,7 +89,7 @@ cadastrada pelo lojista prevalece quando a conta existe no plano dele.
 > ⚠️ **Consequência para teste**: como o tenant já nasce com o plano inteiro, fixture que cria
 > conta precisa usar as **faixas reservadas ao cliente** — **grupo `9` inteiro** e as **famílias
 > `.90`–`.99`** de cada grupo (ex.: `9.01.001`, `2.90.000`) —, senão o `POST` colide com o padrão
-> e devolve **409**. Foi isso que quebrou 62 testes na virada de 2026-08-23.
+> e devolve **409**. Foi isso que quebrou 62 testes na virada de 2026-08-14.
 
 Por que o CMV vem do ledger e não da compra: `3.03.001 Compra de Mercadoria para Revenda` já está
 com **`inclui_dre = false`** no seed — compra é estoque (ativo), não resultado. O custo entra na
@@ -124,7 +124,7 @@ Duas consequências do regime de caixa, ambas deliberadas:
 - **Juros e multa recebidos** (`valor_recebido − valor_receber`) entram como **resultado
   financeiro**, não como receita de venda — o principal é a venda, o excedente é juro.
 
-⚠️ **Risco de dupla contagem no regime de caixa (verificado no código, 2026-08-23):** dar baixa em
+⚠️ **Risco de dupla contagem no regime de caixa (verificado no código, 2026-08-14):** dar baixa em
 Contas a Pagar **não** gera lançamento em `caixa_detalhe` nem em `conta_corrente_movimento` — as
 três tabelas são independentes. Então, se o lojista baixar a conta **e** lançar o mesmo pagamento
 na Movimentação de Conta Corrente, o valor sai duas vezes. Regra desta versão: no regime de caixa,
@@ -144,7 +144,7 @@ isso na ajuda (R22), e a conciliação automática fica como evolução. Ver "Qu
 | Empresa | `EmpresaMultiSelect` | **A tela inteira é ADMIN-only** — `DreService.gerar` chama `exigirAdmin(jwt)` na primeira linha e devolve **403** ("Apenas administradores podem consultar a DRE.") antes de qualquer resolução de empresa (`DreService.java:93, 110-114`). Ou seja, na prática só existe o caso "ADMIN vê todas"; OPERADOR nunca chega ao filtro |
 | Comparar com (AH) | select | Nenhum · Período anterior (padrão) · Mesmo período do ano anterior |
 
-## Padrão de tela de relatório (2026-08-23, segunda rodada)
+## Padrão de tela de relatório (2026-08-14, segunda rodada)
 
 A primeira versão da tela nasceu sem os botões que todo relatório do projeto tem — corrigido no
 mesmo dia, a pedido do dono do produto ("é um relatório, então precisa seguir o padrão"):
@@ -290,12 +290,12 @@ fechamento do mês, e o regime de caixa ser consultado quando falta dinheiro ape
 2. **Outras receitas** seguem entrando por lançamento manual em conta corrente (suficiente no v1).
 
 ## Questões abertas
-1. ~~**Dupla contagem no regime de caixa**~~ — **resolvida na origem em 2026-08-23**: a baixa de
+1. ~~**Dupla contagem no regime de caixa**~~ — **resolvida na origem em 2026-08-14**: a baixa de
    Contas a Pagar passou a gerar o movimento de caixa/conta corrente (Parte 1 de
    `docs/telas/fluxo-caixa.md`), então o pagamento tem um lugar único e canônico. A regra da DRE
    (despesa só de `contas_pagar`; `conta_corrente_movimento` só para contas de receita) **continua
    valendo e sem dupla contagem** — a DRE nunca soma as tabelas de dinheiro no lado da despesa.
-2. ~~**Plano de contas padrão não é semeado no signup**~~ — **resolvido em 2026-08-23**: o signup
+2. ~~**Plano de contas padrão não é semeado no signup**~~ — **resolvido em 2026-08-14**: o signup
    passou a copiar o plano padrão completo (76 contas) do modelo global `cfg_plano_contas_padrao`
    (V016), então um tenant novo já tem contas de despesa e a DRE nasce completa. Ver
    `docs/telas/plano-contas.md`.

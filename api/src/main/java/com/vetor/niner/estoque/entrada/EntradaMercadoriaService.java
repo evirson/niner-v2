@@ -91,7 +91,7 @@ public class EntradaMercadoriaService {
         long idUsuario = Long.parseLong(jwt.getSubject());
 
         if (req.chaveNfe() != null && !req.chaveNfe().isBlank()) {
-            // "AND cancelado = false" (2026-08-19, Cancelamento de Entrada) — mesmo critério do
+            // "AND cancelado = false" (2026-08-12, Cancelamento de Entrada) — mesmo critério do
             // índice único parcial (produto_movimento_mestre_chave_nfe_uk, V019): uma entrada
             // cancelada libera a chave pra reimportar a mesma NF-e corrigida.
             boolean jaImportada = Boolean.TRUE.equals(jdbc.sql("""
@@ -117,7 +117,7 @@ public class EntradaMercadoriaService {
         boolean reajusta = configuracaoGeralService.reajustaPrecoEntrada();
         String origem = req.xmlBruto() != null && !req.xmlBruto().isBlank() ? "entrada xml" : "entrada manual";
 
-        // Meia-noite de Brasília, não UTC (2026-08-19) — meia-noite UTC de "15/06" é 21h de
+        // Meia-noite de Brasília, não UTC (2026-08-12) — meia-noite UTC de "15/06" é 21h de
         // "14/06" em Brasília; gravar em UTC fazia a data digitada voltar da tela um dia atrasada
         // (mesma família de bug de fuso já documentada pro filtro de período desta listagem).
         OffsetDateTime dataMovimento = req.dataMovimento() != null
@@ -159,7 +159,7 @@ public class EntradaMercadoriaService {
 
             // Atualiza produto.preco_custo/preco_venda quando a flag automática está ligada OU
             // quando o operador informou explicitamente o preço de venda nesta entrada
-            // (2026-08-15, fluxo Individual com grade — o campo calculado/editável na tela)
+            // (2026-08-12, fluxo Individual com grade — o campo calculado/editável na tela)
             // — a decisão deliberada do operador vale independente da flag.
             if (reajusta || item.precoVendaInformado() != null) {
                 BigDecimal custoUnitarioComRateio = valorAcrescimo.compareTo(BigDecimal.ZERO) == 0
@@ -170,7 +170,7 @@ public class EntradaMercadoriaService {
                         : custoUnitarioComRateio
                                 .multiply(BigDecimal.ONE.add(item.percentualVenda().divide(BigDecimal.valueOf(100), 6, RoundingMode.HALF_UP)))
                                 .setScale(2, RoundingMode.HALF_UP);
-                // Preço de venda nunca pode ficar abaixo do preço de custo (2026-08-17, regra do
+                // Preço de venda nunca pode ficar abaixo do preço de custo (2026-08-12, regra do
                 // projeto inteiro) — checado aqui contra o custo JÁ com rateio, porque é o que
                 // de fato vai pro `produto.preco_custo` no UPDATE logo abaixo.
                 if (novoPrecoVenda.compareTo(custoUnitarioComRateio.setScale(2, RoundingMode.HALF_UP)) < 0) {
@@ -185,7 +185,7 @@ public class EntradaMercadoriaService {
                         .update();
             }
 
-            // Aprendizado do fluxo XML (Fase 3, 2026-08-18): grava/atualiza o vínculo código-do-
+            // Aprendizado do fluxo XML (Fase 3, 2026-08-12): grava/atualiza o vínculo código-do-
             // fornecedor × variação — a próxima nota do MESMO fornecedor com este `cProd` já
             // resolve sozinha, sem precisar de EAN nem de heurística de texto (ver
             // EntradaXmlService). Upsert porque o operador pode reapontar manualmente uma
@@ -201,7 +201,7 @@ public class EntradaMercadoriaService {
                         .update();
             }
 
-            // NCM do XML sempre vale (2026-08-20, pedido do dono do produto): se o item trouxe
+            // NCM do XML sempre vale (2026-08-13, pedido do dono do produto): se o item trouxe
             // um NCM (já validado contra cfg_produto_ncm em EntradaXmlService) e ele é diferente
             // do que o produto já tem cadastrado, SUBSTITUI — não é sugestão, é correção. Só
             // grava quando de fato muda, pra não bater atualizado_em à toa em toda entrada.
@@ -229,8 +229,8 @@ public class EntradaMercadoriaService {
                     .params(idMovimento, req.xmlBruto()).update();
         }
 
-        // Consistência entre o total dos produtos e a soma das duplicatas (2026-08-14 na tela;
-        // virou o parâmetro `cfg_consiste_valor_contas_pagar` em 2026-08-23, ligado por padrão).
+        // Consistência entre o total dos produtos e a soma das duplicatas (2026-08-11 na tela;
+        // virou o parâmetro `cfg_consiste_valor_contas_pagar` em 2026-08-14, ligado por padrão).
         // Defesa em profundidade: a tela já bloqueia Confirmar, mas a API não confiava só no
         // frontend em nenhuma outra regra desta feature e não deve começar aqui.
         // A base de comparação é o total dos produtos SEM o rateio de frete/IPI/ICMS-ST — a
@@ -252,7 +252,7 @@ public class EntradaMercadoriaService {
         if (req.contasPagar() != null) {
             // Plano de contas de CUSTO do próprio tenant (Parâmetros do Sistema,
             // "Compra de Mercadoria para Revenda" por padrão) — não o plano do fornecedor
-            // (correção 2026-08-12: `fornecedor.id_plano_contas` é a conta contábil do
+            // (correção 2026-08-11: `fornecedor.id_plano_contas` é a conta contábil do
             // fornecedor em si, não a conta de despesa da compra).
             String idPlanoContasCompra = configuracaoGeralService.idPlanoContasCompraMercadoria();
             for (ContaPagarEntradaRequest cp : req.contasPagar()) {
@@ -337,7 +337,7 @@ public class EntradaMercadoriaService {
     }
 
     /**
-     * Pesquisa de produto do fluxo Individual (2026-08-15) — nível produto (não variação), sem
+     * Pesquisa de produto do fluxo Individual (2026-08-12) — nível produto (não variação), sem
      * estoque nem cor/tamanho: só o que a tela precisa pra escolher o produto e, na sequência,
      * montar a grade de tamanhos + custo/%venda/preço de venda. Mesmo estilo enxuto de
      * {@code EtiquetaEmissaoService.buscarProdutos} (não reaproveita {@code ProdutoService.listar},
@@ -429,7 +429,7 @@ public class EntradaMercadoriaService {
     }
 
     /**
-     * Cancelamento de Entrada (2026-08-19) — mesmo padrão de {@code CancelamentoVendaService}/
+     * Cancelamento de Entrada (2026-08-12) — mesmo padrão de {@code CancelamentoVendaService}/
      * {@code CancelamentoDevolucaoService}: ADMIN-only, o {@code produto_movimento_mestre}
      * original NUNCA é apagado nem tem os itens tocados (P3), só marcado {@code cancelado=true}
      * (quem/quando/motivo). O estorno de estoque é um novo movimento (tipo CANCELAMENTO,
@@ -568,7 +568,7 @@ public class EntradaMercadoriaService {
         }
     }
 
-    /** Resolve a empresa que recebe a mercadoria (2026-08-12): sem `idEmpresa` informado, cai
+    /** Resolve a empresa que recebe a mercadoria (2026-08-11): sem `idEmpresa` informado, cai
      *  no `eid` da sessão (comportamento de sempre — preserva o fluxo Individual). Informado,
      *  valida que o usuário pode operar essa empresa (ADMIN: qualquer uma do tenant; OPERADOR:
      *  só as ligadas a ele), reaproveitando {@link EmpresaService#listarPermitidas}. */
@@ -610,11 +610,11 @@ public class EntradaMercadoriaService {
                                    *  atualizado na confirmação IGNORANDO {@code
                                    *  cfg_reajusta_preco_entrada} — ver {@link #efetivar}. */
                                   BigDecimal precoVendaInformado,
-                                  /** `cProd` do XML (2026-08-18) — `null` fora do fluxo XML.
+                                  /** `cProd` do XML (2026-08-12) — `null` fora do fluxo XML.
                                    *  Alimenta o aprendizado de {@code produto_fornecedor} em
                                    *  {@link #efetivar}, mesmo em item resolvido por EAN. */
                                   String codigoFornecedor,
-                                  /** NCM do XML (2026-08-20, `ItemEntradaRequest.ncm`) — `null`
+                                  /** NCM do XML (2026-08-13, `ItemEntradaRequest.ncm`) — `null`
                                    *  fora do fluxo XML. Substitui {@code codigoNcmAtual} na
                                    *  confirmação quando os dois vierem diferentes (o NCM do XML
                                    *  sempre vale — ver {@link #efetivar}). */

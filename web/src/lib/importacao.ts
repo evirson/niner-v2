@@ -37,7 +37,7 @@ export function detectarArquivo(arquivo: File): Promise<DeteccaoArquivo> {
 }
 
 /** Total de registros da planilha, contado no navegador assim que o arquivo é escolhido
- *  (2026-08-11, mostrado antes mesmo de clicar em Validar/Importar) — lê o arquivo localmente
+ *  (2026-08-10, mostrado antes mesmo de clicar em Validar/Importar) — lê o arquivo localmente
  *  (via Web Worker, não trava a tela) e subtrai 1 pela linha de cabeçalho. Falha de leitura aqui
  *  não deve travar o fluxo (é só um número informativo): o chamador decide o que fazer. */
 export async function contarLinhasPlanilha(arquivo: File): Promise<number> {
@@ -53,7 +53,7 @@ export interface ProgressoImportacao {
   total: number
 }
 
-/** Polling de progresso "ao vivo" (2026-08-11) — consultado em intervalo curto enquanto
+/** Polling de progresso "ao vivo" (2026-08-10) — consultado em intervalo curto enquanto
  *  `processarImportacao` está em voo, pro gauge mostrar registro atual/total real em vez de só
  *  uma animação. */
 export function buscarProgressoImportacao(idProgresso: string): Promise<ProgressoImportacao> {
@@ -83,7 +83,7 @@ export async function baixarModeloPlanilha(tabela: string): Promise<void> {
 
 /** `confirmar=false` (padrão) só simula — nada é gravado, o relatório mostra o que aconteceria.
  *  `escolhas` é um objeto livre, interpretado por cada tabela (ver docs/telas/importacao-dados.md).
- *  `idProgresso` (2026-08-11) é gerado pelo chamador a cada clique — usado só pelo polling de
+ *  `idProgresso` (2026-08-10) é gerado pelo chamador a cada clique — usado só pelo polling de
  *  progresso, ver {@link buscarProgressoImportacao}. */
 export function processarImportacao(
   tabela: string,

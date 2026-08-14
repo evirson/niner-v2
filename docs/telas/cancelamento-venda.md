@@ -166,7 +166,7 @@ bloqueio de crediário — RN-03).
 
 Cobertos por `CancelamentoVendaCrudTest` (10 testes) + 1 teste em `ValeMercadoriaCrudTest`
 (reabertura do vale). Vendas de teste são geradas pelo endpoint real do PDV (não inseridas via
-SQL bruto), pra exercitar o ledger de verdade. Suíte completa do projeto: 492/492 (2026-08-24).
+SQL bruto), pra exercitar o ledger de verdade. Suíte completa do projeto: 492/492 (2026-08-14).
 
 ## Ajuda da tela (manual de operação + vídeo) — obrigatório (R22 / §3.7.1)
 
@@ -206,7 +206,7 @@ Nenhum — comissão, fiscal e TEF ficam fora do v1 (ver decisões de escopo).
 
 ## Feature relacionada
 
-`docs/telas/cancelamento-devolucao-produtos.md` (2026-08-11) cancela o vale-mercadoria de uma
+`docs/telas/cancelamento-devolucao-produtos.md` (2026-08-10) cancela o vale-mercadoria de uma
 **devolução**, não uma venda — acesso ADMIN+OPERADOR (aqui é ADMIN-only) com OPERADOR restrito à
 empresa logada. Se a venda cancelada aqui tiver resgatado um vale, ele é reaberto (seção acima);
 se em vez disso for a *devolução* que precisa ser desfeita, é a outra tela.

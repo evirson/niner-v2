@@ -19,7 +19,7 @@ CREATE INDEX cfg_categoria_produto_id_tenant_ix ON cfg_categoria_produto (id_ten
 -- SEM mudar o cadastro do produto (calçados/confecções) — casos como voltagem mudam o preço, logo
 -- viram produtos distintos, não variação. Ver docs/telas/produto.md.
 --
--- id_cor/id_tamanho/id_grade NÃO usam mais IDENTITY global (2026-08-20) — cada tenant tem sua
+-- id_cor/id_tamanho/id_grade NÃO usam mais IDENTITY global (2026-08-13) — cada tenant tem sua
 -- PRÓPRIA numeração (PK composta id_tenant+id_col, id calculado pela aplicação como
 -- MAX(id_col)+1 por tenant). Isso é proposital: garante que TODO tenant tenha, literalmente,
 -- código 1 reservado para a cor/tamanho/grade "PADRÃO" (nome '' / 'UN' / 'PADRÃO', ver
@@ -196,9 +196,9 @@ CREATE TABLE produto (
   id_grade             integer       NOT NULL DEFAULT 1,  -- grade de tamanhos deste produto; 1 =
                                       -- grade PADRÃO (produto não usa variação de verdade); grade
                                       -- REAL obrigatória (checada em serviço) quando cfg_geral.
-                                      -- cfg_usa_cor_grade = true (2026-08-08; NOT NULL 2026-08-20)
+                                      -- cfg_usa_cor_grade = true (2026-08-08; NOT NULL 2026-08-13)
   codigo_importacao    text,         -- código do sistema de origem (CODIGO_PRODUTO da planilha
-                                      -- de migração, 2026-08-09) — NÃO é o id_produto; só existe
+                                      -- de migração, 2026-08-10) — NÃO é o id_produto; só existe
                                       -- pra a Rotina de Importação de Dados achar de volta o
                                       -- produto certo numa planilha separada (ex.: ESTOQUES.csv,
                                       -- que sempre é importada DEPOIS de PRODUTOS.csv). Nunca
@@ -237,7 +237,7 @@ CREATE INDEX produto_categoria_id_tenant_ix ON produto_categoria (id_tenant);
 -- quando o produto não usa grade de verdade). Q7: sku + ean. id_cor/id_tamanho substituem
 -- id_variante_linha/coluna (2026-08-08) — quando o produto usa grade real (produto.id_grade <> 1),
 -- os dois são obrigatórios juntos com valor real (checado em serviço, ProdutoBarraService);
--- quando não usa, ambos gravam 1 (PADRÃO) em vez de NULL (2026-08-20) — nunca exibidos/
+-- quando não usa, ambos gravam 1 (PADRÃO) em vez de NULL (2026-08-13) — nunca exibidos/
 -- referenciados (ProdutoBarraService traduz 1 -> null na resposta da API).
 CREATE TABLE produto_barra (
   id_variacao        integer     GENERATED ALWAYS AS IDENTITY PRIMARY KEY,

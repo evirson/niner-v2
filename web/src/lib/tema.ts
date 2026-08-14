@@ -1,4 +1,4 @@
-/** Tema claro/escuro do ERP (2026-08-23).
+/** Tema claro/escuro do ERP (2026-08-14).
  *
  *  A paleta dos dois temas já existia em `styles.css` desde sempre — `:root` é a clara, a media
  *  query `prefers-color-scheme: dark` é a escura, e os seletores `:root[data-theme='light']` /

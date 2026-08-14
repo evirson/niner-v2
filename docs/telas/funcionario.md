@@ -143,7 +143,7 @@ movimentados (comissão por item).
   sem inativar)
 
 Cobertos por `FuncionarioCrudTest` (10 testes) — suíte completa do projeto em **492/492 verdes
-(2026-08-24)**.
+(2026-08-14)**.
 
 ## Impacto no contrato de API
 

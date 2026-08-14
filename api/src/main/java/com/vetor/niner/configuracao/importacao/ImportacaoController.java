@@ -40,7 +40,7 @@ public class ImportacaoController {
         return service.listarTabelas(jwt);
     }
 
-    /** Detecção automática de tipo de arquivo (tela única de importação, 2026-08-09) — lê só o
+    /** Detecção automática de tipo de arquivo (tela única de importação, 2026-08-10) — lê só o
      *  cabeçalho, sem processar nenhuma linha. {@code tabela} vem {@code null} quando não deu
      *  pra identificar com confiança (a tela pede escolha manual nesse caso). */
     @PostMapping(value = "/detectar", consumes = "multipart/form-data")
@@ -73,7 +73,7 @@ public class ImportacaoController {
         return service.processar(jwt, tabela, arquivo, escolhas, confirmar, idProgresso);
     }
 
-    /** Polling de progresso (2026-08-11) — a tela consulta isto a cada poucos milissegundos
+    /** Polling de progresso (2026-08-10) — a tela consulta isto a cada poucos milissegundos
      *  enquanto {@code /processar} está em voo, pro gauge mostrar registro atual/total real em
      *  vez de só uma animação. */
     @GetMapping("/progresso/{idProgresso}")

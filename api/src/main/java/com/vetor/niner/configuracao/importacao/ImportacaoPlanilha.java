@@ -54,7 +54,7 @@ import java.util.regex.Pattern;
  * plano sem separador de milhar (ponto decimal), célula booleana vira {@code TRUE}/{@code FALSE} —
  * assim nenhuma regra de validação de campo precisou mudar.
  *
- * <p><b>.xlsx lê em streaming (SAX), .xls lê em memória (DOM) — 2026-08-11.</b> O modo antigo
+ * <p><b>.xlsx lê em streaming (SAX), .xls lê em memória (DOM) — 2026-08-10.</b> O modo antigo
  * (DOM, {@code WorkbookFactory}) monta o arquivo inteiro em memória antes de processar a primeira
  * célula; num arquivo de centenas de milhares de linhas essa montagem é a maior parte do tempo
  * gasto, e fica "muda" pro contador de progresso ({@link ImportacaoProgressoContext}) — achado
@@ -71,13 +71,13 @@ public final class ImportacaoPlanilha {
     private static final Logger LOG = LoggerFactory.getLogger(ImportacaoPlanilha.class);
 
     static {
-        // Sem limite de tamanho de arquivo/linhas (decisão do dono do produto, 2026-08-09) —
+        // Sem limite de tamanho de arquivo/linhas (decisão do dono do produto, 2026-08-10) —
         // mas o Apache POI tem, por padrão, duas proteções contra "zip bomb" (arquivo .xlsx
         // pequeno que descompacta em algo gigante) que dão falso positivo em planilhas grandes e
         // LEGÍTIMAS: a razão mínima de inflação (recusa se o XML descompactado for grande demais
         // em relação ao .xlsx comprimido — comum em planilha com muita célula e pouco texto por
         // célula) e o tamanho máximo de array de bytes ao ler uma entrada do zip. Endpoint é
-        // ADMIN-only (2026-08-11, achado real: planilha de Contas a Receber com ~700 mil linhas
+        // ADMIN-only (2026-08-10, achado real: planilha de Contas a Receber com ~700 mil linhas
         // falhava com "Não foi possível ler o arquivo" — a causa real ficava escondida pelo catch
         // genérico). Vale tanto pro leitor DOM quanto pro streaming (mesma infra de zip por
         // baixo, `ZipSecureFile`).
@@ -119,7 +119,7 @@ public final class ImportacaoPlanilha {
     }
 
     /** Só o cabeçalho (em MAIÚSCULAS), sem exigir nenhuma linha de dados — usado pela detecção
-     *  automática de tipo de arquivo ({@link ImportacaoService#detectar}, 2026-08-09), que só
+     *  automática de tipo de arquivo ({@link ImportacaoService#detectar}, 2026-08-10), que só
      *  precisa saber quais colunas o arquivo tem, não processar linha nenhuma ainda. No modo
      *  streaming (.xlsx) isso interrompe a leitura logo após a primeira linha — não escaneia o
      *  arquivo inteiro só pra ler o cabeçalho. */
@@ -157,7 +157,7 @@ public final class ImportacaoPlanilha {
     }
 
     // -------------------------------------------------------------------------------------
-    // .xlsx — leitura em streaming (SAX), 2026-08-11
+    // .xlsx — leitura em streaming (SAX), 2026-08-10
     // -------------------------------------------------------------------------------------
 
     private record ResultadoLeitura(List<String> cabecalho, List<LinhaPlanilha> linhas) {

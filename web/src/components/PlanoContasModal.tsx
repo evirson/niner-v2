@@ -42,7 +42,7 @@ export default function PlanoContasModal({
         natureza: 'ANALITICA',
         incluiDre,
         incluiFluxoCaixa,
-        // Campos que a revisão do plano de contas (2026-08-22) tornou parte do contrato e que a
+        // Campos que a revisão do plano de contas (2026-08-13) tornou parte do contrato e que a
         // criação rápida não coleta: vão nulos e o servidor aplica o padrão. `grupoDre`/`grupoDfc`
         // nulos são coerentes com o backend, que força `NAO_APLICA` quando a flag correspondente
         // é falsa — quem precisa classificar usa a tela própria do Plano de Contas.

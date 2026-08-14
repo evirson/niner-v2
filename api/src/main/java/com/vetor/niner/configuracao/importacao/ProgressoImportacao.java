@@ -3,7 +3,7 @@ package com.vetor.niner.configuracao.importacao;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
- * Estado mutável e thread-safe do progresso de UMA importação em andamento (2026-08-11) —
+ * Estado mutável e thread-safe do progresso de UMA importação em andamento (2026-08-10) —
  * escrito pela thread que processa o arquivo (via {@link ImportacaoProgressoContext}), lido pela
  * thread do polling do frontend (via {@link ImportacaoProgressoRegistry}, que segura a mesma
  * instância sob o {@code idProgresso}). {@code etapa}/{@code total} são {@code volatile} e

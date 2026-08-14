@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 
 interface GaugeProgressoProps {
   rotulo: string
-  /** Registro atual/total real (2026-08-11, polling de `/importacao/progresso/:id`) — quando
+  /** Registro atual/total real (2026-08-10, polling de `/importacao/progresso/:id`) — quando
    *  informados (total > 0), o anel mostra o percentual de verdade e o texto "X de Y registros"
    *  em vez da animação simulada abaixo. */
   atual?: number

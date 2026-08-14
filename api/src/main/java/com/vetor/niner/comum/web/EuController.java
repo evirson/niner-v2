@@ -75,7 +75,7 @@ public class EuController {
         corpo.put("empresa", empresa);
         corpo.put("trial_expira_em", trialExpiraEm);
         // Contagem regressiva do aviso visual de horário de acesso (HorarioAcessoGuard,
-        // 2026-08-14) — null na imensa maioria das chamadas (ADMIN, controle desligado, ou
+        // 2026-08-11) — null na imensa maioria das chamadas (ADMIN, controle desligado, ou
         // dentro do horário normal); só vem preenchido nos minutos finais de tolerância antes
         // do bloqueio de verdade (HorarioAcessoFilter, mesma janela de graça).
         corpo.put("segundosRestantesTolerancia",

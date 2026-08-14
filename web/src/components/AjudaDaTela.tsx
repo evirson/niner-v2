@@ -239,7 +239,7 @@ const CONTEUDOS: Record<string, ConteudoAjuda> = {
     ],
     errosComuns: [
       'A projeção não adivinha vendas futuras — ela só considera o que já está lançado como conta a receber ou a pagar. O que você ainda vai vender no mês não aparece aqui.',
-      'Pagamentos registrados antes de 23/08/2026 não aparecem no Realizado: naquela época a baixa não gerava movimento de caixa. Contas pagas a partir dessa data aparecem normalmente.',
+      'Pagamentos registrados antes de 14/08/2026 não aparecem no Realizado: naquela época a baixa não gerava movimento de caixa. Contas pagas a partir dessa data aparecem normalmente.',
       'Lucro não é dinheiro: a DRE pode mostrar lucro num mês em que faltou dinheiro, porque a venda no crediário só vira caixa quando o cliente paga.',
       'Se o saldo calculado não bater com o saldo real, o motivo mais comum é um pagamento lançado duas vezes — baixado em Contas a Pagar e também lançado na Movimentação de Conta Corrente.',
     ],
@@ -456,8 +456,9 @@ const CONTEUDOS: Record<string, ConteudoAjuda> = {
     errosComuns: [
       'Não acho "Pagar" na grid: a baixa é feita editando a conta (ícone azul) e preenchendo os campos de pagamento.',
       'Para pagar em dinheiro é preciso ter caixa aberto — a saída é lançada no seu caixa do dia. Sem caixa aberto, pague pela conta corrente ou abra o caixa antes.',
-      'Se você desfizer a baixa (apagar a data de pagamento), a saída de dinheiro correspondente é apagada junto — o saldo volta ao que era.',
-      'Contas pagas antes de 23/08/2026 não têm essa informação de origem e continuam editáveis normalmente; elas só não aparecem no Fluxo de Caixa realizado.',
+      'Se você desfizer a baixa (apagar a data de pagamento), a saída de dinheiro correspondente é apagada junto — o saldo volta ao que era. O mesmo vale ao excluir a conta: a saída do caixa ou do banco vai junto, não fica sobrando.',
+      '"Esta operação mexe no caixa nº X, que já está fechado": o pagamento saiu de um caixa que já foi encerrado. Peça ao administrador para reabrir aquele caixa em Frente de Loja › Caixa › Fechamento de Caixa, refaça a alteração ou a exclusão, e feche o caixa de novo.',
+      'Contas pagas antes de 14/08/2026 não têm essa informação de origem e continuam editáveis normalmente; elas só não aparecem no Fluxo de Caixa realizado.',
     ],
     urlVideo: null,
   },
@@ -484,11 +485,14 @@ const CONTEUDOS: Record<string, ConteudoAjuda> = {
       'Confirme em "Fechar Caixa". Se todas baterem, o caixa fecha e a impressão fica disponível.',
       'Se alguma não bater, a tela mostra a diferença por carteira — clique numa carteira pra conferir lançamento a lançamento o que compõe o valor esperado, corrija e tente de novo.',
       'Use "Visualizar Impressão" depois de fechado pra conferir o relatório em folha A4 antes de imprimir ou salvar em PDF.',
+      'Precisa desfazer algo de um caixa já fechado (estornar um recebimento, excluir ou reabrir uma conta a pagar)? Só o administrador vê o botão "Reabrir Caixa" num caixa fechado. Reabrir exige informar o motivo, apaga a conferência que estava gravada e libera a correção — depois é só fechar o caixa de novo, refazendo a contagem às cegas.',
     ],
     errosComuns: [
       'Um caixa já fechado não pode ser fechado de novo — a tela responde com um aviso de conflito.',
       'Operadores que tentam informar outro usuário ou fechar o caixa de outra pessoa recebem acesso negado — só administradores podem.',
       'Faltar o valor contado de alguma carteira com movimento impede o fechamento.',
+      '"Esta operação mexe no caixa nº X, que já está fechado": você tentou estornar um recebimento ou mexer numa conta a pagar cujo pagamento saiu de um caixa já encerrado. Peça ao administrador para reabrir aquele caixa aqui, refaça a operação e feche de novo.',
+      'Não dá pra reabrir um caixa se o mesmo operador já tem outro caixa aberto — feche o que está aberto primeiro, senão haveria dois caixas abertos e o PDV não saberia em qual lançar.',
     ],
     urlVideo: null,
   },
@@ -619,6 +623,7 @@ const CONTEUDOS: Record<string, ConteudoAjuda> = {
     errosComuns: [
       'Não acho o recebimento: confira o nome do cliente e o intervalo de datas — o filtro de cliente é sempre obrigatório.',
       'Não é possível estornar parte de um lote — se ele cobriu várias parcelas juntas, o estorno desfaz todas de uma vez.',
+      '"Esta operação mexe no caixa nº X, que já está fechado": o recebimento entrou num caixa que já foi encerrado, e apagá-lo faria a conferência daquele fechamento deixar de bater. Peça ao administrador para reabrir aquele caixa em Frente de Loja › Caixa › Fechamento de Caixa, estorne, e feche o caixa de novo. Nada é desfeito pela metade enquanto isso — o recebimento continua exatamente como estava.',
     ],
     urlVideo: null,
   },
@@ -855,6 +860,7 @@ const CONTEUDOS: Record<string, ConteudoAjuda> = {
       'Cada busca ADICIONA à lista da tela principal (o popup não fecha sozinho) — dá pra combinar as 3 formas antes de fechar.',
       'Na grade, ajuste a quantidade de qualquer item direto no campo, clique no ícone vermelho pra remover um item, ou em "Limpar Lista" pra esvaziar tudo de uma vez.',
       'Clique em "Emitir Etiquetas" — escolha o modelo (layout já criado em Configuração de Etiqueta) e clique em "Imprimir".',
+      'Se você chegou aqui pelo botão "Emitir Etiquetas desta Nota", logo depois de gravar uma entrada, o popup já abre no modo Por Entradas com o fornecedor e a nota preenchidos: basta clicar em "Localizar" pra trazer os produtos daquela nota.',
     ],
     errosComuns: [
       'No modo Individual, se o produto usa grade (configurado no cadastro dele), os seletores de Cor e Tamanho aparecem como obrigatórios — não dá pra adicionar sem escolher.',

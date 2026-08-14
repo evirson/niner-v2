@@ -283,7 +283,7 @@ export default function ProdutoForm({ somenteLeitura = false }: { somenteLeitura
   /** Reavalia a regra da oferta (itens 4-7) — chamado ao sair de qualquer um dos 3 campos. */
   const revalidarOferta = () => setErros((atual) => ({ ...atual, ...errosOferta(form) }))
 
-  /** Preço de venda não pode ficar abaixo do preço de custo (2026-08-17, regra do projeto
+  /** Preço de venda não pode ficar abaixo do preço de custo (2026-08-12, regra do projeto
    *  inteiro) — chamado ao sair de custo, % de venda ou do próprio preço de venda, já que
    *  qualquer um dos três pode mudar a relação entre eles. */
   const revalidarPrecoVenda = () => setErros((atual) => ({ ...atual, precoVenda: validarCampo('precoVenda', form, mapaConfig) }))

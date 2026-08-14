@@ -38,7 +38,7 @@ public class GlobalExceptionHandler {
      * validações pontuais) — não ganha corpo Problem Details de graça: sem este handler ela
      * chega ao cliente como status certo mas corpo vazio, e o front (que lê {@code p.detail})
      * cai no genérico "Ocorreu um erro.", escondendo o motivo real que o backend já tinha
-     * (bug real encontrado ao testar a rejeição de login por horário de acesso, 2026-08-14 —
+     * (bug real encontrado ao testar a rejeição de login por horário de acesso, 2026-08-11 —
      * afetava também "Credenciais inválidas." e todo outro uso já existente desta exceção).
      */
     @ExceptionHandler(ResponseStatusException.class)

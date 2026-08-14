@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { buscarNcmsPorNome, type Ncm } from '../lib/ncm'
 
 /**
- * Pesquisa de NCM por nome (2026-08-13, pedido do dono do produto) — quem cadastra um produto
+ * Pesquisa de NCM por nome (2026-08-11, pedido do dono do produto) — quem cadastra um produto
  * nem sempre sabe o código NCM de cabeça. Mesmo padrão de `PesquisaProdutoModal` (PDV): digita,
  * busca ao vivo, clica numa linha pra usar. Usada tanto pela tela completa de Produto quanto
  * pelo cadastro rápido embutido na Entrada de Produtos.

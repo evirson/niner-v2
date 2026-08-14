@@ -183,7 +183,7 @@ abria um caixa automaticamente com `saldo_inicial = 0`, sem pedir nada ao operad
 - Dado uma parcela de outro tenant, então não aparece na listagem nem pode ser recebida (RLS).
 
 Cobertos por `RecebimentoCrediarioCrudTest` (23 testes). Suíte completa do projeto: 492/492
-verdes (2026-08-24).
+verdes (2026-08-14).
 
 ## Impacto no contrato de API
 

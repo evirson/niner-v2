@@ -64,7 +64,7 @@ public class SegurancaConfig {
                 .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 // estabelece o TenantContext após a autenticação, dentro da cadeia do tenant
                 .addFilterAfter(tenantFilter, AuthorizationFilter.class)
-                // horário de acesso (2026-08-14) — precisa vir DEPOIS do TenantFilter: consulta
+                // horário de acesso (2026-08-11) — precisa vir DEPOIS do TenantFilter: consulta
                 // plataforma.tenant_atual(), que só resolve com o TenantContext já ativo.
                 .addFilterAfter(horarioAcessoFilter, TenantFilter.class);
         return http.build();

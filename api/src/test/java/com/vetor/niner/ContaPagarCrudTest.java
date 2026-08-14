@@ -74,7 +74,7 @@ class ContaPagarCrudTest {
         }
     }
 
-    /** Garante que a conta existe. Aceita 409 porque, desde 2026-08-23, o signup já copia o plano
+    /** Garante que a conta existe. Aceita 409 porque, desde 2026-08-14, o signup já copia o plano
      *  de contas padrão completo (76 contas) — os códigos usados aqui podem já vir prontos. */
     private void criarPlano(String token, String codigo) throws Exception {
         int status = mvc.perform(post("/api/v1/planos-contas").header("Authorization", "Bearer " + token)
@@ -110,7 +110,7 @@ class ContaPagarCrudTest {
     }
 
     /** Abre o caixa do usuário na carteira DINHEIRO — pré-requisito da baixa em dinheiro desde
-     *  2026-08-23 (o pagamento vira movimento no caixa aberto, docs/telas/fluxo-caixa.md). */
+     *  2026-08-14 (o pagamento vira movimento no caixa aberto, docs/telas/fluxo-caixa.md). */
     private void abrirCaixaDinheiro(String token) throws Exception {
         String resp = mvc.perform(get("/api/v1/caixa/carteiras").header("Authorization", "Bearer " + token))
                 .andReturn().getResponse().getContentAsString();
@@ -301,6 +301,83 @@ class ContaPagarCrudTest {
                 .andExpect(status().isBadRequest());
     }
 
+    /** Fecha o caixa direto no banco — o fluxo real de fechamento exige a contagem às cegas de
+     *  todas as carteiras, e o que estes testes precisam é só do estado "fechado". */
+    private void fecharCaixaNoBanco(long idTenant) throws SQLException {
+        try (Connection c = abrirConexao(idTenant);
+             Statement st = c.createStatement()) {
+            st.executeUpdate("UPDATE caixa_mestre SET caixa_fechado = true, data_fechamento = now()");
+        }
+    }
+
+    /**
+     * Caixa fechado barra a exclusão (2026-08-14). Sem isso, apagar a conta apagaria a linha de um
+     * caixa já conferido e o total gravado em {@code caixa_fechamento_conferencia} passaria a
+     * mentir — em silêncio. A saída é reabrir o caixa (ADMIN) e refazer.
+     */
+    @Test
+    void excluirContaPagarComCaixaFechadoEhRecusado() throws Exception {
+        Base base = prepararBase("exclusao-caixa-fechado");
+        abrirCaixaDinheiro(base.token());
+        long idTenant = extrairIdTenant(base.token());
+        long idContaPagar = criarContaPagar(base, "DUP-FECHADO", "2026-08-15", "70.00");
+
+        mvc.perform(put("/api/v1/contas-pagar/" + idContaPagar).header("Authorization", "Bearer " + base.token())
+                        .contentType(APPLICATION_JSON)
+                        .content("""
+                                {"idFornecedor":%d,"idEmpresa":%d,"idPlanoContas":"9.00.000",
+                                 "dataLancamento":"2026-07-30T12:00:00Z","dataVencimento":"2026-08-15T12:00:00Z",
+                                 "dataPagamento":"2026-08-10T12:00:00Z","valorPagar":70.00,"valorPago":70.00,
+                                 "origemPagamento":"CAIXA"}
+                                """.formatted(base.idFornecedor(), base.idEmpresa())))
+                .andExpect(status().isOk());
+
+        fecharCaixaNoBanco(idTenant);
+
+        mvc.perform(delete("/api/v1/contas-pagar/" + idContaPagar).header("Authorization", "Bearer " + base.token()))
+                .andExpect(status().isConflict());
+
+        // O movimento continua lá — a recusa não pode ter apagado nada pela metade.
+        try (Connection c = abrirConexao(idTenant)) {
+            assertThat(somaMovimentoCaixa(c, idContaPagar)).isEqualByComparingTo("70.00");
+        }
+    }
+
+    /** Mesmo guard na REABERTURA da conta (tirar a data de pagamento), que também apaga o
+     *  movimento — os dois caminhos passam pelo mesmo bloqueio. */
+    @Test
+    void reabrirContaPagarComCaixaFechadoEhRecusado() throws Exception {
+        Base base = prepararBase("reabertura-caixa-fechado");
+        abrirCaixaDinheiro(base.token());
+        long idTenant = extrairIdTenant(base.token());
+        long idContaPagar = criarContaPagar(base, "DUP-REABRIR", "2026-08-15", "90.00");
+
+        mvc.perform(put("/api/v1/contas-pagar/" + idContaPagar).header("Authorization", "Bearer " + base.token())
+                        .contentType(APPLICATION_JSON)
+                        .content("""
+                                {"idFornecedor":%d,"idEmpresa":%d,"idPlanoContas":"9.00.000",
+                                 "dataLancamento":"2026-07-30T12:00:00Z","dataVencimento":"2026-08-15T12:00:00Z",
+                                 "dataPagamento":"2026-08-10T12:00:00Z","valorPagar":90.00,"valorPago":90.00,
+                                 "origemPagamento":"CAIXA"}
+                                """.formatted(base.idFornecedor(), base.idEmpresa())))
+                .andExpect(status().isOk());
+
+        fecharCaixaNoBanco(idTenant);
+
+        mvc.perform(put("/api/v1/contas-pagar/" + idContaPagar).header("Authorization", "Bearer " + base.token())
+                        .contentType(APPLICATION_JSON)
+                        .content("""
+                                {"idFornecedor":%d,"idEmpresa":%d,"idPlanoContas":"9.00.000",
+                                 "dataLancamento":"2026-07-30T12:00:00Z","dataVencimento":"2026-08-15T12:00:00Z",
+                                 "valorPagar":90.00}
+                                """.formatted(base.idFornecedor(), base.idEmpresa())))
+                .andExpect(status().isConflict());
+
+        try (Connection c = abrirConexao(idTenant)) {
+            assertThat(somaMovimentoCaixa(c, idContaPagar)).isEqualByComparingTo("90.00");
+        }
+    }
+
     private BigDecimal somaMovimentoCaixa(Connection c, long idContaPagar) throws SQLException {
         try (PreparedStatement ps = c.prepareStatement(
                 "SELECT COALESCE(SUM(valor), 0) FROM caixa_detalhe WHERE id_conta_pagar = ?")) {
@@ -309,6 +386,41 @@ class ContaPagarCrudTest {
                 rs.next();
                 return rs.getBigDecimal(1);
             }
+        }
+    }
+
+    /**
+     * Regressão de 2026-08-14: excluir uma conta JÁ BAIXADA apagava só a linha de
+     * {@code contas_pagar} e deixava o {@code caixa_detalhe} da baixa órfão — o dinheiro seguia
+     * saindo do caixa para sempre, sem conta que o justificasse. Como a coluna de vínculo não tem
+     * FK (escolha deliberada de V025), o banco não reclamava.
+     */
+    @Test
+    void excluirContaPagarBaixadaApagaOMovimentoDeCaixaJunto() throws Exception {
+        Base base = prepararBase("exclusao-movimento");
+        abrirCaixaDinheiro(base.token());
+        long idTenant = extrairIdTenant(base.token());
+        long idContaPagar = criarContaPagar(base, "DUP-EXCL-CAIXA", "2026-08-15", "310.00");
+
+        mvc.perform(put("/api/v1/contas-pagar/" + idContaPagar).header("Authorization", "Bearer " + base.token())
+                        .contentType(APPLICATION_JSON)
+                        .content("""
+                                {"idFornecedor":%d,"idEmpresa":%d,"idPlanoContas":"9.00.000",
+                                 "dataLancamento":"2026-07-30T12:00:00Z","dataVencimento":"2026-08-15T12:00:00Z",
+                                 "dataPagamento":"2026-08-10T12:00:00Z","valorPagar":310.00,"valorPago":310.00,
+                                 "origemPagamento":"CAIXA"}
+                                """.formatted(base.idFornecedor(), base.idEmpresa())))
+                .andExpect(status().isOk());
+
+        try (Connection c = abrirConexao(idTenant)) {
+            assertThat(somaMovimentoCaixa(c, idContaPagar)).isEqualByComparingTo("310.00");
+        }
+
+        mvc.perform(delete("/api/v1/contas-pagar/" + idContaPagar).header("Authorization", "Bearer " + base.token()))
+                .andExpect(status().isOk());
+
+        try (Connection c = abrirConexao(idTenant)) {
+            assertThat(somaMovimentoCaixa(c, idContaPagar)).isEqualByComparingTo("0.00");
         }
     }
 

@@ -9,6 +9,8 @@ import com.vetor.niner.financeiro.caixa.CaixaDtos.FechamentoCaixaResponse;
 import com.vetor.niner.financeiro.caixa.CaixaDtos.LancamentoCarteiraResponse;
 import com.vetor.niner.financeiro.caixa.CaixaDtos.LinhaConferenciaResponse;
 import com.vetor.niner.financeiro.caixa.CaixaDtos.LinhaTotalCarteiraResponse;
+import com.vetor.niner.financeiro.caixa.CaixaDtos.ReaberturaCaixaResponse;
+import com.vetor.niner.financeiro.caixa.CaixaDtos.ReabrirCaixaRequest;
 import com.vetor.niner.financeiro.caixa.CaixaDtos.ResultadoFechamentoResponse;
 import com.vetor.niner.financeiro.caixa.CaixaDtos.ValorContadoRequest;
 import com.vetor.niner.financeiro.TipoCarteiraDtos.CategoriaCarteira;
@@ -226,6 +228,119 @@ public class CaixaService {
         }
 
         return new ResultadoFechamentoResponse(caixa.idCaixa(), true, conferencia);
+    }
+
+    /**
+     * Reabertura de caixa (2026-08-14) — **ADMIN-only**, exige motivo.
+     *
+     * <p>Existe por uma razão concreta: operações que desfazem dinheiro (estorno de recebimento
+     * de crediário, exclusão ou reabertura de conta a pagar) apagam linhas de
+     * {@code caixa_detalhe}. Se o caixa daquele dia já foi fechado, apagar a linha em silêncio
+     * **descasa a conferência** já gravada em {@code caixa_fechamento_conferencia}: o fechamento
+     * afirma um total que não corresponde mais aos lançamentos. Em vez de deixar passar, essas
+     * rotinas agora recusam e mandam reabrir o caixa — e é aqui que a reabertura acontece.
+     *
+     * <p>Reabrir **invalida a conferência**: as linhas de {@code caixa_fechamento_conferencia}
+     * são apagadas, porque foram calculadas sobre um estado que está prestes a mudar. Fechar de
+     * novo depois refaz a contagem "às cegas" normalmente.
+     *
+     * <p>Auditabilidade (P3): quem reabriu, quando e por quê ficam registrados em
+     * {@code caixa_mestre.observacoes}, em linha própria e **acrescentada** — nunca sobrescreve
+     * o que já estava lá. Mesmo par ADMIN-only + motivo obrigatório do Cancelamento de Venda.
+     */
+    @Transactional
+    public ReaberturaCaixaResponse reabrir(Jwt jwt, long idCaixa, ReabrirCaixaRequest req) {
+        exigirAdmin(jwt);
+        Caixa caixa = buscarCaixaPorIdObrigatorio(idCaixa);
+        if (!caixa.fechado()) {
+            throw new ConflitoDadosException("Este caixa já está aberto.");
+        }
+
+        // Um usuário/empresa só pode ter um caixa aberto por dia (mesma regra da abertura) —
+        // reabrir um caixa antigo enquanto o do dia está aberto criaria dois caixas abertos para
+        // a mesma pessoa, e o PDV não saberia em qual lançar.
+        boolean jaTemOutroAberto = jdbc.sql("""
+                        SELECT EXISTS (
+                            SELECT 1 FROM caixa_mestre
+                            WHERE id_tenant = plataforma.tenant_atual()
+                              AND id_empresa = ? AND id_usuario = ?
+                              AND caixa_fechado = false AND id_caixa <> ?
+                        )
+                        """)
+                .params(caixa.idEmpresa(), caixa.idUsuario(), idCaixa)
+                .query(Boolean.class)
+                .single();
+        if (jaTemOutroAberto) {
+            throw new ConflitoDadosException(
+                    "Este operador já tem outro caixa aberto. Feche o caixa aberto antes de reabrir este.");
+        }
+
+        jdbc.sql("""
+                        UPDATE caixa_mestre SET
+                            caixa_fechado = false,
+                            data_fechamento = NULL,
+                            id_usuario_fechamento = NULL,
+                            valor_contado_dinheiro = NULL,
+                            observacoes = COALESCE(observacoes || E'\\n', '') ||
+                                'REABERTO EM ' || to_char(now(), 'DD/MM/YYYY HH24:MI') ||
+                                ' POR USUARIO ' || ? || ': ' || ?
+                        WHERE id_tenant = plataforma.tenant_atual() AND id_caixa = ?
+                        """)
+                .params(idUsuario(jwt), req.motivo().trim().toUpperCase(java.util.Locale.ROOT), idCaixa)
+                .update();
+
+        jdbc.sql("""
+                        DELETE FROM caixa_fechamento_conferencia
+                        WHERE id_tenant = plataforma.tenant_atual() AND id_caixa = ?
+                        """)
+                .param(idCaixa)
+                .update();
+
+        return new ReaberturaCaixaResponse(idCaixa, true);
+    }
+
+    /**
+     * Barra uma operação que apagaria lançamento de caixa **já fechado** (2026-08-14).
+     *
+     * <p>Chamado pelo estorno de recebimento de crediário e pela exclusão/reabertura de conta a
+     * pagar, antes de qualquer DELETE em {@code caixa_detalhe}. Sem isso, desfazer um recebimento
+     * de ontem apagaria a linha de um caixa já conferido e fechado, e o total conferido passaria
+     * a mentir — sem nenhum aviso ao operador.
+     *
+     * <p>O SQL vem de constante privada, nunca do cliente (P8: o filtro de {@code id_tenant} está
+     * escrito no texto da query, não só na policy de RLS).
+     */
+    @Transactional(readOnly = true)
+    public void exigirCaixaAbertoParaDesfazer(VinculoCaixa vinculo, long idVinculo) {
+        List<Integer> fechados = jdbc.sql(vinculo.sql).param(idVinculo).query(Integer.class).list();
+        if (!fechados.isEmpty()) {
+            throw new ConflitoDadosException(
+                    "Esta operação mexe no caixa nº " + fechados.getFirst() + ", que já está fechado. "
+                            + "Reabra o caixa em Frente de Loja › Caixa › Fechamento de Caixa "
+                            + "(só o ADMIN pode reabrir) e refaça a operação.");
+        }
+    }
+
+    /** Como o lançamento de caixa está vinculado à operação que se quer desfazer. */
+    public enum VinculoCaixa {
+        LOTE_RECEBIMENTO("""
+                SELECT DISTINCT cm.id_caixa FROM caixa_detalhe cd
+                  JOIN caixa_mestre cm ON cm.id_tenant = cd.id_tenant AND cm.id_caixa = cd.id_caixa
+                 WHERE cd.id_tenant = plataforma.tenant_atual()
+                   AND cd.id_lote_recebimento = ? AND cm.caixa_fechado = true
+                """),
+        CONTA_PAGAR("""
+                SELECT DISTINCT cm.id_caixa FROM caixa_detalhe cd
+                  JOIN caixa_mestre cm ON cm.id_tenant = cd.id_tenant AND cm.id_caixa = cd.id_caixa
+                 WHERE cd.id_tenant = plataforma.tenant_atual()
+                   AND cd.id_conta_pagar = ? AND cm.caixa_fechado = true
+                """);
+
+        private final String sql;
+
+        VinculoCaixa(String sql) {
+            this.sql = sql;
+        }
     }
 
     /**

@@ -9,7 +9,7 @@ export interface Eu {
    *  sessão com coluna `id_empresa` usa esta empresa. */
   empresa: { idEmpresa: number; nome: string }
   trial_expira_em: string | null
-  /** Contagem regressiva do aviso de horário de acesso (`HorarioAcessoGuard`, 2026-08-14) —
+  /** Contagem regressiva do aviso de horário de acesso (`HorarioAcessoGuard`, 2026-08-11) —
    *  `null` na imensa maioria das chamadas; só vem preenchido nos minutos finais de tolerância
    *  antes do bloqueio de verdade. */
   segundosRestantesTolerancia: number | null

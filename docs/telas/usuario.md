@@ -49,7 +49,7 @@ Tabela `usuario` (V015) + `usuario_empresa` (N:N, nova nesta feature).
 | `email` | E-mail | texto (`type="email"`) | **Sim** | Formato validado no front e no back (`@Email`); único por tenant (case-insensitive, `usuario_email_uk`) — conflito responde 409 com mensagem amigável |
 | `senha_hash` | Senha | senha (`type="password"`) | **Sim ao criar**; opcional ao editar | Mínimo 8 caracteres; nunca volta preenchida do servidor; em branco na edição = mantém a senha atual; sempre gravada como hash (BCrypt via `PasswordEncoder`, nunca texto) |
 | `usuario_empresa` (N:N) | Empresas com acesso | lista de checkboxes | **Sim, ao menos uma** | Lista todas as empresas do tenant (`GET /api/v1/empresas`); substituída por completo a cada salvamento (apaga tudo e reinsere, mesma técnica de `produto_categoria`) |
-| `controla_horario_acesso` | Controla horário de acesso | checkbox | default `false` | 2026-08-14, ver seção "Horário de acesso por dia da semana" abaixo. Escondido para o próprio ADMIN — a regra nunca se aplica a ele |
+| `controla_horario_acesso` | Controla horário de acesso | checkbox | default `false` | 2026-08-11, ver seção "Horário de acesso por dia da semana" abaixo. Escondido para o próprio ADMIN — a regra nunca se aplica a ele |
 | `usuario_horario_acesso` (N:1, 7 linhas) | Tabela Segunda…Domingo × Início/Fim | grade de 7 linhas com 2 campos de hora cada | Condicional: só aparece/é pedida quando `controlaHorarioAcesso` está marcado | Só renderiza quando o checkbox acima está ligado; dia com os dois campos em branco = sem acesso naquele dia |
 
 `id_usuario`, `criado_em` e `atualizado_em` aparecem como **campos informativos somente
@@ -98,7 +98,7 @@ obrigatórios configuráveis por tenant.
   diferente de `usuario_rotina`, que fica sem cascade por ainda não ser gravada por código
   nenhum).
 
-## Horário de acesso por dia da semana (2026-08-14)
+## Horário de acesso por dia da semana (2026-08-11)
 
 Pedido de segurança do dono do produto: restringir **quando** um `OPERADOR` pode fazer login e
 continuar trabalhando, com uma janela de horário por dia da semana (ex.: segunda a sábado
@@ -198,7 +198,7 @@ ainda, mas podem plugar do mesmo jeito quando for a vez deles.
 ```
 GET    /api/v1/usuarios?nome=&status=&pagina=&limite=&ordenarPor=&direcao=   lista paginada (ADMIN)
 POST   /api/v1/usuarios                      cria usuário (ADMIN) — corpo ganha controlaHorarioAcesso
-                                              (boolean) e horarios (7 linhas diaSemana/horaInicio/horaFim, 2026-08-14)
+                                              (boolean) e horarios (7 linhas diaSemana/horaInicio/horaFim, 2026-08-11)
 GET    /api/v1/usuarios/{id}                 detalhe (ADMIN) — resposta ganha os mesmos dois campos
 PUT    /api/v1/usuarios/{id}                 atualiza usuário (ADMIN); sem campo administrador no
                                               corpo — não é possível criar/promover/rebaixar ADMIN por aqui (2026-07-28)
@@ -207,7 +207,7 @@ DELETE /api/v1/usuarios/{id}                 exclui; fallback para inativar se h
 GET    /api/v1/empresas                      lista de empresas do tenant, sem paginação (qualquer papel)
 ```
 
-`GET /api/v1/empresas/permitidas` (2026-08-12, `EmpresaController`) também mora no módulo
+`GET /api/v1/empresas/permitidas` (2026-08-11, `EmpresaController`) também mora no módulo
 `identidade` mas pertence à Entrada de Produtos por Compra — ver `docs/telas/entrada-mercadoria.md`.
 
 `GET /api/v1/eu` (qualquer papel autenticado, `EuController`) ganhou o campo
@@ -231,7 +231,7 @@ Nova tabela `usuario_empresa` (N:N, `id_tenant`/`id_usuario`/`id_empresa`, PK co
 um único ADMIN por tenant no próprio banco, não só na aplicação. `usuario`/`usuario_rotina`
 não mudaram de estrutura (além do índice).
 
-`db/migration/V033__usuario_horario_acesso.sql` (2026-08-14): `usuario.controla_horario_acesso
+`db/migration/V033__usuario_horario_acesso.sql` (2026-08-11): `usuario.controla_horario_acesso
 boolean NOT NULL DEFAULT false` + tabela nova `usuario_horario_acesso` — ver seção "Horário de
 acesso" acima para o desenho completo (colunas, constraints, RLS).
 

@@ -11,7 +11,7 @@ const Ctx = createContext<RotinaCriticaCtx | null>(null)
  * Flag compartilhada, escopo das rotas autenticadas: `true` enquanto o usuário está no meio de
  * uma rotina que não pode ser interrompida (ex.: finalizando uma venda no PDV). O logoff
  * automático por fim de horário de acesso (`HorarioAcessoGuard`, docs/telas/usuario.md,
- * 2026-08-14) espera ela virar `false` antes de derrubar a sessão de verdade — nunca corta uma
+ * 2026-08-11) espera ela virar `false` antes de derrubar a sessão de verdade — nunca corta uma
  * venda no meio.
  */
 export function RotinaCriticaProvider({ children }: { children: ReactNode }) {

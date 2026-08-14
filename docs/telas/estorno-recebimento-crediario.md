@@ -76,6 +76,8 @@ Duas ações por linha:
 
 ## O que o estorno faz, em ordem (transação única)
 
+0. **Checa se algum caixa envolvido já foi fechado** (2026-08-14) — antes de qualquer escrita, ver
+   a seção abaixo. Se estiver fechado, 409 e nada acontece.
 1. Trava o lote (`SELECT ... FOR UPDATE`) — 409 se não existir ou já tiver sido estornado.
 2. Trava as parcelas do lote (`FOR UPDATE`), protegendo contra estorno duplicado em corrida.
 3. Apaga `contas_receber_detalhe` das parcelas do lote (detalhe de cartão, RN010 da tela de
@@ -89,6 +91,26 @@ Duas ações por linha:
 
 **Nunca mexe em `caixa_mestre`** — o caixa do dia pode ter lançamentos de outros lotes recebidos
 na mesma sessão de trabalho (mesmo usuário/empresa/dia).
+
+## Caixa fechado bloqueia o estorno (2026-08-14)
+
+Até esta data o passo 5 (apagar `caixa_detalhe`) era incondicional: estornar um recebimento de um
+dia **já fechado** apagava a linha em silêncio, e a conferência gravada em
+`caixa_fechamento_conferencia` passava a afirmar um total que não existia mais — sem nenhum aviso
+ao operador. Agora `RecebimentoCrediarioService.estornarLote` chama, **como primeira instrução do
+método** (`RecebimentoCrediarioService.java:374-376`),
+`CaixaService.exigirCaixaAbertoParaDesfazer(VinculoCaixa.LOTE_RECEBIMENTO, idLoteRecebimento)`.
+
+Se algum `caixa_mestre` com lançamento daquele lote estiver com `caixa_fechado = true`, a resposta
+é **409** com a mensagem que já diz o que fazer:
+
+> Esta operação mexe no caixa nº X, que já está fechado. Reabra o caixa em Frente de Loja › Caixa ›
+> Fechamento de Caixa (só o ADMIN pode reabrir) e refaça a operação.
+
+**Nada é desfeito pela metade na recusa.** A checagem roda antes do `FOR UPDATE` do lote e antes de
+qualquer DELETE/UPDATE, dentro da mesma transação — parcelas continuam recebidas,
+`contas_receber_detalhe` intacto, `contas_receber_lote` intacto, lançamentos de caixa intactos. O
+operador reabre o caixa (só ADMIN, ver `docs/telas/fechamento-caixa.md`) e refaz o estorno.
 
 ## Critérios de aceitação (viram testes)
 
@@ -105,9 +127,12 @@ na mesma sessão de trabalho (mesmo usuário/empresa/dia).
 - Dado um lote de outro tenant, então não aparece na listagem nem pode ser estornado (RLS).
 - Dado um lote, quando solicita visualizar as parcelas, então recebe a lista sem travar nada no
   banco nem alterar qualquer dado.
+- Dado um lote cujo caixa já foi **fechado**, quando tenta estornar, então 409 e **tudo continua
+  como estava** — parcelas ainda recebidas, lote ainda existindo, lançamentos de caixa ainda lá
+  (`estornarLoteComCaixaFechadoEhRecusadoEDeixaTudoComoEstava`, 2026-08-14).
 
-Cobertos por `RecebimentoCrediarioCrudTest` (7 testes novos, 23 no arquivo). Suíte completa do
-projeto: 492/492 verdes (2026-08-24).
+Cobertos por `RecebimentoCrediarioCrudTest` (8 testes de estorno, 24 no arquivo). Suíte completa do
+projeto: **500/500 verdes (2026-08-14)**.
 
 ## Impacto no contrato de API
 
@@ -123,7 +148,9 @@ Problem Details (RFC 9457): 400 (sem nome de cliente), 409 (lote inexistente ou 
 ## Ajuda da tela (manual de operação + vídeo) — obrigatório (R22 / §3.7.1)
 
 - **`chave_tela`: `financeiro.estornorecebimentocrediario.tela`** — ver
-  `web/src/components/AjudaDaTela.tsx`. `url_video`: `NULL` por ora.
+  `web/src/components/AjudaDaTela.tsx`. `url_video`: `NULL` por ora. Em 2026-08-14 os erros comuns
+  ganharam a mensagem de caixa fechado, explicando o caminho da reabertura e deixando claro que
+  nada é desfeito pela metade enquanto isso (`AjudaDaTela.tsx:626`).
 
 ## Impacto no banco
 
@@ -142,11 +169,14 @@ Nenhum.
   como listar "recebimentos já estornados" depois do fato.
 - **Estorno de parcela de cartão de crédito recebida fora desta tela** — mesmo escopo da tela de
   Recebimento (só categoria `CREDIARIO`).
-- **Reabertura de caixa fechado** — se o `caixa_mestre` daquele dia já tiver sido fechado (a
-  rotina de **Fechamento de Caixa** existe desde 2026-07-30 —
-  `web/src/pages/caixa/FechamentoCaixa.tsx`, `CaixaController.java:56`,
-  `docs/telas/fechamento-caixa.md`), o estorno dos lançamentos de `caixa_detalhe` ainda funciona,
-  mas não há tela de reabertura de caixa.
+- ~~**Reabertura de caixa fechado** — se o `caixa_mestre` daquele dia já tiver sido fechado, o
+  estorno dos lançamentos de `caixa_detalhe` ainda funciona, mas não há tela de reabertura de
+  caixa.~~ — **revisto em 2026-08-14**: o estorno com caixa fechado deixou de "ainda funcionar"
+  (era exatamente o que corrompia a conferência) e passou a **recusar com 409**; a reabertura
+  existe como ação ADMIN-only dentro do **Fechamento de Caixa**
+  (`web/src/pages/caixa/FechamentoCaixa.tsx:199-211`, `CaixaController.java:66-71`,
+  `docs/telas/fechamento-caixa.md`) — continua fora do escopo **desta** tela, que só aponta o
+  caminho na mensagem de erro.
 
 ## Questões abertas
 

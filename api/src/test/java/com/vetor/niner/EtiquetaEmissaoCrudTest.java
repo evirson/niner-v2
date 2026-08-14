@@ -364,7 +364,7 @@ class EtiquetaEmissaoCrudTest {
         String token = assinarNovoTenant("entradas-nota");
         long idTenant = extrairIdTenant(token);
         long idProduto = criarProduto(token, "Bermuda Entrada");
-        // 2 produtos distintos pra 2 variações "sem cor/tamanho" (2026-08-20): id_cor/id_tamanho
+        // 2 produtos distintos pra 2 variações "sem cor/tamanho" (2026-08-13): id_cor/id_tamanho
         // gravam 1 (PADRÃO) em vez de NULL — 2 variações do MESMO produto sem cor/tamanho
         // colidiriam em produto_barra_variacao_uk.
         long idProduto2 = criarProduto(token, "Bermuda Entrada 2");
@@ -399,7 +399,7 @@ class EtiquetaEmissaoCrudTest {
         String token = assinarNovoTenant("estoque-positivo");
         long idTenant = extrairIdTenant(token);
         long idProduto = criarProduto(token, "Produto Estoque");
-        // 2 produtos distintos pra 2 variações "sem cor/tamanho" (2026-08-20) — ver comentário
+        // 2 produtos distintos pra 2 variações "sem cor/tamanho" (2026-08-13) — ver comentário
         // em buscarPorEntradasFiltraPorNotaFiscal.
         long idProduto2 = criarProduto(token, "Produto Estoque 2");
 

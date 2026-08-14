@@ -47,7 +47,7 @@ function paginasVisiveis(atual: number, total: number): number[] {
 }
 
 /**
- * Cancelamento de Devolução de Produtos (2026-08-11) — ADMIN e OPERADOR (rota fora de
+ * Cancelamento de Devolução de Produtos (2026-08-10) — ADMIN e OPERADOR (rota fora de
  * `RequireAdmin`; OPERADOR só enxerga/cancela devoluções da empresa em que está logado,
  * restrição aplicada no servidor). Os filtros (nº do vale, data inicial e final) ficam num
  * popup obrigatório ao entrar na tela (mesmo padrão do CRM) — só ao confirmar a grid aparece.

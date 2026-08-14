@@ -300,7 +300,7 @@ class ValeMercadoriaCrudTest {
                 .andExpect(status().isCreated());
 
         // Segunda tentativa de usar o mesmo vale — precisa de outra venda igual pra tentar de novo.
-        // Produto NOVO pra essa 2ª variação (2026-08-20): produto_barra_variacao_uk agora é
+        // Produto NOVO pra essa 2ª variação (2026-08-13): produto_barra_variacao_uk agora é
         // violável de verdade sem cor/tamanho — id_cor/id_tamanho gravam 1 (PADRÃO) em vez de
         // NULL, então 2 variações "sem variação" do MESMO produto colidiriam.
         long idProdutoVenda2 = criarProdutoComPreco(tenant.token(), "Produto Vendido Reuso 2", "30.00");
@@ -462,7 +462,7 @@ class ValeMercadoriaCrudTest {
         }
 
         // O vale reaberto pode ser usado numa nova venda. Produto NOVO pra essa 2ª variação
-        // (2026-08-20): produto_barra_variacao_uk agora é violável de verdade sem cor/tamanho —
+        // (2026-08-13): produto_barra_variacao_uk agora é violável de verdade sem cor/tamanho —
         // id_cor/id_tamanho gravam 1 (PADRÃO) em vez de NULL, então 2 variações "sem variação"
         // do MESMO produto colidiriam.
         long idProdutoVenda2 = criarProdutoComPreco(tenant.token(), "Produto Vendido Cancelamento 2", "80.00");

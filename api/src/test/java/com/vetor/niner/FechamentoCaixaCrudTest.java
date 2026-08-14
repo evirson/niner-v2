@@ -258,6 +258,119 @@ class FechamentoCaixaCrudTest {
                 .andExpect(status().isOk());
     }
 
+    // --- Reabertura de caixa (2026-08-14) ----------------------------------------------------
+
+    /** Fecha o caixa direto no banco e devolve o id — estes testes precisam do estado "fechado",
+     *  não do fluxo de contagem às cegas (já coberto pelos testes de fechamento). */
+    private long fecharCaixaNoBanco(long idTenant) throws SQLException {
+        try (Connection c = abrirConexao(idTenant);
+             Statement st = c.createStatement()) {
+            st.executeUpdate("UPDATE caixa_mestre SET caixa_fechado = true, data_fechamento = now()");
+            try (ResultSet rs = st.executeQuery("SELECT id_caixa FROM caixa_mestre ORDER BY id_caixa DESC LIMIT 1")) {
+                rs.next();
+                return rs.getLong(1);
+            }
+        }
+    }
+
+    /**
+     * Reabrir apaga a conferência gravada (foi calculada sobre um estado que vai mudar) e deixa o
+     * motivo registrado em {@code observacoes} — é o que torna a reabertura auditável (P3).
+     */
+    @Test
+    void adminReabreCaixaFechadoApagandoConferenciaERegistrandoMotivo() throws Exception {
+        TenantNovo tenant = assinarNovoTenant("reabrir-ok");
+        abrirCaixaDinheiro(tenant.token());
+        long idTenant = extrairIdTenant(tenant.token());
+        long idCaixa = fecharCaixaNoBanco(idTenant);
+
+        // Uma linha de conferência que precisa sumir na reabertura.
+        long idCarteira = buscarIdCarteiraDinheiro(tenant.token());
+        try (Connection c = abrirConexao(idTenant);
+             PreparedStatement ps = c.prepareStatement("""
+                     INSERT INTO caixa_fechamento_conferencia
+                         (id_tenant, id_caixa, id_carteira, valor_esperado, valor_contado)
+                     VALUES (?, ?, ?, 0, 0)
+                     """)) {
+            ps.setLong(1, idTenant);
+            ps.setLong(2, idCaixa);
+            ps.setLong(3, idCarteira);
+            ps.executeUpdate();
+        }
+
+        mvc.perform(post("/api/v1/caixa/fechamento/" + idCaixa + "/reabrir")
+                        .header("Authorization", "Bearer " + tenant.token())
+                        .contentType(APPLICATION_JSON)
+                        .content("{\"motivo\":\"estornar recebimento lancado por engano\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.reaberto").value(true));
+
+        try (Connection c = abrirConexao(idTenant);
+             Statement st = c.createStatement()) {
+            try (ResultSet rs = st.executeQuery(
+                    "SELECT caixa_fechado, data_fechamento, observacoes FROM caixa_mestre WHERE id_caixa = " + idCaixa)) {
+                rs.next();
+                assertThat(rs.getBoolean("caixa_fechado")).isFalse();
+                assertThat(rs.getObject("data_fechamento")).isNull();
+                assertThat(rs.getString("observacoes")).contains("REABERTO EM").contains("ESTORNAR RECEBIMENTO");
+            }
+            try (ResultSet rs = st.executeQuery(
+                    "SELECT count(*) FROM caixa_fechamento_conferencia WHERE id_caixa = " + idCaixa)) {
+                rs.next();
+                assertThat(rs.getInt(1)).isZero();
+            }
+        }
+    }
+
+    /** Reabrir é decisão de ADMIN — invalida uma conferência já assinada pelo operador. */
+    @Test
+    void operadorNaoReabreCaixa() throws Exception {
+        TenantNovo tenant = assinarNovoTenant("reabrir-operador");
+        String tokenOperador = criarOperadorEFazerLogin(tenant.token(), tenant.slug(), "reabrir-operador");
+        abrirCaixaDinheiro(tokenOperador);
+        long idCaixa = fecharCaixaNoBanco(extrairIdTenant(tenant.token()));
+
+        mvc.perform(post("/api/v1/caixa/fechamento/" + idCaixa + "/reabrir")
+                        .header("Authorization", "Bearer " + tokenOperador)
+                        .contentType(APPLICATION_JSON)
+                        .content("{\"motivo\":\"quero reabrir\"}"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void reabrirCaixaJaAbertoEhRecusado() throws Exception {
+        TenantNovo tenant = assinarNovoTenant("reabrir-ja-aberto");
+        abrirCaixaDinheiro(tenant.token());
+        long idTenant = extrairIdTenant(tenant.token());
+        long idCaixa;
+        try (Connection c = abrirConexao(idTenant);
+             Statement st = c.createStatement();
+             ResultSet rs = st.executeQuery("SELECT id_caixa FROM caixa_mestre ORDER BY id_caixa DESC LIMIT 1")) {
+            rs.next();
+            idCaixa = rs.getLong(1);
+        }
+
+        mvc.perform(post("/api/v1/caixa/fechamento/" + idCaixa + "/reabrir")
+                        .header("Authorization", "Bearer " + tenant.token())
+                        .contentType(APPLICATION_JSON)
+                        .content("{\"motivo\":\"nada a fazer aqui\"}"))
+                .andExpect(status().isConflict());
+    }
+
+    /** Motivo em branco é rejeitado — sem o porquê, a reabertura não deixa rastro auditável. */
+    @Test
+    void reabrirSemMotivoEhRejeitado() throws Exception {
+        TenantNovo tenant = assinarNovoTenant("reabrir-sem-motivo");
+        abrirCaixaDinheiro(tenant.token());
+        long idCaixa = fecharCaixaNoBanco(extrairIdTenant(tenant.token()));
+
+        mvc.perform(post("/api/v1/caixa/fechamento/" + idCaixa + "/reabrir")
+                        .header("Authorization", "Bearer " + tenant.token())
+                        .contentType(APPLICATION_JSON)
+                        .content("{\"motivo\":\"   \"}"))
+                .andExpect(status().isBadRequest());
+    }
+
     @Test
     void adminConsultaFechamentoDoProprioCaixa() throws Exception {
         TenantNovo tenant = assinarNovoTenant("admin-proprio");

@@ -31,7 +31,7 @@ import static org.springframework.http.HttpStatus.NOT_FOUND;
  * 2026-08-08) — este service empacota/desempacota essa lista pro cliente da API nunca ver os
  * slots, só um {@code List<Long>} ordenado.
  *
- * <p><b>id_grade=1 é a grade PADRÃO</b> (2026-08-20, ver {@code SignupService}) — reservada,
+ * <p><b>id_grade=1 é a grade PADRÃO</b> (2026-08-13, ver {@code SignupService}) — reservada,
  * invisível, nunca listada/editável por aqui. {@code id_grade} não é mais {@code IDENTITY}
  * (V017): cada tenant tem sua própria numeração, calculada aqui como {@code MAX(id_grade)+1}.
  */
@@ -91,7 +91,7 @@ public class GradeService {
     /** Acha a grade cujo CONTEÚDO (sequência ORDENADA de tamanhos, slot a slot) é exatamente
      * igual à informada, ou cria uma nova — usado quando a origem não traz nome de grade nenhum
      * (Rotina de Importação de Dados, layout "uma linha = um produto" com {@code TAMANHO_1..20},
-     * 2026-08-09). Diferente de {@link #obterOuCriarPorNome} (casa por nome), aqui "já existe" é
+     * 2026-08-10). Diferente de {@link #obterOuCriarPorNome} (casa por nome), aqui "já existe" é
      * definido pelo conteúdo — o nome é só um rótulo gerado ({@code nomeSugerido}), com sufixo
      * numérico se já estiver em uso por outra grade de conteúdo diferente. */
     @Transactional
@@ -181,7 +181,7 @@ public class GradeService {
 
     /** Garante que {@code idTamanho} faça parte da grade — se já estiver em algum slot, não faz
      * nada; senão anexa no próximo slot livre (extensão automática, usada pelo fluxo Planilha da
-     * Entrada de Produtos, 2026-08-13: uma variação de tamanho nova pra um produto já cadastrado
+     * Entrada de Produtos, 2026-08-11: uma variação de tamanho nova pra um produto já cadastrado
      * é uma ampliação legítima da curva, o mesmo que o usuário faria manualmente em "＋ Gerenciar
      * Grades"). Lança se a grade já estiver com os {@value #MAX_TAMANHOS} slots ocupados —
      * quem chama decide se isso vira pendência pro usuário resolver à mão. */

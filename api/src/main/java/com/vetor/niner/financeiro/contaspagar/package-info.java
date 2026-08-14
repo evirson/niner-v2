@@ -1,5 +1,5 @@
 /**
- * Contas a Pagar / Pagas (2026-08-19) — tela de gestão das duplicatas de fornecedor
+ * Contas a Pagar / Pagas (2026-08-12) — tela de gestão das duplicatas de fornecedor
  * ({@code contas_pagar}, V026), CRUD completo (visualizar/editar/excluir/incluir). A tabela já
  * existia e era gravada só internamente pela Entrada de Produtos por Compra ({@link
  * com.vetor.niner.estoque.entrada.ContasPagarService#gravar}, mantido como está); este pacote é

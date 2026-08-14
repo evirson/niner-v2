@@ -1,18 +1,18 @@
 # Progresso do Projeto — niner-v2
 
 Registro cronológico das decisões e entregas. Atualizar a cada marco relevante.
-**Última atualização:** 2026-08-24
+**Última atualização:** 2026-08-14
 
 ---
 
 ## Estado atual
 
-> **Resumo em uma linha (2026-08-24):** ERP com **~40 telas** ponta a ponta cobrindo cadastros,
+> **Resumo em uma linha (2026-08-14):** ERP com **~40 telas** ponta a ponta cobrindo cadastros,
 > catálogo, estoque (incl. entrada por XML de NF-e), PDV e vendas, financeiro completo (caixa,
 > crediário, contas a pagar/receber, conta corrente, **DRE e Fluxo de Caixa**), relatórios,
 > etiquetas e importação/exportação. **Falta o coração da visão original**: integração com
 > marketplaces (`canais`/`pedidos`/`precos`/`integracao` seguem sem implementação de domínio) e o
-> app `admin/` (backoffice da plataforma). **492/492 testes de backend verdes.**
+> app `admin/` (backoffice da plataforma). **500/500 testes de backend verdes.**
 >
 > Os parágrafos abaixo são a **narrativa acumulada** desde o começo — leia o resumo acima para o
 > estado, e a linha do tempo (do mais novo para o mais antigo) para o detalhe de cada entrega.
@@ -139,18 +139,18 @@ na API (24h, sem custo de object storage, limite de 20 arquivos por tenant soman
 ver `docs/infra/compartilhamento-arquivo-temporario.md`) — e os quatro popups de comprovante
 passaram a ter cabeçalho/rodapé fixos, com scroll só na pré-visualização.
 
-**De 2026-08-08 a 2026-08-24** (resumo; detalhe na linha do tempo): o módulo `estoque` ganhou
+**De 2026-08-08 a 2026-08-14** (resumo; detalhe na linha do tempo): o módulo `estoque` ganhou
 **Entrada de Produtos por Compra** nos três fluxos — manual, planilha e **XML de NF-e** — com
 cancelamento, filtros e consistência configurável entre duplicatas e total; `catalogo` trocou as
 variantes linha/coluna por **cor + grade de tamanho** e recebeu os ~10.515 NCMs reais da Receita;
 `financeiro` ganhou **Contas a Pagar/Pagas**; `identidade` ganhou **horário de acesso por dia da
 semana**; o **plano de contas** encolheu para a máscara `9.99.999` (3 níveis, 76 contas padrão) e
-ganhou o `SeletorPlanoContas`. Em **2026-08-23** saíram as duas telas que fecham o módulo de
+ganhou o `SeletorPlanoContas`. Em **2026-08-14** saíram as duas telas que fecham o módulo de
 resultado — **DRE em dois regimes** (competência e caixa) e **Fluxo de Caixa** (realizado +
 projeção) —, o que exigiu que a **baixa de conta a pagar passasse a gerar movimento de dinheiro**
 de verdade; no mesmo dia o ERP ganhou **seletor de tema Claro/Escuro/Automático**, o signup passou
 a aplicar o **plano de contas padrão completo**, e foi descoberto que o `tsc --noEmit` **não
-checava nada** (19 erros reais acumulados, todos corrigidos — usar `tsc -b`). Em **2026-08-24**, a
+checava nada** (19 erros reais acumulados, todos corrigidos — usar `tsc -b`). Em **2026-08-14**, a
 primeira impressão em bobina térmica real mostrou que a **papeleta de venda saía ilegível**: virou
 42 colunas com item em 2 linhas, e a calibragem de impressão (largura imprimível, negrito,
 Consolas) foi aplicada também ao comprovante de crediário — o vale-mercadoria herdou sozinho.
@@ -211,7 +211,7 @@ incluindo uma asserção de teste que checava um nome de campo que nunca existiu
 de backend depois de tudo: **405/405 verdes**. Ver linha do tempo de 2026-08-08 (topo) pro detalhe
 completo.
 
-**Sessão de 2026-08-09:** a Rotina de Importação de Dados passou por uma reformulação grande, em
+**Sessão de 2026-08-10:** a Rotina de Importação de Dados passou por uma reformulação grande, em
 várias rodadas, testando com os arquivos reais do dono do produto. Primeiro, dois bugs pontuais:
 upload de arquivo grande (`CONTAS_RECEBER.csv`, 26,6 MB) batia no limite de 10 MB herdado do upload
 de foto de produto — corrigido junto com um achado colateral (um `413` do Tomcat some antes do
@@ -244,13 +244,13 @@ descoberto que o par de arquivos de exemplo (`ESTOQUES.csv`/`PRODUTOS.csv`) tem 
 `CODIGO_PRODUTO` que não existe em nenhum dos dois — dado real do lojista, não bug. Zerado o banco
 de dev a pedido (recriado do zero) e semeado com 5 empresas, 5 vendedores e o plano de contas
 padrão completo (336 contas, script já existente). Suíte de backend: **405/405 verdes**. Ver linha
-do tempo de 2026-08-09 (topo) pro detalhe completo.
+do tempo de 2026-08-10 (topo) pro detalhe completo.
 
-**Sessões de 2026-08-10/11 — Rotina de Importação de Dados, reformulação + correções de produção:**
+**Sessões de 2026-08-10 — Rotina de Importação de Dados, reformulação + correções de produção:**
 a tela única multi-arquivo virou um **hub com 5 telas dedicadas** (uma por tabela, ordem de
 dependência: Clientes → Contas a Receber → Fornecedores → Produtos → Estoque Inicial), o formato
-de arquivo trocou de CSV para **planilha Excel nativa** (`.xlsx`/`.xls`, Apache POI). No dia
-seguinte, testando com dados reais e grandes de verdade (planilha de Contas a Receber com 660 mil
+de arquivo trocou de CSV para **planilha Excel nativa** (`.xlsx`/`.xls`, Apache POI). Ainda no
+mesmo dia, testando com dados reais e grandes de verdade (planilha de Contas a Receber com 660 mil
 linhas), apareceram e foram corrigidos **3 bugs de produção genuínos**: (1) uma exceção de banco
 numa linha (não só erro de validação) deixava a transação "abortada" e derrubava em cascata toda
 linha seguinte do arquivo (Postgres `25P02`) — corrigido com **SAVEPOINT por linha**
@@ -277,11 +277,11 @@ rodada de otimização (pré-busca em lote no `ProdutoBarraService`) derrubou o 
 7min46s pra 59,7s (~7,8x) num arquivo real de 22.483 linhas; e a tela de **Exportação de Dados**
 ganhou o mesmo `GaugeProgresso` (modo simulado, sem loop linha a linha no backend pra progresso
 real). Tudo testado ao vivo (planilhas geradas com `write-excel-file`, dados conferidos no banco,
-não só o relatório da API) — ver linha do tempo de 2026-08-10/11 (topo) pro detalhe completo.
+não só o relatório da API) — ver linha do tempo de 2026-08-10 (topo) pro detalhe completo.
 
 **Sessão de 2026-08-07:** o comprovante de Recebimento de Crediário e a Papeleta de Venda (com suas reimpressões) ganharam **envio por WhatsApp** (`comum.arquivocompartilhado` — cache de PDF em memória, sem custo, sem object storage, token expira em 24h, limite de 20 arquivos/tenant somando os 4 fluxos) e **layout fixo** (título/rodapé sempre visíveis, só a pré-visualização rola). Na sequência, a tela de **CRM** passou por duas rodadas revisando o fluxo original de 2026-08-05: primeiro ganhou uma **grid de resultado** (cabeçalho fixo, ordenação por coluna, total, scroll só nos dados), depois os filtros/colunas viraram um **popup obrigatório que abre sozinho ao entrar na tela** (com `GaugeProgresso` — reaproveitado da Rotina de Importação de Dados — enquanto a busca roda) e o botão "Gerar Planilha Excel" subiu pra linha do título. Numa terceira sessão do mesmo dia — recuperada depois que o terminal foi fechado sem pedido explícito de commit/documentação, mas com todo o código intacto no working tree —, o PDV passou a **validar limite de crédito do cliente** no crediário (`cliente.limite_credito`, campo que existia desde a V016 mas nunca era checado) e o comprovante de vale-mercadoria da devolução foi **padronizado com o layout de 64 colunas/Lucida Console da Papeleta de Venda**, ganhando também "Enviar por WhatsApp"; erros de confirmação de venda passaram de `Toast` para um popup dedicado (`AvisoModal`). Ver linha do tempo de 2026-08-07 (topo, três entradas) pro detalhe completo.
 
-**Sessão de 2026-08-11 (nova, depois da reformulação da Importação de Dados):** nasceu o
+**Sessão de 2026-08-10 (nova, depois da reformulação da Importação de Dados):** nasceu o
 **Cancelamento de Devolução de Produtos** (`vendas.cancelamentodevolucao`,
 `docs/telas/cancelamento-devolucao-produtos.md`) — desfaz um vale-mercadoria ainda não usado,
 retirando do estoque a quantidade que a devolução original tinha colocado de volta
@@ -319,11 +319,11 @@ sem recarregar a página) em vez de dar F5. Suíte de backend: **410/410 verdes*
 nesta sessão: 4 da restrição a produtos vendidos + 1 da obrigatoriedade condicional). Detalhe
 completo em `docs/telas/devolucao-produtos.md` e `docs/telas/configuracao-geral.md`.
 
-**Sessão de 2026-08-11/12:** retomada da spec pausada **Entrada de Produtos por Compra**
+**Sessão de 2026-08-11:** retomada da spec pausada **Entrada de Produtos por Compra**
 (`docs/telas/entrada-mercadoria.md`) — décima primeira tela de domínio, módulo `estoque`.
 Fluxos **Manual** e **Planilha** implementados (confirmação comum grava o ledger existente,
 V019, saldo sobe por trigger); **Fluxo XML e atalho de emissão de etiqueta ficaram pendentes
-nesta sessão** (fases 3 e 5 — fase 3 completada em 2026-08-18/19, ver abaixo). Rateio de
+nesta sessão** (fases 3 e 5 — fase 3 completada em 2026-08-12, ver abaixo). Rateio de
 frete/reajuste de preço configuráveis em Parâmetros do Sistema,
 `contas_pagar` opcional a partir de parcelas informadas, plano de contas de compra dedicado
 (`cfg_geral.id_plano_contas_compra_mercadoria`, V032), vínculo `produto_fornecedor` (V031) pra
@@ -332,7 +332,7 @@ escolha de empresa (ADMIN: todas do tenant; OPERADOR: só as liberadas,
 `GET /api/v1/empresas/permitidas`). Ver linha do tempo e `docs/telas/entrada-mercadoria.md`
 para o estado exato do que falta.
 
-**Sessão de 2026-08-14:** **Horário de Acesso por Dia da Semana**, adicionado ao Cadastro de
+**Sessão de 2026-08-11 (continuação 3):** **Horário de Acesso por Dia da Semana**, adicionado ao Cadastro de
 Usuários (`docs/telas/usuario.md`) — restringe quando um `OPERADOR` pode logar/trabalhar, com
 janela por dia da semana e checkbox `controla_horario_acesso` (ADMIN nunca é afetado). Login
 sem tolerância; chamadas autenticadas com **15 minutos** de tolerância (pra não cortar uma
@@ -345,8 +345,8 @@ Postgres embrulhando na virada da meia-noite (quebrava a tolerância pra expedie
 nos últimos 15 minutos do dia). Suíte de backend: **444/444 verdes**. Ver linha do tempo e
 `docs/telas/usuario.md`, seção "Horário de acesso por dia da semana".
 
-**Sessão de 2026-08-18/19:** retomada da Entrada de Produtos por Compra para fechar o **Fluxo
-XML** (Fase 3, pendente desde 08-11/12) — upload da NF-e primeiro, fornecedor/empresa/nota/
+**Sessão de 2026-08-12:** retomada da Entrada de Produtos por Compra para fechar o **Fluxo
+XML** (Fase 3, pendente desde 08-11) — upload da NF-e primeiro, fornecedor/empresa/nota/
 parcelas resolvidos automaticamente a partir dela, cadastro rápido de fornecedor pré-preenchido
 quando não há match por CNPJ, matching de item por EAN → código do fornecedor aprendido →
 heurística de texto → pendência manual, cor/tamanho sempre exigindo confirmação do operador.
@@ -357,7 +357,7 @@ ADMIN-only, mesmo padrão de Cancelamento de Venda/Devolução — estorna estoq
 + correção de um bug real de fuso horário em filtro de data). Ver `docs/telas/
 entrada-mercadoria.md` para o desenho completo dos três.
 
-**Sessão de 2026-08-19 (continuação):** nova tela **Contas a Pagar / Pagas**
+**Sessão de 2026-08-12 (continuação):** nova tela **Contas a Pagar / Pagas**
 (`docs/telas/contas-pagar.md`, novo) no módulo Financeiro — CRUD completo sobre a tabela
 `contas_pagar` (V026), que até aqui só era escrita internamente pela Entrada de Produtos.
 Popup de filtros obrigatório (Fornecedor, Empresa, Nota Fiscal, Duplicata, período de
@@ -367,7 +367,7 @@ Pagamento/Valor Pago/Documento Pago é a baixa. Dois bugs pegos só testando ao 
 escolher um pelo typeahead), ambos corrigidos. Suíte de backend: **472/472 verdes** (11 testes
 novos, `ContaPagarCrudTest`). Ver `docs/telas/contas-pagar.md`.
 
-**Sessão de 2026-08-22:** três entregas independentes. (1) **Fix real** — o cadastro rápido de
+**Sessão de 2026-08-13:** três entregas independentes. (1) **Fix real** — o cadastro rápido de
 fornecedor embutido na Entrada de Produtos por Compra (`FornecedorQuickCreateModal`) só
 preenchia o plano de contas padrão de compra quando quem estava logado era `ADMIN`, porque
 reusava o endpoint completo de Parâmetros do Sistema (`GET /api/v1/config-geral`, ADMIN-only) só
@@ -401,7 +401,64 @@ Movimentação de Conta Corrente) que ainda não tinham migrado pro `SeletorPlan
 
 ## Linha do tempo
 
-### 2026-08-24 — Auditoria completa da documentação (spec + 40 telas + 86 memórias)
+### 2026-08-14 — Reabertura de Caixa + os 4 achados da auditoria, corrigidos
+
+Os quatro achados que a auditoria registrou "para decisão do dono do produto" voltaram
+decididos, e a resposta de um deles obrigou a construir uma feature nova.
+
+**Reabertura de Caixa (feature nova).** O pedido foi *"estorno de crediário, com caixa fechado,
+tem que mandar reabrir o caixa"* — mas **a reabertura não existia**: `CaixaService` só tinha
+`fechar()`, sem volta. Mandar "reabra o caixa" sem ter reabertura seria um beco sem saída, então
+ela veio junto: `POST /api/v1/caixa/fechamento/{id}/reabrir`, **ADMIN-only e com motivo
+obrigatório** (mesmo par do Cancelamento de Venda — reabrir invalida uma conferência que o
+operador assinou, é decisão de gestor). Limpa o estado de fechamento, **apaga as linhas de
+`caixa_fechamento_conferencia`** (foram calculadas sobre um estado que vai mudar) e **acrescenta**
+— nunca sobrescreve — o rastro em `caixa_mestre.observacoes`:
+`REABERTO EM dd/mm/aaaa hh:mm POR USUARIO <id>: <MOTIVO>`. Coluna existente em vez de schema
+novo, de propósito. Recusa (409) se o mesmo operador já tem outro caixa aberto, senão existiriam
+dois caixas abertos e o PDV não saberia em qual lançar. Na tela, o botão só aparece para ADMIN e
+só em caixa fechado.
+
+**O guard que motivou tudo.** `CaixaService.exigirCaixaAbertoParaDesfazer(VinculoCaixa, id)` —
+enum com `LOTE_RECEBIMENTO` e `CONTA_PAGAR`, cada um com seu SQL em constante (nunca do cliente;
+`id_tenant` escrito no texto da query, P8). Responde 409 com uma mensagem que **ensina a saída**,
+não só nega. Ligado no estorno de crediário e nos três caminhos de Contas a Pagar que apagam
+movimento (baixa, troca de origem, reabertura da conta). *O pedido do usuário era só sobre o
+estorno; o mesmo DELETE incondicional existia em Contas a Pagar, e corrigir só um lado deixaria o
+buraco aberto no outro — a extensão do escopo foi comunicada.*
+
+**Bug: exclusão de conta a pagar deixava dinheiro órfão.** `excluir()` apagava só a linha de
+`contas_pagar`; o `caixa_detalhe`/`conta_corrente_movimento` da baixa ficavam para sempre — **o
+dinheiro seguia saindo do caixa e do banco sem nenhuma conta que o justificasse**. Como essas
+colunas de vínculo **não têm FK** (escolha deliberada de V025/V028), o banco nunca reclamou, e o
+DELETE dos movimentos só existia no caminho de POST/PUT. Corrigido; a assinatura virou
+`excluir(Jwt, long)`. Lição registrada: coluna de vínculo sem FK não avisa quando o `excluir()`
+esquece o outro lado — e um teste que só checa 200 no DELETE passa com o bug presente, então o
+teste tem que conferir o banco.
+
+**Bug: "Emitir Etiquetas desta Nota" passava parâmetros ignorados.** A entrada montava
+`?idFornecedor=…&notaFiscal=…` desde 08-11, mas a tela de Emissão nunca leu `useSearchParams` —
+o operador caía numa lista vazia e redigitava tudo. Agora a entrada manda também o
+`nomeFornecedor` (o endpoint de fornecedores busca por texto, não por id — sem o nome seria
+preciso uma chamada extra só pra mostrar de quem é a nota) e a tela **abre o popup sozinha no
+modo Por Entradas**, com os filtros preenchidos: basta clicar em Localizar.
+
+**Bug: PDF do vale-mercadoria fora de calibragem.** Ficou em 5pt/2,6mm enquanto papeleta e
+crediário foram para 8pt/3,6mm — e o docstring afirmava "mesma largura/fonte" enquanto os números
+diziam outra coisa. Só o jsPDF divergia, por isso a conferência na impressora não pegou: **PDF e
+impressão térmica são caminhos separados e precisam ser olhados separadamente.**
+
+**Datas da documentação corrigidas.** O dono do produto confirmou que a data correta é a do
+relógio: **2026-08-14**. A documentação vinha datada de até **08-24** — dez dias no futuro, porque
+cada sessão continuava a numeração da doc anterior em vez de olhar o relógio. O remapeamento usou
+o `git log --date=short` como autoridade e foi feito **por feature** (casando o texto com a
+mensagem do commit), não por subtração de dias: a deriva não era constante, e 16 dias
+documentados tinham que caber em 6 dias reais de trabalho. Datas até 08-08 já estavam certas.
+Datas que são **dado de exemplo** (vencimento de parcela, expiração de trial) ficaram intactas.
+
+8 testes novos, **500/500 verdes**, `tsc -b` limpo.
+
+### 2026-08-14 — Auditoria completa da documentação (spec + 40 telas + 86 memórias)
 
 Revisão de **toda** a documentação do projeto contra o código, a pedido do dono do produto. Três
 frentes paralelas: `spec-driven-erp-varejo.md` + `CLAUDE.md` + `docs/infra/`; os 40 arquivos de
@@ -419,7 +476,7 @@ em 2–3 arquivos ao mesmo tempo:
 |---|---|---|
 | "não existe fechamento de caixa" | existe desde 2026-07-30 | 3 specs + 2 memórias |
 | "nenhum service grava `tipo_movimento='COMPRA'`" | existe desde 2026-08-11 | 3 specs + 2 memórias |
-| "o signup semeia só 3 contas" | semeia 76 desde 2026-08-23 | 3 specs + 2 memórias |
+| "o signup semeia só 3 contas" | semeia 76 desde 2026-08-14 | 3 specs + 2 memórias |
 | "não existe tela de baixa de contas a pagar" | existe desde 2026-08-12 | 2 specs + 1 memória |
 | "não existe reimpressão de comprovante de venda" | existe desde 2026-08-06 | 2 specs + 1 memória |
 
@@ -454,11 +511,11 @@ tinham sido construídas.
 `ContaPagarService.excluir()` apaga só `contas_pagar` e deixa o `caixa_detalhe`/
 `conta_corrente_movimento` da baixa lançados para sempre; o estorno de crediário apaga
 `caixa_detalhe` sem checar caixa fechado; "Emitir Etiquetas desta Nota" passa parâmetros que a
-tela de destino ignora; o PDF do vale-mercadoria não recebeu a calibragem térmica de 2026-08-24.
+tela de destino ignora; o PDF do vale-mercadoria não recebeu a calibragem térmica de 2026-08-14.
 
 492/492 testes verdes, `tsc -b` limpo.
 
-### 2026-08-24 — Papeleta de venda legível na bobina real (42 colunas, item em 2 linhas)
+### 2026-08-14 — Papeleta de venda legível na bobina real (42 colunas, item em 2 linhas)
 
 Primeira impressão da papeleta numa impressora térmica de verdade — e ela saiu **ilegível**. O
 dono do produto mandou a foto do cupom ao lado do PDF (que estava bom) e a comparação foi o que
@@ -514,7 +571,7 @@ papeleta. Isso valida na prática a decisão de 2026-08-07 de padronizar os dois
 os dois são A4, então não têm o problema de bobina — o que eventualmente precisarem é outra
 conversa.
 
-### 2026-08-23 (fechamento) — as 4 pendências abertas do dia, resolvidas
+### 2026-08-14 (fechamento) — as 4 pendências abertas do dia, resolvidas
 
 **1) Signup passa a aplicar o plano de contas padrão completo.** Era a questão aberta da DRE: um
 tenant novo via receita e CMV, mas **nenhuma despesa**, porque o `SignupService` semeava só 3
@@ -551,7 +608,7 @@ da DRE). Escurecido de `#2f9e44` para `#217a33` → **5.39:1**. O verde do tema 
 `@rolldown/binding-win32-x64-msvc` ausente (bug conhecido do npm com dependências opcionais).
 `node_modules` + `package-lock.json` apagados e reinstalados: `✓ built in 1.53s`.
 
-### 2026-08-23 — Fluxo de Caixa (realizado + projeção) e a baixa que passou a mover dinheiro de verdade
+### 2026-08-14 — Fluxo de Caixa (realizado + projeção) e a baixa que passou a mover dinheiro de verdade
 
 Pedido do dono do produto logo depois da DRE: "preciso montar o relatório de fluxo de caixa, o que
 você sugere?". A investigação achou um problema estrutural que **decidia o formato do relatório**,
@@ -609,7 +666,7 @@ exit 0. Testado ao vivo nas duas abas com dado real: a venda de R$ 161,82 aparec
 calculado"; a projeção parte de R$ 161,82, encontra uma conta a pagar de R$ 50,00 e projeta
 R$ 111,82. **Pendente:** olhar o PDF renderizado desta tela e testar com massa maior.
 
-### 2026-08-23 — ⚠️ `tsc --noEmit` no `web/` não checava nada (e o repositório acumulava 19 erros)
+### 2026-08-14 — ⚠️ `tsc --noEmit` no `web/` não checava nada (e o repositório acumulava 19 erros)
 
 Descoberto no meio da Parte 1: escrevi um `<select>` usando uma variável **inexistente** e o
 `npx tsc --noEmit` passou limpo. O `web/tsconfig.json` é do tipo *solution* (`"files": []` +
@@ -623,7 +680,7 @@ nenhum deles introduzido nesta sessão (confirmado cruzando com `git status`):
 - 12 × `TS6133` (variável/import declarado e nunca usado — quase todos um `navigate` sobrando)
 - `TS2305` em `ImportacaoTabelaPage` (importava `IconeComponente` de `components/Icones`; o tipo
   vive em `lib/menu.ts`)
-- `TS2345` em `PlanoContasModal` (resíduo da revisão do plano de contas de 08-22: faltavam 4
+- `TS2345` em `PlanoContasModal` (resíduo da revisão do plano de contas de 08-13: faltavam 4
   campos que viraram parte do contrato)
 - 4 × `TS2345` em `RelatorioEstoque`: a restrição genérica `T extends Record<string, unknown> &
   { qtdPorEmpresa: number[] }` **nunca aceitaria** `LinhaSintetica`/`LinhaAnalitica`, porque
@@ -635,7 +692,7 @@ Todos corrigidos a pedido do dono do produto — **`tsc -b` agora sai com exit 0
 falha **no host** (binding nativo `@rolldown/binding-win32-x64-msvc` ausente, bug conhecido do npm
 com dependências opcionais) — dentro do container o bundle compila normalmente.
 
-### 2026-08-23 — Relatório de DRE (dois regimes) — primeira demonstração de resultado do produto
+### 2026-08-14 — Relatório de DRE (dois regimes) — primeira demonstração de resultado do produto
 
 Pedido do dono do produto: "preciso montar meu DRE, com regime de competência e de caixa — tem
 algo mais que precisamos fazer, como o mercado faz?". A resposta útil não estava nos dois regimes
@@ -702,7 +759,7 @@ teste da DRE. Dois tropeços registrados: os NCMs "de cabeça" não existiam na 
 `POST /api/v1/produtos` **não cria a variação** — sem `produto_barra` o produto é invisível para
 a Entrada de Produtos e para o PDV.
 
-### 2026-08-23 — Seletor de tema Claro/Escuro/Automático no cabeçalho (fecha uma pendência de §3.7)
+### 2026-08-14 — Seletor de tema Claro/Escuro/Automático no cabeçalho (fecha uma pendência de §3.7)
 
 Pergunta do dono do produto: "temos o tema dark, como criamos um light também?". A investigação
 mudou a resposta — **o tema claro já existia e já rodava em produção**; faltava só o interruptor.
@@ -748,14 +805,14 @@ hora, sem recarregar (captura do Painel claro guardada na conversa). **A passada
 tela ficou pendente** — o Chrome usado na automação tem Dark Reader ativo, o que impede avaliar
 contraste de verdade; precisa ser feita num navegador sem a extensão.
 
-### 2026-08-23 — Entrada de Produtos: botão Fechar no popup de filtros, bug da divisão de duplicatas e o parâmetro que torna a consistência opcional
+### 2026-08-14 — Entrada de Produtos: botão Fechar no popup de filtros, bug da divisão de duplicatas e o parâmetro que torna a consistência opcional
 
 Sessão de três pedidos encadeados do dono do produto, todos na Entrada de Produtos por Compra —
 o segundo é um **bug real de produto** achado testando ao vivo, e o terceiro nasceu da conversa
 sobre ele.
 
 **1) Botão "Fechar" no popup de filtros.** O popup obrigatório da listagem
-(`EntradaMercadoriaLista.tsx`, convenção de 2026-08-19) só tinha "Localizar" e "＋ Nova entrada":
+(`EntradaMercadoriaLista.tsx`, convenção de 2026-08-12) só tinha "Localizar" e "＋ Nova entrada":
 quem abria a tela por engano não tinha saída sem executar uma das duas ações. Ganhou um terceiro
 botão, à esquerda, com `navigate(-1)` — mesma mecânica do `BotaoFecharTela` do cabeçalho e do
 popup do Cancelamento de Devolução, que já tinha esse botão desde que nasceu.
@@ -763,7 +820,7 @@ popup do Cancelamento de Devolução, que já tinha esse botão desde que nasceu
 **2) Bug: as duplicatas eram divididas pelo total errado.** Reproduzido pelo dono do produto —
 1 unidade a R$ 150,00 em 3 duplicatas gerou **0,34 / 0,33 / 0,33** (total R$ 1,00) em vez de
 50,00 cada. A conta em si (resto do arredondamento na primeira parcela) estava certa desde
-2026-08-13; **o que estava errado era o momento em que ela rodava**. O `useEffect` que divide
+2026-08-11; **o que estava errado era o momento em que ela rodava**. O `useEffect` que divide
 `valorTotal` por N parava de recalcular assim que existisse qualquer parcela
 (`parcelas.length > 0` na guarda) — e como `valorTotal` é recalculado a cada tecla digitada no
 custo do item, o primeiro dígito ("1") já criava as 3 parcelas e travava a divisão; os dígitos
@@ -778,7 +835,7 @@ já preenchidos são preservados; duplicatas vindas do XML (`xmlTemDuplicatas`) 
 
 **3) Parâmetro novo: "Consistir valor das contas a pagar na entrada"
 (`cfg_geral.cfg_consiste_valor_contas_pagar`).** A regra "soma das duplicatas = total dos
-produtos" existia **fixa** desde 2026-08-14; o dono do produto pediu para torná-la opcional
+produtos" existia **fixa** desde 2026-08-11; o dono do produto pediu para torná-la opcional
 (adiantamento, parte da nota à vista, nota parcialmente financiada são casos reais em que a
 divergência é legítima). Décimo-primeiro campo de Parâmetros do Sistema, seção **Compras**:
 - **Default `true`**, ao contrário das outras flags de Compras (que nascem desligadas) — preserva
@@ -794,13 +851,13 @@ divergência é legítima). Décimo-primeiro campo de Parâmetros do Sistema, se
 - Endpoint leve novo `GET /api/v1/config-geral/consiste-valor-contas-pagar` (qualquer papel,
   mesmo padrão de `/usa-cor-grade`, `/rateia-frete-entrada`, `/plano-contas-compra-mercadoria`) —
   a Entrada de Produtos é operada majoritariamente por `OPERADOR`, que não pode ler o endpoint
-  completo (ADMIN-only), a mesma armadilha já documentada no fix de 2026-08-22.
+  completo (ADMIN-only), a mesma armadilha já documentada no fix de 2026-08-13.
 
 **Banco:** coluna nova dentro de `V023__cfg_geral.sql` (banco em construção, migration editada em
 vez de nova). Aplicada no dev com `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` +
 `docker compose run --rm flyway ... repair`, sem recriar o banco e sem perder dado; **nenhum
 `GRANT` novo foi preciso** — os privilégios de `cfg_geral` para `niner_app` são de tabela inteira,
-não por coluna (diferente do caso de `produto_movimento_mestre` em 2026-08-19).
+não por coluna (diferente do caso de `produto_movimento_mestre` em 2026-08-12).
 
 **Verificação:** suíte de backend **476/476 verdes** (474 + 2 novos em `EntradaMercadoriaCrudTest`:
 com a flag ligada, duplicata divergente devolve 400 e não grava nem `contas_pagar` nem
@@ -809,11 +866,11 @@ com o valor divergente). `ConfiguracaoGeralTest` ganhou as asserções do defaul
 round-trip do PUT e do endpoint leve. `tsc --noEmit` limpo. API rebuildada e testada ao vivo via
 API: `GET` da flag, `PUT` desligando, endpoint leve refletindo `false`, `PUT` religando —
 deixada no padrão. **O teste ao vivo na tela ficou pendente**: os 3 tenants do banco de dev estão
-sem produto cadastrado (efeito da conversão de plano de contas de 08-22), então não dá para
+sem produto cadastrado (efeito da conversão de plano de contas de 08-13), então não dá para
 lançar uma entrada sem antes criar massa de teste — oferecido ao dono do produto, ainda não
 respondido.
 
-### 2026-08-22 (auditoria 3) — terceira passada de "documente/memorize tudo" achou staleness DENTRO do produto
+### 2026-08-13 (auditoria 3) — terceira passada de "documente/memorize tudo" achou staleness DENTRO do produto
 
 Pedido "documente/memorize tudo" pela terceira vez na mesma sessão, depois de fechar os 2
 filtros de lista. Desta vez a lacuna não estava em `docs/`, estava em código user-facing:
@@ -828,7 +885,7 @@ sessão. Ambos corrigidos, junto com a seção "Seleção de plano de contas em 
 precisa da mesma reauditoria que uma spec em `docs/` — não é só documentação de repositório que
 fica stale, é qualquer texto que descreve "onde a coisa é usada".
 
-### 2026-08-22 — Fecha os 2 filtros de plano de contas que faltavam migrar pro SeletorPlanoContas
+### 2026-08-13 — Fecha os 2 filtros de plano de contas que faltavam migrar pro SeletorPlanoContas
 
 Gap achado na auditoria abaixo, fechado no mesmo dia a pedido do dono do produto: os filtros de
 plano de contas nas listagens de Fornecedores e Movimentação de Conta Corrente também trocaram
@@ -844,7 +901,7 @@ na tela com 7 filtros (Movimentação de Conta Corrente). `tsc --noEmit` limpo
 (`noUnusedLocals`/`noUnusedParameters` confirmam que as queries antigas foram removidas por
 completo, não só desconectadas da tela).
 
-### 2026-08-22 (auditoria) — segunda passada de "documente/memorize tudo" achou mais 4 lacunas
+### 2026-08-13 (auditoria) — segunda passada de "documente/memorize tudo" achou mais 4 lacunas
 
 Pedido repetido na mesma sessão ("agora documente tudo e memorize tudo" de novo) — mesmo sinal
 já visto em 2026-07-31 (ver `feedback_checklist_documentar_tudo`, memória): a primeira passada
@@ -862,7 +919,7 @@ em vez de implementado sem pedir): só os campos de **formulário** migraram pro
 Movimentação de Conta Corrente continuam `<select>` nativo (`tamanho:100`), funcional hoje mas
 sujeito ao mesmo risco de corte se o tenant passar de 100 contas.
 
-### 2026-08-22 — Plano de Contas: máscara encurtada para 9.99.999, SeletorPlanoContas (busca código/nome), remoção de Exigências/Integrações
+### 2026-08-13 — Plano de Contas: máscara encurtada para 9.99.999, SeletorPlanoContas (busca código/nome), remoção de Exigências/Integrações
 
 Revisão pedida pelo dono do produto depois de olhar o cadastro em uso: `1.02.002.000` (12
 caracteres) é complexidade de contabilidade formal, não de pequeno varejo. Três perguntas
@@ -911,7 +968,7 @@ campos de Exigências/Integrações servem pra quê?" — e as respostas viraram
    `ContaCorrenteMovimentoForm`, `ConfiguracaoGeralForm` (com a opção `apenasAnaliticas`) e
    `ImportacaoTabelaPage`. O cadastro rápido de fornecedor da Entrada de Produtos
    (`FornecedorQuickCreateModal`) continua **sem** esse campo — a conta é sempre a de compra
-   configurada, atribuída sem interação do operador (decisão de 2026-08-19, mantida).
+   configurada, atribuída sem interação do operador (decisão de 2026-08-12, mantida).
 
 3. **Removidas por completo — tela, schema, banco** — as seções "Exigências no lançamento"
    (`exige_centro_custo`/`exige_contraparte`/`exige_documento`) e "Integrações" (`id_conta_
@@ -933,7 +990,7 @@ resposta da API sem os 5 campos removidos, busca por código e por nome no `Sele
 funcionando na tela de Fornecedor. `docs/telas/plano-contas.md` atualizado por completo (máscara,
 tabela de campos, contrato de API, seed, critérios de aceitação).
 
-### 2026-08-22 — Foco automático em 15 telas de lista + espaçamento na Exportação de Dados
+### 2026-08-13 — Foco automático em 15 telas de lista + espaçamento na Exportação de Dados
 
 Pedido direto, lista fechada de telas: `autoFocus` adicionado ao campo principal de busca/
 localização de Pesquisa de Vendas e Reimpressão de Papeleta de Venda (Nº da venda), Recebimento
@@ -950,7 +1007,7 @@ formulários, onde o label já cria respiro) — aplicado `gap: 14px 16px` só n
 com o espaçamento de `.menu-cards` da tela de Relatórios. `tsc --noEmit` limpo; sem impacto em
 backend.
 
-### 2026-08-22 — Fix: cadastro rápido de fornecedor na Entrada de Produtos não preenchia o plano de contas para papel não-ADMIN
+### 2026-08-13 — Fix: cadastro rápido de fornecedor na Entrada de Produtos não preenchia o plano de contas para papel não-ADMIN
 
 Achado ao investigar por que o campo "plano de contas" do fornecedor, criado pelo cadastro
 rápido embutido na Entrada de Produtos por Compra, às vezes não vinha preenchido com o padrão
@@ -970,7 +1027,7 @@ no endpoint antigo, 200 com o valor certo no novo. Suíte de backend segue **474
 (nenhum teste novo — a cobertura de ponta a ponta foi feita via curl/navegador, não automatizada
 nesta sessão).
 
-### 2026-08-21 — Cor/Grade padrão (sentinela código 1), dados reais de NCM, sincronismo de NCM no XML e ajustes na grid da Entrada por XML
+### 2026-08-13 — Cor/Grade padrão (sentinela código 1), dados reais de NCM, sincronismo de NCM no XML e ajustes na grid da Entrada por XML
 
 **1) Cor/Tamanho/Grade "PADRÃO" sempre gravados internamente, nunca mostrados (pedido explícito
 do dono do produto).** Quando o tenant não usa cor/grade, o sistema passou a gravar sempre
@@ -1017,7 +1074,7 @@ ANTES do estoque (e o estoque de novo depois) pra não sobrar FK pendurada.
 Suíte de backend **474/474 verdes**, `tsc --noEmit` limpo. Verificado ao vivo no navegador
 (browser automation) em todos os itens acima antes de fechar a sessão.
 
-### 2026-08-20 — Entrada de Produtos por Compra ignora "Usa Cor/Grade" desligado por completo
+### 2026-08-13 — Entrada de Produtos por Compra ignora "Usa Cor/Grade" desligado por completo
 
 Pedido direto do dono do produto: com o parâmetro **"Usa Cor/Grade" desmarcado** em Parâmetros
 do Sistema, a Entrada de Produtos não deve pedir nem mostrar Cor/Tamanho para nenhum produto —
@@ -1055,7 +1112,7 @@ Sem testes novos (comportamento já coberto pela suíte de Entrada existente,
 completa **472/472 verdes**, `tsc --noEmit` e `mvn compile` limpos. Servidor reiniciado
 (`docker compose restart api web`) e validado ao vivo no navegador antes de fechar a sessão.
 
-### 2026-08-19 (continuação) — Contas a Pagar / Pagas: CRUD completo sobre tabela pré-existente
+### 2026-08-12 (continuação) — Contas a Pagar / Pagas: CRUD completo sobre tabela pré-existente
 
 Nova tela no módulo **Financeiro** (`docs/telas/contas-pagar.md`, novo), pedido direto do dono
 do produto: "Desenvolver a Tela Contas a Pagar / Pagas". A tabela `contas_pagar` já existia
@@ -1087,7 +1144,7 @@ encontra 0 linhas).
 
 Suíte de backend completa: **472/472 verdes** (11 testes novos, `ContaPagarCrudTest`).
 
-### 2026-08-19 — Filtros da Entrada de Produtos por Compra + bug real de fuso horário
+### 2026-08-12 — Filtros da Entrada de Produtos por Compra + bug real de fuso horário
 
 Mesma sessão de continuação, `EntradaMercadoriaLista.tsx` ganhou popup de filtros obrigatório
 ao entrar na tela (Fornecedor, Empresa, Nº Nota Fiscal, Data Início/Fim), mesmo padrão do
@@ -1105,7 +1162,7 @@ de Brasília para `dataMovimento`). **Possível problema sistêmico não corrigi
 sem `AT TIME ZONE` nos próprios filtros de período — mesma classe de bug, não mexido agora (fora
 do pedido), vale revisar se aparecer reclamação de filtro "perdendo" registro perto da meia-noite.
 
-### 2026-08-19 — Cancelamento de Entrada de Produtos por Compra
+### 2026-08-12 — Cancelamento de Entrada de Produtos por Compra
 
 Pedido direto do dono do produto: "na tela de entrada de produtos compra, na grid principal tem
 a opção de visualização, coloque uma opção de exclusão tb" — esclarecido como cancelamento
@@ -1135,9 +1192,9 @@ identificada apesar de investigação extensa; dados corrigidos manualmente. Reg
 memória (`feedback_incidente_cancelamentos_fantasma`) como alerta para testes futuros de
 cancelamento em lote.
 
-### 2026-08-18/19 — Entrada de Produtos por Compra: Fluxo XML (Fase 3), fechando a feature
+### 2026-08-12 — Entrada de Produtos por Compra: Fluxo XML (Fase 3), fechando a feature
 
-Retomada de `docs/telas/entrada-mercadoria.md`, que desde 2026-08-11/12 tinha só os fluxos
+Retomada de `docs/telas/entrada-mercadoria.md`, que desde 2026-08-11 tinha só os fluxos
 Manual e Planilha prontos (Fase 3 — Fluxo XML — pendente). `NfeXmlParser.java` (DOM sem
 namespace, XXE-safe) + `EntradaXmlService.java`: a aba "Dados Gerais" pede o **upload do XML
 primeiro** (pedido explícito) — fornecedor, empresa, nota, data e parcelas só aparecem depois de
@@ -1155,7 +1212,7 @@ normalizado ao cadastrar uma delas, evitando recadastro. Testado ponta a ponta c
 Com isso, a Entrada de Produtos por Compra fica **completa** nos 3 fluxos (Manual/Planilha/XML);
 falta só a Fase 5 (atalho de emissão de etiqueta a partir de uma entrada), não bloqueante.
 
-### 2026-08-14 — Horário de Acesso por Dia da Semana (Cadastro de Usuários) + aviso visual de contagem regressiva
+### 2026-08-11 — Horário de Acesso por Dia da Semana (Cadastro de Usuários) + aviso visual de contagem regressiva
 
 Pedido de segurança do dono do produto: restringir quando um `OPERADOR` pode fazer login e
 continuar trabalhando, com uma janela de horário por dia da semana — nunca se aplica ao ADMIN.
@@ -1202,7 +1259,7 @@ a chave — 20 testes existentes de `UsuarioCrudTest`/outros passaram a falhar; 
 **444/444 verdes**. Detalhe completo em `docs/telas/usuario.md`, seção "Horário de acesso por
 dia da semana".
 
-### 2026-08-11/12 — Entrada de Produtos por Compra (Fluxo Manual + Planilha), retomando a spec pausada em 2026-07-23
+### 2026-08-11 — Entrada de Produtos por Compra (Fluxo Manual + Planilha), retomando a spec pausada em 2026-07-23
 
 Retomada da spec `docs/telas/entrada-mercadoria.md` (RASCUNHO pausado desde 2026-07-23, todas
 as questões em aberto respondidas "sim" pelo dono do produto). Implementados os fluxos
@@ -1213,7 +1270,7 @@ comum aos dois grava `produto_movimento_mestre` (`COMPRA`) + N `produto_moviment
 (`C`) numa transação, saldo sobe via trigger existente (V019), sem escrita manual de estoque.
 **Fluxo XML (Fase 3) e atalho de emissão de etiqueta (Fase 5) ficaram pendentes nesta rodada** —
 a tela já oferece "Por XML" mas avisa que ainda não está disponível. *(Atualização: Fase 3 foi
-implementada em 2026-08-18/19 — ver entrada "Entrada de Produtos por Compra: Fluxo XML" acima;
+implementada em 2026-08-12 — ver entrada "Entrada de Produtos por Compra: Fluxo XML" acima;
 só a Fase 5 continua pendente.)*
 
 Rateio de frete/IPI/ICMS-ST no custo e reajuste automático de `preco_custo`/`preco_venda` —
@@ -1318,7 +1375,7 @@ Arquivos: `web/src/pages/vendas/CancelamentoDevolucao.tsx` (botão Fechar),
 bug), `docs/telas/devolucao-produtos.md` e `docs/telas/comprovante-recebimento-crediario.md`
 (referência cruzada pro mesmo fix, já que as três variantes compartilham a função).
 
-### 2026-08-11 — Cancelamento de Devolução de Produtos
+### 2026-08-10 — Cancelamento de Devolução de Produtos
 
 Nova sessão, pedido direto do dono do produto: fechar a lacuna simétrica ao Cancelamento de
 Venda, mas para o vale-mercadoria gerado por uma Devolução de Produtos
@@ -1366,7 +1423,7 @@ abaixo).
 manualmente até aqui. P5 da constituição pede teste automatizado por critério de aceitação antes
 do merge; registrado como questão aberta em `docs/telas/cancelamento-devolucao-produtos.md`.
 
-### 2026-08-11 (continuação) — dedup de Produto por CODIGO_PRODUTO, tamanho fora da grade no Estoque, 2ª rodada de otimização (7,8x) e gauge na Exportação
+### 2026-08-10 (continuação 2) — dedup de Produto por CODIGO_PRODUTO, tamanho fora da grade no Estoque, 2ª rodada de otimização (7,8x) e gauge na Exportação
 
 Mesma sessão, depois de testar as correções anteriores com os arquivos reais completos do dono do
 produto (`PRODUTOS.xlsx`, `ESTOQUE.xlsx`, ~22 mil linhas cada). Mais 4 achados/pedidos:
@@ -1404,9 +1461,9 @@ Restauração de dados: os testes de performance exigiram apagar e reimportar `p
 `produto_estoque`/movimentação (dados reais do dono do produto, não só teste) — restaurados ao
 final via reimportação real do mesmo arquivo, confirmado no banco.
 
-### 2026-08-11 — Rotina de Importação de Dados: 3 bugs de produção corrigidos (savepoint, streaming, N+1) + progresso ao vivo + CNPJ/e-mail inválidos
+### 2026-08-10 (continuação) — Rotina de Importação de Dados: 3 bugs de produção corrigidos (savepoint, streaming, N+1) + progresso ao vivo + CNPJ/e-mail inválidos
 
-Sessão inteira em cima da reformulação do dia anterior, motivada por testes reais do dono do
+Sessão inteira em cima da reformulação de mais cedo no mesmo dia, motivada por testes reais do dono do
 produto com arquivos grandes de verdade (o maior: Contas a Receber, 660.479 linhas) —
 `docs/telas/importacao-dados.md` ganhou 3 seções novas cobrindo tudo isto.
 
@@ -1474,7 +1531,7 @@ saltando 2% → 33% → 63% → 85% → 100% em tempo real.
 
 **5. Duas correções pequenas de dados, pedidas pelo dono do produto:** e-mail e CNPJ inválidos na
 importação de Fornecedores deixaram de rejeitar a linha — entram em branco (mesmo espírito do
-TELEFONE, 2026-08-09; `FornecedorService.emailValido`/`cnpjValido`, métodos novos expostos só pra
+TELEFONE, 2026-08-10; `FornecedorService.emailValido`/`cnpjValido`, métodos novos expostos só pra
 isso). Estoque Inicial: uma empresa já escolhida numa coluna de quantidade some das opções das
 outras 4 (exclusão mútua), e a validação da tela deixou de exigir as 5 colunas preenchidas (agora
 1 basta) — consequência obrigatória da exclusão mútua pra não travar tenant com menos de 5
@@ -1489,9 +1546,9 @@ rodada. Nada commitado ao final da sessão.
 
 Duas reformulações grandes da mesma feature, pedidas pelo dono do produto no mesmo dia, mais duas
 correções de acabamento encontradas testando a segunda — `docs/telas/importacao-dados.md` reescrita
-de novo (3ª vez em 3 dias: 2026-08-06 → 2026-08-09 → 2026-08-10).
+de novo (3ª vez em 2 dias: 2026-08-06 → 2026-08-10 → 2026-08-10).
 
-**Parte 1 — tela única multi-arquivo (2026-08-09) virou hub + 5 telas dedicadas.** Pedido direto:
+**Parte 1 — tela única multi-arquivo (2026-08-10, mais cedo no mesmo dia) virou hub + 5 telas dedicadas.** Pedido direto:
 "botões separados (telas) dentro do botão Importar Dados", na ordem **Clientes → Contas a Receber →
 Fornecedores → Produtos → Estoque Inicial** — ordem que, por acaso feliz, já resolve sozinha a
 dependência entre tabelas (Contas a Receber precisa de Cliente, Estoque precisa de Produto, ambas
@@ -1528,7 +1585,7 @@ no navegador: baixar o `.xlsx` gerado pela própria tela e reimportar esse mesmo
 2. **Nada impedia escolher a planilha errada** — ex. selecionar `FORNECEDORES.xlsx` na tela de
    Importar Clientes só dava erro (sem sentido, tipo "RAZAO_SOCIAL" lido como se fosse "NOME") na
    hora de clicar "Validar", tarde demais. Corrigido reaproveitando a **mesma detecção por Jaccard**
-   de 2026-08-09 (`POST /api/v1/importacao/detectar`, que tinha ficado sem chamador no frontend
+   de 2026-08-10 (`POST /api/v1/importacao/detectar`, que tinha ficado sem chamador no frontend
    desde a Parte 1) — agora chamada assim que o usuário escolhe o arquivo
    (`onSelecionarArquivo`), comparando o `tabela` detectado com a tabela da própria tela: não bate →
    mensagem clara ("Essa planilha parece ser de 'X', não de 'Y'. Escolha o arquivo correto.") e o
@@ -1541,7 +1598,7 @@ Também nesta sessão: botão nativo "Escolher ficheiro" (texto de navegador em 
 customizável via CSS/props) trocado por um botão próprio da aplicação, "Escolher planilha" (input
 real fica oculto, disparado via `ref.click()`).
 
-### 2026-08-09 — Rotina de Importação de Dados: tela única + detecção automática + Estoque (5ª tabela) + correções
+### 2026-08-10 — Rotina de Importação de Dados: tela única + detecção automática + Estoque (5ª tabela) + correções
 
 Sessão inteira dentro da Rotina de Importação de Dados (`docs/telas/importacao-dados.md`,
 reescrita por completo ao final), em resposta a testes manuais reais do dono do produto com seus
@@ -2677,7 +2734,7 @@ aparece no `tsc -b` do build de produção.
 1. **PDF sempre com fundo branco, mesmo com o app em tema escuro** (`docs/telas/
    relatorio-vendas.md`, seção "PDF") — pedido explícito: impressão em dark gasta muito mais
    tinta. O app não tinha toggle de tema à época (dark só vinha de `prefers-color-scheme` do
-   navegador; o seletor Claro/Escuro/Automático do cabeçalho só nasceu em 2026-08-23);
+   navegador; o seletor Claro/Escuro/Automático do cabeçalho só nasceu em 2026-08-14);
    `styles.css` já tinha `:root[data-theme='light']`/`[data-theme='dark']` prontos, sem nada
    nunca setar o atributo. 1ª versão forçava `data-theme="light"` na página real antes de
    capturar — causava um "flash" visível (app inteiro piscava claro/escuro). **Corrigido no

@@ -151,7 +151,7 @@ public class ConfiguracaoGeralService {
 
     /**
      * Só a flag de consistência entre o total dos produtos e a soma das duplicatas na Entrada de
-     * Produtos por Compra (2026-08-23), sem checagem de papel — usada pela própria tela e pela
+     * Produtos por Compra (2026-08-14), sem checagem de papel — usada pela própria tela e pela
      * validação de servidor de {@code EntradaMercadoriaService}. Fallback {@code true}: a
      * consistência era fixa antes deste parâmetro existir, então a ausência da linha preserva o
      * comportamento de sempre (diferente das outras flags leves, cujo fallback é {@code false}).

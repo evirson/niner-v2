@@ -20,7 +20,7 @@ import java.util.Optional;
 
 /**
  * Fluxo Planilha da Entrada de Produtos por Compra (docs/telas/entrada-mercadoria.md,
- * 2026-08-12) — lê o arquivo (colunas fixas: NOME DO PRODUTO, MARCA, REFERENCIA, COR, TAMANHO,
+ * 2026-08-11) — lê o arquivo (colunas fixas: NOME DO PRODUTO, MARCA, REFERENCIA, COR, TAMANHO,
  * CODIGO BARRAS FABRICANTE, QTD, CUSTO UNITARIO, exemplo do dono do produto em
  * {@code C:\fix\PLANILHA_ENTRADA.xlsx}) e tenta casar cada linha com um produto já cadastrado:
  * primeiro pelo código de barras do FABRICANTE ({@code produto_barra.ean}), senão por
@@ -31,7 +31,7 @@ import java.util.Optional;
  * <p>Preview apenas — não grava nada no ledger. As exceções deliberadas são: a materialização de
  * {@code produto_barra} (via {@link ProdutoBarraService#obterOuCriar}) quando produto+cor+
  * tamanho batem com confiança, e o cadastro automático de cor/tamanho quando o texto da planilha
- * não bate com nada já cadastrado (2026-08-13, pedido do dono do produto: cor e tamanho "que não
+ * não bate com nada já cadastrado (2026-08-11, pedido do dono do produto: cor e tamanho "que não
  * existirem no cadastro" nascem na hora, sem exigir que o usuário resolva a pendência à mão) —
  * cor entra direto em {@code cfg_cor} (lista solta, sem grade), tamanho entra em
  * {@code cfg_tamanho} e, se o produto casado ainda não tiver esse tamanho na grade, a grade é
@@ -122,7 +122,7 @@ public class EntradaPlanilhaService {
         LinhaProduto p = produto.get();
         // Parâmetro "Usa Cor/Grade" desligado: grade do produto (mesmo que já cadastrada de
         // antes) é ignorada por completo — tratado como produto simples, sem pedir COR/TAMANHO
-        // (2026-08-20, pedido do dono do produto). id_grade=1 (PADRÃO, reservada/invisível — ver
+        // (2026-08-13, pedido do dono do produto). id_grade=1 (PADRÃO, reservada/invisível — ver
         // SignupService) também conta como "sem grade de verdade", mesmo com o parâmetro ligado.
         Long idGrade = (usaCorGrade && p.idGrade() != 1) ? p.idGrade() : null;
 
@@ -178,7 +178,7 @@ public class EntradaPlanilhaService {
 
     /** Acha (por nome, mesmo idioma exato do resto da tela) ou cadastra a cor na hora — cor não
      *  depende de grade, é uma lista solta por tenant, então não há nada além do cadastro em si
-     *  a garantir (2026-08-13). {@code id_cor} não é mais IDENTITY (V017, 2026-08-20): calculado
+     *  a garantir (2026-08-11). {@code id_cor} não é mais IDENTITY (V017, 2026-08-13): calculado
      *  por tenant, mesmo padrão de {@code CorService.criar}. */
     private long corOuCriar(String cor) {
         String nome = cor.trim().toUpperCase(Locale.ROOT);
@@ -204,7 +204,7 @@ public class EntradaPlanilhaService {
      *  find-or-create de {@code ProdutoImportador.idTamanhoOuCriar}. Só resolve a existência do
      *  tamanho em si; pertencer (ou não) à grade do produto casado é responsabilidade de quem
      *  chama, via {@link GradeService#garantirTamanhoNaGrade}. {@code id_tamanho} não é mais
-     *  IDENTITY (V017, 2026-08-20): calculado por tenant, mesmo padrão de
+     *  IDENTITY (V017, 2026-08-13): calculado por tenant, mesmo padrão de
      *  {@code TamanhoService.criar}. */
     private long tamanhoOuCriar(String tamanho) {
         String nome = tamanho.trim().toUpperCase(Locale.ROOT);

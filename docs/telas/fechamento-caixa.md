@@ -37,6 +37,10 @@ depois do fechamento ter sido confirmado com sucesso.
   recebimento —, C/D, valor), inclusive uma linha sintética de "abertura de caixa" pro saldo
   inicial. Um botão "Contar de Novo" volta pra contagem, mantendo os valores já digitados pra
   corrigir só o que precisar.
+- **Reabertura (2026-08-14)**: botão "Reabrir Caixa", visível **só para ADMIN e só em caixa
+  fechado**, pede um motivo obrigatório, apaga a conferência gravada e deixa o rastro em
+  `caixa_mestre.observacoes` — existe pra destravar as rotinas que desfazem dinheiro de um caixa já
+  encerrado (ver "Regras de negócio").
 - **Impressão**: botão "Visualizar Impressão" só aparece depois do caixa fechar com sucesso (agora
   ou numa visita anterior) — abre um popup de pré-visualização com "Salvar PDF"/"Imprimir", folha
   A4, mostrando os totais transacionais **e** a conferência (esperado/contado/diferença, todos
@@ -136,7 +140,7 @@ soma com o `valorEsperado` mostrado na tela. `origem` prioriza `id_lote_recebime
 grava os dois; "Recebimento nº X" é o evento relevante daquele dia, não a venda original que
 gerou a parcela).
 
-> ⚠️ **Saída de dinheiro por Contas a Pagar (2026-08-23) — o drill-down não sabe nomear.** Desde
+> ⚠️ **Saída de dinheiro por Contas a Pagar (2026-08-14) — o drill-down não sabe nomear.** Desde
 > o Fluxo de Caixa, a baixa de uma conta a pagar em dinheiro grava um `caixa_detalhe` com
 > `tipo_operacao = 'DEBITO_CAIXA'`, `credito_debito = 'D'` e `id_conta_pagar` preenchido
 > (`ContaPagarService.java:198-206`). Ele **entra normalmente na conferência e no valor esperado**
@@ -144,6 +148,77 @@ gerou a parcela).
 > a função `CaixaService.origem` (`api/src/main/java/com/vetor/niner/financeiro/caixa/CaixaService.java:271-275`)
 > só conhece `id_lote_recebimento` e `id_venda`, e o SELECT de `:251-257` nem lê a coluna
 > `id_conta_pagar`. Pendência: ler `cd.id_conta_pagar` e devolver "Conta a pagar nº N".
+
+### Reabertura de caixa (2026-08-14) — ADMIN-only, com motivo obrigatório
+
+Até esta data um fechamento era definitivo (era um non-goal explícito desta spec, ver abaixo). O
+que mudou o quadro: operações que **desfazem dinheiro** — estorno de recebimento de crediário,
+exclusão de conta a pagar e reabertura de conta a pagar — apagam linhas de `caixa_detalhe`. Quando
+o caixa daquele dia já estava fechado, elas apagavam a linha **em silêncio** e a conferência
+gravada em `caixa_fechamento_conferencia` passava a afirmar um total que não existia mais. Em vez
+de deixar passar, essas rotinas agora **recusam** (409) e mandam reabrir o caixa aqui — ver
+"Guarda de caixa fechado" logo abaixo.
+
+**Quem pode:** só **ADMIN** (`CaixaService.exigirAdmin`, `CaixaService.java:253`) — reabrir
+invalida uma conferência que o operador já assinou. Não-ADMIN recebe **403**.
+
+**O que a reabertura faz** (`CaixaService.reabrir`, `CaixaService.java:251-300`, transação única):
+
+1. `caixa_mestre`: `caixa_fechado = false`, `data_fechamento = NULL`,
+   `id_usuario_fechamento = NULL`, `valor_contado_dinheiro = NULL`.
+2. **Apaga as linhas de `caixa_fechamento_conferencia` daquele caixa** — foram calculadas sobre um
+   estado que está prestes a mudar, então não podem sobreviver à reabertura. Fechar de novo depois
+   refaz a contagem "às cegas" do zero.
+3. **Acrescenta** (nunca sobrescreve) uma linha em `caixa_mestre.observacoes`, no formato
+   `REABERTO EM dd/mm/aaaa hh:mm POR USUARIO <id>: <MOTIVO EM MAIÚSCULAS>`
+   (`COALESCE(observacoes || E'\n', '') || …`, `CaixaService.java:284-286`) — é o rastro de
+   auditoria exigido por P3. O motivo é gravado em maiúsculas (convenção do sistema).
+
+**Três casos de recusa:**
+
+| Situação | Resposta |
+|---|---|
+| Usuário não é ADMIN | **403** |
+| O caixa já está aberto | **409** — `"Este caixa já está aberto."` |
+| O mesmo operador (`id_empresa` + `id_usuario`) já tem **outro** caixa aberto | **409** — `"Este operador já tem outro caixa aberto. Feche o caixa aberto antes de reabrir este."` |
+
+O terceiro caso é a mesma regra "um caixa aberto por operador" da Abertura de Caixa: reabrir um
+caixa antigo enquanto o do dia está aberto criaria dois caixas abertos para a mesma pessoa, e o
+PDV não saberia em qual lançar (`CaixaService.java:259-276`).
+
+O `motivo` é `@NotBlank @Size(max = 200)` (`CaixaDtos.ReabrirCaixaRequest`,
+`CaixaDtos.java:94-96`) — motivo em branco é **400**. Mesmo par ADMIN + motivo obrigatório já
+usado no Cancelamento de Venda.
+
+**Na tela** (`web/src/pages/caixa/FechamentoCaixa.tsx:199-211`): o botão **"Reabrir Caixa"**
+aparece **só para ADMIN e só quando o caixa está fechado**, no topo da seção do caixa, com o aviso
+"Reabrir apaga a conferência já gravada — depois de corrigir, feche o caixa de novo". Clicar abre
+um modal (`:408-446`) que pede o **Motivo** (obrigatório, 200 caracteres, digitado em maiúsculas);
+o botão de confirmar fica desabilitado enquanto o motivo estiver em branco. Ao concluir, um toast
+verde ("Caixa reaberto. A conferência anterior foi apagada.") e as queries `caixa-fechamento`/
+`caixa-status` são invalidadas. Chamada em `web/src/lib/caixa.ts:132-143` (`reabrirCaixa`).
+
+### Guarda de caixa fechado — `exigirCaixaAbertoParaDesfazer` (2026-08-14)
+
+Contrapartida da reabertura, também no `CaixaService` (`CaixaService.java:302-344`): antes de
+qualquer DELETE em `caixa_detalhe`, a operação que desfaz dinheiro chama
+`exigirCaixaAbertoParaDesfazer(VinculoCaixa, idVinculo)`. Se algum `caixa_mestre` envolvido estiver
+com `caixa_fechado = true`, responde **409** com a mensagem que aponta o caminho:
+
+> Esta operação mexe no caixa nº X, que já está fechado. Reabra o caixa em Frente de Loja › Caixa ›
+> Fechamento de Caixa (só o ADMIN pode reabrir) e refaça a operação.
+
+O enum `VinculoCaixa` tem hoje dois valores, cada um com seu SQL **constante** (nunca montado a
+partir de entrada do cliente; o filtro `id_tenant = plataforma.tenant_atual()` está escrito no
+texto da query, inclusive no `JOIN`, conforme P8):
+
+| Valor | Quem usa | Vínculo |
+|---|---|---|
+| `LOTE_RECEBIMENTO` | `RecebimentoCrediarioService.estornarLote` (`:374-376`) | `caixa_detalhe.id_lote_recebimento` |
+| `CONTA_PAGAR` | `ContaPagarService.excluir` (`:326-328`) e `ContaPagarService.sincronizarMovimentoDeDinheiro` (`:157-160`, que cobre a baixa, a troca de origem e a reabertura da conta) | `caixa_detalhe.id_conta_pagar` |
+
+Como o guard roda **antes** de qualquer escrita, a operação recusada não deixa nada feito pela
+metade. Ver `docs/telas/estorno-recebimento-crediario.md` e `docs/telas/contas-pagar.md`.
 
 ### Dependência: PDV precisou passar a lançar em `caixa_detalhe`
 
@@ -175,14 +250,22 @@ POST /api/v1/caixa/fechamento
 GET  /api/v1/caixa/fechamento/{idCaixa}/carteiras/{idCarteira}/lancamentos
      → [{ dataHora, tipoOperacao, creditoDebito, valor, origem }]
      -- drill-down analítico de uma carteira dentro do caixa (inclui a linha sintética de abertura).
+
+POST /api/v1/caixa/fechamento/{idCaixa}/reabrir            (2026-08-14, ADMIN-only)
+     { motivo }                                            -- @NotBlank, máx. 200 caracteres
+     → { idCaixa, reaberto }
+     -- `reaberto = true` sempre que a operação chega ao fim; os casos de recusa saem como erro
+     -- (403 / 409), nunca como sucesso com flag falsa.
 ```
 
 `idUsuario` é opcional — omitido busca o próprio caixa do usuário logado; informado exige ADMIN se
 for diferente do próprio. `data` é obrigatório (`yyyy-MM-dd`). Todos sob `/api/v1/**` (JWT de
 tenant, RLS ativo — P8). Erros em Problem Details (RFC 9457): 400 (`valorContado` ausente/negativo
-em alguma carteira, ou faltando carteira na lista), 403 (não-ADMIN informando outro usuário, ou
-fechando/consultando o caixa de outro usuário), 404 (nenhum caixa para aquele usuário/data,
-`idCaixa` inexistente, ou drill-down de uma carteira fora do caixa), 409 (caixa já fechado).
+em alguma carteira, ou faltando carteira na lista; `motivo` em branco na reabertura), 403
+(não-ADMIN informando outro usuário, fechando/consultando o caixa de outro usuário, ou tentando
+reabrir), 404 (nenhum caixa para aquele usuário/data, `idCaixa` inexistente, ou drill-down de uma
+carteira fora do caixa), 409 (caixa já fechado; ou, na reabertura, caixa já aberto / operador com
+outro caixa aberto).
 
 ## Critérios de aceitação (viram testes)
 
@@ -213,15 +296,36 @@ fechando/consultando o caixa de outro usuário), 404 (nenhum caixa para aquele u
   crédito), quando ambas têm movimento no mesmo caixa, então aparecem como duas linhas separadas,
   cada uma com sua própria `categoriaCarteira` e seus próprios totais (2026-07-31).
 
-Cobertos por `FechamentoCaixaCrudTest` (15 testes) + 2 testes em `PdvCrudTest` (venda com várias
-formas de pagamento lança `caixa_detalhe` em todas menos crediário; débito fica em aberto em
-`contas_receber` mesmo já tendo entrado no caixa). Suíte completa do projeto: **492/492 verdes
-(2026-08-24)** — eram 266 quando esta tela nasceu, em 2026-07-31.
+### Reabertura (2026-08-14)
+
+- Dado um ADMIN e um caixa **fechado** com conferência gravada, quando reabre informando um
+  motivo, então `caixa_mestre` volta a `caixa_fechado = false` (com `data_fechamento`/
+  `id_usuario_fechamento`/`valor_contado_dinheiro` em `NULL`), as linhas de
+  `caixa_fechamento_conferencia` daquele caixa somem, e `observacoes` passa a conter
+  `"REABERTO EM …"` com o motivo em maiúsculas
+  (`adminReabreCaixaFechadoApagandoConferenciaERegistrandoMotivo`).
+- Dado um **OPERADOR**, quando tenta reabrir um caixa fechado, então 403 (`operadorNaoReabreCaixa`).
+- Dado um caixa que já está **aberto**, quando tenta reabrir, então 409
+  (`reabrirCaixaJaAbertoEhRecusado`).
+- Dado uma reabertura **sem motivo** (string em branco), então 400 — sem o porquê a reabertura não
+  deixa rastro auditável (`reabrirSemMotivoEhRejeitado`).
+
+Cobertos por `FechamentoCaixaCrudTest` (19 testes — 4 deles da reabertura, 2026-08-14) + 2 testes
+em `PdvCrudTest` (venda com várias formas de pagamento lança `caixa_detalhe` em todas menos
+crediário; débito fica em aberto em `contas_receber` mesmo já tendo entrado no caixa). A guarda de
+caixa fechado é coberta do lado de quem a chama: `excluirContaPagarComCaixaFechadoEhRecusado` e
+`reabrirContaPagarComCaixaFechadoEhRecusado` (`ContaPagarCrudTest`) e
+`estornarLoteComCaixaFechadoEhRecusadoEDeixaTudoComoEstava` (`RecebimentoCrediarioCrudTest`).
+Suíte completa do projeto: **500/500 verdes (2026-08-14)** — eram 266 quando esta tela nasceu, em
+2026-07-31.
 
 ## Ajuda da tela (manual de operação + vídeo) — obrigatório (R22 / §3.7.1)
 
 - **`chave_tela`: `financeiro.fechamentocaixa.tela`** — ver `web/src/components/AjudaDaTela.tsx`.
-  `url_video`: `NULL` por ora.
+  `url_video`: `NULL` por ora. Atualizado em 2026-08-14 com a reabertura: passo explicando quem vê
+  o botão "Reabrir Caixa", o motivo obrigatório e a conferência apagada (`AjudaDaTela.tsx:488`), e
+  dois erros comuns — a mensagem "Esta operação mexe no caixa nº X, que já está fechado" (`:494`)
+  e a recusa quando o operador já tem outro caixa aberto (`:495`).
 
 ## Impacto no banco
 
@@ -244,8 +348,11 @@ Nenhum.
 ## Non-goals desta feature
 
 - **Sangria/suprimento durante o dia** — fora de escopo, só abertura + fechamento.
-- **Reabrir um caixa fechado** — não existe rota pra isso; um fechamento é definitivo (só a
-  consulta/reimpressão continuam disponíveis depois).
+- ~~**Reabrir um caixa fechado** — não existe rota pra isso; um fechamento é definitivo (só a
+  consulta/reimpressão continuam disponíveis depois).~~ — **superado em 2026-08-14**: existe
+  `POST /api/v1/caixa/fechamento/{idCaixa}/reabrir` (ADMIN-only, motivo obrigatório, apaga a
+  conferência gravada) — ver "Reabertura de caixa" em Regras de negócio. Nasceu por necessidade:
+  sem ela, desfazer dinheiro de um dia já fechado corrompia a conferência em silêncio.
 - **Conciliação de cartões** (baixar as parcelas de débito/crédito em `contas_receber` quando a
   operadora efetivamente pagar) — mencionada como próximo passo pelo dono do produto, mas fora
   desta feature.

@@ -70,7 +70,7 @@ public class EntradaMercadoriaController {
         return service.buscar(id);
     }
 
-    /** Pesquisa de produto do fluxo Individual (2026-08-15) — nível produto, não variação (ver
+    /** Pesquisa de produto do fluxo Individual (2026-08-12) — nível produto, não variação (ver
      *  {@link EntradaMercadoriaService#buscarProdutos}). */
     @GetMapping("/produtos")
     public List<ProdutoOpcaoEntradaResponse> buscarProdutos(
@@ -86,14 +86,14 @@ public class EntradaMercadoriaController {
         service.atualizarItem(id, idDetalhe, req);
     }
 
-    /** Cancelamento de Entrada (2026-08-19) — ADMIN-only (ver {@link EntradaMercadoriaService#cancelar}). */
+    /** Cancelamento de Entrada (2026-08-12) — ADMIN-only (ver {@link EntradaMercadoriaService#cancelar}). */
     @PostMapping("/{id}/cancelar")
     public CancelamentoEntradaEfetivadoResponse cancelar(@AuthenticationPrincipal Jwt jwt, @PathVariable long id,
                                                            @Valid @RequestBody CancelarEntradaRequest req) {
         return service.cancelar(jwt, id, req);
     }
 
-    /** Fluxo Planilha (2026-08-12) — só lê e tenta casar cada linha, nada é persistido no
+    /** Fluxo Planilha (2026-08-11) — só lê e tenta casar cada linha, nada é persistido no
      *  ledger (ver {@link EntradaPlanilhaService}). */
     @PostMapping(value = "/planilha/preview", consumes = "multipart/form-data")
     public List<ItemPlanilhaPreviewResponse> previewPlanilha(@RequestPart("arquivo") MultipartFile arquivo) {
@@ -110,7 +110,7 @@ public class EntradaMercadoriaController {
                 .body(planilha);
     }
 
-    /** Fluxo XML (Fase 3, 2026-08-18) — parse da NF-e e tentativa de casar cada item; nada é
+    /** Fluxo XML (Fase 3, 2026-08-12) — parse da NF-e e tentativa de casar cada item; nada é
      *  persistido (ver {@link EntradaXmlService}). */
     @PostMapping(value = "/xml/preview", consumes = "multipart/form-data")
     public EntradaXmlPreviewResponse previewXml(@RequestPart("arquivo") MultipartFile arquivo) {

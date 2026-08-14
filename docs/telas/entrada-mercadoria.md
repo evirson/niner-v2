@@ -1,7 +1,7 @@
-# Spec: Entrada de Mercadorias (XML NF-e + lançamento manual)      Status: Implementada (falta só Fase 5 — atalho de etiqueta)
-Autor: Evirson (dono do produto) + Claude · Data: 2026-07-23, implementação 2026-08-11/12 (Manual+Planilha), 2026-08-18/19 (XML, Cancelamento, Filtros), 2026-08-20 (respeito ao parâmetro "Usa Cor/Grade") · Módulo(s): `estoque` (entrada) · Fase: 1 — Núcleo do ERP
+# Spec: Entrada de Mercadorias (XML NF-e + lançamento manual)      Status: Implementada
+Autor: Evirson (dono do produto) + Claude · Data: 2026-07-23, implementação 2026-08-11 (Manual+Planilha), 2026-08-12 (XML, Cancelamento, Filtros), 2026-08-13 (respeito ao parâmetro "Usa Cor/Grade"), 2026-08-14 (Fase 5 — atalho de etiqueta) · Módulo(s): `estoque` (entrada) · Fase: 1 — Núcleo do ERP
 
-> **Estado de implementação (2026-08-20).** Todas as "Questões abertas" abaixo foram
+> **Estado de implementação (2026-08-14).** Todas as "Questões abertas" abaixo foram
 > respondidas "sim" pelo dono do produto e a maioria dos **[COMPLEMENTAR]** ao longo do
 > documento reflete decisões já tomadas durante a implementação (mantidos no corpo do texto
 > como registro histórico da discussão, mesmo já resolvidos na prática) — implementado:
@@ -15,8 +15,8 @@ Autor: Evirson (dono do produto) + Claude · Data: 2026-07-23, implementação 2
 > - **Rateio de frete/IPI/ICMS-ST no custo** e **reajuste automático de `preco_custo`/
 >   `preco_venda`** — ambos configuráveis (`cfg_geral.cfg_rateia_frete_entrada` /
 >   `cfg_reajusta_preco_entrada`, Parâmetros do Sistema), desligados por padrão.
-> - **Consistência do valor das contas a pagar (2026-08-23)** — a soma das duplicatas precisa
->   bater com o total dos produtos lançados (regra de 2026-08-14), agora **configurável** em
+> - **Consistência do valor das contas a pagar (2026-08-14)** — a soma das duplicatas precisa
+>   bater com o total dos produtos lançados (regra de 2026-08-11), agora **configurável** em
 >   `cfg_geral.cfg_consiste_valor_contas_pagar` (Parâmetros do Sistema, "Consistir valor das
 >   contas a pagar na entrada"), **ligada por padrão** — desligada, permite divergência
 >   (adiantamento, parte à vista). Aplicada na tela (bloqueia Confirmar + aviso) **e** no
@@ -47,7 +47,7 @@ Autor: Evirson (dono do produto) + Claude · Data: 2026-07-23, implementação 2
 >   `V032__entrada_planilha.sql` (`cfg_geral.id_plano_contas_compra_mercadoria` + seed do plano
 >   de contas de compra) — ver "Impacto no banco" abaixo pelo desenho final (difere um pouco
 >   do proposto no rascunho original).
-> - **Fase 3 — Fluxo XML (2026-08-18/19)** — `NfeXmlParser.java` (DOM sem namespace, XXE-safe)
+> - **Fase 3 — Fluxo XML (2026-08-12)** — `NfeXmlParser.java` (DOM sem namespace, XXE-safe)
 >   + `EntradaXmlService.java`. A aba "Dados Gerais" pede o **upload do XML primeiro**;
 >   fornecedor/empresa/nota/data/parcelas só aparecem depois de processar. Fornecedor casado
 >   pelo CNPJ do `emit` — sem match, `FornecedorQuickCreateModal` abre sozinho, pré-preenchido,
@@ -66,7 +66,7 @@ Autor: Evirson (dono do produto) + Claude · Data: 2026-07-23, implementação 2
 >   normalizado — evita recadastrar o mesmo produto em tamanhos diferentes. Testado ponta a
 >   ponta com 2 NF-es reais (Dakota Calçados 36 itens; A. Grings S.A., `nfe-grings.xml`, no
 >   `EntradaXmlCrudTest`, 11 testes).
-> - **Cancelamento (2026-08-19)** — `POST /api/v1/estoque/entradas/{id}/cancelar`, ADMIN-only.
+> - **Cancelamento (2026-08-12)** — `POST /api/v1/estoque/entradas/{id}/cancelar`, ADMIN-only.
 >   Mestre original nunca é apagado/editado — ganha `cancelado`/`data_cancelamento`/
 >   `id_usuario_cancelamento`/`motivo_cancelamento` (mesmo padrão de `venda.cancelada`); o
 >   estorno de estoque é um NOVO `produto_movimento_mestre` tipo `CANCELAMENTO` com
@@ -82,16 +82,16 @@ Autor: Evirson (dono do produto) + Claude · Data: 2026-07-23, implementação 2
 >   rodam com o superusuário do Testcontainers, não com `niner_app` de verdade. Ícone vermelho
 >   ao lado do de visualizar na grid, só visível pra ADMIN e quando `!cancelada`; linha
 >   cancelada ganha badge "Cancelada" e continua na grid.
-> - **Filtros da listagem (2026-08-19)** — popup obrigatório ao entrar na tela (mesmo padrão do
+> - **Filtros da listagem (2026-08-12)** — popup obrigatório ao entrar na tela (mesmo padrão do
 >   CRM/Cancelamento de Devolução): Fornecedor (busca por texto), Empresa, Nº Nota Fiscal, Data
 >   Início/Fim. Todos os campos opcionais (em branco = lista tudo). Três botões no popup:
 >   "Fechar" (volta pra tela anterior via `navigate(-1)`, mesma convenção do `BotaoFecharTela`;
->   acrescentado em 2026-08-23), "＋ Nova entrada" (pula a busca, vai direto pro formulário) e
+>   acrescentado em 2026-08-14), "＋ Nova entrada" (pula a busca, vai direto pro formulário) e
 >   "Localizar". Bug de fuso
 >   horário achado e corrigido nesta rodada: a sessão do Postgres roda em UTC mas a tela mostra
 >   data em horário local do navegador — filtro de data e gravação de `dataMovimento` agora
 >   usam `(coluna AT TIME ZONE 'America/Sao_Paulo')` em vez de comparar/gravar em UTC puro.
-> - **Parâmetro "Usa Cor/Grade" desligado (2026-08-20)** — nenhum dos 3 fluxos pede ou mostra
+> - **Parâmetro "Usa Cor/Grade" desligado (2026-08-13)** — nenhum dos 3 fluxos pede ou mostra
 >   Cor/Tamanho, mesmo para um produto que já tenha `id_grade` gravado de uma sessão anterior
 >   (a grade é ignorada por completo enquanto o parâmetro estiver desligado — decisão explícita
 >   do dono do produto, não só um bloqueio para produto novo). `EntradaPlanilhaService` zera
@@ -101,7 +101,7 @@ Autor: Evirson (dono do produto) + Claude · Data: 2026-07-23, implementação 2
 >   os selects de Cor/Tamanho quando a linha resolvida realmente tem grade — antes disso havia
 >   um bug de travamento (produto sem grade caindo nessa tela ficava com o select de Tamanho
 >   sempre vazio e o "Confirmar" nunca habilitava).
-> - **Grid "Localizados"/"Não Localizados" agrupada por nome (2026-08-21)** — com "Usa Cor/Grade"
+> - **Grid "Localizados"/"Não Localizados" agrupada por nome (2026-08-13)** — com "Usa Cor/Grade"
 >   desligado, a coluna Cor/Tamanho some das duas grids e linhas com o mesmo nome de produto
 >   (`pendentesAgrupados`, `LinhaPendenteSemGrade`) somam em uma só (quantidade total); "＋
 >   Cadastrar"/"Pesquisar"/"Ignorar" na linha agrupada resolvem/ignoram TODAS as linhas do grupo
@@ -112,10 +112,20 @@ Autor: Evirson (dono do produto) + Claude · Data: 2026-07-23, implementação 2
 >   o NCM do XML (não validado) pro cadastro rápido, mesmo quando esse código ainda não existe em
 >   `cfg_produto_ncm`.
 >
+> - **Fase 5 — Atalho de Emissão de Etiquetas (2026-08-14)** — **concluída**. Na tela de entrada
+>   confirmada, o link **"Emitir Etiquetas desta Nota"**
+>   (`web/src/pages/estoque/entrada/EntradaMercadoriaForm.tsx:1315-1328`) leva para
+>   `/etiqueta-emissao?idFornecedor=…&nomeFornecedor=…&notaFiscal=…`, e a tela de destino abre o
+>   popup de seleção **automaticamente, já no modo Por Entradas, com fornecedor e nota
+>   preenchidos** — basta clicar em Localizar. O link existia desde 2026-08-11, mas
+>   `EtiquetaEmissaoForm` **não lia os parâmetros**: o operador caía numa tela vazia e redigitava
+>   tudo. Corrigido lendo os 3 params (`useSearchParams`, helper `origemDaEntrada`) e passando o
+>   `nomeFornecedor` junto — o endpoint de fornecedores busca por texto, não por id, então sem o
+>   nome a tela de etiquetas precisaria de uma chamada extra só pra mostrar de quem é a nota.
+>   Só frontend, nenhum endpoint novo. Ver `docs/telas/etiqueta-emissao.md`, seção "Chegada por
+>   'Emitir Etiquetas desta Nota'".
+>
 > **Pendente (não implementado ainda):**
-> - **Fase 5 — Atalho de Emissão de Etiquetas**: ação rápida para imprimir etiquetas dos
->   produtos recém-recebidos direto a partir de uma entrada confirmada. Único item que falta
->   para esta feature ser considerada 100% completa.
 > - Questão 8 (quem confirmou o movimento) resolvida **mais simples** do que o rascunho
 >   original propunha: nenhuma tabela `usuario↔funcionário` nova — `id_usuario` foi direto
 >   pra `produto_movimento_mestre` (FK pra `usuario`, nullable porque nenhum outro fluxo grava
@@ -345,7 +355,7 @@ POST   /api/v1/estoque/entradas/{id}/cancelar           ADMIN-only — {motivoCa
 Todos sob `/api/v1/**` (JWT tenant, RLS — P8). `POST .../cancelar` é ADMIN-only; os demais são
 ADMIN e OPERADOR sem distinção (mesmo nível de Transferência de Estoque/Devolução de
 Produtos). Erros em Problem Details (RFC 9457). `GET /api/v1/estoque/entradas` aceita também
-`idEmpresa`/`dataInicial`/`dataFinal` (filtros da listagem, 2026-08-19).
+`idEmpresa`/`dataInicial`/`dataFinal` (filtros da listagem, 2026-08-12).
 
 ## Impacto no banco (implementado — V019 alterada + V031/V032 novas, banco ainda em construção)
 
@@ -370,11 +380,11 @@ Duas tabelas novas além do proposto no rascunho:
 4. **`cfg_geral.id_plano_contas_compra_mercadoria`** (V032) — FK composta pro plano de contas
    usado nas `contas_pagar` geradas pela entrada; V032 também semeia a árvore mínima até
    "3.03.001 Compra de Mercadoria para Revenda" pra tenants que ainda não a tinham (código
-   `3.03.001` desde 2026-08-22 — era `3.03.001.001` antes da máscara do plano de contas
+   `3.03.001` desde 2026-08-13 — era `3.03.001.001` antes da máscara do plano de contas
    encurtar de 4 pra 3 níveis, ver `docs/telas/plano-contas.md`).
    `cfg_geral.cfg_rateia_frete_entrada`/`cfg_reajusta_preco_entrada` (booleans, default
    `false`) foram direto em `V023__cfg_geral.sql` (banco em construção).
-5. **Cancelamento (2026-08-19)** — `produto_movimento_mestre` ganhou
+5. **Cancelamento (2026-08-12)** — `produto_movimento_mestre` ganhou
    `cancelado`/`data_cancelamento`/`id_usuario_cancelamento`/`motivo_cancelamento` (editado em
    `V019__estoque.sql`, mesmo padrão de `venda.cancelada`); `contas_pagar.id_movimento` (V026,
    editado in-place) liga cada duplicata gerada à entrada de origem, permitindo apagá-las no

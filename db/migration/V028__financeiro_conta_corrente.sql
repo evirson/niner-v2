@@ -87,7 +87,7 @@ CREATE TABLE conta_corrente_movimento (
   localizador        integer        GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   id_tenant          smallint       NOT NULL REFERENCES plataforma.tenant (id_tenant),
   id_conta_corrente  text           NOT NULL,
-  id_conta_pagar     integer,                 -- 2026-08-23 (Fluxo de Caixa): saída gerada pela baixa de uma conta a pagar (sem FK, mesmo motivo do caixa_detalhe) — permite apagar o movimento quando a baixa é desfeita
+  id_conta_pagar     integer,                 -- 2026-08-14 (Fluxo de Caixa): saída gerada pela baixa de uma conta a pagar (sem FK, mesmo motivo do caixa_detalhe) — permite apagar o movimento quando a baixa é desfeita
   id_plano_contas    text           NOT NULL,
   data_movimento     timestamptz    NOT NULL,
   numero_documento   text           NOT NULL,

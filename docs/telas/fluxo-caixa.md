@@ -1,6 +1,6 @@
 # Fluxo de Caixa (DFC realizado + projeção) — `relatorios.fluxocaixa`
 
-> Status: **implementado em 2026-08-23** (Partes 1 e 2), aprovado pelo dono do produto. Dois
+> Status: **implementado em 2026-08-14** (Partes 1 e 2), aprovado pelo dono do produto. Dois
 > pontos mudaram durante a implementação, marcados com **[revisto na implementação]**.
 
 ## Problema

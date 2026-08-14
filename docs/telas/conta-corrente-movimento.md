@@ -13,7 +13,7 @@ Tela de cadastro completo (lista + form) pro lançamento — **diferente** de `c
 lançamento já gravado, porque é digitação manual sujeita a erro de captura, não um efeito
 colateral automático de outra rotina.
 
-> ⚠️ **Desde 2026-08-23 a premissa "só lançamento manual" deixou de ser verdadeira.** A **baixa
+> ⚠️ **Desde 2026-08-14 a premissa "só lançamento manual" deixou de ser verdadeira.** A **baixa
 > de Contas a Pagar** com origem `CONTA_CORRENTE` grava aqui um débito automático
 > (`ContaPagarService.sincronizarMovimentoDeDinheiro`,
 > `api/src/main/java/com/vetor/niner/financeiro/contaspagar/ContaPagarService.java:177-188`),
@@ -45,7 +45,7 @@ Contas → Conta Corrente → Documento (busca) → Compensado**. `idEmpresa` fi
 `conta_corrente` (a tabela de lançamento não tem `id_empresa` direto — vem da conta). Datas são
 `LocalDate` (não `OffsetDateTime` — comparação por `data_movimento::date`), mesmo padrão de
 `docs/telas/estorno-recebimento-crediario.md`. Filtro de Plano de Contas usa `SeletorPlanoContas`
-(busca por código ou nome, 2026-08-22 — antes era `<select>` nativo `limite=100`; ver
+(busca por código ou nome, 2026-08-13 — antes era `<select>` nativo `limite=100`; ver
 `docs/telas/plano-contas.md`), mesmo componente do campo do formulário desta tela.
 
 ## Contrato de API
@@ -92,7 +92,7 @@ Cobertos por `ContaCorrenteMovimentoCrudTest` (12 testes).
 `cfg_plano_contas`). RLS própria. `criado_em` **e** `atualizado_em` (diferente de
 `caixa_detalhe`, que só tem `criado_em` — ali o lançamento é imutável, aqui não).
 
-**Coluna acrescentada em 2026-08-23 (Fluxo de Caixa):** `id_conta_pagar integer` nullable e
+**Coluna acrescentada em 2026-08-14 (Fluxo de Caixa):** `id_conta_pagar integer` nullable e
 **sem FK de propósito** (`V028__financeiro_conta_corrente.sql:90`) — marca os movimentos gerados
 automaticamente pela baixa de Contas a Pagar e é o vínculo que permite apagá-los quando a baixa é
 desfeita. Movimento lançado manualmente nesta tela sempre tem `id_conta_pagar` nulo.

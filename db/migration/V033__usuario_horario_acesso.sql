@@ -1,9 +1,9 @@
--- V033 — Horário de acesso por dia da semana (docs/telas/usuario.md, 2026-08-14). Restringe
+-- V033 — Horário de acesso por dia da semana (docs/telas/usuario.md, 2026-08-11). Restringe
 -- QUANDO um OPERADOR pode logar/trabalhar no sistema (segurança de acesso a dados sensíveis).
 -- ADMIN nunca é afetado (só existe um por tenant, imutável — V015) — a regra é checada só pelo
 -- valor de `usuario.administrador`, não precisa de coluna própria de exceção.
 
--- Liga/desliga o controle por usuário (2026-08-14, pedido do dono do produto: "colocar um check
+-- Liga/desliga o controle por usuário (2026-08-11, pedido do dono do produto: "colocar um check
 -- também se controla horário de acessos" — desligado, nenhum dado de horário é pedido/aplicado).
 ALTER TABLE usuario ADD COLUMN controla_horario_acesso boolean NOT NULL DEFAULT false;
 

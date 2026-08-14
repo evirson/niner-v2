@@ -8,7 +8,7 @@ const OPCOES: { valor: Tema; rotulo: string; icone: (props: { size?: number }) =
   { valor: 'auto', rotulo: 'Automático', icone: IconeMonitor },
 ]
 
-/** Seletor de tema do cabeçalho do ERP (2026-08-23) — três estados (Claro / Escuro /
+/** Seletor de tema do cabeçalho do ERP (2026-08-14) — três estados (Claro / Escuro /
  *  Automático), guardados em `localStorage` por navegador. Menu em vez de botão que só alterna:
  *  com três estados, um botão cíclico esconde o "Automático" (o usuário não descobre que existe)
  *  e não mostra qual está ativo. O ícone do gatilho reflete o tema **em uso** — com "Automático"

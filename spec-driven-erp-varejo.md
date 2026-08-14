@@ -269,7 +269,7 @@ Decisões-chave (registrar cada uma como ADR — template na seção 6):
 
 O modelo abaixo parte do **schema legado real** (`db/*.txt`, originalmente Firebird) já **adaptado para PostgreSQL** e reorganizado por módulo de domínio. Nomes em `snake_case` minúsculo (idioma Postgres), vocabulário de domínio em **português** preservado. Tabelas/colunas marcadas em <span style="color:red">🔴</span> **ainda não existem no legado** e precisam ser criadas para atender à Constituição e aos requisitos (integração com marketplaces, reserva, auditoria).
 
-> ⚠️ **Esta seção é o desenho do núcleo, não o inventário do banco (conferido em 2026-08-24).**
+> ⚠️ **Esta seção é o desenho do núcleo, não o inventário do banco (conferido em 2026-08-14).**
 > Ela cobre bem os módulos originais, mas **não** lista tudo o que foi criado depois — vendas do
 > PDV, devolução e vale-mercadoria, balanço, transferência entre empresas, configuração de
 > etiqueta, arquivo compartilhado, cor/tamanho/grade, entre outras (~16 tabelas). **A fonte de
@@ -377,7 +377,7 @@ produto_barra(id_variacao PK,                      -- surrogate; sku é a chave 
 > houver sharding (uma segunda instância de banco para outro grupo de tenants), essa segunda
 > instância nasce com `id_banco = 2`, evitando colisão entre bancos. `niner_app` não tem grant
 > nenhum na tabela — só `EXECUTE` na função (`SECURITY DEFINER`, dono `niner_owner`).
-> ✅ **Resolvido em 2026-08-06** (esta nota dizia "nada chama a função ainda" até 2026-08-24):
+> ✅ **Resolvido em 2026-08-06** (esta nota dizia "nada chama a função ainda" até 2026-08-14):
 > o `ProdutoBarraService` existe (`com.vetor.niner.catalogo`) e chama `gerar_ean13_interno()`
 > explicitamente antes do `INSERT`, exatamente como planejado — derivado explícito no Java, não
 > escondido em `DEFAULT`/`TRIGGER` da coluna, mesmo estilo de `plataforma.tenant_atual()`. É
@@ -578,7 +578,7 @@ conta_corrente_movimento(localizador PK, id_conta_corrente FK, data_movimento,
 >   `tipo_movimento_conta` (`'CREDITO'`/`'DEBITO'`/`'NEUTRO'`, por extenso, sem acento desde a
 >   revisão de 2026-07-31, V013); `inclui_dre`/`inclui_fluxo_caixa` viram `boolean`.
 >   `fornecedor.id_plano_contas` (§3.3.9) referencia essa tabela, `NOT NULL`. Máscara do código
->   encurtada de 4 pra 3 níveis em 2026-08-22 (`9.99.999`) — ver `docs/telas/plano-contas.md`.
+>   encurtada de 4 pra 3 níveis em 2026-08-13 (`9.99.999`) — ver `docs/telas/plano-contas.md`.
 > - `tipo_carteira`, `moeda`, `moeda_detalhe`, `contas_receber`/`contas_receber_detalhe`,
 >   `caixa_mestre`/`caixa_detalhe` — criadas em **V025** (crediário + caixa). Ver diferenças
 >   do real vs. o pseudo-schema abaixo na nota no início desta seção.
@@ -607,13 +607,13 @@ UNIQUE(id_tenant, nome_categoria))` — criada junto de `cliente` (mesmo arquivo
 (removido) nem `nome_etiqueta` (esse ficou em `empresa.cfg_nome_etiqueta`, não em `cfg_geral` —
 ver §3.3.2). Ganhou o prefixo `cfg_` nas colunas de flag (convenção nova a partir desta data).
 
-⚠️ **Flags reais de `cfg_geral` (conferidas em 2026-08-24 contra V023).** As duas flags citadas
+⚠️ **Flags reais de `cfg_geral` (conferidas em 2026-08-14 contra V023).** As duas flags citadas
 na versão anterior deste parágrafo — `cfg_usa_variante_linha` / `cfg_usa_variante_coluna` —
 **não existem mais**: saíram em 2026-08-08 junto com a troca de variante linha/coluna por
 cor+grade. O conjunto atual é:
 `cfg_usa_cor_grade` (default **false**), `cfg_permite_qtd_decimal` (true),
 `cfg_exige_numero_venda_devolucao` (false), `cfg_rateia_frete_entrada` (false),
-`cfg_reajusta_preco_entrada` (false), `cfg_consiste_valor_contas_pagar` (**true**, 2026-08-23)
+`cfg_reajusta_preco_entrada` (false), `cfg_consiste_valor_contas_pagar` (**true**, 2026-08-14)
 e `id_plano_contas_compra_mercadoria`. Ver `docs/telas/configuracao-geral.md`.
 
 ### 3.3.9 Cadastros auxiliares
@@ -741,7 +741,7 @@ Convenções: versionamento no path; erros no formato Problem Details (RFC 9457)
 
 ## 3.5 Docker / ambiente
 
-> ⚠️ **O YAML abaixo é o esboço original e divergiu do real (conferido em 2026-08-24).** O
+> ⚠️ **O YAML abaixo é o esboço original e divergiu do real (conferido em 2026-08-14).** O
 > `docker-compose.yml` do repositório é a fonte de verdade. Diferenças principais: o banco é
 > **`niner_db`** com os papéis `niner_owner`/`niner_app` (não `erp`/`erp`), e além de `db` e `api`
 > existem os serviços **`flyway`** (aplica `db/migration/`), **`fake-gcs`** (object storage local
@@ -846,7 +846,7 @@ V031  balanço de estoque (produto_balanco) · transferência entre empresas
 V032  comum.arquivo_compartilhado (cache de PDF p/ envio por WhatsApp, token 24h)
 V033  cfg_plano_contas ganha grupo_dre/grupo_dfc/sinal/inclui_dre (DRE + Fluxo de Caixa)
 ```
-> ⚠️ A numeração acima é a **real do repositório** (V001–V033, conferida em 2026-08-24). A
+> ⚠️ A numeração acima é a **real do repositório** (V001–V033, conferida em 2026-08-14). A
 > faixa "V001–V091" citada no roadmap (§4) era a estimativa original da spec e **não**
 > corresponde a arquivos existentes — use sempre `db/migration/README.md` como fonte.
 Detalhe migration a migration (com ✅/🔴 de situação): `db/migration/README.md`.
@@ -863,7 +863,7 @@ Racional de RLS num arquivo final: garante que **nenhuma** tabela de tenant fica
 
 Toda tela do frontend segue o **padrão de referência** em [`docs/padroes/cadastro_fornecedor_campos_cinza.html`](docs/padroes/cadastro_fornecedor_campos_cinza.html) — o mockup do Cadastro de Fornecedor ("campos cinza"). Ele é o *golden file* da UI: quando uma decisão de layout/estilo não estiver aqui, ela está no HTML de referência; ao construir componentes React, portar esses padrões para tokens/componentes reutilizáveis (não copiar HTML por tela). O painel lateral "Personalizar cores" do mockup é apenas ferramenta de exploração de paleta — **não** faz parte do produto.
 
-**Design tokens (CSS custom properties).** Todas as cores vêm de variáveis `--*`; nenhum hex literal em componente. Suporte obrigatório a **tema claro e escuro**: default por `@media (prefers-color-scheme)` e override explícito via atributo `data-theme="light|dark"` no elemento raiz (toggle do usuário vence a preferência do sistema). Cada tema mantém seu próprio conjunto de tokens. O toggle previsto aqui foi implementado no ERP em **2026-08-23** (`SeletorTema.tsx` no cabeçalho — Claro/Escuro/Automático, preferência em `localStorage`; ver `docs/telas/menu-principal.md`); declarar `color-scheme` junto dos tokens de cada tema é obrigatório, senão os controles nativos (lista do `<select>`, scrollbar, autofill) ignoram o tema. Paleta base:
+**Design tokens (CSS custom properties).** Todas as cores vêm de variáveis `--*`; nenhum hex literal em componente. Suporte obrigatório a **tema claro e escuro**: default por `@media (prefers-color-scheme)` e override explícito via atributo `data-theme="light|dark"` no elemento raiz (toggle do usuário vence a preferência do sistema). Cada tema mantém seu próprio conjunto de tokens. O toggle previsto aqui foi implementado no ERP em **2026-08-14** (`SeletorTema.tsx` no cabeçalho — Claro/Escuro/Automático, preferência em `localStorage`; ver `docs/telas/menu-principal.md`); declarar `color-scheme` junto dos tokens de cada tema é obrigatório, senão os controles nativos (lista do `<select>`, scrollbar, autofill) ignoram o tema. Paleta base:
 
 | Token | Claro | Escuro | Uso |
 |---|---|---|---|
@@ -916,7 +916,7 @@ Convenção de nomes de campo no mockup segue os identificadores legados em MAI�
   - **Passo a passo** de operação (o "como fazer" — o manual), incluindo campos obrigatórios, validações e ações do rodapé (`footer-bar`).
   - **Dicas/erros comuns** e o que fazer.
   - **Botão "Assistir vídeo"** que direciona ao vídeo explicativo da tela.
-- **Fonte do conteúdo — ⚠️ o desenho abaixo NÃO foi implementado (conferido em 2026-08-24).** A tabela `ajuda_tela`, a migration e o endpoint `GET /api/v1/ajuda/{chave_tela}` **não existem**. Na prática, o conteúdo da ajuda vive num mapa no próprio front (`web/src/components/AjudaDaTela.tsx`), indexado pela `chave_tela` — que é a única parte deste desenho que sobreviveu. A regra R22 (toda tela tem ajuda) **continua obrigatória** e é cumprida assim; o que está em aberto é só *onde o texto mora*. Migrar para a API é trabalho futuro, e o desenho proposto originalmente era:
+- **Fonte do conteúdo — ⚠️ o desenho abaixo NÃO foi implementado (conferido em 2026-08-14).** A tabela `ajuda_tela`, a migration e o endpoint `GET /api/v1/ajuda/{chave_tela}` **não existem**. Na prática, o conteúdo da ajuda vive num mapa no próprio front (`web/src/components/AjudaDaTela.tsx`), indexado pela `chave_tela` — que é a única parte deste desenho que sobreviveu. A regra R22 (toda tela tem ajuda) **continua obrigatória** e é cumprida assim; o que está em aberto é só *onde o texto mora*. Migrar para a API é trabalho futuro, e o desenho proposto originalmente era:
   ```sql
   -- 🔴 a criar (migration futura): catálogo de ajuda por tela (global; conteúdo institucional, não é dado de tenant)
   ajuda_tela(chave_tela PK,        -- ex.: 'catalogo.produto.form'

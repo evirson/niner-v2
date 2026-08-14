@@ -38,7 +38,7 @@ public class NcmService {
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "NCM não encontrado."));
     }
 
-    /** Pesquisa por nome (2026-08-13, pedido do dono do produto: quem cadastra um produto nem
+    /** Pesquisa por nome (2026-08-11, pedido do dono do produto: quem cadastra um produto nem
      *  sempre sabe o código de cabeça) — {@code ILIKE} por {@code descricao_ncm}, mesmo idioma
      *  de busca por nome já usado em {@code EtiquetaEmissaoService.buscarProdutos}/
      *  {@code buscarFornecedores}. Limitado a 30 linhas; sem termo, não busca (a tabela tem

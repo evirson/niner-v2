@@ -5,7 +5,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Checagem da janela de horário de acesso (docs/telas/usuario.md, 2026-08-14) — usada tanto no
+ * Checagem da janela de horário de acesso (docs/telas/usuario.md, 2026-08-11) — usada tanto no
  * login ({@code SignupService.login}, sem tolerância) quanto no filtro por requisição
  * ({@code HorarioAcessoFilter}, {@link #TOLERANCIA_MINUTOS_PADRAO} de tolerância pra não cortar
  * uma venda em andamento). Nunca se aplica a {@code administrador=true} (só existe um por
@@ -24,7 +24,7 @@ public class HorarioAcessoService {
      *  403/401 e disparar o fluxo de logoff gracioso em vez do genérico. */
     public static final String MENSAGEM_FORA_DA_JANELA = "Fora do horário de acesso permitido.";
 
-    /** Tolerância padrão (2026-08-14, revisado a pedido do dono do produto — era 30, agora 15)
+    /** Tolerância padrão (2026-08-11, revisado a pedido do dono do produto — era 30, agora 15)
      *  usada tanto pelo {@code HorarioAcessoFilter} (bloqueio de verdade) quanto por
      *  {@link #segundosRestantesTolerancia} (contagem regressiva mostrada no frontend) — as
      *  duas PRECISAM usar o mesmo valor, senão o aviso visual não bate com o bloqueio real. */
@@ -48,7 +48,7 @@ public class HorarioAcessoService {
         // puro: `time + interval` do Postgres "embrulha" na virada da meia-noite (ex.:
         // 23:50 + 15 min vira 00:05, um limite superior MENOR que o inferior, quebrando o
         // BETWEEN sempre que o fim do expediente cai nos últimos `toleranciaMinutos` do dia —
-        // bug real encontrado na verificação manual, 2026-08-14).
+        // bug real encontrado na verificação manual, 2026-08-11).
         return jdbc.sql("""
                         SELECT u.administrador OR NOT u.controla_horario_acesso OR EXISTS (
                             SELECT 1 FROM usuario_horario_acesso h

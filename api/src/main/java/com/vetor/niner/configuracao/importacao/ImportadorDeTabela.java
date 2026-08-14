@@ -33,7 +33,7 @@ public interface ImportadorDeTabela {
 
     /** Cabeçalho de {@link #modeloPlanilha()} (em MAIÚSCULAS) — única fonte de verdade das colunas
      *  esperadas, reaproveitada pela detecção automática de tipo de arquivo
-     *  ({@link ImportacaoService#detectar}, 2026-08-09): em vez de manter uma segunda lista de
+     *  ({@link ImportacaoService#detectar}, 2026-08-10): em vez de manter uma segunda lista de
      *  colunas por tabela, a detecção só lê o mesmo cabeçalho que já descreve o modelo baixável. */
     default List<String> colunasEsperadas() {
         return ImportacaoPlanilha.lerCabecalhoDeBytes(modeloPlanilha());

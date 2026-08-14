@@ -10,7 +10,7 @@ export interface EmpresaAcesso {
 }
 
 /** Um dia da semana (1=segunda..7=domingo, ISO) do horário de acesso permitido — os dois
- *  horários nulos juntos = sem acesso naquele dia (docs/telas/usuario.md, 2026-08-14). */
+ *  horários nulos juntos = sem acesso naquele dia (docs/telas/usuario.md, 2026-08-11). */
 export interface HorarioAcesso {
   diaSemana: number
   horaInicio: string | null

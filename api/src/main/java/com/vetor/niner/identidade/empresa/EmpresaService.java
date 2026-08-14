@@ -40,7 +40,7 @@ public class EmpresaService {
 
     /**
      * Empresas que o usuário logado pode operar — usado pela Entrada de Produtos por Compra
-     * pra saber em qual empresa dar entrada (2026-08-12). ADMIN vê todas do tenant (mesmo
+     * pra saber em qual empresa dar entrada (2026-08-11). ADMIN vê todas do tenant (mesmo
      * resultado de {@link #listar()}); OPERADOR só as ligadas a ele via {@code usuario_empresa}
      * (mesma query de {@code SignupService.login}, que lista as empresas de um usuário no
      * login em duas voltas).

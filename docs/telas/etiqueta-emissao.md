@@ -93,6 +93,33 @@ sempre" sem querer.
 > (`EntradaMercadoriaService.java:131`), então este modo trabalha com **dado real** — é o caso de
 > uso principal dele (etiquetar o que acabou de chegar).
 
+#### Chegada por "Emitir Etiquetas desta Nota" (2026-08-14)
+
+A Entrada de Produtos por Compra mostra, na tela de entrada confirmada, o link **"Emitir Etiquetas
+desta Nota"** (`web/src/pages/estoque/entrada/EntradaMercadoriaForm.tsx:1315-1328`), que navega
+para `/etiqueta-emissao?idFornecedor=…&nomeFornecedor=…&notaFiscal=…`.
+
+Os params `idFornecedor`/`notaFiscal` eram montados lá desde 2026-08-11, mas **esta tela não os
+lia** — o operador caía aqui com a lista vazia e tinha que redigitar fornecedor e nota. Corrigido
+em 2026-08-14:
+
+- `EtiquetaEmissaoForm` lê os 3 params via `useSearchParams` (helper `origemDaEntrada`,
+  `EtiquetaEmissaoForm.tsx:40-48`, tipo `OrigemEntrada` em `web/src/lib/etiquetaEmissao.ts:26-30`).
+  Só há origem quando vem um `idFornecedor` numérico e positivo; a nota é **opcional** (entrada
+  manual sem número de nota ainda filtra pelo fornecedor).
+- Com origem, o popup de seleção **abre sozinho** (`selecaoAberta` nasce `true`, `:66`) já na aba
+  **Por Entradas** (`SelecaoProdutosModal.tsx:434`), com **fornecedor e nota fiscal já
+  preenchidos** (`SelecaoPorEntradas`, `:228-238`). Basta clicar em **Localizar**.
+- O `nomeFornecedor` viaja na URL de propósito: o endpoint de fornecedores busca **por texto, não
+  por id**, então sem o nome esta tela precisaria de uma chamada extra só pra mostrar de quem é a
+  nota. Com id + nome na URL, a opção escolhida é montada direto — a busca por texto continua
+  disponível se o operador quiser trocar de fornecedor.
+- Aberta pelo menu (sem params), nada muda: `origemDaEntrada` devolve `null`, o popup começa
+  fechado e a aba padrão continua sendo **Individual**.
+
+Os dois lados são só frontend — nenhum endpoint novo, nenhum parâmetro novo em
+`GET /etiqueta-emissao/entradas`.
+
 ### 3. Por Estoques
 
 `produto_estoque.qtd_estoque` (só `> 0`) da empresa escolhida (obrigatória — ver "Decisões de
@@ -177,8 +204,9 @@ depois reaproveita a mesma (não duplica), criar variação rejeita (400) tamanh
 grade do produto, busca de fornecedores só ativos, Por Entradas rejeita sem filtro nenhum, Por
 Entradas soma quantidade de várias compras da mesma variação, Por Entradas filtra por nota fiscal,
 Por Estoques exige empresa pra ADMIN, Por Estoques só traz quantidade positiva, Por Estoques
-filtra por categoria, e isolamento de tenant (RLS). Suíte de backend inteira: **492 testes verdes
-em 2026-08-24** (eram 405 quando esta tela nasceu).
+filtra por categoria, e isolamento de tenant (RLS). Suíte de backend inteira: **500 testes verdes
+em 2026-08-14** (eram 405 quando esta tela nasceu). A chegada por "Emitir Etiquetas desta Nota" é
+100% frontend — não acrescentou teste de backend.
 
 ## Frontend
 
@@ -186,7 +214,9 @@ em 2026-08-24** (eram 405 quando esta tela nasceu).
 Etiquetas + impressão), `SelecaoProdutosModal.tsx` (popup com os 3 modos em abas — Individual/Por
 Entradas/Por Estoques), `EscolherModeloModal.tsx` (popup do passo final, lista os modelos de
 Configuração de Etiqueta). `web/src/lib/etiquetaEmissao.ts` reúne tipos, chamadas de API,
-`mesclarItensEmissao`, `montarSequenciaImpressao`, `paraQuantidadeInteira`.
+`mesclarItensEmissao`, `montarSequenciaImpressao`, `paraQuantidadeInteira` — e, desde 2026-08-14,
+o tipo `OrigemEntrada` da chegada por "Emitir Etiquetas desta Nota" (`SelecaoProdutosModal` e
+`SelecaoPorEntradas` ganharam a prop opcional `origemEntrada`, `null` por padrão).
 
 ## Ajuda da tela (manual de operação + vídeo) — obrigatório (R22 / §3.7.1)
 
@@ -197,9 +227,11 @@ Configuração de Etiqueta). `web/src/lib/etiquetaEmissao.ts` reúne tipos, cham
   "Por Estoques" só traz saldo positivo, quantidade fracionária arredondada, e "Emitir Etiquetas"
   desabilitado com a lista vazia. Texto em `web/src/components/AjudaDaTela.tsx`. `url_video`:
   `NULL` por ora.
-  - ⚠️ O erro comum *"'Por Entradas' sem resultado: nenhuma tela de Entrada de Produtos por Compra
-    existe ainda"* ficou **desatualizado** desde 2026-08-11 (ver "Pendências" abaixo) — o texto no
-    `AjudaDaTela.tsx` ainda não foi corrigido.
+  - Atualizado em 2026-08-14: novo passo sobre a chegada pelo botão "Emitir Etiquetas desta Nota"
+    (popup já aberto em Por Entradas, fornecedor e nota preenchidos — `AjudaDaTela.tsx:863`), e o
+    erro comum de "Por Entradas" sem resultado, que estava **desatualizado desde 2026-08-11**
+    ("nenhuma tela de Entrada de Produtos por Compra existe ainda"), passou a mandar conferir
+    fornecedor/período e citar a tela de Entrada de Produtos por Compra, que já existe (`:867`).
 
 ## Impacto nas integrações
 

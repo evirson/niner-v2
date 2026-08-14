@@ -142,7 +142,7 @@ class RelatorioEstoqueCrudTest {
         }
     }
 
-    /** 2ª (ou 3ª...) variação do MESMO produto (2026-08-20) — {@code criarVariacao(c, idTenant,
+    /** 2ª (ou 3ª...) variação do MESMO produto (2026-08-13) — {@code criarVariacao(c, idTenant,
      *  idProduto)} sempre grava cor/tamanho PADRÃO (id=1), então duas chamadas pro mesmo produto
      *  colidiriam em {@code produto_barra_variacao_uk}; este overload usa um tamanho real e
      *  distinto pra cada variação extra. */

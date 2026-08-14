@@ -23,7 +23,7 @@ import java.util.Locale;
  * plano de contas único (existente, por código, ou novo, criado na hora com os campos mínimos)
  * vale para todo o arquivo — {@code fornecedor.id_plano_contas} é NOT NULL e o layout de origem
  * normalmente não tem essa classificação. Dedup por CNPJ, mesmo padrão do cliente. TELEFONE não
- * passa pela validação de 10–11 dígitos do cadastro manual (2026-08-09, pedido do dono do
+ * passa pela validação de 10–11 dígitos do cadastro manual (2026-08-10, pedido do dono do
  * produto) — planilha migrada traz o campo em formato livre e isso não deve rejeitar a linha.
  */
 @Service
@@ -158,8 +158,8 @@ public class FornecedorImportador implements ImportadorDeTabela {
             throw new IllegalArgumentException("RAZAO_SOCIAL é obrigatório.");
         }
         // E-mail/CNPJ inválidos não rejeitam a linha — entram em branco (pedido do dono do
-        // produto, 2026-08-11 os dois): planilha migrada de outro sistema traz esses campos
-        // sujos/incompletos com frequência, mesmo espírito do TELEFONE sem validação (2026-08-09).
+        // produto, 2026-08-10 os dois): planilha migrada de outro sistema traz esses campos
+        // sujos/incompletos com frequência, mesmo espírito do TELEFONE sem validação (2026-08-10).
         String email = ImportacaoPlanilha.semEspacos(linha.valor("EMAIL"));
         if (!FornecedorService.emailValido(email)) {
             email = null;

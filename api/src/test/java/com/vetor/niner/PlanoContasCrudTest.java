@@ -101,7 +101,7 @@ class PlanoContasCrudTest {
                 .andExpect(jsonPath("$.criadoEm").exists())
                 .andExpect(jsonPath("$.atualizadoEm").exists());
 
-        // Busca pelo código exato: desde 2026-08-23 o tenant nasce com o plano padrão (76 contas),
+        // Busca pelo código exato: desde 2026-08-14 o tenant nasce com o plano padrão (76 contas),
         // então listar tudo e olhar `itens[0]` não prova mais nada — a conta criada aqui não é a
         // primeira da ordenação por código.
         mvc.perform(get("/api/v1/planos-contas").param("busca", "9.00.000").header("Authorization", "Bearer " + token))

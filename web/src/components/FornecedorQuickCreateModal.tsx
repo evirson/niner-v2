@@ -16,7 +16,7 @@ import Toast from './Toast'
 /**
  * Criação rápida de fornecedor embutida (Entrada de Produtos por Compra) — o operador não
  * precisa sair da conferência da entrada pra cadastrar um fornecedor novo. Traz TODOS os campos
- * do cadastro completo (2026-08-12, pedido do dono do produto — a versão anterior só tinha
+ * do cadastro completo (2026-08-11, pedido do dono do produto — a versão anterior só tinha
  * razão social/CNPJ/plano de contas), reaproveitando `paraRequisicao`/`FORNECEDOR_VAZIO` de
  * `lib/fornecedores.ts` — o mesmo contrato usado por `FornecedorForm.tsx`. Fica de fora, de
  * propósito, só o que é específico da tela completa: campos obrigatórios configuráveis por
@@ -30,7 +30,7 @@ export default function FornecedorQuickCreateModal({
 }: {
   aoFechar: () => void
   aoCriar?: (fornecedor: Fornecedor) => void
-  /** Pré-preenchimento (fluxo XML da Entrada, 2026-08-18) — quando o CNPJ do emitente não bate
+  /** Pré-preenchimento (fluxo XML da Entrada, 2026-08-12) — quando o CNPJ do emitente não bate
    *  com nenhum fornecedor cadastrado, a tela já abre o cadastro rápido com o que o XML trouxe
    *  (razão social, CNPJ, endereço…), igual ao cadastro rápido de produto já faz com a Planilha. */
   valorInicial?: Partial<FornecedorFormState>
@@ -39,14 +39,14 @@ export default function FornecedorQuickCreateModal({
   const [form, setForm] = useState<FornecedorFormState>({ ...FORNECEDOR_VAZIO, ...valorInicial })
   const [toast, setToast] = useState('')
 
-  // Plano de Contas nunca é escolhido aqui (2026-08-19, pedido do dono do produto) — este modal
+  // Plano de Contas nunca é escolhido aqui (2026-08-12, pedido do dono do produto) — este modal
   // só existe dentro da Entrada de Produtos por Compra, então a conta é sempre a mesma:
   // `cfg_geral.id_plano_contas_compra_mercadoria`. Atribuído por baixo dos panos, sem campo na
   // tela; se ainda não tiver carregado quando o operador clicar "Criar", o botão continua
   // desabilitado (mesmo `valido` de sempre) até o valor chegar. Busca por
   // `/plano-contas-compra-mercadoria` (sem checagem de papel) — não pelo `/config-geral`
   // completo, que é ADMIN-only e quebrava esse preenchimento pra quem faz entrada sem ser ADMIN
-  // (2026-08-24, achado ao investigar o campo chegando vazio no fornecedor criado por OPERADOR).
+  // (2026-08-14, achado ao investigar o campo chegando vazio no fornecedor criado por OPERADOR).
   const { data: planoContasCompra } = useQuery({
     queryKey: ['config-geral', 'plano-contas-compra-mercadoria'],
     queryFn: buscarPlanoContasCompraMercadoria,

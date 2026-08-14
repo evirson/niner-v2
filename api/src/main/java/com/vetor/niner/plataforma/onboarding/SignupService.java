@@ -96,7 +96,7 @@ public class SignupService {
         // trigger de guarda já são DEFERRABLE INITIALLY DEFERRED (V016), então os 3 níveis
         // (máscara 9.99.999, revisão 2026-08-13) podem entrar juntos sem ordem especial.
         // Plano de contas padrão COMPLETO (76 contas), copiado do modelo global
-        // `cfg_plano_contas_padrao` (V016). Até 2026-08-23 o signup semeava só 3 contas — a árvore
+        // `cfg_plano_contas_padrao` (V016). Até 2026-08-14 o signup semeava só 3 contas — a árvore
         // mínima da conta de compra — e o plano completo era um script manual que quase nenhum
         // tenant rodava. O efeito apareceu no Relatório de DRE: tenant novo via receita e CMV, mas
         // NENHUMA despesa, porque não tinha conta de despesa cadastrada. `sinal` e
@@ -121,7 +121,7 @@ public class SignupService {
         jdbc.sql("INSERT INTO cfg_geral (id_tenant, id_plano_contas_compra_mercadoria) VALUES (?, '3.03.001')")
                 .param(idTenant).update();
 
-        // 5a2) cor/tamanho/grade PADRÃO (2026-08-20) — sempre id=1 (id_cor/id_tamanho/id_grade
+        // 5a2) cor/tamanho/grade PADRÃO (2026-08-13) — sempre id=1 (id_cor/id_tamanho/id_grade
         // não são mais IDENTITY, ver V017): usados internamente quando o tenant não usa cor/grade
         // ou um produto específico não tem variação de verdade, nunca exibidos/referenciados em
         // tela nenhuma (todo JOIN de exibição exclui id=1; CorService/TamanhoService/GradeService.
@@ -214,7 +214,7 @@ public class SignupService {
             throw new ResponseStatusException(UNAUTHORIZED, "Credenciais inválidas.");
         }
 
-        // Horário de acesso (2026-08-14) — sem tolerância nenhuma aqui: não existe "rotina em
+        // Horário de acesso (2026-08-11) — sem tolerância nenhuma aqui: não existe "rotina em
         // andamento" pra proteger numa sessão que ainda nem começou (a tolerância padrão só
         // vale pro filtro por requisição, HorarioAcessoFilter, que pode pegar uma venda no meio).
         if (!horarioAcesso.podeAcessarAgora(usuario.idUsuario(), 0)) {

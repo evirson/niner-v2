@@ -1,9 +1,9 @@
 # Spec: Armazenamento de imagens de produto (object storage)   Status: **Implementada**
-Autor: Evirson (Vetor) · Data: 2026-07-23 · Implementado em 2026-07-24 · Revisado em 2026-08-24
+Autor: Evirson (Vetor) · Data: 2026-07-23 · Implementado em 2026-07-24 · Revisado em 2026-08-14
 Módulo(s): `comum` (infra) + `catalogo` · Fase: 1 — Núcleo do ERP
 Decisão de arquitetura: **ADR-013** (spec §6) · Tabela afetada: `produto_imagem` (V017, §3.3.3)
 
-> ✅ **Este documento era o handoff da tarefa; a tarefa foi feita.** Até 2026-08-24 o cabeçalho
+> ✅ **Este documento era o handoff da tarefa; a tarefa foi feita.** Até 2026-08-14 o cabeçalho
 > dizia "código não iniciado" — não é mais verdade. Existem hoje `ProdutoImagemController`
 > (upload multipart, listagem, exclusão), o `ArmazenamentoDeArquivos` + adapter, e a
 > `GaleriaImagensProduto.tsx` no front (com confirmação ao excluir, lightbox e upload antes de

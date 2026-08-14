@@ -72,7 +72,7 @@ layout próprio de 42 colunas (fonte Courier, `.comprovante-preview`), mesmo pad
 Comprovante de Recebimento de Crediário; **desde 2026-08-07** foi padronizado com o layout da
 Papeleta de Venda (`.papeleta-preview`/`.papeleta-imprimir`, `ComprovantePapeletaModal.tsx`) —
 pedido do dono do produto pra uniformizar a impressão dos itens entre os dois comprovantes que
-saem na mesma bobina térmica física. Esse layout compartilhado **mudou em 2026-08-24**: deixou de
+saem na mesma bobina térmica física. Esse layout compartilhado **mudou em 2026-08-14**: deixou de
 ser 64 colunas numa linha por item (fonte Lucida Console) e passou a **42 colunas com o item em 2
 linhas** (Consolas em negrito), porque a versão anterior saía ilegível na bobina real. O vale
 acompanhou automaticamente **no texto e na impressão** (usa as mesmas funções de montagem de
@@ -80,15 +80,17 @@ linhas), e foi conferido impresso na mesma data, aprovado sem ajuste próprio �
 prática a decisão de 2026-08-07 de padronizar os dois comprovantes: consertar a papeleta
 consertou o vale junto. Ver `docs/telas/papeleta-venda.md`.
 
-⚠️ **Pendência conhecida — o PDF do vale ficou para trás.** A padronização valeu para as linhas
-de texto, **não** para o documento jsPDF: `montarDocumentoComprovanteVale` continua em
-**5pt / `alturaLinha` 2,6mm** (`web/src/lib/comprovante.ts:412-415`), enquanto a papeleta
-(`:330-335`) e o comprovante de crediário (`:126-130`) subiram para **8pt / 3,6mm** justamente
-porque as 42 colunas passaram a caber com folga. O docstring da função ainda diz "mesma
-largura/fonte" da papeleta, o que hoje é falso. Efeito: o vale salvo em PDF (e o enviado por
-WhatsApp, que usa o mesmo Blob) sai visivelmente menor que os outros dois comprovantes. Não afeta
-a impressão térmica, que passa pelo CSS e não pelo jsPDF — por isso não apareceu no teste
-impresso. Corrigir é trocar as duas constantes para 8/3,6 e reconferir o PDF.
+✅ **Pendência resolvida em 2026-08-14 — o PDF do vale voltou à mesma calibragem.** A padronização
+de 2026-08-14 tinha valido só para as linhas de texto, **não** para o documento jsPDF:
+`montarDocumentoComprovanteVale` ficou para trás em **5pt / `alturaLinha` 2,6mm** enquanto a
+papeleta e o comprovante de crediário subiram para **8pt / 3,6mm**, e o docstring da função ainda
+afirmava "mesma largura/fonte" — os números diziam outra coisa. Efeito: o vale salvo em PDF (e o
+enviado por WhatsApp, que usa o mesmo Blob) saía visivelmente menor que os outros dois
+comprovantes; a impressão térmica não era afetada (passa pelo CSS, não pelo jsPDF), e por isso o
+problema não apareceu no teste impresso. Corrigido: as duas constantes foram para **8pt / 3,6mm**
+(`web/src/lib/comprovante.ts:419-420`), idênticas às da papeleta (`:334-335`) e às do comprovante
+de crediário (`:128-129`) — os três comprovantes térmicos do sistema estão agora de fato iguais,
+PDF incluído. O docstring da função (`:408-416`) registra o histórico.
 "Enviar por WhatsApp" reaproveita o mesmo mecanismo da Papeleta de Venda/Comprovante de
 Crediário (`comum.arquivocompartilhado`, ver `docs/infra/compartilhamento-arquivo-temporario.md`)
 — como `venda_devolucao` não tem vínculo com cliente (devolução é anônima), não há telefone pra
@@ -309,7 +311,7 @@ inexistente ou de outro tenant), 409 (vale já usado).
 
 Cobertos por `DevolucaoProdutoCrudTest` (10 testes) e `ValeMercadoriaCrudTest` (6 testes,
 incluindo o cancelamento reabrindo o vale). Suíte completa do projeto: **492/492 verdes
-(2026-08-24)**.
+(2026-08-14)**.
 
 ## Ajuda da tela (manual de operação + vídeo) — obrigatório (R22 / §3.7.1)
 

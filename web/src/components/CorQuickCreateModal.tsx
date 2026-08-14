@@ -6,7 +6,7 @@ import { maiusculas } from '../lib/texto'
 import Toast from './Toast'
 
 /**
- * Cadastro rápido de cor (2026-08-17) — popup dedicado, substitui o antigo padrão "campo +
+ * Cadastro rápido de cor (2026-08-12) — popup dedicado, substitui o antigo padrão "campo +
  * texto + botão inline" (`+ Nova cor…`) nas telas que criam variação (Entrada de Produtos,
  * Emissão de Etiqueta, cadastro rápido de Produto): abre, cadastra, fecha e já devolve a cor
  * criada pronta pra ficar selecionada no lugar de origem — sem exigir mais nenhuma ação do

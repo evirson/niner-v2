@@ -152,7 +152,7 @@ public class FornecedorService {
 
     /**
      * {@code validarTelefone=false}: usado só pela Rotina de Importação de Dados (pedido do
-     * dono do produto, 2026-08-09) — planilha migrada de outro sistema traz telefone em
+     * dono do produto, 2026-08-10) — planilha migrada de outro sistema traz telefone em
      * formato livre (ramal, número incompleto etc.) e não deve travar a linha inteira por
      * causa disso; o telefone é gravado como veio (só dígitos, mesma normalização de sempre),
      * sem a exigência de 10–11 dígitos. Cadastro manual (controller) sempre valida.

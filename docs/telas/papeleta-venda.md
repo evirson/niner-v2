@@ -18,7 +18,7 @@ resposta de `POST /api/v1/pdv/vendas`). Pré-visualização em texto monoespaça
 
 ## Decisões (confirmadas com o dono do produto)
 
-1. ⚠️ **42 colunas, item em 2 linhas** — **revisto em 2026-08-24 depois da primeira impressão em
+1. ⚠️ **42 colunas, item em 2 linhas** — **revisto em 2026-08-14 depois da primeira impressão em
    bobina real**. A versão original era de 64 colunas numa linha por item (mockup do dono do
    produto: código 13 + descrição 25 + qtd 3 + unitário 9 + total 10 + separadores), apostando na
    `Lucida Console` para caber. Impresso de verdade, saiu **ilegível** — e a conta explica por
@@ -33,7 +33,7 @@ resposta de `POST /api/v1/pdv/vendas`). Pré-visualização em texto monoespaça
    a caber inteiros numa linha. O PDF acompanha a mesma montagem e subiu de ~5pt para **8pt**.
 2. **Descrição do produto em até 3 linhas** (28 caracteres cada, quebra literal — não por
    palavra): concatena `descricaoProduto + variacaoCor (se tiver) + variacaoTamanho (se tiver)`
-   num texto só, depois corta em blocos. Desde a revisão de 2026-08-24 **não há mais linhas em
+   num texto só, depois corta em blocos. Desde a revisão de 2026-08-14 **não há mais linhas em
    branco de enchimento** — com o item já ocupando 2 linhas, reservar espaço vertical fixo
    desperdiçaria papel em toda venda.
 3. **NCM inexistente ou inválido = venda em branco, nunca rejeitada** — não aplicável aqui
@@ -50,7 +50,7 @@ resposta de `POST /api/v1/pdv/vendas`). Pré-visualização em texto monoespaça
    aberto até a conciliação (ver `PdvVendaService.efetivarVenda`), mas isso não é "crediário" pro
    cliente que está lendo a papeleta.
 
-## CSS de impressão — o que cada valor resolve (2026-08-24)
+## CSS de impressão — o que cada valor resolve (2026-08-14)
 
 Três ajustes, todos descobertos imprimindo em bobina real e conferindo a foto do resultado. Valem
 como referência para qualquer outro documento térmico do produto:
@@ -72,6 +72,26 @@ preto sólido, em vez de dissolver o cinza em pontos alternados.
    ver o bloco de parcelas). `PagamentoComprovanteVenda.crediario: boolean` carrega essa
    distinção do backend pro frontend.
 
+### Os três comprovantes térmicos estão calibrados igual, PDF incluído (2026-08-14)
+
+Papeleta de Venda, Comprovante de Recebimento de Crediário e Vale-Mercadoria saem na **mesma
+bobina física** e, desde 2026-08-14, compartilham exatamente a mesma calibragem — o CSS acima para
+a impressão e as mesmas constantes de jsPDF para o PDF/Blob do WhatsApp:
+
+| Comprovante | Monta as linhas | Monta o PDF | Fonte / altura de linha |
+|---|---|---|---|
+| Papeleta de Venda | `montarLinhasComprovanteVenda` | `montarDocumentoComprovanteVenda` (`comprovante.ts:330-345`) | 8pt / 3,6mm |
+| Comprovante de Crediário | `montarLinhasComprovante` | `montarDocumentoComprovante` (`:126-139`) | 8pt / 3,6mm |
+| Vale-Mercadoria | reusa as funções da papeleta | `montarDocumentoComprovanteVale` (`:417-430`) | 8pt / 3,6mm |
+
+O vale era a exceção: acompanhou a mudança para 42 colunas **no texto e na impressão** (usa as
+mesmas funções de montagem de linhas), mas seu PDF ficou para trás em **5pt / 2,6mm** e saía
+visivelmente menor que os outros dois — o docstring da função afirmava "mesma largura/fonte"
+enquanto os números diziam outra coisa. Corrigido na mesma data; ver
+`docs/telas/devolucao-produtos.md`. Como o desvio só existia no jsPDF, **não aparecia na impressão
+térmica** — mais um caso da regra de que calibragem de bobina só se confere imprimindo, e PDF e
+impressão precisam ser conferidos **separadamente**.
+
 ## Regras de negócio
 
 ### Fonte única de verdade pro layout
@@ -81,7 +101,7 @@ linhas de texto — reusado idêntico pela pré-visualização (`<pre>`), pela i
 (`window.print()`) e pelo PDF (`jsPDF`). Mesmo padrão de `montarLinhasComprovante` (crediário) e
 `montarLinhasFechamento` (Fechamento de Caixa), mas com constantes de largura/coluna próprias
 (`LARGURA_VENDA = 42`, hoje idêntico ao `LARGURA = 42` do resto do arquivo — a papeleta nasceu
-com 64 colunas e foi alinhada às 42 na revisão de impressão de 2026-08-24).
+com 64 colunas e foi alinhada às 42 na revisão de impressão de 2026-08-14).
 
 ### Bug corrigido (2026-08-11) — jsPDF invertia largura/altura em comprovantes curtos
 
@@ -231,7 +251,7 @@ Nenhum.
 
 Nenhuma bloqueante. ~~Largura/fonte calculadas por conta física (mm/pt), não testadas numa
 impressora térmica real ainda — pode precisar de ajuste fino no primeiro teste real.~~ —
-**resolvido em 2026-08-24**: a calibragem descrita neste arquivo (75mm de área imprimível,
+**resolvido em 2026-08-14**: a calibragem descrita neste arquivo (75mm de área imprimível,
 `left: 0`, 42 colunas, Consolas em negrito, item em 2 linhas) veio **do teste real na bobina** —
 foi ela que substituiu as 64 colunas ilegíveis do primeiro corte. O ajuste foi replicado em
 `comprovante-recebimento-crediario.md`, que sai na mesma impressora.

@@ -28,13 +28,13 @@ import java.util.regex.Pattern;
 
 /**
  * Fluxo XML da Entrada de Produtos por Compra (Fase 3, docs/telas/entrada-mercadoria.md,
- * 2026-08-18) — lê o XML da NF-e ({@link NfeXmlParser}) e tenta casar cada item, na mesma
+ * 2026-08-12) — lê o XML da NF-e ({@link NfeXmlParser}) e tenta casar cada item, na mesma
  * ordem de confiança da Planilha, mas SEM inventar nada: 1) EAN (`produto_barra.ean`) — casamento
  * exato, sem ambiguidade; 2) {@code produto_fornecedor} — código do fornecedor (`cProd`) já
  * aprendido de uma entrada anterior deste MESMO fornecedor, também exato. Sem nenhum dos dois,
  * a linha vira pendência — nome/cor/tamanho aparecem só como PALPITE (pra ajudar o operador a
  * escolher mais rápido na tela de "Não Localizados"), nunca resolvem sozinhos: cor e tamanho
- * NUNCA são cadastrados automaticamente aqui (2026-08-18, pedido explícito do dono do produto —
+ * NUNCA são cadastrados automaticamente aqui (2026-08-12, pedido explícito do dono do produto —
  * diferente da Planilha, que cadastra sozinha porque a planilha foi o próprio lojista quem
  * preencheu; o texto de um XML de fornecedor tem confiança menor pra isso).
  *
@@ -61,7 +61,7 @@ public class EntradaXmlService {
         String xmlTexto = lerTexto(arquivo);
         NotaFiscalNfe nota = NfeXmlParser.parse(new java.io.ByteArrayInputStream(xmlTexto.getBytes(StandardCharsets.UTF_8)));
 
-        // "AND cancelado = false" (2026-08-19, Cancelamento de Entrada) — uma entrada cancelada
+        // "AND cancelado = false" (2026-08-12, Cancelamento de Entrada) — uma entrada cancelada
         // libera a chave pra reimportar a mesma NF-e corrigida; sem isso o preview continuaria
         // avisando "já importada" pra sempre, mesmo depois de cancelada.
         boolean jaImportada = Boolean.TRUE.equals(jdbc.sql("""
@@ -91,7 +91,7 @@ public class EntradaXmlService {
                 jaImportada, fornecedor, idEmpresaEncontrada, nota.valorTotal(), duplicatas, itens, xmlTexto);
     }
 
-    /** Empresa do tenant casada pelo CNPJ do destinatário do XML (2026-08-19) — mesma
+    /** Empresa do tenant casada pelo CNPJ do destinatário do XML (2026-08-12) — mesma
      *  normalização de CNPJ alfanumérico usada em fornecedor/cliente. {@code empresa.cnpj} hoje
      *  não tem nenhuma tela de cadastro que o preencha (schema pronto, sem CRUD ainda), então
      *  na prática isto só encontra algo em tenants que tiverem esse dado carregado por outro
@@ -120,7 +120,7 @@ public class EntradaXmlService {
     private ItemPlanilhaPreviewResponse resolverItem(int numeroLinha, ItemNfe item, Long idFornecedor,
                                                        List<String> coresConhecidas, List<String> tamanhosConhecidos) {
         BigDecimal custoUnitario = custoLiquido(item);
-        // NCM do XML sempre vale (2026-08-20, pedido do dono do produto). Dois usos, dois graus
+        // NCM do XML sempre vale (2026-08-13, pedido do dono do produto). Dois usos, dois graus
         // de confiança: em PENDÊNCIA (só pré-preenche um campo de formulário, sem gravar nada),
         // o dígito cru do XML basta — validar contra cfg_produto_ncm aqui faria o campo vir
         // vazio sempre que a base de NCM local estiver incompleta (o normal: a base oficial da
@@ -149,7 +149,7 @@ public class EntradaXmlService {
         String tamanhoPalpite = adivinharTamanho(item.xProd(), tamanhosConhecidos);
         // Cor/tamanho já aparecem em colunas próprias (palpite) e viram a variação — repeti-los
         // dentro da descrição do produto é ruído e, pior, faz cada tamanho da mesma peça virar
-        // um "produto" com nome diferente pro operador (2026-08-19, pedido do dono do produto).
+        // um "produto" com nome diferente pro operador (2026-08-12, pedido do dono do produto).
         String nomeSemVariacao = removerUltimaOcorrencia(removerUltimaOcorrencia(item.xProd(), tamanhoPalpite), corPalpite);
         String motivo = "Produto não encontrado (sem EAN/código de fornecedor já conhecido) — pesquise ou cadastre.";
         return new ItemPlanilhaPreviewResponse(numeroLinha, nomeSemVariacao, null, null, corPalpite, tamanhoPalpite,
@@ -172,7 +172,7 @@ public class EntradaXmlService {
     /** Acha (por código, mesmo idioma exato de {@code ProdutoImportador.ncmExistenteOuNulo}) o
      *  NCM na referência global — código que não existe (ou vem vazio/em formato inválido) volta
      *  {@code null} em vez de propagar algo que faria a confirmação falhar por violação de FK
-     *  (2026-08-20). Só usado pra linha RESOLVIDA (vai virar UPDATE) — ver {@link #limparNcm}
+     *  (2026-08-13). Só usado pra linha RESOLVIDA (vai virar UPDATE) — ver {@link #limparNcm}
      *  pra pendência. */
     private String ncmExistenteOuNulo(String ncmBruto) {
         if (ncmBruto == null) {
@@ -278,7 +278,7 @@ public class EntradaXmlService {
     private List<String> listarDescricoes(String tabela) {
         // {@code tabela} nunca vem do cliente — só chamado com as duas constantes literais
         // abaixo ("cfg_cor"/"cfg_tamanho"), sem risco de injeção. Exclui id=1 (cor/tamanho
-        // PADRÃO, 2026-08-20) — sem isso, a cor PADRÃO (descricao='') vira candidata no
+        // PADRÃO, 2026-08-13) — sem isso, a cor PADRÃO (descricao='') vira candidata no
         // heurístico de `adivinharCor` e pode "casar" com qualquer texto que tenha espaço
         // duplo, retornando um palpite falso em vez de nenhum.
         String colunaId = tabela.equals("cfg_cor") ? "id_cor" : "id_tamanho";

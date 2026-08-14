@@ -81,7 +81,7 @@ Modelo novo:
 - `produto_barra.id_cor`/`id_tamanho` (FKs) substituem `id_variante_linha`/`id_variante_coluna`;
   `produto_barra_variacao_uk` virou `UNIQUE(id_produto, id_cor, id_tamanho)`.
 
-> **Cor/Tamanho/Grade "PADRÃO", sentinela código 1 (2026-08-21).** `cfg_cor`/`cfg_tamanho`/
+> **Cor/Tamanho/Grade "PADRÃO", sentinela código 1 (2026-08-13).** `cfg_cor`/`cfg_tamanho`/
 > `cfg_grade` deixaram de ser nullable em `produto`/`produto_barra` — todo tenant nasce (via
 > `SignupService`) com uma linha `id_cor=1` (nome vazio), `id_tamanho=1` (nome "UN") e
 > `id_grade=1` (descrição "PADRÃO", único tamanho "UN"), e `produto.id_grade`/
@@ -154,7 +154,7 @@ no frontend (o backend não recalcula, apenas persiste os três valores enviados
 - Editar **Preço de Venda** direto → recalcula `% de Venda = ((Venda − Custo) / Custo) × 100`
   (só quando há custo informado > 0).
 
-**Piso do preço de venda (2026-08-17, regra do projeto inteiro):** o preço de venda **nunca pode
+**Piso do preço de venda (2026-08-12, regra do projeto inteiro):** o preço de venda **nunca pode
 ficar abaixo do preço de custo** — salvar com `precoVenda < precoCusto` devolve 400 ("Preço de
 venda não pode ser menor que o preço de custo."). Igual é aceito (margem zero). A checagem existe
 nos dois lados: bloqueia no cliente (`ProdutoForm.tsx` e `ProdutoQuickCreateModal.tsx`) e é
@@ -272,7 +272,7 @@ variação (`produto_barra`) ou imagem (`produto_imagem`) vinculada, o DELETE **
 - Dado um produto vinculado a uma variação, quando excluído, então é inativado, não apagado.
 
 Cobertos por `ProdutoCrudTest` (25 testes) — suíte completa do projeto em **492/492 verdes
-(2026-08-24)** (inclui `CorGradeTamanhoCrudTest`, novo em 2026-08-08).
+(2026-08-14)** (inclui `CorGradeTamanhoCrudTest`, novo em 2026-08-08).
 
 ## Impacto no contrato de API
 

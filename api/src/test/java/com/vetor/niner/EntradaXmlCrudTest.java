@@ -26,7 +26,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 /**
  * Fluxo XML da Entrada de Produtos por Compra (Fase 3, docs/telas/entrada-mercadoria.md,
- * 2026-08-18) — usa uma NF-e REAL de calçados (`src/test/resources/xml/nfe-dakota-calcados.xml`,
+ * 2026-08-12) — usa uma NF-e REAL de calçados (`src/test/resources/xml/nfe-dakota-calcados.xml`,
  * 36 itens, fornecedor Dakota Calçados) pra provar o parser/matching contra dado de verdade, não
  * um XML sintético simplificado. Mesma hierarquia de confiança do fluxo Planilha (EAN → aprendido
  * → pendência), mas SEM cadastro automático de cor/tamanho — ver {@link EntradaXmlService}.
@@ -218,7 +218,7 @@ class EntradaXmlCrudTest {
         assertThat((String) item1.get("ncm")).isEqualTo("64029190");
     }
 
-    /** Bug relatado (2026-08-20): NCM não vinha preenchido no cadastro rápido a partir de uma
+    /** Bug relatado (2026-08-13): NCM não vinha preenchido no cadastro rápido a partir de uma
      *  pendência — causa raiz era validar o NCM contra {@code cfg_produto_ncm} antes de mostrar
      *  QUALQUER coisa (a base local, ao contrário da oficial da Receita, normalmente não tem o
      *  código do XML cadastrado). Pendência não grava nada — só pré-preenche um campo — então o
@@ -395,7 +395,7 @@ class EntradaXmlCrudTest {
         }
     }
 
-    /** NF-e REAL da A. Grings S.A. (2026-08-19) — motivou o pedido do dono do produto: um item
+    /** NF-e REAL da A. Grings S.A. (2026-08-12) — motivou o pedido do dono do produto: um item
      *  cujo tamanho o palpite acerta ("34", último token numérico) mas a cor não (tenant novo
      *  não tem "PTO" cadastrado em `cfg_cor`, então {@code adivinharCor} não acha nada). O
      *  tamanho identificado deve sair da descrição ({@code nomeProduto}) — repeti-lo lá é ruído

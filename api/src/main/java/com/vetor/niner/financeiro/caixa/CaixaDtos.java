@@ -3,8 +3,10 @@ package com.vetor.niner.financeiro.caixa;
 import com.vetor.niner.financeiro.TipoCarteiraDtos.CategoriaCarteira;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
@@ -83,6 +85,20 @@ public final class CaixaDtos {
     /** {@code fechado = false} quando alguma carteira não bateu — o caixa continua aberto e
      *  {@code linhas} traz a divergência de cada carteira pra tela mostrar. */
     public record ResultadoFechamentoResponse(long idCaixa, boolean fechado, List<LinhaConferenciaResponse> linhas) {
+    }
+
+    /** Reabertura de caixa (2026-08-14) — ADMIN-only. O {@code motivo} é obrigatório porque
+     *  reabrir invalida a conferência já gravada; sem o porquê registrado em
+     *  {@code caixa_mestre.observacoes}, ninguém consegue auditar depois (P3). Mesmo par
+     *  ADMIN + motivo do Cancelamento de Venda. */
+    public record ReabrirCaixaRequest(
+            @NotBlank @Size(max = 200) String motivo) {
+    }
+
+    /** {@code reaberto = true} sempre que a operação chega ao fim — os casos de recusa
+     *  (não é ADMIN, caixa já aberto, operador com outro caixa aberto) saem como erro, não
+     *  como resposta de sucesso com flag falsa. */
+    public record ReaberturaCaixaResponse(long idCaixa, boolean reaberto) {
     }
 
     /** Lançamento analítico de uma carteira dentro do caixa — drill-down pedido na divergência,

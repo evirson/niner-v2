@@ -16,7 +16,7 @@ import java.io.IOException;
 
 /**
  * Bloqueia toda requisição autenticada de um OPERADOR fora do horário de acesso permitido
- * (docs/telas/usuario.md, 2026-08-14) — registrado logo depois de {@link TenantFilter} na
+ * (docs/telas/usuario.md, 2026-08-11) — registrado logo depois de {@link TenantFilter} na
  * cadeia de {@code /api/v1/**} (precisa do {@link TenantContext} já ativo pra consultar
  * {@code plataforma.tenant_atual()}). {@link HorarioAcessoService#TOLERANCIA_MINUTOS_PADRAO} de
  * tolerância sobre o horário final do dia ({@link HorarioAcessoService#podeAcessarAgora}) —

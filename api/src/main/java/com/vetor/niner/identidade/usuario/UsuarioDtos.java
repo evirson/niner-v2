@@ -25,7 +25,7 @@ public final class UsuarioDtos {
      * tenant, criado no signup, e esta tela nunca cria nem edita esse papel (ver
      * {@code UsuarioService}).
      *
-     * <p>{@code horarios} (2026-08-14) só é exigido/gravado quando {@code controlaHorarioAcesso}
+     * <p>{@code horarios} (2026-08-11) só é exigido/gravado quando {@code controlaHorarioAcesso}
      * é {@code true} — ver validação em {@code UsuarioService.validar}. Nunca se aplica ao
      * administrador (a tela nem mostra o campo pra ele).
      */

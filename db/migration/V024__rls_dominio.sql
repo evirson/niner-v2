@@ -52,7 +52,7 @@ END $$;
 -- a trigger disparar de verdade.
 REVOKE UPDATE, DELETE ON produto_movimento_mestre FROM niner_app;
 
--- Cancelamento de Entrada (2026-08-19) — exceção estreita e deliberada à imutabilidade acima:
+-- Cancelamento de Entrada (2026-08-12) — exceção estreita e deliberada à imutabilidade acima:
 -- GRANT DE COLUNA, não de tabela. niner_app pode marcar cancelado/data_cancelamento/
 -- id_usuario_cancelamento/motivo_cancelamento (a "capa" de auditoria do cancelamento), mas
 -- continua SEM permissão de UPDATE em qualquer coluna de negócio (id_empresa, tipo_movimento,

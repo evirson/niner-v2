@@ -1,5 +1,5 @@
 # Spec: Rotina de Exportação de Dados                  Status: Implementada
-Autor: Claudio Calixto (dono do produto) + Claude · Data: 2026-08-06, gauge de progresso 2026-08-11 · Módulo(s): `configuracao` (exportacao) · Fase: 1 — Núcleo do ERP
+Autor: Claudio Calixto (dono do produto) + Claude · Data: 2026-08-06, gauge de progresso 2026-08-10 · Módulo(s): `configuracao` (exportacao) · Fase: 1 — Núcleo do ERP
 
 ## Problema
 
@@ -62,7 +62,7 @@ esses dados viraram visíveis de alguma forma pro usuário.
    `.wizard-tabela-btn`).
 2. Clique dispara: busca os dados (`GET /api/v1/exportacao/{tabela}`), gera a planilha no
    navegador e baixa (`{tabela}-AAAA-MM-DD.xlsx`). **Enquanto isso, um `GaugeProgresso` aparece na
-   tela (2026-08-11, pedido do dono do produto — "como na tela de importação")**, alternando o
+   tela (2026-08-10, pedido do dono do produto — "como na tela de importação")**, alternando o
    rótulo entre as duas fases reais do processo: "Buscando dados..." (aguardando a resposta da
    API) e "Gerando planilha..." (montando o `.xlsx` no navegador). Diferente da Importação, esse
    gauge é **simulado** (sobe suavemente até ~92%, sem número de registro real) — a exportação é
@@ -99,7 +99,7 @@ Todos sob `/api/v1/**` (JWT de tenant, RLS ativo — P8), `ADMIN`-only. Erros em
 porque devolve `List<Map<String,Object>>` pronto — sem parâmetro nenhum pra bindar, não compensa
 escrever 9 `RowMapper` manuais. Frontend: `web/src/pages/exportacao/ExportacaoDadosPage.tsx` +
 `web/src/lib/exportacao.ts` — planilha gerada 100% no navegador com `write-excel-file`, mesmo
-padrão já usado no CRM (`web/src/lib/crm.ts`), sem dependência nova. **2026-08-11:** a página
+padrão já usado no CRM (`web/src/lib/crm.ts`), sem dependência nova. **2026-08-10:** a página
 ganhou um estado `fase` (`'buscando' | 'gerando'`), setado nos dois pontos do `mutationFn` da
 mutation de exportação, e renderiza `GaugeProgresso` (`web/src/components/GaugeProgresso.tsx`,
 mesmo componente da Importação de Dados) enquanto `exportarMut.isPending` — sem alteração nenhuma

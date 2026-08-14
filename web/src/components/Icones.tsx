@@ -316,7 +316,7 @@ export function IconeMovimentoContaCorrente({ size = 28 }: { size?: number }) {
   )
 }
 
-/** Ícone da tela de Contas a Pagar / Pagas (cédula de dinheiro) — 2026-08-19. */
+/** Ícone da tela de Contas a Pagar / Pagas (cédula de dinheiro) — 2026-08-12. */
 export function IconeContasPagar({ size = 28 }: { size?: number }) {
   return (
     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.6} stroke="currentColor" width={size} height={size} aria-hidden="true">
@@ -602,7 +602,7 @@ export function IconeRecolherMenu({ size = 18, recolhido = false }: { size?: num
   )
 }
 
-/** Sol / lua / meia-lua do seletor de tema (2026-08-23) — Heroicons outline `sun`, `moon` e
+/** Sol / lua / meia-lua do seletor de tema (2026-08-14) — Heroicons outline `sun`, `moon` e
  *  `computer-desktop`, mesmo molde dos demais ícones do design system. */
 export function IconeSol({ size = 20 }: { size?: number }) {
   return (

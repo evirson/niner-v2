@@ -2,7 +2,7 @@ package com.vetor.niner.configuracao.importacao;
 
 /**
  * Progresso "ao vivo" (etapa/registro atual/total) da importação em andamento no thread atual
- * (2026-08-11) — mesmo espírito de {@code TenantContext} (P8): um {@link ScopedValue} ligado só
+ * (2026-08-10) — mesmo espírito de {@code TenantContext} (P8): um {@link ScopedValue} ligado só
  * durante a execução de {@link ImportacaoService#processar}, lido por código profundo
  * ({@link ImportacaoPlanilha}, cada {@link ImportadorDeTabela}) sem precisar passar o objeto por
  * parâmetro em toda assinatura. O {@link ProgressoImportacao} em si também fica registrado em

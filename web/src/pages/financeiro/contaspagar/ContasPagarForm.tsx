@@ -72,7 +72,7 @@ export default function ContasPagarForm({ somenteLeitura = false }: { somenteLei
   })
 
   const { data: empresas } = useQuery({ queryKey: ['empresas-permitidas'], queryFn: listarEmpresasPermitidas })
-  // Contas correntes ativas, para a baixa em banco (2026-08-23). `tamanho: 200` porque o seletor
+  // Contas correntes ativas, para a baixa em banco (2026-08-14). `tamanho: 200` porque o seletor
   // é um <select> simples — o tenant típico tem poucas contas, mas o limite evita o corte
   // silencioso já visto em outras telas (feedback "select truncado por paginação").
   const { data: paginaContasCorrente } = useQuery({
@@ -374,7 +374,7 @@ export default function ContasPagarForm({ somenteLeitura = false }: { somenteLei
                 </div>
               </div>
 
-              {/* Origem do dinheiro (2026-08-23) — só aparece quando há data de pagamento, porque
+              {/* Origem do dinheiro (2026-08-14) — só aparece quando há data de pagamento, porque
                   só aí ela é obrigatória. É o que faz o pagamento virar movimento de caixa ou de
                   conta corrente e alimentar o Fluxo de Caixa (docs/telas/fluxo-caixa.md). */}
               {form.dataPagamentoTexto.trim() !== '' && (

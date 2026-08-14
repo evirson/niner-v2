@@ -39,7 +39,7 @@ CREATE TABLE venda_devolucao (
   id_venda_debito    integer,
   id_vale_mercadoria text,
   vale_usado         boolean     NOT NULL DEFAULT false,
-  -- Cancelamento de Devolução de Produtos (2026-08-11) — mesmo padrão de venda.cancelada acima:
+  -- Cancelamento de Devolução de Produtos (2026-08-10) — mesmo padrão de venda.cancelada acima:
   -- colunas direto aqui (quem/quando/motivo, P3) em vez de tabela de log separada; o ledger
   -- imutável de estoque (produto_movimento tipo CANCELAMENTO_DEVOLUCAO) é o resto do rastro.
   -- Só é permitido cancelar um vale ainda não usado (vale_usado = false).

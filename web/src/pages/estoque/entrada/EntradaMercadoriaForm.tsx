@@ -61,15 +61,15 @@ interface ItemLinha {
   variacao: string | null
   qtdTexto: string
   custoTexto: string
-  /** Preço de venda do lote (2026-08-15, popup de pesquisa com grade de tamanhos) — só vem
+  /** Preço de venda do lote (2026-08-12, popup de pesquisa com grade de tamanhos) — só vem
    *  preenchido quando o item nasceu daquele fluxo (custo + %venda do produto sugeriram o
    *  valor); demais fluxos (Planilha, Cadastrar Produto) deixam vazio e o comportamento de
    *  sempre continua (backend usa o `preco_venda` atual do produto como snapshot). */
   precoVendaTexto: string
-  /** `cProd` do XML (2026-08-18) — presente só quando o item nasceu do fluxo XML; alimenta o
+  /** `cProd` do XML (2026-08-12) — presente só quando o item nasceu do fluxo XML; alimenta o
    *  aprendizado de `produto_fornecedor` na confirmação. */
   codigoFornecedor?: string | null
-  /** NCM do XML (2026-08-20) — presente só quando o item nasceu do fluxo XML; substitui o NCM
+  /** NCM do XML (2026-08-13) — presente só quando o item nasceu do fluxo XML; substitui o NCM
    *  do produto na confirmação se vier diferente do já cadastrado. */
   ncm?: string | null
 }
@@ -121,7 +121,7 @@ function LinhaPendentePlanilha({
   const temProduto = linha.idProdutoEncontrado != null
   // Produto achado/cadastrado sem grade (idGradeEncontrada nulo — inclusive quando "Usa
   // Cor/Grade" está desligado no parâmetro do sistema, que faz o backend ignorar a grade do
-  // produto por completo) não pede cor/tamanho nenhum: confirma direto (2026-08-20). Antes desta
+  // produto por completo) não pede cor/tamanho nenhum: confirma direto (2026-08-13). Antes desta
   // correção o formulário de Cor/Tamanho aparecia mesmo sem grade e travava — o select de
   // Tamanho nunca tinha opção nenhuma pra escolher.
   const usaGrade = temProduto && linha.idGradeEncontrada != null
@@ -140,7 +140,7 @@ function LinhaPendentePlanilha({
   // opção que já existe no cadastro — o operador ainda vê o select, ainda pode trocar, e nada é
   // gravado até clicar "Confirmar" (mesma exigência de sempre: nunca resolve sozinho). Sem isso,
   // o sistema já sabia o tamanho (mostrado na coluna Cor/Tamanho) mas obrigava reescolher a
-  // mesma coisa do zero — pedido do dono do produto, 2026-08-19: "voce ja identificou o
+  // mesma coisa do zero — pedido do dono do produto, 2026-08-12: "voce ja identificou o
   // tamanho, pq esta pedindo pra cadastrar o tamanho". Não afeta a Planilha na prática: lá, uma
   // pendência só chega em `temProduto` quando cor/tamanho NÃO bateram com confiança — se
   // batessem, já teria resolvido sozinha antes de virar pendência.
@@ -272,7 +272,7 @@ function LinhaPendentePlanilha({
 }
 
 /** Uma linha (ou grupo de linhas com o mesmo nome — ver `pendentesAgrupados`) da grid "Não
- *  Localizados" quando "Usa Cor/Grade" está desligado (2026-08-20) — sem coluna Cor/Tamanho
+ *  Localizados" quando "Usa Cor/Grade" está desligado (2026-08-13) — sem coluna Cor/Tamanho
  *  (nunca tem nada relevante pra mostrar) e sem o formulário de cor/tamanho de
  *  `LinhaPendentePlanilha` (nunca chega pendência "produto achado, falta cor/tamanho" com o
  *  parâmetro desligado — ver `EntradaXmlService`/`EntradaPlanilhaService`). Pesquisar/＋Cadastrar/
@@ -333,7 +333,7 @@ export default function EntradaMercadoriaForm() {
   const { data: eu } = useEu()
 
   // null = ainda não escolhido — a tela abre com um popup obrigatório perguntando o fluxo
-  // antes de mostrar qualquer campo (pedido do dono do produto, 2026-08-12).
+  // antes de mostrar qualquer campo (pedido do dono do produto, 2026-08-11).
   const [modo, setModo] = useState<ModoEntrada | null>(null)
 
   const { data: cfgQtdDecimal } = useQuery({ queryKey: ['permite-qtd-decimal'], queryFn: buscarPermiteQtdDecimal })
@@ -344,10 +344,10 @@ export default function EntradaMercadoriaForm() {
     queryKey: ['consiste-valor-contas-pagar'],
     queryFn: buscarConsisteValorContasPagar,
   })
-  // `true` como padrão: a consistência existia fixa antes do parâmetro (2026-08-23), então
+  // `true` como padrão: a consistência existia fixa antes do parâmetro (2026-08-14), então
   // enquanto a resposta não chega a tela se comporta como sempre se comportou.
   const consisteValorContasPagar = cfgConsisteContasPagar?.cfgConsisteValorContasPagar ?? true
-  // "Usa Cor/Grade" desligado (2026-08-20): a grid "Localizados" esconde a coluna Variação (nunca
+  // "Usa Cor/Grade" desligado (2026-08-13): a grid "Localizados" esconde a coluna Variação (nunca
   // tem nada pra mostrar — todo produto usa a variação PADRÃO) e "＋ Cadastrar Produto" some as
   // pendências IRMÃS (mesmo nome, já sem cor/tamanho no texto — ver EntradaXmlService) direto na
   // mesma linha, em vez de deixar cada uma virar um produto duplicado (ver aoCriarProduto).
@@ -359,17 +359,17 @@ export default function EntradaMercadoriaForm() {
   const [modalFornecedorAberto, setModalFornecedorAberto] = useState(false)
   const [notaFiscalTexto, setNotaFiscalTexto] = useState('')
   // Vem com a data de hoje por padrão — o usuário pode mudar pra trás, nunca pra frente
-  // (pedido do dono do produto, 2026-08-12; ver `dataEntradaInvalida` abaixo).
+  // (pedido do dono do produto, 2026-08-11; ver `dataEntradaInvalida` abaixo).
   const [dataEntradaTexto, setDataEntradaTexto] = useState(hojeBr())
   const fornecedorInputRef = useRef<HTMLInputElement>(null)
   const primeiraDuplicataRef = useRef<HTMLInputElement>(null)
   const [numeroParcelasTexto, setNumeroParcelasTexto] = useState('')
   /** Estrutura de 3 abas (1. Dados Gerais / 2. Produtos / 3. Financeiro) — originalmente só do
-   *  fluxo Planilha (2026-08-12), estendida ao Individual (2026-08-15) e ao XML (2026-08-18) —
+   *  fluxo Planilha (2026-08-11), estendida ao Individual (2026-08-12) e ao XML (2026-08-12) —
    *  os 3 fluxos convergem na mesma confirmação e compartilham a mesma organização. */
   const temAbas = modo === 'PLANILHA' || modo === 'INDIVIDUAL' || modo === 'XML'
   const [aba, setAba] = useState<'GERAL' | 'PRODUTOS' | 'FINANCEIRO'>('GERAL')
-  /** Sub-abas da aba "2. Produtos" do Planilha (2026-08-13): "Localizados" (itens já lançados) e
+  /** Sub-abas da aba "2. Produtos" do Planilha (2026-08-11): "Localizados" (itens já lançados) e
    *  "Não Localizados" (pendências da planilha) — cada uma com título e totalização fixos, só a
    *  grid de dados rola (`grid-altura-fixa`). Resolver uma pendência já move a linha pra
    *  "Localizados" sozinho (o dado sai de `pendentes` e entra em `itens`); não força a troca de
@@ -387,8 +387,8 @@ export default function EntradaMercadoriaForm() {
   }, [empresasPermitidas, eu, idEmpresaEscolhida])
 
   // Foco automático no Fornecedor: assim que um fluxo é escolhido, e de novo toda vez que o
-  // usuário volta pra aba "1. Dados Gerais" (pedido do dono do produto, 2026-08-12; estendido
-  // ao Individual em 2026-08-15 junto com a mesma estrutura de abas).
+  // usuário volta pra aba "1. Dados Gerais" (pedido do dono do produto, 2026-08-11; estendido
+  // ao Individual em 2026-08-12 junto com a mesma estrutura de abas).
   useEffect(() => {
     if (modo === null) return
     if (temAbas && aba !== 'GERAL') return
@@ -406,10 +406,10 @@ export default function EntradaMercadoriaForm() {
 
   const [mostrarPesquisa, setMostrarPesquisa] = useState(false)
   /** Popup de pesquisa (Nome/Marca/Referência) da aba "2. Produtos" do fluxo Individual
-   *  (2026-08-15) — distinto de `mostrarPesquisa`, que resolve pendências do fluxo Planilha. */
+   *  (2026-08-12) — distinto de `mostrarPesquisa`, que resolve pendências do fluxo Planilha. */
   const [mostrarPesquisaEntrada, setMostrarPesquisaEntrada] = useState(false)
   /** Preenchido só quando "＋ Cadastrar Produto" acaba de criar um produto COM grade
-   *  (2026-08-16) — pula a busca do popup de pesquisa e já abre direto no passo de Cor +
+   *  (2026-08-12) — pula a busca do popup de pesquisa e já abre direto no passo de Cor +
    *  quantidade por tamanho pra esse produto recém-criado. */
   const [produtoInicialPesquisa, setProdutoInicialPesquisa] = useState<ProdutoOpcaoEntrada | undefined>(undefined)
   const [modalProdutoAberto, setModalProdutoAberto] = useState(false)
@@ -421,7 +421,7 @@ export default function EntradaMercadoriaForm() {
   const [pendenteEmResolucao, setPendenteEmResolucao] = useState<number | null>(null)
   const inputArquivoRef = useRef<HTMLInputElement>(null)
 
-  /** Fluxo XML (Fase 3, 2026-08-18) — `xmlBruto`/`chaveNfeXml`/`serieNotaXml` seguem pro
+  /** Fluxo XML (Fase 3, 2026-08-12) — `xmlBruto`/`chaveNfeXml`/`serieNotaXml` seguem pro
    *  payload de confirmação sem alteração nenhuma (auditoria P3, idempotência P2).
    *  `fornecedorXmlSemCadastro` só fica preenchido quando o CNPJ do emitente não bate com
    *  nenhum fornecedor já cadastrado — oferece cadastro rápido pré-preenchido com o que o XML
@@ -435,7 +435,7 @@ export default function EntradaMercadoriaForm() {
   const [chaveJaImportada, setChaveJaImportada] = useState(false)
   const [fornecedorXmlSemCadastro, setFornecedorXmlSemCadastro] = useState<FornecedorXmlPreview | null>(null)
   /** O XML já trouxe as duplicatas prontas (`cobr/dup`) — nesse caso "Nº de Parcelas" nem
-   *  aparece (2026-08-19, pedido do dono do produto: "não preciso definir... já está descrito
+   *  aparece (2026-08-12, pedido do dono do produto: "não preciso definir... já está descrito
    *  no XML"). Só quando o XML NÃO tem parcelamento descrito é que a tela volta a oferecer o
    *  campo, pro operador escolher se quer dividir mesmo assim. */
   const [xmlTemDuplicatas, setXmlTemDuplicatas] = useState(false)
@@ -462,7 +462,7 @@ export default function EntradaMercadoriaForm() {
 
   /** Lança um item já com o custo definido (vindo da planilha ou do XML, que trazem custo por
    *  linha — diferente do fluxo Individual, onde o custo é digitado depois). `codigoFornecedor`
-   *  (2026-08-18) e `ncm` (2026-08-20) só vêm preenchidos no fluxo XML — seguem até a
+   *  (2026-08-12) e `ncm` (2026-08-13) só vêm preenchidos no fluxo XML — seguem até a
    *  confirmação pra alimentar o aprendizado de `produto_fornecedor` e substituir o NCM do
    *  produto se vier diferente. */
   const lancarItemComCusto = (
@@ -506,7 +506,7 @@ export default function EntradaMercadoriaForm() {
   }
 
   /** Lança um lote de variações já resolvidas (achadas ou criadas) vindo do popup de pesquisa
-   *  com grade de tamanhos (2026-08-15) — todas compartilham o mesmo custo/preço de venda
+   *  com grade de tamanhos (2026-08-12) — todas compartilham o mesmo custo/preço de venda
    *  digitados uma única vez para o lote inteiro. */
   const lancarItensComCustoEPreco = (novosItens: { idVariacao: number; descricao: string; variacao: string | null; qtd: number }[], custo: number, precoVenda: number) => {
     setItens((atual) => {
@@ -544,7 +544,7 @@ export default function EntradaMercadoriaForm() {
 
   const normalizarNomeProduto = (nome: string) => nome.trim().toUpperCase().replace(/\s+/g, ' ')
 
-  /** "Usa Cor/Grade" desligado (2026-08-20): a grid "Não Localizados" agrupa TODAS as pendências
+  /** "Usa Cor/Grade" desligado (2026-08-13): a grid "Não Localizados" agrupa TODAS as pendências
    *  sem produto (`idProdutoEncontrado == null`) que têm o mesmo nome numa única linha (soma de
    *  QTD) — sem grade, um SAPATO XPTO tamanho 34/35/36/… é o mesmo produto entrando várias vezes,
    *  não pendências distintas. Cada grupo resolve de uma vez só (Pesquisar/＋Cadastrar/Ignorar
@@ -591,7 +591,7 @@ export default function EntradaMercadoriaForm() {
   }
 
   /** Popup Nome/Marca/Referência + grade de tamanhos da aba "2. Produtos" do fluxo Individual
-   *  (2026-08-15) — o popup já resolve/cria a(s) variação(ões) e devolve prontas, com custo/
+   *  (2026-08-12) — o popup já resolve/cria a(s) variação(ões) e devolve prontas, com custo/
    *  preço de venda do lote inteiro (um custo digitado vale pra todos os tamanhos lançados). */
   const aoAdicionarDaPesquisaEntrada = (itens: ItemResolvidoEntrada[], custo: number, precoVenda: number) => {
     setMostrarPesquisaEntrada(false)
@@ -604,7 +604,7 @@ export default function EntradaMercadoriaForm() {
    *  cada linha ainda precisa escolher cor/tamanho, só marca `idProdutoEncontrado`), aqui não
    *  sobra NADA pra decidir por linha — então toda pendência IRMÃ (mesmo nome já sem cor/tamanho
    *  no texto, ver `EntradaXmlService`/`EntradaPlanilhaService`) é resolvida de uma vez, somando
-   *  direto na mesma linha da grid "Localizados" (2026-08-20, pedido do dono do produto: sem
+   *  direto na mesma linha da grid "Localizados" (2026-08-13, pedido do dono do produto: sem
    *  grade, produto com o mesmo nome vira UMA linha só, não um cadastro duplicado por linha). */
   const aoCriarProduto = (variacao: VariacaoProduto) => {
     setModalProdutoAberto(false)
@@ -638,10 +638,10 @@ export default function EntradaMercadoriaForm() {
 
   /** "＋ Cadastrar Produto" criou um produto COM grade, sem variação nenhuma ainda. Dois
    *  contextos bem diferentes usam este mesmo callback:
-   *  - Individual (2026-08-16, `pendenteEmResolucao == null`): cor/tamanho/quantidade não fazem
+   *  - Individual (2026-08-12, `pendenteEmResolucao == null`): cor/tamanho/quantidade não fazem
    *    sentido pedir naquele modal — é decidido no popup de pesquisa, que já abre direto no
    *    passo 2 pra esse produto.
-   *  - Pendência do XML (2026-08-19, `pendenteEmResolucao != null` e `modo === 'XML'`, único
+   *  - Pendência do XML (2026-08-12, `pendenteEmResolucao != null` e `modo === 'XML'`, único
    *    fluxo que hoje chega aqui com pendência): a linha que estava sendo resolvida — e
    *    QUALQUER OUTRA pendência ainda sem produto cujo nome (já sem cor/tamanho, ver
    *    `EntradaXmlService`) bata com o produto recém-criado — passa a ter `idProdutoEncontrado`
@@ -726,13 +726,13 @@ export default function EntradaMercadoriaForm() {
 
   /** Assim que o Nº de Parcelas (aba "Dados Gerais"/Identificação) e o valor total dos produtos
    *  estiverem os dois prontos — nessa ordem ou na outra, tanto faz — divide o total em N
-   *  parcelas iguais e joga o valor de cada uma (2026-08-13, pedido do dono do produto): resto
+   *  parcelas iguais e joga o valor de cada uma (2026-08-11, pedido do dono do produto): resto
    *  do arredondamento fecha na PRIMEIRA parcela (não na última — mudou de ideia em relação à
    *  1ª versão desta função), Nº Duplicata/Data ficam em branco pro usuário preencher. Sem botão
    *  "＋ Adicionar Parcela": o Nº de Parcelas já é a única fonte da contagem.
    *
    *  **A divisão acompanha o total até o operador mexer nos valores à mão** (bug corrigido em
-   *  2026-08-23): a versão anterior parava de recalcular assim que existisse qualquer parcela
+   *  2026-08-14): a versão anterior parava de recalcular assim que existisse qualquer parcela
    *  (`parcelas.length > 0`), e como `valorTotal` muda a cada tecla digitada no custo do item, o
    *  primeiro dígito já congelava a divisão — digitar 3 parcelas e depois um custo de "150,00"
    *  gerava 0,34/0,33/0,33 (total 1,00, o "1" recém-digitado) em vez de 50,00 cada. Agora só
@@ -756,7 +756,7 @@ export default function EntradaMercadoriaForm() {
   }, [numeroParcelasTexto, valorTotal, parcelasEditadas, xmlTemDuplicatas])
 
   // Foco automático na 1ª duplicata ao entrar na aba "3. Financeiro" (pedido do dono do
-  // produto, 2026-08-13; vale pros dois fluxos desde 2026-08-15) — as parcelas já chegam com
+  // produto, 2026-08-11; vale pros dois fluxos desde 2026-08-12) — as parcelas já chegam com
   // Nº/valor calculados (ver efeito acima), falta só a data/duplicata de cada uma, então o
   // cursor já pousa pronto pra digitar.
   useEffect(() => {
@@ -794,7 +794,7 @@ export default function EntradaMercadoriaForm() {
     onError: (e: unknown) => setToast({ texto: e instanceof ApiError ? e.message : 'Não foi possível processar a planilha.', tipo: 'erro' }),
   })
 
-  /** Fluxo XML (Fase 3, 2026-08-18) — mesmo shape de item que a Planilha (`resolvido`/
+  /** Fluxo XML (Fase 3, 2026-08-12) — mesmo shape de item que a Planilha (`resolvido`/
    *  pendência), então reaproveita a mesma lógica de separar Localizados/Não Localizados; a
    *  diferença fica só no que preenche além dos itens: fornecedor (auto-seleciona se achou pelo
    *  CNPJ, senão oferece cadastro rápido pré-preenchido), Nº Nota Fiscal, e as parcelas (vêm
@@ -814,7 +814,7 @@ export default function EntradaMercadoriaForm() {
         setFornecedorXmlSemCadastro(null)
       } else {
         // CNPJ do emitente não bate com nenhum fornecedor cadastrado — já abre o cadastro
-        // rápido preenchido com os dados do XML (2026-08-19, pedido do dono do produto: "já
+        // rápido preenchido com os dados do XML (2026-08-12, pedido do dono do produto: "já
         // trazer a tela de cadastro do fornecedor"), sem exigir um clique extra em "Cadastrar
         // agora". O operador ainda pode fechar e escolher um fornecedor existente na busca.
         setFornecedorXmlSemCadastro(preview.fornecedor)
@@ -822,7 +822,7 @@ export default function EntradaMercadoriaForm() {
       }
 
       // Empresa destinatária no XML — CNPJ do `dest` casado contra o cadastro de empresas do
-      // tenant (2026-08-19); sem match, mantém o padrão de sempre (empresa da sessão) e o
+      // tenant (2026-08-12); sem match, mantém o padrão de sempre (empresa da sessão) e o
       // operador escolhe manualmente no select, que continua disponível.
       if (preview.idEmpresaEncontrada != null) setIdEmpresaEscolhida(preview.idEmpresaEncontrada)
 
@@ -872,19 +872,19 @@ export default function EntradaMercadoriaForm() {
 
   const algumCustoZerado = itens.some((i) => desmascararMoeda(i.custoTexto || '0') <= 0)
   const algumaParcelaIncompleta = parcelas.some((p) => !p.dataVencimentoTexto.trim() || desmascararMoeda(p.valorTexto || '0') <= 0)
-  // "Pode mudar pra trás, nunca pra frente" (2026-08-12) — vale pros dois fluxos com abas
-  // (Planilha e, desde 2026-08-15, Individual), onde o campo é exibido; comparação de string
+  // "Pode mudar pra trás, nunca pra frente" (2026-08-11) — vale pros dois fluxos com abas
+  // (Planilha e, desde 2026-08-12, Individual), onde o campo é exibido; comparação de string
   // "aaaa-mm-dd" já ordena cronologicamente.
   const dataEntradaIso = dataEntradaTexto.trim() ? dataParaIso(dataEntradaTexto) : null
   const dataEntradaInvalida = temAbas && dataEntradaIso != null && dataEntradaIso > dataParaIso(hojeBr())!
 
-  /** Total das parcelas precisa bater com o total dos produtos lançados (2026-08-14, pedido do
+  /** Total das parcelas precisa bater com o total dos produtos lançados (2026-08-11, pedido do
    *  dono do produto) — comparado em centavos pra não sofrer de imprecisão de ponto flutuante.
    *  Só entra em jogo quando existe alguma parcela (Contas a Pagar continua opcional: nenhuma
    *  parcela lançada não bloqueia nada). Vale pros dois fluxos (Individual e Planilha), já que
    *  os dois compartilham a mesma seção de Contas a Pagar.
    *
-   *  Desde 2026-08-23 a regra é **configurável** — "Consistir valor das contas a pagar na
+   *  Desde 2026-08-14 a regra é **configurável** — "Consistir valor das contas a pagar na
    *  entrada", em Parâmetros do Sistema (ligada por padrão, que é como a tela sempre se
    *  comportou). Desligada, a divergência é permitida (adiantamento, parte à vista, nota
    *  parcialmente financiada) e nem o bloqueio nem o aviso aparecem. A mesma regra é
@@ -895,7 +895,7 @@ export default function EntradaMercadoriaForm() {
     parcelas.length > 0 &&
     Math.round(valorParcelasTotal * 100) !== Math.round(valorTotal * 100)
 
-  /** Vencimento de nenhuma parcela pode ser anterior à Data da Entrada informada (2026-08-14,
+  /** Vencimento de nenhuma parcela pode ser anterior à Data da Entrada informada (2026-08-11,
    *  pedido do dono do produto) — vale pros dois fluxos com abas, onde esse campo existe. */
   const parcelaComVencimentoAntesDaEntrada =
     temAbas &&
@@ -923,7 +923,7 @@ export default function EntradaMercadoriaForm() {
         idEmpresa: idEmpresaEscolhida === '' ? null : idEmpresaEscolhida,
         notaFiscal: notaFiscalTexto.trim() ? Number(notaFiscalTexto.trim()) : null,
         // Os três fluxos com abas mostram/usam este campo (Individual e XML passaram a pedir/
-        // preencher Data da Entrada em 2026-08-15/18, igual ao Planilha).
+        // preencher Data da Entrada em 2026-08-12, igual ao Planilha).
         dataMovimento: temAbas ? dataEntradaIso : null,
         chaveNfe: modo === 'XML' ? chaveNfeXml : null,
         serieNota: modo === 'XML' ? serieNotaXml : null,
@@ -954,7 +954,7 @@ export default function EntradaMercadoriaForm() {
   })
 
   /** {@code alturaFixa} liga `grid-altura-fixa` (só as linhas rolam) e tira o rodapé de total de
-   *  DENTRO da tabela — usado pela sub-aba "Localizados" do fluxo Planilha (2026-08-13), onde o
+   *  DENTRO da tabela — usado pela sub-aba "Localizados" do fluxo Planilha (2026-08-11), onde o
    *  total mora no rodapé fixo da TELA (ver `<div className="lista-rodape">` mais abaixo), não
    *  duplicado dentro da grid. O Individual continua com a grid soltando a página inteira e o
    *  total no rodapé da própria tabela, como sempre. */
@@ -1051,7 +1051,7 @@ export default function EntradaMercadoriaForm() {
   )
 
   /** Fornecedor + empresa + nota fiscal + Data da Entrada + nº de parcelas (+ rateio, quando
-   *  ligado) — a aba "1. Dados Gerais" dos três fluxos com abas. No XML (2026-08-19), Nº Nota
+   *  ligado) — a aba "1. Dados Gerais" dos três fluxos com abas. No XML (2026-08-12), Nº Nota
    *  Fiscal e Data da Entrada viram texto (o XML já traz os dois, sem necessidade de digitar
    *  nem de editar) e Nº de Parcelas some quando o XML já trouxe as duplicatas prontas
    *  (`cobr/dup`) — só reaparece se a nota não tiver parcelamento descrito, pra deixar o
@@ -1189,7 +1189,7 @@ export default function EntradaMercadoriaForm() {
   /** Conteúdo de "Contas a Pagar" — comum ao Individual (seção normal) e à aba "Financeiro" do
    *  Planilha. "Nº Parcela" é só a posição na lista (1, 2, 3…), nunca editável — distinto de
    *  "Nº Duplicata" (livre, o número que o fornecedor deu à parcela). Sem botão "＋ Adicionar
-   *  Parcela" (2026-08-13, removido a pedido do dono do produto): o Nº de Parcelas já informado
+   *  Parcela" (2026-08-11, removido a pedido do dono do produto): o Nº de Parcelas já informado
    *  em "Dados Gerais"/Identificação é a única fonte da contagem de linhas (ver o efeito que
    *  gera `parcelas` a partir dele, com valor já dividido). */
   const renderContasPagar = () => (
@@ -1314,7 +1314,15 @@ export default function EntradaMercadoriaForm() {
               <div className="ajuda-rodape" style={{ justifyContent: 'flex-start' }}>
                 <Link
                   className="btn ghost"
-                  to={`/etiqueta-emissao?idFornecedor=${entradaGravada.idFornecedor}&notaFiscal=${entradaGravada.notaFiscal ?? ''}`}
+                  // Leva também o nome do fornecedor pra tela de destino não precisar de um
+                  // lookup só pra mostrar quem é (o endpoint de fornecedores busca por texto,
+                  // não por id). Ver EtiquetaEmissaoForm — os 3 params são lidos de verdade
+                  // desde 2026-08-14; antes eram montados aqui e ignorados lá.
+                  to={
+                    `/etiqueta-emissao?idFornecedor=${entradaGravada.idFornecedor}` +
+                    `&nomeFornecedor=${encodeURIComponent(entradaGravada.nomeFornecedor)}` +
+                    `&notaFiscal=${entradaGravada.notaFiscal ?? ''}`
+                  }
                 >
                   Emitir Etiquetas desta Nota
                 </Link>
@@ -1707,7 +1715,7 @@ export default function EntradaMercadoriaForm() {
           aoCriar={aoCriarProduto}
           aoCriarComGrade={aoCriarProdutoComGrade}
           // XML nunca exige cor/tamanho no cadastro rápido, mesmo resolvendo uma pendência
-          // (2026-08-19, pedido do dono do produto: "quando chamar pra cadastrar o produto, nao
+          // (2026-08-12, pedido do dono do produto: "quando chamar pra cadastrar o produto, nao
           // precisa pedir cor e tamanho la") — a variação é definida depois, direto na linha da
           // grid "Não Localizados" (ver `aoCriarProdutoComGrade`). Planilha continua exigindo:
           // lá a confiança é maior porque foi o próprio lojista quem preencheu cor/tamanho.
@@ -1723,14 +1731,14 @@ export default function EntradaMercadoriaForm() {
                         referencia: linha.referencia ?? '',
                         precoCusto: linha.custoUnitario != null ? formatarMoeda(linha.custoUnitario) : '',
                         ean: linha.codigoBarrasFabricante ?? '',
-                        // XML nunca cadastra cor/tamanho sozinho (2026-08-18, pedido do dono do
+                        // XML nunca cadastra cor/tamanho sozinho (2026-08-12, pedido do dono do
                         // produto — confiança menor que a Planilha, que o próprio lojista
                         // preencheu): omitir aqui impede o auto-resolve/auto-cadastro silencioso
                         // do modal, forçando os selects manuais (ou "＋ Nova cor"/"＋ Novo
                         // tamanho", ação explícita) mesmo quando o texto do XML já "bateria".
                         cor: modo === 'XML' ? undefined : (linha.cor ?? undefined),
                         tamanho: modo === 'XML' ? undefined : (linha.tamanho ?? undefined),
-                        // NCM do XML (2026-08-20) — já validado contra o cadastro de NCM em
+                        // NCM do XML (2026-08-13) — já validado contra o cadastro de NCM em
                         // EntradaXmlService, pré-preenche o campo pra não obrigar o operador a
                         // digitar de novo algo que a nota fiscal já trouxe.
                         ncm: linha.ncm ?? undefined,

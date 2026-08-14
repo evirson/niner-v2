@@ -408,7 +408,7 @@ public class PdvVendaService {
     /** Resolve o valor de um vale-mercadoria (soma dos itens do movimento DEVOLUCAO vinculado —
      *  mesma conta de {@code DevolucaoProdutoService.buscarVale}, mas sem depender daquele
      *  service: cada serviço consulta o schema direto, mesmo padrão do resto do projeto). 404 se
-     *  o vale não existir (ou for de outro tenant, RLS). {@code cancelado} (2026-08-11, ver
+     *  o vale não existir (ou for de outro tenant, RLS). {@code cancelado} (2026-08-10, ver
      *  {@code CancelamentoDevolucaoService}) bloqueia o resgate igual a um vale já usado — um
      *  vale cancelado não tem mais lastro em estoque. */
     private ValeInfo resolverVale(long idDevolucao) {

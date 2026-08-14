@@ -47,7 +47,7 @@ function percentualInicialDoProduto(p: ProdutoOpcaoEntrada): string {
 
 /**
  * Popup de pesquisa + lançamento do fluxo Individual da Entrada de Produtos por Compra
- * (2026-08-15, revisão; cor via popup + %venda editável 2026-08-17) — dois passos:
+ * (2026-08-12, revisão; cor via popup + %venda editável 2026-08-12) — dois passos:
  * 1. Busca por Nome/Marca/Referência, nível produto (não variação) — sem cor/tamanho/estoque na
  *    grid de resultado (docs pedido do dono do produto).
  * 2. Ao escolher o produto: se ele usa grade, mostra Cor (select + "＋ Nova cor" que abre
@@ -67,7 +67,7 @@ export default function PesquisaProdutoEntradaModal({
 }: {
   aoFechar: () => void
   aoAdicionar: (itens: ItemResolvidoEntrada[], precoCusto: number, precoVenda: number) => void
-  /** Pula direto pro passo 2 (2026-08-16, "＋ Cadastrar Produto" do fluxo Individual) — o produto
+  /** Pula direto pro passo 2 (2026-08-12, "＋ Cadastrar Produto" do fluxo Individual) — o produto
    *  acabou de ser criado (com grade), então não faz sentido pedir pra buscar de novo; a tela já
    *  abre pedindo Cor + a grade de tamanhos pra esse produto. */
   produtoInicial?: ProdutoOpcaoEntrada
@@ -88,7 +88,7 @@ export default function PesquisaProdutoEntradaModal({
   })
 
   // Parâmetro "Usa Cor/Grade" desligado ignora a grade do produto por completo, mesmo que ele já
-  // tenha uma cadastrada de antes (2026-08-20, pedido do dono do produto) — trata como produto
+  // tenha uma cadastrada de antes (2026-08-13, pedido do dono do produto) — trata como produto
   // simples, um único campo de Quantidade.
   const usaGrade = Boolean(cfgUsaCorGrade?.cfgUsaCorGrade) && produtoEscolhido?.idGrade != null
   const [idCor, setIdCor] = useState<number | ''>('')
@@ -163,7 +163,7 @@ export default function PesquisaProdutoEntradaModal({
       atual[idTamanho] ? { ...atual, [idTamanho]: completarQuantidade(atual[idTamanho], permiteQtdDecimal) } : atual,
     )
 
-  /** Preço de venda nunca pode ficar abaixo do custo — regra do projeto inteiro (2026-08-17),
+  /** Preço de venda nunca pode ficar abaixo do custo — regra do projeto inteiro (2026-08-12),
    *  não só desta tela; ver `docs/PROGRESSO.md`. */
   const custoNumero = desmascararMoeda(custoTexto)
   const precoVendaNumero = desmascararMoeda(precoVendaTexto)

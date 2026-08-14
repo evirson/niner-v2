@@ -1,5 +1,5 @@
 # Spec: Cancelamento de Devolução de Produtos              Status: Aprovada
-Autor: Claudio Calixto (dono do produto) · Data: 2026-08-11 · Módulo(s): `vendas` (cancelamentodevolucao) · Fase: 2 — Vendas/Financeiro
+Autor: Claudio Calixto (dono do produto) · Data: 2026-08-10 · Módulo(s): `vendas` (cancelamentodevolucao) · Fase: 2 — Vendas/Financeiro
 
 ## Problema
 
@@ -19,7 +19,7 @@ da devolução. Confirmado o popup, a grid mostra os vales ainda canceláveis; o
 abre um modal de confirmação com os itens que vão sair do estoque, pede um motivo e efetiva o
 cancelamento numa única transação.
 
-**Correção 2026-08-11 (mesma sessão):** o popup de filtros cobre visualmente o ✕ da topbar
+**Correção 2026-08-11 (dia seguinte):** o popup de filtros cobre visualmente o ✕ da topbar
 (`BotaoFecharTela`), e por ser a entrada obrigatória da tela não havia como sair sem confirmar os
 filtros. Ganhou um botão próprio **"Fechar"** (ghost, ao lado de "Localizar Devoluções") que chama
 `navigate(-1)` — mesmo padrão de fechamento do resto do sistema

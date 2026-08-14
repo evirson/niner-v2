@@ -20,7 +20,7 @@ import static org.springframework.http.HttpStatus.NOT_FOUND;
  * ("+ Nova cor") — a Entrada de Produtos, onde cor nasceria de verdade (na compra), ainda não
  * existe (docs/telas/entrada-mercadoria.md, rascunho). Tabela sob RLS de tenant (V017/V024).
  *
- * <p><b>id_cor=1 é a cor PADRÃO</b> (2026-08-20, ver {@code SignupService}) — reservada,
+ * <p><b>id_cor=1 é a cor PADRÃO</b> (2026-08-13, ver {@code SignupService}) — reservada,
  * invisível, nunca listada/renomeável por aqui. {@code id_cor} não é mais {@code IDENTITY}
  * (V017): cada tenant tem sua própria numeração, calculada aqui como {@code MAX(id_cor)+1}.
  */

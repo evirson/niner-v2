@@ -354,7 +354,7 @@ class RelatorioDreCrudTest {
         long idTenant = extrairIdTenant(tenant.token());
         long idFornecedor = criarFornecedor(tenant.token(), "FORNECEDOR DRE DESPESA");
 
-        // Desde 2026-08-23 o signup copia o plano padrão completo, então a conta de aluguel
+        // Desde 2026-08-14 o signup copia o plano padrão completo, então a conta de aluguel
         // (4.01.001) já existe — o teste só garante isso, aceitando 409.
         criarContaDespesaFixa(tenant.token(), "4.00.000", "DESPESAS FIXAS", "SINTETICA");
         criarContaDespesaFixa(tenant.token(), "4.01.000", "Ocupacao", "SINTETICA");

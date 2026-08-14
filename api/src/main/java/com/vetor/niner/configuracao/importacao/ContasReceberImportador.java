@@ -90,7 +90,7 @@ public class ContasReceberImportador implements ImportadorDeTabela {
         List<LinhaErro> erros = new ArrayList<>();
         // Agrupa por (idCliente, idEmpresa), preservando a ordem de primeira ocorrência.
         Map<String, List<LinhaResolvida>> grupos = new LinkedHashMap<>();
-        // Cache de cliente/empresa por chamada (2026-08-11) — variável LOCAL, não campo da
+        // Cache de cliente/empresa por chamada (2026-08-10) — variável LOCAL, não campo da
         // classe (o importador é um singleton Spring, compartilhado entre requisições/tenants).
         // Achado real: planilha de 300 mil parcelas repetindo o mesmo CPF fazia 300 mil SELECTs
         // sequenciais no banco, um por linha, sem necessidade — é exatamente esse cliente/essa
@@ -147,7 +147,7 @@ public class ContasReceberImportador implements ImportadorDeTabela {
             long idCliente = grupo.get(0).idCliente();
             long idEmpresa = grupo.get(0).idEmpresa();
 
-            // SAVEPOINT por venda sintética (2026-08-11): uma falha de banco aqui (ou na parcela
+            // SAVEPOINT por venda sintética (2026-08-10): uma falha de banco aqui (ou na parcela
             // abaixo) não pode deixar a transação do arquivo inteiro "abortada" para os grupos
             // seguintes — mesmo bug/fix de ProdutoImportador, ver ImportacaoSavepointExecutor.
             Long idVenda = savepoints.executar(() -> jdbc.sql("""

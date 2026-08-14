@@ -9,7 +9,7 @@ V026). A tabela `fornecedor` existia no banco desde V016 (`fornecedor.id_plano_c
 `NOT NULL` — nenhum fornecedor pode existir sem que um plano de contas já exista), mas sem
 endpoint/UI. A tela de Plano de Contas (`docs/telas/plano-contas.md`, 2026-07-21) foi construída
 primeiro exatamente para destravar esta. *(Na redação original constava "sem seed padrão";
-**superado em 2026-08-23** — o signup copia as 76 contas de `cfg_plano_contas_padrao`,
+**superado em 2026-08-14** — o signup copia as 76 contas de `cfg_plano_contas_padrao`,
 `SignupService.java:99-116`, então todo tenant novo já nasce com plano de contas.)*
 
 ## Solução proposta
@@ -25,12 +25,12 @@ mecanismo do "＋ Nova categoria" do cliente), e não com uma nova classe de tel
 `fornecedor.id_plano_contas` é `NOT NULL` (FK composta `(id_tenant, id_plano_contas)` →
 `cfg_plano_contas`). ~~**Não há linha padrão pré-cadastrada** — é responsabilidade do lojista
 ter ao menos um plano de contas antes de cadastrar o primeiro fornecedor.~~ — **superado em
-2026-08-23**: o signup copia as **76 contas** de `cfg_plano_contas_padrao`
+2026-08-14**: o signup copia as **76 contas** de `cfg_plano_contas_padrao`
 (`SignupService.java:99-116`), então o lojista sempre tem conta pra escolher já no primeiro
 fornecedor. Os mecanismos abaixo continuam valendo — o seletor porque o plano é grande demais
 pra um `<select>` cru, e a criação rápida porque o lojista pode querer uma conta própria:
 - No **formulário**, ao lado da Razão Social: o componente `SeletorPlanoContas`
-  (`web/src/components/SeletorPlanoContas.tsx`, 2026-08-22 — antes era um `<select>` nativo
+  (`web/src/components/SeletorPlanoContas.tsx`, 2026-08-13 — antes era um `<select>` nativo
   populado por `GET /api/v1/planos-contas?limite=100`) — busca por prefixo de código ou por
   nome, carrega o plano inteiro (`limite=500`) e filtra no cliente, sem risco de o valor cair
   fora de uma página carregada;
@@ -39,7 +39,7 @@ pra um `<select>` cru, e a criação rápida porque o lojista pode querer uma co
   seleciona a conta recém-criada no formulário de fornecedor. A gestão completa (editar,
   excluir) continua exclusiva da tela própria `/planos-contas`;
 - Um **filtro por plano de contas** na listagem de fornecedores, também com `SeletorPlanoContas`
-  (migrado em 2026-08-22, junto do filtro equivalente em
+  (migrado em 2026-08-13, junto do filtro equivalente em
   `financeiro.contacorrentemovimento.lista` — antes ambos eram `<select>` nativo com
   `limite=100`), não texto livre (os planos são uma lista fechada);
 - O backend rejeita com **400** (não 500) um `idPlanoContas` que não existe
@@ -89,7 +89,7 @@ A regra de 10–11 dígitos vale para o **cadastro manual** (tudo que entra pelo
 `FornecedorService.criar(req, validarTelefone = false)`
 (`api/src/main/java/com/vetor/niner/cadastros/fornecedor/FornecedorService.java:153-162`) e
 **grava o telefone como veio** — só normalizado para dígitos, sem exigir 10–11. Decisão do dono
-do produto (2026-08-09): planilha migrada de outro sistema traz telefone em formato livre (ramal,
+do produto (2026-08-10): planilha migrada de outro sistema traz telefone em formato livre (ramal,
 número incompleto), e travar a linha inteira por causa disso inviabilizaria a migração. Efeito
 colateral aceito: um fornecedor importado pode ter telefone que a própria tela recusaria se
 fosse digitado à mão — ao editá-lo, a validação volta a valer e o campo precisa ser corrigido.
@@ -123,7 +123,7 @@ vez de apagar, e retorna `{"acao":"inativado","motivo":"..."}`. Sem vínculo, ap
   inativado, não apagado.
 
 Cobertos por `FornecedorCrudTest` (12 testes) — suíte completa do projeto em **492/492 verdes
-(2026-08-24)**.
+(2026-08-14)**.
 
 ## Impacto no contrato de API
 

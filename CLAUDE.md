@@ -13,7 +13,7 @@ A **greenfield, spec-driven ERP** (product name **Niner**, DB `niner_db`) for sm
 
 Acquisition is self-service via a **public site** with a **60-day, no-card trial**; a **backoffice** manages tenants; billing charges subscribers (gateway **to be defined** — modelled behind an abstract adapter, manual billing at first).
 
-**Implementation is well underway** (see `docs/PROGRESSO.md` for the up-to-date, chronological state — it is the authority; this paragraph is a map, not an inventory). As of **2026-08-24**, `api/` (Spring Boot 4 / Java 25) carries the control-plane + tenant-domain schema (`db/migration/V001`–`V033`), auth/signup/trial, and **~40 screens** across these domain modules — the module list is the reliable index, since individual screens change faster than this file:
+**Implementation is well underway** (see `docs/PROGRESSO.md` for the up-to-date, chronological state — it is the authority; this paragraph is a map, not an inventory). As of **2026-08-14**, `api/` (Spring Boot 4 / Java 25) carries the control-plane + tenant-domain schema (`db/migration/V001`–`V033`), auth/signup/trial, and **~40 screens** across these domain modules — the module list is the reliable index, since individual screens change faster than this file:
 
 - `cadastros/` — cliente (+ histórico), fornecedor, funcionário, plano de contas, **crm**
 - `catalogo/` — produto (variação/cor/grade, NCM, imagens em object storage)
@@ -74,7 +74,7 @@ The new core data model, API contract sample, and docker-compose layout live in 
 
 Per spec §3.5: `docker compose up -d db && docker compose run --rm flyway` brings up Postgres and applies `db/migration/`; `docker compose up -d --build api` (or `cd api && ./mvnw spring-boot:run`) for the API (port 8080, connects as `niner_app`); `cd web && npm run dev` (5173) and `cd site && npm run dev` (5175) for the fronts. API tests: `cd api && ./mvnw test` (Testcontainers — see `api/README.md` for the container-runtime workaround when no JDK is installed on the host). `admin/` has no build yet (not scaffolded).
 
-⚠️ **Type-check do front é `cd web && npx tsc -b` — nunca `tsc --noEmit`.** O `web/tsconfig.json` é *solution-style* (`"files": []` + `references`), então `--noEmit` ignora as referências, **checa zero arquivos e sempre passa**. Isso já mascarou 19 erros reais acumulados no repositório (descoberto em 2026-08-23). `npm run build` = `tsc -b && vite build`; se o build falhar depois do type-check, o problema é do bundler, não de tipos.
+⚠️ **Type-check do front é `cd web && npx tsc -b` — nunca `tsc --noEmit`.** O `web/tsconfig.json` é *solution-style* (`"files": []` + `references`), então `--noEmit` ignora as referências, **checa zero arquivos e sempre passa**. Isso já mascarou 19 erros reais acumulados no repositório (descoberto em 2026-08-14). `npm run build` = `tsc -b && vite build`; se o build falhar depois do type-check, o problema é do bundler, não de tipos.
 
 ## Conventions to honor when building
 

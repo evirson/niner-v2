@@ -194,7 +194,7 @@ export default function Pdv() {
       mostrarFlash('Nenhum item na venda.')
       return
     }
-    // Rotina crítica (docs/telas/usuario.md, 2026-08-14): do início da forma de pagamento até
+    // Rotina crítica (docs/telas/usuario.md, 2026-08-11): do início da forma de pagamento até
     // fechar o comprovante — o logoff automático por fim de horário de acesso espera terminar.
     setEmAndamento(true)
     setMostrarFormaPagamento(true)

@@ -9,7 +9,7 @@ import java.util.function.Supplier;
 
 /**
  * Isola o processamento de UMA linha de planilha num SAVEPOINT (transação {@code NESTED}) dentro
- * da transação grande do arquivo inteiro (2026-08-11, corrigindo bug real: validar a planilha de
+ * da transação grande do arquivo inteiro (2026-08-10, corrigindo bug real: validar a planilha de
  * Produtos quebrava com {@code current transaction is aborted, commands ignored until end of
  * transaction block}, Postgres 25P02). Sem isto, uma exceção vinda direto do banco (violação de
  * constraint, etc.) numa linha deixa a conexão inteira "abortada" e toda linha seguinte falha em

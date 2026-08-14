@@ -1,5 +1,5 @@
 # Spec: Cadastro de Plano de Contas                    Status: Aprovada
-Autor: Claudio Calixto (dono do produto) · Data: 2026-07-21 · Revisão: 2026-08-22 (anterior: 2026-07-31) · Módulo(s): `cadastros` (cfg_plano_contas) · Fase: 1 — Núcleo do ERP
+Autor: Claudio Calixto (dono do produto) · Data: 2026-07-21 · Revisão: 2026-08-13 (anterior: 2026-07-31) · Módulo(s): `cadastros` (cfg_plano_contas) · Fase: 1 — Núcleo do ERP
 
 ## Problema
 
@@ -18,7 +18,7 @@ o plano de contas virou gerencial de verdade — hierarquia de 4 níveis via má
 fluxo de caixa como classificação (grupo + sinal, não só flag), e um plano padrão de ~200 contas
 pra varejo de calçados/confecções pronto pra carregar.
 
-**Revisão de 2026-08-22**, também pedida pelo dono do produto (o público-alvo é pequeno varejo,
+**Revisão de 2026-08-13**, também pedida pelo dono do produto (o público-alvo é pequeno varejo,
 não contabilidade formal): a máscara de 4 níveis (`9.99.999.999`, 12 caracteres) foi considerada
 grande demais e encurtada para **3 níveis (`9.99.999`, 8 caracteres — grupo.família.conta)**; o
 plano padrão caiu de ~200 para 76 contas. O motor de DRE/DFC (grupo + sinal por conta) não muda —
@@ -37,12 +37,12 @@ paginação + formulário), **sem** navegação em árvore — a hierarquia exis
 níveis, view `vw_plano_contas_arvore`) e é usada pra validação/apuração, mas a tela não ganhou um
 componente de árvore nesta rodada. Non-goal explícito, ver seção própria abaixo.
 
-## Desenho atual (2026-08-22)
+## Desenho atual (2026-08-13)
 
 ### Máscara e hierarquia
 
 `id_plano_contas` é uma máscara fixa de 8 caracteres: **`9.99.999`** (grupo.família.conta —
-1+2+3 dígitos; encurtada de `9.99.999.999`/4 níveis em 2026-08-22, ver "Histórico"). `nivel`
+1+2+3 dígitos; encurtada de `9.99.999.999`/4 níveis em 2026-08-13, ver "Histórico"). `nivel`
 (1–3) e `id_plano_contas_pai` são **colunas geradas** (`GENERATED ALWAYS AS ... STORED`) — nunca
 digitados, sempre derivados do próprio código:
 
@@ -62,7 +62,7 @@ de cada grupo, famílias `.90`–`.99` e contas `.900`–`.999` ficam reservadas
 do tenant — uma atualização futura do plano padrão nunca ocupa essas faixas, então nunca colide com
 customização. Grupo `9` inteiro também fica reservado (o seed só usa grupos `1` a `8`).
 
-### Plano padrão aplicado no signup (2026-08-23)
+### Plano padrão aplicado no signup (2026-08-14)
 
 O plano padrão de 76 contas deixou de ser um script manual (`db/scripts/seed_plano_contas_padrao
 .sql`) e virou **`cfg_plano_contas_padrao`** — tabela **modelo global** (sem `id_tenant`, sem RLS,
@@ -81,14 +81,14 @@ foram corrigidos.
 
 ### DRE e fluxo de caixa — classificação, não mais flag solto
 
-> **Consumidor real desde 2026-08-23:** o `grupo_dre`/`sinal`/`inclui_dre` desta tela deixaram de
+> **Consumidor real desde 2026-08-14:** o `grupo_dre`/`sinal`/`inclui_dre` desta tela deixaram de
 > ser preparação para o futuro — são a espinha do **Relatório de DRE**
 > (`docs/telas/relatorio-dre.md`). Duas consequências práticas ao mexer aqui: (1) manter
 > `inclui_dre = false` nas contas de compra de mercadoria (3.03.x) é o que impede a DRE de contar
 > o estoque duas vezes, junto com o CMV; (2) a DRE **não depende** deste cadastro para as linhas
 > derivadas do movimento (receita, CMV, comissão, taxa, desconto, devolução) — elas carregam o
 > próprio grupo em código. *(O motivo original era que o signup semeava só 3 contas e um tenant
-> novo não teria onde classificá-las; desde 2026-08-23 o signup semeia o plano inteiro de 76
+> novo não teria onde classificá-las; desde 2026-08-14 o signup semeia o plano inteiro de 76
 > contas — `SignupService.java:99-116` —, mas a decisão de carregar o grupo em código foi mantida:
 > as linhas derivadas não podem depender de o lojista não ter renomeado/excluído a conta.)*
 
@@ -115,10 +115,10 @@ esta revisão, ver "Impacto no banco").
 
 *(Os campos `exige_centro_custo`/`exige_contraparte`/`exige_documento` e `id_conta_contabil`/
 `id_plano_referencial`, introduzidos nesta mesma revisão de 2026-07-31, foram **removidos por
-completo** em 2026-08-22 — nunca ficaram funcionais em nenhum lançamento do sistema e não
+completo** em 2026-08-13 — nunca ficaram funcionais em nenhum lançamento do sistema e não
 influenciam DRE/DFC. Ver "Histórico".)*
 
-### Seleção de plano de contas em outras telas (2026-08-22)
+### Seleção de plano de contas em outras telas (2026-08-13)
 
 Todo lugar do sistema que pede um plano de contas — seja pra **atribuir** (formulário de
 Fornecedor, Contas a Pagar, Movimentação de Conta Corrente, Parâmetros do Sistema, Importação de
@@ -175,7 +175,7 @@ ligada) continuam fora do padrão configurável — não há registro em
 
 **Foco automático:** ao **criar**, o foco vai para o Código; ao **editar**, direto para a
 Descrição. **Layout:** seções "Identificação", "Classificação", "DRE e fluxo de caixa" (com nota
-explicando a independência), "Observação" (2026-08-22: antes fazia parte da seção "Integrações",
+explicando a independência), "Observação" (2026-08-13: antes fazia parte da seção "Integrações",
 removida junto com `id_conta_contabil`/`id_plano_referencial`), mais a seção padrão
 **"Informações do registro"** (`InfoRegistro`).
 
@@ -234,12 +234,12 @@ filhas / conta em uso por fornecedor-contas a pagar-caixa-conta corrente.
 - Dado o plano de contas de um tenant, então não aparece nem pode ser buscado por outro tenant.
 
 Cobertos por `PlanoContasCrudTest` (19 testes) — suíte completa do projeto em **492/492 verdes
-(2026-08-24)**. Eram 474 em 2026-08-22, após as duas revisões daquela rodada (máscara de 3 níveis
-+ remoção de Exigências/Integrações; mesma contagem de 2026-08-21, nenhum teste novo nem removido
+(2026-08-14)**. Eram 474 em 2026-08-13, após as duas revisões daquela rodada (máscara de 3 níveis
++ remoção de Exigências/Integrações; mesma contagem de 2026-08-13, nenhum teste novo nem removido
 — só convertidos). Em 2026-07-31,
 `FornecedorCrudTest`/`ContaCorrenteCrudTest`/`ContaCorrenteMovimentoCrudTest` tiveram os códigos
 de teste convertidos pro formato novo (dependiam de um plano de contas existente pra testar suas
-próprias FKs); em 2026-08-22, todos os testes com código de 4 níveis foram convertidos pra 3
+próprias FKs); em 2026-08-13, todos os testes com código de 4 níveis foram convertidos pra 3
 níveis (corte mecânico do último bloco) e o teste de hierarquia completa foi reescrito.
 
 ## Impacto no contrato de API
@@ -251,7 +251,7 @@ GET    /api/v1/planos-contas/{codigo}        detalhe
 PUT    /api/v1/planos-contas/{codigo}        atualiza (código imutável — o do path prevalece)
 DELETE /api/v1/planos-contas/{codigo}        exclui, ou inativa (ver regras de negócio)
 
-GET    /api/v1/config-geral/plano-contas-compra-mercadoria   sem checagem de papel (2026-08-22)
+GET    /api/v1/config-geral/plano-contas-compra-mercadoria   sem checagem de papel (2026-08-13)
 ```
 
 `PlanoContasRequest`: `codigo`, `descricao`, `descricaoCurta?`, `tipoMovimento`, `natureza`,
@@ -262,7 +262,7 @@ controlados no servidor. `PlanoContasResponse` inclui todos os campos acima mais
 `atualizadoEm`. Erros em Problem Details (RFC 9457): 400 (máscara/ENUM/grupo inválido, pai
 inexistente), 404, 409 (código duplicado).
 
-*(2026-08-22: `exigeCentroCusto`/`exigeContraparte`/`exigeDocumento`/`idContaContabil`/
+*(2026-08-13: `exigeCentroCusto`/`exigeContraparte`/`exigeDocumento`/`idContaContabil`/
 `idPlanoReferencial` removidos do request e do response — colunas não existem mais no banco. O
 endpoint `GET /api/v1/config-geral/plano-contas-compra-mercadoria` foi adicionado nesta mesma
 revisão, fora do módulo `planocontas` mas documentado aqui por ser consumido pelo cadastro rápido
@@ -307,7 +307,7 @@ de fornecedor da Entrada de Produtos — mesmo padrão sem-checagem-de-papel de 
   CONFLICT DO NOTHING`). **Não** foi ligado ao `SignupService` — seed continua manual por tenant
   (o próprio script comenta o passo de "clonar pra outro tenant").
 
-**Revisão 2026-08-22** (`V016__cadastros.sql`, `V032__entrada_planilha.sql` e `SignupService`
+**Revisão 2026-08-13** (`V016__cadastros.sql`, `V032__entrada_planilha.sql` e `SignupService`
 editados no lugar; banco de dev alterado ao vivo por script à parte, não gravado como migration
 separada):
 
@@ -342,14 +342,14 @@ Nenhum.
 - **Navegação em árvore na tela** — decisão confirmada com o dono do produto (2026-07-31): a
   hierarquia existe no banco (máscara/níveis/view), mas a tela continua lista plana nesta rodada.
 - ~~**Seed automático no signup** — cada tenant novo continua nascendo sem plano de contas; o seed
-  padrão é aplicado manualmente por tenant via script.~~ — **superado em 2026-08-23**: o signup
+  padrão é aplicado manualmente por tenant via script.~~ — **superado em 2026-08-14**: o signup
   copia as **76 contas** de `cfg_plano_contas_padrao` (tabela modelo global semeada em
   `db/migration/V016__cadastros.sql:345-472`) para o tenant novo em uma única instrução
   (`SignupService.java:99-116`). Ver "Plano padrão aplicado no signup" acima — inclusive o aviso
   sobre faixas reservadas em teste.
 - ~~**Apuração de DRE/DFC em relatório** — os grupos/sinal já existem e são coerentes o suficiente
   pra sustentar uma consulta de apuração (esqueleto comentado no próprio script de seed), mas
-  nenhuma tela de relatório foi construída.~~ — **superado em 2026-08-23/24**: os dois relatórios
+  nenhuma tela de relatório foi construída.~~ — **superado em 2026-08-14**: os dois relatórios
   existem e consomem `grupo_dre`/`grupo_dfc`/`sinal` desta tela — **Relatório de DRE**
   (`web/src/pages/relatorios/RelatorioDre.tsx`, `api/.../financeiro/dre/DreController.java`,
   spec `docs/telas/relatorio-dre.md`) e **Fluxo de Caixa**
@@ -369,14 +369,14 @@ sem duplicar contagem entre resultado e caixa.
 
 ---
 
-## Histórico — máscara de 4 níveis + Exigências/Integrações (2026-07-31 a 2026-08-21)
+## Histórico — máscara de 4 níveis + Exigências/Integrações (2026-07-31 a 2026-08-13)
 
-Entre 2026-07-31 e 2026-08-21, `id_plano_contas` usava máscara fixa de 12 caracteres
+Entre 2026-07-31 e 2026-08-13, `id_plano_contas` usava máscara fixa de 12 caracteres
 (`9.99.999.999`, conta.subconta.item.subitem — 4 níveis) e o formulário tinha duas seções a mais:
 "Exigências no lançamento" (`exige_centro_custo`/`exige_contraparte`/`exige_documento`,
 checkboxes) e "Integrações (opcional)" (`id_conta_contabil`/`id_plano_referencial`, de-para SPED
 ECD/plano referencial RFB). O plano padrão tinha ~200/336 contas (pra varejo de calçados/
-confecções). Revisão de 2026-08-22 (ver "Desenho atual"): máscara encurtada pra 3 níveis, as
+confecções). Revisão de 2026-08-13 (ver "Desenho atual"): máscara encurtada pra 3 níveis, as
 duas seções e as 5 colunas removidas por completo (nunca ficaram funcionais em nenhum
 lançamento, não afetam DRE/DFC), plano padrão trocado por um genérico de 76 contas. Ver
 `git log -p docs/telas/plano-contas.md` pro texto completo de cada versão.

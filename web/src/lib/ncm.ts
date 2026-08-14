@@ -17,7 +17,7 @@ export async function buscarNcm(codigo: string): Promise<Ncm | null> {
   }
 }
 
-/** Pesquisa por nome (2026-08-13) — quem cadastra um produto nem sempre sabe o código NCM de
+/** Pesquisa por nome (2026-08-11) — quem cadastra um produto nem sempre sabe o código NCM de
  *  cabeça; devolve até 30 correspondências por `descricao_ncm`. */
 export function buscarNcmsPorNome(busca: string): Promise<Ncm[]> {
   return api<Ncm[]>(`/api/v1/ncm?busca=${encodeURIComponent(busca)}`)

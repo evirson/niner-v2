@@ -58,15 +58,17 @@ public class ContaPagarController {
     }
 
     // O JWT entra aqui por causa da baixa em dinheiro: o movimento vai pro caixa ABERTO do usuário
-    // (2026-08-23, docs/telas/fluxo-caixa.md).
+    // (2026-08-14, docs/telas/fluxo-caixa.md).
     @PutMapping("/{id}")
     public ContaPagarResponse atualizar(
             @AuthenticationPrincipal Jwt jwt, @PathVariable long id, @Valid @RequestBody ContaPagarRequest req) {
         return service.atualizar(jwt, id, req);
     }
 
+    /** Precisa do JWT desde 2026-08-14: a exclusão desfaz o movimento de caixa/banco da baixa,
+     *  e recusa quando o caixa envolvido já está fechado. */
     @DeleteMapping("/{id}")
-    public ExclusaoContaPagarResponse excluir(@PathVariable long id) {
-        return service.excluir(id);
+    public ExclusaoContaPagarResponse excluir(@AuthenticationPrincipal Jwt jwt, @PathVariable long id) {
+        return service.excluir(jwt, id);
     }
 }

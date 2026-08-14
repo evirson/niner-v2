@@ -19,7 +19,7 @@ import static org.springframework.http.HttpStatus.NOT_FOUND;
  * do tamanho ({@code cfg_tamanho}). Sem tela própria: criado embutido no modal "Gerenciar
  * Grades" da tela de Produto (docs/telas/produto.md). Tabela sob RLS de tenant (V017/V024).
  *
- * <p><b>id_tamanho=1 é o tamanho PADRÃO</b> (2026-08-20, ver {@code SignupService}) — reservado,
+ * <p><b>id_tamanho=1 é o tamanho PADRÃO</b> (2026-08-13, ver {@code SignupService}) — reservado,
  * invisível, nunca listado/renomeável por aqui. {@code id_tamanho} não é mais {@code IDENTITY}
  * (V017): cada tenant tem sua própria numeração, calculada aqui como {@code MAX(id_tamanho)+1}.
  */

@@ -50,7 +50,7 @@ CREATE TABLE produto_movimento_mestre (
   chave_nfe        text,                        -- 2026-08-11: chave de acesso da NF-e (44 digitos), so' preenchida
                                                  -- na Entrada via XML; idempotencia do import (P2, ver UK abaixo)
   serie_nota       smallint,                    -- 2026-08-11: serie da NF, so' preenchida na Entrada via XML
-  -- Cancelamento de Entrada (2026-08-19) — mesmo padrão de venda.cancelada/venda_devolucao.cancelada:
+  -- Cancelamento de Entrada (2026-08-12) — mesmo padrão de venda.cancelada/venda_devolucao.cancelada:
   -- colunas direto aqui (quem/quando/motivo, P3) em vez de tabela de log separada; este registro
   -- em si NUNCA é apagado nem tem os itens tocados — o estorno de estoque é um novo
   -- produto_movimento_mestre (tipo_movimento='CANCELAMENTO'), o resto do rastro de auditoria.
@@ -76,7 +76,7 @@ CREATE TABLE produto_movimento_mestre (
     REFERENCES usuario (id_tenant, id_usuario)
 );
 -- Idempotencia do import de XML (P2): a mesma nota nunca gera 2 movimentos pro mesmo tenant.
--- "AND cancelado = false" (2026-08-19, Cancelamento de Entrada) — uma entrada XML cancelada
+-- "AND cancelado = false" (2026-08-12, Cancelamento de Entrada) — uma entrada XML cancelada
 -- libera a chave pra reimportar a mesma NF-e corrigida; o registro cancelado continua existindo
 -- (P3), só sai de baixo desta constraint.
 CREATE UNIQUE INDEX produto_movimento_mestre_chave_nfe_uk

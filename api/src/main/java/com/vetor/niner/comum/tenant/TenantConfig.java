@@ -19,7 +19,7 @@ public class TenantConfig {
     PlatformTransactionManager transactionManager(DataSource dataSource) {
         TenantAwareTransactionManager tm = new TenantAwareTransactionManager(dataSource);
         // Habilita PROPAGATION_NESTED (savepoint) — usado por ImportacaoSavepointExecutor para
-        // isolar cada linha de planilha sem abortar a transação do arquivo inteiro (2026-08-11).
+        // isolar cada linha de planilha sem abortar a transação do arquivo inteiro (2026-08-10).
         tm.setNestedTransactionAllowed(true);
         return tm;
     }

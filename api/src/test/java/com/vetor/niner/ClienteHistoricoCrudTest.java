@@ -130,7 +130,7 @@ class ClienteHistoricoCrudTest {
     }
 
     private long criarCor(Connection c, long idTenant, String descricao) throws SQLException {
-        // id_cor não é mais IDENTITY (V017, 2026-08-20) — calculado por tenant.
+        // id_cor não é mais IDENTITY (V017, 2026-08-13) — calculado por tenant.
         try (PreparedStatement ps = c.prepareStatement("""
                 INSERT INTO cfg_cor (id_tenant, id_cor, descricao)
                 VALUES (?, COALESCE((SELECT MAX(id_cor) FROM cfg_cor WHERE id_tenant = ?), 0) + 1, ?)
@@ -147,7 +147,7 @@ class ClienteHistoricoCrudTest {
     }
 
     private long criarTamanho(Connection c, long idTenant, String descricao) throws SQLException {
-        // id_tamanho não é mais IDENTITY (V017, 2026-08-20) — calculado por tenant.
+        // id_tamanho não é mais IDENTITY (V017, 2026-08-13) — calculado por tenant.
         try (PreparedStatement ps = c.prepareStatement("""
                 INSERT INTO cfg_tamanho (id_tenant, id_tamanho, descricao)
                 VALUES (?, COALESCE((SELECT MAX(id_tamanho) FROM cfg_tamanho WHERE id_tenant = ?), 0) + 1, ?)

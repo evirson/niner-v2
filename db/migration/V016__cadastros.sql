@@ -314,7 +314,7 @@ COMMENT ON TABLE funcionario           IS 'Funcionário do lojista (RLS). Refere
 
 
 -- ---------------------------------------------------------------------------------------------
--- cfg_plano_contas_padrao (2026-08-23) — MODELO GLOBAL do plano de contas padrão, sem id_tenant
+-- cfg_plano_contas_padrao (2026-08-14) — MODELO GLOBAL do plano de contas padrão, sem id_tenant
 -- e sem RLS (mesma exceção documentada de cfg_produto_ncm e cfg_ean_gerador: é estrutura de
 -- produto, não dado de um lojista).
 --

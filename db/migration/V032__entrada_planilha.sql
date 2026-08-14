@@ -1,4 +1,4 @@
--- Entrada de Produtos por Compra — Fluxo Planilha (2026-08-11/12): configuração geral do
+-- Entrada de Produtos por Compra — Fluxo Planilha (2026-08-11): configuração geral do
 -- plano de contas usado nas contas a pagar geradas pela Entrada. Até aqui `ContasPagarService`
 -- usava `fornecedor.id_plano_contas` (a conta contábil do FORNECEDOR), o que está errado — o
 -- correto é uma conta de custo/despesa do próprio tenant (o "3.03.001 Compra de Mercadoria

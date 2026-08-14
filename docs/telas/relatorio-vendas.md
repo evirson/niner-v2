@@ -222,7 +222,7 @@ sessões (é `/tmp` de sessão) — se precisar reverter numa sessão futura, us
 dono do produto: a impressão em tema escuro gasta muito mais tinta. Como o app **não tinha toggle
 de tema** na época (o dark só vinha de `prefers-color-scheme: dark` do SO/navegador; `styles.css`
 já definia `:root[data-theme='light']`/`[data-theme='dark']` sem nada nunca setar esse atributo —
-o seletor de tema do cabeçalho só nasceu em 2026-08-23, ver `docs/telas/menu-principal.md`), a 1ª
+o seletor de tema do cabeçalho só nasceu em 2026-08-14, ver `docs/telas/menu-principal.md`), a 1ª
 versão
 forçava `document.documentElement.setAttribute('data-theme', 'light')` na página **real** antes de
 capturar — funcionava, mas causava um "flash" visível: o app inteiro (menu, cabeçalho, tudo)

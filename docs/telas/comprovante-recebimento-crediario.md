@@ -70,7 +70,7 @@ parcela já paga, mas reforça que não há recálculo).
 `@page { size: 80mm auto; margin: 0; }` (CSS global) — sem isso o navegador tenta encaixar a
 impressão no tamanho de página padrão do sistema (A4/Carta) em vez do rolo contínuo.
 
-**Revisão de 2026-08-24 — calibragem para a bobina real.** A regra original (`width: 80mm`, fonte
+**Revisão de 2026-08-14 — calibragem para a bobina real.** A regra original (`width: 80mm`, fonte
 9px, margem lateral de 3mm) foi escrita no papel, não testada na impressora; quando a Papeleta de
 Venda foi impressa de verdade, os três defeitos apareceram e valiam igualmente aqui, porque os
 dois documentos saem na **mesma bobina física**:
@@ -130,7 +130,7 @@ tenant — RLS).
 
 Cobertos por `RecebimentoCrediarioCrudTest` (+2 testes:
 `comprovanteTrazCabecalhoParcelasEFormasDePagamento`, `comprovanteDeLoteInexistenteResponde404`).
-Suíte completa do projeto: 492/492 verdes (2026-08-24).
+Suíte completa do projeto: 492/492 verdes (2026-08-14).
 
 ## Reimpressão (2026-08-06 — deixou de ser non-goal)
 
@@ -199,7 +199,7 @@ Nenhum.
 
 Nenhuma bloqueante. ~~Fonte de impressão/margens ajustadas por cálculo (não testadas numa
 impressora térmica física ainda) — pode precisar de ajuste fino depois do primeiro teste real.~~
-— **resolvido em 2026-08-24**: a calibragem foi feita **contra impressão real** na bobina de 80mm
+— **resolvido em 2026-08-14**: a calibragem foi feita **contra impressão real** na bobina de 80mm
 (largura 75mm, Consolas 11.5px em negrito, `print-color-adjust: exact`); ver "Impressão pra bobina
 física de 80mm" acima e `docs/telas/papeleta-venda.md`.
 

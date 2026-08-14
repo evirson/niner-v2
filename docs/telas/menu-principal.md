@@ -37,11 +37,11 @@ Quatro mudanças no shell, sem tocar em nenhuma tela de domínio:
 4. **Busca de telas no cabeçalho** (`BuscaDeTelas.tsx`): campo à direita do header, com
    **Ctrl+K** (ou ⌘K) de qualquer lugar do ERP, navegação por setas e Enter para abrir. É a
    contrapartida do custo de navegar por hub — o acesso direto que a lateral deixou de dar.
-5. **Seletor de tema no cabeçalho** (`SeletorTema.tsx`, 2026-08-23): botão de ícone entre a busca
+5. **Seletor de tema no cabeçalho** (`SeletorTema.tsx`, 2026-08-14): botão de ícone entre a busca
    e o "Sair", com um menu de três opções — **Claro / Escuro / Automático**. Ver a seção própria
    abaixo.
 
-## Tema claro/escuro (2026-08-23)
+## Tema claro/escuro (2026-08-14)
 
 A paleta dos dois temas existe em `styles.css` desde o começo do projeto (§3.7 da spec:
 `:root` = clara, `@media (prefers-color-scheme: dark)` = escura, mais os overrides
@@ -76,7 +76,7 @@ tela fecha uma pendência antiga, não inventa comportamento novo.
   `data-theme='light'` só no clone do documento (ver `docs/telas/relatorio-vendas.md`).
 - ⚠️ **A extensão Dark Reader ignora tudo isso.** Ela injeta `<style class="darkreader--root-vars">`
   e reescreve os próprios tokens, então o ERP aparece escuro mesmo com "Claro" selecionado — e não
-  há CSS do lado da página que resolva. Diagnosticado ao vivo em 2026-08-23 (os tokens liam
+  há CSS do lado da página que resolva. Diagnosticado ao vivo em 2026-08-14 (os tokens liam
   `--ground: #f5f4f0` enquanto o `body` pintava `rgb(30,28,20)`). Se um lojista reclamar que o
   tema claro "não funciona", **essa é a primeira coisa a checar**, antes de procurar bug no CSS.
 
@@ -258,6 +258,6 @@ Então vejo "Nenhuma tela encontrada para …", sem resultado algum
 | `web/src/components/Icones.tsx` | **novos** `IconeMenuHamburguer`, `IconeAlfinete`, `IconeVoltar` |
 | `web/src/App.tsx` | rota `/menu/:grupo` |
 | `web/src/styles.css` | `.app-nav-toggle` no topo, cabeçalho em grid, `.busca-telas*`, `.menu-card*`, `.menu-hub-*`; saíram os `.app-nav-grupo*` |
-| `web/src/components/SeletorTema.tsx` | **novo (2026-08-23)** — menu Claro/Escuro/Automático do cabeçalho |
-| `web/src/lib/tema.ts` | **novo (2026-08-23)** — leitura/gravação em `localStorage` e escrita do `data-theme` |
-| `web/index.html` | **(2026-08-23)** script inline no `<head>` que aplica o tema antes da primeira pintura (anti-flash) |
+| `web/src/components/SeletorTema.tsx` | **novo (2026-08-14)** — menu Claro/Escuro/Automático do cabeçalho |
+| `web/src/lib/tema.ts` | **novo (2026-08-14)** — leitura/gravação em `localStorage` e escrita do `data-theme` |
+| `web/index.html` | **(2026-08-14)** script inline no `<head>` que aplica o tema antes da primeira pintura (anti-flash) |

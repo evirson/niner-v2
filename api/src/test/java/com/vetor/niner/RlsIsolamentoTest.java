@@ -67,7 +67,7 @@ class RlsIsolamentoTest {
         }
     }
 
-    /** {@code produto.id_grade} é {@code NOT NULL DEFAULT 1} (V017, 2026-08-20) com FK pra
+    /** {@code produto.id_grade} é {@code NOT NULL DEFAULT 1} (V017, 2026-08-13) com FK pra
      *  {@code cfg_grade} — todo tenant precisa da cor/tamanho/grade PADRÃO (id=1) antes de
      *  qualquer INSERT em {@code produto}, mesmo criado cru como aqui (SignupService faz isso
      *  no fluxo real). */

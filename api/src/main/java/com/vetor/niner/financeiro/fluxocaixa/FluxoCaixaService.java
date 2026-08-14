@@ -25,7 +25,7 @@ import java.util.Map;
  *
  * <p><b>Realizado lê só movimento de dinheiro</b> ({@code caixa_detalhe} +
  * {@code conta_corrente_movimento}), nunca lançamento — é isso que garante a identidade
- * "saldo inicial + entradas − saídas = saldo real". Isso só passou a ser suficiente em 2026-08-23,
+ * "saldo inicial + entradas − saídas = saldo real". Isso só passou a ser suficiente em 2026-08-14,
  * quando a baixa de conta a pagar passou a gravar o movimento correspondente
  * ({@code ContaPagarService}); antes disso as saídas simplesmente não existiam nas tabelas de
  * dinheiro. Contas pagas antes dessa data não aparecem aqui, por decisão registrada na spec.
@@ -114,7 +114,7 @@ public class FluxoCaixaService {
         List<Movimento> movimentos = new ArrayList<>();
 
         if (origem != OrigemDinheiro.CONTA_CORRENTE) {
-            // Abertura de caixa dentro do período conta como ENTRADA (2026-08-23, achado no teste):
+            // Abertura de caixa dentro do período conta como ENTRADA (2026-08-14, achado no teste):
             // `caixa_mestre.saldo_inicial` é dinheiro que entra na gaveta sem gerar linha em
             // `caixa_detalhe`. Sem contá-lo aqui, o saldo final do período não fecha com o saldo
             // real — que é justamente a promessa do relatório (o teste acusou -150 onde o dinheiro

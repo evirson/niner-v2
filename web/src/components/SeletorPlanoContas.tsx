@@ -6,18 +6,18 @@ import { listarPlanosContas, type PlanoContas } from '../lib/planoContas'
  * Seletor de plano de contas com busca por CÓDIGO ou por NOME (2026-08-13, pedido do dono do
  * produto) — substitui os `<select>` de plano de contas em formulários (Fornecedor, Contas a
  * Pagar, Movimentação de Conta Corrente, Parâmetros do Sistema, Importação de Dados) e em
- * filtros de listagem (Fornecedores, Movimentação de Conta Corrente — migrados em 2026-08-22,
+ * filtros de listagem (Fornecedores, Movimentação de Conta Corrente — migrados em 2026-08-13,
  * ver seção de "limpar" abaixo). Digitando dígitos/pontos ("401", "4.01.001") busca por prefixo
  * de código; digitando texto livre busca na descrição. Enter escolhe a linha destacada (setas
  * ↑/↓ movem o destaque) e NÃO dispara o Enter-como-Tab do formulário (stopPropagation só
  * enquanto a lista está aberta); clique escolhe qualquer uma.
  *
  * Carrega o plano inteiro numa query só (tamanho 500 — o plano padrão 9.99.999 tem ~76 contas)
- * e filtra no cliente: sem o problema de select truncado por paginação (2026-08-19).
+ * e filtra no cliente: sem o problema de select truncado por paginação (2026-08-12).
  *
  * Suporta limpar o valor (`onChange('')`) apagando o texto e saindo do campo (blur) ou
  * apertando Enter com o campo vazio — necessário pros usos como FILTRO de listagem (Fornecedores,
- * Movimentação de Conta Corrente, 2026-08-22), onde "vazio" tem o significado válido de "todos".
+ * Movimentação de Conta Corrente, 2026-08-13), onde "vazio" tem o significado válido de "todos".
  * Nos formulários onde o campo é obrigatório, a validação do próprio formulário já acusa "campo
  * vazio" no blur, então deixar limpar também ali é consistente (mesmo padrão de qualquer
  * typeahead: apagar o texto e sair some com a seleção).

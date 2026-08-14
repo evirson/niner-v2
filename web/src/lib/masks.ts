@@ -129,7 +129,7 @@ export function diaMesValido(valor: string): boolean {
   return dia >= 1 && dia <= diasNoMes
 }
 
-/** Máscara "HH:MM" (horário de acesso por dia da semana, 2026-08-14). */
+/** Máscara "HH:MM" (horário de acesso por dia da semana, 2026-08-11). */
 export function mascararHora(valor: string): string {
   const digitos = somenteDigitos(valor).slice(0, 4)
   return aplicarMascara(digitos, '00:00')

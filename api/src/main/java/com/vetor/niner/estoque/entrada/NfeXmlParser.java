@@ -78,7 +78,7 @@ final class NfeXmlParser {
                 texto(enderEmit, "xMun"), texto(enderEmit, "UF"), texto(enderEmit, "CEP"), texto(enderEmit, "fone"));
 
         // <dest> é obrigatório no schema da NF-e, mas trata como opcional aqui — a ausência não
-        // impede a importação, só deixa de casar a empresa automaticamente (2026-08-19).
+        // impede a importação, só deixa de casar a empresa automaticamente (2026-08-12).
         Element dest = filhoOpcional(infNFe, "dest");
         String cnpjDestinatario = dest == null ? null : texto(dest, "CNPJ");
 

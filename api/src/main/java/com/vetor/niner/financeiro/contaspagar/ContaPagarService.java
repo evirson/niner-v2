@@ -7,6 +7,7 @@ import com.vetor.niner.financeiro.contaspagar.ContaPagarDtos.OrigemPagamento;
 import com.vetor.niner.financeiro.contaspagar.ContaPagarDtos.PaginaContasPagar;
 import com.vetor.niner.financeiro.caixa.CaixaDtos.CaixaStatusResponse;
 import com.vetor.niner.financeiro.caixa.CaixaService;
+import com.vetor.niner.financeiro.caixa.CaixaService.VinculoCaixa;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -90,7 +91,7 @@ public class ContaPagarService {
             params.add("%" + numeroDuplicata.trim() + "%");
         }
         // "AT TIME ZONE 'America/Sao_Paulo'" (não UTC, a sessão do banco) — mesma correção já
-        // aplicada em EntradaMercadoriaService.listar (2026-08-19): a tela mostra data em
+        // aplicada em EntradaMercadoriaService.listar (2026-08-12): a tela mostra data em
         // horário local do navegador, então o filtro precisa bucketizar pelo mesmo dia local.
         if (dataVencimentoInicial != null) {
             filtro.append(" AND (cp.data_vencimento AT TIME ZONE 'America/Sao_Paulo')::date >= ?");
@@ -142,7 +143,7 @@ public class ContaPagarService {
     }
 
     /**
-     * Sincroniza o **movimento de dinheiro** da baixa (2026-08-23, docs/telas/fluxo-caixa.md).
+     * Sincroniza o **movimento de dinheiro** da baixa (2026-08-14, docs/telas/fluxo-caixa.md).
      *
      * <p>Antes desta mudança, pagar uma conta só preenchia {@code data_pagamento} — o dinheiro não
      * passava por {@code caixa_detalhe} nem por {@code conta_corrente_movimento}, e por isso um
@@ -154,6 +155,10 @@ public class ContaPagarService {
      * apaga movimento de outra origem.
      */
     private void sincronizarMovimentoDeDinheiro(Jwt jwt, long idContaPagar, ContaPagarRequest req) {
+        // Caixa fechado bloqueia (2026-08-14): o DELETE abaixo apagaria lançamento de um caixa já
+        // conferido, fazendo a conferência gravada mentir. Manda reabrir em vez de passar batido.
+        caixaService.exigirCaixaAbertoParaDesfazer(VinculoCaixa.CONTA_PAGAR, idContaPagar);
+
         jdbc.sql("DELETE FROM caixa_detalhe WHERE id_tenant = plataforma.tenant_atual() AND id_conta_pagar = ?")
                 .param(idContaPagar).update();
         jdbc.sql("DELETE FROM conta_corrente_movimento WHERE id_tenant = plataforma.tenant_atual() AND id_conta_pagar = ?")
@@ -188,7 +193,7 @@ public class ContaPagarService {
             return;
         }
 
-        // CAIXA: usa o caixa aberto do usuário (decisão de 2026-08-23) — mesma convenção do PDV e
+        // CAIXA: usa o caixa aberto do usuário (decisão de 2026-08-14) — mesma convenção do PDV e
         // do Recebimento de Crediário, que também não deixam escolher a sessão de caixa.
         CaixaStatusResponse caixa = caixaService.status(jwt);
         if (!caixa.aberto()) {
@@ -216,7 +221,7 @@ public class ContaPagarService {
 
     /**
      * Decide se a edição precisa mexer no movimento de dinheiro — e é aqui que mora a exceção que
-     * evita uma armadilha: **conta que já estava paga antes desta mudança (2026-08-23) não tem
+     * evita uma armadilha: **conta que já estava paga antes desta mudança (2026-08-14) não tem
      * movimento vinculado**, e exigir a origem dela travaria para sempre qualquer edição
      * (mudar uma observação de uma conta paga em julho devolveria 400 sem saída).
      *
@@ -300,13 +305,33 @@ public class ContaPagarService {
         }
     }
 
-    /** Sempre exclui de verdade — {@code contas_pagar} não tem {@code ativo}, nada referencia
-     *  esta tabela por FK (mesmo caso de {@code conta_corrente_movimento}). Uma conta gerada por
-     *  uma Entrada ({@code id_movimento} preenchido) pode ser excluída aqui sem problema — se a
-     *  entrada for cancelada depois, o DELETE por {@code id_movimento} do Cancelamento de Entrada
-     *  simplesmente não encontra mais nada pra apagar. */
+    /**
+     * Sempre exclui de verdade — {@code contas_pagar} não tem {@code ativo}, nada referencia
+     * esta tabela por FK (mesmo caso de {@code conta_corrente_movimento}). Uma conta gerada por
+     * uma Entrada ({@code id_movimento} preenchido) pode ser excluída aqui sem problema — se a
+     * entrada for cancelada depois, o DELETE por {@code id_movimento} do Cancelamento de Entrada
+     * simplesmente não encontra mais nada pra apagar.
+     *
+     * <p><b>Desfaz o movimento de dinheiro junto (2026-08-14).</b> Até aqui, excluir apagava só
+     * a linha de {@code contas_pagar} e deixava órfãos o {@code caixa_detalhe} e o
+     * {@code conta_corrente_movimento} gerados pela baixa: o dinheiro seguia saindo do caixa e do
+     * banco para sempre, sem nenhuma conta que o justificasse — e como essas colunas de vínculo
+     * **não têm FK** (escolha deliberada de V025/V028), o banco não reclamava. O DELETE agora é o
+     * mesmo de {@link #sincronizarMovimentoDeDinheiro}, e vem antes do DELETE da conta.
+     *
+     * <p>Vale para a <b>reabertura</b> também (tirar a data de pagamento na edição), que já
+     * desfazia o movimento corretamente por {@code sincronizarMovimentoNaEdicao} — a diferença é
+     * que agora os dois caminhos passam pelo mesmo guard de caixa fechado.
+     */
     @Transactional
-    public ExclusaoContaPagarResponse excluir(long idContaPagar) {
+    public ExclusaoContaPagarResponse excluir(Jwt jwt, long idContaPagar) {
+        caixaService.exigirCaixaAbertoParaDesfazer(VinculoCaixa.CONTA_PAGAR, idContaPagar);
+
+        jdbc.sql("DELETE FROM caixa_detalhe WHERE id_tenant = plataforma.tenant_atual() AND id_conta_pagar = ?")
+                .param(idContaPagar).update();
+        jdbc.sql("DELETE FROM conta_corrente_movimento WHERE id_tenant = plataforma.tenant_atual() AND id_conta_pagar = ?")
+                .param(idContaPagar).update();
+
         int linhas = jdbc.sql("DELETE FROM contas_pagar WHERE id_tenant = plataforma.tenant_atual() AND id_conta_pagar = ?")
                 .param(idContaPagar).update();
         if (linhas == 0) {
@@ -327,7 +352,7 @@ public class ContaPagarService {
                    cp.valor_pago, cp.documento_pago, cp.observacoes, cp.id_movimento,
                    -- Origem do pagamento é DERIVADA do movimento gerado na baixa, não uma coluna
                    -- de contas_pagar: o movimento é a verdade sobre onde o dinheiro está, e assim
-                   -- não existe estado duplicado pra sair de sincronia (2026-08-23).
+                   -- não existe estado duplicado pra sair de sincronia (2026-08-14).
                    (SELECT ccm.id_conta_corrente FROM conta_corrente_movimento ccm
                     WHERE ccm.id_tenant = cp.id_tenant AND ccm.id_conta_pagar = cp.id_conta_pagar
                     LIMIT 1) AS id_conta_corrente_pagamento,
@@ -341,7 +366,7 @@ public class ContaPagarService {
             JOIN cfg_plano_contas pc ON pc.id_tenant = cp.id_tenant AND pc.id_plano_contas = cp.id_plano_contas
             """;
 
-    /** {@code null} enquanto a conta não foi baixada (ou foi baixada antes de 2026-08-23, quando
+    /** {@code null} enquanto a conta não foi baixada (ou foi baixada antes de 2026-08-14, quando
      *  a baixa ainda não gerava movimento — ver docs/telas/fluxo-caixa.md). */
     private static OrigemPagamento origemDoPagamento(ResultSet rs) throws SQLException {
         if (rs.getString("id_conta_corrente_pagamento") != null) {

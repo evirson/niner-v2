@@ -2,7 +2,7 @@ import { api, apiUpload, ApiError, getToken } from './api'
 import { API_BASE } from './config'
 
 /** Um item lançado no ledger da entrada (mesmo shape do detalhe gravado em `produto_movimento_detalhe`).
- *  `precoVenda` (2026-08-15, fluxo Individual com grade) só vem preenchido quando o item passou
+ *  `precoVenda` (2026-08-12, fluxo Individual com grade) só vem preenchido quando o item passou
  *  pelo grid de tamanhos (custo + %venda do produto sugerem o valor, editável antes de lançar) —
  *  quando presente, vira o novo `preco_venda` do produto na confirmação. */
 export interface ItemEntradaRequest {
@@ -10,11 +10,11 @@ export interface ItemEntradaRequest {
   qtd: number
   precoCusto: number
   precoVenda?: number | null
-  /** Código do produto no fornecedor (`cProd` do XML, 2026-08-18) — quando presente, a
+  /** Código do produto no fornecedor (`cProd` do XML, 2026-08-12) — quando presente, a
    *  confirmação aprende/atualiza `produto_fornecedor`: a próxima nota do mesmo fornecedor com
    *  este código já resolve sozinha. Só o fluxo XML preenche. */
   codigoFornecedor?: string | null
-  /** NCM do XML (2026-08-20) — quando presente e diferente do NCM já cadastrado no produto, a
+  /** NCM do XML (2026-08-13) — quando presente e diferente do NCM já cadastrado no produto, a
    *  confirmação SUBSTITUI (o NCM do XML sempre vale). Só o fluxo XML preenche. */
   ncm?: string | null
 }
@@ -73,7 +73,7 @@ export interface EntradaResumoResponse {
   qtdItens: number
   valorTotal: number
   origem: string
-  /** Cancelamento de Entrada (2026-08-19) — grid principal mostra a linha marcada, sem esconder. */
+  /** Cancelamento de Entrada (2026-08-12) — grid principal mostra a linha marcada, sem esconder. */
   cancelada: boolean
 }
 
@@ -118,7 +118,7 @@ export interface CancelamentoEntradaEfetivadoResponse {
   dataCancelamento: string
 }
 
-/** Cancelamento de Entrada (2026-08-19) — ADMIN-only, ver docs do backend
+/** Cancelamento de Entrada (2026-08-12) — ADMIN-only, ver docs do backend
  *  (`EntradaMercadoriaService#cancelar`) pra regras de bloqueio. */
 export function cancelarEntrada(idMovimento: number, motivo: string): Promise<CancelamentoEntradaEfetivadoResponse> {
   return api<CancelamentoEntradaEfetivadoResponse>(`/api/v1/estoque/entradas/${idMovimento}/cancelar`, {
@@ -191,11 +191,11 @@ export interface ItemPlanilhaPreviewResponse {
   idProdutoEncontrado: number | null
   idGradeEncontrada: number | null
   motivoPendencia: string | null
-  /** `cProd` do XML (2026-08-18) — `null` no fluxo Planilha. `cor`/`tamanho` acima são só
+  /** `cProd` do XML (2026-08-12) — `null` no fluxo Planilha. `cor`/`tamanho` acima são só
    *  PALPITE nesse caso (nunca resolvem/cadastram sozinhos — o XML sempre exige confirmação
    *  manual do operador, diferente da Planilha). */
   codigoFornecedor: string | null
-  /** NCM do XML, já validado contra o cadastro de NCM (2026-08-20) — `null` no fluxo Planilha
+  /** NCM do XML, já validado contra o cadastro de NCM (2026-08-13) — `null` no fluxo Planilha
    *  (sem coluna de NCM). Em linha resolvida, segue até a confirmação e substitui o NCM do
    *  produto se vier diferente. Em pendência, pré-preenche o NCM do cadastro rápido. */
   ncm: string | null
@@ -228,7 +228,7 @@ export async function baixarModeloPlanilhaEntrada(): Promise<void> {
   URL.revokeObjectURL(url)
 }
 
-/** Resultado da pesquisa de produto do fluxo Individual (2026-08-15) — nível produto (não
+/** Resultado da pesquisa de produto do fluxo Individual (2026-08-12) — nível produto (não
  *  variação): sem cor/tamanho/estoque, só o necessário pra escolher o produto e montar a grade
  *  de tamanhos + custo/%venda/preço de venda em seguida. `idGrade` nulo ⇒ produto sem grade. */
 export interface ProdutoOpcaoEntrada {
@@ -250,7 +250,7 @@ export function buscarProdutosEntrada(busca: string, marca: string, referencia: 
   return api<ProdutoOpcaoEntrada[]>(`/api/v1/estoque/entradas/produtos${query ? `?${query}` : ''}`)
 }
 
-/** Fornecedor casado pelo CNPJ do emitente do XML (2026-08-18, Fase 3) — `idFornecedor` nulo
+/** Fornecedor casado pelo CNPJ do emitente do XML (2026-08-12, Fase 3) — `idFornecedor` nulo
  *  ⇒ não achou no cadastro; os demais campos vêm do próprio XML, prontos pra pré-preencher o
  *  cadastro rápido de fornecedor se o operador optar por criar um novo. */
 export interface FornecedorXmlPreview {
@@ -274,7 +274,7 @@ export interface DuplicataXmlPreview {
   valor: number
 }
 
-/** Pré-entrada do fluxo XML (2026-08-18, Fase 3) — parse do arquivo + tentativa de casar cada
+/** Pré-entrada do fluxo XML (2026-08-12, Fase 3) — parse do arquivo + tentativa de casar cada
  *  item (EAN → `produto_fornecedor` aprendido → pendência), sem gravar nada. `xmlBruto` deve
  *  ser reenviado, sem alteração nenhuma, no `POST /api/v1/estoque/entradas` de confirmação. */
 export interface EntradaXmlPreview {
@@ -284,7 +284,7 @@ export interface EntradaXmlPreview {
   dataEmissao: string | null
   chaveJaImportada: boolean
   fornecedor: FornecedorXmlPreview
-  /** Empresa do tenant casada pelo CNPJ do destinatário (`dest/CNPJ`) do XML (2026-08-19) —
+  /** Empresa do tenant casada pelo CNPJ do destinatário (`dest/CNPJ`) do XML (2026-08-12) —
    *  `null` sem match (mantém o padrão de sempre: empresa da sessão, trocável no select). */
   idEmpresaEncontrada: number | null
   valorTotalNota: number

@@ -6,6 +6,8 @@ import com.vetor.niner.financeiro.caixa.CaixaDtos.CarteiraParaAberturaResponse;
 import com.vetor.niner.financeiro.caixa.CaixaDtos.FecharCaixaRequest;
 import com.vetor.niner.financeiro.caixa.CaixaDtos.FechamentoCaixaResponse;
 import com.vetor.niner.financeiro.caixa.CaixaDtos.LancamentoCarteiraResponse;
+import com.vetor.niner.financeiro.caixa.CaixaDtos.ReaberturaCaixaResponse;
+import com.vetor.niner.financeiro.caixa.CaixaDtos.ReabrirCaixaRequest;
 import com.vetor.niner.financeiro.caixa.CaixaDtos.ResultadoFechamentoResponse;
 import jakarta.validation.Valid;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -56,6 +58,16 @@ public class CaixaController {
     @PostMapping("/fechamento")
     public ResultadoFechamentoResponse fechar(@AuthenticationPrincipal Jwt jwt, @Valid @RequestBody FecharCaixaRequest req) {
         return service.fechar(jwt, req);
+    }
+
+    /** Reabre um caixa fechado (2026-08-14) — **ADMIN-only, checado no service**, com motivo
+     *  obrigatório. Existe pra destravar o estorno de crediário e a exclusão/reabertura de conta
+     *  a pagar, que recusam apagar lançamento de caixa já fechado. */
+    @PostMapping("/fechamento/{idCaixa}/reabrir")
+    public ReaberturaCaixaResponse reabrir(
+            @AuthenticationPrincipal Jwt jwt, @PathVariable long idCaixa,
+            @Valid @RequestBody ReabrirCaixaRequest req) {
+        return service.reabrir(jwt, idCaixa, req);
     }
 
     @GetMapping("/fechamento/{idCaixa}/carteiras/{idCarteira}/lancamentos")

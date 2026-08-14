@@ -159,7 +159,7 @@ function formatarQuantidadeSimples(qtd: number): string {
 }
 
 /**
- * Papeleta de venda do PDV — **42 colunas, item em 2 linhas** (revisão de 2026-08-24).
+ * Papeleta de venda do PDV — **42 colunas, item em 2 linhas** (revisão de 2026-08-14).
  *
  * <p>A versão original tinha 64 colunas numa única linha por item. Impressa numa bobina real o
  * resultado era ilegível, e a conta explica: o papel tem 80mm mas a **área de impressão é 72mm**;
@@ -322,14 +322,14 @@ export function montarLinhasComprovanteVenda(c: ComprovanteVenda, reimpressao: b
 
 /**
  * Monta o documento jsPDF da papeleta de venda — courier 8pt, a mesma dos outros comprovantes
- * desta bobina desde que a papeleta passou a 42 colunas (2026-08-24; antes era ~5pt pra espremer
+ * desta bobina desde que a papeleta passou a 42 colunas (2026-08-14; antes era ~5pt pra espremer
  * 64 colunas em 80mm). Fonte única de verdade reusada tanto pra
  * baixar ({@link gerarPdfComprovanteVenda}) quanto pro Blob do compartilhamento por WhatsApp
  * ({@link gerarBlobComprovanteVenda}).
  */
 function montarDocumentoComprovanteVenda(linhas: string[]): jsPDF {
   const margem = 4
-  // 8pt (era 5pt): com a papeleta em 42 colunas (2026-08-24) cabe a mesma fonte dos outros
+  // 8pt (era 5pt): com a papeleta em 42 colunas (2026-08-14) cabe a mesma fonte dos outros
   // comprovantes desta bobina — 42 × ~1,7mm ≈ 71mm dentro dos 80mm menos as margens.
   const tamanhoFonte = 8
   const alturaLinha = 3.6
@@ -356,7 +356,7 @@ export function gerarBlobComprovanteVenda(linhas: string[]): Blob {
 
 /**
  * Vale-mercadoria emitido por uma devolução (2026-08-03) — desde 2026-08-07 usa a MESMA tabela
- * de itens (42 colunas, item em 2 linhas desde 2026-08-24) e as mesmas funções de
+ * de itens (42 colunas, item em 2 linhas desde 2026-08-14) e as mesmas funções de
  * layout da papeleta de venda (`linhaVenda`/`centralizarVenda`/`colEsq`/`colDir`/`campoVenda`/
  * `linhaResumoVenda`/`montarDescricaoEmLinhas`) — pedido explícito do dono do produto pra
  * padronizar a impressão dos itens entre os dois comprovantes que saem na mesma bobina física
@@ -376,7 +376,7 @@ export function montarLinhasComprovanteVale(d: DevolucaoEfetivada, nomeEmpresa: 
   if (d.nomeFuncionario) linhas.push(campoVenda('Vendedor...:', d.nomeFuncionario))
   linhas.push(campoVenda('Data.......:', formatarDataHora(d.dataMovimento)))
   linhas.push(linhaVenda())
-  // Mesma tabela de 2 linhas por item da papeleta (2026-08-24) — os dois comprovantes saem na
+  // Mesma tabela de 2 linhas por item da papeleta (2026-08-14) — os dois comprovantes saem na
   // mesma bobina física, então continuam compartilhando o layout.
   linhas.push(`${colEsq('CODIGO', COL_CODIGO)} ${colEsq('DESCRICAO DO PRODUTO', COL_DESCRICAO)}`)
   linhas.push(colEsq(' '.repeat(COL_CODIGO + 1) + 'QTD x UNITARIO', LARGURA_VENDA - COL_TOTAL) + colDir('TOTAL', COL_TOTAL))
@@ -405,14 +405,19 @@ export function montarLinhasComprovanteVale(d: DevolucaoEfetivada, nomeEmpresa: 
   return linhas
 }
 
-/** Mesmo documento de {@link montarDocumentoComprovanteVenda} (mesma largura/fonte, agora que o
- *  vale usa a mesma tabela de 42 colunas da papeleta) — fonte única de verdade reusada tanto pra baixar o arquivo
+/** Mesmo documento de {@link montarDocumentoComprovanteVenda} — mesma largura, mesma fonte 8pt,
+ *  mesma altura de linha. Fonte única de verdade reusada tanto pra baixar o arquivo
  *  ({@link gerarPdfComprovanteVale}) quanto pra gerar o Blob do compartilhamento por WhatsApp
- *  ({@link gerarBlobComprovanteVale}). */
+ *  ({@link gerarBlobComprovanteVale}).
+ *
+ *  O texto do vale acompanhou a mudança pra 42 colunas em 2026-08-14, mas **este PDF ficou pra
+ *  trás em 5pt/2,6mm** — o docstring afirmava "mesma largura/fonte" enquanto os números diziam
+ *  outra coisa. Corrigido em 2026-08-14: 8pt/3,6mm, idêntico à papeleta e ao comprovante de
+ *  crediário. */
 function montarDocumentoComprovanteVale(linhas: string[]): jsPDF {
   const margem = 4
-  const tamanhoFonte = 5
-  const alturaLinha = 2.6
+  const tamanhoFonte = 8
+  const alturaLinha = 3.6
   const altura = Math.max(LARGURA_MM, margem * 2 + linhas.length * alturaLinha)
 
   const doc = new jsPDF({ unit: 'mm', format: [LARGURA_MM, altura] })

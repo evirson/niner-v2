@@ -5,7 +5,7 @@ import { BotaoFecharTela } from '../../components/BotaoFecharTela'
 import { IconeFechamentoCaixa } from '../../components/Icones'
 import Toast, { type TipoToast } from '../../components/Toast'
 import { ApiError } from '../../lib/api'
-import { buscarFechamentoCaixa, fecharCaixa, rotuloCarteira, type ResultadoFechamento } from '../../lib/caixa'
+import { buscarFechamentoCaixa, fecharCaixa, reabrirCaixa, rotuloCarteira, type ResultadoFechamento } from '../../lib/caixa'
 import { hojeISO } from '../../lib/datas'
 import { useEu } from '../../lib/eu'
 import { completarMoeda, dataParaIso, dataValida, desmascararMoeda, formatarMoeda, isoParaData, mascararData, mascararMoeda } from '../../lib/masks'
@@ -41,6 +41,8 @@ export default function FechamentoCaixa() {
   const [valoresContados, setValoresContados] = useState<Record<number, string>>({})
   const [erroContagem, setErroContagem] = useState('')
   const [resultadoDivergencia, setResultadoDivergencia] = useState<ResultadoFechamento | null>(null)
+  const [reaberturaAberta, setReaberturaAberta] = useState(false)
+  const [motivoReabertura, setMotivoReabertura] = useState('')
   const [carteiraParaConferir, setCarteiraParaConferir] = useState<{ idCarteira: number; rotulo: string } | null>(null)
   const [mostrarPreview, setMostrarPreview] = useState(false)
   const [toast, setToast] = useState<{ texto: string; tipo: TipoToast } | null>(null)
@@ -106,6 +108,20 @@ export default function FechamentoCaixa() {
       }
     },
     onError: (e: unknown) => setToast({ texto: e instanceof ApiError ? e.message : 'Não foi possível fechar o caixa.', tipo: 'erro' }),
+  })
+
+  const reabrir = useMutation({
+    mutationFn: () => reabrirCaixa(fechamento!.idCaixa, motivoReabertura),
+    onSuccess: () => {
+      setReaberturaAberta(false)
+      setMotivoReabertura('')
+      setResultadoDivergencia(null)
+      queryClient.invalidateQueries({ queryKey: ['caixa-fechamento'] })
+      queryClient.invalidateQueries({ queryKey: ['caixa-status'] })
+      setToast({ texto: 'Caixa reaberto. A conferência anterior foi apagada.', tipo: 'sucesso' })
+    },
+    onError: (e: unknown) =>
+      setToast({ texto: e instanceof ApiError ? e.message : 'Não foi possível reabrir o caixa.', tipo: 'erro' }),
   })
 
   const confirmarFechamento = () => {
@@ -179,6 +195,20 @@ export default function FechamentoCaixa() {
           {fechamento && (
             <section className="section">
               <p className="section-label">{fechamento.fechado ? 'Caixa Fechado' : 'Caixa Aberto'}</p>
+
+              {/* Reabertura (2026-08-14) — só ADMIN, e só faz sentido em caixa fechado. Existe
+                  porque estorno de crediário e exclusão/reabertura de conta a pagar recusam
+                  apagar lançamento de caixa fechado e mandam o operador vir reabrir aqui. */}
+              {fechamento.fechado && ehAdmin && (
+                <div style={{ marginBottom: 12 }}>
+                  <button type="button" className="btn ghost" onClick={() => setReaberturaAberta(true)}>
+                    Reabrir Caixa
+                  </button>
+                  <p className="muted" style={{ marginTop: 6 }}>
+                    Reabrir apaga a conferência já gravada — depois de corrigir, feche o caixa de novo.
+                  </p>
+                </div>
+              )}
               <div className="form-grid">
                 <div className="col-4">
                   <label>Usuário</label>
@@ -373,6 +403,46 @@ export default function FechamentoCaixa() {
           nomeCarteira={carteiraParaConferir.rotulo}
           aoFechar={() => setCarteiraParaConferir(null)}
         />
+      )}
+
+      {/* Motivo obrigatório, mesmo par ADMIN + motivo do Cancelamento de Venda — sem o porquê
+          gravado em `caixa_mestre.observacoes`, ninguém audita a reabertura depois (P3). */}
+      {reaberturaAberta && fechamento && (
+        <div className="modal-overlay" onClick={() => setReaberturaAberta(false)}>
+          <div className="modal" role="dialog" aria-label="Reabrir Caixa" onClick={(e) => e.stopPropagation()}>
+            <h2 style={{ marginTop: 0 }}>Reabrir Caixa</h2>
+            <p className="muted">
+              A conferência já gravada será apagada. Depois de corrigir o que precisa, feche o caixa de novo
+              — a contagem às cegas é refeita do zero.
+            </p>
+            <div className="form-grid">
+              <div className="col-12">
+                <label htmlFor="motivo-reabertura">Motivo *</label>
+                <input
+                  id="motivo-reabertura"
+                  autoFocus
+                  maxLength={200}
+                  value={motivoReabertura}
+                  onChange={(e) => setMotivoReabertura(e.target.value.toUpperCase())}
+                  placeholder="EX.: ESTORNAR RECEBIMENTO LANCADO POR ENGANO"
+                />
+              </div>
+            </div>
+            <div className="ajuda-rodape">
+              <button type="button" className="btn ghost" onClick={() => setReaberturaAberta(false)}>
+                Cancelar
+              </button>
+              <button
+                type="button"
+                className="btn"
+                disabled={motivoReabertura.trim().length === 0 || reabrir.isPending}
+                onClick={() => reabrir.mutate()}
+              >
+                {reabrir.isPending ? 'Reabrindo…' : 'Reabrir Caixa'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {toast && <Toast mensagem={toast.texto} tipo={toast.tipo} aoFechar={() => setToast(null)} />}

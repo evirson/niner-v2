@@ -25,7 +25,7 @@ import { listarTiposCarteira } from '../../lib/tiposCarteira'
 
 export type Tabela = 'cliente' | 'fornecedor' | 'produto' | 'contas_receber' | 'estoque'
 
-/** Rótulo do gauge por etapa reportada pelo backend (2026-08-11) — durante `processar()` a
+/** Rótulo do gauge por etapa reportada pelo backend (2026-08-10) — durante `processar()` a
  *  etapa real pode divergir do `status` da tela (ex.: `status==='validando'` mas o backend ainda
  *  está lendo a planilha inteira antes de validar linha por linha). */
 const ROTULO_ETAPA: Record<string, string> = {
@@ -174,7 +174,7 @@ export default function ImportacaoTabelaPage({ tabela }: { tabela: Tabela }) {
   const [erroMsg, setErroMsg] = useState<string | null>(null)
   const [toast, setToast] = useState('')
   const [toastTipo, setToastTipo] = useState<TipoToast>('erro')
-  // Total de registros contado no navegador ao escolher o arquivo (2026-08-11) — exato e
+  // Total de registros contado no navegador ao escolher o arquivo (2026-08-10) — exato e
   // instantâneo, mostrado antes mesmo de clicar em Validar/Importar.
   const [totalRegistros, setTotalRegistros] = useState<number | null>(null)
   // Progresso "ao vivo" (etapa/atual/total) vindo do polling durante leitura/validação/importação.
@@ -285,7 +285,7 @@ export default function ImportacaoTabelaPage({ tabela }: { tabela: Tabela }) {
     try {
       const rel = await processarImportacao(tabela, arquivo, montarEscolhas(tabela, escolhas), true, idProgresso)
       // Tudo-ou-nada por arquivo: o backend só grava de verdade quando NENHUMA linha tem erro —
-      // `confirmado` pode vir `false` mesmo com `confirmar=true` (achado real de bug, 2026-08-09).
+      // `confirmado` pode vir `false` mesmo com `confirmar=true` (achado real de bug, 2026-08-10).
       if (!rel.confirmado) {
         setStatus('falha')
         setRelatorio(rel)

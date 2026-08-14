@@ -46,7 +46,7 @@ que já é ADMIN-only.
 ## Campos do formulário
 
 Tabela `cfg_geral` (V023). Cinco seções, nesta ordem: **Vendas**, **Catálogo**, **Estoque**
-(2026-07-29), **Compras** (2026-08-22, plano de contas padrão da compra de mercadoria) e
+(2026-07-29), **Compras** (2026-08-13, plano de contas padrão da compra de mercadoria) e
 **Crediário** — esta última nasceu rotulada "(Fase 2)" com um aviso de que o módulo ainda não
 existia; o crediário saiu do papel em 2026-07-29 (Recebimento de Crediário calcula multa/juros
 automaticamente sobre parcelas vencidas usando esses quatro campos) e o rótulo/aviso da tela
@@ -60,7 +60,7 @@ foram corrigidos só em **2026-08-07**, quando a discrepância foi notada.
 | `cfg_exige_numero_venda_devolucao` | Exigir número da venda na Devolução de Produtos | checkbox | — (default `false`, 2026-08-11) |
 | `cfg_rateia_frete_entrada` | Ratear frete/IPI/ICMS-ST no custo do item | checkbox | — (default `false`, 2026-08-11) |
 | `cfg_reajusta_preco_entrada` | Reajustar preço do produto automaticamente | checkbox | — (default `false`, 2026-08-11) |
-| `cfg_consiste_valor_contas_pagar` | Consistir valor das contas a pagar na entrada | checkbox | — (**default `true`**, 2026-08-23) |
+| `cfg_consiste_valor_contas_pagar` | Consistir valor das contas a pagar na entrada | checkbox | — (**default `true`**, 2026-08-14) |
 | `id_plano_contas_compra_mercadoria` | Plano de Contas da Compra | `SeletorPlanoContas` (`apenasAnaliticas`) | obrigatório |
 | `juros_crediario_dias` | Juros após (dias) | inteiro | ≥ 0 |
 | `juros_crediario` | Juros (%) | percentual (máscara) | 0–100 |
@@ -92,11 +92,11 @@ leves) e validado também no servidor (`DevolucaoProdutoService.efetivar` rejeit
 venda não foi informada e a flag está ligada). Detalhe completo do que a restrição faz e como o
 foco inicial do campo muda de acordo com esta flag: `docs/telas/devolucao-produtos.md`.
 
-**`cfg_consiste_valor_contas_pagar` (2026-08-23):** liga/desliga a exigência de que a soma das
+**`cfg_consiste_valor_contas_pagar` (2026-08-14):** liga/desliga a exigência de que a soma das
 duplicatas lançadas na Entrada de Produtos por Compra seja **igual ao total dos produtos
 lançados** — entrada de R$ 1.500,00 só confirma com duplicatas somando R$ 1.500,00. **Ligado por
 padrão**, ao contrário das outras flags de Compras: essa consistência já existia fixa na tela
-desde 2026-08-14, então o default preserva o comportamento de sempre (e o fallback do serviço,
+desde 2026-08-11, então o default preserva o comportamento de sempre (e o fallback do serviço,
 quando a linha de `cfg_geral` não existe, também é `true` — diferente das demais flags leves,
 cujo fallback é `false`). Desligada, a divergência é permitida — caso real de adiantamento,
 parte da nota paga à vista ou nota parcialmente financiada. Base de comparação: o total dos
@@ -130,7 +130,7 @@ de estoque nem conta a pagar sobram). Detalhe do efeito na tela: `docs/telas/ent
 Cobertos por `ConfiguracaoGeralTest` (7 testes). Ver também `DevolucaoProdutoCrudTest` pro
 critério "sem número da venda, quando a flag exige, então 400" e `EntradaMercadoriaCrudTest`
 (`comConsistenciaLigadaRejeitaDuplicataComTotalDiferente` /
-`comConsistenciaDesligadaAceitaDuplicataComTotalDiferente`, 2026-08-23) pro par de critérios da
+`comConsistenciaDesligadaAceitaDuplicataComTotalDiferente`, 2026-08-14) pro par de critérios da
 consistência de contas a pagar — validação cruzada entre os módulos.
 
 ## Bug corrigido (2026-08-11) — cache do React Query desatualizado nas telas que leem as flags leves
@@ -147,7 +147,7 @@ comportamento antigo até o cache expirar sozinho. Corrigido invalidando as 4 qu
 Detalhe completo (incluindo o efeito colateral do lado do consumidor, que também precisou de
 ajuste): [[feedback_react_query_cache_entre_telas]] (memória) e `docs/telas/devolucao-produtos.md`.
 
-## Bug corrigido (2026-08-22) — plano de contas de compra não chegava pra usuário OPERADOR
+## Bug corrigido (2026-08-13) — plano de contas de compra não chegava pra usuário OPERADOR
 
 O cadastro rápido de fornecedor embutido na Entrada de Produtos por Compra
 (`FornecedorQuickCreateModal.tsx`) buscava `id_plano_contas_compra_mercadoria` chamando o
@@ -172,8 +172,8 @@ GET  /api/v1/config-geral/permite-qtd-decimal  quantidade decimal ligada/desliga
 GET  /api/v1/config-geral/exige-numero-venda-devolucao  nº da venda obrigatório na devolução? (qualquer papel)
 GET  /api/v1/config-geral/rateia-frete-entrada     rateia frete/IPI/ICMS-ST no custo? (qualquer papel, Entrada de Produtos)
 GET  /api/v1/config-geral/reajusta-preco-entrada   reajusta preço na entrada? (qualquer papel, Entrada de Produtos)
-GET  /api/v1/config-geral/consiste-valor-contas-pagar  duplicatas têm de somar o total dos produtos? (qualquer papel, Entrada de Produtos — 2026-08-23)
-GET  /api/v1/config-geral/plano-contas-compra-mercadoria  plano de contas padrão de compra (qualquer papel — 2026-08-22, ver "Bug corrigido" acima)
+GET  /api/v1/config-geral/consiste-valor-contas-pagar  duplicatas têm de somar o total dos produtos? (qualquer papel, Entrada de Produtos — 2026-08-14)
+GET  /api/v1/config-geral/plano-contas-compra-mercadoria  plano de contas padrão de compra (qualquer papel — 2026-08-13, ver "Bug corrigido" acima)
 ```
 
 Sob `/api/v1/**` (JWT de tenant, RLS ativo — P8); 403 (Problem Details) para papel diferente
@@ -194,7 +194,7 @@ de ADMIN, verificado a partir do claim `roles` do JWT (mesmo mecanismo de
 `V023__cfg_geral.sql` — banco em construção, editada em vez de nova migration).
 `cfg_exige_numero_venda_devolucao boolean NOT NULL DEFAULT false` (coluna nova, 2026-08-11,
 mesmo padrão — dentro de `V023__cfg_geral.sql`).
-`cfg_consiste_valor_contas_pagar boolean NOT NULL DEFAULT true` (coluna nova, 2026-08-23, mesmo
+`cfg_consiste_valor_contas_pagar boolean NOT NULL DEFAULT true` (coluna nova, 2026-08-14, mesmo
 padrão — dentro de `V023__cfg_geral.sql`; aplicada no banco de dev por `ALTER TABLE ... ADD
 COLUMN IF NOT EXISTS` + `flyway repair`, sem recriar o banco, e sem `GRANT` novo porque os
 privilégios de `cfg_geral` para `niner_app` são de tabela inteira, não por coluna).

@@ -125,7 +125,7 @@ volta para a listagem.
 - Dado `cfg_permite_qtd_decimal` desligado, quando um item é enviado com quantidade fracionária,
   então 400 e nada é gravado (2026-07-29).
 
-Cobertos por `TransferenciaCrudTest`. Suíte completa do projeto: 492/492 verdes (2026-08-24).
+Cobertos por `TransferenciaCrudTest`. Suíte completa do projeto: 492/492 verdes (2026-08-14).
 
 ## Impacto no contrato de API
 

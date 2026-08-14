@@ -294,7 +294,7 @@ public class ProdutoService {
     }
 
     /**
-     * Preço de venda nunca pode ficar abaixo do preço de custo (2026-08-17, regra do projeto
+     * Preço de venda nunca pode ficar abaixo do preço de custo (2026-08-12, regra do projeto
      * inteiro — mesma checagem replicada no cliente em {@code ProdutoForm.tsx}/
      * {@code ProdutoQuickCreateModal.tsx}, reforçada aqui como defesa em profundidade).
      */
@@ -357,7 +357,7 @@ public class ProdutoService {
     /**
      * Campos comuns a INSERT/UPDATE, na mesma ordem em que aparecem nas duas SQLs acima. Texto
      * livre em MAIÚSCULAS (convenção do projeto). {@code idGrade} grava 1 (grade PADRÃO,
-     * reservada/invisível — 2026-08-20, ver {@code SignupService}) quando o tenant não usa
+     * reservada/invisível — 2026-08-13, ver {@code SignupService}) quando o tenant não usa
      * cor/grade ({@code cfg_geral.cfg_usa_cor_grade}) ou o campo não foi enviado — o campo fica
      * oculto no formulário, então qualquer valor enviado nesse caso é ignorado, não rejeitado;
      * quando o tenant usa, a obrigatoriedade já foi checada em {@code validar}.
@@ -406,7 +406,7 @@ public class ProdutoService {
             LEFT JOIN cfg_grade g ON g.id_grade = p.id_grade AND g.id_tenant = p.id_tenant AND g.id_grade <> 1
             """;
 
-    /** id_grade=1 é a grade PADRÃO (2026-08-20, reservada/invisível, ver {@code SignupService})
+    /** id_grade=1 é a grade PADRÃO (2026-08-13, reservada/invisível, ver {@code SignupService})
      *  — a API nunca expõe esse valor: um produto sem grade de verdade devolve {@code idGrade
      *  null} pro cliente, exatamente como antes de {@code id_grade} virar {@code NOT NULL}. */
     private ProdutoResponse mapear(ResultSet rs, int rowNum) throws SQLException {

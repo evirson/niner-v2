@@ -66,7 +66,7 @@ export default function EntradaMercadoriaLista() {
   const [toast, setToast] = useState<{ texto: string; tipo: 'erro' | 'sucesso' } | null>(null)
 
   /** Popup de filtros obrigatório ao entrar na tela (mesmo padrão do CRM/Cancelamento de
-   *  Devolução, 2026-08-19) — "Localizar" aplica os filtros (todos opcionais: em branco
+   *  Devolução, 2026-08-12) — "Localizar" aplica os filtros (todos opcionais: em branco
    *  equivale a listar tudo, igual o comportamento de sempre), "＋ Nova entrada" pula a busca
    *  direto pra tela de criação e "Fechar" volta pra tela anterior (`navigate(-1)`, mesmo
    *  comportamento do BotaoFecharTela do cabeçalho) sem abrir a listagem. */

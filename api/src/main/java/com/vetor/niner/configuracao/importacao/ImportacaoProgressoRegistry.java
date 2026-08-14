@@ -7,7 +7,7 @@ import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Registro em memória do progresso "ao vivo" de importações em andamento (2026-08-11), consultado
+ * Registro em memória do progresso "ao vivo" de importações em andamento (2026-08-10), consultado
  * por polling do frontend enquanto a chamada síncrona de {@link ImportacaoService#processar}
  * roda — não há fila nem worker, é só um contador por {@code idProgresso} (gerado pelo frontend a
  * cada clique em Validar/Importar), removido ao final da requisição

@@ -17,6 +17,7 @@ import {
   produtoEmissaoParaItem,
   type FiltrosEntradasEmissao,
   type FornecedorOpcaoEmissao,
+  type OrigemEntrada,
   type ItemEmissao,
   type ProdutoOpcaoEmissao,
 } from '../../lib/etiquetaEmissao'
@@ -214,10 +215,27 @@ function SelecaoIndividual({ aoAdicionar }: { aoAdicionar: (itens: ItemEmissao[]
 
 /** Modo Por Entradas (item 1.2) — todos os filtros opcionais, mas ao menos 1 obrigatório
  * (validado também no backend). Fornecedor é uma busca simples (id+razão social). */
-function SelecaoPorEntradas({ aoAdicionar }: { aoAdicionar: (itens: ItemEmissao[]) => void }) {
-  const [filtros, setFiltros] = useState<FiltrosEntradasEmissao>(FILTROS_ENTRADAS_EMISSAO_VAZIO)
+function SelecaoPorEntradas({
+  aoAdicionar,
+  origemEntrada = null,
+}: {
+  aoAdicionar: (itens: ItemEmissao[]) => void
+  origemEntrada?: OrigemEntrada | null
+}) {
+  // Vindo de "Emitir Etiquetas desta Nota", nasce com fornecedor e nota preenchidos. O
+  // fornecedor não precisa de lookup: o id E o nome vieram na URL, então já dá pra montar a
+  // opção escolhida direto — a busca por texto continua disponível se o operador quiser trocar.
+  const [filtros, setFiltros] = useState<FiltrosEntradasEmissao>(
+    origemEntrada
+      ? { ...FILTROS_ENTRADAS_EMISSAO_VAZIO, notaFiscal: origemEntrada.notaFiscal }
+      : FILTROS_ENTRADAS_EMISSAO_VAZIO,
+  )
   const [buscaFornecedor, setBuscaFornecedor] = useState('')
-  const [fornecedorEscolhido, setFornecedorEscolhido] = useState<FornecedorOpcaoEmissao | null>(null)
+  const [fornecedorEscolhido, setFornecedorEscolhido] = useState<FornecedorOpcaoEmissao | null>(
+    origemEntrada
+      ? { idFornecedor: origemEntrada.idFornecedor, razaoSocial: origemEntrada.nomeFornecedor }
+      : null,
+  )
   const [erro, setErro] = useState('')
 
   const { data: fornecedores } = useQuery({
@@ -405,11 +423,15 @@ function SelecaoPorEstoques({ aoAdicionar }: { aoAdicionar: (itens: ItemEmissao[
 export default function SelecaoProdutosModal({
   aoFechar,
   aoAdicionar,
+  origemEntrada = null,
 }: {
   aoFechar: () => void
   aoAdicionar: (itens: ItemEmissao[]) => void
+  /** Preenchido quando a tela foi aberta por "Emitir Etiquetas desta Nota" — abre direto no modo
+   *  Por Entradas com fornecedor e nota já postos. `null` na abertura normal pelo menu. */
+  origemEntrada?: OrigemEntrada | null
 }) {
-  const [modo, setModo] = useState<ModoSelecao>('INDIVIDUAL')
+  const [modo, setModo] = useState<ModoSelecao>(origemEntrada ? 'ENTRADAS' : 'INDIVIDUAL')
 
   return (
     <div className="modal-overlay" onClick={aoFechar}>
@@ -429,7 +451,7 @@ export default function SelecaoProdutosModal({
         </div>
 
         {modo === 'INDIVIDUAL' && <SelecaoIndividual aoAdicionar={aoAdicionar} />}
-        {modo === 'ENTRADAS' && <SelecaoPorEntradas aoAdicionar={aoAdicionar} />}
+        {modo === 'ENTRADAS' && <SelecaoPorEntradas aoAdicionar={aoAdicionar} origemEntrada={origemEntrada} />}
         {modo === 'ESTOQUES' && <SelecaoPorEstoques aoAdicionar={aoAdicionar} />}
 
         <div className="ajuda-rodape">

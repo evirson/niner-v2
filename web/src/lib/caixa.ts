@@ -123,3 +123,21 @@ export function fecharCaixa(payload: FecharCaixaRequest): Promise<ResultadoFecha
 export function listarLancamentosDaCarteira(idCaixa: number, idCarteira: number): Promise<LancamentoCarteira[]> {
   return api<LancamentoCarteira[]>(`/api/v1/caixa/fechamento/${idCaixa}/carteiras/${idCarteira}/lancamentos`)
 }
+
+export interface ResultadoReabertura {
+  idCaixa: number
+  reaberto: boolean
+}
+
+/** Reabre um caixa fechado (2026-08-14) — **ADMIN-only** (403 no servidor) e exige motivo, que
+ *  fica registrado em `caixa_mestre.observacoes` (P3). Reabrir apaga a conferência gravada, que
+ *  foi calculada sobre um estado que vai mudar; fechar de novo refaz a contagem às cegas.
+ *
+ *  Existe pra destravar o estorno de recebimento de crediário e a exclusão/reabertura de conta a
+ *  pagar, que recusam apagar lançamento de caixa já fechado. */
+export function reabrirCaixa(idCaixa: number, motivo: string): Promise<ResultadoReabertura> {
+  return api<ResultadoReabertura>(`/api/v1/caixa/fechamento/${idCaixa}/reabrir`, {
+    method: 'POST',
+    body: JSON.stringify({ motivo }),
+  })
+}

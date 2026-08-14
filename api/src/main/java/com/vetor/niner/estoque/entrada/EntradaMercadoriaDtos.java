@@ -21,7 +21,7 @@ public final class EntradaMercadoriaDtos {
             @NotNull Long idVariacao,
             @NotNull @DecimalMin(value = "0.001") BigDecimal qtd,
             @NotNull @DecimalMin(value = "0") BigDecimal precoCusto,
-            /** Preço de venda informado pelo operador nesta entrada (2026-08-15, fluxo
+            /** Preço de venda informado pelo operador nesta entrada (2026-08-12, fluxo
              *  Individual com grade — custo + % de venda do produto sugerem o valor, editável
              *  antes de lançar). Quando presente, vira o novo {@code produto.preco_venda} na
              *  confirmação, **independente** de {@code cfg_reajusta_preco_entrada} (o operador
@@ -29,13 +29,13 @@ public final class EntradaMercadoriaDtos {
              *  sempre: snapshot do detalhe = preço atual do produto, só reajusta automático se
              *  a flag estiver ligada. */
             BigDecimal precoVenda,
-            /** Código do produto no fornecedor (`cProd` do XML, 2026-08-18) — quando presente,
+            /** Código do produto no fornecedor (`cProd` do XML, 2026-08-12) — quando presente,
              *  a confirmação grava/atualiza {@code produto_fornecedor} (aprendizado: a próxima
              *  nota do mesmo fornecedor com este código já resolve sozinha, sem depender de
              *  EAN nem de heurística de texto). Só o fluxo XML preenche; Manual/Planilha
              *  deixam ausente. */
             String codigoFornecedor,
-            /** NCM do item no XML (2026-08-20) — quando presente e diferente do
+            /** NCM do item no XML (2026-08-13) — quando presente e diferente do
              *  {@code produto.codigo_ncm} já cadastrado, a confirmação SUBSTITUI (o NCM do XML
              *  sempre vale, pedido do dono do produto). Só o fluxo XML preenche; já validado
              *  contra {@code cfg_produto_ncm} no preview (nunca chega aqui um código que não
@@ -61,13 +61,13 @@ public final class EntradaMercadoriaDtos {
      */
     public record EfetivarEntradaRequest(
             @NotNull Long idFornecedor,
-            /** Empresa que recebe a mercadoria (2026-08-12) — opcional; ausente cai no `eid`
+            /** Empresa que recebe a mercadoria (2026-08-11) — opcional; ausente cai no `eid`
              *  da sessão (comportamento de sempre). Quando informado, o serviço valida que o
              *  usuário pode operar essa empresa (ADMIN: qualquer uma do tenant; OPERADOR: só
              *  as ligadas a ele em `usuario_empresa`). */
             Long idEmpresa,
             Integer notaFiscal,
-            /** Data em que a mercadoria foi de fato recebida (2026-08-12, aba "Dados Gerais" do
+            /** Data em que a mercadoria foi de fato recebida (2026-08-11, aba "Dados Gerais" do
              *  fluxo Planilha) — opcional; ausente grava `now()` (comportamento de sempre). */
             LocalDate dataMovimento,
             String chaveNfe,
@@ -112,7 +112,7 @@ public final class EntradaMercadoriaDtos {
             int qtdItens,
             BigDecimal valorTotal,
             String origem,
-            /** Cancelamento de Entrada (2026-08-19) — grid principal mostra a linha marcada,
+            /** Cancelamento de Entrada (2026-08-12) — grid principal mostra a linha marcada,
              *  sem esconder (mesmo princípio de `venda.cancelada`); não pode cancelar de novo. */
             boolean cancelada) {
     }
@@ -168,7 +168,7 @@ public final class EntradaMercadoriaDtos {
     }
 
     /**
-     * Uma linha da planilha já processada (fluxo Planilha, 2026-08-12) — preview, nada
+     * Uma linha da planilha já processada (fluxo Planilha, 2026-08-11) — preview, nada
      * persistido no ledger. {@code resolvido=true} já tem {@code idVariacao} pronto pra entrar
      * em {@link ItemEntradaRequest} (a variação pode ter sido CRIADA agora, se produto+cor+
      * tamanho bateram com confiança — decisão registrada na spec, mesmo princípio já usado em
@@ -196,7 +196,7 @@ public final class EntradaMercadoriaDtos {
             Long idProdutoEncontrado,
             Long idGradeEncontrada,
             String motivoPendencia,
-            /** `cProd` do XML (2026-08-18, fluxo XML — ausente/`null` no fluxo Planilha) —
+            /** `cProd` do XML (2026-08-12, fluxo XML — ausente/`null` no fluxo Planilha) —
              *  segue junto até a confirmação pra alimentar o aprendizado de
              *  {@code produto_fornecedor} (ver {@link ItemEntradaRequest#codigoFornecedor}),
              *  mesmo quando a linha já resolveu sozinha por EAN. Cor/tamanho aqui são só
@@ -204,7 +204,7 @@ public final class EntradaMercadoriaDtos {
              *  ou tamanho novo sozinho, sempre exige confirmação manual (diferente da
              *  Planilha, que o dono do produto pediu pra cadastrar automático). */
             String codigoFornecedor,
-            /** NCM do item (2026-08-20, fluxo XML — ausente/`null` no fluxo Planilha, que não
+            /** NCM do item (2026-08-13, fluxo XML — ausente/`null` no fluxo Planilha, que não
              *  tem coluna de NCM). Em linha resolvida, JÁ VALIDADO contra {@code
              *  cfg_produto_ncm} (vai virar um UPDATE em {@code produto.codigo_ncm} na
              *  confirmação se vier diferente do já cadastrado — ver {@link ItemEntradaRequest#ncm}
@@ -217,7 +217,7 @@ public final class EntradaMercadoriaDtos {
     }
 
     /**
-     * Resultado da pesquisa de produto do fluxo Individual (2026-08-15) — busca por
+     * Resultado da pesquisa de produto do fluxo Individual (2026-08-12) — busca por
      * nome/marca/referência, nível produto (não variação): não traz cor/tamanho nem estoque,
      * só o necessário pra escolher o produto e, na sequência, montar a grade de tamanhos +
      * custo/% de venda/preço de venda. {@code idGrade} nulo ⇒ produto sem grade, a tela pede só
@@ -228,7 +228,7 @@ public final class EntradaMercadoriaDtos {
             Long idGrade, BigDecimal precoCusto, BigDecimal percentualVenda) {
     }
 
-    /** Fornecedor casado pelo CNPJ do emitente do XML (2026-08-18, Fase 3) —
+    /** Fornecedor casado pelo CNPJ do emitente do XML (2026-08-12, Fase 3) —
      *  {@code idFornecedor} nulo ⇒ não achou no cadastro; os demais campos vêm do próprio XML
      *  (`emit`), prontos pra pré-preencher o cadastro rápido de fornecedor se o operador optar
      *  por criar um novo em vez de escolher um existente. */
@@ -254,7 +254,7 @@ public final class EntradaMercadoriaDtos {
     }
 
     /**
-     * Pré-entrada do fluxo XML (2026-08-18, Fase 3, docs/telas/entrada-mercadoria.md) — parse
+     * Pré-entrada do fluxo XML (2026-08-12, Fase 3, docs/telas/entrada-mercadoria.md) — parse
      * do arquivo + tentativa de casar cada item, sem gravar nada (mesmo espírito do preview da
      * Planilha). {@code xmlBruto} volta pro cliente pra ser reenviado, sem alteração, no
      * {@code POST /api/v1/estoque/entradas} de confirmação (auditoria P3, `entrada_xml`).
@@ -269,7 +269,7 @@ public final class EntradaMercadoriaDtos {
             boolean chaveJaImportada,
             FornecedorXmlPreviewResponse fornecedor,
             /** Empresa do tenant casada pelo CNPJ do destinatário (`dest/CNPJ`) do XML
-             *  (2026-08-19) — `null` sem match (nenhuma empresa do tenant tem esse CNPJ
+             *  (2026-08-12) — `null` sem match (nenhuma empresa do tenant tem esse CNPJ
              *  cadastrado, ou o XML não trouxe `dest`); a tela cai no padrão de sempre (empresa
              *  da sessão) e o operador pode trocar manualmente no select, que continua ali. */
             Long idEmpresaEncontrada,

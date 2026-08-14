@@ -27,7 +27,7 @@ import java.util.stream.Collectors;
 
 /**
  * Importação de estoque inicial (docs/telas/importacao-dados.md, "5. estoque") — tabela irmã da
- * de produto (2026-08-09), SEMPRE importada depois: acha o produto pelo {@code CODIGO_PRODUTO}
+ * de produto (2026-08-10), SEMPRE importada depois: acha o produto pelo {@code CODIGO_PRODUTO}
  * que a Importação de Produtos gravou em {@code produto.codigo_importacao} (não é o
  * {@code id_produto} — é só o código do sistema de origem, usado pra ligar as duas planilhas).
  * Por linha: acha/cria a variação (cor/tamanho, {@link ProdutoBarraService#obterOuCriar}, mesma
@@ -102,7 +102,7 @@ public class EstoqueImportador implements ImportadorDeTabela {
         List<LinhaErro> erros = new ArrayList<>();
         // Agrupa por (produto, cor, tamanho) — mesma variação em mais de uma linha soma estoque.
         Map<String, List<LinhaResolvida>> grupos = new LinkedHashMap<>();
-        // Cache de produto/cor/tamanho por chamada (2026-08-11) — variável LOCAL, não campo da
+        // Cache de produto/cor/tamanho por chamada (2026-08-10) — variável LOCAL, não campo da
         // classe (o importador é singleton Spring). Mesmo achado real de ContasReceberImportador:
         // planilha de estoque repete o mesmo CODIGO_PRODUTO/cor/tamanho em muitas linhas (cada
         // combinação vira uma variação), então sem cache é um SELECT/INSERT por linha à toa.
@@ -117,7 +117,7 @@ public class EstoqueImportador implements ImportadorDeTabela {
                         .orElseThrow(() -> new IllegalArgumentException(
                                 "Nenhum produto importado com CODIGO_PRODUTO \"" + codigoProduto
                                         + "\" — importe a planilha de Produtos antes desta."));
-                // SAVEPOINT só quando não está em cache (2026-08-11) — idCorOuCriar/idTamanhoOuCriar
+                // SAVEPOINT só quando não está em cache (2026-08-10) — idCorOuCriar/idTamanhoOuCriar
                 // podem INSERT (mesmo bug/fix de ProdutoImportador, ver ImportacaoSavepointExecutor);
                 // num acerto de cache não há nada pra isolar, então não vale abrir savepoint à toa.
                 Long idCor = corCache.containsKey(linha.valor("NOME_COR"))
@@ -142,7 +142,7 @@ public class EstoqueImportador implements ImportadorDeTabela {
         // mesmo padrão do restante da importação.
         Map<Long, Long> movimentoPorEmpresa = new LinkedHashMap<>();
 
-        // Pré-fetch em lote (2026-08-11) — achado real de performance: um arquivo de 22 mil
+        // Pré-fetch em lote (2026-08-10) — achado real de performance: um arquivo de 22 mil
         // linhas levava quase 8 minutos, dominado por 1 SELECT de grade + 1 SELECT de variação
         // + 1 SELECT de EAN por GRUPO (não por linha — cada produto/cor/tamanho já é um grupo
         // distinto, então não tinha cache possível ali). Trocado por 2 consultas em lote (grade
@@ -180,7 +180,7 @@ public class EstoqueImportador implements ImportadorDeTabela {
                 + "|" + (primeira.idTamanho() == null ? "" : primeira.idTamanho());
         VariacaoResumo variacao = variacoesExistentes.get(chaveGrupo);
         if (variacao == null) {
-            // Não valida que o tamanho pertence à grade (2026-08-11): planilha migrada pode
+            // Não valida que o tamanho pertence à grade (2026-08-10): planilha migrada pode
             // trazer um NOME_TAMANHO fora da grade do produto (ex. "UN1" numa grade que só tem
             // "UN") sem que isso seja erro de verdade — pedido do dono do produto. Emissão de
             // Etiqueta (cadastro manual) continua validando, via ProdutoBarraService.obterOuCriar.
@@ -240,7 +240,7 @@ public class EstoqueImportador implements ImportadorDeTabela {
             avisos.add("Variação \"" + variacao.sku() + "\" tem EANs diferentes no arquivo (" + eansDistintos
                     + ") — usado o primeiro, os demais foram ignorados.");
         }
-        // Já tem EAN gravado (ex.: reimportação) — não sobrescreve. Antes (até 2026-08-11) isso
+        // Já tem EAN gravado (ex.: reimportação) — não sobrescreve. Antes (até 2026-08-10) isso
         // era 1 SELECT por grupo; agora `variacao.ean()` já vem do pré-fetch em lote (ou é
         // sabidamente null pra uma variação recém-criada nesta mesma chamada) — 0 SELECT extra.
         if (variacao.ean() != null) {
@@ -257,7 +257,7 @@ public class EstoqueImportador implements ImportadorDeTabela {
     }
 
     /** Executa {@code acao} sob SAVEPOINT (pode INSERT), guarda o resultado no cache sob
-     *  {@code chave} e devolve — usado só quando a chave ainda NÃO está no cache (2026-08-11);
+     *  {@code chave} e devolve — usado só quando a chave ainda NÃO está no cache (2026-08-10);
      *  ver comentário na chamada em {@link #processar}. */
     private Long registrarNoCache(Map<String, Long> cache, String chave, Supplier<Long> acao) {
         Long valor = savepoints.executar(acao::get);
@@ -286,7 +286,7 @@ public class EstoqueImportador implements ImportadorDeTabela {
      *  princípio de find-or-create usado no resto da importação (fornecedor/categoria por nome).
      *  {@code tabela}/{@code coluna} são sempre literais internos (nunca vêm do arquivo
      *  importado), então a concatenação dinâmica não é risco de injeção. {@code id_cor}/
-     *  {@code id_tamanho} não são mais IDENTITY (V017, 2026-08-20): calculados por tenant, mesmo
+     *  {@code id_tamanho} não são mais IDENTITY (V017, 2026-08-13): calculados por tenant, mesmo
      *  padrão de {@code CorService}/{@code TamanhoService}. */
     private Long idOuNulo(String tabela, String coluna, String descricao) {
         if (descricao == null || descricao.isBlank()) {

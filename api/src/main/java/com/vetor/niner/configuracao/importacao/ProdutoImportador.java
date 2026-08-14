@@ -27,7 +27,7 @@ import java.util.Optional;
 
 /**
  * Importação de {@code produto} (docs/telas/importacao-dados.md, seção "3. produto"). Layout
- * (2026-08-09, mudança de estrutura da planilha de origem — substitui o anterior "achatado" de
+ * (2026-08-10, mudança de estrutura da planilha de origem — substitui o anterior "achatado" de
  * uma variação por linha): <b>uma linha do CSV é um produto inteiro</b>, sem cor/EAN/estoque —
  * só os campos do produto mais até {@value #MAX_TAMANHOS_GRADE} colunas {@code TAMANHO_1..20}
  * formando, em ordem, a grade de tamanhos daquele produto. Por linha: acha ou cria o produto
@@ -40,7 +40,7 @@ import java.util.Optional;
  * docs/telas/produto.md): lá é onde a geração em lote de combinações cor×grade nasce naturalmente,
  * junto da compra.
  *
- * <p><b>Grade "já cadastrada" (2026-08-09):</b> esta planilha não traz nome de grade nenhum — o
+ * <p><b>Grade "já cadastrada" (2026-08-10):</b> esta planilha não traz nome de grade nenhum — o
  * critério de "já existe" é o CONTEÚDO (a sequência ordenada de tamanhos), não um nome, via
  * {@link GradeService#obterOuCriarPorTamanhos}. Quando precisa criar, o nome é gerado a partir do
  * primeiro e do último tamanho da sequência (ex.: "GRADE 33-47"), com sufixo numérico se colidir
@@ -111,7 +111,7 @@ public class ProdutoImportador implements ImportadorDeTabela {
 
         List<LinhaErro> erros = new ArrayList<>();
         int importadas = 0, ignoradas = 0;
-        // Cache de tamanho por chamada (2026-08-11) — variável LOCAL, não campo da classe (o
+        // Cache de tamanho por chamada (2026-08-10) — variável LOCAL, não campo da classe (o
         // importador é singleton Spring). O mesmo TAMANHO (ex. "36", "37"...) se repete em
         // praticamente todo produto do arquivo — sem cache seria um SELECT/INSERT em
         // cfg_tamanho por TAMANHO_N por linha, achado real de performance em ContasReceberImportador/
@@ -120,7 +120,7 @@ public class ProdutoImportador implements ImportadorDeTabela {
 
         for (LinhaPlanilha linha : linhas) {
             try {
-                // SAVEPOINT por linha (2026-08-11): sem isto, uma exceção de banco (não só de
+                // SAVEPOINT por linha (2026-08-10): sem isto, uma exceção de banco (não só de
                 // validação Java) numa linha deixa a transação do arquivo inteiro "abortada" e
                 // toda linha seguinte falha em cascata com "current transaction is aborted"
                 // (Postgres 25P02) — achado real ao validar uma planilha de Produtos.
@@ -190,7 +190,7 @@ public class ProdutoImportador implements ImportadorDeTabela {
 
     /** {@code CODIGO_PRODUTO} não é campo de {@link ProdutoRequest} (o cadastro manual não tem
      *  esse conceito) — grava direto, fora do service, só quando presente. É o que a Importação
-     *  de Estoque (2026-08-09) usa depois para achar o produto certo em {@code ESTOQUES.csv},
+     *  de Estoque (2026-08-10) usa depois para achar o produto certo em {@code ESTOQUES.csv},
      *  que sempre é importada DEPOIS de {@code PRODUTOS.csv}. */
     private void gravarCodigoImportacaoSeInformado(long idProduto, String codigoProduto) {
         if (codigoProduto == null || codigoProduto.isBlank()) {
@@ -202,7 +202,7 @@ public class ProdutoImportador implements ImportadorDeTabela {
     }
 
     /**
-     * Dedup por DESCRICAO+MARCA+REFERENCIA **e** CODIGO_PRODUTO (2026-08-11, achado real testando
+     * Dedup por DESCRICAO+MARCA+REFERENCIA **e** CODIGO_PRODUTO (2026-08-10, achado real testando
      * com a planilha de verdade do dono do produto): duas linhas com a mesma
      * DESCRICAO+MARCA+REFERENCIA mas {@code CODIGO_PRODUTO} diferente são produtos DIFERENTES no
      * sistema de origem (coincidência de texto, não duplicidade) — cada uma vira seu próprio
@@ -252,7 +252,7 @@ public class ProdutoImportador implements ImportadorDeTabela {
 
     /** Acha (ou cria) a linha de {@code cfg_tamanho} com essa descrição — mesmo princípio de
      *  find-or-create usado no resto da importação (fornecedor/categoria por nome). Cacheado por
-     *  chamada (2026-08-11): o mesmo tamanho se repete em quase todo produto do arquivo. */
+     *  chamada (2026-08-10): o mesmo tamanho se repete em quase todo produto do arquivo. */
     private long idTamanhoOuCriar(String descricao, Map<String, Long> tamanhoCache) {
         Long cacheado = tamanhoCache.get(descricao);
         if (cacheado != null) {
@@ -263,7 +263,7 @@ public class ProdutoImportador implements ImportadorDeTabela {
         return id;
     }
 
-    /** {@code id_tamanho} não é mais IDENTITY (V017, 2026-08-20): calculado por tenant, mesmo
+    /** {@code id_tamanho} não é mais IDENTITY (V017, 2026-08-13): calculado por tenant, mesmo
      *  padrão de {@code TamanhoService.criar}. */
     private long idTamanhoOuCriar(String descricao) {
         Optional<Long> existente = jdbc.sql("""

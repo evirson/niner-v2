@@ -159,7 +159,7 @@ CREATE TABLE caixa_detalhe (
   id_carteira         integer             NOT NULL,  -- 2026-07-28: era id_moeda, moeda foi absorvida por tipo_carteira
   id_venda            integer,
   id_lote_recebimento integer,             -- sem FK — mesmo padrão de id_transferencia
-  id_conta_pagar      integer,             -- 2026-08-23 (Fluxo de Caixa): saída gerada pela baixa de uma conta a pagar. Nullable — a maioria dos lançamentos não vem de conta a pagar. É o vínculo que permite APAGAR este movimento quando a baixa é desfeita, sem deixar dinheiro fantasma saindo do caixa
+  id_conta_pagar      integer,             -- 2026-08-14 (Fluxo de Caixa): saída gerada pela baixa de uma conta a pagar. Nullable — a maioria dos lançamentos não vem de conta a pagar. É o vínculo que permite APAGAR este movimento quando a baixa é desfeita, sem deixar dinheiro fantasma saindo do caixa
   id_plano_contas     text,
   valor               numeric(12,2)       NOT NULL,
   tipo_operacao       tipo_operacao_caixa NOT NULL,

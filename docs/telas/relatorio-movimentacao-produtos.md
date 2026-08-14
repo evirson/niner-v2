@@ -10,7 +10,7 @@ fotografia do saldo atual). Fonte: `produto_movimento_mestre`/`produto_movimento
 (§3.3.4), os mesmos **9** tipos do ENUM `tipo_movimento` (`COMPRA`, `TRANSFERENCIA`,
 `DEVOLUCAO`, `AJUSTE`, `VENDA`, `RESERVA`, `LIBERACAO_RESERVA`, `CANCELAMENTO`,
 `CANCELAMENTO_DEVOLUCAO`) — `db/migration/V013__dominio_tipos_enum.sql:25-27`. O 9º, `CANCELAMENTO_DEVOLUCAO`,
-nasceu em 2026-08-11 com o Cancelamento de Devolução de Produtos: tem valor próprio (não
+nasceu em 2026-08-10 com o Cancelamento de Devolução de Produtos: tem valor próprio (não
 reaproveita `CANCELAMENTO`) justamente para o Kardex distinguir qual operação está sendo
 revertida.
 

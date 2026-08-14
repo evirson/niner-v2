@@ -153,7 +153,7 @@ public class PdvProdutoService {
             """;
 
     /** Filtra e limita ANTES de expandir por empresa — senão o LIMIT cortaria linhas no meio de uma
-     *  variação. {@code marca}/{@code referencia} entram como filtro adicional (2026-08-15, popup de
+     *  variação. {@code marca}/{@code referencia} entram como filtro adicional (2026-08-12, popup de
      *  pesquisa da Entrada de Produtos por Compra) — {@code COALESCE} pq as duas colunas são nullable
      *  e {@code NULL ILIKE '%'} nunca é {@code true}. */
     private static final String CTE_VARIACOES_BUSCA = "WITH variacoes AS (" + VARIACOES_BASE + """

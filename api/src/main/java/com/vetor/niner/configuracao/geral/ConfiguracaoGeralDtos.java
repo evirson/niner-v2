@@ -83,7 +83,7 @@ public final class ConfiguracaoGeralDtos {
     public record ReajustaPrecoEntradaResponse(boolean cfgReajustaPrecoEntrada) {
     }
 
-    /** Só a flag de consistência do valor das contas a pagar da entrada (2026-08-23), sem checagem
+    /** Só a flag de consistência do valor das contas a pagar da entrada (2026-08-14), sem checagem
      *  de papel — usada pela Entrada de Produtos por Compra pra decidir se a soma das duplicatas
      *  é obrigada a bater com o total dos produtos lançados. */
     public record ConsisteValorContasPagarResponse(boolean cfgConsisteValorContasPagar) {

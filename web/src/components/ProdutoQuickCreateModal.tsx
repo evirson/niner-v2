@@ -33,7 +33,7 @@ import Toast from './Toast'
 /**
  * Criação rápida de produto embutida (Entrada de Produtos por Compra, 2026-08-11) — quando o
  * item lido/pesquisado não existe ainda no cadastro. Traz TODOS os campos do cadastro completo
- * (2026-08-13, pedido do dono do produto — a versão anterior só tinha descrição/custo/%venda/
+ * (2026-08-11, pedido do dono do produto — a versão anterior só tinha descrição/custo/%venda/
  * grade), reaproveitando `paraRequisicao`/`PRODUTO_VAZIO` de `lib/produtos.ts` — o mesmo contrato
  * usado por `ProdutoForm.tsx`. Fica de fora, de propósito: campos obrigatórios configuráveis por
  * tenant (`cfg_tela_campo`), a galeria de fotos (upload encadeado após o produto existir — foge
@@ -43,7 +43,7 @@ import Toast from './Toast'
  * servidor vira Toast, igual ao resto do modal.
  *
  * <p>Cor/tamanho/EAN vindos de `valorInicial` (fluxo Planilha da Entrada) não aparecem em campo
- * nenhum (2026-08-13, pedido explícito do dono do produto, 2ª rodada — a 1ª versão ainda
+ * nenhum (2026-08-11, pedido explícito do dono do produto, 2ª rodada — a 1ª versão ainda
  * mostrava um select pré-selecionado ou uma linha de confirmação; ele pediu pra tirar de vez:
  * "você já sabe o que fazer com isso"). Cor/tamanho são resolvidos 100% em silêncio assim que
  * uma grade fica disponível — acham o que já existe por nome ou cadastram na hora (mesma ideia
@@ -61,7 +61,7 @@ export default function ProdutoQuickCreateModal({
   aoFechar: () => void
   aoCriar?: (variacao: VariacaoProduto) => void
   /** Quando `false` e o produto criado usa grade, os campos Cor/Tamanho nem aparecem e nenhuma
-   *  variação é criada aqui — só o produto, devolvido via `aoCriarComGrade` (2026-08-16, "＋
+   *  variação é criada aqui — só o produto, devolvido via `aoCriarComGrade` (2026-08-12, "＋
    *  Cadastrar Produto" do fluxo Individual da Entrada: a escolha de cor + quantidade por
    *  tamanho já acontece no popup de pesquisa/lançamento logo em seguida — pedir de novo aqui
    *  seria redundante e bloquearia o cadastro por antecipação). Produto SEM grade sempre cria a
@@ -71,9 +71,9 @@ export default function ProdutoQuickCreateModal({
   exigirVariacaoAoCriar?: boolean
   /** Só chamado quando `exigirVariacaoAoCriar=false` e o produto criado usa grade — ver acima. */
   aoCriarComGrade?: (produto: Produto) => void
-  /** Pré-preenchimento (fluxo Planilha da Entrada, 2026-08-12) — quando a linha da planilha não
+  /** Pré-preenchimento (fluxo Planilha da Entrada, 2026-08-11) — quando a linha da planilha não
    *  achou o produto, a tela já abre o cadastro rápido com o que a planilha trouxe. `ncm`
-   *  (2026-08-20, fluxo XML) já vem validado contra o cadastro de NCM. */
+   *  (2026-08-13, fluxo XML) já vem validado contra o cadastro de NCM. */
   valorInicial?: { descricao?: string; marca?: string; referencia?: string; precoCusto?: string; ean?: string; cor?: string; tamanho?: string; ncm?: string }
 }) {
   const queryClient = useQueryClient()
@@ -130,7 +130,7 @@ export default function ProdutoQuickCreateModal({
     setDescricaoNcm(ncm.descricaoNcm)
   }
 
-  // NCM pré-preenchido pelo XML (2026-08-20) — o dígito já está no form desde o useState acima;
+  // NCM pré-preenchido pelo XML (2026-08-13) — o dígito já está no form desde o useState acima;
   // aqui só busca a DESCRIÇÃO (campo somente-leitura), sem reaproveitar `buscarDescricaoDoNcm`
   // (que limpa `codigoNcm` quando não acha — certo pro operador digitando à mão um código que
   // não existe, errado aqui: a base LOCAL de NCM costuma estar incompleta — a oficial da Receita
@@ -161,7 +161,7 @@ export default function ProdutoQuickCreateModal({
    *  importa aqui: um tamanho pode já existir globalmente (criado por outro produto/grade) sem
    *  ainda pertencer a esta grade específica — tentar `criarTamanho` direto nesse caso batia na
    *  restrição de nome único (`id_tenant, descricao`) e falhava, o que fazia o campo "Tamanho"
-   *  cair de volta pro select manual mesmo quando o tamanho já estava cadastrado (2026-08-14,
+   *  cair de volta pro select manual mesmo quando o tamanho já estava cadastrado (2026-08-11,
    *  bug relatado pelo dono do produto — reproduzido com o tamanho "17", que já existia mas não
    *  fazia parte da grade escolhida pra esse produto). */
   const criarNovoTamanho = useMutation({
@@ -183,7 +183,7 @@ export default function ProdutoQuickCreateModal({
     onError: (e: unknown) => setToast(e instanceof ApiError ? e.message : 'Não foi possível criar o tamanho.'),
   })
 
-  // Auto-resolve cor/tamanho vindos da planilha (2026-08-13): assim que a grade escolhida (ou
+  // Auto-resolve cor/tamanho vindos da planilha (2026-08-11): assim que a grade escolhida (ou
   // recém-criada) fica disponível, tenta casar por nome com o que já existe e, se não achar,
   // cadastra na hora — o usuário só precisa agir se algo der errado (toast de erro).
   useEffect(() => {
@@ -278,7 +278,7 @@ export default function ProdutoQuickCreateModal({
       return { ...f, categorias: lista }
     })
 
-  /** Quando a cor/tamanho vêm da planilha, o campo nem aparece (2026-08-13, pedido do dono do
+  /** Quando a cor/tamanho vêm da planilha, o campo nem aparece (2026-08-11, pedido do dono do
    *  produto, 2ª rodada: a 1ª versão trocou o select por uma linha de confirmação, mas ele pediu
    *  pra tirar de vez — "não precisa me mostrar tamanho e nem cor... você já sabe o que fazer com
    *  isso"). Resolvido 100% em silêncio pelo efeito abaixo; só cai de volta pro select manual se
@@ -289,13 +289,13 @@ export default function ProdutoQuickCreateModal({
 
   /** Cód. de barras do fabricante: quando já vem da planilha, fica só guardado em memória (state
    *  `ean`) e é gravado direto em `produto_barra.ean` ao criar a variação — não tem por que
-   *  mostrar esse campo de novo pro usuário (2026-08-13, mesmo pedido: "isso não é necessário...
+   *  mostrar esse campo de novo pro usuário (2026-08-11, mesmo pedido: "isso não é necessário...
    *  você já sabe o que fazer com isso"). Sem planilha (cadastro em branco do fluxo Individual),
    *  continua editável — não há nenhum código já conhecido pra guardar. */
   const eanAutomatico = Boolean(valorInicial?.ean)
 
   const precisaCorTamanho = usaCorGrade && form.idGrade != null && exigirVariacaoAoCriar
-  /** Preço de venda não pode ficar abaixo do preço de custo (2026-08-17, regra do projeto
+  /** Preço de venda não pode ficar abaixo do preço de custo (2026-08-12, regra do projeto
    *  inteiro) — o servidor também recusa (`ProdutoService.validarPrecos`), isto aqui só evita a
    *  ida-e-volta ao servidor pra descobrir o mesmo erro. */
   const precoVendaMenorQueCusto = desmascararMoeda(form.precoVenda) < desmascararMoeda(form.precoCusto)

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import AjudaDaTela from '../../components/AjudaDaTela'
 import { BotaoFecharTela } from '../../components/BotaoFecharTela'
 import { IconeEtiqueta, IconeExcluir } from '../../components/Icones'
@@ -9,6 +10,7 @@ import {
   montarSequenciaImpressao,
   totalDeEtiquetas,
   type ItemEmissao,
+  type OrigemEntrada,
 } from '../../lib/etiquetaEmissao'
 import CampoEtiquetaVisual from '../etiquetaconfig/CampoEtiquetaVisual'
 import EscolherModeloModal from './EscolherModeloModal'
@@ -32,6 +34,19 @@ function linhasComProdutos(
   return linhas
 }
 
+/** Lê os params de "Emitir Etiquetas desta Nota". Devolve `null` quando a tela foi aberta
+ * normalmente pelo menu — só há origem quando veio um `idFornecedor` numérico. A nota é
+ * opcional: entrada sem número de nota (compra manual) ainda filtra pelo fornecedor. */
+function origemDaEntrada(params: URLSearchParams): OrigemEntrada | null {
+  const idFornecedor = Number(params.get('idFornecedor'))
+  if (!Number.isInteger(idFornecedor) || idFornecedor <= 0) return null
+  return {
+    idFornecedor,
+    nomeFornecedor: params.get('nomeFornecedor') ?? '',
+    notaFiscal: params.get('notaFiscal') ?? '',
+  }
+}
+
 /**
  * Emissão de Etiqueta de Produtos (2026-08-05, docs/telas/etiqueta-emissao.md) — 1ª implementação
  * real da área (era só placeholder desde 2026-08-04). Seleciona produtos/quantidades (popup, 3
@@ -40,8 +55,15 @@ function linhasComProdutos(
  * generalizado pra produtos diferentes por etiqueta).
  */
 export default function EtiquetaEmissaoForm() {
+  // Chegada por "Emitir Etiquetas desta Nota" (EntradaMercadoriaForm). Os params existiam desde
+  // 2026-08-11 mas esta tela NÃO os lia — o operador caía aqui com a lista vazia e tinha que
+  // redigitar fornecedor e nota. Desde 2026-08-14 abrem o popup já no modo Por Entradas, com os
+  // dois filtros preenchidos; basta clicar em Localizar.
+  const [params] = useSearchParams()
+  const origemEntrada = origemDaEntrada(params)
+
   const [itens, setItens] = useState<ItemEmissao[]>([])
-  const [selecaoAberta, setSelecaoAberta] = useState(false)
+  const [selecaoAberta, setSelecaoAberta] = useState(origemEntrada !== null)
   const [modeloAberto, setModeloAberto] = useState(false)
   const [impressao, setImpressao] = useState<{ config: EtiquetaConfig; sequencia: ProdutoExemplo[] } | null>(null)
   const [toast, setToast] = useState<{ texto: string; tipo: TipoToast } | null>(null)
@@ -193,7 +215,13 @@ export default function EtiquetaEmissaoForm() {
         </div>
       </div>
 
-      {selecaoAberta && <SelecaoProdutosModal aoFechar={() => setSelecaoAberta(false)} aoAdicionar={adicionarItens} />}
+      {selecaoAberta && (
+        <SelecaoProdutosModal
+          origemEntrada={origemEntrada}
+          aoFechar={() => setSelecaoAberta(false)}
+          aoAdicionar={adicionarItens}
+        />
+      )}
 
       {modeloAberto && (
         <EscolherModeloModal totalEtiquetas={total} aoFechar={() => setModeloAberto(false)} aoConfirmar={confirmarModelo} />

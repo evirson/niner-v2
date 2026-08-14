@@ -1,5 +1,5 @@
 /**
- * Cancelamento de Devolução de Produtos (2026-08-11) — desfaz um vale-mercadoria ainda não
+ * Cancelamento de Devolução de Produtos (2026-08-10) — desfaz um vale-mercadoria ainda não
  * usado: tira do estoque a quantidade que a devolução original tinha colocado de volta
  * ({@code produto_movimento_mestre/detalhe}, {@code tipo_movimento = 'CANCELAMENTO_DEVOLUCAO'})
  * e marca {@code venda_devolucao.cancelada/data_cancelamento/id_usuario_cancelamento/

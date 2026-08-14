@@ -39,7 +39,7 @@ public class ImportacaoService {
         this.progressoRegistry = progressoRegistry;
     }
 
-    /** Consultado por polling do frontend enquanto {@link #processar} está em voo (2026-08-11) —
+    /** Consultado por polling do frontend enquanto {@link #processar} está em voo (2026-08-10) —
      *  ver {@link ImportacaoProgressoRegistry}. Devolve {@code etapa="desconhecido"} quando o id
      *  não existe (ainda não começou, ou já terminou) — não é erro, o front simplesmente ignora. */
     public ProgressoResponse progresso(Jwt jwt, String idProgresso) {
@@ -68,7 +68,7 @@ public class ImportacaoService {
     }
 
     /**
-     * Detecção automática de tipo de arquivo (2026-08-09, tela única de importação): compara o
+     * Detecção automática de tipo de arquivo (2026-08-10, tela única de importação): compara o
      * cabeçalho do arquivo enviado com {@link ImportadorDeTabela#colunasEsperadas()} de cada
      * tabela cadastrada por similaridade de Jaccard (interseção / união das colunas) — não por
      * contagem bruta, pra não favorecer tabelas com cabeçalho grande (produto, com 33 colunas)
@@ -106,7 +106,7 @@ public class ImportacaoService {
     }
 
     /** {@code idProgresso} é gerado pelo frontend a cada clique em Validar/Importar (um id novo
-     *  por chamada) e usado só para o polling de progresso (2026-08-11) — {@code null}/vazio
+     *  por chamada) e usado só para o polling de progresso (2026-08-10) — {@code null}/vazio
      *  ainda funciona (gera um id descartável), então a rotina continua utilizável por qualquer
      *  chamador que não precise acompanhar progresso (ex.: um teste automatizado futuro). */
     public RelatorioImportacao processar(Jwt jwt, String tabela, MultipartFile arquivo, String escolhasJson,
