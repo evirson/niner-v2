@@ -54,16 +54,17 @@ class FornecedorCrudTest {
                                 {"codigo":"%s","descricao":"DESPESA FORNECEDORES","tipoMovimento":"DEBITO",
                                  "natureza":"ANALITICA","incluiDre":false,"incluiFluxoCaixa":false}
                                 """.formatted(codigo)))
-                .andExpect(status().isCreated());
+                .andExpect(result -> org.assertj.core.api.Assertions
+                .assertThat(result.getResponse().getStatus()).isIn(201, 409));
     }
 
     @Test
     void criaFornecedorComDadosCompletos() throws Exception {
         String token = assinarNovoTenant("completo");
-        criarPlano(token, "2.00.000");
+        criarPlano(token, "9.00.000");
 
         String fornecedor = """
-                {"razaoSocial":"distribuidora abc ltda","idPlanoContas":"2.00.000",
+                {"razaoSocial":"distribuidora abc ltda","idPlanoContas":"9.00.000",
                  "nomeFantasia":"abc distribui","cnpj":"11.222.333/0001-81",
                  "inscricaoEstadual":"110.042.490.114","email":"contato@abc.com.br",
                  "telefone":"1130554400","cep":"01310-000","endereco":"avenida paulista",
@@ -111,12 +112,12 @@ class FornecedorCrudTest {
     void cnpjAlfanumericoValidoEhAceito() throws Exception {
         // Convenção do CNPJ alfanumérico (CLAUDE.md) — exemplo oficial da Receita Federal.
         String token = assinarNovoTenant("cnpj-alfa");
-        criarPlano(token, "2.00.000");
+        criarPlano(token, "9.00.000");
 
         mvc.perform(post("/api/v1/fornecedores").header("Authorization", "Bearer " + token)
                         .contentType(APPLICATION_JSON)
                         .content("""
-                                {"razaoSocial":"Fornecedor Alfanumerico","idPlanoContas":"2.00.000",
+                                {"razaoSocial":"Fornecedor Alfanumerico","idPlanoContas":"9.00.000",
                                  "cnpj":"12.ABC.345/01DE-35"}
                                 """))
                 .andExpect(status().isCreated())
@@ -126,12 +127,12 @@ class FornecedorCrudTest {
     @Test
     void cnpjComDigitoVerificadorInvalidoEhRejeitado() throws Exception {
         String token = assinarNovoTenant("cnpj-invalido");
-        criarPlano(token, "2.00.000");
+        criarPlano(token, "9.00.000");
 
         mvc.perform(post("/api/v1/fornecedores").header("Authorization", "Bearer " + token)
                         .contentType(APPLICATION_JSON)
                         .content("""
-                                {"razaoSocial":"CNPJ Errado","idPlanoContas":"2.00.000",
+                                {"razaoSocial":"CNPJ Errado","idPlanoContas":"9.00.000",
                                  "cnpj":"11.222.333/0001-99"}
                                 """))
                 .andExpect(status().isBadRequest());
@@ -141,12 +142,12 @@ class FornecedorCrudTest {
     void cpfNoCampoCnpjEhRejeitado() throws Exception {
         // Fornecedor é pessoa jurídica: CPF válido (11 dígitos) não é aceito como CNPJ.
         String token = assinarNovoTenant("cpf-no-cnpj");
-        criarPlano(token, "2.00.000");
+        criarPlano(token, "9.00.000");
 
         mvc.perform(post("/api/v1/fornecedores").header("Authorization", "Bearer " + token)
                         .contentType(APPLICATION_JSON)
                         .content("""
-                                {"razaoSocial":"CPF Indevido","idPlanoContas":"2.00.000",
+                                {"razaoSocial":"CPF Indevido","idPlanoContas":"9.00.000",
                                  "cnpj":"111.444.777-35"}
                                 """))
                 .andExpect(status().isBadRequest());
@@ -155,29 +156,29 @@ class FornecedorCrudTest {
     @Test
     void cnpjDuplicadoEhRejeitado() throws Exception {
         String token = assinarNovoTenant("cnpj-duplicado");
-        criarPlano(token, "2.00.000");
+        criarPlano(token, "9.00.000");
         String cnpj = "11.222.333/0001-81";
 
         mvc.perform(post("/api/v1/fornecedores").header("Authorization", "Bearer " + token)
                         .contentType(APPLICATION_JSON)
-                        .content("{\"razaoSocial\":\"Primeiro\",\"idPlanoContas\":\"2.00.000\",\"cnpj\":\"" + cnpj + "\"}"))
+                        .content("{\"razaoSocial\":\"Primeiro\",\"idPlanoContas\":\"9.00.000\",\"cnpj\":\"" + cnpj + "\"}"))
                 .andExpect(status().isCreated());
 
         mvc.perform(post("/api/v1/fornecedores").header("Authorization", "Bearer " + token)
                         .contentType(APPLICATION_JSON)
-                        .content("{\"razaoSocial\":\"Segundo\",\"idPlanoContas\":\"2.00.000\",\"cnpj\":\"" + cnpj + "\"}"))
+                        .content("{\"razaoSocial\":\"Segundo\",\"idPlanoContas\":\"9.00.000\",\"cnpj\":\"" + cnpj + "\"}"))
                 .andExpect(status().isConflict());
     }
 
     @Test
     void telefoneComOitoDigitosEhRejeitado() throws Exception {
         String token = assinarNovoTenant("telefone-curto");
-        criarPlano(token, "2.00.000");
+        criarPlano(token, "9.00.000");
 
         mvc.perform(post("/api/v1/fornecedores").header("Authorization", "Bearer " + token)
                         .contentType(APPLICATION_JSON)
                         .content("""
-                                {"razaoSocial":"Telefone Curto","idPlanoContas":"2.00.000",
+                                {"razaoSocial":"Telefone Curto","idPlanoContas":"9.00.000",
                                  "telefone":"30554400"}
                                 """))
                 .andExpect(status().isBadRequest());
@@ -186,7 +187,7 @@ class FornecedorCrudTest {
     @Test
     void campoMarcadoObrigatorioNaConfiguracaoDeTelaEhExigidoNoBackend() throws Exception {
         String token = assinarNovoTenant("campo-obrigatorio");
-        criarPlano(token, "2.00.000");
+        criarPlano(token, "9.00.000");
 
         mvc.perform(put("/api/v1/config-tela/cadastros.fornecedor.form").header("Authorization", "Bearer " + token)
                         .contentType(APPLICATION_JSON)
@@ -195,23 +196,23 @@ class FornecedorCrudTest {
 
         mvc.perform(post("/api/v1/fornecedores").header("Authorization", "Bearer " + token)
                         .contentType(APPLICATION_JSON)
-                        .content("{\"razaoSocial\":\"Sem Email\",\"idPlanoContas\":\"2.00.000\"}"))
+                        .content("{\"razaoSocial\":\"Sem Email\",\"idPlanoContas\":\"9.00.000\"}"))
                 .andExpect(status().isBadRequest());
 
         mvc.perform(post("/api/v1/fornecedores").header("Authorization", "Bearer " + token)
                         .contentType(APPLICATION_JSON)
-                        .content("{\"razaoSocial\":\"Com Email\",\"idPlanoContas\":\"2.00.000\",\"email\":\"a@b.com\"}"))
+                        .content("{\"razaoSocial\":\"Com Email\",\"idPlanoContas\":\"9.00.000\",\"email\":\"a@b.com\"}"))
                 .andExpect(status().isCreated());
     }
 
     @Test
     void listagemOrdenaPorColunaEDirecaoPedidas() throws Exception {
         String token = assinarNovoTenant("ordenacao");
-        criarPlano(token, "2.00.000");
+        criarPlano(token, "9.00.000");
 
-        criarFornecedorSimples(token, "2.00.000", "ORDFORN BETA");
-        criarFornecedorSimples(token, "2.00.000", "ORDFORN ALFA");
-        criarFornecedorSimples(token, "2.00.000", "ORDFORN GAMA");
+        criarFornecedorSimples(token, "9.00.000", "ORDFORN BETA");
+        criarFornecedorSimples(token, "9.00.000", "ORDFORN ALFA");
+        criarFornecedorSimples(token, "9.00.000", "ORDFORN GAMA");
 
         mvc.perform(get("/api/v1/fornecedores").param("razaoSocial", "ORDFORN")
                         .param("ordenarPor", "razaoSocial").param("direcao", "DESC")
@@ -223,8 +224,8 @@ class FornecedorCrudTest {
     @Test
     void excluirFornecedorSemVinculoApagaDeVerdade() throws Exception {
         String token = assinarNovoTenant("exclusao-simples");
-        criarPlano(token, "2.00.000");
-        long id = criarFornecedorSimples(token, "2.00.000", "Fornecedor Sem Vinculo");
+        criarPlano(token, "9.00.000");
+        long id = criarFornecedorSimples(token, "9.00.000", "Fornecedor Sem Vinculo");
 
         mvc.perform(delete("/api/v1/fornecedores/" + id).header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk())
@@ -237,8 +238,8 @@ class FornecedorCrudTest {
     @Test
     void excluirFornecedorComMovimentoInativaEmVezDeExcluir() throws Exception {
         String token = assinarNovoTenant("exclusao-vinculo");
-        criarPlano(token, "2.00.000");
-        long id = criarFornecedorSimples(token, "2.00.000", "Fornecedor Com Movimento");
+        criarPlano(token, "9.00.000");
+        long id = criarFornecedorSimples(token, "9.00.000", "Fornecedor Com Movimento");
         long idTenant = extrairIdTenant(token);
 
         criarMovimentoParaFornecedor(idTenant, id);

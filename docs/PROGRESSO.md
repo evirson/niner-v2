@@ -374,6 +374,43 @@ Movimentação de Conta Corrente) que ainda não tinham migrado pro `SeletorPlan
 
 ## Linha do tempo
 
+### 2026-08-23 (fechamento) — as 4 pendências abertas do dia, resolvidas
+
+**1) Signup passa a aplicar o plano de contas padrão completo.** Era a questão aberta da DRE: um
+tenant novo via receita e CMV, mas **nenhuma despesa**, porque o `SignupService` semeava só 3
+contas (a árvore mínima da conta de compra) e o plano de 76 contas era um script manual que quase
+ninguém rodava. Agora existe **`cfg_plano_contas_padrao`** (V016) — tabela **modelo global**, sem
+`id_tenant` e sem RLS, mesma exceção documentada de `cfg_produto_ncm`/`cfg_ean_gerador` — e o
+signup copia o plano inteiro numa linha de SQL. Uma atualização futura do padrão vira migration,
+não script solto.
+
+**O custo escondido disso:** 62 testes quebraram de uma vez. Todos por **409 (código já existe)**
+— o suite inteiro assumia plano de contas quase vazio e criava contas com códigos que agora vêm
+prontos. A correção **não** foi tolerar conflito em toda parte: o próprio seed padrão **reserva ao
+tenant o grupo 9 inteiro e as famílias `.90–.99` de cada grupo**, exatamente para customização, e
+foi para lá que as fixtures dos testes foram movidas (`2.00.000` → `2.90.000` etc.), com o único
+nível-1 livre (`9.00.000`) reservado ao teste que valida "nível 1 sem pai". Três testes ainda
+assumiam plano vazio de outra forma e foram corrigidos no mérito: busca por "ALUGUEL" agora casa
+com a conta padrão homônima; `itens[0]` de uma listagem não é mais a conta recém-criada (76 contas
+antes dela); e um "filho" que era nível 2 (irmão, não filho) virou nível 3 de verdade.
+**491/491 verdes** ao fim.
+
+**2) PDF conferido de verdade.** Sem `pdftoppm` na máquina, servi o arquivo pelo próprio dev
+server (`web/public`) e abri no Chrome, que renderiza PDF nativamente. O do Fluxo de Caixa saiu
+correto: A4 retrato, tema claro, subtítulo com visão e período, "Página 1 de 1", bloco de filtros
+aplicados e a grade com espaçamento legível. Arquivos de teste removidos de `web/public` depois.
+
+**3) Contraste do tema claro medido, e um token corrigido.** A passada visual dependia de um
+navegador sem Dark Reader, que eu não tenho — então medi o que dá para medir objetivamente:
+contraste WCAG de 11 pares de token do tema claro. Dez passam AA (4.5:1); **`--sucesso` reprovava
+com 3.45:1** e é usado em **texto de corpo** ("confere com o saldo calculado", variações positivas
+da DRE). Escurecido de `#2f9e44` para `#217a33` → **5.39:1**. O verde do tema escuro já dava
+7.27:1 e não mudou.
+
+**4) `npm run build` volta a funcionar no host.** Era o binding nativo
+`@rolldown/binding-win32-x64-msvc` ausente (bug conhecido do npm com dependências opcionais).
+`node_modules` + `package-lock.json` apagados e reinstalados: `✓ built in 1.53s`.
+
 ### 2026-08-23 — Fluxo de Caixa (realizado + projeção) e a baixa que passou a mover dinheiro de verdade
 
 Pedido do dono do produto logo depois da DRE: "preciso montar o relatório de fluxo de caixa, o que

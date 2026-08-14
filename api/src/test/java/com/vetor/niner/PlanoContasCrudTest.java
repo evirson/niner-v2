@@ -76,7 +76,7 @@ class PlanoContasCrudTest {
         String token = assinarNovoTenant("completo");
 
         String plano = """
-                {"codigo":"1.00.000","descricao":"receita de vendas","tipoMovimento":"CREDITO",
+                {"codigo":"9.00.000","descricao":"receita de vendas","tipoMovimento":"CREDITO",
                  "natureza":"ANALITICA","incluiDre":true,"grupoDre":"RECEITA_BRUTA",
                  "incluiFluxoCaixa":true,"grupoDfc":"OPERACIONAL"}
                 """;
@@ -85,7 +85,7 @@ class PlanoContasCrudTest {
                         .contentType(APPLICATION_JSON).content(plano))
                 .andExpect(status().isCreated())
                 // Descrição normalizada para MAIÚSCULAS no servidor, convenção do projeto.
-                .andExpect(jsonPath("$.idPlanoContas").value("1.00.000"))
+                .andExpect(jsonPath("$.idPlanoContas").value("9.00.000"))
                 .andExpect(jsonPath("$.descricao").value("RECEITA DE VENDAS"))
                 .andExpect(jsonPath("$.tipoMovimento").value("CREDITO"))
                 .andExpect(jsonPath("$.natureza").value("ANALITICA"))
@@ -101,20 +101,23 @@ class PlanoContasCrudTest {
                 .andExpect(jsonPath("$.criadoEm").exists())
                 .andExpect(jsonPath("$.atualizadoEm").exists());
 
-        mvc.perform(get("/api/v1/planos-contas").param("busca", "1.00").header("Authorization", "Bearer " + token))
+        // Busca pelo código exato: desde 2026-08-23 o tenant nasce com o plano padrão (76 contas),
+        // então listar tudo e olhar `itens[0]` não prova mais nada — a conta criada aqui não é a
+        // primeira da ordenação por código.
+        mvc.perform(get("/api/v1/planos-contas").param("busca", "9.00.000").header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.itens[0].idPlanoContas").value("1.00.000"));
+                .andExpect(jsonPath("$.itens[0].idPlanoContas").value("9.00.000"));
     }
 
     @Test
     void codigoDuplicadoEhRejeitado() throws Exception {
         String token = assinarNovoTenant("duplicado");
-        criarPlanoSimples(token, "1.00.000", "CAIXA GERAL");
+        criarPlanoSimples(token, "9.00.000", "CAIXA GERAL");
 
         mvc.perform(post("/api/v1/planos-contas").header("Authorization", "Bearer " + token)
                         .contentType(APPLICATION_JSON)
                         .content("""
-                                {"codigo":"1.00.000","descricao":"Outra descricao","tipoMovimento":"DEBITO",
+                                {"codigo":"9.00.000","descricao":"Outra descricao","tipoMovimento":"DEBITO",
                                  "natureza":"ANALITICA","incluiDre":false,"incluiFluxoCaixa":false}
                                 """))
                 .andExpect(status().isConflict());
@@ -225,10 +228,10 @@ class PlanoContasCrudTest {
     @Test
     void atualizarMudaDescricaoMasNaoOCodigo() throws Exception {
         String token = assinarNovoTenant("atualiza");
-        criarPlanoSimples(token, "2.00.000", "DESPESA ORIGINAL");
+        criarPlanoSimples(token, "2.90.000", "DESPESA ORIGINAL");
 
         // O corpo tenta trocar o código — o do path prevalece e o registro continua o mesmo.
-        mvc.perform(put("/api/v1/planos-contas/2.00.000").header("Authorization", "Bearer " + token)
+        mvc.perform(put("/api/v1/planos-contas/2.90.000").header("Authorization", "Bearer " + token)
                         .contentType(APPLICATION_JSON)
                         .content("""
                                 {"codigo":"9.99.999","descricao":"despesa corrigida","tipoMovimento":"DEBITO",
@@ -236,7 +239,7 @@ class PlanoContasCrudTest {
                                  "incluiFluxoCaixa":false}
                                 """))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.idPlanoContas").value("2.00.000"))
+                .andExpect(jsonPath("$.idPlanoContas").value("2.90.000"))
                 .andExpect(jsonPath("$.descricao").value("DESPESA CORRIGIDA"))
                 .andExpect(jsonPath("$.incluiDre").value(true));
 
@@ -247,13 +250,13 @@ class PlanoContasCrudTest {
     @Test
     void excluirPlanoSemVinculoApagaDeVerdade() throws Exception {
         String token = assinarNovoTenant("exclusao-simples");
-        criarPlanoSimples(token, "4.00.000", "SEM VINCULO");
+        criarPlanoSimples(token, "4.90.000", "SEM VINCULO");
 
-        mvc.perform(delete("/api/v1/planos-contas/4.00.000").header("Authorization", "Bearer " + token))
+        mvc.perform(delete("/api/v1/planos-contas/4.90.000").header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.acao").value("excluido"));
 
-        mvc.perform(get("/api/v1/planos-contas/4.00.000").header("Authorization", "Bearer " + token))
+        mvc.perform(get("/api/v1/planos-contas/4.90.000").header("Authorization", "Bearer " + token))
                 .andExpect(status().isNotFound());
     }
 
@@ -261,16 +264,16 @@ class PlanoContasCrudTest {
     void excluirPlanoComFornecedorVinculadoInativaEmVezDeExcluir() throws Exception {
         // 2026-07-31: cfg_plano_contas ganhou `ativo` — mesmo fallback de Cliente/Funcionário/Fornecedor.
         String token = assinarNovoTenant("exclusao-vinculo");
-        criarPlanoSimples(token, "5.00.000", "COM FORNECEDOR");
+        criarPlanoSimples(token, "5.90.000", "COM FORNECEDOR");
         long idTenant = extrairIdTenant(token);
 
-        criarFornecedorComPlano(idTenant, "5.00.000");
+        criarFornecedorComPlano(idTenant, "5.90.000");
 
-        mvc.perform(delete("/api/v1/planos-contas/5.00.000").header("Authorization", "Bearer " + token))
+        mvc.perform(delete("/api/v1/planos-contas/5.90.000").header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.acao").value("inativado"));
 
-        mvc.perform(get("/api/v1/planos-contas/5.00.000").header("Authorization", "Bearer " + token))
+        mvc.perform(get("/api/v1/planos-contas/5.90.000").header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.descricao").value("COM FORNECEDOR"))
                 .andExpect(jsonPath("$.ativo").value(false));
@@ -279,16 +282,16 @@ class PlanoContasCrudTest {
     @Test
     void excluirPlanoComCaixaVinculadoInativaEmVezDeExcluir() throws Exception {
         String token = assinarNovoTenant("exclusao-caixa");
-        criarPlanoSimples(token, "8.00.000", "COM CAIXA");
+        criarPlanoSimples(token, "8.90.000", "COM CAIXA");
         long idTenant = extrairIdTenant(token);
 
-        criarCaixaComPlano(idTenant, "8.00.000");
+        criarCaixaComPlano(idTenant, "8.90.000");
 
-        mvc.perform(delete("/api/v1/planos-contas/8.00.000").header("Authorization", "Bearer " + token))
+        mvc.perform(delete("/api/v1/planos-contas/8.90.000").header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.acao").value("inativado"));
 
-        mvc.perform(get("/api/v1/planos-contas/8.00.000").header("Authorization", "Bearer " + token))
+        mvc.perform(get("/api/v1/planos-contas/8.90.000").header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.ativo").value(false));
     }
@@ -296,14 +299,14 @@ class PlanoContasCrudTest {
     @Test
     void excluirContaComFilhosInativaEmVezDeExcluir() throws Exception {
         String token = assinarNovoTenant("exclusao-filhos");
-        criarPlanoSimples(token, "6.00.000", "GRUPO COM FILHO");
-        criarPlanoSimples(token, "6.01.000", "SUBCONTA FILHA");
+        criarPlanoSimples(token, "6.90.000", "GRUPO COM FILHO");
+        criarPlanoSimples(token, "6.90.001", "SUBCONTA FILHA");
 
-        mvc.perform(delete("/api/v1/planos-contas/6.00.000").header("Authorization", "Bearer " + token))
+        mvc.perform(delete("/api/v1/planos-contas/6.90.000").header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.acao").value("inativado"));
 
-        mvc.perform(get("/api/v1/planos-contas/6.00.000").header("Authorization", "Bearer " + token))
+        mvc.perform(get("/api/v1/planos-contas/6.90.000").header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.ativo").value(false));
     }
@@ -314,10 +317,10 @@ class PlanoContasCrudTest {
         // via SQL pra simular uma conta do template, mesmo padrão de setup já usado neste arquivo.
         String token = assinarNovoTenant("exclusao-padrao");
         long idTenant = extrairIdTenant(token);
-        criarPlanoSimples(token, "7.00.000", "CONTA PADRAO");
-        marcarComoPadraoSistema(idTenant, "7.00.000");
+        criarPlanoSimples(token, "7.90.000", "CONTA PADRAO");
+        marcarComoPadraoSistema(idTenant, "7.90.000");
 
-        mvc.perform(delete("/api/v1/planos-contas/7.00.000").header("Authorization", "Bearer " + token))
+        mvc.perform(delete("/api/v1/planos-contas/7.90.000").header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.acao").value("inativado"))
                 .andExpect(jsonPath("$.motivo").value(org.hamcrest.Matchers.containsString("padrão")));
@@ -326,11 +329,11 @@ class PlanoContasCrudTest {
     @Test
     void listagemOrdenaPorColunaEDirecaoPedidas() throws Exception {
         String token = assinarNovoTenant("ordenacao");
-        criarPlanoSimples(token, "1.00.000", "ORDPLANO BETA");
-        criarPlanoSimples(token, "2.00.000", "ORDPLANO ALFA");
-        // 4.00.000, não 3.00.000: esse já nasce seedado (V032, "CUSTOS VARIÁVEIS") pra
+        criarPlanoSimples(token, "9.00.000", "ORDPLANO BETA");
+        criarPlanoSimples(token, "2.90.000", "ORDPLANO ALFA");
+        // 4.90.000, não 3.00.000: esse já nasce seedado (V032, "CUSTOS VARIÁVEIS") pra
         // a Entrada de Produtos por Compra.
-        criarPlanoSimples(token, "4.00.000", "ORDPLANO GAMA");
+        criarPlanoSimples(token, "4.90.000", "ORDPLANO GAMA");
 
         mvc.perform(get("/api/v1/planos-contas").param("busca", "ORDPLANO")
                         .param("ordenarPor", "descricao").param("direcao", "DESC")
@@ -342,12 +345,12 @@ class PlanoContasCrudTest {
     @Test
     void buscaEncontraPorDescricao() throws Exception {
         String token = assinarNovoTenant("busca");
-        criarPlanoSimples(token, "7.00.000", "ALUGUEL DA LOJA");
+        criarPlanoSimples(token, "7.90.000", "ZZTESTE BUSCA DESCRICAO");
 
-        mvc.perform(get("/api/v1/planos-contas").param("busca", "ALUGUEL")
+        mvc.perform(get("/api/v1/planos-contas").param("busca", "ZZTESTE")
                         .header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.itens[0].idPlanoContas").value("7.00.000"));
+                .andExpect(jsonPath("$.itens[0].idPlanoContas").value("7.90.000"));
     }
 
     @Test
@@ -356,10 +359,10 @@ class PlanoContasCrudTest {
         // sem vínculo, excluir() apaga de verdade e ela some da tabela (não fica "inativa").
         String token = assinarNovoTenant("status");
         long idTenant = extrairIdTenant(token);
-        criarPlanoSimples(token, "1.00.000", "STATUSPLANO ATIVA");
-        criarPlanoSimples(token, "2.00.000", "STATUSPLANO INATIVA");
-        criarFornecedorComPlano(idTenant, "2.00.000");
-        mvc.perform(delete("/api/v1/planos-contas/2.00.000").header("Authorization", "Bearer " + token))
+        criarPlanoSimples(token, "9.00.000", "STATUSPLANO ATIVA");
+        criarPlanoSimples(token, "2.90.000", "STATUSPLANO INATIVA");
+        criarFornecedorComPlano(idTenant, "2.90.000");
+        mvc.perform(delete("/api/v1/planos-contas/2.90.000").header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.acao").value("inativado"));
 
@@ -379,9 +382,9 @@ class PlanoContasCrudTest {
         // PK composta (id_tenant, id_plano_contas) — o MESMO código em tenants diferentes.
         String tokenA = assinarNovoTenant("isolamento-a");
         String tokenB = assinarNovoTenant("isolamento-b");
-        criarPlanoSimples(tokenA, "1.00.000", "CONTA DO TENANT A");
+        criarPlanoSimples(tokenA, "9.00.000", "CONTA DO TENANT A");
 
-        mvc.perform(get("/api/v1/planos-contas/1.00.000").header("Authorization", "Bearer " + tokenB))
+        mvc.perform(get("/api/v1/planos-contas/9.00.000").header("Authorization", "Bearer " + tokenB))
                 .andExpect(status().isNotFound());
     }
 

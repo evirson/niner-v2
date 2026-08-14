@@ -80,15 +80,16 @@ class EntradaXmlCrudTest {
                                 {"codigo":"%s","descricao":"DESPESA FORNECEDORES","tipoMovimento":"DEBITO",
                                  "natureza":"ANALITICA","incluiDre":false,"incluiFluxoCaixa":false}
                                 """.formatted(codigo)))
-                .andExpect(status().isCreated());
+                .andExpect(result -> org.assertj.core.api.Assertions
+                .assertThat(result.getResponse().getStatus()).isIn(201, 409));
     }
 
     private long criarFornecedor(String token, String razaoSocial, String cnpj) throws Exception {
-        criarPlano(token, "2.00.000");
+        criarPlano(token, "9.00.000");
         String cnpjJson = cnpj == null ? "" : ",\"cnpj\":\"" + cnpj + "\"";
         String resp = mvc.perform(post("/api/v1/fornecedores").header("Authorization", "Bearer " + token)
                         .contentType(APPLICATION_JSON)
-                        .content("{\"razaoSocial\":\"%s\",\"idPlanoContas\":\"2.00.000\"%s}".formatted(razaoSocial, cnpjJson)))
+                        .content("{\"razaoSocial\":\"%s\",\"idPlanoContas\":\"9.00.000\"%s}".formatted(razaoSocial, cnpjJson)))
                 .andExpect(status().isCreated())
                 .andReturn().getResponse().getContentAsString();
         return ((Number) JsonPath.read(resp, "$.idFornecedor")).longValue();

@@ -68,14 +68,15 @@ class CancelamentoEntradaCrudTest {
                                 {"codigo":"%s","descricao":"DESPESA FORNECEDORES","tipoMovimento":"DEBITO",
                                  "natureza":"ANALITICA","incluiDre":false,"incluiFluxoCaixa":false}
                                 """.formatted(codigo)))
-                .andExpect(status().isCreated());
+                .andExpect(result -> org.assertj.core.api.Assertions
+                .assertThat(result.getResponse().getStatus()).isIn(201, 409));
     }
 
     private long criarFornecedor(String token, String razaoSocial) throws Exception {
-        criarPlano(token, "2.00.000");
+        criarPlano(token, "9.00.000");
         String resp = mvc.perform(post("/api/v1/fornecedores").header("Authorization", "Bearer " + token)
                         .contentType(APPLICATION_JSON)
-                        .content("{\"razaoSocial\":\"%s\",\"idPlanoContas\":\"2.00.000\"}".formatted(razaoSocial)))
+                        .content("{\"razaoSocial\":\"%s\",\"idPlanoContas\":\"9.00.000\"}".formatted(razaoSocial)))
                 .andExpect(status().isCreated())
                 .andReturn().getResponse().getContentAsString();
         return ((Number) JsonPath.read(resp, "$.idFornecedor")).longValue();

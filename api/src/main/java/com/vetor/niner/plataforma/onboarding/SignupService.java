@@ -95,20 +95,27 @@ public class SignupService {
         // nivel são colunas geradas a partir do código — nunca informadas. FK de hierarquia e
         // trigger de guarda já são DEFERRABLE INITIALLY DEFERRED (V016), então os 3 níveis
         // (máscara 9.99.999, revisão 2026-08-13) podem entrar juntos sem ordem especial.
+        // Plano de contas padrão COMPLETO (76 contas), copiado do modelo global
+        // `cfg_plano_contas_padrao` (V016). Até 2026-08-23 o signup semeava só 3 contas — a árvore
+        // mínima da conta de compra — e o plano completo era um script manual que quase nenhum
+        // tenant rodava. O efeito apareceu no Relatório de DRE: tenant novo via receita e CMV, mas
+        // NENHUMA despesa, porque não tinha conta de despesa cadastrada. `sinal` e
+        // `aceita_lancamento` seguem derivados aqui (CREDITO=+1/DEBITO=-1; analítica lança),
+        // mesma regra que o script usava — não são colunas do modelo.
         jdbc.sql("""
                         INSERT INTO cfg_plano_contas (
                             id_tenant, id_plano_contas, descricao, tipo_movimento, natureza,
                             inclui_dre, inclui_fluxo_caixa, grupo_dre, grupo_dfc, sinal,
                             aceita_lancamento, padrao_sistema
-                        ) VALUES
-                            (?, '3.00.000', 'CUSTOS VARIÁVEIS', 'DEBITO', 'SINTETICA',
-                                true, true, 'CUSTO_VARIAVEL', 'OPERACIONAL', -1, false, true),
-                            (?, '3.03.000', 'Compras de Mercadoria', 'DEBITO', 'SINTETICA',
-                                false, true, 'NAO_APLICA', 'OPERACIONAL', -1, false, true),
-                            (?, '3.03.001', 'Compra de Mercadoria para Revenda', 'DEBITO', 'ANALITICA',
-                                false, true, 'NAO_APLICA', 'OPERACIONAL', -1, true, true)
+                        )
+                        SELECT ?, p.id_plano_contas, p.descricao, p.tipo_movimento,
+                               (CASE WHEN p.analitica THEN 'ANALITICA' ELSE 'SINTETICA' END)::natureza_conta,
+                               p.inclui_dre, p.inclui_fluxo_caixa, p.grupo_dre, p.grupo_dfc,
+                               CASE p.tipo_movimento::text WHEN 'CREDITO' THEN 1 WHEN 'DEBITO' THEN -1 ELSE 0 END,
+                               p.analitica, true
+                        FROM cfg_plano_contas_padrao p
                         """)
-                .params(idTenant, idTenant, idTenant)
+                .param(idTenant)
                 .update();
 
         jdbc.sql("INSERT INTO cfg_geral (id_tenant, id_plano_contas_compra_mercadoria) VALUES (?, '3.03.001')")

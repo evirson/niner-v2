@@ -268,7 +268,7 @@ e o aviso de não lançar em Conta Corrente um pagamento já baixado em Contas a
    `docs/telas/fluxo-caixa.md`), então o pagamento tem um lugar único e canônico. A regra da DRE
    (despesa só de `contas_pagar`; `conta_corrente_movimento` só para contas de receita) **continua
    valendo e sem dupla contagem** — a DRE nunca soma as tabelas de dinheiro no lado da despesa.
-2. **Plano de contas padrão não é semeado no signup** (descoberto aqui): um tenant novo tem 3
-   contas. A DRE funciona mesmo assim (as linhas derivadas trazem o próprio grupo), mas **despesas
-   só aparecem se o lojista tiver contas de despesa cadastradas**. Vale decidir se o signup passa
-   a aplicar o plano padrão completo — decisão de produto, fora do escopo desta tela.
+2. ~~**Plano de contas padrão não é semeado no signup**~~ — **resolvido em 2026-08-23**: o signup
+   passou a copiar o plano padrão completo (76 contas) do modelo global `cfg_plano_contas_padrao`
+   (V016), então um tenant novo já tem contas de despesa e a DRE nasce completa. Ver
+   `docs/telas/plano-contas.md`.

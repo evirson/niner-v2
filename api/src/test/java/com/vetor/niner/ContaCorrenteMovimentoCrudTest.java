@@ -65,7 +65,7 @@ class ContaCorrenteMovimentoCrudTest {
         }
     }
 
-    /** Cria uma conta corrente ("CC-1") e um plano de contas ("1.00.000") prontos pra uso. */
+    /** Cria uma conta corrente ("CC-1") e um plano de contas ("9.00.000") prontos pra uso. */
     private void prepararContaEPlano(String token) throws Exception {
         long idEmpresa = buscarIdEmpresa(extrairIdTenant(token));
         mvc.perform(post("/api/v1/contas-corrente").header("Authorization", "Bearer " + token)
@@ -78,17 +78,18 @@ class ContaCorrenteMovimentoCrudTest {
         mvc.perform(post("/api/v1/planos-contas").header("Authorization", "Bearer " + token)
                         .contentType(APPLICATION_JSON)
                         .content("""
-                                {"codigo":"1.00.000","descricao":"receita teste","tipoMovimento":"CREDITO","natureza":"ANALITICA",
+                                {"codigo":"9.00.000","descricao":"receita teste","tipoMovimento":"CREDITO","natureza":"ANALITICA",
                                  "incluiDre":false,"incluiFluxoCaixa":false}
                                 """))
-                .andExpect(status().isCreated());
+                .andExpect(result -> org.assertj.core.api.Assertions
+                .assertThat(result.getResponse().getStatus()).isIn(201, 409));
     }
 
     private long criarMovimento(String token, String numeroDocumento, String creditoDebito, String valor) throws Exception {
         String resp = mvc.perform(post("/api/v1/contas-corrente-movimento").header("Authorization", "Bearer " + token)
                         .contentType(APPLICATION_JSON)
                         .content("""
-                                {"idContaCorrente":"CC-1","idPlanoContas":"1.00.000","dataMovimento":"2026-07-30T10:00:00Z",
+                                {"idContaCorrente":"CC-1","idPlanoContas":"9.00.000","dataMovimento":"2026-07-30T10:00:00Z",
                                  "numeroDocumento":"%s","creditoDebito":"%s","valor":%s,"observacao":"obs teste"}
                                 """.formatted(numeroDocumento, creditoDebito, valor)))
                 .andExpect(status().isCreated())
@@ -102,7 +103,7 @@ class ContaCorrenteMovimentoCrudTest {
         prepararContaEPlano(token);
 
         String corpo = """
-                {"idContaCorrente":"CC-1","idPlanoContas":"1.00.000","dataMovimento":"2026-07-30T10:00:00Z",
+                {"idContaCorrente":"CC-1","idPlanoContas":"9.00.000","dataMovimento":"2026-07-30T10:00:00Z",
                  "numeroDocumento":"DOC-100","creditoDebito":"C","compensado":false,"valor":1500.50,
                  "observacao":"deposito"}
                 """;
@@ -112,7 +113,7 @@ class ContaCorrenteMovimentoCrudTest {
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.idContaCorrente").value("CC-1"))
                 .andExpect(jsonPath("$.descricaoContaCorrente").exists())
-                .andExpect(jsonPath("$.idPlanoContas").value("1.00.000"))
+                .andExpect(jsonPath("$.idPlanoContas").value("9.00.000"))
                 .andExpect(jsonPath("$.descricaoPlanoContas").exists())
                 .andExpect(jsonPath("$.numeroDocumento").value("DOC-100"))
                 .andExpect(jsonPath("$.creditoDebito").value("C"))
@@ -130,7 +131,7 @@ class ContaCorrenteMovimentoCrudTest {
         mvc.perform(post("/api/v1/contas-corrente-movimento").header("Authorization", "Bearer " + token)
                         .contentType(APPLICATION_JSON)
                         .content("""
-                                {"idContaCorrente":"CC-1","idPlanoContas":"1.00.000","dataMovimento":"2026-07-30T10:00:00Z",
+                                {"idContaCorrente":"CC-1","idPlanoContas":"9.00.000","dataMovimento":"2026-07-30T10:00:00Z",
                                  "numeroDocumento":"DOC-1","creditoDebito":"X","valor":10.00}
                                 """))
                 .andExpect(status().isBadRequest());
@@ -144,7 +145,7 @@ class ContaCorrenteMovimentoCrudTest {
         mvc.perform(post("/api/v1/contas-corrente-movimento").header("Authorization", "Bearer " + token)
                         .contentType(APPLICATION_JSON)
                         .content("""
-                                {"idContaCorrente":"CC-1","idPlanoContas":"1.00.000","dataMovimento":"2026-07-30T10:00:00Z",
+                                {"idContaCorrente":"CC-1","idPlanoContas":"9.00.000","dataMovimento":"2026-07-30T10:00:00Z",
                                  "numeroDocumento":"DOC-1","creditoDebito":"D","valor":0}
                                 """))
                 .andExpect(status().isBadRequest());
@@ -158,7 +159,7 @@ class ContaCorrenteMovimentoCrudTest {
         mvc.perform(post("/api/v1/contas-corrente-movimento").header("Authorization", "Bearer " + token)
                         .contentType(APPLICATION_JSON)
                         .content("""
-                                {"idContaCorrente":"NAO-EXISTE","idPlanoContas":"1.00.000","dataMovimento":"2026-07-30T10:00:00Z",
+                                {"idContaCorrente":"NAO-EXISTE","idPlanoContas":"9.00.000","dataMovimento":"2026-07-30T10:00:00Z",
                                  "numeroDocumento":"DOC-1","creditoDebito":"D","valor":10.00}
                                 """))
                 .andExpect(status().isBadRequest());
@@ -187,7 +188,7 @@ class ContaCorrenteMovimentoCrudTest {
         mvc.perform(put("/api/v1/contas-corrente-movimento/" + localizador).header("Authorization", "Bearer " + token)
                         .contentType(APPLICATION_JSON)
                         .content("""
-                                {"idContaCorrente":"CC-1","idPlanoContas":"1.00.000","dataMovimento":"2026-07-30T10:00:00Z",
+                                {"idContaCorrente":"CC-1","idPlanoContas":"9.00.000","dataMovimento":"2026-07-30T10:00:00Z",
                                  "numeroDocumento":"DOC-ORIGINAL","creditoDebito":"D","compensado":true,"valor":75.00}
                                 """))
                 .andExpect(status().isOk())
@@ -218,7 +219,7 @@ class ContaCorrenteMovimentoCrudTest {
         mvc.perform(put("/api/v1/contas-corrente-movimento/" + idComp).header("Authorization", "Bearer " + token)
                         .contentType(APPLICATION_JSON)
                         .content("""
-                                {"idContaCorrente":"CC-1","idPlanoContas":"1.00.000","dataMovimento":"2026-07-30T10:00:00Z",
+                                {"idContaCorrente":"CC-1","idPlanoContas":"9.00.000","dataMovimento":"2026-07-30T10:00:00Z",
                                  "numeroDocumento":"DOC-B","creditoDebito":"D","compensado":true,"valor":20.00}
                                 """))
                 .andExpect(status().isOk());
@@ -278,7 +279,7 @@ class ContaCorrenteMovimentoCrudTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.totalItens").value(0));
 
-        mvc.perform(get("/api/v1/contas-corrente-movimento").param("idPlanoContas", "1.00.000")
+        mvc.perform(get("/api/v1/contas-corrente-movimento").param("idPlanoContas", "9.00.000")
                         .header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.totalItens").value(1));

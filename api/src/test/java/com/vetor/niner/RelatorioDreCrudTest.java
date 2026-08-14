@@ -213,15 +213,17 @@ class RelatorioDreCrudTest {
         }
     }
 
+    /** Garante a conta de despesa; 409 é esperado quando ela já vem do plano padrão do signup. */
     private void criarContaDespesaFixa(String token, String codigo, String descricao, String natureza) throws Exception {
-        mvc.perform(post("/api/v1/planos-contas").header("Authorization", "Bearer " + token)
+        int status = mvc.perform(post("/api/v1/planos-contas").header("Authorization", "Bearer " + token)
                         .contentType(APPLICATION_JSON)
                         .content("""
                                 {"codigo":"%s","descricao":"%s","tipoMovimento":"DEBITO","natureza":"%s",
                                  "incluiDre":true,"grupoDre":"DESPESA_FIXA","incluiFluxoCaixa":true,
                                  "grupoDfc":"OPERACIONAL"}
                                 """.formatted(codigo, descricao, natureza)))
-                .andExpect(status().isCreated());
+                .andReturn().getResponse().getStatus();
+        org.assertj.core.api.Assertions.assertThat(status).isIn(201, 409);
     }
 
     private String hoje() {
@@ -352,8 +354,8 @@ class RelatorioDreCrudTest {
         long idTenant = extrairIdTenant(tenant.token());
         long idFornecedor = criarFornecedor(tenant.token(), "FORNECEDOR DRE DESPESA");
 
-        // O signup semeia só a árvore mínima da conta de compra — nenhuma conta de despesa fixa
-        // existe num tenant novo, então o teste cria a sua (grupo sintético + analítica).
+        // Desde 2026-08-23 o signup copia o plano padrão completo, então a conta de aluguel
+        // (4.01.001) já existe — o teste só garante isso, aceitando 409.
         criarContaDespesaFixa(tenant.token(), "4.00.000", "DESPESAS FIXAS", "SINTETICA");
         criarContaDespesaFixa(tenant.token(), "4.01.000", "Ocupacao", "SINTETICA");
         criarContaDespesaFixa(tenant.token(), "4.01.001", "Aluguel", "ANALITICA");

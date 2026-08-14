@@ -74,21 +74,24 @@ class ContaPagarCrudTest {
         }
     }
 
+    /** Garante que a conta existe. Aceita 409 porque, desde 2026-08-23, o signup já copia o plano
+     *  de contas padrão completo (76 contas) — os códigos usados aqui podem já vir prontos. */
     private void criarPlano(String token, String codigo) throws Exception {
-        mvc.perform(post("/api/v1/planos-contas").header("Authorization", "Bearer " + token)
+        int status = mvc.perform(post("/api/v1/planos-contas").header("Authorization", "Bearer " + token)
                         .contentType(APPLICATION_JSON)
                         .content("""
                                 {"codigo":"%s","descricao":"despesa teste %s","tipoMovimento":"DEBITO","natureza":"ANALITICA",
                                  "incluiDre":false,"incluiFluxoCaixa":false}
                                 """.formatted(codigo, codigo)))
-                .andExpect(status().isCreated());
+                .andReturn().getResponse().getStatus();
+        assertThat(status).isIn(201, 409);
     }
 
     private long criarFornecedor(String token, String razaoSocial) throws Exception {
-        criarPlano(token, "2.00.000");
+        criarPlano(token, "9.00.000");
         String resp = mvc.perform(post("/api/v1/fornecedores").header("Authorization", "Bearer " + token)
                         .contentType(APPLICATION_JSON)
-                        .content("{\"razaoSocial\":\"%s\",\"idPlanoContas\":\"2.00.000\"}".formatted(razaoSocial)))
+                        .content("{\"razaoSocial\":\"%s\",\"idPlanoContas\":\"9.00.000\"}".formatted(razaoSocial)))
                 .andExpect(status().isCreated())
                 .andReturn().getResponse().getContentAsString();
         return ((Number) JsonPath.read(resp, "$.idFornecedor")).longValue();
@@ -97,11 +100,11 @@ class ContaPagarCrudTest {
     private record Base(String token, long idFornecedor, long idEmpresa) {
     }
 
-    /** Cria tenant + fornecedor + plano de contas "1.00.000" prontos pra uso na conta a pagar. */
+    /** Cria tenant + fornecedor + plano de contas "9.00.000" prontos pra uso na conta a pagar. */
     private Base prepararBase(String sufixo) throws Exception {
         String token = assinarNovoTenant(sufixo);
         long idFornecedor = criarFornecedor(token, "Fornecedor " + sufixo);
-        criarPlano(token, "1.00.000");
+        criarPlano(token, "9.00.000");
         long idEmpresa = buscarIdEmpresa(extrairIdTenant(token));
         return new Base(token, idFornecedor, idEmpresa);
     }
@@ -126,7 +129,7 @@ class ContaPagarCrudTest {
         String resp = mvc.perform(post("/api/v1/contas-pagar").header("Authorization", "Bearer " + base.token())
                         .contentType(APPLICATION_JSON)
                         .content("""
-                                {"idFornecedor":%d,"idEmpresa":%d,"idPlanoContas":"1.00.000","notaFiscal":100,
+                                {"idFornecedor":%d,"idEmpresa":%d,"idPlanoContas":"9.00.000","notaFiscal":100,
                                  "numeroDuplicata":"%s","dataLancamento":"2026-07-30T12:00:00Z",
                                  "dataVencimento":"%sT12:00:00Z","valorPagar":%s}
                                 """.formatted(base.idFornecedor(), base.idEmpresa(), numeroDuplicata, dataVencimento, valorPagar)))
@@ -140,7 +143,7 @@ class ContaPagarCrudTest {
         Base base = prepararBase("completo");
 
         String corpo = """
-                {"idFornecedor":%d,"idEmpresa":%d,"idPlanoContas":"1.00.000","notaFiscal":321,
+                {"idFornecedor":%d,"idEmpresa":%d,"idPlanoContas":"9.00.000","notaFiscal":321,
                  "numeroDuplicata":"DUP-1","dataLancamento":"2026-07-30T12:00:00Z",
                  "dataVencimento":"2026-08-15T12:00:00Z","valorPagar":1500.50,"observacoes":"compra teste"}
                 """.formatted(base.idFornecedor(), base.idEmpresa());
@@ -152,7 +155,7 @@ class ContaPagarCrudTest {
                 .andExpect(jsonPath("$.nomeFornecedor").exists())
                 .andExpect(jsonPath("$.idEmpresa").value(base.idEmpresa()))
                 .andExpect(jsonPath("$.nomeEmpresa").exists())
-                .andExpect(jsonPath("$.idPlanoContas").value("1.00.000"))
+                .andExpect(jsonPath("$.idPlanoContas").value("9.00.000"))
                 .andExpect(jsonPath("$.descricaoPlanoContas").exists())
                 .andExpect(jsonPath("$.notaFiscal").value(321))
                 .andExpect(jsonPath("$.numeroDuplicata").value("DUP-1"))
@@ -171,7 +174,7 @@ class ContaPagarCrudTest {
         mvc.perform(post("/api/v1/contas-pagar").header("Authorization", "Bearer " + base.token())
                         .contentType(APPLICATION_JSON)
                         .content("""
-                                {"idFornecedor":%d,"idEmpresa":%d,"idPlanoContas":"1.00.000",
+                                {"idFornecedor":%d,"idEmpresa":%d,"idPlanoContas":"9.00.000",
                                  "dataLancamento":"2026-07-30T12:00:00Z","dataVencimento":"2026-08-15T12:00:00Z","valorPagar":0}
                                 """.formatted(base.idFornecedor(), base.idEmpresa())))
                 .andExpect(status().isBadRequest());
@@ -184,7 +187,7 @@ class ContaPagarCrudTest {
         mvc.perform(post("/api/v1/contas-pagar").header("Authorization", "Bearer " + base.token())
                         .contentType(APPLICATION_JSON)
                         .content("""
-                                {"idFornecedor":999999,"idEmpresa":%d,"idPlanoContas":"1.00.000",
+                                {"idFornecedor":999999,"idEmpresa":%d,"idPlanoContas":"9.00.000",
                                  "dataLancamento":"2026-07-30T12:00:00Z","dataVencimento":"2026-08-15T12:00:00Z","valorPagar":10.00}
                                 """.formatted(base.idEmpresa())))
                 .andExpect(status().isBadRequest());
@@ -212,7 +215,7 @@ class ContaPagarCrudTest {
         mvc.perform(put("/api/v1/contas-pagar/" + idContaPagar).header("Authorization", "Bearer " + base.token())
                         .contentType(APPLICATION_JSON)
                         .content("""
-                                {"idFornecedor":%d,"idEmpresa":%d,"idPlanoContas":"1.00.000","notaFiscal":100,
+                                {"idFornecedor":%d,"idEmpresa":%d,"idPlanoContas":"9.00.000","notaFiscal":100,
                                  "numeroDuplicata":"DUP-ORIGINAL","dataLancamento":"2026-07-30T12:00:00Z",
                                  "dataVencimento":"2026-08-15T12:00:00Z","dataPagamento":"2026-08-10T12:00:00Z",
                                  "valorPagar":100.00,"valorPago":100.00,"documentoPago":true,
@@ -234,7 +237,7 @@ class ContaPagarCrudTest {
         long idContaPagar = criarContaPagar(base, "DUP-CAIXA", "2026-08-15", "250.00");
 
         String corpoPago = """
-                {"idFornecedor":%d,"idEmpresa":%d,"idPlanoContas":"1.00.000",
+                {"idFornecedor":%d,"idEmpresa":%d,"idPlanoContas":"9.00.000",
                  "dataLancamento":"2026-07-30T12:00:00Z","dataVencimento":"2026-08-15T12:00:00Z",
                  "dataPagamento":"2026-08-10T12:00:00Z","valorPagar":250.00,"valorPago":250.00,
                  "origemPagamento":"CAIXA"}
@@ -250,7 +253,7 @@ class ContaPagarCrudTest {
 
         // Desfaz a baixa (sem data de pagamento) — o movimento tem de sumir junto.
         String corpoSemPagamento = """
-                {"idFornecedor":%d,"idEmpresa":%d,"idPlanoContas":"1.00.000",
+                {"idFornecedor":%d,"idEmpresa":%d,"idPlanoContas":"9.00.000",
                  "dataLancamento":"2026-07-30T12:00:00Z","dataVencimento":"2026-08-15T12:00:00Z",
                  "valorPagar":250.00}
                 """.formatted(base.idFornecedor(), base.idEmpresa());
@@ -273,7 +276,7 @@ class ContaPagarCrudTest {
         mvc.perform(put("/api/v1/contas-pagar/" + idContaPagar).header("Authorization", "Bearer " + base.token())
                         .contentType(APPLICATION_JSON)
                         .content("""
-                                {"idFornecedor":%d,"idEmpresa":%d,"idPlanoContas":"1.00.000",
+                                {"idFornecedor":%d,"idEmpresa":%d,"idPlanoContas":"9.00.000",
                                  "dataLancamento":"2026-07-30T12:00:00Z","dataVencimento":"2026-08-15T12:00:00Z",
                                  "dataPagamento":"2026-08-10T12:00:00Z","valorPagar":80.00,"valorPago":80.00,
                                  "origemPagamento":"CAIXA"}
@@ -291,7 +294,7 @@ class ContaPagarCrudTest {
         mvc.perform(put("/api/v1/contas-pagar/" + idContaPagar).header("Authorization", "Bearer " + base.token())
                         .contentType(APPLICATION_JSON)
                         .content("""
-                                {"idFornecedor":%d,"idEmpresa":%d,"idPlanoContas":"1.00.000",
+                                {"idFornecedor":%d,"idEmpresa":%d,"idPlanoContas":"9.00.000",
                                  "dataLancamento":"2026-07-30T12:00:00Z","dataVencimento":"2026-08-15T12:00:00Z",
                                  "dataPagamento":"2026-08-10T12:00:00Z","valorPagar":40.00,"valorPago":40.00}
                                 """.formatted(base.idFornecedor(), base.idEmpresa())))
@@ -397,7 +400,7 @@ class ContaPagarCrudTest {
         mvc.perform(put("/api/v1/contas-pagar/" + idContaPagar).header("Authorization", "Bearer " + base.token())
                         .contentType(APPLICATION_JSON)
                         .content("""
-                                {"idFornecedor":%d,"idEmpresa":%d,"idPlanoContas":"1.00.000",
+                                {"idFornecedor":%d,"idEmpresa":%d,"idPlanoContas":"9.00.000",
                                  "numeroDuplicata":"DUP-PAG","dataLancamento":"2026-07-30T12:00:00Z",
                                  "dataVencimento":"2026-08-15T12:00:00Z","dataPagamento":"2026-08-12T12:00:00Z",
                                  "valorPagar":10.00,"valorPago":10.00,"documentoPago":true,

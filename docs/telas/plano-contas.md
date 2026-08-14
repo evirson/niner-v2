@@ -62,6 +62,23 @@ de cada grupo, famílias `.90`–`.99` e contas `.900`–`.999` ficam reservadas
 do tenant — uma atualização futura do plano padrão nunca ocupa essas faixas, então nunca colide com
 customização. Grupo `9` inteiro também fica reservado (o seed só usa grupos `1` a `8`).
 
+### Plano padrão aplicado no signup (2026-08-23)
+
+O plano padrão de 76 contas deixou de ser um script manual (`db/scripts/seed_plano_contas_padrao
+.sql`) e virou **`cfg_plano_contas_padrao`** — tabela **modelo global** (sem `id_tenant`, sem RLS,
+mesma exceção de `cfg_produto_ncm`), criada e semeada em `V016__cadastros.sql`. O `SignupService`
+copia o plano inteiro para o tenant novo numa única instrução; `sinal` e `aceita_lancamento`
+seguem derivados na cópia (CREDITO=+1/DEBITO=−1; analítica lança), como o script fazia.
+
+Motivo: o `SignupService` semeava só 3 contas, e o Relatório de DRE de um tenant novo saía **sem
+nenhuma despesa**. Agora uma atualização futura do plano padrão é uma migration, não um script que
+alguém precisa lembrar de rodar por tenant.
+
+⚠️ **Ao escrever teste que cria conta**: o tenant já nasce com as 76 contas. Use as faixas que o
+próprio padrão reserva ao cliente — **grupo 9 inteiro** e as **famílias `.90–.99`** de cada grupo
+(ex.: `2.90.000`) — senão o `POST` devolve 409. Foi assim que os 62 testes quebrados na virada
+foram corrigidos.
+
 ### DRE e fluxo de caixa — classificação, não mais flag solto
 
 > **Consumidor real desde 2026-08-23:** o `grupo_dre`/`sinal`/`inclui_dre` desta tela deixaram de
