@@ -50,6 +50,18 @@ um `DELETE` definitivo, mesmo em linhas com `idMovimento` preenchido (geradas po
 se a entrada de origem for cancelada depois, o `DELETE ... WHERE id_movimento = ?` do
 Cancelamento de Entrada simplesmente não encontra mais nada para apagar.
 
+> ⚠️ **Bug conhecido, em aberto — excluir conta já baixada deixa dinheiro fantasma.**
+> `ContaPagarService.excluir()` (`api/src/main/java/com/vetor/niner/financeiro/contaspagar/ContaPagarService.java:308-316`)
+> apaga **só** a linha de `contas_pagar`. O DELETE dos movimentos de dinheiro
+> (`caixa_detalhe` / `conta_corrente_movimento` por `id_conta_pagar`) existe **apenas** dentro de
+> `sincronizarMovimentoDeDinheiro` (`:157-160`), que é chamado no POST e no PUT — nunca no DELETE.
+> E como `id_conta_pagar` nessas duas tabelas foi criado **sem FK de propósito**
+> (`db/migration/V025__financeiro_caixa_crediario.sql:162`, `V028__financeiro_conta_corrente.sql:90`),
+> o banco também não cascateia nada. Resultado: excluir uma conta **já baixada** deixa a saída de
+> caixa/banco lançada para sempre, órfã e sem como rastrear a origem — o fechamento de caixa e o
+> fluxo de caixa continuam contando esse débito. Correção pendente: chamar o mesmo DELETE por
+> `id_conta_pagar` dentro de `excluir()`.
+
 ### Popup de filtros obrigatório
 
 Ao abrir a tela, `filtrosAberto` inicia `true` e a grid só aparece depois de "Localizar" (todos
@@ -128,6 +140,13 @@ de produto do resto do módulo Financeiro — Conta Corrente/Movimentação).
 - Dado um fornecedor, empresa ou plano de contas inexistente, então 400.
 - Dado uma conta existente, quando atualiza preenchendo `dataPagamento`/`valorPago`/
   `documentoPago`, então grava a baixa (não existe endpoint separado para isso).
+- Dado uma baixa com origem **Caixa da loja**, quando grava, então gera o `caixa_detalhe`
+  (`DEBITO_CAIXA`) no caixa aberto do usuário — e desfazer a baixa apaga esse movimento
+  (`baixaEmDinheiroGeraMovimentoNoCaixaEDesfazerApaga`).
+- Dado uma baixa com origem **Caixa da loja** e nenhum caixa aberto para o usuário, então 400
+  (`baixaEmDinheiroSemCaixaAbertoEhRejeitada`).
+- Dado uma baixa **nova** sem `origemPagamento`, então 400 — a exceção vale só para conta que já
+  estava paga antes desta mudança (`baixaNovaSemOrigemEhRejeitada`).
 - Dado uma conta existente, quando exclui, então apaga de verdade, mesmo se tiver
   `idMovimento` preenchido.
 - Dado filtro por fornecedor e por empresa, então filtra corretamente.
@@ -137,7 +156,8 @@ de produto do resto do módulo Financeiro — Conta Corrente/Movimentação).
 - Dado filtro por intervalo de pagamento, então só traz contas pagas dentro do intervalo.
 - Dado uma conta de outro tenant, então não aparece na listagem nem pode ser buscada (RLS).
 
-Cobertos por `ContaPagarCrudTest` (11 testes).
+Cobertos por `ContaPagarCrudTest` (14 testes) — suíte completa do projeto em **492/492 verdes
+(2026-08-24)**.
 
 ## Ajuda da tela (manual de operação + vídeo) — obrigatório (R22 / §3.7.1)
 

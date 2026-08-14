@@ -219,13 +219,13 @@ Medição: métricas expostas via endpoint `/actuator` + tabela de eventos; aval
 
 **Topologia (ADR-007).** **Uma** API (monólito modular, P6) expõe **três superfícies** por prefixo de path, cada uma com seu `SecurityFilterChain`: `/api/publico/**` (site: signup, checkout, trial — sem auth ou auth leve), `/api/v1/**` (ERP do tenant — JWT de tenant, RLS ativo), `/api/admin/**` (backoffice da plataforma — JWT de staff, opera em `plataforma.*`). Três apps React independentes: **`site/`** (público), **`web/`** (ERP do lojista) e **`admin/`** (backoffice). A separação pedida ("api e front separados") é de **superfície e front-end**, não de processo. A **API é stateless** (JWT, sem sessão/afinidade) e cada front lê a **base-URL da API em runtime** (arquivo de config/env servido, não embutido no bundle) — assim é possível rodar **2 servidores com 2 instâncias** da API e trocar o endereço para manutenção/failover. *Gatilhos para separar o control-plane em serviço próprio depois: janela de manutenção independente, compliance de dados de cartão em rede isolada, ou scale-out do ERP que torne caro arrastar a plataforma junto.*
 
-> ✅ **Q5 fechada (2026-07-10):** o módulo **`financeiro`** do lojista (caixa, crediário, contas a pagar/receber, conta corrente) **não entra no v1** (fora de escopo, junto com PDV — §2.3). Fica para a **Fase 2** (crediário priorizado). Por isso não aparece no diagrama. Ver §3.3.7 / ADR-010.
+> ⚠️ **Q5 — este parágrafo está superado; veja a linha de Q5 na tabela de questões (§2) e §3.3.7.** A decisão original (2026-07-10, ADR-010) deixava o módulo **`financeiro`** do lojista fora do v1. Ela foi **revista duas vezes**: ADR-012 (2026-07-16) antecipou crediário, caixa e contas a pagar (V025/V026), e `conta_corrente`/`conta_corrente_movimento` entraram depois em **V028** (2026-07-31). **Hoje o financeiro do lojista está inteiro no v1 e implementado** — PDV, Recebimento de Crediário, Abertura/Fechamento de Caixa, Contas a Pagar/Pagas, Conta Corrente, DRE e Fluxo de Caixa. Ver §3.3.7 / ADR-010 / ADR-012.
 
 Decisões-chave (registrar cada uma como ADR — template na seção 6):
 
 - **Monolito modular** com módulos por contexto de domínio; comunicação entre módulos por interfaces Java + eventos de domínio internos (Spring events ou Spring Modulith). Justificativa: time pequeno, deploy único, P6.
 - **Padrão de integração:** cada marketplace tem um *adapter* isolado (anti-corruption layer) que implementa a interface comum `CanalDeVenda` (`publicarAnuncio`, `atualizarEstoque`, `atualizarPreco`, `importarPedidos`, `confirmarEnvio`). O domínio nunca conhece payloads do ML/Shopee.
-- **Outbox pattern:** mutações de estoque/preço gravam evento na tabela `outbox_eventos` na mesma transação; um worker (Spring `@Scheduled` no v1; fila dedicada só se necessário) publica para os canais com retry exponencial e dead-letter.
+- **Outbox pattern:** mutações de estoque/preço gravam evento na tabela `outbox_evento` (singular — o nome real, criado em V022; várias partes desta spec ainda dizem `outbox_eventos`) na mesma transação; um worker (Spring `@Scheduled` no v1; fila dedicada só se necessário) publica para os canais com retry exponencial e dead-letter.
 - **Idempotência:** pedidos importados usam chave natural `(canal, id_externo)` com constraint única; webhooks processados registram `webhook_id` recebido.
 - **Sem broker externo no v1** (sem Kafka/RabbitMQ): Postgres como fila via outbox + `SELECT ... FOR UPDATE SKIP LOCKED`. ADR explícito; revisitar se throughput exigir.
 
@@ -268,6 +268,15 @@ Decisões-chave (registrar cada uma como ADR — template na seção 6):
 ## 3.3 Modelo de dados
 
 O modelo abaixo parte do **schema legado real** (`db/*.txt`, originalmente Firebird) já **adaptado para PostgreSQL** e reorganizado por módulo de domínio. Nomes em `snake_case` minúsculo (idioma Postgres), vocabulário de domínio em **português** preservado. Tabelas/colunas marcadas em <span style="color:red">🔴</span> **ainda não existem no legado** e precisam ser criadas para atender à Constituição e aos requisitos (integração com marketplaces, reserva, auditoria).
+
+> ⚠️ **Esta seção é o desenho do núcleo, não o inventário do banco (conferido em 2026-08-24).**
+> Ela cobre bem os módulos originais, mas **não** lista tudo o que foi criado depois — vendas do
+> PDV, devolução e vale-mercadoria, balanço, transferência entre empresas, configuração de
+> etiqueta, arquivo compartilhado, cor/tamanho/grade, entre outras (~16 tabelas). **A fonte de
+> verdade do que existe no banco é `db/migration/README.md` + os arquivos de
+> `db/migration/`** — sempre confira lá antes de afirmar que uma tabela existe ou não. As
+> subseções abaixo continuam valendo para o **racional** de cada decisão de modelagem, que é o
+> que não está no DDL.
 
 ### 3.3.1 Regras de conversão Firebird → PostgreSQL
 
@@ -318,15 +327,17 @@ usuario_rotina(id_usuario FK, nome_rotina, PK(id_usuario, nome_rotina))  -- perm
 
 ```sql
 cfg_categoria_produto(id_categoria PK, nome_categoria)
-cfg_variante_linha(id_variante_linha PK, descricao)      -- ex.: cor
-cfg_variante_coluna(id_variante_coluna PK, descricao)    -- ex.: tamanho / voltagem
+-- SUBSTITUÍDAS em 2026-08-08 (V017) por cor + grade de tamanhos — ver docs/telas/produto.md:
+cfg_cor(id_cor PK, descricao)                            -- sentinela PADRÃO = id 1, nunca exibida
+cfg_tamanho(id_tamanho PK, descricao)                    -- sentinela PADRÃO = id 1, nunca exibida
+cfg_grade(id_grade PK, descricao, até 20 slots ordenados de tamanho)  -- curva de tamanhos
 -- cfg_produto_ncm é GLOBAL (sem id_tenant/RLS, P9) — igual para todos os tenants.
 cfg_produto_ncm(codigo_ncm PK, descricao_ncm, aliquota_ibpt NUMERIC(10,2))
 produto(id_produto PK, ativo BOOL, marca, referencia, descricao,
         preco_custo NUMERIC(12,2), percentual_venda NUMERIC(5,2),
         preco_venda NUMERIC(12,2), data_inicio_oferta, data_final_oferta,
         preco_oferta NUMERIC(12,2), codigo_ncm FK -> cfg_produto_ncm, peso_bruto NUMERIC(14,3),
-        peso_liquido NUMERIC(14,3), nome_variante_linha, nome_variante_coluna,
+        peso_liquido NUMERIC(14,3), id_grade FK -> cfg_grade,
         imagem, criado_em, alterado_em, reajustado_em)
 produto_categoria(id_produto FK, id_categoria FK, PK(id_produto, id_categoria),
                    indice SMALLINT DEFAULT 0)    -- ordenação da categoria dentro do produto; UNIQUE(id_tenant, id_produto, indice)
@@ -334,7 +345,9 @@ produto_categoria(id_produto FK, id_categoria FK, PK(id_produto, id_categoria),
 produto_barra(id_variacao PK,                      -- surrogate; sku é a chave de negócio, não a PK física
               sku,                                  -- identificador INTERNO, obrigatório, único por tenant (ex-codigo_barra); imprimível como código de barras na loja
               ean,                                  -- GTIN real (EAN-13/UPC), NULLABLE; UNIQUE quando preenchido
-              id_produto FK, id_variante_linha FK, id_variante_coluna FK)
+              id_produto FK, id_cor FK -> cfg_cor, id_tamanho FK -> cfg_tamanho)
+              -- UNIQUE(id_tenant, id_produto, id_cor, id_tamanho); cor/tamanho PADRÃO = id 1
+              -- UNIQUE (id_produto, id_cor, id_tamanho); cor/tamanho/grade PADRAO sao sempre id=1
 ```
 > **Mapeamento p/ a spec:** o par (`produto` + `produto_barra`) implementa `produto`+`variacao` do PRD (R1). A chave da variação é o **`sku`** (interno, papel do antigo `codigo_barra`; estrutura grupo+sequencial+dígito de `033_PRODUTOS_BARRA.txt`). Nas migrations de domínio (V013+), **todas as FKs que hoje apontam para `codigo_barra`** (estoque, movimento, pedido_item, anúncio…) passam a referenciar `sku`.
 
@@ -364,12 +377,13 @@ produto_barra(id_variacao PK,                      -- surrogate; sku é a chave 
 > houver sharding (uma segunda instância de banco para outro grupo de tenants), essa segunda
 > instância nasce com `id_banco = 2`, evitando colisão entre bancos. `niner_app` não tem grant
 > nenhum na tabela — só `EXECUTE` na função (`SECURITY DEFINER`, dono `niner_owner`).
-> 🔴 **Decisão em aberto:** hoje nada chama a função automaticamente (a tela/serviço de
-> variação ainda não existe). Quando for construída, o plano é o `ProdutoBarraService.criar()`
-> chamar a função explicitamente antes do `INSERT` (mesmo estilo de `plataforma.tenant_atual()`
-> nos demais módulos — derivado explícito no Java, não escondido em `DEFAULT`/`TRIGGER` da
-> coluna); um gatilho `BEFORE INSERT` que reforce isso no nível do banco (defesa em
-> profundidade) ficou **adiado** a pedido do dono do produto, para decidir quando a tela existir.
+> ✅ **Resolvido em 2026-08-06** (esta nota dizia "nada chama a função ainda" até 2026-08-24):
+> o `ProdutoBarraService` existe (`com.vetor.niner.catalogo`) e chama `gerar_ean13_interno()`
+> explicitamente antes do `INSERT`, exatamente como planejado — derivado explícito no Java, não
+> escondido em `DEFAULT`/`TRIGGER` da coluna, mesmo estilo de `plataforma.tenant_atual()`. É
+> infraestrutura compartilhada: qualquer tela que precise achar-ou-criar variação usa
+> `obterOuCriar(idProduto, idCor, idTamanho, validarGrade[, ean])`. O gatilho `BEFORE INSERT`
+> como defesa em profundidade **continua adiado** a pedido do dono do produto.
 
 > **Tabela de referência de NCM (2026-07-22):** `cfg_produto_ncm(codigo_ncm PK, descricao_ncm,
 > aliquota_ibpt)` é a única tabela do módulo **sem `id_tenant`/RLS** — código NCM é o mesmo para
@@ -439,7 +453,16 @@ produto_movimento_detalhe(id_movimento_detalhe PK, id_movimento FK, id_empresa F
 2026-07-16** (decisão do produto) — o saldo resultante fica só materializado em `produto_estoque`,
 não mais snapshot por linha do ledger.
 
-<span style="color:red">🔴 Impedir saldo negativo sem flag explícita (R2) — hoje só há `CHECK (reservado >= 0)`; falta constraint/validação para `qtd_estoque`/`disponivel` nunca negativos sem flag explícita.</span>
+✅ **R2 revisto pelo dono do produto em 2026-08-12 — saldo negativo é PERMITIDO, de propósito.**
+Nenhuma movimentação do sistema (venda no PDV, transferência entre empresas, devolução, balanço)
+bloqueia por saldo insuficiente: o lançamento passa e o saldo fica negativo. Razão de negócio: no
+varejo pequeno o estoque físico frequentemente está à frente do cadastro (mercadoria chegou e não
+foi lançada), e travar a venda no balcão custa mais do que um saldo negativo que o balanço
+corrige depois. Teste que fixa a política: `PdvCrudTest.estoqueInsuficienteNaoBloqueiaVendaEDeixaSaldoNegativo`.
+Continua valendo o `CHECK (reservado >= 0)` — **reserva** não pode ficar negativa; **saldo** pode.
+
+> Isso **não** enfraquece P1/O1 (zero overselling nos marketplaces): o que evita overselling é a
+> sincronização de estoque com os canais, não uma trava no lançamento interno.
 
 ```sql
 -- inventário / contagem
@@ -501,9 +524,9 @@ webhook_recebido(id PK, id_tenant FK, id_canal FK, webhook_id, recebido_em, proc
 ```
 Worker `@Scheduled` consome `outbox_evento` com `SELECT ... FOR UPDATE SKIP LOCKED`, retry exponencial e dead-letter visível no painel (R7). Polling de segurança a cada 15 min cobre webhooks perdidos.
 
-### 3.3.7 Módulo `financeiro` (caixa, contas, conta corrente) — 🟡 **Quase todo no v1 (Q5 revisada 2026-07-16 — ADR-010/ADR-012)**
+### 3.3.7 Módulo `financeiro` (caixa, contas, conta corrente) — ✅ **Inteiro no v1 e implementado (Q5 encerrada em 2026-07-31)**
 
-> ✅ **Q5 (2026-07-10 — ADR-010), revisada em 2026-07-16 (ADR-012, duas rodadas):** o dono do produto antecipou **crediário, caixa e contas a pagar** da Fase 2 para o v1 — mesmo movimento já feito com `cfg_plano_contas` (V016). Migration **V025** criou: `tipo_carteira`, `moeda`, `moeda_detalhe`, `contas_receber`/`contas_receber_detalhe`, `caixa_mestre`/`caixa_detalhe`. Migration **V026** criou `contas_pagar`. **Só continua fora do v1** (referência de modelagem apenas): `conta_corrente`, `conta_corrente_movimento`. Venda manual (R9) continua sem gravar automaticamente em `contas_receber`/`caixa_detalhe` — a ligação venda→recebível é *feature* futura, ainda não implementada no domínio Java (só o schema existe).
+> ✅ **Q5 (2026-07-10 — ADR-010), revisada em 2026-07-16 (ADR-012, duas rodadas):** o dono do produto antecipou **crediário, caixa e contas a pagar** da Fase 2 para o v1 — mesmo movimento já feito com `cfg_plano_contas` (V016). Migration **V025** criou: `tipo_carteira`, `moeda`, `moeda_detalhe`, `contas_receber`/`contas_receber_detalhe`, `caixa_mestre`/`caixa_detalhe`. Migration **V026** criou `contas_pagar`. **Encerramento (2026-07-31, V028):** `conta_corrente` e `conta_corrente_movimento` — as últimas de fora — também entraram. Hoje **nada do financeiro do lojista fica fora do v1**, e o módulo está implementado ponta a ponta: PDV (grava `venda` + `contas_receber` + `caixa_detalhe`), Recebimento e Estorno de Crediário, Abertura e Fechamento de Caixa, Contas a Pagar/Pagas (baixa gera movimento de caixa/conta corrente), Conta Corrente, DRE e Fluxo de Caixa.
 >
 > **Diferenças do V025/V026 real vs. o pseudo-schema legado abaixo:** todas as 8 tabelas nascem com `id_tenant` (P8) e FKs compostas `(id_tenant, id_x)`; dinheiro/percentual em `NUMERIC` (P7, não `FLOAT`); `documento_recebido`/`documento_pago`/`caixa_fechado` viram `boolean` (não `VARCHAR(1)` S/N; `documento_pago` com `DEFAULT false`); `contas_receber_detalhe` é **1:1** com `contas_receber` (PK `(id_tenant, id_conta_receber)`, sem PK própria); `caixa_detalhe.tipo_operacao` é ENUM `tipo_operacao_caixa` (`RECEBIMENTO_VENDA`/`RECEBIMENTO_PARCELA_CREDIARIO`/`DEBITO_CAIXA`/`CREDITO_CAIXA`/`TROCO`, mapeado do legado `RV/RP/DC/CC/TR`); `caixa_detalhe.credito_debito` reaproveita o ENUM `credito_debito` (`C`/`D`) já criado em V013 para o ledger de estoque; `caixa_detalhe` ganhou `criado_em` (ausente no legado — necessário para "quando" de cada lançamento, P3); `moeda` **não** tem seed global — é semeada **por tenant** no signup (`SignupService.assinar()`, logo após `cfg_geral`); `contas_pagar.localizador` (nome do legado) virou **`id_conta_pagar`** (pedido explícito, quebra de propósito a consistência de nome com `caixa_detalhe.localizador`); `contas_pagar.nota_fiscal` é `integer` **nullable** sem `DEFAULT 0` (sem valor mágico) — a mesma padronização corrigiu `produto_movimento_mestre.nota_fiscal` (V019), que era `text`.
 
@@ -539,11 +562,14 @@ conta_corrente_movimento(localizador PK, id_conta_corrente FK, data_movimento,
                numero_documento, credito_debito, compensado BOOL,
                valor NUMERIC(12,2), observacao)
 ```
-> ✅ **Resolvido (Q5, 2026-07-10 — ADR-010), revisado em 2026-07-16 (ADR-012):**
-> `contas_pagar`/`conta_corrente(_movimento)` continuam **fora do v1**, Fase 2. R9 (venda
-> manual) segue atendido por `venda` + baixa de estoque, sem ligação automática ao financeiro.
-> Diagrama §3.1 ainda não tem o módulo `financeiro` desenhado (pendência de atualização do
-> diagrama, não do schema).
+> ✅ **Q5 encerrada (2026-07-31).** O histórico da decisão: fechada em 2026-07-10 (ADR-010,
+> financeiro fora do v1) → revisada em 2026-07-16 (ADR-012, crediário/caixa/contas a pagar
+> antecipados, V025/V026) → **encerrada em 2026-07-31**, quando `conta_corrente` e
+> `conta_corrente_movimento` entraram via **V028**. Não sobrou nenhuma tabela do financeiro do
+> lojista fora do v1, e R9 (venda) hoje grava sim em `contas_receber`/`caixa_detalhe` — quem
+> faz isso é o PDV (`PdvVendaService`), não a venda manual original.
+> Diagrama §3.1 ainda não tem o módulo `financeiro` desenhado (pendência do diagrama, não do
+> schema).
 >
 > 🟡 **Exceções pontuais antecipadas da Fase 2 (crescendo desde 2026-07-16):**
 > - `cfg_plano_contas` — criada em **V016** (junto de `identidade`/cadastros), preparação
@@ -558,8 +584,10 @@ conta_corrente_movimento(localizador PK, id_conta_corrente FK, data_movimento,
 >   do real vs. o pseudo-schema abaixo na nota no início desta seção.
 > - `contas_pagar` — criada em **V026**. PK `id_conta_pagar` (renomeada do `localizador` do
 >   legado); `nota_fiscal integer` nullable, sem `DEFAULT 0`.
-> - `conta_corrente`, `conta_corrente_movimento` continuam **sem migration**, só referência de
->   modelagem para a Fase 2.
+> - `conta_corrente`, `conta_corrente_movimento` — criadas em **V028** (2026-07-31), fechando
+>   o módulo. `conta_corrente` tem PK de negócio + seed global de 35 bancos e autopreenchimento
+>   do nome do banco; `conta_corrente_movimento.id_conta_pagar` é **deliberadamente sem FK**
+>   (mesma escolha de `caixa_detalhe.id_conta_pagar` em V025) — ver `docs/telas/conta-corrente.md`.
 
 ### 3.3.8 Configuração global
 
@@ -577,9 +605,16 @@ UNIQUE(id_tenant, nome_categoria))` — criada junto de `cliente` (mesmo arquivo
 
 ✅ **Resolvido (V023, ajustado 2026-07-16):** `cfg_geral` real não tem `moeda_devolucao`
 (removido) nem `nome_etiqueta` (esse ficou em `empresa.cfg_nome_etiqueta`, não em `cfg_geral` —
-ver §3.3.2). Ganhou `cfg_usa_variante_linha boolean NOT NULL DEFAULT true` e
-`cfg_usa_variante_coluna boolean NOT NULL DEFAULT true` (prefixo `cfg_` no nome da coluna,
-convenção nova a partir desta data).
+ver §3.3.2). Ganhou o prefixo `cfg_` nas colunas de flag (convenção nova a partir desta data).
+
+⚠️ **Flags reais de `cfg_geral` (conferidas em 2026-08-24 contra V023).** As duas flags citadas
+na versão anterior deste parágrafo — `cfg_usa_variante_linha` / `cfg_usa_variante_coluna` —
+**não existem mais**: saíram em 2026-08-08 junto com a troca de variante linha/coluna por
+cor+grade. O conjunto atual é:
+`cfg_usa_cor_grade` (default **false**), `cfg_permite_qtd_decimal` (true),
+`cfg_exige_numero_venda_devolucao` (false), `cfg_rateia_frete_entrada` (false),
+`cfg_reajusta_preco_entrada` (false), `cfg_consiste_valor_contas_pagar` (**true**, 2026-08-23)
+e `id_plano_contas_compra_mercadoria`. Ver `docs/telas/configuracao-geral.md`.
 
 ### 3.3.9 Cadastros auxiliares
 
@@ -702,12 +737,19 @@ GET    /api/admin/faturas?status=VENCIDA      inadimplência / régua de dunning
 POST   /webhooks/gateway                       notificação do gateway (idempotente)      [R16]
 ```
 
-Convenções: versionamento no path; erros no formato Problem Details (RFC 9457); paginação por cursor em listagens; todos os endpoints documentados no OpenAPI antes da implementação (contrato faz parte da spec da feature). **Multi-tenant:** o tenant vem do claim `tid` do JWT (nunca do path/body) em `/api/v1/**`; `/api/admin/**` usa JWT de staff (`aud=plataforma`) e opera cross-tenant; `/api/publico/**` é anônimo/rate-limited.
+Convenções: versionamento no path; erros no formato Problem Details (RFC 9457); paginação **por número de página** em listagens (`pagina`/`limite` → `LIMIT/OFFSET` + total; revisto em 2026-07-21 — **não** é cursor: as telas precisam pular para qualquer página); todos os endpoints documentados no OpenAPI antes da implementação (contrato faz parte da spec da feature). **Multi-tenant:** o tenant vem do claim `tid` do JWT (nunca do path/body) em `/api/v1/**`; `/api/admin/**` usa JWT de staff (`aud=plataforma`) e opera cross-tenant; `/api/publico/**` é anônimo/rate-limited.
 
 ## 3.5 Docker / ambiente
 
+> ⚠️ **O YAML abaixo é o esboço original e divergiu do real (conferido em 2026-08-24).** O
+> `docker-compose.yml` do repositório é a fonte de verdade. Diferenças principais: o banco é
+> **`niner_db`** com os papéis `niner_owner`/`niner_app` (não `erp`/`erp`), e além de `db` e `api`
+> existem os serviços **`flyway`** (aplica `db/migration/`), **`fake-gcs`** (object storage local
+> para as fotos de produto — ver `docs/infra/armazenamento-imagens.md`), **`pgadmin`**, **`site`**
+> e **`web`**. Mantido aqui só como registro do desenho inicial.
+
 ```yaml
-# docker-compose.yml (dev)
+# docker-compose.yml (dev) — ESBOÇO ORIGINAL, ver docker-compose.yml no repo
 services:
   db:
     image: postgres:18
@@ -784,7 +826,7 @@ V019  estoque: produto_estoque (reservado/disponivel, Q2) · produto_movimento_m
 V020  canais: canal (credenciais cifradas) · anuncio (de-para SKU, R6)
 V021  pedidos de canal: pedido (idempotente canal+id_externo) · pedido_item
 V022  integracao: outbox_evento (COM id_tenant) · webhook_recebido
-V023  cfg_geral (singleton POR tenant; cfg_usa_variante_linha/coluna; sem moeda_devolucao)
+V023  cfg_geral (singleton POR tenant; flags cfg_*; sem moeda_devolucao) — ver §3.3.8
 V024  RLS de domínio (final p/ V014–V023): ENABLE + FORCE ROW LEVEL SECURITY +
       USING (id_tenant = plataforma.tenant_atual()) em TODAS as tabelas de tenant + grants +
       REVOKE UPDATE/DELETE só em produto_movimento_mestre (imutabilidade, P3)
@@ -794,8 +836,19 @@ V025  financeiro (parcial, Q5 revisada 2026-07-16 — ADR-012): tipo_carteira, m
       mesmo arquivo (V024 já tinha rodado).
 V026  financeiro: contas_pagar (Q5 revisada de novo, 2026-07-16 — ADR-012). PK
       id_conta_pagar (renomeada de localizador); nota_fiscal integer nullable, sem
-      DEFAULT 0. RLS próprio no arquivo. conta_corrente* segue como único módulo fora do v1.
+      DEFAULT 0. RLS próprio no arquivo.
+V027  usuário/empresa: usuario_empresa (N:N) + horário de acesso por dia da semana
+V028  financeiro (fecha o módulo): conta_corrente + conta_corrente_movimento —
+      encerra a última pendência de Q5; nada do financeiro do lojista fica fora do v1
+V029  cfg_etiqueta + cfg_etiqueta_campo (editor visual de etiqueta de produto)
+V030  vendas: venda/venda_item/venda_pagamento (PDV) · devolucao + vale_mercadoria
+V031  balanço de estoque (produto_balanco) · transferência entre empresas
+V032  comum.arquivo_compartilhado (cache de PDF p/ envio por WhatsApp, token 24h)
+V033  cfg_plano_contas ganha grupo_dre/grupo_dfc/sinal/inclui_dre (DRE + Fluxo de Caixa)
 ```
+> ⚠️ A numeração acima é a **real do repositório** (V001–V033, conferida em 2026-08-24). A
+> faixa "V001–V091" citada no roadmap (§4) era a estimativa original da spec e **não**
+> corresponde a arquivos existentes — use sempre `db/migration/README.md` como fonte.
 Detalhe migration a migration (com ✅/🔴 de situação): `db/migration/README.md`.
 Racional de RLS num arquivo final: garante que **nenhuma** tabela de tenant fica sem política — auditável num único ponto e testável ("toda tabela de tenant tem RLS" vira teste de P8). As tabelas de `plataforma` são globais (P9) e **não** entram no RLS de tenant.
 
@@ -835,7 +888,11 @@ Toda tela do frontend segue o **padrão de referência** em [`docs/padroes/cadas
 - **Footer-bar:** `--surface-2`, alinhado à direita, com `id-chip` (identificador do registro) à esquerda e botões **Cancelar** (secundário) + **Salvar** (primário).
 
 **Componentes.**
-- **Campo:** `label` (com `*` em `--danger` quando obrigatório) acima de `input`/`select` de fundo `--field-bg`, borda `--line-strong`, `border-radius: 7px`, padding `9px 10px`, largura total. Foco: sem outline default, borda `--focus` + `box-shadow` de 3px com `color-mix`.
+- **Campo:** `label` (com `*` em `--danger` quando obrigatório) acima de `input`/`select` de fundo `--field-bg`, borda `--line-strong`, `border-radius: 7px`, padding `9px 10px`, largura total. Foco: sem outline default, borda `--focus` + `box-shadow` de 3px.
+  ⚠️ **`color-mix()` é proibido no projeto** (decidido em 2026-07-31): o `html2canvas` usado nos PDFs
+  de relatório não entende `color-mix()` nem a serialização `color(srgb …)` do Chrome, e o PDF sai com
+  as cores erradas. Use as trincas R,G,B (`rgba(var(--x-rgb), alpha)`) já definidas no topo de
+  `web/src/styles.css`. Ver `docs/telas/relatorio-vendas.md`.
 - **Botões:** `.btn` `font-weight 600`, `border-radius 8px`. Primário = `--btn-primary-bg`/`--btn-primary-text`; secundário = transparente com borda `--btn-secondary-border`. Hover por `filter: brightness(0.92)`.
 - **Texto sempre em maiúsculas (2026-07-20):** todo campo de texto livre (nome, endereço, redes sociais etc.) é normalizado para **MAIÚSCULAS** no front (`onChange` força o valor, não importa o estado do teclado/Caps Lock do usuário) e reforçado no backend como defesa em profundidade. Única exceção: **e-mail** (caixa preservada). Campos não-texto (select, data, checkbox, valores monetários/mascarados) não se aplicam.
 - **Foco automático:** ao abrir uma tela de inclusão ou edição, o primeiro campo do formulário recebe foco automaticamente (`autoFocus`), para o usuário já poder digitar sem clicar.
@@ -859,7 +916,7 @@ Convenção de nomes de campo no mockup segue os identificadores legados em MAI�
   - **Passo a passo** de operação (o "como fazer" — o manual), incluindo campos obrigatórios, validações e ações do rodapé (`footer-bar`).
   - **Dicas/erros comuns** e o que fazer.
   - **Botão "Assistir vídeo"** que direciona ao vídeo explicativo da tela.
-- **Fonte do conteúdo (API-first, P4):** o texto da ajuda e a URL do vídeo **não** são hard-coded no front. Vêm de um catálogo de ajuda versionado, servido pela API — proposta de modelo:
+- **Fonte do conteúdo — ⚠️ o desenho abaixo NÃO foi implementado (conferido em 2026-08-24).** A tabela `ajuda_tela`, a migration e o endpoint `GET /api/v1/ajuda/{chave_tela}` **não existem**. Na prática, o conteúdo da ajuda vive num mapa no próprio front (`web/src/components/AjudaDaTela.tsx`), indexado pela `chave_tela` — que é a única parte deste desenho que sobreviveu. A regra R22 (toda tela tem ajuda) **continua obrigatória** e é cumprida assim; o que está em aberto é só *onde o texto mora*. Migrar para a API é trabalho futuro, e o desenho proposto originalmente era:
   ```sql
   -- 🔴 a criar (migration futura): catálogo de ajuda por tela (global; conteúdo institucional, não é dado de tenant)
   ajuda_tela(chave_tela PK,        -- ex.: 'catalogo.produto.form'

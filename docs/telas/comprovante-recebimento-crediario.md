@@ -22,9 +22,13 @@ outro).
 1. **Dois botões separados** (Imprimir / Salvar PDF), não um botão só delegando pro diálogo
    nativo do navegador — `jsPDF` adicionado como dependência nova do `web/` (única exceção ao
    "sem biblioteca nova" de outras features, porque gerar PDF direto é o próprio pedido).
-2. **Popup automático após efetivar**, sem botão pra reabrir depois — se o operador fechar sem
+2. **Popup automático após efetivar**, ~~sem botão pra reabrir depois — se o operador fechar sem
    imprimir, precisa ir em Estorno de Crediário pra achar o lote de novo (a visualização de lá
-   não tem os botões de impressão, é só leitura das parcelas).
+   não tem os botões de impressão, é só leitura das parcelas)~~ — **superado**: existe a tela
+   **Reimpressão de Comprovante de Recebimento**
+   (`web/src/pages/financeiro/ReimpressaoRecebimentoCrediario.tsx`, item de menu em
+   `web/src/lib/menu.ts:162`), que localiza o lote e reabre o mesmo comprovante com os botões de
+   Imprimir/PDF/WhatsApp.
 3. **Largura real (42 colunas), não a tabela larga do primeiro mockup** — o mockup original
    (~70 colunas) não caberia fisicamente numa bobina de 80mm em fonte legível (máx. ~42-48
    colunas em Font A). Reorganizado em blocos por parcela mantendo as mesmas informações.
@@ -126,7 +130,7 @@ tenant — RLS).
 
 Cobertos por `RecebimentoCrediarioCrudTest` (+2 testes:
 `comprovanteTrazCabecalhoParcelasEFormasDePagamento`, `comprovanteDeLoteInexistenteResponde404`).
-Suíte completa do projeto: 213/213 verdes (2026-07-30).
+Suíte completa do projeto: 492/492 verdes (2026-08-24).
 
 ## Reimpressão (2026-08-06 — deixou de ser non-goal)
 
@@ -193,8 +197,11 @@ Nenhum.
 
 ## Questões abertas
 
-Nenhuma bloqueante. Fonte de impressão/margens ajustadas por cálculo (não testadas numa
-impressora térmica física ainda) — pode precisar de ajuste fino depois do primeiro teste real.
+Nenhuma bloqueante. ~~Fonte de impressão/margens ajustadas por cálculo (não testadas numa
+impressora térmica física ainda) — pode precisar de ajuste fino depois do primeiro teste real.~~
+— **resolvido em 2026-08-24**: a calibragem foi feita **contra impressão real** na bobina de 80mm
+(largura 75mm, Consolas 11.5px em negrito, `print-color-adjust: exact`); ver "Impressão pra bobina
+física de 80mm" acima e `docs/telas/papeleta-venda.md`.
 
 ## Métrica de sucesso
 

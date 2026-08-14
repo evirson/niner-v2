@@ -63,8 +63,8 @@ no cancelamento e na devolução, e criaria risco de o lançado divergir do movi
 
 | Linha | Conta | Origem derivada |
 |---|---|---|
-| Receita de vendas | `1.01.001` | `produto_movimento_detalhe.preco_venda × qtd` das saídas de venda |
-| Devoluções de vendas | `2.02.001` | `venda_devolucao` (valor devolvido no período) |
+| Receita de vendas | `1.01.001` | `produto_movimento_detalhe.preco_venda × qtd` **+ `valor_acrescimo`** das saídas de venda (o acréscimo da forma de pagamento é receita, `DreService.java:214`) |
+| Devoluções de vendas | `2.02.001` | **o próprio ledger** — `produto_movimento_mestre.tipo_movimento = 'DEVOLUCAO'` + detalhes `credito_debito = 'C'`, por `pmm.data_movimento` (`DreService.java:238-250`). A tabela `venda_devolucao` **não** é consultada pela DRE |
 | Descontos concedidos | `2.02.002` | `produto_movimento_detalhe.valor_desconto` (item + rateio da forma de pagamento) |
 | CMV | `3.01.001` | `produto_movimento_detalhe.preco_custo × qtd` das mesmas saídas |
 | Taxas de cartão/PIX | `3.02.002` | `tipo_carteira.perc_desconto` aplicado sobre o valor de cada forma de pagamento |
@@ -73,13 +73,23 @@ no cancelamento e na devolução, e criaria risco de o lançado divergir do movi
 **Todo o resto vem de lançamento**, somado por `id_plano_contas` → `grupo_dre` → `sinal`.
 
 **[revisto na implementação] As linhas derivadas carregam o próprio grupo de DRE, em código** —
-não perguntam o grupo ao plano de contas do tenant. Motivo descoberto no primeiro teste: o
-`SignupService` semeia apenas **3 contas** (a árvore mínima da conta de compra); o plano padrão
-completo de 76 contas é um seed à parte (`db/scripts/seed_plano_contas_padrao.sql`) que nem todo
-tenant aplicou. Se receita e CMV dependessem de `1.01.001`/`3.01.001` existirem, a DRE de um
-tenant novo viria **zerada mesmo com vendas** — foi exatamente o que aconteceu. O código da conta
-continua sendo a chave de exibição, e a descrição cadastrada pelo lojista prevalece quando a conta
-existe no plano dele.
+não perguntam o grupo ao plano de contas do tenant. Motivo descoberto no primeiro teste: na época
+o `SignupService` semeava apenas **3 contas** (a árvore mínima da conta de compra) e o plano padrão
+completo de 76 contas era um seed à parte que nem todo tenant aplicou. Se receita e CMV dependessem
+de `1.01.001`/`3.01.001` existirem, a DRE de um tenant novo viria **zerada mesmo com vendas** — foi
+exatamente o que aconteceu. O código da conta continua sendo a chave de exibição, e a descrição
+cadastrada pelo lojista prevalece quando a conta existe no plano dele.
+
+> **Atualizado em 2026-08-23:** o seed manual acabou — `SignupService.java:99-116` copia as **76
+> contas** de `cfg_plano_contas_padrao` (tabela modelo global semeada em
+> `db/migration/V016__cadastros.sql:345-472`) para todo tenant novo. A decisão acima **continua
+> valendo assim mesmo**: as linhas derivadas não podem quebrar se o lojista renomear ou excluir a
+> conta padrão.
+>
+> ⚠️ **Consequência para teste**: como o tenant já nasce com o plano inteiro, fixture que cria
+> conta precisa usar as **faixas reservadas ao cliente** — **grupo `9` inteiro** e as **famílias
+> `.90`–`.99`** de cada grupo (ex.: `9.01.001`, `2.90.000`) —, senão o `POST` colide com o padrão
+> e devolve **409**. Foi isso que quebrou 62 testes na virada de 2026-08-23.
 
 Por que o CMV vem do ledger e não da compra: `3.03.001 Compra de Mercadoria para Revenda` já está
 com **`inclui_dre = false`** no seed — compra é estoque (ativo), não resultado. O custo entra na
@@ -91,7 +101,7 @@ DRE quando a mercadoria **sai vendida**, com o custo real gravado na própria li
 | | Competência | Caixa |
 |---|---|---|
 | Venda (receita, CMV, desconto, taxa, comissão) | `venda.data_venda` | `contas_receber.data_recebimento` **[revisto na implementação]** |
-| Devolução | `venda_devolucao.data_devolucao` | idem (quando devolve dinheiro) |
+| Devolução | `produto_movimento_mestre.data_movimento` do movimento `DEVOLUCAO` **[revisto na implementação]** — não `venda_devolucao.data_devolucao` (`DreService.java:238-250`) | **não entra** — o regime de caixa passa `BigDecimal.ZERO` nas linhas de devolução (`DreService.java:315-316`) |
 | Despesa lançada | `contas_pagar.data_lancamento` | `contas_pagar.data_pagamento` |
 | Movimento bancário avulso | — | `conta_corrente_movimento.data_movimento` |
 
@@ -118,10 +128,12 @@ Duas consequências do regime de caixa, ambas deliberadas:
 Contas a Pagar **não** gera lançamento em `caixa_detalhe` nem em `conta_corrente_movimento` — as
 três tabelas são independentes. Então, se o lojista baixar a conta **e** lançar o mesmo pagamento
 na Movimentação de Conta Corrente, o valor sai duas vezes. Regra desta versão: no regime de caixa,
-**a saída é `contas_pagar.data_pagamento`**, e `conta_corrente_movimento`/`caixa_detalhe` entram
-**apenas** com contas cujo grupo de DRE não seja alcançável por Contas a Pagar (tarifa bancária
-lançada direto, por exemplo). A tela avisa isso na ajuda (R22), e a conciliação automática fica
-como evolução. Ver "Questões abertas".
+**a saída é `contas_pagar.data_pagamento`**, e `conta_corrente_movimento` entra **apenas** com
+contas de **receita** — o filtro do código é literalmente
+`pc.grupo_dre IN ('RECEITA_BRUTA','RESULTADO_FINANCEIRO') AND ccm.credito_debito = 'C'`
+(`DreService.java:378-398`). **`caixa_detalhe` nunca é consultado pela DRE**, em nenhum dos dois
+regimes — a entrada de dinheiro vem de `contas_receber.data_recebimento` (ver acima). A tela avisa
+isso na ajuda (R22), e a conciliação automática fica como evolução. Ver "Questões abertas".
 
 ## Filtros
 
@@ -129,7 +141,7 @@ como evolução. Ver "Questões abertas".
 |---|---|---|
 | Período | data inicial/final mascaradas `dd/mm/aaaa` | obrigatório; padrão = mês corrente |
 | Regime | rádio/select | Competência (padrão) · Caixa |
-| Empresa | `EmpresaMultiSelect` | ADMIN vê todas; OPERADOR só as suas (`usuario_empresa`) |
+| Empresa | `EmpresaMultiSelect` | **A tela inteira é ADMIN-only** — `DreService.gerar` chama `exigirAdmin(jwt)` na primeira linha e devolve **403** ("Apenas administradores podem consultar a DRE.") antes de qualquer resolução de empresa (`DreService.java:93, 110-114`). Ou seja, na prática só existe o caso "ADMIN vê todas"; OPERADOR nunca chega ao filtro |
 | Comparar com (AH) | select | Nenhum · Período anterior (padrão) · Mesmo período do ano anterior |
 
 ## Padrão de tela de relatório (2026-08-23, segunda rodada)
@@ -198,10 +210,13 @@ mais um cabeçalho com o período, o período comparado e os totais.
 
 ## Impacto no banco
 
-**Nenhuma migration.** Todos os dados necessários já existem (`cfg_plano_contas` com
-`grupo_dre`/`sinal`/`inclui_dre`, `venda`, `produto_movimento_detalhe`, `venda_devolucao`,
-`tipo_carteira`, `contas_pagar`, `caixa_detalhe`, `conta_corrente_movimento`). Este é um
-relatório de leitura pura.
+**Nenhuma migration.** Todos os dados necessários já existem. Tabelas efetivamente lidas por
+`DreService`: `cfg_plano_contas` (`grupo_dre`/`sinal`/`inclui_dre`), `venda`,
+`produto_movimento_mestre`, `produto_movimento_detalhe`, `funcionario`, `contas_receber`,
+`tipo_carteira`, `contas_pagar` e `conta_corrente_movimento`. **`caixa_detalhe` e
+`venda_devolucao` não entram** — a devolução vem do ledger (`tipo_movimento = 'DEVOLUCAO'`) e a
+entrada de dinheiro vem de `contas_receber.data_recebimento` (`DreService.java:238-250, 378-398`).
+Este é um relatório de leitura pura.
 
 ## Critérios de aceitação (viram testes)
 
@@ -230,6 +245,18 @@ relatório de leitura pura.
 `chave_tela`: `relatorios.dre`. Precisa explicar, em linguagem de lojista: a diferença entre os
 dois regimes (com o exemplo do crediário), por que compra de mercadoria não aparece, o que é CMV,
 e o aviso de não lançar em Conta Corrente um pagamento já baixado em Contas a Pagar.
+
+## Impacto nas integrações
+
+Nenhum. A DRE só lê o que já está persistido — não publica evento no outbox, não fala com canal
+de venda, não escreve nada. É o relatório mais "somente leitura" do produto.
+
+## Métrica de sucesso
+
+O lojista consegue responder **"esse mês deu lucro?"** sem exportar nada para planilha, e a
+diferença entre os dois regimes explica sozinha o desencontro entre lucro e dinheiro em caixa —
+que é a dúvida que motivou a feature. Sinal de que está funcionando: a tela ser aberta perto do
+fechamento do mês, e o regime de caixa ser consultado quando falta dinheiro apesar de ter vendido.
 
 ## Non-goals desta versão
 

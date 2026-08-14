@@ -182,8 +182,8 @@ abria um caixa automaticamente com `saldo_inicial = 0`, sem pedir nada ao operad
   409 e nada é gravado.
 - Dado uma parcela de outro tenant, então não aparece na listagem nem pode ser recebida (RLS).
 
-Cobertos por `RecebimentoCrediarioCrudTest` (13 testes). Suíte completa do projeto: 193/193
-verdes (2026-07-29).
+Cobertos por `RecebimentoCrediarioCrudTest` (23 testes). Suíte completa do projeto: 492/492
+verdes (2026-08-24).
 
 ## Impacto no contrato de API
 
@@ -239,13 +239,18 @@ Nenhum.
   (ou extensão desta) se vier a ser pedido.
 - **Parcelamento do recebimento** — pagar com cartão de crédito aqui não gera novas parcelas;
   é sempre um valor à vista naquela forma de pagamento.
-- **Edição/estorno de um recebimento já efetivado** — sem tela pra desfazer; `contas_receber`
+- ~~**Edição/estorno de um recebimento já efetivado** — sem tela pra desfazer; `contas_receber`
   fica com `data_recebimento` preenchida permanentemente (diferente da Transferência, que ganhou
-  exclusão em 2026-07-29 — aqui não foi pedido).
+  exclusão em 2026-07-29 — aqui não foi pedido).~~ — **superado**: existe a tela irmã **Estorno de
+  Recebimento de Crediário** (`web/src/pages/financeiro/EstornoRecebimentoCrediario.tsx`,
+  `RecebimentoCrediarioController.java:77`, spec `docs/telas/estorno-recebimento-crediario.md`),
+  que reverte o **lote inteiro** do recebimento — não a edição parcial, que segue fora de escopo.
 - **Captura de número de autorização de cartão** — `contas_receber_detalhe.numero_autorizacao`
   fica `NULL`; a tela não tem campo pra isso.
-- **Fechamento de caixa, sangria/suprimento** — a abertura ganhou tela própria em 2026-07-30
-  (`docs/telas/abertura-caixa.md`); fechamento continua sem fluxo.
+- **Sangria/suprimento** — seguem sem fluxo. ~~**Fechamento de caixa**~~ — abertura e
+  **fechamento** ganharam tela própria em 2026-07-30 (`docs/telas/abertura-caixa.md`,
+  `docs/telas/fechamento-caixa.md`; `web/src/pages/caixa/FechamentoCaixa.tsx`,
+  `CaixaController.java:56`).
 
 ## Questões abertas
 

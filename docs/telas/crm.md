@@ -126,7 +126,11 @@ todas já existentes). Dois endpoints, `/api/v1/**` (qualquer papel, só leitura
 
 - `GET /api/v1/crm/opcoes` — as 4 listas de dropdown (categorias de cliente/produto, cores,
   tamanhos) do tenant, pra popular os `MultiSelectGenerico` dos dois popups.
-- `GET /api/v1/crm/clientes` — os 15 filtros como `@RequestParam` (mesmo estilo de
+- `GET /api/v1/crm/clientes` — os **16** filtros como `@RequestParam`
+  (`CrmController.java:39-54`: `clienteInicial`, `clienteFinal`, `generos`, `idadeDe`, `idadeAte`,
+  `aniversarioDe`, `aniversarioAte`, `idsCategoriaCliente`, `cadastroDe`, `cadastroAte`,
+  `diasSemComprasMinimo`, `comprasDe`, `comprasAte`, `idsCategoriaProduto`, `idsCor`,
+  `idsTamanho`) — mesmo estilo de
   `RelatorioContasReceberController`: `List<Long>`/`List<String>` para multi-seleção, LocalDate
   pros períodos), devolve a lista de `ClienteCrmResponse`.
 

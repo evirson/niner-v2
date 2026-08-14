@@ -30,8 +30,10 @@ que já é ADMIN-only.
    de registro que faça sentido mostrar; em vez do bloco de 3 campos do componente padrão, a
    tela mostra só "Última atualização: `<data>`" abaixo do título.
 3. **Todos os campos são `NOT NULL`** (V023) — não existe noção de "campo vazio nem
-   obrigatório configurável"; a validação é só de **faixa** (percentual entre 0–100, dias
-   ≥ 0), nunca de presença.
+   obrigatório configurável" (nada de `cfg_tela_campo` aqui). A validação é de **faixa**
+   (percentual entre 0–100, dias ≥ 0) e de **presença**: todo campo do request é `@NotNull` e o
+   `idPlanoContasCompraMercadoria`, por ser texto, é **`@NotBlank`** — mandar `""` ou só espaços
+   devolve 400 (`api/src/main/java/com/vetor/niner/configuracao/geral/ConfiguracaoGeralDtos.java:22-34`).
 4. **Item de menu condicional ao papel** — diferente das telas de cadastro (sempre visíveis
    no menu, com sub-rotas ADMIN-only como "configuração de campos"), aqui a **tela inteira** é
    ADMIN-only, então o próprio item de menu ("Parâmetros do Sistema") só aparece para ADMIN
@@ -43,7 +45,8 @@ que já é ADMIN-only.
 
 ## Campos do formulário
 
-Tabela `cfg_geral` (V023). Seções: **Vendas**, **Catálogo**, **Estoque** (2026-07-29),
+Tabela `cfg_geral` (V023). Cinco seções, nesta ordem: **Vendas**, **Catálogo**, **Estoque**
+(2026-07-29), **Compras** (2026-08-22, plano de contas padrão da compra de mercadoria) e
 **Crediário** — esta última nasceu rotulada "(Fase 2)" com um aviso de que o módulo ainda não
 existia; o crediário saiu do papel em 2026-07-29 (Recebimento de Crediário calcula multa/juros
 automaticamente sobre parcelas vencidas usando esses quatro campos) e o rótulo/aviso da tela
@@ -194,8 +197,11 @@ mesmo padrão — dentro de `V023__cfg_geral.sql`).
 `cfg_consiste_valor_contas_pagar boolean NOT NULL DEFAULT true` (coluna nova, 2026-08-23, mesmo
 padrão — dentro de `V023__cfg_geral.sql`; aplicada no banco de dev por `ALTER TABLE ... ADD
 COLUMN IF NOT EXISTS` + `flyway repair`, sem recriar o banco, e sem `GRANT` novo porque os
-privilégios de `cfg_geral` para `niner_app` são de tabela inteira, não por coluna). O resto da
-tabela já existia por completo (V023, RLS via V024), semeada no signup.
+privilégios de `cfg_geral` para `niner_app` são de tabela inteira, não por coluna).
+`cfg_geral.id_plano_contas_compra_mercadoria` (seção **Compras**) é a única coluna que **não**
+veio da V023: nasceu na `V032__plano_contas.sql` (linhas 21, 48 e 51 — coluna, FK e seed do
+padrão), junto do plano de contas gerencial. O resto da tabela já existia por completo (V023, RLS
+via V024), semeada no signup.
 
 ## Impacto nas integrações
 

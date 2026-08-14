@@ -59,10 +59,13 @@ havia uma tela desse tipo antes para servir de precedente.
 6. **Vendas canceladas excluídas de tudo** (`v.cancelada = false` direto no filtro base) —
    diferente da Pesquisa de Vendas, que mostra e sinaliza; aqui não faz sentido aparecer em
    KPI/gráfico/totalizador agregado.
-7. **Devoluções sempre mostram zero.** A seção existe (KPI + composição do faturamento) e a
+7. ~~**Devoluções sempre mostram zero.** A seção existe (KPI + composição do faturamento) e a
    query está correta contra o ledger (`produto_movimento_mestre.tipo_movimento = 'DEVOLUCAO'`),
    mas **nenhuma tela do sistema cria esse tipo de movimento ainda** (enum existe desde V013,
-   nunca usado em `api/`). Fica pronta pra quando o módulo de devolução existir.
+   nunca usado em `api/`).~~ — **superado**: a tela **Devolução de Produtos**
+   (`docs/telas/devolucao-produtos.md`) grava `DEVOLUCAO` no ledger
+   (`DevolucaoProdutoService.java:127`), então a seção mostra **dado real**. A query e o layout
+   descritos aqui não mudaram.
 8. **Período máximo: 400 dias** (folga sobre 365 pra cobrir "Últimos 12 Meses" em ano bissexto),
    mesma mensagem de erro no estilo de Pesquisa de Vendas/Cancelamento de Venda.
 9. **Presets de período resolvidos no front** (aritmética de data pura, mesmo precedente já
@@ -342,8 +345,10 @@ Nenhum.
   em relação a Pesquisa de Vendas, que não tem exportação nenhuma).
 - **Navegação real por trás dos cards de KPI** — são só informativos nesta v1, apesar do visual
   de botão.
-- **Dado real de devolução** — a seção existe e a query está correta, mas fica zerada até o
-  módulo de devolução ser implementado em alguma tela futura.
+- ~~**Dado real de devolução** — a seção existe e a query está correta, mas fica zerada até o
+  módulo de devolução ser implementado em alguma tela futura.~~ — **superado**: a Devolução de
+  Produtos existe e grava `DEVOLUCAO` (`DevolucaoProdutoService.java:127`); a seção é alimentada
+  com dado real, sem alteração no relatório.
 - **Outros relatórios do grupo Relatórios** — esta feature só cobre Vendas; o padrão aqui
   definido (filtros → KPIs → composição → gráficos → grid totalizável) é o ponto de partida
   para as próximas telas do grupo, não uma entrega delas.

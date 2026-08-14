@@ -87,8 +87,10 @@ foram corrigidos.
 > `inclui_dre = false` nas contas de compra de mercadoria (3.03.x) é o que impede a DRE de contar
 > o estoque duas vezes, junto com o CMV; (2) a DRE **não depende** deste cadastro para as linhas
 > derivadas do movimento (receita, CMV, comissão, taxa, desconto, devolução) — elas carregam o
-> próprio grupo em código, porque o signup semeia só 3 contas e um tenant novo não teria onde
-> classificá-las.
+> próprio grupo em código. *(O motivo original era que o signup semeava só 3 contas e um tenant
+> novo não teria onde classificá-las; desde 2026-08-23 o signup semeia o plano inteiro de 76
+> contas — `SignupService.java:99-116` —, mas a decisão de carregar o grupo em código foi mantida:
+> as linhas derivadas não podem depender de o lojista não ter renomeado/excluído a conta.)*
 
 `inclui_dre`/`inclui_fluxo_caixa` continuam existindo, mas agora cada um tem um **grupo** obrigatório
 quando `true` (`grupo_dre`/`grupo_dfc`, ENUMs `grupo_dre_conta`/`grupo_dfc_conta`) e forçado pra
@@ -151,7 +153,7 @@ serviço já pré-checa antes, mas continuam como rede de segurança contra SQL 
    **usuário digita o código** ao criar (com a máscara nova), **imutável após a criação** (é PK e
    é referenciada por FK composta em `fornecedor`/`contas_pagar`/`caixa_detalhe`/
    `conta_corrente_movimento`) — na edição o campo aparece bloqueado (`.campo-leitura`).
-2. Rotas usam o próprio código: `/api/v1/planos-contas/3.03.001.001`.
+2. Rotas usam o próprio código: `/api/v1/planos-contas/3.03.001` (3 níveis, máscara `9.99.999`).
 
 **Sem tela de configuração de campos** (sem ícone ⚙): os campos estruturalmente obrigatórios
 (código/descrição/tipo de movimento/natureza, e grupo DRE/DFC quando a flag correspondente está
@@ -185,6 +187,8 @@ removida junto com `id_conta_contabil`/`id_plano_referencial`), mais a seção p
 - **Busca:** código OU descrição (`ILIKE`), maiúsculas. **Filtro de status** (Ativos/Inativos/
   Todos, novo — mesmo padrão de Funcionário), padrão "Ativos".
 - Paginação (janela deslizante, 50 fixos), layout fixo, grid compacta, três ícones de ação.
+- **Botão de fechar (✕)** no cabeçalho da listagem e do formulário (`BotaoFecharTela`,
+  `navigate(-1)` — histórico real, nunca rota fixa; convenção de todo o sistema).
 
 ## Regras de negócio
 
@@ -229,9 +233,10 @@ filhas / conta em uso por fornecedor-contas a pagar-caixa-conta corrente.
 - Dado `ordenarPor`/`direcao`, então a listagem respeita.
 - Dado o plano de contas de um tenant, então não aparece nem pode ser buscado por outro tenant.
 
-Cobertos por `PlanoContasCrudTest` — suíte completa do projeto em **474/474 verdes** (2026-08-22,
-após as duas revisões desta rodada: máscara de 3 níveis + remoção de Exigências/Integrações;
-mesma contagem de 2026-08-21, nenhum teste novo nem removido — só convertidos). Em 2026-07-31,
+Cobertos por `PlanoContasCrudTest` (19 testes) — suíte completa do projeto em **492/492 verdes
+(2026-08-24)**. Eram 474 em 2026-08-22, após as duas revisões daquela rodada (máscara de 3 níveis
++ remoção de Exigências/Integrações; mesma contagem de 2026-08-21, nenhum teste novo nem removido
+— só convertidos). Em 2026-07-31,
 `FornecedorCrudTest`/`ContaCorrenteCrudTest`/`ContaCorrenteMovimentoCrudTest` tiveram os códigos
 de teste convertidos pro formato novo (dependiam de um plano de contas existente pra testar suas
 próprias FKs); em 2026-08-22, todos os testes com código de 4 níveis foram convertidos pra 3
@@ -336,11 +341,19 @@ Nenhum.
 
 - **Navegação em árvore na tela** — decisão confirmada com o dono do produto (2026-07-31): a
   hierarquia existe no banco (máscara/níveis/view), mas a tela continua lista plana nesta rodada.
-- **Seed automático no signup** — cada tenant novo continua nascendo sem plano de contas; o seed
-  padrão é aplicado manualmente por tenant via script.
-- **Apuração de DRE/DFC em relatório** — os grupos/sinal já existem e são coerentes o suficiente
+- ~~**Seed automático no signup** — cada tenant novo continua nascendo sem plano de contas; o seed
+  padrão é aplicado manualmente por tenant via script.~~ — **superado em 2026-08-23**: o signup
+  copia as **76 contas** de `cfg_plano_contas_padrao` (tabela modelo global semeada em
+  `db/migration/V016__cadastros.sql:345-472`) para o tenant novo em uma única instrução
+  (`SignupService.java:99-116`). Ver "Plano padrão aplicado no signup" acima — inclusive o aviso
+  sobre faixas reservadas em teste.
+- ~~**Apuração de DRE/DFC em relatório** — os grupos/sinal já existem e são coerentes o suficiente
   pra sustentar uma consulta de apuração (esqueleto comentado no próprio script de seed), mas
-  nenhuma tela de relatório foi construída.
+  nenhuma tela de relatório foi construída.~~ — **superado em 2026-08-23/24**: os dois relatórios
+  existem e consomem `grupo_dre`/`grupo_dfc`/`sinal` desta tela — **Relatório de DRE**
+  (`web/src/pages/relatorios/RelatorioDre.tsx`, `api/.../financeiro/dre/DreController.java`,
+  spec `docs/telas/relatorio-dre.md`) e **Fluxo de Caixa**
+  (`web/src/pages/relatorios/FluxoCaixa.tsx`, spec `docs/telas/fluxo-caixa.md`).
 - **Criação assistida de hierarquia** (ex.: escolher o pai num combo e o sistema sugerir o
   próximo código livre) — o usuário digita o código completo à mão; se o pai não existir, cria-se
   o pai primeiro, manualmente.

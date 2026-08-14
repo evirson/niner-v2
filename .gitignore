@@ -4,6 +4,7 @@
 # Arquivos temporários / scratch
 *.log
 *.tmp
+.scratch/
 
 # Descompactação do padrão de telas (mantém-se só o HTML de referência)
 docs/padroes/TELA/

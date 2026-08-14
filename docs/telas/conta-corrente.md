@@ -13,6 +13,10 @@ Duas telas no padrão de cadastro consolidado: **Conta Corrente** (cadastro da c
 em si) e **Movimentação de Conta Corrente** (`docs/telas/conta-corrente-movimento.md`, lançamento
 manual do extrato). Esta spec cobre só a primeira.
 
+Por seguir o padrão de cadastro, a tela tem o **botão de fechar (✕)** no cabeçalho — tanto na
+listagem quanto no formulário — via `BotaoFecharTela`, que volta pelo histórico real
+(`navigate(-1)`) e nunca por uma rota fixa (convenção de todo o sistema).
+
 ## Decisões (confirmadas com o dono do produto antes de implementar)
 
 1. **PK de negócio, não surrogate** — `id_conta_corrente` é o próprio número/código da conta
@@ -22,10 +26,10 @@ manual do extrato). Esta spec cobre só a primeira.
    VARCHAR(20)` como PK, sem gerador nenhum — confirma que é uma chave de negócio, não um id
    sequencial.
 2. **`id_banco` é uma FK de verdade pra `cfg_banco`** (tabela de referência global, código
-   FEBRABAN + nome, seed de 34 bancos comuns direto na migration) — o formulário mostra o nome
-   do banco automaticamente ao digitar o código (pedido separado, 2026-07-30, mesmo padrão do
-   NCM em `docs/telas/produto.md`). `id_agencia` continua texto livre — não existe uma lista
-   global finita de agências.
+   FEBRABAN + nome, seed de **35** bancos comuns direto na migration) — o formulário mostra o
+   nome do banco automaticamente ao digitar o código (pedido separado, 2026-07-30, mesmo padrão
+   do NCM em `docs/telas/produto.md`). `id_agencia` continua **texto livre** (não existe uma
+   lista global finita de agências), mas é **`NOT NULL`** — livre no formato, não opcional.
 3. **Tem `ativo`, diferente de Plano de Contas** — exclusão com vínculo em
    `conta_corrente_movimento` inativa em vez de excluir (mesmo padrão de `cadastros.fornecedor`),
    não responde só 409 como Plano de Contas (que não tem essa coluna).
@@ -35,7 +39,8 @@ manual do extrato). Esta spec cobre só a primeira.
 ### Campos
 
 `id_conta_corrente` (PK, texto, imutável), `id_empresa` (FK, obrigatório — qual empresa é dona
-da conta), `id_banco` (FK pra `cfg_banco`), `id_agencia` (texto livre), `descricao` (texto,
+da conta), `id_banco` (FK pra `cfg_banco`, obrigatório), `id_agencia` (texto livre, **obrigatório
+— `NOT NULL` na V028:67**), `descricao` (texto,
 obrigatório — como o operador reconhece a conta nas telas de lançamento),
 `ativo` (boolean, default true), `data_abertura` (date, opcional).
 
@@ -78,7 +83,7 @@ de produto dos demais cadastros.
 - Dado `/opcoes`, então só traz contas ativas.
 - Dado uma conta de outro tenant, então não aparece na busca nem pode ser encontrada (RLS).
 
-Cobertos por `ContaCorrenteCrudTest` (10 testes) + `BancoCrudTest` (2 testes).
+Cobertos por `ContaCorrenteCrudTest` (11 testes) + `BancoCrudTest` (2 testes).
 
 ## Ajuda da tela (manual de operação + vídeo) — obrigatório (R22 / §3.7.1)
 
@@ -88,7 +93,7 @@ Cobertos por `ContaCorrenteCrudTest` (10 testes) + `BancoCrudTest` (2 testes).
 ## Impacto no banco
 
 `db/migration/V028__financeiro_conta_corrente.sql` — tabelas `conta_corrente` e
-`cfg_banco` (referência global de bancos, sem RLS, seed de 34 códigos FEBRABAN comuns dentro da
+`cfg_banco` (referência global de bancos, sem RLS, seed de 35 códigos FEBRABAN comuns dentro da
 própria migration — diferente de `cfg_produto_ncm`, que é carregada por script separado, porque
 aqui a lista é pequena/estável e `id_banco` é `NOT NULL`, então os dados precisam existir em
 qualquer ambiente que rode as migrations, inclusive testes/CI). RLS em `conta_corrente`.
@@ -102,8 +107,10 @@ Nenhum.
 - **Conciliação bancária automática (importar OFX/CSV do banco)** — só lançamento manual.
 - **Transferência entre contas correntes** — cada lançamento é isolado; não há um "par" de
   débito numa conta + crédito noutra numa operação só.
-- **Saldo corrente calculado/exibido na tela de Conta Corrente** — fica pra
-  `docs/telas/conta-corrente-movimento.md` (RN de totais) ou para o Fechamento de Caixa.
+- **Saldo corrente calculado/exibido na tela de Conta Corrente** — quem mostra saldo hoje é o
+  **Fluxo de Caixa** (`docs/telas/fluxo-caixa.md`), que consolida os movimentos; não existe (nem
+  nunca existiu) uma "RN de totais" em `docs/telas/conta-corrente-movimento.md`, que só registra
+  lançamento a lançamento.
 
 ## Questões abertas
 

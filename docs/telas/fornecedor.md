@@ -6,9 +6,11 @@ Autor: Claudio Calixto (dono do produto) · Data: 2026-07-21 · Módulo(s): `cad
 O cadastro de fornecedor é pré-requisito de compras/entrada de estoque
 (`produto_movimento_mestre.id_fornecedor`) e de contas a pagar (`contas_pagar.id_fornecedor`,
 V026). A tabela `fornecedor` existia no banco desde V016 (`fornecedor.id_plano_contas`
-`NOT NULL`, sem seed padrão — nenhum fornecedor pode existir sem que um plano de contas já
-exista), mas sem endpoint/UI. A tela de Plano de Contas (`docs/telas/plano-contas.md`,
-2026-07-21) foi construída primeiro exatamente para destravar esta.
+`NOT NULL` — nenhum fornecedor pode existir sem que um plano de contas já exista), mas sem
+endpoint/UI. A tela de Plano de Contas (`docs/telas/plano-contas.md`, 2026-07-21) foi construída
+primeiro exatamente para destravar esta. *(Na redação original constava "sem seed padrão";
+**superado em 2026-08-23** — o signup copia as 76 contas de `cfg_plano_contas_padrao`,
+`SignupService.java:99-116`, então todo tenant novo já nasce com plano de contas.)*
 
 ## Solução proposta
 
@@ -21,9 +23,12 @@ mecanismo do "＋ Nova categoria" do cliente), e não com uma nova classe de tel
 ## Particularidade estrutural: vínculo obrigatório com plano de contas
 
 `fornecedor.id_plano_contas` é `NOT NULL` (FK composta `(id_tenant, id_plano_contas)` →
-`cfg_plano_contas`) e **não há linha padrão pré-cadastrada** — é responsabilidade do lojista
-ter ao menos um plano de contas antes de cadastrar o primeiro fornecedor. A tela resolve isso
-com:
+`cfg_plano_contas`). ~~**Não há linha padrão pré-cadastrada** — é responsabilidade do lojista
+ter ao menos um plano de contas antes de cadastrar o primeiro fornecedor.~~ — **superado em
+2026-08-23**: o signup copia as **76 contas** de `cfg_plano_contas_padrao`
+(`SignupService.java:99-116`), então o lojista sempre tem conta pra escolher já no primeiro
+fornecedor. Os mecanismos abaixo continuam valendo — o seletor porque o plano é grande demais
+pra um `<select>` cru, e a criação rápida porque o lojista pode querer uma conta própria:
 - No **formulário**, ao lado da Razão Social: o componente `SeletorPlanoContas`
   (`web/src/components/SeletorPlanoContas.tsx`, 2026-08-22 — antes era um `<select>` nativo
   populado por `GET /api/v1/planos-contas?limite=100`) — busca por prefixo de código ou por
@@ -54,7 +59,7 @@ Tabela `fornecedor` (V016). **Foco automático** no campo Razão Social ao abrir
 | `cnpj` | CNPJ | texto com máscara | Configurável | Alfanumérico (CLAUDE.md), 14 caracteres, dígito verificador, único por tenant; sempre pessoa jurídica — CPF não é aceito |
 | `inscricao_estadual` | Inscrição Estadual | texto | Configurável | MAIÚSCULAS |
 | `email` | E-mail | texto | Configurável | Formato validado |
-| `telefone` | Telefone | texto com máscara | Configurável | **Fixo ou celular** (10–11 dígitos com DDD) — regra mais frouxa que a do cliente, que exige celular |
+| `telefone` | Telefone | texto com máscara | Configurável | **Fixo ou celular** (10–11 dígitos com DDD) — regra mais frouxa que a do cliente, que exige celular. ⚠️ Exceção: a Importação de Dados grava sem validar (ver abaixo) |
 | `cep` | CEP | texto com máscara | Configurável | Preenche endereço via ViaCEP |
 | `endereco`, `numero`, `bairro`, `cidade`, `estado` | Endereço, Número, Bairro, Cidade, UF | texto/select | Configuráveis | MAIÚSCULAS; UF por select |
 | `ativo` | Fornecedor ativo | checkbox | — | Ativo ao criar por padrão |
@@ -74,6 +79,20 @@ A obrigatoriedade configurada é **reforçada no backend** (`FornecedorService.v
   status** (Ativos/Inativos/Todos).
 - Paginação em janela deslizante (50 fixos), layout fixo, três ícones de ação — idêntico ao
   padrão (`docs/telas/cliente.md`).
+- **Botão de fechar (✕)** no cabeçalho da listagem e do formulário (`BotaoFecharTela`, volta
+  pelo histórico com `navigate(-1)`, nunca por rota fixa — convenção de todo o sistema).
+
+## Exceção à validação de telefone: Rotina de Importação de Dados
+
+A regra de 10–11 dígitos vale para o **cadastro manual** (tudo que entra pelo
+`FornecedorController`). A Rotina de Importação de Dados chama a sobrecarga
+`FornecedorService.criar(req, validarTelefone = false)`
+(`api/src/main/java/com/vetor/niner/cadastros/fornecedor/FornecedorService.java:153-162`) e
+**grava o telefone como veio** — só normalizado para dígitos, sem exigir 10–11. Decisão do dono
+do produto (2026-08-09): planilha migrada de outro sistema traz telefone em formato livre (ramal,
+número incompleto), e travar a linha inteira por causa disso inviabilizaria a migração. Efeito
+colateral aceito: um fornecedor importado pode ter telefone que a própria tela recusaria se
+fosse digitado à mão — ao editá-lo, a validação volta a valer e o campo precisa ser corrigido.
 
 ## Exclusão de fornecedor
 
@@ -103,7 +122,8 @@ vez de apagar, e retorna `{"acao":"inativado","motivo":"..."}`. Sem vínculo, ap
 - Dado um fornecedor vinculado a uma movimentação de estoque, quando excluído, então é
   inativado, não apagado.
 
-Cobertos por `FornecedorCrudTest` (12 testes) — suíte completa do projeto em **63/63 verdes**.
+Cobertos por `FornecedorCrudTest` (12 testes) — suíte completa do projeto em **492/492 verdes
+(2026-08-24)**.
 
 ## Impacto no contrato de API
 

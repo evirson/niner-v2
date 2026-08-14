@@ -74,11 +74,21 @@ Papeleta de Venda (`.papeleta-preview`/`.papeleta-imprimir`, `ComprovantePapelet
 pedido do dono do produto pra uniformizar a impressão dos itens entre os dois comprovantes que
 saem na mesma bobina térmica física. Esse layout compartilhado **mudou em 2026-08-24**: deixou de
 ser 64 colunas numa linha por item (fonte Lucida Console) e passou a **42 colunas com o item em 2
-linhas** (Consolas em negrito), porque a versão anterior saía ilegível na bobina real — o vale
-acompanhou automaticamente, já que usa as mesmas funções de montagem, e foi **conferido impresso
-na mesma data** (aprovado sem nenhum ajuste próprio). Isso valida na prática a decisão de
-2026-08-07 de padronizar os dois comprovantes: consertar a papeleta consertou o vale junto. Ver
-`docs/telas/papeleta-venda.md`.
+linhas** (Consolas em negrito), porque a versão anterior saía ilegível na bobina real. O vale
+acompanhou automaticamente **no texto e na impressão** (usa as mesmas funções de montagem de
+linhas), e foi conferido impresso na mesma data, aprovado sem ajuste próprio — o que valida na
+prática a decisão de 2026-08-07 de padronizar os dois comprovantes: consertar a papeleta
+consertou o vale junto. Ver `docs/telas/papeleta-venda.md`.
+
+⚠️ **Pendência conhecida — o PDF do vale ficou para trás.** A padronização valeu para as linhas
+de texto, **não** para o documento jsPDF: `montarDocumentoComprovanteVale` continua em
+**5pt / `alturaLinha` 2,6mm** (`web/src/lib/comprovante.ts:412-415`), enquanto a papeleta
+(`:330-335`) e o comprovante de crediário (`:126-130`) subiram para **8pt / 3,6mm** justamente
+porque as 42 colunas passaram a caber com folga. O docstring da função ainda diz "mesma
+largura/fonte" da papeleta, o que hoje é falso. Efeito: o vale salvo em PDF (e o enviado por
+WhatsApp, que usa o mesmo Blob) sai visivelmente menor que os outros dois comprovantes. Não afeta
+a impressão térmica, que passa pelo CSS e não pelo jsPDF — por isso não apareceu no teste
+impresso. Corrigir é trocar as duas constantes para 8/3,6 e reconferir o PDF.
 "Enviar por WhatsApp" reaproveita o mesmo mecanismo da Papeleta de Venda/Comprovante de
 Crediário (`comum.arquivocompartilhado`, ver `docs/infra/compartilhamento-arquivo-temporario.md`)
 — como `venda_devolucao` não tem vínculo com cliente (devolução é anônima), não há telefone pra
@@ -245,13 +255,18 @@ obrigatório.
 
 ```
 GET  /api/v1/vendas/devolucao/vendedor?numeroVenda=123    → { numeroVenda, idFuncionario, nomeFuncionario, itens: [{ idVariacao, sku, descricaoProduto, variacaoCor, variacaoTamanho, qtdVendida, qtdDisponivelDevolucao }] } | 404
-GET  /api/v1/vendas/devolucao/vale/{idDevolucao}           → { valorVale, valeUsado, dataDevolucao, idVendaCredito, idVendaDebito }
+GET  /api/v1/vendas/devolucao/vale/{idDevolucao}           → { idDevolucao, valorVale, valeUsado, cancelada, dataDevolucao, idVendaCredito, idVendaDebito }
 GET  /api/v1/pdv/produtos/codigo/{codigo}                  → reaproveita o endpoint já existente do PDV
 GET  /api/v1/config-geral/exige-numero-venda-devolucao     → { cfgExigeNumeroVendaDevolucao } (qualquer papel)
 POST /api/v1/vendas/devolucao
      { numeroVenda?: number, itens: [{ idVariacao, qtd }] }
      → { idMovimento, idDevolucao, valorVale, dataMovimento, idFuncionario, nomeFuncionario, itens }
 ```
+
+`ValeMercadoriaResponse` devolve o próprio `idDevolucao` (é o número do vale, o que o operador
+digita no PDV) e o par de flags que decide se o vale ainda vale: **`valeUsado`** (já resgatado
+numa venda) e **`cancelada`** — este último é o campo que barra um vale já cancelado pelo
+Cancelamento de Devolução de Produtos (`docs/telas/cancelamento-devolucao-produtos.md`).
 
 `POST /api/v1/pdv/vendas` (`PdvVendaService`) ganhou o campo opcional `idDevolucao` em cada linha
 de `pagamentos[]` — obrigatório só quando `idCarteira` aponta pra uma carteira de categoria
@@ -293,7 +308,8 @@ inexistente ou de outro tenant), 409 (vale já usado).
   venda, então 400.
 
 Cobertos por `DevolucaoProdutoCrudTest` (10 testes) e `ValeMercadoriaCrudTest` (6 testes,
-incluindo o cancelamento reabrindo o vale). Suíte completa do projeto: 410/410.
+incluindo o cancelamento reabrindo o vale). Suíte completa do projeto: **492/492 verdes
+(2026-08-24)**.
 
 ## Ajuda da tela (manual de operação + vídeo) — obrigatório (R22 / §3.7.1)
 

@@ -40,10 +40,13 @@ saiu o dinheiro**, e o sistema grava o movimento correspondente na mesma transa�
   `id_plano_contas` da conta, no caixa aberto do usuário). Exige caixa aberto, mesma convenção de
   PDV/Recebimento de Crediário (popup `AberturaCaixaModal` quando não houver).
 
-**Rastreabilidade e desfazer:** as duas tabelas ganham `id_conta_pagar` (nullable, FK) — é o que
-permite (a) não duplicar se a baixa for reeditada e (b) **apagar o movimento** quando a baixa é
-desfeita (limpar `data_pagamento`). Sem esse vínculo, desfazer uma baixa deixaria dinheiro
-fantasma saindo do caixa.
+**Rastreabilidade e desfazer:** as duas tabelas ganham `id_conta_pagar` (nullable, **sem FK — de
+propósito**: a conta a pagar pode ser excluída e isso não deve travar por causa de um movimento de
+dinheiro já realizado; ver `db/migration/V025__financeiro_caixa_crediario.sql:162`,
+`db/migration/V028__financeiro_conta_corrente.sql:90` e `db/migration/README.md:57`). É o vínculo
+que permite (a) não duplicar se a baixa for reeditada e (b) **apagar o movimento** quando a baixa
+é desfeita (limpar `data_pagamento`). Sem ele, desfazer uma baixa deixaria dinheiro fantasma
+saindo do caixa.
 
 **[revisto na implementação] Conta já paga antes da mudança continua editável.** A validação
 "informou pagamento, tem de informar a origem" vale só para **baixa nova**. Sem essa exceção,
@@ -133,8 +136,10 @@ PUT  /api/v1/contas-pagar/{id}            (existente) ganha origemPagamento + id
 
 ## Impacto no banco
 
-- `conta_corrente_movimento.id_conta_pagar` — coluna nova, nullable, FK.
-- `caixa_detalhe.id_conta_pagar` — coluna nova, nullable, FK.
+- `conta_corrente_movimento.id_conta_pagar` — coluna nova, nullable, **sem FK** (V028:90).
+- `caixa_detalhe.id_conta_pagar` — coluna nova, nullable, **sem FK** (V025:162).
+- A ausência de FK nas duas é deliberada (`db/migration/README.md:57`): excluir a conta a pagar
+  não pode travar por causa de um movimento de dinheiro já realizado.
 - Ambas dentro das migrations existentes (banco em construção), aplicadas no dev com
   `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` + `flyway repair`.
 - **Nenhuma tabela nova.** Saldo é sempre derivado — `conta_corrente` não tem coluna de saldo (é a
@@ -161,6 +166,21 @@ PUT  /api/v1/contas-pagar/{id}            (existente) ganha origemPagamento + id
 pode dar lucro no mês em que falta dinheiro, por causa do crediário), o que significa cada
 atividade, e que a projeção só considera compromissos já lançados — não prevê vendas futuras.
 
+## Impacto nas integrações
+
+Nenhum na leitura (as duas abas só consultam). **Mas a Parte 1 tem efeito colateral fora desta
+tela:** a baixa de conta a pagar passou a escrever em `caixa_detalhe`/`conta_corrente_movimento`,
+então qualquer tela que leia essas tabelas — Fechamento de Caixa, Movimentação de Conta Corrente,
+DRE em regime de caixa — passa a enxergar as saídas de dinheiro que antes não existiam ali. Isso é
+o efeito desejado, mas quem for mexer em uma dessas telas precisa saber que a origem do dado mudou.
+
+## Métrica de sucesso
+
+O lojista abre a aba **Projeção** antes de decidir uma compra grande ou um parcelamento, e a
+conciliação do **Realizado** fecha em zero no dia a dia — é ela que decide se o relatório é
+confiável. Conciliação com diferença recorrente é sinal de pagamento lançado em dois lugares, não
+de erro do relatório.
+
 ## Non-goals desta versão
 
 - **Método indireto** (partir do lucro e ajustar) — é linguagem de contador, não de lojista.
@@ -186,7 +206,10 @@ atividade, e que a projeção só considera compromissos já lançados — não 
 
 ## Questões abertas
 
-1. Ao baixar pelo **caixa**, usar o caixa aberto do usuário (simples) ou deixar escolher a sessão
-   de caixa? Proposta: usar o aberto, como PDV e Recebimento fazem.
+1. ~~Ao baixar pelo **caixa**, usar o caixa aberto do usuário (simples) ou deixar escolher a sessão
+   de caixa? Proposta: usar o aberto, como PDV e Recebimento fazem.~~ — **decidido e implementado**
+   pela proposta: a baixa usa o **caixa aberto do usuário/empresa/dia**
+   (`ContaPagarService.java:191-196`), sem seletor de sessão, igual a PDV e Recebimento de
+   Crediário — e rejeita com 400 quando não há caixa aberto (o front abre o `AberturaCaixaModal`).
 2. Contas a pagar **já baixadas** no banco de dev ficam fora do realizado (sem movimento). Aceito
    para dev; confirmar que não vira problema quando houver tenant real.

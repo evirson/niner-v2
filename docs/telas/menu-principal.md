@@ -6,12 +6,15 @@ Autor: Claudio Calixto (dono do produto) · Data: 2026-08-03 · Módulo(s): `web
 O menu lateral do ERP já era retrátil e agrupado desde 2026-07-28/31 (`Layout.tsx`), mas tinha
 três incômodos apontados pelo dono do produto:
 
-1. **O controle de recolher ficava no rodapé do menu.** Com sete grupos e ~20 telas, o botão saía
+1. **O controle de recolher ficava no rodapé do menu.** Com sete grupos e ~20 telas (era o
+   tamanho do menu em 2026-08-03; hoje os grupos continuam sete, mas são **~57 folhas** —
+   `web/src/lib/menu.ts` é a contagem real), o botão saía
    da área visível assim que a árvore abria — era preciso rolar a navegação inteira para
    recolher. O padrão que todo mundo conhece de aplicativo mobile é o inverso: o hambúrguer é a
    **primeira** coisa da navegação.
 2. **A árvore inteira na lateral é ruído.** Sete grupos, dois subgrupos e vinte telas empilhados
-   verticalmente numa coluna de 200px viram uma parede de rótulos truncados.
+   verticalmente numa coluna de 200px viram uma parede de rótulos truncados — e o problema só
+   cresceu desde então (hoje são ~57 folhas e mais subgrupos), o que confirma a decisão.
 3. **Um grupo do menu não era lugar nenhum.** Clicar em "Financeiro" só abria/fechava rótulos
    curtos. Quem ainda não decorou o sistema não tinha onde descobrir *o que cada tela faz* — o
    rótulo "Tipo de Carteira" não explica nada a quem está começando.
@@ -93,8 +96,8 @@ tela fecha uma pendência antiga, não inventa comportamento novo.
    linha da navegação). A ação fica no `title`/`aria-label` ("clique para travar em aberto"), e o
    estado, no ícone. `aria-pressed` (não `aria-expanded`), porque o que o botão alterna é a
    fixação, não a visibilidade momentânea.
-3. **Modo recolhido = ícones dos sete grupos.** Antes a faixa de 56px mostrava as ~20 telas
-   achatadas; agora mostra os grupos, coerente com o modo expandido. `achatarFolhas()` saiu de
+3. **Modo recolhido = ícones dos sete grupos.** Antes a faixa de 56px mostrava todas as telas
+   achatadas (eram ~20 na época, hoje ~57); agora mostra os grupos, coerente com o modo expandido. `achatarFolhas()` saiu de
    `menu.ts` por ter ficado sem uso.
 4. **Subgrupo é um nível de navegação, com seta de retorno.** O hub de *Frente de Loja* mostra
    três cards de tela e dois cards de subgrupo (*Caixa*, *Cancelamentos*); clicar num card de
@@ -162,24 +165,28 @@ E tirar o mouse recolhe de novo, sem ter alterado a preferência
 Dado que clico em "Financeiro" na lateral
 Quando a navegação acontece
 Então a URL passa a ser /menu/financeiro
-E a área de conteúdo mostra 4 cards (Conta Corrente, Movimentação de Conta Corrente,
-    Plano de Contas, Tipo de Carteira), cada um com ícone, nome e a frase do que a tela faz
+E a área de conteúdo mostra 5 cards (Conta Corrente, Movimentação de Conta Corrente,
+    Plano de Contas, Tipo de Carteira, Contas a Pagar / Pagas), cada um com ícone, nome e a
+    frase do que a tela faz
 E o item "Financeiro" na lateral fica marcado como ativo
 ```
 
 ```
 Dado que estou em /menu/frente-loja
 Quando a página monta
-Então vejo os cards de PDV, Pesquisa de Vendas e Recebimento de Crediário
-E um card "Caixa" e um card "Cancelamentos", cada um mostrando quantas telas contém
-E o conteúdo desses dois NÃO aparece nesta tela
+Então vejo os cards de PDV, Pesquisa de Vendas, Recebimento de Crediário e
+    Devolução de Produtos
+E os cards de subgrupo "Caixa", "Cancelamentos" e "Reimpressões", cada um mostrando quantas
+    telas contém
+E o conteúdo desses três NÃO aparece nesta tela
 ```
 
 ```
 Dado que estou em /menu/frente-loja e clico no card "Cancelamentos"
 Quando a navegação acontece
 Então a URL passa a ser /menu/cancelamentos
-E vejo os cards Cancelamento de Vendas e Estorno de Crediário (conforme o meu papel)
+E vejo os cards Cancelamento de Vendas, Estorno de Crediário e Cancelamento de Devolução
+    de Produtos (conforme o meu papel — Cancelamento de Vendas é ADMIN-only)
 E há uma seta de retorno à esquerda do título, com "Frente de Loja" como trilha
 E clicar na seta volta para /menu/frente-loja
 ```

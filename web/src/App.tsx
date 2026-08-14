@@ -124,8 +124,9 @@ export default function App() {
             path="/relatorio-movimentacao-bancaria"
             element={<EmBreve titulo="Relatório de Movimentação Bancária" />}
           />
-          <Route path="/dre" element={<EmBreve titulo="DRE" />} />
-          <Route path="/fluxo-caixa" element={<EmBreve titulo="Fluxo de Caixa" />} />
+          {/* DRE e Fluxo de Caixa saíram daqui em 2026-08-24: as telas existem
+              (/relatorio-dre e /fluxo-caixa, acima). Os placeholders duplicavam a rota
+              /fluxo-caixa e concorriam com a tela pronta. */}
           <Route path="/lucratividade" element={<EmBreve titulo="Lucratividade" />} />
           <Route path="/integracao-marketplace" element={<EmBreve titulo="Integração com Marketplace" />} />
           <Route path="/cobranca-crediario-atraso" element={<EmBreve titulo="Cobrança de Crediário em Atraso" />} />

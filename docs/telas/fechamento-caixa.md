@@ -11,7 +11,8 @@ total que o sistema registrou ao longo do dia.
 
 ## Solução proposta
 
-Tela dedicada (`/fechamento-caixa`, menu ao lado de Abertura de Caixa) que busca o caixa de um
+Tela dedicada (`/fechamento-caixa`, no subgrupo **Caixa** dentro de *Frente de Loja* —
+`web/src/lib/menu.ts:103-120`, junto da Abertura de Caixa) que busca o caixa de um
 usuário/data e conduz um fechamento **"às cegas"**: o operador informa quanto tem de cada tipo de
 carteira que teve movimento no dia, sem ver o valor calculado pelo sistema antes de digitar. Só
 fecha de fato quando **todas** as carteiras batem exatamente; se alguma não bater, a tela mostra a
@@ -135,6 +136,15 @@ soma com o `valorEsperado` mostrado na tela. `origem` prioriza `id_lote_recebime
 grava os dois; "Recebimento nº X" é o evento relevante daquele dia, não a venda original que
 gerou a parcela).
 
+> ⚠️ **Saída de dinheiro por Contas a Pagar (2026-08-23) — o drill-down não sabe nomear.** Desde
+> o Fluxo de Caixa, a baixa de uma conta a pagar em dinheiro grava um `caixa_detalhe` com
+> `tipo_operacao = 'DEBITO_CAIXA'`, `credito_debito = 'D'` e `id_conta_pagar` preenchido
+> (`ContaPagarService.java:198-206`). Ele **entra normalmente na conferência e no valor esperado**
+> da carteira do caixa (é um débito, reduz o esperado), mas o drill-down mostra `origem = "—"`:
+> a função `CaixaService.origem` (`api/src/main/java/com/vetor/niner/financeiro/caixa/CaixaService.java:271-275`)
+> só conhece `id_lote_recebimento` e `id_venda`, e o SELECT de `:251-257` nem lê a coluna
+> `id_conta_pagar`. Pendência: ler `cd.id_conta_pagar` e devolver "Conta a pagar nº N".
+
 ### Dependência: PDV precisou passar a lançar em `caixa_detalhe`
 
 Antes desta feature, só o Recebimento de Crediário gravava em `caixa_detalhe` — o PDV nunca
@@ -205,8 +215,8 @@ fechando/consultando o caixa de outro usuário), 404 (nenhum caixa para aquele u
 
 Cobertos por `FechamentoCaixaCrudTest` (15 testes) + 2 testes em `PdvCrudTest` (venda com várias
 formas de pagamento lança `caixa_detalhe` em todas menos crediário; débito fica em aberto em
-`contas_receber` mesmo já tendo entrado no caixa). Suíte completa do projeto: 266/266 verdes
-(2026-07-31).
+`contas_receber` mesmo já tendo entrado no caixa). Suíte completa do projeto: **492/492 verdes
+(2026-08-24)** — eram 266 quando esta tela nasceu, em 2026-07-31.
 
 ## Ajuda da tela (manual de operação + vídeo) — obrigatório (R22 / §3.7.1)
 

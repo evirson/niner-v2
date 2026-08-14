@@ -467,18 +467,9 @@ export const MENU: NavGrupo[] = [
         icone: IconeContaCorrente,
         descricao: 'Extrato consolidado das contas correntes da loja. Em construção.',
       },
-      {
-        to: '/dre',
-        label: 'DRE',
-        icone: IconeRelatorio,
-        descricao: 'Demonstração do Resultado do Exercício, por grupo do Plano de Contas Gerencial. Em construção.',
-      },
-      {
-        to: '/fluxo-caixa',
-        label: 'Fluxo de Caixa',
-        icone: IconeRelatorio,
-        descricao: 'Entradas e saídas de caixa por grupo do Plano de Contas Gerencial. Em construção.',
-      },
+      // DRE e Fluxo de Caixa saíram de "Implementações Futuras" em 2026-08-24: as duas telas
+      // existem e estão em Relatórios (/relatorio-dre e /fluxo-caixa). O item /fluxo-caixa
+      // daqui apontava para a MESMA rota da tela pronta, então aparecia duas vezes no menu.
       {
         to: '/lucratividade',
         label: 'Lucratividade',

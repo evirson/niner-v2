@@ -42,7 +42,10 @@ O preço e a variação de cada item são **sempre resolvidos no servidor** a pa
   `produto_oferta` grava `false`. (`valor_desconto`/`valor_acrescimo` **não** gravam mais `0` —
   ver "Split-tender + desconto da venda (F5)" abaixo, revisão de 2026-07-28: eles recebem o
   desconto da venda e o desconto/acréscimo de cada forma de pagamento, rateados por item.)
-- **Sem cancelamento/estorno de venda, sem NF-e, sem impressão de cupom.**
+- **Sem NF-e.** ~~Sem cancelamento/estorno de venda, sem impressão de cupom.~~ — **superado**: o
+  cancelamento ganhou tela própria (`docs/telas/cancelamento-venda.md`,
+  `CancelamentoVendaController.java:20`) e o PDV imprime a **papeleta de venda** ao final
+  (`PdvVendaController.java:36`, `docs/telas/papeleta-venda.md` — bobina térmica 80mm/42 colunas).
 - **Busca de produto sem paginação de verdade** — os 20 primeiros resultados por descrição, sem
   "próxima página" (lista pra digitar e refinar a busca, não pra navegar um catálogo inteiro).
 
@@ -138,11 +141,13 @@ mesma regra e responde **400** se algo tentar passar do limite.
 > valor pago** (item 1/2) **+ teto por divisão** (item 2) — ver `PdvVendaService.resolverPagamentos`
 > se for mexer aqui de novo.
 
-- **Categoria `AVISTA` ou `CARTAO_DEBITO`:** a linha só aceita **1** parcela (400 se pedir mais —
-  dinheiro/PIX/débito não parcelam).
-- **Só `AVISTA` (dinheiro/PIX) já nasce quitada** em `contas_receber` (`data_recebimento`/
-  `valor_recebido` preenchidos, `id_empresa_pagamento` resolvido) — é dinheiro que já circulou na
-  própria loja. **Revisado 2026-07-30:** `CARTAO_DEBITO` **deixou** desse grupo — mesmo aceitando
+- **Categoria `AVISTA`, `CARTAO_DEBITO` ou `VALE_MERCADORIA`:** a linha só aceita **1** parcela
+  (400 se pedir mais — dinheiro/PIX/débito não parcelam, e vale-mercadoria é um crédito único
+  que se consome de uma vez) — `PdvVendaService.aceitaApenasUmaParcela`, linhas 375-378.
+- **`AVISTA` (dinheiro/PIX) e `VALE_MERCADORIA` já nascem quitados** em `contas_receber`
+  (`data_recebimento`/`valor_recebido` preenchidos, `id_empresa_pagamento` resolvido —
+  `PdvVendaService:673-674`): num é dinheiro que já circulou na própria loja, no outro é um
+  crédito que a loja já devia ao cliente e acabou de compensar, então nada fica a receber. **Revisado 2026-07-30:** `CARTAO_DEBITO` **deixou** desse grupo — mesmo aceitando
   só 1 parcela, a parcela em `contas_receber` agora nasce **em aberto**, igual cartão de crédito
   (ver abaixo), porque o prazo de liquidação da bandeira (`tipo_carteira.prazo_pagamento`, D+1
   típico) ainda não passou; entrar no caixa (ver seção "Caixa" abaixo) não é o mesmo que já estar
@@ -216,9 +221,11 @@ Reorganizada em blocos empilhados verticalmente, de cima pra baixo:
    correspondente.
 2. **Resumo + categorias lado a lado** — resumo (Valor Total da Venda em fonte maior/destacada;
    Desconto Gerencial numa linha só com % e R$ juntos; Sub-Total; Desconto Promocional; Valor a
-   Pagar; Valor Pago) à esquerda, e os 4 botões de categoria de forma de pagamento (À Vista/
-   Cartão Débito/Cartão Crédito/Crediário) empilhados verticalmente à direita, sempre visíveis
-   (não somem quando uma categoria é escolhida).
+   Pagar; Valor Pago) à esquerda, e os **5** botões de categoria de forma de pagamento (À Vista/
+   Cartão Débito/Cartão Crédito/Crediário/Vale-Mercadoria — `CATEGORIAS_ORDEM` em
+   `FormaPagamentoModal.tsx:29`) empilhados verticalmente à direita, sempre visíveis
+   (não somem quando uma categoria é escolhida). O 5º nasceu com a Devolução de Produtos
+   (`docs/telas/devolucao-produtos.md`), que é quem emite o vale.
 3. **Área de pagamentos** — caixa abaixo mostrando, alternadamente: a lista de formas de
    pagamento já lançadas (tabela, como já era); ou, quando uma categoria foi clicada, o
    formulário de escolher o tipo de carteira específico + valor pago + parcelas (o que antes
@@ -321,7 +328,10 @@ cartões.
 ## Contrato de API
 
 ```
-GET  /api/v1/pdv/produtos?busca=              busca por descrição (ILIKE, até 20 resultados)
+GET  /api/v1/pdv/produtos?busca=&marca=&referencia=
+                                               busca por descrição (ILIKE, até 20 resultados);
+                                               `marca`/`referencia` são filtros adicionais
+                                               (2026-08-15, usados pela Entrada de Produtos)
 GET  /api/v1/pdv/produtos/codigo/{codigo}      leitura por sku OU ean — 404 amigável
 GET  /api/v1/pdv/clientes?busca=              busca por nome/CPF-CNPJ/celular (novo, 2026-07-28)
 POST /api/v1/pdv/vendas                        efetiva a venda (itens + forma de pagamento + cliente/vendedor)
@@ -345,9 +355,16 @@ Ambos os `GET` devolvem o mesmo formato de item (uma variação):
   "sku": "9001000000123",
   "precoVenda": 189.90,
   "estoquePorEmpresa": [{ "codigoEmpresa": 1, "nomeEmpresa": "LOJA MATRIZ", "qtd": 5.000 }],
-  "estoqueTotal": 5.000
+  "estoqueTotal": 5.000,
+  "urlImagem": "https://.../tenants/1/produtos/42/abc.webp",
+  "marca": "RUNNER",
+  "referencia": "TN-4040"
 }
 ```
+
+`urlImagem` é a URL pública da **primeira foto da galeria** do produto (índice 0), `null` quando
+não há foto — ver `docs/infra/armazenamento-imagens.md`. `marca`/`referencia` (2026-08-15) vêm do
+produto e servem tanto de filtro de busca quanto de desambiguação visual no resultado.
 
 `GET /api/v1/config-geral/desconto-venda` (aberto a qualquer papel — diferente do resto de
 `cfg_geral`, que é ADMIN-only): `{ "percentualDescontoVenda": 10.00 }` — desde 2026-07-28 é o
@@ -398,8 +415,11 @@ crediário desta venda somado ao já em aberto ultrapassa `cliente.limite_credit
 - Dado um produto inativo, quando buscado, então não aparece.
 - Dado um sku ou ean existente, quando lido, então devolve o mesmo formato; se não existir ou o
   produto estiver inativo, 404.
-- Dado um item com `qtd` maior que o `disponivel`, quando a venda é efetivada, então 409 e
-  **nada** é gravado (nem venda, nem movimento, nem parcela) — atomicidade.
+- Dado um item com `qtd` maior que o `disponivel`, quando a venda é efetivada, então a venda é
+  gravada normalmente (201) e o saldo daquela variação fica **negativo** — estoque negativo é
+  permitido em todo o sistema, nenhuma movimentação bloqueia por saldo insuficiente (2026-07-29).
+  Teste: `estoqueInsuficienteNaoBloqueiaVendaEDeixaSaldoNegativo` em
+  `api/src/test/java/com/vetor/niner/PdvCrudTest.java:431`.
 - Dado Tipo de Carteira categoria `AVISTA`, quando a venda é efetivada, então grava 1 parcela já
   com `dataRecebimento` preenchida.
 - Dado Tipo de Carteira categoria `CREDIARIO` com `numeroParcelas = 3`, quando efetivada, então
@@ -426,8 +446,13 @@ crediário desta venda somado ao já em aberto ultrapassa `cliente.limite_credit
   carteira é usada, então a cobertura daquela linha é maior que o `valorPago` na proporção do
   percentual, e o desconto correspondente também é rateado nos itens.
 - Dado um tipo de carteira com `percDesconto` e um saldo restante conhecido antes da linha,
-  quando o `valorPago` da linha passa de `saldoRestante × (1 − percDesconto/100)`, então 400 e
-  nada é gravado.
+  quando o `valorPago` da linha passa de `saldoRestante ÷ (1 + percDesconto/100)`, então 400 e
+  nada é gravado. **É divisão, não subtração** (`api/src/main/java/com/vetor/niner/vendas/PdvVendaService.java:491-492`):
+  o desconto incide sobre o valor **pago**, então a cobertura da linha é `valorPago × (1 + %)`;
+  o teto é o `valorPago` que faz essa cobertura fechar exatamente o saldo, ou seja o inverso da
+  mesma fórmula. O teto por subtração (`saldoRestante × (1 − %)`) é justamente a tentativa **1**
+  registrada como rejeitada na nota de implementação acima (deixava ~1% do saldo sem fechar) —
+  não reintroduzir.
 - Dado várias linhas de pagamento (split-tender) cuja soma de coberturas fecha exatamente o
   líquido a pagar, então a venda é efetivada com uma linha em `contas_receber` por parcela de
   cada linha de pagamento.

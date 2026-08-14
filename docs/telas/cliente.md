@@ -49,7 +49,7 @@ visualmente, só deixou de receber o foco).
 | `id_categoria_cliente` | Categoria | select (+ "＋ Nova categoria") | — | linha própria | **Sim** (NOT NULL no banco) | Ver seção "Categoria de cliente" abaixo |
 | `cpf_cnpj` | CPF / CNPJ | texto | `000.000.000-00` (PF) / `00.000.000/0000-00` (PJ), conforme `fisica_juridica` | 1/3 da linha | Não (nullable no banco) | Se preenchido: **valida dígito verificador** (algoritmo oficial); único por tenant quando preenchido. **CNPJ é alfanumérico** (2026-07-21) — ver nota abaixo |
 | `rg_ie` | RG / Inscrição Estadual | texto | — | 1/3 da linha (junto do CPF/CNPJ) | Não | Label muda para "Inscrição Estadual" quando Jurídica |
-| `data_nascimento` | Data de nascimento | date picker | `dd/mm/aaaa` | 1/3 da linha | **Não** (2026-07-21 — deixou de ser obrigatória mesmo p/ Física) | Campo **oculto** quando Jurídica; quando preenchida, **não pode ser hoje nem no futuro** (validado no front e no back) |
+| `data_nascimento` | Data de nascimento | **texto mascarado** (`mascararData` + `onFocus` select-all, `web/src/pages/clientes/ClienteForm.tsx:496-504`) — **nunca** `<input type="date">`, proibido no projeto porque o widget nativo não permite "seleciona tudo e sobrescreve ao digitar" | `dd/mm/aaaa` | 1/3 da linha | **Não** (2026-07-21 — deixou de ser obrigatória mesmo p/ Física) | Campo **oculto** quando Jurídica; quando preenchida, **não pode ser hoje nem no futuro** (validado no front e no back) |
 | `genero` | Gênero | select: Masculino / Feminino / Outros | — | 1/3 da linha (junto da data) | **Condicional: obrigatório se Física** (CHECK do banco) | Campo **oculto** quando Jurídica |
 | `email` | E-mail | texto | validação de formato e-mail (client-side) | metade da linha | Não | Única exceção à convenção de maiúsculas (item "Maiúsculas" abaixo) |
 | `telefone` | **Celular** (renomeado 2026-07-21, era "Telefone") | texto | `(00) 00000-0000` | 1/4 da linha | Não | Quando preenchido: **11 dígitos com o 3º dígito = 9** (padrão de celular BR) |
@@ -64,7 +64,7 @@ visualmente, só deixou de receber o foco).
 | `bairro` | Bairro | texto | — | campo médio/largo (junto de Número/Complemento) | Não | |
 | `cidade` | Cidade | texto | — | 3/4 da linha | Não | |
 | `estado` | UF | **select fixo com as 27 UFs** (AC…TO) | — | campo pequeno (~1/4 da linha, junto da Cidade) | Não | Coluna no banco continua `text` livre; só a UI restringe |
-| `limite_credito` | Limite de crédito | numérico, moeda (`R$ 0,00`, mascarado — dígitos digitados = centavos) | `NUMERIC(12,2)` | campo pequeno (~1/3 da linha) | Não, default `0` | Campo **opcional exposto já no formulário**, mesmo o crediário (Fase 2) ainda não usar o valor de fato — só armazena |
+| `limite_credito` | Limite de crédito | numérico, moeda (`R$ 0,00`, mascarado — **digitação natural**: inteiro da esquerda para a direita, a vírgula abre as 2 casas; completa `,00` só no `onBlur`) | `NUMERIC(12,2)` | campo pequeno (~1/3 da linha) | Não, default `0` | Campo **opcional exposto já no formulário**, mesmo o crediário (Fase 2) ainda não usar o valor de fato — só armazena |
 
 `id_cliente`, `criado_em` e `atualizado_em` não são editáveis (gerados pelo banco/API), mas
 **aparecem como campos informativos** no fim do formulário — ver "Informações do registro"
@@ -163,12 +163,17 @@ JSX; o `<form>` ganhou esse `id` só para viabilizar essa associação.
 "Pessoa Física"/"Pessoa Jurídica" — antes em duas linhas — passaram a ficar lado a lado numa
 única linha (`.identificacao-linha` em `web/src/styles.css`).
 
-**Limite de crédito com máscara de moeda (2026-07-21):** o campo passou a mascarar a digitação
-como dinheiro (mesma convenção de caixa eletrônico/app de banco — os dígitos digitados são
-sempre os centavos, contados da direita para a esquerda; ex.: digitar "150000" mostra
-"1.500,00"), em vez de aceitar texto livre. Novas funções `mascararMoeda`/`formatarMoeda`/
-`desmascararMoeda` em `web/src/lib/masks.ts`; o valor existente (vindo da API como número) é
-formatado para exibição com `formatarMoeda` ao abrir o formulário de edição.
+**Limite de crédito com máscara de moeda (2026-07-21, convenção revista em 2026-07-22):** o campo
+mascara a digitação como dinheiro, em vez de aceitar texto livre. ~~Convenção de caixa
+eletrônico/app de banco — os dígitos digitados são sempre os centavos, contados da direita para a
+esquerda ("150000" → "1.500,00").~~ **Substituída em 2026-07-22 pela digitação natural**
+(`mascararValorDecimal`/`completarValorDecimal` em `web/src/lib/masks.ts:183-215`): o operador
+digita os dígitos inteiros **da esquerda para a direita**, como num número comum, e a **vírgula**
+é que abre as 2 casas decimais — digitar "1500" mostra "1.500" e vira "1.500,00" só no `onBlur`
+(`completarMoeda`). Nunca reintroduzir a convenção antiga de centavos: ela vale para **todo**
+campo decimal do sistema (moeda, percentual e peso). Funções expostas:
+`mascararMoeda`/`completarMoeda`/`formatarMoeda`/`desmascararMoeda`; o valor existente (vindo da
+API como número) é formatado para exibição com `formatarMoeda` ao abrir o formulário de edição.
 
 ## Categoria de cliente (`cfg_categoria_cliente`)
 
@@ -213,12 +218,19 @@ já precisa criar uma.
   `web/src/styles.css`, convenção do shell reaproveitável em outras telas de listagem).
 - **Grid compacta (2026-07-21):** espaçamento vertical entre linhas reduzido
   (`.table-compacta`, `padding: 6px 16px` em vez de `12px 16px`).
-- **Ações por linha:** três ícones em vez de texto — **verde** (olho) para visualizar em modo
-  somente-leitura (`/clientes/:id/visualizar`, reaproveita o `ClienteForm` com a prop
+- **Botão de fechar (✕):** no canto direito do cabeçalho, tanto na listagem quanto no
+  formulário — componente `BotaoFecharTela`, que volta pelo histórico real (`navigate(-1)`) e
+  nunca para uma rota fixa (convenção de todo o sistema, ver `docs/PROGRESSO.md`, 2026-08-04).
+- **Ações por linha:** **quatro** ícones em vez de texto — **verde** (olho) para visualizar em
+  modo somente-leitura (`/clientes/:id/visualizar`, reaproveita o `ClienteForm` com a prop
   `somenteLeitura` — todo o formulário vira um `<fieldset disabled>`, sem botão Salvar),
-  **azul** (lápis) para editar, **vermelho** (lixeira) para excluir
-  (`.acao-visualizar`/`.acao-editar`/`.acao-excluir` em `web/src/styles.css`, tokens de cor
-  `--sucesso`/`--info`/`--danger`).
+  **azul** (lápis) para editar, **destaque** (relógio) para abrir o Histórico do Cliente
+  (`/clientes/:id/historico`, ver `docs/telas/historico-cliente.md`) e **vermelho** (lixeira)
+  para excluir (`.acao-visualizar`/`.acao-editar`/`.acao-historico`/`.acao-excluir` em
+  `web/src/styles.css`, tokens de cor `--sucesso`/`--info`/`--accent`/`--danger`;
+  `ClienteLista.tsx:242,250,258,267`). ⚠️ **Cliente é a única listagem do sistema com 4 ícones**
+  — o padrão de cadastro descrito em "Solução proposta" são 3 (visualizar/editar/excluir), e o
+  4º existe aqui por causa do Histórico, que não tem equivalente nos outros cadastros.
 - **Modo embutido (2026-07-31):** `ClienteForm` ganhou os props opcionais
   `aoSalvarComSucesso`/`aoCancelar` — quando fornecidos, o formulário chama esses callbacks em
   vez de navegar para `/clientes` e esconde o ícone de engrenagem ("Configurar tela"). Reaproveitado
@@ -277,7 +289,7 @@ inativa em vez de excluir.**
 ## Impacto no contrato de API
 
 ```
-GET    /api/v1/clientes?nome=&cpf_cnpj=&id_categoria_cliente=&status=&pagina=&limite=&ordenarPor=&direcao=
+GET    /api/v1/clientes?nome=&cpfCnpj=&idCategoriaCliente=&status=&pagina=&limite=&ordenarPor=&direcao=
                                                lista paginada (número de página), busca/filtro/ordenação
 POST   /api/v1/clientes                      cria cliente
 GET    /api/v1/clientes/{id}                 detalhe

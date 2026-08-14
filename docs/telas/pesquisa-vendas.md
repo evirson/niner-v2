@@ -61,8 +61,10 @@ dados real do Niner — ver seção seguinte para cada divergência e a decisão
 ## Decisões de escopo (resolvendo os pontos em aberto da especificação original)
 
 1. **Duplo clique na grid de resultado** — nenhuma ação especial nesta v1 (clique simples já carrega
-   o detalhamento; não existe hoje reimpressão de comprovante de venda do PDV nem tela de edição de
-   venda pra abrir).
+   o detalhamento; não há tela de edição de venda pra abrir). *(A justificativa original citava
+   também "não existe reimpressão de comprovante de venda do PDV" — **superado**: existe a
+   **Reimpressão de Papeleta de Venda**, `web/src/pages/vendas/ReimpressaoPapeletaVenda.tsx:11,77`,
+   em tela própria; esta grid segue sem acionar nada no duplo clique.)*
 2. **Exportação (Excel/PDF)** — fora de escopo nesta v1.
 3. **Filtro por situação da venda** — incluído: combo Todas (padrão) / Ativas / Canceladas.
 4. **Período máximo sem filtro adicional** — 365 dias, igual ao Cancelamento de Venda (mesma
@@ -295,8 +297,11 @@ Nenhum.
 - **Edição da venda** — só a rotina de cadastro/PDV altera uma venda; cancelamento continua em
   Cancelamento de Venda.
 - **Exportação (Excel/PDF)** — ver "Decisões de escopo".
-- **Reimpressão de comprovante da venda** — não existe comprovante de venda do PDV hoje (só
-  crediário tem, `docs/telas/comprovante-recebimento-crediario.md`); fora desta feature.
+- **Reimpressão de comprovante da venda** — ~~não existe comprovante de venda do PDV hoje (só
+  crediário tem, `docs/telas/comprovante-recebimento-crediario.md`)~~ — **superado**: a **papeleta
+  de venda** existe (`docs/telas/papeleta-venda.md`) e tem tela de reimpressão própria
+  (`web/src/pages/vendas/ReimpressaoPapeletaVenda.tsx:11,77`). Continua **fora desta tela** — a
+  Pesquisa de Vendas não imprime nada.
 - **Sangria/troco como lançamento de caixa** — não implementado em nenhuma tela hoje.
 
 ## Questões abertas

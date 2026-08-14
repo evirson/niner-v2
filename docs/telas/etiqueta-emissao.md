@@ -60,7 +60,9 @@ Busca **qualquer produto ativo**, com ou sem variação/SKU (`produto_barra`) j�
 a rodada 2 (ver abaixo), não é mais preciso ter SKU pré-cadastrado pra emitir etiqueta de um
 produto novo.
 
-- Se o produto usa grade (`produto.id_grade` não nulo — configurado **por produto**, no cadastro
+- Se o produto usa grade (`produto.id_grade <> 1` — a coluna é `NOT NULL DEFAULT 1` e `1` é a
+  grade **PADRÃO** sentinela, que significa "não usa grade de verdade"; `db/migration/V017__catalogo.sql:196-199`
+  e `api/src/main/java/com/vetor/niner/catalogo/ProdutoBarraService.java:97-99` — configurado **por produto**, no cadastro
   dele, não uma flag global de tenant), os seletores **Cor** e **Tamanho** aparecem como
   **obrigatórios** (revisado 2026-08-08: o antigo par genérico linha/coluna, com rótulo livre por
   produto, virou este par fixo cor+tamanho). Cor vem do **catálogo inteiro do tenant** (`GET
@@ -83,11 +85,13 @@ período/fornecedor/nota fiscal informados. **Nenhum filtro é obrigatório sozi
 menos 1 dos 3** — decisão minha, não pedida, pra não deixar a tela rodar "todas as entradas desde
 sempre" sem querer.
 
-> ⚠️ **Nenhum serviço do sistema grava `tipo_movimento='COMPRA'` ainda** — "Entrada de Produtos
+> ~~⚠️ **Nenhum serviço do sistema grava `tipo_movimento='COMPRA'` ainda** — "Entrada de Produtos
 > por Compra" é outra área de Implementações Futuras, ainda não construída. O filtro é real e
-> funciona contra o schema existente (confirmado por pesquisa no código antes de implementar), só
-> não vai ter dado até aquela tela existir (ou uma carga manual). Documentado aqui e em
-> `AjudaDaTela` pra não parecer bug quando vier vazio.
+> funciona contra o schema existente, só não vai ter dado até aquela tela existir.~~ —
+> **superado em 2026-08-11**: a tela **Entrada de Produtos por Compra**
+> (`docs/telas/entrada-mercadoria.md`) grava `tipo_movimento='COMPRA'`
+> (`EntradaMercadoriaService.java:131`), então este modo trabalha com **dado real** — é o caso de
+> uso principal dele (etiquetar o que acabou de chegar).
 
 ### 3. Por Estoques
 
@@ -117,7 +121,8 @@ Pedido em 3 itens sobre a tela já construída na rodada 1:
 3. Botão para limpar todos os produtos selecionados.
 
 **Leitura da obrigatoriedade (item 2 era ambíguo — "se nas configuração são obrigatórias"):**
-resolvido como **por-PRODUTO**, via `produto.id_grade` (não nulo = este produto usa variação), e
+resolvido como **por-PRODUTO**, via `produto.id_grade` (**`<> 1`** = este produto usa variação; a
+coluna é `NOT NULL DEFAULT 1` e `1` é a grade PADRÃO sentinela — nunca testar por `null`), e
 **não** a flag global de tenant (`cfg_usa_cor_grade`, que só controla se o campo Grade aparece no
 cadastro de Produto).
 
@@ -164,13 +169,16 @@ reaproveita `cfg_etiqueta_config`) — sem tabela nova. Qualquer papel (`ADMIN`/
 `ProdutoBarraService`/`ProdutoBarraDtos` (pacote `catalogo`, ver "Rodada 2" acima) — infraestrutura
 de domínio compartilhada, consumida por este controller mas não pertencente a ele.
 
-Testes (`EtiquetaEmissaoCrudTest.java`): busca traz todos os produtos ativos com ou sem variação,
-criar variação gera SKU novo quando o produto não usa grade, criar variação exige cor/tamanho
-quando o produto usa grade, criar variação com cor e tamanho acha e depois reaproveita a mesma
-(não duplica), busca de fornecedores só ativos, Por Entradas rejeita sem filtro nenhum, Por
+Testes (`EtiquetaEmissaoCrudTest.java`, 14 casos): busca traz todos os produtos ativos com ou sem
+variação, busca devolve o `idGrade` quando o produto usa grade (é o que faz a tela saber que
+precisa pedir cor/tamanho), criar variação gera SKU novo quando o produto não usa grade, criar
+variação exige cor/tamanho quando o produto usa grade, criar variação com cor e tamanho acha e
+depois reaproveita a mesma (não duplica), criar variação rejeita (400) tamanho que não pertence à
+grade do produto, busca de fornecedores só ativos, Por Entradas rejeita sem filtro nenhum, Por
 Entradas soma quantidade de várias compras da mesma variação, Por Entradas filtra por nota fiscal,
 Por Estoques exige empresa pra ADMIN, Por Estoques só traz quantidade positiva, Por Estoques
-filtra por categoria, e isolamento de tenant (RLS). Suíte de backend inteira: **405/405**.
+filtra por categoria, e isolamento de tenant (RLS). Suíte de backend inteira: **492 testes verdes
+em 2026-08-24** (eram 405 quando esta tela nasceu).
 
 ## Frontend
 
@@ -180,14 +188,29 @@ Entradas/Por Estoques), `EscolherModeloModal.tsx` (popup do passo final, lista o
 Configuração de Etiqueta). `web/src/lib/etiquetaEmissao.ts` reúne tipos, chamadas de API,
 `mesclarItensEmissao`, `montarSequenciaImpressao`, `paraQuantidadeInteira`.
 
+## Ajuda da tela (manual de operação + vídeo) — obrigatório (R22 / §3.7.1)
+
+- **`chave_tela`: `relatorios.etiquetaemissao.tela`** — tela única (não tem par lista/form): as 3
+  formas de seleção no popup, o SKU criado na hora no modo Individual, cada busca somando à lista
+  (o popup não fecha sozinho), edição/remoção/"Limpar Lista" na grade e a escolha obrigatória do
+  modelo antes de imprimir. Erros comuns: cor/tamanho obrigatórios quando o produto usa grade,
+  "Por Estoques" só traz saldo positivo, quantidade fracionária arredondada, e "Emitir Etiquetas"
+  desabilitado com a lista vazia. Texto em `web/src/components/AjudaDaTela.tsx`. `url_video`:
+  `NULL` por ora.
+  - ⚠️ O erro comum *"'Por Entradas' sem resultado: nenhuma tela de Entrada de Produtos por Compra
+    existe ainda"* ficou **desatualizado** desde 2026-08-11 (ver "Pendências" abaixo) — o texto no
+    `AjudaDaTela.tsx` ainda não foi corrigido.
+
 ## Impacto nas integrações
 
 Nenhum — tela 100% interna (configuração de impressão física), não afeta canais de venda.
 
 ## Pendências explícitas, fora do escopo desta tela
 
-- **"Por Entradas" sem dado real** até "Entrada de Produtos por Compra" existir (ver aviso acima)
-  — o filtro funciona, só não tem o que buscar ainda.
+- ~~**"Por Entradas" sem dado real** até "Entrada de Produtos por Compra" existir (ver aviso acima)
+  — o filtro funciona, só não tem o que buscar ainda.~~ — **superado em 2026-08-11**: a Entrada de
+  Produtos por Compra existe e grava `COMPRA` (`EntradaMercadoriaService.java:131`); o modo tem
+  dado real.
 - **Sem cap de quantidade máxima** (diferente do Teste de Impressão) — decisão deliberada, não
   testado imprimindo um lote de milhares de etiquetas de propósito (achado sem querer um estoque
   de teste com 1007 unidades de um produto, não forçado a imprimir pra não arriscar travar o

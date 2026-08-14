@@ -66,10 +66,19 @@ Serviços que gravam `id_empresa` num INSERT passam a usar o claim `eid` do JWT 
 - `PdvVendaService.efetivarVenda` (venda + movimentação de estoque).
 - `FuncionarioService.criar` (cadastro de funcionário).
 
-Nenhum outro serviço de domínio grava `id_empresa` hoje (auditado — só leitura/join em
-`PdvProdutoService`, `ClienteHistoricoService`). Todo serviço novo que precisar gravar
-`id_empresa` deve seguir o mesmo padrão: extrair `eid` do JWT, nunca reintroduzir a busca por
-"a primeira empresa do tenant".
+Esses dois eram os únicos na data desta spec (2026-07-28). **A auditoria envelheceu:** hoje mais
+de vinte serviços resolvem o claim `eid` — entre eles `TransferenciaService`,
+`EntradaMercadoriaService`, `BalancoEstoqueService`, `DevolucaoProdutoService`,
+`RecebimentoCrediarioService`, `CaixaService`, `EtiquetaEmissaoService`, `FluxoCaixaService`,
+`CrmService` e os relatórios (`RelatorioVendasService`, `RelatorioEstoqueService`,
+`RelatorioComissoesService`, `RelatorioContasReceberService`,
+`RelatorioMovimentacaoProdutosService`, `PesquisaVendaService`), uns gravando `id_empresa`,
+outros usando o claim para escopar leitura do OPERADOR. Não trate a lista acima como inventário —
+`grep -r '"eid"' api/src/main/java` é a fonte atual.
+
+**A regra continua valendo integralmente:** todo serviço que precisar de `id_empresa` deve
+extrair `eid` do JWT, e **nunca** reintroduzir a busca por "a primeira empresa do tenant"
+(`SELECT id_empresa FROM empresa ... LIMIT 1`).
 
 ## Segurança relacionada (mesmo dia, revisada)
 
@@ -95,7 +104,7 @@ removível (nem pelo próprio ADMIN, nem por mais ninguém). Ver `docs/telas/usu
 Cobertos por `LoginEmpresaTest` (3 testes) e `UsuarioCrudTest`
 (`tentativaDeMudarOProprioNivelEhIgnoradaContinuaAdmin`,
 `criarUsuarioIgnoraTentativaDeMarcarComoAdministrador`,
-`bancoRejeitaUmSegundoAdministradorNoMesmoTenant`). Suíte completa do projeto: 173/173 verdes.
+`bancoRejeitaUmSegundoAdministradorNoMesmoTenant`). Suíte completa do projeto: 492/492 verdes (2026-08-24).
 
 ## Non-goals desta feature
 

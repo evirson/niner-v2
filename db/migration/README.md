@@ -62,6 +62,10 @@ RLS. Só depois os módulos de domínio do lojista e, por fim, as políticas RLS
 | **V027** | **`cfg_tela_campo`** (novo, 2026-07-21, §3.7.2): configuração por tenant de campos visíveis/obrigatórios por tela (`chave_tela`), reutilizável entre telas — primeiro uso `cadastros.cliente.form`. `CHECK` impede campo obrigatório e oculto ao mesmo tempo. RLS próprio no arquivo. **Migration aditiva**: aplicada com `docker compose run --rm flyway` sem recriar o banco (só ela rodou, V001–V026 já estavam aplicadas) | ✅ |
 | **V028** | **`financeiro` — `conta_corrente`/`conta_corrente_movimento`** (2026-07-30, §3.3.7): última tabela do módulo `financeiro` a entrar no v1 — fecha o legado por completo. `cfg_banco` (referência de bancos brasileiros, GLOBAL sem `id_tenant`/RLS, mesma exceção de `cfg_produto_ncm`/`cfg_ean_gerador`, seed pequeno direto na migration). PK de negócio `(id_tenant, id_conta_corrente)`, mesmo padrão de `cfg_plano_contas`. RLS próprio no arquivo | ✅ |
 | **V029** | **`cfg_etiqueta_config`/`cfg_etiqueta_coluna`/`cfg_etiqueta_campo`** (novo, 2026-08-04, `docs/telas/configuracao-etiqueta.md`): configuração nomeada de etiqueta de código de barras — rolo/etiqueta/bordas (cabeçalho), posição de cada coluna no rolo (filha), e campo impresso com posição livre x/y + estilo (fonte/tamanho/negrito/fundo preto) (filha). ENUMs novos `campo_etiqueta` (10 valores fixos), `alinhamento_etiqueta_campo`, `fonte_etiqueta` (provisório, depende da tecnologia de impressão escolhida). RLS próprio no arquivo. **Migration aditiva**, aplicada sem recriar o banco — precisou `flyway repair` antes (checksum drift de V019/V025, editadas em sessões anteriores) | ✅ |
+| **V030** | **`importacao_lote`** (2026-08-06, `docs/telas/importacao-dados.md`): cabeçalho de cada execução da Importação de Dados (tabela alvo, arquivo, contagens, dry-run). RLS próprio no arquivo | ✅ |
+| **V031** | **`estoque` — Entrada de Produtos por Compra** (2026-08-11, `docs/telas/entrada-mercadoria.md`): `entrada_xml` (XML bruto da NF-e importada, chave de acesso única por tenant — idempotência) e `produto_fornecedor` (de-para código-do-fornecedor × variação, aprendido a cada entrada). RLS próprio no arquivo | ✅ |
+| **V032** | **Entrada por planilha + plano de contas da compra** (2026-08-11): `cfg_geral.id_plano_contas_compra_mercadoria` (conta de CUSTO usada nas contas a pagar geradas pela entrada — não a conta do fornecedor) + seed da árvore mínima do plano de contas | ✅ |
+| **V033** | **`usuario_horario_acesso`** (2026-08-14, `docs/telas/usuario.md`): janela de acesso por dia da semana (1=segunda..7=domingo), com `usuario.controla_horario_acesso` ligando a regra. RLS próprio no arquivo | ✅ |
 
 > As tabelas do schema `plataforma` são **globais** (P9) e **não** entram no RLS de tenant.
 > O RLS (`FORCE`) se aplica a toda tabela de **domínio** do lojista — V014–V023 (ativado em V024)
@@ -132,12 +136,16 @@ Em desenvolvimento, recriar do zero (`flyway clean` + `migrate`) é aceitável.
   como `id_funcionario` já é a PK, essa constraint não impõe nada além do que a PK já
   garante; **o CPF deixou de ser único por tenant** (decisão explícita).
 - **`cfg_plano_contas` (V016, 2026-07-16) foge do padrão de PK surrogate + `integer`:** a PK é
-  `(id_tenant, id_plano_contas)` — `id_plano_contas` é `text` (código contábil, ex.:
-  `"3.1.001"`), a própria chave de negócio, sem `id_<entidade> integer GENERATED ALWAYS AS
-  IDENTITY`. Preparação para relatórios/DRE; o módulo `financeiro` completo (caixa,
-  contas a pagar/receber) continua fora do v1 (Q5/ADR-010, Fase 2) — só o plano de contas
-  em si (e o vínculo em `fornecedor.id_plano_contas`, `NOT NULL`, sem linha padrão
-  pré-cadastrada) entrou agora.
+  `(id_tenant, id_plano_contas)` — `id_plano_contas` é `text` (código contábil), a própria chave
+  de negócio, sem `id_<entidade> integer GENERATED ALWAYS AS IDENTITY`.
+  ⚠️ **O código obedece a uma máscara fixa `9.99.999`** (`cfg_plano_contas_mascara_ck`, revisão de
+  2026-08-22 — antes era `9.99.999.999`, 4 níveis): exemplo válido é **`3.03.001`**, e um INSERT
+  com `"3.1.001"` (exemplo que este README trazia até 2026-08-24) **viola o CHECK e falha**.
+  `nivel` e `id_plano_contas_pai` são colunas geradas a partir do código.
+  O módulo `financeiro` **está completo no v1** desde V025/V026/V028 (caixa, crediário, contas a
+  pagar, conta corrente) e o plano de contas alimenta de verdade a **DRE** e o **Fluxo de Caixa**
+  (`grupo_dre`/`grupo_dfc`/`sinal`) — a afirmação anterior de que o módulo continuava "fora do v1,
+  Fase 2" ficou obsoleta.
 - Datas de auditoria (`criado_em` `DEFAULT now()` / `atualizado_em`) mantidas pela aplicação
   (Spring Data JDBC), **sem** JPA auditing (§3.3.1 / §3.2). Única exceção a "sem trigger de
   banco": `produto_estoque.qtd_estoque`, mantido por `trg_produto_movimento_detalhe_estoque`

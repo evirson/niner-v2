@@ -45,7 +45,7 @@ resposta de `POST /api/v1/pdv/vendas`). Pré-visualização em texto monoespaça
 5. **Parcelas de CREDIARIO listadas por extenso** (revisão 2026-08-06, mockup próprio) — quando a
    venda tem pelo menos uma linha de pagamento CREDIARIO, a papeleta ganha um bloco extra no
    final ("PARCELAS A VENCER DE CREDIARIO", tabela PARC./VENCIMENTO/VALOR A PAGAR, 37 colunas,
-   largura própria dentro da bobina de 64). Filtra por `tipo_carteira.categoria_carteira =
+   largura própria dentro da bobina de 42). Filtra por `tipo_carteira.categoria_carteira =
    'CREDIARIO'`, não por parcela em aberto — `CARTAO_DEBITO`/`CARTAO_CREDITO` também ficam em
    aberto até a conciliação (ver `PdvVendaService.efetivarVenda`), mas isso não é "crediário" pro
    cliente que está lendo a papeleta.
@@ -80,7 +80,8 @@ preto sólido, em vez de dissolver o cinza em pontos alternados.
 linhas de texto — reusado idêntico pela pré-visualização (`<pre>`), pela impressão
 (`window.print()`) e pelo PDF (`jsPDF`). Mesmo padrão de `montarLinhasComprovante` (crediário) e
 `montarLinhasFechamento` (Fechamento de Caixa), mas com constantes de largura/coluna próprias
-(`LARGURA_VENDA = 64`, não reaproveita `LARGURA = 42` do resto do arquivo).
+(`LARGURA_VENDA = 42`, hoje idêntico ao `LARGURA = 42` do resto do arquivo — a papeleta nasceu
+com 64 colunas e foi alinhada às 42 na revisão de impressão de 2026-08-24).
 
 ### Bug corrigido (2026-08-11) — jsPDF invertia largura/altura em comprovantes curtos
 
@@ -221,16 +222,19 @@ Nenhum.
 
 ## Non-goals desta feature
 
-- **Layout configurável (logo, campos extras, papel de tamanhos diferentes)** — só 80mm/64
-  colunas, layout fixo.
+- **Layout configurável (logo, campos extras, papel de tamanhos diferentes)** — só bobina de 80mm
+  de papel (75mm de área imprimível) / 42 colunas, layout fixo.
 - **Impressão direta via ESC/POS** — passa pelo driver do sistema operacional via diálogo de
   impressão do navegador.
 
 ## Questões abertas
 
-Largura/fonte calculadas por conta física (mm/pt), não testadas numa impressora térmica real
-ainda — pode precisar de ajuste fino no primeiro teste real (mesma ressalva já registrada em
-`comprovante-recebimento-crediario.md`).
+Nenhuma bloqueante. ~~Largura/fonte calculadas por conta física (mm/pt), não testadas numa
+impressora térmica real ainda — pode precisar de ajuste fino no primeiro teste real.~~ —
+**resolvido em 2026-08-24**: a calibragem descrita neste arquivo (75mm de área imprimível,
+`left: 0`, 42 colunas, Consolas em negrito, item em 2 linhas) veio **do teste real na bobina** —
+foi ela que substituiu as 64 colunas ilegíveis do primeiro corte. O ajuste foi replicado em
+`comprovante-recebimento-crediario.md`, que sai na mesma impressora.
 
 ## Métrica de sucesso
 

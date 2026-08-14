@@ -425,8 +425,15 @@ tela de Clientes precisa ter sido usada (e confirmada) antes desta, mesmo que di
 encontrado → linha **rejeitada**, cai no relatório de erro. Cliente sem CPF/CNPJ cadastrado não
 tem como ter crediário importado por esta rotina (limitação conhecida, aceita).
 
-**Resolução da empresa:** pelo `codigo_empresa` (o código curto da empresa, ex. `1`, `2` — visível
-na tela de Empresas). Código inexistente → linha rejeitada.
+**Resolução da empresa:** pelo `codigo_empresa` (o código curto da empresa, ex. `1`, `2`). Código
+inexistente → linha rejeitada.
+
+⚠️ **Não existe tela de cadastro de Empresas** — `EmpresaController` só expõe dois `GET`
+(`/api/v1/empresas` e `/api/v1/empresas/permitidas`), consumidos pelos seletores de outras telas.
+Para descobrir o código, o usuário tem duas saídas: **Rotina de Exportação de Dados** → tabela
+**"Empresas"**, cuja primeira coluna é **"Código"** (`ExportacaoService.java:78-88`); ou qualquer
+grid que já mostre a coluna Empresa por código — Transferência de Produtos e Recebimento de
+Crediário, por exemplo.
 
 **Venda sintética (contorna `contas_receber.id_venda NOT NULL` sem mexer no schema):** as linhas
 são agrupadas por **`(cliente, empresa)`** — pra cada grupo, uma única linha é inserida em `venda`
@@ -459,8 +466,11 @@ preencher todas sem repetir).
   antes desta.
 - Acha ou cria `NOME_COR`/`NOME_TAMANHO` em `cfg_cor`/`cfg_tamanho` (find-or-create, mesmo princípio
   do resto da importação).
-- Acha ou cria a variação — se o produto não usa grade, cor/tamanho são forçados a `NULL`
-  automaticamente (mesmo princípio de "campo oculto ⇒ servidor ignora"). **Não exige que o
+- Acha ou cria a variação — se o produto não usa grade (`produto.id_grade = 1`, a sentinela
+  PADRÃO; a coluna é `NOT NULL DEFAULT 1`, ver `db/migration/V017__catalogo.sql:196-199`),
+  cor/tamanho são forçados à **sentinela `1`**, não a `NULL`
+  (`api/src/main/java/com/vetor/niner/catalogo/ProdutoBarraService.java:97-99`) — mesmo princípio
+  de "campo oculto ⇒ servidor ignora". **Não exige que o
   tamanho pertença à sequência da grade do produto (2026-08-11)** — achado real: planilha
   migrada trazia `NOME_TAMANHO="UN1"` numa grade que só tinha `"UN"`, e isso não é um erro de
   verdade nesse contexto, é só o sistema de origem sendo menos rígido. `ProdutoBarraService`
@@ -518,7 +528,7 @@ de análise prévia nenhuma.
 **Shape de `escolhas` (JSON livre, um por tabela):**
 ```
 cliente:         { "idCategoriaCliente": 3 }  OU  { "novaCategoria": "VAREJO" }
-fornecedor:      { "idPlanoContas": "3.03.001.000" }  OU
+fornecedor:      { "idPlanoContas": "3.03.001" }      OU
                  { "novoPlanoContas": { "codigo", "descricao", "tipoMovimento", "natureza" } }
 contas_receber:  { "idCarteira": 5 }  OU
                  { "novaCarteira": { "nomeCarteira", "prazoPagamento", "pcMinima", "pcMaxima" } }

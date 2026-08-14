@@ -13,6 +13,16 @@ Tela de cadastro completo (lista + form) pro lançamento — **diferente** de `c
 lançamento já gravado, porque é digitação manual sujeita a erro de captura, não um efeito
 colateral automático de outra rotina.
 
+> ⚠️ **Desde 2026-08-23 a premissa "só lançamento manual" deixou de ser verdadeira.** A **baixa
+> de Contas a Pagar** com origem `CONTA_CORRENTE` grava aqui um débito automático
+> (`ContaPagarService.sincronizarMovimentoDeDinheiro`,
+> `api/src/main/java/com/vetor/niner/financeiro/contaspagar/ContaPagarService.java:177-188`),
+> identificado por `id_conta_pagar` preenchido e observação "Pagamento da conta a pagar nº N".
+> A tela **não distingue** esses lançamentos dos manuais: eles aparecem na lista e podem ser
+> **editados ou excluídos sem nenhum aviso**, o que descasa o extrato da conta a pagar que lhe
+> deu origem (a baixa continua registrada em `contas_pagar`). Pendência conhecida: sinalizar a
+> origem na grid e bloquear/avisar na edição.
+
 ## Regras de negócio
 
 ### Campos
@@ -67,7 +77,7 @@ ativo — P8), sem restrição de papel.
 - Dado busca por número de documento, então encontra o lançamento certo.
 - Dado um lançamento de outro tenant, então não aparece na listagem nem pode ser buscado (RLS).
 
-Cobertos por `ContaCorrenteMovimentoCrudTest` (13 testes).
+Cobertos por `ContaCorrenteMovimentoCrudTest` (12 testes).
 
 ## Ajuda da tela (manual de operação + vídeo) — obrigatório (R22 / §3.7.1)
 
@@ -81,6 +91,11 @@ Cobertos por `ContaCorrenteMovimentoCrudTest` (13 testes).
 (`localizador integer GENERATED ALWAYS AS IDENTITY`, FKs compostas pra `conta_corrente` e
 `cfg_plano_contas`). RLS própria. `criado_em` **e** `atualizado_em` (diferente de
 `caixa_detalhe`, que só tem `criado_em` — ali o lançamento é imutável, aqui não).
+
+**Coluna acrescentada em 2026-08-23 (Fluxo de Caixa):** `id_conta_pagar integer` nullable e
+**sem FK de propósito** (`V028__financeiro_conta_corrente.sql:90`) — marca os movimentos gerados
+automaticamente pela baixa de Contas a Pagar e é o vínculo que permite apagá-los quando a baixa é
+desfeita. Movimento lançado manualmente nesta tela sempre tem `id_conta_pagar` nulo.
 
 ## Impacto nas integrações
 

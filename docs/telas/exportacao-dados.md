@@ -18,7 +18,8 @@ o arquivo.
 
 Cobre **9 tabelas**: Empresas, Clientes, Fornecedores, Funcionários, Contas a Receber/Recebidas,
 Contas a Pagar/Pagas, Código de Barras, Plano de Contas e Estoque — deliberadamente mais ampla que
-a importação (que cobre só 4), porque exportar não tem o mesmo risco de misturar dado ruim no
+a importação (que cobre 5: clientes, fornecedores, produtos, contas a receber e estoque), porque
+exportar não tem o mesmo risco de misturar dado ruim no
 tenant; qualquer tabela de leitura pode entrar.
 
 ## User stories

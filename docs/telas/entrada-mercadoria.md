@@ -65,15 +65,17 @@ Autor: Evirson (dono do produto) + Claude · Data: 2026-07-23, implementação 2
 >   `idProdutoEncontrado`/`idGradeEncontrada` para as OUTRAS linhas com o mesmo nome
 >   normalizado — evita recadastrar o mesmo produto em tamanhos diferentes. Testado ponta a
 >   ponta com 2 NF-es reais (Dakota Calçados 36 itens; A. Grings S.A., `nfe-grings.xml`, no
->   `EntradaXmlCrudTest`, 8 testes).
+>   `EntradaXmlCrudTest`, 11 testes).
 > - **Cancelamento (2026-08-19)** — `POST /api/v1/estoque/entradas/{id}/cancelar`, ADMIN-only.
 >   Mestre original nunca é apagado/editado — ganha `cancelado`/`data_cancelamento`/
 >   `id_usuario_cancelamento`/`motivo_cancelamento` (mesmo padrão de `venda.cancelada`); o
 >   estorno de estoque é um NOVO `produto_movimento_mestre` tipo `CANCELAMENTO` com
 >   `credito_debito='D'` por item (a trigger de V019 reverte `produto_estoque` sozinha).
 >   `contas_pagar` geradas pela entrada são deletadas. Bloqueios: já cancelada → 409; conta a
->   pagar já quitada → 409 (hoje inatingível na prática, sem tela de baixa ainda — mantido como
->   defesa em profundidade). Reimportar a mesma NF-e depois de cancelar funciona (o índice
+>   pagar já quitada → 409 (~~hoje inatingível na prática, sem tela de baixa ainda~~ — **superado**:
+>   a tela **Contas a Pagar/Pagas** (`docs/telas/contas-pagar.md`) faz a baixa
+>   (`ContaPagarService.java:209,269-284`), então esse bloqueio é atingível de verdade).
+>   Reimportar a mesma NF-e depois de cancelar funciona (o índice
 >   único de idempotência ganhou `AND cancelado = false`). Precisou de `GRANT UPDATE` **de
 >   coluna** (não de tabela) em `produto_movimento_mestre` pra `niner_app`, furando a
 >   imutabilidade P3 só nas 4 colunas novas — os testes JUnit não pegaram essa lacuna porque
@@ -247,9 +249,11 @@ entrada, ajuste de estoque , devolução etc...
   Gerar 1 linha por duplicata com `nota_fiscal`, `id_fornecedor`, `id_plano_contas` (o do
   fornecedor), `data_vencimento`, `valor_pagar` — **[COMPLEMENTAR]**: gera automático na
   confirmação, opcional (checkbox), ou fica fora desta spec?
-- **`outbox_evento`** (V022) — P1/P2: a entrada muda saldo → evento de estoque no outbox na
-  mesma transação, para os canais replicarem. Na Fase 1 (sem canal ativo) o evento é gravado
-  e fica sem consumidor; o formato segue §3.3 da spec-mãe.
+- **`outbox_evento`** (V022) — **pendência futura, não implementado**: por P1/P2 a entrada muda
+  saldo e deveria gravar um evento de estoque no outbox na mesma transação, para os canais
+  replicarem. **Nenhum serviço do `api/` escreve em `outbox_evento` hoje** (a palavra só aparece
+  em comentários de `integracao/package-info.java` e `comum/tenant/TenantContext.java`) — isso vai
+  nascer junto do módulo `integracao`/canais. O formato segue §3.3 da spec-mãe.
 - **`cfg_produto_ncm`** (V017) — validação/lookup do NCM dos itens do XML.
 
 ## Mapeamento XML NF-e → banco (modelo 55, layout 4.00)
@@ -275,7 +279,9 @@ entrada, ajuste de estoque , devolução etc...
 
 **[COMPLEMENTAR]** — esta seção é um esqueleto; confirmar/ajustar o desenho.
 
-- **Listagem** (`/entradas`): colunas Data, Fornecedor, Nota Fiscal, Qtde de itens, Valor
+- **Listagem** (`/entrada-produtos-compra`; o formulário é `/entrada-produtos-compra/nova` e o
+  detalhe `/entrada-produtos-compra/:id` — `web/src/App.tsx:119-121`): colunas Data,
+  Fornecedor, Nota Fiscal, Qtde de itens, Valor
   total, Origem (XML/manual) — padrão consolidado (50/página, janela deslizante, ordenação
   com allowlist, cabeçalho/rodapé fixos, `AjudaDaTela`, ícone da tela). Ação de linha:
   **visualizar** (verde, read-only). ⚠️ Sem editar/excluir: o mestre é **imutável (P3)** —
@@ -311,8 +317,10 @@ Rascunho — refinar junto com as decisões acima:
   amigável (Problem Details) e nada é gravado.
 - Dado que a soma dos itens difere de `vNF`, quando importado, então a conferência exibe a
   divergência — **[COMPLEMENTAR]**: bloqueia ou só avisa?
-- Dado uma entrada confirmada, então existe evento de estoque no `outbox_evento` gravado na
-  mesma transação (P2).
+- **[FUTURO — não é critério vigente]** Dado uma entrada confirmada, então existe evento de
+  estoque no `outbox_evento` gravado na mesma transação (P2). Só passa a valer quando o módulo
+  `integracao` existir: hoje nenhum serviço escreve no outbox, então este critério **não** tem
+  teste correspondente e não deve bloquear merge.
 - **[COMPLEMENTAR]** — critérios de contas a pagar / atualização de custo, conforme decisões.
 
 ## Impacto no contrato de API (implementado — difere do rascunho original)
@@ -349,8 +357,10 @@ As três lacunas identificadas no rascunho original foram todas resolvidas, como
    existentes, não em `V028+`, ver `docs/PROGRESSO.md`), junto com `id_usuario` (quem
    confirmou, FK pra `usuario`) e `serie_nota smallint`.
 2. **XML bruto (P3/auditoria)** — tabela `entrada_xml (id_tenant, id_movimento, xml_bruto
-   text, importado_em)`, RLS, `db/migration/V031__estoque_entrada.sql`. Ainda sem gravação
-   real (Fase 3 pendente), mas o contrato de confirmação já aceita `xmlBruto` opcional.
+   text, importado_em)`, RLS, `db/migration/V031__estoque_entrada.sql`. ~~Ainda sem gravação
+   real (Fase 3 pendente)~~ — **superado**: a Fase 3 (importação por XML) foi implementada e o
+   XML bruto é persistido de fato em `EntradaMercadoriaService.java:226`, a partir do `xmlBruto`
+   opcional do contrato de confirmação.
 
 Duas tabelas novas além do proposto no rascunho:
 

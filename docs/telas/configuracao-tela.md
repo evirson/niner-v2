@@ -88,8 +88,11 @@ cfg_tela_campo(id_tenant FK, chave_tela, campo, visivel BOOL, obrigatorio BOOL, 
 RLS próprio no arquivo (nasce depois do guarda-corpo de V024, mesmo padrão de V025/V026/V027).
 O registro de quais campos são configuráveis em cada `chave_tela` é **estático no backend**
 (`ConfiguracaoTelaService.CAMPOS_POR_TELA`) — cada tela nova que ganhar essa configuração
-entra nesse mapa; não é uma tabela de metadados separada (YAGNI até existir uma segunda tela
-configurável de verdade).
+entra nesse mapa; não é uma tabela de metadados separada. ~~(YAGNI até existir uma segunda tela
+configurável de verdade.)~~ — **atualizado**: já são **quatro** telas configuráveis no mapa
+(`cadastros.cliente.form`, `cadastros.funcionario.form`, `cadastros.fornecedor.form`,
+`catalogo.produto.form` — `ConfiguracaoTelaService.java:29-40`), e o mapa estático continua sendo
+a decisão: crescer é adicionar uma entrada, não criar tabela de metadados.
 
 ## Ajuda da tela — obrigatório (R22 / §3.7.1)
 

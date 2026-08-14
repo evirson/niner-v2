@@ -1,11 +1,21 @@
-# Spec: Armazenamento de imagens de produto (object storage)   Status: Aprovada — infra provisionada, código não iniciado
-Autor: Evirson (Vetor) · Data: 2026-07-23 · Módulo(s): `comum` (infra) + `catalogo` · Fase: 1 — Núcleo do ERP
+# Spec: Armazenamento de imagens de produto (object storage)   Status: **Implementada**
+Autor: Evirson (Vetor) · Data: 2026-07-23 · Implementado em 2026-07-24 · Revisado em 2026-08-24
+Módulo(s): `comum` (infra) + `catalogo` · Fase: 1 — Núcleo do ERP
 Decisão de arquitetura: **ADR-013** (spec §6) · Tabela afetada: `produto_imagem` (V017, §3.3.3)
 
-> **Este documento é o handoff.** A infraestrutura no Google Cloud **já está criada e testada**
-> (seção 2). O código **não existe ainda** (seção 5). Quem pegar esta tarefa deve ler as seções
-> 2, 3 e 4 antes de escrever qualquer linha — principalmente a **seção 3 (credenciais)**, que é
-> o único ponto que não se resolve sozinho pelo repositório.
+> ✅ **Este documento era o handoff da tarefa; a tarefa foi feita.** Até 2026-08-24 o cabeçalho
+> dizia "código não iniciado" — não é mais verdade. Existem hoje `ProdutoImagemController`
+> (upload multipart, listagem, exclusão), o `ArmazenamentoDeArquivos` + adapter, e a
+> `GaleriaImagensProduto.tsx` no front (com confirmação ao excluir, lightbox e upload antes de
+> salvar o produto). Em desenvolvimento o adapter aponta para um **fake-gcs-server** local, o que
+> tornou dispensável a chave de conta de serviço no dia a dia.
+>
+> **O que continua valendo desta spec:** o formato da chave
+> (`tenants/{id_tenant}/produtos/{id_produto}/{uuid}.webp`, `id_tenant` sempre do `TenantContext`),
+> a regra de guardar a **chave** e nunca a URL completa, o upload **sempre via API** (nunca
+> navegador→bucket), a leitura pública (marketplaces rebuscam por URL — nada de signed URL que
+> expira) e, principalmente, a **seção 3 (credenciais)** para quem precisar apontar para o GCS
+> real. E a regra dura: **nada além de foto de produto entra nesses buckets, que são públicos.**
 
 ---
 
@@ -266,10 +276,11 @@ Validações no servidor (nunca só no front — P4):
 (ver `api/README.md` para o contorno de runtime de container). **Nenhum teste pode
 tocar o bucket real** — CI sem credencial deve passar.
 
-### TASK-D — front (`web/`)
-Galeria na tela de Produtos: upload, reordenação por arrastar, exclusão, preview. Depende
-da tela de Produtos, que também não existe. Segue o padrão de tela de cadastro
-(`docs/telas/cliente.md`).
+### TASK-D — front (`web/`) ✅ feita
+Galeria na tela de Produtos: upload, exclusão (com confirmação), preview/lightbox.
+`web/src/components/GaleriaImagensProduto.tsx`. Ver `docs/telas/produto.md`.
+*(Esta seção dizia "depende da tela de Produtos, que também não existe" — a tela existe desde
+2026-07-21.)*
 
 ## 6. Riscos e pontos em aberto
 

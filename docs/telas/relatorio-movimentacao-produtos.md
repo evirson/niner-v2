@@ -7,13 +7,19 @@ Rota `/relatorio-movimentacao-produtos`.
 
 Ledger transacional do estoque — "o que aconteceu", diferente do Relatório de Estoque (que é uma
 fotografia do saldo atual). Fonte: `produto_movimento_mestre`/`produto_movimento_detalhe`
-(§3.3.4), os mesmos 8 tipos do ENUM `tipo_movimento` (`COMPRA`, `TRANSFERENCIA`, `DEVOLUCAO`,
-`AJUSTE`, `VENDA`, `RESERVA`, `LIBERACAO_RESERVA`, `CANCELAMENTO`).
+(§3.3.4), os mesmos **9** tipos do ENUM `tipo_movimento` (`COMPRA`, `TRANSFERENCIA`,
+`DEVOLUCAO`, `AJUSTE`, `VENDA`, `RESERVA`, `LIBERACAO_RESERVA`, `CANCELAMENTO`,
+`CANCELAMENTO_DEVOLUCAO`) — `db/migration/V013__dominio_tipos_enum.sql:25-27`. O 9º, `CANCELAMENTO_DEVOLUCAO`,
+nasceu em 2026-08-11 com o Cancelamento de Devolução de Produtos: tem valor próprio (não
+reaproveita `CANCELAMENTO`) justamente para o Kardex distinguir qual operação está sendo
+revertida.
 
-`COMPRA` e `RESERVA`/`LIBERACAO_RESERVA` ainda não têm nenhuma tela que grave esses tipos
-(entrada de mercadoria e integração de pedidos de canal, respectivamente, ficam pra depois) —
-o relatório já nasce preparado pra eles (filtro de tipo já lista os 8, colunas já contextualizam
-cada um), só não vão produzir linha nenhuma até essas telas existirem.
+~~`COMPRA` e~~ `RESERVA`/`LIBERACAO_RESERVA` ainda não têm nenhuma tela que grave esses tipos
+(integração de pedidos de canal fica pra depois) — o relatório já nasce preparado pra eles (filtro
+de tipo já lista os 9, colunas já contextualizam cada um), só não vão produzir linha nenhuma até
+essas telas existirem. **`COMPRA` saiu dessa lista em 2026-08-11**: a tela **Entrada de Produtos
+por Compra** (`docs/telas/entrada-mercadoria.md`) grava o tipo
+(`EntradaMercadoriaService.java:131`), então o relatório mostra dado real de compra.
 
 ## Modelos (mesmo padrão do Relatório de Vendas/Estoque — 1 seletor, não 3 rotas)
 
@@ -43,7 +49,7 @@ popup próprio, `PesquisaVariacaoModal`, mesmo padrão de `PesquisaVendedorModal
 - **Entrada/Saída Física do Período** (quantidade e valor a custo) — exclui `RESERVA`/
   `LIBERACAO_RESERVA` de propósito (não são movimentação física real, são reserva de saldo —
   ver nota acima; entram no Kardex igual a qualquer outro tipo, só ficam fora desta lente).
-- Gráfico **Movimentação por Tipo** (barra) — todos os 8 tipos, quantidade ou valor.
+- Gráfico **Movimentação por Tipo** (barra) — todos os 9 tipos, quantidade ou valor.
 - Gráfico **Movimentação por Dia** (linha).
 - **Top Ajustes Negativos por Produto** (barra horizontal) — `AJUSTE` com `credito_debito = 'D'`
   ranqueado por produto: é o indicador de quebra/perda/furto (shrinkage), o KPI de maior valor

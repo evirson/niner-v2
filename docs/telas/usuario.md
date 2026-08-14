@@ -83,6 +83,8 @@ obrigatórios configuráveis por tenant.
 - **Ações por linha:** três ícones — verde (olho) visualizar somente-leitura, azul (lápis)
   editar, vermelho (lixeira) excluir. **O ícone de excluir fica desabilitado na própria linha
   do usuário logado** (mesma regra reforçada no backend).
+- **Botão de fechar (✕)** no cabeçalho da listagem e do formulário (`BotaoFecharTela`,
+  `navigate(-1)` — histórico real, nunca rota fixa; convenção de todo o sistema).
 
 ## Exclusão de usuário
 

@@ -28,8 +28,9 @@ pelo dono do produto: nome da loja em fundo preto/letra branca no topo, descriç
 ## Decisões de escopo (perguntadas e confirmadas nesta sessão)
 
 - **Por tenant, não por empresa** — mesma lógica de `produto`/`cfg_cor`, que já são
-  por tenant. A tela de Emissão (futura) ainda escolhe a empresa (pro `cfg_nome_etiqueta` e pro
-  preço), só o layout da etiqueta é compartilhado entre as empresas do tenant.
+  por tenant. A tela de Emissão (~~futura~~ — **já existe**, `docs/telas/etiqueta-emissao.md`)
+  ainda escolhe a empresa (pro `cfg_nome_etiqueta` e pro preço), só o layout da etiqueta é
+  compartilhado entre as empresas do tenant.
 - **Várias configurações nomeadas** (cadastro completo, não singleton) — o usuário cria
   "Etiqueta 3 colunas", "Etiqueta grande 2 colunas" etc., e escolhe qual usar na hora de emitir.
   Faz sentido dado que existem 2 telas separadas no menu (Configuração e Emissão).
@@ -51,8 +52,9 @@ direita_mm`), `ativo` (fallback de inativar, mesmo padrão do resto do sistema).
 Uma linha por coluna (`numero_coluna` 1..N, `posicao_inicial_mm`). **Não é calculada por
 fórmula** — embora nos exemplos dados as posições sejam regulares (`borda_esquerda +
 (coluna-1) × (largura_etiqueta + vão)`), o valor fica explícito e editável porque rolos com
-espaçamento irregular entre colunas existem na prática. A tela (quando construída) pode
-*sugerir* o valor calculado ao adicionar uma coluna nova, sem forçar.
+espaçamento irregular entre colunas existem na prática. A tela (construída em 2026-08-05,
+`web/src/pages/configuracoes/`) pode *sugerir* o valor calculado ao adicionar uma coluna nova,
+sem forçar.
 
 ### `cfg_etiqueta_campo` — filha, o que é impresso e como
 
@@ -111,11 +113,18 @@ escala real de milímetros.
 domínio. Coleções filhas (`colunas`/`campos`) salvas por apaga-tudo-e-reinsere dentro da mesma
 transação do cabeçalho (mesmo princípio de `ProdutoService.salvarCategorias`). `excluir()` é
 sempre um DELETE de verdade — diferente de Produto/Plano de Contas, nada ainda referencia
-`cfg_etiqueta_config` por FK (a tela de Emissão que consumiria isso não existe), então não há
-dependente real pra checar; `ativo` é só um "desativar sem apagar" editável direto no form.
+`cfg_etiqueta_config` por FK (~~a tela de Emissão que consumiria isso não existe~~ — a tela de
+Emissão **existe** desde 2026-08-05, `docs/telas/etiqueta-emissao.md`, mas consome a configuração
+só na hora de imprimir, sem gravar FK pra ela), então não há dependente real pra checar; `ativo`
+é só um "desativar sem apagar" editável direto no form.
 Endpoint extra `GET /api/v1/etiquetas-config/produtos-exemplo` — **não** reaproveita a busca de
-produto do Kardex (`VariacaoEncontrada`), que não tem referência/preço/EAN; DTO próprio
-(`ProdutoExemploResponse`) com tudo que `campo_etiqueta` pode imprimir.
+produto do Kardex (`VariacaoEncontrada`), que não tem referência/preço; DTO próprio
+(`ProdutoExemploResponse`) com tudo que `campo_etiqueta` pode imprimir: `idVariacao`, `sku`,
+`descricao`, `marca`, `referencia`, `precoVenda`, `variacaoCor`, `variacaoTamanho`
+(`api/src/main/java/com/vetor/niner/configuracao/etiqueta/EtiquetaConfigDtos.java:146-155`).
+**Não há campo `ean`** — o código de barras da etiqueta é sempre o `sku` (que já é um EAN-13
+gerado por `gerar_ean13_interno()`); `EAN_BARRAS` foi removido dos campos posicionáveis (ver
+acima).
 
 **Frontend** (`web/src/pages/etiquetaconfig/`): `EtiquetaConfigLista.tsx`/`EtiquetaConfigForm.tsx`
 seguem o esqueleto padrão de cadastro (paginação, `InfoRegistro`, `BotaoFecharTela`, Enter-como-Tab).
@@ -135,12 +144,15 @@ só x/y (snap de 0,5mm, travado dentro da etiqueta); tamanho/fonte/estilo ficam 
 `PainelPropriedadesCampo.tsx` (aparece ao selecionar um campo); setas do teclado dão nudge fino
 (0,5mm, Shift = 5mm); Delete/Backspace remove o campo selecionado. Campo cujo retângulo invade a
 borda configurada ganha contorno vermelho de aviso (não bloqueia — a borda é guia, não parede
-rígida). Código de barras (SKU/EAN) renderiza de verdade via `jsbarcode` (sempre `CODE128`, nunca
-`EAN13` — aceita qualquer valor sem checar dígito verificador, então nunca quebra o editor com um
-SKU/EAN incompleto; a simbologia exata de impressão é problema da futura tela de Emissão, aqui é
-só layout). "Escolher produto de exemplo" (`ProdutoExemploModal.tsx`, mesmo padrão visual de
+rígida). Código de barras (SKU/EAN) renderiza de verdade via `jsbarcode` — ~~sempre `CODE128`,
+nunca `EAN13`~~ **desatualizado: hoje é `format: 'EAN13'`**
+(`web/src/pages/etiquetaconfig/CampoEtiquetaVisual.tsx:66`), trocado na rodada 3 de 2026-08-05
+(ver seção abaixo): o `sku` sempre vem de `gerar_ean13_interno()`, então tem 13 dígitos e dígito
+verificador válido por construção. Valor não desenhável (vazio/incompleto) cai no `catch` e deixa
+o SVG em branco em vez de derrubar o editor. "Escolher produto de exemplo" (`ProdutoExemploModal.tsx`, mesmo padrão visual de
 `PesquisaVariacaoModal.tsx` do Kardex, endpoint próprio) troca os placeholders genéricos por
-descrição/marca/preço/variação/SKU/EAN reais de um produto do catálogo, ao vivo.
+descrição/marca/referência/preço/cor/tamanho/SKU reais de um produto do catálogo, ao vivo (o DTO
+não devolve EAN — ver acima).
 
 **2 bugs pegos só no teste manual ao vivo (nenhum teste automatizado cobria isso):**
 
@@ -222,8 +234,10 @@ campo) → excluir (real, com popup de confirmação). Suíte de backend inteira
      visualmente depois (campo Nome ocupando a largura esperada).
 
 3. **Botão "Testar Impressão"** — pedido novo: um jeito de imprimir fisicamente N cópias do layout
-   configurado pra testar numa impressora real, sem depender da futura tela de Emissão (que precisa
-   de produto/estoque reais e ainda nem foi especificada). Fica no topo da tela
+   configurado pra testar numa impressora real, sem depender da tela de Emissão (que precisa
+   de produto/estoque reais e, ~~na época, ainda nem tinha sido especificada~~ — **hoje existe**:
+   `docs/telas/etiqueta-emissao.md`; o Teste de Impressão continua útil justamente por não exigir
+   produto/estoque). Fica no topo da tela
    (`topbar-acoes`, fora do `<fieldset disabled>` — funciona também no modo somente-leitura),
    habilitado só quando há rolo/etiqueta/altura preenchidos e ao menos 1 campo posicionado
    (`podeImprimir`).
@@ -279,6 +293,24 @@ Três pedidos pontuais, cada um testado ao vivo antes do próximo.
    `EditorEtiquetaCanvas.tsx` deixou de renderizar o painel inline. Sincronização ao vivo com o
    canvas/prévia do rolo continua funcionando com o popup aberto (testado: mover um slider no
    popup atualiza a posição do campo no canvas atrás, em tempo real).
+
+## Ajuda da tela (manual de operação + vídeo) — obrigatório (R22 / §3.7.1)
+
+- **`chave_tela`: `configuracoes.etiquetaconfig.lista`** — várias configurações nomeadas por
+  tenant (impressoras/rolos diferentes), "Nova configuração"/"Editar"/"Visualizar" (só leitura).
+  `url_video`: `NULL` por ora.
+  - ⚠️ O erro comum *"a impressão de verdade fica pra 'Emissão de Etiqueta de Produtos' (ainda em
+    Implementações Futuras)"* ficou **desatualizado** — a Emissão existe desde 2026-08-05
+    (`docs/telas/etiqueta-emissao.md`); o texto no `AjudaDaTela.tsx` ainda não foi corrigido.
+- **`chave_tela`: `configuracoes.etiquetaconfig.form`** — cabeçalho em mm (rolo, colunas 1 a 4,
+  etiqueta, bordas) + posição de cada coluna (livre, não calculada), e o editor visual: clicar na
+  paleta pra colocar o campo, arrastar pra posicionar, alça pra redimensionar, setas do teclado pro
+  ajuste fino (Shift = 5mm), popup de propriedades ao clicar num campo, "Mostrar os dígitos
+  embaixo" no código de barras, produto de exemplo, régua/zoom, prévia do rolo completo e "Testar
+  Impressão". Erros comuns: contorno vermelho = campo invadindo a borda (avisa, não bloqueia),
+  Delete/Backspace devolve o campo pra paleta, "Testar Impressão" desabilitado sem rolo/etiqueta
+  ou sem nenhum campo posicionado. Texto em `web/src/components/AjudaDaTela.tsx`. `url_video`:
+  `NULL` por ora.
 
 ## Pendências explícitas, fora do escopo desta migration
 

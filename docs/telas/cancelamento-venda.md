@@ -166,7 +166,7 @@ bloqueio de crediário — RN-03).
 
 Cobertos por `CancelamentoVendaCrudTest` (10 testes) + 1 teste em `ValeMercadoriaCrudTest`
 (reabertura do vale). Vendas de teste são geradas pelo endpoint real do PDV (não inseridas via
-SQL bruto), pra exercitar o ledger de verdade. Suíte completa do projeto: 295/295 (2026-08-03).
+SQL bruto), pra exercitar o ledger de verdade. Suíte completa do projeto: 492/492 (2026-08-24).
 
 ## Ajuda da tela (manual de operação + vídeo) — obrigatório (R22 / §3.7.1)
 

@@ -518,6 +518,7 @@ const CONTEUDOS: Record<string, ConteudoAjuda> = {
     errosComuns: [
       'Sem número da venda, é preciso informar data inicial e final.',
       'O link enviado pelo WhatsApp expira em 24 horas — depois disso, é preciso reimprimir e enviar de novo.',
+      'Impressão saindo apagada ou com as letras "falhadas"? O sistema já imprime em negrito, no tamanho certo para a bobina de 80mm. Se ainda sair fraco, o ajuste é na impressora: aumente a densidade (Density/Darkness) e, no driver, coloque o meio-tom (Halftone) em modo texto ou nenhum — assim ela imprime preto sólido em vez de pontinhos alternados.',
     ],
     urlVideo: null,
   },
@@ -633,6 +634,7 @@ const CONTEUDOS: Record<string, ConteudoAjuda> = {
     errosComuns: [
       'Não acho o recebimento: confira o nome do cliente e o intervalo de datas — o filtro de cliente é sempre obrigatório.',
       'O link enviado pelo WhatsApp expira em 24 horas — depois disso, é preciso reimprimir e enviar de novo.',
+      'Impressão saindo apagada ou com as letras "falhadas"? O sistema já imprime em negrito, no tamanho certo para a bobina de 80mm. Se ainda sair fraco, o ajuste é na impressora: aumente a densidade (Density/Darkness) e, no driver, coloque o meio-tom (Halftone) em modo texto ou nenhum — assim ela imprime preto sólido em vez de pontinhos alternados.',
     ],
     urlVideo: null,
   },
@@ -796,7 +798,7 @@ const CONTEUDOS: Record<string, ConteudoAjuda> = {
       '"Visualizar" abre o layout em modo só leitura, sem risco de mudar nada por engano.',
     ],
     errosComuns: [
-      'Esta tela só monta o LAYOUT — a impressão de verdade fica pra "Emissão de Etiqueta de Produtos" (ainda em Implementações Futuras).',
+      'Esta tela só monta o LAYOUT — a impressão de verdade é feita em "Emissão de Etiqueta de Produtos", no grupo Relatórios.',
     ],
     urlVideo: null,
   },
@@ -856,7 +858,7 @@ const CONTEUDOS: Record<string, ConteudoAjuda> = {
     ],
     errosComuns: [
       'No modo Individual, se o produto usa grade (configurado no cadastro dele), os seletores de Cor e Tamanho aparecem como obrigatórios — não dá pra adicionar sem escolher.',
-      '"Por Entradas" sem resultado: nenhuma tela de Entrada de Produtos por Compra existe ainda no sistema — o filtro busca no schema real, mas só vai ter dado quando essa área for construída (ou dado inserido manualmente).',
+      '"Por Entradas" sem resultado: confira o fornecedor e o período. Só aparecem aqui as notas já lançadas em "Entrada de Produtos por Compra" (grupo Estoque).',
       '"Por Estoques" só traz produtos com saldo positivo (zerado ou negativo não aparece).',
       'Quantidade vinda de estoque/entrada fracionária (produto por peso/medida) é arredondada pro inteiro mais próximo — etiqueta não existe em fração.',
       '"Emitir Etiquetas" fica desabilitado até ter pelo menos 1 produto na lista; "Imprimir" só some quando um modelo é escolhido.',

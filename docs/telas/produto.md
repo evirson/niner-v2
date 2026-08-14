@@ -19,9 +19,12 @@ particularidades ficam por conta de três mecanismos novos: categorias múltipla
 nome de variante condicionado aos Parâmetros do Sistema, e uma tabela de referência global
 (NCM) sem tela própria. Papéis `ADMIN` e `OPERADOR` têm acesso completo (R8 não se aplica).
 
-**Variação (SKU/`produto_barra`) e imagens (`produto_imagem`) ficam fora desta spec** — o
-cadastro cobre só o produto "pai"; a matriz de variações e a galeria de imagens são o próximo
-corte vertical (junto de Estoque).
+**Variação (SKU/`produto_barra`) fica fora desta spec** — o cadastro cobre só o produto "pai"; a
+matriz de variações é o próximo corte vertical (junto de Estoque). ~~E imagens
+(`produto_imagem`)~~ — **superado em 2026-07-23**: a **galeria de imagens** entrou no próprio
+formulário de produto (`web/src/components/GaleriaImagensProduto.tsx`,
+`api/.../catalogo/produto/ProdutoImagemController.java:18-38`), com upload multipart para object
+storage; ver `docs/infra/armazenamento-imagens.md`.
 
 ## Particularidade 1: categorias — N:N ordenada, gerida embutida
 
@@ -97,9 +100,13 @@ Modelo novo:
   service que a Emissão de Etiqueta consome).
 - `cfg_geral.cfg_usa_cor_grade` (renomeado de `cfg_usa_variante_linha`/`cfg_usa_variante_coluna`
   — os dois viraram um único checkbox, já que a decisão passou a ser binária: usa cor+grade, ou
-  não usa nada) continua controlando só a **visibilidade do campo Grade** no formulário de
-  Produto, não a obrigatoriedade em si (essa é por produto: se tem grade, cor+tamanho são
-  obrigatórios na variação; sem grade, são forçados a `null`). Endpoint aberto a qualquer papel:
+  não usa nada) controla a **visibilidade do campo Grade** no formulário de Produto **e também a
+  obrigatoriedade**: com o flag ligado o backend rejeita salvar produto sem `idGrade` ("Grade é
+  obrigatória para este tenant.", `api/src/main/java/com/vetor/niner/catalogo/ProdutoService.java:279-281`).
+  Na variação a obrigatoriedade é por produto: se o produto tem grade, cor+tamanho são
+  obrigatórios; sem grade, são forçados à **sentinela `1`** (não a `null` — as colunas são
+  `NOT NULL DEFAULT 1`, ver `ProdutoBarraService.java:97-99` e a nota da sentinela PADRÃO acima).
+  Endpoint aberto a qualquer papel:
   `GET /api/v1/config-geral/usa-cor-grade` → `{usaCorGrade}`.
 - Geração em lote de todas as combinações cor×grade de uma vez (`Entrada de Produtos`) e uma tela
   de cadastro própria pra `cfg_cor` ficaram **deliberadamente fora desta rodada** — vão nascer
@@ -108,9 +115,16 @@ Modelo novo:
 ## Particularidade 3: NCM — referência global, sem tela de manutenção
 
 `cfg_produto_ncm(codigo_ncm PK text, descricao_ncm NOT NULL, aliquota_ibpt NUMERIC(10,2))` é a
-**única tabela do domínio sem `id_tenant`/RLS** (mesma exceção de `plataforma.*`, P9, só que
-fora daquele schema) — o código NCM (Nomenclatura Comum do Mercosul) é igual para qualquer
-tenant. **Sem tela de manutenção por decisão explícita**: carregada/atualizada por script
+uma das **quatro tabelas do domínio sem `id_tenant`/RLS** (mesma exceção de `plataforma.*`, P9,
+só que fora daquele schema) — o código NCM (Nomenclatura Comum do Mercosul) é igual para
+qualquer tenant. As outras três, pelo mesmo motivo (dado global, não do lojista), são:
+`cfg_ean_gerador` (`db/migration/V017__catalogo.sql:135` — sequencial de código de barras por
+**instância de banco**, ver `gerar_ean13_interno()`), `cfg_plano_contas_padrao`
+(`db/migration/V016__cadastros.sql:331` — modelo de plano de contas copiado no signup) e
+`cfg_banco` (`db/migration/V028__financeiro_conta_corrente.sql:13` — códigos FEBRABAN, ver
+`docs/telas/conta-corrente.md`). São essas quatro e mais nenhuma: a lista pode ser reconferida
+procurando `CREATE TABLE` sem `id_tenant` fora do schema `plataforma`.
+**Sem tela de manutenção por decisão explícita**: carregada/atualizada por script
 (`db/scripts/seed_cfg_produto_ncm.sql`, rodando como `niner_owner` — único grant de escrita;
 `niner_app` só tem `SELECT`).
 
@@ -121,6 +135,11 @@ tenant. **Sem tela de manutenção por decisão explícita**: carregada/atualiza
   Ao sair do campo (`onBlur`), busca `GET /api/v1/ncm/{codigo}` e mostra a descrição num campo
   somente-leitura ao lado. Código que não existe: **limpa o campo e avisa** ("Código NCM
   inválido — não encontrado."), em vez de deixar um código inválido no formulário.
+- **Pesquisa por nome (`PesquisaNcmModal.tsx`, 2026-08-13)** — quem cadastra um produto nem sempre
+  sabe o código de cabeça: ao lado do campo há uma lupa que abre o modal, onde se digita parte do
+  nome da mercadoria (mínimo 3 caracteres, busca ao vivo em `GET /api/v1/ncm?busca=`) e se clica
+  na linha pra usar o código. Mesmo padrão do `PesquisaProdutoModal` do PDV, e reusado tanto por
+  esta tela quanto pelo cadastro rápido de produto embutido na Entrada de Produtos.
 - NCM inexistente ao salvar o produto → 400 ("NCM informado não existe."), não 500 — mesmo
   princípio de tradução de violação de FK já usado para categoria (`ClienteService.duplicidade`).
 
@@ -134,6 +153,15 @@ no frontend (o backend não recalcula, apenas persiste os três valores enviados
   (só quando há custo informado > 0; sem custo, não há base para calcular).
 - Editar **Preço de Venda** direto → recalcula `% de Venda = ((Venda − Custo) / Custo) × 100`
   (só quando há custo informado > 0).
+
+**Piso do preço de venda (2026-08-17, regra do projeto inteiro):** o preço de venda **nunca pode
+ficar abaixo do preço de custo** — salvar com `precoVenda < precoCusto` devolve 400 ("Preço de
+venda não pode ser menor que o preço de custo."). Igual é aceito (margem zero). A checagem existe
+nos dois lados: bloqueia no cliente (`ProdutoForm.tsx` e `ProdutoQuickCreateModal.tsx`) e é
+reforçada como defesa em profundidade no servidor
+(`ProdutoService.validarPrecos()`, `api/src/main/java/com/vetor/niner/catalogo/ProdutoService.java:296-305`),
+valendo portanto também para o cadastro rápido embutido em outras telas e para qualquer chamada
+direta à API.
 
 **Bug corrigido em 2026-08-05:** `percentualVenda` tinha `@DecimalMax("100")` no backend
 (`ProdutoDtos.java`), rejeitando qualquer margem acima de 100% (venda > 2× o custo) com um erro
@@ -205,6 +233,8 @@ checagem genérica de `cfg_tela_campo` para os 3 campos de oferta.
   (Ativos/Inativos/Todos).
 - Paginação em janela deslizante (50 fixos), layout fixo, três ícones de ação — idêntico ao
   padrão (`docs/telas/cliente.md`).
+- **Botão de fechar (✕)** no cabeçalho da listagem e do formulário (`BotaoFecharTela`,
+  `navigate(-1)` — histórico real, nunca rota fixa; convenção de todo o sistema).
 
 ## Exclusão de produto
 
@@ -232,27 +262,41 @@ variação (`produto_barra`) ou imagem (`produto_imagem`) vinculada, o DELETE **
 - Dado preço de oferta maior ou igual ao preço de venda, quando salvo, então 400.
 - Dado peso líquido maior que peso bruto, quando salvo, então 400; igual é aceito.
 - Dado `cfg_geral.cfg_usa_cor_grade = false`, quando um `idGrade` é enviado, então o servidor
-  grava `null` (ignora, não rejeita).
+  ignora (não rejeita) e grava a **sentinela `1`** (grade PADRÃO) — `produto.id_grade` é
+  `NOT NULL DEFAULT 1`, nunca `null` no banco
+  (`api/src/main/java/com/vetor/niner/catalogo/ProdutoService.java:379`). O `null` só aparece na
+  **resposta** da API, onde a sentinela é traduzida de volta (`ProdutoService.java:429`) — a tela
+  nunca vê nem mostra a grade PADRÃO.
 - Dado `ordenarPor`/`direcao`, então a listagem respeita a coluna e direção pedidas.
 - Dado um produto sem vínculo, quando excluído, então deixa de existir.
 - Dado um produto vinculado a uma variação, quando excluído, então é inativado, não apagado.
 
-Cobertos por `ProdutoCrudTest` (20 testes) — suíte completa do projeto em **405/405 verdes**
-(inclui `CorGradeTamanhoCrudTest`, novo em 2026-08-08).
+Cobertos por `ProdutoCrudTest` (25 testes) — suíte completa do projeto em **492/492 verdes
+(2026-08-24)** (inclui `CorGradeTamanhoCrudTest`, novo em 2026-08-08).
 
 ## Impacto no contrato de API
 
 ```
 GET    /api/v1/produtos?descricao=&marca=&idCategoria=&status=&pagina=&limite=&ordenarPor=&direcao=
 POST   /api/v1/produtos                        cria produto (+ categorias, na ordem enviada)
+GET    /api/v1/produtos/marcas                 lista as marcas já usadas (datalist do formulário)
 GET    /api/v1/produtos/{id}                   detalhe (categorias ordenadas por indice)
 PUT    /api/v1/produtos/{id}                   atualiza (substitui a lista de categorias)
 DELETE /api/v1/produtos/{id}                   exclui ou inativa (fallback com vínculo)
+
+POST   /api/v1/produtos/{idProduto}/variacoes  cria (ou reaproveita) a variação cor×tamanho e
+                                               gera o EAN interno — 201
+
+POST   /api/v1/produtos/{idProduto}/imagens          multipart (`arquivo`) — 201, devolve a
+                                                     galeria já reordenada
+DELETE /api/v1/produtos/{idProduto}/imagens/{idImagem}  devolve a galeria restante
+PUT    /api/v1/produtos/{idProduto}/imagens/ordem       reordena (`idsImagem` na ordem desejada)
 
 GET    /api/v1/categorias-produto              lista
 POST   /api/v1/categorias-produto              cria
 PUT    /api/v1/categorias-produto/{id}         renomeia
 
+GET    /api/v1/ncm?busca=                      busca por descrição (`PesquisaNcmModal`)
 GET    /api/v1/ncm/{codigo}                    consulta (404 se não cadastrado) — só leitura
 
 GET    /api/v1/config-geral/usa-cor-grade      {usaCorGrade} — qualquer papel
@@ -310,8 +354,11 @@ próximo corte), não do produto "pai".
 
 ## Non-goals desta feature
 
-- Variação/SKU (`produto_barra`) e galeria de imagens (`produto_imagem`) — schema pronto desde
-  V017, sem CRUD ainda; ficam para o próximo corte vertical (Estoque). **Atualizado 2026-08-05:**
+- Variação/SKU (`produto_barra`) ~~e galeria de imagens (`produto_imagem`)~~ — schema pronto desde
+  V017, sem CRUD ainda; ficam para o próximo corte vertical (Estoque). **Superado para as imagens
+  em 2026-07-23:** a galeria tem CRUD completo — `ProdutoImagemController.java:18-38` (listar,
+  upload multipart, excluir) + `web/src/components/GaleriaImagensProduto.tsx` (miniaturas,
+  lightbox, confirmação ao excluir), embutida no formulário desta tela. **Atualizado 2026-08-05:**
   nasceu `ProdutoBarraService` (`com.vetor.niner.catalogo`, `obterOuCriar`), mas é infraestrutura
   de domínio consumida pela tela **Emissão de Etiqueta de Produtos**
   (`docs/telas/etiqueta-emissao.md`) — acha ou cria a variação (chamando
@@ -324,8 +371,10 @@ próximo corte), não do produto "pai".
   `cfg_cor` usa a Emissão de Etiqueta como válvula de escape até lá.
 - Tela de cadastro dedicada para `cfg_cor` — nasce embutida (Emissão de Etiqueta), sem tela
   própria, pelo mesmo motivo acima.
-- Reajuste em massa de preços, histórico de preço (`reajustado_em` existe na coluna, sem uso
-  ainda).
+- Reajuste em massa de preços e histórico de preço (a tela não os oferece). ~~(`reajustado_em`
+  existe na coluna, sem uso ainda)~~ — **superado**: a coluna é escrita hoje sempre que o custo/preço
+  muda — na **Entrada de Produtos por Compra** (`EntradaMercadoriaService.java:181`) e no próprio
+  cadastro (`ProdutoService.java:404,436`).
 - Importação em lote (planilha).
 
 ## Questões abertas

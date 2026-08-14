@@ -1,13 +1,23 @@
 # Progresso do Projeto — niner-v2
 
 Registro cronológico das decisões e entregas. Atualizar a cada marco relevante.
-**Última atualização:** 2026-08-23
+**Última atualização:** 2026-08-24
 
 ---
 
 ## Estado atual
 
-Projeto **spec-driven** em fase de fundação, com **seis telas de cadastro completas e
+> **Resumo em uma linha (2026-08-24):** ERP com **~40 telas** ponta a ponta cobrindo cadastros,
+> catálogo, estoque (incl. entrada por XML de NF-e), PDV e vendas, financeiro completo (caixa,
+> crediário, contas a pagar/receber, conta corrente, **DRE e Fluxo de Caixa**), relatórios,
+> etiquetas e importação/exportação. **Falta o coração da visão original**: integração com
+> marketplaces (`canais`/`pedidos`/`precos`/`integracao` seguem sem implementação de domínio) e o
+> app `admin/` (backoffice da plataforma). **492/492 testes de backend verdes.**
+>
+> Os parágrafos abaixo são a **narrativa acumulada** desde o começo — leia o resumo acima para o
+> estado, e a linha do tempo (do mais novo para o mais antigo) para o detalhe de cada entrega.
+
+Projeto **spec-driven** que começou pela fundação, com **seis telas de cadastro completas e
 ponta a ponta**: Clientes (`cadastros.cliente`), Funcionários (`cadastros.funcionario`), Plano
 de Contas (`cadastros.planocontas`), Fornecedores (`cadastros.fornecedor`), **Produtos**
 (`catalogo.produto`, 2026-07-22 — primeiro corte vertical do núcleo do catálogo, com categoria
@@ -128,6 +138,23 @@ do cliente, PDF gerado no navegador e compartilhado por um link temporário que 
 na API (24h, sem custo de object storage, limite de 20 arquivos por tenant somando os 4 fluxos —
 ver `docs/infra/compartilhamento-arquivo-temporario.md`) — e os quatro popups de comprovante
 passaram a ter cabeçalho/rodapé fixos, com scroll só na pré-visualização.
+
+**De 2026-08-08 a 2026-08-24** (resumo; detalhe na linha do tempo): o módulo `estoque` ganhou
+**Entrada de Produtos por Compra** nos três fluxos — manual, planilha e **XML de NF-e** — com
+cancelamento, filtros e consistência configurável entre duplicatas e total; `catalogo` trocou as
+variantes linha/coluna por **cor + grade de tamanho** e recebeu os ~10.515 NCMs reais da Receita;
+`financeiro` ganhou **Contas a Pagar/Pagas**; `identidade` ganhou **horário de acesso por dia da
+semana**; o **plano de contas** encolheu para a máscara `9.99.999` (3 níveis, 76 contas padrão) e
+ganhou o `SeletorPlanoContas`. Em **2026-08-23** saíram as duas telas que fecham o módulo de
+resultado — **DRE em dois regimes** (competência e caixa) e **Fluxo de Caixa** (realizado +
+projeção) —, o que exigiu que a **baixa de conta a pagar passasse a gerar movimento de dinheiro**
+de verdade; no mesmo dia o ERP ganhou **seletor de tema Claro/Escuro/Automático**, o signup passou
+a aplicar o **plano de contas padrão completo**, e foi descoberto que o `tsc --noEmit` **não
+checava nada** (19 erros reais acumulados, todos corrigidos — usar `tsc -b`). Em **2026-08-24**, a
+primeira impressão em bobina térmica real mostrou que a **papeleta de venda saía ilegível**: virou
+42 colunas com item em 2 linhas, e a calibragem de impressão (largura imprimível, negrito,
+Consolas) foi aplicada também ao comprovante de crediário — o vale-mercadoria herdou sozinho.
+**491/491 testes de backend verdes; `tsc -b` limpo.**
 
 | Artefato | Situação |
 |---|---|
@@ -373,6 +400,63 @@ Movimentação de Conta Corrente) que ainda não tinham migrado pro `SeletorPlan
 ---
 
 ## Linha do tempo
+
+### 2026-08-24 — Auditoria completa da documentação (spec + 40 telas + 86 memórias)
+
+Revisão de **toda** a documentação do projeto contra o código, a pedido do dono do produto. Três
+frentes paralelas: `spec-driven-erp-varejo.md` + `CLAUDE.md` + `docs/infra/`; os 40 arquivos de
+`docs/telas/`; e as 86 memórias de sessão.
+
+**O achado principal é um padrão, não uma lista de erros avulsos.** Quatro varreduras exaustivas
+sobre `docs/telas/` **não acharam nada**: todos os endpoints, os 70 arquivos `.ts/.tsx`, as 66
+classes Java e todos os identificadores de tabela/coluna citados **existem**. O apodrecimento
+está concentrado em **duas seções**: **"Non-goals"** e **"Questões abertas"**. Quem implementa
+uma feature nunca volta pra riscar o item na spec da tela vizinha — então ~24 afirmações de
+"não existe / é pendente" descreviam coisas já construídas. As mesmas frases erradas apareciam
+em 2–3 arquivos ao mesmo tempo:
+
+| Afirmação errada | Realidade | Onde aparecia |
+|---|---|---|
+| "não existe fechamento de caixa" | existe desde 2026-07-30 | 3 specs + 2 memórias |
+| "nenhum service grava `tipo_movimento='COMPRA'`" | existe desde 2026-08-11 | 3 specs + 2 memórias |
+| "o signup semeia só 3 contas" | semeia 76 desde 2026-08-23 | 3 specs + 2 memórias |
+| "não existe tela de baixa de contas a pagar" | existe desde 2026-08-12 | 2 specs + 1 memória |
+| "não existe reimpressão de comprovante de venda" | existe desde 2026-08-06 | 2 specs + 1 memória |
+
+Essa é a categoria mais cara de doc errada: quem lê "isso não existe" ou **reconstrói algo
+pronto**, ou **orça como trabalho novo**, ou **recusa o pedido do usuário**. Virou convenção
+(memória `feedback_non_goals_apodrecem`): ao terminar qualquer feature, procurar no repo por
+afirmações de inexistência sobre ela **antes** de dar a documentação por pronta; e ao ler uma
+spec, tratar "Non-goals"/"Questões abertas" como as seções **menos confiáveis** do arquivo.
+Ao corrigir, o non-goal **não é apagado** — vira nota de superação (`~~original~~ — superado em
+<data>: <prova em arquivo:linha>`), porque às vezes a decisão original continua certa mesmo com
+a feature existindo (foi o caso da DRE: carregar o grupo em código segue valendo mesmo depois de
+o signup semear o plano inteiro).
+
+**Correções na spec principal** (regra de negócio, não cosmética): `cfg_variante_linha/coluna` →
+`cfg_cor`/`cfg_tamanho`/`cfg_grade`; as flags reais de `cfg_geral`; **Q5 encerrada** (o financeiro
+do lojista está inteiro no v1 desde V028 — a spec ainda dizia "não entra no v1"); sequência de
+migrations completada até V033 (a spec parava em V026 e o roadmap citava uma faixa "V001–V091"
+que nunca existiu); paginação **por número de página**, não cursor; **saldo negativo é permitido
+de propósito** (R2 revisto em 2026-08-12 — a spec ainda pedia constraint pra impedir);
+`gerar_ean13_interno()` deixou de ser "nada chama"; `color-mix()` documentado como **proibido**
+(quebra o PDF por captura); `ajuda_tela` marcada como **não implementada** (o texto vive no
+front); §3.3 e o `docker-compose` do §3.5 marcados como desenho, com ponteiro pra fonte de
+verdade real.
+
+**Dois bugs de código achados pela auditoria e corrigidos:** as rotas `/dre` e `/fluxo-caixa`
+estavam declaradas **duas vezes** (a tela pronta e um placeholder "Em construção" concorrendo
+pela mesma rota, inclusive duplicando o item no menu) — placeholders removidos de `App.tsx` e
+`menu.ts`; e dois textos de `AjudaDaTela` (R22) diziam ao usuário que telas existentes ainda não
+tinham sido construídas.
+
+**Achados de código registrados mas NÃO corrigidos** (precisam de decisão do dono do produto):
+`ContaPagarService.excluir()` apaga só `contas_pagar` e deixa o `caixa_detalhe`/
+`conta_corrente_movimento` da baixa lançados para sempre; o estorno de crediário apaga
+`caixa_detalhe` sem checar caixa fechado; "Emitir Etiquetas desta Nota" passa parâmetros que a
+tela de destino ignora; o PDF do vale-mercadoria não recebeu a calibragem térmica de 2026-08-24.
+
+492/492 testes verdes, `tsc -b` limpo.
 
 ### 2026-08-24 — Papeleta de venda legível na bobina real (42 colunas, item em 2 linhas)
 

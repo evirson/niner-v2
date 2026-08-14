@@ -106,8 +106,8 @@ na mesma sessão de trabalho (mesmo usuário/empresa/dia).
 - Dado um lote, quando solicita visualizar as parcelas, então recebe a lista sem travar nada no
   banco nem alterar qualquer dado.
 
-Cobertos por `RecebimentoCrediarioCrudTest` (7 testes novos, 20 no arquivo). Suíte completa do
-projeto: 200/200 verdes (2026-07-29).
+Cobertos por `RecebimentoCrediarioCrudTest` (7 testes novos, 23 no arquivo). Suíte completa do
+projeto: 492/492 verdes (2026-08-24).
 
 ## Impacto no contrato de API
 
@@ -142,8 +142,10 @@ Nenhum.
   como listar "recebimentos já estornados" depois do fato.
 - **Estorno de parcela de cartão de crédito recebida fora desta tela** — mesmo escopo da tela de
   Recebimento (só categoria `CREDIARIO`).
-- **Reabertura de caixa fechado** — se o `caixa_mestre` daquele dia já tiver sido fechado (quando
-  a rotina de fechamento existir), o estorno dos lançamentos de `caixa_detalhe` ainda funciona,
+- **Reabertura de caixa fechado** — se o `caixa_mestre` daquele dia já tiver sido fechado (a
+  rotina de **Fechamento de Caixa** existe desde 2026-07-30 —
+  `web/src/pages/caixa/FechamentoCaixa.tsx`, `CaixaController.java:56`,
+  `docs/telas/fechamento-caixa.md`), o estorno dos lançamentos de `caixa_detalhe` ainda funciona,
   mas não há tela de reabertura de caixa.
 
 ## Questões abertas

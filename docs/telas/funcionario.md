@@ -44,7 +44,7 @@ cadastro de Cliente.
 | `cpf` | CPF | texto | `000.000.000-00` | Não (nullable; configurável) | Se preenchido, **valida dígito verificador** (reaproveita `Documentos`, o mesmo validador de CPF do Cliente). **Não é único por tenant** — decisão de produto já registrada em V016/§3.3.9 ("o CPF deixou de ser único"), ao contrário do cliente |
 | `telefone` | Celular | texto | `(00) 00000-0000` | Não (configurável) | Quando preenchido: 11 dígitos com o 3º dígito = 9 (mesma regra do Cliente) |
 | `cargo` | Cargo | texto | — | Não (configurável) | Texto livre, MAIÚSCULAS — sem tabela de cargos pré-cadastrados |
-| `perc_comissao` | % Comissão | numérico, percentual (mascarado — dígitos digitados = centésimos) | `NUMERIC(5,2)`, default `0` | Não (configurável) | Deve estar entre **0 e 100** (validado no front e no back); mesma técnica de máscara do "Limite de crédito" do Cliente, adaptada para percentual (`mascararPercentual`/`formatarPercentual`/`desmascararPercentual` em `web/src/lib/masks.ts`) |
+| `perc_comissao` | % Comissão | numérico, percentual (mascarado — **digitação natural**: inteiro da esquerda para a direita, a vírgula abre as 2 casas, completa `,00` no `onBlur`; ver `web/src/lib/masks.ts:183-215`) | `NUMERIC(5,2)`, default `0` | Não (configurável) | Deve estar entre **0 e 100** (validado no front e no back); mesma técnica de máscara do "Limite de crédito" do Cliente, adaptada para percentual (`mascararPercentual`/`completarPercentual`/`formatarPercentual`/`desmascararPercentual` em `web/src/lib/masks.ts`) |
 
 `id_empresa` não aparece no formulário. `id_funcionario`, `criado_em` e `atualizado_em`
 aparecem como **campos informativos somente leitura** no fim do formulário — ver "Informações
@@ -103,6 +103,8 @@ registro novo, quando ainda não existem valores. Ver "Convenção" em `docs/tel
 - **Grid compacta:** mesmo `.table-compacta` do Cliente.
 - **Ações por linha:** três ícones — **verde** (olho) visualizar em modo somente-leitura
   (`/funcionarios/:id/visualizar`), **azul** (lápis) editar, **vermelho** (lixeira) excluir.
+- **Botão de fechar (✕)** no cabeçalho da listagem e do formulário (`BotaoFecharTela`,
+  `navigate(-1)` — histórico real, nunca rota fixa; convenção de todo o sistema).
 
 ## Exclusão de funcionário
 
@@ -140,7 +142,8 @@ movimentados (comissão por item).
   configurável obrigatório)  [x] o que NÃO deve acontecer (excluir com movimento associado
   sem inativar)
 
-Cobertos por `FuncionarioCrudTest` (10 testes) — suíte completa do projeto em 43/43 verdes.
+Cobertos por `FuncionarioCrudTest` (10 testes) — suíte completa do projeto em **492/492 verdes
+(2026-08-24)**.
 
 ## Impacto no contrato de API
 
