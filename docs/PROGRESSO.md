@@ -423,6 +423,13 @@ já que existe pra mostrar como sai no papel. **Não precisou mexer no layout**:
 colunas — essa é a diferença para a papeleta, que era 64 e exigiu a reorganização em duas linhas.
 Aprovado na impressão real também.
 
+O **vale-mercadoria** foi conferido impresso na mesma data e passou **sem nenhum ajuste próprio**:
+ele nunca foi tocado nesta rodada — herdou tudo por compartilhar as funções de montagem com a
+papeleta. Isso valida na prática a decisão de 2026-08-07 de padronizar os dois comprovantes.
+**Guia de Transferência e Fechamento de Caixa ficaram para depois** (decisão do dono do produto);
+os dois são A4, então não têm o problema de bobina — o que eventualmente precisarem é outra
+conversa.
+
 ### 2026-08-23 (fechamento) — as 4 pendências abertas do dia, resolvidas
 
 **1) Signup passa a aplicar o plano de contas padrão completo.** Era a questão aberta da DRE: um
