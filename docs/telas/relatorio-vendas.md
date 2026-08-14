@@ -216,9 +216,11 @@ reverter sem depender de memória de conversa se o resultado não agradasse. Nã
 sessões (é `/tmp` de sessão) — se precisar reverter numa sessão futura, usar `git diff`/histórico.
 
 **Revisão 2026-08-02 — PDF sempre em tema claro, mesmo com o app em dark.** Pedido explícito do
-dono do produto: a impressão em tema escuro gasta muito mais tinta. Como o app **não tem toggle de
-tema** (o dark hoje só vem de `prefers-color-scheme: dark` do SO/navegador; `styles.css` já definia
-`:root[data-theme='light']`/`[data-theme='dark']` sem nada nunca setar esse atributo), a 1ª versão
+dono do produto: a impressão em tema escuro gasta muito mais tinta. Como o app **não tinha toggle
+de tema** na época (o dark só vinha de `prefers-color-scheme: dark` do SO/navegador; `styles.css`
+já definia `:root[data-theme='light']`/`[data-theme='dark']` sem nada nunca setar esse atributo —
+o seletor de tema do cabeçalho só nasceu em 2026-08-23, ver `docs/telas/menu-principal.md`), a 1ª
+versão
 forçava `document.documentElement.setAttribute('data-theme', 'light')` na página **real** antes de
 capturar — funcionava, mas causava um "flash" visível: o app inteiro (menu, cabeçalho, tudo)
 piscava pra claro por 1-2s e voltava pro dark depois. **Corrigido no mesmo dia:** `html2canvas`

@@ -13,9 +13,20 @@
      elemento com a regra), porque a lib clona o documento todo pra manter contexto. */
   --accent-rgb: 31, 111, 107; --accent-ink-rgb: 255, 255, 255; --danger-rgb: 166, 61, 41;
   --radius: 10px;
+  /* `color-scheme` declarado (2026-08-23): diz ao navegador em qual esquema a página está, o que
+     faz os controles NATIVOS (lista suspensa do <select>, scrollbar padrão, destaque de autofill,
+     caret) virem na paleta certa em vez de sempre na clara — eles não leem os tokens do design
+     system. Também é o sinal padrão de "esta página já se tema sozinha" para o modo escuro
+     forçado do Chrome/Android. Precisa acompanhar o tema nos 3 blocos abaixo, não só aqui.
+     ⚠️ Isso NÃO vence a extensão Dark Reader: ela injeta `<style class="darkreader--root-vars">`
+     e reescreve os tokens direto, então quem tiver a extensão ativa vê o ERP escuro mesmo com o
+     tema claro selecionado — é comportamento da extensão, não bug do produto (diagnosticado ao
+     vivo em 2026-08-23; a saída é o usuário desativar a extensão para o domínio do ERP). */
+  color-scheme: light;
 }
 @media (prefers-color-scheme: dark) {
   :root {
+    color-scheme: dark;
     --ground: #12181a; --surface: #1a2225; --surface-2: #202a2d;
     --field-bg: #2a3336; --field-text: #e7ecec; --label-color: #93a19e;
     --ink: #e7ecec; --ink-muted: #93a19e;
@@ -25,6 +36,7 @@
   }
 }
 :root[data-theme='light'] {
+  color-scheme: light;
   --ground: #f5f4f0; --surface: #ffffff; --surface-2: #edece6;
   --field-bg: #e4e6e2; --field-text: #20262a; --label-color: #5c6660;
   --ink: #20262a; --ink-muted: #5c6660; --accent: #1f6f6b; --accent-ink: #ffffff;
@@ -32,6 +44,7 @@
   --accent-rgb: 31, 111, 107; --accent-ink-rgb: 255, 255, 255; --danger-rgb: 166, 61, 41;
 }
 :root[data-theme='dark'] {
+  color-scheme: dark;
   --ground: #12181a; --surface: #1a2225; --surface-2: #202a2d;
   --field-bg: #2a3336; --field-text: #e7ecec; --label-color: #93a19e;
   --ink: #e7ecec; --ink-muted: #93a19e; --accent: #4fbdb2; --accent-ink: #0b1416;
@@ -1107,3 +1120,48 @@ a.menu-card:hover {
     position: absolute; top: 0; left: 0; margin: 0; padding: 0; border: 0; background: none;
   }
 }
+
+/* Seletor de tema do cabeçalho (2026-08-23) — Claro / Escuro / Automático. Todas as cores saem
+   de token, então o próprio seletor acompanha o tema que ele mesmo troca. */
+.seletor-tema { position: relative; flex-shrink: 0; }
+.seletor-tema-gatilho {
+  display: flex; align-items: center; justify-content: center; width: 36px; height: 36px;
+  border-radius: 8px; border: 1px solid var(--line); background: var(--surface);
+  color: var(--ink); cursor: pointer;
+}
+.seletor-tema-gatilho:hover { background: var(--surface-2); border-color: var(--line-strong); }
+.seletor-tema-gatilho:focus-visible { outline: none; border-color: var(--accent); }
+.seletor-tema-menu {
+  position: absolute; top: calc(100% + 6px); right: 0; z-index: 40; min-width: 170px;
+  display: flex; flex-direction: column; padding: 6px;
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, .18);
+}
+.seletor-tema-opcao {
+  display: flex; align-items: center; gap: 10px; width: 100%; padding: 8px 10px;
+  border: 0; border-radius: 8px; background: transparent; color: var(--ink);
+  font-family: inherit; font-size: 14px; text-align: left; cursor: pointer;
+}
+.seletor-tema-opcao:hover { background: var(--surface-2); }
+.seletor-tema-opcao-ativa { background: rgba(var(--accent-rgb), .14); color: var(--accent); font-weight: 600; }
+
+/* DRE (2026-08-23) — hierarquia visual da demonstração: grupo em destaque, conta recuada e
+   discreta, subtotal com faixa. Tudo em token, acompanha claro/escuro. */
+.dre-tabela td { padding-top: 5px; padding-bottom: 5px; }
+.dre-linha-grupo td { font-weight: 600; }
+.dre-linha-conta td { color: var(--ink-muted); font-size: 13px; }
+.dre-linha-subtotal td {
+  font-weight: 700; background: var(--surface-2);
+  border-top: 1px solid var(--line-strong); border-bottom: 1px solid var(--line-strong);
+}
+
+/* Abas do Fluxo de Caixa (2026-08-23) — Realizado x Projeção na mesma tela. Fica no topo fixo,
+   acima da barra de filtros, e a ativa é marcada por borda inferior na cor de destaque. */
+.abas-fluxo { display: flex; gap: 4px; border-bottom: 1px solid var(--line); margin-bottom: 10px; }
+.aba-fluxo {
+  padding: 8px 18px; border: 0; background: transparent; color: var(--ink-muted);
+  font-family: inherit; font-size: 14px; font-weight: 600; cursor: pointer;
+  border-bottom: 2px solid transparent; margin-bottom: -1px;
+}
+.aba-fluxo:hover { color: var(--ink); }
+.aba-fluxo-ativa { color: var(--accent); border-bottom-color: var(--accent); }

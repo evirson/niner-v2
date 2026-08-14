@@ -6,6 +6,20 @@
     <title>Niner — ERP</title>
     <!-- base-URL da API lida em runtime, não embutida (spec §3.1) -->
     <script src="/config.js"></script>
+    <!-- Tema (2026-08-23): aplicado ANTES da primeira pintura, de propósito duplicado em JS puro
+         aqui em vez de reaproveitar `src/lib/tema.ts`. O bundle do React só roda depois que o
+         browser já pintou o `<body>` com a paleta padrão — quem escolheu "claro" veria um flash
+         escuro a cada F5 (FOUC). Este trecho tem de ficar inline e síncrono no <head>;
+         qualquer mudança na regra de gravação precisa ser refletida nos dois lugares. -->
+    <script>
+      (function () {
+        var t = localStorage.getItem('niner_tema')
+        if (t === 'claro') document.documentElement.setAttribute('data-theme', 'light')
+        else if (t === 'escuro') document.documentElement.setAttribute('data-theme', 'dark')
+        // Sem valor salvo = "automático": nenhum atributo, a media query prefers-color-scheme
+        // decide (comportamento histórico do ERP).
+      })()
+    </script>
   </head>
   <body>
     <div id="root"></div>

@@ -5,6 +5,7 @@ import { useEu } from '../lib/eu'
 import { filtrarPorPapel, MENU, rotaDoGrupo, type NavGrupo } from '../lib/menu'
 import BuscaDeTelas from './BuscaDeTelas'
 import { IconeAlfinete, IconeMenuHamburguer } from './Icones'
+import SeletorTema from './SeletorTema'
 
 const CHAVE_RECOLHIDO = 'niner_nav_recolhido'
 
@@ -62,6 +63,7 @@ export default function Layout() {
         </span>
         <div className="app-header-direita">
           <BuscaDeTelas />
+          <SeletorTema />
           <button className="btn ghost" onClick={sair}>
             Sair
           </button>

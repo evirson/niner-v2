@@ -34,6 +34,48 @@ Quatro mudanças no shell, sem tocar em nenhuma tela de domínio:
 4. **Busca de telas no cabeçalho** (`BuscaDeTelas.tsx`): campo à direita do header, com
    **Ctrl+K** (ou ⌘K) de qualquer lugar do ERP, navegação por setas e Enter para abrir. É a
    contrapartida do custo de navegar por hub — o acesso direto que a lateral deixou de dar.
+5. **Seletor de tema no cabeçalho** (`SeletorTema.tsx`, 2026-08-23): botão de ícone entre a busca
+   e o "Sair", com um menu de três opções — **Claro / Escuro / Automático**. Ver a seção própria
+   abaixo.
+
+## Tema claro/escuro (2026-08-23)
+
+A paleta dos dois temas existe em `styles.css` desde o começo do projeto (§3.7 da spec:
+`:root` = clara, `@media (prefers-color-scheme: dark)` = escura, mais os overrides
+`:root[data-theme='light']`/`[data-theme='dark']`). O que não existia era **quem escrevesse o
+atributo** — por isso o ERP só seguia o tema do sistema operacional, e como o Windows costuma
+estar em escuro, era o único tema que se via na prática. A spec já previa o toggle ("override
+explícito via `data-theme`; **o toggle do usuário vence a preferência do sistema**"), então esta
+tela fecha uma pendência antiga, não inventa comportamento novo.
+
+- **Três estados, não dois.** `Automático` **não escreve** o atributo — é a media query
+  decidindo, o comportamento histórico —, e por isso é o padrão de quem nunca mexeu no seletor.
+  `Claro`/`Escuro` gravam `data-theme` e vencem o sistema operacional.
+- **Guardado em `localStorage` (`niner_tema`), por navegador**, não no banco: sem migration, sem
+  endpoint, e a escolha acompanha a máquina — o caixa da loja pode ficar claro e o computador do
+  escritório escuro, independente de quem loga. Se um dia a preferência precisar seguir o usuário
+  entre máquinas, o caminho é uma coluna em `usuario` + `/api/v1/eu`; nada do que existe hoje
+  atrapalha essa migração.
+- **Aplicado antes da primeira pintura.** O trecho que lê o `localStorage` e escreve o atributo é
+  **duplicado em JS puro, inline no `<head>` do `web/index.html`**. Não é descuido: o bundle do
+  React só roda depois que o browser já pintou o `<body>`, então sem esse script quem escolhesse
+  "Claro" veria um flash escuro a cada F5. Qualquer mudança na regra de gravação precisa ser
+  refletida nos dois lugares (`index.html` e `lib/tema.ts`).
+- **O ícone do gatilho mostra o tema em uso, não a preferência** — com "Automático" ele vira sol
+  ou lua conforme o SO (e acompanha a troca com o ERP aberto, via listener de `matchMedia`);
+  mostrar o ícone de monitor não diria nada sobre o que está na tela.
+- **Não exigiu tocar em nenhuma tela.** Toda cor do projeto sai de token (`var(--…)`), incluindo
+  os gráficos Recharts (`stroke="var(--line)"`, `fill="var(--accent)"`) — as únicas cores fixas do
+  `web/src` são o papel branco do editor de etiqueta e as constantes de captura de PDF, ambas
+  propositais. `color-scheme` foi declarado nos blocos de tema para os controles **nativos**
+  (lista do `<select>`, scrollbar, autofill) virem na paleta certa.
+- **O PDF dos relatórios continua sempre claro**, independente do tema escolhido: a captura força
+  `data-theme='light'` só no clone do documento (ver `docs/telas/relatorio-vendas.md`).
+- ⚠️ **A extensão Dark Reader ignora tudo isso.** Ela injeta `<style class="darkreader--root-vars">`
+  e reescreve os próprios tokens, então o ERP aparece escuro mesmo com "Claro" selecionado — e não
+  há CSS do lado da página que resolva. Diagnosticado ao vivo em 2026-08-23 (os tokens liam
+  `--ground: #f5f4f0` enquanto o `body` pintava `rgb(30,28,20)`). Se um lojista reclamar que o
+  tema claro "não funciona", **essa é a primeira coisa a checar**, antes de procurar bug no CSS.
 
 ## Decisões de escopo
 
@@ -209,3 +251,6 @@ Então vejo "Nenhuma tela encontrada para …", sem resultado algum
 | `web/src/components/Icones.tsx` | **novos** `IconeMenuHamburguer`, `IconeAlfinete`, `IconeVoltar` |
 | `web/src/App.tsx` | rota `/menu/:grupo` |
 | `web/src/styles.css` | `.app-nav-toggle` no topo, cabeçalho em grid, `.busca-telas*`, `.menu-card*`, `.menu-hub-*`; saíram os `.app-nav-grupo*` |
+| `web/src/components/SeletorTema.tsx` | **novo (2026-08-23)** — menu Claro/Escuro/Automático do cabeçalho |
+| `web/src/lib/tema.ts` | **novo (2026-08-23)** — leitura/gravação em `localStorage` e escrita do `data-theme` |
+| `web/index.html` | **(2026-08-23)** script inline no `<head>` que aplica o tema antes da primeira pintura (anti-flash) |
