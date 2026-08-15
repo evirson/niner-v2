@@ -13,9 +13,10 @@ public final class RelatorioMovimentacaoProdutosDtos {
 
     public enum ModeloRelatorioMovimentacao { ANALITICO, KARDEX, SINTETICO }
 
-    /** Espelha o ENUM {@code tipo_movimento} do Postgres (V013). COMPRA e RESERVA/
-     *  LIBERACAO_RESERVA ainda não têm nenhuma tela que grave esses tipos — o relatório já nasce
-     *  preparado pra eles mesmo assim. */
+    /** Espelha o ENUM {@code tipo_movimento} do Postgres (V013). Só RESERVA/LIBERACAO_RESERVA
+     *  seguem sem nenhuma tela que os grave (dependem da integração de pedidos de canal) — o
+     *  relatório já nasce preparado pra eles mesmo assim. COMPRA saiu dessa lista em 2026-08-11,
+     *  com a Entrada de Produtos por Compra. */
     public enum TipoMovimentoProduto {
         COMPRA, TRANSFERENCIA, DEVOLUCAO, AJUSTE, VENDA, RESERVA, LIBERACAO_RESERVA, CANCELAMENTO,
         CANCELAMENTO_DEVOLUCAO

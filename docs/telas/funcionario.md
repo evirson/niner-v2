@@ -142,7 +142,7 @@ movimentados (comissão por item).
   configurável obrigatório)  [x] o que NÃO deve acontecer (excluir com movimento associado
   sem inativar)
 
-Cobertos por `FuncionarioCrudTest` (10 testes) — suíte completa do projeto em **492/492 verdes
+Cobertos por `FuncionarioCrudTest` (10 testes) — suíte completa do projeto em **500/500 verdes
 (2026-08-14)**.
 
 ## Impacto no contrato de API

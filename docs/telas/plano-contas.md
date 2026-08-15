@@ -233,7 +233,7 @@ filhas / conta em uso por fornecedor-contas a pagar-caixa-conta corrente.
 - Dado `ordenarPor`/`direcao`, então a listagem respeita.
 - Dado o plano de contas de um tenant, então não aparece nem pode ser buscado por outro tenant.
 
-Cobertos por `PlanoContasCrudTest` (19 testes) — suíte completa do projeto em **492/492 verdes
+Cobertos por `PlanoContasCrudTest` (19 testes) — suíte completa do projeto em **500/500 verdes
 (2026-08-14)**. Eram 474 em 2026-08-13, após as duas revisões daquela rodada (máscara de 3 níveis
 + remoção de Exigências/Integrações; mesma contagem de 2026-08-13, nenhum teste novo nem removido
 — só convertidos). Em 2026-07-31,

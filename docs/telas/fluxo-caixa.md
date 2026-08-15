@@ -38,15 +38,36 @@ saiu o dinheiro**, e o sistema grava o movimento correspondente na mesma transa�
   própria conta a pagar, `data_movimento = data_pagamento`, `valor = valor_pago`).
 - **Caixa** → `caixa_detalhe` (`tipo_operacao = 'DEBITO_CAIXA'`, `credito_debito = 'D'`,
   `id_plano_contas` da conta, no caixa aberto do usuário). Exige caixa aberto, mesma convenção de
-  PDV/Recebimento de Crediário (popup `AberturaCaixaModal` quando não houver).
+  PDV/Recebimento de Crediário — mas, **diferente deles, a tela de Contas a Pagar ainda não abre o
+  popup `AberturaCaixaModal`**: sem caixa aberto ela só mostra o 400. Pendência de UX registrada em
+  `docs/telas/abertura-caixa.md`.
 
 **Rastreabilidade e desfazer:** as duas tabelas ganham `id_conta_pagar` (nullable, **sem FK — de
-propósito**: a conta a pagar pode ser excluída e isso não deve travar por causa de um movimento de
-dinheiro já realizado; ver `db/migration/V025__financeiro_caixa_crediario.sql:162`,
+propósito**: sem FK o banco não impede nem cascateia nada, e é o próprio serviço que decide o que
+fazer com o movimento; ver `db/migration/V025__financeiro_caixa_crediario.sql:162`,
 `db/migration/V028__financeiro_conta_corrente.sql:90` e `db/migration/README.md:57`). É o vínculo
-que permite (a) não duplicar se a baixa for reeditada e (b) **apagar o movimento** quando a baixa
-é desfeita (limpar `data_pagamento`). Sem ele, desfazer uma baixa deixaria dinheiro fantasma
-saindo do caixa.
+que permite (a) não duplicar se a baixa for reeditada e (b) **apagar o movimento** nas **três**
+rotas que o desfazem. Sem ele, desfazer uma baixa deixaria dinheiro fantasma saindo do caixa.
+
+| Rota | Onde | O que apaga |
+|---|---|---|
+| Baixa desfeita (limpar `data_pagamento`) | `ContaPagarService.sincronizarMovimentoNaEdicao` (`:235-245`) → `sincronizarMovimentoDeDinheiro` (`:157-212`) | `caixa_detalhe` + `conta_corrente_movimento` do `id_conta_pagar` |
+| Troca de origem / correção de valor | mesma rota (DELETE incondicional + regravação) | idem, e regrava em seguida |
+| **Exclusão da conta** | `ContaPagarService.excluir(Jwt, long)` (`:326-341`) | idem, **antes** do DELETE de `contas_pagar` |
+
+**[corrigido em 2026-08-14] A exclusão da conta também apaga o movimento.** Até este dia o
+`excluir()` apagava só a linha de `contas_pagar` e deixava o `caixa_detalhe`/
+`conta_corrente_movimento` **órfãos para sempre**: o dinheiro seguia saindo do caixa e do banco sem
+nenhuma conta que o justificasse, e — justamente porque não há FK — o banco não reclamava. Era um
+bug, não uma decisão.
+
+**Guard de caixa fechado (409).** As três rotas passam agora por
+`CaixaService.exigirCaixaAbertoParaDesfazer(VinculoCaixa.CONTA_PAGAR, idContaPagar)`
+(`api/.../financeiro/caixa/CaixaService.java:314-322`), chamado **antes** de qualquer DELETE
+(`ContaPagarService.java:160` e `:328`). Se algum lançamento daquele `id_conta_pagar` estiver em
+caixa já fechado, a resposta é **409** mandando reabrir o caixa (ADMIN-only, ver
+`docs/telas/fechamento-caixa.md`) — apagar em silêncio faria a conferência gravada em
+`caixa_fechamento_conferencia` afirmar um total que não existe mais.
 
 **[revisto na implementação] Conta já paga antes da mudança continua editável.** A validação
 "informou pagamento, tem de informar a origem" vale só para **baixa nova**. Sem essa exceção,
@@ -138,8 +159,11 @@ PUT  /api/v1/contas-pagar/{id}            (existente) ganha origemPagamento + id
 
 - `conta_corrente_movimento.id_conta_pagar` — coluna nova, nullable, **sem FK** (V028:90).
 - `caixa_detalhe.id_conta_pagar` — coluna nova, nullable, **sem FK** (V025:162).
-- A ausência de FK nas duas é deliberada (`db/migration/README.md:57`): excluir a conta a pagar
-  não pode travar por causa de um movimento de dinheiro já realizado.
+- A ausência de FK nas duas é deliberada (`db/migration/README.md:57`): sem FK o banco não trava
+  nem cascateia nada quando a conta a pagar é excluída. **Isso não significa que o movimento deva
+  sobreviver à exclusão** — significa o contrário: como o banco não faz nada sozinho, é o
+  `ContaPagarService.excluir()` que precisa apagar o movimento explicitamente (`:330-333`), e foi
+  exatamente essa omissão que gerou movimentos órfãos até 2026-08-14.
 - Ambas dentro das migrations existentes (banco em construção), aplicadas no dev com
   `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` + `flyway repair`.
 - **Nenhuma tabela nova.** Saldo é sempre derivado — `conta_corrente` não tem coluna de saldo (é a
@@ -194,10 +218,11 @@ de erro do relatório.
 |---|---|
 | `db/migration/V025__financeiro_caixa_crediario.sql` | `caixa_detalhe.id_conta_pagar` (coluna + índice) |
 | `db/migration/V028__financeiro_conta_corrente.sql` | `conta_corrente_movimento.id_conta_pagar` |
-| `api/.../financeiro/contaspagar/ContaPagarService.java` | baixa gera/apaga o movimento; regra da conta já paga |
+| `api/.../financeiro/contaspagar/ContaPagarService.java` | baixa gera/apaga o movimento; regra da conta já paga; **`excluir()` apaga o movimento junto** (`:328-333`) |
+| `api/.../financeiro/caixa/CaixaService.java` | `exigirCaixaAbertoParaDesfazer` + enum `VinculoCaixa.CONTA_PAGAR` (`:314-344`) — o 409 das três rotas de desfazer |
 | `api/.../financeiro/fluxocaixa/` | `FluxoCaixaDtos`/`Service`/`Controller` (realizado + projeção) |
 | `api/src/test/.../FluxoCaixaCrudTest.java` | 5 testes (saída, período vazio, alerta negativo, vencido, isolamento) |
-| `api/src/test/.../ContaPagarCrudTest.java` | +3 testes do ciclo baixa → movimento → desfazer |
+| `api/src/test/.../ContaPagarCrudTest.java` | ciclo baixa → movimento → desfazer, mais `excluirContaPagarBaixadaApagaOMovimentoDeCaixaJunto`, `excluirContaPagarComCaixaFechadoEhRecusado` e `reabrirContaPagarComCaixaFechadoEhRecusado` |
 | `web/src/lib/fluxoCaixa.ts`, `fluxoCaixaCaptura.ts` | tipos/chamadas e PDF (A4 retrato) |
 | `web/src/pages/relatorios/FluxoCaixa.tsx` | tela com as duas abas |
 | `web/src/pages/financeiro/contaspagar/ContasPagarForm.tsx` | campo "De onde saiu o dinheiro" |
@@ -209,7 +234,8 @@ de erro do relatório.
 1. ~~Ao baixar pelo **caixa**, usar o caixa aberto do usuário (simples) ou deixar escolher a sessão
    de caixa? Proposta: usar o aberto, como PDV e Recebimento fazem.~~ — **decidido e implementado**
    pela proposta: a baixa usa o **caixa aberto do usuário/empresa/dia**
-   (`ContaPagarService.java:191-196`), sem seletor de sessão, igual a PDV e Recebimento de
-   Crediário — e rejeita com 400 quando não há caixa aberto (o front abre o `AberturaCaixaModal`).
+   (`ContaPagarService.java:196-202`), sem seletor de sessão, igual a PDV e Recebimento de
+   Crediário — e rejeita com 400 quando não há caixa aberto (o front **ainda não** abre o
+   `AberturaCaixaModal`; ver a pendência de UX em `docs/telas/abertura-caixa.md`).
 2. Contas a pagar **já baixadas** no banco de dev ficam fora do realizado (sem movimento). Aceito
    para dev; confirmar que não vira problema quando houver tenant real.

@@ -19,8 +19,12 @@ import java.time.LocalDate;
 import java.util.List;
 
 /**
- * Abertura de Caixa, superfície do tenant (`/api/v1`, JWT + RLS). Aberto a ADMIN e OPERADOR —
- * mesma decisão de PDV/Recebimento de Crediário, que dependem deste caixa estar aberto.
+ * Caixa (abertura, fechamento, reabertura), superfície do tenant (`/api/v1`, JWT + RLS).
+ *
+ * <p>Aberto a ADMIN e OPERADOR — mesma decisão de PDV/Recebimento de Crediário, que dependem
+ * deste caixa estar aberto. <b>Duas exceções ADMIN-only</b>, checadas no service: consultar ou
+ * fechar o caixa <b>de outro usuário</b>, e <b>reabrir</b> um caixa fechado (esta última vale
+ * mesmo quando o caixa é do próprio operador — reabrir invalida uma conferência já assinada).
  */
 @RestController
 @RequestMapping("/api/v1/caixa")

@@ -94,6 +94,18 @@ aberto — nenhum dos dois abre nada sozinho.
 nenhuma tela ou rotina até 2026-07-30, quando a Abertura ganhou uma tela irmã — ver
 `docs/telas/fechamento-caixa.md`.
 
+**Fechar deixou de ser definitivo em 2026-08-14:** existe **reabertura ADMIN-only** com motivo
+obrigatório (`POST /api/v1/caixa/fechamento/{id}/reabrir`, `CaixaService.reabrir`,
+`api/src/main/java/com/vetor/niner/financeiro/caixa/CaixaService.java:251-300`), criada porque
+estorno de recebimento de crediário, exclusão e reabertura de conta a pagar apagam linhas de
+`caixa_detalhe` e, em caixa já fechado, descasariam a conferência gravada.
+
+Isso **não afrouxa a regra desta tela** — "um caixa aberto por usuário/empresa/dia" vale também na
+volta: reabrir um caixa antigo enquanto o do dia está aberto criaria dois caixas abertos para a
+mesma pessoa (e o PDV não saberia em qual lançar), então a reabertura checa o mesmo invariante e
+responde **409** com "Este operador já tem outro caixa aberto. Feche o caixa aberto antes de
+reabrir este." (`CaixaService.java:262-276`). Detalhes em `docs/telas/fechamento-caixa.md`.
+
 ## Contrato de API
 
 ```
@@ -125,7 +137,7 @@ negativo ou ausente), 409 (caixa já aberto hoje para este usuário/empresa).
 
 Cobertos por `CaixaCrudTest` (6 testes) + 1 teste novo em cada de `PdvCrudTest`/
 `RecebimentoCrediarioCrudTest` (as demais 17/8 pré-existentes ganharam uma chamada de abertura de
-caixa no setup, pra continuarem passando). Suíte completa do projeto: **492/492 verdes
+caixa no setup, pra continuarem passando). Suíte completa do projeto: **500/500 verdes
 (2026-08-14)** — eram 211 quando esta tela nasceu, em 2026-07-30.
 
 ## Ajuda da tela (manual de operação + vídeo) — obrigatório (R22 / §3.7.1)
@@ -170,7 +182,7 @@ abrir o caixa com a carteira errada por engano.
   renomeado). Sem escolha nenhuma nesta tela a partir de agora.
 - **Testes:** +2 em `CaixaCrudTest` — a lista de carteiras só traz "Dinheiro" (não traz PIX,
   também `AVISTA`, semeada no signup); abrir com outra carteira (PIX) responde 400. Suíte
-  completa do projeto: **492/492 verdes (2026-08-14)** (eram 266 na data desta revisão).
+  completa do projeto: **500/500 verdes (2026-08-14)** (eram 266 na data desta revisão).
 
 ## Questões abertas
 

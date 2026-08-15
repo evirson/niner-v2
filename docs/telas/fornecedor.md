@@ -122,7 +122,7 @@ vez de apagar, e retorna `{"acao":"inativado","motivo":"..."}`. Sem vínculo, ap
 - Dado um fornecedor vinculado a uma movimentação de estoque, quando excluído, então é
   inativado, não apagado.
 
-Cobertos por `FornecedorCrudTest` (12 testes) — suíte completa do projeto em **492/492 verdes
+Cobertos por `FornecedorCrudTest` (12 testes) — suíte completa do projeto em **500/500 verdes
 (2026-08-14)**.
 
 ## Impacto no contrato de API

@@ -143,7 +143,8 @@ POST /api/v1/recebimento-crediario/estornos/{idLoteRecebimento}                 
 ```
 
 Todos sob `/api/v1/**` (JWT de tenant, RLS ativo — P8), abertos a ADMIN e OPERADOR. Erros em
-Problem Details (RFC 9457): 400 (sem nome de cliente), 409 (lote inexistente ou já estornado).
+Problem Details (RFC 9457): 400 (sem nome de cliente), 409 (lote inexistente ou já estornado;
+**caixa daquele lote já fechado** — 2026-08-14, ver "Caixa fechado bloqueia o estorno" acima).
 
 ## Ajuda da tela (manual de operação + vídeo) — obrigatório (R22 / §3.7.1)
 

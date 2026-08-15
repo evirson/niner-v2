@@ -162,9 +162,10 @@ function formatarQuantidadeSimples(qtd: number): string {
  * Papeleta de venda do PDV — **42 colunas, item em 2 linhas** (revisão de 2026-08-14).
  *
  * <p>A versão original tinha 64 colunas numa única linha por item. Impressa numa bobina real o
- * resultado era ilegível, e a conta explica: o papel tem 80mm mas a **área de impressão é 72mm**;
- * descontando a margem sobram ~68mm, o que dá 1,06mm por caractere — fonte de ~6px. Pior, o CSS
- * declarava `width: 80mm`, então o driver ainda encolhia tudo em 10% pra caber nos 72mm.
+ * resultado era ilegível, e a conta explica: o papel tem 80mm mas a **área imprimível é 75mm**
+ * (a estimativa inicial era 72mm; 75mm é o valor calibrado contra a impressora e a convenção do
+ * projeto); descontando a margem sobra ~1,1mm por caractere — fonte de ~6px. Pior, o CSS
+ * declarava `width: 80mm`, então o driver ainda encolhia tudo ~10% pra caber na área imprimível.
  *
  * <p>Solução pedida pelo dono do produto: **quebrar o item em duas linhas** em vez de espremer a
  * largura. A primeira traz código de barras + o que couber do nome; a segunda, quantidade × preço

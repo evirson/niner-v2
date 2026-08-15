@@ -13,8 +13,10 @@ import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.ResultSet;
 import java.sql.Statement;
+import java.time.LocalTime;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assumptions.assumeFalse;
 import static org.springframework.http.MediaType.APPLICATION_JSON;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -80,8 +82,24 @@ class HorarioAcessoTest {
 
     /** Sobrescreve hora_inicio/hora_fim do dia de HOJE (calculado pelo próprio banco via
      *  EXTRACT(ISODOW FROM now())) com deltas em minutos relativos a now() — dispensa esperar o
-     *  relógio de verdade passar do horário pra testar a borda da janela. */
+     *  relógio de verdade passar do horário pra testar a borda da janela.
+     *
+     *  <p><b>Guard de meia-noite (2026-08-14).</b> A janela é gravada em colunas {@code time}
+     *  puras, e {@code usuario_horario_acesso_ordem_ck} exige {@code hora_fim > hora_inicio} —
+     *  ou seja, <b>o domínio não expressa janela que cruza a meia-noite</b>, de propósito (a
+     *  janela é por dia da semana). Perto da meia-noite, um delta positivo faz
+     *  {@code (now() + interval)::time} embrulhar pra 00:xx e o INSERT viola a constraint, com o
+     *  teste falhando por relógio e não por regressão — foi o que aconteceu numa execução às
+     *  23:58. Aqui a suíte é <b>pulada</b> (não passa em falso) quando a janela pedida cruzaria a
+     *  virada. Mesma família de armadilha de {@code feedback_time_interval_meia_noite}: nunca
+     *  raciocinar sobre tolerância somando em {@code time} puro. */
     private void definirJanelaHoje(long idTenant, long idUsuario, int deltaInicioMin, int deltaFimMin) throws Exception {
+        LocalTime agora = LocalTime.now();
+        boolean cruzaMeiaNoite = agora.plusMinutes(deltaInicioMin).isAfter(agora.plusMinutes(deltaFimMin));
+        assumeFalse(cruzaMeiaNoite,
+                "Janela [" + deltaInicioMin + ", " + deltaFimMin + "] min cruzaria a meia-noite às "
+                        + agora + " — o domínio não expressa isso (janela é por dia da semana).");
+
         try (Connection c = DriverManager.getConnection(postgres.getJdbcUrl(), "niner_app", "dev_app");
              Statement st = c.createStatement()) {
             st.execute("SET app.id_tenant = " + idTenant);

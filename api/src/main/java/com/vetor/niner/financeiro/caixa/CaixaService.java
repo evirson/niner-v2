@@ -36,11 +36,22 @@ import static org.springframework.http.HttpStatus.FORBIDDEN;
 import static org.springframework.http.HttpStatus.NOT_FOUND;
 
 /**
- * Abertura de Caixa (2026-07-30) — um {@code caixa_mestre} por usuário/empresa/dia. PDV e
- * Recebimento de Crediário exigem caixa aberto antes de efetivar (ver {@link
- * #idCaixaAbertoObrigatorio}); antes dessa data, {@code RecebimentoCrediarioService} abria o
- * caixa sozinho, em silêncio, sempre com saldo zero — agora a abertura é sempre um passo
- * explícito (tela dedicada ou popup), pedindo o saldo inicial e a moeda (tipo de carteira).
+ * Ciclo de vida do caixa — um {@code caixa_mestre} por usuário/empresa/dia.
+ *
+ * <ul>
+ *   <li><b>Abertura</b> (2026-07-30) — PDV, Recebimento de Crediário e a baixa de conta a pagar
+ *       em dinheiro exigem caixa aberto antes de efetivar (ver {@link #idCaixaAbertoObrigatorio}).
+ *       Antes dessa data, {@code RecebimentoCrediarioService} abria o caixa sozinho, em silêncio,
+ *       sempre com saldo zero — agora a abertura é sempre um passo explícito (tela dedicada ou
+ *       popup), pedindo o saldo inicial e a moeda (tipo de carteira).</li>
+ *   <li><b>Fechamento "às cegas"</b> (2026-07-30) — o operador informa quanto contou de cada
+ *       carteira sem ver o esperado; só fecha se tudo bater (ver {@link #fechar}).</li>
+ *   <li><b>Reabertura</b> (2026-08-14) — ADMIN-only, com motivo obrigatório; invalida a
+ *       conferência gravada (ver {@link #reabrir}).</li>
+ * </ul>
+ *
+ * <p>Também mora aqui o guard {@link #exigirCaixaAbertoParaDesfazer}, que impede qualquer rotina
+ * de apagar lançamento de caixa já fechado — é ele que dá sentido à reabertura existir.
  */
 @Service
 public class CaixaService {
@@ -250,7 +261,7 @@ public class CaixaService {
      */
     @Transactional
     public ReaberturaCaixaResponse reabrir(Jwt jwt, long idCaixa, ReabrirCaixaRequest req) {
-        exigirAdmin(jwt);
+        exigirAdmin(jwt, "reabrir um caixa fechado");
         Caixa caixa = buscarCaixaPorIdObrigatorio(idCaixa);
         if (!caixa.fechado()) {
             throw new ConflitoDadosException("Este caixa já está aberto.");
@@ -536,11 +547,19 @@ public class CaixaService {
                 rs.getObject("data_fechamento", OffsetDateTime.class), rs.getBoolean("caixa_fechado"));
     }
 
-    private static void exigirAdmin(Jwt jwt) {
+    /** Mensagem parametrizada (2026-08-14) porque as duas exigências de ADMIN são diferentes:
+     *  consultar/fechar caixa <b>de outro usuário</b>, e <b>reabrir</b> — que é ADMIN mesmo
+     *  quando o caixa é do próprio operador. Antes só existia a 1ª frase, e um OPERADOR que
+     *  tentasse reabrir o próprio caixa recebia um texto que não descrevia o que ele fez. */
+    private static void exigirAdmin(Jwt jwt, String oQue) {
         List<String> roles = jwt.getClaimAsStringList("roles");
         if (roles == null || !roles.contains("ADMIN")) {
-            throw new ResponseStatusException(FORBIDDEN, "Apenas administradores podem consultar/fechar o caixa de outro usuário.");
+            throw new ResponseStatusException(FORBIDDEN, "Apenas administradores podem " + oQue + ".");
         }
+    }
+
+    private static void exigirAdmin(Jwt jwt) {
+        exigirAdmin(jwt, "consultar/fechar o caixa de outro usuário");
     }
 
     private static long idEmpresa(Jwt jwt) {

@@ -310,7 +310,7 @@ inexistente ou de outro tenant), 409 (vale já usado).
   venda, então 400.
 
 Cobertos por `DevolucaoProdutoCrudTest` (10 testes) e `ValeMercadoriaCrudTest` (6 testes,
-incluindo o cancelamento reabrindo o vale). Suíte completa do projeto: **492/492 verdes
+incluindo o cancelamento reabrindo o vale). Suíte completa do projeto: **500/500 verdes
 (2026-08-14)**.
 
 ## Ajuda da tela (manual de operação + vídeo) — obrigatório (R22 / §3.7.1)

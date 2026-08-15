@@ -334,8 +334,11 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
       em 2 linhas (código+nome / qtd × unitário e total) — ver `comprovante.ts`. A 42 colunas cada
       caractere ganha ~1,6mm e a fonte sobe pra 10px.
    2. `width: 80mm` prometia ao navegador uma faixa maior do que a impressora consegue marcar, e o
-      driver encolhia tudo ~10% pra caber nos 72mm — reduzindo ainda mais a fonte já pequena.
-      Agora a caixa tem os 72mm reais, centrada na página de 80mm. */
+      driver encolhia tudo ~10% pra caber na área imprimível — reduzindo ainda mais a fonte já
+      pequena. Hoje a caixa declara **75mm** e fica **alinhada à esquerda** (`left: 0`), não
+      centrada: a origem do CSS na impressão já É o começo da área imprimível (ver o comentário
+      do `left` abaixo). O 72mm que aparecia aqui era a estimativa inicial da área imprimível; o
+      valor calibrado contra a impressora real, e a convenção do projeto, é 75mm. */
 .papeleta-preview {
   width: fit-content; margin: 16px auto; padding: 12px 14px;
   background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--radius);
@@ -347,8 +350,8 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
   .papeleta-imprimir {
     /* `left: 0`, não 4mm: a origem do CSS na impressão JÁ é o começo da área imprimível, não a
        borda física do papel. O deslocamento de 4mm que existiu aqui (2026-08-14) empurrava o
-       conteúdo pra direita e o fim das linhas caía fora dos 72mm — o cupom saía com margem à
-       esquerda e cortado à direita ("TOTAL" virava "TOTAI"). */
+       conteúdo pra direita e o fim das linhas caía fora da área imprimível — o cupom saía com
+       margem à esquerda e cortado à direita ("TOTAL" virava "TOTAI"). */
     position: absolute; top: 0; left: 0; width: 75mm; margin: 0; padding: 2mm 1mm; border: 0;
     background: none; color: #000;
     /* Consolas na frente da Lucida Console: mesma família monoespaçada, mas com haste mais

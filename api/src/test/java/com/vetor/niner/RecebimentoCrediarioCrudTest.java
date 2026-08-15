@@ -154,12 +154,21 @@ class RecebimentoCrediarioCrudTest {
     }
 
     /** {@code diasVencidaHa} positivo = venceu no passado (atrasada); negativo = ainda vai vencer. */
+    /**
+     * <p><b>Vencimento ancorado ao MEIO-DIA</b> (2026-08-14), não a {@code now()}. O serviço conta
+     * atraso em domínio de data — {@code CURRENT_DATE - cr.data_vencimento::date} — e o fixture
+     * gravava {@code now() - N days}, que carrega a hora atual junto. Rodando perto da meia-noite,
+     * a data virava entre o INSERT e o cálculo: o atraso ia de N para N+1 dias, os juros mudavam e
+     * o valor pago (fixo no corpo da requisição) deixava de bater, devolvendo 400. Aconteceu de
+     * verdade numa execução às 23:58. Com o vencimento no meio-dia, a diferença de datas é a mesma
+     * independentemente da hora em que a suíte roda.
+     */
     private long criarParcela(Connection c, long idTenant, long idVenda, long idCarteira, int numeroParcela,
                                int diasVencidaHa, String valorReceber, boolean recebida) throws SQLException {
         try (PreparedStatement ps = c.prepareStatement("""
                 INSERT INTO contas_receber
                     (id_tenant, id_venda, id_carteira, numero_parcela, data_vencimento, valor_receber, data_recebimento)
-                VALUES (?, ?, ?, ?, now() - (? || ' days')::interval, ?, %s)
+                VALUES (?, ?, ?, ?, (CURRENT_DATE - (? || ' days')::interval) + time '12:00', ?, %s)
                 RETURNING id_conta_receber
                 """.formatted(recebida ? "now()" : "NULL"))) {
             ps.setLong(1, idTenant);

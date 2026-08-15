@@ -12,7 +12,13 @@ Registro cronológico das decisões e entregas. Atualizar a cada marco relevante
 > crediário, contas a pagar/receber, conta corrente, **DRE e Fluxo de Caixa**), relatórios,
 > etiquetas e importação/exportação. **Falta o coração da visão original**: integração com
 > marketplaces (`canais`/`pedidos`/`precos`/`integracao` seguem sem implementação de domínio) e o
-> app `admin/` (backoffice da plataforma). **500/500 testes de backend verdes.**
+> app `admin/` (backoffice da plataforma). **500/500 testes de backend verdes, `tsc -b` limpo.**
+>
+> **Pendências adiadas pelo dono do produto (não são esquecimento):** calibragem de impressão
+> térmica da **Guia de Transferência** e do **Fechamento de Caixa** — papeleta de venda,
+> comprovante de crediário e vale-mercadoria já estão calibrados (42 colunas / 75mm / Consolas em
+> negrito, `docs/telas/papeleta-venda.md`); esses dois ficaram para depois. O **vídeo de
+> treinamento de Produtos** também segue pausado.
 >
 > Os parágrafos abaixo são a **narrativa acumulada** desde o começo — leia o resumo acima para o
 > estado, e a linha do tempo (do mais novo para o mais antigo) para o detalhe de cada entrega.
@@ -154,7 +160,7 @@ checava nada** (19 erros reais acumulados, todos corrigidos — usar `tsc -b`). 
 primeira impressão em bobina térmica real mostrou que a **papeleta de venda saía ilegível**: virou
 42 colunas com item em 2 linhas, e a calibragem de impressão (largura imprimível, negrito,
 Consolas) foi aplicada também ao comprovante de crediário — o vale-mercadoria herdou sozinho.
-**491/491 testes de backend verdes; `tsc -b` limpo.**
+**500/500 testes de backend verdes (2026-08-14); `tsc -b` limpo.**
 
 | Artefato | Situação |
 |---|---|
@@ -457,6 +463,18 @@ documentados tinham que caber em 6 dias reais de trabalho. Datas até 08-08 já 
 Datas que são **dado de exemplo** (vencimento de parcela, expiração de trial) ficaram intactas.
 
 8 testes novos, **500/500 verdes**, `tsc -b` limpo.
+
+**Rescaldo — dois testes frágeis por relógio, corrigidos.** Rodando a suíte às 23:58, três testes
+que estavam verdes às 18h falharam sozinhos; nenhum era regressão. (a) `HorarioAcessoTest` grava a
+janela em `time` puro e `(now() + 60min)::time` embrulhava pra `00:58`, violando
+`hora_fim > hora_inicio` — mas a janela é **por dia da semana**, então ela realmente não pode
+cruzar a meia-noite: o teste é que pedia o impossível, e agora é **pulado** com `assumeFalse` e
+mensagem, nunca aprovado em falso. (b) `RecebimentoCrediarioCrudTest` gravava
+`data_vencimento = now() - N days` enquanto o serviço conta atraso em domínio de data
+(`CURRENT_DATE - data_vencimento::date`) — virando o dia entre o INSERT e o cálculo, o atraso ia
+de N para N+1, os juros mudavam e o valor pago (fixo no corpo) deixava de bater. Corrigido de
+verdade ancorando o vencimento ao **meio-dia**, sem pular nada. Fixture de teste não deve usar
+`now()` quando a produção compara por data.
 
 ### 2026-08-14 — Auditoria completa da documentação (spec + 40 telas + 86 memórias)
 

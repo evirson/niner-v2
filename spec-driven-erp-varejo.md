@@ -261,7 +261,7 @@ Decisões-chave (registrar cada uma como ADR — template na seção 6):
 | Frontend | `web`/`admin`: React 19 + Vite + TS (TanStack Query, React Router). `site`: **Astro (SSG)** para SEO (ADR-011) | Fronts leem a base-URL da API em runtime (não embutida) |
 | UI | shadcn/ui ou Mantine | decidir por ADR |
 | Auth | Spring Security + JWT (access curto + refresh) | |
-| Docs API | springdoc-openapi (OpenAPI 3.1) | Contrato gerado é parte da spec |
+| Docs API | ~~springdoc-openapi (OpenAPI 3.1)~~ — **não implementado (conferido em 2026-08-14)** | A intenção continua válida, mas **o OpenAPI gerado não existe**: não há dependência `springdoc-*` em `api/pom.xml` nem uma única anotação `@Operation`/`@ApiResponse`/`@Tag` em `api/src/main`. Na prática o contrato vive nas seções **"Contrato de API" de `docs/telas/*.md`**, escritas antes do código — a regra "contrato faz parte da spec da feature" continua valendo, só não é gerada. Adotar springdoc é trabalho futuro |
 | Observabilidade | Spring Actuator + Micrometer; logs JSON | |
 | Testes | JUnit 5, Testcontainers (Postgres real), WireMock (APIs de marketplace), Playwright (e2e crítico) | |
 

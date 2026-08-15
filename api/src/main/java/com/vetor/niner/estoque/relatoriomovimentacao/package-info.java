@@ -22,11 +22,12 @@
  * linhas; os KPIs "Entrada/Saída Física" (ANALITICO/SINTETICO) excluem esses tipos, mas o Kardex
  * inclui igual a qualquer outro (ver acima).
  *
- * <p><b>Gap conhecido, aceito de propósito:</b> {@code COMPRA} (entrada de mercadoria) e
- * {@code RESERVA}/{@code LIBERACAO_RESERVA} (integração de pedidos de canal) ainda não têm
- * nenhuma tela que grave esses tipos — o relatório já nasce preparado (filtro de tipo lista os 8
- * valores do ENUM, {@code montarDocumento} já sabe formatar fornecedor+NF pra Compra), só não vai
- * produzir linha nenhuma desses tipos até essas telas existirem.
+ * <p><b>Gap conhecido, aceito de propósito:</b> {@code RESERVA}/{@code LIBERACAO_RESERVA}
+ * (integração de pedidos de canal) ainda não têm nenhuma tela que grave esses tipos — o relatório
+ * já nasce preparado (o filtro lista os 9 valores do ENUM), só não vai produzir linha nenhuma
+ * desses dois até a integração existir. {@code COMPRA} **saiu deste gap em 2026-08-11**, quando
+ * a Entrada de Produtos por Compra ({@code EntradaMercadoriaService}) passou a gravá-lo — e é por
+ * isso que {@code montarDocumento} formata fornecedor+NF.
  *
  * <p>Valorização sempre por CUSTO ({@code produto_movimento_detalhe.preco_custo}), nunca por
  * venda — diferente dos relatórios de Vendas/Comissões, aqui é contábil/Kardex e

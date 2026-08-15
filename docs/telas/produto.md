@@ -271,7 +271,7 @@ variação (`produto_barra`) ou imagem (`produto_imagem`) vinculada, o DELETE **
 - Dado um produto sem vínculo, quando excluído, então deixa de existir.
 - Dado um produto vinculado a uma variação, quando excluído, então é inativado, não apagado.
 
-Cobertos por `ProdutoCrudTest` (25 testes) — suíte completa do projeto em **492/492 verdes
+Cobertos por `ProdutoCrudTest` (25 testes) — suíte completa do projeto em **500/500 verdes
 (2026-08-14)** (inclui `CorGradeTamanhoCrudTest`, novo em 2026-08-08).
 
 ## Impacto no contrato de API

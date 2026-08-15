@@ -130,7 +130,7 @@ tenant — RLS).
 
 Cobertos por `RecebimentoCrediarioCrudTest` (+2 testes:
 `comprovanteTrazCabecalhoParcelasEFormasDePagamento`, `comprovanteDeLoteInexistenteResponde404`).
-Suíte completa do projeto: 492/492 verdes (2026-08-14).
+Suíte completa do projeto: 500/500 verdes (2026-08-14).
 
 ## Reimpressão (2026-08-06 — deixou de ser non-goal)
 

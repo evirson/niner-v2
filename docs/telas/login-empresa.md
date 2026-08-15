@@ -104,7 +104,7 @@ removível (nem pelo próprio ADMIN, nem por mais ninguém). Ver `docs/telas/usu
 Cobertos por `LoginEmpresaTest` (3 testes) e `UsuarioCrudTest`
 (`tentativaDeMudarOProprioNivelEhIgnoradaContinuaAdmin`,
 `criarUsuarioIgnoraTentativaDeMarcarComoAdministrador`,
-`bancoRejeitaUmSegundoAdministradorNoMesmoTenant`). Suíte completa do projeto: 492/492 verdes (2026-08-14).
+`bancoRejeitaUmSegundoAdministradorNoMesmoTenant`). Suíte completa do projeto: 500/500 verdes (2026-08-14).
 
 ## Non-goals desta feature
 

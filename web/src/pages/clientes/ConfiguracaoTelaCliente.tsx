@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
+import AjudaDaTela from '../../components/AjudaDaTela'
 import { BotaoFecharTela } from '../../components/BotaoFecharTela'
 import { IconeEngrenagem } from '../../components/Icones'
 import Toast from '../../components/Toast'
@@ -80,6 +81,7 @@ export default function ConfiguracaoTelaCliente() {
             <h1>Configurar tela de Cliente</h1>
           </div>
           <div className="topbar-acoes">
+            <AjudaDaTela chaveTela="comum.telaconfig.cliente" />
             <BotaoFecharTela />
             <button type="button" className="btn" disabled={salvar.isPending} onClick={() => salvar.mutate(campos)}>
               {salvar.isPending ? 'Salvando…' : 'Salvar'}

@@ -14,6 +14,28 @@ interface ConteudoAjuda {
   urlVideo?: string | null
 }
 
+/** As 4 telas de Configuração de Tela (Cliente/Fornecedor/Funcionário/Produto) são irmãs: mesma
+ *  estrutura, mesmo comportamento, só muda o cadastro configurado. Uma fábrica evita quatro
+ *  cópias que envelheceriam em ritmos diferentes. */
+function configuracaoDeTela(cadastro: string): ConteudoAjuda {
+  return {
+    titulo: `Configurar tela de ${cadastro}`,
+    objetivo: `Escolher quais campos do cadastro de ${cadastro} aparecem na tela e quais são de preenchimento obrigatório, para esta loja.`,
+    passos: [
+      'Cada linha é um campo do cadastro. Marque "Visível" para o campo aparecer na tela e "Obrigatório" para exigir o preenchimento.',
+      'Um campo escondido nunca pode ser obrigatório — ao desmarcar "Visível", a obrigatoriedade sai junto.',
+      'Alguns campos são essenciais e não podem ser escondidos nem deixar de ser obrigatórios; nesses, os controles ficam travados.',
+      'Clique em "Salvar". A mudança vale para todos os usuários desta loja, na hora.',
+    ],
+    errosComuns: [
+      'Escondi um campo por engano e agora não acho o dado antigo: nada é apagado — o valor continua gravado e volta a aparecer assim que o campo for marcado como visível de novo.',
+      'A obrigatoriedade também é conferida no servidor, não só na tela — então marcar "Obrigatório" aqui realmente impede salvar o cadastro sem aquele campo.',
+      'Só o administrador pode alterar esta configuração.',
+    ],
+    urlVideo: null,
+  }
+}
+
 const CONTEUDOS: Record<string, ConteudoAjuda> = {
   'cadastros.cliente.lista': {
     titulo: 'Clientes',
@@ -46,15 +68,16 @@ const CONTEUDOS: Record<string, ConteudoAjuda> = {
     ],
     urlVideo: null,
   },
-  'cadastros.cliente.categoria': {
-    titulo: 'Categorias de cliente',
-    objetivo: 'Criar ou renomear categorias usadas no cadastro de cliente.',
-    passos: [
-      'Digite o nome de uma categoria nova e clique em "Adicionar".',
-      'Para renomear, edite o nome de uma categoria já existente na lista e clique em "Salvar".',
-    ],
-    urlVideo: null,
-  },
+  // 'cadastros.cliente.categoria' removida em 2026-08-14: era chave órfã — nenhum arquivo do
+  // repositório a referenciava, e não existe tela nem modal de "Categorias de cliente". As
+  // categorias são mantidas dentro do próprio cadastro de Cliente.
+  // Configuração de tela (visibilidade/obrigatoriedade de campo por tenant) — 4 telas irmãs,
+  // mesma estrutura, mesma ajuda com o nome do cadastro trocado. R22 exige entrada em TODA tela;
+  // faltavam desde que essas telas nasceram (corrigido em 2026-08-14).
+  'comum.telaconfig.cliente': configuracaoDeTela('Cliente'),
+  'comum.telaconfig.fornecedor': configuracaoDeTela('Fornecedor'),
+  'comum.telaconfig.funcionario': configuracaoDeTela('Funcionário'),
+  'comum.telaconfig.produto': configuracaoDeTela('Produto'),
   'cadastros.cliente.historico': {
     titulo: 'Histórico do cliente',
     objetivo: 'Ver as compras, as parcelas e o resumo do crediário deste cliente.',
@@ -440,6 +463,8 @@ const CONTEUDOS: Record<string, ConteudoAjuda> = {
     ],
     errosComuns: [
       'Não encontro uma conta: confira os filtros — clique em "Alterar Filtros" e tente um período mais amplo.',
+      'Ao excluir uma conta já paga, a saída de dinheiro que ela gerou (no caixa ou na conta corrente) é apagada junto — não fica sobrando lançamento sem conta.',
+      '"Esta operação mexe no caixa nº X, que já está fechado": o pagamento saiu de um caixa que já foi encerrado. Peça ao administrador para reabrir aquele caixa em Frente de Loja › Caixa › Fechamento de Caixa, exclua de novo, e feche o caixa.',
     ],
     urlVideo: null,
   },
@@ -788,7 +813,7 @@ const CONTEUDOS: Record<string, ConteudoAjuda> = {
       '"Gerar PDF" captura os KPIs/gráficos (ou o cabeçalho do Kardex) numa página e a grid noutra.',
     ],
     errosComuns: [
-      'Compra e Reserva/Liberação de Reserva ainda não têm tela própria que grave esses tipos — o filtro já lista os 8, mas só aparecem linhas quando essas telas existirem.',
+      'Reserva e Liberação de Reserva ainda não têm tela própria que grave esses tipos (dependem da integração com marketplaces) — o filtro já lista os 9, mas esses dois só vão trazer linhas quando essa integração existir. Compra já traz: quem grava é a Entrada de Produtos por Compra.',
       'O custo é o gravado no próprio movimento (histórico, de quando ele aconteceu). Movimentos gerados antes de 2026-08-04 não tinham esse valor gravado — pra esses, o relatório usa o custo ATUAL do cadastro do produto como aproximação.',
       'O Kardex soma TODOS os tipos de movimento no saldo corrido, inclusive Reserva/Liberação de Reserva — é o único jeito de bater com o saldo real do sistema.',
     ],
