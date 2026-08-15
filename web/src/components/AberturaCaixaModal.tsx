@@ -8,8 +8,15 @@ import CamposAberturaCaixa from './CamposAberturaCaixa'
 /**
  * Popup obrigatório (2026-07-30): quando o PDV ou o Recebimento de Crediário detectam que não
  * há caixa aberto hoje para o usuário/empresa, este popup bloqueia a tela até a abertura ser
- * confirmada — sem opção de "cancelar e continuar mesmo assim"; a única saída é "Voltar", que
- * sai da tela (pedido do dono do produto).
+ * confirmada — sem opção de "cancelar e continuar mesmo assim"; nessas duas telas a única saída
+ * é "Voltar", que sai da tela (pedido do dono do produto).
+ *
+ * <p>Terceiro uso desde 2026-08-15: **Contas a Pagar / Pagas**, quando o operador escolhe pagar
+ * com "Caixa da loja" e não há caixa aberto (a baixa em dinheiro grava `caixa_detalhe` e exige
+ * caixa — ver `docs/telas/contas-pagar.md`). Lá o popup **não** é obrigatório-de-entrada: pagar
+ * pela conta corrente, ou só editar a conta, não precisa de caixa. Por isso o `aoVoltar` daquela
+ * tela apenas limpa a origem escolhida e devolve o operador ao formulário, em vez de navegar pra
+ * fora. O componente não decide isso — quem passa o `aoVoltar` decide.
  */
 export default function AberturaCaixaModal({ aoAbrir, aoVoltar }: { aoAbrir: () => void; aoVoltar: () => void }) {
   const [idCarteira, setIdCarteira] = useState<number | ''>('')

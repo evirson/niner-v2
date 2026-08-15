@@ -267,6 +267,41 @@ class ContaPagarCrudTest {
         }
     }
 
+    /**
+     * Regressão (2026-08-15): a saída de dinheiro da baixa sempre entrou no valor esperado da
+     * conferência (é um débito), mas o drill-down do Fechamento de Caixa mostrava origem "—" —
+     * nem o SELECT lia {@code cd.id_conta_pagar}, nem {@code CaixaService.origem} a conhecia.
+     * Quem conferisse uma divergência via uma saída sem explicação nenhuma.
+     */
+    @Test
+    void drillDownDoFechamentoIdentificaASaidaComoContaAPagar() throws Exception {
+        Base base = prepararBase("origem-drilldown");
+        abrirCaixaDinheiro(base.token());
+        long idContaPagar = criarContaPagar(base, "DUP-ORIGEM", "2026-08-15", "310.00");
+
+        mvc.perform(put("/api/v1/contas-pagar/" + idContaPagar).header("Authorization", "Bearer " + base.token())
+                        .contentType(APPLICATION_JSON)
+                        .content("""
+                                {"idFornecedor":%d,"idEmpresa":%d,"idPlanoContas":"9.00.000",
+                                 "dataLancamento":"2026-07-30T12:00:00Z","dataVencimento":"2026-08-15T12:00:00Z",
+                                 "dataPagamento":"2026-08-10T12:00:00Z","valorPagar":310.00,"valorPago":310.00,
+                                 "origemPagamento":"CAIXA"}
+                                """.formatted(base.idFornecedor(), base.idEmpresa())))
+                .andExpect(status().isOk());
+
+        String status = mvc.perform(get("/api/v1/caixa/status").header("Authorization", "Bearer " + base.token()))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        long idCaixa = ((Number) JsonPath.read(status, "$.idCaixa")).longValue();
+        long idCarteira = ((Number) JsonPath.read(status, "$.idCarteira")).longValue();
+
+        mvc.perform(get("/api/v1/caixa/fechamento/" + idCaixa + "/carteiras/" + idCarteira + "/lancamentos")
+                        .header("Authorization", "Bearer " + base.token()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.tipoOperacao == 'DEBITO_CAIXA')].origem")
+                        .value("Conta a pagar nº " + idContaPagar));
+    }
+
     /** Sem caixa aberto não dá pra pagar em dinheiro — mesma convenção do PDV/Recebimento. */
     @Test
     void baixaEmDinheiroSemCaixaAbertoEhRejeitada() throws Exception {

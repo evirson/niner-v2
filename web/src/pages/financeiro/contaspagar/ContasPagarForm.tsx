@@ -1,6 +1,7 @@
 import { useEffect, useState, type FocusEvent, type FormEvent, type KeyboardEvent } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useParams } from 'react-router-dom'
+import AberturaCaixaModal from '../../../components/AberturaCaixaModal'
 import AjudaDaTela from '../../../components/AjudaDaTela'
 import { BotaoFecharTela } from '../../../components/BotaoFecharTela'
 import ConfirmarSalvarModal from '../../../components/ConfirmarSalvarModal'
@@ -18,6 +19,7 @@ import {
   type ContaPagarFormState,
   type OrigemPagamento,
 } from '../../../lib/contasPagar'
+import { buscarStatusCaixa } from '../../../lib/caixa'
 import { listarContasCorrente } from '../../../lib/contaCorrente'
 import { hojeISO } from '../../../lib/datas'
 import { listarEmpresasPermitidas } from '../../../lib/empresas'
@@ -72,6 +74,14 @@ export default function ContasPagarForm({ somenteLeitura = false }: { somenteLei
   })
 
   const { data: empresas } = useQuery({ queryKey: ['empresas-permitidas'], queryFn: listarEmpresasPermitidas })
+  // Baixa em dinheiro exige caixa aberto (ContaPagarService.sincronizarMovimentoDeDinheiro, 400
+  // se não houver). Até 2026-08-15 esta tela só mostrava o erro e deixava o operador se virar —
+  // sair, abrir o caixa noutra tela e refazer a baixa. Agora oferece a abertura aqui mesmo, igual
+  // PDV e Recebimento de Crediário. Diferença deliberada: lá o popup bloqueia a tela inteira na
+  // entrada (nada se faz sem caixa); aqui só aparece quando o operador escolhe "Caixa da loja",
+  // porque pagar pela conta corrente — ou só editar a conta — não precisa de caixa nenhum.
+  const { data: statusCaixa } = useQuery({ queryKey: ['caixa-status'], queryFn: buscarStatusCaixa })
+  const precisaAbrirCaixa = !somenteLeitura && form.origemPagamento === 'CAIXA' && statusCaixa != null && !statusCaixa.aberto
   // Contas correntes ativas, para a baixa em banco (2026-08-14). `tamanho: 200` porque o seletor
   // é um <select> simples — o tenant típico tem poucas contas, mas o limite evita o corte
   // silencioso já visto em outras telas (feedback "select truncado por paginação").
@@ -449,6 +459,16 @@ export default function ContasPagarForm({ somenteLeitura = false }: { somenteLei
             validarEEnviar()
           }}
           aoCancelar={() => setConfirmarSalvarAberto(false)}
+        />
+      )}
+
+      {/* "Voltar" aqui NÃO sai da tela (diferente do PDV/Recebimento de Crediário): só desfaz a
+          escolha da origem, devolvendo o operador ao formulário — pagar pela conta corrente
+          continua sendo uma saída legítima, e ele pode não querer abrir o caixa agora. */}
+      {precisaAbrirCaixa && (
+        <AberturaCaixaModal
+          aoAbrir={() => queryClient.invalidateQueries({ queryKey: ['caixa-status'] })}
+          aoVoltar={() => setForm((f) => ({ ...f, origemPagamento: '' }))}
         />
       )}
 

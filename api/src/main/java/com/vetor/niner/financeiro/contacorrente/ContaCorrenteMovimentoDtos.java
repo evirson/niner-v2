@@ -31,6 +31,14 @@ public final class ContaCorrenteMovimentoDtos {
             @Size(max = 1000) String observacao) {
     }
 
+    /**
+     * {@code idContaPagar} (2026-08-15) só vem preenchido nos movimentos **gerados
+     * automaticamente** pela baixa de uma conta a pagar
+     * ({@code ContaPagarService.sincronizarMovimentoDeDinheiro}) — lançamento digitado nesta tela
+     * sempre traz {@code null}. É o que permite a tela sinalizar a origem na grid e não oferecer
+     * editar/excluir num lançamento que pertence a outra tela (ver {@code
+     * ContaCorrenteMovimentoService.exigirLancamentoManual}).
+     */
     public record ContaCorrenteMovimentoResponse(
             long localizador,
             String idContaCorrente,
@@ -43,6 +51,7 @@ public final class ContaCorrenteMovimentoDtos {
             boolean compensado,
             BigDecimal valor,
             String observacao,
+            Long idContaPagar,
             OffsetDateTime criadoEm,
             OffsetDateTime atualizadoEm) {
     }

@@ -85,6 +85,22 @@ class ContaCorrenteMovimentoCrudTest {
                 .assertThat(result.getResponse().getStatus()).isIn(201, 409));
     }
 
+    /**
+     * Marca um lançamento como se tivesse sido gerado pela baixa de uma conta a pagar — é o que
+     * {@code ContaPagarService.sincronizarMovimentoDeDinheiro} faz ao gravar o débito. Feito por
+     * SQL direto de propósito: o que está sendo testado é o guard desta tela sobre um movimento
+     * com {@code id_conta_pagar}, não o fluxo da baixa (esse tem cobertura própria em
+     * {@code ContaPagarCrudTest}).
+     */
+    private void marcarComoBaixaDeContaPagar(long idTenant, long localizador, long idContaPagar) throws SQLException {
+        try (Connection c = DriverManager.getConnection(postgres.getJdbcUrl(), "niner_app", "dev_app");
+             Statement st = c.createStatement()) {
+            st.execute("SET app.id_tenant = " + idTenant);
+            st.executeUpdate("UPDATE conta_corrente_movimento SET id_conta_pagar = " + idContaPagar
+                    + " WHERE localizador = " + localizador);
+        }
+    }
+
     private long criarMovimento(String token, String numeroDocumento, String creditoDebito, String valor) throws Exception {
         String resp = mvc.perform(post("/api/v1/contas-corrente-movimento").header("Authorization", "Bearer " + token)
                         .contentType(APPLICATION_JSON)
@@ -315,5 +331,56 @@ class ContaCorrenteMovimentoCrudTest {
         mvc.perform(get("/api/v1/contas-corrente-movimento").header("Authorization", "Bearer " + tokenB))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.totalItens").value(0));
+    }
+
+    /**
+     * Regressão (2026-08-15): o movimento gerado pela baixa de uma conta a pagar não é digitação
+     * manual — é a contrapartida de um pagamento registrado noutra tela. Editar/excluir por aqui
+     * descasava o extrato da conta a pagar **em silêncio** (a baixa continuava em
+     * {@code contas_pagar}, mas o dinheiro sumia do banco), e como {@code id_conta_pagar} foi
+     * criado sem FK de propósito, o banco também não impedia. Agora recusa com 409 e aponta a
+     * tela certa; o lançamento continua intacto.
+     */
+    @Test
+    void movimentoGeradoPelaBaixaDeContaPagarNaoPodeSerEditadoNemExcluido() throws Exception {
+        String token = assinarNovoTenant("baixa-automatica");
+        prepararContaEPlano(token);
+        long localizador = criarMovimento(token, "DOC-BAIXA-AUTO", "D", "150.00");
+        marcarComoBaixaDeContaPagar(extrairIdTenant(token), localizador, 4321L);
+
+        mvc.perform(get("/api/v1/contas-corrente-movimento/" + localizador).header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.idContaPagar").value(4321));
+
+        mvc.perform(put("/api/v1/contas-corrente-movimento/" + localizador).header("Authorization", "Bearer " + token)
+                        .contentType(APPLICATION_JSON)
+                        .content("""
+                                {"idContaCorrente":"CC-1","idPlanoContas":"9.00.000","dataMovimento":"2026-07-30T10:00:00Z",
+                                 "numeroDocumento":"DOC-BAIXA-AUTO","creditoDebito":"D","valor":999.00}
+                                """))
+                .andExpect(status().isConflict());
+
+        mvc.perform(delete("/api/v1/contas-corrente-movimento/" + localizador).header("Authorization", "Bearer " + token))
+                .andExpect(status().isConflict());
+
+        // Nada foi alterado nem apagado pela tentativa recusada.
+        mvc.perform(get("/api/v1/contas-corrente-movimento/" + localizador).header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.valor").value(150.00));
+    }
+
+    /** Lançamento digitado nesta tela continua editável/excluível — o guard acima é estreito. */
+    @Test
+    void movimentoManualContinuaSemVinculoDeContaPagar() throws Exception {
+        String token = assinarNovoTenant("manual-sem-vinculo");
+        prepararContaEPlano(token);
+        long localizador = criarMovimento(token, "DOC-MANUAL", "C", "60.00");
+
+        mvc.perform(get("/api/v1/contas-corrente-movimento/" + localizador).header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.idContaPagar").doesNotExist());
+
+        mvc.perform(delete("/api/v1/contas-corrente-movimento/" + localizador).header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk());
     }
 }

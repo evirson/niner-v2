@@ -376,7 +376,7 @@ public class CaixaService {
 
         lancamentos.addAll(jdbc.sql("""
                         SELECT cd.criado_em, cd.tipo_operacao::text AS tipo_operacao, cd.credito_debito::text AS credito_debito,
-                               cd.valor, cd.id_venda, cd.id_lote_recebimento
+                               cd.valor, cd.id_venda, cd.id_lote_recebimento, cd.id_conta_pagar
                         FROM caixa_detalhe cd
                         WHERE cd.id_tenant = plataforma.tenant_atual() AND cd.id_caixa = ? AND cd.id_carteira = ?
                         ORDER BY cd.criado_em
@@ -385,18 +385,28 @@ public class CaixaService {
                 .query((rs, n) -> new LancamentoCarteiraResponse(
                         rs.getObject("criado_em", OffsetDateTime.class), rs.getString("tipo_operacao"),
                         rs.getString("credito_debito"), rs.getBigDecimal("valor"),
-                        origem(getLongOuNulo(rs, "id_venda"), getLongOuNulo(rs, "id_lote_recebimento"))))
+                        origem(getLongOuNulo(rs, "id_venda"), getLongOuNulo(rs, "id_lote_recebimento"),
+                                getLongOuNulo(rs, "id_conta_pagar"))))
                 .list());
 
         return lancamentos;
     }
 
-    /** Recebimento de crediário grava os dois ({@code id_venda} da parcela original + {@code
-     *  id_lote_recebimento} do pagamento) — prioriza o lote, que é o evento de fato aconteceu
-     *  hoje no caixa; venda pura (à vista/débito/crédito) só tem {@code id_venda}. */
-    private static String origem(Long idVenda, Long idLoteRecebimento) {
+    /**
+     * Recebimento de crediário grava os dois ({@code id_venda} da parcela original + {@code
+     * id_lote_recebimento} do pagamento) — prioriza o lote, que é o evento que de fato aconteceu
+     * hoje no caixa; venda pura (à vista/débito/crédito) só tem {@code id_venda}.
+     *
+     * <p>{@code id_conta_pagar} (2026-08-15) é a saída de dinheiro da baixa de uma conta a pagar
+     * ({@code DEBITO_CAIXA}, ver {@code ContaPagarService.sincronizarMovimentoDeDinheiro}). Ela
+     * sempre entrou no valor esperado da conferência — é um débito, reduz o esperado —, mas o
+     * drill-down mostrava origem "—" porque nem o SELECT lia a coluna, nem este método a conhecia:
+     * quem conferisse uma divergência via uma saída sem explicação nenhuma.
+     */
+    private static String origem(Long idVenda, Long idLoteRecebimento, Long idContaPagar) {
         if (idLoteRecebimento != null) return "Recebimento nº " + idLoteRecebimento;
         if (idVenda != null) return "Venda nº " + idVenda;
+        if (idContaPagar != null) return "Conta a pagar nº " + idContaPagar;
         return "—";
     }
 

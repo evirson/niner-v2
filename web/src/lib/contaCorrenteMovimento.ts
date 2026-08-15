@@ -16,6 +16,10 @@ export interface ContaCorrenteMovimento {
   compensado: boolean
   valor: number
   observacao: string | null
+  /** Preenchido só nos movimentos gerados pela baixa de uma conta a pagar (2026-08-15) — esses
+   *  não são editáveis nem excluíveis por esta tela; a alteração é feita na conta a pagar, e o
+   *  movimento acompanha. `null` em lançamento digitado aqui. */
+  idContaPagar: number | null
   criadoEm: string
   atualizadoEm: string
 }

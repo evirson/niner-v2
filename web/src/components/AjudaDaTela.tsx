@@ -433,9 +433,11 @@ const CONTEUDOS: Record<string, ConteudoAjuda> = {
     passos: [
       'Use a busca por número do documento, ou filtre por período, empresa, plano de contas, conta corrente e "Compensado".',
       'Clique no ícone verde para visualizar, no azul para editar, ou no vermelho para excluir.',
+      'Lançamento marcado como "Baixa automática" veio do pagamento de uma conta a pagar, não da digitação aqui — por isso não tem os ícones de editar e excluir.',
     ],
     errosComuns: [
       'Não encontro um lançamento: confira os filtros — período, empresa, plano de contas, conta corrente e "Compensado" combinam entre si (todos precisam bater).',
+      'Não consigo editar ou excluir um lançamento: se ele está marcado como "Baixa automática", a alteração é feita na conta a pagar que o gerou (Financeiro › Contas a Pagar / Pagas) — o movimento da conta corrente acompanha sozinho.',
     ],
     urlVideo: null,
   },
@@ -480,7 +482,7 @@ const CONTEUDOS: Record<string, ConteudoAjuda> = {
     ],
     errosComuns: [
       'Não acho "Pagar" na grid: a baixa é feita editando a conta (ícone azul) e preenchendo os campos de pagamento.',
-      'Para pagar em dinheiro é preciso ter caixa aberto — a saída é lançada no seu caixa do dia. Sem caixa aberto, pague pela conta corrente ou abra o caixa antes.',
+      'Para pagar em dinheiro é preciso ter caixa aberto — a saída é lançada no seu caixa do dia. Se não houver caixa aberto, ao escolher "Caixa da loja" a própria tela abre o formulário de abertura; se preferir, clique em Voltar e pague pela conta corrente.',
       'Se você desfizer a baixa (apagar a data de pagamento), a saída de dinheiro correspondente é apagada junto — o saldo volta ao que era. O mesmo vale ao excluir a conta: a saída do caixa ou do banco vai junto, não fica sobrando.',
       '"Esta operação mexe no caixa nº X, que já está fechado": o pagamento saiu de um caixa que já foi encerrado. Peça ao administrador para reabrir aquele caixa em Frente de Loja › Caixa › Fechamento de Caixa, refaça a alteração ou a exclusão, e feche o caixa de novo.',
       'Contas pagas antes de 14/08/2026 não têm essa informação de origem e continuam editáveis normalmente; elas só não aparecem no Fluxo de Caixa realizado.',

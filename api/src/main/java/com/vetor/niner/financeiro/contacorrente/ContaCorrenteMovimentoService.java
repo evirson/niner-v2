@@ -1,5 +1,6 @@
 package com.vetor.niner.financeiro.contacorrente;
 
+import com.vetor.niner.comum.web.ConflitoDadosException;
 import com.vetor.niner.financeiro.contacorrente.ContaCorrenteMovimentoDtos.ContaCorrenteMovimentoRequest;
 import com.vetor.niner.financeiro.contacorrente.ContaCorrenteMovimentoDtos.ContaCorrenteMovimentoResponse;
 import com.vetor.niner.financeiro.contacorrente.ContaCorrenteMovimentoDtos.ExclusaoContaCorrenteMovimentoResponse;
@@ -147,6 +148,7 @@ public class ContaCorrenteMovimentoService {
     @Transactional
     public ContaCorrenteMovimentoResponse atualizar(long localizador, ContaCorrenteMovimentoRequest req) {
         validar(req);
+        exigirLancamentoManual(localizador, "alterado");
         try {
             int linhas = jdbc.sql("""
                             UPDATE conta_corrente_movimento SET
@@ -172,6 +174,7 @@ public class ContaCorrenteMovimentoService {
     /** Sempre exclui de verdade — lançamento não tem {@code ativo}, nada referencia esta tabela. */
     @Transactional
     public ExclusaoContaCorrenteMovimentoResponse excluir(long localizador) {
+        exigirLancamentoManual(localizador, "excluído");
         int linhas = jdbc.sql(
                         "DELETE FROM conta_corrente_movimento WHERE id_tenant = plataforma.tenant_atual() AND localizador = ?")
                 .param(localizador).update();
@@ -187,6 +190,43 @@ public class ContaCorrenteMovimentoService {
         }
     }
 
+    /**
+     * Esta tela é o extrato **manual** (docs/telas/conta-corrente-movimento.md): o lançamento é
+     * editável/excluível justamente por ser digitação sujeita a erro de captura. Desde 2026-08-14,
+     * porém, a baixa de uma conta a pagar com origem "conta corrente" grava aqui um débito
+     * automático, marcado por {@code id_conta_pagar} ({@code
+     * ContaPagarService.sincronizarMovimentoDeDinheiro}) — e esse não é digitação, é a
+     * contrapartida de um pagamento registrado noutra tela.
+     *
+     * <p>Editar ou excluir esse movimento por aqui descasava o extrato da conta a pagar que lhe
+     * deu origem, **em silêncio**: a baixa continuava registrada em {@code contas_pagar}, mas o
+     * dinheiro sumia (ou mudava de valor) no banco. Como {@code id_conta_pagar} foi criado **sem
+     * FK de propósito** (V028:90), o banco também não impedia nada.
+     *
+     * <p>Recusa com 409 e ensina a saída, mesmo espírito de {@code
+     * CaixaService.exigirCaixaAbertoParaDesfazer}: quem quer mudar esse valor mexe na conta a
+     * pagar, e o movimento acompanha pela estratégia "apaga e regrava" de lá. Não bloqueia o
+     * caminho da própria baixa — {@code ContaPagarService} apaga/regrava por SQL direto, sem
+     * passar por este serviço.
+     */
+    private void exigirLancamentoManual(long localizador, String acao) {
+        long idContaPagar = jdbc.sql("""
+                        SELECT COALESCE(id_conta_pagar, 0) FROM conta_corrente_movimento
+                         WHERE id_tenant = plataforma.tenant_atual() AND localizador = ?
+                        """)
+                .param(localizador)
+                .query(Long.class)
+                .optional()
+                .orElse(0L);
+
+        if (idContaPagar != 0) {
+            throw new ConflitoDadosException(
+                    "Este lançamento foi gerado pela baixa da conta a pagar nº " + idContaPagar
+                            + " e não pode ser " + acao + " por aqui. Altere ou desfaça o pagamento em "
+                            + "Financeiro › Contas a Pagar / Pagas — o movimento da conta corrente acompanha.");
+        }
+    }
+
     private static String trimOuNulo(String s) {
         return (s == null || s.isBlank()) ? null : s.trim();
     }
@@ -195,7 +235,7 @@ public class ContaCorrenteMovimentoService {
             SELECT m.localizador, m.id_conta_corrente, cc.descricao AS descricao_conta_corrente,
                    m.id_plano_contas, pc.descricao AS descricao_plano_contas, m.data_movimento,
                    m.numero_documento, m.credito_debito::text AS credito_debito, m.compensado, m.valor,
-                   m.observacao, m.criado_em, m.atualizado_em
+                   m.observacao, m.id_conta_pagar, m.criado_em, m.atualizado_em
             FROM conta_corrente_movimento m
             JOIN conta_corrente cc ON cc.id_tenant = m.id_tenant AND cc.id_conta_corrente = m.id_conta_corrente
             JOIN cfg_plano_contas pc ON pc.id_tenant = m.id_tenant AND pc.id_plano_contas = m.id_plano_contas
@@ -214,7 +254,16 @@ public class ContaCorrenteMovimentoService {
                 rs.getBoolean("compensado"),
                 rs.getBigDecimal("valor"),
                 rs.getString("observacao"),
+                getLongOuNulo(rs, "id_conta_pagar"),
                 rs.getObject("criado_em", OffsetDateTime.class),
                 rs.getObject("atualizado_em", OffsetDateTime.class));
+    }
+
+    /** {@code rs.getObject(coluna, Long.class)} não é confiável pra coluna {@code integer} no
+     *  driver do Postgres — {@code getLong}+{@code wasNull} é o jeito seguro de ler uma coluna
+     *  {@code integer} nullable como {@code Long} (mesmo padrão de {@code CaixaService}). */
+    private static Long getLongOuNulo(ResultSet rs, String coluna) throws SQLException {
+        long valor = rs.getLong(coluna);
+        return rs.wasNull() ? null : valor;
     }
 }

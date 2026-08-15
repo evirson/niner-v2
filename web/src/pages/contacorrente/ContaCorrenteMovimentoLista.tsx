@@ -264,6 +264,19 @@ export default function ContaCorrenteMovimentoLista() {
                     >
                       <IconeOlho />
                     </Link>
+                    {/* Movimento gerado pela baixa de uma conta a pagar (2026-08-15) não se edita
+                        nem se exclui por aqui — a alteração é na conta a pagar, e o movimento
+                        acompanha ("apaga e regrava"). O backend também recusa (409); esconder as
+                        ações é só pra não oferecer um caminho que vai falhar. */}
+                    {m.idContaPagar !== null ? (
+                      <span
+                        className="badge badge-inativo"
+                        title={`Gerado pela baixa da conta a pagar nº ${m.idContaPagar}. Para alterar ou desfazer, use Financeiro › Contas a Pagar / Pagas.`}
+                      >
+                        Baixa automática
+                      </span>
+                    ) : (
+                      <>
                     <Link
                       className="acao-icone acao-editar"
                       to={`/contas-corrente-movimento/${m.localizador}`}
@@ -282,6 +295,8 @@ export default function ContaCorrenteMovimentoLista() {
                     >
                       <IconeExcluir />
                     </button>
+                      </>
+                    )}
                   </td>
                 </tr>
               ))}
