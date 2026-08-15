@@ -1,7 +1,7 @@
 # Progresso do Projeto — niner-v2
 
 Registro cronológico das decisões e entregas. Atualizar a cada marco relevante.
-**Última atualização:** 2026-08-14
+**Última atualização:** 2026-08-15
 
 ---
 
@@ -406,6 +406,40 @@ Movimentação de Conta Corrente) que ainda não tinham migrado pro `SeletorPlan
 ---
 
 ## Linha do tempo
+
+### 2026-08-15 — "Próximos passos" alinhado ao código + teste de privilégios de `niner_app`
+
+Rescaldo da auditoria de 08-14, que varreu spec, 40 telas e 86 memórias mas **não** a seção
+"Próximos passos sugeridos" deste próprio arquivo — que acumulava exatamente o erro catalogado
+lá (afirmar que algo não existe quando já existe). Corrigido:
+
+- **Galeria de fotos** deixou de ser *"nenhuma linha de Java escrita"* — implementada em 07-24
+  (`ProdutoImagemController/Service`, `comum/armazenamento`, `GaleriaImagensProduto.tsx`).
+- **Variação/SKU** deixou de ser *"sem domínio nem tela"*: o `ProdutoBarraService` existe desde
+  08-05 e o `sku` já sai de `gerar_ean13_interno()` — falta só a tela. O aviso *"⚠️ Evirson:
+  deve chamar a função"* saiu (já chama; a regra vive no `CLAUDE.md`).
+- **`POST /api/v1/estoque/movimentacoes`** saiu da lista: **nunca existiu** e não deve existir —
+  o ledger é alimentado pelas rotinas de negócio (PDV, Transferência, Balanço, Devolução,
+  Entrada), não por um endpoint genérico.
+- **Marketplaces viraram o item 1.** A lista omitia justamente o que o "Estado atual" no topo
+  deste arquivo aponta como a lacuna central do produto.
+- Numeração corrigida (pulava o 4: ia 1, 2, 3, 5, 6).
+- **"Como subir o ambiente"** era uma segunda cópia, divergente e de outro SO (Colima, `lsof`) —
+  removida em favor do `CLAUDE.md` §Build / run, fonte única.
+
+**Teste novo — `PrivilegiosNinerAppTest` (6 testes).** Fecha o buraco de verificação registrado
+em 08-12: `TestcontainersConfiguration` cria o container sem `withUsername`, então o
+`@ServiceConnection` liga o datasource da aplicação ao **superusuário** do Testcontainers — e
+todo bug de `GRANT`/`REVOKE`/RLS fica invisível para os outros testes (foi assim que o
+Cancelamento de Entrada passou verde sem o `GRANT UPDATE` de coluna de que precisava). O teste
+conecta cru como `niner_app` (mesmo padrão do `RlsIsolamentoTest`) e afirma os invariantes:
+sem `BYPASSRLS`/`SUPERUSER`; `produto_movimento_mestre` imutável **exceto** as 4 colunas de
+cancelamento (o grant de coluna de V024); `cfg_ean_gerador` inacessível mas
+`gerar_ean13_interno()` executável (`SECURITY DEFINER`); NCM só leitura; trilha de impersonação
+encerrável mas não apagável. Não semeia dado — privilégio no Postgres é checado antes das linhas,
+então `DELETE` em tabela vazia e `UPDATE ... WHERE false` bastam. **Não substitui** separar as
+credenciais do datasource, que continua na lista de próximos passos (item 6) por risco de quebrar
+a suíte.
 
 ### 2026-08-14 — Reabertura de Caixa + os 4 achados da auditoria, corrigidos
 
@@ -5916,26 +5950,32 @@ com autenticação JWT real protegendo o ERP.
 
 **Feito em 2026-07-21:** ✅ **padrão de tela de cadastro consolidado** (paginação por página + ordenação por coluna + ícones de ação + modo somente-leitura + configuração de campos por tenant + shell de altura travada + campos informativos de auditoria) e ✅ **segunda, terceira e quarta telas de domínio** — Funcionários (`cadastros.funcionario`), Plano de Contas (`cadastros.planocontas`, com `criado_em`/`atualizado_em` adicionados à V016) e Fornecedores (`cadastros.fornecedor`, com criação rápida de plano de contas embutida), todas construídas sobre esse padrão; ✅ **Parâmetros do Sistema** (`configuracao.geral`), primeira tela deliberadamente fora do padrão de cadastro (singleton por tenant, ADMIN-only).
 
-**Retomar — ordem sugerida:**
+**Retomar — ordem sugerida** (revisada em 2026-08-15 contra o código — o vertical slice de
+Produtos e o ledger de estoque saíram desta lista porque **foram concluídos**; ver a entrada de
+2026-08-15 na linha do tempo):
 
-1. **⭐ Completar o vertical slice de Produtos.** O CRUD de `produto` foi entregue em
-   2026-07-22 (`catalogo.produto`, ver linha do tempo); `docs/telas/produto.md` deixou
-   **variação e imagens explicitamente fora de escopo**. Falta:
-   - **Galeria de fotos (`produto_imagem`)** — object storage já **decidido e provisionado**
-     (ADR-013: Firebase/GCS, buckets criados e testados), mas **nenhuma linha de Java escrita**.
-     Ler `docs/infra/armazenamento-imagens.md` **antes de começar** — é o handoff, com TASK-A a
-     TASK-D e critérios de aceitação. Atenção à seção de credenciais: **a chave não vem pelo
-     git**, o próximo dev precisa de acesso concedido (o caminho recomendado dispensa arquivo
-     de chave).
-   - **Variação/SKU (`produto_barra`)** — schema pronto desde a V017, sem domínio nem tela.
-     **⚠️ Evirson:** `sku` **não** é campo digitado — é sempre gerado por
-     `gerar_ean13_interno()` (função SQL já pronta em V017, 2026-07-22, testada em
-     `EanGeradorTest`); `ProdutoBarraService.criar()` deve chamá-la explicitamente antes do
-     `INSERT`, sem criar gerador novo. Ver linha do tempo de 2026-07-22 e `CLAUDE.md` §Convenções.
-   - `uso_tenant.qtd_produtos` (enforcement R19).
-2. **Estoque:** `produto_estoque` (saldo/reserva) + movimentações (`POST /api/v1/estoque/movimentacoes`) → tela de estoque.
-3. **`admin/`** — backoffice da plataforma (lista/ficha de tenants R17, suspender/impersonar R18/R21).
-5. **Catálogo `ajuda_tela` na API** (R22) — hoje `AjudaDaTela` (`web/`) embute o conteúdo como fallback estático; falta o endpoint/tabela real (§3.3.10/§3.7.1 da spec).
-6. Decisões de negócio em aberto: D1 (preços), D3 (gateway), D5/D6/D8/D9/D10.
+1. **⭐ Integração com marketplaces** — é o **coração da visão original** (P1/P2, R3–R7) e a
+   lacuna central do produto hoje: `canais/`, `pedidos/`, `precos/` e `integracao/` seguem só com
+   `package-info.java`, sem nenhuma implementação de domínio. O schema está pronto desde
+   V020–V022 (`canal`, `anuncio`, `pedido`, `pedido_item`, `outbox_evento`, `webhook_recebido`).
+   Falta o adapter `CanalDeVenda` (anti-corruption layer por marketplace), o worker do outbox
+   (`@Scheduled` + `FOR UPDATE SKIP LOCKED`), a importação de pedido idempotente e o sync de
+   estoque/preço.
+2. **`admin/`** — backoffice da plataforma (lista/ficha de tenants R17, suspender/impersonar
+   R18/R21). O app React ainda não existe.
+3. **Tela de variação/SKU (`produto_barra`).** O **domínio existe** desde 2026-08-05 —
+   `ProdutoBarraService.obterOuCriar`, consumido por Emissão de Etiqueta, Entrada de Produtos e
+   Importação de Dados, com o `sku` sempre saindo de `gerar_ean13_interno()`
+   (`ProdutoBarraService.java:239,261`). O que falta é só a **tela** de listar/editar/excluir
+   variação — nenhuma existe hoje.
+4. `uso_tenant.qtd_produtos` (enforcement R19).
+5. **Catálogo `ajuda_tela` na API** (R22) — hoje `AjudaDaTela` (`web/`) embute o conteúdo como
+   fallback estático; falta o endpoint/tabela real (§3.7.1 da spec).
+6. **Credenciais do datasource nos testes** — `TestcontainersConfiguration` conecta a app como
+   superusuário do container, então `GRANT`/`REVOKE` e RLS ficam invisíveis para a suíte
+   (`PrivilegiosNinerAppTest` cobre os invariantes, mas não substitui a correção de fundo).
+7. Decisões de negócio em aberto: D1 (preços), D3 (gateway), D5/D6/D8/D9/D10.
 
-**Como subir o ambiente:** `docker compose up -d db && docker compose run --rm flyway` · API: `cd api && ./mvnw spring-boot:run` (ou `java -jar target/*.jar`) · fronts: `cd site && npm run dev` / `cd web && npm run dev`. Testes da API: `cd api && TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE=/var/run/docker.sock ./mvnw test` (Colima). ⚠️ Se a API der 401 no `/api/publico/**`, há instância velha presa na 8080 → `lsof -ti tcp:8080 | xargs kill -9`.
+**Como subir o ambiente:** ver **`CLAUDE.md`, seção "Build / run"** — fonte única. Esta seção
+mantinha uma cópia divergente e de outro sistema operacional (`TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE`
++ Colima, `lsof -ti tcp:8080`), removida em 2026-08-15.
