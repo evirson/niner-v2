@@ -140,15 +140,15 @@ soma com o `valorEsperado` mostrado na tela. `origem` prioriza `id_lote_recebime
 grava os dois; "Recebimento nº X" é o evento relevante daquele dia, não a venda original que
 gerou a parcela).
 
-> ⚠️ **Saída de dinheiro por Contas a Pagar (2026-08-14) — o drill-down não sabe nomear.** Desde
-> o Fluxo de Caixa, a baixa de uma conta a pagar em dinheiro grava um `caixa_detalhe` com
-> `tipo_operacao = 'DEBITO_CAIXA'`, `credito_debito = 'D'` e `id_conta_pagar` preenchido
-> (`ContaPagarService.java:198-206`). Ele **entra normalmente na conferência e no valor esperado**
-> da carteira do caixa (é um débito, reduz o esperado), mas o drill-down mostra `origem = "—"`:
-> a função `CaixaService.origem` (`api/src/main/java/com/vetor/niner/financeiro/caixa/CaixaService.java:386-390`)
-> só conhece `id_lote_recebimento` e `id_venda`, e o SELECT de `listarLancamentosDaCarteira`
-> (`:366-372`) nem lê a coluna `id_conta_pagar`. Pendência: ler `cd.id_conta_pagar` e devolver
-> "Conta a pagar nº N".
+> ✅ **Saída de dinheiro por Contas a Pagar — nomeada desde 2026-08-15.** A baixa de uma conta a
+> pagar em dinheiro grava um `caixa_detalhe` com `tipo_operacao = 'DEBITO_CAIXA'`,
+> `credito_debito = 'D'` e `id_conta_pagar` preenchido. Ela sempre **entrou na conferência e no
+> valor esperado** da carteira (é um débito, reduz o esperado), mas o drill-down mostrava
+> `origem = "—"` — nem o SELECT de `listarLancamentosDaCarteira` lia a coluna, nem
+> `CaixaService.origem` a conhecia, então quem conferisse uma divergência via uma saída sem
+> explicação nenhuma. Hoje o SELECT traz `cd.id_conta_pagar` e a origem sai como
+> **"Conta a pagar nº N"** (regressão coberta por
+> `ContaPagarCrudTest.drillDownDoFechamentoIdentificaASaidaComoContaAPagar`).
 
 ### Reabertura de caixa (2026-08-14) — ADMIN-only, com motivo obrigatório
 

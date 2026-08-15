@@ -131,6 +131,14 @@ comportamento **desta** tela:
   do usuário** — exige caixa aberto, mesma convenção do PDV/Recebimento) ou
   `conta_corrente_movimento` (débito). Antes disso, pagar uma conta **não movimentava dinheiro
   em lugar nenhum**, e por isso o fluxo de caixa realizado ficaria sem saídas.
+- **Sem caixa aberto, a tela abre o `AberturaCaixaModal` (2026-08-15)** assim que "Caixa da loja"
+  é escolhido — antes ela só devolvia o 400 e o operador tinha que sair, abrir o caixa noutra
+  tela e refazer a baixa. O popup aqui **não** é obrigatório-de-entrada como no PDV: "Voltar"
+  limpa a origem e devolve ao formulário, porque pagar pela conta corrente segue sendo uma saída
+  legítima.
+- **O movimento gerado é protegido na outra ponta:** a Movimentação de Conta Corrente não deixa
+  editar nem excluir um lançamento com `id_conta_pagar` (409) — a alteração é feita aqui, e o
+  movimento acompanha. Ver `docs/telas/conta-corrente-movimento.md`.
 - **Desfazer a baixa apaga o movimento** (vínculo `id_conta_pagar` nas duas tabelas). Trocar a
   origem ou corrigir o valor regrava — a estratégia é "apaga e regrava".
 - **Exceção deliberada:** conta que já estava paga **antes** desta mudança pode ser editada sem

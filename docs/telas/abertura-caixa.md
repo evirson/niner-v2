@@ -83,10 +83,15 @@ aberto — nenhum dos dois abre nada sozinho.
 > caixa aberto do usuário e, sem caixa aberto, devolve **400** ("Não há caixa aberto para
 > registrar o pagamento em dinheiro. Abra o caixa ou pague pela conta corrente.") —
 > `api/src/main/java/com/vetor/niner/financeiro/contaspagar/ContaPagarService.java:193-206`.
-> ⚠️ **Inconsistência de UX conhecida:** diferente do PDV e do Recebimento de Crediário, a tela de
-> Contas a Pagar **não abre o `AberturaCaixaModal`** — só mostra o erro e deixa o operador se
-> virar (sair da tela, abrir o caixa, voltar e refazer a baixa). Pendência: usar o mesmo popup das
-> outras duas rotinas.
+> ✅ **Resolvido em 2026-08-15.** A tela de Contas a Pagar passou a abrir o mesmo
+> `AberturaCaixaModal` — mas com um gatilho diferente, de propósito: no PDV/Recebimento o popup
+> bloqueia a tela inteira **na entrada** (nada se faz sem caixa); aqui ele só aparece quando o
+> operador escolhe **"Caixa da loja"** como origem do pagamento, porque pagar pela conta corrente
+> — ou só editar a conta — não precisa de caixa nenhum. Por isso o `aoVoltar` daquela tela
+> **limpa a origem e devolve o operador ao formulário**, em vez de navegar pra fora
+> (`ContasPagarForm.tsx`; o componente não decide isso, quem passa o `aoVoltar` decide).
+> ~~Inconsistência de UX conhecida: a tela de Contas a Pagar não abre o `AberturaCaixaModal` — só
+> mostra o erro e deixa o operador se virar.~~
 
 ### Fechamento de caixa
 

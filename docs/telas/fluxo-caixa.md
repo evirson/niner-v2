@@ -38,8 +38,9 @@ saiu o dinheiro**, e o sistema grava o movimento correspondente na mesma transa�
   própria conta a pagar, `data_movimento = data_pagamento`, `valor = valor_pago`).
 - **Caixa** → `caixa_detalhe` (`tipo_operacao = 'DEBITO_CAIXA'`, `credito_debito = 'D'`,
   `id_plano_contas` da conta, no caixa aberto do usuário). Exige caixa aberto, mesma convenção de
-  PDV/Recebimento de Crediário — mas, **diferente deles, a tela de Contas a Pagar ainda não abre o
-  popup `AberturaCaixaModal`**: sem caixa aberto ela só mostra o 400. Pendência de UX registrada em
+  PDV/Recebimento de Crediário — e, **desde 2026-08-15, a tela de Contas a Pagar também abre o
+  `AberturaCaixaModal`**, só que no momento em que o operador escolhe "Caixa da loja" (não na
+  entrada da tela, porque pagar pela conta corrente não precisa de caixa). Ver
   `docs/telas/abertura-caixa.md`.
 
 **Rastreabilidade e desfazer:** as duas tabelas ganham `id_conta_pagar` (nullable, **sem FK — de

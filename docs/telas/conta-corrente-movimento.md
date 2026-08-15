@@ -18,10 +18,23 @@ colateral automático de outra rotina.
 > (`ContaPagarService.sincronizarMovimentoDeDinheiro`,
 > `api/src/main/java/com/vetor/niner/financeiro/contaspagar/ContaPagarService.java:177-188`),
 > identificado por `id_conta_pagar` preenchido e observação "Pagamento da conta a pagar nº N".
-> A tela **não distingue** esses lançamentos dos manuais: eles aparecem na lista e podem ser
-> **editados ou excluídos sem nenhum aviso**, o que descasa o extrato da conta a pagar que lhe
-> deu origem (a baixa continua registrada em `contas_pagar`). Pendência conhecida: sinalizar a
-> origem na grid e bloquear/avisar na edição.
+> ✅ **Distinguidos e protegidos desde 2026-08-15.** Antes disso esses lançamentos apareciam
+> iguais aos manuais e podiam ser **editados ou excluídos sem nenhum aviso** — a baixa continuava
+> registrada em `contas_pagar` mas o dinheiro sumia (ou mudava de valor) no banco, e como
+> `id_conta_pagar` foi criado **sem FK de propósito** o banco também não impedia nada. Agora:
+> - a resposta da API traz `idContaPagar` (nulo em lançamento manual);
+> - a grid mostra o badge **"Baixa automática"** no lugar dos ícones de editar/excluir, com o
+>   número da conta a pagar no `title`;
+> - `atualizar()`/`excluir()` recusam com **409** e apontam a saída — *"Este lançamento foi gerado
+>   pela baixa da conta a pagar nº N … Altere ou desfaça o pagamento em Financeiro › Contas a
+>   Pagar / Pagas — o movimento da conta corrente acompanha."* (`exigirLancamentoManual`, mesmo
+>   espírito de `CaixaService.exigirCaixaAbertoParaDesfazer`).
+>
+> O guard é estreito e **não atrapalha a própria baixa**: `ContaPagarService` apaga e regrava o
+> movimento por SQL direto, sem passar por este serviço. Lançamento digitado aqui continua
+> editável e excluível como sempre (`ContaCorrenteMovimentoCrudTest`,
+> `movimentoGeradoPelaBaixaDeContaPagarNaoPodeSerEditadoNemExcluido` e
+> `movimentoManualContinuaSemVinculoDeContaPagar`).
 
 ## Regras de negócio
 
