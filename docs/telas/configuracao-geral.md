@@ -36,9 +36,11 @@ que já é ADMIN-only.
    devolve 400 (`api/src/main/java/com/vetor/niner/configuracao/geral/ConfiguracaoGeralDtos.java:22-34`).
 4. **Item de menu condicional ao papel** — diferente das telas de cadastro (sempre visíveis
    no menu, com sub-rotas ADMIN-only como "configuração de campos"), aqui a **tela inteira** é
-   ADMIN-only, então o próprio item de menu ("Parâmetros do Sistema") só aparece para ADMIN
-   (`Layout.tsx`, `NAV_ADMIN`) — evita mostrar um link que vai redirecionar o OPERADOR de
-   volta ao Painel.
+   ADMIN-only, então o próprio item de menu ("Parâmetros do Sistema") só aparece para ADMIN —
+   flag `adminOnly` na árvore `web/src/lib/menu.ts`, filtrada por `filtrarPorPapel` — evita
+   mostrar um link que vai redirecionar o OPERADOR de volta ao Painel.
+   *(Corrigido em 2026-08-15: citava `Layout.tsx`/`NAV_ADMIN`, que não existem desde que o menu
+   virou dado em `menu.ts`, 2026-08-01 — ver `docs/telas/menu-principal.md`.)*
 5. **Ícone próprio, deliberadamente diferente da engrenagem (⚙)** — `IconeEngrenagem` já
    significa "configurar campos desta tela" em cada cadastro; usar o mesmo ícone aqui
    confundiria as duas ideias. Ícone novo: `IconeParametros` (sliders/ajustes).

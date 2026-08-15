@@ -242,7 +242,7 @@ Nenhum.
 - ~~**Edição/estorno de um recebimento já efetivado** — sem tela pra desfazer; `contas_receber`
   fica com `data_recebimento` preenchida permanentemente (diferente da Transferência, que ganhou
   exclusão em 2026-07-29 — aqui não foi pedido).~~ — **superado**: existe a tela irmã **Estorno de
-  Recebimento de Crediário** (`web/src/pages/financeiro/EstornoRecebimentoCrediario.tsx`,
+  Recebimento de Crediário** (`web/src/pages/recebimentocrediario/EstornoRecebimentoCrediario.tsx`,
   `RecebimentoCrediarioController.java:77`, spec `docs/telas/estorno-recebimento-crediario.md`),
   que reverte o **lote inteiro** do recebimento — não a edição parcial, que segue fora de escopo.
 - **Captura de número de autorização de cartão** — `contas_receber_detalhe.numero_autorizacao`

@@ -35,9 +35,14 @@ O preço e a variação de cada item são **sempre resolvidos no servidor** a pa
   `produto_movimento_detalhe.id_funcionario` sempre preenchidos — não existe mais venda de
   balcão anônima nem vínculo pendente `usuario`↔`funcionario`: o vendedor é escolhido
   diretamente do cadastro de funcionários a cada venda, sem depender de login.
-- **Uma única empresa.** Hoje `tenant 1:1 empresa` (V014, Q6) — o backend resolve a empresa
-  automaticamente (`SELECT id_empresa FROM empresa WHERE id_tenant = tenant_atual() LIMIT 1`,
-  mesmo padrão já usado em `FuncionarioService`), sem seletor de loja na tela.
+- **Sem seletor de loja na tela.** A venda é sempre gravada na **empresa ativa da sessão**, lida
+  do claim `eid` do JWT (`PdvVendaService.java:94`) — escolhida no login quando o usuário tem
+  acesso a mais de uma empresa (`docs/telas/login-empresa.md`).
+  ⚠️ **Corrigido em 2026-08-15:** este item dizia que o backend resolvia a empresa com
+  `SELECT id_empresa FROM empresa WHERE id_tenant = tenant_atual() LIMIT 1`. Isso descrevia o
+  comportamento de **antes de 2026-07-28** e contradizia `login-empresa.md`, que registra o
+  retrofit do `PdvVendaService` para o claim `eid` e é explícita: *"nunca reintroduzir a busca por
+  'a primeira empresa do tenant'"*.
 - **Sem preço de oferta nem desconto manual por item.** Vende sempre por `produto.preco_venda`;
   `produto_oferta` grava `false`. (`valor_desconto`/`valor_acrescimo` **não** gravam mais `0` —
   ver "Split-tender + desconto da venda (F5)" abaixo, revisão de 2026-07-28: eles recebem o

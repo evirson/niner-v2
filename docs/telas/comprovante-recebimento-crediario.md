@@ -26,7 +26,7 @@ outro).
    imprimir, precisa ir em Estorno de Crediário pra achar o lote de novo (a visualização de lá
    não tem os botões de impressão, é só leitura das parcelas)~~ — **superado**: existe a tela
    **Reimpressão de Comprovante de Recebimento**
-   (`web/src/pages/financeiro/ReimpressaoRecebimentoCrediario.tsx`, item de menu em
+   (`web/src/pages/recebimentocrediario/ReimpressaoRecebimentoCrediario.tsx`, item de menu em
    `web/src/lib/menu.ts:162`), que localiza o lote e reabre o mesmo comprovante com os botões de
    Imprimir/PDF/WhatsApp.
 3. **Largura real (42 colunas), não a tabela larga do primeiro mockup** — o mockup original
