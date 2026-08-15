@@ -12,7 +12,7 @@ Registro cronológico das decisões e entregas. Atualizar a cada marco relevante
 > crediário, contas a pagar/receber, conta corrente, **DRE e Fluxo de Caixa**), relatórios,
 > etiquetas e importação/exportação. **Falta o coração da visão original**: integração com
 > marketplaces (`canais`/`pedidos`/`precos`/`integracao` seguem sem implementação de domínio) e o
-> app `admin/` (backoffice da plataforma). **500/500 testes de backend verdes, `tsc -b` limpo.**
+> app `admin/` (backoffice da plataforma). **509/509 testes de backend verdes, `tsc -b` limpo.**
 >
 > **Pendências adiadas pelo dono do produto (não são esquecimento):** calibragem de impressão
 > térmica da **Guia de Transferência** e do **Fechamento de Caixa** — papeleta de venda,
@@ -161,6 +161,20 @@ primeira impressão em bobina térmica real mostrou que a **papeleta de venda sa
 42 colunas com item em 2 linhas, e a calibragem de impressão (largura imprimível, negrito,
 Consolas) foi aplicada também ao comprovante de crediário — o vale-mercadoria herdou sozinho.
 **500/500 testes de backend verdes (2026-08-14); `tsc -b` limpo.**
+
+**Sessão de 2026-08-15 — leitura integral da documentação, e o rescaldo dela.** Dia sem feature
+nova: o trabalho saiu todo de ler a documentação inteira (spec, plano de negócio, `docs/infra/`,
+as **40** specs de `docs/telas/` e as 110 memórias) e corrigir o que não batia com o código.
+Removido o `docs/TREINAMENTO_IA_ENTRADA.md` (2.318 linhas catalogando ~30 padrões de extração de
+cor/tamanho de NF-e por fornecedor — **nunca implementado**: o código usa duas heurísticas
+genéricas; preservado em `c2a0c80`). Nasceu o **`PrivilegiosNinerAppTest`**, que fecha o ponto
+cego de `GRANT`/`REVOKE`/RLS registrado em 08-12 (a suíte roda como superusuário do container, não
+como `niner_app`). A seção "Próximos passos" do próprio `PROGRESSO.md` — que a auditoria de 08-14
+não cobriu — foi alinhada ao código e passou a ter **marketplaces como item 1**. E as **três
+pendências que a baixa de conta a pagar (08-14) tinha aberto nas telas que leem dinheiro** foram
+fechadas: Contas a Pagar passou a oferecer a abertura de caixa, o drill-down do Fechamento de
+Caixa passou a nomear a saída ("Conta a pagar nº N") e o extrato manual de conta corrente passou a
+**recusar** edição/exclusão do movimento gerado pela baixa. **509/509 testes verdes.**
 
 | Artefato | Situação |
 |---|---|
@@ -406,6 +420,80 @@ Movimentação de Conta Corrente) que ainda não tinham migrado pro `SeletorPlan
 ---
 
 ## Linha do tempo
+
+### 2026-08-15 — As 3 pendências que a baixa de conta a pagar tinha aberto
+
+A mudança de 08-14 (baixa de Contas a Pagar passou a gravar `caixa_detalhe`/
+`conta_corrente_movimento`) deixou três telas que **leem** esse dinheiro sem acompanhar. As
+próprias specs registravam as três como pendência conhecida — fechadas agora.
+
+**1. Contas a Pagar oferece a abertura de caixa.** Pagar em dinheiro exige caixa aberto; sem ele
+a tela só devolvia o 400 e o operador tinha que sair, abrir o caixa noutra tela e refazer a baixa.
+Passou a abrir o mesmo `AberturaCaixaModal` do PDV/Recebimento — **mas com gatilho diferente, de
+propósito**: aparece quando "Caixa da loja" é escolhido, não na entrada da tela, porque pagar pela
+conta corrente (ou só editar a conta) não precisa de caixa nenhum. Por isso o `aoVoltar` daqui
+**limpa a origem e devolve ao formulário** em vez de navegar pra fora — o componente não decide
+isso, quem passa o `aoVoltar` decide (docstring do `AberturaCaixaModal` atualizada com os três
+usos).
+
+**2. O drill-down do Fechamento de Caixa nomeia a saída.** O débito da baixa sempre entrou no
+valor esperado da conferência, mas o drill-down mostrava `origem = "—"`: nem o SELECT de
+`listarLancamentosDaCarteira` lia `cd.id_conta_pagar`, nem `CaixaService.origem` a conhecia — quem
+conferisse uma divergência via uma saída sem explicação nenhuma. Agora sai **"Conta a pagar nº N"**.
+
+**3. O extrato manual de conta corrente recusa o movimento automático.** Aquela tela é editável
+justamente por ser digitação sujeita a erro de captura — mas o débito gerado pela baixa não é
+digitação. Editá-lo ou excluí-lo descasava o extrato da conta a pagar **em silêncio**: a baixa
+continuava em `contas_pagar` e o dinheiro sumia (ou mudava de valor) no banco; e como
+`id_conta_pagar` foi criado **sem FK de propósito**, o banco também não impedia nada. Agora a
+resposta expõe `idContaPagar`, a grid troca os ícones de editar/excluir por um badge **"Baixa
+automática"**, e `atualizar()`/`excluir()` recusam com **409** apontando a tela certa
+(`exigirLancamentoManual`, mesmo espírito de `exigirCaixaAbertoParaDesfazer`).
+
+> **Decisão registrada:** a spec dizia "bloquear **ou** avisar". Escolhido **bloquear**, seguindo o
+> precedente do guard de caixa fechado — avisar deixaria o descasamento acontecer para quem
+> clicasse assim mesmo. O guard é **estreito**: `ContaPagarService` apaga e regrava o movimento por
+> SQL direto, sem passar por este serviço, então a própria baixa não é afetada; e lançamento
+> digitado na tela continua editável e excluível.
+
+**3 testes novos — 509/509 verdes**, `tsc -b` limpo. `AjudaDaTela` (R22) atualizada nas duas telas
+afetadas. ⚠️ **A UX do item 1 não foi conferida no navegador** — testes e type-check cobrem os
+itens 2 e 3; o popup abrir no momento certo e o "Voltar" limpar a origem só se confirma clicando.
+
+### 2026-08-15 — Leitura integral das 40 specs de tela: 1 contradição e 3 ponteiros mortos
+
+Varredura completa de `docs/telas/` (as 37 que ainda não tinham sido lidas na íntegra). O corpo
+das specs continua sólido — o que apareceu foi pouco e específico:
+
+- **Contradição real entre duas specs:** `pdv.md` dizia que o PDV resolve a empresa com
+  `SELECT id_empresa … LIMIT 1`, enquanto `login-empresa.md` registra o retrofit para o claim
+  `eid` e é explícita em *"nunca reintroduzir"* aquela busca. O código confirma o claim
+  (`PdvVendaService.java:94`) — a spec do PDV descrevia o comportamento anterior a 2026-07-28 como
+  se fosse o atual, que é o tipo de frase que faz alguém "consertar" na direção errada.
+- **Três ponteiros de arquivo inexistentes:** `configuracao-geral.md` citava `Layout.tsx`/
+  `NAV_ADMIN` (a árvore virou dado em `menu.ts` em 08-01); `recebimento-crediario.md` e
+  `comprovante-recebimento-crediario.md` apontavam Estorno e Reimpressão para
+  `web/src/pages/financeiro/`, quando o diretório é `web/src/pages/recebimentocrediario/`.
+
+Grep dos termos trocados em `docs/` inteiro depois da correção: nenhuma outra ocorrência.
+
+**Também registradas, sem correção nesta rodada** (as próprias specs as declaram): o
+`CancelamentoDevolucaoCrudTest` não existe — a feature foi verificada só manualmente, violação
+declarada de P5 —, e a `AjudaDaTela` da Configuração de Etiqueta ainda diz que a Emissão está em
+"Implementações Futuras".
+
+### 2026-08-15 — Removido o material de treinamento de leitura de NF-e
+
+`docs/TREINAMENTO_IA_ENTRADA.md` (2.318 linhas, 307 KB) catalogava **~30 padrões de extração de
+cor/tamanho por fornecedor** (A a AE), a partir de 131 XMLs reais de 42 fornecedores. Removido
+porque **nunca foi implementado**: `EntradaXmlService` usa duas heurísticas genéricas
+(`adivinharCor` casa contra as cores já cadastradas do tenant; `adivinharTamanho`, contra os
+tamanhos ou um token numérico de 1–3 dígitos), sem roteamento por emitente nem tabela de padrões.
+Nenhum código, spec, teste ou memória o referenciava, e os XMLs de origem não existem mais na
+máquina. Preservado no histórico: `git show c2a0c80:docs/TREINAMENTO_IA_ENTRADA.md`.
+
+> Se um dia a leitura de cor/tamanho do XML for melhorada por fornecedor, esse documento é o
+> insumo — e recuperá-lo é o primeiro passo, não refazer a análise.
 
 ### 2026-08-15 — "Próximos passos" alinhado ao código + teste de privilégios de `niner_app`
 
