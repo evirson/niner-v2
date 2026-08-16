@@ -1,12 +1,19 @@
 # Progresso do Projeto — niner-v2
 
 Registro cronológico das decisões e entregas. Atualizar a cada marco relevante.
-**Última atualização:** 2026-08-15
+**Última atualização:** 2026-08-16
 
 ---
 
 ## Estado atual
 
+> **Em curso (2026-08-16): MÓDULO FISCAL.** O estudo está fechado (`docs/MODULOFISCAL.md` v2.1) e o
+> **schema já está no banco** (V034/V035 + colunas fiscais nas migrations donas). Escopo do v1:
+> **NFC-e ao consumidor final + NF-e de devolução de venda**, com cancelamento, inutilização,
+> contingência, arquivamento e download. **Nenhuma linha de Java ou React ainda** — o roteiro de
+> codificação, em blocos B0–B9 e com o que depende (ou não) de certificado digital, está em
+> **§17.1 do estudo**. É por lá que a próxima sessão começa.
+>
 > **Resumo em uma linha (2026-08-14):** ERP com **~40 telas** ponta a ponta cobrindo cadastros,
 > catálogo, estoque (incl. entrada por XML de NF-e), PDV e vendas, financeiro completo (caixa,
 > crediário, contas a pagar/receber, conta corrente, **DRE e Fluxo de Caixa**), relatórios,
@@ -420,6 +427,88 @@ Movimentação de Conta Corrente) que ainda não tinham migrado pro `SeletorPlan
 ---
 
 ## Linha do tempo
+
+### 2026-08-16 — Módulo fiscal: estudo fechado e schema no banco
+
+Dia de **começar o módulo fiscal** (NFC-e/NF-e). Sem código Java ou React ainda — o que saiu foi o
+estudo do módulo e o schema inteiro, que é o que não depende de certificado digital nem de acesso à
+SEFAZ.
+
+**O estudo (`docs/MODULOFISCAL.md`, v2.1).** O arquivo já existia como pesquisa preliminar (v1.1),
+escrita **de fora para dentro**: o que a legislação exige. Foi reescrito **de dentro para fora**,
+com cada afirmação conferida contra `V001`–`V033` e contra as telas que já existem.
+
+**Escopo do v1, fechado pelo dono do produto (DF35):** **NFC-e ao consumidor final** (identificado
+ou não) **+ NF-e de devolução de venda**, com o ciclo de vida completo da nota — cancelamento,
+inutilização, contingência offline, arquivamento e download. As outras **13 modalidades** ficaram
+catalogadas em §4.2 do estudo, cada uma com *o que já fica pronto no v1* e *o que falta* — não
+foram apagadas. Também decidido: emissão **própria** direto na SEFAZ (sem provedor), **UF piloto
+Paraná** (que tem autorizador próprio, `nfce.sefa.pr.gov.br` — **não** SVRS, ao contrário do que a
+pesquisa inicial supunha), certificado **A1 por upload**, QR Code **v3.00** apenas, e IBS/CBS
+calculados **para todos os regimes** desde o v1.
+
+**O que a leitura do código revelou** (o motivo de o estudo ter mudado de forma):
+
+- **A lista original de operações deixava 7 modalidades de fora.** A mais imediata: **NFC-e não
+  serve para venda a contribuinte de ICMS**, e o PDV é hoje a única tela de venda do sistema. Como
+  a NF-e de venda ficou para depois, o PDV vai **recusar a emissão** nesse caso (estado
+  `NAO_EMITIDO`, com o motivo gravado e visível) em vez de emitir o documento errado — a venda
+  continua sendo gravada normalmente.
+- **`produto` não tinha nenhuma coluna de unidade comercial.** `uCom`/`uTrib` são obrigatórios em
+  todo item do XML, e a única unidade do sistema era `produto_fornecedor.unidade_compra`, que é a
+  unidade *do fornecedor*. Era bloqueante.
+- **`tipo_carteira` não tinha `tPag`, bandeira nem CNPJ de credenciadora**, e o grupo `detPag` é
+  obrigatório na NFC-e.
+- **O `sku` interno nunca pode ir no `cEAN`:** é EAN-13 com prefixo 9 gerado por
+  `gerar_ean13_interno()`, não registrado na GS1 — a SEFAZ valida o GTIN contra a base oficial e
+  rejeita. Produto sem GTIN real leva literalmente `SEM GTIN`.
+- **`cfg_produto_ncm.aliquota_ibpt` não serve** para o `vTotTrib`: é uma coluna só, e o IBPT tem
+  quatro alíquotas por NCM, **por UF e por vigência**.
+- **Erro conceitual da v1.1, corrigido:** depois da **ADC 49/STF** e da **LC 204/2023**, ICMS **não
+  incide** na transferência entre estabelecimentos do mesmo titular — o que circula é **crédito**,
+  pelo **custo**, com opção anual do Convênio 109/2024. Muda o XML inteiro daquela nota.
+- **CC-e não se aplica à NFC-e** (evento 110110 é de NF-e 55), então nunca entraria num v1 de NFC-e.
+
+**O schema (V034 + V035, mais 4 migrations editadas).** As colunas fiscais foram para as
+**migrations donas** de cada tabela, seguindo a convenção do §7 do `db/migration/README.md` (banco
+ainda em construção): `empresa`→V014, `cliente`→V016, `produto`→V017, `tipo_carteira`→V025. A única
+exceção é `produto.id_perfil_fiscal`, que referencia uma tabela criada só em V035 e entra lá por
+`ALTER TABLE`, com o motivo comentado nos dois arquivos.
+
+**V034** traz a referência nacional (global, sem `id_tenant`, sem RLS — mesma exceção de
+`cfg_produto_ncm`): autorizador por UF, CFOP, CEST, CST/CSOSN, CST e classificação do IBS/CBS,
+IBPT. CST e CSOSN nascem semeados **com as flags de quais campos cada código exige e proíbe** — é o
+que deixa o motor validar antes de assinar, porque campo a mais rejeita tanto quanto campo a menos.
+Os endpoints de NF-e 55 do Paraná nascem **nulos de propósito**: não foram confirmados em fonte
+oficial, e a emissão deve falhar explicitando isso em vez de chutar um domínio.
+
+**V035** traz as tabelas de tenant, todas com RLS FORCE e guarda-corpo de P8. Três invariantes que
+foram para o banco, não só para o serviço:
+
+- **`documento_fiscal`, `_item`, `_evento` e `fiscal_certificado_uso` não têm `GRANT DELETE`** —
+  documento fiscal nunca é apagado, nem rascunho que falhou, que é trilha de suporte. ⚠️ O caso
+  precisa entrar em `PrivilegiosNinerAppTest`: `TestcontainersConfiguration` conecta a aplicação
+  como superusuário e `GRANT`/`REVOKE` fica invisível para o resto da suíte.
+- **Trigger `documento_fiscal_imutavel_tg`:** depois de preenchidos, `chave_acesso`,
+  `numero`/`serie`, `protocolo` e o ponteiro do XML não mudam mais. A situação continua mudando
+  (AUTORIZADO → CANCELADO); o que é pedra é a identidade da nota perante a SEFAZ.
+- **`documento_fiscal_transporte` e `_intermediador` não foram criadas** — tabela vazia não adianta
+  nada, já que não há dado para migrar depois. O que o v1 já grava são os campos do próprio
+  documento (`finNFe`, `tpNF`, `indPres`, `indFinal`, `idDest`), porque o caro é remontar o XML.
+
+**Verificação:** banco recriado do zero, **35/35 migrations aplicam limpo**, RLS FORCE nas 12
+tabelas novas, grants exatamente como esperado, seeds carregados. **509/509 testes verdes** — as
+4 migrations editadas não quebraram nada.
+
+**Duas perguntas ficaram sem resposta confiável e viraram item obrigatório da F0**, antes de
+qualquer código de emissão: **(1)** se IBS/CBS **compõem o `vNF`** em 2026 — muda o total impresso
+no cupom, o valor cobrado do cliente e a conferência de caixa; **(2)** como fica a **devolução de
+NFC-e sem consumidor identificado**, que é o caso mais frequente do balcão (venda em dinheiro, sem
+CPF) e não tem destinatário para a nota de entrada. Uma terceira, menor: como a chave de acesso (44
+dígitos numéricos) acomoda emitente com **CNPJ alfanumérico**.
+
+**Próximo passo combinado:** §17.1 do estudo tem o roteiro de codificação em blocos B0–B9, com o
+que depende de certificado e o que não depende.
 
 ### 2026-08-15 — As 3 pendências que a baixa de conta a pagar tinha aberto
 
@@ -6038,10 +6127,15 @@ com autenticação JWT real protegendo o ERP.
 
 **Feito em 2026-07-21:** ✅ **padrão de tela de cadastro consolidado** (paginação por página + ordenação por coluna + ícones de ação + modo somente-leitura + configuração de campos por tenant + shell de altura travada + campos informativos de auditoria) e ✅ **segunda, terceira e quarta telas de domínio** — Funcionários (`cadastros.funcionario`), Plano de Contas (`cadastros.planocontas`, com `criado_em`/`atualizado_em` adicionados à V016) e Fornecedores (`cadastros.fornecedor`, com criação rápida de plano de contas embutida), todas construídas sobre esse padrão; ✅ **Parâmetros do Sistema** (`configuracao.geral`), primeira tela deliberadamente fora do padrão de cadastro (singleton por tenant, ADMIN-only).
 
-**Retomar — ordem sugerida** (revisada em 2026-08-15 contra o código — o vertical slice de
-Produtos e o ledger de estoque saíram desta lista porque **foram concluídos**; ver a entrada de
-2026-08-15 na linha do tempo):
+**Retomar — ordem sugerida** (revisada em 2026-08-16):
 
+0. **⭐ EM CURSO — Módulo fiscal (NFC-e + NF-e de devolução).** Escolhido pelo dono do produto em
+   2026-08-16 e já com o schema aplicado. **O roteiro de codificação é a §17.1 de
+   `docs/MODULOFISCAL.md`** (blocos B0–B9). Resumo de por onde pegar: **com o certificado A1 em
+   mãos, B0** (PoC da F0 — assinar e autorizar uma NFC-e na homologação do PR; é o único gate real
+   de arquitetura, porque a lib candidata é Java 8 + `javax` + Axis2 contra nosso Java 25
+   jakarta); **sem o certificado, B1 → B2** (specs das 4 telas fiscais, depois os cadastros), com
+   **B4** (motor tributário, puro e sem rede) podendo andar em paralelo.
 1. **⭐ Integração com marketplaces** — é o **coração da visão original** (P1/P2, R3–R7) e a
    lacuna central do produto hoje: `canais/`, `pedidos/`, `precos/` e `integracao/` seguem só com
    `package-info.java`, sem nenhuma implementação de domínio. O schema está pronto desde

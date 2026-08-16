@@ -1192,6 +1192,47 @@ manter as tabelas nacionais atualizadas (cClassTrib, CEST, CFOP, IBPT, MVA).
 | **F5 — NF-e de devolução** | Nota de **entrada** (`tpNF=0`, `finNFe=4`) referenciando a NFC-e original, espelhando a tributação dela; DANFE A4; integração com a tela de Devolução de Produtos | Cliente devolve depois dos 30 minutos e a nota de entrada sai autorizada, com o estoque batendo |
 | **F6+ — Implementações futuras** | Tudo da §4.2, na ordem que o negócio pedir. Candidatas naturais a virem primeiro: **cancelamento por substituição** (o "fechou no cartão errado" do balcão), **baixa por perda** (a mais barata: o ajuste já existe) e **NF-e de venda a contribuinte** (a que o `NAO_EMITIDO` vai medir) | Cada uma com homologação própria |
 
+### 17.1 Ponto de partida da codificação (estado em 2026-08-16)
+
+**Feito:** o schema inteiro — `V034__fiscal_referencia.sql` (referência nacional, global),
+`V035__fiscal_documento.sql` (tabelas de tenant, RLS FORCE) e as colunas fiscais nas migrations
+donas (V014 empresa, V016 cliente, V017 produto, V025 tipo_carteira). 35/35 migrations aplicam
+limpo num banco recriado do zero; 509/509 testes verdes.
+
+**Não feito:** nenhuma linha de Java, nenhuma linha de React, nenhuma spec de tela.
+
+**Ordem de ataque.** Os blocos B1–B3 e B4 são independentes entre si — dá para atacar o motor em
+paralelo às telas, se fizer sentido.
+
+| Bloco | O que é | Depende de | Precisa de certificado? |
+|---|---|---|---|
+| **B0** | **PoC da F0**: assinar um XML e autorizar uma NFC-e com IBS/CBS na homologação do PR, por script, fora do produto. Valida a DF7 (lib `java-nfe` é Java 8 + `javax` + Axis2 contra nosso Java 25 jakarta) e responde às 4 perguntas ⚠️ da F0 | — | **Sim** |
+| **B1** | Specs de tela em `docs/telas/`: `fiscal-configuracao.md`, `fiscal-certificado.md`, `fiscal-perfil.md`, `fiscal-conformidade.md`. Spec antes do código (§5 da spec principal) | — | Não |
+| **B2** | Cadastros fiscais: `FiscalConfigService`/`Controller` (singleton por **empresa**), `FiscalCertificadoService` (upload multipart → bucket cifrado, *write-only*), `PerfilFiscalService` (padrão de cadastro consolidado), + campos fiscais nas telas de Produto, Cliente, Empresa e Tipo de Carteira | B1 | Não |
+| **B3** | Tela de **Conformidade Fiscal** — lista o que impede emitir (produto sem NCM/unidade/perfil, cliente sem município IBGE, empresa sem certificado). É o que revela cedo o tamanho do problema de base cadastral | B2 | Não |
+| **B4** | **Motor tributário** (`fiscal.motor`): puro, sem I/O. Simples/Presumido/Real + IBS/CBS + FCP + `vTotTrib`. Maior massa de testes do módulo e a mais barata — teste de tabela por (CRT × CST/CSOSN × UF × operação) | — (o schema já basta) | Não |
+| **B5** | Montagem do XML + validação contra o **XSD oficial** em teste | B4 | Não |
+| **B6** | Assinatura (XMLDSig) + transporte (`HttpClient` do JDK com mTLS por empresa) | B5, B0 | **Sim** |
+| **B7** | PDV: emissão síncrona, DANFCE térmico, contingência offline, recusa em venda a contribuinte | B6 | **Sim** |
+| **B8** | Cancelamento (110111), inutilização, arquivamento no bucket, download em ZIP | B7 | **Sim** |
+| **B9** | NF-e de devolução de venda (entrada, `finNFe=4`), espelhando a tributação gravada em `documento_fiscal_item` | B8 | **Sim** |
+
+**Por onde começar, concretamente:**
+
+- **Com o certificado em mãos → B0.** É meio dia de trabalho e é o único gate real de arquitetura:
+  se a lib não subir em Java 25 com Spring Boot 4, o plano B (assinar com `java.xml.crypto` e gerar
+  as classes com JAXB jakarta) muda o cronograma inteiro — e é muito mais barato descobrir isso
+  antes de B5 do que depois.
+- **Sem o certificado → B1 seguido de B2.** As telas de cadastro seguem um padrão consolidado
+  (trabalho previsível) e o motor precisa de perfil fiscal cadastrado para ser exercitado de
+  verdade. B4 pode andar em paralelo com fixtures inseridas direto no banco.
+
+**O que pedir ao dono do produto junto com o certificado:** CNPJ e inscrição estadual da empresa
+(para conferir contra o titular do certificado), o **pacote de XSD** da NF-e/NFC-e e a tabela
+**cClassTrib** do IT 2025.002 (~173 códigos, portal do SVRS). O portal da NF-e bloqueia acesso
+automatizado — os 10.515 NCMs de `cfg_produto_ncm` vieram por esse mesmo caminho.
+⚠️ O `.pfx` **nunca** vai para o chat nem para o repositório: `api/secrets/` já está no `.gitignore`.
+
 ---
 
 ## 18. Riscos
