@@ -204,3 +204,49 @@ Em desenvolvimento, recriar do zero (`flyway clean` + `migrate`) é aceitável.
   só vai reclamar de checksum divergente em V025 se algum dia rodar `flyway migrate`/`validate`
   de novo contra esse mesmo banco (mesmo risco aceito em toda edição de migration já aplicada,
   ver convenção acima).
+- **Módulo fiscal — V034/V035 + 4 migrations editadas (2026-08-16):** primeiro corte do
+  `docs/MODULOFISCAL.md` (v2.1). Escopo do v1 (DF35): **NFC-e ao consumidor final + NF-e de
+  devolução de venda**, com cancelamento, inutilização, contingência, arquivamento e download.
+  - **Colunas fiscais foram para as migrations DONAS**, seguindo a convenção do §7 (banco ainda
+    em construção): `empresa` → **V014** (`codigo_municipio_ibge`, `cnae`, `inscricao_municipal`,
+    `matriz`); `cliente` → **V016** (`codigo_municipio_ibge`, `indicador_ie` + CHECK);
+    `produto` → **V017** (`unidade_comercial`, `unidade_tributavel`,
+    `fator_conversao_tributavel`, `origem_mercadoria` + CHECK, `cest`, `ex_tipi`,
+    `cnpj_fabricante`); `tipo_carteira` → **V025** (`codigo_tpag`, `codigo_bandeira`,
+    `cnpj_credenciadora`, `tipo_integracao`).
+  - **A que NÃO pôde ir para a dona:** `produto.id_perfil_fiscal` referencia `cfg_perfil_fiscal`,
+    criada só em V035 — entra lá por `ALTER TABLE`, com o motivo comentado nos dois arquivos.
+  - **`produto` não tinha NENHUMA coluna de unidade** (a única do sistema era
+    `produto_fornecedor.unidade_compra`, que é a unidade *do fornecedor*). `uCom`/`uTrib` são
+    obrigatórios em todo item do XML — era bloqueante. Entrou com `DEFAULT 'UN'` para o dado
+    existente nascer válido.
+  - **V034 — referência nacional (GLOBAL, sem `id_tenant`, sem RLS)**, mesma exceção documentada
+    de `cfg_produto_ncm`/`cfg_banco`: `cfg_uf_autorizador` (F10 — endpoint, prazo e alíquota por
+    UF são *linha*, nunca `if`), `cfg_cfop`, `cfg_cest`, `cfg_cst_icms`, `cfg_csosn`,
+    `cfg_cst_ibscbs`, `cfg_cclasstrib`, `cfg_ibpt`. `niner_app` só tem `SELECT`; a carga é script
+    rodando como `niner_owner`. Semeadas: CST/CSOSN completos (com as flags de quais campos cada
+    código exige/proíbe), o subconjunto de CFOP do v1 e as 4 linhas do **Paraná**. ⚠️ Os endpoints
+    de NF-e 55 do PR nascem **NULOS de propósito** — não foram confirmados em fonte oficial, e a
+    emissão deve falhar explicitamente em vez de chutar domínio.
+  - **`cfg_produto_ncm.aliquota_ibpt` deixa de ser usada:** é uma coluna só, e o IBPT tem 4
+    alíquotas por NCM **por UF e por vigência** (`cfg_ibpt`). A coluna fica onde está.
+  - **V035 — tabelas de tenant**, todas com RLS FORCE + policy + guarda-corpo (padrão de
+    V024/V025): `fiscal_config_empresa` (por **empresa**, não por tenant), `fiscal_certificado`
+    (+ `fiscal_certificado_uso`), `cfg_perfil_fiscal` (+ `_regra`), `fiscal_numeracao`,
+    `fiscal_inutilizacao`, `documento_fiscal` (+ `_item`, `_pagamento`, `_evento`,
+    `_referencia`).
+  - **`documento_fiscal`, `_item`, `_evento` e `fiscal_certificado_uso` não têm `GRANT DELETE`
+    para `niner_app`** (F6/F7: documento fiscal nunca é apagado, nem rascunho que falhou).
+    ⚠️ Acrescentar o caso a `PrivilegiosNinerAppTest` — `TestcontainersConfiguration` conecta a
+    aplicação como superusuário do container e `GRANT`/`REVOKE` fica invisível para o resto da
+    suíte.
+  - **Trigger `documento_fiscal_imutavel_tg`** (F6/F4): depois de preenchidos, `chave_acesso`,
+    `numero`/`serie`, `protocolo` e o ponteiro do XML não mudam mais. A situação continua mudando
+    (AUTORIZADO → CANCELADO); o que é pedra é a identidade da nota perante a SEFAZ.
+  - **Não criadas de propósito:** `documento_fiscal_transporte` e `documento_fiscal_intermediador`
+    (transporte/volumes e `infIntermed` de marketplace) — tabela vazia não adianta nada, já que
+    não há dado para migrar depois. O que o v1 já grava são os campos do próprio documento
+    (`finalidade`, `tipo_nf`, `indPres`, `indFinal`, `idDest`), porque o caro é remontar o XML.
+  - `tipo_operacao_fiscal` e `situacao_documento_fiscal` já nascem com o domínio **completo**
+    (inclusive operações futuras): acrescentar valor a ENUM depois é `ALTER TYPE`, e o motor e os
+    relatórios passam a ter o domínio inteiro desde já.

@@ -35,6 +35,13 @@ CREATE TABLE cliente (
   cidade               text,
   estado               text,
   cep                  text,
+  -- Fiscal (2026-08-16, docs/MODULOFISCAL.md §6.3) — dados do DESTINATÁRIO exigidos pelo XML.
+  codigo_municipio_ibge integer,                             -- cMun (7 dígitos, IBGE)
+  -- indIEDest: 1 = contribuinte de ICMS · 2 = contribuinte isento de inscrição · 9 = não
+  -- contribuinte. DEFAULT 9 porque o cliente típico do varejo é consumidor final. É o campo que
+  -- decide se a NFC-e PODE ser emitida: NFC-e não serve para contribuinte (indicador_ie = 1), que
+  -- exige NF-e modelo 55 — sem esta coluna o sistema emitiria o documento errado sem saber (DF13).
+  indicador_ie         smallint      NOT NULL DEFAULT 9,
   limite_credito       numeric(12,2) NOT NULL DEFAULT 0,     -- crediário é Fase 2; campo fica pronto
   ativo                boolean       NOT NULL DEFAULT true,
   criado_em            timestamptz   NOT NULL DEFAULT now(),
@@ -46,6 +53,8 @@ CREATE TABLE cliente (
   CONSTRAINT cliente_dados_pessoais_ck CHECK (
     NOT fisica_juridica OR genero IS NOT NULL
   ),
+  -- Domínio fechado do indIEDest (2026-08-16). Não há valor 3..8 no layout da NF-e.
+  CONSTRAINT cliente_indicador_ie_ck CHECK (indicador_ie IN (1, 2, 9)),
   -- FK composta (2026-07-16, P8) — ver comentário em usuario_empresa_fk (V015).
   CONSTRAINT cliente_categoria_fk FOREIGN KEY (id_tenant, id_categoria_cliente)
     REFERENCES cfg_categoria_cliente (id_tenant, id_categoria_cliente),

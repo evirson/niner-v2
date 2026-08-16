@@ -18,6 +18,16 @@ CREATE TABLE empresa (
   cep                text,
   telefone           text,
   email              text,
+  -- Fiscal (2026-08-16, docs/MODULOFISCAL.md §6.1) — dados do EMITENTE exigidos pelo XML da
+  -- NF-e/NFC-e que a empresa ainda não tinha. Todos nullable de propósito (F12: tenant sem fiscal
+  -- habilitado não muda em nada); a exigência é da aplicação (tela de Conformidade Fiscal), nunca
+  -- NOT NULL retroativo sobre dado existente.
+  codigo_municipio_ibge integer,                 -- cMun: 7 dígitos da tabela do IBGE. `cidade` é
+                                                 -- texto livre e NÃO serve — não há como derivar.
+  cnae                  text,                    -- CNAE fiscal principal (obrigatório quando há IM)
+  inscricao_municipal   text,                    -- IM
+  matriz                boolean NOT NULL DEFAULT true,  -- false = filial. Necessário para a NF-e de
+                                                 -- transferência entre estabelecimentos (§8.4)
   imagem_relatorio   text,                       -- URL/chave de object storage (não binário no banco)
   cfg_nome_etiqueta  text        NOT NULL,       -- texto/modelo impresso na etiqueta de produto
   ativo              boolean     NOT NULL DEFAULT true,

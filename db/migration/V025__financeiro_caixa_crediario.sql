@@ -45,6 +45,16 @@ CREATE TABLE tipo_carteira (
   -- opção de pagamento naquela tela — controla quais formas de pagamento (categoria AVISTA/
   -- CARTAO_DEBITO/CARTAO_CREDITO) podem quitar parcela de crediário.
   permite_receber_crediario boolean        NOT NULL DEFAULT false,
+  -- Fiscal (2026-08-16, docs/MODULOFISCAL.md §6.4) — o grupo `pag/detPag` é OBRIGATÓRIO na NFC-e
+  -- e nada disto existia. Cada linha de tipo_carteira já é uma bandeira específica (a UK abaixo
+  -- inclui categoria), então o de-para é 1:1; faltavam só os códigos oficiais.
+  codigo_tpag          text,                 -- tPag: 01 dinheiro · 03 crédito · 04 débito
+                                             -- · 05 crédito loja (o crediário) · 17 PIX · 99 outros
+  codigo_bandeira      text,                 -- tBand: 01 Visa · 02 Master · 03 Amex · 06 Elo
+                                             -- · 07 Hipercard · 99 outros. Só para tPag 03/04
+  cnpj_credenciadora   text,                 -- CNPJ da adquirente (Cielo, Rede, Stone...)
+  tipo_integracao      smallint       NOT NULL DEFAULT 2,  -- tpIntegra: 1 integrado (TEF/POS)
+                                             -- · 2 não integrado. O Niner hoje é 2
   criado_em            timestamptz         NOT NULL DEFAULT now(),  -- 2026-07-23 (auditoria, convenção do domínio)
   atualizado_em        timestamptz         NOT NULL DEFAULT now(),
   -- base para FK composta (P8) de contas_receber/caixa_detalhe.

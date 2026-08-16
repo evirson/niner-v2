@@ -193,6 +193,21 @@ CREATE TABLE produto (
   codigo_ncm           text          REFERENCES cfg_produto_ncm (codigo_ncm),
   peso_bruto           numeric(14,3) NOT NULL DEFAULT 0,
   peso_liquido         numeric(14,3) NOT NULL DEFAULT 0,
+  -- Fiscal (2026-08-16, docs/MODULOFISCAL.md §6.2) — o item da nota. `id_perfil_fiscal` NÃO está
+  -- aqui: ele referencia cfg_perfil_fiscal, criada só em V035, e vem por ALTER TABLE lá.
+  -- uCom/uTrib são OBRIGATÓRIOS em todo item do XML e o produto não tinha NENHUMA coluna de
+  -- unidade (a única do sistema era produto_fornecedor.unidade_compra, que é a unidade DO
+  -- FORNECEDOR). DEFAULT 'UN' para o dado existente nascer válido em vez de bloquear a migration.
+  unidade_comercial    text          NOT NULL DEFAULT 'UN',
+  unidade_tributavel   text,                       -- NULL = igual à comercial (o caso do varejo)
+  fator_conversao_tributavel numeric(10,3) NOT NULL DEFAULT 1,  -- qCom * fator = qTrib
+  -- orig do grupo ICMS: 0 nacional · 1 importação direta · 2 mercado interno importado · 3..8
+  -- (ver MOC). Define inclusive a alíquota interestadual de 4% da Resolução SF 13/2012.
+  origem_mercadoria    smallint      NOT NULL DEFAULT 0,
+  cest                 text,                       -- obrigatório quando o produto é de segmento
+                                                   -- sujeito a ST, MESMO que a operação não seja ST
+  ex_tipi              text,                       -- só quando o NCM tem exceção
+  cnpj_fabricante      text,                       -- só item de produção em escala relevante
   id_grade             integer       NOT NULL DEFAULT 1,  -- grade de tamanhos deste produto; 1 =
                                       -- grade PADRÃO (produto não usa variação de verdade); grade
                                       -- REAL obrigatória (checada em serviço) quando cfg_geral.
@@ -208,7 +223,9 @@ CREATE TABLE produto (
   reajustado_em        timestamptz,
   -- base para FK composta (2026-07-16, P8) — ver comentário em empresa_id_empresa_uk (V014).
   CONSTRAINT produto_id_produto_uk UNIQUE (id_tenant, id_produto),
-  CONSTRAINT produto_grade_fk FOREIGN KEY (id_tenant, id_grade) REFERENCES cfg_grade (id_tenant, id_grade)
+  CONSTRAINT produto_grade_fk FOREIGN KEY (id_tenant, id_grade) REFERENCES cfg_grade (id_tenant, id_grade),
+  -- Domínio fechado de `orig` (2026-08-16). Valor fora daqui é rejeição garantida na SEFAZ.
+  CONSTRAINT produto_origem_mercadoria_ck CHECK (origem_mercadoria BETWEEN 0 AND 8)
 );
 CREATE INDEX produto_id_tenant_ix  ON produto (id_tenant);
 CREATE INDEX produto_descricao_ix  ON produto (id_tenant, descricao);
