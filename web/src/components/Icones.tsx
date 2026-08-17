@@ -671,3 +671,16 @@ export function IconeCertificado({ size = 28 }: { size?: number }) {
     </svg>
   )
 }
+
+/** Ícone da Conformidade Fiscal — prancheta com checklist. */
+export function IconeConformidade({ size = 28 }: { size?: number }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.6} stroke="currentColor" width={size} height={size} aria-hidden="true">
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M9 3.75h6a1.5 1.5 0 0 1 1.5 1.5v.75h-9V5.25A1.5 1.5 0 0 1 9 3.75Z M7.5 6h9a1.5 1.5 0 0 1 1.5 1.5v11.25a1.5 1.5 0 0 1-1.5 1.5h-9a1.5 1.5 0 0 1-1.5-1.5V7.5A1.5 1.5 0 0 1 7.5 6Z M9 12.75l1.5 1.5 3-3.5 M9 17.25h6"
+      />
+    </svg>
+  )
+}

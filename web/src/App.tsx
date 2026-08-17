@@ -70,6 +70,7 @@ import FiscalConfiguracaoForm from './pages/fiscal/FiscalConfiguracaoForm'
 import PerfilFiscalLista from './pages/fiscal/PerfilFiscalLista'
 import PerfilFiscalForm from './pages/fiscal/PerfilFiscalForm'
 import FiscalCertificadoLista from './pages/fiscal/FiscalCertificadoLista'
+import ConformidadeFiscalPainel from './pages/fiscal/ConformidadeFiscalPainel'
 
 export default function App() {
   return (
@@ -204,6 +205,7 @@ export default function App() {
             <Route path="/fiscal/perfis/:id/visualizar" element={<PerfilFiscalForm somenteLeitura />} />
             <Route path="/fiscal/perfis/:id" element={<PerfilFiscalForm />} />
             <Route path="/fiscal/certificados" element={<FiscalCertificadoLista />} />
+            <Route path="/fiscal/conformidade" element={<ConformidadeFiscalPainel />} />
           </Route>
         </Route>
       </Route>

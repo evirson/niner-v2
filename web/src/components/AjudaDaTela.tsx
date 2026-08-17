@@ -361,6 +361,23 @@ const CONTEUDOS: Record<string, ConteudoAjuda> = {
     ],
     urlVideo: null,
   },
+  'fiscal.conformidade.tela': {
+    titulo: 'Conformidade Fiscal',
+    objetivo: 'Ver o que impede esta empresa de ligar o fiscal e emitir nota, antes de descobrir no caixa com o cliente na frente.',
+    passos: [
+      'Escolha a empresa no seletor do topo.',
+      'O topo mostra um veredito: "Pronto para emitir" (verde) ou quantas pendências bloqueiam a emissão (vermelho).',
+      'Clique em qualquer categoria (Empresa, Produtos, Formas de pagamento, Clientes) para ver a lista de registros com problema.',
+      'Categorias que bloqueiam (vermelho) impedem realmente ligar a emissão. Clientes só avisa (amarelo) — nunca bloqueia.',
+      'Clique em "Corrigir" numa linha pra abrir o cadastro daquele registro numa aba nova. Esta tela não edita nada — só aponta.',
+    ],
+    errosComuns: [
+      'Só administradores acessam esta tela.',
+      'Cliente sem município IBGE não impede vender no balcão (a NFC-e sem identificação não exige isso) — só impede devolver depois de 30 minutos. Por isso é aviso, não bloqueio.',
+      'Formas de pagamento aparecem sempre com pendência hoje: o código de forma de pagamento ainda não tem campo na tela de Tipo de Carteira.',
+    ],
+    urlVideo: null,
+  },
   'cadastros.planocontas.lista': {
     titulo: 'Plano de Contas',
     objetivo: 'Encontrar e gerenciar as contas do plano de contas (usadas por fornecedores, contas a pagar e relatórios).',
