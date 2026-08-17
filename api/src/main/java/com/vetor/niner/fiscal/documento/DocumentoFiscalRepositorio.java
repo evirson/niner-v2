@@ -198,7 +198,7 @@ public class DocumentoFiscalRepositorio {
     @Transactional(readOnly = true)
     public List<EmpresaEmContingencia> empresasComFilaPendente() {
         return jdbc.sql("""
-                        SELECT DISTINCT c.id_tenant, c.id_empresa, e.uf,
+                        SELECT DISTINCT c.id_tenant, c.id_empresa, e.estado AS uf,
                                CASE c.ambiente WHEN 'PRODUCAO' THEN 1 ELSE 2 END AS ambiente_codigo,
                                u.codigo_uf_ibge
                           FROM documento_fiscal d
@@ -207,7 +207,7 @@ public class DocumentoFiscalRepositorio {
                           JOIN empresa e
                             ON e.id_tenant = d.id_tenant AND e.id_empresa = d.id_empresa
                           JOIN cfg_uf_autorizador u
-                            ON u.uf = e.uf AND u.modelo = 65 AND u.ambiente = c.ambiente
+                            ON u.uf = e.estado AND u.modelo = 65 AND u.ambiente = c.ambiente
                           JOIN fiscal_certificado cert
                             ON cert.id_tenant = d.id_tenant AND cert.id_empresa = d.id_empresa
                            AND cert.ativo = true
