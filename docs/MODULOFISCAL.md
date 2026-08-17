@@ -25,7 +25,7 @@ decisão de arquitetura vira ADR no formato §6 da spec.
 | DF2 | Ordem de entrega | ✅ **NFC-e primeiro** (amarrada ao PDV), NF-e na sequência |
 | DF3 | Onde mora a inteligência tributária | ✅ **No Niner** — perfil fiscal por produto/tenant, XML sai pronto |
 | DF4 | Reforma tributária (IBS/CBS/IS) | ✅ **Desde o v1, para TODOS os regimes** — motor e schema prontos mesmo para Simples/MEI; ver §8.5 |
-| DF5 | Certificado digital | ✅ **A1 (.pfx) por upload**, cifrado no bucket, senha em KMS |
+| DF5 | Certificado digital | ✅ **A1 (.pfx) por upload**, cifrado **no banco** (`fiscal_certificado.arquivo_cifrado`) — não em bucket, DF21 revisada em 2026-08-17 —, senha cifrada com chave fora do banco |
 | DF6 | UF piloto | ✅ **Paraná** — autorizador próprio (`nfce.sefa.pr.gov.br`), não SVRS; ver §9.4 |
 | DF7 | Base técnica em Java | ✅ **Híbrido**: lib open-source para XSD/assinatura/QR + `HttpClient` do JDK no transporte. PoC na F0 é o gate |
 | DF8 | Emissão no PDV | ✅ **Síncrona na efetivação** + **contingência offline** |
@@ -308,7 +308,7 @@ paralelo (F1). Mapeamento conferido contra o código:
 | `produto_movimento_mestre` tipo `COMPRA` | NF-e 55 de devolução ao fornecedor *(futura)* | DF14 decide a tela |
 | `vendas.cancelamento` (ADMIN-only, com motivo) | Evento 110111 | A justificativa mínima de 15 caracteres é a que a tela já pede |
 | `entrada_xml.xml_bruto` | (consome XML de terceiro) | Já **lê** NF-e e **guarda** o XML bruto — insumo da Distribuição DF-e (futura) e do ZIP do contador (§11) |
-| `comum.armazenamento` (GCS, ADR-013) | Guarda dos **XML autorizados** | Bucket provisionado e testado — mas ver DF21: o fiscal precisa de bucket próprio, privado. O `.pfx` **não** vai para bucket (fica cifrado no banco) |
+| `comum.armazenamento` — `ArmazenamentoPrivado` (MinIO/S3, **ADR-014**) | Guarda dos **XML autorizados** | ✅ Bucket fiscal **provisionado em 2026-08-17**: privado, Object Lock GOVERNANCE de 1825 dias, credencial da API **sem permissão de apagar**. Área `AreaPrivada.FISCAL_XML`, caminho `tenants/{id}/fiscal/{ano}/{mes}/{modelo}/{chave}.xml`. Falta o consumidor (gravar no fim da autorização). O `.pfx` **não** vai para bucket (fica cifrado no banco). O GCS do ADR-013 continua só com foto de produto |
 | `comum.arquivocompartilhado` | DANFCE por WhatsApp | Cache de 24 h já existe para papeleta e crediário. **Não serve** para o ZIP fiscal (§11.2) |
 | Papeleta térmica (42 col., 75 mm, Consolas negrito) | DANFCE | A calibragem de 2026-08-14 é a base do cupom fiscal — não recomeçar do zero |
 | `cfg_produto_ncm` (~10.515 NCMs reais) | Cadastro fiscal do produto | Já global e sem RLS — mesmo padrão para CFOP, CEST, CST e cClassTrib |
@@ -1074,14 +1074,23 @@ sozinho** e avisar — ninguém confere sequência de nota manualmente.
 | **XML de entrada (fornecedor)** 🆕 | XML bruto | **já existe** em `entrada_xml.xml_bruto` desde 2026-08-11 |
 | DANFE / DANFCE | PDF | gerado sob demanda, **não** guardado — o que vale é o XML |
 
-**Caminho no bucket:** `tenant/{id_tenant}/fiscal/{ano}/{mes}/{modelo}/{chave}.xml` — hierarquia que
-torna o ZIP por período uma listagem de prefixo, não uma varredura.
+**Caminho no bucket:** `tenants/{id_tenant}/fiscal/{ano}/{mes}/{modelo}/{chave}.xml` — hierarquia
+que torna o ZIP por período uma listagem de prefixo, não uma varredura. O prefixo
+`tenants/{id_tenant}/` é montado pelo adapter a partir do `TenantContext` (P8), nunca por quem
+chama; é o que `ArmazenamentoPrivado.gravar(AreaPrivada.FISCAL_XML, "{ano}/{mes}/…", …)` devolve
+como chave, e é isso que vai em `documento_fiscal.xml_objeto_bucket`.
 
 **Retenção: 5 anos** ✅ para o contribuinte (prazo decadencial, arts. 173/174 do CTN; os 132 meses
 do Ajuste SINIEF 2/2025 são obrigação dos **fiscos**, não do lojista). O bucket precisa de política
 de retenção/lock — apagar XML fiscal por acidente é problema legal do lojista, e isso **não existe
 hoje** em `docs/infra/armazenamento-imagens.md`, desenhado para fotos de produto (deletáveis).
-✅ **DF21 (revisada em 2026-08-17, decisão do dono do produto):** bucket fiscal separado e privado **para os XML**, com versionamento e retenção de 5 anos. O **certificado NÃO vai para bucket** — fica cifrado no banco do cliente (`fiscal_certificado.arquivo_cifrado`), o que o coloca no mesmo backup/restore do tenant e sob o RLS (P8) sem depender de política de bucket. 🔴 O bucket real ainda não foi provisionado.
+✅ **DF21 (revisada em 2026-08-17, decisão do dono do produto):** bucket fiscal separado e privado **para os XML**, com versionamento e retenção de 5 anos. O **certificado NÃO vai para bucket** — fica cifrado no banco do cliente (`fiscal_certificado.arquivo_cifrado`), o que o coloca no mesmo backup/restore do tenant e sob o RLS (P8) sem depender de política de bucket.
+
+📄 **A implementação do arquivamento está especificada para handoff em
+`docs/HANDOFF-ARQUIVAMENTO-XML.md`** (contrato, montagem do `nfeProc`, idempotência, critérios de
+aceitação e definição de pronto) — é o documento a entregar a quem for implementar.
+
+✅ **Bucket provisionado em 2026-08-17 (ADR-014):** **MinIO auto-hospedado** (S3), no docker-compose do projeto e em VPS dedicado quando o volume justificar — não GCS, por custo. Object Lock **GOVERNANCE de 1825 dias** ligado na criação do bucket, versionamento junto, e a credencial da API **sem permissão de apagar** no bucket fiscal: apagar XML é recusado três vezes (código, política da credencial e retenção do bucket). Sobe com `docker compose up -d minio minio-init`. Detalhes, riscos e o que falta: `docs/infra/armazenamento-privado-minio.md`. **O que ainda não existe é o consumidor** — nada grava no bucket até o Arquivamento ser implementado, e `xml_objeto_bucket`/`xml_hash` seguem vazios.
 
 ### 11.2 A rotina de download para a contabilidade
 
@@ -1098,7 +1107,11 @@ isso não sai em requisição síncrona.
 
 **Entrega:** 🔴 **DF22** — `comum.arquivocompartilhado` guarda em **memória** e limita a 20 arquivos
 por tenant; um ZIP de centenas de MB não cabe nesse desenho. O ZIP fiscal vai para o bucket com URL
-assinada de validade curta.
+assinada de validade curta. **O bucket já existe** (ADR-014) — mas o `ArmazenamentoPrivado` **não
+tem** método de URL assinada, de propósito: hoje arquivo privado sai pela API, autenticado.
+Oferecer URL assinada é decisão a registrar junto com a DF22, não método a acrescentar em
+silêncio. E o ZIP não pertence à área `FISCAL_XML` (imutável, 5 anos): é artefato descartável,
+regerável a partir dos XMLs, então precisa de uma área nova, apagável.
 
 ### 11.3 Acesso do contador
 
@@ -1370,7 +1383,7 @@ automatizado — os 10.515 NCMs de `cfg_produto_ncm` vieram por esse mesmo camin
 | **Transferência com tratamento pré-ADC 49** | Alto — nota errada em toda transferência | §8.4 validado com contador **antes** de a transferência sair da §4.2 |
 | **Lojista atender revendedor sem saber que ficou sem nota** | Médio — descoberto só na contabilidade | Estado `NAO_EMITIDO` visível na tela de Documentos (§9.1) + aviso no PDV, não silêncio |
 | Suporte fiscal engolindo a equipe | Alto para o negócio | DF12: fiscal só no Profissional/Escala ou como add-on |
-| Perda de XML no bucket | Crítico — obrigação legal de 5 anos | DF21: bucket com retenção/lock, separado do de fotos |
+| Perda de XML no bucket | Crítico — obrigação legal de 5 anos | ✅ Bucket com Object Lock de 1825 dias, separado do de fotos (ADR-014). ⚠️ **Retenção não é backup:** WORM impede apagar, não protege contra perder o disco — plano de backup do MinIO é pré-requisito da migração para VPS |
 
 ---
 
@@ -1385,7 +1398,7 @@ automatizado — os 10.515 NCMs de `cfg_produto_ncm` vieram por esse mesmo camin
 | DF18 | Timeout de autorização no PDV antes de cair em contingência | 10 s |
 | DF19 | Quantas falhas disparam contingência automática | 2 falhas consecutivas em 60 s |
 | **DF20** | **Devolução de NFC-e sem consumidor identificado** | ⚠️ **Decisão de v1, não futura** — é o caso mais comum do balcão. Investigar na F0, decidir antes da F5 (§10.2) |
-| **DF21** | Onde ficam certificado e XML? | ✅ **Revisada 2026-08-17: separados.** Certificado **cifrado no banco** do cliente; XML no **bucket privado** (retenção de 5 anos). Ver §11.1 |
+| **DF21** | Onde ficam certificado e XML? | ✅ **Fechada 2026-08-17.** Certificado **cifrado no banco** do cliente; XML no **bucket privado** com WORM de 5 anos — **MinIO auto-hospedado, provisionado** (ADR-014). Falta só o consumidor. Ver §11.1 |
 | DF22 | Entrega do ZIP grande | Bucket + URL assinada, não cache em memória |
 | DF23 | Papel `CONTADOR` (leitura fiscal) | Futuro; no v1 o lojista baixa e repassa |
 | DF24 | Tenant `INADIMPLENTE` pode emitir nota? | Sim — nunca bloquear emissão |

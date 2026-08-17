@@ -24,9 +24,11 @@ Registro cronológico das decisões e entregas. Atualizar a cada marco relevante
 > link de consulta pública e "Ver DANFCE" na lista de Documentos Fiscais.
 >
 > ⏭️ **O que falta:** **B9** (NF-e de devolução) travado pela **DF20** (regra de devolução sem
-> consumidor identificado, decisão do dono do produto ainda em aberto); **Arquivamento** (bucket
-> fiscal privado, DF21 — credenciais ainda não provisionadas pelo dono do produto). Nenhum dos
-> dois bloqueia o resto do produto — o v1 fiscal já emite, cancela, inutiliza e reprocessa.
+> consumidor identificado, decisão do dono do produto ainda em aberto); **Arquivamento** — o
+> **bucket deixou de ser o bloqueio em 2026-08-17** (ADR-014: MinIO privado provisionado, com WORM
+> de 5 anos), falta escrever o consumidor que grava o `nfeProc` e preenche
+> `documento_fiscal.xml_objeto_bucket`. Nenhum dos dois bloqueia o resto do produto — o v1 fiscal
+> já emite, cancela, inutiliza e reprocessa.
 >
 > ⚠️ **A MITRYUSCASH é a desenvolvedora, não uma cliente** — o certificado é da casa de software e
 > ela nunca emitirá em produção. Cada comprador do ERP terá um regime próprio (Simples, Presumido,
@@ -446,6 +448,64 @@ Movimentação de Conta Corrente) que ainda não tinham migrado pro `SeletorPlan
 ---
 
 ## Linha do tempo
+
+### 2026-08-17 (fim do dia) — Object storage **privado**: MinIO no compose (ADR-014)
+
+Pedido do dono do produto: *"precisamos de um bucket para guardar fotos de clientes e XML de notas
+fiscais; para garantir a segurança dessas informações vamos de MinIO no docker deste projeto e
+depois, caso fique grande, migramos pra VPS separado."* Escopo confirmado por pergunta explícita
+antes de codificar: **só a infra** — os dois consumidores (arquivamento fiscal e foto de cliente)
+são tarefas próprias —, e **as fotos de produto continuam no GCS**, porque bucket público é
+requisito real dos marketplaces (URL que expira quebra anúncio).
+
+**Por que não um segundo bucket no GCS.** Custo — a mesma razão que já tinha derrubado a proposta
+de bucket para o compartilhamento de comprovantes em 2026-08-07 —, e o fato de o XML ter guarda
+legal de 5 anos: é o item que só cresce, nunca decresce. MinIO auto-hospedado tem custo marginal
+zero em dev e disco de VPS em produção. O SDK escolhido foi o **da AWS (S3)**, não o proprietário
+do MinIO: MinIO, VPS, R2 e S3 falam o mesmo protocolo, então migrar vira troca de endpoint.
+
+1. **ADR-014 na spec** (§6, depois do ADR-013) e `docs/infra/armazenamento-privado-minio.md`.
+   Escritos **antes** do código, como manda o processo.
+2. **Dois buckets, porque os ciclos de vida são opostos.** `niner-fiscal-dev`: Object Lock
+   **GOVERNANCE de 1825 dias** + versionamento — apagar é impossível (F6, guarda legal).
+   `niner-privado-dev`: versionado e **apagável**, porque LGPD dá ao titular direito de exclusão.
+   Política de retenção no S3 é por bucket, então não dava para ser um só com dois prefixos.
+3. **`docker compose up -d minio minio-init`** (portas 9300/9301 — a máquina já roda outros três
+   MinIO). O `infra/minio/bootstrap.sh` cria bucket, retenção, ciclo de vida e a **credencial de
+   menor privilégio** da API; é idempotente (rodado duas vezes, verificado) e é o mesmo script que
+   vai provisionar o VPS — só muda endpoint.
+4. **A API nunca é root do MinIO.** Verificado por comando com a credencial da aplicação: grava no
+   fiscal ✅, **apaga no fiscal ❌ Access Denied**, grava/apaga no privado ✅, cria bucket ❌, leitura
+   anônima ❌. Vazamento da chave da API não apaga XML fiscal.
+5. **`ArmazenamentoPrivado` + `AreaPrivada` + `S3ArmazenamentoPrivado`** em `comum.armazenamento` —
+   interface **separada** da pública (`ArmazenamentoDeArquivos`, GCS): não tem `urlPublica()`, e
+   isso é decisão, não esquecimento. `AreaPrivada` amarra bucket + prefixo + mutabilidade num
+   enum, para não existir combinação errada possível. Prefixo `tenants/{id_tenant}/` sempre do
+   `TenantContext` e **conferido na leitura** — se um SELECT sem filtro de `id_tenant` (o bug que a
+   auditoria de 2026-08-08 provou possível) devolver chave alheia, sai 403 em vez do XML do
+   vizinho. **8 testes** (`ArmazenamentoPrivadoTest`) contra MinIO real via Testcontainers.
+6. **Achado durante a verificação:** em bucket versionado, `rm` **não apaga** — cria um *delete
+   marker* e a versão antiga fica guardada para sempre. Para foto de produto seria detalhe; para
+   dado pessoal é o oposto do que a LGPD pede, e o `mc rm` "bem-sucedido" esconde isso. Corrigido
+   com regra de ciclo de vida no bucket privado (`--noncurrent-expire-days 30
+   --expire-delete-marker`): exclusão vira definitiva em 30 dias, com janela para desfazer engano.
+7. **DF21 fechada** (`MODULOFISCAL.md` §11.1) — o bucket fiscal deixou de ser o bloqueio do
+   Arquivamento. O que falta agora é o **consumidor**: gravar o `nfeProc` e preencher
+   `documento_fiscal.xml_objeto_bucket`/`xml_hash`, colunas que existem desde a V035 e seguem
+   vazias. Também corrigida a linha da DF5, que ainda dizia "certificado cifrado no bucket" —
+   contradizia a própria revisão da DF21 (o `.pfx` fica cifrado **no banco**).
+
+📄 **Handoff escrito no mesmo dia:** `docs/HANDOFF-ARQUIVAMENTO-XML.md` — o arquivamento do XML
+será implementado por **outro desenvolvedor**, então a tarefa saiu especificada como spec de
+entrega: o que já existe e não deve ser refeito, onde estão os ganchos no código atual, como
+montar o `nfeProc` sem invalidar a assinatura (armadilha silenciosa), idempotência, o trigger de
+imutabilidade que barra código errado, critérios de aceitação em Dado/Quando/Então, definição de
+pronto e as 3 questões que são decisão do dono do produto, não de quem implementa.
+
+⚠️ **Duas dívidas registradas, nenhuma resolvida:** não existe **backup** do MinIO (retenção
+impede apagar, não protege contra perder o disco — é pré-requisito da migração para VPS, não
+tarefa posterior) e o tráfego API↔MinIO só é HTTP porque hoje não sai da rede do Docker; no VPS
+precisa de TLS.
 
 ### 2026-08-17 (continuação) — B1 a B8 do módulo fiscal fechados no mesmo dia, mais 3 melhorias pós-B8
 
@@ -6305,9 +6365,10 @@ com autenticação JWT real protegendo o ERP.
    reprocessar/link público/Ver DANFCE pós-B8.** Emite NFC-e de verdade pela SEFAZ-PR, cancela,
    inutiliza numeração, entra/sai de contingência sozinho e reprocessa documento preso. O que
    falta: **B9 (NF-e de devolução)**, travado pela **DF20** (regra de devolução sem consumidor
-   identificado — decisão do dono do produto, ainda em aberto); e **Arquivamento** (bucket fiscal
-   privado, DF21 — credenciais ainda não provisionadas). Nenhum dos dois é urgente: o v1 já cobre
-   o ciclo de vida completo da NFC-e, que é a operação do dia a dia da loja piloto.
+   identificado — decisão do dono do produto, ainda em aberto); e **Arquivamento** — o bucket
+   privado **já existe** desde 2026-08-17 (ADR-014, MinIO com WORM de 5 anos), falta o consumidor
+   que grava o `nfeProc` e preenche `xml_objeto_bucket`/`xml_hash`. Nenhum dos dois é urgente: o
+   v1 já cobre o ciclo de vida completo da NFC-e, que é a operação do dia a dia da loja piloto.
 1. **⭐ Integração com marketplaces** — é o **coração da visão original** (P1/P2, R3–R7) e a
    lacuna central do produto hoje: `canais/`, `pedidos/`, `precos/` e `integracao/` seguem só com
    `package-info.java`, sem nenhuma implementação de domínio. O schema está pronto desde
