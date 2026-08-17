@@ -28,7 +28,9 @@ import java.io.StringWriter;
 import java.nio.charset.StandardCharsets;
 import java.security.KeyStore;
 import java.security.PrivateKey;
+import java.security.Signature;
 import java.security.cert.X509Certificate;
+import java.util.Base64;
 import java.util.Collections;
 import java.util.List;
 
@@ -117,6 +119,33 @@ public class AssinadorXmlNfe {
             throw e;
         } catch (Exception e) {
             throw new AssinaturaInvalidaException("Falha ao assinar o XML: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * Assina o texto do QR Code da <b>contingência offline</b> (§9.7): RSA-SHA1 sobre os
+     * parâmetros, resultado em Base64 — o que o pattern <i>QRCODE V3 OFFLINE</i> do XSD espera no
+     * último campo.
+     *
+     * <p>É assinatura de <b>texto puro</b>, não XMLDSig: não há canonicalização, não há
+     * {@code Reference}, não há envelope. Confundir as duas produz um QR que o aplicativo de
+     * consulta rejeita — e em contingência não há SEFAZ do outro lado para dizer o que houve.
+     *
+     * <p>Existe porque em contingência o consumidor recebe o cupom <b>antes</b> de a SEFAZ
+     * conhecer a nota: sem essa assinatura, nada distingue um cupom legítimo de um inventado.
+     */
+    public String assinarQrCodeOffline(String parametros, KeyStore certificado, String senha) {
+        try {
+            ChavePrivadaECertificado credencial = extrair(certificado, senha);
+            Signature rsa = Signature.getInstance("SHA1withRSA");
+            rsa.initSign(credencial.chavePrivada());
+            rsa.update(parametros.getBytes(StandardCharsets.UTF_8));
+            return Base64.getEncoder().encodeToString(rsa.sign());
+        } catch (AssinaturaInvalidaException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new AssinaturaInvalidaException(
+                    "Falha ao assinar o QR Code da contingência: " + e.getMessage(), e);
         }
     }
 

@@ -906,10 +906,26 @@ a um.
 ✅ **DF17: só a versão 3.00** (NT 2025.001), obrigatória em produção desde 01/09/2025. O modelo v2.0
 (hash SHA-1 com CSC) **não será implementado**.
 
-Estrutura ⚠️ (validar no PDF da NT antes de codar): online `?p=<chave>|<versaoQRCode>`;
-contingência `?p=<chave>|<versaoQRCode>||<dhEmi>||<tpAmb>||`; autenticidade por **assinatura
-digital** de campos do próprio QR — o CSC saiu da montagem. Independente da versão, `infNFeSupl`
-(`qrCode` + `urlChave`) é **obrigatório na NFC-e** e **inexistente na NF-e**.
+✅ **Estrutura confirmada no B7 contra o pattern do `leiauteNFe_v4.00.xsd`** (⚠️ o que esta seção
+descrevia antes estava errado nas duas formas — codificar por ela daria rejeição por schema):
+
+| Emissão | Formato (depois de `?p=`) |
+|---|---|
+| **Online** (`tpEmis` 1/3/4) | `<chave44>` \| `3` \| `<tpAmb>` |
+| **Contingência** (`tpEmis` 9) | `<chave44>` \| `3` \| `<tpAmb>` \| `<dia>` \| `<vNF>` \| `<indicador>` \| `<documento>` \| `<assinatura>` |
+
+- `<dia>` é **o dia do mês em 2 dígitos** (01–31), *não* o `dhEmi` completo — foi o erro mais
+  perigoso do texto anterior.
+- `<indicador>` (1 CPF · 2 CNPJ · 3 estrangeiro) e `<documento>` podem vir **vazios** (venda de
+  balcão sem CPF), mas **os separadores continuam obrigatórios**.
+- `<assinatura>` é **RSA-SHA1 em Base64** sobre exatamente esses parâmetros, com a chave privada do
+  certificado da empresa — assinatura de **texto puro**, não XMLDSig. É ela que substitui a SEFAZ
+  como prova de autenticidade enquanto a nota não foi transmitida.
+- O CSC saiu da montagem no v3 (não há hash).
+
+Independente da versão, `infNFeSupl` (`qrCode` + `urlChave`) é **obrigatório na NFC-e** e
+**inexistente na NF-e**. Como `infNFeSupl` fica **fora** de `infNFe`, ele **não** é coberto pela
+assinatura XMLDSig — daí o QR offline precisar de assinatura própria.
 
 ### 9.6 Fluxo síncrono no PDV (DF8 + DF13)
 

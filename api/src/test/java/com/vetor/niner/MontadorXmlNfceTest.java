@@ -347,7 +347,85 @@ class MontadorXmlNfceTest {
                 .contains("<vDesc>2.00</vDesc>");
     }
 
+    // ------------------------------------------------------------------ contingência (§9.7)
+
+    /**
+     * ⚠️ <b>O caso que corrigiu a spec.</b> A §9.5 descrevia o QR offline como
+     * {@code ?p=<chave>|<versao>||<dhEmi>||<tpAmb>||}. O pattern <i>QRCODE V3 OFFLINE</i> do
+     * {@code leiauteNFe_v4.00.xsd} exige outra coisa — daí este teste validar contra o XSD e não
+     * contra uma string que eu mesmo escrevi: só o schema é autoridade aqui, e codificar pela spec
+     * teria dado rejeição em toda venda em contingência.
+     */
+    @Test
+    void qrCodeDeContingenciaSegueOPatternOfflineDoXsd() {
+        XmlMontado montado = montarEmContingencia(null);
+
+        assertThatCode(() -> validarEstrutura(montado)).doesNotThrowAnyException();
+        assertThat(montado.chaveAcesso().charAt(34))
+                .as("tpEmis 9 entra na própria chave de acesso").isEqualTo('9');
+        assertThat(montado.xml())
+                .contains("<tpEmis>9</tpEmis>")
+                // chave|3|tpAmb|dia|vNF|indicador|documento|assinatura — no balcão sem CPF os dois
+                // campos de destinatário ficam vazios, mas os separadores continuam obrigatórios.
+                .contains("?p=%s|3|1|17|28.00|||".formatted(montado.chaveAcesso()));
+    }
+
+    /** Com CPF informado, os campos de destinatário deixam de ser vazios (indicador 1 = CPF). */
+    @Test
+    void qrCodeDeContingenciaComCpfPreencheIndicadorEDocumento() {
+        XmlMontado montado = montarEmContingencia(
+                new Destinatario("22233344405", null, 9, 4106902, "CURITIBA", "PR"));
+
+        assertThatCode(() -> validarEstrutura(montado)).doesNotThrowAnyException();
+        assertThat(montado.xml()).contains("|28.00|1|22233344405|");
+    }
+
+    /**
+     * Sem assinador o montador <b>recusa</b>, em vez de emitir um QR sem assinatura. Em
+     * contingência o cupom vai para a mão do consumidor antes de a SEFAZ conhecer a nota: um QR
+     * não verificável é pior que não emitir, porque parece válido.
+     */
+    @Test
+    void contingenciaSemAssinadorDeQrCodeEhRecusada() {
+        assertThatThrownBy(() -> montador.montar(notaEmContingencia(null)))
+                .isInstanceOf(MontagemInvalidaException.class)
+                .hasMessageContaining("assinador do QR Code");
+    }
+
+    /** Emissão normal não muda: continua no formato online, sem os campos extras. */
+    @Test
+    void emissaoNormalMantemOQrCodeOnline() {
+        XmlMontado montado = montarVendaSimples(1, "102", null);
+
+        assertThat(montado.xml())
+                .contains("?p=%s|3|2]]>".formatted(montado.chaveAcesso()))
+                .contains("<tpEmis>1</tpEmis>");
+    }
+
     // ------------------------------------------------------------------ fixtures
+
+    /**
+     * Assinador de mentira: devolve Base64 fixo. O que este teste precisa provar é o <b>formato</b>
+     * do QR (que o XSD confere); que a assinatura é criptograficamente válida é assunto do
+     * {@code AssinadorXmlNfeTest}, onde há certificado de verdade.
+     */
+    private static final MontadorXmlNfce.AssinadorQrCode ASSINADOR_FALSO =
+            parametros -> "YWJjZGVmZ2hpams=";
+
+    private NotaParaMontar notaEmContingencia(Destinatario destinatario) {
+        NotaParaMontar base = notaBase(1, regraSimples("102"), destinatario, AmbienteSefaz.PRODUCAO,
+                pagamentoDe("28.00"), null);
+        return new NotaParaMontar(base.ambiente(), base.serie(), base.numero(),
+                base.codigoNumerico(), base.emissao(), base.naturezaOperacao(),
+                MontadorXmlNfce.TP_EMIS_CONTINGENCIA_OFFLINE,
+                base.emitente(), base.destinatario(), base.itens(), base.itensTributados(),
+                base.totais(), base.pagamentos(), base.troco(), base.informacoesComplementares(),
+                base.responsavelTecnico(), base.urls(), base.versaoAplicativo());
+    }
+
+    private XmlMontado montarEmContingencia(Destinatario destinatario) {
+        return montador.montar(notaEmContingencia(destinatario), ASSINADOR_FALSO);
+    }
 
     private XmlMontado montarVendaSimples(int crt, String csosn, Destinatario destinatario) {
         return montar(crt, regraSimples(csosn), destinatario);

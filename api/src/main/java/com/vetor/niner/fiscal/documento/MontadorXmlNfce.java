@@ -43,6 +43,9 @@ public class MontadorXmlNfce {
     private static final int MODELO_NFCE = 65;
     private static final String SEM_GTIN = "SEM GTIN";
 
+    /** {@code tpEmis = 9} — contingência offline da NFC-e (§9.7). Muda a chave de acesso e o QR. */
+    public static final int TP_EMIS_CONTINGENCIA_OFFLINE = 9;
+
     /** MOC: em homologação, na NFC-e a frase vai no {@code xProd} do <b>primeiro item</b> —
      *  não na razão social do destinatário (que a NFC-e sem CPF nem tem). Confirmado no B0. */
     private static final String FRASE_HOMOLOGACAO =
@@ -63,6 +66,17 @@ public class MontadorXmlNfce {
     private static final Set<String> CST_CONTRIB_ALIQ = Set.of("01", "02");
 
     public XmlMontado montar(NotaParaMontar nota) {
+        return montar(nota, null);
+    }
+
+    /**
+     * @param assinadorQrOffline assina o texto do QR Code na <b>contingência</b>
+     *                           ({@code tpEmis = 9}), onde a autenticidade não pode depender de
+     *                           consultar a SEFAZ. Ignorado na emissão normal; <b>obrigatório</b>
+     *                           em contingência — sem ele o QR não é verificável e a nota é
+     *                           rejeitada por schema.
+     */
+    public XmlMontado montar(NotaParaMontar nota, AssinadorQrCode assinadorQrOffline) {
         validar(nota);
 
         String cnpjEmitente = apenasAlfanumerico(nota.emitente().cnpj());
@@ -82,7 +96,7 @@ public class MontadorXmlNfce {
         montarInfAdic(xml, nota);
         montarInfRespTec(xml, nota.responsavelTecnico());
         xml.append("</infNFe>");
-        montarInfNFeSupl(xml, nota, chave);
+        montarInfNFeSupl(xml, nota, chave, assinadorQrOffline);
         xml.append("</NFe>");
 
         return new XmlMontado(chave, xml.toString());
@@ -436,18 +450,76 @@ public class MontadorXmlNfce {
 
     /**
      * {@code infNFeSupl} — QR Code e link de consulta. Fica <b>fora</b> de {@code infNFe} (é irmão
-     * dele dentro de {@code NFe}), o que também significa que <b>não é assinado</b>.
+     * dele dentro de {@code NFe}), o que também significa que <b>não é assinado</b> pela
+     * XMLDSig — daí o QR offline carregar assinatura própria.
      *
-     * <p>QR Code <b>v3.00 online</b>: {@code ?p=<chave44>|3|<tpAmb>} — forma lida do pattern do
-     * XSD oficial. O estudo documentava só {@code |<versao>} e <b>omitia o tpAmb</b>; era essa a
-     * causa dos três {@code cStat 225} do B0. No v3 o CSC saiu da montagem (não há hash).
+     * <p><b>Online</b> ({@code tpEmis} 1/3/4): {@code ?p=<chave44>|3|<tpAmb>}. O QR não precisa
+     * dizer mais nada porque quem consulta chega na SEFAZ e lê a nota inteira de lá. O estudo
+     * documentava só {@code |<versao>} e <b>omitia o tpAmb</b> — era essa a causa dos três
+     * {@code cStat 225} do B0.
+     *
+     * <p><b>Offline</b> ({@code tpEmis = 9}): a SEFAZ ainda não tem a nota, então o QR precisa
+     * carregar o suficiente para o consumidor conferir na hora — e ser assinado, porque sem a
+     * SEFAZ do outro lado nada mais garante que aquele papel não foi inventado.
+     *
+     * <p>⚠️ <b>O formato offline foi lido do pattern do XSD oficial, não da spec.</b> A §9.5
+     * descrevia {@code ?p=<chave>|<versao>||<dhEmi>||<tpAmb>||}, que não bate com o layout: o
+     * pattern <i>QRCODE V3 OFFLINE</i> de {@code leiauteNFe_v4.00.xsd} exige
+     * {@code chave|3|tpAmb|<dia>|<vNF>|<indicador do destinatário>|<documento>|<assinatura base64>}
+     * — <b>o dia do mês</b> (2 dígitos, 01–31), não a data-hora completa, e os campos de
+     * destinatário podem vir vazios mas os separadores não. Codificar pela spec teria dado
+     * rejeição por schema em toda venda em contingência — justamente quando não há SEFAZ para
+     * explicar o erro.
      */
-    private void montarInfNFeSupl(StringBuilder xml, NotaParaMontar nota, String chave) {
-        String qr = "%s?p=%s|3|%d".formatted(nota.urls().urlQrCode(), chave, nota.ambiente().codigo());
+    private void montarInfNFeSupl(StringBuilder xml, NotaParaMontar nota, String chave,
+                                  AssinadorQrCode assinadorQrOffline) {
+        String qr = nota.tipoEmissao() == TP_EMIS_CONTINGENCIA_OFFLINE
+                ? qrCodeOffline(nota, chave, assinadorQrOffline)
+                : "%s?p=%s|3|%d".formatted(nota.urls().urlQrCode(), chave, nota.ambiente().codigo());
+
         xml.append("<infNFeSupl>")
                 .append("<qrCode><![CDATA[").append(qr).append("]]></qrCode>")
                 .append(tag("urlChave", nota.urls().urlConsultaChave()))
                 .append("</infNFeSupl>");
+    }
+
+    private String qrCodeOffline(NotaParaMontar nota, String chave, AssinadorQrCode assinador) {
+        if (assinador == null) {
+            throw new MontagemInvalidaException(
+                    "Emissão em contingência exige assinador do QR Code — sem assinatura o cupom "
+                            + "entregue ao consumidor não é verificável.");
+        }
+
+        Destinatario dest = nota.destinatario();
+        String indicador = "";
+        String documento = "";
+        if (dest != null && !vazio(dest.cpfCnpj())) {
+            // 1 = CPF, 2 = CNPJ, 3 = documento estrangeiro. Na NFC-e de balcão o normal é não ter
+            // destinatário nenhum — e aí os dois campos ficam vazios, mas os separadores ficam.
+            documento = apenasDigitos(dest.cpfCnpj());
+            indicador = documento.length() == 14 ? "2" : "1";
+        }
+
+        // Os parâmetros assinados são exatamente o que vai depois de "?p=" — assinar mais (a URL)
+        // ou menos (sem o dia/valor) produz assinatura que o app de consulta rejeita.
+        String parametros = "%s|3|%d|%02d|%s|%s|%s".formatted(
+                chave, nota.ambiente().codigo(), nota.emissao().getDayOfMonth(),
+                nota.totais().valorNota().setScale(2, RoundingMode.HALF_UP).toPlainString(),
+                indicador, documento);
+
+        return "%s?p=%s|%s".formatted(nota.urls().urlQrCode(), parametros, assinador.assinar(parametros));
+    }
+
+    /**
+     * Assina o texto do QR Code da contingência (RSA-SHA1 sobre os parâmetros, resultado em
+     * Base64), com a chave privada do certificado da empresa.
+     *
+     * <p>É uma função e não uma dependência do montador de propósito: o montador precisa continuar
+     * puro e testável sem certificado, e a chave privada só circula em quem realmente assina.
+     */
+    @FunctionalInterface
+    public interface AssinadorQrCode {
+        String assinar(String parametros);
     }
 
     // ---------------------------------------------------------------- validação de entrada
