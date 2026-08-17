@@ -336,6 +336,38 @@ public class DocumentoFiscalRepositorio {
                                         MontagemNfceDtos.AmbienteSefaz ambiente, String uf, String cnpjEmitente) {
     }
 
+    // ---------------------------------------------------------------- consulta pontual (§12, B8)
+
+    /**
+     * Contexto mínimo pra montar/enviar uma consulta {@code NFeConsultaProtocolo4} a partir de um
+     * {@code id_documento_fiscal} — usado por {@link DocumentoFiscalConsultaService#consultarNaSefaz}.
+     *
+     * <p>⚠️ Vive aqui, não como método privado do serviço, pela mesma razão de sempre
+     * ([[feedback_transactional_chamada_interna_rls]]): {@code consultarNaSefaz} não pode ser
+     * {@code @Transactional} (faria a chamada de rede acontecer dentro de uma transação de banco,
+     * F2) — e sem transação ativa, uma leitura chamada por {@code this.} nunca teria
+     * {@code app.id_tenant} definido. Achado testando ao vivo: a consulta devolvia 404 "documento
+     * não encontrado" para um documento que existia, porque o RLS via tenant nenhum.
+     */
+    @Transactional(readOnly = true)
+    public java.util.Optional<ContextoConsulta> buscarContextoParaConsulta(long idDocumentoFiscal) {
+        return jdbc.sql("""
+                        SELECT d.id_empresa, d.modelo, d.chave_acesso, d.ambiente::text AS ambiente, e.estado AS uf
+                          FROM documento_fiscal d
+                          JOIN empresa e ON e.id_tenant = d.id_tenant AND e.id_empresa = d.id_empresa
+                         WHERE d.id_tenant = plataforma.tenant_atual() AND d.id_documento_fiscal = ?
+                        """)
+                .param(idDocumentoFiscal)
+                .query((rs, n) -> new ContextoConsulta(
+                        rs.getLong("id_empresa"), rs.getInt("modelo"), rs.getString("chave_acesso"),
+                        MontagemNfceDtos.AmbienteSefaz.valueOf(rs.getString("ambiente")), rs.getString("uf")))
+                .optional();
+    }
+
+    public record ContextoConsulta(long idEmpresa, int modelo, String chaveAcesso,
+                                   MontagemNfceDtos.AmbienteSefaz ambiente, String uf) {
+    }
+
     /** {@code valor_troco} é {@code NOT NULL} — troco não informado é zero, nunca ausência. */
     private static java.math.BigDecimal nz(java.math.BigDecimal valor) {
         return valor == null ? java.math.BigDecimal.ZERO : valor;
