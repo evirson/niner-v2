@@ -7,21 +7,26 @@ Registro cronológico das decisões e entregas. Atualizar a cada marco relevante
 
 ## Estado atual
 
-> **Em curso (2026-08-17): MÓDULO FISCAL.** Estudo fechado (`docs/MODULOFISCAL.md` v2.1), schema no
-> banco (V034/V035), tabelas nacionais de IBS/CBS carregadas e **243 XSD oficiais versionados**.
-> Escopo do v1: **NFC-e ao consumidor final + NF-e de devolução de venda**, com cancelamento,
-> inutilização, contingência, arquivamento e download. Roteiro em blocos B0–B9: **§17.1 do estudo**.
+> **MÓDULO FISCAL — B0 a B8 fechados no mesmo dia (2026-08-17), mais 3 melhorias pós-B8.**
+> Estudo fechado (`docs/MODULOFISCAL.md` v2.1), schema no banco (V034/V035), tabelas nacionais de
+> IBS/CBS carregadas e **243 XSD oficiais versionados**. Escopo do v1: **NFC-e ao consumidor final
+> + NF-e de devolução de venda**, com cancelamento, inutilização, contingência, arquivamento e
+> download. Roteiro em blocos B0–B9: **§17.1 do estudo**.
 >
-> **✅ B0 CONCLUÍDO — NFC-e autorizada pela SEFAZ-PR** (`cStat 100`, protocolo `141260001531993`),
-> com **JDK puro, sem lib de NF-e**: a DF7 está fechada no plano B e o maior risco de arquitetura do
-> módulo caiu. ✅ **B1** (4 specs de tela). 🔄 **B2 em andamento** — `fiscal.configuracao` pronto
-> (13 testes); faltam `PerfilFiscalService`, `FiscalCertificadoService` e as telas React.
-> ⏭️ **Próximo: B4, o motor tributário** — puro, sem rede, e a maior massa de teste do módulo.
+> **O que está pronto e testado (675/675 backend verdes):** B0 (PoC real contra a SEFAZ-PR, `cStat
+> 100`, JDK puro sem lib de NF-e — DF7 fechada no plano B) · B1 (specs) · B2 (`fiscal.configuracao`
+> + `fiscal.perfil` + certificado A1, **cifrado no banco**, não em bucket — DF21 revisada) · B3
+> (Conformidade Fiscal, bloqueio preventivo F11) · B4 (motor tributário puro — ICMS/PIS/COFINS/IPI/
+> IBS/CBS, DF37: só MEI e Simples Nacional) · B5 (montagem do XML validada contra o XSD oficial) ·
+> B6 (assinatura XMLDSig + transporte mTLS) · B7 (numeração sem buraco F4, emissão síncrona no PDV,
+> contingência offline com drenagem automática, DANFCE na papeleta) · B8 (cancelamento 110111,
+> tela de Documentos Fiscais, inutilização de numeração) · **pós-B8**: reprocessar documento preso,
+> link de consulta pública e "Ver DANFCE" na lista de Documentos Fiscais.
 >
-> ⚠️ **Duas decisões de infra bloqueiam o `FiscalCertificadoService`:** o bucket fiscal privado
-> (DF21 — os buckets do ADR-013 são de leitura pública, o `.pfx` não pode ir neles) e onde mora a
-> senha do certificado (não existe KMS no projeto; recomendação é AES-GCM com chave fora do banco,
-> reaproveitando a decisão que a Constituição já tomou para credencial de marketplace).
+> ⏭️ **O que falta:** **B9** (NF-e de devolução) travado pela **DF20** (regra de devolução sem
+> consumidor identificado, decisão do dono do produto ainda em aberto); **Arquivamento** (bucket
+> fiscal privado, DF21 — credenciais ainda não provisionadas pelo dono do produto). Nenhum dos
+> dois bloqueia o resto do produto — o v1 fiscal já emite, cancela, inutiliza e reprocessa.
 >
 > ⚠️ **A MITRYUSCASH é a desenvolvedora, não uma cliente** — o certificado é da casa de software e
 > ela nunca emitirá em produção. Cada comprador do ERP terá um regime próprio (Simples, Presumido,
@@ -441,6 +446,84 @@ Movimentação de Conta Corrente) que ainda não tinham migrado pro `SeletorPlan
 ---
 
 ## Linha do tempo
+
+### 2026-08-17 (continuação) — B1 a B8 do módulo fiscal fechados no mesmo dia, mais 3 melhorias pós-B8
+
+O resto do dia que começou com o B0 (NFC-e autorizada pela SEFAZ-PR, entrada abaixo). Nesta
+sequência, sem pausa: **B1 → B2 → B3 → B4 → B5 → B6 → B7 (4 partes) → B8 (3 partes) → pós-B8**.
+**675/675 testes de backend verdes ao final do dia**, `tsc -b` limpo no `web/`.
+
+**B1 — specs.** Quatro telas fiscais especificadas antes de codificar (§5 do processo
+spec-driven): `fiscal.configuracao`, `fiscal.perfil`, `fiscal.certificado`, `fiscal.conformidade`.
+
+**B2 — configuração fiscal, perfis e certificado.** `fiscal.configuracao` (por **empresa**, não
+por tenant — cada loja tem IE/série/ambiente próprios), `fiscal.perfil` (CRUD de
+`cfg_perfil_fiscal`/`cfg_perfil_fiscal_regra` — CST/CFOP centralizados num perfil reutilizável em
+vez de espalhados por produto) e `fiscal.certificado` (upload do `.pfx`, validação de validade e
+de CNPJ do titular contra o CNPJ da empresa — CPF/CNPJ alfanumérico, IN RFB 2.229/2024). **DF21
+revisada nesta mesma sessão:** o certificado **não vai para bucket** (os buckets do ADR-013 são de
+leitura pública) — fica **cifrado no banco** (`fiscal_certificado.arquivo_cifrado`, AES-GCM, chave
+fora do banco), o que o coloca sob RLS/backup do tenant como qualquer outro dado sensível, sem
+depender de infra de bucket nenhuma. **DF37 fechada nesta janela também:** o Niner atende **só MEI
+e Simples Nacional** (CRT 1/2/4) — Lucro Presumido/Real ficam fora do produto, recusados com 400
+explicando que é escopo, não bug. Três telas React novas.
+
+**B3 — Conformidade Fiscal.** Painel que lista o que falta antes de ligar a emissão (produto sem
+NCM/perfil, cliente sem município IBGE, empresa sem certificado/CNAE) — bloqueio **preventivo**
+(F11): a recusa de ligar `emite_nfce` aponta exatamente o que corrigir, em vez de deixar o lojista
+descobrir na primeira rejeição da SEFAZ com cliente no caixa.
+
+**B4 — motor tributário.** Puro, sem I/O, testado por tabela (§16.1 do estudo é a superfície
+principal do produto, não borda — cada comprador tem um regime diferente). Calcula ICMS
+(normal/ST/substituição), PIS/COFINS, e **IBS/CBS para todos os regimes desde o v1** (reforma
+tributária), resolvido por perfil fiscal × contexto (CRT, UF destino, tipo de destinatário,
+operação).
+
+**B5 — montagem do XML.** `MontadorXmlNfce` gera o XML da NFC-e a partir do que o motor calculou
+(o montador nunca recalcula imposto) e valida contra o **XSD oficial** antes de qualquer coisa
+(F11) — três tentativas gastas com `cStat 225` até parar de adivinhar e ler o schema.
+
+**B6 — assinatura e transporte.** XMLDSig **enveloped** (RSA-SHA1 + C14N) com **só o JDK**, sem
+lib de NF-e — o `java.xml.crypto` do próprio Java 25 assina no formato que a SEFAZ exige.
+Transporte via `HttpClient` do JDK com **mTLS nativo** (certificado do lojista, nunca o da
+Vetor — cache de `SSLContext` por impressão digital do certificado, não por tenant, para nunca
+misturar). Achado: a raiz ICP-Brasil não vem no `cacerts` padrão — truststore própria configurável.
+
+**B7 — emissão síncrona, contingência, DANFCE (4 partes).** (1) `FiscalNumeracaoService`: número
+**sem buraco** (F4), alocado sob trava numa transação curta e separada da transmissão — um número
+perdido é papelada (inutilização); um número repetido é rejeição no caixa com cliente na frente.
+`EmissaoNfceService` orquestra montar→assinar→validar→transmitir com contingência automática
+(DF19: duas falhas de comunicação seguidas entram em contingência sozinhas). (2)
+`FiscalContingenciaDrenoJob`: `@Scheduled` que transmite a fila pendente quando a SEFAZ volta. (3)
+PDV liga com venda real — `POST /pdv/vendas/{id}/nfce` dispara em paralelo ao cupom (F3: a venda
+nunca espera a SEFAZ). (4) DANFCE de verdade na papeleta (QR Code escaneável, protocolo, tarja de
+homologação) e painel de Contingência (`/fiscal/contingencia`, estado + fila + entrar/sair manual).
+**Bug real achado ao vivo:** `dhEmi` com sufixo `Z` quebrava 100% das emissões (`TDateTimeUTC`
+proíbe `Z`) — normalizado para o fuso de São Paulo antes de formatar.
+
+**B8 — cancelamento, Documentos Fiscais, inutilização (3 partes, escolhidas pelo dono do produto
+via pergunta explícita — Arquivamento ficou de fora, bucket ainda não provisionado).**
+(1) Cancelamento de NFC-e (evento 110111) integrado ao Cancelamento de Venda existente: "estoque/
+caixa e fiscal nunca divergem — ou os dois andam, ou nenhum anda"; prazo de 30 min vindo de
+`cfg_uf_autorizador` (F10, nunca hardcoded); toda tentativa fica registrada mesmo quando a SEFAZ
+recusa (P3). (2) Tela `/fiscal/documentos` — lista paginada por empresa/período/modelo/situação,
+ver XML, consultar situação ao vivo na SEFAZ. (3) `/fiscal/inutilizacao` — a tela **detecta os
+buracos sozinha** (número alocado que nunca virou nota nem já foi inutilizado, agrupado em faixas
+contíguas) em vez de exigir conferência manual de sequência; bloqueio F11 antes de chamar a SEFAZ
+para número já usado ou ainda não alocado. **Bug real achado incidentalmente** (não relacionado ao
+B8): o job de drenagem de contingência do B7 referenciava uma coluna (`e.uf`) que não existe em
+`empresa` (é `estado`) — vinha quebrando em silêncio toda vez que rodava; corrigido.
+
+**Pós-B8 — três melhorias que não dependem do bucket, pedidas pelo dono do produto depois de um
+levantamento do que faltava.** (1) `POST /documentos/{id}/reprocessar` — destrava documento preso
+em `TRANSMITINDO`/`ASSINADO`: **sempre consulta a SEFAZ antes de decidir** (F5 — a nota pode ter
+sido autorizada com a resposta perdida) e só retransmite quando a consulta confirma que a nota
+nunca chegou lá. (2) Link de consulta pública na lista de Documentos Fiscais (mesma URL do QR
+Code, extraída do XML já assinado). (3) "Ver DANFCE" na lista, reaproveitando 100% o componente já
+existente do PDV (zero lógica nova).
+
+Detalhe técnico completo (decisões de design, bugs e o porquê de cada um, convenções de XSD/Id de
+evento, etc.) fica na memória de sessão do agente — este registro é só o resumo cronológico.
 
 ### 2026-08-17 — B0 concluído: **NFC-e autorizada pela SEFAZ-PR**, e a DF7 fechada no plano B
 
@@ -6216,15 +6299,15 @@ com autenticação JWT real protegendo o ERP.
 
 **Feito em 2026-07-21:** ✅ **padrão de tela de cadastro consolidado** (paginação por página + ordenação por coluna + ícones de ação + modo somente-leitura + configuração de campos por tenant + shell de altura travada + campos informativos de auditoria) e ✅ **segunda, terceira e quarta telas de domínio** — Funcionários (`cadastros.funcionario`), Plano de Contas (`cadastros.planocontas`, com `criado_em`/`atualizado_em` adicionados à V016) e Fornecedores (`cadastros.fornecedor`, com criação rápida de plano de contas embutida), todas construídas sobre esse padrão; ✅ **Parâmetros do Sistema** (`configuracao.geral`), primeira tela deliberadamente fora do padrão de cadastro (singleton por tenant, ADMIN-only).
 
-**Retomar — ordem sugerida** (revisada em 2026-08-16):
+**Retomar — ordem sugerida** (revisada em 2026-08-17):
 
-0. **⭐ EM CURSO — Módulo fiscal (NFC-e + NF-e de devolução).** Escolhido pelo dono do produto em
-   2026-08-16 e já com o schema aplicado. **O roteiro de codificação é a §17.1 de
-   `docs/MODULOFISCAL.md`** (blocos B0–B9). Resumo de por onde pegar: **com o certificado A1 em
-   mãos, B0** (PoC da F0 — assinar e autorizar uma NFC-e na homologação do PR; é o único gate real
-   de arquitetura, porque a lib candidata é Java 8 + `javax` + Axis2 contra nosso Java 25
-   jakarta); **sem o certificado, B1 → B2** (specs das 4 telas fiscais, depois os cadastros), com
-   **B4** (motor tributário, puro e sem rede) podendo andar em paralelo.
+0. **⭐ Módulo fiscal — B0 a B8 fechados em 2026-08-17 (`docs/MODULOFISCAL.md` §17.1), mais
+   reprocessar/link público/Ver DANFCE pós-B8.** Emite NFC-e de verdade pela SEFAZ-PR, cancela,
+   inutiliza numeração, entra/sai de contingência sozinho e reprocessa documento preso. O que
+   falta: **B9 (NF-e de devolução)**, travado pela **DF20** (regra de devolução sem consumidor
+   identificado — decisão do dono do produto, ainda em aberto); e **Arquivamento** (bucket fiscal
+   privado, DF21 — credenciais ainda não provisionadas). Nenhum dos dois é urgente: o v1 já cobre
+   o ciclo de vida completo da NFC-e, que é a operação do dia a dia da loja piloto.
 1. **⭐ Integração com marketplaces** — é o **coração da visão original** (P1/P2, R3–R7) e a
    lacuna central do produto hoje: `canais/`, `pedidos/`, `precos/` e `integracao/` seguem só com
    `package-info.java`, sem nenhuma implementação de domínio. O schema está pronto desde
