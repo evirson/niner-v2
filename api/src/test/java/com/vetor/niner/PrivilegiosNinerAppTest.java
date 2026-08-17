@@ -130,9 +130,9 @@ class PrivilegiosNinerAppTest {
     }
 
     /**
-     * F6/F7 (V035): documento fiscal, seus itens, seus eventos e o log de uso do certificado
-     * NUNCA são apagados por {@code niner_app} — nem um RASCUNHO que falhou é trilha perdida
-     * (documento) nem um acesso ao certificado deixa de constar (uso).
+     * F6/F7 (V035): documento fiscal, seus itens, seus eventos, a inutilização de numeração e o
+     * log de uso do certificado NUNCA são apagados por {@code niner_app} — nem um RASCUNHO que
+     * falhou é trilha perdida (documento) nem um acesso ao certificado deixa de constar (uso).
      */
     @Test
     void documentosFiscaisELogDeUsoDoCertificadoNaoPodemSerApagadosPorNinerApp() throws Exception {
@@ -141,6 +141,7 @@ class PrivilegiosNinerAppTest {
             permissaoNegada(st, "DELETE FROM documento_fiscal_item");
             permissaoNegada(st, "DELETE FROM documento_fiscal_evento");
             permissaoNegada(st, "DELETE FROM fiscal_certificado_uso");
+            permissaoNegada(st, "DELETE FROM fiscal_inutilizacao");
         }
     }
 

@@ -41,12 +41,17 @@ public class ValidadorXsd {
     /** XSD do lote de envio do evento de cancelamento (110111, B8) — define {@code envEvento}. */
     public static final String XSD_EVENTO_CANCELAMENTO = "/xsd/envEventoCancNFe_v1.00.xsd";
 
+    /** XSD do pedido de inutilização (§10.4, B8) — define {@code inutNFe}, sem envelope de lote. */
+    public static final String XSD_INUTILIZACAO = "/xsd/inutNFe_v4.00.xsd";
+
     private final Schema schemaNfe;
     private final Schema schemaEventoCancelamento;
+    private final Schema schemaInutilizacao;
 
     public ValidadorXsd() {
         this.schemaNfe = carregar(XSD_NFE);
         this.schemaEventoCancelamento = carregar(XSD_EVENTO_CANCELAMENTO);
+        this.schemaInutilizacao = carregar(XSD_INUTILIZACAO);
     }
 
     /**
@@ -61,6 +66,11 @@ public class ValidadorXsd {
     /** Mesma garantia do {@link #validarNfe}, aplicada ao lote de envio do evento (F11). */
     public void validarEventoCancelamento(String xml) {
         validar(schemaEventoCancelamento, xml);
+    }
+
+    /** Mesma garantia do {@link #validarNfe}, aplicada ao pedido de inutilização (F11). */
+    public void validarInutilizacao(String xml) {
+        validar(schemaInutilizacao, xml);
     }
 
     private void validar(Schema schema, String xml) {

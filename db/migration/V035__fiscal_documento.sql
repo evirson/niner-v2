@@ -242,6 +242,8 @@ CREATE TABLE fiscal_numeracao (
 );
 
 -- Buraco na sequência só se resolve por inutilização formal, até o 10º dia do mês seguinte.
+-- Como documento_fiscal_evento (B8): grava TODA tentativa, mesmo recusada pela SEFAZ (P3) — não
+-- se apaga nem se sobrescreve uma linha, só se insere outra (F11 "erro explicito, nunca chute").
 CREATE TABLE fiscal_inutilizacao (
   id_inutilizacao  integer     GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   id_tenant        smallint    NOT NULL REFERENCES plataforma.tenant (id_tenant),
@@ -252,9 +254,13 @@ CREATE TABLE fiscal_inutilizacao (
   numero_inicial   integer     NOT NULL,
   numero_final     integer     NOT NULL,
   justificativa    text        NOT NULL,
+  autorizado       boolean     NOT NULL,          -- P3: grava a tentativa mesmo quando a SEFAZ recusa
   protocolo        text,
   status_sefaz     text,
   motivo_sefaz     text,
+  -- XML da inutilização já assinado (o que foi enviado) — mesmo par indissociável de
+  -- protocolo/motivo que documento_fiscal_evento.xml_evento (B8).
+  xml_inutilizacao text,
   xml_objeto_bucket text,
   id_usuario       integer,
   criado_em        timestamptz NOT NULL DEFAULT now(),
@@ -573,16 +579,17 @@ DECLARE
   tabelas text[] := ARRAY[
     'fiscal_config_empresa', 'fiscal_certificado',
     'cfg_perfil_fiscal', 'cfg_perfil_fiscal_regra',
-    'fiscal_numeracao', 'fiscal_inutilizacao',
+    'fiscal_numeracao',
     'documento_fiscal_pagamento', 'documento_fiscal_referencia'
   ];
-  -- Tabelas SEM DELETE para niner_app (F6/F7: o documento fiscal, seus itens, seus eventos e o
-  -- log de uso do certificado NUNCA são apagados — nem um RASCUNHO que falhou, que é trilha de
-  -- suporte). Acrescentar o caso a PrivilegiosNinerAppTest: TestcontainersConfiguration conecta
-  -- a aplicação como superusuário e GRANT/REVOKE fica invisível para o resto da suíte.
+  -- Tabelas SEM DELETE para niner_app (F6/F7: o documento fiscal, seus itens, seus eventos, a
+  -- inutilização de numeração e o log de uso do certificado NUNCA são apagados — nem um RASCUNHO
+  -- que falhou, que é trilha de suporte). Acrescentar o caso a PrivilegiosNinerAppTest:
+  -- TestcontainersConfiguration conecta a aplicação como superusuário e GRANT/REVOKE fica
+  -- invisível para o resto da suíte.
   tabelas_sem_delete text[] := ARRAY[
     'documento_fiscal', 'documento_fiscal_item', 'documento_fiscal_evento',
-    'fiscal_certificado_uso'
+    'fiscal_certificado_uso', 'fiscal_inutilizacao'
   ];
 BEGIN
   FOREACH t IN ARRAY tabelas LOOP
@@ -635,7 +642,7 @@ COMMENT ON TABLE fiscal_certificado_uso IS 'Log de uso do certificado (quem, qua
 COMMENT ON TABLE cfg_perfil_fiscal     IS 'Perfil fiscal reutilizavel (DF3): um perfil, centenas de produtos, uma correcao so. RLS.';
 COMMENT ON TABLE cfg_perfil_fiscal_regra IS 'Regra do perfil por CRT x UF destino x tipo de destinatario x tipo de operacao. Sem regra que case, o motor falha explicitamente (F11). RLS.';
 COMMENT ON TABLE fiscal_numeracao      IS 'Sequencial por (empresa, modelo, serie), alocado sob trava em transacao curta e separada da transmissao (F2/F4). RLS.';
-COMMENT ON TABLE fiscal_inutilizacao   IS 'Inutilizacao de faixa de numeracao (buraco na sequencia), ate o 10o dia do mes seguinte. RLS.';
+COMMENT ON TABLE fiscal_inutilizacao   IS 'Inutilizacao de faixa de numeracao (buraco na sequencia), ate o 10o dia do mes seguinte. Imutavel (F6/F7), so INSERT. RLS.';
 COMMENT ON TABLE documento_fiscal      IS 'Mestre do documento fiscal (NFC-e 65 e NF-e 55). F1: e consequencia de uma operacao ja registrada (id_venda/id_devolucao/id_movimento). Nunca apagado (F6) — sem GRANT de DELETE. RLS.';
 COMMENT ON TABLE documento_fiscal_item IS 'Item + MEMORIA DE CALCULO (F9, camada 3 de docs/MODULOFISCAL.md 7.4). Imutavel: perfil corrigido depois nao muda nota antiga, e a NF-e de devolucao espelha a tributacao gravada aqui. RLS.';
 COMMENT ON TABLE documento_fiscal_pagamento IS 'detPag (obrigatorio na NFC-e). Tabela propria para a nota ser reproduzivel byte a byte mesmo apos o caixa ser fechado/reaberto. RLS.';

@@ -90,6 +90,14 @@ public class AssinadorXmlNfe {
         return assinarElemento(xml, "infEvento", idEsperado, pkcs12, senha);
     }
 
+    /**
+     * Assina o {@code infInut} de um pedido de inutilização (§10.4, B8) — mesma mecânica, alvo
+     * diferente. Ver {@link MontadorInutilizacaoNfe} para a convenção do {@code Id}.
+     */
+    public String assinarInutilizacao(String xml, String idEsperado, KeyStore pkcs12, String senha) {
+        return assinarElemento(xml, "infInut", idEsperado, pkcs12, senha);
+    }
+
     private String assinarElemento(String xml, String nomeElemento, String idEsperado,
                                    KeyStore pkcs12, String senha) {
         try {
