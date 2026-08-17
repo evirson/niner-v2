@@ -66,7 +66,7 @@ visual de `LancamentosCarteiraModal.tsx`.
 | Verificação | Origem | Por que bloqueia |
 |---|---|---|
 | Configuração fiscal existe | `fiscal_config_empresa` | Sem CRT não há como calcular nada |
-| `crt` × `regime_apuracao` coerentes | idem | CRT 3 + SIMPLES calcularia PIS/COFINS zerado (DF36) |
+| `crt` entre os atendidos (1, 2, 4) | idem | CRT 3 é Lucro Real/Presumido, fora do escopo do produto (DF37) |
 | CNPJ preenchido e válido | `empresa.cnpj` | Grupo `emit` do XML |
 | Inscrição Estadual preenchida | `empresa.inscricao_estadual` | idem |
 | Código de município IBGE | `empresa.codigo_municipio_ibge` | `cMun` — não há de onde derivar, `cidade` é texto livre |

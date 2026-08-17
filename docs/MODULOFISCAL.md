@@ -37,7 +37,8 @@ decisão de arquitetura vira ADR no formato §6 da spec.
 | DF13 | Venda a CNPJ contribuinte no PDV | ✅ Revisada pela DF35: sem NF-e de venda no v1, o PDV **emite NFC-e para consumidor final, inclusive com CNPJ** (`indIEDest` 2 ou 9), e **recusa a emissão** quando o cliente é contribuinte de ICMS (`indIEDest = 1`), com mensagem que ensina a saída. A venda em si nunca é bloqueada (F3) — ver §9.6 |
 | DF26 | Venda não presencial (marketplace / e-commerce) | ✅ Futura (§4.2). Os indicadores `indPres`/`indFinal`/`idDest` nascem no `documento_fiscal` desde o v1 porque a NFC-e já os preenche; o resto (transporte, `infIntermed`) vem junto com `canais/` |
 | DF27 | Correção de nota autorizada | ✅ Futura. ⚠️ **CC-e não existe para NFC-e** — é evento de NF-e 55, então nunca teria entrado num v1 de NFC-e de qualquer forma (§4.2) |
-| **DF36** 🆕 | **Alíquota de PIS/COFINS: do perfil do produto ou do regime da empresa?** | ✅ **Do regime.** O motor lê `fiscal_config_empresa.regime_apuracao`; o perfil contribui só o **CST**. `aliquota_pis`/`aliquota_cofins` da regra viram **override**, usadas apenas quando o CST não é "tributada normal". Ver §7.3 e §8.3 |
+| ~~DF36~~ | ~~Alíquota de PIS/COFINS: do perfil do produto ou do regime da empresa?~~ | ⛔ **SUPERADA pela DF37 (2026-08-17).** A pergunta só existia porque o CRT 3 cobre Lucro Presumido e Real ao mesmo tempo. Com os dois regimes fora do produto, não há mais alíquota ad-valorem de PIS/COFINS a decidir: é sempre CST 99, dentro do DAS. `regime_apuracao` foi removido do schema |
+| **DF37** 🆕 | **Quais regimes tributários o Niner atende?** | ✅ **Só MEI e Simples Nacional** — CRT 1, 2 e 4. Lucro Real e Lucro Presumido **não são atendidos**, e a recusa é de **escopo de produto**, não de funcionalidade faltando. Consequências em cascata: sem `regime_apuracao`, sem PIS/COFINS ad-valorem, sem IPI, sem `equiparado_industrial`. CST de ICMS sobrevive só para o CRT 2. Ver §7.1, §8.2 e §8.3 |
 
 Decisões ainda em aberto: **Anexo A** (DF12, DF16, DF18–DF24, DF29–DF34).
 
@@ -129,6 +130,11 @@ não pagar por nota.
 2025.002-RTC** são obrigatórios em produção para **regime regular (CRT 3)**; nota sem os grupos é
 rejeitada. Simples e MEI (CRT 1, 2 e 4) estão dispensados até **04/01/2027** ⚠️ — cerca de cinco
 meses. Ver §8.5.
+
+> **A DF37 mudou o peso desta data.** Com o produto atendendo só MEI e Simples, **04/01/2027 é o
+> prazo de 100% da base de clientes** — não de uma minoria. Não sobra nenhuma empresa no prazo de
+> 03/08/2026, mas também não sobra ninguém com folga: quando a data virar, vira para todo mundo ao
+> mesmo tempo. É o argumento mais forte para o IBS/CBS já sair calculado no v1 (DF4).
 
 **2.4 — O fiscal é o primeiro módulo que pode parar a loja.** Todos os módulos até aqui falham para
 dentro: um relatório errado se refaz, uma baixa errada se estorna. Uma NFC-e que não autoriza para
@@ -331,8 +337,7 @@ CEP, telefone, e-mail. **Falta para o grupo `emit`/`enderEmit`:**
 | `cnae` | `CNAE` | Obrigatório quando há IM; recomendado sempre |
 | `inscricao_municipal` | `IM` | |
 | `inscricao_estadual_st` | `IEST` | Só para substituto tributário em outra UF |
-| `crt` | `CRT` | 1 Simples · 2 Simples excesso de sublimite · 3 Regime Normal · 4 MEI ⚠️ (CRT 4 é recente; confirmar no XSD vigente) |
-| `regime_apuracao` | — | `SIMPLES`/`PRESUMIDO`/`REAL`. Não vai no XML, mas o CRT 3 **não distingue** Presumido de Real e a diferença de PIS/COFINS é de 3,65% para 9,25% |
+| `crt` | `CRT` | **1** Simples · **2** Simples com excesso de sublimite · **4** MEI ⚠️ (CRT 4 é recente; confirmar no XSD vigente). O **3** (Regime Normal) é recusado — DF37 |
 | `tipo_estabelecimento` | — | Matriz ou filial. Necessário para a transferência (§8.4) |
 | `pais` / `codigo_pais` | `cPais`/`xPais` | Fixo 1058/BRASIL, mas o campo tem que existir |
 
@@ -433,11 +438,11 @@ e por isso o documento fiscal **nunca é apagado** (F6), só muda de estado.
 **`fiscal_config_empresa`** — uma linha por `empresa` (não por tenant: cada loja tem IE, série e
 numeração próprias).
 
-`id_fiscal_config` · `id_tenant` · `id_empresa` (único) · `crt` · `regime_apuracao` ·
+`id_fiscal_config` · `id_tenant` · `id_empresa` (único) · `crt` (CHECK 1/2/4, DF37) ·
 `inscricao_estadual_st` · `suframa` · `ambiente` (`HOMOLOGACAO`/`PRODUCAO`, **por empresa**) ·
 `serie_nfce` · `serie_nfe` · `csc_id` · `csc_token_cifrado` · `emite_nfce` · `emite_nfe` ·
 `contingencia_ativa` · `contingencia_desde` · `contingencia_justificativa` ·
-`versao_tabela_ibpt` · `opcao_transferencia_tributada` (§8.4) · `equiparado_industrial` (DF15) ·
+`versao_tabela_ibpt` · `opcao_transferencia_tributada` (§8.4) ·
 `criado_em` · `atualizado_em`.
 
 **`fiscal_certificado`** — o A1 do lojista.
@@ -522,25 +527,30 @@ ST retido", "Isento"). Um perfil, centenas de produtos, uma correção só.
 
 | Dimensão | Valores |
 |---|---|
-| `crt` do emitente | 1 / 2 / 3 / 4 |
+| `crt` do emitente | 1 / 2 / 4 (CHECK; o 3 não existe no produto — DF37) |
 | `uf_destino` | `*` (qualquer) ou UF específica |
 | `tipo_destinatario` | consumidor final · contribuinte · não contribuinte |
 | `tipo_operacao` | venda · devolução · transferência · remessa · bonificação |
-| **Saída** | `cfop`, `cst_icms`/`csosn`, `aliquota_icms`, `perc_reducao_bc`, `mva_st`, `aliquota_fcp`, `cst_pis`, `aliquota_pis`, `cst_cofins`, `aliquota_cofins`, `cst_ipi`, `aliquota_ipi`, `cst_ibscbs`, `cclasstrib`, `codigo_beneficio` |
+| **Saída** | `cfop`, `cst_icms`/`csosn`, `aliquota_icms`, `perc_reducao_bc`, `mva_st`, `aliquota_fcp`, `cst_pis`, `aliquota_pis`, `cst_cofins`, `aliquota_cofins`, `cst_ibscbs`, `cclasstrib`, `codigo_beneficio` |
 
 Resolução: a regra mais específica ganha (UF exata > `*`). **Sem regra que case → erro explícito,
 nunca chute** (F11 + §8.1).
 
-> **DF36 — a alíquota de PIS/COFINS não sai daqui.** A dimensão da regra é o **`crt`**, e o CRT 3
-> cobre **Lucro Presumido e Lucro Real ao mesmo tempo** — regimes com PIS/COFINS diferentes (§8.3).
-> Um tenant com uma empresa Presumido e outra Real casaria as duas na **mesma linha de regra**, e uma
-> delas emitiria com alíquota errada, em silêncio. Por isso o motor **deriva a alíquota de
-> `fiscal_config_empresa.regime_apuracao`**, e a regra contribui só o **CST** (`cst_pis`/`cst_cofins`).
-> As colunas `aliquota_pis`/`aliquota_cofins` continuam existindo como **override**, aplicadas apenas
-> quando o CST não é "tributada normal" — produto monofásico ou de alíquota zero (cesta básica,
-> medicamento, autopeça) se expressa por CST 04/06 com alíquota 0, e isso o perfil precisa saber
-> dizer. Alternativa rejeitada: acrescentar `regime_apuracao` à chave única da regra — dobraria as
-> linhas do perfil e deixaria o usuário digitar um número que a lei já determina.
+> **DF37 — o que a regra ainda decide, e o que ela nunca decidiu.** Com Lucro Real e Presumido fora
+> do produto, `aliquota_pis`/`aliquota_cofins` deixaram de ser "override de um valor derivado do
+> regime" e passaram a ser simplesmente **a alíquota dos CST de tratamento próprio** (04 monofásico,
+> 06 alíquota zero) que o optante do Simples segrega da receita — cesta básica, medicamento,
+> autopeça, bebida. No caso normal, CST 99, tudo é zero: o tributo está dentro do DAS. O CST **01**
+> (saída tributada normal) é **recusado pelo motor**, porque só existe nos regimes que o produto não
+> atende — aceitá-lo faria a nota destacar PIS/COFINS por cima do DAS, cobrando duas vezes.
+>
+> Sumiram daqui: `cst_ipi`/`aliquota_ipi` (optante do Simples recolhe IPI dentro do DAS e não
+> destaca na saída, LC 123/2006 art. 13, II).
+>
+> Sobreviveu por um motivo específico: **`cst_icms` só vale para o CRT 2**, com CHECK no banco
+> (`crt = 2 OR cst_icms IS NULL`). A empresa com excesso de sublimite recolhe ICMS **fora** do
+> Simples, e se ela emite com CSOSN ou com CST é divergência de mercado ainda em aberto (§8.2). O
+> ERP não chuta por ela — quem decide é o contador, configurando o perfil.
 
 ### 7.4 As três camadas de tributo 🆕 — resposta ao item 4.3
 
@@ -588,8 +598,7 @@ permite responder ao fiscal *"por que esta nota saiu assim"* anos depois.
 **Camada 3-bis — os tributos que chegam nas notas de ENTRADA** 🆕. A Entrada de Produtos por XML já
 lê ICMS-ST, IPI e frete do XML do fornecedor e (com `cfg_rateia_frete_entrada`) rateia no custo —
 mas **não guarda nada disso por item**. Uma tabela `entrada_item_tributo` (espelhando os campos da
-camada 3, ligada a `produto_movimento_detalhe`) entrega de graça: crédito de ICMS/PIS/COFINS para
-Presumido e Real, conferência de ST recolhido, custo de reposição correto e a base da devolução ao
+camada 3, ligada a `produto_movimento_detalhe`) entrega de graça: conferência de ST recolhido, custo de reposição correto e a base da devolução ao
 fornecedor — que precisa **espelhar a tributação da nota de compra original** para o fornecedor
 recuperar o crédito ⚠️. 🔴 **DF30 — entra no v1?** Recomendação: **sim, na F1**, porque o dado já
 passa pelo parser e descartá-lo agora significa reimportar XML depois.
@@ -606,21 +615,29 @@ TributacaoResultado calcular(OperacaoFiscal operacao, ContextoFiscalEmpresa cont
 
 `OperacaoFiscal` = itens (produto, quantidade, valor, desconto rateado), destinatário (UF,
 contribuinte ou não, consumidor final ou não), tipo de operação, data.
-`ContextoFiscalEmpresa` = CRT, regime de apuração, UF, IE, opção de transferência, versões de
-tabela.
+`ContextoFiscalEmpresa` = **CRT e UF do emitente, só isso** — a DF37 tirou o regime de apuração
+(deixou de existir) e o `equiparado_industrial` (deixou de ter caso).
+
+> **O que a DF37 deixou de fora do motor.** Depois que Lucro Real e Presumido saíram do produto,
+> **PIS/COFINS ad-valorem e IPI deixaram de existir**: os dois estão dentro do DAS (LC 123/2006,
+> art. 13). O que o motor realmente calcula é **ICMS** (só quando o CSOSN/CST destaca) e
+> **IBS/CBS**. Isso é bom para o risco — menos superfície de erro — e ruim para a intuição, porque
+> um motor que devolve zero em quase tudo parece quebrado. Por isso a massa de teste checa os zeros
+> explicitamente, e o motor **recusa** os CST que só fazem sentido nos regimes que saíram.
 
 ### 8.1 Ordem de cálculo
 
 1. Resolver o **perfil fiscal** do produto → regra que casa com (CRT × UF destino × tipo de
    destinatário × tipo de operação). **Sem regra que case → erro explícito, nunca chute.**
 2. Definir **CFOP** (1º dígito por destino geográfico, 2º pela natureza da operação).
-3. **ICMS** — por CSOSN (CRT 1/2/4) ou CST (CRT 3), com redução de base, ST, FCP e DIFAL quando
-   couber.
-4. **PIS/COFINS** — conforme regime (§8.3).
-5. **IPI** — só se a empresa for equiparada a industrial (DF15).
-6. **IBS/CBS/IS** — §8.5.
-7. **`vTotTrib`** (Lei 12.741) — §8.6.
-8. Totalizar por nota, conferindo item × total. As rejeições novas batem justamente aí ⚠️.
+3. **ICMS** — por CSOSN (CRT 1/2/4) ou, só no CRT 2, por CST; com redução de base, ST, FCP e DIFAL
+   quando couber.
+4. **PIS/COFINS** — CST 99 zerado no caso normal; alíquota da regra nos CST de tratamento próprio
+   (§8.3).
+5. **IBS/CBS/IS** — §8.5.
+6. **`vTotTrib`** (Lei 12.741) — §8.6.
+7. Totalizar por nota, conferindo item × total. As rejeições novas batem justamente aí ⚠️ — o total
+   é a **soma dos itens já arredondados**, nunca um cálculo sobre a base somada.
 
 ### 8.2 ICMS por regime
 
@@ -637,7 +654,10 @@ F0; é um caso raro no ICP, mas mal resolvido gera rejeição sistemática):
 | **500** | **ICMS já retido por ST** (o lojista é o substituído) — muito comum em confecção e calçado | `vBCSTRet`, `vICMSSTRet`, `pST`. **CFOP 5.405**, não 5.102 |
 | 900 | Outras | depende |
 
-**Regime Normal (CRT 3) — grupo `ICMS`, campo `CST`:**
+**Grupo `ICMS`, campo `CST` — só CRT 2** ⚠️. A DF37 tirou o CRT 3 do produto, mas **não** apagou o
+CST: a empresa do Simples com excesso de sublimite recolhe ICMS **fora** do DAS, e a divergência
+acima é justamente sobre qual grupo ela usa. O banco garante o limite
+(`CHECK crt = 2 OR cst_icms IS NULL`) e o motor recusa CST em CRT 1 e 4 com mensagem própria.
 
 | CST | Uso | Campos-chave |
 |---|---|---|
@@ -658,39 +678,39 @@ listados. No PR ⚠️ a alíquota modal é **19,5%** desde 18/03/2024 (Lei 21.8
 +2% (Lei 11.580/1996, art. 14-A). Campos próprios (`pFCP`, `vFCP`, `pFCPST`, `vFCPST`) — o motor
 precisa suportar desde a F2, é a UF piloto.
 
-### 8.3 PIS/COFINS e IPI por regime
+### 8.3 PIS/COFINS
 
-| Regime | PIS/COFINS | Alíquotas | CST de saída |
-|---|---|---|---|
-| **Simples Nacional / MEI** | Dentro do DAS, sem apuração separada | — | **99** ⚠️ (com base/alíquota/valor zerados) |
-| **Lucro Presumido** | Cumulativo, sem crédito | PIS 0,65% · COFINS 3,00% | 01 nas saídas tributadas |
-| **Lucro Real** | Não cumulativo, com crédito | PIS 1,65% · COFINS 7,60% | 01 nas saídas; créditos nas entradas |
+**Todas as empresas do produto são Simples ou MEI (DF37), e nelas o PIS/COFINS está dentro do DAS,
+sem apuração separada.** O caso normal é **CST 99 com base, alíquota e valor zerados** ⚠️ —
+destacar valor aqui cobraria o tributo duas vezes.
 
-É por isso que `regime_apuracao` existe separado do `crt` — e, pela **DF36**, é de lá que a alíquota
-sai. Note que **Presumido e Real são os dois CRT 3**: se a alíquota viesse do perfil fiscal do
-produto (cuja regra só distingue por `crt`), um tenant com as duas empresas emitiria uma delas
-errado. O contrato do motor é:
+| CST na saída | Quando | Alíquota |
+|---|---|---|
+| **99** | O caso normal de todo Simples/MEI: o tributo está no DAS | zero, com base e valor zerados |
+| 04 · 06 | Tratamento próprio que o optante **segrega da receita**: monofásico (bebida, combustível, autopeça) e alíquota zero (cesta básica, medicamento) | do **produto**, via `cfg_perfil_fiscal_regra` |
+| ~~01~~ | Saída tributada normal — **recusado pelo motor** | só existe em Lucro Real/Presumido |
 
-| Origem | O que fornece |
-|---|---|
-| `cfg_perfil_fiscal_regra` | **CST** (`cst_pis`, `cst_cofins`) — e só |
-| `fiscal_config_empresa.regime_apuracao` | **Alíquota**, quando o CST é de saída tributada normal (01) |
-| `cfg_perfil_fiscal_regra.aliquota_pis`/`aliquota_cofins` | **Override**, quando o CST **não** é 01 (monofásico, alíquota zero) |
+O CST **01** merece a recusa explícita e não o silêncio: num perfil do Simples ele destacaria
+PIS/COFINS **por cima do DAS**, e a nota seria autorizada normalmente — o erro só apareceria na
+contabilidade, meses depois. A mensagem do motor manda usar o 99.
 
-Na prática: `ContextoFiscalEmpresa` carrega `regime_apuracao`, e o passo 4 da ordem de cálculo
-(§8.1) consulta o regime antes de olhar para a regra. **Simples e MEI não têm alíquota** — CST 99
-com base/alíquota/valor zerados, então a questão nem se coloca para CRT 1/2/4.
+> **Isto é o que sobrou da DF36.** A decisão anterior mandava a alíquota vir de
+> `fiscal_config_empresa.regime_apuracao`, porque o CRT 3 cobria Presumido (0,65/3,00) e Real
+> (1,65/7,60) e a regra do perfil só distinguia por CRT. Com os dois regimes fora do produto
+> (DF37), a coluna foi removida e a pergunta deixou de existir. As alíquotas do perfil, que eram
+> "override", voltaram a ser simplesmente a alíquota — dos CST de tratamento próprio.
 
-**Consequência de cadastro (a pergunta que originou a DF36):** empresas de regimes diferentes no
-mesmo tenant são suportadas — `fiscal_config_empresa` é uma linha **por empresa** (§7.1). E os
-impostos **não** se separam por empresa: o produto declara *o que ele é* (NCM, CEST, origem,
-unidade, perfil — igual em toda empresa) e a empresa declara *como tributa* (CRT + regime). Replicar
-cadastro fiscal por empresa multiplicaria N produtos × M empresas de linhas para manter, sem ganho —
-a auditoria já está preservada pela camada 3 (§7.4), que congela o que foi calculado em cada nota.
+**Consequência de cadastro:** os impostos **não** se separam por empresa. O produto declara *o que
+ele é* (NCM, CEST, origem, unidade, perfil — igual em toda empresa) e a empresa declara *como
+tributa* (CRT). Replicar cadastro fiscal por empresa multiplicaria N produtos × M empresas de linhas
+para manter, sem ganho — a auditoria já está preservada pela camada 3 (§7.4), que congela o que foi
+calculado em cada nota.
 
-**IPI:** varejo que compra para revender não é contribuinte. Só importa se a empresa for
-**equiparada a industrial** (importador que revende, quem fraciona/reembala). Flag em
-`fiscal_config_empresa`. 🔴 **DF15** — recomendação: fora do v1, como non-goal com data.
+**IPI: fora do produto (DF37).** Varejo que compra para revender não é contribuinte, e o optante do
+Simples recolhe IPI **dentro do DAS** (LC 123/2006, art. 13, II), sem destaque na saída. A DF15
+("só se equiparada a industrial") ficou sem caso possível: `equiparado_industrial`, `cst_ipi`,
+`aliquota_ipi` e `valor_ipi` saíram do schema e do motor. ⚠️ Isto vale para a nota **emitida**; o
+IPI que a loja **paga na compra** vem no XML do fornecedor e é assunto da DF30.
 
 ### 8.4 Transferência entre estabelecimentos: ADC 49 🆕
 
@@ -727,14 +747,25 @@ nº 1/2026), que adiou ~20 regras de validação para 01/09/2026 (homologação)
 
 | Quem | Obrigatório em produção |
 |---|---|
-| **CRT 3** (Presumido / Real) | **03/08/2026**, com parte das validações adiada para 05/10/2026 ⚠️ |
-| **CRT 1, 2 e 4** (Simples e MEI) | **04/01/2027** (art. 348 da LC 214/2025) ⚠️ |
+| ~~CRT 3 (Presumido / Real)~~ | ~~03/08/2026~~ — fora do produto (DF37), fica só como referência |
+| **CRT 1, 2 e 4** (Simples e MEI) | **04/01/2027** (art. 348 da LC 214/2025) ⚠️ — **é a data de 100% da base de clientes** |
 | Regras de referenciamento de documentos | 01/09/2026 ⚠️ |
 
 **O achado que sustenta o "sempre pronto":** a rejeição **1021** ("Grupo IBS/CBS informado
 indevidamente", regra UB13-20) dispara pelo **CST do item**, não pelo CRT do emitente ⚠️. O gate do
 motor é **por item/CST**, não um `if (crt == SIMPLES)`. **Validar a condição exata da UB13-20 no
 texto oficial antes de codar — é a regra que sustenta a estratégia inteira.**
+
+> **Depois da DF37 isso deixou de ser detalhe.** Se o gate fosse por CRT, ele desligaria o IBS/CBS
+> para **a base inteira** — não sobra nenhuma empresa em regime regular no produto. E como todas
+> compartilham a mesma data, não haverá um grupo de clientes servindo de cobaia antes do prazo:
+> quando 04/01/2027 chegar, chega para todos ao mesmo tempo.
+
+🔴 **Questão nova aberta pela DF37 (para a F0):** o optante do Simples pode ficar **dentro** do DAS
+para IBS/CBS ou optar pelo **regime regular** (recolhendo por fora) — LC 214/2025. Isso muda o CST e
+o `cClassTrib` do item, e possivelmente exige o grupo `gTribRegular`. Antes era um caso de minoria;
+agora é a configuração de todo cliente. **Não implementar por dedução — confirmar no texto oficial e
+no XSD.** É o candidato número 1 a virar campo em `fiscal_config_empresa`.
 
 **Alíquotas de teste de 2026:** CBS **0,9%**; IBS **0,1% integralmente estadual** (`pIBSUF = 0,1%`,
 `pIBSMun = 0%` — a divisão UF/município só começa em 2027-2028, arts. 343/344 da LC 214/2025) ⚠️.
@@ -1242,7 +1273,7 @@ paralelo às telas, se fizer sentido.
 | **B1** | Specs de tela em `docs/telas/`: `fiscal-configuracao.md`, `fiscal-certificado.md`, `fiscal-perfil.md`, `fiscal-conformidade.md`. Spec antes do código (§5 da spec principal) | — | Não |
 | **B2** | Cadastros fiscais: `FiscalConfigService`/`Controller` (singleton por **empresa**), `FiscalCertificadoService` (upload multipart → bucket cifrado, *write-only*), `PerfilFiscalService` (padrão de cadastro consolidado), + campos fiscais nas telas de Produto, Cliente, Empresa e Tipo de Carteira | B1 | Não |
 | **B3** | Tela de **Conformidade Fiscal** — lista o que impede emitir (produto sem NCM/unidade/perfil, cliente sem município IBGE, empresa sem certificado). É o que revela cedo o tamanho do problema de base cadastral | B2 | Não |
-| **B4** | **Motor tributário** (`fiscal.motor`): puro, sem I/O. Simples/Presumido/Real + IBS/CBS + FCP + `vTotTrib`. Maior massa de testes do módulo e a mais barata — teste de tabela por (CRT × CST/CSOSN × UF × operação) | — (o schema já basta) | Não |
+| **B4** ✅ | **Motor tributário** (`fiscal.motor`): puro, sem I/O. ICMS (CSOSN, + CST no CRT 2) + PIS/COFINS + IBS/CBS + FCP + `vTotTrib`. Teste de tabela por (CRT × CST/CSOSN × UF × operação), sem Testcontainers. **Feito em 2026-08-17**, já sob a DF37 | — (o schema já basta) | Não |
 | **B5** | Montagem do XML + validação contra o **XSD oficial** em teste | B4 | Não |
 | **B6** | Assinatura (XMLDSig) + transporte (`HttpClient` do JDK com mTLS por empresa) | B5, B0 | **Sim** |
 | **B7** | PDV: emissão síncrona, DANFCE térmico, contingência offline, recusa em venda a contribuinte | B6 | **Sim** |
@@ -1293,7 +1324,7 @@ automatizado — os 10.515 NCMs de `cfg_produto_ncm` vieram por esse mesmo camin
 |---|---|---|
 | DF12 | Fiscal entra em qual plano comercial? | Add-on, ou exclusivo do Profissional/Escala |
 | DF14 | Devolução ao fornecedor: no Cancelamento de Entrada ou tela nova? *(decisão futura, §4.2)* | Tela nova — cancelar entrada e devolver mercadoria são operações diferentes |
-| DF15 | Empresa equiparada a industrial (IPI) entra no v1? | Não — motor preparado, flag desligada |
+| ~~DF15~~ | ~~Empresa equiparada a industrial (IPI) entra no v1?~~ | ⛔ Sem caso possível depois da DF37: optante do Simples recolhe IPI dentro do DAS e não destaca na saída |
 | DF16 | Licenciamento da tabela IBPT para SaaS multi-tenant | Licença única da Vetor, se o contrato permitir |
 | DF18 | Timeout de autorização no PDV antes de cair em contingência | 10 s |
 | DF19 | Quantas falhas disparam contingência automática | 2 falhas consecutivas em 60 s |

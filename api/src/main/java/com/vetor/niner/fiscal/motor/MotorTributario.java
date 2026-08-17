@@ -1,6 +1,5 @@
 package com.vetor.niner.fiscal.motor;
 
-import com.vetor.niner.fiscal.configuracao.FiscalConfigDtos.RegimeApuracao;
 import com.vetor.niner.fiscal.motor.MotorTributarioDtos.*;
 import org.springframework.stereotype.Component;
 
@@ -15,13 +14,17 @@ import java.util.Set;
  * fiscal já resolvida em cada item e devolve o cálculo completo, item a item, com a memória de como
  * chegou lá (camada 3 do §7.4).
  *
- * <p><b>Ordem de cálculo</b> (§8.1): CFOP vem da regra → ICMS por CSOSN (CRT 1/2/4) ou CST (CRT 3)
- * → PIS/COFINS <b>pelo regime da empresa</b> (DF36) → IPI só se equiparado a industrial (DF15) →
- * IBS/CBS → vTotTrib → totaliza conferindo item × total.
+ * <p><b>DF37 — só MEI e Simples Nacional.</b> Com Lucro Real e Presumido fora do produto, o que
+ * sobra de tributo efetivamente calculado é ICMS (por CSOSN, ou CST no caso do CRT 2), os CST de
+ * tratamento próprio de PIS/COFINS e o IBS/CBS da reforma. PIS/COFINS ad-valorem e IPI não existem
+ * aqui: os dois estão dentro do DAS (LC 123/2006, art. 13).
  *
- * <p><b>Nunca chuta</b> (F11): sem regra, com CST/CSOSN incompatível com o CRT, ou com CSOSN de ST
- * sem os campos de ST, o motor lança {@link TributacaoInvalidaException}. Uma alíquota inventada
- * vira multa para o lojista; um erro explícito vira uma mensagem na tela.
+ * <p><b>Ordem de cálculo</b> (§8.1): CFOP vem da regra → ICMS → PIS/COFINS → IBS/CBS → vTotTrib →
+ * totaliza conferindo item × total.
+ *
+ * <p><b>Nunca chuta</b> (F11): sem regra, com CRT fora do escopo, com CST/CSOSN incompatível com o
+ * CRT, o motor lança {@link TributacaoInvalidaException}. Uma alíquota inventada vira multa para o
+ * lojista; um erro explícito vira uma mensagem na tela.
  *
  * <p><b>Arredondamento</b>: cada item é arredondado a 2 casas (HALF_UP, P7) e o total é a
  * <b>soma dos itens já arredondados</b> — é assim que a SEFAZ confere, e é onde as rejeições de
@@ -47,6 +50,9 @@ public class MotorTributario {
     private static final BigDecimal ALIQ_IBS_UF_2026 = new BigDecimal("0.10");
     private static final BigDecimal ALIQ_IBS_MUN_2026 = BigDecimal.ZERO;
 
+    /** CRT que o produto atende (DF37). O 3, Regime Normal, está fora por escopo. */
+    private static final Set<Integer> CRT_ATENDIDOS = Set.of(1, 2, 4);
+
     /** CSOSN válidos no v1 (§8.2). O 101 fica de fora — DF31: exige a alíquota efetiva do DAS. */
     private static final Set<String> CSOSN_VALIDOS = Set.of("102", "103", "202", "300", "400", "500", "900");
     private static final Set<String> CST_ICMS_VALIDOS =
@@ -56,10 +62,10 @@ public class MotorTributario {
     private static final Set<String> CSOSN_SEM_ICMS = Set.of("102", "103", "300", "400");
     private static final Set<String> CST_SEM_ICMS = Set.of("40", "41", "50");
 
-    /** CST de PIS/COFINS de saída tributada normal — o único caso em que o REGIME dita a alíquota. */
-    private static final String CST_TRIBUTADA_NORMAL = "01";
-    /** CST do Simples Nacional/MEI: base, alíquota e valor zerados (§8.3). */
+    /** CST do Simples Nacional/MEI: base, alíquota e valor zerados (§8.3). É o caso normal. */
     private static final String CST_SIMPLES = "99";
+    /** CST de saída tributada normal — só existe em Lucro Real/Presumido, fora do produto (DF37). */
+    private static final String CST_TRIBUTADA_NORMAL = "01";
 
     public TributacaoResultado calcular(OperacaoFiscal operacao, ContextoFiscalEmpresa contexto) {
         validarContexto(contexto);
@@ -81,9 +87,9 @@ public class MotorTributario {
         RegraFiscal regra = item.regra();
         if (regra == null) {
             throw new TributacaoInvalidaException(
-                    "Item %d: nenhuma regra fiscal casou com o contexto (CRT %d, UF de destino, tipo de "
-                            .formatted(item.nItem(), ctx.crt())
-                            + "destinatário e operação). Revise o perfil fiscal do produto.");
+                    ("Item %d: nenhuma regra fiscal casou com o contexto (CRT %d, UF de destino, tipo de "
+                            + "destinatário e operação). Revise o perfil fiscal do produto.")
+                            .formatted(item.nItem(), ctx.crt()));
         }
         if (vazio(regra.cfop())) {
             throw new TributacaoInvalidaException("Item %d: a regra fiscal não define CFOP.".formatted(item.nItem()));
@@ -95,62 +101,63 @@ public class MotorTributario {
         BigDecimal baseBruta = valorProduto.subtract(desconto).add(acrescimo).max(BigDecimal.ZERO);
 
         Icms icms = calcularIcms(item.nItem(), regra, ctx, baseBruta);
-        Contribuicao pis = calcularContribuicao(item.nItem(), "PIS", regra.cstPis(),
-                regra.aliquotaPisOverride(), ctx, baseBruta);
+        Contribuicao pis = calcularContribuicao(item.nItem(), "PIS", regra.cstPis(), regra.aliquotaPis(), baseBruta);
         Contribuicao cofins = calcularContribuicao(item.nItem(), "COFINS", regra.cstCofins(),
-                regra.aliquotaCofinsOverride(), ctx, baseBruta);
-        Ipi ipi = calcularIpi(regra, ctx, baseBruta);
+                regra.aliquotaCofins(), baseBruta);
         IbsCbs ibsCbs = calcularIbsCbs(item.nItem(), regra, baseBruta, avisos);
 
         // vTotTrib (Lei 12.741, §8.6) sai da tabela IBPT (NCM × UF × vigência), que ainda não foi
         // carregada — cfg_ibpt está vazia. Somar os tributos calculados aqui daria um número
         // DIFERENTE do que a lei pede (o vTotTrib inclui tributo federal embutido no preço), então
         // fica zero e o aviso sobe, em vez de imprimir um valor errado no cupom.
-        BigDecimal vTotTrib = BigDecimal.ZERO.setScale(ESCALA);
+        BigDecimal vTotTrib = zero();
 
         return new ItemTributado(item.nItem(), regra.cfop(), valorProduto, desconto, acrescimo,
-                icms, pis, cofins, ipi, ibsCbs, vTotTrib);
+                icms, pis, cofins, ibsCbs, vTotTrib);
     }
 
     // ---------------------------------------------------------------- ICMS (§8.2)
 
+    /**
+     * CRT 1 e 4 emitem sempre com CSOSN. O <b>CRT 2</b> é o único que pode usar CST: a empresa com
+     * excesso de sublimite recolhe ICMS fora do Simples, e se ela emite com CSOSN ou com CST é
+     * divergência de mercado ainda não resolvida (§8.2, pendente do MOC). Enquanto não houver
+     * resposta, quem decide é o contador no perfil fiscal — o motor aceita os dois e não chuta.
+     */
     private Icms calcularIcms(int nItem, RegraFiscal regra, ContextoFiscalEmpresa ctx, BigDecimal base) {
-        boolean simplesOuMei = ctx.crt() == 1 || ctx.crt() == 2 || ctx.crt() == 4;
-
-        if (simplesOuMei) {
-            String csosn = regra.csosn();
-            if (vazio(csosn)) {
+        String cst = regra.cstIcms();
+        if (!vazio(cst)) {
+            if (ctx.crt() != 2) {
                 throw new TributacaoInvalidaException(
-                        "Item %d: CRT %d (Simples Nacional/MEI) exige CSOSN, e a regra fiscal traz CST de ICMS."
+                        ("Item %d: CRT %d (Simples Nacional/MEI) emite com CSOSN, e a regra fiscal traz CST "
+                                + "de ICMS. Só o CRT 2, com excesso de sublimite, pode usar CST.")
                                 .formatted(nItem, ctx.crt()));
             }
-            if (!CSOSN_VALIDOS.contains(csosn)) {
-                throw new TributacaoInvalidaException(
-                        "Item %d: CSOSN %s não é aceito no v1. Válidos: %s."
-                                .formatted(nItem, csosn, String.join(", ", CSOSN_VALIDOS.stream().sorted().toList())));
+            if (!CST_ICMS_VALIDOS.contains(cst)) {
+                throw new TributacaoInvalidaException("Item %d: CST de ICMS %s inválido.".formatted(nItem, cst));
             }
-            if (CSOSN_SEM_ICMS.contains(csosn)) {
-                // 102/103/300/400 não destacam ICMS: o grupo sai só com orig e CSOSN. Campo a mais
-                // rejeita tanto quanto campo a menos (§8.2).
-                return new Icms(null, csosn, zero(), zero(), zero(), zero(), zero(), zero());
-            }
-            // 202/500/900 — o v1 destaca o que a regra trouxer; ST completo entra com a NF-e (§4.2).
-            return montarIcmsComValor(null, csosn, regra, base);
+            return CST_SEM_ICMS.contains(cst)
+                    ? new Icms(cst, null, zero(), zero(), zero(), zero(), zero(), zero())
+                    : montarIcmsComValor(cst, null, regra, base);
         }
 
-        String cst = regra.cstIcms();
-        if (vazio(cst)) {
+        String csosn = regra.csosn();
+        if (vazio(csosn)) {
             throw new TributacaoInvalidaException(
-                    "Item %d: CRT 3 (Regime Normal) exige CST de ICMS, e a regra fiscal traz CSOSN."
-                            .formatted(nItem));
+                    "Item %d: a regra fiscal não define CSOSN nem CST de ICMS.".formatted(nItem));
         }
-        if (!CST_ICMS_VALIDOS.contains(cst)) {
-            throw new TributacaoInvalidaException("Item %d: CST de ICMS %s inválido.".formatted(nItem, cst));
+        if (!CSOSN_VALIDOS.contains(csosn)) {
+            throw new TributacaoInvalidaException(
+                    "Item %d: CSOSN %s não é aceito no v1. Válidos: %s."
+                            .formatted(nItem, csosn, String.join(", ", CSOSN_VALIDOS.stream().sorted().toList())));
         }
-        if (CST_SEM_ICMS.contains(cst)) {
-            return new Icms(cst, null, zero(), zero(), zero(), zero(), zero(), zero());
+        if (CSOSN_SEM_ICMS.contains(csosn)) {
+            // 102/103/300/400 não destacam ICMS: o grupo sai só com orig e CSOSN. Campo a mais
+            // rejeita tanto quanto campo a menos (§8.2).
+            return new Icms(null, csosn, zero(), zero(), zero(), zero(), zero(), zero());
         }
-        return montarIcmsComValor(cst, null, regra, base);
+        // 202/500/900 — o v1 destaca o que a regra trouxer; ST completo entra com a NF-e (§4.2).
+        return montarIcmsComValor(null, csosn, regra, base);
     }
 
     private Icms montarIcmsComValor(String cst, String csosn, RegraFiscal regra, BigDecimal base) {
@@ -163,61 +170,37 @@ public class MotorTributario {
         return new Icms(cst, csosn, baseIcms, aliquota, valor, reducao, aliqFcp, valorFcp);
     }
 
-    // ---------------------------------------------------------------- PIS/COFINS (DF36, §8.3)
+    // ---------------------------------------------------------------- PIS/COFINS (§8.3)
 
     /**
-     * <b>A alíquota vem do REGIME da empresa, não do perfil do produto</b> — só quando o CST é o de
-     * saída tributada normal (01). CRT 3 cobre Presumido (0,65/3,00) e Real (1,65/7,60), e a regra
-     * do perfil só distingue por CRT: se a alíquota saísse dela, um tenant com as duas empresas
-     * emitiria uma delas errado, em silêncio. Ver DF36.
+     * No Simples e no MEI o PIS/COFINS está <b>dentro do DAS</b>, sem apuração separada: CST 99 com
+     * base, alíquota e valor zerados. Destacar valor aqui cobraria duas vezes.
      *
-     * <p>Para qualquer outro CST (04 monofásico, 06 alíquota zero, 07/08/09, 99 Simples) a alíquota
-     * é a da regra — aí ela É override legítimo, porque o produto tem tratamento próprio.
+     * <p>A exceção legítima são os CST de <b>tratamento próprio</b> — 04 (monofásico), 06 (alíquota
+     * zero) — que o optante segrega da receita: cesta básica, medicamento, autopeça, bebida.
+     * Aí a alíquota é do produto mesmo, e vem da regra.
+     *
+     * <p>O CST <b>01</b> (saída tributada normal) é recusado: ele só existe em Lucro Real e
+     * Presumido, que não são atendidos (DF37). Aceitá-lo faria uma nota do Simples destacar
+     * PIS/COFINS por cima do DAS — cobrança em duplicidade, e silenciosa.
      */
     private Contribuicao calcularContribuicao(int nItem, String nome, String cst,
-                                              BigDecimal override, ContextoFiscalEmpresa ctx,
-                                              BigDecimal base) {
+                                              BigDecimal aliquotaDaRegra, BigDecimal base) {
         if (vazio(cst)) {
             throw new TributacaoInvalidaException(
                     "Item %d: a regra fiscal não define CST de %s.".formatted(nItem, nome));
         }
+        if (CST_TRIBUTADA_NORMAL.equals(cst)) {
+            throw new TributacaoInvalidaException(
+                    ("Item %d: CST %s de %s é de saída tributada normal, que só existe em Lucro Real ou "
+                            + "Presumido — regimes fora do escopo do produto. No Simples/MEI use CST 99.")
+                            .formatted(nItem, cst, nome));
+        }
         if (CST_SIMPLES.equals(cst)) {
-            // Simples/MEI: o tributo está dentro do DAS, sem apuração separada — base, alíquota e
-            // valor zerados. Destacar valor aqui seria cobrar duas vezes.
             return new Contribuicao(cst, zero(), zero(), zero());
         }
-        if (CST_TRIBUTADA_NORMAL.equals(cst)) {
-            if (ctx.regimeApuracao() == RegimeApuracao.SIMPLES) {
-                throw new TributacaoInvalidaException(
-                        "Item %d: CST %s de %s é de saída tributada, incompatível com regime SIMPLES "
-                                .formatted(nItem, cst, nome) + "(use CST 99).");
-            }
-            BigDecimal aliquota = aliquotaPorRegime(nome, ctx.regimeApuracao());
-            return new Contribuicao(cst, base, aliquota, percentual(base, aliquota));
-        }
-        BigDecimal aliquota = nz(override);
+        BigDecimal aliquota = nz(aliquotaDaRegra);
         return new Contribuicao(cst, aliquota.signum() == 0 ? zero() : base, aliquota, percentual(base, aliquota));
-    }
-
-    private static BigDecimal aliquotaPorRegime(String nome, RegimeApuracao regime) {
-        boolean pis = "PIS".equals(nome);
-        return switch (regime) {
-            case PRESUMIDO -> pis ? new BigDecimal("0.65") : new BigDecimal("3.00");   // cumulativo
-            case REAL -> pis ? new BigDecimal("1.65") : new BigDecimal("7.60");        // não cumulativo
-            case SIMPLES -> BigDecimal.ZERO;                                            // barrado antes
-        };
-    }
-
-    // ---------------------------------------------------------------- IPI (DF15)
-
-    private Ipi calcularIpi(RegraFiscal regra, ContextoFiscalEmpresa ctx, BigDecimal base) {
-        // Varejo que compra para revender não é contribuinte de IPI. Só calcula se a empresa for
-        // equiparada a industrial (importador que revende, quem fraciona/reembala).
-        if (!ctx.equiparadoIndustrial() || vazio(regra.cstIpi())) {
-            return new Ipi(null, zero(), zero(), zero());
-        }
-        BigDecimal aliquota = nz(regra.aliquotaIpi());
-        return new Ipi(regra.cstIpi(), base, aliquota, percentual(base, aliquota));
     }
 
     // ---------------------------------------------------------------- IBS/CBS (§8.5)
@@ -225,15 +208,14 @@ public class MotorTributario {
     /**
      * <b>O gate é por CST do item, não por CRT do emitente.</b> A rejeição 1021 ("Grupo IBS/CBS
      * informado indevidamente", regra UB13-20) dispara pelo CST — é isso que sustenta a DF4
-     * ("calcula para todos os regimes desde o v1"). Um {@code if (crt == SIMPLES)} aqui seria o
-     * erro clássico: o Simples está dispensado de <b>transmitir</b> até 04/01/2027, não de o
-     * sistema saber calcular.
+     * ("calcula desde o v1"). Um {@code if (crt == SIMPLES)} aqui seria o erro clássico, e depois
+     * da DF37 seria fatal: <b>todas</b> as empresas do produto são Simples ou MEI. Elas estão
+     * dispensadas de <b>transmitir</b> até 04/01/2027, não de o sistema saber calcular.
      */
     private IbsCbs calcularIbsCbs(int nItem, RegraFiscal regra, BigDecimal base, List<String> avisos) {
         if (vazio(regra.cstIbsCbs()) || vazio(regra.cClassTrib())) {
-            avisos.add("Item %d: sem CST de IBS/CBS ou cClassTrib no perfil — o grupo não será gerado. "
-                    .formatted(nItem)
-                    + "Obrigatório para CRT 3 desde 03/08/2026.");
+            avisos.add(("Item %d: sem CST de IBS/CBS ou cClassTrib no perfil — o grupo não será gerado. "
+                    + "Obrigatório para Simples e MEI a partir de 04/01/2027.").formatted(nItem));
             return new IbsCbs(false, null, null, zero(), zero(), zero(), zero(), zero(), zero(), zero());
         }
 
@@ -272,22 +254,21 @@ public class MotorTributario {
         BigDecimal valorFcp = soma(itens, i -> i.icms().valorFcp());
         BigDecimal valorPis = soma(itens, i -> i.pis().valor());
         BigDecimal valorCofins = soma(itens, i -> i.cofins().valor());
-        BigDecimal valorIpi = soma(itens, i -> i.ipi().valor());
         BigDecimal baseIbs = soma(itens, i -> i.ibsCbs().baseCalculo());
         BigDecimal ibsUf = soma(itens, i -> i.ibsCbs().valorIbsUf());
         BigDecimal ibsMun = soma(itens, i -> i.ibsCbs().valorIbsMun());
         BigDecimal cbs = soma(itens, i -> i.ibsCbs().valorCbs());
         BigDecimal totTrib = soma(itens, ItemTributado::valorTotalTributos);
 
-        // vNF do v1 = produtos − desconto + acréscimo + IPI. IBS/CBS e ICMS NÃO entram: o ICMS é
-        // por dentro (já está no preço) e o IBS/CBS é "por fora", mas se ele compõe o vNF em 2026
-        // é a DF32 — pergunta obrigatória da F0, ainda sem resposta de fonte primária. Enquanto
-        // não houver, não somamos: inflar o total cobraria do consumidor um valor que o caixa não
-        // confere (o cupom deixaria de bater com caixa_detalhe).
-        BigDecimal valorNota = produtos.subtract(desconto).add(acrescimo).add(valorIpi);
+        // vNF = produtos − desconto + acréscimo. ICMS não entra (é por dentro, já está no preço) e
+        // IBS/CBS é "por fora", mas se compõe o vNF em 2026 é a DF32 — pergunta obrigatória da F0,
+        // ainda sem resposta de fonte primária. Enquanto não houver, não somamos: inflar o total
+        // cobraria do consumidor um valor que o caixa não confere (o cupom deixaria de bater com
+        // caixa_detalhe).
+        BigDecimal valorNota = produtos.subtract(desconto).add(acrescimo);
 
         return new TotaisTributarios(produtos, desconto, acrescimo, baseIcms, valorIcms, valorFcp,
-                valorPis, valorCofins, valorIpi, baseIbs, ibsUf, ibsMun, cbs, totTrib, valorNota);
+                valorPis, valorCofins, baseIbs, ibsUf, ibsMun, cbs, totTrib, valorNota);
     }
 
     // ---------------------------------------------------------------- auxiliares
@@ -296,21 +277,13 @@ public class MotorTributario {
         if (ctx == null) {
             throw new TributacaoInvalidaException("Contexto fiscal da empresa não informado.");
         }
-        if (ctx.crt() < 1 || ctx.crt() > 4) {
-            throw new TributacaoInvalidaException("CRT %d inválido (esperado 1 a 4).".formatted(ctx.crt()));
-        }
-        if (ctx.regimeApuracao() == null) {
-            throw new TributacaoInvalidaException("Regime de apuração não informado — é ele que define "
-                    + "a alíquota de PIS/COFINS (DF36).");
-        }
-        boolean simplesOuMei = ctx.crt() == 1 || ctx.crt() == 2 || ctx.crt() == 4;
-        if (simplesOuMei && ctx.regimeApuracao() != RegimeApuracao.SIMPLES) {
+        if (!CRT_ATENDIDOS.contains(ctx.crt())) {
+            // Recusa de ESCOPO, não de implementação: dizer "não suportado" sem dizer o porquê
+            // faria alguém tentar contornar cadastrando CRT 1 numa empresa do Lucro Presumido.
             throw new TributacaoInvalidaException(
-                    "CRT %d exige regime de apuração SIMPLES.".formatted(ctx.crt()));
-        }
-        if (ctx.crt() == 3 && ctx.regimeApuracao() == RegimeApuracao.SIMPLES) {
-            throw new TributacaoInvalidaException(
-                    "CRT 3 (Regime Normal) exige regime PRESUMIDO ou REAL.");
+                    ("CRT %d fora do escopo do produto: o Niner atende Simples Nacional (CRT 1 e 2) e "
+                            + "MEI (CRT 4). Lucro Real e Lucro Presumido não são atendidos.")
+                            .formatted(ctx.crt()));
         }
     }
 

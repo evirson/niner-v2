@@ -70,17 +70,17 @@ class FiscalConfigCrudTest {
     }
 
     /** Corpo válido mínimo — Simples Nacional, fiscal desligado, séries default. */
-    private static String corpo(int crt, String regime, boolean emiteNfce,
+    private static String corpo(int crt, boolean emiteNfce,
                                 int serieNfce, int serieContingencia, String extras) {
         return """
-                {"crt":%d,"regimeApuracao":"%s","emiteNfce":%b,"emiteNfe":false,
+                {"crt":%d,"emiteNfce":%b,"emiteNfe":false,
                  "ambiente":"HOMOLOGACAO","serieNfce":%d,"serieNfe":1,
-                 "serieContingencia":%d,"equiparadoIndustrial":false%s}
-                """.formatted(crt, regime, emiteNfce, serieNfce, serieContingencia, extras);
+                 "serieContingencia":%d%s}
+                """.formatted(crt, emiteNfce, serieNfce, serieContingencia, extras);
     }
 
     private static String corpoPadrao() {
-        return corpo(1, "SIMPLES", false, 1, 9, "");
+        return corpo(1, false, 1, 9, "");
     }
 
     // ---------------------------------------------------------------- leitura
@@ -94,7 +94,6 @@ class FiscalConfigCrudTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.configurado").value(false))
                 .andExpect(jsonPath("$.crt").value(1))
-                .andExpect(jsonPath("$.regimeApuracao").value("SIMPLES"))
                 .andExpect(jsonPath("$.ambiente").value("HOMOLOGACAO"))
                 .andExpect(jsonPath("$.emiteNfce").value(false))
                 .andExpect(jsonPath("$.serieContingencia").value(9))
@@ -141,46 +140,49 @@ class FiscalConfigCrudTest {
         mvc.perform(put("/api/v1/fiscal/config/" + idEmpresa)
                         .header("Authorization", "Bearer " + token)
                         .contentType(APPLICATION_JSON)
-                        .content(corpo(3, "PRESUMIDO", false, 1, 9, "")))
+                        .content(corpo(2, false, 1, 9, "")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.configurado").value(true))
-                .andExpect(jsonPath("$.crt").value(3))
-                .andExpect(jsonPath("$.regimeApuracao").value("PRESUMIDO"));
+                .andExpect(jsonPath("$.crt").value(2));
 
         mvc.perform(get("/api/v1/fiscal/config/" + idEmpresa).header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.configurado").value(true))
-                .andExpect(jsonPath("$.crt").value(3));
+                .andExpect(jsonPath("$.crt").value(2));
     }
 
-    // ---------------------------------------------------------------- DF36
+    // ---------------------------------------------------------------- DF37 (escopo do produto)
 
+    /**
+     * O Niner atende Simples Nacional (CRT 1 e 2) e MEI (CRT 4). CRT 3 é Lucro Real ou Presumido, e
+     * a recusa tem que explicar que é <b>escopo</b>: quem lê "não suportado" cadastra CRT 1 para
+     * destravar a tela e passa a emitir toda nota com CSOSN e PIS/COFINS zerado.
+     */
     @Test
-    void crt3ComRegimeSimplesEhRejeitado() throws Exception {
-        String token = assinarNovoTenant("crt3-simples");
-        long idEmpresa = idEmpresaDo(token);
-
-        // CRT 3 cobre Presumido E Real; gravar como SIMPLES faria o motor zerar PIS/COFINS
-        // numa nota que devia destacar 9,25% (DF36).
-        mvc.perform(put("/api/v1/fiscal/config/" + idEmpresa)
-                        .header("Authorization", "Bearer " + token)
-                        .contentType(APPLICATION_JSON)
-                        .content(corpo(3, "SIMPLES", false, 1, 9, "")))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.detail").exists());
-    }
-
-    @Test
-    void crt1ComRegimeRealEhRejeitado() throws Exception {
-        String token = assinarNovoTenant("crt1-real");
+    void crt3EhRejeitadoPorEstarForaDoEscopoDoProduto() throws Exception {
+        String token = assinarNovoTenant("crt3-fora");
         long idEmpresa = idEmpresaDo(token);
 
         mvc.perform(put("/api/v1/fiscal/config/" + idEmpresa)
                         .header("Authorization", "Bearer " + token)
                         .contentType(APPLICATION_JSON)
-                        .content(corpo(1, "REAL", false, 1, 9, "")))
+                        .content(corpo(3, false, 1, 9, "")))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.detail").exists());
+                .andExpect(jsonPath("$.detail").value(
+                        org.hamcrest.Matchers.containsString("fora do escopo")));
+    }
+
+    @Test
+    void meiEhAceito() throws Exception {
+        String token = assinarNovoTenant("mei");
+        long idEmpresa = idEmpresaDo(token);
+
+        mvc.perform(put("/api/v1/fiscal/config/" + idEmpresa)
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(APPLICATION_JSON)
+                        .content(corpo(4, false, 1, 9, "")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.crt").value(4));
     }
 
     // ---------------------------------------------------------------- séries
@@ -193,7 +195,7 @@ class FiscalConfigCrudTest {
         mvc.perform(put("/api/v1/fiscal/config/" + idEmpresa)
                         .header("Authorization", "Bearer " + token)
                         .contentType(APPLICATION_JSON)
-                        .content(corpo(1, "SIMPLES", false, 1, 1, "")))
+                        .content(corpo(1, false, 1, 1, "")))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.detail").exists());
     }
@@ -208,7 +210,7 @@ class FiscalConfigCrudTest {
         mvc.perform(put("/api/v1/fiscal/config/" + idEmpresa)
                         .header("Authorization", "Bearer " + token)
                         .contentType(APPLICATION_JSON)
-                        .content(corpo(1, "SIMPLES", false, 1, 9,
+                        .content(corpo(1, false, 1, 9,
                                 ",\"cscId\":\"000001\",\"cscToken\":\"SEGREDO-DO-CSC\"")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.cscConfigurado").value(true))
@@ -219,7 +221,7 @@ class FiscalConfigCrudTest {
         mvc.perform(put("/api/v1/fiscal/config/" + idEmpresa)
                         .header("Authorization", "Bearer " + token)
                         .contentType(APPLICATION_JSON)
-                        .content(corpo(1, "SIMPLES", false, 2, 9, ",\"cscId\":\"000001\"")))
+                        .content(corpo(1, false, 2, 9, ",\"cscId\":\"000001\"")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.cscConfigurado").value(true))
                 .andExpect(jsonPath("$.serieNfce").value(2));
@@ -233,7 +235,7 @@ class FiscalConfigCrudTest {
         mvc.perform(put("/api/v1/fiscal/config/" + idEmpresa)
                         .header("Authorization", "Bearer " + token)
                         .contentType(APPLICATION_JSON)
-                        .content(corpo(1, "SIMPLES", false, 1, 9,
+                        .content(corpo(1, false, 1, 9,
                                 ",\"cscToken\":\"SEGREDO-DO-CSC\"")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.cscConfigurado").value(true));
@@ -241,7 +243,7 @@ class FiscalConfigCrudTest {
         mvc.perform(put("/api/v1/fiscal/config/" + idEmpresa)
                         .header("Authorization", "Bearer " + token)
                         .contentType(APPLICATION_JSON)
-                        .content(corpo(1, "SIMPLES", false, 1, 9, ",\"removerCsc\":true")))
+                        .content(corpo(1, false, 1, 9, ",\"removerCsc\":true")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.cscConfigurado").value(false));
     }
@@ -257,7 +259,7 @@ class FiscalConfigCrudTest {
         mvc.perform(put("/api/v1/fiscal/config/" + idEmpresa)
                         .header("Authorization", "Bearer " + token)
                         .contentType(APPLICATION_JSON)
-                        .content(corpo(1, "SIMPLES", true, 1, 9, "")))
+                        .content(corpo(1, true, 1, 9, "")))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.detail").exists());
 
@@ -313,7 +315,7 @@ class FiscalConfigCrudTest {
         mvc.perform(put("/api/v1/fiscal/config/" + idEmpresaDo(tokenA))
                         .header("Authorization", "Bearer " + tokenA)
                         .contentType(APPLICATION_JSON)
-                        .content(corpo(3, "REAL", false, 1, 9, "")))
+                        .content(corpo(2, false, 1, 9, "")))
                 .andExpect(status().isOk());
 
         // O tenant B segue sem configuração — configurar A não vaza para B.

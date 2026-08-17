@@ -13,9 +13,10 @@
 
 CREATE TYPE ambiente_fiscal AS ENUM ('HOMOLOGACAO', 'PRODUCAO');
 
--- Refina o CRT 3, que NÃO distingue Lucro Presumido de Lucro Real — e a diferença de PIS/COFINS
--- entre os dois é de 3,65% para 9,25% do faturamento (§8.3).
-CREATE TYPE regime_apuracao AS ENUM ('SIMPLES', 'PRESUMIDO', 'REAL');
+-- DF37: o Niner atende SOMENTE MEI e Simples Nacional. Não existe mais o tipo `regime_apuracao`
+-- (SIMPLES/PRESUMIDO/REAL) que existia aqui: com Lucro Real e Presumido fora do produto, o CRT
+-- (1/2/4) já diz tudo, e uma coluna que só aceita um valor é armadilha — alguém a preenche e
+-- espera que mude alguma coisa. Ver docs/MODULOFISCAL.md §7.1.
 
 -- Máquina de estados do §9.1. NAO_EMITIDO é estado TERMINAL para a operação que o v1 reconhece
 -- mas ainda não sabe emitir (venda a contribuinte de ICMS, que exige NF-e 55): nenhum número é
@@ -46,8 +47,8 @@ CREATE TABLE fiscal_config_empresa (
   id_tenant              smallint        NOT NULL REFERENCES plataforma.tenant (id_tenant),
   id_empresa             integer         NOT NULL,
   crt                    smallint        NOT NULL DEFAULT 1,  -- 1 Simples · 2 Simples excesso de
-                                         -- sublimite · 3 Regime Normal · 4 MEI
-  regime_apuracao        regime_apuracao NOT NULL DEFAULT 'SIMPLES',
+                                         -- sublimite · 4 MEI. O 3 (Regime Normal) está FORA do
+                                         -- produto por decisão de escopo (DF37) — ver o CHECK
   inscricao_estadual_st  text,
   suframa                text,
   ambiente               ambiente_fiscal NOT NULL DEFAULT 'HOMOLOGACAO',
@@ -60,7 +61,9 @@ CREATE TABLE fiscal_config_empresa (
                                          -- não usa mais CSC na montagem, mas ele não foi extinto
   emite_nfce             boolean         NOT NULL DEFAULT false,  -- gate por empresa (F12)
   emite_nfe              boolean         NOT NULL DEFAULT false,
-  equiparado_industrial  boolean         NOT NULL DEFAULT false,  -- DF15: liga o cálculo de IPI
+  -- DF15 encerrada pela DF37: `equiparado_industrial` saiu junto com o cálculo de IPI. Optante do
+  -- Simples recolhe IPI DENTRO do DAS (LC 123/2006 art. 13, II) e não destaca na saída — o flag
+  -- não teria como ficar true em nenhuma empresa que este ERP atende.
   opcao_transferencia_tributada boolean  NOT NULL DEFAULT false,  -- Convenio ICMS 109/2024, opção
                                          -- anual (§8.4). Só usado quando a transferência entrar
   ano_opcao_transferencia smallint,
@@ -71,7 +74,9 @@ CREATE TABLE fiscal_config_empresa (
   criado_em              timestamptz     NOT NULL DEFAULT now(),
   atualizado_em          timestamptz     NOT NULL DEFAULT now(),
   CONSTRAINT fiscal_config_empresa_uk UNIQUE (id_tenant, id_empresa),
-  CONSTRAINT fiscal_config_empresa_crt_ck CHECK (crt IN (1, 2, 3, 4)),
+  -- DF37: MEI e Simples Nacional apenas. O CRT 3 é barrado no BANCO, não só no serviço — é a
+  -- diferença entre "o produto não faz isso" e "o produto faz errado se alguém gravar 3 por fora".
+  CONSTRAINT fiscal_config_empresa_crt_ck CHECK (crt IN (1, 2, 4)),
   -- FK composta (P8) — ver comentário em empresa_id_empresa_uk (V014).
   CONSTRAINT fiscal_config_empresa_empresa_fk FOREIGN KEY (id_tenant, id_empresa)
     REFERENCES empresa (id_tenant, id_empresa)
@@ -154,23 +159,26 @@ CREATE TABLE cfg_perfil_fiscal_regra (
   tipo_operacao      tipo_operacao_fiscal     NOT NULL,
   -- saída da regra
   cfop               char(4)                  NOT NULL,
-  cst_icms           char(2),                 -- CRT 3
+  -- CSOSN é o caminho normal (CRT 1 e 4). `cst_icms` sobrevive à DF37 por causa do CRT 2 apenas:
+  -- a empresa com excesso de sublimite recolhe ICMS FORA do Simples, e se ela emite com CSOSN ou
+  -- com CST é divergência de mercado ainda não resolvida (F0, §8.2). Quem decide é o contador, no
+  -- perfil fiscal — o ERP não chuta por ela. Ver o CHECK cfg_perfil_fiscal_regra_icms_crt_ck.
+  cst_icms           char(2),                 -- CRT 2 (excesso de sublimite)
   csosn              char(3),                 -- CRT 1/2/4
   aliquota_icms      numeric(5,2)             NOT NULL DEFAULT 0,
   perc_reducao_bc    numeric(5,2)             NOT NULL DEFAULT 0,
   mva_st             numeric(5,2)             NOT NULL DEFAULT 0,
   aliquota_fcp       numeric(5,2)             NOT NULL DEFAULT 0,
-  -- DF36: PIS/COFINS ad valorem de saída normal é fixado por LEI pelo regime, não é escolha por
-  -- produto — e CRT 3 cobre Presumido (0,65/3,00) E Real (1,65/7,60), que esta regra não distingue.
-  -- Por isso o motor tira a ALÍQUOTA de fiscal_config_empresa.regime_apuracao e daqui só o CST.
-  -- As duas colunas de alíquota abaixo são OVERRIDE: valem apenas quando o CST não é o de saída
-  -- tributada normal (01) — monofásico / alíquota zero (cesta básica, medicamento, autopeça).
+  -- PIS/COFINS: com Real e Presumido fora do produto (DF37), o caso normal de todo Simples/MEI é
+  -- CST 99 — o tributo está dentro do DAS, sem apuração separada, base/alíquota/valor zerados.
+  -- As alíquotas abaixo só valem para os CST de tratamento próprio (04 monofásico, 06 alíquota
+  -- zero) que o Simples segrega da receita: aí a alíquota é do PRODUTO mesmo. O CST 01 (saída
+  -- tributada normal) NÃO existe neste produto — é o que a DF36 tentava resolver, e a DF37 apagou.
   cst_pis            char(2),
-  aliquota_pis       numeric(5,2)             NOT NULL DEFAULT 0,  -- override (ver DF36 acima)
+  aliquota_pis       numeric(5,2)             NOT NULL DEFAULT 0,
   cst_cofins         char(2),
-  aliquota_cofins    numeric(5,2)             NOT NULL DEFAULT 0,  -- override (ver DF36 acima)
-  cst_ipi            char(2),
-  aliquota_ipi       numeric(5,2)             NOT NULL DEFAULT 0,
+  aliquota_cofins    numeric(5,2)             NOT NULL DEFAULT 0,
+  -- Sem cst_ipi/aliquota_ipi: optante do Simples recolhe IPI dentro do DAS e não destaca (DF37).
   cst_ibscbs         char(3),
   cclasstrib         char(6),
   codigo_beneficio   text,                    -- cBenef, exigido por algumas UFs
@@ -178,11 +186,17 @@ CREATE TABLE cfg_perfil_fiscal_regra (
   atualizado_em      timestamptz              NOT NULL DEFAULT now(),
   CONSTRAINT cfg_perfil_fiscal_regra_uk UNIQUE
     (id_tenant, id_perfil_fiscal, crt, uf_destino, tipo_destinatario, tipo_operacao),
-  -- Ou CST (regime normal) ou CSOSN (Simples) — nunca os dois, nunca nenhum.
+  -- Ou CST ou CSOSN — nunca os dois, nunca nenhum.
   CONSTRAINT cfg_perfil_fiscal_regra_icms_ck CHECK (
     (cst_icms IS NOT NULL AND csosn IS NULL) OR (cst_icms IS NULL AND csosn IS NOT NULL)
   ),
-  CONSTRAINT cfg_perfil_fiscal_regra_crt_ck CHECK (crt IN (1, 2, 3, 4)),
+  -- DF37: CRT 1 (Simples) e 4 (MEI) só emitem com CSOSN. Só o CRT 2 pode usar CST, e ainda assim
+  -- por causa de uma divergência de mercado em aberto (§8.2). Sem este CHECK, um perfil mal
+  -- configurado gravaria CST numa empresa do Simples e a nota seria rejeitada no caixa.
+  CONSTRAINT cfg_perfil_fiscal_regra_icms_crt_ck CHECK (
+    crt = 2 OR cst_icms IS NULL
+  ),
+  CONSTRAINT cfg_perfil_fiscal_regra_crt_ck CHECK (crt IN (1, 2, 4)),
   CONSTRAINT cfg_perfil_fiscal_regra_perfil_fk FOREIGN KEY (id_tenant, id_perfil_fiscal)
     REFERENCES cfg_perfil_fiscal (id_tenant, id_perfil_fiscal)
 );
@@ -293,7 +307,8 @@ CREATE TABLE documento_fiscal (
   valor_fcp             numeric(12,2)            NOT NULL DEFAULT 0,
   valor_pis             numeric(12,2)            NOT NULL DEFAULT 0,
   valor_cofins          numeric(12,2)            NOT NULL DEFAULT 0,
-  valor_ipi             numeric(12,2)            NOT NULL DEFAULT 0,
+  -- Sem valor_ipi: nota emitida por optante do Simples/MEI não destaca IPI (DF37). O IPI que a
+  -- LOJA paga na COMPRA é outra coisa, vive no XML do fornecedor e é assunto da DF30.
   -- Reforma (§8.5). ⚠️ DF32 em aberto: se estes valores COMPÕEM o vNF em 2026. A coluna existe
   -- de qualquer forma — o emissor calcula e destaca mesmo com carga efetiva zero.
   valor_ibs_uf          numeric(12,2)            NOT NULL DEFAULT 0,
@@ -384,7 +399,7 @@ CREATE TABLE documento_fiscal_item (
   valor_fcp           numeric(12,2) NOT NULL DEFAULT 0,
   perc_credito_sn     numeric(5,2)  NOT NULL DEFAULT 0,   -- pCredSN (CSOSN 101)
   valor_credito_sn    numeric(12,2) NOT NULL DEFAULT 0,   -- vCredICMSSN
-  -- PIS / COFINS / IPI
+  -- PIS / COFINS (sem IPI — DF37)
   cst_pis             char(2),
   base_calculo_pis    numeric(12,2) NOT NULL DEFAULT 0,
   aliquota_pis        numeric(5,2)  NOT NULL DEFAULT 0,
@@ -393,9 +408,6 @@ CREATE TABLE documento_fiscal_item (
   base_calculo_cofins numeric(12,2) NOT NULL DEFAULT 0,
   aliquota_cofins     numeric(5,2)  NOT NULL DEFAULT 0,
   valor_cofins        numeric(12,2) NOT NULL DEFAULT 0,
-  cst_ipi             char(2),
-  aliquota_ipi        numeric(5,2)  NOT NULL DEFAULT 0,
-  valor_ipi           numeric(12,2) NOT NULL DEFAULT 0,
   -- IBS / CBS / IS (reforma)
   cst_ibscbs          char(3),
   cclasstrib          char(6),

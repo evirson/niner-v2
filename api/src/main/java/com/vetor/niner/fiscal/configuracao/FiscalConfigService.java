@@ -5,7 +5,7 @@ import com.vetor.niner.fiscal.configuracao.FiscalConfigDtos.EmpresaFiscalRespons
 import com.vetor.niner.fiscal.configuracao.FiscalConfigDtos.FiscalConfigRequest;
 import com.vetor.niner.fiscal.configuracao.FiscalConfigDtos.FiscalConfigResponse;
 import com.vetor.niner.fiscal.configuracao.FiscalConfigDtos.PendenciaAtivacao;
-import com.vetor.niner.fiscal.configuracao.FiscalConfigDtos.RegimeApuracao;
+
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -43,10 +43,10 @@ public class FiscalConfigService {
 
     private static final String SELECT_BASE = """
             SELECT e.id_empresa, e.razao_social,
-                   c.id_fiscal_config, c.crt, c.regime_apuracao::text AS regime_apuracao,
+                   c.id_fiscal_config, c.crt,
                    c.emite_nfce, c.emite_nfe, c.ambiente::text AS ambiente,
                    c.serie_nfce, c.serie_nfe, c.serie_contingencia,
-                   c.equiparado_industrial, c.inscricao_estadual_st, c.suframa,
+                   c.inscricao_estadual_st, c.suframa,
                    c.csc_id, c.csc_token_cifrado, c.versao_tabela_ibpt,
                    c.criado_em, c.atualizado_em
             FROM empresa e
@@ -110,34 +110,34 @@ public class FiscalConfigService {
         if (atual.configurado()) {
             jdbc.sql("""
                             UPDATE fiscal_config_empresa SET
-                                crt = ?, regime_apuracao = ?::regime_apuracao,
+                                crt = ?,
                                 emite_nfce = ?, emite_nfe = ?, ambiente = ?::ambiente_fiscal,
                                 serie_nfce = ?, serie_nfe = ?, serie_contingencia = ?,
-                                equiparado_industrial = ?, inscricao_estadual_st = ?, suframa = ?,
+                                inscricao_estadual_st = ?, suframa = ?,
                                 csc_id = ?, csc_token_cifrado = ?, atualizado_em = now()
                             WHERE id_tenant = plataforma.tenant_atual() AND id_empresa = ?
                             """)
-                    .params(req.crt(), req.regimeApuracao().name(),
+                    .params(req.crt(),
                             req.emiteNfce(), req.emiteNfe(), req.ambiente().name(),
                             req.serieNfce(), req.serieNfe(), req.serieContingencia(),
-                            req.equiparadoIndustrial(), req.inscricaoEstadualSt(), req.suframa(),
+                            req.inscricaoEstadualSt(), req.suframa(),
                             req.cscId(), cscToken, idEmpresa)
                     .update();
         } else {
             jdbc.sql("""
                             INSERT INTO fiscal_config_empresa (
-                                id_tenant, id_empresa, crt, regime_apuracao,
+                                id_tenant, id_empresa, crt,
                                 emite_nfce, emite_nfe, ambiente,
                                 serie_nfce, serie_nfe, serie_contingencia,
-                                equiparado_industrial, inscricao_estadual_st, suframa,
+                                inscricao_estadual_st, suframa,
                                 csc_id, csc_token_cifrado)
-                            VALUES (plataforma.tenant_atual(), ?, ?, ?::regime_apuracao,
-                                    ?, ?, ?::ambiente_fiscal, ?, ?, ?, ?, ?, ?, ?, ?)
+                            VALUES (plataforma.tenant_atual(), ?, ?,
+                                    ?, ?, ?::ambiente_fiscal, ?, ?, ?, ?, ?, ?, ?)
                             """)
-                    .params(idEmpresa, req.crt(), req.regimeApuracao().name(),
+                    .params(idEmpresa, req.crt(),
                             req.emiteNfce(), req.emiteNfe(), req.ambiente().name(),
                             req.serieNfce(), req.serieNfe(), req.serieContingencia(),
-                            req.equiparadoIndustrial(), req.inscricaoEstadualSt(), req.suframa(),
+                            req.inscricaoEstadualSt(), req.suframa(),
                             req.cscId(), cscToken)
                     .update();
         }
@@ -147,20 +147,18 @@ public class FiscalConfigService {
     // ---------------------------------------------------------------- validações
 
     /**
-     * CRT e regime de apuração não são redundantes, e a combinação errada é silenciosa: uma
-     * empresa CRT 3 gravada como SIMPLES faria o motor calcular PIS/COFINS zerado numa nota que
-     * devia destacar 9,25%. Ver DF36 (docs/MODULOFISCAL.md §7.3/§8.3) — a alíquota vem daqui, não
-     * do perfil fiscal do produto, justamente porque CRT 3 cobre Presumido e Real ao mesmo tempo.
+     * DF37: o Niner atende <b>Simples Nacional (CRT 1 e 2) e MEI (CRT 4)</b>. O CRT 3, Regime
+     * Normal, é recusado com 400 — e a mensagem diz que é escopo de produto, não funcionalidade
+     * faltando. Sem esse cuidado, alguém do Lucro Presumido cadastraria CRT 1 para "destravar" a
+     * tela e passaria a emitir toda nota com CSOSN e PIS/COFINS zerado.
+     *
+     * <p>O mesmo domínio está no CHECK do banco (V035). Aqui é para a mensagem; lá é para valer.
      */
     private static void validarRegime(FiscalConfigRequest req) {
-        boolean simplesOuMei = req.crt() == 1 || req.crt() == 2 || req.crt() == 4;
-        if (simplesOuMei && req.regimeApuracao() != RegimeApuracao.SIMPLES) {
-            throw badRequest("CRT %d (Simples Nacional/MEI) exige regime de apuração SIMPLES."
+        if (!FiscalConfigDtos.CRT_ATENDIDOS.contains(req.crt())) {
+            throw badRequest(("CRT %d fora do escopo do produto: o Niner atende Simples Nacional "
+                    + "(CRT 1 e 2) e MEI (CRT 4). Lucro Real e Lucro Presumido não são atendidos.")
                     .formatted(req.crt()));
-        }
-        if (req.crt() == 3 && req.regimeApuracao() == RegimeApuracao.SIMPLES) {
-            throw badRequest("CRT 3 (Regime Normal) exige regime de apuração PRESUMIDO ou REAL — "
-                    + "é o regime que define a alíquota de PIS/COFINS.");
         }
     }
 
@@ -304,10 +302,10 @@ public class FiscalConfigService {
         boolean nfceBloqueada = existeNumeracao(idEmpresa, 65, base.serieNfce());
         boolean nfeBloqueada = existeNumeracao(idEmpresa, 55, base.serieNfe());
         return new FiscalConfigResponse(
-                base.idEmpresa(), base.razaoSocialEmpresa(), true, base.crt(), base.regimeApuracao(),
+                base.idEmpresa(), base.razaoSocialEmpresa(), true, base.crt(),
                 base.emiteNfce(), base.emiteNfe(), base.ambiente(),
                 base.serieNfce(), base.serieNfe(), base.serieContingencia(),
-                base.equiparadoIndustrial(), base.inscricaoEstadualSt(), base.suframa(),
+                base.inscricaoEstadualSt(), base.suframa(),
                 base.cscId(), base.cscConfigurado(), base.versaoTabelaIbpt(),
                 nfceBloqueada, nfeBloqueada, base.criadoEm(), base.atualizadoEm());
     }
@@ -330,18 +328,16 @@ public class FiscalConfigService {
             // Defaults do banco (V035), para a tela renderizar sem 404 nem campo vazio.
             return new FiscalConfigResponse(
                     rs.getLong("id_empresa"), rs.getString("razao_social"), false,
-                    1, RegimeApuracao.SIMPLES, false, false, AmbienteFiscal.HOMOLOGACAO,
-                    1, 1, 9, false, null, null, null, false, null,
+                    1, false, false, AmbienteFiscal.HOMOLOGACAO,
+                    1, 1, 9, null, null, null, false, null,
                     false, false, null, null);
         }
         return new FiscalConfigResponse(
                 rs.getLong("id_empresa"), rs.getString("razao_social"), true,
                 rs.getInt("crt"),
-                RegimeApuracao.valueOf(rs.getString("regime_apuracao")),
                 rs.getBoolean("emite_nfce"), rs.getBoolean("emite_nfe"),
                 AmbienteFiscal.valueOf(rs.getString("ambiente")),
                 rs.getInt("serie_nfce"), rs.getInt("serie_nfe"), rs.getInt("serie_contingencia"),
-                rs.getBoolean("equiparado_industrial"),
                 rs.getString("inscricao_estadual_st"), rs.getString("suframa"),
                 rs.getString("csc_id"),
                 rs.getString("csc_token_cifrado") != null,   // F7: nunca o token, só se existe

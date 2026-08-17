@@ -1,7 +1,5 @@
 package com.vetor.niner.fiscal.motor;
 
-import com.vetor.niner.fiscal.configuracao.FiscalConfigDtos.RegimeApuracao;
-
 import java.math.BigDecimal;
 import java.util.List;
 
@@ -9,6 +7,11 @@ import java.util.List;
  * Contrato do motor tributário (docs/MODULOFISCAL.md §8). Tudo aqui é imutável e sem I/O — a
  * resolução do perfil fiscal no banco acontece <b>antes</b>, e a regra já chega resolvida em cada
  * item. É isso que torna o motor testável por tabela, sem Testcontainers.
+ *
+ * <p><b>DF37 — o Niner atende só MEI e Simples Nacional.</b> Lucro Real e Lucro Presumido estão
+ * fora do produto, e com eles saíram: o regime de apuração (o CRT já diz tudo), a alíquota
+ * ad-valorem de PIS/COFINS (sempre dentro do DAS) e o IPI (idem). O que restou de tributo
+ * realmente calculado é ICMS, os CST de tratamento próprio de PIS/COFINS e o IBS/CBS da reforma.
  */
 public final class MotorTributarioDtos {
 
@@ -18,16 +21,11 @@ public final class MotorTributarioDtos {
     // ---------------------------------------------------------------- entrada
 
     /**
-     * O que a EMPRESA é. {@code crt} e {@code regimeApuracao} não são redundantes: CRT 3 cobre
-     * Lucro Presumido <b>e</b> Lucro Real, e é o regime — não o CRT — que define a alíquota de
-     * PIS/COFINS (DF36). Como cada comprador do ERP cai num regime diferente, este par é a
-     * variabilidade principal do produto, não um caso de borda.
+     * O que a EMPRESA é. Só o {@code crt} sobrou como eixo: <b>1</b> Simples Nacional, <b>2</b>
+     * Simples com excesso de sublimite, <b>4</b> MEI. O CRT 3 (Regime Normal) é recusado — não é
+     * caso não implementado, é escopo de produto (DF37).
      */
-    public record ContextoFiscalEmpresa(
-            int crt,
-            RegimeApuracao regimeApuracao,
-            String ufEmitente,
-            boolean equiparadoIndustrial) {
+    public record ContextoFiscalEmpresa(int crt, String ufEmitente) {
     }
 
     /** O que está sendo vendido/devolvido, já com desconto rateado por item pelo PDV. */
@@ -51,23 +49,21 @@ public final class MotorTributarioDtos {
      * Uma linha de {@code cfg_perfil_fiscal_regra} já resolvida para o contexto (CRT × UF ×
      * destinatário × operação), acrescida do que veio de {@code cfg_cclasstrib}.
      *
-     * <p>⚠️ {@code aliquotaPisOverride}/{@code aliquotaCofinsOverride} são <b>override</b>, não a
-     * fonte (DF36): valem apenas quando o CST não é o de saída tributada normal (01). Para CST 01 a
-     * alíquota vem do {@link ContextoFiscalEmpresa#regimeApuracao()}.
+     * <p>{@code cstIcms} só é válido para <b>CRT 2</b> (§8.2). {@code aliquotaPis}/
+     * {@code aliquotaCofins} só valem para os CST de tratamento próprio (04 monofásico, 06
+     * alíquota zero) — no CST 99, que é o caso normal, tudo é zero.
      */
     public record RegraFiscal(
             String cfop,
-            String cstIcms,        // CRT 3
+            String cstIcms,        // só CRT 2
             String csosn,          // CRT 1/2/4
             BigDecimal aliquotaIcms,
             BigDecimal percReducaoBc,
             BigDecimal aliquotaFcp,
             String cstPis,
-            BigDecimal aliquotaPisOverride,
+            BigDecimal aliquotaPis,
             String cstCofins,
-            BigDecimal aliquotaCofinsOverride,
-            String cstIpi,
-            BigDecimal aliquotaIpi,
+            BigDecimal aliquotaCofins,
             String cstIbsCbs,
             String cClassTrib,
             BigDecimal percReducaoIbs,
@@ -102,7 +98,6 @@ public final class MotorTributarioDtos {
             Icms icms,
             Contribuicao pis,
             Contribuicao cofins,
-            Ipi ipi,
             IbsCbs ibsCbs,
             BigDecimal valorTotalTributos) {
     }
@@ -120,9 +115,6 @@ public final class MotorTributarioDtos {
     }
 
     public record Contribuicao(String cst, BigDecimal baseCalculo, BigDecimal aliquota, BigDecimal valor) {
-    }
-
-    public record Ipi(String cst, BigDecimal baseCalculo, BigDecimal aliquota, BigDecimal valor) {
     }
 
     /** Reforma tributária (§8.5). Em 2026 o IBS é integralmente estadual — {@code pIBSMun} = 0. */
@@ -148,7 +140,6 @@ public final class MotorTributarioDtos {
             BigDecimal valorFcp,
             BigDecimal valorPis,
             BigDecimal valorCofins,
-            BigDecimal valorIpi,
             BigDecimal baseIbsCbs,
             BigDecimal valorIbsUf,
             BigDecimal valorIbsMun,

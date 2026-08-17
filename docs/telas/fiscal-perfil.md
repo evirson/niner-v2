@@ -8,7 +8,7 @@ externo. Isso significa que alguém precisa dizer, para cada produto, qual CFOP,
 quais alíquotas usar — e isso varia por regime do emitente, UF de destino, tipo de destinatário e
 tipo de operação.
 
-Espalhar isso em colunas de `produto` seria inviável: 10.000 produtos × 4 regimes × N UFs. A saída é
+Espalhar isso em colunas de `produto` seria inviável: 10.000 produtos × 3 CRT × N UFs. A saída é
 o **perfil reutilizável** — um perfil, centenas de produtos, uma correção só. `cfg_perfil_fiscal` e
 `cfg_perfil_fiscal_regra` já existem (V035); falta a tela.
 
@@ -43,7 +43,7 @@ Cada linha é uma combinação de contexto → saída tributária. **Dimensões*
 
 | Campo | Rótulo | Componente | Regra |
 |---|---|---|---|
-| `crt` | CRT | `<select>` | 1 Simples · 2 Simples excesso · 3 Regime Normal · 4 MEI |
+| `crt` | CRT | `<select>` | 1 Simples · 2 Simples com excesso de sublimite · 4 MEI (**o 3 não existe no produto** — DF37) |
 | `uf_destino` | UF destino | `<select>` | `*` (qualquer, default) ou UF |
 | `tipo_destinatario` | Destinatário | `<select>` | consumidor final · contribuinte · não contribuinte |
 | `tipo_operacao` | Operação | `<select>` | venda · devolução · transferência · remessa · bonificação |
@@ -53,8 +53,8 @@ Cada linha é uma combinação de contexto → saída tributária. **Dimensões*
 **ICMS** — `cfop` (obrigatório, 4 dígitos), `cst_icms` **ou** `csosn` (ver abaixo), `aliquota_icms`,
 `perc_reducao_bc`, `mva_st`, `aliquota_fcp`, `codigo_beneficio` (cBenef).
 
-**PIS/COFINS/IPI** — `cst_pis`, `aliquota_pis`, `cst_cofins`, `aliquota_cofins`, `cst_ipi`,
-`aliquota_ipi`.
+**PIS/COFINS** — `cst_pis`, `aliquota_pis`, `cst_cofins`, `aliquota_cofins`. Sem IPI: optante do
+Simples recolhe IPI dentro do DAS e não destaca na saída (DF37).
 
 **Reforma (IBS/CBS)** — `cst_ibscbs` (3 dígitos), `cclasstrib` (6 dígitos).
 
@@ -62,38 +62,45 @@ Cada linha é uma combinação de contexto → saída tributária. **Dimensões*
 
 ### 1. CST ou CSOSN, nunca os dois — e o certo para o CRT
 
-O banco já garante metade disso (`cfg_perfil_fiscal_regra_icms_ck`: um dos dois preenchido, nunca
-ambos, nunca nenhum). O que o banco **não** garante é a coerência com o CRT, e a tela impõe:
+O banco garante duas coisas: um dos dois preenchido, nunca ambos nem nenhum
+(`cfg_perfil_fiscal_regra_icms_ck`), e **CST só no CRT 2** (`cfg_perfil_fiscal_regra_icms_crt_ck`:
+`crt = 2 OR cst_icms IS NULL`). A tela reflete isso:
 
 | CRT da regra | Campo de ICMS exibido | O outro |
 |---|---|---|
-| 1, 2, 4 (Simples/MEI) | **CSOSN** (`<select>`: 102, 103, 202, 300, 400, 500, 900) | `cst_icms` fica nulo, campo escondido |
-| 3 (Regime Normal) | **CST** (`<select>`: 00, 10, 20, 40, 41, 50, 51, 60, 70) | `csosn` fica nulo, campo escondido |
+| 1 e 4 (Simples/MEI) | **CSOSN** (`<select>`: 102, 103, 202, 300, 400, 500, 900) | `cst_icms` fica nulo, campo escondido |
+| **2** (excesso de sublimite) | **CSOSN ou CST**, escolha do contador — ver abaixo | o não escolhido fica nulo |
 
 Trocar o CRT da linha troca o campo exibido e **limpa o valor do outro**. Validado de novo no
-servidor — 400 se vier CSOSN com CRT 3 ou CST com CRT 1.
+servidor — 400 se vier CST com CRT 1 ou 4.
+
+⚠️ **Por que só o CRT 2 pode as duas coisas.** A empresa do Simples que estoura o sublimite estadual
+recolhe **ICMS fora do DAS**, e o mercado diverge sobre se ela emite com o grupo `ICMSSN` (CSOSN) ou
+com o grupo `ICMS` (CST) — está em aberto na F0 (`MODULOFISCAL.md` §8.2). Enquanto não houver
+resposta oficial, **o ERP não escolhe pelo lojista**: os dois campos aparecem, com um texto de ajuda
+explicando a divergência, e quem decide é o contador. Escolher por ele seria fingir uma certeza que
+não existe — e o custo do palpite errado é rejeição sistemática em toda venda.
 
 CSOSN 101 (crédito do Simples) fica **fora da lista** no v1 — DF31: exige a alíquota efetiva da
 apuração do DAS, que o sistema não tem de onde ler.
 
-### 2. DF36 — alíquota de PIS/COFINS é override, não a fonte
+### 2. PIS/COFINS — CST 99 é o caso normal, e o 01 é recusado
 
-Este é o ponto mais fácil de entender errado nesta tela, e o formulário tem que dizer isso na cara.
+Todas as empresas do produto são Simples ou MEI (DF37), e nelas o PIS/COFINS está **dentro do DAS**.
+O formulário precisa deixar isso óbvio, senão alguém digita uma alíquota "para não deixar zerado".
 
-A alíquota ad valorem de PIS/COFINS de saída normal **vem do regime da empresa**
-(`fiscal_config_empresa.regime_apuracao`), não daqui — porque CRT 3 cobre Presumido *e* Real, com
-alíquotas diferentes (0,65%/3,00% × 1,65%/7,60%), e esta regra só distingue por `crt`.
+- `cst_pis`/`cst_cofins` = **99** (default para regra nova) ⇒ campos de alíquota **desabilitados e
+  zerados**, com o texto *"Dentro do DAS — sem apuração separada"*.
+- **04** (monofásico) e **06** (alíquota zero) ⇒ campos habilitam. É o tratamento próprio que o
+  optante segrega da receita: bebida, combustível, autopeça, cesta básica, medicamento.
+- **01** (saída tributada normal) ⇒ **fora da lista**. Só existe em Lucro Real e Presumido; o motor
+  recusa com mensagem própria, porque num perfil do Simples ele destacaria PIS/COFINS **por cima do
+  DAS** e a nota seria autorizada normalmente — o erro só apareceria na contabilidade.
 
-Comportamento da tela:
-
-- `cst_pis`/`cst_cofins` **de saída tributada normal (01)** ⇒ os campos de alíquota ficam
-  **desabilitados**, com o texto *"Vem do regime de apuração da empresa (Presumido 0,65% / Real
-  1,65%)"* no lugar do valor.
-- **Qualquer outro CST** (04 monofásico, 06 alíquota zero, 07/08/09 isenta/suspensa, 99 Simples) ⇒ os
-  campos habilitam e valem como override.
-
-Sem isso, alguém digita 1,65% num perfil usado também por uma empresa Presumido e a nota sai errada
-para uma das duas. Detalhe completo: `docs/MODULOFISCAL.md` §7.3 e §8.3.
+> Aqui existia a **DF36** ("a alíquota vem do regime da empresa, não do perfil"). Ela foi **superada
+> pela DF37**: sem Lucro Real e Presumido, não sobrou alíquota ad-valorem a decidir, e
+> `regime_apuracao` saiu do schema. O que era "override" voltou a ser simplesmente a alíquota dos
+> CST de tratamento próprio. Detalhe completo: `docs/MODULOFISCAL.md` §8.3.
 
 ### 3. Especificidade, e o vazio que o motor não perdoa
 
@@ -105,7 +112,7 @@ aplicada, não em ordem de digitação.
 avisa antes: ao salvar, se o perfil não tem nenhuma regra para o CRT de **alguma empresa do tenant
 com fiscal ligado**, mostra um aviso (não bloqueia — o perfil pode estar sendo montado aos poucos):
 
-> *"Este perfil não tem regra para CRT 3, usado pela empresa LOJA CENTRO. Produtos com este perfil não
+> *"Este perfil não tem regra para CRT 2, usado pela empresa LOJA CENTRO. Produtos com este perfil não
 > emitirão nota nessa empresa."*
 
 ## Exclusão
@@ -127,13 +134,14 @@ já semeia 6 tipos de carteira e 76 contas do plano de contas:
 
 | Perfil | Regras | Uso |
 |---|---|---|
-| **REVENDA TRIBUTADA NORMAL** | CRT 1/2/4 → CSOSN 102, CFOP 5.102 · CRT 3 → CST 00, CFOP 5.102 | O caso mais comum do varejo |
-| **REVENDA COM ST RETIDO** | CRT 1/2/4 → CSOSN 500, CFOP **5.405** · CRT 3 → CST 60, CFOP **5.405** | Confecção e calçado, muito comum |
+| **REVENDA TRIBUTADA NORMAL** | CRT 1, 2 e 4 → CSOSN 102, CFOP 5.102 | O caso mais comum do varejo |
+| **REVENDA COM ST RETIDO** | CRT 1, 2 e 4 → CSOSN 500, CFOP **5.405** | Confecção e calçado, muito comum |
 
 Racional: sem isso, o onboarding começa com uma tela vazia e um lojista que não sabe o que é CSOSN.
 Com isso, ele liga o fiscal e a maioria dos produtos já funciona. O risco é semear uma alíquota
-errada — mitigado porque os dois perfis acima **não têm alíquota de ICMS fixa** para Simples (CSOSN
-102/500 não destacam ICMS) e o CRT 3 exige revisão consciente de qualquer forma.
+errada — mitigado porque os dois perfis acima **não têm alíquota de ICMS fixa** (CSOSN 102 e 500 não
+destacam ICMS), e a semente cobre só o CSOSN: a variante com CST do CRT 2 fica de fora justamente
+porque depende da divergência ainda em aberto (§1) e exige decisão do contador.
 
 ## Critérios de aceitação (viram testes)
 
@@ -141,8 +149,8 @@ errada — mitigado porque os dois perfis acima **não têm alíquota de ICMS fi
   especificidade.
 - Dado um perfil salvo, quando é salvo de novo com 2 regras, então ficam exatamente 2 (apaga e
   reinsere), sem sobra da versão anterior.
-- Dado uma regra com CRT 3, quando salva com `csosn` preenchido, então 400.
-- Dado uma regra com CRT 1, quando salva com `cst_icms` preenchido, então 400.
+- Dado uma regra com CRT 1 ou 4, quando salva com `cst_icms` preenchido, então 400.
+- Dado uma regra com CRT 2, quando salva com `cst_icms` preenchido, então 200 (é o único CRT que pode).
 - Dado uma regra sem `cst_icms` e sem `csosn`, quando salva, então 400 (o CHECK do banco não deve ser
   a primeira linha de defesa — o serviço rejeita antes).
 - Dado duas regras com a mesma combinação (crt, uf, destinatário, operação), quando salva, então 400

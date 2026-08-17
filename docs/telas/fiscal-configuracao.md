@@ -4,7 +4,7 @@ Autor: Claudio Calixto (dono do produto) · Data: 2026-08-17 · Módulo(s): `fis
 ## Problema
 
 `fiscal_config_empresa` (V035) guarda tudo que decide **como uma empresa emite nota**: regime
-tributário (CRT), regime de apuração, série e numeração, ambiente (homologação × produção), CSC do
+tributário (CRT), série e numeração, ambiente (homologação × produção), CSC do
 credenciamento e os dois gates `emite_nfce`/`emite_nfe`. Diferente de `cfg_geral`, **o signup não
 semeia essa linha** — um tenant recém-assinado não tem configuração fiscal nenhuma, e é assim que o
 F12 se cumpre ("fiscal desligado não muda o ERP").
@@ -58,22 +58,29 @@ Quatro seções: **Regime**, **Emissão**, **Numeração** e **Credenciamento**.
 
 | Campo (banco) | Rótulo | Componente | Regra |
 |---|---|---|---|
-| `crt` | Regime Tributário (CRT) | `<select>` | 1 Simples · 2 Simples excesso de sublimite · 3 Regime Normal · 4 MEI. Obrigatório |
-| `regime_apuracao` | Regime de Apuração | `<select>` | SIMPLES · PRESUMIDO · REAL. Obrigatório |
-| `equiparado_industrial` | Empresa equiparada a industrial (IPI) | checkbox | Default `false` (DF15 — fora do v1, flag desligada) |
+| `crt` | Regime Tributário (CRT) | `<select>` | **1** Simples · **2** Simples com excesso de sublimite · **4** MEI. Obrigatório. **O 3 não aparece na lista** |
 | `inscricao_estadual_st` | IE de Substituto Tributário (outra UF) | texto | Opcional |
 | `suframa` | Inscrição SUFRAMA | texto | Opcional, sem regra de motor no v1 |
 
-**`crt` e `regime_apuracao` não são redundantes, e a tela precisa deixar isso claro.** CRT 3 cobre
-**Presumido e Real ao mesmo tempo**, e os dois têm PIS/COFINS diferentes (0,65%/3,00% × 1,65%/7,60%).
-Pela **DF36**, é de `regime_apuracao` que o motor tira a alíquota — o perfil fiscal do produto
-contribui só o CST. Por isso a tela valida a combinação:
+**O `<select>` de CRT tem três opções, não quatro (DF37).** O Niner atende Simples Nacional e MEI;
+Lucro Real e Lucro Presumido estão fora do produto. O CRT 3 é recusado em três camadas — não é
+excesso de zelo, é o custo de errar: uma empresa do Lucro Presumido operando como CRT 1 emitiria
+**toda** nota com CSOSN e PIS/COFINS zerado, e a nota seria autorizada normalmente. O erro só
+apareceria na contabilidade.
 
-- `crt` 1, 2 ou 4 ⇒ `regime_apuracao` **tem que ser** `SIMPLES` (400 caso contrário)
-- `crt` 3 ⇒ `regime_apuracao` tem que ser `PRESUMIDO` ou `REAL`; `SIMPLES` é rejeitado
+| Camada | O que faz |
+|---|---|
+| Tela | O 3 não existe no `<select>` |
+| Serviço | 400 com mensagem de **escopo** (`"CRT 3 fora do escopo do produto…"`), não "não suportado" |
+| Banco | `CHECK (crt IN (1, 2, 4))` em `fiscal_config_empresa` |
 
-Sem essa trava, uma empresa CRT 3 salva como `SIMPLES` faria o motor calcular PIS/COFINS zerado numa
-nota que devia destacar 9,25%.
+A mensagem importa: quem lê *"não suportado"* entende "ainda não" e procura um jeito de contornar.
+Quem lê *"Lucro Real e Lucro Presumido não são atendidos"* procura outro ERP — que é o resultado
+correto.
+
+> **Sumiram desta seção (DF37):** `regime_apuracao` (com Real e Presumido fora, o CRT já diz tudo, e
+> uma coluna que só aceita um valor é armadilha) e `equiparado_industrial` (optante do Simples
+> recolhe IPI dentro do DAS e não destaca na saída — o flag não teria como ficar `true`).
 
 ### Emissão
 
@@ -127,7 +134,7 @@ a lista do que falta:
 | Empresa com CNAE | `empresa.cnae` |
 | Certificado A1 ativo e dentro da validade | `fiscal_certificado` (ver `fiscal-certificado.md`) |
 | CNPJ do certificado igual ao da empresa | `fiscal_certificado.cnpj_titular` |
-| `crt` × `regime_apuracao` coerentes | esta tela |
+| `crt` entre os atendidos (1, 2 ou 4 — DF37) | esta tela |
 
 A resposta 409 **lista o que falta e manda para a Conformidade Fiscal** (`fiscal.conformidade`), que
 é a tela desenhada para mostrar isso item a item — esta aqui não vira um relatório de pendências.
@@ -142,8 +149,8 @@ autorizado não é afetado (F6).
 - Dado uma empresa sem configuração, quando o ADMIN salva pela primeira vez, então a linha é criada
   e o `GET` seguinte traz `configurado: true`.
 - Dado um OPERADOR, quando tenta ler ou gravar, então 403 nos dois casos.
-- Dado `crt = 3`, quando salva com `regime_apuracao = SIMPLES`, então 400.
-- Dado `crt = 1`, quando salva com `regime_apuracao = REAL`, então 400.
+- Dado `crt = 3`, quando salva, então 400 com `detail` contendo "fora do escopo" (DF37).
+- Dado `crt = 4` (MEI), quando salva, então 200 e o `GET` seguinte traz `crt: 4`.
 - Dado `serie_contingencia` igual a `serie_nfce`, quando salva, então 400.
 - Dado um CSC já gravado, quando salva sem informar o token, então o token anterior **permanece**
   (não é apagado) e `cscConfigurado` segue `true`.
@@ -178,8 +185,8 @@ RLS (P8/F8) — inclusive o lookup por `id_empresa` vindo do path e o `EXISTS` d
 
 ## Ajuda da tela (R22 / §3.7.1)
 
-Entrada `fiscal.configuracao.form` em `AjudaDaTela.tsx`, cobrindo: a diferença entre CRT e regime de
-apuração (e por que os dois existem), o que muda entre homologação e produção, por que a série não
+Entrada `fiscal.configuracao.form` em `AjudaDaTela.tsx`, cobrindo: o que é o CRT e por que só existem
+três opções (DF37 — o produto não atende Lucro Real nem Presumido), o que muda entre homologação e produção, por que a série não
 pode ser alterada depois da primeira nota, e o que fazer quando o gate recusa ligar.
 
 ## Impacto no banco
@@ -201,10 +208,11 @@ usadas aqui. As colunas de `empresa` que a regra de ativação confere (`codigo_
 
 - 🔴 **O CSC continua exigido no credenciamento do PR com QR v3.00?** Item da F0 (leitura do MOC-PR).
   Se não for, o campo some da tela; enquanto não se sabe, fica opcional.
-- 🔴 **MEI (CRT 4) é cenário real deste produto?** Uma pessoa só pode ter um MEI e o MEI é dispensado
-  de emitir nota a consumidor pessoa física — CRT 4 no mesmo tenant que uma Lucro Real é
-  juridicamente estranho. Confirmar com o contador do piloto antes de gastar massa de teste com CRT 4
-  (a validação de coerência acima já o aceita; o que está em aberto é se vale exercitar).
+- 🔴 **MEI (CRT 4) é cenário real deste produto?** A DF37 tornou a pergunta *mais* relevante, não
+  menos: o MEI agora é um dos três regimes atendidos, e é dispensado de emitir nota a consumidor
+  pessoa física. Se na prática nenhum MEI emite, o CRT 4 vira código sem uso — e se emite, é o caso
+  mais sensível (limite de faturamento baixo, lojista sem contador). Confirmar com o contador do
+  piloto **o que o MEI realmente precisa emitir** antes da F2.
 
 ## Métrica de sucesso
 

@@ -26,14 +26,12 @@ public final class FiscalConfigDtos {
      */
     public record FiscalConfigRequest(
             @NotNull @Min(1) @Max(4) Integer crt,
-            @NotNull RegimeApuracao regimeApuracao,
             @NotNull Boolean emiteNfce,
             @NotNull Boolean emiteNfe,
             @NotNull AmbienteFiscal ambiente,
             @NotNull @Min(1) @Max(999) Integer serieNfce,
             @NotNull @Min(1) @Max(999) Integer serieNfe,
             @NotNull @Min(1) @Max(999) Integer serieContingencia,
-            @NotNull Boolean equiparadoIndustrial,
             @Size(max = 20) String inscricaoEstadualSt,
             @Size(max = 20) String suframa,
             @Size(max = 60) String cscId,
@@ -51,14 +49,12 @@ public final class FiscalConfigDtos {
             String razaoSocialEmpresa,
             boolean configurado,
             int crt,
-            RegimeApuracao regimeApuracao,
             boolean emiteNfce,
             boolean emiteNfe,
             AmbienteFiscal ambiente,
             int serieNfce,
             int serieNfe,
             int serieContingencia,
-            boolean equiparadoIndustrial,
             String inscricaoEstadualSt,
             String suframa,
             String cscId,
@@ -91,10 +87,12 @@ public final class FiscalConfigDtos {
     public record AtivacaoRecusadaResponse(String detail, List<PendenciaAtivacao> pendencias) {
     }
 
-    /** Espelha o ENUM {@code regime_apuracao} (V035). */
-    public enum RegimeApuracao {
-        SIMPLES, PRESUMIDO, REAL
-    }
+    /**
+     * O CRT que a empresa pode ter. Não é enum no banco (a coluna é {@code smallint}, porque o
+     * número vai literalmente no XML), mas o domínio é fechado pelo CHECK e pela DF37: o 3, Regime
+     * Normal, não existe neste produto.
+     */
+    public static final java.util.Set<Integer> CRT_ATENDIDOS = java.util.Set.of(1, 2, 4);
 
     /** Espelha o ENUM {@code ambiente_fiscal} (V035). */
     public enum AmbienteFiscal {
