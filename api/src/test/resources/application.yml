@@ -33,3 +33,8 @@ niner:
     # HTTPS local usa certificado autoassinado), então este default não é usado por ele.
     truststore-path: ""
     truststore-senha: ""
+    resp-tec:
+      cnpj: "37829453000135"
+      contato: SUPORTE VETOR SISTEMAS
+      email: suporte@vetorsistemas.com.br
+      telefone: "4133334444"

@@ -82,3 +82,10 @@ niner:
     # Vazio = truststore padrão do JDK (serve para teste local, não para a SEFAZ real).
     truststore-path: ${NINER_FISCAL_TRUSTSTORE:}
     truststore-senha: ${NINER_FISCAL_TRUSTSTORE_SENHA:}
+    # infRespTec (B7): o responsável técnico é a VETOR/MITRYUSCASH, o mesmo em toda nota de todo
+    # tenant — nunca o lojista. CNPJ é o mesmo usado no B0 (homologação real na SEFAZ-PR).
+    resp-tec:
+      cnpj: ${NINER_FISCAL_RESPTEC_CNPJ:37829453000135}
+      contato: ${NINER_FISCAL_RESPTEC_CONTATO:SUPORTE VETOR SISTEMAS}
+      email: ${NINER_FISCAL_RESPTEC_EMAIL:suporte@vetorsistemas.com.br}
+      telefone: ${NINER_FISCAL_RESPTEC_TELEFONE:4133334444}

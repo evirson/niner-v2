@@ -64,6 +64,15 @@ public record NinerProperties(
      * horas suspeitando do certificado do lojista (achado do B0). Vazio = truststore padrão do
      * JDK, que serve para teste local mas não para a SEFAZ real.
      */
-    public record Fiscal(String truststorePath, String truststoreSenha) {
+    public record Fiscal(String truststorePath, String truststoreSenha, RespTec respTec) {
+    }
+
+    /**
+     * Grupo {@code infRespTec} (B7) — o responsável técnico pelo <b>software emissor</b>, exigido
+     * em toda NFC-e/NF-e (MOC). É a Vetor/MITRYUSCASH, <b>nunca o tenant</b>: um valor só, igual
+     * para todas as notas de todos os lojistas — por isso vive em configuração de aplicação, não
+     * em {@code fiscal_config_empresa}.
+     */
+    public record RespTec(String cnpj, String contato, String email, String telefone) {
     }
 }

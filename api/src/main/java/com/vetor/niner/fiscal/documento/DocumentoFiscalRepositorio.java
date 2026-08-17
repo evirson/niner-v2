@@ -81,7 +81,7 @@ public class DocumentoFiscalRepositorio {
                         pedido.ambiente().name(), tipoEmissao,
                         pedido.idVenda(), pedido.idCliente(), pedido.emissao(),
                         t.valorProdutos(), t.valorDesconto(), t.valorAcrescimo(), t.valorNota(),
-                        pedido.troco(), t.valorIcms(), t.valorFcp(), t.valorPis(), t.valorCofins(),
+                        nz(pedido.troco()), t.valorIcms(), t.valorFcp(), t.valorPis(), t.valorCofins(),
                         t.valorIbsUf(), t.valorIbsMun(), t.valorCbs(), t.valorTotalTributos(),
                         xmlAssinado, sha256(xmlAssinado), pedido.idUsuario())
                 .query(Long.class).single();
@@ -255,6 +255,11 @@ public class DocumentoFiscalRepositorio {
     }
 
     /** SHA-256 do XML autorizado — prova de integridade do arquivo guardado (F6). */
+    /** {@code valor_troco} é {@code NOT NULL} — troco não informado é zero, nunca ausência. */
+    private static java.math.BigDecimal nz(java.math.BigDecimal valor) {
+        return valor == null ? java.math.BigDecimal.ZERO : valor;
+    }
+
     private static String sha256(String xml) {
         try {
             return HexFormat.of().formatHex(

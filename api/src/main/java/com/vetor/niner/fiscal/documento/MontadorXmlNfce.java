@@ -9,6 +9,7 @@ import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.OffsetDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Locale;
 import java.util.Map;
@@ -54,6 +55,26 @@ public class MontadorXmlNfce {
     private static final DateTimeFormatter DH =
             DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ssXXX", Locale.ROOT);
 
+    /**
+     * ⚠️ Fuso do emitente, simplificado para o piloto (UF única, PR): o XSD (padrão
+     * {@code TDateTimeUTC}) <b>proíbe</b> o sufixo {@code Z} — só aceita offset explícito
+     * {@code ±HH:MM}. {@code java.time}'s {@code XXX} imprime exatamente {@code Z} para offset
+     * zero, então qualquer {@code OffsetDateTime} que chegue em UTC (é o que o pgjdbc devolve
+     * para {@code timestamptz} — o instante é lido corretamente, só o offset vem zerado) rejeita
+     * a nota inteira por schema. Achado no B7: nenhum fixture anterior expunha isso porque todos
+     * criavam o {@code OffsetDateTime} à mão já com {@code ZoneOffset.ofHours(-3)}; só uma data
+     * vinda do banco (venda real) revelou o problema.
+     *
+     * <p>Reconverter para {@code America/Sao_Paulo} corrige as duas coisas de uma vez: o offset
+     * deixa de ser {@code Z} (schema) <b>e</b> a hora impressa volta a ser a hora local da venda,
+     * não a hora UTC (uma nota das 19h de Brasília não pode sair dizendo "19h" com offset zero —
+     * isso a colocaria três horas no futuro). Quando o produto atender mais de uma UF, isto vira
+     * coluna em {@code cfg_uf_autorizador} (F10), não uma constante.
+     */
+    private static final java.time.ZoneId FUSO_EMISSAO = java.time.ZoneId.of("America/Sao_Paulo");
+
+    // (java.time.ZoneId acima fica qualificado de propósito — só um uso, evita mais um import)
+
     /** CSOSN que o grupo {@code ICMSSN102} cobre — os quatro sem destaque de ICMS (XSD). */
     private static final Set<String> CSOSN_GRUPO_102 = Set.of("102", "103", "300", "400");
     /** CST que o grupo {@code ICMS40} cobre (XSD). */
@@ -79,14 +100,19 @@ public class MontadorXmlNfce {
     public XmlMontado montar(NotaParaMontar nota, AssinadorQrCode assinadorQrOffline) {
         validar(nota);
 
+        // Ver FUSO_EMISSAO: normaliza o offset ANTES de usar em qualquer lugar (chave, dhEmi, QR
+        // de contingência) — inclusive a chave de acesso, cujo AAMM tem que refletir o mês LOCAL
+        // da venda, não o mês UTC (que pode divergir perto da virada do dia/mês/ano).
+        OffsetDateTime emissaoLocal = nota.emissao().atZoneSameInstant(FUSO_EMISSAO).toOffsetDateTime();
+
         String cnpjEmitente = apenasAlfanumerico(nota.emitente().cnpj());
-        String chave = ChaveAcesso.montar(codigoUfDe(nota.emitente().uf()), nota.emissao(), cnpjEmitente,
+        String chave = ChaveAcesso.montar(codigoUfDe(nota.emitente().uf()), emissaoLocal, cnpjEmitente,
                 MODELO_NFCE, nota.serie(), nota.numero(), nota.tipoEmissao(), nota.codigoNumerico());
 
         StringBuilder xml = new StringBuilder(8192);
         xml.append("<NFe xmlns=\"").append(NS).append("\">");
         xml.append("<infNFe versao=\"").append(VERSAO_LAYOUT).append("\" Id=\"NFe").append(chave).append("\">");
-        montarIde(xml, nota, chave);
+        montarIde(xml, nota, chave, emissaoLocal);
         montarEmit(xml, nota.emitente(), cnpjEmitente);
         montarDest(xml, nota);
         montarItens(xml, nota);
@@ -96,7 +122,7 @@ public class MontadorXmlNfce {
         montarInfAdic(xml, nota);
         montarInfRespTec(xml, nota.responsavelTecnico());
         xml.append("</infNFe>");
-        montarInfNFeSupl(xml, nota, chave, assinadorQrOffline);
+        montarInfNFeSupl(xml, nota, chave, assinadorQrOffline, emissaoLocal);
         xml.append("</NFe>");
 
         return new XmlMontado(chave, xml.toString());
@@ -104,7 +130,7 @@ public class MontadorXmlNfce {
 
     // ---------------------------------------------------------------- ide
 
-    private void montarIde(StringBuilder xml, NotaParaMontar nota, String chave) {
+    private void montarIde(StringBuilder xml, NotaParaMontar nota, String chave, OffsetDateTime emissaoLocal) {
         Emitente e = nota.emitente();
         xml.append("<ide>")
                 .append(tag("cUF", "%02d".formatted(codigoUfDe(e.uf()))))
@@ -113,7 +139,7 @@ public class MontadorXmlNfce {
                 .append(tag("mod", String.valueOf(MODELO_NFCE)))
                 .append(tag("serie", String.valueOf(nota.serie())))
                 .append(tag("nNF", String.valueOf(nota.numero())))
-                .append(tag("dhEmi", nota.emissao().format(DH)))
+                .append(tag("dhEmi", emissaoLocal.format(DH)))
                 .append(tag("tpNF", "1"))                     // 1 = saída
                 .append(tag("idDest", "1"))                   // 1 = operação interna (NFC-e é sempre)
                 .append(tag("cMunFG", String.valueOf(e.codigoMunicipioIbge())))
@@ -472,9 +498,9 @@ public class MontadorXmlNfce {
      * explicar o erro.
      */
     private void montarInfNFeSupl(StringBuilder xml, NotaParaMontar nota, String chave,
-                                  AssinadorQrCode assinadorQrOffline) {
+                                  AssinadorQrCode assinadorQrOffline, OffsetDateTime emissaoLocal) {
         String qr = nota.tipoEmissao() == TP_EMIS_CONTINGENCIA_OFFLINE
-                ? qrCodeOffline(nota, chave, assinadorQrOffline)
+                ? qrCodeOffline(nota, chave, assinadorQrOffline, emissaoLocal)
                 : "%s?p=%s|3|%d".formatted(nota.urls().urlQrCode(), chave, nota.ambiente().codigo());
 
         xml.append("<infNFeSupl>")
@@ -483,7 +509,8 @@ public class MontadorXmlNfce {
                 .append("</infNFeSupl>");
     }
 
-    private String qrCodeOffline(NotaParaMontar nota, String chave, AssinadorQrCode assinador) {
+    private String qrCodeOffline(NotaParaMontar nota, String chave, AssinadorQrCode assinador,
+                                 OffsetDateTime emissaoLocal) {
         if (assinador == null) {
             throw new MontagemInvalidaException(
                     "Emissão em contingência exige assinador do QR Code — sem assinatura o cupom "
@@ -503,7 +530,7 @@ public class MontadorXmlNfce {
         // Os parâmetros assinados são exatamente o que vai depois de "?p=" — assinar mais (a URL)
         // ou menos (sem o dia/valor) produz assinatura que o app de consulta rejeita.
         String parametros = "%s|3|%d|%02d|%s|%s|%s".formatted(
-                chave, nota.ambiente().codigo(), nota.emissao().getDayOfMonth(),
+                chave, nota.ambiente().codigo(), emissaoLocal.getDayOfMonth(),
                 nota.totais().valorNota().setScale(2, RoundingMode.HALF_UP).toPlainString(),
                 indicador, documento);
 

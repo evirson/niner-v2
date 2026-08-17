@@ -380,6 +380,39 @@ class MontadorXmlNfceTest {
         assertThat(montado.xml()).contains("|28.00|1|22233344405|");
     }
 
+    // ------------------------------------------------------------------ fuso da emissão (achado do B7)
+
+    /**
+     * ⚠️ Achado do B7: {@code pgjdbc} devolve {@code timestamptz} sempre com offset UTC
+     * ({@code ZoneOffset.UTC}) — o instante está correto, só o offset não é o local do
+     * estabelecimento. O XSD ({@code TDateTimeUTC}) <b>proíbe</b> o sufixo {@code Z}: só aceita
+     * {@code ±HH:MM} explícito. Nenhum teste anterior pegava isso porque todo fixture criava o
+     * {@code OffsetDateTime} já com {@code ZoneOffset.ofHours(-3)} à mão — só uma data vinda do
+     * banco de verdade revelou o problema (achado ao ligar o B7 com uma venda real).
+     */
+    @Test
+    void emissaoEmUtcNaoQuebraOXsdEVemFormatadaNoFusoLocal() {
+        NotaParaMontar base = notaBase(1, regraSimples("102"), null, AmbienteSefaz.HOMOLOGACAO,
+                pagamentoDe("28.00"), null);
+        // 19:44 UTC == 16:44 em Brasília (-03:00) — a mesma hora que pgjdbc devolveria para uma
+        // venda registrada às 16:44 no horário do lojista.
+        OffsetDateTime emissaoUtc = OffsetDateTime.of(2026, 8, 17, 19, 44, 0, 0, ZoneOffset.UTC);
+        NotaParaMontar nota = new NotaParaMontar(base.ambiente(), base.serie(), base.numero(),
+                base.codigoNumerico(), emissaoUtc, base.naturezaOperacao(), base.tipoEmissao(),
+                base.emitente(), base.destinatario(), base.itens(), base.itensTributados(),
+                base.totais(), base.pagamentos(), base.troco(), base.informacoesComplementares(),
+                base.responsavelTecnico(), base.urls(), base.versaoAplicativo());
+
+        XmlMontado montado = montador.montar(nota);
+
+        assertThatCode(() -> validarEstrutura(montado)).doesNotThrowAnyException();
+        assertThat(montado.xml())
+                .as("offset Z é rejeitado pelo XSD — precisa virar ±HH:MM")
+                .doesNotContain("19:44:00Z")
+                .as("a hora impressa é a hora LOCAL da venda (16:44-03:00), não a hora UTC (19:44)")
+                .contains("<dhEmi>2026-08-17T16:44:00-03:00</dhEmi>");
+    }
+
     /**
      * Sem assinador o montador <b>recusa</b>, em vez de emitir um QR sem assinatura. Em
      * contingência o cupom vai para a mão do consumidor antes de a SEFAZ conhecer a nota: um QR
