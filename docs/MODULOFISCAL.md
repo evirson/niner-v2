@@ -780,12 +780,23 @@ valorem) e `gIBSCBSMono` (monofásico, fora do varejo); `gIBSUF`, `gIBSMun`, `gC
 `gTribRegular` (simula tributação cheia quando há benefício); `gIBSCredPres`; por item, `CST` de 3
 dígitos + `cClassTrib` de 6; totais em **`IBSCBSTot`** (`vBCIBSCBS`, `vIBS`, `vCBS`, `vIS`).
 
-> 🔴 **DF32 — pergunta crítica, sem resposta confiável ainda:** IBS, CBS e IS são tributos **"por
-> fora"**. **Eles compõem o `vNF` em 2026?** Se compuserem, o total impresso no cupom, o valor
-> cobrado do cliente e a conferência de `caixa_detalhe` mudam — mesmo com carga efetiva zero por
-> compensação, quem paga o cupom é o consumidor. Se não compuserem, é só destaque informativo.
-> Nenhuma fonte secundária foi conclusiva. **Item obrigatório da F0, com fonte primária (NT + XSD),
-> antes de qualquer linha de DANFCE.** É a diferença entre o cupom bater e não bater com o caixa.
+> ✅ **DF32 — RESPONDIDA em 2026-08-17, por fonte primária (o próprio XSD).** IBS, CBS e IS
+> **não** entram no `vNF`: o layout tem um campo **separado** para isso, irmão do `ICMSTot` dentro
+> de `total`:
+>
+> ```xml
+> <xs:element name="vNFTot" type="TDec_1302Opc" minOccurs="0">
+>   <xs:documentation>Valor Total da NF considerando os impostos por fora IBS, CBS e IS</xs:documentation>
+> ```
+>
+> Se os tributos por fora compusessem o `vNF`, esse campo não precisaria existir — a própria
+> existência dele é a resposta. Consequência prática: **o `vNF` continua sendo o que o caixa
+> recebe**, e a conferência com `caixa_detalhe` não muda; o `vNFTot` é informativo, para quando a
+> carga deixar de ser compensada integralmente. O montador (B5) emite `vNF` sem IBS/CBS.
+>
+> ⚠️ O que ainda falta: `vNFTot` e o grupo de totais `IBSCBSTot` **não são emitidos pelo v1** —
+> só entram quando a obrigatoriedade chegar (04/01/2027 para Simples/MEI, ou seja, 100% da base).
+> O grupo `IBSCBS` **por item** já é emitido e validado contra o XSD.
 
 **Convivência:** durante toda a transição os dois conjuntos coexistem na mesma nota — ICMS, PIS,
 COFINS e IPI continuam, IBS/CBS/IS entram ao lado. O motor calcula os dois mundos.
@@ -796,6 +807,12 @@ Valor aproximado dos tributos no cupom, via **tabela IBPT** (NCM × UF × vigên
 rotina de atualização, fallback quando o NCM não é encontrado, e a versão gravada no documento
 (F9). 🔴 **DF16** — a tabela IBPT é licenciada; confirmar a forma de distribuição para um SaaS
 multi-tenant (uma licença da Vetor cobrindo todos os tenants, ou cada lojista com a sua).
+
+> **Como o B5 tratou isso (2026-08-17):** o campo `vTotTrib` é `minOccurs="0"` no XSD, então o
+> montador simplesmente **não o emite** enquanto `cfg_ibpt` estiver vazia. Emitir `0.00` seria
+> afirmar ao consumidor, no cupom, que a compra não tem tributo — informação errada é pior que
+> ausência de informação, e a Lei 12.741 não é atendida por um zero falso de qualquer forma.
+> Mesma decisão que o motor tomou no B4, agora coerente ponta a ponta.
 
 ### 8.7 DIFAL
 
@@ -930,8 +947,9 @@ estava emitindo.
 **A papeleta e o DANFCE.** Com fiscal ligado, o cupom impresso **é** o DANFCE: chave em grupos de 4,
 QR Code, URL de consulta, itens, totais, forma de pagamento, troco e o `vTotTrib` da Lei 12.741.
 Isso não cabe em qualquer layout — a lição de 2026-08-24 vale de novo: documento que não couber em
-42 colunas se **reorganiza** (item em 2 linhas), não se espreme. E se a DF32 disser que IBS/CBS
-compõem o total, o cupom ganha mais duas linhas de destaque.
+42 colunas se **reorganiza** (item em 2 linhas), não se espreme. ✅ A DF32 foi respondida (§8.5):
+IBS/CBS **não** compõem o total, então o valor a pagar impresso continua sendo o `vNF` — o cupom
+bate com o caixa sem linha extra. O destaque de IBS/CBS, quando vier, é informativo.
 
 ### 9.7 Contingência offline (`tpEmis = 9`)
 
@@ -1183,6 +1201,19 @@ confirmação de suporte à reforma e com foco menor em NFC-e.
 SHA-256 foi encontrada. Ler o MOC vigente na F0; se um dia migrar, é troca de constante, não de
 arquitetura.
 
+> **O que o B5 já descobriu sobre a assinatura, lendo o XSD (economiza tentativa no B6):**
+> 1. A `Signature` é **obrigatória** no `TNFe` — `<xs:element ref="ds:Signature"/>` sem
+>    `minOccurs="0"`. Um XML não assinado **nunca** passa no schema; não existe variante do tipo
+>    que a dispense. Consequência prática: a validação XSD em produção roda **depois** de assinar,
+>    e o teste do B5 completa o documento com um esqueleto de assinatura para poder validar a
+>    estrutura sem depender do B6.
+> 2. O atributo `URI` do `Reference` é restrito a **`minLength=2`** — ou seja, o XSD **proíbe**
+>    `URI=""` (que assinaria "o documento todo"). Tem que ser `#NFe<chave>`, apontando para o
+>    `Id` do `infNFe`. O PoC do B0 já fazia assim; agora se sabe que é o schema exigindo.
+> 3. A `Signature` fica **fora** do `infNFe` (é irmã dele dentro de `NFe`), depois do
+>    `infNFeSupl`. O QR Code, portanto, **não é assinado** — o que é coerente com ele poder ser
+>    remontado a partir da chave.
+
 **mTLS multi-tenant:** cada requisição usa o certificado **do lojista**, não da Vetor. É um
 `KeyStore` por empresa, montado a partir do `.pfx` decifrado, com cache em memória de vida curta e
 `SSLContext` por empresa. Cuidado explícito: **nunca cachear `SSLContext` sem chave de tenant** —
@@ -1276,7 +1307,7 @@ paralelo às telas, se fizer sentido.
 | **B2** ✅ | Cadastros fiscais: `FiscalConfigService`/`Controller` ✅, `FiscalCertificadoService` ✅ (upload multipart → bucket fiscal privado + senha AES-GCM, *write-only*, DF21 fechada), `PerfilFiscalService` ✅ (padrão de cadastro consolidado) — **+ as 3 telas React** ✅ (2026-08-17, testadas ao vivo no navegador). **Fora do B2**: campos fiscais em Produto/Cliente/Empresa/Tipo de Carteira ficam para o B3 (Conformidade Fiscal), que é quem precisa deles | B1 | Não |
 | **B3** ✅ | **Conformidade Fiscal** — painel + drill-down (2026-08-17), backend + tela. Lista o que impede emitir (empresa/produtos/pagamentos bloqueiam; clientes só avisa). Achado real confirmado ao vivo: hoje todo tenant nasce bloqueado em "Formas de pagamento" (`codigo_tpag` sem tela própria) — é o que revela o tamanho do problema de base cadastral | B2 | Não |
 | **B4** ✅ | **Motor tributário** (`fiscal.motor`): puro, sem I/O. ICMS (CSOSN, + CST no CRT 2) + PIS/COFINS + IBS/CBS + FCP + `vTotTrib`. Teste de tabela por (CRT × CST/CSOSN × UF × operação), sem Testcontainers. **Feito em 2026-08-17**, já sob a DF37 | — (o schema já basta) | Não |
-| **B5** | Montagem do XML + validação contra o **XSD oficial** em teste | B4 | Não |
+| **B5** ✅ | Montagem do XML + validação contra o **XSD oficial** em teste — `fiscal.documento` (`MontadorXmlNfce`, `ChaveAcesso`, `ValidadorXsd`), 2026-08-17. 25 testes validando contra o schema real. Fechou a **DF32** por fonte primária | B4 | Não |
 | **B6** | Assinatura (XMLDSig) + transporte (`HttpClient` do JDK com mTLS por empresa) | B5, B0 | **Sim** |
 | **B7** | PDV: emissão síncrona, DANFCE térmico, contingência offline, recusa em venda a contribuinte | B6 | **Sim** |
 | **B8** | Cancelamento (110111), inutilização, arquivamento no bucket, download em ZIP | B7 | **Sim** |
@@ -1305,7 +1336,7 @@ automatizado — os 10.515 NCMs de `cfg_produto_ncm` vieram por esse mesmo camin
 | Risco | Impacto | Mitigação |
 |---|---|---|
 | Lib de DF-e incompatível com Java 25 / Spring Boot 4 | Alto — trava a arquitetura | PoC na F0, antes de qualquer código de produto (§14) |
-| **IBS/CBS compondo ou não o total da nota (DF32)** | **Alto — cupom não bate com o caixa** | Fonte primária na F0, antes do DANFCE |
+| ~~IBS/CBS compondo ou não o total da nota (DF32)~~ | ~~Alto — cupom não bate com o caixa~~ | ✅ Resolvido: não compõem (XSD, `vNFTot` separado). O cupom bate com o caixa |
 | QR Code v3.00 implementado errado | Alto — cupom inválido no dia 1 | Confirmar no MOC; validar cupom real com leitor no piloto |
 | NT nova não implementada a tempo | **Crítico — todos os tenants param juntos** | Rotina de acompanhamento (§16.4); homologação sempre pronta |
 | Vazamento de certificado | Crítico — terceiro emite no CNPJ do lojista | F7 + KMS + auditoria de uso |
@@ -1338,7 +1369,7 @@ automatizado — os 10.515 NCMs de `cfg_produto_ncm` vieram por esse mesmo camin
 | **DF29** 🆕 | Vale-mercadoria na nota: forma de pagamento ou desconto? | Forma de pagamento; confirmar com contador no piloto. **Decisão do v1** — o vale já quita venda no PDV hoje |
 | **DF30** 🆕 | Guardar tributos das notas de **entrada** (`entrada_item_tributo`)? | Sim, na F1 — o dado já passa pelo parser |
 | **DF31** 🆕 | CSOSN 101 (crédito do Simples) no v1? | Fora do v1; só 102/300/400/500 |
-| **DF32** 🆕 | **IBS/CBS compõem o `vNF` em 2026?** | **Sem resposta confiável — item obrigatório da F0** |
+| ~~DF32~~ | ~~IBS/CBS compõem o `vNF` em 2026?~~ | ✅ **RESPONDIDA (2026-08-17, XSD oficial): NÃO.** O layout tem `vNFTot` separado, "valor total considerando os impostos por fora" — a existência do campo é a resposta. `vNF` segue batendo com o caixa. Ver §8.5 |
 | **DF33** 🆕 | Série própria para contingência? | Sim: 1 normal, 9 contingência |
 | **DF34** 🆕 | Staff impersonando pode emitir/cancelar nota? | Não — leitura apenas |
 
@@ -1369,7 +1400,7 @@ Legenda: ✅ fonte oficial · ◐ fontes secundárias convergentes · ✳ corrig
 | 14 🆕 | **DIFAL e Simples Nacional** | ◐ Empresa do Simples não recolhe DIFAL como remetente (ADI 5464/STF) |
 | 15 🆕 | **`cEAN` de produto sem GTIN** | ◐ Literal `SEM GTIN`; GTIN é validado contra base oficial e código inventado é rejeitado |
 | 16 🆕 | **Chave de acesso × CNPJ alfanumérico** | 🔴 **Não confirmado.** A chave é numérica de 44 posições e embute o CNPJ do emitente. Item da F0 |
-| 17 🆕 | **IBS/CBS compõem o total da nota?** | 🔴 **Não confirmado** (DF32). Item da F0 |
+| 17 | **IBS/CBS compõem o total da nota?** | ✅ **Não** — confirmado no XSD (campo `vNFTot` separado do `vNF`), 2026-08-17 |
 | 18 🆕 | Tabelas `tPag` / `tBand` vigentes | 🔴 Conferir a versão da NT 2023.004 no MOC — os códigos acima de 16 mudaram recentemente |
 
 ---
