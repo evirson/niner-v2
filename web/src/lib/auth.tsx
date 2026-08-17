@@ -3,8 +3,28 @@ import { clearToken, getToken, setToken } from './api'
 
 interface AuthCtx {
   token: string | null
+  /** Empresa ativa da sessão (claim `eid`, docs/telas/login-empresa.md) — `null` até logar,
+   *  ou se o token não tiver o claim (fluxos ainda sem empresa escolhida). */
+  idEmpresa: number | null
   login: (t: string) => void
   logout: () => void
+}
+
+/** Decodifica só o payload do JWT (sem verificar assinatura — isso é papel do backend) para ler
+ *  claims não sensíveis no front, como `eid`. `null` em qualquer formato inesperado. */
+function decodificarPayload(token: string): Record<string, unknown> | null {
+  try {
+    const base64 = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')
+    return JSON.parse(atob(base64))
+  } catch {
+    return null
+  }
+}
+
+function idEmpresaDoToken(token: string | null): number | null {
+  if (!token) return null
+  const eid = decodificarPayload(token)?.eid
+  return typeof eid === 'number' ? eid : null
 }
 
 const Ctx = createContext<AuthCtx | null>(null)
@@ -30,7 +50,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => window.removeEventListener('niner:sessao-expirada', aoExpirar)
   }, [])
 
-  return <Ctx.Provider value={{ token, login, logout }}>{children}</Ctx.Provider>
+  return <Ctx.Provider value={{ token, idEmpresa: idEmpresaDoToken(token), login, logout }}>{children}</Ctx.Provider>
 }
 
 export function useAuth(): AuthCtx {

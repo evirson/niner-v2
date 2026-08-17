@@ -645,3 +645,29 @@ export function IconeMonitor({ size = 20 }: { size?: number }) {
     </svg>
   )
 }
+
+/** Ícone do módulo fiscal (Configuração Fiscal, Perfis Fiscais) — documento com conferência. */
+export function IconeFiscal({ size = 28 }: { size?: number }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.6} stroke="currentColor" width={size} height={size} aria-hidden="true">
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M6 3.75h7.5L19.5 9.75v9a1.5 1.5 0 0 1-1.5 1.5H6a1.5 1.5 0 0 1-1.5-1.5V5.25A1.5 1.5 0 0 1 6 3.75Z M13.5 3.75V9h6M8.25 13.5h7.5M8.25 16.5h4.5"
+      />
+    </svg>
+  )
+}
+
+/** Ícone do Certificado Digital — selo/escudo de segurança. */
+export function IconeCertificado({ size = 28 }: { size?: number }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.6} stroke="currentColor" width={size} height={size} aria-hidden="true">
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M12 3.375 19.5 6v5.25c0 4.632-3.163 8.918-7.5 10.5-4.337-1.582-7.5-5.868-7.5-10.5V6l7.5-2.625Z M9.5 12.5l1.75 1.75 3.25-3.75"
+      />
+    </svg>
+  )
+}
