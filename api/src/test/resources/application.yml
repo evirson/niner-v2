@@ -23,7 +23,16 @@ niner:
   storage:
     bucket: niner-erp-dev
     base-url: https://storage.googleapis.com
-    bucket-fiscal: niner-fiscal-test
+    # ADR-014. Nenhum teste do contexto Spring fala com o MinIO: o bean S3Client é @Lazy, então
+    # estes valores nunca chegam a ser usados aqui. Quem exercita o armazenamento privado de
+    # verdade é o ArmazenamentoPrivadoTest, que sobe o próprio container e monta o adapter à mão.
+    privado:
+      endpoint: http://localhost:9300
+      access-key: niner_app
+      secret-key: dev_minio_app
+      regiao: us-east-1
+      bucket-fiscal: niner-fiscal-test
+      bucket-privado: niner-privado-test
   arquivo-compartilhado:
     expiracao-horas: 24
   seguranca:
