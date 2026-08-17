@@ -468,21 +468,32 @@ public class EntradaMercadoriaService {
                             + " por " + c.nomeUsuarioCancelamento() + ".");
         }
 
-        // Bloqueio análogo ao "crediário já recebido" da Venda — hoje não existe tela de baixa de
-        // contas_pagar (ContasPagarService só grava), então documento_pago nunca fica true na
-        // prática; mantido mesmo assim pra não ficar um buraco de segurança quando essa tela
-        // existir.
+        // Bloqueio análogo ao "crediário já recebido" da Venda.
+        //
+        // ⚠️ A marca de baixa é `data_pagamento`, NÃO `documento_pago`. Este guard checava
+        // `documento_pago = true` e o comentário antigo dizia que "não existe tela de baixa de
+        // contas_pagar, então nunca fica true" — obsoleto desde 2026-08-12 (a tela Contas a Pagar
+        // existe) e perigoso desde 2026-08-14 (a baixa passou a gerar caixa_detalhe /
+        // conta_corrente_movimento). `documento_pago` é um checkbox independente que nasce false,
+        // então uma conta baixada de verdade passava batido: o DELETE abaixo apagava a
+        // contas_pagar e deixava o movimento de dinheiro ÓRFÃO para sempre — exatamente o bug
+        // corrigido em ContaPagarService.excluir() em 08-14, reproduzido aqui.
+        // Ver feedback_delete_sem_fk_deixa_orfao: vínculo sem FK não avisa quando o DELETE esquece
+        // o outro lado. Bloquear é mais seguro que cascatear: quem quiser cancelar estorna a baixa
+        // pela tela dona, que já sabe apagar o movimento e checar caixa fechado.
         boolean temContaPaga = Boolean.TRUE.equals(jdbc.sql("""
                         SELECT EXISTS (
                             SELECT 1 FROM contas_pagar
-                            WHERE id_tenant = plataforma.tenant_atual() AND id_movimento = ? AND documento_pago = true
+                            WHERE id_tenant = plataforma.tenant_atual() AND id_movimento = ?
+                              AND data_pagamento IS NOT NULL
                         )
                         """)
                 .param(idMovimento).query(Boolean.class).single());
         if (temContaPaga) {
             throw new ConflitoDadosException(
-                    "Esta entrada tem conta a pagar já quitada. Não é possível cancelá-la — "
-                            + "estorne o pagamento antes de cancelar a entrada nº " + idMovimento + ".");
+                    "Esta entrada tem conta a pagar já baixada. Não é possível cancelá-la — "
+                            + "desfaça o pagamento em Contas a Pagar antes de cancelar a entrada nº "
+                            + idMovimento + ".");
         }
 
         OffsetDateTime agora = OffsetDateTime.now();

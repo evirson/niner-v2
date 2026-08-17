@@ -348,7 +348,17 @@ public class DreService {
     private Map<String, List<ValorConta>> lancamentos(
             LocalDate inicio, LocalDate fim, Regime regime, List<Long> idsEmpresa) {
         String colunaData = regime == Regime.COMPETENCIA ? "cp.data_lancamento" : "cp.data_pagamento";
-        String valor = regime == Regime.COMPETENCIA ? "cp.valor_pagar" : "COALESCE(cp.valor_pago, cp.valor_pagar)";
+        // ⚠️ NULLIF é obrigatório aqui, não é defensividade. `contas_pagar.valor_pago` é
+        // `numeric(12,2) NOT NULL DEFAULT 0` (V026:21) e ContaPagarService grava ZERO quando a tela
+        // manda o campo vazio — ou seja, a coluna NUNCA é NULL e um COALESCE puro jamais cai no
+        // fallback. Baixa "cheia" (só a data informada) entrava na DRE como R$ 0,00 enquanto o
+        // caixa recebia o valor certo, e a mesma baixa aparecia com valores diferentes no Fluxo de
+        // Caixa e na DRE — lucro inflado. Esta expressão reproduz exatamente a regra de
+        // ContaPagarService.sincronizarMovimentoDeDinheiro: valor_pago quando informado E não-zero,
+        // senão valor_pagar. Se uma das duas mudar, a outra tem que mudar junto.
+        String valor = regime == Regime.COMPETENCIA
+                ? "cp.valor_pagar"
+                : "COALESCE(NULLIF(cp.valor_pago, 0), cp.valor_pagar)";
 
         Map<String, List<ValorConta>> porGrupo = new LinkedHashMap<>();
 

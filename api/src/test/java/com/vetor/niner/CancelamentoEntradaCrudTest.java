@@ -258,6 +258,72 @@ class CancelamentoEntradaCrudTest {
         }
     }
 
+    /**
+     * Regressão de 2026-08-17. O guard de "conta já paga" checava {@code documento_pago = true},
+     * mas a marca de baixa é {@code data_pagamento} — {@code documento_pago} é um checkbox
+     * independente que nasce {@code false} e quase nunca é marcado.
+     *
+     * <p>Consequência: uma conta <b>de fato baixada</b> passava batido, o cancelamento apagava a
+     * linha de {@code contas_pagar}, e o {@code caixa_detalhe}/{@code conta_corrente_movimento}
+     * gerado pela baixa ficava <b>órfão para sempre</b> — o dinheiro seguia saindo do caixa sem
+     * nenhuma conta que o justificasse. É o mesmo bug corrigido em
+     * {@code ContaPagarService.excluir()} em 2026-08-14, reproduzido no outro deletador; o vínculo
+     * {@code caixa_detalhe.id_conta_pagar} não tem FK (de propósito), então o banco não reclama.
+     *
+     * <p>O comentário no código afirmava que "não existe tela de baixa de contas_pagar, então
+     * documento_pago nunca fica true" — obsoleto desde 2026-08-12.
+     */
+    @Test
+    void naoCancelaEntradaComContaBaixadaAindaQueDocumentoPagoNaoEstejaMarcado() throws Exception {
+        TenantENota tenant = prepararTenantComProduto("baixada");
+        String corpo = """
+                {"idFornecedor":%d,"itens":[{"idVariacao":%d,"qtd":1,"precoCusto":10.00}],
+                 "contasPagar":[{"numeroDuplicata":"001","dataVencimento":"2026-09-10","valor":10.00}]}
+                """.formatted(tenant.idFornecedor(), tenant.idVariacao());
+        String resp = mvc.perform(post("/api/v1/estoque/entradas").header("Authorization", "Bearer " + tenant.token())
+                        .contentType(APPLICATION_JSON).content(corpo))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        long idMovimento = ((Number) JsonPath.read(resp, "$.idMovimento")).longValue();
+
+        // Estado que a tela Contas a Pagar produz numa baixa normal: data preenchida,
+        // `documento_pago` intocado (false) — exatamente a condição que o guard antigo não via.
+        try (Connection c = abrirConexao(tenant.idTenant());
+             PreparedStatement ps = c.prepareStatement("""
+                     UPDATE contas_pagar SET data_pagamento = now(), valor_pago = 10.00
+                     WHERE id_movimento = ? AND documento_pago = false
+                     """)) {
+            ps.setLong(1, idMovimento);
+            assertThat(ps.executeUpdate()).isEqualTo(1);
+        }
+
+        mvc.perform(post("/api/v1/estoque/entradas/" + idMovimento + "/cancelar")
+                        .header("Authorization", "Bearer " + tenant.token())
+                        .contentType(APPLICATION_JSON).content("{\"motivo\":\"Tentativa indevida\"}"))
+                .andExpect(status().isConflict());
+
+        // Conferir o BANCO, não só o status: a conta tem que continuar lá (sem ela, o movimento
+        // de dinheiro da baixa ficaria órfão) e o movimento não pode ter sido marcado cancelado.
+        try (Connection c = abrirConexao(tenant.idTenant())) {
+            try (PreparedStatement ps = c.prepareStatement(
+                    "SELECT count(*) FROM contas_pagar WHERE id_movimento = ?")) {
+                ps.setLong(1, idMovimento);
+                try (ResultSet rs = ps.executeQuery()) {
+                    rs.next();
+                    assertThat(rs.getInt(1)).isEqualTo(1);
+                }
+            }
+            try (PreparedStatement ps = c.prepareStatement(
+                    "SELECT cancelado FROM produto_movimento_mestre WHERE id_movimento = ?")) {
+                ps.setLong(1, idMovimento);
+                try (ResultSet rs = ps.executeQuery()) {
+                    rs.next();
+                    assertThat(rs.getBoolean(1)).isFalse();
+                }
+            }
+        }
+    }
+
     @Test
     void naoPodeCancelarUmaEntradaJaCancelada() throws Exception {
         TenantENota tenant = prepararTenantComProduto("duplo-cancel");

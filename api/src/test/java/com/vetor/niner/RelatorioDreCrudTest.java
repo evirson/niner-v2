@@ -372,6 +372,65 @@ class RelatorioDreCrudTest {
                 .isEqualTo(0d);
     }
 
+    /**
+     * Regressão de 2026-08-17. A DRE em regime CAIXA usava {@code COALESCE(valor_pago, valor_pagar)},
+     * que <b>nunca</b> caía no fallback: {@code contas_pagar.valor_pago} é
+     * {@code numeric(12,2) NOT NULL DEFAULT 0} (V026:21) e {@code ContaPagarService} grava ZERO
+     * quando a tela manda o campo vazio — a coluna jamais é NULL.
+     *
+     * <p>Resultado: a baixa "cheia" (operador informa só a Data de Pagamento, que é o caminho
+     * normal) lançava o valor certo em {@code caixa_detalhe} e <b>R$ 0,00</b> na DRE. Fluxo de
+     * Caixa e DRE divergiam sobre a mesma baixa e o lucro saía inflado.
+     *
+     * <p>O helper {@code lancarContaPagar} não pegava isso porque sempre preenche
+     * {@code valor_pago = valor_pagar} — este teste existe justamente para o caso que ele não cobre.
+     */
+    @Test
+    void despesaBaixadaSemValorPagoDigitadoEntraNaDreDeCaixaPeloValorDaConta() throws Exception {
+        TenantNovo tenant = assinarNovoTenant("baixa-cheia");
+        long idTenant = extrairIdTenant(tenant.token());
+        long idFornecedor = criarFornecedor(tenant.token(), "FORNECEDOR BAIXA CHEIA");
+
+        criarContaDespesaFixa(tenant.token(), "4.00.000", "DESPESAS FIXAS", "SINTETICA");
+        criarContaDespesaFixa(tenant.token(), "4.01.000", "Ocupacao", "SINTETICA");
+        criarContaDespesaFixa(tenant.token(), "4.01.001", "Aluguel", "ANALITICA");
+
+        try (Connection c = abrirConexao(idTenant)) {
+            lancarContaPagarBaixadaSemValorPago(
+                    c, idTenant, buscarIdEmpresa(c), idFornecedor, "4.01.001", "500.00");
+        }
+
+        // Competência sempre usou valor_pagar — continua certo.
+        org.assertj.core.api.Assertions
+                .assertThat(valorDaLinha(gerarDre(tenant.token(), "COMPETENCIA"), "DESPESA_FIXA"))
+                .isEqualTo(-500.00);
+        // Caixa: antes do fix vinha 0.00. Tem que trazer o valor da conta, igual ao que o
+        // movimento de dinheiro grava (ContaPagarService.sincronizarMovimentoDeDinheiro).
+        org.assertj.core.api.Assertions
+                .assertThat(valorDaLinha(gerarDre(tenant.token(), "CAIXA"), "DESPESA_FIXA"))
+                .isEqualTo(-500.00);
+    }
+
+    /** Baixa "cheia": {@code data_pagamento} preenchida e {@code valor_pago} em 0 — o estado que a
+     *  tela produz quando o operador informa só a data. */
+    private void lancarContaPagarBaixadaSemValorPago(Connection c, long idTenant, long idEmpresa,
+                                                     long idFornecedor, String idPlanoContas,
+                                                     String valor) throws SQLException {
+        try (PreparedStatement ps = c.prepareStatement("""
+                INSERT INTO contas_pagar
+                    (id_tenant, id_empresa, id_fornecedor, id_plano_contas, data_lancamento, data_vencimento,
+                     data_pagamento, valor_pagar, valor_pago)
+                VALUES (?, ?, ?, ?, now(), now(), now(), ?::numeric, 0)
+                """)) {
+            ps.setLong(1, idTenant);
+            ps.setLong(2, idEmpresa);
+            ps.setLong(3, idFornecedor);
+            ps.setString(4, idPlanoContas);
+            ps.setString(5, valor);
+            ps.execute();
+        }
+    }
+
     @Test
     void operadorRecebe403() throws Exception {
         TenantNovo tenant = assinarNovoTenant("papel");
