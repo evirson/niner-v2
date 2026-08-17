@@ -723,3 +723,29 @@ export function IconeInutilizacao({ size = 28 }: { size?: number }) {
     </svg>
   )
 }
+
+/** Ícone "Ver DANFCE" (recibo/cupom fiscal) — usado na lista de Documentos Fiscais. */
+export function IconeRecibo({ size = 18 }: { size?: number }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor" width={size} height={size} aria-hidden="true">
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M6 3.75h12v16.5l-2.25-1.5-2.25 1.5-2.25-1.5-2.25 1.5-2.25-1.5-.75.5V3.75Z M9 8.25h6 M9 11.25h6 M9 14.25h3.75"
+      />
+    </svg>
+  )
+}
+
+/** Ícone de link externo — usado na lista de Documentos Fiscais (link de consulta pública, §11.4). */
+export function IconeLinkExterno({ size = 18 }: { size?: number }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor" width={size} height={size} aria-hidden="true">
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M13.5 6H8.25A2.25 2.25 0 0 0 6 8.25v9.5A2.25 2.25 0 0 0 8.25 20h9.5A2.25 2.25 0 0 0 20 17.75V12.5 M15 4.5h4.5V9 M19.5 4.5 11 13"
+      />
+    </svg>
+  )
+}

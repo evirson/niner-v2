@@ -16,6 +16,7 @@ export interface DocumentoFiscalItem {
   valorTotal: number
   idVenda: number | null
   nomeCliente: string | null
+  urlConsultaPublica: string | null
 }
 
 export interface PaginaDocumentosFiscais {
@@ -66,6 +67,19 @@ export interface ConsultaSefazResultado {
 
 export function consultarDocumentoNaSefaz(idDocumentoFiscal: number): Promise<ConsultaSefazResultado> {
   return api<ConsultaSefazResultado>(`/api/v1/fiscal/documentos/${idDocumentoFiscal}/consultar-sefaz`, {
+    method: 'POST',
+  })
+}
+
+export interface ReprocessamentoResultado {
+  situacao: string
+  protocolo: string | null
+  cStat: string | null
+  mensagem: string
+}
+
+export function reprocessarDocumentoFiscal(idDocumentoFiscal: number): Promise<ReprocessamentoResultado> {
+  return api<ReprocessamentoResultado>(`/api/v1/fiscal/documentos/${idDocumentoFiscal}/reprocessar`, {
     method: 'POST',
   })
 }

@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import AjudaDaTela from '../../components/AjudaDaTela'
 import { BotaoFecharTela } from '../../components/BotaoFecharTela'
-import { IconeDocumentoFiscal, IconeOlho } from '../../components/Icones'
+import { IconeDocumentoFiscal, IconeLinkExterno, IconeOlho, IconeRecibo } from '../../components/Icones'
 import { useAuth } from '../../lib/auth'
 import { ApiError } from '../../lib/api'
 import { hojeISO } from '../../lib/datas'
@@ -12,9 +12,19 @@ import {
   buscarXmlDocumentoFiscal,
   consultarDocumentoNaSefaz,
   listarDocumentosFiscais,
+  reprocessarDocumentoFiscal,
   type DocumentoFiscalItem,
 } from '../../lib/documentoFiscal'
 import Toast from '../../components/Toast'
+import ComprovantePapeletaModal from '../pdv/ComprovantePapeletaModal'
+
+/** Só nestas situações o comprovante do PDV vem com {@code dadosFiscais} preenchido (autorizado
+ *  ou em contingência) — nas outras, abrir o DANFCE mostraria um recibo comum sem QR/protocolo. */
+const SITUACOES_COM_DANFCE = new Set(['AUTORIZADO', 'CONTINGENCIA'])
+
+/** Situações em que a nota ficou presa numa transmissão que não terminou — candidatas a
+ *  reprocessar (§12: consulta a SEFAZ antes de decidir, F5). */
+const SITUACOES_REPROCESSAVEIS = new Set(['TRANSMITINDO', 'ASSINADO'])
 
 const JANELA_PAGINACAO = 7
 const TAMANHO_PAGINA = 50
@@ -68,6 +78,7 @@ function paginasVisiveis(atual: number, total: number): number[] {
  * que também é uma tela de consulta pura).
  */
 export default function DocumentoFiscalLista() {
+  const queryClient = useQueryClient()
   const { idEmpresa: idEmpresaSessao } = useAuth()
   const [idEmpresa, setIdEmpresa] = useState<number | null>(null)
   const [dataInicialTexto, setDataInicialTexto] = useState(isoParaData(primeiroDiaDoMesISO()))
@@ -76,7 +87,9 @@ export default function DocumentoFiscalLista() {
   const [situacao, setSituacao] = useState('')
   const [pagina, setPagina] = useState(1)
   const [xmlAberto, setXmlAberto] = useState<DocumentoFiscalItem | null>(null)
+  const [idVendaDanfce, setIdVendaDanfce] = useState<number | null>(null)
   const [consultando, setConsultando] = useState<number | null>(null)
+  const [reprocessando, setReprocessando] = useState<number | null>(null)
   const [aviso, setAviso] = useState<{ mensagem: string; tipo: 'erro' | 'sucesso' } | null>(null)
 
   const { data: empresas } = useQuery({ queryKey: ['fiscal-empresas'], queryFn: listarEmpresasFiscal })
@@ -129,6 +142,22 @@ export default function DocumentoFiscalLista() {
       setAviso({ mensagem: e instanceof ApiError ? e.message : 'Não foi possível consultar a SEFAZ.', tipo: 'erro' })
     } finally {
       setConsultando(null)
+    }
+  }
+
+  async function reprocessar(item: DocumentoFiscalItem) {
+    setReprocessando(item.idDocumentoFiscal)
+    try {
+      const resultado = await reprocessarDocumentoFiscal(item.idDocumentoFiscal)
+      setAviso({
+        mensagem: resultado.mensagem,
+        tipo: resultado.situacao === 'AUTORIZADO' ? 'sucesso' : 'erro',
+      })
+      queryClient.invalidateQueries({ queryKey: ['documentos-fiscais'] })
+    } catch (e) {
+      setAviso({ mensagem: e instanceof ApiError ? e.message : 'Não foi possível reprocessar este documento.', tipo: 'erro' })
+    } finally {
+      setReprocessando(null)
     }
   }
 
@@ -235,7 +264,7 @@ export default function DocumentoFiscalLista() {
                     <td>{item.nomeCliente ?? '—'}</td>
                     <td className="mono">{moeda(item.valorTotal)}</td>
                     <td>
-                      <div style={{ display: 'flex', gap: 6 }}>
+                      <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
                         <button
                           type="button"
                           className="acao-icone"
@@ -245,6 +274,29 @@ export default function DocumentoFiscalLista() {
                         >
                           <IconeOlho size={18} />
                         </button>
+                        {item.idVenda !== null && SITUACOES_COM_DANFCE.has(item.situacao) && (
+                          <button
+                            type="button"
+                            className="acao-icone"
+                            title="Ver DANFCE"
+                            aria-label="Ver DANFCE"
+                            onClick={() => setIdVendaDanfce(item.idVenda)}
+                          >
+                            <IconeRecibo size={18} />
+                          </button>
+                        )}
+                        {item.urlConsultaPublica && (
+                          <a
+                            className="acao-icone"
+                            title="Consulta pública (SEFAZ)"
+                            aria-label="Consulta pública (SEFAZ)"
+                            href={item.urlConsultaPublica}
+                            target="_blank"
+                            rel="noreferrer"
+                          >
+                            <IconeLinkExterno size={18} />
+                          </a>
+                        )}
                         <button
                           type="button"
                           className="btn ghost"
@@ -253,6 +305,16 @@ export default function DocumentoFiscalLista() {
                         >
                           {consultando === item.idDocumentoFiscal ? 'Consultando…' : 'Consultar SEFAZ'}
                         </button>
+                        {SITUACOES_REPROCESSAVEIS.has(item.situacao) && (
+                          <button
+                            type="button"
+                            className="btn ghost"
+                            disabled={reprocessando === item.idDocumentoFiscal}
+                            onClick={() => reprocessar(item)}
+                          >
+                            {reprocessando === item.idDocumentoFiscal ? 'Reprocessando…' : 'Reprocessar'}
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -299,6 +361,10 @@ export default function DocumentoFiscalLista() {
       )}
 
       {xmlAberto && <XmlModal item={xmlAberto} aoFechar={() => setXmlAberto(null)} />}
+
+      {idVendaDanfce !== null && (
+        <ComprovantePapeletaModal idVenda={idVendaDanfce} reimpressao aoFechar={() => setIdVendaDanfce(null)} />
+      )}
 
       {aviso && <Toast mensagem={aviso.mensagem} tipo={aviso.tipo} aoFechar={() => setAviso(null)} />}
     </div>
