@@ -1,18 +1,32 @@
 # Progresso do Projeto — niner-v2
 
 Registro cronológico das decisões e entregas. Atualizar a cada marco relevante.
-**Última atualização:** 2026-08-16
+**Última atualização:** 2026-08-17
 
 ---
 
 ## Estado atual
 
-> **Em curso (2026-08-16): MÓDULO FISCAL.** O estudo está fechado (`docs/MODULOFISCAL.md` v2.1) e o
-> **schema já está no banco** (V034/V035 + colunas fiscais nas migrations donas). Escopo do v1:
-> **NFC-e ao consumidor final + NF-e de devolução de venda**, com cancelamento, inutilização,
-> contingência, arquivamento e download. **Nenhuma linha de Java ou React ainda** — o roteiro de
-> codificação, em blocos B0–B9 e com o que depende (ou não) de certificado digital, está em
-> **§17.1 do estudo**. É por lá que a próxima sessão começa.
+> **Em curso (2026-08-17): MÓDULO FISCAL.** Estudo fechado (`docs/MODULOFISCAL.md` v2.1), schema no
+> banco (V034/V035), tabelas nacionais de IBS/CBS carregadas e **243 XSD oficiais versionados**.
+> Escopo do v1: **NFC-e ao consumidor final + NF-e de devolução de venda**, com cancelamento,
+> inutilização, contingência, arquivamento e download. Roteiro em blocos B0–B9: **§17.1 do estudo**.
+>
+> **✅ B0 CONCLUÍDO — NFC-e autorizada pela SEFAZ-PR** (`cStat 100`, protocolo `141260001531993`),
+> com **JDK puro, sem lib de NF-e**: a DF7 está fechada no plano B e o maior risco de arquitetura do
+> módulo caiu. ✅ **B1** (4 specs de tela). 🔄 **B2 em andamento** — `fiscal.configuracao` pronto
+> (13 testes); faltam `PerfilFiscalService`, `FiscalCertificadoService` e as telas React.
+> ⏭️ **Próximo: B4, o motor tributário** — puro, sem rede, e a maior massa de teste do módulo.
+>
+> ⚠️ **Duas decisões de infra bloqueiam o `FiscalCertificadoService`:** o bucket fiscal privado
+> (DF21 — os buckets do ADR-013 são de leitura pública, o `.pfx` não pode ir neles) e onde mora a
+> senha do certificado (não existe KMS no projeto; recomendação é AES-GCM com chave fora do banco,
+> reaproveitando a decisão que a Constituição já tomou para credencial de marketplace).
+>
+> ⚠️ **A MITRYUSCASH é a desenvolvedora, não uma cliente** — o certificado é da casa de software e
+> ela nunca emitirá em produção. Cada comprador do ERP terá um regime próprio (Simples, Presumido,
+> Real ou MEI), então o teste de tabela do motor (§16.1) é a **superfície principal do produto**, não
+> cobertura de borda.
 >
 > **Resumo em uma linha (2026-08-14):** ERP com **~40 telas** ponta a ponta cobrindo cadastros,
 > catálogo, estoque (incl. entrada por XML de NF-e), PDV e vendas, financeiro completo (caixa,
@@ -427,6 +441,81 @@ Movimentação de Conta Corrente) que ainda não tinham migrado pro `SeletorPlan
 ---
 
 ## Linha do tempo
+
+### 2026-08-17 — B0 concluído: **NFC-e autorizada pela SEFAZ-PR**, e a DF7 fechada no plano B
+
+O dia em que o módulo fiscal saiu do papel. **`cStat 100 — Autorizado o uso da NF-e`**, protocolo
+`141260001531993`, chave `41260837829453000135650010000000051323005118`, homologação do Paraná.
+
+**A DF7 pode ser fechada no plano B.** O PoC (`docs/MODULOFISCAL.md` §17.1, bloco B0) rodou com o
+certificado A1 real contra a SEFAZ usando **só o JDK 25** — nenhuma lib de NF-e: abriu o `.pfx`
+brasileiro (empacotado com RC2-40-CBC) no PKCS12 nativo **sem BouncyCastle**, assinou em RSA-SHA1 +
+C14N com `java.xml.crypto`, montou o SOAP à mão e falou mTLS pelo `HttpClient`. A lib
+`br.com.swconsultoria:java-nfe` (Java 8 + `javax` + Axis2 contra nosso Java 25 jakarta) **deixa de
+ser risco de arquitetura** e vira conveniência.
+
+**Achado com consequência de deploy: a raiz ICP-Brasil não está no `cacerts` do JDK.** A cadeia da
+SEFAZ-PR é CELEPAR ← AC SOLUTI SSL EV G4 ← Raiz Brasileira v10 (ITI). Sem truststore própria toda
+chamada morre com `PKIX path building failed` — mensagem que não cita ICP-Brasil e faz perder horas
+suspeitando do certificado do lojista. Vira requisito de ambiente. (A raiz do PoC foi extraída do
+próprio handshake, o que é circular: **antes de produção tem que vir do repositório oficial do ITI**
+com fingerprint conferido.) Detalhe irmão: o OpenSSL 3.x **recusa** o `.pfx` (exige `-legacy`); o
+Java lê sem reclamar.
+
+**Duas rejeições ensinaram o que nenhuma fonte secundária sabia.** O `cStat 225` (falha de schema)
+persistiu por três tentativas até os XSD oficiais chegarem; lidos, o `leiauteNFe_v4.00.xsd` mostrou
+que o QR v3.00 online é `?p=<chave>|3|<tpAmb>` — **o §9.5 documentava `?p=<chave>|<versao>` e omitia
+o `tpAmb`** — e que o `cIdToken` do v2 não aceita zeros à esquerda (`1`, não `000001`). Depois veio
+`cStat 878`, que **entregou a resposta na própria mensagem**: a URL de consulta por chave do PR não é
+o host do webservice, é `http://www.fazenda.pr.gov.br/nfce/consulta`.
+
+**✅ Uma das quatro perguntas obrigatórias da F0 está respondida, com fonte primária.** O §9.3
+perguntava como a chave de acesso (44 dígitos numéricos) acomoda um emitente com **CNPJ
+alfanumérico**. O pattern do XSD é `[0-9]{6}[0-9A-Z]{12}[0-9]{16}(1|3|4|9)[0-9]{9}`: as 12 posições
+de raiz+ordem **aceitam `A-Z` nativamente**, o resto é numérico. Não é preciso desenho especial.
+
+**Também neste dia:**
+
+- **DF36 — a alíquota de PIS/COFINS vem do regime da empresa, não do perfil do produto.** A pergunta
+  do dono do produto ("posso ter empresas de regimes diferentes no mesmo tenant?") revelou que
+  `cfg_perfil_fiscal_regra` só distingue por `crt`, e **CRT 3 cobre Presumido E Real** — regimes com
+  PIS/COFINS diferentes (0,65%/3,00% × 1,65%/7,60%). As duas empresas casariam na mesma regra e uma
+  emitiria errado, em silêncio. O motor passa a ler `fiscal_config_empresa.regime_apuracao`; o perfil
+  contribui só o CST, e as colunas de alíquota da regra viram **override** para CST não-01.
+- **Bloco B1 completo** — as 4 specs de tela fiscais (`fiscal-configuracao`, `fiscal-certificado`,
+  `fiscal-perfil`, `fiscal-conformidade`), com um padrão estrutural novo: singleton **por empresa**
+  (não por tenant, como `cfg_geral`).
+- **Bloco B2 começado** — módulo `fiscal.configuracao` (Dtos/Service/Controller) + 13 testes, com o
+  gate do F11 (ligar a emissão valida 7 precondições e recusa com 409 listando o que falta).
+- **Dois bugs de dinheiro corrigidos**, achados por varredura de código e **verificados com controle
+  negativo** (rodados com o fix revertido, para provar que o teste discrimina):
+  1. **Cancelamento de Entrada deixava dinheiro órfão** — o guard checava `documento_pago = true`,
+     mas a marca de baixa é `data_pagamento`; `documento_pago` é um checkbox independente que nasce
+     `false`. Conta baixada de verdade passava batido, o `DELETE FROM contas_pagar` executava e o
+     `caixa_detalhe` ficava órfão. Mesmo bug corrigido em `ContaPagarService.excluir()` em 08-14,
+     reproduzido no outro deletador. Sem o fix: `Status expected:<409> but was:<200>`.
+  2. **DRE em regime caixa somava R$ 0,00** — `COALESCE(valor_pago, valor_pagar)` nunca caía no
+     fallback porque a coluna é `NOT NULL DEFAULT 0`. Baixa "cheia" (só a data) ia certa para o caixa
+     e zerada para a DRE: Fluxo de Caixa e DRE divergiam sobre a mesma baixa, com lucro inflado. Sem
+     o fix: `expected: -500.0 but was: 0.0`.
+- **Tabelas nacionais de IBS/CBS carregadas** do IT 2025.002: `cfg_cst_ibscbs` (19) e
+  `cfg_cclasstrib` (141). A V034 ganhou 3 colunas que vinham na planilha e não tinham onde morar —
+  `ind_nfce`, `perc_reducao_ibs`, `perc_reducao_cbs`. Não eram opcionais: só **42 dos 141** códigos
+  valem em NFC-e (sem a flag a tela ofereceria 99 códigos que a SEFAZ rejeita) e **60** têm redução
+  de alíquota (sem os percentuais o motor saberia que é reduzida, mas não quanto).
+  ⚠️ **Uma anomalia da fonte oficial foi preservada, não corrigida:** a planilha traz `5100002`, com
+  7 dígitos, enquanto os outros 141 têm 6. Confirmado no arquivo (`<t>5100002</t>` no
+  `sharedStrings.xml`; `510002` não existe nele). Provavelmente é digitação errada, mas adivinhar
+  código de classificação tributária faz toda nota que o usar ser rejeitada — a linha ficou em
+  comentário no fim do seed, esperando confirmação no Informe Técnico. Não urge: `ind_nfce = false`.
+- **243 XSD oficiais** versionados em `api/src/main/resources/xsd/`, o que habilita a validação
+  local exigida pelo §16.1 (hoje o erro só aparece depois de um round-trip na SEFAZ).
+- **Dois subagentes caçadores de bug** definidos em `.claude/agents/`, carregando o catálogo dos
+  bugs que de fato apareceram neste repositório. A varredura devolveu 18 achados na API e 33 no
+  front — **parados, aguardando triagem**; os 2 acima são os únicos já verificados e corrigidos.
+  Notícia boa: nenhum vazamento de tenant em toda a base.
+
+**523/523 testes de backend verdes.**
 
 ### 2026-08-16 — Módulo fiscal: estudo fechado e schema no banco
 

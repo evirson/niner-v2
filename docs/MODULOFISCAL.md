@@ -37,6 +37,7 @@ decisão de arquitetura vira ADR no formato §6 da spec.
 | DF13 | Venda a CNPJ contribuinte no PDV | ✅ Revisada pela DF35: sem NF-e de venda no v1, o PDV **emite NFC-e para consumidor final, inclusive com CNPJ** (`indIEDest` 2 ou 9), e **recusa a emissão** quando o cliente é contribuinte de ICMS (`indIEDest = 1`), com mensagem que ensina a saída. A venda em si nunca é bloqueada (F3) — ver §9.6 |
 | DF26 | Venda não presencial (marketplace / e-commerce) | ✅ Futura (§4.2). Os indicadores `indPres`/`indFinal`/`idDest` nascem no `documento_fiscal` desde o v1 porque a NFC-e já os preenche; o resto (transporte, `infIntermed`) vem junto com `canais/` |
 | DF27 | Correção de nota autorizada | ✅ Futura. ⚠️ **CC-e não existe para NFC-e** — é evento de NF-e 55, então nunca teria entrado num v1 de NFC-e de qualquer forma (§4.2) |
+| **DF36** 🆕 | **Alíquota de PIS/COFINS: do perfil do produto ou do regime da empresa?** | ✅ **Do regime.** O motor lê `fiscal_config_empresa.regime_apuracao`; o perfil contribui só o **CST**. `aliquota_pis`/`aliquota_cofins` da regra viram **override**, usadas apenas quando o CST não é "tributada normal". Ver §7.3 e §8.3 |
 
 Decisões ainda em aberto: **Anexo A** (DF12, DF16, DF18–DF24, DF29–DF34).
 
@@ -530,6 +531,17 @@ ST retido", "Isento"). Um perfil, centenas de produtos, uma correção só.
 Resolução: a regra mais específica ganha (UF exata > `*`). **Sem regra que case → erro explícito,
 nunca chute** (F11 + §8.1).
 
+> **DF36 — a alíquota de PIS/COFINS não sai daqui.** A dimensão da regra é o **`crt`**, e o CRT 3
+> cobre **Lucro Presumido e Lucro Real ao mesmo tempo** — regimes com PIS/COFINS diferentes (§8.3).
+> Um tenant com uma empresa Presumido e outra Real casaria as duas na **mesma linha de regra**, e uma
+> delas emitiria com alíquota errada, em silêncio. Por isso o motor **deriva a alíquota de
+> `fiscal_config_empresa.regime_apuracao`**, e a regra contribui só o **CST** (`cst_pis`/`cst_cofins`).
+> As colunas `aliquota_pis`/`aliquota_cofins` continuam existindo como **override**, aplicadas apenas
+> quando o CST não é "tributada normal" — produto monofásico ou de alíquota zero (cesta básica,
+> medicamento, autopeça) se expressa por CST 04/06 com alíquota 0, e isso o perfil precisa saber
+> dizer. Alternativa rejeitada: acrescentar `regime_apuracao` à chave única da regra — dobraria as
+> linhas do perfil e deixaria o usuário digitar um número que a lei já determina.
+
 ### 7.4 As três camadas de tributo 🆕 — resposta ao item 4.3
 
 "Arquivar no banco as informações sobre tributos dos produtos" são, na verdade, **três coisas
@@ -654,7 +666,27 @@ precisa suportar desde a F2, é a UF piloto.
 | **Lucro Presumido** | Cumulativo, sem crédito | PIS 0,65% · COFINS 3,00% | 01 nas saídas tributadas |
 | **Lucro Real** | Não cumulativo, com crédito | PIS 1,65% · COFINS 7,60% | 01 nas saídas; créditos nas entradas |
 
-É por isso que `regime_apuracao` existe separado do `crt`.
+É por isso que `regime_apuracao` existe separado do `crt` — e, pela **DF36**, é de lá que a alíquota
+sai. Note que **Presumido e Real são os dois CRT 3**: se a alíquota viesse do perfil fiscal do
+produto (cuja regra só distingue por `crt`), um tenant com as duas empresas emitiria uma delas
+errado. O contrato do motor é:
+
+| Origem | O que fornece |
+|---|---|
+| `cfg_perfil_fiscal_regra` | **CST** (`cst_pis`, `cst_cofins`) — e só |
+| `fiscal_config_empresa.regime_apuracao` | **Alíquota**, quando o CST é de saída tributada normal (01) |
+| `cfg_perfil_fiscal_regra.aliquota_pis`/`aliquota_cofins` | **Override**, quando o CST **não** é 01 (monofásico, alíquota zero) |
+
+Na prática: `ContextoFiscalEmpresa` carrega `regime_apuracao`, e o passo 4 da ordem de cálculo
+(§8.1) consulta o regime antes de olhar para a regra. **Simples e MEI não têm alíquota** — CST 99
+com base/alíquota/valor zerados, então a questão nem se coloca para CRT 1/2/4.
+
+**Consequência de cadastro (a pergunta que originou a DF36):** empresas de regimes diferentes no
+mesmo tenant são suportadas — `fiscal_config_empresa` é uma linha **por empresa** (§7.1). E os
+impostos **não** se separam por empresa: o produto declara *o que ele é* (NCM, CEST, origem,
+unidade, perfil — igual em toda empresa) e a empresa declara *como tributa* (CRT + regime). Replicar
+cadastro fiscal por empresa multiplicaria N produtos × M empresas de linhas para manter, sem ganho —
+a auditoria já está preservada pela camada 3 (§7.4), que congela o que foi calculado em cada nota.
 
 **IPI:** varejo que compra para revender não é contribuinte. Só importa se a empresa for
 **equiparada a industrial** (importador que revende, quem fraciona/reembala). Flag em
