@@ -73,21 +73,42 @@ public class AssinadorXmlNfe {
      * @param senha senha do keystore
      */
     public String assinar(String xml, String chave, KeyStore pkcs12, String senha) {
+        return assinarElemento(xml, "infNFe", "NFe" + chave, pkcs12, senha);
+    }
+
+    /**
+     * Assina o {@code infEvento} de um evento (cancelamento 110111, B8) — mesma mecânica
+     * XMLDSig do {@link #assinar}, só muda o elemento alvo e a convenção do {@code Id}: aqui é
+     * {@code "ID" + tpEvento(6) + chave(44) + nSeqEvento(2)}, não {@code "NFe" + chave}
+     * (leiauteEventoCancNFe_v1.00.xsd — o {@code Id} tem 54 caracteres: {@code "ID"} + 52 dígitos).
+     *
+     * @param idEsperado o {@code Id} exato que {@code montarEventoCancelamento} gravou no XML —
+     *                   confere igual {@link #assinar} confere {@code "NFe"+chave}, mesma razão:
+     *                   assinar sem checar produziria um evento apontando pra outra nota/sequência.
+     */
+    public String assinarEvento(String xml, String idEsperado, KeyStore pkcs12, String senha) {
+        return assinarElemento(xml, "infEvento", idEsperado, pkcs12, senha);
+    }
+
+    private String assinarElemento(String xml, String nomeElemento, String idEsperado,
+                                   KeyStore pkcs12, String senha) {
         try {
             Document doc = parse(xml);
 
-            Element infNFe = (Element) doc.getElementsByTagNameNS(NS_NFE, "infNFe").item(0);
-            if (infNFe == null) {
-                throw new AssinaturaInvalidaException("XML sem elemento infNFe — nada a assinar.");
-            }
-            // Marca o atributo como ID; sem isto a Reference "#NFe<chave>" não resolve.
-            infNFe.setIdAttribute("Id", true);
-
-            String id = infNFe.getAttribute("Id");
-            if (!("NFe" + chave).equals(id)) {
+            Element alvo = (Element) doc.getElementsByTagNameNS(NS_NFE, nomeElemento).item(0);
+            if (alvo == null) {
                 throw new AssinaturaInvalidaException(
-                        "O Id do infNFe (%s) não corresponde à chave informada (NFe%s) — assinar assim produziria uma nota que aponta para outra chave."
-                                .formatted(id, chave));
+                        "XML sem elemento " + nomeElemento + " — nada a assinar.");
+            }
+            // Marca o atributo como ID; sem isto a Reference "#<id>" não resolve.
+            alvo.setIdAttribute("Id", true);
+
+            String id = alvo.getAttribute("Id");
+            if (!idEsperado.equals(id)) {
+                throw new AssinaturaInvalidaException(
+                        ("O Id do %s (%s) não corresponde ao esperado (%s) — assinar assim produziria "
+                                + "um documento apontando para outra chave/evento.")
+                                        .formatted(nomeElemento, id, idEsperado));
             }
 
             ChavePrivadaECertificado credencial = extrair(pkcs12, senha);
@@ -109,7 +130,7 @@ public class AssinadorXmlNfe {
             X509Data x509 = kif.newX509Data(List.of(credencial.certificado()));
             KeyInfo keyInfo = kif.newKeyInfo(List.of(x509));
 
-            // A Signature entra no elemento raiz <NFe>, como irmã de infNFe/infNFeSupl.
+            // A Signature entra no elemento raiz (<NFe> ou <evento>), como irmã do elemento alvo.
             DOMSignContext contexto = new DOMSignContext(credencial.chavePrivada(), doc.getDocumentElement());
             contexto.setProperty("org.jcp.xml.dsig.secureValidation", Boolean.FALSE);
             fac.newXMLSignature(signedInfo, keyInfo).sign(contexto);

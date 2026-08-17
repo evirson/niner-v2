@@ -483,9 +483,14 @@ CREATE TABLE documento_fiscal_evento (
   tipo_evento         text        NOT NULL,          -- '110111' cancelamento · '110110' CC-e
   sequencia           smallint    NOT NULL DEFAULT 1,
   justificativa       text        NOT NULL,
+  autorizado          boolean     NOT NULL,          -- P3: grava a tentativa mesmo quando a SEFAZ
+                                                      -- recusa (F11 "erro explicito, nunca chute")
   protocolo           text,
   status_sefaz        text,
   motivo_sefaz        text,
+  -- XML do EVENTO já assinado (o que foi enviado) — B8, mesma razão de documento_fiscal.
+  -- xml_assinado (B7): sobrevive a restart, e é o par indissociável do protocolo/motivo acima.
+  xml_evento          text,
   xml_objeto_bucket   text,
   id_usuario          integer,
   criado_em           timestamptz NOT NULL DEFAULT now(),

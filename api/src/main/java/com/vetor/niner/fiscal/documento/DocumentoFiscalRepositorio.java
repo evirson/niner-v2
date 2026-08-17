@@ -254,7 +254,88 @@ public class DocumentoFiscalRepositorio {
     public record NotaPendente(long id, String chaveAcesso, String xmlAssinado) {
     }
 
-    /** SHA-256 do XML autorizado — prova de integridade do arquivo guardado (F6). */
+    // ---------------------------------------------------------------- cancelamento (§10.1, B8)
+
+    /**
+     * A nota AUTORIZADA mais recente de uma venda, ou vazia quando não há nenhuma — o chamador
+     * (F12/DF13) trata "vazio" como "sem nota fiscal, cancelamento não passa pela SEFAZ". Pega a
+     * mais recente por {@code criado_em}: uma venda com nota rejeitada e reemitida com sucesso
+     * tem duas linhas em {@code documento_fiscal}, e é a AUTORIZADA que importa.
+     */
+    @Transactional(readOnly = true)
+    public java.util.Optional<DocumentoParaCancelar> buscarAutorizadoParaCancelamento(long idVenda) {
+        return jdbc.sql("""
+                        SELECT d.id_documento_fiscal, d.chave_acesso, d.protocolo, d.data_autorizacao,
+                               d.ambiente::text AS ambiente, e.estado AS uf, e.cnpj
+                          FROM documento_fiscal d
+                          JOIN empresa e ON e.id_tenant = d.id_tenant AND e.id_empresa = d.id_empresa
+                         WHERE d.id_tenant = plataforma.tenant_atual() AND d.id_venda = ?
+                           AND d.situacao = 'AUTORIZADO'
+                         ORDER BY d.criado_em DESC
+                         LIMIT 1
+                        """)
+                .param(idVenda)
+                .query((rs, n) -> new DocumentoParaCancelar(
+                        rs.getLong("id_documento_fiscal"), rs.getString("chave_acesso"),
+                        rs.getString("protocolo"),
+                        rs.getObject("data_autorizacao", java.time.OffsetDateTime.class),
+                        MontagemNfceDtos.AmbienteSefaz.valueOf(rs.getString("ambiente")),
+                        rs.getString("uf"), rs.getString("cnpj")))
+                .optional();
+    }
+
+    /**
+     * Grava a <b>tentativa</b> de cancelamento — sempre, autorizada ou recusada (P3, F11: nunca
+     * esconder uma recusa). Só isso; quem marca {@code documento_fiscal.situacao = CANCELADO} é
+     * {@link #marcarCancelado}, chamado à parte.
+     *
+     * <p>⚠️ {@code REQUIRES_NEW}, não o padrão — achado testando o caminho de recusa (B8):
+     * {@code CancelamentoVendaService.cancelar()} chama {@link CancelamentoNfceService
+     * #cancelarSeAplicavel} de <b>dentro</b> da própria transação (desvio deliberado do F2,
+     * documentado lá). Com propagação padrão, este {@code INSERT} entraria nessa MESMA
+     * transação — e como a recusa termina lançando {@code ResponseStatusException}, o Spring
+     * reverte a transação inteira, apagando junto o registro de auditoria que existe
+     * <b>exatamente</b> para sobreviver à recusa. {@code REQUIRES_NEW} garante que o evento
+     * commita sozinho, aconteça o que acontecer depois no chamador.
+     */
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.REQUIRES_NEW)
+    public void registrarTentativaCancelamento(long idDocumentoFiscal, String justificativa,
+                                               boolean autorizado, String protocoloEvento,
+                                               String statusSefaz, String motivoSefaz, String xmlEvento,
+                                               Integer idUsuario) {
+        jdbc.sql("""
+                        INSERT INTO documento_fiscal_evento
+                            (id_tenant, id_documento_fiscal, tipo_evento, justificativa, autorizado,
+                             protocolo, status_sefaz, motivo_sefaz, xml_evento, id_usuario)
+                        VALUES (plataforma.tenant_atual(), ?, '110111', ?, ?, ?, ?, ?, ?, ?)
+                        """)
+                .params(idDocumentoFiscal, justificativa, autorizado, protocoloEvento, statusSefaz,
+                        motivoSefaz, xmlEvento, idUsuario)
+                .update();
+    }
+
+    /**
+     * Marca o documento como {@code CANCELADO} — chamado só quando a SEFAZ autorizou.
+     * <b>Propagação padrão, de propósito</b> (diferente de {@link #registrarTentativaCancelamento}):
+     * este {@code UPDATE} precisa entrar na <b>mesma</b> transação que reverte a venda em
+     * {@code CancelamentoVendaService.cancelar()} — se a reversão falhar por qualquer motivo
+     * depois deste ponto, o rollback tem que desfazer o {@code CANCELADO} junto, senão o fiscal
+     * fica cancelado com a venda intacta ("estoque/caixa e fiscal nunca divergem", §10.1).
+     */
+    @Transactional
+    public void marcarCancelado(long idDocumentoFiscal) {
+        jdbc.sql("""
+                        UPDATE documento_fiscal SET situacao = 'CANCELADO', atualizado_em = now()
+                         WHERE id_tenant = plataforma.tenant_atual() AND id_documento_fiscal = ?
+                        """)
+                .param(idDocumentoFiscal).update();
+    }
+
+    public record DocumentoParaCancelar(long idDocumentoFiscal, String chaveAcesso, String protocolo,
+                                        java.time.OffsetDateTime dataAutorizacao,
+                                        MontagemNfceDtos.AmbienteSefaz ambiente, String uf, String cnpjEmitente) {
+    }
+
     /** {@code valor_troco} é {@code NOT NULL} — troco não informado é zero, nunca ausência. */
     private static java.math.BigDecimal nz(java.math.BigDecimal valor) {
         return valor == null ? java.math.BigDecimal.ZERO : valor;

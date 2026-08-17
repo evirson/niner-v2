@@ -593,23 +593,14 @@ public class MontadorXmlNfce {
 
     // ---------------------------------------------------------------- auxiliares
 
-    /** Código IBGE da UF (`cUF`) — os 2 primeiros dígitos do código de município. */
+    /** Código IBGE da UF (`cUF`) — mapa único do módulo, ver {@link ChaveAcesso#codigoUfDe}. */
     private static int codigoUfDe(String uf) {
-        Integer codigo = CODIGO_UF.get(uf == null ? "" : uf.trim().toUpperCase(Locale.ROOT));
-        if (codigo == null) {
+        try {
+            return ChaveAcesso.codigoUfDe(uf);
+        } catch (IllegalArgumentException e) {
             throw new MontagemInvalidaException("UF do emitente inválida: %s.".formatted(uf));
         }
-        return codigo;
     }
-
-    private static final Map<String, Integer> CODIGO_UF = Map.ofEntries(
-            Map.entry("RO", 11), Map.entry("AC", 12), Map.entry("AM", 13), Map.entry("RR", 14),
-            Map.entry("PA", 15), Map.entry("AP", 16), Map.entry("TO", 17), Map.entry("MA", 21),
-            Map.entry("PI", 22), Map.entry("CE", 23), Map.entry("RN", 24), Map.entry("PB", 25),
-            Map.entry("PE", 26), Map.entry("AL", 27), Map.entry("SE", 28), Map.entry("BA", 29),
-            Map.entry("MG", 31), Map.entry("ES", 32), Map.entry("RJ", 33), Map.entry("SP", 35),
-            Map.entry("PR", 41), Map.entry("SC", 42), Map.entry("RS", 43), Map.entry("MS", 50),
-            Map.entry("MT", 51), Map.entry("GO", 52), Map.entry("DF", 53));
 
     private static String tag(String nome, String valor) {
         return "<" + nome + ">" + valor + "</" + nome + ">";

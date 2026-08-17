@@ -1,6 +1,7 @@
 package com.vetor.niner.vendas.cancelamento;
 
 import com.vetor.niner.comum.web.ConflitoDadosException;
+import com.vetor.niner.fiscal.documento.CancelamentoNfceService;
 import com.vetor.niner.financeiro.caixa.CaixaService;
 import com.vetor.niner.vendas.cancelamento.CancelamentoVendaDtos.CancelamentoEfetivadoResponse;
 import com.vetor.niner.vendas.cancelamento.CancelamentoVendaDtos.CancelarVendaRequest;
@@ -51,10 +52,13 @@ public class CancelamentoVendaService {
 
     private final JdbcClient jdbc;
     private final CaixaService caixaService;
+    private final CancelamentoNfceService cancelamentoNfceService;
 
-    public CancelamentoVendaService(JdbcClient jdbc, CaixaService caixaService) {
+    public CancelamentoVendaService(JdbcClient jdbc, CaixaService caixaService,
+                                    CancelamentoNfceService cancelamentoNfceService) {
         this.jdbc = jdbc;
         this.caixaService = caixaService;
+        this.cancelamentoNfceService = cancelamentoNfceService;
     }
 
     @Transactional(readOnly = true)
@@ -228,6 +232,20 @@ public class CancelamentoVendaService {
                     "O caixa de hoje da empresa " + venda.nomeEmpresa() + " está fechado. É necessário abrir o "
                             + "caixa de hoje antes de cancelar a venda nº " + venda.idVenda() + ".");
         }
+
+        // §10.1 (B8): estoque/caixa e fiscal nunca divergem — ou os dois andam, ou nenhum anda.
+        // Se esta venda tem NFC-e autorizada, o cancelamento na SEFAZ acontece ANTES de qualquer
+        // reversão; se a SEFAZ recusar (ou o prazo de 30 min já tiver passado), o método abaixo
+        // lança e NADA do resto desta transação roda. Sem nota fiscal (F12/DF13), devolve
+        // silenciosamente e o fluxo segue idêntico a antes deste bloco existir.
+        //
+        // ⚠️ Desvio deliberado do F2 ("nenhum I/O de rede dentro de transação de banco"): esta
+        // chamada roda dentro da transação de `cancelar()`, ao contrário da emissão (B7), que
+        // separa em transações curtas. A emissão acontece em TODA venda (hot path — segurar a
+        // conexão nela travaria o caixa numa loja cheia); cancelamento é ação manual e rara do
+        // ADMIN, e aqui a atomicidade é desejável: ou a venda inteira (fiscal+estoque+caixa)
+        // reverte junto, ou nada reverte — não existe janela intermediária pra divergir.
+        cancelamentoNfceService.cancelarSeAplicavel(venda.idEmpresa(), idVenda, (int) idUsuario, req.motivo());
 
         OffsetDateTime agora = OffsetDateTime.now();
         jdbc.sql("""

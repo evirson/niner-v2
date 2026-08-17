@@ -192,7 +192,7 @@ class AssinadorXmlNfeTest {
 
         assertThatThrownBy(() -> assinador.assinar(montado.xml(), outraChave, keystore, SENHA))
                 .isInstanceOf(AssinaturaInvalidaException.class)
-                .hasMessageContaining("aponta para outra chave");
+                .hasMessageContaining("apontando para outra chave");
     }
 
     @Test

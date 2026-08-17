@@ -38,10 +38,15 @@ public class ValidadorXsd {
     /** XSD raiz de uma NF-e/NFC-e isolada — define o elemento {@code NFe} do tipo {@code TNFe}. */
     public static final String XSD_NFE = "/xsd/nfe_v4.00.xsd";
 
+    /** XSD do lote de envio do evento de cancelamento (110111, B8) — define {@code envEvento}. */
+    public static final String XSD_EVENTO_CANCELAMENTO = "/xsd/envEventoCancNFe_v1.00.xsd";
+
     private final Schema schemaNfe;
+    private final Schema schemaEventoCancelamento;
 
     public ValidadorXsd() {
         this.schemaNfe = carregar(XSD_NFE);
+        this.schemaEventoCancelamento = carregar(XSD_EVENTO_CANCELAMENTO);
     }
 
     /**
@@ -50,8 +55,17 @@ public class ValidadorXsd {
      *         correção numa sequência de tentativas.
      */
     public void validarNfe(String xml) {
+        validar(schemaNfe, xml);
+    }
+
+    /** Mesma garantia do {@link #validarNfe}, aplicada ao lote de envio do evento (F11). */
+    public void validarEventoCancelamento(String xml) {
+        validar(schemaEventoCancelamento, xml);
+    }
+
+    private void validar(Schema schema, String xml) {
         List<String> erros = new ArrayList<>();
-        Validator validator = schemaNfe.newValidator();
+        Validator validator = schema.newValidator();
         validator.setErrorHandler(new ErrorHandler() {
             @Override
             public void warning(SAXParseException e) {
