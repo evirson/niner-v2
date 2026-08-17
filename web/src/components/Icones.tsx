@@ -710,3 +710,16 @@ export function IconeContingencia({ size = 28 }: { size?: number }) {
     </svg>
   )
 }
+
+/** Ícone da Inutilização de Numeração (§10.4) — faixa riscada, representando o buraco tapado. */
+export function IconeInutilizacao({ size = 28 }: { size?: number }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.6} stroke="currentColor" width={size} height={size} aria-hidden="true">
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M4.5 6.75h15 M4.5 12h15 M4.5 17.25h15 M3 3.75l18 16.5"
+      />
+    </svg>
+  )
+}

@@ -410,6 +410,23 @@ const CONTEUDOS: Record<string, ConteudoAjuda> = {
     ],
     urlVideo: null,
   },
+  'fiscal.inutilizacao.tela': {
+    titulo: 'Inutilização de Numeração',
+    objetivo: 'Tapar formalmente um "buraco" na numeração fiscal — número que a série já alocou mas que nunca virou nota (venda cancelada no meio, rejeição da SEFAZ nunca corrigida etc.).',
+    passos: [
+      'Escolha a empresa, o modelo (NFC-e/NF-e) e a série — a tela detecta os buracos sozinha, não precisa conferir a sequência na mão.',
+      'Clique na faixa que aparecer (ex.: "12" ou "15–17") para selecioná-la.',
+      'Digite a justificativa (mínimo 15 caracteres, é exigência da SEFAZ) e clique em "Inutilizar na SEFAZ".',
+      'O histórico abaixo mostra todas as tentativas — inclusive as recusadas, que não somem.',
+    ],
+    errosComuns: [
+      'Só administradores acessam esta tela.',
+      '"Não há buracos" é bom sinal: quer dizer que todo número alocado nesta série virou nota de verdade.',
+      'Um número já usado por nota autorizada, cancelada ou denegada nunca aparece como buraco — não tem o que inutilizar ali.',
+      'Se a SEFAZ recusar, a faixa continua aparecendo como buraco — tente de novo com a justificativa corrigida.',
+    ],
+    urlVideo: null,
+  },
   'cadastros.planocontas.lista': {
     titulo: 'Plano de Contas',
     objetivo: 'Encontrar e gerenciar as contas do plano de contas (usadas por fornecedores, contas a pagar e relatórios).',
