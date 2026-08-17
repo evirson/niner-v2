@@ -121,7 +121,9 @@ Padrão do projeto: tenta excluir, e **cai para inativar** quando há vínculo. 
 `produto.id_perfil_fiscal`.
 
 - Nenhum produto aponta ⇒ `DELETE` real (regras vão junto).
-- Algum produto aponta ⇒ 409 com a contagem, e a tela oferece **inativar** (`ativo = false`).
+- Algum produto aponta ⇒ **200**, o perfil é inativado automaticamente (`ativo = false`) e a
+  resposta traz o motivo — mesmo mecanismo de `FornecedorService.excluir` (não é um 409 pedindo
+  confirmação separada; a tela mostra o resultado depois de agir, como no resto do projeto).
 
 Perfil inativo não aparece no `<select>` do cadastro de Produto, mas **continua valendo** para os
 produtos que já apontam para ele — desativar não pode quebrar a emissão de quem estava emitindo. Quem
@@ -157,7 +159,8 @@ porque depende da divergência ainda em aberto (§1) e exige decisão do contado
   com mensagem legível — não a violação crua da UK.
 - Dado um nome de perfil já usado no tenant, quando cria outro, então 409.
 - Dado um perfil sem produto vinculado, quando excluído, então some do banco junto com as regras.
-- Dado um perfil com produto vinculado, quando excluído, então 409 e a tela oferece inativar.
+- Dado um perfil com produto vinculado, quando excluído, então 200 com `acao: "inativado"`, e o
+  perfil vira `ativo = false`.
 - Dado um perfil inativado, quando um produto já apontava para ele, então o produto continua
   apontando (o vínculo não é quebrado).
 - Dado um OPERADOR, quando tenta listar ou gravar, então 403.
@@ -190,8 +193,9 @@ Toda query filtra `id_tenant` explicitamente no SQL além do RLS (P8/F8), inclus
 ## Ajuda da tela (R22 / §3.7.1)
 
 Entrada `fiscal.perfil.tela` em `AjudaDaTela.tsx`: o que é um perfil e por que ele não fica no
-produto; a diferença entre CST e CSOSN e por que o campo muda com o CRT; por que a alíquota de
-PIS/COFINS às vezes está desabilitada (DF36); e o que significa "regra mais específica ganha".
+produto; a diferença entre CST e CSOSN e por que só o CRT 2 pode escolher; por que a alíquota de
+PIS/COFINS fica zerada e desabilitada no CST 99 (o caso normal — tributo dentro do DAS); e o que
+significa "regra mais específica ganha".
 
 ## Impacto no banco
 
@@ -216,10 +220,14 @@ Se a proposta de **perfis semeados no signup** for aceita, `SignupService.assina
 - 🔴 **A tabela `cfg_cclasstrib` (~173 códigos) ainda não foi carregada.** Enquanto não for, o campo
   `cclasstrib` é texto de 6 dígitos sem validação contra lista. Vem no mesmo pacote que os XSD, pedido
   ao dono do produto junto com o certificado (§17.1).
-- 🔴 **`tipo_operacao` tem 5 valores no enum, mas o v1 usa 2** (venda e devolução). Os outros três
-  (transferência, remessa, bonificação) são de operações futuras (§4.2) — manter no `<select>` ou
-  esconder até existirem? **Recomendação: esconder**, para não convidar o lojista a cadastrar regra
-  para uma operação que o sistema ainda não emite.
+- 🔴 **`tipo_operacao_fiscal` tem 11 valores no banco, mas o v1 usa 2** (`VENDA_CONSUMIDOR` e
+  `DEVOLUCAO_VENDA` — DF35). Os outros nove (`VENDA_CONTRIBUINTE`, `VENDA_NAO_PRESENCIAL`,
+  `TRANSFERENCIA`, `DEVOLUCAO_FORNECEDOR`, `REMESSA_CONSERTO`, `RETORNO_CONSERTO`, `BAIXA_PERDA`,
+  `BONIFICACAO`, `COMPLEMENTAR`) já existem no `ENUM` do banco — acrescentar valor depois é
+  `ALTER TYPE`, então nasceram todos juntos (§4.2) — mas são de operações futuras. **Recomendação:
+  esconder no `<select>`** até existirem, para não convidar o lojista a cadastrar regra para uma
+  operação que o sistema ainda não emite. A API aceita qualquer valor do enum (não é o front que
+  garante a integridade) — só a tela restringe.
 
 ## Métrica de sucesso
 
