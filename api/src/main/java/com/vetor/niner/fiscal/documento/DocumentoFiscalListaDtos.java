@@ -14,7 +14,10 @@ public final class DocumentoFiscalListaDtos {
             long idDocumentoFiscal, int modelo, int serie, long numero, String chaveAcesso,
             String tipoOperacao, String situacao, int tipoEmissao, String ambiente,
             OffsetDateTime dataEmissao, OffsetDateTime dataAutorizacao, String protocolo,
-            BigDecimal valorTotal, Long idVenda, String nomeCliente) {
+            BigDecimal valorTotal, Long idVenda, String nomeCliente,
+            // §11.4: link público de consulta pela chave — mesma URL do QR Code (v3.00), extraída
+            // do XML já assinado. null quando a nota não chegou a ser autorizada (não tem qrCode).
+            String urlConsultaPublica) {
     }
 
     public record PaginaDocumentosFiscais(
@@ -29,5 +32,10 @@ public final class DocumentoFiscalListaDtos {
      *  uma pergunta nova, feita agora, útil pra conferir se algo mudou (ex.: cancelamento feito
      *  por outro canal, ou uma nota que ficou {@code TRANSMITINDO} por falha de comunicação). */
     public record ConsultaSefazResponse(String cStat, String xMotivo, String protocolo) {
+    }
+
+    /** Resultado de {@code POST /documentos/{id}/reprocessar} — situação final do documento
+     *  depois da consulta (e, se preciso, da retransmissão). */
+    public record ReprocessamentoResponse(String situacao, String protocolo, String cStat, String mensagem) {
     }
 }

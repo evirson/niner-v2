@@ -166,6 +166,39 @@ class DocumentoFiscalListaTest {
     }
 
     @Test
+    void listaExtraiLinkDeConsultaPublicaDoQrCodeQuandoExiste() throws Exception {
+        String token = assinarNovoTenant("link-publico");
+        long idTenant = idTenantDo(token);
+        long idEmpresa = idEmpresaDo(token);
+        String chave = "41260837829453000135650010000000091123456789";
+        jdbc.sql("UPDATE empresa SET estado = 'PR' WHERE id_tenant = ? AND id_empresa = ?")
+                .params(idTenant, idEmpresa).update();
+        String xml = ("<NFe xmlns=\"http://www.portalfiscal.inf.br/nfe\"><infNFe Id=\"NFe%s\"/>"
+                + "<infNFeSupl><qrCode><![CDATA[http://www.fazenda.pr.gov.br/nfce/qrcode?p=%s]]></qrCode></infNFeSupl></NFe>")
+                .formatted(chave, chave);
+        jdbc.sql("""
+                        INSERT INTO documento_fiscal (
+                            id_tenant, id_empresa, modelo, serie, numero, chave_acesso, codigo_numerico,
+                            digito_verificador, tipo_operacao, situacao, ambiente, tipo_emissao,
+                            data_emissao, valor_produtos, valor_desconto, valor_outros, valor_total,
+                            valor_troco, xml_assinado, protocolo, data_autorizacao)
+                        VALUES (?, ?, 65, 1, 9, ?, '12345678', 9, 'VENDA_CONSUMIDOR', 'AUTORIZADO',
+                                'HOMOLOGACAO', 1, now(), 30.00, 0, 0, 30.00, 0,
+                                ?, '141260001999999', now())
+                        """)
+                .params(idTenant, idEmpresa, chave, xml).update();
+
+        mvc.perform(get("/api/v1/fiscal/documentos")
+                        .header("Authorization", "Bearer " + token)
+                        .param("idEmpresa", String.valueOf(idEmpresa))
+                        .param("dataInicial", LocalDate.now().minusDays(1).toString())
+                        .param("dataFinal", LocalDate.now().plusDays(1).toString()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.itens[0].urlConsultaPublica")
+                        .value("http://www.fazenda.pr.gov.br/nfce/qrcode?p=" + chave));
+    }
+
+    @Test
     void verXmlDevolveOXmlAssinado() throws Exception {
         String token = assinarNovoTenant("ver-xml");
         long idTenant = idTenantDo(token);

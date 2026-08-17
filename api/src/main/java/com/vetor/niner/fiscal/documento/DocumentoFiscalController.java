@@ -2,6 +2,7 @@ package com.vetor.niner.fiscal.documento;
 
 import com.vetor.niner.fiscal.documento.DocumentoFiscalListaDtos.ConsultaSefazResponse;
 import com.vetor.niner.fiscal.documento.DocumentoFiscalListaDtos.PaginaDocumentosFiscais;
+import com.vetor.niner.fiscal.documento.DocumentoFiscalListaDtos.ReprocessamentoResponse;
 import com.vetor.niner.fiscal.documento.DocumentoFiscalListaDtos.XmlDocumentoFiscalResponse;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -21,9 +22,12 @@ import java.time.LocalDate;
 public class DocumentoFiscalController {
 
     private final DocumentoFiscalConsultaService service;
+    private final DocumentoFiscalReprocessamentoService reprocessamento;
 
-    public DocumentoFiscalController(DocumentoFiscalConsultaService service) {
+    public DocumentoFiscalController(DocumentoFiscalConsultaService service,
+                                     DocumentoFiscalReprocessamentoService reprocessamento) {
         this.service = service;
+        this.reprocessamento = reprocessamento;
     }
 
     @GetMapping
@@ -47,5 +51,10 @@ public class DocumentoFiscalController {
     @PostMapping("/{idDocumentoFiscal}/consultar-sefaz")
     public ConsultaSefazResponse consultarSefaz(@AuthenticationPrincipal Jwt jwt, @PathVariable long idDocumentoFiscal) {
         return service.consultarNaSefaz(jwt, idDocumentoFiscal);
+    }
+
+    @PostMapping("/{idDocumentoFiscal}/reprocessar")
+    public ReprocessamentoResponse reprocessar(@AuthenticationPrincipal Jwt jwt, @PathVariable long idDocumentoFiscal) {
+        return reprocessamento.reprocessar(jwt, idDocumentoFiscal);
     }
 }

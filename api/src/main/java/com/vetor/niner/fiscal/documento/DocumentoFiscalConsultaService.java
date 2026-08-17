@@ -94,7 +94,7 @@ public class DocumentoFiscalConsultaService {
                                d.tipo_operacao::text AS tipo_operacao, d.situacao::text AS situacao,
                                d.tipo_emissao, d.ambiente::text AS ambiente, d.data_emissao,
                                d.data_autorizacao, d.protocolo, d.valor_total, d.id_venda,
-                               c.nome AS nome_cliente
+                               c.nome AS nome_cliente, d.xml_assinado
                           FROM documento_fiscal d
                           LEFT JOIN cliente c ON c.id_tenant = d.id_tenant AND c.id_cliente = d.id_cliente
                         """ + filtro + " ORDER BY d.data_emissao DESC, d.id_documento_fiscal DESC LIMIT ? OFFSET ?")
@@ -106,7 +106,8 @@ public class DocumentoFiscalConsultaService {
                         rs.getObject("data_emissao", OffsetDateTime.class),
                         rs.getObject("data_autorizacao", OffsetDateTime.class),
                         rs.getString("protocolo"), rs.getBigDecimal("valor_total"),
-                        getLongOuNulo(rs, "id_venda"), rs.getString("nome_cliente")))
+                        getLongOuNulo(rs, "id_venda"), rs.getString("nome_cliente"),
+                        extrairTagCdata(rs.getString("xml_assinado"), "qrCode")))
                 .list();
 
         return new PaginaDocumentosFiscais(itens, paginaAtual, tamanho, totalItens, totalPaginas);
@@ -155,6 +156,22 @@ public class DocumentoFiscalConsultaService {
     private static Long getLongOuNulo(java.sql.ResultSet rs, String coluna) throws java.sql.SQLException {
         long valor = rs.getLong(coluna);
         return rs.wasNull() ? null : valor;
+    }
+
+    /** Mesma extração de {@code PdvVendaService} (comprovante do PDV) — o {@code qrCode} do XML
+     *  já assinado é uma URL v3.00 completa e autossuficiente: abrir no navegador faz exatamente
+     *  o que escanear o QR faria (§11.4). {@code null} quando a nota não chegou a ser autorizada
+     *  (o XML nem tem o elemento). */
+    private static String extrairTagCdata(String xml, String tag) {
+        if (xml == null) return null;
+        String abre = "<" + tag + ">";
+        String fecha = "</" + tag + ">";
+        int inicio = xml.indexOf(abre);
+        if (inicio < 0) return null;
+        inicio += abre.length();
+        int fim = xml.indexOf(fecha, inicio);
+        if (fim < 0) return null;
+        return xml.substring(inicio, fim).replace("<![CDATA[", "").replace("]]>", "");
     }
 
     private static void exigirAdmin(Jwt jwt) {

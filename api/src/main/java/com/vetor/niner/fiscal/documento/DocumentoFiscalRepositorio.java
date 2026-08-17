@@ -368,6 +368,36 @@ public class DocumentoFiscalRepositorio {
                                    MontagemNfceDtos.AmbienteSefaz ambiente, String uf) {
     }
 
+    // ---------------------------------------------------------------- reprocessamento (§12, B8)
+
+    /**
+     * Contexto completo pra reprocessar um documento preso (F5): igual a
+     * {@link #buscarContextoParaConsulta}, mais {@code situacao} (precondição — só faz sentido
+     * reprocessar {@code TRANSMITINDO}/{@code ASSINADO}) e {@code xmlAssinado} (pra retransmitir
+     * quando a SEFAZ disser que a nota não consta).
+     */
+    @Transactional(readOnly = true)
+    public java.util.Optional<ContextoReprocessamento> buscarParaReprocessar(long idDocumentoFiscal) {
+        return jdbc.sql("""
+                        SELECT d.id_empresa, d.modelo, d.situacao::text AS situacao, d.chave_acesso,
+                               d.xml_assinado, d.ambiente::text AS ambiente, e.estado AS uf
+                          FROM documento_fiscal d
+                          JOIN empresa e ON e.id_tenant = d.id_tenant AND e.id_empresa = d.id_empresa
+                         WHERE d.id_tenant = plataforma.tenant_atual() AND d.id_documento_fiscal = ?
+                        """)
+                .param(idDocumentoFiscal)
+                .query((rs, n) -> new ContextoReprocessamento(
+                        rs.getLong("id_empresa"), rs.getInt("modelo"), rs.getString("situacao"),
+                        rs.getString("chave_acesso"), rs.getString("xml_assinado"),
+                        MontagemNfceDtos.AmbienteSefaz.valueOf(rs.getString("ambiente")), rs.getString("uf")))
+                .optional();
+    }
+
+    public record ContextoReprocessamento(long idEmpresa, int modelo, String situacao, String chaveAcesso,
+                                          String xmlAssinado, MontagemNfceDtos.AmbienteSefaz ambiente,
+                                          String uf) {
+    }
+
     /** {@code valor_troco} é {@code NOT NULL} — troco não informado é zero, nunca ausência. */
     private static java.math.BigDecimal nz(java.math.BigDecimal valor) {
         return valor == null ? java.math.BigDecimal.ZERO : valor;

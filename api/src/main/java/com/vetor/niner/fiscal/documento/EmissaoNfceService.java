@@ -56,7 +56,7 @@ public class EmissaoNfceService {
      * nem se reaproveita. Tratar como rejeição levaria o lojista a "corrigir e reenviar" um número
      * que já morreu.
      */
-    private static final Set<String> CSTAT_DENEGACAO = Set.of("301", "302", "303", "304", "305");
+    public static final Set<String> CSTAT_DENEGACAO = Set.of("301", "302", "303", "304", "305");
 
     private final FiscalNumeracaoService numeracao;
     private final DocumentoFiscalRepositorio repositorio;
