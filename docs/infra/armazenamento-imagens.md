@@ -16,6 +16,14 @@ Decisão de arquitetura: **ADR-013** (spec §6) · Tabela afetada: `produto_imag
 > navegador→bucket), a leitura pública (marketplaces rebuscam por URL — nada de signed URL que
 > expira) e, principalmente, a **seção 3 (credenciais)** para quem precisar apontar para o GCS
 > real. E a regra dura: **nada além de foto de produto entra nesses buckets, que são públicos.**
+>
+> **⚠️ Existe um SEGUNDO bucket, separado — o fiscal (DF21, 2026-08-17).** O certificado digital
+> A1 (`.pfx`) nunca pode entrar nos buckets acima: eles são de leitura pública de propósito, e um
+> `.pfx` ali seria vazamento imediato. O bucket fiscal é **privado**, configurado em
+> `niner.storage.bucket-fiscal` (adapter `fiscal.certificado.CertificadoStorage`, sem
+> `urlPublica()`). Ainda **não provisionado em GCP real** — só existe contra o emulador
+> fake-gcs-server em dev/teste; provisionar (nome real, região, negar leitura pública, retenção
+> de 5 anos) é trabalho de infra pendente. Detalhes: `docs/telas/fiscal-certificado.md`.
 
 ---
 

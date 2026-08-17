@@ -62,5 +62,13 @@ niner:
     # herda o host automaticamente, então as URLs públicas das fotos já saem do emulador.
     host: ${NINER_STORAGE_HOST:}
     base-url: ${NINER_STORAGE_BASE_URL:${NINER_STORAGE_HOST:https://storage.googleapis.com}}
+    # DF21 (2026-08-17): bucket SEPARADO e PRIVADO para o certificado digital — nunca o de
+    # fotos acima, que é de leitura pública de propósito. Mesmo host/credencial, nome diferente.
+    bucket-fiscal: ${NINER_STORAGE_BUCKET_FISCAL:niner-fiscal-dev}
   arquivo-compartilhado:       # cache temporário em memória (ex.: comprovante por link do WhatsApp)
     expiracao-horas: ${NINER_ARQUIVO_COMPARTILHADO_EXPIRACAO_HORAS:24}
+  seguranca:
+    # AES-256-GCM para cifrar segredos de terceiro em repouso (F7) — hoje só a senha do
+    # certificado fiscal. Base64 de 32 bytes. O valor abaixo é só de DEV — TROQUE EM PRODUÇÃO
+    # (secret manager / variável de ambiente do compose, nunca commitado).
+    chave-segredos: ${NINER_CHAVE_SEGREDOS:bmluZXItZGV2LWNoYXZlLXNlY3JldGEtZmlzY2FsMzI=}

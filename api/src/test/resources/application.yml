@@ -23,5 +23,8 @@ niner:
   storage:
     bucket: niner-erp-dev
     base-url: https://storage.googleapis.com
+    bucket-fiscal: niner-fiscal-test
   arquivo-compartilhado:
     expiracao-horas: 24
+  seguranca:
+    chave-segredos: bmluZXItdGVzdC1jaGF2ZS1zZWNyZXRhLWZpc2NhbDI=

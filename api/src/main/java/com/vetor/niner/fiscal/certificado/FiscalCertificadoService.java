@@ -1,0 +1,322 @@
+package com.vetor.niner.fiscal.certificado;
+
+import com.vetor.niner.cadastros.cliente.Documentos;
+import com.vetor.niner.comum.seguranca.SegredoCifrador;
+import com.vetor.niner.fiscal.certificado.FiscalCertificadoDtos.FiscalCertificadoResponse;
+import com.vetor.niner.fiscal.certificado.FiscalCertificadoDtos.FiscalCertificadoUsoResponse;
+import com.vetor.niner.fiscal.certificado.FiscalCertificadoDtos.SituacaoCertificado;
+import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.server.ResponseStatusException;
+
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
+import java.security.GeneralSecurityException;
+import java.security.KeyStore;
+import java.security.MessageDigest;
+import java.security.cert.X509Certificate;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.time.Instant;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
+import java.time.temporal.ChronoUnit;
+import java.util.Enumeration;
+import java.util.HexFormat;
+import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+import static org.springframework.http.HttpStatus.BAD_REQUEST;
+import static org.springframework.http.HttpStatus.CONFLICT;
+import static org.springframework.http.HttpStatus.FORBIDDEN;
+import static org.springframework.http.HttpStatus.NOT_FOUND;
+
+/**
+ * Certificado Digital A1 (docs/telas/fiscal-certificado.md) — o segredo de <b>terceiro</b> mais
+ * sensível que o produto guarda (F7). <b>Write-only de verdade</b>: nenhum endpoint devolve o
+ * arquivo nem a senha, em campo nenhum, nem para ADMIN. Só ADMIN acessa a tela.
+ *
+ * <p>Ordem do upload — nada é gravado nem sobe para o bucket antes das 5 validações passarem
+ * (abrir como PKCS12 com a senha, ter chave privada, estar dentro da validade, CNPJ do titular
+ * igual ao da empresa, impressão digital ainda não cadastrada e ativa):
+ *
+ * <ol>
+ *   <li>Parseia o {@code .pfx} em memória — nunca grava antes de confirmar que abre.</li>
+ *   <li>Extrai metadados do próprio certificado (CNPJ, razão social, validade, impressão
+ *       digital) — <b>nunca digitados</b> pelo lojista, que mentiriam se divergissem.</li>
+ *   <li>Confere as 5 precondições.</li>
+ *   <li>Só então: cifra a senha (AES-GCM, {@link SegredoCifrador}), sobe o arquivo tal como
+ *       recebido para o bucket fiscal <b>privado</b> (DF21 — nunca o bucket de fotos, que é de
+ *       leitura pública), desativa o certificado anterior e insere o novo, na mesma
+ *       transação.</li>
+ * </ol>
+ */
+@Service
+public class FiscalCertificadoService {
+
+    /** CN de e-CNPJ ICP-Brasil: {@code RAZAO SOCIAL:14DIGITOS}. Extrai os 14 dígitos finais. */
+    private static final Pattern CNPJ_NO_CN = Pattern.compile("(\\d{14})\\s*$");
+
+    private final JdbcClient jdbc;
+    private final SegredoCifrador cifrador;
+    private final CertificadoStorage storage;
+
+    public FiscalCertificadoService(JdbcClient jdbc, SegredoCifrador cifrador, CertificadoStorage storage) {
+        this.jdbc = jdbc;
+        this.cifrador = cifrador;
+        this.storage = storage;
+    }
+
+    @Transactional(readOnly = true)
+    public List<FiscalCertificadoResponse> listar(Jwt jwt, long idEmpresa) {
+        exigirAdmin(jwt);
+        return jdbc.sql("""
+                        SELECT id_certificado, id_empresa, cnpj_titular, razao_social_titular,
+                               valido_de, valido_ate, impressao_digital, ativo, criado_em
+                        FROM fiscal_certificado
+                        WHERE id_tenant = plataforma.tenant_atual() AND id_empresa = ?
+                        ORDER BY criado_em DESC
+                        """)
+                .param(idEmpresa)
+                .query(FiscalCertificadoService::mapear)
+                .list();
+    }
+
+    @Transactional(readOnly = true)
+    public List<FiscalCertificadoUsoResponse> listarUsos(Jwt jwt, long idCertificado) {
+        exigirAdmin(jwt);
+        boolean existe = Boolean.TRUE.equals(jdbc.sql("""
+                        SELECT EXISTS (SELECT 1 FROM fiscal_certificado
+                                       WHERE id_tenant = plataforma.tenant_atual() AND id_certificado = ?)
+                        """)
+                .param(idCertificado).query(Boolean.class).single());
+        if (!existe) {
+            throw new ResponseStatusException(NOT_FOUND, "Certificado não encontrado.");
+        }
+        return jdbc.sql("""
+                        SELECT id_uso, finalidade, id_documento_fiscal, id_usuario, ocorrido_em
+                        FROM fiscal_certificado_uso
+                        WHERE id_tenant = plataforma.tenant_atual() AND id_certificado = ?
+                        ORDER BY ocorrido_em DESC
+                        """)
+                .param(idCertificado)
+                .query((rs, n) -> new FiscalCertificadoUsoResponse(
+                        rs.getLong("id_uso"), rs.getString("finalidade"),
+                        (Long) rs.getObject("id_documento_fiscal"), (Long) rs.getObject("id_usuario"),
+                        rs.getObject("ocorrido_em", OffsetDateTime.class)))
+                .list();
+    }
+
+    @Transactional
+    public FiscalCertificadoResponse enviar(Jwt jwt, long idEmpresa, MultipartFile arquivo, String senha) {
+        exigirAdmin(jwt);
+        if (arquivo == null || arquivo.isEmpty()) {
+            throw new ResponseStatusException(BAD_REQUEST, "Envie o arquivo .pfx do certificado.");
+        }
+        if (senha == null || senha.isBlank()) {
+            throw new ResponseStatusException(BAD_REQUEST, "Informe a senha do certificado.");
+        }
+
+        byte[] conteudo;
+        try {
+            conteudo = arquivo.getBytes();
+        } catch (IOException e) {
+            throw new ResponseStatusException(BAD_REQUEST, "Não foi possível ler o arquivo enviado.", e);
+        }
+
+        CertificadoExtraido extraido = abrirEExtrair(conteudo, senha);
+
+        // Validação 3 — dentro da validade.
+        if (extraido.validoAte().isBefore(Instant.now())) {
+            throw new ResponseStatusException(BAD_REQUEST,
+                    "Certificado vencido em %s.".formatted(
+                            extraido.validoAte().atOffset(ZoneOffset.UTC).toLocalDate()));
+        }
+
+        String cnpjEmpresa = jdbc.sql("""
+                        SELECT cnpj FROM empresa
+                        WHERE id_tenant = plataforma.tenant_atual() AND id_empresa = ?
+                        """)
+                .param(idEmpresa).query(String.class).optional()
+                .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Empresa não encontrada."));
+
+        String cnpjTitularNormalizado = Documentos.somenteAlfanumerico(extraido.cnpjTitular());
+        String cnpjEmpresaNormalizado = Documentos.somenteAlfanumerico(cnpjEmpresa);
+        // Validação 4 — CNPJ alfanumérico (IN RFB 2.229/2024): compara sempre normalizado,
+        // nunca um limpador de dígitos, senão CNPJ com letra compara errado.
+        if (cnpjTitularNormalizado == null || !cnpjTitularNormalizado.equals(cnpjEmpresaNormalizado)) {
+            throw new ResponseStatusException(CONFLICT,
+                    "Certificado é de outro CNPJ (%s); a empresa é %s."
+                            .formatted(mascarar(extraido.cnpjTitular()), mascarar(cnpjEmpresa)));
+        }
+
+        // Validação 5 — impressão digital ainda não cadastrada e ativa para esta empresa.
+        boolean jaExiste = Boolean.TRUE.equals(jdbc.sql("""
+                        SELECT EXISTS (SELECT 1 FROM fiscal_certificado
+                                       WHERE id_tenant = plataforma.tenant_atual() AND id_empresa = ?
+                                         AND impressao_digital = ? AND ativo)
+                        """)
+                .params(idEmpresa, extraido.impressaoDigital()).query(Boolean.class).single());
+        if (jaExiste) {
+            throw new ResponseStatusException(CONFLICT, "Este certificado já está cadastrado.");
+        }
+
+        // As 5 validações passaram — só agora grava e sobe para o bucket.
+        long idTenant = ((Number) jwt.getClaim("tid")).longValue();
+        String chaveObjeto = storage.gravar(idTenant, idEmpresa, conteudo);
+        String senhaCifrada = cifrador.cifrar(senha);
+        Long idUsuario = idUsuarioDoJwt(jwt);
+
+        jdbc.sql("""
+                        UPDATE fiscal_certificado SET ativo = false
+                        WHERE id_tenant = plataforma.tenant_atual() AND id_empresa = ? AND ativo
+                        """)
+                .param(idEmpresa).update();
+
+        long idCertificado = jdbc.sql("""
+                        INSERT INTO fiscal_certificado (
+                            id_tenant, id_empresa, objeto_bucket, senha_cifrada,
+                            cnpj_titular, razao_social_titular, valido_de, valido_ate,
+                            impressao_digital, ativo, id_usuario)
+                        VALUES (plataforma.tenant_atual(), ?, ?, ?, ?, ?, ?, ?, ?, true, ?)
+                        RETURNING id_certificado
+                        """)
+                .params(idEmpresa, chaveObjeto, senhaCifrada, cnpjTitularNormalizado,
+                        extraido.razaoSocialTitular(), OffsetDateTime.ofInstant(extraido.validoDe(), ZoneOffset.UTC),
+                        OffsetDateTime.ofInstant(extraido.validoAte(), ZoneOffset.UTC),
+                        extraido.impressaoDigital(), idUsuario)
+                .query(Long.class).single();
+
+        return buscar(idCertificado);
+    }
+
+    // ---------------------------------------------------------------- parsing do .pfx
+
+    private record CertificadoExtraido(
+            String cnpjTitular, String razaoSocialTitular, Instant validoDe, Instant validoAte, String impressaoDigital) {
+    }
+
+    /**
+     * Validações 1 e 2 (abre como PKCS12 com a senha, tem chave privada) mais a extração de
+     * metadados. Uma falha aqui nunca escreve nada — o método é puro sobre os bytes recebidos.
+     */
+    private static CertificadoExtraido abrirEExtrair(byte[] conteudo, String senha) {
+        KeyStore keyStore;
+        String alias;
+        try {
+            keyStore = KeyStore.getInstance("PKCS12");
+            keyStore.load(new ByteArrayInputStream(conteudo), senha.toCharArray());
+            alias = primeiroAlias(keyStore);
+        } catch (IOException | GeneralSecurityException e) {
+            throw new ResponseStatusException(BAD_REQUEST, "Senha do certificado incorreta ou arquivo inválido.", e);
+        }
+
+        try {
+            if (alias == null || !keyStore.isKeyEntry(alias)) {
+                throw new ResponseStatusException(BAD_REQUEST,
+                        "O arquivo não contém uma chave privada — envie o .pfx completo, não só o certificado público.");
+            }
+            X509Certificate certificado = (X509Certificate) keyStore.getCertificate(alias);
+            String cn = extrairCn(certificado.getSubjectX500Principal().getName());
+            Matcher m = CNPJ_NO_CN.matcher(cn == null ? "" : cn);
+            String cnpj = m.find() ? m.group(1) : null;
+            String razaoSocial = cn != null && cn.contains(":") ? cn.substring(0, cn.indexOf(':')).trim() : cn;
+
+            MessageDigest sha256 = MessageDigest.getInstance("SHA-256");
+            String impressaoDigital = HexFormat.of().formatHex(sha256.digest(certificado.getEncoded()));
+
+            if (cnpj == null) {
+                throw new ResponseStatusException(BAD_REQUEST,
+                        "Não foi possível identificar o CNPJ no certificado — formato de CN inesperado.");
+            }
+
+            return new CertificadoExtraido(cnpj, razaoSocial,
+                    certificado.getNotBefore().toInstant(), certificado.getNotAfter().toInstant(),
+                    impressaoDigital);
+        } catch (GeneralSecurityException e) {
+            throw new ResponseStatusException(BAD_REQUEST, "Não foi possível ler o certificado.", e);
+        }
+    }
+
+    private static String primeiroAlias(KeyStore keyStore) throws GeneralSecurityException {
+        Enumeration<String> aliases = keyStore.aliases();
+        return aliases.hasMoreElements() ? aliases.nextElement() : null;
+    }
+
+    /** Varre os RDNs do Subject DN (RFC 2253) procurando {@code CN=...} — não assume posição. */
+    private static String extrairCn(String subjectDn) {
+        for (String rdn : subjectDn.split(",")) {
+            String parte = rdn.trim();
+            if (parte.regionMatches(true, 0, "CN=", 0, 3)) {
+                return parte.substring(3).trim();
+            }
+        }
+        return null;
+    }
+
+    // ---------------------------------------------------------------- leitura
+
+    private FiscalCertificadoResponse buscar(long idCertificado) {
+        return jdbc.sql("""
+                        SELECT id_certificado, id_empresa, cnpj_titular, razao_social_titular,
+                               valido_de, valido_ate, impressao_digital, ativo, criado_em
+                        FROM fiscal_certificado
+                        WHERE id_tenant = plataforma.tenant_atual() AND id_certificado = ?
+                        """)
+                .param(idCertificado)
+                .query(FiscalCertificadoService::mapear)
+                .single();
+    }
+
+    private static FiscalCertificadoResponse mapear(ResultSet rs, int rowNum) throws SQLException {
+        boolean ativo = rs.getBoolean("ativo");
+        OffsetDateTime validoAte = rs.getObject("valido_ate", OffsetDateTime.class);
+        SituacaoCertificado situacao;
+        Long diasParaVencer = null;
+        if (!ativo) {
+            situacao = SituacaoCertificado.SUBSTITUIDO;
+        } else if (validoAte != null && validoAte.isBefore(OffsetDateTime.now())) {
+            situacao = SituacaoCertificado.VENCIDO;
+        } else {
+            diasParaVencer = validoAte == null ? null : ChronoUnit.DAYS.between(OffsetDateTime.now(), validoAte);
+            situacao = (diasParaVencer != null && diasParaVencer <= 30)
+                    ? SituacaoCertificado.VENCE_EM_BREVE
+                    : SituacaoCertificado.ATIVO;
+        }
+
+        return new FiscalCertificadoResponse(
+                rs.getLong("id_certificado"), rs.getLong("id_empresa"),
+                rs.getString("cnpj_titular"), rs.getString("razao_social_titular"),
+                rs.getObject("valido_de", OffsetDateTime.class), validoAte,
+                rs.getString("impressao_digital"), ativo, situacao, diasParaVencer,
+                rs.getObject("criado_em", OffsetDateTime.class));
+    }
+
+    private static String mascarar(String cnpj) {
+        if (cnpj == null || cnpj.length() != 14) {
+            return cnpj == null ? "—" : cnpj;
+        }
+        return cnpj.substring(0, 2) + "." + cnpj.substring(2, 5) + "." + cnpj.substring(5, 8)
+                + "/" + cnpj.substring(8, 12) + "-" + cnpj.substring(12);
+    }
+
+    private static Long idUsuarioDoJwt(Jwt jwt) {
+        Object sub = jwt.getClaim("sub");
+        try {
+            return sub == null ? null : Long.parseLong(sub.toString());
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
+    private static void exigirAdmin(Jwt jwt) {
+        List<String> roles = jwt.getClaimAsStringList("roles");
+        if (roles == null || !roles.contains("ADMIN")) {
+            throw new ResponseStatusException(FORBIDDEN, "Apenas ADMIN pode gerenciar o certificado digital.");
+        }
+    }
+}

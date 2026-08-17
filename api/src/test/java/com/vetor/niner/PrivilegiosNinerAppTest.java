@@ -129,6 +129,21 @@ class PrivilegiosNinerAppTest {
         }
     }
 
+    /**
+     * F6/F7 (V035): documento fiscal, seus itens, seus eventos e o log de uso do certificado
+     * NUNCA são apagados por {@code niner_app} — nem um RASCUNHO que falhou é trilha perdida
+     * (documento) nem um acesso ao certificado deixa de constar (uso).
+     */
+    @Test
+    void documentosFiscaisELogDeUsoDoCertificadoNaoPodemSerApagadosPorNinerApp() throws Exception {
+        try (Connection c = conexaoApp(); Statement st = c.createStatement()) {
+            permissaoNegada(st, "DELETE FROM documento_fiscal");
+            permissaoNegada(st, "DELETE FROM documento_fiscal_item");
+            permissaoNegada(st, "DELETE FROM documento_fiscal_evento");
+            permissaoNegada(st, "DELETE FROM fiscal_certificado_uso");
+        }
+    }
+
     /** V011 / R21 / P3: trilha de impersonação só pode ser encerrada (UPDATE), nunca apagada. */
     @Test
     void trilhaDeImpersonacaoPodeSerEncerradaMasNaoApagada() throws Exception {

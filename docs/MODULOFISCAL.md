@@ -447,8 +447,10 @@ numeração próprias).
 
 **`fiscal_certificado`** — o A1 do lojista.
 
-`id_certificado` · `id_tenant` · `id_empresa` · `objeto_bucket` (caminho do `.pfx` **cifrado**) ·
-`senha_ref_kms` (**referência** no Secret Manager, nunca a senha) · `cnpj_titular` ·
+`id_certificado` · `id_tenant` · `id_empresa` · `objeto_bucket` (caminho do `.pfx` no **bucket
+fiscal privado**, DF21 fechada — `niner.storage.bucket-fiscal`, nunca o de fotos) ·
+`senha_cifrada` (AES-256-GCM local, `comum.seguranca.SegredoCifrador`, chave fora do banco —
+não é referência a Secret Manager externo, que o projeto não tem) · `cnpj_titular` ·
 `razao_social_titular` (extraídos do certificado e conferidos contra a empresa) · `valido_de` ·
 `valido_ate` · `impressao_digital` (SHA-256, auditoria e deduplicação) · `ativo` (histórico
 preservado; **nunca deletar certificado antigo**).
@@ -1271,7 +1273,7 @@ paralelo às telas, se fizer sentido.
 |---|---|---|---|
 | **B0** | **PoC da F0**: assinar um XML e autorizar uma NFC-e com IBS/CBS na homologação do PR, por script, fora do produto. Valida a DF7 (lib `java-nfe` é Java 8 + `javax` + Axis2 contra nosso Java 25 jakarta) e responde às 4 perguntas ⚠️ da F0 | — | **Sim** |
 | **B1** | Specs de tela em `docs/telas/`: `fiscal-configuracao.md`, `fiscal-certificado.md`, `fiscal-perfil.md`, `fiscal-conformidade.md`. Spec antes do código (§5 da spec principal) | — | Não |
-| **B2** | Cadastros fiscais: `FiscalConfigService`/`Controller` (singleton por **empresa**), `FiscalCertificadoService` (upload multipart → bucket cifrado, *write-only*), `PerfilFiscalService` (padrão de cadastro consolidado), + campos fiscais nas telas de Produto, Cliente, Empresa e Tipo de Carteira | B1 | Não |
+| **B2** ✅ backend | Cadastros fiscais: `FiscalConfigService`/`Controller` ✅, `FiscalCertificadoService` ✅ (upload multipart → bucket fiscal privado + senha AES-GCM, *write-only*, DF21 fechada), `PerfilFiscalService` ✅ (padrão de cadastro consolidado). **Faltam as telas React** (as 3 specs de B1 + campos fiscais em Produto/Cliente/Empresa/Tipo de Carteira) — bloco de Sonnet | B1 | Não |
 | **B3** | Tela de **Conformidade Fiscal** — lista o que impede emitir (produto sem NCM/unidade/perfil, cliente sem município IBGE, empresa sem certificado). É o que revela cedo o tamanho do problema de base cadastral | B2 | Não |
 | **B4** ✅ | **Motor tributário** (`fiscal.motor`): puro, sem I/O. ICMS (CSOSN, + CST no CRT 2) + PIS/COFINS + IBS/CBS + FCP + `vTotTrib`. Teste de tabela por (CRT × CST/CSOSN × UF × operação), sem Testcontainers. **Feito em 2026-08-17**, já sob a DF37 | — (o schema já basta) | Não |
 | **B5** | Montagem do XML + validação contra o **XSD oficial** em teste | B4 | Não |

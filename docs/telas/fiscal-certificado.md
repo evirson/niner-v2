@@ -27,13 +27,19 @@ edita — se mudou, é outro arquivo) e não há exclusão (ver *Histórico é i
 1. **Write-only de verdade.** `POST` recebe multipart (`arquivo` + `senha` + `idEmpresa`). Nenhum
    endpoint devolve o `.pfx` nem a senha. Não existe rota de download. Isso vale para o request
    também: a senha nunca aparece em query string, só no corpo multipart.
-2. **A senha não vai para o banco.** `fiscal_certificado.senha_ref_kms` guarda uma **referência** no
-   Secret Manager, não a senha. O `.pfx` vai cifrado para o bucket e `objeto_bucket` guarda a chave.
-   O banco, sozinho, é inútil para quem o roubar.
-3. **⚠️ Bucket próprio — NÃO o de fotos de produto.** Os buckets do ADR-013
+2. **A senha não vai em claro para o banco.** `fiscal_certificado.senha_cifrada` guarda o valor
+   **cifrado** (AES-256-GCM, `comum.seguranca.SegredoCifrador`), com a chave mestra **fora do
+   banco** (`niner.seguranca.chave-segredos`, variável de ambiente/secret manager em produção —
+   ver DF21 fechada abaixo). O `.pfx` sobe **tal como recebido** (não recifrado pela aplicação)
+   para o bucket fiscal, e `objeto_bucket` guarda a chave do objeto. O banco, sozinho, não abre o
+   certificado — falta a chave, que não está lá.
+3. **Bucket próprio — NUNCA o de fotos de produto.** Os buckets do ADR-013
    (`niner-erp.firebasestorage.app` / `niner-erp-dev`) são de **leitura pública** de propósito
-   (marketplaces rebuscam a imagem por URL). Subir um `.pfx` ali é vazamento imediato. O certificado
-   exige o bucket fiscal privado da **DF21**, que ainda não existe — ver *Questões abertas*.
+   (marketplaces rebuscam a imagem por URL). Subir um `.pfx` ali seria vazamento imediato. **DF21
+   fechada (2026-08-17): bucket privado dedicado**, `niner.storage.bucket-fiscal` (env
+   `NINER_STORAGE_BUCKET_FISCAL`, default dev `niner-fiscal-dev`) — mesmo host/credencial do
+   bucket de fotos, nome diferente. Sem rota de leitura pública, sem `urlPublica()` no adapter
+   (`fiscal.certificado.CertificadoStorage`).
 4. **Metadados são extraídos, nunca digitados.** CNPJ titular, razão social, `valido_de`,
    `valido_ate` e `impressao_digital` (SHA-256) saem do próprio arquivo no momento do upload. O
    lojista não digita nada além da senha — dado digitado diverge do certificado e mente.
@@ -158,10 +164,15 @@ quando o badge fica amarelo.
 
 ## Impacto no banco
 
-**Nenhuma migration nova.** `fiscal_certificado` e `fiscal_certificado_uso` já existem (V035).
+`fiscal_certificado` e `fiscal_certificado_uso` já existiam (V035) desde antes desta tela. A
+única mudança de schema: a coluna nasceu `senha_ref_kms` (pressupondo Secret Manager externo) e
+foi renomeada para **`senha_cifrada`** quando a DF21 fechou em AES-GCM local — tabela vazia,
+renomeada direto na migration dona (V035), sem migração de dado.
 
-**Fora do banco, porém, há dependência real de infra:** bucket fiscal privado (DF21) e um Secret
-Manager para a senha. Nenhum dos dois existe hoje — ver *Questões abertas*.
+**Infra fora do banco, agora resolvida:** bucket fiscal privado (`niner.storage.bucket-fiscal`,
+DF21) e a chave de cifra (`niner.seguranca.chave-segredos`, `comum.seguranca.SegredoCifrador`) —
+ambos implementados. Falta só provisionar o bucket e a chave **reais** de produção; em dev/teste
+o bucket é criado sozinho contra o emulador/fake-gcs-server, mesmo mecanismo do bucket de fotos.
 
 ## Non-goals desta feature
 
@@ -173,19 +184,22 @@ Manager para a senha. Nenhum dos dois existe hoje — ver *Questões abertas*.
 
 ## Questões abertas
 
-- 🔴 **DF21 — bucket fiscal privado.** Bloqueante para esta tela sair do rascunho. Os buckets do
-  ADR-013 são de leitura pública; o `.pfx` precisa de um bucket **privado**, com versionamento e
-  retenção. Sem ele não há onde guardar o arquivo com segurança, e `docs/infra/armazenamento-imagens.md`
-  precisa ganhar uma seção (ou um documento irmão) descrevendo o bucket fiscal.
-- 🔴 **Onde fica a senha?** `senha_ref_kms` pressupõe um Secret Manager que o projeto **não tem
-  hoje** — nenhuma integração com KMS/Secret Manager existe em `api/`. Alternativas a decidir na F1:
-  (a) Google Secret Manager (mesmo projeto GCP do storage), (b) cifrar a senha com AES-GCM usando
-  chave fora do banco (mesmo padrão que a spec principal já prevê para credencial de marketplace,
-  §"Channel credentials encrypted at rest"). **Recomendação: (b)** — reaproveita uma decisão que a
-  Constituição já tomou e não adiciona um serviço novo ao ambiente de dev.
-- 🔴 **Emissão em dev sem certificado real.** O `FiscalCertificadoCrudTest` gera um autoassinado, mas
+- ✅ **DF21 — bucket fiscal privado, FECHADA (2026-08-17).** Bucket dedicado
+  (`niner.storage.bucket-fiscal`), separado do de fotos, sem leitura pública, sem `urlPublica()`
+  no adapter. Ainda em aberto: **versionamento e política de retenção de 5 anos** no bucket real
+  de produção (o app não impõe isso — é configuração do bucket GCS em si, fora do código).
+- ✅ **Onde fica a senha, FECHADA (2026-08-17).** Opção (b) da recomendação original: AES-256-GCM
+  local, chave fora do banco (`comum.seguranca.SegredoCifrador`). A coluna `senha_ref_kms` foi
+  renomeada para `senha_cifrada` — não existe Secret Manager externo, e não é preciso.
+- 🔴 **Emissão em dev sem certificado real.** O `FiscalCertificadoCrudTest` gera um autoassinado
+  (via `keytool`, bundlado no JDK — mesmo achado do B0: nenhuma lib de terceiro necessária), mas
   o teste ao vivo no navegador precisa de um `.pfx` de verdade. Vai em `api/secrets/` (já no
   `.gitignore`), nunca no repositório e nunca colado no chat.
+- 🔴 **Convenção de CN do e-CNPJ, não confirmada em fonte primária.** O extrator assume
+  `CN=RAZAO SOCIAL:14DIGITOS` (padrão ICP-Brasil documentado no DOC-ICP-04 e usado por libs de
+  NF-e da comunidade) e falha explicitamente (400) se não achar 14 dígitos no fim do CN — nunca
+  adivinha um CNPJ errado. **Validar contra um certificado A1 real de e-CNPJ antes de produção**
+  (o certificado de homologação da MITRYUSCASH, se ainda disponível, serve para isso).
 
 ## Métrica de sucesso
 
