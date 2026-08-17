@@ -378,6 +378,23 @@ const CONTEUDOS: Record<string, ConteudoAjuda> = {
     ],
     urlVideo: null,
   },
+  'fiscal.contingencia.tela': {
+    titulo: 'Contingência Fiscal',
+    objetivo: 'Ver se a empresa está emitindo NFC-e direto pela SEFAZ ou em contingência offline, e quantas notas ainda esperam transmissão.',
+    passos: [
+      'Escolha a empresa no seletor do topo.',
+      'A tarja no topo mostra o estado: verde (emissão normal) ou vermelha (em contingência, com há quanto tempo e a série usada).',
+      '"Notas aguardando transmissão" é a fila que o sistema transmite sozinho quando a SEFAZ volta — não precisa fazer nada.',
+      'Para entrar manualmente (ex.: sabe que a internet vai cair pra manutenção), digite a justificativa e clique em "Entrar em contingência".',
+      'Para sair manualmente, digite a justificativa e clique em "Sair da contingência" — mas normalmente isso acontece sozinho quando a SEFAZ volta a responder.',
+    ],
+    errosComuns: [
+      'Só administradores acessam esta tela.',
+      'A entrada automática (duas falhas de comunicação seguidas) acontece sozinha durante a venda — este painel não precisa ser aberto pra isso funcionar.',
+      'Empresa sem Configuração Fiscal ainda não tem o que entrar em contingência — o botão devolve erro explicando isso.',
+    ],
+    urlVideo: null,
+  },
   'cadastros.planocontas.lista': {
     titulo: 'Plano de Contas',
     objetivo: 'Encontrar e gerenciar as contas do plano de contas (usadas por fornecedores, contas a pagar e relatórios).',

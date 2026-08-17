@@ -414,6 +414,35 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
   }
 }
 
+/* DANFCE (§9.6, bloco B7) — com fiscal ligado e a NFC-e autorizada/em contingência, o cupom
+   impresso É o DANFCE (chave de acesso + QR Code) por cima da mesma tabela de 42 colunas de
+   sempre. Wrapper PRÓPRIO (não reaproveita `.papeleta-imprimir` diretamente na `<pre>`) de
+   propósito: assim o texto/QR fluem em document flow normal dentro do wrapper — que é quem fica
+   `position: absolute` — e o QR sempre cai abaixo da tabela de itens, qualquer que seja a altura
+   dela, sem arriscar a calibragem já testada do Vale-Mercadoria/papeleta comum (que continuam
+   usando `.papeleta-imprimir` direto na `<pre>`, sem tocar neste bloco). */
+.papeleta-qrcode { display: flex; flex-direction: column; align-items: center; gap: 2px; margin-top: 4px; }
+.papeleta-qrcode img { width: 28mm; height: 28mm; }
+@media print {
+  .papeleta-fiscal-imprimir, .papeleta-fiscal-imprimir * { visibility: visible; }
+  .papeleta-fiscal-imprimir {
+    position: absolute; top: 0; left: 0; width: 75mm; margin: 0; padding: 2mm 1mm; border: 0;
+    background: none; color: #000;
+  }
+  .papeleta-fiscal-imprimir .papeleta-preview {
+    /* Mesma calibragem Consolas/11.5px/bold/print-color-adjust do `.papeleta-imprimir` comum
+       (2026-08-14) — só reaplicada aqui porque a `<pre>` deixou de carregar aquela classe. */
+    font-family: Consolas, 'Lucida Console', 'Courier New', Courier, monospace; font-size: 11.5px; line-height: 1.35;
+    font-weight: bold;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  .papeleta-fiscal-imprimir .papeleta-qrcode img {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}
+
 /* Fechamento de Caixa (2026-07-30, docs/telas/fechamento-caixa.md) — relatório em folha A4,
    diferente do Comprovante de Pagamento de Crediário (80mm, bobina térmica, ver acima). Página
    nomeada (`page: fechamento-a4`) porque o `@page` sem nome já está reservado pra 80mm — os dois

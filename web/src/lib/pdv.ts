@@ -168,6 +168,23 @@ export interface ParcelaComprovanteVenda {
   valorParcela: number
 }
 
+/**
+ * Dados fiscais pra a papeleta virar DANFCE (§9.6, bloco B7) — `null` quando o fiscal está
+ * desligado (F12) ou a nota não terminou autorizada/em contingência: nesses casos a papeleta sai
+ * exatamente como sempre foi, sem nenhuma menção fiscal.
+ */
+export interface DadosFiscaisComprovante {
+  chaveAcesso: string
+  protocolo: string | null
+  dataAutorizacao: string | null
+  homologacao: boolean
+  contingencia: boolean
+  /** URL completa do QR Code (já com `?p=...`) — extraída do XML assinado, nunca remontada aqui. */
+  qrCodeUrl: string
+  urlConsultaChave: string
+  valorTotalTributos: number
+}
+
 /** Papeleta de venda pra impressão térmica 80mm, buscada logo após o F5 efetivar a venda.
  *  `nomeVendedor`/`nomeOperador` podem vir `null` (venda gravada antes de existir vínculo). */
 export interface ComprovanteVenda {
@@ -186,8 +203,40 @@ export interface ComprovanteVenda {
   totalAPagar: number
   pagamentos: PagamentoComprovanteVenda[]
   parcelasCrediario: ParcelaComprovanteVenda[]
+  dadosFiscais: DadosFiscaisComprovante | null
 }
 
 export function buscarComprovanteVenda(idVenda: number): Promise<ComprovanteVenda> {
   return api<ComprovanteVenda>(`/api/v1/pdv/vendas/${idVenda}/comprovante`)
+}
+
+/** Situações possíveis da emissão (§9.1/B7) — espelha `EmissaoNfceService.ResultadoEmissao`. */
+export type SituacaoEmissaoNfce =
+  | 'AUTORIZADO'
+  | 'REJEITADO'
+  | 'DENEGADO'
+  | 'EM_PROCESSAMENTO'
+  | 'FALHA_COMUNICACAO'
+  | 'CONTINGENCIA'
+  | 'NAO_EMITIDO'
+
+export interface ResultadoEmissaoNfce {
+  situacao: SituacaoEmissaoNfce
+  idDocumentoFiscal: number
+  chaveAcesso: string | null
+  protocolo: string | null
+  cStat: string | null
+  mensagem: string
+}
+
+/**
+ * Dispara a emissão da NFC-e depois que o F5 já efetivou a venda (F3: a venda nunca depende
+ * disto). `null` quando o fiscal está desligado para a empresa (204, F12) — a tela não mostra
+ * nada, como se o módulo fiscal não existisse.
+ */
+export async function emitirNfce(idVenda: number): Promise<ResultadoEmissaoNfce | null> {
+  const resposta = await api<ResultadoEmissaoNfce | undefined>(`/api/v1/pdv/vendas/${idVenda}/nfce`, {
+    method: 'POST',
+  })
+  return resposta ?? null
 }

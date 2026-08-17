@@ -5,6 +5,7 @@ import com.vetor.niner.configuracao.geral.ConfiguracaoGeralService;
 import com.vetor.niner.financeiro.TipoCarteiraDtos.CategoriaCarteira;
 import com.vetor.niner.financeiro.caixa.CaixaService;
 import com.vetor.niner.vendas.PdvDtos.ComprovanteVendaResponse;
+import com.vetor.niner.vendas.PdvDtos.DadosFiscaisComprovante;
 import com.vetor.niner.vendas.PdvDtos.EfetivarVendaRequest;
 import com.vetor.niner.vendas.PdvDtos.ItemComprovanteVenda;
 import com.vetor.niner.vendas.PdvDtos.ItemVendaRequest;
@@ -330,7 +331,52 @@ public class PdvVendaService {
                 idVenda, cabecalho.nomeEmpresa(), cabecalho.codigoEmpresa(), cabecalho.dataVenda(),
                 cabecalho.nomeCliente(), cabecalho.telefoneCliente(), nomeVendedor, cabecalho.nomeOperador(),
                 itens, totais.subtotal(), totais.descontos(), totais.acrescimos(), totalAPagar,
-                pagamentos, parcelasCrediario);
+                pagamentos, parcelasCrediario, buscarDadosFiscais(idVenda));
+    }
+
+    /**
+     * §9.6/B7: a papeleta vira DANFCE quando existe NFC-e autorizada ou em contingência para esta
+     * venda. {@code null} em qualquer outro caso (F12, rejeição, falha) — a papeleta segue como
+     * sempre foi. Pega a mais recente por {@code criado_em}: uma venda pode ter mais de um
+     * {@code documento_fiscal} se a primeira tentativa foi rejeitada e o operador reemitiu.
+     */
+    private DadosFiscaisComprovante buscarDadosFiscais(long idVenda) {
+        return jdbc.sql("""
+                        SELECT chave_acesso, protocolo, data_autorizacao, ambiente::text AS ambiente,
+                               tipo_emissao, valor_total_tributos, xml_assinado
+                          FROM documento_fiscal
+                         WHERE id_tenant = plataforma.tenant_atual() AND id_venda = ?
+                           AND situacao IN ('AUTORIZADO', 'CONTINGENCIA')
+                         ORDER BY criado_em DESC
+                         LIMIT 1
+                        """)
+                .param(idVenda)
+                .query((rs, n) -> new DadosFiscaisComprovante(
+                        rs.getString("chave_acesso"), rs.getString("protocolo"),
+                        rs.getObject("data_autorizacao", OffsetDateTime.class),
+                        "HOMOLOGACAO".equals(rs.getString("ambiente")), rs.getInt("tipo_emissao") == 9,
+                        extrairTagCdata(rs.getString("xml_assinado"), "qrCode"),
+                        extrairTag(rs.getString("xml_assinado"), "urlChave"),
+                        rs.getBigDecimal("valor_total_tributos")))
+                .optional()
+                .orElse(null);
+    }
+
+    private static String extrairTag(String xml, String tag) {
+        if (xml == null) return null;
+        String abre = "<" + tag + ">";
+        String fecha = "</" + tag + ">";
+        int inicio = xml.indexOf(abre);
+        if (inicio < 0) return null;
+        inicio += abre.length();
+        int fim = xml.indexOf(fecha, inicio);
+        return fim < 0 ? null : xml.substring(inicio, fim);
+    }
+
+    private static String extrairTagCdata(String xml, String tag) {
+        String bruto = extrairTag(xml, tag);
+        if (bruto == null) return null;
+        return bruto.replace("<![CDATA[", "").replace("]]>", "");
     }
 
     private BigDecimal buscarPercentualDescontoVenda() {

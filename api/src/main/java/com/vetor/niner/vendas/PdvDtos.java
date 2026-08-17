@@ -160,6 +160,25 @@ public final class PdvDtos {
             BigDecimal acrescimos,
             BigDecimal totalAPagar,
             List<PagamentoComprovanteVenda> pagamentos,
-            List<ParcelaComprovanteVenda> parcelasCrediario) {
+            List<ParcelaComprovanteVenda> parcelasCrediario,
+            DadosFiscaisComprovante dadosFiscais) {
+    }
+
+    /**
+     * Dados fiscais pra a papeleta virar DANFCE (§9.6, bloco B7) — {@code null} quando o fiscal
+     * está desligado (F12) ou a nota não terminou autorizada/em contingência (rejeitada, denegada,
+     * falha de comunicação, não emitida por DF13): nesses casos a papeleta sai <b>exatamente como
+     * hoje</b>, sem menção fiscal — imprimir um DANFCE de uma nota que não existe seria pior que
+     * não imprimir nada.
+     *
+     * <p>{@code qrCodeUrl}/{@code urlConsultaChave} vêm extraídos do <b>XML já assinado</b>
+     * (nunca reconstruídos aqui) — é a única forma de garantir que o QR impresso é
+     * <b>exatamente</b> o que está no documento, inclusive na contingência offline, cujo QR carrega
+     * uma assinatura própria que não dá para recalcular fora do momento da emissão (B7).
+     */
+    public record DadosFiscaisComprovante(
+            String chaveAcesso, String protocolo, OffsetDateTime dataAutorizacao,
+            boolean homologacao, boolean contingencia, String qrCodeUrl, String urlConsultaChave,
+            BigDecimal valorTotalTributos) {
     }
 }

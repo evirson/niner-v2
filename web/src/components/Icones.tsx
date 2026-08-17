@@ -684,3 +684,16 @@ export function IconeConformidade({ size = 28 }: { size?: number }) {
     </svg>
   )
 }
+
+/** Ícone da Contingência Fiscal (§9.7) — sinal Wi-Fi cortado, representando a SEFAZ fora do ar. */
+export function IconeContingencia({ size = 28 }: { size?: number }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.6} stroke="currentColor" width={size} height={size} aria-hidden="true">
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M3.75 9.75a12 12 0 0 1 5.25-2.783 M20.25 9.75a12 12 0 0 0-4.017-2.325 M6.75 13.25a7.5 7.5 0 0 1 3.421-1.874 M17.25 13.25a7.5 7.5 0 0 0-2.148-1.53 M9.75 16.75a3.5 3.5 0 0 1 3-1.036 M12 19.5h.008v.008H12z M3 3l18 18"
+      />
+    </svg>
+  )
+}

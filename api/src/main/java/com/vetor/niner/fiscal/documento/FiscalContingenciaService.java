@@ -1,8 +1,10 @@
 package com.vetor.niner.fiscal.documento;
 
+import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -138,10 +140,19 @@ public class FiscalContingenciaService {
         }
     }
 
-    /** P3 — entrar em contingência sempre grava justificativa e horário; é decisão auditável. */
+    /**
+     * P3 — entrar em contingência sempre grava justificativa e horário; é decisão auditável.
+     *
+     * <p>⚠️ Achado ao ligar o painel manual (B7): o {@code UPDATE} só afeta uma linha se
+     * {@code fiscal_config_empresa} já existir — e ela <b>não existe</b> até o primeiro
+     * {@code PUT} em Configuração Fiscal (F12: ausência = fiscal desligado). Sem checar o
+     * número de linhas afetadas, um ADMIN clicando "Entrar em contingência" numa empresa sem
+     * fiscal configurado via {@link FiscalContingenciaController} não via <b>nenhum</b> erro — o
+     * botão simplesmente não fazia nada, e o painel continuava mostrando "desligada".
+     */
     @Transactional
     public void entrar(long idEmpresa, String justificativa) {
-        jdbc.sql("""
+        int linhas = jdbc.sql("""
                         UPDATE fiscal_config_empresa
                            SET contingencia_ativa = true, contingencia_desde = now(),
                                contingencia_justificativa = ?, atualizado_em = now()
@@ -149,6 +160,9 @@ public class FiscalContingenciaService {
                            AND contingencia_ativa = false
                         """)
                 .params(justificativa, idEmpresa).update();
+        if (linhas == 0) {
+            exigirConfigExistente(idEmpresa);
+        }
     }
 
     /**
@@ -158,13 +172,34 @@ public class FiscalContingenciaService {
      */
     @Transactional
     public void sair(long idEmpresa, String justificativa) {
-        jdbc.sql("""
+        int linhas = jdbc.sql("""
                         UPDATE fiscal_config_empresa
                            SET contingencia_ativa = false,
                                contingencia_justificativa = ?, atualizado_em = now()
                          WHERE id_tenant = plataforma.tenant_atual() AND id_empresa = ?
                         """)
                 .params(justificativa, idEmpresa).update();
+        if (linhas == 0) {
+            exigirConfigExistente(idEmpresa);
+        }
+    }
+
+    /**
+     * Chamado só quando o {@code UPDATE} afetou zero linhas — distingue "empresa sem fiscal
+     * configurado" (409, erro real) de qualquer outra causa de zero linhas, e nunca deixa a
+     * ação parecer bem-sucedida sem ter mudado nada (F11: erro explícito, nunca chute).
+     */
+    private void exigirConfigExistente(long idEmpresa) {
+        boolean existe = jdbc.sql("""
+                        SELECT 1 FROM fiscal_config_empresa
+                         WHERE id_tenant = plataforma.tenant_atual() AND id_empresa = ?
+                        """)
+                .param(idEmpresa).query(Integer.class).optional().isPresent();
+        if (!existe) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Esta empresa ainda não tem configuração fiscal. Configure o fiscal antes de "
+                            + "usar a contingência.");
+        }
     }
 
     /**
