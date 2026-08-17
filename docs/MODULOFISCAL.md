@@ -1219,6 +1219,14 @@ arquitetura.
 seria emitir nota com o certificado do lojista errado. É o `TenantContext` (P8) valendo para um
 recurso que não é linha de banco.
 
+> ✅ **Implementado e testado no B6 (2026-08-17).** A chave do cache é a **impressão digital do
+> certificado**, o que dá dois ganhos sobre uma chave `(tenant, empresa)`: trocar o certificado
+> invalida a entrada sozinho (sem TTL nem invalidação manual) e duas empresas nunca colidem mesmo
+> se os ids se repetissem. O teste que garante isso sobe um **servidor HTTPS real com
+> `setNeedClientAuth(true)`** e confere o DN que chegou do outro lado — duas empresas em
+> sequência têm que apresentar cada uma o seu. Controle negativo: cacheando com chave fixa, é
+> exatamente esse teste que quebra.
+
 **DANFE/DANFCE em PDF:** não há biblioteca Java open-source viável (as encontradas estão
 abandonadas). Construir com o que o projeto já usa — `jsPDF` no front para o cupom térmico (caminho
 já calibrado) e/ou OpenPDF/Jasper no backend para o DANFE A4. Lembrar de 2026-08-14: **PDF e
@@ -1307,7 +1315,7 @@ paralelo às telas, se fizer sentido.
 | **B3** ✅ | **Conformidade Fiscal** — painel + drill-down (2026-08-17), backend + tela. Lista o que impede emitir (empresa/produtos/pagamentos bloqueiam; clientes só avisa). Achado real confirmado ao vivo: hoje todo tenant nasce bloqueado em "Formas de pagamento" (`codigo_tpag` sem tela própria) — é o que revela o tamanho do problema de base cadastral | B2 | Não |
 | **B4** ✅ | **Motor tributário** (`fiscal.motor`): puro, sem I/O. ICMS (CSOSN, + CST no CRT 2) + PIS/COFINS + IBS/CBS + FCP + `vTotTrib`. Teste de tabela por (CRT × CST/CSOSN × UF × operação), sem Testcontainers. **Feito em 2026-08-17**, já sob a DF37 | — (o schema já basta) | Não |
 | **B5** ✅ | Montagem do XML + validação contra o **XSD oficial** em teste — `fiscal.documento` (`MontadorXmlNfce`, `ChaveAcesso`, `ValidadorXsd`), 2026-08-17. 25 testes validando contra o schema real. Fechou a **DF32** por fonte primária | B4 | Não |
-| **B6** | Assinatura (XMLDSig) + transporte (`HttpClient` do JDK com mTLS por empresa) | B5, B0 | **Sim** |
+| **B6** ✅ | Assinatura (XMLDSig) + transporte (`HttpClient` do JDK com mTLS por empresa) — `AssinadorXmlNfe` + `fiscal.sefaz` (`SefazTransporte`, `SefazAutorizadorService`), 2026-08-17. 27 testes, incluindo mTLS contra servidor HTTPS real e validação criptográfica da assinatura. **Não precisou do certificado real**: certificados autoassinados cobrem tudo menos a homologação ponta a ponta, que o B0 já fez | B5, B0 | **Sim** |
 | **B7** | PDV: emissão síncrona, DANFCE térmico, contingência offline, recusa em venda a contribuinte | B6 | **Sim** |
 | **B8** | Cancelamento (110111), inutilização, arquivamento no bucket, download em ZIP | B7 | **Sim** |
 | **B9** | NF-e de devolução de venda (entrada, `finNFe=4`), espelhando a tributação gravada em `documento_fiscal_item` | B8 | **Sim** |

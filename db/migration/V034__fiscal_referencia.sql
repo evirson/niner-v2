@@ -28,7 +28,11 @@ CREATE TABLE cfg_uf_autorizador (
   url_recepcao_evento       text,                    -- NFeRecepcaoEvento4 (cancelamento, CC-e)
   url_inutilizacao          text,                    -- NFeInutilizacao4
   url_consulta_protocolo    text,                    -- NFeConsultaProtocolo4
-  url_consulta_publica      text,                    -- consulta da chave pelo consumidor (QR Code)
+  -- ⚠️ As duas URLs abaixo NÃO são o host do webservice — no PR o webservice é
+  -- `nfce.sefa.pr.gov.br` e a consulta pública é `www.fazenda.pr.gov.br`. Confundir as duas custou
+  -- um `cStat 878` no B0, com a própria SEFAZ devolvendo o endereço certo na mensagem de erro.
+  url_qrcode                text,                    -- base do QR Code impresso no DANFCE
+  url_consulta_publica      text,                    -- consulta da chave pelo consumidor
   prazo_cancelamento_min    integer,                 -- NFC-e 30 min · NF-e 24 h = 1440 min
   prazo_contingencia_horas  integer,                 -- transmissão após cessar a falha (PR: 24 h)
   aliquota_interna          numeric(5,2),            -- ICMS interno modal da UF
@@ -215,6 +219,7 @@ INSERT INTO cfg_uf_autorizador (
   uf, modelo, ambiente, codigo_uf_ibge, autorizador,
   url_autorizacao, url_ret_autorizacao, url_status_servico,
   url_recepcao_evento, url_inutilizacao, url_consulta_protocolo,
+  url_qrcode, url_consulta_publica,
   prazo_cancelamento_min, prazo_contingencia_horas, aliquota_interna, aliquota_fcp,
   permite_extemporaneo, observacao
 ) VALUES
@@ -225,6 +230,8 @@ INSERT INTO cfg_uf_autorizador (
    'https://nfce.sefa.pr.gov.br/nfce/NFeRecepcaoEvento4',
    'https://nfce.sefa.pr.gov.br/nfce/NFeInutilizacao4',
    'https://nfce.sefa.pr.gov.br/nfce/NFeConsultaProtocolo4',
+   'http://www.fazenda.pr.gov.br/nfce/qrcode',
+   'http://www.fazenda.pr.gov.br/nfce/consulta',
    30, 24, 19.50, 2.00, false,
    'NPF 100/2014 consolidada. Credenciamento de producao pelo Portal Receita/PR.'),
   ('PR', 65, 2, 41, 'PROPRIO',
@@ -234,13 +241,18 @@ INSERT INTO cfg_uf_autorizador (
    'https://homologacao.nfce.sefa.pr.gov.br/nfce/NFeRecepcaoEvento4',
    'https://homologacao.nfce.sefa.pr.gov.br/nfce/NFeInutilizacao4',
    'https://homologacao.nfce.sefa.pr.gov.br/nfce/NFeConsultaProtocolo4',
+   -- ⚠️ Mesmas URLs de consulta da producao, de proposito: no PR o endereco de consulta publica
+   -- NAO tem variante de homologacao, e o que distingue os ambientes e o tpAmb dentro do QR.
+   -- Confirmado no B0 pela propria SEFAZ, na mensagem do cStat 878.
+   'http://www.fazenda.pr.gov.br/nfce/qrcode',
+   'http://www.fazenda.pr.gov.br/nfce/consulta',
    30, 24, 19.50, 2.00, false,
    'Credenciamento de homologacao no PR e AUTOMATICO para contribuinte ativo no cadastro de ICMS.'),
   ('PR', 55, 1, 41, 'PROPRIO',
-   NULL, NULL, NULL, NULL, NULL, NULL,
+   NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
    1440, NULL, 19.50, 2.00, false,
    'ENDPOINTS A CONFIRMAR NA F0 (fonte oficial Sped-PR). Prazo de cancelamento 24h = Ajuste SINIEF 07/2005.'),
   ('PR', 55, 2, 41, 'PROPRIO',
-   NULL, NULL, NULL, NULL, NULL, NULL,
+   NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
    1440, NULL, 19.50, 2.00, false,
    'ENDPOINTS A CONFIRMAR NA F0 (fonte oficial Sped-PR).');

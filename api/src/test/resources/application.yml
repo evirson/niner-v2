@@ -28,3 +28,8 @@ niner:
     expiracao-horas: 24
   seguranca:
     chave-segredos: bmluZXItdGVzdC1jaGF2ZS1zZWNyZXRhLWZpc2NhbDI=
+  fiscal:
+    # Vazio = truststore padrão do JDK. O teste de transporte injeta a sua própria (o servidor
+    # HTTPS local usa certificado autoassinado), então este default não é usado por ele.
+    truststore-path: ""
+    truststore-senha: ""

@@ -75,3 +75,10 @@ niner:
     # certificado fiscal. Base64 de 32 bytes. O valor abaixo é só de DEV — TROQUE EM PRODUÇÃO
     # (secret manager / variável de ambiente do compose, nunca commitado).
     chave-segredos: ${NINER_CHAVE_SEGREDOS:bmluZXItZGV2LWNoYXZlLXNlY3JldGEtZmlzY2FsMzI=}
+  fiscal:
+    # ⚠️ Requisito de ambiente em PRODUÇÃO: a raiz da ICP-Brasil NÃO vem no cacerts do JDK.
+    # Sem truststore própria, toda chamada à SEFAZ falha com "PKIX path building failed" —
+    # erro que não menciona ICP-Brasil e faz suspeitar do certificado do lojista (achado do B0).
+    # Vazio = truststore padrão do JDK (serve para teste local, não para a SEFAZ real).
+    truststore-path: ${NINER_FISCAL_TRUSTSTORE:}
+    truststore-senha: ${NINER_FISCAL_TRUSTSTORE_SENHA:}

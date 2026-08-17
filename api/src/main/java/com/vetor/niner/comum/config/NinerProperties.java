@@ -13,7 +13,7 @@ import java.util.List;
 @ConfigurationProperties("niner")
 public record NinerProperties(
         Jwt jwt, Trial trial, Cors cors, Storage storage,
-        ArquivoCompartilhado arquivoCompartilhado, Seguranca seguranca) {
+        ArquivoCompartilhado arquivoCompartilhado, Seguranca seguranca, Fiscal fiscal) {
 
     public record Jwt(String secret, Duration expiracao, String emissor) {
     }
@@ -53,5 +53,17 @@ public record NinerProperties(
      * mas o util é genérico ({@code SegredoCifrador}) para qualquer segredo futuro. A chave
      * fica <b>fora do banco</b> de propósito: quem rouba só o banco não decifra nada. */
     public record Seguranca(String chaveSegredos) {
+    }
+
+    /**
+     * Módulo fiscal — transporte com a SEFAZ (B6).
+     *
+     * <p>⚠️ {@code truststorePath} é <b>requisito de ambiente, não opcional em produção</b>: a
+     * raiz da ICP-Brasil não vem no {@code cacerts} do JDK, e sem ela toda chamada à SEFAZ falha
+     * com {@code PKIX path building failed} — mensagem que não menciona ICP-Brasil e faz perder
+     * horas suspeitando do certificado do lojista (achado do B0). Vazio = truststore padrão do
+     * JDK, que serve para teste local mas não para a SEFAZ real.
+     */
+    public record Fiscal(String truststorePath, String truststoreSenha) {
     }
 }
