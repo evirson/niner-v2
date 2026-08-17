@@ -78,6 +78,13 @@ public class FiscalContingenciaService {
                 .orElse(Estado.DESLIGADA);
     }
 
+    /**
+     * ⚠️ Anotado mesmo só delegando para {@link #consultar}: a chamada interna <b>não</b> passa
+     * pelo proxy do Spring, então sem transação própria aqui o {@code app.id_tenant} não existe,
+     * a consulta não acha a linha e este método devolve {@code false} <b>sempre</b> — a
+     * contingência ficaria invisível para o job de drenagem, sem erro nenhum.
+     */
+    @Transactional(readOnly = true)
     public boolean ativa(long idEmpresa) {
         return consultar(idEmpresa).ativa();
     }
@@ -85,9 +92,18 @@ public class FiscalContingenciaService {
     /**
      * Registra uma falha de comunicação e diz se ela <b>disparou</b> a entrada em contingência.
      *
+     * <p>⚠️ {@code @Transactional} aqui não é enfeite: este método chama {@link #ativa} e
+     * {@link #entrar}, que são anotados mas <b>não passam pelo proxy</b> quando invocados de
+     * dentro da própria classe. Sem uma transação aberta por fora, o
+     * {@code TenantAwareTransactionManager} nunca define {@code app.id_tenant},
+     * {@code plataforma.tenant_atual()} devolve {@code null} e o {@code UPDATE} não encontra
+     * linha nenhuma — a contingência simplesmente não ligaria, em silêncio. Sem I/O de rede aqui
+     * dentro, então a transação é curta (F2).
+     *
      * @return {@code true} apenas na transição desligada → ligada, para que o chamador avise o
      *         operador uma vez só em vez de a cada venda
      */
+    @Transactional
     public boolean registrarFalhaEavaliarEntrada(long idTenant, long idEmpresa, String motivo) {
         Instant agora = Instant.now();
         Deque<Instant> janela = falhasRecentes.computeIfAbsent(

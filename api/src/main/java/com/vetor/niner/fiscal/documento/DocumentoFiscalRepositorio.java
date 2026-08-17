@@ -10,6 +10,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.HexFormat;
+import java.util.List;
 
 /**
  * Persistência do documento fiscal ao longo da máquina de estados (§9.1).
@@ -68,10 +69,10 @@ public class DocumentoFiscalRepositorio {
                             valor_produtos, valor_desconto, valor_outros, valor_total, valor_troco,
                             valor_icms, valor_fcp, valor_pis, valor_cofins,
                             valor_ibs_uf, valor_ibs_mun, valor_cbs, valor_total_tributos,
-                            xml_hash, id_usuario)
+                            xml_assinado, xml_hash, id_usuario)
                         VALUES (plataforma.tenant_atual(), ?, ?, ?, ?, ?, ?, ?,
                                 'VENDA_CONSUMIDOR', 'ASSINADO', ?::ambiente_fiscal, ?, ?, ?, ?,
-                                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         RETURNING id_documento_fiscal
                         """)
                 .params(pedido.idEmpresa(), MODELO_NFCE, numero.serie(), numero.numero(), chave,
@@ -82,7 +83,7 @@ public class DocumentoFiscalRepositorio {
                         t.valorProdutos(), t.valorDesconto(), t.valorAcrescimo(), t.valorNota(),
                         pedido.troco(), t.valorIcms(), t.valorFcp(), t.valorPis(), t.valorCofins(),
                         t.valorIbsUf(), t.valorIbsMun(), t.valorCbs(), t.valorTotalTributos(),
-                        sha256(xmlAssinado), pedido.idUsuario())
+                        xmlAssinado, sha256(xmlAssinado), pedido.idUsuario())
                 .query(Long.class).single();
     }
 
@@ -177,6 +178,75 @@ public class DocumentoFiscalRepositorio {
                         VALUES (plataforma.tenant_atual(), ?, ?, ?)
                         """)
                 .params(idCertificado, idDocumento, finalidade).update();
+    }
+
+    // ---------------------------------------------------------------- fila de contingência (§9.7)
+
+    /**
+     * Empresas com nota emitida em contingência ainda não autorizada.
+     *
+     * <p>Varre <b>todos</b> os tenants de propósito: é consulta de infraestrutura para o job, que
+     * não tem JWT. Devolve só o necessário para o chamador entrar no {@code TenantContext} certo
+     * antes de tocar em dado de domínio — e por isso não seleciona nada da nota em si.
+     */
+    @Transactional(readOnly = true)
+    public List<EmpresaEmContingencia> empresasComFilaPendente() {
+        return jdbc.sql("""
+                        SELECT DISTINCT c.id_tenant, c.id_empresa, e.uf,
+                               CASE c.ambiente WHEN 'PRODUCAO' THEN 1 ELSE 2 END AS ambiente_codigo,
+                               u.codigo_uf_ibge, cert.impressao_digital
+                          FROM documento_fiscal d
+                          JOIN fiscal_config_empresa c
+                            ON c.id_tenant = d.id_tenant AND c.id_empresa = d.id_empresa
+                          JOIN empresa e
+                            ON e.id_tenant = d.id_tenant AND e.id_empresa = d.id_empresa
+                          JOIN cfg_uf_autorizador u
+                            ON u.uf = e.uf AND u.modelo = 65 AND u.ambiente = c.ambiente
+                          JOIN fiscal_certificado cert
+                            ON cert.id_tenant = d.id_tenant AND cert.id_empresa = d.id_empresa
+                           AND cert.ativo = true
+                         WHERE d.tipo_emissao = 9
+                           AND d.situacao IN ('CONTINGENCIA', 'ASSINADO')
+                        """)
+                .query((rs, n) -> new EmpresaEmContingencia(
+                        rs.getLong("id_tenant"), rs.getLong("id_empresa"), rs.getString("uf"),
+                        rs.getInt("ambiente_codigo"), rs.getInt("codigo_uf_ibge"),
+                        rs.getString("impressao_digital")))
+                .list();
+    }
+
+    /**
+     * Fila de uma empresa, <b>em ordem de emissão</b>. A ordem não é estética: transmitir a nota
+     * 12 antes da 10 cria buraco aparente na numeração e complica a conferência.
+     *
+     * <p>Dentro do {@code TenantContext}, o filtro explícito de {@code id_tenant} volta a ser
+     * obrigatório (P8) — o job não é exceção.
+     */
+    @Transactional(readOnly = true)
+    public List<NotaPendente> pendentesDeContingencia(long idEmpresa, int limite) {
+        return jdbc.sql("""
+                        SELECT id_documento_fiscal, chave_acesso, xml_assinado
+                          FROM documento_fiscal
+                         WHERE id_tenant = plataforma.tenant_atual()
+                           AND id_empresa = ?
+                           AND tipo_emissao = 9
+                           AND situacao IN ('CONTINGENCIA', 'ASSINADO')
+                           AND xml_assinado IS NOT NULL
+                         ORDER BY data_emissao, numero
+                         LIMIT ?
+                        """)
+                .params(idEmpresa, limite)
+                .query((rs, n) -> new NotaPendente(
+                        rs.getLong("id_documento_fiscal"), rs.getString("chave_acesso"),
+                        rs.getString("xml_assinado")))
+                .list();
+    }
+
+    public record EmpresaEmContingencia(long idTenant, long idEmpresa, String uf, int ambienteCodigo,
+                                        int codigoUfIbge, String impressaoDigital) {
+    }
+
+    public record NotaPendente(long id, String chaveAcesso, String xmlAssinado) {
     }
 
     /** SHA-256 do XML autorizado — prova de integridade do arquivo guardado (F6). */

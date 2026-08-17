@@ -328,6 +328,13 @@ CREATE TABLE documento_fiscal (
   valor_total_tributos  numeric(12,2)            NOT NULL DEFAULT 0,  -- vTotTrib, Lei 12.741
   xml_objeto_bucket     text,                    -- ponteiro IMUTÁVEL (F6)
   xml_hash              text,
+  -- XML assinado ANTES da autorização. Lacuna descoberta no B7: o bucket guarda o XML
+  -- AUTORIZADO (F6), mas entre assinar e autorizar existe uma janela em que o documento precisa
+  -- sobreviver a um restart da API — e na contingência offline (§9.7) essa janela é de até 24 h,
+  -- com o cupom já na mão do consumidor. Sem esta coluna, reiniciar a API durante uma queda da
+  -- SEFAZ apagaria o XML de notas que o lojista já entregou: nada a transmitir, e prazo correndo.
+  -- Fica no banco (e não no bucket) porque é dado ainda mutável — o bucket é só do imutável.
+  xml_assinado          text,
   tentativas            integer                  NOT NULL DEFAULT 0,
   ultima_tentativa_em   timestamptz,
   ultimo_erro           text,
@@ -535,6 +542,12 @@ BEGIN
      AND (NEW.xml_objeto_bucket IS DISTINCT FROM OLD.xml_objeto_bucket
           OR NEW.xml_hash IS DISTINCT FROM OLD.xml_hash) THEN
     RAISE EXCEPTION 'F6: XML autorizado nunca e reescrito (documento %)', OLD.id_documento_fiscal;
+  END IF;
+  -- xml_assinado E mutavel enquanto a nota nao foi autorizada (rejeitada -> corrige -> reassina),
+  -- mas depois do protocolo ele E o documento que a SEFAZ autorizou: trocar significaria guardar
+  -- um XML diferente do que foi validado, com o mesmo protocolo. F6 vale aqui tambem.
+  IF OLD.protocolo IS NOT NULL AND NEW.xml_assinado IS DISTINCT FROM OLD.xml_assinado THEN
+    RAISE EXCEPTION 'F6: XML de documento autorizado nao pode ser trocado (documento %)', OLD.id_documento_fiscal;
   END IF;
   RETURN NEW;
 END $$;
