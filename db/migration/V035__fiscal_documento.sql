@@ -160,10 +160,15 @@ CREATE TABLE cfg_perfil_fiscal_regra (
   perc_reducao_bc    numeric(5,2)             NOT NULL DEFAULT 0,
   mva_st             numeric(5,2)             NOT NULL DEFAULT 0,
   aliquota_fcp       numeric(5,2)             NOT NULL DEFAULT 0,
+  -- DF36: PIS/COFINS ad valorem de saída normal é fixado por LEI pelo regime, não é escolha por
+  -- produto — e CRT 3 cobre Presumido (0,65/3,00) E Real (1,65/7,60), que esta regra não distingue.
+  -- Por isso o motor tira a ALÍQUOTA de fiscal_config_empresa.regime_apuracao e daqui só o CST.
+  -- As duas colunas de alíquota abaixo são OVERRIDE: valem apenas quando o CST não é o de saída
+  -- tributada normal (01) — monofásico / alíquota zero (cesta básica, medicamento, autopeça).
   cst_pis            char(2),
-  aliquota_pis       numeric(5,2)             NOT NULL DEFAULT 0,
+  aliquota_pis       numeric(5,2)             NOT NULL DEFAULT 0,  -- override (ver DF36 acima)
   cst_cofins         char(2),
-  aliquota_cofins    numeric(5,2)             NOT NULL DEFAULT 0,
+  aliquota_cofins    numeric(5,2)             NOT NULL DEFAULT 0,  -- override (ver DF36 acima)
   cst_ipi            char(2),
   aliquota_ipi       numeric(5,2)             NOT NULL DEFAULT 0,
   cst_ibscbs         char(3),

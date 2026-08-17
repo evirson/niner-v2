@@ -111,6 +111,15 @@ CREATE TABLE cfg_cclasstrib (
   codigo_cst          char(3),                    -- CST compatível (a incompatibilidade é rejeição)
   exige_trib_regular  boolean  NOT NULL DEFAULT false,  -- dispara o grupo gTribRegular
   permite_cred_pres   boolean  NOT NULL DEFAULT false,  -- dispara gIBSCredPres
+  -- Três colunas acrescentadas em 2026-08-17, ao carregar a planilha oficial do IT 2025.002:
+  -- vinham no arquivo e não tinham onde morar, e as duas primeiras são necessárias antes do
+  -- motor tributário (B4), não depois.
+  ind_nfce            boolean  NOT NULL DEFAULT true,   -- o código vale em NFC-e (modelo 65)?
+                                          -- Sem isto a tela ofereceria ao lojista códigos que a
+                                          -- SEFAZ rejeita na NFC-e (ex.: 010001/010002 são NFSe).
+  perc_reducao_ibs    numeric(5,2) NOT NULL DEFAULT 0,  -- pRedIBS: % de redução da alíquota
+  perc_reducao_cbs    numeric(5,2) NOT NULL DEFAULT 0,  -- pRedCBS: idem para a CBS. Sem os dois o
+                                          -- motor saberia que a alíquota é reduzida, mas não quanto.
   versao_it           text,                       -- versão do Informe Técnico importada (F9)
   vigencia_inicio     date,
   vigencia_fim        date
