@@ -163,7 +163,7 @@ public class EmissaoNfceService {
         repositorio.marcarTransmitindo(idDocumento);
         try {
             resposta = transporte.enviar(url, SERVICO_AUTORIZACAO, enviNFe,
-                    certificado.pkcs12(), certificado.senha(), pedido.impressaoDigitalCertificado());
+                    certificado.pkcs12(), certificado.senha(), certificado.impressaoDigital());
             repositorio.registrarUsoDoCertificado(certificado.idCertificado(), idDocumento, "MTLS");
             contingencia.registrarSucesso(pedido.idTenant(), pedido.idEmpresa());
         } catch (FalhaDeComunicacaoException e) {
@@ -236,7 +236,6 @@ public class EmissaoNfceService {
             BigDecimal troco,
             String informacoesComplementares,
             ResponsavelTecnico responsavelTecnico,
-            String impressaoDigitalCertificado,
             String versaoAplicativo) {
     }
 

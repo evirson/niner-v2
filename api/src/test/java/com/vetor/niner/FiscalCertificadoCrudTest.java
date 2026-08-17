@@ -270,6 +270,12 @@ class FiscalCertificadoCrudTest {
             } catch (Exception e) {
                 throw new AssertionError("O .pfx que saiu do banco não abriu com a senha que saiu do banco.", e);
             }
+
+            // A impressão digital é a chave do cache mTLS por empresa (B6, SefazTransporte) — se
+            // ela viesse de outro lugar (um parâmetro externo, por exemplo), o cache poderia
+            // divergir do certificado que de fato assina, exatamente o que o cache existe para
+            // impedir. Por isso ela tem que vir daqui, do certificado carregado.
+            assertThat(carregado.impressaoDigital()).isNotBlank().hasSize(64 /* SHA-256 em hex */);
         });
     }
 

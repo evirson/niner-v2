@@ -188,13 +188,19 @@ public class DocumentoFiscalRepositorio {
      * <p>Varre <b>todos</b> os tenants de propósito: é consulta de infraestrutura para o job, que
      * não tem JWT. Devolve só o necessário para o chamador entrar no {@code TenantContext} certo
      * antes de tocar em dado de domínio — e por isso não seleciona nada da nota em si.
+     *
+     * <p>O {@code JOIN} com {@code fiscal_certificado} é filtro de existência, não fonte da
+     * impressão digital — essa vem de {@link com.vetor.niner.fiscal.certificado.FiscalCertificadoService
+     * #carregarAtivoParaAssinatura}, a única fonte confiável para a chave do cache mTLS (o cache
+     * é por certificado; um valor de outra origem poderia divergir do certificado que de fato
+     * assina, e é exatamente essa divergência que o cache existe para impedir).
      */
     @Transactional(readOnly = true)
     public List<EmpresaEmContingencia> empresasComFilaPendente() {
         return jdbc.sql("""
                         SELECT DISTINCT c.id_tenant, c.id_empresa, e.uf,
                                CASE c.ambiente WHEN 'PRODUCAO' THEN 1 ELSE 2 END AS ambiente_codigo,
-                               u.codigo_uf_ibge, cert.impressao_digital
+                               u.codigo_uf_ibge
                           FROM documento_fiscal d
                           JOIN fiscal_config_empresa c
                             ON c.id_tenant = d.id_tenant AND c.id_empresa = d.id_empresa
@@ -210,8 +216,7 @@ public class DocumentoFiscalRepositorio {
                         """)
                 .query((rs, n) -> new EmpresaEmContingencia(
                         rs.getLong("id_tenant"), rs.getLong("id_empresa"), rs.getString("uf"),
-                        rs.getInt("ambiente_codigo"), rs.getInt("codigo_uf_ibge"),
-                        rs.getString("impressao_digital")))
+                        rs.getInt("ambiente_codigo"), rs.getInt("codigo_uf_ibge")))
                 .list();
     }
 
@@ -243,7 +248,7 @@ public class DocumentoFiscalRepositorio {
     }
 
     public record EmpresaEmContingencia(long idTenant, long idEmpresa, String uf, int ambienteCodigo,
-                                        int codigoUfIbge, String impressaoDigital) {
+                                        int codigoUfIbge) {
     }
 
     public record NotaPendente(long id, String chaveAcesso, String xmlAssinado) {

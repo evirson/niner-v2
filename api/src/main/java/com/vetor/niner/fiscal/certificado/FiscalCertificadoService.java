@@ -213,7 +213,8 @@ public class FiscalCertificadoService {
     @Transactional(readOnly = true)
     public CertificadoParaAssinatura carregarAtivoParaAssinatura(long idEmpresa) {
         return jdbc.sql("""
-                        SELECT id_certificado, arquivo_cifrado, senha_cifrada, cnpj_titular, valido_ate
+                        SELECT id_certificado, arquivo_cifrado, senha_cifrada, cnpj_titular,
+                               valido_ate, impressao_digital
                         FROM fiscal_certificado
                         WHERE id_tenant = plataforma.tenant_atual() AND id_empresa = ? AND ativo
                         """)
@@ -229,7 +230,8 @@ public class FiscalCertificadoService {
                             rs.getLong("id_certificado"),
                             cifrador.decifrarBytes(rs.getBytes("arquivo_cifrado")),
                             cifrador.decifrar(rs.getString("senha_cifrada")),
-                            rs.getString("cnpj_titular"));
+                            rs.getString("cnpj_titular"),
+                            rs.getString("impressao_digital"));
                 })
                 .optional()
                 .orElseThrow(() -> new ResponseStatusException(CONFLICT,
@@ -240,7 +242,8 @@ public class FiscalCertificadoService {
      * O {@code .pfx} decifrado em memória, para assinar/mTLS. <b>Vive o mínimo possível</b> —
      * quem recebe usa e descarta; nada disto vai para log, resposta HTTP ou disco (F7).
      */
-    public record CertificadoParaAssinatura(long idCertificado, byte[] pkcs12, String senha, String cnpjTitular) {
+    public record CertificadoParaAssinatura(long idCertificado, byte[] pkcs12, String senha,
+                                            String cnpjTitular, String impressaoDigital) {
     }
 
     // ---------------------------------------------------------------- parsing do .pfx

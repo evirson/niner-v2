@@ -109,7 +109,7 @@ public class FiscalContingenciaDrenoJob {
                     .formatted(MontadorXmlNfce.NS, empresa.ambienteCodigo(), empresa.codigoUfIbge());
 
             RespostaSefaz r = transporte.enviar(url, SERVICO_STATUS, consulta,
-                    cert.pkcs12(), cert.senha(), empresa.impressaoDigital());
+                    cert.pkcs12(), cert.senha(), cert.impressaoDigital());
             return "107".equals(r.cStat());   // 107 = Serviço em Operação
         } catch (FalhaDeComunicacaoException e) {
             return false;
@@ -131,7 +131,7 @@ public class FiscalContingenciaDrenoJob {
 
             repositorio.marcarTransmitindo(nota.id());
             RespostaSefaz resposta = transporte.enviar(url, SERVICO_AUTORIZACAO, enviNFe,
-                    cert.pkcs12(), cert.senha(), empresa.impressaoDigital());
+                    cert.pkcs12(), cert.senha(), cert.impressaoDigital());
 
             if (resposta.autorizado()) {
                 repositorio.marcarAutorizado(nota.id(), resposta);
