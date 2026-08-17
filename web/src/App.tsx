@@ -72,6 +72,7 @@ import PerfilFiscalForm from './pages/fiscal/PerfilFiscalForm'
 import FiscalCertificadoLista from './pages/fiscal/FiscalCertificadoLista'
 import ConformidadeFiscalPainel from './pages/fiscal/ConformidadeFiscalPainel'
 import FiscalContingenciaPainel from './pages/fiscal/FiscalContingenciaPainel'
+import DocumentoFiscalLista from './pages/fiscal/DocumentoFiscalLista'
 
 export default function App() {
   return (
@@ -208,6 +209,7 @@ export default function App() {
             <Route path="/fiscal/certificados" element={<FiscalCertificadoLista />} />
             <Route path="/fiscal/conformidade" element={<ConformidadeFiscalPainel />} />
             <Route path="/fiscal/contingencia" element={<FiscalContingenciaPainel />} />
+            <Route path="/fiscal/documentos" element={<DocumentoFiscalLista />} />
           </Route>
         </Route>
       </Route>

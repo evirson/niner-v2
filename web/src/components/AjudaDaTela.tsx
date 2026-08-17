@@ -395,6 +395,21 @@ const CONTEUDOS: Record<string, ConteudoAjuda> = {
     ],
     urlVideo: null,
   },
+  'fiscal.documentos.tela': {
+    titulo: 'Documentos Fiscais',
+    objetivo: 'Consultar as NFC-e/NF-e emitidas pela empresa, ver o XML autorizado e checar a situação atual direto na SEFAZ.',
+    passos: [
+      'Escolha a empresa e o período (data inicial/final) no filtro do topo — o período máximo é de 365 dias.',
+      'Opcionalmente filtre por modelo (NFC-e/NF-e) ou por situação (autorizado, cancelado, rejeitado etc.).',
+      'Clique no ícone de olho para ver o XML autorizado do documento.',
+      '"Consultar SEFAZ" refaz a consulta de situação em tempo real (cStat) — útil quando o documento ficou pendente ou em contingência.',
+    ],
+    errosComuns: [
+      'Só administradores acessam esta tela.',
+      'Documento em RASCUNHO ou NAO_EMITIDO ainda não tem XML nem protocolo — a consulta na SEFAZ não se aplica a eles.',
+    ],
+    urlVideo: null,
+  },
   'cadastros.planocontas.lista': {
     titulo: 'Plano de Contas',
     objetivo: 'Encontrar e gerenciar as contas do plano de contas (usadas por fornecedores, contas a pagar e relatórios).',

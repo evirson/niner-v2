@@ -1,0 +1,343 @@
+import { useEffect, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import AjudaDaTela from '../../components/AjudaDaTela'
+import { BotaoFecharTela } from '../../components/BotaoFecharTela'
+import { IconeDocumentoFiscal, IconeOlho } from '../../components/Icones'
+import { useAuth } from '../../lib/auth'
+import { ApiError } from '../../lib/api'
+import { hojeISO } from '../../lib/datas'
+import { dataParaIso, dataValida, formatarMoeda, isoParaData, mascararData } from '../../lib/masks'
+import { listarEmpresasFiscal } from '../../lib/fiscalConfiguracao'
+import {
+  buscarXmlDocumentoFiscal,
+  consultarDocumentoNaSefaz,
+  listarDocumentosFiscais,
+  type DocumentoFiscalItem,
+} from '../../lib/documentoFiscal'
+import Toast from '../../components/Toast'
+
+const JANELA_PAGINACAO = 7
+const TAMANHO_PAGINA = 50
+
+const ROTULO_SITUACAO: Record<string, string> = {
+  RASCUNHO: 'Rascunho',
+  VALIDADO: 'Validado',
+  ASSINADO: 'Assinado',
+  TRANSMITINDO: 'Transmitindo',
+  CONTINGENCIA: 'Contingência',
+  AUTORIZADO: 'Autorizado',
+  REJEITADO: 'Rejeitado',
+  DENEGADO: 'Denegado',
+  CANCELADO: 'Cancelado',
+  NAO_EMITIDO: 'Não emitido',
+}
+
+function classeBadge(situacao: string): string {
+  if (situacao === 'AUTORIZADO') return 'badge badge-sucesso'
+  if (situacao === 'CONTINGENCIA' || situacao === 'NAO_EMITIDO') return 'badge badge-aviso'
+  if (situacao === 'REJEITADO' || situacao === 'DENEGADO') return 'badge badge-perigo'
+  if (situacao === 'CANCELADO') return 'badge badge-inativo'
+  return 'badge'
+}
+
+function moeda(v: number): string {
+  return `R$ ${formatarMoeda(v)}`
+}
+
+function formatarDataHora(iso: string): string {
+  return new Date(iso).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+}
+
+function primeiroDiaDoMesISO(): string {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`
+}
+
+function paginasVisiveis(atual: number, total: number): number[] {
+  if (total <= JANELA_PAGINACAO) return Array.from({ length: total }, (_, i) => i + 1)
+  let inicio = Math.max(1, atual - Math.floor(JANELA_PAGINACAO / 2))
+  const fim = Math.min(total, inicio + JANELA_PAGINACAO - 1)
+  inicio = Math.max(1, fim - JANELA_PAGINACAO + 1)
+  return Array.from({ length: fim - inicio + 1 }, (_, i) => inicio + i)
+}
+
+/**
+ * Documentos Fiscais (§12, bloco B8) — lista das NFC-e/NF-e emitidas, com filtros, ver XML e
+ * consultar a situação atual direto na SEFAZ. ADMIN-only, mesmo padrão do resto do módulo fiscal
+ * (seletor de empresa no topo, filtros inline — não popup, mesmo desvio de Pesquisa de Vendas,
+ * que também é uma tela de consulta pura).
+ */
+export default function DocumentoFiscalLista() {
+  const { idEmpresa: idEmpresaSessao } = useAuth()
+  const [idEmpresa, setIdEmpresa] = useState<number | null>(null)
+  const [dataInicialTexto, setDataInicialTexto] = useState(isoParaData(primeiroDiaDoMesISO()))
+  const [dataFinalTexto, setDataFinalTexto] = useState(isoParaData(hojeISO()))
+  const [modelo, setModelo] = useState<'' | '65' | '55'>('')
+  const [situacao, setSituacao] = useState('')
+  const [pagina, setPagina] = useState(1)
+  const [xmlAberto, setXmlAberto] = useState<DocumentoFiscalItem | null>(null)
+  const [consultando, setConsultando] = useState<number | null>(null)
+  const [aviso, setAviso] = useState<{ mensagem: string; tipo: 'erro' | 'sucesso' } | null>(null)
+
+  const { data: empresas } = useQuery({ queryKey: ['fiscal-empresas'], queryFn: listarEmpresasFiscal })
+
+  useEffect(() => {
+    if (idEmpresa === null && idEmpresaSessao !== null) setIdEmpresa(idEmpresaSessao)
+    else if (idEmpresa === null && empresas && empresas.length > 0) setIdEmpresa(empresas[0].idEmpresa)
+  }, [idEmpresa, idEmpresaSessao, empresas])
+
+  useEffect(() => {
+    setPagina(1)
+  }, [idEmpresa, dataInicialTexto, dataFinalTexto, modelo, situacao])
+
+  const dataInicialIso = dataValida(dataInicialTexto) ? dataParaIso(dataInicialTexto) : null
+  const dataFinalIso = dataValida(dataFinalTexto) ? dataParaIso(dataFinalTexto) : null
+  const podeBuscar = idEmpresa !== null && !!dataInicialIso && !!dataFinalIso
+
+  const { data, isLoading, isFetching, error } = useQuery({
+    queryKey: ['documentos-fiscais', idEmpresa, dataInicialIso, dataFinalIso, modelo, situacao, pagina],
+    queryFn: () =>
+      listarDocumentosFiscais({
+        idEmpresa: idEmpresa as number,
+        dataInicial: dataInicialIso as string,
+        dataFinal: dataFinalIso as string,
+        modelo: modelo ? Number(modelo) : undefined,
+        situacao: situacao || undefined,
+        pagina,
+        limite: TAMANHO_PAGINA,
+      }),
+    enabled: podeBuscar,
+    placeholderData: (anterior) => anterior,
+  })
+
+  const itens = data?.itens ?? []
+  const totalPaginas = data?.totalPaginas ?? 1
+
+  async function abrirXml(item: DocumentoFiscalItem) {
+    setXmlAberto(item)
+  }
+
+  async function consultarSefaz(item: DocumentoFiscalItem) {
+    setConsultando(item.idDocumentoFiscal)
+    try {
+      const resultado = await consultarDocumentoNaSefaz(item.idDocumentoFiscal)
+      setAviso({
+        mensagem: `SEFAZ agora: ${resultado.cStat ?? '—'} — ${resultado.xMotivo ?? 'sem resposta'}`,
+        tipo: resultado.cStat === '100' || resultado.cStat === '135' ? 'sucesso' : 'erro',
+      })
+    } catch (e) {
+      setAviso({ mensagem: e instanceof ApiError ? e.message : 'Não foi possível consultar a SEFAZ.', tipo: 'erro' })
+    } finally {
+      setConsultando(null)
+    }
+  }
+
+  return (
+    <div className="lista-tela">
+      <div className="lista-topo">
+        <div className="topbar-tela">
+          <div className="titulo-tela">
+            <IconeDocumentoFiscal size={34} />
+            <h1>Documentos Fiscais</h1>
+          </div>
+          <div className="topbar-acoes">
+            <AjudaDaTela chaveTela="fiscal.documentos.tela" />
+            <BotaoFecharTela />
+          </div>
+        </div>
+
+        <div className="card filtros-bar">
+          <select
+            autoFocus
+            value={idEmpresa ?? ''}
+            onChange={(e) => setIdEmpresa(Number(e.target.value))}
+            aria-label="Empresa"
+          >
+            {(empresas ?? []).map((emp) => (
+              <option key={emp.idEmpresa} value={emp.idEmpresa}>
+                {emp.razaoSocial}
+              </option>
+            ))}
+          </select>
+          <input
+            className="mono"
+            placeholder="dd/mm/aaaa"
+            value={dataInicialTexto}
+            onChange={(e) => setDataInicialTexto(mascararData(e.target.value))}
+            onFocus={(e) => e.target.select()}
+            aria-label="Data inicial"
+            style={{ maxWidth: 130 }}
+          />
+          <input
+            className="mono"
+            placeholder="dd/mm/aaaa"
+            value={dataFinalTexto}
+            onChange={(e) => setDataFinalTexto(mascararData(e.target.value))}
+            onFocus={(e) => e.target.select()}
+            aria-label="Data final"
+            style={{ maxWidth: 130 }}
+          />
+          <select value={modelo} onChange={(e) => setModelo(e.target.value as '' | '65' | '55')} aria-label="Modelo">
+            <option value="">Todos os modelos</option>
+            <option value="65">NFC-e (65)</option>
+            <option value="55">NF-e (55)</option>
+          </select>
+          <select value={situacao} onChange={(e) => setSituacao(e.target.value)} aria-label="Situação">
+            <option value="">Todas as situações</option>
+            {Object.entries(ROTULO_SITUACAO).map(([valor, rotulo]) => (
+              <option key={valor} value={valor}>
+                {rotulo}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      <div className="lista-corpo">
+        <div className="card table-wrap">
+          {!podeBuscar ? (
+            <p className="muted">Informe a data inicial e final.</p>
+          ) : isLoading ? (
+            <p className="muted">Carregando…</p>
+          ) : error ? (
+            <p className="erro">{error instanceof ApiError ? error.message : 'Não foi possível buscar os documentos.'}</p>
+          ) : itens.length === 0 ? (
+            <p className="muted">Nenhum documento fiscal encontrado para os filtros informados.</p>
+          ) : (
+            <table className="table table-compacta">
+              <thead>
+                <tr>
+                  <th>Modelo</th>
+                  <th>Número</th>
+                  <th>Chave de Acesso</th>
+                  <th>Situação</th>
+                  <th>Emissão</th>
+                  <th>Cliente</th>
+                  <th>Valor</th>
+                  <th>Ações</th>
+                </tr>
+              </thead>
+              <tbody>
+                {itens.map((item) => (
+                  <tr key={item.idDocumentoFiscal}>
+                    <td>{item.modelo === 65 ? 'NFC-e' : 'NF-e'}</td>
+                    <td className="mono">
+                      {item.serie}/{item.numero}
+                      {item.tipoEmissao === 9 && <span className="badge badge-aviso" style={{ marginLeft: 6 }}>Conting.</span>}
+                    </td>
+                    <td className="mono" title={item.chaveAcesso}>
+                      …{item.chaveAcesso.slice(-8)}
+                    </td>
+                    <td>
+                      <span className={classeBadge(item.situacao)}>{ROTULO_SITUACAO[item.situacao] ?? item.situacao}</span>
+                    </td>
+                    <td>{formatarDataHora(item.dataEmissao)}</td>
+                    <td>{item.nomeCliente ?? '—'}</td>
+                    <td className="mono">{moeda(item.valorTotal)}</td>
+                    <td>
+                      <div style={{ display: 'flex', gap: 6 }}>
+                        <button
+                          type="button"
+                          className="acao-icone"
+                          title="Ver XML"
+                          aria-label="Ver XML"
+                          onClick={() => abrirXml(item)}
+                        >
+                          <IconeOlho size={18} />
+                        </button>
+                        <button
+                          type="button"
+                          className="btn ghost"
+                          disabled={consultando === item.idDocumentoFiscal}
+                          onClick={() => consultarSefaz(item)}
+                        >
+                          {consultando === item.idDocumentoFiscal ? 'Consultando…' : 'Consultar SEFAZ'}
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </div>
+
+      {itens.length > 0 && (
+        <div className="lista-rodape">
+          <div className="paginacao-bar">
+            <span className="muted">
+              {data?.totalItens} documento{data?.totalItens === 1 ? '' : 's'}
+              {isFetching && ' · atualizando…'}
+            </span>
+            <div className="paginacao-paginas">
+              <button type="button" className="btn ghost paginacao-seta" onClick={() => setPagina(1)}
+                      disabled={pagina <= 1 || isFetching} aria-label="Primeira página" title="Primeira página">
+                «
+              </button>
+              <button type="button" className="btn ghost paginacao-seta" onClick={() => setPagina((p) => Math.max(1, p - 1))}
+                      disabled={pagina <= 1 || isFetching} aria-label="Página anterior" title="Página anterior">
+                ‹
+              </button>
+              {paginasVisiveis(pagina, totalPaginas).map((p) => (
+                <button key={p} type="button" className={`btn ghost paginacao-numero ${p === pagina ? 'ativa' : ''}`}
+                        onClick={() => setPagina(p)} disabled={isFetching} aria-current={p === pagina ? 'page' : undefined}>
+                  {p}
+                </button>
+              ))}
+              <button type="button" className="btn ghost paginacao-seta" onClick={() => setPagina((p) => Math.min(totalPaginas, p + 1))}
+                      disabled={pagina >= totalPaginas || isFetching} aria-label="Próxima página" title="Próxima página">
+                ›
+              </button>
+              <button type="button" className="btn ghost paginacao-seta" onClick={() => setPagina(totalPaginas)}
+                      disabled={pagina >= totalPaginas || isFetching} aria-label="Última página" title="Última página">
+                »
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {xmlAberto && <XmlModal item={xmlAberto} aoFechar={() => setXmlAberto(null)} />}
+
+      {aviso && <Toast mensagem={aviso.mensagem} tipo={aviso.tipo} aoFechar={() => setAviso(null)} />}
+    </div>
+  )
+}
+
+function XmlModal({ item, aoFechar }: { item: DocumentoFiscalItem; aoFechar: () => void }) {
+  const { data, isLoading, error } = useQuery({
+    queryKey: ['documento-fiscal-xml', item.idDocumentoFiscal],
+    queryFn: () => buscarXmlDocumentoFiscal(item.idDocumentoFiscal),
+  })
+
+  return (
+    <div className="modal-overlay" onClick={aoFechar}>
+      <div
+        className="modal modal-largo"
+        role="dialog"
+        aria-label="XML do documento fiscal"
+        onClick={(e) => e.stopPropagation()}
+        style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
+      >
+        <h2 style={{ marginTop: 0, flexShrink: 0 }}>XML — {item.chaveAcesso}</h2>
+        <div style={{ overflow: 'auto', flex: 1, minHeight: 0 }}>
+          {isLoading ? (
+            <p className="muted">Carregando…</p>
+          ) : error ? (
+            <p className="erro">Não foi possível carregar o XML.</p>
+          ) : !data?.xml ? (
+            <p className="muted">Este documento ainda não tem XML gravado.</p>
+          ) : (
+            <pre style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-all', fontSize: 12 }}>{data.xml}</pre>
+          )}
+        </div>
+        <div className="ajuda-rodape" style={{ flexShrink: 0 }}>
+          <button type="button" className="btn ghost" onClick={aoFechar}>
+            Fechar
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}

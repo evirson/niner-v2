@@ -685,6 +685,19 @@ export function IconeConformidade({ size = 28 }: { size?: number }) {
   )
 }
 
+/** Ícone dos Documentos Fiscais (§12) — folha com chave/linha, o "documento" da nota. */
+export function IconeDocumentoFiscal({ size = 28 }: { size?: number }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.6} stroke="currentColor" width={size} height={size} aria-hidden="true">
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M6.75 3.75h7.5L18.75 9v10.5a1.5 1.5 0 0 1-1.5 1.5h-9a1.5 1.5 0 0 1-1.5-1.5V5.25a1.5 1.5 0 0 1 1.5-1.5Z M14.25 3.75V9h4.5 M8.25 12.75h7.5 M8.25 15.75h7.5 M8.25 18.75h4.5"
+      />
+    </svg>
+  )
+}
+
 /** Ícone da Contingência Fiscal (§9.7) — sinal Wi-Fi cortado, representando a SEFAZ fora do ar. */
 export function IconeContingencia({ size = 28 }: { size?: number }) {
   return (
