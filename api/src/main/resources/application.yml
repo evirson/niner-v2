@@ -62,8 +62,11 @@ niner:
     # herda o host automaticamente, então as URLs públicas das fotos já saem do emulador.
     host: ${NINER_STORAGE_HOST:}
     base-url: ${NINER_STORAGE_BASE_URL:${NINER_STORAGE_HOST:https://storage.googleapis.com}}
-    # DF21 (2026-08-17): bucket SEPARADO e PRIVADO para o certificado digital — nunca o de
-    # fotos acima, que é de leitura pública de propósito. Mesmo host/credencial, nome diferente.
+    # DF21: bucket SEPARADO e PRIVADO para os XML AUTORIZADOS (guarda legal de 5 anos, com
+    # versionamento/retenção) — nunca o de fotos acima, que é de leitura pública de propósito.
+    # Mesmo host/credencial, nome diferente. ⚠️ O certificado digital NÃO vem para cá: fica
+    # cifrado no banco (fiscal_certificado.arquivo_cifrado), DF21 revisada em 2026-08-17.
+    # 🔴 Bucket real ainda não provisionado — dados vêm do dono do produto.
     bucket-fiscal: ${NINER_STORAGE_BUCKET_FISCAL:niner-fiscal-dev}
   arquivo-compartilhado:       # cache temporário em memória (ex.: comprovante por link do WhatsApp)
     expiracao-horas: ${NINER_ARQUIVO_COMPARTILHADO_EXPIRACAO_HORAS:24}

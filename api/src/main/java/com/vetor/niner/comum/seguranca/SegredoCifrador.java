@@ -43,30 +43,45 @@ public class SegredoCifrador {
     }
 
     public String cifrar(String textoClaro) {
+        return Base64.getEncoder().encodeToString(cifrarBytes(textoClaro.getBytes(StandardCharsets.UTF_8)));
+    }
+
+    public String decifrar(String valorCifrado) {
+        return new String(decifrarBytes(Base64.getDecoder().decode(valorCifrado)), StandardCharsets.UTF_8);
+    }
+
+    /**
+     * Cifra conteúdo binário — usado pelo <b>arquivo do certificado digital</b> (`.pfx`), que
+     * desde 2026-08-17 fica no banco do cliente e não em bucket.
+     *
+     * <p>⚠️ <b>Por que cifrar um `.pfx`, que já é um container protegido por senha:</b> o PKCS12
+     * é cifrado com uma senha escolhida pelo lojista ou pela AC — quase sempre curta e sujeita a
+     * força bruta <b>offline</b>, sem nenhum limite de tentativa, por quem tiver o arquivo. Um
+     * dump do banco entregaria exatamente isso. Cifrando com a chave mestra (que vive fora do
+     * banco), o dump sozinho não abre nem o arquivo nem a senha.
+     */
+    public byte[] cifrarBytes(byte[] claro) {
         try {
             byte[] nonce = new byte[TAMANHO_NONCE_BYTES];
             new SecureRandom().nextBytes(nonce);
             Cipher cipher = Cipher.getInstance(TRANSFORMACAO);
             cipher.init(Cipher.ENCRYPT_MODE, chave, new GCMParameterSpec(TAMANHO_TAG_BITS, nonce));
-            byte[] cifrado = cipher.doFinal(textoClaro.getBytes(StandardCharsets.UTF_8));
+            byte[] cifrado = cipher.doFinal(claro);
 
-            ByteBuffer saida = ByteBuffer.allocate(nonce.length + cifrado.length);
-            saida.put(nonce).put(cifrado);
-            return Base64.getEncoder().encodeToString(saida.array());
+            return ByteBuffer.allocate(nonce.length + cifrado.length).put(nonce).put(cifrado).array();
         } catch (GeneralSecurityException e) {
             throw new IllegalStateException("Falha ao cifrar segredo.", e);
         }
     }
 
-    public String decifrar(String valorCifrado) {
+    public byte[] decifrarBytes(byte[] cifradoComNonce) {
         try {
-            byte[] entrada = Base64.getDecoder().decode(valorCifrado);
-            byte[] nonce = Arrays.copyOfRange(entrada, 0, TAMANHO_NONCE_BYTES);
-            byte[] cifrado = Arrays.copyOfRange(entrada, TAMANHO_NONCE_BYTES, entrada.length);
+            byte[] nonce = Arrays.copyOfRange(cifradoComNonce, 0, TAMANHO_NONCE_BYTES);
+            byte[] cifrado = Arrays.copyOfRange(cifradoComNonce, TAMANHO_NONCE_BYTES, cifradoComNonce.length);
 
             Cipher cipher = Cipher.getInstance(TRANSFORMACAO);
             cipher.init(Cipher.DECRYPT_MODE, chave, new GCMParameterSpec(TAMANHO_TAG_BITS, nonce));
-            return new String(cipher.doFinal(cifrado), StandardCharsets.UTF_8);
+            return cipher.doFinal(cifrado);
         } catch (GeneralSecurityException e) {
             throw new IllegalStateException("Falha ao decifrar segredo — chave incorreta ou dado corrompido.", e);
         }

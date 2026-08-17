@@ -27,29 +27,40 @@ edita — se mudou, é outro arquivo) e não há exclusão (ver *Histórico é i
 1. **Write-only de verdade.** `POST` recebe multipart (`arquivo` + `senha` + `idEmpresa`). Nenhum
    endpoint devolve o `.pfx` nem a senha. Não existe rota de download. Isso vale para o request
    também: a senha nunca aparece em query string, só no corpo multipart.
-2. **A senha não vai em claro para o banco.** `fiscal_certificado.senha_cifrada` guarda o valor
-   **cifrado** (AES-256-GCM, `comum.seguranca.SegredoCifrador`), com a chave mestra **fora do
-   banco** (`niner.seguranca.chave-segredos`, variável de ambiente/secret manager em produção —
-   ver DF21 fechada abaixo). O `.pfx` sobe **tal como recebido** (não recifrado pela aplicação)
-   para o bucket fiscal, e `objeto_bucket` guarda a chave do objeto. O banco, sozinho, não abre o
-   certificado — falta a chave, que não está lá.
-3. **Bucket próprio — NUNCA o de fotos de produto.** Os buckets do ADR-013
+2. **O certificado fica no BANCO do cliente, cifrado — não em bucket.** ⚠️ **DF21 revisada em
+   2026-08-17** (decisão do dono do produto), invertendo o desenho anterior: o `.pfx` inteiro vai
+   para `fiscal_certificado.arquivo_cifrado` (`bytea`), e a senha para `senha_cifrada` — os dois
+   cifrados com AES-256-GCM (`comum.seguranca.SegredoCifrador`), chave mestra **fora do banco**
+   (`niner.seguranca.chave-segredos`). Ganhos: o certificado entra no mesmo backup/restore do
+   resto do tenant, e o RLS (P8) o isola por tenant sem depender de política de bucket bem
+   configurada.
+3. **Por que cifrar o `.pfx`, se ele já é protegido por senha.** O PKCS12 é um container cifrado,
+   mas a senha é escolhida pelo lojista ou pela AC — quase sempre curta e sujeita a **força bruta
+   offline**, sem limite de tentativas, por quem tiver o arquivo. Um dump do banco entregaria
+   exatamente isso. Cifrado com a chave mestra, o dump sozinho não abre nem o arquivo nem a senha.
+   O teste `arquivoDoCertificadoFicaCifradoNoBancoNuncaEmClaro` verifica que o conteúdo gravado
+   **não** começa com a assinatura DER de um PKCS12 (`0x30 0x82`) — é o que separa "cifrado" de
+   "só gravado com outro nome".
+4. **O bucket privado continua existindo — para os XML.** Os buckets do ADR-013
    (`niner-erp.firebasestorage.app` / `niner-erp-dev`) são de **leitura pública** de propósito
-   (marketplaces rebuscam a imagem por URL). Subir um `.pfx` ali seria vazamento imediato. **DF21
-   fechada (2026-08-17): bucket privado dedicado**, `niner.storage.bucket-fiscal` (env
-   `NINER_STORAGE_BUCKET_FISCAL`, default dev `niner-fiscal-dev`) — mesmo host/credencial do
-   bucket de fotos, nome diferente. Sem rota de leitura pública, sem `urlPublica()` no adapter
-   (`fiscal.certificado.CertificadoStorage`).
-4. **Metadados são extraídos, nunca digitados.** CNPJ titular, razão social, `valido_de`,
+   (marketplaces rebuscam a imagem por URL) e nunca serviriam para dado fiscal. O
+   `niner.storage.bucket-fiscal` (env `NINER_STORAGE_BUCKET_FISCAL`) é dos **XML autorizados**,
+   que têm guarda legal de 5 anos e precisam de versionamento/retenção — requisitos que o bucket
+   dá e o banco não. 🔴 Ainda não provisionado.
+5. **Metadados são extraídos, nunca digitados.** CNPJ titular, razão social, `valido_de`,
    `valido_ate` e `impressao_digital` (SHA-256) saem do próprio arquivo no momento do upload. O
    lojista não digita nada além da senha — dado digitado diverge do certificado e mente.
-5. **Histórico é imutável.** Certificado antigo **nunca é apagado**, só marcado `ativo = false`.
+6. **Histórico é imutável.** Certificado antigo **nunca é apagado**, só marcado `ativo = false`.
    Uma nota de 2026 foi assinada com um certificado específico, e a auditoria (F9) precisa saber
    qual. Não há `DELETE` — nem na tela, nem na API. `fiscal_certificado_uso` também não tem
-   `GRANT DELETE` para `niner_app` (V035), e esse invariante precisa entrar em
-   `PrivilegiosNinerAppTest` ([[feedback_testcontainers_nao_usa_niner_app]]).
-6. **Um ativo por empresa.** Subir um certificado novo desativa o anterior na mesma transação. Duas
+   `GRANT DELETE` para `niner_app` (V035), invariante coberto em `PrivilegiosNinerAppTest`.
+7. **Um ativo por empresa.** Subir um certificado novo desativa o anterior na mesma transação. Duas
    linhas `ativo = true` para a mesma empresa é estado inválido.
+8. **Existe um caminho de leitura — e ele não é da web.**
+   `FiscalCertificadoService.carregarAtivoParaAssinatura(idEmpresa)` devolve o `.pfx` decifrado
+   para o módulo de assinatura/mTLS (B6). É `public` para o Java, **não** para a API: nenhum
+   Controller o chama, e o "write-only" da tela continua valendo. Ele também recusa certificado
+   vencido, com mensagem que diz ser o certificado — não um "erro ao emitir" genérico.
 
 ## Validações no upload (todas no servidor, antes de gravar qualquer coisa)
 
@@ -66,8 +77,8 @@ emitir centenas de notas no CNPJ errado. **CNPJ alfanumérico** (IN RFB 2.229/20
 comparação usa `somenteAlfanumerico`, nunca um limpador de dígitos, senão um CNPJ com letra passa a
 comparar errado ([[project_cnpj_alfanumerico]]).
 
-Ordem importa: nada é gravado e nada sobe para o bucket antes das 5 passarem. Um upload rejeitado não
-deixa arquivo órfão.
+Ordem importa: nada é gravado antes das 5 passarem. Um upload rejeitado não deixa nem linha no
+banco nem arquivo órfão.
 
 ## Campos da tela
 
@@ -122,7 +133,12 @@ padrão visual de `LancamentosCarteiraModal.tsx` (Fechamento de Caixa). Somente 
 
 - Dado um `.pfx` válido com a senha certa, quando o ADMIN envia, então 201 e a lista passa a mostrar
   CNPJ, razão social e validade **extraídos do arquivo**.
-- Dado a senha errada, quando envia, então 400 e **nada** é gravado nem sobe para o bucket.
+- Dado a senha errada, quando envia, então 400 e **nada** é gravado.
+- Dado um upload válido, quando consulta o banco, então `arquivo_cifrado` **não** é o `.pfx`
+  original (nem começa com a assinatura DER `0x30 0x82` de um PKCS12) e `senha_cifrada` não
+  contém a senha.
+- Dado um certificado gravado, quando o módulo de assinatura o carrega, então o `.pfx` decifrado
+  abre como PKCS12 com a senha decifrada — o ciclo completo, que é o que o B6 usa.
 - Dado um certificado vencido, quando envia, então 400.
 - Dado um certificado cujo CNPJ titular difere do da empresa, quando envia, então 409.
 - Dado um certificado já cadastrado e ativo (mesma impressão digital), quando envia de novo, então
@@ -164,15 +180,17 @@ quando o badge fica amarelo.
 
 ## Impacto no banco
 
-`fiscal_certificado` e `fiscal_certificado_uso` já existiam (V035) desde antes desta tela. A
-única mudança de schema: a coluna nasceu `senha_ref_kms` (pressupondo Secret Manager externo) e
-foi renomeada para **`senha_cifrada`** quando a DF21 fechou em AES-GCM local — tabela vazia,
-renomeada direto na migration dona (V035), sem migração de dado.
+`fiscal_certificado` e `fiscal_certificado_uso` já existiam (V035) desde antes desta tela. Duas
+mudanças de schema, ambas na migration dona (V035) e com a tabela **vazia**, sem migração de dado:
 
-**Infra fora do banco, agora resolvida:** bucket fiscal privado (`niner.storage.bucket-fiscal`,
-DF21) e a chave de cifra (`niner.seguranca.chave-segredos`, `comum.seguranca.SegredoCifrador`) —
-ambos implementados. Falta só provisionar o bucket e a chave **reais** de produção; em dev/teste
-o bucket é criado sozinho contra o emulador/fake-gcs-server, mesmo mecanismo do bucket de fotos.
+| Nasceu como | Virou | Por quê |
+|---|---|---|
+| `senha_ref_kms text` | `senha_cifrada text` | Pressupunha um Secret Manager externo que o projeto não tem; AES-GCM local resolve |
+| `objeto_bucket text` | `arquivo_cifrado bytea` | DF21 revisada: o `.pfx` fica no banco, cifrado, em vez de em bucket |
+
+**Infra fora do banco:** só a chave de cifra (`niner.seguranca.chave-segredos`) — que em dev tem
+default e em produção precisa vir de variável de ambiente/secret manager, **nunca commitada**.
+O bucket deixou de ser dependência desta tela (passou a ser dos XML, §11.1).
 
 ## Non-goals desta feature
 
@@ -184,10 +202,11 @@ o bucket é criado sozinho contra o emulador/fake-gcs-server, mesmo mecanismo do
 
 ## Questões abertas
 
-- ✅ **DF21 — bucket fiscal privado, FECHADA (2026-08-17).** Bucket dedicado
-  (`niner.storage.bucket-fiscal`), separado do de fotos, sem leitura pública, sem `urlPublica()`
-  no adapter. Ainda em aberto: **versionamento e política de retenção de 5 anos** no bucket real
-  de produção (o app não impõe isso — é configuração do bucket GCS em si, fora do código).
+- ✅ **DF21 — REVISADA em 2026-08-17 (decisão do dono do produto): certificado e XML foram
+  separados.** O `.pfx` fica **cifrado no banco** do cliente; o bucket privado
+  (`niner.storage.bucket-fiscal`) passou a ser só dos **XML autorizados**. 🔴 O bucket real ainda
+  **não foi provisionado** — dados do dono do produto pendentes; e o versionamento/retenção de 5
+  anos é configuração do bucket GCS, fora do código.
 - ✅ **Onde fica a senha, FECHADA (2026-08-17).** Opção (b) da recomendação original: AES-256-GCM
   local, chave fora do banco (`comum.seguranca.SegredoCifrador`). A coluna `senha_ref_kms` foi
   renomeada para `senha_cifrada` — não existe Secret Manager externo, e não é preciso.

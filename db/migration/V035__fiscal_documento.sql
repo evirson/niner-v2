@@ -84,16 +84,24 @@ CREATE TABLE fiscal_config_empresa (
 CREATE INDEX fiscal_config_empresa_id_tenant_ix ON fiscal_config_empresa (id_tenant);
 
 -- Certificado A1 do lojista. F7: segredo de TERCEIRO, não dado de aplicação.
--- O .pfx nunca vai cifrado pela aplicação: sobe como está para o bucket PRIVADO dedicado
--- (DF21, 2026-08-17 — nunca o bucket de fotos, que é de leitura pública). A senha do .pfx É
--- cifrada (AES-256-GCM, comum.seguranca.SegredoCifrador) com chave FORA do banco — quem rouba
--- só o banco não abre o certificado. Nenhum endpoint devolve o arquivo nem a senha — nem para
--- ADMIN. Certificado antigo NUNCA é apagado (histórico de qual certificado assinou qual nota).
+--
+-- DF21 revisada em 2026-08-17 (decisão do dono do produto): o `.pfx` fica no BANCO do cliente,
+-- não em bucket. O bucket privado passa a ser só dos XML autorizados. Duas consequências boas:
+-- o certificado entra no mesmo backup/restore do resto do tenant, e o RLS (P8) já o isola por
+-- tenant sem depender de política de bucket bem configurada.
+--
+-- ⚠️ O arquivo é gravado CIFRADO (AES-256-GCM, comum.seguranca.SegredoCifrador), com a chave
+-- FORA do banco — e não só a senha. Motivo: o PKCS12 já é protegido por senha, mas por uma senha
+-- escolhida pelo lojista/AC, quase sempre curta e sujeita a força bruta OFFLINE por quem tiver o
+-- arquivo. Um dump do banco entregaria exatamente isso. Cifrado, o dump sozinho é inútil.
+--
+-- Nenhum endpoint devolve o arquivo nem a senha — nem para ADMIN. Certificado antigo NUNCA é
+-- apagado (histórico de qual certificado assinou qual nota).
 CREATE TABLE fiscal_certificado (
   id_certificado       integer     GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   id_tenant            smallint    NOT NULL REFERENCES plataforma.tenant (id_tenant),
   id_empresa           integer     NOT NULL,
-  objeto_bucket        text        NOT NULL,      -- caminho do .pfx no bucket fiscal privado
+  arquivo_cifrado      bytea       NOT NULL,      -- o .pfx inteiro, cifrado (nunce||AES-GCM)
   senha_cifrada        text        NOT NULL,      -- AES-256-GCM (SegredoCifrador), NUNCA em claro
   cnpj_titular         text,                      -- extraído do certificado e conferido contra a
   razao_social_titular text,                      -- empresa: certificado de outro CNPJ é recusado

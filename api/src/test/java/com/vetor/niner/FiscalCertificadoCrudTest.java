@@ -2,6 +2,8 @@ package com.vetor.niner;
 
 import com.jayway.jsonpath.JsonPath;
 import com.vetor.niner.comum.seguranca.TokenService;
+import com.vetor.niner.comum.tenant.TenantContext;
+import com.vetor.niner.fiscal.certificado.FiscalCertificadoService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -12,10 +14,13 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.web.servlet.MockMvc;
 
+import java.io.ByteArrayInputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.KeyStore;
 import java.util.ArrayList;
 import java.util.Base64;
+import java.util.Collections;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -37,7 +42,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
-@Import({TestcontainersConfiguration.class, FakeGcsConfiguration.class})
+@Import(TestcontainersConfiguration.class)
 class FiscalCertificadoCrudTest {
 
     private static final String SENHA = "senha-teste-123";
@@ -50,6 +55,11 @@ class FiscalCertificadoCrudTest {
 
     @Autowired
     JdbcClient jdbc;
+
+    /** Injetado para exercitar {@code carregarAtivoParaAssinatura}, que é o caminho do B6 e não
+     *  tem (nem terá) endpoint — o certificado nunca sai pela API. */
+    @Autowired
+    FiscalCertificadoService certificados;
 
     @TempDir
     Path tempDir;
@@ -185,6 +195,82 @@ class FiscalCertificadoCrudTest {
                 .andReturn().getResponse().getContentAsString();
 
         assertThat(resp.toLowerCase()).doesNotContain("senha").doesNotContain(SENHA.toLowerCase());
+    }
+
+    /**
+     * DF21 revisada (2026-08-17): o {@code .pfx} fica no <b>banco</b>, e <b>cifrado</b> — não só
+     * a senha. Um dump do banco não pode conter um PKCS12 utilizável, porque a senha dele é curta
+     * e quebrável por força bruta offline por quem tiver o arquivo.
+     */
+    @Test
+    void arquivoDoCertificadoFicaCifradoNoBancoNuncaEmClaro() throws Exception {
+        String token = assinarNovoTenant("cifrado-no-banco");
+        long idTenant = idTenantDo(token);
+        long idEmpresa = idEmpresaDo(token);
+        String cnpj = "12345678000195";
+        definirCnpjDaEmpresa(idTenant, idEmpresa, cnpj);
+        byte[] pfxOriginal = certificadoValido(cnpj);
+
+        mvc.perform(multipart("/api/v1/fiscal/certificados")
+                        .file(new MockMultipartFile("arquivo", "c.pfx", "application/x-pkcs12", pfxOriginal))
+                        .param("idEmpresa", String.valueOf(idEmpresa)).param("senha", SENHA)
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isCreated());
+
+        byte[] gravado = jdbc.sql("""
+                        SELECT arquivo_cifrado FROM fiscal_certificado
+                        WHERE id_tenant = ? AND id_empresa = ? AND ativo
+                        """)
+                .params(idTenant, idEmpresa).query(byte[].class).single();
+
+        assertThat(gravado).isNotEqualTo(pfxOriginal);
+        // Um PKCS12 sempre começa com a sequência DER 0x30 0x82. Se o gravado começasse assim,
+        // estaria em claro — este é o teste que discrimina "cifrado" de "só renomeado".
+        assertThat(gravado[0] == 0x30 && gravado[1] == (byte) 0x82)
+                .as("arquivo gravado não pode ser um PKCS12 legível")
+                .isFalse();
+
+        String senhaGravada = jdbc.sql("""
+                        SELECT senha_cifrada FROM fiscal_certificado
+                        WHERE id_tenant = ? AND id_empresa = ? AND ativo
+                        """)
+                .params(idTenant, idEmpresa).query(String.class).single();
+        assertThat(senhaGravada).isNotEqualTo(SENHA).doesNotContain(SENHA);
+    }
+
+    /**
+     * O caminho que o B6 vai usar para assinar: carrega o certificado ativo já decifrado. Prova
+     * o ciclo inteiro — o {@code .pfx} que sai do banco abre com a senha que saiu do banco.
+     */
+    @Test
+    void certificadoCarregadoDoBancoAbreComoPkcs12ParaAssinar() throws Exception {
+        String token = assinarNovoTenant("carrega-assinatura");
+        long idTenant = idTenantDo(token);
+        long idEmpresa = idEmpresaDo(token);
+        String cnpj = "98765432000109";
+        definirCnpjDaEmpresa(idTenant, idEmpresa, cnpj);
+
+        mvc.perform(multipart("/api/v1/fiscal/certificados")
+                        .file(new MockMultipartFile("arquivo", "c.pfx", "application/x-pkcs12", certificadoValido(cnpj)))
+                        .param("idEmpresa", String.valueOf(idEmpresa)).param("senha", SENHA)
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isCreated());
+
+        // Caminho sem requisição HTTP: o tenant é ligado explicitamente no escopo (P8).
+        TenantContext.comTenant(idTenant, () -> {
+            var carregado = certificados.carregarAtivoParaAssinatura(idEmpresa);
+
+            assertThat(carregado.senha()).isEqualTo(SENHA);
+            assertThat(carregado.cnpjTitular()).isEqualTo(cnpj);
+
+            try {
+                KeyStore ks = KeyStore.getInstance("PKCS12");
+                ks.load(new ByteArrayInputStream(carregado.pkcs12()), carregado.senha().toCharArray());
+                assertThat(Collections.list(ks.aliases())).isNotEmpty();
+            } catch (Exception e) {
+                throw new AssertionError("O .pfx que saiu do banco não abriu com a senha que saiu do banco.", e);
+            }
+        });
     }
 
     // ---------------------------------------------------------------- as 5 validações

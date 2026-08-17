@@ -308,7 +308,7 @@ paralelo (F1). Mapeamento conferido contra o código:
 | `produto_movimento_mestre` tipo `COMPRA` | NF-e 55 de devolução ao fornecedor *(futura)* | DF14 decide a tela |
 | `vendas.cancelamento` (ADMIN-only, com motivo) | Evento 110111 | A justificativa mínima de 15 caracteres é a que a tela já pede |
 | `entrada_xml.xml_bruto` | (consome XML de terceiro) | Já **lê** NF-e e **guarda** o XML bruto — insumo da Distribuição DF-e (futura) e do ZIP do contador (§11) |
-| `comum.armazenamento` (GCS, ADR-013) | Guarda do `.pfx` e dos XMLs | Bucket provisionado e testado — mas ver DF21, o fiscal precisa de bucket próprio |
+| `comum.armazenamento` (GCS, ADR-013) | Guarda dos **XML autorizados** | Bucket provisionado e testado — mas ver DF21: o fiscal precisa de bucket próprio, privado. O `.pfx` **não** vai para bucket (fica cifrado no banco) |
 | `comum.arquivocompartilhado` | DANFCE por WhatsApp | Cache de 24 h já existe para papeleta e crediário. **Não serve** para o ZIP fiscal (§11.2) |
 | Papeleta térmica (42 col., 75 mm, Consolas negrito) | DANFCE | A calibragem de 2026-08-14 é a base do cupom fiscal — não recomeçar do zero |
 | `cfg_produto_ncm` (~10.515 NCMs reais) | Cadastro fiscal do produto | Já global e sem RLS — mesmo padrão para CFOP, CEST, CST e cClassTrib |
@@ -447,8 +447,7 @@ numeração próprias).
 
 **`fiscal_certificado`** — o A1 do lojista.
 
-`id_certificado` · `id_tenant` · `id_empresa` · `objeto_bucket` (caminho do `.pfx` no **bucket
-fiscal privado**, DF21 fechada — `niner.storage.bucket-fiscal`, nunca o de fotos) ·
+`id_certificado` · `id_tenant` · `id_empresa` · `arquivo_cifrado` (o `.pfx` inteiro, **cifrado**, no próprio banco — DF21 revisada em 2026-08-17) ·
 `senha_cifrada` (AES-256-GCM local, `comum.seguranca.SegredoCifrador`, chave fora do banco —
 não é referência a Secret Manager externo, que o projeto não tem) · `cnpj_titular` ·
 `razao_social_titular` (extraídos do certificado e conferidos contra a empresa) · `valido_de` ·
@@ -1066,7 +1065,7 @@ torna o ZIP por período uma listagem de prefixo, não uma varredura.
 do Ajuste SINIEF 2/2025 são obrigação dos **fiscos**, não do lojista). O bucket precisa de política
 de retenção/lock — apagar XML fiscal por acidente é problema legal do lojista, e isso **não existe
 hoje** em `docs/infra/armazenamento-imagens.md`, desenhado para fotos de produto (deletáveis).
-🔴 **DF21:** bucket fiscal separado, com versionamento e retenção.
+✅ **DF21 (revisada em 2026-08-17, decisão do dono do produto):** bucket fiscal separado e privado **para os XML**, com versionamento e retenção de 5 anos. O **certificado NÃO vai para bucket** — fica cifrado no banco do cliente (`fiscal_certificado.arquivo_cifrado`), o que o coloca no mesmo backup/restore do tenant e sob o RLS (P8) sem depender de política de bucket. 🔴 O bucket real ainda não foi provisionado.
 
 ### 11.2 A rotina de download para a contabilidade
 
@@ -1304,7 +1303,7 @@ paralelo às telas, se fizer sentido.
 |---|---|---|---|
 | **B0** | **PoC da F0**: assinar um XML e autorizar uma NFC-e com IBS/CBS na homologação do PR, por script, fora do produto. Valida a DF7 (lib `java-nfe` é Java 8 + `javax` + Axis2 contra nosso Java 25 jakarta) e responde às 4 perguntas ⚠️ da F0 | — | **Sim** |
 | **B1** | Specs de tela em `docs/telas/`: `fiscal-configuracao.md`, `fiscal-certificado.md`, `fiscal-perfil.md`, `fiscal-conformidade.md`. Spec antes do código (§5 da spec principal) | — | Não |
-| **B2** ✅ | Cadastros fiscais: `FiscalConfigService`/`Controller` ✅, `FiscalCertificadoService` ✅ (upload multipart → bucket fiscal privado + senha AES-GCM, *write-only*, DF21 fechada), `PerfilFiscalService` ✅ (padrão de cadastro consolidado) — **+ as 3 telas React** ✅ (2026-08-17, testadas ao vivo no navegador). **Fora do B2**: campos fiscais em Produto/Cliente/Empresa/Tipo de Carteira ficam para o B3 (Conformidade Fiscal), que é quem precisa deles | B1 | Não |
+| **B2** ✅ | Cadastros fiscais: `FiscalConfigService`/`Controller` ✅, `FiscalCertificadoService` ✅ (upload multipart → arquivo E senha cifrados no banco, *write-only*, DF21 revisada), `PerfilFiscalService` ✅ (padrão de cadastro consolidado) — **+ as 3 telas React** ✅ (2026-08-17, testadas ao vivo no navegador). **Fora do B2**: campos fiscais em Produto/Cliente/Empresa/Tipo de Carteira ficam para o B3 (Conformidade Fiscal), que é quem precisa deles | B1 | Não |
 | **B3** ✅ | **Conformidade Fiscal** — painel + drill-down (2026-08-17), backend + tela. Lista o que impede emitir (empresa/produtos/pagamentos bloqueiam; clientes só avisa). Achado real confirmado ao vivo: hoje todo tenant nasce bloqueado em "Formas de pagamento" (`codigo_tpag` sem tela própria) — é o que revela o tamanho do problema de base cadastral | B2 | Não |
 | **B4** ✅ | **Motor tributário** (`fiscal.motor`): puro, sem I/O. ICMS (CSOSN, + CST no CRT 2) + PIS/COFINS + IBS/CBS + FCP + `vTotTrib`. Teste de tabela por (CRT × CST/CSOSN × UF × operação), sem Testcontainers. **Feito em 2026-08-17**, já sob a DF37 | — (o schema já basta) | Não |
 | **B5** ✅ | Montagem do XML + validação contra o **XSD oficial** em teste — `fiscal.documento` (`MontadorXmlNfce`, `ChaveAcesso`, `ValidadorXsd`), 2026-08-17. 25 testes validando contra o schema real. Fechou a **DF32** por fonte primária | B4 | Não |
@@ -1362,7 +1361,7 @@ automatizado — os 10.515 NCMs de `cfg_produto_ncm` vieram por esse mesmo camin
 | DF18 | Timeout de autorização no PDV antes de cair em contingência | 10 s |
 | DF19 | Quantas falhas disparam contingência automática | 2 falhas consecutivas em 60 s |
 | **DF20** | **Devolução de NFC-e sem consumidor identificado** | ⚠️ **Decisão de v1, não futura** — é o caso mais comum do balcão. Investigar na F0, decidir antes da F5 (§10.2) |
-| DF21 | Bucket fiscal separado, com retenção de 5 anos | Sim — muda `docs/infra/armazenamento-imagens.md` |
+| **DF21** | Onde ficam certificado e XML? | ✅ **Revisada 2026-08-17: separados.** Certificado **cifrado no banco** do cliente; XML no **bucket privado** (retenção de 5 anos). Ver §11.1 |
 | DF22 | Entrega do ZIP grande | Bucket + URL assinada, não cache em memória |
 | DF23 | Papel `CONTADOR` (leitura fiscal) | Futuro; no v1 o lojista baixa e repassa |
 | DF24 | Tenant `INADIMPLENTE` pode emitir nota? | Sim — nunca bloquear emissão |

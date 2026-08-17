@@ -29,10 +29,16 @@ public record NinerProperties(
      * = GCS real (ADC/chave); preenchido (ex.: {@code http://localhost:4443}) = emulador
      * fake-gcs-server, sem credencial — modo dev, ver docs/infra/armazenamento-imagens.md §3.
      *
-     * <p>{@code bucketFiscal} (DF21, 2026-08-17) é um bucket **separado e privado** — nunca o
-     * mesmo {@code bucket} de fotos, que é de leitura pública de propósito (marketplaces
-     * rebuscam a imagem por URL). Um {@code .pfx} ali seria vazamento imediato (F7). Usa o
-     * mesmo {@code host}/credencial do bucket de fotos, só o nome muda. */
+     * <p>{@code bucketFiscal} (DF21) é um bucket <b>separado e privado</b>, para os <b>XML
+     * autorizados</b> — nunca o mesmo {@code bucket} de fotos, que é de leitura pública de
+     * propósito (marketplaces rebuscam a imagem por URL). Usa o mesmo {@code host}/credencial,
+     * só o nome muda.
+     *
+     * <p>⚠️ <b>O certificado digital NÃO vai para cá</b> (DF21 revisada em 2026-08-17): o
+     * {@code .pfx} fica cifrado no banco do cliente
+     * ({@code fiscal_certificado.arquivo_cifrado}). Este bucket é só do XML, que tem obrigação
+     * legal de guarda por 5 anos e precisa de versionamento/retenção — requisitos que o banco
+     * não dá de graça e o bucket dá. */
     public record Storage(String bucket, String baseUrl, String host, String bucketFiscal) {
     }
 

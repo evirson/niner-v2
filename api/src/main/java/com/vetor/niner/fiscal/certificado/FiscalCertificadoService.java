@@ -40,19 +40,28 @@ import static org.springframework.http.HttpStatus.NOT_FOUND;
  * sensível que o produto guarda (F7). <b>Write-only de verdade</b>: nenhum endpoint devolve o
  * arquivo nem a senha, em campo nenhum, nem para ADMIN. Só ADMIN acessa a tela.
  *
- * <p>Ordem do upload — nada é gravado nem sobe para o bucket antes das 5 validações passarem
- * (abrir como PKCS12 com a senha, ter chave privada, estar dentro da validade, CNPJ do titular
- * igual ao da empresa, impressão digital ainda não cadastrada e ativa):
+ * <p><b>Onde o certificado mora (DF21, revisada em 2026-08-17):</b> no <b>banco do cliente</b>,
+ * não em bucket — decisão do dono do produto. O bucket privado ficou só para os XML autorizados.
+ * Ganha-se backup/restore junto com o resto do tenant e o isolamento por RLS (P8) de graça, sem
+ * depender de política de bucket bem configurada.
+ *
+ * <p>⚠️ <b>O arquivo é gravado cifrado, não só a senha.</b> O PKCS12 já é um container protegido,
+ * mas por uma senha escolhida pelo lojista ou pela AC — curta e sujeita a força bruta
+ * <b>offline</b>, sem limite de tentativas, por quem tiver o arquivo. Um dump do banco entregaria
+ * exatamente isso. Com o arquivo cifrado pela chave mestra (que vive fora do banco), o dump
+ * sozinho não abre nem o {@code .pfx} nem a senha.
+ *
+ * <p>Ordem do upload — nada é gravado antes das 5 validações passarem (abrir como PKCS12 com a
+ * senha, ter chave privada, estar dentro da validade, CNPJ do titular igual ao da empresa,
+ * impressão digital ainda não cadastrada e ativa):
  *
  * <ol>
  *   <li>Parseia o {@code .pfx} em memória — nunca grava antes de confirmar que abre.</li>
  *   <li>Extrai metadados do próprio certificado (CNPJ, razão social, validade, impressão
  *       digital) — <b>nunca digitados</b> pelo lojista, que mentiriam se divergissem.</li>
  *   <li>Confere as 5 precondições.</li>
- *   <li>Só então: cifra a senha (AES-GCM, {@link SegredoCifrador}), sobe o arquivo tal como
- *       recebido para o bucket fiscal <b>privado</b> (DF21 — nunca o bucket de fotos, que é de
- *       leitura pública), desativa o certificado anterior e insere o novo, na mesma
- *       transação.</li>
+ *   <li>Só então: cifra arquivo e senha (AES-256-GCM, {@link SegredoCifrador}), desativa o
+ *       certificado anterior e insere o novo, na mesma transação.</li>
  * </ol>
  */
 @Service
@@ -63,12 +72,10 @@ public class FiscalCertificadoService {
 
     private final JdbcClient jdbc;
     private final SegredoCifrador cifrador;
-    private final CertificadoStorage storage;
 
-    public FiscalCertificadoService(JdbcClient jdbc, SegredoCifrador cifrador, CertificadoStorage storage) {
+    public FiscalCertificadoService(JdbcClient jdbc, SegredoCifrador cifrador) {
         this.jdbc = jdbc;
         this.cifrador = cifrador;
-        this.storage = storage;
     }
 
     @Transactional(readOnly = true)
@@ -165,9 +172,9 @@ public class FiscalCertificadoService {
             throw new ResponseStatusException(CONFLICT, "Este certificado já está cadastrado.");
         }
 
-        // As 5 validações passaram — só agora grava e sobe para o bucket.
-        long idTenant = ((Number) jwt.getClaim("tid")).longValue();
-        String chaveObjeto = storage.gravar(idTenant, idEmpresa, conteudo);
+        // As 5 validações passaram — só agora grava. Arquivo E senha cifrados (ver javadoc da
+        // classe): o dump do banco sozinho não abre nenhum dos dois.
+        byte[] arquivoCifrado = cifrador.cifrarBytes(conteudo);
         String senhaCifrada = cifrador.cifrar(senha);
         Long idUsuario = idUsuarioDoJwt(jwt);
 
@@ -179,19 +186,61 @@ public class FiscalCertificadoService {
 
         long idCertificado = jdbc.sql("""
                         INSERT INTO fiscal_certificado (
-                            id_tenant, id_empresa, objeto_bucket, senha_cifrada,
+                            id_tenant, id_empresa, arquivo_cifrado, senha_cifrada,
                             cnpj_titular, razao_social_titular, valido_de, valido_ate,
                             impressao_digital, ativo, id_usuario)
                         VALUES (plataforma.tenant_atual(), ?, ?, ?, ?, ?, ?, ?, ?, true, ?)
                         RETURNING id_certificado
                         """)
-                .params(idEmpresa, chaveObjeto, senhaCifrada, cnpjTitularNormalizado,
+                .params(idEmpresa, arquivoCifrado, senhaCifrada, cnpjTitularNormalizado,
                         extraido.razaoSocialTitular(), OffsetDateTime.ofInstant(extraido.validoDe(), ZoneOffset.UTC),
                         OffsetDateTime.ofInstant(extraido.validoAte(), ZoneOffset.UTC),
                         extraido.impressaoDigital(), idUsuario)
                 .query(Long.class).single();
 
         return buscar(idCertificado);
+    }
+
+    /**
+     * Carrega o certificado ativo da empresa, <b>decifrado e pronto para assinar</b> — é o único
+     * caminho de leitura do arquivo, e existe para o {@code fiscal.sefaz} (B6).
+     *
+     * <p><b>Nunca exposto por endpoint</b> (é `public` para o módulo de assinatura, não para a
+     * web): o contrato de "write-only" vale para a API, e o Controller não tem rota que chame
+     * isto. Todo uso deveria deixar rastro em {@code fiscal_certificado_uso} (F7) — quem chamar
+     * registra, porque só quem chama sabe a finalidade e o documento.
+     */
+    @Transactional(readOnly = true)
+    public CertificadoParaAssinatura carregarAtivoParaAssinatura(long idEmpresa) {
+        return jdbc.sql("""
+                        SELECT id_certificado, arquivo_cifrado, senha_cifrada, cnpj_titular, valido_ate
+                        FROM fiscal_certificado
+                        WHERE id_tenant = plataforma.tenant_atual() AND id_empresa = ? AND ativo
+                        """)
+                .param(idEmpresa)
+                .query((rs, n) -> {
+                    OffsetDateTime validoAte = rs.getObject("valido_ate", OffsetDateTime.class);
+                    if (validoAte != null && validoAte.isBefore(OffsetDateTime.now())) {
+                        throw new ResponseStatusException(CONFLICT,
+                                "O certificado digital desta empresa venceu em %s. Envie um certificado novo antes de emitir."
+                                        .formatted(validoAte.toLocalDate()));
+                    }
+                    return new CertificadoParaAssinatura(
+                            rs.getLong("id_certificado"),
+                            cifrador.decifrarBytes(rs.getBytes("arquivo_cifrado")),
+                            cifrador.decifrar(rs.getString("senha_cifrada")),
+                            rs.getString("cnpj_titular"));
+                })
+                .optional()
+                .orElseThrow(() -> new ResponseStatusException(CONFLICT,
+                        "Nenhum certificado digital ativo para esta empresa. Envie o certificado A1 antes de emitir."));
+    }
+
+    /**
+     * O {@code .pfx} decifrado em memória, para assinar/mTLS. <b>Vive o mínimo possível</b> —
+     * quem recebe usa e descarta; nada disto vai para log, resposta HTTP ou disco (F7).
+     */
+    public record CertificadoParaAssinatura(long idCertificado, byte[] pkcs12, String senha, String cnpjTitular) {
     }
 
     // ---------------------------------------------------------------- parsing do .pfx

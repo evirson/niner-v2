@@ -108,9 +108,9 @@ class ConformidadeFiscalCrudTest {
     private void enviarCertificadoValido(String token, long idEmpresa, String cnpj, int diasValidade) throws Exception {
         long idTenant = idTenantDo(token);
         jdbc.sql("""
-                        INSERT INTO fiscal_certificado (id_tenant, id_empresa, objeto_bucket, senha_cifrada,
+                        INSERT INTO fiscal_certificado (id_tenant, id_empresa, arquivo_cifrado, senha_cifrada,
                             cnpj_titular, razao_social_titular, valido_de, valido_ate, impressao_digital, ativo)
-                        VALUES (?, ?, 'x', 'x', ?, 'TITULAR', now() - interval '1 day',
+                        VALUES (?, ?, '\\x00'::bytea, 'x', ?, 'TITULAR', now() - interval '1 day',
                                 now() + (? || ' days')::interval, ?, true)
                         """)
                 .params(idTenant, idEmpresa, cnpj, diasValidade, "fp-" + idEmpresa + "-" + diasValidade)
