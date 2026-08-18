@@ -104,7 +104,7 @@ método** (`RecebimentoCrediarioService.java:374-376`),
 Se algum `caixa_mestre` com lançamento daquele lote estiver com `caixa_fechado = true`, a resposta
 é **409** com a mensagem que já diz o que fazer:
 
-> Esta operação mexe no caixa nº X, que já está fechado. Reabra o caixa em Frente de Loja › Caixa ›
+> Esta operação mexe no caixa nº X, que já está fechado. Reabra o caixa em Frente de Loja ›
 > Fechamento de Caixa (só o ADMIN pode reabrir) e refaça a operação.
 
 **Nada é desfeito pela metade na recusa.** A checagem roda antes do `FOR UPDATE` do lote e antes de

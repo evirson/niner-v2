@@ -1,7 +1,7 @@
 # Progresso do Projeto — niner-v2
 
 Registro cronológico das decisões e entregas. Atualizar a cada marco relevante.
-**Última atualização:** 2026-08-18
+**Última atualização:** 2026-08-19
 
 ---
 
@@ -48,10 +48,15 @@ Registro cronológico das decisões e entregas. Atualizar a cada marco relevante
 > app `admin/` (backoffice da plataforma). **509/509 testes de backend verdes, `tsc -b` limpo.**
 >
 > **Pendências adiadas pelo dono do produto (não são esquecimento):** calibragem de impressão
-> térmica da **Guia de Transferência** e do **Fechamento de Caixa** — papeleta de venda,
-> comprovante de crediário e vale-mercadoria já estão calibrados (42 colunas / 75mm / Consolas em
-> negrito, `docs/telas/papeleta-venda.md`); esses dois ficaram para depois. O **vídeo de
-> treinamento de Produtos** também segue pausado.
+> térmica da **Guia de Transferência** (ainda em folha A4) — papeleta de venda, comprovante de
+> crediário, vale-mercadoria e, desde 2026-08-19, **Fechamento de Caixa** já estão calibrados (42
+> colunas / 75mm / Consolas em negrito, `docs/telas/papeleta-venda.md`). O **vídeo de treinamento
+> de Produtos** também segue pausado.
+>
+> **2026-08-19:** Fechamento de Caixa redesenhado por completo (fim da contagem "às cegas", grade
+> "Caixas Abertos", "Fechar Mesmo Assim", impressão térmica) + Abertura de Caixa virou só popup +
+> bug real de "duplicate key" na Importação de Estoque corrigido. **732/732 testes de backend
+> verdes.** Ver linha do tempo de hoje.
 >
 > Os parágrafos abaixo são a **narrativa acumulada** desde o começo — leia o resumo acima para o
 > estado, e a linha do tempo (do mais novo para o mais antigo) para o detalhe de cada entrega.
@@ -453,6 +458,86 @@ Movimentação de Conta Corrente) que ainda não tinham migrado pro `SeletorPlan
 ---
 
 ## Linha do tempo
+
+### 2026-08-19 — Fechamento de Caixa redesenhado: fim da contagem "às cegas", grade "Caixas Abertos", impressão térmica
+
+Pedido direto e detalhado do dono do produto, em 5 itens numerados, reformulando por completo a
+rotina de caixa que existia desde 2026-07-30 (`docs/telas/fechamento-caixa.md`, `docs/telas/
+abertura-caixa.md`):
+
+1. **Abertura de Caixa deixou de ter tela dedicada.** `web/src/pages/caixa/AberturaCaixa.tsx`
+   apagado, rota `/abertura-caixa` removida de `App.tsx` — o popup obrigatório
+   (`AberturaCaixaModal.tsx`, já embutido no PDV e no Recebimento de Crediário desde que a feature
+   nasceu) já cobria inteiramente o requisito ("abrir na hora de iniciar uma venda/recebimento, se
+   ainda não estiver aberto"). Nenhuma mudança de backend.
+2. **"Fechamento de Caixa" virou item direto do menu Frente de Loja** — o subgrupo "Caixa" (que só
+   tinha Abertura + Fechamento) foi dissolvido, mesmo padrão já usado antes pro grupo
+   "Reimpressões" (`web/src/lib/menu.ts`).
+3. **Fim da contagem "às cegas".** A tela abre direto numa grade **"Caixas Abertos"**
+   (`GET /api/v1/caixa/abertos` — OPERADOR só vê os próprios, ADMIN vê de todo mundo em qualquer
+   empresa). Escolhida uma linha, cada carteira aparece com **Valor em Caixa | Valor Contado** lado
+   a lado — o campo de contagem já nasce preenchido com o valor esperado. `GET /api/v1/caixa/
+   fechamento?idUsuario=&data=` foi removido, substituído por `GET .../fechamento/{idCaixa}`.
+4. **"Fechar Mesmo Assim".** Se a contagem não bate, a tela mostra a divergência (como sempre) mas
+   agora oferece fechar de propósito com a diferença registrada em `caixa_mestre.observacoes`
+   ("FECHADO COM DIVERGENCIA…") — `POST .../fechamento` ganhou `forcarComDivergencia: boolean`. Sem
+   a flag, o comportamento continua idêntico ao de sempre (nada é gravado até confirmar).
+5. **Impressão virou bobina térmica 80mm/42 colunas** — "mesmo formato e dimensões da venda". Era
+   folha A4/96 colunas (`fechamentoCaixaImpressao.ts` reescrito, reaproveita as classes CSS da
+   papeleta de venda; `@page fechamento-a4` removido de `styles.css`). O popup de impressão perdeu
+   "Salvar PDF" e trocou "Fechar" por um ✕ no canto, mesmo padrão abaixo.
+
+Reabertura de caixa fechado (ADMIN-only, já existente desde 2026-08-14) segue igual, mas como um
+caixa fechado some da grade de abertos, a tela ganhou um campo "Ver Caixa Já Fechado (nº)" pra
+localizá-lo — a mensagem de erro do guard "caixa fechado bloqueia desfazer" já cita esse número.
+
+**Mesmo pedido, item 7 — limpeza dos popups de impressão.** Papeleta de Venda, Comprovante de
+Pagamento de Crediário e as respectivas reimpressões perderam o botão "Salvar PDF" (o diálogo
+nativo de impressão já oferece isso) e o botão "Fechar" virou um ✕ no cabeçalho — o rodapé agora
+tem só "Enviar por WhatsApp" (esquerda) e "Imprimir" (direita). `lib/comprovante.ts` perdeu as
+funções `gerarPdfComprovanteVenda`/`gerarPdfComprovante` (mortas), mantendo só os geradores de
+Blob usados pelo compartilhamento por WhatsApp.
+
+**Testes:** `FechamentoCaixaCrudTest` — todos os métodos que buscavam por data/usuário convertidos
+pro `GET` por id, +5 testes novos (`/abertos` operador/admin, caixa some da grade ao fechar,
+force-close grava a observação, 404 em caixa inexistente); `CancelamentoVendaCrudTest` (helper
+interno) também dependia do endpoint removido, ajustado no mesmo lote. **732/732 testes de backend
+verdes.** Verificado ao vivo no navegador ponta a ponta: abertura inline no PDV, grade de abertos,
+contagem com valor visível, divergência proposital, "Fechar Mesmo Assim", impressão térmica abrindo
+sozinha, caixa sumindo da grade, localizado de novo por número, reaberto, fechado limpo.
+
+Detalhes completos: `docs/telas/fechamento-caixa.md` (seção "Redesenho 2026-08-19"),
+`docs/telas/abertura-caixa.md` (seção "Revisão 2026-08-19").
+
+### 2026-08-19 — Bug real corrigido: "duplicate key" na Importação de Estoque (produto sem grade)
+
+Reportado ao vivo pelo dono do produto, importando `ESTOQUE.xlsx` de verdade: erro na 3ª linha,
+"PreparedStatementCallback; SQL [INSERT INTO produto_barra ...]; ERROR: duplicate key value
+violates unique constraint \"produto_barra_variacao_uk\"" — aparecia como erro no relatório mesmo
+pedindo a importação de verdade, porque qualquer erro faz `RelatorioImportacao.concluir` recusar
+confirmar (nada é gravado).
+
+**Causa:** `EstoqueImportador` agrupava linhas por `idProduto+idCor+idTamanho` usando o texto cru
+de `NOME_COR`/`NOME_TAMANHO`, sem saber ainda se o produto tinha grade real. Pra produto SEM grade
+real, `ProdutoBarraService.criarParaImportacaoEmMassa` sempre força cor/tamanho pro sentinela
+`id=1` — mas só DEPOIS de o grupo já ter sido formado. Duas linhas do MESMO produto sem grade com
+texto de cor/tamanho diferente entre si (comum em planilha migrada — algumas linhas em branco,
+outras com um texto tipo "ÚNICO") viravam DOIS grupos; o 1º criava a variação `(id_produto,1,1)`,
+o 2º tentava criar a mesma de novo.
+
+**Corrigido** dividindo o processamento em duas passadas: a 1ª só resolve `CODIGO_PRODUTO` →
+`idProduto` (pra pré-buscar `id_grade` em lote); a 2ª força cor/tamanho pra `null` já na montagem
+da chave do grupo quando o produto não tem grade real. Produto com grade real não muda de
+comportamento.
+
+**Teste novo:** `EstoqueImportadorCrudTest` — a Rotina de Importação de Dados não tinha nenhum
+teste automatizado até então, apesar de ser uma feature grande (lacuna notada, não preenchida por
+completo — só o suficiente pra cobrir esta regressão). Confirmado que o teste reproduz a mensagem
+exata do usuário contra o código sem a correção, e passa depois. **732/732 testes de backend
+verdes.** API reconstruída (`docker compose up -d --build api`) pra aplicar o fix no ambiente que o
+usuário estava usando.
+
+Detalhes: `docs/PROGRESSO.md` (esta entrada), memória `project_importacao_dados.md`.
 
 ### 2026-08-18 — 🔴 BUG CRÍTICO ACHADO E CORRIGIDO: NFC-e autorizada pela SEFAZ saía reportada como REJEITADA
 

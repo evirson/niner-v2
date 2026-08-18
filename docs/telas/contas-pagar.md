@@ -78,7 +78,7 @@ Apagar um `caixa_detalhe` de um caixa **já fechado** faria a conferência grava
 
 Se o caixa vinculado estiver fechado, a operação responde **409** sem escrever nada:
 
-> Esta operação mexe no caixa nº X, que já está fechado. Reabra o caixa em Frente de Loja › Caixa ›
+> Esta operação mexe no caixa nº X, que já está fechado. Reabra o caixa em Frente de Loja ›
 > Fechamento de Caixa (só o ADMIN pode reabrir) e refaça a operação.
 
 O caminho indicado existe desde a mesma data — ver `docs/telas/fechamento-caixa.md`, seção

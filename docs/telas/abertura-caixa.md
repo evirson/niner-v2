@@ -11,6 +11,10 @@ operador informar o valor físico com que o caixa começa o dia.
 
 ## Solução proposta
 
+> ⚠️ **A "tela dedicada" descrita abaixo foi REMOVIDA em 2026-08-19 — ver "Revisão 2026-08-19".**
+> Só o popup obrigatório continua existindo; a seção original fica como histórico de como a
+> feature nasceu.
+
 Tela dedicada de Abertura de Caixa + um popup obrigatório reaproveitado no PDV e no Recebimento
 de Crediário. Um `caixa_mestre` por usuário/empresa/dia:
 
@@ -145,10 +149,40 @@ Cobertos por `CaixaCrudTest` (6 testes) + 1 teste novo em cada de `PdvCrudTest`/
 caixa no setup, pra continuarem passando). Suíte completa do projeto: **500/500 verdes
 (2026-08-14)** — eram 211 quando esta tela nasceu, em 2026-07-30.
 
+## Revisão 2026-08-19 — tela dedicada removida
+
+Pedido direto do dono do produto: "o botão de abertura de caixa pode retirar desta [tela], pois
+abertura de caixa será feito, se o caixa ainda não estiver aberto, na hora que for iniciar uma
+venda ou na hora que for receber um crediário" — ou seja, o **popup obrigatório já cobria
+inteiramente** esse requisito; a tela dedicada só era redundante.
+
+- **Removido:** `web/src/pages/caixa/AberturaCaixa.tsx` (arquivo apagado), a rota
+  `/abertura-caixa` em `App.tsx`, e o subgrupo de menu **Caixa** em `web/src/lib/menu.ts` (que
+  continha só Abertura + Fechamento) — dissolvido num item direto "Fechamento de Caixa" em
+  *Frente de Loja*, mesmo padrão da dissolução do grupo "Reimpressões" (ver
+  `docs/telas/pesquisa-vendas.md`).
+- **Mantido, sem alteração nenhuma:** `AberturaCaixaModal.tsx`/`CamposAberturaCaixa.tsx` (o
+  popup), plugados em `Pdv.tsx`/`RecebimentoCrediario.tsx` — continuam sendo o único jeito de
+  abrir caixa no sistema. Os endpoints (`GET /status`, `GET /carteiras`, `POST /abrir`) também não
+  mudaram — só o front que os consumia exclusivamente perdeu a tela dedicada.
+- **Ajuda da tela removida** — a entrada `financeiro.aberturacaixa.tela` em `AjudaDaTela.tsx` foi
+  apagada junto (não há mais tela pra ela documentar). Dúvidas sobre abertura de caixa agora ficam
+  cobertas pelo passo-a-passo de `financeiro.fechamentocaixa.tela` (ver
+  `docs/telas/fechamento-caixa.md`) e pela ajuda contextual do próprio PDV/Recebimento de
+  Crediário.
+- **Reabertura (ADMIN-only, ver `docs/telas/fechamento-caixa.md`)** passou a exigir localizar o
+  caixa fechado **por número** — a grade "Caixas Abertos" que substituiu a tela de Fechamento de
+  Caixa às cegas só lista caixas abertos, então um caixa já fechado não aparece mais ali por
+  padrão.
+
+## Impacto no banco (2026-08-19)
+
+Nenhum — mudança só de frontend/menu, sem alteração de schema nem de endpoint.
+
 ## Ajuda da tela (manual de operação + vídeo) — obrigatório (R22 / §3.7.1)
 
-- **`chave_tela`: `financeiro.aberturacaixa.tela`** — ver `web/src/components/AjudaDaTela.tsx`.
-  `url_video`: `NULL` por ora.
+- ⚠️ **`chave_tela`: `financeiro.aberturacaixa.tela` — REMOVIDA em 2026-08-19** junto com a tela
+  dedicada (ver "Revisão 2026-08-19" acima). Não existe mais em `AjudaDaTela.tsx`.
 
 ## Impacto no banco
 

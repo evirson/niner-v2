@@ -11,6 +11,10 @@ total que o sistema registrou ao longo do dia.
 
 ## Solução proposta
 
+> ⚠️ **Descrição original (2026-07-30/31), superada em 2026-08-19 — ver "Revisão 2026-08-19"
+> abaixo pro desenho ATUAL.** Mantida aqui só como histórico de como a tela nasceu; não reflete
+> mais o comportamento em produção.
+
 Tela dedicada (`/fechamento-caixa`, no subgrupo **Caixa** dentro de *Frente de Loja* —
 `web/src/lib/menu.ts:103-120`, junto da Abertura de Caixa) que busca o caixa de um
 usuário/data e conduz um fechamento **"às cegas"**: o operador informa quanto tem de cada tipo de
@@ -206,7 +210,7 @@ qualquer DELETE em `caixa_detalhe`, a operação que desfaz dinheiro chama
 `exigirCaixaAbertoParaDesfazer(VinculoCaixa, idVinculo)`. Se algum `caixa_mestre` envolvido estiver
 com `caixa_fechado = true`, responde **409** com a mensagem que aponta o caminho:
 
-> Esta operação mexe no caixa nº X, que já está fechado. Reabra o caixa em Frente de Loja › Caixa ›
+> Esta operação mexe no caixa nº X, que já está fechado. Reabra o caixa em Frente de Loja ›
 > Fechamento de Caixa (só o ADMIN pode reabrir) e refaça a operação.
 
 O enum `VinculoCaixa` tem hoje dois valores, cada um com seu SQL **constante** (nunca montado a
@@ -231,22 +235,104 @@ de pagamento à vista (`AVISTA`/`CARTAO_DEBITO`/`CARTAO_CREDITO`) de uma venda d
 um crédito em `caixa_detalhe`; `CREDIARIO` continua de fora (ver `docs/telas/pdv.md`, seção "Venda
 lança em `caixa_detalhe`").
 
+### Redesenho 2026-08-19 — fim da contagem "às cegas"
+
+Pedido direto e detalhado do dono do produto: a contagem às cegas (decisão 3, 2026-07-30) foi
+substituída por completo. A tela toda foi reconstruída; as seções acima descrevem o desenho
+**anterior**, mantidas só como histórico — o que segue é o comportamento atual.
+
+**Novo fluxo, ponta a ponta:**
+
+1. A tela abre direto na grade **"Caixas Abertos"** (`GET /api/v1/caixa/abertos`) — não existe
+   mais busca por data/usuário. OPERADOR só vê o próprio caixa; ADMIN vê os caixas abertos de
+   **todo mundo, em qualquer empresa do tenant**.
+2. Escolhida uma linha da grade, a tela mostra cada carteira em três colunas: **Carteira | Valor
+   em Caixa | Valor Contado** — o campo de contagem já nasce preenchido com o valor esperado
+   (`GET /api/v1/caixa/fechamento/{idCaixa}`), pro operador ajustar em vez de digitar do zero. A
+   contagem **não é mais às cegas**.
+3. "Fechar Caixa" tenta sem forçar (`POST /api/v1/caixa/fechamento` com
+   `forcarComDivergencia: false`). Se bate, fecha e a impressão abre **sozinha**. Se não bate,
+   mostra esperado × contado × diferença (clicável, mesmo drill-down de sempre) com dois botões:
+   "Contar de Novo" e **"Fechar Mesmo Assim"** — só esse segundo clique reenvia com
+   `forcarComDivergencia: true`, fechando com a divergência registrada em
+   `caixa_mestre.observacoes` ("FECHADO COM DIVERGENCIA EM dd/mm/aaaa hh:mm POR USUARIO id").
+4. Caixa fechado **some da grade de abertos**. A reabertura (ADMIN-only, motivo obrigatório,
+   comportamento inalterado — ver "Reabertura de caixa" acima) passou a ser localizada por
+   **número do caixa**, num campo próprio da tela ("Ver Caixa Já Fechado (nº)") — a mensagem de
+   erro do guard "caixa fechado bloqueia desfazer" já traz esse número.
+5. **Impressão virou bobina térmica 80mm/42 colunas** — antes era folha A4/96 colunas ("mesmo
+   formato e dimensões da papeleta de venda", pedido explícito). Reaproveita as classes CSS
+   `.papeleta-preview`/`.papeleta-imprimir` de `docs/telas/pdv.md` em vez de um `@page` próprio.
+   O popup de impressão trocou "Fechar" por um **✕** no canto (mesmo padrão do Comprovante de
+   Pagamento de Crediário/Papeleta de Venda) e perdeu o botão "Salvar PDF" — só resta "Imprimir"
+   (o diálogo nativo do navegador já oferece salvar em PDF).
+
+**Item 4/5 relacionados (mesmo pedido do dono do produto, mesmo dia):** a tela de **Abertura de
+Caixa deixou de existir como tela dedicada** — abrir caixa só acontece pelo popup inline, já
+embutido no início de uma venda/recebimento (ver `docs/telas/abertura-caixa.md`, "Revisão
+2026-08-19"). O menu "Frente de Loja" perdeu o subgrupo **Caixa** (que só tinha Abertura +
+Fechamento) — "Fechamento de Caixa" virou item direto do grupo.
+
+**Backend** (`CaixaDtos`/`CaixaService`/`CaixaController`):
+
+- `CaixaAbertoResponse` novo (`idCaixa, idUsuario, nomeUsuario, idEmpresa, nomeEmpresa,
+  dataAbertura, nomeCarteira, saldoInicial`) + `CaixaService.listarAbertos(jwt)` →
+  `GET /api/v1/caixa/abertos`.
+- `GET /api/v1/caixa/fechamento?idUsuario=&data=` **removido**; substituído por
+  `GET /api/v1/caixa/fechamento/{idCaixa}` (`CaixaService.buscarPorId`) — mesma regra
+  dono-ou-ADMIN de sempre (403 se outro usuário sem ser ADMIN), 404 se não existir/for de outro
+  tenant.
+- `FecharCaixaRequest` ganhou `boolean forcarComDivergencia` (primitivo — omitido no corpo
+  desserializa `false`, preservando o comportamento padrão). `CaixaService.fechar()`: `!bate &&
+  !forcar` devolve a divergência sem gravar nada (igual sempre foi); `!bate && forcar` grava
+  `caixa_fechado = true` **e** acrescenta a observação de divergência; `bate` grava normalmente
+  (a flag não importa nesse caso).
+- Mensagem do guard `exigirCaixaAbertoParaDesfazer` (Contas a Pagar / Estorno de Recebimento)
+  atualizada: "Reabra o caixa em Frente de Loja › Fechamento de Caixa" (não existe mais o
+  submenu "Caixa" no meio do caminho).
+
+**Testes:** `FechamentoCaixaCrudTest` — todos os métodos que buscavam por data/usuário foram
+convertidos pro `GET` por id; +5 testes novos (`/abertos` operador-só-o-próprio, `/abertos`
+admin-vê-todos, caixa fechado some de `/abertos`, force-close grava a observação de divergência,
+404 em caixa inexistente). `CancelamentoVendaCrudTest` (helper interno que fecha um caixa pra
+testar cancelamento) também dependia do `GET` por data e foi ajustado no mesmo lote. **731 testes
+de backend verdes** no momento da migração (**732** contando o teste novo do bugfix de
+importação do mesmo dia, ver `docs/telas/importacao-dados.md`).
+
+**Verificado ao vivo no navegador** (não só suíte automatizada): grade de abertos → seleção →
+contagem com valor esperado visível → divergência proposital → "Fechar Mesmo Assim" → impressão
+térmica abriu sozinha, ✕ fecha, só "Imprimir" → caixa sumiu da grade de abertos → localizado de
+novo por número → reaberto → contagem batendo → fechado limpo (diferença R$0,00). Confirmado
+também que o popup inline de abertura (`AberturaCaixaModal`) continua disparando sozinho no PDV
+quando não há caixa aberto — item 4 do pedido não exigiu mudança de código, só a remoção da tela
+dedicada que tinha ficado redundante.
+
 ## Contrato de API
 
 ```
-GET  /api/v1/caixa/fechamento?idUsuario=&data=
-     busca o caixa (aberto ou fechado) de um usuário/data → { idCaixa, idUsuario, nomeUsuario,
+⚠️ REMOVIDO em 2026-08-19: GET /api/v1/caixa/fechamento?idUsuario=&data=
+   (substituído pelos dois endpoints abaixo — ver "Redesenho 2026-08-19")
+
+GET  /api/v1/caixa/abertos                                 (2026-08-19)
+     grade "Caixas Abertos" → [{ idCaixa, idUsuario, nomeUsuario, idEmpresa, nomeEmpresa,
+     dataAbertura, nomeCarteira, saldoInicial }]
+     -- OPERADOR só vê os próprios; ADMIN vê de todo mundo, em qualquer empresa do tenant.
+
+GET  /api/v1/caixa/fechamento/{idCaixa}                     (2026-08-19, substitui a busca por data/usuário)
+     busca o caixa (aberto ou fechado) pelo id → { idCaixa, idUsuario, nomeUsuario,
      nomeEmpresa, dataAbertura, dataFechamento, fechado,
      linhas: [{ idCarteira, nomeCarteira, categoriaCarteira, saldoInicial, totalCredito, totalDebito, valorEsperado }],
      conferencia: [{ idCarteira, nomeCarteira, categoriaCarteira, valorEsperado, valorContado, diferenca }] }
      -- `conferencia` só vem preenchida quando `fechado = true`. `categoriaCarteira` desde 2026-07-31.
 
 POST /api/v1/caixa/fechamento
-     { idCaixa, valoresContados: [{ idCarteira, valorContado }] }
+     { idCaixa, valoresContados: [{ idCarteira, valorContado }], forcarComDivergencia }
      → { idCaixa, fechado, linhas: [{ idCarteira, nomeCarteira, categoriaCarteira, valorEsperado, valorContado, diferenca }] }
-     -- `fechado = true` e a conferência foi gravada quando toda `diferenca` é zero;
-     -- `fechado = false` (nada gravado) quando alguma carteira não bateu — `linhas` mostra
-     -- onde está a divergência.
+     -- `fechado = true` e a conferência foi gravada quando toda `diferenca` é zero, OU quando
+     -- `forcarComDivergencia = true` (2026-08-19 — fecha mesmo com divergência, registrada em
+     -- `caixa_mestre.observacoes`);
+     -- `fechado = false` (nada gravado) quando alguma carteira não bateu e `forcarComDivergencia`
+     -- não foi enviado — `linhas` mostra onde está a divergência.
 
 GET  /api/v1/caixa/fechamento/{idCaixa}/carteiras/{idCarteira}/lancamentos
      → [{ dataHora, tipoOperacao, creditoDebito, valor, origem }]
@@ -259,24 +345,23 @@ POST /api/v1/caixa/fechamento/{idCaixa}/reabrir            (2026-08-14, ADMIN-on
      -- (403 / 409), nunca como sucesso com flag falsa.
 ```
 
-`idUsuario` é opcional — omitido busca o próprio caixa do usuário logado; informado exige ADMIN se
-for diferente do próprio. `data` é obrigatório (`yyyy-MM-dd`). Todos sob `/api/v1/**` (JWT de
-tenant, RLS ativo — P8). Erros em Problem Details (RFC 9457): 400 (`valorContado` ausente/negativo
-em alguma carteira, ou faltando carteira na lista; `motivo` em branco na reabertura), 403
-(não-ADMIN informando outro usuário, fechando/consultando o caixa de outro usuário, ou tentando
-reabrir), 404 (nenhum caixa para aquele usuário/data, `idCaixa` inexistente, ou drill-down de uma
-carteira fora do caixa), 409 (caixa já fechado; ou, na reabertura, caixa já aberto / operador com
-outro caixa aberto).
+Todos sob `/api/v1/**` (JWT de tenant, RLS ativo — P8). Erros em Problem Details (RFC 9457): 400
+(`valorContado` ausente/negativo em alguma carteira, ou faltando carteira na lista; `motivo` em
+branco na reabertura), 403 (não-ADMIN consultando/fechando o caixa de outro usuário, ou tentando
+reabrir), 404 (`idCaixa` inexistente/de outro tenant, ou drill-down de uma carteira fora do
+caixa), 409 (caixa já fechado; ou, na reabertura, caixa já aberto / operador com outro caixa
+aberto).
 
 ## Critérios de aceitação (viram testes)
 
-- Dado um caixa aberto hoje para o usuário logado, quando busca o fechamento sem informar
-  `idUsuario`, então devolve os totais do próprio caixa.
-- Dado um OPERADOR, quando informa `idUsuario` de outra pessoa na busca ou no fechamento, então
-  403.
-- Dado um ADMIN, quando informa `idUsuario` de outra pessoa, então consulta/fecha o caixa dela
+- Dado um caixa aberto hoje para o usuário logado, quando busca o fechamento pelo `idCaixa`,
+  então devolve os totais do próprio caixa.
+- Dado um OPERADOR, quando busca ou tenta fechar o `idCaixa` de outra pessoa, então 403.
+- Dado um ADMIN, quando busca ou fecha o `idCaixa` de outra pessoa, então consulta/fecha
   normalmente.
-- Dado nenhum caixa para o usuário/data informados, então 404.
+- Dado um `idCaixa` inexistente, então 404.
+- Dado a grade `GET /api/v1/caixa/abertos` (2026-08-19), então OPERADOR só vê os próprios caixas
+  abertos e ADMIN vê os de todo mundo, em qualquer empresa; um caixa recém-fechado some da lista.
 - Dado um caixa com lançamentos em `caixa_detalhe` em mais de uma carteira, então os totais de
   crédito/débito de cada linha batem com a soma dos lançamentos daquela carteira, e
   `valorEsperado` reflete a fórmula (saldo inicial só na carteira de abertura).
@@ -291,11 +376,13 @@ outro caixa aberto).
 - Dado o drill-down de uma carteira, então devolve a linha sintética de abertura (quando aplicável)
   mais os lançamentos reais, na ordem cronológica.
 - Dado um caixa já fechado, quando tenta fechar de novo, então 409.
-- Dado um `idCaixa` inexistente (ou de outro tenant), então 404.
-- Dado o caixa de um tenant, então não aparece na busca de outro tenant (RLS).
+- Dado um `idCaixa` de outro tenant, então 404 (RLS).
 - Dado duas carteiras com o mesmo nome em categorias diferentes (ex.: "HIPER" débito e "HIPER"
   crédito), quando ambas têm movimento no mesmo caixa, então aparecem como duas linhas separadas,
   cada uma com sua própria `categoriaCarteira` e seus próprios totais (2026-07-31).
+- Dado um fechamento em que alguma carteira não bate, quando reenviado com
+  `forcarComDivergencia: true`, então o caixa fecha mesmo assim e `caixa_mestre.observacoes`
+  registra "FECHADO COM DIVERGENCIA…" (2026-08-19).
 
 ### Reabertura (2026-08-14)
 
@@ -311,22 +398,23 @@ outro caixa aberto).
 - Dado uma reabertura **sem motivo** (string em branco), então 400 — sem o porquê a reabertura não
   deixa rastro auditável (`reabrirSemMotivoEhRejeitado`).
 
-Cobertos por `FechamentoCaixaCrudTest` (19 testes — 4 deles da reabertura, 2026-08-14) + 2 testes
-em `PdvCrudTest` (venda com várias formas de pagamento lança `caixa_detalhe` em todas menos
-crediário; débito fica em aberto em `contas_receber` mesmo já tendo entrado no caixa). A guarda de
-caixa fechado é coberta do lado de quem a chama: `excluirContaPagarComCaixaFechadoEhRecusado` e
+Cobertos por `FechamentoCaixaCrudTest` (23 testes — 4 da reabertura de 2026-08-14, 6 novos de
+2026-08-19: `/abertos` operador/admin, caixa fechado some da grade, force-close com observação,
+404 em caixa inexistente, isolamento por tenant no `GET` por id) + 2 testes em `PdvCrudTest`
+(venda com várias formas de pagamento lança `caixa_detalhe` em todas menos crediário; débito fica
+em aberto em `contas_receber` mesmo já tendo entrado no caixa). A guarda de caixa fechado é
+coberta do lado de quem a chama: `excluirContaPagarComCaixaFechadoEhRecusado` e
 `reabrirContaPagarComCaixaFechadoEhRecusado` (`ContaPagarCrudTest`) e
 `estornarLoteComCaixaFechadoEhRecusadoEDeixaTudoComoEstava` (`RecebimentoCrediarioCrudTest`).
-Suíte completa do projeto: **500/500 verdes (2026-08-14)** — eram 266 quando esta tela nasceu, em
+Suíte completa do projeto: **732/732 verdes (2026-08-19)** — eram 266 quando esta tela nasceu, em
 2026-07-31.
 
 ## Ajuda da tela (manual de operação + vídeo) — obrigatório (R22 / §3.7.1)
 
 - **`chave_tela`: `financeiro.fechamentocaixa.tela`** — ver `web/src/components/AjudaDaTela.tsx`.
-  `url_video`: `NULL` por ora. Atualizado em 2026-08-14 com a reabertura: passo explicando quem vê
-  o botão "Reabrir Caixa", o motivo obrigatório e a conferência apagada (`AjudaDaTela.tsx:488`), e
-  dois erros comuns — a mensagem "Esta operação mexe no caixa nº X, que já está fechado" (`:494`)
-  e a recusa quando o operador já tem outro caixa aberto (`:495`).
+  `url_video`: `NULL` por ora. **Reescrito em 2026-08-19** pro desenho novo (grade "Caixas
+  Abertos", valor esperado visível, "Fechar Mesmo Assim", impressão térmica, localizar caixa
+  fechado por número) — a entrada anterior descrevia a contagem às cegas, superada.
 
 ## Impacto no banco
 
@@ -340,7 +428,9 @@ modelo de conferência de um único valor pra uma linha por carteira, então cri
 construção). `id_usuario_fechamento` continua sendo usado; **`valor_contado_dinheiro` ficou sem
 uso a partir de agora — a coluna foi mantida (não apagada) pra não perder dado de caixas já
 fechados com a versão anterior**, seguindo a regra de nunca excluir dado de tabela sem perguntar
-antes. `caixa_fechado`/`data_fechamento` já existiam desde V025.
+antes. `caixa_fechado`/`data_fechamento` já existiam desde V025. **Redesenho 2026-08-19: nenhuma
+mudança de schema** — só DTOs/endpoints novos e a observação de divergência, que reaproveita a
+coluna `observacoes` já existente (mesma usada pela reabertura).
 
 ## Impacto nas integrações
 
