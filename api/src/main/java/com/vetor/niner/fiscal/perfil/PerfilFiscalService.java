@@ -96,7 +96,13 @@ public class PerfilFiscalService {
         List<PerfilFiscalListaResponse> itens = jdbc.sql("""
                         SELECT p.id_perfil_fiscal, p.nome, p.descricao, p.ativo, p.criado_em, p.atualizado_em,
                                (SELECT count(*) FROM cfg_perfil_fiscal_regra r
-                                 WHERE r.id_tenant = p.id_tenant AND r.id_perfil_fiscal = p.id_perfil_fiscal) AS qtd_regras
+                                 WHERE r.id_tenant = p.id_tenant AND r.id_perfil_fiscal = p.id_perfil_fiscal) AS qtd_regras,
+                               EXISTS (SELECT 1 FROM cfg_perfil_fiscal_regra r
+                                 WHERE r.id_tenant = p.id_tenant AND r.id_perfil_fiscal = p.id_perfil_fiscal
+                                   AND r.crt IN (1, 2)) AS atende_simples,
+                               EXISTS (SELECT 1 FROM cfg_perfil_fiscal_regra r
+                                 WHERE r.id_tenant = p.id_tenant AND r.id_perfil_fiscal = p.id_perfil_fiscal
+                                   AND r.crt = 4) AS atende_mei
                         FROM cfg_perfil_fiscal p
                         """ + filtro + ordenacao)
                 .params(paramsPagina)
@@ -335,6 +341,7 @@ public class PerfilFiscalService {
         return new PerfilFiscalListaResponse(
                 rs.getLong("id_perfil_fiscal"), rs.getString("nome"), rs.getString("descricao"),
                 rs.getBoolean("ativo"), rs.getInt("qtd_regras"),
+                rs.getBoolean("atende_simples"), rs.getBoolean("atende_mei"),
                 rs.getObject("criado_em", OffsetDateTime.class),
                 rs.getObject("atualizado_em", OffsetDateTime.class));
     }

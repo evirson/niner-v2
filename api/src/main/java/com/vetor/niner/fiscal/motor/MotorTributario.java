@@ -62,6 +62,14 @@ public class MotorTributario {
     private static final Set<String> CSOSN_SEM_ICMS = Set.of("102", "103", "300", "400");
     private static final Set<String> CST_SEM_ICMS = Set.of("40", "41", "50");
 
+    /**
+     * CST 60 — ICMS já retido antes por substituição tributária: nesta venda não há ICMS NOVO a
+     * destacar (mesma lógica do CSOSN 500), então alíquota zerada aqui é o caso normal, não erro.
+     * Os demais CST que destacam valor (00/10/20/51/70/90) precisam de alíquota informada —
+     * salvos com zero, a nota sairia com ICMS R$ 0,00 sem avisar ninguém.
+     */
+    private static final Set<String> CST_ICMS_JA_RETIDO = Set.of("60");
+
     /** CST do Simples Nacional/MEI: base, alíquota e valor zerados (§8.3). É o caso normal. */
     private static final String CST_SIMPLES = "99";
     /** CST de saída tributada normal — só existe em Lucro Real/Presumido, fora do produto (DF37). */
@@ -136,9 +144,16 @@ public class MotorTributario {
             if (!CST_ICMS_VALIDOS.contains(cst)) {
                 throw new TributacaoInvalidaException("Item %d: CST de ICMS %s inválido.".formatted(nItem, cst));
             }
-            return CST_SEM_ICMS.contains(cst)
-                    ? new Icms(cst, null, zero(), zero(), zero(), zero(), zero(), zero())
-                    : montarIcmsComValor(cst, null, regra, base);
+            if (CST_SEM_ICMS.contains(cst)) {
+                return new Icms(cst, null, zero(), zero(), zero(), zero(), zero(), zero());
+            }
+            if (!CST_ICMS_JA_RETIDO.contains(cst) && nz(regra.aliquotaIcms()).signum() == 0) {
+                throw new TributacaoInvalidaException(
+                        ("Item %d: CST %s de ICMS destaca imposto, mas a regra fiscal não tem alíquota de "
+                                + "ICMS informada (está zerada) — a nota sairia com ICMS R$ 0,00.")
+                                .formatted(nItem, cst));
+            }
+            return montarIcmsComValor(cst, null, regra, base);
         }
 
         String csosn = regra.csosn();

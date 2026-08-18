@@ -696,6 +696,11 @@ acima é justamente sobre qual grupo ela usa. O banco garante o limite
 > tanto quanto campo a menos. Validar **antes** de assinar e transmitir — erro pego no motor custa
 > milissegundos, erro pego na SEFAZ custa a venda.
 
+> ✅ **2026-08-19 — o motor recusa CST tributado (00/10/20/51/70/90) com alíquota zerada.** Achado
+> real: o cadastro de perfil fiscal aceitava salvar essas linhas sem alíquota, e a nota saía
+> autorizada com ICMS R$ 0,00, silenciosamente. **60 é a exceção** — ICMS já retido por ST não tem
+> imposto novo nesta venda, alíquota 0 é o valor certo. Ver `docs/telas/fiscal-perfil.md` §2.
+
 **FCP / FECOP.** Adicional de até 2% em operações internas a consumidor final para produtos
 listados. No PR ⚠️ a alíquota modal é **19,5%** desde 18/03/2024 (Lei 21.850/2023) e há FECOP de
 +2% (Lei 11.580/1996, art. 14-A). Campos próprios (`pFCP`, `vFCP`, `pFCPST`, `vFCPST`) — o motor

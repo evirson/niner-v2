@@ -331,6 +331,8 @@ class PerfilFiscalCrudTest {
 
     // ---------------------------------------------------------------- /opcoes
 
+    /** O tenant já nasce com os 2 perfis padrão do signup (ver
+     *  {@code novoTenantJaNasceComOsDoisPerfisPadrao} abaixo) — /opcoes soma esses com o criado aqui. */
     @Test
     void opcoesNaoExigePapelESoTrazAtivos() throws Exception {
         String token = assinarNovoTenant("opcoes");
@@ -347,8 +349,81 @@ class PerfilFiscalCrudTest {
 
         mvc.perform(get("/api/v1/fiscal/perfis/opcoes").header("Authorization", "Bearer " + operador))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.length()").value(1))
-                .andExpect(jsonPath("$[0].nome").value("PERFIL ATIVO"));
+                .andExpect(jsonPath("$.length()").value(3))
+                .andExpect(jsonPath("$[*].nome", org.hamcrest.Matchers.hasItem("PERFIL ATIVO")))
+                .andExpect(jsonPath("$[*].nome", org.hamcrest.Matchers.not(org.hamcrest.Matchers.hasItem("PERFIL INATIVO"))));
+    }
+
+    // ---------------------------------------------------------------- seed do signup (2026-08-19)
+
+    /** REVENDA TRIBUTADA NORMAL (CSOSN 102) e REVENDA COM SUBSTITUIÇÃO TRIBUTÁRIA (CSOSN 500) —
+     *  os dois perfis padrão que todo tenant novo já ganha (docs/telas/fiscal-perfil.md, seção
+     *  "Perfis semeados no signup"), pra não começar o fiscal com uma tela vazia. Cada um cobre
+     *  os três CRT do produto (1, 2 e 4 — DF37), então atende Simples Nacional e MEI ao mesmo
+     *  tempo — daí o grid mostrar os dois badges nos dois perfis. */
+    @Test
+    void novoTenantJaNasceComOsDoisPerfisPadrao() throws Exception {
+        String token = assinarNovoTenant("seed-signup");
+
+        String resp = mvc.perform(get("/api/v1/fiscal/perfis").header("Authorization", "Bearer " + token)
+                        .queryParam("limite", "50"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalItens").value(2))
+                .andReturn().getResponse().getContentAsString();
+
+        List<java.util.Map<String, Object>> itens = JsonPath.read(resp, "$.itens");
+        var normal = itens.stream().filter(i -> "REVENDA TRIBUTADA NORMAL".equals(i.get("nome"))).findFirst()
+                .orElseThrow(() -> new AssertionError("Perfil padrão não encontrado: REVENDA TRIBUTADA NORMAL"));
+        var st = itens.stream().filter(i -> "REVENDA COM SUBSTITUIÇÃO TRIBUTÁRIA (ST)".equals(i.get("nome"))).findFirst()
+                .orElseThrow(() -> new AssertionError("Perfil padrão não encontrado: REVENDA COM SUBSTITUIÇÃO TRIBUTÁRIA (ST)"));
+
+        for (var perfil : List.of(normal, st)) {
+            org.assertj.core.api.Assertions.assertThat(perfil.get("ativo")).isEqualTo(true);
+            org.assertj.core.api.Assertions.assertThat(perfil.get("quantidadeRegras")).isEqualTo(3);
+            org.assertj.core.api.Assertions.assertThat(perfil.get("atendeSimples")).isEqualTo(true);
+            org.assertj.core.api.Assertions.assertThat(perfil.get("atendeMei")).isEqualTo(true);
+        }
+
+        long idNormal = ((Number) normal.get("idPerfilFiscal")).longValue();
+        String detalheNormal = mvc.perform(get("/api/v1/fiscal/perfis/" + idNormal).header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        List<Integer> crtsNormal = JsonPath.read(detalheNormal, "$.regras[*].crt");
+        org.assertj.core.api.Assertions.assertThat(crtsNormal).containsExactlyInAnyOrder(1, 2, 4);
+        List<String> csosnNormal = JsonPath.read(detalheNormal, "$.regras[*].csosn");
+        org.assertj.core.api.Assertions.assertThat(csosnNormal).containsOnly("102");
+
+        long idSt = ((Number) st.get("idPerfilFiscal")).longValue();
+        String detalheSt = mvc.perform(get("/api/v1/fiscal/perfis/" + idSt).header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        List<String> csosnSt = JsonPath.read(detalheSt, "$.regras[*].csosn");
+        org.assertj.core.api.Assertions.assertThat(csosnSt).containsOnly("500");
+    }
+
+    /** O perfil semeado precisa ser aceito de verdade pela regra que a emissão consulta
+     *  (VendaFiscalAssembler.buscarRegra: CONSUMIDOR_FINAL/VENDA_CONSUMIDOR/UF '*' ou exata) —
+     *  não só existir na tela. Confere criando um produto com o perfil padrão e o CRT da empresa. */
+    @Test
+    void perfilPadraoTemRegraQueAEmissaoConsegueAchar() throws Exception {
+        String token = assinarNovoTenant("seed-emissao");
+        long idTenant = extrairIdTenant(token);
+
+        Long idPerfilNormal = jdbc.sql(
+                        "SELECT id_perfil_fiscal FROM cfg_perfil_fiscal WHERE id_tenant = ? AND nome = 'REVENDA TRIBUTADA NORMAL'")
+                .param(idTenant).query(Long.class).single();
+
+        for (int crt : List.of(1, 2, 4)) {
+            Long idRegra = jdbc.sql("""
+                            SELECT id_regra FROM cfg_perfil_fiscal_regra
+                            WHERE id_tenant = ? AND id_perfil_fiscal = ? AND crt = ?
+                              AND tipo_destinatario = 'CONSUMIDOR_FINAL' AND tipo_operacao = 'VENDA_CONSUMIDOR'
+                              AND uf_destino = '*'
+                            """)
+                    .params(idTenant, idPerfilNormal, crt).query(Long.class).optional().orElse(null);
+            org.assertj.core.api.Assertions.assertThat(idRegra)
+                    .as("regra do perfil padrão para CRT %d", crt).isNotNull();
+        }
     }
 
     // ---------------------------------------------------------------- papéis e isolamento

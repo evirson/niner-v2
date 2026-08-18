@@ -258,6 +258,11 @@ export default function RegraFiscalModal({
               onChange={(e) => setF((s) => ({ ...s, aliquotaIcms: mascararPercentual(e.target.value) }))}
               onBlur={() => setF((s) => ({ ...s, aliquotaIcms: completarPercentual(s.aliquotaIcms) }))}
             />
+            {f.modoIcms === 'CST' && !['40', '41', '50', '60'].includes(f.cstIcms) && (
+              <p className="muted" style={{ fontSize: 12, marginTop: 4 }}>
+                Este CST destaca ICMS — sem alíquota, a nota é recusada na emissão.
+              </p>
+            )}
           </div>
           <div className="col-4">
             <label htmlFor="regra-reducao-bc">Redução de base (%)</label>

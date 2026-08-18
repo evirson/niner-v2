@@ -1,5 +1,5 @@
-# Spec: Perfis Fiscais (cfg_perfil_fiscal)                          Status: Rascunho
-Autor: Claudio Calixto (dono do produto) · Data: 2026-08-17 · Módulo(s): `fiscal.perfil` · Fase: F1/F2 — Fundação + Motor (bloco B2)
+# Spec: Perfis Fiscais (cfg_perfil_fiscal)                          Status: Aprovada
+Autor: Claudio Calixto (dono do produto) · Data: 2026-08-17, revisada 2026-08-19 · Módulo(s): `fiscal.perfil` · Fase: F1/F2 — Fundação + Motor (bloco B2)
 
 ## Problema
 
@@ -58,7 +58,7 @@ Simples recolhe IPI dentro do DAS e não destaca na saída (DF37).
 
 **Reforma (IBS/CBS)** — `cst_ibscbs` (3 dígitos), `cclasstrib` (6 dígitos).
 
-## As três regras de negócio que a tela precisa impor
+## As quatro regras de negócio que a tela/motor precisam impor
 
 ### 1. CST ou CSOSN, nunca os dois — e o certo para o CRT
 
@@ -84,7 +84,37 @@ não existe — e o custo do palpite errado é rejeição sistemática em toda v
 CSOSN 101 (crédito do Simples) fica **fora da lista** no v1 — DF31: exige a alíquota efetiva da
 apuração do DAS, que o sistema não tem de onde ler.
 
-### 2. PIS/COFINS — CST 99 é o caso normal, e o 01 é recusado
+### 2. CST tributado sem alíquota é erro de cadastro, não "zero por escolha" 🆕 2026-08-19
+
+Achado reportado ao vivo pelo dono do produto: nada impedia salvar uma regra de CRT 2 com CST
+tributado (00, 10, 20, 51, 70 ou 90) e a **Alíquota ICMS (%) em branco** — a nota sairia
+**autorizada normalmente, com ICMS R$ 0,00**, e o erro só apareceria depois, na contabilidade
+(o mesmo tipo de risco silencioso que já motivou a recusa do CST 01 de PIS/COFINS e do CSOSN
+101). A validação vive no **motor** (`MotorTributario.calcularIcms`), não na tela/serviço de
+CRUD — mesmo critério já usado pelo resto do conteúdo tributário do perfil (CST/CSOSN inválido,
+CST 01 de PIS/COFINS): a tela só garante estrutura (CST *xor* CSOSN, CST só no CRT 2), o motor é
+quem valida o conteúdo tributário, na emissão, não importa por qual caminho a regra chegou lá
+(tela ou SQL direto).
+
+- **CST 00, 10, 20, 51, 70, 90** — destacam imposto. Alíquota zerada/ausente ⇒
+  `TributacaoInvalidaException`: *"CST XX de ICMS destaca imposto, mas a regra fiscal não tem
+  alíquota de ICMS informada (está zerada) — a nota sairia com ICMS R$ 0,00."*
+- **CST 40, 41, 50** — isenta/não tributada/suspensão. Não destacam nada; alíquota 0 é o valor
+  certo, sem exceção.
+- **CST 60** — ICMS **já retido antes** por substituição tributária (mesma lógica do CSOSN 500):
+  não há imposto novo nesta venda, então alíquota 0 é o caso normal, **não** erro de cadastro —
+  é a única exceção dentro do grupo "destaca imposto".
+
+A tela **não bloqueia no popup de edição da regra** (a alíquota continua opcional no formulário,
+mesmo campo usado por CSOSN e CST) — o erro aparece na primeira emissão real que usar aquela
+regra, com a mensagem acima. Isso é diferente da checagem "CST só vale no CRT 2" do item 1, que é
+estrutural e por isso é validada **duas vezes** (serviço, ao salvar, **e** motor, ao emitir);
+"este CST é válido" e "esta combinação de CST × alíquota faz sentido" são conhecimento de motor
+tributário, e por isso só existem no `MotorTributario`, na emissão — se um dia a tela quiser
+avisar mais cedo (antes da primeira venda), é uma chamada nova ao endpoint de simulação, não uma
+regra a mais no `PerfilFiscalService`.
+
+### 3. PIS/COFINS — CST 99 é o caso normal, e o 01 é recusado
 
 Todas as empresas do produto são Simples ou MEI (DF37), e nelas o PIS/COFINS está **dentro do DAS**.
 O formulário precisa deixar isso óbvio, senão alguém digita uma alíquota "para não deixar zerado".
@@ -102,7 +132,7 @@ O formulário precisa deixar isso óbvio, senão alguém digita uma alíquota "p
 > `regime_apuracao` saiu do schema. O que era "override" voltou a ser simplesmente a alíquota dos
 > CST de tratamento próprio. Detalhe completo: `docs/MODULOFISCAL.md` §8.3.
 
-### 3. Especificidade, e o vazio que o motor não perdoa
+### 4. Especificidade, e o vazio que o motor não perdoa
 
 Na emissão, o motor escolhe a regra **mais específica** que casa: UF exata ganha de `*`. A grade
 ordena por especificidade decrescente para o lojista enxergar a precedência do jeito que ela é
@@ -129,21 +159,39 @@ Perfil inativo não aparece no `<select>` do cadastro de Produto, mas **continua
 produtos que já apontam para ele — desativar não pode quebrar a emissão de quem estava emitindo. Quem
 quiser realmente parar troca o perfil dos produtos primeiro.
 
-## Perfis semeados no signup
+## Grid — coluna "Regime" (Simples/MEI) 🆕 2026-08-19
 
-🔴 **Proposta (decisão do dono do produto):** o signup semear dois perfis prontos, do mesmo jeito que
-já semeia 6 tipos de carteira e 76 contas do plano de contas:
+`PerfilFiscalLista.tsx` mostra badges **Simples**/**MEI** por perfil. **Não é campo do
+cadastro** — é derivado das próprias regras que o perfil já tem, na consulta de listagem
+(`PerfilFiscalService.listar`, subquery `EXISTS`, mesmo padrão do `quantidadeRegras` já
+existente): regra com `crt IN (1, 2)` acende "Simples"; regra com `crt = 4` acende "MEI". Um
+perfil com as três regras (1, 2 e 4 — como os dois semeados abaixo) mostra os dois badges juntos;
+só ficaria faltando um se alguém apagasse manualmente a regra daquele CRT. Sem badge nenhum
+(`—`) quando o perfil ainda não tem regra nenhuma.
+
+## Perfis semeados no signup ✅ IMPLEMENTADO 2026-08-19
+
+Todo tenant novo já nasce com dois perfis prontos (`SignupService.assinar`, mesma transação e
+mesmo padrão dos 6 tipos de carteira e das 76 contas do plano de contas — bloco "5c", entre
+tipo_carteira e o primeiro usuário):
 
 | Perfil | Regras | Uso |
 |---|---|---|
-| **REVENDA TRIBUTADA NORMAL** | CRT 1, 2 e 4 → CSOSN 102, CFOP 5.102 | O caso mais comum do varejo |
-| **REVENDA COM ST RETIDO** | CRT 1, 2 e 4 → CSOSN 500, CFOP **5.405** | Confecção e calçado, muito comum |
+| **REVENDA TRIBUTADA NORMAL** | CRT 1, 2 e 4 → CSOSN 102, CFOP 5102 | O caso mais comum do varejo |
+| **REVENDA COM SUBSTITUIÇÃO TRIBUTÁRIA (ST)** | CRT 1, 2 e 4 → CSOSN 500, CFOP **5405** | Confecção e calçado, muito comum |
 
-Racional: sem isso, o onboarding começa com uma tela vazia e um lojista que não sabe o que é CSOSN.
-Com isso, ele liga o fiscal e a maioria dos produtos já funciona. O risco é semear uma alíquota
-errada — mitigado porque os dois perfis acima **não têm alíquota de ICMS fixa** (CSOSN 102 e 500 não
-destacam ICMS), e a semente cobre só o CSOSN: a variante com CST do CRT 2 fica de fora justamente
-porque depende da divergência ainda em aberto (§1) e exige decisão do contador.
+Racional: sem isso, o onboarding começa com uma tela vazia e um lojista que não sabe o que é
+CSOSN. Com isso, ele liga o fiscal e a maioria dos produtos já funciona. O risco de semear uma
+alíquota errada não existe aqui: os dois perfis **não têm alíquota de ICMS fixa** (CSOSN 102 e
+500 não destacam ICMS — nem exigem, pela regra §2 acima, que só vale para CST), e a semente cobre
+só o CSOSN — a variante com CST do CRT 2 fica de fora de propósito, porque depende da divergência
+ainda em aberto (§1) e exige decisão do contador. As três regras (CRT 1/2/4) usam sempre
+`uf_destino='*'`/`CONSUMIDOR_FINAL`/`VENDA_CONSUMIDOR` — o único contexto que
+`VendaFiscalAssembler.buscarRegra` consulta na emissão de NFC-e (v1); PIS/COFINS sempre CST 99.
+
+Cada tenant que já existia antes desta mudança **não recebe o seed automático** (só roda dentro
+de `SignupService.assinar`, no momento da assinatura) — para um tenant antigo, os dois perfis
+entram por SQL direto, mesmo `INSERT` usado no signup.
 
 ## Critérios de aceitação (viram testes)
 
@@ -166,8 +214,19 @@ porque depende da divergência ainda em aberto (§1) e exige decisão do contado
 - Dado um OPERADOR, quando tenta listar ou gravar, então 403.
 - Dado dois tenants distintos, quando um cria um perfil, então o outro não o enxerga nem consegue
   editá-lo por id (isolamento — `id_tenant` explícito, P8/F8).
+- Dado um tenant recém-assinado, quando consulta a lista de perfis, então encontra os 2 perfis
+  padrão (REVENDA TRIBUTADA NORMAL, REVENDA COM SUBSTITUIÇÃO TRIBUTÁRIA), cada um com 3 regras
+  (CRT 1, 2 e 4) e os badges `atendeSimples`/`atendeMei` em `true`.
+- Dado o perfil padrão REVENDA TRIBUTADA NORMAL, quando o motor busca a regra pro contexto que a
+  emissão de NFC-e realmente usa (CONSUMIDOR_FINAL/VENDA_CONSUMIDOR/UF `*`), então encontra,
+  pros três CRT.
+- Dado um item com CRT 2, CST de ICMS tributado (00/10/20/51/70/90) e alíquota zerada ou ausente,
+  quando o motor calcula, então recusa com mensagem citando o CST e "alíquota de ICMS" (não
+  emite nota com ICMS R$ 0,00 silenciosamente).
+- Dado um item com CRT 2, CST **60** (ICMS já retido por ST) e alíquota zerada, quando o motor
+  calcula, então aceita — é o caso normal, não os outros CST tributados.
 
-Cobertos por `PerfilFiscalCrudTest` (novo).
+Cobertos por `PerfilFiscalCrudTest` e `MotorTributarioTest` (nested `Icms`).
 
 ## Impacto no contrato de API
 
@@ -192,18 +251,18 @@ Toda query filtra `id_tenant` explicitamente no SQL além do RLS (P8/F8), inclus
 
 ## Ajuda da tela (R22 / §3.7.1)
 
-Entrada `fiscal.perfil.tela` em `AjudaDaTela.tsx`: o que é um perfil e por que ele não fica no
-produto; a diferença entre CST e CSOSN e por que só o CRT 2 pode escolher; por que a alíquota de
-PIS/COFINS fica zerada e desabilitada no CST 99 (o caso normal — tributo dentro do DAS); e o que
-significa "regra mais específica ganha".
+Entrada `fiscal.perfil.tela` em `AjudaDaTela.tsx`: os 2 perfis padrão que todo tenant já ganha
+prontos; o que é um perfil e por que ele não fica no produto; o que significa a coluna "Regime"
+(Simples/MEI, calculada, não é campo); a diferença entre CST e CSOSN e por que só o CRT 2 pode
+escolher; por que a alíquota de PIS/COFINS fica zerada e desabilitada no CST 99 (o caso normal —
+tributo dentro do DAS); e o que significa "regra mais específica ganha".
 
 ## Impacto no banco
 
-**Nenhuma migration nova** para a tela. `cfg_perfil_fiscal`, `cfg_perfil_fiscal_regra` e
-`produto.id_perfil_fiscal` já existem (V035:132-193).
-
-Se a proposta de **perfis semeados no signup** for aceita, `SignupService.assinar` ganha os dois
-`INSERT`s (mesma transação do resto do seed) — sem mudança de schema.
+**Nenhuma migration nova** para a tela nem para o seed do signup. `cfg_perfil_fiscal`,
+`cfg_perfil_fiscal_regra` e `produto.id_perfil_fiscal` já existem (V035:132-193);
+`SignupService.assinar` só ganhou os `INSERT`s dos dois perfis padrão, mesma transação do resto
+do seed.
 
 ## Non-goals desta feature
 
@@ -216,7 +275,6 @@ Se a proposta de **perfis semeados no signup** for aceita, `SignupService.assina
 
 ## Questões abertas
 
-- 🔴 **Semear os dois perfis padrão no signup?** Recomendação acima é sim. Decisão do dono do produto.
 - 🔴 **A tabela `cfg_cclasstrib` (~173 códigos) ainda não foi carregada.** Enquanto não for, o campo
   `cclasstrib` é texto de 6 dígitos sem validação contra lista. Vem no mesmo pacote que os XSD, pedido
   ao dono do produto junto com o certificado (§17.1).
@@ -231,5 +289,5 @@ Se a proposta de **perfis semeados no signup** for aceita, `SignupService.assina
 
 ## Métrica de sucesso
 
-Um lojista de calçados liga o fiscal, aponta os produtos para dois perfis, e emite NFC-e sem digitar
-CFOP nem CST em nenhum produto individualmente.
+Um lojista de calçados liga o fiscal, aponta os produtos para os dois perfis já prontos desde o
+signup, e emite NFC-e sem digitar CFOP nem CST em nenhum produto individualmente.

@@ -58,7 +58,11 @@ Registro cronológico das decisões e entregas. Atualizar a cada marco relevante
 > bug real de "duplicate key" na Importação de Estoque corrigido + tela nova **Dados da Empresa**
 > (`/empresas`, primeiro CRUD do projeto sem criar/excluir) fecha a categoria "Empresa" da
 > Conformidade Fiscal (CNPJ/Inscrição Estadual/Inscrição Municipal/código de município IBGE/CNAE
-> nunca tinham tela pra editar). **741/741 testes de backend verdes.** Ver linha do tempo de hoje.
+> nunca tinham tela pra editar) + **Perfis Fiscais** ganharam os 2 perfis padrão semeados no
+> signup (fecha a última pendência aberta da spec), coluna "Regime" (Simples/MEI, derivada) na
+> grade, e o motor passou a recusar CST de ICMS tributado sem alíquota informada (achado real:
+> nota saía autorizada com ICMS R$ 0,00 em silêncio). **750/750 testes de backend verdes.** Ver
+> linha do tempo de hoje.
 >
 > Os parágrafos abaixo são a **narrativa acumulada** desde o começo — leia o resumo acima para o
 > estado, e a linha do tempo (do mais novo para o mais antigo) para o detalhe de cada entrega.
@@ -460,6 +464,48 @@ Movimentação de Conta Corrente) que ainda não tinham migrado pro `SeletorPlan
 ---
 
 ## Linha do tempo
+
+### 2026-08-19 — Perfis Fiscais: 2 perfis padrão no signup, badge Simples/MEI na grade, motor recusa CST tributado sem alíquota
+
+Três pedidos do dono do produto na mesma sessão, cada um fechando uma lacuna real do módulo
+fiscal (`docs/telas/fiscal-perfil.md`).
+
+**1) Perfis padrão semeados no signup** — fecha a questão que a spec já carregava desde 2026-08-17
+("🔴 Semear os dois perfis padrão no signup? Recomendação é sim. Decisão do dono do produto").
+Todo tenant novo já nasce com **REVENDA TRIBUTADA NORMAL** (CSOSN 102, CFOP 5102) e **REVENDA COM
+SUBSTITUIÇÃO TRIBUTÁRIA (ST)** (CSOSN 500, CFOP 5405), cada um com 3 regras (CRT 1, 2 e 4 — DF37),
+sempre para `uf_destino='*'`/`CONSUMIDOR_FINAL`/`VENDA_CONSUMIDOR` — o único contexto que
+`VendaFiscalAssembler.buscarRegra` consulta na emissão de NFC-e do v1. PIS/COFINS sempre CST 99.
+Seed em `SignupService.assinar` (mesma transação e mesmo padrão dos 6 tipos de carteira e das 76
+contas do plano de contas). CST de ICMS fica de fora de propósito — a divergência do CRT 2 (§8.2
+do estudo) é decisão do contador, não do ERP.
+
+**2) Coluna "Regime" (Simples/MEI) na grade** — não é campo novo do cadastro, é **derivado** das
+regras que o perfil já tem: `PerfilFiscalService.listar()` ganhou duas subqueries `EXISTS` (CRT 1
+ou 2 ⇒ "Simples"; CRT 4 ⇒ "MEI"), mesmo padrão do `quantidadeRegras` que já existia. Um perfil com
+regra pros três CRT — como os dois semeados — mostra os dois badges juntos.
+
+**3) Motor recusa CST de ICMS tributado sem alíquota** — achado ao vivo pelo dono do produto
+perguntando "quando está no CRT 2, não teria que colocar a alíquota de ICMS?": nada impedia salvar
+uma regra com CST tributado (00/10/20/51/70/90) e alíquota em branco — a nota saía **autorizada
+normalmente, com ICMS R$ 0,00**, erro só visível depois, na contabilidade (mesma classe de risco
+que já motivou a recusa do CST 01 de PIS/COFINS e do CSOSN 101). Corrigido em
+`MotorTributario.calcularIcms` — validação de **conteúdo tributário fica no motor**, não no CRUD
+do perfil, mesmo critério já usado pro resto (CST/CSOSN inválido, CST 01). CST **60** (ICMS já
+retido por substituição tributária, mesma lógica do CSOSN 500) é a exceção deliberada: alíquota
+zerada ali é o caso normal, não erro.
+
+**Testado:** os 2 perfis aplicados também no tenant de dev (via SQL direto — signups antigos não
+recebem o seed automático), confirmado ao vivo no navegador (grid com os dois badges, formulário
+com as 3 regras). Havia um perfil de teste mais antigo ("TRIBUTADO NORMAL", CRT 1+4 só, 1 produto
+vinculado) — a pedido do usuário, excluído depois de repontar o produto pro novo perfil.
+`MotorTributarioTest` ganhou 7 casos novos (CST tributado × alíquota zerada para cada código,
+mais o caso de exceção do CST 60) — suíte inteira roda em milissegundos, sem Spring/Testcontainers
+(o motor é puro, por desenho). `PerfilFiscalCrudTest` ganhou 2 casos confirmando o seed do signup.
+**750/750 testes de backend verdes**, `tsc -b` limpo.
+
+Detalhes completos: `docs/telas/fiscal-perfil.md` (seções "Grid — coluna Regime", "Perfis
+semeados no signup", regra de negócio nº 2) e `docs/MODULOFISCAL.md` §8.2.
 
 ### 2026-08-19 — Tela nova "Dados da Empresa": fecha a lacuna de CNPJ/IE/IM/código IBGE/CNAE que a Conformidade Fiscal cobrava
 

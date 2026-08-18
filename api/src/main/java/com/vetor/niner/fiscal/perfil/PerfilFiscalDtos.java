@@ -103,13 +103,19 @@ public final class PerfilFiscalDtos {
             OffsetDateTime atualizadoEm) {
     }
 
-    /** Linha da grade — sem as regras, que só carregam no popup de edição. */
+    /**
+     * Linha da grade — sem as regras, que só carregam no popup de edição. {@code atendeSimples}/
+     * {@code atendeMei} são derivados das regras do perfil (CRT 1 ou 2 ⇒ Simples Nacional; CRT 4
+     * ⇒ MEI), não uma escolha do cadastro — um perfil com regra pros três CRT atende os dois.
+     */
     public record PerfilFiscalListaResponse(
             long idPerfilFiscal,
             String nome,
             String descricao,
             boolean ativo,
             int quantidadeRegras,
+            boolean atendeSimples,
+            boolean atendeMei,
             OffsetDateTime criadoEm,
             OffsetDateTime atualizadoEm) {
     }

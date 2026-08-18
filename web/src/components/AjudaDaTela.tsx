@@ -361,7 +361,9 @@ const CONTEUDOS: Record<string, ConteudoAjuda> = {
     titulo: 'Perfis Fiscais',
     objetivo: 'Cadastrar as regras de tributação (CFOP, ICMS, PIS/COFINS, IBS/CBS) que o produto usa na nota — sem digitar isso em cada produto individualmente.',
     passos: [
+      'Todo tenant já nasce com 2 perfis prontos: "Revenda Tributada Normal" (CSOSN 102, o caso comum) e "Revenda com Substituição Tributária (ST)" (CSOSN 500, comum em confecção e calçado) — cada um já cobre os três CRT do produto (1, 2 e 4).',
       'Um perfil agrupa uma ou mais regras. Cada regra vale para um contexto: CRT do emitente, UF de destino (ou "*" para qualquer uma), tipo de destinatário e tipo de operação.',
+      'A coluna "Regime" da lista mostra Simples/MEI — não é um campo que se escolhe, é calculado a partir das regras do perfil (CRT 1 ou 2 = Simples Nacional, CRT 4 = MEI).',
       'Em CRT 1 e 4 (a maioria) o ICMS é sempre por CSOSN. Só o CRT 2 (excesso de sublimite) pode escolher entre CSOSN e CST — se não souber qual usar, confirme com o contador.',
       'PIS/COFINS: o normal é CST 99 (tributo dentro do DAS, sem alíquota). Só use outro CST para produto com tratamento próprio (monofásico, alíquota zero) — aí a alíquota é do produto.',
       'A regra mais específica ganha: uma UF exata vale mais que "*". Sem nenhuma regra que case, a nota não sai — o sistema nunca chuta um CFOP.',
@@ -370,6 +372,7 @@ const CONTEUDOS: Record<string, ConteudoAjuda> = {
     errosComuns: [
       'Só administradores acessam esta tela — uma regra errada aqui afeta todos os produtos do perfil.',
       'Não consigo excluir um perfil: ele está em uso por algum produto — o sistema inativa em vez de excluir; o perfil continua valendo para quem já apontava para ele.',
+      'Escolhi CST de ICMS (CRT 2) e a venda foi recusada na hora de emitir: falta preencher a Alíquota ICMS (%) — CST que destaca imposto (00, 10, 20, 51, 70, 90) exige alíquota informada, senão a nota sairia com ICMS zerado. Só o CST 60 (ICMS já retido antes por substituição tributária) dispensa alíquota de propósito.',
     ],
     urlVideo: null,
   },

@@ -177,6 +177,7 @@ export default function PerfilFiscalLista() {
                     )
                   })}
                   <th>Regras</th>
+                  <th>Regime</th>
                   <th aria-label="Ações" />
                 </tr>
               </thead>
@@ -189,6 +190,16 @@ export default function PerfilFiscalLista() {
                     </td>
                     <td>{new Date(p.criadoEm).toLocaleDateString('pt-BR')}</td>
                     <td>{p.quantidadeRegras}</td>
+                    <td>
+                      {!p.atendeSimples && !p.atendeMei ? (
+                        <span className="muted">—</span>
+                      ) : (
+                        <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                          {p.atendeSimples && <span className="badge" title="Tem regra para CRT 1 e/ou 2">Simples</span>}
+                          {p.atendeMei && <span className="badge" title="Tem regra para CRT 4">MEI</span>}
+                        </div>
+                      )}
+                    </td>
                     <td className="acoes-cell">
                       <Link
                         className="acao-icone acao-visualizar"

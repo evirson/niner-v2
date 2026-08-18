@@ -157,6 +157,53 @@ public class SignupService {
                 .params(idTenant, idTenant, idTenant, idTenant, idTenant, idTenant)
                 .update();
 
+        // 5c) perfis fiscais padrão (2026-08-19, docs/telas/fiscal-perfil.md "Perfis semeados no
+        // signup") — sem isso o lojista liga o fiscal e não tem produto com pra onde apontar. Os
+        // dois cobrem o caso mais comum do varejo de Simples Nacional/MEI (DF37: só CRT 1, 2 e 4,
+        // os três semeados nos dois perfis — um perfil só "é" Simples ou MEI pelas regras que tem,
+        // não por um campo próprio, ver PerfilFiscalService.listar/atende_simples/atende_mei):
+        // revenda tributada normal (CSOSN 102) e revenda com ICMS já retido por substituição
+        // tributária (CSOSN 500, comum em confecção/calçado). PIS/COFINS sempre CST 99 (dentro do
+        // DAS, DF37); contexto CONSUMIDOR_FINAL/VENDA_CONSUMIDOR/UF '*' é o único que
+        // VendaFiscalAssembler.buscarRegra consulta na emissão de NFC-e (v1, DF35). CST de ICMS
+        // fica de fora de propósito — a divergência do CRT 2 (§8.2 do estudo fiscal) é decisão do
+        // contador, o ERP não escolhe por ele.
+        long idPerfilNormal = jdbc.sql("""
+                        INSERT INTO cfg_perfil_fiscal (id_tenant, nome, descricao, ativo)
+                        VALUES (?, 'REVENDA TRIBUTADA NORMAL',
+                                'CSOSN 102 — regra padrão para revenda de mercadoria sem substituição tributária.', true)
+                        RETURNING id_perfil_fiscal
+                        """)
+                .param(idTenant).query(Long.class).single();
+        jdbc.sql("""
+                        INSERT INTO cfg_perfil_fiscal_regra
+                            (id_tenant, id_perfil_fiscal, crt, uf_destino, tipo_destinatario, tipo_operacao,
+                             cfop, csosn, cst_pis, cst_cofins) VALUES
+                            (?, ?, 1, '*', 'CONSUMIDOR_FINAL', 'VENDA_CONSUMIDOR', '5102', '102', '99', '99'),
+                            (?, ?, 2, '*', 'CONSUMIDOR_FINAL', 'VENDA_CONSUMIDOR', '5102', '102', '99', '99'),
+                            (?, ?, 4, '*', 'CONSUMIDOR_FINAL', 'VENDA_CONSUMIDOR', '5102', '102', '99', '99')
+                        """)
+                .params(idTenant, idPerfilNormal, idTenant, idPerfilNormal, idTenant, idPerfilNormal)
+                .update();
+
+        long idPerfilSt = jdbc.sql("""
+                        INSERT INTO cfg_perfil_fiscal (id_tenant, nome, descricao, ativo)
+                        VALUES (?, 'REVENDA COM SUBSTITUIÇÃO TRIBUTÁRIA (ST)',
+                                'CSOSN 500 — mercadoria com ICMS já retido por substituição tributária (comum em confecção e calçado).', true)
+                        RETURNING id_perfil_fiscal
+                        """)
+                .param(idTenant).query(Long.class).single();
+        jdbc.sql("""
+                        INSERT INTO cfg_perfil_fiscal_regra
+                            (id_tenant, id_perfil_fiscal, crt, uf_destino, tipo_destinatario, tipo_operacao,
+                             cfop, csosn, cst_pis, cst_cofins) VALUES
+                            (?, ?, 1, '*', 'CONSUMIDOR_FINAL', 'VENDA_CONSUMIDOR', '5405', '500', '99', '99'),
+                            (?, ?, 2, '*', 'CONSUMIDOR_FINAL', 'VENDA_CONSUMIDOR', '5405', '500', '99', '99'),
+                            (?, ?, 4, '*', 'CONSUMIDOR_FINAL', 'VENDA_CONSUMIDOR', '5405', '500', '99', '99')
+                        """)
+                .params(idTenant, idPerfilSt, idTenant, idPerfilSt, idTenant, idPerfilSt)
+                .update();
+
         // 6) primeiro usuário = ADMIN (senha em hash — nunca texto).
         long idUsuario = jdbc.sql("""
                         INSERT INTO usuario (id_tenant, id_empresa, nome_usuario, email, senha_hash, administrador)

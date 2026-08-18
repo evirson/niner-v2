@@ -127,6 +127,38 @@ class MotorTributarioTest {
                     .hasMessageContaining("emite com CSOSN")
                     .hasMessageContaining("Só o CRT 2");
         }
+
+        /**
+         * Achado testando ao vivo (2026-08-19): nada impedia salvar uma regra de CRT 2 com CST
+         * tributado e alíquota em branco — a nota sairia autorizada com ICMS R$ 0,00, sem aviso
+         * nenhum, e o erro só apareceria depois, na contabilidade. CST 00/10/20/51/70/90 destacam
+         * imposto: sem alíquota informada, é erro de cadastro, não "alíquota zero por escolha".
+         */
+        @ParameterizedTest(name = "CST {0}")
+        @ValueSource(strings = {"00", "10", "20", "51", "70", "90"})
+        void cstTributadoComAliquotaZeradaEhRecusado(String cst) {
+            RegraFiscal regra = comAliquota(comCst(regraComCst(), cst), null);
+
+            assertThatThrownBy(() -> motor.calcular(venda(item(regra)), ctx(2)))
+                    .isInstanceOf(TributacaoInvalidaException.class)
+                    .hasMessageContaining("CST " + cst)
+                    .hasMessageContaining("alíquota de ICMS");
+        }
+
+        /**
+         * CST 60 é a exceção: o ICMS já foi retido antes por substituição tributária (mesma lógica
+         * do CSOSN 500), então não há imposto novo nesta venda — alíquota zerada aqui é o caso
+         * normal, não erro de cadastro.
+         */
+        @Test
+        void cst60ComIcmsJaRetidoAceitaAliquotaZerada() {
+            RegraFiscal regra = comAliquota(comCst(regraComCst(), "60"), null);
+
+            var icms = umItem(motor.calcular(venda(item(regra)), ctx(2))).icms();
+
+            assertThat(icms.cst()).isEqualTo("60");
+            assertThat(icms.valor()).isEqualByComparingTo("0.00");
+        }
     }
 
     // ------------------------------------------------------------------ recusas explícitas (F11)
@@ -400,6 +432,12 @@ class MotorTributarioTest {
 
     private static RegraFiscal comFcp(RegraFiscal r, String fcp) {
         return new RegraFiscal(r.cfop(), r.cstIcms(), r.csosn(), r.aliquotaIcms(), r.percReducaoBc(), um(fcp),
+                r.cstPis(), r.aliquotaPis(), r.cstCofins(), r.aliquotaCofins(),
+                r.cstIbsCbs(), r.cClassTrib(), r.percReducaoIbs(), r.percReducaoCbs(), r.codigoBeneficio());
+    }
+
+    private static RegraFiscal comCst(RegraFiscal r, String cst) {
+        return new RegraFiscal(r.cfop(), cst, r.csosn(), r.aliquotaIcms(), r.percReducaoBc(), r.aliquotaFcp(),
                 r.cstPis(), r.aliquotaPis(), r.cstCofins(), r.aliquotaCofins(),
                 r.cstIbsCbs(), r.cClassTrib(), r.percReducaoIbs(), r.percReducaoCbs(), r.codigoBeneficio());
     }

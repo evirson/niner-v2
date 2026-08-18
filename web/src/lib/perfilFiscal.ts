@@ -102,6 +102,10 @@ export interface PerfilFiscalLista {
   descricao: string | null
   ativo: boolean
   quantidadeRegras: number
+  /** Derivado das regras do perfil (CRT 1 ou 2 ⇒ Simples Nacional; CRT 4 ⇒ MEI) — não é campo
+   *  do cadastro. Um perfil com regra pros três CRT atende os dois regimes ao mesmo tempo. */
+  atendeSimples: boolean
+  atendeMei: boolean
   criadoEm: string
   atualizadoEm: string
 }
