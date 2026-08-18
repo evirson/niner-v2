@@ -44,9 +44,10 @@ edita — se mudou, é outro arquivo) e não há exclusão (ver *Histórico é i
 4. **O bucket privado continua existindo — para os XML.** Os buckets do ADR-013
    (`niner-erp.firebasestorage.app` / `niner-erp-dev`) são de **leitura pública** de propósito
    (marketplaces rebuscam a imagem por URL) e nunca serviriam para dado fiscal. O
-   `niner.storage.bucket-fiscal` (env `NINER_STORAGE_BUCKET_FISCAL`) é dos **XML autorizados**,
-   que têm guarda legal de 5 anos e precisam de versionamento/retenção — requisitos que o bucket
-   dá e o banco não. 🔴 Ainda não provisionado.
+   `niner.storage.privado.bucket-fiscal` (env `NINER_STORAGE_BUCKET_FISCAL`) é dos **XML
+   autorizados**, que têm guarda legal de 5 anos e precisam de versionamento/retenção —
+   requisitos que o bucket dá e o banco não. ✅ **Provisionado em 2026-08-17** (ADR-014): MinIO
+   auto-hospedado, com Object Lock de 5 anos, `docs/infra/armazenamento-privado-minio.md`.
 5. **Metadados são extraídos, nunca digitados.** CNPJ titular, razão social, `valido_de`,
    `valido_ate` e `impressao_digital` (SHA-256) saem do próprio arquivo no momento do upload. O
    lojista não digita nada além da senha — dado digitado diverge do certificado e mente.
@@ -204,9 +205,10 @@ O bucket deixou de ser dependência desta tela (passou a ser dos XML, §11.1).
 
 - ✅ **DF21 — REVISADA em 2026-08-17 (decisão do dono do produto): certificado e XML foram
   separados.** O `.pfx` fica **cifrado no banco** do cliente; o bucket privado
-  (`niner.storage.bucket-fiscal`) passou a ser só dos **XML autorizados**. 🔴 O bucket real ainda
-  **não foi provisionado** — dados do dono do produto pendentes; e o versionamento/retenção de 5
-  anos é configuração do bucket GCS, fora do código.
+  (`niner.storage.privado.bucket-fiscal`) passou a ser só dos **XML autorizados**. ✅ **O bucket
+  foi provisionado em 2026-08-17 (ADR-014):** MinIO auto-hospedado no compose (e VPS quando o
+  volume justificar), com Object Lock GOVERNANCE de 1825 dias e versionamento — o
+  `infra/minio/bootstrap.sh` configura isso, então retenção deixou de ser passo manual de console.
 - ✅ **Onde fica a senha, FECHADA (2026-08-17).** Opção (b) da recomendação original: AES-256-GCM
   local, chave fora do banco (`comum.seguranca.SegredoCifrador`). A coluna `senha_ref_kms` foi
   renomeada para `senha_cifrada` — não existe Secret Manager externo, e não é preciso.

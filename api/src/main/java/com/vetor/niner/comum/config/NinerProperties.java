@@ -29,17 +29,29 @@ public record NinerProperties(
      * = GCS real (ADC/chave); preenchido (ex.: {@code http://localhost:4443}) = emulador
      * fake-gcs-server, sem credencial — modo dev, ver docs/infra/armazenamento-imagens.md §3.
      *
-     * <p>{@code bucketFiscal} (DF21) é um bucket <b>separado e privado</b>, para os <b>XML
-     * autorizados</b> — nunca o mesmo {@code bucket} de fotos, que é de leitura pública de
-     * propósito (marketplaces rebuscam a imagem por URL). Usa o mesmo {@code host}/credencial,
-     * só o nome muda.
+     * <p>Estes buckets são de <b>leitura pública</b> de propósito (marketplaces rebuscam a imagem
+     * por URL). Tudo o que <b>não</b> pode ser público mora em {@link Privado}, outro provedor.
+     */
+    public record Storage(String bucket, String baseUrl, String host, Privado privado) {
+    }
+
+    /**
+     * Object storage <b>privado</b> (ADR-014) — MinIO auto-hospedado, falado por API S3. Guarda o
+     * que não pode ser público: <b>XML fiscal</b> (bucketFiscal, com WORM e retenção de 5 anos —
+     * F6/DF21) e <b>dado pessoal</b> (bucketPrivado, apagável — LGPD). Endpoint e credencial são
+     * a única coisa que muda para apontar num VPS dedicado, no Cloudflare R2 ou no S3 da AWS.
      *
      * <p>⚠️ <b>O certificado digital NÃO vai para cá</b> (DF21 revisada em 2026-08-17): o
-     * {@code .pfx} fica cifrado no banco do cliente
-     * ({@code fiscal_certificado.arquivo_cifrado}). Este bucket é só do XML, que tem obrigação
-     * legal de guarda por 5 anos e precisa de versionamento/retenção — requisitos que o banco
-     * não dá de graça e o bucket dá. */
-    public record Storage(String bucket, String baseUrl, String host, String bucketFiscal) {
+     * {@code .pfx} fica cifrado no banco do cliente ({@code fiscal_certificado.arquivo_cifrado}),
+     * o que o coloca no mesmo backup/restore do tenant e sob RLS, sem depender de política de
+     * bucket.
+     *
+     * <p>{@code accessKey}/{@code secretKey} são do usuário de aplicação criado pelo
+     * {@code infra/minio/bootstrap.sh} — <b>nunca</b> a conta root do MinIO: essa credencial não
+     * tem permissão de apagar no bucket fiscal nem de burlar a retenção.
+     */
+    public record Privado(String endpoint, String accessKey, String secretKey, String regiao,
+                          String bucketFiscal, String bucketPrivado) {
     }
 
     /** Cache temporário em memória de {@code comum.arquivocompartilhado} (ex.: comprovante

@@ -62,12 +62,26 @@ niner:
     # herda o host automaticamente, então as URLs públicas das fotos já saem do emulador.
     host: ${NINER_STORAGE_HOST:}
     base-url: ${NINER_STORAGE_BASE_URL:${NINER_STORAGE_HOST:https://storage.googleapis.com}}
-    # DF21: bucket SEPARADO e PRIVADO para os XML AUTORIZADOS (guarda legal de 5 anos, com
-    # versionamento/retenção) — nunca o de fotos acima, que é de leitura pública de propósito.
-    # Mesmo host/credencial, nome diferente. ⚠️ O certificado digital NÃO vem para cá: fica
-    # cifrado no banco (fiscal_certificado.arquivo_cifrado), DF21 revisada em 2026-08-17.
-    # 🔴 Bucket real ainda não provisionado — dados vêm do dono do produto.
-    bucket-fiscal: ${NINER_STORAGE_BUCKET_FISCAL:niner-fiscal-dev}
+    # Object storage PRIVADO (ADR-014) — MinIO auto-hospedado, falado por API S3. Outro provedor,
+    # de propósito: o bucket acima é de leitura PÚBLICA (marketplaces), e XML fiscal + dado
+    # pessoal não podem estar num bucket público. Sobe com `docker compose up -d minio minio-init`.
+    # ⚠️ O certificado digital NÃO vem para cá: fica cifrado no banco
+    # (fiscal_certificado.arquivo_cifrado), DF21 revisada em 2026-08-17.
+    privado:
+      # Default = porta publicada no host, para rodar a API com ./mvnw spring-boot:run sem
+      # exportar nada. Pelo compose, o serviço `api` sobrescreve para http://minio:9000.
+      endpoint: ${NINER_STORAGE_PRIVADO_ENDPOINT:http://localhost:9300}
+      # Usuário de aplicação criado por infra/minio/bootstrap.sh — NUNCA a conta root do MinIO.
+      # Sem permissão de apagar no bucket fiscal e sem bypass de retenção. 🔴 dev; em produção
+      # via secret manager.
+      access-key: ${NINER_STORAGE_PRIVADO_ACCESS_KEY:niner_app}
+      secret-key: ${NINER_STORAGE_PRIVADO_SECRET_KEY:dev_minio_app}
+      # Irrelevante para o MinIO, mas o SDK da AWS exige uma região.
+      regiao: ${NINER_STORAGE_PRIVADO_REGIAO:us-east-1}
+      # XML autorizado: bucket com Object Lock (WORM) e retenção de 5 anos — imutável (F6/DF21).
+      bucket-fiscal: ${NINER_STORAGE_BUCKET_FISCAL:niner-fiscal-dev}
+      # Dado pessoal (foto de cliente): versionado, porém APAGÁVEL — LGPD, direito de exclusão.
+      bucket-privado: ${NINER_STORAGE_BUCKET_PRIVADO:niner-privado-dev}
   arquivo-compartilhado:       # cache temporário em memória (ex.: comprovante por link do WhatsApp)
     expiracao-horas: ${NINER_ARQUIVO_COMPARTILHADO_EXPIRACAO_HORAS:24}
   seguranca:

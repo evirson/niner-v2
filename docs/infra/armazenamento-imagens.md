@@ -17,11 +17,13 @@ Decisão de arquitetura: **ADR-013** (spec §6) · Tabela afetada: `produto_imag
 > expira) e, principalmente, a **seção 3 (credenciais)** para quem precisar apontar para o GCS
 > real. E a regra dura: **nada além de foto de produto entra nesses buckets, que são públicos.**
 >
-> **⚠️ Existe um SEGUNDO bucket, separado — o fiscal (DF21).** Nada fiscal pode entrar nos
-> buckets acima: eles são de leitura pública de propósito. O bucket fiscal é **privado**,
-> configurado em `niner.storage.bucket-fiscal`, e serve para os **XML autorizados** (guarda legal
-> de 5 anos, com versionamento/retenção). Ainda **não provisionado em GCP real** — dados
-> pendentes com o dono do produto.
+> **⚠️ Existe um SEGUNDO armazenamento, em outro provedor — o privado (ADR-014, 2026-08-17).**
+> Nada que não possa ser público entra nos buckets acima: eles são de leitura pública de
+> propósito. O armazenamento privado é **MinIO auto-hospedado** (S3), com dois buckets — o
+> **fiscal** (`niner.storage.privado.bucket-fiscal`, XML autorizado, WORM e guarda de 5 anos) e o
+> **privado comum** (`…bucket-privado`, foto de cliente e demais dados pessoais, apagável por
+> LGPD). Sobe com `docker compose up -d minio minio-init`. Detalhes:
+> **`docs/infra/armazenamento-privado-minio.md`**.
 >
 > **O certificado digital NÃO usa bucket nenhum** (DF21 revisada em 2026-08-17): o `.pfx` fica
 > **cifrado no banco** do cliente, em `fiscal_certificado.arquivo_cifrado`. Detalhes e o porquê:
@@ -308,7 +310,9 @@ Galeria na tela de Produtos: upload, exclusão (com confirmação), preview/ligh
 - 🟡 **Bucket público.** Foto de produto vai ser pública nos marketplaces de qualquer forma, e
   URL que expira quebra anúncio. Mas isso significa que **nada além de foto de produto pode
   entrar nesses buckets** — documento de cliente, XML de nota, backup, anexo de contrato exigem
-  bucket privado e outra decisão.
+  bucket privado e outra decisão. ✅ **Essa decisão foi tomada em 2026-08-17 (ADR-014):** MinIO
+  auto-hospedado, `docs/infra/armazenamento-privado-minio.md`. Este gatilho de revisão do ADR-013
+  está, portanto, **fechado** — e sem substituir nada aqui: as fotos de produto continuam no GCS.
 - 🟡 **Soft delete de 7 dias** significa que objeto apagado continua sendo cobrado por uma
   semana. Irrelevante no volume atual; lembrar se um dia houver reprocessamento em massa.
 

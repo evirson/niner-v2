@@ -68,6 +68,16 @@ services:
       # resolver — "fake-gcs" só existe dentro da rede do Docker). Vazio (produção) = GCS real.
       NINER_STORAGE_HOST: ${NINER_STORAGE_HOST:-}
       NINER_STORAGE_BASE_URL: ${NINER_STORAGE_BASE_URL:-}
+      # Object storage PRIVADO (ADR-014) — MinIO. Dentro da rede do compose o endereço é
+      # http://minio:9000; rodando a API no host, é http://localhost:9300 (a porta publicada) —
+      # que é justamente o default de application.yml, então lá não precisa exportar nada.
+      # A credencial NÃO é a root do MinIO: é o usuário criado pelo minio-init, sem permissão de
+      # apagar no bucket fiscal e sem bypass de retenção.
+      NINER_STORAGE_PRIVADO_ENDPOINT: ${NINER_STORAGE_PRIVADO_ENDPOINT:-http://minio:9000}
+      NINER_STORAGE_PRIVADO_ACCESS_KEY: ${NINER_STORAGE_PRIVADO_ACCESS_KEY:-niner_app}
+      NINER_STORAGE_PRIVADO_SECRET_KEY: ${NINER_STORAGE_PRIVADO_SECRET_KEY:-dev_minio_app}
+      NINER_STORAGE_BUCKET_FISCAL: ${NINER_STORAGE_BUCKET_FISCAL:-niner-fiscal-dev}
+      NINER_STORAGE_BUCKET_PRIVADO: ${NINER_STORAGE_BUCKET_PRIVADO:-niner-privado-dev}
     volumes:
       - ./api/secrets:/secrets:ro
     ports: ["${NINER_API_PORT:-8080}:8080"]
@@ -87,6 +97,56 @@ services:
     volumes:
       - fake-gcs-data:/storage
     ports: ["${NINER_FAKE_GCS_PORT:-4443}:4443"]
+
+  # Object storage PRIVADO (ADR-014) — MinIO, S3-compatível, auto-hospedado.
+  # ⚠️ NÃO confundir com o `fake-gcs` acima: aquele é um EMULADOR do bucket PÚBLICO das fotos de
+  # produto (que continuam no GCS, ADR-013). Este aqui é armazenamento de verdade — o mesmo
+  # software que vai rodar no VPS — e guarda o que não pode ser público: XML fiscal (guarda legal
+  # de 5 anos, imutável — F6/DF21) e dado pessoal (foto de cliente, LGPD).
+  #   docker compose up -d minio minio-init     → API S3 na 9300, console web na 9301
+  minio:
+    image: minio/minio:RELEASE.2025-09-07T16-13-09Z
+    container_name: niner-minio
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment:
+      # 🔴 dev. Em produção: secret manager, e a conta root NÃO é a que a API usa (ver minio-init).
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-niner_root}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-dev_minio_root}
+    volumes:
+      - minio-data:/data
+    ports:
+      - "${NINER_MINIO_PORT:-9300}:9000"            # API S3 (é esta que a API consome)
+      - "${NINER_MINIO_CONSOLE_PORT:-9301}:9001"    # console web (inspeção manual)
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+  # Bootstrap do MinIO — cria os dois buckets com as políticas certas e a credencial de menor
+  # privilégio da API. Roda uma vez e sai (é um job, não um serviço); é idempotente, então pode
+  # ser reexecutado à vontade. O que ele garante está em infra/minio/bootstrap.sh.
+  minio-init:
+    image: minio/mc:RELEASE.2025-08-13T08-35-41Z
+    container_name: niner-minio-init
+    depends_on:
+      minio: { condition: service_healthy }
+    environment:
+      MINIO_ENDPOINT: http://minio:9000
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-niner_root}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-dev_minio_root}
+      BUCKET_FISCAL: ${NINER_STORAGE_BUCKET_FISCAL:-niner-fiscal-dev}
+      BUCKET_PRIVADO: ${NINER_STORAGE_BUCKET_PRIVADO:-niner-privado-dev}
+      RETENCAO_FISCAL_DIAS: ${NINER_FISCAL_RETENCAO_DIAS:-1825}   # 5 anos (arts. 173/174 do CTN)
+      # Bucket privado é versionado, então apagar só cria um "delete marker": a versão antiga
+      # some de verdade depois destes dias (LGPD — exclusão precisa apagar mesmo).
+      VERSAO_ANTIGA_DIAS: ${NINER_PRIVADO_VERSAO_ANTIGA_DIAS:-30}
+      APP_ACCESS_KEY: ${NINER_STORAGE_PRIVADO_ACCESS_KEY:-niner_app}
+      APP_SECRET_KEY: ${NINER_STORAGE_PRIVADO_SECRET_KEY:-dev_minio_app}
+    volumes:
+      - ./infra/minio:/bootstrap:ro
+    entrypoint: ["/bin/sh", "/bootstrap/bootstrap.sh"]
+    restart: "no"
 
   # pgAdmin — cliente web para inspecionar o niner_db em dev. Perfil `tools` (não sobe por padrão).
   #   docker compose --profile tools up -d pgadmin   → http://localhost:5050
@@ -133,3 +193,6 @@ volumes:
   pgdata:
   pgadmin-data:
   fake-gcs-data:
+  # ⚠️ Apagar este volume apaga XML fiscal — em dev é só perda de teste, em produção é
+  # problema legal do lojista. O `docker compose down -v` leva ele junto.
+  minio-data:

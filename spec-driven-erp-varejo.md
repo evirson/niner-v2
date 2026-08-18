@@ -1023,7 +1023,7 @@ Data: · Decisores:
 Positivas: · Negativas/dívidas: · Gatilho de revisão: [métrica ou evento que faria rever]
 ```
 
-ADRs já previstos: ADR-001 monolito modular; ADR-002 outbox sobre Postgres sem broker; ADR-003 biblioteca de UI; **ADR-004 estratégia de reserva de estoque: reservar no `recebido` + expiração configurável por canal (Q2 fechada 2026-07-10; §3.3.5);** ADR-005 cifragem de credenciais; **ADR-006 isolamento de tenant (banco único + `id_tenant` + Postgres RLS; §3.1.1); ADR-007 topologia do control-plane (uma API/3 superfícies + 3 apps React, API stateless, supera o non-goal §2.3, gatilhos de split); ADR-008 adapter de gateway de cobrança (provedor a definir — D3); ADR-009 auth/identidade multi-tenant (duas populações de usuário, claims JWT por `aud`, papéis de staff × RBAC do tenant); ADR-010 financeiro do lojista fora do v1 (Q5 fechada 2026-07-10, **revisado por ADR-012**; §3.3.7); ADR-011 framework do site público: **Astro (SSG)** — decidido 2026-07-10, prioriza SEO/Core Web Vitals para a landing/planos; `web`/`admin` seguem React+Vite; **ADR-012 crediário + caixa + contas a pagar antecipados da Fase 2 (revisão de Q5/ADR-010, 2026-07-16, em duas rodadas) — `tipo_carteira`/`moeda`/`contas_receber`/`caixa_mestre`/`caixa_detalhe` entram via V025; `contas_pagar` entra via V026; só `conta_corrente(_movimento)` continua fora (§3.3.7).**
+ADRs já previstos: ADR-001 monolito modular; ADR-002 outbox sobre Postgres sem broker; ADR-003 biblioteca de UI; **ADR-004 estratégia de reserva de estoque: reservar no `recebido` + expiração configurável por canal (Q2 fechada 2026-07-10; §3.3.5);** ADR-005 cifragem de credenciais; **ADR-006 isolamento de tenant (banco único + `id_tenant` + Postgres RLS; §3.1.1); ADR-007 topologia do control-plane (uma API/3 superfícies + 3 apps React, API stateless, supera o non-goal §2.3, gatilhos de split); ADR-008 adapter de gateway de cobrança (provedor a definir — D3); ADR-009 auth/identidade multi-tenant (duas populações de usuário, claims JWT por `aud`, papéis de staff × RBAC do tenant); ADR-010 financeiro do lojista fora do v1 (Q5 fechada 2026-07-10, **revisado por ADR-012**; §3.3.7); ADR-011 framework do site público: **Astro (SSG)** — decidido 2026-07-10, prioriza SEO/Core Web Vitals para a landing/planos; `web`/`admin` seguem React+Vite; **ADR-012 crediário + caixa + contas a pagar antecipados da Fase 2 (revisão de Q5/ADR-010, 2026-07-16, em duas rodadas) — `tipo_carteira`/`moeda`/`contas_receber`/`caixa_mestre`/`caixa_detalhe` entram via V025; `contas_pagar` entra via V026; só `conta_corrente(_movimento)` continua fora (§3.3.7).** **ADR-013 object storage das imagens de produto: Firebase Storage/GCS, bucket público (2026-07-23); ADR-014 object storage privado: MinIO (S3) auto-hospedado, dois buckets — fiscal com WORM/5 anos e privado apagável (2026-08-17) — as fotos de produto continuam no GCS.**
 
 ---
 
@@ -1048,6 +1048,41 @@ Imagens de produto vão para **Firebase Storage** (que é um bucket do Google Cl
 **Gatilho de revisão:** o egress aparecer de forma relevante na fatura do GCP, ou a necessidade de armazenar qualquer arquivo **não público** (aí o desenho ganha um segundo bucket privado, não substitui este).
 
 **Detalhamento operacional, estado provisionado e plano de implementação: `docs/infra/armazenamento-imagens.md`.**
+
+---
+
+# ADR-014: Object storage **privado** — MinIO (S3) auto-hospedado   Status: Aceito
+Data: 2026-08-17 · Decisores: Evirson (Vetor)
+
+## Contexto
+O gatilho de revisão do ADR-013 ("a necessidade de armazenar qualquer arquivo **não público**") foi puxado por duas demandas ao mesmo tempo: **XML fiscal** (DF21 — `documento_fiscal.xml_objeto_bucket`/`xml_hash` existem desde a V035, mas nada os escreve, e o Arquivamento ficou de fora do B8 justamente por falta de bucket) e **foto de cliente** (dado pessoal, LGPD). Os dois são o oposto exato do bucket de fotos de produto, que é **público de propósito** porque os marketplaces rebuscam a imagem por URL. Somam-se a isso duas forças já registradas no histórico do projeto: (a) sensibilidade a custo — a proposta de usar bucket GCS para o compartilhamento de comprovantes foi **rejeitada pelo dono do produto** em 2026-08-07 ("vai ter custo"); (b) o XML tem obrigação legal de guarda por **5 anos** (arts. 173/174 do CTN) e é **imutável depois de autorizado** (F6), requisitos de retenção/WORM que o Postgres não dá de graça.
+
+## Decisão
+Arquivo privado vai para **MinIO auto-hospedado**, subindo no **`docker-compose` do próprio projeto** em dev e migrando para **VPS dedicado** quando o volume justificar. O acesso é encapsulado por uma interface própria — `ArmazenamentoPrivado` (área + caminho relativo), separada de `ArmazenamentoDeArquivos` (público, GCS), porque as duas têm **contratos diferentes**: a privada não tem `urlPublica()` e a pública não tem WORM. O cliente é o **AWS SDK v2 (S3)** com `forcePathStyle`, e não o SDK proprietário do MinIO: MinIO, VPS próprio, Cloudflare R2, Wasabi e S3 passam a ser troca de endpoint + chave, não troca de código.
+
+**Dois buckets, porque os ciclos de vida são incompatíveis:**
+
+| Bucket | Conteúdo | Política |
+|---|---|---|
+| `niner-fiscal-*` | XML autorizado (`nfeProc`), eventos, inutilizações | **Object Lock GOVERNANCE, retenção 1825 dias** + versionamento. Apagar/sobrescrever é recusado **duas vezes**: no código (área imutável) e no bucket (WORM) |
+| `niner-privado-*` | Foto de cliente e demais anexos pessoais | Versionado (recupera exclusão acidental), **apagável** — LGPD dá ao titular direito de exclusão |
+
+**Fotos de produto permanecem no GCS** (ADR-013 intacto): URL pública estável é requisito dos marketplaces, e servi-la do MinIO exigiria expô-lo publicamente com domínio + TLS.
+
+**Caminho do objeto:** `tenants/{id_tenant}/{área}/{caminho relativo}` — o prefixo do tenant é montado **sempre** pelo adapter, a partir do `TenantContext` (P8, nunca de parâmetro), e a leitura **recusa** chave cujo prefixo não seja o do tenant vigente, mesmo que a chave venha do banco.
+
+## Alternativas consideradas
+1. **Segundo bucket privado no GCS** — prós: zero infra nova, mesma credencial. Contras: custo recorrente num item que só cresce (5 anos de retenção legal, nunca decresce), e concentra em um provedor pago justamente o dado que a loja é **obrigada** a manter. Rejeitada por custo.
+2. **XML dentro do Postgres** (`documento_fiscal.xml_assinado`, que é o estado de hoje) — prós: já funciona, entra no backup do tenant, coberto por RLS. Contras: infla backup/WAL com dezenas de milhares de XMLs por mês por loja, sem WORM e sem versionamento; §3.3.1 já veda binário grande no banco. Rejeitada como destino final — permanece só como cópia de trabalho até a autorização.
+3. **SDK proprietário do MinIO (`io.minio`)** — prós: menor, API mais direta. Contras: amarra o código ao MinIO justamente quando a decisão prevê migrar (VPS/R2). Rejeitada.
+4. **Certificado digital (`.pfx`) também no bucket** — rejeitada em 2026-08-17 na revisão da DF21: o certificado fica **cifrado no banco** (`fiscal_certificado.arquivo_cifrado`), o que o coloca no mesmo backup/restore do tenant e sob RLS, sem depender de política de bucket.
+
+## Consequências
+**Positivas:** custo marginal zero em dev e previsível em produção (disco de VPS, não egress medido); WORM de verdade para o XML, que é obrigação legal; dado pessoal (foto de cliente) fora de bucket público; API S3 mantém aberta a saída para R2/S3/VPS sem migration de dados; o isolamento por tenant continua visível no próprio storage (offboarding vira `rm` de prefixo).
+**Negativas/dívidas:** é **infra que passa a ser nossa** — backup, atualização e monitoramento do MinIO viram responsabilidade da Vetor (em dev, o volume Docker basta; em produção, não); um segundo SDK de storage no classpath (GCS + AWS S3); a retenção de 5 anos em GOVERNANCE significa que **nem o root apaga** um XML sem o header de bypass, o que é o comportamento desejado e ao mesmo tempo um pé-de-ouvido em dev; enquanto o MinIO rodar na mesma máquina da API, uma perda de disco leva os dois juntos — o plano de backup é pré-requisito da migração para VPS, não posterior a ela.
+**Gatilho de revisão:** o volume ou a criticidade justificarem VPS dedicado (a migração já prevista), ou a fatura/operação do MinIO auto-hospedado ficar mais cara que R2 — cujo egress zero seria o próximo destino natural, com o mesmo adapter.
+
+**Detalhamento operacional (buckets, política de acesso, dev, produção e backup): `docs/infra/armazenamento-privado-minio.md`.**
 
 # 7. Template — Task
 

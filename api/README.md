@@ -32,6 +32,15 @@ curl localhost:8080/api/admin/ping
 
 Ou tudo via compose: `docker compose up -d db && docker compose run --rm flyway && docker compose up -d api`.
 
+**Object storage.** São dois, com finalidades opostas (não confunda):
+`docker compose up -d fake-gcs` sobe o **emulador** do bucket **público** das fotos de produto
+(ADR-013 — rodando a API no host, exige `NINER_STORAGE_HOST=http://localhost:4443`);
+`docker compose up -d minio minio-init` sobe o **MinIO** de verdade, o armazenamento **privado**
+de XML fiscal e dado pessoal (ADR-014 — rodando a API no host **não precisa exportar nada**, o
+default de `application.yml` já é `http://localhost:9300`). Console web do MinIO: `localhost:9301`.
+Sem eles a API sobe igual; a falha aparece na primeira gravação. Ver
+`docs/infra/armazenamento-privado-minio.md`.
+
 ## Testes
 
 ```bash

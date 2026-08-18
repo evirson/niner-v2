@@ -38,6 +38,13 @@
 				<type>pom</type>
 				<scope>import</scope>
 			</dependency>
+			<dependency>
+				<groupId>software.amazon.awssdk</groupId>
+				<artifactId>bom</artifactId>
+				<version>2.31.78</version>
+				<type>pom</type>
+				<scope>import</scope>
+			</dependency>
 		</dependencies>
 	</dependencyManagement>
 	<dependencies>
@@ -91,6 +98,21 @@
 		<dependency>
 			<groupId>com.google.cloud</groupId>
 			<artifactId>google-cloud-storage</artifactId>
+		</dependency>
+		<!-- Object storage PRIVADO (ADR-014, docs/infra/armazenamento-privado-minio.md): XML fiscal e
+		     dado pessoal, hoje em MinIO auto-hospedado. É o SDK da AWS de propósito, e não o cliente
+		     proprietário do MinIO (io.minio): MinIO, VPS próprio, Cloudflare R2 e S3 falam o mesmo
+		     protocolo, então migrar vira troca de endpoint, não troca de código.
+		     O cliente HTTP assíncrono (netty) não é usado — só o S3Client síncrono, sobre apache-client. -->
+		<dependency>
+			<groupId>software.amazon.awssdk</groupId>
+			<artifactId>s3</artifactId>
+			<exclusions>
+				<exclusion>
+					<groupId>software.amazon.awssdk</groupId>
+					<artifactId>netty-nio-client</artifactId>
+				</exclusion>
+			</exclusions>
 		</dependency>
 		<!-- Normalização de imagem (redimensionar + recodificar) no upload. -->
 		<dependency>
