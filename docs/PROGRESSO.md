@@ -465,6 +465,75 @@ Movimentação de Conta Corrente) que ainda não tinham migrado pro `SeletorPlan
 
 ## Linha do tempo
 
+### 2026-08-18 — Pivô comercial: gratuito por volume de vendas, multi-CNPJ, Mercado Pago e rastreamento próprio (ADR-015/016/017)
+
+Sessão de **spec** (nenhuma linha de código de produção ainda): o dono do produto redefiniu o
+modelo comercial, e o encadeamento spec→código exigiu fechar três decisões que estavam abertas
+desde julho (D1, D3) ou não existiam (rastreamento).
+
+**O que muda.** Sai o **trial de 60 dias** (D2) e saem os **3 planos por funcionalidade** (D1);
+entra **plano Gratuito sem prazo de validade, limitado a 100 vendas/mês**, com o produto
+**inteiro** liberado — inclusive fiscal — e **CNPJs, usuários e produtos ilimitados**. Acima
+disso, **faixas por volume** de 500 em 500 vendas, geradas por fórmula
+(`preco_base × (1 + f + … + f^(n-1))`, com `f=1` linear e `f<1` atenuando, tudo limitado por um
+**preço máximo**), anual com **15%** de desconto. Decisões do dono do produto nesta sessão:
+(1) o contador **zera todo mês**; (2) ao estourar, ainda são permitidas **X vendas de tolerância**
+— parâmetro que ele preenche — e só então bloqueia; (3) **cancelar venda não devolve cota**;
+(4) escala pode ser linear ou atenuada, **com teto de preço**; (5) **nada de limitar ferramenta**,
+nem no gratuito nem no pago.
+
+**Por que o modelo antigo não servia mais** (registrado no ADR-015): os 3 planos vendiam
+*canais de marketplace*, e `canais/`/`pedidos/`/`precos/`/`integracao/` seguem **sem uma linha de
+domínio**; enquanto isso o que está pronto — PDV, caixa, crediário, contas a pagar, DRE e o
+**módulo fiscal inteiro** — não aparecia no plano de preços. E trial por tempo cria uma data em
+que o lojista **perde acesso ao que já digitou**, no produto em que migrar cadastro leva semanas.
+
+**Achado que facilitou o pivô:** o enforcement de limite **nunca existiu**. `plataforma.uso_tenant`
+é escrito uma única vez, no `SignupService`, e nenhum caminho de escrita compara uso × plano — R19
+estava só no papel. Trocar a dimensão medida não custou refatoração; custou a implementação que
+faltava de qualquer jeito.
+
+**Artefatos criados/atualizados:**
+- **ADR-015** (modelo comercial), **ADR-016** (Mercado Pago fecha D3 — escolhido porque a equipe
+  já o integrou em `ecommerce-revo` e `s7classificados`, além de PIX nativo e recorrência) e
+  **ADR-017** (rastreamento de aquisição first-party, sem pixel de terceiro sem consentimento) —
+  em `spec-driven-erp-varejo.md`, com §3.3.11 reescrita, **§3.3.12 nova** (lead/visita/evento),
+  §3.4 (endpoints novos) e §3.5.1 (V037–V040 previstas).
+- **`docs/PLANO-DE-NEGOCIO.md`** — §4/§5/§6/§7/§9 reescritos e Anexo B atualizado: D1 ✅, D2 ⛔
+  superada, D3 ✅, D4 ✅ revisada (multi-CNPJ ilimitado), D7 ✅ revisada, **D11/D12 novas**.
+- **`docs/telas/painel-assinatura.md`** (nova tela *Minha Conta*: medidor de cota, histórico de
+  12 meses, faixa recomendada e inclusão de CNPJ) e **`docs/telas/admin-marketing.md`** (funil,
+  leads e "contas perto do limite", no `admin/` que ainda não existe).
+- **`docs/telas/empresa.md`** — inclusão de empresa deixa de ser SQL manual (`POST /api/v1/empresas`).
+- **`docs/site/briefing-landing.md`** — briefing de design da landing de venda (estrutura, copy,
+  SEO, instrumentação `data-evento`, restrições), para gerar o HTML e portar para Astro.
+
+**Regras que ficaram fixadas para a implementação:** a cota conta **venda emitida no PDV**, soma
+todas as empresas do tenant, e **não** conta importação de dados legada (`ContasReceberImportador`
+insere `venda` histórica — contaria 500 vendas no dia da migração) nem devolução; o bloqueio é
+**409 Problem Details** e atinge **só a emissão de venda** (login, relatórios, crediário e
+financeiro seguem abertos); o contador é a **única** travessia domínio→plataforma permitida (P9),
+confinada a `LimiteVendasService`; e `plataforma.gerar_faixas_planos()` **nunca faz DELETE** (há FK
+de `assinatura` e o preço histórico importa).
+
+**🔴 Falta o dono do produto preencher** (são dado em `plataforma.parametro_comercial`, não código):
+`preco_base`, `fator_faixa`, `preco_maximo`, `vendas_maximo` e `tolerancia_vendas`.
+
+**Ambiente subido nesta sessão** para inspeção das telas de assinatura: compose (db 5435, MinIO
+9300/9301, fake-gcs 4443) + migrations V001–V036 + API e os dois fronts. Dois desvios registrados:
+a **8080 estava ocupada** pela API do `calcemoda-v2` (a API do Niner subiu na **8081**, com os
+`config.js` de `web/` e `site/` apontados para lá — reverter com `git checkout` quando a 8080
+liberar), e os **fronts rodam pelo compose**, porque os `node_modules` do repositório têm binário
+nativo `linux-arm64-musl` (rolldown/rollup) e `npm run dev` no host quebra com `MODULE_NOT_FOUND`.
+
+**🐛 Bug encontrado ao subir (ainda não corrigido):** `FiscalContingenciaDrenoJob` explode a cada
+5 minutos — `DocumentoFiscalRepositorio.java:210` compara `u.ambiente` (`smallint` 1/2 em
+`cfg_uf_autorizador`, V034) com `c.ambiente` (ENUM `ambiente_fiscal`, V035): `ERROR: operator does
+not exist: smallint = ambiente_fiscal`. A própria query já converte certo duas linhas acima
+(`CASE c.ambiente WHEN 'PRODUCAO' THEN 1 ELSE 2 END`), só não reaproveita no JOIN. Efeito real:
+**o dreno de contingência nunca drenou nada** — nota emitida offline ficaria parada.
+
+
 ### 2026-08-19 — Perfis Fiscais: 2 perfis padrão no signup, badge Simples/MEI na grade, motor recusa CST tributado sem alíquota
 
 Três pedidos do dono do produto na mesma sessão, cada um fechando uma lacuna real do módulo
