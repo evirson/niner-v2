@@ -103,9 +103,14 @@ public class GradeService {
         return criar(new GradeRequest(nomeUnico(nomeSugerido), idsTamanho));
     }
 
+    /** Exclui a grade PADRÃO (id=1) da busca por conteúdo — ela reserva justamente o conteúdo
+     * "um só tamanho UN" (id_tamanho=1 no 1º slot), que colide com um produto real importado com
+     * um único tamanho chamado "UN". Sem essa exclusão, {@link #obterOuCriarPorTamanhos} "achava"
+     * a sentinela e {@link #buscar} recusava devolvê-la (404), mesmo ela existindo no banco —
+     * achado real na Importação de Dados (2026-08-18, produto com grade de tamanho único). */
     private Optional<Long> buscarIdPorSlots(List<Long> idsTamanho) {
         List<Object> slots = empacotarSlots(idsTamanho);
-        return jdbc.sql("SELECT id_grade FROM cfg_grade WHERE id_tenant = plataforma.tenant_atual() AND "
+        return jdbc.sql("SELECT id_grade FROM cfg_grade WHERE id_tenant = plataforma.tenant_atual() AND id_grade <> 1 AND "
                         + IGUALDADE_SLOT)
                 .params(slots)
                 .query(Long.class).optional();

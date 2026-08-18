@@ -266,9 +266,12 @@ public class ProdutoImportador implements ImportadorDeTabela {
     /** {@code id_tamanho} não é mais IDENTITY (V017, 2026-08-13): calculado por tenant, mesmo
      *  padrão de {@code TamanhoService.criar}. */
     private long idTamanhoOuCriar(String descricao) {
+        // id_tamanho <> 1 exclui o tamanho PADRÃO (sentinela reservado, "UN") — um produto real
+        // importado com um único tamanho chamado "UN" precisa de um id PRÓPRIO, não do sentinela
+        // (GradeService.buscar recusa devolver a grade que contém id=1, ver comentário lá).
         Optional<Long> existente = jdbc.sql("""
                         SELECT id_tamanho FROM cfg_tamanho
-                        WHERE id_tenant = plataforma.tenant_atual() AND descricao = ?
+                        WHERE id_tenant = plataforma.tenant_atual() AND id_tamanho <> 1 AND descricao = ?
                         """)
                 .param(descricao).query(Long.class).optional();
         if (existente.isPresent()) {

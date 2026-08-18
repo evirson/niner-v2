@@ -293,8 +293,14 @@ public class EstoqueImportador implements ImportadorDeTabela {
             return null;
         }
         String d = descricao.trim().toUpperCase(Locale.ROOT);
+        // id <> 1 exclui a cor/tamanho PADRÃO (sentinela reservado) — mesma colisão corrigida em
+        // ProdutoImportador.idTamanhoOuCriar: sem isso, um produto com cor/tamanho "PADRÃO" ou
+        // "UN" digitado de verdade acharia o sentinela em vez de criar seu próprio registro, e
+        // depois de o Produto import já ter criado um "UN" real (id<>1), esta busca sem exclusão
+        // passaria a achar DOIS registros com a mesma descrição e quebrar (.optional() exige 0/1).
         Optional<Long> existente = jdbc.sql(
-                        "SELECT " + coluna + " FROM " + tabela + " WHERE id_tenant = plataforma.tenant_atual() AND descricao = ?")
+                        "SELECT " + coluna + " FROM " + tabela + " WHERE id_tenant = plataforma.tenant_atual() AND "
+                                + coluna + " <> 1 AND descricao = ?")
                 .param(d).query(Long.class).optional();
         if (existente.isPresent()) {
             return existente.get();

@@ -1,7 +1,7 @@
 # Progresso do Projeto — niner-v2
 
 Registro cronológico das decisões e entregas. Atualizar a cada marco relevante.
-**Última atualização:** 2026-08-17
+**Última atualização:** 2026-08-18
 
 ---
 
@@ -446,6 +446,42 @@ Movimentação de Conta Corrente) que ainda não tinham migrado pro `SeletorPlan
 ---
 
 ## Linha do tempo
+
+### 2026-08-18 — Bug real: importação de Produtos rejeitava tamanho único ("UN") com "Grade não encontrada"
+
+Achado testando com a planilha real do dono do produto (`PRODUTOS.xlsx`, ~3.600 linhas) — duas
+linhas (produtos com um único tamanho "UN": bola de futebol, kit de meias) voltavam `404 NOT_FOUND
+"Grade não encontrada."` na importação.
+
+**Causa raiz — colisão com o sentinela reservado, não falta de auto-criação.** `TAMANHO_1 = "UN"`
+faz a importação achar (por nome) o `cfg_tamanho` já existente com essa descrição — mas esse é
+justamente o **tamanho PADRÃO** (`id_tamanho=1`, reservado desde 2026-08-13, ver
+[[project_cor_grade_tamanho]]). A grade de conteúdo `[1]` então bate com a **grade PADRÃO**
+(`id_grade=1`, "PADRÃO") — e `GradeService.buscar()` recusa devolver `id=1` de propósito (é
+invisível/reservada). Resultado: a rotina "achava" a grade, mas a API bloqueava a resposta.
+
+O próprio schema já antecipava esse caso — `cfg_grade_uk`/`cfg_tamanho_uk` são índices únicos
+**parciais** (`WHERE id <> 1`), ou seja, o banco sempre permitiu um segundo "UN" com id diferente
+do sentinela. Só as buscas da importação não excluíam `id=1`. Corrigido em 3 pontos (mesmo padrão
+em todos: acrescentar `AND id <> 1` na busca por nome/conteúdo):
+
+1. `GradeService.buscarIdPorSlots` (usado por `obterOuCriarPorTamanhos`) — não considera mais a
+   grade `id=1` como "já existente" por conteúdo.
+2. `ProdutoImportador.idTamanhoOuCriar` — não reaproveita mais o tamanho `id=1` ao buscar por nome.
+3. `EstoqueImportador.idOuNulo` (cor/tamanho, mesmo helper) — mesmo ajuste; sem ele, depois da
+   Importação de Produtos criar um "UN" real (`id<>1`), a Importação de Estoque passaria a achar
+   **dois** registros "UN" e quebrar com resultado ambíguo (`.optional()` exige 0 ou 1).
+
+**Testado ao vivo contra a API real** (não só compilação): reproduzi as duas linhas exatas do
+arquivo do dono do produto numa planilha de teste, rodei `/api/v1/importacao/produto/processar`
+com `confirmar=true` — 0 erros, os dois produtos saíram com uma grade nova e real ("GRADE UN-UN",
+`id_grade=2`), distinta do sentinela. Dados de teste removidos depois. Suíte completa:
+**675/675 verdes** (sem teste automatizado dedicado para Importação de Dados ainda — ver
+[[project_importacao_dados]], pendência já registrada antes).
+
+**How to apply:** qualquer nova rotina que faça "achar por nome/conteúdo" em `cfg_cor`/
+`cfg_tamanho`/`cfg_grade` tem que excluir `id=1` explicitamente — o sentinela nunca deve ser
+"encontrado" por essas buscas, só gravado deliberadamente quando `cfg_usa_cor_grade=false`.
 
 ### 2026-08-17 (continuação) — B1 a B8 do módulo fiscal fechados no mesmo dia, mais 3 melhorias pós-B8
 
