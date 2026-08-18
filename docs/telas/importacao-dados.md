@@ -464,16 +464,25 @@ preencher todas sem repetir).
   `id_produto`) — se não achar: `"Nenhum produto importado com CODIGO_PRODUTO \"X\" — importe a
   planilha de Produtos antes desta."` — a tela de Produtos precisa ter sido usada (e confirmada)
   antes desta.
-- Acha ou cria `NOME_COR`/`NOME_TAMANHO` em `cfg_cor`/`cfg_tamanho` (find-or-create, mesmo princípio
-  do resto da importação).
-- Acha ou cria a variação — se o produto não usa grade (`produto.id_grade = 1`, a sentinela
-  PADRÃO; a coluna é `NOT NULL DEFAULT 1`, ver `db/migration/V017__catalogo.sql:196-199`),
-  cor/tamanho são forçados à **sentinela `1`**, não a `NULL`
-  (`api/src/main/java/com/vetor/niner/catalogo/ProdutoBarraService.java:97-99`) — mesmo princípio
-  de "campo oculto ⇒ servidor ignora". **Não exige que o
-  tamanho pertença à sequência da grade do produto (2026-08-10)** — achado real: planilha
-  migrada trazia `NOME_TAMANHO="UN1"` numa grade que só tinha `"UN"`, e isso não é um erro de
-  verdade nesse contexto, é só o sistema de origem sendo menos rígido. `ProdutoBarraService`
+- **Grade do produto decide se `NOME_COR`/`NOME_TAMANHO` são sequer lidos (2026-08-19, corrigindo
+  um bug real de duplicidade — ver abaixo).** `EstoqueImportador` pré-busca em lote o
+  `id_grade` de cada produto tocado pelo arquivo ANTES de olhar as colunas de cor/tamanho: se o
+  produto não usa grade (`produto.id_grade = 1`, a sentinela PADRÃO; coluna `NOT NULL DEFAULT 1`,
+  ver `db/migration/V017__catalogo.sql:196-199`), cor/tamanho são forçados a `null` **já na
+  montagem do agrupamento**, sem sequer consultar `cfg_cor`/`cfg_tamanho` — a variação nasce
+  direto com a **sentinela `1`** em ambos
+  (`api/src/main/java/com/vetor/niner/catalogo/ProdutoBarraService.java:97-99`,
+  `criarParaImportacaoEmMassa`). Só quando o produto TEM grade real é que `NOME_COR`/
+  `NOME_TAMANHO` são lidos e viram `cfg_cor`/`cfg_tamanho` por find-or-create.
+  > ⚠️ **Antes de 2026-08-19**, a força pro sentinela só acontecia DENTRO da criação da variação,
+  > depois de já ter agrupado as linhas pelo texto cru de cor/tamanho — duas linhas do MESMO
+  > produto sem grade com texto diferente (comum em planilha migrada: uma em branco, outra
+  > "ÚNICO") formavam dois grupos que colidiam na mesma variação `(id_produto,1,1)`, batendo em
+  > `duplicate key value violates unique constraint "produto_barra_variacao_uk"`. Corrigido —
+  > detalhe completo em `docs/PROGRESSO.md`, entrada de 2026-08-19.
+- **Não exige que o tamanho pertença à sequência da grade do produto (2026-08-10)** — achado real:
+  planilha migrada trazia `NOME_TAMANHO="UN1"` numa grade que só tinha `"UN"`, e isso não é um erro
+  de verdade nesse contexto, é só o sistema de origem sendo menos rígido. `ProdutoBarraService`
   ganhou um parâmetro `validarGrade` (`obterOuCriar(..., boolean validarGrade)`) — a importação
   chama com `false`; a Emissão de Etiqueta (cadastro manual, ação deliberada de quem está no
   balcão) continua exigindo que o tamanho pertença à grade, sem mudança de comportamento lá.

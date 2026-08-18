@@ -23,7 +23,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.Supplier;
-import java.util.stream.Collectors;
 
 /**
  * Importação de estoque inicial (docs/telas/importacao-dados.md, "5. estoque") — tabela irmã da
@@ -100,16 +99,20 @@ public class EstoqueImportador implements ImportadorDeTabela {
         }
 
         List<LinhaErro> erros = new ArrayList<>();
-        // Agrupa por (produto, cor, tamanho) — mesma variação em mais de uma linha soma estoque.
-        Map<String, List<LinhaResolvida>> grupos = new LinkedHashMap<>();
-        // Cache de produto/cor/tamanho por chamada (2026-08-10) — variável LOCAL, não campo da
-        // classe (o importador é singleton Spring). Mesmo achado real de ContasReceberImportador:
-        // planilha de estoque repete o mesmo CODIGO_PRODUTO/cor/tamanho em muitas linhas (cada
-        // combinação vira uma variação), então sem cache é um SELECT/INSERT por linha à toa.
+        // Cache de produto por chamada (2026-08-10) — variável LOCAL, não campo da classe (o
+        // importador é singleton Spring). Mesmo achado real de ContasReceberImportador: planilha
+        // de estoque repete o mesmo CODIGO_PRODUTO em muitas linhas, então sem cache é um SELECT
+        // por linha à toa.
         Map<String, Optional<Long>> produtoCache = new HashMap<>();
-        Map<String, Long> corCache = new HashMap<>();
-        Map<String, Long> tamanhoCache = new HashMap<>();
 
+        // 1ª passada: só resolve CODIGO_PRODUTO → idProduto, pra poder pré-buscar em lote o
+        // id_grade de cada produto ANTES de resolver cor/tamanho (2026-08-19, correção de bug —
+        // ver comentário na 2ª passada abaixo, é o motivo de precisar de duas passadas em vez de
+        // uma só como antes).
+        record LinhaComProduto(LinhaPlanilha origem, long idProduto) {
+        }
+        List<LinhaComProduto> comProduto = new ArrayList<>();
+        Set<Long> idsProduto = new LinkedHashSet<>();
         for (LinhaPlanilha linha : linhas) {
             try {
                 String codigoProduto = exigir(linha, "CODIGO_PRODUTO").trim();
@@ -117,20 +120,67 @@ public class EstoqueImportador implements ImportadorDeTabela {
                         .orElseThrow(() -> new IllegalArgumentException(
                                 "Nenhum produto importado com CODIGO_PRODUTO \"" + codigoProduto
                                         + "\" — importe a planilha de Produtos antes desta."));
-                // SAVEPOINT só quando não está em cache (2026-08-10) — idCorOuCriar/idTamanhoOuCriar
-                // podem INSERT (mesmo bug/fix de ProdutoImportador, ver ImportacaoSavepointExecutor);
-                // num acerto de cache não há nada pra isolar, então não vale abrir savepoint à toa.
-                Long idCor = corCache.containsKey(linha.valor("NOME_COR"))
-                        ? corCache.get(linha.valor("NOME_COR"))
-                        : registrarNoCache(corCache, linha.valor("NOME_COR"), () -> idCorOuCriar(linha.valor("NOME_COR")));
-                Long idTamanho = tamanhoCache.containsKey(linha.valor("NOME_TAMANHO"))
-                        ? tamanhoCache.get(linha.valor("NOME_TAMANHO"))
-                        : registrarNoCache(tamanhoCache, linha.valor("NOME_TAMANHO"), () -> idTamanhoOuCriar(linha.valor("NOME_TAMANHO")));
-                String chaveGrupo = idProduto + "|" + (idCor == null ? "" : idCor) + "|" + (idTamanho == null ? "" : idTamanho);
-                grupos.computeIfAbsent(chaveGrupo, k -> new ArrayList<>())
-                        .add(new LinhaResolvida(linha, idProduto, idCor, idTamanho, linha.valor("EAN_CODIGO_BARRAS")));
+                comProduto.add(new LinhaComProduto(linha, idProduto));
+                idsProduto.add(idProduto);
             } catch (RuntimeException e) {
                 erros.add(LinhaErro.de(linha.numeroLinha(), e));
+                ImportacaoProgressoContext.avancar();
+            }
+        }
+
+        // Pré-fetch em lote (2026-08-10) — achado real de performance: um arquivo de 22 mil
+        // linhas levava quase 8 minutos, dominado por 1 SELECT de grade + 1 SELECT de variação
+        // + 1 SELECT de EAN por GRUPO (não por linha — cada produto/cor/tamanho já é um grupo
+        // distinto, então não tinha cache possível ali). Trocado por 2 consultas em lote (grade
+        // e variação existente) pros produtos tocados por este arquivo, uma vez só, em vez de
+        // milhares de idas e voltas ao banco — ver ImportacaoPlanilha e o resto da importação
+        // pra outros achados do mesmo tipo (N+1 query) nesta mesma sessão.
+        Map<Long, Long> gradesPorProduto = produtoBarraService.buscarGradesEmLote(idsProduto);
+        Map<String, VariacaoResumo> variacoesExistentes = produtoBarraService.buscarVariacoesEmLote(idsProduto);
+
+        // Agrupa por (produto, cor, tamanho) — mesma variação em mais de uma linha soma estoque.
+        Map<String, List<LinhaResolvida>> grupos = new LinkedHashMap<>();
+        Map<String, Long> corCache = new HashMap<>();
+        Map<String, Long> tamanhoCache = new HashMap<>();
+
+        // 2ª passada: resolve cor/tamanho e monta os grupos. Produto SEM grade real
+        // (gradesPorProduto.get(idProduto) == null, convenção de buscarGradesEmLote) força
+        // cor/tamanho pra null AQUI, antes de montar a chave do grupo — não só dentro de
+        // criarParaImportacaoEmMassa, como era até 2026-08-19. Bug real: sem essa força aqui,
+        // duas linhas do MESMO produto sem grade com NOME_COR/NOME_TAMANHO textualmente
+        // diferentes (ex.: uma em branco, outra "ÚNICO" — comum em planilha migrada de sistema
+        // legado) viravam DOIS grupos diferentes; ambos colapsam pra variação (id_cor=1,
+        // id_tamanho=1) dentro de criarParaImportacaoEmMassa, então o 2º grupo tentava criar uma
+        // variação que o 1º já tinha criado — "duplicate key value violates unique constraint
+        // produto_barra_variacao_uk". Produto COM grade real continua exigindo cor/tamanho da
+        // planilha, sem mudança de comportamento.
+        for (LinhaComProduto lp : comProduto) {
+            try {
+                Long idGrade = gradesPorProduto.get(lp.idProduto());
+                Long idCor;
+                Long idTamanho;
+                if (idGrade == null) {
+                    idCor = null;
+                    idTamanho = null;
+                } else {
+                    // SAVEPOINT só quando não está em cache (2026-08-10) — idCorOuCriar/
+                    // idTamanhoOuCriar podem INSERT (mesmo bug/fix de ProdutoImportador, ver
+                    // ImportacaoSavepointExecutor); num acerto de cache não há nada pra isolar,
+                    // então não vale abrir savepoint à toa.
+                    String nomeCor = lp.origem().valor("NOME_COR");
+                    idCor = corCache.containsKey(nomeCor)
+                            ? corCache.get(nomeCor)
+                            : registrarNoCache(corCache, nomeCor, () -> idCorOuCriar(nomeCor));
+                    String nomeTamanho = lp.origem().valor("NOME_TAMANHO");
+                    idTamanho = tamanhoCache.containsKey(nomeTamanho)
+                            ? tamanhoCache.get(nomeTamanho)
+                            : registrarNoCache(tamanhoCache, nomeTamanho, () -> idTamanhoOuCriar(nomeTamanho));
+                }
+                String chaveGrupo = lp.idProduto() + "|" + (idCor == null ? "" : idCor) + "|" + (idTamanho == null ? "" : idTamanho);
+                grupos.computeIfAbsent(chaveGrupo, k -> new ArrayList<>())
+                        .add(new LinhaResolvida(lp.origem(), lp.idProduto(), idCor, idTamanho, lp.origem().valor("EAN_CODIGO_BARRAS")));
+            } catch (RuntimeException e) {
+                erros.add(LinhaErro.de(lp.origem().numeroLinha(), e));
             } finally {
                 ImportacaoProgressoContext.avancar();
             }
@@ -141,17 +191,6 @@ public class EstoqueImportador implements ImportadorDeTabela {
         // Um produto_movimento_mestre (AJUSTE) por empresa, reaproveitado por todo o arquivo —
         // mesmo padrão do restante da importação.
         Map<Long, Long> movimentoPorEmpresa = new LinkedHashMap<>();
-
-        // Pré-fetch em lote (2026-08-10) — achado real de performance: um arquivo de 22 mil
-        // linhas levava quase 8 minutos, dominado por 1 SELECT de grade + 1 SELECT de variação
-        // + 1 SELECT de EAN por GRUPO (não por linha — cada produto/cor/tamanho já é um grupo
-        // distinto, então não tinha cache possível ali). Trocado por 2 consultas em lote (grade
-        // e variação existente) pros produtos tocados por este arquivo, uma vez só, em vez de
-        // milhares de idas e voltas ao banco — ver ImportacaoPlanilha e o resto da importação
-        // pra outros achados do mesmo tipo (N+1 query) nesta mesma sessão.
-        Set<Long> idsProduto = grupos.values().stream().map(g -> g.get(0).idProduto()).collect(Collectors.toSet());
-        Map<Long, Long> gradesPorProduto = produtoBarraService.buscarGradesEmLote(idsProduto);
-        Map<String, VariacaoResumo> variacoesExistentes = produtoBarraService.buscarVariacoesEmLote(idsProduto);
 
         for (List<LinhaResolvida> grupo : grupos.values()) {
             try {
