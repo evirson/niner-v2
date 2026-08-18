@@ -1,5 +1,6 @@
 package com.vetor.niner.identidade.empresa;
 
+import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 
 import java.time.OffsetDateTime;
@@ -49,5 +50,17 @@ public final class EmpresaDtos {
             @Size(max = 9) String cep,
             @Size(max = 20) String telefone,
             @Size(max = 200) String email) {
+    }
+
+    /**
+     * Inclusão de empresa/CNPJ pelo próprio ADMIN (2026-08-18, ADR-015 — CNPJ é ilimitado em
+     * todos os planos, e a cota de vendas soma todos eles). Só a razão social é obrigatória: o
+     * resto da ficha se preenche depois em Dados da Empresa, e quem cobra preenchimento antes de
+     * emitir nota é a Conformidade Fiscal.
+     */
+    public record CriarEmpresaRequest(
+            @NotBlank @Size(max = 200) String razaoSocial,
+            @Size(max = 200) String nomeFantasia,
+            @Size(max = 14) String cnpj) {
     }
 }

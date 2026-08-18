@@ -22,27 +22,30 @@ public class PlanosController {
         this.jdbc = jdbc;
     }
 
+    /**
+     * Faixa do catálogo (ADR-015): o que a landing mostra é volume de vendas e preço — os limites
+     * estruturais saíram do DTO em 2026-08-18 porque são ilimitados em todos os planos (o produto
+     * não vende funcionalidade, vende volume).
+     */
     public record PlanoPublico(
-            long idPlano, String nome, String descricao,
-            BigDecimal precoMensal, BigDecimal precoAnual,
-            Integer limiteCanais, Integer limiteProdutos,
-            Integer limiteUsuarios, Integer limitePedidosMes) {
+            long idPlano, String nome, String descricao, boolean gratuito, Integer faixaOrdem,
+            Integer limiteVendasMes, BigDecimal precoMensal, BigDecimal precoAnual) {
     }
 
     @GetMapping("/planos")
     public List<PlanoPublico> planos() {
         return jdbc.sql("""
-                        SELECT id_plano, nome, descricao, preco_mensal, preco_anual,
-                               limite_canais, limite_produtos, limite_usuarios, limite_pedidos_mes
+                        SELECT id_plano, nome, descricao, gratuito, faixa_ordem,
+                               limite_vendas_mes, preco_mensal, preco_anual
                         FROM plataforma.plano
-                        WHERE ativo
-                        ORDER BY preco_mensal
+                        WHERE ativo AND faixa_ordem IS NOT NULL
+                        ORDER BY faixa_ordem
                         """)
                 .query((rs, n) -> new PlanoPublico(
                         rs.getLong("id_plano"), rs.getString("nome"), rs.getString("descricao"),
-                        rs.getBigDecimal("preco_mensal"), rs.getBigDecimal("preco_anual"),
-                        (Integer) rs.getObject("limite_canais"), (Integer) rs.getObject("limite_produtos"),
-                        (Integer) rs.getObject("limite_usuarios"), (Integer) rs.getObject("limite_pedidos_mes")))
+                        rs.getBoolean("gratuito"), (Integer) rs.getObject("faixa_ordem"),
+                        (Integer) rs.getObject("limite_vendas_mes"),
+                        rs.getBigDecimal("preco_mensal"), rs.getBigDecimal("preco_anual")))
                 .list();
     }
 }

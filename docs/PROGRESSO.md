@@ -526,7 +526,50 @@ a **8080 estava ocupada** pela API do `calcemoda-v2` (a API do Niner subiu na **
 liberar), e os **fronts rodam pelo compose**, porque os `node_modules` do repositório têm binário
 nativo `linux-arm64-musl` (rolldown/rollup) e `npm run dev` no host quebra com `MODULE_NOT_FOUND`.
 
-**🐛 Bug encontrado ao subir (ainda não corrigido):** `FiscalContingenciaDrenoJob` explode a cada
+**Implementado no mesmo dia (branch `feat/modelo-comercial-assinatura`):**
+
+- **V037** — `plataforma.parametro_comercial` (singleton com preço-base, passo, fator, teto,
+  tolerância e desconto anual), `plano` ganha `limite_vendas_mes`/`faixa_ordem`/`gratuito`, e a
+  função `plataforma.gerar_faixas_planos()` que **regera** as faixas a partir dos parâmetros
+  (UPDATE/INSERT por `faixa_ordem`, **nunca DELETE** — há FK de `assinatura`). Os 3 planos de
+  V012 ficam desativados, não apagados. Gerou 21 linhas: Gratuito + 20 faixas.
+- **V038** — contador (`uso_tenant.competencia_vendas/qtd_vendas_mes/qtd_empresas`),
+  `uso_venda_mes` (histórico mensal), `assinatura.tolerancia_vendas` (override por cliente) e a
+  migração dos tenants `TRIAL` para `ATIVA` no Gratuito. O backfill roda tenant a tenant com
+  `set_config('app.id_tenant', …)` porque `empresa`/`venda` têm **FORCE ROW LEVEL SECURITY** —
+  nem o dono lê sem contexto — e conta só venda com `id_caixa IS NOT NULL` (venda do PDV), nunca
+  a histórica da importação.
+- **`LimiteVendasService`** (`plataforma.uso`) — incrementa e valida em **uma chamada só**
+  (`INSERT … ON CONFLICT DO UPDATE … RETURNING`), o que trava a linha do tenant e serializa
+  vendas concorrentes; checar antes e incrementar depois deixaria duas vendas simultâneas
+  passarem pelo mesmo último slot. Chamado por `PdvVendaService.efetivarVenda()` **depois** de
+  toda validação de negócio e antes da primeira escrita (venda que ia falhar por outro motivo
+  não pode consumir cota). Sem assinatura viva ou faixa sem teto ⇒ passa: falta de dado no
+  control-plane não pode impedir a loja de vender.
+- **409 com números** — `LimiteVendasExcedidoException` vira Problem Details
+  `urn:niner:erro:limite-de-vendas` carregando `usadas`/`limite`/`tolerancia`/`faixaRecomendada`,
+  para a tela oferecer o upgrade em vez de só dizer "erro".
+- **`GET /api/v1/minha-conta`** + tela **Minha Conta** (`web/src/pages/plataforma/MinhaConta.tsx`,
+  rota ADMIN-only, entrada no menu de Configurações): medidor com escada NORMAL → ATENÇÃO (80%) →
+  TOLERÂNCIA → BLOQUEADO, histórico de 12 meses, faixa recomendada pelo **pico** (não pela média —
+  assinar pela média deixa o lojista bloqueado no primeiro mês forte) e a grade de CNPJs.
+- **`POST /api/v1/empresas`** — inclusão de CNPJ pelo ADMIN (antes era SQL manual): calcula
+  `codigo_empresa`, marca `matriz = false`, grava `cfg_nome_etiqueta` padrão e cria o vínculo
+  `usuario_empresa`. Não replica plano de contas/carteiras/perfis fiscais (são por tenant).
+- **Signup** agora nasce `ATIVA` no Gratuito, sem `trial_expira_em`; `AssinarResponse` troca
+  `trialExpiraEm` por `limiteVendasMes`. Site: `/assinar`, `/bem-vindo`, CTAs e a seção de planos
+  do `index` reescritos para "grátis até 100 vendas/mês, sem prazo" (a landing nova vem depois,
+  a partir de `docs/site/briefing-landing.md`).
+- **`CotaVendasTest`** — 12 casos verdes, incluindo: tolerância aceita, além dela **409 sem
+  gravar a venda nem o incremento**, virada de mês zera e arquiva, cancelamento **não** devolve
+  cota, venda gravada fora do PDV não consome (guarda contra alguém trocar o contador por
+  trigger), dois CNPJs somando na mesma cota, e isolamento entre tenants.
+- **Suíte completa:** 762 testes, 1 falha corrigida (`OnboardingTrialTest` → renomeado para
+  `OnboardingContaGratuitaTest`, que agora espera Gratuito/ATIVA). Restam 5 erros em
+  `ProdutoImagemCrudTest`, **de ambiente, não do código**: o `libwebp-imageio.dylib` não carrega
+  neste Mac (`UnsatisfiedLinkError`).
+
+**🐛 Bug encontrado ao subir (ainda não corrigido — fiscal está com outro programador):** `FiscalContingenciaDrenoJob` explode a cada
 5 minutos — `DocumentoFiscalRepositorio.java:210` compara `u.ambiente` (`smallint` 1/2 em
 `cfg_uf_autorizador`, V034) com `c.ambiente` (ENUM `ambiente_fiscal`, V035): `ERROR: operator does
 not exist: smallint = ambiente_fiscal`. A própria query já converte certo duas linhas acima

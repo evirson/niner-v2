@@ -1,4 +1,4 @@
-# Spec: Minha Conta (plano, uso e empresas)            Status: Rascunho — aguardando aprovação
+# Spec: Minha Conta (plano, uso e empresas)            Status: Implementada (2026-08-18)
 Autor: Evirson (dono do produto) · Data: 2026-08-18 · Módulo(s): `plataforma` (uso/assinatura) + `identidade` (empresa) · Fase: 1 — Núcleo do ERP
 
 ## Problema
@@ -113,6 +113,23 @@ que embora sejam globais são consultadas por `id_tenant` vindo do JWT.
     **então** recebe 403.
 11. **Dado** dois tenants, **quando** o tenant A consulta Minha Conta, **então** o uso e as
     empresas do tenant B **não** aparecem (P8 — teste de isolamento explícito).
+
+## Como ficou implementado (2026-08-18)
+
+Duas diferenças em relação ao que esta spec previa, ambas deliberadas:
+
+1. **Cota: uma chamada, não duas.** A spec descrevia `garantirPodeVender()` + `registrarVenda()`.
+   O código faz as duas coisas em `LimiteVendasService.registrarVenda()`, porque entre checar e
+   incrementar existiria uma janela em que duas vendas simultâneas passariam pelo mesmo último
+   slot da cota. O `INSERT … ON CONFLICT DO UPDATE … RETURNING` incrementa e **trava a linha** do
+   tenant até o commit; se o total estourar, a exceção derruba a transação da venda e o
+   incremento vai junto no rollback.
+2. **Sem assinatura viva ou plano sem limite ⇒ passa.** Falta de dado no control-plane nunca
+   bloqueia a loja: `limite = NULL` é tratado como ilimitado.
+
+Arquivos: `plataforma/uso/{LimiteVendasService,MinhaContaService,MinhaContaController,
+UsoTenantService}.java`, `identidade/empresa/EmpresaService.criar`, `web/src/pages/plataforma/
+MinhaConta.tsx`, migrations `V037`/`V038`. Testes: `CotaVendasTest` (12 casos, verdes).
 
 ## Impacto no banco
 

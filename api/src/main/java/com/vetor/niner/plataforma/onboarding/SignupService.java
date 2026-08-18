@@ -11,7 +11,6 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.text.Normalizer;
-import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Locale;
 
@@ -19,7 +18,7 @@ import static org.springframework.http.HttpStatus.FORBIDDEN;
 import static org.springframework.http.HttpStatus.UNAUTHORIZED;
 
 /**
- * Onboarding do trial (R12, §3.3.2). Numa ÚNICA transação cria a conta assinante e
+ * Onboarding da conta gratuita (R12, §3.3.2; ADR-015 — antes era o trial de 60 dias). Numa ÚNICA transação cria a conta assinante e
  * libera o sistema com configurações padrão, e devolve o token de primeiro acesso.
  *
  * <p>Como o tenant nasce dentro desta transação, o serviço estabelece
@@ -46,11 +45,12 @@ public class SignupService {
 
     @Transactional
     public AssinarResponse assinar(AssinarRequest req) {
-        // 1) tenant (global, P9) — status TRIAL. slug único derivado do nome da loja.
+        // 1) tenant (global, P9) — nasce ATIVA no plano Gratuito (ADR-015: não existe mais trial
+        // por tempo; o que limita é volume de vendas no mês). slug único derivado do nome da loja.
         String slug = slugUnico(req.nomeLoja());
         long idTenant = jdbc.sql("""
                         INSERT INTO plataforma.tenant (nome_conta, slug, email_contato, status)
-                        VALUES (?, ?, ?, 'TRIAL')
+                        VALUES (?, ?, ?, 'ATIVA')
                         RETURNING id_tenant
                         """)
                 .params(req.nomeLoja(), slug, req.email())
@@ -60,23 +60,31 @@ public class SignupService {
         jdbc.sql("SELECT set_config('app.id_tenant', ?, true)")
                 .param(Long.toString(idTenant)).query(String.class).single();
 
-        // 3) assinatura TRIAL no plano-base (fallback: menor preço ativo).
-        long idPlano = jdbc.sql("SELECT id_plano FROM plataforma.plano WHERE nome = ? AND ativo")
-                .param(props.trial().plano()).query(Long.class).optional()
+        // 3) assinatura ATIVA no plano Gratuito (faixa 0, gerado por plataforma.gerar_faixas_planos()).
+        // Sem trial_expira_em: a conta gratuita não expira — o que a limita é a cota de vendas
+        // do mês (ADR-015). Fallback pelo menor preço ativo cobre banco sem faixa gerada.
+        long idPlano = jdbc.sql("SELECT id_plano FROM plataforma.plano WHERE gratuito AND ativo ORDER BY id_plano LIMIT 1")
+                .query(Long.class).optional()
                 .orElseGet(() -> jdbc.sql(
                         "SELECT id_plano FROM plataforma.plano WHERE ativo ORDER BY preco_mensal LIMIT 1")
                         .query(Long.class).single());
 
-        OffsetDateTime trialExpiraEm = jdbc.sql("""
-                        INSERT INTO plataforma.assinatura (id_tenant, id_plano, status, trial_expira_em)
-                        VALUES (?, ?, 'TRIAL', now() + make_interval(days => ?))
-                        RETURNING trial_expira_em
+        jdbc.sql("""
+                        INSERT INTO plataforma.assinatura (id_tenant, id_plano, status)
+                        VALUES (?, ?, 'ATIVA')
                         """)
-                .params(idTenant, idPlano, props.trial().dias())
-                .query(OffsetDateTime.class).single();
+                .params(idTenant, idPlano)
+                .update();
 
-        // 4) uso_tenant inicial (1 usuário: o admin criado abaixo).
-        jdbc.sql("INSERT INTO plataforma.uso_tenant (id_tenant, qtd_usuarios) VALUES (?, 1)")
+        PlanoContratado plano = jdbc.sql(
+                        "SELECT nome, limite_vendas_mes FROM plataforma.plano WHERE id_plano = ?")
+                .param(idPlano)
+                .query((rs, n) -> new PlanoContratado(rs.getString("nome"), (Integer) rs.getObject("limite_vendas_mes")))
+                .single();
+
+        // 4) uso_tenant inicial: 1 usuário (o admin criado abaixo) e 1 empresa (criada no passo 5).
+        // A cota de vendas nasce zerada na competência corrente (ADR-015).
+        jdbc.sql("INSERT INTO plataforma.uso_tenant (id_tenant, qtd_usuarios, qtd_empresas) VALUES (?, 1, 1)")
                 .param(idTenant).update();
 
         // 5) empresa (1:1 no v1) + configurações padrão da loja. codigo_empresa=1 (primeira
@@ -222,7 +230,10 @@ public class SignupService {
         // 7) token de primeiro acesso (auto-login) — leva o cliente direto ao sistema, já com a
         // empresa recém-criada como empresa ativa da sessão (eid).
         String token = tokens.emitir(idUsuario, idTenant, idEmpresa, req.email(), List.of("ADMIN"));
-        return new AssinarResponse(token, idTenant, slug, req.nomeLoja(), props.trial().plano(), trialExpiraEm);
+        return new AssinarResponse(token, idTenant, slug, req.nomeLoja(), plano.nome(), plano.limiteVendasMes());
+    }
+
+    private record PlanoContratado(String nome, Integer limiteVendasMes) {
     }
 
     /**

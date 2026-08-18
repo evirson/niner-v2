@@ -1,5 +1,6 @@
 package com.vetor.niner.comum.web;
 
+import com.vetor.niner.plataforma.uso.LimiteVendasExcedidoException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
@@ -51,6 +52,26 @@ public class GlobalExceptionHandler {
         ProblemDetail pd = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, ex.getMessage());
         pd.setTitle("Conflito de dados");
         pd.setType(URI.create("urn:niner:erro:conflito"));
+        return pd;
+    }
+
+    /**
+     * Cota de vendas do mês esgotada (ADR-015). Vai além da mensagem: manda os números e a faixa
+     * recomendada como propriedades do Problem Details, para a tela oferecer o upgrade na hora —
+     * é o momento de conversão do produto, não só um erro.
+     */
+    @ExceptionHandler(LimiteVendasExcedidoException.class)
+    public ProblemDetail tratarLimiteDeVendas(LimiteVendasExcedidoException ex) {
+        ProblemDetail pd = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, ex.getMessage());
+        pd.setTitle("Limite de vendas do plano atingido");
+        pd.setType(URI.create("urn:niner:erro:limite-de-vendas"));
+        pd.setProperty("usadas", ex.usadas());
+        pd.setProperty("limite", ex.limite());
+        pd.setProperty("tolerancia", ex.tolerancia());
+        if (ex.faixaRecomendada() != null) {
+            pd.setProperty("faixaRecomendada", ex.faixaRecomendada());
+            pd.setProperty("precoMensalRecomendado", ex.precoMensalRecomendado());
+        }
         return pd;
     }
 

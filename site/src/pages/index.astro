@@ -11,17 +11,19 @@ const recursos = [
   { ic: '⚡', t: 'Integração automática', d: 'Sincronização assíncrona e idempotente, com retentativa. Reprocessar um evento nunca duplica pedido ou baixa.' },
 ];
 
-// Fallback de planos para SEO (o HTML já sai com valores); a API atualiza no cliente se estiver no ar.
+// Fallback de planos para SEO (o HTML já sai com valores); a API atualiza no cliente se estiver
+// no ar. Desde o ADR-015 o catálogo é: Gratuito (sem prazo) + faixas por volume de vendas/mês.
+// 🔴 Preços de exemplo — os valores reais saem de plataforma.parametro_comercial.
 const planosFallback = [
-  { nome: 'Essencial', precoMensal: 99, descricao: 'Loja física + 1 canal online.', destaque: false },
-  { nome: 'Profissional', precoMensal: 249, descricao: 'Multicanal (ML + Shopee) e maior volume.', destaque: true },
-  { nome: 'Escala', precoMensal: 599, descricao: 'Todos os canais e o maior volume.', destaque: false },
+  { nome: 'Gratuito', precoMensal: 0, descricao: 'Até 100 vendas por mês. Sem prazo, sem cartão.', destaque: true },
+  { nome: 'Até 500 vendas/mês', precoMensal: 99, descricao: 'Quando a loja passa de 100 vendas no mês.', destaque: false },
+  { nome: 'Até 1000 vendas/mês', precoMensal: 198, descricao: 'Mesmo produto, mais volume incluído.', destaque: false },
 ];
 ---
 
 <Base
   title="Niner — ERP para varejo multicanal, sem overselling"
-  description="O ERP que é a fonte única de estoque e preço da sua loja e sincroniza automaticamente Mercado Livre, Shopee, Amazon e o balcão. Teste grátis por 60 dias, sem cartão."
+  description="ERP completo para a sua loja — PDV, estoque, crediário, caixa e emissão de NFC-e/NF-e. Grátis para sempre até 100 vendas por mês, sem cartão."
   path="/"
 >
   <!-- ============ HERO ============ -->
@@ -40,7 +42,7 @@ const planosFallback = [
           <a class="btn btn-secondary btn-lg" href="#como-funciona">Ver como funciona</a>
         </div>
         <p class="hero-note">
-          <b>60 dias grátis</b><span class="dot"></span>sem cartão<span class="dot"></span>configure em minutos
+          <b>Grátis até 100 vendas/mês</b><span class="dot"></span>sem prazo<span class="dot"></span>sem cartão
         </p>
       </div>
 
@@ -199,21 +201,21 @@ const planosFallback = [
     <div class="container">
       <div class="section-head reveal">
         <span class="eyebrow">Planos</span>
-        <h2>Escolha ao fim do teste. Sem compromisso agora.</h2>
-        <p>Todos os planos começam com 60 dias grátis, sem cartão. Você só decide depois de ver o Niner rodando com os seus dados.</p>
+        <h2>Grátis enquanto a loja for pequena. Paga quando crescer.</h2>
+        <p>O produto é o mesmo em todos os planos — nada de função bloqueada. O que muda é quantas vendas por mês estão incluídas. No plano anual, 15% de desconto.</p>
       </div>
       <div class="planos-grid" id="planos-grid">
         {planosFallback.map((p) => (
           <article class={`card plano reveal${p.destaque ? ' destaque' : ''}`} data-plano={p.nome}>
-            {p.destaque && <span class="tag">Mais popular</span>}
+            {p.destaque && <span class="tag">Comece aqui</span>}
             <h3>{p.nome}</h3>
-            <p class="preco" data-preco>R$ {p.precoMensal}<small>/mês</small></p>
+            <p class="preco" data-preco>{p.precoMensal === 0 ? 'R$ 0' : `R$ ${p.precoMensal}`}<small>{p.precoMensal === 0 ? '/para sempre' : '/mês'}</small></p>
             <p class="desc">{p.descricao}</p>
-            <a class="btn btn-primary btn-block" href="/assinar">Testar grátis</a>
+            <a class="btn btn-primary btn-block" href="/assinar">Criar conta grátis</a>
           </article>
         ))}
       </div>
-      <p class="muted" style="font-size:13px; margin-top:14px; text-align:center;">Preços provisórios (em definição).</p>
+      <p class="muted" style="font-size:13px; margin-top:14px; text-align:center;">Preços das faixas pagas em definição. O plano Gratuito é definitivo: 100 vendas por mês, sem prazo.</p>
     </div>
   </section>
 
@@ -226,8 +228,12 @@ const planosFallback = [
       </div>
       <div class="faq reveal">
         <details open>
-          <summary>Preciso de cartão de crédito para testar?</summary>
-          <p>Não. São <strong>60 dias grátis, sem cartão</strong>. Você só informa pagamento se decidir assinar ao fim do teste.</p>
+          <summary>É grátis mesmo? Tem pegadinha?</summary>
+          <p>É grátis <strong>sem prazo de validade</strong>, até <strong>100 vendas por mês</strong>, sem cartão. Não é teste: se a sua loja vende até isso, você usa de graça para sempre — com o produto inteiro liberado, inclusive nota fiscal.</p>
+        </details>
+        <details>
+          <summary>E se eu passar de 100 vendas num mês?</summary>
+          <p>A gente avisa bem antes de você chegar lá, e ainda libera uma folga além do limite. Passando disso, é só assinar a faixa do seu volume — <strong>nenhum dado é apagado</strong> e o contador zera todo mês.</p>
         </details>
         <details>
           <summary>Já vendo no Mercado Livre e na Shopee. Consigo conectar?</summary>
@@ -268,7 +274,11 @@ const planosFallback = [
         for (const p of planos) {
           const card = document.querySelector(`[data-plano="${p.nome}"]`);
           const preco = card && card.querySelector('[data-preco]');
-          if (preco) preco.innerHTML = `R$ ${Number(p.precoMensal).toFixed(0)}<small>/mês</small>`;
+          if (preco) {
+            preco.innerHTML = p.gratuito
+              ? 'R$ 0<small>/para sempre</small>'
+              : `R$ ${Number(p.precoMensal).toFixed(0)}<small>/mês</small>`;
+          }
         }
       } catch (_) { /* offline: mantém o fallback estático (bom para SEO) */ }
     })();

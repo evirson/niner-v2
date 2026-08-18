@@ -3,8 +3,10 @@ package com.vetor.niner.identidade.empresa;
 import com.vetor.niner.cadastros.fornecedor.FornecedorService;
 import com.vetor.niner.comum.web.ConflitoDadosException;
 import com.vetor.niner.identidade.empresa.EmpresaDtos.AtualizarEmpresaRequest;
+import com.vetor.niner.identidade.empresa.EmpresaDtos.CriarEmpresaRequest;
 import com.vetor.niner.identidade.empresa.EmpresaDtos.EmpresaDetalheResponse;
 import com.vetor.niner.identidade.empresa.EmpresaDtos.EmpresaResponse;
+import com.vetor.niner.plataforma.uso.UsoTenantService;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -38,10 +40,70 @@ import static org.springframework.http.HttpStatus.NOT_FOUND;
 @Service
 public class EmpresaService {
 
-    private final JdbcClient jdbc;
+    /** Mesmo modelo que o signup grava na primeira empresa — a coluna é NOT NULL sem default. */
+    private static final String ETIQUETA_PADRAO = "{sku}\n{descricao}\n{preco_venda}";
 
-    public EmpresaService(JdbcClient jdbc) {
+    private final JdbcClient jdbc;
+    private final UsoTenantService usoTenant;
+
+    public EmpresaService(JdbcClient jdbc, UsoTenantService usoTenant) {
         this.jdbc = jdbc;
+        this.usoTenant = usoTenant;
+    }
+
+    /**
+     * Inclui uma empresa/CNPJ no tenant — ADMIN-only (2026-08-18, ADR-015). Antes disso, filial
+     * era inserida por SQL direto pela equipe; com CNPJ ilimitado em todos os planos, virou
+     * autoatendimento pelo painel <i>Minha Conta</i>.
+     *
+     * <p>O que nasce junto, na mesma transação: {@code codigo_empresa} = maior do tenant + 1
+     * (respeita {@code empresa_codigo_empresa_uk}), {@code matriz = false} (a matriz é a primeira,
+     * criada no signup), {@code cfg_nome_etiqueta} padrão, e o vínculo em {@code usuario_empresa}
+     * do ADMIN que criou — sem ele, a empresa nova não apareceria para ninguém no login.
+     *
+     * <p>O que <b>não</b> nasce junto: plano de contas, tipos de carteira e perfis fiscais são
+     * <b>por tenant</b> (ver {@code SignupService.assinar}) e já existem; {@code
+     * fiscal_config_empresa} é por empresa, mas só é criada quando o lojista ligar o fiscal
+     * naquela empresa (F12) — incluir um CNPJ não presume que ele vá emitir nota.
+     */
+    @Transactional
+    public EmpresaDetalheResponse criar(Jwt jwt, CriarEmpresaRequest req) {
+        exigirAdmin(jwt);
+
+        String cnpj = vazioParaNulo(req.cnpj());
+        if (cnpj != null && !FornecedorService.cnpjValido(cnpj)) {
+            throw new IllegalArgumentException("CNPJ inválido.");
+        }
+
+        long idEmpresa;
+        try {
+            idEmpresa = jdbc.sql("""
+                            INSERT INTO empresa (id_tenant, codigo_empresa, razao_social, nome_fantasia, cnpj,
+                                                 matriz, cfg_nome_etiqueta)
+                            SELECT plataforma.tenant_atual(),
+                                   COALESCE(MAX(e.codigo_empresa), 0) + 1,
+                                   ?, ?, ?, false, ?
+                              FROM empresa e
+                             WHERE e.id_tenant = plataforma.tenant_atual()
+                            RETURNING id_empresa
+                            """)
+                    .params(maiusculas(req.razaoSocial()), maiusculas(req.nomeFantasia()), cnpj, ETIQUETA_PADRAO)
+                    .query(Long.class).single();
+        } catch (DuplicateKeyException e) {
+            throw new ConflitoDadosException("Já existe uma empresa com esse CNPJ neste tenant.");
+        } catch (DataIntegrityViolationException e) {
+            throw new IllegalArgumentException("Dados inválidos para criar a empresa.");
+        }
+
+        jdbc.sql("""
+                        INSERT INTO usuario_empresa (id_tenant, id_usuario, id_empresa)
+                        VALUES (plataforma.tenant_atual(), ?, ?)
+                        """)
+                .params(Long.parseLong(jwt.getSubject()), idEmpresa)
+                .update();
+
+        usoTenant.recontarEmpresas();
+        return buscarPorId(jwt, idEmpresa);
     }
 
     @Transactional(readOnly = true)

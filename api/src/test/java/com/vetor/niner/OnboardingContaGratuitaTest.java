@@ -15,39 +15,43 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * Fluxo do trial self-service (R12): assinatura-teste → cria tenant + libera o sistema
- * + token de 1º acesso → primeiro uso autenticado. E o login de usuário do tenant.
+ * Signup self-service (R12): cria a conta → libera o sistema → token de 1º acesso → primeiro uso
+ * autenticado. E o login de usuário do tenant.
+ *
+ * <p>Era {@code OnboardingTrialTest} até 2026-08-18: o trial de 60 dias saiu (ADR-015) e a conta
+ * passa a nascer <b>ATIVA no plano Gratuito</b>, sem data de expiração — o que limita é a cota de
+ * vendas do mês.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
 @Import(TestcontainersConfiguration.class)
-class OnboardingTrialTest {
+class OnboardingContaGratuitaTest {
 
     @Autowired
     MockMvc mvc;
 
     @Test
-    void assinarCriaTenantELiberaPrimeiroUso() throws Exception {
+    void assinarCriaTenantGratuitoELiberaPrimeiroUso() throws Exception {
         String body = """
-                {"nomeLoja":"Loja Teste Trial","email":"dono@lojateste.com",
+                {"nomeLoja":"Loja Teste Gratuito","email":"dono@lojateste.com",
                  "senha":"segredo123","nomeAdmin":"Dono da Loja"}
                 """;
         String resp = mvc.perform(post("/api/publico/assinar").contentType(APPLICATION_JSON).content(body))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.token").isNotEmpty())
                 .andExpect(jsonPath("$.idTenant").isNumber())
-                .andExpect(jsonPath("$.slug").value("loja-teste-trial"))
-                .andExpect(jsonPath("$.plano").value("Profissional"))
-                .andExpect(jsonPath("$.trialExpiraEm").isNotEmpty())
+                .andExpect(jsonPath("$.slug").value("loja-teste-gratuito"))
+                .andExpect(jsonPath("$.plano").value("Gratuito"))
+                .andExpect(jsonPath("$.limiteVendasMes").value(100))
                 .andReturn().getResponse().getContentAsString();
 
         String token = JsonPath.read(resp, "$.token");
 
-        // Primeiro uso: com o token do trial, o cliente já enxerga a própria conta.
+        // Primeiro uso: com o token do signup, o cliente já enxerga a própria conta.
         mvc.perform(get("/api/v1/eu").header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.conta.nomeConta").value("Loja Teste Trial"))
-                .andExpect(jsonPath("$.conta.status").value("TRIAL"))
+                .andExpect(jsonPath("$.conta.nomeConta").value("Loja Teste Gratuito"))
+                .andExpect(jsonPath("$.conta.status").value("ATIVA"))
                 .andExpect(jsonPath("$.usuario.papel").value("ADMIN"));
     }
 
