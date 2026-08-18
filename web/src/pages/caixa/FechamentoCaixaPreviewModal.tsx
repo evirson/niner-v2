@@ -1,12 +1,14 @@
+import { IconeFechar } from '../../components/Icones'
 import type { FechamentoCaixa } from '../../lib/caixa'
-import { gerarPdfFechamento, montarLinhasFechamento } from '../../lib/fechamentoCaixaImpressao'
+import { montarLinhasFechamento } from '../../lib/fechamentoCaixaImpressao'
 
 /**
- * Pré-visualização do relatório de Fechamento de Caixa antes de imprimir/salvar em PDF
- * (2026-07-30, pedido explícito: "primeiro visualizar, depois a opção de imprimir ou salvar em
- * pdf"). Impressão em folha A4 — diferente do Comprovante de Pagamento de Crediário (80mm, ver
- * `ComprovanteRecebimentoModal.tsx`), por isso usa uma classe/`@page` nomeada própria
- * (`.fechamento-imprimir`, `styles.css`) em vez de reaproveitar `.comprovante-imprimir`.
+ * Impressão do Fechamento de Caixa (2026-08-19) — bobina térmica 80mm/42 colunas, mesmo formato e
+ * dimensões da papeleta de venda (pedido explícito do dono do produto), reaproveitando as mesmas
+ * classes de impressão (`.papeleta-preview`/`.papeleta-imprimir`, `styles.css`). Abre sozinha assim
+ * que o caixa fecha com sucesso. "Fechar" virou o "✕" no cabeçalho, mesmo padrão do Comprovante de
+ * Pagamento de Crediário/Papeleta de Venda; sem "Salvar PDF" — o diálogo de impressão nativo já
+ * oferece "Salvar como PDF".
  */
 export default function FechamentoCaixaPreviewModal({
   fechamento,
@@ -19,23 +21,21 @@ export default function FechamentoCaixaPreviewModal({
 
   return (
     <div className="modal-overlay" onClick={aoFechar}>
-      <div className="modal modal-largo" role="dialog" aria-label="Pré-visualização do fechamento de caixa" onClick={(e) => e.stopPropagation()}>
-        <h2 style={{ marginTop: 0 }}>Pré-visualização — Fechamento de Caixa</h2>
+      <div className="modal modal-medio" role="dialog" aria-label="Impressão do Fechamento de Caixa" onClick={(e) => e.stopPropagation()}>
+        <div className="lightbox-topo">
+          <h2 style={{ margin: 0 }}>Fechamento de Caixa</h2>
+          <button type="button" className="btn ghost btn-fechar-tela" onClick={aoFechar} aria-label="Fechar" title="Fechar">
+            <IconeFechar />
+          </button>
+        </div>
 
-        <pre className="fechamento-preview fechamento-imprimir">{linhas.join('\n')}</pre>
+        <pre className="papeleta-preview papeleta-imprimir">{linhas.join('\n')}</pre>
 
         <div className="ajuda-rodape">
-          <button type="button" className="btn ghost" onClick={aoFechar}>
-            Fechar
+          <span />
+          <button type="button" className="btn" onClick={() => window.print()}>
+            Imprimir
           </button>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button type="button" className="btn ghost" onClick={() => gerarPdfFechamento(linhas, fechamento.idCaixa)}>
-              Salvar PDF
-            </button>
-            <button type="button" className="btn" onClick={() => window.print()}>
-              Imprimir
-            </button>
-          </div>
         </div>
       </div>
     </div>

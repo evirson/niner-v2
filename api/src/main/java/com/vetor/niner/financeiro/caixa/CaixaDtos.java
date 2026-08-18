@@ -37,6 +37,16 @@ public final class CaixaDtos {
     }
 
     /**
+     * Uma linha da grade "Caixas Abertos" (2026-08-19) — substitui a busca por data/usuário do
+     * Fechamento de Caixa "às cegas". OPERADOR só vê os próprios; ADMIN vê de todo mundo, em
+     * qualquer empresa do tenant (ver {@code CaixaService.listarAbertos}).
+     */
+    public record CaixaAbertoResponse(
+            long idCaixa, long idUsuario, String nomeUsuario, long idEmpresa, String nomeEmpresa,
+            OffsetDateTime dataAbertura, String nomeCarteira, BigDecimal saldoInicial) {
+    }
+
+    /**
      * Uma linha de totais do Fechamento de Caixa, por tipo de carteira. {@code saldoInicial}
      * só é diferente de zero na linha da carteira escolhida na abertura (V025). {@code
      * valorEsperado = saldoInicial + totalCredito - totalDebito} — nunca gravado, sempre
@@ -68,9 +78,17 @@ public final class CaixaDtos {
             @NotNull @DecimalMin(value = "0") BigDecimal valorContado) {
     }
 
+    /**
+     * {@code forcarComDivergencia} (2026-08-19, revisão da contagem às cegas): quando alguma
+     * carteira não bate, uma primeira chamada sem essa flag devolve a divergência sem fechar
+     * nada (mesmo contrato de sempre) — a tela pergunta se o operador quer fechar mesmo assim, e
+     * só nesse "sim" é que ela reenvia com {@code forcarComDivergencia = true}, fechando de
+     * propósito com a diferença registrada (fica na auditoria, ver {@code CaixaService.fechar}).
+     */
     public record FecharCaixaRequest(
             @NotNull Long idCaixa,
-            @NotEmpty List<@Valid ValorContadoRequest> valoresContados) {
+            @NotEmpty List<@Valid ValorContadoRequest> valoresContados,
+            boolean forcarComDivergencia) {
     }
 
     /** Uma linha de conferência: {@code diferenca = valorContado - valorEsperado}. Só é

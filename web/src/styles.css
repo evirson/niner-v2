@@ -453,29 +453,8 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
   }
 }
 
-/* Fechamento de Caixa (2026-07-30, docs/telas/fechamento-caixa.md) — relatório em folha A4,
-   diferente do Comprovante de Pagamento de Crediário (80mm, bobina térmica, ver acima). Página
-   nomeada (`page: fechamento-a4`) porque o `@page` sem nome já está reservado pra 80mm — os dois
-   nunca imprimem juntos (só um popup de impressão fica aberto por vez), mas o CSS de página é
-   global ao documento, não escopado por classe. */
-.fechamento-preview {
-  width: fit-content; margin: 16px auto; padding: 14px 18px;
-  background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--radius);
-  font-family: 'Courier New', Courier, monospace; font-size: 12px; line-height: 1.4;
-  white-space: pre; color: var(--ink); max-width: 100%; overflow-x: auto;
-}
-@page fechamento-a4 {
-  size: A4;
-  margin: 15mm;
-}
-@media print {
-  .fechamento-imprimir, .fechamento-imprimir * { visibility: visible; }
-  .fechamento-imprimir {
-    page: fechamento-a4;
-    position: absolute; top: 0; left: 0; width: auto; margin: 0; padding: 0; border: 0;
-    background: none; color: #000; font-size: 11px; line-height: 1.4;
-  }
-}
+/* Fechamento de Caixa — desde 2026-08-19 imprime na mesma bobina térmica 80mm/42 colunas da
+   venda (`.papeleta-preview`/`.papeleta-imprimir`, acima), não mais em folha A4; sem CSS próprio. */
 
 /* Guia de Transferência de Produtos (2026-08-06, docs/telas/pdv.md) — folha A4, mesmo mecanismo
    do Fechamento de Caixa acima (texto monoespaçado 96 colunas); página nomeada própria em vez de

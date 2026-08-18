@@ -1,17 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import {
-  gerarBlobComprovanteVenda,
-  gerarPdfComprovanteVenda,
-  gerarQrCodeDataUrl,
-  montarLinhasComprovanteVenda,
-} from '../../lib/comprovante'
+import { gerarBlobComprovanteVenda, gerarQrCodeDataUrl, montarLinhasComprovanteVenda } from '../../lib/comprovante'
 import { ApiError } from '../../lib/api'
 import { buscarEmiteFiscalAposVenda } from '../../lib/configuracaoGeral'
 import { buscarComprovanteVenda, emitirNfce, type ResultadoEmissaoNfce } from '../../lib/pdv'
 import { compartilharArquivo } from '../../lib/compartilhamento'
 import { montarLinkWhatsApp } from '../../lib/whatsapp'
-import { IconeWhatsapp } from '../../components/Icones'
+import { IconeFechar, IconeWhatsapp } from '../../components/Icones'
 import EnviarWhatsAppModal from '../../components/EnviarWhatsAppModal'
 import Toast from '../../components/Toast'
 
@@ -23,8 +18,10 @@ const SITUACOES_SUCESSO = new Set(['AUTORIZADO', 'CONTINGENCIA', 'EM_PROCESSAMEN
  * Papeleta de venda, formatada pra bobina térmica de 80mm (2026-08-06). Abre automaticamente
  * logo após o F5 efetivar a venda com sucesso (`Pdv.tsx`). Mesmo mecanismo do Comprovante de
  * Pagamento de Crediário: "Imprimir" usa o diálogo nativo do navegador (só `.papeleta-imprimir`
- * fica visível na impressão, via CSS — ver `styles.css`); "Salvar PDF" gera o arquivo direto com
- * `jsPDF`, sem passar pelo diálogo.
+ * fica visível na impressão, via CSS — ver `styles.css`) — o próprio diálogo de impressão já
+ * oferece "Salvar como PDF", então o botão dedicado saiu (2026-08-19, pedido do dono do
+ * produto). Fechar virou o "✕" no cabeçalho (`.lightbox-topo`), não mais um botão "Fechar" no
+ * rodapé — o rodapé agora só tem "Enviar por WhatsApp" (esquerda) e "Imprimir" (direita).
  *
  * `reimpressao` (2026-08-06) — usado pelo botão "Reimprimir papeleta" do popup de detalhe da
  * Pesquisa de Vendas (`DetalheVendaModal.tsx`; a tela dedicada `ReimpressaoPapeletaVenda.tsx`
@@ -180,7 +177,20 @@ export default function ComprovantePapeletaModal({
           onClick={(e) => e.stopPropagation()}
           style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
         >
-          <h2 style={{ marginTop: 0, flexShrink: 0 }}>{reimpressao ? 'Reimpressão de Papeleta de Venda' : 'Papeleta de Venda'}</h2>
+          <div className="lightbox-topo" style={{ flexShrink: 0 }}>
+            <h2 style={{ margin: 0 }}>{reimpressao ? 'Reimpressão de Papeleta de Venda' : 'Papeleta de Venda'}</h2>
+            <button type="button" className="btn ghost btn-fechar-tela" onClick={aoFechar} aria-label="Fechar" title="Fechar">
+              <IconeFechar />
+            </button>
+          </div>
+
+          {!reimpressao && configFiscal && !configFiscal.cfgEmiteFiscalAposVenda && !dadosFiscais && (
+            <div style={{ display: 'flex', justifyContent: 'flex-end', flexShrink: 0, marginBottom: 8 }}>
+              <button type="button" className="btn ghost" disabled={!comprovante || emitindoManualmente} onClick={emitirManualmente}>
+                {emitindoManualmente ? 'Emitindo…' : 'Emitir Nota Fiscal'}
+              </button>
+            </div>
+          )}
 
           <div style={{ overflowY: 'auto', flex: 1, minHeight: 0 }}>
             {isLoading ? (
@@ -202,37 +212,19 @@ export default function ComprovantePapeletaModal({
           </div>
 
           <div className="ajuda-rodape" style={{ flexShrink: 0 }}>
-            <button type="button" className="btn ghost" onClick={aoFechar}>
-              Fechar
+            <button
+              type="button"
+              className="btn ghost"
+              disabled={!comprovante}
+              onClick={() => setModalWhatsAppAberto(true)}
+              style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+            >
+              <IconeWhatsapp size={18} />
+              Enviar por WhatsApp
             </button>
-            <div style={{ display: 'flex', gap: 8 }}>
-              {!reimpressao && configFiscal && !configFiscal.cfgEmiteFiscalAposVenda && !dadosFiscais && (
-                <button type="button" className="btn ghost" disabled={!comprovante || emitindoManualmente} onClick={emitirManualmente}>
-                  {emitindoManualmente ? 'Emitindo…' : 'Emitir Nota Fiscal'}
-                </button>
-              )}
-              <button
-                type="button"
-                className="btn ghost"
-                disabled={!comprovante}
-                onClick={() => setModalWhatsAppAberto(true)}
-                style={{ display: 'flex', alignItems: 'center', gap: 6 }}
-              >
-                <IconeWhatsapp size={18} />
-                Enviar por WhatsApp
-              </button>
-              <button
-                type="button"
-                className="btn ghost"
-                disabled={!comprovante}
-                onClick={() => comprovante && gerarPdfComprovanteVenda(linhas, comprovante.idVenda, qrDataUrl)}
-              >
-                Salvar PDF
-              </button>
-              <button type="button" className="btn" disabled={!comprovante} onClick={() => window.print()}>
-                Imprimir
-              </button>
-            </div>
+            <button type="button" className="btn" disabled={!comprovante} onClick={() => window.print()}>
+              Imprimir
+            </button>
           </div>
         </div>
       </div>

@@ -1,6 +1,5 @@
 import type { ReactElement } from 'react'
 import {
-  IconeCaixa,
   IconeCanais,
   IconeCancelamentoVenda,
   IconeCertificado,
@@ -115,24 +114,14 @@ export const MENU: NavGrupo[] = [
         descricao: 'Devolve produtos ao estoque lendo o código de barras, com o vendedor da venda opcionalmente identificado.',
       },
       {
-        chave: 'caixa',
-        label: 'Caixa',
-        icone: IconeCaixa,
-        descricao: 'Abertura e fechamento da sessão de caixa do dia.',
-        itens: [
-          {
-            to: '/abertura-caixa',
-            label: 'Abertura de Caixa',
-            icone: IconeCaixa,
-            descricao: 'Abre a sessão informando o saldo inicial em dinheiro. Exigida antes de vender ou receber.',
-          },
-          {
-            to: '/fechamento-caixa',
-            label: 'Fechamento de Caixa',
-            icone: IconeFechamentoCaixa,
-            descricao: 'Confere o movimento por carteira "às cegas", aponta a diferença e encerra a sessão.',
-          },
-        ],
+        // Saiu do grupo "Caixa" (2026-08-19, pedido do dono do produto): Abertura de Caixa não é
+        // mais uma tela — ela já acontece embutida no início da venda/recebimento
+        // (AberturaCaixaModal.tsx) quando ainda não há caixa aberto. Sobrando só um item,
+        // o grupo virou item direto de Frente de Loja, mesmo padrão de "Reimpressões" acima.
+        to: '/fechamento-caixa',
+        label: 'Fechamento de Caixa',
+        icone: IconeFechamentoCaixa,
+        descricao: 'Escolhe um caixa aberto, confere o movimento por carteira e encerra a sessão.',
       },
       {
         chave: 'cancelamentos',

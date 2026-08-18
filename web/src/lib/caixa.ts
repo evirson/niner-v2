@@ -33,6 +33,24 @@ export function abrirCaixa(payload: AbrirCaixaRequest): Promise<CaixaStatus> {
   return api<CaixaStatus>('/api/v1/caixa/abrir', { method: 'POST', body: JSON.stringify(payload) })
 }
 
+/** Uma linha da grade "Caixas Abertos" (2026-08-19) — substitui a busca por data/usuário do
+ *  Fechamento de Caixa "às cegas". OPERADOR só vê os próprios; ADMIN vê de todo mundo, em
+ *  qualquer empresa. */
+export interface CaixaAberto {
+  idCaixa: number
+  idUsuario: number
+  nomeUsuario: string
+  idEmpresa: number
+  nomeEmpresa: string
+  dataAbertura: string
+  nomeCarteira: string
+  saldoInicial: number
+}
+
+export function listarCaixasAbertos(): Promise<CaixaAberto[]> {
+  return api<CaixaAberto[]>('/api/v1/caixa/abertos')
+}
+
 /** Uma linha de totais do Fechamento de Caixa, por tipo de carteira (2026-07-30). `valorEsperado`
  *  é sempre recalculado no servidor a partir de `caixa_detalhe` — nunca vem de um campo gravado.
  *  `categoriaCarteira` (2026-07-31) distingue carteiras com o mesmo nome em categorias
@@ -85,6 +103,7 @@ export interface ValorContado {
 export interface FecharCaixaRequest {
   idCaixa: number
   valoresContados: ValorContado[]
+  forcarComDivergencia: boolean
 }
 
 /** `fechado = false` quando alguma carteira não bateu — o caixa continua aberto e `linhas` traz
@@ -103,17 +122,17 @@ export interface LancamentoCarteira {
   origem: string
 }
 
-/** `idUsuario` omitido busca o próprio caixa do usuário logado — só ADMIN pode informar outro
- *  (checado no servidor, ver `CaixaService.buscarParaFechamento`). */
-export function buscarFechamentoCaixa(dataIso: string, idUsuario?: number): Promise<FechamentoCaixa> {
-  const params = new URLSearchParams()
-  params.set('data', dataIso)
-  if (idUsuario) params.set('idUsuario', String(idUsuario))
-  return api<FechamentoCaixa>(`/api/v1/caixa/fechamento?${params.toString()}`)
+/** Busca o fechamento de UM caixa pelo id (2026-08-19, substitui a busca por data/usuário) — o
+ *  caixa é escolhido a partir da grade de "Caixas Abertos". Só ADMIN pode consultar caixa de
+ *  outro usuário (403 no servidor, ver `CaixaService.buscarPorId`). */
+export function buscarFechamentoCaixa(idCaixa: number): Promise<FechamentoCaixa> {
+  return api<FechamentoCaixa>(`/api/v1/caixa/fechamento/${idCaixa}`)
 }
 
-/** "Às cegas" (2026-07-30): manda o valor contado de cada carteira com movimento no dia; só
- *  fecha de fato quando todas batem — senão devolve a divergência sem fechar nada. */
+/** Manda o valor contado de cada carteira com movimento no dia. Se alguma carteira não bater,
+ *  a primeira chamada (`forcarComDivergencia: false`) devolve a divergência sem fechar nada —
+ *  a tela pergunta se o operador quer fechar mesmo assim, e só nesse "sim" reenvia com
+ *  `forcarComDivergencia: true` (2026-08-19, fica registrado em `caixa_mestre.observacoes`). */
 export function fecharCaixa(payload: FecharCaixaRequest): Promise<ResultadoFechamento> {
   return api<ResultadoFechamento>('/api/v1/caixa/fechamento', { method: 'POST', body: JSON.stringify(payload) })
 }

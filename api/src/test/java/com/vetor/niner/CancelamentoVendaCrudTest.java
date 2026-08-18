@@ -165,8 +165,7 @@ class CancelamentoVendaCrudTest {
                 .andReturn().getResponse().getContentAsString();
         long idCaixa = ((Number) JsonPath.read(statusResp, "$.idCaixa")).longValue();
 
-        String fechamentoResp = mvc.perform(get("/api/v1/caixa/fechamento").header("Authorization", "Bearer " + token)
-                        .param("data", java.time.LocalDate.now().toString()))
+        String fechamentoResp = mvc.perform(get("/api/v1/caixa/fechamento/" + idCaixa).header("Authorization", "Bearer " + token))
                 .andReturn().getResponse().getContentAsString();
         java.util.List<java.util.Map<String, Object>> linhas = JsonPath.read(fechamentoResp, "$.linhas");
 
@@ -179,7 +178,7 @@ class CancelamentoVendaCrudTest {
 
         mvc.perform(post("/api/v1/caixa/fechamento").header("Authorization", "Bearer " + token)
                         .contentType(APPLICATION_JSON)
-                        .content("{\"idCaixa\":%d,\"valoresContados\":[%s]}".formatted(idCaixa, valoresContados)))
+                        .content("{\"idCaixa\":%d,\"valoresContados\":[%s],\"forcarComDivergencia\":false}".formatted(idCaixa, valoresContados)))
                 .andExpect(status().isOk());
     }
 

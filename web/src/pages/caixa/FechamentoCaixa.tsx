@@ -5,11 +5,16 @@ import { BotaoFecharTela } from '../../components/BotaoFecharTela'
 import { IconeFechamentoCaixa } from '../../components/Icones'
 import Toast, { type TipoToast } from '../../components/Toast'
 import { ApiError } from '../../lib/api'
-import { buscarFechamentoCaixa, fecharCaixa, reabrirCaixa, rotuloCarteira, type ResultadoFechamento } from '../../lib/caixa'
-import { hojeISO } from '../../lib/datas'
+import {
+  buscarFechamentoCaixa,
+  fecharCaixa,
+  listarCaixasAbertos,
+  reabrirCaixa,
+  rotuloCarteira,
+  type ResultadoFechamento,
+} from '../../lib/caixa'
 import { useEu } from '../../lib/eu'
-import { completarMoeda, dataParaIso, dataValida, desmascararMoeda, formatarMoeda, isoParaData, mascararData, mascararMoeda } from '../../lib/masks'
-import { listarUsuarios } from '../../lib/usuarios'
+import { completarMoeda, desmascararMoeda, formatarMoeda, mascararMoeda } from '../../lib/masks'
 import FechamentoCaixaPreviewModal from './FechamentoCaixaPreviewModal'
 import LancamentosCarteiraModal from './LancamentosCarteiraModal'
 
@@ -23,21 +28,26 @@ function formatarDataHora(iso: string | null): string {
 }
 
 /**
- * Fechamento de Caixa "às cegas" (2026-07-30, revisado no mesmo dia) — ADMIN escolhe o usuário
- * (select) + a data do movimento; OPERADOR só vê/fecha o próprio caixa. Mostra os TIPOS de
- * carteira com movimento no dia, sem os valores (contagem às cegas de verdade), pede o valor
- * contado de cada um e só fecha quando todos batem exatamente — senão mostra a divergência
- * (esperado/contado/diferença por carteira) sem gravar nada, com drill-down analítico pra
- * conferir lançamento a lançamento. Impressão em A4 só fica disponível depois do fechamento
- * bem-sucedido ({@link FechamentoCaixaPreviewModal}).
+ * Fechamento de Caixa (2026-08-19, substitui a contagem "às cegas" por data/usuário) — a tela
+ * abre direto na grade "Caixas Abertos" ({@link listarCaixasAbertos}: operador só vê o próprio,
+ * administrador vê de todo mundo em qualquer empresa). Escolhida uma linha, mostra cada carteira
+ * com o **valor que o sistema espera** ao lado do campo pra digitar o valor contado — não é mais
+ * contagem cega. Se todas baterem, fecha e a impressão (mesma bobina térmica 80mm da papeleta de
+ * venda) abre sozinha. Se alguma não bater, mostra a divergência e oferece "Fechar Mesmo Assim"
+ * ({@code forcarComDivergencia}), que fecha do mesmo jeito com a diferença registrada na
+ * observação do caixa (auditoria, P3) — nada é gravado até essa confirmação explícita.
+ *
+ * Reabertura (ADMIN-only): como um caixa fechado some da grade de abertos, o administrador
+ * localiza pelo número do caixa (a mensagem de erro de operações bloqueadas por caixa fechado já
+ * traz esse número).
  */
 export default function FechamentoCaixa() {
   const queryClient = useQueryClient()
   const { data: eu } = useEu()
   const ehAdmin = eu?.usuario.papel === 'ADMIN'
 
-  const [idUsuarioSelecionado, setIdUsuarioSelecionado] = useState<number | ''>('')
-  const [dataTexto, setDataTexto] = useState(isoParaData(hojeISO()))
+  const [idCaixaSelecionado, setIdCaixaSelecionado] = useState<number | null>(null)
+  const [buscaNumeroCaixa, setBuscaNumeroCaixa] = useState('')
   const [valoresContados, setValoresContados] = useState<Record<number, string>>({})
   const [erroContagem, setErroContagem] = useState('')
   const [resultadoDivergencia, setResultadoDivergencia] = useState<ResultadoFechamento | null>(null)
@@ -47,40 +57,31 @@ export default function FechamentoCaixa() {
   const [mostrarPreview, setMostrarPreview] = useState(false)
   const [toast, setToast] = useState<{ texto: string; tipo: TipoToast } | null>(null)
 
-  useEffect(() => {
-    if (eu && !ehAdmin) return
-    if (eu && idUsuarioSelecionado === '') setIdUsuarioSelecionado(eu.usuario.idUsuario)
-  }, [eu, ehAdmin, idUsuarioSelecionado])
-
-  const { data: usuarios } = useQuery({
-    queryKey: ['usuarios-select-fechamento-caixa'],
-    queryFn: () => listarUsuarios({ status: 'ATIVOS', tamanho: 100 }),
-    enabled: ehAdmin,
+  const { data: abertos, isLoading: carregandoAbertos } = useQuery({
+    queryKey: ['caixa-abertos'],
+    queryFn: listarCaixasAbertos,
+    enabled: idCaixaSelecionado === null,
   })
-
-  const dataIso = dataValida(dataTexto) ? dataParaIso(dataTexto) : null
-  const podeBuscar = dataIso !== null && (!ehAdmin || idUsuarioSelecionado !== '')
 
   const {
     data: fechamento,
     isLoading,
     error,
   } = useQuery({
-    queryKey: ['caixa-fechamento', ehAdmin ? idUsuarioSelecionado : eu?.usuario.idUsuario, dataIso],
-    queryFn: () => buscarFechamentoCaixa(dataIso!, ehAdmin ? (idUsuarioSelecionado as number) : undefined),
-    enabled: podeBuscar,
+    queryKey: ['caixa-fechamento', idCaixaSelecionado],
+    queryFn: () => buscarFechamentoCaixa(idCaixaSelecionado!),
+    enabled: idCaixaSelecionado !== null,
     retry: false,
   })
 
-  // Novo caixa carregado — reseta a contagem às cegas e qualquer divergência da tentativa anterior.
-  // Campos nascem VAZIOS (não "0,00") — a tela só mostra carteiras que tiveram movimento, então
-  // nenhuma delas pode ficar sem contagem: um valor "0,00" só é aceito se o operador digitou de
-  // propósito, nunca como default silencioso (2026-07-31, pedido do dono do produto).
+  // Novo caixa carregado — reseta a contagem e qualquer divergência da tentativa anterior. Campos
+  // nascem com o valor esperado já preenchido (a contagem não é mais às cegas): o operador ajusta
+  // pra baixo/cima conforme o que contou fisicamente, em vez de digitar tudo do zero.
   useEffect(() => {
     if (!fechamento) return
     const iniciais: Record<number, string> = {}
     fechamento.linhas.forEach((l) => {
-      iniciais[l.idCarteira] = ''
+      iniciais[l.idCarteira] = formatarMoeda(l.valorEsperado)
     })
     setValoresContados(iniciais)
     setResultadoDivergencia(null)
@@ -89,19 +90,21 @@ export default function FechamentoCaixa() {
   }, [fechamento?.idCaixa])
 
   const fechar = useMutation({
-    mutationFn: () => {
+    mutationFn: (forcarComDivergencia: boolean) => {
       const valoresContadosPayload = fechamento!.linhas.map((l) => ({
         idCarteira: l.idCarteira,
         valorContado: desmascararMoeda(valoresContados[l.idCarteira] ?? ''),
       }))
-      return fecharCaixa({ idCaixa: fechamento!.idCaixa, valoresContados: valoresContadosPayload })
+      return fecharCaixa({ idCaixa: fechamento!.idCaixa, valoresContados: valoresContadosPayload, forcarComDivergencia })
     },
     onSuccess: (resultado) => {
       if (resultado.fechado) {
         setResultadoDivergencia(null)
         queryClient.invalidateQueries({ queryKey: ['caixa-fechamento'] })
         queryClient.invalidateQueries({ queryKey: ['caixa-status'] })
+        queryClient.invalidateQueries({ queryKey: ['caixa-abertos'] })
         setToast({ texto: 'Caixa fechado com sucesso.', tipo: 'sucesso' })
+        setMostrarPreview(true)
       } else {
         setResultadoDivergencia(resultado)
         setToast({ texto: 'Os valores contados não bateram com o esperado — confira a divergência abaixo.', tipo: 'erro' })
@@ -118,6 +121,7 @@ export default function FechamentoCaixa() {
       setResultadoDivergencia(null)
       queryClient.invalidateQueries({ queryKey: ['caixa-fechamento'] })
       queryClient.invalidateQueries({ queryKey: ['caixa-status'] })
+      queryClient.invalidateQueries({ queryKey: ['caixa-abertos'] })
       setToast({ texto: 'Caixa reaberto. A conferência anterior foi apagada.', tipo: 'sucesso' })
     },
     onError: (e: unknown) =>
@@ -131,7 +135,13 @@ export default function FechamentoCaixa() {
       return
     }
     setErroContagem('')
-    fechar.mutate()
+    fechar.mutate(false)
+  }
+
+  const voltarParaLista = () => {
+    setIdCaixaSelecionado(null)
+    setBuscaNumeroCaixa('')
+    setResultadoDivergencia(null)
   }
 
   const naoEncontrado = error instanceof ApiError && error.status === 404
@@ -153,48 +163,92 @@ export default function FechamentoCaixa() {
 
       <div className="lista-corpo">
         <div className="card form-secoes">
-          <section className="section">
-            <p className="section-label">Buscar Caixa</p>
-            <div className="form-grid">
-              {ehAdmin && (
-                <div className="col-6">
-                  <label htmlFor="fechamento-caixa-usuario">Usuário *</label>
-                  <select
-                    id="fechamento-caixa-usuario"
-                    value={idUsuarioSelecionado}
-                    onChange={(e) => setIdUsuarioSelecionado(e.target.value ? Number(e.target.value) : '')}
-                  >
-                    <option value="">Selecione…</option>
-                    {usuarios?.itens.map((u) => (
-                      <option key={u.idUsuario} value={u.idUsuario}>
-                        {u.nome}
-                      </option>
-                    ))}
-                  </select>
+          {idCaixaSelecionado === null && (
+            <section className="section">
+              <p className="section-label">Caixas Abertos</p>
+              {carregandoAbertos && <p className="muted">Carregando…</p>}
+              {abertos && abertos.length === 0 && <p className="muted">Nenhum caixa aberto no momento.</p>}
+              {abertos && abertos.length > 0 && (
+                <div className="table-wrap">
+                  <table className="table table-compacta">
+                    <thead>
+                      <tr>
+                        <th>Usuário</th>
+                        <th>Empresa</th>
+                        <th>Carteira de Abertura</th>
+                        <th>Abertura</th>
+                        <th>Saldo Inicial</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {abertos.map((c) => (
+                        <tr key={c.idCaixa} style={{ cursor: 'pointer' }} onClick={() => setIdCaixaSelecionado(c.idCaixa)}>
+                          <td>{c.nomeUsuario}</td>
+                          <td>{c.nomeEmpresa}</td>
+                          <td>{c.nomeCarteira}</td>
+                          <td>{formatarDataHora(c.dataAbertura)}</td>
+                          <td className="mono">{moeda(c.saldoInicial)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
               )}
-              <div className="col-3">
-                <label htmlFor="fechamento-caixa-data">Data do Movimento *</label>
-                <input
-                  id="fechamento-caixa-data"
-                  className="mono"
-                  inputMode="numeric"
-                  placeholder="dd/mm/aaaa"
-                  value={dataTexto}
-                  onChange={(e) => setDataTexto(mascararData(e.target.value))}
-                  onFocus={(e) => e.target.select()}
-                />
-              </div>
-            </div>
-          </section>
 
-          {isLoading && podeBuscar && <p className="muted">Carregando…</p>}
-          {naoEncontrado && <p className="muted">Nenhum caixa encontrado para este usuário nesta data.</p>}
-          {error && !naoEncontrado && <p className="erro">{error instanceof ApiError ? error.message : 'Não foi possível buscar o fechamento.'}</p>}
+              {ehAdmin && (
+                <div className="form-grid" style={{ marginTop: 16 }}>
+                  <div className="col-3">
+                    <label htmlFor="fechamento-caixa-numero">Ver Caixa Já Fechado (nº)</label>
+                    <input
+                      id="fechamento-caixa-numero"
+                      className="mono"
+                      inputMode="numeric"
+                      placeholder="Nº do caixa"
+                      value={buscaNumeroCaixa}
+                      onChange={(e) => setBuscaNumeroCaixa(e.target.value.replace(/\D/g, ''))}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && buscaNumeroCaixa) setIdCaixaSelecionado(Number(buscaNumeroCaixa))
+                      }}
+                    />
+                  </div>
+                  <div className="col-3" style={{ display: 'flex', alignItems: 'flex-end' }}>
+                    <button
+                      type="button"
+                      className="btn ghost"
+                      disabled={!buscaNumeroCaixa}
+                      onClick={() => setIdCaixaSelecionado(Number(buscaNumeroCaixa))}
+                    >
+                      Localizar
+                    </button>
+                  </div>
+                </div>
+              )}
+            </section>
+          )}
+
+          {idCaixaSelecionado !== null && isLoading && <p className="muted">Carregando…</p>}
+          {idCaixaSelecionado !== null && naoEncontrado && (
+            <>
+              <p className="muted">Nenhum caixa encontrado com esse número.</p>
+              <button type="button" className="btn ghost" onClick={voltarParaLista}>
+                Voltar
+              </button>
+            </>
+          )}
+          {idCaixaSelecionado !== null && error && !naoEncontrado && (
+            <p className="erro">{error instanceof ApiError ? error.message : 'Não foi possível buscar o fechamento.'}</p>
+          )}
 
           {fechamento && (
             <section className="section">
-              <p className="section-label">{fechamento.fechado ? 'Caixa Fechado' : 'Caixa Aberto'}</p>
+              <div className="ajuda-rodape" style={{ marginBottom: 8 }}>
+                <p className="section-label" style={{ margin: 0 }}>
+                  {fechamento.fechado ? 'Caixa Fechado' : 'Caixa Aberto'}
+                </p>
+                <button type="button" className="btn ghost" onClick={voltarParaLista}>
+                  Voltar à Lista
+                </button>
+              </div>
 
               {/* Reabertura (2026-08-14) — só ADMIN, e só faz sentido em caixa fechado. Existe
                   porque estorno de crediário e exclusão/reabertura de conta a pagar recusam
@@ -230,41 +284,50 @@ export default function FechamentoCaixa() {
                 </div>
               </div>
 
-              {/* Caixa aberto, sem tentativa de fechamento em andamento: contagem às cegas — só
-                  os NOMES das carteiras com movimento, nenhum valor do sistema aparece aqui. */}
+              {/* Caixa aberto, sem tentativa de fechamento em andamento: mostra o valor esperado
+                  de cada carteira lado a lado com o campo do valor contado — não é mais uma
+                  contagem às cegas (2026-08-19, pedido do dono do produto). */}
               {!fechamento.fechado && !resultadoDivergencia && (
                 <>
-                  <p className="muted" style={{ marginTop: 16 }}>
-                    Informe quanto você tem de cada forma de pagamento abaixo (contagem às cegas — os valores do
-                    sistema só aparecem depois de fechar).
-                  </p>
-                  <div className="form-grid" style={{ marginTop: 8 }}>
-                    {fechamento.linhas.map((l) => (
-                      <div className="col-4" key={l.idCarteira}>
-                        <label htmlFor={`contado-${l.idCarteira}`}>{rotuloCarteira(l)} *</label>
-                        <input
-                          id={`contado-${l.idCarteira}`}
-                          className="mono"
-                          inputMode="decimal"
-                          placeholder="0,00"
-                          value={valoresContados[l.idCarteira] ?? ''}
-                          onChange={(e) => {
-                            setErroContagem('')
-                            setValoresContados((v) => ({ ...v, [l.idCarteira]: mascararMoeda(e.target.value) }))
-                          }}
-                          onBlur={(e) => {
-                            // Campo vazio fica vazio (nunca completa sozinho pra "0,00") — só
-                            // um valor digitado de propósito é aceito, ver comentário no reset acima.
-                            if (!e.target.value.trim()) return
-                            setValoresContados((v) => ({
-                              ...v,
-                              [l.idCarteira]: formatarMoeda(desmascararMoeda(completarMoeda(e.target.value))),
-                            }))
-                          }}
-                          onFocus={(e) => e.target.select()}
-                        />
-                      </div>
-                    ))}
+                  <div className="table-wrap" style={{ marginTop: 16 }}>
+                    <table className="table table-compacta">
+                      <thead>
+                        <tr>
+                          <th>Carteira</th>
+                          <th>Valor em Caixa</th>
+                          <th>Valor Contado</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {fechamento.linhas.map((l) => (
+                          <tr key={l.idCarteira}>
+                            <td>{rotuloCarteira(l)}</td>
+                            <td className="mono">{moeda(l.valorEsperado)}</td>
+                            <td>
+                              <input
+                                id={`contado-${l.idCarteira}`}
+                                className="mono"
+                                inputMode="decimal"
+                                placeholder="0,00"
+                                value={valoresContados[l.idCarteira] ?? ''}
+                                onChange={(e) => {
+                                  setErroContagem('')
+                                  setValoresContados((v) => ({ ...v, [l.idCarteira]: mascararMoeda(e.target.value) }))
+                                }}
+                                onBlur={(e) => {
+                                  if (!e.target.value.trim()) return
+                                  setValoresContados((v) => ({
+                                    ...v,
+                                    [l.idCarteira]: formatarMoeda(desmascararMoeda(completarMoeda(e.target.value))),
+                                  }))
+                                }}
+                                onFocus={(e) => e.target.select()}
+                              />
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
                   {erroContagem && <p className="erro-campo">{erroContagem}</p>}
                   <div className="ajuda-rodape">
@@ -277,12 +340,13 @@ export default function FechamentoCaixa() {
               )}
 
               {/* Valores não bateram: mostra esperado × contado × diferença por carteira; clicar
-                  numa linha abre o drill-down analítico dos lançamentos daquela carteira. */}
+                  numa linha abre o drill-down analítico dos lançamentos daquela carteira. Fechar
+                  mesmo assim registra a divergência na observação do caixa (auditoria, P3). */}
               {resultadoDivergencia && (
                 <div style={{ marginTop: 16 }}>
                   <p className="erro">
                     Os valores contados não bateram com o esperado. Clique numa carteira para conferir os
-                    lançamentos, ou volte e conte de novo.
+                    lançamentos, corrija e conte de novo, ou feche mesmo assim.
                   </p>
                   <div className="table-wrap">
                     <table className="table table-compacta">
@@ -320,7 +384,9 @@ export default function FechamentoCaixa() {
                     <button type="button" className="btn ghost" onClick={() => setResultadoDivergencia(null)}>
                       Contar de Novo
                     </button>
-                    <span />
+                    <button type="button" className="btn" disabled={fechar.isPending} onClick={() => fechar.mutate(true)}>
+                      {fechar.isPending ? 'Fechando…' : 'Fechar Mesmo Assim'}
+                    </button>
                   </div>
                 </div>
               )}
@@ -354,7 +420,7 @@ export default function FechamentoCaixa() {
                   </div>
 
                   <p className="section-label" style={{ marginTop: 16 }}>
-                    Conferência (contagem às cegas)
+                    Conferência
                   </p>
                   <div className="table-wrap">
                     <table className="table table-compacta">
@@ -412,8 +478,7 @@ export default function FechamentoCaixa() {
           <div className="modal" role="dialog" aria-label="Reabrir Caixa" onClick={(e) => e.stopPropagation()}>
             <h2 style={{ marginTop: 0 }}>Reabrir Caixa</h2>
             <p className="muted">
-              A conferência já gravada será apagada. Depois de corrigir o que precisa, feche o caixa de novo
-              — a contagem às cegas é refeita do zero.
+              A conferência já gravada será apagada. Depois de corrigir o que precisa, feche o caixa de novo.
             </p>
             <div className="form-grid">
               <div className="col-12">

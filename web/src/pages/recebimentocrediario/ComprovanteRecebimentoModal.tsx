@@ -1,19 +1,21 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { gerarBlobComprovante, gerarPdfComprovante, montarLinhasComprovante } from '../../lib/comprovante'
+import { gerarBlobComprovante, montarLinhasComprovante } from '../../lib/comprovante'
 import { ApiError } from '../../lib/api'
 import { buscarComprovanteRecebimento } from '../../lib/recebimentoCrediario'
 import { compartilharArquivo } from '../../lib/compartilhamento'
 import { montarLinkWhatsApp } from '../../lib/whatsapp'
-import { IconeWhatsapp } from '../../components/Icones'
+import { IconeFechar, IconeWhatsapp } from '../../components/Icones'
 import EnviarWhatsAppModal from '../../components/EnviarWhatsAppModal'
 
 /**
  * Comprovante de pagamento de crediário, formatado pra bobina térmica de 80mm (2026-07-30).
  * Abre automaticamente logo após um recebimento efetivado com sucesso (`RecebimentoCrediario.
  * tsx`). "Imprimir" usa o diálogo nativo do navegador (só `.comprovante-imprimir` fica visível
- * na impressão, via CSS — ver `styles.css`); "Salvar PDF" gera o arquivo direto com `jsPDF`, sem
- * passar pelo diálogo (pedido explícito, dois botões separados).
+ * na impressão, via CSS — ver `styles.css`) — o próprio diálogo já oferece "Salvar como PDF",
+ * então o botão dedicado saiu (2026-08-19, pedido do dono do produto). Fechar virou o "✕" no
+ * cabeçalho, não mais um botão "Fechar" no rodapé — o rodapé agora só tem "Enviar por WhatsApp"
+ * (esquerda) e "Imprimir" (direita).
  *
  * `reimpressao` (2026-08-06) — usado pela tela de Reimpressão de Papeleta de Recebimento de
  * Crediário (`ReimpressaoRecebimentoCrediario.tsx`): mesmo componente, muda só o título do popup
@@ -84,9 +86,14 @@ export default function ComprovanteRecebimentoModal({
           onClick={(e) => e.stopPropagation()}
           style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
         >
-          <h2 style={{ marginTop: 0, flexShrink: 0 }}>
-            {reimpressao ? 'Reimpressão de Papeleta de Recebimento de Crediário' : 'Comprovante de Pagamento'}
-          </h2>
+          <div className="lightbox-topo" style={{ flexShrink: 0 }}>
+            <h2 style={{ margin: 0 }}>
+              {reimpressao ? 'Reimpressão de Papeleta de Recebimento de Crediário' : 'Comprovante de Pagamento'}
+            </h2>
+            <button type="button" className="btn ghost btn-fechar-tela" onClick={aoFechar} aria-label="Fechar" title="Fechar">
+              <IconeFechar />
+            </button>
+          </div>
 
           <div style={{ overflowY: 'auto', flex: 1, minHeight: 0 }}>
             {isLoading ? (
@@ -99,32 +106,19 @@ export default function ComprovanteRecebimentoModal({
           </div>
 
           <div className="ajuda-rodape" style={{ flexShrink: 0 }}>
-            <button type="button" className="btn ghost" onClick={aoFechar}>
-              Fechar
+            <button
+              type="button"
+              className="btn ghost"
+              disabled={!comprovante}
+              onClick={() => setModalWhatsAppAberto(true)}
+              style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+            >
+              <IconeWhatsapp size={18} />
+              Enviar por WhatsApp
             </button>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <button
-                type="button"
-                className="btn ghost"
-                disabled={!comprovante}
-                onClick={() => setModalWhatsAppAberto(true)}
-                style={{ display: 'flex', alignItems: 'center', gap: 6 }}
-              >
-                <IconeWhatsapp size={18} />
-                Enviar por WhatsApp
-              </button>
-              <button
-                type="button"
-                className="btn ghost"
-                disabled={!comprovante}
-                onClick={() => comprovante && gerarPdfComprovante(linhas, comprovante.idLoteRecebimento)}
-              >
-                Salvar PDF
-              </button>
-              <button type="button" className="btn" disabled={!comprovante} onClick={() => window.print()}>
-                Imprimir
-              </button>
-            </div>
+            <button type="button" className="btn" disabled={!comprovante} onClick={() => window.print()}>
+              Imprimir
+            </button>
           </div>
         </div>
       </div>

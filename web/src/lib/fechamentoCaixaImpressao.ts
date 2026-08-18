@@ -1,18 +1,13 @@
-import { jsPDF } from 'jspdf'
 import { rotuloCarteira, type FechamentoCaixa } from './caixa'
 import { formatarMoeda } from './masks'
 
 /**
- * Largura em colunas do relatório de Fechamento de Caixa — folha A4 (diferente do Comprovante
- * de Pagamento de Crediário, 80mm, ver `comprovante.ts`), fonte courier monoespaçada pra manter
- * a pré-visualização, a impressão e o PDF idênticos (mesmo padrão).
+ * Impressão do Fechamento de Caixa (2026-08-19) — convertida de folha A4/96 colunas pra bobina
+ * térmica 80mm/42 colunas, "mesmo formato e dimensões da venda" (pedido explícito do dono do
+ * produto): mesma largura, mesmos separadores e o mesmo mecanismo de duas colunas (rótulo à
+ * esquerda, valor à direita) da papeleta de venda (`comprovante.ts`).
  */
-const LARGURA = 96
-
-// coluna "CARTEIRA" alargada em 2026-07-31 pra caber "NOME — Categoria" (ex.: "VALE MERCADORIA —
-// Cartão Crédito", o rótulo mais longo possível) sem truncar.
-const LARGURAS_COLUNA_TABELA = [34, 16, 16, 16, 18]
-const LARGURAS_COLUNA_CONFERENCIA = [34, 20, 20, 20]
+const LARGURA = 42
 
 function linha(caractere: string = '—'): string {
   return caractere.repeat(LARGURA)
@@ -24,16 +19,12 @@ function centralizar(texto: string): string {
   return ' '.repeat(Math.floor(espacos / 2)) + t
 }
 
-/** Primeira coluna alinhada à esquerda, as demais à direita — usada pelo cabeçalho e pelas
- *  linhas das tabelas de totais/conferência por carteira. */
-function linhaTabela(valores: string[], larguras: number[]): string {
-  return valores
-    .map((valor, indice) => {
-      const largura = larguras[indice]
-      const v = valor.length > largura ? valor.slice(0, largura) : valor
-      return indice === 0 ? v.padEnd(largura) : v.padStart(largura)
-    })
-    .join(' ')
+/** Texto à esquerda, valor à direita, preenchido de espaços — trunca a esquerda se não couber. */
+function duasColunas(esquerda: string, direita: string): string {
+  const maxEsquerda = Math.max(0, LARGURA - direita.length - 1)
+  const e = esquerda.length > maxEsquerda ? esquerda.slice(0, maxEsquerda) : esquerda
+  const espacos = Math.max(1, LARGURA - e.length - direita.length)
+  return e + ' '.repeat(espacos) + direita
 }
 
 function moeda(v: number): string {
@@ -52,12 +43,12 @@ function formatarDataHora(iso: string | null): string {
 }
 
 /**
- * Monta o relatório de fechamento como linhas de texto monoespaçado (96 colunas, A4) — fonte
- * única de verdade reusada pela pré-visualização, pela impressão e pelo PDF, mesmo padrão de
- * `montarLinhasComprovante`. A tabela de conferência (esperado/contado/diferença por carteira,
- * "às cegas" — 2026-07-30) só existe depois que o caixa fecha de verdade (todas as carteiras
- * bateram); a impressão só fica disponível nesse ponto, então `f.conferencia` sempre vem
- * preenchida aqui.
+ * Monta o relatório de fechamento como linhas de texto monoespaçado (42 colunas, 80mm) — fonte
+ * única de verdade reusada pela pré-visualização e pela impressão, mesmo padrão de
+ * `montarLinhasComprovante`. Cada carteira sai em um bloco de 3 linhas (saldo inicial/crédito/
+ * débito) seguido do esperado, igual ao bloco de parcela do comprovante de crediário — uma tabela
+ * larga não caberia nas 42 colunas. A conferência (esperado/contado/diferença) só existe depois
+ * que o caixa fecha de verdade, então `f.conferencia` sempre vem preenchida aqui.
  */
 export function montarLinhasFechamento(f: FechamentoCaixa): string[] {
   const linhas: string[] = []
@@ -66,53 +57,36 @@ export function montarLinhasFechamento(f: FechamentoCaixa): string[] {
   linhas.push(linha())
   linhas.push(centralizar('FECHAMENTO DE CAIXA'))
   linhas.push(linha())
-  linhas.push(`Usuário: ${f.nomeUsuario}`)
-  linhas.push(`Empresa: ${f.nomeEmpresa}`)
+  linhas.push(`Usuario: ${f.nomeUsuario}`)
   linhas.push(`Abertura:   ${formatarDataHora(f.dataAbertura)}`)
   linhas.push(`Fechamento: ${formatarDataHora(f.dataFechamento)}`)
   linhas.push(linha())
-  linhas.push(linhaTabela(['CARTEIRA', 'SALDO INIC.', 'CRÉDITO', 'DÉBITO', 'ESPERADO'], LARGURAS_COLUNA_TABELA))
-  linhas.push(linha('•'))
-  f.linhas.forEach((l) => {
-    linhas.push(
-      linhaTabela(
-        [rotuloCarteira(l), moeda(l.saldoInicial), moeda(l.totalCredito), moeda(l.totalDebito), moeda(l.valorEsperado)],
-        LARGURAS_COLUNA_TABELA,
-      ),
-    )
+
+  f.linhas.forEach((l, indice) => {
+    linhas.push(rotuloCarteira(l))
+    linhas.push(duasColunas('  Saldo Inicial:', moeda(l.saldoInicial)))
+    linhas.push(duasColunas('  Credito:', moeda(l.totalCredito)))
+    linhas.push(duasColunas('  Debito:', moeda(l.totalDebito)))
+    linhas.push(duasColunas('  Esperado:', moeda(l.valorEsperado)))
+    if (indice < f.linhas.length - 1) linhas.push(linha('•'))
   })
   linhas.push(linha())
 
   if (f.conferencia.length > 0) {
-    linhas.push(centralizar('CONFERÊNCIA (CONTAGEM ÀS CEGAS)'))
+    linhas.push(centralizar('CONFERENCIA'))
     linhas.push(linha())
-    linhas.push(linhaTabela(['CARTEIRA', 'ESPERADO', 'CONTADO', 'DIFERENÇA'], LARGURAS_COLUNA_CONFERENCIA))
-    linhas.push(linha('•'))
-    f.conferencia.forEach((c) => {
-      linhas.push(
-        linhaTabela([rotuloCarteira(c), moeda(c.valorEsperado), moeda(c.valorContado), moeda(c.diferenca)], LARGURAS_COLUNA_CONFERENCIA),
-      )
+    f.conferencia.forEach((c, indice) => {
+      linhas.push(rotuloCarteira(c))
+      linhas.push(duasColunas('  Esperado:', moeda(c.valorEsperado)))
+      linhas.push(duasColunas('  Contado:', moeda(c.valorContado)))
+      linhas.push(duasColunas('  Diferenca:', moeda(c.diferenca)))
+      if (indice < f.conferencia.length - 1) linhas.push(linha('•'))
     })
     linhas.push(linha())
   }
 
+  linhas.push(`Impresso em: ${formatarDataHora(new Date().toISOString())}`)
+  linhas.push(linha())
+
   return linhas
-}
-
-/**
- * Gera o PDF direto (sem diálogo de impressão), folha A4, fonte courier monoespaçada pra
- * alinhar exatamente igual à pré-visualização — mesmo padrão de `gerarPdfComprovante`.
- */
-export function gerarPdfFechamento(linhas: string[], idCaixa: number): void {
-  const margem = 15
-  const tamanhoFonte = 9
-  const alturaLinha = 4.6
-
-  const doc = new jsPDF({ unit: 'mm', format: 'a4' })
-  doc.setFont('courier', 'normal')
-  doc.setFontSize(tamanhoFonte)
-  linhas.forEach((texto, indice) => {
-    doc.text(texto, margem, margem + (indice + 1) * alturaLinha)
-  })
-  doc.save(`fechamento-caixa-${idCaixa}.pdf`)
 }

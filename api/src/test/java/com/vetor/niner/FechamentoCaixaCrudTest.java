@@ -26,12 +26,13 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * Fechamento de Caixa (2026-07-30, revisado no mesmo dia pro fechamento "às cegas") — ADMIN
+ * Fechamento de Caixa (2026-07-30, revisado 2026-08-19 — deixou de ser "às cegas") — ADMIN
  * fecha o caixa de qualquer usuário, OPERADOR só o próprio; totais por tipo de carteira
- * (crédito/débito separados) recalculados a partir de {@code caixa_detalhe}. O operador informa
- * o valor contado de CADA carteira com movimento; só fecha de fato quando todas batem — senão o
- * caixa continua aberto e a resposta traz a divergência de cada carteira, gravada em {@code
- * caixa_fechamento_conferencia} só no sucesso. Mesmo padrão de setup de {@link
+ * (crédito/débito separados) recalculados a partir de {@code caixa_detalhe}. A tela busca o
+ * caixa por {@code idCaixa} (escolhido na grade de "Caixas Abertos", {@code GET .../abertos}) e
+ * já mostra o valor esperado antes do operador contar. Fecha quando bate, ou quando o operador
+ * confirma fechar mesmo com divergência ({@code forcarComDivergencia}); sem a flag, uma
+ * diferença devolve {@code fechado = false} sem gravar nada. Mesmo padrão de setup de {@link
  * RecebimentoCrediarioCrudTest} (única forma de popular {@code caixa_detalhe} de verdade).
  */
 @SpringBootTest
@@ -221,12 +222,26 @@ class FechamentoCaixaCrudTest {
     /** Monta o corpo de {@code POST /api/v1/caixa/fechamento} com um valor contado por carteira
      *  — {@code valoresPorCarteira} é {idCarteira: "valor"}. */
     private String corpoFechamento(long idCaixa, java.util.Map<Long, String> valoresPorCarteira) {
+        return corpoFechamento(idCaixa, valoresPorCarteira, false);
+    }
+
+    private String corpoFechamento(long idCaixa, java.util.Map<Long, String> valoresPorCarteira, boolean forcarComDivergencia) {
         StringBuilder linhas = new StringBuilder();
         for (var entrada : valoresPorCarteira.entrySet()) {
             if (linhas.length() > 0) linhas.append(",");
             linhas.append("{\"idCarteira\":%d,\"valorContado\":%s}".formatted(entrada.getKey(), entrada.getValue()));
         }
-        return "{\"idCaixa\":%d,\"valoresContados\":[%s]}".formatted(idCaixa, linhas);
+        return "{\"idCaixa\":%d,\"valoresContados\":[%s],\"forcarComDivergencia\":%s}"
+                .formatted(idCaixa, linhas, forcarComDivergencia);
+    }
+
+    /** Id do caixa aberto hoje para o dono de {@code token} — mesmo caminho que várias
+     *  respostas de {@code /caixa/status} já usavam inline, extraído pra reduzir repetição
+     *  depois que {@code GET /caixa/fechamento} passou a exigir {@code idCaixa} no path. */
+    private long buscarIdCaixaAtual(String token) throws Exception {
+        String resp = mvc.perform(get("/api/v1/caixa/status").header("Authorization", "Bearer " + token))
+                .andReturn().getResponse().getContentAsString();
+        return ((Number) JsonPath.read(resp, "$.idCaixa")).longValue();
     }
 
     /** Efetiva um recebimento de crediário de {@code valor} na carteira DINHEIRO, gerando um
@@ -375,24 +390,22 @@ class FechamentoCaixaCrudTest {
     void adminConsultaFechamentoDoProprioCaixa() throws Exception {
         TenantNovo tenant = assinarNovoTenant("admin-proprio");
         abrirCaixaDinheiro(tenant.token());
-        String hoje = LocalDate.now().toString();
+        long idCaixa = buscarIdCaixaAtual(tenant.token());
 
-        mvc.perform(get("/api/v1/caixa/fechamento").header("Authorization", "Bearer " + tenant.token())
-                        .param("data", hoje))
+        mvc.perform(get("/api/v1/caixa/fechamento/" + idCaixa).header("Authorization", "Bearer " + tenant.token()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.fechado").value(false))
                 .andExpect(jsonPath("$.linhas[*].nomeCarteira").value(hasItem("DINHEIRO")));
     }
 
     @Test
-    void operadorConsultaOProprioSemInformarIdUsuario() throws Exception {
+    void operadorConsultaOProprio() throws Exception {
         TenantNovo tenant = assinarNovoTenant("operador-proprio");
         String tokenOperador = criarOperadorEFazerLogin(tenant.token(), tenant.slug(), "operador-proprio");
         abrirCaixaDinheiro(tokenOperador);
-        String hoje = LocalDate.now().toString();
+        long idCaixa = buscarIdCaixaAtual(tokenOperador);
 
-        mvc.perform(get("/api/v1/caixa/fechamento").header("Authorization", "Bearer " + tokenOperador)
-                        .param("data", hoje))
+        mvc.perform(get("/api/v1/caixa/fechamento/" + idCaixa).header("Authorization", "Bearer " + tokenOperador))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.fechado").value(false));
     }
@@ -400,14 +413,11 @@ class FechamentoCaixaCrudTest {
     @Test
     void operadorNaoConsegueConsultarCaixaDeOutroUsuario() throws Exception {
         TenantNovo tenant = assinarNovoTenant("operador-bloqueado");
-        long idAdmin = buscarIdUsuarioLogado(tenant.token());
         String tokenOperador = criarOperadorEFazerLogin(tenant.token(), tenant.slug(), "operador-bloqueado");
         abrirCaixaDinheiro(tenant.token());
-        String hoje = LocalDate.now().toString();
+        long idCaixaAdmin = buscarIdCaixaAtual(tenant.token());
 
-        mvc.perform(get("/api/v1/caixa/fechamento").header("Authorization", "Bearer " + tokenOperador)
-                        .param("idUsuario", String.valueOf(idAdmin))
-                        .param("data", hoje))
+        mvc.perform(get("/api/v1/caixa/fechamento/" + idCaixaAdmin).header("Authorization", "Bearer " + tokenOperador))
                 .andExpect(status().isForbidden());
     }
 
@@ -417,21 +427,18 @@ class FechamentoCaixaCrudTest {
         String tokenOperador = criarOperadorEFazerLogin(tenant.token(), tenant.slug(), "admin-consulta-outro");
         long idOperador = buscarIdUsuarioLogado(tokenOperador);
         abrirCaixaDinheiro(tokenOperador);
-        String hoje = LocalDate.now().toString();
+        long idCaixa = buscarIdCaixaAtual(tokenOperador);
 
-        mvc.perform(get("/api/v1/caixa/fechamento").header("Authorization", "Bearer " + tenant.token())
-                        .param("idUsuario", String.valueOf(idOperador))
-                        .param("data", hoje))
+        mvc.perform(get("/api/v1/caixa/fechamento/" + idCaixa).header("Authorization", "Bearer " + tenant.token()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.idUsuario").value(idOperador));
     }
 
     @Test
-    void buscarFechamentoSemCaixaNaDataRespondeNaoEncontrado() throws Exception {
+    void buscarFechamentoDeCaixaInexistenteRespondeNaoEncontrado() throws Exception {
         TenantNovo tenant = assinarNovoTenant("sem-caixa");
 
-        mvc.perform(get("/api/v1/caixa/fechamento").header("Authorization", "Bearer " + tenant.token())
-                        .param("data", LocalDate.now().toString()))
+        mvc.perform(get("/api/v1/caixa/fechamento/999999").header("Authorization", "Bearer " + tenant.token()))
                 .andExpect(status().isNotFound());
     }
 
@@ -444,15 +451,65 @@ class FechamentoCaixaCrudTest {
 
         efetivarRecebimento(tenant.token(), idTenant, "150.00");
         efetivarRecebimento(tenant.token(), idTenant, "50.00");
+        long idCaixa = buscarIdCaixaAtual(tenant.token());
 
-        mvc.perform(get("/api/v1/caixa/fechamento").header("Authorization", "Bearer " + tenant.token())
-                        .param("data", LocalDate.now().toString()))
+        mvc.perform(get("/api/v1/caixa/fechamento/" + idCaixa).header("Authorization", "Bearer " + tenant.token()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.linhas[0].nomeCarteira").value("DINHEIRO"))
                 .andExpect(jsonPath("$.linhas[0].saldoInicial").value(100.00))
                 .andExpect(jsonPath("$.linhas[0].totalCredito").value(200.00))
                 .andExpect(jsonPath("$.linhas[0].totalDebito").value(0))
                 .andExpect(jsonPath("$.linhas[0].valorEsperado").value(300.00));
+    }
+
+    // --- "Caixas Abertos" (2026-08-19) — substitui a busca por data/usuário -------------------
+
+    @Test
+    void operadorVeSoOsProprioCaixasAbertos() throws Exception {
+        TenantNovo tenant = assinarNovoTenant("abertos-operador");
+        String tokenOperadorA = criarOperadorEFazerLogin(tenant.token(), tenant.slug(), "abertos-operador-a");
+        String tokenOperadorB = criarOperadorEFazerLogin(tenant.token(), tenant.slug(), "abertos-operador-b");
+        long idOperadorA = buscarIdUsuarioLogado(tokenOperadorA);
+        abrirCaixaDinheiro(tokenOperadorA);
+        abrirCaixaDinheiro(tokenOperadorB);
+
+        String resp = mvc.perform(get("/api/v1/caixa/abertos").header("Authorization", "Bearer " + tokenOperadorA))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        java.util.List<java.util.Map<String, Object>> abertos = JsonPath.read(resp, "$");
+        assertThat(abertos).hasSize(1);
+        assertThat(((Number) abertos.getFirst().get("idUsuario")).longValue()).isEqualTo(idOperadorA);
+    }
+
+    @Test
+    void adminVeCaixasAbertosDeTodosOsUsuarios() throws Exception {
+        TenantNovo tenant = assinarNovoTenant("abertos-admin");
+        String tokenOperador = criarOperadorEFazerLogin(tenant.token(), tenant.slug(), "abertos-admin-op");
+        abrirCaixaDinheiro(tenant.token());
+        abrirCaixaDinheiro(tokenOperador);
+
+        String resp = mvc.perform(get("/api/v1/caixa/abertos").header("Authorization", "Bearer " + tenant.token()))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        java.util.List<java.util.Map<String, Object>> abertos = JsonPath.read(resp, "$");
+        assertThat(abertos).hasSize(2);
+    }
+
+    @Test
+    void caixaFechadoNaoAparecemEmAbertos() throws Exception {
+        TenantNovo tenant = assinarNovoTenant("abertos-fechado");
+        abrirCaixaDinheiro(tenant.token());
+        long idCarteiraDinheiro = buscarIdCarteiraDinheiro(tenant.token());
+        long idCaixa = buscarIdCaixaAtual(tenant.token());
+
+        mvc.perform(post("/api/v1/caixa/fechamento").header("Authorization", "Bearer " + tenant.token())
+                        .contentType(APPLICATION_JSON)
+                        .content(corpoFechamento(idCaixa, java.util.Map.of(idCarteiraDinheiro, "100.00"))))
+                .andExpect(status().isOk());
+
+        mvc.perform(get("/api/v1/caixa/abertos").header("Authorization", "Bearer " + tenant.token()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(0));
     }
 
     /** 2026-07-31 — a mesma bandeira pode ter um cadastro em débito e outro em crédito (mesmo
@@ -486,8 +543,7 @@ class FechamentoCaixaCrudTest {
             }
         }
 
-        String resp = mvc.perform(get("/api/v1/caixa/fechamento").header("Authorization", "Bearer " + tenant.token())
-                        .param("data", LocalDate.now().toString()))
+        String resp = mvc.perform(get("/api/v1/caixa/fechamento/" + idCaixa).header("Authorization", "Bearer " + tenant.token()))
                 .andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString();
 
@@ -511,11 +567,8 @@ class FechamentoCaixaCrudTest {
         long idOperador = buscarIdUsuarioLogado(tokenOperador);
         abrirCaixaDinheiro(tokenOperador);
         long idCarteiraDinheiro = buscarIdCarteiraDinheiro(tokenOperador);
-        String hoje = LocalDate.now().toString();
 
-        String resp = mvc.perform(get("/api/v1/caixa/status").header("Authorization", "Bearer " + tokenOperador))
-                .andReturn().getResponse().getContentAsString();
-        long idCaixa = ((Number) JsonPath.read(resp, "$.idCaixa")).longValue();
+        long idCaixa = buscarIdCaixaAtual(tokenOperador);
 
         // Só a carteira de abertura teve movimento (só o saldo inicial de 100.00) — contar 100.00 bate exato.
         mvc.perform(post("/api/v1/caixa/fechamento").header("Authorization", "Bearer " + tenant.token())
@@ -525,10 +578,9 @@ class FechamentoCaixaCrudTest {
                 .andExpect(jsonPath("$.fechado").value(true))
                 .andExpect(jsonPath("$.linhas[0].diferenca").value(0));
 
-        mvc.perform(get("/api/v1/caixa/fechamento").header("Authorization", "Bearer " + tenant.token())
-                        .param("idUsuario", String.valueOf(idOperador))
-                        .param("data", hoje))
+        mvc.perform(get("/api/v1/caixa/fechamento/" + idCaixa).header("Authorization", "Bearer " + tenant.token()))
                 .andExpect(status().isOk())
+                .andExpect(jsonPath("$.idUsuario").value(idOperador))
                 .andExpect(jsonPath("$.fechado").value(true))
                 .andExpect(jsonPath("$.conferencia[0].valorEsperado").value(100.00))
                 .andExpect(jsonPath("$.conferencia[0].valorContado").value(100.00));
@@ -555,10 +607,40 @@ class FechamentoCaixaCrudTest {
                 .andExpect(jsonPath("$.linhas[0].diferenca").value(-10.00));
 
         // O caixa continua aberto — nada foi gravado.
-        mvc.perform(get("/api/v1/caixa/fechamento").header("Authorization", "Bearer " + tenant.token())
-                        .param("data", LocalDate.now().toString()))
+        mvc.perform(get("/api/v1/caixa/fechamento/" + idCaixa).header("Authorization", "Bearer " + tenant.token()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.fechado").value(false));
+    }
+
+    @Test
+    void fechamentoComDivergenciaEForcarFechaEDeixaRastroNaObservacao() throws Exception {
+        TenantNovo tenant = assinarNovoTenant("divergencia-forcada");
+        long idTenant = extrairIdTenant(tenant.token());
+        abrirCaixaDinheiro(tenant.token());
+        long idCarteiraDinheiro = buscarIdCarteiraDinheiro(tenant.token());
+        long idCaixa = buscarIdCaixaAtual(tenant.token());
+
+        // Esperado é 100.00 (só o saldo inicial); contando 90.00 gera divergência de -10.00.
+        mvc.perform(post("/api/v1/caixa/fechamento").header("Authorization", "Bearer " + tenant.token())
+                        .contentType(APPLICATION_JSON)
+                        .content(corpoFechamento(idCaixa, java.util.Map.of(idCarteiraDinheiro, "90.00"), true)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.fechado").value(true));
+
+        mvc.perform(get("/api/v1/caixa/fechamento/" + idCaixa).header("Authorization", "Bearer " + tenant.token()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.fechado").value(true));
+
+        try (Connection c = abrirConexao(idTenant);
+                PreparedStatement ps = c.prepareStatement(
+                        "SELECT observacoes FROM caixa_mestre WHERE id_tenant = ? AND id_caixa = ?")) {
+            ps.setLong(1, idTenant);
+            ps.setLong(2, idCaixa);
+            try (ResultSet rs = ps.executeQuery()) {
+                assertThat(rs.next()).isTrue();
+                assertThat(rs.getString("observacoes")).contains("FECHADO COM DIVERGENCIA");
+            }
+        }
     }
 
     @Test
@@ -669,9 +751,9 @@ class FechamentoCaixaCrudTest {
         TenantNovo tenantA = assinarNovoTenant("isolamento-a");
         TenantNovo tenantB = assinarNovoTenant("isolamento-b");
         abrirCaixaDinheiro(tenantA.token());
+        long idCaixaA = buscarIdCaixaAtual(tenantA.token());
 
-        mvc.perform(get("/api/v1/caixa/fechamento").header("Authorization", "Bearer " + tenantB.token())
-                        .param("data", LocalDate.now().toString()))
+        mvc.perform(get("/api/v1/caixa/fechamento/" + idCaixaA).header("Authorization", "Bearer " + tenantB.token()))
                 .andExpect(status().isNotFound());
     }
 }

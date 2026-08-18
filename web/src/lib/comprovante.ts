@@ -16,7 +16,7 @@ const LARGURA = 42
 /**
  * '—' (travessão) e '•' (marcador) em vez de '-'/'.': ficam graficamente mais parecidos com uma
  * linha/separador impresso de verdade. Restritos ao WinAnsiEncoding (CP1252) de propósito — são
- * os únicos "caracteres gráficos" que a fonte padrão do jsPDF (`gerarPdfComprovante`) consegue
+ * os únicos "caracteres gráficos" que a fonte padrão do jsPDF (`gerarBlobComprovante`) consegue
  * desenhar sem precisar embutir uma fonte TTF nova; caracteres de desenho de caixa (─/═/Unicode
  * U+2500+) apareceriam certos na tela mas quebrados no PDF.
  */
@@ -121,8 +121,9 @@ const LARGURA_MM = 80
 /**
  * Monta o documento jsPDF do comprovante de crediário (80mm de largura, altura dinâmica conforme
  * o número de linhas, fonte courier monoespaçada pra alinhar exatamente igual à pré-visualização)
- * — fonte única de verdade reusada tanto pra baixar o arquivo ({@link gerarPdfComprovante}) quanto
- * pra gerar o Blob que sobe pro compartilhamento por link ({@link gerarBlobComprovante}).
+ * — fonte única de verdade do Blob que sobe pro compartilhamento por link
+ * ({@link gerarBlobComprovante}). O download direto em PDF saiu do produto em 2026-08-19 (o
+ * diálogo de impressão nativo já oferece "Salvar como PDF").
  */
 function montarDocumentoComprovante(linhas: string[]): jsPDF {
   const margem = 4
@@ -140,16 +141,8 @@ function montarDocumentoComprovante(linhas: string[]): jsPDF {
 }
 
 /**
- * Gera o PDF direto (sem passar pelo diálogo de impressão do navegador — pedido explícito,
- * 2026-07-30).
- */
-export function gerarPdfComprovante(linhas: string[], idLoteRecebimento: number): void {
-  montarDocumentoComprovante(linhas).save(`comprovante-crediario-${idLoteRecebimento}.pdf`)
-}
-
-/**
- * Mesmo documento de {@link gerarPdfComprovante}, mas devolve o Blob em vez de baixar — usado
- * pra subir o PDF pro compartilhamento por link (envio por WhatsApp, `lib/compartilhamento.ts`).
+ * Usado pra subir o PDF pro compartilhamento por link (envio por WhatsApp,
+ * `lib/compartilhamento.ts`).
  */
 export function gerarBlobComprovante(linhas: string[]): Blob {
   return montarDocumentoComprovante(linhas).output('blob')
@@ -381,9 +374,9 @@ export function montarLinhasComprovanteVenda(c: ComprovanteVenda, reimpressao: b
 /**
  * Monta o documento jsPDF da papeleta de venda — courier 8pt, a mesma dos outros comprovantes
  * desta bobina desde que a papeleta passou a 42 colunas (2026-08-14; antes era ~5pt pra espremer
- * 64 colunas em 80mm). Fonte única de verdade reusada tanto pra
- * baixar ({@link gerarPdfComprovanteVenda}) quanto pro Blob do compartilhamento por WhatsApp
- * ({@link gerarBlobComprovanteVenda}).
+ * 64 colunas em 80mm). Fonte única de verdade do Blob do compartilhamento por WhatsApp
+ * ({@link gerarBlobComprovanteVenda}) — o download direto em PDF saiu do produto em 2026-08-19
+ * (o diálogo de impressão nativo já oferece "Salvar como PDF").
  */
 /** Lado (mm) do QR Code no PDF — mesmo tamanho da tela/impressão (`.papeleta-qrcode img`,
  *  `styles.css`), pra não precisar de duas calibragens de legibilidade diferentes. */
@@ -413,20 +406,16 @@ function montarDocumentoComprovanteVenda(linhas: string[], qrCodeDataUrl?: strin
 
 /** `qrCodeDataUrl` (§9.6, B7): DANFCE — quando a venda tem NFC-e autorizada/em contingência, o
  *  PDF ganha o QR Code embutido abaixo do texto (ver {@link gerarQrCodeDataUrl}). `undefined`/
- *  `null` para a papeleta comum, sem fiscal — comportamento idêntico ao de sempre. */
-export function gerarPdfComprovanteVenda(linhas: string[], idVenda: number, qrCodeDataUrl?: string | null): void {
-  montarDocumentoComprovanteVenda(linhas, qrCodeDataUrl).save(`papeleta-venda-${idVenda}.pdf`)
-}
-
-/** Mesmo documento de {@link gerarPdfComprovanteVenda}, mas devolve o Blob em vez de baixar —
- *  usado pra subir a papeleta pro compartilhamento por link (envio por WhatsApp). */
+ *  `null` para a papeleta comum, sem fiscal — comportamento idêntico ao de sempre. Usado pra
+ *  subir a papeleta pro compartilhamento por link (envio por WhatsApp) — o download direto em
+ *  PDF saiu do produto em 2026-08-19. */
 export function gerarBlobComprovanteVenda(linhas: string[], qrCodeDataUrl?: string | null): Blob {
   return montarDocumentoComprovanteVenda(linhas, qrCodeDataUrl).output('blob')
 }
 
 /**
  * QR Code da NFC-e (§9.6, B7) como data URL PNG — usado tanto no preview/impressão em tela
- * (`<img src>`) quanto embutido no PDF ({@link gerarPdfComprovanteVenda}). O CONTEÚDO do QR
+ * (`<img src>`) quanto embutido no PDF ({@link gerarBlobComprovanteVenda}). O CONTEÚDO do QR
  * (`url`) já vem pronto do backend, extraído do XML assinado — esta função só desenha o
  * desenho, nunca decide o texto que vai dentro (ver `DadosFiscaisComprovante.qrCodeUrl`).
  */
@@ -509,7 +498,7 @@ function montarDocumentoComprovanteVale(linhas: string[]): jsPDF {
   return doc
 }
 
-/** Mesmo mecanismo de {@link gerarPdfComprovanteVenda}, nome de arquivo próprio do vale. */
+/** Mesmo mecanismo de {@link montarDocumentoComprovanteVenda}, nome de arquivo próprio do vale. */
 export function gerarPdfComprovanteVale(linhas: string[], idDevolucao: number): void {
   montarDocumentoComprovanteVale(linhas).save(`vale-mercadoria-${idDevolucao}.pdf`)
 }

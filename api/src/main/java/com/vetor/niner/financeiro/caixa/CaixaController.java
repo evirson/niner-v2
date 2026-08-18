@@ -1,6 +1,7 @@
 package com.vetor.niner.financeiro.caixa;
 
 import com.vetor.niner.financeiro.caixa.CaixaDtos.AbrirCaixaRequest;
+import com.vetor.niner.financeiro.caixa.CaixaDtos.CaixaAbertoResponse;
 import com.vetor.niner.financeiro.caixa.CaixaDtos.CaixaStatusResponse;
 import com.vetor.niner.financeiro.caixa.CaixaDtos.CarteiraParaAberturaResponse;
 import com.vetor.niner.financeiro.caixa.CaixaDtos.FecharCaixaRequest;
@@ -10,12 +11,10 @@ import com.vetor.niner.financeiro.caixa.CaixaDtos.ReaberturaCaixaResponse;
 import com.vetor.niner.financeiro.caixa.CaixaDtos.ReabrirCaixaRequest;
 import com.vetor.niner.financeiro.caixa.CaixaDtos.ResultadoFechamentoResponse;
 import jakarta.validation.Valid;
-import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
 
-import java.time.LocalDate;
 import java.util.List;
 
 /**
@@ -51,12 +50,16 @@ public class CaixaController {
         return service.abrir(jwt, req);
     }
 
-    @GetMapping("/fechamento")
-    public FechamentoCaixaResponse buscarParaFechamento(
-            @AuthenticationPrincipal Jwt jwt,
-            @RequestParam(required = false) Long idUsuario,
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate data) {
-        return service.buscarParaFechamento(jwt, idUsuario, data);
+    /** "Caixas Abertos" (2026-08-19) — alimenta a grade que substitui a busca por data/usuário.
+     *  OPERADOR só vê os próprios; ADMIN vê de todo mundo, em qualquer empresa. */
+    @GetMapping("/abertos")
+    public List<CaixaAbertoResponse> listarAbertos(@AuthenticationPrincipal Jwt jwt) {
+        return service.listarAbertos(jwt);
+    }
+
+    @GetMapping("/fechamento/{idCaixa}")
+    public FechamentoCaixaResponse buscarPorId(@AuthenticationPrincipal Jwt jwt, @PathVariable long idCaixa) {
+        return service.buscarPorId(jwt, idCaixa);
     }
 
     @PostMapping("/fechamento")

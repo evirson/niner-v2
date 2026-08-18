@@ -2,6 +2,7 @@ package com.vetor.niner.financeiro.caixa;
 
 import com.vetor.niner.comum.web.ConflitoDadosException;
 import com.vetor.niner.financeiro.caixa.CaixaDtos.AbrirCaixaRequest;
+import com.vetor.niner.financeiro.caixa.CaixaDtos.CaixaAbertoResponse;
 import com.vetor.niner.financeiro.caixa.CaixaDtos.CaixaStatusResponse;
 import com.vetor.niner.financeiro.caixa.CaixaDtos.CarteiraParaAberturaResponse;
 import com.vetor.niner.financeiro.caixa.CaixaDtos.FecharCaixaRequest;
@@ -23,7 +24,6 @@ import org.springframework.web.server.ResponseStatusException;
 import java.math.BigDecimal;
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -155,34 +155,67 @@ public class CaixaService {
     }
 
     /**
-     * Fechamento de Caixa (2026-07-30) — busca o caixa de um usuário/empresa/dia (aberto ou já
-     * fechado, pra permitir reabrir a tela e reimprimir depois de fechado) com os totais por
-     * tipo de carteira. ADMIN pode consultar/fechar o caixa de qualquer usuário; OPERADOR só o
-     * próprio (mesma checagem de {@code UsuarioService}/{@code ConfiguracaoGeralService}).
+     * "Caixas Abertos" (2026-08-19) — substitui a busca por data/usuário: em vez do operador
+     * digitar uma data e torcer pra achar o caixa certo, a tela lista todos os caixas
+     * {@code caixa_fechado = false} pra ele escolher. OPERADOR só vê os próprios (qualquer
+     * empresa em que tenha aberto um, não só a da sessão atual); ADMIN vê de todo mundo, em
+     * qualquer empresa do tenant — é o comportamento pedido explicitamente ("se for
+     * administrador tem que trazer todos os caixas abertos e de todas as empresas").
      */
     @Transactional(readOnly = true)
-    public FechamentoCaixaResponse buscarParaFechamento(Jwt jwt, Long idUsuarioParam, LocalDate data) {
-        long idEmpresa = idEmpresa(jwt);
-        long idUsuarioAlvo = idUsuarioParam != null ? idUsuarioParam : idUsuario(jwt);
-        if (idUsuarioAlvo != idUsuario(jwt)) {
+    public List<CaixaAbertoResponse> listarAbertos(Jwt jwt) {
+        boolean admin = ehAdmin(jwt);
+        StringBuilder sql = new StringBuilder("""
+                SELECT cm.id_caixa, cm.id_usuario, u.nome_usuario, cm.id_empresa, e.razao_social AS nome_empresa,
+                       cm.data_abertura, tc.nome_carteira, cm.saldo_inicial
+                FROM caixa_mestre cm
+                JOIN usuario u ON u.id_tenant = cm.id_tenant AND u.id_usuario = cm.id_usuario
+                JOIN empresa e ON e.id_tenant = cm.id_tenant AND e.id_empresa = cm.id_empresa
+                JOIN tipo_carteira tc ON tc.id_tenant = cm.id_tenant AND tc.id_carteira = cm.id_carteira
+                WHERE cm.id_tenant = plataforma.tenant_atual() AND cm.caixa_fechado = false
+                """);
+        List<Object> params = new ArrayList<>();
+        if (!admin) {
+            sql.append(" AND cm.id_usuario = ?");
+            params.add(idUsuario(jwt));
+        }
+        sql.append(" ORDER BY cm.data_abertura DESC");
+
+        return jdbc.sql(sql.toString())
+                .params(params)
+                .query((rs, n) -> new CaixaAbertoResponse(
+                        rs.getLong("id_caixa"), rs.getLong("id_usuario"), rs.getString("nome_usuario"),
+                        rs.getLong("id_empresa"), rs.getString("nome_empresa"),
+                        rs.getObject("data_abertura", OffsetDateTime.class),
+                        rs.getString("nome_carteira"), rs.getBigDecimal("saldo_inicial")))
+                .list();
+    }
+
+    /**
+     * Fechamento de Caixa (2026-07-30, revisado 2026-08-19) — busca um caixa específico (aberto
+     * ou já fechado, pra permitir reabrir a tela e reimprimir depois de fechado) com os totais
+     * por tipo de carteira, escolhido a partir da grade de "Caixas Abertos". ADMIN pode
+     * consultar/fechar o caixa de qualquer usuário; OPERADOR só o próprio.
+     */
+    @Transactional(readOnly = true)
+    public FechamentoCaixaResponse buscarPorId(Jwt jwt, long idCaixa) {
+        Caixa caixa = buscarCaixaPorIdObrigatorio(idCaixa);
+        if (caixa.idUsuario() != idUsuario(jwt)) {
             exigirAdmin(jwt);
         }
-
-        Caixa caixa = buscarCaixaDoDia(idEmpresa, idUsuarioAlvo, data)
-                .orElseThrow(() -> new ResponseStatusException(NOT_FOUND,
-                        "Não há caixa aberto ou fechado para este usuário nesta data."));
         return montarFechamento(caixa);
     }
 
     /**
-     * Fechamento "às cegas" (2026-07-30, revisão): o operador informa o valor contado de CADA
-     * tipo de carteira que teve movimento no dia — não só dinheiro — sem ver o valor esperado
-     * antes (isso é responsabilidade da tela, que só busca os totais depois desta chamada
-     * responder). Só fecha de fato (grava {@code caixa_fechado}/{@code
-     * caixa_fechamento_conferencia}) quando TODAS as carteiras batem exatamente; senão devolve
-     * {@code fechado = false} com a diferença de cada carteira, sem mudar nada no banco — a
-     * tela mostra a divergência e permite o operador conferir lançamento a lançamento (ver
-     * {@link #listarLancamentosDaCarteira}) antes de tentar de novo.
+     * Fechamento de Caixa (2026-07-30, revisão 2026-08-19 — deixou de ser "às cegas"): o
+     * operador vê o valor esperado de cada carteira (a tela busca com {@link #buscarPorId} antes
+     * de mostrar o formulário) e informa o valor contado. Só fecha de fato (grava {@code
+     * caixa_fechado}/{@code caixa_fechamento_conferencia}) quando TODAS as carteiras batem
+     * exatamente **ou** o operador confirmou fechar mesmo com divergência ({@code
+     * req.forcarComDivergencia()}); sem a flag, uma diferença devolve {@code fechado = false} com
+     * a diferença de cada carteira, sem mudar nada no banco — a tela avisa e pergunta se fecha
+     * mesmo assim, permitindo também conferir lançamento a lançamento antes de decidir (ver
+     * {@link #listarLancamentosDaCarteira}).
      */
     @Transactional
     public ResultadoFechamentoResponse fechar(Jwt jwt, FecharCaixaRequest req) {
@@ -217,16 +250,31 @@ public class CaixaService {
                     linha.idCarteira(), linha.nomeCarteira(), linha.categoriaCarteira(), linha.valorEsperado(), contado, diferenca));
         }
 
-        if (!bate) {
+        if (!bate && !req.forcarComDivergencia()) {
             return new ResultadoFechamentoResponse(caixa.idCaixa(), false, conferencia);
         }
 
-        jdbc.sql("""
-                        UPDATE caixa_mestre SET caixa_fechado = true, data_fechamento = now(), id_usuario_fechamento = ?
-                        WHERE id_tenant = plataforma.tenant_atual() AND id_caixa = ?
-                        """)
-                .params(idUsuario(jwt), req.idCaixa())
-                .update();
+        if (bate) {
+            jdbc.sql("""
+                            UPDATE caixa_mestre SET caixa_fechado = true, data_fechamento = now(), id_usuario_fechamento = ?
+                            WHERE id_tenant = plataforma.tenant_atual() AND id_caixa = ?
+                            """)
+                    .params(idUsuario(jwt), req.idCaixa())
+                    .update();
+        } else {
+            // P3: fechar com divergência fica registrado — quem olhar o relatório de conferência
+            // depois vê só números, não o "porquê"; a observação é o rastro de que foi uma
+            // decisão consciente do operador, não um bug do fechamento "às cegas" de antes.
+            String observacao = "FECHADO COM DIVERGENCIA EM " + java.time.OffsetDateTime.now().format(
+                    java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm")) + " POR USUARIO " + idUsuario(jwt);
+            jdbc.sql("""
+                            UPDATE caixa_mestre SET caixa_fechado = true, data_fechamento = now(), id_usuario_fechamento = ?,
+                                observacoes = COALESCE(observacoes || E'\\n', '') || ?
+                            WHERE id_tenant = plataforma.tenant_atual() AND id_caixa = ?
+                            """)
+                    .params(idUsuario(jwt), observacao, req.idCaixa())
+                    .update();
+        }
 
         for (LinhaConferenciaResponse linha : conferencia) {
             jdbc.sql("""
@@ -327,7 +375,7 @@ public class CaixaService {
         if (!fechados.isEmpty()) {
             throw new ConflitoDadosException(
                     "Esta operação mexe no caixa nº " + fechados.getFirst() + ", que já está fechado. "
-                            + "Reabra o caixa em Frente de Loja › Caixa › Fechamento de Caixa "
+                            + "Reabra o caixa em Frente de Loja › Fechamento de Caixa "
                             + "(só o ADMIN pode reabrir) e refaça a operação.");
         }
     }
@@ -429,20 +477,6 @@ public class CaixaService {
                 .query(CaixaService::mapearCaixa)
                 .optional()
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Caixa não encontrado."));
-    }
-
-    private Optional<Caixa> buscarCaixaDoDia(long idEmpresa, long idUsuario, LocalDate data) {
-        return jdbc.sql("""
-                        SELECT id_caixa, id_empresa, id_usuario, id_carteira, saldo_inicial,
-                               data_abertura, data_fechamento, caixa_fechado
-                        FROM caixa_mestre
-                        WHERE id_tenant = plataforma.tenant_atual() AND id_empresa = ? AND id_usuario = ?
-                              AND data_abertura::date = ?
-                        ORDER BY data_abertura DESC LIMIT 1
-                        """)
-                .params(idEmpresa, idUsuario, data)
-                .query(CaixaService::mapearCaixa)
-                .optional();
     }
 
     /** Monta a resposta completa: cabeçalho do caixa + uma linha por tipo de carteira usado
@@ -570,6 +604,11 @@ public class CaixaService {
 
     private static void exigirAdmin(Jwt jwt) {
         exigirAdmin(jwt, "consultar/fechar o caixa de outro usuário");
+    }
+
+    private static boolean ehAdmin(Jwt jwt) {
+        List<String> roles = jwt.getClaimAsStringList("roles");
+        return roles != null && roles.contains("ADMIN");
     }
 
     private static long idEmpresa(Jwt jwt) {
