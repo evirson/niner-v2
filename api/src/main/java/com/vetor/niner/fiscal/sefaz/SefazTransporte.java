@@ -106,13 +106,47 @@ public class SefazTransporte {
         }
 
         String corpo = resp.body();
+        // ⚠️ Achado real testando contra a SEFAZ-PR de verdade (2026-08-18, primeira emissão
+        // síncrona autorizada de fato): a resposta de autorização (indSinc=1) traz DOIS `cStat` —
+        // um no nível do LOTE (`retEnviNFe`, sempre 104 "Lote processado" quando o lote foi
+        // aceito, não diz nada sobre a nota) e outro dentro de `protNFe/infProt`, que é o
+        // resultado REAL da nota (100 = autorizada, ou a rejeição específica). Extrair sem
+        // escopo pega o PRIMEIRO `cStat` do texto — o do lote — e uma nota autorizada (100 lá
+        // dentro) sai reportada como "REJEITADO cStat 104" no sistema, com a chave/protocolo
+        // corretos mas a decisão errada. Os testes deste módulo nunca pegaram isso porque os
+        // fixtures mockados só têm UM `cStat` (dentro de `infProt`), nunca os dois juntos como a
+        // SEFAZ real manda. Resolvido priorizando o escopo de `infProt` quando ele existe —
+        // idêntico ao problema (e à mesma classe de solução) que `ArquivamentoXmlService` já
+        // resolve para montar o `nfeProc`.
+        String escopo = extrairBloco(corpo, "infProt");
         return new RespostaSefaz(
                 resp.statusCode(),
-                extrair(corpo, "cStat"),
-                extrair(corpo, "xMotivo"),
-                extrair(corpo, "nProt"),
-                extrair(corpo, "chNFe"),
+                extrairComEscopo(escopo, corpo, "cStat"),
+                extrairComEscopo(escopo, corpo, "xMotivo"),
+                extrairComEscopo(escopo, corpo, "nProt"),
+                extrairComEscopo(escopo, corpo, "chNFe"),
                 corpo);
+    }
+
+    /** Procura {@code tag} dentro de {@code infProt} primeiro (resultado real da nota); cai para
+     *  o corpo inteiro só se aquele campo específico não estiver lá — cobre tanto a resposta real
+     *  da SEFAZ (tudo dentro de {@code infProt}) quanto uma resposta sem nota processada (lote
+     *  rejeitado, sem {@code protNFe} nenhum: {@code escopo} vem {@code null}). */
+    private static String extrairComEscopo(String escopo, String corpoCompleto, String tag) {
+        String valor = escopo != null ? extrair(escopo, tag) : null;
+        return valor != null ? valor : extrair(corpoCompleto, tag);
+    }
+
+    /** Conteúdo de {@code <tag>...</tag>} (ignorando prefixo de namespace), ou {@code null} se a
+     *  tag não aparecer na resposta — mesmo princípio de {@link #extrair}, mas devolvendo o bloco
+     *  inteiro em vez de um valor escalar, para os campos seguintes procurarem só dentro dele. */
+    private static String extrairBloco(String xml, String tag) {
+        if (xml == null) {
+            return null;
+        }
+        Matcher m = Pattern.compile("<(?:\\w+:)?%s\\b[^>]*>(.*?)</(?:\\w+:)?%s>".formatted(tag, tag), Pattern.DOTALL)
+                .matcher(xml);
+        return m.find() ? m.group(1) : null;
     }
 
     /** Envelope SOAP 1.2 — montado à mão, aceito pela SEFAZ-PR no B0 ({@code verAplic PR-v4_5_39}). */
