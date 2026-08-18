@@ -12,6 +12,7 @@ import {
   IconeContaCorrente,
   IconeContasPagar,
   IconeDevolucaoProduto,
+  IconeEmpresa,
   IconeEstoque,
   IconeEstornoRecebimentoCrediario,
   IconeEtiqueta,
@@ -279,6 +280,12 @@ export const MENU: NavGrupo[] = [
         label: 'Usuários',
         icone: IconeUsuario,
         descricao: 'Quem acessa o ERP, com papel (administrador ou operador) e as empresas permitidas.',
+      },
+      {
+        to: '/empresas',
+        label: 'Empresas',
+        icone: IconeEmpresa,
+        descricao: 'Identificação, endereço e dados fiscais (CNPJ, Inscrição Estadual, CNAE) de cada empresa do tenant.',
       },
       {
         to: '/configuracoes-gerais',

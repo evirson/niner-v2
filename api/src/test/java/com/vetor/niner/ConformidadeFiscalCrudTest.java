@@ -181,6 +181,29 @@ class ConformidadeFiscalCrudTest {
                         org.hamcrest.Matchers.hasItem("Nenhuma configuração fiscal cadastrada.")));
     }
 
+    /** 2026-08-19 — antes desta correção, essas 4 pendências não tinham {@code telaCorrecao}
+     *  (o "Corrigir" simplesmente não aparecia): não existia tela nenhuma pra editar CNPJ/
+     *  Inscrição Estadual/código de município IBGE/CNAE da empresa. Agora apontam pra
+     *  "identidade.empresa" (`/empresas/{id}` no front). */
+    @Test
+    void pendenciasDeCadastroDaEmpresaApontamParaATelaDeEmpresa() throws Exception {
+        String token = assinarNovoTenant("sem-cadastro");
+        long idEmpresa = idEmpresaDo(token);
+
+        String resp = mvc.perform(get("/api/v1/fiscal/conformidade/" + idEmpresa + "/empresa")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+
+        List<java.util.Map<String, Object>> itens = JsonPath.read(resp, "$.itens");
+        for (String problema : List.of("Empresa sem CNPJ.", "Empresa sem Inscrição Estadual.",
+                "Empresa sem código de município IBGE.", "Empresa sem CNAE.")) {
+            var item = itens.stream().filter(i -> problema.equals(i.get("problema"))).findFirst()
+                    .orElseThrow(() -> new AssertionError("Pendência não encontrada: " + problema));
+            org.assertj.core.api.Assertions.assertThat(item.get("telaCorrecao")).isEqualTo("identidade.empresa");
+        }
+    }
+
     @Test
     void empresaCompletaComCertificadoValidoESemProdutosEhVerde() throws Exception {
         String token = assinarNovoTenant("completa");

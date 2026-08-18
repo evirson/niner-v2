@@ -140,16 +140,16 @@ public class ConformidadeFiscalService {
             pendencias.add(item(idEmpresa, razaoSocial, "Nenhuma configuração fiscal cadastrada.", "fiscal.configuracao"));
         }
         if (vazio((String) linha[1])) {
-            pendencias.add(item(idEmpresa, razaoSocial, "Empresa sem CNPJ.", null));
+            pendencias.add(item(idEmpresa, razaoSocial, "Empresa sem CNPJ.", "identidade.empresa"));
         }
         if (vazio((String) linha[2])) {
-            pendencias.add(item(idEmpresa, razaoSocial, "Empresa sem Inscrição Estadual.", null));
+            pendencias.add(item(idEmpresa, razaoSocial, "Empresa sem Inscrição Estadual.", "identidade.empresa"));
         }
         if (linha[3] == null) {
-            pendencias.add(item(idEmpresa, razaoSocial, "Empresa sem código de município IBGE.", null));
+            pendencias.add(item(idEmpresa, razaoSocial, "Empresa sem código de município IBGE.", "identidade.empresa"));
         }
         if (vazio((String) linha[4])) {
-            pendencias.add(item(idEmpresa, razaoSocial, "Empresa sem CNAE.", null));
+            pendencias.add(item(idEmpresa, razaoSocial, "Empresa sem CNAE.", "identidade.empresa"));
         }
         if ((long) linha[6] == 0L) {
             pendencias.add(item(idEmpresa, razaoSocial, "Nenhum certificado digital ativo e dentro da validade.", "fiscal.certificado"));

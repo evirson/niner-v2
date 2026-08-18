@@ -41,6 +41,7 @@ export const ROTA_POR_TELA: Partial<Record<string, string>> = {
   'catalogo.produto': '/produtos',
   'financeiro.tipocarteira': '/tipos-carteira',
   'cadastros.cliente': '/clientes',
+  'identidade.empresa': '/empresas',
 }
 
 export function rotaDeCorrecao(item: ItemPendencia): string | null {

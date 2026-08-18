@@ -55,8 +55,10 @@ Registro cronológico das decisões e entregas. Atualizar a cada marco relevante
 >
 > **2026-08-19:** Fechamento de Caixa redesenhado por completo (fim da contagem "às cegas", grade
 > "Caixas Abertos", "Fechar Mesmo Assim", impressão térmica) + Abertura de Caixa virou só popup +
-> bug real de "duplicate key" na Importação de Estoque corrigido. **732/732 testes de backend
-> verdes.** Ver linha do tempo de hoje.
+> bug real de "duplicate key" na Importação de Estoque corrigido + tela nova **Dados da Empresa**
+> (`/empresas`, primeiro CRUD do projeto sem criar/excluir) fecha a categoria "Empresa" da
+> Conformidade Fiscal (CNPJ/Inscrição Estadual/Inscrição Municipal/código de município IBGE/CNAE
+> nunca tinham tela pra editar). **741/741 testes de backend verdes.** Ver linha do tempo de hoje.
 >
 > Os parágrafos abaixo são a **narrativa acumulada** desde o começo — leia o resumo acima para o
 > estado, e a linha do tempo (do mais novo para o mais antigo) para o detalhe de cada entrega.
@@ -458,6 +460,50 @@ Movimentação de Conta Corrente) que ainda não tinham migrado pro `SeletorPlan
 ---
 
 ## Linha do tempo
+
+### 2026-08-19 — Tela nova "Dados da Empresa": fecha a lacuna de CNPJ/IE/IM/código IBGE/CNAE que a Conformidade Fiscal cobrava
+
+Reportado ao vivo pelo dono do produto testando a Conformidade Fiscal: *"na conformidade fiscal,
+na seção empresas, tem 6 pendências... mas quando mando corrigir não me aparece pra cadastrar o
+CNPJ da empresa, onde a gente coloca isso??"*. Investigação confirmou: `empresa` era **só
+leitura** desde sempre — `EmpresaController` só tinha `GET /api/v1/empresas`/`.../permitidas`,
+zero `POST`/`PUT`, nenhuma tela editava CNPJ/Inscrição Estadual/Inscrição Municipal/código de
+município IBGE/CNAE, apesar de esses campos existirem em `empresa` desde `V014` (bloco fiscal
+adicionado em 2026-08-16). 4 das 6 pendências de "Empresa" nem mostravam o botão "Corrigir"
+(`telaCorrecao = null`); a 5ª levava para `/fiscal/configuracao`, que trata de campos diferentes
+(CRT/emissão/séries/CSC). É a **terceira vez** no projeto que a mesma causa raiz aparece — Tipo
+de Carteira e Produto tiveram o mesmo problema em 2026-08-18.
+
+**Construído:** `EmpresaService.buscarPorId`/`atualizar` (ADMIN-only, CNPJ e e-mail validados
+reaproveitando `FornecedorService.cnpjValido`/`emailValido`, texto livre em maiúsculas,
+`DuplicateKeyException` de CNPJ vira 409) + `GET`/`PUT /api/v1/empresas/{id}`. Front:
+`EmpresaLista.tsx` (grade simples, sem paginação/busca — `EmpresaService.listar()` já documenta
+"no máximo poucas dezenas") e `EmpresaForm.tsx` (**primeiro CRUD do projeto sem criar/excluir** —
+sempre em modo edição; Razão Social/Código/Matriz somente leitura; CNPJ com máscara alfanumérica;
+CEP autopreenche endereço via ViaCEP), rotas `/empresas` e `/empresas/:id` dentro do bloco
+`RequireAdmin`, menu "Configurações › Empresas", ícone novo (`IconeEmpresa`).
+`ConformidadeFiscalService.pendenciasEmpresa` passou a apontar `telaCorrecao = "identidade.empresa"`
+nas 4 pendências que antes não levavam a lugar nenhum.
+
+**Nada é obrigatório para salvar** — quem cobra o preenchimento é a Conformidade Fiscal, não este
+formulário (mesmo princípio de `TipoCarteiraForm`/`FornecedorForm`).
+
+**Testes:** `EmpresaCrudTest` novo (8 casos: sucesso, campos em branco aceitos, CNPJ/e-mail
+inválidos rejeitados com 400, salvar de novo com o mesmo CNPJ não conflita consigo mesma,
+OPERADOR recebe 403, empresa de outro tenant responde 404, campos estruturais não mudam) +
+1 caso novo em `ConformidadeFiscalCrudTest`. **741/741 testes de backend verdes**, `tsc -b`
+limpo. **Achado ao escrever os testes:** os CNPJs usados em `ConformidadeFiscalCrudTest` (via
+`UPDATE` direto no banco, sem validação) não são CNPJs válidos de verdade — o único confirmado
+válido no projeto é `11222333000181` (já usado em `FornecedorCrudTest`), reaproveitado aqui.
+
+**Verificado ao vivo no navegador:** editada a Loja Dev Claudio — CNPJ, IE, IM, código IBGE,
+CNAE, CEP autopreenchendo endereço. Pendências de "Empresa" na Conformidade Fiscal caíram de
+**6 para 2** (só restaram as de configuração fiscal/certificado, de outra tela).
+
+**Fora do escopo, deliberadamente:** criar/excluir empresa pela UI (segue via SQL direto) e
+lookup/autocomplete de município IBGE (campo de texto puro, sem tabela de referência).
+
+Detalhes completos: `docs/telas/empresa.md`.
 
 ### 2026-08-19 — Fechamento de Caixa redesenhado: fim da contagem "às cegas", grade "Caixas Abertos", impressão térmica
 

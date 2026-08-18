@@ -325,7 +325,7 @@ O que **hoje** impede emitir uma nota. Conferido em `db/migration/V001`–`V033`
 **aditiva** (F12): coluna nova nasce nullable ou com default, e a exigência é da aplicação, pela
 Conformidade Fiscal (F11) — nunca `NOT NULL` retroativo sobre dado existente.
 
-### 6.1 `empresa` (V014) — o emitente
+### 6.1 `empresa` (V014) — o emitente 🆕 ✅ campos da tela desde 2026-08-19
 
 Hoje tem: razão social, fantasia, CNPJ, IE, endereço, número, complemento, bairro, cidade, estado,
 CEP, telefone, e-mail. **Falta para o grupo `emit`/`enderEmit`:**
@@ -349,6 +349,17 @@ alfanumérica já existente, UF contra a tabela de UFs.
 > `codigo_municipio_ibge`, `cnae`, `inscricao_municipal` e `tipo_estabelecimento`, que são
 > **atributos da empresa**, não configuração fiscal, e vão para `empresa` mesmo. A tela de Empresa
 > (`identidade.empresa`) ganha esses campos; a tela nova de Configuração Fiscal fica com o resto.
+
+✅ **Implementado em 2026-08-19** — a lacuna foi achada pelo dono do produto ao clicar "Corrigir"
+numa pendência de "Empresa sem CNPJ" na Conformidade Fiscal e não encontrar onde preencher (`empresa`
+era só leitura desde sempre, apesar dos campos existirem desde `V014`). Tela nova `identidade.empresa`
+(`/empresas`, **primeiro CRUD do projeto sem criar/excluir**): CNPJ (alfanumérico), Inscrição
+Estadual, Inscrição Municipal, código de município IBGE (texto puro, sem lookup — não existe
+tabela de referência de municípios no projeto) e CNAE, além de identificação/endereço/contato.
+`tipo_estabelecimento` **não** entrou — a coluna `matriz` já existe e cobre o mesmo papel (Matriz/
+Filial), mostrado somente-leitura na tela. Nada é obrigatório para salvar; quem cobra é a
+Conformidade Fiscal. Testado ao vivo: pendências de "Empresa" caíram de 6 para 2. Detalhe completo:
+`docs/telas/empresa.md`.
 
 ### 6.2 `produto` (V017) e `produto_barra` — o item da nota
 

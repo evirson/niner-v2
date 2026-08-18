@@ -250,6 +250,36 @@ const CONTEUDOS: Record<string, ConteudoAjuda> = {
     ],
     urlVideo: null,
   },
+  'identidade.empresa.lista': {
+    titulo: 'Empresas',
+    objetivo: 'Ver as empresas cadastradas no tenant e abrir uma para editar seus dados.',
+    passos: [
+      'A lista mostra todas as empresas do tenant — código, razão social, nome fantasia e status.',
+      'Clique no ícone azul de editar para abrir os dados completos de uma empresa.',
+      'Não há botão de criar empresa nova ou excluir aqui — a empresa já existe (foi criada na assinatura ou incluída direto pela equipe); esta tela só edita o que já existe.',
+    ],
+    errosComuns: [
+      'Só administradores acessam esta tela.',
+    ],
+    urlVideo: null,
+  },
+  'identidade.empresa.form': {
+    titulo: 'Dados da Empresa',
+    objetivo: 'Preencher a identificação, o endereço e os dados fiscais (CNPJ, Inscrição Estadual, Inscrição Municipal, código de município IBGE, CNAE) de uma empresa.',
+    passos: [
+      'Razão Social, Código e Matriz/Filial ficam só para consulta — não são editáveis nesta tela.',
+      'Preencha o CNPJ (aceita letras nas 12 primeiras posições, conforme a regra nova da Receita Federal a partir de julho/2026) e a Inscrição Estadual.',
+      'O código de município é o código de 7 dígitos do IBGE, não o nome da cidade — consulte no site do IBGE se não souber de cabeça.',
+      'Digite o CEP para o endereço (logradouro, bairro, cidade, UF) ser preenchido automaticamente; corrija manualmente se precisar.',
+      'Salve — os dados ficam disponíveis na hora para a Conformidade Fiscal reavaliar as pendências da empresa.',
+    ],
+    errosComuns: [
+      'Nada aqui é obrigatório para salvar: quem cobra o preenchimento antes de emitir nota é a tela de Conformidade Fiscal, não este formulário — é possível salvar parcialmente e voltar depois.',
+      'CNPJ já usado por outra empresa do mesmo tenant é recusado ao salvar.',
+      'Cheguei aqui clicando em "Corrigir" na Conformidade Fiscal: é a mesma tela, já aberta na empresa certa — preencha o campo que faltava e salve.',
+    ],
+    urlVideo: null,
+  },
   'relatorios.fluxocaixa': {
     titulo: 'Fluxo de Caixa',
     objetivo: 'Ver para onde foi o dinheiro e se vai faltar dinheiro à frente.',

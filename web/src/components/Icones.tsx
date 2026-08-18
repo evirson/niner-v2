@@ -98,6 +98,20 @@ export function IconeParametros({ size = 28 }: { size?: number }) {
   )
 }
 
+/** Ícone da tela de Empresa (2026-08-19) — dados de identificação/endereço/fiscal do
+ *  estabelecimento. */
+export function IconeEmpresa({ size = 28 }: { size?: number }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.6} stroke="currentColor" width={size} height={size} aria-hidden="true">
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M2.25 21h19.5m-18-18v18m10.5-18v18m6-13.5V21M6.75 6.75h.75m-.75 3h.75m-.75 3h.75m3-6h.75m-.75 3h.75m-.75 3h.75M6.75 21v-3.375c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21"
+      />
+    </svg>
+  )
+}
+
 /** Ícone da tela de Produto (lista/formulário) — fixa a função da tela ao lado do título. */
 export function IconeProduto({ size = 28 }: { size?: number }) {
   return (

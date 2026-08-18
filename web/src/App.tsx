@@ -27,6 +27,8 @@ import ProdutoForm from './pages/produtos/ProdutoForm'
 import ConfiguracaoTelaProduto from './pages/produtos/ConfiguracaoTelaProduto'
 import UsuarioLista from './pages/usuarios/UsuarioLista'
 import UsuarioForm from './pages/usuarios/UsuarioForm'
+import EmpresaLista from './pages/identidade/EmpresaLista'
+import EmpresaForm from './pages/identidade/EmpresaForm'
 import EtiquetaConfigLista from './pages/etiquetaconfig/EtiquetaConfigLista'
 import EtiquetaConfigForm from './pages/etiquetaconfig/EtiquetaConfigForm'
 import TransferenciaLista from './pages/estoque/TransferenciaLista'
@@ -188,6 +190,8 @@ export default function App() {
             <Route path="/importacao-dados/estoque" element={<ImportacaoTabelaPage tabela="estoque" />} />
             <Route path="/exportacao-dados" element={<ExportacaoDadosPage />} />
             <Route path="/configuracoes-gerais" element={<ConfiguracaoGeralForm />} />
+            <Route path="/empresas" element={<EmpresaLista />} />
+            <Route path="/empresas/:id" element={<EmpresaForm />} />
             <Route path="/usuarios" element={<UsuarioLista />} />
             <Route path="/usuarios/novo" element={<UsuarioForm />} />
             <Route path="/usuarios/:id/visualizar" element={<UsuarioForm somenteLeitura />} />

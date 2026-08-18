@@ -1,15 +1,22 @@
 package com.vetor.niner.identidade.empresa;
 
+import com.vetor.niner.identidade.empresa.EmpresaDtos.AtualizarEmpresaRequest;
+import com.vetor.niner.identidade.empresa.EmpresaDtos.EmpresaDetalheResponse;
 import com.vetor.niner.identidade.empresa.EmpresaDtos.EmpresaResponse;
+import jakarta.validation.Valid;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 
-/** Listagem de empresas do tenant (`/api/v1`, JWT + RLS) — qualquer papel pode ler. */
+/** Empresas do tenant (`/api/v1`, JWT + RLS) — listar é aberto a qualquer papel; ficha completa
+ *  e atualização (2026-08-19) são ADMIN-only, checado em {@link EmpresaService}. */
 @RestController
 @RequestMapping("/api/v1/empresas")
 public class EmpresaController {
@@ -30,5 +37,18 @@ public class EmpresaController {
     @GetMapping("/permitidas")
     public List<EmpresaResponse> listarPermitidas(@AuthenticationPrincipal Jwt jwt) {
         return service.listarPermitidas(jwt);
+    }
+
+    /** Ficha completa (2026-08-19) — inclui os dados fiscais do emitente que a Conformidade
+     *  Fiscal cobra (CNPJ/Inscrição Estadual/código de município IBGE/CNAE). */
+    @GetMapping("/{id}")
+    public EmpresaDetalheResponse buscar(@AuthenticationPrincipal Jwt jwt, @PathVariable long id) {
+        return service.buscarPorId(jwt, id);
+    }
+
+    @PutMapping("/{id}")
+    public EmpresaDetalheResponse atualizar(
+            @AuthenticationPrincipal Jwt jwt, @PathVariable long id, @Valid @RequestBody AtualizarEmpresaRequest req) {
+        return service.atualizar(jwt, id, req);
     }
 }
