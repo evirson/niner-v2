@@ -44,9 +44,7 @@ import RecebimentoCrediario from './pages/recebimentocrediario/RecebimentoCredia
 import ReimpressaoRecebimentoCrediario from './pages/recebimentocrediario/ReimpressaoRecebimentoCrediario'
 import AberturaCaixa from './pages/caixa/AberturaCaixa'
 import FechamentoCaixa from './pages/caixa/FechamentoCaixa'
-import CancelamentoVenda from './pages/vendas/CancelamentoVenda'
 import PesquisaVendas from './pages/vendas/PesquisaVendas'
-import ReimpressaoPapeletaVenda from './pages/vendas/ReimpressaoPapeletaVenda'
 import DevolucaoProduto from './pages/vendas/DevolucaoProduto'
 import CancelamentoDevolucao from './pages/vendas/CancelamentoDevolucao'
 import ContaCorrenteLista from './pages/contacorrente/ContaCorrenteLista'
@@ -87,7 +85,6 @@ export default function App() {
           <Route path="/menu/:grupo" element={<MenuGrupo />} />
           <Route path="/pdv" element={<Pdv />} />
           <Route path="/pesquisa-vendas" element={<PesquisaVendas />} />
-          <Route path="/reimpressao-papeleta-venda" element={<ReimpressaoPapeletaVenda />} />
           <Route path="/devolucao-produto" element={<DevolucaoProduto />} />
           <Route path="/relatorio-vendas" element={<RelatorioVendas />} />
           <Route path="/relatorio-comissoes" element={<RelatorioComissoes />} />
@@ -197,7 +194,6 @@ export default function App() {
             <Route path="/usuarios/novo" element={<UsuarioForm />} />
             <Route path="/usuarios/:id/visualizar" element={<UsuarioForm somenteLeitura />} />
             <Route path="/usuarios/:id" element={<UsuarioForm />} />
-            <Route path="/cancelamento-venda" element={<CancelamentoVenda />} />
             <Route path="/etiqueta-configuracao" element={<EtiquetaConfigLista />} />
             <Route path="/etiqueta-configuracao/novo" element={<EtiquetaConfigForm />} />
             <Route path="/etiqueta-configuracao/:id/visualizar" element={<EtiquetaConfigForm somenteLeitura />} />

@@ -1,12 +1,8 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery } from '@tanstack/react-query'
 import { useState } from 'react'
 import { IconeFechar } from '../../components/Icones'
 import { ApiError } from '../../lib/api'
-import {
-  buscarDetalheParaCancelamento,
-  cancelarVenda,
-  type VendaParaCancelamento,
-} from '../../lib/cancelamentoVenda'
+import { buscarDetalheParaCancelamento, cancelarVenda } from '../../lib/cancelamentoVenda'
 import { formatarDataHora } from '../../lib/datas'
 import { formatarMoeda } from '../../lib/masks'
 
@@ -19,17 +15,22 @@ function moeda(v: number): string {
  * revertido (itens de estoque + formas de pagamento), exige um motivo e confirmação explícita
  * (Sim/Não). Bloqueio definitivo de crediário com parcela recebida (RN-03) é mostrado aqui com
  * o detalhe de cada parcela — a tela nem tenta cancelar nesse caso, só "Fechar".
+ *
+ * **Migrado pra dentro do popup de detalhe da Pesquisa de Vendas (2026-08-18)** — o prop era
+ * `venda: VendaParaCancelamento` (a linha inteira da grade da extinta tela de Cancelamento de
+ * Venda); virou só `idVenda`, que é tudo que este componente de fato usa fora da própria query
+ * de detalhe abaixo. Quem chama decide a invalidação de cache depois do sucesso — este modal não
+ * sabe mais de onde foi aberto.
  */
 export default function CancelamentoVendaModal({
-  venda,
+  idVenda,
   aoFechar,
   aoCancelarComSucesso,
 }: {
-  venda: VendaParaCancelamento
+  idVenda: number
   aoFechar: () => void
   aoCancelarComSucesso: () => void
 }) {
-  const queryClient = useQueryClient()
   const [motivo, setMotivo] = useState('')
   const [erro, setErro] = useState('')
 
@@ -38,17 +39,14 @@ export default function CancelamentoVendaModal({
     isLoading,
     error,
   } = useQuery({
-    queryKey: ['cancelamento-venda-detalhe', venda.idVenda],
-    queryFn: () => buscarDetalheParaCancelamento(venda.idVenda),
+    queryKey: ['cancelamento-venda-detalhe', idVenda],
+    queryFn: () => buscarDetalheParaCancelamento(idVenda),
     retry: 1,
   })
 
   const cancelar = useMutation({
-    mutationFn: () => cancelarVenda(venda.idVenda, motivo.trim()),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['vendas-cancelamento'] })
-      aoCancelarComSucesso()
-    },
+    mutationFn: () => cancelarVenda(idVenda, motivo.trim()),
+    onSuccess: aoCancelarComSucesso,
     onError: (e: unknown) => setErro(e instanceof ApiError ? e.message : 'Não foi possível cancelar a venda.'),
   })
 
@@ -74,7 +72,7 @@ export default function CancelamentoVendaModal({
         style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
       >
         <div className="lightbox-topo" style={{ marginBottom: 12, flexShrink: 0 }}>
-          <h2 style={{ margin: 0 }}>Cancelamento de Venda nº {venda.idVenda}</h2>
+          <h2 style={{ margin: 0 }}>Cancelamento de Venda nº {idVenda}</h2>
           <button type="button" className="btn ghost btn-fechar-tela" onClick={aoFechar} aria-label="Fechar" title="Fechar">
             <IconeFechar />
           </button>

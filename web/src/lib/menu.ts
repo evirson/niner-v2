@@ -91,7 +91,7 @@ export const MENU: NavGrupo[] = [
         to: '/pesquisa-vendas',
         label: 'Pesquisa de Vendas',
         icone: IconePesquisaVendas,
-        descricao: 'Localiza vendas por período, número, cliente ou vendedor e abre o detalhe de cada item.',
+        descricao: 'Localiza vendas por período, número, cliente ou vendedor; vê o detalhe, reimprime a papeleta e cancela (ADMIN).',
       },
       {
         to: '/recebimento-crediario',
@@ -132,13 +132,6 @@ export const MENU: NavGrupo[] = [
         descricao: 'Desfaz operações lançadas por engano, com rastro de auditoria.',
         itens: [
           {
-            to: '/cancelamento-venda',
-            label: 'Cancelamento de Vendas',
-            icone: IconeCancelamentoVenda,
-            descricao: 'Cancela uma venda registrada, devolvendo o estoque e revertendo os lançamentos financeiros.',
-            adminOnly: true,
-          },
-          {
             to: '/estorno-recebimento-crediario',
             label: 'Estorno de Crediário',
             icone: IconeEstornoRecebimentoCrediario,
@@ -153,17 +146,15 @@ export const MENU: NavGrupo[] = [
         ],
       },
       {
+        // Reimpressão de Papeleta de Venda saiu do menu (2026-08-18) — ficou redundante com o
+        // botão "Reimprimir papeleta" que Pesquisa de Vendas ganhou no mesmo dia. O grupo
+        // "Reimpressões" continua existindo mesmo com um só item (recebimento de crediário não
+        // tem tela de destino equivalente pra virar botão embutido).
         chave: 'reimpressoes',
         label: 'Reimpressões',
         icone: IconePdv,
-        descricao: 'Localiza uma venda ou um recebimento já efetivado e reimprime a papeleta.',
+        descricao: 'Localiza um recebimento de crediário já efetivado e reimprime a papeleta.',
         itens: [
-          {
-            to: '/reimpressao-papeleta-venda',
-            label: 'Reimpressão de Papeleta de Venda',
-            icone: IconePdv,
-            descricao: 'Localiza uma venda por número, período ou cliente e reimprime a papeleta.',
-          },
           {
             to: '/reimpressao-recebimento-crediario',
             label: 'Reimpressão de Recebimento de Crediário',

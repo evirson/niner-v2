@@ -648,46 +648,19 @@ const CONTEUDOS: Record<string, ConteudoAjuda> = {
   },
   'vendas.pesquisavendas.tela': {
     titulo: 'Pesquisa de Vendas',
-    objetivo: 'Localizar uma venda já registrada e ver, numa única tela, itens, movimentação de caixa e parcelas de crediário.',
+    objetivo: 'Localizar uma venda já registrada, ver o detalhamento em abas, reimprimir a papeleta e, se preciso, cancelar (administrador).',
     passos: [
-      'Busque pelo número da venda (ignora os demais filtros) ou por um intervalo de datas — empresa (admin), situação, cliente e vendedor são filtros opcionais.',
-      'Clique numa linha do resultado para carregar o detalhamento logo abaixo: dados da venda, produtos vendidos, movimentação de caixa e parcelas de crediário.',
+      'No popup inicial, informe o número da venda (ignora os demais filtros) ou um intervalo de datas — cliente, vendedor, empresa (admin) e situação são opcionais.',
+      'Clique numa linha do resultado para abrir o detalhamento em abas: Dados Gerais, Produtos Vendidos, Movimentação de Caixa e, se a venda for de crediário, Parcelas de Crediário.',
+      '"Reimprimir papeleta" abre a mesma papeleta da 1ª via, com "REIMPRESSÃO" e a data/hora — imprima, salve em PDF ou envie por WhatsApp.',
+      '"Cancelar venda" (só administrador, e só se a venda ainda não estiver cancelada) mostra o resumo do que será revertido e pede o motivo antes de confirmar — a mesma rotina que era uma tela separada.',
       'Vendas canceladas aparecem sinalizadas na grid, mas não entram na soma do rodapé.',
-      'Esta tela é só de consulta — para cancelar uma venda, use Cancelamento de Venda.',
     ],
     errosComuns: [
       'Operadores sempre pesquisam só a própria empresa da sessão, mesmo que tentem informar outra.',
       'Sem número da venda, é preciso informar data inicial e final, com no máximo 365 dias de intervalo.',
-    ],
-    urlVideo: null,
-  },
-  'vendas.reimpressaopapeleta.tela': {
-    titulo: 'Reimpressão de Papeleta de Venda',
-    objetivo: 'Localizar uma venda já efetivada e reimprimir a papeleta (mesmo layout da 1ª via, com "REIMPRESSÃO" e a data/hora da reimpressão).',
-    passos: [
-      'Busque pelo número da venda (ignora os demais filtros) ou por um intervalo de datas — cliente é opcional.',
-      'Clique numa linha do resultado para abrir a papeleta — imprima, salve em PDF ou envie por WhatsApp.',
-      'Em "Enviar por WhatsApp", confirme (ou corrija) o celular do cliente no popup antes de continuar — o WhatsApp abre com o link de download já preenchido, e quem envia de fato é você, na própria conversa.',
-    ],
-    errosComuns: [
-      'Sem número da venda, é preciso informar data inicial e final.',
-      'O link enviado pelo WhatsApp expira em 24 horas — depois disso, é preciso reimprimir e enviar de novo.',
-      'Impressão saindo apagada ou com as letras "falhadas"? O sistema já imprime em negrito, no tamanho certo para a bobina de 80mm. Se ainda sair fraco, o ajuste é na impressora: aumente a densidade (Density/Darkness) e, no driver, coloque o meio-tom (Halftone) em modo texto ou nenhum — assim ela imprime preto sólido em vez de pontinhos alternados.',
-    ],
-    urlVideo: null,
-  },
-  'vendas.cancelamentovenda.lista': {
-    titulo: 'Cancelamento de Venda',
-    objetivo: 'Localizar uma venda finalizada e reverter completamente estoque, caixa e contas a receber.',
-    passos: [
-      'Busque pelo número da venda (ignora os demais filtros) ou por um intervalo de datas — empresa, cliente e vendedor são filtros opcionais.',
-      'Clique no ícone de visualizar na linha da venda para ver o resumo, os itens e as formas de pagamento antes de decidir.',
-      'Informe o motivo do cancelamento e confirme em "Sim, Cancelar Venda" — o estoque volta, os lançamentos de caixa e as parcelas em aberto são removidos, tudo numa única operação.',
-    ],
-    errosComuns: [
-      'Venda de crediário com alguma parcela já recebida nunca pode ser cancelada, nem por administrador — a tela mostra quais parcelas foram recebidas e orienta a estornar o recebimento primeiro.',
+      'Venda de crediário com alguma parcela já recebida nunca pode ser cancelada, nem por administrador — o popup de cancelamento mostra quais parcelas foram recebidas e orienta a estornar o recebimento primeiro.',
       'É preciso ter o caixa de hoje aberto para cancelar — o sistema não sabe reabrir o caixa do dia original da venda.',
-      'Uma venda já cancelada não pode ser cancelada de novo.',
     ],
     urlVideo: null,
   },

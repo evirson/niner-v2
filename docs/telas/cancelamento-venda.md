@@ -1,6 +1,15 @@
 # Spec: Cancelamento de Venda                      Status: Aprovada
 Autor: Claudio Calixto (dono do produto) · Data: 2026-07-30 · Módulo(s): `vendas` (cancelamento) · Fase: 2 — Vendas/Financeiro
 
+> ⚠️ **Migrada em 2026-08-18**: a tela dedicada `/cancelamento-venda` (com a busca própria
+> descrita abaixo) saiu do menu — a regra de negócio inteira (RN-01 a RN-06, o resumo do que
+> reverte, o bloqueio de crediário recebido) continua valendo tal como está aqui, mas passou a
+> viver dentro do popup de detalhe da **Pesquisa de Vendas** (`docs/telas/pesquisa-vendas.md`),
+> num botão "Cancelar venda" (ADMIN-only). `CancelamentoVendaModal.tsx` foi reaproveitado sem
+> mudança de lógica, só o prop de entrada trocou de `venda` (linha da grade antiga) pra
+> `idVenda`. A seção "Busca de vendas" abaixo descreve a tela antiga — hoje quem busca a venda é
+> a Pesquisa de Vendas.
+
 ## Problema
 
 Uma venda finalizada no PDV não tinha nenhuma forma de ser desfeita — nem `venda` tinha um

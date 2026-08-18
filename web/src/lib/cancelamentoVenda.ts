@@ -1,26 +1,8 @@
 import { api } from './api'
 
-export interface VendaParaCancelamento {
-  idVenda: number
-  idEmpresa: number
-  nomeEmpresa: string
-  dataVenda: string
-  idCliente: number | null
-  nomeCliente: string | null
-  idFuncionario: number | null
-  nomeFuncionario: string | null
-  valorVenda: number
-  cancelada: boolean
-  bloqueadaCredario: boolean
-}
-
-export interface PaginaVendasCancelamento {
-  itens: VendaParaCancelamento[]
-  pagina: number
-  tamanhoPagina: number
-  totalItens: number
-  totalPaginas: number
-}
+// A busca/listagem para cancelamento (`listarVendasParaCancelamento`) saiu daqui em 2026-08-18 —
+// a tela de Cancelamento de Venda foi migrada pro popup de detalhe da Pesquisa de Vendas, que já
+// tem sua própria busca (`lib/pesquisaVendas.ts`). Só sobra o que o modal de confirmação usa.
 
 export interface ItemVendaDetalhe {
   descricaoProduto: string
@@ -64,44 +46,6 @@ export interface VendaDetalheCancelamento {
   pagamentos: PagamentoVendaDetalhe[]
   bloqueadaCredario: boolean
   parcelasRecebidas: ParcelaRecebidaDetalhe[]
-}
-
-export type ColunaOrdenacaoCancelamento =
-  | 'dataVenda'
-  | 'numeroVenda'
-  | 'valorVenda'
-  | 'nomeCliente'
-  | 'nomeEmpresa'
-  | 'nomeFuncionario'
-export type DirecaoOrdenacao = 'ASC' | 'DESC'
-
-export interface FiltrosCancelamentoVenda {
-  numeroVenda?: number
-  idEmpresa?: number
-  idCliente?: number
-  dataInicial?: string
-  dataFinal?: string
-  idFuncionario?: number
-  pagina?: number
-  tamanho?: number
-  ordenarPor?: ColunaOrdenacaoCancelamento
-  direcao?: DirecaoOrdenacao
-}
-
-export function listarVendasParaCancelamento(filtros: FiltrosCancelamentoVenda): Promise<PaginaVendasCancelamento> {
-  const params = new URLSearchParams()
-  if (filtros.numeroVenda) params.set('numeroVenda', String(filtros.numeroVenda))
-  if (filtros.idEmpresa) params.set('idEmpresa', String(filtros.idEmpresa))
-  if (filtros.idCliente) params.set('idCliente', String(filtros.idCliente))
-  if (filtros.dataInicial) params.set('dataInicial', filtros.dataInicial)
-  if (filtros.dataFinal) params.set('dataFinal', filtros.dataFinal)
-  if (filtros.idFuncionario) params.set('idFuncionario', String(filtros.idFuncionario))
-  if (filtros.pagina) params.set('pagina', String(filtros.pagina))
-  if (filtros.tamanho) params.set('limite', String(filtros.tamanho))
-  if (filtros.ordenarPor) params.set('ordenarPor', filtros.ordenarPor)
-  if (filtros.direcao) params.set('direcao', filtros.direcao)
-  const query = params.toString()
-  return api<PaginaVendasCancelamento>(`/api/v1/vendas/cancelamento${query ? `?${query}` : ''}`)
 }
 
 export function buscarDetalheParaCancelamento(idVenda: number): Promise<VendaDetalheCancelamento> {

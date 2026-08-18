@@ -25,10 +25,12 @@ const SITUACOES_SUCESSO = new Set(['AUTORIZADO', 'CONTINGENCIA', 'EM_PROCESSAMEN
  * fica visível na impressão, via CSS — ver `styles.css`); "Salvar PDF" gera o arquivo direto com
  * `jsPDF`, sem passar pelo diálogo.
  *
- * `reimpressao` (2026-08-06) — usado pela tela de Reimpressão de Papeleta de Venda
- * (`ReimpressaoPapeletaVenda.tsx`): mesmo componente, muda só o título do popup e injeta uma
- * linha "REIMPRESSÃO DE PAPELETA DE VENDA" + "Impresso em: <data/hora atual>" no final da
- * papeleta (`montarLinhasComprovanteVenda`) — nunca no fluxo normal pós-F5.
+ * `reimpressao` (2026-08-06) — usado pelo botão "Reimprimir papeleta" do popup de detalhe da
+ * Pesquisa de Vendas (`DetalheVendaModal.tsx`; a tela dedicada `ReimpressaoPapeletaVenda.tsx`
+ * que usava isso antes saiu do projeto em 2026-08-18 por ficar redundante com esse botão): mesmo
+ * componente, muda só o título do popup e injeta uma linha "REIMPRESSÃO DE PAPELETA DE VENDA" +
+ * "Impresso em: <data/hora atual>" no final da papeleta (`montarLinhasComprovanteVenda`) — nunca
+ * no fluxo normal pós-F5.
  *
  * "Enviar por WhatsApp" (2026-08-07) — mesmo mecanismo do Comprovante de Pagamento de Crediário:
  * abre `EnviarWhatsAppModal` pra confirmar/editar o celular (pré-preenchido com `cliente.

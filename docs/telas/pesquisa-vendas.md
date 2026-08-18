@@ -13,9 +13,10 @@ diário — só dá pra ver detalhes de uma venda de crediário indiretamente, p
 ## Solução proposta
 
 Tela `/pesquisa-vendas`, disponível a **qualquer papel** (ADMIN e OPERADOR), **somente consulta**
-(alterações continuam na rotina de cadastro/PDV, ou no Cancelamento de Venda). Painel de filtros no
-topo + grid de resultado paginada (mesmo esqueleto de paginação/ordenação do Cancelamento de Venda)
-+, ao clicar numa linha, um popup com o detalhamento da venda.
+pra quem não é ADMIN (alterações continuam na rotina de cadastro/PDV — o próprio popup de
+cancelamento é ADMIN-only, ver abaixo). Popup de filtros obrigatório ao entrar + grid de resultado
+paginada (mesmo esqueleto de paginação/ordenação que o Cancelamento de Venda usava) +, ao clicar
+numa linha, um popup com o detalhamento da venda.
 **Desde 2026-07-31 o detalhamento abre em popup** (`DetalheVendaModal.tsx`, rola internamente,
 sem afetar o scroll da página) — a versão original empilhava o bloco abaixo da grid de resultado.
 
@@ -24,9 +25,27 @@ abas"):** as quatro seções do detalhamento viraram abas — **Dados Gerais**, 
 **Movimentação de Caixa** e **Parcelas de Crediário** (esta última só aparece como aba quando
 `detalhe.temParcelasCredario`, senão a venda não tem crediário e a aba ficaria vazia). O popup
 também ganhou o botão **"Reimprimir papeleta"** no cabeçalho — reaproveita `ComprovantePapeletaModal`
-em modo `reimpressao` (mesmo componente já usado em `ReimpressaoPapeletaVenda.tsx`), empilhado por
-cima do popup de detalhe (usa `Fragment` para não aninhar dentro do `.modal-overlay` do detalhe —
-senão um clique no fundo do popup de reimpressão fecharia os dois por bubbling).
+em modo `reimpressao` (mesmo componente já usado na extinta `ReimpressaoPapeletaVenda.tsx`),
+empilhado por cima do popup de detalhe (usa `Fragment` para não aninhar dentro do
+`.modal-overlay` do detalhe — senão um clique no fundo do popup de reimpressão fecharia os dois
+por bubbling). O popup em si passou a ter **altura fixa** (`height: 78vh`) — antes seguia a
+altura do conteúdo da aba ativa, e trocar de aba fazia o popup encolher/crescer visivelmente.
+
+**Popup de filtros obrigatório + Cancelamento de Venda migrado (2026-08-18, mesmo dia):** os
+filtros deixaram de ficar sempre visíveis numa barra e passaram a abrir num popup obrigatório ao
+entrar na tela (mesmo padrão de `docs/telas/cancelamento-devolucao-produtos.md`), na ordem
+pedida pelo dono do produto: Nº da Venda, Cliente, Data Inicial, Data Final, Vendedor, Empresa,
+Situação. Depois de confirmar, uma barra resumo com "Alterar Filtros" substitui o popup.
+
+A tela dedicada de **Cancelamento de Venda** (`docs/telas/cancelamento-venda.md`) saiu do menu —
+a lógica inteira migrou pra um botão **"Cancelar venda"** no cabeçalho do popup de detalhe
+(ADMIN-only, some quando a venda já está cancelada), reaproveitando `CancelamentoVendaModal.tsx`
+sem mudar a regra de negócio: só o prop de entrada trocou de `venda: VendaParaCancelamento`
+(linha da grade da tela antiga) para `idVenda: number`, já que era a única coisa que o modal
+usava daquele objeto — o resto sempre veio da própria query de detalhe do modal. Ao cancelar com
+sucesso, invalida a query da lista (`pesquisa-vendas`) e a do detalhe (`pesquisa-venda-detalhe`),
+fecha o popup de confirmação e mostra um Toast — o popup de detalhe continua aberto, agora
+mostrando "Cancelada".
 
 Adaptada de uma especificação escrita para um sistema de referência ("Mitryus ERP") pro modelo de
 dados real do Niner — ver seção seguinte para cada divergência e a decisão tomada.

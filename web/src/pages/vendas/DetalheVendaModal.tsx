@@ -1,10 +1,13 @@
 import { Fragment, useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { IconeFechar } from '../../components/Icones'
+import Toast, { type TipoToast } from '../../components/Toast'
 import { ApiError } from '../../lib/api'
+import { useEu } from '../../lib/eu'
 import { buscarDetalhePesquisaVenda } from '../../lib/pesquisaVendas'
 import { formatarMoeda, mascararCpfCnpj } from '../../lib/masks'
 import ComprovantePapeletaModal from '../pdv/ComprovantePapeletaModal'
+import CancelamentoVendaModal from './CancelamentoVendaModal'
 
 function moeda(v: number): string {
   return `R$ ${formatarMoeda(v)}`
@@ -44,10 +47,22 @@ type Aba = 'geral' | 'produtos' | 'caixa' | 'parcelas'
  * sem isso a aba ficaria vazia pra maioria das vendas (dinheiro/cartão/PIX).
  *
  * **Reimprimir papeleta (2026-08-18)** — reaproveita `ComprovantePapeletaModal` em modo
- * `reimpressao` (mesmo componente da Reimpressão de Papeleta de Venda), empilhado por cima deste
- * popup — zero lógica nova de impressão/PDF/WhatsApp.
+ * `reimpressao` (mesmo componente da extinta tela de Reimpressão de Papeleta de Venda, removida
+ * do menu por ficar redundante com este botão), empilhado por cima deste popup — zero lógica
+ * nova de impressão/PDF/WhatsApp.
+ *
+ * **Cancelar Venda (2026-08-18)** — a rotina de Cancelamento de Venda migrou pra cá (o item saiu
+ * do menu): reaproveita `CancelamentoVendaModal` tal como estava, só trocando o prop de
+ * `venda: VendaParaCancelamento` para `idVenda: number` — era a única coisa que ele de fato usava
+ * do objeto da linha da grade antiga, o resto vem todo da própria query de detalhe do modal.
+ * Botão só aparece pra ADMIN e quando a venda ainda não está cancelada; as regras de bloqueio
+ * (crediário recebido, caixa fechado) continuam resolvidas dentro do modal reaproveitado.
  */
 export default function DetalheVendaModal({ idVenda, aoFechar }: { idVenda: number; aoFechar: () => void }) {
+  const queryClient = useQueryClient()
+  const { data: eu } = useEu()
+  const ehAdmin = eu?.usuario.papel === 'ADMIN'
+
   const {
     data: detalhe,
     isLoading,
@@ -59,6 +74,8 @@ export default function DetalheVendaModal({ idVenda, aoFechar }: { idVenda: numb
 
   const [aba, setAba] = useState<Aba>('geral')
   const [mostrarReimpressao, setMostrarReimpressao] = useState(false)
+  const [mostrarCancelamento, setMostrarCancelamento] = useState(false)
+  const [aviso, setAviso] = useState<{ texto: string; tipo: TipoToast } | null>(null)
 
   return (
     <Fragment>
@@ -68,7 +85,10 @@ export default function DetalheVendaModal({ idVenda, aoFechar }: { idVenda: numb
         role="dialog"
         aria-label={`Venda nº ${idVenda}`}
         onClick={(e) => e.stopPropagation()}
-        style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
+        // Tamanho fixo (2026-08-18, pedido do dono do produto): antes a altura seguia o
+        // conteúdo, e trocar de aba fazia o popup encolher/crescer a cada clique — só a área
+        // rolável interna (abaixo) muda de conteúdo, o modal em si nunca muda de tamanho.
+        style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden', height: '78vh' }}
       >
         <div className="lightbox-topo" style={{ marginBottom: 12, flexShrink: 0 }}>
           <div className="titulo-tela">
@@ -84,6 +104,11 @@ export default function DetalheVendaModal({ idVenda, aoFechar }: { idVenda: numb
             )}
           </div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            {detalhe && !detalhe.cancelada && ehAdmin && (
+              <button type="button" className="btn ghost" onClick={() => setMostrarCancelamento(true)}>
+                Cancelar venda
+              </button>
+            )}
             {detalhe && (
               <button type="button" className="btn ghost" onClick={() => setMostrarReimpressao(true)}>
                 Reimprimir papeleta
@@ -309,6 +334,19 @@ export default function DetalheVendaModal({ idVenda, aoFechar }: { idVenda: numb
     {mostrarReimpressao && (
       <ComprovantePapeletaModal idVenda={idVenda} reimpressao aoFechar={() => setMostrarReimpressao(false)} />
     )}
+    {mostrarCancelamento && (
+      <CancelamentoVendaModal
+        idVenda={idVenda}
+        aoFechar={() => setMostrarCancelamento(false)}
+        aoCancelarComSucesso={() => {
+          setMostrarCancelamento(false)
+          queryClient.invalidateQueries({ queryKey: ['pesquisa-venda-detalhe', idVenda] })
+          queryClient.invalidateQueries({ queryKey: ['pesquisa-vendas'] })
+          setAviso({ texto: `Venda nº ${idVenda} cancelada com sucesso.`, tipo: 'sucesso' })
+        }}
+      />
+    )}
+    {aviso && <Toast mensagem={aviso.texto} tipo={aviso.tipo} aoFechar={() => setAviso(null)} />}
     </Fragment>
   )
 }

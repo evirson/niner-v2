@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { useEffect, useRef, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import AjudaDaTela from '../../components/AjudaDaTela'
 import { BotaoFecharTela } from '../../components/BotaoFecharTela'
 import { IconePesquisaVendas } from '../../components/Icones'
@@ -32,6 +33,11 @@ const COLUNAS: Array<{ chave: ColunaOrdenacaoPesquisaVenda; rotulo: string }> = 
   { chave: 'valorVenda', rotulo: 'Valor' },
 ]
 
+const ROTULO_SITUACAO: Record<SituacaoVendaFiltro, string> = {
+  ATIVAS: 'Ativas',
+  CANCELADAS: 'Canceladas',
+}
+
 function moeda(v: number): string {
   return `R$ ${formatarMoeda(v)}`
 }
@@ -57,14 +63,22 @@ function paginasVisiveis(atual: number, total: number): number[] {
  * Pesquisa de Vendas (docs/telas/pesquisa-vendas.md) — qualquer papel, somente consulta. Empresa:
  * ADMIN filtra livremente (combo); OPERADOR sempre vê só a própria empresa da sessão, sem combo
  * (mesmo padrão de Fechamento de Caixa) — o servidor reforça isso mesmo que o front não envie o
- * filtro. Detalhamento abre em popup (DetalheVendaModal) ao clicar numa linha, com quatro grids
- * empilhadas dentro dele (sem abas, pedido explícito — o usuário compara produtos com
- * recebimentos ao mesmo tempo); rola internamente, sem afetar o scroll da tela.
+ * filtro. Detalhamento (dados/produtos/caixa/parcelas em abas, reimpressão e cancelamento) abre
+ * em popup (`DetalheVendaModal`) ao clicar numa linha.
+ *
+ * **Popup de filtros obrigatório (2026-08-18, pedido do dono do produto)** — antes os filtros
+ * ficavam sempre visíveis numa barra fixa; agora abrem num popup ao entrar na tela (mesmo padrão
+ * de `CancelamentoDevolucao.tsx`), na ordem pedida: Nº da Venda, Cliente, Data Inicial, Data
+ * Final, Vendedor, Empresa, Situação. Depois de confirmar, a barra vira um resumo com "Alterar
+ * Filtros" — a grid só busca depois do popup fechado.
  */
 export default function PesquisaVendas() {
+  const navigate = useNavigate()
   const { data: eu } = useEu()
   const ehAdmin = eu?.usuario.papel === 'ADMIN'
 
+  const [filtrosAberto, setFiltrosAberto] = useState(true)
+  const [erroFiltros, setErroFiltros] = useState('')
   const [numeroVendaTexto, setNumeroVendaTexto] = useState('')
   const [idEmpresa, setIdEmpresa] = useState<number | ''>('')
   const [situacao, setSituacao] = useState<SituacaoVendaFiltro | ''>('')
@@ -87,7 +101,7 @@ export default function PesquisaVendas() {
     }
     setPagina(1)
     setIdVendaSelecionada(null)
-  }, [numeroVendaTexto, idEmpresa, situacao, cliente, vendedor, dataInicialTexto, dataFinalTexto, ordenarPor, direcao])
+  }, [ordenarPor, direcao])
 
   const { data: empresas } = useQuery({ queryKey: ['empresas'], queryFn: listarEmpresas, enabled: ehAdmin })
 
@@ -96,6 +110,17 @@ export default function PesquisaVendas() {
   const dataFinalIso = dataValida(dataFinalTexto) ? dataParaIso(dataFinalTexto) ?? undefined : undefined
 
   const podeBuscar = numeroVenda !== undefined || (dataInicialIso !== undefined && dataFinalIso !== undefined)
+
+  const confirmarFiltros = () => {
+    if (!podeBuscar) {
+      setErroFiltros('Informe o número da venda, ou a data inicial e final.')
+      return
+    }
+    setErroFiltros('')
+    setPagina(1)
+    setIdVendaSelecionada(null)
+    setFiltrosAberto(false)
+  }
 
   const { data, isLoading, isFetching, error } = useQuery({
     queryKey: [
@@ -118,7 +143,7 @@ export default function PesquisaVendas() {
         ordenarPor,
         direcao,
       }),
-    enabled: podeBuscar,
+    enabled: !filtrosAberto && podeBuscar,
     placeholderData: (anterior) => anterior,
   })
 
@@ -134,6 +159,19 @@ export default function PesquisaVendas() {
   const vendas: VendaPesquisa[] = data?.itens ?? []
   const totalPaginas = data?.totalPaginas ?? 1
 
+  const nomeEmpresaFiltro = idEmpresa ? empresas?.find((e) => e.idEmpresa === idEmpresa)?.nomeFantasia
+    ?? empresas?.find((e) => e.idEmpresa === idEmpresa)?.razaoSocial : null
+
+  const resumoFiltros = [
+    numeroVenda !== undefined ? `Nº ${numeroVenda}` : dataInicialIso && dataFinalIso ? `${dataInicialTexto} a ${dataFinalTexto}` : '',
+    cliente?.nome,
+    vendedor?.nome,
+    ehAdmin ? nomeEmpresaFiltro : null,
+    situacao ? ROTULO_SITUACAO[situacao] : null,
+  ]
+    .filter(Boolean)
+    .join(' · ')
+
   return (
     <div className="lista-tela">
       <div className="lista-topo">
@@ -148,154 +186,80 @@ export default function PesquisaVendas() {
           </div>
         </div>
 
-        <div className="card filtros-bar">
-          <input
-            autoFocus
-            placeholder="Nº da venda…"
-            value={numeroVendaTexto}
-            onChange={(e) => setNumeroVendaTexto(e.target.value.replace(/\D/g, ''))}
-            aria-label="Buscar por número da venda"
-            style={{ maxWidth: 140 }}
-          />
-          <input
-            className="mono"
-            placeholder="dd/mm/aaaa"
-            value={dataInicialTexto}
-            onChange={(e) => setDataInicialTexto(mascararData(e.target.value))}
-            onFocus={(e) => e.target.select()}
-            aria-label="Data inicial"
-            disabled={!!numeroVendaTexto}
-            style={{ maxWidth: 130 }}
-          />
-          <input
-            className="mono"
-            placeholder="dd/mm/aaaa"
-            value={dataFinalTexto}
-            onChange={(e) => setDataFinalTexto(mascararData(e.target.value))}
-            onFocus={(e) => e.target.select()}
-            aria-label="Data final"
-            disabled={!!numeroVendaTexto}
-            style={{ maxWidth: 130 }}
-          />
-          {ehAdmin && (
-            <select
-              value={idEmpresa}
-              onChange={(e) => setIdEmpresa(e.target.value ? Number(e.target.value) : '')}
-              aria-label="Filtrar por empresa"
-              disabled={!!numeroVendaTexto}
-            >
-              <option value="">Todas as empresas</option>
-              {empresas?.map((emp: Empresa) => (
-                <option key={emp.idEmpresa} value={emp.idEmpresa}>
-                  {emp.nomeFantasia ?? emp.razaoSocial}
-                </option>
-              ))}
-            </select>
-          )}
-          <select
-            value={situacao}
-            onChange={(e) => setSituacao(e.target.value as SituacaoVendaFiltro | '')}
-            aria-label="Filtrar por situação"
-            disabled={!!numeroVendaTexto}
-          >
-            <option value="">Todas as situações</option>
-            <option value="ATIVAS">Ativas</option>
-            <option value="CANCELADAS">Canceladas</option>
-          </select>
-          <button
-            type="button"
-            className="btn ghost"
-            onClick={() => setMostrarBuscaCliente(true)}
-            disabled={!!numeroVendaTexto}
-          >
-            {cliente ? cliente.nome : 'Cliente…'}
-          </button>
-          {cliente && (
-            <button type="button" className="btn ghost" onClick={() => setCliente(null)} aria-label="Limpar cliente">
-              ✕
+        {!filtrosAberto && (
+          <div className="card filtros-bar">
+            <span className="muted">{resumoFiltros}</span>
+            <button type="button" className="btn ghost" onClick={() => setFiltrosAberto(true)}>
+              Alterar Filtros
             </button>
-          )}
-          <button
-            type="button"
-            className="btn ghost"
-            onClick={() => setMostrarBuscaVendedor(true)}
-            disabled={!!numeroVendaTexto}
-          >
-            {vendedor ? vendedor.nome : 'Vendedor…'}
-          </button>
-          {vendedor && (
-            <button type="button" className="btn ghost" onClick={() => setVendedor(null)} aria-label="Limpar vendedor">
-              ✕
-            </button>
-          )}
-        </div>
+          </div>
+        )}
       </div>
 
       <div className="lista-corpo">
-        <div className="card table-wrap">
-          {!podeBuscar ? (
-            <p className="muted">Informe o número da venda, ou a data inicial e final.</p>
-          ) : isLoading ? (
-            <p className="muted">Carregando…</p>
-          ) : error ? (
-            <p className="erro">{error instanceof ApiError ? error.message : 'Não foi possível buscar as vendas.'}</p>
-          ) : vendas.length === 0 ? (
-            <p className="muted">Nenhuma venda encontrada para os filtros informados.</p>
-          ) : (
-            <table className="table table-compacta">
-              <thead>
-                <tr>
-                  {COLUNAS.filter((c) => c.chave !== 'nomeEmpresa' || ehAdmin).map((c) => {
-                    const ativa = ordenarPor === c.chave
-                    return (
-                      <th
-                        key={c.chave}
-                        className="th-ordenavel"
-                        onClick={() => ordenarPorColuna(c.chave)}
-                        title="Clique para ordenar"
-                        aria-sort={ativa ? (direcao === 'ASC' ? 'ascending' : 'descending') : 'none'}
-                      >
-                        {c.rotulo}
-                        <span className={`th-seta ${ativa ? 'th-seta-ativa' : ''}`}>
-                          {ativa ? (direcao === 'ASC' ? '▲' : '▼') : '⇅'}
-                        </span>
-                      </th>
-                    )
-                  })}
-                  <th aria-label="Situação" />
-                </tr>
-              </thead>
-              <tbody>
-                {vendas.map((v) => (
-                  <tr
-                    key={v.idVenda}
-                    className={v.idVenda === idVendaSelecionada ? 'linha-selecionada' : undefined}
-                    tabIndex={0}
-                    onClick={() => setIdVendaSelecionada(v.idVenda)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' || e.key === ' ') {
-                        e.preventDefault()
-                        setIdVendaSelecionada(v.idVenda)
-                      }
-                    }}
-                  >
-                    {ehAdmin && <td>{v.nomeEmpresa}</td>}
-                    <td className="mono">{v.idVenda}</td>
-                    <td>{formatarData(v.dataVenda)}</td>
-                    <td>{v.nomeCliente ?? '—'}</td>
-                    <td>{v.nomeFuncionario ?? '—'}</td>
-                    <td className="mono">{moeda(v.valorVenda)}</td>
-                    <td>{v.cancelada && <span className="badge badge-inativo">Cancelada</span>}</td>
+        {!filtrosAberto && (
+          <div className="card table-wrap">
+            {isLoading ? (
+              <p className="muted">Carregando…</p>
+            ) : error ? (
+              <p className="erro">{error instanceof ApiError ? error.message : 'Não foi possível buscar as vendas.'}</p>
+            ) : vendas.length === 0 ? (
+              <p className="muted">Nenhuma venda encontrada para os filtros informados.</p>
+            ) : (
+              <table className="table table-compacta">
+                <thead>
+                  <tr>
+                    {COLUNAS.filter((c) => c.chave !== 'nomeEmpresa' || ehAdmin).map((c) => {
+                      const ativa = ordenarPor === c.chave
+                      return (
+                        <th
+                          key={c.chave}
+                          className="th-ordenavel"
+                          onClick={() => ordenarPorColuna(c.chave)}
+                          title="Clique para ordenar"
+                          aria-sort={ativa ? (direcao === 'ASC' ? 'ascending' : 'descending') : 'none'}
+                        >
+                          {c.rotulo}
+                          <span className={`th-seta ${ativa ? 'th-seta-ativa' : ''}`}>
+                            {ativa ? (direcao === 'ASC' ? '▲' : '▼') : '⇅'}
+                          </span>
+                        </th>
+                      )
+                    })}
+                    <th aria-label="Situação" />
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </div>
-
+                </thead>
+                <tbody>
+                  {vendas.map((v) => (
+                    <tr
+                      key={v.idVenda}
+                      className={v.idVenda === idVendaSelecionada ? 'linha-selecionada' : undefined}
+                      tabIndex={0}
+                      onClick={() => setIdVendaSelecionada(v.idVenda)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault()
+                          setIdVendaSelecionada(v.idVenda)
+                        }
+                      }}
+                    >
+                      {ehAdmin && <td>{v.nomeEmpresa}</td>}
+                      <td className="mono">{v.idVenda}</td>
+                      <td>{formatarData(v.dataVenda)}</td>
+                      <td>{v.nomeCliente ?? '—'}</td>
+                      <td>{v.nomeFuncionario ?? '—'}</td>
+                      <td className="mono">{moeda(v.valorVenda)}</td>
+                      <td>{v.cancelada && <span className="badge badge-inativo">Cancelada</span>}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        )}
       </div>
 
-      {vendas.length > 0 && (
+      {!filtrosAberto && vendas.length > 0 && (
         <div className="lista-rodape">
           <div className="paginacao-bar">
             <span className="muted">
@@ -325,6 +289,140 @@ export default function PesquisaVendas() {
               <button type="button" className="btn ghost paginacao-seta" onClick={() => setPagina(totalPaginas)}
                       disabled={pagina >= totalPaginas || isFetching} aria-label="Última página" title="Última página">
                 »
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {filtrosAberto && (
+        <div className="modal-overlay">
+          <div className="modal" role="dialog" aria-label="Filtros de Pesquisa de Vendas" onClick={(e) => e.stopPropagation()}>
+            <h2 style={{ marginTop: 0 }}>Pesquisa de Vendas</h2>
+            <p className="muted" style={{ marginTop: 4 }}>
+              Informe o número da venda, ou a data inicial e final.
+            </p>
+
+            <div className="form-grid" style={{ marginTop: 12 }}>
+              <div className="col-3">
+                <label htmlFor="filtro-numero-venda">Nº da Venda</label>
+                <input
+                  id="filtro-numero-venda"
+                  autoFocus
+                  placeholder="Deixe em branco pra buscar por período…"
+                  value={numeroVendaTexto}
+                  onChange={(e) => setNumeroVendaTexto(e.target.value.replace(/\D/g, ''))}
+                  aria-label="Número da venda"
+                />
+              </div>
+              <div className="col-5">
+                <label>Cliente</label>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button
+                    type="button"
+                    className="btn ghost"
+                    style={{ flex: 1 }}
+                    onClick={() => setMostrarBuscaCliente(true)}
+                    disabled={!!numeroVendaTexto}
+                  >
+                    {cliente ? cliente.nome : 'Selecionar cliente…'}
+                  </button>
+                  {cliente && (
+                    <button type="button" className="btn ghost" onClick={() => setCliente(null)} aria-label="Limpar cliente">
+                      ✕
+                    </button>
+                  )}
+                </div>
+              </div>
+              <div className="col-2">
+                <label htmlFor="filtro-data-inicial">Data Inicial</label>
+                <input
+                  id="filtro-data-inicial"
+                  className="mono"
+                  placeholder="dd/mm/aaaa"
+                  value={dataInicialTexto}
+                  onChange={(e) => setDataInicialTexto(mascararData(e.target.value))}
+                  onFocus={(e) => e.target.select()}
+                  aria-label="Data inicial"
+                  disabled={!!numeroVendaTexto}
+                />
+              </div>
+              <div className="col-2">
+                <label htmlFor="filtro-data-final">Data Final</label>
+                <input
+                  id="filtro-data-final"
+                  className="mono"
+                  placeholder="dd/mm/aaaa"
+                  value={dataFinalTexto}
+                  onChange={(e) => setDataFinalTexto(mascararData(e.target.value))}
+                  onFocus={(e) => e.target.select()}
+                  aria-label="Data final"
+                  disabled={!!numeroVendaTexto}
+                />
+              </div>
+
+              <div className="col-5">
+                <label>Vendedor</label>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button
+                    type="button"
+                    className="btn ghost"
+                    style={{ flex: 1 }}
+                    onClick={() => setMostrarBuscaVendedor(true)}
+                    disabled={!!numeroVendaTexto}
+                  >
+                    {vendedor ? vendedor.nome : 'Selecionar vendedor…'}
+                  </button>
+                  {vendedor && (
+                    <button type="button" className="btn ghost" onClick={() => setVendedor(null)} aria-label="Limpar vendedor">
+                      ✕
+                    </button>
+                  )}
+                </div>
+              </div>
+              {ehAdmin && (
+                <div className="col-4">
+                  <label htmlFor="filtro-empresa">Empresa</label>
+                  <select
+                    id="filtro-empresa"
+                    value={idEmpresa}
+                    onChange={(e) => setIdEmpresa(e.target.value ? Number(e.target.value) : '')}
+                    aria-label="Filtrar por empresa"
+                    disabled={!!numeroVendaTexto}
+                  >
+                    <option value="">Todas as empresas</option>
+                    {empresas?.map((emp: Empresa) => (
+                      <option key={emp.idEmpresa} value={emp.idEmpresa}>
+                        {emp.nomeFantasia ?? emp.razaoSocial}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+              <div className={ehAdmin ? 'col-3' : 'col-7'}>
+                <label htmlFor="filtro-situacao">Situação</label>
+                <select
+                  id="filtro-situacao"
+                  value={situacao}
+                  onChange={(e) => setSituacao(e.target.value as SituacaoVendaFiltro | '')}
+                  aria-label="Filtrar por situação"
+                  disabled={!!numeroVendaTexto}
+                >
+                  <option value="">Todas as situações</option>
+                  <option value="ATIVAS">Ativas</option>
+                  <option value="CANCELADAS">Canceladas</option>
+                </select>
+              </div>
+            </div>
+
+            {erroFiltros && <p className="erro-campo">{erroFiltros}</p>}
+
+            <div className="ajuda-rodape">
+              <button type="button" className="btn ghost" onClick={() => navigate(-1)}>
+                Fechar
+              </button>
+              <button type="button" className="btn" onClick={confirmarFiltros}>
+                Localizar Vendas
               </button>
             </div>
           </div>
