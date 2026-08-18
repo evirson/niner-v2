@@ -1,6 +1,29 @@
 import { api } from './api'
-import { desmascararPercentual, formatarPercentual } from './masks'
+import { desmascararPercentual, formatarPercentual, mascararCpfCnpj, somenteAlfanumerico } from './masks'
 import { maiusculas } from './texto'
+
+/** Código `tPag` (NFC-e, `docs/MODULOFISCAL.md` §6.4) — não depende da categoria (ex.: AVISTA
+ * cobre tanto Dinheiro=01 quanto PIX=17), por isso é uma lista fixa, não derivada. */
+export const OPCOES_CODIGO_TPAG: Array<{ codigo: string; rotulo: string }> = [
+  { codigo: '01', rotulo: '01 — Dinheiro' },
+  { codigo: '03', rotulo: '03 — Cartão de Crédito' },
+  { codigo: '04', rotulo: '04 — Cartão de Débito' },
+  { codigo: '05', rotulo: '05 — Crédito Loja (Crediário)' },
+  { codigo: '17', rotulo: '17 — PIX' },
+  { codigo: '90', rotulo: '90 — Sem Pagamento' },
+  { codigo: '99', rotulo: '99 — Outros' },
+]
+
+/** Código `tBand` (NFC-e, §6.4) — só se aplica quando a categoria é Cartão Débito/Crédito
+ * (mesma condição que `ConformidadeFiscalService` usa pra cobrar o campo). */
+export const OPCOES_CODIGO_BANDEIRA: Array<{ codigo: string; rotulo: string }> = [
+  { codigo: '01', rotulo: '01 — Visa' },
+  { codigo: '02', rotulo: '02 — Mastercard' },
+  { codigo: '03', rotulo: '03 — American Express' },
+  { codigo: '06', rotulo: '06 — Elo' },
+  { codigo: '07', rotulo: '07 — Hipercard' },
+  { codigo: '99', rotulo: '99 — Outros' },
+]
 
 /** Categoria fixa do tipo de carteira (2026-07-23) — usada pelo histórico do cliente pra
  * isolar parcelas de crediário das demais formas de pagamento. VALE_MERCADORIA (2026-08-03):
@@ -36,6 +59,11 @@ export interface TipoCarteira {
   percAcrescimo: number | null
   /** Recebimento de Crediário (2026-07-29, RN007) — só carteiras marcadas aqui aparecem como opção de pagamento naquela tela. */
   permiteReceberCrediario: boolean
+  /** Fiscal (2026-08-18, `docs/MODULOFISCAL.md` §6.4) — grupo `pag/detPag` da NFC-e. Todos
+   * opcionais: a Conformidade Fiscal cobra sem bloquear o cadastro. */
+  codigoTpag: string | null
+  codigoBandeira: string | null
+  cnpjCredenciadora: string | null
   criadoEm: string
   atualizadoEm: string
 }
@@ -51,6 +79,9 @@ export interface TipoCarteiraFormState {
   percDesconto: string
   percAcrescimo: string
   permiteReceberCrediario: boolean
+  codigoTpag: string
+  codigoBandeira: string
+  cnpjCredenciadora: string
 }
 
 export const TIPO_CARTEIRA_VAZIO: TipoCarteiraFormState = {
@@ -63,6 +94,9 @@ export const TIPO_CARTEIRA_VAZIO: TipoCarteiraFormState = {
   percDesconto: '',
   percAcrescimo: '',
   permiteReceberCrediario: false,
+  codigoTpag: '',
+  codigoBandeira: '',
+  cnpjCredenciadora: '',
 }
 
 export function paraFormulario(tc: TipoCarteira): TipoCarteiraFormState {
@@ -76,6 +110,9 @@ export function paraFormulario(tc: TipoCarteira): TipoCarteiraFormState {
     percDesconto: tc.percDesconto == null ? '' : formatarPercentual(tc.percDesconto),
     percAcrescimo: tc.percAcrescimo == null ? '' : formatarPercentual(tc.percAcrescimo),
     permiteReceberCrediario: tc.permiteReceberCrediario,
+    codigoTpag: tc.codigoTpag ?? '',
+    codigoBandeira: tc.codigoBandeira ?? '',
+    cnpjCredenciadora: tc.cnpjCredenciadora ? mascararCpfCnpj(tc.cnpjCredenciadora, false) : '',
   }
 }
 
@@ -96,6 +133,9 @@ export function paraRequisicao(f: TipoCarteiraFormState) {
     percDesconto: desmascararPercentualOuNulo(f.percDesconto),
     percAcrescimo: desmascararPercentualOuNulo(f.percAcrescimo),
     permiteReceberCrediario: f.permiteReceberCrediario,
+    codigoTpag: f.codigoTpag || null,
+    codigoBandeira: f.codigoBandeira || null,
+    cnpjCredenciadora: f.cnpjCredenciadora.trim() ? somenteAlfanumerico(f.cnpjCredenciadora) : null,
   }
 }
 

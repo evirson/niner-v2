@@ -1,5 +1,6 @@
 package com.vetor.niner.financeiro;
 
+import com.vetor.niner.cadastros.cliente.Documentos;
 import com.vetor.niner.comum.web.ConflitoDadosException;
 import com.vetor.niner.financeiro.TipoCarteiraDtos.CategoriaCarteira;
 import com.vetor.niner.financeiro.TipoCarteiraDtos.ExclusaoTipoCarteiraResponse;
@@ -102,13 +103,16 @@ public class TipoCarteiraService {
             long id = jdbc.sql("""
                             INSERT INTO tipo_carteira
                                 (id_tenant, nome_carteira, categoria_carteira, prazo_pagamento, pc_minima, pc_maxima,
-                                 taxa_administradora, perc_desconto, perc_acrescimo, permite_receber_crediario)
-                            VALUES (plataforma.tenant_atual(), ?, ?::categoria_carteira, ?, ?, ?, ?, ?, ?, ?)
+                                 taxa_administradora, perc_desconto, perc_acrescimo, permite_receber_crediario,
+                                 codigo_tpag, codigo_bandeira, cnpj_credenciadora)
+                            VALUES (plataforma.tenant_atual(), ?, ?::categoria_carteira, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                             RETURNING id_carteira
                             """)
                     .params(req.nomeCarteira().trim().toUpperCase(Locale.ROOT), req.categoriaCarteira().name(),
                             req.prazoPagamento(), req.pcMinima(), req.pcMaxima(), req.taxaAdministradora(),
-                            req.percDesconto(), req.percAcrescimo(), req.permiteReceberCrediario())
+                            req.percDesconto(), req.percAcrescimo(), req.permiteReceberCrediario(),
+                            normalizarCodigo(req.codigoTpag()), normalizarCodigo(req.codigoBandeira()),
+                            Documentos.somenteAlfanumerico(req.cnpjCredenciadora()))
                     .query(Long.class).single();
             return buscar(id);
         } catch (DuplicateKeyException e) {
@@ -124,12 +128,15 @@ public class TipoCarteiraService {
                             UPDATE tipo_carteira SET
                                 nome_carteira = ?, categoria_carteira = ?::categoria_carteira, prazo_pagamento = ?,
                                 pc_minima = ?, pc_maxima = ?, taxa_administradora = ?,
-                                perc_desconto = ?, perc_acrescimo = ?, permite_receber_crediario = ?, atualizado_em = now()
+                                perc_desconto = ?, perc_acrescimo = ?, permite_receber_crediario = ?,
+                                codigo_tpag = ?, codigo_bandeira = ?, cnpj_credenciadora = ?, atualizado_em = now()
                             WHERE id_tenant = plataforma.tenant_atual() AND id_carteira = ?
                             """)
                     .params(req.nomeCarteira().trim().toUpperCase(Locale.ROOT), req.categoriaCarteira().name(),
                             req.prazoPagamento(), req.pcMinima(), req.pcMaxima(), req.taxaAdministradora(),
-                            req.percDesconto(), req.percAcrescimo(), req.permiteReceberCrediario(), id)
+                            req.percDesconto(), req.percAcrescimo(), req.permiteReceberCrediario(),
+                            normalizarCodigo(req.codigoTpag()), normalizarCodigo(req.codigoBandeira()),
+                            Documentos.somenteAlfanumerico(req.cnpjCredenciadora()), id)
                     .update();
             if (linhas == 0) {
                 throw new ResponseStatusException(NOT_FOUND, "Tipo de carteira não encontrado.");
@@ -138,6 +145,13 @@ public class TipoCarteiraService {
         } catch (DuplicateKeyException e) {
             throw new ConflitoDadosException("Já existe um tipo de carteira com esse nome nesta categoria.");
         }
+    }
+
+    /** {@code codigoTpag}/{@code codigoBandeira} vêm de um {@code <select>} de códigos fixos no
+     *  front — normaliza só pra evitar string vazia virando {@code ''} em vez de {@code NULL}
+     *  (a Conformidade Fiscal checa {@code IS NULL}, não {@code = ''}). */
+    private static String normalizarCodigo(String valor) {
+        return valor == null || valor.isBlank() ? null : valor.trim();
     }
 
     /**
@@ -197,6 +211,13 @@ public class TipoCarteiraService {
         }
         exigirNaoNegativoSePresente(req.percDesconto(), "% de desconto");
         exigirNaoNegativoSePresente(req.percAcrescimo(), "% de acréscimo");
+
+        // Fiscal (2026-08-18) — opcional no cadastro (a Conformidade Fiscal cobra sem bloquear),
+        // mas quando preenchido tem que ser um CNPJ de verdade (dígito verificador).
+        if (req.cnpjCredenciadora() != null && !req.cnpjCredenciadora().isBlank()
+                && !Documentos.valido(req.cnpjCredenciadora())) {
+            throw new IllegalArgumentException("CNPJ da credenciadora inválido.");
+        }
     }
 
     private static void exigirNaoNegativoSePresente(BigDecimal valor, String rotulo) {
@@ -209,6 +230,7 @@ public class TipoCarteiraService {
             SELECT tc.id_carteira, tc.nome_carteira, tc.categoria_carteira::text AS categoria_carteira,
                    tc.prazo_pagamento, tc.pc_minima, tc.pc_maxima,
                    tc.taxa_administradora, tc.perc_desconto, tc.perc_acrescimo, tc.permite_receber_crediario,
+                   tc.codigo_tpag, tc.codigo_bandeira, tc.cnpj_credenciadora,
                    tc.criado_em, tc.atualizado_em
             FROM tipo_carteira tc
             """;
@@ -225,6 +247,9 @@ public class TipoCarteiraService {
                 rs.getBigDecimal("perc_desconto"),
                 rs.getBigDecimal("perc_acrescimo"),
                 rs.getBoolean("permite_receber_crediario"),
+                rs.getString("codigo_tpag"),
+                rs.getString("codigo_bandeira"),
+                rs.getString("cnpj_credenciadora"),
                 rs.getObject("criado_em", OffsetDateTime.class),
                 rs.getObject("atualizado_em", OffsetDateTime.class));
     }

@@ -41,6 +41,8 @@ export interface Produto {
   ativo: boolean
   categorias: CategoriaSelecionada[]
   imagens: ImagemProduto[]
+  idPerfilFiscal: number | null
+  nomePerfilFiscal: string | null
   criadoEm: string
   atualizadoEm: string
 }
@@ -64,6 +66,9 @@ export interface ProdutoFormState {
   ativo: boolean
   /** Categorias escolhidas, na ordem de exibição — o índice na lista é o `indice` enviado à API. */
   categorias: CategoriaSelecionada[]
+  /** Fiscal (2026-08-18, `docs/MODULOFISCAL.md` §6.2/DF3) — opcional aqui de propósito: quem
+   * cobra o preenchimento antes de emitir é a tela de Conformidade Fiscal, não este cadastro. */
+  idPerfilFiscal: number | null
 }
 
 export const PRODUTO_VAZIO: ProdutoFormState = {
@@ -83,6 +88,7 @@ export const PRODUTO_VAZIO: ProdutoFormState = {
   descricaoGrade: null,
   ativo: true,
   categorias: [],
+  idPerfilFiscal: null,
 }
 
 /** "dd/mm/aaaa" (campo de texto, ver masks.ts#mascararData) -> ISO com hora, para a API. */
@@ -109,6 +115,7 @@ export function paraFormulario(p: Produto): ProdutoFormState {
     descricaoGrade: p.descricaoGrade,
     ativo: p.ativo,
     categorias: [...p.categorias].sort((a, b) => a.indice - b.indice),
+    idPerfilFiscal: p.idPerfilFiscal,
   }
 }
 
@@ -131,6 +138,7 @@ export function paraRequisicao(f: ProdutoFormState) {
     idGrade: f.idGrade,
     ativo: f.ativo,
     categorias: f.categorias.map((c) => c.idCategoria),
+    idPerfilFiscal: f.idPerfilFiscal,
   }
 }
 

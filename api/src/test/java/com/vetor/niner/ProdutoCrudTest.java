@@ -48,6 +48,26 @@ class ProdutoCrudTest {
         return JsonPath.read(resp, "$.token");
     }
 
+    /** Perfil fiscal mínimo (1 regra, exigida pelo `@NotEmpty` de `PerfilFiscalRequest`) —
+     *  suficiente pra testar o vínculo `produto.id_perfil_fiscal`, sem cobrir o motor tributário
+     *  (isso é escopo de {@code PerfilFiscalCrudTest}/{@code MotorTributarioTest}). */
+    private long criarPerfilFiscal(String token, String nome) throws Exception {
+        String corpo = """
+                {"nome":"%s","descricao":null,"ativo":true,"regras":[
+                  {"crt":1,"ufDestino":"PR","tipoDestinatario":"CONSUMIDOR_FINAL","tipoOperacao":"VENDA_CONSUMIDOR",
+                   "cfop":"5102","cstIcms":null,"csosn":"102","aliquotaIcms":"0","percReducaoBc":"0",
+                   "mvaSt":"0","aliquotaFcp":"0","cstPis":"99","aliquotaPis":"0",
+                   "cstCofins":"99","aliquotaCofins":"0","cstIbscbs":null,"cclasstrib":null,
+                   "codigoBeneficio":null}
+                ]}
+                """.formatted(nome);
+        String resp = mvc.perform(post("/api/v1/fiscal/perfis").header("Authorization", "Bearer " + token)
+                        .contentType(APPLICATION_JSON).content(corpo))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        return ((Number) JsonPath.read(resp, "$.idPerfilFiscal")).longValue();
+    }
+
     private long criarCategoria(String token, String nome) throws Exception {
         String resp = mvc.perform(post("/api/v1/categorias-produto")
                         .header("Authorization", "Bearer " + token)
@@ -83,6 +103,70 @@ class ProdutoCrudTest {
                 .andExpect(jsonPath("$.categorias[1].idCategoria").value(informatica))
                 .andExpect(jsonPath("$.categorias[1].indice").value(1))
                 .andExpect(jsonPath("$.ativo").value(true));
+    }
+
+    /** Fiscal (2026-08-18, `docs/MODULOFISCAL.md` §6.2/DF3) — opcional aqui de propósito, quem
+     *  cobra o preenchimento é a Conformidade Fiscal, não este CRUD. */
+    @Test
+    void criaProdutoComPerfilFiscal() throws Exception {
+        String token = assinarNovoTenant("perfil-fiscal");
+        long idPerfil = criarPerfilFiscal(token, "Revenda Simples");
+
+        String produto = """
+                {"descricao":"produto com perfil","precoCusto":"10.00","percentualVenda":"100",
+                 "precoVenda":"20.00","idPerfilFiscal":%d}
+                """.formatted(idPerfil);
+
+        mvc.perform(post("/api/v1/produtos").header("Authorization", "Bearer " + token)
+                        .contentType(APPLICATION_JSON).content(produto))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.idPerfilFiscal").value(idPerfil))
+                .andExpect(jsonPath("$.nomePerfilFiscal").value("REVENDA SIMPLES"));
+    }
+
+    /** Sem perfil informado, os dois campos voltam {@code null} — nunca bloqueia o cadastro. */
+    @Test
+    void produtoSemPerfilFiscalContinuaOpcional() throws Exception {
+        String token = assinarNovoTenant("sem-perfil-fiscal");
+
+        mvc.perform(post("/api/v1/produtos").header("Authorization", "Bearer " + token)
+                        .contentType(APPLICATION_JSON)
+                        .content("""
+                                {"descricao":"produto sem perfil","precoCusto":"1.00","percentualVenda":"0","precoVenda":"1.00"}
+                                """))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.idPerfilFiscal").value(org.hamcrest.Matchers.nullValue()))
+                .andExpect(jsonPath("$.nomePerfilFiscal").value(org.hamcrest.Matchers.nullValue()));
+    }
+
+    @Test
+    void perfilFiscalInexistenteAoCriarProdutoEhRejeitado() throws Exception {
+        String token = assinarNovoTenant("perfil-fiscal-inexistente");
+
+        mvc.perform(post("/api/v1/produtos").header("Authorization", "Bearer " + token)
+                        .contentType(APPLICATION_JSON)
+                        .content("""
+                                {"descricao":"produto perfil fantasma","precoCusto":"1.00","percentualVenda":"0",
+                                 "precoVenda":"1.00","idPerfilFiscal":999999}
+                                """))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void atualizarProdutoAlteraPerfilFiscal() throws Exception {
+        String token = assinarNovoTenant("atualiza-perfil-fiscal");
+        long id = criarProdutoSimples(token, "Produto Atualiza Perfil");
+        long idPerfil = criarPerfilFiscal(token, "Isento");
+
+        mvc.perform(put("/api/v1/produtos/" + id).header("Authorization", "Bearer " + token)
+                        .contentType(APPLICATION_JSON)
+                        .content("""
+                                {"descricao":"Produto Atualiza Perfil","precoCusto":"1.00","percentualVenda":"0",
+                                 "precoVenda":"1.00","idPerfilFiscal":%d}
+                                """.formatted(idPerfil)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.idPerfilFiscal").value(idPerfil))
+                .andExpect(jsonPath("$.nomePerfilFiscal").value("ISENTO"));
     }
 
     @Test

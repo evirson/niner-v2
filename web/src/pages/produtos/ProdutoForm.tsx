@@ -47,6 +47,7 @@ import {
   somenteDigitos,
 } from '../../lib/masks'
 import { buscarNcm } from '../../lib/ncm'
+import { listarOpcoesPerfilFiscal } from '../../lib/perfilFiscal'
 import {
   PRODUTO_VAZIO,
   atualizarProduto,
@@ -221,6 +222,11 @@ export default function ProdutoForm({ somenteLeitura = false }: { somenteLeitura
     queryKey: ['grades'],
     queryFn: listarGrades,
     enabled: Boolean(usaCorGrade?.cfgUsaCorGrade),
+  })
+
+  const { data: perfisFiscais } = useQuery({
+    queryKey: ['perfis-fiscais-opcoes'],
+    queryFn: listarOpcoesPerfilFiscal,
   })
   const categoriasDisponiveis = (categorias ?? []).filter(
     (c) => !form.categorias.some((fc) => fc.idCategoria === c.idCategoria),
@@ -545,6 +551,32 @@ export default function ProdutoForm({ somenteLeitura = false }: { somenteLeitura
                 },
               ]}
             />
+          </div>
+        </section>
+
+        <section className="section">
+          <p className="section-label">Fiscal</p>
+          <p className="muted" style={{ marginTop: -4 }}>
+            Usado para calcular os tributos na nota fiscal. Opcional aqui — a tela de Conformidade
+            Fiscal aponta quando falta antes de emitir.
+          </p>
+
+          <div className="form-grid">
+            <div className="col-6">
+              <label htmlFor="idPerfilFiscal">Perfil Fiscal</label>
+              <select
+                id="idPerfilFiscal"
+                value={form.idPerfilFiscal ?? ''}
+                onChange={(e) => setForm((f) => ({ ...f, idPerfilFiscal: e.target.value ? Number(e.target.value) : null }))}
+              >
+                <option value="">Não informado</option>
+                {(perfisFiscais ?? []).map((p) => (
+                  <option key={p.idPerfilFiscal} value={p.idPerfilFiscal}>
+                    {p.nome}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
         </section>
 

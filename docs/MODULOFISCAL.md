@@ -391,20 +391,31 @@ inteiro. Quando informado, a validação alfanumérica de CNPJ já existente val
 ⚠️ Alguns estados exigem identificação acima de um valor. **Não foi possível confirmar a régua do
 PR** — item de F0. O PDV já precisa facilitar a captura do CPF pelo programa Nota Paraná.
 
-### 6.4 `tipo_carteira` (V025) — a forma de pagamento 🆕
+### 6.4 `tipo_carteira` (V025) — a forma de pagamento 🆕 ✅ campo da tela desde 2026-08-18
 
-`detPag` é **obrigatório na NFC-e** e a `tipo_carteira` não tem nada do que ele exige:
+`detPag` é **obrigatório na NFC-e** e a `tipo_carteira` precisava de:
 
-| Falta | Campo do XML | Nota |
+| Campo | Campo do XML | Nota |
 |---|---|---|
 | `codigo_tpag` | `tPag` | 01 dinheiro · 03 crédito · 04 débito · 05 crédito loja (o crediário do Niner) · 17 PIX · 90 sem pagamento · 99 outros ⚠️ (tabela completa na NT 2023.004 — conferir na F0) |
 | `codigo_bandeira` | `tBand` | 01 Visa · 02 Mastercard · 03 Amex · 06 Elo · 07 Hipercard · 99 outros ⚠️. Obrigatório junto com `tPag` 03/04 |
 | `cnpj_credenciadora` | `CNPJ` do grupo `card` | Da adquirente (Cielo, Rede, Stone…) |
-| `tipo_integracao` | `tpIntegra` | 1 integrado (TEF/POS) · 2 não integrado. Hoje o Niner é **2** |
+| `tipo_integracao` | `tpIntegra` | 1 integrado (TEF/POS) · 2 não integrado. Hoje o Niner é **2**, hardcoded no `MontadorXmlNfce` — nunca lido de `tipo_carteira`, não ganhou campo de tela por não ter uso ainda |
 
 O mapeamento é direto: `categoria_carteira` já separa `AVISTA` / `CARTAO_DEBITO` /
 `CARTAO_CREDITO` / `CREDIARIO` / `VALE_MERCADORIA`, e cada linha de `tipo_carteira` já é uma
-bandeira específica. Faltam só os códigos oficiais, que viram campo da tela de Tipo de Carteira.
+bandeira específica.
+
+✅ **Implementado em 2026-08-18** — a lacuna foi achada pelo dono do produto ao clicar "Corrigir"
+num registro AMEX real na tela de Conformidade Fiscal e não encontrar onde preencher. Seção "Dados
+Fiscais (NFC-e)" em `financeiro.tipocarteira` (`TipoCarteiraForm.tsx`): `codigoTpag`/
+`codigoBandeira` são `<select>` de código fixo (nunca texto livre — evita bandeira/forma de
+pagamento inventada), bandeira só aparece quando a categoria é Cartão Débito/Crédito. Todos
+opcionais no CRUD (colunas sem `NOT NULL`) — quem cobra o preenchimento continua sendo a tela de
+Conformidade Fiscal (§11.1 do estudo, `docs/telas/fiscal-conformidade.md`), não este cadastro.
+`cnpj_credenciadora` validado com o mesmo `Documentos.valido()` de CPF/CNPJ do resto do domínio,
+normalizado sem máscara no banco. Testado ao vivo: corrigir a pendência do AMEX no navegador fez a
+contagem de "Formas de pagamento" cair de 9 para 8 pendências na mesma sessão.
 
 🔴 **DF29 — vale-mercadoria é pagamento ou desconto?** O vale gerado por devolução
 (`venda_devolucao`) hoje quita venda como forma de pagamento. Na nota ele pode ser **`tPag` de

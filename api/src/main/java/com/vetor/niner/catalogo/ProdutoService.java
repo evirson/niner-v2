@@ -157,8 +157,8 @@ public class ProdutoService {
             long id = jdbc.sql("""
                             INSERT INTO produto (id_tenant, ativo, marca, referencia, descricao, preco_custo,
                                 percentual_venda, preco_venda, data_inicio_oferta, data_final_oferta, preco_oferta,
-                                codigo_ncm, peso_bruto, peso_liquido, id_grade)
-                            VALUES (plataforma.tenant_atual(), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                codigo_ncm, peso_bruto, peso_liquido, id_grade, id_perfil_fiscal)
+                            VALUES (plataforma.tenant_atual(), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                             RETURNING id_produto
                             """)
                     .params(params)
@@ -184,7 +184,7 @@ public class ProdutoService {
                                 ativo = ?, marca = ?, referencia = ?, descricao = ?, preco_custo = ?,
                                 percentual_venda = ?, preco_venda = ?, data_inicio_oferta = ?, data_final_oferta = ?,
                                 preco_oferta = ?, codigo_ncm = ?, peso_bruto = ?, peso_liquido = ?,
-                                id_grade = ?, atualizado_em = now()
+                                id_grade = ?, id_perfil_fiscal = ?, atualizado_em = now()
                             WHERE id_produto = ? AND id_tenant = plataforma.tenant_atual()
                             """)
                     .params(params)
@@ -343,6 +343,9 @@ public class ProdutoService {
         if (causa.contains("produto_codigo_ncm_fkey")) {
             return new IllegalArgumentException("NCM informado não existe.");
         }
+        if (causa.contains("produto_perfil_fiscal_fk")) {
+            return new IllegalArgumentException("Perfil fiscal informado não existe.");
+        }
         return new IllegalArgumentException("Categoria informada não existe.");
     }
 
@@ -377,6 +380,7 @@ public class ProdutoService {
         params.add(r.pesoBruto() == null ? BigDecimal.ZERO : r.pesoBruto());
         params.add(r.pesoLiquido() == null ? BigDecimal.ZERO : r.pesoLiquido());
         params.add(usaCorGrade && r.idGrade() != null ? r.idGrade() : 1L);
+        params.add(r.idPerfilFiscal());
     }
 
     private static String trimMaiusculoOuNulo(String s) {
@@ -401,9 +405,11 @@ public class ProdutoService {
             SELECT p.id_produto, p.descricao, p.marca, p.referencia, p.preco_custo, p.percentual_venda,
                    p.preco_venda, p.data_inicio_oferta, p.data_final_oferta, p.preco_oferta, p.codigo_ncm,
                    p.peso_bruto, p.peso_liquido, p.id_grade, g.descricao AS descricao_grade, p.ativo,
+                   p.id_perfil_fiscal, pf.nome AS nome_perfil_fiscal,
                    p.criado_em, p.atualizado_em, p.reajustado_em
             FROM produto p
             LEFT JOIN cfg_grade g ON g.id_grade = p.id_grade AND g.id_tenant = p.id_tenant AND g.id_grade <> 1
+            LEFT JOIN cfg_perfil_fiscal pf ON pf.id_perfil_fiscal = p.id_perfil_fiscal AND pf.id_tenant = p.id_tenant
             """;
 
     /** id_grade=1 é a grade PADRÃO (2026-08-13, reservada/invisível, ver {@code SignupService})
@@ -412,6 +418,11 @@ public class ProdutoService {
     private ProdutoResponse mapear(ResultSet rs, int rowNum) throws SQLException {
         long id = rs.getLong("id_produto");
         long idGrade = rs.getLong("id_grade");
+        // pgjdbc não converte int4 -> java.lang.Long via getObject(coluna, Long.class) (PSQLException
+        // "conversion to class java.lang.Long from int4 not supported") — precisa ler como long
+        // primitivo e checar wasNull() à parte, mesmo idioma já usado em outros módulos do domínio.
+        long idPerfilFiscalRaw = rs.getLong("id_perfil_fiscal");
+        Long idPerfilFiscal = rs.wasNull() ? null : idPerfilFiscalRaw;
         return new ProdutoResponse(
                 id,
                 rs.getString("descricao"),
@@ -431,6 +442,8 @@ public class ProdutoService {
                 rs.getBoolean("ativo"),
                 buscarCategorias(id),
                 produtoImagemService.listar(id),
+                idPerfilFiscal,
+                rs.getString("nome_perfil_fiscal"),
                 rs.getObject("criado_em", OffsetDateTime.class),
                 rs.getObject("atualizado_em", OffsetDateTime.class),
                 rs.getObject("reajustado_em", OffsetDateTime.class));

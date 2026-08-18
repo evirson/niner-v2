@@ -23,6 +23,10 @@ public final class ProdutoDtos {
      * {@code cfg_geral.cfg_usa_cor_grade} (verificado no serviço); ignorado (gravado como
      * {@code null}) quando o tenant não usa — mesmo princípio dos antigos
      * {@code nomeVarianteLinha}/{@code nomeVarianteColuna}.
+     *
+     * <p>{@code idPerfilFiscal} (2026-08-18, `docs/MODULOFISCAL.md` §6.2/DF3) — opcional aqui de
+     * propósito (coluna sem {@code NOT NULL}, {@code produto.id_perfil_fiscal} em V035): quem
+     * cobra o preenchimento antes de emitir é a Conformidade Fiscal, não este CRUD.
      */
     public record ProdutoRequest(
             @NotBlank @Size(max = 200) String descricao,
@@ -39,7 +43,8 @@ public final class ProdutoDtos {
             BigDecimal pesoLiquido,
             Long idGrade,
             Boolean ativo,
-            List<Long> categorias) {
+            List<Long> categorias,
+            Long idPerfilFiscal) {
     }
 
     public record CategoriaSelecionada(long idCategoria, String nomeCategoria, int indice) {
@@ -64,6 +69,8 @@ public final class ProdutoDtos {
             boolean ativo,
             List<CategoriaSelecionada> categorias,
             List<ProdutoImagemDtos.ImagemResponse> imagens,
+            Long idPerfilFiscal,
+            String nomePerfilFiscal,
             OffsetDateTime criadoEm,
             OffsetDateTime atualizadoEm,
             OffsetDateTime reajustadoEm) {

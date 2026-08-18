@@ -104,6 +104,14 @@ mesmo que a operação não seja ST (Convênio 142/2018) — mas o sistema **nã
 exigem CEST enquanto `cfg_cest` não estiver carregada. Entra como aviso quando a tabela existir; hoje
 nem isso, para não gerar um alarme falso em 10.000 produtos.
 
+> ✅ **Corrigido em 2026-08-18** (mesmo padrão do gap de Formas de pagamento, achado pelo dono do
+> produto clicando "Corrigir" numa pendência real de "sem perfil fiscal" e caindo no cadastro de
+> Produto sem onde preencher): `catalogo.produto` ganhou o campo "Perfil Fiscal" na seção "Fiscal"
+> de `ProdutoForm.tsx`, alimentado por `GET /api/v1/fiscal/perfis/opcoes` — endpoint que já existia
+> desde o B2 ("alimenta o `<select>` de Produto, operado por OPERADOR", comentário do
+> `PerfilFiscalController`) mas nunca tinha sido consumido. Opcional no CRUD, como sempre: quem
+> cobra o preenchimento continua sendo este painel.
+
 ### Formas de pagamento (🔴 bloqueia)
 
 `detPag` é obrigatório na NFC-e. Conta as `tipo_carteira` ativas sem `codigo_tpag` — e as de categoria
@@ -112,12 +120,17 @@ nem isso, para não gerar um alarme falso em 10.000 produtos.
 Bloqueia porque é a pendência **mais silenciosa** das quatro: são poucas linhas (6 no seed), ninguém
 pensa nelas, e a nota é rejeitada na primeira venda no cartão.
 
-> ⚠️ **Consequência real, verificada em 2026-08-17: hoje TODO tenant nasce bloqueado aqui.**
-> `codigo_tpag`/`codigo_bandeira` não têm tela própria ainda (não fazem parte do B2/B3) — as 6
-> carteiras que o signup semeia nascem sempre sem `codigo_tpag`. Até `financeiro.tipocarteira`
-> ganhar esses campos, este painel nunca mostra "Pronto para emitir" pra ninguém, mesmo com
-> Empresa/Produtos/Clientes impecáveis. Não é bug do painel — é o painel fazendo o trabalho de
-> apontar exatamente essa lacuna. Registrado como pré-requisito, não corrigido aqui.
+> ⚠️ **Consequência real, verificada em 2026-08-17: até 2026-08-18 TODO tenant nascia bloqueado
+> aqui.** `codigo_tpag`/`codigo_bandeira` não tinham tela própria (não fizeram parte do B2/B3) —
+> as 6 carteiras que o signup semeia nasciam sempre sem `codigo_tpag`.
+>
+> ✅ **Corrigido em 2026-08-18** (achado pelo dono do produto testando "Corrigir" num registro
+> AMEX real): `financeiro.tipocarteira` ganhou a seção "Dados Fiscais (NFC-e)" —
+> `codigoTpag`/`codigoBandeira` (selects de código fixo, nunca texto livre) + `cnpjCredenciadora`
+> (opcional, validado quando preenchido). Bandeira só aparece no formulário quando a categoria é
+> Cartão Débito/Crédito — mesma condição que zera a pendência aqui. Todos opcionais no CRUD de
+> propósito: continua sendo este painel que cobra o preenchimento antes de emitir, o cadastro
+> nunca bloqueia salvar sem eles.
 
 ### Clientes (🟡 avisa, não bloqueia)
 
@@ -244,10 +257,8 @@ Se a tela ficar lenta com 10.000 produtos, o passo seguinte é um índice parcia
   "corrigir 10.000 produtos" vira digitação manual e esta tela só mostra um problema insolúvel.
   Está previsto na F1 (§12), mas é trabalho de outra tela (`docs/telas/importacao-dados.md`) e
   precisa entrar no mesmo bloco.
-- 🔴 **`tipo_carteira` precisa ganhar `codigo_tpag`/`codigo_bandeira` na tela** — sem isso, TODO
-  tenant fica preso em "N pendências bloqueiam" na categoria Formas de pagamento para sempre
-  (ver nota na seção Formas de pagamento). É o bloqueador mais urgente pra esta tela ter alguma
-  utilidade prática.
+- ✅ **`tipo_carteira` ganhou `codigo_tpag`/`codigo_bandeira` na tela — corrigido em 2026-08-18**
+  (ver nota na seção Formas de pagamento). Continua valendo o resto desta lista.
 
 ## Métrica de sucesso
 

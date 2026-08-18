@@ -16,8 +16,10 @@ import InfoRegistro from '../../components/InfoRegistro'
 import Toast from '../../components/Toast'
 import { ApiError } from '../../lib/api'
 import { aoTeclarEnterNoFormulario } from '../../lib/formularios'
-import { completarPercentual, mascararPercentual } from '../../lib/masks'
+import { completarPercentual, mascararCpfCnpj, mascararPercentual } from '../../lib/masks'
 import {
+  OPCOES_CODIGO_BANDEIRA,
+  OPCOES_CODIGO_TPAG,
   ROTULO_CATEGORIA_CARTEIRA,
   TIPO_CARTEIRA_VAZIO,
   atualizarTipoCarteira,
@@ -72,6 +74,12 @@ function ehPositivo(valor: string): boolean {
  * `docs/PROGRESSO.md`. % Desconto e % Acréscimo nunca coexistem com valor positivo: digitar
  * um valor > 0 num deles limpa o outro automaticamente. Sem tela de configuração de campos:
  * todos são NOT NULL ou opcionais fixos, nada a configurar por tenant.
+ *
+ * <p>"Dados Fiscais (NFC-e)" (2026-08-18, `docs/MODULOFISCAL.md` §6.4) — código `tPag`/`tBand`
+ * (selects de código fixo, nunca texto livre — evita bandeira/forma de pagamento inventada) e
+ * CNPJ da credenciadora. Todos opcionais aqui de propósito: quem cobra o preenchimento antes de
+ * emitir é a tela de Conformidade Fiscal, não este CRUD. Bandeira só aparece pra categoria
+ * Cartão Débito/Crédito (mesma condição que zera a pendência lá).
  */
 export default function TipoCarteiraForm({ somenteLeitura = false }: { somenteLeitura?: boolean }) {
   const { id } = useParams()
@@ -202,9 +210,11 @@ export default function TipoCarteiraForm({ somenteLeitura = false }: { somenteLe
               <select
                 id="categoriaCarteira"
                 value={form.categoriaCarteira}
-                onChange={(e) =>
-                  setForm((f) => ({ ...f, categoriaCarteira: e.target.value as CategoriaCarteira }))
-                }
+                onChange={(e) => {
+                  const categoria = e.target.value as CategoriaCarteira
+                  const ehCartao = categoria === 'CARTAO_DEBITO' || categoria === 'CARTAO_CREDITO'
+                  setForm((f) => ({ ...f, categoriaCarteira: categoria, codigoBandeira: ehCartao ? f.codigoBandeira : '' }))
+                }}
                 onBlur={aoSairDoCampo('categoriaCarteira')}
               >
                 <option value="">Selecione…</option>
@@ -334,6 +344,60 @@ export default function TipoCarteiraForm({ somenteLeitura = false }: { somenteLe
             Só carteiras marcadas aqui aparecem como opção de pagamento na tela de Recebimento de
             Crediário.
           </p>
+        </section>
+
+        <section className="section">
+          <p className="section-label">Dados Fiscais (NFC-e)</p>
+          <p className="muted" style={{ marginTop: -4 }}>
+            Usados no grupo "Forma de Pagamento" da nota fiscal. Opcionais aqui — a tela de
+            Conformidade Fiscal aponta quando faltam antes de emitir.
+          </p>
+
+          <div className="form-grid">
+            <div className="col-4">
+              <label htmlFor="codigoTpag">Forma de Pagamento (tPag)</label>
+              <select
+                id="codigoTpag"
+                value={form.codigoTpag}
+                onChange={(e) => setForm((f) => ({ ...f, codigoTpag: e.target.value }))}
+              >
+                <option value="">Não informado</option>
+                {OPCOES_CODIGO_TPAG.map((o) => (
+                  <option key={o.codigo} value={o.codigo}>
+                    {o.rotulo}
+                  </option>
+                ))}
+              </select>
+            </div>
+            {(form.categoriaCarteira === 'CARTAO_DEBITO' || form.categoriaCarteira === 'CARTAO_CREDITO') && (
+              <div className="col-4">
+                <label htmlFor="codigoBandeira">Bandeira do Cartão (tBand)</label>
+                <select
+                  id="codigoBandeira"
+                  value={form.codigoBandeira}
+                  onChange={(e) => setForm((f) => ({ ...f, codigoBandeira: e.target.value }))}
+                >
+                  <option value="">Não informado</option>
+                  {OPCOES_CODIGO_BANDEIRA.map((o) => (
+                    <option key={o.codigo} value={o.codigo}>
+                      {o.rotulo}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+            <div className="col-4">
+              <label htmlFor="cnpjCredenciadora">CNPJ da Credenciadora</label>
+              <input
+                id="cnpjCredenciadora"
+                placeholder="00.000.000/0000-00"
+                value={form.cnpjCredenciadora}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, cnpjCredenciadora: mascararCpfCnpj(e.target.value, false) }))
+                }
+              />
+            </div>
+          </div>
         </section>
 
         <InfoRegistro

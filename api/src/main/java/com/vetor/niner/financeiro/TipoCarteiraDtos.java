@@ -37,6 +37,12 @@ public final class TipoCarteiraDtos {
      *
      * <p>{@code permiteReceberCrediario} (2026-07-29, RN007 do Recebimento de Crediário): só
      * carteiras marcadas aqui aparecem como opção de pagamento naquela tela.
+     *
+     * <p>{@code codigoTpag}/{@code codigoBandeira}/{@code cnpjCredenciadora} (2026-08-18,
+     * `docs/MODULOFISCAL.md` §6.4) — o grupo {@code pag/detPag} da NFC-e. Todos opcionais
+     * (colunas sem {@code NOT NULL}): o CRUD não bloqueia salvar sem eles — quem aponta a
+     * lacuna pro dono do produto é a tela de Conformidade Fiscal, que os cobra sem impedir o
+     * cadastro. Só validados quando preenchidos (CNPJ com dígito verificador).
      */
     public record TipoCarteiraRequest(
             @NotBlank @Size(max = 60) String nomeCarteira,
@@ -47,7 +53,10 @@ public final class TipoCarteiraDtos {
             BigDecimal taxaAdministradora,
             BigDecimal percDesconto,
             BigDecimal percAcrescimo,
-            @NotNull Boolean permiteReceberCrediario) {
+            @NotNull Boolean permiteReceberCrediario,
+            String codigoTpag,
+            String codigoBandeira,
+            String cnpjCredenciadora) {
     }
 
     public record TipoCarteiraResponse(
@@ -61,6 +70,9 @@ public final class TipoCarteiraDtos {
             BigDecimal percDesconto,
             BigDecimal percAcrescimo,
             boolean permiteReceberCrediario,
+            String codigoTpag,
+            String codigoBandeira,
+            String cnpjCredenciadora,
             OffsetDateTime criadoEm,
             OffsetDateTime atualizadoEm) {
     }

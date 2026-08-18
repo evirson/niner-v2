@@ -212,7 +212,8 @@ public class ContasReceberImportador implements ImportadorDeTabela {
                         "Informe prazo de pagamento e nº mínimo/máximo de parcelas da nova carteira.");
             }
             var criada = tipoCarteiraService.criar(new TipoCarteiraRequest(
-                    nome, CategoriaCarteira.CREDIARIO, prazo, pcMinima, pcMaxima, null, null, null, true));
+                    nome, CategoriaCarteira.CREDIARIO, prazo, pcMinima, pcMaxima, null, null, null, true,
+                    null, null, null));
             return criada.idCarteira();
         }
         throw new IllegalArgumentException(

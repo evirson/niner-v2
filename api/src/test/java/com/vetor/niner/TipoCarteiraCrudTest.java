@@ -296,6 +296,74 @@ class TipoCarteiraCrudTest {
                 .andExpect(status().isConflict());
     }
 
+    /** Fiscal (2026-08-18, `docs/MODULOFISCAL.md` §6.4) — o CRUD só ganhou os campos, sem
+     *  torná-los obrigatórios: quem cobra o preenchimento é a Conformidade Fiscal. */
+    @Test
+    void criaTipoCarteiraComDadosFiscais() throws Exception {
+        String token = assinarNovoTenant("dados-fiscais");
+
+        mvc.perform(post("/api/v1/tipos-carteira").header("Authorization", "Bearer " + token)
+                        .contentType(APPLICATION_JSON)
+                        .content("""
+                                {"nomeCarteira":"AMEX","categoriaCarteira":"CARTAO_CREDITO","prazoPagamento":30,
+                                 "pcMinima":1,"pcMaxima":6,"permiteReceberCrediario":false,
+                                 "codigoTpag":"03","codigoBandeira":"03","cnpjCredenciadora":"11.222.333/0001-81"}
+                                """))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.codigoTpag").value("03"))
+                .andExpect(jsonPath("$.codigoBandeira").value("03"))
+                .andExpect(jsonPath("$.cnpjCredenciadora").value("11222333000181"));
+    }
+
+    /** Sem preencher nada de fiscal, os 3 campos voltam {@code null} — nunca string vazia
+     *  (a Conformidade Fiscal checa {@code IS NULL}). */
+    @Test
+    void dadosFiscaisFicamNulosQuandoNaoInformados() throws Exception {
+        String token = assinarNovoTenant("sem-dados-fiscais");
+
+        mvc.perform(post("/api/v1/tipos-carteira").header("Authorization", "Bearer " + token)
+                        .contentType(APPLICATION_JSON)
+                        .content("""
+                                {"nomeCarteira":"CARTEIRA SEM FISCAL","categoriaCarteira":"CARTAO_DEBITO","prazoPagamento":0,
+                                 "pcMinima":1,"pcMaxima":1,"permiteReceberCrediario":false}
+                                """))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.codigoTpag").value(org.hamcrest.Matchers.nullValue()))
+                .andExpect(jsonPath("$.codigoBandeira").value(org.hamcrest.Matchers.nullValue()))
+                .andExpect(jsonPath("$.cnpjCredenciadora").value(org.hamcrest.Matchers.nullValue()));
+    }
+
+    @Test
+    void cnpjCredenciadoraInvalidoEhRejeitado() throws Exception {
+        String token = assinarNovoTenant("cnpj-credenciadora-invalido");
+
+        mvc.perform(post("/api/v1/tipos-carteira").header("Authorization", "Bearer " + token)
+                        .contentType(APPLICATION_JSON)
+                        .content("""
+                                {"nomeCarteira":"CARTEIRA CNPJ INVALIDO","categoriaCarteira":"CARTAO_CREDITO","prazoPagamento":30,
+                                 "pcMinima":1,"pcMaxima":1,"permiteReceberCrediario":false,
+                                 "codigoTpag":"03","cnpjCredenciadora":"11.111.111/1111-11"}
+                                """))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void atualizarPreencheDadosFiscaisDeUmaCarteiraSemeadaSemEles() throws Exception {
+        String token = assinarNovoTenant("atualiza-fiscal");
+        long id = criarCarteira(token, "CARTEIRA ATUALIZA FISCAL", "CARTAO_DEBITO", 0, 1, 1, "0");
+
+        mvc.perform(put("/api/v1/tipos-carteira/" + id).header("Authorization", "Bearer " + token)
+                        .contentType(APPLICATION_JSON)
+                        .content("""
+                                {"nomeCarteira":"CARTEIRA ATUALIZA FISCAL","categoriaCarteira":"CARTAO_DEBITO","prazoPagamento":0,
+                                 "pcMinima":1,"pcMaxima":1,"permiteReceberCrediario":false,
+                                 "codigoTpag":"04","codigoBandeira":"01"}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.codigoTpag").value("04"))
+                .andExpect(jsonPath("$.codigoBandeira").value("01"));
+    }
+
     @Test
     void listagemOrdenaPorColunaEDirecaoPedidas() throws Exception {
         String token = assinarNovoTenant("ordenacao");

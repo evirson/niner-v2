@@ -182,7 +182,7 @@ public class ProdutoImportador implements ImportadorDeTabela {
                 ncmExistenteOuNulo(linha.valor("CODIGO_NCM")),
                 ImportacaoPlanilha.decimal("PESO_BRUTO", linha.valor("PESO_BRUTO")),
                 ImportacaoPlanilha.decimal("PESO_LIQUIDO", linha.valor("PESO_LIQUIDO")),
-                idGrade, true, List.of());
+                idGrade, true, List.of(), null);
         long idProduto = produtoService.criar(req).idProduto();
         gravarCodigoImportacaoSeInformado(idProduto, codigoProduto);
         return true;
