@@ -27,14 +27,17 @@ public class VendaFiscalService {
     }
 
     /**
+     * @param incluirCpf 2026-08-19 — resposta do operador na pergunta "incluir CPF na nota?",
+     *         perguntada antes de chamar este método (ver {@code ComprovantePapeletaModal.tsx});
+     *         nunca mais decidido sozinho a partir do cliente da venda.
      * @return vazio quando o fiscal está desligado para a empresa (F12) — a tela não mostra nada,
      *         exatamente como se o módulo fiscal não existisse
      */
-    public Optional<ResultadoEmissao> emitirNfce(Jwt jwt, long idVenda) {
+    public Optional<ResultadoEmissao> emitirNfce(Jwt jwt, long idVenda, boolean incluirCpf) {
         long idTenant = ((Number) jwt.getClaim("tid")).longValue();
         long idEmpresa = ((Number) jwt.getClaim("eid")).longValue();
         Integer idUsuario = Integer.parseInt(jwt.getSubject());
 
-        return assembler.montar(idTenant, idEmpresa, idVenda, idUsuario).map(emissao::emitir);
+        return assembler.montar(idTenant, idEmpresa, idVenda, idUsuario, incluirCpf).map(emissao::emitir);
     }
 }

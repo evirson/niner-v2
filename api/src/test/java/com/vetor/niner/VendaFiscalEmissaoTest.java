@@ -297,7 +297,8 @@ class VendaFiscalEmissaoTest {
                 .thenAnswer(inv -> autorizada(extrairChaveDoEnvi(inv.getArgument(2))));
 
         var resultado = mvc.perform(post("/api/v1/pdv/vendas/" + idVenda + "/nfce")
-                        .header("Authorization", "Bearer " + token))
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(APPLICATION_JSON).content("{\"incluirCpf\":false}"))
                 .andReturn();
         String resp = resultado.getResponse().getContentAsString();
         assertThat(resultado.getResponse().getStatus()).as("corpo: " + resp).isEqualTo(200);
@@ -343,7 +344,8 @@ class VendaFiscalEmissaoTest {
         abrirCaixa(token, idCarteira);
         long idVenda = efetivarVenda(token, idVariacao, idCliente, idFuncionario, idCarteira, "10.00");
 
-        mvc.perform(post("/api/v1/pdv/vendas/" + idVenda + "/nfce").header("Authorization", "Bearer " + token))
+        mvc.perform(post("/api/v1/pdv/vendas/" + idVenda + "/nfce").header("Authorization", "Bearer " + token)
+                        .contentType(APPLICATION_JSON).content("{\"incluirCpf\":false}"))
                 .andExpect(status().isNoContent());
 
         Mockito.verifyNoInteractions(transporte);
@@ -376,7 +378,10 @@ class VendaFiscalEmissaoTest {
 
         long idVenda = efetivarVenda(token, idVariacao, idCliente, idFuncionario, idCarteira, "50.00");
 
-        mvc.perform(post("/api/v1/pdv/vendas/" + idVenda + "/nfce").header("Authorization", "Bearer " + token))
+        // incluirCpf=true de propósito: é a inclusão do CPF/CNPJ do cliente (contribuinte) que
+        // faz o destinatário chegar preenchido no motor e disparar a recusa DF13 abaixo.
+        mvc.perform(post("/api/v1/pdv/vendas/" + idVenda + "/nfce").header("Authorization", "Bearer " + token)
+                        .contentType(APPLICATION_JSON).content("{\"incluirCpf\":true}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.situacao").value("NAO_EMITIDO"))
                 .andExpect(jsonPath("$.mensagem").value(org.hamcrest.Matchers.containsString("contribuinte")));

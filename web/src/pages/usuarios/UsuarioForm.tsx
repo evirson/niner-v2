@@ -210,8 +210,8 @@ export default function UsuarioForm({ somenteLeitura = false }: { somenteLeitura
           </div>
           {usuarioExistente?.administrador && (
             <p className="muted" style={{ marginTop: 4 }}>
-              Este é o administrador da conta. Só existe um por loja e o privilégio é definido no
-              cadastro da loja — não pode ser alterado nem removido por aqui.
+              Este é o administrador da conta. Só pode existir um - não pode ser alterado nem
+              removido por aqui.
             </p>
           )}
 

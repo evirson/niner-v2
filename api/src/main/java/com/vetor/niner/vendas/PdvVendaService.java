@@ -215,12 +215,13 @@ public class PdvVendaService {
     @Transactional(readOnly = true)
     public ComprovanteVendaResponse buscarComprovante(long idVenda) {
         record Cabecalho(String nomeEmpresa, int codigoEmpresa, OffsetDateTime dataVenda,
-                          String nomeCliente, String telefoneCliente, String nomeOperador) {
+                          String nomeCliente, String telefoneCliente, String documentoCliente, String nomeOperador) {
         }
 
         Cabecalho cabecalho = jdbc.sql("""
                         SELECT e.razao_social AS nome_empresa, e.codigo_empresa, v.data_venda,
-                               c.nome AS nome_cliente, c.telefone AS telefone_cliente, uop.nome_usuario AS nome_operador
+                               c.nome AS nome_cliente, c.telefone AS telefone_cliente, c.cpf_cnpj AS documento_cliente,
+                               uop.nome_usuario AS nome_operador
                         FROM venda v
                         JOIN empresa e ON e.id_tenant = v.id_tenant AND e.id_empresa = v.id_empresa
                         LEFT JOIN cliente c ON c.id_tenant = v.id_tenant AND c.id_cliente = v.id_cliente
@@ -232,7 +233,8 @@ public class PdvVendaService {
                 .query((rs, n) -> new Cabecalho(
                         rs.getString("nome_empresa"), rs.getInt("codigo_empresa"),
                         rs.getObject("data_venda", OffsetDateTime.class),
-                        rs.getString("nome_cliente"), rs.getString("telefone_cliente"), rs.getString("nome_operador")))
+                        rs.getString("nome_cliente"), rs.getString("telefone_cliente"),
+                        rs.getString("documento_cliente"), rs.getString("nome_operador")))
                 .optional()
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND, "A venda #" + idVenda + " não existe."));
@@ -329,7 +331,8 @@ public class PdvVendaService {
 
         return new ComprovanteVendaResponse(
                 idVenda, cabecalho.nomeEmpresa(), cabecalho.codigoEmpresa(), cabecalho.dataVenda(),
-                cabecalho.nomeCliente(), cabecalho.telefoneCliente(), nomeVendedor, cabecalho.nomeOperador(),
+                cabecalho.nomeCliente(), cabecalho.telefoneCliente(), cabecalho.documentoCliente(),
+                nomeVendedor, cabecalho.nomeOperador(),
                 itens, totais.subtotal(), totais.descontos(), totais.acrescimos(), totalAPagar,
                 pagamentos, parcelasCrediario, buscarDadosFiscais(idVenda));
     }

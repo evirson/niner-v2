@@ -152,6 +152,10 @@ public final class PdvDtos {
             OffsetDateTime dataVenda,
             String nomeCliente,
             String telefoneCliente,
+            /** CPF/CNPJ do cliente da venda (2026-08-19) — só pra tela de emissão fiscal decidir
+             *  se oferece a pergunta "incluir CPF na nota?"; {@code null} quando não há cliente ou
+             *  ele não tem documento cadastrado (nesse caso a nota só pode sair pra consumidor). */
+            String documentoCliente,
             String nomeVendedor,
             String nomeOperador,
             List<ItemComprovanteVenda> itens,

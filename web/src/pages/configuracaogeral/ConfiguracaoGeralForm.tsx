@@ -38,6 +38,25 @@ const VAZIO: ConfiguracaoGeralFormState = {
 type CampoValidavel = 'percentualDescontoVenda' | 'jurosCrediarioDias' | 'jurosCrediario' | 'multaCrediarioDias' | 'multaCrediario'
 type ErrosCampo = Partial<Record<CampoValidavel, string>>
 
+type Aba = 'vendas' | 'estoque' | 'compras' | 'crediario'
+
+const ABAS: Array<{ chave: Aba; rotulo: string }> = [
+  { chave: 'vendas', rotulo: 'Vendas' },
+  { chave: 'estoque', rotulo: 'Estoque' },
+  { chave: 'compras', rotulo: 'Compras' },
+  { chave: 'crediario', rotulo: 'Crediário' },
+]
+
+/** Em qual aba mora cada campo validado (2026-08-19, reorganização em abas) — usado só para
+ *  levar o usuário até o erro quando ele está numa aba diferente da que falhou ao salvar. */
+const ABA_DO_CAMPO: Record<CampoValidavel, Aba> = {
+  percentualDescontoVenda: 'vendas',
+  jurosCrediarioDias: 'crediario',
+  jurosCrediario: 'crediario',
+  multaCrediarioDias: 'crediario',
+  multaCrediario: 'crediario',
+}
+
 /** Todos os campos são NOT NULL no banco (V023) — validação é só de faixa, nunca de "vazio". */
 function validarCampo(chave: CampoValidavel, f: ConfiguracaoGeralFormState): string | undefined {
   if (chave === 'percentualDescontoVenda' || chave === 'jurosCrediario' || chave === 'multaCrediario') {
@@ -61,6 +80,7 @@ export default function ConfiguracaoGeralForm() {
   const [erros, setErros] = useState<ErrosCampo>({})
   const [toast, setToast] = useState('')
   const [toastTipo, setToastTipo] = useState<TipoToast>('erro')
+  const [aba, setAba] = useState<Aba>('vendas')
 
   const { data: configuracao } = useQuery({
     queryKey: ['config-geral'],
@@ -110,7 +130,9 @@ export default function ConfiguracaoGeralForm() {
       multaCrediario: validarCampo('multaCrediario', form),
     }
     setErros(novosErros)
-    if (Object.values(novosErros).some(Boolean)) {
+    const primeiroCampoComErro = (Object.keys(novosErros) as CampoValidavel[]).find((c) => novosErros[c])
+    if (primeiroCampoComErro) {
+      setAba(ABA_DO_CAMPO[primeiroCampoComErro])
       setToastTipo('erro')
       setToast('Corrija os campos destacados antes de salvar.')
       return
@@ -151,6 +173,23 @@ export default function ConfiguracaoGeralForm() {
         onKeyDown={aoTeclarEnterNoFormulario}
         noValidate
       >
+        <div className="abas-nav" role="tablist">
+          {ABAS.map((a) => (
+            <button
+              key={a.chave}
+              type="button"
+              role="tab"
+              aria-selected={aba === a.chave}
+              className={`aba-botao ${aba === a.chave ? 'ativa' : ''}`}
+              onClick={() => setAba(a.chave)}
+            >
+              {a.rotulo}
+            </button>
+          ))}
+        </div>
+
+        {aba === 'vendas' && (
+        <>
         <section className="section">
           <p className="section-label">Vendas</p>
 
@@ -203,15 +242,19 @@ export default function ConfiguracaoGeralForm() {
                 Emitir NFC-e/NF-e automaticamente após a venda
               </label>
               <p className="muted" style={{ fontSize: 12, marginTop: 4 }}>
-                Ligado: assim que a venda é confirmada, o sistema já tenta emitir a nota fiscal —
-                o popup mostra a papeleta e vira o cupom fiscal (DANFCE) sozinho quando a SEFAZ
-                autoriza. Desligado: o popup mostra só a papeleta de venda, com um botão para o
-                operador emitir a nota fiscal quando quiser.
+                Ligado: assim que a venda é confirmada, o popup pergunta se o CPF do cliente entra
+                na nota e, ao responder, emite na hora — o cupom vira DANFCE sozinho quando a
+                SEFAZ autoriza. Desligado: o popup mostra direto a papeleta de venda, com um botão
+                para o operador emitir a nota fiscal quando quiser (mesma pergunta de CPF).
               </p>
             </div>
           </div>
         </section>
+        </>
+        )}
 
+        {aba === 'estoque' && (
+        <>
         <section className="section">
           <p className="section-label">Catálogo</p>
 
@@ -254,7 +297,11 @@ export default function ConfiguracaoGeralForm() {
             </div>
           </div>
         </section>
+        </>
+        )}
 
+        {aba === 'compras' && (
+        <>
         <section className="section">
           <p className="section-label">Compras</p>
           <p className="muted" style={{ marginTop: -4 }}>
@@ -322,7 +369,11 @@ export default function ConfiguracaoGeralForm() {
             </div>
           </div>
         </section>
+        </>
+        )}
 
+        {aba === 'crediario' && (
+        <>
         <section className="section">
           <p className="section-label">Crediário</p>
           <p className="muted" style={{ marginTop: -4 }}>
@@ -381,6 +432,8 @@ export default function ConfiguracaoGeralForm() {
             </div>
           </div>
         </section>
+        </>
+        )}
       </form>
       </div>
 

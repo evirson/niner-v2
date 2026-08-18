@@ -113,19 +113,18 @@ de estoque nem conta a pagar sobram). Detalhe do efeito na tela: `docs/telas/ent
 
 **`cfg_emite_fiscal_apos_venda` (2026-08-19):** liga/desliga se a NFC-e/NF-e é emitida
 **automaticamente** assim que o PDV confirma a venda, ou se fica **manual** (o operador aciona
-quando quiser). **Ligado por padrão** — preserva o comportamento de sempre: desde o B7
-(2026-08-17), a emissão já disparava sozinha em paralelo à papeleta (F3: a venda nunca espera a
-SEFAZ), sem nenhum parâmetro pra desligar isso até este dia. Ligado, o popup de papeleta do PDV
-(`ComprovantePapeletaModal.tsx`) dispara `POST .../nfce` sozinho ao abrir e vira DANFCE quando a
-SEFAZ autoriza, exatamente como antes. Desligado, o popup **não** dispara nada sozinho — mostra
-só a papeleta comum, com um botão "Emitir Nota Fiscal" no rodapé pro operador acionar quando
-quiser (mesma função de emissão, mesmo tratamento de resultado — Toast de sucesso/erro, popup
-vira DANFCE quando autoriza). Lida por qualquer papel via `GET
-/api/v1/config-geral/emite-fiscal-apos-venda` (mesmo padrão das outras flags leves) — o popup de
-papeleta é usado por qualquer operador que efetiva uma venda, não só ADMIN. **O botão manual
-nunca aparece em reimpressão** (`reimpressao=true`): reimprimir uma papeleta já emitida não é (e
-não deve virar) um jeito de reemitir documento fiscal — a query da flag nem é buscada nesse modo
-(`enabled: !reimpressao`). Detalhe completo do popup: `docs/telas/papeleta-venda.md`.
+quando quiser). **Ligado por padrão.** Ligado, o popup de papeleta do PDV
+(`ComprovantePapeletaModal.tsx`) não mostra a papeleta não fiscal nem dispara nada sozinho — antes
+mostra uma tela de confirmação (cliente, valor, formas de pagamento) perguntando se o CPF do
+cliente entra na nota; só depois da resposta chama `POST .../nfce` e vira DANFCE quando a SEFAZ
+autoriza. Desligado, o popup mostra a papeleta comum direto, com um botão "Emitir Nota Fiscal" no
+rodapé que abre a mesma pergunta de CPF quando o operador quiser emitir. Lida por qualquer papel
+via `GET /api/v1/config-geral/emite-fiscal-apos-venda` (mesmo padrão das outras flags leves) — o
+popup de papeleta é usado por qualquer operador que efetiva uma venda, não só ADMIN. **A pergunta
+de CPF nunca aparece em reimpressão** (`reimpressao=true`): reimprimir uma papeleta já emitida não
+é (e não deve virar) um jeito de reemitir documento fiscal — a query da flag nem é buscada nesse
+modo (`enabled: !reimpressao`). Detalhe completo do popup e da pergunta de CPF:
+`docs/telas/papeleta-venda.md`.
 
 ## Critérios de aceitação (viram testes)
 

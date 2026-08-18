@@ -465,6 +465,42 @@ Movimentação de Conta Corrente) que ainda não tinham migrado pro `SeletorPlan
 
 ## Linha do tempo
 
+### 2026-08-19 — PDV pergunta CPF antes de emitir a NFC-e, fix de rejeição SEFAZ (venda 555) e texto do admin em Usuários
+
+Três pedidos do dono do produto na mesma sessão.
+
+**1) Pergunta de CPF antes de emitir (`docs/telas/papeleta-venda.md`).** Até aqui, com
+`cfg_emite_fiscal_apos_venda` ligado, a NFC-e disparava sozinha assim que o popup de papeleta
+abria, decidindo o CPF do destinatário automaticamente a partir do cliente vinculado à venda.
+Passa a existir uma etapa de confirmação: o popup mostra cliente/valor/formas de pagamento e
+pergunta "Deseja incluir o CPF do cliente nesta nota fiscal?" — "Sim" emite com o documento do
+cliente, "Não" emite para consumidor não identificado, e cliente sem CPF/CNPJ cadastrado só recebe
+um aviso + botão único ("Confirmar e emitir"). A papeleta não fiscal ("DOCUMENTO SEM VALOR
+FISCAL") nunca mais aparece antes dessa pergunta quando o parâmetro está ligado, e os botões
+Imprimir/Enviar por WhatsApp só liberam depois do resultado da emissão. `ComprovanteVendaResponse`/
+`ComprovanteVenda` ganharam `documentoCliente`; `VendaFiscalAssembler.montar`,
+`VendaFiscalService.emitirNfce` e `POST /api/v1/pdv/vendas/{id}/nfce` ganharam o parâmetro
+`incluirCpf` (corpo passou a ser obrigatório, `{"incluirCpf": boolean}`), com
+`buscarDestinatarioObrigatorio` recusando com 409 se o frontend mandar `incluirCpf=true` sem
+cliente/documento (P4 — defesa também no servidor). O botão manual "Emitir Nota Fiscal" (parâmetro
+desligado) abre a mesma tela, com um "Cancelar" a mais.
+
+**2) Fix da rejeição SEFAZ na venda 555 (cStat 373).** Uma correção anterior, na mesma sessão, para
+a rejeição de `dest/xNome` (cStat 598) tinha reaproveitado por engano a mesma constante de frase
+de homologação usada em `xProd` (descrição do item) — as duas frases são **diferentes** e a SEFAZ
+passou a rejeitar o item. `MontadorXmlNfce` agora guarda `FRASE_HOMOLOGACAO` (`xProd`, "NOTA FISCAL
+EMITIDA...") e `FRASE_HOMOLOGACAO_DESTINATARIO` (`dest/xNome`, "NF-E EMITIDA...") separadas, com
+javadoc avisando pra nunca mais unificá-las sem validar as duas emissões reais. Ver
+`docs/MODULOFISCAL.md` §9.6.
+
+**3) Texto do bloqueio do ADMIN em Cadastro de Usuários** simplificado — tirou a menção a "definido
+no cadastro da loja" (a empresa nunca decidiu isso; é sempre o primeiro ADMIN do tenant).
+
+**Testado:** `MontadorXmlNfceTest` (32/32) e suíte completa do backend, **760/760 verdes**;
+`tsc -b` limpo; verificado ao vivo em três vendas reais na SEFAZ-PR homologação — cliente com CPF
+respondendo "sim" (XML com `<dest><CPF>`), mesmo cliente respondendo "não" (XML sem `<dest>`
+nenhum) e cliente sem CPF cadastrado (aviso único) — e o caminho manual com "Cancelar".
+
 ### 2026-08-19 — Perfis Fiscais: 2 perfis padrão no signup, badge Simples/MEI na grade, motor recusa CST tributado sem alíquota
 
 Três pedidos do dono do produto na mesma sessão, cada um fechando uma lacuna real do módulo

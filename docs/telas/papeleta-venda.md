@@ -238,26 +238,47 @@ Pedido do dono do produto: até aqui a emissão da NFC-e (§9.6 do estudo fiscal
 disparava sozinha, sem parâmetro pra desligar. Ganhou um `checkbox` em Parâmetros do Sistema >
 Fiscal — comportamento no popup (`ComprovantePapeletaModal.tsx`):
 
-- **Ligado (default, preserva o comportamento de sempre):** o `useEffect` que dispara
-  `POST .../nfce` continua dele mesmo, assim que o popup abre — nada muda visualmente.
-- **Desligado:** o `useEffect` **não dispara** (checa `configFiscal?.cfgEmiteFiscalAposVenda`
-  antes de marcar `emissaoDisparadaRef`) — a papeleta fica só papeleta ("DOCUMENTO SEM VALOR
-  FISCAL"), sem nenhuma chamada de rede automática. Um botão **"Emitir Nota Fiscal"** aparece no
-  rodapé (grupo de botões, ao lado de "Enviar por WhatsApp") — chama a mesma `emitirNfce(idVenda)`
-  e trata o resultado do mesmo jeito do caminho automático (Toast, invalida a query do
-  comprovante, popup vira DANFCE quando autoriza). Só aparece quando `!dadosFiscais` (some
-  sozinho depois de emitir com sucesso; reaparece se a emissão veio rejeitada/falhou, pra permitir
-  tentar de novo).
+- **Ligado (default):** o popup **não** dispara nada sozinho e **não** mostra a papeleta com
+  "DOCUMENTO SEM VALOR FISCAL" antes de perguntar — primeiro aparece uma tela de confirmação
+  ("Confirmar Emissão da Nota Fiscal") com cliente, valor total e formas de pagamento, mais a
+  pergunta "Deseja incluir o CPF do cliente nesta nota fiscal?" (ver seção seguinte). Só depois de
+  o operador responder é que `emitirNfce(idVenda, incluirCpf)` é chamado; o resultado é tratado do
+  jeito de sempre (Toast, invalida a query do comprovante, popup vira DANFCE quando autoriza), e aí
+  sim a papeleta/DANFCE e os botões "Enviar por WhatsApp"/"Imprimir" aparecem.
+- **Desligado:** a papeleta comum ("DOCUMENTO SEM VALOR FISCAL") aparece direto, sem pergunta
+  nenhuma. Um botão **"Emitir Nota Fiscal"** no rodapé abre a **mesma** tela de confirmação de
+  CPF sob demanda — com um "Cancelar" a mais (volta pra papeleta sem emitir), já que aqui é
+  opcional. Só aparece quando `!dadosFiscais` (some depois de emitir com sucesso; reaparece se a
+  emissão veio rejeitada/falhou, pra tentar de novo).
 - A configuração é buscada via `GET /api/v1/config-geral/emite-fiscal-apos-venda` (flag leve, sem
   checagem de papel — qualquer operador efetiva venda), com `enabled: !reimpressao`: **em
-  reimpressão a query nem roda**, então o botão manual nunca aparece lá — reimprimir uma papeleta
-  já emitida não é (e não pode virar) um jeito de reemitir documento fiscal.
+  reimpressão a query nem roda**, então nem a pergunta nem o botão manual aparecem lá —
+  reimprimir uma papeleta já emitida não é (e não pode virar) um jeito de reemitir documento
+  fiscal.
 
-Verificado ao vivo: banco de dev reconstruído (coluna nova em `cfg_geral`), venda real com o
-parâmetro desligado → papeleta comum + botão manual, clique disparou `POST .../nfce` (confirmado
-na aba de rede, 204 porque o fiscal não está configurado neste tenant de teste); venda real com o
-parâmetro ligado → mesmo `POST .../nfce` disparado sozinho, sem nenhum clique, sem botão manual
-visível.
+### Pergunta de CPF antes de emitir (2026-08-19)
+
+Pedido do dono do produto: a nota nunca mais decide sozinha, a partir do cliente vinculado à
+venda, se o CPF entra ou não. `ComprovanteVendaResponse`/`ComprovanteVenda` ganharam
+`documentoCliente` (CPF/CNPJ do cliente da venda, `null` sem cliente ou sem documento
+cadastrado) e `emitirNfce`/`VendaFiscalAssembler.montar`/`VendaFiscalController` ganharam o
+parâmetro `incluirCpf` (corpo `POST .../nfce` passou a exigir `{"incluirCpf": boolean}`):
+
+- **Cliente com CPF/CNPJ cadastrado:** a tela mostra o documento mascarado
+  (`mascararCpfCnpj`, PF/PJ inferido pelo tamanho do documento — 11 dígitos = CPF) e dois botões,
+  "Sim, incluir CPF" e "Não, emitir para consumidor".
+- **Cliente sem documento (ou venda sem cliente identificado com CPF):** a tela mostra só um
+  aviso ("a nota vai sair para consumidor não identificado") e um botão único, "Confirmar e
+  emitir" — nunca oferece a opção de incluir o que não existe.
+- No backend, `VendaFiscalAssembler.buscarDestinatarioObrigatorio` recusa com 409 se
+  `incluirCpf=true` mas a venda não tem cliente ou o cliente não tem documento — defesa em
+  profundidade (P4), já que o frontend nunca deveria oferecer "sim" nesse caso.
+
+Verificado ao vivo (venda real, SEFAZ-PR homologação): cliente com CPF respondendo "sim" → XML
+com `<dest><CPF>...</CPF>...</dest>`; mesmo cliente respondendo "não" → XML **sem** bloco `dest`
+nenhum (consumidor não identificado); cliente sem CPF cadastrado → tela de aviso único, mesmo
+resultado sem `dest`. Emissão manual (parâmetro desligado) abre a mesma tela, com "Cancelar"
+funcionando (some a pergunta, volta pra papeleta comum, nada é emitido).
 
 ## Ajuda da tela (manual de operação + vídeo) — obrigatório (R22 / §3.7.1)
 

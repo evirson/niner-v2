@@ -6,6 +6,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -23,14 +24,21 @@ public class VendaFiscalController {
         this.service = service;
     }
 
+    /** {@code incluirCpf} (2026-08-19) — resposta da pergunta feita ao operador antes de emitir
+     *  (ver {@code ComprovantePapeletaModal.tsx}); nunca mais inferido sozinho do cliente da
+     *  venda. */
+    public record EmitirNfceRequest(boolean incluirCpf) {
+    }
+
     /**
      * 200 com o resultado quando o fiscal está ligado (autorizado, rejeitado, contingência etc.);
      * 204 sem corpo quando está desligado para a empresa — a tela não mostra nada, como se o
      * módulo fiscal não existisse (F12).
      */
     @PostMapping("/{idVenda}/nfce")
-    public ResponseEntity<ResultadoEmissao> emitir(@AuthenticationPrincipal Jwt jwt, @PathVariable long idVenda) {
-        return service.emitirNfce(jwt, idVenda)
+    public ResponseEntity<ResultadoEmissao> emitir(@AuthenticationPrincipal Jwt jwt, @PathVariable long idVenda,
+                                                   @RequestBody EmitirNfceRequest req) {
+        return service.emitirNfce(jwt, idVenda, req.incluirCpf())
                 .map(ResponseEntity::ok)
                 .orElseGet(() -> ResponseEntity.noContent().build());
     }

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { gerarBlobComprovanteVenda, gerarQrCodeDataUrl, montarLinhasComprovanteVenda } from '../../lib/comprovante'
 import { ApiError } from '../../lib/api'
@@ -6,6 +6,7 @@ import { buscarEmiteFiscalAposVenda } from '../../lib/configuracaoGeral'
 import { buscarComprovanteVenda, emitirNfce, type ResultadoEmissaoNfce } from '../../lib/pdv'
 import { compartilharArquivo } from '../../lib/compartilhamento'
 import { montarLinkWhatsApp } from '../../lib/whatsapp'
+import { formatarMoeda, mascararCpfCnpj } from '../../lib/masks'
 import { IconeFechar, IconeWhatsapp } from '../../components/Icones'
 import EnviarWhatsAppModal from '../../components/EnviarWhatsAppModal'
 import Toast from '../../components/Toast'
@@ -36,19 +37,21 @@ const SITUACOES_SUCESSO = new Set(['AUTORIZADO', 'CONTINGENCIA', 'EM_PROCESSAMEN
  * (mesmo motor de "Salvar PDF"), sobe pro cache temporário da API e abre o link `wa.me`.
  *
  * **DANFCE (§9.6, bloco B7, 2026-08-17)** — só no fluxo normal (nunca em `reimpressao`, que
- * jamais reemite nada): assim que o modal abre, dispara `POST .../nfce` em paralelo à papeleta já
- * visível (F3: a venda não espera a SEFAZ pra o operador ver o cupom). `null` de volta (204, F12)
- * não muda nada na tela — é como se o módulo fiscal não existisse. Quando volta um resultado, um
- * Toast avisa o operador e a query do comprovante é invalidada: como a emissão gravou
- * `documento_fiscal`, o próximo fetch já traz `dadosFiscais` preenchido e a papeleta vira DANFCE
- * na hora (chave, QR Code, protocolo) sem o operador precisar fechar/reabrir o popup.
+ * jamais reemite nada). Quando volta um resultado, um Toast avisa o operador e a query do
+ * comprovante é invalidada: como a emissão gravou `documento_fiscal`, o próximo fetch já traz
+ * `dadosFiscais` preenchido e a papeleta vira DANFCE na hora (chave, QR Code, protocolo).
  *
- * **Emissão automática × manual (2026-08-19, `cfg_geral.cfg_emite_fiscal_apos_venda`)** — o
- * disparo automático acima só acontece quando o parâmetro está ligado (Parâmetros do Sistema >
- * Fiscal). Desligado: nenhum `POST .../nfce` automático — a papeleta fica como sempre foi, e um
- * botão "Emitir Nota Fiscal" no rodapé deixa o operador acionar na hora que quiser (mesma função
- * `emitirNfce`, mesmo tratamento de resultado). O botão nunca aparece em `reimpressao` — reimprimir
- * não é (e não deve virar) um jeito de reemitir documento fiscal.
+ * **Pergunta de CPF antes de emitir (2026-08-19)** — quando `cfg_geral.cfg_emite_fiscal_apos_venda`
+ * está ligado (Parâmetros do Sistema > Fiscal), o modal NÃO mostra a papeleta com valor não fiscal
+ * nem emite nada sozinho: primeiro aparece uma tela de confirmação com cliente/valor/formas de
+ * pagamento perguntando se o CPF do cliente da venda entra na nota. "Sim" emite com o documento do
+ * cliente (`comprovante.documentoCliente`); "não" (ou cliente sem documento cadastrado) emite pra
+ * consumidor não identificado — nunca decidido sozinho a partir do cliente vinculado à venda. Só
+ * depois da resposta (e da SEFAZ responder) é que a papeleta/DANFCE aparece com os botões de
+ * Imprimir/WhatsApp liberados. Desligado: nenhuma pergunta, nenhum disparo automático — a papeleta
+ * aparece direto como sempre foi, e um botão "Emitir Nota Fiscal" no rodapé abre a mesma tela de
+ * confirmação pra o operador acionar na hora que quiser. Nunca em `reimpressao` — reimprimir não é
+ * (e não deve virar) um jeito de reemitir documento fiscal.
  */
 export default function ComprovantePapeletaModal({
   idVenda,
@@ -82,9 +85,9 @@ export default function ComprovantePapeletaModal({
   const [enviandoWhatsApp, setEnviandoWhatsApp] = useState(false)
   const [erroWhatsApp, setErroWhatsApp] = useState<string | null>(null)
   const [resultadoFiscal, setResultadoFiscal] = useState<ResultadoEmissaoNfce | null>(null)
-  const [emitindoManualmente, setEmitindoManualmente] = useState(false)
+  const [respondendoCpf, setRespondendoCpf] = useState(false)
+  const [pedirCpfManual, setPedirCpfManual] = useState(false)
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null)
-  const emissaoDisparadaRef = useRef(false)
 
   function processarResultadoEmissao(resultado: ResultadoEmissaoNfce | null) {
     if (!resultado) return // F12: fiscal desligado, nada a mostrar
@@ -106,30 +109,27 @@ export default function ComprovantePapeletaModal({
     }
   }
 
-  // Dispara uma vez só, nunca em reimpressão e só quando "emitir automaticamente" está ligado
-  // (Parâmetros do Sistema > Fiscal, 2026-08-19) — aguarda `configFiscal` carregar antes de
-  // decidir, pra não vazar uma emissão automática enquanto o parâmetro ainda está desconhecido.
-  // Efeito próprio (não dentro do useQuery) porque a papeleta tem que abrir e ficar utilizável
-  // ANTES da SEFAZ responder — a emissão é só mais uma coisa acontecendo em paralelo, não uma
-  // condição pra mostrar o comprovante.
-  useEffect(() => {
-    if (reimpressao || emissaoDisparadaRef.current) return
-    if (!configFiscal?.cfgEmiteFiscalAposVenda) return
-    emissaoDisparadaRef.current = true
-    emitirNfce(idVenda).then(processarResultadoEmissao).catch(() => setResultadoFiscal(erroDeComunicacao()))
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [idVenda, reimpressao, configFiscal])
-
-  async function emitirManualmente() {
-    setEmitindoManualmente(true)
+  async function confirmarEmissao(incluirCpf: boolean) {
+    setRespondendoCpf(true)
     try {
-      processarResultadoEmissao(await emitirNfce(idVenda))
+      processarResultadoEmissao(await emitirNfce(idVenda, incluirCpf))
     } catch {
       setResultadoFiscal(erroDeComunicacao())
     } finally {
-      setEmitindoManualmente(false)
+      setRespondendoCpf(false)
+      setPedirCpfManual(false)
     }
   }
+
+  // Aguarda `configFiscal` carregar antes de decidir qualquer coisa (nunca em reimpressão), pra
+  // não vazar a papeleta não fiscal enquanto o parâmetro ainda está desconhecido.
+  const configFiscalCarregado = reimpressao || configFiscal !== undefined
+  const dadosFiscais = comprovante?.dadosFiscais ?? null
+  const perguntaAutomatica =
+    !reimpressao && configFiscalCarregado && configFiscal?.cfgEmiteFiscalAposVenda === true && !resultadoFiscal && !dadosFiscais
+  const mostrarPerguntaCpf = perguntaAutomatica || pedirCpfManual
+  const documentoCliente = comprovante?.documentoCliente ?? null
+  const clienteFisicaJuridica = (documentoCliente?.length ?? 0) <= 11
 
   useEffect(() => {
     if (!comprovante?.dadosFiscais) {
@@ -146,7 +146,6 @@ export default function ComprovantePapeletaModal({
   }, [comprovante?.dadosFiscais])
 
   const linhas = comprovante ? montarLinhasComprovanteVenda(comprovante, reimpressao) : []
-  const dadosFiscais = comprovante?.dadosFiscais ?? null
 
   async function confirmarEnvioWhatsApp(telefone: string) {
     if (!comprovante) return
@@ -184,19 +183,74 @@ export default function ComprovantePapeletaModal({
             </button>
           </div>
 
-          {!reimpressao && configFiscal && !configFiscal.cfgEmiteFiscalAposVenda && !dadosFiscais && (
+          {!reimpressao && configFiscal && !configFiscal.cfgEmiteFiscalAposVenda && !dadosFiscais && !mostrarPerguntaCpf && (
             <div style={{ display: 'flex', justifyContent: 'flex-end', flexShrink: 0, marginBottom: 8 }}>
-              <button type="button" className="btn ghost" disabled={!comprovante || emitindoManualmente} onClick={emitirManualmente}>
-                {emitindoManualmente ? 'Emitindo…' : 'Emitir Nota Fiscal'}
+              <button type="button" className="btn ghost" disabled={!comprovante} onClick={() => setPedirCpfManual(true)}>
+                Emitir Nota Fiscal
               </button>
             </div>
           )}
 
           <div style={{ overflowY: 'auto', flex: 1, minHeight: 0 }}>
-            {isLoading ? (
+            {isLoading || !configFiscalCarregado ? (
               <p className="muted">Carregando…</p>
             ) : error ? (
               <p className="erro">{error instanceof ApiError ? error.message : 'Não foi possível carregar a papeleta.'}</p>
+            ) : mostrarPerguntaCpf && comprovante ? (
+              <div style={{ padding: '4px 4px 8px' }}>
+                <h3 style={{ marginTop: 0 }}>Confirmar Emissão da Nota Fiscal</h3>
+                <p>
+                  <strong>Cliente:</strong> {comprovante.nomeCliente ?? 'Consumidor não identificado'}
+                </p>
+                <p>
+                  <strong>Valor total:</strong> {formatarMoeda(comprovante.totalAPagar)}
+                </p>
+                <p>
+                  <strong>Formas de pagamento:</strong>
+                </p>
+                <ul style={{ marginTop: 0 }}>
+                  {comprovante.pagamentos.map((p, i) => (
+                    <li key={i}>
+                      {p.nomeCarteira}: {formatarMoeda(p.valorPago)}
+                    </li>
+                  ))}
+                </ul>
+                {documentoCliente ? (
+                  <>
+                    <p>
+                      <strong>CPF/CNPJ do cliente:</strong> {mascararCpfCnpj(documentoCliente, clienteFisicaJuridica)}
+                    </p>
+                    <p>Deseja incluir o CPF do cliente nesta nota fiscal?</p>
+                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                      <button type="button" className="btn" disabled={respondendoCpf} onClick={() => confirmarEmissao(true)}>
+                        {respondendoCpf ? 'Emitindo…' : 'Sim, incluir CPF'}
+                      </button>
+                      <button type="button" className="btn ghost" disabled={respondendoCpf} onClick={() => confirmarEmissao(false)}>
+                        Não, emitir para consumidor
+                      </button>
+                      {pedirCpfManual && (
+                        <button type="button" className="btn ghost" disabled={respondendoCpf} onClick={() => setPedirCpfManual(false)}>
+                          Cancelar
+                        </button>
+                      )}
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <p>Este cliente não tem CPF/CNPJ cadastrado — a nota vai sair para consumidor não identificado.</p>
+                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                      <button type="button" className="btn" disabled={respondendoCpf} onClick={() => confirmarEmissao(false)}>
+                        {respondendoCpf ? 'Emitindo…' : 'Confirmar e emitir'}
+                      </button>
+                      {pedirCpfManual && (
+                        <button type="button" className="btn ghost" disabled={respondendoCpf} onClick={() => setPedirCpfManual(false)}>
+                          Cancelar
+                        </button>
+                      )}
+                    </div>
+                  </>
+                )}
+              </div>
             ) : dadosFiscais ? (
               <div className="papeleta-fiscal-imprimir">
                 <pre className="papeleta-preview">{linhas.join('\n')}</pre>
@@ -211,21 +265,23 @@ export default function ComprovantePapeletaModal({
             )}
           </div>
 
-          <div className="ajuda-rodape" style={{ flexShrink: 0 }}>
-            <button
-              type="button"
-              className="btn ghost"
-              disabled={!comprovante}
-              onClick={() => setModalWhatsAppAberto(true)}
-              style={{ display: 'flex', alignItems: 'center', gap: 6 }}
-            >
-              <IconeWhatsapp size={18} />
-              Enviar por WhatsApp
-            </button>
-            <button type="button" className="btn" disabled={!comprovante} onClick={() => window.print()}>
-              Imprimir
-            </button>
-          </div>
+          {!mostrarPerguntaCpf && (
+            <div className="ajuda-rodape" style={{ flexShrink: 0 }}>
+              <button
+                type="button"
+                className="btn ghost"
+                disabled={!comprovante}
+                onClick={() => setModalWhatsAppAberto(true)}
+                style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+              >
+                <IconeWhatsapp size={18} />
+                Enviar por WhatsApp
+              </button>
+              <button type="button" className="btn" disabled={!comprovante} onClick={() => window.print()}>
+                Imprimir
+              </button>
+            </div>
+          )}
         </div>
       </div>
 

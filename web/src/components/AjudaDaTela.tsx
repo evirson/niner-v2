@@ -732,8 +732,8 @@ const CONTEUDOS: Record<string, ConteudoAjuda> = {
       '"F3 Altera Quantidade" corrige a quantidade do item selecionado na lista de produtos vendidos (navegue com ↑/↓).',
       '"F4 Limpa Tela" remove todos os itens lançados e recomeça a venda, com confirmação antes de apagar.',
       '"F5 Efetiva Venda" abre a Forma de Pagamento: escolha Cliente e Vendedor (os dois são obrigatórios), aplique um desconto (até o máximo definido em Parâmetros do Sistema) e lance uma ou mais formas de pagamento — dinheiro, cartão, crediário ou vale-mercadoria — até fechar o valor a pagar.',
-      'Depois de confirmar, a Papeleta de Venda abre automaticamente, pronta para imprimir, salvar em PDF ou enviar por WhatsApp.',
-      'Se "Emitir NFC-e/NF-e automaticamente após a venda" estiver ligado (Parâmetros do Sistema), a nota fiscal é emitida sozinha e o popup vira o cupom fiscal (DANFCE) assim que a SEFAZ autoriza. Desligado, o popup mostra só a papeleta, com um botão "Emitir Nota Fiscal" para emitir quando quiser.',
+      'Se "Emitir NFC-e/NF-e automaticamente após a venda" estiver ligado (Parâmetros do Sistema), o popup pergunta primeiro os dados do cliente/valor/formas de pagamento e se o CPF do cliente entra na nota — depois de responder, emite na hora e a Papeleta de Venda aparece já como cupom fiscal (DANFCE) quando a SEFAZ autoriza, pronta para imprimir, salvar em PDF ou enviar por WhatsApp.',
+      'Desligado, o popup mostra direto a papeleta de venda (não fiscal), com um botão "Emitir Nota Fiscal" que abre a mesma pergunta de CPF quando o operador quiser emitir.',
     ],
     errosComuns: [
       'Sem caixa aberto no dia, nenhuma venda é efetivada — abra o caixa antes de lançar produtos.',

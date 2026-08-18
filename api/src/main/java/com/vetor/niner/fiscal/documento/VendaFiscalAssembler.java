@@ -55,23 +55,30 @@ public class VendaFiscalAssembler {
     }
 
     /**
+     * @param incluirCpf 2026-08-19 — decisão do operador, perguntada na tela antes de emitir
+     *         (nunca mais automático a partir do {@code id_cliente} da venda): {@code true} inclui
+     *         o CPF/CNPJ do cliente da venda no grupo {@code dest}; {@code false} emite pra
+     *         consumidor não identificado, mesmo que a venda tenha cliente vinculado. Ver
+     *         {@link #buscarDestinatario}.
      * @return vazio quando o fiscal está <b>desligado</b> para a empresa (F12: "fiscal off muda
      *         nada" — nenhum documento é criado, nenhum erro é lançado); presente, pronto para
      *         {@link EmissaoNfceService#emitir}, quando está ligado — inclusive quando a venda vai
      *         terminar recusada por DF13 (é o {@code EmissaoNfceService} quem decide isso).
      * @throws ResponseStatusException 409 quando o fiscal está ligado mas falta um pré-requisito
      *         que a tela de Conformidade Fiscal deveria ter pego antes (F11: nunca deixar a
-     *         rejeição chegar na SEFAZ por falta de dado básico)
+     *         rejeição chegar na SEFAZ por falta de dado básico), ou quando {@code incluirCpf=true}
+     *         mas a venda não tem cliente/documento pra honrar a escolha do operador
      */
     @Transactional(readOnly = true)
-    public Optional<PedidoDeEmissao> montar(long idTenant, long idEmpresa, long idVenda, Integer idUsuario) {
+    public Optional<PedidoDeEmissao> montar(long idTenant, long idEmpresa, long idVenda, Integer idUsuario,
+                                            boolean incluirCpf) {
         ConfigEmpresa config = buscarConfig(idEmpresa);
         if (config == null || !config.emiteNfce()) {
             return Optional.empty();
         }
 
         VendaHeader venda = buscarVenda(idEmpresa, idVenda);
-        Destinatario destinatario = venda.idCliente() == null ? null : buscarDestinatario(venda.idCliente());
+        Destinatario destinatario = incluirCpf ? buscarDestinatarioObrigatorio(venda.idCliente()) : null;
         String ufDestino = destinatario != null && destinatario.uf() != null ? destinatario.uf() : config.uf();
 
         List<ItemBruto> itensBrutos = buscarItens(idVenda);
@@ -168,6 +175,26 @@ public class VendaFiscalAssembler {
                 .optional()
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
                         "Venda nº " + idVenda + " não encontrada."));
+    }
+
+    /**
+     * Só chamado quando o operador respondeu "sim" à pergunta de incluir CPF (2026-08-19) — por
+     * isso é erro explícito, não {@code null} silencioso, quando não há como honrar a escolha:
+     * sem cliente vinculado à venda, ou cliente vinculado mas sem CPF/CNPJ cadastrado. A tela já
+     * deveria ter escondido essa opção nesse caso ({@code documentoCliente} vem {@code null} no
+     * comprovante), mas o backend nunca confia só na tela (P4).
+     */
+    private Destinatario buscarDestinatarioObrigatorio(Integer idCliente) {
+        if (idCliente == null) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Não é possível incluir CPF na nota: esta venda não tem cliente identificado.");
+        }
+        Destinatario destinatario = buscarDestinatario(idCliente);
+        if (destinatario == null) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Não é possível incluir CPF na nota: o cliente desta venda não tem CPF/CNPJ cadastrado.");
+        }
+        return destinatario;
     }
 
     /**

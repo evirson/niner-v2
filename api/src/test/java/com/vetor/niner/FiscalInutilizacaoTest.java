@@ -247,7 +247,8 @@ class FiscalInutilizacaoTest {
         Mockito.when(transporte.enviar(any(), any(), any(), any(), any(), any()))
                 .thenReturn(new RespostaSefaz(200, "225", "Rejeicao: falha no schema XML",
                         null, null, "<retEnviNFe><infProt><cStat>225</cStat></infProt></retEnviNFe>"));
-        mvc.perform(post("/api/v1/pdv/vendas/" + idVenda + "/nfce").header("Authorization", "Bearer " + token))
+        mvc.perform(post("/api/v1/pdv/vendas/" + idVenda + "/nfce").header("Authorization", "Bearer " + token)
+                        .contentType(APPLICATION_JSON).content("{\"incluirCpf\":false}"))
                 .andExpect(status().isOk());
 
         Mockito.reset(transporte);
@@ -374,7 +375,8 @@ class FiscalInutilizacaoTest {
             return new RespostaSefaz(200, "100", "Autorizado o uso da NF-e", "141260001999999", chave,
                     "<retEnviNFe><protNFe><infProt><cStat>100</cStat></infProt></protNFe></retEnviNFe>");
         });
-        mvc.perform(post("/api/v1/pdv/vendas/" + idVenda + "/nfce").header("Authorization", "Bearer " + token))
+        mvc.perform(post("/api/v1/pdv/vendas/" + idVenda + "/nfce").header("Authorization", "Bearer " + token)
+                        .contentType(APPLICATION_JSON).content("{\"incluirCpf\":false}"))
                 .andExpect(status().isOk());
         Mockito.reset(transporte);
         int numero = numeroDaNota(jdbc, idTenant, idVenda);

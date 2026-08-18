@@ -969,6 +969,8 @@ assinatura XMLDSig — daí o QR offline precisar de assinatura própria.
    │               + cria documento_fiscal em RASCUNHO + documento_fiscal_pagamento
    ├─ COMMIT ────────────────────────────────────────────────  ◄── F2/F3: a venda já está salva
    │
+   ├─ Popup pergunta se o CPF do cliente entra na nota (2026-08-19, `incluirCpf` — nunca
+   │  decidido sozinho a partir do cliente vinculado à venda; ver docs/telas/papeleta-venda.md)
    ├─ Motor tributário (memória, ~ms)
    ├─ Monta XML + aloca número (TX curta) + assina (certificado do tenant)
    ├─ Transmite (timeout curto — 🔴 DF18, sugestão 10 s)
@@ -981,8 +983,14 @@ assinatura XMLDSig — daí o QR offline precisar de assinatura própria.
 O `web/` já tem o mecanismo de **rotina crítica** (`lib/rotinaCritica.tsx`, criado para o horário de
 acesso não cortar uma venda no meio) — emitir NFC-e é exatamente uma rotina crítica.
 
-**Ambiente de homologação:** o `xNome` do **destinatário** (não a razão social do emitente) tem que
-ser literalmente `NF-E EMITIDA EM AMBIENTE DE HOMOLOGACAO - SEM VALOR FISCAL` ⚠️, e a tela precisa
+**Ambiente de homologação:** ⚠️ **duas frases diferentes, cada uma no seu campo — nunca a mesma
+constante para as duas** (incidente real em 2026-08-19: uma correção no `xNome` sobrescreveu por
+engano o texto também usado no `xProd`, e a SEFAZ passou a rejeitar o item — venda 555, cStat 373).
+`det/prod/xProd` (item 1) tem que ser literalmente `NOTA FISCAL EMITIDA EM AMBIENTE DE
+HOMOLOGACAO - SEM VALOR FISCAL`; `dest/xNome` (não a razão social do emitente) tem que ser
+literalmente `NF-E EMITIDA EM AMBIENTE DE HOMOLOGACAO - SEM VALOR FISCAL`. `MontadorXmlNfce` guarda
+as duas em constantes separadas (`FRASE_HOMOLOGACAO` / `FRASE_HOMOLOGACAO_DESTINATARIO`) com
+javadoc avisando pra nunca unificá-las de novo sem validar as duas ao vivo. A tela também precisa
 de aviso visual permanente — nota de homologação não vale nada e já causou lojista achando que
 estava emitindo.
 

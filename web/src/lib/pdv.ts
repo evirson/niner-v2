@@ -194,6 +194,9 @@ export interface ComprovanteVenda {
   dataVenda: string
   nomeCliente: string | null
   telefoneCliente: string | null
+  /** CPF/CNPJ do cliente da venda (2026-08-19) — `null` sem cliente ou sem documento cadastrado;
+   *  é o que decide se a pergunta "incluir CPF na nota?" oferece a opção "sim". */
+  documentoCliente: string | null
   nomeVendedor: string | null
   nomeOperador: string | null
   itens: ItemComprovanteVenda[]
@@ -233,10 +236,16 @@ export interface ResultadoEmissaoNfce {
  * Dispara a emissão da NFC-e depois que o F5 já efetivou a venda (F3: a venda nunca depende
  * disto). `null` quando o fiscal está desligado para a empresa (204, F12) — a tela não mostra
  * nada, como se o módulo fiscal não existisse.
+ *
+ * `incluirCpf` (2026-08-19) — resposta da pergunta feita ao operador antes de emitir: `true`
+ * inclui o CPF/CNPJ do cliente da venda na nota; `false` emite pra consumidor não identificado,
+ * mesmo que a venda tenha cliente vinculado. Nunca mais decidido sozinho a partir do cliente da
+ * venda — ver `ComprovantePapeletaModal.tsx`.
  */
-export async function emitirNfce(idVenda: number): Promise<ResultadoEmissaoNfce | null> {
+export async function emitirNfce(idVenda: number, incluirCpf: boolean): Promise<ResultadoEmissaoNfce | null> {
   const resposta = await api<ResultadoEmissaoNfce | undefined>(`/api/v1/pdv/vendas/${idVenda}/nfce`, {
     method: 'POST',
+    body: JSON.stringify({ incluirCpf }),
   })
   return resposta ?? null
 }

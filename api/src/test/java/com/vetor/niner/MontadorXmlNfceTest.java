@@ -187,10 +187,35 @@ class MontadorXmlNfceTest {
                 .contains("<indIEDest>9</indIEDest>");
     }
 
+    /**
+     * ⚠️ Bug real achado em 2026-08-19 numa emissão de verdade contra a SEFAZ-PR: com cliente
+     * identificado, a nota saiu rejeitada (cStat 598, "Razão Social do destinatário diferente
+     * de..."). O B0 só tinha testado venda anônima (grupo {@code dest} omitido); com {@code dest}
+     * presente, a SEFAZ valida {@code xNome} contra a MESMA frase de homologação do item — o
+     * nome real do cliente não pode aparecer ali em homologação, mesmo que na emissão de verdade
+     * (produção) ele deva aparecer normalmente (teste irmão abaixo).
+     */
+    @Test
+    void emHomologacaoODestinatarioLevaAFraseNoLugarDoNomeReal() {
+        Destinatario cliente = new Destinatario("111.444.777-35", "MARIA SILVA", 9, 4106902, "CURITIBA", "PR");
+        XmlMontado montado = montarVendaSimples(1, "102", cliente);
+
+        validarEstrutura(montado);
+        assertThat(montado.xml())
+                .contains("<xNome>NF-E EMITIDA EM AMBIENTE DE HOMOLOGACAO - SEM VALOR FISCAL</xNome>")
+                .doesNotContain("MARIA SILVA");
+    }
+
     // ------------------------------------------------------------------ homologação
 
-    /** Em homologação a frase obrigatória vai no {@code xProd} do PRIMEIRO item (MOC) — foi assim
-     *  que a nota do B0 foi autorizada. Os demais itens mantêm a descrição real. */
+    /**
+     * Em homologação a frase obrigatória vai no {@code xProd} do PRIMEIRO item (MOC) — foi assim
+     * que a nota do B0 foi autorizada. Os demais itens mantêm a descrição real.
+     *
+     * <p>⚠️ Frase DIFERENTE da usada em {@code dest/xNome} — "NOTA FISCAL EMITIDA...", não
+     * "NF-E EMITIDA...". Ver o aviso em {@code MontadorXmlNfce.FRASE_HOMOLOGACAO}: já rolou uma
+     * rejeição real (venda 555, cStat 373) por essas duas terem sido unificadas por engano.
+     */
     @Test
     void emHomologacaoAFraseVaiNoPrimeiroItemESoNele() {
         XmlMontado montado = montarComDoisItens(AmbienteSefaz.HOMOLOGACAO);
@@ -208,6 +233,20 @@ class MontadorXmlNfceTest {
         validarEstrutura(montado);
         assertThat(montado.xml())
                 .contains("<xProd>PRIMEIRO PRODUTO</xProd>")
+                .doesNotContain("HOMOLOGACAO");
+    }
+
+    /** Irmão do teste de homologação acima: em produção, o nome real do cliente TEM que ir pro
+     *  XML — só em homologação ele é substituído pela frase. */
+    @Test
+    void emProducaoODestinatarioLevaONomeReal() {
+        Destinatario cliente = new Destinatario("111.444.777-35", "MARIA SILVA", 9, 4106902, "CURITIBA", "PR");
+        XmlMontado montado = montador.montar(notaBase(1, regraSimples("102"), cliente, AmbienteSefaz.PRODUCAO,
+                null, null));
+
+        validarEstrutura(montado);
+        assertThat(montado.xml())
+                .contains("<xNome>MARIA SILVA</xNome>")
                 .doesNotContain("HOMOLOGACAO");
     }
 

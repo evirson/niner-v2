@@ -47,10 +47,31 @@ public class MontadorXmlNfce {
     /** {@code tpEmis = 9} — contingência offline da NFC-e (§9.7). Muda a chave de acesso e o QR. */
     public static final int TP_EMIS_CONTINGENCIA_OFFLINE = 9;
 
-    /** MOC: em homologação, na NFC-e a frase vai no {@code xProd} do <b>primeiro item</b> —
-     *  não na razão social do destinatário (que a NFC-e sem CPF nem tem). Confirmado no B0. */
+    /**
+     * MOC: em homologação, a frase obrigatória vai no {@code xProd} do <b>primeiro item</b> — o
+     * B0 confirmou isso, mas só cobriu venda <b>anônima</b> (sem CPF, {@code dest} inteiro
+     * omitido). Ver {@link #montarProd}.
+     *
+     * <p>⚠️ 2026-08-19 — <b>são DUAS frases diferentes, não uma só.</b> Uma emissão real com
+     * cliente identificado (venda 555) rejeitou justamente porque a 1ª correção deste dia (feita
+     * numa venda com CPF, sem reparar que ela também mudou {@link #montarProd}) trocou esta
+     * constante inteira, quebrando o caso já provado no B0. A SEFAZ exige o texto EXATO — e é
+     * diferente pra cada grupo:
+     * <ul>
+     *   <li>{@code xProd} (item 1): <b>"NOTA FISCAL EMITIDA..."</b> — confirmado no B0 (cStat 100).</li>
+     *   <li>{@code dest/xNome}: <b>"NF-E EMITIDA..."</b> — confirmado por rejeição real (cStat 598,
+     *       "Razão Social do destinatário diferente de..."), ver {@link #FRASE_HOMOLOGACAO_DESTINATARIO}
+     *       e {@link #montarDest}.</li>
+     * </ul>
+     * Nunca unificar as duas de novo sem ter as DUAS emissões reais (com e sem cliente) provando
+     * a mudança — cada uma só foi validada isoladamente.
+     */
     private static final String FRASE_HOMOLOGACAO =
             "NOTA FISCAL EMITIDA EM AMBIENTE DE HOMOLOGACAO - SEM VALOR FISCAL";
+
+    /** Só para {@code dest/xNome} — ver o aviso em {@link #FRASE_HOMOLOGACAO}. */
+    private static final String FRASE_HOMOLOGACAO_DESTINATARIO =
+            "NF-E EMITIDA EM AMBIENTE DE HOMOLOGACAO - SEM VALOR FISCAL";
 
     private static final DateTimeFormatter DH =
             DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ssXXX", Locale.ROOT);
@@ -197,9 +218,12 @@ public class MontadorXmlNfce {
         } else if (doc != null && doc.length() == 14) {
             xml.append(tag("CNPJ", doc));
         }
-        // Em homologação o nome do destinatário é livre; o que a SEFAZ exige na NFC-e é a frase
-        // no xProd do primeiro item (ver montarItens).
-        xml.append(opcional("xNome", d.nome()))
+        // ⚠️ 2026-08-19: em homologação, xNome do destinatário TEM que ser a frase de homologação
+        // (FRASE_HOMOLOGACAO), não o nome real do cliente — SEFAZ rejeita com cStat 598 senão
+        // ("Razão Social do destinatário diferente de..."). Achado numa emissão real com cliente
+        // identificado; o B0 nunca testou esse caminho (só venda anônima, sem dest).
+        String xNome = nota.ambiente() == AmbienteSefaz.HOMOLOGACAO ? FRASE_HOMOLOGACAO_DESTINATARIO : d.nome();
+        xml.append(opcional("xNome", xNome))
                 .append(tag("indIEDest", String.valueOf(d.indicadorIe())))
                 .append("</dest>");
     }

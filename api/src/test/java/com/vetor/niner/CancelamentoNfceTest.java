@@ -258,7 +258,8 @@ class CancelamentoNfceTest {
 
         Mockito.when(transporte.enviar(any(), any(), any(), any(), any(), any()))
                 .thenAnswer(inv -> autorizada(extrairChaveDoEnvi(inv.getArgument(2))));
-        mvc.perform(post("/api/v1/pdv/vendas/" + idVenda + "/nfce").header("Authorization", "Bearer " + token))
+        mvc.perform(post("/api/v1/pdv/vendas/" + idVenda + "/nfce").header("Authorization", "Bearer " + token)
+                        .contentType(APPLICATION_JSON).content("{\"incluirCpf\":false}"))
                 .andExpect(status().isOk());
 
         Mockito.reset(transporte);
