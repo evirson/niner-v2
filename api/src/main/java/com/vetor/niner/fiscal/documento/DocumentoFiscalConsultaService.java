@@ -1,5 +1,7 @@
 package com.vetor.niner.fiscal.documento;
 
+import com.vetor.niner.comum.armazenamento.AreaPrivada;
+import com.vetor.niner.comum.armazenamento.ArmazenamentoPrivado;
 import com.vetor.niner.fiscal.certificado.FiscalCertificadoService;
 import com.vetor.niner.fiscal.certificado.FiscalCertificadoService.CertificadoParaAssinatura;
 import com.vetor.niner.fiscal.documento.DocumentoFiscalListaDtos.ConsultaSefazResponse;
@@ -38,15 +40,17 @@ public class DocumentoFiscalConsultaService {
     private final SefazTransporte transporte;
     private final SefazAutorizadorService autorizadores;
     private final FiscalCertificadoService certificados;
+    private final ArmazenamentoPrivado armazenamento;
 
     public DocumentoFiscalConsultaService(JdbcClient jdbc, DocumentoFiscalRepositorio repositorio,
                                           SefazTransporte transporte, SefazAutorizadorService autorizadores,
-                                          FiscalCertificadoService certificados) {
+                                          FiscalCertificadoService certificados, ArmazenamentoPrivado armazenamento) {
         this.jdbc = jdbc;
         this.repositorio = repositorio;
         this.transporte = transporte;
         this.autorizadores = autorizadores;
         this.certificados = certificados;
+        this.armazenamento = armazenamento;
     }
 
     @Transactional(readOnly = true)
@@ -113,18 +117,34 @@ public class DocumentoFiscalConsultaService {
         return new PaginaDocumentosFiscais(itens, paginaAtual, tamanho, totalItens, totalPaginas);
     }
 
+    /**
+     * Handoff §6.5: quando o documento já foi arquivado, devolve o {@code nfeProc} de verdade
+     * (XML + protocolo, o que o contador precisa) lido do bucket — nunca o {@code xml_assinado}
+     * puro, que não é a mesma coisa. Documento ainda não arquivado (job/caminho quente não
+     * chegaram lá, ou nunca foi autorizado) cai no fallback de sempre.
+     */
     @Transactional(readOnly = true)
     public XmlDocumentoFiscalResponse buscarXml(Jwt jwt, long idDocumentoFiscal) {
         exigirAdmin(jwt);
-        return jdbc.sql("""
-                        SELECT chave_acesso, xml_assinado FROM documento_fiscal
+        var linha = jdbc.sql("""
+                        SELECT chave_acesso, xml_assinado, xml_objeto_bucket FROM documento_fiscal
                          WHERE id_tenant = plataforma.tenant_atual() AND id_documento_fiscal = ?
                         """)
                 .param(idDocumentoFiscal)
-                .query((rs, n) -> new XmlDocumentoFiscalResponse(
-                        idDocumentoFiscal, rs.getString("chave_acesso"), rs.getString("xml_assinado")))
+                .query((rs, n) -> new LinhaXml(
+                        rs.getString("chave_acesso"), rs.getString("xml_assinado"), rs.getString("xml_objeto_bucket")))
                 .optional()
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Documento fiscal não encontrado."));
+
+        if (linha.xmlObjetoBucket() != null) {
+            String nfeProc = new String(armazenamento.ler(AreaPrivada.FISCAL_XML, linha.xmlObjetoBucket()),
+                    java.nio.charset.StandardCharsets.UTF_8);
+            return new XmlDocumentoFiscalResponse(idDocumentoFiscal, linha.chaveAcesso(), nfeProc);
+        }
+        return new XmlDocumentoFiscalResponse(idDocumentoFiscal, linha.chaveAcesso(), linha.xmlAssinado());
+    }
+
+    private record LinhaXml(String chaveAcesso, String xmlAssinado, String xmlObjetoBucket) {
     }
 
     /**

@@ -47,10 +47,12 @@ public class FiscalInutilizacaoService {
     private final SefazTransporte transporte;
     private final SefazAutorizadorService autorizadores;
     private final FiscalCertificadoService certificados;
+    private final ArquivamentoXmlService arquivamento;
 
     public FiscalInutilizacaoService(FiscalInutilizacaoRepositorio repositorio, MontadorInutilizacaoNfe montador,
                                      AssinadorXmlNfe assinador, ValidadorXsd validador, SefazTransporte transporte,
-                                     SefazAutorizadorService autorizadores, FiscalCertificadoService certificados) {
+                                     SefazAutorizadorService autorizadores, FiscalCertificadoService certificados,
+                                     ArquivamentoXmlService arquivamento) {
         this.repositorio = repositorio;
         this.montador = montador;
         this.assinador = assinador;
@@ -58,6 +60,7 @@ public class FiscalInutilizacaoService {
         this.transporte = transporte;
         this.autorizadores = autorizadores;
         this.certificados = certificados;
+        this.arquivamento = arquivamento;
     }
 
     /**
@@ -132,15 +135,18 @@ public class FiscalInutilizacaoService {
 
         // 102 = Inutilização de número homologada (leiauteInutNFe_v4.00.xsd / retInutNFe).
         boolean homologada = "102".equals(resposta.cStat());
-        repositorio.registrarTentativa(idEmpresa, modelo, serie, ano, numeroInicial, numeroFinal,
-                justificativa, homologada, resposta.protocolo(), resposta.cStat(), resposta.xMotivo(),
-                xmlAssinado, idUsuario);
+        long idInutilizacao = repositorio.registrarTentativa(idEmpresa, modelo, serie, ano, numeroInicial,
+                numeroFinal, justificativa, homologada, resposta.protocolo(), resposta.cStat(),
+                resposta.xMotivo(), xmlAssinado, idUsuario);
 
         if (!homologada) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
                     "A SEFAZ recusou a inutilização: %s (%s)."
                             .formatted(resposta.xMotivo(), resposta.cStat()));
         }
+
+        // Caminho quente do arquivamento (handoff §4.1) — best-effort, nunca lança.
+        arquivamento.arquivarInutilizacaoSeAplicavel(idInutilizacao);
 
         return new ResultadoInutilizacao(resposta.protocolo(), ano);
     }

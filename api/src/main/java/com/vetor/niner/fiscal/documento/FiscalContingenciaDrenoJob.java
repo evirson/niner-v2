@@ -51,17 +51,20 @@ public class FiscalContingenciaDrenoJob {
     private final FiscalCertificadoService certificados;
     private final FiscalContingenciaService contingencia;
     private final DocumentoFiscalRepositorio repositorio;
+    private final ArquivamentoXmlService arquivamento;
 
     public FiscalContingenciaDrenoJob(SefazTransporte transporte,
                                       SefazAutorizadorService autorizadores,
                                       FiscalCertificadoService certificados,
                                       FiscalContingenciaService contingencia,
-                                      DocumentoFiscalRepositorio repositorio) {
+                                      DocumentoFiscalRepositorio repositorio,
+                                      ArquivamentoXmlService arquivamento) {
         this.transporte = transporte;
         this.autorizadores = autorizadores;
         this.certificados = certificados;
         this.contingencia = contingencia;
         this.repositorio = repositorio;
+        this.arquivamento = arquivamento;
     }
 
     /** A cada 5 minutos: rápido o bastante para o prazo de 24 h, devagar o bastante para não pesar. */
@@ -135,6 +138,7 @@ public class FiscalContingenciaDrenoJob {
 
             if (resposta.autorizado()) {
                 repositorio.marcarAutorizado(nota.id(), resposta);
+                arquivamento.arquivarDocumentoSeAplicavel(nota.id());
                 return;
             }
             if (resposta.emProcessamento()) {

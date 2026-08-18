@@ -53,10 +53,12 @@ public class CancelamentoNfceService {
     private final SefazTransporte transporte;
     private final SefazAutorizadorService autorizadores;
     private final FiscalCertificadoService certificados;
+    private final ArquivamentoXmlService arquivamento;
 
     public CancelamentoNfceService(DocumentoFiscalRepositorio repositorio, MontadorEventoCancelamento montador,
                                    AssinadorXmlNfe assinador, ValidadorXsd validador, SefazTransporte transporte,
-                                   SefazAutorizadorService autorizadores, FiscalCertificadoService certificados) {
+                                   SefazAutorizadorService autorizadores, FiscalCertificadoService certificados,
+                                   ArquivamentoXmlService arquivamento) {
         this.repositorio = repositorio;
         this.montador = montador;
         this.assinador = assinador;
@@ -64,6 +66,7 @@ public class CancelamentoNfceService {
         this.transporte = transporte;
         this.autorizadores = autorizadores;
         this.certificados = certificados;
+        this.arquivamento = arquivamento;
     }
 
     /**
@@ -121,8 +124,8 @@ public class CancelamentoNfceService {
         // 135 = evento registrado e vinculado à NF-e (leiauteEventoCancNFe_v1.00.xsd). 136
         // (registrado, NÃO vinculado) não conta como sucesso — algo deu errado mesmo respondendo.
         boolean autorizadoNaSefaz = "135".equals(resposta.cStat());
-        repositorio.registrarTentativaCancelamento(doc.idDocumentoFiscal(), justificativa, autorizadoNaSefaz,
-                resposta.protocolo(), resposta.cStat(), resposta.xMotivo(), envelope, idUsuario);
+        long idEvento = repositorio.registrarTentativaCancelamento(doc.idDocumentoFiscal(), justificativa,
+                autorizadoNaSefaz, resposta.protocolo(), resposta.cStat(), resposta.xMotivo(), envelope, idUsuario);
 
         if (!autorizadoNaSefaz) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
@@ -132,6 +135,8 @@ public class CancelamentoNfceService {
 
         // Propagação padrão (junta a transação do chamador) — ver o porquê no javadoc do método.
         repositorio.marcarCancelado(doc.idDocumentoFiscal());
+        // Caminho quente do arquivamento (handoff §4.1) — best-effort, nunca lança.
+        arquivamento.arquivarEventoSeAplicavel(idEvento);
 
         return Optional.of(resposta.protocolo());
     }

@@ -49,14 +49,17 @@ public class DocumentoFiscalReprocessamentoService {
     private final SefazTransporte transporte;
     private final SefazAutorizadorService autorizadores;
     private final FiscalCertificadoService certificados;
+    private final ArquivamentoXmlService arquivamento;
 
     public DocumentoFiscalReprocessamentoService(DocumentoFiscalRepositorio repositorio, SefazTransporte transporte,
                                                   SefazAutorizadorService autorizadores,
-                                                  FiscalCertificadoService certificados) {
+                                                  FiscalCertificadoService certificados,
+                                                  ArquivamentoXmlService arquivamento) {
         this.repositorio = repositorio;
         this.transporte = transporte;
         this.autorizadores = autorizadores;
         this.certificados = certificados;
+        this.arquivamento = arquivamento;
     }
 
     public ReprocessamentoResponse reprocessar(Jwt jwt, long idDocumentoFiscal) {
@@ -81,6 +84,7 @@ public class DocumentoFiscalReprocessamentoService {
 
         if (consulta.autorizado()) {
             repositorio.marcarAutorizado(idDocumentoFiscal, consulta);
+            arquivamento.arquivarDocumentoSeAplicavel(idDocumentoFiscal);
             return new ReprocessamentoResponse("AUTORIZADO", consulta.protocolo(), consulta.cStat(),
                     "A SEFAZ confirmou: esta nota já estava autorizada (%s).".formatted(consulta.cStat()));
         }
@@ -118,6 +122,7 @@ public class DocumentoFiscalReprocessamentoService {
 
         if (resposta.autorizado()) {
             repositorio.marcarAutorizado(idDocumentoFiscal, resposta);
+            arquivamento.arquivarDocumentoSeAplicavel(idDocumentoFiscal);
             return new ReprocessamentoResponse("AUTORIZADO", resposta.protocolo(), resposta.cStat(),
                     "Nota retransmitida e autorizada agora.");
         }

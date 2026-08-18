@@ -67,13 +67,15 @@ public class EmissaoNfceService {
     private final SefazAutorizadorService autorizadores;
     private final FiscalCertificadoService certificados;
     private final FiscalContingenciaService contingencia;
+    private final ArquivamentoXmlService arquivamento;
 
     public EmissaoNfceService(FiscalNumeracaoService numeracao, DocumentoFiscalRepositorio repositorio,
                               MontadorXmlNfce montador, AssinadorXmlNfe assinador,
                               ValidadorXsd validador, SefazTransporte transporte,
                               SefazAutorizadorService autorizadores,
                               FiscalCertificadoService certificados,
-                              FiscalContingenciaService contingencia) {
+                              FiscalContingenciaService contingencia,
+                              ArquivamentoXmlService arquivamento) {
         this.contingencia = contingencia;
         this.numeracao = numeracao;
         this.repositorio = repositorio;
@@ -83,6 +85,7 @@ public class EmissaoNfceService {
         this.transporte = transporte;
         this.autorizadores = autorizadores;
         this.certificados = certificados;
+        this.arquivamento = arquivamento;
     }
 
     /**
@@ -183,6 +186,9 @@ public class EmissaoNfceService {
     private ResultadoEmissao concluir(long idDocumento, String chave, RespostaSefaz resposta) {
         if (resposta.autorizado()) {
             repositorio.marcarAutorizado(idDocumento, resposta);
+            // Caminho quente do arquivamento (handoff §4.1) — best-effort, nunca lança: a nota já
+            // está autorizada e o cupom já vai sair, o bucket não pode atrasar nem quebrar isso.
+            arquivamento.arquivarDocumentoSeAplicavel(idDocumento);
             return ResultadoEmissao.autorizado(idDocumento, chave, resposta.protocolo());
         }
         if (resposta.emProcessamento()) {

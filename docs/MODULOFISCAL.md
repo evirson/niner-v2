@@ -1086,11 +1086,27 @@ de retenção/lock — apagar XML fiscal por acidente é problema legal do lojis
 hoje** em `docs/infra/armazenamento-imagens.md`, desenhado para fotos de produto (deletáveis).
 ✅ **DF21 (revisada em 2026-08-17, decisão do dono do produto):** bucket fiscal separado e privado **para os XML**, com versionamento e retenção de 5 anos. O **certificado NÃO vai para bucket** — fica cifrado no banco do cliente (`fiscal_certificado.arquivo_cifrado`), o que o coloca no mesmo backup/restore do tenant e sob o RLS (P8) sem depender de política de bucket.
 
-📄 **A implementação do arquivamento está especificada para handoff em
-`docs/HANDOFF-ARQUIVAMENTO-XML.md`** (contrato, montagem do `nfeProc`, idempotência, critérios de
-aceitação e definição de pronto) — é o documento a entregar a quem for implementar.
+📄 **A implementação foi especificada em `docs/HANDOFF-ARQUIVAMENTO-XML.md`** (contrato, montagem
+do `nfeProc`, idempotência, critérios de aceitação e definição de pronto) — escrito para handoff a
+outro desenvolvedor, mas **implementado no mesmo dia (2026-08-18) seguindo essa spec à risca**.
 
-✅ **Bucket provisionado em 2026-08-17 (ADR-014):** **MinIO auto-hospedado** (S3), no docker-compose do projeto e em VPS dedicado quando o volume justificar — não GCS, por custo. Object Lock **GOVERNANCE de 1825 dias** ligado na criação do bucket, versionamento junto, e a credencial da API **sem permissão de apagar** no bucket fiscal: apagar XML é recusado três vezes (código, política da credencial e retenção do bucket). Sobe com `docker compose up -d minio minio-init`. Detalhes, riscos e o que falta: `docs/infra/armazenamento-privado-minio.md`. **O que ainda não existe é o consumidor** — nada grava no bucket até o Arquivamento ser implementado, e `xml_objeto_bucket`/`xml_hash` seguem vazios.
+✅ **Bucket provisionado em 2026-08-17 (ADR-014):** **MinIO auto-hospedado** (S3), no docker-compose do projeto e em VPS dedicado quando o volume justificar — não GCS, por custo. Object Lock **GOVERNANCE de 1825 dias** ligado na criação do bucket, versionamento junto, e a credencial da API **sem permissão de apagar** no bucket fiscal: apagar XML é recusado três vezes (código, política da credencial e retenção do bucket). Sobe com `docker compose up -d minio minio-init`. Detalhes, riscos e o que falta: `docs/infra/armazenamento-privado-minio.md`.
+
+✅ **Consumidor implementado em 2026-08-18** — `fiscal.documento.ArquivamentoXmlService` +
+`ArquivamentoXmlJob` (V036). Toda nota/evento/inutilização **autorizada** é arquivada
+automaticamente logo após a autorização (caminho quente, best-effort — nunca derruba a
+emissão/cancelamento/inutilização se o bucket falhar) e há um job `@Scheduled` de 10 em 10 minutos
+que varre o que ficou pendente (MinIO fora do ar, restart no meio, contingência). `nfeProc` montado
+por **concatenação de texto** (nunca reserialização — invalidaria a assinatura em silêncio),
+validado contra `procNFe_v4.00.xsd` **antes** de subir ao bucket (F11). Idempotente (P2): chave
+determinística, 409 em regravação, hash conferido. `GET /api/v1/fiscal/documentos/{id}/xml` passa a
+servir o `nfeProc` (com protocolo) assim que arquivado, com fallback para `xml_assinado` antes
+disso. Testado contra MinIO real (Testcontainers) + Postgres real, incluindo validação de XSD de
+verdade (não só "a coluna foi preenchida") — `ArquivamentoXmlTest`, 4 testes. Suíte completa:
+687/687. Único achado de teste que valeu registrar: o fixture minimalista de `protNFe`
+(`<infProt><cStat>100</cStat></infProt>`) usado nos outros testes fiscais não é XSD-válido —
+`infProt` exige `tpAmb/verAplic/chNFe/dhRecbto/cStat/xMotivo` em sequência; só apareceu porque
+nenhum teste anterior reconstruía e validava o `nfeProc` de verdade.
 
 ### 11.2 A rotina de download para a contabilidade
 
@@ -1349,6 +1365,12 @@ paralelo às telas, se fizer sentido.
 | **B8** | Cancelamento (110111), inutilização, arquivamento no bucket, download em ZIP | B7 | **Sim** |
 | **B9** | NF-e de devolução de venda (entrada, `finNFe=4`), espelhando a tributação gravada em `documento_fiscal_item` | B8 | **Sim** |
 
+**Nota (2026-08-18):** B7 e B8 fecharam em 2026-08-17 (ver `docs/PROGRESSO.md`), mas a linha do B8
+acima ficou desatualizada — "arquivamento no bucket" tinha ficado **fora** do escopo fechado
+naquele dia (DF21 ainda não tinha bucket provisionado). Fechado à parte em **2026-08-18**: ver
+§11.1 e `docs/HANDOFF-ARQUIVAMENTO-XML.md`. Download em ZIP (§11.2) continua não implementado
+(DF22 em aberto).
+
 **Por onde começar, concretamente:**
 
 - **Com o certificado em mãos → B0.** É meio dia de trabalho e é o único gate real de arquitetura:
@@ -1398,7 +1420,7 @@ automatizado — os 10.515 NCMs de `cfg_produto_ncm` vieram por esse mesmo camin
 | DF18 | Timeout de autorização no PDV antes de cair em contingência | 10 s |
 | DF19 | Quantas falhas disparam contingência automática | 2 falhas consecutivas em 60 s |
 | **DF20** | **Devolução de NFC-e sem consumidor identificado** | ⚠️ **Decisão de v1, não futura** — é o caso mais comum do balcão. Investigar na F0, decidir antes da F5 (§10.2) |
-| **DF21** | Onde ficam certificado e XML? | ✅ **Fechada 2026-08-17.** Certificado **cifrado no banco** do cliente; XML no **bucket privado** com WORM de 5 anos — **MinIO auto-hospedado, provisionado** (ADR-014). Falta só o consumidor. Ver §11.1 |
+| **DF21** | Onde ficam certificado e XML? | ✅ **Fechada 2026-08-17, consumidor implementado 2026-08-18.** Certificado **cifrado no banco** do cliente; XML no **bucket privado** com WORM de 5 anos — **MinIO auto-hospedado** (ADR-014), arquivamento automático de nota/evento/inutilização autorizados. Ver §11.1 |
 | DF22 | Entrega do ZIP grande | Bucket + URL assinada, não cache em memória |
 | DF23 | Papel `CONTADOR` (leitura fiscal) | Futuro; no v1 o lojista baixa e repassa |
 | DF24 | Tenant `INADIMPLENTE` pode emitir nota? | Sim — nunca bloquear emissão |

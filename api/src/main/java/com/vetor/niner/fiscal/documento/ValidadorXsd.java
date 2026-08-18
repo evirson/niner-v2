@@ -44,14 +44,19 @@ public class ValidadorXsd {
     /** XSD do pedido de inutilização (§10.4, B8) — define {@code inutNFe}, sem envelope de lote. */
     public static final String XSD_INUTILIZACAO = "/xsd/inutNFe_v4.00.xsd";
 
+    /** XSD do XML arquivado (NFe + protocolo) — define {@code nfeProc} (Arquivamento, handoff §5). */
+    public static final String XSD_PROC_NFE = "/xsd/procNFe_v4.00.xsd";
+
     private final Schema schemaNfe;
     private final Schema schemaEventoCancelamento;
     private final Schema schemaInutilizacao;
+    private final Schema schemaProcNfe;
 
     public ValidadorXsd() {
         this.schemaNfe = carregar(XSD_NFE);
         this.schemaEventoCancelamento = carregar(XSD_EVENTO_CANCELAMENTO);
         this.schemaInutilizacao = carregar(XSD_INUTILIZACAO);
+        this.schemaProcNfe = carregar(XSD_PROC_NFE);
     }
 
     /**
@@ -71,6 +76,13 @@ public class ValidadorXsd {
     /** Mesma garantia do {@link #validarNfe}, aplicada ao pedido de inutilização (F11). */
     public void validarInutilizacao(String xml) {
         validar(schemaInutilizacao, xml);
+    }
+
+    /** Mesma garantia do {@link #validarNfe}, aplicada ao {@code nfeProc} antes de ir pro bucket
+     *  (Arquivamento) — nunca sobe ao armazenamento imutável um XML que não valide (F11: mais
+     *  barato recusar aqui do que descobrir na guarda de 5 anos que o arquivo está incorreto). */
+    public void validarProcNfe(String xml) {
+        validar(schemaProcNfe, xml);
     }
 
     private void validar(Schema schema, String xml) {

@@ -142,20 +142,78 @@ public class FiscalInutilizacaoRepositorio {
      * esconder uma recusa). Uma linha por tentativa, nunca apagada nem sobrescrita (F6/F7).
      */
     @Transactional
-    public void registrarTentativa(long idEmpresa, int modelo, int serie, int ano,
+    public long registrarTentativa(long idEmpresa, int modelo, int serie, int ano,
                                    int numeroInicial, int numeroFinal, String justificativa,
                                    boolean autorizado, String protocolo, String statusSefaz,
                                    String motivoSefaz, String xmlInutilizacao, Integer idUsuario) {
-        jdbc.sql("""
+        return jdbc.sql("""
                         INSERT INTO fiscal_inutilizacao (
                             id_tenant, id_empresa, modelo, serie, ano, numero_inicial, numero_final,
                             justificativa, autorizado, protocolo, status_sefaz, motivo_sefaz,
                             xml_inutilizacao, id_usuario)
                         VALUES (plataforma.tenant_atual(), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        RETURNING id_inutilizacao
                         """)
                 .params(idEmpresa, modelo, serie, ano, numeroInicial, numeroFinal, justificativa,
                         autorizado, protocolo, statusSefaz, motivoSefaz, xmlInutilizacao, idUsuario)
-                .update();
+                .query(Long.class).single();
+    }
+
+    // ---------------------------------------------------------------- arquivamento (docs/HANDOFF-ARQUIVAMENTO-XML.md)
+
+    @Transactional(readOnly = true)
+    public Optional<InutilizacaoParaArquivar> buscarParaArquivar(long idInutilizacao) {
+        return jdbc.sql("""
+                        SELECT modelo, serie, numero_inicial, numero_final, xml_inutilizacao,
+                               criado_em, xml_objeto_bucket
+                          FROM fiscal_inutilizacao
+                         WHERE id_tenant = plataforma.tenant_atual() AND id_inutilizacao = ?
+                           AND autorizado = true
+                        """)
+                .param(idInutilizacao)
+                .query((rs, n) -> new InutilizacaoParaArquivar(
+                        rs.getInt("modelo"), rs.getInt("serie"), rs.getInt("numero_inicial"),
+                        rs.getInt("numero_final"), rs.getString("xml_inutilizacao"),
+                        rs.getObject("criado_em", OffsetDateTime.class), rs.getString("xml_objeto_bucket")))
+                .optional();
+    }
+
+    public record InutilizacaoParaArquivar(int modelo, int serie, int numeroInicial, int numeroFinal,
+                                           String xmlInutilizacao, OffsetDateTime criadoEm,
+                                           String xmlObjetoBucketAtual) {
+    }
+
+    /** {@code fiscal_inutilizacao} não tem {@code xml_hash} (V035) — só o ponteiro. */
+    @Transactional
+    public void marcarArquivado(long idInutilizacao, String chave) {
+        jdbc.sql("""
+                        UPDATE fiscal_inutilizacao SET xml_objeto_bucket = ?
+                         WHERE id_tenant = plataforma.tenant_atual() AND id_inutilizacao = ?
+                        """)
+                .params(chave, idInutilizacao).update();
+    }
+
+    /** Tenants com pelo menos uma inutilização autorizada ainda não arquivada — consulta GLOBAL,
+     *  sem JWT (job). */
+    @Transactional(readOnly = true)
+    public List<Long> tenantsComPendenciaDeArquivamento() {
+        return jdbc.sql("""
+                        SELECT DISTINCT id_tenant FROM fiscal_inutilizacao
+                         WHERE autorizado = true AND xml_objeto_bucket IS NULL
+                        """)
+                .query(Long.class).list();
+    }
+
+    @Transactional(readOnly = true)
+    public List<Long> pendentesDeArquivamento(int limite) {
+        return jdbc.sql("""
+                        SELECT id_inutilizacao FROM fiscal_inutilizacao
+                         WHERE id_tenant = plataforma.tenant_atual()
+                           AND autorizado = true AND xml_objeto_bucket IS NULL
+                         ORDER BY criado_em
+                         LIMIT ?
+                        """)
+                .param(limite).query(Long.class).list();
     }
 
     /** Histórico de inutilizações da empresa, mais recente primeiro — a tela mostra tentativas. */

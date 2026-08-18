@@ -1,7 +1,15 @@
 # Handoff: Arquivamento do XML fiscal no bucket privado
 **Para:** equipe/desenvolvedor externo que vai implementar · **De:** Vetor Sistemas (Evirson)
-**Data:** 2026-08-17 · **Status:** infra pronta, **falta o consumidor**
+**Data:** 2026-08-17 · **Status:** ✅ **implementado em 2026-08-18** (ver nota abaixo)
 **Bloco no roteiro fiscal:** "Arquivamento" (`docs/MODULOFISCAL.md` §11, §17) · **Fecha:** DF21
+
+> ✅ **Implementado no dia seguinte ao handoff, seguindo esta spec.** `ArquivamentoXmlService` +
+> `ArquivamentoXmlJob` (`fiscal.documento`), migration `V036__fiscal_arquivamento.sql`. Os 8
+> critérios de aceitação da §7 estão cobertos por `ArquivamentoXmlTest` (Postgres + MinIO reais via
+> Testcontainers). Resumo da entrega em `docs/PROGRESSO.md` (2026-08-18) e `docs/MODULOFISCAL.md`
+> §11.1. Este documento continua valendo como a spec de referência — o código segue exatamente o
+> desenho descrito aqui. Fora do escopo (como já estava aqui): ZIP do contador (DF22) e apagar
+> `xml_assinado` do banco (§10).
 
 ---
 
@@ -401,17 +409,17 @@ cd api && ./mvnw spring-boot:run                            # API na 8080
 
 ## 11. Definição de pronto
 
-- [ ] Critérios de aceitação da §7 cobertos por teste automatizado, todos verdes
-- [ ] Suíte completa do backend verde (`./mvnw test`), sem teste desabilitado
-- [ ] Migration nova versionada em `db/migration/` (índice parcial + comentário da coluna `xml_hash`)
-- [ ] Toda query nova com `id_tenant` **explícito** no texto do SQL (P8) — inclusive dentro de
+- [x] Critérios de aceitação da §7 cobertos por teste automatizado, todos verdes
+- [x] Suíte completa do backend verde (`./mvnw test`), sem teste desabilitado
+- [x] Migration nova versionada em `db/migration/` (índice parcial + comentário da coluna `xml_hash`)
+- [x] Toda query nova com `id_tenant` **explícito** no texto do SQL (P8) — inclusive dentro de
       `EXISTS`/`JOIN`
-- [ ] Job `@Scheduled` estabelecendo `TenantContext` antes de tocar em dado de domínio
-- [ ] Nenhuma chamada de rede dentro de transação de banco (F2)
-- [ ] Nada de lógica de negócio no frontend (P4)
-- [ ] `docs/MODULOFISCAL.md` §11/§17 e `docs/PROGRESSO.md` atualizados com o que foi entregue —
+- [x] Job `@Scheduled` estabelecendo `TenantContext` antes de tocar em dado de domínio
+- [x] Nenhuma chamada de rede dentro de transação de banco (F2)
+- [x] Nada de lógica de negócio no frontend (P4)
+- [x] `docs/MODULOFISCAL.md` §11/§17 e `docs/PROGRESSO.md` atualizados com o que foi entregue —
       **incluindo o que ficou de fora e por quê**
-- [ ] Este documento atualizado se alguma decisão daqui mudou no caminho
+- [x] Este documento atualizado se alguma decisão daqui mudou no caminho
 
 ---
 

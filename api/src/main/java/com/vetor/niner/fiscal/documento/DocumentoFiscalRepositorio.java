@@ -299,19 +299,20 @@ public class DocumentoFiscalRepositorio {
      * commita sozinho, aconteça o que acontecer depois no chamador.
      */
     @Transactional(propagation = org.springframework.transaction.annotation.Propagation.REQUIRES_NEW)
-    public void registrarTentativaCancelamento(long idDocumentoFiscal, String justificativa,
+    public long registrarTentativaCancelamento(long idDocumentoFiscal, String justificativa,
                                                boolean autorizado, String protocoloEvento,
                                                String statusSefaz, String motivoSefaz, String xmlEvento,
                                                Integer idUsuario) {
-        jdbc.sql("""
+        return jdbc.sql("""
                         INSERT INTO documento_fiscal_evento
                             (id_tenant, id_documento_fiscal, tipo_evento, justificativa, autorizado,
                              protocolo, status_sefaz, motivo_sefaz, xml_evento, id_usuario)
                         VALUES (plataforma.tenant_atual(), ?, '110111', ?, ?, ?, ?, ?, ?, ?)
+                        RETURNING id_evento
                         """)
                 .params(idDocumentoFiscal, justificativa, autorizado, protocoloEvento, statusSefaz,
                         motivoSefaz, xmlEvento, idUsuario)
-                .update();
+                .query(Long.class).single();
     }
 
     /**
@@ -396,6 +397,119 @@ public class DocumentoFiscalRepositorio {
     public record ContextoReprocessamento(long idEmpresa, int modelo, String situacao, String chaveAcesso,
                                           String xmlAssinado, MontagemNfceDtos.AmbienteSefaz ambiente,
                                           String uf) {
+    }
+
+    // ---------------------------------------------------------------- arquivamento (docs/HANDOFF-ARQUIVAMENTO-XML.md)
+
+    /**
+     * Contexto pra montar o {@code nfeProc} de um documento AUTORIZADO. {@code xmlObjetoBucketAtual}
+     * vem junto pra o chamador decidir "já arquivado" sem uma segunda query (P2 — idempotência).
+     */
+    @Transactional(readOnly = true)
+    public java.util.Optional<DocumentoParaArquivar> buscarParaArquivar(long idDocumentoFiscal) {
+        return jdbc.sql("""
+                        SELECT modelo, chave_acesso, data_emissao, xml_assinado, status_sefaz, xml_objeto_bucket
+                          FROM documento_fiscal
+                         WHERE id_tenant = plataforma.tenant_atual() AND id_documento_fiscal = ?
+                           AND situacao = 'AUTORIZADO'
+                        """)
+                .param(idDocumentoFiscal)
+                .query((rs, n) -> new DocumentoParaArquivar(
+                        rs.getInt("modelo"), rs.getString("chave_acesso"),
+                        rs.getObject("data_emissao", java.time.OffsetDateTime.class),
+                        rs.getString("xml_assinado"), rs.getString("status_sefaz"),
+                        rs.getString("xml_objeto_bucket")))
+                .optional();
+    }
+
+    public record DocumentoParaArquivar(int modelo, String chaveAcesso, java.time.OffsetDateTime dataEmissao,
+                                        String xmlAssinado, String statusSefaz, String xmlObjetoBucketAtual) {
+    }
+
+    /** F6: {@code xml_objeto_bucket}/{@code xml_hash} só são gravados UMA vez — o trigger de
+     *  imutabilidade (V035) recusa um segundo UPDATE depois que o bucket deixou de ser NULL. */
+    @Transactional
+    public void marcarXmlArquivado(long idDocumentoFiscal, String chave, String hash) {
+        jdbc.sql("""
+                        UPDATE documento_fiscal SET xml_objeto_bucket = ?, xml_hash = ?, atualizado_em = now()
+                         WHERE id_tenant = plataforma.tenant_atual() AND id_documento_fiscal = ?
+                        """)
+                .params(chave, hash, idDocumentoFiscal)
+                .update();
+    }
+
+    /** Tenants com pelo menos um documento OU evento (cancelamento) autorizado ainda não
+     *  arquivado — consulta GLOBAL, sem JWT (job), mesmo padrão de {@link #empresasComFilaPendente}. */
+    @Transactional(readOnly = true)
+    public List<Long> tenantsComPendenciaDeArquivamento() {
+        return jdbc.sql("""
+                        SELECT id_tenant FROM documento_fiscal
+                         WHERE situacao = 'AUTORIZADO' AND xml_objeto_bucket IS NULL
+                        UNION
+                        SELECT id_tenant FROM documento_fiscal_evento
+                         WHERE autorizado = true AND xml_objeto_bucket IS NULL
+                        """)
+                .query(Long.class).list();
+    }
+
+    /** Dentro do {@code TenantContext} (P8) — ids pendentes de arquivamento desse tenant, mais
+     *  antigo primeiro. */
+    @Transactional(readOnly = true)
+    public List<Long> pendentesDeArquivamento(int limite) {
+        return jdbc.sql("""
+                        SELECT id_documento_fiscal FROM documento_fiscal
+                         WHERE id_tenant = plataforma.tenant_atual()
+                           AND situacao = 'AUTORIZADO' AND xml_objeto_bucket IS NULL
+                         ORDER BY data_autorizacao
+                         LIMIT ?
+                        """)
+                .param(limite).query(Long.class).list();
+    }
+
+    /** Contexto pra arquivar o XML de um EVENTO autorizado (cancelamento 110111). */
+    @Transactional(readOnly = true)
+    public java.util.Optional<EventoParaArquivar> buscarEventoParaArquivar(long idEvento) {
+        return jdbc.sql("""
+                        SELECT e.tipo_evento, e.sequencia, e.xml_evento, e.criado_em, e.xml_objeto_bucket,
+                               d.chave_acesso, d.modelo
+                          FROM documento_fiscal_evento e
+                          JOIN documento_fiscal d
+                            ON d.id_tenant = e.id_tenant AND d.id_documento_fiscal = e.id_documento_fiscal
+                         WHERE e.id_tenant = plataforma.tenant_atual() AND e.id_evento = ? AND e.autorizado = true
+                        """)
+                .param(idEvento)
+                .query((rs, n) -> new EventoParaArquivar(
+                        rs.getString("tipo_evento"), rs.getInt("sequencia"), rs.getString("xml_evento"),
+                        rs.getObject("criado_em", java.time.OffsetDateTime.class),
+                        rs.getString("xml_objeto_bucket"), rs.getString("chave_acesso"), rs.getInt("modelo")))
+                .optional();
+    }
+
+    public record EventoParaArquivar(String tipoEvento, int sequencia, String xmlEvento,
+                                     java.time.OffsetDateTime criadoEm, String xmlObjetoBucketAtual,
+                                     String chaveAcesso, int modelo) {
+    }
+
+    /** {@code documento_fiscal_evento} não tem {@code xml_hash} (V035) — só o ponteiro. */
+    @Transactional
+    public void marcarEventoArquivado(long idEvento, String chave) {
+        jdbc.sql("""
+                        UPDATE documento_fiscal_evento SET xml_objeto_bucket = ?
+                         WHERE id_tenant = plataforma.tenant_atual() AND id_evento = ?
+                        """)
+                .params(chave, idEvento).update();
+    }
+
+    @Transactional(readOnly = true)
+    public List<Long> eventosPendentesDeArquivamento(int limite) {
+        return jdbc.sql("""
+                        SELECT id_evento FROM documento_fiscal_evento
+                         WHERE id_tenant = plataforma.tenant_atual()
+                           AND autorizado = true AND xml_objeto_bucket IS NULL
+                         ORDER BY criado_em
+                         LIMIT ?
+                        """)
+                .param(limite).query(Long.class).list();
     }
 
     /** {@code valor_troco} é {@code NOT NULL} — troco não informado é zero, nunca ausência. */

@@ -13,7 +13,7 @@ Registro cronológico das decisões e entregas. Atualizar a cada marco relevante
 > + NF-e de devolução de venda**, com cancelamento, inutilização, contingência, arquivamento e
 > download. Roteiro em blocos B0–B9: **§17.1 do estudo**.
 >
-> **O que está pronto e testado (675/675 backend verdes):** B0 (PoC real contra a SEFAZ-PR, `cStat
+> **O que está pronto e testado (687/687 backend verdes):** B0 (PoC real contra a SEFAZ-PR, `cStat
 > 100`, JDK puro sem lib de NF-e — DF7 fechada no plano B) · B1 (specs) · B2 (`fiscal.configuracao`
 > + `fiscal.perfil` + certificado A1, **cifrado no banco**, não em bucket — DF21 revisada) · B3
 > (Conformidade Fiscal, bloqueio preventivo F11) · B4 (motor tributário puro — ICMS/PIS/COFINS/IPI/
@@ -21,14 +21,19 @@ Registro cronológico das decisões e entregas. Atualizar a cada marco relevante
 > B6 (assinatura XMLDSig + transporte mTLS) · B7 (numeração sem buraco F4, emissão síncrona no PDV,
 > contingência offline com drenagem automática, DANFCE na papeleta) · B8 (cancelamento 110111,
 > tela de Documentos Fiscais, inutilização de numeração) · **pós-B8**: reprocessar documento preso,
-> link de consulta pública e "Ver DANFCE" na lista de Documentos Fiscais.
+> link de consulta pública e "Ver DANFCE" na lista de Documentos Fiscais · **Arquivamento**
+> (2026-08-18, MinIO/ADR-014 + `ArquivamentoXmlService`/`Job`: nota/evento/inutilização autorizados
+> arquivam sozinhos, `nfeProc` validado contra XSD, `GET .../xml` serve do bucket).
 >
-> ⏭️ **O que falta:** **B9** (NF-e de devolução) travado pela **DF20** (regra de devolução sem
-> consumidor identificado, decisão do dono do produto ainda em aberto); **Arquivamento** — o
-> **bucket deixou de ser o bloqueio em 2026-08-17** (ADR-014: MinIO privado provisionado, com WORM
-> de 5 anos), falta escrever o consumidor que grava o `nfeProc` e preenche
-> `documento_fiscal.xml_objeto_bucket`. Nenhum dos dois bloqueia o resto do produto — o v1 fiscal
-> já emite, cancela, inutiliza e reprocessa.
+> ⏭️ **O que falta:** só **B9** (NF-e de devolução), travado pela **DF20** (regra de devolução sem
+> consumidor identificado, decisão do dono do produto ainda em aberto) — não bloqueia o resto do
+> produto, o v1 fiscal já emite, cancela, inutiliza, reprocessa e arquiva.
+>
+> 🔴✅ **Primeira emissão síncrona real contra a SEFAZ-PR fora de um script de PoC (2026-08-18)
+> achou e corrigiu um bug crítico:** a resposta síncrona real tem dois `cStat` (lote e nota) e
+> `SefazTransporte` lia o do lote — nota autorizada saía reportada como REJEITADA. Nenhum teste
+> pegava porque todo fixture mockado só tinha um `cStat`. Corrigido e comprovado ao vivo (nova
+> emissão saiu `AUTORIZADO` direto). Ver a entrada de hoje na linha do tempo.
 >
 > ⚠️ **A MITRYUSCASH é a desenvolvedora, não uma cliente** — o certificado é da casa de software e
 > ela nunca emitirá em produção. Cada comprador do ERP terá um regime próprio (Simples, Presumido,
@@ -448,6 +453,108 @@ Movimentação de Conta Corrente) que ainda não tinham migrado pro `SeletorPlan
 ---
 
 ## Linha do tempo
+
+### 2026-08-18 — 🔴 BUG CRÍTICO ACHADO E CORRIGIDO: NFC-e autorizada pela SEFAZ saía reportada como REJEITADA
+
+Pedido do usuário: "posso testar a emissão da NFC-e?" — sim, e testar **contra a SEFAZ-PR real**
+(não mock) foi o que expôs este bug. Configuração usada: certificado A1 real da MITRYUSCASH
+(`CERTIFICADO_HOMOLOGACAO/`, o mesmo do B0) + truststore ICP-Brasil (`api/secrets/
+truststore-icpbrasil.p12`, senha `changeit`) ligados na API via `NINER_FISCAL_TRUSTSTORE`/
+`_SENHA` (novo no `docker-compose.yml`/`.env`, não existiam antes — só o B0 usava fora do produto).
+
+**O bug:** `SefazTransporte.enviar()` extraía `cStat`/`xMotivo`/`nProt`/`chNFe` do **primeiro**
+match no corpo inteiro da resposta. A resposta síncrona (`indSinc=1`) real da SEFAZ-PR tem **dois**
+`cStat`: um no nível do **lote** (`retEnviNFe`, sempre `104` "Lote processado" quando o lote foi
+aceito — não diz nada sobre a nota) e outro dentro de `protNFe/infProt`, o resultado **real** da
+nota. A extração pegava o `104` do lote e reportava **REJEITADO**, mesmo quando a nota estava
+`cStat 100` "Autorizado o uso da NF-e" ali dentro, com protocolo e chave corretos.
+**Toda emissão síncrona real neste UF teria saído com esse diagnóstico errado** — achado só porque
+esta foi a primeira vez que o produto falou com a SEFAZ de verdade fora de um script de PoC.
+
+**Por que nenhum teste pegava isso:** todos os fixtures mockados de `RespostaSefaz` neste projeto
+(`VendaFiscalEmissaoTest`, `CancelamentoNfceTest`, `DocumentoFiscalReprocessamentoTest`,
+`FiscalInutilizacaoTest`, e o próprio `SefazTransporteTest`) têm **um só** `cStat` no corpo — nunca
+os dois juntos como a SEFAZ manda de verdade. O caminho "pega o primeiro" nunca tinha chance de
+errar contra esses fixtures.
+
+**Correção** (`SefazTransporte.java`): extrai o bloco `<infProt>...</infProt>` primeiro (mesma
+técnica do `ArquivamentoXmlService`, ignorando prefixo de namespace) e busca `cStat`/`xMotivo`/
+`nProt`/`chNFe` **dentro dele** por padrão; só cai pro corpo inteiro quando o campo específico não
+está lá (cobre lote rejeitado sem `protNFe` nenhum, e não quebra o fixture do
+`SefazTransporteTest`, que só tem `chNFe`/`nProt` dentro de `infProt`, não `cStat`/`xMotivo`).
+
+**Provado corrigido, ao vivo, contra a SEFAZ real:**
+1. `POST .../documentos/3/consultar-sefaz` no documento com o diagnóstico errado → devolveu
+   `cStat 100 "Autorizado o uso da NF-e"` corretamente (a nota real nunca esteve errada, só o
+   diagnóstico).
+2. Uma emissão nova do zero (venda → NFC-e) com o binário corrigido → `"situacao":"AUTORIZADO"`
+   direto, sem precisar de reprocessamento.
+
+Suíte completa depois da correção: **687/687 verdes** (só um teste específico do
+`SefazTransporteTest` precisou de um `extrairComEscopo` com fallback por campo, não um switch
+tudo-ou-nada, pra não quebrar o fixture simplificado dele).
+
+**Pendência de dev, sem risco:** o documento id 3 do tenant de teste local (a primeira emissão,
+antes da correção) ficou com `situacao=REJEITADO` pra sempre (o reprocessamento só aceita
+`TRANSMITINDO`/`ASSINADO`, não `REJEITADO`) — é dado de teste, a nota real está autorizada na
+SEFAZ (confirmado pela consulta acima), só o registro local ficou desatualizado. Sem ação
+necessária; o documento id 4 (emitido já com a correção) está `AUTORIZADO` normalmente.
+
+### 2026-08-18 — Arquivamento do XML fiscal no bucket privado (implementa o handoff no mesmo dia)
+
+`docs/HANDOFF-ARQUIVAMENTO-XML.md` foi escrito em 2026-08-17 para entregar essa tarefa a outro
+desenvolvedor — acabou implementada no dia seguinte, seguindo a spec à risca (contrato, critérios
+de aceitação, definição de pronto). Fecha de vez a DF21/B8 (bucket fiscal, que tinha ficado de fora
+do B8 por falta de infra — a infra chegou horas depois, ADR-014).
+
+**O que foi feito**, novo em `fiscal.documento`:
+- `ArquivamentoXmlService` — arquiva nota autorizada (monta o `nfeProc`), evento autorizado
+  (cancelamento 110111) e inutilização homologada. Best-effort (`*SeAplicavel`, nunca lança) no
+  **caminho quente**, chamado logo após `marcarAutorizado`/`registrarTentativaCancelamento`/
+  `registrarTentativa` em `EmissaoNfceService`, `DocumentoFiscalReprocessamentoService`,
+  `FiscalContingenciaDrenoJob`, `CancelamentoNfceService` e `FiscalInutilizacaoService`.
+- `ArquivamentoXmlJob` — rede de segurança, `@Scheduled` a cada 10 min, mesmo padrão P8 de
+  `FiscalContingenciaDrenoJob` (varredura global de tenants pendentes, `TenantContext.comTenant`
+  por item).
+- `V036__fiscal_arquivamento.sql` — índices parciais da fila (uma por tabela) + comentário
+  documentando que `xml_hash` muda de significado depois do arquivamento (handoff §6.2).
+- `ValidadorXsd.validarProcNfe` — valida o `nfeProc` contra `procNFe_v4.00.xsd` **antes** de subir
+  ao bucket (F11): mais barato recusar aqui do que descobrir na guarda de 5 anos que o XML está
+  errado.
+- `DocumentoFiscalConsultaService.buscarXml` — `GET .../documentos/{id}/xml` passa a servir o
+  `nfeProc` do bucket (com protocolo) quando já arquivado; fallback pro `xml_assinado` antes disso.
+
+**O que o handoff avisava e se confirmou na prática:**
+- `nfeProc` montado por **concatenação de texto** (nunca DOM/reserialização) — o `xml_assinado` já
+  é exatamente `<NFe ...>...</NFe>` sem prólogo, colado byte a byte com o `<protNFe>` extraído por
+  regex (ignorando prefixo de namespace) de `documento_fiscal.status_sefaz` (a resposta CRUA da
+  SEFAZ, F9).
+- Idempotência (P2): chave determinística por `{ano}/{mes}/{modelo}/{chave}.xml`; a área
+  `FISCAL_XML` recusa sobrescrever (409); no 409, confere hash do já-gravado contra o que se
+  tentaria gravar — igual segue, diferente para com erro (nunca "resolve" apagando).
+- Arquivamento sempre **fora de transação de banco** (F2, chamada de rede).
+
+**⚠️ Achado real ao testar (não é bug do arquivamento, é fixture de teste desatualizado):** o
+fixture `<retEnviNFe><protNFe><infProt><cStat>100</cStat></infProt></protNFe></retEnviNFe>` usado
+em `VendaFiscalEmissaoTest`/`CancelamentoNfceTest`/`FiscalInutilizacaoTest`/
+`DocumentoFiscalReprocessamentoTest` **não é XSD-válido** — `protNFe` exige `versao="4.00"`, e
+`infProt` exige `tpAmb/verAplic/chNFe/dhRecbto/cStat/xMotivo` nessa ordem (`nProt`/`digVal` são os
+únicos opcionais). Nenhum teste anterior expunha isso porque nenhum reconstrói e valida o `nfeProc`
+de verdade — só o novo `ArquivamentoXmlTest` faz essa prova, com fixture próprio corrigido
+(os 4 testes fiscais antigos continuam passando porque o arquivamento é best-effort: a exceção de
+XSD é só logada, nunca quebra o teste — mas fica pendente pro job, que também não teria bucket pra
+gravar naqueles contextos).
+
+**Testado contra infraestrutura real** (`ArquivamentoXmlTest`, novo — Postgres real via
+Testcontainers **e MinIO real** via Testcontainers, buckets com Object Lock igual ao
+`infra/minio/bootstrap.sh`): nota autorizada arquiva automaticamente, `nfeProc` no bucket valida
+contra o XSD oficial de verdade (não só "a coluna foi preenchida"), arquivar de novo é idempotente,
+`GET .../xml` serve o `nfeProc` depois de arquivado, cancelamento autorizado arquiva o evento.
+4 testes novos. **Suíte completa: 687/687 verdes**, `mvn compile`/`test-compile` limpos.
+
+**O que ficou de fora, documentado no próprio `HANDOFF-ARQUIVAMENTO-XML.md`:** ZIP do contador
+(DF22, depende de decisão de produto sobre entrega), apagar `xml_assinado` do banco depois de
+arquivar (trigger de imutabilidade impede hoje, decisão do Evirson se incomodar o volume).
 
 ### 2026-08-18 — Pesquisa de Vendas: detalhamento em abas + reimpressão de papeleta no popup
 
