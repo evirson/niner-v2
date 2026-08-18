@@ -1,0 +1,4 @@
+# Scripts shell rodam dentro de containers Linux — CRLF quebra o shebang/`set -euo pipefail`
+# (visto em 2026-08-18: checkout Windows converteu infra/minio/bootstrap.sh para CRLF e o
+# minio-init morreu com "set: -: invalid option"). Força LF no checkout em qualquer SO.
+*.sh text eol=lf
