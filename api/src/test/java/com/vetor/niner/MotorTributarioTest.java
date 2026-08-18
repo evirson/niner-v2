@@ -78,22 +78,34 @@ class MotorTributarioTest {
     @Nested
     class Icms {
 
-        @Test
-        void csosnSemDestaqueNaoEmiteBaseNemValor() {
-            ItemTributado item = umItem(motor.calcular(venda(item(regraSimples("102"))), ctx(1)));
+        @ParameterizedTest(name = "CSOSN {0}")
+        @ValueSource(strings = {"102", "103", "300", "400"})
+        void csosnSemDestaqueNaoEmiteBaseNemValor(String csosn) {
+            ItemTributado item = umItem(motor.calcular(venda(item(regraSimples(csosn))), ctx(1)));
 
-            assertThat(item.icms().csosn()).isEqualTo("102");
+            assertThat(item.icms().csosn()).isEqualTo(csosn);
             assertThat(item.icms().cst()).isNull();   // campo a mais rejeita tanto quanto campo a menos
             assertThat(item.icms().baseCalculo()).isEqualByComparingTo("0.00");
             assertThat(item.icms().valor()).isEqualByComparingTo("0.00");
         }
 
+        /**
+         * ⚠️ Regressão real (2026-08-19, venda rejeitada pela SEFAZ, cStat 531 "Total da BC ICMS
+         * difere do somatório dos itens"): {@code ICMSSN500} no XML sai só com {@code orig}+
+         * {@code CSOSN} ({@link com.vetor.niner.fiscal.documento.MontadorXmlNfce#montarIcms} — o
+         * grupo de ST retido é {@code minOccurs="0"} e o motor não o calcula), mas o motor calculava
+         * uma base/valor não-zero a partir da alíquota da regra e isso ia parar no total da nota —
+         * o total declarava uma base que nenhum item de fato carregava no XML. CSOSN 500 significa
+         * "ICMS já retido lá atrás"; mesmo com alíquota cadastrada na regra, esta venda não abre
+         * base nova nenhuma.
+         */
         @Test
-        void csosn500DeStRetidoDestacaOQueARegraTrouxer() {
+        void csosn500DeStRetidoNaoDestacaBaseNemValorMesmoComAliquotaNaRegra() {
             var icms = umItem(motor.calcular(venda(item(comAliquota(regraSimples("500"), "18.00"))), ctx(1))).icms();
 
             assertThat(icms.csosn()).isEqualTo("500");
-            assertThat(icms.valor()).isEqualByComparingTo("5.04");   // 28,00 × 18%
+            assertThat(icms.baseCalculo()).isEqualByComparingTo("0.00");
+            assertThat(icms.valor()).isEqualByComparingTo("0.00");
         }
 
         @Test

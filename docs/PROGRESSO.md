@@ -465,6 +465,29 @@ Movimentação de Conta Corrente) que ainda não tinham migrado pro `SeletorPlan
 
 ## Linha do tempo
 
+### 2026-08-19 — Fix de rejeição SEFAZ: CSOSN 500 mandava uma base de ICMS que nenhum item declarava (venda 560, cStat 531)
+
+Reportado ao vivo pelo dono do produto: *"A SEFAZ rejeitou a nota: Total da BC ICMS difere do
+somatorio dos itens. [vBC informado: 1279.80, vBC calculado: 0.0] (531)."* — segunda rejeição real
+na mesma sessão, depois do fix do `xProd`/`dest/xNome` (ver entrada seguinte). Causa raiz:
+`MotorTributario.calcularIcms` calculava uma base/valor não-zero pra itens com **CSOSN 500** (ICMS
+já retido por substituição tributária, o perfil "REVENDA COM SUBSTITUIÇÃO TRIBUTÁRIA (ST)" seedado
+no signup) sempre que a regra tinha alíquota cadastrada — mas `MontadorXmlNfce.montarIcms` nunca
+escreve `vBC`/`pICMS`/`vICMS` pra CSOSN 500 (o XSD só permite o grupo `ST` retido, que o motor não
+calcula, então o item sai só com `orig`+`CSOSN`). O total da nota (`ICMSTot/vBC`) somava a base
+"fantasma" calculada mas nunca impressa em nenhum item — SEFAZ recalcula esse total a partir dos
+itens de verdade e rejeita a divergência. Fix: CSOSN 500 entrou no mesmo grupo de 102/103/300/400
+(zera base e valor, `MotorTributario.CSOSN_SEM_ICMS`) — semanticamente correto também: CSOSN 500
+significa que esta venda não abre uma base nova de ICMS, o imposto já foi retido lá atrás.
+
+`MotorTributarioTest` reescrito: o teste antigo que validava a base "destacada" do CSOSN 500 virou
+regressão (`csosn500DeStRetidoNaoDestacaBaseNemValorMesmoComAliquotaNaRegra`, exigindo zero mesmo
+com alíquota na regra); o teste de CSOSN sem destaque virou parametrizado sobre
+102/103/300/400. **763/763 testes de backend verdes.** Verificado ao vivo: venda nova com produto
+do perfil ST (CSOSN 500) autorizada pela SEFAZ-PR (protocolo `141260001535836`), XML confirmado com
+`vBC=0.00` no total, batendo com `<ICMSSN500><orig>0</orig><CSOSN>500</CSOSN></ICMSSN500>` do item
+(nenhum campo de base/valor). Ver `docs/MODULOFISCAL.md` §8.2.
+
 ### 2026-08-19 — PDV pergunta CPF antes de emitir a NFC-e, fix de rejeição SEFAZ (venda 555) e texto do admin em Usuários
 
 Três pedidos do dono do produto na mesma sessão.

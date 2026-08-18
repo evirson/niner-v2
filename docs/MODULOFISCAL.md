@@ -674,7 +674,7 @@ F0; é um caso raro no ICP, mas mal resolvido gera rejeição sistemática):
 | 101 | Tributada com crédito | `pCredSN`, `vCredICMSSN` (a alíquota efetiva vem da apuração do DAS — 🔴 **DF31**: entrada manual por empresa/mês ou fora do v1?) |
 | 103 / 300 / 400 | Isenta por faixa · imune · não tributada | nenhum |
 | 202 | Tributada sem crédito, com ST | grupo ST completo |
-| **500** | **ICMS já retido por ST** (o lojista é o substituído) — muito comum em confecção e calçado | `vBCSTRet`, `vICMSSTRet`, `pST`. **CFOP 5.405**, não 5.102 |
+| **500** | **ICMS já retido por ST** (o lojista é o substituído) — muito comum em confecção e calçado | `vBCSTRet`/`vICMSSTRet`/`pST` **opcionais** (`minOccurs="0"`) — o v1 não calcula, sai só `orig`+`CSOSN`, sem base nem valor. **CFOP 5.405**, não 5.102 |
 | 900 | Outras | depende |
 
 **Grupo `ICMS`, campo `CST` — só CRT 2** ⚠️. A DF37 tirou o CRT 3 do produto, mas **não** apagou o
@@ -700,6 +700,14 @@ acima é justamente sobre qual grupo ela usa. O banco garante o limite
 > real: o cadastro de perfil fiscal aceitava salvar essas linhas sem alíquota, e a nota saía
 > autorizada com ICMS R$ 0,00, silenciosamente. **60 é a exceção** — ICMS já retido por ST não tem
 > imposto novo nesta venda, alíquota 0 é o valor certo. Ver `docs/telas/fiscal-perfil.md` §2.
+
+> ✅ **2026-08-19 — CSOSN 500 nunca destaca base/valor de ICMS, mesmo com alíquota na regra.**
+> Rejeição real (venda 560, cStat 531 "Total da BC ICMS difere do somatório dos itens"): o motor
+> calculava uma base não-zero pra CSOSN 500 sempre que a regra tinha alíquota cadastrada, mas o
+> item no XML nunca carrega esse campo (grupo `ST` retido é opcional e não calculado) — o total da
+> nota declarava uma base que nenhum item de fato tinha. CSOSN 500 entrou no mesmo grupo de
+> 102/103/300/400 (`MotorTributario.CSOSN_SEM_ICMS`): zera base e valor sempre, é a mesma lógica do
+> CST 60 acima — "ICMS já retido lá atrás" nunca abre base nova nesta venda.
 
 **FCP / FECOP.** Adicional de até 2% em operações internas a consumidor final para produtos
 listados. No PR ⚠️ a alíquota modal é **19,5%** desde 18/03/2024 (Lei 21.850/2023) e há FECOP de

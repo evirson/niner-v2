@@ -58,8 +58,17 @@ public class MotorTributario {
     private static final Set<String> CST_ICMS_VALIDOS =
             Set.of("00", "10", "20", "40", "41", "50", "51", "60", "70", "90");
 
-    /** CSOSN/CST em que o ICMS não é destacado — o grupo sai sem base nem valor. */
-    private static final Set<String> CSOSN_SEM_ICMS = Set.of("102", "103", "300", "400");
+    /**
+     * CSOSN/CST em que o ICMS não é destacado — o grupo sai sem base nem valor. {@code 500}
+     * entrou aqui em 2026-08-19 (bug real, venda rejeitada pela SEFAZ, cStat 531 "Total da BC
+     * ICMS difere do somatório dos itens"): {@code ICMSSN500} no XML sai só com {@code orig}+
+     * {@code CSOSN} (grupo de ST retido é {@code minOccurs="0"} e o motor não o calcula —
+     * {@link MontadorXmlNfce#montarIcms}), mas o motor estava calculando uma base não-zero (o
+     * valor do produto, sem redução configurada) e somando isso no total da nota — o total
+     * declarava uma base que nenhum item de fato carregava no XML. CSOSN 500 significa "ICMS já
+     * retido lá atrás"; esta venda não abre uma base nova, então tem que zerar igual 102/103/400.
+     */
+    private static final Set<String> CSOSN_SEM_ICMS = Set.of("102", "103", "300", "400", "500");
     private static final Set<String> CST_SEM_ICMS = Set.of("40", "41", "50");
 
     /**
@@ -171,7 +180,8 @@ public class MotorTributario {
             // rejeita tanto quanto campo a menos (§8.2).
             return new Icms(null, csosn, zero(), zero(), zero(), zero(), zero(), zero());
         }
-        // 202/500/900 — o v1 destaca o que a regra trouxer; ST completo entra com a NF-e (§4.2).
+        // 202/900 — Montador ainda recusa esses dois (grupo de ST completo não calculado, §4.2);
+        // chega aqui só pra cair na exceção de montagem, não pra declarar valor de verdade.
         return montarIcmsComValor(null, csosn, regra, base);
     }
 
