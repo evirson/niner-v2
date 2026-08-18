@@ -15,10 +15,18 @@ diário — só dá pra ver detalhes de uma venda de crediário indiretamente, p
 Tela `/pesquisa-vendas`, disponível a **qualquer papel** (ADMIN e OPERADOR), **somente consulta**
 (alterações continuam na rotina de cadastro/PDV, ou no Cancelamento de Venda). Painel de filtros no
 topo + grid de resultado paginada (mesmo esqueleto de paginação/ordenação do Cancelamento de Venda)
-+, ao clicar numa linha, um popup com quatro grids **empilhadas** dentro dele (sem abas — decisão
-da especificação original, mantida: o usuário compara produtos com recebimentos ao mesmo tempo).
++, ao clicar numa linha, um popup com o detalhamento da venda.
 **Desde 2026-07-31 o detalhamento abre em popup** (`DetalheVendaModal.tsx`, rola internamente,
 sem afetar o scroll da página) — a versão original empilhava o bloco abaixo da grid de resultado.
+
+**Abas (2026-08-18, pedido do dono do produto — reverte a decisão original de "empilhado sem
+abas"):** as quatro seções do detalhamento viraram abas — **Dados Gerais**, **Produtos Vendidos**,
+**Movimentação de Caixa** e **Parcelas de Crediário** (esta última só aparece como aba quando
+`detalhe.temParcelasCredario`, senão a venda não tem crediário e a aba ficaria vazia). O popup
+também ganhou o botão **"Reimprimir papeleta"** no cabeçalho — reaproveita `ComprovantePapeletaModal`
+em modo `reimpressao` (mesmo componente já usado em `ReimpressaoPapeletaVenda.tsx`), empilhado por
+cima do popup de detalhe (usa `Fragment` para não aninhar dentro do `.modal-overlay` do detalhe —
+senão um clique no fundo do popup de reimpressão fecharia os dois por bubbling).
 
 Adaptada de uma especificação escrita para um sistema de referência ("Mitryus ERP") pro modelo de
 dados real do Niner — ver seção seguinte para cada divergência e a decisão tomada.

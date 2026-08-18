@@ -447,6 +447,27 @@ Movimentação de Conta Corrente) que ainda não tinham migrado pro `SeletorPlan
 
 ## Linha do tempo
 
+### 2026-08-18 — Pesquisa de Vendas: detalhamento em abas + reimpressão de papeleta no popup
+
+Pedido do dono do produto: o popup de detalhe da venda (`DetalheVendaModal.tsx`) tinha as quatro
+seções (dados/produtos/caixa/parcelas) **empilhadas sem abas** desde 2026-07-30 — decisão
+deliberada da época, pra comparar produtos com recebimentos ao mesmo tempo. Revertido: agora são
+**abas** — Dados Gerais, Produtos Vendidos, Movimentação de Caixa e **Parcelas de Crediário**
+(esta só aparece quando a venda tem crediário, `detalhe.temParcelasCredario`).
+
+Também ganhou o botão **"Reimprimir papeleta"** no cabeçalho do popup — zero lógica nova, reaproveita
+`ComprovantePapeletaModal` em modo `reimpressao` (mesmo componente da tela
+`ReimpressaoPapeletaVenda.tsx`). Único cuidado: o popup de reimpressão precisou virar irmão do
+`.modal-overlay` do popup de detalhe (via `Fragment`), não filho dele — aninhado, um clique no
+fundo do popup de reimpressão faria bubbling até o `onClick` do overlay pai e fecharia os dois de
+uma vez.
+
+CSS novo: `.abas-nav`/`.aba-botao` em `styles.css` (barra de abas com sublinhado, primeiro uso
+desse padrão no projeto — não existia tab strip nenhum antes). Testado ao vivo no navegador contra
+uma venda real (crediário 6x + dinheiro + PIX): as 4 abas trocam de conteúdo corretamente, a aba de
+parcelas aparece por ter crediário, e o botão de reimpressão abre a papeleta em popup por cima sem
+fechar o de detalhe. `tsc -b` limpo.
+
 ### 2026-08-18 — Bug real: importação de Produtos rejeitava tamanho único ("UN") com "Grade não encontrada"
 
 Achado testando com a planilha real do dono do produto (`PRODUTOS.xlsx`, ~3.600 linhas) — duas

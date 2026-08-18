@@ -1,8 +1,10 @@
+import { Fragment, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { IconeFechar } from '../../components/Icones'
 import { ApiError } from '../../lib/api'
 import { buscarDetalhePesquisaVenda } from '../../lib/pesquisaVendas'
 import { formatarMoeda, mascararCpfCnpj } from '../../lib/masks'
+import ComprovantePapeletaModal from '../pdv/ComprovantePapeletaModal'
 
 function moeda(v: number): string {
   return `R$ ${formatarMoeda(v)}`
@@ -28,10 +30,22 @@ function rotuloSituacaoParcela(situacao: string): string {
   return 'Aberta'
 }
 
+type Aba = 'geral' | 'produtos' | 'caixa' | 'parcelas'
+
 /**
  * Detalhamento da venda selecionada na Pesquisa de Vendas, em popup (2026-07-31) — antes
  * aparecia empilhado abaixo da grid, exigindo scroll da página inteira; agora abre em modal
  * próprio, que rola internamente (mesmo padrão de CancelamentoVendaModal/LancamentosCarteiraModal).
+ *
+ * **Abas (2026-08-18)** — as 4 seções (Dados Gerais/Produtos Vendidos/Movimentação de Caixa/
+ * Parcelas de Crediário) eram empilhadas sem abas de propósito (pedido original: comparar
+ * produtos com recebimentos ao mesmo tempo); revertido a pedido do dono do produto. "Parcelas de
+ * Crediário" só aparece como aba quando a venda tem crediário (`detalhe.temParcelasCredario`) —
+ * sem isso a aba ficaria vazia pra maioria das vendas (dinheiro/cartão/PIX).
+ *
+ * **Reimprimir papeleta (2026-08-18)** — reaproveita `ComprovantePapeletaModal` em modo
+ * `reimpressao` (mesmo componente da Reimpressão de Papeleta de Venda), empilhado por cima deste
+ * popup — zero lógica nova de impressão/PDF/WhatsApp.
  */
 export default function DetalheVendaModal({ idVenda, aoFechar }: { idVenda: number; aoFechar: () => void }) {
   const {
@@ -43,7 +57,11 @@ export default function DetalheVendaModal({ idVenda, aoFechar }: { idVenda: numb
     queryFn: () => buscarDetalhePesquisaVenda(idVenda),
   })
 
+  const [aba, setAba] = useState<Aba>('geral')
+  const [mostrarReimpressao, setMostrarReimpressao] = useState(false)
+
   return (
+    <Fragment>
     <div className="modal-overlay" onClick={aoFechar}>
       <div
         className="modal modal-largo"
@@ -65,143 +83,195 @@ export default function DetalheVendaModal({ idVenda, aoFechar }: { idVenda: numb
               </>
             )}
           </div>
-          <button type="button" className="btn ghost btn-fechar-tela" onClick={aoFechar} aria-label="Fechar" title="Fechar">
-            <IconeFechar />
-          </button>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            {detalhe && (
+              <button type="button" className="btn ghost" onClick={() => setMostrarReimpressao(true)}>
+                Reimprimir papeleta
+              </button>
+            )}
+            <button type="button" className="btn ghost btn-fechar-tela" onClick={aoFechar} aria-label="Fechar" title="Fechar">
+              <IconeFechar />
+            </button>
+          </div>
         </div>
 
-        <div style={{ overflowY: 'auto', flex: 1, minHeight: 0 }}>
         {isLoading ? (
           <p className="muted">Carregando detalhamento…</p>
         ) : error || !detalhe ? (
           <p className="erro">{error instanceof ApiError ? error.message : 'Não foi possível carregar o detalhamento.'}</p>
         ) : (
           <>
-            <div className="form-grid" style={{ marginBottom: 16 }}>
-              <div className="col-3">
-                <label htmlFor="det-empresa">Empresa</label>
-                <input id="det-empresa" className="campo-leitura" readOnly tabIndex={-1} value={detalhe.nomeEmpresa} />
-              </div>
-              <div className="col-3">
-                <label htmlFor="det-data">Data da venda</label>
-                <input id="det-data" className="campo-leitura" readOnly tabIndex={-1} value={formatarDataHora(detalhe.dataVenda)} />
-              </div>
-              <div className="col-3">
-                <label htmlFor="det-cliente">Cliente</label>
-                <input id="det-cliente" className="campo-leitura" readOnly tabIndex={-1} value={detalhe.nomeCliente ?? '—'} />
-              </div>
-              <div className="col-3">
-                <label htmlFor="det-documento">CPF/CNPJ</label>
-                <input
-                  id="det-documento"
-                  className="campo-leitura"
-                  readOnly
-                  tabIndex={-1}
-                  value={detalhe.cpfCnpj && detalhe.fisicaJuridica !== null ? mascararCpfCnpj(detalhe.cpfCnpj, detalhe.fisicaJuridica) : '—'}
-                />
-              </div>
-              <div className="col-3">
-                <label htmlFor="det-vendedor">Vendedor</label>
-                <input id="det-vendedor" className="campo-leitura" readOnly tabIndex={-1} value={detalhe.nomeFuncionario ?? '—'} />
-              </div>
-              <div className="col-6">
-                <label htmlFor="det-condicao">Condição de pagamento</label>
-                <input id="det-condicao" className="campo-leitura" readOnly tabIndex={-1} value={detalhe.condicaoPagamento} />
-              </div>
-              <div className="col-3">
-                <label htmlFor="det-desconto">Desconto</label>
-                <input id="det-desconto" className="campo-leitura mono" readOnly tabIndex={-1} value={moeda(detalhe.desconto)} />
-              </div>
-              <div className="col-3">
-                <label htmlFor="det-total">Valor total</label>
-                <input id="det-total" className="campo-leitura mono" readOnly tabIndex={-1} value={moeda(detalhe.valorTotal)} />
-              </div>
-              <div className="col-3">
-                <label htmlFor="det-recebido">Recebido</label>
-                <input id="det-recebido" className="campo-leitura mono" readOnly tabIndex={-1} value={moeda(detalhe.recebido)} />
-              </div>
-              <div className="col-3">
-                <label htmlFor="det-a-receber">A receber</label>
-                <input id="det-a-receber" className="campo-leitura mono" readOnly tabIndex={-1} value={moeda(detalhe.aReceber)} />
-              </div>
-            </div>
-
-            {detalhe.cancelada && (
-              <p className="muted" style={{ marginTop: -8, marginBottom: 16 }}>
-                Cancelada em {detalhe.dataCancelamento && formatarDataHora(detalhe.dataCancelamento)} por{' '}
-                {detalhe.nomeUsuarioCancelamento} — motivo: {detalhe.motivoCancelamento}
-              </p>
-            )}
-
-            <h3>Produtos vendidos</h3>
-            <div className="table-wrap" style={{ marginBottom: 16, maxHeight: 220 }}>
-              <table className="table table-compacta">
-                <thead>
-                  <tr>
-                    <th>Código</th>
-                    <th>Descrição</th>
-                    <th>Quantidade</th>
-                    <th>Valor unitário</th>
-                    <th>Desconto</th>
-                    <th>Valor total</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {detalhe.itens.map((item, indice) => (
-                    <tr key={indice}>
-                      <td className="mono">{item.codigo}</td>
-                      <td>
-                        {item.descricaoProduto}
-                        {(item.variacaoCor || item.variacaoTamanho) && (
-                          <span className="muted"> ({[item.variacaoCor, item.variacaoTamanho].filter(Boolean).join(' / ')})</span>
-                        )}
-                      </td>
-                      <td className="mono">{item.qtd}</td>
-                      <td className="mono">{moeda(item.valorUnitario)}</td>
-                      <td className="mono">{moeda(item.valorDesconto)}</td>
-                      <td className="mono">{moeda(item.valorItem)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            <h3>Movimentação de caixa</h3>
-            <div className="table-wrap" style={{ marginBottom: 16, maxHeight: 220 }}>
-              {detalhe.movimentosCaixa.length === 0 ? (
-                <p className="muted">Nenhuma movimentação de caixa para esta venda.</p>
-              ) : (
-                <table className="table table-compacta">
-                  <thead>
-                    <tr>
-                      <th>Data/Hora</th>
-                      <th>Tipo de operação</th>
-                      <th>Forma de pagamento</th>
-                      <th>Documento</th>
-                      <th>C/D</th>
-                      <th>Valor</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {detalhe.movimentosCaixa.map((m, indice) => (
-                      <tr key={indice}>
-                        <td>{formatarDataHora(m.dataHora)}</td>
-                        <td>{m.tipoOperacao}</td>
-                        <td>{m.nomeCarteira}</td>
-                        <td>{m.origem}</td>
-                        <td className="mono">{m.creditoDebito}</td>
-                        <td className="mono">{moeda(m.valor)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+            <div className="abas-nav" role="tablist">
+              <button
+                type="button"
+                role="tab"
+                aria-selected={aba === 'geral'}
+                className={`aba-botao ${aba === 'geral' ? 'ativa' : ''}`}
+                onClick={() => setAba('geral')}
+              >
+                Dados Gerais
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={aba === 'produtos'}
+                className={`aba-botao ${aba === 'produtos' ? 'ativa' : ''}`}
+                onClick={() => setAba('produtos')}
+              >
+                Produtos Vendidos
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={aba === 'caixa'}
+                className={`aba-botao ${aba === 'caixa' ? 'ativa' : ''}`}
+                onClick={() => setAba('caixa')}
+              >
+                Movimentação de Caixa
+              </button>
+              {detalhe.temParcelasCredario && (
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={aba === 'parcelas'}
+                  className={`aba-botao ${aba === 'parcelas' ? 'ativa' : ''}`}
+                  onClick={() => setAba('parcelas')}
+                >
+                  Parcelas de Crediário
+                </button>
               )}
             </div>
 
-            {detalhe.temParcelasCredario && (
-              <>
-                <h3>Parcelas de crediário</h3>
-                <div className="table-wrap" style={{ maxHeight: 220 }}>
+            <div style={{ overflowY: 'auto', flex: 1, minHeight: 0 }}>
+              {aba === 'geral' && (
+                <>
+                  <div className="form-grid" style={{ marginBottom: 16 }}>
+                    <div className="col-3">
+                      <label htmlFor="det-empresa">Empresa</label>
+                      <input id="det-empresa" className="campo-leitura" readOnly tabIndex={-1} value={detalhe.nomeEmpresa} />
+                    </div>
+                    <div className="col-3">
+                      <label htmlFor="det-data">Data da venda</label>
+                      <input id="det-data" className="campo-leitura" readOnly tabIndex={-1} value={formatarDataHora(detalhe.dataVenda)} />
+                    </div>
+                    <div className="col-3">
+                      <label htmlFor="det-cliente">Cliente</label>
+                      <input id="det-cliente" className="campo-leitura" readOnly tabIndex={-1} value={detalhe.nomeCliente ?? '—'} />
+                    </div>
+                    <div className="col-3">
+                      <label htmlFor="det-documento">CPF/CNPJ</label>
+                      <input
+                        id="det-documento"
+                        className="campo-leitura"
+                        readOnly
+                        tabIndex={-1}
+                        value={detalhe.cpfCnpj && detalhe.fisicaJuridica !== null ? mascararCpfCnpj(detalhe.cpfCnpj, detalhe.fisicaJuridica) : '—'}
+                      />
+                    </div>
+                    <div className="col-3">
+                      <label htmlFor="det-vendedor">Vendedor</label>
+                      <input id="det-vendedor" className="campo-leitura" readOnly tabIndex={-1} value={detalhe.nomeFuncionario ?? '—'} />
+                    </div>
+                    <div className="col-6">
+                      <label htmlFor="det-condicao">Condição de pagamento</label>
+                      <input id="det-condicao" className="campo-leitura" readOnly tabIndex={-1} value={detalhe.condicaoPagamento} />
+                    </div>
+                    <div className="col-3">
+                      <label htmlFor="det-desconto">Desconto</label>
+                      <input id="det-desconto" className="campo-leitura mono" readOnly tabIndex={-1} value={moeda(detalhe.desconto)} />
+                    </div>
+                    <div className="col-3">
+                      <label htmlFor="det-total">Valor total</label>
+                      <input id="det-total" className="campo-leitura mono" readOnly tabIndex={-1} value={moeda(detalhe.valorTotal)} />
+                    </div>
+                    <div className="col-3">
+                      <label htmlFor="det-recebido">Recebido</label>
+                      <input id="det-recebido" className="campo-leitura mono" readOnly tabIndex={-1} value={moeda(detalhe.recebido)} />
+                    </div>
+                    <div className="col-3">
+                      <label htmlFor="det-a-receber">A receber</label>
+                      <input id="det-a-receber" className="campo-leitura mono" readOnly tabIndex={-1} value={moeda(detalhe.aReceber)} />
+                    </div>
+                  </div>
+
+                  {detalhe.cancelada && (
+                    <p className="muted" style={{ marginTop: -8 }}>
+                      Cancelada em {detalhe.dataCancelamento && formatarDataHora(detalhe.dataCancelamento)} por{' '}
+                      {detalhe.nomeUsuarioCancelamento} — motivo: {detalhe.motivoCancelamento}
+                    </p>
+                  )}
+                </>
+              )}
+
+              {aba === 'produtos' && (
+                <div className="table-wrap">
+                  <table className="table table-compacta">
+                    <thead>
+                      <tr>
+                        <th>Código</th>
+                        <th>Descrição</th>
+                        <th>Quantidade</th>
+                        <th>Valor unitário</th>
+                        <th>Desconto</th>
+                        <th>Valor total</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {detalhe.itens.map((item, indice) => (
+                        <tr key={indice}>
+                          <td className="mono">{item.codigo}</td>
+                          <td>
+                            {item.descricaoProduto}
+                            {(item.variacaoCor || item.variacaoTamanho) && (
+                              <span className="muted"> ({[item.variacaoCor, item.variacaoTamanho].filter(Boolean).join(' / ')})</span>
+                            )}
+                          </td>
+                          <td className="mono">{item.qtd}</td>
+                          <td className="mono">{moeda(item.valorUnitario)}</td>
+                          <td className="mono">{moeda(item.valorDesconto)}</td>
+                          <td className="mono">{moeda(item.valorItem)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              {aba === 'caixa' && (
+                <div className="table-wrap">
+                  {detalhe.movimentosCaixa.length === 0 ? (
+                    <p className="muted">Nenhuma movimentação de caixa para esta venda.</p>
+                  ) : (
+                    <table className="table table-compacta">
+                      <thead>
+                        <tr>
+                          <th>Data/Hora</th>
+                          <th>Tipo de operação</th>
+                          <th>Forma de pagamento</th>
+                          <th>Documento</th>
+                          <th>C/D</th>
+                          <th>Valor</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {detalhe.movimentosCaixa.map((m, indice) => (
+                          <tr key={indice}>
+                            <td>{formatarDataHora(m.dataHora)}</td>
+                            <td>{m.tipoOperacao}</td>
+                            <td>{m.nomeCarteira}</td>
+                            <td>{m.origem}</td>
+                            <td className="mono">{m.creditoDebito}</td>
+                            <td className="mono">{moeda(m.valor)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
+              )}
+
+              {aba === 'parcelas' && detalhe.temParcelasCredario && (
+                <div className="table-wrap">
                   <table className="table table-compacta">
                     <thead>
                       <tr>
@@ -229,12 +299,16 @@ export default function DetalheVendaModal({ idVenda, aoFechar }: { idVenda: numb
                     </tbody>
                   </table>
                 </div>
-              </>
-            )}
+              )}
+            </div>
           </>
         )}
-        </div>
       </div>
     </div>
+
+    {mostrarReimpressao && (
+      <ComprovantePapeletaModal idVenda={idVenda} reimpressao aoFechar={() => setMostrarReimpressao(false)} />
+    )}
+    </Fragment>
   )
 }

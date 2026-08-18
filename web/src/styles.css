@@ -216,6 +216,16 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
 .paginacao-numero.ativa { background: var(--accent); color: var(--accent-ink); border-color: transparent; }
 .paginacao-seta { padding: 7px 9px; display: inline-flex; align-items: center; }
 
+/* Abas dentro de popup largo (DetalheVendaModal, 2026-08-18) — navegação por seção em vez de
+   grids empilhadas; `flex-shrink: 0` porque só o conteúdo da aba ativa deve rolar, não a barra. */
+.abas-nav { display: flex; gap: 4px; border-bottom: 1px solid var(--line); margin-bottom: 16px; flex-shrink: 0; }
+.aba-botao {
+  padding: 10px 16px; background: transparent; border: 0; border-bottom: 2px solid transparent;
+  color: var(--ink-muted); font-size: 14px; font-weight: 600; cursor: pointer; margin-bottom: -1px;
+}
+.aba-botao:hover { color: var(--ink); }
+.aba-botao.ativa { color: var(--accent); border-bottom-color: var(--accent); }
+
 /* `overflow-x: auto` sozinho já força um contexto de rolagem próprio neste elemento (o
    navegador trata overflow-y como "auto" também quando só overflow-x é definido) — sem
    `height: 100%` aqui, esse contexto nunca chega a rolar de verdade (quem rola é o
