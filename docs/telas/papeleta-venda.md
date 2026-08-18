@@ -186,6 +186,14 @@ descritos acima, não suíte JUnit).
 
 ## Reimpressão (2026-08-06, mesmo dia — deixou de ser non-goal)
 
+> ⚠️ **A tela dedicada abaixo saiu do projeto em 2026-08-18.** `ReimpressaoPapeletaVenda.tsx`,
+> a rota `/reimpressao-papeleta-venda` e o grupo de menu "Frente de Loja › Reimpressões" foram
+> removidos — ficaram redundantes com o botão "Reimprimir papeleta" que o popup de detalhe da
+> Pesquisa de Vendas ganhou no mesmo dia. A lógica descrita abaixo (prop `reimpressao`,
+> `montarLinhasComprovanteVenda` com o segundo parâmetro) **continua valendo por completo** —
+> só a casca (tela de busca dedicada) mudou de endereço. Ver `docs/telas/pesquisa-vendas.md`
+> pra onde o botão mora agora.
+
 Tela nova, **Reimpressão de Papeleta de Venda** (`/reimpressao-papeleta-venda`,
 `ReimpressaoPapeletaVenda.tsx`, grupo de menu "Frente de Loja › Reimpressões", junto com a
 reimpressão de crediário abaixo) — 100% frontend, zero endpoint novo:
@@ -224,11 +232,41 @@ só a pré-visualização (`<pre>`) rola por dentro quando a papeleta é longa. 
 usado em `CancelamentoVendaModal.tsx` (`.modal` em coluna flex com `overflow:hidden`; título e
 rodapé com `flexShrink:0`; miolo com `overflow-y:auto; flex:1; min-height:0`).
 
+## Emissão fiscal automática × manual (2026-08-19, `cfg_geral.cfg_emite_fiscal_apos_venda`)
+
+Pedido do dono do produto: até aqui a emissão da NFC-e (§9.6 do estudo fiscal, bloco B7) sempre
+disparava sozinha, sem parâmetro pra desligar. Ganhou um `checkbox` em Parâmetros do Sistema >
+Fiscal — comportamento no popup (`ComprovantePapeletaModal.tsx`):
+
+- **Ligado (default, preserva o comportamento de sempre):** o `useEffect` que dispara
+  `POST .../nfce` continua dele mesmo, assim que o popup abre — nada muda visualmente.
+- **Desligado:** o `useEffect` **não dispara** (checa `configFiscal?.cfgEmiteFiscalAposVenda`
+  antes de marcar `emissaoDisparadaRef`) — a papeleta fica só papeleta ("DOCUMENTO SEM VALOR
+  FISCAL"), sem nenhuma chamada de rede automática. Um botão **"Emitir Nota Fiscal"** aparece no
+  rodapé (grupo de botões, ao lado de "Enviar por WhatsApp") — chama a mesma `emitirNfce(idVenda)`
+  e trata o resultado do mesmo jeito do caminho automático (Toast, invalida a query do
+  comprovante, popup vira DANFCE quando autoriza). Só aparece quando `!dadosFiscais` (some
+  sozinho depois de emitir com sucesso; reaparece se a emissão veio rejeitada/falhou, pra permitir
+  tentar de novo).
+- A configuração é buscada via `GET /api/v1/config-geral/emite-fiscal-apos-venda` (flag leve, sem
+  checagem de papel — qualquer operador efetiva venda), com `enabled: !reimpressao`: **em
+  reimpressão a query nem roda**, então o botão manual nunca aparece lá — reimprimir uma papeleta
+  já emitida não é (e não pode virar) um jeito de reemitir documento fiscal.
+
+Verificado ao vivo: banco de dev reconstruído (coluna nova em `cfg_geral`), venda real com o
+parâmetro desligado → papeleta comum + botão manual, clique disparou `POST .../nfce` (confirmado
+na aba de rede, 204 porque o fiscal não está configurado neste tenant de teste); venda real com o
+parâmetro ligado → mesmo `POST .../nfce` disparado sozinho, sem nenhum clique, sem botão manual
+visível.
+
 ## Ajuda da tela (manual de operação + vídeo) — obrigatório (R22 / §3.7.1)
 
 O popup em si (pós-F5) não se aplica — é automático dentro do fluxo do PDV, sem `AjudaDaTela`
-própria. A tela de **Reimpressão** tem a sua: `vendas.reimpressaopapeleta.tela`, atualizada
-(2026-08-07) pra mencionar o botão de WhatsApp.
+própria; a ajuda relevante vive em `pdv.tela` (o fluxo que abre o popup, incluindo o parâmetro de
+emissão automática/manual) e em `vendas.pesquisavendas.tela` (o botão "Reimprimir papeleta",
+desde 2026-08-18 — ver nota no topo desta seção sobre a tela dedicada removida, cuja entrada
+`vendas.reimpressaopapeleta.tela` também saiu do `AjudaDaTela.tsx` junto). O parâmetro em si tem
+a sua própria em `configuracao.geral.form`.
 
 ## Impacto no banco
 

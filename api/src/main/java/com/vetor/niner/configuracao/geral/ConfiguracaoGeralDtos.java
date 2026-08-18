@@ -31,7 +31,8 @@ public final class ConfiguracaoGeralDtos {
             @NotNull Boolean cfgRateiaFreteEntrada,
             @NotNull Boolean cfgReajustaPrecoEntrada,
             @NotNull Boolean cfgConsisteValorContasPagar,
-            @NotBlank String idPlanoContasCompraMercadoria) {
+            @NotBlank String idPlanoContasCompraMercadoria,
+            @NotNull Boolean cfgEmiteFiscalAposVenda) {
     }
 
     public record ConfiguracaoGeralResponse(
@@ -47,6 +48,7 @@ public final class ConfiguracaoGeralDtos {
             boolean cfgReajustaPrecoEntrada,
             boolean cfgConsisteValorContasPagar,
             String idPlanoContasCompraMercadoria,
+            boolean cfgEmiteFiscalAposVenda,
             OffsetDateTime atualizadoEm) {
     }
 
@@ -93,5 +95,11 @@ public final class ConfiguracaoGeralDtos {
      *  de fornecedor embutido na Entrada de Produtos por Compra (`FornecedorQuickCreateModal`),
      *  acionado por qualquer papel que faz entrada, não só ADMIN. */
     public record PlanoContasCompraMercadoriaResponse(String idPlanoContasCompraMercadoria) {
+    }
+
+    /** Só a flag de emissão fiscal automática pós-venda (2026-08-19), sem checagem de papel —
+     *  usada pelo popup de papeleta do PDV (`ComprovantePapeletaModal`) pra decidir se dispara a
+     *  emissão da NFC-e sozinha ou mostra o botão de emissão manual. */
+    public record EmiteFiscalAposVendaResponse(boolean cfgEmiteFiscalAposVenda) {
     }
 }

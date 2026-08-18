@@ -135,8 +135,10 @@ Suíte completa do projeto: 500/500 verdes (2026-08-14).
 ## Reimpressão (2026-08-06 — deixou de ser non-goal)
 
 Tela nova, **Reimpressão de Recebimento de Crediário**
-(`/reimpressao-recebimento-crediario`, `ReimpressaoRecebimentoCrediario.tsx`, grupo de menu
-"Frente de Loja › Reimpressões") — 100% frontend, reaproveita o endpoint que o Estorno de
+(`/reimpressao-recebimento-crediario`, `ReimpressaoRecebimentoCrediario.tsx`, item direto de
+"Frente de Loja" — ⚠️ 2026-08-19: o grupo "Reimpressões" saiu do menu quando este virou o único
+item nele, depois de "Reimpressão de Papeleta de Venda" sair em 2026-08-18) — 100% frontend,
+reaproveita o endpoint que o Estorno de
 Crediário já usava pra achar lotes (`GET /api/v1/recebimento-crediario/estornos`), só sem a ação
 de estornar:
 

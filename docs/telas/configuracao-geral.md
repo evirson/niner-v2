@@ -47,16 +47,18 @@ que já é ADMIN-only.
 
 ## Campos do formulário
 
-Tabela `cfg_geral` (V023). Cinco seções, nesta ordem: **Vendas**, **Catálogo**, **Estoque**
-(2026-07-29), **Compras** (2026-08-13, plano de contas padrão da compra de mercadoria) e
-**Crediário** — esta última nasceu rotulada "(Fase 2)" com um aviso de que o módulo ainda não
-existia; o crediário saiu do papel em 2026-07-29 (Recebimento de Crediário calcula multa/juros
-automaticamente sobre parcelas vencidas usando esses quatro campos) e o rótulo/aviso da tela
-foram corrigidos só em **2026-08-07**, quando a discrepância foi notada.
+Tabela `cfg_geral` (V023). Seis seções, nesta ordem: **Vendas**, **Fiscal** (2026-08-19),
+**Catálogo**, **Estoque** (2026-07-29), **Compras** (2026-08-13, plano de contas padrão da
+compra de mercadoria) e **Crediário** — esta última nasceu rotulada "(Fase 2)" com um aviso de
+que o módulo ainda não existia; o crediário saiu do papel em 2026-07-29 (Recebimento de
+Crediário calcula multa/juros automaticamente sobre parcelas vencidas usando esses quatro
+campos) e o rótulo/aviso da tela foram corrigidos só em **2026-08-07**, quando a discrepância
+foi notada.
 
 | Campo (banco) | Rótulo na tela | Componente | Regra |
 |---|---|---|---|
 | `percentual_desconto_venda` | Desconto máximo em venda (%) | percentual (máscara) | 0–100 |
+| `cfg_emite_fiscal_apos_venda` | Emitir NFC-e/NF-e automaticamente após a venda | checkbox | — (default `true`, 2026-08-19) |
 | `cfg_usa_cor_grade` | Usa cor/grade (calçados, confecções) | checkbox | — (default `false`, 2026-08-08; era duas flags separadas de linha/coluna) |
 | `cfg_permite_qtd_decimal` | Permite quantidade decimal para produtos | checkbox | — (default `true`) |
 | `cfg_exige_numero_venda_devolucao` | Exigir número da venda na Devolução de Produtos | checkbox | — (default `false`, 2026-08-11) |
@@ -108,6 +110,22 @@ Lida por qualquer papel via `GET /api/v1/config-geral/consiste-valor-contas-paga
 das outras flags leves) e **validada também no servidor** (`EntradaMercadoriaService.registrar`
 rejeita com 400 antes de gravar qualquer coisa — a transação inteira é revertida, nem movimento
 de estoque nem conta a pagar sobram). Detalhe do efeito na tela: `docs/telas/entrada-mercadoria.md`.
+
+**`cfg_emite_fiscal_apos_venda` (2026-08-19):** liga/desliga se a NFC-e/NF-e é emitida
+**automaticamente** assim que o PDV confirma a venda, ou se fica **manual** (o operador aciona
+quando quiser). **Ligado por padrão** — preserva o comportamento de sempre: desde o B7
+(2026-08-17), a emissão já disparava sozinha em paralelo à papeleta (F3: a venda nunca espera a
+SEFAZ), sem nenhum parâmetro pra desligar isso até este dia. Ligado, o popup de papeleta do PDV
+(`ComprovantePapeletaModal.tsx`) dispara `POST .../nfce` sozinho ao abrir e vira DANFCE quando a
+SEFAZ autoriza, exatamente como antes. Desligado, o popup **não** dispara nada sozinho — mostra
+só a papeleta comum, com um botão "Emitir Nota Fiscal" no rodapé pro operador acionar quando
+quiser (mesma função de emissão, mesmo tratamento de resultado — Toast de sucesso/erro, popup
+vira DANFCE quando autoriza). Lida por qualquer papel via `GET
+/api/v1/config-geral/emite-fiscal-apos-venda` (mesmo padrão das outras flags leves) — o popup de
+papeleta é usado por qualquer operador que efetiva uma venda, não só ADMIN. **O botão manual
+nunca aparece em reimpressão** (`reimpressao=true`): reimprimir uma papeleta já emitida não é (e
+não deve virar) um jeito de reemitir documento fiscal — a query da flag nem é buscada nesse modo
+(`enabled: !reimpressao`). Detalhe completo do popup: `docs/telas/papeleta-venda.md`.
 
 ## Critérios de aceitação (viram testes)
 
@@ -176,6 +194,7 @@ GET  /api/v1/config-geral/rateia-frete-entrada     rateia frete/IPI/ICMS-ST no c
 GET  /api/v1/config-geral/reajusta-preco-entrada   reajusta preço na entrada? (qualquer papel, Entrada de Produtos)
 GET  /api/v1/config-geral/consiste-valor-contas-pagar  duplicatas têm de somar o total dos produtos? (qualquer papel, Entrada de Produtos — 2026-08-14)
 GET  /api/v1/config-geral/plano-contas-compra-mercadoria  plano de contas padrão de compra (qualquer papel — 2026-08-13, ver "Bug corrigido" acima)
+GET  /api/v1/config-geral/emite-fiscal-apos-venda  emite NFC-e/NF-e automática após a venda? (qualquer papel, popup de papeleta do PDV — 2026-08-19)
 ```
 
 Sob `/api/v1/**` (JWT de tenant, RLS ativo — P8); 403 (Problem Details) para papel diferente
@@ -185,10 +204,10 @@ de ADMIN, verificado a partir do claim `roles` do JWT (mesmo mecanismo de
 ## Ajuda da tela (manual de operação + vídeo) — obrigatório (R22 / §3.7.1)
 
 - **`chave_tela`: `configuracao.geral.form`** — desconto máximo, exigência de venda na
-  devolução, uso de cor/grade, quantidade decimal de produtos, juros/multa de crediário e as
-  regras de Compras (rateio de frete, reajuste de preço, consistência do valor das contas a
-  pagar, plano de contas da compra); erros comuns: só ADMIN acessa, percentuais entre 0–100.
-  `url_video`: NULL.
+  devolução, uso de cor/grade, quantidade decimal de produtos, emissão fiscal automática ou
+  manual após a venda, juros/multa de crediário e as regras de Compras (rateio de frete,
+  reajuste de preço, consistência do valor das contas a pagar, plano de contas da compra); erros
+  comuns: só ADMIN acessa, percentuais entre 0–100. `url_video`: NULL.
 
 ## Impacto no banco
 
@@ -204,6 +223,9 @@ privilégios de `cfg_geral` para `niner_app` são de tabela inteira, não por co
 veio da V023: nasceu na `V032__plano_contas.sql` (linhas 21, 48 e 51 — coluna, FK e seed do
 padrão), junto do plano de contas gerencial. O resto da tabela já existia por completo (V023, RLS
 via V024), semeada no signup.
+`cfg_emite_fiscal_apos_venda boolean NOT NULL DEFAULT true` (coluna nova, 2026-08-19, mesmo
+padrão — dentro de `V023__cfg_geral.sql`; banco de dev reconstruído do zero pra pegar a coluna,
+sem `flyway repair`, porque o dono do produto autorizou o reset dos dados de teste).
 
 ## Impacto nas integrações
 

@@ -32,6 +32,7 @@ const VAZIO: ConfiguracaoGeralFormState = {
   cfgReajustaPrecoEntrada: false,
   cfgConsisteValorContasPagar: true,
   idPlanoContasCompraMercadoria: '',
+  cfgEmiteFiscalAposVenda: true,
 }
 
 type CampoValidavel = 'percentualDescontoVenda' | 'jurosCrediarioDias' | 'jurosCrediario' | 'multaCrediarioDias' | 'multaCrediario'
@@ -86,6 +87,7 @@ export default function ConfiguracaoGeralForm() {
       queryClient.invalidateQueries({ queryKey: ['rateia-frete-entrada'] })
       queryClient.invalidateQueries({ queryKey: ['reajusta-preco-entrada'] })
       queryClient.invalidateQueries({ queryKey: ['consiste-valor-contas-pagar'] })
+      queryClient.invalidateQueries({ queryKey: ['emite-fiscal-apos-venda'] })
       setToastTipo('sucesso')
       setToast('Parâmetros salvos.')
     },
@@ -182,6 +184,29 @@ export default function ConfiguracaoGeralForm() {
                 Ligado: o operador precisa informar o número da venda de origem antes de gravar a
                 devolução, e só pode devolver produtos que fizeram parte dela. Desligado: o campo
                 continua opcional (padrão) — sem ele, qualquer produto pode ser devolvido livremente.
+              </p>
+            </div>
+          </div>
+        </section>
+
+        <section className="section">
+          <p className="section-label">Fiscal</p>
+
+          <div className="form-grid">
+            <div className="col-6">
+              <label className="checkbox-linha" style={{ marginTop: 0 }}>
+                <input
+                  type="checkbox"
+                  checked={form.cfgEmiteFiscalAposVenda}
+                  onChange={(e) => setForm((f) => ({ ...f, cfgEmiteFiscalAposVenda: e.target.checked }))}
+                />
+                Emitir NFC-e/NF-e automaticamente após a venda
+              </label>
+              <p className="muted" style={{ fontSize: 12, marginTop: 4 }}>
+                Ligado: assim que a venda é confirmada, o sistema já tenta emitir a nota fiscal —
+                o popup mostra a papeleta e vira o cupom fiscal (DANFCE) sozinho quando a SEFAZ
+                autoriza. Desligado: o popup mostra só a papeleta de venda, com um botão para o
+                operador emitir a nota fiscal quando quiser.
               </p>
             </div>
           </div>

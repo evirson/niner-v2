@@ -30,7 +30,7 @@ public class ConfiguracaoGeralService {
                    cfg_permite_qtd_decimal, cfg_exige_numero_venda_devolucao,
                    cfg_rateia_frete_entrada, cfg_reajusta_preco_entrada,
                    cfg_consiste_valor_contas_pagar,
-                   id_plano_contas_compra_mercadoria, atualizado_em
+                   id_plano_contas_compra_mercadoria, cfg_emite_fiscal_apos_venda, atualizado_em
             FROM cfg_geral
             WHERE id_tenant = plataforma.tenant_atual()
             """;
@@ -184,6 +184,24 @@ public class ConfiguracaoGeralService {
                 .orElse("3.03.001");
     }
 
+    /**
+     * Só a flag de emissão fiscal automática pós-venda (2026-08-19), sem checagem de papel —
+     * usada pelo popup de papeleta do PDV (`ComprovantePapeletaModal`) logo após o F5. Fallback
+     * {@code true}: preserva o comportamento de sempre (emissão automática, sem esperar o
+     * operador) para quem nunca configurou este parâmetro — é assim que a NFC-e funciona desde
+     * o B7, antes deste parâmetro existir.
+     */
+    @Transactional(readOnly = true)
+    public boolean emiteFiscalAposVenda() {
+        return jdbc.sql("""
+                        SELECT cfg_emite_fiscal_apos_venda FROM cfg_geral
+                        WHERE id_tenant = plataforma.tenant_atual()
+                        """)
+                .query(Boolean.class)
+                .optional()
+                .orElse(true);
+    }
+
     @Transactional
     public ConfiguracaoGeralResponse atualizar(Jwt jwt, ConfiguracaoGeralRequest req) {
         exigirAdmin(jwt);
@@ -194,7 +212,8 @@ public class ConfiguracaoGeralService {
                             cfg_permite_qtd_decimal = ?, cfg_exige_numero_venda_devolucao = ?,
                             cfg_rateia_frete_entrada = ?, cfg_reajusta_preco_entrada = ?,
                             cfg_consiste_valor_contas_pagar = ?,
-                            id_plano_contas_compra_mercadoria = ?, atualizado_em = now()
+                            id_plano_contas_compra_mercadoria = ?, cfg_emite_fiscal_apos_venda = ?,
+                            atualizado_em = now()
                         WHERE id_tenant = plataforma.tenant_atual()
                         """)
                 .params(List.of(
@@ -203,7 +222,7 @@ public class ConfiguracaoGeralService {
                         req.cfgPermiteQtdDecimal(), req.cfgExigeNumeroVendaDevolucao(),
                         req.cfgRateiaFreteEntrada(), req.cfgReajustaPrecoEntrada(),
                         req.cfgConsisteValorContasPagar(),
-                        req.idPlanoContasCompraMercadoria()))
+                        req.idPlanoContasCompraMercadoria(), req.cfgEmiteFiscalAposVenda()))
                 .update();
         // Não deveria acontecer — a linha nasce no signup — mas 404 é mais honesto que
         // seguir em frente como se tivesse atualizado algo.
@@ -243,6 +262,7 @@ public class ConfiguracaoGeralService {
                 rs.getBoolean("cfg_reajusta_preco_entrada"),
                 rs.getBoolean("cfg_consiste_valor_contas_pagar"),
                 rs.getString("id_plano_contas_compra_mercadoria"),
+                rs.getBoolean("cfg_emite_fiscal_apos_venda"),
                 rs.getObject("atualizado_em", OffsetDateTime.class));
     }
 }

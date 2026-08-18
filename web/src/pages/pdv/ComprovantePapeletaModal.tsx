@@ -7,6 +7,7 @@ import {
   montarLinhasComprovanteVenda,
 } from '../../lib/comprovante'
 import { ApiError } from '../../lib/api'
+import { buscarEmiteFiscalAposVenda } from '../../lib/configuracaoGeral'
 import { buscarComprovanteVenda, emitirNfce, type ResultadoEmissaoNfce } from '../../lib/pdv'
 import { compartilharArquivo } from '../../lib/compartilhamento'
 import { montarLinkWhatsApp } from '../../lib/whatsapp'
@@ -44,6 +45,13 @@ const SITUACOES_SUCESSO = new Set(['AUTORIZADO', 'CONTINGENCIA', 'EM_PROCESSAMEN
  * Toast avisa o operador e a query do comprovante é invalidada: como a emissão gravou
  * `documento_fiscal`, o próximo fetch já traz `dadosFiscais` preenchido e a papeleta vira DANFCE
  * na hora (chave, QR Code, protocolo) sem o operador precisar fechar/reabrir o popup.
+ *
+ * **Emissão automática × manual (2026-08-19, `cfg_geral.cfg_emite_fiscal_apos_venda`)** — o
+ * disparo automático acima só acontece quando o parâmetro está ligado (Parâmetros do Sistema >
+ * Fiscal). Desligado: nenhum `POST .../nfce` automático — a papeleta fica como sempre foi, e um
+ * botão "Emitir Nota Fiscal" no rodapé deixa o operador acionar na hora que quiser (mesma função
+ * `emitirNfce`, mesmo tratamento de resultado). O botão nunca aparece em `reimpressao` — reimprimir
+ * não é (e não deve virar) um jeito de reemitir documento fiscal.
  */
 export default function ComprovantePapeletaModal({
   idVenda,
@@ -65,40 +73,66 @@ export default function ComprovantePapeletaModal({
     retry: 1,
   })
 
+  // Nunca buscado em reimpressão — o parâmetro só decide o comportamento do fluxo normal
+  // pós-venda, e reimpressão nunca emite nada, automático ou manual (ver Obs1 do pedido).
+  const { data: configFiscal } = useQuery({
+    queryKey: ['emite-fiscal-apos-venda'],
+    queryFn: buscarEmiteFiscalAposVenda,
+    enabled: !reimpressao,
+  })
+
   const [modalWhatsAppAberto, setModalWhatsAppAberto] = useState(false)
   const [enviandoWhatsApp, setEnviandoWhatsApp] = useState(false)
   const [erroWhatsApp, setErroWhatsApp] = useState<string | null>(null)
   const [resultadoFiscal, setResultadoFiscal] = useState<ResultadoEmissaoNfce | null>(null)
+  const [emitindoManualmente, setEmitindoManualmente] = useState(false)
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null)
   const emissaoDisparadaRef = useRef(false)
 
-  // Dispara uma vez só, nunca em reimpressão. Efeito próprio (não dentro do useQuery) porque a
-  // papeleta tem que abrir e ficar utilizável ANTES da SEFAZ responder — a emissão é só mais uma
-  // coisa acontecendo em paralelo, não uma condição pra mostrar o comprovante.
+  function processarResultadoEmissao(resultado: ResultadoEmissaoNfce | null) {
+    if (!resultado) return // F12: fiscal desligado, nada a mostrar
+    setResultadoFiscal(resultado)
+    queryClient.invalidateQueries({ queryKey: ['comprovante-venda', idVenda] })
+  }
+
+  function erroDeComunicacao(): ResultadoEmissaoNfce {
+    // Falha ao CHAMAR o endpoint (rede, 5xx) — diferente de uma emissão que terminou
+    // rejeitada/em contingência (essas voltam 200 com o resultado, não erro HTTP). A venda já
+    // está gravada de qualquer forma; só avisa que a tentativa de emitir não completou.
+    return {
+      situacao: 'FALHA_COMUNICACAO',
+      idDocumentoFiscal: 0,
+      chaveAcesso: null,
+      protocolo: null,
+      cStat: null,
+      mensagem: 'Não foi possível falar com o serviço fiscal. A venda está registrada.',
+    }
+  }
+
+  // Dispara uma vez só, nunca em reimpressão e só quando "emitir automaticamente" está ligado
+  // (Parâmetros do Sistema > Fiscal, 2026-08-19) — aguarda `configFiscal` carregar antes de
+  // decidir, pra não vazar uma emissão automática enquanto o parâmetro ainda está desconhecido.
+  // Efeito próprio (não dentro do useQuery) porque a papeleta tem que abrir e ficar utilizável
+  // ANTES da SEFAZ responder — a emissão é só mais uma coisa acontecendo em paralelo, não uma
+  // condição pra mostrar o comprovante.
   useEffect(() => {
     if (reimpressao || emissaoDisparadaRef.current) return
+    if (!configFiscal?.cfgEmiteFiscalAposVenda) return
     emissaoDisparadaRef.current = true
-    emitirNfce(idVenda)
-      .then((resultado) => {
-        if (!resultado) return // F12: fiscal desligado, nada a mostrar
-        setResultadoFiscal(resultado)
-        queryClient.invalidateQueries({ queryKey: ['comprovante-venda', idVenda] })
-      })
-      .catch(() => {
-        // Falha ao CHAMAR o endpoint (rede, 5xx) — diferente de uma emissão que terminou
-        // rejeitada/em contingência (essas voltam 200 com o resultado, não erro HTTP). A venda já
-        // está gravada de qualquer forma; só avisa que a tentativa de emitir não completou.
-        setResultadoFiscal({
-          situacao: 'FALHA_COMUNICACAO',
-          idDocumentoFiscal: 0,
-          chaveAcesso: null,
-          protocolo: null,
-          cStat: null,
-          mensagem: 'Não foi possível falar com o serviço fiscal. A venda está registrada.',
-        })
-      })
+    emitirNfce(idVenda).then(processarResultadoEmissao).catch(() => setResultadoFiscal(erroDeComunicacao()))
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [idVenda, reimpressao])
+  }, [idVenda, reimpressao, configFiscal])
+
+  async function emitirManualmente() {
+    setEmitindoManualmente(true)
+    try {
+      processarResultadoEmissao(await emitirNfce(idVenda))
+    } catch {
+      setResultadoFiscal(erroDeComunicacao())
+    } finally {
+      setEmitindoManualmente(false)
+    }
+  }
 
   useEffect(() => {
     if (!comprovante?.dadosFiscais) {
@@ -172,6 +206,11 @@ export default function ComprovantePapeletaModal({
               Fechar
             </button>
             <div style={{ display: 'flex', gap: 8 }}>
+              {!reimpressao && configFiscal && !configFiscal.cfgEmiteFiscalAposVenda && !dadosFiscais && (
+                <button type="button" className="btn ghost" disabled={!comprovante || emitindoManualmente} onClick={emitirManualmente}>
+                  {emitindoManualmente ? 'Emitindo…' : 'Emitir Nota Fiscal'}
+                </button>
+              )}
               <button
                 type="button"
                 className="btn ghost"

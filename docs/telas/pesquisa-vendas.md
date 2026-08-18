@@ -37,6 +37,15 @@ entrar na tela (mesmo padrão de `docs/telas/cancelamento-devolucao-produtos.md`
 pedida pelo dono do produto: Nº da Venda, Cliente, Data Inicial, Data Final, Vendedor, Empresa,
 Situação. Depois de confirmar, uma barra resumo com "Alterar Filtros" substitui o popup.
 
+**Linhas simétricas (2026-08-19):** a primeira versão colocava os 7 campos num único
+`form-grid` com pesos desiguais (`col-3`/`col-5`/`col-2`/`col-2`/`col-5`/`col-4`/`col-3`), o que
+deixava as linhas com colunas de largura bem diferente entre si. Corrigido pra três
+`form-grid` separados, um por linha, cada um com colunas de largura **igual** entre os campos da
+própria linha: **Nº da Venda | Cliente** (`col-6`/`col-6`) · **Data Inicial | Data Final |
+Vendedor** (`col-4`/`col-4`/`col-4`) · **Empresa | Situação** (`col-6`/`col-6`, Empresa some pra
+OPERADOR e Situação fica sozinha na linha). A ordem dos campos não mudou, só o agrupamento visual
+em linhas e a simetria dentro de cada uma.
+
 A tela dedicada de **Cancelamento de Venda** (`docs/telas/cancelamento-venda.md`) saiu do menu —
 a lógica inteira migrou pra um botão **"Cancelar venda"** no cabeçalho do popup de detalhe
 (ADMIN-only, some quando a venda já está cancelada), reaproveitando `CancelamentoVendaModal.tsx`

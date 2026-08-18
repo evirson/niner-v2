@@ -67,7 +67,10 @@ class ConfiguracaoGeralTest {
                 .andExpect(jsonPath("$.cfgReajustaPrecoEntrada").value(false))
                 // DEFAULT true (2026-08-14): a consistência entre duplicatas e total dos produtos
                 // era fixa antes de virar parâmetro, então o tenant novo nasce com ela ligada.
-                .andExpect(jsonPath("$.cfgConsisteValorContasPagar").value(true));
+                .andExpect(jsonPath("$.cfgConsisteValorContasPagar").value(true))
+                // DEFAULT true (2026-08-19): emissão automática era o único comportamento antes
+                // deste parâmetro existir, então o tenant novo nasce com ela ligada.
+                .andExpect(jsonPath("$.cfgEmiteFiscalAposVenda").value(true));
     }
 
     @Test
@@ -80,7 +83,7 @@ class ConfiguracaoGeralTest {
                  "cfgPermiteQtdDecimal":false,"cfgExigeNumeroVendaDevolucao":true,
                  "cfgRateiaFreteEntrada":true,"cfgReajustaPrecoEntrada":true,
                  "cfgConsisteValorContasPagar":false,
-                 "idPlanoContasCompraMercadoria":"3.03.001"}
+                 "idPlanoContasCompraMercadoria":"3.03.001","cfgEmiteFiscalAposVenda":false}
                 """;
 
         mvc.perform(put("/api/v1/config-geral").header("Authorization", "Bearer " + token)
@@ -93,7 +96,8 @@ class ConfiguracaoGeralTest {
                 .andExpect(jsonPath("$.cfgExigeNumeroVendaDevolucao").value(true))
                 .andExpect(jsonPath("$.cfgRateiaFreteEntrada").value(true))
                 .andExpect(jsonPath("$.cfgReajustaPrecoEntrada").value(true))
-                .andExpect(jsonPath("$.cfgConsisteValorContasPagar").value(false));
+                .andExpect(jsonPath("$.cfgConsisteValorContasPagar").value(false))
+                .andExpect(jsonPath("$.cfgEmiteFiscalAposVenda").value(false));
 
         mvc.perform(get("/api/v1/config-geral").header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk())
@@ -116,6 +120,21 @@ class ConfiguracaoGeralTest {
         mvc.perform(get("/api/v1/config-geral/consiste-valor-contas-pagar").header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.cfgConsisteValorContasPagar").value(false));
+        mvc.perform(get("/api/v1/config-geral/emite-fiscal-apos-venda").header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.cfgEmiteFiscalAposVenda").value(false));
+    }
+
+    /** Aberto a qualquer papel (diferente do resto de `cfg_geral`) — o popup de papeleta do PDV
+     *  precisa saber disso sem ser ADMIN. Default `true` quando a linha nunca foi criada. */
+    @Test
+    void emiteFiscalAposVendaAbertoAQualquerPapelInclusiveOperador() throws Exception {
+        String tokenAdmin = assinarNovoTenant("emite-fiscal-operador");
+        String tokenOperador = comoOperador(tokenAdmin);
+
+        mvc.perform(get("/api/v1/config-geral/emite-fiscal-apos-venda").header("Authorization", "Bearer " + tokenOperador))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.cfgEmiteFiscalAposVenda").value(true));
     }
 
     @Test
@@ -140,7 +159,7 @@ class ConfiguracaoGeralTest {
                 {"percentualDescontoVenda":10,"jurosCrediarioDias":0,"jurosCrediario":0,
                  "multaCrediarioDias":0,"multaCrediario":0,"cfgUsaCorGrade":true,"cfgPermiteQtdDecimal":true,
                  "cfgExigeNumeroVendaDevolucao":false,"cfgRateiaFreteEntrada":false,"cfgReajustaPrecoEntrada":false,"cfgConsisteValorContasPagar":false,
-                 "idPlanoContasCompraMercadoria":"3.03.001"}
+                 "idPlanoContasCompraMercadoria":"3.03.001","cfgEmiteFiscalAposVenda":true}
                 """;
         mvc.perform(put("/api/v1/config-geral").header("Authorization", "Bearer " + tokenOperador)
                         .contentType(APPLICATION_JSON).content(corpo))
@@ -155,7 +174,7 @@ class ConfiguracaoGeralTest {
                 {"percentualDescontoVenda":150,"jurosCrediarioDias":0,"jurosCrediario":0,
                  "multaCrediarioDias":0,"multaCrediario":0,"cfgUsaCorGrade":true,"cfgPermiteQtdDecimal":true,
                  "cfgExigeNumeroVendaDevolucao":false,"cfgRateiaFreteEntrada":false,"cfgReajustaPrecoEntrada":false,"cfgConsisteValorContasPagar":false,
-                 "idPlanoContasCompraMercadoria":"3.03.001"}
+                 "idPlanoContasCompraMercadoria":"3.03.001","cfgEmiteFiscalAposVenda":true}
                 """;
         mvc.perform(put("/api/v1/config-geral").header("Authorization", "Bearer " + token)
                         .contentType(APPLICATION_JSON).content(corpo))
@@ -170,7 +189,7 @@ class ConfiguracaoGeralTest {
                 {"percentualDescontoVenda":10,"jurosCrediarioDias":-1,"jurosCrediario":0,
                  "multaCrediarioDias":0,"multaCrediario":0,"cfgUsaCorGrade":true,"cfgPermiteQtdDecimal":true,
                  "cfgExigeNumeroVendaDevolucao":false,"cfgRateiaFreteEntrada":false,"cfgReajustaPrecoEntrada":false,"cfgConsisteValorContasPagar":false,
-                 "idPlanoContasCompraMercadoria":"3.03.001"}
+                 "idPlanoContasCompraMercadoria":"3.03.001","cfgEmiteFiscalAposVenda":true}
                 """;
         mvc.perform(put("/api/v1/config-geral").header("Authorization", "Bearer " + token)
                         .contentType(APPLICATION_JSON).content(corpo))
@@ -189,7 +208,7 @@ class ConfiguracaoGeralTest {
                                  "multaCrediarioDias":0,"multaCrediario":0,"cfgUsaCorGrade":true,
                                  "cfgPermiteQtdDecimal":true,"cfgExigeNumeroVendaDevolucao":false,
                                  "cfgRateiaFreteEntrada":false,"cfgReajustaPrecoEntrada":false,"cfgConsisteValorContasPagar":false,
-                 "idPlanoContasCompraMercadoria":"3.03.001"}
+                 "idPlanoContasCompraMercadoria":"3.03.001","cfgEmiteFiscalAposVenda":true}
                                 """))
                 .andExpect(status().isOk());
 

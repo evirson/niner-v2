@@ -113,7 +113,7 @@ class EntradaMercadoriaCrudTest {
                                  "cfgPermiteQtdDecimal":true,"cfgExigeNumeroVendaDevolucao":false,
                                  "cfgRateiaFreteEntrada":%s,"cfgReajustaPrecoEntrada":%s,
                                  "cfgConsisteValorContasPagar":%s,
-                                 "idPlanoContasCompraMercadoria":"3.03.001"}
+                                 "idPlanoContasCompraMercadoria":"3.03.001","cfgEmiteFiscalAposVenda":true}
                                 """.formatted(rateiaFrete, reajustaPreco, consisteValorContasPagar)))
                 .andExpect(status().isOk());
     }

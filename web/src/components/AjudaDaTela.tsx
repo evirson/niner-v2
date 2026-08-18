@@ -300,6 +300,7 @@ const CONTEUDOS: Record<string, ConteudoAjuda> = {
       'Marque "Reajustar preço na entrada" se quiser que o custo/preço de venda do produto sejam atualizados automaticamente a cada Entrada de Produtos.',
       'Marque "Consistir valor das contas a pagar na entrada" se a soma das duplicatas tiver de ser sempre igual ao total dos produtos lançados — uma entrada de R$ 1.500,00 só é confirmada com duplicatas somando R$ 1.500,00. Desmarque para permitir divergência (adiantamento, parte à vista, nota parcialmente financiada).',
       'Escolha o plano de contas usado nas contas a pagar geradas pela Entrada de Produtos por Compra.',
+      'Marque "Emitir NFC-e/NF-e automaticamente após a venda" para que a nota fiscal seja emitida sozinha assim que o PDV confirma a venda (o popup mostra a papeleta e vira o cupom fiscal quando a SEFAZ autoriza). Desmarque para que o popup só mostre a papeleta, com um botão para o operador emitir a nota fiscal quando quiser.',
       'Salve.',
     ],
     errosComuns: [
@@ -713,6 +714,7 @@ const CONTEUDOS: Record<string, ConteudoAjuda> = {
       '"F4 Limpa Tela" remove todos os itens lançados e recomeça a venda, com confirmação antes de apagar.',
       '"F5 Efetiva Venda" abre a Forma de Pagamento: escolha Cliente e Vendedor (os dois são obrigatórios), aplique um desconto (até o máximo definido em Parâmetros do Sistema) e lance uma ou mais formas de pagamento — dinheiro, cartão, crediário ou vale-mercadoria — até fechar o valor a pagar.',
       'Depois de confirmar, a Papeleta de Venda abre automaticamente, pronta para imprimir, salvar em PDF ou enviar por WhatsApp.',
+      'Se "Emitir NFC-e/NF-e automaticamente após a venda" estiver ligado (Parâmetros do Sistema), a nota fiscal é emitida sozinha e o popup vira o cupom fiscal (DANFCE) assim que a SEFAZ autoriza. Desligado, o popup mostra só a papeleta, com um botão "Emitir Nota Fiscal" para emitir quando quiser.',
     ],
     errosComuns: [
       'Sem caixa aberto no dia, nenhuma venda é efetivada — abra o caixa antes de lançar produtos.',

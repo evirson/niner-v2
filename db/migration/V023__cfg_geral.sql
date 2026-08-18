@@ -14,6 +14,7 @@ CREATE TABLE cfg_geral (
   cfg_rateia_frete_entrada boolean NOT NULL DEFAULT false,  -- 2026-08-11 (Entrada de Produtos): true rateia frete/IPI/ICMS-ST no custo unitário do item (grava em produto_movimento_detalhe.valor_acrescimo); false = ignora
   cfg_reajusta_preco_entrada boolean NOT NULL DEFAULT false,  -- 2026-08-11 (Entrada de Produtos): true atualiza produto.preco_custo/preco_venda/reajustado_em a partir do custo da entrada; false = só grava o movimento, preço do produto não muda
   cfg_consiste_valor_contas_pagar boolean NOT NULL DEFAULT true,  -- 2026-08-14 (Entrada de Produtos): true exige que a soma das duplicatas seja igual ao total dos produtos lançados (regra de 2026-08-14, que até aqui era fixa); false libera divergência (adiantamento, parte à vista, nota parcialmente financiada). DEFAULT true = comportamento de sempre
+  cfg_emite_fiscal_apos_venda boolean NOT NULL DEFAULT true,  -- 2026-08-19 (PDV/F5): true emite NFC-e automaticamente assim que a venda é confirmada (comportamento de sempre até este parâmetro existir — a papeleta vira DANFCE sozinha quando a SEFAZ autoriza); false só imprime a papeleta, e o operador aciona a emissão manualmente no popup da papeleta
   atualizado_em             timestamptz  NOT NULL DEFAULT now()
 );
 

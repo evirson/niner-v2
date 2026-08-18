@@ -4,6 +4,7 @@ import com.vetor.niner.configuracao.geral.ConfiguracaoGeralDtos.ConfiguracaoGera
 import com.vetor.niner.configuracao.geral.ConfiguracaoGeralDtos.ConfiguracaoGeralResponse;
 import com.vetor.niner.configuracao.geral.ConfiguracaoGeralDtos.ConsisteValorContasPagarResponse;
 import com.vetor.niner.configuracao.geral.ConfiguracaoGeralDtos.DescontoVendaResponse;
+import com.vetor.niner.configuracao.geral.ConfiguracaoGeralDtos.EmiteFiscalAposVendaResponse;
 import com.vetor.niner.configuracao.geral.ConfiguracaoGeralDtos.ExigeNumeroVendaDevolucaoResponse;
 import com.vetor.niner.configuracao.geral.ConfiguracaoGeralDtos.PermiteQtdDecimalResponse;
 import com.vetor.niner.configuracao.geral.ConfiguracaoGeralDtos.PlanoContasCompraMercadoriaResponse;
@@ -88,5 +89,10 @@ public class ConfiguracaoGeralController {
     @GetMapping("/plano-contas-compra-mercadoria")
     public PlanoContasCompraMercadoriaResponse planoContasCompraMercadoria() {
         return new PlanoContasCompraMercadoriaResponse(service.idPlanoContasCompraMercadoria());
+    }
+
+    @GetMapping("/emite-fiscal-apos-venda")
+    public EmiteFiscalAposVendaResponse emiteFiscalAposVenda() {
+        return new EmiteFiscalAposVendaResponse(service.emiteFiscalAposVenda());
     }
 }

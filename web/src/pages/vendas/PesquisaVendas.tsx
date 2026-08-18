@@ -303,8 +303,11 @@ export default function PesquisaVendas() {
               Informe o número da venda, ou a data inicial e final.
             </p>
 
+            {/* Linhas simétricas (2026-08-19, pedido do dono do produto): Nº Venda/Cliente,
+                Data Inicial/Data Final/Vendedor, Empresa/Situação — cada linha com colunas de
+                largura igual entre si, em vez de um único form-grid com pesos desiguais. */}
             <div className="form-grid" style={{ marginTop: 12 }}>
-              <div className="col-3">
+              <div className="col-6">
                 <label htmlFor="filtro-numero-venda">Nº da Venda</label>
                 <input
                   id="filtro-numero-venda"
@@ -315,7 +318,7 @@ export default function PesquisaVendas() {
                   aria-label="Número da venda"
                 />
               </div>
-              <div className="col-5">
+              <div className="col-6">
                 <label>Cliente</label>
                 <div style={{ display: 'flex', gap: 8 }}>
                   <button
@@ -334,7 +337,10 @@ export default function PesquisaVendas() {
                   )}
                 </div>
               </div>
-              <div className="col-2">
+            </div>
+
+            <div className="form-grid">
+              <div className="col-4">
                 <label htmlFor="filtro-data-inicial">Data Inicial</label>
                 <input
                   id="filtro-data-inicial"
@@ -347,7 +353,7 @@ export default function PesquisaVendas() {
                   disabled={!!numeroVendaTexto}
                 />
               </div>
-              <div className="col-2">
+              <div className="col-4">
                 <label htmlFor="filtro-data-final">Data Final</label>
                 <input
                   id="filtro-data-final"
@@ -360,8 +366,7 @@ export default function PesquisaVendas() {
                   disabled={!!numeroVendaTexto}
                 />
               </div>
-
-              <div className="col-5">
+              <div className="col-4">
                 <label>Vendedor</label>
                 <div style={{ display: 'flex', gap: 8 }}>
                   <button
@@ -380,8 +385,11 @@ export default function PesquisaVendas() {
                   )}
                 </div>
               </div>
+            </div>
+
+            <div className="form-grid">
               {ehAdmin && (
-                <div className="col-4">
+                <div className="col-6">
                   <label htmlFor="filtro-empresa">Empresa</label>
                   <select
                     id="filtro-empresa"
@@ -399,7 +407,7 @@ export default function PesquisaVendas() {
                   </select>
                 </div>
               )}
-              <div className={ehAdmin ? 'col-3' : 'col-7'}>
+              <div className="col-6">
                 <label htmlFor="filtro-situacao">Situação</label>
                 <select
                   id="filtro-situacao"

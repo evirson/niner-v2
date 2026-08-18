@@ -174,12 +174,16 @@ E o item "Financeiro" na lateral fica marcado como ativo
 ```
 Dado que estou em /menu/frente-loja
 Quando a página monta
-Então vejo os cards de PDV, Pesquisa de Vendas, Recebimento de Crediário e
-    Devolução de Produtos
-E os cards de subgrupo "Caixa", "Cancelamentos" e "Reimpressões", cada um mostrando quantas
-    telas contém
-E o conteúdo desses três NÃO aparece nesta tela
+Então vejo os cards de PDV, Pesquisa de Vendas, Recebimento de Crediário,
+    Reimpressão de Recebimento de Crediário e Devolução de Produtos
+E os cards de subgrupo "Caixa" e "Cancelamentos", cada um mostrando quantas telas contém
+E o conteúdo desses dois NÃO aparece nesta tela
 ```
+
+> ⚠️ **Atualizado em 2026-08-19:** o subgrupo "Reimpressões" saiu do menu — tinha só um item
+> desde que "Reimpressão de Papeleta de Venda" saiu em 2026-08-18 (ficou redundante com o botão
+> "Reimprimir papeleta" da Pesquisa de Vendas), e não fazia sentido manter um subgrupo de item
+> único. "Reimpressão de Recebimento de Crediário" virou item direto de "Frente de Loja".
 
 ```
 Dado que estou em /menu/frente-loja e clico no card "Cancelamentos"

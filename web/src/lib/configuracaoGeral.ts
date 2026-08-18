@@ -14,6 +14,7 @@ export interface ConfiguracaoGeral {
   cfgReajustaPrecoEntrada: boolean
   cfgConsisteValorContasPagar: boolean
   idPlanoContasCompraMercadoria: string
+  cfgEmiteFiscalAposVenda: boolean
   atualizadoEm: string
 }
 
@@ -31,6 +32,7 @@ export interface ConfiguracaoGeralFormState {
   cfgReajustaPrecoEntrada: boolean
   cfgConsisteValorContasPagar: boolean
   idPlanoContasCompraMercadoria: string
+  cfgEmiteFiscalAposVenda: boolean
 }
 
 export function paraFormulario(c: ConfiguracaoGeral): ConfiguracaoGeralFormState {
@@ -47,6 +49,7 @@ export function paraFormulario(c: ConfiguracaoGeral): ConfiguracaoGeralFormState
     cfgReajustaPrecoEntrada: c.cfgReajustaPrecoEntrada,
     cfgConsisteValorContasPagar: c.cfgConsisteValorContasPagar,
     idPlanoContasCompraMercadoria: c.idPlanoContasCompraMercadoria,
+    cfgEmiteFiscalAposVenda: c.cfgEmiteFiscalAposVenda,
   }
 }
 
@@ -65,6 +68,7 @@ export function paraRequisicao(f: ConfiguracaoGeralFormState) {
     cfgReajustaPrecoEntrada: f.cfgReajustaPrecoEntrada,
     cfgConsisteValorContasPagar: f.cfgConsisteValorContasPagar,
     idPlanoContasCompraMercadoria: f.idPlanoContasCompraMercadoria,
+    cfgEmiteFiscalAposVenda: f.cfgEmiteFiscalAposVenda,
   }
 }
 
@@ -156,4 +160,17 @@ export interface ConsisteValorContasPagar {
  *  por Compra pra decidir se a soma das duplicatas é obrigada a bater com o total dos produtos. */
 export function buscarConsisteValorContasPagar(): Promise<ConsisteValorContasPagar> {
   return api<ConsisteValorContasPagar>('/api/v1/config-geral/consiste-valor-contas-pagar')
+}
+
+export interface EmiteFiscalAposVenda {
+  cfgEmiteFiscalAposVenda: boolean
+}
+
+/**
+ * Aberto a qualquer papel (diferente do resto de `cfg_geral`) — usado pelo popup de papeleta do
+ * PDV (`ComprovantePapeletaModal`) pra decidir entre emissão automática da NFC-e logo após a
+ * venda (`true`, comportamento de sempre) ou botão de emissão manual (`false`).
+ */
+export function buscarEmiteFiscalAposVenda(): Promise<EmiteFiscalAposVenda> {
+  return api<EmiteFiscalAposVenda>('/api/v1/config-geral/emite-fiscal-apos-venda')
 }

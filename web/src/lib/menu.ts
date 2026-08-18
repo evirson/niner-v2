@@ -100,6 +100,15 @@ export const MENU: NavGrupo[] = [
         descricao: 'Baixa as parcelas em aberto do cliente, aplicando juros e multa por atraso.',
       },
       {
+        // Saiu do grupo "Reimpressões" (2026-08-19, pedido do dono do produto) — era o único
+        // item que sobrava lá desde que Reimpressão de Papeleta de Venda saiu do menu em
+        // 2026-08-18; virar item direto de Frente de Loja em vez de manter um grupo de 1 item.
+        to: '/reimpressao-recebimento-crediario',
+        label: 'Reimpressão de Recebimento de Crediário',
+        icone: IconeRecebimentoCrediario,
+        descricao: 'Localiza um recebimento por cliente e período e reimprime a papeleta.',
+      },
+      {
         to: '/devolucao-produto',
         label: 'Devolução de Produtos',
         icone: IconeDevolucaoProduto,
@@ -142,24 +151,6 @@ export const MENU: NavGrupo[] = [
             label: 'Cancelamento de Devolução de Produtos',
             icone: IconeCancelamentoVenda,
             descricao: 'Cancela um vale-mercadoria gerado por devolução, revertendo o estoque — só se o vale ainda não foi usado.',
-          },
-        ],
-      },
-      {
-        // Reimpressão de Papeleta de Venda saiu do menu (2026-08-18) — ficou redundante com o
-        // botão "Reimprimir papeleta" que Pesquisa de Vendas ganhou no mesmo dia. O grupo
-        // "Reimpressões" continua existindo mesmo com um só item (recebimento de crediário não
-        // tem tela de destino equivalente pra virar botão embutido).
-        chave: 'reimpressoes',
-        label: 'Reimpressões',
-        icone: IconePdv,
-        descricao: 'Localiza um recebimento de crediário já efetivado e reimprime a papeleta.',
-        itens: [
-          {
-            to: '/reimpressao-recebimento-crediario',
-            label: 'Reimpressão de Recebimento de Crediário',
-            icone: IconeRecebimentoCrediario,
-            descricao: 'Localiza um recebimento por cliente e período e reimprime a papeleta.',
           },
         ],
       },
