@@ -467,6 +467,7 @@ export default function ContasPagarForm({ somenteLeitura = false }: { somenteLei
           continua sendo uma saída legítima, e ele pode não querer abrir o caixa agora. */}
       {precisaAbrirCaixa && (
         <AberturaCaixaModal
+          statusCaixa={statusCaixa}
           aoAbrir={() => queryClient.invalidateQueries({ queryKey: ['caixa-status'] })}
           aoVoltar={() => setForm((f) => ({ ...f, origemPagamento: '' }))}
         />

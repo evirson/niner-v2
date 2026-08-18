@@ -511,6 +511,7 @@ export default function RecebimentoCrediario() {
 
       {caixaFechado && (
         <AberturaCaixaModal
+          statusCaixa={statusCaixa}
           aoAbrir={() => queryClient.invalidateQueries({ queryKey: ['caixa-status'] })}
           aoVoltar={() => navigate('/')}
         />

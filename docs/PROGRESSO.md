@@ -524,6 +524,44 @@ no cadastro da loja" (a empresa nunca decidiu isso; é sempre o primeiro ADMIN d
 respondendo "sim" (XML com `<dest><CPF>`), mesmo cliente respondendo "não" (XML sem `<dest>`
 nenhum) e cliente sem CPF cadastrado (aviso único) — e o caminho manual com "Cancelar".
 
+### 2026-08-19 — Abertura de Caixa reabre no mesmo dia, coluna TRIBUTACAO na Importação de Produtos e Parâmetros do Sistema em 4 abas
+
+Três frentes na mesma sessão, antes do trabalho de emissão fiscal (CPF/SEFAZ) documentado acima.
+
+**1) Abertura de Caixa — "1 caixa por empresa+usuário+dia" (`docs/telas/abertura-caixa.md`).**
+Pedido direto do dono do produto: abrir de novo depois de fechar no mesmo dia estava criando um
+**segundo** `caixa_mestre` (mesma empresa+usuário+data), quebrando esse invariante. `CaixaService.
+abrir` passa a checar se já existe um caixa fechado hoje e, se existir, **reabre a mesma linha**
+(saldo inicial/carteira do novo request, rastro em `observacoes` — P3) em vez de criar outra; a
+conferência do fechamento anterior é apagada (não vale mais). `GET /caixa/status` ganhou uma
+segunda consulta interna que traz o caixa de hoje mesmo fechado (`aberto:false` com `idCaixa`/
+`saldoInicial` preenchidos), usada por `AberturaCaixaModal.tsx` (prop `statusCaixa`, passada pelas
+3 telas que abrem o popup — PDV, Recebimento de Crediário e baixa em dinheiro de Contas a Pagar)
+pra pré-preencher o saldo inicial e trocar "Abrir Caixa" por "Reabrir Caixa". 3 testes novos em
+`CaixaCrudTest`.
+
+**2) Coluna TRIBUTACAO na Importação de Produtos + perfil "NÃO INFORMADO"
+(`docs/telas/importacao-dados.md`, `docs/telas/fiscal-perfil.md`).** A coluna resolve o perfil
+fiscal do produto por **nome**, comparado sem acento/maiúscula (`NORMAL`/`1` → "Revenda Tributada
+Normal", `SUBSTITUICAO`/`ST`/`2` → "Revenda com Substituição Tributária (ST)", ajustado no mesmo
+dia depois de testar com a planilha real do usuário, que traz texto, não os códigos numéricos
+assumidos na primeira versão). Vazio não rejeita a linha — atribui um **terceiro perfil padrão**,
+"NÃO INFORMADO" (semeado no signup, `SignupService`, **sem regra fiscal nenhuma** de propósito):
+a Conformidade Fiscal aponta o produto como pendente e a emissão de nota recusa até o usuário
+corrigir, em vez de o produto ficar silenciosamente sem perfil nenhum. Um aviso agregado no
+relatório final lista quantos produtos (e em quais linhas) ficaram sem `TRIBUTACAO`. 5 testes
+novos em `ProdutoImportadorCrudTest` (arquivo novo); `PerfilFiscalCrudTest` atualizado pros 3
+perfis.
+
+**3) Parâmetros do Sistema em 4 abas (`docs/telas/configuracao-geral.md`).** As 6 seções (Vendas,
+Fiscal, Catálogo, Estoque, Compras, Crediário) cresceram demais pra rolar numa página só — viraram
+4 abas: **Vendas** (+ Fiscal), **Estoque** (+ Catálogo), **Compras** e **Crediário**. O `PUT`
+continua salvando o formulário inteiro de uma vez, não só a aba aberta.
+
+**Testado:** suíte completa do backend, **763/763 verdes**; `tsc -b` limpo; os três fluxos
+testados ao vivo no navegador (reabertura de caixa confirmada também direto no banco — mesmo
+`id_caixa` reaproveitado; troca de aba em Parâmetros preservando os campos digitados nas outras).
+
 ### 2026-08-19 — Perfis Fiscais: 2 perfis padrão no signup, badge Simples/MEI na grade, motor recusa CST tributado sem alíquota
 
 Três pedidos do dono do produto na mesma sessão, cada um fechando uma lacuna real do módulo

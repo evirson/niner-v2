@@ -331,8 +331,8 @@ class PerfilFiscalCrudTest {
 
     // ---------------------------------------------------------------- /opcoes
 
-    /** O tenant já nasce com os 2 perfis padrão do signup (ver
-     *  {@code novoTenantJaNasceComOsDoisPerfisPadrao} abaixo) — /opcoes soma esses com o criado aqui. */
+    /** O tenant já nasce com os 3 perfis padrão do signup (ver
+     *  {@code novoTenantJaNasceComOsTresPerfisPadrao} abaixo) — /opcoes soma esses com o criado aqui. */
     @Test
     void opcoesNaoExigePapelESoTrazAtivos() throws Exception {
         String token = assinarNovoTenant("opcoes");
@@ -349,26 +349,28 @@ class PerfilFiscalCrudTest {
 
         mvc.perform(get("/api/v1/fiscal/perfis/opcoes").header("Authorization", "Bearer " + operador))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.length()").value(3))
+                .andExpect(jsonPath("$.length()").value(4))
                 .andExpect(jsonPath("$[*].nome", org.hamcrest.Matchers.hasItem("PERFIL ATIVO")))
                 .andExpect(jsonPath("$[*].nome", org.hamcrest.Matchers.not(org.hamcrest.Matchers.hasItem("PERFIL INATIVO"))));
     }
 
     // ---------------------------------------------------------------- seed do signup (2026-08-19)
 
-    /** REVENDA TRIBUTADA NORMAL (CSOSN 102) e REVENDA COM SUBSTITUIÇÃO TRIBUTÁRIA (CSOSN 500) —
-     *  os dois perfis padrão que todo tenant novo já ganha (docs/telas/fiscal-perfil.md, seção
-     *  "Perfis semeados no signup"), pra não começar o fiscal com uma tela vazia. Cada um cobre
-     *  os três CRT do produto (1, 2 e 4 — DF37), então atende Simples Nacional e MEI ao mesmo
-     *  tempo — daí o grid mostrar os dois badges nos dois perfis. */
+    /** REVENDA TRIBUTADA NORMAL (CSOSN 102), REVENDA COM SUBSTITUIÇÃO TRIBUTÁRIA (CSOSN 500) e
+     *  NÃO INFORMADO (sem regra nenhuma) — os três perfis padrão que todo tenant novo já ganha
+     *  (docs/telas/fiscal-perfil.md, seção "Perfis semeados no signup"), pra não começar o fiscal
+     *  com uma tela vazia. Os dois primeiros cobrem os três CRT do produto (1, 2 e 4 — DF37),
+     *  então atendem Simples Nacional e MEI ao mesmo tempo — daí o grid mostrar os dois badges. O
+     *  terceiro é o sentinela que a Importação de Produtos usa quando TRIBUTACAO vem em branco:
+     *  sem regra nenhuma, então nenhum badge (nem Simples nem MEI) e o motor recusa emitir. */
     @Test
-    void novoTenantJaNasceComOsDoisPerfisPadrao() throws Exception {
+    void novoTenantJaNasceComOsTresPerfisPadrao() throws Exception {
         String token = assinarNovoTenant("seed-signup");
 
         String resp = mvc.perform(get("/api/v1/fiscal/perfis").header("Authorization", "Bearer " + token)
                         .queryParam("limite", "50"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.totalItens").value(2))
+                .andExpect(jsonPath("$.totalItens").value(3))
                 .andReturn().getResponse().getContentAsString();
 
         List<java.util.Map<String, Object>> itens = JsonPath.read(resp, "$.itens");
@@ -376,6 +378,8 @@ class PerfilFiscalCrudTest {
                 .orElseThrow(() -> new AssertionError("Perfil padrão não encontrado: REVENDA TRIBUTADA NORMAL"));
         var st = itens.stream().filter(i -> "REVENDA COM SUBSTITUIÇÃO TRIBUTÁRIA (ST)".equals(i.get("nome"))).findFirst()
                 .orElseThrow(() -> new AssertionError("Perfil padrão não encontrado: REVENDA COM SUBSTITUIÇÃO TRIBUTÁRIA (ST)"));
+        var naoInformado = itens.stream().filter(i -> "NÃO INFORMADO".equals(i.get("nome"))).findFirst()
+                .orElseThrow(() -> new AssertionError("Perfil padrão não encontrado: NÃO INFORMADO"));
 
         for (var perfil : List.of(normal, st)) {
             org.assertj.core.api.Assertions.assertThat(perfil.get("ativo")).isEqualTo(true);
@@ -383,6 +387,11 @@ class PerfilFiscalCrudTest {
             org.assertj.core.api.Assertions.assertThat(perfil.get("atendeSimples")).isEqualTo(true);
             org.assertj.core.api.Assertions.assertThat(perfil.get("atendeMei")).isEqualTo(true);
         }
+
+        org.assertj.core.api.Assertions.assertThat(naoInformado.get("ativo")).isEqualTo(true);
+        org.assertj.core.api.Assertions.assertThat(naoInformado.get("quantidadeRegras")).isEqualTo(0);
+        org.assertj.core.api.Assertions.assertThat(naoInformado.get("atendeSimples")).isEqualTo(false);
+        org.assertj.core.api.Assertions.assertThat(naoInformado.get("atendeMei")).isEqualTo(false);
 
         long idNormal = ((Number) normal.get("idPerfilFiscal")).longValue();
         String detalheNormal = mvc.perform(get("/api/v1/fiscal/perfis/" + idNormal).header("Authorization", "Bearer " + token))

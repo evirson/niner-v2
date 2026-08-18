@@ -6,8 +6,10 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Import;
+import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.test.web.servlet.MockMvc;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.http.MediaType.APPLICATION_JSON;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -25,6 +27,20 @@ class CaixaCrudTest {
 
     @Autowired
     MockMvc mvc;
+
+    @Autowired
+    JdbcClient jdbc;
+
+    private static long extrairIdTenant(String token) {
+        String[] partes = token.split("\\.");
+        String payload = new String(java.util.Base64.getUrlDecoder().decode(partes[1]));
+        return ((Number) JsonPath.read(payload, "$.tid")).longValue();
+    }
+
+    private String corpoFechamento(long idCaixa, long idCarteira, String valorContado) {
+        return "{\"idCaixa\":%d,\"valoresContados\":[{\"idCarteira\":%d,\"valorContado\":%s}],\"forcarComDivergencia\":false}"
+                .formatted(idCaixa, idCarteira, valorContado);
+    }
 
     private String assinarNovoTenant(String sufixo) throws Exception {
         String body = """
@@ -171,5 +187,109 @@ class CaixaCrudTest {
         mvc.perform(get("/api/v1/caixa/status").header("Authorization", "Bearer " + tokenB))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.aberto").value(false));
+    }
+
+    // ---------------------------------------------------------------- reabertura no mesmo dia (2026-08-19)
+
+    /**
+     * ⚠️ Bug real corrigido: abrir de novo no mesmo dia, depois de fechar, criava um SEGUNDO
+     * {@code caixa_mestre} (mesma empresa+usuário+data) em vez de reaproveitar o já existente —
+     * quebra o invariante "1 caixa por empresa+usuário+dia". Confere tanto pela API (mesmo
+     * {@code idCaixa}) quanto direto no banco (exatamente 1 linha pro dia).
+     */
+    @Test
+    void abrirDeNovoNoMesmoDiaReabreOMesmoCaixaEmVezDeCriarOutro() throws Exception {
+        String token = assinarNovoTenant("reabre-mesmo-dia");
+        long idTenant = extrairIdTenant(token);
+        long idCarteira = buscarIdCarteiraDinheiro(token);
+
+        String respAbertura = mvc.perform(post("/api/v1/caixa/abrir").header("Authorization", "Bearer " + token)
+                        .contentType(APPLICATION_JSON)
+                        .content("{\"idCarteira\":%d,\"saldoInicial\":100.00}".formatted(idCarteira)))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        long idCaixa = ((Number) JsonPath.read(respAbertura, "$.idCaixa")).longValue();
+
+        mvc.perform(post("/api/v1/caixa/fechamento").header("Authorization", "Bearer " + token)
+                        .contentType(APPLICATION_JSON)
+                        .content(corpoFechamento(idCaixa, idCarteira, "100.00")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.fechado").value(true));
+
+        // Reabre com um saldo inicial DIFERENTE — a tela deixa o operador alterar.
+        mvc.perform(post("/api/v1/caixa/abrir").header("Authorization", "Bearer " + token)
+                        .contentType(APPLICATION_JSON)
+                        .content("{\"idCarteira\":%d,\"saldoInicial\":250.00}".formatted(idCarteira)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.aberto").value(true))
+                .andExpect(jsonPath("$.idCaixa").value(idCaixa))     // MESMO caixa, não um novo
+                .andExpect(jsonPath("$.saldoInicial").value(250.00));
+
+        Long totalCaixasHoje = jdbc.sql("""
+                        SELECT count(*) FROM caixa_mestre
+                        WHERE id_tenant = ? AND data_abertura::date = CURRENT_DATE
+                        """)
+                .param(idTenant).query(Long.class).single();
+        assertThat(totalCaixasHoje).isEqualTo(1L);
+    }
+
+    /** A conferência do fechamento anterior não pode sobreviver à reabertura — senão o próximo
+     *  fechamento do dia colide com uma conferência de outro "estado" do caixa. */
+    @Test
+    void reabrirNoMesmoDiaApagaAConferenciaDoFechamentoAnterior() throws Exception {
+        String token = assinarNovoTenant("reabre-limpa-conferencia");
+        long idTenant = extrairIdTenant(token);
+        long idCarteira = buscarIdCarteiraDinheiro(token);
+
+        String respAbertura = mvc.perform(post("/api/v1/caixa/abrir").header("Authorization", "Bearer " + token)
+                        .contentType(APPLICATION_JSON)
+                        .content("{\"idCarteira\":%d,\"saldoInicial\":100.00}".formatted(idCarteira)))
+                .andReturn().getResponse().getContentAsString();
+        long idCaixa = ((Number) JsonPath.read(respAbertura, "$.idCaixa")).longValue();
+
+        mvc.perform(post("/api/v1/caixa/fechamento").header("Authorization", "Bearer " + token)
+                        .contentType(APPLICATION_JSON)
+                        .content(corpoFechamento(idCaixa, idCarteira, "100.00")))
+                .andExpect(status().isOk());
+
+        Long conferenciasAntes = jdbc.sql(
+                        "SELECT count(*) FROM caixa_fechamento_conferencia WHERE id_tenant = ? AND id_caixa = ?")
+                .params(idTenant, idCaixa).query(Long.class).single();
+        assertThat(conferenciasAntes).isEqualTo(1L);
+
+        mvc.perform(post("/api/v1/caixa/abrir").header("Authorization", "Bearer " + token)
+                        .contentType(APPLICATION_JSON)
+                        .content("{\"idCarteira\":%d,\"saldoInicial\":100.00}".formatted(idCarteira)))
+                .andExpect(status().isOk());
+
+        Long conferenciasDepois = jdbc.sql(
+                        "SELECT count(*) FROM caixa_fechamento_conferencia WHERE id_tenant = ? AND id_caixa = ?")
+                .params(idTenant, idCaixa).query(Long.class).single();
+        assertThat(conferenciasDepois).isEqualTo(0L);
+    }
+
+    /** {@code status} passa a informar o caixa de hoje mesmo fechado — é o que o popup de
+     *  Abertura de Caixa usa pra pré-preencher o saldo inicial em vez de sempre mostrar zero. */
+    @Test
+    void statusMostraSaldoDoCaixaFechadoHojeMesmoComAbertoFalse() throws Exception {
+        String token = assinarNovoTenant("status-prefill");
+        long idCarteira = buscarIdCarteiraDinheiro(token);
+
+        String respAbertura = mvc.perform(post("/api/v1/caixa/abrir").header("Authorization", "Bearer " + token)
+                        .contentType(APPLICATION_JSON)
+                        .content("{\"idCarteira\":%d,\"saldoInicial\":180.00}".formatted(idCarteira)))
+                .andReturn().getResponse().getContentAsString();
+        long idCaixa = ((Number) JsonPath.read(respAbertura, "$.idCaixa")).longValue();
+
+        mvc.perform(post("/api/v1/caixa/fechamento").header("Authorization", "Bearer " + token)
+                        .contentType(APPLICATION_JSON)
+                        .content(corpoFechamento(idCaixa, idCarteira, "180.00")))
+                .andExpect(status().isOk());
+
+        mvc.perform(get("/api/v1/caixa/status").header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.aberto").value(false))
+                .andExpect(jsonPath("$.idCaixa").value(idCaixa))
+                .andExpect(jsonPath("$.saldoInicial").value(180.00));
     }
 }

@@ -171,26 +171,37 @@ só ficaria faltando um se alguém apagasse manualmente a regra daquele CRT. Sem
 
 ## Perfis semeados no signup ✅ IMPLEMENTADO 2026-08-19
 
-Todo tenant novo já nasce com dois perfis prontos (`SignupService.assinar`, mesma transação e
-mesmo padrão dos 6 tipos de carteira e das 76 contas do plano de contas — bloco "5c", entre
+Todo tenant novo já nasce com três perfis prontos (`SignupService.assinar`, mesma transação e
+mesmo padrão dos 6 tipos de carteira e das 76 contas do plano de contas — blocos "5c"/"5d", entre
 tipo_carteira e o primeiro usuário):
 
 | Perfil | Regras | Uso |
 |---|---|---|
 | **REVENDA TRIBUTADA NORMAL** | CRT 1, 2 e 4 → CSOSN 102, CFOP 5102 | O caso mais comum do varejo |
 | **REVENDA COM SUBSTITUIÇÃO TRIBUTÁRIA (ST)** | CRT 1, 2 e 4 → CSOSN 500, CFOP **5405** | Confecção e calçado, muito comum |
+| **NÃO INFORMADO** (2026-08-19) | **Nenhuma** — sentinela de propósito | Perfil sem tributação definida — ver abaixo |
 
-Racional: sem isso, o onboarding começa com uma tela vazia e um lojista que não sabe o que é
-CSOSN. Com isso, ele liga o fiscal e a maioria dos produtos já funciona. O risco de semear uma
-alíquota errada não existe aqui: os dois perfis **não têm alíquota de ICMS fixa** (CSOSN 102 e
-500 não destacam ICMS — nem exigem, pela regra §2 acima, que só vale para CST), e a semente cobre
-só o CSOSN — a variante com CST do CRT 2 fica de fora de propósito, porque depende da divergência
-ainda em aberto (§1) e exige decisão do contador. As três regras (CRT 1/2/4) usam sempre
-`uf_destino='*'`/`CONSUMIDOR_FINAL`/`VENDA_CONSUMIDOR` — o único contexto que
+Racional dos dois primeiros: sem isso, o onboarding começa com uma tela vazia e um lojista que não
+sabe o que é CSOSN. Com isso, ele liga o fiscal e a maioria dos produtos já funciona. O risco de
+semear uma alíquota errada não existe aqui: os dois perfis **não têm alíquota de ICMS fixa** (CSOSN
+102 e 500 não destacam ICMS — nem exigem, pela regra §2 acima, que só vale para CST), e a semente
+cobre só o CSOSN — a variante com CST do CRT 2 fica de fora de propósito, porque depende da
+divergência ainda em aberto (§1) e exige decisão do contador. As três regras (CRT 1/2/4) usam
+sempre `uf_destino='*'`/`CONSUMIDOR_FINAL`/`VENDA_CONSUMIDOR` — o único contexto que
 `VendaFiscalAssembler.buscarRegra` consulta na emissão de NFC-e (v1); PIS/COFINS sempre CST 99.
 
+**"NÃO INFORMADO" (2026-08-19) não é um perfil de tributação de verdade — é um sentinela**, criado
+pra a Importação de Produtos (`docs/telas/importacao-dados.md`) ter algo pra atribuir quando a
+coluna `TRIBUTACAO` da planilha vem em branco: sem `INSERT` nenhum em `cfg_perfil_fiscal_regra`
+(de propósito). Um produto apontando pra ele faz a Conformidade Fiscal acusar "perfil sem regra
+para o CRT" (mecanismo que já existia, nenhuma mudança nele) e a emissão de nota recusa (F11) até
+o usuário corrigir o perfil — melhor isso do que o produto ficar silenciosamente sem perfil nenhum
+(`id_perfil_fiscal NULL`, que também não emite, mas some da conferência por não ser "sem regra",
+só "sem perfil"). Pode ser editado ou excluído como qualquer outro perfil, se o tenant não usar a
+Importação de Produtos.
+
 Cada tenant que já existia antes desta mudança **não recebe o seed automático** (só roda dentro
-de `SignupService.assinar`, no momento da assinatura) — para um tenant antigo, os dois perfis
+de `SignupService.assinar`, no momento da assinatura) — para um tenant antigo, os três perfis
 entram por SQL direto, mesmo `INSERT` usado no signup.
 
 ## Critérios de aceitação (viram testes)
@@ -214,9 +225,10 @@ entram por SQL direto, mesmo `INSERT` usado no signup.
 - Dado um OPERADOR, quando tenta listar ou gravar, então 403.
 - Dado dois tenants distintos, quando um cria um perfil, então o outro não o enxerga nem consegue
   editá-lo por id (isolamento — `id_tenant` explícito, P8/F8).
-- Dado um tenant recém-assinado, quando consulta a lista de perfis, então encontra os 2 perfis
-  padrão (REVENDA TRIBUTADA NORMAL, REVENDA COM SUBSTITUIÇÃO TRIBUTÁRIA), cada um com 3 regras
-  (CRT 1, 2 e 4) e os badges `atendeSimples`/`atendeMei` em `true`.
+- Dado um tenant recém-assinado, quando consulta a lista de perfis, então encontra os 3 perfis
+  padrão (REVENDA TRIBUTADA NORMAL, REVENDA COM SUBSTITUIÇÃO TRIBUTÁRIA, NÃO INFORMADO) — os dois
+  primeiros com 3 regras (CRT 1, 2 e 4) e os badges `atendeSimples`/`atendeMei` em `true`; o
+  terceiro sem regra nenhuma e sem badge nenhum.
 - Dado o perfil padrão REVENDA TRIBUTADA NORMAL, quando o motor busca a regra pro contexto que a
   emissão de NFC-e realmente usa (CONSUMIDOR_FINAL/VENDA_CONSUMIDOR/UF `*`), então encontra,
   pros três CRT.
@@ -251,17 +263,18 @@ Toda query filtra `id_tenant` explicitamente no SQL além do RLS (P8/F8), inclus
 
 ## Ajuda da tela (R22 / §3.7.1)
 
-Entrada `fiscal.perfil.tela` em `AjudaDaTela.tsx`: os 2 perfis padrão que todo tenant já ganha
-prontos; o que é um perfil e por que ele não fica no produto; o que significa a coluna "Regime"
-(Simples/MEI, calculada, não é campo); a diferença entre CST e CSOSN e por que só o CRT 2 pode
-escolher; por que a alíquota de PIS/COFINS fica zerada e desabilitada no CST 99 (o caso normal —
-tributo dentro do DAS); e o que significa "regra mais específica ganha".
+Entrada `fiscal.perfil.tela` em `AjudaDaTela.tsx`: os 3 perfis padrão que todo tenant já ganha
+prontos (os dois tributados + "Não Informado", o sentinela que a Importação de Produtos usa); o
+que é um perfil e por que ele não fica no produto; o que significa a coluna "Regime" (Simples/MEI,
+calculada, não é campo); a diferença entre CST e CSOSN e por que só o CRT 2 pode escolher; por que
+a alíquota de PIS/COFINS fica zerada e desabilitada no CST 99 (o caso normal — tributo dentro do
+DAS); e o que significa "regra mais específica ganha".
 
 ## Impacto no banco
 
 **Nenhuma migration nova** para a tela nem para o seed do signup. `cfg_perfil_fiscal`,
 `cfg_perfil_fiscal_regra` e `produto.id_perfil_fiscal` já existem (V035:132-193);
-`SignupService.assinar` só ganhou os `INSERT`s dos dois perfis padrão, mesma transação do resto
+`SignupService.assinar` só ganhou os `INSERT`s dos três perfis padrão, mesma transação do resto
 do seed.
 
 ## Non-goals desta feature

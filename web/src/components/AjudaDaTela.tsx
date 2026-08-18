@@ -322,6 +322,7 @@ const CONTEUDOS: Record<string, ConteudoAjuda> = {
     titulo: 'Parâmetros do sistema',
     objetivo: 'Ajustar as regras gerais do tenant: desconto máximo em venda, exigência de venda na devolução, uso de cor/grade, taxas de crediário e regras da Entrada de Produtos por Compra.',
     passos: [
+      'Os parâmetros ficam em 4 abas: Vendas (inclui Fiscal), Estoque (inclui Catálogo), Compras e Crediário. O botão Salvar grava tudo de uma vez, não só a aba aberta no momento.',
       'Informe o desconto máximo permitido em uma venda.',
       'Marque "Exigir número da venda na Devolução de Produtos" se quiser bloquear devoluções sem vínculo com uma venda — a tela passa a exigir o número da venda e só aceita produtos que ela vendeu.',
       'Marque "Usa cor/grade" se o tenant é de calçados ou confecções — liga o campo Grade no cadastro de Produto e as variações passam a ter cor e tamanho.',
@@ -361,7 +362,7 @@ const CONTEUDOS: Record<string, ConteudoAjuda> = {
     titulo: 'Perfis Fiscais',
     objetivo: 'Cadastrar as regras de tributação (CFOP, ICMS, PIS/COFINS, IBS/CBS) que o produto usa na nota — sem digitar isso em cada produto individualmente.',
     passos: [
-      'Todo tenant já nasce com 2 perfis prontos: "Revenda Tributada Normal" (CSOSN 102, o caso comum) e "Revenda com Substituição Tributária (ST)" (CSOSN 500, comum em confecção e calçado) — cada um já cobre os três CRT do produto (1, 2 e 4).',
+      'Todo tenant já nasce com 3 perfis prontos: "Revenda Tributada Normal" (CSOSN 102, o caso comum) e "Revenda com Substituição Tributária (ST)" (CSOSN 500, comum em confecção e calçado) — cada um já cobre os três CRT do produto (1, 2 e 4) — e "Não Informado" (sem regra nenhuma, de propósito): a Importação de Produtos usa esse último quando a tributação do item ainda não foi definida.',
       'Um perfil agrupa uma ou mais regras. Cada regra vale para um contexto: CRT do emitente, UF de destino (ou "*" para qualquer uma), tipo de destinatário e tipo de operação.',
       'A coluna "Regime" da lista mostra Simples/MEI — não é um campo que se escolhe, é calculado a partir das regras do perfil (CRT 1 ou 2 = Simples Nacional, CRT 4 = MEI).',
       'Em CRT 1 e 4 (a maioria) o ICMS é sempre por CSOSN. Só o CRT 2 (excesso de sublimite) pode escolher entre CSOSN e CST — se não souber qual usar, confirme com o contador.',
@@ -1084,12 +1085,14 @@ const CONTEUDOS: Record<string, ConteudoAjuda> = {
       'Clique em "Escolher planilha" e selecione o arquivo .xlsx ou .xls — a planilha é conferida na hora, e se não for da tabela certa a tela avisa e não deixa continuar. Esta tabela não pede nenhuma escolha prévia.',
       'Clique em "Validar" — mostra quantas linhas ficariam prontas e quais têm erro, sem gravar nada ainda. Durante a leitura e a validação, a tela mostra o registro atual e o total em tempo real (útil em arquivo grande).',
       'Sem erro real, o botão "Importar" libera — ele grava o arquivo de verdade.',
+      'Coluna TRIBUTACAO define o perfil fiscal do produto: NORMAL = Revenda Tributada Normal, SUBSTITUICAO = Revenda com Substituição Tributária (ST). Deixe em branco só se realmente não souber ainda — o produto é importado do mesmo jeito, mas fica com o perfil "Não Informado" e não emite nota fiscal até você corrigir.',
       'Depois de importar, use a tela de Estoque Inicial para trazer o saldo de cada variação.',
     ],
     errosComuns: [
       'Linha com erro: veja o motivo na tabela de erros, corrija só aquela linha no arquivo original e clique em "Validar" de novo.',
       'Produto "já existia": já havia um cadastro com a mesma descrição+marca+referência E o mesmo CODIGO_PRODUTO — o sistema reaproveitou em vez de duplicar. Duas linhas com descrição igual mas CODIGO_PRODUTO diferente viram produtos separados (são produtos diferentes no sistema de origem, mesmo com texto parecido).',
       'Nada foi importado mesmo o relatório mostrando linhas prontas: a importação é tudo-ou-nada — se sobrar QUALQUER linha com erro real, o arquivo inteiro não grava nada.',
+      'Aviso "N produto(s) sem TRIBUTACAO preenchida": não impede a importação, mas esses produtos não emitem documento fiscal até você definir a tributação (edite o produto e troque o perfil fiscal, ou reimporte com a coluna preenchida).',
     ],
     urlVideo: null,
   },

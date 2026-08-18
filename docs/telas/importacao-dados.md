@@ -365,9 +365,9 @@ errado foi importada normalmente, com `cnpj: null` gravado.
 "achatado" anterior.** Agora **uma linha da planilha é um produto inteiro**, sem cor/EAN/estoque.
 
 **Colunas da planilha:** `CODIGO_PRODUTO, MARCA, REFERENCIA, DESCRICAO, PRECO_CUSTO, PERCENTUAL_VENDA,
-PRECO_VENDA, DATA_INICIO_OFERTA, DATA_FINAL_OFERTA, PRECO_OFERTA, CODIGO_NCM, PESO_BRUTO,
-PESO_LIQUIDO, TAMANHO_1..TAMANHO_20` (até 20 colunas fixas de tamanho, em ordem — a grade do
-produto).
+PRECO_VENDA, DATA_INICIO_OFERTA, DATA_FINAL_OFERTA, PRECO_OFERTA, CODIGO_NCM, TRIBUTACAO,
+PESO_BRUTO, PESO_LIQUIDO, TAMANHO_1..TAMANHO_20` (até 20 colunas fixas de tamanho, em ordem — a
+grade do produto).
 
 **Sem escolha prévia nenhuma** — pula direto da etapa de arquivo para a prévia.
 
@@ -407,6 +407,31 @@ combinações cor×grade nasce naturalmente, na compra, decisão já registrada 
 **NCM:** opcional — código que não existe em `cfg_produto_ncm` (ou vem em formato inválido) entra
 como **vazio**, não rejeita a linha (2026-08-06). Antes de checar, tira toda pontuação (ex.
 `6402.99.90` → `64029990`) — a tabela de referência guarda só os 8 dígitos.
+
+**`TRIBUTACAO` → perfil fiscal do produto (2026-08-19).** Resolve por **nome** contra os perfis
+fiscais padrão do tenant (`cfg_perfil_fiscal`, semeados no signup — `docs/telas/fiscal-perfil.md`),
+não por código numérico fixo — ajustado no mesmo dia depois de testar com a planilha real do
+usuário, que traz texto, não os códigos `1`/`2` assumidos na primeira versão:
+- `NORMAL` (ou `1`) → perfil **"REVENDA TRIBUTADA NORMAL"**.
+- `SUBSTITUICAO` / `SUBSTITUIÇÃO` / `ST` (ou `2`) → perfil **"REVENDA COM SUBSTITUIÇÃO TRIBUTÁRIA
+  (ST)"**. Comparação sem acento/maiúscula-minúscula (`ProdutoImportador.resolverPerfilFiscal`).
+- **Vazio** → perfil **"NÃO INFORMADO"** (terceiro perfil semeado no signup em 2026-08-19,
+  `SignupService`, **sem regra fiscal nenhuma** de propósito — sentinela). O produto é importado
+  normalmente (não rejeita a linha), mas fica sem tributação definida: a Conformidade Fiscal aponta
+  ("perfil sem regra para o CRT", mecanismo que já existia) e a emissão de nota fiscal recusa
+  (F11) até o usuário corrigir o perfil do produto. Um aviso agregado no relatório final lista
+  quantos produtos (e em quais linhas, até 20 na amostra) ficaram sem `TRIBUTACAO` — "N produto(s)
+  sem a coluna TRIBUTACAO preenchida... receberam o perfil fiscal "Não Informado" e não poderão
+  emitir documento fiscal até você definir a tributação correta".
+- **Qualquer outro valor** → erro de linha (`IllegalArgumentException`, cai no relatório de erro
+  normal) — não é tratado como "tributação desconhecida" silenciosa.
+- Se um dos 3 perfis padrão não existir no tenant (usuário editou/apagou o que o signup semeou), a
+  importação **não trava**: os produtos que apontariam pra ele ficam sem perfil fiscal (`null`,
+  mesmo comportamento de antes desta feature) e um aviso avisa uma vez só, no topo do relatório.
+- **Testes:** `ProdutoImportadorCrudTest` (novo arquivo, 5 casos) — `NORMAL`/`SUBSTITUICAO`
+  atribuem o perfil certo, minúsculo/acento/código numérico (`1`/`2`) são aceitos, vazio atribui
+  "Não Informado" e gera o aviso agregado, valor fora do domínio rejeita a linha. **763/763 testes
+  de backend verdes.**
 
 **Regra da oferta** (tudo-ou-nada, `PRECO_OFERTA = "0"` tratado como "não preenchido") — mesma
 lógica de antes.

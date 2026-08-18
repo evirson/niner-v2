@@ -44,16 +44,29 @@ que já é ADMIN-only.
 5. **Ícone próprio, deliberadamente diferente da engrenagem (⚙)** — `IconeEngrenagem` já
    significa "configurar campos desta tela" em cada cadastro; usar o mesmo ícone aqui
    confundiria as duas ideias. Ícone novo: `IconeParametros` (sliders/ajustes).
+6. **4 abas (2026-08-19)** — a lista cresceu demais pra rolar numa página só; virou
+   **Vendas** (inclui Fiscal), **Estoque** (inclui Catálogo), **Compras** e **Crediário**. O
+   `PUT` continua salvando **o formulário inteiro de uma vez**, não só a aba aberta no momento —
+   as abas são só organização visual, o estado do formulário é um objeto único (`form`), igual
+   antes. Ver "Campos do formulário" abaixo pra saber qual campo mora em qual aba.
 
 ## Campos do formulário
 
-Tabela `cfg_geral` (V023). Seis seções, nesta ordem: **Vendas**, **Fiscal** (2026-08-19),
-**Catálogo**, **Estoque** (2026-07-29), **Compras** (2026-08-13, plano de contas padrão da
-compra de mercadoria) e **Crediário** — esta última nasceu rotulada "(Fase 2)" com um aviso de
-que o módulo ainda não existia; o crediário saiu do papel em 2026-07-29 (Recebimento de
-Crediário calcula multa/juros automaticamente sobre parcelas vencidas usando esses quatro
-campos) e o rótulo/aviso da tela foram corrigidos só em **2026-08-07**, quando a discrepância
-foi notada.
+Tabela `cfg_geral` (V023). Seis seções, agrupadas em **4 abas** (2026-08-19, `ConfiguracaoGeralForm.tsx`):
+
+| Aba | Seções dentro dela |
+|---|---|
+| **Vendas** | Vendas · Fiscal (2026-08-19) |
+| **Estoque** | Catálogo · Estoque (2026-07-29) |
+| **Compras** | Compras (2026-08-13, plano de contas padrão da compra de mercadoria) |
+| **Crediário** | Crediário |
+
+**Crediário** nasceu rotulada "(Fase 2)" com um aviso de que o módulo ainda não existia; o
+crediário saiu do papel em 2026-07-29 (Recebimento de Crediário calcula multa/juros
+automaticamente sobre parcelas vencidas usando esses quatro campos) e o rótulo/aviso da tela
+foram corrigidos só em **2026-08-07**, quando a discrepância foi notada. O `PUT` salva **o
+formulário inteiro**, não só a aba aberta — trocar de aba não perde o que foi digitado nas
+outras.
 
 | Campo (banco) | Rótulo na tela | Componente | Regra |
 |---|---|---|---|

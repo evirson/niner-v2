@@ -143,11 +143,17 @@ negativo ou ausente), 409 (caixa já aberto hoje para este usuário/empresa).
   é gravado (rede de segurança do backend — a tela em si já bloqueia antes via popup).
 - Dado o Recebimento de Crediário sem caixa aberto, quando tenta efetivar direto pela API, então
   400 e nada é gravado (mesma rede de segurança).
+- Dado um caixa aberto e fechado hoje pro usuário/empresa, quando abre de novo, então reaproveita
+  o mesmo `idCaixa` (não cria linha nova) com o saldo inicial/carteira do novo request (2026-08-19).
+- Dado um caixa reaberto no mesmo dia, então a conferência do fechamento anterior é apagada
+  (2026-08-19).
+- Dado um caixa fechado hoje, quando consulta o status, então `aberto = false` mas `idCaixa`/
+  `saldoInicial` vêm preenchidos com os dados desse caixa, não nulos (2026-08-19).
 
-Cobertos por `CaixaCrudTest` (6 testes) + 1 teste novo em cada de `PdvCrudTest`/
-`RecebimentoCrediarioCrudTest` (as demais 17/8 pré-existentes ganharam uma chamada de abertura de
-caixa no setup, pra continuarem passando). Suíte completa do projeto: **500/500 verdes
-(2026-08-14)** — eram 211 quando esta tela nasceu, em 2026-07-30.
+Cobertos por `CaixaCrudTest` (6 testes originais + 3 de reabertura em 2026-08-19) + 1 teste novo em
+cada de `PdvCrudTest`/`RecebimentoCrediarioCrudTest` (as demais 17/8 pré-existentes ganharam uma
+chamada de abertura de caixa no setup, pra continuarem passando). Suíte completa do projeto:
+**763/763 verdes (2026-08-19)** — eram 211 quando esta tela nasceu, em 2026-07-30.
 
 ## Revisão 2026-08-19 — tela dedicada removida
 
@@ -175,9 +181,42 @@ inteiramente** esse requisito; a tela dedicada só era redundante.
   Caixa às cegas só lista caixas abertos, então um caixa já fechado não aparece mais ali por
   padrão.
 
+## Revisão 2026-08-19 — abrir de novo no mesmo dia reabre o caixa, não cria outro
+
+⚠️ **Bug real, achado pelo dono do produto:** "O Caixa so pode existir 1 para empresa + usuario +
+data de abertura" — antes desta correção, abrir o caixa de novo depois de fechar no mesmo dia
+criava uma **segunda** linha em `caixa_mestre` (mesma empresa+usuário+data), quebrando esse
+invariante. O histórico do dia ficava espalhado em dois caixas, e a grade "Caixas Abertos"/
+conferência não sabiam mais qual era "o de verdade".
+
+- **`CaixaService.abrir`** agora checa se já existe um caixa **fechado hoje** (mesma
+  empresa+usuário) antes de inserir — se existir, **reabre a mesma linha** (`UPDATE caixa_mestre
+  SET caixa_fechado=false, data_fechamento=NULL, ...`, com o saldo inicial e a carteira que vieram
+  no request, que podem ser iguais ou diferentes de antes — a tela deixa o operador decidir) em vez
+  de criar outra. A `data_abertura` ORIGINAL nunca muda. Um rastro fica em `observacoes` (P3):
+  "REABERTO (MESMO DIA) EM dd/mm/aaaa hh:mi POR USUARIO N".
+- **A conferência do fechamento anterior é apagada** (`DELETE FROM caixa_fechamento_conferencia
+  WHERE id_caixa = ?`) ao reabrir — ela não vale mais, o caixa vai receber lançamento novo e o
+  próximo fechamento do dia grava a conferência dele mesmo, do zero.
+- **`GET /caixa/status`** ganhou uma segunda consulta interna (`buscarCaixaDeHoje`, diferente de
+  `buscarCaixaAbertoHoje`): quando não há caixa aberto mas existe um fechado **hoje**, a resposta
+  vem com `aberto:false` só que `idCaixa`/`saldoInicial`/`idCarteira` preenchidos — é o gancho que
+  o popup usa pra pré-preencher.
+- **`AberturaCaixaModal.tsx`** recebeu a prop `statusCaixa` (passada pelas 3 telas que abrem o
+  popup — `Pdv.tsx`, `RecebimentoCrediario.tsx` e `ContasPagarForm.tsx` na baixa em dinheiro): se
+  `statusCaixa.idCaixa` vier preenchido, o campo de saldo inicial já nasce com o valor da última
+  abertura de hoje (em vez de `0,00`), a mensagem muda para "Você já tinha aberto e fechado o caixa
+  hoje — ele será reaberto (não é um caixa novo)..." e o botão vira "Reabrir Caixa" em vez de
+  "Abrir Caixa". Puramente informativo — o operador pode alterar o saldo antes de confirmar.
+- **Testes:** 3 casos novos em `CaixaCrudTest` — reabrir no mesmo dia reaproveita o mesmo
+  `idCaixa` (confirmado também direto no banco, `count(*) = 1` pro dia), a conferência do
+  fechamento anterior some ao reabrir, e `status` traz o saldo do caixa fechado hoje mesmo com
+  `aberto:false`. **763/763 testes de backend verdes.**
+
 ## Impacto no banco (2026-08-19)
 
-Nenhum — mudança só de frontend/menu, sem alteração de schema nem de endpoint.
+Nenhum — mudança só de frontend/menu, sem alteração de schema nem de endpoint. A revisão de
+reabertura do mesmo dia (acima) também não muda schema — só a lógica de `abrir`/`status`.
 
 ## Ajuda da tela (manual de operação + vídeo) — obrigatório (R22 / §3.7.1)
 

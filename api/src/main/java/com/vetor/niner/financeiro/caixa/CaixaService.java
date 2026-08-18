@@ -62,9 +62,16 @@ public class CaixaService {
         this.jdbc = jdbc;
     }
 
+    /**
+     * {@code aberto=false} não significa mais "sem caixa nenhum hoje" — desde 2026-08-19, se o
+     * usuário já tinha aberto e fechado o caixa hoje, {@code idCaixa}/{@code saldoInicial}/
+     * {@code idCarteira} vêm preenchidos mesmo assim (só {@code aberto} é que é `false`), para o
+     * popup de Abertura de Caixa poder pré-preencher com o saldo inicial já usado hoje — ver
+     * {@link #abrir} e {@link #buscarCaixaDeHoje}.
+     */
     @Transactional(readOnly = true)
     public CaixaStatusResponse status(Jwt jwt) {
-        return buscarCaixaAbertoHoje(idEmpresa(jwt), idUsuario(jwt))
+        return buscarCaixaDeHoje(idEmpresa(jwt), idUsuario(jwt))
                 .orElseGet(() -> new CaixaStatusResponse(false, null, null, null, null, null));
     }
 
@@ -86,6 +93,16 @@ public class CaixaService {
                 .list();
     }
 
+    /**
+     * ⚠️ 2026-08-19 — só pode existir <b>um</b> {@code caixa_mestre} por empresa+usuário+dia,
+     * ponto: antes desta correção, abrir de novo depois de fechar no mesmo dia criava uma
+     * SEGUNDA linha (mesma empresa+usuário+data), quebrando esse invariante — o histórico do dia
+     * ficava espalhado em dois caixas, e "Caixas Abertos"/conferência não sabiam mais qual era o
+     * "de verdade". Agora, se já existe um caixa de hoje fechado (mesma empresa+usuário), abrir
+     * não cria linha nova: <b>reabre a mesma</b>, com o saldo inicial informado agora (que pode
+     * ser o mesmo de antes ou um novo — a tela decide, o serviço só grava o que veio). A data de
+     * abertura ORIGINAL nunca muda; só o {@code caixa_fechado} e o rastro em {@code observacoes}.
+     */
     @Transactional
     public CaixaStatusResponse abrir(Jwt jwt, AbrirCaixaRequest req) {
         long idEmpresa = idEmpresa(jwt);
@@ -95,14 +112,65 @@ public class CaixaService {
         }
         validarCarteira(req.idCarteira());
 
-        jdbc.sql("""
-                        INSERT INTO caixa_mestre (id_tenant, id_empresa, id_usuario, id_carteira, saldo_inicial)
-                        VALUES (plataforma.tenant_atual(), ?, ?, ?, ?)
-                        """)
-                .params(idEmpresa, idUsuario, req.idCarteira(), req.saldoInicial())
-                .update();
+        Optional<Long> idCaixaFechadoHoje = buscarIdCaixaFechadoHoje(idEmpresa, idUsuario);
+        if (idCaixaFechadoHoje.isPresent()) {
+            reabrirCaixaDoMesmoDia(jwt, idCaixaFechadoHoje.get(), req);
+        } else {
+            jdbc.sql("""
+                            INSERT INTO caixa_mestre (id_tenant, id_empresa, id_usuario, id_carteira, saldo_inicial)
+                            VALUES (plataforma.tenant_atual(), ?, ?, ?, ?)
+                            """)
+                    .params(idEmpresa, idUsuario, req.idCarteira(), req.saldoInicial())
+                    .update();
+        }
 
         return status(jwt);
+    }
+
+    /** Mesma regra do CHECK conceitual "1 caixa por empresa+usuário+dia": procura um caixa **já
+     *  fechado hoje**, para {@link #abrir} decidir entre reabrir e criar. */
+    private Optional<Long> buscarIdCaixaFechadoHoje(long idEmpresa, long idUsuario) {
+        return jdbc.sql("""
+                        SELECT id_caixa FROM caixa_mestre
+                        WHERE id_tenant = plataforma.tenant_atual() AND id_empresa = ? AND id_usuario = ?
+                              AND caixa_fechado = true AND data_abertura::date = CURRENT_DATE
+                        ORDER BY id_caixa DESC LIMIT 1
+                        """)
+                .params(idEmpresa, idUsuario)
+                .query(Long.class)
+                .optional();
+    }
+
+    /**
+     * Reabre o caixa de hoje como parte do fluxo normal de "Abrir Caixa" — <b>diferente</b> de
+     * {@link #reabrir}: não é ADMIN-only, não pede motivo, porque não é uma correção excepcional
+     * de um caixa antigo — é o próprio usuário continuando o dia dele. Mesmo assim invalida a
+     * conferência gravada no fechamento anterior (ela não vale mais: o caixa vai receber
+     * lançamento novo) e deixa rastro em {@code observacoes} (P3).
+     */
+    private void reabrirCaixaDoMesmoDia(Jwt jwt, long idCaixa, AbrirCaixaRequest req) {
+        jdbc.sql("""
+                        UPDATE caixa_mestre SET
+                            caixa_fechado = false,
+                            data_fechamento = NULL,
+                            id_usuario_fechamento = NULL,
+                            valor_contado_dinheiro = NULL,
+                            id_carteira = ?,
+                            saldo_inicial = ?,
+                            observacoes = COALESCE(observacoes || E'\\n', '') ||
+                                'REABERTO (MESMO DIA) EM ' || to_char(now(), 'DD/MM/YYYY HH24:MI') ||
+                                ' POR USUARIO ' || ?
+                        WHERE id_tenant = plataforma.tenant_atual() AND id_caixa = ?
+                        """)
+                .params(req.idCarteira(), req.saldoInicial(), idUsuario(jwt), idCaixa)
+                .update();
+
+        jdbc.sql("""
+                        DELETE FROM caixa_fechamento_conferencia
+                        WHERE id_tenant = plataforma.tenant_atual() AND id_caixa = ?
+                        """)
+                .param(idCaixa)
+                .update();
     }
 
     /**
@@ -126,6 +194,9 @@ public class CaixaService {
         return buscarCaixaAbertoHoje(idEmpresa, idUsuario).isPresent();
     }
 
+    /** Só o caixa de hoje que está ABERTO — usado onde "posso lançar?" é a pergunta (abrir,
+     *  guard de PDV/Recebimento/baixa em dinheiro). Não confundir com {@link #buscarCaixaDeHoje},
+     *  que devolve o caixa de hoje independente de estar aberto ou fechado. */
     private Optional<CaixaStatusResponse> buscarCaixaAbertoHoje(long idEmpresa, long idUsuario) {
         return jdbc.sql("""
                         SELECT cm.id_caixa, cm.data_abertura, cm.id_carteira, tc.nome_carteira, cm.saldo_inicial
@@ -138,6 +209,27 @@ public class CaixaService {
                 .params(idEmpresa, idUsuario)
                 .query((rs, n) -> new CaixaStatusResponse(
                         true, rs.getLong("id_caixa"), rs.getObject("data_abertura", OffsetDateTime.class),
+                        rs.getLong("id_carteira"), rs.getString("nome_carteira"), rs.getBigDecimal("saldo_inicial")))
+                .optional();
+    }
+
+    /** Caixa de hoje INDEPENDENTE de estar aberto ou fechado — usado só por {@link #status}, pro
+     *  popup de Abertura de Caixa saber que já existe um caixa hoje (mesmo fechado) e pré-preencher
+     *  com o saldo inicial que já tinha sido usado, em vez de sempre começar do zero. */
+    private Optional<CaixaStatusResponse> buscarCaixaDeHoje(long idEmpresa, long idUsuario) {
+        return jdbc.sql("""
+                        SELECT cm.id_caixa, cm.data_abertura, cm.id_carteira, tc.nome_carteira, cm.saldo_inicial,
+                               cm.caixa_fechado
+                        FROM caixa_mestre cm
+                        JOIN tipo_carteira tc ON tc.id_carteira = cm.id_carteira AND tc.id_tenant = cm.id_tenant
+                        WHERE cm.id_tenant = plataforma.tenant_atual() AND cm.id_empresa = ? AND cm.id_usuario = ?
+                              AND cm.data_abertura::date = CURRENT_DATE
+                        ORDER BY cm.id_caixa DESC LIMIT 1
+                        """)
+                .params(idEmpresa, idUsuario)
+                .query((rs, n) -> new CaixaStatusResponse(
+                        !rs.getBoolean("caixa_fechado"), rs.getLong("id_caixa"),
+                        rs.getObject("data_abertura", OffsetDateTime.class),
                         rs.getLong("id_carteira"), rs.getString("nome_carteira"), rs.getBigDecimal("saldo_inicial")))
                 .optional();
     }

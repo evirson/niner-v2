@@ -204,6 +204,19 @@ public class SignupService {
                 .params(idTenant, idPerfilSt, idTenant, idPerfilSt, idTenant, idPerfilSt)
                 .update();
 
+        // 5d) perfil "NÃO INFORMADO" (2026-08-19) — sentinela SEM regra nenhuma, de propósito.
+        // É o que a Importação de Produtos atribui quando a coluna TRIBUTACAO vem em branco
+        // (docs/telas/importacao-dados.md): melhor um produto apontar pra um perfil real que a
+        // Conformidade Fiscal já sabe cobrar ("perfil sem regra para o CRT") do que ficar
+        // silenciosamente sem perfil nenhum. Sem `INSERT` em cfg_perfil_fiscal_regra — é exatamente
+        // a ausência de regra que faz o motor recusar emitir (F11) em vez de chutar CFOP/CSOSN.
+        jdbc.sql("""
+                        INSERT INTO cfg_perfil_fiscal (id_tenant, nome, descricao, ativo)
+                        VALUES (?, 'NÃO INFORMADO',
+                                'Sentinela sem regra fiscal — atribuído automaticamente a produtos importados sem a tributação definida. Edite este perfil (ou troque o produto de perfil) antes de emitir nota para eles.', true)
+                        """)
+                .param(idTenant).update();
+
         // 6) primeiro usuário = ADMIN (senha em hash — nunca texto).
         long idUsuario = jdbc.sql("""
                         INSERT INTO usuario (id_tenant, id_empresa, nome_usuario, email, senha_hash, administrador)

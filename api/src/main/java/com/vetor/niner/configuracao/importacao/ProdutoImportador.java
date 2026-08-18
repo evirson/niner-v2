@@ -52,10 +52,22 @@ public class ProdutoImportador implements ImportadorDeTabela {
     private static final int MAX_TAMANHOS_GRADE = 20;
     private static final String[] COLUNAS = colunasComTamanhos();
 
+    /** Nomes dos 3 perfis fiscais padrão (docs/telas/fiscal-perfil.md) que
+     *  {@code TRIBUTACAO} resolve — os dois primeiros semeados no signup com regras completas
+     *  (CRT 1/2/4); o terceiro, semeado **sem regra nenhuma** de propósito: é o sentinela de
+     *  "tributação não informada" — qualquer produto apontando pra ele faz a Conformidade Fiscal
+     *  acusar "perfil sem regra para o CRT" (mecanismo que já existia, nenhuma mudança lá) e o
+     *  motor recusa a emissão (F11) em vez de chutar um CFOP/CSOSN. */
+    private static final String NOME_PERFIL_NORMAL = "REVENDA TRIBUTADA NORMAL";
+    private static final String NOME_PERFIL_SUBSTITUICAO = "REVENDA COM SUBSTITUIÇÃO TRIBUTÁRIA (ST)";
+    private static final String NOME_PERFIL_NAO_INFORMADO = "NÃO INFORMADO";
+    private static final int LIMITE_LINHAS_NO_AVISO = 20;
+
     private static String[] colunasComTamanhos() {
         List<String> colunas = new ArrayList<>(List.of(
                 "CODIGO_PRODUTO", "MARCA", "REFERENCIA", "DESCRICAO", "PRECO_CUSTO", "PERCENTUAL_VENDA", "PRECO_VENDA",
-                "DATA_INICIO_OFERTA", "DATA_FINAL_OFERTA", "PRECO_OFERTA", "CODIGO_NCM", "PESO_BRUTO", "PESO_LIQUIDO"));
+                "DATA_INICIO_OFERTA", "DATA_FINAL_OFERTA", "PRECO_OFERTA", "CODIGO_NCM", "TRIBUTACAO",
+                "PESO_BRUTO", "PESO_LIQUIDO"));
         for (int i = 1; i <= MAX_TAMANHOS_GRADE; i++) {
             colunas.add("TAMANHO_" + i);
         }
@@ -90,14 +102,14 @@ public class ProdutoImportador implements ImportadorDeTabela {
 
     @Override
     public String descricao() {
-        return "Produtos e a grade de tamanhos de cada um (TAMANHO_1..20). Sem variação/EAN/estoque nesta importação — isso fica para a Entrada de Produtos.";
+        return "Produtos e a grade de tamanhos de cada um (TAMANHO_1..20). Sem variação/EAN/estoque nesta importação — isso fica para a Entrada de Produtos. TRIBUTACAO define o perfil fiscal (NORMAL, SUBSTITUICAO ou vazio=Não Informado).";
     }
 
     @Override
     public byte[] modeloPlanilha() {
         List<String> linha = new ArrayList<>(List.of(
                 "1", "BEIRA MAR", "SAND-001", "SANDALIA RASTEIRA VERAO", "35,00", "100", "70,00",
-                "", "", "", "6402.99.90", "0,350", "0,300", "36", "37", "38", "39", "40"));
+                "", "", "", "6402.99.90", "NORMAL", "0,350", "0,300", "36", "37", "38", "39", "40"));
         while (linha.size() < COLUNAS.length) {
             linha.add("");
         }
@@ -110,6 +122,7 @@ public class ProdutoImportador implements ImportadorDeTabela {
         boolean usaCorGrade = configuracaoGeralService.usaCorGrade();
 
         List<LinhaErro> erros = new ArrayList<>();
+        List<String> avisos = new ArrayList<>();
         int importadas = 0, ignoradas = 0;
         // Cache de tamanho por chamada (2026-08-10) — variável LOCAL, não campo da classe (o
         // importador é singleton Spring). O mesmo TAMANHO (ex. "36", "37"...) se repete em
@@ -118,13 +131,28 @@ public class ProdutoImportador implements ImportadorDeTabela {
         // EstoqueImportador (mesmo padrão).
         Map<String, Long> tamanhoCache = new HashMap<>();
 
+        // Resolvidos UMA VEZ por arquivo (não por linha) — os 3 nomes são fixos, e cfg_perfil_fiscal
+        // já é indexado por (id_tenant, nome). Se um deles não existir (tenant editou/apagou o
+        // padrão semeado no signup), o `null` propaga silenciosamente pro produto (mesmo
+        // comportamento de "sem perfil fiscal" de antes desta feature) e um único aviso avisa —
+        // não trava o arquivo inteiro por causa de um cadastro de referência ausente.
+        Long idPerfilNormal = idPerfilFiscalPorNome(NOME_PERFIL_NORMAL);
+        Long idPerfilSubstituicao = idPerfilFiscalPorNome(NOME_PERFIL_SUBSTITUICAO);
+        Long idPerfilNaoInformado = idPerfilFiscalPorNome(NOME_PERFIL_NAO_INFORMADO);
+        avisarSePerfilPadraoAusente(avisos, NOME_PERFIL_NORMAL, idPerfilNormal);
+        avisarSePerfilPadraoAusente(avisos, NOME_PERFIL_SUBSTITUICAO, idPerfilSubstituicao);
+        avisarSePerfilPadraoAusente(avisos, NOME_PERFIL_NAO_INFORMADO, idPerfilNaoInformado);
+
+        List<Integer> linhasSemTributacao = new ArrayList<>();
+
         for (LinhaPlanilha linha : linhas) {
             try {
                 // SAVEPOINT por linha (2026-08-10): sem isto, uma exceção de banco (não só de
                 // validação Java) numa linha deixa a transação do arquivo inteiro "abortada" e
                 // toda linha seguinte falha em cascata com "current transaction is aborted"
                 // (Postgres 25P02) — achado real ao validar uma planilha de Produtos.
-                if (savepoints.executar(() -> processarLinha(linha, usaCorGrade, tamanhoCache))) {
+                if (savepoints.executar(() -> processarLinha(linha, usaCorGrade, tamanhoCache,
+                        idPerfilNormal, idPerfilSubstituicao, idPerfilNaoInformado, linhasSemTributacao))) {
                     importadas++;
                 } else {
                     ignoradas++;
@@ -136,17 +164,42 @@ public class ProdutoImportador implements ImportadorDeTabela {
             }
         }
 
+        if (!linhasSemTributacao.isEmpty()) {
+            avisos.add(mensagemTributacaoAusente(linhasSemTributacao));
+        }
+
         RelatorioImportacao relatorio =
-                RelatorioImportacao.concluir(confirmar, linhas.size(), importadas, ignoradas, erros, List.of());
+                RelatorioImportacao.concluir(confirmar, linhas.size(), importadas, ignoradas, erros, avisos);
         if (!relatorio.confirmado()) {
             throw new SimulacaoConcluidaException(relatorio);
         }
         return relatorio;
     }
 
+    private static void avisarSePerfilPadraoAusente(List<String> avisos, String nome, Long id) {
+        if (id == null) {
+            avisos.add("Perfil fiscal padrão \"" + nome + "\" não encontrado neste tenant — produtos que "
+                    + "deveriam recebê-lo automaticamente pela coluna TRIBUTACAO ficarão sem perfil fiscal. "
+                    + "Cadastre um perfil com esse nome exato em Perfis Fiscais, ou reimporte depois de corrigir.");
+        }
+    }
+
+    private static String mensagemTributacaoAusente(List<Integer> linhasSemTributacao) {
+        int total = linhasSemTributacao.size();
+        String amostra = linhasSemTributacao.stream().limit(LIMITE_LINHAS_NO_AVISO)
+                .map(String::valueOf).reduce((a, b) -> a + ", " + b).orElse("");
+        String sufixo = total > LIMITE_LINHAS_NO_AVISO ? " e mais " + (total - LIMITE_LINHAS_NO_AVISO) + " linha(s)" : "";
+        return total + " produto(s) sem a coluna TRIBUTACAO preenchida (linha" + (total > 1 ? "s " : " ") + amostra
+                + sufixo + ") — receberam o perfil fiscal \"" + NOME_PERFIL_NAO_INFORMADO + "\" e não poderão "
+                + "emitir documento fiscal até você definir a tributação correta (NORMAL ou "
+                + "SUBSTITUICAO).";
+    }
+
     /** {@code true} se um produto novo foi criado; {@code false} se já existia (ignorada — mesma
      *  convenção de dedup do resto da importação: reaproveita, nunca duplica). */
-    private boolean processarLinha(LinhaPlanilha linha, boolean usaCorGrade, Map<String, Long> tamanhoCache) {
+    private boolean processarLinha(LinhaPlanilha linha, boolean usaCorGrade, Map<String, Long> tamanhoCache,
+                                   Long idPerfilNormal, Long idPerfilSubstituicao, Long idPerfilNaoInformado,
+                                   List<Integer> linhasSemTributacao) {
         String descricao = exigir(linha, "DESCRICAO");
         String marca = linha.valor("MARCA");
         String referencia = linha.valor("REFERENCIA");
@@ -157,6 +210,8 @@ public class ProdutoImportador implements ImportadorDeTabela {
         }
 
         Long idGrade = usaCorGrade ? resolverGrade(linha, tamanhoCache) : null;
+        Long idPerfilFiscal = resolverPerfilFiscal(linha, idPerfilNormal, idPerfilSubstituicao, idPerfilNaoInformado,
+                linhasSemTributacao);
 
         BigDecimal precoCusto = ImportacaoPlanilha.decimal("PRECO_CUSTO", linha.valor("PRECO_CUSTO"));
         BigDecimal percentualVenda = ImportacaoPlanilha.decimal("PERCENTUAL_VENDA", linha.valor("PERCENTUAL_VENDA"));
@@ -182,10 +237,47 @@ public class ProdutoImportador implements ImportadorDeTabela {
                 ncmExistenteOuNulo(linha.valor("CODIGO_NCM")),
                 ImportacaoPlanilha.decimal("PESO_BRUTO", linha.valor("PESO_BRUTO")),
                 ImportacaoPlanilha.decimal("PESO_LIQUIDO", linha.valor("PESO_LIQUIDO")),
-                idGrade, true, List.of(), null);
+                idGrade, true, List.of(), idPerfilFiscal);
         long idProduto = produtoService.criar(req).idProduto();
         gravarCodigoImportacaoSeInformado(idProduto, codigoProduto);
         return true;
+    }
+
+    /**
+     * {@code TRIBUTACAO} (2026-08-19, ajustado no mesmo dia: a planilha real do usuário traz texto,
+     * não código numérico): {@code NORMAL} (ou {@code 1}) = perfil "Revenda Tributada Normal",
+     * {@code SUBSTITUICAO}/{@code SUBSTITUIÇÃO}/{@code ST} (ou {@code 2}) = perfil "Revenda com
+     * Substituição Tributária (ST)", vazio = perfil "Não Informado" (sentinela sem regra — a
+     * Conformidade Fiscal aponta e o motor recusa emitir, em vez de o produto ficar "quieto" sem
+     * perfil nenhum). Comparação sem acento/maiúscula-minúscula. Qualquer outro valor é erro de
+     * planilha, não tributação desconhecida.
+     */
+    private Long resolverPerfilFiscal(LinhaPlanilha linha, Long idPerfilNormal, Long idPerfilSubstituicao,
+                                      Long idPerfilNaoInformado, List<Integer> linhasSemTributacao) {
+        String valor = linha.valor("TRIBUTACAO");
+        if (valor == null || valor.isBlank()) {
+            linhasSemTributacao.add(linha.numeroLinha());
+            return idPerfilNaoInformado;
+        }
+        String normalizado = valor.trim().toUpperCase(Locale.ROOT)
+                .replace("Ã", "A").replace("Ç", "C");
+        return switch (normalizado) {
+            case "1", "NORMAL" -> idPerfilNormal;
+            case "2", "SUBSTITUICAO", "ST" -> idPerfilSubstituicao;
+            default -> throw new IllegalArgumentException(
+                    "TRIBUTACAO deve ser NORMAL, SUBSTITUICAO ou vazio — veio \"" + valor + "\".");
+        };
+    }
+
+    /** Perfis fiscais são identificados por nome, único por tenant (`cfg_perfil_fiscal_nome_uk`) —
+     *  não há coluna de "código fixo" pra referenciar de fora, então a busca é pelo nome exato dos
+     *  3 perfis padrão semeados no signup (docs/telas/fiscal-perfil.md). */
+    private Long idPerfilFiscalPorNome(String nome) {
+        return jdbc.sql("""
+                        SELECT id_perfil_fiscal FROM cfg_perfil_fiscal
+                        WHERE id_tenant = plataforma.tenant_atual() AND nome = ?
+                        """)
+                .param(nome).query(Long.class).optional().orElse(null);
     }
 
     /** {@code CODIGO_PRODUTO} não é campo de {@link ProdutoRequest} (o cadastro manual não tem

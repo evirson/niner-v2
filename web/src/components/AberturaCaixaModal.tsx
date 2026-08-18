@@ -1,7 +1,7 @@
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { useEffect, useState } from 'react'
 import { ApiError } from '../lib/api'
-import { abrirCaixa, listarCarteirasParaAbertura } from '../lib/caixa'
+import { abrirCaixa, listarCarteirasParaAbertura, type CaixaStatus } from '../lib/caixa'
 import { completarMoeda, desmascararMoeda, formatarMoeda, mascararMoeda } from '../lib/masks'
 import CamposAberturaCaixa from './CamposAberturaCaixa'
 
@@ -17,10 +17,28 @@ import CamposAberturaCaixa from './CamposAberturaCaixa'
  * pela conta corrente, ou só editar a conta, não precisa de caixa. Por isso o `aoVoltar` daquela
  * tela apenas limpa a origem escolhida e devolve o operador ao formulário, em vez de navegar pra
  * fora. O componente não decide isso — quem passa o `aoVoltar` decide.
+ *
+ * <p><b>Reabertura no mesmo dia (2026-08-19):</b> só pode existir 1 {@code caixa_mestre} por
+ * empresa+usuário+dia — se o usuário já tinha aberto e fechado o caixa hoje, o backend REABRE o
+ * mesmo caixa em vez de criar outro (`CaixaService.abrir`). Este popup só precisa saber disso pra
+ * pré-preencher o saldo inicial com o valor já usado hoje, em vez de sempre começar em zero — o
+ * `statusCaixa` já vem com {@code idCaixa}/{@code saldoInicial} preenchidos nesse caso, mesmo com
+ * {@code aberto: false} (ver `CaixaService.status`). O operador pode manter ou alterar o valor.
  */
-export default function AberturaCaixaModal({ aoAbrir, aoVoltar }: { aoAbrir: () => void; aoVoltar: () => void }) {
+export default function AberturaCaixaModal({
+  aoAbrir,
+  aoVoltar,
+  statusCaixa,
+}: {
+  aoAbrir: () => void
+  aoVoltar: () => void
+  statusCaixa?: CaixaStatus
+}) {
+  const reabrindoCaixaDeHoje = statusCaixa?.idCaixa != null
   const [idCarteira, setIdCarteira] = useState<number | ''>('')
-  const [valorTexto, setValorTexto] = useState('0,00')
+  const [valorTexto, setValorTexto] = useState(
+    reabrindoCaixaDeHoje && statusCaixa?.saldoInicial != null ? formatarMoeda(statusCaixa.saldoInicial) : '0,00',
+  )
   const [erro, setErro] = useState<string | null>(null)
 
   const { data: carteiras } = useQuery({ queryKey: ['caixa-carteiras'], queryFn: listarCarteirasParaAbertura })
@@ -44,7 +62,9 @@ export default function AberturaCaixaModal({ aoAbrir, aoVoltar }: { aoAbrir: () 
       <div className="modal" role="dialog" aria-label="Abertura de Caixa">
         <h2 style={{ marginTop: 0 }}>Abertura de Caixa</h2>
         <p className="muted" style={{ marginTop: -4 }}>
-          Não há caixa aberto hoje para este usuário — informe o saldo inicial para continuar.
+          {reabrindoCaixaDeHoje
+            ? 'Você já tinha aberto e fechado o caixa hoje — ele será reaberto (não é um caixa novo). O saldo inicial abaixo veio da última abertura; altere se precisar.'
+            : 'Não há caixa aberto hoje para este usuário — informe o saldo inicial para continuar.'}
         </p>
 
         <CamposAberturaCaixa
@@ -65,7 +85,7 @@ export default function AberturaCaixaModal({ aoAbrir, aoVoltar }: { aoAbrir: () 
             Voltar
           </button>
           <button type="button" className="btn" disabled={idCarteira === '' || abrir.isPending} onClick={() => abrir.mutate()}>
-            {abrir.isPending ? 'Abrindo…' : 'Abrir Caixa'}
+            {abrir.isPending ? 'Abrindo…' : reabrindoCaixaDeHoje ? 'Reabrir Caixa' : 'Abrir Caixa'}
           </button>
         </div>
       </div>
