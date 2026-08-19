@@ -55,11 +55,14 @@ const canonical = new URL(path, Astro.site ?? 'https://niner.com.br').toString()
           <span class="brand-tagline">ERP para varejo multicanal</span>
         </span>
       </a>
+      <!-- Os destinos espelham os `id` REAIS da landing (`src/pages/index.astro`): #recursos,
+           #preco, #fiscal, #duvidas. Antes apontavam para #como-funciona/#planos/#perguntas/#canais,
+           que não existem em página nenhuma — âncora morta não dá 404, ela falha em silêncio. -->
       <nav class="nav-links" aria-label="Seções">
-        <a href="/#recursos">Recursos</a>
-        <a href="/#como-funciona">Como funciona</a>
-        <a href="/#planos">Planos</a>
-        <a href="/#perguntas">Perguntas</a>
+        <a href="/#recursos" data-evento="NAV" data-rotulo="recursos">Recursos</a>
+        <a href="/#preco" data-evento="NAV" data-rotulo="preco">Preço</a>
+        <a href="/#fiscal" data-evento="NAV" data-rotulo="fiscal">Fiscal</a>
+        <a href="/#duvidas" data-evento="NAV" data-rotulo="duvidas">Dúvidas</a>
       </nav>
       <div class="nav-actions">
         <button type="button" class="theme-toggle" id="themeToggle" aria-label="Alternar tema claro ou escuro">
@@ -88,23 +91,24 @@ const canonical = new URL(path, Astro.site ?? 'https://niner.com.br').toString()
           <div>
             <h4>Produto</h4>
             <ul>
-              <li><a href="/#recursos">Recursos</a></li>
-              <li><a href="/#como-funciona">Como funciona</a></li>
-              <li><a href="/#canais">Canais</a></li>
-              <li><a href="/#planos">Planos</a></li>
+              <li><a href="/#recursos" data-evento="NAV" data-rotulo="recursos">Recursos</a></li>
+              <li><a href="/#preco" data-evento="NAV" data-rotulo="preco">Preço</a></li>
+              <li><a href="/#fiscal" data-evento="NAV" data-rotulo="fiscal">Nota fiscal</a></li>
             </ul>
           </div>
           <div>
             <h4>Começar</h4>
             <ul>
-              <li><a href="/assinar">Criar conta grátis</a></li>
-              <li><a href="/#perguntas">Perguntas frequentes</a></li>
+              <li><a href="/assinar" data-evento="INICIO_SIGNUP" data-rotulo="rodape-base">Criar conta grátis</a></li>
+              <li><a href="/#duvidas" data-evento="NAV" data-rotulo="duvidas">Perguntas frequentes</a></li>
             </ul>
           </div>
           <div>
             <h4>Empresa</h4>
             <ul>
               <li><a href="mailto:contato@vetorsistemas.com.br">Contato</a></li>
+              <li><a href="/termos">Termos de uso</a></li>
+              <li><a href="/privacidade">Privacidade (LGPD)</a></li>
             </ul>
           </div>
         </div>

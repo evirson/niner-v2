@@ -19,6 +19,9 @@
   --ink-muted: #5c6660;    --ink-muted-rgb: 92,102,96;
   --accent: #1f6f6b;       --accent-rgb: 31,111,107;
   --accent-contrast: #ffffff;
+  /* Destaque "neon" (design v2). Mesma família do --accent, mais saturado. */
+  --neon: #0a9d90;         --neon-rgb: 10,157,144;
+  --neon-glow: 0 0 10px rgba(15,214,196,.4), 0 0 24px rgba(15,214,196,.22);
   --line: #dee2dc;         --line-rgb: 222,226,220;
   --danger: #a63d29;       --danger-rgb: 166,61,41;
 }
@@ -30,6 +33,9 @@
     --ink-muted: #93a19e;  --ink-muted-rgb: 147,161,158;
     --accent: #4fbdb2;     --accent-rgb: 79,189,178;
     --accent-contrast: #0d1b1a;
+    /* Destaque "neon" (design v2) — no escuro é onde ele realmente brilha. */
+    --neon: #2cf5e2;         --neon-rgb: 44,245,226;
+    --neon-glow: 0 0 12px rgba(44,245,226,.55), 0 0 32px rgba(44,245,226,.3);
     --line: #2a3538;       --line-rgb: 42,53,56;
     --danger: #e2836a;     --danger-rgb: 226,131,106;
   }
@@ -42,6 +48,9 @@
   --ink-muted: #5c6660;    --ink-muted-rgb: 92,102,96;
   --accent: #1f6f6b;       --accent-rgb: 31,111,107;
   --accent-contrast: #ffffff;
+  /* Destaque "neon" (design v2). Mesma família do --accent, mais saturado. */
+  --neon: #0a9d90;         --neon-rgb: 10,157,144;
+  --neon-glow: 0 0 10px rgba(15,214,196,.4), 0 0 24px rgba(15,214,196,.22);
   --line: #dee2dc;         --line-rgb: 222,226,220;
   --danger: #a63d29;       --danger-rgb: 166,61,41;
 }
@@ -53,6 +62,9 @@
   --ink-muted: #93a19e;    --ink-muted-rgb: 147,161,158;
   --accent: #4fbdb2;       --accent-rgb: 79,189,178;
   --accent-contrast: #0d1b1a;
+  /* Destaque "neon" (design v2) — no escuro é onde ele realmente brilha. */
+  --neon: #2cf5e2;         --neon-rgb: 44,245,226;
+  --neon-glow: 0 0 12px rgba(44,245,226,.55), 0 0 32px rgba(44,245,226,.3);
   --line: #2a3538;         --line-rgb: 42,53,56;
   --danger: #e2836a;       --danger-rgb: 226,131,106;
 }
@@ -76,7 +88,7 @@ a { color: var(--accent); }
 a:hover { color: var(--ink); }
 :focus-visible { outline: 3px solid rgba(var(--accent-rgb), .7); outline-offset: 2px; border-radius: 4px; }
 .wrap { max-width: 1080px; margin: 0 auto; padding: 0 20px; }
-.kicker { font-size: 13px; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; color: var(--accent); }
+.kicker { font-size: 13px; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; color: var(--neon); text-shadow: var(--neon-glow); }
 .preco, .num { font-variant-numeric: tabular-nums; }
 
 /* ============ Botões ============ */
@@ -102,7 +114,7 @@ a:hover { color: var(--ink); }
 }
 .topo-inner { display: flex; align-items: center; gap: 16px; min-height: 64px; }
 .logo { font-family: Georgia, "Iowan Old Style", serif; font-size: 24px; color: var(--ink); text-decoration: none; letter-spacing: -.01em; }
-.logo b { color: var(--accent); font-weight: 500; }
+.logo b { color: var(--neon); text-shadow: var(--neon-glow); font-weight: 500; }
 .nav { display: none; gap: 4px; margin: 0 auto; }
 .nav a { color: var(--ink-muted); text-decoration: none; font-size: 15px; font-weight: 500; padding: 12px 12px; border-radius: 8px; }
 .nav a:hover { color: var(--ink); background: rgba(var(--ink-rgb), .05); }
@@ -116,22 +128,21 @@ a:hover { color: var(--ink); }
 .heroi { padding: 64px 0 56px; }
 .heroi-grid { display: grid; gap: 40px; align-items: center; }
 .heroi h1 { font-size: clamp(34px, 5.4vw, 54px); letter-spacing: -.015em; }
-.heroi h1 em { font-style: normal; color: var(--accent); }
+.heroi h1 em { font-style: normal; color: var(--neon); text-shadow: var(--neon-glow); }
 .heroi .sub { font-size: clamp(18px, 2.2vw, 21px); color: var(--ink-muted); margin-top: 18px; max-width: 34em; }
 .heroi-ctas { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 28px; }
 .heroi .micro { font-size: 14px; color: var(--ink-muted); margin-top: 14px; }
 @media (min-width: 900px) { .heroi { padding: 88px 0 80px; } .heroi-grid { grid-template-columns: 1.05fr .95fr; gap: 56px; } }
 
-/* Placeholder de captura de tela (trocar por <img> com width/height quando houver print real) */
-.print {
-  aspect-ratio: 4 / 3; width: 100%;
-  background: var(--surface);
-  border: 1px dashed rgba(var(--accent-rgb), .5);
-  border-radius: 14px;
-  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;
-  color: var(--ink-muted); font-size: 14px; text-align: center; padding: 16px;
-}
-.print .tag { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 13px; color: var(--accent); background: rgba(var(--accent-rgb), .08); padding: 4px 10px; border-radius: 6px; }
+/* Fotos ilustrativas (herói e fiscal). Servidas do nosso domínio (/img/*.jpg), nunca por hotlink:
+   o herói é o LCP da página e a promessa de "medição própria, sem terceiros" vale também para
+   quem entrega o pixel. width/height no <img> reservam a caixa e evitam CLS. */
+.print { margin: 0; border-radius: 14px; overflow: hidden; border: 1px solid var(--line); box-shadow: 0 12px 34px rgba(0,0,0,.12); }
+.print img { display: block; width: 100%; height: auto; aspect-ratio: 4 / 3; object-fit: cover; filter: saturate(.92); }
+
+/* Faixa de ambiência: foto larga, puramente decorativa (a seção é aria-hidden). */
+.ambiencia { border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.ambiencia img { display: block; width: 100%; height: clamp(220px, 34vw, 420px); object-fit: cover; object-position: center 60%; filter: saturate(.88); }
 
 /* ============ Faixa de credibilidade ============ */
 .faixa { border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); background: rgba(var(--surface-rgb), .55); }
@@ -173,7 +184,7 @@ a:hover { color: var(--ink); }
 .plano-gratis { background: var(--surface); border: 2px solid var(--accent); position: relative; }
 .plano-gratis .selo { position: absolute; top: -13px; left: 26px; background: var(--accent); color: var(--accent-contrast); font-size: 12.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; padding: 4px 12px; border-radius: 999px; }
 .plano h3 { font-size: 24px; }
-.plano .valor { font-size: clamp(40px, 5vw, 52px); font-family: Georgia, "Iowan Old Style", serif; margin-top: 12px; }
+.plano .valor { font-size: clamp(40px, 5vw, 52px); font-family: Georgia, "Iowan Old Style", serif; margin-top: 12px; color: var(--neon); text-shadow: var(--neon-glow); }
 .plano .valor small { font-size: 18px; font-family: -apple-system, "Segoe UI", Roboto, sans-serif; color: var(--ink-muted); font-weight: 400; }
 .plano ul { list-style: none; padding: 0; margin: 20px 0 26px; display: grid; gap: 11px; }
 .plano li { display: flex; gap: 10px; align-items: flex-start; font-size: 15.5px; }
@@ -246,7 +257,7 @@ table.faixas { width: 100%; border-collapse: collapse; font-size: 15px; min-widt
   padding: 20px 4px; font-size: 17.5px; font-weight: 600; min-height: 44px;
 }
 .faq summary::-webkit-details-marker { display: none; }
-.faq summary::after { content: "+"; font-size: 24px; font-weight: 400; color: var(--accent); flex: none; line-height: 1; transition: transform .15s; }
+.faq summary::after { content: "+"; font-size: 24px; font-weight: 400; color: var(--neon); text-shadow: var(--neon-glow); flex: none; line-height: 1; transition: transform .15s; }
 .faq details[open] summary::after { transform: rotate(45deg); }
 .faq .resposta { padding: 0 4px 22px; color: var(--ink-muted); font-size: 16px; max-width: 40em; }
 

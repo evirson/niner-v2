@@ -195,10 +195,19 @@ const recursos = [
             </div>
             <p class="micro">Sem cartão de crédito. Sem prazo. Você começa a usar em 1 minuto.</p>
           </div>
-          <div class="print" role="img" aria-label="Captura de tela do PDV do Niner">
-            <span class="tag">[PRINT: PDV]</span>
-            <span>Tela do PDV com uma venda em andamento</span>
-          </div>
+          <figure class="print">
+            {/* LCP da página: nada de loading="lazy" aqui, e servida do nosso domínio (ver
+                public/img/) em vez de hotlink — terceiro no caminho crítico não cabe na meta
+                de LCP < 2s, e entregaria IP/user-agent do visitante a cada visita. */}
+            <img
+              src="/img/heroi-balcao.jpg"
+              alt="Atendente passando cartão na maquininha no balcão da loja"
+              width="1200"
+              height="900"
+              fetchpriority="high"
+              decoding="async"
+            />
+          </figure>
         </div>
       </section>
 
@@ -348,10 +357,16 @@ const recursos = [
             </ul>
             <p class="frase-contador">"O XML fica arquivado e disponível para o seu contador."</p>
           </div>
-          <div class="print" role="img" aria-label="Captura de tela da emissão de NFC-e no Niner">
-            <span class="tag">[PRINT: Emissão de NFC-e]</span>
-            <span>Emissão de nota a partir de uma venda</span>
-          </div>
+          <figure class="print">
+            <img
+              src="/img/fiscal-maquininha.jpg"
+              alt="Maquininha de cartão pronta para receber o pagamento"
+              width="1200"
+              height="900"
+              loading="lazy"
+              decoding="async"
+            />
+          </figure>
         </div>
       </section>
 
@@ -367,6 +382,19 @@ const recursos = [
             <li class="passo"><h3>Venda</h3><p>Abra o caixa e registre a primeira venda — com nota, se quiser.</p></li>
           </ol>
         </div>
+      </section>
+
+      {/* Faixa de ambiência: puramente decorativa, por isso a seção inteira é aria-hidden e o
+          alt fica vazio — leitor de tela não ganha nada anunciando "foto de loja". */}
+      <section class="ambiencia" aria-hidden="true">
+        <img
+          src="/img/ambiencia-loja.jpg"
+          alt=""
+          width="2000"
+          height="1335"
+          loading="lazy"
+          decoding="async"
+        />
       </section>
 
       {depoimentos.length > 0 && (

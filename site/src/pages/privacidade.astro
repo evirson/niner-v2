@@ -1,0 +1,247 @@
+---
+/**
+ * Política de Privacidade (LGPD) — 🔴 RASCUNHO, pendente de revisão jurídica.
+ *
+ * Regra que governa este arquivo: **descrever só o que o código faz de verdade.** Cada afirmação
+ * aqui tem contrapartida verificável no repositório:
+ *  · cookie `niner_vid`, `ninerSessao`, `ninerOrigem` e os eventos → `site/public/beacon.js`;
+ *  · `ninerTema` / `ninerCookies` → o script inline de `Base.astro` e o aviso da landing;
+ *  · dados do cadastro → os campos do formulário em `src/pages/assinar.astro`;
+ *  · ausência de rastreador de terceiro → ADR-017 e o briefing (`docs/site/briefing-landing.md` §6).
+ * Se o beacon mudar, esta página muda junto — política que descreve coleta que não existe (ou
+ * omite coleta que existe) é pior que não ter política.
+ *
+ * Contato: vem de `src/dados/contato.ts`. Enquanto o e-mail for `PENDENTE`, a página aponta para o
+ * canal de contato do rodapé em vez de inventar um endereço.
+ */
+import Base from '../layouts/Base.astro';
+import { contato } from '../dados/contato';
+
+const atualizadoEm = '19 de agosto de 2026';
+---
+
+<Base
+  title="Política de Privacidade — Niner"
+  description="Como o Niner trata os dados de quem visita o site e de quem cria uma conta: medição própria, sem rastreadores de terceiros."
+  path="/privacidade"
+>
+  <section class="page-header">
+    <div class="container">
+      <p class="rascunho" role="note">🔴 Rascunho — pendente de revisão jurídica</p>
+      <span class="eyebrow">LGPD · Lei 13.709/2018</span>
+      <h1>Política de Privacidade</h1>
+      <p>Como tratamos os dados de quem visita este site e de quem cria uma conta no Niner.</p>
+    </div>
+  </section>
+
+  <section class="legal">
+    <div class="container">
+      <p class="atualizado">Última atualização: {atualizadoEm}</p>
+
+      <h2>Em resumo</h2>
+      <ul>
+        <li>Não usamos Google Analytics, Meta Pixel nem qualquer rastreador de terceiro. A medição de audiência é <b>nossa e own-domain</b>.</li>
+        <li>Não vendemos, alugamos nem compartilhamos seus dados com anunciantes.</li>
+        <li>Você pode pedir a exclusão dos seus dados a qualquer momento.</li>
+      </ul>
+
+      <h2>1. Quem trata os dados</h2>
+      <p>
+        O Niner é um produto da <b>Vetor Sistemas</b>, que atua como controladora dos dados descritos
+        nesta página.
+        {contato.cnpjVetor && <span> CNPJ {contato.cnpjVetor}.</span>}
+      </p>
+
+      <h2>2. O que este site coleta enquanto você navega</h2>
+      <p>
+        Medimos a audiência do site com um script próprio (<code>/beacon.js</code>), servido pelo
+        nosso próprio domínio. Ele guarda no seu navegador:
+      </p>
+      <table class="tab-dados">
+        <thead>
+          <tr>
+            <th scope="col">O que</th>
+            <th scope="col">Onde</th>
+            <th scope="col">Para quê</th>
+            <th scope="col">Prazo</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>niner_vid</code></td>
+            <td>Cookie próprio</td>
+            <td>Identificador aleatório e anônimo, para saber que duas visitas são da mesma pessoa. Não contém nome, e-mail nem telefone.</td>
+            <td>1 ano</td>
+          </tr>
+          <tr>
+            <td><code>ninerSessao</code></td>
+            <td><code>sessionStorage</code></td>
+            <td>Agrupa os eventos de uma mesma visita.</td>
+            <td>Até fechar a aba</td>
+          </tr>
+          <tr>
+            <td><code>ninerOrigem</code></td>
+            <td><code>localStorage</code></td>
+            <td>Parâmetros UTM e site de referência da <b>primeira</b> visita, para saber qual campanha trouxe você.</td>
+            <td>Até você limpar o navegador</td>
+          </tr>
+          <tr>
+            <td><code>ninerTema</code></td>
+            <td><code>localStorage</code></td>
+            <td>Lembrar se você escolheu tema claro ou escuro.</td>
+            <td>Até você limpar o navegador</td>
+          </tr>
+          <tr>
+            <td><code>ninerCookies</code></td>
+            <td><code>localStorage</code></td>
+            <td>Lembrar que você já dispensou o aviso de cookies.</td>
+            <td>Até você limpar o navegador</td>
+          </tr>
+        </tbody>
+      </table>
+      <p>
+        Com esse identificador enviamos ao nosso servidor os seguintes eventos: abertura de página,
+        cliques em elementos marcados (botão de criar conta, WhatsApp, Instagram, abertura de item
+        do FAQ, links do menu) e profundidade de rolagem (25%, 50%, 75% e 90% da página).
+      </p>
+      <p>
+        <b>O que a medição não coleta:</b> nada que você digite em formulário — nem e-mail, nem
+        telefone, nem senha. Se o envio falhar, ele falha em silêncio: a medição nunca bloqueia,
+        atrasa nem quebra a página.
+      </p>
+
+      <h2>3. O que coletamos quando você cria uma conta</h2>
+      <p>No cadastro em <a href="/assinar">/assinar</a> pedimos apenas:</p>
+      <ul>
+        <li><b>Nome da loja</b> e <b>seu nome</b> — para identificar a conta e falar com você;</li>
+        <li><b>E-mail</b> — é o seu login e o canal de avisos importantes (por exemplo, quando o volume de vendas se aproxima do limite do plano gratuito);</li>
+        <li><b>Senha</b> — guardada apenas como <i>hash</i>, nunca em texto legível.</li>
+      </ul>
+      <p>
+        Junto vai o identificador anônimo da seção 2, quando existir, só para ligar a visita ao
+        cadastro e sabermos qual canal funciona. Se você bloqueia cookies, o cadastro funciona
+        igual — só perdemos essa atribuição.
+      </p>
+
+      <h2>4. Dados que você registra dentro do sistema</h2>
+      <p>
+        Cadastros de clientes, produtos, vendas, notas fiscais e movimentações financeiras que você
+        lança no Niner <b>são seus</b>. Nós os hospedamos e processamos exclusivamente para operar o
+        serviço que você contratou (nesse contexto a Vetor Sistemas é operadora, e você, controlador
+        dos dados dos seus clientes).
+      </p>
+      <p>
+        Os dados de cada loja ficam isolados dos das demais no banco de dados, e o acesso da nossa
+        equipe a dados de cliente é registrado.
+      </p>
+
+      <h2>5. Base legal</h2>
+      <ul>
+        <li><b>Execução de contrato</b> — dados de cadastro e dados operacionais do sistema;</li>
+        <li><b>Obrigação legal</b> — arquivamento do XML das notas fiscais pelo prazo exigido pela legislação fiscal (5 anos);</li>
+        <li><b>Legítimo interesse</b> — medição própria de audiência do site, em volume mínimo e sem perfilamento publicitário.</li>
+      </ul>
+
+      <h2>6. Com quem compartilhamos</h2>
+      <p>
+        Com fornecedores de infraestrutura necessários para o serviço existir (hospedagem em nuvem,
+        armazenamento de arquivos, envio de e-mail) e com autoridades fiscais, no que a emissão de
+        nota fiscal exige. <b>Não</b> compartilhamos com redes de anúncios nem com corretores de
+        dados.
+      </p>
+
+      <h2>7. Por quanto tempo guardamos</h2>
+      <ul>
+        <li>Dados de cadastro e do sistema: enquanto a conta existir. Se você voltar ao plano gratuito ou parar de pagar, <b>nada é apagado</b>;</li>
+        <li>XML de nota fiscal: 5 anos, por exigência legal — este prazo não pode ser encurtado a pedido;</li>
+        <li>Eventos de audiência: mantidos de forma agregada para análise de funil.</li>
+      </ul>
+
+      <h2>8. Seus direitos</h2>
+      <p>
+        A LGPD garante a você confirmar a existência de tratamento, acessar seus dados, corrigir
+        dados incompletos ou desatualizados, pedir anonimização, bloqueio ou <b>exclusão</b>, pedir
+        portabilidade e revogar consentimento.
+      </p>
+      <p>
+        Para exercer qualquer um deles, fale com a gente
+        {contato.email ? (
+          <span> pelo e-mail <a href={`mailto:${contato.email}`}>{contato.email}</a>.</span>
+        ) : (
+          <span> pelo canal de contato publicado no rodapé deste site.</span>
+        )}
+        Respondemos em até 15 dias. A exclusão alcança tudo, exceto o que a lei nos obriga a manter
+        (item 7).
+      </p>
+
+      <h2>9. Como recusar a medição</h2>
+      <p>
+        Basta bloquear cookies para este site ou limpar os dados do navegador — o site continua
+        funcionando por inteiro. Não existe login, conteúdo ou função condicionada a aceitar a
+        medição.
+      </p>
+
+      <h2>10. Mudanças nesta política</h2>
+      <p>
+        Se mudarmos o que é coletado, atualizamos esta página e a data no topo. Mudança relevante
+        para quem já tem conta é avisada por e-mail.
+      </p>
+
+      <p class="voltar"><a href="/">← Voltar para a página inicial</a> · <a href="/termos">Termos de uso</a></p>
+    </div>
+  </section>
+</Base>
+
+<style>
+  .rascunho {
+    display: inline-block;
+    margin: 0 0 14px;
+    padding: 8px 14px;
+    border: 1px solid var(--danger);
+    border-radius: var(--radius);
+    background: var(--danger-bg);
+    color: var(--danger);
+    font-size: 14px;
+    font-weight: 600;
+  }
+  .legal { padding: 8px 0 72px; }
+  .legal .container { max-width: 760px; }
+  .legal h2 {
+    margin: 34px 0 10px;
+    font-size: 20px;
+    line-height: 1.3;
+  }
+  .legal p,
+  .legal li { color: var(--ink-muted); font-size: 16px; line-height: 1.65; }
+  .legal p { margin: 0 0 12px; }
+  .legal ul { margin: 0 0 12px; padding-left: 20px; }
+  .legal li { margin-bottom: 6px; }
+  .legal b { color: var(--ink); }
+  .legal a { color: var(--accent); }
+  .legal code {
+    font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+    font-size: 0.92em;
+    background: var(--surface-2);
+    border-radius: 4px;
+    padding: 1px 5px;
+  }
+  .atualizado { font-size: 14px; }
+  .tab-dados {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 0 0 16px;
+    font-size: 14px;
+    display: block;
+    overflow-x: auto;
+  }
+  .tab-dados th,
+  .tab-dados td {
+    border: 1px solid var(--line);
+    padding: 8px 10px;
+    text-align: left;
+    vertical-align: top;
+    color: var(--ink-muted);
+  }
+  .tab-dados th { color: var(--ink); background: var(--surface-2); font-weight: 600; }
+  .voltar { margin-top: 32px; padding-top: 16px; border-top: 1px solid var(--line); }
+</style>
