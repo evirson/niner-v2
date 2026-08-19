@@ -183,11 +183,27 @@ public class DocumentoFiscalRepositorio {
     // ---------------------------------------------------------------- fila de contingência (§9.7)
 
     /**
-     * Empresas com nota emitida em contingência ainda não autorizada.
-     *
-     * <p>Varre <b>todos</b> os tenants de propósito: é consulta de infraestrutura para o job, que
-     * não tem JWT. Devolve só o necessário para o chamador entrar no {@code TenantContext} certo
-     * antes de tocar em dado de domínio — e por isso não seleciona nada da nota em si.
+     * Todos os ids de tenant existentes ({@code plataforma.tenant}, GLOBAL, sem RLS — P9). Ponto
+     * de entrada dos jobs em caminho não-requisição (sem JWT) para descobrir quem varrer: uma
+     * consulta de domínio (RLS FORCE) chamada sem {@link com.vetor.niner.comum.tenant.TenantContext
+     * #comTenant} não "vê todos os tenants" como se poderia supor — {@code niner_app} nunca tem
+     * {@code BYPASSRLS} (P8), então sem {@code app.id_tenant} definido a política
+     * {@code USING (id_tenant = plataforma.tenant_atual())} não bate para NENHUMA linha, de
+     * NENHUM tenant, e a consulta volta silenciosamente vazia — não um erro, um job que nunca
+     * encontra trabalho. Confirmado ao vivo (2026-08-19): mesmo como {@code niner_owner}, dono das
+     * tabelas, {@code SELECT * FROM empresa} sem {@code SET app.id_tenant} devolveu 0 linhas com 5
+     * empresas reais no banco. O padrão correto é este: listar os tenants por aqui (sem RLS) e
+     * entrar em {@code comTenant} por tenant antes de qualquer consulta de domínio.
+     */
+    @Transactional(readOnly = true)
+    public List<Long> listarTenantIds() {
+        return jdbc.sql("SELECT id_tenant FROM plataforma.tenant").query(Long.class).list();
+    }
+
+    /**
+     * Empresas do tenant corrente com nota emitida em contingência ainda não autorizada. Chamar
+     * dentro de {@link com.vetor.niner.comum.tenant.TenantContext#comTenant} — sem tenant no
+     * contexto o RLS devolve lista vazia (P8), nunca todos os tenants (ver {@link #listarTenantIds}).
      *
      * <p>O {@code JOIN} com {@code fiscal_certificado} é filtro de existência, não fonte da
      * impressão digital — essa vem de {@link com.vetor.niner.fiscal.certificado.FiscalCertificadoService
@@ -207,11 +223,13 @@ public class DocumentoFiscalRepositorio {
                           JOIN empresa e
                             ON e.id_tenant = d.id_tenant AND e.id_empresa = d.id_empresa
                           JOIN cfg_uf_autorizador u
-                            ON u.uf = e.estado AND u.modelo = 65 AND u.ambiente = c.ambiente
+                            ON u.uf = e.estado AND u.modelo = 65
+                           AND u.ambiente = CASE c.ambiente WHEN 'PRODUCAO' THEN 1 ELSE 2 END
                           JOIN fiscal_certificado cert
                             ON cert.id_tenant = d.id_tenant AND cert.id_empresa = d.id_empresa
                            AND cert.ativo = true
-                         WHERE d.tipo_emissao = 9
+                         WHERE d.id_tenant = plataforma.tenant_atual()
+                           AND d.tipo_emissao = 9
                            AND d.situacao IN ('CONTINGENCIA', 'ASSINADO')
                         """)
                 .query((rs, n) -> new EmpresaEmContingencia(
@@ -436,20 +454,6 @@ public class DocumentoFiscalRepositorio {
                         """)
                 .params(chave, hash, idDocumentoFiscal)
                 .update();
-    }
-
-    /** Tenants com pelo menos um documento OU evento (cancelamento) autorizado ainda não
-     *  arquivado — consulta GLOBAL, sem JWT (job), mesmo padrão de {@link #empresasComFilaPendente}. */
-    @Transactional(readOnly = true)
-    public List<Long> tenantsComPendenciaDeArquivamento() {
-        return jdbc.sql("""
-                        SELECT id_tenant FROM documento_fiscal
-                         WHERE situacao = 'AUTORIZADO' AND xml_objeto_bucket IS NULL
-                        UNION
-                        SELECT id_tenant FROM documento_fiscal_evento
-                         WHERE autorizado = true AND xml_objeto_bucket IS NULL
-                        """)
-                .query(Long.class).list();
     }
 
     /** Dentro do {@code TenantContext} (P8) — ids pendentes de arquivamento desse tenant, mais

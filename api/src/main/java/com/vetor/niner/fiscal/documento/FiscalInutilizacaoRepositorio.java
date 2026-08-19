@@ -193,17 +193,6 @@ public class FiscalInutilizacaoRepositorio {
                 .params(chave, idInutilizacao).update();
     }
 
-    /** Tenants com pelo menos uma inutilização autorizada ainda não arquivada — consulta GLOBAL,
-     *  sem JWT (job). */
-    @Transactional(readOnly = true)
-    public List<Long> tenantsComPendenciaDeArquivamento() {
-        return jdbc.sql("""
-                        SELECT DISTINCT id_tenant FROM fiscal_inutilizacao
-                         WHERE autorizado = true AND xml_objeto_bucket IS NULL
-                        """)
-                .query(Long.class).list();
-    }
-
     @Transactional(readOnly = true)
     public List<Long> pendentesDeArquivamento(int limite) {
         return jdbc.sql("""

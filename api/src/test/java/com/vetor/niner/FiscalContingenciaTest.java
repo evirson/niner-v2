@@ -2,6 +2,8 @@ package com.vetor.niner;
 
 import com.jayway.jsonpath.JsonPath;
 import com.vetor.niner.comum.tenant.TenantContext;
+import com.vetor.niner.fiscal.documento.DocumentoFiscalRepositorio;
+import com.vetor.niner.fiscal.documento.DocumentoFiscalRepositorio.EmpresaEmContingencia;
 import com.vetor.niner.fiscal.documento.FiscalContingenciaService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -12,6 +14,7 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.util.Base64;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.http.MediaType.APPLICATION_JSON;
@@ -39,6 +42,9 @@ class FiscalContingenciaTest {
 
     @Autowired
     JdbcClient jdbc;
+
+    @Autowired
+    DocumentoFiscalRepositorio documentoFiscalRepositorio;
 
     // ---------------------------------------------------------------- helpers
 
@@ -216,6 +222,47 @@ class FiscalContingenciaTest {
 
             assertThat(contingencia.consultar(s.idEmpresa()).desde())
                     .as("já estando em contingência, o horário de início não se move").isEqualTo(desde);
+        });
+    }
+
+    /**
+     * Regressão do job de drenagem: {@code cfg_uf_autorizador.ambiente} é {@code smallint} (1/2) e
+     * {@code fiscal_config_empresa.ambiente} é o enum {@code ambiente_fiscal} — comparar os dois
+     * direto no {@code JOIN} falhava em runtime com "operator does not exist: smallint =
+     * ambiente_fiscal", nunca pego porque nenhum teste chamava
+     * {@link DocumentoFiscalRepositorio#empresasComFilaPendente()} de verdade.
+     */
+    @Test
+    void filaDePendentesEncontraEmpresaComNotaEmContingencia() throws Exception {
+        Sessao s = assinarNovoTenant("fila-pendente");
+        jdbc.sql("UPDATE empresa SET estado = 'PR' WHERE id_tenant = ? AND id_empresa = ?")
+                .params(s.idTenant(), s.idEmpresa()).update();
+        jdbc.sql("""
+                        INSERT INTO fiscal_certificado (id_tenant, id_empresa, arquivo_cifrado, senha_cifrada, ativo)
+                        VALUES (?, ?, '\\x00'::bytea, 'x', true)
+                        """)
+                .params(s.idTenant(), s.idEmpresa()).update();
+        jdbc.sql("""
+                        INSERT INTO documento_fiscal (
+                            id_tenant, id_empresa, modelo, serie, numero, chave_acesso, codigo_numerico,
+                            digito_verificador, tipo_operacao, situacao, ambiente, tipo_emissao,
+                            data_emissao, valor_produtos, valor_desconto, valor_outros, valor_total,
+                            valor_troco, xml_assinado)
+                        VALUES (?, ?, 65, 9, 1, ?, '12345678', 9, 'VENDA_CONSUMIDOR',
+                                'ASSINADO'::situacao_documento_fiscal, 'HOMOLOGACAO', 9, now(),
+                                10.00, 0, 0, 10.00, 0, '<NFe/>')
+                        """)
+                .params(s.idTenant(), s.idEmpresa(), "41260837829453000135650090000000011123456789")
+                .update();
+
+        List<EmpresaEmContingencia> fila = TenantContext.comTenant(s.idTenant(),
+                () -> documentoFiscalRepositorio.empresasComFilaPendente());
+
+        assertThat(fila).anySatisfy(e -> {
+            assertThat(e.idEmpresa()).isEqualTo(s.idEmpresa());
+            assertThat(e.uf()).isEqualTo("PR");
+            assertThat(e.ambienteCodigo()).as("HOMOLOGACAO mapeia pro código 2 em cfg_uf_autorizador")
+                    .isEqualTo(2);
         });
     }
 }

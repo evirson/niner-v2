@@ -29,10 +29,13 @@ import org.springframework.stereotype.Component;
  *
  * <h2>P8 em caminho não-requisição</h2>
  *
- * <p>Não há JWT aqui: o job varre <b>todos</b> os tenants. Por isso a varredura roda como
- * {@code niner_owner} numa consulta explicitamente global, e <b>cada</b> transmissão entra em
- * {@link TenantContext#comTenant} antes de tocar em dado de domínio. Esquecer isso faria o RLS
- * barrar tudo — ou, pior, o job trabalhar no tenant errado.
+ * <p>Não há JWT aqui: o job varre <b>todos</b> os tenants, um de cada vez —
+ * {@link DocumentoFiscalRepositorio#listarTenantIds()} lê {@code plataforma.tenant} (GLOBAL, sem
+ * RLS, P9), e cada tenant entra em {@link TenantContext#comTenant} antes de qualquer consulta de
+ * domínio. <b>Não existe atalho "consulta global"</b>: {@code niner_app} nunca tem
+ * {@code BYPASSRLS} (P8), então uma consulta de domínio sem tenant no contexto não vê nada de
+ * nenhum tenant — não erra, só devolve vazio, e por isso ficou despercebido por dias (achado ao
+ * vivo em 2026-08-19: o job nunca tinha encontrado uma única empresa para drenar).
  */
 @Component
 public class FiscalContingenciaDrenoJob {
@@ -70,9 +73,20 @@ public class FiscalContingenciaDrenoJob {
     /** A cada 5 minutos: rápido o bastante para o prazo de 24 h, devagar o bastante para não pesar. */
     @Scheduled(fixedRate = 300_000, initialDelay = 60_000)
     public void drenar() {
+        for (Long idTenant : repositorio.listarTenantIds()) {
+            try {
+                TenantContext.comTenant(idTenant, this::drenarFilaDoTenant);
+            } catch (Exception e) {
+                // Um tenant com problema não pode impedir os outros de drenar.
+                log.warn("Falha ao varrer fila de contingência do tenant {}: {}", idTenant, e.toString());
+            }
+        }
+    }
+
+    private void drenarFilaDoTenant() {
         for (EmpresaEmContingencia empresa : repositorio.empresasComFilaPendente()) {
             try {
-                TenantContext.comTenant(empresa.idTenant(), () -> drenarEmpresa(empresa));
+                drenarEmpresa(empresa);
             } catch (Exception e) {
                 // Uma empresa com problema não pode impedir as outras de drenar.
                 log.warn("Falha ao drenar contingência do tenant {} empresa {}: {}",

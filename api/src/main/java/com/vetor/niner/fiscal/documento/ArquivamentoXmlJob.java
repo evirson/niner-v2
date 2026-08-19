@@ -6,9 +6,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
-import java.util.LinkedHashSet;
-import java.util.Set;
-
 /**
  * Rede de segurança do arquivamento (handoff §4.1, item 2) — varre o que o caminho quente
  * ({@link ArquivamentoXmlService#arquivarDocumentoSeAplicavel} e afins, chamados logo após cada
@@ -18,8 +15,13 @@ import java.util.Set;
  * sempre — a guarda legal de 5 anos (F6) não se cumpre sozinha.
  *
  * <p><b>P8 em caminho não-requisição</b>: mesmo padrão de {@link FiscalContingenciaDrenoJob} — sem
- * JWT, a varredura de "quem tem pendência" é global, e cada item processado entra em
- * {@link TenantContext#comTenant} antes de tocar em dado de domínio.
+ * JWT, a lista de tenants vem de {@link DocumentoFiscalRepositorio#listarTenantIds()}
+ * ({@code plataforma.tenant}, GLOBAL, sem RLS, P9), e cada tenant entra em
+ * {@link TenantContext#comTenant} <b>antes</b> de qualquer consulta de domínio — inclusive a de
+ * "este tenant tem pendência?". Uma consulta de domínio sem tenant no contexto não vê nada de
+ * nenhum tenant ({@code niner_app} nunca tem {@code BYPASSRLS}, P8): não é filtro "global", é RLS
+ * devolvendo vazio em silêncio. Esta rodada sempre chama {@link #processarTenant} para todo
+ * tenant — as consultas internas já são baratas e vazias na maioria das rodadas.
  *
  * <p>Chama os métodos {@code arquivar*} <b>não</b>-wrapped (pacote) de {@link ArquivamentoXmlService}
  * diretamente, porque este job já trata erro por item sozinho — usar as variantes
@@ -49,10 +51,7 @@ public class ArquivamentoXmlJob {
     /** A cada 10 minutos: a guarda é de anos, não há pressa de segundos — só não deixar acumular. */
     @Scheduled(fixedRate = 600_000, initialDelay = 90_000)
     public void arquivarPendencias() {
-        Set<Long> tenants = new LinkedHashSet<>(repositorio.tenantsComPendenciaDeArquivamento());
-        tenants.addAll(inutilizacaoRepositorio.tenantsComPendenciaDeArquivamento());
-
-        for (Long idTenant : tenants) {
+        for (Long idTenant : repositorio.listarTenantIds()) {
             try {
                 TenantContext.comTenant(idTenant, () -> processarTenant(idTenant));
             } catch (Exception e) {

@@ -156,6 +156,35 @@ class PrivilegiosNinerAppTest {
     }
 
     /**
+     * P8 em job sem JWT (achado ao vivo em 2026-08-19): uma consulta em tabela de <b>domínio</b>
+     * sem {@code SET app.id_tenant} não "varre todos os tenants" — o RLS {@code FORCE} devolve
+     * <b>zero linhas de qualquer tenant</b>, em silêncio, sem erro. Era exatamente o que
+     * {@code FiscalContingenciaDrenoJob}/{@code ArquivamentoXmlJob} faziam antes da correção: a
+     * consulta "quem tem pendência?" rodava sem contexto e sempre voltava vazia — os jobs nunca
+     * encontravam nada para processar. A correção usa {@code plataforma.tenant} (GLOBAL, sem RLS,
+     * P9) para descobrir os tenants e entra em {@code TenantContext.comTenant} por tenant antes de
+     * qualquer consulta de domínio — este teste prova as duas metades desse contrato.
+     */
+    @Test
+    void semTenantNoContextoDominioNaoAparecePorNenhumTenantMasPlataformaTenantContinuaGlobal()
+            throws Exception {
+        try (Connection c = conexaoApp(); Statement st = c.createStatement()) {
+            try (ResultSet rs = st.executeQuery("SELECT count(*) FROM empresa")) {
+                assertThat(rs.next()).isTrue();
+                assertThat(rs.getLong(1))
+                        .as("RLS sem app.id_tenant bloqueia TODAS as linhas de TODOS os tenants, "
+                                + "não filtra 'nenhum tenant específico'")
+                        .isZero();
+            }
+            // plataforma.tenant é GLOBAL (P9) — não tem RLS, por isso é o único jeito correto de um
+            // job sem JWT descobrir quais tenants existem. A consulta não lançar já é a prova.
+            try (ResultSet rs = st.executeQuery("SELECT count(*) FROM plataforma.tenant")) {
+                assertThat(rs.next()).isTrue();
+            }
+        }
+    }
+
+    /**
      * Executa e exige que o Postgres recuse por privilégio. Autocommit está ligado (conexão JDBC
      * nova), então cada instrução é sua própria transação — uma falha aqui não contamina as
      * seguintes.

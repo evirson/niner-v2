@@ -61,8 +61,12 @@ Registro cronológico das decisões e entregas. Atualizar a cada marco relevante
 > nunca tinham tela pra editar) + **Perfis Fiscais** ganharam os 2 perfis padrão semeados no
 > signup (fecha a última pendência aberta da spec), coluna "Regime" (Simples/MEI, derivada) na
 > grade, e o motor passou a recusar CST de ICMS tributado sem alíquota informada (achado real:
-> nota saía autorizada com ICMS R$ 0,00 em silêncio). **750/750 testes de backend verdes.** Ver
-> linha do tempo de hoje.
+> nota saía autorizada com ICMS R$ 0,00 em silêncio). Mais tarde no mesmo dia: os jobs
+> `@Scheduled` de fiscal (drenagem de contingência, arquivamento) nunca encontravam nenhum tenant
+> — RLS sem `TenantContext` devolve vazio em silêncio, não um erro (corrigido: loop por tenant via
+> `plataforma.tenant`, global) — e `cfg_produto_ncm` ganhou alíquota IBPT real
+> (`alq_federal`/`alq_estadual`/`alq_municipal`, populada via planilha, 10.515/10.515 NCMs).
+> **765/765 testes de backend verdes.** Ver linha do tempo de hoje.
 >
 > Os parágrafos abaixo são a **narrativa acumulada** desde o começo — leia o resumo acima para o
 > estado, e a linha do tempo (do mais novo para o mais antigo) para o detalhe de cada entrega.
@@ -464,6 +468,83 @@ Movimentação de Conta Corrente) que ainda não tinham migrado pro `SeletorPlan
 ---
 
 ## Linha do tempo
+
+### 2026-08-19 — `cfg_produto_ncm` ganha alíquota IBPT federal/estadual/municipal (dado real da Receita/IBPT)
+
+Pedido do dono do produto: trocar a coluna `aliquota_ibpt` (nunca usada — o próprio `db/migration`
+já tinha comentário dizendo que ela "não serve", ver entrada de arquitetura abaixo) por três colunas
+reais, `alq_federal`/`alq_estadual`/`alq_municipal` (todas `numeric(10,2)`), e popular as 10.515
+linhas com a planilha `TabelaIBPTaxSP26.1.L.csv` (tabela paga IBPT, versão 26.1.L, base São Paulo).
+
+- **Migration dona é a `V017__catalogo.sql`** (banco ainda em construção,
+  [[project_db_in_construction]]) — `aliquota_ibpt` saiu, entraram as 3 colunas novas.
+- Antes de remover, conferido que `aliquota_ibpt` estava NULL/zero nas 10.515 linhas — nenhum dado
+  real se perdeu.
+- **Existe uma tabela `cfg_ibpt` (V034) desenhada exatamente para isso**, com as mesmas 4 alíquotas
+  mas por NCM × UF × vigência — mais correta tecnicamente, porque a planilha é específica de SP e
+  `cfg_produto_ncm` é global (mesma linha vale pra tenant de qualquer UF). Perguntado explicitamente
+  via `AskUserQuestion`: o dono do produto escolheu popular `cfg_produto_ncm` mesmo assim (mais
+  simples, uma linha por NCM). `cfg_ibpt` segue vazia, sem consumidor — ver [[project_modulo_fiscal]].
+- Import: planilha é `;`-delimitada, `codigo` pode repetir por causa da exceção TIPI (coluna `ex`)
+  — 586 dos 11.576 NCMs únicos têm mais de uma linha; usada sempre a linha com `ex` vazio (a
+  "base"), presente para 100% dos códigos duplicados. `alq_federal = nacionalfederal +
+  importadosfederal` (a planilha separa produto nacional de importado; a tabela guarda só uma
+  alíquota federal). Importado via `COPY` numa staging table + `UPDATE ... FROM`, direto no banco de
+  dev (não passou pelo Flyway — ver nota abaixo). **10.515/10.515 NCMs atualizados, 0 sem
+  correspondência.**
+- `NcmService`/`NcmDtos`/`NcmController` (backend) e `web/src/lib/ncm.ts` (frontend) atualizados
+  para os 3 campos novos — `aliquotaIbpt` não era consumido em nenhum componente do front, troca
+  sem quebra. `tsc -b` limpo, endpoint testado ao vivo (`GET /api/v1/ncm/{codigo}`).
+- **Nota de processo:** a migration V017 já estava aplicada no banco de dev — editá-la não altera
+  o banco sozinho. Em vez do reset completo de banco (procedimento de outras sessões, ver
+  [[project_credenciais_dev_atual]]), a alteração foi aplicada por `ALTER TABLE` manual direto no
+  Postgres (mesmo shape do que a migration editada faz), preservando os 10.515 NCMs e todo o resto
+  do dado de teste do dia — cabível aqui porque `cfg_produto_ncm` é uma tabela GLOBAL sem
+  `id_tenant`, sem risco de RLS/isolamento.
+
+### 2026-08-19 — Bug real corrigido: os jobs `@Scheduled` de fiscal nunca encontravam nenhum tenant (RLS silenciosamente vazio)
+
+Pedido de rotina ("suba o servidor") revelou, ao ler os logs, que `FiscalContingenciaDrenoJob`
+estava lançando `operator does not exist: smallint = ambiente_fiscal` a cada 5 minutos desde
+17/08 — `cfg_uf_autorizador.ambiente` é `smallint` (1/2) e `fiscal_config_empresa.ambiente` é o
+enum `ambiente_fiscal`, comparados direto num `JOIN` sem cast. Corrigido
+(`CASE c.ambiente WHEN 'PRODUCAO' THEN 1 ELSE 2 END`).
+
+**Investigando o teste de regressão apareceu um segundo bug, bem mais sério, escondido atrás do
+primeiro.** O comentário no código dizia "a varredura roda como `niner_owner` numa consulta
+explicitamente global" — **isso nunca foi verdade**: `application.yml`/`docker-compose.yml`
+mostram que a API só conecta como `niner_app`, em qualquer ambiente. `documento_fiscal`/
+`fiscal_config_empresa`/`empresa` têm `FORCE ROW LEVEL SECURITY`; sem `SET app.id_tenant` a
+política `USING (id_tenant = plataforma.tenant_atual())` não bate pra NENHUMA linha, de NENHUM
+tenant — não é um filtro "global", é RLS devolvendo vazio em silêncio. Provado ao vivo: mesmo
+`niner_owner` (dono das tabelas, sem `BYPASSRLS`) via 0 linhas em `SELECT * FROM empresa` sem
+contexto, com 5 empresas reais no banco. **Consequência prática: o job de drenagem de
+contingência nunca tinha encontrado uma única empresa desde que existe (17/08), e o job de
+arquivamento (`ArquivamentoXmlJob`) tinha o mesmo bug na descoberta de "quais tenants têm
+pendência"** — só o caminho quente (arquivar logo após emitir, já dentro do `TenantContext` de
+uma requisição) funcionava; a rede de segurança agendada nunca rodava de verdade.
+
+Por que nenhum teste pegava: Testcontainers conecta como **superusuário** do container (não
+`niner_app`), que sempre ignora RLS independente de `FORCE` — o mesmo ponto cego que motivou
+`PrivilegiosNinerAppTest` (ver [[feedback_testcontainers_nao_usa_niner_app]]). Um teste ingênuo
+teria passado em CI e continuado quebrado em produção.
+
+**Correção (opção "loop por tenant" escolhida pelo dono do produto entre 3 alternativas
+propostas):** `DocumentoFiscalRepositorio.listarTenantIds()` (novo) lê `plataforma.tenant`
+(GLOBAL, sem RLS, P9) — o único jeito correto de um job sem JWT descobrir quais tenants existem.
+Os dois jobs passam a fazer loop por tenant, entrando em `TenantContext.comTenant` **antes** de
+qualquer consulta de domínio; a consulta "quem tem pendência" antiga (`tenantsComPendenciaDeArquivamento`,
+que rodava sem contexto) foi removida — ficou redundante, cada tenant agora é sempre verificado.
+Motivo de não usar uma função `SECURITY DEFINER` (alternativa rejeitada): manter o padrão P8 já
+usado no resto do projeto, sem abrir exceção nova ao RLS.
+
+Dois testes de regressão novos: `FiscalContingenciaTest.filaDePendentesEncontraEmpresaComNotaEmContingencia`
+(prova que a query com o cast novo encontra a empresa certa, com `ambienteCodigo` correto) e
+`PrivilegiosNinerAppTest.semTenantNoContextoDominioNaoAparecePorNenhumTenantMasPlataformaTenantContinuaGlobal`
+(prova as duas metades do contrato: domínio vazio sem contexto, `plataforma.tenant` sempre
+acessível) — este no lugar certo pra bug invisível ao Testcontainers padrão. **765/765 testes de
+backend verdes.** API reconstruída (`docker compose up -d --build api`) e confirmado ao vivo:
+erro sumiu dos logs. Ver [[project_modulo_fiscal]].
 
 ### 2026-08-19 — Fix de rejeição SEFAZ: CSOSN 500 mandava uma base de ICMS que nenhum item declarava (venda 560, cStat 531)
 
