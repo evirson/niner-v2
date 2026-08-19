@@ -625,6 +625,28 @@ e um caso passava **por engano**. O fake passou a gerar um id por cobrança, com
 `.gitignore` antes de qualquer commit. Access token e segredo de webhook vivem em
 `NINER_MP_ACCESS_TOKEN`/`NINER_MP_WEBHOOK_SECRET`.
 
+**▶️ Retomar amanhã (onde exatamente paramos):**
+
+1. **Preencher os 5 parâmetros comerciais** e regerar as faixas:
+   `UPDATE plataforma.parametro_comercial SET preco_base = …, fator_faixa = …, preco_maximo = …,
+   vendas_maximo = …, tolerancia_vendas = … WHERE id = 1;` seguido de
+   `SELECT plataforma.gerar_faixas_planos();` — sem deploy, sem migration.
+2. **Credenciais de teste do Mercado Pago** (`TEST-…`) em `NINER_MP_ACCESS_TOKEN` +
+   `NINER_MP_WEBHOOK_SECRET`, e um túnel público em `NINER_MP_NOTIFICATION_URL` para o webhook
+   chegar em dev. Alternativa sem colar credencial: autorizar o MCP Server do Mercado Pago
+   (`.mcp.json` já criado, falta rodar `/mcp`) e usar `get_credentials`/`create_test_user`.
+   Só então dá para validar o PIX ponta a ponta contra o sandbox — hoje a cobrança está provada
+   contra um gateway falso local (`CobrancaMercadoPagoTest`), não contra o Mercado Pago real.
+3. **Dados reais da landing** em `site/src/dados/contato.ts` (WhatsApp, Instagram, e-mail, CNPJ,
+   domínio) + os dois prints (`[PRINT: PDV]`, `[PRINT: Emissão de NFC-e]`) e a `og.png` 1200×630.
+   Enquanto estiverem vazios, a página **esconde** os links em vez de publicar `wa.me/[PLACEHOLDER]`.
+4. **Backoffice `admin/`**: os endpoints do gerenciador de marketing existem e estão testados, mas
+   o app React não existe — é a próxima tela grande. Enquanto isso, `/api/admin/**` segue
+   `permitAll` (TODO(jwt) em `SegurancaConfig`): **não expor essa superfície fora da máquina local**.
+5. Decidir as duas questões em aberto de `docs/telas/painel-assinatura.md`: aviso de cota também
+   no PDV (recomendação: a partir de 90%) e tolerância global × negociável por cliente.
+6. A branch `feat/modelo-comercial-assinatura` está no `origin`, **sem PR e sem merge na `main`**.
+
 **🐛 Bug encontrado ao subir (ainda não corrigido — fiscal está com outro programador):** `FiscalContingenciaDrenoJob` explode a cada
 5 minutos — `DocumentoFiscalRepositorio.java:210` compara `u.ambiente` (`smallint` 1/2 em
 `cfg_uf_autorizador`, V034) com `c.ambiente` (ENUM `ambiente_fiscal`, V035): `ERROR: operator does
