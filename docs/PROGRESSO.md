@@ -569,6 +569,14 @@ apontou a saída certa (devolução). **775/775 testes de backend verdes** (2 no
 `SefazTransporteTest` + `CancelamentoNfceTest.buscarDetalheDeVendaComNfceDentroDoPrazo...`), `tsc
 -b` limpo. Ver `docs/telas/cancelamento-venda.md`.
 
+**Auditoria "documente/memorize tudo" pedida de novo, na mesma sessão** (sinal de que a 1ª
+passada não bastou, ver `feedback_checklist_documentar_tudo` na memória) achou 2 lacunas reais de conteúdo
+**dentro do produto**, não em `docs/`: `AjudaDaTela.tsx` da própria Pesquisa de Vendas
+(`vendas.pesquisavendas.tela`) não mencionava nem o prazo de cancelamento da NFC-e nem o aviso
+"VENDA CANCELADA" da reimpressão — os dois corrigidos (novo item em `errosComuns` + duas frases
+nos `passos`). E o docstring do próprio `CancelamentoVendaModal.tsx` (componente escrito nesta
+mesma sessão) ainda não citava a integração fiscal nem o bloqueio por prazo — corrigido também.
+
 ### 2026-08-19 — Pesquisa de Vendas mais espaçada e DANFCE ganha o número da venda
 
 Dois pedidos pequenos do dono do produto, resolvidos antes da investigação de cancelamento acima:

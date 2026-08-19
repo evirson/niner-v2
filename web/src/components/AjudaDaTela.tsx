@@ -678,8 +678,8 @@ const CONTEUDOS: Record<string, ConteudoAjuda> = {
     passos: [
       'No popup inicial, informe o número da venda (ignora os demais filtros) ou um intervalo de datas — cliente, vendedor, empresa (admin) e situação são opcionais.',
       'Clique numa linha do resultado para abrir o detalhamento em abas: Dados Gerais, Produtos Vendidos, Movimentação de Caixa e, se a venda for de crediário, Parcelas de Crediário.',
-      '"Reimprimir papeleta" abre a mesma papeleta da 1ª via, com "REIMPRESSÃO" e a data/hora — imprima, salve em PDF ou envie por WhatsApp.',
-      '"Cancelar venda" (só administrador, e só se a venda ainda não estiver cancelada) mostra o resumo do que será revertido e pede o motivo antes de confirmar — a mesma rotina que era uma tela separada.',
+      '"Reimprimir papeleta" abre a mesma papeleta da 1ª via, com "REIMPRESSÃO" e a data/hora — imprima, salve em PDF ou envie por WhatsApp. Se a venda estiver cancelada, o cupom avisa "VENDA CANCELADA" já na primeira linha.',
+      '"Cancelar venda" (só administrador, e só se a venda ainda não estiver cancelada) mostra o resumo do que será revertido e pede o motivo antes de confirmar — a mesma rotina que era uma tela separada. Se a venda tiver nota fiscal (NFC-e), o popup também mostra até quando a SEFAZ permite cancelá-la.',
       'Vendas canceladas aparecem sinalizadas na grid, mas não entram na soma do rodapé.',
     ],
     errosComuns: [
@@ -687,6 +687,7 @@ const CONTEUDOS: Record<string, ConteudoAjuda> = {
       'Sem número da venda, é preciso informar data inicial e final, com no máximo 365 dias de intervalo.',
       'Venda de crediário com alguma parcela já recebida nunca pode ser cancelada, nem por administrador — o popup de cancelamento mostra quais parcelas foram recebidas e orienta a estornar o recebimento primeiro.',
       'É preciso ter o caixa de hoje aberto para cancelar — o sistema não sabe reabrir o caixa do dia original da venda.',
+      'Se a venda tiver nota fiscal (NFC-e) autorizada, o cancelamento também cancela a nota na SEFAZ — e isso só é permitido dentro do prazo que a SEFAZ dá (30 minutos, padrão, contados da autorização). Depois desse prazo, nem a venda nem a nota podem mais ser canceladas por aqui; a saída é uma nota de devolução (ainda não disponível).',
     ],
     urlVideo: null,
   },

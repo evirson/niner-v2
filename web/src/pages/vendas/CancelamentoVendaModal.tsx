@@ -12,15 +12,23 @@ function moeda(v: number): string {
 
 /**
  * Confirmação de Cancelamento de Venda (RN-06) — mostra o resumo da venda e o que será
- * revertido (itens de estoque + formas de pagamento), exige um motivo e confirmação explícita
- * (Sim/Não). Bloqueio definitivo de crediário com parcela recebida (RN-03) é mostrado aqui com
- * o detalhe de cada parcela — a tela nem tenta cancelar nesse caso, só "Fechar".
+ * revertido (itens de estoque + formas de pagamento), exige um motivo (mínimo 15 caracteres —
+ * regra da SEFAZ, MOC, vale mesmo pra venda sem NFC-e) e confirmação explícita (Sim/Não).
+ * Bloqueio definitivo de crediário com parcela recebida (RN-03) é mostrado aqui com o detalhe de
+ * cada parcela — a tela nem tenta cancelar nesse caso, só "Fechar".
  *
  * **Migrado pra dentro do popup de detalhe da Pesquisa de Vendas (2026-08-18)** — o prop era
  * `venda: VendaParaCancelamento` (a linha inteira da grade da extinta tela de Cancelamento de
  * Venda); virou só `idVenda`, que é tudo que este componente de fato usa fora da própria query
  * de detalhe abaixo. Quem chama decide a invalidação de cache depois do sucesso — este modal não
  * sabe mais de onde foi aberto.
+ *
+ * **Prazo de cancelamento da NFC-e (2026-08-19)** — quando a venda tem NFC-e autorizada
+ * (`temNfce`), o backend cancela a nota na SEFAZ antes de reverter qualquer coisa
+ * (`docs/telas/cancelamento-venda.md`, seção "Integração fiscal"). `nfcePrazoCancelamentoExpirado`
+ * (calculado no servidor, não no relógio do navegador) some com o campo de motivo e o botão por
+ * completo quando a janela da SEFAZ (30 min padrão, por UF) já passou — evita que o operador
+ * preencha o motivo só pra levar um 409 depois.
  */
 export default function CancelamentoVendaModal({
   idVenda,
