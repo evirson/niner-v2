@@ -345,7 +345,7 @@ const CONTEUDOS: Record<string, ConteudoAjuda> = {
     objetivo: 'Definir como esta empresa emite nota fiscal: regime tributário, ambiente (homologação/produção), numeração e credenciamento junto à SEFAZ.',
     passos: [
       'Escolha a empresa no seletor do topo — cada empresa (matriz/filiais) tem sua própria configuração fiscal.',
-      'Escolha o Regime Tributário (CRT). O Niner atende só Simples Nacional (1 e 2) e MEI (4) — Lucro Real e Lucro Presumido não são atendidos por este produto.',
+      'Escolha o Regime Tributário (CRT). O Nainer atende só Simples Nacional (1 e 2) e MEI (4) — Lucro Real e Lucro Presumido não são atendidos por este produto.',
       'Enquanto o ambiente estiver em Homologação, nenhuma nota emitida tem valor fiscal — é assim que se testa sem risco.',
       'Ligar "Emitir NFC-e"/"Emitir NF-e" passa por uma conferência automática (certificado válido, CNPJ, Inscrição Estadual, município, CNAE). Faltando algo, a tela recusa e explica o que falta.',
       'A série de numeração fica travada assim que a primeira nota é autorizada nela — trocar depois quebraria a sequência exigida pela lei.',
@@ -804,7 +804,7 @@ const CONTEUDOS: Record<string, ConteudoAjuda> = {
       'Os 7 gráficos cobrem vendas por dia, top 10 de marcas/vendedores/clientes, formas de pagamento, por hora e por dia da semana.',
       'Escolha "Totalizar Por" para agrupar a grid final (por data, cliente, vendedor, operador de caixa ou empresa) — clique numa linha agrupada para ver as vendas daquele grupo.',
       '"Não Totalizar" já mostra a lista de vendas do período diretamente, sem agrupar, em ordem cronológica (data/hora da venda), já com a linha de total no rodapé.',
-      '"Gerar PDF" baixa a tela como está (com os gráficos desenhados) em PDF: a 1ª página traz os filtros aplicados, o título e a numeração/data de geração repetem no topo de todas as páginas, e o rodapé de cada página mostra a empresa logada e "Niner ERP" — a grid de vendas sempre começa numa página nova, com total no fim.',
+      '"Gerar PDF" baixa a tela como está (com os gráficos desenhados) em PDF: a 1ª página traz os filtros aplicados, o título e a numeração/data de geração repetem no topo de todas as páginas, e o rodapé de cada página mostra a empresa logada e "Nainer ERP" — a grid de vendas sempre começa numa página nova, com total no fim.',
       'O PDF sai sempre em tema claro (fundo branco), mesmo com o sistema no tema escuro — economiza tinta na impressão.',
     ],
     errosComuns: [
@@ -1024,7 +1024,7 @@ const CONTEUDOS: Record<string, ConteudoAjuda> = {
   },
   'configuracao.importacao.clientes': {
     titulo: 'Importar Clientes',
-    objetivo: 'Trazer o cadastro de clientes de um sistema anterior para o Niner, via planilha Excel (.xlsx ou .xls).',
+    objetivo: 'Trazer o cadastro de clientes de um sistema anterior para o Nainer, via planilha Excel (.xlsx ou .xls).',
     passos: [
       'Sem a planilha ainda? Baixe o modelo no topo da tela.',
       'Clique em "Escolher planilha" e selecione o arquivo .xlsx ou .xls — a planilha é conferida na hora, e se não for da tabela certa a tela avisa e não deixa continuar.',
@@ -1061,7 +1061,7 @@ const CONTEUDOS: Record<string, ConteudoAjuda> = {
   },
   'configuracao.importacao.fornecedores': {
     titulo: 'Importar Fornecedores',
-    objetivo: 'Trazer o cadastro de fornecedores de um sistema anterior para o Niner, via planilha Excel (.xlsx ou .xls).',
+    objetivo: 'Trazer o cadastro de fornecedores de um sistema anterior para o Nainer, via planilha Excel (.xlsx ou .xls).',
     passos: [
       'Sem a planilha ainda? Baixe o modelo no topo da tela.',
       'Clique em "Escolher planilha" e selecione o arquivo .xlsx ou .xls — a planilha é conferida na hora, e se não for da tabela certa a tela avisa e não deixa continuar.',
@@ -1080,7 +1080,7 @@ const CONTEUDOS: Record<string, ConteudoAjuda> = {
   },
   'configuracao.importacao.produtos': {
     titulo: 'Importar Produtos',
-    objetivo: 'Trazer o catálogo de produtos de um sistema anterior para o Niner, com a grade de tamanhos de cada um, via planilha Excel (.xlsx ou .xls).',
+    objetivo: 'Trazer o catálogo de produtos de um sistema anterior para o Nainer, com a grade de tamanhos de cada um, via planilha Excel (.xlsx ou .xls).',
     passos: [
       'Sem a planilha ainda? Baixe o modelo no topo da tela.',
       'Clique em "Escolher planilha" e selecione o arquivo .xlsx ou .xls — a planilha é conferida na hora, e se não for da tabela certa a tela avisa e não deixa continuar. Esta tabela não pede nenhuma escolha prévia.',
@@ -1118,7 +1118,7 @@ const CONTEUDOS: Record<string, ConteudoAjuda> = {
   },
   'configuracao.exportacao': {
     titulo: 'Exportação de Dados',
-    objetivo: 'Baixar em planilha Excel (.xlsx) tudo que já está cadastrado no Niner — clientes, fornecedores, produtos, estoque, financeiro etc.',
+    objetivo: 'Baixar em planilha Excel (.xlsx) tudo que já está cadastrado no Nainer — clientes, fornecedores, produtos, estoque, financeiro etc.',
     passos: [
       'Escolha a tabela desejada.',
       'Enquanto os dados são buscados e a planilha é montada, a tela mostra um indicador de progresso.',

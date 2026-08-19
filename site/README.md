@@ -1,6 +1,6 @@
 # niner-site
 
-Site público de aquisição do Niner — **Astro (SSG)**, escolhido para SEO/Core Web
+Site público de aquisição do Nainer — **Astro (SSG)**, escolhido para SEO/Core Web
 Vitals (ADR-011). É a superfície onde o cliente conhece o produto e faz a
 **assinatura-teste** (trial de **60 dias**, sem cartão — R12; posicionamento de ERP
 multicanal, concorrente do Bling).
@@ -8,7 +8,7 @@ multicanal, concorrente do Bling).
 ## Páginas
 
 - `/` — **home institucional** (proposta de valor + planos). Página longa e animada
-  posicionando o Niner como ERP multicanal: hero com painel decorativo + **demo de
+  posicionando o Nainer como ERP multicanal: hero com painel decorativo + **demo de
   sincronização estoque→canais**, faixa de stats com **contadores**, contraste
   problema→solução, "como funciona" (3 passos), recursos, canais, planos, FAQ e CTA.
   HTML estático (bom para SEO); os planos são atualizados com dados reais de
@@ -21,7 +21,7 @@ multicanal, concorrente do Bling).
 ## Movimento e acessibilidade
 
 O sistema visual vive em `src/styles/site.css` (portado do golden
-`docs/padroes/nainer_institucional/`, rebrandeado Niner). O movimento é feito em CSS/SVG
+`docs/padroes/nainer_institucional/`, rebrandeado Nainer). O movimento é feito em CSS/SVG
 puro, **sem dependências**: scroll-reveal (`.reveal` via IntersectionObserver em
 `Base.astro`), contadores (`[data-count]`), painel do hero flutuante e demo de sync.
 **Tudo respeita `prefers-reduced-motion`** — sob "reduzir movimento", o conteúdo aparece

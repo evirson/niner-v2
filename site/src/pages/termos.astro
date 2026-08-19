@@ -1,0 +1,159 @@
+---
+/**
+ * Termos de Uso — 🔴 RASCUNHO, pendente de revisão jurídica.
+ *
+ * Escrito para não contradizer a promessa da landing (`docs/site/briefing-landing.md` §1 e §9):
+ * gratuito **sem prazo** até 100 vendas/mês, cobrança por **faixa de volume** e não por
+ * funcionalidade, e **nada é apagado** quando a conta volta ao gratuito. Se um destes pontos mudar
+ * no produto, muda aqui e na landing ao mesmo tempo.
+ *
+ * Nada de razão social, CNPJ ou comarca inventados: o que não estiver em `src/dados/contato.ts`
+ * simplesmente não é renderizado.
+ */
+import Base from '../layouts/Base.astro';
+import { contato } from '../dados/contato';
+
+const atualizadoEm = '19 de agosto de 2026';
+---
+
+<Base
+  title="Termos de Uso — Nainer"
+  description="Condições de uso do Nainer: conta gratuita sem prazo até 100 vendas por mês, faixas pagas por volume, dados preservados e cancelamento a qualquer momento."
+  path="/termos"
+>
+  <section class="page-header">
+    <div class="container">
+      <p class="rascunho" role="note">🔴 Rascunho — pendente de revisão jurídica</p>
+      <span class="eyebrow">Condições de uso do serviço</span>
+      <h1>Termos de Uso</h1>
+      <p>As regras do serviço, em linguagem de gente. Se alguma parte parecer ambígua, fale com a gente antes de assinar.</p>
+    </div>
+  </section>
+
+  <section class="legal">
+    <div class="container">
+      <p class="atualizado">Última atualização: {atualizadoEm}</p>
+
+      <h2>1. O que é o Nainer</h2>
+      <p>
+        O Nainer é um sistema de gestão (ERP) em nuvem para o varejo — PDV, estoque, crediário,
+        caixa, contas a pagar e receber, relatórios e emissão de NFC-e e NF-e. É um produto da
+        <b>Vetor Sistemas</b>{contato.cnpjVetor ? <span>, CNPJ {contato.cnpjVetor}</span> : null}.
+        Ao criar uma conta você concorda com estes termos.
+      </p>
+
+      <h2>2. Conta gratuita</h2>
+      <ul>
+        <li>A conta gratuita permite <b>até 100 vendas por mês</b>, com <b>todas as funções liberadas</b> — inclusive emissão de nota fiscal.</li>
+        <li><b>Não tem prazo de validade</b> e <b>não pedimos cartão de crédito</b>. Não é um teste que expira.</li>
+        <li>Não há limite de CNPJs, usuários ou produtos: o que conta é o volume total de vendas no mês.</li>
+      </ul>
+
+      <h2>3. Quando a loja cresce</h2>
+      <ul>
+        <li>Se o volume passar de 100 vendas num mês, avisamos <b>antes</b> de você chegar ao limite e ainda liberamos uma folga. Nada trava de repente.</li>
+        <li>Se o volume se mantiver acima, você escolhe uma <b>faixa paga</b> conforme o número de vendas por mês. As faixas e valores vigentes estão em <a href="/#preco">nainer.com.br/#preco</a>.</li>
+        <li>A cobrança é por <b>volume</b>, nunca por funcionalidade: nenhuma tela é bloqueada por causa do plano.</li>
+        <li>Podemos reajustar preços; quando isso acontecer, avisamos com pelo menos 30 dias de antecedência e você pode cancelar antes que o novo valor passe a valer.</li>
+      </ul>
+
+      <h2>4. Seus dados são preservados</h2>
+      <ul>
+        <li>Cadastros, vendas, notas e movimentações são <b>seus</b>. Nós apenas hospedamos.</li>
+        <li>Se você voltar ao plano gratuito, ou parar de pagar, a conta volta ao limite de 100 vendas por mês — mas <b>nada é apagado</b>.</li>
+        <li>Você pode exportar seus dados a qualquer momento. Se pedir a exclusão da conta, apagamos tudo o que a lei não nos obrigue a manter.</li>
+        <li>O XML das notas fiscais fica arquivado por <b>5 anos</b>, como a legislação fiscal exige, e disponível para o seu contador.</li>
+      </ul>
+
+      <h2>5. Cancelamento</h2>
+      <p>
+        Você cancela dentro do próprio sistema, em um clique, <b>sem multa</b> e sem precisar ligar
+        para ninguém. O cancelamento vale para o próximo ciclo — o período já pago continua
+        disponível até o fim. Seus dados continuam guardados caso você queira voltar.
+      </p>
+
+      <h2>6. Suas responsabilidades</h2>
+      <ul>
+        <li>Manter corretos os dados fiscais da empresa (CNPJ, inscrições, regime tributário) — é com base neles que a nota é emitida;</li>
+        <li>Providenciar e manter válido o <b>certificado digital A1</b>, se for emitir nota fiscal;</li>
+        <li>Guardar suas senhas e não compartilhar acessos; cada pessoa da equipe deve ter o próprio usuário;</li>
+        <li>Usar o sistema dentro da lei — não usamos nem permitimos o uso do Nainer para fraude fiscal ou atividade ilícita.</li>
+      </ul>
+
+      <h2>7. Nossas responsabilidades e limites</h2>
+      <ul>
+        <li>Trabalhamos para manter o serviço disponível e com cópia de segurança diária, mas não prometemos disponibilidade ininterrupta. Interrupções para manutenção são avisadas quando programadas.</li>
+        <li>Não respondemos por indisponibilidade de serviços de terceiros dos quais o sistema depende — em especial os servidores da SEFAZ. Quando a SEFAZ cai, a venda continua e a nota é transmitida depois (contingência).</li>
+        <li>Não respondemos por erro nos dados que você digita, nem pela classificação fiscal escolhida por você ou pelo seu contador.</li>
+        <li>Podemos suspender uma conta que ameace a segurança ou a estabilidade do serviço, avisando assim que possível.</li>
+      </ul>
+
+      <h2>8. Propriedade</h2>
+      <p>
+        O software, a marca e a documentação do Nainer pertencem à Vetor Sistemas. O uso do serviço
+        não transfere essa propriedade. Os dados que você lança no sistema continuam seus.
+      </p>
+
+      <h2>9. Privacidade</h2>
+      <p>
+        O tratamento de dados pessoais está descrito na
+        <a href="/privacidade">Política de Privacidade</a>, que faz parte destes termos.
+      </p>
+
+      <h2>10. Mudanças nestes termos</h2>
+      <p>
+        Podemos atualizar estes termos. Mudança relevante é avisada por e-mail com pelo menos 30
+        dias de antecedência, e a data no topo desta página é atualizada. Continuar usando o serviço
+        depois disso significa concordar com a nova versão.
+      </p>
+
+      <h2>11. Legislação aplicável</h2>
+      <p>
+        Estes termos são regidos pela legislação brasileira, incluindo o Código de Defesa do
+        Consumidor, quando aplicável, e a Lei Geral de Proteção de Dados (Lei 13.709/2018).
+      </p>
+
+      <h2>12. Contato</h2>
+      <p>
+        Dúvida sobre qualquer ponto acima?
+        {contato.email ? (
+          <span> Escreva para <a href={`mailto:${contato.email}`}>{contato.email}</a>.</span>
+        ) : (
+          <span> Use o canal de contato publicado no rodapé deste site.</span>
+        )}
+      </p>
+
+      <p class="voltar"><a href="/">← Voltar para a página inicial</a> · <a href="/privacidade">Política de Privacidade</a></p>
+    </div>
+  </section>
+</Base>
+
+<style>
+  .rascunho {
+    display: inline-block;
+    margin: 0 0 14px;
+    padding: 8px 14px;
+    border: 1px solid var(--danger);
+    border-radius: var(--radius);
+    background: var(--danger-bg);
+    color: var(--danger);
+    font-size: 14px;
+    font-weight: 600;
+  }
+  .legal { padding: 8px 0 72px; }
+  .legal .container { max-width: 760px; }
+  .legal h2 {
+    margin: 34px 0 10px;
+    font-size: 20px;
+    line-height: 1.3;
+  }
+  .legal p,
+  .legal li { color: var(--ink-muted); font-size: 16px; line-height: 1.65; }
+  .legal p { margin: 0 0 12px; }
+  .legal ul { margin: 0 0 12px; padding-left: 20px; }
+  .legal li { margin-bottom: 6px; }
+  .legal b { color: var(--ink); }
+  .legal a { color: var(--accent); }
+  .atualizado { font-size: 14px; }
+  .voltar { margin-top: 32px; padding-top: 16px; border-top: 1px solid var(--line); }
+</style>

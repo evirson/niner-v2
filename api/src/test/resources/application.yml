@@ -17,6 +17,26 @@ niner:
   trial:
     dias: 60
     plano: Profissional
+  limite-requisicao:
+    # Desligado por padrão nos testes: a suíte faz dezenas de signups seguidos do mesmo "IP".
+    # LimiteRequisicaoTest liga via @DynamicPropertySource com limite baixo.
+    habilitado: false
+  staff-inicial:               # vazio nos testes: cada teste cria o staff que precisa
+    email: ""
+    senha: ""
+    nome: Administrador Teste
+  cobranca:
+    # Este arquivo SOMBREIA o application.yml de produção (ver nota no topo), então o bloco
+    # precisa existir aqui também. Token vazio = cobrança desligada por padrão nos testes;
+    # CobrancaMercadoPagoTest sobrescreve via @DynamicPropertySource apontando para um
+    # Mercado Pago falso.
+    gateway: mercadopago
+    mercadopago:
+      base-url: http://localhost:1
+      access-token: ""
+      webhook-secret: ""
+      notification-url: ""
+      validade-pix: PT24H
   cors:
     origins:
       - http://localhost:5175

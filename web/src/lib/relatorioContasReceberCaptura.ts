@@ -116,7 +116,7 @@ export async function gerarPdfCapturaRelatorioContasReceber(elemento: HTMLElemen
 
   await desenharElementoPaginado(doc, elemento)
 
-  desenharCabecalhoERodape(doc, 'Relatório de Contas a Receber / Recebidas', new Date().toLocaleString('pt-BR'), rodapeEsquerda, 'Niner ERP')
+  desenharCabecalhoERodape(doc, 'Relatório de Contas a Receber / Recebidas', new Date().toLocaleString('pt-BR'), rodapeEsquerda, 'Nainer ERP')
 
   doc.save('relatorio-de-contas-a-receber.pdf')
 }

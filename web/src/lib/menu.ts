@@ -276,6 +276,13 @@ export const MENU: NavGrupo[] = [
     adminOnly: true,
     itens: [
       {
+        to: '/minha-conta',
+        label: 'Minha Conta',
+        icone: IconePainel,
+        descricao:
+          'Plano, quantas vendas do mês já foram usadas, histórico e os CNPJs da conta. É o que a loja paga à Vetor — não confundir com o caixa da loja.',
+      },
+      {
         to: '/usuarios',
         label: 'Usuários',
         icone: IconeUsuario,

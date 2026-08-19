@@ -23,7 +23,7 @@ const CHAVE_TELA = 'configuracao.exportacao'
 
 /**
  * Rotina de Exportação de Dados (Configurações) — irmã "de saída" da Rotina de Importação de
- * Dados: baixa o que já está cadastrado no Niner em planilha Excel. ADMIN-only (rota protegida
+ * Dados: baixa o que já está cadastrado no Nainer em planilha Excel. ADMIN-only (rota protegida
  * por `RequireAdmin`; o backend reforça o mesmo). Sem etapas — um clique busca os dados e já
  * gera o download, a planilha é montada no navegador (mesmo padrão do CRM).
  */

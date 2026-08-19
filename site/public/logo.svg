@@ -1,0 +1,8 @@
+<!-- Marca do Nainer em arquivo, com cores LITERAIS: um SVG carregado por <img> ou como favicon
+     não enxerga as variáveis de tema da página. Para uso dentro do site, prefira o componente
+     MarcaNainer.astro, que acompanha claro/escuro. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32" role="img" aria-label="Nainer">
+  <rect width="32" height="32" rx="7" fill="#1f6f6b"/>
+  <text x="15" y="22.5" font-family="Georgia, 'Iowan Old Style', serif" font-size="19" fill="#ffffff" text-anchor="middle">N</text>
+  <rect x="20" y="23" width="7" height="3" rx="1.5" fill="#2cf5e2"/>
+</svg>

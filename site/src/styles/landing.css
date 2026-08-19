@@ -1,0 +1,303 @@
+/* ==============================================================================================
+   Landing de venda do Nainer — CSS vindo do Claude Design (projeto "HTML com tema claro/escuro e
+   FAQ", 2026-08-18), gerado a partir de docs/site/briefing-landing.md.
+
+   Regras que vieram do briefing e NÃO devem ser afrouxadas ao editar:
+   · sem webfont externa (títulos Georgia, corpo sans do sistema) — Core Web Vitals é parte da
+     estratégia de SEO desta página;
+   · `color-mix()` é proibido no projeto — use rgba(var(--x-rgb), alpha);
+   · tema claro/escuro por prefers-color-scheme + override data-theme;
+   · toda tabela larga rola dentro do próprio contêiner (.tabela-rolagem), a página nunca.
+   ============================================================================================== */
+
+/* ============ Tokens ============ */
+:root {
+  color-scheme: light dark;
+  --ground: #f5f4f0;       --ground-rgb: 245,244,240;
+  --surface: #ffffff;      --surface-rgb: 255,255,255;
+  --ink: #20262a;          --ink-rgb: 32,38,42;
+  --ink-muted: #5c6660;    --ink-muted-rgb: 92,102,96;
+  --accent: #1f6f6b;       --accent-rgb: 31,111,107;
+  --accent-contrast: #ffffff;
+  /* Destaque "neon" (design v2). O design entregou #0a9d90, que dá 3,06:1 sobre este fundo e
+     REPROVA em AA para texto pequeno — o .kicker tem 13px. Escurecido para #0a7d73 (4,5:1) por
+     decisão do dono do produto, para o neon continuar nos cinco lugares sem perder acessibilidade.
+     O tema escuro fica com o valor original: lá o contraste é 11,7:1 e é onde o efeito aparece. */
+  --neon: #0a7d73;         --neon-rgb: 10,125,115;
+  --neon-glow: 0 0 10px rgba(15,214,196,.4), 0 0 24px rgba(15,214,196,.22);
+  --line: #dee2dc;         --line-rgb: 222,226,220;
+  --danger: #a63d29;       --danger-rgb: 166,61,41;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ground: #12181a;     --ground-rgb: 18,24,26;
+    --surface: #1a2225;    --surface-rgb: 26,34,37;
+    --ink: #e7ecec;        --ink-rgb: 231,236,236;
+    --ink-muted: #93a19e;  --ink-muted-rgb: 147,161,158;
+    --accent: #4fbdb2;     --accent-rgb: 79,189,178;
+    --accent-contrast: #0d1b1a;
+    /* Destaque "neon" (design v2) — no escuro é onde ele realmente brilha. */
+    --neon: #2cf5e2;         --neon-rgb: 44,245,226;
+    --neon-glow: 0 0 12px rgba(44,245,226,.55), 0 0 32px rgba(44,245,226,.3);
+    --line: #2a3538;       --line-rgb: 42,53,56;
+    --danger: #e2836a;     --danger-rgb: 226,131,106;
+  }
+}
+:root[data-theme="light"] {
+  color-scheme: light;
+  --ground: #f5f4f0;       --ground-rgb: 245,244,240;
+  --surface: #ffffff;      --surface-rgb: 255,255,255;
+  --ink: #20262a;          --ink-rgb: 32,38,42;
+  --ink-muted: #5c6660;    --ink-muted-rgb: 92,102,96;
+  --accent: #1f6f6b;       --accent-rgb: 31,111,107;
+  --accent-contrast: #ffffff;
+  /* Destaque "neon" (design v2). O design entregou #0a9d90, que dá 3,06:1 sobre este fundo e
+     REPROVA em AA para texto pequeno — o .kicker tem 13px. Escurecido para #0a7d73 (4,5:1) por
+     decisão do dono do produto, para o neon continuar nos cinco lugares sem perder acessibilidade.
+     O tema escuro fica com o valor original: lá o contraste é 11,7:1 e é onde o efeito aparece. */
+  --neon: #0a7d73;         --neon-rgb: 10,125,115;
+  --neon-glow: 0 0 10px rgba(15,214,196,.4), 0 0 24px rgba(15,214,196,.22);
+  --line: #dee2dc;         --line-rgb: 222,226,220;
+  --danger: #a63d29;       --danger-rgb: 166,61,41;
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --ground: #12181a;       --ground-rgb: 18,24,26;
+  --surface: #1a2225;      --surface-rgb: 26,34,37;
+  --ink: #e7ecec;          --ink-rgb: 231,236,236;
+  --ink-muted: #93a19e;    --ink-muted-rgb: 147,161,158;
+  --accent: #4fbdb2;       --accent-rgb: 79,189,178;
+  --accent-contrast: #0d1b1a;
+  /* Destaque "neon" (design v2) — no escuro é onde ele realmente brilha. */
+  --neon: #2cf5e2;         --neon-rgb: 44,245,226;
+  --neon-glow: 0 0 12px rgba(44,245,226,.55), 0 0 32px rgba(44,245,226,.3);
+  --line: #2a3538;         --line-rgb: 42,53,56;
+  --danger: #e2836a;       --danger-rgb: 226,131,106;
+}
+
+/* ============ Base ============ */
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; scroll-padding-top: 76px; }
+body {
+  margin: 0;
+  background: var(--ground);
+  color: var(--ink);
+  font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-size: 17px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+h1, h2, h3 { font-family: Georgia, "Iowan Old Style", serif; font-weight: 500; line-height: 1.15; margin: 0; text-wrap: balance; }
+p { margin: 0; text-wrap: pretty; }
+a { color: var(--accent); }
+a:hover { color: var(--ink); }
+:focus-visible { outline: 3px solid rgba(var(--accent-rgb), .7); outline-offset: 2px; border-radius: 4px; }
+.wrap { max-width: 1080px; margin: 0 auto; padding: 0 20px; }
+.kicker { font-size: 13px; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; color: var(--neon); text-shadow: var(--neon-glow); }
+.preco, .num { font-variant-numeric: tabular-nums; }
+
+/* ============ Botões ============ */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  min-height: 48px; padding: 12px 22px; border-radius: 10px;
+  font-size: 16px; font-weight: 600; text-decoration: none; cursor: pointer;
+  border: 1px solid transparent; transition: background .15s, border-color .15s;
+}
+.btn-primario { background: var(--accent); color: var(--accent-contrast); }
+.btn-primario:hover { background: rgba(var(--accent-rgb), .88); color: var(--accent-contrast); }
+.btn-secundario { background: var(--surface); color: var(--ink); border-color: var(--line); }
+.btn-secundario:hover { border-color: rgba(var(--accent-rgb), .6); color: var(--ink); }
+.btn-zap { background: rgba(var(--accent-rgb), .1); color: var(--accent); border-color: rgba(var(--accent-rgb), .25); }
+.btn-zap:hover { background: rgba(var(--accent-rgb), .18); color: var(--accent); }
+
+/* ============ Topo ============ */
+.topo {
+  position: sticky; top: 0; z-index: 50;
+  background: rgba(var(--ground-rgb), .88);
+  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--line);
+}
+.topo-inner { display: flex; align-items: center; gap: 16px; min-height: 64px; }
+.logo { font-family: Georgia, "Iowan Old Style", serif; font-size: 24px; color: var(--ink); text-decoration: none; letter-spacing: -.01em; }
+.logo b { color: var(--neon); text-shadow: var(--neon-glow); font-weight: 500; }
+.nav { display: none; gap: 4px; margin: 0 auto; }
+.nav a { color: var(--ink-muted); text-decoration: none; font-size: 15px; font-weight: 500; padding: 12px 12px; border-radius: 8px; }
+.nav a:hover { color: var(--ink); background: rgba(var(--ink-rgb), .05); }
+.topo-acoes { display: flex; gap: 10px; margin-left: auto; align-items: center; }
+.topo-acoes .entrar { color: var(--ink-muted); text-decoration: none; font-size: 15px; font-weight: 500; padding: 12px 10px; }
+.topo-acoes .entrar:hover { color: var(--ink); }
+.topo .btn { min-height: 44px; padding: 10px 18px; font-size: 15px; }
+@media (min-width: 800px) { .nav { display: flex; } }
+
+/* ============ Herói ============ */
+.heroi { padding: 64px 0 56px; }
+.heroi-grid { display: grid; gap: 40px; align-items: center; }
+.heroi h1 { font-size: clamp(34px, 5.4vw, 54px); letter-spacing: -.015em; }
+.heroi h1 em { font-style: normal; color: var(--neon); text-shadow: var(--neon-glow); }
+.heroi .sub { font-size: clamp(18px, 2.2vw, 21px); color: var(--ink-muted); margin-top: 18px; max-width: 34em; }
+.heroi-ctas { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 28px; }
+.heroi .micro { font-size: 14px; color: var(--ink-muted); margin-top: 14px; }
+@media (min-width: 900px) { .heroi { padding: 88px 0 80px; } .heroi-grid { grid-template-columns: 1.05fr .95fr; gap: 56px; } }
+
+/* Fotos ilustrativas (herói e fiscal). Servidas do nosso domínio (/img/*.jpg), nunca por hotlink:
+   o herói é o LCP da página e a promessa de "medição própria, sem terceiros" vale também para
+   quem entrega o pixel. width/height no <img> reservam a caixa e evitam CLS. */
+.print { margin: 0; border-radius: 14px; overflow: hidden; border: 1px solid var(--line); box-shadow: 0 12px 34px rgba(0,0,0,.12); }
+.print img { display: block; width: 100%; height: auto; aspect-ratio: 4 / 3; object-fit: cover; filter: saturate(.92); }
+
+/* Faixa de ambiência: foto larga, puramente decorativa (a seção é aria-hidden). */
+.ambiencia { border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.ambiencia img { display: block; width: 100%; height: clamp(220px, 34vw, 420px); object-fit: cover; object-position: center 60%; filter: saturate(.88); }
+
+/* ============ Faixa de credibilidade ============ */
+.faixa { border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); background: rgba(var(--surface-rgb), .55); }
+.faixa ul { list-style: none; margin: 0; padding: 22px 0; display: grid; grid-template-columns: 1fr 1fr; gap: 14px 24px; }
+.faixa li { display: flex; align-items: center; gap: 10px; font-size: 15px; font-weight: 500; color: var(--ink); }
+.faixa svg { flex: none; color: var(--accent); }
+@media (min-width: 800px) { .faixa ul { grid-template-columns: repeat(4, 1fr); } }
+
+/* ============ Seções ============ */
+.secao { padding: 72px 0; }
+.secao-cab { max-width: 38em; margin-bottom: 40px; }
+.secao-cab h2 { font-size: clamp(27px, 3.6vw, 38px); margin-top: 10px; letter-spacing: -.01em; }
+.secao-cab .desc { color: var(--ink-muted); margin-top: 14px; font-size: 18px; }
+@media (min-width: 900px) { .secao { padding: 96px 0; } }
+.secao-continua { padding-top: 0; }
+.secao-realce { background: rgba(var(--surface-rgb), .45); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+
+/* Problema */
+.cards3 { display: grid; gap: 16px; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 26px; }
+.card h3 { font-size: 21px; margin-bottom: 10px; }
+.card p { color: var(--ink-muted); font-size: 16px; }
+@media (min-width: 800px) { .cards3 { grid-template-columns: repeat(3, 1fr); } }
+
+/* Recursos */
+.recursos-grid { display: grid; gap: 14px; grid-template-columns: 1fr; }
+.recurso { display: flex; gap: 14px; align-items: flex-start; padding: 20px; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; }
+.recurso svg { flex: none; color: var(--accent); margin-top: 3px; }
+.recurso h3 { font-family: inherit; font-size: 17px; font-weight: 600; }
+.recurso p { font-size: 15px; color: var(--ink-muted); margin-top: 3px; }
+.recurso .breve { display: inline-block; font-size: 12px; font-weight: 600; color: var(--accent); background: rgba(var(--accent-rgb), .1); border-radius: 999px; padding: 1px 8px; margin-left: 6px; vertical-align: 2px; }
+@media (min-width: 640px) { .recursos-grid { grid-template-columns: 1fr 1fr; } }
+@media (min-width: 980px) { .recursos-grid { grid-template-columns: repeat(4, 1fr); } .recurso { flex-direction: column; gap: 10px; } }
+
+/* ============ Preço ============ */
+.preco-grid { display: grid; gap: 20px; align-items: stretch; }
+@media (min-width: 900px) { .preco-grid { grid-template-columns: 1fr 1.2fr; } }
+.plano { border-radius: 16px; padding: 30px; display: flex; flex-direction: column; }
+.plano-gratis { background: var(--surface); border: 2px solid var(--accent); position: relative; }
+.plano-gratis .selo { position: absolute; top: -13px; left: 26px; background: var(--accent); color: var(--accent-contrast); font-size: 12.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; padding: 4px 12px; border-radius: 999px; }
+.plano h3 { font-size: 24px; }
+.plano .valor { font-size: clamp(40px, 5vw, 52px); font-family: Georgia, "Iowan Old Style", serif; margin-top: 12px; color: var(--neon); text-shadow: var(--neon-glow); }
+.plano .valor small { font-size: 18px; font-family: -apple-system, "Segoe UI", Roboto, sans-serif; color: var(--ink-muted); font-weight: 400; }
+.plano ul { list-style: none; padding: 0; margin: 20px 0 26px; display: grid; gap: 11px; }
+.plano li { display: flex; gap: 10px; align-items: flex-start; font-size: 15.5px; }
+.plano li svg { flex: none; color: var(--accent); margin-top: 4px; }
+.plano .btn { margin-top: auto; }
+.plano-volume { background: rgba(var(--surface-rgb), .55); border: 1px solid var(--line); }
+.plano-volume .explica { color: var(--ink-muted); font-size: 15.5px; margin-top: 10px; }
+
+.ciclo { display: inline-flex; background: rgba(var(--ink-rgb), .06); border: 1px solid var(--line); border-radius: 999px; padding: 3px; margin-top: 18px; }
+.ciclo button {
+  min-height: 38px; padding: 6px 18px; border: none; border-radius: 999px; cursor: pointer;
+  background: transparent; color: var(--ink-muted); font-size: 14.5px; font-weight: 600; font-family: inherit;
+}
+.ciclo button[aria-pressed="true"] { background: var(--surface); color: var(--ink); box-shadow: 0 1px 3px rgba(0,0,0,.12); }
+
+.tabela-rolagem { overflow-x: auto; margin-top: 18px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+table.faixas { width: 100%; border-collapse: collapse; font-size: 15px; min-width: 420px; }
+.faixas th, .faixas td { text-align: left; padding: 12px 16px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+.faixas th { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: .07em; color: var(--ink-muted); }
+.faixas tr:last-child td { border-bottom: none; }
+.faixas td.preco { font-weight: 600; }
+.preco-nota { font-size: 14px; color: var(--ink-muted); margin-top: 18px; max-width: 44em; }
+
+/* Alternador Mensal/Anual (comportamento do site, não do design): a coluna do ciclo escolhido
+   fica em destaque, e no celular a outra some — em 360px de largura, duas colunas de preço lado
+   a lado obrigariam a rolagem horizontal justamente na informação que decide a compra. */
+.faixas [data-ciclo] { color: var(--ink-muted); font-weight: 500; }
+.faixas [data-ciclo].ativo { color: var(--ink); font-weight: 700; }
+@media (max-width: 639px) {
+  .faixas [data-ciclo]:not(.ativo), .faixas th[data-ciclo]:not(.ativo) { display: none; }
+  table.faixas { min-width: 0; }
+}
+
+/* ============ Fiscal ============ */
+.fiscal-grid { display: grid; gap: 40px; align-items: center; }
+@media (min-width: 900px) { .fiscal-grid { grid-template-columns: 1fr 1fr; gap: 64px; } }
+.fiscal h2 { font-size: clamp(27px, 3.6vw, 38px); margin-top: 10px; }
+.fiscal ul.lista { list-style: none; padding: 0; margin: 24px 0 0; display: grid; gap: 14px; }
+.fiscal .lista li { display: flex; gap: 12px; align-items: flex-start; font-size: 16px; }
+.fiscal .lista svg { flex: none; color: var(--accent); margin-top: 4px; }
+.frase-contador { margin-top: 26px; padding: 18px 22px; border-left: 3px solid var(--accent); background: rgba(var(--accent-rgb), .06); border-radius: 0 10px 10px 0; font-size: 16.5px; font-style: italic; font-family: Georgia, "Iowan Old Style", serif; }
+
+/* ============ Passos ============ */
+.passos { display: grid; gap: 16px; counter-reset: passo; list-style: none; padding: 0; margin: 0; }
+.passo { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 26px; counter-increment: passo; }
+.passo::before {
+  content: counter(passo); display: inline-flex; align-items: center; justify-content: center;
+  width: 40px; height: 40px; border-radius: 999px; margin-bottom: 14px;
+  background: rgba(var(--accent-rgb), .1); color: var(--accent);
+  font-family: Georgia, "Iowan Old Style", serif; font-size: 20px;
+}
+.passo h3 { font-size: 20px; margin-bottom: 8px; }
+.passo p { color: var(--ink-muted); font-size: 15.5px; }
+@media (min-width: 800px) { .passos { grid-template-columns: repeat(3, 1fr); } }
+
+/* ============ Depoimentos ============ */
+.depos { display: grid; gap: 16px; }
+.depo { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 26px; display: flex; flex-direction: column; gap: 16px; }
+.depo blockquote { margin: 0; font-family: Georgia, "Iowan Old Style", serif; font-size: 18px; line-height: 1.5; }
+.depo footer { font-size: 14px; color: var(--ink-muted); }
+.depo footer b { color: var(--ink); font-weight: 600; }
+@media (min-width: 800px) { .depos { grid-template-columns: repeat(3, 1fr); } }
+
+/* ============ FAQ ============ */
+.faq { max-width: 760px; }
+.faq details { border-bottom: 1px solid var(--line); }
+.faq details:first-of-type { border-top: 1px solid var(--line); }
+.faq summary {
+  list-style: none; cursor: pointer; display: flex; justify-content: space-between; align-items: center; gap: 16px;
+  padding: 20px 4px; font-size: 17.5px; font-weight: 600; min-height: 44px;
+}
+.faq summary::-webkit-details-marker { display: none; }
+.faq summary::after { content: "+"; font-size: 24px; font-weight: 400; color: var(--neon); text-shadow: var(--neon-glow); flex: none; line-height: 1; transition: transform .15s; }
+.faq details[open] summary::after { transform: rotate(45deg); }
+.faq .resposta { padding: 0 4px 22px; color: var(--ink-muted); font-size: 16px; max-width: 40em; }
+
+/* ============ CTA final ============ */
+.cta-final { background: var(--accent); color: var(--accent-contrast); }
+.cta-final .wrap { padding-top: 80px; padding-bottom: 80px; text-align: center; }
+.cta-final h2 { font-size: clamp(28px, 4vw, 42px); color: var(--accent-contrast); }
+.cta-final p { margin: 16px auto 0; max-width: 34em; font-size: 18px; color: rgba(var(--ground-rgb), .92); }
+:root[data-theme="dark"] .cta-final p { color: rgba(13,27,26,.85); }
+.cta-final .acoes { display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; margin-top: 30px; }
+.cta-final .btn-primario { background: var(--ground); color: var(--ink); }
+.cta-final .btn-primario:hover { background: var(--surface); }
+.cta-final .btn-zap { background: rgba(0,0,0,.14); color: var(--accent-contrast); border-color: rgba(0,0,0,.2); }
+.cta-final .btn-zap:hover { background: rgba(0,0,0,.22); color: var(--accent-contrast); }
+.cta-final .micro { font-size: 14px; margin-top: 16px; opacity: .85; }
+
+/* ============ Rodapé ============ */
+.rodape { border-top: 1px solid var(--line); padding: 48px 0 40px; font-size: 14.5px; color: var(--ink-muted); }
+.rodape-grid { display: grid; gap: 32px; }
+.rodape h3 { font-family: inherit; font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; color: var(--ink); margin-bottom: 12px; }
+.rodape ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 9px; }
+.rodape a { color: var(--ink-muted); text-decoration: none; }
+.rodape a:hover { color: var(--accent); text-decoration: underline; }
+.rodape .legal { margin-top: 36px; padding-top: 20px; border-top: 1px solid var(--line); font-size: 13.5px; }
+@media (min-width: 800px) { .rodape-grid { grid-template-columns: 2fr 1fr 1fr 1fr; } }
+
+/* ============ Aviso de cookies ============ */
+.cookies {
+  position: fixed; left: 16px; right: 16px; bottom: 16px; z-index: 60;
+  background: var(--surface); border: 1px solid var(--line); border-radius: 12px;
+  box-shadow: 0 8px 30px rgba(0,0,0,.14);
+  padding: 16px 18px; display: flex; flex-wrap: wrap; gap: 12px; align-items: center;
+  font-size: 14px; color: var(--ink-muted); max-width: 640px; margin: 0 auto;
+}
+.cookies[hidden] { display: none; }
+.cookies p { flex: 1 1 280px; }
+.cookies .btn { min-height: 44px; padding: 8px 18px; font-size: 14.5px; }

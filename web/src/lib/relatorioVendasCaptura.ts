@@ -106,7 +106,7 @@ async function desenharElementoPaginado(doc: jsPDF, elemento: HTMLElement): Prom
 }
 
 /** Cabeçalho (título + "Página X de Y" + data/hora de geração) e rodapé (empresa(s) filtrada(s)
- *  + "Niner ERP") repetidos em **todas** as páginas do PDF — modelo de referência
+ *  + "Nainer ERP") repetidos em **todas** as páginas do PDF — modelo de referência
  *  `RELATORIO_COMISSOES.PDF` (ERP legado): lá o título/paginação ficam no topo de cada página, e
  *  o rodapé mostra loja + sistema. Roda por último, depois de todas as páginas já existirem, pra
  *  saber o total. */
@@ -176,7 +176,7 @@ export async function gerarPdfCapturaRelatorioVendas(
   doc.addPage()
   await desenharElementoPaginado(doc, gridEl)
 
-  desenharCabecalhoERodape(doc, COR_TEXTO_PDF, 'Relatório de Vendas', new Date().toLocaleString('pt-BR'), rodapeEsquerda, 'Niner ERP')
+  desenharCabecalhoERodape(doc, COR_TEXTO_PDF, 'Relatório de Vendas', new Date().toLocaleString('pt-BR'), rodapeEsquerda, 'Nainer ERP')
 
   doc.save('relatorio-de-vendas.pdf')
 }

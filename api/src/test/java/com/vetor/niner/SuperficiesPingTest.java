@@ -33,10 +33,12 @@ class SuperficiesPingTest {
     }
 
     @Test
-    void adminPingResponde() throws Exception {
+    void adminPingExigeTokenDeStaff() throws Exception {
+        // Mudou em 2026-08-19 (bloqueador nº 1): /api/admin/** deixou de ser aberto. O ping,
+        // que antes respondia a qualquer um, agora prova o contrário — a superfície está fechada.
+        // O caminho autenticado é exercitado por StaffAdminSegurancaTest.
         mockMvc.perform(get("/api/admin/ping"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.superficie").value("admin"));
+                .andExpect(status().isUnauthorized());
     }
 
     @Test

@@ -1,0 +1,25 @@
+---
+/**
+ * Ponte para o app do ERP. O endereço do `web/` é config de RUNTIME (`public/config.js`), então
+ * não dá para gerar o link em build — esta página resolve no cliente e redireciona.
+ */
+import Base from '../layouts/Base.astro';
+---
+
+<Base title="Entrar — Nainer" description="Acesse o Nainer da sua loja." path="/entrar">
+  <section class="page-header">
+    <div class="container">
+      <h1>Entrando…</h1>
+      <p id="aviso">Levando você para o sistema. Se não abrir sozinho, use o botão abaixo.</p>
+      <p><a id="link-app" class="btn btn-primary" href="/">Abrir o sistema</a></p>
+    </div>
+  </section>
+
+  <script is:inline>
+    (function () {
+      var destino = window.NINER_WEB_BASE || 'http://localhost:5173';
+      document.getElementById('link-app').setAttribute('href', destino);
+      window.location.replace(destino);
+    })();
+  </script>
+</Base>

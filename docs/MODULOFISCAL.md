@@ -1,6 +1,6 @@
 # Módulo Fiscal — NFC-e, NF-e, Cancelamento, Correção e Guarda de XML
 
-**Produto:** Niner (Vetor Sistemas) · **Banco:** `niner_db` · **Versão do documento:** 2.1
+**Produto:** Nainer (Vetor Sistemas) · **Banco:** `niner_db` · **Versão do documento:** 2.1
 **Data:** 2026-08-16 (v2.1: escopo do v1 fechado pelo dono do produto — ver §1.1 e §4)
 
 **Relação com os outros documentos:** este é o **documento de módulo** do fiscal. Complementa
@@ -23,7 +23,7 @@ decisão de arquitetura vira ADR no formato §6 da spec.
 |---|---|---|
 | DF1 | Como falar com a SEFAZ | ✅ **Emissão própria**, direto na SEFAZ. Sem provedor terceiro |
 | DF2 | Ordem de entrega | ✅ **NFC-e primeiro** (amarrada ao PDV), NF-e na sequência |
-| DF3 | Onde mora a inteligência tributária | ✅ **No Niner** — perfil fiscal por produto/tenant, XML sai pronto |
+| DF3 | Onde mora a inteligência tributária | ✅ **No Nainer** — perfil fiscal por produto/tenant, XML sai pronto |
 | DF4 | Reforma tributária (IBS/CBS/IS) | ✅ **Desde o v1, para TODOS os regimes** — motor e schema prontos mesmo para Simples/MEI; ver §8.5 |
 | DF5 | Certificado digital | ✅ **A1 (.pfx) por upload**, cifrado **no banco** (`fiscal_certificado.arquivo_cifrado`) — não em bucket, DF21 revisada em 2026-08-17 —, senha cifrada com chave fora do banco |
 | DF6 | UF piloto | ✅ **Paraná** — autorizador próprio (`nfce.sefa.pr.gov.br`), não SVRS; ver §9.4 |
@@ -38,7 +38,7 @@ decisão de arquitetura vira ADR no formato §6 da spec.
 | DF26 | Venda não presencial (marketplace / e-commerce) | ✅ Futura (§4.2). Os indicadores `indPres`/`indFinal`/`idDest` nascem no `documento_fiscal` desde o v1 porque a NFC-e já os preenche; o resto (transporte, `infIntermed`) vem junto com `canais/` |
 | DF27 | Correção de nota autorizada | ✅ Futura. ⚠️ **CC-e não existe para NFC-e** — é evento de NF-e 55, então nunca teria entrado num v1 de NFC-e de qualquer forma (§4.2) |
 | ~~DF36~~ | ~~Alíquota de PIS/COFINS: do perfil do produto ou do regime da empresa?~~ | ⛔ **SUPERADA pela DF37 (2026-08-17).** A pergunta só existia porque o CRT 3 cobre Lucro Presumido e Real ao mesmo tempo. Com os dois regimes fora do produto, não há mais alíquota ad-valorem de PIS/COFINS a decidir: é sempre CST 99, dentro do DAS. `regime_apuracao` foi removido do schema |
-| **DF37** 🆕 | **Quais regimes tributários o Niner atende?** | ✅ **Só MEI e Simples Nacional** — CRT 1, 2 e 4. Lucro Real e Lucro Presumido **não são atendidos**, e a recusa é de **escopo de produto**, não de funcionalidade faltando. Consequências em cascata: sem `regime_apuracao`, sem PIS/COFINS ad-valorem, sem IPI, sem `equiparado_industrial`. CST de ICMS sobrevive só para o CRT 2. Ver §7.1, §8.2 e §8.3 |
+| **DF37** 🆕 | **Quais regimes tributários o Nainer atende?** | ✅ **Só MEI e Simples Nacional** — CRT 1, 2 e 4. Lucro Real e Lucro Presumido **não são atendidos**, e a recusa é de **escopo de produto**, não de funcionalidade faltando. Consequências em cascata: sem `regime_apuracao`, sem PIS/COFINS ad-valorem, sem IPI, sem `equiparado_industrial`. CST de ICMS sobrevive só para o CRT 2. Ver §7.1, §8.2 e §8.3 |
 
 Decisões ainda em aberto: **Anexo A** (DF12, DF16, DF18–DF24, DF29–DF34).
 
@@ -82,7 +82,7 @@ real (`db/migration/V001`–`V033`) e contra as telas que já existem. O que mud
 
 1. **§4 virou o catálogo completo de documentos** — a lista de 4 operações de NF-e da v1.1 (e do
    pedido original) deixava **7 modalidades de fora**, três delas praticamente obrigatórias para
-   quem já usa o Niner hoje. Ver §4.3.
+   quem já usa o Nainer hoje. Ver §4.3.
 2. **§6 é nova: as lacunas do schema atual.** O que hoje impede a emissão, tabela por tabela,
    coluna por coluna. A mais grave: **`produto` não tem nenhuma coluna de unidade comercial** —
    `uCom` e `uTrib` são obrigatórios no XML, e não existe de onde tirá-los.
@@ -95,7 +95,7 @@ real (`db/migration/V001`–`V033`) e contra as telas que já existem. O que mud
    **crédito** — regra que muda o XML inteiro dessa nota. Era o maior erro conceitual do documento
    anterior.
 5. **A forma de pagamento virou item de schema (§6.4).** `detPag` é obrigatório na NFC-e e a
-   `tipo_carteira` do Niner não tem `tPag`, bandeira nem CNPJ de credenciadora. Sem isso, nenhuma
+   `tipo_carteira` do Nainer não tem `tPag`, bandeira nem CNPJ de credenciadora. Sem isso, nenhuma
    NFC-e é autorizada.
 6. **A guarda passou a incluir o XML de entrada (§11.1).** `entrada_xml.xml_bruto` já guarda o XML
    das notas dos fornecedores desde 2026-08-11 — o contador precisa das entradas tanto quanto das
@@ -114,7 +114,7 @@ real (`db/migration/V001`–`V033`) e contra as telas que já existem. O que mud
 
 **2.1 — O ICP do plano de negócio muda.** O `PLANO-DE-NEGOCIO.md` §3 diz, hoje, que está **fora do
 ICP** "quem exige emissão fiscal nativa", e o Anexo A classifica NF-e/NFC-e como **non-goal do
-produto**. Emitir NFC-e no PDV inverte isso: o Niner passa a ser um ERP fiscal, o que amplia muito
+produto**. Emitir NFC-e no PDV inverte isso: o Nainer passa a ser um ERP fiscal, o que amplia muito
 o mercado e, ao mesmo tempo, **eleva o custo de suporte, o risco jurídico e o piso de qualidade**
 — nota rejeitada é loja parada. Os dois documentos precisam ser atualizados na mesma leva em que
 este for aprovado. 🔴 **DF12 — fiscal entra em qual plano?** Recomendação: add-on cobrado à parte
@@ -173,7 +173,7 @@ Os CFOP abaixo trazem o par **dentro do estado / fora do estado** e são os típ
 revendendo mercadoria de terceiros ⚠️ — a definição final é sempre do perfil fiscal (§8.2), porque
 muda com ST, produto importado e benefício.
 
-| # | Operação de negócio | Doc. | `finNFe` / `tpNF` | CFOP | Origem no Niner | Fase |
+| # | Operação de negócio | Doc. | `finNFe` / `tpNF` | CFOP | Origem no Nainer | Fase |
 |---|---|---|---|---|---|---|
 | 1 | **Venda presencial a consumidor final** — com ou sem CPF, inclusive a CNPJ não contribuinte | **NFC-e 65** | 1 / saída | 5.102 · **5.405** se ST retido | `vendas.pdv` | **F3** |
 | 2 | **Devolução de venda feita pelo consumidor** | **NF-e 55 de entrada** | **4** / **entrada** | 1.202 · 1.411 se ST | `vendas.devolucao` | **F5** |
@@ -239,7 +239,7 @@ Resposta direta ao item 4.2 do pedido — **sim, faltavam**. Em ordem de gravida
 **(a) Venda a contribuinte de ICMS — a NFC-e simplesmente não serve.** É o buraco mais imediato: a
 NFC-e é documento de **venda presencial a consumidor final**. Cliente PJ que compra para revender,
 ou qualquer entrega fora da UF, exige **NF-e modelo 55**. Hoje o PDV é a única tela de venda do
-Niner e não distingue os dois casos. Fechado pela **DF13**, revisada pela DF35: como a NF-e de venda
+Nainer e não distingue os dois casos. Fechado pela **DF13**, revisada pela DF35: como a NF-e de venda
 ficou para depois, o PDV **recusa a emissão** para cliente com `indIEDest = 1` em vez de emitir uma
 NFC-e inválida. O campo `indicador_ie` no cadastro de cliente nasce no v1 justamente para isso — sem
 ele, não há como distinguir, e o sistema emitiria errado sem saber.
@@ -297,10 +297,10 @@ Diferente da §4.2: aqui não é "depois", é "provavelmente nunca, salvo mudan�
 
 ## 5. O encaixe no que já existe
 
-O Niner tem quase tudo que uma nota precisa. O fiscal é **camada de tradução**, não sistema
+O Nainer tem quase tudo que uma nota precisa. O fiscal é **camada de tradução**, não sistema
 paralelo (F1). Mapeamento conferido contra o código:
 
-| Origem no Niner (existe hoje) | Documento gerado | Observação |
+| Origem no Nainer (existe hoje) | Documento gerado | Observação |
 |---|---|---|
 | `PdvVendaService` — efetivação de venda | NFC-e 65 (ou recusa explícita, DF13) | Split-tender e desconto rateado já estão em `produto_movimento_detalhe`; a empresa vem do claim `eid` |
 | `venda_devolucao` + vale-mercadoria | NF-e 55 de **entrada** | Desde 2026-08-11 já restringe a produtos efetivamente vendidos e amarra no nº da venda — é exatamente o que a nota de devolução referencia |
@@ -408,10 +408,10 @@ PR** — item de F0. O PDV já precisa facilitar a captura do CPF pelo programa 
 
 | Campo | Campo do XML | Nota |
 |---|---|---|
-| `codigo_tpag` | `tPag` | 01 dinheiro · 03 crédito · 04 débito · 05 crédito loja (o crediário do Niner) · 17 PIX · 90 sem pagamento · 99 outros ⚠️ (tabela completa na NT 2023.004 — conferir na F0) |
+| `codigo_tpag` | `tPag` | 01 dinheiro · 03 crédito · 04 débito · 05 crédito loja (o crediário do Nainer) · 17 PIX · 90 sem pagamento · 99 outros ⚠️ (tabela completa na NT 2023.004 — conferir na F0) |
 | `codigo_bandeira` | `tBand` | 01 Visa · 02 Mastercard · 03 Amex · 06 Elo · 07 Hipercard · 99 outros ⚠️. Obrigatório junto com `tPag` 03/04 |
 | `cnpj_credenciadora` | `CNPJ` do grupo `card` | Da adquirente (Cielo, Rede, Stone…) |
-| `tipo_integracao` | `tpIntegra` | 1 integrado (TEF/POS) · 2 não integrado. Hoje o Niner é **2**, hardcoded no `MontadorXmlNfce` — nunca lido de `tipo_carteira`, não ganhou campo de tela por não ter uso ainda |
+| `tipo_integracao` | `tpIntegra` | 1 integrado (TEF/POS) · 2 não integrado. Hoje o Nainer é **2**, hardcoded no `MontadorXmlNfce` — nunca lido de `tipo_carteira`, não ganhou campo de tela por não ter uso ainda |
 
 O mapeamento é direto: `categoria_carteira` já separa `AVISTA` / `CARTAO_DEBITO` /
 `CARTAO_CREDITO` / `CREDIARIO` / `VALE_MERCADORIA`, e cada linha de `tipo_carteira` já é uma
@@ -773,7 +773,7 @@ estabelecimentos do **mesmo titular** ⚠️. O que circula é **crédito**:
 - A nota de transferência é obrigatória (a mercadoria circula fisicamente), CFOP **5.152** (mesma
   UF) ou **6.152** (interestadual).
 - O crédito transferido é limitado ao valor do crédito apropriado na entrada; o valor da nota usa o
-  **custo**, não o preço de venda — no Niner, `produto_movimento_detalhe.preco_custo`, que a
+  **custo**, não o preço de venda — no Nainer, `produto_movimento_detalhe.preco_custo`, que a
   Transferência já grava.
 - O **Convênio ICMS 109/2024** ⚠️ (que substituiu o 178/2023) permite ao contribuinte **optar** por
   equiparar a transferência a operação tributada, por opção **anual** formalizada no livro fiscal.
@@ -1049,7 +1049,7 @@ A chave tem **44 dígitos numéricos**: `cUF(2) + AAMM(4) + CNPJ(14) + mod(2) + 
 tpEmis(1) + cNF(8) + cDV(1)` ⚠️.
 
 > ⚠️ **Ponto de atenção que o projeto já conhece por outro caminho.** Desde a IN RFB 2.229/2024, o
-> CNPJ é **alfanumérico** nas posições 1–12 (o Niner já trata isso em `Documentos.java` e
+> CNPJ é **alfanumérico** nas posições 1–12 (o Nainer já trata isso em `Documentos.java` e
 > `masks.ts`). A chave de acesso, porém, é numérica. **Como a chave acomoda um emitente com CNPJ
 > alfanumérico não foi possível confirmar em fonte oficial** — CNPJs já existentes seguem
 > numéricos, então o problema só aparece em empresa aberta a partir de julho/2026, que é
@@ -1444,7 +1444,7 @@ Módulos: `fiscal.motor` (cálculo puro) · `fiscal.documento` (montagem e estad
 **O risco real da DF7.** A lib open-source mais madura e a única com suporte confirmado à NT
 2025.002 é **`br.com.swconsultoria:java-nfe`** (MIT, v4.1.1 de jun/2026; cobre eventos,
 inutilização, Distribuição DF-e, QR Code e contingência). Só que ela compila para **Java 8**, usa
-**JAXB `javax.*`** e traz **Apache Axis2 1.7.5** — e o Niner é **Spring Boot 4 / Java 25, jakarta
+**JAXB `javax.*`** e traz **Apache Axis2 1.7.5** — e o Nainer é **Spring Boot 4 / Java 25, jakarta
 nativo**. Não é detalhe de build: é conflito de `javax.xml.bind` × `jakarta.xml.bind` no mesmo
 classpath. Alternativa mapeada: `com.github.wmixvideo:nfe` (Apache-2.0, v5.0.65 de jul/2026), sem
 confirmação de suporte à reforma e com foco menor em NFC-e.
@@ -1684,11 +1684,11 @@ Legenda: ✅ fonte oficial · ◐ fontes secundárias convergentes · ✳ corrig
 
 ---
 
-## Anexo C — De-para: campo do XML × dado do Niner
+## Anexo C — De-para: campo do XML × dado do Nainer
 
 Resumo operacional do que a montagem do XML vai buscar onde. `(novo)` = coluna que não existe hoje.
 
-| Grupo | Campo | Origem no Niner |
+| Grupo | Campo | Origem no Nainer |
 |---|---|---|
 | `ide` | `cUF`, `cMun` | `cfg_uf_autorizador` / `empresa.codigo_municipio_ibge` *(novo)* |
 | `ide` | `nNF`, `serie`, `cNF`, `cDV` | `fiscal_numeracao` + `documento_fiscal` |

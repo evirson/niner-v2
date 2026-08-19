@@ -113,7 +113,7 @@ export async function gerarPdfCapturaRelatorioComissoes(elemento: HTMLElement, r
 
   await desenharElementoPaginado(doc, elemento)
 
-  desenharCabecalhoERodape(doc, 'Relatório de Comissões', new Date().toLocaleString('pt-BR'), rodapeEsquerda, 'Niner ERP')
+  desenharCabecalhoERodape(doc, 'Relatório de Comissões', new Date().toLocaleString('pt-BR'), rodapeEsquerda, 'Nainer ERP')
 
   doc.save('relatorio-de-comissoes.pdf')
 }

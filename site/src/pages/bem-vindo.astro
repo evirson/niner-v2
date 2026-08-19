@@ -3,8 +3,8 @@ import Base from '../layouts/Base.astro';
 ---
 
 <Base
-  title="Bem-vindo ao Niner"
-  description="Sua conta de teste do Niner está pronta."
+  title="Bem-vindo ao Nainer"
+  description="Sua conta de teste do Nainer está pronta."
   path="/bem-vindo"
 >
   <section class="container" style="padding: 56px 20px; max-width: 640px;">
@@ -51,10 +51,11 @@ import Base from '../layouts/Base.astro';
         const conta = eu.conta || {};
         const usuario = eu.usuario || {};
         document.getElementById('titulo').textContent = `Bem-vindo, ${usuario.nome || ''}!`;
-        const validade = eu.trial_expira_em ? new Date(eu.trial_expira_em).toLocaleDateString('pt-BR') : '';
+        // ADR-015: não existe mais data de expiração — a conta é gratuita e sem prazo, limitada
+        // por volume de vendas no mês (o medidor fica em Minha Conta, dentro do ERP).
         document.getElementById('resumo').innerHTML =
-          `A loja <strong>${conta.nomeConta || ''}</strong> está liberada em modo <strong>teste</strong>` +
-          (validade ? ` até <strong>${validade}</strong>.` : '.');
+          `A loja <strong>${conta.nomeConta || ''}</strong> está liberada no plano <strong>Gratuito</strong>, ` +
+          'sem prazo de validade — até <strong>100 vendas por mês</strong>.';
         // Handoff para o app do ERP levando o token (SSO leve site → web).
         const webBase = window.NINER_WEB_BASE || 'http://localhost:5173';
         document.getElementById('entrar').setAttribute('href', `${webBase}/#token=${encodeURIComponent(token)}`);

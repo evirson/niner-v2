@@ -1,0 +1,144 @@
+/* ==============================================================================================
+   Backoffice da Vetor — sistema visual enxuto, com os MESMOS design tokens do ERP (spec §3.7),
+   para que as duas telas pareçam o mesmo produto.
+   `color-mix()` é proibido no projeto: use rgba(var(--x-rgb), alpha).
+   ============================================================================================== */
+:root {
+  color-scheme: light dark;
+  --ground: #f5f4f0;      --ground-rgb: 245,244,240;
+  --surface: #ffffff;     --surface-rgb: 255,255,255;
+  --surface-2: #edece6;
+  --ink: #20262a;         --ink-rgb: 32,38,42;
+  --ink-muted: #5c6660;
+  --accent: #1f6f6b;      --accent-rgb: 31,111,107;
+  --accent-contrast: #ffffff;
+  --neon: #2cf5e2;        /* traço da marca — literal nos dois temas (logotipia) */
+  --line: #dee2dc;        --line-strong: #b9beb5;
+  --danger: #a63d29;      --danger-rgb: 166,61,41;
+  --warning: #b8860b;     --warning-rgb: 184,134,11;
+  --field-bg: #e4e6e2;
+  --radius: 12px;
+  --shadow: 0 1px 3px rgba(0,0,0,.08);
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ground: #12181a;    --ground-rgb: 18,24,26;
+    --surface: #1a2225;   --surface-rgb: 26,34,37;
+    --surface-2: #202a2d;
+    --ink: #e7ecec;       --ink-rgb: 231,236,236;
+    --ink-muted: #93a19e;
+    --accent: #4fbdb2;    --accent-rgb: 79,189,178;
+    --accent-contrast: #0d1b1a;
+    --neon: #2cf5e2;
+    --line: #2a3538;      --line-strong: #4a5457;
+    --danger: #e2836a;    --danger-rgb: 226,131,106;
+    --warning: #d9a441;   --warning-rgb: 217,164,65;
+    --field-bg: #2a3336;
+  }
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--ground); color: var(--ink);
+  font-family: -apple-system, "Segoe UI", Roboto, sans-serif; font-size: 14px; line-height: 1.5;
+}
+h1, h2, h3 { font-family: Georgia, "Iowan Old Style", serif; font-weight: 500; margin: 0; }
+a { color: var(--accent); }
+:focus-visible { outline: 3px solid rgba(var(--accent-rgb), .6); outline-offset: 2px; border-radius: 4px; }
+.mono, .num { font-variant-numeric: tabular-nums; }
+.muted { color: var(--ink-muted); }
+.erro { color: var(--danger); }
+
+/* ---- estrutura ---- */
+.layout { display: grid; grid-template-columns: 232px 1fr; min-height: 100vh; }
+.lateral {
+  background: var(--surface-2); border-right: 1px solid var(--line);
+  display: flex; flex-direction: column; padding: 20px 14px; gap: 4px;
+}
+.marca { font-family: Georgia, serif; font-size: 22px; padding: 0 10px 18px; }
+.marca b { color: var(--accent); font-weight: 500; }
+.marca-linha { display: inline-flex; align-items: center; gap: 9px; }
+.marca small { display: block; font-family: -apple-system, sans-serif; font-size: 11px;
+  letter-spacing: .1em; text-transform: uppercase; color: var(--ink-muted); }
+.lateral a {
+  display: block; padding: 10px 12px; border-radius: 8px; color: var(--ink);
+  text-decoration: none; font-weight: 500;
+}
+.lateral a:hover { background: rgba(var(--ink-rgb), .06); }
+.lateral a.ativo { background: rgba(var(--accent-rgb), .14); color: var(--accent); }
+.lateral .rodape { margin-top: auto; padding: 12px 12px 0; border-top: 1px solid var(--line);
+  font-size: 12px; color: var(--ink-muted); }
+.conteudo { padding: 28px 32px; overflow: auto; }
+.topo-pagina { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; margin-bottom: 22px; }
+.topo-pagina h1 { font-size: 26px; }
+
+/* ---- cartões e métricas ---- */
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
+  padding: 18px 20px; box-shadow: var(--shadow); }
+.grade-metricas { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 14px; }
+.metrica .rotulo { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-muted); }
+.metrica .valor { font-size: 28px; font-family: Georgia, serif; font-variant-numeric: tabular-nums; margin-top: 4px; }
+.metrica .apoio { font-size: 12px; color: var(--ink-muted); }
+.secao { margin-top: 26px; }
+.secao > h2 { font-size: 18px; margin-bottom: 12px; }
+
+/* ---- tabela ---- */
+table { width: 100%; border-collapse: collapse; }
+th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--line); }
+th { font-size: 11px; letter-spacing: .07em; text-transform: uppercase; color: var(--ink-muted); font-weight: 600; }
+tbody tr:hover { background: rgba(var(--ink-rgb), .03); }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+.tabela-rolagem { overflow-x: auto; }
+
+/* ---- formulário ---- */
+.campo { display: flex; flex-direction: column; gap: 5px; margin-bottom: 14px; }
+.campo label { font-size: 12px; color: var(--ink-muted); font-weight: 600; }
+input, select, textarea {
+  background: var(--field-bg); color: var(--ink); border: 1px solid var(--line-strong);
+  border-radius: 7px; padding: 9px 10px; font: inherit; width: 100%;
+}
+input:focus, select:focus, textarea:focus { outline: none; border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(var(--accent-rgb), .25); }
+.linha { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 0 16px; }
+.check { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; }
+.check input { width: auto; }
+
+/* ---- botões ---- */
+.btn { border: 1px solid transparent; border-radius: 8px; padding: 9px 16px; font: inherit;
+  font-weight: 600; cursor: pointer; }
+.btn-primario { background: var(--accent); color: var(--accent-contrast); }
+.btn-primario:hover:not(:disabled) { filter: brightness(0.92); }
+.btn-secundario { background: transparent; color: var(--ink); border-color: var(--line-strong); }
+.btn:disabled { opacity: .55; cursor: not-allowed; }
+.acoes { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+
+/* ---- etiquetas de estado ---- */
+.tag { display: inline-block; padding: 2px 9px; border-radius: 999px; font-size: 12px; font-weight: 600; }
+.tag-ok { background: rgba(var(--accent-rgb), .16); color: var(--accent); }
+.tag-atencao { background: rgba(var(--warning-rgb), .18); color: var(--warning); }
+.tag-perigo { background: rgba(var(--danger-rgb), .16); color: var(--danger); }
+.tag-neutro { background: rgba(var(--ink-rgb), .10); color: var(--ink-muted); }
+
+/* ---- barra de uso (mesma leitura do painel do lojista) ---- */
+.barra { height: 8px; border-radius: 999px; background: var(--field-bg); overflow: hidden; min-width: 90px; }
+.barra > span { display: block; height: 100%; background: var(--accent); }
+.barra.atencao > span { background: var(--warning); }
+.barra.perigo > span { background: var(--danger); }
+
+/* ---- login ---- */
+.tela-login { min-height: 100vh; display: grid; place-items: center; padding: 20px; }
+.tela-login .card { width: 100%; max-width: 380px; }
+.tela-login h1 { font-size: 24px; margin-bottom: 4px; }
+
+/* ---- linha do tempo do lead ---- */
+.tempo { list-style: none; margin: 0; padding: 0; }
+.tempo li { display: grid; grid-template-columns: 150px 130px 1fr; gap: 12px; padding: 8px 0;
+  border-bottom: 1px solid var(--line); font-size: 13px; }
+.tempo .quando { color: var(--ink-muted); font-variant-numeric: tabular-nums; }
+
+@media (max-width: 860px) {
+  .layout { grid-template-columns: 1fr; }
+  .lateral { flex-direction: row; flex-wrap: wrap; border-right: none; border-bottom: 1px solid var(--line); }
+  .lateral .rodape { margin-top: 0; border-top: none; }
+  .conteudo { padding: 20px 16px; }
+}

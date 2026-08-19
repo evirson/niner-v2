@@ -668,10 +668,19 @@ Tabelas do **Plano de Controle** (o negócio da Vetor). São **globais**: **não
 tenant(id_tenant PK, nome_conta, slug UNIQUE, email_contato,
        status ENUM('TRIAL','ATIVA','INADIMPLENTE','SUSPENSA','CANCELADA'),
        criado_em, cancelado_em)
--- planos de preço (tiers) e seus limites
+-- planos de preço (faixas de VOLUME DE VENDAS — ADR-015). As linhas são GERADAS a partir de
+-- parametro_comercial por plataforma.gerar_faixas_planos(); os limites estruturais existem por
+-- histórico e ficam NULL (= ilimitado): o produto não vende funcionalidade, vende volume.
 plano(id_plano PK, nome, descricao, ciclo_padrao ENUM('MENSAL','ANUAL'),
       preco_mensal NUMERIC(12,2), preco_anual NUMERIC(12,2), ativo BOOL,
+      limite_vendas_mes INT,                  -- NULL = ilimitado; 100 no Gratuito
+      faixa_ordem SMALLINT, gratuito BOOL,    -- faixa 0 = Gratuito; n = passo × n vendas/mês
       limite_canais INT, limite_produtos INT, limite_usuarios INT, limite_pedidos_mes INT)
+-- parâmetros comerciais da Vetor (singleton) — preço/tolerância mudam por UPDATE, sem deploy
+parametro_comercial(id PK CHECK(id=1), vendas_gratuito_mes INT, tolerancia_vendas INT,
+      preco_base NUMERIC(12,2), passo_vendas INT, fator_faixa NUMERIC(4,3),
+      preco_maximo NUMERIC(12,2), vendas_maximo INT, desconto_anual NUMERIC(4,3),
+      atualizado_em)
 assinatura(id_assinatura PK, id_tenant FK, id_plano FK,
            status ENUM('TRIAL','ATIVA','INADIMPLENTE','SUSPENSA','CANCELADA'),
            ciclo ENUM('MENSAL','ANUAL'), trial_expira_em TIMESTAMPTZ,
@@ -692,7 +701,10 @@ webhook_gateway(id PK, gateway VARCHAR, evento_id UNIQUE, tipo, payload JSONB,
 -- contadores para enforcement de limites do plano (R19)
 uso_tenant(id_tenant PK/FK, periodo DATE,        -- competência mensal p/ pedidos/mês
            qtd_canais INT, qtd_produtos INT, qtd_usuarios INT, qtd_pedidos_mes INT,
-           atualizado_em)
+           competencia_vendas DATE, qtd_vendas_mes INT,   -- cota do ADR-015 (zera na virada)
+           qtd_empresas SMALLINT, atualizado_em)
+-- histórico mensal fechado: alimenta o gráfico do painel e a recomendação de faixa no upgrade
+uso_venda_mes(id_tenant FK, competencia DATE, qtd_vendas INT, fechado_em, PK(id_tenant,competencia))
 -- staff da plataforma (separado dos usuários do tenant, R18)
 staff(id_staff PK, nome, email UNIQUE, senha_hash, ativo BOOL,
       papel ENUM('SUPER_ADMIN','SUPORTE','FINANCEIRO'))
@@ -702,8 +714,37 @@ impersonacao_log(id PK, id_staff FK, id_tenant FK, iniciado_em, encerrado_em, mo
 Notas:
 - **Adapter de gateway (ADR-008, D3 adiada):** `id_gateway_*` e `pagamento.gateway` são preenchidos por um adapter abstrato; no v1 a cobrança pode ser **manual/registro** até integrar um provedor real (Asaas/Iugu/…).
 - **Efeitos de cobrança idempotentes (P2):** marcar fatura paga, reativar/suspender assinatura passam pelo **outbox**; `webhook_gateway.evento_id UNIQUE` + `FOR UPDATE SKIP LOCKED` no worker.
-- **Enforcement (R19):** `uso_tenant` é atualizado por eventos de domínio (produto criado, canal conectado, pedido importado); um *guard* no caminho de escrita compara `uso_tenant` vs `plano` e bloqueia com Problem Details ao estourar tier estrutural. Pedidos/mês nunca dropam (§R19).
-- **Gate de login do ERP:** tenant `SUSPENSA`/`CANCELADA` → `/api/v1` nega; `INADIMPLENTE` → modo restrito (regra D10, em aberto).
+- **Enforcement (R19, reescrito pelo ADR-015):** a **única** dimensão medida é **venda emitida no mês**, somando todas as empresas do tenant. `LimiteVendasService` (pacote `plataforma.uso`) é chamado por `PdvVendaService.efetivarVenda()` **na mesma transação da venda**, em **uma chamada só** — `registrarVenda()` incrementa e valida junto (`INSERT … ON CONFLICT DO UPDATE … RETURNING`, que trava a linha do tenant e serializa vendas concorrentes); checar antes e incrementar depois deixaria uma janela em que duas vendas simultâneas passariam pelo mesmo último slot. Estourado o limite, a exceção derruba a transação inteira e o incremento volta junto. Limite efetivo = `plano.limite_vendas_mes` + **tolerância** (`assinatura.tolerancia_vendas` ?? `parametro_comercial.tolerancia_vendas`); estourado, responde **409 Problem Details** (`type=.../limite-de-vendas`) com a faixa recomendada. Reset da competência é *lazy* (primeira venda do mês fecha a linha em `uso_venda_mes` e zera). **Contador é incremento puro:** cancelar venda **não** devolve cota; **não contam** importação de dados legada (`ContasReceberImportador`) nem devolução. Nada além da venda é bloqueado — login, relatórios e financeiro seguem abertos. Os limites estruturais (canais/produtos/usuários/CNPJs) **não** são aplicados: são ilimitados em todos os planos.
+- **Contador cruza os dois planos (P9):** o domínio (venda) escreve num contador de **plataforma**. É a única travessia permitida, confinada a `LimiteVendasService` — nenhum outro serviço de domínio toca `plataforma.*`.
+- **Gate de login do ERP:** tenant `SUSPENSA`/`CANCELADA` → `/api/v1` nega; `INADIMPLENTE` → modo restrito (regra D10, em aberto). **Signup novo não usa mais `TRIAL`** (ADR-015): nasce `ATIVA` no plano Gratuito, sem `trial_expira_em`; o valor do ENUM fica só para histórico.
+- **Aquisição/marketing (ADR-017):** `lead`, `visita_site` e `evento_marketing` são do control-plane — dados de **visitante do site**, anteriores a qualquer tenant, e por isso nunca podem cair sob RLS de tenant. Ver §3.3.12.
+
+### 3.3.12 Módulo `plataforma` — aquisição e marketing (ADR-017)
+
+Dados do **funil de aquisição**: existem **antes** de qualquer tenant (o visitante ainda não é cliente), são do Plano de Controle e **não** entram no RLS de tenant (P9). Rastreamento **first-party**: um `visitante_id` (UUID em cookie próprio) e nada de pixel de terceiro sem consentimento (LGPD).
+
+```sql
+-- visitante identificado (formulário, WhatsApp, signup) — o "lead" do gerenciador
+lead(id_lead PK, visitante_id UUID, nome, email, telefone_whatsapp, nome_loja,
+     utm_source, utm_medium, utm_campaign, utm_content, utm_term,
+     referrer, pagina_entrada, dispositivo, cidade_ip, estado_ip,
+     status ENUM('NOVO','CONTATADO','QUALIFICADO','CONVERTIDO','PERDIDO'),
+     id_tenant FK NULL,                 -- preenchido quando o lead vira conta (signup)
+     consentimento_em, criado_em, atualizado_em,
+     UNIQUE(email))
+-- pageview anônimo (só o que a própria Vetor coleta, sem cookie de terceiro)
+visita_site(id BIGINT PK, visitante_id UUID, sessao_id UUID, caminho, referrer,
+     utm_source, utm_medium, utm_campaign, dispositivo, pais, criado_em)
+-- evento de interesse: clique em WhatsApp/Instagram, início de signup, vídeo, scroll 90%…
+evento_marketing(id BIGINT PK, visitante_id UUID, id_lead FK NULL, tipo, rotulo,
+     valor NUMERIC(12,2), payload JSONB, criado_em)
+```
+Notas:
+- **O `visitante_id` amarra o funil inteiro:** o mesmo UUID aparece em `visita_site` (anônimo), em `evento_marketing` (interesse) e em `lead`/`assinar` (identificado). É o que permite responder *"a campanha X trouxe quantos signups?"* sem ferramenta externa.
+- **`POST /api/publico/eventos` aceita lote** e é *rate-limited*; é o único endpoint de escrita anônima de volume, então nunca dispara efeito de negócio — só grava.
+- **Signup carrega o `visitante_id`** (`AssinarRequest.visitanteId`, opcional): fecha o funil marcando `lead.status='CONVERTIDO'` + `lead.id_tenant`.
+- **Sem PII no evento anônimo.** IP não é armazenado bruto — só cidade/estado derivados; `payload` nunca recebe e-mail/telefone (isso é `lead`, que tem consentimento registrado).
+- **Agregação para o painel** é consulta sobre estas três tabelas (volume baixo: um site institucional). Materialização diária só entra se a consulta passar do orçamento de p95 (§3.6).
 
 ## 3.4 Contratos de API (amostra do padrão)
 
@@ -720,10 +761,15 @@ POST   /webhooks/mercadolivre                recepção de notificações (públ
 
 # --- Plano de Controle e site público (v2.0) ---
 # superfície pública (site/ — sem auth ou auth leve + rate limit)
-POST   /api/publico/assinar                  signup: cria tenant + admin + trial (60d)  [R12]
-GET    /api/publico/planos                    catálogo de planos e preços               [R11]
-POST   /api/publico/assinaturas/checkout      escolhe plano + inicia pagamento          [R14]
+POST   /api/publico/assinar                  signup: cria tenant + admin no plano Gratuito [R12]
+GET    /api/publico/planos                    catálogo: Gratuito + faixas por volume    [R11]
+POST   /api/publico/assinaturas/checkout      escolhe faixa + inicia pagamento (MP)     [R14]
+POST   /api/publico/leads                     formulário do site → lead (ADR-017)
+POST   /api/publico/eventos                   beacon de visita/evento, em lote          [ADR-017]
+POST   /api/publico/webhooks/mercadopago      notificação do gateway (idempotente)      [ADR-016]
 # superfície do tenant (web/ — autogestão da própria assinatura, JWT de tenant)
+GET    /api/v1/minha-conta                    plano, cota do mês, histórico, empresas   [ADR-015]
+POST   /api/v1/empresas                       inclui novo CNPJ no tenant (ADMIN)
 GET    /api/v1/assinatura                     status, plano, uso vs. limites            [R15]
 POST   /api/v1/assinatura/upgrade             troca de plano (proration)                [R15]
 POST   /api/v1/assinatura/cancelar            cancela ao fim do ciclo                    [R15]
@@ -734,6 +780,11 @@ GET    /api/admin/tenants/{id}                ficha do tenant (plano, faturas, s
 POST   /api/admin/tenants/{id}/suspender      suspende/reativa                          [R18]
 POST   /api/admin/tenants/{id}/impersonar     token efêmero + log de auditoria          [R21]
 GET    /api/admin/faturas?status=VENCIDA      inadimplência / régua de dunning          [R16]
+GET    /api/admin/marketing/funil             visitas→leads→signups→pagantes por período [ADR-017]
+GET    /api/admin/marketing/leads             lista/filtra leads (origem, UTM, status)   [ADR-017]
+PUT    /api/admin/marketing/leads/{id}        atualiza status/anotação do lead           [ADR-017]
+GET    /api/admin/comercial/parametros        preço-base, passo, fator, teto, tolerância [ADR-015]
+PUT    /api/admin/comercial/parametros        grava e REGERA as faixas de plano          [ADR-015]
 POST   /webhooks/gateway                       notificação do gateway (idempotente)      [R16]
 ```
 
@@ -845,6 +896,23 @@ V030  vendas: venda/venda_item/venda_pagamento (PDV) · devolucao + vale_mercado
 V031  balanço de estoque (produto_balanco) · transferência entre empresas
 V032  comum.arquivo_compartilhado (cache de PDF p/ envio por WhatsApp, token 24h)
 V033  cfg_plano_contas ganha grupo_dre/grupo_dfc/sinal/inclui_dre (DRE + Fluxo de Caixa)
+V034  fiscal: tabelas de referência (cfg_uf_autorizador, NCM/CEST, IBPT)
+V035  fiscal: documento_fiscal + fiscal_config_empresa + certificado (ENUM ambiente_fiscal)
+V036  fiscal: arquivamento de XML (bucket privado, ADR-014)
+```
+**Modelo comercial novo (ADR-015/016/017) — aplicadas em 2026-08-18:**
+```
+V037  plataforma.parametro_comercial (singleton) + plano ganha limite_vendas_mes/
+      faixa_ordem/gratuito + função plataforma.gerar_faixas_planos() (UPDATE/INSERT por
+      faixa_ordem, NUNCA DELETE — há FK de assinatura e o preço histórico importa) +
+      seed do Gratuito e das faixas; desativa os 3 planos de V012
+V038  medição de vendas: uso_tenant ganha competencia_vendas/qtd_vendas_mes/qtd_empresas ·
+      uso_venda_mes (histórico mensal) · assinatura ganha tolerancia_vendas (override) ·
+      migra tenants TRIAL existentes para ATIVA no plano Gratuito
+V039  cobrança Mercado Pago (ADR-016): fatura ganha id_plano/ciclo/link_pagamento/
+      pix_copia_cola/qr_code_base64/expira_em/pago_em · webhook_gateway ganha
+      tentativas/proxima_tentativa (retentativa com espera crescente + dead-letter)
+V040  aquisição/marketing (ADR-017): lead · visita_site · evento_marketing
 ```
 > ⚠️ A numeração acima é a **real do repositório** (V001–V033, conferida em 2026-08-14). A
 > faixa "V001–V091" citada no roadmap (§4) era a estimativa original da spec e **não**
@@ -1023,7 +1091,7 @@ Data: · Decisores:
 Positivas: · Negativas/dívidas: · Gatilho de revisão: [métrica ou evento que faria rever]
 ```
 
-ADRs já previstos: ADR-001 monolito modular; ADR-002 outbox sobre Postgres sem broker; ADR-003 biblioteca de UI; **ADR-004 estratégia de reserva de estoque: reservar no `recebido` + expiração configurável por canal (Q2 fechada 2026-07-10; §3.3.5);** ADR-005 cifragem de credenciais; **ADR-006 isolamento de tenant (banco único + `id_tenant` + Postgres RLS; §3.1.1); ADR-007 topologia do control-plane (uma API/3 superfícies + 3 apps React, API stateless, supera o non-goal §2.3, gatilhos de split); ADR-008 adapter de gateway de cobrança (provedor a definir — D3); ADR-009 auth/identidade multi-tenant (duas populações de usuário, claims JWT por `aud`, papéis de staff × RBAC do tenant); ADR-010 financeiro do lojista fora do v1 (Q5 fechada 2026-07-10, **revisado por ADR-012**; §3.3.7); ADR-011 framework do site público: **Astro (SSG)** — decidido 2026-07-10, prioriza SEO/Core Web Vitals para a landing/planos; `web`/`admin` seguem React+Vite; **ADR-012 crediário + caixa + contas a pagar antecipados da Fase 2 (revisão de Q5/ADR-010, 2026-07-16, em duas rodadas) — `tipo_carteira`/`moeda`/`contas_receber`/`caixa_mestre`/`caixa_detalhe` entram via V025; `contas_pagar` entra via V026; só `conta_corrente(_movimento)` continua fora (§3.3.7).** **ADR-013 object storage das imagens de produto: Firebase Storage/GCS, bucket público (2026-07-23); ADR-014 object storage privado: MinIO (S3) auto-hospedado, dois buckets — fiscal com WORM/5 anos e privado apagável (2026-08-17) — as fotos de produto continuam no GCS.**
+ADRs já previstos: ADR-001 monolito modular; ADR-002 outbox sobre Postgres sem broker; ADR-003 biblioteca de UI; **ADR-004 estratégia de reserva de estoque: reservar no `recebido` + expiração configurável por canal (Q2 fechada 2026-07-10; §3.3.5);** ADR-005 cifragem de credenciais; **ADR-006 isolamento de tenant (banco único + `id_tenant` + Postgres RLS; §3.1.1); ADR-007 topologia do control-plane (uma API/3 superfícies + 3 apps React, API stateless, supera o non-goal §2.3, gatilhos de split); ADR-008 adapter de gateway de cobrança (provedor a definir — D3); ADR-009 auth/identidade multi-tenant (duas populações de usuário, claims JWT por `aud`, papéis de staff × RBAC do tenant); ADR-010 financeiro do lojista fora do v1 (Q5 fechada 2026-07-10, **revisado por ADR-012**; §3.3.7); ADR-011 framework do site público: **Astro (SSG)** — decidido 2026-07-10, prioriza SEO/Core Web Vitals para a landing/planos; `web`/`admin` seguem React+Vite; **ADR-012 crediário + caixa + contas a pagar antecipados da Fase 2 (revisão de Q5/ADR-010, 2026-07-16, em duas rodadas) — `tipo_carteira`/`moeda`/`contas_receber`/`caixa_mestre`/`caixa_detalhe` entram via V025; `contas_pagar` entra via V026; só `conta_corrente(_movimento)` continua fora (§3.3.7).** **ADR-013 object storage das imagens de produto: Firebase Storage/GCS, bucket público (2026-07-23); ADR-014 object storage privado: MinIO (S3) auto-hospedado, dois buckets — fiscal com WORM/5 anos e privado apagável (2026-08-17) — as fotos de produto continuam no GCS.** **ADR-015 modelo comercial: plano Gratuito sem prazo medido por vendas/mês + faixas por volume geradas por fórmula (2026-08-18) — supera o trial de 60 dias (D2) e os 3 planos por funcionalidade (D1); ADR-016 gateway de cobrança: Mercado Pago, PIX avulso + recorrência (2026-08-18) — fecha D3; ADR-017 rastreamento de aquisição first-party próprio (2026-08-18) — `lead`/`visita_site`/`evento_marketing` no control-plane, sem pixel de terceiro sem consentimento (LGPD).**
 
 ---
 
@@ -1083,6 +1151,99 @@ Arquivo privado vai para **MinIO auto-hospedado**, subindo no **`docker-compose`
 **Gatilho de revisão:** o volume ou a criticidade justificarem VPS dedicado (a migração já prevista), ou a fatura/operação do MinIO auto-hospedado ficar mais cara que R2 — cujo egress zero seria o próximo destino natural, com o mesmo adapter.
 
 **Detalhamento operacional (buckets, política de acesso, dev, produção e backup): `docs/infra/armazenamento-privado-minio.md`.**
+
+# ADR-015: Modelo comercial — plano Gratuito medido por vendas/mês e faixas por volume   Status: Aceito
+Data: 2026-08-18 · Decisores: Evirson (Vetor)
+
+## Contexto
+A v2.0 nasceu com **trial de 60 dias sem cartão** (D2) e **3 planos** limitados por dimensões estruturais — canais, SKUs, usuários, pedidos/mês (D1; seed `V012` com preços provisórios). Duas coisas mudaram desde então:
+
+(a) **O produto que existe não é o do plano de preços.** O que está implementado é **ERP de loja física** — PDV, caixa, crediário, contas a pagar, estoque, DRE — mais o **módulo fiscal (NFC-e/NF-e)**, que sequer aparecia no plano comercial. A integração com marketplace, eixo dos 3 planos ("1 canal / 3 canais / todos"), **não tem uma linha de domínio implementada** (`canais/`, `pedidos/`, `precos/`, `integracao/` só têm `package-info.java`). Cobrar por canal conectado é cobrar pelo que não existe.
+
+(b) **Trial por tempo pune o cliente que o produto quer atrair.** A loja pequena leva semanas para migrar cadastro e meses para confiar o caixa ao sistema; no fiscal, ainda precisa de certificado, CSC e homologação. Prazo cria uma data em que o lojista **perde acesso ao que já digitou** — o oposto da adoção que este produto exige.
+
+Soma-se o fato de que **o enforcement nunca existiu**: `plataforma.uso_tenant` é escrito uma única vez, no signup (`SignupService`), e nenhum caminho de escrita compara uso × plano. R19 estava só no papel — trocar a dimensão medida não custa refatoração, custa a implementação que faltava de qualquer forma.
+
+## Decisão
+**O eixo de cobrança passa a ser um só: vendas emitidas por mês, somando todas as empresas (CNPJs) do tenant.** Nenhum recurso é vendido à parte — fiscal, canais, usuários, produtos, CNPJs e telas são **idênticos** no gratuito e no pago. *Paga-se volume, não funcionalidade.*
+
+1. **Plano Gratuito sem prazo de validade** — até **100 vendas/mês**, contador zerando na virada do mês. Substitui o trial de 60 dias (supera D2). O tenant nasce `ATIVA` no plano Gratuito, `assinatura.trial_expira_em` fica `NULL` e o status `TRIAL` deixa de ser emitido em signup novo (o valor do ENUM permanece, para o histórico).
+2. **Tolerância configurável pela plataforma** — estourada a cota, o tenant ainda emite mais **X** vendas antes de qualquer bloqueio. A venda 101 não pode parar a loja no meio do movimento: primeiro avisa, depois tolera, só então bloqueia. `X` é parâmetro **da Vetor**, não do tenant.
+3. **Faixas pagas geradas por fórmula, não digitadas** — faixa *n* cobre `passo × n` vendas/mês (passo inicial = 500) e custa `preco_base × (1 + f + … + f^(n-1))`, onde **`f = 1` dá crescimento linear** (`n × preco_base`) e **`f < 1` atenua** o incremento de cada faixa. Tudo limitado por um **preço máximo**. Anual = mensal × 12 × (1 − desconto), desconto inicial **15%**, pago em PIX mensal ou recorrência (ADR-016).
+4. **Os parâmetros são dado, não código** — vivem em `plataforma.parametro_comercial` (singleton) e as linhas de `plataforma.plano` são **regeneradas** a partir deles por `plataforma.gerar_faixas_planos()`, que faz `UPDATE`/`INSERT` por `faixa_ordem` e **nunca `DELETE`** (há FK de `assinatura` e o preço histórico importa). Mudar preço deixa de ser deploy.
+5. **A cota conta venda emitida e cancelamento não devolve** — incremento puro, num único ponto (`PdvVendaService.finalizar()`, mesma transação da venda). **Não contam:** importação de dados legada (`ContasReceberImportador`, que insere `venda` histórica e queimaria a cota no dia da migração) e devolução/vale (`venda_devolucao`).
+
+## Alternativas consideradas
+1. **Manter o trial por tempo e só rebaixar preços** — prós: nada a implementar. Contras: mantém a data em que o lojista perde o sistema, no produto em que a migração leva semanas, e segue vendendo canais inexistentes. Rejeitada.
+2. **Freemium por funcionalidade** (fiscal só no pago) — prós: conversão mais previsível, padrão de mercado. Contras: o fiscal é o gancho de aquisição do pequeno varejo; travá-lo empurra o lojista para o emissor gratuito da SEFAZ, que resolve o problema **fora** do Niner. Rejeitada por decisão do dono do produto ("não limita ferramentas disponíveis").
+3. **Cobrança por transação** (por venda/nota emitida) — prós: alinhamento total entre preço e uso. Contras: imprevisível para o lojista, o oposto da promessa de previsibilidade do §4 do plano de negócio. Rejeitada — faixa é a versão previsível da mesma ideia.
+4. **Limite por faturamento (R$)** — prós: proxy melhor do valor capturado. Contras: exige que o lojista aceite o ERP lendo seu faturamento como base de cobrança, e pune ticket alto/volume baixo, quando o custo real segue o **número de documentos**, não o valor deles. Rejeitada.
+5. **Cobrar por CNPJ** — rejeitada explicitamente: filial/CNPJ novo é decisão fiscal, não de volume; cobrar por CNPJ cria o incentivo de espremer tudo num só, que piora o dado e o fiscal. Daí a decisão de **CNPJs ilimitados** com a cota somando todos.
+
+## Consequências
+**Positivas:** uma dimensão só para medir, explicar e vender; o gratuito não expira, o que remove a data de perda de acesso e viabiliza a migração lenta que o produto exige; o preço acompanha o crescimento do lojista sem negociação; preço e tolerância mudam por `UPDATE`, sem deploy; e o enforcement que faltava (R19) nasce implementado num único ponto de escrita.
+**Negativas/dívidas:** cria no PDV um caminho que pode **bloquear venda** — exige teste de regressão explícito, aviso muito antes do limite e tolerância bem calibrada; o contador é estado de **plataforma** atualizado pelo **domínio** (cruza os dois planos, P9 — por isso fica confinado a um serviço só, `LimiteVendasService`); cancelamento não devolver cota é simplificação deliberada que vai gerar pergunta de suporte; e a faixa linear (`f = 1`) fica cara no topo — o `preco_maximo` mitiga, mas é calibragem a acompanhar.
+**Gatilho de revisão:** (a) marketplaces entrarem em produção — pedido importado é venda que **não** passa pelo PDV e precisa cair na mesma conta, senão o multicanal sai de graça; (b) suporte recebendo reclamação de bloqueio no meio do expediente; (c) faixa alta perdendo cliente para concorrente — o sinal de trocar `f = 1` por atenuação.
+
+**Detalhamento da tela do assinante: `docs/telas/painel-assinatura.md`. Parâmetros e fórmula: §5 de `docs/PLANO-DE-NEGOCIO.md`.**
+
+# ADR-016: Gateway de cobrança da assinatura — Mercado Pago (fecha D3)   Status: Aceito
+Data: 2026-08-18 · Decisores: Evirson (Vetor)
+
+## Contexto
+D3 estava **adiada** desde 2026-07-08: adapter abstrato (ADR-008), cobrança manual no início, candidatos Asaas/Iugu/Vindi/Pagar.me. Com o ADR-015 o produto ganha um momento de conversão real — o lojista estoura a cota e precisa pagar **naquele instante**, dentro do ERP —, e cobrança manual passa a ser inaceitável: cada dia entre "quero pagar" e "voltei a vender" é churn.
+
+Peso decisivo: **o Mercado Pago já está integrado por esta equipe em dois projetos** (`ecommerce-revo` e `s7classificados`), com PIX e recorrência funcionando — o custo de aprender webhook, idempotência e conciliação já foi pago. Somam-se PIX nativo (meio dominante no varejo pequeno), recorrência (`preapproval`) no mesmo provedor e a proximidade com o Mercado Livre, primeiro canal do roadmap.
+
+## Decisão
+**Mercado Pago** é o gateway da assinatura, atrás da interface `GatewayCobranca` prevista no ADR-008 — a abstração fica, o provedor deixa de ser 🔴. Dois modos, à escolha do lojista:
+- **PIX avulso mensal** (Payments API) — a fatura da competência recebe QR + copia-e-cola; pago, o webhook confirma e a assinatura segue ativa.
+- **Recorrência automática** (Preapproval) — cartão, com o `preapproval_id` em `assinatura.id_gateway_assinatura`.
+
+Regras que não são opcionais:
+- O webhook (`POST /api/publico/webhooks/mercadopago`) **só grava** em `plataforma.webhook_gateway` (único por `gateway + evento_id`) e responde 200. **Nenhum efeito de cobrança no handler HTTP** — quem aplica é um worker `@Scheduled` com `FOR UPDATE SKIP LOCKED` (P2/P6), mesmo padrão dos marketplaces.
+- Assinatura da notificação (`x-signature`) **validada antes** de gravar; payload bruto preservado em `jsonb` (P3).
+- Credenciais (access token, chave de webhook) **fora do repositório** — variável de ambiente/secret, mesma regra de `api/secrets/`. Nunca no banco, nunca no bundle do front.
+- O valor cobrado **nunca** vem do cliente: é recalculado no servidor a partir da faixa e do ciclo.
+
+## Alternativas consideradas
+1. **Asaas / Iugu / Vindi** — prós: nascidas para assinatura recorrente BR, régua de dunning pronta, algumas com NFS-e (D6). Contras: nenhuma integração pronta em casa; o item mais caro aqui é reaprender webhook/conciliação. Adiadas, não rejeitadas para sempre.
+2. **Stripe** — prós: melhor experiência de desenvolvimento do mercado. Contras: PIX limitado/indireto no Brasil, e o público-alvo paga em PIX. Rejeitada.
+3. **Cobrança manual (status quo)** — prós: zero integração. Contras: incompatível com o gatilho de conversão do ADR-015 (lojista bloqueado esperando alguém conferir extrato). Rejeitada.
+4. **Boleto** — fora do v1: custo por emissão e liquidação em D+1/D+3, para um público que paga PIX na hora.
+
+## Consequências
+**Positivas:** reaproveita integração já feita e testada em dois sistemas da casa; PIX e recorrência no mesmo provedor; conversão dentro do próprio ERP, no momento do bloqueio; o adapter mantém a saída aberta.
+**Negativas/dívidas:** acopla a receita da Vetor a um provedor que também é dono do maior marketplace do roadmap (concentração); a taxa do MP entra direto na margem das faixas baixas — `preco_base` precisa ser calibrado **já com ela**; e passa a existir um segundo relógio de idempotência (webhook de gateway) para operar e monitorar.
+**Gatilho de revisão:** taxa efetiva acima do que a faixa baixa suporta; indisponibilidade recorrente do webhook; ou necessidade de NFS-e automática da assinatura (D6) que o MP não cubra.
+
+# ADR-017: Rastreamento de aquisição — first-party próprio, dentro do control-plane   Status: Aceito
+Data: 2026-08-18 · Decisores: Evirson (Vetor)
+
+## Contexto
+Com o ADR-015 a aquisição vira o gargalo do negócio: o produto passa a ter um gratuito sem prazo, então o funil deixa de ser "trial→pago" e passa a ser **visitante → lead → conta gratuita → faixa paga**, com meses entre as pontas. O dono do produto quer decidir marketing (Instagram, WhatsApp, campanhas) **com base em dado próprio**, dentro do gerenciador que a Vetor vai construir — não em painel de terceiro.
+
+Três forças moldam a decisão: (a) o site é **Astro/SSG** (ADR-011) e a métrica de Core Web Vitals é parte da estratégia de SEO — script de terceiro é justamente o que degrada isso; (b) **LGPD**: pixel de rede social grava dado pessoal em servidor de terceiro antes de qualquer consentimento; (c) o dado precisa **cruzar com o tenant** ("a campanha X trouxe assinantes que hoje pagam quanto?"), e isso é impossível num painel externo que não conhece `plataforma.assinatura`.
+
+## Decisão
+**Rastreamento próprio, first-party, gravado no control-plane** — três tabelas (`lead`, `visita_site`, `evento_marketing`, §3.3.12) alimentadas por um **beacon mínimo** servido pelo próprio site, com um `visitante_id` (UUID) em **cookie first-party**. O mesmo `visitante_id` viaja do primeiro pageview anônimo até o `POST /api/publico/assinar`, que grava `lead.id_tenant` — é o que fecha o funil ponta a ponta.
+
+- **Sem pixel de terceiro por padrão.** GA4/Meta Pixel só entram atrás de **consentimento explícito** e nunca são a fonte de verdade do gerenciador.
+- **UTM é capturado na entrada e persistido na sessão** (`utm_source/medium/campaign/content/term` + `referrer` + página de entrada), porque o signup costuma acontecer dias depois, em visita direta.
+- **Sem PII no evento anônimo:** IP não é gravado bruto (só cidade/estado derivados); e-mail e telefone só existem em `lead`, com `consentimento_em` registrado.
+- **Botões de WhatsApp e Instagram são eventos medidos** (`CLIQUE_WHATSAPP`, `CLIQUE_INSTAGRAM`), não links soltos — é o principal sinal de intenção deste público, e é o que permite comparar campanha por canal.
+- **O beacon nunca pode quebrar nem atrasar a página:** `navigator.sendBeacon`, falha silenciosa, zero dependência externa, endpoint em lote e *rate-limited*.
+
+## Alternativas consideradas
+1. **Google Analytics 4** — prós: grátis, pronto, relatórios ricos. Contras: não cruza com `assinatura`/`fatura` (a pergunta que importa é receita por campanha), amostragem, atrito de LGPD e peso no CWV do site que a mesma estratégia quer rankear. Rejeitado como fonte de verdade; admitido como complemento sob consentimento.
+2. **Plausible/Umami auto-hospedado** — prós: leve, privacy-first, pronto. Contras: mais um serviço para operar e, de novo, **outro banco** — o cruzamento lead→tenant→receita continuaria manual. Rejeitado.
+3. **Meta Pixel / TikTok Pixel direto** — prós: otimização de campanha paga. Contras: dado pessoal em terceiro antes do consentimento; só entra com consentimento e nunca como base do gerenciador.
+4. **Não medir nada agora** — rejeitada: o gratuito sem prazo torna o custo de aquisição a métrica central, e não dá para calibrar campanha sem saber de onde veio quem converteu.
+
+## Consequências
+**Positivas:** dado de funil no mesmo banco da receita, então "campanha → signup → faixa paga → MRR" é uma consulta, não uma planilha; site continua leve (sem script de terceiro no caminho crítico); conformidade LGPD por construção (first-party, sem PII anônima, consentimento registrado).
+**Negativas/dívidas:** somos nós que operamos o rastreamento — bot/crawler infla pageview se não houver filtro, e o volume de `visita_site`/`evento_marketing` cresce sem parar (precisa de política de expurgo/agregação antes de virar problema de disco); e não teremos, de graça, os relatórios prontos de um GA4 — cada visão do gerenciador é tela a construir.
+**Gatilho de revisão:** volume de eventos exigir materialização/particionamento, ou campanha paga séria exigir otimização por pixel (aí o pixel entra **ao lado**, com consentimento, sem virar fonte de verdade).
 
 # 7. Template — Task
 
