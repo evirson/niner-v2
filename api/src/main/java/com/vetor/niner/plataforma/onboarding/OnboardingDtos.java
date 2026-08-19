@@ -17,7 +17,10 @@ public final class OnboardingDtos {
             @NotBlank @Size(max = 120) String nomeLoja,
             @NotBlank @Email @Size(max = 160) String email,
             @NotBlank @Size(min = 8, max = 100) String senha,
-            @NotBlank @Size(max = 120) String nomeAdmin) {
+            @NotBlank @Size(max = 120) String nomeAdmin,
+            /** UUID do cookie first-party do site (ADR-017). Opcional: sem ele o signup funciona
+             *  igual, só não dá para atribuir a conta à campanha que a trouxe. */
+            String visitanteId) {
     }
 
     /**

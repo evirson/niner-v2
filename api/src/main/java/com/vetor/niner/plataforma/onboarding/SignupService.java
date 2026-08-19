@@ -227,6 +227,10 @@ public class SignupService {
                 .params(idTenant, idUsuario, idEmpresa)
                 .update();
 
+        // O funil de aquisição (ADR-017) é fechado pelo OnboardingController, DEPOIS do commit
+        // desta transação — ver o comentário lá: dentro daqui não funciona (a transação separada
+        // ainda não enxerga o tenant, e a mesma transação vira armadilha de rollback silencioso).
+
         // 7) token de primeiro acesso (auto-login) — leva o cliente direto ao sistema, já com a
         // empresa recém-criada como empresa ativa da sessão (eid).
         String token = tokens.emitir(idUsuario, idTenant, idEmpresa, req.email(), List.of("ADMIN"));

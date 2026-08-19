@@ -1,3 +1,4 @@
+import sitemap from '@astrojs/sitemap';
 import { defineConfig } from 'astro/config';
 
 // Site público do Niner — SSG (HTML estático) para SEO. A base-URL da API é lida em
@@ -5,4 +6,8 @@ import { defineConfig } from 'astro/config';
 export default defineConfig({
   site: 'https://niner.com.br',
   server: { port: 5175 },
+  // SEO (ADR-017 / briefing da landing): sitemap gerado no build. `robots.txt` (public/) aponta
+  // para ele. As páginas de handoff não entram — não têm conteúdo indexável e canibalizariam a
+  // busca por "entrar no Niner".
+  integrations: [sitemap({ filter: (pagina) => !pagina.includes('/entrar') && !pagina.includes('/bem-vindo') })],
 });

@@ -17,6 +17,18 @@ niner:
   trial:
     dias: 60
     plano: Profissional
+  cobranca:
+    # Este arquivo SOMBREIA o application.yml de produção (ver nota no topo), então o bloco
+    # precisa existir aqui também. Token vazio = cobrança desligada por padrão nos testes;
+    # CobrancaMercadoPagoTest sobrescreve via @DynamicPropertySource apontando para um
+    # Mercado Pago falso.
+    gateway: mercadopago
+    mercadopago:
+      base-url: http://localhost:1
+      access-token: ""
+      webhook-secret: ""
+      notification-url: ""
+      validade-pix: PT24H
   cors:
     origins:
       - http://localhost:5175

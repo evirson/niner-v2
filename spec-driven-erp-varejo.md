@@ -900,7 +900,7 @@ V034  fiscal: tabelas de referência (cfg_uf_autorizador, NCM/CEST, IBPT)
 V035  fiscal: documento_fiscal + fiscal_config_empresa + certificado (ENUM ambiente_fiscal)
 V036  fiscal: arquivamento de XML (bucket privado, ADR-014)
 ```
-**Modelo comercial novo (ADR-015/016/017) — previstas:**
+**Modelo comercial novo (ADR-015/016/017) — aplicadas em 2026-08-18:**
 ```
 V037  plataforma.parametro_comercial (singleton) + plano ganha limite_vendas_mes/
       faixa_ordem/gratuito + função plataforma.gerar_faixas_planos() (UPDATE/INSERT por
@@ -909,9 +909,10 @@ V037  plataforma.parametro_comercial (singleton) + plano ganha limite_vendas_mes
 V038  medição de vendas: uso_tenant ganha competencia_vendas/qtd_vendas_mes/qtd_empresas ·
       uso_venda_mes (histórico mensal) · assinatura ganha tolerancia_vendas (override) ·
       migra tenants TRIAL existentes para ATIVA no plano Gratuito
-V039  aquisição/marketing (ADR-017): lead · visita_site · evento_marketing
-V040  cobrança Mercado Pago (ADR-016): fatura ganha link_pagamento/pix_copia_cola/
-      qr_code_base64/expira_em — entra junto com as credenciais do app do MP
+V039  cobrança Mercado Pago (ADR-016): fatura ganha id_plano/ciclo/link_pagamento/
+      pix_copia_cola/qr_code_base64/expira_em/pago_em · webhook_gateway ganha
+      tentativas/proxima_tentativa (retentativa com espera crescente + dead-letter)
+V040  aquisição/marketing (ADR-017): lead · visita_site · evento_marketing
 ```
 > ⚠️ A numeração acima é a **real do repositório** (V001–V033, conferida em 2026-08-14). A
 > faixa "V001–V091" citada no roadmap (§4) era a estimativa original da spec e **não**

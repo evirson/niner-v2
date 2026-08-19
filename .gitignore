@@ -25,3 +25,8 @@ NFE_entradas_teste/
 CERTIFICADO_HOMOLOGACAO/
 *.pfx
 *.p12
+
+# Credenciais de gateway (Mercado Pago) — NUNCA versionar. Access token/public key vivem em
+# variável de ambiente (NINER_MP_ACCESS_TOKEN / NINER_MP_WEBHOOK_SECRET), nunca no repositório.
+docs/mercadopago/
+*mercadopago*secret*

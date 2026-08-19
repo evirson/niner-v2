@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import AjudaDaTela from '../../components/AjudaDaTela'
 import { BotaoFecharTela } from '../../components/BotaoFecharTela'
@@ -8,10 +8,15 @@ import Toast, { type TipoToast } from '../../components/Toast'
 import { mascararCpfCnpj } from '../../lib/masks'
 import {
   buscarMinhaConta,
+  consultarFatura,
   criarEmpresa,
+  iniciarPagamento,
+  listarFaixas,
   rotuloCompetencia,
+  type Ciclo,
   type MinhaConta as MinhaContaDados,
   type NovaEmpresaForm,
+  type PagamentoPix,
   type SituacaoUso,
 } from '../../lib/minhaConta'
 import { maiusculas } from '../../lib/texto'
@@ -29,6 +34,7 @@ export default function MinhaConta() {
   const qc = useQueryClient()
   const [toast, setToast] = useState<{ texto: string; tipo: TipoToast } | null>(null)
   const [modalAberto, setModalAberto] = useState(false)
+  const [modalPagamento, setModalPagamento] = useState(false)
 
   const { data, isLoading } = useQuery({ queryKey: ['minha-conta'], queryFn: buscarMinhaConta })
 
@@ -54,12 +60,24 @@ export default function MinhaConta() {
         ) : (
           <div className="minha-conta">
             <BlocoPlano dados={data} />
-            <BlocoUso dados={data} />
+            <BlocoUso dados={data} aoAssinar={() => setModalPagamento(true)} />
             <BlocoHistorico dados={data} />
             <BlocoEmpresas dados={data} aoAdicionar={() => setModalAberto(true)} />
           </div>
         )}
       </div>
+
+      {modalPagamento && (
+        <ModalPagamento
+          recomendada={data?.faixaRecomendada?.nome ?? null}
+          aoFechar={() => setModalPagamento(false)}
+          aoPagar={() => {
+            setModalPagamento(false)
+            setToast({ texto: 'Pagamento confirmado. Sua faixa já está valendo.', tipo: 'sucesso' })
+            qc.invalidateQueries({ queryKey: ['minha-conta'] })
+          }}
+        />
+      )}
 
       {modalAberto && (
         <ModalNovaEmpresa
@@ -109,7 +127,7 @@ const TEXTO_SITUACAO: Record<SituacaoUso, string> = {
   BLOQUEADO: 'Limite e folga esgotados: novas vendas estão bloqueadas até a virada do mês ou a assinatura de uma faixa.',
 }
 
-function BlocoUso({ dados }: { dados: MinhaContaDados }) {
+function BlocoUso({ dados, aoAssinar }: { dados: MinhaContaDados; aoAssinar: () => void }) {
   const { uso, faixaRecomendada } = dados
   const limite = uso.limite
   const percentual = limite ? Math.min(100, Math.round((uso.qtdVendas / limite) * 100)) : 0
@@ -143,9 +161,22 @@ function BlocoUso({ dados }: { dados: MinhaContaDados }) {
       </p>
 
       {faixaRecomendada && uso.situacao !== 'NORMAL' && (
-        <p className="faixa-sugerida">
-          Faixa indicada para o seu volume: <b>{faixaRecomendada.nome}</b> — {REAL.format(faixaRecomendada.precoMensal)}
-          /mês (ou {REAL.format(faixaRecomendada.precoAnual)}/ano, 15% de desconto).
+        <div className="faixa-sugerida">
+          <p>
+            Faixa indicada para o seu volume: <b>{faixaRecomendada.nome}</b> —{' '}
+            {REAL.format(faixaRecomendada.precoMensal)}/mês (ou {REAL.format(faixaRecomendada.precoAnual)}/ano, 15% de
+            desconto).
+          </p>
+          <button type="button" className="btn btn-primary" onClick={aoAssinar}>
+            Assinar esta faixa
+          </button>
+        </div>
+      )}
+      {uso.situacao === 'NORMAL' && (
+        <p className="muted">
+          <button type="button" className="btn-link" onClick={aoAssinar}>
+            Quero assinar uma faixa maior
+          </button>
         </p>
       )}
     </section>
@@ -286,6 +317,168 @@ function ModalNovaEmpresa({ aoFechar, aoCriar }: { aoFechar: () => void; aoCriar
             {mutacao.isPending ? 'Criando…' : 'Criar empresa'}
           </button>
         </div>
+      </div>
+    </div>
+  )
+}
+
+/**
+ * Pagamento da faixa por PIX (ADR-016). A tela mostra o código e fica consultando a fatura —
+ * quem promove a assinatura é o worker do backend, depois que o Mercado Pago confirma. Enquanto
+ * isso, nada muda de plano: é de propósito, e a mensagem diz isso ao lojista.
+ */
+function ModalPagamento({
+  recomendada,
+  aoFechar,
+  aoPagar,
+}: {
+  recomendada: string | null
+  aoFechar: () => void
+  aoPagar: () => void
+}) {
+  const [ciclo, setCiclo] = useState<Ciclo>('MENSAL')
+  const [idPlano, setIdPlano] = useState<number | null>(null)
+  const [pix, setPix] = useState<PagamentoPix | null>(null)
+  const [erro, setErro] = useState<string | null>(null)
+  const [copiado, setCopiado] = useState(false)
+
+  const { data: faixas } = useQuery({ queryKey: ['faixas-plano'], queryFn: listarFaixas })
+
+  useEffect(() => {
+    if (idPlano === null && faixas && faixas.length > 0) {
+      const sugerida = recomendada ? faixas.find((f) => f.nome === recomendada) : undefined
+      setIdPlano((sugerida ?? faixas[0]).idPlano)
+    }
+  }, [faixas, idPlano, recomendada])
+
+  const gerar = useMutation({
+    mutationFn: () => iniciarPagamento(idPlano!, ciclo),
+    onSuccess: (p) => {
+      setErro(null)
+      setPix(p)
+    },
+    onError: (e: Error) => setErro(e.message),
+  })
+
+  // Consulta a fatura enquanto o PIX está na tela. Intervalo curto porque o lojista está
+  // olhando: PIX cai em segundos e ficar "esperando" sem retorno parece defeito.
+  useEffect(() => {
+    if (!pix) return
+    const id = setInterval(async () => {
+      try {
+        const s = await consultarFatura(pix.idFatura)
+        if (s.situacao === 'PAGA') {
+          clearInterval(id)
+          aoPagar()
+        }
+      } catch {
+        /* rede instável não pode derrubar a tela de pagamento */
+      }
+    }, 4000)
+    return () => clearInterval(id)
+  }, [pix, aoPagar])
+
+  const faixaEscolhida = faixas?.find((f) => f.idPlano === idPlano)
+  const valor = faixaEscolhida ? (ciclo === 'ANUAL' ? faixaEscolhida.precoAnual : faixaEscolhida.precoMensal) : 0
+
+  return (
+    <div className="modal-overlay" onClick={aoFechar}>
+      <div className="modal" role="dialog" aria-label="Assinar faixa" onClick={(e) => e.stopPropagation()}>
+        <h2 style={{ marginTop: 0 }}>Assinar uma faixa</h2>
+
+        {!pix ? (
+          <>
+            <p className="muted">
+              Escolha a faixa pelo seu volume de vendas. As funções são as mesmas em todas — o que muda é quanto
+              cabe no mês.
+            </p>
+
+            <div className="field">
+              <label htmlFor="faixa">Faixa</label>
+              <select id="faixa" value={idPlano ?? ''} onChange={(e) => setIdPlano(Number(e.target.value))}>
+                {(faixas ?? []).map((f) => (
+                  <option key={f.idPlano} value={f.idPlano}>
+                    {f.nome} — {REAL.format(f.precoMensal)}/mês
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="field">
+              <label>Ciclo</label>
+              <div className="ciclo-opcoes">
+                <button
+                  type="button"
+                  className={`btn ${ciclo === 'MENSAL' ? 'btn-primary' : 'btn-secondary'}`}
+                  onClick={() => setCiclo('MENSAL')}
+                >
+                  Mensal
+                </button>
+                <button
+                  type="button"
+                  className={`btn ${ciclo === 'ANUAL' ? 'btn-primary' : 'btn-secondary'}`}
+                  onClick={() => setCiclo('ANUAL')}
+                >
+                  Anual (15% de desconto)
+                </button>
+              </div>
+            </div>
+
+            <p className="valor-cobranca">
+              Total a pagar agora: <b>{REAL.format(valor)}</b>
+            </p>
+            {erro && <p className="erro">{erro}</p>}
+
+            <div className="footer-bar">
+              <button type="button" className="btn btn-secondary" onClick={aoFechar}>
+                Cancelar
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary"
+                disabled={!idPlano || gerar.isPending}
+                onClick={() => gerar.mutate()}
+              >
+                {gerar.isPending ? 'Gerando PIX…' : 'Gerar PIX'}
+              </button>
+            </div>
+          </>
+        ) : (
+          <>
+            <p className="muted">
+              Pague o PIX de <b>{REAL.format(pix.valor)}</b> ({pix.plano}). Assim que o pagamento cair, sua faixa
+              passa a valer sozinha — pode deixar esta tela aberta.
+            </p>
+            {pix.qrCodeBase64 && (
+              <img
+                className="pix-qr"
+                src={`data:image/png;base64,${pix.qrCodeBase64}`}
+                alt="QR Code do PIX para pagar a assinatura"
+                width={220}
+                height={220}
+              />
+            )}
+            <div className="field">
+              <label htmlFor="copiaecola">PIX copia e cola</label>
+              <textarea id="copiaecola" className="mono" readOnly rows={3} value={pix.copiaECola} />
+            </div>
+            <div className="footer-bar">
+              <button type="button" className="btn btn-secondary" onClick={aoFechar}>
+                Fechar
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={() => {
+                  navigator.clipboard?.writeText(pix.copiaECola)
+                  setCopiado(true)
+                }}
+              >
+                {copiado ? 'Copiado!' : 'Copiar código'}
+              </button>
+            </div>
+          </>
+        )}
       </div>
     </div>
   )

@@ -68,7 +68,11 @@ import Base from '../layouts/Base.astro';
         nomeAdmin: form.nomeAdmin.value.trim(),
         email: form.email.value.trim(),
         senha: form.senha.value,
+        // Fecha o funil (ADR-017): o mesmo id que veio do primeiro pageview anônimo. Ausente
+        // quando o visitante bloqueia cookie/JS — o cadastro segue igual, só sem atribuição.
+        visitanteId: window.NINER_VISITANTE_ID || null,
       };
+      if (window.ninerEvento) window.ninerEvento('SIGNUP_ENVIADO', 'assinar');
       btn.disabled = true;
       btn.textContent = 'Criando...';
       try {

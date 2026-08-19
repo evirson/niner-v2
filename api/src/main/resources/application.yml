@@ -50,6 +50,23 @@ niner:
   trial:
     dias: 60                   # trial sem cartão (D2 — revisto de 14 para 60 dias)
     plano: Profissional        # plano-base durante o trial (fallback: menor preço ativo)
+  cobranca:                    # cobrança da assinatura (ADR-016) — control-plane, não é o
+                               # financeiro do lojista
+    gateway: ${NINER_COBRANCA_GATEWAY:mercadopago}
+    mercadopago:
+      base-url: ${NINER_MP_BASE_URL:https://api.mercadopago.com}
+      # 🔴 NUNCA commitar token. Em dev use o access token de TESTE (prefixo TEST-) das
+      # credenciais da aplicação no painel do Mercado Pago. Vazio = cobrança desligada: a API
+      # sobe normalmente e só o endpoint de pagamento responde 503.
+      access-token: ${NINER_MP_ACCESS_TOKEN:}
+      # Segredo do webhook (painel > Suas integrações > Webhooks). Vazio = não valida assinatura
+      # (só dev). Mesmo sem ele o webhook é inofensivo: não decide nada, quem aplica efeito é o
+      # worker consultando o gateway.
+      webhook-secret: ${NINER_MP_WEBHOOK_SECRET:}
+      # Endereço público que o MP chama (em dev, um túnel). Vazio = sem notificação: a
+      # confirmação passa a depender da consulta periódica.
+      notification-url: ${NINER_MP_NOTIFICATION_URL:}
+      validade-pix: PT24H
   cors:
     origins:                   # fronts em dev (site/web/admin). Em prod: domínios reais.
       - http://localhost:5175

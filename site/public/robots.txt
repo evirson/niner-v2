@@ -1,0 +1,5 @@
+# Niner — site público. Tudo é indexável de propósito: a landing é o canal de aquisição.
+User-agent: *
+Allow: /
+
+Sitemap: https://niner.com.br/sitemap-index.xml

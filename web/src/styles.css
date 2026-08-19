@@ -1298,3 +1298,10 @@ a.menu-card:hover {
 .historico-barra { width: 100%; max-width: 48px; background: var(--accent); border-radius: 4px 4px 0 0; }
 .historico-valor { font-size: 12px; font-variant-numeric: tabular-nums; color: var(--ink-muted); }
 .historico-mes { font-size: 11px; color: var(--label-color); }
+
+/* Pagamento da assinatura (ADR-016) — modal de PIX dentro de Minha Conta. */
+.faixa-sugerida { display: flex; flex-direction: column; gap: 10px; align-items: flex-start; }
+.ciclo-opcoes { display: flex; gap: 8px; flex-wrap: wrap; }
+.valor-cobranca { margin: 12px 0 0; font-size: 18px; }
+.pix-qr { display: block; margin: 12px auto; border-radius: var(--radius); background: #fff; padding: 8px; }
+.btn-link { background: none; border: none; padding: 0; color: var(--accent); cursor: pointer; font: inherit; text-decoration: underline; }

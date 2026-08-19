@@ -90,3 +90,60 @@ export function rotuloCompetencia(iso: string): string {
   const nomes = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez']
   return `${nomes[Number(mes) - 1]}/${ano.slice(2)}`
 }
+
+/* ---------------------------------------------------------------------------------------------
+ * Assinatura paga (ADR-015/016). O plano só troca quando o pagamento é confirmado pelo gateway —
+ * a tela pede o PIX e fica consultando a fatura; quem promove a assinatura é o worker no backend.
+ * ------------------------------------------------------------------------------------------- */
+
+export type Ciclo = 'MENSAL' | 'ANUAL'
+
+export interface FaixaPublica {
+  idPlano: number
+  nome: string
+  gratuito: boolean
+  faixaOrdem: number | null
+  limiteVendasMes: number | null
+  precoMensal: number
+  precoAnual: number
+}
+
+/** Catálogo é público (a landing usa o mesmo endpoint) — não exige token. */
+export async function listarFaixas(): Promise<FaixaPublica[]> {
+  const base = (window as unknown as { NINER_API_BASE?: string }).NINER_API_BASE ?? ''
+  const res = await fetch(`${base}/api/publico/planos`)
+  if (!res.ok) throw new Error('Não foi possível carregar as faixas de plano.')
+  const faixas = (await res.json()) as FaixaPublica[]
+  return faixas.filter((f) => !f.gratuito)
+}
+
+export interface PagamentoPix {
+  idFatura: number
+  plano: string
+  ciclo: Ciclo
+  valor: number
+  competencia: string
+  copiaECola: string
+  qrCodeBase64: string | null
+  linkPagamento: string | null
+  expiraEm: string
+  situacao: string
+}
+
+export function iniciarPagamento(idPlano: number, ciclo: Ciclo): Promise<PagamentoPix> {
+  return api<PagamentoPix>('/api/v1/assinatura/pagamento', {
+    method: 'POST',
+    body: JSON.stringify({ idPlano, ciclo }),
+  })
+}
+
+export interface SituacaoFatura {
+  idFatura: number
+  situacao: string
+  pagoEm: string | null
+  planoAtual: string
+}
+
+export function consultarFatura(idFatura: number): Promise<SituacaoFatura> {
+  return api<SituacaoFatura>(`/api/v1/assinatura/faturas/${idFatura}`)
+}

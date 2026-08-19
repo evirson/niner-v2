@@ -569,6 +569,62 @@ nativo `linux-arm64-musl` (rolldown/rollup) e `npm run dev` no host quebra com `
   `ProdutoImagemCrudTest`, **de ambiente, não do código**: o `libwebp-imageio.dylib` não carrega
   neste Mac (`UnsatisfiedLinkError`).
 
+**Landing nova, cobrança e funil de aquisição (mesma sessão, continuação):**
+
+- **Landing implementada a partir do Claude Design** — o HTML voltou fiel ao briefing e virou
+  `site/src/pages/index.astro` + `src/styles/landing.css`. Mudanças conscientes na portagem:
+  placeholders de contato saíram do markup para `src/dados/contato.ts` (o mesmo
+  `[PLACEHOLDER: número WhatsApp]` aparecia em 3 links), **link/seção sem dado real não é
+  publicado** (sem WhatsApp o botão some; sem depoimento real a seção some — briefing §9), a
+  tabela de faixas é preenchida em runtime por `GET /api/publico/planos`, e o alternador
+  Mensal/Anual + aviso de cookies ganharam comportamento. SEO: JSON-LD (SoftwareApplication +
+  Organization + **FAQPage gerado da mesma lista renderizada**, para não divergir do visível),
+  OG/Twitter, `@astrojs/sitemap` e `robots.txt`.
+- **Medição própria (ADR-017) implementada ponta a ponta:** `site/public/beacon.js`
+  (visitante_id em cookie first-party, UTM da **primeira** visita, cliques `data-evento`,
+  profundidade de leitura, `sendBeacon` com fila e falha silenciosa), **V040** (`lead`,
+  `visita_site`, `evento_marketing`), `POST /api/publico/eventos` e `/leads`, e o **gerenciador
+  de marketing** no control-plane: `GET /api/admin/marketing/{funil,leads,leads/{id},
+  contas-perto-do-limite}` — o funil responde *quanto de MRR cada origem gerou*, que é a pergunta
+  que ferramenta externa não responde (ela não conhece `plataforma.assinatura`).
+- **Cobrança Mercado Pago (ADR-016):** **V039** (fatura ganha faixa/ciclo/PIX; `webhook_gateway`
+  ganha retentativa e dead-letter), `GatewayCobranca` + `MercadoPagoAdapter` (Payments API v1 no
+  `HttpClient` do JDK, sem SDK), `POST /api/v1/assinatura/pagamento`, webhook público idempotente
+  com validação de `x-signature` (HMAC-SHA256, comparação em tempo constante) e o worker
+  `CobrancaWebhookJob`/`CobrancaWebhookProcessador`. Regra central: **o webhook não decide nada** —
+  o worker reconsulta o gateway, então notificação forjada não paga fatura nem promove faixa.
+  No `web/`, o painel ganhou o modal de PIX (QR + copia-e-cola + consulta até confirmar).
+
+**Três bugs encontrados pelos próprios testes (e o que cada um ensina):**
+
+1. **Rollback silencioso no signup.** Ao chamar a medição *dentro* da transação do signup e
+   capturar a exceção em Java, o Postgres já tinha abortado a transação — e `COMMIT` sobre
+   transação abortada **é tratado como ROLLBACK, devolvendo sucesso**. Resultado: 201 com token
+   válido e a conta inteira inexistente. Corrigido movendo o fechamento do funil para **depois do
+   commit** (no `OnboardingController`): em transação separada (`REQUIRES_NEW`) também não
+   funciona, porque a FK `lead.id_tenant → tenant` não enxerga o tenant ainda não commitado.
+   Regressão coberta por `AquisicaoFunilTest.signupSobreviveAFalhaDeMedicao`.
+2. **`@Transactional` em auto-invocação.** O worker chamava os próprios métodos transacionais
+   (`this.pegarLote()`), e o proxy do Spring não intercepta isso: o `FOR UPDATE SKIP LOCKED`
+   rodaria fora de transação, soltando o lock na hora e deixando dois workers pegarem o mesmo
+   evento. Separado em `CobrancaWebhookJob` (agenda) × `CobrancaWebhookProcessador` (transaciona).
+3. **`ON CONFLICT` sobre índice parcial** precisa repetir o predicado do índice
+   (`pagamento_gateway_transacao_uk` é parcial, V007) — sem isso o Postgres não encontra o índice
+   e a inserção falha.
+
+Além deles, o teste de cobrança tinha um vício próprio: o Mercado Pago falso devolvia sempre o
+mesmo `payment id`, então a idempotência de `pagamento` reaproveitava a cobrança do teste anterior
+e um caso passava **por engano**. O fake passou a gerar um id por cobrança, como o gateway real.
+
+**Suíte:** 774 testes, 0 falhas — só os 5 erros de ambiente de `ProdutoImagemCrudTest`
+(`libwebp-imageio.dylib` não carrega neste Mac). Novos: `CobrancaMercadoPagoTest` (7) e
+`AquisicaoFunilTest` (5).
+
+**🔐 Credencial de gateway não entra no repositório:** o `docs/mercadopago/api.md` deixado na
+árvore de trabalho contém credenciais **de produção** (`APP_USR-`) e foi adicionado ao
+`.gitignore` antes de qualquer commit. Access token e segredo de webhook vivem em
+`NINER_MP_ACCESS_TOKEN`/`NINER_MP_WEBHOOK_SECRET`.
+
 **🐛 Bug encontrado ao subir (ainda não corrigido — fiscal está com outro programador):** `FiscalContingenciaDrenoJob` explode a cada
 5 minutos — `DocumentoFiscalRepositorio.java:210` compara `u.ambiente` (`smallint` 1/2 em
 `cfg_uf_autorizador`, V034) com `c.ambiente` (ENUM `ambiente_fiscal`, V035): `ERROR: operator does
