@@ -247,6 +247,12 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
 .table tbody tr[tabindex] { cursor: pointer; }
 .table tbody tr[tabindex]:hover td { background: var(--surface-2); }
 .table tbody tr.linha-selecionada td { background: var(--accent); color: var(--accent-ink); }
+/* ⚠️ `.muted` (cinza fixo) dentro de uma linha selecionada some contra o fundo `--accent` — a
+   cor do texto secundário não acompanha a inversão da linha. Herdar a cor e baixar a opacidade
+   preserva a hierarquia visual ("isto é secundário") sem perder contraste. Vale para qualquer
+   grid do sistema que combine as duas coisas — achado na grid de seleção da Devolução de
+   Produtos (2026-08-19), onde a variação do produto (cor/tamanho) ficava ilegível ao selecionar. */
+.table tbody tr.linha-selecionada td .muted { color: inherit; opacity: .8; }
 /* Subtotal de grupo dentro da própria grid (banda clássica, Relatório de Comissões) — mesmo
    fundo do <tfoot>, mas sem a borda grossa de "fim da tabela". */
 .table tbody tr.linha-subtotal td { background: var(--surface-2); border-top: 1px solid var(--line-strong); }

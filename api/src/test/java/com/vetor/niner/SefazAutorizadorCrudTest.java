@@ -70,13 +70,26 @@ class SefazAutorizadorCrudTest {
                 .hasMessageContaining("não está cadastrada");
     }
 
-    /** NF-e (55) do PR está na tabela, mas sem endpoints — pendência conhecida da F0. Devolver
-     *  {@code null} (em vez de estourar) deixa a decisão com quem chama. */
+    /**
+     * ✅ <b>Pendência da F0 fechada em 2026-08-19</b> (bloco B9, NF-e de devolução): os endpoints de
+     * NF-e modelo 55 do PR nasceram <b>nulos de propósito</b> na V034 ("falhar explicitamente em
+     * vez de chutar domínio") e foram preenchidos depois de confirmados na fonte oficial — o
+     * portal Sped-PR, a mesma que validou os da NFC-e. O PR tem autorizador <b>próprio</b> também
+     * para NF-e 55; não usa SVRS.
+     *
+     * <p>Este teste era o que documentava a pendência (esperava {@code null}) — virou o que
+     * documenta a resolução. Sem a NF-e 55 configurada, o B9 não teria para onde transmitir.
+     */
     @Test
-    void servicoSemUrlMapeadaDevolveNuloEmVezDeEstourar() {
-        String url = autorizadores.urlDe("PR", 55, 2, ServicoSefaz.AUTORIZACAO);
-
-        assertThat(url).isNull();
+    void nfe55DoPrTemEndpointProprioConfirmadoNaFonteOficial() {
+        assertThat(autorizadores.urlDe("PR", 55, 2, ServicoSefaz.AUTORIZACAO))
+                .isEqualTo("https://homologacao.nfe.sefa.pr.gov.br/nfe/NFeAutorizacao4");
+        assertThat(autorizadores.urlDe("PR", 55, 1, ServicoSefaz.AUTORIZACAO))
+                .isEqualTo("https://nfe.sefa.pr.gov.br/nfe/NFeAutorizacao4");
+        // O host é o de NF-e (`nfe.`), não o de NFC-e (`nfce.`) — trocar um pelo outro é um erro
+        // fácil de cometer e que só apareceria na primeira transmissão real.
+        assertThat(autorizadores.urlDe("PR", 55, 1, ServicoSefaz.AUTORIZACAO))
+                .doesNotContain("nfce.sefa");
     }
 
     @Test

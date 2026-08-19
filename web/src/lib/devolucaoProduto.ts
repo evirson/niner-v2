@@ -22,6 +22,11 @@ export interface ItemVendaOrigem {
   variacaoTamanho: string | null
   qtdVendida: number
   qtdDisponivelDevolucao: number
+  /** Preço que o cliente PAGOU nesta venda (não o do cadastro atual, que pode ter mudado desde
+   *  então) — é ele que a grid de seleção mostra e que o vale-mercadoria usa. */
+  precoUnitario: number
+  /** `qtdVendida × precoUnitario` — o total daquele item na venda original. */
+  valorTotal: number
 }
 
 export interface VendedorDaVenda {

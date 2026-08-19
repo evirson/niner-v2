@@ -29,7 +29,14 @@ public final class DevolucaoProdutoDtos {
     /** Item vendido numa venda, com quanto ainda pode ser devolvido dela — {@code qtdDisponivelDevolucao}
      *  já desconta devoluções anteriores (não canceladas) da mesma venda. Usado pra restringir o
      *  que a tela permite lançar quando o número da venda é informado (2026-08-11): a tela só
-     *  aceita produtos presentes nesta lista, até o limite de {@code qtdDisponivelDevolucao}. */
+     *  aceita produtos presentes nesta lista, até o limite de {@code qtdDisponivelDevolucao}.
+     *  {@code precoUnitario}/{@code valorTotal} (2026-08-19) — o preço que o cliente PAGOU
+     *  naquela venda (média ponderada de {@code produto_movimento_detalhe.preco_venda}, pro caso
+     *  raro de a mesma variação aparecer em mais de uma linha da venda com preços diferentes),
+     *  nunca o preço atual do cadastro — ver "Restrição a produtos vendidos" na spec pro porquê:
+     *  o vale-mercadoria e a futura NF-e de devolução têm que refletir o valor real da venda, que
+     *  pode já ter mudado no cadastro desde então. Alimenta a grid de seleção da tela (item 1.2
+     *  da revisão 2026-08-19). */
     public record ItemVendaOrigemResponse(
             long idVariacao,
             String sku,
@@ -37,7 +44,9 @@ public final class DevolucaoProdutoDtos {
             String variacaoCor,
             String variacaoTamanho,
             BigDecimal qtdVendida,
-            BigDecimal qtdDisponivelDevolucao) {
+            BigDecimal qtdDisponivelDevolucao,
+            BigDecimal precoUnitario,
+            BigDecimal valorTotal) {
     }
 
     public record VendedorDaVendaResponse(

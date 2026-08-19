@@ -212,9 +212,13 @@ INSERT INTO cfg_cfop (codigo_cfop, descricao, entrada_saida, ambito) VALUES
 --    (sped.fazenda.pr.gov.br/NFCe/Pagina/Web-Services-NFC-e).
 -- ⚠️ Alíquota interna 19,5% (Lei 21.850/2023) e FECOP 2% (Lei 11.580/1996 art. 14-A) vieram de
 --    fonte secundária — conferir no RICMS-PR na F0 antes de o motor confiar nelas.
--- ⚠️ Os endpoints de NF-e (modelo 55) NÃO foram confirmados em fonte oficial: as linhas nascem com
---    URL NULA de propósito, para a F0 preenchê-las. Motor e emissão devem falhar explicitamente
---    quando a URL for nula, nunca chutar um domínio.
+-- ✅ Endpoints de NF-e (modelo 55) CONFIRMADOS em 2026-08-19 na mesma fonte oficial da NFC-e
+--    (sped.fazenda.pr.gov.br/NFe/Pagina/Enderecos-dos-ambientes-de-homologacao-e-producao-Versao-400):
+--    o PR também tem autorizador PRÓPRIO para NF-e 55 — NÃO usa SVRS —, no mesmo padrão de host
+--    da NFC-e (`nfe.sefa.pr.gov.br` / `homologacao.nfe.sefa.pr.gov.br`, path `/nfe/`). Preenchidos
+--    para o B9 (NF-e de devolução). Até aqui nasciam NULOS de propósito: a regra de "falhar
+--    explicitamente quando a URL for nula, nunca chutar um domínio" continua valendo para as
+--    demais UFs, que seguem sem linha nenhuma nesta tabela.
 INSERT INTO cfg_uf_autorizador (
   uf, modelo, ambiente, codigo_uf_ibge, autorizador,
   url_autorizacao, url_ret_autorizacao, url_status_servico,
@@ -248,11 +252,26 @@ INSERT INTO cfg_uf_autorizador (
    'http://www.fazenda.pr.gov.br/nfce/consulta',
    30, 24, 19.50, 2.00, false,
    'Credenciamento de homologacao no PR e AUTOMATICO para contribuinte ativo no cadastro de ICMS.'),
+  -- NF-e 55: sem url_qrcode/url_consulta_publica de proposito — QR Code e consulta por QR sao da
+  -- NFC-e; o DANFE modelo 55 traz a chave de acesso e o protocolo, e a consulta e feita no portal
+  -- nacional (www.nfe.fazenda.gov.br/portal), impresso no proprio DANFE.
   ('PR', 55, 1, 41, 'PROPRIO',
-   NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+   'https://nfe.sefa.pr.gov.br/nfe/NFeAutorizacao4',
+   'https://nfe.sefa.pr.gov.br/nfe/NFeRetAutorizacao4',
+   'https://nfe.sefa.pr.gov.br/nfe/NFeStatusServico4',
+   'https://nfe.sefa.pr.gov.br/nfe/NFeRecepcaoEvento4',
+   'https://nfe.sefa.pr.gov.br/nfe/NFeInutilizacao4',
+   'https://nfe.sefa.pr.gov.br/nfe/NFeConsultaProtocolo4',
+   NULL, NULL,
    1440, NULL, 19.50, 2.00, false,
-   'ENDPOINTS A CONFIRMAR NA F0 (fonte oficial Sped-PR). Prazo de cancelamento 24h = Ajuste SINIEF 07/2005.'),
+   'Endpoints confirmados no portal Sped-PR (2026-08-19). Prazo de cancelamento 24h = Ajuste SINIEF 07/2005.'),
   ('PR', 55, 2, 41, 'PROPRIO',
-   NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+   'https://homologacao.nfe.sefa.pr.gov.br/nfe/NFeAutorizacao4',
+   'https://homologacao.nfe.sefa.pr.gov.br/nfe/NFeRetAutorizacao4',
+   'https://homologacao.nfe.sefa.pr.gov.br/nfe/NFeStatusServico4',
+   'https://homologacao.nfe.sefa.pr.gov.br/nfe/NFeRecepcaoEvento4',
+   'https://homologacao.nfe.sefa.pr.gov.br/nfe/NFeInutilizacao4',
+   'https://homologacao.nfe.sefa.pr.gov.br/nfe/NFeConsultaProtocolo4',
+   NULL, NULL,
    1440, NULL, 19.50, 2.00, false,
-   'ENDPOINTS A CONFIRMAR NA F0 (fonte oficial Sped-PR).');
+   'Endpoints confirmados no portal Sped-PR (2026-08-19).');

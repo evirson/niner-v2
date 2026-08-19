@@ -373,7 +373,110 @@ class DevolucaoProdutoCrudTest {
                 .andExpect(jsonPath("$.itens.length()").value(1))
                 .andExpect(jsonPath("$.itens[0].idVariacao").value(idVariacao))
                 .andExpect(jsonPath("$.itens[0].qtdVendida").value(1))
-                .andExpect(jsonPath("$.itens[0].qtdDisponivelDevolucao").value(1));
+                .andExpect(jsonPath("$.itens[0].qtdDisponivelDevolucao").value(1))
+                .andExpect(jsonPath("$.itens[0].precoUnitario").value(50.00))
+                .andExpect(jsonPath("$.itens[0].valorTotal").value(50.00));
+    }
+
+    /**
+     * ⚠️ <b>Teste que discrimina de verdade</b> (2026-08-19): o preço do CADASTRO é alterado
+     * depois da venda, então usar `produto.preco_venda` (comportamento até esta data) e usar o
+     * preço da venda original dão resultados diferentes — sem essa divergência artificial, todos
+     * os outros testes desta classe passam com as duas implementações (é exatamente o que
+     * acontecia: a mudança de preço original entrou sem quebrar um único teste existente).
+     *
+     * <p>O vale-mercadoria tem que valer o que o cliente PAGOU, não o que o produto custa hoje —
+     * e, a partir da NF-e de devolução (spec, revisão 2026-08-19), a nota de entrada precisa
+     * espelhar os valores da nota de saída original, senão a SEFAZ recebe uma devolução com valor
+     * diferente da venda que ela referencia.
+     */
+    @Test
+    void devolucaoUsaOPrecoDaVendaOriginalMesmoDepoisDeOPrecoDoCadastroMudar() throws Exception {
+        TenantNovo tenant = assinarNovoTenant("preco-da-venda");
+        long idTenant = extrairIdTenant(tenant.token());
+        long idProduto = criarProduto(tenant.token(), "Produto Preco Mudou");   // cadastro nasce a 50,00
+        long idCarteira = criarTipoCarteira(tenant.token(), "DINHEIRO PRECO", "AVISTA");
+        long idCliente = criarCliente(tenant.token(), "Cliente Preco Mudou");
+        long idFuncionario = criarFuncionario(tenant.token(), "Vendedor Preco Mudou");
+        abrirCaixaDinheiro(tenant.token());
+
+        long idVariacao;
+        long idVenda;
+        try (Connection c = abrirConexao(idTenant)) {
+            long idEmpresa = buscarIdEmpresa(c);
+            idVariacao = criarVariacao(c, idTenant, idProduto);
+            definirEstoque(c, idTenant, idEmpresa, idVariacao, new BigDecimal("10.000"));
+            idVenda = efetivarVenda(tenant.token(), idVariacao, idCliente, idFuncionario, idCarteira, "50.00", 1);
+
+            // Só agora o preço do cadastro muda — a venda já aconteceu a 50,00.
+            try (PreparedStatement ps = c.prepareStatement(
+                    "UPDATE produto SET preco_venda = 80.00, preco_custo = 40.00 WHERE id_produto = ?")) {
+                ps.setLong(1, idProduto);
+                ps.executeUpdate();
+            }
+        }
+
+        // A grid de seleção da tela mostra o preço da VENDA (50,00), não o novo do cadastro (80,00).
+        mvc.perform(get("/api/v1/vendas/devolucao/vendedor").header("Authorization", "Bearer " + tenant.token())
+                        .param("numeroVenda", String.valueOf(idVenda)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.itens[0].precoUnitario").value(50.00));
+
+        String corpo = """
+                {"numeroVenda":%d,"itens":[{"idVariacao":%d,"qtd":1}]}
+                """.formatted(idVenda, idVariacao);
+        mvc.perform(post("/api/v1/vendas/devolucao").header("Authorization", "Bearer " + tenant.token())
+                        .contentType(APPLICATION_JSON).content(corpo))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.valorVale").value(50.00))
+                .andExpect(jsonPath("$.itens[0].precoVenda").value(50.00));
+
+        // E o que ficou GRAVADO no movimento também é o preço da venda — é dele que saem o valor
+        // do vale (sempre derivado) e o CMV do DRE.
+        try (Connection c = abrirConexao(idTenant);
+             PreparedStatement ps = c.prepareStatement("""
+                     SELECT pmd.preco_venda, pmd.preco_custo
+                       FROM produto_movimento_mestre pmm
+                       JOIN produto_movimento_detalhe pmd ON pmd.id_movimento = pmm.id_movimento
+                      WHERE pmm.tipo_movimento = 'DEVOLUCAO' AND pmd.id_variacao = ?
+                     """)) {
+            ps.setLong(1, idVariacao);
+            try (ResultSet rs = ps.executeQuery()) {
+                rs.next();
+                assertThat(rs.getBigDecimal("preco_venda"))
+                        .as("preço da venda original (50,00), nunca o do cadastro alterado depois (80,00)")
+                        .isEqualByComparingTo("50.00");
+                assertThat(rs.getBigDecimal("preco_custo"))
+                        .as("custo da venda original (10,00), nunca o do cadastro alterado depois (40,00)")
+                        .isEqualByComparingTo("10.00");
+            }
+        }
+    }
+
+    /** Sem venda de origem não há outro valor possível — cai no preço do cadastro, como sempre foi. */
+    @Test
+    void devolucaoSemNumeroDeVendaUsaOPrecoAtualDoCadastro() throws Exception {
+        TenantNovo tenant = assinarNovoTenant("preco-cadastro");
+        long idTenant = extrairIdTenant(tenant.token());
+        long idProduto = criarProduto(tenant.token(), "Produto Preco Cadastro");
+
+        long idVariacao;
+        try (Connection c = abrirConexao(idTenant)) {
+            long idEmpresa = buscarIdEmpresa(c);
+            idVariacao = criarVariacao(c, idTenant, idProduto);
+            definirEstoque(c, idTenant, idEmpresa, idVariacao, new BigDecimal("5.000"));
+            try (PreparedStatement ps = c.prepareStatement(
+                    "UPDATE produto SET preco_venda = 80.00 WHERE id_produto = ?")) {
+                ps.setLong(1, idProduto);
+                ps.executeUpdate();
+            }
+        }
+
+        mvc.perform(post("/api/v1/vendas/devolucao").header("Authorization", "Bearer " + tenant.token())
+                        .contentType(APPLICATION_JSON)
+                        .content("{\"itens\":[{\"idVariacao\":%d,\"qtd\":1}]}".formatted(idVariacao)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.valorVale").value(80.00));
     }
 
     @Test

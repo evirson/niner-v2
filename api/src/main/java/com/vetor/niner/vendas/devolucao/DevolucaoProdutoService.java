@@ -86,15 +86,17 @@ public class DevolucaoProdutoService {
         Long idFuncionario = null;
         String nomeFuncionario = null;
         Map<Long, BigDecimal> disponivelPorVariacao = null;
+        Map<Long, PrecoOriginal> precosOriginais = Map.of();
         if (req.numeroVenda() != null) {
             FuncionarioVenda fv = buscarFuncionarioDaVenda(req.numeroVenda());
             idFuncionario = fv.idFuncionario();
             nomeFuncionario = fv.nomeFuncionario();
             disponivelPorVariacao = buscarItensDisponiveisParaDevolucao(req.numeroVenda()).stream()
                     .collect(Collectors.toMap(ItemVendaOrigemResponse::idVariacao, ItemVendaOrigemResponse::qtdDisponivelDevolucao));
+            precosOriginais = buscarPrecosOriginaisDaVenda(req.numeroVenda());
         }
 
-        List<ItemResolvido> itens = resolverItens(req.itens());
+        List<ItemResolvido> itens = resolverItens(req.itens(), precosOriginais);
 
         // Quando a venda de origem é informada, só é permitido devolver produtos que ela vendeu,
         // até o que ainda não foi devolvido dela — validado aqui (não só na tela, P4) porque é a
@@ -194,12 +196,17 @@ public class DevolucaoProdutoService {
      *  venda devolve lista vazia (não lança erro aqui — quem chama decide o que fazer). */
     private List<ItemVendaOrigemResponse> buscarItensDisponiveisParaDevolucao(long idVenda) {
         record ItemVendido(long idVariacao, String sku, String descricaoProduto, String variacaoCor,
-                            String variacaoTamanho, BigDecimal qtdVendida) {
+                            String variacaoTamanho, BigDecimal qtdVendida, BigDecimal valorTotalVendido) {
         }
+        // valor_total_vendido = SUM(qtd × preço) da(s) linha(s) desta variação na venda — preço
+        // UNITÁRIO é derivado como média ponderada (valor_total / qtd) mais abaixo, não lido
+        // direto de uma linha só: a mesma variação pode aparecer em mais de uma linha da venda
+        // com preços diferentes (raro, mas possível — split de desconto por linha).
         List<ItemVendido> vendidos = jdbc.sql("""
                         SELECT pb.id_variacao, pb.sku, p.descricao AS descricao_produto,
                                co.descricao AS variacao_cor, ta.descricao AS variacao_tamanho,
-                               SUM(pmd.qtd_produto) AS qtd_vendida
+                               SUM(pmd.qtd_produto) AS qtd_vendida,
+                               SUM(pmd.qtd_produto * pmd.preco_venda) AS valor_total_vendido
                         FROM produto_movimento_mestre pmm
                         JOIN produto_movimento_detalhe pmd
                                ON pmd.id_movimento = pmm.id_movimento AND pmd.id_tenant = pmm.id_tenant
@@ -213,7 +220,8 @@ public class DevolucaoProdutoService {
                 .param(idVenda)
                 .query((rs, n) -> new ItemVendido(
                         rs.getLong("id_variacao"), rs.getString("sku"), rs.getString("descricao_produto"),
-                        rs.getString("variacao_cor"), rs.getString("variacao_tamanho"), rs.getBigDecimal("qtd_vendida")))
+                        rs.getString("variacao_cor"), rs.getString("variacao_tamanho"), rs.getBigDecimal("qtd_vendida"),
+                        rs.getBigDecimal("valor_total_vendido")))
                 .list();
         if (vendidos.isEmpty()) {
             return List.of();
@@ -241,9 +249,13 @@ public class DevolucaoProdutoService {
         for (ItemVendido v : vendidos) {
             BigDecimal devolvido = jaDevolvido.getOrDefault(v.idVariacao(), BigDecimal.ZERO);
             BigDecimal disponivel = v.qtdVendida().subtract(devolvido).max(BigDecimal.ZERO);
+            // Preço unitário = média ponderada da venda (valor total ÷ qtd vendida) — nunca o
+            // preço atual do cadastro. `HALF_UP`/escala 2 casas: é o valor que vai pro vale e,
+            // futuramente, pro XML da NF-e de devolução, sempre em BigDecimal monetário (P7).
+            BigDecimal precoUnitario = v.valorTotalVendido().divide(v.qtdVendida(), 2, java.math.RoundingMode.HALF_UP);
             resultado.add(new ItemVendaOrigemResponse(
                     v.idVariacao(), v.sku(), v.descricaoProduto(), v.variacaoCor(), v.variacaoTamanho(),
-                    v.qtdVendida(), disponivel));
+                    v.qtdVendida(), disponivel, precoUnitario, v.valorTotalVendido()));
         }
         return resultado;
     }
@@ -270,15 +282,56 @@ public class DevolucaoProdutoService {
                 .orElse(new FuncionarioVenda(null, null));
     }
 
+    /**
+     * Preços que a <b>venda original</b> praticou, por variação — média ponderada quando a mesma
+     * variação aparece em mais de uma linha da venda (raro, mas possível). ⚠️ <b>Não</b> é o preço
+     * do cadastro: pelo mesmo motivo documentado em {@code CancelamentoVendaService.estornarEstoque}
+     * ("o custo tem que ser o mesmo que saiu, mesmo que o cadastro já tenha mudado de preço desde
+     * então"), a devolução é a reversão daquela venda e tem que reverter pelos valores dela —
+     * senão o vale-mercadoria paga um valor diferente do que o cliente pagou, e o CMV/DRE fica
+     * torto. Vale duplamente a partir da NF-e de devolução (revisão 2026-08-19 da spec), que
+     * precisa espelhar os valores da nota de saída original.
+     */
+    private record PrecoOriginal(BigDecimal precoVenda, BigDecimal precoCusto) {
+    }
+
+    private Map<Long, PrecoOriginal> buscarPrecosOriginaisDaVenda(long idVenda) {
+        record Linha(long idVariacao, BigDecimal precoVenda, BigDecimal precoCusto) {
+        }
+        return jdbc.sql("""
+                        SELECT pmd.id_variacao,
+                               SUM(pmd.qtd_produto * pmd.preco_venda) / SUM(pmd.qtd_produto) AS preco_venda,
+                               SUM(pmd.qtd_produto * pmd.preco_custo) / SUM(pmd.qtd_produto) AS preco_custo
+                        FROM produto_movimento_mestre pmm
+                        JOIN produto_movimento_detalhe pmd
+                               ON pmd.id_movimento = pmm.id_movimento AND pmd.id_tenant = pmm.id_tenant
+                        WHERE pmm.id_tenant = plataforma.tenant_atual() AND pmm.id_venda = ?
+                              AND pmm.tipo_movimento = 'VENDA' AND pmd.qtd_produto > 0
+                        GROUP BY pmd.id_variacao
+                        """)
+                .param(idVenda)
+                .query((rs, n) -> new Linha(rs.getLong("id_variacao"),
+                        rs.getBigDecimal("preco_venda").setScale(2, java.math.RoundingMode.HALF_UP),
+                        rs.getBigDecimal("preco_custo").setScale(2, java.math.RoundingMode.HALF_UP)))
+                .list()
+                .stream()
+                .collect(Collectors.toMap(Linha::idVariacao, l -> new PrecoOriginal(l.precoVenda(), l.precoCusto())));
+    }
+
     private record ItemResolvido(long idVariacao, BigDecimal qtd, BigDecimal precoVenda, BigDecimal precoCusto,
                                   String sku, String descricaoProduto, String variacaoCor, String variacaoTamanho) {
     }
 
     /** Resolve descrição/variação/preço de cada item a partir do {@code idVariacao} — a tela
-     *  nunca envia preço nem descrição (mesmo princípio do PDV/Transferência). Não checa se a
-     *  quantidade devolvida bate com alguma venda (não há vínculo, ver package-info); não checa
-     *  saldo — saldo negativo é permitido de propósito em qualquer movimentação (2026-07-29). */
-    private List<ItemResolvido> resolverItens(List<ItemDevolucaoRequest> itens) {
+     *  nunca envia preço nem descrição (mesmo princípio do PDV/Transferência). Não checa
+     *  saldo — saldo negativo é permitido de propósito em qualquer movimentação (2026-07-29).
+     *
+     *  <p>{@code precosOriginais} (2026-08-19) tem prioridade sobre o preço do cadastro sempre que
+     *  a variação estiver lá (ou seja, quando a devolução está amarrada a uma venda — ver
+     *  {@link PrecoOriginal} pro porquê). Vazio quando a devolução não informa venda de origem:
+     *  aí não há outro valor possível, cai no cadastro como sempre foi. */
+    private List<ItemResolvido> resolverItens(List<ItemDevolucaoRequest> itens,
+                                              Map<Long, PrecoOriginal> precosOriginais) {
         boolean permiteQtdDecimal = configuracaoGeralService.permiteQtdDecimalProduto();
         List<ItemResolvido> resolvidos = new ArrayList<>();
         for (ItemDevolucaoRequest item : itens) {
@@ -304,7 +357,11 @@ public class DevolucaoProdutoService {
                     .optional()
                     .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Produto informado não existe ou está inativo."));
 
-            resolvidos.add(new ItemResolvido(item.idVariacao(), item.qtd(), linha.precoVenda(), linha.precoCusto(),
+            PrecoOriginal original = precosOriginais.get(item.idVariacao());
+            BigDecimal precoVenda = original != null ? original.precoVenda() : linha.precoVenda();
+            BigDecimal precoCusto = original != null ? original.precoCusto() : linha.precoCusto();
+
+            resolvidos.add(new ItemResolvido(item.idVariacao(), item.qtd(), precoVenda, precoCusto,
                     linha.sku(), linha.descricaoProduto(), linha.variacaoCor(), linha.variacaoTamanho()));
         }
         return resolvidos;

@@ -198,6 +198,130 @@ sistema é toda client-side, sem recarregar a página). Corrigido esperando `isF
 (`ConfiguracaoGeralForm.tsx`, `onSuccess` do salvar) pra qualquer tela já aberta reagir na hora.
 Detalhe técnico completo: [[feedback_react_query_cache_entre_telas]] (memória).
 
+## Revisão 2026-08-19 — grid de seleção por venda + NF-e de devolução
+
+Fecha a pergunta **DF20** (`docs/MODULOFISCAL.md` §10.2, "a pergunta mais importante do v1, e
+ainda sem resposta") e o item **B9** do roteiro fiscal (NF-e de devolução), que dependiam dela.
+
+> **Estado (2026-08-19):** a **grid de seleção por venda está implementada e testada ao vivo**; a
+> **NF-e de devolução está em construção** — montador de XML e assembler prontos e validados
+> contra o XSD oficial, faltando o serviço de emissão, a integração com a tela e o DANFE A4.
+
+### Dois modos de operação, decididos pelo mesmo parâmetro que já existe
+
+`cfg_geral.cfg_exige_numero_venda_devolucao` passa a decidir **o mecanismo de lançamento inteiro**,
+não só se o campo é obrigatório:
+
+**Ligado — grid de seleção (substitui a leitura por código de barras neste modo):**
+1. Ao entrar na tela, popup obrigatório pede o **Número da Venda** (mesmo padrão "popup
+   obrigatório ao entrar" já usado em Pesquisa de Vendas/Cancelamento de Devolução).
+2. Resolvida a venda, o popup mostra uma grid com os itens vendidos: **Código de Barras |
+   Descrição do Produto + Cor + Tamanho | Qtd. Vendida | Preço Unitário | Preço Total**, e um
+   botão **"Selecionar"** por linha + **"Selecionar Todos"** no topo. Dado real: o endpoint
+   `GET /vendas/devolucao/vendedor` já devolve `qtdVendida`/`qtdDisponivelDevolucao` por item
+   (RN-06, 2026-08-11) — só faltam `precoUnitario`/`valorTotal` (já existem em
+   `produto_movimento_detalhe`, é só expor).
+3. **Decidido:** clicar "Selecionar" adiciona a linha na grid final (a mesma "Itens a Devolver"
+   de sempre) com a **quantidade total ainda disponível** (`qtdDisponivelDevolucao`) — devolução
+   parcial de um item se ajusta **depois**, na grid final, com o campo de quantidade que já existe
+   hoje (não um campo novo dentro do popup). "Selecionar Todos" faz isso pra cada linha de uma vez.
+4. Popup fecha ("Confirmar"), tela segue com a grid final de sempre (revisar quantidade, remover
+   linha, "Gravar Devolução") — RN-02/RN-06 continuam valendo, só a **forma de lançar** mudou.
+
+**Desligado — leitura livre de código de barras (comportamento atual, sem mudança):** campo
+"Número da Venda" opcional e inline (não popup), leitura de código de barras sempre disponível.
+Se o operador preencher o número mesmo assim, a resolução de vendedor/itens e a restrição RN-06
+continuam se aplicando exatamente como hoje — só não aparece a grid de seleção.
+
+### Integração fiscal — NF-e de devolução (modelo 55, entrada)
+
+Regra decidida, independente do parâmetro acima (depende só de **ter ou não um número de venda
+resolvido com NFC-e autorizada**):
+
+| Situação | Nota fiscal? |
+|---|---|
+| Número da venda informado, e ela tem NFC-e `AUTORIZADO`/`CONTINGENCIA` | **Sim** — NF-e modelo 55, tipo entrada, referenciando a NFC-e original |
+| Número da venda informado, mas sem NFC-e (F12 desligado, ou nota rejeitada/não emitida) | **Não** — só vale-mercadoria, como hoje |
+| **Sem número de venda nenhum** | **Não** — mesmo tratamento do caso acima. Decidido via `AskUserQuestion`: sem nenhum documento de origem pra referenciar, uma "nota de devolução" deixa de ter base fiscal (seria juridicamente outra coisa — aquisição de terceiro não-contribuinte, fora de escopo). Revisitar só se/quando confirmado com o contador que há uma base segura. |
+
+**⚠️ Achado de pesquisa que precisa de confirmação do contador antes de ir pra produção:** existe
+uma mudança regulatória recente (**Ajuste SINIEF nº 8/2026**, em vigor desde 2026-05/08) que
+reestrutura como devolução deve ser referenciada — distinguindo devolução **total** (`refNFe`,
+referência simples pela chave) de **parcial** (grupo `DFeReferenciado`, item a item). As fontes
+consultadas não deixam claro se isso já vale pro consumidor final de balcão (NFC-e) ou só entre
+contribuintes (B2B) — não é algo pra eu decidir sozinho. Enquanto não confirmado, o padrão
+histórico documentado (CFOP 1.202 interno/2.202 interestadual, `dest` = próprio CNPJ da loja
+quando o consumidor original não foi identificado) é o ponto de partida, mas a estrutura exata de
+referência por item precisa ser revisada à luz dessa mudança antes de codar o montador do XML.
+
+### O que o schema já tem pronto (achado bom — B9 é mais barato do que parecia)
+
+Toda a base de dados pro modelo 55 **já existe**, semeada desde o B4/B6 sem nunca ter sido usada:
+- `cfg_cfop` já tem **1202**/**2202** ("Devolucao de venda de mercadoria adquirida ou recebida de
+  terceiros", interno/interestadual) semeados desde a V034.
+- `fiscal_numeracao` já aceita `modelo IN (55, 65)` — numeração do modelo 55 não precisa de
+  schema novo.
+- `fiscal_config_empresa` já tem `serie_nfe`/`emite_nfe` (só nunca usados) — falta só a tela de
+  Configuração Fiscal ligar `emite_nfe` (hoje só emitir NFC-e é operável).
+- `documento_fiscal_referencia` já existe **exatamente** pra isso: "a devolução referencia a
+  NFC-e original" está no comentário da tabela desde que foi criada (V035).
+- O transporte (`SefazTransporte`), a assinatura (`AssinadorXmlNfe`) e os 243 XSD oficiais já são
+  agnósticos de modelo — o que falta é só o **montador do XML** (um `MontadorXmlNfeDevolucao`,
+  espelhando os valores tributários já gravados em `documento_fiscal_item` da nota original, sem
+  reprocessar pelo motor tributário) e o **DANFE A4** (hoje só existe o DANFCE térmico, 80mm).
+
+### Preço da devolução passou a ser o da VENDA, não o do cadastro (2026-08-19)
+
+Achado ao expor `precoUnitario` na grid: `DevolucaoProdutoService` usava sempre
+`produto.preco_venda` (o preço de **hoje**) para gravar o movimento e derivar o valor do vale — se
+o preço mudou desde a venda, o cliente recebia um vale de valor diferente do que pagou. Corrigido:
+quando há venda de origem, o preço (e o **custo**, que alimenta o CMV do DRE) vêm da média
+ponderada de `produto_movimento_detalhe` daquela venda; sem venda de origem, cai no cadastro, como
+sempre. Mesmo princípio que `CancelamentoVendaService.estornarEstoque` já documentava para o custo.
+
+É pré-requisito da NF-e de devolução: a nota de entrada tem que espelhar os valores da nota de
+saída que ela referencia. Coberto por dois testes que formam controle negativo entre si —
+`devolucaoUsaOPrecoDaVendaOriginalMesmoDepoisDeOPrecoDoCadastroMudar` (espera o preço da venda) e
+`devolucaoSemNumeroDeVendaUsaOPrecoAtualDoCadastro` (espera o do cadastro), ambos com o cadastro
+alterado depois da venda.
+
+### Três armadilhas do XSD que só a validação contra o schema revelou (2026-08-19)
+
+O montador (`MontadorXmlNfeDevolucao`) valida contra o XSD oficial em teste, e o schema recusou
+três coisas que a leitura do MOC não anteciparia:
+
+| O que parecia | O que o schema exige |
+|---|---|
+| `NFref` logo após `cMunFG` (ordem "lógica" do cabeçalho) | `NFref` é o **último** elemento do `ide`, depois de `verProc`/`dhCont`/`xJust` |
+| `DFeReferenciado` dentro de `prod` (o nome sugere "referência do produto") | É filho de **`det`**, depois de `imposto` — descreve o **item**, não o produto |
+| `vPag` omitido quando `tPag=90`, como a **anotação** do XSD diz textualmente | O **schema** declara `vPag` obrigatório; quem valida é o schema. Vai `0.00` |
+
+A terceira é a mais traiçoeira: a documentação do próprio XSD contradiz o schema do próprio XSD.
+Está fixada como asserção de teste para o par não voltar a divergir em silêncio.
+
+### Endpoints de NF-e 55 do Paraná — pendência da F0 fechada (2026-08-19)
+
+`cfg_uf_autorizador` tinha as linhas do modelo 55 do PR com **URL nula de propósito** ("falhar
+explicitamente em vez de chutar domínio", V034). Sem elas o B9 não teria para onde transmitir.
+Confirmado no portal oficial Sped-PR (a mesma fonte que validou as da NFC-e): o PR tem autorizador
+**próprio** também para NF-e 55, em `nfe.sefa.pr.gov.br/nfe/` — **não usa SVRS**, ao contrário do
+que a primeira pesquisa sugeria. Preenchidas na V034 e aplicadas no banco de dev.
+`SefazAutorizadorCrudTest` deixou de documentar a pendência e passou a documentar a resolução,
+inclusive verificando que o host é `nfe.sefa` e não `nfce.sefa` (troca fácil, que só apareceria na
+primeira transmissão real).
+
+### Ainda em aberto
+
+- Se a venda referenciada ainda está dentro dos 30 min de cancelamento da NFC-e, vale sugerir
+  "cancele a venda direto" em vez de devolução+nota nova? (Cancelamento desfaz tudo; devolução
+  pode ser parcial — talvez os dois caminhos devam conviver, sem um substituir o outro.)
+- DANFE A4 — layout de referência recebido do dono do produto (`c:\fix\danfe_55.pdf`, NF-e real de
+  outro emissor): canhoto destacável, cabeçalho em 3 colunas (emitente / DANFE+tipo / chave de
+  acesso), natureza da operação + protocolo, destinatário, fatura/duplicata, cálculo do imposto em
+  duas faixas de caixas, transportador, tabela de produtos (código, descrição, NCM, O/CST, CFOP,
+  un, qtd, unitário, total, BC ICMS, valor ICMS, alíquotas) e dados adicionais. Ainda não
+  implementado — hoje só existe o DANFCE térmico de 80mm.
+
 ## User stories
 
 - Como operador de caixa, quero opcionalmente informar o número de uma venda pra que o sistema
@@ -332,8 +456,9 @@ incluindo o cancelamento reabrindo o vale). Suíte completa do projeto: **500/50
 
 ## Impacto nas integrações
 
-Nenhum — comissão, documento fiscal e TEF ficam fora do v1 (nenhum dos três existe no sistema
-hoje).
+Nenhum ainda — comissão e TEF ficam fora do v1. **Documento fiscal deixou de ser non-goal em
+2026-08-19** (planejamento, não implementado) — ver "Revisão 2026-08-19" acima; até esse trabalho
+ser codado, toda devolução continua sem nota fiscal, igual a hoje.
 
 ## Non-goals
 
@@ -342,6 +467,8 @@ hoje).
   venda) — a coluna existe e é preenchida, mas não dispara nenhuma lógica de troca.
 - Saldo parcial de vale (usar parte do valor e manter o resto disponível) — um vale é sempre
   consumido por inteiro, numa única venda.
+- **Emissão de nota fiscal sem nenhum número de venda informado** — decisão de escopo (ver
+  "Revisão 2026-08-19"), não limitação técnica.
 
 ## Métrica de sucesso
 

@@ -1,5 +1,6 @@
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import AjudaDaTela from '../../components/AjudaDaTela'
 import { BotaoFecharTela } from '../../components/BotaoFecharTela'
 import { IconeDevolucaoProduto, IconeExcluir, IconeLupa } from '../../components/Icones'
@@ -10,6 +11,7 @@ import {
   buscarVendedorDaVenda,
   efetivarDevolucao,
   type DevolucaoEfetivada,
+  type ItemVendaOrigem,
   type VendedorDaVenda,
 } from '../../lib/devolucaoProduto'
 import { useEu } from '../../lib/eu'
@@ -18,6 +20,7 @@ import { buscarProdutoPorCodigo, interpretarCodigoBarras, type PdvProduto } from
 import { maiusculas } from '../../lib/texto'
 import PesquisaProdutoModal from '../pdv/PesquisaProdutoModal'
 import ComprovanteValeModal from './ComprovanteValeModal'
+import SelecaoItensVendaModal from './SelecaoItensVendaModal'
 
 const CHAVE_TELA = 'vendas.devolucaoproduto.form'
 
@@ -40,6 +43,7 @@ function variacaoTexto(p: PdvProduto): string | null {
 
 export default function DevolucaoProduto() {
   const { data: eu } = useEu()
+  const navigate = useNavigate()
 
   const { data: cfgQtdDecimal } = useQuery({ queryKey: ['permite-qtd-decimal'], queryFn: buscarPermiteQtdDecimal })
   const permiteQtdDecimal = cfgQtdDecimal?.cfgPermiteQtdDecimal ?? true
@@ -56,6 +60,10 @@ export default function DevolucaoProduto() {
 
   const [itens, setItens] = useState<ItemLinha[]>([])
   const [mostrarPesquisa, setMostrarPesquisa] = useState(false)
+  /** Popup de seleção por venda (revisão 2026-08-19) — só existe quando o número da venda é
+   *  obrigatório; nesse modo ele SUBSTITUI a leitura por código de barras. Abre sozinho ao entrar
+   *  na tela e depois de cada devolução gravada (o fluxo recomeça na venda seguinte). */
+  const [mostrarSelecaoVenda, setMostrarSelecaoVenda] = useState(false)
   const [valorBarras, setValorBarras] = useState('')
   const [toast, setToast] = useState<{ texto: string; tipo: 'erro' | 'sucesso' } | null>(null)
   /** Vale gerado pela última devolução gravada — abre o comprovante automaticamente (2026-08-03). */
@@ -74,13 +82,14 @@ export default function DevolucaoProduto() {
     }
   }, [])
 
-  /** Foco do campo inicial depende da configuração (2026-08-11, pedido do dono do produto): se
-   *  o número da venda é obrigatório, o operador precisa preenchê-lo antes de tudo — foco vai pra
-   *  lá. Senão, o fluxo de sempre continua sendo ler o código de barras direto. Reusado tanto na
-   *  abertura da tela quanto depois de gravar uma devolução (o formulário volta ao estado inicial). */
-  const focarCampoInicial = () => {
+  /** Ponto de partida da tela, decidido pela configuração. **Revisão 2026-08-19:** com o número
+   *  da venda obrigatório, o operador não digita mais nada solto — abre o popup de seleção por
+   *  venda (que já pede o número e lista os itens). Sem a obrigatoriedade, o fluxo de sempre
+   *  continua: foco no código de barras, leitura livre. Reusado tanto na abertura da tela quanto
+   *  depois de gravar uma devolução (o formulário volta ao estado inicial). */
+  const iniciarFluxo = () => {
     if (exigeNumeroVenda) {
-      numeroVendaRef.current?.focus()
+      setMostrarSelecaoVenda(true)
     } else {
       campoBarrasRef.current?.focus()
     }
@@ -94,7 +103,7 @@ export default function DevolucaoProduto() {
     // que o foco só decide depois que o valor realmente confirmado do servidor chegou.
     if (cfgExigeVenda === undefined || buscandoCfgExigeVenda || focoInicialFeito.current) return
     focoInicialFeito.current = true
-    focarCampoInicial()
+    iniciarFluxo()
   }, [cfgExigeVenda, buscandoCfgExigeVenda, exigeNumeroVenda])
 
   /** Dispara sozinha ao sair do campo (`onBlur`) ou no Enter — sem botão manual (pedido do dono
@@ -169,6 +178,25 @@ export default function DevolucaoProduto() {
     },
     onError: (e: unknown) => setToast({ texto: e instanceof ApiError ? e.message : 'Não foi possível gravar a devolução.', tipo: 'erro' }),
   })
+
+  /** Popup de seleção confirmado (modo "número da venda obrigatório", 2026-08-19) — troca a grid
+   *  inteira pelos itens escolhidos, cada um com a quantidade DISPONÍVEL da venda e o preço que a
+   *  venda praticou (`precoUnitario`, não o do cadastro atual — ver `ItemVendaOrigem`). Devolução
+   *  parcial de um item se ajusta no campo de quantidade da grid, como sempre. */
+  const aoConfirmarSelecao = (vendaSelecionada: VendedorDaVenda, itensSelecionados: ItemVendaOrigem[]) => {
+    setNumeroVendaTexto(String(vendaSelecionada.numeroVenda))
+    setVendedor(vendaSelecionada)
+    setItens(
+      itensSelecionados.map((i) => ({
+        idVariacao: i.idVariacao,
+        descricao: i.descricaoProduto,
+        variacao: [i.variacaoCor, i.variacaoTamanho].filter(Boolean).join(' · ') || null,
+        precoVenda: i.precoUnitario,
+        qtdTexto: formatarQuantidade(i.qtdDisponivelDevolucao, permiteQtdDecimal),
+      })),
+    )
+    setMostrarSelecaoVenda(false)
+  }
 
   // Lança um produto na grid — se a variação já está na lista, soma `qtd` na quantidade em vez
   // de duplicar a linha (mesma rotina do PDV/Transferência).
@@ -292,88 +320,123 @@ export default function DevolucaoProduto() {
 
       <div className="lista-corpo">
         <div className="card form-secoes form-secoes-larga">
-          <section className="section">
-            <p className="section-label" style={{ margin: 0 }}>
-              Venda de Origem{exigeNumeroVenda ? '' : ' (opcional)'}
-            </p>
-            <p className="muted" style={{ marginTop: 4 }}>
-              {exigeNumeroVenda
-                ? 'Informe o número da venda para identificar o vendedor automaticamente — só é possível devolver produtos que fizeram parte dela, até a quantidade ainda não devolvida.'
-                : 'Informe o número da venda para identificar o vendedor automaticamente — a partir daí só é possível devolver produtos que fizeram parte dela, até a quantidade ainda não devolvida. Deixe em branco para uma devolução sem vínculo, como antes.'}
-            </p>
-            <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end', marginTop: 10 }}>
-              <div style={{ maxWidth: 220 }}>
-                <label>Número da Venda{exigeNumeroVenda ? ' *' : ''}</label>
-                <input
-                  ref={numeroVendaRef}
-                  type="text"
-                  inputMode="numeric"
-                  autoComplete="off"
-                  placeholder={exigeNumeroVenda ? 'Obrigatório' : 'Opcional'}
-                  value={numeroVendaTexto}
-                  onChange={(e) => {
-                    setNumeroVendaTexto(e.target.value.replace(/\D/g, ''))
-                    setVendedor(null)
-                  }}
-                  onKeyDown={aoDigitarNumeroVenda}
-                  onBlur={buscarVendedor}
-                />
-                {faltaNumeroVendaObrigatorio && <p className="erro-campo">Informe o número da venda de origem.</p>}
+          {/* Modo "venda obrigatória" (2026-08-19): a venda já foi escolhida no popup — aqui só
+              o resumo + o caminho de volta pro popup. O campo digitável e a leitura por código de
+              barras não existem nesse modo (o popup os substitui). */}
+          {exigeNumeroVenda ? (
+            <section className="section">
+              <div style={{ display: 'flex', gap: 16, alignItems: 'center', justifyContent: 'space-between' }}>
+                <div>
+                  <p className="section-label" style={{ margin: 0 }}>
+                    Venda de Origem
+                  </p>
+                  <p className="muted" style={{ marginTop: 4 }}>
+                    {vendedor ? (
+                      <>
+                        Venda nº <strong>{vendedor.numeroVenda}</strong>
+                        {vendedor.idFuncionario && (
+                          <>
+                            {' · '}Vendedor: <strong>{vendedor.nomeFuncionario}</strong>
+                          </>
+                        )}
+                      </>
+                    ) : (
+                      'Nenhuma venda selecionada.'
+                    )}
+                  </p>
+                </div>
+                <button type="button" className="btn ghost" onClick={() => setMostrarSelecaoVenda(true)}>
+                  {vendedor ? 'Trocar Venda' : 'Selecionar Venda'}
+                </button>
               </div>
-              {buscandoVendedor && <p className="muted" style={{ margin: 0 }}>Buscando…</p>}
-              {!buscandoVendedor && vendedor && (
-                <p className="muted" style={{ margin: 0 }}>
-                  {vendedor.idFuncionario
-                    ? <>Vendedor: <strong>{vendedor.nomeFuncionario}</strong></>
-                    : 'Sem vendedor associado a esta venda.'}
-                  {' · '}
-                  {vendedor.itens.length > 0
-                    ? `${vendedor.itens.length} produto(s) diferentes vendidos, disponíveis pra devolução.`
-                    : 'Nenhum item de venda encontrado nesta venda.'}
-                </p>
-              )}
-            </div>
-          </section>
+            </section>
+          ) : (
+            <section className="section">
+              <p className="section-label" style={{ margin: 0 }}>
+                Venda de Origem (opcional)
+              </p>
+              <p className="muted" style={{ marginTop: 4 }}>
+                Informe o número da venda para identificar o vendedor automaticamente — a partir daí só é possível
+                devolver produtos que fizeram parte dela, até a quantidade ainda não devolvida. Deixe em branco para
+                uma devolução sem vínculo, como antes.
+              </p>
+              <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end', marginTop: 10 }}>
+                <div style={{ maxWidth: 220 }}>
+                  <label>Número da Venda</label>
+                  <input
+                    ref={numeroVendaRef}
+                    type="text"
+                    inputMode="numeric"
+                    autoComplete="off"
+                    placeholder="Opcional"
+                    value={numeroVendaTexto}
+                    onChange={(e) => {
+                      setNumeroVendaTexto(e.target.value.replace(/\D/g, ''))
+                      setVendedor(null)
+                    }}
+                    onKeyDown={aoDigitarNumeroVenda}
+                    onBlur={buscarVendedor}
+                  />
+                </div>
+                {buscandoVendedor && <p className="muted" style={{ margin: 0 }}>Buscando…</p>}
+                {!buscandoVendedor && vendedor && (
+                  <p className="muted" style={{ margin: 0 }}>
+                    {vendedor.idFuncionario
+                      ? <>Vendedor: <strong>{vendedor.nomeFuncionario}</strong></>
+                      : 'Sem vendedor associado a esta venda.'}
+                    {' · '}
+                    {vendedor.itens.length > 0
+                      ? `${vendedor.itens.length} produto(s) diferentes vendidos, disponíveis pra devolução.`
+                      : 'Nenhum item de venda encontrado nesta venda.'}
+                  </p>
+                )}
+              </div>
+            </section>
+          )}
 
           <section className="section">
             <p className="section-label" style={{ margin: 0 }}>
               Produtos
             </p>
 
-            <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start', marginTop: 10 }}>
-              <div className="pdv-campo-codigo-barras" style={{ flex: 1 }}>
-                <div className="pdv-rotulo">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.6}>
-                    <path d="M4 5v14M8 5v14M11 5v14M13 5v14M17 5v14M20 5v14" />
-                  </svg>
-                  Código de Barras
+            {!exigeNumeroVenda && (
+              <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start', marginTop: 10 }}>
+                <div className="pdv-campo-codigo-barras" style={{ flex: 1 }}>
+                  <div className="pdv-rotulo">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.6}>
+                      <path d="M4 5v14M8 5v14M11 5v14M13 5v14M17 5v14M20 5v14" />
+                    </svg>
+                    Código de Barras
+                  </div>
+                  <input
+                    ref={campoBarrasRef}
+                    type="text"
+                    placeholder="Aguardando leitura…"
+                    autoComplete="off"
+                    inputMode="numeric"
+                    value={valorBarras}
+                    onChange={(e) => setValorBarras(maiusculas(e.target.value))}
+                    onKeyDown={aoDigitarBarras}
+                  />
+                  <p className="pdv-dica">Leia o código de barras do produto devolvido e pressione Enter.</p>
+                  <p className="pdv-dica">Dica: "5*código" lança direto com quantidade 5.</p>
                 </div>
-                <input
-                  ref={campoBarrasRef}
-                  type="text"
-                  placeholder="Aguardando leitura…"
-                  autoComplete="off"
-                  inputMode="numeric"
-                  value={valorBarras}
-                  onChange={(e) => setValorBarras(maiusculas(e.target.value))}
-                  onKeyDown={aoDigitarBarras}
-                />
-                <p className="pdv-dica">Leia o código de barras do produto devolvido e pressione Enter.</p>
-                <p className="pdv-dica">Dica: "5*código" lança direto com quantidade 5.</p>
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column' }}>
-                <div className="pdv-rotulo" style={{ visibility: 'hidden' }}>
-                  Pesquisar
+                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                  <div className="pdv-rotulo" style={{ visibility: 'hidden' }}>
+                    Pesquisar
+                  </div>
+                  <button type="button" className="btn ghost" style={{ height: 50, whiteSpace: 'nowrap' }} onClick={() => setMostrarPesquisa(true)}>
+                    <IconeLupa /> Pesquisar Produto
+                  </button>
                 </div>
-                <button type="button" className="btn ghost" style={{ height: 50, whiteSpace: 'nowrap' }} onClick={() => setMostrarPesquisa(true)}>
-                  <IconeLupa /> Pesquisar Produto
-                </button>
               </div>
-            </div>
+            )}
 
             {itens.length === 0 ? (
               <p className="muted" style={{ marginTop: 12 }}>
-                Nenhum produto adicionado ainda.
+                {exigeNumeroVenda
+                  ? 'Nenhum produto selecionado ainda — use "Selecionar Venda" para escolher o que será devolvido.'
+                  : 'Nenhum produto adicionado ainda.'}
               </p>
             ) : (
               <div className="table-wrap" style={{ marginTop: 12 }}>
@@ -451,6 +514,19 @@ export default function DevolucaoProduto() {
         </div>
       </div>
 
+      {mostrarSelecaoVenda && (
+        <SelecaoItensVendaModal
+          permiteQtdDecimal={permiteQtdDecimal}
+          aoConfirmar={aoConfirmarSelecao}
+          aoFechar={() => {
+            setMostrarSelecaoVenda(false)
+            // Sem venda selecionada não há o que fazer nesta tela neste modo — sai, em vez de
+            // deixar o operador olhando uma tela vazia sem caminho ([[project_botao_fechar_tela]]).
+            if (!vendedor) navigate(-1)
+          }}
+        />
+      )}
+
       {mostrarPesquisa && (
         <PesquisaProdutoModal aoFechar={() => setMostrarPesquisa(false)} aoSelecionar={aoSelecionarNaPesquisa} />
       )}
@@ -461,7 +537,7 @@ export default function DevolucaoProduto() {
           nomeEmpresa={eu?.empresa.nome ?? '—'}
           aoFechar={() => {
             setValeGerado(null)
-            focarCampoInicial()
+            iniciarFluxo()
           }}
         />
       )}

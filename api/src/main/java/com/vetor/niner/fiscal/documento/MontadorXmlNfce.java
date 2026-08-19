@@ -667,71 +667,52 @@ public class MontadorXmlNfce {
 
     // ---------------------------------------------------------------- auxiliares
 
-    /** Código IBGE da UF (`cUF`) — mapa único do módulo, ver {@link ChaveAcesso#codigoUfDe}. */
+    // ⚠️ Estes auxiliares MORAM em `XmlFiscal` desde 2026-08-19 — são compartilhados com o
+    // montador da NF-e 55 de devolução, e o escape/formatação tem que ser IDÊNTICO nos dois
+    // (ver o javadoc de `XmlFiscal` pro porquê). Os delegadores abaixo existem só pra não mexer
+    // nas ~200 chamadas deste arquivo, que já emite nota de verdade em produção.
+
     private static int codigoUfDe(String uf) {
-        try {
-            return ChaveAcesso.codigoUfDe(uf);
-        } catch (IllegalArgumentException e) {
-            throw new MontagemInvalidaException("UF do emitente inválida: %s.".formatted(uf));
-        }
+        return XmlFiscal.codigoUfDe(uf);
     }
 
     private static String tag(String nome, String valor) {
-        return "<" + nome + ">" + valor + "</" + nome + ">";
+        return XmlFiscal.tag(nome, valor);
     }
 
-    /** Emite a tag só quando há valor — campo opcional vazio é rejeitado, não ignorado. */
     private static String opcional(String nome, String valor) {
-        return vazio(valor) ? "" : tag(nome, texto(valor));
+        return XmlFiscal.opcional(nome, valor);
     }
 
-    /**
-     * Escapa o que o XML não aceita cru. Texto de produto vem do cadastro do lojista e pode ter
-     * {@code &} ("SABÃO P&G"), que sozinho quebra o XML — e quebraria só na nota daquele item,
-     * o tipo de bug que só aparece em produção.
-     */
     private static String texto(String valor) {
-        if (valor == null) {
-            return "";
-        }
-        return valor.replace("&", "&amp;")
-                .replace("<", "&lt;")
-                .replace(">", "&gt;")
-                .replace("\"", "&quot;")
-                .replace("'", "&apos;");
+        return XmlFiscal.texto(valor);
     }
 
-    /**
-     * Formata para o pattern do XSD: {@code 0|0\.[0-9]{2}|[1-9][0-9]{0,12}(\.[0-9]{2})?} — ou
-     * seja, sem zero à esquerda e sempre com as casas decimais completas.
-     * {@code BigDecimal.setScale().toPlainString()} já produz exatamente isso.
-     */
     private static String dec(BigDecimal valor, int casas) {
-        return nz(valor).setScale(casas, RoundingMode.HALF_UP).toPlainString();
+        return XmlFiscal.dec(valor, casas);
     }
 
     private static BigDecimal nz(BigDecimal v) {
-        return v == null ? BigDecimal.ZERO : v;
+        return XmlFiscal.nz(v);
     }
 
     private static boolean positivo(BigDecimal v) {
-        return v != null && v.signum() > 0;
+        return XmlFiscal.positivo(v);
     }
 
     private static boolean vazio(String s) {
-        return s == null || s.isBlank();
+        return XmlFiscal.vazio(s);
     }
 
     private static <T> T ouEntao(T valor, T alternativa) {
-        return valor == null ? alternativa : valor;
+        return XmlFiscal.ouEntao(valor, alternativa);
     }
 
     private static String apenasDigitos(String s) {
-        return s == null ? null : s.replaceAll("\\D", "");
+        return XmlFiscal.apenasDigitos(s);
     }
 
-    /** CNPJ/IE podem ser alfanuméricos (IN RFB 2.229/2024) — nunca limpar com digits-only. */
     private static String apenasAlfanumerico(String s) {
-        return s == null ? null : s.toUpperCase(Locale.ROOT).replaceAll("[^0-9A-Z]", "");
+        return XmlFiscal.apenasAlfanumerico(s);
     }
 }
