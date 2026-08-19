@@ -631,12 +631,17 @@ e um caso passava **por engano**. O fake passou a gerar um id por cobrança, com
    `UPDATE plataforma.parametro_comercial SET preco_base = …, fator_faixa = …, preco_maximo = …,
    vendas_maximo = …, tolerancia_vendas = … WHERE id = 1;` seguido de
    `SELECT plataforma.gerar_faixas_planos();` — sem deploy, sem migration.
-2. **Credenciais de teste do Mercado Pago** (`TEST-…`) em `NINER_MP_ACCESS_TOKEN` +
-   `NINER_MP_WEBHOOK_SECRET`, e um túnel público em `NINER_MP_NOTIFICATION_URL` para o webhook
-   chegar em dev. Alternativa sem colar credencial: autorizar o MCP Server do Mercado Pago
-   (`.mcp.json` já criado, falta rodar `/mcp`) e usar `get_credentials`/`create_test_user`.
-   Só então dá para validar o PIX ponta a ponta contra o sandbox — hoje a cobrança está provada
-   contra um gateway falso local (`CobrancaMercadoPagoTest`), não contra o Mercado Pago real.
+2. **Destravar o PIX no sandbox.** As credenciais que o dono do produto entregou **são de
+   usuário de teste** — confirmado por `GET /users/me` (`tags: [… test_user], nickname
+   TESTUSER…`); o prefixo `APP_USR-` não indica produção, é a credencial "live" de uma conta de
+   sandbox (registrado no CLAUDE.md, porque induziu a conclusão errada aqui). Com elas, a API
+   sobe e fala com o Mercado Pago, mas `POST /v1/payments` responde **401 `Unauthorized use of
+   live credentials`**: falta **chave PIX registrada** nessa conta de teste. Caminhos: registrar
+   a chave PIX na conta de teste, usar as credenciais **`TEST-`** da aplicação, ou provisionar o
+   test user pelo **MCP Server do Mercado Pago** (`.mcp.json` criado; falta rodar `/mcp`) e usar
+   `get_credentials`/`create_test_user`. Falta também um túnel público em
+   `NINER_MP_NOTIFICATION_URL` para o webhook chegar em dev. Até lá, a cobrança está provada
+   contra um gateway falso local (`CobrancaMercadoPagoTest`, 7 casos), não contra o MP real.
 3. **Dados reais da landing** em `site/src/dados/contato.ts` (WhatsApp, Instagram, e-mail, CNPJ,
    domínio) + os dois prints (`[PRINT: PDV]`, `[PRINT: Emissão de NFC-e]`) e a `og.png` 1200×630.
    Enquanto estiverem vazios, a página **esconde** os links em vez de publicar `wa.me/[PLACEHOLDER]`.
