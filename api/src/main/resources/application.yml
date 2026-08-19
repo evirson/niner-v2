@@ -50,6 +50,18 @@ niner:
   trial:
     dias: 60                   # trial sem cartão (D2 — revisto de 14 para 60 dias)
     plano: Profissional        # plano-base durante o trial (fallback: menor preço ativo)
+  limite-requisicao:           # protege a superfície pública (única com escrita anônima).
+                               # Em produção atrás de nginx, ligue confiar-proxy e mantenha
+                               # também o limit_req no proxy — este filtro é a segunda camada.
+    habilitado: ${NINER_LIMITE_HABILITADO:true}
+    confiar-proxy: ${NINER_LIMITE_CONFIAR_PROXY:false}
+    escrita-por-minuto: ${NINER_LIMITE_ESCRITA:10}    # signup, formulário de lead
+    beacon-por-minuto: ${NINER_LIMITE_BEACON:120}     # medição (envia em lote)
+  staff-inicial:               # primeiro SUPER_ADMIN do backoffice (só é criado se a tabela
+                               # plataforma.staff estiver VAZIA — ver StaffBootstrap)
+    email: ${NINER_STAFF_INICIAL_EMAIL:}
+    senha: ${NINER_STAFF_INICIAL_SENHA:}      # 🔴 mínimo 12 caracteres; nunca versionar
+    nome: ${NINER_STAFF_INICIAL_NOME:Administrador Vetor}
   cobranca:                    # cobrança da assinatura (ADR-016) — control-plane, não é o
                                # financeiro do lojista
     gateway: ${NINER_COBRANCA_GATEWAY:mercadopago}

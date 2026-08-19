@@ -11,11 +11,17 @@ mas porque cada um tem consequência concreta com cliente real dentro.
 
 ## 🔴 Bloqueadores (antes do primeiro cadastro de verdade)
 
-1. **`/api/admin/**` está `permitAll`** (TODO(jwt) em `SegurancaConfig`). Publicar `api.` sem
+> **Situação em 2026-08-19:** ✅ **1 e 4 resolvidos**. 2, 3 e 5 têm desenho decidido pelo dono do
+> produto — configuração no banco, editável pelo backoffice (ver "Decisão sobre configuração").
+
+1. ✅ **RESOLVIDO (2026-08-19).** ~~**`/api/admin/**` está `permitAll`**~~ (TODO(jwt) em `SegurancaConfig`). Publicar `api.` sem
    travar isso expõe o gerenciador de marketing — **nome, e-mail e WhatsApp de leads** — para
    qualquer um na internet. É vazamento de dado pessoal (LGPD), não "detalhe de segurança".
-   *Mínimo aceitável no dia 1:* bloquear `/api/admin/` no nginx por IP/VPN. *Certo:* JWT de staff
-   (`aud=plataforma`, ADR-009).
+   *Feito:* JWT de staff (`aud=plataforma`, ADR-009) com **decoder próprio por superfície** —
+   `/api/v1` só aceita `aud=tenant`, `/api/admin` só aceita `aud=plataforma`, e o token trocado de
+   lugar é recusado na porta. Login em `POST /api/admin/sessao`; primeiro `SUPER_ADMIN` criado por
+   `NINER_STAFF_INICIAL_EMAIL`/`_SENHA` **apenas se a tabela estiver vazia** (`StaffBootstrap`).
+   Coberto por `StaffAdminSegurancaTest` (5 casos).
 2. **Segredos com valor de desenvolvimento.** `niner.jwt.secret` tem default
    `niner-dev-secret-…` no `application.yml`: quem conhece esse valor **forja token de qualquer
    tenant** e entra em qualquer loja. Idem `niner.seguranca.chave-segredos` (cifra a senha do
@@ -24,11 +30,38 @@ mas porque cada um tem consequência concreta com cliente real dentro.
 3. **Backup do Postgres e do MinIO.** Hoje não existe nenhum. Com cliente real há dado fiscal com
    **guarda legal de 5 anos** e dado pessoal sob LGPD; perder o disco do VPS é perder o negócio do
    lojista. `pg_dump` diário + cópia fora do VPS + **um restore testado** (spec §3.6: RPO 24h).
-4. **Sem rate limit no `/api/publico/**`.** Signup, `/eventos` e `/leads` são escrita anônima;
-   `/eventos` aceita lote. Sem limite, um robô enche o banco. `limit_req` no nginx resolve o dia 1.
+4. ✅ **RESOLVIDO (2026-08-19).** ~~Sem rate limit no `/api/publico/**`~~ — `LimiteRequisicaoFilter`
+   com dois baldes por IP (escrita 10/min, beacon 120/min, ajustáveis por env), 429 em Problem
+   Details com `Retry-After`. Leitura de catálogo e **webhook de gateway ficam de fora** (recusar
+   notificação é perder confirmação de pagamento). Em produção, manter também `limit_req` no nginx
+   e ligar `NINER_LIMITE_CONFIAR_PROXY=true` — sem isso o filtro conta o IP do proxy, não o do
+   visitante. Coberto por `LimiteRequisicaoTest` (4 casos).
 5. **Não existe recuperação de senha nem e-mail transacional.** Lojista que esquece a senha fica
    trancado para fora, e nenhum aviso de cota chega por e-mail. Decisão do dono do produto:
    (a) aceitar reset manual pelo suporte no começo, ou (b) implementar antes de abrir cadastro.
+
+## Decisão sobre configuração (2026-08-19, dono do produto)
+
+Os itens 2, 3 e 5 passam a ser **configuráveis pelo backoffice**, com a divisão que a segurança
+exige:
+
+| Camada | Onde vive | Exemplos |
+|---|---|---|
+| **Nunca no banco** | variável de ambiente no VPS | senha do Postgres, `niner.jwt.secret`, chave mestra `chave-segredos` |
+| **No banco, cifrado** com a chave mestra | `plataforma.configuracao_plataforma` | senha do SMTP, access token do Mercado Pago, futuras credenciais de marketplace |
+| **No banco, em claro** | idem | host/porta/remetente do SMTP, agenda e retenção do backup, parâmetros comerciais (já em `parametro_comercial`) |
+
+O motivo de a chave mestra ficar fora: é ela que cifra o resto: guardá-la dentro do que ela
+protege faz um dump de banco valer tudo. Mesmo princípio já aplicado em
+`fiscal_certificado.senha_cifrada` (ADR-005).
+
+## ⚠️ VPS compartilhado com outros projetos (2026-08-19)
+
+O Docker do VPS **já roda outros projetos**. Antes de fixar qualquer porta:
+`ss -ltnp` (ou `docker ps --format '{{.Names}}: {{.Ports}}'`) e escolher faixa livre — o
+`.env` do compose já parametriza todas as portas (`NINER_DB_PORT`, `NINER_API_PORT`,
+`NINER_MINIO_PORT`…). É a mesma armadilha que apareceu na máquina de desenvolvimento, onde a
+8080 estava tomada por outro sistema. Só 80/443 são fixas, no proxy.
 
 ## 🟡 Importantes (podem entrar logo depois, mas com data)
 
@@ -40,7 +73,9 @@ mas porque cada um tem consequência concreta com cliente real dentro.
 - **Compose de produção + rotina de deploy**: migrations rodam como `niner_owner` (P8), a app
   como `niner_app`, e o Flyway **não** roda pela aplicação.
 - **Logs persistentes e alerta mínimo** (a API caiu? a fila de webhook parou?).
-- **`admin/` não existe** como app — o host fica reservado, sem nada para servir.
+- **`admin/` não existe** como app React — o host fica reservado. **A API do backoffice existe**
+  (funil, leads, contas perto do limite) e agora está autenticada; falta só a interface, que
+  passou a ser a próxima tela grande porque é onde a configuração de SMTP/backup vai morar.
 
 ## 🟢 Já pronto
 

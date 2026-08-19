@@ -4,6 +4,7 @@ import com.nimbusds.jose.jwk.source.ImmutableSecret;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Primary;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator;
@@ -36,9 +37,30 @@ public class JwtConfig {
         return new NimbusJwtEncoder(new ImmutableSecret<>(chave));
     }
 
-    /** Decoder do resource server: valida assinatura, expiração e exige aud=tenant. */
+    /**
+     * Decoder da superfície do lojista ({@code /api/v1}): assinatura, expiração e {@code
+     * aud=tenant}. É o {@code @Primary} porque é o caminho da maioria esmagadora das requisições.
+     */
     @Bean
+    @Primary
     JwtDecoder jwtDecoder() {
+        return decoderPara("tenant");
+    }
+
+    /**
+     * Decoder da superfície do backoffice ({@code /api/admin}): exige {@code aud=plataforma}.
+     *
+     * <p><b>Dois decoders, não um que aceite os dois `aud`.</b> Com um decoder permissivo, um
+     * token de lojista entraria no backoffice (e vice-versa) e a separação de populações (R18/P9)
+     * viraria só convenção. Assim, o token errado é rejeitado na porta, antes de qualquer
+     * checagem de papel.
+     */
+    @Bean
+    JwtDecoder jwtDecoderStaff() {
+        return decoderPara("plataforma");
+    }
+
+    private JwtDecoder decoderPara(String audiencia) {
         NimbusJwtDecoder decoder = NimbusJwtDecoder
                 .withSecretKey(chave)
                 .macAlgorithm(MacAlgorithm.HS256)
@@ -46,7 +68,7 @@ public class JwtConfig {
         decoder.setJwtValidator(new DelegatingOAuth2TokenValidator<>(
                 JwtValidators.createDefault(),
                 new JwtClaimValidator<List<String>>("aud",
-                        aud -> aud != null && aud.contains("tenant"))));
+                        aud -> aud != null && aud.contains(audiencia))));
         return decoder;
     }
 
