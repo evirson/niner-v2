@@ -299,6 +299,25 @@ três coisas que a leitura do MOC não anteciparia:
 A terceira é a mais traiçoeira: a documentação do próprio XSD contradiz o schema do próprio XSD.
 Está fixada como asserção de teste para o par não voltar a divergir em silêncio.
 
+### 🔴 Gap achado e corrigido: `documento_fiscal_item` nunca era gravada (2026-08-19)
+
+Construir a devolução expôs um buraco pré-existente do módulo fiscal: a tabela
+`documento_fiscal_item` existe desde a V035 e **nunca havia recebido um único `INSERT`** — o
+ambiente de dev tinha **43 documentos fiscais, 27 autorizados e zero itens**. O dado nunca esteve
+perdido (o `xml_assinado` sempre guardou a nota inteira), mas viver só dentro do XML o torna
+inacessível a qualquer consulta — e a NF-e de devolução precisa **espelhar a tributação item a
+item** da nota original, o que exige justamente essa tabela.
+
+Corrigido na origem: `DocumentoFiscalRepositorio.gravarAssinado` passou a gravar um item por
+linha, decompondo o que o motor calculou (ICMS/PIS/COFINS/IBS-CBS, CFOP, NCM, origem, valores).
+A FK `id_variacao` é resolvida por subquery a partir do SKU — `ItemNota` é o contrato do montador
+de XML e não carrega chave interna, e poluí-lo só por causa dessa coluna não se justificava.
+
+⚠️ **Notas autorizadas antes desta data seguem sem itens** — não há como reconstruí-las sem
+parsear o XML. Na prática são todas de homologação/teste; em produção o efeito é nulo, porque o
+fiscal ainda não foi ligado para nenhum cliente real. A devolução fiscal dessas notas é recusada
+explicitamente pelo assembler, com mensagem que explica o motivo, em vez de gerar nota incompleta.
+
 ### Endpoints de NF-e 55 do Paraná — pendência da F0 fechada (2026-08-19)
 
 `cfg_uf_autorizador` tinha as linhas do modelo 55 do PR com **URL nula de propósito** ("falhar

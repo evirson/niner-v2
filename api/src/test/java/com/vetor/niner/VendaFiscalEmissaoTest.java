@@ -326,6 +326,40 @@ class VendaFiscalEmissaoTest {
         assertThat(gravado.modelo()).isEqualTo(65);
         assertThat(gravado.tipoEmissao()).isEqualTo(1);
         assertThat(chave).hasSize(44).containsOnlyDigits();
+
+        // ⚠️ Gap corrigido em 2026-08-19: `documento_fiscal_item` existia desde a V035 e NUNCA
+        // recebia INSERT — o ambiente de dev tinha 27 notas autorizadas e zero itens. O dado
+        // estava só dentro do `xml_assinado`, inacessível a qualquer consulta. Descoberto ao
+        // construir a NF-e de devolução (B9), que precisa espelhar a tributação item a item.
+        var item = jdbc.sql("""
+                        SELECT i.numero_item, i.id_variacao, i.codigo_produto, i.descricao, i.cfop,
+                               i.csosn, i.quantidade, i.valor_produto, i.cst_pis, i.cst_cofins
+                          FROM documento_fiscal_item i
+                          JOIN documento_fiscal d ON d.id_documento_fiscal = i.id_documento_fiscal
+                                                 AND d.id_tenant = i.id_tenant
+                         WHERE i.id_tenant = ? AND d.id_venda = ?
+                        """)
+                .params(idTenant, idVenda)
+                .query((rs, n) -> new ItemFiscalGravado(rs.getInt("numero_item"), rs.getLong("id_variacao"),
+                        rs.getString("codigo_produto"), rs.getString("descricao"), rs.getString("cfop"),
+                        rs.getString("csosn"), rs.getBigDecimal("quantidade"), rs.getBigDecimal("valor_produto"),
+                        rs.getString("cst_pis"), rs.getString("cst_cofins")))
+                .single();
+
+        assertThat(item.numeroItem()).isEqualTo(1);
+        assertThat(item.idVariacao()).as("FK resolvida pelo SKU — é por ela que a devolução casa o item")
+                .isEqualTo(idVariacao);
+        assertThat(item.descricao()).isEqualTo("PRODUTO VENDA FISCAL");
+        assertThat(item.csosn()).isEqualTo("102");
+        assertThat(item.cfop()).isEqualTo("5102");
+        assertThat(item.valorProduto()).isEqualByComparingTo("30.00");
+        assertThat(item.cstPis()).isEqualTo("99");
+        assertThat(item.cstCofins()).isEqualTo("99");
+    }
+
+    private record ItemFiscalGravado(int numeroItem, long idVariacao, String codigoProduto, String descricao,
+                                      String cfop, String csosn, java.math.BigDecimal quantidade,
+                                      java.math.BigDecimal valorProduto, String cstPis, String cstCofins) {
     }
 
     /**

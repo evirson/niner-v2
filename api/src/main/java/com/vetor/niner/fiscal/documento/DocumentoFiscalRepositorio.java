@@ -2,15 +2,19 @@ package com.vetor.niner.fiscal.documento;
 
 import com.vetor.niner.fiscal.documento.EmissaoNfceService.PedidoDeEmissao;
 import com.vetor.niner.fiscal.documento.FiscalNumeracaoService.NumeroReservado;
+import com.vetor.niner.fiscal.documento.MontagemNfceDtos.ItemNota;
+import com.vetor.niner.fiscal.motor.MotorTributarioDtos.ItemTributado;
 import com.vetor.niner.fiscal.sefaz.SefazDtos.RespostaSefaz;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.HexFormat;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Persistência do documento fiscal ao longo da máquina de estados (§9.1).
@@ -61,7 +65,7 @@ public class DocumentoFiscalRepositorio {
     public long gravarAssinado(PedidoDeEmissao pedido, NumeroReservado numero,
                                String chave, String xmlAssinado, int tipoEmissao) {
         var t = pedido.totais();
-        return jdbc.sql("""
+        long idDocumento = jdbc.sql("""
                         INSERT INTO documento_fiscal (
                             id_tenant, id_empresa, modelo, serie, numero, chave_acesso,
                             codigo_numerico, digito_verificador, tipo_operacao, situacao, ambiente,
@@ -87,6 +91,94 @@ public class DocumentoFiscalRepositorio {
                         t.valorTribFederal(), t.valorTribEstadual(), t.valorTribMunicipal(), t.valorTotalTributos(),
                         xmlAssinado, sha256(xmlAssinado), pedido.idUsuario())
                 .query(Long.class).single();
+        gravarItens(idDocumento, pedido);
+        return idDocumento;
+    }
+
+    /**
+     * Itens da nota, um por linha em {@code documento_fiscal_item} — a tributação que o motor
+     * calculou, decomposta em colunas.
+     *
+     * <p>⚠️ <b>Gap corrigido em 2026-08-19</b>: a tabela existia desde a V035 e <b>nunca havia
+     * recebido um INSERT</b> — 43 documentos fiscais no ambiente de dev, 27 autorizados, e zero
+     * itens. O dado não estava perdido (o {@code xml_assinado} sempre guardou tudo), mas só em
+     * XML, o que o torna inútil para qualquer consulta. Descoberto ao construir a NF-e de
+     * devolução (B9), que precisa <b>espelhar</b> a tributação da nota original item a item: sem
+     * esta tabela preenchida não há de onde espelhar, restando fazer parse do XML — frágil e
+     * desnecessário, já que o schema previa exatamente isto.
+     *
+     * <p>⚠️ Notas <b>autorizadas antes desta data</b> seguem sem itens (não há como reconstruí-los
+     * sem parsear o XML) — a devolução fiscal delas é recusada explicitamente pelo assembler,
+     * com mensagem que explica o motivo, em vez de gerar uma nota incompleta.
+     */
+    private void gravarItens(long idDocumento, PedidoDeEmissao pedido) {
+        Map<Integer, ItemTributado> tributadoPorItem = pedido.itensTributados().stream()
+                .collect(java.util.stream.Collectors.toMap(ItemTributado::nItem, t -> t));
+
+        for (ItemNota item : pedido.itens()) {
+            ItemTributado t = tributadoPorItem.get(item.nItem());
+            if (t == null) {
+                continue;   // não deve acontecer: montador e motor recebem a mesma lista
+            }
+            var icms = t.icms();
+            var pis = t.pis();
+            var cofins = t.cofins();
+            var ibs = t.ibsCbs();
+            boolean temIbs = ibs != null && ibs.aplicavel();
+            jdbc.sql("""
+                            INSERT INTO documento_fiscal_item (
+                                id_tenant, id_documento_fiscal, numero_item, id_variacao, codigo_produto,
+                                codigo_ean, descricao, codigo_ncm, cest, cfop, unidade_comercial,
+                                quantidade, valor_unitario, valor_produto, valor_desconto,
+                                unidade_tributavel, quantidade_trib, valor_unitario_trib, origem_mercadoria,
+                                cst_icms, csosn, base_calculo_icms, perc_reducao_bc, aliquota_icms, valor_icms,
+                                aliquota_fcp, valor_fcp,
+                                cst_pis, base_calculo_pis, aliquota_pis, valor_pis,
+                                cst_cofins, base_calculo_cofins, aliquota_cofins, valor_cofins,
+                                cst_ibscbs, cclasstrib, base_ibscbs, aliquota_ibs_uf, valor_ibs_uf,
+                                aliquota_ibs_mun, valor_ibs_mun, aliquota_cbs, valor_cbs,
+                                valor_total_tributos)
+                            VALUES (plataforma.tenant_atual(), ?, ?,
+                                    -- `ItemNota` é o contrato do montador de XML e não carrega
+                                    -- chave interna (só o SKU, que é o cProd da nota) — resolver
+                                    -- aqui evita poluí-lo com `idVariacao` só por causa desta FK.
+                                    (SELECT pb.id_variacao FROM produto_barra pb
+                                      WHERE pb.id_tenant = plataforma.tenant_atual() AND pb.sku = ? LIMIT 1),
+                                    ?,
+                                    COALESCE(?, 'SEM GTIN'), ?, ?, ?, ?, ?,
+                                    ?, ?, ?, ?,
+                                    ?, ?, ?, ?,
+                                    ?, ?, ?, ?, ?, ?,
+                                    ?, ?,
+                                    ?, ?, ?, ?,
+                                    ?, ?, ?, ?,
+                                    ?, ?, ?, ?, ?,
+                                    ?, ?, ?, ?,
+                                    ?)
+                            """)
+                    .params(idDocumento, item.nItem(), item.codigoProduto(), item.codigoProduto(),
+                            item.gtin(), item.descricao(), item.ncm(), item.cest(), t.cfop(),
+                            item.unidadeComercial(),
+                            item.quantidade(), item.valorUnitario(), t.valorProduto(), nz(t.valorDesconto()),
+                            item.unidadeTributavel() != null ? item.unidadeTributavel() : item.unidadeComercial(),
+                            item.quantidadeTributavel() != null ? item.quantidadeTributavel() : item.quantidade(),
+                            item.valorUnitarioTributavel() != null ? item.valorUnitarioTributavel() : item.valorUnitario(),
+                            item.origemMercadoria(),
+                            icms.cst(), icms.csosn(), nz(icms.baseCalculo()), nz(icms.percReducaoBc()),
+                            nz(icms.aliquota()), nz(icms.valor()), nz(icms.aliquotaFcp()), nz(icms.valorFcp()),
+                            pis.cst(), nz(pis.baseCalculo()), nz(pis.aliquota()), nz(pis.valor()),
+                            cofins.cst(), nz(cofins.baseCalculo()), nz(cofins.aliquota()), nz(cofins.valor()),
+                            temIbs ? ibs.cst() : null, temIbs ? ibs.cClassTrib() : null,
+                            temIbs ? nz(ibs.baseCalculo()) : BigDecimal.ZERO,
+                            temIbs ? nz(ibs.aliquotaIbsUf()) : BigDecimal.ZERO,
+                            temIbs ? nz(ibs.valorIbsUf()) : BigDecimal.ZERO,
+                            temIbs ? nz(ibs.aliquotaIbsMun()) : BigDecimal.ZERO,
+                            temIbs ? nz(ibs.valorIbsMun()) : BigDecimal.ZERO,
+                            temIbs ? nz(ibs.aliquotaCbs()) : BigDecimal.ZERO,
+                            temIbs ? nz(ibs.valorCbs()) : BigDecimal.ZERO,
+                            nz(t.valorTotalTributos()))
+                    .update();
+        }
     }
 
     /**
