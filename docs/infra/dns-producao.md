@@ -29,8 +29,26 @@ por isso não pedimos wildcard.
 registro.br, uma vez; daí em diante a equipe do produto gerencia tudo (inclusive TXT para
 certificado wildcard, CDN e proteção). Melhor se a expectativa é mexer em DNS com frequência.
 
-Recomendação: **A** para subir agora; **B** quando houver mais de um ambiente (homologação) ou
-necessidade de wildcard/CDN.
+**✅ Decidido (2026-08-18): Opção A** — o Evirson configura direto no registro.br. A Opção B fica
+registrada só como caminho futuro, se um dia aparecer necessidade de wildcard/CDN.
+
+### Como fazer no painel do registro.br
+
+1. Entrar em `registro.br` → **Painel** → clicar no domínio `niner.com.br`.
+2. A edição de zona só aparece quando o domínio usa **os servidores DNS do próprio registro.br**
+   (`a.auto.dns.br` / `b.auto.dns.br`). Se estiver apontado para DNS de terceiro (ex.: o da
+   hospedagem antiga), é preciso trocar para os do registro.br antes — e essa troca **leva o
+   e-mail e o site atuais junto**, então confira o que existe hoje antes de mexer.
+3. Na edição da zona, cada linha é *nome + tipo + valor*. O **nome do apex fica em branco** (é o
+   próprio domínio); os demais são só o rótulo: `www`, `app`, `admin`, `api` — **sem** digitar
+   `.niner.com.br`.
+4. O TTL no editor do registro.br costuma ser **global da zona**, não por registro; se for o
+   caso, deixe o padrão — os 300 segundos da tabela são só uma preferência para a migração.
+5. Salvar/publicar as alterações. A publicação costuma valer em minutos; até uma hora é normal.
+6. Conferir de qualquer máquina:
+   `dig +short niner.com.br app.niner.com.br admin.niner.com.br api.niner.com.br`
+   — os quatro têm que devolver o **mesmo IP**. Só depois disso vale emitir os certificados
+   (a validação HTTP-01 falha enquanto o nome não resolver).
 
 ## Registros (Opção A)
 
