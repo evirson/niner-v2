@@ -120,6 +120,15 @@ public final class MontagemNfceDtos {
     }
 
     /**
+     * CSC (Código de Segurança do Contribuinte) já decifrado — necessário só para o QR Code
+     * <b>online</b> (NT 2015.002 v2: {@code hashQRCode = SHA-1(chave+token)}, formato
+     * {@code chave|2|tpAmb|idCSC|hashQRCode}). A contingência (offline) não usa: ali quem garante
+     * a autenticidade é a assinatura RSA do certificado, não o CSC — ver {@code qrCodeOffline}.
+     */
+    public record CscEmpresa(String id, String token) {
+    }
+
+    /**
      * A nota inteira, pronta para virar XML. {@code numero}/{@code serie}/{@code codigoNumerico}
      * vêm da reserva de numeração (F4); {@code itensTributados} e {@code totais} vêm do motor.
      */
@@ -141,6 +150,7 @@ public final class MontagemNfceDtos {
             String informacoesComplementares,
             ResponsavelTecnico responsavelTecnico,
             UrlsConsultaUf urls,
+            CscEmpresa csc,
             String versaoAplicativo) {
     }
 

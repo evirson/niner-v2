@@ -31,7 +31,7 @@ decisão de arquitetura vira ADR no formato §6 da spec.
 | DF8 | Emissão no PDV | ✅ **Síncrona na efetivação** + **contingência offline** |
 | DF10 | Cancelamento | ✅ **Uma operação só** — cancelar a venda cancela a nota, com trava de prazo legal |
 | DF11 | Arquivamento | ✅ XML das notas próprias + eventos · ZIP por período · DANFCE/DANFE em PDF junto |
-| DF17 | QR Code | ✅ **v3.00 (NT 2025.001) desde o início** — sem o modelo v2.0 legado; ver §9.5 |
+| DF17 | QR Code | ⚠️ **Corrigido em 2026-08-19**: online é **v2 com CSC+hash** (não v3 sem CSC como assumido antes — v3 sem hash chegou a ser rejeitado de verdade, `cStat 464`); contingência continua v3 com assinatura. Ver §9.5 |
 | **DF35** 🆕 | **Escopo do v1 fiscal** | ✅ **NFC-e ao consumidor final (identificado ou não) + NF-e de devolução de venda**, com o ciclo de vida completo da nota: cancelamento, inutilização, contingência offline, arquivamento e download. **Todo o resto fica documentado como implementação futura** (§4.2) |
 | DF9 | Escopo da NF-e (modelo 55) | ✅ Reduzido pela DF35: **só a nota de devolução de venda** (entrada, `finNFe=4`). Venda a CNPJ, transferência e devolução ao fornecedor ⇒ futuras |
 | DF13 | Venda a CNPJ contribuinte no PDV | ✅ Revisada pela DF35: sem NF-e de venda no v1, o PDV **emite NFC-e para consumidor final, inclusive com CNPJ** (`indIEDest` 2 ou 9), e **recusa a emissão** quando o cliente é contribuinte de ICMS (`indIEDest = 1`), com mensagem que ensina a saída. A venda em si nunca é bloqueada (F3) — ver §9.6 |
@@ -885,6 +885,16 @@ multi-tenant (uma licença da Vetor cobrindo todos os tenants, ou cada lojista c
 > variável, omissão quando zero) e `VendaFiscalEmissaoTest` (ponta a ponta real — produto com NCM
 > real + origem Importado, venda autorizada, `documento_fiscal.valor_total_tributos` e o XML
 > assinado batendo com a fórmula). **770/770 testes de backend verdes.**
+>
+> **✅ Detalhamento por esfera, 2026-08-19.** O DANFE passou a mostrar `Federal: X% Estadual: Y%
+> Municipal: Z%` junto do total (só percentual, não R$ — pedido do dono do produto, o valor em
+> reais poluía a linha). O XSD só tem **um** campo `vTotTrib` (não dá pra quebrar no XML), então o
+> detalhamento é **só do DANFE**: `MotorTributarioDtos.ItemTributado`/`TotaisTributarios` ganharam
+> `valorTribFederal`/`Estadual`/`Municipal` ao lado do total (a soma dos três continua igual ao
+> total — teste novo prova isso com três alíquotas diferentes, não o mesmo valor repetido);
+> `documento_fiscal` ganhou as três colunas (V035) só para servir o front. Achado no caminho: o
+> `INSERT` de `gravarAssinado()` ficou com um `?` a menos pros parâmetros novos — toda emissão
+> quebrava com 409 até o fix.
 
 ### 8.6.1 Layout impresso do DANFE (bobina térmica) — especificação recebida em 2026-08-19
 
@@ -1039,31 +1049,58 @@ Fonte: `sped.fazenda.pr.gov.br/NFCe/Pagina/Web-Services-NFC-e`.
 maior parte dos estados de uma vez; autorizadores próprios restantes (SP, MG, BA…) vêm depois, um
 a um.
 
-### 9.5 QR Code da NFC-e — v3.00
+### 9.5 QR Code da NFC-e — online v2.0 (CSC+hash) para emissão normal, v3 só para contingência
 
-✅ **DF17: só a versão 3.00** (NT 2025.001), obrigatória em produção desde 01/09/2025. O modelo v2.0
-(hash SHA-1 com CSC) **não será implementado**.
-
-✅ **Estrutura confirmada no B7 contra o pattern do `leiauteNFe_v4.00.xsd`** (⚠️ o que esta seção
-descrevia antes estava errado nas duas formas — codificar por ela daria rejeição por schema):
+⚠️ **DF17 corrigida em 2026-08-19: a suposição de "só v3.00, sem CSC" estava errada e chegou a
+derrubar uma emissão real** — `cStat 464` "Código de Hash no QR-Code difere do calculado". O que
+esta seção descrevia antes (`3.00` para tudo, "modelo v2.0 não será implementado") **passava** no
+XSD (que só confere a *forma* do campo — qualquer dígito único ali é sintaticamente válido) mas era
+**rejeitado pela SEFAZ-PR de verdade**, tanto na autorização (`cStat 464`) quanto no portal público
+de consulta ("Url do QRCode mal formatado"). Corrigido e **confirmado ao vivo**: a mesma nota,
+depois do ajuste, saiu `AUTORIZADO` com protocolo real. Fórmula do hash conferida contra a
+implementação de referência `nfephp-org/sped-nfe` (`get200()`).
 
 | Emissão | Formato (depois de `?p=`) |
 |---|---|
-| **Online** (`tpEmis` 1/3/4) | `<chave44>` \| `3` \| `<tpAmb>` |
+| **Online** (`tpEmis` 1/3/4) | `<chave44>` \| `2` \| `<tpAmb>` \| `<idCSC>` \| `<hashQRCode>` |
 | **Contingência** (`tpEmis` 9) | `<chave44>` \| `3` \| `<tpAmb>` \| `<dia>` \| `<vNF>` \| `<indicador>` \| `<documento>` \| `<assinatura>` |
 
-- `<dia>` é **o dia do mês em 2 dígitos** (01–31), *não* o `dhEmi` completo — foi o erro mais
-  perigoso do texto anterior.
+**Online** (a emissão do dia a dia — a que estava quebrada):
+- `<idCSC>` **sem zeros à esquerda** — a SEFAZ credencia e exibe o CSC como `"000001"`, mas o
+  padrão do XSD para este campo é `0|[1-9][0-9]{1,5}`; o literal com zeros é rejeitado por
+  schema. `MontadorXmlNfce.qrCodeOnline` normaliza (`Integer.parseInt` + `String.valueOf`) antes
+  de montar a URL.
+- `<hashQRCode>` = `SHA-1(<chave44>|2|<tpAmb>|<idCSC> + <CSC>)`, hex **maiúsculo**, 40 caracteres.
+  ⚠️ **Não é** `SHA-1(chave+CSC)` — esse foi exatamente o bug que gerou o `cStat 464`: falta
+  concatenar a sequência inteira (`chave|2|tpAmb|idCSC`) antes do CSC, não só a chave.
+- O CSC (token, não o id) é lido **decifrado** de `fiscal_config_empresa.csc_token_cifrado` via
+  `FiscalConfigService.carregarCscParaEmissao` — nunca exposto por endpoint (mesmo espírito do
+  certificado). Sem CSC configurado, `FiscalConfigService.validarGates` recusa **ligar** a emissão
+  de NFC-e (F11) — antes dava pra ligar e todo QR Code sair inválido em silêncio.
+- ⚠️ **`csc_token_cifrado` não estava cifrado** desde que a tela existe — a coluna tinha o nome
+  certo, mas `resolverCscToken` nunca chamava `SegredoCifrador`. Corrigido (AES-256-GCM, mesmo
+  padrão de `fiscal_certificado.senha_cifrada`).
+
+**Contingência** (`3`, com assinatura RSA) **continua igual** — não foi tocada nesta correção,
+porque o problema era só no branch online:
+- `<dia>` é **o dia do mês em 2 dígitos** (01–31), *não* o `dhEmi` completo.
 - `<indicador>` (1 CPF · 2 CNPJ · 3 estrangeiro) e `<documento>` podem vir **vazios** (venda de
   balcão sem CPF), mas **os separadores continuam obrigatórios**.
 - `<assinatura>` é **RSA-SHA1 em Base64** sobre exatamente esses parâmetros, com a chave privada do
   certificado da empresa — assinatura de **texto puro**, não XMLDSig. É ela que substitui a SEFAZ
-  como prova de autenticidade enquanto a nota não foi transmitida.
-- O CSC saiu da montagem no v3 (não há hash).
+  como prova de autenticidade enquanto a nota não foi transmitida. Sem CSC.
 
 Independente da versão, `infNFeSupl` (`qrCode` + `urlChave`) é **obrigatório na NFC-e** e
 **inexistente na NF-e**. Como `infNFeSupl` fica **fora** de `infNFe`, ele **não** é coberto pela
 assinatura XMLDSig — daí o QR offline precisar de assinatura própria.
+
+⚠️ **Testando QR Code de homologação contra o portal público da SEFAZ-PR**: o portal
+(`fazenda.pr.gov.br/nfce/qrcode`) responde "Url do QRCode mal formatado" para **qualquer** nota de
+homologação, mesmo com formato e hash corretos — confirmado trocando só `tpAmb` de `2` para `1` no
+mesmo QR Code: a mensagem muda para "Chave de Acesso... não consta na base de dados da SEFAZ" (ou
+seja, o parsing funciona, só não indexa homologação para consulta pública). **Isso não é bug do
+Niner** — é o portal público que não expõe notas de teste. Notas de produção devem ler
+normalmente.
 
 ### 9.6 Fluxo síncrono no PDV (DF8 + DF13)
 
@@ -1541,7 +1578,7 @@ automatizado — os 10.515 NCMs de `cfg_produto_ncm` vieram por esse mesmo camin
 |---|---|---|
 | Lib de DF-e incompatível com Java 25 / Spring Boot 4 | Alto — trava a arquitetura | PoC na F0, antes de qualquer código de produto (§14) |
 | ~~IBS/CBS compondo ou não o total da nota (DF32)~~ | ~~Alto — cupom não bate com o caixa~~ | ✅ Resolvido: não compõem (XSD, `vNFTot` separado). O cupom bate com o caixa |
-| QR Code v3.00 implementado errado | Alto — cupom inválido no dia 1 | Confirmar no MOC; validar cupom real com leitor no piloto |
+| ~~QR Code implementado errado~~ | ~~Alto — cupom inválido no dia 1~~ | ✅ Materializado e corrigido em 2026-08-19 (`cStat 464` real) — online é v2+CSC+hash, não v3; ver §9.5 |
 | NT nova não implementada a tempo | **Crítico — todos os tenants param juntos** | Rotina de acompanhamento (§16.4); homologação sempre pronta |
 | Vazamento de certificado | Crítico — terceiro emite no CNPJ do lojista | F7 + KMS + auditoria de uso |
 | **Base cadastral incompleta no onboarding** | Alto — lojista liga o fiscal e não consegue vender | Conformidade Fiscal (§12) + colunas fiscais na Importação |
@@ -1590,7 +1627,7 @@ Legenda: ✅ fonte oficial · ◐ fontes secundárias convergentes · ✳ corrig
 |---|---|---|
 | 1 | Versão da NT 2025.002-RTC | ◐ ✳ **v1.51 (~31/07/2026)**; adia ~20 validações para 01/09 (homolog.) e **05/10/2026** (produção). Obrigatoriedade CRT 3 desde 03/08/2026 ✅ (site do CGIBS) |
 | 2 | Simples/MEI: data em 2027 | ◐ **04/01/2027** (art. 348 da LC 214/2025) |
-| 3 | QR Code v3.00 e CSC | ◐ v3.00 obrigatório desde 01/09/2025; autenticidade por assinatura; CSC fora do QR mas **não extinto** |
+| 3 | QR Code v3.00 e CSC | ⚠️ **A pesquisa nacional dizia v3.00 sem CSC — testado ao vivo contra a SEFAZ-PR em 2026-08-19 e não é o que o autorizador nem o portal de consulta aceitam.** Emissão online usa **v2 + CSC + hash**; só a contingência (offline, com assinatura) usa v3. Ver §9.5 — PR pode não ter migrado, ou a NT nacional não se aplica igual a todo autorizador; decisão tomada pelo que funciona de verdade, não pela pesquisa |
 | 4 | Algoritmo de assinatura | ◐ **RSA-SHA1 + C14N** vigente; nenhuma NT de migração a SHA-256 localizada |
 | 5 | UF piloto e autorizador | ✅ ✳ **PR NÃO usa SVRS** — autorizador próprio (portal Sped-PR) |
 | 6 | Prazo pós-contingência | ✅ **PR: 24 horas** (NPF 100/2014). Varia por UF → coluna em `cfg_uf_autorizador` |

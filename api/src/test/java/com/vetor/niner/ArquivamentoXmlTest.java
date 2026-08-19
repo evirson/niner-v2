@@ -187,7 +187,8 @@ class ArquivamentoXmlTest {
                         .contentType(APPLICATION_JSON)
                         .content("""
                                 {"crt":1,"emiteNfce":true,"emiteNfe":false,
-                                 "ambiente":"HOMOLOGACAO","serieNfce":1,"serieNfe":1,"serieContingencia":9}
+                                 "ambiente":"HOMOLOGACAO","serieNfce":1,"serieNfe":1,"serieContingencia":9,
+                                 "cscId":"000001","cscToken":"csc-fake-de-teste"}
                                 """))
                 .andExpect(status().isOk());
     }

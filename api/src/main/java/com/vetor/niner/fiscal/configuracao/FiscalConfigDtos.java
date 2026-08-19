@@ -66,6 +66,14 @@ public final class FiscalConfigDtos {
             OffsetDateTime atualizadoEm) {
     }
 
+    /**
+     * CSC decifrado, pronto para montar o QR Code da NFC-e — nunca exposto por endpoint (mesmo
+     * espírito do {@code CertificadoParaAssinatura}, write-only na API); só
+     * {@code EmissaoNfceService} usa.
+     */
+    public record CscParaEmissao(String id, String token) {
+    }
+
     /** Uma empresa do tenant no seletor do topo da tela. */
     public record EmpresaFiscalResponse(
             long idEmpresa,

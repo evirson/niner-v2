@@ -9,6 +9,9 @@ import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.OffsetDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Locale;
@@ -511,10 +514,13 @@ public class MontadorXmlNfce {
      * dele dentro de {@code NFe}), o que também significa que <b>não é assinado</b> pela
      * XMLDSig — daí o QR offline carregar assinatura própria.
      *
-     * <p><b>Online</b> ({@code tpEmis} 1/3/4): {@code ?p=<chave44>|3|<tpAmb>}. O QR não precisa
-     * dizer mais nada porque quem consulta chega na SEFAZ e lê a nota inteira de lá. O estudo
-     * documentava só {@code |<versao>} e <b>omitia o tpAmb</b> — era essa a causa dos três
-     * {@code cStat 225} do B0.
+     * <p><b>Online</b> ({@code tpEmis} 1/3/4): {@code ?p=<chave44>|2|<tpAmb>|<idCSC>|<hashQRCode>}
+     * (NT 2015.002 v2), {@code hashQRCode = SHA-1(chave+cscToken)} em hex maiúsculo. ⚠️
+     * <b>Achado em 2026-08-19, testando ao vivo contra o portal da SEFAZ-PR:</b> a versão "3" sem
+     * CSC/hash — que passa na autorização, porque o XSD só confere a <i>forma</i> do campo — é
+     * recusada pelo <b>portal de consulta</b> com "Url do QRCode mal formatado". Confirmado por
+     * comparação com QR Codes reais do PR: a autorização aceita "3" solto, mas quem lê o QR quer
+     * "2" com CSC — são validações independentes, uma não implica a outra.
      *
      * <p><b>Offline</b> ({@code tpEmis = 9}): a SEFAZ ainda não tem a nota, então o QR precisa
      * carregar o suficiente para o consumidor conferir na hora — e ser assinado, porque sem a
@@ -533,12 +539,42 @@ public class MontadorXmlNfce {
                                   AssinadorQrCode assinadorQrOffline, OffsetDateTime emissaoLocal) {
         String qr = nota.tipoEmissao() == TP_EMIS_CONTINGENCIA_OFFLINE
                 ? qrCodeOffline(nota, chave, assinadorQrOffline, emissaoLocal)
-                : "%s?p=%s|3|%d".formatted(nota.urls().urlQrCode(), chave, nota.ambiente().codigo());
+                : qrCodeOnline(nota, chave);
 
         xml.append("<infNFeSupl>")
                 .append("<qrCode><![CDATA[").append(qr).append("]]></qrCode>")
                 .append(tag("urlChave", nota.urls().urlConsultaChave()))
                 .append("</infNFeSupl>");
+    }
+
+    private String qrCodeOnline(NotaParaMontar nota, String chave) {
+        // O XSD exige idCSC sem zeros à esquerda (`0|[1-9][0-9]{1,5}`) — a SEFAZ credencia e
+        // exibe o CSC como "000001", mas o QR Code rejeita esse literal (achado em 2026-08-19,
+        // testando contra o XSD oficial: "não tem um aspecto válido em relação ao padrão").
+        String idCsc = String.valueOf(Integer.parseInt(nota.csc().id()));
+        // ⚠️ hashQRCode NÃO é SHA-1(chave+CSC) — é SHA-1 de TODA a sequência já montada
+        // (chave|versao|tpAmb|idCSC) concatenada com o CSC no final. Faltar versao/tpAmb/idCSC no
+        // hash foi a causa da rejeição real da SEFAZ (cStat 464 "Código de Hash no QR-Code difere
+        // do calculado", achado em 2026-08-19 numa emissão de verdade) — o hash "só chave+CSC" que
+        // eu tinha antes até *parecia* certo (mesmo formato geral, mesmo tamanho de 40 hex), mas a
+        // SEFAZ recalcula com a fórmula completa e rejeita qualquer divergência, por menor que
+        // seja. Confirmado contra a implementação de referência (nfephp-org/sped-nfe, get200()).
+        String seq = "%s|2|%d|%s".formatted(chave, nota.ambiente().codigo(), idCsc);
+        String hash = sha1Hex(seq + nota.csc().token());
+        return "%s?p=%s|%s".formatted(nota.urls().urlQrCode(), seq, hash);
+    }
+
+    private static String sha1Hex(String texto) {
+        try {
+            byte[] digest = MessageDigest.getInstance("SHA-1").digest(texto.getBytes(StandardCharsets.UTF_8));
+            StringBuilder hex = new StringBuilder(digest.length * 2);
+            for (byte b : digest) {
+                hex.append(String.format("%02X", b));
+            }
+            return hex.toString();
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("SHA-1 indisponível na JVM.", e);
+        }
     }
 
     private String qrCodeOffline(NotaParaMontar nota, String chave, AssinadorQrCode assinador,
@@ -603,6 +639,12 @@ public class MontadorXmlNfce {
         if (nota.urls() == null || vazio(nota.urls().urlQrCode()) || vazio(nota.urls().urlConsultaChave())) {
             throw new MontagemInvalidaException(
                     "URLs de consulta da UF não informadas — sem elas não há QR Code válido (F10).");
+        }
+        if (nota.tipoEmissao() != TP_EMIS_CONTINGENCIA_OFFLINE && (nota.csc() == null
+                || vazio(nota.csc().id()) || vazio(nota.csc().token()))) {
+            throw new MontagemInvalidaException(
+                    "CSC (Código de Segurança do Contribuinte) não informado — sem ele o QR Code "
+                            + "online da NFC-e não é aceito pelo portal de consulta da SEFAZ.");
         }
         for (Pagamento p : nota.pagamentos()) {
             if (vazio(p.codigoMeioPagamento())) {

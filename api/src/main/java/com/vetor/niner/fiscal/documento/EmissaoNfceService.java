@@ -2,6 +2,7 @@ package com.vetor.niner.fiscal.documento;
 
 import com.vetor.niner.fiscal.certificado.FiscalCertificadoService;
 import com.vetor.niner.fiscal.certificado.FiscalCertificadoService.CertificadoParaAssinatura;
+import com.vetor.niner.fiscal.configuracao.FiscalConfigService;
 import com.vetor.niner.fiscal.documento.FiscalNumeracaoService.NumeroReservado;
 import com.vetor.niner.fiscal.documento.MontagemNfceDtos.*;
 import com.vetor.niner.fiscal.motor.MotorTributarioDtos.ItemTributado;
@@ -66,6 +67,7 @@ public class EmissaoNfceService {
     private final SefazTransporte transporte;
     private final SefazAutorizadorService autorizadores;
     private final FiscalCertificadoService certificados;
+    private final FiscalConfigService fiscalConfig;
     private final FiscalContingenciaService contingencia;
     private final ArquivamentoXmlService arquivamento;
 
@@ -74,6 +76,7 @@ public class EmissaoNfceService {
                               ValidadorXsd validador, SefazTransporte transporte,
                               SefazAutorizadorService autorizadores,
                               FiscalCertificadoService certificados,
+                              FiscalConfigService fiscalConfig,
                               FiscalContingenciaService contingencia,
                               ArquivamentoXmlService arquivamento) {
         this.contingencia = contingencia;
@@ -85,6 +88,7 @@ public class EmissaoNfceService {
         this.transporte = transporte;
         this.autorizadores = autorizadores;
         this.certificados = certificados;
+        this.fiscalConfig = fiscalConfig;
         this.arquivamento = arquivamento;
     }
 
@@ -121,6 +125,12 @@ public class EmissaoNfceService {
         int tipoEmissao = estado.ativa() ? MontadorXmlNfce.TP_EMIS_CONTINGENCIA_OFFLINE : TP_EMIS_NORMAL;
         int serie = estado.ativa() ? estado.serieContingencia() : pedido.serie();
 
+        // O CSC só entra no QR Code ONLINE (NT 2015.002 v2) — em contingência quem garante a
+        // autenticidade é a assinatura do certificado, não o CSC (ver MontadorXmlNfce.qrCodeOffline).
+        CscEmpresa csc = tipoEmissao == MontadorXmlNfce.TP_EMIS_CONTINGENCIA_OFFLINE
+                ? null
+                : carregarCsc(pedido.idEmpresa());
+
         // ---------- 1. numeração — transação curta e própria (F4) ----------
         NumeroReservado numero = numeracao.reservar(pedido.idEmpresa(), MODELO_NFCE, serie);
 
@@ -133,7 +143,7 @@ public class EmissaoNfceService {
                         pedido.pagamentos(), pedido.troco(), pedido.informacoesComplementares(),
                         pedido.responsavelTecnico(),
                         new UrlsConsultaUf(autorizador.urlQrCode(), autorizador.urlConsultaPublica()),
-                        pedido.versaoAplicativo()),
+                        csc, pedido.versaoAplicativo()),
                 parametros -> assinador.assinarQrCodeOffline(parametros, keystore, certificado.senha()));
 
         String xmlAssinado = assinador.assinar(
@@ -203,6 +213,11 @@ public class EmissaoNfceService {
         return denegado
                 ? ResultadoEmissao.denegado(idDocumento, chave, resposta.cStat(), resposta.xMotivo())
                 : ResultadoEmissao.rejeitado(idDocumento, chave, resposta.cStat(), resposta.xMotivo());
+    }
+
+    private CscEmpresa carregarCsc(long idEmpresa) {
+        var csc = fiscalConfig.carregarCscParaEmissao(idEmpresa);
+        return new CscEmpresa(csc.id(), csc.token());
     }
 
     private static KeyStore abrir(CertificadoParaAssinatura certificado) {

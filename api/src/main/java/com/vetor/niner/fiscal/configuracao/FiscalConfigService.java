@@ -1,6 +1,8 @@
 package com.vetor.niner.fiscal.configuracao;
 
+import com.vetor.niner.comum.seguranca.SegredoCifrador;
 import com.vetor.niner.fiscal.configuracao.FiscalConfigDtos.AmbienteFiscal;
+import com.vetor.niner.fiscal.configuracao.FiscalConfigDtos.CscParaEmissao;
 import com.vetor.niner.fiscal.configuracao.FiscalConfigDtos.EmpresaFiscalResponse;
 import com.vetor.niner.fiscal.configuracao.FiscalConfigDtos.FiscalConfigRequest;
 import com.vetor.niner.fiscal.configuracao.FiscalConfigDtos.FiscalConfigResponse;
@@ -57,9 +59,11 @@ public class FiscalConfigService {
             """;
 
     private final JdbcClient jdbc;
+    private final SegredoCifrador cifrador;
 
-    public FiscalConfigService(JdbcClient jdbc) {
+    public FiscalConfigService(JdbcClient jdbc, SegredoCifrador cifrador) {
         this.jdbc = jdbc;
+        this.cifrador = cifrador;
     }
 
     @Transactional(readOnly = true)
@@ -103,9 +107,9 @@ public class FiscalConfigService {
         validarRegime(req);
         validarSeries(req);
         validarSerieImutavel(atual, req);
-        validarGates(idEmpresa, atual, req);
 
         String cscToken = resolverCscToken(atual, req);
+        validarGates(idEmpresa, atual, req, cscToken);
 
         if (atual.configurado()) {
             jdbc.sql("""
@@ -194,11 +198,20 @@ public class FiscalConfigService {
      * desligar nunca é bloqueado (se o lojista quer parar de emitir, ele para), e manter ligado
      * também não, senão uma pendência superveniente travaria a edição de qualquer outro campo.
      */
-    private void validarGates(long idEmpresa, FiscalConfigResponse atual, FiscalConfigRequest req) {
+    private void validarGates(long idEmpresa, FiscalConfigResponse atual, FiscalConfigRequest req,
+                              String cscToken) {
         boolean ligandoNfce = req.emiteNfce() && !atual.emiteNfce();
         boolean ligandoNfe = req.emiteNfe() && !atual.emiteNfe();
         if (!ligandoNfce && !ligandoNfe) {
             return;
+        }
+        // CSC só existe pro modelo 65 (QR Code da NFC-e) — a NF-e (modelo 55) não imprime QR pro
+        // consumidor, então não trava por isso. Achado em 2026-08-19: sem este gate, dava pra
+        // ligar emite_nfce sem CSC e todo QR Code impresso saía com "URL mal formatado" na SEFAZ.
+        if (ligandoNfce && (vazio(req.cscId()) || cscToken == null)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Não é possível ligar a emissão de NFC-e: CSC (Código de Segurança do "
+                            + "Contribuinte) não configurado — obrigatório para o QR Code do cupom.");
         }
         List<PendenciaAtivacao> pendencias = pendenciasDeAtivacao(idEmpresa);
         if (!pendencias.isEmpty()) {
@@ -267,13 +280,18 @@ public class FiscalConfigService {
      * Write-only: token ausente <b>preserva</b> o que já está gravado; apagar exige
      * {@code removerCsc}. Sem essa distinção, um PUT que só muda a série zeraria o CSC em
      * silêncio — e o lojista só descobriria no credenciamento.
+     *
+     * <p>⚠️ Até 2026-08-19 este método gravava {@code req.cscToken()} em texto puro — a coluna
+     * chama {@code csc_token_cifrado}, mas nada cifrava (achado ao investigar o QR Code inválido
+     * da NFC-e, que precisou ler o CSC de volta pela primeira vez). Agora cifra com
+     * {@link SegredoCifrador} (P7/F7), mesmo padrão de {@code fiscal_certificado.senha_cifrada}.
      */
     private String resolverCscToken(FiscalConfigResponse atual, FiscalConfigRequest req) {
         if (Boolean.TRUE.equals(req.removerCsc())) {
             return null;
         }
         if (!vazio(req.cscToken())) {
-            return req.cscToken();
+            return cifrador.cifrar(req.cscToken());
         }
         if (!atual.configurado() || !atual.cscConfigurado()) {
             return null;
@@ -286,6 +304,36 @@ public class FiscalConfigService {
                 .query(String.class)
                 .optional()
                 .orElse(null);
+    }
+
+    /**
+     * CSC decifrado, pronto para montar o QR Code online da NFC-e (NT 2015.002 v2:
+     * {@code hashQRCode = SHA-1(chave+token)}) — único caminho de leitura do token, existe para
+     * {@code EmissaoNfceService} (B7). Nunca exposto por endpoint (mesmo espírito do certificado).
+     */
+    @Transactional(readOnly = true)
+    public CscParaEmissao carregarCscParaEmissao(long idEmpresa) {
+        return jdbc.sql("""
+                        SELECT csc_id, csc_token_cifrado FROM fiscal_config_empresa
+                        WHERE id_tenant = plataforma.tenant_atual() AND id_empresa = ?
+                        """)
+                .param(idEmpresa)
+                .query((rs, n) -> {
+                    String id = rs.getString("csc_id");
+                    String tokenCifrado = rs.getString("csc_token_cifrado");
+                    if (vazio(id) || tokenCifrado == null) {
+                        throw cscNaoConfigurado();
+                    }
+                    return new CscParaEmissao(id, cifrador.decifrar(tokenCifrado));
+                })
+                .optional()
+                .orElseThrow(this::cscNaoConfigurado);
+    }
+
+    private ResponseStatusException cscNaoConfigurado() {
+        return new ResponseStatusException(HttpStatus.CONFLICT,
+                "CSC (Código de Segurança do Contribuinte) não configurado para esta empresa — "
+                        + "obrigatório para o QR Code da NFC-e. Configure em Configurações Fiscais.");
     }
 
     // ---------------------------------------------------------------- leitura

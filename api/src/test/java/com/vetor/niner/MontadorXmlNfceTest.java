@@ -132,7 +132,7 @@ class MontadorXmlNfceTest {
     @Test
     void origemDaMercadoriaVaiNoOrigDoGrupoIcmsConformeOProduto() {
         RegraFiscal regra = regraSimples("102");
-        ItemOperacao operacao = new ItemOperacao(1, um("3"), um("10.00"), um("2.00"), null, regra, null);
+        ItemOperacao operacao = new ItemOperacao(1, um("3"), um("10.00"), um("2.00"), null, regra, null, null, null);
         TributacaoResultado calculo = motor.calcular(
                 new OperacaoFiscal(TipoOperacao.VENDA, "PR", TipoDestinatario.CONSUMIDOR_FINAL, List.of(operacao)),
                 new ContextoFiscalEmpresa(1, "PR"));
@@ -143,7 +143,7 @@ class MontadorXmlNfceTest {
                 AmbienteSefaz.HOMOLOGACAO, 1, 5, 13230051, EMISSAO, "VENDA AO CONSUMIDOR", 1,
                 emitente(1), null, List.of(item), calculo.itens(), calculo.totais(),
                 List.of(new Pagamento("01", calculo.totais().valorNota(), null, null)), null, null,
-                respTec(), urls(), "Niner 1.0"));
+                respTec(), urls(), csc(), "Niner 1.0"));
 
         validarEstrutura(montado);
         assertThat(montado.xml()).contains("<ICMSSN102><orig>6</orig><CSOSN>102</CSOSN></ICMSSN102>");
@@ -160,7 +160,7 @@ class MontadorXmlNfceTest {
     @Test
     void comAliquotaResolvidaVTotTribApareceNoItemENoTotal() {
         RegraFiscal regra = regraSimples("102");
-        ItemOperacao operacao = new ItemOperacao(1, um("3"), um("10.00"), um("2.00"), null, regra, um("13.45"));
+        ItemOperacao operacao = new ItemOperacao(1, um("3"), um("10.00"), um("2.00"), null, regra, um("13.45"), null, null);
         TributacaoResultado calculo = motor.calcular(
                 new OperacaoFiscal(TipoOperacao.VENDA, "PR", TipoDestinatario.CONSUMIDOR_FINAL, List.of(operacao)),
                 new ContextoFiscalEmpresa(1, "PR"));
@@ -171,7 +171,7 @@ class MontadorXmlNfceTest {
                 AmbienteSefaz.HOMOLOGACAO, 1, 5, 13230051, EMISSAO, "VENDA AO CONSUMIDOR", 1,
                 emitente(1), null, List.of(item), calculo.itens(), calculo.totais(),
                 List.of(new Pagamento("01", calculo.totais().valorNota(), null, null)), null, null,
-                respTec(), urls(), "Niner 1.0"));
+                respTec(), urls(), csc(), "Niner 1.0"));
 
         validarEstrutura(montado);
         // 28,00 (base) × 13,45% = 3,77 (HALF_UP) — mesma conta do teste do motor.
@@ -319,18 +319,36 @@ class MontadorXmlNfceTest {
     // ------------------------------------------------------------------ QR Code e chave
 
     /**
-     * QR Code v3.00: {@code ?p=<chave44>|3|<tpAmb>}. Faltar o {@code |<tpAmb>} foi a causa dos
-     * três {@code cStat 225} do B0 — o pattern do XSD é quem manda, e é ele que este teste
-     * exercita ao validar o documento inteiro.
+     * QR Code online v2 (NT 2015.002): {@code ?p=<chave44>|2|<tpAmb>|<idCSC>|<hashQRCode>},
+     * {@code hashQRCode = SHA-1(chave+cscToken)} em hex maiúsculo. ⚠️ Trocado de "3" pra "2" em
+     * 2026-08-19: "3" sem CSC passava na autorização (o XSD só confere a forma), mas o portal de
+     * consulta da SEFAZ-PR recusava com "Url do QRCode mal formatado" — reproduzido ao vivo.
      */
     @Test
-    void qrCodeSegueOFormatoV300ComTpAmb() {
+    void qrCodeSegueOFormatoOnlineV2ComCscEHash() {
         XmlMontado montado = montarVendaSimples(1, "102", null);
 
         validarEstrutura(montado);
+        String hashEsperado = sha1Hex(montado.chaveAcesso() + "|2|2|1" + csc().token());
         assertThat(montado.xml())
                 .contains("<qrCode><![CDATA[http://www.fazenda.pr.gov.br/nfce/qrcode?p="
-                        + montado.chaveAcesso() + "|3|2]]></qrCode>");
+                        + montado.chaveAcesso() + "|2|2|1|" + hashEsperado + "]]></qrCode>");
+    }
+
+    /** Sem CSC configurado não há como montar o QR Code online verificável — recusa explícita
+     *  (F11), não uma nota emitida com QR quebrado. */
+    @Test
+    void semCscOnlineEhRecusado() {
+        NotaParaMontar base = notaBase(1, regraSimples("102"), null, AmbienteSefaz.HOMOLOGACAO, null, null);
+        NotaParaMontar semCsc = new NotaParaMontar(base.ambiente(), base.serie(), base.numero(),
+                base.codigoNumerico(), base.emissao(), base.naturezaOperacao(), base.tipoEmissao(),
+                base.emitente(), base.destinatario(), base.itens(), base.itensTributados(),
+                base.totais(), base.pagamentos(), base.troco(), base.informacoesComplementares(),
+                base.responsavelTecnico(), base.urls(), null, base.versaoAplicativo());
+
+        assertThatThrownBy(() -> montador.montar(semCsc))
+                .isInstanceOf(MontagemInvalidaException.class)
+                .hasMessageContaining("CSC");
     }
 
     /** A chave do B0, autorizada de verdade pela SEFAZ-PR (protocolo 141260001531993) — se o
@@ -424,7 +442,7 @@ class MontadorXmlNfceTest {
                 base.codigoNumerico(), base.emissao(), base.naturezaOperacao(), base.tipoEmissao(),
                 base.emitente(), base.destinatario(), List.of(comEComercial), base.itensTributados(),
                 base.totais(), base.pagamentos(), base.troco(), base.informacoesComplementares(),
-                base.responsavelTecnico(), base.urls(), base.versaoAplicativo());
+                base.responsavelTecnico(), base.urls(), base.csc(), base.versaoAplicativo());
 
         XmlMontado montado = montador.montar(nota);
 
@@ -506,7 +524,7 @@ class MontadorXmlNfceTest {
                 base.codigoNumerico(), emissaoUtc, base.naturezaOperacao(), base.tipoEmissao(),
                 base.emitente(), base.destinatario(), base.itens(), base.itensTributados(),
                 base.totais(), base.pagamentos(), base.troco(), base.informacoesComplementares(),
-                base.responsavelTecnico(), base.urls(), base.versaoAplicativo());
+                base.responsavelTecnico(), base.urls(), base.csc(), base.versaoAplicativo());
 
         XmlMontado montado = montador.montar(nota);
 
@@ -534,9 +552,10 @@ class MontadorXmlNfceTest {
     @Test
     void emissaoNormalMantemOQrCodeOnline() {
         XmlMontado montado = montarVendaSimples(1, "102", null);
+        String hashEsperado = sha1Hex(montado.chaveAcesso() + "|2|2|1" + csc().token());
 
         assertThat(montado.xml())
-                .contains("?p=%s|3|2]]>".formatted(montado.chaveAcesso()))
+                .contains("?p=%s|2|2|1|%s]]>".formatted(montado.chaveAcesso(), hashEsperado))
                 .contains("<tpEmis>1</tpEmis>");
     }
 
@@ -558,7 +577,7 @@ class MontadorXmlNfceTest {
                 MontadorXmlNfce.TP_EMIS_CONTINGENCIA_OFFLINE,
                 base.emitente(), base.destinatario(), base.itens(), base.itensTributados(),
                 base.totais(), base.pagamentos(), base.troco(), base.informacoesComplementares(),
-                base.responsavelTecnico(), base.urls(), base.versaoAplicativo());
+                base.responsavelTecnico(), base.urls(), null, base.versaoAplicativo());
     }
 
     private XmlMontado montarEmContingencia(Destinatario destinatario) {
@@ -576,8 +595,8 @@ class MontadorXmlNfceTest {
 
     private XmlMontado montarComDoisItens(AmbienteSefaz ambiente) {
         RegraFiscal regra = regraSimples("102");
-        ItemOperacao op1 = new ItemOperacao(1, um("3"), um("10.00"), um("2.00"), null, regra, null);
-        ItemOperacao op2 = new ItemOperacao(2, um("1"), um("5.00"), null, null, regra, null);
+        ItemOperacao op1 = new ItemOperacao(1, um("3"), um("10.00"), um("2.00"), null, regra, null, null, null);
+        ItemOperacao op2 = new ItemOperacao(2, um("1"), um("5.00"), null, null, regra, null, null, null);
         TributacaoResultado calculo = motor.calcular(
                 new OperacaoFiscal(TipoOperacao.VENDA, "PR", TipoDestinatario.CONSUMIDOR_FINAL, List.of(op1, op2)),
                 new ContextoFiscalEmpresa(1, "PR"));
@@ -589,13 +608,13 @@ class MontadorXmlNfceTest {
         return montador.montar(new NotaParaMontar(ambiente, 1, 5, 13230051, EMISSAO,
                 "VENDA AO CONSUMIDOR", 1, emitente(1), null, itens, calculo.itens(), calculo.totais(),
                 List.of(new Pagamento("01", calculo.totais().valorNota(), null, null)), null, null,
-                respTec(), urls(), "Niner 1.0"));
+                respTec(), urls(), csc(), "Niner 1.0"));
     }
 
     /** Uma venda de 3 × R$ 10,00 − R$ 2,00 = R$ 28,00 — a mesma base do teste do motor. */
     private NotaParaMontar notaBase(int crt, RegraFiscal regra, Destinatario destinatario,
                                     AmbienteSefaz ambiente, List<Pagamento> pagamentos, BigDecimal troco) {
-        ItemOperacao operacao = new ItemOperacao(1, um("3"), um("10.00"), um("2.00"), null, regra, null);
+        ItemOperacao operacao = new ItemOperacao(1, um("3"), um("10.00"), um("2.00"), null, regra, null, null, null);
         TributacaoResultado calculo = motor.calcular(
                 new OperacaoFiscal(TipoOperacao.VENDA, "PR", TipoDestinatario.CONSUMIDOR_FINAL, List.of(operacao)),
                 new ContextoFiscalEmpresa(crt, "PR"));
@@ -609,7 +628,7 @@ class MontadorXmlNfceTest {
 
         return new NotaParaMontar(ambiente, 1, 5, 13230051, EMISSAO, "VENDA AO CONSUMIDOR", 1,
                 emitente(crt), destinatario, List.of(item), calculo.itens(), calculo.totais(),
-                pags, troco, null, respTec(), urls(), "Niner 1.0");
+                pags, troco, null, respTec(), urls(), csc(), "Niner 1.0");
     }
 
     private static List<Pagamento> pagamentoDe(String valor) {
@@ -630,6 +649,26 @@ class MontadorXmlNfceTest {
     private static UrlsConsultaUf urls() {
         return new UrlsConsultaUf("http://www.fazenda.pr.gov.br/nfce/qrcode",
                 "http://www.fazenda.pr.gov.br/nfce/consulta");
+    }
+
+    private static CscEmpresa csc() {
+        return new CscEmpresa("000001", "csc-fake-de-teste");
+    }
+
+    /** Mesma fórmula de {@code MontadorXmlNfce.sha1Hex} — recalculada aqui, não importada, porque
+     *  o teste precisa provar o valor, não assumir que o motor está certo. */
+    private static String sha1Hex(String texto) {
+        try {
+            byte[] digest = java.security.MessageDigest.getInstance("SHA-1")
+                    .digest(texto.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            StringBuilder hex = new StringBuilder(digest.length * 2);
+            for (byte b : digest) {
+                hex.append(String.format("%02X", b));
+            }
+            return hex.toString();
+        } catch (java.security.NoSuchAlgorithmException e) {
+            throw new IllegalStateException(e);
+        }
     }
 
     private static RegraFiscal regraSimples(String csosn) {

@@ -264,7 +264,7 @@ class AssinadorXmlNfeTest {
         RegraFiscal regra = new RegraFiscal("5102", null, "102", null, null, null,
                 "99", null, "99", null, null, null, null, null, null);
         ItemOperacao operacao = new ItemOperacao(1, new BigDecimal("3"), new BigDecimal("10.00"),
-                new BigDecimal("2.00"), null, regra, null);
+                new BigDecimal("2.00"), null, regra, null, null, null);
         TributacaoResultado calculo = motor.calcular(
                 new OperacaoFiscal(TipoOperacao.VENDA, "PR", TipoDestinatario.CONSUMIDOR_FINAL, List.of(operacao)),
                 new ContextoFiscalEmpresa(1, "PR"));
@@ -282,6 +282,7 @@ class AssinadorXmlNfeTest {
                 new ResponsavelTecnico(CNPJ, "SUPORTE VETOR", "suporte@vetorsistemas.com.br", "4133334444"),
                 new UrlsConsultaUf("http://www.fazenda.pr.gov.br/nfce/qrcode",
                         "http://www.fazenda.pr.gov.br/nfce/consulta"),
+                new CscEmpresa("000001", "csc-fake-de-teste"),
                 "Niner 1.0"));
     }
 }

@@ -13,7 +13,7 @@ Registro cronológico das decisões e entregas. Atualizar a cada marco relevante
 > + NF-e de devolução de venda**, com cancelamento, inutilização, contingência, arquivamento e
 > download. Roteiro em blocos B0–B9: **§17.1 do estudo**.
 >
-> **O que está pronto e testado (687/687 backend verdes):** B0 (PoC real contra a SEFAZ-PR, `cStat
+> **O que está pronto e testado (772/772 backend verdes):** B0 (PoC real contra a SEFAZ-PR, `cStat
 > 100`, JDK puro sem lib de NF-e — DF7 fechada no plano B) · B1 (specs) · B2 (`fiscal.configuracao`
 > + `fiscal.perfil` + certificado A1, **cifrado no banco**, não em bucket — DF21 revisada) · B3
 > (Conformidade Fiscal, bloqueio preventivo F11) · B4 (motor tributário puro — ICMS/PIS/COFINS/IPI/
@@ -473,6 +473,85 @@ Movimentação de Conta Corrente) que ainda não tinham migrado pro `SeletorPlan
 ---
 
 ## Linha do tempo
+
+### 2026-08-19 — DANFE: papeleta sem linhas zeradas, cabeçalho "Descrição dos Produtos" e traços contínuos entre seções
+
+Ajustes visuais pedidos pelo dono do produto, comparando contra modelos reais trazidos por ele
+(prints de outro sistema). Três rodadas até acertar o traço:
+
+1. **Papeleta comum (sem fiscal):** quando desconto **e** acréscimo são zero (caso mais comum),
+   esconde `SUB-TOTAL`/`DESCONTOS`/`ACRESCIMOS` e mostra só `TOTAL A PAGAR` — as três linhas
+   zeradas só poluíam.
+2. **DANFE ganhou a linha "Descrição dos Produtos"** antes do cabeçalho da tabela de itens
+   (`Cod. Qtd. Un Vlr.Unit. Vlr.Total.`), igual ao modelo de referência.
+3. **Separador entre seções — três tentativas:** primeiro `border-style: dashed` (CSS), não batia
+   com o modelo; depois uma fileira de caracteres `-` (texto), ainda saía "pontilhada" na
+   impressora térmica — a resolução da bobina não resolve traços finos intercalados com espaço.
+   Versão final: uma **barra gráfica sólida** (`<div>` com `background`, não borda nem texto) — e
+   em **preto fixo**, não `var(--ink)`: a cor ligada ao tema claro/escuro do app deixava a barra
+   quase invisível no modo escuro (achado comparando a pré-visualização em cada tema; a área do
+   DANFE sempre representa papel, não deveria seguir o tema da tela). Acrescentados separadores
+   novos pedidos depois: antes/depois da frase "DANFE NFC-e - Documento Auxiliar" e **entre cada
+   produto** da lista de itens.
+4. **Cabeçalho da empresa trocado**: razão social e nome fantasia estavam invertidos no cadastro
+   de dev (`Loja Dev Claudio` como razão social, `MITRYUSCASH LTDA` como fantasia) — corrigido via
+   tela de Dados da Empresa (dado, não código; o campo razão social é somente-leitura na tela,
+   corrigido direto no banco de dev com confirmação do dono do produto).
+
+`tsc -b` limpo, testado ao vivo reimprimindo vendas reais em `Pesquisa de Vendas`. Ver
+`web/src/pages/pdv/DanfceImprimir.tsx` e `web/src/styles.css` (`.danfce-sep`).
+
+### 2026-08-19 — 🔴 Bug real: QR Code da NFC-e rejeitado pela SEFAZ (`cStat 464`, hash divergente) — formato e cálculo do hash estavam errados
+
+Reportado pelo dono do produto ("erro ao ler o QR Code, corrija de uma vez por todas"),
+reproduzido ao vivo navegando direto pro portal público da SEFAZ-PR com o QR Code de notas reais.
+
+1. **Formato:** o QR online usava `chave|3|tpAmb` (sem CSC/hash) — passa na autorização (o XSD só
+   confere a forma do campo), mas o portal de consulta da SEFAZ-PR rejeitava com "Url do QRCode
+   mal formatado". Corrigido pro formato nacional NT 2015.002 v2: `chave|2|tpAmb|idCSC|hashQRCode`.
+2. **`idCSC` precisa ir sem zeros à esquerda** — a SEFAZ credencia e exibe o CSC como "000001", mas
+   o XSD oficial exige `0|[1-9][0-9]{1,5}` nesse campo; achado validando contra o XSD, não contra
+   suposição.
+3. **A fórmula do hash estava errada**: a versão anterior calculava `SHA-1(chave+CSC)`; o correto é
+   `SHA-1(chave|2|tpAmb|idCSC + CSC)` — faltava concatenar versão/ambiente/idCSC antes do CSC.
+   Confirmado contra a SEFAZ de verdade: uma emissão real chegou a ser **rejeitada em produção**
+   com `cStat 464` ("Código de Hash no QR-Code difere do calculado") antes deste ajuste; a próxima
+   emissão, já corrigida, saiu `AUTORIZADO` com protocolo real. Fórmula conferida contra a
+   implementação de referência `nfephp-org/sped-nfe` (`get200()`).
+4. **CSC estava gravado em texto puro** — a coluna se chama `csc_token_cifrado`, mas nada cifrava
+   desde que a tela existe. Corrigido com `SegredoCifrador` (AES-256-GCM), mesmo padrão do
+   certificado digital (`fiscal_certificado.senha_cifrada`).
+5. **Gate novo**: não dá mais pra ligar a emissão de NFC-e sem CSC configurado (F11) — antes dava
+   pra ligar e todo QR Code impresso sair inválido em silêncio, sem nenhum aviso até uma rejeição
+   real ou um cliente reclamando que não conseguia ler o cupom.
+
+O erro "mal formatado" do portal público, quando a nota é de **homologação**, **não é bug
+nosso** — confirmado trocando só o `tpAmb` de 2 pra 1 no mesmo QR Code: a mensagem muda pra
+"Chave de Acesso... não consta na base de dados da SEFAZ" (o portal simplesmente não indexa notas
+de homologação para consulta pública). Notas de produção devem ler normalmente. Suíte: 772/772
+verdes. Ver `MontadorXmlNfce.qrCodeOnline`/`sha1Hex`, `FiscalConfigService.carregarCscParaEmissao`.
+
+### 2026-08-19 — DANFE detalha o tributo aproximado em Federal/Estadual/Municipal (Lei 12.741), não só o total
+
+Pedido do dono do produto: em vez de "Valor aproximado dos tributos R$ X (Y%)" sozinho, detalhar
+as três parcelas.
+
+1. `MotorTributarioDtos.ItemOperacao` trocou o único `aliquotaTributoAproximado` por três campos
+   (`aliquotaTribFederal`/`Estadual`/`Municipal`); `ItemTributado` e `TotaisTributarios` ganharam os
+   3 valores em paralelo ao total (que continua sendo a soma dos três — teste novo prova isso com
+   alíquotas diferentes, não só o mesmo valor triplicado).
+2. `VendaFiscalAssembler` resolve a alíquota federal por origem (Nacional × Importado) e passa as
+   3 pro motor; `documento_fiscal` ganhou `valor_trib_federal`/`estadual`/`municipal` (V035) — não
+   vai no XML (`vTotTrib` é um valor só no XSD), só serve o DANFE.
+3. **Bug real achado no caminho**: o `INSERT` de `gravarAssinado()` tinha 31 `?` para 32
+   parâmetros — um placeholder a menos, causando `409 Conflito` ("Registro em uso") em **toda**
+   emissão de NFC-e assim que os 3 campos novos foram acrescentados à query. Sem esse fix os 12
+   testes de emissão afetados ficariam vermelhos.
+4. No DANFE, a primeira versão mostrava os 3 valores em R$; a pedido do dono do produto, virou só
+   percentual (`Federal: X% Estadual: Y% Municipal: Z%`) — os valores em reais poluíam a linha.
+
+Testado: `MotorTributarioTest` (caso novo com 3 alíquotas diferentes), suíte inteira. Ver
+`web/src/pages/pdv/DanfceImprimir.tsx` (seção `.danfce-tributo`).
 
 ### 2026-08-19 — DANFE da NFC-e: `vTotTrib` (Lei 12.741) real, emitido no XML, e layout completo na papeleta
 
