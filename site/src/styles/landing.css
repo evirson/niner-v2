@@ -19,8 +19,11 @@
   --ink-muted: #5c6660;    --ink-muted-rgb: 92,102,96;
   --accent: #1f6f6b;       --accent-rgb: 31,111,107;
   --accent-contrast: #ffffff;
-  /* Destaque "neon" (design v2). Mesma família do --accent, mais saturado. */
-  --neon: #0a9d90;         --neon-rgb: 10,157,144;
+  /* Destaque "neon" (design v2). O design entregou #0a9d90, que dá 3,06:1 sobre este fundo e
+     REPROVA em AA para texto pequeno — o .kicker tem 13px. Escurecido para #0a7d73 (4,5:1) por
+     decisão do dono do produto, para o neon continuar nos cinco lugares sem perder acessibilidade.
+     O tema escuro fica com o valor original: lá o contraste é 11,7:1 e é onde o efeito aparece. */
+  --neon: #0a7d73;         --neon-rgb: 10,125,115;
   --neon-glow: 0 0 10px rgba(15,214,196,.4), 0 0 24px rgba(15,214,196,.22);
   --line: #dee2dc;         --line-rgb: 222,226,220;
   --danger: #a63d29;       --danger-rgb: 166,61,41;
@@ -48,8 +51,11 @@
   --ink-muted: #5c6660;    --ink-muted-rgb: 92,102,96;
   --accent: #1f6f6b;       --accent-rgb: 31,111,107;
   --accent-contrast: #ffffff;
-  /* Destaque "neon" (design v2). Mesma família do --accent, mais saturado. */
-  --neon: #0a9d90;         --neon-rgb: 10,157,144;
+  /* Destaque "neon" (design v2). O design entregou #0a9d90, que dá 3,06:1 sobre este fundo e
+     REPROVA em AA para texto pequeno — o .kicker tem 13px. Escurecido para #0a7d73 (4,5:1) por
+     decisão do dono do produto, para o neon continuar nos cinco lugares sem perder acessibilidade.
+     O tema escuro fica com o valor original: lá o contraste é 11,7:1 e é onde o efeito aparece. */
+  --neon: #0a7d73;         --neon-rgb: 10,125,115;
   --neon-glow: 0 0 10px rgba(15,214,196,.4), 0 0 24px rgba(15,214,196,.22);
   --line: #dee2dc;         --line-rgb: 222,226,220;
   --danger: #a63d29;       --danger-rgb: 166,61,41;
