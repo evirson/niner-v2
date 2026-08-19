@@ -251,6 +251,22 @@ public class DevolucaoFiscalAssembler {
                 baseIbs, ibsUf, ibsMun, cbs, trib);
     }
 
+    /**
+     * {@code id_documento_fiscal} da NFC-e que esta devolução referencia — usado só para gravar
+     * {@code documento_fiscal_referencia.id_documento_referenciado} (a chave já vai no XML).
+     * Devolve {@code 0} quando não há nota, mas quem chama só pergunta depois de
+     * {@link #montar} ter devolvido algo, então na prática sempre existe.
+     */
+    @Transactional(readOnly = true)
+    public long idDocumentoOriginal(long idDevolucao) {
+        Long idVenda = buscarVendaDeOrigem(idDevolucao);
+        if (idVenda == null) {
+            return 0;
+        }
+        NotaOriginal original = buscarNotaOriginalAutorizada(idVenda);
+        return original == null ? 0 : original.idDocumentoFiscal();
+    }
+
     // ---------------------------------------------------------------- leituras
 
     private Long buscarVendaDeOrigem(long idDevolucao) {

@@ -150,7 +150,8 @@ public class DevolucaoProdutoService {
         }
 
         return new DevolucaoEfetivadaResponse(
-                idMovimento, idDevolucao, valorVale, OffsetDateTime.now(), idFuncionario, nomeFuncionario, itensResponse);
+                idMovimento, idDevolucao, valorVale, OffsetDateTime.now(), idFuncionario, nomeFuncionario,
+                itensResponse, null);
     }
 
     /** Consulta um vale-mercadoria pelo número (`id_devolucao`) — reimpressão e resgate no PDV

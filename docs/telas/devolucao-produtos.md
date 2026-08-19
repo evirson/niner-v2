@@ -204,8 +204,9 @@ Fecha a pergunta **DF20** (`docs/MODULOFISCAL.md` §10.2, "a pergunta mais impor
 ainda sem resposta") e o item **B9** do roteiro fiscal (NF-e de devolução), que dependiam dela.
 
 > **Estado (2026-08-19):** a **grid de seleção por venda está implementada e testada ao vivo**; a
-> **NF-e de devolução está em construção** — montador de XML e assembler prontos e validados
-> contra o XSD oficial, faltando o serviço de emissão, a integração com a tela e o DANFE A4.
+> **NF-e de devolução emite ponta a ponta** (assembler → montador → assinatura → transporte →
+> persistência), coberta por teste de integração com certificado real. Falta o **DANFE A4** (o
+> documento impresso) e o teste ao vivo contra a SEFAZ de homologação.
 
 ### Dois modos de operação, decididos pelo mesmo parâmetro que já existe
 
@@ -328,6 +329,25 @@ que a primeira pesquisa sugeria. Preenchidas na V034 e aplicadas no banco de dev
 `SefazAutorizadorCrudTest` deixou de documentar a pendência e passou a documentar a resolução,
 inclusive verificando que o host é `nfe.sefa` e não `nfce.sefa` (troca fácil, que só apareceria na
 primeira transmissão real).
+
+### Falha na nota NÃO desfaz a devolução (F3) — diferente do Cancelamento de Venda
+
+Decisão de desenho que vale registrar porque contraria a analogia mais óbvia. No **Cancelamento de
+Venda**, a nota tem que ser cancelada na SEFAZ **antes** de reverter qualquer coisa — se a
+reversão acontecesse primeiro, a nota ficaria válida sem a venda que a originou ("estoque/caixa e
+fiscal nunca divergem", §10.1).
+
+Na **devolução é o contrário**: a mercadoria já voltou fisicamente ao balcão e o vale-mercadoria
+já é do cliente. Bloquear a devolução porque a SEFAZ está fora travaria a loja por um motivo que
+não é da loja — exatamente o que o **F3** ("fiscal nunca bloqueia a operação de balcão") existe
+para evitar, e o mesmo tratamento que a NFC-e da venda já recebe. Uma rejeição registra o
+documento com a situação real em Documentos Fiscais, para reprocessar, e a resposta da API traz
+`notaFiscal.situacao` para a tela avisar o operador.
+
+A orquestração fica no **controller**, não no serviço: `efetivar` é `@Transactional` e a emissão
+faz I/O de rede (até 10 s) — chamá-la de dentro prenderia conexão e travas pelo tempo da SEFAZ,
+violando o **F2**. O controller não é transacional, então a devolução já está commitada quando a
+emissão começa.
 
 ### Ainda em aberto
 

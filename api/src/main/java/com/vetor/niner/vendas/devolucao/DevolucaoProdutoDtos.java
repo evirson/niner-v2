@@ -69,7 +69,11 @@ public final class DevolucaoProdutoDtos {
 
     /** {@code idDevolucao} (`venda_devolucao.id_devolucao`) É o número do vale-mercadoria
      *  impresso pro cliente — toda devolução gera um (2026-08-03); {@code valorVale} é a soma
-     *  dos itens devolvidos, o crédito que o vale vale. */
+     *  dos itens devolvidos, o crédito que o vale vale.
+     *
+     *  <p>{@code notaFiscal} (2026-08-19, B9) é {@code null} quando não havia nota a emitir —
+     *  fiscal desligado, devolução sem venda de origem, ou venda sem NFC-e autorizada. Preenchido,
+     *  diz como terminou a emissão da NF-e de entrada; ver {@link NotaFiscalDevolucaoResponse}. */
     public record DevolucaoEfetivadaResponse(
             long idMovimento,
             long idDevolucao,
@@ -77,7 +81,25 @@ public final class DevolucaoProdutoDtos {
             OffsetDateTime dataMovimento,
             Long idFuncionario,
             String nomeFuncionario,
-            List<ItemDevolucaoResponse> itens) {
+            List<ItemDevolucaoResponse> itens,
+            NotaFiscalDevolucaoResponse notaFiscal) {
+    }
+
+    /**
+     * Desfecho da NF-e de devolução (modelo 55, entrada) que acompanha a devolução — §10.2, B9.
+     *
+     * <p>⚠️ Um resultado <b>diferente de AUTORIZADO não desfaz a devolução</b>: a mercadoria voltou
+     * fisicamente ao estoque e o vale-mercadoria já é do cliente. A nota fica registrada em
+     * Documentos Fiscais com a situação real, para ser reprocessada — mesmo princípio do F3 que
+     * já vale na venda ("fiscal nunca bloqueia a operação de balcão").
+     */
+    public record NotaFiscalDevolucaoResponse(
+            String situacao,
+            long idDocumentoFiscal,
+            String chaveAcesso,
+            String protocolo,
+            String cStat,
+            String mensagem) {
     }
 
     /** Consulta de um vale-mercadoria já emitido — usada tanto pra reimprimir quanto pelo PDV

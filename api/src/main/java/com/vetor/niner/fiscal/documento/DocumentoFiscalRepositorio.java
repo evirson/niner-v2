@@ -2,6 +2,8 @@ package com.vetor.niner.fiscal.documento;
 
 import com.vetor.niner.fiscal.documento.EmissaoNfceService.PedidoDeEmissao;
 import com.vetor.niner.fiscal.documento.FiscalNumeracaoService.NumeroReservado;
+import com.vetor.niner.fiscal.documento.MontagemDevolucaoDtos.DevolucaoParaMontar;
+import com.vetor.niner.fiscal.documento.MontagemDevolucaoDtos.ItemDevolucao;
 import com.vetor.niner.fiscal.documento.MontagemNfceDtos.ItemNota;
 import com.vetor.niner.fiscal.motor.MotorTributarioDtos.ItemTributado;
 import com.vetor.niner.fiscal.sefaz.SefazDtos.RespostaSefaz;
@@ -111,6 +113,105 @@ public class DocumentoFiscalRepositorio {
      * sem parsear o XML) — a devolução fiscal delas é recusada explicitamente pelo assembler,
      * com mensagem que explica o motivo, em vez de gerar uma nota incompleta.
      */
+    /**
+     * Grava a <b>NF-e de devolução</b> assinada (modelo 55, entrada) — bloco B9. Além do
+     * cabeçalho e dos itens, grava a linha em {@code documento_fiscal_referencia} com a chave da
+     * NFC-e devolvida: é a amarração que permite responder "esta devolução se refere a qual
+     * venda?" sem parsear XML.
+     *
+     * <p>{@code tipo_operacao = DEVOLUCAO_VENDA}, {@code tipo_nf = 0} (entrada), {@code
+     * finalidade = 4} (devolução) — os três já previstos no schema desde a V035.
+     */
+    @Transactional
+    public long gravarDevolucaoAssinada(long idEmpresa, long idDevolucao, Integer idUsuario,
+                                        DevolucaoParaMontar dev, NumeroReservado numero,
+                                        String chave, String xmlAssinado, long idDocumentoOriginal) {
+        var t = dev.totais();
+        long idDocumento = jdbc.sql("""
+                        INSERT INTO documento_fiscal (
+                            id_tenant, id_empresa, modelo, serie, numero, chave_acesso,
+                            codigo_numerico, digito_verificador, tipo_operacao, situacao, ambiente,
+                            tipo_emissao, tipo_nf, finalidade, indicador_final, indicador_presenca,
+                            id_devolucao, data_emissao,
+                            valor_produtos, valor_desconto, valor_total,
+                            valor_icms, valor_icms_st, valor_pis, valor_cofins,
+                            base_ibs_cbs, valor_ibs_uf, valor_ibs_mun, valor_cbs, valor_total_tributos,
+                            xml_assinado, xml_hash, id_usuario)
+                        VALUES (plataforma.tenant_atual(), ?, 55, ?, ?, ?, ?, ?,
+                                'DEVOLUCAO_VENDA', 'ASSINADO', ?::ambiente_fiscal, 1, 0, 4, 0, 0,
+                                ?, ?,
+                                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        RETURNING id_documento_fiscal
+                        """)
+                .params(idEmpresa, numero.serie(), numero.numero(), chave,
+                        "%08d".formatted(numero.codigoNumerico()), Integer.parseInt(chave.substring(43)),
+                        dev.ambiente().name(), idDevolucao, dev.emissao(),
+                        t.valorProdutos(), t.valorDesconto(), t.valorTotal(),
+                        t.valorIcms(), t.valorIcmsSt(), t.valorPis(), t.valorCofins(),
+                        t.baseIbsCbs(), t.valorIbsUf(), t.valorIbsMun(), t.valorCbs(), t.valorTotalTributos(),
+                        xmlAssinado, sha256(xmlAssinado), idUsuario)
+                .query(Long.class).single();
+
+        jdbc.sql("""
+                        INSERT INTO documento_fiscal_referencia
+                            (id_tenant, id_documento_fiscal, chave_referenciada, id_documento_referenciado)
+                        VALUES (plataforma.tenant_atual(), ?, ?, ?)
+                        """)
+                .params(idDocumento, dev.chaveNotaOriginal(), idDocumentoOriginal)
+                .update();
+
+        gravarItensDevolucao(idDocumento, dev);
+        return idDocumento;
+    }
+
+    /** Itens da devolução — os mesmos valores que foram para o XML, já espelhados da nota
+     *  original pelo {@code DevolucaoFiscalAssembler} (nada é recalculado aqui). */
+    private void gravarItensDevolucao(long idDocumento, DevolucaoParaMontar dev) {
+        for (ItemDevolucao i : dev.itens()) {
+            jdbc.sql("""
+                            INSERT INTO documento_fiscal_item (
+                                id_tenant, id_documento_fiscal, numero_item, id_variacao, codigo_produto,
+                                codigo_ean, descricao, codigo_ncm, cest, cfop, unidade_comercial,
+                                quantidade, valor_unitario, valor_produto,
+                                unidade_tributavel, quantidade_trib, valor_unitario_trib, origem_mercadoria,
+                                cst_icms, csosn, base_calculo_icms, perc_reducao_bc, aliquota_icms, valor_icms,
+                                base_calculo_st, valor_icms_st, base_st_retido, icms_st_retido,
+                                perc_credito_sn, valor_credito_sn,
+                                cst_pis, base_calculo_pis, aliquota_pis, valor_pis,
+                                cst_cofins, base_calculo_cofins, aliquota_cofins, valor_cofins,
+                                cst_ibscbs, cclasstrib, base_ibscbs, aliquota_ibs_uf, valor_ibs_uf,
+                                aliquota_ibs_mun, valor_ibs_mun, aliquota_cbs, valor_cbs, valor_total_tributos)
+                            VALUES (plataforma.tenant_atual(), ?, ?,
+                                    (SELECT pb.id_variacao FROM produto_barra pb
+                                      WHERE pb.id_tenant = plataforma.tenant_atual() AND pb.sku = ? LIMIT 1),
+                                    ?, COALESCE(?, 'SEM GTIN'), ?, ?, ?, ?, ?,
+                                    ?, ?, ?,
+                                    ?, ?, ?, ?,
+                                    ?, ?, ?, ?, ?, ?,
+                                    ?, ?, ?, ?,
+                                    ?, ?,
+                                    ?, ?, ?, ?,
+                                    ?, ?, ?, ?,
+                                    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                            """)
+                    .params(idDocumento, i.nItem(), i.codigoProduto(), i.codigoProduto(),
+                            i.gtin(), i.descricao(), i.ncm(), i.cest(), i.cfop(), i.unidadeComercial(),
+                            i.quantidade(), i.valorUnitario(), i.valorProduto(),
+                            i.unidadeTributavel(), i.quantidadeTributavel(), i.valorUnitarioTributavel(),
+                            i.origemMercadoria(),
+                            i.cstIcms(), i.csosn(), nz(i.baseCalculoIcms()), nz(i.percentualReducaoBc()),
+                            nz(i.aliquotaIcms()), nz(i.valorIcms()),
+                            nz(i.baseCalculoSt()), nz(i.valorIcmsSt()), nz(i.baseStRetido()), nz(i.icmsStRetido()),
+                            nz(i.percentualCreditoSn()), nz(i.valorCreditoSn()),
+                            i.cstPis(), nz(i.baseCalculoPis()), nz(i.aliquotaPis()), nz(i.valorPis()),
+                            i.cstCofins(), nz(i.baseCalculoCofins()), nz(i.aliquotaCofins()), nz(i.valorCofins()),
+                            i.cstIbsCbs(), i.cclasstrib(), nz(i.baseIbsCbs()), nz(i.aliquotaIbsUf()),
+                            nz(i.valorIbsUf()), nz(i.aliquotaIbsMun()), nz(i.valorIbsMun()),
+                            nz(i.aliquotaCbs()), nz(i.valorCbs()), nz(i.valorTotalTributos()))
+                    .update();
+        }
+    }
+
     private void gravarItens(long idDocumento, PedidoDeEmissao pedido) {
         Map<Integer, ItemTributado> tributadoPorItem = pedido.itensTributados().stream()
                 .collect(java.util.stream.Collectors.toMap(ItemTributado::nItem, t -> t));
