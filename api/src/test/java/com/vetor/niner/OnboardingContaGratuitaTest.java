@@ -56,6 +56,28 @@ class OnboardingContaGratuitaTest {
     }
 
     @Test
+    void euDevolvePlanoECotaEmVezDeDataDeTrial() throws Exception {
+        // O /eu devolvia `trial_expira_em`, e o painel do lojista mostrava "Teste até <data>" —
+        // cópia de dois modelos comerciais atrás. Agora devolve plano + cota, que é o que a conta
+        // gratuita realmente tem. Lido por QUALQUER papel (Minha Conta é ADMIN-only).
+        String body = """
+                {"nomeLoja":"Loja Plano No Eu","email":"dono@lojaplanoeu.com",
+                 "senha":"segredo123","nomeAdmin":"Dono"}
+                """;
+        String resp = mvc.perform(post("/api/publico/assinar").contentType(APPLICATION_JSON).content(body))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+
+        mvc.perform(get("/api/v1/eu").header("Authorization", "Bearer " + JsonPath.read(resp, "$.token")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.plano.nome").value("Gratuito"))
+                .andExpect(jsonPath("$.plano.gratuito").value(true))
+                .andExpect(jsonPath("$.plano.limite_vendas_mes").value(100))
+                .andExpect(jsonPath("$.plano.vendas_no_mes").value(0))
+                .andExpect(jsonPath("$.trial_expira_em").doesNotExist());
+    }
+
+    @Test
     void euSemTokenEhNaoAutorizado() throws Exception {
         mvc.perform(get("/api/v1/eu")).andExpect(status().isUnauthorized());
     }

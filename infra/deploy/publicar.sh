@@ -34,6 +34,8 @@ for app in site web admin; do
   printf "window.NINER_API_BASE = 'https://api.%s';\n" "$NINER_DOMINIO" | sudo tee "$DESTINO_ESTATICO/$app/config.js" >/dev/null
 done
 printf "window.NINER_WEB_BASE = 'https://app.%s';\n" "$NINER_DOMINIO" | sudo tee -a "$DESTINO_ESTATICO/site/config.js" >/dev/null
+# O app do lojista precisa saber o endereço do site (link "criar conta" no login).
+printf "window.NINER_SITE_BASE = 'https://%s';\n" "$NINER_DOMINIO" | sudo tee -a "$DESTINO_ESTATICO/web/config.js" >/dev/null
 
 echo
 echo "✅ Publicado. Confira:"

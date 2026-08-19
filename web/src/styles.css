@@ -1305,3 +1305,8 @@ a.menu-card:hover {
 .valor-cobranca { margin: 12px 0 0; font-size: 18px; }
 .pix-qr { display: block; margin: 12px auto; border-radius: var(--radius); background: #fff; padding: 8px; }
 .btn-link { background: none; border: none; padding: 0; color: var(--accent); cursor: pointer; font: inherit; text-decoration: underline; }
+
+/* Cota do mês no painel do lojista (ADR-015) — mesma leitura da tela Minha Conta. */
+.barra-cota { height: 8px; border-radius: 999px; background: var(--field-bg); overflow: hidden; margin-top: 8px; }
+.barra-cota-preenchida { height: 100%; background: var(--accent); transition: width .3s ease; }
+.barra-cota-preenchida.atencao { background: #b8860b; }
