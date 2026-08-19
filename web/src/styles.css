@@ -427,13 +427,18 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
 /* DANFE (§9.6, reconstruído em 2026-08-19 a partir de um modelo real trazido pelo dono do
    produto) — com fiscal ligado e a NFC-e autorizada/em contingência, o cupom impresso É o DANFE:
    tabela HTML de verdade (fonte proporcional, colunas alinhadas), não mais texto monoespaçado.
-   Mesma bobina térmica 80mm/75mm de área imprimível de sempre — só o motor de renderização
-   mudou. A papeleta comum (sem fiscal) e o Vale-Mercadoria continuam em `.papeleta-imprimir`
-   (texto monoespaçado), sem tocar neste bloco. */
+   Bobina de 78mm, área imprimível **confirmada por foto real em 72mm** (2026-08-19 — passou por
+   75mm/77mm com deslocamento negativo antes disso, cortando fora dos dois lados; o dono do
+   produto trouxe os dois números certos — 78mm de rolo, 72mm de área útil — e a régua venceu a
+   estimativa). `left: 0` na impressão (não negativo): a origem do CSS já É o começo da área
+   imprimível, mesma regra da papeleta comum — só o motor de renderização mudou. Vale-Mercadoria
+   continua em `.papeleta-imprimir` (texto monoespaçado, calibrada à parte), sem tocar aqui. */
 .danfce-preview {
-  width: 75mm; margin: 16px auto; padding: 3mm;
+  width: 72mm; margin: 16px auto; padding: 3mm;
   background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--radius);
-  font-family: Arial, Helvetica, sans-serif; font-size: 11px; line-height: 1.4; color: var(--ink);
+  /* line-height 1.2 (2026-08-19, ajuste "leve" pedido pelo dono do produto pra gastar menos
+   * papel) — era 1.4; abaixo disso a bobina térmica arrisca linha colada em texto negrito. */
+  font-family: Arial, Helvetica, sans-serif; font-size: 11px; line-height: 1.2; color: var(--ink);
 }
 .danfce-preview .danfce-empresa,
 .danfce-preview .danfce-titulo,
@@ -442,29 +447,33 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
 .danfce-preview .danfce-tributo,
 .danfce-preview .danfce-adicional,
 .danfce-preview .danfce-consulta { text-align: center; }
-.danfce-preview .danfce-empresa { margin-bottom: 2mm; }
+/* Margens/paddings abaixo: nível "moderado" (2026-08-19) do ajuste de papel — depois do "leve"
+ * (line-height + separadores) o dono do produto pediu mais aperto pra testar. Mantém todos os
+ * separadores (o "agressivo" que troca o separador entre itens por margem fina ficou pra depois,
+ * se este nível ainda não bastar). */
+.danfce-preview .danfce-empresa { margin-bottom: 1.2mm; }
 .danfce-preview .danfce-empresa-nome { font-weight: bold; }
-.danfce-preview .danfce-titulo { font-weight: bold; margin: 2mm 0; }
-.danfce-preview .danfce-aviso { margin-bottom: 1mm; }
-.danfce-preview .danfce-tarja { font-weight: bold; margin: 1mm 0; }
+.danfce-preview .danfce-titulo { font-weight: bold; margin: 1.2mm 0; }
+.danfce-preview .danfce-aviso { margin-bottom: 0.6mm; }
+.danfce-preview .danfce-tarja { font-weight: bold; margin: 0.6mm 0; }
 .danfce-preview table.danfce-itens,
-.danfce-preview table.danfce-pagamentos { width: 100%; border-collapse: collapse; margin: 2mm 0; }
+.danfce-preview table.danfce-pagamentos { width: 100%; border-collapse: collapse; margin: 1.2mm 0; }
 .danfce-preview .danfce-sep {
   /* Preto fixo, não `var(--ink)`: esta área sempre representa papel (fundo branco), então a
    * cor não pode seguir o tema claro/escuro da tela — no escuro `--ink` vira claro e o traço
    * desaparece contra o fundo escuro do preview (achado em 2026-08-19, testando ao vivo). */
-  height: 0.3mm; background: #000; margin: 1.5mm 0;
+  height: 0.3mm; background: #000; margin: 0.9mm 0; /* era 1.5mm — ajuste "leve" de papel, 2026-08-19 */
 }
 .danfce-preview table.danfce-itens th,
 .danfce-preview table.danfce-pagamentos th {
   text-align: left; font-weight: normal; border-bottom: 1px solid #000;
-  padding: 1mm 0 0.5mm;
+  padding: 0.6mm 0 0.3mm; /* era 1mm 0 0.5mm — nível "moderado" */
 }
 .danfce-preview .danfce-itens-titulo { font-weight: bold; border-bottom: 0; padding-bottom: 0; }
 .danfce-preview table.danfce-itens td,
-.danfce-preview table.danfce-pagamentos td { padding: 0.3mm 0; vertical-align: top; }
+.danfce-preview table.danfce-pagamentos td { padding: 0.2mm 0; vertical-align: top; } /* era 0.3mm — nível "moderado" */
 .danfce-preview .danfce-num { text-align: right; white-space: nowrap; }
-.danfce-preview .danfce-item-desc { font-weight: bold; padding-top: 1.5mm !important; }
+.danfce-preview .danfce-item-desc { font-weight: bold; padding-top: 1mm !important; } /* era 1.5mm — nível "moderado" */
 .danfce-preview .danfce-totais > div { display: flex; justify-content: space-between; gap: 4mm; }
 .danfce-preview .danfce-total-pagar { font-weight: bold; }
 .danfce-preview .danfce-chave { font-weight: bold; }
@@ -474,7 +483,9 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
 @media print {
   .danfce-imprimir, .danfce-imprimir * { visibility: visible; }
   .danfce-imprimir {
-    position: absolute; top: 0; left: 0; width: 75mm; margin: 0; padding: 2mm 1mm; border: 0;
+    /* left: 0, width: 72mm — área imprimível real confirmada por foto (ver o comentário de
+     * `.danfce-preview` acima pro histórico da calibragem). */
+    position: absolute; top: 0; left: 0; width: 72mm; margin: 0; padding: 2mm 1mm; border: 0;
     background: none; color: #000;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;

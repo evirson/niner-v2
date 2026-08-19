@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { gerarBlobComprovanteVenda, gerarQrCodeDataUrl, montarLinhasComprovanteVenda } from '../../lib/comprovante'
 import { gerarBlobDanfce } from '../../lib/danfce'
 import { ApiError } from '../../lib/api'
-import { buscarEmiteFiscalAposVenda } from '../../lib/configuracaoGeral'
+import { buscarEmiteFiscalAposVenda, buscarPermiteQtdDecimal } from '../../lib/configuracaoGeral'
 import { buscarComprovanteVenda, emitirNfce, type ResultadoEmissaoNfce } from '../../lib/pdv'
 import { compartilharArquivo } from '../../lib/compartilhamento'
 import { montarLinkWhatsApp } from '../../lib/whatsapp'
@@ -82,6 +82,9 @@ export default function ComprovantePapeletaModal({
     queryFn: buscarEmiteFiscalAposVenda,
     enabled: !reimpressao,
   })
+
+  const { data: cfgQtdDecimal } = useQuery({ queryKey: ['permite-qtd-decimal'], queryFn: buscarPermiteQtdDecimal })
+  const permiteQtdDecimal = cfgQtdDecimal?.cfgPermiteQtdDecimal ?? true
 
   const [modalWhatsAppAberto, setModalWhatsAppAberto] = useState(false)
   const [enviandoWhatsApp, setEnviandoWhatsApp] = useState(false)
@@ -273,7 +276,12 @@ export default function ComprovantePapeletaModal({
                 )}
               </div>
             ) : dadosFiscais && comprovante ? (
-              <DanfceImprimir ref={danfceRef} comprovante={comprovante} qrDataUrl={qrDataUrl} />
+              <DanfceImprimir
+                ref={danfceRef}
+                comprovante={comprovante}
+                qrDataUrl={qrDataUrl}
+                permiteQtdDecimal={permiteQtdDecimal}
+              />
             ) : (
               <pre className="papeleta-preview papeleta-imprimir">{linhas.join('\n')}</pre>
             )}

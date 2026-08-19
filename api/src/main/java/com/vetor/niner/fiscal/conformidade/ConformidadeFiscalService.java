@@ -218,7 +218,10 @@ public class ConformidadeFiscalService {
                                    CASE WHEN tc.codigo_tpag IS NULL THEN 'sem código de forma de pagamento (tPag)' END,
                                    CASE WHEN tc.categoria_carteira IN ('CARTAO_DEBITO', 'CARTAO_CREDITO')
                                              AND tc.codigo_bandeira IS NULL
-                                        THEN 'sem bandeira do cartão' END
+                                        THEN 'sem bandeira do cartão' END,
+                                   CASE WHEN tc.categoria_carteira IN ('CARTAO_DEBITO', 'CARTAO_CREDITO')
+                                             AND tc.cnpj_credenciadora IS NULL
+                                        THEN 'sem CNPJ da credenciadora' END
                                ) AS problema
                         FROM tipo_carteira tc
                         """ + FILTRO_PAGAMENTOS_PROBLEMATICOS + """
@@ -228,10 +231,15 @@ public class ConformidadeFiscalService {
                 .list();
     }
 
+    // ⚠️ cStat 391 real (2026-08-19): SEFAZ-PR rejeitou uma NFC-e com forma de pagamento em cartão
+    // porque faltava o CNPJ da credenciadora — mesmo com tpIntegra=2 (maquininha não integrada) e
+    // a bandeira preenchida, o grupo <card> incompleto não basta. Sem este item aqui, a
+    // Conformidade Fiscal dizia "pronto pra emitir" com uma pendência real invisível.
     private static final String FILTRO_PAGAMENTOS_PROBLEMATICOS = """
             WHERE tc.id_tenant = plataforma.tenant_atual()
               AND (tc.codigo_tpag IS NULL
-                   OR (tc.categoria_carteira IN ('CARTAO_DEBITO', 'CARTAO_CREDITO') AND tc.codigo_bandeira IS NULL))
+                   OR (tc.categoria_carteira IN ('CARTAO_DEBITO', 'CARTAO_CREDITO')
+                       AND (tc.codigo_bandeira IS NULL OR tc.cnpj_credenciadora IS NULL)))
             """;
 
     // ---------------------------------------------------------------- Clientes (aviso)

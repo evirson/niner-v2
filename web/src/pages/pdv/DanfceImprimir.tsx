@@ -31,8 +31,10 @@ function Separador() {
   return <div className="danfce-sep" />
 }
 
-const DanfceImprimir = forwardRef<HTMLDivElement, { comprovante: ComprovanteVenda; qrDataUrl: string | null }>(
-  function DanfceImprimir({ comprovante: c, qrDataUrl }, ref) {
+const DanfceImprimir = forwardRef<
+  HTMLDivElement,
+  { comprovante: ComprovanteVenda; qrDataUrl: string | null; permiteQtdDecimal: boolean }
+>(function DanfceImprimir({ comprovante: c, qrDataUrl, permiteQtdDecimal }, ref) {
     const f = c.dadosFiscais
     if (!f) return null
     const empresa = c.empresaFiscal
@@ -107,7 +109,7 @@ const DanfceImprimir = forwardRef<HTMLDivElement, { comprovante: ComprovanteVend
                 </tr>
                 <tr>
                   <td>{item.sku}</td>
-                  <td className="danfce-num">{formatarQuantidadeDanfce(item.qtd)}</td>
+                  <td className="danfce-num">{formatarQuantidadeDanfce(item.qtd, permiteQtdDecimal)}</td>
                   <td>{item.unidadeComercial ?? ''}</td>
                   <td className="danfce-num">{formatarMoeda(item.valorUnitario)}</td>
                   <td className="danfce-num">{formatarMoeda(item.valorTotal)}</td>

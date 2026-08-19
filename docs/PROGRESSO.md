@@ -13,7 +13,7 @@ Registro cronológico das decisões e entregas. Atualizar a cada marco relevante
 > + NF-e de devolução de venda**, com cancelamento, inutilização, contingência, arquivamento e
 > download. Roteiro em blocos B0–B9: **§17.1 do estudo**.
 >
-> **O que está pronto e testado (772/772 backend verdes):** B0 (PoC real contra a SEFAZ-PR, `cStat
+> **O que está pronto e testado (730/730 backend verdes):** B0 (PoC real contra a SEFAZ-PR, `cStat
 > 100`, JDK puro sem lib de NF-e — DF7 fechada no plano B) · B1 (specs) · B2 (`fiscal.configuracao`
 > + `fiscal.perfil` + certificado A1, **cifrado no banco**, não em bucket — DF21 revisada) · B3
 > (Conformidade Fiscal, bloqueio preventivo F11) · B4 (motor tributário puro — ICMS/PIS/COFINS/IPI/
@@ -70,8 +70,15 @@ Registro cronológico das decisões e entregas. Atualizar a cada marco relevante
 > hardcoded em zero** — calcula de verdade a partir do NCM/origem do produto e passa a ser
 > **emitido no XML** (antes ficava sempre omitido); a papeleta ganhou número/série oficial da
 > NFC-e e a linha "CONSUMIDOR - CPF/CNPJ" (ou "NÃO IDENTIFICADO"), fechando a especificação de
-> DANFE recebida do dono do produto. **770/770 testes de backend verdes.** Ver linha do tempo de
-> hoje.
+> DANFE recebida do dono do produto. Ainda no mesmo dia: DANFCE reconstruído como tabela HTML de
+> verdade (era texto monoespaçado), QR Code corrigido (`cStat 464` real — formato/hash errados,
+> CSC passou a ser cifrado de fato), e um bug real de rejeição SEFAZ por `cnpj_credenciadora`
+> ausente em carteira de cartão (`cStat 391`, venda 586) corrigido — a Conformidade Fiscal agora
+> flags essa pendência. Calibragem de impressão do DANFE fechada em **72mm de área útil, `left: 0`**
+> (medida real por régua, depois de 4 rodadas por estimativa), quantidade do item passou a respeitar
+> `cfg_permite_qtd_decimal` (antes saía sempre "1,000UN"), e espaçamento vertical reduzido em 2
+> níveis (Leve + Moderado) a pedido do dono do produto, pra gastar menos papel. **730/730 testes de
+> backend verdes.** Ver linha do tempo de hoje.
 >
 > Os parágrafos abaixo são a **narrativa acumulada** desde o começo — leia o resumo acima para o
 > estado, e a linha do tempo (do mais novo para o mais antigo) para o detalhe de cada entrega.
@@ -473,6 +480,44 @@ Movimentação de Conta Corrente) que ainda não tinham migrado pro `SeletorPlan
 ---
 
 ## Linha do tempo
+
+### 2026-08-19 — Bug real corrigido: rejeição SEFAZ por CNPJ da credenciadora ausente (`cStat 391`); calibragem final do DANFE (72mm confirmado por foto); quantidade respeita `cfg_permite_qtd_decimal`; ajuste de espaçamento vertical pra economizar papel
+
+1. **🔴✅ Bug real de produção: NFC-e paga em cartão rejeitada pela SEFAZ-PR** — "Não informados os
+   dados do cartão de crédito/débito nas Formas de Pagamento da Nota Fiscal (391)" na venda nº 586.
+   Causa: `tipo_carteira.cnpj_credenciadora` NULL nas 6 carteiras de cartão do tenant — o grupo
+   `<card>` do XML saía com `tpIntegra`/`tBand` mas sem `CNPJ`, incompleto pra SEFAZ mesmo com
+   `tpIntegra = 2` (maquininha não integrada). Isso **contraria a leitura genérica da NT 2015.002**
+   (que só exige CNPJ com `tpIntegra = 1`) — achado só reproduzindo contra o ambiente real da
+   SEFAZ-PR. Corrigido em duas frentes: `ConformidadeFiscalService.listarPagamentos()` passa a
+   também flagar carteira de cartão sem `cnpj_credenciadora` (antes a Conformidade Fiscal dizia
+   "pronto pra emitir" com essa pendência invisível); dado de dev corrigido (CNPJ real da Cielo
+   como placeholder nas 6 carteiras — **trocar pelo CNPJ real da credenciadora antes de produção**).
+   Teste novo (`ConformidadeFiscalCrudTest.carteiraDeCreditoComBandeiraMasSemCnpjDaCredenciadoraContaComoPendencia`)
+   + fix no helper compartilhado `configurarEmpresaCompleta()`, que também deixava o campo NULL e
+   mascarava o gap nos testes "caminho feliz". Confirmado ao vivo: nova venda com VISA crédito saiu
+   `AUTORIZADO`, protocolo real. **730/730 testes de backend verdes.**
+2. **Calibragem final da largura/posição do DANFE** — depois de 4 rodadas por estimativa (-3mm,
+   +1mm, 72mm, 77mm de largura), o dono do produto trouxe uma foto do cupom cortando dos **dois**
+   lados e as duas medidas reais tiradas com régua: **78mm de bobina, 72mm de área útil**. Corrigido
+   para `left: 0` (não negativo — a origem do CSS já É o começo da área imprimível, mesma regra da
+   papeleta comum) + `width: 72mm`. Régua venceu a estimativa visual.
+3. **Quantidade do DANFE ignorava `cfg_permite_qtd_decimal`** — saía sempre "1,000UN" mesmo em
+   tenant configurado pra não trabalhar com fração, porque `formatarQuantidadeDanfce` (`danfce.ts`)
+   forçava 3 casas decimais sempre, por decisão anterior deliberada ("o DANFE mostra o que foi
+   gravado na nota") que o uso real provou errada. Corrigido pra usar a mesma
+   `formatarQuantidade(valor, permiteDecimal)` de `masks.ts` já usada em todo o resto do PDV/Estoque
+   — `ComprovantePapeletaModal.tsx` passou a buscar `cfg_permite_qtd_decimal` (mesmo padrão
+   `useQuery(['permite-qtd-decimal'], buscarPermiteQtdDecimal)` de `Pdv.tsx`/`AlteraQuantidadeModal.tsx`)
+   e repassar como prop pro `DanfceImprimir`.
+4. **Espaçamento vertical reduzido pra gastar menos papel** — pedido explícito do dono do produto,
+   com 3 níveis de opção apresentados antes de mexer (Leve/Moderado/Agressivo). Aplicado **Leve**
+   (`line-height` 1.4→1.2 + margem dos separadores `.danfce-sep` 1.5mm→0.9mm) e, a pedido, também
+   **Moderado** em cima (margens de seção — empresa/título/tarja/tabelas — de ~2mm/1mm pra ~1.2mm/
+   0.6mm, padding de cabeçalho de tabela 1mm→0.6mm, padding de linha de item/pagamento 0.3mm→0.2mm,
+   espaço acima da descrição do item 1.5mm→1mm). Todos os separadores continuam presentes — o nível
+   **Agressivo** (trocar o separador entre itens, o mais repetido, por margem fina) ficou pra depois
+   se o Moderado ainda não bastar. Em teste pelo dono do produto no momento desta entrada.
 
 ### 2026-08-19 — DANFE: papeleta sem linhas zeradas, cabeçalho "Descrição dos Produtos" e traços contínuos entre seções
 

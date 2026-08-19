@@ -428,6 +428,18 @@ Conformidade Fiscal (§11.1 do estudo, `docs/telas/fiscal-conformidade.md`), nã
 normalizado sem máscara no banco. Testado ao vivo: corrigir a pendência do AMEX no navegador fez a
 contagem de "Formas de pagamento" cair de 9 para 8 pendências na mesma sessão.
 
+🔴✅ **`cnpj_credenciadora` é obrigatório mesmo com `tpIntegra = 2` — achado real, `cStat 391`
+(2026-08-19).** A leitura genérica da NT 2015.002 diz que o CNPJ da credenciadora só é exigido com
+`tpIntegra = 1` (maquininha integrada via TEF/POS); o Niner sempre emite com `tpIntegra = 2`
+(hardcoded, ver linha acima). Na prática, a **SEFAZ-PR rejeitou uma NFC-e real** ("Não informados
+os dados do cartão de crédito/débito nas Formas de Pagamento da Nota Fiscal", `cStat 391`) porque
+o grupo `<card>` saía com `tPag`/`tBand` mas sem `CNPJ` — carteira de cartão com
+`cnpj_credenciadora` NULL. A Conformidade Fiscal **não flagava essa pendência** (checava só
+`codigo_tpag`/`codigo_bandeira`); corrigido em `ConformidadeFiscalService.listarPagamentos()` pra
+também exigir `cnpj_credenciadora` em toda carteira `CARTAO_DEBITO`/`CARTAO_CREDITO`. Qualquer
+CNPJ válido passa na SEFAZ (ela não cruza contra a bandeira real) — mas o correto pra produção é o
+CNPJ real da adquirente (Cielo/Rede/Stone/GetNet), não um qualquer.
+
 🔴 **DF29 — vale-mercadoria é pagamento ou desconto?** O vale gerado por devolução
 (`venda_devolucao`) hoje quita venda como forma de pagamento. Na nota ele pode ser **`tPag` de
 crédito em loja** ⚠️ ou **desconto no item**. Tributariamente não são a mesma coisa: desconto
@@ -896,21 +908,16 @@ multi-tenant (uma licença da Vetor cobrindo todos os tenants, ou cada lojista c
 > `INSERT` de `gravarAssinado()` ficou com um `?` a menos pros parâmetros novos — toda emissão
 > quebrava com 409 até o fix.
 
-### 8.6.1 Layout impresso do DANFE (bobina térmica) — especificação recebida em 2026-08-19
+### 8.6.1 Layout impresso do DANFE (bobina térmica)
 
-Especificação técnica trazida pelo dono do produto (layout oficial MOC + Lei da Transparência),
-conferida contra o que já estava implementado desde o B7 (`docs/telas/papeleta-venda.md`, calibragem
-42 colunas / 75mm / Consolas negrito).
-
-**Características físicas** (impressora térmica de cupom): largura mínima 56mm (ideal 80mm),
-margem mínima 2mm, fonte com altura mínima ~2mm (7–8pt), papel térmico legível por no mínimo 6
-meses. O Niner usa a calibragem de `docs/telas/papeleta-venda.md` (área imprimível 75mm dos 80mm
-do papel, 42 colunas, Consolas em negrito — térmica é 1 bit, haste fina sai falhada).
-
-**Estrutura padrão do cupom** (esquemático da especificação — cabeçalho da empresa, título DANFE,
-tabela de itens com coluna opcional de tributo por item, total de itens/valor, formas de
-pagamento, "Informação dos Tributos Totais" da Lei 12.741, número/série da nota, chave de acesso
-em blocos de 4, identificação do consumidor, QR Code, protocolo de autorização):
+Especificação técnica original recebida do dono do produto em 2026-08-19 (layout oficial MOC + Lei
+da Transparência, esquemático abaixo) — a lista de itens que ela cobra continua valendo, mas a
+**implementação mudou de motor no mesmo dia**: nasceu em texto monoespaçado (herdado do B7,
+`comprovante.ts`) e foi **reconstruída como tabela HTML/CSS de verdade** (fonte proporcional,
+colunas alinhadas) ainda em 2026-08-19, a partir de um modelo real trazido pelo dono do produto —
+o texto monoespaçado cortava a chave de acesso em silêncio (linha maior que as 42 colunas) e saía
+feio contra o modelo. **A papeleta comum (venda sem fiscal) continua no texto monoespaçado antigo,
+`comprovante.ts` — só o DANFCE trocou de motor.**
 
 ```text
 ============================================================
@@ -942,21 +949,47 @@ CONSUMIDOR - CPF: 000.000.000-00
 ============================================================
 ```
 
-**Como o layout do Niner atende cada ponto** (`web/src/lib/comprovante.ts`,
-`linhasCabecalhoFiscal`/`linhasRodapeFiscal`, desde o B7 + reforço de 2026-08-19):
+**Implementação atual** — `web/src/pages/pdv/DanfceImprimir.tsx` (montagem HTML) +
+`web/src/lib/danfce.ts` (formatação/captura de PDF) + `web/src/styles.css`
+(`.danfce-preview`/`.danfce-imprimir`, calibragem de impressão):
 
 | Item da especificação | Implementação |
 |---|---|
-| Cabeçalho empresa/CNPJ/endereço | Já existia na papeleta comum (fora do escopo fiscal) |
-| Título DANFE + tarja de homologação | `linhasCabecalhoFiscal` — alterna DANFCE ↔ tarja HOMOLOGACAO |
-| Tabela de itens | Já existia (formato de 2 linhas por item, `papeleta-venda.md`) |
+| Cabeçalho empresa/CNPJ/endereço | `<div className="danfce-empresa">`, centralizado |
+| Título DANFE + tarja de homologação/contingência | Separador sólido antes/depois do título; tarja própria quando `homologacao`/`contingencia` |
+| Tabela de itens | `<table className="danfce-itens">`, cada item com descrição em negrito + linha cód./qtd./un./valores; separador sólido entre itens |
 | Coluna de tributo por item `(VL TR)` | **Não implementada** — a especificação marca como opcional/recomendada; o total (obrigatório) já sai no rodapé |
-| Total de tributos (Lei 12.741) | `Trib. aprox.: R$ X,XX (Lei 12.741/2012)` — valor real desde 2026-08-19 (§8.6) |
-| Número/série da NFC-e | **2026-08-19**: `NFC-e: No 000.000.001 - Serie 001` — antes só existia o nº interno da venda |
-| Chave de acesso em blocos de 4 | `formatarChaveGrupos4`, desde o B7 |
-| Identificação do consumidor (CPF/CNPJ ou "não identificado") | **2026-08-19**: extraído do `<dest>` do XML assinado (nunca do cadastro — podem divergir se o operador respondeu "não" à pergunta de incluir CPF), nunca reconstruído |
-| QR Code | Renderizado como imagem (não texto), extraído do XML assinado — B7 |
-| Protocolo de autorização | `Protocolo..:`/`Autorizacao:`, desde o B7 |
+| Total de tributos (Lei 12.741) | Valor aproximado + detalhamento Federal/Estadual/Municipal (§8.6 acima), fonte IBPT |
+| Número/série da NFC-e | `Número:.../Série:...`, no rodapé |
+| Chave de acesso em blocos de 4 | `formatarChaveGrupos4` |
+| Identificação do consumidor (CPF/CNPJ ou "não identificado") | Extraído do `<dest>` do XML assinado (nunca do cadastro — podem divergir se o operador respondeu "não" à pergunta de incluir CPF) |
+| QR Code | Renderizado como imagem (`<img>`), extraído do XML assinado |
+| Protocolo de autorização | `Protocolo de Autorização:` + data/hora, no rodapé |
+| Quantidade do item | `formatarQuantidadeDanfce(qtd, permiteDecimal)` — 3 casas se o tenant permite quantidade decimal, inteiro se não (`cfg_permite_qtd_decimal`; **2026-08-19**: antes saía sempre "1,000UN", mesmo em tenant sem fração — corrigido pra reusar `formatarQuantidade` de `masks.ts`, mesma convenção do resto do PDV) |
+
+**Separadores** — três rodadas até acertar (2026-08-19): borda CSS tracejada não batia com o
+modelo real; uma fileira de caracteres `-` de texto ainda saía pontilhada na impressora térmica (a
+resolução da bobina não resolve traços finos intercalados com espaço); a versão final é uma barra
+sólida (`<div className="danfce-sep">`, `background` preenchido), em **preto fixo** — nunca
+`var(--ink)`, que segue o tema claro/escuro do app e ficava quase invisível no modo escuro (a área
+do DANFCE representa papel, não deve seguir tema nenhum da tela).
+
+**Calibragem de largura/posição** — `left: 0` + `width: 72mm` em `.danfce-imprimir` (regra: `left:
+0` já é a origem da área imprimível, não a borda física do papel — mesma convenção da papeleta
+comum, só o motor de renderização mudou). Fechada em 2026-08-19 depois de 4 rodadas por estimativa
+visual (-3mm, +1mm, 72mm, 77mm de largura) — o dono do produto trouxe uma foto do cupom cortando
+dos dois lados junto com as duas medidas reais tiradas com régua (**78mm de bobina, 72mm de área
+útil**), e essa foi a medida que fechou o ajuste. `font-size` nunca foi tocado nessa calibragem —
+só posição/largura do contêiner, pra não sacrificar legibilidade.
+
+**Espaçamento vertical** — reduzido em 2026-08-19 a pedido do dono do produto, pra gastar menos
+papel por cupom. Dois níveis aplicados, cada um testado ao vivo antes do próximo: **Leve**
+(`line-height` do documento 1.4→1.2, margem dos separadores 1.5mm→0.9mm) e **Moderado** (margens de
+seção — empresa/título/tarja/tabelas — de ~2mm/1mm pra ~1.2mm/0.6mm, padding de cabeçalho de
+tabela 1mm→0.6mm, padding de linha de item/pagamento 0.3mm→0.2mm, espaço acima da descrição do
+item 1.5mm→1mm). Nenhum separador foi removido nesses dois níveis; um nível **Agressivo** (trocar
+o separador entre itens — o mais repetido no documento — por uma margem fina) ficou definido mas
+não aplicado, caso o Moderado ainda não seja suficiente.
 
 **Cálculo do tributo aproximado**: ver §8.6 acima (implementação completa, com a fórmula
 Nacional × Importado e onde cada peça mora no código).

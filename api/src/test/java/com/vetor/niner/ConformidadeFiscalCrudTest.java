@@ -89,7 +89,9 @@ class ConformidadeFiscalCrudTest {
         jdbc.sql("""
                         UPDATE tipo_carteira SET codigo_tpag = '01',
                             codigo_bandeira = CASE WHEN categoria_carteira IN ('CARTAO_DEBITO', 'CARTAO_CREDITO')
-                                                    THEN '99' ELSE codigo_bandeira END
+                                                    THEN '99' ELSE codigo_bandeira END,
+                            cnpj_credenciadora = CASE WHEN categoria_carteira IN ('CARTAO_DEBITO', 'CARTAO_CREDITO')
+                                                       THEN '01234567000199' ELSE cnpj_credenciadora END
                         WHERE id_tenant = ?
                         """)
                 .param(idTenant).update();
@@ -339,6 +341,33 @@ class ConformidadeFiscalCrudTest {
                 .andExpect(jsonPath("$.pronto").value(false))
                 .andExpect(jsonPath("$.categorias[2].categoria").value("PAGAMENTOS"))
                 .andExpect(jsonPath("$.categorias[2].quantidadePendencias").value(org.hamcrest.Matchers.greaterThan(0)));
+    }
+
+    /** ⚠️ cStat 391 real (2026-08-19): SEFAZ-PR rejeitou uma NFC-e paga em cartão porque faltava
+     *  o CNPJ da credenciadora — mesmo com tPag/tBand preenchidos (grupo {@code <card>} incompleto
+     *  não basta). Antes deste teste, uma carteira exatamente nesse estado não contava como
+     *  pendência: "pronto pra emitir" mentia. */
+    @Test
+    void carteiraDeCreditoComBandeiraMasSemCnpjDaCredenciadoraContaComoPendencia() throws Exception {
+        String token = assinarNovoTenant("carteira-sem-credenciadora");
+        long idTenant = idTenantDo(token);
+        long idEmpresa = idEmpresaDo(token);
+        configurarEmpresaCompleta(token, idTenant, idEmpresa, "55666777000199");
+        enviarCertificadoValido(token, idEmpresa, "55666777000199", 365);
+
+        // configurarEmpresaCompleta já deixa as 6 carteiras padrão com CNPJ da credenciadora
+        // preenchido — só esta carteira nova, criada sem o campo, deve contar como pendência.
+        jdbc.sql("""
+                        INSERT INTO tipo_carteira (id_tenant, nome_carteira, categoria_carteira,
+                            prazo_pagamento, pc_minima, pc_maxima, codigo_tpag, codigo_bandeira)
+                        VALUES (?, 'CARTAO TESTE SEM CREDENCIADORA', 'CARTAO_CREDITO', 30, 1, 1, '03', '01')
+                        """)
+                .param(idTenant).update();
+
+        mvc.perform(get("/api/v1/fiscal/conformidade/" + idEmpresa + "/pagamentos").header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalItens").value(1))
+                .andExpect(jsonPath("$.itens[0].problema").value("sem CNPJ da credenciadora"));
     }
 
     // ---------------------------------------------------------------- Clientes (aviso)

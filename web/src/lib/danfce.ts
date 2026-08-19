@@ -1,6 +1,6 @@
 import html2canvas from 'html2canvas'
 import { jsPDF } from 'jspdf'
-import { formatarMoeda } from './masks'
+import { formatarMoeda, formatarQuantidade } from './masks'
 
 /**
  * Formatação e captura do DANFE (documento auxiliar da NFC-e) — 2026-08-19, reconstrução total a
@@ -37,10 +37,14 @@ export function formatarNumeroNfce(numero: number): string {
   return String(numero).padStart(9, '0').replace(/(\d{3})(?=\d)/g, '$1.')
 }
 
-/** Quantidade sempre em 3 casas ("1,000") — convenção do modelo de referência, independente de
- *  `cfg_permite_qtd_decimal` do tenant: o DANFE mostra o que foi de fato gravado na nota. */
-export function formatarQuantidadeDanfce(qtd: number): string {
-  return qtd.toLocaleString('pt-BR', { minimumFractionDigits: 3, maximumFractionDigits: 3 })
+/** 3 casas ("1,000") se o tenant permite quantidade decimal, inteiro ("1") se não — 2026-08-19:
+ *  a versão anterior ignorava `cfg_permite_qtd_decimal` de propósito ("o DANFE mostra o que foi
+ *  de fato gravado na nota"), mas isso saía errado justamente pro caso comum, tenant que não
+ *  trabalha com fração nenhuma: toda quantidade já é inteira, e "1,000UN" no cupom parecia bug pro
+ *  operador. Mesma convenção de {@link formatarQuantidade} (`masks.ts`), usada em todo o resto do
+ *  PDV. */
+export function formatarQuantidadeDanfce(qtd: number, permiteDecimal: boolean): string {
+  return formatarQuantidade(qtd, permiteDecimal)
 }
 
 /** Largura fixa (mm) do rolo térmico — mesma de todo o resto de `comprovante.ts`. O PDF do
