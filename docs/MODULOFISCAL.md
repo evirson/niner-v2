@@ -530,8 +530,12 @@ exigiria remontar o pagamento a partir de `caixa_detalhe` — e a nota tem que s
 byte a byte.
 
 **`documento_fiscal_evento`** — cancelamento, CC-e, inutilização, contingência: `tp_evento`
-(110111 cancelamento · 110110 CC-e ⚠️), `sequencia`, `justificativa` (mín. 15 caracteres),
-`protocolo`, `status_sefaz`, `motivo_sefaz`, `xml_objeto_bucket`, `id_usuario`, `criado_em`.
+(110111 cancelamento · 110110 CC-e ⚠️), `sequencia` (a posição do evento pra SEFAZ — cancelamento
+é sempre 1), `tentativa` (2026-08-19, a posição da RETENTATIVA local do mesmo `sequencia` —
+`UNIQUE (id_tenant, id_documento_fiscal, tipo_evento, sequencia, tentativa)`; sem essa coluna, uma
+1ª tentativa registrada bloqueava qualquer 2ª tentativa do mesmo evento com "duplicate key", achado
+cancelando uma venda de verdade — ver §18), `justificativa` (mín. 15 caracteres), `protocolo`,
+`status_sefaz`, `motivo_sefaz`, `xml_objeto_bucket`, `id_usuario`, `criado_em`.
 
 **`documento_fiscal_referencia`** — chave da nota referenciada (devolução → original; complementar
 → original; retorno → remessa). A NT 2025.002 introduziu regras próprias de referenciamento ⚠️,
@@ -1612,6 +1616,7 @@ automatizado — os 10.515 NCMs de `cfg_produto_ncm` vieram por esse mesmo camin
 | Lib de DF-e incompatível com Java 25 / Spring Boot 4 | Alto — trava a arquitetura | PoC na F0, antes de qualquer código de produto (§14) |
 | ~~IBS/CBS compondo ou não o total da nota (DF32)~~ | ~~Alto — cupom não bate com o caixa~~ | ✅ Resolvido: não compõem (XSD, `vNFTot` separado). O cupom bate com o caixa |
 | ~~QR Code implementado errado~~ | ~~Alto — cupom inválido no dia 1~~ | ✅ Materializado e corrigido em 2026-08-19 (`cStat 464` real) — online é v2+CSC+hash, não v3; ver §9.5 |
+| ~~Resposta da SEFAZ com dois `cStat` lida errado~~ | ~~Alto — decisão errada, mesmo com chave/protocolo corretos~~ | ✅ Materializado **duas vezes**: emissão (2026-08-18, `NFeAutorizacao4` — nota autorizada saía "REJEITADA") e cancelamento (2026-08-19, `RecepcaoEvento4` — cancelamento autorizado pela SEFAZ saía "recusado"). Mesma causa (`SefazTransporte` sem escopo pro bloco certo do XML) e mesma solução (escopar por `infProt`/`infEvento` antes de extrair). Teste de regressão pros dois casos em `SefazTransporteTest` |
 | NT nova não implementada a tempo | **Crítico — todos os tenants param juntos** | Rotina de acompanhamento (§16.4); homologação sempre pronta |
 | Vazamento de certificado | Crítico — terceiro emite no CNPJ do lojista | F7 + KMS + auditoria de uso |
 | **Base cadastral incompleta no onboarding** | Alto — lojista liga o fiscal e não consegue vender | Conformidade Fiscal (§12) + colunas fiscais na Importação |

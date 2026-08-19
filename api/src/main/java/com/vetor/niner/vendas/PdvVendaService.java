@@ -218,13 +218,13 @@ public class PdvVendaService {
         record Cabecalho(String nomeEmpresa, int codigoEmpresa, OffsetDateTime dataVenda,
                           String nomeCliente, String telefoneCliente, String documentoCliente, String nomeOperador,
                           Integer numeroCaixa, String cnpjEmpresa, String inscricaoEstadualEmpresa,
-                          String enderecoEmpresa, String telefoneEmpresa) {
+                          String enderecoEmpresa, String telefoneEmpresa, boolean cancelada) {
         }
 
         Cabecalho cabecalho = jdbc.sql("""
                         SELECT e.razao_social AS nome_empresa, e.codigo_empresa, v.data_venda,
                                c.nome AS nome_cliente, c.telefone AS telefone_cliente, c.cpf_cnpj AS documento_cliente,
-                               uop.nome_usuario AS nome_operador, v.id_caixa,
+                               uop.nome_usuario AS nome_operador, v.id_caixa, v.cancelada,
                                e.cnpj, e.inscricao_estadual, e.telefone AS telefone_empresa,
                                e.endereco, e.numero AS numero_empresa, e.bairro, e.cidade, e.estado
                         FROM venda v
@@ -243,7 +243,8 @@ public class PdvVendaService {
                         (Integer) rs.getObject("id_caixa"), rs.getString("cnpj"),
                         rs.getString("inscricao_estadual"), rs.getString("telefone_empresa"),
                         enderecoCompleto(rs.getString("endereco"), rs.getString("numero_empresa"),
-                                rs.getString("bairro"), rs.getString("cidade"), rs.getString("estado"))))
+                                rs.getString("bairro"), rs.getString("cidade"), rs.getString("estado")),
+                        rs.getBoolean("cancelada")))
                 .optional()
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND, "A venda #" + idVenda + " não existe."));
@@ -351,7 +352,7 @@ public class PdvVendaService {
                 cabecalho.nomeCliente(), cabecalho.telefoneCliente(), cabecalho.documentoCliente(),
                 vendedor.nome(), vendedor.codigo(), cabecalho.numeroCaixa(), cabecalho.nomeOperador(),
                 itens, totais.subtotal(), totais.descontos(), totais.acrescimos(), totalAPagar,
-                pagamentos, parcelasCrediario, dadosFiscais, empresaFiscal);
+                pagamentos, parcelasCrediario, dadosFiscais, empresaFiscal, cabecalho.cancelada());
     }
 
     /** "RODOVIA BR-116, 15338 - XAXIM - CURITIBA - PR" (2026-08-19, DANFE) — pedaços nulos somem

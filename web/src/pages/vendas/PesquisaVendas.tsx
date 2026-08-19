@@ -297,22 +297,29 @@ export default function PesquisaVendas() {
 
       {filtrosAberto && (
         <div className="modal-overlay">
-          <div className="modal" role="dialog" aria-label="Filtros de Pesquisa de Vendas" onClick={(e) => e.stopPropagation()}>
+          <div
+            className="modal modal-medio"
+            role="dialog"
+            aria-label="Filtros de Pesquisa de Vendas"
+            onClick={(e) => e.stopPropagation()}
+          >
             <h2 style={{ marginTop: 0 }}>Pesquisa de Vendas</h2>
-            <p className="muted" style={{ marginTop: 4 }}>
+            <p className="muted" style={{ marginTop: 4, marginBottom: 24 }}>
               Informe o número da venda, ou a data inicial e final.
             </p>
 
             {/* Linhas simétricas (2026-08-19, pedido do dono do produto): Nº Venda/Cliente,
                 Data Inicial/Data Final/Vendedor, Empresa/Situação — cada linha com colunas de
-                largura igual entre si, em vez de um único form-grid com pesos desiguais. */}
-            <div className="form-grid" style={{ marginTop: 12 }}>
+                largura igual entre si, em vez de um único form-grid com pesos desiguais.
+                Modal alargado pra modal-medio e as linhas ganharam respiro vertical entre si
+                (2026-08-19b, pedido do dono do produto — o popup estava com tudo colado). */}
+            <div className="form-grid">
               <div className="col-6">
                 <label htmlFor="filtro-numero-venda">Nº da Venda</label>
                 <input
                   id="filtro-numero-venda"
                   autoFocus
-                  placeholder="Deixe em branco pra buscar por período…"
+                  placeholder="Em branco: busca por período"
                   value={numeroVendaTexto}
                   onChange={(e) => setNumeroVendaTexto(e.target.value.replace(/\D/g, ''))}
                   aria-label="Número da venda"
@@ -339,8 +346,8 @@ export default function PesquisaVendas() {
               </div>
             </div>
 
-            <div className="form-grid">
-              <div className="col-4">
+            <div className="form-grid" style={{ marginTop: 20 }}>
+              <div className="col-3">
                 <label htmlFor="filtro-data-inicial">Data Inicial</label>
                 <input
                   id="filtro-data-inicial"
@@ -353,7 +360,7 @@ export default function PesquisaVendas() {
                   disabled={!!numeroVendaTexto}
                 />
               </div>
-              <div className="col-4">
+              <div className="col-3">
                 <label htmlFor="filtro-data-final">Data Final</label>
                 <input
                   id="filtro-data-final"
@@ -366,7 +373,7 @@ export default function PesquisaVendas() {
                   disabled={!!numeroVendaTexto}
                 />
               </div>
-              <div className="col-4">
+              <div className="col-6">
                 <label>Vendedor</label>
                 <div style={{ display: 'flex', gap: 8 }}>
                   <button
@@ -387,7 +394,7 @@ export default function PesquisaVendas() {
               </div>
             </div>
 
-            <div className="form-grid">
+            <div className="form-grid" style={{ marginTop: 20 }}>
               {ehAdmin && (
                 <div className="col-6">
                   <label htmlFor="filtro-empresa">Empresa</label>
@@ -407,7 +414,7 @@ export default function PesquisaVendas() {
                   </select>
                 </div>
               )}
-              <div className="col-6">
+              <div className={ehAdmin ? 'col-6' : 'col-12'}>
                 <label htmlFor="filtro-situacao">Situação</label>
                 <select
                   id="filtro-situacao"
@@ -423,9 +430,13 @@ export default function PesquisaVendas() {
               </div>
             </div>
 
-            {erroFiltros && <p className="erro-campo">{erroFiltros}</p>}
+            {erroFiltros && (
+              <p className="erro-campo" style={{ marginTop: 16 }}>
+                {erroFiltros}
+              </p>
+            )}
 
-            <div className="ajuda-rodape">
+            <div className="ajuda-rodape" style={{ marginTop: 28 }}>
               <button type="button" className="btn ghost" onClick={() => navigate(-1)}>
                 Fechar
               </button>

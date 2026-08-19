@@ -1,5 +1,6 @@
 package com.vetor.niner.comum.web;
 
+import com.vetor.niner.fiscal.documento.MontagemNfceDtos.MontagemInvalidaException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
@@ -67,6 +68,21 @@ public class GlobalExceptionHandler {
                 HttpStatus.CONFLICT, "Registro em uso por outro cadastro — não pode ser excluído.");
         pd.setTitle("Conflito de dados");
         pd.setType(URI.create("urn:niner:erro:conflito"));
+        return pd;
+    }
+
+    /**
+     * Falha de montagem de XML fiscal (emissão, cancelamento, inutilização) — sem este handler
+     * caía no 500 genérico do Spring (achado real: cancelar uma venda com NFC-e autorizada e
+     * justificativa curta demais lançava {@code MontagemInvalidaException} de dentro de
+     * {@code CancelamentoNfceService}, e o front só mostrava "Ocorreu um erro", escondendo a
+     * regra real — SEFAZ exige justificativa com no mínimo 15 caracteres, MOC).
+     */
+    @ExceptionHandler(MontagemInvalidaException.class)
+    public ProblemDetail tratarMontagemInvalida(MontagemInvalidaException ex) {
+        ProblemDetail pd = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, ex.getMessage());
+        pd.setTitle("Documento fiscal inválido");
+        pd.setType(URI.create("urn:niner:erro:fiscal-montagem-invalida"));
         return pd;
     }
 }

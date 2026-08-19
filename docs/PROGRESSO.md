@@ -13,7 +13,7 @@ Registro cronológico das decisões e entregas. Atualizar a cada marco relevante
 > + NF-e de devolução de venda**, com cancelamento, inutilização, contingência, arquivamento e
 > download. Roteiro em blocos B0–B9: **§17.1 do estudo**.
 >
-> **O que está pronto e testado (730/730 backend verdes):** B0 (PoC real contra a SEFAZ-PR, `cStat
+> **O que está pronto e testado (775/775 backend verdes):** B0 (PoC real contra a SEFAZ-PR, `cStat
 > 100`, JDK puro sem lib de NF-e — DF7 fechada no plano B) · B1 (specs) · B2 (`fiscal.configuracao`
 > + `fiscal.perfil` + certificado A1, **cifrado no banco**, não em bucket — DF21 revisada) · B3
 > (Conformidade Fiscal, bloqueio preventivo F11) · B4 (motor tributário puro — ICMS/PIS/COFINS/IPI/
@@ -34,6 +34,19 @@ Registro cronológico das decisões e entregas. Atualizar a cada marco relevante
 > `SefazTransporte` lia o do lote — nota autorizada saía reportada como REJEITADA. Nenhum teste
 > pegava porque todo fixture mockado só tinha um `cStat`. Corrigido e comprovado ao vivo (nova
 > emissão saiu `AUTORIZADO` direto). Ver a entrada de hoje na linha do tempo.
+>
+> 🔴✅ **O MESMO bug em outro endpoint, achado cancelando uma venda real (2026-08-19):**
+> `RecepcaoEvento4` (cancelamento 110111) também devolve dois `cStat` — um do **lote de evento**
+> (128 "Lote de Evento Processado", `retEnvEvento`) e outro do **evento em si** (135 "Evento
+> registrado e vinculado à NF-e", dentro de `retEvento/infEvento`). Sem escopo pra `infEvento`,
+> o cancelamento saía **sempre "recusado pela SEFAZ"** mesmo quando ela autorizava de verdade — a
+> venda nunca revertia. Corrigido em `SefazTransporte.enviar()` (mesma técnica de escopo por
+> bloco já usada pro par `infProt`), com teste de regressão contra um XML real de dois `cStat`
+> (`SefazTransporteTest`). Efeito colateral descoberto ao vivo: a 1ª tentativa (com o bug) já
+> tinha sido silenciosamente aceita pela SEFAZ, e a 2ª tentativa (já corrigida) colidia com a
+> UNIQUE de `documento_fiscal_evento` — ver a entrada de hoje na linha do tempo pro fix completo
+> (handler de exceção, coluna `tentativa`, e o prazo de cancelamento da NFC-e exposto na tela
+> ANTES do usuário tentar).
 >
 > ⚠️ **A MITRYUSCASH é a desenvolvedora, não uma cliente** — o certificado é da casa de software e
 > ela nunca emitirá em produção. Cada comprador do ERP terá um regime próprio (Simples, Presumido,
@@ -77,8 +90,17 @@ Registro cronológico das decisões e entregas. Atualizar a cada marco relevante
 > flags essa pendência. Calibragem de impressão do DANFE fechada em **72mm de área útil, `left: 0`**
 > (medida real por régua, depois de 4 rodadas por estimativa), quantidade do item passou a respeitar
 > `cfg_permite_qtd_decimal` (antes saía sempre "1,000UN"), e espaçamento vertical reduzido em 2
-> níveis (Leve + Moderado) a pedido do dono do produto, pra gastar menos papel. **730/730 testes de
-> backend verdes.** Ver linha do tempo de hoje.
+> níveis (Leve + Moderado) a pedido do dono do produto, pra gastar menos papel. Depois disso:
+> Pesquisa de Vendas ganhou mais respiro visual (modal alargado, linhas espaçadas) e o DANFCE
+> passou a imprimir o número da venda em "Informações adicionais de interesse do contribuinte".
+> **Maior achado do dia**, testando o Cancelamento de Venda ao vivo (venda 590): o mesmo bug de
+> dois `cStat` da emissão (2026-08-18) existia também no cancelamento — corrigido, junto com a
+> exceção de validação fiscal que caía num 500 genérico, a justificativa sem checar 15 caracteres,
+> a UNIQUE de `documento_fiscal_evento` que travava qualquer retentativa, e a tela ganhou o prazo
+> de cancelamento da NFC-e (30 min, por UF) exposto ANTES do usuário tentar, bloqueando de vez
+> quando já passou. Fechando: a reimpressão de papeleta de venda cancelada avisa **"VENDA
+> CANCELADA"** já na primeira linha do cupom. **775/775 testes de backend verdes.** Ver linha do
+> tempo de hoje.
 >
 > Os parágrafos abaixo são a **narrativa acumulada** desde o começo — leia o resumo acima para o
 > estado, e a linha do tempo (do mais novo para o mais antigo) para o detalhe de cada entrega.
@@ -480,6 +502,86 @@ Movimentação de Conta Corrente) que ainda não tinham migrado pro `SeletorPlan
 ---
 
 ## Linha do tempo
+
+### 2026-08-19 — Reimpressão de papeleta avisa "VENDA CANCELADA" já na primeira linha do cupom
+
+Pedido do dono do produto, achado direto ao reimprimir a papeleta de uma venda já cancelada (a
+591, usada de exemplo): a reimpressão saía **idêntica** à de uma venda válida, sem nenhum aviso.
+`venda.cancelada` passou a viajar em `ComprovanteVendaResponse`/`ComprovanteVenda`
+(`PdvVendaService.buscarComprovante`), e `montarLinhasComprovanteVenda` (`web/src/lib/
+comprovante.ts`) imprime `**** VENDA CANCELADA ****` centralizado, antes de qualquer outra coisa
+— até antes da tarja "DOCUMENTO SEM VALOR FISCAL". Uma venda cancelada com NFC-e nunca chega como
+DANFCE aqui: `buscarDadosFiscais` só considera documento `AUTORIZADO`/`CONTINGENCIA`, e o
+cancelamento marca `documento_fiscal.situacao = CANCELADO` — a papeleta comum é sempre o formato
+que sai na reimpressão de uma venda cancelada, então um único aviso cobre os dois casos (fiscal e
+não fiscal). `jsonPath("$.cancelada")` novo em `CancelamentoVendaCrudTest`. Ver
+`docs/telas/papeleta-venda.md`.
+
+### 2026-08-19 — 🔴 Bug real corrigido: cancelamento de NFC-e sempre saía "recusado pela SEFAZ" mesmo quando ela autorizava — mesma classe do bug de emissão de 2026-08-18; trava de retentativa e prazo de cancelamento na tela
+
+Investigação disparada por um pedido simples ("cancele a venda 590, dá 'Ocorreu um erro'") que
+puxou uma cadeia de quatro problemas reais, achados só testando ao vivo contra a SEFAZ-PR:
+
+1. **Mensagem genérica escondendo o motivo real.** `MontagemInvalidaException` (validação de XML
+   fiscal — inclusive a checagem da justificativa mínima do cancelamento) não tinha
+   `@ExceptionHandler` nenhum: caía no 500 padrão do Spring, sem corpo Problem Details, e o front
+   só mostrava "Ocorreu um erro". Corrigido com um handler novo em `GlobalExceptionHandler`
+   (mesmo padrão já usado pra `ResponseStatusException`/`DataIntegrityViolationException`).
+2. **Justificativa sem validar o mínimo de 15 caracteres** (regra da SEFAZ, MOC) no front —
+   `CancelamentoVendaModal.tsx` só checava "não vazio". Agora valida 15 caracteres antes de
+   chamar a API, com um texto de ajuda explicando o porquê.
+3. **🔴 O bug de verdade: `SefazTransporte` lia o `cStat` errado na resposta de cancelamento.**
+   Mesma classe do bug de emissão achado em 2026-08-18 (ver a entrada daquele dia e o box no topo
+   deste arquivo): `RecepcaoEvento4` também devolve dois `cStat` — 128 (lote de evento,
+   `retEnvEvento`) e 135 (o evento em si, `retEvento/infEvento`). Sem escopo pra `infEvento`, o
+   primeiro `cStat` do texto (128, do lote) sempre vencia, e **todo cancelamento saía "recusado"
+   mesmo quando a SEFAZ autorizava de verdade** — a venda nunca revertia estoque/caixa/fiscal.
+   Corrigido estendendo a mesma resolução por bloco (`infProt` primeiro, `infEvento` como
+   segunda opção) que já existia só pra autorização. Teste de regressão novo com um XML real de
+   dois `cStat` (`SefazTransporteTest.cancelamentoComDoisCstatExtraiODoEventoNaoODoLote`) — os
+   testes antigos de `CancelamentoNfceTest` nunca pegavam isso porque mockam `SefazTransporte`
+   inteiro, sem exercitar o parser de verdade.
+4. **Efeito colateral: a UNIQUE de `documento_fiscal_evento` travava qualquer retentativa.**
+   Como o bug 3 fez a 1ª tentativa de cancelamento (antes do fix) registrar `autorizado = false`
+   mesmo com a SEFAZ tendo aceitado de verdade, a 2ª tentativa (já com o fix) reenviou o mesmo
+   evento (cancelamento é sempre `nSeqEvento = 1`, regra da SEFAZ, não bug) — e bateu na
+   `UNIQUE (id_tenant, id_documento_fiscal, tipo_evento, sequencia)`, que só permitia **uma**
+   linha por documento+evento. A tentativa nova nem conseguia ser gravada, e a transação inteira
+   revertia com "Registro em uso por outro cadastro". Corrigido com uma coluna nova,
+   `tentativa` (calculada por subquery, `COALESCE(MAX(tentativa),0)+1`), entrando na UNIQUE junto
+   — cada tentativa LOCAL de registrar o mesmo evento vira uma linha própria, preservando o
+   rastro de todas (P3) sem travar a retentativa. Editado direto em `V035__fiscal_documento.sql`
+   (banco em construção) + aplicado por hand no dev (`ALTER TABLE`, sem apagar dados) +
+   `flyway repair` pra reconciliar o checksum.
+5. **Novo, a pedido do dono do produto**: a tela de Cancelamento de Venda passou a mostrar o
+   horário de autorização da NFC-e e até quando a SEFAZ permite cancelá-la (30 minutos, padrão
+   nacional pra NFC-e — configurável por UF em `cfg_uf_autorizador.prazo_cancelamento_min`, bem
+   diferente da NF-e, 24h) **antes** de deixar preencher o motivo — e bloqueia por completo
+   (venda e nota) quando esse prazo já passou, com uma mensagem que já aponta a saída (NF-e de
+   devolução). `VendaDetalheCancelamentoResponse` ganhou `nfceDataAutorizacao`/
+   `nfcePrazoCancelamentoMinutos`/`nfcePrazoCancelamentoExpiraEm`/`nfcePrazoCancelamentoExpirado`
+   (calculado no servidor, não no relógio do navegador).
+
+Confirmado ao vivo contra a SEFAZ-PR de verdade: a venda 590 teve o cancelamento genuinamente
+autorizado pela SEFAZ nos bastidores (mesmo com o bug local reportando recusa), mas por essa
+altura o prazo real de 30 minutos já tinha passado — o bloqueio novo pegou exatamente esse caso e
+apontou a saída certa (devolução). **775/775 testes de backend verdes** (2 novos:
+`SefazTransporteTest` + `CancelamentoNfceTest.buscarDetalheDeVendaComNfceDentroDoPrazo...`), `tsc
+-b` limpo. Ver `docs/telas/cancelamento-venda.md`.
+
+### 2026-08-19 — Pesquisa de Vendas mais espaçada e DANFCE ganha o número da venda
+
+Dois pedidos pequenos do dono do produto, resolvidos antes da investigação de cancelamento acima:
+
+- **Popup de filtros da Pesquisa de Vendas** (o das "linhas simétricas" de mais cedo hoje) estava
+  com tudo colado — modal alargado pra `modal-medio` (640px), 20px de respiro vertical entre as
+  três linhas de campos, coluna "Vendedor" mais larga (`col-6`, não quebrava mais em duas linhas),
+  placeholder do Nº da Venda encurtado (cortava), e "Situação" ocupa a linha inteira quando o
+  usuário não é ADMIN (sem "Empresa" do lado). Ver `docs/telas/pesquisa-vendas.md`.
+- **DANFCE não tinha o número da venda** — só o número/série oficial da NFC-e. Adicionado "Venda
+  Nº: <id>" em "Informações adicionais de interesse do contribuinte" (`DanfceImprimir.tsx`); como
+  esse número sempre existe, a seção deixou de ser condicional (antes só aparecia com
+  caixa/vendedor/IBS-CBS preenchidos).
 
 ### 2026-08-19 — Bug real corrigido: rejeição SEFAZ por CNPJ da credenciadora ausente (`cStat 391`); calibragem final do DANFE (72mm confirmado por foto); quantidade respeita `cfg_permite_qtd_decimal`; ajuste de espaçamento vertical pra economizar papel
 

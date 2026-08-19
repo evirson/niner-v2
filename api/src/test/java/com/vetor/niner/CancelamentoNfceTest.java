@@ -357,6 +357,14 @@ class CancelamentoNfceTest {
                         """)
                 .params(idTenant, idVenda).update();
 
+        // A tela de cancelamento (2026-08-19) já mostra o prazo vencido ANTES do usuário tentar —
+        // o detalhe precisa expor isso pra front nem oferecer o botão de cancelar.
+        mvc.perform(get("/api/v1/vendas/cancelamento/" + idVenda).header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.nfcePrazoCancelamentoExpirado").value(true))
+                .andExpect(jsonPath("$.nfcePrazoCancelamentoMinutos").value(30))
+                .andExpect(jsonPath("$.nfceDataAutorizacao").isNotEmpty());
+
         mvc.perform(post("/api/v1/vendas/cancelamento/" + idVenda).header("Authorization", "Bearer " + token)
                         .contentType(APPLICATION_JSON)
                         .content("{\"motivo\":\"Cliente desistiu da compra, forma de pagamento errada\"}"))
@@ -368,6 +376,20 @@ class CancelamentoNfceTest {
         Boolean cancelada = jdbc.sql("SELECT cancelada FROM venda WHERE id_tenant = ? AND id_venda = ?")
                 .params(idTenant, idVenda).query(Boolean.class).single();
         assertThat(cancelada).isFalse();
+    }
+
+    /** Dentro do prazo: o detalhe expõe a janela de cancelamento, sem bloquear nada. */
+    @Test
+    void buscarDetalheDeVendaComNfceDentroDoPrazoNaoMarcaComoExpirado() throws Exception {
+        String token = assinarNovoTenant("prazo-em-dia");
+        long idVenda = vendaComNfceAutorizada(token, idTenantDo(token), idEmpresaDo(token), "55666777000105");
+
+        mvc.perform(get("/api/v1/vendas/cancelamento/" + idVenda).header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.nfcePrazoCancelamentoExpirado").value(false))
+                .andExpect(jsonPath("$.nfcePrazoCancelamentoMinutos").value(30))
+                .andExpect(jsonPath("$.nfceDataAutorizacao").isNotEmpty())
+                .andExpect(jsonPath("$.nfcePrazoCancelamentoExpiraEm").isNotEmpty());
     }
 
     /** Venda sem NFC-e (fiscal desligado): cancelamento segue o fluxo de sempre, sem chamar SEFAZ. */

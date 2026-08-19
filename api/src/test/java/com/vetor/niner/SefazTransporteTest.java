@@ -152,6 +152,41 @@ class SefazTransporteTest {
     }
 
     /**
+     * <b>Achado real cancelando uma venda contra a SEFAZ-PR (2026-08-19), mesma classe do bug de
+     * {@code autorizacaoBemSucedidaExtraiCstatProtocoloEChave}:</b> a resposta de
+     * {@code RecepcaoEvento4} (cancelamento 110111) também tem DOIS {@code cStat} — um no LOTE de
+     * evento ({@code retEnvEvento}, 128 "Lote de Evento Processado", não diz nada sobre o evento)
+     * e outro dentro de {@code retEvento/infEvento}, o resultado REAL do cancelamento (135). Sem
+     * escopo pra {@code infEvento}, o primeiro {@code cStat} do texto (128, do lote) vencia e todo
+     * cancelamento saía "recusado" mesmo quando a SEFAZ autorizava de verdade.
+     */
+    @Test
+    void cancelamentoComDoisCstatExtraiODoEventoNaoODoLote() {
+        respostaParaDevolver.set("""
+                <soap:Envelope xmlns:soap="http://www.w3.org/2003/05/soap-envelope"><soap:Body>\
+                <nfeResultMsg xmlns="http://www.portalfiscal.inf.br/nfe/wsdl/RecepcaoEvento4">\
+                <retEnvEvento versao="1.00"><idLote>1</idLote><tpAmb>2</tpAmb><cOrgao>41</cOrgao>\
+                <cStat>128</cStat><xMotivo>Lote de Evento Processado</xMotivo>\
+                <retEvento versao="1.00"><infEvento Id="ID1101114126083782945300013565001000000042">\
+                <tpAmb>2</tpAmb><cOrgao>41</cOrgao><cStat>135</cStat>\
+                <xMotivo>Evento registrado e vinculado a NF-e</xMotivo>\
+                <chNFe>41260837829453000135650010000000421480365360</chNFe>\
+                <tpEvento>110111</tpEvento><xEvento>Cancelamento</xEvento><nSeqEvento>1</nSeqEvento>\
+                <nProt>141260001537524</nProt></infEvento></retEvento></retEnvEvento>\
+                </nfeResultMsg></soap:Body></soap:Envelope>""");
+        transporte = transporteComTruststore();
+
+        RespostaSefaz r = transporte.enviar(urlBase + "/nfce/NFeAutorizacao4", "RecepcaoEvento4",
+                "<envEvento versao=\"1.00\"/>", pkcs12Cliente, SENHA, impressaoCliente);
+
+        assertThat(r.cStat()).as("cStat do EVENTO (infEvento), não do lote (retEnvEvento)").isEqualTo("135");
+        assertThat(r.xMotivo()).isEqualTo("Evento registrado e vinculado a NF-e");
+        assertThat(r.protocolo()).isEqualTo("141260001537524");
+        assertThat(r.chaveAcesso()).isEqualTo("41260837829453000135650010000000421480365360");
+        assertThat(r.autorizado()).isFalse(); // "autorizado" no sentido de RespostaSefaz é cStat 100 (nota); evento usa outra checagem no chamador
+    }
+
+    /**
      * <b>O teste que prova o mTLS.</b> O servidor exige certificado de cliente e registra o DN de
      * quem apresentou — se o transporte não estivesse mandando o certificado do lojista, o
      * handshake nem completaria.

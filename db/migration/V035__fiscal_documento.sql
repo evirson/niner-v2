@@ -494,6 +494,15 @@ CREATE TABLE documento_fiscal_evento (
   id_documento_fiscal bigint      NOT NULL,
   tipo_evento         text        NOT NULL,          -- '110111' cancelamento · '110110' CC-e
   sequencia           smallint    NOT NULL DEFAULT 1,
+  -- ⚠️ Achado real cancelando uma venda de verdade (2026-08-19): cancelamento (110111) sempre usa
+  -- `sequencia = 1` (é assim que a SEFAZ exige — não é como a CC-e, que incrementa a cada
+  -- correção). Isso por si só está certo; o erro estava em UNIQUE não prever RETENTATIVA da MESMA
+  -- sequência: uma 1ª tentativa recusada (ou, como aconteceu aqui, um bug local lendo errado uma
+  -- resposta que a SEFAZ na verdade autorizou) ocupava a única linha permitida e travava qualquer
+  -- tentativa seguinte com "duplicate key" — mesmo a SEFAZ tendo aceitado o reenvio idêntico.
+  -- `tentativa` é o número da tentativa LOCAL (1, 2, 3…) da mesma `sequencia`; cada tentativa vira
+  -- uma linha própria, preservando o rastro de todas (P3) sem bloquear a retentativa.
+  tentativa            smallint   NOT NULL DEFAULT 1,
   justificativa       text        NOT NULL,
   autorizado          boolean     NOT NULL,          -- P3: grava a tentativa mesmo quando a SEFAZ
                                                       -- recusa (F11 "erro explicito, nunca chute")
@@ -506,7 +515,7 @@ CREATE TABLE documento_fiscal_evento (
   xml_objeto_bucket   text,
   id_usuario          integer,
   criado_em           timestamptz NOT NULL DEFAULT now(),
-  CONSTRAINT documento_fiscal_evento_uk UNIQUE (id_tenant, id_documento_fiscal, tipo_evento, sequencia),
+  CONSTRAINT documento_fiscal_evento_uk UNIQUE (id_tenant, id_documento_fiscal, tipo_evento, sequencia, tentativa),
   -- Mínimo legal da justificativa de cancelamento; vale para CC-e também.
   CONSTRAINT documento_fiscal_evento_justificativa_ck CHECK (length(justificativa) >= 15),
   CONSTRAINT documento_fiscal_evento_documento_fk FOREIGN KEY (id_tenant, id_documento_fiscal)

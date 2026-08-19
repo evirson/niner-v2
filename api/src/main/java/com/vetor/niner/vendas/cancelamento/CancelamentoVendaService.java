@@ -2,6 +2,9 @@ package com.vetor.niner.vendas.cancelamento;
 
 import com.vetor.niner.comum.web.ConflitoDadosException;
 import com.vetor.niner.fiscal.documento.CancelamentoNfceService;
+import com.vetor.niner.fiscal.documento.DocumentoFiscalRepositorio;
+import com.vetor.niner.fiscal.sefaz.SefazAutorizadorService;
+import com.vetor.niner.fiscal.sefaz.SefazDtos.Autorizador;
 import com.vetor.niner.financeiro.caixa.CaixaService;
 import com.vetor.niner.vendas.cancelamento.CancelamentoVendaDtos.CancelamentoEfetivadoResponse;
 import com.vetor.niner.vendas.cancelamento.CancelamentoVendaDtos.CancelarVendaRequest;
@@ -40,6 +43,8 @@ public class CancelamentoVendaService {
     private static final int TAMANHO_PAGINA_PADRAO = 50;
     private static final int TAMANHO_PAGINA_MAXIMO = 100;
     private static final int PERIODO_MAXIMO_DIAS = 365;
+    private static final int MODELO_NFCE = 65;
+    private static final int PRAZO_PADRAO_MINUTOS = 30;
     private static final DateTimeFormatter FMT_DATA = DateTimeFormatter.ofPattern("dd/MM/yyyy");
 
     private static final Map<String, String> COLUNAS_ORDENAVEIS = Map.of(
@@ -53,12 +58,18 @@ public class CancelamentoVendaService {
     private final JdbcClient jdbc;
     private final CaixaService caixaService;
     private final CancelamentoNfceService cancelamentoNfceService;
+    private final DocumentoFiscalRepositorio documentoFiscalRepositorio;
+    private final SefazAutorizadorService autorizadores;
 
     public CancelamentoVendaService(JdbcClient jdbc, CaixaService caixaService,
-                                    CancelamentoNfceService cancelamentoNfceService) {
+                                    CancelamentoNfceService cancelamentoNfceService,
+                                    DocumentoFiscalRepositorio documentoFiscalRepositorio,
+                                    SefazAutorizadorService autorizadores) {
         this.jdbc = jdbc;
         this.caixaService = caixaService;
         this.cancelamentoNfceService = cancelamentoNfceService;
+        this.documentoFiscalRepositorio = documentoFiscalRepositorio;
+        this.autorizadores = autorizadores;
     }
 
     @Transactional(readOnly = true)
@@ -173,12 +184,41 @@ public class CancelamentoVendaService {
         List<PagamentoVendaDetalhe> pagamentos = buscarPagamentos(idVenda);
         List<ParcelaRecebidaDetalhe> parcelasRecebidas = buscarParcelasCredarioRecebidas(idVenda);
         BigDecimal valorVenda = itens.stream().map(ItemVendaDetalhe::valorItem).reduce(BigDecimal.ZERO, BigDecimal::add);
+        PrazoNfce prazo = buscarPrazoNfce(idVenda);
 
         return new VendaDetalheCancelamentoResponse(
                 venda.idVenda(), venda.idEmpresa(), venda.nomeEmpresa(), venda.dataVenda(),
                 venda.idCliente(), venda.nomeCliente(), venda.idFuncionario(), venda.nomeFuncionario(),
                 valorVenda, venda.cancelada(), venda.dataCancelamento(), venda.nomeUsuarioCancelamento(),
-                venda.motivoCancelamento(), itens, pagamentos, !parcelasRecebidas.isEmpty(), parcelasRecebidas);
+                venda.motivoCancelamento(), itens, pagamentos, !parcelasRecebidas.isEmpty(), parcelasRecebidas,
+                prazo.dataAutorizacao(), prazo.prazoMinutos(), prazo.expiraEm(), prazo.expirado());
+    }
+
+    /**
+     * Prazo de cancelamento da NFC-e (§ da SEFAZ por UF, {@code cfg_uf_autorizador}, 30 min
+     * padrão) — exposto na tela ANTES de tentar cancelar (2026-08-19, achado testando a venda
+     * 590 ao vivo): sem isso, o usuário só descobria que o prazo tinha passado depois de
+     * preencher o motivo e apertar "Cancelar", com uma mensagem de erro genérica. Vazio quando a
+     * venda não tem NFC-e autorizada — cancelamento nesse caso não depende de prazo nenhum.
+     */
+    private record PrazoNfce(OffsetDateTime dataAutorizacao, Integer prazoMinutos,
+                             OffsetDateTime expiraEm, boolean expirado) {
+        static PrazoNfce vazio() {
+            return new PrazoNfce(null, null, null, false);
+        }
+    }
+
+    private PrazoNfce buscarPrazoNfce(long idVenda) {
+        return documentoFiscalRepositorio.buscarAutorizadoParaCancelamento(idVenda)
+                .map(doc -> {
+                    Autorizador autorizador = autorizadores.buscar(doc.uf(), MODELO_NFCE, doc.ambiente().codigo());
+                    int prazoMinutos = autorizador.prazoCancelamentoMinutos() != null
+                            ? autorizador.prazoCancelamentoMinutos() : PRAZO_PADRAO_MINUTOS;
+                    OffsetDateTime expiraEm = doc.dataAutorizacao().plusMinutes(prazoMinutos);
+                    return new PrazoNfce(doc.dataAutorizacao(), prazoMinutos, expiraEm,
+                            OffsetDateTime.now().isAfter(expiraEm));
+                })
+                .orElseGet(PrazoNfce::vazio);
     }
 
     @Transactional

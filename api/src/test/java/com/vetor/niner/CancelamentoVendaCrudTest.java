@@ -335,6 +335,13 @@ class CancelamentoVendaCrudTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.cancelada").value(true))
                 .andExpect(jsonPath("$.motivoCancelamento").value("Cliente desistiu da compra"));
+
+        // A reimpressão da papeleta (2026-08-19) precisa saber que a venda foi cancelada, pra
+        // avisar "VENDA CANCELADA" já no início do cupom — o comprovante continua acessível
+        // depois do cancelamento (só o estoque/caixa/contas a receber é que reverte).
+        mvc.perform(get("/api/v1/pdv/vendas/" + idVenda + "/comprovante").header("Authorization", "Bearer " + tenant.token()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.cancelada").value(true));
     }
 
     @Test

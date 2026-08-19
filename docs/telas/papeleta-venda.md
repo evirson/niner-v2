@@ -166,7 +166,8 @@ existir (ou for de outro tenant — RLS).
   "pagamentos": [{ "nomeCarteira": "CREDIARIO", "crediario": true, "valorPago": 319.90 }],
   "parcelasCrediario": [
     { "numeroParcela": 1, "totalParcelas": 6, "dataVencimento": "2026-09-05T21:09:16Z", "valorParcela": 53.31 }
-  ]
+  ],
+  "cancelada": false
 }
 ```
 
@@ -211,6 +212,18 @@ reimpressão de crediário abaixo) — 100% frontend, zero endpoint novo:
 
 Testado com venda real, inclusive uma venda sintética de importação (sem itens/vendedor/
 operador) — os campos vazios caem certinho em "(não informado)".
+
+### Aviso "VENDA CANCELADA" (2026-08-19)
+
+Pedido do dono do produto: reimprimir a papeleta de uma venda cancelada saía **idêntica** à de
+uma venda válida, sem nenhum aviso. `venda.cancelada` passou a viajar em
+`ComprovanteVendaResponse`/`ComprovanteVenda`, e `montarLinhasComprovanteVenda` imprime
+`**** VENDA CANCELADA ****` centralizado como as primeiras linhas do cupom — antes até da tarja
+"DOCUMENTO SEM VALOR FISCAL". Uma venda cancelada com NFC-e **nunca** chega como DANFCE aqui:
+`buscarDadosFiscais` só considera documento `AUTORIZADO`/`CONTINGENCIA`
+(`docs/telas/cancelamento-venda.md` — o cancelamento marca `documento_fiscal.situacao =
+CANCELADO`), então a papeleta comum é sempre o formato que sai na reimpressão de uma venda
+cancelada, fiscal ou não — um único aviso, num único lugar, cobre os dois casos.
 
 ## Envio por WhatsApp (2026-08-07)
 

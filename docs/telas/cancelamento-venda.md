@@ -128,7 +128,8 @@ falhar, rollback completo:
   id_venda_debito = NULL WHERE id_venda_debito = ?` — se a venda tiver resgatado um vale
   (`docs/telas/devolucao-produtos.md`), ele volta a valer pro cliente usar numa venda futura, sem
   deixar rastro de que já tinha sido usado (mesma exclusão física dos itens acima).
-- **Comissão, fiscal, TEF:** fora do v1 (ver decisões de escopo).
+- **Comissão, TEF:** fora do v1 (ver decisões de escopo). **Fiscal (NFC-e) não está mais fora** —
+  ver "Integração fiscal" abaixo.
 
 `venda` grava `cancelada = true`, `data_cancelamento`, `id_usuario_cancelamento` (pode ser
 diferente de quem vendeu — é sempre o ADMIN que cancelou) e `motivo_cancelamento` — funciona como
@@ -172,10 +173,20 @@ bloqueio de crediário — RN-03).
 - Dado uma venda que resgatou um vale-mercadoria, quando cancelada, então o vale volta a
   `vale_usado = false`/`id_venda_debito = NULL` e pode ser usado numa venda futura (2026-08-03,
   coberto em `ValeMercadoriaCrudTest`).
+- Dado uma venda com NFC-e autorizada, dentro do prazo, quando a SEFAZ aceita o cancelamento,
+  então o documento fiscal vira `CANCELADO` e a venda reverte junto (mesma transação); dado a
+  SEFAZ recusa (ou falha a comunicação), então 409 e **nada** reverte (2026-08-17, B8).
+- Dado uma venda com NFC-e cujo prazo de cancelamento da SEFAZ já passou, quando busca o detalhe,
+  então `nfcePrazoCancelamentoExpirado = true` (calculado no servidor); quando tenta cancelar,
+  então 409 **sem** chamar a SEFAZ (2026-08-19).
 
 Cobertos por `CancelamentoVendaCrudTest` (10 testes) + 1 teste em `ValeMercadoriaCrudTest`
-(reabertura do vale). Vendas de teste são geradas pelo endpoint real do PDV (não inseridas via
-SQL bruto), pra exercitar o ledger de verdade. Suíte completa do projeto: 500/500 (2026-08-14).
+(reabertura do vale) + `CancelamentoNfceTest` (5 testes — integração fiscal: autorizado, recusado,
+prazo vencido bloqueia sem chamar a SEFAZ, prazo exposto no detalhe dentro/fora da janela, venda
+sem NFC-e ignora a SEFAZ) + `SefazTransporteTest` (extração do `cStat` certo num evento com dois,
+regressão do bug de 2026-08-19). Vendas de teste são geradas pelo endpoint real do PDV (não
+inseridas via SQL bruto), pra exercitar o ledger de verdade. Suíte completa do projeto: 775/775
+(2026-08-19).
 
 ## Ajuda da tela (manual de operação + vídeo) — obrigatório (R22 / §3.7.1)
 
@@ -198,15 +209,52 @@ Nenhum — comissão, fiscal e TEF ficam fora do v1 (ver decisões de escopo).
 
 ## Non-goals desta feature
 
-- **Comissão, documento fiscal (NFC-e/NF-e), TEF** — nenhum dos três existe no sistema; fora do
-  v1 por completo (ver decisões de escopo).
+- **Comissão, TEF** — nenhum dos dois existe no sistema; fora do v1 por completo (ver decisões de
+  escopo). **Documento fiscal deixou de ser non-goal em 2026-08-17 (bloco B8)** — ver seção
+  "Integração fiscal" abaixo; esta lista não foi atualizada quando o B8 entrou, ficando
+  desalinhada com o código por dois dias até a auditoria de 2026-08-19.
 - **Permissão granular por rotina (`VENDA_CANCELAR`)** — tela ADMIN-only por enquanto.
 - **Reabrir o caixa de uma data passada** — a regra usa sempre o caixa de hoje.
-- **Prazo/limite de dias para cancelar uma venda antiga** — não implementado; qualquer venda
-  finalizada e não cancelada pode ser buscada e cancelada, respeitando RN-02/RN-03.
+- **Prazo/limite de dias para cancelar uma venda antiga em geral** — continua não existindo; uma
+  venda **sem** NFC-e pode ser buscada e cancelada a qualquer momento, sem limite de idade. O que
+  existe desde 2026-08-19 é o prazo específico da **SEFAZ para cancelar a NFC-e** (30 min padrão,
+  por UF) — ver "Integração fiscal" abaixo; não é um limite geral do cancelamento de venda.
 - **Senha de supervisor no ato do cancelamento** — não pedida (ADMIN já é o papel mais alto).
 - **Relatório "Vendas canceladas por período"** — os dados existem (`venda.cancelada` +
   metadados), mas nenhuma tela de relatório foi construída ainda.
+
+## Integração fiscal (bloco B8, 2026-08-17 — ausente desta spec até a auditoria de 2026-08-19)
+
+Quando a venda tem uma NFC-e `AUTORIZADO`, o cancelamento **cancela a nota na SEFAZ antes de
+reverter qualquer coisa** (evento 110111) — `CancelamentoVendaService.cancelar` chama
+`CancelamentoNfceService.cancelarSeAplicavel` logo depois de RN-02/RN-03 e antes de qualquer
+`UPDATE`/`DELETE`. Garantia central: **estoque/caixa e fiscal nunca divergem** — ou os dois
+revertem juntos, ou nenhum reverte:
+
+- **Sem NFC-e** (F12 desligado, ou a nota não terminou autorizada) — `cancelarSeAplicavel` devolve
+  vazio e o cancelamento segue exatamente o fluxo de sempre, sem tocar na SEFAZ.
+- **NFC-e autorizada, dentro do prazo, SEFAZ aceita** — o evento é registrado
+  (`documento_fiscal_evento`, `autorizado = true`), o documento vira `CANCELADO`, e só então a
+  venda reverte (mesma transação).
+- **NFC-e autorizada, SEFAZ recusa, ou falha de comunicação** — 409, **nada** reverte (nem
+  `venda.cancelada`, nem estoque, nem caixa); a tentativa fica registrada mesmo assim (P3, F11).
+- **Prazo de cancelamento da SEFAZ vencido** (30 min padrão pra NFC-e, `cfg_uf_autorizador.
+  prazo_cancelamento_min` por UF — bem menor que os 15 min de tolerância que se imagina; NF-e é
+  24h) — 409 **sem sequer chamar a SEFAZ**, apontando a saída certa (nota de devolução, ainda não
+  implementada — B9, travado pela DF20). **Desde 2026-08-19** esse prazo aparece na tela **antes**
+  do usuário tentar: `GET .../cancelamento/{idVenda}` devolve `nfceDataAutorizacao`/
+  `nfcePrazoCancelamentoMinutos`/`nfcePrazoCancelamentoExpiraEm`/`nfcePrazoCancelamentoExpirado`
+  (calculado no servidor), e o modal esconde o motivo/botão por completo quando já expirou, com a
+  mesma mensagem do 409.
+
+🔴✅ **Bug real corrigido em 2026-08-19** (achado cancelando uma venda real, número 590): a
+resposta de `RecepcaoEvento4` tem **dois** `cStat` (128 do lote de evento, 135 do evento em si,
+mesma armadilha do bug de emissão de 2026-08-18) — sem escopo pro bloco certo, `SefazTransporte`
+lia o do lote e **todo cancelamento saía "recusado" mesmo quando a SEFAZ autorizava de verdade**.
+Corrigido em `SefazTransporte.enviar()`, com teste de regressão. Ver `docs/PROGRESSO.md`
+(2026-08-19) e `docs/MODULOFISCAL.md` §18 pro relato completo, incluindo o efeito colateral na
+UNIQUE de `documento_fiscal_evento` (coluna `tentativa` nova, pra permitir retentativa do mesmo
+evento sem perder o rastro de nenhuma tentativa).
 
 ## Questões abertas
 

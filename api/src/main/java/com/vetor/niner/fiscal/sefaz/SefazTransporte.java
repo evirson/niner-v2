@@ -118,7 +118,20 @@ public class SefazTransporte {
         // SEFAZ real manda. Resolvido priorizando o escopo de `infProt` quando ele existe —
         // idêntico ao problema (e à mesma classe de solução) que `ArquivamentoXmlService` já
         // resolve para montar o `nfeProc`.
+        //
+        // ⚠️ MESMO BUG, achado de novo em 2026-08-19 testando o cancelamento de venda contra a
+        // SEFAZ real: a resposta de `RecepcaoEvento4` (cancelamento 110111) também tem DOIS
+        // `cStat` — um em `retEnvEvento` (nível do LOTE de evento, 128 "Lote de Evento
+        // Processado", não diz nada sobre o evento em si) e outro dentro de `retEvento/infEvento`,
+        // que é o resultado REAL do cancelamento (135 = registrado e vinculado à NF-e, ou a
+        // rejeição específica). Sem escopo pra `infEvento`, o cancelamento saía SEMPRE "recusado"
+        // (cStat 128 nunca é "135"), mesmo quando a SEFAZ autorizava de verdade — a venda nunca
+        // era revertida. `infProt` primeiro (autorização/consulta), `infEvento` como segunda
+        // opção (cancelamento) — os dois nunca coexistem na mesma resposta.
         String escopo = extrairBloco(corpo, "infProt");
+        if (escopo == null) {
+            escopo = extrairBloco(corpo, "infEvento");
+        }
         return new RespostaSefaz(
                 resp.statusCode(),
                 extrairComEscopo(escopo, corpo, "cStat"),

@@ -46,6 +46,15 @@ Vendedor** (`col-4`/`col-4`/`col-4`) · **Empresa | Situação** (`col-6`/`col-6
 OPERADOR e Situação fica sozinha na linha). A ordem dos campos não mudou, só o agrupamento visual
 em linhas e a simetria dentro de cada uma.
 
+**Mais espaçamento (2026-08-19, mesmo dia, rodada seguinte):** o popup ainda estava com tudo
+colado (padding do `.modal` default, sem gap entre as três linhas). Modal alargado de `.modal`
+(480px) pra `.modal-medio` (640px), 20px de margem entre cada uma das três linhas de campos,
+coluna "Vendedor" alargada de `col-4` pra `col-6` (com `col-3`/`col-3` pras datas — "Selecionar
+vendedor…" quebrava em duas linhas na largura antiga), e o placeholder do Nº da Venda encurtado
+(cortava no fim antes da largura maior). "Situação" também passou a ocupar a linha inteira
+(`col-12`) quando o usuário não é ADMIN, em vez de ficar sozinha do lado de um espaço vazio onde
+"Empresa" ficaria.
+
 A tela dedicada de **Cancelamento de Venda** (`docs/telas/cancelamento-venda.md`) saiu do menu —
 a lógica inteira migrou pra um botão **"Cancelar venda"** no cabeçalho do popup de detalhe
 (ADMIN-only, some quando a venda já está cancelada), reaproveitando `CancelamentoVendaModal.tsx`

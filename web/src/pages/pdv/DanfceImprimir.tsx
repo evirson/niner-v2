@@ -44,8 +44,6 @@ const DanfceImprimir = forwardRef<
     const documentoConsumidorTexto = f.documentoConsumidor
       ? mascararCpfCnpj(f.documentoConsumidor, f.documentoConsumidor.length === 11)
       : 'CONSUMIDOR NÃO IDENTIFICADO'
-    const temInfoAdicional = c.numeroCaixa != null || c.codigoVendedor != null || f.baseIbsCbs > 0
-
     return (
       <div className="danfce-preview danfce-imprimir" ref={ref}>
         {empresa && (
@@ -164,25 +162,23 @@ const DanfceImprimir = forwardRef<
           Fonte: IBPT
         </div>
 
-        {temInfoAdicional && (
-          <>
-            <Separador />
-            <div className="danfce-adicional">
-              Informações adicionais de interesse do contribuinte
+        <Separador />
+        <div className="danfce-adicional">
+          Informações adicionais de interesse do contribuinte
+          <br />
+          Venda Nº: {c.idVenda}
+          {(c.numeroCaixa != null || c.codigoVendedor != null) && <br />}
+          {c.numeroCaixa != null && `CX.: ${c.numeroCaixa}`}
+          {c.numeroCaixa != null && c.codigoVendedor != null && ', '}
+          {c.codigoVendedor != null && `VEN.: ${c.codigoVendedor}-${c.nomeVendedor}`}
+          {f.baseIbsCbs > 0 && (
+            <>
               <br />
-              {c.numeroCaixa != null && `CX.: ${c.numeroCaixa}`}
-              {c.numeroCaixa != null && c.codigoVendedor != null && ', '}
-              {c.codigoVendedor != null && `VEN.: ${c.codigoVendedor}-${c.nomeVendedor}`}
-              {f.baseIbsCbs > 0 && (
-                <>
-                  <br />
-                  Reforma Tributária (LC 214/2025) - Base IBS/CBS: {formatarMoeda(f.baseIbsCbs)} | IBS:{' '}
-                  {formatarMoeda(f.valorIbsUf + f.valorIbsMun)} | CBS: {formatarMoeda(f.valorCbs)}
-                </>
-              )}
-            </div>
-          </>
-        )}
+              Reforma Tributária (LC 214/2025) - Base IBS/CBS: {formatarMoeda(f.baseIbsCbs)} | IBS:{' '}
+              {formatarMoeda(f.valorIbsUf + f.valorIbsMun)} | CBS: {formatarMoeda(f.valorCbs)}
+            </>
+          )}
+        </div>
 
         <Separador />
         <div className="danfce-consulta">

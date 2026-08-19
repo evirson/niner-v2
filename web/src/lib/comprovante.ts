@@ -257,6 +257,14 @@ function linhaValoresItem(qtd: string, unitario: string, total: string): string 
  */
 export function montarLinhasComprovanteVenda(c: ComprovanteVenda, reimpressao: boolean = false): string[] {
   const linhas: string[] = []
+  // Reimpressão de venda cancelada (2026-08-19) — o aviso vem ANTES de qualquer outra coisa,
+  // já na primeira linha impressa, pra ninguém confundir com uma venda válida (o restante do
+  // cupom continua idêntico ao original, é só o aviso que muda).
+  if (c.cancelada) {
+    linhas.push(linhaVenda())
+    linhas.push(centralizarVenda('****  VENDA CANCELADA  ****'))
+    linhas.push(linhaVenda())
+  }
   linhas.push(linhaVenda())
   linhas.push(centralizarVenda('***  DOCUMENTO SEM VALOR FISCAL  ***'))
   linhas.push(linhaVenda())

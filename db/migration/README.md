@@ -246,6 +246,16 @@ Em desenvolvimento, recriar do zero (`flyway clean` + `migrate`) é aceitável.
     ⚠️ Acrescentar o caso a `PrivilegiosNinerAppTest` — `TestcontainersConfiguration` conecta a
     aplicação como superusuário do container e `GRANT`/`REVOKE` fica invisível para o resto da
     suíte.
+  - **`documento_fiscal_evento` ganhou a coluna `tentativa` em 2026-08-19** (editada direto em
+    V035, banco em construção — aplicada por `ALTER TABLE` no dev + `flyway repair` pro checksum,
+    sem apagar dados): a UNIQUE original, `(id_tenant, id_documento_fiscal, tipo_evento,
+    sequencia)`, só permitia UMA linha por documento+evento — mas cancelamento é sempre
+    `sequencia = 1` (regra da SEFAZ), então uma 1ª tentativa (mesmo recusada, ou vítima do bug de
+    `cStat` de baixo) ocupava a única vaga e travava qualquer retentativa com "duplicate key",
+    mesmo a SEFAZ aceitando o reenvio. `tentativa` (calculada por subquery,
+    `COALESCE(MAX(tentativa),0)+1`) entrou na UNIQUE, virando o eixo real de "quantas vezes
+    tentei localmente", sem inventar `sequencia` além do que a SEFAZ realmente usa. Ver
+    `docs/MODULOFISCAL.md` §18 e `docs/PROGRESSO.md` (2026-08-19) pro achado que motivou.
   - **Trigger `documento_fiscal_imutavel_tg`** (F6/F4): depois de preenchidos, `chave_acesso`,
     `numero`/`serie`, `protocolo` e o ponteiro do XML não mudam mais. A situação continua mudando
     (AUTORIZADO → CANCELADO); o que é pedra é a identidade da nota perante a SEFAZ.

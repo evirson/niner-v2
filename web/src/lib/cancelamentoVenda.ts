@@ -46,6 +46,10 @@ export interface VendaDetalheCancelamento {
   pagamentos: PagamentoVendaDetalhe[]
   bloqueadaCredario: boolean
   parcelasRecebidas: ParcelaRecebidaDetalhe[]
+  nfceDataAutorizacao: string | null
+  nfcePrazoCancelamentoMinutos: number | null
+  nfcePrazoCancelamentoExpiraEm: string | null
+  nfcePrazoCancelamentoExpirado: boolean
 }
 
 export function buscarDetalheParaCancelamento(idVenda: number): Promise<VendaDetalheCancelamento> {

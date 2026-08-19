@@ -176,7 +176,15 @@ public final class PdvDtos {
             /** Cabeçalho fiscal completo da empresa (2026-08-19, DANFE) — {@code null} quando a
              *  venda não é fiscal ({@code dadosFiscais == null}); a papeleta comum não precisa
              *  disso, só o DANFCE. */
-            EmpresaComprovante empresaFiscal) {
+            EmpresaComprovante empresaFiscal,
+            /** {@code venda.cancelada} (2026-08-19) — a reimpressão precisa avisar "VENDA
+             *  CANCELADA" logo no início do cupom; sem isso, uma papeleta reimpressa de uma venda
+             *  já cancelada saía idêntica à de uma venda válida. Note que uma venda cancelada com
+             *  NFC-e nunca chega como DANFCE aqui: {@link #buscarDadosFiscais} só considera
+             *  documento {@code AUTORIZADO}/{@code CONTINGENCIA}, e o cancelamento marca o
+             *  documento como {@code CANCELADO} — a papeleta comum é sempre o formato certo pra
+             *  esse aviso. */
+            boolean cancelada) {
     }
 
     /**

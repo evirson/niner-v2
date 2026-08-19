@@ -47,6 +47,10 @@ public final class CancelamentoVendaDtos {
             int numeroParcela, OffsetDateTime dataVencimento, OffsetDateTime dataRecebimento, BigDecimal valorRecebido) {
     }
 
+    /** {@code nfce*} vêm nulos quando a venda não tem NFC-e autorizada (F12/DF13) — nesse caso o
+     *  cancelamento não depende de prazo nenhum da SEFAZ. Quando preenchidos,
+     *  {@code nfcePrazoCancelamentoExpirado} já vem calculado pelo servidor (não pelo relógio do
+     *  navegador) — é ele que a tela usa pra bloquear o botão, não uma conta feita no front. */
     public record VendaDetalheCancelamentoResponse(
             long idVenda,
             long idEmpresa,
@@ -64,7 +68,11 @@ public final class CancelamentoVendaDtos {
             List<ItemVendaDetalhe> itens,
             List<PagamentoVendaDetalhe> pagamentos,
             boolean bloqueadaCredario,
-            List<ParcelaRecebidaDetalhe> parcelasRecebidas) {
+            List<ParcelaRecebidaDetalhe> parcelasRecebidas,
+            OffsetDateTime nfceDataAutorizacao,
+            Integer nfcePrazoCancelamentoMinutos,
+            OffsetDateTime nfcePrazoCancelamentoExpiraEm,
+            boolean nfcePrazoCancelamentoExpirado) {
     }
 
     public record CancelarVendaRequest(@NotBlank String motivo) {

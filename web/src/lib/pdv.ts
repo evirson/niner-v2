@@ -236,6 +236,7 @@ export interface ComprovanteVenda {
   parcelasCrediario: ParcelaComprovanteVenda[]
   dadosFiscais: DadosFiscaisComprovante | null
   empresaFiscal: EmpresaComprovante | null
+  cancelada: boolean
 }
 
 export function buscarComprovanteVenda(idVenda: number): Promise<ComprovanteVenda> {

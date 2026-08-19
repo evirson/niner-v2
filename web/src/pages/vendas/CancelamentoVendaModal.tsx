@@ -51,8 +51,8 @@ export default function CancelamentoVendaModal({
   })
 
   const confirmar = () => {
-    if (!motivo.trim()) {
-      setErro('Informe o motivo do cancelamento.')
+    if (motivo.trim().length < 15) {
+      setErro('Informe o motivo do cancelamento (mínimo 15 caracteres).')
       return
     }
     setErro('')
@@ -61,6 +61,8 @@ export default function CancelamentoVendaModal({
 
   const jaCancelada = detalhe?.cancelada ?? false
   const bloqueada = detalhe?.bloqueadaCredario ?? false
+  const temNfce = detalhe?.nfceDataAutorizacao != null
+  const prazoExpirado = detalhe?.nfcePrazoCancelamentoExpirado ?? false
 
   return (
     <div className="modal-overlay" onClick={aoFechar}>
@@ -213,9 +215,31 @@ export default function CancelamentoVendaModal({
                   </div>
                 </div>
               )}
+
+              {/* Prazo de cancelamento da NFC-e (2026-08-19) — a SEFAZ só aceita cancelar a nota
+                  dentro de uma janela curta contada da autorização (30 min padrão para NFC-e,
+                  configurável por UF em cfg_uf_autorizador; bem diferente da NF-e, 24h). Mostrar
+                  isso ANTES de tentar evita o usuário preencher o motivo só pra levar um erro
+                  genérico depois — e se o prazo já passou, a venda nem tenta (a nota não pode
+                  ficar cancelada sem a venda, nem a venda sem a nota — §10.1). */}
+              {!jaCancelada && !bloqueada && temNfce && prazoExpirado && (
+                <p className="erro" style={{ marginTop: 16 }}>
+                  A NFC-e desta venda foi autorizada em {formatarDataHora(detalhe.nfceDataAutorizacao)} e o prazo de{' '}
+                  {detalhe.nfcePrazoCancelamentoMinutos} minutos que a SEFAZ dá para cancelá-la já passou (ia até{' '}
+                  {formatarDataHora(detalhe.nfcePrazoCancelamentoExpiraEm)}). Não é mais possível cancelar esta
+                  venda por aqui — a nota fiscal só pode ser desfeita agora por uma NF-e de devolução.
+                </p>
+              )}
+              {!jaCancelada && !bloqueada && temNfce && !prazoExpirado && (
+                <p className="muted" style={{ marginTop: 16, fontSize: 13 }}>
+                  NFC-e autorizada em {formatarDataHora(detalhe.nfceDataAutorizacao)} — a SEFAZ permite cancelá-la
+                  até {formatarDataHora(detalhe.nfcePrazoCancelamentoExpiraEm)} ({detalhe.nfcePrazoCancelamentoMinutos}{' '}
+                  minutos de prazo). Depois disso, esta venda não poderá mais ser cancelada por aqui.
+                </p>
+              )}
             </div>
 
-            {!jaCancelada && !bloqueada && (
+            {!jaCancelada && !bloqueada && !prazoExpirado && (
               <div style={{ flexShrink: 0, marginTop: 16 }}>
                 <label htmlFor="motivo-cancelamento">Motivo do Cancelamento *</label>
                 <textarea
@@ -225,6 +249,10 @@ export default function CancelamentoVendaModal({
                   onChange={(e) => setMotivo(e.target.value.toUpperCase())}
                   autoFocus
                 />
+                <p className="muted" style={{ fontSize: 12, marginTop: 4 }}>
+                  Mínimo 15 caracteres — se esta venda tiver NFC-e autorizada, a SEFAZ exige essa
+                  justificativa para cancelar a nota junto com a venda.
+                </p>
                 {erro && <p className="erro-campo">{erro}</p>}
                 <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 12 }}>
                   <button type="button" className="btn" disabled={cancelar.isPending} onClick={confirmar}>

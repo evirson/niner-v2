@@ -317,6 +317,13 @@ public class DocumentoFiscalRepositorio {
      * reverte a transação inteira, apagando junto o registro de auditoria que existe
      * <b>exatamente</b> para sobreviver à recusa. {@code REQUIRES_NEW} garante que o evento
      * commita sozinho, aconteça o que acontecer depois no chamador.
+     *
+     * <p>⚠️ {@code tentativa} calculado por subquery (não fixo em 1) — achado cancelando uma
+     * venda de verdade (2026-08-19): cancelamento (110111) sempre usa {@code sequencia = 1} (é a
+     * SEFAZ que exige isso, não um bug), então uma RETENTATIVA da mesma sequência — 1ª tentativa
+     * recusada, ou um bug local (já corrigido) lendo errado uma resposta que a SEFAZ na verdade
+     * autorizou — precisa de uma tentativa nova (2, 3…) pra não colidir com a UNIQUE e travar o
+     * cancelamento pra sempre com "duplicate key", mesmo a SEFAZ aceitando o reenvio.
      */
     @Transactional(propagation = org.springframework.transaction.annotation.Propagation.REQUIRES_NEW)
     public long registrarTentativaCancelamento(long idDocumentoFiscal, String justificativa,
@@ -325,13 +332,18 @@ public class DocumentoFiscalRepositorio {
                                                Integer idUsuario) {
         return jdbc.sql("""
                         INSERT INTO documento_fiscal_evento
-                            (id_tenant, id_documento_fiscal, tipo_evento, justificativa, autorizado,
-                             protocolo, status_sefaz, motivo_sefaz, xml_evento, id_usuario)
-                        VALUES (plataforma.tenant_atual(), ?, '110111', ?, ?, ?, ?, ?, ?, ?)
+                            (id_tenant, id_documento_fiscal, tipo_evento, sequencia, tentativa,
+                             justificativa, autorizado, protocolo, status_sefaz, motivo_sefaz,
+                             xml_evento, id_usuario)
+                        SELECT plataforma.tenant_atual(), ?, '110111', 1, COALESCE(MAX(tentativa), 0) + 1,
+                               ?, ?, ?, ?, ?, ?, ?
+                          FROM documento_fiscal_evento
+                         WHERE id_tenant = plataforma.tenant_atual() AND id_documento_fiscal = ?
+                               AND tipo_evento = '110111' AND sequencia = 1
                         RETURNING id_evento
                         """)
                 .params(idDocumentoFiscal, justificativa, autorizado, protocoloEvento, statusSefaz,
-                        motivoSefaz, xmlEvento, idUsuario)
+                        motivoSefaz, xmlEvento, idUsuario, idDocumentoFiscal)
                 .query(Long.class).single();
     }
 
