@@ -17,6 +17,11 @@ services:
       POSTGRES_DB: niner_db
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: ${DB_PASSWORD:-dev_postgres}   # 🔴 dev; produção via secret manager
+      # Senhas das roles do bootstrap. Em dev ficam nos valores conhecidos; em produção vêm do
+      # .env do servidor (ver docker-compose.prod.yml).
+      NINER_OWNER_PASSWORD: ${FLYWAY_OWNER_PASSWORD:-dev_owner}
+      NINER_APP_PASSWORD: ${DB_APP_PASSWORD:-dev_app}
+      NINER_BACKUP_PASSWORD: ${NINER_BACKUP_SENHA:-dev_backup}
     volumes:
       # postgres:18 mudou o VOLUME para /var/lib/postgresql (PGDATA=/var/lib/postgresql/18/docker)
       - pgdata:/var/lib/postgresql

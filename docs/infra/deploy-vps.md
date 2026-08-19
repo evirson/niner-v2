@@ -40,19 +40,22 @@ Copie a chave do GCS para `api/secrets/gcs.json` (o diretório é gitignored).
 
 ## 2. Papel de backup no banco
 
-O `db/bootstrap/00_roles.sql` cria `niner_backup` (com `BYPASSRLS`) no **primeiro** init do
-Postgres. Se o banco já existir, crie à mão — e troque a senha de desenvolvimento pela do `.env`:
+O `db/bootstrap/00_roles.sh` cria as três roles — `niner_owner`, `niner_app` e **`niner_backup`
+(com `BYPASSRLS`)** — já com as senhas do seu `.env`, no primeiro init do Postgres. Nada a fazer
+à mão.
+
+⚠️ **Só vale no primeiro init.** Se o volume `pgdata` já existir, o script não roda de novo e as
+senhas continuam as antigas — nesse caso, alinhe à mão:
 
 ```sql
-CREATE ROLE niner_backup LOGIN PASSWORD '<NINER_BACKUP_SENHA do .env>'
-  NOSUPERUSER NOCREATEDB NOCREATEROLE BYPASSRLS;
-GRANT CONNECT ON DATABASE niner_db TO niner_backup;
-GRANT USAGE ON SCHEMA public, plataforma TO niner_backup;
-GRANT SELECT ON ALL TABLES IN SCHEMA public, plataforma TO niner_backup;
+ALTER ROLE niner_owner  WITH PASSWORD '<FLYWAY_OWNER_PASSWORD do .env>';
+ALTER ROLE niner_app    WITH PASSWORD '<DB_APP_PASSWORD do .env>';
+ALTER ROLE niner_backup WITH PASSWORD '<NINER_BACKUP_SENHA do .env>';
 ```
 
-Sem `BYPASSRLS` o `pg_dump` sai **sem uma linha** das tabelas dos lojistas — e o serviço recusa
-executar justamente para isso não passar batido.
+Sem `BYPASSRLS` o `pg_dump` sai **sem uma linha** das tabelas dos lojistas — medido em produção:
+o `niner_owner` enxerga 0 empresas, o superusuário enxerga todas. O serviço de backup recusa
+executar nessa condição, de propósito.
 
 ## 3. Subir banco, storage, migrations e API
 

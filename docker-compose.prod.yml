@@ -26,6 +26,12 @@ services:
       POSTGRES_DB: niner_db
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: ${DB_PASSWORD:?defina no .env}
+      # Senhas das roles criadas pelo bootstrap (db/bootstrap/00_roles.sh). Sem isto o banco
+      # nasceria com as senhas de desenvolvimento — e o Flyway, que usa a do .env, não entraria
+      # (foi o que aconteceu no primeiro deploy, 2026-08-19).
+      NINER_OWNER_PASSWORD: ${FLYWAY_OWNER_PASSWORD:?defina no .env}
+      NINER_APP_PASSWORD: ${DB_APP_PASSWORD:?defina no .env}
+      NINER_BACKUP_PASSWORD: ${NINER_BACKUP_SENHA:?defina no .env}
     volumes:
       - pgdata:/var/lib/postgresql
       - ./db/bootstrap:/docker-entrypoint-initdb.d:ro
