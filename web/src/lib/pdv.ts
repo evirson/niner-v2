@@ -147,6 +147,7 @@ export interface ItemComprovanteVenda {
   variacaoCor: string | null
   variacaoTamanho: string | null
   qtd: number
+  unidadeComercial: string | null
   valorUnitario: number
   valorTotal: number
 }
@@ -187,6 +188,25 @@ export interface DadosFiscaisComprovante {
   serie: number
   /** CPF/CNPJ (só dígitos) que foi para o `<dest>` do XML — `null` = consumidor não identificado. */
   documentoConsumidor: string | null
+  /** Reforma tributária (LC 214/2025), somados da nota inteira (2026-08-19, DANFE). */
+  baseIbsCbs: number
+  valorIbsUf: number
+  valorIbsMun: number
+  valorCbs: number
+  /** Detalhamento da Lei 12.741 (2026-08-19) — os 3 somam `valorTotalTributos`. */
+  valorTribFederal: number
+  valorTribEstadual: number
+  valorTribMunicipal: number
+}
+
+/** Cabeçalho fiscal completo da empresa (2026-08-19, DANFE) — só presente quando `dadosFiscais`
+ *  também está presente; `enderecoCompleto` já vem formatado pronto pra imprimir. */
+export interface EmpresaComprovante {
+  razaoSocial: string
+  cnpj: string | null
+  inscricaoEstadual: string | null
+  enderecoCompleto: string | null
+  telefone: string | null
 }
 
 /** Papeleta de venda pra impressão térmica 80mm, buscada logo após o F5 efetivar a venda.
@@ -202,6 +222,10 @@ export interface ComprovanteVenda {
    *  é o que decide se a pergunta "incluir CPF na nota?" oferece a opção "sim". */
   documentoCliente: string | null
   nomeVendedor: string | null
+  /** Código (`id_funcionario`) do vendedor (2026-08-19, DANFE) — o "VEN.: nn" do rodapé fiscal. */
+  codigoVendedor: number | null
+  /** `venda.id_caixa` (2026-08-19, DANFE). */
+  numeroCaixa: number | null
   nomeOperador: string | null
   itens: ItemComprovanteVenda[]
   subtotal: number
@@ -211,6 +235,7 @@ export interface ComprovanteVenda {
   pagamentos: PagamentoComprovanteVenda[]
   parcelasCrediario: ParcelaComprovanteVenda[]
   dadosFiscais: DadosFiscaisComprovante | null
+  empresaFiscal: EmpresaComprovante | null
 }
 
 export function buscarComprovanteVenda(idVenda: number): Promise<ComprovanteVenda> {

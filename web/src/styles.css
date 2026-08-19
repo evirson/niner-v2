@@ -424,30 +424,58 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
   }
 }
 
-/* DANFCE (§9.6, bloco B7) — com fiscal ligado e a NFC-e autorizada/em contingência, o cupom
-   impresso É o DANFCE (chave de acesso + QR Code) por cima da mesma tabela de 42 colunas de
-   sempre. Wrapper PRÓPRIO (não reaproveita `.papeleta-imprimir` diretamente na `<pre>`) de
-   propósito: assim o texto/QR fluem em document flow normal dentro do wrapper — que é quem fica
-   `position: absolute` — e o QR sempre cai abaixo da tabela de itens, qualquer que seja a altura
-   dela, sem arriscar a calibragem já testada do Vale-Mercadoria/papeleta comum (que continuam
-   usando `.papeleta-imprimir` direto na `<pre>`, sem tocar neste bloco). */
-.papeleta-qrcode { display: flex; flex-direction: column; align-items: center; gap: 2px; margin-top: 4px; }
-.papeleta-qrcode img { width: 28mm; height: 28mm; }
+/* DANFE (§9.6, reconstruído em 2026-08-19 a partir de um modelo real trazido pelo dono do
+   produto) — com fiscal ligado e a NFC-e autorizada/em contingência, o cupom impresso É o DANFE:
+   tabela HTML de verdade (fonte proporcional, colunas alinhadas), não mais texto monoespaçado.
+   Mesma bobina térmica 80mm/75mm de área imprimível de sempre — só o motor de renderização
+   mudou. A papeleta comum (sem fiscal) e o Vale-Mercadoria continuam em `.papeleta-imprimir`
+   (texto monoespaçado), sem tocar neste bloco. */
+.danfce-preview {
+  width: 75mm; margin: 16px auto; padding: 3mm;
+  background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--radius);
+  font-family: Arial, Helvetica, sans-serif; font-size: 11px; line-height: 1.4; color: var(--ink);
+}
+.danfce-preview .danfce-empresa,
+.danfce-preview .danfce-titulo,
+.danfce-preview .danfce-aviso,
+.danfce-preview .danfce-tarja,
+.danfce-preview .danfce-tributo,
+.danfce-preview .danfce-adicional,
+.danfce-preview .danfce-consulta { text-align: center; }
+.danfce-preview .danfce-empresa { margin-bottom: 2mm; }
+.danfce-preview .danfce-empresa-nome { font-weight: bold; }
+.danfce-preview .danfce-titulo { font-weight: bold; margin: 2mm 0; }
+.danfce-preview .danfce-aviso { margin-bottom: 1mm; }
+.danfce-preview .danfce-tarja { font-weight: bold; margin: 1mm 0; }
+.danfce-preview table.danfce-itens,
+.danfce-preview table.danfce-pagamentos { width: 100%; border-collapse: collapse; margin: 2mm 0; }
+.danfce-preview .danfce-sep {
+  /* Preto fixo, não `var(--ink)`: esta área sempre representa papel (fundo branco), então a
+   * cor não pode seguir o tema claro/escuro da tela — no escuro `--ink` vira claro e o traço
+   * desaparece contra o fundo escuro do preview (achado em 2026-08-19, testando ao vivo). */
+  height: 0.3mm; background: #000; margin: 1.5mm 0;
+}
+.danfce-preview table.danfce-itens th,
+.danfce-preview table.danfce-pagamentos th {
+  text-align: left; font-weight: normal; border-bottom: 1px solid #000;
+  padding: 1mm 0 0.5mm;
+}
+.danfce-preview .danfce-itens-titulo { font-weight: bold; border-bottom: 0; padding-bottom: 0; }
+.danfce-preview table.danfce-itens td,
+.danfce-preview table.danfce-pagamentos td { padding: 0.3mm 0; vertical-align: top; }
+.danfce-preview .danfce-num { text-align: right; white-space: nowrap; }
+.danfce-preview .danfce-item-desc { font-weight: bold; padding-top: 1.5mm !important; }
+.danfce-preview .danfce-totais > div { display: flex; justify-content: space-between; gap: 4mm; }
+.danfce-preview .danfce-total-pagar { font-weight: bold; }
+.danfce-preview .danfce-chave { font-weight: bold; }
+.danfce-preview .danfce-rodape { display: flex; gap: 3mm; align-items: flex-start; }
+.danfce-preview .danfce-qrcode img { width: 28mm; height: 28mm; flex-shrink: 0; }
+.danfce-preview .danfce-info { flex: 1; }
 @media print {
-  .papeleta-fiscal-imprimir, .papeleta-fiscal-imprimir * { visibility: visible; }
-  .papeleta-fiscal-imprimir {
+  .danfce-imprimir, .danfce-imprimir * { visibility: visible; }
+  .danfce-imprimir {
     position: absolute; top: 0; left: 0; width: 75mm; margin: 0; padding: 2mm 1mm; border: 0;
     background: none; color: #000;
-  }
-  .papeleta-fiscal-imprimir .papeleta-preview {
-    /* Mesma calibragem Consolas/11.5px/bold/print-color-adjust do `.papeleta-imprimir` comum
-       (2026-08-14) — só reaplicada aqui porque a `<pre>` deixou de carregar aquela classe. */
-    font-family: Consolas, 'Lucida Console', 'Courier New', Courier, monospace; font-size: 11.5px; line-height: 1.35;
-    font-weight: bold;
-    -webkit-print-color-adjust: exact;
-    print-color-adjust: exact;
-  }
-  .papeleta-fiscal-imprimir .papeleta-qrcode img {
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }

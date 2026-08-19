@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { gerarBlobComprovanteVenda, gerarQrCodeDataUrl, montarLinhasComprovanteVenda } from '../../lib/comprovante'
+import { gerarBlobDanfce } from '../../lib/danfce'
 import { ApiError } from '../../lib/api'
 import { buscarEmiteFiscalAposVenda } from '../../lib/configuracaoGeral'
 import { buscarComprovanteVenda, emitirNfce, type ResultadoEmissaoNfce } from '../../lib/pdv'
@@ -10,6 +11,7 @@ import { formatarMoeda, mascararCpfCnpj } from '../../lib/masks'
 import { IconeFechar, IconeWhatsapp } from '../../components/Icones'
 import EnviarWhatsAppModal from '../../components/EnviarWhatsAppModal'
 import Toast from '../../components/Toast'
+import DanfceImprimir from './DanfceImprimir'
 
 /** Situações de emissão que valem como "sucesso" pro operador — a venda saiu bem das duas
  *  (AUTORIZADO) ou vai sair (CONTINGENCIA/EM_PROCESSAMENTO); as outras precisam de atenção. */
@@ -88,6 +90,7 @@ export default function ComprovantePapeletaModal({
   const [respondendoCpf, setRespondendoCpf] = useState(false)
   const [pedirCpfManual, setPedirCpfManual] = useState(false)
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null)
+  const danfceRef = useRef<HTMLDivElement>(null)
 
   function processarResultadoEmissao(resultado: ResultadoEmissaoNfce | null) {
     if (!resultado) return // F12: fiscal desligado, nada a mostrar
@@ -147,12 +150,30 @@ export default function ComprovantePapeletaModal({
 
   const linhas = comprovante ? montarLinhasComprovanteVenda(comprovante, reimpressao) : []
 
+  // O popup se chamava sempre "Papeleta de Venda", mesmo quando o conteúdo já era o DANFCE — em
+  // homologação (a maioria dos ambientes de teste) o cupom nem escreve "DANFCE" em lugar nenhum
+  // (mostra a tarja "SEM VALOR FISCAL"), então nada no popup deixava claro que aquilo já era a
+  // nota fiscal. 2026-08-19: título muda quando há dado fiscal.
+  const titulo = reimpressao
+    ? dadosFiscais
+      ? 'Reimpressão de Nota Fiscal — NFC-e'
+      : 'Reimpressão de Papeleta de Venda'
+    : dadosFiscais
+      ? 'Nota Fiscal — NFC-e'
+      : 'Papeleta de Venda'
+
   async function confirmarEnvioWhatsApp(telefone: string) {
     if (!comprovante) return
     setEnviandoWhatsApp(true)
     setErroWhatsApp(null)
     try {
-      const blob = gerarBlobComprovanteVenda(linhas, qrDataUrl)
+      // DANFE (2026-08-19): o PDF do envio por WhatsApp é uma CAPTURA do próprio DOM já
+      // renderizado (`danfceRef`), não mais texto monoespaçado — mesmo motor html2canvas+jsPDF
+      // dos relatórios, garantindo que o PDF sai idêntico ao que o operador está vendo na tela.
+      // Papeleta comum (sem fiscal) continua no PDF de texto de sempre.
+      const blob = dadosFiscais && danfceRef.current
+        ? await gerarBlobDanfce(danfceRef.current)
+        : gerarBlobComprovanteVenda(linhas, qrDataUrl)
       const link = await compartilharArquivo(blob, `papeleta-venda-${comprovante.idVenda}.pdf`)
       const mensagem =
         `Olá${comprovante.nomeCliente ? `, ${comprovante.nomeCliente}` : ''}! Segue a papeleta da sua compra:\n${link}\n\n` +
@@ -172,12 +193,12 @@ export default function ComprovantePapeletaModal({
         <div
           className="modal modal-medio"
           role="dialog"
-          aria-label={reimpressao ? 'Reimpressão de papeleta de venda' : 'Papeleta de venda'}
+          aria-label={titulo}
           onClick={(e) => e.stopPropagation()}
           style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
         >
           <div className="lightbox-topo" style={{ flexShrink: 0 }}>
-            <h2 style={{ margin: 0 }}>{reimpressao ? 'Reimpressão de Papeleta de Venda' : 'Papeleta de Venda'}</h2>
+            <h2 style={{ margin: 0 }}>{titulo}</h2>
             <button type="button" className="btn ghost btn-fechar-tela" onClick={aoFechar} aria-label="Fechar" title="Fechar">
               <IconeFechar />
             </button>
@@ -251,15 +272,8 @@ export default function ComprovantePapeletaModal({
                   </>
                 )}
               </div>
-            ) : dadosFiscais ? (
-              <div className="papeleta-fiscal-imprimir">
-                <pre className="papeleta-preview">{linhas.join('\n')}</pre>
-                {qrDataUrl && (
-                  <div className="papeleta-qrcode">
-                    <img src={qrDataUrl} alt={`QR Code da NFC-e ${dadosFiscais.chaveAcesso}`} />
-                  </div>
-                )}
-              </div>
+            ) : dadosFiscais && comprovante ? (
+              <DanfceImprimir ref={danfceRef} comprovante={comprovante} qrDataUrl={qrDataUrl} />
             ) : (
               <pre className="papeleta-preview papeleta-imprimir">{linhas.join('\n')}</pre>
             )}

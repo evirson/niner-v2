@@ -2,8 +2,8 @@ import { jsPDF } from 'jspdf'
 import QRCode from 'qrcode'
 import type { ComprovanteRecebimento } from './recebimentoCrediario'
 import type { DevolucaoEfetivada } from './devolucaoProduto'
-import type { ComprovanteVenda, DadosFiscaisComprovante } from './pdv'
-import { formatarMoeda, mascararCpfCnpj } from './masks'
+import type { ComprovanteVenda } from './pdv'
+import { formatarMoeda } from './masks'
 
 /**
  * Largura em colunas do comprovante — 42 caracteres é o padrão seguro pra bobina térmica de
@@ -249,72 +249,16 @@ function linhaValoresItem(qtd: string, unitario: string, total: string): string 
   return colEsq(esquerda, LARGURA_VENDA - COL_TOTAL) + colDir(total, COL_TOTAL)
 }
 
-/** Chave de acesso em grupos de 4 dígitos (44 → 11 grupos) — convenção do MOC, é assim que o
- *  DANFCE sempre imprime a chave, pra facilitar a digitação manual quando o QR não lê. */
-function formatarChaveGrupos4(chave: string): string {
-  return chave.replace(/(\d{4})(?=\d)/g, '$1 ')
-}
-
-/** "000.045.123" — número da NFC-e (nNF) em 9 dígitos com pontos a cada 3, convenção do DANFE. */
-function formatarNumeroNfce(numero: number): string {
-  return String(numero).padStart(9, '0').replace(/(\d{3})(?=\d)/g, '$1.')
-}
-
 /**
- * DANFCE (§9.6, bloco B7): com o fiscal ligado e a NFC-e autorizada ou em contingência, o cupom
- * impresso <b>é</b> o DANFCE — chave em grupos de 4, protocolo/autorização (ou aviso de
- * contingência), tarja de homologação quando aplicável, e o total de tributos da Lei 12.741. O QR
- * Code em si <b>não</b> entra nesta lista de texto (é gráfico) — ver {@link gerarQrCodeDataUrl},
- * renderizado à parte pelo componente da tela.
+ * Papeleta comum, sem fiscal — quando a venda tem NFC-e autorizada/em contingência, o comprovante
+ * vira DANFE de verdade (`pages/pdv/DanfceImprimir.tsx`, tabela HTML própria desde 2026-08-19),
+ * não mais este texto monoespaçado. Esta função continua servindo a papeleta comum e o
+ * PDF/WhatsApp dela.
  */
-function linhasCabecalhoFiscal(f: DadosFiscaisComprovante): string[] {
-  const linhas: string[] = []
-  if (f.homologacao) {
-    linhas.push(centralizarVenda('EMITIDA EM AMBIENTE DE HOMOLOGACAO'))
-    linhas.push(centralizarVenda('SEM VALOR FISCAL'))
-  } else {
-    linhas.push(centralizarVenda('DANFCE - Documento Auxiliar da'))
-    linhas.push(centralizarVenda('Nota Fiscal de Consumidor Eletronica'))
-  }
-  if (f.contingencia) {
-    linhas.push(linhaVenda())
-    linhas.push(centralizarVenda('EMITIDA EM CONTINGENCIA'))
-    linhas.push(centralizarVenda('AGUARDANDO AUTORIZACAO DA SEFAZ'))
-  }
-  return linhas
-}
-
-function linhasRodapeFiscal(f: DadosFiscaisComprovante): string[] {
-  const linhas: string[] = []
-  linhas.push(linhaVenda())
-  linhas.push(campoVenda('Trib. aprox.:', `${moeda(f.valorTotalTributos)} (Lei 12.741/2012)`))
-  linhas.push(campoVenda('NFC-e......:', `No ${formatarNumeroNfce(f.numero)} - Serie ${String(f.serie).padStart(3, '0')}`))
-  linhas.push(linhaVenda())
-  linhas.push(centralizarVenda('Consulte pela Chave de Acesso em:'))
-  linhas.push(centralizarVenda(f.urlConsultaChave))
-  linhas.push(linhaVenda())
-  linhas.push(centralizarVenda(formatarChaveGrupos4(f.chaveAcesso)))
-  linhas.push(linhaVenda())
-  linhas.push(centralizarVenda(f.documentoConsumidor
-    ? `CONSUMIDOR - ${mascararCpfCnpj(f.documentoConsumidor, f.documentoConsumidor.length === 11)}`
-    : 'CONSUMIDOR NAO IDENTIFICADO'))
-  linhas.push(linhaVenda())
-  if (f.protocolo) {
-    linhas.push(campoVenda('Protocolo..:', f.protocolo))
-    if (f.dataAutorizacao) linhas.push(campoVenda('Autorizacao:', formatarDataHora(f.dataAutorizacao)))
-    linhas.push(linhaVenda())
-  }
-  return linhas
-}
-
 export function montarLinhasComprovanteVenda(c: ComprovanteVenda, reimpressao: boolean = false): string[] {
   const linhas: string[] = []
   linhas.push(linhaVenda())
-  if (c.dadosFiscais) {
-    linhasCabecalhoFiscal(c.dadosFiscais).forEach((l) => linhas.push(l))
-  } else {
-    linhas.push(centralizarVenda('***  DOCUMENTO SEM VALOR FISCAL  ***'))
-  }
+  linhas.push(centralizarVenda('***  DOCUMENTO SEM VALOR FISCAL  ***'))
   linhas.push(linhaVenda())
   linhas.push(centralizarVenda(`${c.nomeEmpresa} (Loja ${c.codigoEmpresa})`))
   linhas.push(linhaVenda())
@@ -347,10 +291,14 @@ export function montarLinhasComprovanteVenda(c: ComprovanteVenda, reimpressao: b
   })
 
   linhas.push(linhaVenda())
-  linhas.push(linhaResumoVenda('SUB-TOTAL....:', formatarMoeda(c.subtotal)))
-  linhas.push(linhaResumoVenda('DESCONTOS....:', formatarMoeda(c.descontos)))
-  linhas.push(linhaResumoVenda('ACRESCIMOS...:', formatarMoeda(c.acrescimos)))
-  linhas.push(linhaResumoVenda('TOTAL A PAGAR..:', formatarMoeda(c.totalAPagar)))
+  if (c.descontos === 0 && c.acrescimos === 0) {
+    linhas.push(linhaResumoVenda('TOTAL A PAGAR..:', formatarMoeda(c.totalAPagar)))
+  } else {
+    linhas.push(linhaResumoVenda('SUB-TOTAL....:', formatarMoeda(c.subtotal)))
+    linhas.push(linhaResumoVenda('DESCONTOS....:', formatarMoeda(c.descontos)))
+    linhas.push(linhaResumoVenda('ACRESCIMOS...:', formatarMoeda(c.acrescimos)))
+    linhas.push(linhaResumoVenda('TOTAL A PAGAR..:', formatarMoeda(c.totalAPagar)))
+  }
   linhas.push(linhaVenda())
   c.pagamentos.forEach((p) => {
     linhas.push(linhaPagamentoVenda(p.nomeCarteira, p.crediario, formatarMoeda(p.valorPago)))
@@ -369,10 +317,6 @@ export function montarLinhasComprovanteVenda(c: ComprovanteVenda, reimpressao: b
     linhas.push(linhaVenda())
   }
 
-  if (c.dadosFiscais) {
-    linhasRodapeFiscal(c.dadosFiscais).forEach((l) => linhas.push(l))
-  }
-
   if (reimpressao) {
     linhas.push(campoVenda('Impresso em:', formatarDataHora(new Date().toISOString())))
     linhas.push(linhaVenda())
@@ -388,8 +332,10 @@ export function montarLinhasComprovanteVenda(c: ComprovanteVenda, reimpressao: b
  * ({@link gerarBlobComprovanteVenda}) — o download direto em PDF saiu do produto em 2026-08-19
  * (o diálogo de impressão nativo já oferece "Salvar como PDF").
  */
-/** Lado (mm) do QR Code no PDF — mesmo tamanho da tela/impressão (`.papeleta-qrcode img`,
- *  `styles.css`), pra não precisar de duas calibragens de legibilidade diferentes. */
+/** Lado (mm) do QR Code embutido no PDF — parâmetro órfão desde 2026-08-19: o DANFCE trocou pra
+ *  captura visual (`gerarBlobDanfce`, `lib/danfce.ts`), então `qrCodeDataUrl` só chega `null` aqui
+ *  (só a papeleta comum, sem fiscal, ainda usa esta função). Mantido por só não quebrar a
+ *  assinatura pública sem necessidade. */
 const LADO_QR_MM = 28
 
 function montarDocumentoComprovanteVenda(linhas: string[], qrCodeDataUrl?: string | null): jsPDF {
