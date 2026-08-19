@@ -4,7 +4,8 @@ import { ApiError, api } from './api'
 export interface Ncm {
   codigoNcm: string
   descricaoNcm: string
-  alqFederal: number | null
+  alqFederalNacional: number | null
+  alqFederalImportado: number | null
   alqEstadual: number | null
   alqMunicipal: number | null
 }

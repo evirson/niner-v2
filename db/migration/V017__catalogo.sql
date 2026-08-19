@@ -113,14 +113,19 @@ COMMENT ON TABLE cfg_grade IS 'Grades do tenant. id_grade=1 é reservado para a 
 -- cfg_produto_ncm — referência de NCM, GLOBAL (sem id_tenant/RLS, P9): o mesmo código NCM
 -- vale para qualquer tenant, mantida por script (carga/atualização da tabela oficial da
 -- Receita Federal) — sem tela de manutenção/CRUD via API.
+-- alq_federal_nacional/alq_federal_importado separados (2026-08-19, DANFE §3.2 Lei 12.741): o
+-- tributo aproximado usa UM ou OUTRO, nunca os dois juntos — depende da origem do produto
+-- (CST/CSOSN dígito 1, ver produto.origem_mercadoria). Uma coluna só (soma) superestimaria o
+-- tributo de todo item nacional.
 CREATE TABLE cfg_produto_ncm (
-  codigo_ncm    text          PRIMARY KEY,
-  descricao_ncm text          NOT NULL,
-  alq_federal   numeric(10,2),
-  alq_estadual  numeric(10,2),
-  alq_municipal numeric(10,2)
+  codigo_ncm            text          PRIMARY KEY,
+  descricao_ncm         text          NOT NULL,
+  alq_federal_nacional  numeric(10,2),
+  alq_federal_importado numeric(10,2),
+  alq_estadual          numeric(10,2),
+  alq_municipal         numeric(10,2)
 );
-COMMENT ON TABLE cfg_produto_ncm IS 'Referência de NCM (código + descrição + alíquotas IBPT federal/estadual/municipal), GLOBAL — igual para todos os tenants, sem RLS. Mantida por script, sem tela de manutenção.';
+COMMENT ON TABLE cfg_produto_ncm IS 'Referência de NCM (código + descrição + alíquotas IBPT federal nacional/importado + estadual/municipal), GLOBAL — igual para todos os tenants, sem RLS. Mantida por script, sem tela de manutenção.';
 -- niner_app só lê (mantida por script/carga, não pela aplicação) — sem entrar no laço de
 -- RLS/grants de V024 porque não tem id_tenant (guarda-corpo de P8 não se aplica a ela).
 GRANT SELECT ON cfg_produto_ncm TO niner_app;

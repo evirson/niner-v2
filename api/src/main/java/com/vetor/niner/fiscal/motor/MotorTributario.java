@@ -123,11 +123,11 @@ public class MotorTributario {
                 regra.aliquotaCofins(), baseBruta);
         IbsCbs ibsCbs = calcularIbsCbs(item.nItem(), regra, baseBruta, avisos);
 
-        // vTotTrib (Lei 12.741, §8.6) sai da tabela IBPT (NCM × UF × vigência), que ainda não foi
-        // carregada — cfg_ibpt está vazia. Somar os tributos calculados aqui daria um número
-        // DIFERENTE do que a lei pede (o vTotTrib inclui tributo federal embutido no preço), então
-        // fica zero e o aviso sobe, em vez de imprimir um valor errado no cupom.
-        BigDecimal vTotTrib = zero();
+        // vTotTrib (Lei 12.741, §8.6): a alíquota já vem RESOLVIDA pelo chamador (Nacional ×
+        // Importado por origem, NCM × cfg_produto_ncm — 2026-08-19) — o motor só multiplica pela
+        // base, igual a ICMS/PIS/COFINS. Sem alíquota resolvida (produto sem NCM cadastrado, ou
+        // NCM sem correspondência local), fica zero sem aviso: informação indisponível, não erro.
+        BigDecimal vTotTrib = percentual(baseBruta, nz(item.aliquotaTributoAproximado()));
 
         return new ItemTributado(item.nItem(), regra.cfop(), valorProduto, desconto, acrescimo,
                 icms, pis, cofins, ibsCbs, vTotTrib);

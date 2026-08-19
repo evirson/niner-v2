@@ -36,13 +36,21 @@ public final class MotorTributarioDtos {
             List<ItemOperacao> itens) {
     }
 
+    /**
+     * @param aliquotaTributoAproximado percentual TOTAL (federal + estadual + municipal) da Lei
+     *         12.741/2012 já resolvido pelo chamador — Nacional × Importado por origem, NCM ×
+     *         {@code cfg_produto_ncm} — antes de chegar aqui: o motor continua sem I/O, só
+     *         multiplica pela base do item igual a ICMS/PIS/COFINS. {@code null}/zero quando não
+     *         há como resolver (produto sem NCM, ou NCM sem correspondência).
+     */
     public record ItemOperacao(
             int nItem,
             BigDecimal quantidade,
             BigDecimal valorUnitario,
             BigDecimal valorDesconto,
             BigDecimal valorAcrescimo,
-            RegraFiscal regra) {
+            RegraFiscal regra,
+            BigDecimal aliquotaTributoAproximado) {
     }
 
     /**

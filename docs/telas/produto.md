@@ -114,9 +114,10 @@ Modelo novo:
 
 ## Particularidade 3: NCM — referência global, sem tela de manutenção
 
-`cfg_produto_ncm(codigo_ncm PK text, descricao_ncm NOT NULL, alq_federal NUMERIC(10,2),
-alq_estadual NUMERIC(10,2), alq_municipal NUMERIC(10,2))` (alíquotas IBPT desde 2026-08-19, ver
-`docs/PROGRESSO.md`) é a uma das **quatro tabelas do domínio sem `id_tenant`/RLS** (mesma exceção de `plataforma.*`, P9,
+`cfg_produto_ncm(codigo_ncm PK text, descricao_ncm NOT NULL, alq_federal_nacional NUMERIC(10,2),
+alq_federal_importado NUMERIC(10,2), alq_estadual NUMERIC(10,2), alq_municipal NUMERIC(10,2))`
+(alíquotas IBPT desde 2026-08-19, ver `docs/PROGRESSO.md` e `docs/MODULOFISCAL.md` §8.6) é a uma
+das **quatro tabelas do domínio sem `id_tenant`/RLS** (mesma exceção de `plataforma.*`, P9,
 só que fora daquele schema) — o código NCM (Nomenclatura Comum do Mercosul) é igual para
 qualquer tenant. As outras três, pelo mesmo motivo (dado global, não do lojista), são:
 `cfg_ean_gerador` (`db/migration/V017__catalogo.sql:135` — sequencial de código de barras por

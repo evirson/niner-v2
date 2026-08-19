@@ -3,7 +3,7 @@ import QRCode from 'qrcode'
 import type { ComprovanteRecebimento } from './recebimentoCrediario'
 import type { DevolucaoEfetivada } from './devolucaoProduto'
 import type { ComprovanteVenda, DadosFiscaisComprovante } from './pdv'
-import { formatarMoeda } from './masks'
+import { formatarMoeda, mascararCpfCnpj } from './masks'
 
 /**
  * Largura em colunas do comprovante — 42 caracteres é o padrão seguro pra bobina térmica de
@@ -255,6 +255,11 @@ function formatarChaveGrupos4(chave: string): string {
   return chave.replace(/(\d{4})(?=\d)/g, '$1 ')
 }
 
+/** "000.045.123" — número da NFC-e (nNF) em 9 dígitos com pontos a cada 3, convenção do DANFE. */
+function formatarNumeroNfce(numero: number): string {
+  return String(numero).padStart(9, '0').replace(/(\d{3})(?=\d)/g, '$1.')
+}
+
 /**
  * DANFCE (§9.6, bloco B7): com o fiscal ligado e a NFC-e autorizada ou em contingência, o cupom
  * impresso <b>é</b> o DANFCE — chave em grupos de 4, protocolo/autorização (ou aviso de
@@ -283,11 +288,16 @@ function linhasRodapeFiscal(f: DadosFiscaisComprovante): string[] {
   const linhas: string[] = []
   linhas.push(linhaVenda())
   linhas.push(campoVenda('Trib. aprox.:', `${moeda(f.valorTotalTributos)} (Lei 12.741/2012)`))
+  linhas.push(campoVenda('NFC-e......:', `No ${formatarNumeroNfce(f.numero)} - Serie ${String(f.serie).padStart(3, '0')}`))
   linhas.push(linhaVenda())
   linhas.push(centralizarVenda('Consulte pela Chave de Acesso em:'))
   linhas.push(centralizarVenda(f.urlConsultaChave))
   linhas.push(linhaVenda())
   linhas.push(centralizarVenda(formatarChaveGrupos4(f.chaveAcesso)))
+  linhas.push(linhaVenda())
+  linhas.push(centralizarVenda(f.documentoConsumidor
+    ? `CONSUMIDOR - ${mascararCpfCnpj(f.documentoConsumidor, f.documentoConsumidor.length === 11)}`
+    : 'CONSUMIDOR NAO IDENTIFICADO'))
   linhas.push(linhaVenda())
   if (f.protocolo) {
     linhas.push(campoVenda('Protocolo..:', f.protocolo))

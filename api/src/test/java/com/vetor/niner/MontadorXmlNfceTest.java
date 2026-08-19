@@ -124,6 +124,72 @@ class MontadorXmlNfceTest {
         assertThat(montado.xml()).contains("<ICMSSN500><orig>0</orig><CSOSN>500</CSOSN></ICMSSN500>");
     }
 
+    /**
+     * Origem da mercadoria (2026-08-19): antes vinha sempre hardcoded {@code "0"} — hoje vem de
+     * {@code produto.origem_mercadoria} via {@code ItemNota}. Origem 6 (importação direta sem
+     * similar nacional) é um caso real de confecção importada.
+     */
+    @Test
+    void origemDaMercadoriaVaiNoOrigDoGrupoIcmsConformeOProduto() {
+        RegraFiscal regra = regraSimples("102");
+        ItemOperacao operacao = new ItemOperacao(1, um("3"), um("10.00"), um("2.00"), null, regra, null);
+        TributacaoResultado calculo = motor.calcular(
+                new OperacaoFiscal(TipoOperacao.VENDA, "PR", TipoDestinatario.CONSUMIDOR_FINAL, List.of(operacao)),
+                new ContextoFiscalEmpresa(1, "PR"));
+        ItemNota item = new ItemNota(1, "P1", null, "CAMISA IMPORTADA", "61091000", null,
+                "UN", um("3"), um("10.00"), null, null, null, 6);
+
+        XmlMontado montado = montador.montar(new NotaParaMontar(
+                AmbienteSefaz.HOMOLOGACAO, 1, 5, 13230051, EMISSAO, "VENDA AO CONSUMIDOR", 1,
+                emitente(1), null, List.of(item), calculo.itens(), calculo.totais(),
+                List.of(new Pagamento("01", calculo.totais().valorNota(), null, null)), null, null,
+                respTec(), urls(), "Niner 1.0"));
+
+        validarEstrutura(montado);
+        assertThat(montado.xml()).contains("<ICMSSN102><orig>6</orig><CSOSN>102</CSOSN></ICMSSN102>");
+    }
+
+    /**
+     * {@code vTotTrib} (Lei 12.741, §8.6, 2026-08-19): quando a alíquota chega resolvida
+     * (Nacional/Importado × NCM, já feito pelo {@code VendaFiscalAssembler}), o motor calcula um
+     * valor positivo e o montador PASSA a emitir o campo — antes ficava omitido de propósito
+     * porque o valor era sempre zero. Aparece tanto no item ({@code det/imposto}) quanto no total
+     * da nota ({@code ICMSTot}), na posição certa do XSD (primeiro elemento de {@code imposto};
+     * logo após {@code vNF} em {@code ICMSTot}).
+     */
+    @Test
+    void comAliquotaResolvidaVTotTribApareceNoItemENoTotal() {
+        RegraFiscal regra = regraSimples("102");
+        ItemOperacao operacao = new ItemOperacao(1, um("3"), um("10.00"), um("2.00"), null, regra, um("13.45"));
+        TributacaoResultado calculo = motor.calcular(
+                new OperacaoFiscal(TipoOperacao.VENDA, "PR", TipoDestinatario.CONSUMIDOR_FINAL, List.of(operacao)),
+                new ContextoFiscalEmpresa(1, "PR"));
+        ItemNota item = new ItemNota(1, "P1", null, "PRODUTO DE TESTE", "61091000", null,
+                "UN", um("3"), um("10.00"), null, null, null, 0);
+
+        XmlMontado montado = montador.montar(new NotaParaMontar(
+                AmbienteSefaz.HOMOLOGACAO, 1, 5, 13230051, EMISSAO, "VENDA AO CONSUMIDOR", 1,
+                emitente(1), null, List.of(item), calculo.itens(), calculo.totais(),
+                List.of(new Pagamento("01", calculo.totais().valorNota(), null, null)), null, null,
+                respTec(), urls(), "Niner 1.0"));
+
+        validarEstrutura(montado);
+        // 28,00 (base) × 13,45% = 3,77 (HALF_UP) — mesma conta do teste do motor.
+        assertThat(montado.xml())
+                .contains("<imposto><vTotTrib>3.77</vTotTrib><ICMS>")
+                .contains("<vNF>28.00</vNF><vTotTrib>3.77</vTotTrib></ICMSTot>");
+    }
+
+    /** Sem alíquota resolvida (produto sem NCM, ou sem correspondência) o valor fica zero e o
+     *  campo — opcional no XSD — some do XML: emitir 0,00 afirmaria "zero tributos" incorretamente. */
+    @Test
+    void semAliquotaResolvidaVTotTribFicaOmitidoDoXml() {
+        XmlMontado montado = montarVendaSimples(1, "102", null);
+
+        validarEstrutura(montado);
+        assertThat(montado.xml()).doesNotContain("vTotTrib");
+    }
+
     /** CRT 2 (excesso de sublimite) é o único que emite com CST — o ICMS sai destacado. */
     @Test
     void crt2ComCstDestacaIcmsNoGrupoIcms00() {
@@ -353,7 +419,7 @@ class MontadorXmlNfceTest {
         NotaParaMontar base = notaBase(1, regraSimples("102"), null, AmbienteSefaz.PRODUCAO,
                 pagamentoDe("28.00"), null);
         ItemNota comEComercial = new ItemNota(1, "P1", null, "SABAO P&G <PROMO>", "61091000", null,
-                "UN", um("3"), um("10.00"), null, null, null);
+                "UN", um("3"), um("10.00"), null, null, null, 0);
         NotaParaMontar nota = new NotaParaMontar(base.ambiente(), base.serie(), base.numero(),
                 base.codigoNumerico(), base.emissao(), base.naturezaOperacao(), base.tipoEmissao(),
                 base.emitente(), base.destinatario(), List.of(comEComercial), base.itensTributados(),
@@ -510,15 +576,15 @@ class MontadorXmlNfceTest {
 
     private XmlMontado montarComDoisItens(AmbienteSefaz ambiente) {
         RegraFiscal regra = regraSimples("102");
-        ItemOperacao op1 = new ItemOperacao(1, um("3"), um("10.00"), um("2.00"), null, regra);
-        ItemOperacao op2 = new ItemOperacao(2, um("1"), um("5.00"), null, null, regra);
+        ItemOperacao op1 = new ItemOperacao(1, um("3"), um("10.00"), um("2.00"), null, regra, null);
+        ItemOperacao op2 = new ItemOperacao(2, um("1"), um("5.00"), null, null, regra, null);
         TributacaoResultado calculo = motor.calcular(
                 new OperacaoFiscal(TipoOperacao.VENDA, "PR", TipoDestinatario.CONSUMIDOR_FINAL, List.of(op1, op2)),
                 new ContextoFiscalEmpresa(1, "PR"));
 
         List<ItemNota> itens = List.of(
-                new ItemNota(1, "P1", null, "PRIMEIRO PRODUTO", "61091000", null, "UN", um("3"), um("10.00"), null, null, null),
-                new ItemNota(2, "P2", null, "SEGUNDO PRODUTO", "61091000", null, "UN", um("1"), um("5.00"), null, null, null));
+                new ItemNota(1, "P1", null, "PRIMEIRO PRODUTO", "61091000", null, "UN", um("3"), um("10.00"), null, null, null, 0),
+                new ItemNota(2, "P2", null, "SEGUNDO PRODUTO", "61091000", null, "UN", um("1"), um("5.00"), null, null, null, 0));
 
         return montador.montar(new NotaParaMontar(ambiente, 1, 5, 13230051, EMISSAO,
                 "VENDA AO CONSUMIDOR", 1, emitente(1), null, itens, calculo.itens(), calculo.totais(),
@@ -529,13 +595,13 @@ class MontadorXmlNfceTest {
     /** Uma venda de 3 × R$ 10,00 − R$ 2,00 = R$ 28,00 — a mesma base do teste do motor. */
     private NotaParaMontar notaBase(int crt, RegraFiscal regra, Destinatario destinatario,
                                     AmbienteSefaz ambiente, List<Pagamento> pagamentos, BigDecimal troco) {
-        ItemOperacao operacao = new ItemOperacao(1, um("3"), um("10.00"), um("2.00"), null, regra);
+        ItemOperacao operacao = new ItemOperacao(1, um("3"), um("10.00"), um("2.00"), null, regra, null);
         TributacaoResultado calculo = motor.calcular(
                 new OperacaoFiscal(TipoOperacao.VENDA, "PR", TipoDestinatario.CONSUMIDOR_FINAL, List.of(operacao)),
                 new ContextoFiscalEmpresa(crt, "PR"));
 
         ItemNota item = new ItemNota(1, "P1", null, "PRODUTO DE TESTE", "61091000", null,
-                "UN", um("3"), um("10.00"), null, null, null);
+                "UN", um("3"), um("10.00"), null, null, null, 0);
 
         List<Pagamento> pags = pagamentos != null
                 ? pagamentos

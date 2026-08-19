@@ -27,15 +27,16 @@ public class NcmService {
     @Transactional(readOnly = true)
     public NcmResponse buscar(String codigo) {
         return jdbc.sql("""
-                        SELECT codigo_ncm, descricao_ncm, alq_federal, alq_estadual, alq_municipal
+                        SELECT codigo_ncm, descricao_ncm, alq_federal_nacional, alq_federal_importado,
+                               alq_estadual, alq_municipal
                         FROM cfg_produto_ncm
                         WHERE codigo_ncm = ?
                         """)
                 .param(codigo)
                 .query((rs, n) -> new NcmResponse(
                         rs.getString("codigo_ncm"), rs.getString("descricao_ncm"),
-                        rs.getBigDecimal("alq_federal"), rs.getBigDecimal("alq_estadual"),
-                        rs.getBigDecimal("alq_municipal")))
+                        rs.getBigDecimal("alq_federal_nacional"), rs.getBigDecimal("alq_federal_importado"),
+                        rs.getBigDecimal("alq_estadual"), rs.getBigDecimal("alq_municipal")))
                 .optional()
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "NCM não encontrado."));
     }
@@ -51,7 +52,8 @@ public class NcmService {
             return List.of();
         }
         return jdbc.sql("""
-                        SELECT codigo_ncm, descricao_ncm, alq_federal, alq_estadual, alq_municipal
+                        SELECT codigo_ncm, descricao_ncm, alq_federal_nacional, alq_federal_importado,
+                               alq_estadual, alq_municipal
                         FROM cfg_produto_ncm
                         WHERE descricao_ncm ILIKE ?
                         ORDER BY descricao_ncm
@@ -60,8 +62,8 @@ public class NcmService {
                 .param("%" + busca.trim() + "%")
                 .query((rs, n) -> new NcmResponse(
                         rs.getString("codigo_ncm"), rs.getString("descricao_ncm"),
-                        rs.getBigDecimal("alq_federal"), rs.getBigDecimal("alq_estadual"),
-                        rs.getBigDecimal("alq_municipal")))
+                        rs.getBigDecimal("alq_federal_nacional"), rs.getBigDecimal("alq_federal_importado"),
+                        rs.getBigDecimal("alq_estadual"), rs.getBigDecimal("alq_municipal")))
                 .list();
     }
 }

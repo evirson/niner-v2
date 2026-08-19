@@ -353,8 +353,8 @@ class MotorTributarioTest {
     @Test
     void totalizaSomandoOsItensJaArredondados() {
         RegraFiscal regra = comAliquota(regraComCst(), "17.00");
-        ItemOperacao a = new ItemOperacao(1, um("1"), um("0.15"), null, null, regra);
-        ItemOperacao b = new ItemOperacao(2, um("1"), um("0.15"), null, null, regra);
+        ItemOperacao a = new ItemOperacao(1, um("1"), um("0.15"), null, null, regra, null);
+        ItemOperacao b = new ItemOperacao(2, um("1"), um("0.15"), null, null, regra, null);
 
         var totais = motor.calcular(
                 new OperacaoFiscal(TipoOperacao.VENDA, "PR", TipoDestinatario.CONSUMIDOR_FINAL, List.of(a, b)),
@@ -367,7 +367,7 @@ class MotorTributarioTest {
 
     @Test
     void acrescimoEntraNaBaseEDescontoSai() {
-        ItemOperacao item = new ItemOperacao(1, um("2"), um("50.00"), um("10.00"), um("4.00"), regraComCst());
+        ItemOperacao item = new ItemOperacao(1, um("2"), um("50.00"), um("10.00"), um("4.00"), regraComCst(), null);
 
         var resultado = motor.calcular(
                 new OperacaoFiscal(TipoOperacao.VENDA, "PR", TipoDestinatario.CONSUMIDOR_FINAL, List.of(item)),
@@ -388,16 +388,32 @@ class MotorTributarioTest {
     }
 
     /**
-     * {@code vTotTrib} (Lei 12.741) depende da tabela IBPT por NCM × UF, e {@code cfg_ibpt} está
-     * vazia. Enquanto não houver carga, o motor devolve zero <b>e diz isso</b> — somar os tributos
-     * calculados daria um número diferente do que a lei pede, impresso no cupom do consumidor.
+     * {@code vTotTrib} (Lei 12.741) precisa de uma alíquota já resolvida (Nacional × Importado por
+     * origem, NCM × {@code cfg_produto_ncm}) — resolução que é do {@code VendaFiscalAssembler}, não
+     * do motor (§8.6). Sem NCM cadastrado no produto (ou NCM sem correspondência local), o item
+     * chega sem alíquota resolvida (nulo) e o motor não inventa: fica zero, sem aviso.
      */
     @Test
-    void valorTotalDeTributosFicaZeradoEnquantoAIbptNaoForCarregada() {
+    void semAliquotaDeTributoAproximadoResolvidaVTotTribFicaZero() {
         var resultado = motor.calcular(venda(item(regraSimples("102"))), ctx(1));
 
         assertThat(umItem(resultado).valorTotalTributos()).isEqualByComparingTo("0.00");
         assertThat(resultado.totais().valorTotalTributos()).isEqualByComparingTo("0.00");
+    }
+
+    /**
+     * Com a alíquota já resolvida, o motor só multiplica pela base do item — igual a
+     * ICMS/PIS/COFINS. Base do {@link #item(RegraFiscal)} é R$ 28,00 (3 × R$ 10,00 − R$ 2,00);
+     * 28,00 × 13,45% = 3,766 → 3,77 (HALF_UP, mesma escala de tudo no motor).
+     */
+    @Test
+    void calculaVTotTribAplicandoAAliquotaJaResolvidaSobreABaseDoItem() {
+        ItemOperacao item = item(regraSimples("102"), um("13.45"));
+
+        var resultado = motor.calcular(venda(item), ctx(1));
+
+        assertThat(umItem(resultado).valorTotalTributos()).isEqualByComparingTo("3.77");
+        assertThat(resultado.totais().valorTotalTributos()).isEqualByComparingTo("3.77");
     }
 
     // ------------------------------------------------------------------ fixtures
@@ -412,7 +428,11 @@ class MotorTributarioTest {
 
     /** 3 × R$ 10,00 − R$ 2,00 de desconto ⇒ base de R$ 28,00 em todos os cenários. */
     private static ItemOperacao item(RegraFiscal regra) {
-        return new ItemOperacao(1, um("3"), um("10.00"), um("2.00"), null, regra);
+        return item(regra, null);
+    }
+
+    private static ItemOperacao item(RegraFiscal regra, BigDecimal aliquotaTributoAproximado) {
+        return new ItemOperacao(1, um("3"), um("10.00"), um("2.00"), null, regra, aliquotaTributoAproximado);
     }
 
     private static ItemTributado umItem(TributacaoResultado resultado) {

@@ -15,6 +15,7 @@ import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
+import java.math.BigDecimal;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Base64;
@@ -324,6 +325,80 @@ class VendaFiscalEmissaoTest {
         assertThat(gravado.modelo()).isEqualTo(65);
         assertThat(gravado.tipoEmissao()).isEqualTo(1);
         assertThat(chave).hasSize(44).containsOnlyDigits();
+    }
+
+    /**
+     * Lei 12.741/2012 (§8.6, 2026-08-19) ponta a ponta: NCM com alíquota IBPT real cadastrada em
+     * {@code cfg_produto_ncm} + produto com {@code origem_mercadoria} IMPORTADO (1) resolve
+     * {@code vTotTrib} de verdade — não mais hardcoded em zero — e o valor aparece gravado em
+     * {@code documento_fiscal.valor_total_tributos} E no XML assinado (com o {@code orig} certo).
+     */
+    @Test
+    void vendaComAliquotaIbptResolvidaCalculaVTotTribRealEGravaComOOrigemCorreto() throws Exception {
+        String token = assinarNovoTenant("ibpt");
+        long idTenant = idTenantDo(token);
+        long idEmpresa = idEmpresaDo(token);
+        String cnpj = "44555666000124";
+
+        completarDadosDaEmpresa(idTenant, idEmpresa, cnpj);
+        enviarCertificado(token, idEmpresa, cnpj);
+        ligarFiscal(token, idEmpresa);
+        long idPerfil = criarPerfilFiscalCsosn102(idTenant);
+        long idVariacao = criarProdutoComPerfil(token, idTenant, "PRODUTO COM IBPT", idPerfil, "100.00");
+
+        // criarProdutoComPerfil cria o NCM 61091000 sem alíquota (ON CONFLICT DO NOTHING) —
+        // completa aqui com uma alíquota IBPT real de fixture, e marca o produto como IMPORTADO
+        // (origem 1) para exercitar a escolha Nacional × Importado da fórmula.
+        jdbc.sql("""
+                        UPDATE cfg_produto_ncm
+                           SET alq_federal_nacional = 8.00, alq_federal_importado = 20.00,
+                               alq_estadual = 18.00, alq_municipal = 0.00
+                         WHERE codigo_ncm = '61091000'
+                        """)
+                .update();
+        jdbc.sql("UPDATE produto SET origem_mercadoria = 1 WHERE id_tenant = ? AND descricao = ?")
+                .params(idTenant, "PRODUTO COM IBPT").update();
+
+        long idCliente = criarClienteAnonimo(token, "Cliente Ibpt");
+        long idFuncionario = criarFuncionario(token, "Vendedor Ibpt");
+        long idCarteira = carteiraDinheiroComTpag(token, idTenant);
+        abrirCaixa(token, idCarteira);
+        long idVenda = efetivarVenda(token, idVariacao, idCliente, idFuncionario, idCarteira, "100.00");
+
+        Mockito.when(transporte.enviar(any(), any(), any(), any(), any(), any()))
+                .thenAnswer(inv -> autorizada(extrairChaveDoEnvi(inv.getArgument(2))));
+
+        mvc.perform(post("/api/v1/pdv/vendas/" + idVenda + "/nfce")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(APPLICATION_JSON).content("{\"incluirCpf\":false}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.situacao").value("AUTORIZADO"));
+
+        // Importado (orig 1): federal 20,00 + estadual 18,00 + municipal 0,00 = 38,00% sobre a
+        // base de 100,00 = 38,00.
+        var gravado = jdbc.sql("""
+                        SELECT valor_total_tributos, xml_assinado FROM documento_fiscal
+                         WHERE id_tenant = ? AND id_venda = ?
+                        """)
+                .params(idTenant, idVenda)
+                .query((rs, n) -> Map.of("valor", rs.getBigDecimal("valor_total_tributos"),
+                        "xml", rs.getString("xml_assinado")))
+                .single();
+
+        assertThat((BigDecimal) gravado.get("valor")).isEqualByComparingTo("38.00");
+        assertThat((String) gravado.get("xml"))
+                .contains("<vTotTrib>38.00</vTotTrib>")
+                .contains("<orig>1</orig>");
+
+        // A papeleta (DANFE, §3-4 do estudo) precisa do mesmo dado pronto pra impressão: número
+        // oficial da NFC-e (não o id interno da venda), série, e "consumidor não identificado"
+        // porque esta venda emitiu com incluirCpf=false.
+        mvc.perform(get("/api/v1/pdv/vendas/" + idVenda + "/comprovante").header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.dadosFiscais.numero").value(1))
+                .andExpect(jsonPath("$.dadosFiscais.serie").value(1))
+                .andExpect(jsonPath("$.dadosFiscais.documentoConsumidor").doesNotExist())
+                .andExpect(jsonPath("$.dadosFiscais.valorTotalTributos").value(38.00));
     }
 
     /** F12: sem fiscal ligado, o endpoint não devolve corpo e nada é gravado — como se o módulo

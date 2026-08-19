@@ -65,8 +65,13 @@ Registro cronológico das decisões e entregas. Atualizar a cada marco relevante
 > `@Scheduled` de fiscal (drenagem de contingência, arquivamento) nunca encontravam nenhum tenant
 > — RLS sem `TenantContext` devolve vazio em silêncio, não um erro (corrigido: loop por tenant via
 > `plataforma.tenant`, global) — e `cfg_produto_ncm` ganhou alíquota IBPT real
-> (`alq_federal`/`alq_estadual`/`alq_municipal`, populada via planilha, 10.515/10.515 NCMs).
-> **765/765 testes de backend verdes.** Ver linha do tempo de hoje.
+> (`alq_federal_nacional`/`alq_federal_importado`/`alq_estadual`/`alq_municipal`, populada via
+> planilha, 10.515/10.515 NCMs). Fechando o dia: **`vTotTrib` (Lei 12.741) deixou de ser
+> hardcoded em zero** — calcula de verdade a partir do NCM/origem do produto e passa a ser
+> **emitido no XML** (antes ficava sempre omitido); a papeleta ganhou número/série oficial da
+> NFC-e e a linha "CONSUMIDOR - CPF/CNPJ" (ou "NÃO IDENTIFICADO"), fechando a especificação de
+> DANFE recebida do dono do produto. **770/770 testes de backend verdes.** Ver linha do tempo de
+> hoje.
 >
 > Os parágrafos abaixo são a **narrativa acumulada** desde o começo — leia o resumo acima para o
 > estado, e a linha do tempo (do mais novo para o mais antigo) para o detalhe de cada entrega.
@@ -468,6 +473,59 @@ Movimentação de Conta Corrente) que ainda não tinham migrado pro `SeletorPlan
 ---
 
 ## Linha do tempo
+
+### 2026-08-19 — DANFE da NFC-e: `vTotTrib` (Lei 12.741) real, emitido no XML, e layout completo na papeleta
+
+Pedido do dono do produto, com especificação técnica em mãos (layout MOC + fórmula IBPT) —
+mesclada em `docs/MODULOFISCAL.md` §8.6/§8.6.1 e o arquivo solto apagado. O DANFCE **já existia**
+desde o B7 (17/08) — chave em blocos, protocolo, QR Code, tarja de homologação — o que faltava era
+o cálculo real do tributo aproximado (entrada anterior de hoje deu a matéria-prima: `alq_federal_
+nacional`/`alq_federal_importado`/`alq_estadual`/`alq_municipal` em `cfg_produto_ncm`).
+
+1. **`vTotTrib` deixou de ser hardcoded em zero** (`MotorTributario.calcularItem`). A alíquota
+   total (Nacional × Importado por `produto.origem_mercadoria`, mais estadual/municipal) é
+   resolvida **antes** do motor, em `VendaFiscalAssembler.buscarItens` (`LEFT JOIN
+   cfg_produto_ncm` pelo mesmo NCM que já buscava pro XML) — o motor continua **sem I/O**, só
+   multiplica pela base do item, igual ICMS/PIS/COFINS. Sem NCM cadastrado (ou sem
+   correspondência), fica zero sem aviso — informação indisponível, não erro (F11).
+2. **`orig` deixou de ser hardcoded `"0"`** em `MontadorXmlNfce.montarIcms` (6 grupos de ICMS) —
+   passa a vir de `produto.origem_mercadoria` via `ItemNota`. Sem tela pra editar essa coluna
+   ainda (item aberto, não bloqueante: nenhum cliente piloto vende importado hoje).
+3. **`vTotTrib` passou a ser EMITIDO no XML** — antes ficava sempre omitido de propósito (o valor
+   era sempre zero, e um `0,00` afirmaria falsamente "sem tributo"). Aparece no `det/imposto` de
+   cada item (primeiro elemento, antes de `ICMS` — ordem do XSD) e no total (`ICMSTot/vTotTrib`,
+   após `vNF`), só quando positivo.
+4. **Papeleta ganhou os 2 itens que faltavam da especificação**: número/série oficial da NFC-e
+   (`documento_fiscal.numero`/`serie`, antes só aparecia o nº interno da venda) e a linha
+   "CONSUMIDOR - CPF/CNPJ: ..." ou "CONSUMIDOR NÃO IDENTIFICADO" — extraída do `<dest>` do XML
+   assinado, nunca do cadastro do cliente (podem divergir se o operador respondeu "não" à
+   pergunta de incluir CPF).
+5. **⚠️ Bug real achado pelo próprio teste novo**: a extração do CNPJ do consumidor
+   (`PdvVendaService.buscarDadosFiscais`) usava `extrairTag(xml, "CNPJ")` no XML inteiro — mas o
+   `<emit>` (a empresa) também tem `<CNPJ>`, e aparece ANTES de qualquer `<dest>` eventual. Uma
+   venda sem CPF incluído devolvia o CNPJ da **própria empresa** como "consumidor". Corrigido
+   restringindo a busca ao bloco `<dest>` primeiro (`extrairTag(xml, "dest")`), só então
+   procurando CPF/CNPJ dentro dele.
+6. **`cfg_produto_ncm.alq_federal` dividida em `alq_federal_nacional`/`alq_federal_importado`**
+   (mesma sessão, antes do cálculo) — a fórmula da Lei 12.741 usa uma OU outra, nunca a soma;
+   reimportada da mesma planilha (`TabelaIBPTaxSP26.1.L.csv`), 10.515/10.515 NCMs batidos de
+   novo, sem perda de dado (aplicado por `ALTER TABLE` direto no banco de dev, sem reset completo
+   — mesmo procedimento da entrada anterior).
+
+Testado: `MotorTributarioTest` (cálculo puro, 2 casos: com e sem alíquota resolvida),
+`MontadorXmlNfceTest` (3 casos novos: `orig` variável, `vTotTrib` no item+total, omissão quando
+zero) e `VendaFiscalEmissaoTest` (ponta a ponta real: produto com NCM real + origem Importado,
+venda autorizada contra SEFAZ mockada, `documento_fiscal.valor_total_tributos` e o XML assinado
+batendo com a fórmula, e a papeleta devolvendo número/série/consumidor corretos via
+`GET .../comprovante`). **770/770 testes de backend verdes.** `tsc -b` limpo. API reconstruída e
+confirmado ao vivo (`GET /api/v1/ncm/{codigo}` com os 4 campos separados). Ver
+`docs/MODULOFISCAL.md` §8.6/§8.6.1 para o detalhe técnico completo (fórmula, tabela de
+correspondência item-a-item com a especificação recebida).
+
+**O que ficou de fora, de propósito**: coluna opcional de tributo por item `(VL TR)` na tabela de
+itens (a especificação marca como opcional/recomendada, só o total é obrigatório) e tela de
+cadastro pra `produto.origem_mercadoria` (a coluna já existe desde sempre, só nunca teve UI —
+hoje todo produto do sistema é Nacional por não ter como marcar diferente).
 
 ### 2026-08-19 — `cfg_produto_ncm` ganha alíquota IBPT federal/estadual/municipal (dado real da Receita/IBPT)
 

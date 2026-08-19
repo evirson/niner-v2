@@ -243,7 +243,7 @@ public class MontadorXmlNfce {
             }
             xml.append("<det nItem=\"").append(item.nItem()).append("\">");
             montarProd(xml, item, trib, nota);
-            montarImposto(xml, trib);
+            montarImposto(xml, trib, item.origemMercadoria());
             xml.append("</det>");
         }
     }
@@ -281,12 +281,16 @@ public class MontadorXmlNfce {
     }
 
     /** Ordem do XSD dentro de {@code imposto}: vTotTrib → ICMS → … → PIS → COFINS → IBSCBS. */
-    private void montarImposto(StringBuilder xml, ItemTributado trib) {
+    private void montarImposto(StringBuilder xml, ItemTributado trib, int origemMercadoria) {
         xml.append("<imposto>");
-        // vTotTrib (Lei 12.741) é OMITIDO enquanto cfg_ibpt não estiver carregada: o campo é
-        // opcional no XSD, e emitir 0,00 afirmaria "zero tributos" no cupom do consumidor — uma
-        // informação errada é pior que a ausência dela (§8.6).
-        montarIcms(xml, trib.icms());
+        // vTotTrib (Lei 12.741, §8.6) — resolvido pelo motor a partir da alíquota já casada por
+        // NCM/origem (VendaFiscalAssembler, 2026-08-19). minOccurs="0" no XSD: sem alíquota
+        // resolvida (produto sem NCM cadastrado) o valor fica zero e o campo é OMITIDO — emitir
+        // 0,00 afirmaria "zero tributos" no cupom do consumidor, uma informação errada.
+        if (positivo(trib.valorTotalTributos())) {
+            xml.append(tag("vTotTrib", dec(trib.valorTotalTributos(), 2)));
+        }
+        montarIcms(xml, trib.icms(), origemMercadoria);
         montarContribuicao(xml, "PIS", trib.pis());
         montarContribuicao(xml, "COFINS", trib.cofins());
         montarIbsCbs(xml, trib.ibsCbs());
@@ -295,23 +299,24 @@ public class MontadorXmlNfce {
 
     /**
      * O grupo de ICMS é escolhido pelo CSOSN/CST — cada um com seu conjunto fechado de campos.
-     * Origem da mercadoria vem sempre 0 (nacional): o motor não a carrega, e o cadastro de
-     * produto tem {@code origem_mercadoria NOT NULL DEFAULT 0}. ⚠️ Quando o item da nota passar
-     * a trazer a origem real do produto, é aqui que ela entra.
+     * {@code origemMercadoria} vem de {@code produto.origem_mercadoria} (0-8, TOrig do XSD, NOT
+     * NULL DEFAULT 0) via {@code ItemNota} — 2026-08-19: antes vinha sempre hardcoded "0", porque
+     * o motor não a carregava e não havia consumidor nenhum para o dado.
      */
-    private void montarIcms(StringBuilder xml, Icms icms) {
+    private void montarIcms(StringBuilder xml, Icms icms, int origemMercadoria) {
         xml.append("<ICMS>");
+        String orig = String.valueOf(origemMercadoria);
         String csosn = icms.csosn();
         String cst = icms.cst();
 
         if (csosn != null) {
             if (CSOSN_GRUPO_102.contains(csosn)) {
-                xml.append("<ICMSSN102>").append(tag("orig", "0")).append(tag("CSOSN", csosn)).append("</ICMSSN102>");
+                xml.append("<ICMSSN102>").append(tag("orig", orig)).append(tag("CSOSN", csosn)).append("</ICMSSN102>");
             } else if ("500".equals(csosn)) {
                 // O bloco de ST retido (vBCSTRet/pST/vICMSSTRet) é <xs:sequence minOccurs="0">
                 // no XSD — e o motor não calcula esses valores (são do ST retido lá atrás, na
                 // compra, não desta venda). Sai só orig+CSOSN, que o schema aceita.
-                xml.append("<ICMSSN500>").append(tag("orig", "0")).append(tag("CSOSN", csosn)).append("</ICMSSN500>");
+                xml.append("<ICMSSN500>").append(tag("orig", orig)).append(tag("CSOSN", csosn)).append("</ICMSSN500>");
             } else if ("202".equals(csosn) || "203".equals(csosn)) {
                 throw new MontagemInvalidaException(
                         ("CSOSN %s exige o grupo completo de ST (modBCST, vBCST, pICMSST, vICMSST), que o motor "
@@ -325,19 +330,19 @@ public class MontadorXmlNfce {
         } else if (cst != null) {
             if ("00".equals(cst)) {
                 xml.append("<ICMS00>")
-                        .append(tag("orig", "0")).append(tag("CST", cst))
+                        .append(tag("orig", orig)).append(tag("CST", cst))
                         .append(tag("modBC", "3"))              // 3 = valor da operação
                         .append(tag("vBC", dec(icms.baseCalculo(), 2)))
                         .append(tag("pICMS", dec(icms.aliquota(), 2)))
                         .append(tag("vICMS", dec(icms.valor(), 2)))
                         .append("</ICMS00>");
             } else if (CST_GRUPO_40.contains(cst)) {
-                xml.append("<ICMS40>").append(tag("orig", "0")).append(tag("CST", cst)).append("</ICMS40>");
+                xml.append("<ICMS40>").append(tag("orig", orig)).append(tag("CST", cst)).append("</ICMS40>");
             } else if ("60".equals(cst)) {
-                xml.append("<ICMS60>").append(tag("orig", "0")).append(tag("CST", cst)).append("</ICMS60>");
+                xml.append("<ICMS60>").append(tag("orig", orig)).append(tag("CST", cst)).append("</ICMS60>");
             } else if ("20".equals(cst)) {
                 xml.append("<ICMS20>")
-                        .append(tag("orig", "0")).append(tag("CST", cst))
+                        .append(tag("orig", orig)).append(tag("CST", cst))
                         .append(tag("modBC", "3"))
                         .append(tag("pRedBC", dec(icms.percReducaoBc(), 2)))
                         .append(tag("vBC", dec(icms.baseCalculo(), 2)))
@@ -451,8 +456,11 @@ public class MontadorXmlNfce {
                 .append(tag("vPIS", dec(t.valorPis(), 2)))
                 .append(tag("vCOFINS", dec(t.valorCofins(), 2)))
                 .append(tag("vOutro", dec(t.valorAcrescimo(), 2)))
-                .append(tag("vNF", dec(t.valorNota(), 2)))
-                .append("</ICMSTot></total>");
+                .append(tag("vNF", dec(t.valorNota(), 2)));
+        if (positivo(t.valorTotalTributos())) {
+            xml.append(tag("vTotTrib", dec(t.valorTotalTributos(), 2)));
+        }
+        xml.append("</ICMSTot></total>");
     }
 
     // ---------------------------------------------------------------- pag / infAdic / respTec

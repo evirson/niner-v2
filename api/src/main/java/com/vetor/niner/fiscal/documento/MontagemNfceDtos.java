@@ -96,7 +96,10 @@ public final class MontagemNfceDtos {
             BigDecimal valorUnitario,
             String unidadeTributavel,
             BigDecimal quantidadeTributavel,
-            BigDecimal valorUnitarioTributavel) {
+            BigDecimal valorUnitarioTributavel,
+            /** {@code produto.origem_mercadoria} (0-8, TOrig do XSD) — vai no {@code orig} do grupo
+             *  de ICMS. Default 0 (Nacional): não há tela hoje pra marcar Importado. */
+            int origemMercadoria) {
     }
 
     /** Uma forma de pagamento do grupo {@code pag}. {@code tPag}: 01 dinheiro · 03 crédito ·

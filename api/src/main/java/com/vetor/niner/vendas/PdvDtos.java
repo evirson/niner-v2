@@ -183,6 +183,11 @@ public final class PdvDtos {
     public record DadosFiscaisComprovante(
             String chaveAcesso, String protocolo, OffsetDateTime dataAutorizacao,
             boolean homologacao, boolean contingencia, String qrCodeUrl, String urlConsultaChave,
-            BigDecimal valorTotalTributos) {
+            BigDecimal valorTotalTributos, int numero, int serie,
+            /** CPF/CNPJ (só dígitos) que de fato foi para o {@code <dest>} do XML — extraído do
+             *  XML assinado, nunca do cadastro do cliente (podem divergir: o operador respondeu
+             *  "não" à pergunta de incluir CPF). {@code null} quando a NFC-e saiu para consumidor
+             *  não identificado — DANFE §4.3 pede "CONSUMIDOR NÃO IDENTIFICADO" nesse caso. */
+            String documentoConsumidor) {
     }
 }

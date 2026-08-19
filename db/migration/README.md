@@ -229,10 +229,13 @@ Em desenvolvimento, recriar do zero (`flyway clean` + `migrate`) é aceitável.
     de NF-e 55 do PR nascem **NULOS de propósito** — não foram confirmados em fonte oficial, e a
     emissão deve falhar explicitamente em vez de chutar domínio.
   - **`cfg_produto_ncm.aliquota_ibpt` foi removida em 2026-08-19** (migration dona:
-    `V017__catalogo.sql`), substituída por `alq_federal`/`alq_estadual`/`alq_municipal`
-    (`numeric(10,2)` cada), populadas por planilha (uma média nacional/SP por NCM, sem distinção
-    por UF/vigência — `cfg_ibpt` continua sendo a tabela correta pra isso, mas segue vazia/sem
-    consumidor; decisão explícita do dono do produto, ver `docs/PROGRESSO.md`).
+    `V017__catalogo.sql`), substituída por `alq_federal_nacional`/`alq_federal_importado`/
+    `alq_estadual`/`alq_municipal` (`numeric(10,2)` cada — as duas federais separadas porque a
+    fórmula da Lei 12.741 usa uma OU outra, nunca a soma, conforme a origem do produto), populadas
+    por planilha (uma média nacional/SP por NCM, sem distinção por UF/vigência — `cfg_ibpt`
+    continua sendo a tabela correta pra isso, mas segue vazia/sem consumidor; decisão explícita do
+    dono do produto). O cálculo real do tributo aproximado (`vTotTrib`) usa essas colunas desde o
+    mesmo dia — ver `docs/MODULOFISCAL.md` §8.6.
   - **V035 — tabelas de tenant**, todas com RLS FORCE + policy + guarda-corpo (padrão de
     V024/V025): `fiscal_config_empresa` (por **empresa**, não por tenant), `fiscal_certificado`
     (+ `fiscal_certificado_uso`), `cfg_perfil_fiscal` (+ `_regra`), `fiscal_numeracao`,

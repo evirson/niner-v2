@@ -183,6 +183,10 @@ export interface DadosFiscaisComprovante {
   qrCodeUrl: string
   urlConsultaChave: string
   valorTotalTributos: number
+  numero: number
+  serie: number
+  /** CPF/CNPJ (só dígitos) que foi para o `<dest>` do XML — `null` = consumidor não identificado. */
+  documentoConsumidor: string | null
 }
 
 /** Papeleta de venda pra impressão térmica 80mm, buscada logo após o F5 efetivar a venda.

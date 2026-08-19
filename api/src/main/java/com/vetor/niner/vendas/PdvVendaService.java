@@ -346,7 +346,7 @@ public class PdvVendaService {
     private DadosFiscaisComprovante buscarDadosFiscais(long idVenda) {
         return jdbc.sql("""
                         SELECT chave_acesso, protocolo, data_autorizacao, ambiente::text AS ambiente,
-                               tipo_emissao, valor_total_tributos, xml_assinado
+                               tipo_emissao, valor_total_tributos, xml_assinado, numero, serie
                           FROM documento_fiscal
                          WHERE id_tenant = plataforma.tenant_atual() AND id_venda = ?
                            AND situacao IN ('AUTORIZADO', 'CONTINGENCIA')
@@ -354,13 +354,23 @@ public class PdvVendaService {
                          LIMIT 1
                         """)
                 .param(idVenda)
-                .query((rs, n) -> new DadosFiscaisComprovante(
-                        rs.getString("chave_acesso"), rs.getString("protocolo"),
-                        rs.getObject("data_autorizacao", OffsetDateTime.class),
-                        "HOMOLOGACAO".equals(rs.getString("ambiente")), rs.getInt("tipo_emissao") == 9,
-                        extrairTagCdata(rs.getString("xml_assinado"), "qrCode"),
-                        extrairTag(rs.getString("xml_assinado"), "urlChave"),
-                        rs.getBigDecimal("valor_total_tributos")))
+                .query((rs, n) -> {
+                    String xml = rs.getString("xml_assinado");
+                    // ⚠️ CPF/CNPJ do CONSUMIDOR — nunca extrairTag(xml, "CNPJ") direto: o <emit>
+                    // (a empresa) também tem CNPJ, e apareceria ANTES de um <dest> eventual, dando
+                    // o CNPJ errado quando incluirCpf=false (achado testando ao vivo, 2026-08-19).
+                    // O grupo <dest> inteiro está ausente quando a nota não identifica o consumidor.
+                    String dest = extrairTag(xml, "dest");
+                    String cpf = extrairTag(dest, "CPF");
+                    String documentoConsumidor = cpf != null ? cpf : extrairTag(dest, "CNPJ");
+                    return new DadosFiscaisComprovante(
+                            rs.getString("chave_acesso"), rs.getString("protocolo"),
+                            rs.getObject("data_autorizacao", OffsetDateTime.class),
+                            "HOMOLOGACAO".equals(rs.getString("ambiente")), rs.getInt("tipo_emissao") == 9,
+                            extrairTagCdata(xml, "qrCode"), extrairTag(xml, "urlChave"),
+                            rs.getBigDecimal("valor_total_tributos"), rs.getInt("numero"), rs.getInt("serie"),
+                            documentoConsumidor);
+                })
                 .optional()
                 .orElse(null);
     }

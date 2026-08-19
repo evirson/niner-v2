@@ -27,6 +27,7 @@ import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * Monta o {@link PedidoDeEmissao} a partir de uma venda já gravada pelo PDV (§9.6, bloco B7).
@@ -94,9 +95,10 @@ public class VendaFiscalAssembler {
             int nItem = i + 1;
             RegraFiscal regra = buscarRegra(b, config.crt(), ufDestino);
             itensOperacao.add(new ItemOperacao(nItem, b.qtd(), b.precoVenda(), b.valorDesconto(),
-                    b.valorAcrescimo(), regra));
+                    b.valorAcrescimo(), regra, aliquotaTributoAproximado(b)));
             itensNota.add(new ItemNota(nItem, b.sku(), b.gtin(), b.descricao(), b.ncm(), b.cest(),
-                    b.unidadeComercial(), b.qtd(), b.precoVenda(), b.unidadeTributavel(), null, null));
+                    b.unidadeComercial(), b.qtd(), b.precoVenda(), b.unidadeTributavel(), null, null,
+                    b.origemMercadoria()));
         }
 
         TributacaoResultado calculo = motor.calcular(
@@ -225,8 +227,9 @@ public class VendaFiscalAssembler {
     private List<ItemBruto> buscarItens(long idVenda) {
         return jdbc.sql("""
                         SELECT pmd.qtd_produto, pmd.preco_venda, pmd.valor_desconto, pmd.valor_acrescimo,
-                               pb.sku, pb.ean, p.descricao, p.codigo_ncm, p.cest,
-                               p.unidade_comercial, p.unidade_tributavel, p.id_perfil_fiscal
+                               pb.sku, pb.ean, p.descricao, p.codigo_ncm, p.cest, p.origem_mercadoria,
+                               p.unidade_comercial, p.unidade_tributavel, p.id_perfil_fiscal,
+                               n.alq_federal_nacional, n.alq_federal_importado, n.alq_estadual, n.alq_municipal
                           FROM produto_movimento_detalhe pmd
                           JOIN produto_movimento_mestre pmm
                             ON pmm.id_tenant = pmd.id_tenant AND pmm.id_movimento = pmd.id_movimento
@@ -234,6 +237,8 @@ public class VendaFiscalAssembler {
                             ON pb.id_tenant = pmd.id_tenant AND pb.id_variacao = pmd.id_variacao
                           JOIN produto p
                             ON p.id_tenant = pb.id_tenant AND p.id_produto = pb.id_produto
+                          LEFT JOIN cfg_produto_ncm n
+                            ON n.codigo_ncm = p.codigo_ncm
                          WHERE pmd.id_tenant = plataforma.tenant_atual()
                            AND pmm.id_venda = ? AND pmm.tipo_movimento = 'VENDA'
                          ORDER BY pmd.id_movimento_detalhe
@@ -249,10 +254,33 @@ public class VendaFiscalAssembler {
                     return new ItemBruto(rs.getBigDecimal("qtd_produto"), rs.getBigDecimal("preco_venda"),
                             rs.getBigDecimal("valor_desconto"), rs.getBigDecimal("valor_acrescimo"),
                             rs.getString("sku"), rs.getString("ean"), rs.getString("descricao"),
-                            rs.getString("codigo_ncm"), rs.getString("cest"),
-                            rs.getString("unidade_comercial"), rs.getString("unidade_tributavel"), idPerfil);
+                            rs.getString("codigo_ncm"), rs.getString("cest"), rs.getInt("origem_mercadoria"),
+                            rs.getString("unidade_comercial"), rs.getString("unidade_tributavel"), idPerfil,
+                            rs.getBigDecimal("alq_federal_nacional"), rs.getBigDecimal("alq_federal_importado"),
+                            rs.getBigDecimal("alq_estadual"), rs.getBigDecimal("alq_municipal"));
                 })
                 .list();
+    }
+
+    /**
+     * Tributo aproximado (Lei 12.741/2012, §8.6 do estudo) — devolve a alíquota TOTAL (federal +
+     * estadual + municipal) já somada, pronta para o motor multiplicar pela base do item, igual a
+     * ICMS/PIS/COFINS. A federal escolhe Nacional × Importado pelo primeiro dígito da origem da
+     * mercadoria (CST/CSOSN): {@link #ORIGENS_IMPORTADO} = 1/2/6/7; os demais (0/3/4/5/8) são
+     * Nacional. Sem NCM cadastrado no produto, ou NCM sem correspondência em {@code
+     * cfg_produto_ncm} (a base local não é 100% completa), devolve zero — informação
+     * simplesmente indisponível, não um erro (mesmo espírito do F11: nunca chutar um valor).
+     */
+    private static BigDecimal aliquotaTributoAproximado(ItemBruto b) {
+        BigDecimal federal = ORIGENS_IMPORTADO.contains(b.origemMercadoria())
+                ? b.alqFederalImportado() : b.alqFederalNacional();
+        return nz(federal).add(nz(b.alqEstadual())).add(nz(b.alqMunicipal()));
+    }
+
+    private static final Set<Integer> ORIGENS_IMPORTADO = Set.of(1, 2, 6, 7);
+
+    private static BigDecimal nz(BigDecimal v) {
+        return v == null ? BigDecimal.ZERO : v;
     }
 
     /**
@@ -345,7 +373,8 @@ public class VendaFiscalAssembler {
 
     private record ItemBruto(BigDecimal qtd, BigDecimal precoVenda, BigDecimal valorDesconto,
                              BigDecimal valorAcrescimo, String sku, String gtin, String descricao,
-                             String ncm, String cest, String unidadeComercial,
-                             String unidadeTributavel, int idPerfilFiscal) {
+                             String ncm, String cest, int origemMercadoria, String unidadeComercial,
+                             String unidadeTributavel, int idPerfilFiscal, BigDecimal alqFederalNacional,
+                             BigDecimal alqFederalImportado, BigDecimal alqEstadual, BigDecimal alqMunicipal) {
     }
 }

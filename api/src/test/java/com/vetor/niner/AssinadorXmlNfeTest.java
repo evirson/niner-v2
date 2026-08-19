@@ -264,13 +264,13 @@ class AssinadorXmlNfeTest {
         RegraFiscal regra = new RegraFiscal("5102", null, "102", null, null, null,
                 "99", null, "99", null, null, null, null, null, null);
         ItemOperacao operacao = new ItemOperacao(1, new BigDecimal("3"), new BigDecimal("10.00"),
-                new BigDecimal("2.00"), null, regra);
+                new BigDecimal("2.00"), null, regra, null);
         TributacaoResultado calculo = motor.calcular(
                 new OperacaoFiscal(TipoOperacao.VENDA, "PR", TipoDestinatario.CONSUMIDOR_FINAL, List.of(operacao)),
                 new ContextoFiscalEmpresa(1, "PR"));
 
         ItemNota item = new ItemNota(1, "P1", null, "PRODUTO DE TESTE", "61091000", null,
-                "UN", new BigDecimal("3"), new BigDecimal("10.00"), null, null, null);
+                "UN", new BigDecimal("3"), new BigDecimal("10.00"), null, null, null, 0);
 
         return montador.montar(new NotaParaMontar(
                 AmbienteSefaz.HOMOLOGACAO, 1, 5, 13230051, EMISSAO, "VENDA AO CONSUMIDOR", 1,

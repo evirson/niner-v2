@@ -848,6 +848,109 @@ multi-tenant (uma licença da Vetor cobrindo todos os tenants, ou cada lojista c
 > ausência de informação, e a Lei 12.741 não é atendida por um zero falso de qualquer forma.
 > Mesma decisão que o motor tomou no B4, agora coerente ponta a ponta.
 
+> **✅ Implementado em 2026-08-19 (real, não mais hardcoded em zero).** A DF16 (licenciamento da
+> `cfg_ibpt`, por NCM × UF × vigência) segue em aberto — quem foi carregada é `cfg_produto_ncm`
+> (referência de NCM, §3.3 do modelo de dados), com uma **média nacional** (não por UF/vigência),
+> a partir de uma planilha real do IBPT fornecida pelo dono do produto: `alq_federal_nacional`,
+> `alq_federal_importado`, `alq_estadual`, `alq_municipal` (todas `numeric(10,2)`). Decisão
+> explícita, perguntada antes de agir: usar a tabela mais simples (`cfg_produto_ncm`, sem
+> distinção por UF) em vez de popular `cfg_ibpt` — que segue vazia, sem consumidor, pronta para
+> quando a DF16 for resolvida.
+>
+> **Fórmula por item** (escolhe Nacional × Importado pelo primeiro dígito de
+> `produto.origem_mercadoria`, TOrig do XSD):
+> - **Nacional** (origem 0, 3, 4, 5, 8): `Valor Item × (alq_federal_nacional + alq_estadual + alq_municipal) / 100`
+> - **Importado** (origem 1, 2, 6, 7): `Valor Item × (alq_federal_importado + alq_estadual + alq_municipal) / 100`
+>
+> **Onde a I/O acontece — o motor continua puro.** `VendaFiscalAssembler.buscarItens` faz o
+> `LEFT JOIN` com `cfg_produto_ncm` (pelo mesmo `codigo_ncm` que já buscava para o XML) e resolve
+> a alíquota TOTAL (uma soma só) **antes** de montar o `ItemOperacao` — o motor só multiplica essa
+> alíquota pela base do item (`percentual(baseBruta, aliquota)`), exatamente como já fazia para
+> ICMS/PIS/COFINS. Sem NCM cadastrado no produto, ou NCM sem correspondência local, a alíquota
+> chega zero e o item fica sem `vTotTrib` — informação indisponível, não um erro (mesmo espírito
+> do F11).
+>
+> **`orig` deixou de ser hardcoded "0".** Antes disso `MontadorXmlNfce.montarIcms` sempre escrevia
+> `<orig>0</orig>` (nacional) porque não havia consumidor nenhum pra origem real — hoje vem de
+> `produto.origem_mercadoria` via `ItemNota`. **Não existe tela de cadastro pra editar essa
+> coluna ainda** (fica como está desde o cadastro de produto, default 0/Nacional) — item aberto,
+> não bloqueante: nenhum cliente piloto vende mercadoria importada até este momento.
+>
+> **Emitido no XML** (antes ficava sempre omitido, já que era sempre zero): `<vTotTrib>` no
+> `det/imposto` de cada item (primeiro elemento do grupo, antes de `ICMS` — ordem do XSD) e o
+> total somado em `ICMSTot/vTotTrib` (logo após `vNF`), só quando positivo — continua omitido
+> quando zero, pela mesma razão de sempre (§8.6).
+>
+> Testado: `MotorTributarioTest` (cálculo puro), `MontadorXmlNfceTest` (posição no XSD, `orig`
+> variável, omissão quando zero) e `VendaFiscalEmissaoTest` (ponta a ponta real — produto com NCM
+> real + origem Importado, venda autorizada, `documento_fiscal.valor_total_tributos` e o XML
+> assinado batendo com a fórmula). **770/770 testes de backend verdes.**
+
+### 8.6.1 Layout impresso do DANFE (bobina térmica) — especificação recebida em 2026-08-19
+
+Especificação técnica trazida pelo dono do produto (layout oficial MOC + Lei da Transparência),
+conferida contra o que já estava implementado desde o B7 (`docs/telas/papeleta-venda.md`, calibragem
+42 colunas / 75mm / Consolas negrito).
+
+**Características físicas** (impressora térmica de cupom): largura mínima 56mm (ideal 80mm),
+margem mínima 2mm, fonte com altura mínima ~2mm (7–8pt), papel térmico legível por no mínimo 6
+meses. O Niner usa a calibragem de `docs/telas/papeleta-venda.md` (área imprimível 75mm dos 80mm
+do papel, 42 colunas, Consolas em negrito — térmica é 1 bit, haste fina sai falhada).
+
+**Estrutura padrão do cupom** (esquemático da especificação — cabeçalho da empresa, título DANFE,
+tabela de itens com coluna opcional de tributo por item, total de itens/valor, formas de
+pagamento, "Informação dos Tributos Totais" da Lei 12.741, número/série da nota, chave de acesso
+em blocos de 4, identificação do consumidor, QR Code, protocolo de autorização):
+
+```text
+============================================================
+                     RAZÃO SOCIAL DA EMPRESA
+                    CNPJ: 00.000.000/0001-00
+              Endereço Completo do Estabelecimento
+============================================================
+         DANFE NFC-e - Documento Auxiliar da Nota Fiscal
+               de Consumidor Eletrônica
+============================================================
+# | CÓD | DESCRIÇÃO | QTD | UN | VL UN R$ | (VL TR) | VL TOT R$
+------------------------------------------------------------
+001 101  Produto Alfa       1  UN    15,00     (4,72)     15,00
+------------------------------------------------------------
+Informação dos Tributos Totais Incidentes
+(Lei Federal 12.741/2012) R$ 7,87
+============================================================
+              EMISSÃO NORMAL / NÚMERO: 000.045.123
+                     SÉRIE: 001 - VIA CONSUMIDOR
+------------------------------------------------------------
+CHAVE DE ACESSO:
+1234 5678 9012 3456 7890 1234 5678 9012 3456 7890 1234
+============================================================
+CONSUMIDOR - CPF: 000.000.000-00
+============================================================
+        Consulta via Leitor de QR Code (Padrão SEFAZ)
+                   [   QR CODE AQUI   ]
+            Protocolo de Autorização: 141260000004512
+============================================================
+```
+
+**Como o layout do Niner atende cada ponto** (`web/src/lib/comprovante.ts`,
+`linhasCabecalhoFiscal`/`linhasRodapeFiscal`, desde o B7 + reforço de 2026-08-19):
+
+| Item da especificação | Implementação |
+|---|---|
+| Cabeçalho empresa/CNPJ/endereço | Já existia na papeleta comum (fora do escopo fiscal) |
+| Título DANFE + tarja de homologação | `linhasCabecalhoFiscal` — alterna DANFCE ↔ tarja HOMOLOGACAO |
+| Tabela de itens | Já existia (formato de 2 linhas por item, `papeleta-venda.md`) |
+| Coluna de tributo por item `(VL TR)` | **Não implementada** — a especificação marca como opcional/recomendada; o total (obrigatório) já sai no rodapé |
+| Total de tributos (Lei 12.741) | `Trib. aprox.: R$ X,XX (Lei 12.741/2012)` — valor real desde 2026-08-19 (§8.6) |
+| Número/série da NFC-e | **2026-08-19**: `NFC-e: No 000.000.001 - Serie 001` — antes só existia o nº interno da venda |
+| Chave de acesso em blocos de 4 | `formatarChaveGrupos4`, desde o B7 |
+| Identificação do consumidor (CPF/CNPJ ou "não identificado") | **2026-08-19**: extraído do `<dest>` do XML assinado (nunca do cadastro — podem divergir se o operador respondeu "não" à pergunta de incluir CPF), nunca reconstruído |
+| QR Code | Renderizado como imagem (não texto), extraído do XML assinado — B7 |
+| Protocolo de autorização | `Protocolo..:`/`Autorizacao:`, desde o B7 |
+
+**Cálculo do tributo aproximado**: ver §8.6 acima (implementação completa, com a fórmula
+Nacional × Importado e onde cada peça mora no código).
+
 ### 8.7 DIFAL
 
 Aplica-se em venda **interestadual a consumidor final não contribuinte** — cenário de venda não
