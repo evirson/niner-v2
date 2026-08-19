@@ -15,7 +15,15 @@ export default function Layout() {
     <div className="layout">
       <nav className="lateral" aria-label="Navegação do backoffice">
         <div className="marca">
-          <b>Nainer</b>
+          <span className="marca-linha">
+            <svg className="marca-simbolo" width="26" height="26" viewBox="0 0 32 32" aria-hidden="true">
+            <rect width="32" height="32" rx="7" fill="var(--accent)" />
+            <text x="15" y="22.5" fontFamily="Georgia, 'Iowan Old Style', serif" fontSize="19"
+              fill="var(--accent-contrast)" textAnchor="middle">N</text>
+            <rect x="20" y="23" width="7" height="3" rx="1.5" fill="var(--neon)" />
+          </svg>
+            <b>Nainer</b>
+          </span>
           <small>Plataforma · Vetor</small>
         </div>
         {ITENS.map((i) => (

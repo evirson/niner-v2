@@ -1,0 +1,34 @@
+---
+/**
+ * Marca do Nainer (logotipia entregue pelo Claude Design, 2026-08-19): quadrado arredondado com
+ * o "N" e o traço neon — alusão ao cupom saindo da impressora.
+ *
+ * É SVG inline, e não um arquivo em `<img>`, por um motivo específico: os `fill` usam as
+ * variáveis de tema (`--accent`, `--neon`), então a marca acompanha claro/escuro sozinha. Num
+ * `<img src="logo.svg">` o SVG não enxerga as variáveis da página e sairia sempre com a mesma
+ * cor. Onde precisar de arquivo (favicon, og:image, apps), use `public/logo.svg`, que tem as
+ * cores literais.
+ *
+ * Regra da marca: o traço neon nunca aparece sem o "N".
+ */
+interface Props {
+  /** Lado do símbolo em px. O texto acompanha o tamanho da fonte de quem chama. */
+  tamanho?: number
+  /** `false` mostra só o símbolo (favicon, avatar, espaço apertado). */
+  comTexto?: boolean
+}
+const { tamanho = 28, comTexto = true } = Astro.props
+---
+
+<svg class="logo-marca" width={tamanho} height={tamanho} viewBox="0 0 32 32" aria-hidden="true">
+  <rect width="32" height="32" rx="7" fill="var(--accent)" />
+  <text
+    x="15"
+    y="22.5"
+    font-family="Georgia, 'Iowan Old Style', serif"
+    font-size="19"
+    fill="var(--accent-contrast)"
+    text-anchor="middle">N</text>
+  <rect x="20" y="23" width="7" height="3" rx="1.5" fill="var(--neon)" />
+</svg>
+{comTexto && <b>Nainer</b>}

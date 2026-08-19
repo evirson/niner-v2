@@ -32,8 +32,14 @@ export default function Login() {
   return (
     <div className="tela-login">
       <form className="card" onSubmit={enviar}>
-        <h1>
-          <span style={{ color: 'var(--accent)' }}>Nainer</span> Plataforma
+        <h1 className="marca-linha">
+          <svg width="30" height="30" viewBox="0 0 32 32" aria-hidden="true">
+            <rect width="32" height="32" rx="7" fill="var(--accent)" />
+            <text x="15" y="22.5" fontFamily="Georgia, 'Iowan Old Style', serif" fontSize="19"
+              fill="var(--accent-contrast)" textAnchor="middle">N</text>
+            <rect x="20" y="23" width="7" height="3" rx="1.5" fill="var(--neon)" />
+          </svg>
+          Nainer Plataforma
         </h1>
         <p className="muted" style={{ marginTop: 0, marginBottom: 18 }}>
           Acesso restrito ao time da Vetor.

@@ -12,6 +12,7 @@
   --ink-muted: #5c6660;
   --accent: #1f6f6b;      --accent-rgb: 31,111,107;
   --accent-contrast: #ffffff;
+  --neon: #2cf5e2;        /* traço da marca — literal nos dois temas (logotipia) */
   --line: #dee2dc;        --line-strong: #b9beb5;
   --danger: #a63d29;      --danger-rgb: 166,61,41;
   --warning: #b8860b;     --warning-rgb: 184,134,11;
@@ -28,6 +29,7 @@
     --ink-muted: #93a19e;
     --accent: #4fbdb2;    --accent-rgb: 79,189,178;
     --accent-contrast: #0d1b1a;
+    --neon: #2cf5e2;
     --line: #2a3538;      --line-strong: #4a5457;
     --danger: #e2836a;    --danger-rgb: 226,131,106;
     --warning: #d9a441;   --warning-rgb: 217,164,65;
@@ -55,6 +57,7 @@ a { color: var(--accent); }
 }
 .marca { font-family: Georgia, serif; font-size: 22px; padding: 0 10px 18px; }
 .marca b { color: var(--accent); font-weight: 500; }
+.marca-linha { display: inline-flex; align-items: center; gap: 9px; }
 .marca small { display: block; font-family: -apple-system, sans-serif; font-size: 11px;
   letter-spacing: .1em; text-transform: uppercase; color: var(--ink-muted); }
 .lateral a {

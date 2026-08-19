@@ -49,10 +49,15 @@ const canonical = new URL(path, Astro.site ?? 'https://nainer.com.br').toString(
   <body>
     <header class="navbar" id="navbar">
       <a href="/" class="brand" aria-label="Nainer — início">
-        <span class="brand-mark">N</span>
+        <svg class="brand-mark" width="34" height="34" viewBox="0 0 32 32" aria-hidden="true">
+          <rect width="32" height="32" rx="9" fill="var(--btn-primary-bg)" />
+          <text x="15" y="22.5" font-family="Georgia, 'Iowan Old Style', serif" font-size="19"
+            fill="var(--btn-primary-text)" text-anchor="middle">N</text>
+          <rect x="20" y="23" width="7" height="3" rx="1.5" fill="#2cf5e2" />
+        </svg>
         <span class="brand-text">
-          <span class="brand-name">NI<span>NER</span></span>
-          <span class="brand-tagline">ERP para varejo multicanal</span>
+          <span class="brand-name">NAI<span>NER</span></span>
+          <span class="brand-tagline">ERP para o pequeno varejo</span>
         </span>
       </a>
       <!-- Os destinos espelham os `id` REAIS da landing (`src/pages/index.astro`): #recursos,
@@ -83,10 +88,15 @@ const canonical = new URL(path, Astro.site ?? 'https://nainer.com.br').toString(
         <div class="footer-grid">
           <div class="footer-brand">
             <a href="/" class="brand" aria-label="Nainer — início">
-              <span class="brand-mark">N</span>
-              <span class="brand-text"><span class="brand-name">NI<span>NER</span></span></span>
+              <svg class="brand-mark" width="34" height="34" viewBox="0 0 32 32" aria-hidden="true">
+                <rect width="32" height="32" rx="9" fill="var(--btn-primary-bg)" />
+                <text x="15" y="22.5" font-family="Georgia, 'Iowan Old Style', serif" font-size="19"
+                  fill="var(--btn-primary-text)" text-anchor="middle">N</text>
+                <rect x="20" y="23" width="7" height="3" rx="1.5" fill="#2cf5e2" />
+              </svg>
+              <span class="brand-text"><span class="brand-name">NAI<span>NER</span></span></span>
             </a>
-            <p>O ERP que é a fonte única de estoque e preço da sua loja e mantém todos os canais em sincronia — sem overselling.</p>
+            <p>PDV, estoque com grade de cor e tamanho, crediário e nota fiscal num lugar só — calçado e confecção atendidos plenamente.</p>
           </div>
           <div>
             <h4>Produto</h4>
