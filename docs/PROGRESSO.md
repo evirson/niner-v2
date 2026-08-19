@@ -1013,6 +1013,21 @@ perguntas do FAQ batendo com as visíveis; cadastro → login → `/minha-conta`
 de outro tenant = 404); beacon gravando visita com UTM e aparecendo no funil; portas internas
 (5433/9080/9081/8090) fechadas de fora.
 
+**⛔ O deploy das correções foi barrado pelo Flyway — e o motivo merece registro:** dois arquivos
+de migration **já aplicados** tinham sido editados no lugar em `main` (V017, alíquota IBPT
+detalhada; V035, `tentativa` na UNIQUE do evento fiscal), então a soma de verificação registrada
+em produção não batia mais e o Flyway **recusou subir inteiro**, sem publicar nada. Em banco
+recriado do zero isso passa despercebido — por isso não apareceu na máquina de quem editou.
+Conserto para frente, em `V045__realinha_v017_v035_editadas_apos_aplicadas.sql`, idempotente
+(vale no banco antigo e é no-op no novo), mais um `flyway repair` **uma vez** em produção para
+realinhar as somas. Migration aplicada é imutável: registrado no CLAUDE.md.
+
+**Backup provado com restore, não só com "status OK":** depois da V044, o backup manual pelo
+backoffice gerou `plataforma/backup/niner-20260819-1958.dump` (513 KB). O arquivo foi **baixado
+do MinIO e restaurado num banco descartável** dentro do mesmo Postgres — 27 tenants, 28 empresas,
+27 usuários e 2.052 linhas de plano de contas vieram junto. O banco de teste foi apagado em
+seguida. Era exatamente o que o `pg_dump` sem `SELECT` em sequência não conseguia produzir.
+
 **O que ficou em aberto** (detalhe e reprodução no relatório): SMTP em branco — sem ele
 `recuperar-senha` responde 204 e **não manda e-mail** —, `og.png` 404 (compartilhamento sai sem
 imagem), mensagem de validação em inglês e sem dizer o campo (`"Invalid request content."`) no

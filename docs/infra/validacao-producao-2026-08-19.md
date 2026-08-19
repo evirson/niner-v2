@@ -151,6 +151,46 @@ indefinido e a barra de cota some do mesmo jeito.
 
 ---
 
+## O deploy da correção esbarrou noutro problema: migration editada depois de aplicada
+
+```
+ERROR: Validate failed: Migrations have failed validation
+Migration checksum mismatch for migration version 017
+Migration checksum mismatch for migration version 035
+```
+
+V017 (`cfg_produto_ncm`: `aliquota_ibpt` virou quatro colunas) e V035 (`documento_fiscal` +
+`documento_fiscal_evento.tentativa`) tinham sido **alteradas no lugar** depois de já aplicadas.
+Em banco recriado do zero o arquivo editado roda uma vez e produz o schema certo — por isso o
+problema não aparece na máquina de quem editou; em produção, o Flyway recusa subir inteiro e o
+deploy para sem publicar nada.
+
+Conserto: `V045__realinha_v017_v035_editadas_apos_aplicadas.sql` (idempotente — no banco novo é
+no-op) + `flyway repair` uma vez. Conferido depois em produção:
+
+```
+ schema     | seqs | backup_pode_ler        colunas_ncm: alq_estadual, alq_federal_importado,
+ plataforma |   12 |              12                     alq_federal_nacional, alq_municipal,
+ public     |   47 |              47                     codigo_ncm, descricao_ncm
+
+ uk_evento: UNIQUE (id_tenant, id_documento_fiscal, tipo_evento, sequencia, tentativa)
+```
+
+## Backup: provado com restore
+
+O backup manual passou a gerar `plataforma/backup/niner-20260819-1958.dump` (513 KB). O arquivo
+foi baixado do MinIO e **restaurado num banco descartável** no mesmo Postgres:
+
+```
+ tenants | empresas | usuarios | produtos | contas
+      27 |       28 |       27 |        0 |   2052
+```
+
+(0 produtos porque nenhum produto foi cadastrado ainda em produção.) O banco de teste foi
+apagado em seguida. Status "OK" não prova backup — o restore prova.
+
+---
+
 ## Dados de teste criados em produção durante a auditoria
 
 Ainda **não removidos** — a limpeza é uma exclusão em banco de produção e espera aval.
