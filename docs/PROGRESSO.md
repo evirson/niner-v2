@@ -625,6 +625,15 @@ e um caso passava **por engano**. O fake passou a gerar um id por cobrança, com
 `.gitignore` antes de qualquer commit. Access token e segredo de webhook vivem em
 `NINER_MP_ACCESS_TOKEN`/`NINER_MP_WEBHOOK_SECRET`.
 
+**▶️ Plano combinado para amanhã (2026-08-19):** subir no VPS e abrir o **plano gratuito**;
+a assinatura paga vem depois, testada com token de produção. O caminho do cliente gratuito está
+completo e testado, mas **cinco bloqueadores operacionais** precisam cair antes do primeiro
+cadastro real — `/api/admin/**` ainda é `permitAll` (expõe lead com dado pessoal), segredos com
+valor de desenvolvimento (o JWT default permite forjar token de qualquer tenant), backup
+inexistente, sem rate limit no `/api/publico/**` e sem recuperação de senha. Detalhe, motivo e
+ordem de execução: **`docs/infra/checklist-producao.md`**. DNS: **`docs/infra/dns-producao.md`**
+(Opção A, direto no registro.br).
+
 **▶️ Retomar amanhã (onde exatamente paramos):**
 
 1. **Preencher os 5 parâmetros comerciais** e regerar as faixas:
