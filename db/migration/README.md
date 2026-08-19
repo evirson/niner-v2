@@ -228,8 +228,11 @@ Em desenvolvimento, recriar do zero (`flyway clean` + `migrate`) é aceitável.
     código exige/proíbe), o subconjunto de CFOP do v1 e as 4 linhas do **Paraná**. ⚠️ Os endpoints
     de NF-e 55 do PR nascem **NULOS de propósito** — não foram confirmados em fonte oficial, e a
     emissão deve falhar explicitamente em vez de chutar domínio.
-  - **`cfg_produto_ncm.aliquota_ibpt` deixa de ser usada:** é uma coluna só, e o IBPT tem 4
-    alíquotas por NCM **por UF e por vigência** (`cfg_ibpt`). A coluna fica onde está.
+  - **`cfg_produto_ncm.aliquota_ibpt` foi removida em 2026-08-19** (migration dona:
+    `V017__catalogo.sql`), substituída por `alq_federal`/`alq_estadual`/`alq_municipal`
+    (`numeric(10,2)` cada), populadas por planilha (uma média nacional/SP por NCM, sem distinção
+    por UF/vigência — `cfg_ibpt` continua sendo a tabela correta pra isso, mas segue vazia/sem
+    consumidor; decisão explícita do dono do produto, ver `docs/PROGRESSO.md`).
   - **V035 — tabelas de tenant**, todas com RLS FORCE + policy + guarda-corpo (padrão de
     V024/V025): `fiscal_config_empresa` (por **empresa**, não por tenant), `fiscal_certificado`
     (+ `fiscal_certificado_uso`), `cfg_perfil_fiscal` (+ `_regra`), `fiscal_numeracao`,

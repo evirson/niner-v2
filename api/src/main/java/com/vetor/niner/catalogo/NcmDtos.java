@@ -8,6 +8,7 @@ public final class NcmDtos {
     private NcmDtos() {
     }
 
-    public record NcmResponse(String codigoNcm, String descricaoNcm, BigDecimal aliquotaIbpt) {
+    public record NcmResponse(String codigoNcm, String descricaoNcm, BigDecimal alqFederal,
+                              BigDecimal alqEstadual, BigDecimal alqMunicipal) {
     }
 }

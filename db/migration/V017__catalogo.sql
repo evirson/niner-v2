@@ -116,9 +116,11 @@ COMMENT ON TABLE cfg_grade IS 'Grades do tenant. id_grade=1 é reservado para a 
 CREATE TABLE cfg_produto_ncm (
   codigo_ncm    text          PRIMARY KEY,
   descricao_ncm text          NOT NULL,
-  aliquota_ibpt numeric(10,2)
+  alq_federal   numeric(10,2),
+  alq_estadual  numeric(10,2),
+  alq_municipal numeric(10,2)
 );
-COMMENT ON TABLE cfg_produto_ncm IS 'Referência de NCM (código + descrição + alíquota IBPT), GLOBAL — igual para todos os tenants, sem RLS. Mantida por script, sem tela de manutenção.';
+COMMENT ON TABLE cfg_produto_ncm IS 'Referência de NCM (código + descrição + alíquotas IBPT federal/estadual/municipal), GLOBAL — igual para todos os tenants, sem RLS. Mantida por script, sem tela de manutenção.';
 -- niner_app só lê (mantida por script/carga, não pela aplicação) — sem entrar no laço de
 -- RLS/grants de V024 porque não tem id_tenant (guarda-corpo de P8 não se aplica a ela).
 GRANT SELECT ON cfg_produto_ncm TO niner_app;

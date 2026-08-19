@@ -4,7 +4,9 @@ import { ApiError, api } from './api'
 export interface Ncm {
   codigoNcm: string
   descricaoNcm: string
-  aliquotaIbpt: number | null
+  alqFederal: number | null
+  alqEstadual: number | null
+  alqMunicipal: number | null
 }
 
 /** {@code null} quando o código não existe (404) — não é erro de validação, só "sem descrição ainda". */
