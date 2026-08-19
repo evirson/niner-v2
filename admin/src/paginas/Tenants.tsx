@@ -4,7 +4,7 @@ import { useSearchParams } from 'react-router-dom'
 import { NUMERO, REAL, data, dataHora } from '../lib/api'
 import { buscarTenant, listarTenants } from '../lib/plataforma'
 
-const STATUS = ['', 'ATIVA', 'TRIAL', 'INADIMPLENTE', 'SUSPENSA', 'CANCELADA']
+const STATUS = ['', 'ATIVA', 'INADIMPLENTE', 'SUSPENSA', 'CANCELADA']
 
 /** Contas assinantes (R17): quem é o cliente e quanto ele está usando, na mesma linha. */
 export default function Tenants() {

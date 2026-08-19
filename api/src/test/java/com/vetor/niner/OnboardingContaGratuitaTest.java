@@ -56,6 +56,37 @@ class OnboardingContaGratuitaTest {
     }
 
     @Test
+    void mesmoEmailNaoCriaUmaSegundaLoja() throws Exception {
+        // Achado na validação de produção (2026-08-19): o segundo cadastro com o mesmo e-mail
+        // devolvia 201 e criava OUTRA loja — o lojista que clica duas vezes ficava com os dados
+        // divididos entre duas contas, e o lead de marketing migrava para a segunda (apagando a
+        // primeira do funil). Mais de um CNPJ é EMPRESA dentro da mesma conta, não conta nova.
+        String primeiro = """
+                {"nomeLoja":"Loja Do Zé","email":"ze@lojadoze.com",
+                 "senha":"segredo123","nomeAdmin":"Zé"}
+                """;
+        mvc.perform(post("/api/publico/assinar").contentType(APPLICATION_JSON).content(primeiro))
+                .andExpect(status().isCreated());
+
+        // Nome de loja diferente (slug diferente, então não é a unicidade do slug que barra) e
+        // e-mail em outra caixa — a comparação tem que ser insensível a maiúscula.
+        String segundo = """
+                {"nomeLoja":"Outra Loja Do Ze","email":"ZE@LojaDoZe.com",
+                 "senha":"outrasenha123","nomeAdmin":"Zé"}
+                """;
+        mvc.perform(post("/api/publico/assinar").contentType(APPLICATION_JSON).content(segundo))
+                .andExpect(status().isConflict());
+
+        // E a loja original continua de pé, com o login funcionando.
+        String login = """
+                {"slug":"loja-do-ze","email":"ze@lojadoze.com","senha":"segredo123"}
+                """;
+        mvc.perform(post("/api/publico/login").contentType(APPLICATION_JSON).content(login))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.token").isNotEmpty());
+    }
+
+    @Test
     void euDevolvePlanoECotaEmVezDeDataDeTrial() throws Exception {
         // O /eu devolvia `trial_expira_em`, e o painel do lojista mostrava "Teste até <data>" —
         // cópia de dois modelos comerciais atrás. Agora devolve plano + cota, que é o que a conta

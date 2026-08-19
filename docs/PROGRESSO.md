@@ -465,6 +465,94 @@ Movimentação de Conta Corrente) que ainda não tinham migrado pro `SeletorPlan
 
 ## Linha do tempo
 
+### 2026-08-19 — Nainer no ar (deploy no VPS) + auditoria de produção: 3 defeitos 🔴 encontrados e corrigidos no mesmo dia
+
+O produto passou a se chamar **Nainer** (`nainer.com.br`; `niner.com.br` registrado como
+defensivo e redirecionando 301 para o principal) e subiu num VPS **compartilhado com ~29 sites de
+cliente** — cada mexida no nginx foi precedida de `nginx -t` e seguida de `reload` (nunca
+`restart`), com a lista dos outros hosts conferida antes e depois. Quatro hosts com TLS por
+Let's Encrypt: `nainer.com.br` (landing), `app.` (ERP), `admin.` (backoffice), `api.`.
+
+**Três incidentes de CORS no primeiro dia, todos com o mesmo sintoma na tela** ("não foi possível
+conectar ao servidor", com a API perfeitamente no ar) **e três causas diferentes**:
+
+1. o `limit_req` do nginx recusava com **503 e página HTML**, que não carrega cabeçalho de CORS →
+   o `fetch` estourava como falha de rede. Corrigido com `limit_req_status 429` + o cabeçalho nas
+   respostas de erro.
+2. a correção acima passou a **duplicar** o `Access-Control-Allow-Origin` (o Spring já mandava o
+   dele) — e **cabeçalho duplicado o navegador recusa igual a cabeçalho ausente**.
+3. o `www` não estava na lista de origens → 403 sem CORS. Resolvido com 301 para o apex.
+
+**Auditoria de produção item a item** (subagente, ~19 min, só leitura no VPS; as escritas foram
+pela API pública, que é o que estava sendo testado). O relatório completo, com evidência e passo
+de reprodução de cada achado, está em **`docs/infra/validacao-producao-2026-08-19.md`**. Três
+defeitos 🔴, corrigidos no mesmo dia:
+
+**🔴 D1 — o backup nunca rodou.** `backup_ultimo_status = ERRO` desde o primeiro dia:
+
+> `pg_dump: error: failed to get data for sequence "assinatura_id_assinatura_seq"; user may lack
+> SELECT privilege on the sequence`
+
+A role `niner_backup` tinha BYPASSRLS e SELECT nas **tabelas** — e SELECT em **0 de 59
+sequências**. O `pg_dump` lê o `last_value` de cada uma e aborta com código 1 sem isso. Era o
+bloqueador nº 3 do próprio checklist de produção, falhando exatamente do jeito que o checklist
+queria evitar: um "backup configurado" que não produz backup nenhum. Corrigido em
+**`V044__backup_grants_sequencias.sql`** (grants no que existe + `ALTER DEFAULT PRIVILEGES` para
+o que vier) e no `db/bootstrap/00_roles.sh` (banco novo já nasce certo). O bloco é condicional à
+existência da role, porque ela é objeto de **cluster**, não de banco.
+
+**🔴 D2 — o 429 da aplicação chegava ao navegador com CORS duplicado.** A correção do incidente 2
+tinha condicionado o cabeçalho ao **status** (`map $status`, só em 429/502/503) — mas a aplicação
+**também** responde 429 (`LimiteRequisicaoFilter`), e aí o cabeçalho saía duas vezes justamente na
+resposta que mais precisa chegar íntegra: a que explica ao visitante que ele tentou rápido demais.
+O critério certo não é o status, é a **origem da resposta**:
+
+```nginx
+map $upstream_http_access_control_allow_origin $nainer_cors_falta {
+    default "";            # a aplicação respondeu e já mandou o dela — não duplicar
+    ""      $nainer_cors;  # resposta gerada pelo próprio nginx — o cabeçalho falta
+}
+```
+
+Medido em produção depois do reload: 1 cabeçalho no 204, 1 no 429 da aplicação, 1 no 429 do nginx.
+
+**🔴 D3 — e-mail repetido criava uma segunda loja.** `plataforma.tenant` só tinha unique em
+`slug`, então repetir o cadastro devolvia **201** e criava outra conta. Quem clica duas vezes (ou
+tenta de novo achando que falhou) ficava com **duas lojas**, dados divididos, e — na hora da
+cobrança — duas assinaturas no mesmo e-mail. Pior: `AquisicaoService.converter()` faz
+`ON CONFLICT (email) DO UPDATE SET id_tenant = EXCLUDED.id_tenant`, então o **lead migrava para a
+conta nova** e a primeira sumia do funil, sem aviso. Corrigido no `SignupService`, com
+`pg_advisory_xact_lock` antes da checagem — o clique duplo é *exatamente* a corrida que um
+`SELECT`-depois-`INSERT` sozinho não fecha. Mais de um CNPJ é **empresa dentro da mesma conta**,
+que é o desenho do produto (ADR-015). Regressão:
+`OnboardingContaGratuitaTest.mesmoEmailNaoCriaUmaSegundaLoja` (inclusive com o e-mail em outra
+caixa e nome de loja diferente, pra provar que não é a unicidade do slug que barra).
+
+Corrigidos junto, de menor gravidade: **corpo do 429 em ISO-8859-1** (o Tomcat assume isso quando
+o content-type não declara charset; o `response.json()` do navegador decodifica sempre como UTF-8,
+e o usuário lia *"Muitas requisies"*) — coberto por
+`LimiteRequisicaoTest.mensagemDo429ChegaEmUtf8`; **429 do nginx em HTML** (o front faz `.json()` e
+estoura no meio do tratamento do erro) — agora `error_page 429 /429.json` com Problem Details e
+`Retry-After`; **HSTS ausente** nos 4 hosts; e o filtro morto de status **TRIAL** no backoffice
+(ADR-015 acabou com o trial, o filtro nunca devolveria nada).
+
+**O que a auditoria confirmou funcionando:** certificado correto nos 4 hosts e nenhum vazando para
+outro cliente do VPS; os ~29 sites vizinhos intactos; nenhum link 404 na landing; JSON-LD com as 7
+perguntas do FAQ batendo com as visíveis; cadastro → login → `/minha-conta` → criar 2ª empresa;
+`aud` separando as duas populações de token **nos dois sentidos** (token de lojista em
+`/api/admin/**` = 401, token de staff em `/api/v1/**` = 401); isolamento entre lojistas (empresa
+de outro tenant = 404); beacon gravando visita com UTM e aparecendo no funil; portas internas
+(5433/9080/9081/8090) fechadas de fora.
+
+**O que ficou em aberto** (detalhe e reprodução no relatório): SMTP em branco — sem ele
+`recuperar-senha` responde 204 e **não manda e-mail** —, `og.png` 404 (compartilhamento sai sem
+imagem), mensagem de validação em inglês e sem dizer o campo (`"Invalid request content."`) no
+formulário que converte visitante em cliente, `porOrigem` do funil não fechando com os totais
+(quem entra por signup direto some da quebra em vez de cair num balde "não atribuído"), home com
+772 KB sendo 94% imagem, e o **teto de preço** achatando as faixas 10 a 20 todas em R$ 990 — que é
+o `preco_maximo` funcionando como pedido, mas vale reconferir antes de cobrar de verdade.
+Os 5 parâmetros comerciais seguem com valor provisório em produção.
+
 ### 2026-08-18 — Pivô comercial: gratuito por volume de vendas, multi-CNPJ, Mercado Pago e rastreamento próprio (ADR-015/016/017)
 
 Sessão de **spec** (nenhuma linha de código de produção ainda): o dono do produto redefiniu o

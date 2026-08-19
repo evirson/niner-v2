@@ -83,6 +83,11 @@ services:
       NINER_CORS_ORIGINS_0: https://${NINER_DOMINIO}
       NINER_CORS_ORIGINS_1: https://app.${NINER_DOMINIO}
       NINER_CORS_ORIGINS_2: https://admin.${NINER_DOMINIO}
+      # O www redireciona para o apex (nginx), então esta origem não deveria aparecer — mas
+      # aparece de quem tem o www salvo nos favoritos e chega antes do redirect. Sem ela na
+      # lista, o Spring recusa com 403 e SEM cabeçalho de CORS, e o site diz apenas que não
+      # conseguiu conectar (achado em produção, 2026-08-19).
+      NINER_CORS_ORIGINS_3: https://www.${NINER_DOMINIO}
       # Object storage: fotos de produto no GCS (ADR-013) e privado no MinIO (ADR-014).
       GOOGLE_APPLICATION_CREDENTIALS: /secrets/gcs.json
       NINER_STORAGE_BUCKET: ${NINER_STORAGE_BUCKET:-niner-erp}

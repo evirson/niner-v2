@@ -14,6 +14,7 @@ import java.text.Normalizer;
 import java.util.List;
 import java.util.Locale;
 
+import static org.springframework.http.HttpStatus.CONFLICT;
 import static org.springframework.http.HttpStatus.FORBIDDEN;
 import static org.springframework.http.HttpStatus.UNAUTHORIZED;
 
@@ -45,6 +46,28 @@ public class SignupService {
 
     @Transactional
     public AssinarResponse assinar(AssinarRequest req) {
+        // 0) UMA conta por e-mail. Defeito visto na validação de produção (2026-08-19): repetir
+        // o cadastro com o mesmo e-mail devolvia 201 e criava uma SEGUNDA loja — dados divididos
+        // entre as duas sem o lojista perceber, duas assinaturas quando a cobrança ligar, e o
+        // lead de marketing migrando para a conta nova (`converter()` faz ON CONFLICT (email) DO
+        // UPDATE id_tenant), o que apagava a primeira do funil. Quem tem mais de um CNPJ
+        // acrescenta EMPRESA dentro da mesma conta — é o desenho do produto (ADR-015).
+        //
+        // O lock consultivo é o que fecha a corrida do clique duplo, que é justamente o caso
+        // real: duas requisições simultâneas passariam as duas pelo SELECT abaixo. É por
+        // transação (`_xact_`), liberado no commit/rollback sem precisar de unlock.
+        String emailNormalizado = req.email().trim().toLowerCase(Locale.ROOT);
+        jdbc.sql("SELECT pg_advisory_xact_lock(hashtext(?))")
+                .param("signup:" + emailNormalizado).query().listOfRows();
+        boolean jaCadastrado = Boolean.TRUE.equals(jdbc.sql(
+                        "SELECT exists(SELECT 1 FROM plataforma.tenant WHERE lower(email_contato) = ?)")
+                .param(emailNormalizado).query(Boolean.class).single());
+        if (jaCadastrado) {
+            throw new ResponseStatusException(CONFLICT,
+                    "Já existe uma conta com este e-mail. Entre nela ou use \"esqueci minha senha\". "
+                            + "Para vender com outro CNPJ, cadastre uma nova empresa dentro da mesma conta.");
+        }
+
         // 1) tenant (global, P9) — nasce ATIVA no plano Gratuito (ADR-015: não existe mais trial
         // por tempo; o que limita é volume de vendas no mês). slug único derivado do nome da loja.
         String slug = slugUnico(req.nomeLoja());

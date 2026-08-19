@@ -8,6 +8,7 @@ import org.springframework.context.annotation.Import;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.request.RequestPostProcessor;
 
 import java.util.UUID;
 
@@ -61,6 +62,34 @@ class LimiteRequisicaoTest {
                 .andExpect(status().isTooManyRequests())
                 .andExpect(header().exists("Retry-After"))
                 .andExpect(jsonPath("$.type").value("urn:niner:erro:limite-de-requisicoes"));
+    }
+
+    @Test
+    void mensagemDo429ChegaEmUtf8() throws Exception {
+        // Em produção (2026-08-19) o corpo saía em ISO-8859-1 — o Tomcat assume isso quando o
+        // content-type não declara charset. O response.json() do navegador decodifica SEMPRE como
+        // UTF-8, então o visitante lia "Muitas requisies" bem no momento em que a mensagem
+        // precisava ser compreensível.
+        // IP próprio: o balde é por IP e todos os testes desta classe sairiam do mesmo
+        // 127.0.0.1, um consumindo a cota do outro conforme a ordem de execução.
+        RequestPostProcessor outroIp = req -> {
+            req.setRemoteAddr("10.9.9.9");
+            return req;
+        };
+        for (int i = 0; i < 3; i++) {
+            mvc.perform(post("/api/publico/leads").with(outroIp)
+                            .contentType(APPLICATION_JSON).content(corpoLead()))
+                    .andExpect(status().isNoContent());
+        }
+        var resp = mvc.perform(post("/api/publico/leads").with(outroIp)
+                        .contentType(APPLICATION_JSON).content(corpoLead()))
+                .andExpect(status().isTooManyRequests())
+                .andReturn().getResponse();
+
+        org.junit.jupiter.api.Assertions.assertEquals("UTF-8", resp.getCharacterEncoding());
+        String corpo = new String(resp.getContentAsByteArray(), java.nio.charset.StandardCharsets.UTF_8);
+        org.junit.jupiter.api.Assertions.assertTrue(corpo.contains("Muitas requisições"),
+                "corpo do 429 deveria vir legível em UTF-8, veio: " + corpo);
     }
 
     @Test

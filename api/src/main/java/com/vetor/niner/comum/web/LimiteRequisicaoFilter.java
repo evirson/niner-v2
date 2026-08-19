@@ -90,7 +90,11 @@ public class LimiteRequisicaoFilter extends OncePerRequestFilter {
             log.debug("Limite de requisições atingido para {} em {}", chave, req.getRequestURI());
             resp.setStatus(HttpStatus.TOO_MANY_REQUESTS.value());
             resp.setHeader("Retry-After", Long.toString(JANELA.toSeconds()));
+            // charset explícito: sem ele o Tomcat usa ISO-8859-1 e o "ç"/"õ" de "Muitas
+            // requisições" chega quebrado — o response.json() do navegador decodifica sempre
+            // como UTF-8 e o usuário lê "Muitas requisies" (visto em produção, 2026-08-19).
             resp.setContentType("application/problem+json");
+            resp.setCharacterEncoding("UTF-8");
             resp.getWriter().write("""
                     {"type":"urn:niner:erro:limite-de-requisicoes","title":"Muitas requisições",\
                     "status":429,"detail":"Aguarde um instante e tente de novo."}""");

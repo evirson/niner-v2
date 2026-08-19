@@ -52,9 +52,13 @@ REVOKE CREATE ON SCHEMA public FROM PUBLIC;
 -- GRANT, o Flyway falharia com "permission denied for schema public" a partir de V013.
 GRANT CREATE ON SCHEMA public TO niner_owner;
 
--- Leitura para o backup em tudo o que as migrations criarem depois.
+-- Leitura para o backup em tudo o que as migrations criarem depois. SEQUÊNCIA também: o
+-- pg_dump lê o last_value de cada uma, e sem SELECT nelas o dump aborta com código 1 — o
+-- backup automático de produção passou o primeiro dia falhando exatamente assim (V044).
+-- O schema `plataforma` ainda não existe aqui (nasce na V001), então o resto é lá.
 GRANT USAGE ON SCHEMA public TO niner_backup;
-ALTER DEFAULT PRIVILEGES FOR ROLE niner_owner IN SCHEMA public GRANT SELECT ON TABLES TO niner_backup;
+ALTER DEFAULT PRIVILEGES FOR ROLE niner_owner IN SCHEMA public GRANT SELECT ON TABLES    TO niner_backup;
+ALTER DEFAULT PRIVILEGES FOR ROLE niner_owner IN SCHEMA public GRANT SELECT ON SEQUENCES TO niner_backup;
 SQL
 
 echo "[bootstrap] roles niner_owner / niner_app / niner_backup criadas."

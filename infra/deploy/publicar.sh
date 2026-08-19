@@ -4,7 +4,7 @@
 set -euo pipefail
 
 RAIZ="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-DESTINO_ESTATICO="${DESTINO_ESTATICO:-/var/www/niner}"
+DESTINO_ESTATICO="${DESTINO_ESTATICO:-/var/www/nainer}"
 COMPOSE="docker compose -f $RAIZ/docker-compose.prod.yml --env-file $RAIZ/.env"
 
 cd "$RAIZ"
@@ -36,6 +36,13 @@ done
 printf "window.NINER_WEB_BASE = 'https://app.%s';\n" "$NINER_DOMINIO" | sudo tee -a "$DESTINO_ESTATICO/site/config.js" >/dev/null
 # O app do lojista precisa saber o endereço do site (link "criar conta" no login).
 printf "window.NINER_SITE_BASE = 'https://%s';\n" "$NINER_DOMINIO" | sudo tee -a "$DESTINO_ESTATICO/web/config.js" >/dev/null
+
+# Corpo do 429 gerado pelo PRÓPRIO nginx (limit_req). Sem este arquivo a recusa sai como página
+# HTML, o front faz response.json() e estoura no meio do tratamento do erro — some justamente a
+# mensagem "aguarde um instante" que existe pra ser lida. Ver `error_page 429` em infra/nginx.
+sudo mkdir -p "$DESTINO_ESTATICO/erro"
+printf '%s\n' '{"type":"urn:nainer:erro:limite-de-requisicoes","title":"Muitas requisições","status":429,"detail":"Você fez muitas tentativas seguidas. Aguarde um instante e tente de novo."}' \
+  | sudo tee "$DESTINO_ESTATICO/erro/429.json" >/dev/null
 
 echo
 echo "✅ Publicado. Confira:"
