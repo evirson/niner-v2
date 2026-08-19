@@ -1,5 +1,5 @@
 ---
-// Layout base do site público do Niner: SEO/OG + sistema visual (site.css) + tema claro/escuro
+// Layout base do site público do Nainer: SEO/OG + sistema visual (site.css) + tema claro/escuro
 // + camada de movimento (scroll-reveal, contadores, sync do hero). A base-URL da API é lida em
 // runtime (public/config.js), nunca embutida no bundle (spec §3.1).
 import '../styles/site.css';
@@ -10,7 +10,7 @@ export interface Props {
   path?: string;
 }
 const { title, description, path = '/' } = Astro.props;
-const canonical = new URL(path, Astro.site ?? 'https://niner.com.br').toString();
+const canonical = new URL(path, Astro.site ?? 'https://nainer.com.br').toString();
 ---
 
 <!doctype html>
@@ -23,7 +23,7 @@ const canonical = new URL(path, Astro.site ?? 'https://niner.com.br').toString()
     <link rel="canonical" href={canonical} />
     <!-- Open Graph / social -->
     <meta property="og:type" content="website" />
-    <meta property="og:site_name" content="Niner" />
+    <meta property="og:site_name" content="Nainer" />
     <meta property="og:title" content={title} />
     <meta property="og:description" content={description} />
     <meta property="og:url" content={canonical} />
@@ -48,7 +48,7 @@ const canonical = new URL(path, Astro.site ?? 'https://niner.com.br').toString()
   </head>
   <body>
     <header class="navbar" id="navbar">
-      <a href="/" class="brand" aria-label="Niner — início">
+      <a href="/" class="brand" aria-label="Nainer — início">
         <span class="brand-mark">N</span>
         <span class="brand-text">
           <span class="brand-name">NI<span>NER</span></span>
@@ -82,7 +82,7 @@ const canonical = new URL(path, Astro.site ?? 'https://niner.com.br').toString()
       <div class="container">
         <div class="footer-grid">
           <div class="footer-brand">
-            <a href="/" class="brand" aria-label="Niner — início">
+            <a href="/" class="brand" aria-label="Nainer — início">
               <span class="brand-mark">N</span>
               <span class="brand-text"><span class="brand-name">NI<span>NER</span></span></span>
             </a>
@@ -113,7 +113,7 @@ const canonical = new URL(path, Astro.site ?? 'https://niner.com.br').toString()
           </div>
         </div>
         <div class="footer-bottom">
-          <span>© 2026 Niner — Vetor Sistemas. Todos os direitos reservados.</span>
+          <span>© 2026 Nainer — Vetor Sistemas. Todos os direitos reservados.</span>
           <span>Feito para o varejo multicanal brasileiro.</span>
         </div>
       </div>

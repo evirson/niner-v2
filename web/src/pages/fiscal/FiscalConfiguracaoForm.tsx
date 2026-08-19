@@ -202,7 +202,7 @@ export default function FiscalConfiguracaoForm() {
                     ))}
                   </select>
                   <p className="muted" style={{ fontSize: 12, marginTop: 4 }}>
-                    O Niner atende Simples Nacional e MEI. Lucro Real e Lucro Presumido não são
+                    O Nainer atende Simples Nacional e MEI. Lucro Real e Lucro Presumido não são
                     atendidos por este produto.
                   </p>
                 </div>

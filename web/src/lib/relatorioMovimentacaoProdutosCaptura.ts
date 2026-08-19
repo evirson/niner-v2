@@ -114,7 +114,7 @@ export async function gerarPdfCapturaRelatorioMovimentacaoProdutos(
   doc.addPage()
   await desenharElementoPaginado(doc, gridEl)
 
-  desenharCabecalhoERodape(doc, 'Relatório de Movimentação de Produtos', new Date().toLocaleString('pt-BR'), rodapeEsquerda, 'Niner ERP')
+  desenharCabecalhoERodape(doc, 'Relatório de Movimentação de Produtos', new Date().toLocaleString('pt-BR'), rodapeEsquerda, 'Nainer ERP')
 
   doc.save('relatorio-de-movimentacao-de-produtos.pdf')
 }

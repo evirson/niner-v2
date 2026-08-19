@@ -1,4 +1,4 @@
-# Checklist de produção — subir o Niner no VPS
+# Checklist de produção — subir o Nainer no VPS
 
 Resposta à pergunta "o que foi entregue já aceita a parte grátis?" (2026-08-18).
 
@@ -109,7 +109,7 @@ reconsulta o gateway (ADR-016) · RLS + filtro explícito de tenant em toda quer
 
 1. **Cobra de verdade.** Use uma faixa temporária de valor mínimo (`UPDATE plataforma.plano SET
    preco_mensal = 1.00 WHERE …`) ou aceite o débito real da primeira cobrança.
-2. **O webhook precisa de URL pública** — `https://api.niner.com.br/api/publico/webhooks/mercadopago`
+2. **O webhook precisa de URL pública** — `https://api.nainer.com.br/api/publico/webhooks/mercadopago`
    em `NINER_MP_NOTIFICATION_URL`, e o mesmo endereço cadastrado no painel do Mercado Pago, com o
    **segredo do webhook** em `NINER_MP_WEBHOOK_SECRET` (sem ele a assinatura não é validada).
 3. **Antes disso, se possível, feche o sandbox**: falta só habilitar chave PIX na conta de teste

@@ -118,7 +118,7 @@ export async function gerarPdfCapturaDre(
 
   desenharCabecalhoERodape(
     doc, 'DRE — Demonstração do Resultado', subtitulo,
-    new Date().toLocaleString('pt-BR'), rodapeEsquerda, 'Niner ERP')
+    new Date().toLocaleString('pt-BR'), rodapeEsquerda, 'Nainer ERP')
 
   doc.save('dre-demonstracao-do-resultado.pdf')
 }

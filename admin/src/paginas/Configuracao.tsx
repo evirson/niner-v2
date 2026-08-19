@@ -30,7 +30,7 @@ function paraFormulario(c: Config): Formulario {
     smtpSenha: '',                     // segredo nunca volta do servidor — em branco = manter
     smtpStarttls: c.smtpStarttls,
     smtpRemetenteEmail: c.smtpRemetenteEmail ?? '',
-    smtpRemetenteNome: c.smtpRemetenteNome ?? 'Niner',
+    smtpRemetenteNome: c.smtpRemetenteNome ?? 'Nainer',
     backupHabilitado: c.backupHabilitado,
     backupHora: (c.backupHora ?? '03:00:00').slice(0, 5),
     backupRetencaoDias: String(c.backupRetencaoDias),
@@ -139,7 +139,7 @@ export default function Configuracao() {
           <div className="campo">
             <label htmlFor="remetente">E-mail remetente</label>
             <input id="remetente" value={form.smtpRemetenteEmail} disabled={!ehSuperAdmin}
-              onChange={(e) => alterar('smtpRemetenteEmail', e.target.value)} placeholder="nao-responda@niner.com.br" />
+              onChange={(e) => alterar('smtpRemetenteEmail', e.target.value)} placeholder="nao-responda@nainer.com.br" />
           </div>
           <div className="campo">
             <label htmlFor="remetente-nome">Nome do remetente</label>
@@ -220,7 +220,7 @@ export default function Configuracao() {
           <div className="campo">
             <label htmlFor="mp-url">URL de notificação</label>
             <input id="mp-url" value={form.mpNotificationUrl} disabled={!ehSuperAdmin}
-              placeholder="https://api.niner.com.br/api/publico/webhooks/mercadopago"
+              placeholder="https://api.nainer.com.br/api/publico/webhooks/mercadopago"
               onChange={(e) => alterar('mpNotificationUrl', e.target.value)} />
           </div>
         </div>

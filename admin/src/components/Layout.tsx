@@ -15,7 +15,7 @@ export default function Layout() {
     <div className="layout">
       <nav className="lateral" aria-label="Navegação do backoffice">
         <div className="marca">
-          <b>Niner</b>
+          <b>Nainer</b>
           <small>Plataforma · Vetor</small>
         </div>
         {ITENS.map((i) => (

@@ -1,5 +1,5 @@
 /**
- * Medição própria de audiência do Niner (ADR-017) — first-party, sem rastreador de terceiro.
+ * Medição própria de audiência do Nainer (ADR-017) — first-party, sem rastreador de terceiro.
  *
  * O que ele faz, e por que cada pedaço existe:
  *  · `visitante_id` em cookie PRÓPRIO (1 ano): é o fio que liga o primeiro pageview anônimo ao

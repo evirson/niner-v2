@@ -4,10 +4,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this repository is
 
-A **greenfield, spec-driven ERP** (product name **Niner**, DB `niner_db`) for small retailers that sell both in a physical store and across 2–5 online marketplaces (Mercado Livre, Shopee, Amazon, own e-commerce). The product's job is to make the ERP the single source of truth for stock and price, and to keep every channel in sync automatically (zero overselling).
+A **greenfield, spec-driven ERP** (product name **Nainer**, DB `niner_db`) for small retailers that sell both in a physical store and across 2–5 online marketplaces (Mercado Livre, Shopee, Amazon, own e-commerce). The product's job is to make the ERP the single source of truth for stock and price, and to keep every channel in sync automatically (zero overselling).
 
 **As of spec v2.0 it is a multi-tenant SaaS**, sold by subscription. Two planes that must never be conflated:
-- **Control Plane ("Plataforma Niner")** — Vetor's business: tenants, pricing plans, subscriptions, invoices, billing, support. Global tables under module `plataforma/` (outside tenant RLS).
+- **Control Plane ("Plataforma Nainer")** — Vetor's business: tenants, pricing plans, subscriptions, invoices, billing, support. Global tables under module `plataforma/` (outside tenant RLS).
 - **Tenant Plane (the retailer's ERP)** — catalog, stock, orders, channels and the retailer's own internal finance (legacy `financeiro`, scope Q5). Every row isolated by `id_tenant`.
 - Vocabulary rule: *assinatura/plano/trial/mensalidade/gateway* = **platform** (Vetor charges the retailer); *caixa/crediário/contas a pagar-receber/conta corrente da loja* = **retailer's finance**. Never mix.
 

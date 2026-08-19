@@ -58,7 +58,7 @@ public class EmailService {
             JavaMailSenderImpl sender = montar(smtp);
             MimeMessage mensagem = sender.createMimeMessage();
             MimeMessageHelper helper = new MimeMessageHelper(mensagem, false, StandardCharsets.UTF_8.name());
-            helper.setFrom(smtp.remetenteEmail(), smtp.remetenteNome() == null ? "Niner" : smtp.remetenteNome());
+            helper.setFrom(smtp.remetenteEmail(), smtp.remetenteNome() == null ? "Nainer" : smtp.remetenteNome());
             helper.setTo(destinatario);
             helper.setSubject(assunto);
             helper.setText(corpoHtml, true);

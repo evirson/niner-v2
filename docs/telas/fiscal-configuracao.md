@@ -62,7 +62,7 @@ Quatro seções: **Regime**, **Emissão**, **Numeração** e **Credenciamento**.
 | `inscricao_estadual_st` | IE de Substituto Tributário (outra UF) | texto | Opcional |
 | `suframa` | Inscrição SUFRAMA | texto | Opcional, sem regra de motor no v1 |
 
-**O `<select>` de CRT tem três opções, não quatro (DF37).** O Niner atende Simples Nacional e MEI;
+**O `<select>` de CRT tem três opções, não quatro (DF37).** O Nainer atende Simples Nacional e MEI;
 Lucro Real e Lucro Presumido estão fora do produto. O CRT 3 é recusado em três camadas — não é
 excesso de zelo, é o custo de errar: uma empresa do Lucro Presumido operando como CRT 1 emitiria
 **toda** nota com CSOSN e PIS/COFINS zerado, e a nota seria autorizada normalmente. O erro só

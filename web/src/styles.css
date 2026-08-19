@@ -1,4 +1,4 @@
-/* Design system do Niner (§3.7) — tokens + tema claro/escuro. Compartilha a paleta
+/* Design system do Nainer (§3.7) — tokens + tema claro/escuro. Compartilha a paleta
    com o site (golden file: cadastro_fornecedor_campos_cinza.html). */
 :root {
   --ground: #f5f4f0; --surface: #ffffff; --surface-2: #edece6;

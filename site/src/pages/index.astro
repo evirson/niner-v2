@@ -1,6 +1,6 @@
 ---
 /**
- * Landing de venda do Niner — implementação do HTML entregue pelo Claude Design
+ * Landing de venda do Nainer — implementação do HTML entregue pelo Claude Design
  * (projeto "HTML com tema claro/escuro e FAQ", 2026-08-18), gerado a partir de
  * `docs/site/briefing-landing.md`.
  *
@@ -21,7 +21,7 @@ import { contato, depoimentos, linkInstagram, linkWhatsapp } from '../dados/cont
 const zap = linkWhatsapp();
 const insta = linkInstagram();
 const canonical = contato.dominio + '/';
-const titulo = 'Niner — sistema para loja com NFC-e, grátis até 100 vendas/mês';
+const titulo = 'Nainer — sistema para loja com NFC-e, grátis até 100 vendas/mês';
 const descricao =
   'Sistema completo para sua loja: PDV, estoque, crediário e nota fiscal (NFC-e/NF-e). ' +
   'Grátis para sempre até 100 vendas por mês. Sem cartão, sem prazo.';
@@ -49,7 +49,7 @@ const perguntas = [
   },
   {
     p: 'Preciso de certificado digital?',
-    r: 'Só para emitir nota fiscal. O Niner usa o certificado A1 (um arquivo digital), que você envia uma vez e pronto. Se você ainda não tem, seu contador consegue providenciar em poucos dias.',
+    r: 'Só para emitir nota fiscal. O Nainer usa o certificado A1 (um arquivo digital), que você envia uma vez e pronto. Se você ainda não tem, seu contador consegue providenciar em poucos dias.',
   },
   {
     p: 'Funciona com mais de um CNPJ?',
@@ -72,7 +72,7 @@ const jsonLd = {
   '@graph': [
     {
       '@type': 'SoftwareApplication',
-      name: 'Niner',
+      name: 'Nainer',
       applicationCategory: 'BusinessApplication',
       operatingSystem: 'Web',
       description:
@@ -86,7 +86,7 @@ const jsonLd = {
       url: canonical,
       inLanguage: 'pt-BR',
     },
-    { '@type': 'Organization', name: 'Vetor Sistemas', url: canonical, brand: { '@type': 'Brand', name: 'Niner' } },
+    { '@type': 'Organization', name: 'Vetor Sistemas', url: canonical, brand: { '@type': 'Brand', name: 'Nainer' } },
     {
       '@type': 'FAQPage',
       mainEntity: perguntas.map((q) => ({
@@ -133,7 +133,7 @@ const recursos = [
     <meta property="og:url" content={canonical} />
     <meta property="og:type" content="website" />
     <meta property="og:locale" content="pt_BR" />
-    <meta property="og:site_name" content="Niner" />
+    <meta property="og:site_name" content="Nainer" />
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content={titulo} />
     <meta name="twitter:description" content={descricao} />
@@ -157,7 +157,7 @@ const recursos = [
   <body>
     <header class="topo">
       <div class="wrap topo-inner">
-        <a class="logo" href="/" aria-label="Niner — página inicial"><b>Niner</b></a>
+        <a class="logo" href="/" aria-label="Nainer — página inicial"><b>Nainer</b></a>
         <nav class="nav" aria-label="Seções da página">
           <a href="#recursos" data-evento="NAV" data-rotulo="recursos">Recursos</a>
           <a href="#preco" data-evento="NAV" data-rotulo="preco">Preço</a>
@@ -211,7 +211,7 @@ const recursos = [
         </div>
       </section>
 
-      <section class="faixa" aria-label="Garantias do Niner">
+      <section class="faixa" aria-label="Garantias do Nainer">
         <div class="wrap">
           <ul>
             {['NFC-e e NF-e inclusos', 'Seus dados nunca são apagados', 'Funciona no balcão e no celular', 'Suporte por WhatsApp'].map((item) => (
@@ -250,7 +250,7 @@ const recursos = [
       <section class="secao secao-continua" id="recursos" aria-labelledby="t-recursos">
         <div class="wrap">
           <header class="secao-cab">
-            <p class="kicker">O que o Niner faz</p>
+            <p class="kicker">O que o Nainer faz</p>
             <h2 id="t-recursos">Tudo o que a loja precisa, num lugar só</h2>
             <p class="desc">Todas as funções liberadas desde o primeiro dia — inclusive no plano gratuito.</p>
           </header>
@@ -345,7 +345,7 @@ const recursos = [
             <ul class="lista">
               {[
                 '<b>NFC-e no balcão e NF-e para empresa</b>, emitidas direto da venda, sem redigitar item por item.',
-                '<b>Certificado digital A1:</b> você envia o arquivo uma vez e o Niner cuida do resto.',
+                '<b>Certificado digital A1:</b> você envia o arquivo uma vez e o Nainer cuida do resto.',
                 '<b>Contingência automática:</b> caiu a internet da SEFAZ? A venda não para — a nota é transmitida depois.',
                 '<b>XML guardado por 5 anos</b>, como a lei exige.',
               ].map((item) => (
@@ -450,7 +450,7 @@ const recursos = [
       <div class="wrap">
         <div class="rodape-grid">
           <div>
-            <a class="logo" href="/" style="font-size:22px"><b>Niner</b></a>
+            <a class="logo" href="/" style="font-size:22px"><b>Nainer</b></a>
             <p style="margin-top:10px; max-width:26em;">ERP em nuvem para o pequeno varejo brasileiro. Um produto da Vetor Sistemas.</p>
             {contato.cnpjVetor && <p style="margin-top:10px;">CNPJ {contato.cnpjVetor}</p>}
           </div>

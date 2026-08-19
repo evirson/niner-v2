@@ -103,7 +103,7 @@ public class CobrancaService {
 
         CobrancaPix pix = gateway.criarPix(
                 "fatura-" + idFatura, valor,
-                "Niner — assinatura %s (%s)".formatted(plano.nome(), req.ciclo().name().toLowerCase()),
+                "Nainer — assinatura %s (%s)".formatted(plano.nome(), req.ciclo().name().toLowerCase()),
                 assinatura.emailContato(), idempotencia);
 
         jdbc.sql("""

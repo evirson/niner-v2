@@ -3,7 +3,7 @@
   "type": "module",
   "version": "0.0.1",
   "private": true,
-  "description": "Site público de aquisição do Niner (SEO/SSG — Astro). ADR-011.",
+  "description": "Site público de aquisição do Nainer (SEO/SSG — Astro). ADR-011.",
   "scripts": {
     "dev": "astro dev --port 5175",
     "build": "astro build",

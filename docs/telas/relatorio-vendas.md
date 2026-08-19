@@ -200,7 +200,7 @@ em sequência do dono do produto:
    de Y" + data/hora de geração à direita, régua fina abaixo).
 3. **Rodapé em toda página:** empresa **logada na sessão** à esquerda (`eu.empresa.nome` — fixa,
    não muda com o filtro de empresa, que já aparece em "Filtros Aplicados" e pode ser "Todas as
-   empresas" pro ADMIN) e `"Niner ERP"` fixo à direita.
+   empresas" pro ADMIN) e `"Nainer ERP"` fixo à direita.
 
 **Como o cabeçalho/rodapé abrem espaço sem cortar conteúdo:** `desenharElementoPaginado()` reserva
 `ALTURA_CABECALHO_MM` (16mm) e `ALTURA_RODAPE_MM` (10mm) subtraindo do cálculo de altura útil por

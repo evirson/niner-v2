@@ -100,9 +100,9 @@ public class RecuperacaoSenhaService {
                 .update();
 
         String link = "%s/redefinir-senha?token=%s".formatted(baseWeb.replaceAll("/+$", ""), token);
-        email.enviar(usuario.email(), "Redefinir a senha do Niner", """
+        email.enviar(usuario.email(), "Redefinir a senha do Nainer", """
                 <p>Olá, %s.</p>
-                <p>Recebemos um pedido para redefinir a senha da sua conta no Niner.
+                <p>Recebemos um pedido para redefinir a senha da sua conta no Nainer.
                 O link abaixo vale por <b>%d horas</b> e só pode ser usado uma vez:</p>
                 <p><a href="%s">Redefinir minha senha</a></p>
                 <p style="color:#5c6660;font-size:13px">Se não foi você que pediu, ignore este e-mail —

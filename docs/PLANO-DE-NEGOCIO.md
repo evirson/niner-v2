@@ -1,10 +1,10 @@
-# Plano de Negócio — Niner (ERP SaaS multicanal para varejo)
+# Plano de Negócio — Nainer (ERP SaaS multicanal para varejo)
 
-**Empresa:** Vetor Sistemas · **Produto:** Niner · **Banco:** `niner_db` · **Versão:** 1.0 (pivô SaaS)
+**Empresa:** Vetor Sistemas · **Produto:** Nainer · **Banco:** `niner_db` · **Versão:** 1.0 (pivô SaaS)
 **Relação com a spec técnica:** este documento é **comercial** e complementa (não substitui) o `spec-driven-erp-varejo.md` (v2.0). Convenção: itens 🔴 = decisão pendente.
 
 > **Conceito organizador — dois planos (planes), nunca conflar:**
-> - **Plano de Controle ("Plataforma Niner")** — o negócio da Vetor: tenants, planos, assinaturas, faturas, cobrança, suporte. Tabelas globais (`plataforma.*`).
+> - **Plano de Controle ("Plataforma Nainer")** — o negócio da Vetor: tenants, planos, assinaturas, faturas, cobrança, suporte. Tabelas globais (`plataforma.*`).
 > - **Plano do Inquilino ("ERP do lojista")** — catálogo, estoque, pedidos, canais e o **financeiro interno do lojista** (caixa/crediário legado). Isolado por `id_tenant`.
 > Regra de vocabulário: *assinatura/plano/trial/mensalidade/gateway* = **plataforma**; *caixa/crediário/contas a pagar-receber/conta corrente da loja* = **financeiro do lojista**. Ver o Anexo A.
 
@@ -12,7 +12,7 @@
 
 ## 1. Sumário executivo
 
-Niner é um **ERP em nuvem (SaaS por assinatura)** da Vetor Sistemas para o **pequeno varejista brasileiro** que vende em loja física e em 2–5 marketplaces (Mercado Livre, Shopee, Amazon, loja própria). Entrega uma **fonte única de verdade de estoque e preço**, com sincronização automática entre canais e **zero overselling**. Aquisição **self-service** pelo site público com **plano Gratuito sem prazo de validade** (até 100 vendas/mês); receita por **assinatura recorrente** mensal/anual em **faixas de volume de vendas** (ADR-015), cobradas via **Mercado Pago** (ADR-016).
+Nainer é um **ERP em nuvem (SaaS por assinatura)** da Vetor Sistemas para o **pequeno varejista brasileiro** que vende em loja física e em 2–5 marketplaces (Mercado Livre, Shopee, Amazon, loja própria). Entrega uma **fonte única de verdade de estoque e preço**, com sincronização automática entre canais e **zero overselling**. Aquisição **self-service** pelo site público com **plano Gratuito sem prazo de validade** (até 100 vendas/mês); receita por **assinatura recorrente** mensal/anual em **faixas de volume de vendas** (ADR-015), cobradas via **Mercado Pago** (ADR-016).
 
 ## 2. Proposta de valor
 
@@ -153,7 +153,7 @@ Regra prática: qualquer coisa com *assinatura/plano/trial/mensalidade/gateway* 
 | D2 | Trial por tempo | ⛔ **Superada (2026-08-18, ADR-015)** — não há mais trial: o plano Gratuito não expira, limita volume. |
 | D3 | Gateway de cobrança | ✅ **Fechada (2026-08-18, ADR-016):** **Mercado Pago** — PIX avulso mensal + recorrência (preapproval), atrás da interface `GatewayCobranca`. Integração já dominada pela equipe (`ecommerce-revo`, `s7classificados`). |
 | D4 | Multi-CNPJ por tenant | ✅ **Revisada (2026-08-18, ADR-015):** **ilimitado em todos os planos**, criado pelo próprio ADMIN no painel. Não é recurso de plano — a cota de vendas soma todos os CNPJs. |
-| D5 | Nome comercial "Niner" + domínio do site | 🔴 Confirmar |
+| D5 | Nome comercial "Nainer" + domínio do site | 🔴 Confirmar |
 | D6 | NFS-e da assinatura (Vetor→lojista): emissor/município | 🔴 Aberta |
 | D7 | Overage | ✅ **Revisada (2026-08-18):** vendas/mês tem **tolerância configurável** antes do bloqueio; pedido de marketplace importado nunca é descartado (regra original mantida). |
 | D8 | Régua de dunning (avisos D+1/D+3/D+7; suspensão ~15d; graça 7d) | 🔴 Confirmar |

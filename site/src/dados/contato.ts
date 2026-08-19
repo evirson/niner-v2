@@ -18,10 +18,10 @@ export const contato = {
   email: PENDENTE as string | null,
   cnpjVetor: PENDENTE as string | null,
   /** Domínio final do site — usado em canonical/OG. */
-  dominio: 'https://niner.com.br',
+  dominio: 'https://nainer.com.br',
 };
 
-export const MENSAGEM_WHATSAPP = 'Olá! Vi o Niner no site e queria saber mais.';
+export const MENSAGEM_WHATSAPP = 'Olá! Vi o Nainer no site e queria saber mais.';
 
 export function linkWhatsapp(): string | null {
   return contato.whatsapp

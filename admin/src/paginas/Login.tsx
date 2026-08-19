@@ -33,7 +33,7 @@ export default function Login() {
     <div className="tela-login">
       <form className="card" onSubmit={enviar}>
         <h1>
-          <span style={{ color: 'var(--accent)' }}>Niner</span> Plataforma
+          <span style={{ color: 'var(--accent)' }}>Nainer</span> Plataforma
         </h1>
         <p className="muted" style={{ marginTop: 0, marginBottom: 18 }}>
           Acesso restrito ao time da Vetor.

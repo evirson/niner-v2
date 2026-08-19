@@ -59,7 +59,7 @@ class ConfiguracaoPlataformaTest {
         return """
                 {"smtpHabilitado":true,"smtpHost":"smtp.vetor.com.br","smtpPorta":587,
                  "smtpUsuario":"envio@vetorsistemas.com.br",%s"smtpStarttls":true,
-                 "smtpRemetenteEmail":"nao-responda@niner.com.br","smtpRemetenteNome":"Niner",
+                 "smtpRemetenteEmail":"nao-responda@nainer.com.br","smtpRemetenteNome":"Nainer",
                  "backupHabilitado":true,"backupHora":"02:30:00","backupRetencaoDias":45%s}
                 """.formatted(
                 smtpSenha == null ? "" : "\"smtpSenha\":\"" + smtpSenha + "\",",

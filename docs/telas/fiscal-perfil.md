@@ -3,7 +3,7 @@ Autor: Claudio Calixto (dono do produto) · Data: 2026-08-17, revisada 2026-08-1
 
 ## Problema
 
-A **DF3** decidiu que a inteligência tributária mora no Niner: o XML sai pronto, sem provedor
+A **DF3** decidiu que a inteligência tributária mora no Nainer: o XML sai pronto, sem provedor
 externo. Isso significa que alguém precisa dizer, para cada produto, qual CFOP, qual CST/CSOSN e
 quais alíquotas usar — e isso varia por regime do emitente, UF de destino, tipo de destinatário e
 tipo de operação.

@@ -1,7 +1,7 @@
-# Briefing de design — Landing page do Niner (página de venda)
+# Briefing de design — Landing page do Nainer (página de venda)
 
 > **Para quem lê:** este documento é o *brief* para gerar o **HTML/CSS da página principal** do
-> site público do Niner. Quem implementa depois porta o resultado para **Astro** (`site/`, SSG).
+> site público do Nainer. Quem implementa depois porta o resultado para **Astro** (`site/`, SSG).
 > Entregue **um HTML autocontido** (CSS embutido, sem framework, sem CDN, sem JS de terceiro),
 > semântico e acessível. Onde houver dúvida de conteúdo, prefira **menos texto e mais clareza**.
 
@@ -9,7 +9,7 @@
 
 ## 1. O produto em uma frase
 
-**Niner** é um **ERP em nuvem para o pequeno varejo brasileiro** — PDV, estoque, crediário, caixa,
+**Nainer** é um **ERP em nuvem para o pequeno varejo brasileiro** — PDV, estoque, crediário, caixa,
 contas a pagar, DRE e **emissão de NFC-e/NF-e** — que é **grátis para sempre até 100 vendas por
 mês**, sem cartão e sem prazo de validade.
 
@@ -61,7 +61,7 @@ mês**, sem cartão e sem prazo de validade.
 
 ## 4. Estrutura da página (ordem das seções)
 
-1. **Topo fixo** — logo "Niner", links âncora (Recursos · Preço · Fiscal · Dúvidas), botão
+1. **Topo fixo** — logo "Nainer", links âncora (Recursos · Preço · Fiscal · Dúvidas), botão
    secundário **Entrar** e botão primário **Criar conta grátis**.
 2. **Herói** — `<h1>` com a promessa; subtítulo de uma linha; dois botões (**Criar conta grátis**
    / **Falar no WhatsApp**); micro-copy embaixo: *"Sem cartão de crédito. Sem prazo. Você começa a
@@ -70,7 +70,7 @@ mês**, sem cartão e sem prazo de validade.
    nunca são apagados"*, *"Funciona no balcão e no celular"*, *"Suporte por WhatsApp"*.
 4. **O problema** (3 cartões curtos) — caderno/planilha que não fecha; nota fiscal em sistema
    separado; fiado sem controle. Linguagem de loja, não de software.
-5. **O que o Niner faz** (grade de 6–8 recursos, ícone + título + 1 linha):
+5. **O que o Nainer faz** (grade de 6–8 recursos, ícone + título + 1 linha):
    PDV rápido · Estoque com variação (cor/tamanho/grade) · **NFC-e e NF-e** · Crediário e cobrança
    · Abertura/fechamento de caixa · Contas a pagar e receber · DRE e fluxo de caixa · Etiquetas
    de produto.
@@ -103,7 +103,7 @@ mês**, sem cartão e sem prazo de validade.
 - **Um único `<h1>`**, com a palavra-chave principal: *sistema para loja com nota fiscal grátis*.
   Hierarquia `h2`/`h3` correta em todas as seções.
 - **`<title>`** ≤ 60 caracteres e **`<meta name="description">`** ≤ 155, escritos para clique, não
-  para robô. Sugestão de título: *"Niner — sistema para loja com NFC-e, grátis até 100 vendas/mês"*.
+  para robô. Sugestão de título: *"Nainer — sistema para loja com NFC-e, grátis até 100 vendas/mês"*.
 - **Open Graph + Twitter Card** completos (`og:title`, `og:description`, `og:image` 1200×630,
   `og:url`, `og:type=website`, `og:locale=pt_BR`).
 - **JSON-LD** com `SoftwareApplication` (+ `offers` com `price: 0`, `priceCurrency: BRL`),
@@ -137,7 +137,7 @@ O que o HTML precisa entregar pronto:
 - **Aviso de cookies próprio** (banner discreto no rodapé, dispensável em 1 clique) com texto
   curto de LGPD e link para a política — sem biblioteca de consentimento de terceiro.
 - **WhatsApp:** o link deve ser `https://wa.me/<NUMERO>?text=<mensagem pré-preenchida>` com o
-  número em `[PLACEHOLDER: número WhatsApp]` e a mensagem *"Olá! Vi o Niner no site e queria
+  número em `[PLACEHOLDER: número WhatsApp]` e a mensagem *"Olá! Vi o Nainer no site e queria
   saber mais."*
 
 ## 7. Restrições técnicas (o que eu vou precisar portar)

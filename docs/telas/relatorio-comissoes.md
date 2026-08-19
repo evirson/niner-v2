@@ -66,7 +66,7 @@ Receber).
 ## PDF
 
 Mesmo mecanismo de captura visual (`html2canvas` + `jsPDF`) e mesmo modelo de cabeçalho/rodapé em
-toda página (título + paginação + data/hora no cabeçalho; empresa da sessão + "Niner ERP" no
+toda página (título + paginação + data/hora no cabeçalho; empresa da sessão + "Nainer ERP" no
 rodapé) do Relatório de Vendas/Contas a Receber — ver a seção "PDF" de
 `docs/telas/relatorio-vendas.md` para o raciocínio completo (captura, tema claro forçado só no
 clone, margem lateral 3mm). "Filtros Aplicados" (Período, Empresa(s)) aparece só na captura, não

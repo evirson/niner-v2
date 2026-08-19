@@ -157,7 +157,7 @@ mesmo dia, a pedido do dono do produto ("é um relatório, então precisa seguir
 - **PDF por captura visual** (`lib/relatorioDreCaptura.ts`, mesmo mecanismo de
   `relatorioComissoesCaptura.ts`): tema claro forçado **só no clone** do documento (sem flash na
   tela), altura dos ancestrais liberada no clone (senão o `.lista-corpo` corta o PDF na altura da
-  tela), cabeçalho/rodapé nativos em toda página com "Página X de Y", empresa e "Niner ERP".
+  tela), cabeçalho/rodapé nativos em toda página com "Página X de Y", empresa e "Nainer ERP".
 - **Blocos que só existem no PDF**: "Filtros Aplicados" (regime, período, empresas, comparação) e
   o resumo de receita/resultado líquido — na tela eles já estão na barra de filtros e no rodapé
   fixo, que ficam **fora** do elemento capturado.
