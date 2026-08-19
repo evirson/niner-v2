@@ -11,8 +11,9 @@ mas porque cada um tem consequência concreta com cliente real dentro.
 
 ## 🔴 Bloqueadores (antes do primeiro cadastro de verdade)
 
-> **Situação em 2026-08-19:** ✅ **1 e 4 resolvidos**. 2, 3 e 5 têm desenho decidido pelo dono do
-> produto — configuração no banco, editável pelo backoffice (ver "Decisão sobre configuração").
+> **Situação em 2026-08-19:** ✅ **os cinco resolvidos** (795 testes, 0 falhas). O que resta para
+> abrir cadastro real não é mais código: é **configurar** (segredos no VPS, SMTP e backup pelo
+> backoffice) e **fazer um restore de teste**.
 
 1. ✅ **RESOLVIDO (2026-08-19).** ~~**`/api/admin/**` está `permitAll`**~~ (TODO(jwt) em `SegurancaConfig`). Publicar `api.` sem
    travar isso expõe o gerenciador de marketing — **nome, e-mail e WhatsApp de leads** — para
@@ -22,12 +23,26 @@ mas porque cada um tem consequência concreta com cliente real dentro.
    lugar é recusado na porta. Login em `POST /api/admin/sessao`; primeiro `SUPER_ADMIN` criado por
    `NINER_STAFF_INICIAL_EMAIL`/`_SENHA` **apenas se a tabela estiver vazia** (`StaffBootstrap`).
    Coberto por `StaffAdminSegurancaTest` (5 casos).
-2. **Segredos com valor de desenvolvimento.** `niner.jwt.secret` tem default
+2. ⚠️ **CONTINUA VALENDO — é configuração, não código.** **Segredos com valor de desenvolvimento.** `niner.jwt.secret` tem default
    `niner-dev-secret-…` no `application.yml`: quem conhece esse valor **forja token de qualquer
    tenant** e entra em qualquer loja. Idem `niner.seguranca.chave-segredos` (cifra a senha do
    certificado fiscal) e as senhas do Postgres (`dev_app`/`dev_owner`). Todos precisam vir de
    variável de ambiente no VPS, gerados na hora.
-3. **Backup do Postgres e do MinIO.** Hoje não existe nenhum. Com cliente real há dado fiscal com
+3. ✅ **RESOLVIDO (2026-08-19).** ~~**Backup do Postgres e do MinIO.** Hoje não existe nenhum.~~
+   *Feito:* `BackupService` roda `pg_dump --format=custom`, envia para o MinIO em
+   `plataforma/backup/`, aplica a **retenção configurada** e grava o resultado (inclusive o erro)
+   na tela de configuração — backup que falha em silêncio é indistinguível de backup que funciona.
+   Agenda (horário + retenção) é editável no backoffice e o `BackupJob` confere a janela a cada
+   minuto, então mudar o horário vale no mesmo dia. Disparo manual em
+   `POST /api/admin/backup/executar` (SUPER_ADMIN) — use no dia do deploy, para não descobrir na
+   primeira madrugada que a credencial estava errada.
+   🔴 **Pré-requisito de infra:** o dump precisa do papel **`niner_backup` (BYPASSRLS)** criado no
+   `db/bootstrap/00_roles.sql`, e `NINER_BACKUP_USUARIO`/`NINER_BACKUP_SENHA` apontando para ele.
+   Com `FORCE ROW LEVEL SECURITY`, `niner_app` **e `niner_owner`** enxergam zero linha (medido:
+   `count(*) FROM empresa` = 0 para o owner, 3 para o superusuário) — o serviço recusa rodar
+   nessa condição. Falta ainda **cópia fora do VPS** e um **restore testado**: isso é operação, e
+   nenhum código substitui.
+   ~~Texto original:~~ Com cliente real há dado fiscal com
    **guarda legal de 5 anos** e dado pessoal sob LGPD; perder o disco do VPS é perder o negócio do
    lojista. `pg_dump` diário + cópia fora do VPS + **um restore testado** (spec §3.6: RPO 24h).
 4. ✅ **RESOLVIDO (2026-08-19).** ~~Sem rate limit no `/api/publico/**`~~ — `LimiteRequisicaoFilter`
@@ -36,7 +51,13 @@ mas porque cada um tem consequência concreta com cliente real dentro.
    notificação é perder confirmação de pagamento). Em produção, manter também `limit_req` no nginx
    e ligar `NINER_LIMITE_CONFIAR_PROXY=true` — sem isso o filtro conta o IP do proxy, não o do
    visitante. Coberto por `LimiteRequisicaoTest` (4 casos).
-5. **Não existe recuperação de senha nem e-mail transacional.** Lojista que esquece a senha fica
+5. ✅ **RESOLVIDO (2026-08-19).** ~~**Não existe recuperação de senha nem e-mail transacional.**~~
+   *Feito:* `POST /api/publico/recuperar-senha` (responde 204 sempre, para não revelar quem é
+   cliente) e `POST /api/publico/redefinir-senha` com token de **uso único**, validade de 2h e
+   **hash** no banco. O SMTP é configurado no backoffice (senha cifrada) e serve também para
+   avisos e, adiante, envio de NF-e ao cliente do lojista. Falta a tela no `web/`
+   ("Esqueci minha senha" + página de redefinição) e **preencher o SMTP**.
+   ~~Texto original:~~ Lojista que esquece a senha fica
    trancado para fora, e nenhum aviso de cota chega por e-mail. Decisão do dono do produto:
    (a) aceitar reset manual pelo suporte no começo, ou (b) implementar antes de abrir cadastro.
 

@@ -4,6 +4,8 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.vetor.niner.comum.config.NinerProperties;
+import com.vetor.niner.plataforma.configuracao.ConfiguracaoPlataformaDtos.CredenciaisGateway;
+import com.vetor.niner.plataforma.configuracao.ConfiguracaoPlataformaService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -24,9 +26,14 @@ import java.time.format.DateTimeFormatter;
  * mesma escolha do transporte da SEFAZ ({@code fiscal.sefaz.SefazTransporte}): sem SDK, sem
  * dependência nova, e o que muda entre sandbox e produção é o <b>token</b>, não o código.
  *
- * <p><b>Sandbox:</b> o access token de teste (prefixo {@code TEST-}) vem das credenciais da
- * aplicação no painel do Mercado Pago. Token vazio ⇒ {@link #configurado()} falso e a cobrança
- * responde 503 — a API sobe normalmente, o resto do ERP não sabe que existe gateway.
+ * <p><b>De onde vem a credencial:</b> do banco quando o backoffice a tiver configurado
+ * ({@code plataforma.configuracao_plataforma}, cifrada), com o {@code application.yml}/env como
+ * alternativa — é o caminho de dev, CI e da primeira subida, antes de existir staff para
+ * configurar. Token vazio nos dois ⇒ {@link #configurado()} falso e a cobrança responde 503: a
+ * API sobe normalmente e o resto do ERP não sabe que existe gateway.
+ *
+ * <p>A credencial é lida <b>a cada chamada</b>, de propósito: trocar o token pelo backoffice tem
+ * efeito imediato, sem reiniciar a API — que é justamente o motivo de ela ter saído do arquivo.
  *
  * <p><b>Idempotência (P2):</b> toda criação de cobrança manda {@code X-Idempotency-Key}; repetir
  * a chave devolve a mesma cobrança em vez de criar a segunda.
@@ -43,12 +50,18 @@ public class MercadoPagoAdapter implements GatewayCobranca {
     public static final String NOME = "mercadopago";
 
     private final NinerProperties.MercadoPago cfg;
+    private final ConfiguracaoPlataformaService configuracao;
     private final HttpClient http;
     private final ObjectMapper json = new ObjectMapper();
 
-    public MercadoPagoAdapter(NinerProperties props) {
+    public MercadoPagoAdapter(NinerProperties props, ConfiguracaoPlataformaService configuracao) {
         this.cfg = props.cobranca().mercadopago();
+        this.configuracao = configuracao;
         this.http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).build();
+    }
+
+    private CredenciaisGateway credenciais() {
+        return configuracao.credenciaisGateway();
     }
 
     @Override
@@ -58,13 +71,14 @@ public class MercadoPagoAdapter implements GatewayCobranca {
 
     @Override
     public boolean configurado() {
-        return cfg.accessToken() != null && !cfg.accessToken().isBlank();
+        String token = credenciais().accessToken();
+        return token != null && !token.isBlank();
     }
 
     @Override
     public CobrancaPix criarPix(String referencia, BigDecimal valor, String descricao, String emailPagador,
             String chaveIdempotencia) {
-        exigirConfigurado();
+        CredenciaisGateway credencial = exigirConfigurado();
         // Config parcial não pode explodir no meio de uma cobrança — 24h é o default do produto.
         OffsetDateTime expiraEm = OffsetDateTime.now()
                 .plus(cfg.validadePix() != null ? cfg.validadePix() : Duration.ofHours(24));
@@ -75,12 +89,12 @@ public class MercadoPagoAdapter implements GatewayCobranca {
         corpo.put("payment_method_id", "pix");
         corpo.put("external_reference", referencia);
         corpo.put("date_of_expiration", expiraEm.format(DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSSxxx")));
-        if (cfg.notificationUrl() != null && !cfg.notificationUrl().isBlank()) {
-            corpo.put("notification_url", cfg.notificationUrl());
+        if (credencial.notificationUrl() != null && !credencial.notificationUrl().isBlank()) {
+            corpo.put("notification_url", credencial.notificationUrl());
         }
         corpo.putObject("payer").put("email", emailPagador);
 
-        JsonNode resposta = chamar("POST", "/v1/payments", corpo.toString(), chaveIdempotencia);
+        JsonNode resposta = chamar(credencial, "POST", "/v1/payments", corpo.toString(), chaveIdempotencia);
 
         JsonNode dados = resposta.path("point_of_interaction").path("transaction_data");
         String copiaECola = texto(dados, "qr_code");
@@ -97,8 +111,8 @@ public class MercadoPagoAdapter implements GatewayCobranca {
 
     @Override
     public SituacaoPagamento consultarPagamento(String idTransacao) {
-        exigirConfigurado();
-        JsonNode r = chamar("GET", "/v1/payments/" + idTransacao, null, null);
+        CredenciaisGateway credencial = exigirConfigurado();
+        JsonNode r = chamar(credencial, "GET", "/v1/payments/" + idTransacao, null, null);
         return new SituacaoPagamento(
                 r.path("id").asText(), traduzir(r.path("status").asText()),
                 r.path("transaction_amount").decimalValue(), texto(r, "external_reference"));
@@ -118,11 +132,12 @@ public class MercadoPagoAdapter implements GatewayCobranca {
         };
     }
 
-    private JsonNode chamar(String metodo, String caminho, String corpo, String chaveIdempotencia) {
+    private JsonNode chamar(CredenciaisGateway credencial, String metodo, String caminho, String corpo,
+            String chaveIdempotencia) {
         HttpRequest.Builder req = HttpRequest.newBuilder()
                 .uri(URI.create(cfg.baseUrl() + caminho))
                 .timeout(TIMEOUT)
-                .header("Authorization", "Bearer " + cfg.accessToken())
+                .header("Authorization", "Bearer " + credencial.accessToken())
                 .header("Content-Type", "application/json");
         if (chaveIdempotencia != null) {
             req.header("X-Idempotency-Key", chaveIdempotencia);
@@ -154,11 +169,13 @@ public class MercadoPagoAdapter implements GatewayCobranca {
         }
     }
 
-    private void exigirConfigurado() {
-        if (!configurado()) {
+    private CredenciaisGateway exigirConfigurado() {
+        CredenciaisGateway credencial = credenciais();
+        if (credencial.accessToken() == null || credencial.accessToken().isBlank()) {
             throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
                     "Cobrança online ainda não está configurada nesta instalação.");
         }
+        return credencial;
     }
 
     private static String texto(JsonNode no, String campo) {

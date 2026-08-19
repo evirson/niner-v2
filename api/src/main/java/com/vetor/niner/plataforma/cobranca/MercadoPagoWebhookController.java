@@ -2,7 +2,7 @@ package com.vetor.niner.plataforma.cobranca;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.vetor.niner.comum.config.NinerProperties;
+import com.vetor.niner.plataforma.configuracao.ConfiguracaoPlataformaService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -44,11 +44,11 @@ public class MercadoPagoWebhookController {
     private static final ObjectMapper JSON = new ObjectMapper();
 
     private final JdbcClient jdbc;
-    private final NinerProperties.MercadoPago cfg;
+    private final ConfiguracaoPlataformaService configuracao;
 
-    public MercadoPagoWebhookController(JdbcClient jdbc, NinerProperties props) {
+    public MercadoPagoWebhookController(JdbcClient jdbc, ConfiguracaoPlataformaService configuracao) {
         this.jdbc = jdbc;
-        this.cfg = props.cobranca().mercadopago();
+        this.configuracao = configuracao;
     }
 
     @PostMapping("/mercadopago")
@@ -103,7 +103,8 @@ public class MercadoPagoWebhookController {
      * consulta ao gateway de qualquer forma.
      */
     private boolean assinaturaValida(String header, String requestId, String dataId) {
-        if (cfg.webhookSecret() == null || cfg.webhookSecret().isBlank()) {
+        String segredo = configuracao.credenciaisGateway().webhookSecret();
+        if (segredo == null || segredo.isBlank()) {
             return true;
         }
         if (header == null || header.isBlank()) {
@@ -137,7 +138,7 @@ public class MercadoPagoWebhookController {
 
         try {
             Mac mac = Mac.getInstance("HmacSHA256");
-            mac.init(new SecretKeySpec(cfg.webhookSecret().getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
+            mac.init(new SecretKeySpec(segredo.getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
             String calculado = HexFormat.of()
                     .formatHex(mac.doFinal(manifest.toString().getBytes(StandardCharsets.UTF_8)));
             // Comparação em tempo constante — comparar hash com equals() vaza informação por tempo.

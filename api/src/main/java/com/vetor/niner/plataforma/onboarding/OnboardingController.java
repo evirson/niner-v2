@@ -2,6 +2,8 @@ package com.vetor.niner.plataforma.onboarding;
 
 import com.vetor.niner.plataforma.aquisicao.AquisicaoService;
 import com.vetor.niner.plataforma.onboarding.OnboardingDtos.*;
+import com.vetor.niner.plataforma.onboarding.RecuperacaoSenhaDtos.RedefinirSenhaRequest;
+import com.vetor.niner.plataforma.onboarding.RecuperacaoSenhaDtos.SolicitarRecuperacaoRequest;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
@@ -16,10 +18,13 @@ public class OnboardingController {
 
     private final SignupService signup;
     private final AquisicaoService aquisicao;
+    private final RecuperacaoSenhaService recuperacao;
 
-    public OnboardingController(SignupService signup, AquisicaoService aquisicao) {
+    public OnboardingController(SignupService signup, AquisicaoService aquisicao,
+            RecuperacaoSenhaService recuperacao) {
         this.signup = signup;
         this.aquisicao = aquisicao;
+        this.recuperacao = recuperacao;
     }
 
     /**
@@ -47,5 +52,23 @@ public class OnboardingController {
     @PostMapping("/login")
     public TokenResponse login(@Valid @RequestBody LoginRequest req) {
         return signup.login(req);
+    }
+
+    /**
+     * Pede a redefinição de senha. Responde <b>204 sempre</b> — inclusive para loja ou e-mail
+     * inexistente: status diferente transformaria este endpoint numa lista de quem é cliente.
+     */
+    @PostMapping("/recuperar-senha")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void recuperarSenha(
+            @Valid @RequestBody SolicitarRecuperacaoRequest req, jakarta.servlet.http.HttpServletRequest http) {
+        recuperacao.solicitar(req, http.getRemoteAddr());
+    }
+
+    /** Redefine a senha com o token do e-mail (uso único, validade curta). */
+    @PostMapping("/redefinir-senha")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void redefinirSenha(@Valid @RequestBody RedefinirSenhaRequest req) {
+        recuperacao.redefinir(req);
     }
 }

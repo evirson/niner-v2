@@ -10,6 +10,9 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import java.util.UUID;
 
+import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.security.crypto.password.PasswordEncoder;
+
 import static org.springframework.http.MediaType.APPLICATION_JSON;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -27,6 +30,31 @@ class AquisicaoFunilTest {
 
     @Autowired
     MockMvc mvc;
+
+    @Autowired
+    JdbcClient jdbc;
+
+    @Autowired
+    PasswordEncoder senhas;
+
+    /**
+     * O backoffice deixou de ser aberto em 2026-08-19 (bloqueador nº 1): consultar o funil agora
+     * exige token de staff. Cria um SUPER_ADMIN e devolve o token.
+     */
+    private String tokenStaff() throws Exception {
+        String email = "funil-staff@vetor.com.br";
+        jdbc.sql("""
+                        INSERT INTO plataforma.staff (nome, email, senha_hash, papel)
+                        VALUES ('Staff Funil', ?, ?, 'SUPER_ADMIN')
+                        ON CONFLICT (lower(email)) DO NOTHING
+                        """)
+                .params(email, senhas.encode("senha-de-teste-123"))
+                .update();
+        String resp = mvc.perform(post("/api/admin/sessao").contentType(APPLICATION_JSON)
+                        .content("{\"email\":\"%s\",\"senha\":\"senha-de-teste-123\"}".formatted(email)))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        return JsonPath.read(resp, "$.token");
+    }
 
     private void beacon(String visitanteId, String utmSource, String campanha, String tipo, String rotulo)
             throws Exception {
@@ -48,7 +76,7 @@ class AquisicaoFunilTest {
         beacon(visitante, "instagram", "lancamento", "PAGEVIEW", "Niner");
         beacon(visitante, "instagram", "lancamento", "CLIQUE_WHATSAPP", "heroi");
 
-        mvc.perform(get("/api/admin/marketing/funil"))
+        mvc.perform(get("/api/admin/marketing/funil").header("Authorization", "Bearer " + tokenStaff()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.visitantes").isNumber())
                 .andExpect(jsonPath("$.porOrigem[?(@.origem == 'instagram')]").exists());
@@ -79,7 +107,8 @@ class AquisicaoFunilTest {
                                 """.formatted(visitante.substring(0, 6), email, visitante)))
                 .andExpect(status().isCreated());
 
-        String resp = mvc.perform(get("/api/admin/marketing/leads?status=CONVERTIDO"))
+        String resp = mvc.perform(get("/api/admin/marketing/leads?status=CONVERTIDO")
+                        .header("Authorization", "Bearer " + tokenStaff()))
                 .andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString();
 
@@ -130,7 +159,10 @@ class AquisicaoFunilTest {
         mvc.perform(post("/api/publico/leads").contentType(APPLICATION_JSON).content(corpo))
                 .andExpect(status().isNoContent());
 
-        String resp = mvc.perform(get("/api/admin/marketing/leads")).andReturn().getResponse().getContentAsString();
+        String resp = mvc.perform(get("/api/admin/marketing/leads")
+                        .header("Authorization", "Bearer " + tokenStaff()))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
         org.assertj.core.api.Assertions.assertThat(
                         JsonPath.<java.util.List<Object>>read(resp, "$.itens[?(@.email == '" + email + "')]"))
                 .hasSize(1);

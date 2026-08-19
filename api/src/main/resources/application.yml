@@ -50,6 +50,14 @@ niner:
   trial:
     dias: 60                   # trial sem cartão (D2 — revisto de 14 para 60 dias)
     plano: Profissional        # plano-base durante o trial (fallback: menor preço ativo)
+  backup:                      # credenciais do pg_dump — NUNCA niner_app (RLS filtraria tudo e o
+                               # dump sairia sem os dados dos lojistas). Horário e retenção ficam
+                               # no backoffice; aqui só o acesso ao banco.
+    jdbc-url: ${NINER_BACKUP_JDBC_URL:}   # vazio = usa o endereço do próprio DataSource
+    usuario: ${NINER_BACKUP_USUARIO:}
+    senha: ${NINER_BACKUP_SENHA:}
+  # Endereço do app do lojista — usado no link de redefinição de senha enviado por e-mail.
+  web-base-url: ${NINER_WEB_BASE_URL:http://localhost:5173}
   limite-requisicao:           # protege a superfície pública (única com escrita anônima).
                                # Em produção atrás de nginx, ligue confiar-proxy e mantenha
                                # também o limit_req no proxy — este filtro é a segunda camada.
