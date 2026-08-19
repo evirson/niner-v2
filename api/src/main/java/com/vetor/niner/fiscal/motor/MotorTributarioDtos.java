@@ -37,11 +37,13 @@ public final class MotorTributarioDtos {
     }
 
     /**
-     * @param aliquotaTributoAproximado percentual TOTAL (federal + estadual + municipal) da Lei
-     *         12.741/2012 já resolvido pelo chamador — Nacional × Importado por origem, NCM ×
-     *         {@code cfg_produto_ncm} — antes de chegar aqui: o motor continua sem I/O, só
-     *         multiplica pela base do item igual a ICMS/PIS/COFINS. {@code null}/zero quando não
-     *         há como resolver (produto sem NCM, ou NCM sem correspondência).
+     * @param aliquotaTribFederal/aliquotaTribEstadual/aliquotaTribMunicipal — as 3 alíquotas da
+     *         Lei 12.741/2012, separadas (2026-08-19: o DANFE passou a exibir o detalhamento, não
+     *         só o total) — já resolvidas pelo chamador (a federal já escolhida Nacional ×
+     *         Importado por origem, NCM × {@code cfg_produto_ncm}) antes de chegar aqui: o motor
+     *         continua sem I/O, só multiplica cada uma pela base do item igual a ICMS/PIS/COFINS.
+     *         {@code null}/zero quando não há como resolver (produto sem NCM, ou NCM sem
+     *         correspondência).
      */
     public record ItemOperacao(
             int nItem,
@@ -50,7 +52,9 @@ public final class MotorTributarioDtos {
             BigDecimal valorDesconto,
             BigDecimal valorAcrescimo,
             RegraFiscal regra,
-            BigDecimal aliquotaTributoAproximado) {
+            BigDecimal aliquotaTribFederal,
+            BigDecimal aliquotaTribEstadual,
+            BigDecimal aliquotaTribMunicipal) {
     }
 
     /**
@@ -107,6 +111,10 @@ public final class MotorTributarioDtos {
             Contribuicao pis,
             Contribuicao cofins,
             IbsCbs ibsCbs,
+            /** Detalhamento da Lei 12.741 (2026-08-19) — os 3 valores somam {@code valorTotalTributos}. */
+            BigDecimal valorTribFederal,
+            BigDecimal valorTribEstadual,
+            BigDecimal valorTribMunicipal,
             BigDecimal valorTotalTributos) {
     }
 
@@ -152,6 +160,10 @@ public final class MotorTributarioDtos {
             BigDecimal valorIbsUf,
             BigDecimal valorIbsMun,
             BigDecimal valorCbs,
+            /** Detalhamento da Lei 12.741 (2026-08-19) — os 3 valores somam {@code valorTotalTributos}. */
+            BigDecimal valorTribFederal,
+            BigDecimal valorTribEstadual,
+            BigDecimal valorTribMunicipal,
             BigDecimal valorTotalTributos,
             BigDecimal valorNota) {
     }

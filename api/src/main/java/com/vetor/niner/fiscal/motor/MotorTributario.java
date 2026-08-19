@@ -123,14 +123,19 @@ public class MotorTributario {
                 regra.aliquotaCofins(), baseBruta);
         IbsCbs ibsCbs = calcularIbsCbs(item.nItem(), regra, baseBruta, avisos);
 
-        // vTotTrib (Lei 12.741, §8.6): a alíquota já vem RESOLVIDA pelo chamador (Nacional ×
-        // Importado por origem, NCM × cfg_produto_ncm — 2026-08-19) — o motor só multiplica pela
-        // base, igual a ICMS/PIS/COFINS. Sem alíquota resolvida (produto sem NCM cadastrado, ou
-        // NCM sem correspondência local), fica zero sem aviso: informação indisponível, não erro.
-        BigDecimal vTotTrib = percentual(baseBruta, nz(item.aliquotaTributoAproximado()));
+        // vTotTrib (Lei 12.741, §8.6): as 3 alíquotas já vêm RESOLVIDAS pelo chamador (a federal já
+        // escolhida Nacional × Importado por origem, NCM × cfg_produto_ncm — 2026-08-19) — o motor
+        // só multiplica cada uma pela base, igual a ICMS/PIS/COFINS. Sem alíquota resolvida
+        // (produto sem NCM cadastrado, ou NCM sem correspondência local), fica zero sem aviso:
+        // informação indisponível, não erro. O detalhamento (federal/estadual/municipal) existe
+        // desde 2026-08-19 pra o DANFE poder exibir cada parcela, não só o total.
+        BigDecimal tribFederal = percentual(baseBruta, nz(item.aliquotaTribFederal()));
+        BigDecimal tribEstadual = percentual(baseBruta, nz(item.aliquotaTribEstadual()));
+        BigDecimal tribMunicipal = percentual(baseBruta, nz(item.aliquotaTribMunicipal()));
+        BigDecimal vTotTrib = tribFederal.add(tribEstadual).add(tribMunicipal);
 
         return new ItemTributado(item.nItem(), regra.cfop(), valorProduto, desconto, acrescimo,
-                icms, pis, cofins, ibsCbs, vTotTrib);
+                icms, pis, cofins, ibsCbs, tribFederal, tribEstadual, tribMunicipal, vTotTrib);
     }
 
     // ---------------------------------------------------------------- ICMS (§8.2)
@@ -283,6 +288,9 @@ public class MotorTributario {
         BigDecimal ibsUf = soma(itens, i -> i.ibsCbs().valorIbsUf());
         BigDecimal ibsMun = soma(itens, i -> i.ibsCbs().valorIbsMun());
         BigDecimal cbs = soma(itens, i -> i.ibsCbs().valorCbs());
+        BigDecimal tribFederal = soma(itens, ItemTributado::valorTribFederal);
+        BigDecimal tribEstadual = soma(itens, ItemTributado::valorTribEstadual);
+        BigDecimal tribMunicipal = soma(itens, ItemTributado::valorTribMunicipal);
         BigDecimal totTrib = soma(itens, ItemTributado::valorTotalTributos);
 
         // vNF = produtos − desconto + acréscimo. ICMS não entra (é por dentro, já está no preço) e
@@ -293,7 +301,8 @@ public class MotorTributario {
         BigDecimal valorNota = produtos.subtract(desconto).add(acrescimo);
 
         return new TotaisTributarios(produtos, desconto, acrescimo, baseIcms, valorIcms, valorFcp,
-                valorPis, valorCofins, baseIbs, ibsUf, ibsMun, cbs, totTrib, valorNota);
+                valorPis, valorCofins, baseIbs, ibsUf, ibsMun, cbs,
+                tribFederal, tribEstadual, tribMunicipal, totTrib, valorNota);
     }
 
     // ---------------------------------------------------------------- auxiliares

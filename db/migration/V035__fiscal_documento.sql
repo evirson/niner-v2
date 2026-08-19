@@ -327,10 +327,16 @@ CREATE TABLE documento_fiscal (
   -- LOJA paga na COMPRA é outra coisa, vive no XML do fornecedor e é assunto da DF30.
   -- Reforma (§8.5). ⚠️ DF32 em aberto: se estes valores COMPÕEM o vNF em 2026. A coluna existe
   -- de qualquer forma — o emissor calcula e destaca mesmo com carga efetiva zero.
+  base_ibs_cbs          numeric(12,2)            NOT NULL DEFAULT 0,  -- soma dos itens (DANFE, 2026-08-19)
   valor_ibs_uf          numeric(12,2)            NOT NULL DEFAULT 0,
   valor_ibs_mun         numeric(12,2)            NOT NULL DEFAULT 0,
   valor_cbs             numeric(12,2)            NOT NULL DEFAULT 0,
   valor_is              numeric(12,2)            NOT NULL DEFAULT 0,
+  -- Detalhamento federal/estadual/municipal da Lei 12.741 (DANFE, 2026-08-19) — os 3 somam
+  -- valor_total_tributos. Não faz parte do XML (vTotTrib é um valor só no XSD), só do DANFE.
+  valor_trib_federal    numeric(12,2)            NOT NULL DEFAULT 0,
+  valor_trib_estadual   numeric(12,2)            NOT NULL DEFAULT 0,
+  valor_trib_municipal  numeric(12,2)            NOT NULL DEFAULT 0,
   valor_total_tributos  numeric(12,2)            NOT NULL DEFAULT 0,  -- vTotTrib, Lei 12.741
   xml_objeto_bucket     text,                    -- ponteiro IMUTÁVEL (F6)
   xml_hash              text,

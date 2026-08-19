@@ -68,11 +68,12 @@ public class DocumentoFiscalRepositorio {
                             tipo_emissao, id_venda, id_cliente, data_emissao,
                             valor_produtos, valor_desconto, valor_outros, valor_total, valor_troco,
                             valor_icms, valor_fcp, valor_pis, valor_cofins,
-                            valor_ibs_uf, valor_ibs_mun, valor_cbs, valor_total_tributos,
+                            base_ibs_cbs, valor_ibs_uf, valor_ibs_mun, valor_cbs,
+                            valor_trib_federal, valor_trib_estadual, valor_trib_municipal, valor_total_tributos,
                             xml_assinado, xml_hash, id_usuario)
                         VALUES (plataforma.tenant_atual(), ?, ?, ?, ?, ?, ?, ?,
                                 'VENDA_CONSUMIDOR', 'ASSINADO', ?::ambiente_fiscal, ?, ?, ?, ?,
-                                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         RETURNING id_documento_fiscal
                         """)
                 .params(pedido.idEmpresa(), MODELO_NFCE, numero.serie(), numero.numero(), chave,
@@ -82,7 +83,8 @@ public class DocumentoFiscalRepositorio {
                         pedido.idVenda(), pedido.idCliente(), pedido.emissao(),
                         t.valorProdutos(), t.valorDesconto(), t.valorAcrescimo(), t.valorNota(),
                         nz(pedido.troco()), t.valorIcms(), t.valorFcp(), t.valorPis(), t.valorCofins(),
-                        t.valorIbsUf(), t.valorIbsMun(), t.valorCbs(), t.valorTotalTributos(),
+                        t.baseIbsCbs(), t.valorIbsUf(), t.valorIbsMun(), t.valorCbs(),
+                        t.valorTribFederal(), t.valorTribEstadual(), t.valorTribMunicipal(), t.valorTotalTributos(),
                         xmlAssinado, sha256(xmlAssinado), pedido.idUsuario())
                 .query(Long.class).single();
     }

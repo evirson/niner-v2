@@ -95,7 +95,7 @@ public class VendaFiscalAssembler {
             int nItem = i + 1;
             RegraFiscal regra = buscarRegra(b, config.crt(), ufDestino);
             itensOperacao.add(new ItemOperacao(nItem, b.qtd(), b.precoVenda(), b.valorDesconto(),
-                    b.valorAcrescimo(), regra, aliquotaTributoAproximado(b)));
+                    b.valorAcrescimo(), regra, aliquotaTribFederal(b), b.alqEstadual(), b.alqMunicipal()));
             itensNota.add(new ItemNota(nItem, b.sku(), b.gtin(), b.descricao(), b.ncm(), b.cest(),
                     b.unidadeComercial(), b.qtd(), b.precoVenda(), b.unidadeTributavel(), null, null,
                     b.origemMercadoria()));
@@ -263,25 +263,18 @@ public class VendaFiscalAssembler {
     }
 
     /**
-     * Tributo aproximado (Lei 12.741/2012, §8.6 do estudo) — devolve a alíquota TOTAL (federal +
-     * estadual + municipal) já somada, pronta para o motor multiplicar pela base do item, igual a
-     * ICMS/PIS/COFINS. A federal escolhe Nacional × Importado pelo primeiro dígito da origem da
-     * mercadoria (CST/CSOSN): {@link #ORIGENS_IMPORTADO} = 1/2/6/7; os demais (0/3/4/5/8) são
-     * Nacional. Sem NCM cadastrado no produto, ou NCM sem correspondência em {@code
-     * cfg_produto_ncm} (a base local não é 100% completa), devolve zero — informação
-     * simplesmente indisponível, não um erro (mesmo espírito do F11: nunca chutar um valor).
+     * Tributo aproximado (Lei 12.741/2012, §8.6 do estudo) — só a alíquota FEDERAL (estadual/
+     * municipal vão direto de {@code ItemBruto} pro {@code ItemOperacao}, sem escolha nenhuma).
+     * Escolhe Nacional × Importado pelo primeiro dígito da origem da mercadoria (CST/CSOSN):
+     * {@link #ORIGENS_IMPORTADO} = 1/2/6/7; os demais (0/3/4/5/8) são Nacional. 2026-08-19: as 3
+     * alíquotas passaram a chegar separadas ao motor (antes eram somadas aqui) pra o DANFE poder
+     * exibir o detalhamento federal/estadual/municipal, não só o total.
      */
-    private static BigDecimal aliquotaTributoAproximado(ItemBruto b) {
-        BigDecimal federal = ORIGENS_IMPORTADO.contains(b.origemMercadoria())
-                ? b.alqFederalImportado() : b.alqFederalNacional();
-        return nz(federal).add(nz(b.alqEstadual())).add(nz(b.alqMunicipal()));
+    private static BigDecimal aliquotaTribFederal(ItemBruto b) {
+        return ORIGENS_IMPORTADO.contains(b.origemMercadoria()) ? b.alqFederalImportado() : b.alqFederalNacional();
     }
 
     private static final Set<Integer> ORIGENS_IMPORTADO = Set.of(1, 2, 6, 7);
-
-    private static BigDecimal nz(BigDecimal v) {
-        return v == null ? BigDecimal.ZERO : v;
-    }
 
     /**
      * A regra mais específica vence: UF exata bate antes do coringa {@code '*'}. Sem regra que

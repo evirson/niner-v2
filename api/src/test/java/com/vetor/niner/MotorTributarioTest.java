@@ -353,8 +353,8 @@ class MotorTributarioTest {
     @Test
     void totalizaSomandoOsItensJaArredondados() {
         RegraFiscal regra = comAliquota(regraComCst(), "17.00");
-        ItemOperacao a = new ItemOperacao(1, um("1"), um("0.15"), null, null, regra, null);
-        ItemOperacao b = new ItemOperacao(2, um("1"), um("0.15"), null, null, regra, null);
+        ItemOperacao a = new ItemOperacao(1, um("1"), um("0.15"), null, null, regra, null, null, null);
+        ItemOperacao b = new ItemOperacao(2, um("1"), um("0.15"), null, null, regra, null, null, null);
 
         var totais = motor.calcular(
                 new OperacaoFiscal(TipoOperacao.VENDA, "PR", TipoDestinatario.CONSUMIDOR_FINAL, List.of(a, b)),
@@ -367,7 +367,7 @@ class MotorTributarioTest {
 
     @Test
     void acrescimoEntraNaBaseEDescontoSai() {
-        ItemOperacao item = new ItemOperacao(1, um("2"), um("50.00"), um("10.00"), um("4.00"), regraComCst(), null);
+        ItemOperacao item = new ItemOperacao(1, um("2"), um("50.00"), um("10.00"), um("4.00"), regraComCst(), null, null, null);
 
         var resultado = motor.calcular(
                 new OperacaoFiscal(TipoOperacao.VENDA, "PR", TipoDestinatario.CONSUMIDOR_FINAL, List.of(item)),
@@ -408,12 +408,36 @@ class MotorTributarioTest {
      */
     @Test
     void calculaVTotTribAplicandoAAliquotaJaResolvidaSobreABaseDoItem() {
-        ItemOperacao item = item(regraSimples("102"), um("13.45"));
+        ItemOperacao item = item(regraSimples("102"), um("13.45"), null, null);
 
         var resultado = motor.calcular(venda(item), ctx(1));
 
         assertThat(umItem(resultado).valorTotalTributos()).isEqualByComparingTo("3.77");
         assertThat(resultado.totais().valorTotalTributos()).isEqualByComparingTo("3.77");
+    }
+
+    /**
+     * Detalhamento federal/estadual/municipal (2026-08-19, DANFE passou a exibir cada parcela, não
+     * só o total). Base R$ 28,00: 6% federal = 1,68 · 18% estadual = 5,04 · 2% municipal = 0,56 ·
+     * soma = 7,28 — cada parcela bate isolada, provando que o motor não jogou tudo junto num
+     * cálculo só (o que esconderia um erro de alíquota trocada entre as três).
+     */
+    @Test
+    void detalhaFederalEstadualMunicipalSeparadamenteENaSoma() {
+        ItemOperacao item = item(regraSimples("102"), um("6.00"), um("18.00"), um("2.00"));
+
+        var resultado = motor.calcular(venda(item), ctx(1));
+        ItemTributado tributado = umItem(resultado);
+
+        assertThat(tributado.valorTribFederal()).isEqualByComparingTo("1.68");
+        assertThat(tributado.valorTribEstadual()).isEqualByComparingTo("5.04");
+        assertThat(tributado.valorTribMunicipal()).isEqualByComparingTo("0.56");
+        assertThat(tributado.valorTotalTributos()).isEqualByComparingTo("7.28");
+
+        assertThat(resultado.totais().valorTribFederal()).isEqualByComparingTo("1.68");
+        assertThat(resultado.totais().valorTribEstadual()).isEqualByComparingTo("5.04");
+        assertThat(resultado.totais().valorTribMunicipal()).isEqualByComparingTo("0.56");
+        assertThat(resultado.totais().valorTotalTributos()).isEqualByComparingTo("7.28");
     }
 
     // ------------------------------------------------------------------ fixtures
@@ -428,11 +452,13 @@ class MotorTributarioTest {
 
     /** 3 × R$ 10,00 − R$ 2,00 de desconto ⇒ base de R$ 28,00 em todos os cenários. */
     private static ItemOperacao item(RegraFiscal regra) {
-        return item(regra, null);
+        return item(regra, null, null, null);
     }
 
-    private static ItemOperacao item(RegraFiscal regra, BigDecimal aliquotaTributoAproximado) {
-        return new ItemOperacao(1, um("3"), um("10.00"), um("2.00"), null, regra, aliquotaTributoAproximado);
+    private static ItemOperacao item(RegraFiscal regra, BigDecimal aliquotaFederal,
+                                     BigDecimal aliquotaEstadual, BigDecimal aliquotaMunicipal) {
+        return new ItemOperacao(1, um("3"), um("10.00"), um("2.00"), null, regra,
+                aliquotaFederal, aliquotaEstadual, aliquotaMunicipal);
     }
 
     private static ItemTributado umItem(TributacaoResultado resultado) {

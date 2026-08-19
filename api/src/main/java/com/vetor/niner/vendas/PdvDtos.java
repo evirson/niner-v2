@@ -120,7 +120,7 @@ public final class PdvDtos {
      *  papeleta, nunca por item (mesmo formato do mockup pedido pelo dono do produto). */
     public record ItemComprovanteVenda(
             String sku, String descricaoProduto, String variacaoCor, String variacaoTamanho,
-            BigDecimal qtd, BigDecimal valorUnitario, BigDecimal valorTotal) {
+            BigDecimal qtd, String unidadeComercial, BigDecimal valorUnitario, BigDecimal valorTotal) {
     }
 
     /** {@code crediario} (2026-08-06) diferencia o rótulo na papeleta: "VALOR PAGO EM" (dinheiro/
@@ -157,6 +157,13 @@ public final class PdvDtos {
              *  ele não tem documento cadastrado (nesse caso a nota só pode sair pra consumidor). */
             String documentoCliente,
             String nomeVendedor,
+            /** {@code funcionario.id_funcionario} do vendedor (2026-08-19, DANFE) — o "VEN.: nn"
+             *  do rodapé fiscal. {@code null} nos mesmos casos em que {@code nomeVendedor} é nulo. */
+            Integer codigoVendedor,
+            /** {@code venda.id_caixa} (2026-08-19, DANFE) — identifica qual caixa processou a
+             *  venda, informação de auditoria comum em DANFE. {@code null} numa venda sem caixa
+             *  vinculado (não deveria acontecer no fluxo normal do PDV, mas o campo é nullable). */
+            Integer numeroCaixa,
             String nomeOperador,
             List<ItemComprovanteVenda> itens,
             BigDecimal subtotal,
@@ -165,7 +172,21 @@ public final class PdvDtos {
             BigDecimal totalAPagar,
             List<PagamentoComprovanteVenda> pagamentos,
             List<ParcelaComprovanteVenda> parcelasCrediario,
-            DadosFiscaisComprovante dadosFiscais) {
+            DadosFiscaisComprovante dadosFiscais,
+            /** Cabeçalho fiscal completo da empresa (2026-08-19, DANFE) — {@code null} quando a
+             *  venda não é fiscal ({@code dadosFiscais == null}); a papeleta comum não precisa
+             *  disso, só o DANFCE. */
+            EmpresaComprovante empresaFiscal) {
+    }
+
+    /**
+     * Cabeçalho de empresa que o DANFE exige (razão social/CNPJ/IE/endereço/telefone) — dado
+     * diferente do {@code nomeEmpresa}/{@code codigoEmpresa} que a papeleta comum já usa (esses
+     * dois continuam existindo pra não quebrar o cabeçalho não-fiscal). {@code enderecoCompleto}
+     * já vem formatado pronto pra imprimir: {@code logradouro, numero - bairro - cidade - UF}.
+     */
+    public record EmpresaComprovante(
+            String razaoSocial, String cnpj, String inscricaoEstadual, String enderecoCompleto, String telefone) {
     }
 
     /**
@@ -188,6 +209,13 @@ public final class PdvDtos {
              *  XML assinado, nunca do cadastro do cliente (podem divergir: o operador respondeu
              *  "não" à pergunta de incluir CPF). {@code null} quando a NFC-e saiu para consumidor
              *  não identificado — DANFE §4.3 pede "CONSUMIDOR NÃO IDENTIFICADO" nesse caso. */
-            String documentoConsumidor) {
+            String documentoConsumidor,
+            /** Reforma tributária (LC 214/2025), somados de {@code documento_fiscal} — a mesma
+             *  base/valor que o motor calculou e o XML declara por item, aqui já agregado pela
+             *  nota inteira (2026-08-19, DANFE). */
+            BigDecimal baseIbsCbs, BigDecimal valorIbsUf, BigDecimal valorIbsMun, BigDecimal valorCbs,
+            /** Detalhamento federal/estadual/municipal da Lei 12.741 (2026-08-19) — os 3 somam
+             *  {@code valorTotalTributos}; o DANFE mostra cada parcela, não só o total. */
+            BigDecimal valorTribFederal, BigDecimal valorTribEstadual, BigDecimal valorTribMunicipal) {
     }
 }

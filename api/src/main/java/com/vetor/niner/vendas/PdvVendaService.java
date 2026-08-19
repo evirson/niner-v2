@@ -7,6 +7,7 @@ import com.vetor.niner.financeiro.caixa.CaixaService;
 import com.vetor.niner.vendas.PdvDtos.ComprovanteVendaResponse;
 import com.vetor.niner.vendas.PdvDtos.DadosFiscaisComprovante;
 import com.vetor.niner.vendas.PdvDtos.EfetivarVendaRequest;
+import com.vetor.niner.vendas.PdvDtos.EmpresaComprovante;
 import com.vetor.niner.vendas.PdvDtos.ItemComprovanteVenda;
 import com.vetor.niner.vendas.PdvDtos.ItemVendaRequest;
 import com.vetor.niner.vendas.PdvDtos.PagamentoComprovanteVenda;
@@ -215,13 +216,17 @@ public class PdvVendaService {
     @Transactional(readOnly = true)
     public ComprovanteVendaResponse buscarComprovante(long idVenda) {
         record Cabecalho(String nomeEmpresa, int codigoEmpresa, OffsetDateTime dataVenda,
-                          String nomeCliente, String telefoneCliente, String documentoCliente, String nomeOperador) {
+                          String nomeCliente, String telefoneCliente, String documentoCliente, String nomeOperador,
+                          Integer numeroCaixa, String cnpjEmpresa, String inscricaoEstadualEmpresa,
+                          String enderecoEmpresa, String telefoneEmpresa) {
         }
 
         Cabecalho cabecalho = jdbc.sql("""
                         SELECT e.razao_social AS nome_empresa, e.codigo_empresa, v.data_venda,
                                c.nome AS nome_cliente, c.telefone AS telefone_cliente, c.cpf_cnpj AS documento_cliente,
-                               uop.nome_usuario AS nome_operador
+                               uop.nome_usuario AS nome_operador, v.id_caixa,
+                               e.cnpj, e.inscricao_estadual, e.telefone AS telefone_empresa,
+                               e.endereco, e.numero AS numero_empresa, e.bairro, e.cidade, e.estado
                         FROM venda v
                         JOIN empresa e ON e.id_tenant = v.id_tenant AND e.id_empresa = v.id_empresa
                         LEFT JOIN cliente c ON c.id_tenant = v.id_tenant AND c.id_cliente = v.id_cliente
@@ -234,13 +239,19 @@ public class PdvVendaService {
                         rs.getString("nome_empresa"), rs.getInt("codigo_empresa"),
                         rs.getObject("data_venda", OffsetDateTime.class),
                         rs.getString("nome_cliente"), rs.getString("telefone_cliente"),
-                        rs.getString("documento_cliente"), rs.getString("nome_operador")))
+                        rs.getString("documento_cliente"), rs.getString("nome_operador"),
+                        (Integer) rs.getObject("id_caixa"), rs.getString("cnpj"),
+                        rs.getString("inscricao_estadual"), rs.getString("telefone_empresa"),
+                        enderecoCompleto(rs.getString("endereco"), rs.getString("numero_empresa"),
+                                rs.getString("bairro"), rs.getString("cidade"), rs.getString("estado"))))
                 .optional()
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND, "A venda #" + idVenda + " não existe."));
 
-        String nomeVendedor = jdbc.sql("""
-                        SELECT f.nome
+        record Vendedor(String nome, Integer codigo) {
+        }
+        Vendedor vendedor = jdbc.sql("""
+                        SELECT f.nome, f.id_funcionario
                         FROM produto_movimento_mestre pmm
                         JOIN produto_movimento_detalhe pmd
                                ON pmd.id_tenant = pmm.id_tenant AND pmd.id_movimento = pmm.id_movimento
@@ -249,14 +260,15 @@ public class PdvVendaService {
                         LIMIT 1
                         """)
                 .param(idVenda)
-                .query(String.class)
+                .query((rs, n) -> new Vendedor(rs.getString("nome"), rs.getInt("id_funcionario")))
                 .optional()
-                .orElse(null);
+                .orElse(new Vendedor(null, null));
 
         List<ItemComprovanteVenda> itens = jdbc.sql("""
                         SELECT pb.sku, p.descricao AS descricao_produto,
                                co.descricao AS variacao_cor, ta.descricao AS variacao_tamanho,
-                               pmd.qtd_produto, pmd.preco_venda, (pmd.qtd_produto * pmd.preco_venda) AS valor_total
+                               pmd.qtd_produto, p.unidade_comercial, pmd.preco_venda,
+                               (pmd.qtd_produto * pmd.preco_venda) AS valor_total
                         FROM produto_movimento_mestre pmm
                         JOIN produto_movimento_detalhe pmd
                                ON pmd.id_tenant = pmm.id_tenant AND pmd.id_movimento = pmm.id_movimento
@@ -271,7 +283,8 @@ public class PdvVendaService {
                 .query((rs, n) -> new ItemComprovanteVenda(
                         rs.getString("sku"), rs.getString("descricao_produto"),
                         rs.getString("variacao_cor"), rs.getString("variacao_tamanho"),
-                        rs.getBigDecimal("qtd_produto"), rs.getBigDecimal("preco_venda"), rs.getBigDecimal("valor_total")))
+                        rs.getBigDecimal("qtd_produto"), rs.getString("unidade_comercial"),
+                        rs.getBigDecimal("preco_venda"), rs.getBigDecimal("valor_total")))
                 .list();
 
         record Totais(BigDecimal subtotal, BigDecimal descontos, BigDecimal acrescimos) {
@@ -328,13 +341,32 @@ public class PdvVendaService {
                 .list();
 
         BigDecimal totalAPagar = totais.subtotal().subtract(totais.descontos()).add(totais.acrescimos());
+        DadosFiscaisComprovante dadosFiscais = buscarDadosFiscais(idVenda);
+        EmpresaComprovante empresaFiscal = dadosFiscais == null ? null : new EmpresaComprovante(
+                cabecalho.nomeEmpresa(), cabecalho.cnpjEmpresa(), cabecalho.inscricaoEstadualEmpresa(),
+                cabecalho.enderecoEmpresa(), cabecalho.telefoneEmpresa());
 
         return new ComprovanteVendaResponse(
                 idVenda, cabecalho.nomeEmpresa(), cabecalho.codigoEmpresa(), cabecalho.dataVenda(),
                 cabecalho.nomeCliente(), cabecalho.telefoneCliente(), cabecalho.documentoCliente(),
-                nomeVendedor, cabecalho.nomeOperador(),
+                vendedor.nome(), vendedor.codigo(), cabecalho.numeroCaixa(), cabecalho.nomeOperador(),
                 itens, totais.subtotal(), totais.descontos(), totais.acrescimos(), totalAPagar,
-                pagamentos, parcelasCrediario, buscarDadosFiscais(idVenda));
+                pagamentos, parcelasCrediario, dadosFiscais, empresaFiscal);
+    }
+
+    /** "RODOVIA BR-116, 15338 - XAXIM - CURITIBA - PR" (2026-08-19, DANFE) — pedaços nulos somem
+     *  em vez de deixar " - " sobrando (endereço incompleto é comum enquanto o cadastro da
+     *  empresa não foi completado, F11 não bloqueia a venda por isso). */
+    private static String enderecoCompleto(String logradouro, String numero, String bairro,
+                                           String cidade, String estado) {
+        List<String> partes = new ArrayList<>();
+        if (logradouro != null && !logradouro.isBlank()) {
+            partes.add(numero != null && !numero.isBlank() ? logradouro + ", " + numero : logradouro);
+        }
+        if (bairro != null && !bairro.isBlank()) partes.add(bairro);
+        if (cidade != null && !cidade.isBlank()) partes.add(cidade);
+        if (estado != null && !estado.isBlank()) partes.add(estado);
+        return partes.isEmpty() ? null : String.join(" - ", partes);
     }
 
     /**
@@ -346,7 +378,9 @@ public class PdvVendaService {
     private DadosFiscaisComprovante buscarDadosFiscais(long idVenda) {
         return jdbc.sql("""
                         SELECT chave_acesso, protocolo, data_autorizacao, ambiente::text AS ambiente,
-                               tipo_emissao, valor_total_tributos, xml_assinado, numero, serie
+                               tipo_emissao, valor_total_tributos, xml_assinado, numero, serie,
+                               base_ibs_cbs, valor_ibs_uf, valor_ibs_mun, valor_cbs,
+                               valor_trib_federal, valor_trib_estadual, valor_trib_municipal
                           FROM documento_fiscal
                          WHERE id_tenant = plataforma.tenant_atual() AND id_venda = ?
                            AND situacao IN ('AUTORIZADO', 'CONTINGENCIA')
@@ -369,7 +403,10 @@ public class PdvVendaService {
                             "HOMOLOGACAO".equals(rs.getString("ambiente")), rs.getInt("tipo_emissao") == 9,
                             extrairTagCdata(xml, "qrCode"), extrairTag(xml, "urlChave"),
                             rs.getBigDecimal("valor_total_tributos"), rs.getInt("numero"), rs.getInt("serie"),
-                            documentoConsumidor);
+                            documentoConsumidor, rs.getBigDecimal("base_ibs_cbs"),
+                            rs.getBigDecimal("valor_ibs_uf"), rs.getBigDecimal("valor_ibs_mun"),
+                            rs.getBigDecimal("valor_cbs"), rs.getBigDecimal("valor_trib_federal"),
+                            rs.getBigDecimal("valor_trib_estadual"), rs.getBigDecimal("valor_trib_municipal"));
                 })
                 .optional()
                 .orElse(null);
