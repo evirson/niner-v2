@@ -29,11 +29,16 @@ public class BackupJob {
 
     @Scheduled(fixedDelay = 60_000, initialDelay = 120_000)
     public void verificarJanela() {
+        // ⚠️ `localtime` e `current_date` são o relógio da SESSÃO, que roda em UTC — o staff
+        // configurava backup para as 03:00 e ele disparava às 00:00 de Brasília, no meio do
+        // movimento de quem fecha tarde. Horário e "já rodou hoje" são do relógio da Vetor
+        // (FusoDaPlataforma), não do banco.
         Boolean estaNaHora = jdbc.sql("""
                         SELECT backup_habilitado
-                               AND localtime >= backup_hora
+                               AND (now() AT TIME ZONE 'America/Sao_Paulo')::time >= backup_hora
                                AND (backup_ultimo_em IS NULL
-                                    OR backup_ultimo_em::date < current_date
+                                    OR (backup_ultimo_em AT TIME ZONE 'America/Sao_Paulo')::date
+                                        < (now() AT TIME ZONE 'America/Sao_Paulo')::date
                                     OR backup_ultimo_status <> 'OK')
                           FROM plataforma.configuracao_plataforma WHERE id = 1
                         """)

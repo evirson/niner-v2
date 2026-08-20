@@ -1,5 +1,6 @@
 package com.vetor.niner.plataforma.uso;
 
+import com.vetor.niner.comum.tempo.FusoDaPlataforma;
 import com.vetor.niner.plataforma.uso.MinhaContaDtos.EmpresaDoTenant;
 import com.vetor.niner.plataforma.uso.MinhaContaDtos.FaixaSugerida;
 import com.vetor.niner.plataforma.uso.MinhaContaDtos.MinhaContaResponse;
@@ -60,7 +61,7 @@ public class MinhaContaService {
         // Uso da competência corrente. A linha pode estar com a competência do mês passado (o
         // reset é lazy, feito na primeira venda do mês) — nesse caso o mês corrente vale zero.
         Uso bruto = jdbc.sql("""
-                        SELECT CASE WHEN u.competencia_vendas = date_trunc('month', now())::date
+                        SELECT CASE WHEN u.competencia_vendas = date_trunc('month', now() AT TIME ZONE 'America/Sao_Paulo')::date
                                     THEN u.qtd_vendas_mes ELSE 0 END AS qtd_vendas,
                                COALESCE(a.tolerancia_vendas, pc.tolerancia_vendas) AS tolerancia
                           FROM plataforma.parametro_comercial pc
@@ -74,14 +75,14 @@ public class MinhaContaService {
                 .optional()
                 .orElse(new Uso(0, 0));
 
-        LocalDate competencia = LocalDate.now().withDayOfMonth(1);
+        LocalDate competencia = LocalDate.now(FusoDaPlataforma.ZONA).withDayOfMonth(1);
         UsoAtual uso = montarUso(bruto, plano.limiteVendasMes(), competencia);
 
         List<UsoMes> historico = jdbc.sql("""
                         SELECT competencia, qtd_vendas
                           FROM plataforma.uso_venda_mes
                          WHERE id_tenant = plataforma.tenant_atual()
-                           AND competencia >= (date_trunc('month', now()) - interval '11 months')::date
+                           AND competencia >= (date_trunc('month', now() AT TIME ZONE 'America/Sao_Paulo') - interval '11 months')::date
                          ORDER BY competencia
                         """)
                 .query((rs, n) -> new UsoMes(rs.getObject("competencia", LocalDate.class), rs.getInt("qtd_vendas")))

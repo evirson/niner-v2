@@ -131,10 +131,14 @@ public class CobrancaWebhookProcessador {
                            SET id_plano = f.id_plano,
                                ciclo = f.ciclo,
                                status = 'ATIVA',
-                               inicio_vigencia = COALESCE(a.inicio_vigencia, CURRENT_DATE),
+                               -- ⚠️ Dia da VETOR, não o do banco: CURRENT_DATE em UTC vira o dia
+                               -- seguinte às 21:00 de Brasília, e pagamento aprovado à noite datava
+                               -- a vigência um dia à frente — de novo a cada renovação.
+                               inicio_vigencia = COALESCE(a.inicio_vigencia,
+                                   (now() AT TIME ZONE 'America/Sao_Paulo')::date),
                                proxima_cobranca = CASE f.ciclo
-                                   WHEN 'ANUAL' THEN CURRENT_DATE + INTERVAL '1 year'
-                                   ELSE CURRENT_DATE + INTERVAL '1 month' END,
+                                   WHEN 'ANUAL' THEN (now() AT TIME ZONE 'America/Sao_Paulo')::date + INTERVAL '1 year'
+                                   ELSE (now() AT TIME ZONE 'America/Sao_Paulo')::date + INTERVAL '1 month' END,
                                atualizado_em = now()
                           FROM plataforma.fatura f
                          WHERE f.id_fatura = ? AND a.id_assinatura = f.id_assinatura AND f.id_plano IS NOT NULL

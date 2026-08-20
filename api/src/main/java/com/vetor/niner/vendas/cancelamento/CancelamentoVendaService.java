@@ -1,5 +1,6 @@
 package com.vetor.niner.vendas.cancelamento;
 
+import com.vetor.niner.comum.tempo.FusoDaLoja;
 import com.vetor.niner.comum.web.ConflitoDadosException;
 import com.vetor.niner.fiscal.documento.CancelamentoNfceService;
 import com.vetor.niner.fiscal.documento.DocumentoFiscalRepositorio;
@@ -60,16 +61,18 @@ public class CancelamentoVendaService {
     private final CancelamentoNfceService cancelamentoNfceService;
     private final DocumentoFiscalRepositorio documentoFiscalRepositorio;
     private final SefazAutorizadorService autorizadores;
+    private final FusoDaLoja fusoDaLoja;
 
     public CancelamentoVendaService(JdbcClient jdbc, CaixaService caixaService,
                                     CancelamentoNfceService cancelamentoNfceService,
                                     DocumentoFiscalRepositorio documentoFiscalRepositorio,
-                                    SefazAutorizadorService autorizadores) {
+                                    SefazAutorizadorService autorizadores, FusoDaLoja fusoDaLoja) {
         this.jdbc = jdbc;
         this.caixaService = caixaService;
         this.cancelamentoNfceService = cancelamentoNfceService;
         this.documentoFiscalRepositorio = documentoFiscalRepositorio;
         this.autorizadores = autorizadores;
+        this.fusoDaLoja = fusoDaLoja;
     }
 
     @Transactional(readOnly = true)
@@ -245,7 +248,8 @@ public class CancelamentoVendaService {
 
         if (venda.cancelada()) {
             throw new ConflitoDadosException(
-                    "A venda nº " + venda.idVenda() + " já foi cancelada em " + FMT_DATA.format(venda.dataCancelamento())
+                    "A venda nº " + venda.idVenda() + " já foi cancelada em "
+                            + fusoDaLoja.formatar(venda.dataCancelamento(), venda.idEmpresa(), FMT_DATA)
                             + " por " + venda.nomeUsuarioCancelamento() + ".");
         }
 

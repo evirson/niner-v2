@@ -1,5 +1,7 @@
 package com.vetor.niner.fiscal.documento;
 
+import com.vetor.niner.comum.tempo.FusoDaLoja;
+import com.vetor.niner.comum.tempo.FusoDaUf;
 import com.vetor.niner.fiscal.certificado.FiscalCertificadoService;
 import com.vetor.niner.fiscal.certificado.FiscalCertificadoService.CertificadoParaAssinatura;
 import com.vetor.niner.fiscal.documento.DocumentoFiscalRepositorio.DocumentoParaCancelar;
@@ -44,6 +46,8 @@ public class CancelamentoNfceService {
 
     private static final int MODELO_NFCE = 65;
     private static final int PRAZO_PADRAO_MINUTOS = 30;
+    /** ⚠️ Sempre via {@link FusoDaLoja}: o driver devolve `timestamptz` em UTC, e formatar direto
+     *  imprimia 3 h a mais (achado em 2026-08-20 — "autorizada às 19:44" para uma nota das 16:44). */
     private static final DateTimeFormatter FMT = DateTimeFormatter.ofPattern("dd/MM 'às' HH:mm", Locale.of("pt", "BR"));
 
     private final DocumentoFiscalRepositorio repositorio;
@@ -92,7 +96,8 @@ public class CancelamentoNfceService {
                     ("O prazo de %d minutos para cancelar esta NFC-e pela SEFAZ já passou "
                             + "(autorizada em %s). Não é possível cancelar a venda sem antes tratar a "
                             + "nota fiscal — emita uma nota de devolução.")
-                            .formatted(prazoMinutos, FMT.format(doc.dataAutorizacao())));
+                            .formatted(prazoMinutos, FusoDaLoja.formatarEm(
+                                    doc.dataAutorizacao(), FusoDaUf.deOuPadrao(doc.uf()), FMT)));
         }
 
         CertificadoParaAssinatura certificado = certificados.carregarAtivoParaAssinatura(idEmpresa);

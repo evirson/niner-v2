@@ -1,5 +1,6 @@
 package com.vetor.niner.plataforma.aquisicao;
 
+import com.vetor.niner.comum.tempo.FusoDaPlataforma;
 import com.vetor.niner.plataforma.aquisicao.MarketingAdminDtos.AtualizarLeadRequest;
 import com.vetor.niner.plataforma.aquisicao.MarketingAdminDtos.ContaPertoDoLimite;
 import com.vetor.niner.plataforma.aquisicao.MarketingAdminDtos.Funil;
@@ -49,20 +50,20 @@ public class MarketingAdminService {
 
     @Transactional(readOnly = true)
     public Funil funil(LocalDate de, LocalDate ate) {
-        LocalDate inicio = de != null ? de : LocalDate.now().minusDays(30);
-        LocalDate fim = ate != null ? ate : LocalDate.now();
+        LocalDate inicio = de != null ? de : LocalDate.now(FusoDaPlataforma.ZONA).minusDays(30);
+        LocalDate fim = ate != null ? ate : LocalDate.now(FusoDaPlataforma.ZONA);
 
         // Cada degrau conta VISITANTE distinto, não evento: recarregar a página não pode inflar o
         // topo do funil e fazer a conversão parecer pior do que é.
         var totais = jdbc.sql("""
                         SELECT (SELECT count(*) FROM plataforma.visita_site
-                                 WHERE criado_em::date BETWEEN ? AND ?)                       AS visitas,
+                                 WHERE (criado_em AT TIME ZONE 'America/Sao_Paulo')::date BETWEEN ? AND ?)                       AS visitas,
                                (SELECT count(DISTINCT visitante_id) FROM plataforma.visita_site
-                                 WHERE criado_em::date BETWEEN ? AND ?)                       AS visitantes,
+                                 WHERE (criado_em AT TIME ZONE 'America/Sao_Paulo')::date BETWEEN ? AND ?)                       AS visitantes,
                                (SELECT count(*) FROM plataforma.lead
-                                 WHERE criado_em::date BETWEEN ? AND ?)                       AS leads,
+                                 WHERE (criado_em AT TIME ZONE 'America/Sao_Paulo')::date BETWEEN ? AND ?)                       AS leads,
                                (SELECT count(*) FROM plataforma.tenant
-                                 WHERE criado_em::date BETWEEN ? AND ?)                       AS contas,
+                                 WHERE (criado_em AT TIME ZONE 'America/Sao_Paulo')::date BETWEEN ? AND ?)                       AS contas,
                                (SELECT count(*) FROM plataforma.uso_venda_mes u
                                  WHERE u.qtd_vendas > 0)                                      AS com_venda_hist,
                                (SELECT count(*) FROM plataforma.uso_tenant
@@ -94,7 +95,7 @@ public class MarketingAdminService {
                                                  THEN %s END), 0)            AS mrr
                           FROM (SELECT DISTINCT ON (visitante_id) visitante_id, utm_source, utm_campaign
                                   FROM plataforma.visita_site
-                                 WHERE criado_em::date BETWEEN ? AND ?
+                                 WHERE (criado_em AT TIME ZONE 'America/Sao_Paulo')::date BETWEEN ? AND ?
                                  ORDER BY visitante_id, criado_em) o
                           LEFT JOIN plataforma.lead l       ON l.visitante_id = o.visitante_id
                           LEFT JOIN plataforma.assinatura a ON a.id_tenant = l.id_tenant AND a.status <> 'CANCELADA'
@@ -208,7 +209,7 @@ public class MarketingAdminService {
                           JOIN plataforma.assinatura a  ON a.id_tenant = u.id_tenant AND a.status <> 'CANCELADA'
                           JOIN plataforma.plano p       ON p.id_plano = a.id_plano
                          WHERE p.gratuito AND p.limite_vendas_mes IS NOT NULL
-                           AND u.competencia_vendas = date_trunc('month', now())::date
+                           AND u.competencia_vendas = date_trunc('month', now() AT TIME ZONE 'America/Sao_Paulo')::date
                            AND u.qtd_vendas_mes * 100 >= p.limite_vendas_mes * 80
                          ORDER BY percentual DESC
                         """)

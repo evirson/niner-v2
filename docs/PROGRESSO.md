@@ -523,6 +523,89 @@ Movimentação de Conta Corrente) que ainda não tinham migrado pro `SeletorPlan
 
 ## Linha do tempo
 
+### 2026-08-20 — Fuso horário: a data que o usuário lê, o mês que a plataforma cobra, e um guarda para não esquecer de novo
+
+Terceira frente do dia, saída de uma pergunta do dono do produto ("o Nainer vai rodar no país
+inteiro, e o Brasil tem 4 fusos — como resolver?"). Uma auditoria em paralelo mediu o estado real, e
+o que ela achou vale mais que o plano que eu tinha.
+
+**Decisão do dono do produto: o fuso vem da UF, sem exceção por município.** Fernando de Noronha
+(UTC−2, mas é PE) e o extremo oeste do Amazonas (UTC−5, mas é AM) ficam com **1 h de desencontro
+conhecido e aceito** — cupom com 1 h a menos e venda entre 00:00 e 01:00 caindo no caixa do dia
+anterior. Está registrado no javadoc de `FusoDaUf` para não ser "consertado" daqui a seis meses por
+quem achar que é bug. O mapa guarda **identificador IANA**, nunca offset: se o horário de verão
+voltar, o `tzdata` resolve e nenhuma linha muda.
+
+**Onde o padrão da NF-e ajuda:** `dhEmi` é do tipo `TDateTimeUTC`, que exige offset explícito
+(`AAAA-MM-DDThh:mm:ss±hh:00`, conferido no `tiposBasico_v4.00.xsd`). A SEFAZ compara **instantes**;
+nenhuma delas assume UTC−3. Multi-fuso é suportado pelo padrão — o que ele exige é que o offset
+declarado seja o certo.
+
+#### 🔴 O que estava errado AGORA, em Curitiba (não era multi-UF)
+
+O driver devolve `timestamptz` como `OffsetDateTime` em **UTC**. Formatar direto o que vem do banco
+imprime **3 h a mais**. A mensagem de prazo do cancelamento de NFC-e dizia *"autorizada em 17/08 às
+19:44"* para uma nota autorizada às **16:44** — e o mesmo defeito estava em mais quatro lugares,
+onde a **data** (não a hora) saía do dia seguinte depois das 21h:
+
+| Onde | O que o usuário via |
+|---|---|
+| `CancelamentoNfceService` | hora da autorização 3 h à frente |
+| `CancelamentoVendaService` | "já foi cancelada em 20/08" para cancelamento das 21:30 de 19/08 |
+| `EntradaMercadoriaService` | idem, na entrada já cancelada |
+| `CancelamentoDevolucaoService` | idem, na devolução já cancelada |
+| `CaixaService` | observação de "fechado com divergência" com hora do **container** (só definida em produção — dev e produção gravavam horas diferentes para o mesmo fechamento) |
+
+Todos passam agora por `comum.tempo.FusoDaLoja`, que resolve o fuso pela UF da empresa. Regra
+nova: **nenhum `DateTimeFormatter` do backend recebe um `OffsetDateTime` sem passar por lá.**
+
+#### O plano da plataforma comparava data em UTC — e um dos casos é dinheiro
+
+O plano do lojista estava 100% varrido desde ontem; o de controle, 0% — e eram exatamente os
+**únicos 15 `::date` sem conversão** de todo o `src/main`. Os dois que passam de cosmético:
+
+- **`LimiteVendasService`** — a competência da cota virava às 21:00 do último dia do mês. Uma loja
+  **bloqueada por cota estourada voltava a vender às 21:05 de 31/08**, porque o contador zerava 3 h
+  antes da hora; e as vendas das 21:00 à meia-noite eram debitadas do mês seguinte.
+- **`BackupJob`** — `localtime` é o relógio da **sessão** (UTC): backup configurado para 03:00
+  disparava às **00:00 de Brasília**, no meio do movimento de quem fecha tarde.
+
+Mais: "Minha Conta" mostrando *agosto/2026 com 0 vendas* às 22h de 31/08 (e **não reproduzia em
+dev** — em produção a JVM está em `America/Sao_Paulo` pelo `docker-compose.prod.yml` e o banco em
+UTC, então os dois lados discordavam só lá), funil de aquisição com lead da noite caindo no dia
+seguinte, "contas perto do limite" sumindo na virada do mês, e vigência de assinatura ganhando um
+dia a cada pagamento noturno.
+
+⚠️ **Aqui o fuso é constante de propósito** (`comum.tempo.FusoDaPlataforma`): competência de cota,
+agenda de backup e vigência são fatos do negócio da **Vetor** (P9), e um tenant com empresas em UFs
+diferentes não teria "fuso do tenant" para desempatar. **V048** acerta junto os `DEFAULT` de coluna
+de `uso_tenant`, sem reescrever competência já gravada — histórico reescrito com regra nova produz
+número que nunca foi apurado.
+
+#### O guarda: a convenção passou a ser verificada, não lembrada
+
+`ComparacaoDeDataNoFusoCertoTest` é o **primeiro teste do projeto que lê código-fonte** (os outros
+invariantes — privilégio, autorizador por UF — são verificados contra o banco). Varre
+`src/main/java` e reprova `::date`, `CURRENT_DATE`, `localtime`, `age(` e `EXTRACT(… FROM now())`
+sem `AT TIME ZONE`. Duas lições da construção dele, ambas viraram comentário no arquivo:
+
+- `localtime` **não** pode ser case-insensitive — pegava o tipo `LocalTime` do Java em 11 linhas
+  legítimas de DTO e `getObject`. Palavra-chave SQL é toda minúscula ou toda maiúscula; tipo Java é
+  CamelCase, e isso basta para separar.
+- comentário `--` dentro de *text block* é comentário: o primeiro a reprovar o teste foi **o próprio
+  comentário que explicava a correção**.
+
+E o guarda tem teste do guarda (`oGuardaReprovaAConstrucaoErradaEAceitaACerta`) — regex quebrado
+viraria verde vazio para sempre.
+
+**865 testes de backend verdes** (eram 862).
+
+⏭️ **Fica para a próxima etapa:** o `dhEmi` do XML e os `LocalDate.now()` do plano do lojista ainda
+saem de `America/Sao_Paulo` fixo. Como o instante é preservado (`atZoneSameInstant`), **não há
+rejeição da SEFAZ** e as 21 UFs em UTC−3 estão corretas; o que muda para AM/MT/MS/RO/RR/AC é a hora
+declarada, a virada de dia na chave de acesso e o `<ano>` da inutilização na virada do ano. É
+pré-requisito do primeiro cliente desses seis estados, não de hoje.
+
 ### 2026-08-20 — As 27 unidades da federação em `cfg_uf_autorizador`: o fiscal deixou de ser "do Paraná"
 
 Fechando a outra metade do trabalho de hoje. A tabela que governa **para onde a nota é

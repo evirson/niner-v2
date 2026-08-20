@@ -1,5 +1,6 @@
 package com.vetor.niner.vendas.cancelamentodevolucao;
 
+import com.vetor.niner.comum.tempo.FusoDaLoja;
 import com.vetor.niner.comum.web.ConflitoDadosException;
 import com.vetor.niner.vendas.cancelamentodevolucao.CancelamentoDevolucaoDtos.CancelamentoDevolucaoEfetivadoResponse;
 import com.vetor.niner.vendas.cancelamentodevolucao.CancelamentoDevolucaoDtos.CancelarDevolucaoRequest;
@@ -46,9 +47,11 @@ public class CancelamentoDevolucaoService {
             "valorVale", "valor_vale");
 
     private final JdbcClient jdbc;
+    private final FusoDaLoja fusoDaLoja;
 
-    public CancelamentoDevolucaoService(JdbcClient jdbc) {
+    public CancelamentoDevolucaoService(JdbcClient jdbc, FusoDaLoja fusoDaLoja) {
         this.jdbc = jdbc;
+        this.fusoDaLoja = fusoDaLoja;
     }
 
     @Transactional(readOnly = true)
@@ -165,7 +168,8 @@ public class CancelamentoDevolucaoService {
 
         if (c.cancelada()) {
             throw new ConflitoDadosException(
-                    "A devolução nº " + c.idDevolucao() + " já foi cancelada em " + FMT_DATA.format(c.dataCancelamento())
+                    "A devolução nº " + c.idDevolucao() + " já foi cancelada em "
+                            + fusoDaLoja.formatar(c.dataCancelamento(), c.idEmpresa(), FMT_DATA)
                             + " por " + c.nomeUsuarioCancelamento() + ".");
         }
         if (c.valeUsado()) {

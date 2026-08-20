@@ -1,5 +1,6 @@
 package com.vetor.niner.plataforma.cobranca;
 
+import com.vetor.niner.comum.tempo.FusoDaPlataforma;
 import com.vetor.niner.comum.web.ConflitoDadosException;
 import com.vetor.niner.plataforma.cobranca.CobrancaDtos.Ciclo;
 import com.vetor.niner.plataforma.cobranca.CobrancaDtos.FaturaResponse;
@@ -72,7 +73,7 @@ public class CobrancaService {
                         """)
                 .query((rs, n) -> new Assinatura(rs.getLong("id_assinatura"), rs.getString("email_contato")))
                 .optional()
-                .orElseThrow(() -> new ResponseStatusException(FORBIDDEN, "Conta sem assinatura ativa."));        LocalDate competencia = LocalDate.now().withDayOfMonth(1);
+                .orElseThrow(() -> new ResponseStatusException(FORBIDDEN, "Conta sem assinatura ativa."));        LocalDate competencia = LocalDate.now(FusoDaPlataforma.ZONA).withDayOfMonth(1);
         String statusFatura = jdbc.sql("""
                         SELECT status::text FROM plataforma.fatura
                          WHERE id_assinatura = ? AND competencia = ?
@@ -92,7 +93,7 @@ public class CobrancaService {
                                id_plano = EXCLUDED.id_plano, ciclo = EXCLUDED.ciclo, status = 'ABERTA'
                         RETURNING id_fatura
                         """)
-                .params(assinatura.idAssinatura(), competencia, valor, LocalDate.now().plusDays(3),
+                .params(assinatura.idAssinatura(), competencia, valor, LocalDate.now(FusoDaPlataforma.ZONA).plusDays(3),
                         plano.idPlano(), req.ciclo().name())
                 .query(Long.class).single();
 

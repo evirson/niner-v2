@@ -1,5 +1,6 @@
 package com.vetor.niner.plataforma.backup;
 
+import com.vetor.niner.comum.tempo.FusoDaPlataforma;
 import com.vetor.niner.comum.config.NinerProperties;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -98,7 +99,7 @@ public class BackupService {
                 return registrar("ERRO", "pg_dump gerou arquivo vazio.");
             }
 
-            String chave = PREFIXO + "niner-" + LocalDateTime.now().format(CARIMBO) + ".dump";
+            String chave = PREFIXO + "niner-" + LocalDateTime.now(FusoDaPlataforma.ZONA).format(CARIMBO) + ".dump";
             enviar(chave, arquivo);
             int expurgados = expurgar();
 

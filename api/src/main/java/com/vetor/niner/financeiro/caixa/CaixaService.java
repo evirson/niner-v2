@@ -1,5 +1,6 @@
 package com.vetor.niner.financeiro.caixa;
 
+import com.vetor.niner.comum.tempo.FusoDaLoja;
 import com.vetor.niner.comum.web.ConflitoDadosException;
 import com.vetor.niner.financeiro.caixa.CaixaDtos.AbrirCaixaRequest;
 import com.vetor.niner.financeiro.caixa.CaixaDtos.CaixaAbertoResponse;
@@ -57,9 +58,11 @@ import static org.springframework.http.HttpStatus.NOT_FOUND;
 public class CaixaService {
 
     private final JdbcClient jdbc;
+    private final FusoDaLoja fusoDaLoja;
 
-    public CaixaService(JdbcClient jdbc) {
+    public CaixaService(JdbcClient jdbc, FusoDaLoja fusoDaLoja) {
         this.jdbc = jdbc;
+        this.fusoDaLoja = fusoDaLoja;
     }
 
     /**
@@ -372,8 +375,13 @@ public class CaixaService {
             // P3: fechar com divergência fica registrado — quem olhar o relatório de conferência
             // depois vê só números, não o "porquê"; a observação é o rastro de que foi uma
             // decisão consciente do operador, não um bug do fechamento "às cegas" de antes.
-            String observacao = "FECHADO COM DIVERGENCIA EM " + java.time.OffsetDateTime.now().format(
-                    java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm")) + " POR USUARIO " + idUsuario(jwt);
+            // ⚠️ Fuso da LOJA, não o do container: `OffsetDateTime.now().format(...)` usa o fuso da
+            // JVM, que só está definido em produção (`TZ` no docker-compose.prod.yml) — o mesmo
+            // fechamento gravava hora diferente em dev e em produção. Ver FusoDaUf.
+            String observacao = "FECHADO COM DIVERGENCIA EM "
+                    + FusoDaLoja.formatarEm(java.time.OffsetDateTime.now(), fusoDaLoja.da(idEmpresa(jwt)),
+                            java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm"))
+                    + " POR USUARIO " + idUsuario(jwt);
             jdbc.sql("""
                             UPDATE caixa_mestre SET caixa_fechado = true, data_fechamento = now(), id_usuario_fechamento = ?,
                                 observacoes = COALESCE(observacoes || E'\\n', '') || ?

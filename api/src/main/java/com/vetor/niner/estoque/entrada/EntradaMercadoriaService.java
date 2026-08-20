@@ -1,5 +1,6 @@
 package com.vetor.niner.estoque.entrada;
 
+import com.vetor.niner.comum.tempo.FusoDaLoja;
 import com.vetor.niner.comum.web.ConflitoDadosException;
 import com.vetor.niner.configuracao.geral.ConfiguracaoGeralService;
 import com.vetor.niner.identidade.empresa.EmpresaService;
@@ -61,13 +62,16 @@ public class EntradaMercadoriaService {
     private final ConfiguracaoGeralService configuracaoGeralService;
     private final ContasPagarService contasPagarService;
     private final EmpresaService empresaService;
+    private final FusoDaLoja fusoDaLoja;
 
     public EntradaMercadoriaService(JdbcClient jdbc, ConfiguracaoGeralService configuracaoGeralService,
-                                     ContasPagarService contasPagarService, EmpresaService empresaService) {
+                                     ContasPagarService contasPagarService, EmpresaService empresaService,
+                                     FusoDaLoja fusoDaLoja) {
         this.jdbc = jdbc;
         this.configuracaoGeralService = configuracaoGeralService;
         this.contasPagarService = contasPagarService;
         this.empresaService = empresaService;
+        this.fusoDaLoja = fusoDaLoja;
     }
 
     /**
@@ -464,7 +468,8 @@ public class EntradaMercadoriaService {
 
         if (c.cancelado()) {
             throw new ConflitoDadosException(
-                    "A entrada nº " + idMovimento + " já foi cancelada em " + FMT_DATA.format(c.dataCancelamento())
+                    "A entrada nº " + idMovimento + " já foi cancelada em "
+                            + fusoDaLoja.formatar(c.dataCancelamento(), c.idEmpresa(), FMT_DATA)
                             + " por " + c.nomeUsuarioCancelamento() + ".");
         }
 

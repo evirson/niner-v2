@@ -36,7 +36,7 @@ public class LimiteVendasService {
             SELECT u.id_tenant, u.competencia_vendas, u.qtd_vendas_mes
               FROM plataforma.uso_tenant u
              WHERE u.id_tenant = plataforma.tenant_atual()
-               AND u.competencia_vendas < date_trunc('month', now())::date
+               AND u.competencia_vendas < date_trunc('month', now() AT TIME ZONE 'America/Sao_Paulo')::date
                AND u.qtd_vendas_mes > 0
             ON CONFLICT (id_tenant, competencia)
             DO UPDATE SET qtd_vendas = EXCLUDED.qtd_vendas, fechado_em = now()
@@ -45,13 +45,13 @@ public class LimiteVendasService {
     /** Incrementa (ou reinicia, se a competência virou) e devolve o total do mês corrente. */
     private static final String SQL_INCREMENTAR = """
             INSERT INTO plataforma.uso_tenant (id_tenant, competencia_vendas, qtd_vendas_mes)
-            VALUES (plataforma.tenant_atual(), date_trunc('month', now())::date, 1)
+            VALUES (plataforma.tenant_atual(), date_trunc('month', now() AT TIME ZONE 'America/Sao_Paulo')::date, 1)
             ON CONFLICT (id_tenant) DO UPDATE
                SET qtd_vendas_mes = CASE
-                       WHEN uso_tenant.competencia_vendas = date_trunc('month', now())::date
+                       WHEN uso_tenant.competencia_vendas = date_trunc('month', now() AT TIME ZONE 'America/Sao_Paulo')::date
                        THEN uso_tenant.qtd_vendas_mes + 1
                        ELSE 1 END,
-                   competencia_vendas = date_trunc('month', now())::date,
+                   competencia_vendas = date_trunc('month', now() AT TIME ZONE 'America/Sao_Paulo')::date,
                    atualizado_em = now()
             RETURNING qtd_vendas_mes
             """;

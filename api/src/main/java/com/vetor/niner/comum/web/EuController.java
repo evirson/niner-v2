@@ -69,7 +69,7 @@ public class EuController {
         // enquanto Minha Conta é ADMIN-only.
         Map<String, Object> plano = jdbc.sql("""
                         SELECT p.nome, p.gratuito, p.limite_vendas_mes,
-                               CASE WHEN u.competencia_vendas = date_trunc('month', now())::date
+                               CASE WHEN u.competencia_vendas = date_trunc('month', now() AT TIME ZONE 'America/Sao_Paulo')::date
                                     THEN u.qtd_vendas_mes ELSE 0 END AS vendas_no_mes
                           FROM plataforma.assinatura a
                           JOIN plataforma.plano p       ON p.id_plano = a.id_plano

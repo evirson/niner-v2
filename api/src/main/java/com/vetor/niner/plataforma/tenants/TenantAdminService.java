@@ -40,7 +40,7 @@ public class TenantAdminService {
     private static final String SELECT_RESUMO = """
             SELECT t.id_tenant, t.nome_conta, t.slug, t.email_contato, t.status::text AS status,
                    p.nome AS plano, p.gratuito, p.limite_vendas_mes,
-                   CASE WHEN u.competencia_vendas = date_trunc('month', now())::date
+                   CASE WHEN u.competencia_vendas = date_trunc('month', now() AT TIME ZONE 'America/Sao_Paulo')::date
                         THEN u.qtd_vendas_mes ELSE 0 END AS vendas_no_mes,
                    COALESCE(u.qtd_empresas, 0) AS qtd_empresas,
                    COALESCE(u.qtd_usuarios, 0) AS qtd_usuarios,
