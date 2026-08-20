@@ -375,8 +375,27 @@ As três lacunas identificadas no rascunho original foram todas resolvidas, como
 2. **XML bruto (P3/auditoria)** — tabela `entrada_xml (id_tenant, id_movimento, xml_bruto
    text, importado_em)`, RLS, `db/migration/V031__estoque_entrada.sql`. ~~Ainda sem gravação
    real (Fase 3 pendente)~~ — **superado**: a Fase 3 (importação por XML) foi implementada e o
-   XML bruto é persistido de fato em `EntradaMercadoriaService.java:226`, a partir do `xmlBruto`
+   XML bruto é persistido de fato em `EntradaMercadoriaService.java`, a partir do `xmlBruto`
    opcional do contrato de confirmação.
+
+   **⚠️ Mudou em 2026-08-20 (V051) — o XML da entrada deixou de morar só no banco.** Ele agora
+   é arquivado no **MinIO** (ADR-014, mesmo bucket privado e imutável do XML de saída), em
+   `entrada/{ano}/{mes}/{chave}.xml`. `entrada_xml` ganhou `xml_objeto_bucket`, `xml_hash` e
+   `arquivado_em`, e `xml_bruto` passou a ser anulável.
+
+   A ordem importa: o XML **nasce no banco**, dentro da transação da entrada, e **migra para o
+   bucket depois do commit** (`EntradaMercadoriaController.efetivar`). Gravar no bucket antes do
+   commit deixaria arquivo órfão se a entrada falhasse; gravar dentro da transação violaria o F2
+   (rede dentro de transação). Falha no arquivamento **não derruba a entrada** — fica um WARN e
+   o job de arquivamento recupera.
+
+   **Junto veio `entrada_nfe_item`** (V051, 47 colunas, RLS): a tributação **item a item** da
+   nota do fornecedor, gravada no ato da entrada. Ela existe para a **Devolução de Produtos
+   Comprados**, que espelha esses impostos em vez de recalculá-los — ver
+   `docs/telas/devolucao-compra.md`. ⚠️ Ela tem **IPI**, que `documento_fiscal_item` não tem: a
+   NFC-e de saída não destaca IPI, a nota de compra destaca. Consequência prática: **entrada
+   anterior a 2026-08-20 não é devolvível**, e entrada manual ou por planilha **nunca** será —
+   não há nota de origem para espelhar.
 
 Duas tabelas novas além do proposto no rascunho:
 

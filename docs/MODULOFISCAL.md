@@ -33,7 +33,7 @@ decisão de arquitetura vira ADR no formato §6 da spec.
 | DF11 | Arquivamento | ✅ XML das notas próprias + eventos · ZIP por período · DANFCE/DANFE em PDF junto |
 | DF17 | QR Code | ⚠️ **Corrigido em 2026-08-19**: online é **v2 com CSC+hash** (não v3 sem CSC como assumido antes — v3 sem hash chegou a ser rejeitado de verdade, `cStat 464`); contingência continua v3 com assinatura. Ver §9.5 |
 | **DF35** 🆕 | **Escopo do v1 fiscal** | ✅ **NFC-e ao consumidor final (identificado ou não) + NF-e de devolução de venda**, com o ciclo de vida completo da nota: cancelamento, inutilização, contingência offline, arquivamento e download. **Todo o resto fica documentado como implementação futura** (§4.2) |
-| DF9 | Escopo da NF-e (modelo 55) | ✅ Reduzido pela DF35: **só a nota de devolução de venda** (entrada, `finNFe=4`). Venda a CNPJ, transferência e devolução ao fornecedor ⇒ futuras |
+| DF9 | Escopo da NF-e (modelo 55) | ✅ Reduzido pela DF35 e **ampliado em 2026-08-20**: nota de devolução de **venda** (entrada, `finNFe=4`) **e de compra** (saída, `finNFe=4`). Venda a CNPJ e transferência seguem futuras |
 | DF13 | Venda a CNPJ contribuinte no PDV | ✅ Revisada pela DF35: sem NF-e de venda no v1, o PDV **emite NFC-e para consumidor final, inclusive com CNPJ** (`indIEDest` 2 ou 9), e **recusa a emissão** quando o cliente é contribuinte de ICMS (`indIEDest = 1`), com mensagem que ensina a saída. A venda em si nunca é bloqueada (F3) — ver §9.6 |
 | DF26 | Venda não presencial (marketplace / e-commerce) | ✅ Futura (§4.2). Os indicadores `indPres`/`indFinal`/`idDest` nascem no `documento_fiscal` desde o v1 porque a NFC-e já os preenche; o resto (transporte, `infIntermed`) vem junto com `canais/` |
 | DF27 | Correção de nota autorizada | ✅ Futura. ⚠️ **CC-e não existe para NFC-e** — é evento de NF-e 55, então nunca teria entrado num v1 de NFC-e de qualquer forma (§4.2) |
@@ -207,7 +207,7 @@ uma operação futura não é o mesmo se o schema, o transporte e o motor já ex
 |---|---|---|---|
 | **Venda a CNPJ contribuinte** | NF-e 55, `finNFe=1` | Motor, numeração, assinatura, transporte SEFAZ, `indIEDest` no cliente, DANFE A4 (da devolução) | Regra de CFOP interestadual, DIFAL, grupo de transporte/volumes, e o PDV passar a escolher o modelo em vez de recusar |
 | **Transferência entre matriz e filiais** | NF-e 55 | Ledger de transferência, custo por item (`preco_custo`), empresas com config fiscal própria | **§8.4 inteira** — ADC 49/LC 204: ICMS não incide, transfere-se crédito, com opção anual do Convênio 109/2024. É a operação futura que mais precisa de validação com contador |
-| **Devolução ao fornecedor** | NF-e 55, `finNFe=4`, saída | `entrada_xml.xml_bruto` guarda a nota de compra; `entrada_item_tributo` (DF30) guarda os tributos dela | Espelhar a tributação da nota de compra original ⚠️ (senão o fornecedor não recupera o crédito) e decidir a tela (DF14) |
+| ~~**Devolução ao fornecedor**~~ | NF-e 55, `finNFe=4`, saída | ✅ **ENTREGUE em 2026-08-20** — saiu de "futura" para pronta. A DF30 virou a tabela **`entrada_nfe_item`** (V051, 47 colunas, com **IPI**: a nota de compra destaca, a NFC-e de saída não) e o XML da entrada passou a ser arquivado no MinIO. Tributação **espelhada** item a item, CFOP **derivado** do que o fornecedor usou. DF14 resolvida: tela nova em Estoque | — (ver `docs/telas/devolucao-compra.md`) |
 | **Carta de Correção (CC-e)** | Evento 110110 | `NFeRecepcaoEvento4` e `documento_fiscal_evento` já existem desde a F4 | Tela, validação do texto e prazo de 720 h ⚠️. ⚠️ **Não se aplica à NFC-e** — só faz sentido depois da NF-e de venda |
 | **Venda não presencial** (marketplace, e-commerce, delivery) | NF-e 55 | `indPres`/`indFinal`/`idDest` já gravados; motor e emissão prontos | `documento_fiscal_transporte`, `documento_fiscal_intermediador` (`infIntermed`, obrigatório desde a NT 2020.006 ⚠️), DIFAL, e o módulo `canais/`, que ainda não existe |
 | **Remessa e retorno de garantia/conserto** | NF-e 55 (par) | `documento_fiscal_referencia` (o retorno referencia a remessa) | CFOP 5.915/1.916, controle do que saiu e não voltou, e uma tela de origem — hoje não existe operação de remessa no ERP |
@@ -305,7 +305,7 @@ paralelo (F1). Mapeamento conferido contra o código:
 | `PdvVendaService` — efetivação de venda | NFC-e 65 (ou recusa explícita, DF13) | Split-tender e desconto rateado já estão em `produto_movimento_detalhe`; a empresa vem do claim `eid` |
 | `venda_devolucao` + vale-mercadoria | NF-e 55 de **entrada** | Desde 2026-08-11 já restringe a produtos efetivamente vendidos e amarra no nº da venda — é exatamente o que a nota de devolução referencia |
 | `produto_transferencia` + ledger | NF-e 55 de transferência *(futura)* | Hoje move estoque **sem documento fiscal**. Ver §8.4 (ADC 49) |
-| `produto_movimento_mestre` tipo `COMPRA` | NF-e 55 de devolução ao fornecedor *(futura)* | DF14 decide a tela |
+| `produto_movimento_mestre` tipo `COMPRA` | NF-e 55 de devolução ao fornecedor ✅ | Entregue em 2026-08-20. Movimento `DEVOLUCAO_COMPRA` com `id_movimento_origem` apontando para a compra; **sem tabela de cabeçalho** — a operação *é* o movimento (não gera vale nem toca o financeiro) |
 | `vendas.cancelamento` (ADMIN-only, com motivo) | Evento 110111 | A justificativa mínima de 15 caracteres é a que a tela já pede |
 | `entrada_xml.xml_bruto` | (consome XML de terceiro) | Já **lê** NF-e e **guarda** o XML bruto — insumo da Distribuição DF-e (futura) e do ZIP do contador (§11) |
 | `comum.armazenamento` — `ArmazenamentoPrivado` (MinIO/S3, **ADR-014**) | Guarda dos **XML autorizados** | ✅ Bucket fiscal **provisionado em 2026-08-17**: privado, Object Lock GOVERNANCE de 1825 dias, credencial da API **sem permissão de apagar**. Área `AreaPrivada.FISCAL_XML`, caminho `tenants/{id}/fiscal/{ano}/{mes}/{modelo}/{chave}.xml`. Falta o consumidor (gravar no fim da autorização). O `.pfx` **não** vai para bucket (fica cifrado no banco). O GCS do ADR-013 continua só com foto de produto |
@@ -1294,7 +1294,7 @@ sozinho** e avisar — ninguém confere sequência de nota manualmente.
 | Eventos (cancelamento, CC-e) | XML do evento + protocolo | bucket |
 | Inutilizações | XML | bucket |
 | Notas rejeitadas / denegadas | XML + motivo | banco (sem valor fiscal, com valor de suporte) |
-| **XML de entrada (fornecedor)** 🆕 | XML bruto | **já existe** em `entrada_xml.xml_bruto` desde 2026-08-11 |
+| **XML de entrada (fornecedor)** | XML bruto | **bucket** desde 2026-08-20 (V051): nasce em `entrada_xml.xml_bruto` na transação da entrada e migra para o MinIO **depois do commit** (`entrada/{ano}/{mes}/{chave}.xml`), para nunca ficar em lugar nenhum. É insumo da devolução ao fornecedor, do ZIP do contador e da Distribuição DF-e |
 | DANFE / DANFCE | PDF | gerado sob demanda, **não** guardado — o que vale é o XML |
 
 **Caminho no bucket:** `tenants/{id_tenant}/fiscal/{ano}/{mes}/{modelo}/{chave}.xml` — hierarquia
@@ -1428,7 +1428,9 @@ GET      /api/v1/fiscal/simular-tributos                    (motor puro, sem emi
 
 Fora do v1, com o desenho já previsto para não quebrar a superfície depois:
 `POST /documentos/{id}/carta-correcao`, `POST /nfe/emitir { tipoOperacao, idOrigem }` (venda a
-contribuinte, transferência, devolução ao fornecedor) e `POST /nfe/complementar`. O
+contribuinte, transferência) e `POST /nfe/complementar`. A devolução ao fornecedor **saiu desta
+lista em 2026-08-20** e seguiu o mesmo princípio do `POST /nfe/devolucao`: endpoint específico
+(`POST /api/v1/estoque/devolucao-compra`), na tela dona da operação, não um genérico. O
 `POST /nfe/devolucao` do v1 é deliberadamente **específico**, não genérico: endpoint genérico com um
 único caso de uso vira parâmetro que ninguém valida.
 
@@ -1633,7 +1635,8 @@ manter as tabelas nacionais atualizadas (cClassTrib, CEST, CFOP, IBPT, MVA).
 Resposta curta para *"o que ainda temos para fazer no fiscal?"*. **F0–F5 estão entregues**
 (B0–B9 no roteiro de blocos): o produto emite NFC-e de verdade, cancela, inutiliza, entra e sai de
 contingência sozinho, reprocessa documento preso, arquiva o XML e emite a NF-e 55 de devolução com
-DANFE A4.
+DANFE A4 — **nos dois sentidos** desde 2026-08-20: devolução de **venda** (entrada) e de **compra**
+(saída, ao fornecedor).
 
 **1. Bloqueante, e não é código — o CSRT.**
 A NF-e modelo 55 exige `idCSRT`/`hashCSRT` no `infRespTec` (§9.9). A **MITRYUSCASH precisa se cadastrar
@@ -1666,6 +1669,7 @@ fonte primária antes de implementar.** Não é urgente hoje, mas tem data.
 | ZIP do mês para o contador (DF22) | §11 | O arquivamento existe e funciona; falta empacotar e servir por URL assinada |
 | Papel `CONTADOR` (leitura fiscal) | §4.2 | Terceiro papel em `identidade` — mudança estrutural, hoje o lojista baixa e repassa |
 | Notas anteriores a 2026-08-19 não têm itens | `documento_fiscal_item` | O gap foi corrigido na origem, mas o que já estava autorizado ficou sem itens — **essas notas não podem gerar devolução fiscal**, e o serviço recusa explicitamente |
+| Entradas anteriores a 2026-08-20 não têm tributação por item | `entrada_nfe_item` | Mesma forma do defeito acima, do lado da compra: **essas entradas não podem gerar devolução ao fornecedor**. Sem correção retroativa possível — o XML antigo até existe em `entrada_xml.xml_bruto`, então um job de *backfill* é viável se algum lojista precisar |
 
 **4. Operações futuras (§4.2) — catalogadas, nenhuma começada.** As candidatas naturais a virem
 primeiro, por custo/valor:
@@ -1674,7 +1678,9 @@ primeiro, por custo/valor:
   balcão, o mais provável de ser pedido cedo.
 - **Baixa por perda/quebra (CFOP 5.927)** — a mais barata da lista: a Rotina de Contagem de Estoque
   já gera o ajuste, falta o gancho e o CFOP. E diferença de inventário é justamente o que o fisco
-  cruza.
+  cruza. **Ficou mais barata ainda em 2026-08-20**: a devolução ao fornecedor já estreou o caminho
+  "movimento de estoque → NF-e 55 de saída", incluindo o de-para de CFOP e a nota sem cabeçalho
+  próprio.
 - **NF-e 55 de venda a contribuinte** — hoje o PDV **recusa** emitir para cliente com
   `indIEDest = 1` (a NFC-e não serve). O contador de `NAO_EMITIDO` é quem mede se isso dói.
 - **Distribuição DF-e** — o maior valor/esforço do módulo inteiro: mataria o upload manual de XML
@@ -1760,7 +1766,7 @@ automatizado — os 10.515 NCMs de `cfg_produto_ncm` vieram por esse mesmo camin
 | # | Decisão | Recomendação |
 |---|---|---|
 | DF12 | Fiscal entra em qual plano comercial? | Add-on, ou exclusivo do Profissional/Escala |
-| DF14 | Devolução ao fornecedor: no Cancelamento de Entrada ou tela nova? *(decisão futura, §4.2)* | Tela nova — cancelar entrada e devolver mercadoria são operações diferentes |
+| ~~DF14~~ | ~~Devolução ao fornecedor: no Cancelamento de Entrada ou tela nova?~~ | ✅ **Fechada e implementada em 2026-08-20: tela nova** em Estoque. Cancelar entrada e devolver mercadoria são operações diferentes — a primeira desfaz um lançamento, a segunda faz mercadoria circular com nota |
 | ~~DF15~~ | ~~Empresa equiparada a industrial (IPI) entra no v1?~~ | ⛔ Sem caso possível depois da DF37: optante do Simples recolhe IPI dentro do DAS e não destaca na saída |
 | DF16 | Licenciamento da tabela IBPT para SaaS multi-tenant | Licença única da Vetor, se o contrato permitir |
 | DF18 | Timeout de autorização no PDV antes de cair em contingência | 10 s |

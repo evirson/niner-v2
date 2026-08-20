@@ -143,12 +143,18 @@ no contexto, e caminho com `..` recusado.
 
 ## 7. O que falta (cada um é uma tarefa própria)
 
-1. **Arquivamento fiscal** — gravar o `nfeProc` (e XML de evento/inutilização) na área
-   `FISCAL_XML` ao autorizar, preencher `documento_fiscal.xml_objeto_bucket` + `xml_hash` (as
-   colunas existem desde a V035 e continuam vazias), e fazer a tela de Documentos Fiscais ler o
-   XML do bucket. Fecha a DF21 e o item "Arquivamento" do `MODULOFISCAL.md` §17.
-   📄 **Spec de handoff pronta para outra equipe: `docs/HANDOFF-ARQUIVAMENTO-XML.md`** — contrato,
-   critérios de aceitação, armadilhas e definição de pronto.
+1. ~~**Arquivamento fiscal**~~ — ✅ **ENTREGUE.** O `nfeProc`, o XML de evento e o de
+   inutilização vão para a área `FISCAL_XML` ao autorizar, com `xml_objeto_bucket` + `xml_hash`
+   preenchidos (`ArquivamentoXmlService` no caminho quente, `ArquivamentoXmlJob` recuperando o que
+   falhou). Fechou a DF21. A spec de handoff (`docs/HANDOFF-ARQUIVAMENTO-XML.md`) vale como
+   registro do contrato acordado, não como pendência.
+
+   **Ampliado em 2026-08-20 (V051): o XML de ENTRADA também.** A nota que o fornecedor emitiu
+   contra o lojista passou a ser arquivada na mesma área (`entrada/{ano}/{mes}/{chave}.xml`) — ela
+   é documento fiscal da loja tanto quanto os de saída, e o contador precisa dela. ⚠️ O XML
+   **nasce no banco** (`entrada_xml.xml_bruto`, na transação da entrada) e **migra para o bucket
+   depois do commit**: gravar antes deixaria arquivo órfão se a entrada falhasse, e gravar dentro
+   da transação violaria o F2. Falha no arquivamento não derruba a entrada.
 2. **Foto de cliente** — coluna nova, endpoint de upload/exclusão e a área `CLIENTE_FOTO`. Não
    existe nada disso hoje (nem coluna, nem tela).
 3. **ZIP do contador (DF22)** — hoje `comum.arquivocompartilhado` guarda em memória, limitado a 20
