@@ -109,13 +109,15 @@ public class EtiquetaConfigService {
             long id = jdbc.sql("""
                             INSERT INTO cfg_etiqueta_config
                                 (id_tenant, nome, largura_rolo_mm, numero_colunas, largura_etiqueta_mm, altura_etiqueta_mm,
-                                 borda_superior_mm, borda_inferior_mm, borda_esquerda_mm, borda_direita_mm, ativo)
-                            VALUES (plataforma.tenant_atual(), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                 borda_superior_mm, borda_inferior_mm, borda_esquerda_mm, borda_direita_mm,
+                                 espacamento_vertical_mm, ativo)
+                            VALUES (plataforma.tenant_atual(), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                             RETURNING id_config_etiqueta
                             """)
                     .params(req.nome().trim().toUpperCase(Locale.ROOT), req.larguraRoloMm(), req.numeroColunas(), req.larguraEtiquetaMm(),
                             req.alturaEtiquetaMm(), naoNegativoOuZero(req.bordaSuperiorMm()), naoNegativoOuZero(req.bordaInferiorMm()),
                             naoNegativoOuZero(req.bordaEsquerdaMm()), naoNegativoOuZero(req.bordaDireitaMm()),
+                            naoNegativoOuZero(req.espacamentoVerticalMm()),
                             req.ativo() == null || req.ativo())
                     .query(Long.class).single();
             salvarColunas(id, req.colunas());
@@ -134,12 +136,14 @@ public class EtiquetaConfigService {
                             UPDATE cfg_etiqueta_config SET
                                 nome = ?, largura_rolo_mm = ?, numero_colunas = ?, largura_etiqueta_mm = ?,
                                 altura_etiqueta_mm = ?, borda_superior_mm = ?, borda_inferior_mm = ?,
-                                borda_esquerda_mm = ?, borda_direita_mm = ?, ativo = ?, atualizado_em = now()
+                                borda_esquerda_mm = ?, borda_direita_mm = ?,
+                                espacamento_vertical_mm = ?, ativo = ?, atualizado_em = now()
                             WHERE id_tenant = plataforma.tenant_atual() AND id_config_etiqueta = ?
                             """)
                     .params(req.nome().trim().toUpperCase(Locale.ROOT), req.larguraRoloMm(), req.numeroColunas(), req.larguraEtiquetaMm(),
                             req.alturaEtiquetaMm(), naoNegativoOuZero(req.bordaSuperiorMm()), naoNegativoOuZero(req.bordaInferiorMm()),
                             naoNegativoOuZero(req.bordaEsquerdaMm()), naoNegativoOuZero(req.bordaDireitaMm()),
+                            naoNegativoOuZero(req.espacamentoVerticalMm()),
                             req.ativo() == null || req.ativo(), id)
                     .update();
             if (linhas == 0) {
@@ -289,7 +293,8 @@ public class EtiquetaConfigService {
 
     private static final String SELECT_BASE = """
             SELECT ec.id_config_etiqueta, ec.nome, ec.largura_rolo_mm, ec.numero_colunas, ec.largura_etiqueta_mm,
-                   ec.altura_etiqueta_mm, ec.borda_superior_mm, ec.borda_inferior_mm, ec.borda_esquerda_mm,
+                   ec.altura_etiqueta_mm, ec.espacamento_vertical_mm,
+                   ec.borda_superior_mm, ec.borda_inferior_mm, ec.borda_esquerda_mm,
                    ec.borda_direita_mm, ec.ativo, ec.criado_em, ec.atualizado_em
             FROM cfg_etiqueta_config ec
             """;
@@ -303,6 +308,7 @@ public class EtiquetaConfigService {
                 rs.getInt("numero_colunas"),
                 rs.getBigDecimal("largura_etiqueta_mm"),
                 rs.getBigDecimal("altura_etiqueta_mm"),
+                rs.getBigDecimal("espacamento_vertical_mm"),
                 rs.getBigDecimal("borda_superior_mm"),
                 rs.getBigDecimal("borda_inferior_mm"),
                 rs.getBigDecimal("borda_esquerda_mm"),

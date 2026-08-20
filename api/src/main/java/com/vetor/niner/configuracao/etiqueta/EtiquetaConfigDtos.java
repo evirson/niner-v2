@@ -1,6 +1,7 @@
 package com.vetor.niner.configuracao.etiqueta;
 
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.DecimalMax;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -102,6 +103,8 @@ public final class EtiquetaConfigDtos {
             @NotNull Integer numeroColunas,
             @NotNull @DecimalMin("0.01") BigDecimal larguraEtiquetaMm,
             @NotNull @DecimalMin("0.01") BigDecimal alturaEtiquetaMm,
+            /** Espaco em branco ENTRE fileiras do rolo (V056). Nulo = 0 = fileiras coladas. */
+            @DecimalMin("0") @DecimalMax("100") BigDecimal espacamentoVerticalMm,
             BigDecimal bordaSuperiorMm,
             BigDecimal bordaInferiorMm,
             BigDecimal bordaEsquerdaMm,
@@ -118,6 +121,7 @@ public final class EtiquetaConfigDtos {
             int numeroColunas,
             BigDecimal larguraEtiquetaMm,
             BigDecimal alturaEtiquetaMm,
+            BigDecimal espacamentoVerticalMm,
             BigDecimal bordaSuperiorMm,
             BigDecimal bordaInferiorMm,
             BigDecimal bordaEsquerdaMm,

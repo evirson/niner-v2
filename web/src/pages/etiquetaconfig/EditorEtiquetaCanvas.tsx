@@ -12,6 +12,11 @@ import {
 } from '../../lib/etiquetaConfig'
 
 const PX_POR_MM_BASE = 6
+
+/** Escala da prévia do rolo. Metade da base — o rolo inteiro precisa caber na largura da tela.
+ *  ⚠️ O texto acompanha esta escala desde 2026-08-20 (`CampoEtiquetaVisual`): antes a fonte saía
+ *  em `pt` fixo e a prévia mostrava letra 26% maior que a real, cortando o que na verdade cabia. */
+const ESCALA_PREVIA = PX_POR_MM_BASE * 0.5
 const ZOOM_MIN = 0.5
 const ZOOM_MAX = 3
 const ZOOM_PASSO = 0.25
@@ -83,6 +88,7 @@ function tamanhoPadrao(campo: CampoEtiqueta): { larguraMm: number; alturaMm: num
 export default function EditorEtiquetaCanvas({
   larguraEtiquetaMm,
   alturaEtiquetaMm,
+  espacamentoVerticalMm,
   bordaSuperiorMm,
   bordaInferiorMm,
   bordaEsquerdaMm,
@@ -95,6 +101,7 @@ export default function EditorEtiquetaCanvas({
 }: {
   larguraEtiquetaMm: number
   alturaEtiquetaMm: number
+  espacamentoVerticalMm: number
   bordaSuperiorMm: number
   bordaInferiorMm: number
   bordaEsquerdaMm: number
@@ -110,6 +117,22 @@ export default function EditorEtiquetaCanvas({
   produtoExemplo: ProdutoExemplo | null
 }) {
   const [zoom, setZoom] = useState(1)
+
+  /**
+   * Campos cujo conteúdo não cabe na própria caixa — medido de verdade pelo
+   * `CampoEtiquetaVisual`, não estimado. É o aviso mais importante desta tela: com
+   * `overflow: hidden`, o texto que sobra some em silêncio na tela e reaparece bagunçado no
+   * papel (foi assim que a descrição de 3 linhas invadiu o preço em 2026-08-20).
+   */
+  const [camposQueTransbordam, setCamposQueTransbordam] = useState<Set<string>>(new Set())
+  const marcarTransbordo = (campo: string, transborda: boolean) =>
+    setCamposQueTransbordam((atual) => {
+      if (atual.has(campo) === transborda) return atual
+      const novo = new Set(atual)
+      if (transborda) novo.add(campo)
+      else novo.delete(campo)
+      return novo
+    })
   const [campoSelecionado, setCampoSelecionado] = useState<CampoEtiqueta | null>(null)
   const arrastoRef = useRef<{ campo: CampoEtiqueta; inicioPxX: number; inicioPxY: number; inicioMmX: number; inicioMmY: number } | null>(null)
   const redimensionoRef = useRef<{ campo: CampoEtiqueta; inicioPxX: number; inicioPxY: number; inicioLarguraMm: number; inicioAlturaMm: number } | null>(null)
@@ -349,6 +372,7 @@ export default function EditorEtiquetaCanvas({
                   produtoExemplo={produtoExemplo}
                   nomeEmpresaExemplo={nomeEmpresaExemplo}
                   className="editor-etiqueta-campo"
+                  aoMedirTransbordo={(transborda) => marcarTransbordo(c.campo, transborda)}
                   tabIndex={0}
                   onPointerDown={(e) => aoIniciarArraste(e, c)}
                   onKeyDown={(e) => aoTeclarNoCampo(e, c)}
@@ -393,34 +417,57 @@ export default function EditorEtiquetaCanvas({
         />
       )}
 
+      {camposQueTransbordam.size > 0 && (
+        <p className="erro-campo" style={{ marginTop: 8 }}>
+          O conteúdo não cabe em{' '}
+          {[...camposQueTransbordam].map((c) => ROTULO_CAMPO_ETIQUETA[c as CampoEtiqueta]).join(', ')} — o que
+          sobra é <strong>cortado na impressão</strong>. Aumente a caixa, diminua a fonte ou encurte o texto.
+        </p>
+      )}
+
       {colunas.length > 0 && (
         <div>
-          <strong className="muted">Prévia do rolo completo ({colunas.length} coluna{colunas.length === 1 ? '' : 's'})</strong>
+          <strong className="muted">
+            Prévia do rolo ({colunas.length} coluna{colunas.length === 1 ? '' : 's'} × 2 fileiras)
+          </strong>
+          {/* ⚠️ DUAS fileiras de propósito (2026-08-20). Com uma só, o "Espaço entre fileiras" não
+              tinha como ser conferido antes de imprimir — e é justamente o valor cujo erro se
+              acumula: a primeira etiqueta sai certa e a quarta sai fora do adesivo. Aqui o
+              operador vê o passo vertical desenhado. */}
           <div className="editor-etiqueta-rolo-preview" style={{ width: '100%' }}>
-            <div style={{ position: 'relative', width: larguraRoloMm * PX_POR_MM_BASE * 0.5, height: altura * PX_POR_MM_BASE * 0.5 }}>
-              {colunas.map((coluna) => (
-                <div
-                  key={coluna.numeroColuna}
-                  className="editor-etiqueta-rolo-etiqueta"
-                  style={{
-                    position: 'absolute',
-                    left: coluna.posicaoInicialMm * PX_POR_MM_BASE * 0.5,
-                    width: largura * PX_POR_MM_BASE * 0.5,
-                    height: altura * PX_POR_MM_BASE * 0.5,
-                  }}
-                >
-                  {campos.map((c) => (
-                    <CampoEtiquetaVisual
-                      key={c.campo}
-                      campo={c}
-                      escalaPxPorMm={PX_POR_MM_BASE * 0.5}
-                      produtoExemplo={produtoExemplo}
-                      nomeEmpresaExemplo={nomeEmpresaExemplo}
-                      style={{ pointerEvents: 'none' }}
-                    />
-                  ))}
-                </div>
-              ))}
+            <div
+              style={{
+                position: 'relative',
+                width: larguraRoloMm * ESCALA_PREVIA,
+                height: (altura * 2 + espacamentoVerticalMm) * ESCALA_PREVIA,
+              }}
+            >
+              {[0, 1].map((fileira) =>
+                colunas.map((coluna) => (
+                  <div
+                    key={`${fileira}-${coluna.numeroColuna}`}
+                    className="editor-etiqueta-rolo-etiqueta"
+                    style={{
+                      position: 'absolute',
+                      left: coluna.posicaoInicialMm * ESCALA_PREVIA,
+                      top: fileira * (altura + espacamentoVerticalMm) * ESCALA_PREVIA,
+                      width: largura * ESCALA_PREVIA,
+                      height: altura * ESCALA_PREVIA,
+                    }}
+                  >
+                    {campos.map((c) => (
+                      <CampoEtiquetaVisual
+                        key={c.campo}
+                        campo={c}
+                        escalaPxPorMm={ESCALA_PREVIA}
+                        produtoExemplo={produtoExemplo}
+                        nomeEmpresaExemplo={nomeEmpresaExemplo}
+                        style={{ pointerEvents: 'none' }}
+                      />
+                    ))}
+                  </div>
+                )),
+              )}
             </div>
           </div>
         </div>

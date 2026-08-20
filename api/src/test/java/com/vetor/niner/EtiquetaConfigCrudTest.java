@@ -86,7 +86,45 @@ class EtiquetaConfigCrudTest {
                 .andExpect(jsonPath("$.campos[1].campo").value("SKU_BARRAS"))
                 .andExpect(jsonPath("$.campos[1].exibirTextoLegivel").value(true))
                 .andExpect(jsonPath("$.ativo").value(true))
+                // Sem informar, o espaço entre fileiras nasce 0 = fileiras coladas, que é como o
+                // sistema paginava antes da V056 — nenhuma configuração existente muda sozinha.
+                .andExpect(jsonPath("$.espacamentoVerticalMm").value(0))
                 .andExpect(jsonPath("$.criadoEm").exists());
+    }
+
+    /**
+     * ⚠️ Espaço entre fileiras (V056) — o valor cujo erro se ACUMULA.
+     *
+     * <p>Diagnosticado com etiqueta impressa na mão em 2026-08-20: a impressão empilhava as
+     * fileiras usando só a altura do adesivo, e num rolo com 3 mm de gap o conteúdo subia 3 mm por
+     * fileira — a primeira saía perfeita, a quarta inteiramente fora. O passo correto é
+     * {@code altura + espaçamento}, e o campo precisa sobreviver à ida e volta da API para a tela
+     * conseguir desenhar a prévia de duas fileiras.
+     */
+    @Test
+    void espacamentoEntreFileirasEhGravadoELido() throws Exception {
+        String token = assinarNovoTenant("espacamento");
+        String corpo = CORPO_3_COLUNAS.formatted("ETIQUETA COM GAP")
+                .replace("\"numeroColunas\":3", "\"numeroColunas\":3,\"espacamentoVerticalMm\":3.00");
+
+        String resp = mvc.perform(post("/api/v1/etiquetas-config").header("Authorization", "Bearer " + token)
+                        .contentType(APPLICATION_JSON).content(corpo))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.espacamentoVerticalMm").value(3.00))
+                .andReturn().getResponse().getContentAsString();
+        long id = ((Number) com.jayway.jsonpath.JsonPath.read(resp, "$.idConfigEtiqueta")).longValue();
+
+        mvc.perform(get("/api/v1/etiquetas-config/" + id).header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.espacamentoVerticalMm").value(3.00));
+
+        // Atualizar também precisa persistir — o UPDATE tem lista de colunas própria e é onde um
+        // campo novo costuma ficar de fora sem ninguém notar.
+        mvc.perform(put("/api/v1/etiquetas-config/" + id).header("Authorization", "Bearer " + token)
+                        .contentType(APPLICATION_JSON)
+                        .content(corpo.replace("\"espacamentoVerticalMm\":3.00", "\"espacamentoVerticalMm\":5.50")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.espacamentoVerticalMm").value(5.50));
     }
 
     @Test

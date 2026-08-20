@@ -294,6 +294,93 @@ Três pedidos pontuais, cada um testado ao vivo antes do próximo.
    canvas/prévia do rolo continua funcionando com o popup aberto (testado: mover um slider no
    popup atualiza a posição do campo no canvas atrás, em tempo real).
 
+## 🔴 2026-08-20 — o que a etiqueta impressa revelou (3 defeitos e a reforma da tela)
+
+Diagnóstico feito com material real na mão: as duas telas de configuração, o PDF gerado e a **foto
+de uma folha impressa**. O que a foto mostrava: fileira 1 quase certa, fileira 2 sem o cabeçalho,
+fileira 4 inteiramente fora do adesivo — e, em todas, a descrição do produto em três linhas
+invadindo o preço.
+
+### Defeito 1 — a tela mentia sobre o tamanho do texto (⚠️ o central)
+
+`CampoEtiquetaVisual` dimensiona tudo em `mm × escalaPxPorMm`, mas o `font-size` saía em **`pt`**,
+que é unidade **absoluta de tela** — 7pt são sempre ~9,3px, não importa quanto vale 1mm no
+contexto:
+
+| Contexto | 1mm vale | 7pt aparentam ser | erro |
+|---|---|---|---|
+| Editor a 200% | 12px | 0,78mm | texto **3,2× menor** que o real |
+| Impressão | 3,78px | 2,47mm | **correto** |
+| Prévia do rolo | 3px | 3,11mm | 26% maior |
+
+Por isso a descrição cabia numa linha no editor e quebrava em três no papel. **A impressão sempre
+esteve certa; a tela é que mentia** — e a prova é que a correção (pt → mm → px pela mesma escala)
+produz no papel exatamente o mesmo resultado de antes: `pt × 25,4/72 × 96/25,4 = pt × 96/72`, que é
+o que `Npt` já valia a 96dpi. O mesmo tratamento foi dado à altura do texto legível do código de
+barras, que também era pixel fixo.
+
+### Defeito 2 — não existia espaçamento vertical entre fileiras
+
+A impressão empilhava as fileiras usando `alturaEtiquetaMm` como passo. Rolo com gap entre as
+fileiras → o conteúdo sobe a cada fileira. **O erro se acumula**, e é por isso que ninguém o pega
+antes: a primeira etiqueta sai perfeita. Coluna nova `espacamento_vertical_mm` (V056), passo =
+`altura + espaçamento`, aplicada na Emissão **e** no Testar Impressão.
+
+### Defeito 3 — o texto cortado sumia em silêncio
+
+`overflow: hidden` esconde o excesso na tela; ele reaparece bagunçado no papel. Agora
+`CampoEtiquetaVisual` **mede** (`scrollHeight` × `clientHeight`) e a tela avisa por extenso qual
+campo não cabe.
+
+---
+
+## A reforma da tela: uma só forma de medir o rolo
+
+A primeira versão do conserto deixou uma incoerência que o dono do produto pegou de imediato:
+*"o espaço horizontal e o vertical eu tenho que informar, ou só informo a posição onde cada
+etiqueta começa?"*. E ele tinha razão — o vertical pedia **espaço** e o horizontal pedia
+**posição**, duas formas de pensar a mesma medida física.
+
+**Hoje é uma só: informa-se sempre o espaço em branco, nas duas direções.** O card
+"Espaçamento entre Etiquetas (mm)" reúne as três medidas que se tiram com a régua:
+
+| Campo | O que medir no rolo |
+|---|---|
+| Margem até a 1ª coluna | borda do rolo → começo da 1ª etiqueta |
+| ↔ Espaço entre colunas | fim de uma etiqueta → começo da vizinha |
+| ↕ Espaço entre fileiras | fim de uma etiqueta → começo da de baixo |
+
+A posição de cada coluna passou a ser **calculada** e mostrada como conferência
+("Cada coluna começa em: 3,00 · 43,00 · 83,00"). Continua sendo o que vai para o banco —
+`cfg_etiqueta_coluna.posicao_inicial_mm` é a fonte de verdade da impressão; o que mudou é quem a
+preenche.
+
+### ⚠️ "Rolo irregular — digitar cada posição" não é recurso avançado
+
+É o que impede a tela de **estragar** um modelo que já funcionava. Ao abrir um modelo salvo, a tela
+deduz margem e espaço das posições gravadas e **cai sozinha no modo manual** quando elas não seguem
+passo constante. Sem isso, abrir um rolo irregular recalcularia as posições dele em silêncio.
+
+⚠️ **Armadilha de ordem de efeitos, resolvida com uma trava explícita:** o recálculo automático e a
+dedução rodam no mesmo commit do React, e o recálculo é declarado depois — ele leria margem/espaço
+ainda vazios e `colunasManuais` ainda `false`. Em rolo regular isso se auto-corrige no render
+seguinte; em rolo **irregular**, não — as posições já teriam sido sobrescritas antes de o modo
+manual ligar. O estado `medidasDeduzidas` bloqueia qualquer recálculo até a dedução terminar.
+
+### Avisos que a tela não dava
+
+- **"O conteúdo não cabe em ..."** — o mais importante; é o defeito 3 exposto.
+- **Coluna que passa da largura do rolo** — o excedente é cortado sem avisar. (No modelo que
+  motivou o diagnóstico, a coluna 3 terminava em 113mm num rolo de 110mm.)
+- **Colunas que se sobrepõem.**
+- **Prévia do rolo com duas fileiras** — sem a segunda, o espaço entre fileiras não tinha como ser
+  conferido antes de gastar rolo.
+
+### Como acertar um modelo existente
+
+Se a impressão está deslizando, o valor a medir é o **espaço entre fileiras**. Se o texto sai
+cortado nas colunas da direita, o **espaço entre colunas** está menor que o real — informe o
+medido e as posições se recalculam.
 ## Ajuda da tela (manual de operação + vídeo) — obrigatório (R22 / §3.7.1)
 
 - **`chave_tela`: `configuracoes.etiquetaconfig.lista`** — várias configurações nomeadas por

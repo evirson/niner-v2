@@ -67,6 +67,32 @@ export default function EtiquetaConfigForm({ somenteLeitura = false }: { somente
   const listaEstado = (location.state as { listaEstado?: EstadoListaEtiquetaConfig } | null)?.listaEstado
 
   const [form, setForm] = useState<EtiquetaConfigFormState>(ETIQUETA_CONFIG_VAZIA)
+  /**
+   * Como as colunas são informadas.
+   *
+   * <p>⚠️ Até 2026-08-20 a tela pedia a **posição** de cada coluna (horizontal) e nada na vertical
+   * — duas formas de pensar a mesma medida física, e o dono do produto tropeçou nisso na primeira
+   * leitura: *"o espaço horizontal e o vertical eu tenho que informar, ou só informo a posição
+   * onde cada etiqueta começa?"*. Hoje a resposta é uma só: **informa-se sempre o espaço em
+   * branco**, nas duas direções, e as posições são calculadas.
+   *
+   * <p>O modo manual continua existindo porque rolo com espaçamento irregular existe — mas é
+   * exceção, e a tela entra nele sozinha ao abrir um modelo cujas posições não seguem um passo
+   * constante (senão, abrir um modelo antigo silenciosamente recalcularia as posições dele).
+   */
+  const [colunasManuais, setColunasManuais] = useState(false)
+
+  /**
+   * ⚠️ Trava contra uma armadilha de ORDEM DE EFEITOS: o recálculo automático das posições é
+   * declarado depois da dedução, mas os dois rodam no MESMO commit — e o recálculo leria
+   * `margemColunas`/`espacoColunas` ainda vazios (= 0) e `colunasManuais` ainda `false`. Num rolo
+   * regular isso se auto-corrige no render seguinte; num rolo IRREGULAR, não: as posições já
+   * teriam sido sobrescritas antes de o modo manual ligar, estragando em silêncio um modelo que
+   * funcionava. Enquanto a dedução não terminar, ninguém recalcula nada.
+   */
+  const [medidasDeduzidas, setMedidasDeduzidas] = useState(!editando)
+  const [margemColunas, setMargemColunas] = useState('')
+  const [espacoColunas, setEspacoColunas] = useState('')
   const [erros, setErros] = useState<ErrosCampo>({})
   const [toast, setToast] = useState('')
   const [confirmarSalvarAberto, setConfirmarSalvarAberto] = useState(false)
@@ -83,6 +109,30 @@ export default function EtiquetaConfigForm({ somenteLeitura = false }: { somente
 
   useEffect(() => {
     if (configExistente) setForm(paraFormulario(configExistente))
+  }, [configExistente])
+
+  /**
+   * Ao abrir um modelo já salvo, deduz margem e espaço a partir das posições gravadas — e cai no
+   * modo manual quando elas NÃO seguem um passo constante.
+   *
+   * <p>⚠️ Sem essa dedução, abrir um modelo antigo recalcularia as posições dele em silêncio (os
+   * campos de margem/espaço nasceriam vazios = 0) e o operador só descobriria imprimindo. O modo
+   * manual não é um recurso avançado: é o que impede a tela de estragar um rolo irregular que já
+   * estava funcionando.
+   */
+  useEffect(() => {
+    if (!configExistente) return
+    const colunas = [...configExistente.colunas].sort((a, b) => a.numeroColuna - b.numeroColuna)
+    const largura = configExistente.larguraEtiquetaMm
+    const margem = colunas[0]?.posicaoInicialMm ?? 0
+    const espaco = colunas.length > 1 ? colunas[1].posicaoInicialMm - colunas[0].posicaoInicialMm - largura : 0
+    const regular = colunas.every(
+      (c, i) => Math.abs(c.posicaoInicialMm - (margem + i * (largura + espaco))) < 0.01,
+    )
+    setColunasManuais(!regular || espaco < 0)
+    setMargemColunas(formatarEtiquetaMm(margem))
+    setEspacoColunas(formatarEtiquetaMm(Math.max(espaco, 0)))
+    setMedidasDeduzidas(true)
   }, [configExistente])
 
   const podeImprimir =
@@ -138,7 +188,7 @@ export default function EtiquetaConfigForm({ somenteLeitura = false }: { somente
   const campoTexto = (chave: 'nome') => (e: ChangeEvent<HTMLInputElement>) =>
     setForm((f) => ({ ...f, [chave]: maiusculas(e.target.value) }))
 
-  type CampoMmChave = 'larguraRoloMm' | 'larguraEtiquetaMm' | 'alturaEtiquetaMm' | 'bordaSuperiorMm' | 'bordaInferiorMm' | 'bordaEsquerdaMm' | 'bordaDireitaMm'
+  type CampoMmChave = 'larguraRoloMm' | 'larguraEtiquetaMm' | 'alturaEtiquetaMm' | 'espacamentoVerticalMm' | 'bordaSuperiorMm' | 'bordaInferiorMm' | 'bordaEsquerdaMm' | 'bordaDireitaMm'
 
   const campoMm = (chave: CampoMmChave) => (e: ChangeEvent<HTMLInputElement>) =>
     setForm((f) => ({ ...f, [chave]: mascararEtiquetaMm(e.target.value) }))
@@ -178,6 +228,51 @@ export default function EtiquetaConfigForm({ somenteLeitura = false }: { somente
       colunas: f.colunas.map((c) => (c.numeroColuna === numeroColuna ? { ...c, posicaoInicialMm: desmascararEtiquetaMm(texto) || 0 } : c)),
     }))
   }
+
+  /**
+   * Recalcula a posição de cada coluna a partir de margem + espaço + largura da etiqueta, sempre
+   * que qualquer um dos três muda — e só no modo automático.
+   *
+   * <p>É por isto que o operador não digita posição nenhuma no caso normal: com 3 colunas de
+   * 34 mm, margem 3 e espaço 6, as posições saem 3 · 43 · 83. Digitadas à mão, o erro **se
+   * acumula** — informar 38 de passo onde o rolo tem 40 põe a terceira coluna 4 mm fora, o
+   * bastante para cortar o texto (foi exatamente o que apareceu na etiqueta impressa).
+   */
+  useEffect(() => {
+    if (colunasManuais || !medidasDeduzidas) return
+    const margem = desmascararEtiquetaMm(margemColunas) || 0
+    const espaco = desmascararEtiquetaMm(espacoColunas) || 0
+    const largura = desmascararEtiquetaMm(form.larguraEtiquetaMm) || 0
+    setForm((f) => {
+      const novas = f.colunas.map((c) => ({
+        ...c,
+        posicaoInicialMm: Number((margem + (c.numeroColuna - 1) * (largura + espaco)).toFixed(2)),
+      }))
+      const igual = novas.every((c, i) => c.posicaoInicialMm === f.colunas[i].posicaoInicialMm)
+      return igual ? f : { ...f, colunas: novas }
+    })
+  }, [colunasManuais, medidasDeduzidas, margemColunas, espacoColunas, form.larguraEtiquetaMm, form.numeroColunas])
+
+  const larguraRoloNumero = desmascararEtiquetaMm(form.larguraRoloMm) || 0
+  const larguraEtiquetaNumero = desmascararEtiquetaMm(form.larguraEtiquetaMm) || 0
+
+  /** Colunas cujo fim passa da largura do rolo — o excedente simplesmente não é impresso, e isso
+   *  é invisível até a etiqueta sair da impressora. */
+  const colunasQueEstouram =
+    larguraRoloNumero > 0 && larguraEtiquetaNumero > 0
+      ? form.colunas
+          .filter((c) => c.posicaoInicialMm + larguraEtiquetaNumero > larguraRoloNumero + 0.001)
+          .map((c) => c.numeroColuna)
+      : []
+
+  /** Colunas que começam antes de a anterior terminar. */
+  const colunasSobrepostas = (() => {
+    if (larguraEtiquetaNumero <= 0) return []
+    const ordenadas = [...form.colunas].sort((a, b) => a.numeroColuna - b.numeroColuna)
+    return ordenadas
+      .filter((c, i) => i > 0 && c.posicaoInicialMm < ordenadas[i - 1].posicaoInicialMm + larguraEtiquetaNumero - 0.001)
+      .map((c) => c.numeroColuna)
+  })()
 
   const aoMudarCampos = (atualizar: (campos: CampoEtiquetaPosicionado[]) => CampoEtiquetaPosicionado[]) =>
     setForm((f) => ({ ...f, campos: atualizar(f.campos) }))
@@ -314,14 +409,60 @@ export default function EtiquetaConfigForm({ somenteLeitura = false }: { somente
 
                 <div className="col-4">
                   <div className="card etiqueta-subcard">
-                    <p className="card-title">Posição das Colunas (mm)</p>
+                    <p className="card-title">Espaçamento entre Etiquetas (mm)</p>
                     <p className="muted etiqueta-subcard-ajuda">
-                      Distância do início do rolo até o início de cada etiqueta — valor livre, não calculado
-                      automaticamente.
+                      Meça no rolo, com a régua, os espaços <strong>em branco</strong> entre as etiquetas —
+                      é a mesma medida nas duas direções.
                     </p>
-                    {form.colunas.map((coluna) => (
+
+                    <label htmlFor="margemEsquerdaColunas">Margem até a 1ª coluna</label>
+                    <input id="margemEsquerdaColunas" inputMode="decimal" placeholder="0,00"
+                      disabled={colunasManuais}
+                      value={margemColunas}
+                      onChange={(e) => setMargemColunas(mascararEtiquetaMm(e.target.value))}
+                      onBlur={(e) => setMargemColunas(completarEtiquetaMm(e.target.value))} />
+
+                    {form.numeroColunas > 1 && (
+                      <>
+                        <label htmlFor="espacoEntreColunas">↔ Espaço entre colunas</label>
+                        <input id="espacoEntreColunas" inputMode="decimal" placeholder="0,00"
+                          disabled={colunasManuais}
+                          value={espacoColunas}
+                          onChange={(e) => setEspacoColunas(mascararEtiquetaMm(e.target.value))}
+                          onBlur={(e) => setEspacoColunas(completarEtiquetaMm(e.target.value))} />
+                      </>
+                    )}
+
+                    <label htmlFor="espacamentoVerticalMm">↕ Espaço entre fileiras</label>
+                    <input id="espacamentoVerticalMm" inputMode="decimal" placeholder="0,00"
+                      value={form.espacamentoVerticalMm}
+                      onChange={campoMm('espacamentoVerticalMm')} onBlur={aoSairDoCampoMm('espacamentoVerticalMm')} />
+                    <p className="muted etiqueta-subcard-ajuda">
+                      <strong>Erro aqui se acumula</strong>: a 1ª etiqueta sai certa e a 4ª sai fora do adesivo.
+                    </p>
+
+                    {!colunasManuais && (
+                      <p className="muted etiqueta-subcard-ajuda" style={{ marginTop: 8 }}>
+                        Cada coluna começa em:{' '}
+                        <strong className="mono">
+                          {form.colunas.map((c) => formatarEtiquetaMm(c.posicaoInicialMm)).join(' · ')}
+                        </strong>{' '}
+                        mm
+                      </p>
+                    )}
+
+                    <label className="checkbox-linha" style={{ marginTop: 8 }}>
+                      <input
+                        type="checkbox"
+                        checked={colunasManuais}
+                        onChange={(e) => setColunasManuais(e.target.checked)}
+                      />
+                      Rolo irregular — digitar cada posição
+                    </label>
+
+                    {colunasManuais && form.colunas.map((coluna) => (
                       <div key={coluna.numeroColuna}>
-                        <label htmlFor={`coluna-${coluna.numeroColuna}`}>Coluna {coluna.numeroColuna}</label>
+                        <label htmlFor={`coluna-${coluna.numeroColuna}`}>Coluna {coluna.numeroColuna} começa em</label>
                         <input
                           id={`coluna-${coluna.numeroColuna}`}
                           inputMode="decimal"
@@ -332,6 +473,21 @@ export default function EtiquetaConfigForm({ somenteLeitura = false }: { somente
                         />
                       </div>
                     ))}
+
+                    {colunasQueEstouram.length > 0 && (
+                      <p className="erro-campo">
+                        {colunasQueEstouram.length === 1
+                          ? `A coluna ${colunasQueEstouram[0]} passa da largura do rolo`
+                          : `As colunas ${colunasQueEstouram.join(', ')} passam da largura do rolo`}{' '}
+                        ({formatarEtiquetaMm(larguraRoloNumero)} mm) — o que sobrar é cortado na impressão.
+                      </p>
+                    )}
+                    {colunasSobrepostas.length > 0 && (
+                      <p className="erro-campo">
+                        A coluna {colunasSobrepostas[0]} começa antes de a anterior terminar — as etiquetas
+                        vão se sobrepor.
+                      </p>
+                    )}
                   </div>
                 </div>
               </div>
@@ -364,6 +520,7 @@ export default function EtiquetaConfigForm({ somenteLeitura = false }: { somente
                   <EditorEtiquetaCanvas
                     larguraEtiquetaMm={desmascararEtiquetaMm(form.larguraEtiquetaMm) || 0}
                     alturaEtiquetaMm={desmascararEtiquetaMm(form.alturaEtiquetaMm) || 0}
+                    espacamentoVerticalMm={desmascararEtiquetaMm(form.espacamentoVerticalMm) || 0}
                     bordaSuperiorMm={desmascararEtiquetaMm(form.bordaSuperiorMm) || 0}
                     bordaInferiorMm={desmascararEtiquetaMm(form.bordaInferiorMm) || 0}
                     bordaEsquerdaMm={desmascararEtiquetaMm(form.bordaEsquerdaMm) || 0}
@@ -433,7 +590,12 @@ export default function EtiquetaConfigForm({ somenteLeitura = false }: { somente
               style={{
                 position: 'relative',
                 width: (desmascararEtiquetaMm(form.larguraRoloMm) || 0) * MM_PARA_PX_IMPRESSAO,
-                height: (desmascararEtiquetaMm(form.alturaEtiquetaMm) || 0) * MM_PARA_PX_IMPRESSAO,
+                // PASSO vertical da fileira = altura + espaço entre fileiras (V056). A etiqueta em
+                // si (abaixo) continua com a altura pura — quem cresce é o passo, não o adesivo.
+                height:
+                  ((desmascararEtiquetaMm(form.alturaEtiquetaMm) || 0) +
+                    (desmascararEtiquetaMm(form.espacamentoVerticalMm) || 0)) *
+                  MM_PARA_PX_IMPRESSAO,
               }}
             >
               {colunasDaLinha.map((coluna) => (

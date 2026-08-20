@@ -238,7 +238,13 @@ export default function EtiquetaEmissaoForm() {
               style={{
                 position: 'relative',
                 width: impressao.config.larguraRoloMm * MM_PARA_PX_IMPRESSAO,
-                height: impressao.config.alturaEtiquetaMm * MM_PARA_PX_IMPRESSAO,
+                // ⚠️ PASSO vertical = altura da etiqueta + espaço entre fileiras (V056). Usar só a
+                // altura fazia o conteúdo subir uma fração a cada fileira num rolo com gap: na 2ª
+                // já faltava o cabeçalho, na 4ª estava inteiramente fora do adesivo. O erro não
+                // aparece na primeira etiqueta — só imprimindo uma folha inteira.
+                height:
+                  (impressao.config.alturaEtiquetaMm + (impressao.config.espacamentoVerticalMm ?? 0)) *
+                  MM_PARA_PX_IMPRESSAO,
               }}
             >
               {linha.map(({ coluna, produto }) => (

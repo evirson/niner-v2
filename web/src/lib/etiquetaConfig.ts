@@ -82,6 +82,9 @@ export interface EtiquetaConfig {
   numeroColunas: number
   larguraEtiquetaMm: number
   alturaEtiquetaMm: number
+  /** Espaço em branco ENTRE fileiras do rolo (V056). O passo vertical da impressão é
+   *  `alturaEtiquetaMm + espacamentoVerticalMm`. 0 = fileiras coladas. */
+  espacamentoVerticalMm: number
   bordaSuperiorMm: number
   bordaInferiorMm: number
   bordaEsquerdaMm: number
@@ -102,6 +105,7 @@ export interface EtiquetaConfigFormState {
   numeroColunas: number
   larguraEtiquetaMm: string
   alturaEtiquetaMm: string
+  espacamentoVerticalMm: string
   bordaSuperiorMm: string
   bordaInferiorMm: string
   bordaEsquerdaMm: string
@@ -117,6 +121,7 @@ export const ETIQUETA_CONFIG_VAZIA: EtiquetaConfigFormState = {
   numeroColunas: 1,
   larguraEtiquetaMm: '',
   alturaEtiquetaMm: '',
+  espacamentoVerticalMm: '0,00',
   bordaSuperiorMm: '',
   bordaInferiorMm: '',
   bordaEsquerdaMm: '',
@@ -133,6 +138,7 @@ export function paraFormulario(ec: EtiquetaConfig): EtiquetaConfigFormState {
     numeroColunas: ec.numeroColunas,
     larguraEtiquetaMm: formatarEtiquetaMm(ec.larguraEtiquetaMm),
     alturaEtiquetaMm: formatarEtiquetaMm(ec.alturaEtiquetaMm),
+    espacamentoVerticalMm: formatarEtiquetaMm(ec.espacamentoVerticalMm ?? 0),
     bordaSuperiorMm: formatarEtiquetaMm(ec.bordaSuperiorMm),
     bordaInferiorMm: formatarEtiquetaMm(ec.bordaInferiorMm),
     bordaEsquerdaMm: formatarEtiquetaMm(ec.bordaEsquerdaMm),
@@ -154,6 +160,7 @@ export function paraRequisicao(f: EtiquetaConfigFormState) {
     numeroColunas: f.numeroColunas,
     larguraEtiquetaMm: desmascararMmOuZero(f.larguraEtiquetaMm),
     alturaEtiquetaMm: desmascararMmOuZero(f.alturaEtiquetaMm),
+    espacamentoVerticalMm: desmascararMmOuZero(f.espacamentoVerticalMm),
     bordaSuperiorMm: desmascararMmOuZero(f.bordaSuperiorMm),
     bordaInferiorMm: desmascararMmOuZero(f.bordaInferiorMm),
     bordaEsquerdaMm: desmascararMmOuZero(f.bordaEsquerdaMm),

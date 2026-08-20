@@ -541,6 +541,71 @@ Movimentação de Conta Corrente) que ainda não tinham migrado pro `SeletorPlan
 
 ## Linha do tempo
 
+### 2026-08-20 — Etiqueta: a tela mentia sobre o tamanho da letra, e o rolo não tinha passo vertical
+
+Diagnóstico pedido com material real na mão — as duas telas de configuração, o PDF gerado e a
+**foto de uma folha impressa**. É a segunda vez no projeto que a foto da impressão acha o que
+nenhum teste acharia (a primeira foi a calibragem da bobina térmica).
+
+**O defeito central cabe numa linha.** `CampoEtiquetaVisual` dimensiona posição, largura e altura
+em `mm × escalaPxPorMm`, mas o `font-size` saía em **`pt`** — unidade **absoluta de tela**. 7pt são
+sempre ~9,3px, não importa se 1mm vale 12px (editor a 200%), 3,78px (impressão) ou 3px (prévia do
+rolo). Resultado: o texto aparecia **3,2× menor que o real** no editor e 26% maior na prévia. A
+descrição do produto cabia numa linha na tela e quebrava em **três** no papel, e as duas linhas
+extras vazavam por cima do preço.
+
+⚠️ **A impressão sempre esteve certa; a tela é que mentia** — e a prova é a própria correção: pt →
+mm → px pela mesma escala dá, no papel, exatamente o que dava antes
+(`pt × 25,4/72 × 96/25,4 = pt × 96/72`, que é o que `Npt` já valia a 96dpi). Só a tela mudou.
+
+**O segundo defeito só aparece na quarta etiqueta.** A impressão empilhava as fileiras usando
+`alturaEtiquetaMm` como passo, e o rolo tem espaço em branco entre fileiras. O conteúdo subia a
+cada fileira: na foto, a 1ª sai quase certa, a 2ª já sem cabeçalho, a 4ª inteiramente fora do
+adesivo. **É a assinatura de um erro que se acumula** — e por isso ninguém o pega testando uma
+etiqueta. Coluna nova `espacamento_vertical_mm` (V056), passo = `altura + espaçamento`, aplicada na
+Emissão e no Testar Impressão. Default 0 = comportamento atual: nenhum modelo existente muda
+sozinho.
+
+**O terceiro é o que fecha o ciclo:** `overflow: hidden` fazia o texto que não cabia sumir em
+silêncio na tela e reaparecer bagunçado no papel. Agora o campo **mede** (`scrollHeight` ×
+`clientHeight`) e a tela diz por extenso qual campo não cabe.
+
+#### A reforma da tela veio de uma pergunta do dono do produto
+
+A primeira versão do conserto acrescentou "espaço entre fileiras" (vertical) e manteve "posição de
+cada coluna" (horizontal). Ele leu e perguntou: *"o espaço horizontal e o vertical eu tenho que
+informar, ou só informo a posição onde cada etiqueta começa?"* — e a pergunta era o defeito: duas
+formas de pensar a mesma medida física, na mesma tela.
+
+**Hoje é uma só: informa-se sempre o espaço em branco.** O card "Espaçamento entre Etiquetas"
+reúne margem até a 1ª coluna, ↔ espaço entre colunas e ↕ espaço entre fileiras — as três medidas
+que se tiram com a régua, do mesmo jeito. As posições das colunas passaram a ser **calculadas** e
+mostradas como conferência; continuam sendo o que vai para o banco.
+
+⚠️ **"Rolo irregular — digitar cada posição" não é recurso avançado:** é o que impede a tela de
+estragar um modelo que já funcionava. Ao abrir um modelo salvo, a tela deduz margem/espaço das
+posições gravadas e cai sozinha no modo manual quando elas não seguem passo constante.
+
+⚠️ **Armadilha de ordem de efeitos que isso criou**, resolvida com trava explícita: o recálculo
+automático e a dedução rodam no **mesmo commit** do React, e o recálculo é declarado depois — leria
+margem/espaço ainda vazios e `colunasManuais` ainda `false`. Em rolo regular se auto-corrige no
+render seguinte; em rolo **irregular** não, e as posições já teriam sido sobrescritas antes de o
+modo manual ligar. O estado `medidasDeduzidas` bloqueia qualquer recálculo até a dedução terminar.
+
+**Avisos que a tela não dava:** conteúdo que não cabe, coluna que passa da largura do rolo (no
+modelo que motivou tudo, a coluna 3 terminava em 113mm num rolo de 110mm), colunas sobrepostas, e
+a prévia do rolo passou a mostrar **duas fileiras** — sem a segunda não havia como conferir o
+espaço vertical antes de gastar rolo.
+
+**894 testes verdes** (+1: `espacamentoEntreFileirasEhGravadoELido`, que cobre criação, leitura e
+**atualização** — o UPDATE tem lista de colunas própria e é onde campo novo costuma ficar de fora).
+
+⚠️ **Achado colateral, não corrigido:** `npm run build` está quebrado nesta máquina —
+`node_modules/@rolldown` só tem o binding **linux-x64-musl** num Windows (bug conhecido de
+optional dependencies do npm). `tsc -b` passa; quem quebra é o bundler. Conserto é remover
+`node_modules` + `package-lock.json` e reinstalar — não fiz por conta própria por ser demorado e
+mexer em ambiente.
+
 ### 2026-08-20 — Estoque negativo vira escolha do lojista, e a regra mora na trigger
 
 Três pedidos do dono do produto no mesmo dia, sendo o terceiro uma **inversão de política**:

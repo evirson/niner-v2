@@ -1,5 +1,5 @@
 import JsBarcode from 'jsbarcode'
-import { useEffect, useRef } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import {
   CAMPOS_DE_BARRAS,
   CSS_ALINHAMENTO_ETIQUETA,
@@ -15,6 +15,27 @@ import { formatarMoeda } from '../../lib/masks'
  * só pra o código de barras ter uma cara real quando nenhum produto de exemplo foi escolhido —
  * layout, não impressão de verdade. */
 const VALOR_BARRA_EXEMPLO = '9000000000018'
+
+/**
+ * ⚠️ **O tamanho da fonte precisa acompanhar a escala do desenho — este era o defeito que fazia a
+ * tela mentir** (achado em 2026-08-20, com etiqueta impressa na mão).
+ *
+ * <p>Todo o resto deste componente é dimensionado em `mm × escalaPxPorMm`, mas o `font-size` saía
+ * em `pt`, que é unidade **absoluta de tela**: 7pt são sempre ~9,3px, não importa se 1mm vale
+ * 12px (editor a 200%), 3,78px (impressão) ou 3px (prévia do rolo). O texto ficava então **3,2×
+ * menor que o real** no editor e 1,26× maior na prévia — a descrição cabia numa linha na tela e
+ * quebrava em três no papel, invadindo o campo do preço.
+ *
+ * <p>Convertendo pt→mm→px pela mesma escala do restante, os três contextos passam a mostrar a
+ * MESMA proporção texto/etiqueta. Na impressão o resultado é idêntico ao anterior
+ * (`pt × 25,4/72 × 96/25,4 = pt × 96/72`, que é exatamente o que `Npt` já valia a 96dpi) — ou
+ * seja, **o papel não muda; a tela é que passa a dizer a verdade**.
+ */
+const MM_POR_PONTO = 25.4 / 72
+
+/** Altura reservada para o texto legível sob as barras, em mm — o jsbarcode desenha esse texto
+ *  com fonte própria, então ele também precisa ser medido em milímetro e não em pixel fixo. */
+const ALTURA_TEXTO_BARRAS_MM = 3
 
 function ehCampoDeBarras(campo: CampoEtiquetaPosicionado['campo']): boolean {
   return (CAMPOS_DE_BARRAS as string[]).includes(campo)
@@ -51,30 +72,36 @@ function valorDeBarrasDoCampo(_campo: CampoEtiquetaPosicionado, produto: Produto
  * pequena, e sem essa flag o SVG preserva a proporção original ("meet") deixando espaço vazio
  * ao redor das barras, mais sobra quanto menor a escala. Esticar sem manter proporção garante
  * que as barras preencham a caixa inteira nos dois lugares, do mesmo jeito. */
-function CodigoDeBarras({ valor, larguraPx, alturaPx, exibirTexto }: {
+function CodigoDeBarras({ valor, larguraPx, alturaPx, exibirTexto, escalaPxPorMm }: {
   valor: string
   larguraPx: number
   alturaPx: number
   exibirTexto: boolean
+  escalaPxPorMm: number
 }) {
   const svgRef = useRef<SVGSVGElement>(null)
 
   useEffect(() => {
     if (!svgRef.current || larguraPx <= 0 || alturaPx <= 0) return
     try {
+      // ⚠️ `alturaTextoPx` e `fontSize` em MILÍMETRO convertido, não em pixel fixo: com valores
+      // fixos, a proporção barras/texto mudava entre editor, impressão e prévia — o mesmo defeito
+      // do `font-size` em pt (ver MM_POR_PONTO acima).
+      const alturaTextoPx = exibirTexto ? ALTURA_TEXTO_BARRAS_MM * escalaPxPorMm : 0
       JsBarcode(svgRef.current, valor || VALOR_BARRA_EXEMPLO, {
         format: 'EAN13',
         width: 2,
-        height: exibirTexto ? Math.max(alturaPx - 14, 10) : alturaPx,
+        height: Math.max(alturaPx - alturaTextoPx, 1),
         displayValue: exibirTexto,
-        fontSize: 10,
+        fontSize: Math.max(alturaTextoPx * 0.9, 1),
+        textMargin: 0,
         margin: 0,
       })
     } catch (e) {
       // Valor não desenhável (ex.: vazio) — deixa o SVG em branco em vez de derrubar a tela.
       console.warn('Não foi possível desenhar o código de barras de exemplo:', e)
     }
-  }, [valor, larguraPx, alturaPx, exibirTexto])
+  }, [valor, larguraPx, alturaPx, exibirTexto, escalaPxPorMm])
 
   return (
     <svg
@@ -99,6 +126,7 @@ export default function CampoEtiquetaVisual({
   produtoExemplo,
   nomeEmpresaExemplo,
   style,
+  aoMedirTransbordo,
   ...resto
 }: {
   campo: CampoEtiquetaPosicionado
@@ -106,9 +134,13 @@ export default function CampoEtiquetaVisual({
   produtoExemplo: ProdutoExemplo | null
   nomeEmpresaExemplo: string
   style?: React.CSSProperties
+  /** Chamado quando o conteúdo passa a caber (ou a não caber) na caixa — ver {@link useTransbordo}. */
+  aoMedirTransbordo?: (transborda: boolean) => void
 } & React.HTMLAttributes<HTMLDivElement>) {
   const larguraPx = (campo.larguraMm ?? 10) * escalaPxPorMm
   const alturaPx = (campo.alturaMm ?? 6) * escalaPxPorMm
+  const conteudoRef = useRef<HTMLDivElement>(null)
+  const [transborda, setTransborda] = useState(false)
 
   const estiloBase: React.CSSProperties = {
     position: 'absolute',
@@ -118,7 +150,8 @@ export default function CampoEtiquetaVisual({
     height: alturaPx,
     fontFamily: CSS_FONTE_ETIQUETA[campo.fonte],
     fontWeight: campo.negrito ? 700 : 400,
-    fontSize: campo.tamanhoFontePt ? `${campo.tamanhoFontePt}pt` : '7pt',
+    // ⚠️ pt → mm → px pela escala do desenho. Nunca volte para `${pt}pt`: ver MM_POR_PONTO.
+    fontSize: `${(campo.tamanhoFontePt ?? 7) * MM_POR_PONTO * escalaPxPorMm}px`,
     textAlign: CSS_ALINHAMENTO_ETIQUETA[campo.alinhamento],
     color: campo.fundoPreto ? '#fff' : '#000',
     background: campo.fundoPreto ? '#000' : 'transparent',
@@ -133,14 +166,34 @@ export default function CampoEtiquetaVisual({
     ...style,
   }
 
+  /**
+   * ⚠️ Mede se o texto REALMENTE cabe, comparando `scrollHeight` com `clientHeight` — não estima.
+   *
+   * <p>Motivo: foi exatamente assim que a etiqueta saiu bagunçada (2026-08-20). A descrição
+   * "SAPATENIS MASC PEGADA REF: 111801 COURO PRETO 38" ocupava uma linha na tela e três no papel;
+   * as duas linhas extras vazavam por cima do preço. Com `overflow: hidden` o excesso some
+   * silenciosamente na tela — o operador só descobre com a etiqueta impressa na mão.
+   *
+   * <p>`useLayoutEffect` porque a medida tem de acontecer depois do layout e antes da pintura,
+   * senão a borda de aviso pisca a cada arraste.
+   */
+  useLayoutEffect(() => {
+    const el = conteudoRef.current
+    if (!el || !aoMedirTransbordo) return
+    const passou = el.scrollHeight > el.clientHeight + 1 || el.scrollWidth > el.clientWidth + 1
+    setTransborda(passou)
+    aoMedirTransbordo(passou)
+  })
+
   return (
-    <div style={estiloBase} {...resto}>
+    <div ref={conteudoRef} style={estiloBase} data-transborda={transborda ? 'sim' : undefined} {...resto}>
       {ehCampoDeBarras(campo.campo) ? (
         <CodigoDeBarras
           valor={valorDeBarrasDoCampo(campo, produtoExemplo)}
           larguraPx={larguraPx}
           alturaPx={alturaPx}
           exibirTexto={Boolean(campo.exibirTextoLegivel)}
+          escalaPxPorMm={escalaPxPorMm}
         />
       ) : (
         valorTextoDoCampo(campo, produtoExemplo, nomeEmpresaExemplo)
