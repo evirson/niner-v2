@@ -1537,7 +1537,7 @@ codificado em Base-64 — 28 caracteres. Duas formas de errar, e as duas dão o 
 as duas variáveis, em vez de assinar e transmitir uma nota que já se sabe recusada.
 
 ⏭️ **Pendência aberta:** com um CSRT de teste a SEFAZ-PR responde `cStat 974` — *"CNPJ do
-responsavel tecnico diverge do cadastrado"*. A **Vetor precisa se cadastrar como responsável
+responsavel tecnico diverge do cadastrado"*. A **MITRYUSCASH precisa se cadastrar como responsável
 técnico no portal da SEFAZ de cada UF** e obter o CSRT real. Enquanto isso, nenhuma NF-e 55
 autoriza; a NFC-e não é afetada.
 
@@ -1616,7 +1616,7 @@ contingência sozinho, reprocessa documento preso, arquiva o XML e emite a NF-e 
 DANFE A4.
 
 **1. Bloqueante, e não é código — o CSRT.**
-A NF-e modelo 55 exige `idCSRT`/`hashCSRT` no `infRespTec` (§9.9). A **Vetor precisa se cadastrar
+A NF-e modelo 55 exige `idCSRT`/`hashCSRT` no `infRespTec` (§9.9). A **MITRYUSCASH precisa se cadastrar
 como responsável técnico no portal da SEFAZ de cada UF** e obter o código; hoje a resposta é
 `cStat 974` ("CNPJ do responsavel tecnico diverge do cadastrado") e **nenhuma NF-e 55 autoriza**.
 A NFC-e — a operação do dia a dia da loja — **não** depende disso. É a única pendência que impede
@@ -1679,7 +1679,7 @@ paralelo às telas, se fizer sentido.
 | **B6** ✅ | Assinatura (XMLDSig) + transporte (`HttpClient` do JDK com mTLS por empresa) — `AssinadorXmlNfe` + `fiscal.sefaz` (`SefazTransporte`, `SefazAutorizadorService`), 2026-08-17. 27 testes, incluindo mTLS contra servidor HTTPS real e validação criptográfica da assinatura. **Não precisou do certificado real**: certificados autoassinados cobrem tudo menos a homologação ponta a ponta, que o B0 já fez | B5, B0 | **Sim** |
 | **B7** | PDV: emissão síncrona, DANFCE térmico, contingência offline, recusa em venda a contribuinte | B6 | **Sim** |
 | **B8** | Cancelamento (110111), inutilização, arquivamento no bucket, download em ZIP | B7 | **Sim** |
-| **B9** ✅ | NF-e de devolução de venda (entrada, `finNFe=4`), espelhando a tributação gravada em `documento_fiscal_item`, + **DANFE em A4**. **Feito em 2026-08-19.** Referência à nota original **só a nível de item** (`det/DFeReferenciado`): os dois níveis juntos passam no XSD mas a SEFAZ rejeita (`cStat 1010`). Exigiu implementar o **CSRT** (`idCSRT`/`hashCSRT`, NT 2018.005), obrigatório no modelo 55 (`cStat 975` sem ele). ⏭️ **Falta credencial, não código:** a Vetor precisa se cadastrar como responsável técnico na SEFAZ de cada UF e obter o CSRT — a resposta hoje é `cStat 974` | B8 | **Sim** |
+| **B9** ✅ | NF-e de devolução de venda (entrada, `finNFe=4`), espelhando a tributação gravada em `documento_fiscal_item`, + **DANFE em A4**. **Feito em 2026-08-19.** Referência à nota original **só a nível de item** (`det/DFeReferenciado`): os dois níveis juntos passam no XSD mas a SEFAZ rejeita (`cStat 1010`). Exigiu implementar o **CSRT** (`idCSRT`/`hashCSRT`, NT 2018.005), obrigatório no modelo 55 (`cStat 975` sem ele). ⏭️ **Falta credencial, não código:** a MITRYUSCASH precisa se cadastrar como responsável técnico na SEFAZ de cada UF e obter o CSRT — a resposta hoje é `cStat 974` | B8 | **Sim** |
 
 **Nota (2026-08-18):** B7 e B8 fecharam em 2026-08-17 (ver `docs/PROGRESSO.md`), mas a linha do B8
 acima ficou desatualizada — "arquivamento no bucket" tinha ficado **fora** do escopo fechado
@@ -1814,7 +1814,7 @@ Resumo operacional do que a montagem do XML vai buscar onde. `(novo)` = coluna q
 | `pag` | `vTroco` | PDV *(hoje não persistido)* |
 | `infIntermed` | CNPJ e id do vendedor na plataforma | `documento_fiscal_intermediador` *(novo, DF26)* |
 | `infNFeSupl` | `qrCode`, `urlChave` | gerado na emissão (NFC-e apenas) |
-| `infRespTec` | CNPJ, `xContato`, `email`, `fone` | `niner.fiscal.resp-tec` (config da **aplicação** — é a Vetor, não o tenant) |
+| `infRespTec` | CNPJ, `xContato`, `email`, `fone` | `niner.fiscal.resp-tec` (config da **aplicação** — é a MITRYUSCASH (casa de software), não o tenant) |
 | `infRespTec` | `idCSRT`, `hashCSRT` | `NINER_FISCAL_RESPTEC_ID_CSRT` + hash calculado por nota (§9.9) |
 | `ide/NFref` | — | **não é emitido**: a devolução referencia por item (ver abaixo) |
 | `det/DFeReferenciado` | `chaveAcesso`, `nItem` | `documento_fiscal_referencia` + `documento_fiscal_item.numero_item` da nota original (só na devolução) |

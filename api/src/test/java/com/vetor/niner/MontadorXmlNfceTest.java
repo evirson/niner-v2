@@ -642,8 +642,8 @@ class MontadorXmlNfceTest {
     }
 
     private static ResponsavelTecnico respTec() {
-        return new ResponsavelTecnico("37829453000135", "SUPORTE VETOR SISTEMAS",
-                "suporte@vetorsistemas.com.br", "4133334444", null, null);
+        return new ResponsavelTecnico("37829453000135", "MITRYUSCASH",
+                "suporte@nainer.com.br", "4133334444", null, null);
     }
 
     private static UrlsConsultaUf urls() {

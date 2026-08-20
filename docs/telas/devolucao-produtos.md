@@ -209,7 +209,7 @@ ainda sem resposta") e o item **B9** do roteiro fiscal (NF-e de devolução), qu
 > (ver "O que a SEFAZ recusou", abaixo).
 >
 > ⏭️ **Pendência que não é código:** a SEFAZ responde `cStat 974` ("CNPJ do responsavel tecnico
-> diverge do cadastrado") — a **Vetor precisa se cadastrar como responsável técnico no portal da
+> diverge do cadastrado") — a **MITRYUSCASH precisa se cadastrar como responsável técnico no portal da
 > SEFAZ de cada UF e obter o CSRT**. Até lá nenhuma NF-e 55 autoriza de verdade; a devolução e o
 > vale funcionam normalmente (F3), e a NFC-e do dia a dia não é afetada.
 
@@ -386,7 +386,7 @@ emissão começa.
 - Se a venda referenciada ainda está dentro dos 30 min de cancelamento da NFC-e, vale sugerir
   "cancele a venda direto" em vez de devolução+nota nova? (Cancelamento desfaz tudo; devolução
   pode ser parcial — talvez os dois caminhos devam conviver, sem um substituir o outro.)
-- **CSRT do responsável técnico** — ⏭️ **pendência de credencial, não de código.** A Vetor precisa
+- **CSRT do responsável técnico** — ⏭️ **pendência de credencial, não de código.** A MITRYUSCASH precisa
   se cadastrar como responsável técnico no portal da SEFAZ de **cada UF** e obter o CSRT; enquanto
   isso a resposta é `cStat 974`. Ver `docs/MODULOFISCAL.md` §9.9.
 

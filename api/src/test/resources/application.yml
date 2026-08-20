@@ -64,8 +64,8 @@ niner:
     truststore-senha: ""
     resp-tec:
       cnpj: "37829453000135"
-      contato: SUPORTE VETOR SISTEMAS
-      email: suporte@vetorsistemas.com.br
+      contato: MITRYUSCASH
+      email: suporte@nainer.com.br
       telefone: "4133334444"
       # CSRT de teste — valor sem significado, só precisa existir: a NF-e modelo 55 é recusada na
       # montagem sem ele (cStat 975 na SEFAZ real). O CSRT de verdade é segredo e nunca entra aqui.

@@ -1,7 +1,7 @@
 # Progresso do Projeto — niner-v2
 
 Registro cronológico das decisões e entregas. Atualizar a cada marco relevante.
-**Última atualização:** 2026-08-19
+**Última atualização:** 2026-08-20
 
 ---
 
@@ -30,7 +30,7 @@ Registro cronológico das decisões e entregas. Atualizar a cada marco relevante
 > ponta, com **DANFE em A4**. Blocos B0–B9 completos.
 >
 > ⏭️ **O que falta não é código: o CSRT.** A NF-e modelo 55 exige `idCSRT`/`hashCSRT` no
-> `infRespTec` (NT 2018.005) — a **Vetor precisa se cadastrar como responsável técnico no portal
+> `infRespTec` (NT 2018.005) — a **MITRYUSCASH precisa se cadastrar como responsável técnico no portal
 > da SEFAZ de cada UF** e obter o código. Sem ele a SEFAZ responde `cStat 974` ("CNPJ do
 > responsavel tecnico diverge do cadastrado") e nenhuma nota de devolução autoriza. **A NFC-e, que
 > é a operação do dia a dia da loja, não é afetada** — o PR não cobra CSRT no modelo 65. Ver
@@ -510,6 +510,29 @@ Movimentação de Conta Corrente) que ainda não tinham migrado pro `SeletorPlan
 
 ## Linha do tempo
 
+### 2026-08-20 — Correção de fato: o responsável técnico do `infRespTec` é a MITRYUSCASH, não a Vetor
+
+Esclarecimento do dono do produto: o **responsável técnico** declarado em toda NFC-e/NF-e é sempre
+a **casa de software** — **MITRYUSCASH**, CNPJ **37.829.453/0001-35** — e **não a Vetor**. Quem
+precisa se cadastrar no portal da SEFAZ de cada UF e obter o **CSRT** (a única pendência do módulo
+fiscal, `cStat 974` hoje) é a MITRYUSCASH.
+
+**O XML sempre esteve certo**: `niner.fiscal.resp-tec.cnpj` já era `37829453000135`. O erro estava
+só na **documentação**, que dizia "a Vetor precisa se cadastrar" em 12 lugares —
+`docs/MODULOFISCAL.md` (§9.9, §17.0, tabela do B9 em §17.1, anexo de origem dos campos),
+`docs/PROGRESSO.md` (3), `docs/telas/devolucao-produtos.md` (2), o Javadoc de
+`NinerProperties.RespTec` e os comentários do `application.yml`. Todos corrigidos.
+
+**Os três campos de contato do grupo passaram a ser da MITRYUSCASH**, que antes carregavam dado da
+Vetor e iam em **toda nota de todo lojista**: `xContato` **MITRYUSCASH**, `email`
+**suporte@nainer.com.br**, `fone` 4133334444 (inalterado). A SEFAZ não confere esses três contra o
+cadastro — o que ela compara é o CNPJ, e é por isso que a rejeição de hoje é 974 e não outra — mas
+eles são o canal que o fisco usa para falar com quem desenvolve o emissor, então precisam ser reais.
+Alinhados também os *fixtures* dos testes e o `application.yml` de teste, para o valor errado não
+voltar por cópia. **59 testes verdes** (`MontadorXmlNfceTest` 36, `MontadorXmlNfeDevolucaoTest` 13,
+`AssinadorXmlNfeTest` 10) — o primeiro valida o XML contra os XSD oficiais, então a troca do
+`xContato` está conferida contra o schema, não só compilando.
+
 ### 2026-08-19 — 🔴 Bug real corrigido: "hoje" era o dia do banco (UTC), não o da loja — o caixa aberto de manhã sumia às 21h
 
 Achado tentando fazer uma venda de teste às 21:30: `POST /api/v1/pdv/vendas` respondia **"Não há
@@ -543,7 +566,7 @@ pelo `age()` do CRM, que passou a comparar contra o hoje local. 794 testes verde
 Pedido do dono do produto ao encerrar o dia: amanhã ele vai perguntar o que falta no módulo
 fiscal, e a resposta não podia depender de reler 1.800 linhas de estudo. §17.0 nova, logo antes do
 "ponto de partida da codificação", com as pendências em ordem de urgência: **(1)** o **CSRT**, que
-é bloqueante e **não é código** — a Vetor precisa se credenciar como responsável técnico na SEFAZ
+é bloqueante e **não é código** — a MITRYUSCASH precisa se credenciar como responsável técnico na SEFAZ
 de cada UF; **(2)** o prazo de **04/01/2027** do IBS/CBS, que atinge 100% da base (DF37) e ainda
 carrega uma pergunta em aberto — se o optante do Simples fica dentro do DAS ou pode optar pelo
 regime regular (LC 214/2025), o que mudaria CST, `cClassTrib` e talvez exigisse `gTribRegular`;
@@ -586,7 +609,7 @@ verdade contra a SEFAZ-PR de homologação, e cada uma virou teste:
   `NFe` — errar qualquer uma dá cStat 976, que não diz qual das duas foi.
 
 ⏭️ **Pendência que não é código:** a SEFAZ-PR agora responde **cStat 974** ("CNPJ do responsavel
-tecnico diverge do cadastrado"). A **Vetor precisa se cadastrar como responsável técnico no
+tecnico diverge do cadastrado"). A **MITRYUSCASH precisa se cadastrar como responsável técnico no
 portal da SEFAZ de cada UF e obter o CSRT de verdade** (`NINER_FISCAL_RESPTEC_ID_CSRT` +
 `NINER_FISCAL_RESPTEC_CSRT`, segredo, via `.env`). O valor de dev é de teste e não autoriza nada
 — serviu pra provar que o caminho do hash está certo, já que a rejeição avançou de 975 pra 974.
@@ -7596,7 +7619,7 @@ com autenticação JWT real protegendo o ERP.
    preso, arquiva o XML e **emite a NF-e modelo 55 de devolução** com DANFE em A4. A **DF20** que
    travava o B9 foi decidida com o contador em 2026-08-19 (devolução sem consumidor identificado
    sai contra o CNPJ da própria loja).
-   **A única pendência do módulo não é código:** a **Vetor precisa se cadastrar como responsável
+   **A única pendência do módulo não é código:** a **MITRYUSCASH precisa se cadastrar como responsável
    técnico no portal da SEFAZ de cada UF e obter o CSRT** — sem ele a NF-e 55 é recusada
    (hoje responde `cStat 974`, "CNPJ do responsavel tecnico diverge do cadastrado"). A NFC-e, que
    é a operação do dia a dia da loja, **não** depende disso e segue autorizando normalmente.

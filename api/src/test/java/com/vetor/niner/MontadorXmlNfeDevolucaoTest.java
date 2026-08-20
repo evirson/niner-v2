@@ -212,7 +212,7 @@ class MontadorXmlNfeDevolucaoTest {
     @Test
     void devolucaoSemCsrtConfiguradoEhRecusadaAntesDeTransmitir() {
         ResponsavelTecnico semCsrt = new ResponsavelTecnico(
-                "37829453000135", "SUPORTE VETOR", "suporte@vetorsistemas.com.br", "4133334444", null, null);
+                "37829453000135", "MITRYUSCASH", "suporte@nainer.com.br", "4133334444", null, null);
         DevolucaoParaMontar dev = new DevolucaoParaMontar(
                 AmbienteSefaz.HOMOLOGACAO, 1, 1, 12345678, EMISSAO, "DEVOLUCAO DE VENDA",
                 CHAVE_ORIGINAL, emitente(), destinatarioPropriaLoja(),
@@ -295,7 +295,7 @@ class MontadorXmlNfeDevolucaoTest {
     }
 
     private static ResponsavelTecnico respTec() {
-        return new ResponsavelTecnico("37829453000135", "SUPORTE VETOR", "suporte@vetorsistemas.com.br", "4133334444",
+        return new ResponsavelTecnico("37829453000135", "MITRYUSCASH", "suporte@nainer.com.br", "4133334444",
                 "01", "CSRTDETESTEPARAOMONTADOR1234567890");
     }
 
