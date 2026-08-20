@@ -68,7 +68,7 @@ de o parâmetro existir — e por que a devolução continua sendo o caso mais r
 | A mercadoria | está na mão do operador | ninguém está vendo |
 | Estoque zero significa | o **cadastro** está atrasado | a peça provavelmente **já foi vendida** |
 | A operação | **registra** um fato observado | **declara** um fato não conferido |
-| Negativo | **parâmetro** (`cfg_permite_estoque_negativo`) — desligado por padrão | **barrado sempre**, o parâmetro não afrouxa |
+| Negativo | **parâmetro** (`cfg_permite_estoque_negativo`) — ligado por padrão | **barrado sempre**, o parâmetro não afrouxa |
 
 O que muda tudo é a NF-e: ela afirma à SEFAZ que a mercadoria está saindo fisicamente. Se não
 estiver, o documento fica mentindo e o fornecedor espera uma caixa que nunca chega.

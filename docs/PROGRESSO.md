@@ -536,7 +536,7 @@ de ele não circular é não imprimir. O botão some da tela e
 atende qualquer usuário do tenant e a tela não é o único caminho até ele (P4).
 
 **2. Parâmetro novo: "Permite quantidade de estoque negativo"** (Parâmetros do Sistema → Estoque),
-`cfg_geral.cfg_permite_estoque_negativo`, **desligado por padrão**.
+`cfg_geral.cfg_permite_estoque_negativo`.
 
 **3. Nenhuma rotina debita além do que existe** — e o saldo é **por empresa**.
 
@@ -588,9 +588,24 @@ mensagem nenhuma.
   **viraram a cobertura da regra nova**, com o comentário dizendo que diziam o contrário até hoje —
   quem ler daqui a um ano precisa saber que foi decisão, não deriva.
 
-**Default `false`.** Contraria o precedente de `cfg_consiste_valor_contas_pagar` (que nasceu `true`
-por preservar o comportamento existente), e é deliberado: o pedido descreve o bloqueio como o
-comportamento desejado, e o parâmetro como a saída para quem quiser o contrário.
+#### ⚠️ O padrão nasceu ao contrário e foi invertido no mesmo dia (V054 `false` → V055 `true`)
+
+A V054 leu o item 3 do pedido ("as rotinas não podem debitar e ficar negativo") como o
+comportamento desejado e nasceu **bloqueando**. Perguntado sobre o padrão, o dono do produto deu o
+contexto que faltava: *"na maioria das vezes o usuário não vai querer controlar o estoque, aí se
+ficar negativo não tem problema"*. A loja típica do produto **não faz gestão de estoque** — travar
+o caixa dela por um número que ninguém alimenta seria o pior dos dois erros. O controle é
+**opt-in**: quem quer estoque confiável desmarca.
+
+Vale registrar o custo dessa inversão, que foi pequeno **porque a regra estava num lugar só**:
+mudou um `DEFAULT`, e os três testes que medem o bloqueio passaram a desligar o parâmetro
+explicitamente. Se a checagem estivesse espalhada por seis serviços, seria seis vezes o trabalho e
+uma chance de esquecer um.
+
+⚠️ A V055 também roda `UPDATE cfg_geral SET cfg_permite_estoque_negativo = true` nas linhas
+existentes: ninguém chegou a **escolher** `false` — foi um default que durou uma sessão, e deixar
+as lojas já cadastradas bloqueando faria elas se comportarem diferente das novas por acidente de
+cronologia.
 
 **893 testes verdes** (+2 líquidos: 3 reescritos, 2 novos).
 

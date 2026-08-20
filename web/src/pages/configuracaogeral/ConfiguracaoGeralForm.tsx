@@ -27,7 +27,7 @@ const VAZIO: ConfiguracaoGeralFormState = {
   multaCrediario: '',
   cfgUsaCorGrade: false,
   cfgPermiteQtdDecimal: true,
-  cfgPermiteEstoqueNegativo: false,
+  cfgPermiteEstoqueNegativo: true,
   cfgExigeNumeroVendaDevolucao: false,
   cfgRateiaFreteEntrada: false,
   cfgReajustaPrecoEntrada: false,
@@ -310,11 +310,12 @@ export default function ConfiguracaoGeralForm() {
                 Permite quantidade de estoque negativo
               </label>
               <p className="muted" style={{ fontSize: 12, marginTop: 4 }}>
-                Desligado (padrão): nenhuma rotina consegue tirar mais do que existe — venda,
-                transferência, devolução ao fornecedor, cancelamento de entrada e ajuste de balanço
-                param com "estoque insuficiente", dizendo qual produto e quanto há. O saldo é
-                contado <strong>por empresa</strong>. Ligado: o saldo pode ficar negativo, e a
-                venda nunca trava por cadastro desatualizado.
+                Ligado (padrão): o saldo pode ficar negativo e a venda nunca trava por cadastro
+                desatualizado — a maioria das lojas não faz gestão de estoque. Desligue para
+                controlar: aí nenhuma rotina tira mais do que existe (venda, transferência,
+                devolução ao fornecedor, cancelamento de entrada, ajuste de balanço), e a operação
+                para com "estoque insuficiente", dizendo qual produto e quanto há. O saldo é
+                contado <strong>por empresa</strong>.
               </p>
             </div>
           </div>

@@ -350,9 +350,33 @@ class CancelamentoEntradaCrudTest {
      * Se passasse, o estoque ficaria em −2 e a loja teria vendido mercadoria que o sistema passa a
      * dizer que nunca entrou.
      */
+
+    /**
+     * Desliga "Permite quantidade de estoque negativo" (Parâmetros do Sistema → Estoque).
+     *
+     * <p>O parâmetro nasce **ligado** — a loja típica do produto não faz gestão de estoque e a
+     * venda não deve travar. Quem quer estoque confiável desliga, e é essa loja que este teste
+     * representa.
+     */
+    private void desligarEstoqueNegativo(String token) throws Exception {
+        mvc.perform(put("/api/v1/config-geral").header("Authorization", "Bearer " + token)
+                        .contentType(APPLICATION_JSON)
+                        .content("""
+                                {"percentualDescontoVenda":0,"jurosCrediarioDias":0,"jurosCrediario":0,
+                                 "multaCrediarioDias":0,"multaCrediario":0,"cfgUsaCorGrade":false,
+                                 "cfgPermiteQtdDecimal":true,"cfgPermiteEstoqueNegativo":false,
+                                 "cfgExigeNumeroVendaDevolucao":false,
+                                 "cfgRateiaFreteEntrada":false,"cfgReajustaPrecoEntrada":false,
+                                 "cfgConsisteValorContasPagar":false,
+                                 "idPlanoContasCompraMercadoria":"3.03.001","cfgEmiteFiscalAposVenda":false}
+                                """))
+                .andExpect(status().isOk());
+    }
+
     @Test
     void cancelarEntradaCujaMercadoriaJaSaiuEhBloqueado() throws Exception {
         TenantENota tenant = prepararTenantComProduto("ja-vendida");
+        desligarEstoqueNegativo(tenant.token());
         long idMovimento = efetivarEntrada(tenant.token(), tenant.idFornecedor(), tenant.idVariacao(), null);
         long idEmpresa = buscarPrimeiraEmpresa(tenant.token());
 

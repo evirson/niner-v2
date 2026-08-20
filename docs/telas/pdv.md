@@ -420,14 +420,15 @@ crediário desta venda somado ao já em aberto ultrapassa `cliente.limite_credit
 - Dado um produto inativo, quando buscado, então não aparece.
 - Dado um sku ou ean existente, quando lido, então devolve o mesmo formato; se não existir ou o
   produto estiver inativo, 404.
-- ⚠️ **Mudou em 2026-08-20.** Dado um item com `qtd` maior que o saldo da empresa, quando a venda
-  é efetivada, então a venda inteira é **recusada com 409** e o estoque fica intacto — a mensagem
-  diz qual produto, quanto há e quanto a operação precisa. Isso vale enquanto
-  `cfg_permite_estoque_negativo` estiver **desligado**, que é o padrão (Parâmetros do Sistema →
-  Estoque); ligado, volta o comportamento anterior (venda gravada, saldo negativo). Quem barra não
-  é o PDV: é a trigger `fn_atualiza_estoque_movimento` (V054), que fica no único caminho por onde o
-  saldo se mexe — ver `docs/telas/configuracao-geral.md`. Testes:
-  `estoqueInsuficienteBloqueiaAVendaEDeixaOSaldoIntacto` e
+- Dado um item com `qtd` maior que o saldo da empresa, quando a venda é efetivada, então a venda é
+  gravada normalmente (201) e o saldo fica **negativo** — `cfg_permite_estoque_negativo` nasce
+  **ligado** (V055): a loja típica não faz gestão de estoque e o caixa não deve travar por um
+  cadastro que ninguém alimenta.
+- ⚠️ **Novo em 2026-08-20:** desligando esse parâmetro (Parâmetros do Sistema → Estoque), a mesma
+  venda é **recusada com 409** e o estoque fica intacto — a mensagem diz qual produto, quanto há e
+  quanto a operação precisa. Quem barra não é o PDV: é a trigger `fn_atualiza_estoque_movimento`
+  (V054), no único caminho por onde o saldo se mexe — ver `docs/telas/configuracao-geral.md`.
+  Testes: `estoqueInsuficienteBloqueiaAVendaEDeixaOSaldoIntacto` e
   `estoqueInsuficienteEhAceitoQuandoOParametroPermiteNegativo`, em `PdvCrudTest`.
 - Dado Tipo de Carteira categoria `AVISTA`, quando a venda é efetivada, então grava 1 parcela já
   com `dataRecebimento` preenchida.

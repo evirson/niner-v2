@@ -74,7 +74,7 @@ outras.
 | `cfg_emite_fiscal_apos_venda` | Emitir NFC-e/NF-e automaticamente após a venda | checkbox | — (default `true`, 2026-08-19) |
 | `cfg_usa_cor_grade` | Usa cor/grade (calçados, confecções) | checkbox | — (default `false`, 2026-08-08; era duas flags separadas de linha/coluna) |
 | `cfg_permite_qtd_decimal` | Permite quantidade decimal para produtos | checkbox | — (default `true`) |
-| `cfg_permite_estoque_negativo` | Permite quantidade de estoque negativo | checkbox | — (**default `false`**, 2026-08-20 — ver abaixo) |
+| `cfg_permite_estoque_negativo` | Permite quantidade de estoque negativo | checkbox | — (**default `true`**, V055 — nasceu `false` na V054 e foi invertido no mesmo dia; ver abaixo) |
 | `cfg_exige_numero_venda_devolucao` | Exigir número da venda na Devolução de Produtos | checkbox | — (default `false`, 2026-08-11) |
 | `cfg_rateia_frete_entrada` | Ratear frete/IPI/ICMS-ST no custo do item | checkbox | — (default `false`, 2026-08-11) |
 | `cfg_reajusta_preco_entrada` | Reajustar preço do produto automaticamente | checkbox | — (default `false`, 2026-08-11) |
@@ -152,10 +152,18 @@ de entrada** (que ninguém lembra), o cancelamento de devolução de venda e o b
 vier depois. `produto_movimento_detalhe` é o **único** caminho por onde `produto_estoque` se mexe:
 a regra ali cobre o que existe e o que ainda não foi escrito.
 
-- **Desligado (padrão):** *tem 5, só debita até 5*. O saldo é contado **por empresa** — transferir
-  5 de uma empresa que tem 3 é barrado mesmo que outra empresa do tenant tenha 100.
-- **Ligado:** o saldo pode ficar negativo, e a venda nunca trava por cadastro desatualizado (o
-  comportamento do sistema inteiro até 2026-08-20).
+- **Ligado (padrão):** o saldo pode ficar negativo e a venda nunca trava por cadastro
+  desatualizado — o comportamento do sistema inteiro desde sempre. Razão do dono do produto:
+  *"na maioria das vezes o usuário não vai querer controlar o estoque, aí se ficar negativo não tem
+  problema"*. **O controle de estoque é opt-in**, não o contrário.
+- **Desligado:** *tem 5, só debita até 5*. O saldo é contado **por empresa** — transferir 5 de uma
+  empresa que tem 3 é barrado mesmo que outra empresa do tenant tenha 100.
+
+⚠️ **O padrão nasceu ao contrário e foi invertido no mesmo dia** (V054 `false` → V055 `true`). A
+V054 leu o pedido "as rotinas não podem debitar e ficar negativo" como o comportamento desejado; a
+pergunta sobre o padrão trouxe o contexto que faltava — a maioria das lojas não controla estoque.
+As linhas existentes voltaram a `true` na V055 porque ninguém chegou a **escolher** `false`: foi um
+default que durou uma sessão.
 - **Exceção que o parâmetro NÃO afrouxa:** a Devolução de Produtos Comprados tem regra própria e
   mais estreita (só devolve o que a nota trouxe **e** ainda está em estoque), porque ali o estoque
   não é só saldo — é o que a NF-e declara estar saindo fisicamente.

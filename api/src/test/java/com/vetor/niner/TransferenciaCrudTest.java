@@ -165,6 +165,28 @@ class TransferenciaCrudTest {
     }
 
     /** `assinarNovoTenant` já devolve token ADMIN — PUT exige o corpo inteiro (sem campo nullable). */
+
+    /**
+     * Liga/desliga "Permite quantidade de estoque negativo" (Parâmetros do Sistema → Estoque).
+     *
+     * <p>O parâmetro nasce **ligado** (a loja típica não faz gestão de estoque), então o teste que
+     * mede o bloqueio precisa desligá-lo — e faz isso pela API de verdade, não por SQL, para o
+     * contrato da tela ficar preso junto.
+     */
+    private void definirPermiteEstoqueNegativo(String token, boolean permite) throws Exception {
+        mvc.perform(put("/api/v1/config-geral").header("Authorization", "Bearer " + token)
+                        .contentType(APPLICATION_JSON)
+                        .content("""
+                                {"percentualDescontoVenda":0,"jurosCrediarioDias":0,"jurosCrediario":0,
+                                 "multaCrediarioDias":0,"multaCrediario":0,"cfgUsaCorGrade":false,
+                                 "cfgPermiteQtdDecimal":true,"cfgPermiteEstoqueNegativo":%s,
+                                 "cfgExigeNumeroVendaDevolucao":false,
+                                 "cfgRateiaFreteEntrada":false,"cfgReajustaPrecoEntrada":false,
+                                 "cfgConsisteValorContasPagar":false,
+                                 "idPlanoContasCompraMercadoria":"3.03.001","cfgEmiteFiscalAposVenda":false}
+                                """.formatted(permite)))
+                .andExpect(status().isOk());
+    }
     private void definirPermiteQtdDecimal(String token, boolean permite) throws Exception {
         mvc.perform(put("/api/v1/config-geral").header("Authorization", "Bearer " + token)
                         .contentType(APPLICATION_JSON)
@@ -209,13 +231,15 @@ class TransferenciaCrudTest {
 
     @Test
     void transferenciaComEstoqueInsuficienteEhBloqueadaNaOrigem() throws Exception {
-        // ⚠️ Este teste afirmava o CONTRÁRIO até 2026-08-20. A política de estoque negativo virou
-        // parâmetro (`cfg_permite_estoque_negativo`, desligado por padrão), e a transferência é o
-        // caso onde o saldo POR EMPRESA fica evidente: a origem tem 2, o destino não importa.
+        // ⚠️ Este teste afirmava o CONTRÁRIO até 2026-08-20. O controle de estoque virou
+        // parâmetro **opt-in** (`cfg_permite_estoque_negativo` nasce ligado), então o teste começa
+        // desligando. A transferência é o caso onde o saldo POR EMPRESA fica evidente: a origem
+        // tem 2, e não importa quanto a empresa de destino tenha.
         String token = assinarNovoTenant("estoque-insuficiente");
         long idTenant = extrairIdTenant(token);
         long idEmpresaOrigem = extrairIdEmpresa(token);
         long idProduto = criarProduto(token, "Produto Sem Estoque");
+        definirPermiteEstoqueNegativo(token, false);
 
         long idVariacao;
         long idEmpresaDestino;

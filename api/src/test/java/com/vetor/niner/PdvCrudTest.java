@@ -430,9 +430,10 @@ class PdvCrudTest {
     @Test
     void estoqueInsuficienteBloqueiaAVendaEDeixaOSaldoIntacto() throws Exception {
         // ⚠️ Este teste dizia o CONTRÁRIO até 2026-08-20 ("saldo negativo é permitido de
-        // propósito em qualquer movimentação"). O dono do produto inverteu a política e a
-        // colocou atrás de um parâmetro: `cfg_permite_estoque_negativo`, desligado por padrão.
-        // O caminho ligado está em `estoqueInsuficienteEhAceitoQuandoOParametroPermiteNegativo`.
+        // propósito em qualquer movimentação"). Hoje o controle existe, mas é **opt-in**:
+        // `cfg_permite_estoque_negativo` nasce LIGADO (a loja típica não faz gestão de estoque),
+        // e quem quer estoque confiável desliga — que é o que este teste faz.
+        // O padrão de fábrica está em `estoqueInsuficienteEhAceitoQuandoOParametroPermiteNegativo`.
         String token = assinarNovoTenant("sem-estoque");
         long idTenant = extrairIdTenant(token);
         long idProduto = criarProduto(token, "Produto Sem Estoque", true);
@@ -440,6 +441,7 @@ class PdvCrudTest {
         long idCliente = criarCliente(token, "Cliente Sem Estoque");
         long idFuncionario = criarFuncionario(token, "Vendedor Sem Estoque");
         abrirCaixaDinheiro(token);
+        definirEstoqueNegativo(token, false);
 
         try (Connection c = abrirConexao(idTenant)) {
             long idEmpresa = buscarIdEmpresa(c);
@@ -474,7 +476,9 @@ class PdvCrudTest {
         long idCliente = criarCliente(token, "Cliente Negativo OK");
         long idFuncionario = criarFuncionario(token, "Vendedor Negativo OK");
         abrirCaixaDinheiro(token);
-        permitirEstoqueNegativo(token);
+        // Explícito de propósito, mesmo sendo o padrão: se o padrão mudar de novo, este teste
+        // continua medindo o que diz medir.
+        definirEstoqueNegativo(token, true);
 
         try (Connection c = abrirConexao(idTenant)) {
             long idEmpresa = buscarIdEmpresa(c);
@@ -494,20 +498,20 @@ class PdvCrudTest {
         }
     }
 
-    /** Liga "Permite quantidade de estoque negativo" pela própria API de Parâmetros do Sistema —
-     *  é assim que o lojista faz, e testar pelo caminho real prende o contrato junto. */
-    private void permitirEstoqueNegativo(String token) throws Exception {
+    /** Liga/desliga "Permite quantidade de estoque negativo" pela própria API de Parâmetros do
+     *  Sistema — é assim que o lojista faz, e testar pelo caminho real prende o contrato junto. */
+    private void definirEstoqueNegativo(String token, boolean permite) throws Exception {
         mvc.perform(put("/api/v1/config-geral").header("Authorization", "Bearer " + token)
                         .contentType(APPLICATION_JSON)
                         .content("""
                                 {"percentualDescontoVenda":0,"jurosCrediarioDias":0,"jurosCrediario":0,
                                  "multaCrediarioDias":0,"multaCrediario":0,"cfgUsaCorGrade":false,
-                                 "cfgPermiteQtdDecimal":true,"cfgPermiteEstoqueNegativo":true,
+                                 "cfgPermiteQtdDecimal":true,"cfgPermiteEstoqueNegativo":%s,
                                  "cfgExigeNumeroVendaDevolucao":false,
                                  "cfgRateiaFreteEntrada":false,"cfgReajustaPrecoEntrada":false,
                                  "cfgConsisteValorContasPagar":false,
                                  "idPlanoContasCompraMercadoria":"3.03.001","cfgEmiteFiscalAposVenda":false}
-                                """))
+                                """.formatted(permite)))
                 .andExpect(status().isOk());
     }
 

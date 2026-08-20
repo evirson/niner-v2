@@ -69,7 +69,7 @@ tabela de negócio específica).
 | Empresa de Origem | texto somente-leitura | — | Sempre a empresa ativa da sessão (`GET /api/v1/eu`, campo `empresa`); nunca editável |
 | Empresa de Destino | select | **Sim** | `GET /api/v1/empresas`, excluindo a empresa de origem e as inativas |
 | Produtos | busca + lista | **Sim, ao menos um** | Reaproveita `PesquisaProdutoModal` do PDV (`GET /api/v1/pdv/produtos`) — mesma busca, mostra estoque por empresa, o que já dá visibilidade do saldo na origem antes de adicionar |
-| Quantidade (por item) | numérico, até 3 casas (`numeric(14,3)`) **se** `cfg_permite_qtd_decimal` estiver ligado, senão inteiro | **Sim, > 0** | Sem limite contra o estoque da origem (revisado 2026-07-29; desde 2026-08-20 o limite volta quando `cfg_permite_estoque_negativo` está desligado — padrão. Ver "Estoque negativo virou parâmetro" abaixo) — só não pode ser zero/negativa. |
+| Quantidade (por item) | numérico, até 3 casas (`numeric(14,3)`) **se** `cfg_permite_qtd_decimal` estiver ligado, senão inteiro | **Sim, > 0** | Sem limite contra o estoque da origem (revisado 2026-07-29; desde 2026-08-20 o limite volta se o lojista **desligar** `cfg_permite_estoque_negativo`, que nasce ligado. Ver "Estoque negativo virou parâmetro" abaixo) — só não pode ser zero/negativa. |
 
 **Sem `cfg_tela_campo` nesta tela** — mesma decisão de `identidade.usuario`: os únicos campos
 são estruturalmente obrigatórios (destino + ao menos um item), não há o que tornar configurável
@@ -149,13 +149,14 @@ Problem Details (RFC 9457).
 
 ⚠️ **Esta seção dizia o contrário até 2026-08-20.** De 2026-07-29 até lá, "nenhuma rotina de
 movimentação deve checar/bloquear por saldo insuficiente" era regra fixa do sistema. O dono do
-produto inverteu a política e a pôs atrás de **`cfg_permite_estoque_negativo`** (Parâmetros do
-Sistema → Estoque), **desligado por padrão**:
+produto pôs a escolha atrás de **`cfg_permite_estoque_negativo`** (Parâmetros do Sistema →
+Estoque), **ligado por padrão** — o controle é **opt-in**:
 
-- **Desligado (padrão):** transferir 5 de uma empresa que tem 3 é recusado com **409**, e a
-  transferência inteira é revertida — nem a saída da origem, nem a entrada no destino. O saldo é
-  **por empresa**: não adianta outra empresa do tenant ter 100.
-- **Ligado:** volta o comportamento de 2026-07-29 (origem fica negativa, transferência gravada).
+- **Ligado (padrão):** comportamento de 2026-07-29 — a origem fica negativa e a transferência é
+  gravada. A maioria das lojas não faz gestão de estoque.
+- **Desligado:** transferir 5 de uma empresa que tem 3 é recusado com **409**, e a transferência
+  inteira é revertida — nem a saída da origem, nem a entrada no destino. O saldo é **por empresa**:
+  não adianta outra empresa do tenant ter 100.
 
 O que **não** mudou: `TransferenciaService.resolverItens()` continua sem comparar saldo, e o front
 continua sem bloquear o botão. Quem barra é a trigger `fn_atualiza_estoque_movimento` (V054), no
