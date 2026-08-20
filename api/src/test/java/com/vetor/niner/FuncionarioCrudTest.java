@@ -251,6 +251,11 @@ class FuncionarioCrudTest {
                 rs.next();
                 idVariacao = rs.getLong(1);
             }
+            // Estoque para o débito abaixo poder acontecer: desde a V054 o saldo não fica
+            // negativo com o parâmetro desligado (padrão), e este teste é sobre comissão de
+            // funcionário, não sobre estoque.
+            st.executeUpdate("INSERT INTO produto_estoque (id_tenant, id_empresa, id_variacao, qtd_estoque) VALUES ("
+                    + idTenant + ", " + idEmpresa + ", " + idVariacao + ", 1000)");
             long idMovimento;
             try (ResultSet rs = st.executeQuery(
                     "INSERT INTO produto_movimento_mestre (id_tenant, id_empresa, tipo_movimento) VALUES ("

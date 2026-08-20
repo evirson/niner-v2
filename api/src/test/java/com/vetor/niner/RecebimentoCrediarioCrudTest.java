@@ -100,7 +100,7 @@ class RecebimentoCrediarioCrudTest {
                         .content("""
                                 {"percentualDescontoVenda":0,"jurosCrediarioDias":%d,"jurosCrediario":%s,
                                  "multaCrediarioDias":%d,"multaCrediario":%s,"cfgUsaCorGrade":false,
-                                 "cfgPermiteQtdDecimal":true,"cfgExigeNumeroVendaDevolucao":false,
+                                 "cfgPermiteQtdDecimal":true,"cfgPermiteEstoqueNegativo":true,"cfgExigeNumeroVendaDevolucao":false,
                                  "cfgRateiaFreteEntrada":false,"cfgReajustaPrecoEntrada":false,"cfgConsisteValorContasPagar":false,
                                  "idPlanoContasCompraMercadoria":"3.03.001","cfgEmiteFiscalAposVenda":true}
                                 """.formatted(jurosCrediarioDias, jurosCrediario, multaCrediarioDias, multaCrediario)))

@@ -9,6 +9,7 @@ export interface ConfiguracaoGeral {
   multaCrediario: number
   cfgUsaCorGrade: boolean
   cfgPermiteQtdDecimal: boolean
+  cfgPermiteEstoqueNegativo: boolean
   cfgExigeNumeroVendaDevolucao: boolean
   cfgRateiaFreteEntrada: boolean
   cfgReajustaPrecoEntrada: boolean
@@ -27,6 +28,7 @@ export interface ConfiguracaoGeralFormState {
   multaCrediario: string
   cfgUsaCorGrade: boolean
   cfgPermiteQtdDecimal: boolean
+  cfgPermiteEstoqueNegativo: boolean
   cfgExigeNumeroVendaDevolucao: boolean
   cfgRateiaFreteEntrada: boolean
   cfgReajustaPrecoEntrada: boolean
@@ -44,6 +46,7 @@ export function paraFormulario(c: ConfiguracaoGeral): ConfiguracaoGeralFormState
     multaCrediario: formatarPercentual(c.multaCrediario),
     cfgUsaCorGrade: c.cfgUsaCorGrade,
     cfgPermiteQtdDecimal: c.cfgPermiteQtdDecimal,
+    cfgPermiteEstoqueNegativo: c.cfgPermiteEstoqueNegativo,
     cfgExigeNumeroVendaDevolucao: c.cfgExigeNumeroVendaDevolucao,
     cfgRateiaFreteEntrada: c.cfgRateiaFreteEntrada,
     cfgReajustaPrecoEntrada: c.cfgReajustaPrecoEntrada,
@@ -63,6 +66,7 @@ export function paraRequisicao(f: ConfiguracaoGeralFormState) {
     multaCrediario: desmascararPercentual(f.multaCrediario),
     cfgUsaCorGrade: f.cfgUsaCorGrade,
     cfgPermiteQtdDecimal: f.cfgPermiteQtdDecimal,
+    cfgPermiteEstoqueNegativo: f.cfgPermiteEstoqueNegativo,
     cfgExigeNumeroVendaDevolucao: f.cfgExigeNumeroVendaDevolucao,
     cfgRateiaFreteEntrada: f.cfgRateiaFreteEntrada,
     cfgReajustaPrecoEntrada: f.cfgReajustaPrecoEntrada,

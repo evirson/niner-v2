@@ -257,14 +257,13 @@ function linhaValoresItem(qtd: string, unitario: string, total: string): string 
  */
 export function montarLinhasComprovanteVenda(c: ComprovanteVenda, reimpressao: boolean = false): string[] {
   const linhas: string[] = []
-  // Reimpressão de venda cancelada (2026-08-19) — o aviso vem ANTES de qualquer outra coisa,
-  // já na primeira linha impressa, pra ninguém confundir com uma venda válida (o restante do
-  // cupom continua idêntico ao original, é só o aviso que muda).
-  if (c.cancelada) {
-    linhas.push(linhaVenda())
-    linhas.push(centralizarVenda('****  VENDA CANCELADA  ****'))
-    linhas.push(linhaVenda())
-  }
+  // ⚠️ NÃO existe mais o cupom com "**** VENDA CANCELADA ****" (2026-08-20, decisão do dono
+  // do produto): venda cancelada simplesmente não tem papeleta. O aviso de 2026-08-19 partia da
+  // ideia de avisar quem estivesse com o papel na mão — mas um cupom impresso circula, e um
+  // cupom de venda cancelada é um documento afirmando uma venda que não existe mais. A única
+  // forma de ele não circular é não imprimir. Quem recusa é o servidor
+  // (`PdvVendaService.buscarComprovante`, 409); o campo `cancelada` continua no DTO porque o
+  // detalhe da venda o usa para o selo "Cancelada" na tela.
   linhas.push(linhaVenda())
   linhas.push(centralizarVenda('***  DOCUMENTO SEM VALOR FISCAL  ***'))
   linhas.push(linhaVenda())

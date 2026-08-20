@@ -74,6 +74,7 @@ outras.
 | `cfg_emite_fiscal_apos_venda` | Emitir NFC-e/NF-e automaticamente após a venda | checkbox | — (default `true`, 2026-08-19) |
 | `cfg_usa_cor_grade` | Usa cor/grade (calçados, confecções) | checkbox | — (default `false`, 2026-08-08; era duas flags separadas de linha/coluna) |
 | `cfg_permite_qtd_decimal` | Permite quantidade decimal para produtos | checkbox | — (default `true`) |
+| `cfg_permite_estoque_negativo` | Permite quantidade de estoque negativo | checkbox | — (**default `false`**, 2026-08-20 — ver abaixo) |
 | `cfg_exige_numero_venda_devolucao` | Exigir número da venda na Devolução de Produtos | checkbox | — (default `false`, 2026-08-11) |
 | `cfg_rateia_frete_entrada` | Ratear frete/IPI/ICMS-ST no custo do item | checkbox | — (default `false`, 2026-08-11) |
 | `cfg_reajusta_preco_entrada` | Reajustar preço do produto automaticamente | checkbox | — (default `false`, 2026-08-11) |
@@ -138,6 +139,29 @@ de CPF nunca aparece em reimpressão** (`reimpressao=true`): reimprimir uma pape
 é (e não deve virar) um jeito de reemitir documento fiscal — a query da flag nem é buscada nesse
 modo (`enabled: !reimpressao`). Detalhe completo do popup e da pergunta de CPF:
 `docs/telas/papeleta-venda.md`.
+
+### ⚠️ `cfg_permite_estoque_negativo` — o único parâmetro desta tela cuja regra roda no BANCO
+
+Todos os outros são lidos por um serviço Java, que decide. Este não: quem barra o débito é a
+trigger **`fn_atualiza_estoque_movimento`** (V054), em `produto_movimento_detalhe`.
+
+O motivo é o enunciado do pedido (2026-08-20): *"ajustar todas as rotinas que debitam quantidade do
+estoque — vendas, transferências, devolução ao fornecedor, **e etc**"*. O "e etc" é que decide o
+desenho. Debitam estoque hoje o PDV, a transferência, a devolução ao fornecedor, **o cancelamento
+de entrada** (que ninguém lembra), o cancelamento de devolução de venda e o balanço — mais o que
+vier depois. `produto_movimento_detalhe` é o **único** caminho por onde `produto_estoque` se mexe:
+a regra ali cobre o que existe e o que ainda não foi escrito.
+
+- **Desligado (padrão):** *tem 5, só debita até 5*. O saldo é contado **por empresa** — transferir
+  5 de uma empresa que tem 3 é barrado mesmo que outra empresa do tenant tenha 100.
+- **Ligado:** o saldo pode ficar negativo, e a venda nunca trava por cadastro desatualizado (o
+  comportamento do sistema inteiro até 2026-08-20).
+- **Exceção que o parâmetro NÃO afrouxa:** a Devolução de Produtos Comprados tem regra própria e
+  mais estreita (só devolve o que a nota trouxe **e** ainda está em estoque), porque ali o estoque
+  não é só saldo — é o que a NF-e declara estar saindo fisicamente.
+
+A mensagem de recusa diz **qual produto, qual empresa, quanto há e quanto a operação precisa**, e é
+montada só no caminho de falha. Ver `db/migration/V054__estoque_negativo_configuravel.sql`.
 
 ## Critérios de aceitação (viram testes)
 

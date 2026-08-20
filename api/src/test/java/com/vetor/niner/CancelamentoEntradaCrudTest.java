@@ -340,6 +340,66 @@ class CancelamentoEntradaCrudTest {
                 .andExpect(status().isConflict());
     }
 
+    /**
+     * ⚠️ O "e etc" do pedido de 2026-08-20: <b>cancelar uma entrada é um débito de estoque</b>, e
+     * ninguém pensa nela quando ouve "rotinas que debitam estoque". Não há uma linha sequer de
+     * checagem em {@code CancelamentoEntradaService} — quem barra é a trigger (V054), que fica no
+     * único caminho por onde `produto_estoque` se mexe.
+     *
+     * <p>O caso é real e não é acadêmico: entrou 3, vendeu 2, e alguém tenta cancelar a entrada.
+     * Se passasse, o estoque ficaria em −2 e a loja teria vendido mercadoria que o sistema passa a
+     * dizer que nunca entrou.
+     */
+    @Test
+    void cancelarEntradaCujaMercadoriaJaSaiuEhBloqueado() throws Exception {
+        TenantENota tenant = prepararTenantComProduto("ja-vendida");
+        long idMovimento = efetivarEntrada(tenant.token(), tenant.idFornecedor(), tenant.idVariacao(), null);
+        long idEmpresa = buscarPrimeiraEmpresa(tenant.token());
+
+        // Saída de 2 das 3 unidades, como uma venda faria. SQL direto porque montar uma venda de
+        // verdade aqui (caixa, cliente, vendedor, pagamento) seria fixture sem relação com o que
+        // este teste mede — o efeito no ledger é idêntico.
+        try (Connection c = abrirConexao(tenant.idTenant())) {
+            long idSaida;
+            try (PreparedStatement ps = c.prepareStatement("""
+                    INSERT INTO produto_movimento_mestre (id_tenant, id_empresa, tipo_movimento, id_usuario)
+                    SELECT ?, ?, 'VENDA', u.id_usuario FROM usuario u WHERE u.id_tenant = ? LIMIT 1
+                    RETURNING id_movimento
+                    """)) {
+                ps.setLong(1, tenant.idTenant());
+                ps.setLong(2, idEmpresa);
+                ps.setLong(3, tenant.idTenant());
+                try (ResultSet rs = ps.executeQuery()) {
+                    assertThat(rs.next()).isTrue();
+                    idSaida = rs.getLong(1);
+                }
+            }
+            try (PreparedStatement ps = c.prepareStatement("""
+                    INSERT INTO produto_movimento_detalhe (id_tenant, id_movimento, id_empresa, id_variacao,
+                                                           credito_debito, qtd_produto, preco_custo, origem)
+                    VALUES (?, ?, ?, ?, 'D', 2, 10.00, 'venda simulada')
+                    """)) {
+                ps.setLong(1, tenant.idTenant());
+                ps.setLong(2, idSaida);
+                ps.setLong(3, idEmpresa);
+                ps.setLong(4, tenant.idVariacao());
+                ps.executeUpdate();
+            }
+            assertThat(buscarQtdEstoque(c, tenant.idVariacao())).isEqualByComparingTo("1.000");
+        }
+
+        mvc.perform(post("/api/v1/estoque/entradas/" + idMovimento + "/cancelar")
+                        .header("Authorization", "Bearer " + tenant.token())
+                        .contentType(APPLICATION_JSON).content("{\"motivo\":\"Nota lancada em duplicidade\"}"))
+                .andExpect(status().isConflict());
+
+        try (Connection c = abrirConexao(tenant.idTenant())) {
+            // O cancelamento inteiro foi revertido — nem o estorno de estoque, nem a marca de
+            // cancelado no mestre. Meio cancelamento seria pior que nenhum.
+            assertThat(buscarQtdEstoque(c, tenant.idVariacao())).isEqualByComparingTo("1.000");
+        }
+    }
+
     @Test
     void entradaInexistenteRespondeNaoEncontrado() throws Exception {
         TenantSlug tenant = assinarNovoTenant("inexistente");

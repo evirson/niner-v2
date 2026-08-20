@@ -69,7 +69,7 @@ tabela de negócio específica).
 | Empresa de Origem | texto somente-leitura | — | Sempre a empresa ativa da sessão (`GET /api/v1/eu`, campo `empresa`); nunca editável |
 | Empresa de Destino | select | **Sim** | `GET /api/v1/empresas`, excluindo a empresa de origem e as inativas |
 | Produtos | busca + lista | **Sim, ao menos um** | Reaproveita `PesquisaProdutoModal` do PDV (`GET /api/v1/pdv/produtos`) — mesma busca, mostra estoque por empresa, o que já dá visibilidade do saldo na origem antes de adicionar |
-| Quantidade (por item) | numérico, até 3 casas (`numeric(14,3)`) **se** `cfg_permite_qtd_decimal` estiver ligado, senão inteiro | **Sim, > 0** | Sem limite contra o estoque da origem (revisado 2026-07-29, ver "Estoque negativo permitido" abaixo) — só não pode ser zero/negativa. |
+| Quantidade (por item) | numérico, até 3 casas (`numeric(14,3)`) **se** `cfg_permite_qtd_decimal` estiver ligado, senão inteiro | **Sim, > 0** | Sem limite contra o estoque da origem (revisado 2026-07-29; desde 2026-08-20 o limite volta quando `cfg_permite_estoque_negativo` está desligado — padrão. Ver "Estoque negativo virou parâmetro" abaixo) — só não pode ser zero/negativa. |
 
 **Sem `cfg_tela_campo` nesta tela** — mesma decisão de `identidade.usuario`: os únicos campos
 são estruturalmente obrigatórios (destino + ao menos um item), não há o que tornar configurável
@@ -115,7 +115,7 @@ volta para a listagem.
 
 - Dado um usuário logado na empresa A, quando transfere um produto para a empresa B, então o
   estoque de A diminui e o de B aumenta na mesma quantidade — **mesmo que A não tenha saldo
-  suficiente** (revisado 2026-07-29, ver "Estoque negativo permitido").
+  suficiente** (revisado 2026-07-29; ver "Estoque negativo virou parâmetro" abaixo — desde 2026-08-20 o padrão é bloquear).
 - Dado um pedido de transferência para a própria empresa de origem, então a API rejeita com 400.
 - Dado um `idEmpresaDestino` inexistente ou de outro tenant, então a API rejeita com 400.
 - Dado uma transferência criada, quando listada ou buscada por id, então aparecem os produtos e
@@ -145,15 +145,23 @@ Todos sob `/api/v1/**` (JWT de tenant, RLS ativo — P8). Aberto a ADMIN e OPERA
 dia a dia, mesma decisão de PDV/cadastros — não é sensível como `identidade.usuario`). Erros em
 Problem Details (RFC 9457).
 
-## Estoque negativo permitido (revisado 2026-07-29)
+## Estoque negativo virou parâmetro (2026-08-20 — substitui a regra de 2026-07-29)
 
-Pedido direto do dono do produto, **vale para qualquer movimentação de produto do sistema**
-(entrada ou saída, não só transferência — PDV incluído): nenhuma rotina de movimentação de
-estoque deve checar/bloquear por saldo insuficiente. `TransferenciaService.resolverItens()` só
-valida que a variação existe e está ativa — não compara mais com `produto_estoque.disponivel`.
-O front (`TransferenciaForm.tsx`) não bloqueia mais o botão "Confirmar Transferência" nem mostra
-aviso de "maior que o estoque disponível". Mesma mudança em `PdvVendaService` (PDV) — ver
-`docs/telas/pdv.md`.
+⚠️ **Esta seção dizia o contrário até 2026-08-20.** De 2026-07-29 até lá, "nenhuma rotina de
+movimentação deve checar/bloquear por saldo insuficiente" era regra fixa do sistema. O dono do
+produto inverteu a política e a pôs atrás de **`cfg_permite_estoque_negativo`** (Parâmetros do
+Sistema → Estoque), **desligado por padrão**:
+
+- **Desligado (padrão):** transferir 5 de uma empresa que tem 3 é recusado com **409**, e a
+  transferência inteira é revertida — nem a saída da origem, nem a entrada no destino. O saldo é
+  **por empresa**: não adianta outra empresa do tenant ter 100.
+- **Ligado:** volta o comportamento de 2026-07-29 (origem fica negativa, transferência gravada).
+
+O que **não** mudou: `TransferenciaService.resolverItens()` continua sem comparar saldo, e o front
+continua sem bloquear o botão. Quem barra é a trigger `fn_atualiza_estoque_movimento` (V054), no
+único caminho por onde `produto_estoque` se mexe — a checagem não foi espalhada por serviço de
+propósito, senão alguma rotina ficaria de fora (ver `docs/telas/configuracao-geral.md`). Teste:
+`transferenciaComEstoqueInsuficienteEhBloqueadaNaOrigem`.
 
 ## Exclusão de transferência (novo, 2026-07-29)
 

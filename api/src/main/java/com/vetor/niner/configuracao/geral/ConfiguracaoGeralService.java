@@ -27,7 +27,8 @@ public class ConfiguracaoGeralService {
     private static final String SELECT_BASE = """
             SELECT percentual_desconto_venda, juros_crediario_dias, juros_crediario,
                    multa_crediario_dias, multa_crediario, cfg_usa_cor_grade,
-                   cfg_permite_qtd_decimal, cfg_exige_numero_venda_devolucao,
+                   cfg_permite_qtd_decimal, cfg_permite_estoque_negativo,
+                   cfg_exige_numero_venda_devolucao,
                    cfg_rateia_frete_entrada, cfg_reajusta_preco_entrada,
                    cfg_consiste_valor_contas_pagar,
                    id_plano_contas_compra_mercadoria, cfg_emite_fiscal_apos_venda, atualizado_em
@@ -209,7 +210,8 @@ public class ConfiguracaoGeralService {
                         UPDATE cfg_geral SET
                             percentual_desconto_venda = ?, juros_crediario_dias = ?, juros_crediario = ?,
                             multa_crediario_dias = ?, multa_crediario = ?, cfg_usa_cor_grade = ?,
-                            cfg_permite_qtd_decimal = ?, cfg_exige_numero_venda_devolucao = ?,
+                            cfg_permite_qtd_decimal = ?, cfg_permite_estoque_negativo = ?,
+                            cfg_exige_numero_venda_devolucao = ?,
                             cfg_rateia_frete_entrada = ?, cfg_reajusta_preco_entrada = ?,
                             cfg_consiste_valor_contas_pagar = ?,
                             id_plano_contas_compra_mercadoria = ?, cfg_emite_fiscal_apos_venda = ?,
@@ -219,7 +221,8 @@ public class ConfiguracaoGeralService {
                 .params(List.of(
                         req.percentualDescontoVenda(), req.jurosCrediarioDias(), req.jurosCrediario(),
                         req.multaCrediarioDias(), req.multaCrediario(), req.cfgUsaCorGrade(),
-                        req.cfgPermiteQtdDecimal(), req.cfgExigeNumeroVendaDevolucao(),
+                        req.cfgPermiteQtdDecimal(), req.cfgPermiteEstoqueNegativo(),
+                        req.cfgExigeNumeroVendaDevolucao(),
                         req.cfgRateiaFreteEntrada(), req.cfgReajustaPrecoEntrada(),
                         req.cfgConsisteValorContasPagar(),
                         req.idPlanoContasCompraMercadoria(), req.cfgEmiteFiscalAposVenda()))
@@ -257,6 +260,7 @@ public class ConfiguracaoGeralService {
                 rs.getBigDecimal("multa_crediario"),
                 rs.getBoolean("cfg_usa_cor_grade"),
                 rs.getBoolean("cfg_permite_qtd_decimal"),
+                rs.getBoolean("cfg_permite_estoque_negativo"),
                 rs.getBoolean("cfg_exige_numero_venda_devolucao"),
                 rs.getBoolean("cfg_rateia_frete_entrada"),
                 rs.getBoolean("cfg_reajusta_preco_entrada"),

@@ -171,7 +171,7 @@ class TransferenciaCrudTest {
                         .content("""
                                 {"percentualDescontoVenda":0,"jurosCrediarioDias":0,"jurosCrediario":0,
                                  "multaCrediarioDias":0,"multaCrediario":0,"cfgUsaCorGrade":false,
-                                 "cfgPermiteQtdDecimal":%s,"cfgExigeNumeroVendaDevolucao":false,
+                                 "cfgPermiteQtdDecimal":%s,"cfgPermiteEstoqueNegativo":true,"cfgExigeNumeroVendaDevolucao":false,
                                  "cfgRateiaFreteEntrada":false,"cfgReajustaPrecoEntrada":false,"cfgConsisteValorContasPagar":false,
                                  "idPlanoContasCompraMercadoria":"3.03.001","cfgEmiteFiscalAposVenda":true}
                                 """.formatted(permite)))
@@ -208,9 +208,10 @@ class TransferenciaCrudTest {
     }
 
     @Test
-    void transferenciaComEstoqueInsuficienteEhAceitaEDeixaSaldoNegativoNaOrigem() throws Exception {
-        // Saldo negativo é permitido de propósito em qualquer movimentação (2026-07-29) —
-        // não há mais bloqueio de estoque insuficiente na transferência.
+    void transferenciaComEstoqueInsuficienteEhBloqueadaNaOrigem() throws Exception {
+        // ⚠️ Este teste afirmava o CONTRÁRIO até 2026-08-20. A política de estoque negativo virou
+        // parâmetro (`cfg_permite_estoque_negativo`, desligado por padrão), e a transferência é o
+        // caso onde o saldo POR EMPRESA fica evidente: a origem tem 2, o destino não importa.
         String token = assinarNovoTenant("estoque-insuficiente");
         long idTenant = extrairIdTenant(token);
         long idEmpresaOrigem = extrairIdEmpresa(token);
@@ -230,11 +231,13 @@ class TransferenciaCrudTest {
 
         mvc.perform(post("/api/v1/estoque/transferencias").header("Authorization", "Bearer " + token)
                         .contentType(APPLICATION_JSON).content(corpo))
-                .andExpect(status().isCreated());
+                .andExpect(status().isConflict());
 
         try (Connection c = abrirConexao(idTenant)) {
-            assertEquals(new BigDecimal("-3.000"), buscarQtdEstoque(c, idEmpresaOrigem, idVariacao));
-            assertEquals(new BigDecimal("5.000"), buscarQtdEstoque(c, idEmpresaDestino, idVariacao));
+            // Nada se moveu: nem a saída da origem, nem a entrada no destino. A transferência é
+            // uma transação só, e é isso que impede a mercadoria de "existir" nos dois lugares.
+            assertEquals(new BigDecimal("2.000"), buscarQtdEstoque(c, idEmpresaOrigem, idVariacao));
+            assertEquals(new BigDecimal("0.000"), buscarQtdEstoque(c, idEmpresaDestino, idVariacao));
         }
     }
 

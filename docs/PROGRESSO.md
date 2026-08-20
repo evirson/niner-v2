@@ -523,6 +523,77 @@ Movimentação de Conta Corrente) que ainda não tinham migrado pro `SeletorPlan
 
 ## Linha do tempo
 
+### 2026-08-20 — Estoque negativo vira escolha do lojista, e a regra mora na trigger
+
+Três pedidos do dono do produto no mesmo dia, sendo o terceiro uma **inversão de política**:
+
+**1. Venda cancelada não tem mais reimpressão de papeleta.** Até 2026-08-19 a reimpressão saía com
+`**** VENDA CANCELADA ****` no topo — a ideia era avisar. O dono do produto trocou o aviso pela
+recusa, e o motivo é melhor que a solução anterior: **papel impresso circula**. Um cupom de venda
+cancelada na mão de alguém é um documento afirmando uma venda que não existe mais, e a única forma
+de ele não circular é não imprimir. O botão some da tela e
+`PdvVendaService.buscarComprovante` responde **409** — checagem no servidor porque o endpoint
+atende qualquer usuário do tenant e a tela não é o único caminho até ele (P4).
+
+**2. Parâmetro novo: "Permite quantidade de estoque negativo"** (Parâmetros do Sistema → Estoque),
+`cfg_geral.cfg_permite_estoque_negativo`, **desligado por padrão**.
+
+**3. Nenhuma rotina debita além do que existe** — e o saldo é **por empresa**.
+
+#### A regra mora na trigger, e essa foi a decisão de projeto do dia
+
+O pedido dizia "vendas, transferências, devolução ao fornecedor, **e etc**". O "e etc" é o
+problema: debitam estoque hoje o PDV, a transferência, a devolução ao fornecedor, **o cancelamento
+de entrada**, o cancelamento de devolução de venda e o balanço — e amanhã, alguma rotina nova.
+Espalhar a checagem por serviço garante que uma fique de fora, hoje ou em seis meses.
+
+`produto_movimento_detalhe` é o **único** caminho por onde `produto_estoque` se mexe. A V054 pôs a
+regra em `fn_atualiza_estoque_movimento`, que já estava lá: quem passa por ela é toda rotina que
+existe e toda que vier. É o mesmo raciocínio do RLS — a regra que não pode falhar mora no banco.
+
+⚠️ **O cancelamento de entrada prova o ponto.** Ele não tem uma linha de checagem de estoque, e
+ninguém pensa nele ao ouvir "rotinas que debitam estoque" — mas cancelar uma compra é um débito.
+Entrou 3, vendeu 2, alguém cancela a entrada: sem a trava, o saldo iria a −2 e a loja teria vendido
+mercadoria que o sistema passa a dizer que nunca entrou. Está preso em
+`CancelamentoEntradaCrudTest.cancelarEntradaCujaMercadoriaJaSaiuEhBloqueado`.
+
+#### Três detalhes da implementação que não são óbvios
+
+- **A conferência no `UPDATE` vem depois dos DOIS passos, nunca no meio.** A trigger desfaz o
+  efeito da linha antiga e aplica o da nova; desfazer um crédito derruba o saldo no caminho e o
+  passo seguinte o recompõe. Corrigir a quantidade de um item de entrada de 10 para 12, com 5 já
+  vendidos, passa por −5 e termina em 7 — conferir no meio reprovaria uma correção legítima.
+- **O caminho comum não paga nada.** `saldo >= 0` sai na primeira linha, sem ler `cfg_geral` nem
+  montar mensagem. Uma importação de 10 mil linhas de crédito não sente a regra.
+- **A mensagem diz qual produto, qual empresa, quanto há e quanto falta** — montada só no caminho
+  de falha, onde consulta extra não custa. Sem o item, o operador caçaria linha por linha.
+
+⚠️ **Como o erro da trigger vira uma mensagem legível:** ela levanta com `ERRCODE 23514`
+(check_violation) e o prefixo `ESTOQUE_NEGATIVO|`. Sem o prefixo, o `GlobalExceptionHandler`
+responderia *"Registro em uso por outro cadastro — não pode ser excluído"* para quem tentou vender.
+Um SQLSTATE próprio (classe `P0`) seria pior ainda: viraria `UncategorizedSQLException` e um 500 sem
+mensagem nenhuma.
+
+#### O custo nos testes — e o que ele revelou
+
+**67 dos 891 testes quebraram.** Vale destrinchar, porque a distribuição foi informativa:
+
+- **~38 não tinham nada a ver com estoque**: eram `PUT /config-geral` sem o campo novo obrigatório
+  → 400. Um `perl` de uma linha nos payloads resolveu.
+- **~26 eram fixtures vendendo sem estoque.** Esses foram **abastecidos**, não contornados: a
+  variação nasce com saldo, como nasceria depois de uma entrada. Ligar o parâmetro nesses testes
+  teria sido mais rápido e teria escondido a regra da suíte inteira.
+- **3 afirmavam explicitamente o comportamento antigo** (`estoqueInsuficienteNaoBloqueiaVenda...`,
+  `transferenciaComEstoqueInsuficienteEhAceita...`, e o comprovante de venda cancelada). Esses
+  **viraram a cobertura da regra nova**, com o comentário dizendo que diziam o contrário até hoje —
+  quem ler daqui a um ano precisa saber que foi decisão, não deriva.
+
+**Default `false`.** Contraria o precedente de `cfg_consiste_valor_contas_pagar` (que nasceu `true`
+por preservar o comportamento existente), e é deliberado: o pedido descreve o bloqueio como o
+comportamento desejado, e o parâmetro como a saída para quem quiser o contrário.
+
+**893 testes verdes** (+2 líquidos: 3 reescritos, 2 novos).
+
 ### 2026-08-20 — Devolução de Produtos Comprados: o XML da entrada virou insumo, e o estoque virou limite
 
 Rotina nova: devolver mercadoria ao **fornecedor**, com baixa de estoque e **NF-e 55 de saída**.

@@ -109,7 +109,11 @@ export default function DetalheVendaModal({ idVenda, aoFechar }: { idVenda: numb
                 Cancelar venda
               </button>
             )}
-            {detalhe && (
+            {/* Venda cancelada não tem papeleta (2026-08-20): o botão some, e o servidor
+                recusa o endpoint de qualquer jeito. Oferecer uma ação que vai falhar é pior que
+                não oferecer — e um cupom impresso de venda cancelada circula afirmando uma venda
+                que não existe mais. */}
+            {detalhe && !detalhe.cancelada && (
               <button type="button" className="btn ghost" onClick={() => setMostrarReimpressao(true)}>
                 Reimprimir papeleta
               </button>

@@ -259,6 +259,19 @@ public class PdvVendaService {
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND, "A venda #" + idVenda + " não existe."));
 
+        // ⚠️ Venda cancelada NÃO tem papeleta (2026-08-20, decisão do dono do produto). Antes, a
+        // reimpressão saía com "**** VENDA CANCELADA ****" no topo — a ideia era avisar, mas o
+        // efeito era pior: cupom impresso circula, e um cupom de venda cancelada na mão de alguém
+        // é um documento afirmando uma venda que não existe mais. Não imprimir é a única forma de
+        // ele não circular.
+        //
+        // A checagem é aqui, no servidor, e não só no botão da tela (P4): o endpoint atende
+        // qualquer usuário do tenant e a tela não é a única forma de chegar nele.
+        if (cabecalho.cancelada()) {
+            throw new ConflitoDadosException(
+                    "A venda #" + idVenda + " foi cancelada e não tem papeleta para reimpressão.");
+        }
+
         record Vendedor(String nome, Integer codigo) {
         }
         Vendedor vendedor = jdbc.sql("""

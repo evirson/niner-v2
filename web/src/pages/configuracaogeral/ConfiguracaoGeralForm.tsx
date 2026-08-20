@@ -27,6 +27,7 @@ const VAZIO: ConfiguracaoGeralFormState = {
   multaCrediario: '',
   cfgUsaCorGrade: false,
   cfgPermiteQtdDecimal: true,
+  cfgPermiteEstoqueNegativo: false,
   cfgExigeNumeroVendaDevolucao: false,
   cfgRateiaFreteEntrada: false,
   cfgReajustaPrecoEntrada: false,
@@ -296,6 +297,24 @@ export default function ConfiguracaoGeralForm() {
               <p className="muted" style={{ fontSize: 12, marginTop: 4 }}>
                 Ligado: quantidade de produto (venda, transferência, histórico) aceita até 3 casas
                 decimais (ex.: 1,500 kg). Desligado: quantidade sempre inteira.
+              </p>
+            </div>
+
+            <div className="col-6">
+              <label className="checkbox-linha" style={{ marginTop: 0 }}>
+                <input
+                  type="checkbox"
+                  checked={form.cfgPermiteEstoqueNegativo}
+                  onChange={(e) => setForm((f) => ({ ...f, cfgPermiteEstoqueNegativo: e.target.checked }))}
+                />
+                Permite quantidade de estoque negativo
+              </label>
+              <p className="muted" style={{ fontSize: 12, marginTop: 4 }}>
+                Desligado (padrão): nenhuma rotina consegue tirar mais do que existe — venda,
+                transferência, devolução ao fornecedor, cancelamento de entrada e ajuste de balanço
+                param com "estoque insuficiente", dizendo qual produto e quanto há. O saldo é
+                contado <strong>por empresa</strong>. Ligado: o saldo pode ficar negativo, e a
+                venda nunca trava por cadastro desatualizado.
               </p>
             </div>
           </div>

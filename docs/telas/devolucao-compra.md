@@ -52,17 +52,23 @@ Exemplos que o dono do produto usou para enunciar a regra:
 | 10 | 8 | **8** — o estoque limita |
 | 10 | 12 | **10** — a nota limita |
 
-### ⚠️ O segundo limite é exceção deliberada à política de estoque negativo
+### ⚠️ O segundo limite não depende do parâmetro de estoque negativo
 
-Em toda outra movimentação o Nainer **permite estoque negativo**. Aqui não, e **não é
-inconsistência** — são situações opostas:
+Desde 2026-08-20 existe `cfg_permite_estoque_negativo` (Parâmetros do Sistema → Estoque), que
+decide se as demais rotinas podem deixar o saldo abaixo de zero. **A devolução ao fornecedor não
+consulta esse parâmetro**: a regra dela é mais estreita e vale sempre, porque aqui o estoque não é
+só saldo — é o que a NF-e declara estar saindo fisicamente. Mesmo com o parâmetro ligado, não se
+devolve o que não está na loja.
+
+A comparação abaixo explica por que a venda e a devolução foram tratadas de forma diferente antes
+de o parâmetro existir — e por que a devolução continua sendo o caso mais rígido:
 
 | | Venda (PDV) | Devolução ao fornecedor |
 |---|---|---|
 | A mercadoria | está na mão do operador | ninguém está vendo |
 | Estoque zero significa | o **cadastro** está atrasado | a peça provavelmente **já foi vendida** |
 | A operação | **registra** um fato observado | **declara** um fato não conferido |
-| Negativo | permitido — a venda vence | **barrado** |
+| Negativo | **parâmetro** (`cfg_permite_estoque_negativo`) — desligado por padrão | **barrado sempre**, o parâmetro não afrouxa |
 
 O que muda tudo é a NF-e: ela afirma à SEFAZ que a mercadoria está saindo fisicamente. Se não
 estiver, o documento fica mentindo e o fornecedor espera uma caixa que nunca chega.
@@ -74,7 +80,9 @@ estiver, o documento fica mentindo e o fornecedor espera uma caixa que nunca che
 - **Corrida com o PDV**: o estoque é lido **dentro da transação, com a linha travada**
   (`SELECT … FOR UPDATE`, ordenado por `id_variacao` para não dar deadlock). Sem a trava, a venda
   acontece entre a grid e o "confirmar", ou duas devoluções simultâneas leem as mesmas 8 unidades.
-  No resto do sistema nada trava estoque — aqui trava porque aqui existe um limite para respeitar.
+  (No resto do sistema quem garante o saldo é a trigger da V054, que roda dentro da mesma
+  transação do débito; aqui a trava é explícita porque o limite é conferido **antes** de gravar,
+  para a mensagem poder listar produto e quantidade.)
 
 ---
 

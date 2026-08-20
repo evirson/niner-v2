@@ -50,9 +50,11 @@ import static org.springframework.http.HttpStatus.NOT_FOUND;
  *       em estoque</b>. Se a mercadoria já foi vendida, não há o que mandar de volta.</li>
  * </ol>
  *
- * <p>⚠️ O segundo é <b>exceção deliberada</b> à política do sistema, que permite estoque negativo em
- * toda outra movimentação. <b>Não uniformize isto</b> — não é inconsistência, são duas situações
- * opostas (regra do dono do produto, 2026-08-20):
+ * <p>⚠️ O segundo <b>não passa pelo parâmetro</b> {@code cfg_permite_estoque_negativo} (V054), que
+ * desde 2026-08-20 decide se as demais rotinas podem deixar saldo negativo. A regra daqui é mais
+ * estreita e vale <b>sempre</b>: mesmo com o parâmetro ligado, não se devolve o que não está na
+ * loja. <b>Não uniformize isto</b> — a diferença entre vender e devolver é de natureza, não de
+ * rigor (regra do dono do produto, 2026-08-20):
  *
  * <ul>
  *   <li><b>Saída para o cliente (PDV):</b> o produto está na mão do operador, na frente dele. Se o

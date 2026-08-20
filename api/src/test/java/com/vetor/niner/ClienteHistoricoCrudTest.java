@@ -124,10 +124,35 @@ class ClienteHistoricoCrudTest {
             ps.setLong(2, idProduto);
             try (ResultSet rs = ps.executeQuery()) {
                 rs.next();
-                return rs.getLong(1);
+                long idVariacao = rs.getLong(1);
+                abastecerEstoqueDoFixture(c, idTenant, idVariacao);
+                return idVariacao;
             }
         }
     }
+
+    /**
+     * Dá estoque à variação recém-criada, em todas as empresas do tenant.
+     *
+     * <p>Desde a V054 o débito não pode deixar o saldo negativo quando
+     * {@code cfg_permite_estoque_negativo} está desligado — que é o padrão. Este teste não é sobre
+     * estoque: ele precisa de uma venda como <b>fixture</b>, e uma venda de verdade tem estoque
+     * antes. Abastecer aqui é mais honesto que ligar o parâmetro e fingir que a regra não existe.
+     */
+    private void abastecerEstoqueDoFixture(Connection c, long idTenant, long idVariacao) throws SQLException {
+        try (PreparedStatement ps = c.prepareStatement("""
+                INSERT INTO produto_estoque (id_tenant, id_empresa, id_variacao, qtd_estoque)
+                SELECT ?, e.id_empresa, ?, 1000 FROM empresa e WHERE e.id_tenant = ?
+                ON CONFLICT (id_tenant, id_empresa, id_variacao)
+                DO UPDATE SET qtd_estoque = produto_estoque.qtd_estoque + 1000
+                """)) {
+            ps.setLong(1, idTenant);
+            ps.setLong(2, idVariacao);
+            ps.setLong(3, idTenant);
+            ps.executeUpdate();
+        }
+    }
+
 
     private long criarCor(Connection c, long idTenant, String descricao) throws SQLException {
         // id_cor não é mais IDENTITY (V017, 2026-08-13) — calculado por tenant.
@@ -174,7 +199,9 @@ class ClienteHistoricoCrudTest {
             ps.setLong(4, idTamanho);
             try (ResultSet rs = ps.executeQuery()) {
                 rs.next();
-                return rs.getLong(1);
+                long idVariacao = rs.getLong(1);
+                abastecerEstoqueDoFixture(c, idTenant, idVariacao);
+                return idVariacao;
             }
         }
     }

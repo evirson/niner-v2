@@ -88,6 +88,17 @@ public class GlobalExceptionHandler {
      */
     @ExceptionHandler(DataIntegrityViolationException.class)
     public ProblemDetail tratarViolacaoDeIntegridade(DataIntegrityViolationException ex) {
+        String estoque = mensagemDeEstoqueInsuficiente(ex);
+        if (estoque != null) {
+            // Não é violação de FK — é a regra de estoque negativo (V054), que a trigger
+            // `fn_atualiza_estoque_movimento` levanta com ERRCODE 23514. Sem este desvio o
+            // operador leria "registro em uso por outro cadastro" ao tentar vender, o que não
+            // faz o menor sentido para ele.
+            ProblemDetail pd = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, estoque);
+            pd.setTitle("Estoque insuficiente");
+            pd.setType(URI.create("urn:niner:erro:estoque-insuficiente"));
+            return pd;
+        }
         LOG.warn("Violacao de integridade tratada como 409", ex);
         ProblemDetail pd = ProblemDetail.forStatusAndDetail(
                 HttpStatus.CONFLICT, "Registro em uso por outro cadastro — não pode ser excluído.");
@@ -95,6 +106,36 @@ public class GlobalExceptionHandler {
         pd.setType(URI.create("urn:niner:erro:conflito"));
         return pd;
     }
+
+    /**
+     * Prefixo que a trigger de estoque (V054) põe na mensagem para se distinguir de uma violação
+     * de FK de verdade. O texto depois do {@code |} já vem escrito para o operador — qual produto,
+     * qual empresa, quanto há e quanto a operação precisa — e é devolvido como está.
+     *
+     * <p>Por que casar por texto e não por SQLSTATE: a regra usa {@code 23514} justamente para o
+     * driver classificar como violação de integridade e cair neste handler; um SQLSTATE próprio
+     * (classe {@code P0}) viraria {@code UncategorizedSQLException} e um 500 sem mensagem.
+     */
+    private static String mensagemDeEstoqueInsuficiente(Throwable ex) {
+        for (Throwable causa = ex; causa != null; causa = causa.getCause()) {
+            String mensagem = causa.getMessage();
+            if (mensagem != null) {
+                int marcador = mensagem.indexOf(MARCADOR_ESTOQUE);
+                if (marcador >= 0) {
+                    String texto = mensagem.substring(marcador + MARCADOR_ESTOQUE.length());
+                    // O Postgres acrescenta contexto depois da mensagem ("Where: PL/pgSQL…").
+                    int fim = texto.indexOf('\n');
+                    return (fim >= 0 ? texto.substring(0, fim) : texto).trim();
+                }
+            }
+            if (causa.getCause() == causa) {
+                break;
+            }
+        }
+        return null;
+    }
+
+    private static final String MARCADOR_ESTOQUE = "ESTOQUE_NEGATIVO|";
 
     /**
      * Falha de montagem de XML fiscal (emissão, cancelamento, inutilização) — sem este handler

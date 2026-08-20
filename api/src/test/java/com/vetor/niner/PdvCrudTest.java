@@ -142,7 +142,7 @@ class PdvCrudTest {
                         .content("""
                                 {"percentualDescontoVenda":%s,"jurosCrediarioDias":0,"jurosCrediario":0,
                                  "multaCrediarioDias":0,"multaCrediario":0,"cfgUsaCorGrade":false,
-                                 "cfgPermiteQtdDecimal":true,"cfgExigeNumeroVendaDevolucao":false,
+                                 "cfgPermiteQtdDecimal":true,"cfgPermiteEstoqueNegativo":true,"cfgExigeNumeroVendaDevolucao":false,
                                  "cfgRateiaFreteEntrada":false,"cfgReajustaPrecoEntrada":false,"cfgConsisteValorContasPagar":false,
                                  "idPlanoContasCompraMercadoria":"3.03.001","cfgEmiteFiscalAposVenda":true}
                                 """.formatted(percentual)))
@@ -172,7 +172,7 @@ class PdvCrudTest {
                         .content("""
                                 {"percentualDescontoVenda":0,"jurosCrediarioDias":0,"jurosCrediario":0,
                                  "multaCrediarioDias":0,"multaCrediario":0,"cfgUsaCorGrade":false,
-                                 "cfgPermiteQtdDecimal":%s,"cfgExigeNumeroVendaDevolucao":false,
+                                 "cfgPermiteQtdDecimal":%s,"cfgPermiteEstoqueNegativo":true,"cfgExigeNumeroVendaDevolucao":false,
                                  "cfgRateiaFreteEntrada":false,"cfgReajustaPrecoEntrada":false,"cfgConsisteValorContasPagar":false,
                                  "idPlanoContasCompraMercadoria":"3.03.001","cfgEmiteFiscalAposVenda":true}
                                 """.formatted(permite)))
@@ -428,9 +428,11 @@ class PdvCrudTest {
     }
 
     @Test
-    void estoqueInsuficienteNaoBloqueiaVendaEDeixaSaldoNegativo() throws Exception {
-        // Saldo negativo é permitido de propósito em qualquer movimentação (2026-07-29) — não
-        // há mais bloqueio de estoque insuficiente no PDV.
+    void estoqueInsuficienteBloqueiaAVendaEDeixaOSaldoIntacto() throws Exception {
+        // ⚠️ Este teste dizia o CONTRÁRIO até 2026-08-20 ("saldo negativo é permitido de
+        // propósito em qualquer movimentação"). O dono do produto inverteu a política e a
+        // colocou atrás de um parâmetro: `cfg_permite_estoque_negativo`, desligado por padrão.
+        // O caminho ligado está em `estoqueInsuficienteEhAceitoQuandoOParametroPermiteNegativo`.
         String token = assinarNovoTenant("sem-estoque");
         long idTenant = extrairIdTenant(token);
         long idProduto = criarProduto(token, "Produto Sem Estoque", true);
@@ -451,11 +453,62 @@ class PdvCrudTest {
 
             mvc.perform(post("/api/v1/pdv/vendas").header("Authorization", "Bearer " + token)
                             .contentType(APPLICATION_JSON).content(corpo))
+                    .andExpect(status().isConflict())
+                    // A mensagem tem de dizer QUAL produto — senão o operador caça linha por linha.
+                    .andExpect(jsonPath("$.detail").value(org.hamcrest.Matchers.containsString("PRODUTO SEM ESTOQUE")))
+                    .andExpect(jsonPath("$.detail").value(org.hamcrest.Matchers.containsString("Estoque insuficiente")));
+
+            // A venda inteira foi revertida: o estoque continua com os 2 originais, e não com 2
+            // menos algum item que tivesse passado antes do que estourou.
+            org.assertj.core.api.Assertions.assertThat(buscarQtdEstoque(c, idVariacao)).isEqualByComparingTo("2.000");
+        }
+    }
+
+    /** O outro lado do parâmetro: ligado, o comportamento antigo volta inteiro. */
+    @Test
+    void estoqueInsuficienteEhAceitoQuandoOParametroPermiteNegativo() throws Exception {
+        String token = assinarNovoTenant("negativo-ok");
+        long idTenant = extrairIdTenant(token);
+        long idProduto = criarProduto(token, "Produto Negativo OK", true);
+        long idCarteira = criarTipoCarteira(token, "DINHEIRO NEGATIVO OK", "AVISTA", 0, 1, 1);
+        long idCliente = criarCliente(token, "Cliente Negativo OK");
+        long idFuncionario = criarFuncionario(token, "Vendedor Negativo OK");
+        abrirCaixaDinheiro(token);
+        permitirEstoqueNegativo(token);
+
+        try (Connection c = abrirConexao(idTenant)) {
+            long idEmpresa = buscarIdEmpresa(c);
+            long idVariacao = criarVariacao(c, idTenant, idProduto);
+            definirEstoque(c, idTenant, idEmpresa, idVariacao, new BigDecimal("2.000"));
+
+            String corpo = """
+                    {"itens":[{"idVariacao":%d,"qtd":5}],"descontoVenda":0,"idCliente":%d,"idFuncionario":%d,
+                     "pagamentos":[{"idCarteira":%d,"valorPago":250.00,"numeroParcelas":1}]}
+                    """.formatted(idVariacao, idCliente, idFuncionario, idCarteira);
+
+            mvc.perform(post("/api/v1/pdv/vendas").header("Authorization", "Bearer " + token)
+                            .contentType(APPLICATION_JSON).content(corpo))
                     .andExpect(status().isCreated());
 
-            // Vendeu 5 com só 2 em estoque — saldo fica negativo, venda gravada normalmente.
             org.assertj.core.api.Assertions.assertThat(buscarQtdEstoque(c, idVariacao)).isEqualByComparingTo("-3.000");
         }
+    }
+
+    /** Liga "Permite quantidade de estoque negativo" pela própria API de Parâmetros do Sistema —
+     *  é assim que o lojista faz, e testar pelo caminho real prende o contrato junto. */
+    private void permitirEstoqueNegativo(String token) throws Exception {
+        mvc.perform(put("/api/v1/config-geral").header("Authorization", "Bearer " + token)
+                        .contentType(APPLICATION_JSON)
+                        .content("""
+                                {"percentualDescontoVenda":0,"jurosCrediarioDias":0,"jurosCrediario":0,
+                                 "multaCrediarioDias":0,"multaCrediario":0,"cfgUsaCorGrade":false,
+                                 "cfgPermiteQtdDecimal":true,"cfgPermiteEstoqueNegativo":true,
+                                 "cfgExigeNumeroVendaDevolucao":false,
+                                 "cfgRateiaFreteEntrada":false,"cfgReajustaPrecoEntrada":false,
+                                 "cfgConsisteValorContasPagar":false,
+                                 "idPlanoContasCompraMercadoria":"3.03.001","cfgEmiteFiscalAposVenda":false}
+                                """))
+                .andExpect(status().isOk());
     }
 
     @Test

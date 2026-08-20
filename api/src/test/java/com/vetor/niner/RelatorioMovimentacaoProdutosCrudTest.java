@@ -180,7 +180,22 @@ class RelatorioMovimentacaoProdutosCrudTest {
             ps.setLong(2, idProduto);
             try (ResultSet rs = ps.executeQuery()) {
                 rs.next();
-                return rs.getLong(1);
+                long idVariacao = rs.getLong(1);
+                // Desde a V054 o débito não deixa saldo negativo com o parâmetro desligado
+                // (padrão). Este teste mede o Kardex, não a regra de estoque — a variação nasce
+                // abastecida em todas as empresas do tenant, como nasceria depois de uma entrada.
+                try (PreparedStatement est = c.prepareStatement("""
+                        INSERT INTO produto_estoque (id_tenant, id_empresa, id_variacao, qtd_estoque)
+                        SELECT ?, e.id_empresa, ?, 1000 FROM empresa e WHERE e.id_tenant = ?
+                        ON CONFLICT (id_tenant, id_empresa, id_variacao)
+                        DO UPDATE SET qtd_estoque = produto_estoque.qtd_estoque + 1000
+                        """)) {
+                    est.setLong(1, idTenant);
+                    est.setLong(2, idVariacao);
+                    est.setLong(3, idTenant);
+                    est.executeUpdate();
+                }
+                return idVariacao;
             }
         }
     }
@@ -188,6 +203,10 @@ class RelatorioMovimentacaoProdutosCrudTest {
     private void definirEstoque(Connection c, long idTenant, long idEmpresa, long idVariacao, BigDecimal qtd) throws SQLException {
         try (PreparedStatement ps = c.prepareStatement("""
                 INSERT INTO produto_estoque (id_tenant, id_empresa, id_variacao, qtd_estoque) VALUES (?, ?, ?, ?)
+                -- Upsert: a variação já nasce abastecida (V054) e este helper DEFINE o saldo,
+                -- não acumula — vários testes daqui afirmam um número exato de estoque.
+                ON CONFLICT (id_tenant, id_empresa, id_variacao)
+                DO UPDATE SET qtd_estoque = EXCLUDED.qtd_estoque
                 """)) {
             ps.setLong(1, idTenant);
             ps.setLong(2, idEmpresa);

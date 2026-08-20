@@ -350,6 +350,7 @@ const CONTEUDOS: Record<string, ConteudoAjuda> = {
       'Marque "Ratear frete/IPI/ICMS-ST no custo" se quiser que o valor de rateio informado numa Entrada de Produtos seja distribuído proporcionalmente entre os itens da nota.',
       'Marque "Reajustar preço na entrada" se quiser que o custo/preço de venda do produto sejam atualizados automaticamente a cada Entrada de Produtos.',
       'Marque "Consistir valor das contas a pagar na entrada" se a soma das duplicatas tiver de ser sempre igual ao total dos produtos lançados — uma entrada de R$ 1.500,00 só é confirmada com duplicatas somando R$ 1.500,00. Desmarque para permitir divergência (adiantamento, parte à vista, nota parcialmente financiada).',
+      'Marque "Permite quantidade de estoque negativo" apenas se quiser que venda, transferência e demais saídas aconteçam mesmo sem saldo suficiente. Desmarcado (padrão), nenhuma rotina tira mais do que existe: a operação para com "estoque insuficiente", dizendo qual produto e quanto há. O saldo é contado por empresa — não adianta a mercadoria estar em outra loja do grupo.',
       'Escolha o plano de contas usado nas contas a pagar geradas pela Entrada de Produtos por Compra.',
       'Marque "Emitir NFC-e/NF-e automaticamente após a venda" para que a nota fiscal seja emitida sozinha assim que o PDV confirma a venda (o popup mostra a papeleta e vira o cupom fiscal quando a SEFAZ autoriza). Desmarque para que o popup só mostre a papeleta, com um botão para o operador emitir a nota fiscal quando quiser.',
       'Salve.',
@@ -357,6 +358,7 @@ const CONTEUDOS: Record<string, ConteudoAjuda> = {
     errosComuns: [
       'Só administradores acessam esta tela — usuários OPERADOR não têm este item no menu.',
       'Percentuais devem ficar entre 0 e 100.',
+      'Se o PDV começar a recusar vendas com "estoque insuficiente", o caminho não é ligar o estoque negativo por reflexo: normalmente o certo é dar entrada da mercadoria ou acertar o saldo pela Contagem de Estoque. Ligue o parâmetro só se a loja realmente trabalha vendendo antes de lançar a compra.',
     ],
     urlVideo: null,
   },
@@ -700,7 +702,7 @@ const CONTEUDOS: Record<string, ConteudoAjuda> = {
     passos: [
       'No popup inicial, informe o número da venda (ignora os demais filtros) ou um intervalo de datas — cliente, vendedor, empresa (admin) e situação são opcionais.',
       'Clique numa linha do resultado para abrir o detalhamento em abas: Dados Gerais, Produtos Vendidos, Movimentação de Caixa e, se a venda for de crediário, Parcelas de Crediário.',
-      '"Reimprimir papeleta" abre a mesma papeleta da 1ª via, com "REIMPRESSÃO" e a data/hora — imprima, salve em PDF ou envie por WhatsApp. Se a venda estiver cancelada, o cupom avisa "VENDA CANCELADA" já na primeira linha.',
+      '"Reimprimir papeleta" abre a mesma papeleta da 1ª via, com "REIMPRESSÃO" e a data/hora — imprima, salve em PDF ou envie por WhatsApp. Venda cancelada não tem reimpressão: o botão nem aparece, porque um cupom impresso circula afirmando uma venda que não existe mais.',
       '"Cancelar venda" (só administrador, e só se a venda ainda não estiver cancelada) mostra o resumo do que será revertido e pede o motivo antes de confirmar — a mesma rotina que era uma tela separada. Se a venda tiver nota fiscal (NFC-e), o popup também mostra até quando a SEFAZ permite cancelá-la.',
       'Vendas canceladas aparecem sinalizadas na grid, mas não entram na soma do rodapé.',
     ],

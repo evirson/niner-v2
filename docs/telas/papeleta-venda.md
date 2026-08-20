@@ -213,17 +213,28 @@ reimpressão de crediário abaixo) — 100% frontend, zero endpoint novo:
 Testado com venda real, inclusive uma venda sintética de importação (sem itens/vendedor/
 operador) — os campos vazios caem certinho em "(não informado)".
 
-### Aviso "VENDA CANCELADA" (2026-08-19)
+### ⛔ Venda cancelada NÃO tem reimpressão (2026-08-20 — substitui o aviso de 2026-08-19)
 
-Pedido do dono do produto: reimprimir a papeleta de uma venda cancelada saía **idêntica** à de
-uma venda válida, sem nenhum aviso. `venda.cancelada` passou a viajar em
-`ComprovanteVendaResponse`/`ComprovanteVenda`, e `montarLinhasComprovanteVenda` imprime
-`**** VENDA CANCELADA ****` centralizado como as primeiras linhas do cupom — antes até da tarja
-"DOCUMENTO SEM VALOR FISCAL". Uma venda cancelada com NFC-e **nunca** chega como DANFCE aqui:
-`buscarDadosFiscais` só considera documento `AUTORIZADO`/`CONTINGENCIA`
-(`docs/telas/cancelamento-venda.md` — o cancelamento marca `documento_fiscal.situacao =
-CANCELADO`), então a papeleta comum é sempre o formato que sai na reimpressão de uma venda
-cancelada, fiscal ou não — um único aviso, num único lugar, cobre os dois casos.
+**Regra atual:** o botão "Reimprimir papeleta" **não aparece** para venda cancelada, e
+`GET /api/v1/pdv/vendas/{id}/comprovante` responde **409** — checagem no servidor porque o
+endpoint atende qualquer usuário do tenant e a tela não é o único caminho até ele (P4).
+
+**O que havia antes, e por que mudou.** Em 2026-08-19 a reimpressão passou a sair com
+`**** VENDA CANCELADA ****` como primeira linha do cupom, para ninguém confundir com uma venda
+válida. O dono do produto trocou o aviso pela recusa um dia depois, e o motivo é melhor que a
+solução anterior: **papel impresso circula**. Um cupom de venda cancelada na mão de alguém é um
+documento afirmando uma venda que não existe mais — e a única forma de ele não circular é não
+imprimir. Avisar dependia de quem estivesse lendo; recusar não depende de ninguém.
+
+⚠️ O campo `cancelada` **continua** em `ComprovanteVendaResponse`/`ComprovanteVenda`: o detalhe da
+venda o usa para o selo "Cancelada" na tela. O que saiu foi só o bloco de linhas em
+`montarLinhasComprovanteVenda` (`web/src/lib/comprovante.ts`), que hoje traz um comentário
+explicando a remoção — sem ele, o próximo a ler o DTO reintroduz o aviso achando que faltava.
+
+Nota que continua valendo: venda cancelada com NFC-e **nunca** chegaria como DANFCE aqui de
+qualquer forma, porque `buscarDadosFiscais` só considera documento `AUTORIZADO`/`CONTINGENCIA` e o
+cancelamento marca `documento_fiscal.situacao = CANCELADO`
+(`docs/telas/cancelamento-venda.md`).
 
 ## Envio por WhatsApp (2026-08-07)
 

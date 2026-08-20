@@ -336,12 +336,12 @@ class CancelamentoVendaCrudTest {
                 .andExpect(jsonPath("$.cancelada").value(true))
                 .andExpect(jsonPath("$.motivoCancelamento").value("Cliente desistiu da compra"));
 
-        // A reimpressão da papeleta (2026-08-19) precisa saber que a venda foi cancelada, pra
-        // avisar "VENDA CANCELADA" já no início do cupom — o comprovante continua acessível
-        // depois do cancelamento (só o estoque/caixa/contas a receber é que reverte).
+        // ⚠️ Mudou em 2026-08-20: venda cancelada NÃO tem papeleta. Até aqui o comprovante
+        // continuava acessível e o cupom avisava "VENDA CANCELADA" no topo; o dono do produto
+        // trocou o aviso pela recusa, porque papel impresso circula — e um cupom de venda
+        // cancelada na mão de alguém é um documento afirmando uma venda que não existe mais.
         mvc.perform(get("/api/v1/pdv/vendas/" + idVenda + "/comprovante").header("Authorization", "Bearer " + tenant.token()))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.cancelada").value(true));
+                .andExpect(status().isConflict());
     }
 
     @Test

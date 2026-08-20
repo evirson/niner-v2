@@ -252,12 +252,32 @@ class ArquivamentoXmlTest {
         jdbc.sql("UPDATE produto SET id_perfil_fiscal = ? WHERE id_tenant = ? AND id_produto = ?")
                 .params(idPerfil, idTenant, idProduto).update();
 
-        return jdbc.sql("""
+        long idVariacao = jdbc.sql("""
                         INSERT INTO produto_barra (id_tenant, id_produto, sku)
                         VALUES (?, ?, gerar_ean13_interno())
                         RETURNING id_variacao
                         """)
                 .params(idTenant, idProduto).query(Long.class).single();
+        abastecerEstoqueDoFixture(idTenant, idVariacao);
+        return idVariacao;
+    }
+
+    /**
+     * Dá estoque à variação recém-criada, em todas as empresas do tenant.
+     *
+     * <p>Desde a V054 o débito não pode deixar o saldo negativo quando
+     * {@code cfg_permite_estoque_negativo} está desligado — que é o padrão. Este teste não é sobre
+     * estoque: ele precisa de uma venda como <b>fixture</b>, e uma venda de verdade tem estoque
+     * antes. Abastecer aqui é mais honesto que ligar o parâmetro e fingir que a regra não existe.
+     */
+    private void abastecerEstoqueDoFixture(long idTenant, long idVariacao) {
+        jdbc.sql("""
+                        INSERT INTO produto_estoque (id_tenant, id_empresa, id_variacao, qtd_estoque)
+                        SELECT ?, e.id_empresa, ?, 1000 FROM empresa e WHERE e.id_tenant = ?
+                        ON CONFLICT (id_tenant, id_empresa, id_variacao)
+                        DO UPDATE SET qtd_estoque = produto_estoque.qtd_estoque + 1000
+                        """)
+                .params(idTenant, idVariacao, idTenant).update();
     }
 
     private long criarClienteAnonimo(String token, String nome) throws Exception {
