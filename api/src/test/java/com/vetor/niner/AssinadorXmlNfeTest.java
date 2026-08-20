@@ -279,7 +279,7 @@ class AssinadorXmlNfeTest {
                         4106902, "CURITIBA", "PR", "81050240", null),
                 null, List.of(item), calculo.itens(), calculo.totais(),
                 List.of(new Pagamento("01", calculo.totais().valorNota(), null, null)), null, null,
-                new ResponsavelTecnico(CNPJ, "SUPORTE VETOR", "suporte@vetorsistemas.com.br", "4133334444"),
+                new ResponsavelTecnico(CNPJ, "SUPORTE VETOR", "suporte@vetorsistemas.com.br", "4133334444", null, null),
                 new UrlsConsultaUf("http://www.fazenda.pr.gov.br/nfce/qrcode",
                         "http://www.fazenda.pr.gov.br/nfce/consulta"),
                 new CscEmpresa("000001", "csc-fake-de-teste"),

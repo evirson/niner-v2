@@ -84,7 +84,17 @@ public record NinerProperties(
      * em toda NFC-e/NF-e (MOC). É a Vetor/MITRYUSCASH, <b>nunca o tenant</b>: um valor só, igual
      * para todas as notas de todos os lojistas — por isso vive em configuração de aplicação, não
      * em {@code fiscal_config_empresa}.
+     *
+     * <p>{@code idCsrt} + {@code csrt} são o <b>Código de Segurança do Responsável Técnico</b>,
+     * emitido para a Vetor no portal da SEFAZ de cada UF (NT 2018.005). Preenchidos, o montador
+     * acrescenta {@code idCSRT} e {@code hashCSRT} ao grupo; vazios, o grupo sai sem eles — que é
+     * o que a NFC-e do PR aceita hoje, mas <b>não</b> a NF-e modelo 55: sem CSRT a devolução é
+     * rejeitada com cStat 975 (achado transmitindo de verdade em 2026-08-19).
+     *
+     * <p>⚠️ O {@code csrt} é <b>segredo</b> — trate como senha: nunca commitado, sempre via
+     * variável de ambiente, e nunca registrado em log (é o hash que vai no XML, não ele).
      */
-    public record RespTec(String cnpj, String contato, String email, String telefone) {
+    public record RespTec(String cnpj, String contato, String email, String telefone,
+                          String idCsrt, String csrt) {
     }
 }

@@ -144,7 +144,7 @@ public class MontadorXmlNfce {
         xml.append("<transp><modFrete>9</modFrete></transp>");   // 9 = sem frete, o caso do balcão
         montarPag(xml, nota);
         montarInfAdic(xml, nota);
-        montarInfRespTec(xml, nota.responsavelTecnico());
+        montarInfRespTec(xml, nota.responsavelTecnico(), chave);
         xml.append("</infNFe>");
         montarInfNFeSupl(xml, nota, chave, assinadorQrOffline, emissaoLocal);
         xml.append("</NFe>");
@@ -497,7 +497,13 @@ public class MontadorXmlNfce {
         xml.append("<infAdic>").append(tag("infCpl", texto(nota.informacoesComplementares()))).append("</infAdic>");
     }
 
-    private void montarInfRespTec(StringBuilder xml, ResponsavelTecnico r) {
+    /**
+     * {@code idCSRT}/{@code hashCSRT} (NT 2018.005) saem só quando o CSRT está configurado. Ao
+     * contrário da NF-e modelo 55 — que é rejeitada sem eles (cStat 975) — a NFC-e do PR autoriza
+     * com o grupo enxuto, que foi como este emissor rodou até 2026-08-19. Emitir quando disponível
+     * é o comportamento correto pela NT e não muda nada para quem não configurou.
+     */
+    private void montarInfRespTec(StringBuilder xml, ResponsavelTecnico r, String chaveAcesso) {
         if (r == null) {
             return;
         }
@@ -505,8 +511,12 @@ public class MontadorXmlNfce {
                 .append(tag("CNPJ", apenasDigitos(r.cnpj())))
                 .append(tag("xContato", texto(r.contato())))
                 .append(tag("email", texto(r.email())))
-                .append(tag("fone", apenasDigitos(r.telefone())))
-                .append("</infRespTec>");
+                .append(tag("fone", apenasDigitos(r.telefone())));
+        if (!vazio(r.csrt())) {
+            xml.append(tag("idCSRT", texto(r.idCsrt())))
+                    .append(tag("hashCSRT", XmlFiscal.hashCsrt(r.csrt(), chaveAcesso)));
+        }
+        xml.append("</infRespTec>");
     }
 
     /**

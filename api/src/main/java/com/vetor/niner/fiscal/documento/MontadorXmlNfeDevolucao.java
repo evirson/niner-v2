@@ -47,11 +47,17 @@ import static com.vetor.niner.fiscal.documento.XmlFiscal.vazio;
  *
  * <h2>Ajuste SINIEF 8/2026 (confirmado com o contador em 2026-08-19)</h2>
  *
- * <p>A referência à nota de origem é <b>dupla</b>: {@code ide/NFref/refNFe} com a chave (a nota
- * inteira) e, em cada item, {@code det/DFeReferenciado} com {@code chaveAcesso} + {@code nItem} do
- * item correspondente na NFC-e. É o segundo que torna a devolução <b>parcial</b> rastreável — e
- * parcial é o caso comum do balcão. O grupo existe no XSD 4.00 versionado no projeto (conferido
- * antes de escrever isto, não presumido).
+ * <p>A referência à nota de origem é feita <b>só a nível de item</b>: cada {@code det} leva um
+ * {@code DFeReferenciado} com {@code chaveAcesso} + {@code nItem} do item correspondente na NFC-e.
+ * É isso que torna a devolução <b>parcial</b> rastreável — e parcial é o caso comum do balcão.
+ *
+ * <p>⚠️ <b>Não</b> existe {@code ide/NFref/refNFe} junto. A primeira versão referenciava nos dois
+ * níveis (leitura literal do Ajuste), o XSD aceitou, e a <b>SEFAZ rejeitou na transmissão real</b>:
+ * <i>"NF-e com referenciamento de documento a nivel de nota e a nivel de item"</i> (cStat 1010,
+ * 2026-08-19, PR homologação). Os níveis são mutuamente exclusivos — escolhido o de item, que é
+ * estritamente mais informativo (a chave está lá também, mais o {@code nItem}). Lição que vale
+ * além daqui: <b>o XSD não é o contrato completo</b>; regra de validação da SEFAZ só aparece
+ * transmitindo.
  */
 @Component
 public class MontadorXmlNfeDevolucao {
@@ -99,7 +105,7 @@ public class MontadorXmlNfeDevolucao {
         xml.append("<transp><modFrete>9</modFrete></transp>");   // 9 = sem frete (cliente trouxe)
         montarPag(xml);
         montarInfAdic(xml, dev);
-        montarInfRespTec(xml, dev.responsavelTecnico());
+        montarInfRespTec(xml, dev.responsavelTecnico(), chave);
         xml.append("</infNFe>");
         xml.append("</NFe>");
 
@@ -135,11 +141,9 @@ public class MontadorXmlNfeDevolucao {
                 .append(tag("indPres", "0"))
                 .append(tag("procEmi", "0"))
                 .append(tag("verProc", texto(dev.versaoAplicativo())))
-                // ⚠️ `NFref` é o ÚLTIMO elemento do `ide` na sequence do XSD (depois de verProc/
-                // dhCont/xJust), não logo após cMunFG como a leitura do MOC sugere. Achado pela
-                // validação contra o schema oficial. Ajuste SINIEF 8/2026: toda anulação
-                // referencia a nota de saída original pela chave.
-                .append("<NFref>").append(tag("refNFe", dev.chaveNotaOriginal())).append("</NFref>")
+                // ⚠️ NÃO existe `NFref` aqui — a referência à nota de origem é SÓ por item
+                // (`det/DFeReferenciado`). Ver o javadoc da classe: a SEFAZ rejeita (cStat 1010)
+                // quando os dois níveis vêm juntos.
                 .append("</ide>");
     }
 
@@ -421,7 +425,14 @@ public class MontadorXmlNfeDevolucao {
         xml.append("<infAdic>").append(tag("infCpl", texto(dev.informacoesComplementares()))).append("</infAdic>");
     }
 
-    private void montarInfRespTec(StringBuilder xml, ResponsavelTecnico r) {
+    /**
+     * ⚠️ {@code idCSRT}/{@code hashCSRT} são <b>obrigatórios na NF-e modelo 55</b> — sem eles a
+     * SEFAZ rejeita com cStat 975, mesmo com todo o resto do {@code infRespTec} preenchido
+     * (achado transmitindo de verdade, 2026-08-19; a NFC-e do PR aceita sem). Por isso a validação
+     * de entrada exige o CSRT configurado, em vez de emitir uma nota que já se sabe recusada (F11
+     * — falha explícita e cedo, não uma rejeição incompreensível depois).
+     */
+    private void montarInfRespTec(StringBuilder xml, ResponsavelTecnico r, String chaveAcesso) {
         if (r == null) {
             return;
         }
@@ -429,8 +440,12 @@ public class MontadorXmlNfeDevolucao {
                 .append(tag("CNPJ", apenasAlfanumerico(r.cnpj())))
                 .append(tag("xContato", texto(r.contato())))
                 .append(tag("email", texto(r.email())))
-                .append(tag("fone", apenasDigitos(r.telefone())))
-                .append("</infRespTec>");
+                .append(tag("fone", apenasDigitos(r.telefone())));
+        if (!vazio(r.csrt())) {
+            xml.append(tag("idCSRT", texto(r.idCsrt())))
+                    .append(tag("hashCSRT", XmlFiscal.hashCsrt(r.csrt(), chaveAcesso)));
+        }
+        xml.append("</infRespTec>");
     }
 
     // ---------------------------------------------------------------- validação de entrada
@@ -458,6 +473,15 @@ public class MontadorXmlNfeDevolucao {
         if (doc == null || (doc.length() != 11 && doc.length() != 14)) {
             throw new MontagemInvalidaException(
                     "CPF/CNPJ do destinatário da devolução inválido (esperado 11 ou 14 posições).");
+        }
+        // F11 — falhar aqui, com o motivo por extenso, em vez de montar e assinar uma nota que a
+        // SEFAZ já vai recusar com cStat 975 (mensagem que não diz onde configurar o CSRT).
+        if (dev.responsavelTecnico() == null || vazio(dev.responsavelTecnico().csrt())) {
+            throw new MontagemInvalidaException(
+                    "A NF-e modelo 55 exige o CSRT (Código de Segurança do Responsável Técnico), que não "
+                            + "está configurado. Obtenha o código no portal da SEFAZ da UF, para o CNPJ do "
+                            + "responsável técnico, e informe em NINER_FISCAL_RESPTEC_ID_CSRT e "
+                            + "NINER_FISCAL_RESPTEC_CSRT.");
         }
         for (ItemDevolucao item : dev.itens()) {
             if (vazio(item.cfop())) {

@@ -103,3 +103,9 @@ niner:
       contato: ${NINER_FISCAL_RESPTEC_CONTATO:SUPORTE VETOR SISTEMAS}
       email: ${NINER_FISCAL_RESPTEC_EMAIL:suporte@vetorsistemas.com.br}
       telefone: ${NINER_FISCAL_RESPTEC_TELEFONE:4133334444}
+      # CSRT (NT 2018.005) — obtido pela VETOR no portal da SEFAZ de cada UF, por CNPJ do
+      # responsável técnico. ⚠️ SEGREDO: nunca commitar o valor, sempre por variável de ambiente.
+      # Vazio, o grupo infRespTec sai sem idCSRT/hashCSRT — a NFC-e do PR aceita, a NF-e modelo 55
+      # NÃO (cStat 975 "Obrigatoria a informacao do identificador do CSRT e do Hash do CSRT").
+      id-csrt: ${NINER_FISCAL_RESPTEC_ID_CSRT:}
+      csrt: ${NINER_FISCAL_RESPTEC_CSRT:}

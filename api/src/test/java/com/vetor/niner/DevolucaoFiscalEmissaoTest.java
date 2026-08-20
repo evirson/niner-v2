@@ -100,10 +100,12 @@ class DevolucaoFiscalEmissaoTest {
         assertThat(doc.tipoOperacao()).isEqualTo("DEVOLUCAO_VENDA");
         assertThat(doc.situacao()).isEqualTo("AUTORIZADO");
 
-        // Ajuste SINIEF 8/2026 — referência nos dois níveis, dentro do XML que foi assinado.
+        // Ajuste SINIEF 8/2026 — referência SÓ a nível de item, dentro do XML que foi assinado.
+        // Os dois níveis juntos passam no XSD mas a SEFAZ rejeita (cStat 1010) — ver
+        // MontadorXmlNfeDevolucaoTest.referenciaANotaOriginalSomenteItemAItem.
         assertThat(doc.xml())
-                .as("chave da nota original no cabeçalho").contains("<NFref><refNFe>" + c.chaveNfce() + "</refNFe></NFref>")
                 .as("referência item a item").contains("<DFeReferenciado><chaveAcesso>" + c.chaveNfce() + "</chaveAcesso><nItem>1</nItem>")
+                .as("sem NFref junto (cStat 1010)").doesNotContain("<NFref>")
                 .as("CFOP de devolução interna").contains("<CFOP>1202</CFOP>")
                 .as("tributação espelhada da venda (CSOSN 102)").contains("<CSOSN>102</CSOSN>");
 

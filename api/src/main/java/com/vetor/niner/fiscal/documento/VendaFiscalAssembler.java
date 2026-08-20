@@ -113,7 +113,8 @@ public class VendaFiscalAssembler {
                 config.uf(), config.cep(), config.telefone());
 
         ResponsavelTecnico responsavelTecnico = new ResponsavelTecnico(
-                respTec.cnpj(), respTec.contato(), respTec.email(), respTec.telefone());
+                respTec.cnpj(), respTec.contato(), respTec.email(), respTec.telefone(),
+                respTec.idCsrt(), respTec.csrt());
 
         return Optional.of(new PedidoDeEmissao(idTenant, idEmpresa, (int) idVenda,
                 venda.idCliente() == null ? null : venda.idCliente().intValue(), idUsuario,

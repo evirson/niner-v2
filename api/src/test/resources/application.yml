@@ -47,3 +47,7 @@ niner:
       contato: SUPORTE VETOR SISTEMAS
       email: suporte@vetorsistemas.com.br
       telefone: "4133334444"
+      # CSRT de teste — valor sem significado, só precisa existir: a NF-e modelo 55 é recusada na
+      # montagem sem ele (cStat 975 na SEFAZ real). O CSRT de verdade é segredo e nunca entra aqui.
+      id-csrt: "01"
+      csrt: CSRTDETESTENAOEOVALORREAL0123456789

@@ -107,8 +107,16 @@ public final class MontagemNfceDtos {
     public record Pagamento(String codigoMeioPagamento, BigDecimal valor, String bandeira, String cnpjCredenciadora) {
     }
 
-    /** Grupo {@code infRespTec} — o responsável técnico pelo software emissor (a Vetor). */
-    public record ResponsavelTecnico(String cnpj, String contato, String email, String telefone) {
+    /**
+     * Grupo {@code infRespTec} — o responsável técnico pelo software emissor (a Vetor).
+     *
+     * <p>{@code idCsrt}/{@code csrt} vêm da configuração da aplicação e são opcionais: preenchidos,
+     * o montador acrescenta {@code idCSRT} + {@code hashCSRT} (calculado por nota, porque entra a
+     * chave de acesso — ver {@link XmlFiscal#hashCsrt}); vazios, o grupo sai sem eles. A NF-e
+     * modelo 55 <b>exige</b> o par (cStat 975 sem ele).
+     */
+    public record ResponsavelTecnico(String cnpj, String contato, String email, String telefone,
+                                     String idCsrt, String csrt) {
     }
 
     /**

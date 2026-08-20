@@ -120,7 +120,8 @@ public class DevolucaoFiscalAssembler {
                 config.ambiente(), config.serieNfe(), 0, 0, OffsetDateTime.now(),
                 "DEVOLUCAO DE VENDA", original.chaveAcesso(), emitente, destinatario, itens, totais,
                 montarInfoComplementar(original, destinatario, idDevolucao),
-                new ResponsavelTecnico(respTec.cnpj(), respTec.contato(), respTec.email(), respTec.telefone()),
+                new ResponsavelTecnico(respTec.cnpj(), respTec.contato(), respTec.email(), respTec.telefone(),
+                        respTec.idCsrt(), respTec.csrt()),
                 "Niner PDV 1.0"));
     }
 

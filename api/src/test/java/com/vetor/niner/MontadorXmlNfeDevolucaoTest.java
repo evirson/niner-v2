@@ -81,21 +81,27 @@ class MontadorXmlNfeDevolucaoTest {
     }
 
     /**
-     * <b>Ajuste SINIEF 8/2026, o ponto central desta feature.</b> A referência tem que existir nos
-     * DOIS níveis: a chave da nota inteira no cabeçalho e, em cada item, qual item da nota
-     * original está voltando — sem o segundo, uma devolução parcial não é rastreável.
+     * <b>Ajuste SINIEF 8/2026, o ponto central desta feature.</b> A referência à nota de origem sai
+     * <b>só a nível de item</b>: cada {@code det} diz qual item da nota original está voltando, que
+     * é o que torna a devolução parcial rastreável.
+     *
+     * <p>⚠️ A ausência do {@code ide/NFref} é tão testada quanto a presença do
+     * {@code DFeReferenciado}, e por um motivo caro: a primeira versão emitia os dois níveis, <b>o
+     * XSD aceitou</b>, e a SEFAZ rejeitou na transmissão real com cStat 1010 ("referenciamento de
+     * documento a nivel de nota e a nivel de item"). Este assert é a rede que impede o
+     * {@code NFref} de voltar por refatoração.
      */
     @Test
-    void referenciaANotaOriginalNoCabecalhoEItemAItem() {
+    void referenciaANotaOriginalSomenteItemAItem() {
         XmlMontado montado = montador.montar(devolucaoDeUmItem("102", null));
 
         validarEstrutura(montado);
         assertThat(montado.xml())
-                .as("referência da nota inteira (ide/NFref/refNFe)")
-                .contains("<NFref><refNFe>" + CHAVE_ORIGINAL + "</refNFe></NFref>");
-        assertThat(montado.xml())
-                .as("referência item a item (det/prod/DFeReferenciado) — exigência do Ajuste para devolução parcial")
+                .as("referência item a item (det/DFeReferenciado) — exigência do Ajuste para devolução parcial")
                 .contains("<DFeReferenciado><chaveAcesso>" + CHAVE_ORIGINAL + "</chaveAcesso><nItem>3</nItem></DFeReferenciado>");
+        assertThat(montado.xml())
+                .as("NFref junto do DFeReferenciado é rejeitado pela SEFAZ (cStat 1010)")
+                .doesNotContain("<NFref>");
     }
 
     /**
@@ -174,7 +180,48 @@ class MontadorXmlNfeDevolucaoTest {
         assertThat(montado.xml()).contains("<pag><detPag><tPag>90</tPag><vPag>0.00</vPag></detPag></pag>");
     }
 
+    /**
+     * CSRT (NT 2018.005) — o par {@code idCSRT} + {@code hashCSRT} é <b>obrigatório na NF-e modelo
+     * 55</b>: sem ele a SEFAZ rejeita com cStat 975 (achado transmitindo de verdade, 2026-08-19).
+     *
+     * <p>O hash é conferido contra um valor calculado <b>fora</b> do código de produção
+     * (SHA-1 de {@code CSRT + chave}, digest bruto em Base-64), não contra o que o montador
+     * produziu — um teste que chamasse {@code XmlFiscal.hashCsrt} dos dois lados passaria mesmo se
+     * a fórmula estivesse errada, que é exatamente o erro que dá cStat 976.
+     */
+    @Test
+    void csrtSaiNoInfRespTecComHashSha1EmBase64() throws Exception {
+        XmlMontado montado = montador.montar(devolucaoDeUmItem("102", null));
+
+        byte[] digest = java.security.MessageDigest.getInstance("SHA-1").digest(
+                ("CSRTDETESTEPARAOMONTADOR1234567890" + montado.chaveAcesso())
+                        .getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        String hashEsperado = java.util.Base64.getEncoder().encodeToString(digest);
+
+        validarEstrutura(montado);
+        assertThat(hashEsperado).as("digest bruto em Base-64, não o hex").hasSize(28);
+        assertThat(montado.xml())
+                .contains("<idCSRT>01</idCSRT>")
+                .contains("<hashCSRT>" + hashEsperado + "</hashCSRT>");
+    }
+
     // ------------------------------------------------------------------ recusas explícitas (F11)
+
+    /** Melhor recusar aqui, dizendo onde configurar, do que assinar e transmitir uma nota que a
+     *  SEFAZ devolve com um cStat 975 que não menciona variável de ambiente nenhuma. */
+    @Test
+    void devolucaoSemCsrtConfiguradoEhRecusadaAntesDeTransmitir() {
+        ResponsavelTecnico semCsrt = new ResponsavelTecnico(
+                "37829453000135", "SUPORTE VETOR", "suporte@vetorsistemas.com.br", "4133334444", null, null);
+        DevolucaoParaMontar dev = new DevolucaoParaMontar(
+                AmbienteSefaz.HOMOLOGACAO, 1, 1, 12345678, EMISSAO, "DEVOLUCAO DE VENDA",
+                CHAVE_ORIGINAL, emitente(), destinatarioPropriaLoja(),
+                List.of(itemBase("102", null).build(1, 3)), totais(), null, semCsrt, "1.0");
+
+        assertThatThrownBy(() -> montador.montar(dev))
+                .isInstanceOf(MontagemInvalidaException.class)
+                .hasMessageContaining("CSRT");
+    }
 
     @Test
     void devolucaoSemChaveDaNotaOriginalEhRecusada() {
@@ -248,7 +295,8 @@ class MontadorXmlNfeDevolucaoTest {
     }
 
     private static ResponsavelTecnico respTec() {
-        return new ResponsavelTecnico("37829453000135", "SUPORTE VETOR", "suporte@vetorsistemas.com.br", "4133334444");
+        return new ResponsavelTecnico("37829453000135", "SUPORTE VETOR", "suporte@vetorsistemas.com.br", "4133334444",
+                "01", "CSRTDETESTEPARAOMONTADOR1234567890");
     }
 
     private static TotaisDevolucao totais() {

@@ -82,6 +82,28 @@ final class XmlFiscal {
         return s == null ? null : s.toUpperCase(Locale.ROOT).replaceAll("[^0-9A-Z]", "");
     }
 
+    /**
+     * {@code hashCSRT} do grupo {@code infRespTec} (NT 2018.005): SHA-1 de
+     * {@code CSRT + chaveDeAcesso}, o digest <b>bruto</b> (20 bytes) codificado em Base-64 — 28
+     * caracteres.
+     *
+     * <p>⚠️ As duas armadilhas: (1) é o digest binário que vai para o Base-64, <b>não</b> a
+     * representação hexadecimal dele (Base-64 de hex daria 56 caracteres e a SEFAZ rejeita); (2) a
+     * concatenação é CSRT seguido da chave, sem separador, e a chave são os <b>44 dígitos</b>, sem
+     * o prefixo {@code NFe}. Errar qualquer um dos dois dá cStat 976 ("Rejeicao: Hash do CSRT
+     * inválido"), que não diz qual dos dois foi.
+     */
+    static String hashCsrt(String csrt, String chaveAcesso) {
+        try {
+            byte[] digest = java.security.MessageDigest.getInstance("SHA-1")
+                    .digest((csrt + chaveAcesso).getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            return java.util.Base64.getEncoder().encodeToString(digest);
+        } catch (java.security.NoSuchAlgorithmException e) {
+            // SHA-1 é obrigatório em toda JVM; se faltar, o ambiente está quebrado.
+            throw new IllegalStateException("SHA-1 indisponível na JVM.", e);
+        }
+    }
+
     /** Código IBGE da UF (`cUF`) — mapa único do módulo, ver {@link ChaveAcesso#codigoUfDe}. */
     static int codigoUfDe(String uf) {
         try {

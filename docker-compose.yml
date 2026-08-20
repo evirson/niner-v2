@@ -83,6 +83,11 @@ services:
       # (montado acima, gitignored), senha padrão do keytool para truststore criada sem -storepass.
       NINER_FISCAL_TRUSTSTORE: ${NINER_FISCAL_TRUSTSTORE:-}
       NINER_FISCAL_TRUSTSTORE_SENHA: ${NINER_FISCAL_TRUSTSTORE_SENHA:-}
+      # CSRT do responsável técnico (NT 2018.005) — obtido pela VETOR no portal da SEFAZ da UF.
+      # ⚠️ SEGREDO: o valor mora no .env (gitignored), nunca aqui. Sem ele a NF-e modelo 55 de
+      # devolução é recusada na montagem (e seria recusada pela SEFAZ com cStat 975).
+      NINER_FISCAL_RESPTEC_ID_CSRT: ${NINER_FISCAL_RESPTEC_ID_CSRT:-}
+      NINER_FISCAL_RESPTEC_CSRT: ${NINER_FISCAL_RESPTEC_CSRT:-}
     volumes:
       - ./api/secrets:/secrets:ro
     ports: ["${NINER_API_PORT:-8080}:8080"]
