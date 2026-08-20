@@ -364,7 +364,7 @@ class CancelamentoEntradaCrudTest {
                         .content("""
                                 {"percentualDescontoVenda":0,"jurosCrediarioDias":0,"jurosCrediario":0,
                                  "multaCrediarioDias":0,"multaCrediario":0,"cfgUsaCorGrade":false,
-                                 "cfgPermiteQtdDecimal":true,"cfgPermiteEstoqueNegativo":false,
+                                 "cfgPermiteQtdDecimal":true,"cfgPermiteEstoqueNegativo":false,"cfgDiasValidadeOrcamento":15,
                                  "cfgExigeNumeroVendaDevolucao":false,
                                  "cfgRateiaFreteEntrada":false,"cfgReajustaPrecoEntrada":false,
                                  "cfgConsisteValorContasPagar":false,

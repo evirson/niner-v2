@@ -86,7 +86,16 @@ public final class PdvDtos {
             @NotNull @DecimalMin(value = "0") BigDecimal descontoVenda,
             @NotEmpty List<@Valid PagamentoRequest> pagamentos,
             @NotNull Long idCliente,
-            @NotNull Long idFuncionario) {
+            @NotNull Long idFuncionario,
+            /**
+             * Orçamento que originou esta venda (V058), ou nulo numa venda normal.
+             *
+             * <p>⚠️ Quando presente, o PDV usa o preço <b>congelado do orçamento</b> em vez do
+             * preço do cadastro — lido do banco, nunca do que a tela mandar. E as quantidades só
+             * podem ser <b>menores ou iguais</b> às orçadas (R2): o cliente pode levar menos, nunca
+             * mais nem por outro preço.
+             */
+            Long idOrcamento) {
     }
 
     /** `paga` = true quando a parcela já nasce recebida (categoria AVISTA/CARTAO_DEBITO). */
@@ -112,7 +121,10 @@ public final class PdvDtos {
             BigDecimal valorTotalProdutos,
             BigDecimal descontoVenda,
             BigDecimal valorLiquido,
-            List<PagamentoGerado> pagamentos) {
+            List<PagamentoGerado> pagamentos,
+            /** Orçamento que virou esta venda, e se foi parcial (V058). Nulo em venda normal. */
+            Long idOrcamento,
+            Boolean orcamentoParcial) {
     }
 
     /** Uma linha de item da papeleta de venda (2026-08-06) — {@code valorTotal} é bruto

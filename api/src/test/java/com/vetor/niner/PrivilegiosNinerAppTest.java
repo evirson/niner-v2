@@ -177,6 +177,28 @@ class PrivilegiosNinerAppTest {
     }
 
     /**
+     * V058 — orçamento se cancela, não se apaga (P3).
+     *
+     * <p>⚠️ Este caso existe porque o `GRANT` é <b>invisível para o resto da suíte</b>: o
+     * Testcontainers conecta como superusuário, então uma permissão faltando passa em todos os
+     * outros testes e só quebra ao vivo (foi assim com o Cancelamento de Entrada, que passou com
+     * 7 testes verdes e falhou na primeira tentativa real).
+     *
+     * <p>`orcamento` recebe UPDATE porque a situação muda (efetivar/cancelar/vencer);
+     * `orcamento_item` não, porque o orçamento é imutável — item emitido nunca muda.
+     */
+    @Test
+    void orcamentoSeCancelaNaoSeApaga() throws Exception {
+        try (Connection c = conexaoApp(); Statement st = c.createStatement()) {
+            permissaoNegada(st, "DELETE FROM orcamento");
+            permissaoNegada(st, "DELETE FROM orcamento_item");
+            permissaoNegada(st, "UPDATE orcamento_item SET qtd_produto = 1 WHERE false");
+            // O que a aplicação PRECISA poder fazer:
+            st.executeUpdate("UPDATE orcamento SET situacao = 'VENCIDO' WHERE false");
+        }
+    }
+
+    /**
      * P8 em job sem JWT (achado ao vivo em 2026-08-19): uma consulta em tabela de <b>domínio</b>
      * sem {@code SET app.id_tenant} não "varre todos os tenants" — o RLS {@code FORCE} devolve
      * <b>zero linhas de qualquer tenant</b>, em silêncio, sem erro. Era exatamente o que

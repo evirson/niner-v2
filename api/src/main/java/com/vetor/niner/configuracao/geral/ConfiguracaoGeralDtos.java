@@ -2,6 +2,7 @@ package com.vetor.niner.configuracao.geral;
 
 import jakarta.validation.constraints.DecimalMax;
 import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -28,6 +29,8 @@ public final class ConfiguracaoGeralDtos {
             @NotNull Boolean cfgUsaCorGrade,
             @NotNull Boolean cfgPermiteQtdDecimal,
             @NotNull Boolean cfgPermiteEstoqueNegativo,
+            /** Dias somados a hoje para SUGERIR a validade do orcamento (V058). */
+            @NotNull @Min(1) @Max(365) Integer cfgDiasValidadeOrcamento,
             @NotNull Boolean cfgExigeNumeroVendaDevolucao,
             @NotNull Boolean cfgRateiaFreteEntrada,
             @NotNull Boolean cfgReajustaPrecoEntrada,
@@ -45,6 +48,7 @@ public final class ConfiguracaoGeralDtos {
             boolean cfgUsaCorGrade,
             boolean cfgPermiteQtdDecimal,
             boolean cfgPermiteEstoqueNegativo,
+            int cfgDiasValidadeOrcamento,
             boolean cfgExigeNumeroVendaDevolucao,
             boolean cfgRateiaFreteEntrada,
             boolean cfgReajustaPrecoEntrada,

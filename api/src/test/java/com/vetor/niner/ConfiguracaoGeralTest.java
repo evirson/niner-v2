@@ -80,7 +80,7 @@ class ConfiguracaoGeralTest {
         String corpo = """
                 {"percentualDescontoVenda":15.5,"jurosCrediarioDias":5,"jurosCrediario":2.5,
                  "multaCrediarioDias":10,"multaCrediario":3.0,"cfgUsaCorGrade":true,
-                 "cfgPermiteQtdDecimal":false,"cfgPermiteEstoqueNegativo":true,"cfgExigeNumeroVendaDevolucao":true,
+                 "cfgPermiteQtdDecimal":false,"cfgPermiteEstoqueNegativo":true,"cfgDiasValidadeOrcamento":15,"cfgExigeNumeroVendaDevolucao":true,
                  "cfgRateiaFreteEntrada":true,"cfgReajustaPrecoEntrada":true,
                  "cfgConsisteValorContasPagar":false,
                  "idPlanoContasCompraMercadoria":"3.03.001","cfgEmiteFiscalAposVenda":false}
@@ -157,7 +157,7 @@ class ConfiguracaoGeralTest {
 
         String corpo = """
                 {"percentualDescontoVenda":10,"jurosCrediarioDias":0,"jurosCrediario":0,
-                 "multaCrediarioDias":0,"multaCrediario":0,"cfgUsaCorGrade":true,"cfgPermiteQtdDecimal":true,"cfgPermiteEstoqueNegativo":false,
+                 "multaCrediarioDias":0,"multaCrediario":0,"cfgUsaCorGrade":true,"cfgPermiteQtdDecimal":true,"cfgPermiteEstoqueNegativo":false,"cfgDiasValidadeOrcamento":15,
                  "cfgExigeNumeroVendaDevolucao":false,"cfgRateiaFreteEntrada":false,"cfgReajustaPrecoEntrada":false,"cfgConsisteValorContasPagar":false,
                  "idPlanoContasCompraMercadoria":"3.03.001","cfgEmiteFiscalAposVenda":true}
                 """;
@@ -172,7 +172,7 @@ class ConfiguracaoGeralTest {
 
         String corpo = """
                 {"percentualDescontoVenda":150,"jurosCrediarioDias":0,"jurosCrediario":0,
-                 "multaCrediarioDias":0,"multaCrediario":0,"cfgUsaCorGrade":true,"cfgPermiteQtdDecimal":true,"cfgPermiteEstoqueNegativo":false,
+                 "multaCrediarioDias":0,"multaCrediario":0,"cfgUsaCorGrade":true,"cfgPermiteQtdDecimal":true,"cfgPermiteEstoqueNegativo":false,"cfgDiasValidadeOrcamento":15,
                  "cfgExigeNumeroVendaDevolucao":false,"cfgRateiaFreteEntrada":false,"cfgReajustaPrecoEntrada":false,"cfgConsisteValorContasPagar":false,
                  "idPlanoContasCompraMercadoria":"3.03.001","cfgEmiteFiscalAposVenda":true}
                 """;
@@ -187,7 +187,7 @@ class ConfiguracaoGeralTest {
 
         String corpo = """
                 {"percentualDescontoVenda":10,"jurosCrediarioDias":-1,"jurosCrediario":0,
-                 "multaCrediarioDias":0,"multaCrediario":0,"cfgUsaCorGrade":true,"cfgPermiteQtdDecimal":true,"cfgPermiteEstoqueNegativo":false,
+                 "multaCrediarioDias":0,"multaCrediario":0,"cfgUsaCorGrade":true,"cfgPermiteQtdDecimal":true,"cfgPermiteEstoqueNegativo":false,"cfgDiasValidadeOrcamento":15,
                  "cfgExigeNumeroVendaDevolucao":false,"cfgRateiaFreteEntrada":false,"cfgReajustaPrecoEntrada":false,"cfgConsisteValorContasPagar":false,
                  "idPlanoContasCompraMercadoria":"3.03.001","cfgEmiteFiscalAposVenda":true}
                 """;
@@ -206,7 +206,7 @@ class ConfiguracaoGeralTest {
                         .content("""
                                 {"percentualDescontoVenda":20,"jurosCrediarioDias":0,"jurosCrediario":0,
                                  "multaCrediarioDias":0,"multaCrediario":0,"cfgUsaCorGrade":true,
-                                 "cfgPermiteQtdDecimal":true,"cfgPermiteEstoqueNegativo":true,"cfgExigeNumeroVendaDevolucao":false,
+                                 "cfgPermiteQtdDecimal":true,"cfgPermiteEstoqueNegativo":true,"cfgDiasValidadeOrcamento":15,"cfgExigeNumeroVendaDevolucao":false,
                                  "cfgRateiaFreteEntrada":false,"cfgReajustaPrecoEntrada":false,"cfgConsisteValorContasPagar":false,
                  "idPlanoContasCompraMercadoria":"3.03.001","cfgEmiteFiscalAposVenda":true}
                                 """))

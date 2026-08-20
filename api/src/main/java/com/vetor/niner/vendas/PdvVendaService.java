@@ -1,6 +1,9 @@
 package com.vetor.niner.vendas;
 
 import com.vetor.niner.comum.web.ConflitoDadosException;
+import com.vetor.niner.vendas.orcamento.OrcamentoDtos.ItemOrcamentoResponse;
+import com.vetor.niner.vendas.orcamento.OrcamentoDtos.OrcamentoResponse;
+import com.vetor.niner.vendas.orcamento.OrcamentoService;
 import com.vetor.niner.configuracao.geral.ConfiguracaoGeralService;
 import com.vetor.niner.financeiro.TipoCarteiraDtos.CategoriaCarteira;
 import com.vetor.niner.financeiro.caixa.CaixaService;
@@ -29,6 +32,7 @@ import java.math.RoundingMode;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Efetiva a venda do PDV (F5, docs/telas/pdv.md) — grava tudo numa única transação: {@code
@@ -86,13 +90,16 @@ public class PdvVendaService {
     private final ConfiguracaoGeralService configuracaoGeralService;
     private final CaixaService caixaService;
     private final LimiteVendasService limiteVendas;
+    private final OrcamentoService orcamentoService;
 
     public PdvVendaService(JdbcClient jdbc, ConfiguracaoGeralService configuracaoGeralService,
-            CaixaService caixaService, LimiteVendasService limiteVendas) {
+            CaixaService caixaService, LimiteVendasService limiteVendas,
+            OrcamentoService orcamentoService) {
         this.jdbc = jdbc;
         this.configuracaoGeralService = configuracaoGeralService;
         this.caixaService = caixaService;
         this.limiteVendas = limiteVendas;
+        this.orcamentoService = orcamentoService;
     }
 
     @Transactional
@@ -102,7 +109,15 @@ public class PdvVendaService {
         long idCaixa = caixaService.idCaixaAbertoObrigatorio(idEmpresa, idUsuario);
         long idCliente = validarCliente(req.idCliente());
         long idFuncionario = validarFuncionario(req.idFuncionario());
-        List<ItemResolvido> itens = resolverItens(req.itens(), idEmpresa);
+
+        // ⚠️ Venda vinda de orçamento usa o preço CONGELADO dele, lido do BANCO — nunca do que a
+        // tela mandou. A regra do PDV ("o servidor resolve o preço, a tela nunca manda") continua
+        // valendo de pé: o que muda é a fonte, que passa a ser o orçamento em vez do cadastro.
+        Map<Long, BigDecimal> precosDoOrcamento = req.idOrcamento() == null
+                ? Map.of()
+                : precosCongeladosDoOrcamento(jwt, req.idOrcamento(), req.itens());
+
+        List<ItemResolvido> itens = resolverItens(req.itens(), idEmpresa, precosDoOrcamento);
 
         BigDecimal valorTotalProdutos = itens.stream()
                 .map(ItemResolvido::valorItem)
@@ -210,7 +225,86 @@ public class PdvVendaService {
             }
         }
 
-        return new VendaEfetivadaResponse(idVenda, valorTotalProdutos, descontoVenda, valorLiquido, pagamentos);
+        // ⚠️ Marcar o orçamento é parte da operação, NÃO efeito colateral — fica DENTRO desta
+        // transação de propósito. A regra "efeito secundário roda depois do commit" nasceu do
+        // signup respondendo 201 com conta inexistente e vale para medição e log. Aqui é vínculo
+        // de negócio: se esta gravação falhar, a venda DEVE falhar junto, senão sobra uma venda
+        // feita e um orçamento aberto que o cliente usa de novo.
+        Boolean orcamentoParcial = null;
+        if (req.idOrcamento() != null) {
+            orcamentoParcial = vendaLevouMenosQueOrcado(req.idOrcamento(), req.itens());
+            orcamentoService.marcarEfetivado(req.idOrcamento(), idVenda, orcamentoParcial);
+        }
+
+        return new VendaEfetivadaResponse(idVenda, valorTotalProdutos, descontoVenda, valorLiquido,
+                pagamentos, req.idOrcamento(), orcamentoParcial);
+    }
+
+    /**
+     * Preços congelados do orçamento, e a validação da regra R2: <b>só dá para diminuir</b>.
+     *
+     * <p>{@code abrirParaVenda} recusa orçamento vencido/cancelado/já vendido com a mensagem
+     * dizendo o motivo, e vence na hora o que passou da validade.
+     *
+     * <p>⚠️ Produto inativado depois da emissão <b>não passa</b> (R7): o orçamento não afrouxa
+     * nenhuma regra do PDV, e {@code resolverItens} já recusaria — aqui a recusa vem antes e com
+     * nome do produto, para o operador não descobrir com o cliente na frente.
+     */
+    private Map<Long, BigDecimal> precosCongeladosDoOrcamento(Jwt jwt, long idOrcamento,
+                                                              List<ItemVendaRequest> itensDaVenda) {
+        OrcamentoResponse orcamento = orcamentoService.abrirParaVenda(jwt, idOrcamento);
+
+        Map<Long, BigDecimal> precos = new java.util.HashMap<>();
+        Map<Long, BigDecimal> qtdOrcada = new java.util.HashMap<>();
+        for (ItemOrcamentoResponse item : orcamento.itens()) {
+            precos.put(item.idVariacao(), item.precoVenda());
+            qtdOrcada.merge(item.idVariacao(), item.qtd(), BigDecimal::add);
+            if (item.produtoInativo()) {
+                throw new ConflitoDadosException(
+                        "O produto \"%s\" foi inativado depois deste orçamento e não pode ser vendido. Retire-o da venda."
+                                .formatted(item.descricao()));
+            }
+        }
+
+        Map<Long, BigDecimal> qtdPedida = new java.util.HashMap<>();
+        for (ItemVendaRequest item : itensDaVenda) {
+            qtdPedida.merge(item.idVariacao(), item.qtd(), BigDecimal::add);
+        }
+        for (Map.Entry<Long, BigDecimal> pedido : qtdPedida.entrySet()) {
+            BigDecimal orcada = qtdOrcada.get(pedido.getKey());
+            if (orcada == null) {
+                throw new ConflitoDadosException(
+                        "A venda tem um produto que não está no orçamento. Só é possível levar o que foi orçado.");
+            }
+            if (pedido.getValue().compareTo(orcada) > 0) {
+                throw new ConflitoDadosException(
+                        "Não é possível levar mais do que foi orçado (%s de %s). O orçamento só permite diminuir."
+                                .formatted(pedido.getValue().toPlainString(), orcada.toPlainString()));
+            }
+        }
+        return precos;
+    }
+
+    /** Parcial = algum item saiu com quantidade menor que a orçada, ou não saiu. Estado FINAL: o
+     *  que sobrou nunca é vendido por este orçamento (decisão do dono do produto). */
+    private boolean vendaLevouMenosQueOrcado(long idOrcamento, List<ItemVendaRequest> itensDaVenda) {
+        Map<Long, BigDecimal> qtdPedida = new java.util.HashMap<>();
+        for (ItemVendaRequest item : itensDaVenda) {
+            qtdPedida.merge(item.idVariacao(), item.qtd(), BigDecimal::add);
+        }
+        return jdbc.sql("""
+                        SELECT id_variacao, SUM(qtd_produto) AS qtd
+                          FROM orcamento_item
+                         WHERE id_tenant = plataforma.tenant_atual() AND id_orcamento = ?
+                         GROUP BY id_variacao
+                        """)
+                .param(idOrcamento)
+                .query((rs, n) -> {
+                    BigDecimal orcada = rs.getBigDecimal("qtd");
+                    BigDecimal levada = qtdPedida.getOrDefault(rs.getLong("id_variacao"), BigDecimal.ZERO);
+                    return levada.compareTo(orcada) < 0;
+                })
+                .list().stream().anyMatch(Boolean::booleanValue);
     }
 
     /**
@@ -724,7 +818,8 @@ public class PdvVendaService {
      * decimal só é aceita se {@code cfg_geral.cfg_permite_qtd_decimal} estiver ligado
      * (Parâmetros do Sistema) — mesma regra em qualquer lugar que grava {@code qtd_produto}.
      */
-    private List<ItemResolvido> resolverItens(List<ItemVendaRequest> itens, long idEmpresa) {
+    private List<ItemResolvido> resolverItens(List<ItemVendaRequest> itens, long idEmpresa,
+                                              Map<Long, BigDecimal> precosDoOrcamento) {
         boolean permiteQtdDecimal = configuracaoGeralService.permiteQtdDecimalProduto();
         List<ItemResolvido> resolvidos = new ArrayList<>();
         for (ItemVendaRequest item : itens) {
@@ -749,7 +844,9 @@ public class PdvVendaService {
                     .optional()
                     .orElseThrow(() -> new IllegalArgumentException("Produto informado não existe ou está inativo."));
 
-            resolvidos.add(new ItemResolvido(item.idVariacao(), item.qtd(), linha.precoVenda(), linha.precoCusto()));
+            // Preço do orçamento tem precedência sobre o do cadastro (V058, R3).
+            BigDecimal preco = precosDoOrcamento.getOrDefault(item.idVariacao(), linha.precoVenda());
+            resolvidos.add(new ItemResolvido(item.idVariacao(), item.qtd(), preco, linha.precoCusto()));
         }
         return resolvidos;
     }

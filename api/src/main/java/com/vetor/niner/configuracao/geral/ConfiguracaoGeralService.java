@@ -27,7 +27,7 @@ public class ConfiguracaoGeralService {
     private static final String SELECT_BASE = """
             SELECT percentual_desconto_venda, juros_crediario_dias, juros_crediario,
                    multa_crediario_dias, multa_crediario, cfg_usa_cor_grade,
-                   cfg_permite_qtd_decimal, cfg_permite_estoque_negativo,
+                   cfg_permite_qtd_decimal, cfg_permite_estoque_negativo, cfg_dias_validade_orcamento,
                    cfg_exige_numero_venda_devolucao,
                    cfg_rateia_frete_entrada, cfg_reajusta_preco_entrada,
                    cfg_consiste_valor_contas_pagar,
@@ -99,6 +99,23 @@ public class ConfiguracaoGeralService {
                 .query(Boolean.class)
                 .optional()
                 .orElse(true);
+    }
+
+    /**
+     * Dias de validade sugeridos para o orçamento (V058) — leitura leve, aberta a qualquer papel.
+     *
+     * <p>⚠️ Endpoint próprio pelo mesmo motivo dos outros: o `GET /api/v1/config-geral` completo é
+     * **ADMIN-only**, e quem emite orçamento é majoritariamente OPERADOR — a chamada voltaria 403
+     * em silêncio e o campo nasceria vazio (bug real de 2026-08-22 no cadastro rápido de
+     * fornecedor). Fallback 15, o mesmo DEFAULT da coluna.
+     */
+    @Transactional(readOnly = true)
+    public int diasValidadeOrcamento() {
+        return jdbc.sql("""
+                        SELECT cfg_dias_validade_orcamento FROM cfg_geral
+                         WHERE id_tenant = plataforma.tenant_atual()
+                        """)
+                .query(Integer.class).optional().orElse(15);
     }
 
     /**
@@ -211,6 +228,7 @@ public class ConfiguracaoGeralService {
                             percentual_desconto_venda = ?, juros_crediario_dias = ?, juros_crediario = ?,
                             multa_crediario_dias = ?, multa_crediario = ?, cfg_usa_cor_grade = ?,
                             cfg_permite_qtd_decimal = ?, cfg_permite_estoque_negativo = ?,
+                            cfg_dias_validade_orcamento = ?,
                             cfg_exige_numero_venda_devolucao = ?,
                             cfg_rateia_frete_entrada = ?, cfg_reajusta_preco_entrada = ?,
                             cfg_consiste_valor_contas_pagar = ?,
@@ -222,6 +240,7 @@ public class ConfiguracaoGeralService {
                         req.percentualDescontoVenda(), req.jurosCrediarioDias(), req.jurosCrediario(),
                         req.multaCrediarioDias(), req.multaCrediario(), req.cfgUsaCorGrade(),
                         req.cfgPermiteQtdDecimal(), req.cfgPermiteEstoqueNegativo(),
+                        req.cfgDiasValidadeOrcamento(),
                         req.cfgExigeNumeroVendaDevolucao(),
                         req.cfgRateiaFreteEntrada(), req.cfgReajustaPrecoEntrada(),
                         req.cfgConsisteValorContasPagar(),
@@ -261,6 +280,7 @@ public class ConfiguracaoGeralService {
                 rs.getBoolean("cfg_usa_cor_grade"),
                 rs.getBoolean("cfg_permite_qtd_decimal"),
                 rs.getBoolean("cfg_permite_estoque_negativo"),
+                rs.getInt("cfg_dias_validade_orcamento"),
                 rs.getBoolean("cfg_exige_numero_venda_devolucao"),
                 rs.getBoolean("cfg_rateia_frete_entrada"),
                 rs.getBoolean("cfg_reajusta_preco_entrada"),
