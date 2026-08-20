@@ -538,6 +538,31 @@ conferido no `information_schema` que toda coluna envolvida é `timestamptz`:
 `cliente.data_nascimento` e `conta_corrente.data_abertura` são `date` e ficaram de fora, exceto
 pelo `age()` do CRM, que passou a comparar contra o hoje local. 794 testes verdes.
 
+### 2026-08-19 — `MODULOFISCAL.md` §17.0: uma seção que responde "o que ainda falta no fiscal?"
+
+Pedido do dono do produto ao encerrar o dia: amanhã ele vai perguntar o que falta no módulo
+fiscal, e a resposta não podia depender de reler 1.800 linhas de estudo. §17.0 nova, logo antes do
+"ponto de partida da codificação", com as pendências em ordem de urgência: **(1)** o **CSRT**, que
+é bloqueante e **não é código** — a Vetor precisa se credenciar como responsável técnico na SEFAZ
+de cada UF; **(2)** o prazo de **04/01/2027** do IBS/CBS, que atinge 100% da base (DF37) e ainda
+carrega uma pergunta em aberto — se o optante do Simples fica dentro do DAS ou pode optar pelo
+regime regular (LC 214/2025), o que mudaria CST, `cClassTrib` e talvez exigisse `gTribRegular`;
+**(3)** as dívidas pequenas (tabelas `tPag`/`tBand` vigentes, ZIP do contador da DF22, papel
+`CONTADOR`, e as notas anteriores a hoje que ficaram sem `documento_fiscal_item` e por isso não
+podem gerar devolução fiscal); **(4)** as operações futuras da §4.2, nenhuma começada, com as
+candidatas naturais ordenadas por custo/valor — cancelamento por substituição (110112), baixa por
+perda (a mais barata: o ajuste já existe), NF-e de venda a contribuinte e Distribuição DF-e.
+
+A tabela de fases (§17) ganhou ✅ em **F0 a F5** — estava sem nenhuma marca, o que fazia o
+documento se contradizer com a própria linha do tempo.
+
+**Correção de fato, achada ao levantar as pendências:** o Anexo B item 16 (chave de acesso × CNPJ
+alfanumérico) seguia marcado 🔴 *"não confirmado"*, mas tinha sido **respondido no B0 em
+2026-08-17**. Conferido de novo no XSD antes de corrigir — o `pattern` de `TChNFe` em
+`tiposBasico_v4.00.xsd` é `[0-9]{6}[0-9A-Z]{12}[0-9]{26}`, ou seja, as 12 posições de raiz+ordem do
+CNPJ aceitam `A-Z` e a chave acomoda CNPJ alfanumérico nativamente. É exatamente o tipo de linha
+que faria alguém repetir uma pesquisa já feita.
+
 ### 2026-08-19 — ⭐ B9 fechado no código: NF-e modelo 55 de devolução emitindo de verdade, DANFE em A4 — falta só o CSRT da Vetor na SEFAZ
 
 Fim do bloco B9 (§10.2), o último pendente do módulo fiscal. A devolução de produtos passa a

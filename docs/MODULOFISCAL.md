@@ -1594,15 +1594,62 @@ manter as tabelas nacionais atualizadas (cClassTrib, CEST, CFOP, IBPT, MVA).
 
 ## 17. Fases de entrega
 
+> **Estado em 2026-08-19: F0 a F5 entregues** (✅ na tabela). O que falta está em **§17.0**, logo
+> abaixo — leia lá antes de responder *"o que falta no fiscal?"*. Uma ressalva na F4: o
+> arquivamento existe e funciona, mas o **ZIP do contador (DF22)** ainda não.
+
 | Fase | Entrega | Como se sabe que acabou |
 |---|---|---|
-| **F0 — Prova de conceito** | Lib escolhida; PoC de assinatura + autorização com IBS/CBS na homologação do PR; leitura manual do MOC-PR, da NT 2025.002 v1.51 e do XSD; resposta às quatro perguntas ⚠️ que o v1 não pode carregar em aberto: **§8.5 (DF32 — IBS/CBS compõem o total?)**, **§10.2 (DF20 — devolução sem consumidor identificado)**, §9.3 (chave × CNPJ alfanumérico) e §6.4 (tabela `tPag` vigente) | Uma NFC-e autorizada em homologação, por script, fora do produto — e as quatro respostas escritas com fonte |
-| **F1 — Fundação** | Migrations V034+; colunas fiscais em `empresa`/`produto`/`cliente`/`tipo_carteira`; tabelas nacionais semeadas; certificado; configuração fiscal; **Conformidade Fiscal**; colunas fiscais na Importação de Dados; `entrada_item_tributo` (DF30) | Tela de certificado funcionando com alerta de vencimento; Conformidade listando pendências reais de um tenant de teste |
-| **F2 — Motor tributário** | Cálculo dos 3 regimes + Simples/MEI + IBS/CBS + FCP + `vTotTrib`; cadastro de perfil fiscal; endpoint de simulação | Suíte de tabela verde; `/simular-tributos` batendo com nota real conferida por contador |
-| **F3 — NFC-e** | Emissão síncrona no PDV, DANFCE térmico, contingência offline, consulta e reprocessamento | Loja piloto vendendo com nota autorizada por um dia inteiro, **incluindo queda de internet** |
-| **F4 — Cancelamento e guarda** | Evento 110111 integrado ao Cancelamento de Venda; inutilização; arquivamento; download em ZIP (saídas + entradas) | Contador da loja piloto baixa o mês fechado e aceita |
-| **F5 — NF-e de devolução** | Nota de **entrada** (`tpNF=0`, `finNFe=4`) referenciando a NFC-e original, espelhando a tributação dela; DANFE A4; integração com a tela de Devolução de Produtos | Cliente devolve depois dos 30 minutos e a nota de entrada sai autorizada, com o estoque batendo |
+| **F0 — Prova de conceito** ✅ | Lib escolhida; PoC de assinatura + autorização com IBS/CBS na homologação do PR; leitura manual do MOC-PR, da NT 2025.002 v1.51 e do XSD; resposta às quatro perguntas ⚠️ que o v1 não pode carregar em aberto: **§8.5 (DF32 — IBS/CBS compõem o total?)**, **§10.2 (DF20 — devolução sem consumidor identificado)**, §9.3 (chave × CNPJ alfanumérico) e §6.4 (tabela `tPag` vigente) | Uma NFC-e autorizada em homologação, por script, fora do produto — e as quatro respostas escritas com fonte |
+| **F1 — Fundação** ✅ | Migrations V034+; colunas fiscais em `empresa`/`produto`/`cliente`/`tipo_carteira`; tabelas nacionais semeadas; certificado; configuração fiscal; **Conformidade Fiscal**; colunas fiscais na Importação de Dados; `entrada_item_tributo` (DF30) | Tela de certificado funcionando com alerta de vencimento; Conformidade listando pendências reais de um tenant de teste |
+| **F2 — Motor tributário** ✅ | Cálculo dos 3 regimes + Simples/MEI + IBS/CBS + FCP + `vTotTrib`; cadastro de perfil fiscal; endpoint de simulação | Suíte de tabela verde; `/simular-tributos` batendo com nota real conferida por contador |
+| **F3 — NFC-e** ✅ | Emissão síncrona no PDV, DANFCE térmico, contingência offline, consulta e reprocessamento | Loja piloto vendendo com nota autorizada por um dia inteiro, **incluindo queda de internet** |
+| **F4 — Cancelamento e guarda** ✅ | Evento 110111 integrado ao Cancelamento de Venda; inutilização; arquivamento; download em ZIP (saídas + entradas) | Contador da loja piloto baixa o mês fechado e aceita |
+| **F5 — NF-e de devolução** ✅ | Nota de **entrada** (`tpNF=0`, `finNFe=4`) referenciando a NFC-e original, espelhando a tributação dela; DANFE A4; integração com a tela de Devolução de Produtos | Cliente devolve depois dos 30 minutos e a nota de entrada sai autorizada, com o estoque batendo |
 | **F6+ — Implementações futuras** | Tudo da §4.2, na ordem que o negócio pedir. Candidatas naturais a virem primeiro: **cancelamento por substituição** (o "fechou no cartão errado" do balcão), **baixa por perda** (a mais barata: o ajuste já existe) e **NF-e de venda a contribuinte** (a que o `NAO_EMITIDO` vai medir) | Cada uma com homologação própria |
+
+### 17.0 ⏭️ O que falta no módulo fiscal (estado em 2026-08-19 — F0 a F5 entregues)
+
+Resposta curta para *"o que ainda temos para fazer no fiscal?"*. **F0–F5 estão entregues**
+(B0–B9 no roteiro de blocos): o produto emite NFC-e de verdade, cancela, inutiliza, entra e sai de
+contingência sozinho, reprocessa documento preso, arquiva o XML e emite a NF-e 55 de devolução com
+DANFE A4.
+
+**1. Bloqueante, e não é código — o CSRT.**
+A NF-e modelo 55 exige `idCSRT`/`hashCSRT` no `infRespTec` (§9.9). A **Vetor precisa se cadastrar
+como responsável técnico no portal da SEFAZ de cada UF** e obter o código; hoje a resposta é
+`cStat 974` ("CNPJ do responsavel tecnico diverge do cadastrado") e **nenhuma NF-e 55 autoriza**.
+A NFC-e — a operação do dia a dia da loja — **não** depende disso. É a única pendência que impede
+uma funcionalidade já pronta de funcionar.
+
+**2. Prazo com data marcada — IBS/CBS em 04/01/2027.**
+Obrigatório para CRT 1, 2 e 4, que é **100% da base** (DF37). O motor já calcula IBS/CBS e o XML já
+os carrega, mas continua aberta a pergunta que a DF37 promoveu a crítica: o optante do Simples fica
+**dentro do DAS** ou pode optar pelo **regime regular** (LC 214/2025)? Isso muda CST, `cClassTrib`
+e talvez exija `gTribRegular` — e, se exigir, vira campo em `fiscal_config_empresa`. **Confirmar em
+fonte primária antes de implementar.** Não é urgente hoje, mas tem data.
+
+**3. Dívidas pequenas, todas de baixo risco:**
+
+| O que | Onde | Observação |
+|---|---|---|
+| Conferir as tabelas `tPag`/`tBand` vigentes | Anexo B, item 18 | Os códigos acima de 16 mudaram na NT 2023.004; hoje o produto usa os que autorizaram na prática |
+| ZIP do mês para o contador (DF22) | §11 | O arquivamento existe e funciona; falta empacotar e servir por URL assinada |
+| Papel `CONTADOR` (leitura fiscal) | §4.2 | Terceiro papel em `identidade` — mudança estrutural, hoje o lojista baixa e repassa |
+| Notas anteriores a 2026-08-19 não têm itens | `documento_fiscal_item` | O gap foi corrigido na origem, mas o que já estava autorizado ficou sem itens — **essas notas não podem gerar devolução fiscal**, e o serviço recusa explicitamente |
+
+**4. Operações futuras (§4.2) — catalogadas, nenhuma começada.** As candidatas naturais a virem
+primeiro, por custo/valor:
+
+- **Cancelamento por substituição (110112)** — é o caminho do *"fechou no cartão errado"* do
+  balcão, o mais provável de ser pedido cedo.
+- **Baixa por perda/quebra (CFOP 5.927)** — a mais barata da lista: a Rotina de Contagem de Estoque
+  já gera o ajuste, falta o gancho e o CFOP. E diferença de inventário é justamente o que o fisco
+  cruza.
+- **NF-e 55 de venda a contribuinte** — hoje o PDV **recusa** emitir para cliente com
+  `indIEDest = 1` (a NFC-e não serve). O contador de `NAO_EMITIDO` é quem mede se isso dói.
+- **Distribuição DF-e** — o maior valor/esforço do módulo inteiro: mataria o upload manual de XML
+  na Entrada de Produtos.
 
 ### 17.1 Ponto de partida da codificação (estado em 2026-08-16)
 
@@ -1727,7 +1774,7 @@ Legenda: ✅ fonte oficial · ◐ fontes secundárias convergentes · ✳ corrig
 | 13 🆕 | **`infIntermed` em venda por marketplace** | ◐ Obrigatório desde a NT 2020.006 ⚠️ |
 | 14 🆕 | **DIFAL e Simples Nacional** | ◐ Empresa do Simples não recolhe DIFAL como remetente (ADI 5464/STF) |
 | 15 🆕 | **`cEAN` de produto sem GTIN** | ◐ Literal `SEM GTIN`; GTIN é validado contra base oficial e código inventado é rejeitado |
-| 16 🆕 | **Chave de acesso × CNPJ alfanumérico** | 🔴 **Não confirmado.** A chave é numérica de 44 posições e embute o CNPJ do emitente. Item da F0 |
+| 16 🆕 | **Chave de acesso × CNPJ alfanumérico** | ✅ ✳ **Respondida no B0 (2026-08-17), por fonte primária — esta linha ficou desatualizada até 2026-08-19.** O `pattern` de `TChNFe` em `tiposBasico_v4.00.xsd` é `[0-9]{6}[0-9A-Z]{12}[0-9]{26}`: as **12 posições de raiz+ordem do CNPJ aceitam `A-Z`**, o resto é numérico. A chave acomoda CNPJ alfanumérico nativamente, sem desenho especial. Ver [[project_cnpj_alfanumerico]] |
 | 17 | **IBS/CBS compõem o total da nota?** | ✅ **Não** — confirmado no XSD (campo `vNFTot` separado do `vNF`), 2026-08-17 |
 | 18 🆕 | Tabelas `tPag` / `tBand` vigentes | 🔴 Conferir a versão da NT 2023.004 no MOC — os códigos acima de 16 mudaram recentemente |
 | 19 🆕 | **Ajuste SINIEF 8/2026 — referência da devolução: nota, item, ou os dois?** | ✅ ✳ **Um OU outro, nunca os dois.** A leitura literal do Ajuste sugeria `ide/NFref/refNFe` **e** `det/DFeReferenciado`, e **o XSD oficial aceita os dois juntos** — mas a SEFAZ-PR recusa na transmissão: `cStat 1010`, *"NF-e com referenciamento de documento a nivel de nota e a nivel de item"* (2026-08-19, homologação). Adotado o de **item**, que carrega a mesma chave mais o `nItem` e é o que torna a devolução parcial rastreável |
