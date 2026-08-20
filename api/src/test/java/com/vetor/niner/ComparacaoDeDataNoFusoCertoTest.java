@@ -62,7 +62,12 @@ class ComparacaoDeDataNoFusoCertoTest {
             // `rs.getObject(...)` por todo lado. Ignorar a caixa aqui reprovava 11 linhas legítimas.
             Pattern.compile("\\b(localtime(stamp)?|LOCALTIME(STAMP)?)\\b"),
             Pattern.compile("\\bage\\s*\\(", Pattern.CASE_INSENSITIVE),
-            Pattern.compile("extract\\s*\\(\\s*\\w+\\s+from\\s+now\\s*\\(\\s*\\)", Pattern.CASE_INSENSITIVE));
+            Pattern.compile("extract\\s*\\(\\s*\\w+\\s+from\\s+now\\s*\\(\\s*\\)", Pattern.CASE_INSENSITIVE),
+            // Lado Java da mesma armadilha: sem argumento, estes usam o fuso da JVM — que só está
+            // definido em PRODUÇÃO (`TZ` no docker-compose.prod.yml). Em dev roda em UTC, então o
+            // bug não reproduz na máquina de quem escreveu. `OffsetDateTime.now()` fica de fora de
+            // propósito: representa um instante, e comparar instante independe de fuso.
+            Pattern.compile("\\bLocal(Date|DateTime|Time)\\.now\\s*\\(\\s*\\)"));
 
     /** A conversão que redime qualquer uma das acima. */
     private static final Pattern CONVERTIDA =
@@ -135,6 +140,10 @@ class ComparacaoDeDataNoFusoCertoTest {
         assertThat(reprovaria("public record HorarioAcessoRequest(int diaSemana, LocalTime horaInicio) {")).isFalse();
         assertThat(reprovaria("EXTRACT(ISODOW FROM now())")).isTrue();
         assertThat(reprovaria("date_trunc('month', now())::date")).isTrue();
+        assertThat(reprovaria("LocalDate hoje = LocalDate.now();")).isTrue();
+        assertThat(reprovaria("LocalDate.now(FusoDaUf.PADRAO)")).isFalse();
+        // Instante não depende de fuso: comparar OffsetDateTime.now() com um limite está certo.
+        assertThat(reprovaria("if (OffsetDateTime.now().isAfter(limite)) {")).isFalse();
 
         assertThat(reprovaria(
                 "AND (data_venda AT TIME ZONE 'America/Sao_Paulo')::date = "

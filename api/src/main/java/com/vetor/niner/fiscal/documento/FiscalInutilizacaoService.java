@@ -1,5 +1,6 @@
 package com.vetor.niner.fiscal.documento;
 
+import com.vetor.niner.comum.tempo.FusoDaUf;
 import com.vetor.niner.fiscal.certificado.FiscalCertificadoService;
 import com.vetor.niner.fiscal.certificado.FiscalCertificadoService.CertificadoParaAssinatura;
 import com.vetor.niner.fiscal.documento.FiscalInutilizacaoRepositorio.ContextoEmpresa;
@@ -38,7 +39,6 @@ import java.util.List;
 @Service
 public class FiscalInutilizacaoService {
 
-    private static final ZoneId FUSO = ZoneId.of("America/Sao_Paulo");
 
     private final FiscalInutilizacaoRepositorio repositorio;
     private final MontadorInutilizacaoNfe montador;
@@ -114,7 +114,10 @@ public class FiscalInutilizacaoService {
         CertificadoParaAssinatura certificado = certificados.carregarAtivoParaAssinatura(idEmpresa);
         KeyStore keystore = abrir(certificado);
 
-        int ano = OffsetDateTime.now(FUSO).getYear() % 100;
+        // ⚠️ Ano no fuso da UF do emitente. Com America/Sao_Paulo fixo, no Acre (UTC−5) um pedido
+        // feito em 31/12 às 22:00 local saía com o <ano> do ano SEGUINTE — faixa de numeração de
+        // um ano que ainda não existe.
+        int ano = OffsetDateTime.now(FusoDaUf.de(contexto.uf())).getYear() % 100;
         XmlInutilizacaoMontado montado = montador.montar(new PedidoInutilizacao(
                 contexto.ambiente(), contexto.uf(), contexto.cnpj(), ano, modelo, serie,
                 numeroInicial, numeroFinal, justificativa));

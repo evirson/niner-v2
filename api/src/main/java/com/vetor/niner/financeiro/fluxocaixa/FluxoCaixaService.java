@@ -1,5 +1,6 @@
 package com.vetor.niner.financeiro.fluxocaixa;
 
+import com.vetor.niner.comum.tempo.FusoDaLoja;
 import com.vetor.niner.financeiro.fluxocaixa.FluxoCaixaDtos.Agrupamento;
 import com.vetor.niner.financeiro.fluxocaixa.FluxoCaixaDtos.Atividade;
 import com.vetor.niner.financeiro.fluxocaixa.FluxoCaixaDtos.FluxoProjecaoResponse;
@@ -52,9 +53,11 @@ public class FluxoCaixaService {
     private static final List<String> ORDEM_ATIVIDADES = List.of("OPERACIONAL", "INVESTIMENTO", "FINANCIAMENTO");
 
     private final JdbcClient jdbc;
+    private final FusoDaLoja fusoDaLoja;
 
-    public FluxoCaixaService(JdbcClient jdbc) {
+    public FluxoCaixaService(JdbcClient jdbc, FusoDaLoja fusoDaLoja) {
         this.jdbc = jdbc;
+        this.fusoDaLoja = fusoDaLoja;
     }
 
     // ------------------------------------------------------------------ realizado
@@ -93,10 +96,12 @@ public class FluxoCaixaService {
         }
 
         BigDecimal saldoFinal = saldoInicial.add(entradas).subtract(saidas);
-        BigDecimal saldoRealAtual = saldoAte(LocalDate.now(), empresas, origemEfetiva);
+        // "Hoje" é o da LOJA do usuário, não o da JVM (que só tem fuso definido em produção).
+        LocalDate hoje = fusoDaLoja.hoje(jwt);
+        BigDecimal saldoRealAtual = saldoAte(hoje, empresas, origemEfetiva);
         // Conciliação só faz sentido quando o período alcança hoje — comparar o saldo final de um
         // período antigo com o saldo de hoje acusaria uma "diferença" que é só o tempo passando.
-        BigDecimal diferenca = dataFinal.isBefore(LocalDate.now())
+        BigDecimal diferenca = dataFinal.isBefore(hoje)
                 ? null
                 : arredondar(saldoFinal.subtract(saldoRealAtual));
 
@@ -228,7 +233,7 @@ public class FluxoCaixaService {
         Agrupamento agrupamentoEfetivo = agrupamento == null ? Agrupamento.DIA : agrupamento;
         List<Long> empresas = resolverEmpresas(jwt, idsEmpresa);
 
-        BigDecimal saldoAtual = saldoAte(LocalDate.now(), empresas, OrigemDinheiro.TODAS);
+        BigDecimal saldoAtual = saldoAte(fusoDaLoja.hoje(jwt), empresas, OrigemDinheiro.TODAS);
 
         // Vencidos entram no primeiro balde (data inicial), não na data original — senão o saldo
         // projetado mentiria sobre o presente, mostrando dinheiro que já era pra ter entrado.

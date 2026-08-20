@@ -523,6 +523,68 @@ Movimentação de Conta Corrente) que ainda não tinham migrado pro `SeletorPlan
 
 ## Linha do tempo
 
+### 2026-08-20 — P3: o `dhEmi` sai no fuso da UF, e `empresa.estado` só aceita UF que existe
+
+Fecha o fuso horário. O `dhEmi` do XML e todo "hoje" do plano do lojista saíam de
+`America/Sao_Paulo` **fixo** — correto para 21 UFs, errado em 1 h para AM/MT/MS/RO/RR e em 2 h
+para o AC.
+
+**Por que isso nunca apareceu como rejeição da SEFAZ.** A conversão usa `atZoneSameInstant`, que
+**preserva o instante**; o `dhEmi` sempre descreveu o momento certo, só com o offset de outro
+estado. As validações da SEFAZ comparam instante (228 "emissão muito atrasada", 703 "posterior ao
+recebimento"), então nada era recusado. O defeito era silencioso — o pior tipo:
+
+| Onde | O que sairia numa loja de Manaus |
+|---|---|
+| `dhEmi` | venda das 14:00 declarada como **15:00−03:00** (16:00 no Acre) |
+| cupom × XML | DANFCE formata no fuso do navegador → cupom **14:00**, consulta da SEFAZ **15:00** |
+| virada de mês | venda de 31/08 às 23:30 → `dhEmi` de **01/09**, chave com `AAMM = 2609`, XML arquivado na pasta **2026/09** |
+| inutilização | no AC, 31/12 às 22:00 pedia faixa do **ano seguinte** |
+
+Todos passam agora por `FusoDaUf.de(uf do emitente)`: `MontadorXmlNfce`, `MontadorXmlNfeDevolucao`,
+`MontadorEventoCancelamento`, `FiscalInutilizacaoService` e `ArquivamentoXmlService` (este ganhou
+`uf` em três records/queries — o mês da pasta tem de bater com o mês do `dhEmi`, senão o contador
+procura no lugar errado). No plano do lojista, `FluxoCaixaService` e `RecebimentoCrediarioService`
+passaram a usar `FusoDaLoja.hoje(jwt)` — o dia da **loja onde o usuário está logado**, que é a
+referência certa num relatório que soma várias empresas.
+
+#### `empresa.estado` deixou de ser texto livre (decisão do dono do produto)
+
+A coluna nasceu anulável, sem CHECK e sem validação nenhuma (V014). Isso passou a ser perigoso
+quando a UF virou a fonte do **fuso** e já era a fonte de **para qual SEFAZ a nota vai**: sigla
+errada não falha no cadastro, falha na primeira venda do cliente.
+
+- **Banco (V049):** CHECK com as 27 siglas. ⛔ Nasce **`NOT VALID`** de propósito — uma constraint
+  que varre linha existente derrubaria o deploy inteiro se **uma** empresa tivesse 'Paraná' ou
+  'XX' gravado, que é exatamente como a publicação parou em 2026-08-19. A migration normaliza
+  caixa/espaço, tenta `VALIDATE` e, se não der, **avisa com a query de diagnóstico** em vez de
+  abortar. Nada é apagado.
+- **API:** `EmpresaService.validarUf` recusa sigla fora das 27, com mensagem que diz o que fazer.
+- **Front:** o campo virou `<select>` das 27 (era `<input maxLength={2}>`), como já era em Cliente
+  e Fornecedor.
+- ⚠️ **NULL continua valendo**: o signup cria a empresa **sem** UF (o funil não pergunta) e o
+  lojista preenche depois. `NOT NULL` aqui quebraria o cadastro de conta nova. Quem **exige** a UF
+  é o caminho fiscal, que falha explicitamente sem ela.
+
+#### O guarda também pegou o lado Java
+
+`LocalDate.now()` **sem argumento** usa o fuso da JVM — definido só em produção (`TZ` no
+`docker-compose.prod.yml`), UTC em dev. Ou seja: o bug não reproduz na máquina de quem escreve.
+`ComparacaoDeDataNoFusoCertoTest` passou a reprovar `LocalDate/LocalDateTime/LocalTime.now()` sem
+fuso; `OffsetDateTime.now()` fica de fora de propósito, porque representa um **instante** e
+comparar instante não depende de fuso.
+
+**Novo:** `EmpresaUfValidaTest` (5 casos) confere que as **três** listas de UF do projeto concordam
+— o CHECK do banco, `ChaveAcesso.CODIGO_UF` (que monta a chave) e `FusoDaUf` (que decide o fuso) —
+e que todo fuso cai num dos quatro offsets do Brasil, o que pega erro de digitação em identificador
+IANA (`America/Manaos` compilaria e só explodiria no cliente).
+
+**870 testes de backend verdes** (eram 865), `tsc -b` limpo.
+
+**Erros que a construção cometeu e valem registro:** `documento_fiscal` **não tem coluna `uf`** — a
+UF vem de `empresa` por join, como `DocumentoParaCancelar` já fazia; e o regex de `localtime` do
+guarda não pode ser case-insensitive, senão pega o tipo `LocalTime` do Java.
+
 ### 2026-08-20 — Fuso horário: a data que o usuário lê, o mês que a plataforma cobra, e um guarda para não esquecer de novo
 
 Terceira frente do dia, saída de uma pergunta do dono do produto ("o Nainer vai rodar no país

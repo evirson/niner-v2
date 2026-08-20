@@ -1,11 +1,11 @@
 package com.vetor.niner.fiscal.documento;
 
+import com.vetor.niner.comum.tempo.FusoDaUf;
 import com.vetor.niner.fiscal.documento.MontagemEventoDtos.EventoCancelamento;
 import com.vetor.niner.fiscal.documento.MontagemEventoDtos.XmlEventoMontado;
 import org.springframework.stereotype.Component;
 
 import java.time.OffsetDateTime;
-import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.Locale;
 
@@ -27,17 +27,16 @@ public class MontadorEventoCancelamento {
     private static final DateTimeFormatter DH =
             DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ssXXX", Locale.ROOT);
 
-    /** Ver o comentário equivalente em {@link MontadorXmlNfce#FUSO_EMISSAO} — mesmo achado do B7:
-     *  {@code TDateTimeUTC} proíbe o sufixo {@code Z}, e datas vindas do banco chegam em UTC. */
-    private static final ZoneId FUSO_EMISSAO = ZoneId.of("America/Sao_Paulo");
-
     public XmlEventoMontado montar(EventoCancelamento dados) {
         validar(dados);
 
         String justificativa = dados.justificativa().trim();
         String cnpj = apenasAlfanumerico(dados.cnpjAutor());
         int codigoUf = ChaveAcesso.codigoUfDe(dados.uf());
-        OffsetDateTime dataLocal = dados.dataEvento().atZoneSameInstant(FUSO_EMISSAO).toOffsetDateTime();
+        // Fuso da UF do autor do evento (mesmo achado do B7: TDateTimeUTC proíbe o sufixo Z, e data
+        // vinda do banco chega em UTC). Desde 2026-08-20 vem da UF, não de uma constante.
+        OffsetDateTime dataLocal = dados.dataEvento()
+                .atZoneSameInstant(FusoDaUf.de(dados.uf())).toOffsetDateTime();
         // "1" com 2 posições — nSeqEvento sempre 1 no cancelamento (só a CC-e, fora do v1, usa
         // sequência > 1 para correções sucessivas da mesma nota).
         String id = "ID%s%s%02d".formatted(TP_EVENTO_CANCELAMENTO, dados.chaveAcesso(), 1);

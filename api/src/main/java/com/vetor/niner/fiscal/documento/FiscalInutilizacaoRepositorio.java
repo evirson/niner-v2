@@ -174,13 +174,14 @@ public class FiscalInutilizacaoRepositorio {
                 .query((rs, n) -> new InutilizacaoParaArquivar(
                         rs.getInt("modelo"), rs.getInt("serie"), rs.getInt("numero_inicial"),
                         rs.getInt("numero_final"), rs.getString("xml_inutilizacao"),
-                        rs.getObject("criado_em", OffsetDateTime.class), rs.getString("xml_objeto_bucket")))
+                        rs.getObject("criado_em", OffsetDateTime.class), rs.getString("xml_objeto_bucket"),
+                        rs.getString("uf")))
                 .optional();
     }
 
     public record InutilizacaoParaArquivar(int modelo, int serie, int numeroInicial, int numeroFinal,
                                            String xmlInutilizacao, OffsetDateTime criadoEm,
-                                           String xmlObjetoBucketAtual) {
+                                           String xmlObjetoBucketAtual, String uf) {
     }
 
     /** {@code fiscal_inutilizacao} não tem {@code xml_hash} (V035) — só o ponteiro. */

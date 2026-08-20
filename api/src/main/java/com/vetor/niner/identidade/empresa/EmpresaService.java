@@ -176,6 +176,7 @@ public class EmpresaService {
         if (email != null && !FornecedorService.emailValido(email)) {
             throw new IllegalArgumentException("E-mail inválido.");
         }
+        String estado = validarUf(req.estado());
 
         try {
             jdbc.sql("""
@@ -191,7 +192,7 @@ public class EmpresaService {
                             maiusculas(vazioParaNulo(req.inscricaoMunicipal())), req.codigoMunicipioIbge(),
                             vazioParaNulo(req.cnae()), maiusculas(req.endereco()), maiusculas(req.numero()),
                             maiusculas(req.complemento()), maiusculas(req.bairro()), maiusculas(req.cidade()),
-                            maiusculas(vazioParaNulo(req.estado())), vazioParaNulo(req.cep()),
+                            estado, vazioParaNulo(req.cep()),
                             vazioParaNulo(req.telefone()), email, idEmpresa)
                     .update();
         } catch (DuplicateKeyException e) {
@@ -201,6 +202,31 @@ public class EmpresaService {
         }
 
         return buscarPorId(jwt, idEmpresa);
+    }
+
+    /**
+     * A UF da empresa deixou de ser texto livre em 2026-08-20: ela agora decide o <b>fuso da loja</b>
+     * ({@link com.vetor.niner.comum.tempo.FusoDaUf}) e, por tabela, para qual SEFAZ o documento é
+     * transmitido ({@code cfg_uf_autorizador}). Sigla inválida vira hora errada no cupom e nota
+     * mandada para o autorizador errado — dois defeitos que só aparecem depois, no cliente. O banco
+     * recusa também, pelo CHECK da V049; esta validação é para o usuário receber a mensagem certa.
+     *
+     * <p><b>Vazio continua valendo</b>: o signup cria a empresa <b>sem</b> UF (o funil não pergunta)
+     * e o lojista preenche depois em Dados da Empresa. Quem <b>exige</b> a UF é o caminho fiscal,
+     * que falha explicitamente sem ela — emitir nota com UF chutada seria pior.
+     */
+    private static String validarUf(String uf) {
+        String normalizada = maiusculas(vazioParaNulo(uf));
+        if (normalizada == null) {
+            return null;
+        }
+        try {
+            com.vetor.niner.comum.tempo.FusoDaUf.de(normalizada);
+        } catch (IllegalArgumentException e) {
+            throw new IllegalArgumentException(
+                    "UF inválida: \"" + uf + "\". Informe uma das 27 siglas (ex.: PR, SP, AM).");
+        }
+        return normalizada;
     }
 
     private static String vazioParaNulo(String valor) {

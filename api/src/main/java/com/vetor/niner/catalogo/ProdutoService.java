@@ -1,5 +1,6 @@
 package com.vetor.niner.catalogo;
 
+import com.vetor.niner.comum.tempo.FusoDaUf;
 import com.vetor.niner.catalogo.ProdutoDtos.CategoriaSelecionada;
 import com.vetor.niner.catalogo.ProdutoDtos.ExclusaoProdutoResponse;
 import com.vetor.niner.catalogo.ProdutoDtos.PaginaProdutos;
@@ -322,7 +323,8 @@ public class ProdutoService {
             throw new IllegalArgumentException(
                     "Para a oferta ser válida, informe início, final e preço de oferta juntos.");
         }
-        if (req.dataInicioOferta().toLocalDate().isBefore(LocalDate.now())) {
+        // Ver ClienteService: fuso explícito em vez do da JVM (indefinido em dev).
+        if (req.dataInicioOferta().toLocalDate().isBefore(LocalDate.now(FusoDaUf.PADRAO))) {
             throw new IllegalArgumentException("Data de início da oferta não pode ser no passado.");
         }
         if (req.dataFinalOferta().isBefore(req.dataInicioOferta())) {

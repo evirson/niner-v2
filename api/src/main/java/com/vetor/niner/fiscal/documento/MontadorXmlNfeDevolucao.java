@@ -1,5 +1,6 @@
 package com.vetor.niner.fiscal.documento;
 
+import com.vetor.niner.comum.tempo.FusoDaUf;
 import com.vetor.niner.fiscal.configuracao.CsrtService;
 import com.vetor.niner.fiscal.documento.MontagemDevolucaoDtos.DestinatarioDevolucao;
 import com.vetor.niner.fiscal.documento.MontagemDevolucaoDtos.DevolucaoParaMontar;
@@ -15,7 +16,6 @@ import org.springframework.stereotype.Component;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.OffsetDateTime;
-import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.Locale;
 import java.util.Set;
@@ -78,10 +78,6 @@ public class MontadorXmlNfeDevolucao {
     private static final DateTimeFormatter DH =
             DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ssXXX", Locale.ROOT);
 
-    /** Ver o comentário equivalente em {@code MontadorXmlNfce}: {@code TDateTimeUTC} proíbe o
-     *  sufixo {@code Z}, e data vinda do banco chega em UTC. */
-    private static final ZoneId FUSO_EMISSAO = ZoneId.of("America/Sao_Paulo");
-
     private static final Set<String> CSOSN_GRUPO_102 = Set.of("102", "103", "300", "400");
     private static final Set<String> CST_GRUPO_40 = Set.of("40", "41", "50");
     private static final Set<String> CST_CONTRIB_NT = Set.of("04", "05", "06", "07", "08", "09");
@@ -90,7 +86,10 @@ public class MontadorXmlNfeDevolucao {
     public XmlMontado montar(DevolucaoParaMontar dev) {
         validar(dev);
 
-        OffsetDateTime emissaoLocal = dev.emissao().atZoneSameInstant(FUSO_EMISSAO).toOffsetDateTime();
+        // Fuso da UF do emitente — ver o comentário equivalente em MontadorXmlNfce: TDateTimeUTC
+        // proíbe o sufixo Z, data vinda do banco chega em UTC, e a UF é quem diz qual é o offset.
+        OffsetDateTime emissaoLocal = dev.emissao()
+                .atZoneSameInstant(FusoDaUf.de(dev.emitente().uf())).toOffsetDateTime();
         String cnpjEmitente = apenasAlfanumerico(dev.emitente().cnpj());
         String chave = ChaveAcesso.montar(codigoUfDe(dev.emitente().uf()), emissaoLocal, cnpjEmitente,
                 MODELO_NFE, dev.serie(), dev.numero(), TP_EMIS_NORMAL, dev.codigoNumerico());

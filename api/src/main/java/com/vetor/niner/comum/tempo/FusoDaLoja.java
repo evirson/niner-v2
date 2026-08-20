@@ -1,9 +1,11 @@
 package com.vetor.niner.comum.tempo;
 
 import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
@@ -49,6 +51,25 @@ public class FusoDaLoja {
                 .query(String.class)
                 .optional()
                 .orElse(null));
+    }
+
+    /**
+     * Fuso da empresa em que o usuário está logado (claim {@code eid} do JWT) — é o "hoje" que ele
+     * enxerga na tela. Num relatório que soma várias empresas, esta é a referência certa: o dia é o
+     * da loja onde a pessoa está operando, não o de cada filial (que poderiam estar em UFs
+     * diferentes e não teriam um "hoje" comum).
+     */
+    @Transactional(readOnly = true)
+    public ZoneId daSessao(Jwt jwt) {
+        Object eid = jwt.getClaim("eid");
+        return eid == null ? FusoDaUf.PADRAO : da(((Number) eid).longValue());
+    }
+
+    /** "Hoje" no fuso da loja do usuário — nunca {@code LocalDate.now()}, que usa o fuso da JVM
+     *  (definido só em produção, pelo {@code TZ} do compose: o bug não reproduz em dev). */
+    @Transactional(readOnly = true)
+    public LocalDate hoje(Jwt jwt) {
+        return LocalDate.now(daSessao(jwt));
     }
 
     /** Formata no fuso da empresa. {@code null} vira string vazia, não "null" na tela do usuário. */

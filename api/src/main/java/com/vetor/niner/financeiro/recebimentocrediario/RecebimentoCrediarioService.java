@@ -1,5 +1,6 @@
 package com.vetor.niner.financeiro.recebimentocrediario;
 
+import com.vetor.niner.comum.tempo.FusoDaLoja;
 import com.vetor.niner.cadastros.cliente.Documentos;
 import com.vetor.niner.comum.web.ConflitoDadosException;
 import com.vetor.niner.financeiro.TipoCarteiraDtos.CategoriaCarteira;
@@ -52,11 +53,13 @@ public class RecebimentoCrediarioService {
             " permite_receber_crediario = true AND categoria_carteira IN ('AVISTA','CARTAO_DEBITO','CARTAO_CREDITO')";
 
     private final JdbcClient jdbc;
+    private final FusoDaLoja fusoDaLoja;
     private final CaixaService caixaService;
 
-    public RecebimentoCrediarioService(JdbcClient jdbc, CaixaService caixaService) {
+    public RecebimentoCrediarioService(JdbcClient jdbc, CaixaService caixaService, FusoDaLoja fusoDaLoja) {
         this.jdbc = jdbc;
         this.caixaService = caixaService;
+        this.fusoDaLoja = fusoDaLoja;
     }
 
     @Transactional(readOnly = true)
@@ -148,7 +151,7 @@ public class RecebimentoCrediarioService {
         List<Long> idsUnicos = req.idsContaReceber().stream().distinct().toList();
         List<ParcelaResolvida> parcelas = new ArrayList<>();
         for (long idContaReceber : idsUnicos) {
-            parcelas.add(resolverParcelaParaRecebimento(idContaReceber, req.idCliente(), cfg));
+            parcelas.add(resolverParcelaParaRecebimento(idContaReceber, req.idCliente(), cfg, fusoDaLoja.hoje(jwt)));
         }
         parcelas.sort(Comparator.comparing(ParcelaResolvida::dataVencimento).thenComparing(ParcelaResolvida::numeroParcela));
 
@@ -454,7 +457,10 @@ public class RecebimentoCrediarioService {
      * é do cliente informado, e é de fato uma parcela de crediário. Multa/juros recalculados
      * aqui — nunca confia no que veio da listagem (pode estar minutos desatualizada).
      */
-    private ParcelaResolvida resolverParcelaParaRecebimento(long idContaReceber, long idClienteEsperado, ConfigCrediario cfg) {
+    /**  hoje dia da LOJA (fuso da UF da empresa) — multa e juros contam dias de atraso, e
+     *              "hoje" do servidor viraria um dia antes da hora para quem está a oeste. */
+    private ParcelaResolvida resolverParcelaParaRecebimento(long idContaReceber, long idClienteEsperado,
+                                                            ConfigCrediario cfg, LocalDate hoje) {
         record Linha(long idVenda, long idCliente, BigDecimal valorOriginal, OffsetDateTime dataVencimento,
                       int numeroParcela, String categoriaCarteira) {
         }
@@ -485,7 +491,7 @@ public class RecebimentoCrediarioService {
             throw new IllegalArgumentException("A parcela #" + idContaReceber + " não é uma parcela de crediário.");
         }
 
-        long diasAtraso = Math.max(0, ChronoUnit.DAYS.between(linha.dataVencimento().toLocalDate(), LocalDate.now()));
+        long diasAtraso = Math.max(0, ChronoUnit.DAYS.between(linha.dataVencimento().toLocalDate(), hoje));
         BigDecimal[] multaJuros = calcularMultaJuros(linha.valorOriginal(), diasAtraso, cfg);
         BigDecimal total = linha.valorOriginal().add(multaJuros[0]).add(multaJuros[1]);
         return new ParcelaResolvida(idContaReceber, linha.idVenda(), linha.dataVencimento(), linha.numeroParcela(), total);

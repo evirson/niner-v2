@@ -1,5 +1,6 @@
 package com.vetor.niner.cadastros.cliente;
 
+import com.vetor.niner.comum.tempo.FusoDaUf;
 import com.vetor.niner.cadastros.cliente.ClienteDtos.ClienteRequest;
 import com.vetor.niner.cadastros.cliente.ClienteDtos.ClienteResponse;
 import com.vetor.niner.cadastros.cliente.ClienteDtos.ExclusaoClienteResponse;
@@ -247,7 +248,12 @@ public class ClienteService {
         }
         // Data de nascimento é sempre opcional (2026-07-21); quando preenchida, não pode ser
         // hoje nem no futuro.
-        if (req.dataNascimento() != null && !req.dataNascimento().isBefore(LocalDate.now())) {
+        // Fuso explícito: `LocalDate.now()` sem argumento usa o da JVM, que só está definido em
+        // produção (TZ do compose) — em dev seria UTC, e o "hoje" da validação já nasceria 3 h à
+        // frente. Aqui basta o de Brasília: é validação de borda ("não pode ser hoje nem futuro"),
+        // onde 1 h de diferença não muda o significado.
+        if (req.dataNascimento() != null
+                && !req.dataNascimento().isBefore(LocalDate.now(FusoDaUf.PADRAO))) {
             throw new IllegalArgumentException("Data de nascimento não pode ser hoje ou no futuro.");
         }
         if (req.cpfCnpj() != null && !req.cpfCnpj().isBlank() && !Documentos.valido(req.cpfCnpj())) {

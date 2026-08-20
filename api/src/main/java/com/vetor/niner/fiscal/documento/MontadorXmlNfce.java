@@ -1,5 +1,6 @@
 package com.vetor.niner.fiscal.documento;
 
+import com.vetor.niner.comum.tempo.FusoDaUf;
 import com.vetor.niner.fiscal.documento.MontagemNfceDtos.*;
 import com.vetor.niner.fiscal.motor.MotorTributarioDtos.Contribuicao;
 import com.vetor.niner.fiscal.motor.MotorTributarioDtos.IbsCbs;
@@ -92,12 +93,15 @@ public class MontadorXmlNfce {
      * <p>Reconverter para {@code America/Sao_Paulo} corrige as duas coisas de uma vez: o offset
      * deixa de ser {@code Z} (schema) <b>e</b> a hora impressa volta a ser a hora local da venda,
      * não a hora UTC (uma nota das 19h de Brasília não pode sair dizendo "19h" com offset zero —
-     * isso a colocaria três horas no futuro). Quando o produto atender mais de uma UF, isto vira
-     * coluna em {@code cfg_uf_autorizador} (F10), não uma constante.
+     * isso a colocaria três horas no futuro).
+     *
+     * <p><b>2026-08-20 — deixou de ser constante.</b> O fuso é o da <b>UF do emitente</b>
+     * ({@link FusoDaUf}), porque o Nainer atende os 27 entes e o Brasil tem 4 fusos: com
+     * {@code America/Sao_Paulo} fixo, a nota de uma loja de Manaus declarava 1 h a mais que o
+     * relógio dela (2 h no Acre) — e, perto da meia-noite, saía com <b>data do dia seguinte</b>,
+     * levando junto o {@code AAMM} da chave de acesso. O instante nunca esteve errado
+     * ({@code atZoneSameInstant}), então a SEFAZ não recusava: o defeito era silencioso.
      */
-    private static final java.time.ZoneId FUSO_EMISSAO = java.time.ZoneId.of("America/Sao_Paulo");
-
-    // (java.time.ZoneId acima fica qualificado de propósito — só um uso, evita mais um import)
 
     /** CSOSN que o grupo {@code ICMSSN102} cobre — os quatro sem destaque de ICMS (XSD). */
     private static final Set<String> CSOSN_GRUPO_102 = Set.of("102", "103", "300", "400");
@@ -124,10 +128,11 @@ public class MontadorXmlNfce {
     public XmlMontado montar(NotaParaMontar nota, AssinadorQrCode assinadorQrOffline) {
         validar(nota);
 
-        // Ver FUSO_EMISSAO: normaliza o offset ANTES de usar em qualquer lugar (chave, dhEmi, QR
-        // de contingência) — inclusive a chave de acesso, cujo AAMM tem que refletir o mês LOCAL
-        // da venda, não o mês UTC (que pode divergir perto da virada do dia/mês/ano).
-        OffsetDateTime emissaoLocal = nota.emissao().atZoneSameInstant(FUSO_EMISSAO).toOffsetDateTime();
+        // Normaliza o offset para o fuso da UF do EMITENTE antes de usar em qualquer lugar (chave,
+        // dhEmi, QR de contingência) — inclusive a chave de acesso, cujo AAMM tem que refletir o
+        // mês LOCAL da venda, não o mês UTC (que diverge perto da virada do dia/mês/ano).
+        OffsetDateTime emissaoLocal = nota.emissao()
+                .atZoneSameInstant(FusoDaUf.de(nota.emitente().uf())).toOffsetDateTime();
 
         String cnpjEmitente = apenasAlfanumerico(nota.emitente().cnpj());
         String chave = ChaveAcesso.montar(codigoUfDe(nota.emitente().uf()), emissaoLocal, cnpjEmitente,

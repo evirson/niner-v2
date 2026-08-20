@@ -2,6 +2,7 @@ package com.vetor.niner.fiscal.documento;
 
 import com.vetor.niner.comum.armazenamento.AreaPrivada;
 import com.vetor.niner.comum.armazenamento.ArmazenamentoPrivado;
+import com.vetor.niner.comum.tempo.FusoDaUf;
 import com.vetor.niner.comum.tenant.TenantContext;
 import com.vetor.niner.fiscal.documento.DocumentoFiscalRepositorio.DocumentoParaArquivar;
 import com.vetor.niner.fiscal.documento.DocumentoFiscalRepositorio.EventoParaArquivar;
@@ -125,7 +126,11 @@ public class ArquivamentoXmlService {
         String nfeProc = montarNfeProc(doc.xmlAssinado(), doc.statusSefaz(), doc.chaveAcesso());
         validador.validarProcNfe(nfeProc);
 
-        OffsetDateTime local = doc.dataEmissao().atZoneSameInstant(FUSO).toOffsetDateTime();
+        // Ano/mês do caminho saem do instante LOCAL da UF do emitente, nunca do offset cru que o
+        // pgjdbc devolve (sempre UTC) nem de um fuso fixo: os dois erram o mês perto da virada do
+        // dia, e a pasta tem de bater com o mês do dhEmi da própria nota.
+        OffsetDateTime local = doc.dataEmissao()
+                .atZoneSameInstant(FusoDaUf.deOuPadrao(doc.uf())).toOffsetDateTime();
         String caminho = "%d/%02d/%d/%s.xml".formatted(
                 local.getYear(), local.getMonthValue(), doc.modelo(), doc.chaveAcesso());
 
@@ -196,7 +201,7 @@ public class ArquivamentoXmlService {
             return;
         }
 
-        OffsetDateTime local = evt.criadoEm().atZoneSameInstant(FUSO).toOffsetDateTime();
+        OffsetDateTime local = evt.criadoEm().atZoneSameInstant(FusoDaUf.deOuPadrao(evt.uf())).toOffsetDateTime();
         String caminho = "%d/%02d/%d/%s-%s-%d.xml".formatted(
                 local.getYear(), local.getMonthValue(), evt.modelo(),
                 evt.chaveAcesso(), evt.tipoEvento(), evt.sequencia());
@@ -214,7 +219,7 @@ public class ArquivamentoXmlService {
             return;
         }
 
-        OffsetDateTime local = inu.criadoEm().atZoneSameInstant(FUSO).toOffsetDateTime();
+        OffsetDateTime local = inu.criadoEm().atZoneSameInstant(FusoDaUf.deOuPadrao(inu.uf())).toOffsetDateTime();
         String caminho = "%d/%02d/%d/inut-%d-%d-%d.xml".formatted(
                 local.getYear(), local.getMonthValue(), inu.modelo(),
                 inu.serie(), inu.numeroInicial(), inu.numeroFinal());

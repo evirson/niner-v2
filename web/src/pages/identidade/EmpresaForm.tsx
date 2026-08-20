@@ -16,7 +16,7 @@ import {
   type EmpresaFormState,
 } from '../../lib/empresas'
 import { aoTeclarEnterNoFormulario } from '../../lib/formularios'
-import { mascararCep, mascararCpfCnpj, mascararTelefone, somenteDigitos } from '../../lib/masks'
+import { ESTADOS_UF, mascararCep, mascararCpfCnpj, mascararTelefone, somenteDigitos } from '../../lib/masks'
 import { maiusculas } from '../../lib/texto'
 import { buscarEnderecoPorCep } from '../../lib/viacep'
 
@@ -245,7 +245,20 @@ export default function EmpresaForm() {
               </div>
               <div className="col-2">
                 <label htmlFor="estado">UF</label>
-                <input id="estado" maxLength={2} value={form.estado} onChange={campoMaiusculo('estado')} />
+                {/* Select, não texto livre: desde 2026-08-20 a UF decide o FUSO da loja e para qual
+                    SEFAZ a nota vai — sigla digitada errada só apareceria na primeira venda. */}
+                <select
+                  id="estado"
+                  value={form.estado}
+                  onChange={(e) => setForm((f) => ({ ...f, estado: e.target.value }))}
+                >
+                  <option value="">Selecione…</option>
+                  {ESTADOS_UF.map((uf) => (
+                    <option key={uf} value={uf}>
+                      {uf}
+                    </option>
+                  ))}
+                </select>
               </div>
             </div>
           </section>

@@ -633,21 +633,27 @@ public class DocumentoFiscalRepositorio {
     @Transactional(readOnly = true)
     public java.util.Optional<DocumentoParaArquivar> buscarParaArquivar(long idDocumentoFiscal) {
         return jdbc.sql("""
-                        SELECT modelo, chave_acesso, data_emissao, xml_assinado, status_sefaz, xml_objeto_bucket
-                          FROM documento_fiscal
-                         WHERE id_tenant = plataforma.tenant_atual() AND id_documento_fiscal = ?
-                           AND situacao = 'AUTORIZADO'
+                        SELECT d.modelo, d.chave_acesso, e.estado AS uf, d.data_emissao,
+                               d.xml_assinado, d.status_sefaz, d.xml_objeto_bucket
+                          FROM documento_fiscal d
+                          JOIN empresa e ON e.id_tenant = d.id_tenant AND e.id_empresa = d.id_empresa
+                         WHERE d.id_tenant = plataforma.tenant_atual() AND d.id_documento_fiscal = ?
+                           AND d.situacao = 'AUTORIZADO'
                         """)
                 .param(idDocumentoFiscal)
                 .query((rs, n) -> new DocumentoParaArquivar(
-                        rs.getInt("modelo"), rs.getString("chave_acesso"),
+                        rs.getInt("modelo"), rs.getString("chave_acesso"), rs.getString("uf"),
                         rs.getObject("data_emissao", java.time.OffsetDateTime.class),
                         rs.getString("xml_assinado"), rs.getString("status_sefaz"),
                         rs.getString("xml_objeto_bucket")))
                 .optional();
     }
 
-    public record DocumentoParaArquivar(int modelo, String chaveAcesso, java.time.OffsetDateTime dataEmissao,
+    /** {@code uf} entra em 2026-08-20: o ano/mês do caminho no bucket saem do instante local da UF
+     *  do emitente, não de um fuso fixo — senão a nota de 31/12 de uma loja de Manaus vai parar na
+     *  pasta do ano seguinte, onde o contador não procura. */
+    public record DocumentoParaArquivar(int modelo, String chaveAcesso, String uf,
+                                        java.time.OffsetDateTime dataEmissao,
                                         String xmlAssinado, String statusSefaz, String xmlObjetoBucketAtual) {
     }
 
@@ -682,23 +688,25 @@ public class DocumentoFiscalRepositorio {
     public java.util.Optional<EventoParaArquivar> buscarEventoParaArquivar(long idEvento) {
         return jdbc.sql("""
                         SELECT e.tipo_evento, e.sequencia, e.xml_evento, e.criado_em, e.xml_objeto_bucket,
-                               d.chave_acesso, d.modelo
+                               d.chave_acesso, d.modelo, emp.estado AS uf
                           FROM documento_fiscal_evento e
                           JOIN documento_fiscal d
                             ON d.id_tenant = e.id_tenant AND d.id_documento_fiscal = e.id_documento_fiscal
+                          JOIN empresa emp ON emp.id_tenant = d.id_tenant AND emp.id_empresa = d.id_empresa
                          WHERE e.id_tenant = plataforma.tenant_atual() AND e.id_evento = ? AND e.autorizado = true
                         """)
                 .param(idEvento)
                 .query((rs, n) -> new EventoParaArquivar(
                         rs.getString("tipo_evento"), rs.getInt("sequencia"), rs.getString("xml_evento"),
                         rs.getObject("criado_em", java.time.OffsetDateTime.class),
-                        rs.getString("xml_objeto_bucket"), rs.getString("chave_acesso"), rs.getInt("modelo")))
+                        rs.getString("xml_objeto_bucket"), rs.getString("chave_acesso"), rs.getInt("modelo"),
+                        rs.getString("uf")))
                 .optional();
     }
 
     public record EventoParaArquivar(String tipoEvento, int sequencia, String xmlEvento,
                                      java.time.OffsetDateTime criadoEm, String xmlObjetoBucketAtual,
-                                     String chaveAcesso, int modelo) {
+                                     String chaveAcesso, int modelo, String uf) {
     }
 
     /** {@code documento_fiscal_evento} não tem {@code xml_hash} (V035) — só o ponteiro. */
