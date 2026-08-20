@@ -475,6 +475,27 @@ Caixa.
 **Colunas da planilha:** `CODIGO_PRODUTO, EAN_CODIGO_BARRAS, NOME_COR, NOME_TAMANHO,
 QUANTIDADE_ESTOQUE_1..QUANTIDADE_ESTOQUE_5` (5 colunas fixas de quantidade, uma por empresa).
 
+**⛔ `EAN_CODIGO_BARRAS` não pode começar com a faixa do gerador do Nainer (2026-08-20).** Se
+qualquer linha trouxer um código começando por um prefixo reservado (hoje **`9`**), **nada é
+importado** — a planilha inteira é recusada com a lista das linhas ofensoras, e o lojista corrige o
+arquivo antes de tentar de novo.
+
+*Por que barrar em vez de ignorar o código:* quem migra de outro sistema traz os códigos **já
+impressos nas etiquetas** da mercadoria. Um deles na nossa faixa colidiria com um SKU que
+`gerar_ean13_interno()` **ainda vai emitir** — o sequencial cresce, então um código que hoje não
+conflita passa a conflitar no dia em que o contador alcançar aquele número, e o sintoma seria uma
+bipada trazendo o produto errado no caixa, meses depois. *Por que a planilha toda e não a linha:*
+importar metade deixaria o lojista sem saber qual metade entrou.
+
+Sai barato porque a importação é **uma transação só** e a tela tem o passo **Validar** antes do
+Importar — o erro aparece lá, antes de qualquer gravação.
+
+⚠️ **O prefixo é dado, não literal.** Vem de `prefixos_ean_reservados()` (V050), a mesma linha de
+`cfg_ean_gerador` que a função geradora lê para montar o SKU. Trocar o prefixo um dia é
+`UPDATE cfg_ean_gerador SET prefixo = '8', prefixos_reservados = prefixos_reservados || '8'::text`
+— sem deploy, e a importação acompanha sozinha. Um CHECK impede trocar o prefixo sem reservá-lo,
+porque os SKUs já gerados continuam com o prefixo antigo e ele precisa seguir barrado para sempre.
+
 **Escolha prévia:** a qual **empresa** cada uma das 5 colunas de quantidade corresponde (select por
 coluna) — igual ao mapeamento que existia no antigo formato de `produto`. **Não precisa preencher
 as 5** (2026-08-10) — o backend (`EstoqueImportador.lerMapeamentoEmpresas`) já aceitava mapeamento

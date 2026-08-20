@@ -193,4 +193,75 @@ class EstoqueImportadorCrudTest {
         }
         return c;
     }
+
+    /**
+     * ⛔ Código de barras na faixa do gerador do Nainer **derruba a planilha inteira** (2026-08-20,
+     * decisão do dono do produto).
+     *
+     * <p><b>Por que a planilha toda, e não a linha.</b> O lojista que migra de outro sistema traz
+     * códigos <b>já impressos nas etiquetas</b>. Um deles na nossa faixa colidiria com um SKU que
+     * {@code gerar_ean13_interno()} ainda vai emitir — o sequencial <b>cresce</b>, então o conflito
+     * nasce meses depois, numa bipada que traz o produto errado no caixa. Importar metade e avisar
+     * deixaria o lojista sem saber qual metade entrou: "pra não gerar mal-entendidos".
+     */
+    @Test
+    void codigoDeBarrasNaFaixaDoNainerDerrubaAPlanilhaInteira() throws Exception {
+        TenantNovo tenant = assinarNovoTenant("ean-faixa-interna");
+        importarProdutoSemGrade(tenant.token(), "PROD-A", "PRODUTO A");
+        importarProdutoSemGrade(tenant.token(), "PROD-B", "PRODUTO B");
+
+        // Linha 1 é perfeitamente válida; a 2ª traz um código começando por 9.
+        MockMultipartFile planilha = planilhaEstoque(
+                new String[] {"PROD-A", "7891234567895", "", "", "10", "", "", "", ""},
+                new String[] {"PROD-B", "9001000041032", "", "", "7", "", "", "", ""});
+        String escolhas = "{\"mapeamentoEmpresas\":{\"QUANTIDADE_ESTOQUE_1\":" + tenant.idEmpresa() + "}}";
+
+        String erro = mvc.perform(multipart("/api/v1/importacao/estoque/processar")
+                        .file(planilha)
+                        .part(new MockPart("escolhas", escolhas.getBytes()))
+                        .param("confirmar", "true")
+                        .header("Authorization", "Bearer " + tenant.token()))
+                .andExpect(status().isBadRequest())
+                .andReturn().getResponse().getContentAsString();
+
+        // A mensagem tem de dizer QUAL linha, senão o lojista não sabe o que corrigir na planilha.
+        assertThat(erro).contains("Nada foi importado").contains("9001000041032");
+
+        // E nada entrou — nem a linha boa. É o ponto do "barrar".
+        try (Connection c = abrirConexao(tenant.idTenant());
+                Statement st = c.createStatement();
+                ResultSet rs = st.executeQuery(
+                        "SELECT count(*) AS n FROM produto_barra WHERE id_tenant = " + tenant.idTenant())) {
+            assertThat(rs.next()).isTrue();
+            assertThat(rs.getInt("n")).as("nenhuma variação criada").isZero();
+        }
+    }
+
+    /** O caminho normal continua passando: EAN de fabricante (789…) não é da nossa faixa. */
+    @Test
+    void codigoDeBarrasDeFabricanteContinuaImportando() throws Exception {
+        TenantNovo tenant = assinarNovoTenant("ean-fabricante-ok");
+        importarProdutoSemGrade(tenant.token(), "PROD-C", "PRODUTO C");
+
+        MockMultipartFile planilha = planilhaEstoque(
+                new String[] {"PROD-C", "7891234567895", "", "", "3", "", "", "", ""});
+        String escolhas = "{\"mapeamentoEmpresas\":{\"QUANTIDADE_ESTOQUE_1\":" + tenant.idEmpresa() + "}}";
+
+        mvc.perform(multipart("/api/v1/importacao/estoque/processar")
+                        .file(planilha)
+                        .part(new MockPart("escolhas", escolhas.getBytes()))
+                        .param("confirmar", "true")
+                        .header("Authorization", "Bearer " + tenant.token()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.erros").isEmpty())
+                .andExpect(jsonPath("$.confirmado").value(true));
+
+        try (Connection c = abrirConexao(tenant.idTenant());
+                Statement st = c.createStatement();
+                ResultSet rs = st.executeQuery(
+                        "SELECT ean FROM produto_barra WHERE id_tenant = " + tenant.idTenant())) {
+            assertThat(rs.next()).isTrue();
+            assertThat(rs.getString("ean")).isEqualTo("7891234567895");
+        }
+    }
 }

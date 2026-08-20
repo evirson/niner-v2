@@ -523,6 +523,63 @@ Movimentação de Conta Corrente) que ainda não tinham migrado pro `SeletorPlan
 
 ## Linha do tempo
 
+### 2026-08-20 — Importação de estoque recusa código de barras na faixa do Nainer, e o prefixo vira dado
+
+Pedido do dono do produto, que começou como um estudo maior — "criar um campo para o código de
+barras do sistema antigo" — e **encolheu para a solução certa** depois de conversar. Vale registrar
+o encolhimento, não só o resultado.
+
+**O problema real.** O lojista que contrata o Nainer já tem produtos cadastrados e **etiquetas
+impressas** pelo sistema antigo. Esses códigos entram por `EAN_CODIGO_BARRAS` na importação de
+estoque inicial. Se um deles começar com `9`, ele cai na faixa do nosso gerador
+(`gerar_ean13_interno()` monta `9` + `id_banco` + sequencial + DV).
+
+**Por que isso é pior do que parece:** o sequencial **cresce**. Um código legado `9001000041032`
+importado hoje não conflita com nada — e passa a conflitar no dia em que o contador alcançar
+`41032`. Nenhuma conferência no momento da importação evita isso, porque a colisão **nasce depois**.
+Só bloquear a faixa resolve. Foi o argumento que fez a proposta inicial (campo novo + checagem
+cruzada + índice) dar lugar a **uma regra de uma linha**.
+
+**A decisão:** código começando por prefixo reservado → **nada é importado**. Não é aviso, não é
+linha rejeitada: a planilha inteira volta, com a lista das linhas, para o lojista corrigir. Nas
+palavras dele, *"pra não gerar mal-entendidos"* — importar metade deixaria o cliente sem saber qual
+metade entrou. Sai barato porque `EstoqueImportador.processar` é **uma transação só** e a tela já
+tem o passo **Validar** antes do Importar: o erro aparece antes de qualquer gravação.
+
+**O prefixo virou dado (V050), e esse é o ponto de desenho.** Ele avisou que o `9` pode mudar um
+dia. Escrever `'9'` no importador criaria uma **segunda cópia** da regra — e este projeto já foi
+mordido três vezes por lista duplicada (as UFs, as siglas do CSRT, o cUF). Então:
+
+- `cfg_ean_gerador.prefixo` — o que o gerador **usa**; `gerar_ean13_interno()` passou a lê-lo em vez
+  de carregar o literal;
+- `cfg_ean_gerador.prefixos_reservados text[]` — tudo que já foi usado, que é o que a importação
+  **barra**, via `prefixos_ean_reservados()` (`niner_app` continua sem grant na tabela, só na função);
+- **CHECK `prefixo = ANY(prefixos_reservados)`** — impossível trocar e esquecer de reservar. Isso
+  importa porque os SKUs já emitidos continuam com o prefixo antigo: liberar a faixa velha
+  reabriria a colisão para trás.
+
+Trocar o prefixo passa a ser `UPDATE cfg_ean_gerador SET prefixo = '8', prefixos_reservados =
+prefixos_reservados || '8'::text` — **sem deploy**, e a importação acompanha sozinha.
+
+**Duas armadilhas medidas escrevendo isto**, as duas viraram comentário no código:
+
+1. `query(String[].class)` **não lê array do Postgres** — o driver devolve `PgArray` e o Spring não
+   converte (*"Value [{9}] is of type PgArray"*). Tem de passar pelo `ResultSet`. O teste pegou
+   antes de virar bug em produção.
+2. `prefixos_reservados || '8'` sem `::text` estoura com *"malformed array literal"* — o Postgres lê
+   o `'8'` como literal de array. O `::text` não é decorativo.
+
+**4 testes novos** (877 no total): o prefixo do código gerado vindo da tabela e não do corpo da
+função; a troca sem reservar sendo recusada pelo banco (e a troca correta funcionando, com o antigo
+seguindo barrado); a planilha inteira derrubada por uma linha na faixa, **conferindo no banco que
+nem a linha boa entrou**; e o caminho normal (EAN de fabricante `789…`) continuando a importar.
+
+⏭️ **O que NÃO foi feito, e por decisão:** nenhum campo novo em `produto_barra`. O código do sistema
+antigo continua entrando em `ean` quando não conflita com a nossa faixa — que é o caso da esmagadora
+maioria (a praxe do varejo brasileiro para código interno é a faixa `2`, de circulação restrita da
+GS1). Se um dia aparecer lojista cujo sistema antigo usava o `9`, aí sim a conversa volta: ou ele
+re-etiqueta, ou trocamos o nosso prefixo (que agora é um `UPDATE`).
+
 ### 2026-08-20 — A UF de um documento fiscal vem congelada na chave, não da empresa de hoje
 
 Consequência que só apareceu porque o dono do produto perguntou "não seria melhor já corrigir?"

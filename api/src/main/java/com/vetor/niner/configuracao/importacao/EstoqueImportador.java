@@ -98,6 +98,8 @@ public class EstoqueImportador implements ImportadorDeTabela {
                     "Informe para qual empresa vai cada coluna QUANTIDADE_ESTOQUE_N antes de importar.");
         }
 
+        recusarCodigosNaFaixaInterna(linhas);
+
         List<LinhaErro> erros = new ArrayList<>();
         // Cache de produto por chamada (2026-08-10) — variável LOCAL, não campo da classe (o
         // importador é singleton Spring). Mesmo achado real de ContasReceberImportador: planilha
@@ -302,6 +304,76 @@ public class EstoqueImportador implements ImportadorDeTabela {
         Long valor = savepoints.executar(acao::get);
         cache.put(chave, valor);
         return valor;
+    }
+
+    /** Quantas linhas o erro cita antes de resumir — a lista serve para achar o problema na
+     *  planilha, não para reproduzi-la inteira numa mensagem. */
+    private static final int MAX_LINHAS_CITADAS = 10;
+
+    /**
+     * Recusa a planilha INTEIRA quando algum {@code EAN_CODIGO_BARRAS} começa por um prefixo
+     * reservado ao código interno do Nainer.
+     *
+     * <p><b>Por que barrar em vez de ignorar o código.</b> O lojista que migra de outro sistema
+     * traz os códigos <b>já impressos nas etiquetas</b> da mercadoria. Se um deles cair na nossa
+     * faixa, ele colide com um SKU que {@code gerar_ean13_interno()} <b>ainda vai emitir</b> — o
+     * sequencial cresce, então um código que hoje não conflita passa a conflitar no dia em que o
+     * contador alcançar aquele número. Importar e avisar depois não resolveria: o estrago
+     * apareceria meses adiante, numa bipada que traz o produto errado no caixa.
+     *
+     * <p><b>Por que a planilha toda, e não a linha.</b> Decisão do dono do produto (2026-08-20):
+     * importar parcialmente deixaria o lojista com metade do estoque dentro e metade fora, sem
+     * saber qual metade — "para não gerar mal-entendidos". Ele corrige o arquivo e reimporta.
+     * Sai barato porque a importação é uma transação só, e a tela tem o passo <b>Validar</b>
+     * antes do Importar: o erro aparece lá, antes de qualquer gravação.
+     *
+     * <p>⚠️ O prefixo <b>não é literal aqui</b>: vem de {@code prefixos_ean_reservados()} (V050),
+     * a mesma linha que {@code gerar_ean13_interno()} lê para montar o SKU. Se um dia o prefixo
+     * mudar, esta validação acompanha sozinha — uma segunda cópia do {@code '9'} neste arquivo
+     * seria a forma garantida de as duas regras divergirem em silêncio.
+     */
+    private void recusarCodigosNaFaixaInterna(List<LinhaPlanilha> linhas) {
+        // ⚠️ `query(String[].class)` NÃO funciona para array do Postgres — o driver devolve
+        // `PgArray` e o Spring não converte ("Value [{9}] is of type PgArray"). Tem de passar pelo
+        // ResultSet. Descoberto pelo teste antes de virar bug em produção.
+        String[] reservados = jdbc.sql("SELECT prefixos_ean_reservados() AS prefixos")
+                .query((rs, n) -> (String[]) rs.getArray("prefixos").getArray())
+                .optional().orElse(new String[0]);
+        if (reservados.length == 0) {
+            return;
+        }
+
+        List<String> ofensoras = new ArrayList<>();
+        for (LinhaPlanilha linha : linhas) {
+            String codigo = linha.valor("EAN_CODIGO_BARRAS");
+            if (codigo == null || codigo.isBlank()) {
+                continue;
+            }
+            String limpo = codigo.trim();
+            for (String prefixo : reservados) {
+                if (limpo.startsWith(prefixo)) {
+                    ofensoras.add("linha " + linha.numeroLinha() + " (" + limpo + ")");
+                    break;
+                }
+            }
+        }
+        if (ofensoras.isEmpty()) {
+            return;
+        }
+
+        String citadas = String.join(", ", ofensoras.subList(0, Math.min(ofensoras.size(), MAX_LINHAS_CITADAS)));
+        String resto = ofensoras.size() > MAX_LINHAS_CITADAS
+                ? " e mais " + (ofensoras.size() - MAX_LINHAS_CITADAS) : "";
+        throw new IllegalArgumentException(
+                ("Nada foi importado. %d %s com EAN_CODIGO_BARRAS começando por %s — essa faixa é "
+                        + "reservada ao código de barras que o próprio Nainer gera, e usá-la faria o "
+                        + "código do sistema antigo colidir com um código nosso mais adiante. Remova ou "
+                        + "corrija %s e importe de novo: %s%s.")
+                        .formatted(ofensoras.size(),
+                                ofensoras.size() == 1 ? "linha está" : "linhas estão",
+                                String.join("/", reservados),
+                                ofensoras.size() == 1 ? "essa linha" : "essas linhas",
+                                citadas, resto));
     }
 
     private Optional<Long> buscarIdProduto(String codigoImportacao) {
