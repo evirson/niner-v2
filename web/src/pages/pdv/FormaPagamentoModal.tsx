@@ -110,11 +110,24 @@ function calcularValorPagoMaximo(saldoAtual: number, carteira: TipoCarteira | nu
 export default function FormaPagamentoModal({
   itens,
   valorTotal,
+  idOrcamento,
+  clienteInicial,
+  vendedorInicial,
   aoFechar,
   aoEfetivada,
 }: {
   itens: ItemLedger[]
   valorTotal: number
+  /**
+   * Orçamento que originou esta venda (V058), quando a venda veio de um.
+   *
+   * <p>⚠️ O servidor usa isto para aplicar o preço <b>congelado</b> do orçamento e para recusar
+   * quantidade maior que a orçada. Cliente e vendedor já vêm preenchidos porque foram definidos
+   * na emissão — mas continuam editáveis: quem vai levar pode não ser quem pediu o orçamento.
+   */
+  idOrcamento?: number | null
+  clienteInicial?: PdvCliente | null
+  vendedorInicial?: Pick<Funcionario, 'idFuncionario' | 'nome'> | null
   aoFechar: () => void
   aoEfetivada: (resultado: VendaEfetivada) => void
 }) {
@@ -139,8 +152,10 @@ export default function FormaPagamentoModal({
   const [buscandoVale, setBuscandoVale] = useState(false)
   const [erroVale, setErroVale] = useState<string | null>(null)
   /** Cliente e vendedor são obrigatórios em toda venda do PDV (2026-07-28). */
-  const [clienteSelecionado, setClienteSelecionado] = useState<PdvCliente | null>(null)
-  const [vendedorSelecionado, setVendedorSelecionado] = useState<Funcionario | null>(null)
+  const [clienteSelecionado, setClienteSelecionado] = useState<PdvCliente | null>(clienteInicial ?? null)
+  const [vendedorSelecionado, setVendedorSelecionado] = useState<Pick<Funcionario, 'idFuncionario' | 'nome'> | null>(
+    vendedorInicial ?? null,
+  )
   const [mostrarPesquisaCliente, setMostrarPesquisaCliente] = useState(false)
   const [mostrarPesquisaVendedor, setMostrarPesquisaVendedor] = useState(false)
 
@@ -331,6 +346,7 @@ export default function FormaPagamentoModal({
         pagamentos: corpoPagamentos,
         idCliente: clienteSelecionado.idCliente,
         idFuncionario: vendedorSelecionado.idFuncionario,
+        idOrcamento: idOrcamento ?? null,
       })
     },
     onSuccess: (resultado) => aoEfetivada(resultado),

@@ -2,6 +2,7 @@ package com.vetor.niner.configuracao.geral;
 
 import com.vetor.niner.configuracao.geral.ConfiguracaoGeralDtos.ConfiguracaoGeralRequest;
 import com.vetor.niner.configuracao.geral.ConfiguracaoGeralDtos.ConfiguracaoGeralResponse;
+import com.vetor.niner.configuracao.geral.ConfiguracaoGeralDtos.DiasValidadeOrcamentoResponse;
 import com.vetor.niner.configuracao.geral.ConfiguracaoGeralDtos.ConsisteValorContasPagarResponse;
 import com.vetor.niner.configuracao.geral.ConfiguracaoGeralDtos.DescontoVendaResponse;
 import com.vetor.niner.configuracao.geral.ConfiguracaoGeralDtos.EmiteFiscalAposVendaResponse;
@@ -64,6 +65,13 @@ public class ConfiguracaoGeralController {
     @GetMapping("/permite-qtd-decimal")
     public PermiteQtdDecimalResponse permiteQtdDecimal() {
         return new PermiteQtdDecimalResponse(service.permiteQtdDecimalProduto());
+    }
+
+    /** Dias de validade sugeridos para o orçamento (V058) — aberto a qualquer papel: quem emite
+     *  orçamento é majoritariamente OPERADOR, e o GET completo é ADMIN-only. */
+    @GetMapping("/dias-validade-orcamento")
+    public DiasValidadeOrcamentoResponse diasValidadeOrcamento() {
+        return new DiasValidadeOrcamentoResponse(service.diasValidadeOrcamento());
     }
 
     @GetMapping("/exige-numero-venda-devolucao")

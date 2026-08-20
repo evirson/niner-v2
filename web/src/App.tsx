@@ -43,6 +43,8 @@ import EntradaMercadoriaLista from './pages/estoque/entrada/EntradaMercadoriaLis
 import EntradaMercadoriaForm from './pages/estoque/entrada/EntradaMercadoriaForm'
 import EntradaMercadoriaDetalhe from './pages/estoque/entrada/EntradaMercadoriaDetalhe'
 import DevolucaoCompra from './pages/estoque/devolucaocompra/DevolucaoCompra'
+import OrcamentoForm from './pages/orcamento/OrcamentoForm'
+import OrcamentoLista from './pages/orcamento/OrcamentoLista'
 import EstornoRecebimentoCrediario from './pages/recebimentocrediario/EstornoRecebimentoCrediario'
 import RecebimentoCrediario from './pages/recebimentocrediario/RecebimentoCrediario'
 import ReimpressaoRecebimentoCrediario from './pages/recebimentocrediario/ReimpressaoRecebimentoCrediario'
@@ -87,6 +89,8 @@ export default function App() {
               não colidir com as rotas das telas (`/estoque` já é a Transferência). */}
           <Route path="/menu/:grupo" element={<MenuGrupo />} />
           <Route path="/pdv" element={<Pdv />} />
+          <Route path="/orcamentos" element={<OrcamentoLista />} />
+          <Route path="/orcamentos/novo" element={<OrcamentoForm />} />
           <Route path="/pesquisa-vendas" element={<PesquisaVendas />} />
           <Route path="/devolucao-produto" element={<DevolucaoProduto />} />
           <Route path="/relatorio-vendas" element={<RelatorioVendas />} />

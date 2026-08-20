@@ -1452,3 +1452,43 @@ a.menu-card:hover {
 .barra-cota { height: 8px; border-radius: 999px; background: var(--field-bg); overflow: hidden; margin-top: 8px; }
 .barra-cota-preenchida { height: 100%; background: var(--accent); transition: width .3s ease; }
 .barra-cota-preenchida.atencao { background: #b8860b; }
+
+/* ---------------------------------------------------------------------------------------------
+   Orçamento — impressão A4 (2026-08-20)
+   ⚠️ O `@page` global do projeto é `size: 80mm auto` (bobina térmica). Um documento A4 PRECISA de
+   `@page` nomeado próprio, senão sai espremido na bobina — o DANFE já tropeçou nisso.
+   --------------------------------------------------------------------------------------------- */
+.orcamento-a4-preview, .orcamento-a4-folha {
+  width: 210mm; padding: 12mm; background: #fff; color: #000;
+  font-family: Arial, Helvetica, sans-serif; font-size: 10pt; box-sizing: border-box;
+}
+.orcamento-a4-cabecalho { display: flex; justify-content: space-between; align-items: flex-start;
+  border-bottom: 2px solid #000; padding-bottom: 6px; margin-bottom: 10px; }
+.orcamento-a4-validade { text-align: center; border: 1px solid #000; padding: 4px;
+  margin-bottom: 10px; font-size: 11pt; }
+.orcamento-a4-dados { width: 100%; margin-bottom: 10px; }
+.orcamento-a4-dados td { padding: 2px 4px; border-bottom: 1px dotted #999; }
+.orcamento-a4-itens { width: 100%; border-collapse: collapse; margin-bottom: 10px; }
+.orcamento-a4-itens th, .orcamento-a4-itens td { border: 1px solid #000; padding: 3px 5px; }
+.orcamento-a4-itens th { background: #eee; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+.orcamento-a4-totais { text-align: right; line-height: 1.6; margin-bottom: 10px; }
+.orcamento-a4-observacao { border: 1px solid #999; padding: 6px; margin-bottom: 14px; }
+.orcamento-a4-rodape { margin-top: 24px; text-align: center; font-size: 9pt; }
+.orcamento-a4-assinatura { border-top: 1px solid #000; width: 60%; margin: 30px auto 4px; padding-top: 4px; }
+
+/* Fica no DOM sem aparecer: a folha A4 precisa existir para o envio por WhatsApp capturá-la
+   mesmo quando a tela está mostrando a bobina. */
+.orcamento-imprimir-oculto { position: absolute; left: -10000px; top: 0; }
+
+@media print {
+  /* `body * { visibility: hidden }` da regra global (linha ~365) esconde tudo; cada documento
+     revela o seu. Sem esta linha o A4 sairia em branco. */
+  .orcamento-imprimir-a4, .orcamento-imprimir-a4 * { visibility: visible; }
+  .orcamento-imprimir-a4 {
+    page: orcamento-a4;
+    position: absolute; top: 0; left: 0; margin: 0;
+  }
+  .orcamento-imprimir-a4 .orcamento-a4-folha { padding: 10mm; }
+  /* A folha oculta (a que existe só para o WhatsApp capturar) nunca vai para a impressora. */
+  .orcamento-imprimir-oculto, .orcamento-imprimir-oculto * { display: none !important; }
+}

@@ -10,6 +10,7 @@ export interface ConfiguracaoGeral {
   cfgUsaCorGrade: boolean
   cfgPermiteQtdDecimal: boolean
   cfgPermiteEstoqueNegativo: boolean
+  cfgDiasValidadeOrcamento: number
   cfgExigeNumeroVendaDevolucao: boolean
   cfgRateiaFreteEntrada: boolean
   cfgReajustaPrecoEntrada: boolean
@@ -29,6 +30,7 @@ export interface ConfiguracaoGeralFormState {
   cfgUsaCorGrade: boolean
   cfgPermiteQtdDecimal: boolean
   cfgPermiteEstoqueNegativo: boolean
+  cfgDiasValidadeOrcamento: string
   cfgExigeNumeroVendaDevolucao: boolean
   cfgRateiaFreteEntrada: boolean
   cfgReajustaPrecoEntrada: boolean
@@ -47,6 +49,7 @@ export function paraFormulario(c: ConfiguracaoGeral): ConfiguracaoGeralFormState
     cfgUsaCorGrade: c.cfgUsaCorGrade,
     cfgPermiteQtdDecimal: c.cfgPermiteQtdDecimal,
     cfgPermiteEstoqueNegativo: c.cfgPermiteEstoqueNegativo,
+    cfgDiasValidadeOrcamento: String(c.cfgDiasValidadeOrcamento ?? 15),
     cfgExigeNumeroVendaDevolucao: c.cfgExigeNumeroVendaDevolucao,
     cfgRateiaFreteEntrada: c.cfgRateiaFreteEntrada,
     cfgReajustaPrecoEntrada: c.cfgReajustaPrecoEntrada,
@@ -67,6 +70,7 @@ export function paraRequisicao(f: ConfiguracaoGeralFormState) {
     cfgUsaCorGrade: f.cfgUsaCorGrade,
     cfgPermiteQtdDecimal: f.cfgPermiteQtdDecimal,
     cfgPermiteEstoqueNegativo: f.cfgPermiteEstoqueNegativo,
+    cfgDiasValidadeOrcamento: Number(f.cfgDiasValidadeOrcamento) || 15,
     cfgExigeNumeroVendaDevolucao: f.cfgExigeNumeroVendaDevolucao,
     cfgRateiaFreteEntrada: f.cfgRateiaFreteEntrada,
     cfgReajustaPrecoEntrada: f.cfgReajustaPrecoEntrada,

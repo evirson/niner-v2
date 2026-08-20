@@ -388,6 +388,41 @@ class OrcamentoCrudTest {
                 .andExpect(jsonPath("$.situacao").value("VENDIDO"));
     }
 
+
+    /**
+     * O cliente veio buscar o orçado e viu mais coisa na loja (decisão do dono do produto,
+     * 2026-08-20): item fora do orçamento é permitido na mesma venda.
+     *
+     * <p>⚠️ A regra "só diminuir" (R2) vale para o que foi <b>orçado</b>, não para a venda inteira.
+     * O item extra é venda comum: preço do <b>cadastro</b> (não congelado, porque nunca foi
+     * prometido) e sem limite de quantidade. E ele <b>não</b> conta para decidir se o orçamento
+     * foi parcial — levando tudo o que orçou + um extra, o orçamento fecha como VENDIDO.
+     */
+    @Test
+    void produtoForaDoOrcamentoPodeEntrarNaMesmaVenda() throws Exception {
+        Cenario c = prepararCenario("extra", "10.00");
+        long idOrcamento = emitir(c, "2", null);
+        long idOutroProduto = criarProduto(c.token(), "PRODUTO EXTRA", "20.00");
+        long idOutraVariacao = criarVariacao(c.idTenant(), idOutroProduto);
+        abrirCaixa(c.token());
+
+        mvc.perform(post("/api/v1/pdv/vendas").header("Authorization", "Bearer " + c.token())
+                        .contentType(APPLICATION_JSON)
+                        .content("""
+                                {"idOrcamento":%d,"idCliente":%d,"idFuncionario":%d,"descontoVenda":0,
+                                 "itens":[{"idVariacao":%d,"qtd":2},{"idVariacao":%d,"qtd":3}],
+                                 "pagamentos":[{"idCarteira":%d,"valorPago":80.00,"numeroParcelas":1}]}
+                                """.formatted(idOrcamento, c.idCliente(), c.idFuncionario(),
+                                c.idVariacao(), idOutraVariacao, idCarteiraDinheiro(c.token()))))
+                .andExpect(status().isCreated())
+                // 2 × 10,00 congelados do orçamento + 3 × 20,00 do cadastro = 80,00
+                .andExpect(jsonPath("$.valorTotalProdutos").value(80.00))
+                // Levou tudo o que estava orçado — o extra não torna a venda parcial.
+                .andExpect(jsonPath("$.orcamentoParcial").value(false));
+
+        mvc.perform(get("/api/v1/orcamentos/" + idOrcamento).header("Authorization", "Bearer " + c.token()))
+                .andExpect(jsonPath("$.situacao").value("VENDIDO"));
+    }
     /** R1: não existe endpoint de alteração — a ausência é a regra, e um PUT devolve 405. */
     @Test
     void naoExisteAlteracaoDeOrcamento() throws Exception {

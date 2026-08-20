@@ -88,6 +88,12 @@ export const MENU: NavGrupo[] = [
         descricao: 'Venda no balcão com leitura de código de barras, desconto, formas de pagamento e comprovante.',
       },
       {
+        to: '/orcamentos',
+        label: 'Orçamentos',
+        icone: IconePdv,
+        descricao: 'Emite orçamento com validade para o cliente que ainda não fechou, imprime, envia por WhatsApp e transforma em venda no PDV.',
+      },
+      {
         to: '/pesquisa-vendas',
         label: 'Pesquisa de Vendas',
         icone: IconePesquisaVendas,

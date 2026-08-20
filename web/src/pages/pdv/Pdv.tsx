@@ -16,12 +16,14 @@ import {
   type PdvProduto,
   type VendaEfetivada,
 } from '../../lib/pdv'
+import type { Orcamento } from '../../lib/orcamento'
 import { useRotinaCritica } from '../../lib/rotinaCritica'
 import { maiusculas } from '../../lib/texto'
 import AlteraQuantidadeModal from './AlteraQuantidadeModal'
 import ComprovantePapeletaModal from './ComprovantePapeletaModal'
 import FormaPagamentoModal from './FormaPagamentoModal'
 import PesquisaProdutoModal from './PesquisaProdutoModal'
+import PuxarOrcamentoModal from './PuxarOrcamentoModal'
 
 function moeda(v: number): string {
   return `R$ ${formatarMoeda(v)}`
@@ -58,6 +60,15 @@ export default function Pdv() {
   const [mostrarAlteraQtd, setMostrarAlteraQtd] = useState(false)
   const [mostrarFormaPagamento, setMostrarFormaPagamento] = useState(false)
   const [idVendaPapeleta, setIdVendaPapeleta] = useState<number | null>(null)
+  /**
+   * Orçamento puxado para esta venda (V058) e o cliente/vendedor que vieram junto.
+   *
+   * <p>⚠️ O `idOrcamento` viaja até `efetivarVenda`: é ele que faz o servidor usar o preço
+   * congelado e recusar quantidade maior que a orçada. Limpar a venda limpa isto também — senão
+   * a venda seguinte carimbaria um orçamento que não tem nada a ver com ela.
+   */
+  const [orcamentoPuxado, setOrcamentoPuxado] = useState<Orcamento | null>(null)
+  const [mostrarPuxarOrcamento, setMostrarPuxarOrcamento] = useState(false)
   const campoBarrasRef = useRef<HTMLInputElement>(null)
   const linhasLedgerRef = useRef<Array<HTMLDivElement | null>>([])
   const flashTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -65,7 +76,8 @@ export default function Pdv() {
   const barrasTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const algumModalAberto =
-    mostrarPesquisa || mostrarAlteraQtd || mostrarFormaPagamento || idVendaPapeleta !== null || caixaFechado
+    mostrarPesquisa || mostrarAlteraQtd || mostrarFormaPagamento || mostrarPuxarOrcamento ||
+    idVendaPapeleta !== null || caixaFechado
 
   useEffect(() => {
     campoBarrasRef.current?.focus()
@@ -200,11 +212,25 @@ export default function Pdv() {
     setMostrarFormaPagamento(true)
   }
 
+  /** F6 abre o orçamento. ⚠️ Só com a venda vazia: puxar por cima de itens já lançados
+   *  misturaria preço congelado com preço de cadastro sem o operador perceber. */
+  const f6PuxarOrcamento = () => {
+    if (ledger.length > 0) {
+      mostrarFlash('Limpe a tela (F4) antes de puxar um orçamento.')
+      return
+    }
+    setTeclaAtiva('f6')
+    setMostrarPuxarOrcamento(true)
+  }
+
   const aoVendaEfetivada = (resultado: VendaEfetivada) => {
     setMostrarFormaPagamento(false)
     mostrarFlash(`Venda #${resultado.idVenda} efetivada — ${moeda(resultado.valorLiquido)}.`)
     setLedger([])
     setSelecionado(null)
+    // ⚠️ Limpar o orçamento junto: sem isto, a PRÓXIMA venda carimbaria um orçamento que não tem
+    // nada a ver com ela — e o servidor recusaria (já vendido), com o operador sem entender.
+    setOrcamentoPuxado(null)
     setIdVendaPapeleta(resultado.idVenda)
   }
 
@@ -222,6 +248,7 @@ export default function Pdv() {
       if (e.key === 'F3') { e.preventDefault(); f3AlteraQtd(); return }
       if (e.key === 'F4') { e.preventDefault(); f4LimpaTela(); return }
       if (e.key === 'F5') { e.preventDefault(); f5EfetivaVenda(); return }
+      if (e.key === 'F6') { e.preventDefault(); f6PuxarOrcamento(); return }
     }
     document.addEventListener('keydown', aoTeclar)
     return () => document.removeEventListener('keydown', aoTeclar)
@@ -336,7 +363,23 @@ export default function Pdv() {
                     <span className="pdv-kbd">F4</span> Limpa Tela
                   </span>
                 </div>
+                <div
+                  className={`pdv-tecla${teclaAtiva === 'f6' ? ' pdv-ativa' : ''}`}
+                  onClick={f6PuxarOrcamento}
+                >
+                  <IconeLupa />
+                  <span>
+                    <span className="pdv-kbd">F6</span> Puxar Orçamento
+                  </span>
+                </div>
               </div>
+
+              {orcamentoPuxado && (
+                <p className="pdv-dica">
+                  Venda a partir do <strong>orçamento nº {orcamentoPuxado.idOrcamento}</strong> —
+                  preços travados, cliente e vendedor já preenchidos no F5.
+                </p>
+              )}
 
               <button type="button" className="pdv-tecla-venda" onClick={f5EfetivaVenda}>
                 <IconeConfirmar size={24} />
@@ -410,10 +453,48 @@ export default function Pdv() {
           aoRemover={aoRemoverItem}
         />
       )}
+      {mostrarPuxarOrcamento && (
+        <PuxarOrcamentoModal
+          aoFechar={() => setMostrarPuxarOrcamento(false)}
+          aoConfirmar={(orcamento, levando) => {
+            // ⚠️ O ledger recebe o preço CONGELADO do orçamento, não o do cadastro — e o servidor
+            // relê esse preço do banco na efetivação, então a tela aqui é só o que o operador vê.
+            setLedger(
+              orcamento.itens
+                .filter((i) => (levando[i.idVariacao] ?? 0) > 0)
+                .map((i) => ({
+                  idVariacao: i.idVariacao,
+                  codigo: i.sku,
+                  descricao: i.descricao,
+                  variacao: [i.variacaoCor, i.variacaoTamanho].filter(Boolean).join(' · ') || null,
+                  qtd: levando[i.idVariacao] ?? 0,
+                  precoUnit: i.precoVenda,
+                  urlImagem: null,
+                })),
+            )
+            setOrcamentoPuxado(orcamento)
+            setSelecionado(null)
+            setMostrarPuxarOrcamento(false)
+            mostrarFlash(`Orçamento nº ${orcamento.idOrcamento} carregado — ${orcamento.nomeCliente}.`)
+          }}
+        />
+      )}
       {mostrarFormaPagamento && (
         <FormaPagamentoModal
           itens={ledger}
           valorTotal={valorTotal}
+          idOrcamento={orcamentoPuxado?.idOrcamento ?? null}
+          clienteInicial={
+            orcamentoPuxado
+              ? { idCliente: orcamentoPuxado.idCliente, nome: orcamentoPuxado.nomeCliente,
+                  cpfCnpj: orcamentoPuxado.documentoCliente, telefone: orcamentoPuxado.telefoneCliente }
+              : null
+          }
+          vendedorInicial={
+            orcamentoPuxado
+              ? { idFuncionario: orcamentoPuxado.idFuncionario, nome: orcamentoPuxado.nomeFuncionario }
+              : null
+          }
           aoFechar={() => {
             // Cancelou sem efetivar — libera a rotina crítica; a venda nunca chegou a existir.
             setMostrarFormaPagamento(false)

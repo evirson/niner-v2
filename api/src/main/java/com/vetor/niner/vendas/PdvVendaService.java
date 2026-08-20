@@ -273,8 +273,13 @@ public class PdvVendaService {
         for (Map.Entry<Long, BigDecimal> pedido : qtdPedida.entrySet()) {
             BigDecimal orcada = qtdOrcada.get(pedido.getKey());
             if (orcada == null) {
-                throw new ConflitoDadosException(
-                        "A venda tem um produto que não está no orçamento. Só é possível levar o que foi orçado.");
+                // ⚠️ Produto que NÃO estava no orçamento é permitido (decisão do dono do produto,
+                // 2026-08-20): o cliente veio buscar o orçado e viu mais coisa na loja. Esse item
+                // é uma venda comum — preço do CADASTRO, sem limite de quantidade —, e não entra
+                // na conta do que foi "levado do orçamento" (`vendaLevouMenosQueOrcado` só olha os
+                // itens orçados). A regra "só diminuir" vale para o que foi orçado, não para a
+                // venda inteira.
+                continue;
             }
             if (pedido.getValue().compareTo(orcada) > 0) {
                 throw new ConflitoDadosException(

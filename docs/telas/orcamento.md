@@ -351,3 +351,37 @@ link é **cópia temporária**, não o orçamento.
 
 Percentual de orçamentos que viram venda, e quantos morrem por vencimento. Os dois números saem
 direto de `situacao` — é por isso que `VENCIDO` é estado próprio (R5).
+
+---
+
+## Implementado (2026-08-20)
+
+**Backend:** `com.vetor.niner.vendas.orcamento` — `OrcamentoController`, `OrcamentoService`,
+`OrcamentoVencimentoJob` + `OrcamentoVencimentoProcessador`. Migration **V058**.
+
+**Front:**
+- `web/src/pages/orcamento/OrcamentoForm.tsx` — emissão (Frente de Loja → Orçamentos → ＋ Novo)
+- `web/src/pages/orcamento/OrcamentoLista.tsx` — pesquisa + detalhe em popup + cancelamento
+- `web/src/pages/orcamento/OrcamentoImpressaoModal.tsx` — **A4 e bobina**, com envio por WhatsApp
+- `web/src/pages/pdv/PuxarOrcamentoModal.tsx` — **F6** no PDV
+
+### Detalhes de implementação que valem registro
+
+**O item extra é permitido** (decisão do dono do produto, depois da primeira rodada): a venda pode
+levar produto que não estava no orçamento. Ele é venda comum — preço de **cadastro**, sem limite de
+quantidade — e **não** conta para decidir se o orçamento foi parcial. A regra "só diminuir" vale
+para o que foi **orçado**, não para a venda inteira.
+
+**F6 só funciona com a venda vazia.** Puxar orçamento por cima de itens já lançados misturaria
+preço congelado com preço de cadastro sem o operador perceber.
+
+**O `idOrcamento` é limpo junto com o ledger** ao efetivar. Sem isso a venda seguinte carimbaria um
+orçamento sem relação com ela — e o servidor a recusaria ("já vendido") com o operador sem entender
+o motivo.
+
+**As duas versões do documento ficam sempre no DOM.** O CSS decide qual vai para a impressora, e o
+envio por WhatsApp captura a folha **A4** mesmo quando a tela está mostrando a bobina: bobina é
+papel de balcão, não anexo de mensagem.
+
+**Cliente e vendedor vêm preenchidos, mas continuam editáveis** — quem vai levar pode não ser quem
+pediu o orçamento.

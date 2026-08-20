@@ -28,6 +28,7 @@ const VAZIO: ConfiguracaoGeralFormState = {
   cfgUsaCorGrade: false,
   cfgPermiteQtdDecimal: true,
   cfgPermiteEstoqueNegativo: true,
+  cfgDiasValidadeOrcamento: '15',
   cfgExigeNumeroVendaDevolucao: false,
   cfgRateiaFreteEntrada: false,
   cfgReajustaPrecoEntrada: false,
@@ -214,6 +215,27 @@ export default function ConfiguracaoGeralForm() {
               />
               {erros.percentualDescontoVenda && <p className="erro-campo">{erros.percentualDescontoVenda}</p>}
             </div>
+
+              <div className="col-6">
+                <label htmlFor="cfgDiasValidadeOrcamento">Validade padrão do orçamento (dias)</label>
+                <input
+                  id="cfgDiasValidadeOrcamento"
+                  inputMode="numeric"
+                  value={form.cfgDiasValidadeOrcamento}
+                  onChange={(e) =>
+                    setForm((f) => ({
+                      ...f,
+                      cfgDiasValidadeOrcamento: e.target.value.replace(/\D/g, '').slice(0, 3),
+                    }))
+                  }
+                  onFocus={(e) => e.target.select()}
+                />
+                <p className="muted" style={{ fontSize: 12, marginTop: 4 }}>
+                  Quantos dias somar a hoje para <strong>sugerir</strong> a validade ao emitir um
+                  orçamento — o vendedor pode mudar caso a caso. Passando da validade o orçamento
+                  vence sozinho e não vira mais venda.
+                </p>
+              </div>
             <div className="col-6">
               <label className="checkbox-linha" style={{ marginTop: 0 }}>
                 <input
@@ -235,7 +257,7 @@ export default function ConfiguracaoGeralForm() {
         <section className="section">
           <p className="section-label">Fiscal</p>
 
-          <div className="form-grid">
+          <div className="form-grid">CAMPO
             <div className="col-6">
               <label className="checkbox-linha" style={{ marginTop: 0 }}>
                 <input

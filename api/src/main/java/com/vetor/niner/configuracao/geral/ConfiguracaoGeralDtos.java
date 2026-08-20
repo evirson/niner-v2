@@ -75,6 +75,9 @@ public final class ConfiguracaoGeralDtos {
     public record PermiteQtdDecimalResponse(boolean cfgPermiteQtdDecimal) {
     }
 
+    public record DiasValidadeOrcamentoResponse(int cfgDiasValidadeOrcamento) {
+    }
+
     /** Só a flag de exigência do número da venda na Devolução de Produtos, sem checagem de papel —
      *  usada pela própria tela (`vendas.devolucao`) pra saber se o campo "Número da Venda" é
      *  obrigatório antes mesmo de tentar gravar. */

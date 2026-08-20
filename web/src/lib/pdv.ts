@@ -70,6 +70,9 @@ export interface EfetivarVendaRequest {
   /** Cliente e vendedor são obrigatórios em toda venda do PDV (2026-07-28). */
   idCliente: number
   idFuncionario: number
+  /** Orcamento que originou a venda (V058). O servidor usa o preco CONGELADO dele e recusa
+   *  quantidade maior que a orcada. */
+  idOrcamento?: number | null
 }
 
 export interface ParcelaGerada {
