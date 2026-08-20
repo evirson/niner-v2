@@ -2,6 +2,7 @@ package com.vetor.niner.fiscal.configuracao;
 
 import com.vetor.niner.comum.seguranca.SegredoCifrador;
 import com.vetor.niner.fiscal.documento.ChaveAcesso;
+import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -46,6 +47,10 @@ public class CsrtAdminService {
      *             da senha de SMTP), o que permite corrigir só a observação ou o {@code idCSRT}.
      */
     public record SalvarCsrtRequest(
+            // ⚠️ @NotBlank além do @Pattern: por especificação do Bean Validation, @Pattern PASSA
+            // quando o valor é null — e a coluna é NOT NULL, então o INSERT estourava e o handler
+            // global respondia 409 "Registro em uso por outro cadastro", que não tem nada a ver.
+            @NotBlank(message = "Informe o identificador do CSRT (2 dígitos).")
             @Pattern(regexp = "\\d{2}", message = "O identificador do CSRT tem exatamente 2 dígitos.")
             String idCsrt,
             @Size(max = 200) String csrt,

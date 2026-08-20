@@ -77,7 +77,7 @@ export default function ComprovantePapeletaModal({
 
   // Nunca buscado em reimpressão — o parâmetro só decide o comportamento do fluxo normal
   // pós-venda, e reimpressão nunca emite nada, automático ou manual (ver Obs1 do pedido).
-  const { data: configFiscal } = useQuery({
+  const { data: configFiscal, isFetching: buscandoConfigFiscal } = useQuery({
     queryKey: ['emite-fiscal-apos-venda'],
     queryFn: buscarEmiteFiscalAposVenda,
     enabled: !reimpressao,
@@ -129,7 +129,13 @@ export default function ComprovantePapeletaModal({
 
   // Aguarda `configFiscal` carregar antes de decidir qualquer coisa (nunca em reimpressão), pra
   // não vazar a papeleta não fiscal enquanto o parâmetro ainda está desconhecido.
-  const configFiscalCarregado = reimpressao || configFiscal !== undefined
+  //
+  // ⚠️ `!== undefined` sozinho não bastava (achado em 2026-08-20): navegando pelo menu (SPA, sem
+  // recarga), o valor em CACHE chega na primeira renderização mesmo desatualizado — o ADMIN
+  // desligava "Emitir fiscal após a venda" em Parâmetros e o popup de CPF ainda abria sozinho na
+  // venda seguinte, na janela do refetch. `isFetching` fecha essa janela. Mesmo tratamento e mesmo
+  // motivo de `DevolucaoProduto.tsx` (`buscandoCfgExigeVenda`).
+  const configFiscalCarregado = reimpressao || (configFiscal !== undefined && !buscandoConfigFiscal)
   const dadosFiscais = comprovante?.dadosFiscais ?? null
   const perguntaAutomatica =
     !reimpressao && configFiscalCarregado && configFiscal?.cfgEmiteFiscalAposVenda === true && !resultadoFiscal && !dadosFiscais

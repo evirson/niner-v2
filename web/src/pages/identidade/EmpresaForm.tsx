@@ -123,7 +123,7 @@ export default function EmpresaForm() {
           </div>
           <div className="topbar-acoes">
             <AjudaDaTela chaveTela="identidade.empresa.form" />
-            <BotaoFecharTela onClick={() => navigate('/empresas')} />
+            <BotaoFecharTela />
             <button type="submit" form="form-empresa" className="btn" disabled={salvar.isPending}>
               {salvar.isPending ? 'Salvando…' : 'Salvar'}
             </button>

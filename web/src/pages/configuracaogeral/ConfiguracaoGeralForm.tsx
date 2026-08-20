@@ -101,7 +101,10 @@ export default function ConfiguracaoGeralForm() {
       // `config-geral`; sem invalidar aqui, uma tela já visitada nesta sessão (navegação por
       // SPA, sem recarregar a página) continua servindo o valor antigo do cache até expirar.
       queryClient.invalidateQueries({ queryKey: ['usa-cor-grade'] })
-      queryClient.invalidateQueries({ queryKey: ['desconto-venda'] })
+      // ⚠️ A chave tem de ser a MESMA que o PDV usa em FormaPagamentoModal. Até 2026-08-20 aqui
+      // estava 'desconto-venda' — que não casa por prefixo com 'pdv-desconto-venda' e portanto não
+      // atingia query nenhuma: o teto de desconto continuava o antigo no PDV até um F5.
+      queryClient.invalidateQueries({ queryKey: ['pdv-desconto-venda'] })
       queryClient.invalidateQueries({ queryKey: ['permite-qtd-decimal'] })
       queryClient.invalidateQueries({ queryKey: ['exige-numero-venda-devolucao'] })
       queryClient.invalidateQueries({ queryKey: ['rateia-frete-entrada'] })

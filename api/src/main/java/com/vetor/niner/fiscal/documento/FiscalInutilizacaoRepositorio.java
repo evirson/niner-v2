@@ -164,11 +164,12 @@ public class FiscalInutilizacaoRepositorio {
     @Transactional(readOnly = true)
     public Optional<InutilizacaoParaArquivar> buscarParaArquivar(long idInutilizacao) {
         return jdbc.sql("""
-                        SELECT modelo, serie, numero_inicial, numero_final, xml_inutilizacao,
-                               criado_em, xml_objeto_bucket
-                          FROM fiscal_inutilizacao
-                         WHERE id_tenant = plataforma.tenant_atual() AND id_inutilizacao = ?
-                           AND autorizado = true
+                        SELECT i.modelo, i.serie, i.numero_inicial, i.numero_final, i.xml_inutilizacao,
+                               i.criado_em, i.xml_objeto_bucket, e.estado AS uf
+                          FROM fiscal_inutilizacao i
+                          JOIN empresa e ON e.id_tenant = i.id_tenant AND e.id_empresa = i.id_empresa
+                         WHERE i.id_tenant = plataforma.tenant_atual() AND i.id_inutilizacao = ?
+                           AND i.autorizado = true
                         """)
                 .param(idInutilizacao)
                 .query((rs, n) -> new InutilizacaoParaArquivar(

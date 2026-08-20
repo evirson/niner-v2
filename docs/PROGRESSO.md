@@ -523,6 +523,59 @@ Movimentação de Conta Corrente) que ainda não tinham migrado pro `SeletorPlan
 
 ## Linha do tempo
 
+### 2026-08-20 — Duas caçadas de bug em paralelo: 6 defeitos corrigidos, 1 mantido por decisão
+
+Dois agentes de leitura varreram o repositório ao mesmo tempo (back e front), depois de um dia com
+7 commits grandes. Nove achados; seis corrigidos, um virou decisão registrada, dois descartados por
+mim como fora de escopo.
+
+#### 🔴 O mais grave era meu, de hoje, e passou por 877 testes verdes
+
+`FiscalInutilizacaoRepositorio:166` — acrescentei o campo `uf` ao record `InutilizacaoParaArquivar`
+e o `perl` que devia acrescentar a coluna à query **falhou em silêncio**. `buscarParaArquivar`
+passou a estourar *"The column name uf was not found in this ResultSet"* — e o erro era **engolido**
+pelo `catch (RuntimeException) → log.warn` do próprio `ArquivamentoXmlService`.
+
+Efeito: a inutilização respondia **200**, o operador via sucesso, e **nenhum XML de inutilização
+chegava ao MinIO** — guarda legal de 5 anos (F6/DF21). O job de recuperação retentava a cada 10
+minutos, para sempre, com um warn por ciclo que ninguém lê.
+
+**Por que a suíte não pegou:** nenhum teste cobria o arquivamento de inutilização. As três consultas
+irmãs em `DocumentoFiscalRepositorio` tinham; esta não. É a mesma lição de sempre — *código sem
+teste no caminho é código que ninguém prova*. Corrigido com `JOIN empresa` (com `id_tenant`
+explícito no `ON`, P8) e coberto por `ArquivamentoXmlTest.inutilizacaoAutorizadaTemOXmlArquivadoNoBucket`.
+
+Registro do método, porque se repetiu hoje: **`perl -0pi -e` falhou em silêncio várias vezes** nesta
+sessão (padrão que não casa = arquivo intacto, exit 0). Onde o resultado importa, conferir com
+`grep` depois — foi assim que este bug nasceu.
+
+#### Os outros cinco
+
+| Onde | O que era |
+|---|---|
+| `CsrtPorUf.tsx` | 🔴 `existente` era calculado mas **nunca preenchia o formulário**. Trocar o CSRT de uma UF que usava `idCSRT 02` o rebaixava para `01` e **apagava a observação**, em silêncio — e o `idCSRT` vai em claro no `infRespTec`: seria toda NF-e daquela UF voltando `cStat 974` com a tela dizendo "salvo". Corrigido com um efeito que repõe o formulário **uma vez por seleção** (não a cada chegada de dado, senão um refetch de janela apagaria o que o usuário está digitando) |
+| `CsrtPorUf.tsx` | dizia *"salvo"* mesmo com o campo do código vazio. O campo é `type="password"` — colagem que não pegou é invisível. Agora distingue *"trocado"* de *"o código gravado foi mantido"* |
+| `CsrtAdminService` | `@Pattern` **passa quando o valor é `null`** (especificação do Bean Validation) → `idCsrt` ausente estourava o `NOT NULL` e o handler global respondia **409 "Registro em uso por outro cadastro"** numa criação. `@NotBlank` junto |
+| `ConfiguracaoGeralForm` | invalidava `['desconto-venda']` contra a chave real `['pdv-desconto-venda']` — **não atingia query nenhuma**, e o teto de desconto ficava o antigo no PDV até um F5 |
+| `ComprovantePapeletaModal` | decidia emitir NFC-e com `configFiscal !== undefined`, servindo cache desatualizado: desligar "emitir fiscal após a venda" e voltar ao PDV ainda abria o popup de CPF na janela do refetch. A tela irmã (`DevolucaoProduto`) já esperava `isFetching` e documentava o porquê — mesmo tratamento aplicado |
+| `EmpresaForm` | ✕ com rota fixa em vez de `navigate(-1)`, criando laço no histórico (fechar a lista devolvia ao formulário recém-fechado) |
+
+#### ⚠️ O achado mantido: `CancelamentoVendaService` apaga `caixa_detalhe` sem o guard
+
+É o único dos quatro `DELETE FROM caixa_detalhe` do sistema que não chama
+`exigirCaixaAbertoParaDesfazer`. A justificativa escrita na spec — *"não existe rota pra reabrir um
+caixa já fechado"* — **morreu em 2026-08-14**, quando a reabertura e o guard passaram a existir.
+
+**O dono do produto decidiu manter.** O custo aceito está agora escrito com todas as letras em
+`docs/telas/cancelamento-venda.md`: cancelar venda de caixa já fechado apaga o lançamento sem aviso,
+e a conferência gravada passa a afirmar um total que não existe mais. Vale reavaliar quando houver
+cliente real com conferência de caixa valendo dinheiro. O `CLAUDE.md` passou a citar isso como **a
+única exceção conhecida** da regra geral — rotina nova continua obrigada a chamar o guard.
+
+O que interessa registrar não é a decisão em si: é que uma **justificativa vencida** ficou seis dias
+parecendo regra vigente. É o que [[feedback_non_goals_apodrecem]] já dizia, agora com exemplo.
+
+**878 testes verdes**, `tsc -b` limpo em `web/` e `admin/`.
 ### 2026-08-20 — Importação de estoque recusa código de barras na faixa do Nainer, e o prefixo vira dado
 
 Pedido do dono do produto, que começou como um estudo maior — "criar um campo para o código de

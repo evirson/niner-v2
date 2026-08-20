@@ -499,4 +499,48 @@ class ArquivamentoXmlTest {
                 armazenamentoPrivado.ler(AreaPrivada.FISCAL_XML, chaveBucket));
         assertThat(new String(conteudo, java.nio.charset.StandardCharsets.UTF_8)).contains("110111");
     }
+
+    /**
+     * ⚠️ <b>Regressão de 2026-08-20.</b> O record {@code InutilizacaoParaArquivar} ganhou o campo
+     * {@code uf} (o mês da pasta passou a sair do fuso da UF) e a <b>query não ganhou a coluna</b>:
+     * {@code buscarParaArquivar} passou a estourar <i>"The column name uf was not found in this
+     * ResultSet"</i>. O erro era <b>engolido</b> pelo {@code catch (RuntimeException) → log.warn} do
+     * próprio serviço, então a inutilização respondia 200, <b>nenhum XML subia ao bucket</b>
+     * (F6/DF21, guarda de 5 anos) e o job de recuperação retentava para sempre, um warn por ciclo.
+     *
+     * <p>Passou despercebido porque <b>nenhum teste cobria o arquivamento de inutilização</b> — as
+     * três irmãs em {@code DocumentoFiscalRepositorio} tinham teste, esta não. Agora tem.
+     */
+    @Test
+    void inutilizacaoAutorizadaTemOXmlArquivadoNoBucket() throws Exception {
+        String token = assinarNovoTenant("inut-arquivo");
+        long idTenant = idTenantDo(token);
+        long idEmpresa = idEmpresaDo(token);
+        completarDadosDaEmpresa(idTenant, idEmpresa, "22333444000162");
+
+        long idInutilizacao = jdbc.sql("""
+                        INSERT INTO fiscal_inutilizacao
+                            (id_tenant, id_empresa, modelo, serie, ano, numero_inicial, numero_final,
+                             justificativa, autorizado, protocolo, xml_inutilizacao)
+                        VALUES (?, ?, 65, 1, 26, 500, 505,
+                                'Numeros queimados por rejeicao de schema, nunca autorizados', true,
+                                '141260009999999', '<inutNFe versao="4.00"><infInut>teste</infInut></inutNFe>')
+                        RETURNING id_inutilizacao
+                        """)
+                .params(idTenant, idEmpresa).query(Long.class).single();
+
+        TenantContext.comTenant(idTenant, () -> arquivamento.arquivarInutilizacaoSeAplicavel(idInutilizacao));
+
+        String chave = jdbc.sql("""
+                        SELECT xml_objeto_bucket FROM fiscal_inutilizacao
+                         WHERE id_tenant = ? AND id_inutilizacao = ?
+                        """)
+                .params(idTenant, idInutilizacao).query(String.class).optional().orElse(null);
+
+        assertThat(chave)
+                .as("XML da inutilização no bucket — nulo significa que buscarParaArquivar falhou e o erro foi engolido")
+                .isNotBlank();
+        // O caminho carrega ano/mês do instante LOCAL da UF da empresa (PR), não do offset cru.
+        assertThat(chave).contains("/65/").contains("inut-1-500-505.xml");
+    }
 }

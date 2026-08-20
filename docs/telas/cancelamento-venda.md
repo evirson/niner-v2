@@ -33,11 +33,33 @@ O documento original assume comissão, fiscal e TEF — nenhum dos três existe 
 Fechado como **non-goals do v1** — o cancelamento reverte só estoque, caixa e contas a receber.
 
 **Regra do caixa (RN-02) simplificada.** O documento original pede o caixa "da data da venda"
-aberto — o sistema só sabe abrir/fechar o caixa de HOJE (não existe rota pra reabrir um caixa já
-fechado de uma data passada). Decisão: exige o **caixa de hoje aberto** (do usuário que está
-cancelando, na empresa da venda) — o estorno de caixa em si é uma exclusão física dos
-lançamentos originais (não um novo lançamento datado de hoje), então a regra é uma trava de
-"operação do dia", não uma tentativa de reconciliar o caixa original.
+aberto. Decisão: exige o **caixa de hoje aberto** (do usuário que está cancelando, na empresa da
+venda) — o estorno de caixa em si é uma exclusão física dos lançamentos originais (não um novo
+lançamento datado de hoje), então a regra é uma trava de "operação do dia", não uma tentativa de
+reconciliar o caixa original.
+
+> ⚠️ **Decisão consciente, revalidada em 2026-08-20 — leia antes de "consertar".**
+>
+> A justificativa original desta regra era *"não existe rota pra reabrir um caixa já fechado de uma
+> data passada"*. **Essa razão morreu em 2026-08-14**, quando `POST /api/v1/caixa/fechamento/{id}/reabrir`
+> e o guard `CaixaService.exigirCaixaAbertoParaDesfazer` passaram a existir. Uma auditoria de
+> 2026-08-20 levantou a divergência, e **o dono do produto decidiu manter a regra como está**.
+>
+> **O custo que se aceita, dito com todas as letras:** `CancelamentoVendaService` é o único dos
+> quatro `DELETE FROM caixa_detalhe` do sistema que **não** chama o guard. Cancelar uma venda cujo
+> caixa já foi fechado apaga o lançamento daquele caixa **sem aviso** — e a conferência gravada em
+> `caixa_fechamento_conferencia` passa a afirmar um total que não existe mais. Exemplo: venda de
+> 18/08 de R$ 500 no caixa 5, fechado e conferido; cancelada em 20/08, o caixa 5 passa a somar R$ 0
+> contra uma conferência que diz R$ 500.
+>
+> **Por que se aceita:** exigir a reabertura do caixa daquele dia transformaria um cancelamento
+> corriqueiro num procedimento de duas etapas com 409 no meio. O sistema ainda está em construção e
+> sem cliente real; quando houver conferência de caixa valendo dinheiro de verdade, esta decisão
+> merece uma segunda passada.
+>
+> Isto **não** é a mesma coisa que a regra geral do `CLAUDE.md` ("desfazer dinheiro nunca toca caixa
+> fechado em silêncio"): é a **exceção conhecida** dela, e a única. Rotina nova que apague
+> `caixa_detalhe` continua obrigada a chamar o guard.
 
 **Permissão (RN-04) simplificada.** O documento pede uma permissão granular
 (`VENDA_CANCELAR`) no cadastro de perfis — o sistema só tem dois papéis (ADMIN/OPERADOR), sem
@@ -214,7 +236,7 @@ Nenhum — comissão, fiscal e TEF ficam fora do v1 (ver decisões de escopo).
   "Integração fiscal" abaixo; esta lista não foi atualizada quando o B8 entrou, ficando
   desalinhada com o código por dois dias até a auditoria de 2026-08-19.
 - **Permissão granular por rotina (`VENDA_CANCELAR`)** — tela ADMIN-only por enquanto.
-- **Reabrir o caixa de uma data passada** — a regra usa sempre o caixa de hoje.
+- **Reabrir o caixa de uma data passada** — a regra usa sempre o caixa de hoje. ⚠️ A rota de reabertura **passou a existir** em 2026-08-14; manter isto fora do escopo virou **decisão consciente** em 2026-08-20, com o custo escrito na seção "Decisões de escopo" acima. Não é ponteiro morto.
 - **Prazo/limite de dias para cancelar uma venda antiga em geral** — continua não existindo; uma
   venda **sem** NFC-e pode ser buscada e cancelada a qualquer momento, sem limite de idade. O que
   existe desde 2026-08-19 é o prazo específico da **SEFAZ para cancelar a NFC-e** (30 min padrão,

@@ -313,6 +313,7 @@ class FiscalInutilizacaoTest {
                 .andReturn().getResponse().getContentAsString();
         assertThat((List<?>) JsonPath.read(buracosDepois, "$"))
                 .as("depois de homologada, o buraco não aparece mais").isEmpty();
+
     }
 
     /** SEFAZ recusa: a tentativa fica registrada (P3), mas o buraco continua aberto. */

@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { dataHora } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import { excluirCsrt, listarCsrt, salvarCsrt, type CsrtUf } from '../lib/plataforma'
@@ -44,12 +44,42 @@ export default function CsrtPorUf() {
   const [erro, setErro] = useState<string | null>(null)
 
   const existente = cadastrados?.find((c) => c.uf === uf && c.ambiente === ambiente)
+  const chaveSelecionada = chave(uf, ambiente)
+  const chaveJaPreenchida = useRef<string | null>(null)
+
+  /**
+   * Repõe o formulário com o que está gravado na UF/ambiente selecionados.
+   *
+   * <p>⚠️ Sem isto, `idCsrt` ficava no default `'01'` e a observação em branco mesmo para uma UF
+   * já cadastrada — e como o backend grava `id_csrt`/`observacao` sem a convenção de "em branco
+   * mantém" (que vale só para o código), trocar o CSRT de uma UF que usava o identificador `02`
+   * o rebaixava para `01` em silêncio. O `idCSRT` vai em claro no `infRespTec` e precisa bater com
+   * o cadastro da SEFAZ: seria toda NF-e daquela UF voltando `cStat 974`, com a tela dizendo
+   * "salvo".
+   *
+   * <p>Preenche **uma vez por seleção**, não a cada chegada de dado: um refetch de janela (o React
+   * Query refaz a busca ao voltar o foco) não pode apagar o que o usuário está digitando enquanto
+   * copia o código do e-mail da SEFAZ.
+   */
+  useEffect(() => {
+    if (!cadastrados || chaveJaPreenchida.current === chaveSelecionada) return
+    chaveJaPreenchida.current = chaveSelecionada
+    setIdCsrt(existente?.idCsrt ?? '01')
+    setObservacao(existente?.observacao ?? '')
+    setCodigo('')
+  }, [cadastrados, chaveSelecionada, existente])
 
   const salvar = useMutation({
     mutationFn: () => salvarCsrt(uf, ambiente, { idCsrt, csrt: codigo, observacao }),
     onSuccess: () => {
       setErro(null)
-      setAviso(`CSRT de ${uf} (${ambiente === 1 ? 'produção' : 'homologação'}) salvo.`)
+      // ⚠️ A mensagem tem de distinguir "troquei o código" de "mantive o código". O campo é
+      // `type="password"`: uma colagem que não pegou é invisível, e um "salvo" genérico faria o
+      // administrador dar a tarefa por concluída com o código antigo ainda gravado.
+      const onde = `${uf} (${ambiente === 1 ? 'produção' : 'homologação'})`
+      setAviso(codigo.trim()
+        ? `CSRT de ${onde} trocado.`
+        : `Identificador e observação de ${onde} atualizados — o código gravado foi mantido.`)
       setCodigo('')
       qc.invalidateQueries({ queryKey: ['csrt'] })
     },
@@ -61,6 +91,7 @@ export default function CsrtPorUf() {
     onSuccess: () => {
       setErro(null)
       setAviso('CSRT removido.')
+      chaveJaPreenchida.current = null // some a linha: o formulário tem de voltar ao default
       qc.invalidateQueries({ queryKey: ['csrt'] })
     },
     onError: (e: Error) => { setAviso(null); setErro(e.message) },
