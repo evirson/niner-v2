@@ -3,7 +3,7 @@ Autor: Claudio Calixto (dono do produto) + Claude · Data: 2026-08-06, gauge de 
 
 ## Problema
 
-O lojista às vezes precisa tirar os dados do Niner pra fora — uma auditoria contábil pedindo o
+O lojista às vezes precisa tirar os dados do Nainer pra fora — uma auditoria contábil pedindo o
 plano de contas, um backup próprio, conferência cruzada com outro sistema, ou simplesmente abrir
 numa planilha pra analisar fora do ERP. Não existia nenhum jeito de baixar o que já está
 cadastrado além de copiar linha por linha das telas de listagem.
@@ -11,7 +11,7 @@ cadastrado além de copiar linha por linha das telas de listagem.
 ## Solução proposta
 
 Irmã "de saída" da [Rotina de Importação de Dados](importacao-dados.md): em vez de trazer dado de
-um sistema anterior, exporta o que já está no Niner para planilha Excel (`.xlsx`). Vive no mesmo
+um sistema anterior, exporta o que já está no Nainer para planilha Excel (`.xlsx`). Vive no mesmo
 grupo do menu, **Configurações**, `ADMIN`-only. Bem mais simples que a importação — é só leitura,
 sem validação, sem escolha prévia, sem dependência entre tabelas: um clique numa tabela já baixa
 o arquivo.
@@ -108,7 +108,7 @@ no backend, é só reaproveitar um componente já genérico com um rótulo difer
 ## Ajuda da tela (manual de operação) — obrigatório (R22 / §3.7.1)
 
 - **`chave_tela`: `configuracao.exportacao`**
-  - Objetivo: baixar em planilha Excel tudo que já está cadastrado no Niner.
+  - Objetivo: baixar em planilha Excel tudo que já está cadastrado no Nainer.
   - Passos: (1) escolha a tabela; (2) enquanto os dados são buscados e a planilha é montada, um
     indicador de progresso aparece na tela; (3) a planilha é gerada e baixada automaticamente.
   - Erros comuns: "Nenhum registro encontrado" → a tabela escolhida ainda não tem dado

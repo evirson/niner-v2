@@ -102,7 +102,7 @@ export async function gerarPdfCapturaRelatorioEstoque(elemento: HTMLElement, rod
 
   await desenharElementoPaginado(doc, elemento)
 
-  desenharCabecalhoERodape(doc, 'Relatório de Estoque', new Date().toLocaleString('pt-BR'), rodapeEsquerda, 'Niner ERP')
+  desenharCabecalhoERodape(doc, 'Relatório de Estoque', new Date().toLocaleString('pt-BR'), rodapeEsquerda, 'Nainer ERP')
 
   doc.save('relatorio-de-estoque.pdf')
 }

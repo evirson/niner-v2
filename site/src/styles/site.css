@@ -1,5 +1,5 @@
-/* Niner — folha de estilos do site público (institucional + trial).
-   Sistema visual portado do golden docs/padroes/nainer_institucional/, rebrandeado Niner,
+/* Nainer — folha de estilos do site público (institucional + trial).
+   Sistema visual portado do golden docs/padroes/nainer_institucional/, rebrandeado Nainer,
    com camada de movimento (scroll-reveal, hero animado, contadores). Todo movimento é
    opcional e desligado sob prefers-reduced-motion. Tokens de cor §3.7. */
 
@@ -91,12 +91,9 @@ h1, h2, h3 {
   backdrop-filter: saturate(1.4) blur(10px);
 }
 .brand { display: flex; align-items: center; gap: 10px; text-decoration: none; color: var(--ink); }
-.brand-mark {
-  display: inline-flex; align-items: center; justify-content: center;
-  width: 34px; height: 34px; border-radius: 9px;
-  background: var(--btn-primary-bg); color: var(--btn-primary-text);
-  font-family: Georgia, serif; font-weight: 700; font-size: 17px; flex-shrink: 0;
-}
+/* Desde 2026-08-19 é o símbolo em SVG (quadrado + "N" + traço neon), não mais uma letra numa
+   caixa: o fundo e a cor vêm de dentro do próprio SVG. */
+.brand-mark { display: block; width: 34px; height: 34px; flex-shrink: 0; }
 .brand-text { display: flex; flex-direction: column; line-height: 1.2; }
 .brand-name { font-family: Georgia, serif; font-weight: 700; font-size: 18px; letter-spacing: 0.02em; }
 .brand-name span { color: var(--accent); }

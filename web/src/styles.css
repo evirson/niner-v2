@@ -1,4 +1,4 @@
-/* Design system do Niner (§3.7) — tokens + tema claro/escuro. Compartilha a paleta
+/* Design system do Nainer (§3.7) — tokens + tema claro/escuro. Compartilha a paleta
    com o site (golden file: cadastro_fornecedor_campos_cinza.html). */
 :root {
   --ground: #f5f4f0; --surface: #ffffff; --surface-2: #edece6;
@@ -1407,3 +1407,48 @@ a.menu-card:hover {
     print-color-adjust: exact;
   }
 }
+/* -------------------------------------------------------------------------------------------
+   Minha Conta (ADR-015, docs/telas/painel-assinatura.md) — plano, cota de vendas do mês,
+   histórico e CNPJs. A cor do bloco de uso é o aviso: teal enquanto sobra folga, âmbar a partir
+   de 80% da cota, vermelho quando a cota estourou (tolerância) ou acabou de vez (bloqueado).
+   ------------------------------------------------------------------------------------------- */
+.minha-conta { display: flex; flex-direction: column; gap: 16px; }
+.secao-conta { padding: 20px 24px; }
+.secao-conta-cabecalho { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 12px; }
+.secao-conta .muted { margin: 6px 0 0; }
+
+.plano-linha { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.plano-nome { font-size: 22px; }
+.plano-preco { color: var(--ink-muted); font-variant-numeric: tabular-nums; }
+
+.uso-numero { font-size: 20px; margin: 4px 0 10px; font-variant-numeric: tabular-nums; }
+.uso-numero strong { font-size: 28px; }
+.uso-detalhe { color: var(--ink-muted); font-size: 15px; }
+
+.barra-uso { height: 12px; border-radius: 999px; background: var(--field-bg); overflow: hidden; }
+.barra-uso-preenchida { height: 100%; background: var(--accent); transition: width .3s ease; }
+.uso-atencao .barra-uso-preenchida { background: #b8860b; }
+.uso-tolerancia .barra-uso-preenchida,
+.uso-bloqueado .barra-uso-preenchida { background: var(--danger); }
+.uso-tolerancia, .uso-bloqueado { border-color: var(--danger); }
+
+.faixa-sugerida { margin: 12px 0 0; padding: 10px 12px; border-radius: var(--radius);
+  background: rgba(var(--accent-rgb), .10); border: 1px solid var(--line); }
+
+.historico-barras { display: flex; align-items: flex-end; gap: 10px; height: 140px; padding-top: 8px; }
+.historico-coluna { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; gap: 4px; }
+.historico-barra { width: 100%; max-width: 48px; background: var(--accent); border-radius: 4px 4px 0 0; }
+.historico-valor { font-size: 12px; font-variant-numeric: tabular-nums; color: var(--ink-muted); }
+.historico-mes { font-size: 11px; color: var(--label-color); }
+
+/* Pagamento da assinatura (ADR-016) — modal de PIX dentro de Minha Conta. */
+.faixa-sugerida { display: flex; flex-direction: column; gap: 10px; align-items: flex-start; }
+.ciclo-opcoes { display: flex; gap: 8px; flex-wrap: wrap; }
+.valor-cobranca { margin: 12px 0 0; font-size: 18px; }
+.pix-qr { display: block; margin: 12px auto; border-radius: var(--radius); background: #fff; padding: 8px; }
+.btn-link { background: none; border: none; padding: 0; color: var(--accent); cursor: pointer; font: inherit; text-decoration: underline; }
+
+/* Cota do mês no painel do lojista (ADR-015) — mesma leitura da tela Minha Conta. */
+.barra-cota { height: 8px; border-radius: 999px; background: var(--field-bg); overflow: hidden; margin-top: 8px; }
+.barra-cota-preenchida { height: 100%; background: var(--accent); transition: width .3s ease; }
+.barra-cota-preenchida.atencao { background: #b8860b; }

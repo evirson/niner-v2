@@ -2,7 +2,12 @@ package com.vetor.niner.comum.config;
 
 import com.vetor.niner.comum.tenant.HorarioAcessoFilter;
 import com.vetor.niner.comum.tenant.TenantFilter;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.Bean;
+import org.springframework.http.HttpMethod;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.oauth2.jwt.JwtDecoder;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
@@ -30,10 +35,13 @@ import java.util.List;
  *       {@code plataforma.*} (global).</li>
  * </ul>
  *
- * <p>TODO(jwt): as cadeias de tenant/admin ainda não exigem token porque não há
- * emissor de JWT nesta fase. Quando existir, trocar o {@code permitAll} por
- * {@code authenticated()} + {@code oauth2ResourceServer(jwt)} validando o {@code aud}
- * ({@code tenant} × {@code plataforma}) — ver application.yml e ADR-009.
+ * <p><b>As três superfícies estão fechadas (2026-08-19).</b> A de admin era {@code permitAll}
+ * desde a fase 0 e foi o bloqueador nº 1 para produção: publicá-la assim exporia o gerenciador de
+ * marketing — <b>nome, e-mail e WhatsApp de leads</b> — para qualquer um na internet (LGPD).
+ * Agora exige JWT de staff, e a separação de populações (R18/ADR-009) é feita por <b>decoder
+ * próprio por superfície</b>: {@code /api/v1} só aceita {@code aud=tenant}, {@code /api/admin} só
+ * aceita {@code aud=plataforma}. Token trocado de lugar é recusado na porta, antes de qualquer
+ * checagem de papel.
  */
 @Configuration(proxyBeanMethods = false)
 public class SegurancaConfig {
@@ -70,16 +78,42 @@ public class SegurancaConfig {
         return http.build();
     }
 
+    /**
+     * Backoffice da Vetor. Único ponto anônimo: {@code POST /api/admin/sessao} (o login do staff).
+     * O papel vira authority ({@code SUPER_ADMIN}/{@code SUPORTE}/{@code FINANCEIRO}) a partir do
+     * claim {@code papel}; a restrição por papel fica em cada endpoint, não aqui.
+     *
+     * <p>⚠️ O {@code @Qualifier} é obrigatório: com dois beans {@code JwtDecoder}, o
+     * {@code @Primary} (o de tenant) vence a resolução por nome do parâmetro, e sem ele o Spring
+     * injetava silenciosamente o decoder errado aqui — token de <b>lojista</b> abria o backoffice.
+     * Pego por {@code StaffAdminSegurancaTest.tokenDeLojistaNaoAbreOBackoffice}.
+     */
     @Bean
     @Order(3)
-    SecurityFilterChain adminFilterChain(HttpSecurity http) throws Exception {
+    SecurityFilterChain adminFilterChain(
+            HttpSecurity http, @Qualifier("jwtDecoderStaff") JwtDecoder jwtDecoderStaff) throws Exception {
         http
                 .securityMatcher("/api/admin/**")
-                // TODO(jwt): .authorizeHttpRequests(a -> a.anyRequest().hasAuthority("SCOPE_admin"))
-                .authorizeHttpRequests(auth -> auth.anyRequest().permitAll())
+                .authorizeHttpRequests(auth -> auth
+                        .requestMatchers(HttpMethod.POST, "/api/admin/sessao").permitAll()
+                        .anyRequest().authenticated())
+                .oauth2ResourceServer(oauth -> oauth.jwt(jwt -> jwt
+                        .decoder(jwtDecoderStaff)
+                        .jwtAuthenticationConverter(conversorDePapelDeStaff())))
+                .cors(Customizer.withDefaults())
                 .csrf(AbstractHttpConfigurer::disable)
                 .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS));
         return http.build();
+    }
+
+    /** Claim {@code papel} → authority, para os endpoints poderem exigir SUPER_ADMIN e afins. */
+    private static JwtAuthenticationConverter conversorDePapelDeStaff() {
+        JwtAuthenticationConverter conversor = new JwtAuthenticationConverter();
+        conversor.setJwtGrantedAuthoritiesConverter(jwt -> {
+            String papel = jwt.getClaimAsString("papel");
+            return papel == null ? List.of() : List.of(new SimpleGrantedAuthority(papel));
+        });
+        return conversor;
     }
 
     /** Nega tudo que não casa com as três superfícies acima. */

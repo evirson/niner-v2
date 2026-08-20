@@ -1,5 +1,5 @@
 ---
-// Layout base do site público do Niner: SEO/OG + sistema visual (site.css) + tema claro/escuro
+// Layout base do site público do Nainer: SEO/OG + sistema visual (site.css) + tema claro/escuro
 // + camada de movimento (scroll-reveal, contadores, sync do hero). A base-URL da API é lida em
 // runtime (public/config.js), nunca embutida no bundle (spec §3.1).
 import '../styles/site.css';
@@ -10,7 +10,7 @@ export interface Props {
   path?: string;
 }
 const { title, description, path = '/' } = Astro.props;
-const canonical = new URL(path, Astro.site ?? 'https://niner.com.br').toString();
+const canonical = new URL(path, Astro.site ?? 'https://nainer.com.br').toString();
 ---
 
 <!doctype html>
@@ -23,7 +23,7 @@ const canonical = new URL(path, Astro.site ?? 'https://niner.com.br').toString()
     <link rel="canonical" href={canonical} />
     <!-- Open Graph / social -->
     <meta property="og:type" content="website" />
-    <meta property="og:site_name" content="Niner" />
+    <meta property="og:site_name" content="Nainer" />
     <meta property="og:title" content={title} />
     <meta property="og:description" content={description} />
     <meta property="og:url" content={canonical} />
@@ -42,28 +42,39 @@ const canonical = new URL(path, Astro.site ?? 'https://niner.com.br').toString()
     </script>
     <!-- base-URL da API lida em runtime (spec §3.1) -->
     <script is:inline src="/config.js"></script>
+    <!-- medição própria, first-party (ADR-017): mede também as páginas fora da landing, senão o
+         funil perde justamente o passo anterior ao cadastro. defer = nunca no caminho crítico. -->
+    <script is:inline defer src="/beacon.js"></script>
   </head>
   <body>
     <header class="navbar" id="navbar">
-      <a href="/" class="brand" aria-label="Niner — início">
-        <span class="brand-mark">N</span>
+      <a href="/" class="brand" aria-label="Nainer — início">
+        <svg class="brand-mark" width="34" height="34" viewBox="0 0 32 32" aria-hidden="true">
+          <rect width="32" height="32" rx="9" fill="var(--btn-primary-bg)" />
+          <text x="15" y="22.5" font-family="Georgia, 'Iowan Old Style', serif" font-size="19"
+            fill="var(--btn-primary-text)" text-anchor="middle">N</text>
+          <rect x="20" y="23" width="7" height="3" rx="1.5" fill="#2cf5e2" />
+        </svg>
         <span class="brand-text">
-          <span class="brand-name">NI<span>NER</span></span>
-          <span class="brand-tagline">ERP para varejo multicanal</span>
+          <span class="brand-name">NAI<span>NER</span></span>
+          <span class="brand-tagline">ERP para o pequeno varejo</span>
         </span>
       </a>
+      <!-- Os destinos espelham os `id` REAIS da landing (`src/pages/index.astro`): #recursos,
+           #preco, #fiscal, #duvidas. Antes apontavam para #como-funciona/#planos/#perguntas/#canais,
+           que não existem em página nenhuma — âncora morta não dá 404, ela falha em silêncio. -->
       <nav class="nav-links" aria-label="Seções">
-        <a href="/#recursos">Recursos</a>
-        <a href="/#como-funciona">Como funciona</a>
-        <a href="/#planos">Planos</a>
-        <a href="/#perguntas">Perguntas</a>
+        <a href="/#recursos" data-evento="NAV" data-rotulo="recursos">Recursos</a>
+        <a href="/#preco" data-evento="NAV" data-rotulo="preco">Preço</a>
+        <a href="/#fiscal" data-evento="NAV" data-rotulo="fiscal">Fiscal</a>
+        <a href="/#duvidas" data-evento="NAV" data-rotulo="duvidas">Dúvidas</a>
       </nav>
       <div class="nav-actions">
         <button type="button" class="theme-toggle" id="themeToggle" aria-label="Alternar tema claro ou escuro">
           <span id="themeIcon" aria-hidden="true">☾</span>
           <span id="themeLabel">Tema escuro</span>
         </button>
-        <a href="/assinar" class="btn btn-primary">Testar 60 dias grátis</a>
+        <a href="/assinar" class="btn btn-primary">Criar conta grátis</a>
         <button type="button" class="nav-toggle" id="navToggle" aria-label="Abrir menu">☰</button>
       </div>
     </header>
@@ -76,37 +87,43 @@ const canonical = new URL(path, Astro.site ?? 'https://niner.com.br').toString()
       <div class="container">
         <div class="footer-grid">
           <div class="footer-brand">
-            <a href="/" class="brand" aria-label="Niner — início">
-              <span class="brand-mark">N</span>
-              <span class="brand-text"><span class="brand-name">NI<span>NER</span></span></span>
+            <a href="/" class="brand" aria-label="Nainer — início">
+              <svg class="brand-mark" width="34" height="34" viewBox="0 0 32 32" aria-hidden="true">
+                <rect width="32" height="32" rx="9" fill="var(--btn-primary-bg)" />
+                <text x="15" y="22.5" font-family="Georgia, 'Iowan Old Style', serif" font-size="19"
+                  fill="var(--btn-primary-text)" text-anchor="middle">N</text>
+                <rect x="20" y="23" width="7" height="3" rx="1.5" fill="#2cf5e2" />
+              </svg>
+              <span class="brand-text"><span class="brand-name">NAI<span>NER</span></span></span>
             </a>
-            <p>O ERP que é a fonte única de estoque e preço da sua loja e mantém todos os canais em sincronia — sem overselling.</p>
+            <p>PDV, estoque com grade de cor e tamanho, crediário e nota fiscal num lugar só — calçado e confecção atendidos plenamente.</p>
           </div>
           <div>
             <h4>Produto</h4>
             <ul>
-              <li><a href="/#recursos">Recursos</a></li>
-              <li><a href="/#como-funciona">Como funciona</a></li>
-              <li><a href="/#canais">Canais</a></li>
-              <li><a href="/#planos">Planos</a></li>
+              <li><a href="/#recursos" data-evento="NAV" data-rotulo="recursos">Recursos</a></li>
+              <li><a href="/#preco" data-evento="NAV" data-rotulo="preco">Preço</a></li>
+              <li><a href="/#fiscal" data-evento="NAV" data-rotulo="fiscal">Nota fiscal</a></li>
             </ul>
           </div>
           <div>
             <h4>Começar</h4>
             <ul>
-              <li><a href="/assinar">Teste grátis (60 dias)</a></li>
-              <li><a href="/#perguntas">Perguntas frequentes</a></li>
+              <li><a href="/assinar" data-evento="INICIO_SIGNUP" data-rotulo="rodape-base">Criar conta grátis</a></li>
+              <li><a href="/#duvidas" data-evento="NAV" data-rotulo="duvidas">Perguntas frequentes</a></li>
             </ul>
           </div>
           <div>
             <h4>Empresa</h4>
             <ul>
               <li><a href="mailto:contato@vetorsistemas.com.br">Contato</a></li>
+              <li><a href="/termos">Termos de uso</a></li>
+              <li><a href="/privacidade">Privacidade (LGPD)</a></li>
             </ul>
           </div>
         </div>
         <div class="footer-bottom">
-          <span>© 2026 Niner — Vetor Sistemas. Todos os direitos reservados.</span>
+          <span>© 2026 Nainer — Vetor Sistemas. Todos os direitos reservados.</span>
           <span>Feito para o varejo multicanal brasileiro.</span>
         </div>
       </div>

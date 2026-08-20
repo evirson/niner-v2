@@ -1,3 +1,4 @@
+import { SITE_BASE } from '../lib/config'
 import { useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Toast from '../components/Toast'
@@ -125,7 +126,10 @@ export default function Login() {
         </button>
         <p className="muted" style={{ fontSize: 13, marginTop: 14 }}>
           Ainda não tem conta?{' '}
-          <a href="http://localhost:5175/assinar">Teste grátis por 14 dias</a>.
+          {/* Texto do trial de 14 dias sobreviveu a DUAS mudanças de modelo comercial (14 → 60
+              dias → plano Gratuito sem prazo, ADR-015). O endereço vem do config de runtime: o
+              `localhost:5175` que estava aqui virava link morto em produção. */}
+          <a href={`${SITE_BASE}/assinar`}>Crie grátis — até 100 vendas por mês</a>.
         </p>
       </form>
     </div>

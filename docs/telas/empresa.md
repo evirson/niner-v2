@@ -25,7 +25,12 @@ nunca construída. Tipo de Carteira e Produto tiveram o mesmo problema em 2026-0
 
 Nova tela em `identidade/empresa` — **o primeiro CRUD do projeto sem criar/excluir**: a empresa
 já existe (criada no signup ou incluída via SQL direto pela equipe, caminho que já era usado
-antes desta tela para cadastrar filiais); esta tela só edita o que já existe. Sem paginação,
+antes desta tela para cadastrar filiais); esta tela só edita o que já existe.
+
+> ⚠️ **Revisado em 2026-08-18 (ADR-015):** a inclusão deixou de ser SQL manual — o ADMIN passa a
+> criar CNPJ novo sozinho, pela tela **Minha Conta** (`docs/telas/painel-assinatura.md`), via
+> `POST /api/v1/empresas`. Esta tela continua **sem criar e sem excluir**: ela edita a ficha
+> completa; quem inclui é o painel. Ver a seção "Revisão 2026-08-18" no fim deste arquivo. Sem paginação,
 busca ou ordenação — `EmpresaService.listar()` já documenta "no máximo poucas dezenas" (mesmo
 critério de sempre para as empresas de um tenant).
 
@@ -147,3 +152,36 @@ Nenhuma bloqueante.
 
 Preencher os dados fiscais de uma empresa e ver a Conformidade Fiscal refletir a mudança em
 menos de 1 minuto.
+
+
+---
+
+## Revisão 2026-08-18 — inclusão de empresa (multi-CNPJ), ADR-015
+
+Com o ADR-015, **CNPJ deixa de ser recurso de plano**: é ilimitado no gratuito e no pago (D4
+revisada), e a cota de vendas do tenant **soma todas as empresas**. Isso torna a inclusão uma
+operação de autoatendimento, e ela ganha endpoint próprio:
+
+```
+POST /api/v1/empresas                        (ADMIN)
+{ razaoSocial*, nomeFantasia?, cnpj? }       → 201
+409 CNPJ duplicado no tenant (empresa_cnpj_uk) · 422 CNPJ inválido
+```
+
+O serviço faz, **numa transação**: `codigo_empresa` = maior do tenant + 1 (respeitando
+`empresa_codigo_empresa_uk`); `matriz = false` a partir da segunda empresa; `cfg_nome_etiqueta`
+com o modelo padrão (coluna `NOT NULL` sem default); vínculo em `usuario_empresa` para o ADMIN
+que criou; e incremento de `plataforma.uso_tenant.qtd_empresas`.
+
+**Não** replica plano de contas, tipos de carteira nem perfis fiscais — os três são **por tenant**
+(ver `SignupService.assinar`) e já existem. **`fiscal_config_empresa` é por empresa** e continua
+nascendo só quando o lojista ligar o fiscal naquela empresa (F12), pela tela de Configuração
+Fiscal — a inclusão não presume que a filial vai emitir nota.
+
+O CNPJ segue a validação **alfanumérica** (IN RFB 2.229/2024): `somenteAlfanumerico` + `cnpjValido`
+no front, `Documentos.java` no back. Nunca limpar letras com um filtro só-dígitos antes de validar.
+
+**Fluxo depois de criar:** a tela avisa que a empresa nova só fica disponível para operação **no
+próximo login** (o login em duas voltas trata múltiplas empresas — `docs/telas/login-empresa.md`)
+e oferece o link direto para esta tela, *Dados da Empresa*, completar endereço, IE, IM, código
+IBGE e CNAE. Nada disso é obrigatório para salvar — quem cobra é a Conformidade Fiscal.

@@ -5,7 +5,7 @@ import { api } from './api'
 
 export type AmbienteFiscal = 'HOMOLOGACAO' | 'PRODUCAO'
 
-/** DF37 — o Niner atende só Simples Nacional (1 e 2) e MEI (4). O 3 nunca aparece aqui. */
+/** DF37 — o Nainer atende só Simples Nacional (1 e 2) e MEI (4). O 3 nunca aparece aqui. */
 export const CRT_OPCOES = [
   { valor: 1, rotulo: '1 — Simples Nacional' },
   { valor: 2, rotulo: '2 — Simples Nacional (excesso de sublimite)' },

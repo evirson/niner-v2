@@ -4,7 +4,6 @@ import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 
-import java.time.OffsetDateTime;
 import java.util.List;
 
 /** DTOs do onboarding público (signup do trial + login). */
@@ -13,22 +12,29 @@ public final class OnboardingDtos {
     private OnboardingDtos() {
     }
 
-    /** Pedido de assinatura-teste (trial self-service, R12). */
+    /** Pedido de criação de conta (self-service, R12) — nasce no plano Gratuito (ADR-015). */
     public record AssinarRequest(
             @NotBlank @Size(max = 120) String nomeLoja,
             @NotBlank @Email @Size(max = 160) String email,
             @NotBlank @Size(min = 8, max = 100) String senha,
-            @NotBlank @Size(max = 120) String nomeAdmin) {
+            @NotBlank @Size(max = 120) String nomeAdmin,
+            /** UUID do cookie first-party do site (ADR-017). Opcional: sem ele o signup funciona
+             *  igual, só não dá para atribuir a conta à campanha que a trouxe. */
+            String visitanteId) {
     }
 
-    /** Resposta do signup: já devolve o token de primeiro acesso (auto-login). */
+    /**
+     * Resposta do signup: já devolve o token de primeiro acesso (auto-login). {@code
+     * limiteVendasMes} substituiu {@code trialExpiraEm} em 2026-08-18 (ADR-015) — não existe mais
+     * data de expiração; o que a conta gratuita tem é cota de vendas por mês.
+     */
     public record AssinarResponse(
             String token,
             long idTenant,
             String slug,
             String nomeLoja,
             String plano,
-            OffsetDateTime trialExpiraEm) {
+            Integer limiteVendasMes) {
     }
 
     /**

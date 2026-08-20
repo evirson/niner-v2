@@ -5,6 +5,7 @@ import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
 import org.springframework.security.oauth2.jwt.*;
 import org.springframework.stereotype.Service;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 
@@ -18,6 +19,9 @@ import java.util.List;
  */
 @Service
 public class TokenService {
+
+    /** Sessão do staff dura menos que a do lojista (8h): acesso interno, cross-tenant. */
+    private static final Duration EXPIRACAO_STAFF = Duration.ofHours(2);
 
     private final JwtEncoder encoder;
     private final NinerProperties props;
@@ -40,6 +44,29 @@ public class TokenService {
                 .claim("email", email)
                 .claim("roles", roles)
                 .build();
+        return assinar(claims);
+    }
+
+    /**
+     * Token do staff da plataforma (backoffice). Validade menor que a do lojista de propósito:
+     * é sessão de operador interno com acesso cross-tenant, e sessão longa aqui vale muito mais
+     * para quem roubar a máquina.
+     */
+    public String emitirStaff(long idStaff, String email, String papel) {
+        Instant agora = Instant.now();
+        JwtClaimsSet claims = JwtClaimsSet.builder()
+                .issuer(props.jwt().emissor())
+                .issuedAt(agora)
+                .expiresAt(agora.plus(EXPIRACAO_STAFF))
+                .subject(Long.toString(idStaff))
+                .audience(List.of("plataforma"))
+                .claim("email", email)
+                .claim("papel", papel)
+                .build();
+        return assinar(claims);
+    }
+
+    private String assinar(JwtClaimsSet claims) {
         JwsHeader header = JwsHeader.with(MacAlgorithm.HS256).build();
         return encoder.encode(JwtEncoderParameters.from(header, claims)).getTokenValue();
     }

@@ -1,10 +1,10 @@
-# Plano de Negócio — Niner (ERP SaaS multicanal para varejo)
+# Plano de Negócio — Nainer (ERP SaaS multicanal para varejo)
 
-**Empresa:** Vetor Sistemas · **Produto:** Niner · **Banco:** `niner_db` · **Versão:** 1.0 (pivô SaaS)
+**Empresa:** Vetor Sistemas · **Produto:** Nainer · **Banco:** `niner_db` · **Versão:** 1.0 (pivô SaaS)
 **Relação com a spec técnica:** este documento é **comercial** e complementa (não substitui) o `spec-driven-erp-varejo.md` (v2.0). Convenção: itens 🔴 = decisão pendente.
 
 > **Conceito organizador — dois planos (planes), nunca conflar:**
-> - **Plano de Controle ("Plataforma Niner")** — o negócio da Vetor: tenants, planos, assinaturas, faturas, cobrança, suporte. Tabelas globais (`plataforma.*`).
+> - **Plano de Controle ("Plataforma Nainer")** — o negócio da Vetor: tenants, planos, assinaturas, faturas, cobrança, suporte. Tabelas globais (`plataforma.*`).
 > - **Plano do Inquilino ("ERP do lojista")** — catálogo, estoque, pedidos, canais e o **financeiro interno do lojista** (caixa/crediário legado). Isolado por `id_tenant`.
 > Regra de vocabulário: *assinatura/plano/trial/mensalidade/gateway* = **plataforma**; *caixa/crediário/contas a pagar-receber/conta corrente da loja* = **financeiro do lojista**. Ver o Anexo A.
 
@@ -12,7 +12,7 @@
 
 ## 1. Sumário executivo
 
-Niner é um **ERP em nuvem (SaaS por assinatura)** da Vetor Sistemas para o **pequeno varejista brasileiro** que vende em loja física e em 2–5 marketplaces (Mercado Livre, Shopee, Amazon, loja própria). Entrega uma **fonte única de verdade de estoque e preço**, com sincronização automática entre canais e **zero overselling**. Aquisição **self-service** pelo site público com **trial gratuito de 60 dias sem cartão**; receita por **assinatura recorrente** mensal/anual em 3 planos.
+Nainer é um **ERP em nuvem (SaaS por assinatura)** da Vetor Sistemas para o **pequeno varejista brasileiro** que vende em loja física e em 2–5 marketplaces (Mercado Livre, Shopee, Amazon, loja própria). Entrega uma **fonte única de verdade de estoque e preço**, com sincronização automática entre canais e **zero overselling**. Aquisição **self-service** pelo site público com **plano Gratuito sem prazo de validade** (até 100 vendas/mês); receita por **assinatura recorrente** mensal/anual em **faixas de volume de vendas** (ADR-015), cobradas via **Mercado Pago** (ADR-016).
 
 ## 2. Proposta de valor
 
@@ -32,45 +32,64 @@ Niner é um **ERP em nuvem (SaaS por assinatura)** da Vetor Sistemas para o **pe
 
 ## 4. Modelo de receita
 
-- **Assinatura recorrente SaaS** (mensal e anual), preço por **plano/tier** limitado por uso.
-- Cobrança predominante em **cartão de crédito recorrente**; **PIX/boleto** como alternativa. 🔴 Gateway a definir (D3) — no início, cobrança manual via adapter.
-- **Anual com desconto** (~2 meses grátis).
-- **Sem cobrança por transação/pedido** no v1 (previsibilidade). Overage vira **gatilho de upgrade**, não taxa avulsa.
-- Expansão de receita: upsell de plano + 🔴 futuros add-ons (conectores extras, usuários adicionais, multi-CNPJ).
+- **Assinatura recorrente SaaS** (mensal e anual), preço por **faixa de volume de vendas emitidas/mês** — somando todas as empresas (CNPJs) do tenant.
+- **Uma única dimensão medida.** Nenhum recurso é vendido à parte: fiscal (NFC-e/NF-e), canais, usuários, produtos, CNPJs e telas são **idênticos** no gratuito e no pago. *Paga-se volume, não funcionalidade* (ADR-015).
+- **Cobrança via Mercado Pago** (ADR-016): **PIX avulso mensal** ou **recorrência automática** no cartão. Boleto fora do v1.
+- **Anual com 15% de desconto** sobre 12 mensalidades.
+- **Nunca bloquear no susto:** ao estourar a cota o lojista ainda emite uma **tolerância** de vendas (parâmetro da Vetor) antes de qualquer bloqueio, com aviso desde 80% da cota.
+- Expansão de receita: subida de faixa conforme o lojista cresce — sem negociação, sem migração de plano manual.
 
-## 5. Planos e preços 🔴 (valores placeholder — decisão D1)
+## 5. Planos e preços — faixas por volume (ADR-015)
 
-| Recurso / Limite | **Essencial** | **Profissional** | **Escala** |
-|---|---|---|---|
-| Preço mensal | **R$ 99** | **R$ 249** | **R$ 599** |
-| Preço anual (~2 meses grátis) | R$ 990/ano (~R$ 82/mês) | R$ 2.490/ano (~R$ 208/mês) | R$ 5.990/ano (~R$ 499/mês) |
-| Canais online simultâneos | 1 (+ loja física) | 3 | 5+ |
-| Conectores incluídos | ML **ou** Shopee | ML + Shopee | Todos (ML, Shopee, Amazon, e-commerce) |
-| SKUs (produtos × variações) | 500 | 5.000 | 50.000 |
-| Usuários | 2 | 5 | 15 |
-| Pedidos importados/mês | 300 | 2.000 | 10.000 |
-| Painel de saúde de integrações (R7) | ✔ | ✔ | ✔ |
-| Suporte | e-mail + base de conhecimento | e-mail prioritário | prioritário + onboarding assistido |
-| Multi-CNPJ | — | — | 🔴 add-on / P2 |
+**Plano Gratuito — sem prazo de validade.** Até **100 vendas/mês** (o contador zera na virada do mês), com **todas** as funcionalidades liberadas, inclusive o módulo fiscal, e **CNPJs, usuários e produtos ilimitados**. Não existe data de expiração: quem vende pouco usa de graça para sempre.
 
-**Política de limites (R19):**
-- **Estruturais (canais, usuários, SKUs):** bloqueio *hard* ao exceder — "faça upgrade para conectar o 2º canal".
-- **Pedidos/mês:** **nunca dropar pedido** (quebraria O1/O4 e a proposta de valor). *Soft-cap*: importa tudo, alerta em 80%/100% e exige upgrade se estourar 2 ciclos seguidos. Auditabilidade > receita marginal.
+**Faixas pagas — geradas por fórmula, não digitadas.** A faixa *n* cobre `passo × n` vendas/mês e custa:
 
-## 6. Período de trial (avaliação)
+```
+mensal(n) = min( preco_maximo ,  preco_base × (1 + f + f² + … + f^(n-1)) )
+anual(n)  = mensal(n) × 12 × (1 − desconto_anual)
+```
 
-- **60 dias, sem cartão antecipado** (self-service, baixa fricção — decisão D2; revisto de 14 para 60 dias em 2026-07-11 para dar mais tempo de ativação/aha). ✅
-- Trial dá acesso ao **plano Profissional** (mostrar o produto forte).
-- **Cartão pedido só na conversão** (fim do trial ou ativação de plano pago).
-- Fim do trial sem conversão → **modo leitura/graça (7 dias)**: dados preservados, sync pausado, sem exclusão imediata (R20). Reativa ao assinar.
+- `f = 1` → crescimento **linear** (`n × preco_base`: 2ª faixa custa 2×, 3ª custa 3×…).
+- `f < 1` → **atenuação**: cada faixa acrescenta menos que a anterior (ex.: `f = 0,8` → 1,00 / 1,80 / 2,44 / 2,95 × `preco_base`).
+- `preco_maximo` é o **teto**: da faixa em que for atingido em diante, o preço não sobe mais.
+
+**Parâmetros (tabela `plataforma.parametro_comercial`, editáveis no backoffice — mudar preço não é deploy):**
+
+| Parâmetro | Significado | Valor |
+|---|---|---|
+| `vendas_gratuito_mes` | Cota do plano Gratuito | **100** |
+| `tolerancia_vendas` | Vendas extras permitidas depois de estourar a cota, antes do bloqueio | 🔴 **a definir** |
+| `preco_base` | Mensalidade da 1ª faixa (500 vendas/mês) | 🔴 **a definir** |
+| `passo_vendas` | Tamanho da faixa | **500** |
+| `fator_faixa` | `1,000` = linear · `< 1` = atenuação | 🔴 **a definir** |
+| `preco_maximo` | Teto de mensalidade | 🔴 **a definir** |
+| `vendas_maximo` | Última faixa gerada (acima disso: "fale conosco") | 🔴 **a definir** |
+| `desconto_anual` | Desconto do pagamento anual | **15%** |
+
+*Exemplo ilustrativo* com `preco_base = R$ 99`, `f = 1` e teto `R$ 990`: 500 → R$ 99 · 1.000 → R$ 198 · 1.500 → R$ 297 · 5.000 → R$ 990 (teto) · acima → R$ 990. Com `f = 0,8`: 500 → R$ 99 · 1.000 → R$ 178,20 · 1.500 → R$ 241,56. **Os números da tabela acima são o que decide** — este exemplo não é compromisso de preço.
+
+**Política de limite (R19, reescrita):**
+- **Vendas/mês é a única dimensão medida.** Estruturais (canais, SKUs, usuários, CNPJs) ficam **ilimitados** em todos os planos.
+- **Cota conta venda emitida; cancelamento não devolve.** Não contam: importação de dados legada e devolução.
+- **Escalada de aviso:** 80% da cota (aviso) → 100% (aviso forte, entra na tolerância) → tolerância esgotada (**bloqueia só a emissão de venda nova**; login, relatórios, recebimentos e financeiro continuam funcionando).
+
+## 6. Plano Gratuito (substitui o trial por tempo — ADR-015)
+
+- **Sem prazo, sem cartão, sem data de expiração.** O trial de 60 dias (D2) foi **descontinuado**: prazo cria uma data em que o lojista perde acesso ao que já digitou, no produto em que migrar cadastro leva semanas e o fiscal exige certificado, CSC e homologação.
+- **Produto inteiro liberado**, inclusive NFC-e/NF-e — o fiscal é o gancho de aquisição do pequeno varejo, não um item de plano.
+- **O que limita é volume:** 100 vendas/mês. Quem cresce, paga; quem não cresce, fica.
+- **Conversão acontece no momento certo** — quando a loja já depende do sistema e estoura a cota, com upgrade em um clique dentro do próprio ERP (Mercado Pago, ADR-016).
+- **Dados nunca são apagados por falta de pagamento**: a assinatura vencida bloqueia emissão de venda nova, não o acesso ao histórico (D10 segue em aberto para o caso `INADIMPLENTE` de plano pago).
 
 ## 7. Funil de aquisição
 
-`Site público → Cadastro (signup) → Trial ativo → Ativação (aha) → Conversão paga → Retenção/Expansão`
+`Visitante do site → Lead → Cadastro (signup) → Conta Gratuita ativa → Ativação (aha) → Estouro de cota → Faixa paga → Expansão de faixa`
 
-- **Cadastro (R12):** e-mail + senha + nome da loja → cria tenant em TRIAL.
+- **Visitante → lead (ADR-017):** todo pageview, clique de WhatsApp/Instagram e envio de formulário é medido com rastreamento **próprio** (first-party), amarrado por `visitante_id` até o signup.
+- **Cadastro (R12):** nome da loja + seu nome + e-mail + senha → cria tenant **ATIVO no plano Gratuito** (sem cartão, sem prazo).
 - **Ativação (aha moment, ligado a O5):** dentro do trial o tenant (a) cadastrou **≥ 10 produtos**, (b) conectou **≥ 1 canal** via OAuth e (c) teve **≥ 1 pedido importado** *ou* **≥ 1 sync estoque→canal** confirmado. É a métrica-líder de conversão.
-- **Conversão paga (R14):** escolha de plano + checkout + 1ª cobrança aprovada.
+- **Conversão paga (R14):** disparada pelo **estouro da cota** (não por uma data) — escolha da faixa + PIX/recorrência no Mercado Pago + 1ª cobrança aprovada.
 - **Retenção/Expansão (R15):** renovação + upgrade de plano.
 
 ## 8. Métricas SaaS a acompanhar
@@ -84,11 +103,13 @@ Niner é um **ERP em nuvem (SaaS por assinatura)** da Vetor Sistemas para o **pe
 
 ## 9. Go-to-market (resumo)
 
-- **Motion primário: Product-Led Growth** — trial self-service pelo site.
+- **Motion primário: Product-Led Growth** — conta gratuita self-service pelo site, sem cartão e sem prazo.
 - **Inbound/SEO/conteúdo:** "como não vender sem estoque no Mercado Livre", "integrar Shopee e loja física".
 - **Comunidades de sellers** (grupos ML/Shopee, YouTube de e-commerce); presença na loja de aplicações do Mercado Livre.
 - **Parcerias com contadores/escritórios** (canal de indicação) e **programa de indicação (referral)** entre lojistas.
 - **Outbound leve** para o ICP na fase de piloto (design partners).
+- **Medição própria do funil (ADR-017):** `lead`, `visita_site` e `evento_marketing` no control-plane, com UTM persistido da entrada até o signup. O **gerenciador de marketing** (no backoffice `admin/`) responde, sem ferramenta externa: de onde vieram as visitas, quais campanhas geraram lead, quantos leads viraram conta gratuita, quantas contas gratuitas viraram faixa paga e **quanto de MRR** cada origem produziu.
+- **WhatsApp e Instagram são canais medidos**, não links soltos: cada clique vira evento, e é o principal sinal de intenção deste público.
 
 ## 10. Roadmap comercial (alinhado às Fases técnicas 0–4)
 
@@ -128,13 +149,15 @@ Regra prática: qualquer coisa com *assinatura/plano/trial/mensalidade/gateway* 
 
 | # | Decisão | Situação / recomendação |
 |---|---------|-------------------------|
-| D1 | Preços dos 3 planos + desconto anual | 🔴 Confirmar (placeholders R$ 99 / 249 / 599; anual ~2 meses grátis) |
-| D2 | Trial: 60 dias, sem cartão, expondo o Profissional (revisto de 14 dias em 2026-07-11) | ✅ Decidida |
-| D3 | Gateway de cobrança (PIX/boleto/cartão recorrente) | 🔴 **Adiada** — adapter abstrato; cobrança manual no início; candidatos BR: Asaas, Iugu, Vindi, Pagar.me |
-| D4 | Multi-CNPJ por tenant como recurso de plano / P2 | ✅ Decidida (1 CNPJ/tenant no v1) |
-| D5 | Nome comercial "Niner" + domínio do site | 🔴 Confirmar |
+| D1 | Modelo de preço | ✅ **Fechada (2026-08-18, ADR-015):** Gratuito até 100 vendas/mês + faixas por volume geradas por fórmula, anual −15%. 🔴 Falta só **preencher os parâmetros** (`preco_base`, `fator_faixa`, `preco_maximo`, `vendas_maximo`, `tolerancia_vendas`) — são dado, não código. |
+| D2 | Trial por tempo | ⛔ **Superada (2026-08-18, ADR-015)** — não há mais trial: o plano Gratuito não expira, limita volume. |
+| D3 | Gateway de cobrança | ✅ **Fechada (2026-08-18, ADR-016):** **Mercado Pago** — PIX avulso mensal + recorrência (preapproval), atrás da interface `GatewayCobranca`. Integração já dominada pela equipe (`ecommerce-revo`, `s7classificados`). |
+| D4 | Multi-CNPJ por tenant | ✅ **Revisada (2026-08-18, ADR-015):** **ilimitado em todos os planos**, criado pelo próprio ADMIN no painel. Não é recurso de plano — a cota de vendas soma todos os CNPJs. |
+| D5 | Nome comercial "Nainer" + domínio do site | 🔴 Confirmar |
 | D6 | NFS-e da assinatura (Vetor→lojista): emissor/município | 🔴 Aberta |
-| D7 | Overage de pedidos/mês: nunca descartar, só gatilhar upgrade | ✅ Recomendada (R19) |
+| D7 | Overage | ✅ **Revisada (2026-08-18):** vendas/mês tem **tolerância configurável** antes do bloqueio; pedido de marketplace importado nunca é descartado (regra original mantida). |
 | D8 | Régua de dunning (avisos D+1/D+3/D+7; suspensão ~15d; graça 7d) | 🔴 Confirmar |
 | D9 | Metas numéricas (MRR, trial→paid, churn) para GA+6m | 🔴 Aberta |
 | D10 | Estado `INADIMPLENTE`: ERP em modo leitura/aviso vs bloqueio total | 🔴 Aberta (regra do gate de login) |
+| D11 | Rastreamento de aquisição | ✅ **Fechada (2026-08-18, ADR-017):** first-party próprio no control-plane; GA4/Meta Pixel só sob consentimento e nunca como fonte de verdade. |
+| D12 | Identidade visual e domínio do site novo (landing de venda) | 🔴 Aberta — ver `docs/site/briefing-landing.md` |

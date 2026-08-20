@@ -13,7 +13,8 @@ import java.util.List;
 @ConfigurationProperties("niner")
 public record NinerProperties(
         Jwt jwt, Trial trial, Cors cors, Storage storage,
-        ArquivoCompartilhado arquivoCompartilhado, Seguranca seguranca, Fiscal fiscal) {
+        ArquivoCompartilhado arquivoCompartilhado, Seguranca seguranca, Fiscal fiscal,
+        Cobranca cobranca) {
 
     public record Jwt(String secret, Duration expiracao, String emissor) {
     }
@@ -96,5 +97,27 @@ public record NinerProperties(
      */
     public record RespTec(String cnpj, String contato, String email, String telefone,
                           String idCsrt, String csrt) {
+    }
+
+    /** Cobrança da assinatura (ADR-016). {@code gateway} escolhe a implementação de
+     *  {@code GatewayCobranca}; hoje só existe o Mercado Pago. */
+    public record Cobranca(String gateway, MercadoPago mercadopago) {
+    }
+
+    /**
+     * Credenciais e endereços do Mercado Pago. <b>Nada disso vai para o repositório</b> — em dev
+     * usa-se o access token de teste (prefixo {@code TEST-}) das credenciais da aplicação; em
+     * produção, secret manager.
+     *
+     * <p>{@code accessToken} vazio = cobrança <b>desligada</b>: a API sobe igual e só o endpoint
+     * de pagamento responde 503. {@code webhookSecret} vazio deixa a notificação entrar sem
+     * validar assinatura — aceitável só em dev, e mesmo assim inofensivo por construção: o
+     * webhook não decide nada, quem aplica efeito é o worker <b>consultando o gateway</b>.
+     *
+     * <p>{@code notificationUrl} precisa ser um endereço público (em dev, um túnel) — sem ele o
+     * Mercado Pago não tem para onde notificar e a confirmação depende só da consulta periódica.
+     */
+    public record MercadoPago(String baseUrl, String accessToken, String webhookSecret,
+                              String notificationUrl, Duration validadePix) {
     }
 }

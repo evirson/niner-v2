@@ -103,7 +103,7 @@ export async function gerarPdfCapturaDiferencasEstoque(elemento: HTMLElement, ro
 
   await desenharElementoPaginado(doc, elemento)
 
-  desenharCabecalhoERodape(doc, 'Diferenças de Estoque', new Date().toLocaleString('pt-BR'), rodapeEsquerda, 'Niner ERP')
+  desenharCabecalhoERodape(doc, 'Diferenças de Estoque', new Date().toLocaleString('pt-BR'), rodapeEsquerda, 'Nainer ERP')
 
   doc.save('diferencas-de-estoque.pdf')
 }

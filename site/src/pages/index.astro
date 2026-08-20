@@ -1,276 +1,552 @@
 ---
-import Base from '../layouts/Base.astro';
+/**
+ * Landing de venda do Nainer — implementação do HTML entregue pelo Claude Design
+ * (projeto "HTML com tema claro/escuro e FAQ", 2026-08-18), gerado a partir de
+ * `docs/site/briefing-landing.md`.
+ *
+ * O que mudou do HTML original, e por quê:
+ * · placeholders de contato saíram do markup para `src/dados/contato.ts` — o mesmo
+ *   `[PLACEHOLDER: número WhatsApp]` aparecia em 3 links; um só lugar não deixa esquecer;
+ * · link/seção sem dado real **não é publicado**: sem WhatsApp configurado o botão some, e sem
+ *   depoimento real a seção inteira some (briefing §9: nunca inventar cliente);
+ * · a tabela de faixas é preenchida em runtime por `GET /api/publico/planos` (o HTML já sai com
+ *   os valores atuais, para SEO e para quem chega com a API fora do ar);
+ * · o alternador Mensal/Anual e o aviso de cookies ganharam comportamento;
+ * · `data-evento`/`data-rotulo` continuam exatamente como o design entregou — quem lê é
+ *   `/beacon.js` (ADR-017, medição própria, sem rastreador de terceiro).
+ */
+import '../styles/landing.css';
+import MarcaNainer from '../componentes/MarcaNainer.astro';
+import { contato, depoimentos, linkInstagram, linkWhatsapp } from '../dados/contato';
 
-// Recursos (linguagem do Niner — multicanal, não o PDV/crediário legado).
-const recursos = [
-  { ic: '📦', t: 'Estoque como fonte única', d: 'O ERP é o dono do estoque e do preço. Marketplaces são réplicas, sincronizadas automaticamente a cada venda.' },
-  { ic: '🛡️', t: 'Zero overselling', d: 'Reserva no momento do pedido e baixa simultânea em todos os canais. Você nunca vende o que não tem.' },
-  { ic: '🧾', t: 'Um pedido, todos os canais', d: 'Mercado Livre, Shopee, Amazon e o balcão numa fila única de expedição — sem pular de aba.' },
-  { ic: '🏷️', t: 'Preço sincronizado', d: 'Ajuste o preço uma vez; ele viaja para cada anúncio conectado, com histórico de quem mudou e quando.' },
-  { ic: '🔎', t: 'Auditoria de tudo', d: 'Cada movimento de estoque, preço e pedido vira registro imutável: quem, quando, de onde e de/para.' },
-  { ic: '⚡', t: 'Integração automática', d: 'Sincronização assíncrona e idempotente, com retentativa. Reprocessar um evento nunca duplica pedido ou baixa.' },
+const zap = linkWhatsapp();
+const insta = linkInstagram();
+const canonical = contato.dominio + '/';
+const titulo = 'Nainer — sistema para loja com NFC-e, grátis até 100 vendas/mês';
+const descricao =
+  'Sistema completo para loja de calçado e confecção: PDV, estoque com grade de cor e tamanho, ' +
+  'crediário e nota fiscal (NFC-e/NF-e). Grátis para sempre até 100 vendas por mês. Sem cartão, sem prazo.';
+
+// Fallback das faixas (SEO + API fora do ar). Espelha os parâmetros atuais de
+// plataforma.parametro_comercial; os valores reais chegam em runtime.
+const faixas = [
+  { limite: 500, rotulo: 'até 500', mensal: 99, anual: 84 },
+  { limite: 1000, rotulo: 'até 1.000', mensal: 198, anual: 168 },
+  { limite: 1500, rotulo: 'até 1.500', mensal: 297, anual: 252 },
 ];
 
-// Fallback de planos para SEO (o HTML já sai com valores); a API atualiza no cliente se estiver no ar.
-const planosFallback = [
-  { nome: 'Essencial', precoMensal: 99, descricao: 'Loja física + 1 canal online.', destaque: false },
-  { nome: 'Profissional', precoMensal: 249, descricao: 'Multicanal (ML + Shopee) e maior volume.', destaque: true },
-  { nome: 'Escala', precoMensal: 599, descricao: 'Todos os canais e o maior volume.', destaque: false },
+const perguntas = [
+  {
+    p: 'É grátis mesmo?',
+    r: 'É. Até 100 vendas por mês, todas as funções ficam liberadas — inclusive a emissão de nota fiscal. Não pedimos cartão e não existe prazo de teste. Enquanto sua loja vender até 100 vezes no mês, você não paga nada.',
+  },
+  {
+    p: 'O que acontece se eu passar de 100 vendas?',
+    r: 'A gente avisa antes de você chegar no limite e ainda libera uma folga. Se o volume se mantiver, você escolhe uma faixa paga. Nada trava de repente e nada é apagado.',
+  },
+  {
+    p: 'Perco meus dados se parar de pagar?',
+    r: 'Não. Seus cadastros, vendas e notas ficam guardados. Se você voltar ao plano gratuito ou parar de pagar, o sistema volta ao limite de 100 vendas/mês — mas nada é apagado, nunca.',
+  },
+  {
+    p: 'Preciso de certificado digital?',
+    r: 'Só para emitir nota fiscal. O Nainer usa o certificado A1 (um arquivo digital), que você envia uma vez e pronto. Se você ainda não tem, seu contador consegue providenciar em poucos dias.',
+  },
+  {
+    p: 'Funciona com mais de um CNPJ?',
+    r: 'Sim. Você pode cadastrar quantos CNPJs precisar, sem custo extra — o que conta é o volume total de vendas por mês.',
+  },
+  {
+    p: 'Meus dados ficam onde?',
+    r: 'Em servidores na nuvem, com cópia de segurança automática todos os dias. Os XMLs das suas notas ficam arquivados por 5 anos, como a lei pede, e disponíveis para o seu contador.',
+  },
+  {
+    p: 'Como cancelo?',
+    r: 'Dentro do próprio sistema, em um clique, sem multa e sem precisar ligar para ninguém. Seus dados continuam guardados caso você queira voltar.',
+  },
+];
+
+// JSON-LD: o FAQPage é gerado da MESMA lista renderizada acima — dado estruturado que diverge do
+// conteúdo visível é penalizado pelo Google e, pior, mente para quem lê o resultado da busca.
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@graph': [
+    {
+      '@type': 'SoftwareApplication',
+      name: 'Nainer',
+      applicationCategory: 'BusinessApplication',
+      operatingSystem: 'Web',
+      description:
+        'ERP em nuvem para o pequeno varejo brasileiro — calçado e confecção atendidos plenamente, ' +
+        'com grade de cor e tamanho: PDV, estoque, crediário, caixa, contas a pagar, DRE e emissão de NFC-e/NF-e.',
+      offers: {
+        '@type': 'Offer',
+        price: 0,
+        priceCurrency: 'BRL',
+        description: 'Grátis para sempre até 100 vendas por mês.',
+      },
+      url: canonical,
+      inLanguage: 'pt-BR',
+    },
+    { '@type': 'Organization', name: 'Vetor Sistemas', url: canonical, brand: { '@type': 'Brand', name: 'Nainer' } },
+    {
+      '@type': 'FAQPage',
+      mainEntity: perguntas.map((q) => ({
+        '@type': 'Question',
+        name: q.p,
+        acceptedAnswer: { '@type': 'Answer', text: q.r },
+      })),
+    },
+  ],
+};
+
+const CHECK = 'M20 6 9 17l-5-5';
+const recursos = [
+  { t: 'PDV rápido', d: 'Venda pelo teclado, sem mouse: bipa, recebe, imprime. Cliente não espera.', i: 'M3 3h18v4H3zM5 7v13h14V7M9 11h6' },
+  { t: 'Grade de cor e tamanho', d: 'Calçado e confecção atendidos plenamente: numeração, cor e modelo com saldo certo por variação, em cada loja.', i: 'M21 8 12 3 3 8v8l9 5 9-5V8ZM3 8l9 5m0 0 9-5m-9 5v8' },
+  { t: 'NFC-e e NF-e', d: 'A nota sai de dentro da venda, sem redigitar nada. XML guardado por 5 anos.', i: 'M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9l-6-6ZM14 3v6h6M9 14h6M9 17h4' },
+  { t: 'Crediário e cobrança', d: 'O fiado com nome, valor e vencimento — e lembrete na hora de cobrar.', i: 'M17 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9.5 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM19 8v6M22 11h-6' },
+  { t: 'Abertura e fechamento de caixa', d: 'Abriu, vendeu, conferiu, fechou. A diferença aparece na hora, não no fim do mês.', i: 'M12 8v4l3 3M22 12a10 10 0 1 1-10-10 10 10 0 0 1 10 10Z' },
+  { t: 'Contas a pagar e receber', d: 'Boleto do fornecedor e recebimento do cliente no mesmo calendário.', i: 'M8 7V3m8 4V3M4 11h16M5 5h14a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1Z' },
+  { t: 'DRE e fluxo de caixa', d: 'Quanto entrou, quanto saiu e quanto sobrou — em linguagem de gente.', i: 'M3 3v18h18M7 15l4-4 3 3 5-6' },
+  { t: 'Etiquetas de produto', d: 'Imprime etiqueta com código de barras direto do cadastro.', i: 'm7 7 10 10M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0l-7.2-7.2a2 2 0 0 1 0-2.8l7.2-7.2a2 2 0 0 1 2.8 0l7.2 7.2a2 2 0 0 1 0 2.8Z' },
 ];
 ---
 
-<Base
-  title="Niner — ERP para varejo multicanal, sem overselling"
-  description="O ERP que é a fonte única de estoque e preço da sua loja e sincroniza automaticamente Mercado Livre, Shopee, Amazon e o balcão. Teste grátis por 60 dias, sem cartão."
-  path="/"
->
-  <!-- ============ HERO ============ -->
-  <section class="hero">
-    <div class="hero-mesh" aria-hidden="true"></div>
-    <div class="container hero-grid">
-      <div class="hero-copy reveal">
-        <span class="eyebrow">ERP para varejo multicanal</span>
-        <h1>Um estoque só.<br /><em>Todos os canais</em> em sincronia.</h1>
-        <p class="hero-sub">
-          O Niner é a fonte única de estoque e preço da sua loja. Venda no Mercado Livre, Shopee,
-          Amazon e no balcão — sem nunca vender o que não tem.
-        </p>
-        <div class="hero-actions">
-          <a class="btn btn-primary btn-lg" href="/assinar">Começar teste grátis</a>
-          <a class="btn btn-secondary btn-lg" href="#como-funciona">Ver como funciona</a>
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{titulo}</title>
+    <meta name="description" content={descricao} />
+    <link rel="canonical" href={canonical} />
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%231f6f6b'/%3E%3Ctext x='16' y='22' font-family='Georgia,serif' font-size='18' fill='white' text-anchor='middle'%3EN%3C/text%3E%3Crect x='20' y='23' width='7' height='3' rx='1.5' fill='%232cf5e2'/%3E%3C/svg%3E"
+    />
+    <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f5f4f0" />
+    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#12181a" />
+    <meta property="og:title" content={titulo} />
+    <meta property="og:description" content={descricao} />
+    <meta property="og:image" content={contato.dominio + '/og.png'} />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:url" content={canonical} />
+    <meta property="og:type" content="website" />
+    <meta property="og:locale" content="pt_BR" />
+    <meta property="og:site_name" content="Nainer" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={titulo} />
+    <meta name="twitter:description" content={descricao} />
+    <meta name="twitter:image" content={contato.dominio + '/og.png'} />
+    <script type="application/ld+json" set:html={JSON.stringify(jsonLd)} />
+    <!-- Tema explícito do visitante (o padrão é o do sistema operacional), antes da pintura. -->
+    <script is:inline>
+      (function () {
+        try {
+          var t = localStorage.getItem('ninerTema');
+          if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t);
+        } catch (e) {}
+      })();
+    </script>
+    <!-- base-URL da API lida em runtime (spec §3.1), nunca embutida no bundle -->
+    <script is:inline src="/config.js"></script>
+    <!-- medição própria, first-party (ADR-017). defer: nunca no caminho crítico da página -->
+    <script is:inline defer src="/beacon.js"></script>
+  </head>
+
+  <body>
+    <header class="topo">
+      <div class="wrap topo-inner">
+        <a class="logo" href="/" aria-label="Nainer — página inicial"><MarcaNainer tamanho={28} /></a>
+        <nav class="nav" aria-label="Seções da página">
+          <a href="#recursos" data-evento="NAV" data-rotulo="recursos">Recursos</a>
+          <a href="#preco" data-evento="NAV" data-rotulo="preco">Preço</a>
+          <a href="#fiscal" data-evento="NAV" data-rotulo="fiscal">Fiscal</a>
+          <a href="#duvidas" data-evento="NAV" data-rotulo="duvidas">Dúvidas</a>
+        </nav>
+        <div class="topo-acoes">
+          <a class="entrar" href="/entrar">Entrar</a>
+          <a class="btn btn-primario" href="/assinar" data-evento="INICIO_SIGNUP" data-rotulo="topo">Criar conta grátis</a>
         </div>
-        <p class="hero-note">
-          <b>60 dias grátis</b><span class="dot"></span>sem cartão<span class="dot"></span>configure em minutos
-        </p>
       </div>
+    </header>
 
-      <!-- Painel decorativo animado. TODO: trocar por print real do painel do ERP. -->
-      <div class="hero-visual reveal" data-delay="1">
-        <div class="mock" aria-hidden="true">
-          <div class="mock-bar">
-            <span class="mock-dot"></span><span class="mock-dot"></span><span class="mock-dot"></span>
-            <span class="mock-title">Painel Niner — Visão da loja</span>
-          </div>
-          <div class="mock-body">
-            <div class="mock-kpis">
-              <div class="mock-kpi"><div class="n">R$ 18,4k</div><div class="l">Vendas hoje</div></div>
-              <div class="mock-kpi"><div class="n">1.240</div><div class="l">SKUs em estoque</div></div>
-              <div class="mock-kpi"><div class="n">37</div><div class="l">Pedidos p/ expedir</div></div>
+    <main>
+      <section class="heroi">
+        <div class="wrap heroi-grid">
+          <div>
+            <h1>Sistema para loja com nota fiscal, <em>grátis até 100 vendas por mês</em></h1>
+            <p class="sub">
+              PDV, estoque com grade de cor e tamanho, crediário, caixa e NFC-e num lugar só.
+              Calçado e confecção atendidos plenamente. Sem cartão, sem prazo, sem pegadinha — se a
+              loja crescer, você paga por volume, nunca por funcionalidade.
+            </p>
+            <div class="heroi-ctas">
+              <a class="btn btn-primario" href="/assinar" data-evento="INICIO_SIGNUP" data-rotulo="heroi">Criar conta grátis</a>
+              {zap && (
+                <a class="btn btn-zap" href={zap} data-evento="CLIQUE_WHATSAPP" data-rotulo="heroi">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"
+                    ><path
+                      d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5.1-1.3A10 10 0 1 0 12 2Zm5.2 13.9c-.2.6-1.2 1.1-1.7 1.2-.5 0-1 .2-3.3-.7-2.8-1.1-4.6-4-4.7-4.2-.1-.2-1.1-1.5-1.1-2.9s.7-2 1-2.3c.2-.3.5-.3.7-.3h.5c.2 0 .4 0 .6.4l.9 2.1c.1.2.1.4 0 .6l-.4.6-.5.5c-.1.2-.3.3-.1.6.2.3.8 1.4 1.8 2.2 1.3 1.1 2.3 1.5 2.6 1.6.3.1.5.1.7-.1l1-1.2c.2-.3.4-.2.7-.1l2 .9c.3.1.5.2.6.4 0 .1 0 .7-.3 1.2Z"
+                    /></svg
+                  >
+                  Falar no WhatsApp
+                </a>
+              )}
             </div>
-
-            <div class="sync" id="sync-demo" data-start="48">
-              <div class="sync-source">
-                <span class="lbl">Camiseta Preta P · estoque</span>
-                <span class="val"><span data-stock>48</span> un</span>
-              </div>
-              <div class="sync-channels">
-                <div class="chan"><span class="ic">ML</span> Mercado Livre <span class="ok"></span></div>
-                <div class="chan"><span class="ic">SH</span> Shopee <span class="ok"></span></div>
-                <div class="chan"><span class="ic">AM</span> Amazon <span class="ok"></span></div>
-                <div class="chan"><span class="ic">🏬</span> Loja física <span class="ok"></span></div>
-              </div>
-            </div>
+            <p class="micro">Sem cartão de crédito. Sem prazo. Você começa a usar em 1 minuto.</p>
           </div>
+          <figure class="print">
+            {/* LCP da página: nada de loading="lazy" aqui, e servida do nosso domínio (ver
+                public/img/) em vez de hotlink — terceiro no caminho crítico não cabe na meta
+                de LCP < 2s, e entregaria IP/user-agent do visitante a cada visita. */}
+            <img
+              src="/img/heroi-balcao.jpg"
+              alt="Atendente passando cartão na maquininha no balcão da loja"
+              width="1200"
+              height="900"
+              fetchpriority="high"
+              decoding="async"
+            />
+          </figure>
         </div>
-      </div>
-    </div>
-  </section>
+      </section>
 
-  <!-- ============ PROVA / STATS ============ -->
-  <section class="tight alt">
-    <div class="container">
-      <div class="stats">
-        <div class="stat reveal"><div class="n"><span data-count="0">0</span></div><div class="l">Casos de overselling</div></div>
-        <div class="stat reveal" data-delay="1"><div class="n"><span data-count="4">0</span>+</div><div class="l">Canais em um só painel</div></div>
-        <div class="stat reveal" data-delay="2"><div class="n">seg</div><div class="l">Sincronização a cada venda</div></div>
-        <div class="stat reveal" data-delay="3"><div class="n"><span data-count="1">0</span></div><div class="l">Fonte de verdade do estoque</div></div>
-      </div>
-    </div>
-  </section>
-
-  <!-- ============ PROBLEMA → SOLUÇÃO ============ -->
-  <section>
-    <div class="container">
-      <div class="section-head reveal">
-        <span class="eyebrow">O problema</span>
-        <h2>Vender em vários lugares não pode significar vender o que não tem</h2>
-        <p>Cada marketplace com seu próprio estoque vira planilha, retrabalho e cliente irritado. O Niner inverte a lógica: um estoque manda em todos.</p>
-      </div>
-      <div class="split">
-        <div class="panel bad reveal">
-          <h3>😵‍💫 Sem uma fonte única</h3>
+      <section class="faixa" aria-label="Garantias do Nainer">
+        <div class="wrap">
           <ul>
-            <li><span class="mk">✕</span> Estoque atualizado à mão em cada canal</li>
-            <li><span class="mk">✕</span> Vendeu no ML e na Shopee a mesma última peça</li>
-            <li><span class="mk">✕</span> Preço divergente entre anúncios</li>
-            <li><span class="mk">✕</span> Ninguém sabe quem mudou o quê</li>
+            {['NFC-e e NF-e inclusos', 'Seus dados nunca são apagados', 'Grade de cor e tamanho (calçado e confecção)', 'Suporte por WhatsApp'].map((item) => (
+              <li>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d={CHECK} /></svg>
+                {item}
+              </li>
+            ))}
           </ul>
         </div>
-        <div class="panel good reveal" data-delay="1">
-          <h3>✅ Com o Niner</h3>
-          <ul>
-            <li><span class="mk">✓</span> Um estoque central, réplicas sincronizadas sozinhas</li>
-            <li><span class="mk">✓</span> Reserva no pedido: <b>zero overselling</b></li>
-            <li><span class="mk">✓</span> Mudou o preço uma vez, valeu em todo canal</li>
-            <li><span class="mk">✓</span> Cada mudança auditada: quem, quando, de/para</li>
-          </ul>
-        </div>
-      </div>
-    </div>
-  </section>
+      </section>
 
-  <!-- ============ COMO FUNCIONA ============ -->
-  <section id="como-funciona" class="alt">
-    <div class="container">
-      <div class="section-head reveal">
-        <span class="eyebrow">Como funciona</span>
-        <h2>Do cadastro à venda multicanal em três passos</h2>
-        <p>Sem consultoria, sem migração dolorida. Você entra no sistema no mesmo minuto do cadastro.</p>
-      </div>
-      <div class="steps">
-        <div class="step reveal">
-          <div class="num"></div>
-          <h3>Cadastre seus produtos</h3>
-          <p>Importe ou cadastre com variações (cor, tamanho), preço e estoque. É a base — sua fonte única.</p>
-          <div class="art" aria-hidden="true">
-            <svg width="120" height="34" viewBox="0 0 120 34" fill="none"><rect x="1" y="4" width="26" height="26" rx="6" stroke="currentColor" stroke-width="2"/><rect x="34" y="9" width="60" height="6" rx="3" fill="currentColor" opacity=".8"/><rect x="34" y="20" width="40" height="6" rx="3" fill="currentColor" opacity=".4"/></svg>
+      <section class="secao" aria-labelledby="t-problema">
+        <div class="wrap">
+          <header class="secao-cab">
+            <p class="kicker">O dia a dia da loja</p>
+            <h2 id="t-problema">Você reconhece alguma dessas cenas?</h2>
+          </header>
+          <div class="cards3">
+            <article class="card">
+              <h3>O caderno não fecha com o caixa</h3>
+              <p>No fim do dia, a soma do caderno dá uma coisa, o dinheiro na gaveta dá outra — e ninguém sabe onde foi parar a diferença.</p>
+            </article>
+            <article class="card">
+              <h3>A nota sai num sistema separado</h3>
+              <p>A venda é registrada num lugar e a nota emitida em outro. Digitação em dobro, erro em dobro, e o contador cobrando o XML no fim do mês.</p>
+            </article>
+            <article class="card">
+              <h3>O fiado vive na memória</h3>
+              <p>Cliente bom compra fiado — mas quem anotou quanto, quando e de quem? Na hora de cobrar, fica aquele constrangimento.</p>
+            </article>
           </div>
         </div>
-        <div class="step reveal" data-delay="1">
-          <div class="num"></div>
-          <h3>Conecte os canais</h3>
-          <p>Autorize Mercado Livre, Shopee, Amazon e sua loja em poucos cliques (OAuth). Anúncios e pedidos passam a conversar com o ERP.</p>
-          <div class="art" aria-hidden="true">
-            <svg width="120" height="34" viewBox="0 0 120 34" fill="none"><circle cx="17" cy="17" r="9" stroke="currentColor" stroke-width="2"/><circle cx="103" cy="17" r="9" stroke="currentColor" stroke-width="2"/><path d="M26 17h68" stroke="currentColor" stroke-width="2" stroke-dasharray="4 4"/></svg>
+      </section>
+
+      <section class="secao secao-continua" id="recursos" aria-labelledby="t-recursos">
+        <div class="wrap">
+          <header class="secao-cab">
+            <p class="kicker">O que o Nainer faz</p>
+            <h2 id="t-recursos">Tudo o que a loja precisa, num lugar só</h2>
+            <p class="desc">Todas as funções liberadas desde o primeiro dia — inclusive no plano gratuito.</p>
+          </header>
+          <div class="recursos-grid">
+            {recursos.map((r) => (
+              <article class="recurso">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d={r.i} /></svg>
+                <div><h3>{r.t}</h3><p>{r.d}</p></div>
+              </article>
+            ))}
           </div>
         </div>
-        <div class="step reveal" data-delay="2">
-          <div class="num"></div>
-          <h3>Venda sem overselling</h3>
-          <p>Cada venda baixa o estoque uma vez e sincroniza todos os canais automaticamente. Você despacha de uma fila só.</p>
-          <div class="art" aria-hidden="true">
-            <svg width="120" height="34" viewBox="0 0 120 34" fill="none"><path d="M4 18l8 8 16-18" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><rect x="44" y="14" width="72" height="6" rx="3" fill="currentColor" opacity=".5"/></svg>
+      </section>
+
+      <section class="secao secao-realce" id="preco" aria-labelledby="t-preco">
+        <div class="wrap">
+          <header class="secao-cab">
+            <p class="kicker">Preço</p>
+            <h2 id="t-preco">Grátis até 100 vendas por mês. De verdade.</h2>
+            <p class="desc">Sem cartão, sem prazo de teste, sem função bloqueada. Você só paga se — e quando — a loja crescer.</p>
+          </header>
+          <div class="preco-grid">
+            <article class="plano plano-gratis" aria-labelledby="t-plano-gratis">
+              <span class="selo">Para sempre</span>
+              <h3 id="t-plano-gratis">Gratuito</h3>
+              <p class="valor preco">R$ 0 <small>· para sempre</small></p>
+              <ul>
+                {[
+                  'Até <b>100 vendas por mês</b>',
+                  'Todas as funções liberadas, inclusive nota fiscal',
+                  'CNPJs, usuários e produtos ilimitados',
+                  'Sem cartão de crédito',
+                ].map((item) => (
+                  <li>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d={CHECK} /></svg>
+                    <span set:html={item} />
+                  </li>
+                ))}
+              </ul>
+              <a class="btn btn-primario" href="/assinar" data-evento="INICIO_SIGNUP" data-rotulo="preco">Criar conta grátis</a>
+            </article>
+
+            <article class="plano plano-volume" aria-labelledby="t-plano-volume">
+              <h3 id="t-plano-volume">Cresceu? Paga por volume</h3>
+              <p class="explica">
+                Quando a loja passa de 100 vendas por mês, você escolhe uma faixa de acordo com o
+                seu volume. As funções continuam as mesmas — o que muda é só o tamanho.
+              </p>
+              <div class="ciclo" role="group" aria-label="Ciclo de cobrança">
+                <button type="button" aria-pressed="true" data-ciclo-btn="mensal" data-evento="TOGGLE_CICLO" data-rotulo="mensal">Mensal</button>
+                <button type="button" aria-pressed="false" data-ciclo-btn="anual" data-evento="TOGGLE_CICLO" data-rotulo="anual">Anual (−15%)</button>
+              </div>
+              <div class="tabela-rolagem" tabindex="0" role="region" aria-label="Tabela de faixas de preço">
+                <table class="faixas" id="tabela-faixas">
+                  <thead>
+                    <tr>
+                      <th scope="col">Vendas por mês</th>
+                      <th scope="col" data-ciclo="mensal" class="ativo">Mensal</th>
+                      <th scope="col" data-ciclo="anual">Anual (−15%)</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {faixas.map((f) => (
+                      <tr>
+                        <td class="num">{f.rotulo}</td>
+                        <td class="preco ativo" data-preco-faixa={String(f.limite)} data-ciclo="mensal">R$ {f.mensal}/mês</td>
+                        <td class="preco" data-preco-faixa={String(f.limite)} data-ciclo="anual">R$ {f.anual}/mês</td>
+                      </tr>
+                    ))}
+                    <tr>
+                      <td class="num">acima de 1.500</td>
+                      <td class="preco ativo" data-ciclo="mensal">fale com a gente</td>
+                      <td class="preco" data-ciclo="anual">fale com a gente</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              <p class="preco-nota">
+                Se você passar de 100 vendas num mês, a gente avisa antes e ainda libera uma folga.
+                Nada é apagado, nunca.
+              </p>
+            </article>
           </div>
         </div>
-      </div>
-    </div>
-  </section>
+      </section>
 
-  <!-- ============ RECURSOS ============ -->
-  <section id="recursos">
-    <div class="container">
-      <div class="section-head reveal">
-        <span class="eyebrow">Recursos</span>
-        <h2>Tudo o que uma loja multicanal precisa, integrado</h2>
-        <p>Construído sobre princípios sérios: estoque como fonte da verdade, integrações idempotentes e auditoria de cada mudança.</p>
-      </div>
-      <div class="grid-3">
-        {recursos.map((r, i) => (
-          <article class="card reveal" data-delay={String(i % 3)}>
-            <div class="card-icon" aria-hidden="true">{r.ic}</div>
-            <h3>{r.t}</h3>
-            <p>{r.d}</p>
-          </article>
-        ))}
-      </div>
-    </div>
-  </section>
-
-  <!-- ============ CANAIS ============ -->
-  <section id="canais" class="alt">
-    <div class="container">
-      <div class="section-head reveal">
-        <span class="eyebrow">Canais</span>
-        <h2>Conecte onde você já vende</h2>
-        <p>Comece pelo balcão e um marketplace; adicione os outros quando quiser. O mesmo estoque manda em todos.</p>
-      </div>
-      <div class="channels-row reveal">
-        <span class="chan-pill"><svg width="20" height="20" viewBox="0 0 20 20"><circle cx="10" cy="10" r="9" fill="#ffe600"/><path d="M5 12c2-4 8-4 10 0" stroke="#2d3277" stroke-width="1.6" fill="none"/></svg>Mercado Livre</span>
-        <span class="chan-pill"><svg width="20" height="20" viewBox="0 0 20 20"><rect x="3" y="6" width="14" height="11" rx="2" fill="#ee4d2d"/><path d="M7 6a3 3 0 016 0" stroke="#fff" stroke-width="1.4" fill="none"/></svg>Shopee</span>
-        <span class="chan-pill"><svg width="20" height="20" viewBox="0 0 20 20"><path d="M3 13c4 3 10 3 14 0" stroke="#ff9900" stroke-width="2" fill="none" stroke-linecap="round"/><circle cx="16" cy="12" r="1.4" fill="#ff9900"/></svg>Amazon</span>
-        <span class="chan-pill"><svg width="20" height="20" viewBox="0 0 20 20"><path d="M3 8l2-3h10l2 3" stroke="currentColor" stroke-width="1.6" fill="none"/><rect x="4" y="8" width="12" height="8" rx="1.5" stroke="currentColor" stroke-width="1.6" fill="none"/></svg>Loja própria</span>
-        <span class="chan-pill"><svg width="20" height="20" viewBox="0 0 20 20"><rect x="3" y="4" width="14" height="12" rx="2" stroke="currentColor" stroke-width="1.6" fill="none"/><path d="M3 9h14" stroke="currentColor" stroke-width="1.6"/></svg>Balcão / PDV</span>
-      </div>
-    </div>
-  </section>
-
-  <!-- ============ PLANOS ============ -->
-  <section id="planos">
-    <div class="container">
-      <div class="section-head reveal">
-        <span class="eyebrow">Planos</span>
-        <h2>Escolha ao fim do teste. Sem compromisso agora.</h2>
-        <p>Todos os planos começam com 60 dias grátis, sem cartão. Você só decide depois de ver o Niner rodando com os seus dados.</p>
-      </div>
-      <div class="planos-grid" id="planos-grid">
-        {planosFallback.map((p) => (
-          <article class={`card plano reveal${p.destaque ? ' destaque' : ''}`} data-plano={p.nome}>
-            {p.destaque && <span class="tag">Mais popular</span>}
-            <h3>{p.nome}</h3>
-            <p class="preco" data-preco>R$ {p.precoMensal}<small>/mês</small></p>
-            <p class="desc">{p.descricao}</p>
-            <a class="btn btn-primary btn-block" href="/assinar">Testar grátis</a>
-          </article>
-        ))}
-      </div>
-      <p class="muted" style="font-size:13px; margin-top:14px; text-align:center;">Preços provisórios (em definição).</p>
-    </div>
-  </section>
-
-  <!-- ============ FAQ ============ -->
-  <section id="perguntas" class="alt">
-    <div class="container">
-      <div class="section-head reveal">
-        <span class="eyebrow">Perguntas frequentes</span>
-        <h2>O que costumam perguntar antes de testar</h2>
-      </div>
-      <div class="faq reveal">
-        <details open>
-          <summary>Preciso de cartão de crédito para testar?</summary>
-          <p>Não. São <strong>60 dias grátis, sem cartão</strong>. Você só informa pagamento se decidir assinar ao fim do teste.</p>
-        </details>
-        <details>
-          <summary>Já vendo no Mercado Livre e na Shopee. Consigo conectar?</summary>
-          <p>Sim. Você autoriza cada canal por OAuth em poucos cliques, e o Niner passa a ser a fonte única de estoque e preço, sincronizando os anúncios automaticamente.</p>
-        </details>
-        <details>
-          <summary>O que acontece com meus dados quando o teste termina?</summary>
-          <p>Nada é apagado na hora. O teste entra em <strong>modo leitura por um período de graça</strong>: seus dados ficam preservados e a sincronização é pausada. Ao assinar, tudo volta de onde parou.</p>
-        </details>
-        <details>
-          <summary>Vou perder vendas por causa de estoque errado?</summary>
-          <p>Esse é justamente o problema que o Niner resolve. Com reserva no momento do pedido e baixa simultânea em todos os canais, o overselling deixa de acontecer.</p>
-        </details>
-      </div>
-    </div>
-  </section>
-
-  <!-- ============ CTA FINAL ============ -->
-  <section class="tight">
-    <div class="container">
-      <div class="cta-banner reveal">
-        <div class="txt">
-          <h2>Pronto para parar de vender o que não tem?</h2>
-          <p>Crie sua conta em um minuto e comece agora. 60 dias grátis, sem cartão.</p>
+      <section class="secao fiscal" id="fiscal" aria-labelledby="t-fiscal">
+        <div class="wrap fiscal-grid">
+          <div>
+            <p class="kicker">Nota fiscal</p>
+            <h2 id="t-fiscal">A nota sai de dentro do sistema — não de um emissor separado</h2>
+            <ul class="lista">
+              {[
+                '<b>NFC-e no balcão e NF-e para empresa</b>, emitidas direto da venda, sem redigitar item por item.',
+                '<b>Certificado digital A1:</b> você envia o arquivo uma vez e o Nainer cuida do resto.',
+                '<b>Contingência automática:</b> caiu a internet da SEFAZ? A venda não para — a nota é transmitida depois.',
+                '<b>XML guardado por 5 anos</b>, como a lei exige.',
+              ].map((item) => (
+                <li>
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d={CHECK} /></svg>
+                  <span set:html={item} />
+                </li>
+              ))}
+            </ul>
+            <p class="frase-contador">"O XML fica arquivado e disponível para o seu contador."</p>
+          </div>
+          <figure class="print">
+            <img
+              src="/img/fiscal-maquininha.jpg"
+              alt="Maquininha de cartão pronta para receber o pagamento"
+              width="1200"
+              height="900"
+              loading="lazy"
+              decoding="async"
+            />
+          </figure>
         </div>
-        <a class="btn btn-lg btn-onaccent" href="/assinar">Começar teste grátis</a>
-      </div>
-    </div>
-  </section>
+      </section>
 
-  <!-- Atualiza os preços com os dados reais da API, se disponível (progressive enhancement). -->
-  <script is:inline>
-    (async () => {
-      try {
-        const res = await fetch(window.NINER_API_BASE + '/api/publico/planos');
-        if (!res.ok) return;
-        const planos = await res.json();
-        for (const p of planos) {
-          const card = document.querySelector(`[data-plano="${p.nome}"]`);
-          const preco = card && card.querySelector('[data-preco]');
-          if (preco) preco.innerHTML = `R$ ${Number(p.precoMensal).toFixed(0)}<small>/mês</small>`;
-        }
-      } catch (_) { /* offline: mantém o fallback estático (bom para SEO) */ }
-    })();
-  </script>
-</Base>
+      <section class="secao secao-continua" aria-labelledby="t-comecar">
+        <div class="wrap">
+          <header class="secao-cab">
+            <p class="kicker">Como começar</p>
+            <h2 id="t-comecar">Da conta criada à primeira venda, no mesmo dia</h2>
+          </header>
+          <ol class="passos">
+            <li class="passo"><h3>Crie sua conta</h3><p>Leva 1 minuto. Só e-mail — sem cartão, sem boleto, sem contrato.</p></li>
+            <li class="passo"><h3>Cadastre os produtos</h3><p>Um a um ou importando a planilha que você já tem.</p></li>
+            <li class="passo"><h3>Venda</h3><p>Abra o caixa e registre a primeira venda — com nota, se quiser.</p></li>
+          </ol>
+        </div>
+      </section>
+
+      {/* Faixa de ambiência: puramente decorativa, por isso a seção inteira é aria-hidden e o
+          alt fica vazio — leitor de tela não ganha nada anunciando "foto de loja". */}
+      <section class="ambiencia" aria-hidden="true">
+        <img
+          src="/img/ambiencia-loja.jpg"
+          alt=""
+          width="2000"
+          height="1335"
+          loading="lazy"
+          decoding="async"
+        />
+      </section>
+
+      {depoimentos.length > 0 && (
+        <section class="secao secao-continua" aria-labelledby="t-depoimentos">
+          <div class="wrap">
+            <header class="secao-cab">
+              <p class="kicker">Quem já usa</p>
+              <h2 id="t-depoimentos">Lojas de verdade, do tamanho da sua</h2>
+            </header>
+            <div class="depos">
+              {depoimentos.map((d) => (
+                <article class="depo">
+                  <blockquote>{d.texto}</blockquote>
+                  <footer><b>{d.nome}</b> — {d.loja}, {d.cidade}</footer>
+                </article>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
+
+      <section class="secao secao-continua" id="duvidas" aria-labelledby="t-faq">
+        <div class="wrap">
+          <header class="secao-cab">
+            <p class="kicker">Dúvidas</p>
+            <h2 id="t-faq">Perguntas que todo mundo faz</h2>
+          </header>
+          <div class="faq">
+            {perguntas.map((q) => (
+              <details data-evento="FAQ" data-rotulo={q.p}>
+                <summary>{q.p}</summary>
+                <p class="resposta">{q.r}</p>
+              </details>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section class="cta-final" aria-labelledby="t-cta">
+        <div class="wrap">
+          <h2 id="t-cta">Sua loja organizada, com nota fiscal, sem pagar nada</h2>
+          <p>Crie a conta agora e registre a primeira venda ainda hoje.{zap ? ' Se ficar com dúvida, é só chamar no WhatsApp.' : ''}</p>
+          <div class="acoes">
+            <a class="btn btn-primario" href="/assinar" data-evento="INICIO_SIGNUP" data-rotulo="rodape">Criar conta grátis</a>
+            {zap && <a class="btn btn-zap" href={zap} data-evento="CLIQUE_WHATSAPP" data-rotulo="cta-final">Falar no WhatsApp</a>}
+          </div>
+          <p class="micro">Sem cartão de crédito. Sem prazo. Você começa a usar em 1 minuto.</p>
+        </div>
+      </section>
+    </main>
+
+    <footer class="rodape">
+      <div class="wrap">
+        <div class="rodape-grid">
+          <div>
+            <a class="logo" href="/" style="font-size:22px"><MarcaNainer tamanho={24} /></a>
+            <p style="margin-top:10px; max-width:26em;">ERP em nuvem para o pequeno varejo brasileiro. Um produto da Vetor Sistemas.</p>
+            {contato.cnpjVetor && <p style="margin-top:10px;">CNPJ {contato.cnpjVetor}</p>}
+          </div>
+          <nav aria-label="Produto">
+            <h3>Produto</h3>
+            <ul>
+              <li><a href="#recursos" data-evento="NAV" data-rotulo="recursos">Recursos</a></li>
+              <li><a href="#preco" data-evento="NAV" data-rotulo="preco">Preço</a></li>
+              <li><a href="#fiscal" data-evento="NAV" data-rotulo="fiscal">Nota fiscal</a></li>
+              <li><a href="#duvidas" data-evento="NAV" data-rotulo="duvidas">Dúvidas</a></li>
+            </ul>
+          </nav>
+          <nav aria-label="Contato">
+            <h3>Contato</h3>
+            <ul>
+              {zap && <li><a href={zap} data-evento="CLIQUE_WHATSAPP" data-rotulo="rodape">WhatsApp</a></li>}
+              {insta && <li><a href={insta} data-evento="CLIQUE_INSTAGRAM">Instagram</a></li>}
+              {contato.email && <li><a href={`mailto:${contato.email}`}>{contato.email}</a></li>}
+            </ul>
+          </nav>
+          <nav aria-label="Legal">
+            <h3>Legal</h3>
+            <ul>
+              <li><a href="/termos">Termos de uso</a></li>
+              <li><a href="/privacidade">Privacidade (LGPD)</a></li>
+            </ul>
+          </nav>
+        </div>
+        <p class="legal">© 2026 Vetor Sistemas. Todos os direitos reservados.</p>
+      </div>
+    </footer>
+
+    <div class="cookies" id="aviso-cookies" role="region" aria-label="Aviso de cookies" hidden>
+      <p>Usamos apenas medição própria de audiência, sem rastreadores de terceiros. <a href="/privacidade">Saiba mais</a>.</p>
+      <button class="btn btn-secundario" type="button" id="aceitar-cookies">Entendi</button>
+    </div>
+
+    <script is:inline>
+      // ---- Aviso de cookies: só aparece para quem ainda não dispensou ----------------------
+      (function () {
+        var aviso = document.getElementById('aviso-cookies');
+        var visto = false;
+        try {
+          visto = localStorage.getItem('ninerCookies') === 'ok';
+        } catch (e) {}
+        if (!visto) aviso.hidden = false;
+        document.getElementById('aceitar-cookies').addEventListener('click', function () {
+          aviso.hidden = true;
+          try {
+            localStorage.setItem('ninerCookies', 'ok');
+          } catch (e) {}
+        });
+      })();
+
+      // ---- Alternador Mensal/Anual ---------------------------------------------------------
+      (function () {
+        var botoes = document.querySelectorAll('[data-ciclo-btn]');
+        botoes.forEach(function (b) {
+          b.addEventListener('click', function () {
+            var ciclo = b.getAttribute('data-ciclo-btn');
+            botoes.forEach(function (o) {
+              o.setAttribute('aria-pressed', String(o === b));
+            });
+            document.querySelectorAll('#tabela-faixas [data-ciclo]').forEach(function (c) {
+              c.classList.toggle('ativo', c.getAttribute('data-ciclo') === ciclo);
+            });
+          });
+        });
+      })();
+
+      // ---- Preços reais em runtime (GET /api/publico/planos) --------------------------------
+      // O HTML já sai com os valores atuais (SEO e API fora do ar); isto corrige quando o dono do
+      // produto muda os parâmetros comerciais, sem rebuild do site.
+      (function () {
+        if (!window.NINER_API_BASE) return;
+        var real = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 });
+        fetch(window.NINER_API_BASE + '/api/publico/planos')
+          .then(function (r) {
+            return r.ok ? r.json() : null;
+          })
+          .then(function (planos) {
+            if (!planos) return;
+            planos.forEach(function (p) {
+              if (p.gratuito || !p.limiteVendasMes) return;
+              var mensal = document.querySelector('[data-preco-faixa="' + p.limiteVendasMes + '"][data-ciclo="mensal"]');
+              var anual = document.querySelector('[data-preco-faixa="' + p.limiteVendasMes + '"][data-ciclo="anual"]');
+              if (mensal) mensal.textContent = real.format(p.precoMensal) + '/mês';
+              // Anual é mostrado por mês equivalente: é assim que o lojista compara com o mensal.
+              if (anual) anual.textContent = real.format(p.precoAnual / 12) + '/mês';
+            });
+          })
+          .catch(function () {});
+      })();
+    </script>
+  </body>
+</html>

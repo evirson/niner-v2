@@ -1,0 +1,154 @@
+# docker-compose de PRODUÇÃO — VPS. Difere do compose de dev em quatro pontos que importam:
+#
+#  1. Nada escuta na interface pública: todas as portas são publicadas em 127.0.0.1. Quem fala com
+#     a internet é só o proxy reverso (nginx), nas 80/443. Postgres e MinIO expostos num VPS
+#     compartilhado seriam varridos em horas.
+#  2. Os fronts NÃO rodam aqui: `site`, `web` e `admin` viram HTML estático servido pelo nginx —
+#     dev server em produção é lento e inseguro.
+#  3. Toda senha e segredo vem do `.env` do servidor (gerado por infra/deploy/gerar-segredos.sh),
+#     nunca do repositório.
+#  4. ⚠️ Este VPS roda OUTROS PROJETOS: as portas de host abaixo são variáveis justamente para
+#     você escolher faixa livre. Varra antes: `ss -ltnp` ou `docker ps --format '{{.Ports}}'`.
+#
+# Uso:
+#   docker compose -f docker-compose.prod.yml --env-file .env up -d db minio minio-init
+#   docker compose -f docker-compose.prod.yml --env-file .env run --rm flyway
+#   docker compose -f docker-compose.prod.yml --env-file .env up -d --build api
+
+name: niner
+
+services:
+  db:
+    image: postgres:18
+    container_name: niner-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: niner_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?defina no .env}
+      # Senhas das roles criadas pelo bootstrap (db/bootstrap/00_roles.sh). Sem isto o banco
+      # nasceria com as senhas de desenvolvimento — e o Flyway, que usa a do .env, não entraria
+      # (foi o que aconteceu no primeiro deploy, 2026-08-19).
+      NINER_OWNER_PASSWORD: ${FLYWAY_OWNER_PASSWORD:?defina no .env}
+      NINER_APP_PASSWORD: ${DB_APP_PASSWORD:?defina no .env}
+      NINER_BACKUP_PASSWORD: ${NINER_BACKUP_SENHA:?defina no .env}
+    volumes:
+      - pgdata:/var/lib/postgresql
+      - ./db/bootstrap:/docker-entrypoint-initdb.d:ro
+    ports: ["127.0.0.1:${NINER_DB_PORT:-5432}:5432"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d niner_db"]
+      interval: 10s
+      timeout: 3s
+      retries: 12
+
+  flyway:
+    image: flyway/flyway:11
+    profiles: [migrate]
+    depends_on:
+      db: { condition: service_healthy }
+    volumes:
+      - ./db/migration:/flyway/sql:ro
+    command: >-
+      -url=jdbc:postgresql://db:5432/niner_db
+      -user=niner_owner
+      -password=${FLYWAY_OWNER_PASSWORD:?defina no .env}
+      -connectRetries=10
+      migrate
+
+  api:
+    build: ./api
+    container_name: niner-api
+    restart: unless-stopped
+    depends_on:
+      db: { condition: service_healthy }
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/niner_db
+      SPRING_DATASOURCE_USERNAME: niner_app
+      SPRING_DATASOURCE_PASSWORD: ${DB_APP_PASSWORD:?defina no .env}
+      # Segredos — gerados no servidor, nunca versionados.
+      NINER_JWT_SECRET: ${NINER_JWT_SECRET:?defina no .env}
+      NINER_CHAVE_SEGREDOS: ${NINER_CHAVE_SEGREDOS:?defina no .env}
+      # Primeiro SUPER_ADMIN do backoffice (só é criado se plataforma.staff estiver vazia).
+      NINER_STAFF_INICIAL_EMAIL: ${NINER_STAFF_INICIAL_EMAIL:-}
+      NINER_STAFF_INICIAL_SENHA: ${NINER_STAFF_INICIAL_SENHA:-}
+      NINER_STAFF_INICIAL_NOME: ${NINER_STAFF_INICIAL_NOME:-Administrador Vetor}
+      # Backup: usuário com BYPASSRLS. NUNCA niner_app nem niner_owner — com FORCE ROW LEVEL
+      # SECURITY os dois enxergam zero linha e o dump sairia sem dado de cliente.
+      NINER_BACKUP_USUARIO: ${NINER_BACKUP_USUARIO:-niner_backup}
+      NINER_BACKUP_SENHA: ${NINER_BACKUP_SENHA:?defina no .env}
+      # Atrás do nginx, o IP real vem no X-Forwarded-For.
+      NINER_LIMITE_CONFIAR_PROXY: "true"
+      NINER_WEB_BASE_URL: https://app.${NINER_DOMINIO:?defina no .env}
+      NINER_CORS_ORIGINS_0: https://${NINER_DOMINIO}
+      NINER_CORS_ORIGINS_1: https://app.${NINER_DOMINIO}
+      NINER_CORS_ORIGINS_2: https://admin.${NINER_DOMINIO}
+      # O www redireciona para o apex (nginx), então esta origem não deveria aparecer — mas
+      # aparece de quem tem o www salvo nos favoritos e chega antes do redirect. Sem ela na
+      # lista, o Spring recusa com 403 e SEM cabeçalho de CORS, e o site diz apenas que não
+      # conseguiu conectar (achado em produção, 2026-08-19).
+      NINER_CORS_ORIGINS_3: https://www.${NINER_DOMINIO}
+      # Object storage: fotos de produto no GCS (ADR-013) e privado no MinIO (ADR-014).
+      GOOGLE_APPLICATION_CREDENTIALS: /secrets/gcs.json
+      NINER_STORAGE_BUCKET: ${NINER_STORAGE_BUCKET:-niner-erp}
+      NINER_STORAGE_PRIVADO_ENDPOINT: http://minio:9000
+      NINER_STORAGE_PRIVADO_ACCESS_KEY: ${NINER_STORAGE_PRIVADO_ACCESS_KEY:-niner_app}
+      NINER_STORAGE_PRIVADO_SECRET_KEY: ${NINER_STORAGE_PRIVADO_SECRET_KEY:?defina no .env}
+      NINER_STORAGE_BUCKET_FISCAL: ${NINER_STORAGE_BUCKET_FISCAL:-niner-fiscal}
+      NINER_STORAGE_BUCKET_PRIVADO: ${NINER_STORAGE_BUCKET_PRIVADO:-niner-privado}
+      # Fiscal (o módulo é de outro programador; a truststore é requisito de ambiente).
+      NINER_FISCAL_TRUSTSTORE: ${NINER_FISCAL_TRUSTSTORE:-}
+      NINER_FISCAL_TRUSTSTORE_SENHA: ${NINER_FISCAL_TRUSTSTORE_SENHA:-}
+      # Cobrança: preferimos configurar pelo backoffice (fica cifrado no banco). Estas variáveis
+      # existem para a primeira subida, antes de haver staff para preencher.
+      NINER_MP_ACCESS_TOKEN: ${NINER_MP_ACCESS_TOKEN:-}
+      NINER_MP_WEBHOOK_SECRET: ${NINER_MP_WEBHOOK_SECRET:-}
+      NINER_MP_NOTIFICATION_URL: https://api.${NINER_DOMINIO}/api/publico/webhooks/mercadopago
+      TZ: America/Sao_Paulo
+    volumes:
+      - ./api/secrets:/secrets:ro
+    ports: ["127.0.0.1:${NINER_API_PORT:-8080}:8080"]
+
+  minio:
+    image: minio/minio:RELEASE.2025-09-07T16-13-09Z
+    container_name: niner-minio
+    restart: unless-stopped
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?defina no .env}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?defina no .env}
+    volumes:
+      - minio-data:/data
+    # Console fica só no localhost: acesso por túnel SSH, nunca publicado.
+    ports:
+      - "127.0.0.1:${NINER_MINIO_PORT:-9000}:9000"
+      - "127.0.0.1:${NINER_MINIO_CONSOLE_PORT:-9001}:9001"
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 3s
+      retries: 12
+
+  minio-init:
+    image: minio/mc:RELEASE.2025-08-13T08-35-41Z
+    depends_on:
+      minio: { condition: service_healthy }
+    environment:
+      MINIO_ENDPOINT: http://minio:9000
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?defina no .env}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?defina no .env}
+      BUCKET_FISCAL: ${NINER_STORAGE_BUCKET_FISCAL:-niner-fiscal}
+      BUCKET_PRIVADO: ${NINER_STORAGE_BUCKET_PRIVADO:-niner-privado}
+      RETENCAO_FISCAL_DIAS: ${NINER_FISCAL_RETENCAO_DIAS:-1825}
+      VERSAO_ANTIGA_DIAS: ${NINER_PRIVADO_VERSAO_ANTIGA_DIAS:-30}
+      APP_ACCESS_KEY: ${NINER_STORAGE_PRIVADO_ACCESS_KEY:-niner_app}
+      APP_SECRET_KEY: ${NINER_STORAGE_PRIVADO_SECRET_KEY:?defina no .env}
+    volumes:
+      - ./infra/minio:/bootstrap:ro
+    entrypoint: ["/bin/sh", "/bootstrap/bootstrap.sh"]
+    restart: "no"
+
+volumes:
+  pgdata:
+  # ⚠️ Apagar este volume apaga XML fiscal (guarda legal de 5 anos).
+  minio-data:

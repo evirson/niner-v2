@@ -50,6 +50,43 @@ niner:
   trial:
     dias: 60                   # trial sem cartão (D2 — revisto de 14 para 60 dias)
     plano: Profissional        # plano-base durante o trial (fallback: menor preço ativo)
+  backup:                      # credenciais do pg_dump — NUNCA niner_app (RLS filtraria tudo e o
+                               # dump sairia sem os dados dos lojistas). Horário e retenção ficam
+                               # no backoffice; aqui só o acesso ao banco.
+    jdbc-url: ${NINER_BACKUP_JDBC_URL:}   # vazio = usa o endereço do próprio DataSource
+    usuario: ${NINER_BACKUP_USUARIO:}
+    senha: ${NINER_BACKUP_SENHA:}
+  # Endereço do app do lojista — usado no link de redefinição de senha enviado por e-mail.
+  web-base-url: ${NINER_WEB_BASE_URL:http://localhost:5173}
+  limite-requisicao:           # protege a superfície pública (única com escrita anônima).
+                               # Em produção atrás de nginx, ligue confiar-proxy e mantenha
+                               # também o limit_req no proxy — este filtro é a segunda camada.
+    habilitado: ${NINER_LIMITE_HABILITADO:true}
+    confiar-proxy: ${NINER_LIMITE_CONFIAR_PROXY:false}
+    escrita-por-minuto: ${NINER_LIMITE_ESCRITA:10}    # signup, formulário de lead
+    beacon-por-minuto: ${NINER_LIMITE_BEACON:120}     # medição (envia em lote)
+  staff-inicial:               # primeiro SUPER_ADMIN do backoffice (só é criado se a tabela
+                               # plataforma.staff estiver VAZIA — ver StaffBootstrap)
+    email: ${NINER_STAFF_INICIAL_EMAIL:}
+    senha: ${NINER_STAFF_INICIAL_SENHA:}      # 🔴 mínimo 12 caracteres; nunca versionar
+    nome: ${NINER_STAFF_INICIAL_NOME:Administrador Vetor}
+  cobranca:                    # cobrança da assinatura (ADR-016) — control-plane, não é o
+                               # financeiro do lojista
+    gateway: ${NINER_COBRANCA_GATEWAY:mercadopago}
+    mercadopago:
+      base-url: ${NINER_MP_BASE_URL:https://api.mercadopago.com}
+      # 🔴 NUNCA commitar token. Em dev use o access token de TESTE (prefixo TEST-) das
+      # credenciais da aplicação no painel do Mercado Pago. Vazio = cobrança desligada: a API
+      # sobe normalmente e só o endpoint de pagamento responde 503.
+      access-token: ${NINER_MP_ACCESS_TOKEN:}
+      # Segredo do webhook (painel > Suas integrações > Webhooks). Vazio = não valida assinatura
+      # (só dev). Mesmo sem ele o webhook é inofensivo: não decide nada, quem aplica efeito é o
+      # worker consultando o gateway.
+      webhook-secret: ${NINER_MP_WEBHOOK_SECRET:}
+      # Endereço público que o MP chama (em dev, um túnel). Vazio = sem notificação: a
+      # confirmação passa a depender da consulta periódica.
+      notification-url: ${NINER_MP_NOTIFICATION_URL:}
+      validade-pix: PT24H
   cors:
     origins:                   # fronts em dev (site/web/admin). Em prod: domínios reais.
       - http://localhost:5175

@@ -5,7 +5,7 @@ reformulada de novo 2026-08-10, correções e melhorias 2026-08-10 · Módulo(s)
 
 ## Problema
 
-Quando um lojista contrata o Niner, às vezes já opera outro sistema (planilha ou ERP concorrente) e
+Quando um lojista contrata o Nainer, às vezes já opera outro sistema (planilha ou ERP concorrente) e
 precisa trazer os dados que já tem — clientes, fornecedores, catálogo, estoque inicial e o saldo
 devedor de crediário — sem redigitar tudo na mão. Hoje não existe nenhum caminho de carga inicial: o
 único jeito de popular o tenant é usar as telas de cadastro uma linha por vez.
@@ -268,7 +268,7 @@ a ler via `XSSFReader` + SAX (`XSSFSheetXMLHandler`, `ImportacaoPlanilha.lerXlsx
 processa uma linha do XML por vez — progresso real desde a primeira linha, bem mais rápido e mais
 leve em memória (testado: 300 mil linhas/9MB, leitura completa em segundos; detecção do tipo de
 arquivo, que só lê a 1ª linha, em 0,28s). `.xls` continua em DOM — o formato BIFF8 trava em 65.536
-linhas por conta própria (limite do formato, não do Niner), então nunca sofre desse problema.
+linhas por conta própria (limite do formato, não do Nainer), então nunca sofre desse problema.
 Decisão de rota é pela assinatura do arquivo (ZIP `PK\x03\x04` = `.xlsx`, senão DOM), não pela
 extensão do nome. Célula com data formatada de exibição diferente de `dd/mm/aaaa` (ex. formato
 americano `m/d/yyyy` na planilha de origem) continua normalizando pro formato interno correto nos

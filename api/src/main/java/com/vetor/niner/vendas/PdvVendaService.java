@@ -4,6 +4,7 @@ import com.vetor.niner.comum.web.ConflitoDadosException;
 import com.vetor.niner.configuracao.geral.ConfiguracaoGeralService;
 import com.vetor.niner.financeiro.TipoCarteiraDtos.CategoriaCarteira;
 import com.vetor.niner.financeiro.caixa.CaixaService;
+import com.vetor.niner.plataforma.uso.LimiteVendasService;
 import com.vetor.niner.vendas.PdvDtos.ComprovanteVendaResponse;
 import com.vetor.niner.vendas.PdvDtos.DadosFiscaisComprovante;
 import com.vetor.niner.vendas.PdvDtos.EfetivarVendaRequest;
@@ -84,11 +85,14 @@ public class PdvVendaService {
     private final JdbcClient jdbc;
     private final ConfiguracaoGeralService configuracaoGeralService;
     private final CaixaService caixaService;
+    private final LimiteVendasService limiteVendas;
 
-    public PdvVendaService(JdbcClient jdbc, ConfiguracaoGeralService configuracaoGeralService, CaixaService caixaService) {
+    public PdvVendaService(JdbcClient jdbc, ConfiguracaoGeralService configuracaoGeralService,
+            CaixaService caixaService, LimiteVendasService limiteVendas) {
         this.jdbc = jdbc;
         this.configuracaoGeralService = configuracaoGeralService;
         this.caixaService = caixaService;
+        this.limiteVendas = limiteVendas;
     }
 
     @Transactional
@@ -137,6 +141,12 @@ public class PdvVendaService {
         List<BigDecimal> pesos = itens.stream().map(ItemResolvido::valorItem).toList();
         List<BigDecimal> descontoPorItem = ratear(totalDesconto, pesos, valorTotalProdutos);
         List<BigDecimal> acrescimoPorItem = ratear(totalAcrescimo, pesos, valorTotalProdutos);
+
+        // Cota de vendas do plano (ADR-015). Fica aqui, DEPOIS de toda validação de negócio e
+        // imediatamente antes da primeira escrita: uma venda que ia falhar por outro motivo não
+        // pode consumir cota. Estourado o limite + tolerância, a exceção derruba a transação
+        // inteira — inclusive o próprio incremento.
+        limiteVendas.registrarVenda();
 
         long idVenda = jdbc.sql("""
                         INSERT INTO venda (id_tenant, id_empresa, id_cliente, id_caixa)

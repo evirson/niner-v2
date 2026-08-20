@@ -117,7 +117,7 @@ export async function gerarPdfCapturaFluxoCaixa(
 
   desenharCabecalhoERodape(
     doc, 'Fluxo de Caixa', subtitulo,
-    new Date().toLocaleString('pt-BR'), rodapeEsquerda, 'Niner ERP')
+    new Date().toLocaleString('pt-BR'), rodapeEsquerda, 'Nainer ERP')
 
   doc.save('fluxo-de-caixa.pdf')
 }

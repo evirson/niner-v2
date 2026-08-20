@@ -17,6 +17,11 @@ services:
       POSTGRES_DB: niner_db
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: ${DB_PASSWORD:-dev_postgres}   # 🔴 dev; produção via secret manager
+      # Senhas das roles do bootstrap. Em dev ficam nos valores conhecidos; em produção vêm do
+      # .env do servidor (ver docker-compose.prod.yml).
+      NINER_OWNER_PASSWORD: ${FLYWAY_OWNER_PASSWORD:-dev_owner}
+      NINER_APP_PASSWORD: ${DB_APP_PASSWORD:-dev_app}
+      NINER_BACKUP_PASSWORD: ${NINER_BACKUP_SENHA:-dev_backup}
     volumes:
       # postgres:18 mudou o VOLUME para /var/lib/postgresql (PGDATA=/var/lib/postgresql/18/docker)
       - pgdata:/var/lib/postgresql
@@ -44,7 +49,7 @@ services:
       -connectRetries=10
       migrate
 
-  # API Niner (Spring Boot 4 / Java 25). Conecta como niner_app (SEM BYPASSRLS, P8).
+  # API Nainer (Spring Boot 4 / Java 25). Conecta como niner_app (SEM BYPASSRLS, P8).
   # As migrations devem ter sido aplicadas antes: `docker compose run --rm flyway`.
   api:
     build: ./api
@@ -198,6 +203,20 @@ services:
       - ./web:/app
     command: sh -c "npm install && npm run dev -- --host"
     ports: ["${NINER_WEB_PORT:-5173}:5173"]
+
+  # Backoffice da plataforma (React + Vite). Dev server na 5174. Perfil `fronts`.
+  # ⚠️ Ferramenta interna: em produção NÃO publicar sem restrição de acesso (VPN/allowlist),
+  # mesmo com o login de staff — ver docs/infra/checklist-producao.md.
+  admin:
+    image: node:26-alpine
+    profiles: [fronts]
+    working_dir: /app
+    environment:
+      CHOKIDAR_USEPOLLING: "true"
+    volumes:
+      - ./admin:/app
+    command: sh -c "npm install && npm run dev -- --host"
+    ports: ["${NINER_ADMIN_PORT:-5174}:5174"]
 
 volumes:
   pgdata:

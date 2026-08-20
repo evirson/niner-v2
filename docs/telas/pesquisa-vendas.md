@@ -66,7 +66,7 @@ fecha o popup de confirmação e mostra um Toast — o popup de detalhe continua
 mostrando "Cancelada".
 
 Adaptada de uma especificação escrita para um sistema de referência ("Mitryus ERP") pro modelo de
-dados real do Niner — ver seção seguinte para cada divergência e a decisão tomada.
+dados real do Nainer — ver seção seguinte para cada divergência e a decisão tomada.
 
 ## Adaptações em relação à especificação original
 

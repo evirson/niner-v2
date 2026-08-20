@@ -21,7 +21,11 @@ export default function Dashboard() {
   if (error) return <p className="erro">Não foi possível carregar seus dados.</p>
   if (!data) return null
 
-  const trial = data.trial_expira_em ? new Date(data.trial_expira_em).toLocaleDateString('pt-BR') : null
+  // O painel mostrava selo de TRIAL e "Teste até <data>" — cópia de dois modelos comerciais
+  // atrás (14 dias → 60 dias → plano Gratuito sem prazo, ADR-015). Hoje o que importa é a cota.
+  const plano = data.plano
+  const usaCota = plano?.limite_vendas_mes != null
+  const percentual = usaCota ? Math.min(100, Math.round((plano!.vendas_no_mes / plano!.limite_vendas_mes!) * 100)) : 0
 
   return (
     <div>
@@ -35,8 +39,19 @@ export default function Dashboard() {
           <p className="muted">
             Identificador: <code>{data.conta.slug}</code>
           </p>
-          <span className={`badge ${data.conta.status === 'TRIAL' ? 'badge-trial' : ''}`}>{data.conta.status}</span>
-          {trial && <p className="muted" style={{ marginTop: 10 }}>Teste até <strong>{trial}</strong>.</p>}
+          <span className="badge">{plano?.nome ?? data.conta.status}</span>
+          {usaCota && (
+            <>
+              <p className="muted" style={{ marginTop: 10 }}>
+                <strong>{plano!.vendas_no_mes}</strong> de {plano!.limite_vendas_mes} vendas neste mês
+                {plano!.gratuito ? ' — o plano gratuito não expira.' : '.'}
+              </p>
+              <div className="barra-cota" role="img" aria-label={`${percentual}% da cota do mês`}>
+                <div className={`barra-cota-preenchida${percentual >= 80 ? ' atencao' : ''}`}
+                  style={{ width: `${percentual}%` }} />
+              </div>
+            </>
+          )}
         </section>
 
         <section className="card">
@@ -49,15 +64,14 @@ export default function Dashboard() {
 
       <section className="card" style={{ marginTop: 20 }}>
         <h2 className="card-title">Próximos passos</h2>
+        {/* A lista antiga prometia canais de marketplace, que não existem no produto ainda —
+            promessa que o lojista cobra. Estes quatro passos são o que ele consegue fazer hoje. */}
         <ol className="passos">
-          <li>Cadastrar seus produtos e variações (SKU/EAN).</li>
+          <li>Cadastrar seus produtos, com cor e tamanho quando for o caso.</li>
           <li>Ajustar o estoque inicial de cada item.</li>
-          <li>Conectar um canal de venda (Mercado Livre, Shopee…).</li>
-          <li>Importar e acompanhar seus pedidos numa fila única.</li>
+          <li>Abrir o caixa e registrar a primeira venda no PDV.</li>
+          <li>Configurar o fiscal para emitir NFC-e direto da venda.</li>
         </ol>
-        <p className="muted" style={{ fontSize: 13 }}>
-          Estas áreas estão em construção — em breve disponíveis no menu ao lado.
-        </p>
       </section>
     </div>
   )
