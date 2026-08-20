@@ -42,6 +42,38 @@ public final class ChaveAcesso {
     private ChaveAcesso() {
     }
 
+    /**
+     * Caminho inverso de {@link #CODIGO_UF}, <b>derivado dele</b> — nunca uma segunda lista escrita
+     * à mão, que poderia divergir em silêncio.
+     */
+    private static final Map<Integer, String> UF_POR_CODIGO = CODIGO_UF.entrySet().stream()
+            .collect(java.util.stream.Collectors.toUnmodifiableMap(Map.Entry::getValue, Map.Entry::getKey));
+
+    /**
+     * UF <b>congelada na chave de acesso</b> (posições 1–2, o {@code cUF}).
+     *
+     * <p><b>Por que não perguntar à empresa.</b> Documento fiscal é registro imutável (F6/P3): a UF
+     * que vale para ele é a de <b>quando foi emitido</b>, não a que a empresa tem hoje. Se um
+     * lojista mudar a empresa de UF, ler a UF atual reinterpretaria retroativamente todo o
+     * histórico — e o caso que dói de verdade é o <b>cancelamento</b>, que escolhe por essa UF
+     * <b>para qual SEFAZ</b> o evento é transmitido: a nota antiga iria para o autorizador errado
+     * e seria recusada. A chave já carrega a resposta certa, gravada no ato da emissão.
+     *
+     * @return {@code null} quando não há chave (documento que nunca chegou a receber número —
+     *         {@code NAO_EMITIDO}, {@code RASCUNHO}) ou quando o {@code cUF} não é reconhecido; o
+     *         chamador cai na UF da empresa, que é o melhor palpite disponível nesse caso
+     */
+    public static String ufDaChave(String chaveAcesso) {
+        if (chaveAcesso == null || chaveAcesso.length() < 2) {
+            return null;
+        }
+        try {
+            return UF_POR_CODIGO.get(Integer.parseInt(chaveAcesso.substring(0, 2)));
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
     /** Código IBGE da UF (2 dígitos) — usado tanto na chave quanto no {@code cOrgao} do evento. */
     public static int codigoUfDe(String uf) {
         Integer codigo = CODIGO_UF.get(uf == null ? "" : uf.trim().toUpperCase(Locale.ROOT));

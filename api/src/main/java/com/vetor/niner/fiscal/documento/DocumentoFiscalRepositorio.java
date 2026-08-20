@@ -36,6 +36,19 @@ public class DocumentoFiscalRepositorio {
 
     private static final int MODELO_NFCE = 65;
 
+    /**
+     * UF de um documento que <b>já existe</b>: a que está congelada na chave de acesso, não a que a
+     * empresa tem hoje. Ver {@link ChaveAcesso#ufDaChave} para o porquê — em resumo, documento
+     * fiscal é registro imutável, e é por esta UF que o cancelamento escolhe a SEFAZ de destino.
+     *
+     * <p>Sem chave (documento que nunca recebeu número), cai na UF da empresa: é o melhor palpite
+     * disponível, e nesse estado não há evento nem arquivamento para errar o destino.
+     */
+    private static String ufDoDocumento(java.sql.ResultSet rs) throws java.sql.SQLException {
+        String daChave = ChaveAcesso.ufDaChave(rs.getString("chave_acesso"));
+        return daChave != null ? daChave : rs.getString("uf");
+    }
+
     private final JdbcClient jdbc;
 
     public DocumentoFiscalRepositorio(JdbcClient jdbc) {
@@ -493,7 +506,7 @@ public class DocumentoFiscalRepositorio {
                         rs.getString("protocolo"),
                         rs.getObject("data_autorizacao", java.time.OffsetDateTime.class),
                         MontagemNfceDtos.AmbienteSefaz.valueOf(rs.getString("ambiente")),
-                        rs.getString("uf"), rs.getString("cnpj")))
+                        ufDoDocumento(rs), rs.getString("cnpj")))
                 .optional();
     }
 
@@ -586,7 +599,7 @@ public class DocumentoFiscalRepositorio {
                 .param(idDocumentoFiscal)
                 .query((rs, n) -> new ContextoConsulta(
                         rs.getLong("id_empresa"), rs.getInt("modelo"), rs.getString("chave_acesso"),
-                        MontagemNfceDtos.AmbienteSefaz.valueOf(rs.getString("ambiente")), rs.getString("uf")))
+                        MontagemNfceDtos.AmbienteSefaz.valueOf(rs.getString("ambiente")), ufDoDocumento(rs)))
                 .optional();
     }
 
@@ -615,7 +628,7 @@ public class DocumentoFiscalRepositorio {
                 .query((rs, n) -> new ContextoReprocessamento(
                         rs.getLong("id_empresa"), rs.getInt("modelo"), rs.getString("situacao"),
                         rs.getString("chave_acesso"), rs.getString("xml_assinado"),
-                        MontagemNfceDtos.AmbienteSefaz.valueOf(rs.getString("ambiente")), rs.getString("uf")))
+                        MontagemNfceDtos.AmbienteSefaz.valueOf(rs.getString("ambiente")), ufDoDocumento(rs)))
                 .optional();
     }
 
@@ -642,7 +655,7 @@ public class DocumentoFiscalRepositorio {
                         """)
                 .param(idDocumentoFiscal)
                 .query((rs, n) -> new DocumentoParaArquivar(
-                        rs.getInt("modelo"), rs.getString("chave_acesso"), rs.getString("uf"),
+                        rs.getInt("modelo"), rs.getString("chave_acesso"), ufDoDocumento(rs),
                         rs.getObject("data_emissao", java.time.OffsetDateTime.class),
                         rs.getString("xml_assinado"), rs.getString("status_sefaz"),
                         rs.getString("xml_objeto_bucket")))
@@ -700,7 +713,7 @@ public class DocumentoFiscalRepositorio {
                         rs.getString("tipo_evento"), rs.getInt("sequencia"), rs.getString("xml_evento"),
                         rs.getObject("criado_em", java.time.OffsetDateTime.class),
                         rs.getString("xml_objeto_bucket"), rs.getString("chave_acesso"), rs.getInt("modelo"),
-                        rs.getString("uf")))
+                        ufDoDocumento(rs)))
                 .optional();
     }
 

@@ -523,6 +523,41 @@ Movimentação de Conta Corrente) que ainda não tinham migrado pro `SeletorPlan
 
 ## Linha do tempo
 
+### 2026-08-20 — A UF de um documento fiscal vem congelada na chave, não da empresa de hoje
+
+Consequência que só apareceu porque o dono do produto perguntou "não seria melhor já corrigir?"
+sobre um erro de construção. Os dois erros já estavam corrigidos — mas o primeiro (supor coluna
+`uf` em `documento_fiscal`, quando ela vem de `empresa` por join) escondia uma questão de desenho
+que valia decidir.
+
+**O problema.** Documento fiscal é registro **imutável** (F6/P3), mas a UF dele estava vindo de
+`empresa.estado` — o valor de **hoje**. Se um lojista mudar a empresa de UF, todo o histórico passa
+a ser lido com a UF nova. O caso que dói de verdade é o **cancelamento**: é por essa UF que
+`CancelamentoNfceService` escolhe **para qual SEFAZ** transmitir o evento. Depois de uma mudança de
+UF, o cancelamento de uma nota antiga iria para o autorizador errado e voltaria recusado.
+
+**A resposta já existia no próprio dado:** a **chave de acesso** carrega o `cUF` nas posições 1–2,
+gravado no ato da emissão. `ChaveAcesso.ufDaChave(chave)` faz o caminho inverso, com o mapa
+**derivado** do direto (`CODIGO_UF.entrySet().stream()...`) — nunca uma segunda lista à mão, que é
+o erro que a `CsrtAdminService` já tinha cometido e que foi desfeito ontem.
+
+Aplicado nas 5 consultas que carregam um documento existente (cancelamento, consulta,
+reprocessamento, arquivamento do documento e do evento), via um helper único
+`ufDoDocumento(rs)`: chave primeiro, UF da empresa como último recurso. Sem chave — documento que
+nunca recebeu número (`NAO_EMITIDO`, `RASCUNHO`) — não há evento nem arquivamento para errar o
+destino, então a UF da empresa é o melhor palpite e serve.
+
+Ficam **de propósito** com a UF da empresa: `empresasComFilaPendente` (lista por empresa, sem chave)
+e o contexto de **inutilização** (que não é documento e não tem chave — é faixa de numeração).
+
+**Probabilidade × princípio:** a janela real é estreita — a NFC-e só cancela em 30 min, então
+exigiria a loja mudar de UF entre a venda e o cancelamento (24 h na NF-e 55). Foi corrigido pelo
+princípio, não pela estatística: o projeto trata imutabilidade de documento fiscal como regra, e o
+custo eram 30 minutos.
+
+`ChaveAcessoUfTest` (3 casos, unitário puro): a chave real do B0 devolvendo PR, SP/AM/AC pelo
+`cUF`, chave ausente ou `cUF` desconhecido devolvendo `null` em vez de inventar, e as **27 UFs
+dando a volta completa** pelo mapa inverso. **873 testes verdes.**
 ### 2026-08-20 — P3: o `dhEmi` sai no fuso da UF, e `empresa.estado` só aceita UF que existe
 
 Fecha o fuso horário. O `dhEmi` do XML e todo "hoje" do plano do lojista saíam de
