@@ -1,6 +1,7 @@
 package com.vetor.niner.fiscal.documento;
 
 import com.vetor.niner.comum.config.NinerProperties;
+import com.vetor.niner.fiscal.configuracao.CsrtService;
 import com.vetor.niner.fiscal.documento.MontagemDevolucaoDtos.DestinatarioDevolucao;
 import com.vetor.niner.fiscal.documento.MontagemDevolucaoDtos.DevolucaoParaMontar;
 import com.vetor.niner.fiscal.documento.MontagemDevolucaoDtos.ItemDevolucao;
@@ -63,10 +64,12 @@ public class DevolucaoFiscalAssembler {
 
     private final JdbcClient jdbc;
     private final NinerProperties.RespTec respTec;
+    private final CsrtService csrt;
 
-    public DevolucaoFiscalAssembler(JdbcClient jdbc, NinerProperties propriedades) {
+    public DevolucaoFiscalAssembler(JdbcClient jdbc, NinerProperties propriedades, CsrtService csrt) {
         this.jdbc = jdbc;
         this.respTec = propriedades.fiscal().respTec();
+        this.csrt = csrt;
     }
 
     @Transactional(readOnly = true)
@@ -116,12 +119,17 @@ public class DevolucaoFiscalAssembler {
                 config.complemento(), config.bairro(), config.codigoMunicipioIbge(), config.cidade(),
                 config.uf(), config.cep(), config.telefone());
 
+        // CSRT da UF do emitente — ver VendaFiscalAssembler. No modelo 55 a ausência não passa
+        // batida: o montador recusa (F11) em vez de assinar uma nota que voltaria com cStat 975.
+        CsrtService.Csrt codigo = csrt.buscar(config.uf(), config.ambiente().codigo()).orElse(null);
+
         return Optional.of(new DevolucaoParaMontar(
                 config.ambiente(), config.serieNfe(), 0, 0, OffsetDateTime.now(),
                 "DEVOLUCAO DE VENDA", original.chaveAcesso(), emitente, destinatario, itens, totais,
                 montarInfoComplementar(original, destinatario, idDevolucao),
                 new ResponsavelTecnico(respTec.cnpj(), respTec.contato(), respTec.email(), respTec.telefone(),
-                        respTec.idCsrt(), respTec.csrt()),
+                        codigo == null ? null : codigo.idCsrt(),
+                        codigo == null ? null : codigo.codigo()),
                 "Niner PDV 1.0"));
     }
 

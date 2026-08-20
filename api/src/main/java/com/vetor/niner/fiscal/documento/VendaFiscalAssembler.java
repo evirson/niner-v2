@@ -1,6 +1,7 @@
 package com.vetor.niner.fiscal.documento;
 
 import com.vetor.niner.comum.config.NinerProperties;
+import com.vetor.niner.fiscal.configuracao.CsrtService;
 import com.vetor.niner.fiscal.documento.EmissaoNfceService.PedidoDeEmissao;
 import com.vetor.niner.fiscal.documento.MontagemNfceDtos.AmbienteSefaz;
 import com.vetor.niner.fiscal.documento.MontagemNfceDtos.Destinatario;
@@ -48,11 +49,14 @@ public class VendaFiscalAssembler {
     private final JdbcClient jdbc;
     private final MotorTributario motor;
     private final NinerProperties.RespTec respTec;
+    private final CsrtService csrt;
 
-    public VendaFiscalAssembler(JdbcClient jdbc, MotorTributario motor, NinerProperties propriedades) {
+    public VendaFiscalAssembler(JdbcClient jdbc, MotorTributario motor, NinerProperties propriedades,
+                                CsrtService csrt) {
         this.jdbc = jdbc;
         this.motor = motor;
         this.respTec = propriedades.fiscal().respTec();
+        this.csrt = csrt;
     }
 
     /**
@@ -112,9 +116,19 @@ public class VendaFiscalAssembler {
                 config.complemento(), config.bairro(), config.codigoMunicipioIbge(), config.cidade(),
                 config.uf(), config.cep(), config.telefone());
 
+        // CSRT da UF do EMITENTE (não a do destinatário): quem cadastra o responsável técnico é a
+        // SEFAZ que autoriza a nota. Ausente, o grupo sai sem idCSRT/hashCSRT — que é o que o PR
+        // aceita na NFC-e. UF que exigir (cfg_uf_autorizador.exige_csrt) é barrada aqui, com o
+        // motivo por extenso, em vez de assinar e transmitir uma nota que voltaria com cStat 975.
+        int tpAmb = config.ambiente().codigo();
+        Optional<CsrtService.Csrt> codigo = csrt.buscar(config.uf(), tpAmb);
+        if (codigo.isEmpty() && csrt.exigeCsrt(config.uf(), 65, tpAmb)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, CsrtService.mensagemFaltando(config.uf(), 65));
+        }
         ResponsavelTecnico responsavelTecnico = new ResponsavelTecnico(
                 respTec.cnpj(), respTec.contato(), respTec.email(), respTec.telefone(),
-                respTec.idCsrt(), respTec.csrt());
+                codigo.map(CsrtService.Csrt::idCsrt).orElse(null),
+                codigo.map(CsrtService.Csrt::codigo).orElse(null));
 
         return Optional.of(new PedidoDeEmissao(idTenant, idEmpresa, (int) idVenda,
                 venda.idCliente() == null ? null : venda.idCliente().intValue(), idUsuario,

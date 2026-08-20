@@ -94,9 +94,19 @@ public record NinerProperties(
      *
      * <p>⚠️ O {@code csrt} é <b>segredo</b> — trate como senha: nunca commitado, sempre via
      * variável de ambiente, e nunca registrado em log (é o hash que vai no XML, não ele).
+     *
+     * <p>⚠️ <b>2026-08-20 — o par {@code idCsrt}/{@code csrt} daqui é FALLBACK, não a fonte.</b>
+     * O CSRT é emitido <b>por UF</b>, e o Nainer atende as 27 unidades da federação: a fonte é a
+     * tabela {@code cfg_csrt_resptec} (uma linha por UF × ambiente), mantida pelo backoffice —
+     * ver {@code fiscal.configuracao.CsrtService}. Estas duas variáveis continuam valendo para
+     * dev/CI e para a primeira subida, e <b>só se aplicam à UF declarada em {@link #uf()}</b>
+     * (default {@code PR}) — sem isso o código do Paraná sairia carimbado numa nota de São Paulo.
+     *
+     * @param uf UF a que pertencem {@code idCsrt}/{@code csrt} do ambiente/env. Nunca é a UF do
+     *           lojista: é só o escopo do fallback.
      */
     public record RespTec(String cnpj, String contato, String email, String telefone,
-                          String idCsrt, String csrt) {
+                          String uf, String idCsrt, String csrt) {
     }
 
     /** Cobrança da assinatura (ADR-016). {@code gateway} escolhe a implementação de

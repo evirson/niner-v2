@@ -1,5 +1,6 @@
 package com.vetor.niner.fiscal.documento;
 
+import com.vetor.niner.fiscal.configuracao.CsrtService;
 import com.vetor.niner.fiscal.documento.MontagemDevolucaoDtos.DestinatarioDevolucao;
 import com.vetor.niner.fiscal.documento.MontagemDevolucaoDtos.DevolucaoParaMontar;
 import com.vetor.niner.fiscal.documento.MontagemDevolucaoDtos.ItemDevolucao;
@@ -478,10 +479,8 @@ public class MontadorXmlNfeDevolucao {
         // SEFAZ já vai recusar com cStat 975 (mensagem que não diz onde configurar o CSRT).
         if (dev.responsavelTecnico() == null || vazio(dev.responsavelTecnico().csrt())) {
             throw new MontagemInvalidaException(
-                    "A NF-e modelo 55 exige o CSRT (Código de Segurança do Responsável Técnico), que não "
-                            + "está configurado. Obtenha o código no portal da SEFAZ da UF, para o CNPJ do "
-                            + "responsável técnico, e informe em NINER_FISCAL_RESPTEC_ID_CSRT e "
-                            + "NINER_FISCAL_RESPTEC_CSRT.");
+                    CsrtService.mensagemFaltando(
+                            dev.emitente() == null ? null : dev.emitente().uf(), 55));
         }
         for (ItemDevolucao item : dev.itens()) {
             if (vazio(item.cfop())) {

@@ -1530,11 +1530,31 @@ codificado em Base-64 — 28 caracteres. Duas formas de errar, e as duas dão o 
    56 caracteres).
 2. Concatenar a chave **com** o prefixo `NFe` — são os 44 dígitos puros, sem separador.
 
-**Configuração:** `NINER_FISCAL_RESPTEC_ID_CSRT` e `NINER_FISCAL_RESPTEC_CSRT`. ⚠️ O CSRT é
-**segredo**, tratado como senha: entra por variável de ambiente, fica no `.env` (gitignored) e
-**nunca** vai para log — o que aparece no XML é o hash, não ele. Vazio, o grupo sai sem o par
-(comportamento anterior, preservado); a montagem da NF-e 55 **falha explicitamente** (F11) citando
-as duas variáveis, em vez de assinar e transmitir uma nota que já se sabe recusada.
+**Configuração — uma linha por UF, não uma variável global (revisto em 2026-08-20).** O CSRT é
+emitido pela SEFAZ de **cada** UF, e o Nainer é vendido para as 27 unidades da federação: guardar o
+código em duas variáveis de ambiente só funcionava enquanto todo lojista emitisse no Paraná. A
+fonte é a tabela **`cfg_csrt_resptec`** (V046), chaveada por **(UF, ambiente)** — homologação e
+produção são cadastros separados no portal —, global e sem RLS igual a `cfg_uf_autorizador`, e
+mantida no **backoffice** (`/api/admin/fiscal/csrt`, tela "CSRT por UF", SUPER_ADMIN grava e o
+resto do staff só lê). É o único `cfg_*` que a aplicação escreve: os outros são carga por script,
+este muda no dia em que entra lojista de um estado novo — evento de horário comercial, não de
+deploy.
+
+⚠️ O CSRT é **segredo**: cifrado em repouso com a chave mestra (AES-256-GCM, `SegredoCifrador`),
+**nunca volta pela API** (a tela recebe só "definido" + o `idCSRT`, que é público porque vai no XML
+em claro) e nunca vai para log. Campo em branco numa UF já cadastrada **mantém** o código gravado —
+mesma convenção da senha de SMTP.
+
+`NINER_FISCAL_RESPTEC_ID_CSRT`/`_CSRT` continuam existindo como **fallback** de dev/CI e da
+primeira subida, e valem **só para a UF declarada** em `NINER_FISCAL_RESPTEC_UF` (default `PR`).
+Sem essa amarra o fallback seria curinga e carimbaria o código do Paraná numa nota de São Paulo —
+que a SEFAZ responderia com `cStat 974`, mandando o diagnóstico para o lado errado.
+
+**A exigência do par também é dado da UF:** `cfg_uf_autorizador.exige_csrt`, por (UF, modelo,
+ambiente). O PR prova que varia dentro do mesmo estado — cobra na NF-e 55 e não cobra na NFC-e 65,
+que rodou meses sem —, e a NT deixa isso "a critério da UF". UF que exigir e não tiver código
+cadastrado é barrada na montagem (F11), com a UF citada na mensagem, em vez de transmitir uma nota
+que voltaria `975`.
 
 ⏭️ **Pendência aberta:** com um CSRT de teste a SEFAZ-PR responde `cStat 974` — *"CNPJ do
 responsavel tecnico diverge do cadastrado"*. A **MITRYUSCASH precisa se cadastrar como responsável
@@ -1815,7 +1835,7 @@ Resumo operacional do que a montagem do XML vai buscar onde. `(novo)` = coluna q
 | `infIntermed` | CNPJ e id do vendedor na plataforma | `documento_fiscal_intermediador` *(novo, DF26)* |
 | `infNFeSupl` | `qrCode`, `urlChave` | gerado na emissão (NFC-e apenas) |
 | `infRespTec` | CNPJ, `xContato`, `email`, `fone` | `niner.fiscal.resp-tec` (config da **aplicação** — é a MITRYUSCASH (casa de software), não o tenant) |
-| `infRespTec` | `idCSRT`, `hashCSRT` | `NINER_FISCAL_RESPTEC_ID_CSRT` + hash calculado por nota (§9.9) |
+| `infRespTec` | `idCSRT`, `hashCSRT` | `cfg_csrt_resptec` por (UF do emitente, ambiente); hash calculado por nota (§9.9) |
 | `ide/NFref` | — | **não é emitido**: a devolução referencia por item (ver abaixo) |
 | `det/DFeReferenciado` | `chaveAcesso`, `nItem` | `documento_fiscal_referencia` + `documento_fiscal_item.numero_item` da nota original (só na devolução) |
 

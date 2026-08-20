@@ -67,6 +67,8 @@ niner:
       contato: MITRYUSCASH
       email: suporte@nainer.com.br
       telefone: "4133334444"
+      # UF do CSRT de fallback abaixo (a fonte real e cfg_csrt_resptec, por UF x ambiente).
+      uf: PR
       # CSRT de teste — valor sem significado, só precisa existir: a NF-e modelo 55 é recusada na
       # montagem sem ele (cStat 975 na SEFAZ real). O CSRT de verdade é segredo e nunca entra aqui.
       id-csrt: "01"

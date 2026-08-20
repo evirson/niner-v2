@@ -140,6 +140,9 @@ niner:
       contato: ${NINER_FISCAL_RESPTEC_CONTATO:MITRYUSCASH}
       email: ${NINER_FISCAL_RESPTEC_EMAIL:suporte@nainer.com.br}
       telefone: ${NINER_FISCAL_RESPTEC_TELEFONE:4133334444}
+      # UF a que pertence o CSRT do env abaixo (fallback de dev/CI e da primeira subida). A fonte
+      # de verdade e a tabela cfg_csrt_resptec, uma linha por UF x ambiente, mantida no backoffice.
+      uf: ${NINER_FISCAL_RESPTEC_UF:PR}
       # CSRT (NT 2018.005) — obtido pela MITRYUSCASH no portal da SEFAZ de cada UF, por CNPJ do
       # responsável técnico. ⚠️ SEGREDO: nunca commitar o valor, sempre por variável de ambiente.
       # Vazio, o grupo infRespTec sai sem idCSRT/hashCSRT — a NFC-e do PR aceita, a NF-e modelo 55

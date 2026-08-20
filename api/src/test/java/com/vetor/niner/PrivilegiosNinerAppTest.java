@@ -130,6 +130,27 @@ class PrivilegiosNinerAppTest {
     }
 
     /**
+     * V046: {@code cfg_csrt_resptec} é a <b>exceção</b> entre as tabelas {@code cfg_*} — as outras
+     * são carga por script do dono, esta é mantida pelo backoffice (/api/admin), que roda como
+     * {@code niner_app} igual ao resto da API. Sem estes quatro grants, cadastrar o CSRT de um
+     * estado novo falharia só em produção: o teste de integração conecta como superusuário do
+     * container e não enxerga GRANT nenhum ([[feedback_testcontainers_nao_usa_niner_app]]).
+     */
+    @Test
+    void csrtPorUfEhEscritoPelaAplicacaoDiferenteDasOutrasTabelasDeReferencia() throws Exception {
+        try (Connection c = conexaoApp(); Statement st = c.createStatement()) {
+            for (String sql : new String[] {
+                    "SELECT count(*) FROM cfg_csrt_resptec",
+                    "INSERT INTO cfg_csrt_resptec (uf, ambiente, id_csrt, csrt_cifrado) "
+                            + "VALUES ('SP', 2, '09', 'x')",
+                    "UPDATE cfg_csrt_resptec SET id_csrt = '10' WHERE uf = 'SP' AND ambiente = 2",
+                    "DELETE FROM cfg_csrt_resptec WHERE uf = 'SP' AND ambiente = 2"}) {
+                st.execute(sql);
+            }
+        }
+    }
+
+    /**
      * F6/F7 (V035): documento fiscal, seus itens, seus eventos, a inutilização de numeração e o
      * log de uso do certificado NUNCA são apagados por {@code niner_app} — nem um RASCUNHO que
      * falhou é trilha perdida (documento) nem um acesso ao certificado deixa de constar (uso).

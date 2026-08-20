@@ -36,6 +36,16 @@ Registro cronológico das decisões e entregas. Atualizar a cada marco relevante
 > é a operação do dia a dia da loja, não é afetada** — o PR não cobra CSRT no modelo 65. Ver
 > `docs/MODULOFISCAL.md` §9.9.
 >
+> 🌎 **2026-08-20 — o fiscal saiu do "produto do Paraná" pela metade.** O CSRT deixou de ser uma
+> variável de ambiente única e virou **cadastro por UF × ambiente** (`cfg_csrt_resptec`, V046 +
+> tela no backoffice), porque ele é emitido pela SEFAZ de **cada** estado: com o desenho anterior,
+> a primeira nota de um lojista de fora do PR sairia carimbada com o código do Paraná e voltaria
+> `cStat 974`, com o diagnóstico apontando para o CNPJ em vez da UF. A exigência do par também
+> virou dado (`cfg_uf_autorizador.exige_csrt`, por modelo). ⏭️ **A outra metade continua aberta e é
+> maior:** `cfg_uf_autorizador` tem **só as 4 linhas do PR** — endpoint, prazo, alíquota interna e
+> FECOP das outras 26 UFs não estão carregados, e qualquer emissão fora do Paraná para em 409
+> ("a UF ainda não está cadastrada"). É carga de dado do portal de cada SEFAZ, não código.
+>
 > 🔴✅ **Primeira emissão síncrona real contra a SEFAZ-PR fora de um script de PoC (2026-08-18)
 > achou e corrigiu um bug crítico:** a resposta síncrona real tem dois `cStat` (lote e nota) e
 > `SefazTransporte` lia o do lote — nota autorizada saía reportada como REJEITADA. Nenhum teste
@@ -509,6 +519,62 @@ Movimentação de Conta Corrente) que ainda não tinham migrado pro `SeletorPlan
 ---
 
 ## Linha do tempo
+
+### 2026-08-20 — CSRT deixa de ser variável global e vira cadastro por UF (o Nainer é para os 27 entes, não para o Paraná)
+
+Decisão do dono do produto: **o Nainer vai ter lojista em todos os 26 estados e no Distrito
+Federal** — o Paraná é só onde a homologação foi feita. Isso condena um desenho que estava no
+código desde o B7: o **CSRT** (Código de Segurança do Responsável Técnico, NT 2018.005) morava em
+**duas variáveis de ambiente únicas para a aplicação inteira**, e ele é emitido pela SEFAZ de
+**cada** UF.
+
+**Por que isso seria pior que "não funciona".** Com o par global, a primeira nota de um lojista de
+São Paulo sairia carimbada com o código do Paraná — estruturalmente válida, assinada, transmitida
+e recusada com `cStat 974` ("CNPJ do responsável técnico diverge do cadastrado"), que aponta para
+o CNPJ e não para a UF. O diagnóstico iria para o lugar errado, num cliente novo, na primeira
+venda. E havia um caminho pior ainda: a exigência do par é **a critério da UF** — o próprio PR
+mostra que varia dentro do mesmo estado, cobrando na NF-e 55 e não na NFC-e 65. Numa UF que cobre
+no modelo 65, quem quebraria não seria a devolução: seria a **venda do dia a dia**.
+
+**O que mudou** (V046, arquivo novo — migration aplicada é imutável):
+
+- **`cfg_csrt_resptec`**, chaveada por **(UF, ambiente)** — homologação e produção são cadastros
+  separados no portal. Global e sem RLS, igual a `cfg_uf_autorizador`: é dado da casa de software,
+  não do lojista. O código fica **cifrado** (AES-256-GCM, chave mestra fora do banco).
+- **`cfg_uf_autorizador.exige_csrt`**, por (UF, modelo, ambiente). A regra da UF virou linha, não
+  `if` — mesma filosofia do F10 que já governa endpoint, prazo e alíquota. Semeada com o que foi
+  **medido** ao vivo: PR 55 = sim, PR 65 = não.
+- **`CsrtService`** resolve na ordem: linha da UF → fallback do `application.yml`, **e só se a UF
+  pedida for a declarada em `NINER_FISCAL_RESPTEC_UF`** (default `PR`) → nada. A amarra da UF é o
+  ponto: sem ela o fallback seria curinga e reproduziria exatamente o defeito que a mudança
+  conserta.
+- **Tela nova no backoffice** — `/csrt`, "CSRT por UF" (`docs/telas/admin-csrt-por-uf.md`).
+  SUPER_ADMIN grava, o resto do staff lê. Segredo entra e não sai: a tela recebe só "definido" e o
+  `idCSRT`, que é público porque vai no XML em claro. Campo em branco **mantém** o código gravado,
+  mesma convenção da senha de SMTP. Precisa existir sem deploy porque CSRT novo chega quando entra
+  lojista de estado novo — evento de horário comercial.
+- **F11 com a UF na mensagem**: "o modelo 55 exige o CSRT da UF **SP**, que não está cadastrado" em
+  vez de citar duas variáveis de ambiente que deixaram de ser a fonte.
+
+⚠️ **`cfg_csrt_resptec` é o único `cfg_*` que `niner_app` escreve** — os outros são carga por
+script do dono. Como o teste de integração conecta como superusuário do container e não enxerga
+`GRANT` nenhum, o invariante foi preso em `PrivilegiosNinerAppTest`
+([[feedback_testcontainers_nao_usa_niner_app]]).
+
+**Correção de fato no mesmo dia:** o responsável técnico é a **MITRYUSCASH** (CNPJ
+37.829.453/0001-35), **não a Vetor** — quem precisa se cadastrar na SEFAZ e obter o CSRT é ela. O
+XML sempre esteve certo; a documentação dizia "Vetor" em 12 lugares e os três campos de contato do
+grupo carregavam dado da Vetor, indo em toda nota de todo lojista. Contato agora é `MITRYUSCASH` /
+`suporte@nainer.com.br` / 4133334444.
+
+**856 testes de backend verdes** (eram 845): `CsrtPorUfTest` novo com 10 casos e mais um em
+`PrivilegiosNinerAppTest`. `tsc -b` limpo no `admin/`.
+
+⏭️ **O que este trabalho NÃO resolve, e é maior:** `cfg_uf_autorizador` tem **só as 4 linhas do
+Paraná**. Endpoint de autorização, prazo de cancelamento, alíquota interna e FECOP das outras 26
+UFs não estão carregados, e `SefazAutorizadorService` responde 409 ("a UF ainda não está
+cadastrada") para qualquer estado fora do PR. A arquitetura está pronta para isso desde a V034 —
+falta o **dado**, que precisa vir do portal de cada SEFAZ, não de memória.
 
 ### 2026-08-20 — Correção de fato: o responsável técnico do `infRespTec` é a MITRYUSCASH, não a Vetor
 

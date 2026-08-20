@@ -179,3 +179,39 @@ export function salvarConfiguracao(dados: Record<string, unknown>): Promise<Conf
 export function executarBackup(): Promise<{ resultado: string }> {
   return api<{ resultado: string }>('/api/admin/backup/executar', { method: 'POST' })
 }
+
+// ---------------------------------------------------------------------------------------------
+// CSRT por UF (NT 2018.005) — o código do responsável técnico é emitido pela SEFAZ de CADA UF, e
+// o Nainer atende as 27 unidades da federação. O código em si nunca volta do servidor: a listagem
+// traz só o identificador (que é público, vai no XML) e quando foi trocado.
+// ---------------------------------------------------------------------------------------------
+
+export interface CsrtUf {
+  uf: string
+  /** tpAmb do XML: 1 produção, 2 homologação. */
+  ambiente: number
+  idCsrt: string
+  definido: boolean
+  observacao: string | null
+  atualizadoEm: string
+}
+
+export function listarCsrt(): Promise<CsrtUf[]> {
+  return api<CsrtUf[]>('/api/admin/fiscal/csrt')
+}
+
+/** `csrt` em branco numa UF já cadastrada mantém o código gravado (contrato do backend). */
+export function salvarCsrt(
+  uf: string,
+  ambiente: number,
+  dados: { idCsrt: string; csrt: string; observacao: string },
+): Promise<CsrtUf> {
+  return api<CsrtUf>(`/api/admin/fiscal/csrt/${uf}/${ambiente}`, {
+    method: 'PUT',
+    body: JSON.stringify(dados),
+  })
+}
+
+export function excluirCsrt(uf: string, ambiente: number): Promise<void> {
+  return api<void>(`/api/admin/fiscal/csrt/${uf}/${ambiente}`, { method: 'DELETE' })
+}
