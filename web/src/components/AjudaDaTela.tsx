@@ -1111,6 +1111,7 @@ const CONTEUDOS: Record<string, ConteudoAjuda> = {
     passos: [
       'Importe Produtos antes desta tela — o produto é achado pelo CODIGO_PRODUTO, que precisa já ter sido importado.',
       'NOME_TAMANHO fora da grade do produto não é erro: é aceito normalmente, mesmo que o produto tenha uma grade de tamanhos diferente cadastrada.',
+      'O EAN_CODIGO_BARRAS pode ser o código do fabricante ou o do seu sistema antigo — mas não pode começar com 9: essa faixa é reservada ao código de barras que o próprio Nainer gera.',
       'Sem a planilha ainda? Baixe o modelo no topo da tela.',
       'Clique em "Escolher planilha" e selecione o arquivo .xlsx ou .xls — a planilha é conferida na hora, e se não for da tabela certa a tela avisa e não deixa continuar.',
       'Diga a qual empresa corresponde cada uma das 5 colunas de quantidade do arquivo — não precisa preencher as 5 (só as que o arquivo realmente usa, no mínimo 1), e uma empresa já escolhida numa coluna some das opções das outras.',
@@ -1121,6 +1122,7 @@ const CONTEUDOS: Record<string, ConteudoAjuda> = {
       'Linha com erro: veja o motivo na tabela de erros, corrija só aquela linha no arquivo original e clique em "Validar" de novo.',
       '"Nenhum produto importado com CODIGO_PRODUTO...": esse código não existe em nenhuma linha do arquivo de Produtos — importe Produtos primeiro, ou corrija o código.',
       'Nada foi importado mesmo o relatório mostrando linhas prontas: a importação é tudo-ou-nada — se sobrar QUALQUER linha com erro real, o arquivo inteiro não grava nada.',
+      '"Nada foi importado… EAN_CODIGO_BARRAS começando por 9": um ou mais códigos de barras da planilha caem na faixa que o Nainer usa para gerar os códigos dele. Se você usar esse código, mais adiante ele vai bater com o código de outro produto e a leitura no caixa traria o produto errado. A tela lista as linhas — remova ou corrija o código nelas e importe de novo.',
     ],
     urlVideo: null,
   },
