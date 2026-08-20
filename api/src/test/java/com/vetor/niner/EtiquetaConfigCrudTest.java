@@ -58,9 +58,7 @@ class EtiquetaConfigCrudTest {
 
     private static final String CORPO_3_COLUNAS = """
             {"nome":"%s","larguraRoloMm":110,"numeroColunas":3,"larguraEtiquetaMm":34,"alturaEtiquetaMm":30,
-             "bordaSuperiorMm":2,"bordaInferiorMm":2,"bordaEsquerdaMm":2,"bordaDireitaMm":2,"ativo":true,
-             "colunas":[{"numeroColuna":1,"posicaoInicialMm":3},{"numeroColuna":2,"posicaoInicialMm":39},
-                        {"numeroColuna":3,"posicaoInicialMm":75}],
+             "margemEsquerdaMm":3,"espacamentoHorizontalMm":2,"ativo":true,
              "campos":[{"campo":"NOME_EMPRESA","posicaoXMm":0,"posicaoYMm":0,"larguraMm":34,"alturaMm":5,
                         "fonte":"ARIAL","tamanhoFontePt":8,"negrito":true,"fundoPreto":true,"alinhamento":"CENTRO"},
                        {"campo":"SKU_BARRAS","posicaoXMm":0,"posicaoYMm":18,"larguraMm":30,"alturaMm":8,
@@ -77,9 +75,8 @@ class EtiquetaConfigCrudTest {
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.nome").value("ETIQUETA 3 COLUNAS"))
                 .andExpect(jsonPath("$.numeroColunas").value(3))
-                .andExpect(jsonPath("$.colunas.length()").value(3))
-                .andExpect(jsonPath("$.colunas[1].numeroColuna").value(2))
-                .andExpect(jsonPath("$.colunas[1].posicaoInicialMm").value(39))
+                .andExpect(jsonPath("$.margemEsquerdaMm").value(3))
+                .andExpect(jsonPath("$.espacamentoHorizontalMm").value(2))
                 .andExpect(jsonPath("$.campos.length()").value(2))
                 .andExpect(jsonPath("$.campos[0].campo").value("NOME_EMPRESA"))
                 .andExpect(jsonPath("$.campos[0].fundoPreto").value(true))
@@ -137,12 +134,21 @@ class EtiquetaConfigCrudTest {
                 .andExpect(status().isBadRequest());
     }
 
+    /**
+     * ⚠️ Substitui os dois testes de coerência da lista de colunas (quantidade divergente e número
+     * repetido), que deixaram de existir com a V057: sem lista, não há como estar incoerente. A
+     * validação que sobra é a que **importa fisicamente** — as colunas cabem no rolo?
+     *
+     * <p>2 colunas de 34 mm com margem 3 e espaço 2 ocupam 73 mm. Num rolo de 50 mm, a segunda sai
+     * cortada pela metade — e antes disso só a tela avisava, porque com posições digitadas o
+     * servidor não tinha como saber onde cada coluna começava sem confiar no que recebeu.
+     */
     @Test
-    void quantidadeDeColunasDivergenteDoNumeroColunasEhRejeitada() throws Exception {
-        String token = assinarNovoTenant("colunas-divergente");
+    void colunasQueNaoCabemNoRoloSaoRejeitadas() throws Exception {
+        String token = assinarNovoTenant("nao-cabe");
         String corpo = """
-                {"nome":"ETIQUETA DIVERGENTE","larguraRoloMm":50,"numeroColunas":2,"larguraEtiquetaMm":34,
-                 "alturaEtiquetaMm":30,"colunas":[{"numeroColuna":1,"posicaoInicialMm":3}],"campos":[]}
+                {"nome":"ETIQUETA QUE NAO CABE","larguraRoloMm":50,"numeroColunas":2,"larguraEtiquetaMm":34,
+                 "alturaEtiquetaMm":30,"margemEsquerdaMm":3,"espacamentoHorizontalMm":2,"campos":[]}
                 """;
 
         mvc.perform(post("/api/v1/etiquetas-config").header("Authorization", "Bearer " + token)
@@ -150,19 +156,20 @@ class EtiquetaConfigCrudTest {
                 .andExpect(status().isBadRequest());
     }
 
+    /** O mesmo rolo, com espaço entre colunas que cabe, passa — a validação não é um "não" fixo. */
     @Test
-    void numeroDeColunaRepetidoEhRejeitado() throws Exception {
-        String token = assinarNovoTenant("coluna-repetida");
+    void colunasQueCabemNoRoloSaoAceitas() throws Exception {
+        String token = assinarNovoTenant("cabe");
         String corpo = """
-                {"nome":"ETIQUETA COLUNA REPETIDA","larguraRoloMm":50,"numeroColunas":2,"larguraEtiquetaMm":34,
-                 "alturaEtiquetaMm":30,
-                 "colunas":[{"numeroColuna":1,"posicaoInicialMm":3},{"numeroColuna":1,"posicaoInicialMm":39}],
-                 "campos":[]}
+                {"nome":"ETIQUETA QUE CABE","larguraRoloMm":110,"numeroColunas":3,"larguraEtiquetaMm":34,
+                 "alturaEtiquetaMm":30,"margemEsquerdaMm":3,"espacamentoHorizontalMm":2,"campos":[]}
                 """;
 
         mvc.perform(post("/api/v1/etiquetas-config").header("Authorization", "Bearer " + token)
                         .contentType(APPLICATION_JSON).content(corpo))
-                .andExpect(status().isBadRequest());
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.margemEsquerdaMm").value(3))
+                .andExpect(jsonPath("$.espacamentoHorizontalMm").value(2));
     }
 
     @Test
@@ -170,7 +177,7 @@ class EtiquetaConfigCrudTest {
         String token = assinarNovoTenant("campo-repetido");
         String corpo = """
                 {"nome":"ETIQUETA CAMPO REPETIDO","larguraRoloMm":50,"numeroColunas":1,"larguraEtiquetaMm":34,
-                 "alturaEtiquetaMm":30,"colunas":[{"numeroColuna":1,"posicaoInicialMm":3}],
+                 "alturaEtiquetaMm":30,"margemEsquerdaMm":3,
                  "campos":[{"campo":"PRECO_VENDA","posicaoXMm":0,"posicaoYMm":0,"fonte":"ARIAL","negrito":false,"fundoPreto":false,"alinhamento":"ESQUERDA"},
                            {"campo":"PRECO_VENDA","posicaoXMm":0,"posicaoYMm":10,"fonte":"ARIAL","negrito":false,"fundoPreto":false,"alinhamento":"ESQUERDA"}]}
                 """;
@@ -185,7 +192,7 @@ class EtiquetaConfigCrudTest {
         String token = assinarNovoTenant("campo-fora");
         String corpo = """
                 {"nome":"ETIQUETA CAMPO FORA","larguraRoloMm":50,"numeroColunas":1,"larguraEtiquetaMm":34,
-                 "alturaEtiquetaMm":30,"colunas":[{"numeroColuna":1,"posicaoInicialMm":3}],
+                 "alturaEtiquetaMm":30,"margemEsquerdaMm":3,
                  "campos":[{"campo":"PRECO_VENDA","posicaoXMm":30,"posicaoYMm":0,"larguraMm":10,"alturaMm":5,
                             "fonte":"ARIAL","negrito":false,"fundoPreto":false,"alinhamento":"ESQUERDA"}]}
                 """;
@@ -212,7 +219,7 @@ class EtiquetaConfigCrudTest {
 
         String corpoAtualizado = """
                 {"nome":"ETIQUETA ATUALIZA","larguraRoloMm":60,"numeroColunas":1,"larguraEtiquetaMm":40,
-                 "alturaEtiquetaMm":25,"colunas":[{"numeroColuna":1,"posicaoInicialMm":5}],
+                 "alturaEtiquetaMm":25,"margemEsquerdaMm":5,
                  "campos":[{"campo":"PRECO_VENDA","posicaoXMm":2,"posicaoYMm":2,"larguraMm":20,"alturaMm":8,
                             "fonte":"TIMES_NEW_ROMAN","tamanhoFontePt":12,"negrito":true,"fundoPreto":false,
                             "alinhamento":"DIREITA"}]}
@@ -222,8 +229,7 @@ class EtiquetaConfigCrudTest {
                         .contentType(APPLICATION_JSON).content(corpoAtualizado))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.numeroColunas").value(1))
-                .andExpect(jsonPath("$.colunas.length()").value(1))
-                .andExpect(jsonPath("$.campos.length()").value(1))
+                                .andExpect(jsonPath("$.campos.length()").value(1))
                 .andExpect(jsonPath("$.campos[0].campo").value("PRECO_VENDA"));
     }
 

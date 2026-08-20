@@ -54,9 +54,44 @@ export const CSS_ALINHAMENTO_ETIQUETA: Record<AlinhamentoEtiquetaCampo, 'left' |
   DIREITA: 'right',
 }
 
-export interface ColunaEtiqueta {
-  numeroColuna: number
-  posicaoInicialMm: number
+/**
+ * Geometria do rolo (V057) — o mínimo que descreve TODA a folha de etiquetas.
+ *
+ * <p>A posição de cada etiqueta é **derivada**, não guardada. O modelo anterior tinha uma tabela
+ * `cfg_etiqueta_coluna` com a posição de cada coluna digitada à mão, e era exatamente ali que o
+ * erro entrava: 3 colunas de 34 mm gravadas em 3/41/79 (passo 38) num rolo de passo 40 faziam o
+ * texto sair progressivamente cortado, e a tela mostrava fielmente o número errado. Derivando de
+ * medidas físicas — as que se tiram com a régua — esse erro deixa de ser representável.
+ */
+export interface GeometriaRolo {
+  larguraRoloMm: number
+  numeroColunas: number
+  larguraEtiquetaMm: number
+  alturaEtiquetaMm: number
+  margemEsquerdaMm: number
+  espacamentoHorizontalMm: number
+  espacamentoVerticalMm: number
+}
+
+/** x (mm) do canto esquerdo da coluna `indice` (base 0) dentro do rolo. */
+export function xDaColuna(g: Pick<GeometriaRolo, 'margemEsquerdaMm' | 'larguraEtiquetaMm' | 'espacamentoHorizontalMm'>, indice: number): number {
+  return g.margemEsquerdaMm + indice * (g.larguraEtiquetaMm + g.espacamentoHorizontalMm)
+}
+
+/** Passo vertical (mm) de uma fileira para a seguinte — altura do adesivo + o branco entre elas. */
+export function passoVertical(g: Pick<GeometriaRolo, 'alturaEtiquetaMm' | 'espacamentoVerticalMm'>): number {
+  return g.alturaEtiquetaMm + g.espacamentoVerticalMm
+}
+
+/** Onde cada coluna começa, em ordem — usado pela tela como conferência e pelas prévias. */
+export function posicoesDasColunas(g: Pick<GeometriaRolo, 'numeroColunas' | 'margemEsquerdaMm' | 'larguraEtiquetaMm' | 'espacamentoHorizontalMm'>): number[] {
+  return Array.from({ length: Math.max(g.numeroColunas, 0) }, (_, i) => Number(xDaColuna(g, i).toFixed(2)))
+}
+
+/** mm que as colunas ocupam no rolo, da borda até o fim da última — o que passar disso é cortado. */
+export function larguraOcupadaPelasColunas(g: Pick<GeometriaRolo, 'numeroColunas' | 'margemEsquerdaMm' | 'larguraEtiquetaMm' | 'espacamentoHorizontalMm'>): number {
+  if (g.numeroColunas <= 0) return 0
+  return Number((xDaColuna(g, g.numeroColunas - 1) + g.larguraEtiquetaMm).toFixed(2))
 }
 
 /** Um campo posicionado na etiqueta — `posicaoXMm`/`posicaoYMm` relativos ao canto
@@ -84,13 +119,10 @@ export interface EtiquetaConfig {
   alturaEtiquetaMm: number
   /** Espaço em branco ENTRE fileiras do rolo (V056). O passo vertical da impressão é
    *  `alturaEtiquetaMm + espacamentoVerticalMm`. 0 = fileiras coladas. */
+  margemEsquerdaMm: number
+  espacamentoHorizontalMm: number
   espacamentoVerticalMm: number
-  bordaSuperiorMm: number
-  bordaInferiorMm: number
-  bordaEsquerdaMm: number
-  bordaDireitaMm: number
   ativo: boolean
-  colunas: ColunaEtiqueta[]
   campos: CampoEtiquetaPosicionado[]
   criadoEm: string
   atualizadoEm: string
@@ -105,13 +137,10 @@ export interface EtiquetaConfigFormState {
   numeroColunas: number
   larguraEtiquetaMm: string
   alturaEtiquetaMm: string
+  margemEsquerdaMm: string
+  espacamentoHorizontalMm: string
   espacamentoVerticalMm: string
-  bordaSuperiorMm: string
-  bordaInferiorMm: string
-  bordaEsquerdaMm: string
-  bordaDireitaMm: string
   ativo: boolean
-  colunas: ColunaEtiqueta[]
   campos: CampoEtiquetaPosicionado[]
 }
 
@@ -121,13 +150,10 @@ export const ETIQUETA_CONFIG_VAZIA: EtiquetaConfigFormState = {
   numeroColunas: 1,
   larguraEtiquetaMm: '',
   alturaEtiquetaMm: '',
+  margemEsquerdaMm: '0,00',
+  espacamentoHorizontalMm: '0,00',
   espacamentoVerticalMm: '0,00',
-  bordaSuperiorMm: '',
-  bordaInferiorMm: '',
-  bordaEsquerdaMm: '',
-  bordaDireitaMm: '',
   ativo: true,
-  colunas: [{ numeroColuna: 1, posicaoInicialMm: 0 }],
   campos: [],
 }
 
@@ -138,13 +164,10 @@ export function paraFormulario(ec: EtiquetaConfig): EtiquetaConfigFormState {
     numeroColunas: ec.numeroColunas,
     larguraEtiquetaMm: formatarEtiquetaMm(ec.larguraEtiquetaMm),
     alturaEtiquetaMm: formatarEtiquetaMm(ec.alturaEtiquetaMm),
+    margemEsquerdaMm: formatarEtiquetaMm(ec.margemEsquerdaMm ?? 0),
+    espacamentoHorizontalMm: formatarEtiquetaMm(ec.espacamentoHorizontalMm ?? 0),
     espacamentoVerticalMm: formatarEtiquetaMm(ec.espacamentoVerticalMm ?? 0),
-    bordaSuperiorMm: formatarEtiquetaMm(ec.bordaSuperiorMm),
-    bordaInferiorMm: formatarEtiquetaMm(ec.bordaInferiorMm),
-    bordaEsquerdaMm: formatarEtiquetaMm(ec.bordaEsquerdaMm),
-    bordaDireitaMm: formatarEtiquetaMm(ec.bordaDireitaMm),
     ativo: ec.ativo,
-    colunas: ec.colunas,
     campos: ec.campos,
   }
 }
@@ -160,13 +183,10 @@ export function paraRequisicao(f: EtiquetaConfigFormState) {
     numeroColunas: f.numeroColunas,
     larguraEtiquetaMm: desmascararMmOuZero(f.larguraEtiquetaMm),
     alturaEtiquetaMm: desmascararMmOuZero(f.alturaEtiquetaMm),
+    margemEsquerdaMm: desmascararMmOuZero(f.margemEsquerdaMm),
+    espacamentoHorizontalMm: desmascararMmOuZero(f.espacamentoHorizontalMm),
     espacamentoVerticalMm: desmascararMmOuZero(f.espacamentoVerticalMm),
-    bordaSuperiorMm: desmascararMmOuZero(f.bordaSuperiorMm),
-    bordaInferiorMm: desmascararMmOuZero(f.bordaInferiorMm),
-    bordaEsquerdaMm: desmascararMmOuZero(f.bordaEsquerdaMm),
-    bordaDireitaMm: desmascararMmOuZero(f.bordaDireitaMm),
     ativo: f.ativo,
-    colunas: f.colunas,
     campos: f.campos,
   }
 }
@@ -273,17 +293,16 @@ export function buscarProdutosExemplo(busca: string): Promise<ProdutoExemplo[]> 
  * tamanho físico real impresso (a página em si é dimensionada em mm via `@page`). */
 export const MM_PARA_PX_IMPRESSAO = 96 / 25.4
 
-/** Distribui `quantidade` etiquetas pelas colunas configuradas, uma linha por vez — mesmo jeito
- * que o rolo físico avança sob a impressora. A última linha pode ficar parcial (ex.: 3 colunas,
- * 8 etiquetas → 3+3+2). */
-export function linhasParaImprimir(quantidade: number, colunas: ColunaEtiqueta[]): ColunaEtiqueta[][] {
-  if (colunas.length === 0 || quantidade <= 0) return []
-  const ordenadas = [...colunas].sort((a, b) => a.numeroColuna - b.numeroColuna)
-  const linhas: ColunaEtiqueta[][] = []
+/** Distribui `quantidade` etiquetas pelas colunas, uma fileira por vez — mesmo jeito que o rolo
+ * físico avança sob a impressora. Devolve ÍNDICES de coluna (base 0); a posição de cada uma sai de
+ * {@link xDaColuna}. A última fileira pode ficar parcial (ex.: 3 colunas, 8 etiquetas → 3+3+2). */
+export function linhasParaImprimir(quantidade: number, numeroColunas: number): number[][] {
+  if (numeroColunas <= 0 || quantidade <= 0) return []
+  const linhas: number[][] = []
   let restante = quantidade
   while (restante > 0) {
-    const tamanho = Math.min(ordenadas.length, restante)
-    linhas.push(ordenadas.slice(0, tamanho))
+    const tamanho = Math.min(numeroColunas, restante)
+    linhas.push(Array.from({ length: tamanho }, (_, i) => i))
     restante -= tamanho
   }
   return linhas

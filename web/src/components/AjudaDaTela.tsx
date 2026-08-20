@@ -990,10 +990,10 @@ const CONTEUDOS: Record<string, ConteudoAjuda> = {
     titulo: 'Configuração de Etiqueta de Produtos',
     objetivo: 'Montar visualmente o layout de uma etiqueta: dimensões do rolo, colunas e quais campos aparecem, onde e como.',
     passos: [
-      'No topo, preencha Ativa/Nome e, nos 3 cartões (Rolo e Etiqueta, Bordas, Espaçamento entre Etiquetas), a largura do rolo, o número de colunas (1 a 4), o tamanho da etiqueta e as bordas — tudo em milímetros.',
+      'No topo, preencha Ativa/Nome e, nos 3 cartões (Rolo e Etiqueta, Espaçamento entre Etiquetas), a largura do rolo, o número de colunas (1 a 4) e o tamanho da etiqueta — tudo em milímetros.',
       'Pegue a régua e meça no rolo os três espaços EM BRANCO: da borda do rolo até a 1ª coluna, entre uma coluna e a seguinte, e entre uma fileira e a de baixo. Você informa sempre o espaço vazio — a posição de cada coluna é calculada a partir dele e aparece logo abaixo ("Cada coluna começa em: 3,00 · 43,00 · 83,00").',
       'ATENÇÃO ao "Espaço entre fileiras": o erro dele se ACUMULA. Se ele estiver 3mm menor que o real, a 1ª etiqueta sai perfeita, a 2ª sai 3mm fora, a 3ª 6mm, e a 4ª cai inteira fora do adesivo — foi o defeito corrigido em 20/08/2026.',
-      'Só marque "Rolo irregular — digitar cada posição" se as colunas do seu rolo NÃO tiverem espaçamento constante. Ao abrir um modelo assim, a tela já entra nesse modo sozinha.',
+      'Confira a linha "Cada etiqueta começa em ... · ocupam X dos Y mm do rolo" logo abaixo dos campos: é a prova de que as medidas batem. Se aparecer o aviso de que as colunas não cabem, o que passar da largura do rolo será cortado na impressão.',
       'No editor visual, clique num campo da paleta (à esquerda) pra colocá-lo na etiqueta — ele aparece com uma posição padrão.',
       'Arraste o campo pra posicioná-lo; arraste a alça no canto inferior-direito pra redimensionar; use as setas do teclado pra ajustar fino (Shift+seta move 5mm de uma vez).',
       'Clique num campo já colocado pra abrir um popup de propriedades e ajustar posição exata, tamanho, fonte, negrito, fundo preto/letra branca e alinhamento — feche pelo botão "Fechar" ou clicando fora.',
@@ -1004,7 +1004,7 @@ const CONTEUDOS: Record<string, ConteudoAjuda> = {
       '"Testar Impressão" (topo da tela) imprime a quantidade de etiquetas que você informar, no tamanho físico real e com um quadro de corte ao redor de cada uma — pra testar na impressora antes de emitir de verdade.',
     ],
     errosComuns: [
-      'Um campo com contorno vermelho está invadindo a margem de borda configurada — é só um aviso, não impede salvar, mas pode cortar na impressão real.',
+      'Um campo com contorno vermelho está saindo da etiqueta — é só um aviso, não impede salvar, mas o que passar da borda do adesivo é cortado na impressão.',
       'O aviso "o conteúdo não cabe em ..." é o mais importante da tela: o texto que sobra é cortado na impressão sem avisar. Aumente a caixa do campo, diminua a fonte ou encurte o texto. Descrição de produto longa é o caso mais comum — ela quebra em várias linhas e invade o campo de baixo.',
       'O que você vê no editor é do MESMO tamanho proporcional que vai sair no papel (corrigido em 20/08/2026 — antes a letra aparecia 3x menor que a real na tela, e o texto que cabia numa linha saía em três na impressão).',
       'Aviso de coluna passando da largura do rolo: o que passa é simplesmente cortado. Confira a largura do rolo, a largura da etiqueta e o espaço entre colunas.',

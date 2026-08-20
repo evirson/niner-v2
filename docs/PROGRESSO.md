@@ -541,6 +541,50 @@ Movimentação de Conta Corrente) que ainda não tinham migrado pro `SeletorPlan
 
 ## Linha do tempo
 
+### 2026-08-20 — Etiqueta, rodada 2: a geometria virou derivada, e a migration quase apagou o dado em silêncio
+
+Proposta do dono do produto depois de ler a rodada 1: *"você já sabe a largura do rolo, o número de
+colunas, a largura e a altura da etiqueta. O que preciso a mais é margem até a primeira coluna,
+espaçamento entre colunas e espaçamento entre fileiras. Com isso você sabe a área de impressão e a
+posição x,y de cada etiqueta."*
+
+Está certo, e expõe um defeito de fundo do modelo original: `cfg_etiqueta_coluna.posicao_inicial_mm`
+era **dado redundante** — sempre foi calculável — e, por ser digitado à mão, era exatamente ali que
+o erro entrava (3/41/79 num rolo de passo 40). Com a posição derivada, **o erro deixa de ser
+representável**. A folha inteira sai de 7 números.
+
+**O modelo encolheu:** foram embora a tabela `cfg_etiqueta_coluna`, as 4 colunas de borda, duas
+validações de coerência da lista de colunas — e, do front, todo o aparato que a rodada 1 tinha
+criado para conviver com posições digitadas (modo "rolo irregular", dedução de margem/espaço na
+abertura e a trava de ordem de efeitos que ela exigia). No lugar entrou **uma** validação, a que
+importa fisicamente: *as colunas cabem no rolo?* — agora conferida **também no servidor**, o que
+antes era impossível: com posições digitadas, o backend não tinha como saber onde cada coluna
+começava sem confiar no que recebeu.
+
+#### 🔴 A armadilha: o backfill da migration saiu zerado, e o Flyway disse "sucesso"
+
+A V057 precisa ler `cfg_etiqueta_coluna` para preencher margem/espaçamento antes de apagar a
+tabela. Rodou, anunciou sucesso — e a config existente em dev, que tinha colunas em 2,50 / 40,50 /
+78,50 (margem 2,50, espaço 4,00), ficou com **margem 0,00 e espaço 0,00**.
+
+⚠️ **Migration roda como `niner_owner`, e com `FORCE ROW LEVEL SECURITY` (V024) nem o dono da
+tabela escapa da política.** Sem `app.id_tenant` no contexto, o `SELECT` devolveu 0 linhas e o
+`UPDATE` casou 0 linhas — as colunas novas ficaram no `DEFAULT 0`. Não há erro, não há aviso: o
+Flyway não tem como saber que zero linha era o número errado.
+
+É o **mesmo** defeito que já tinha mordido o backup do produto em 2026-08-19 (`pg_dump` sem
+`BYPASSRLS` levando estrutura completa e zero linha de cliente). Vale a generalização: **migration
+que LÊ dado de tenant para transformá-lo precisa tratar RLS explicitamente**, e o único jeito de
+perceber é conferir o resultado no banco depois.
+
+Conserto: `NO FORCE ROW LEVEL SECURITY` nas duas tabelas antes do backfill e `FORCE` de volta
+depois — `NO FORCE`, não `DISABLE`, porque libera só o **dono** e mantém a política valendo para
+`niner_app`. Provado em isolamento antes de aceitar: como `niner_owner`, `count(*)` na mesma tabela
+devolve **0 com FORCE e 1 com NO FORCE**. Como a V057 ainda não tinha sido publicada e só o dev a
+tinha rodado, o caminho foi corrigir o arquivo + `flyway repair` (o procedimento já documentado
+para este caso) e repor à mão a geometria da única config de dev.
+
+**894 testes verdes**, `tsc -b` limpo.
 ### 2026-08-20 — Etiqueta: a tela mentia sobre o tamanho da letra, e o rolo não tinha passo vertical
 
 Diagnóstico pedido com material real na mão — as duas telas de configuração, o PDF gerado e a

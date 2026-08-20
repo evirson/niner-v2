@@ -4,7 +4,7 @@ import AjudaDaTela from '../../components/AjudaDaTela'
 import { BotaoFecharTela } from '../../components/BotaoFecharTela'
 import { IconeEtiqueta, IconeExcluir } from '../../components/Icones'
 import Toast, { type TipoToast } from '../../components/Toast'
-import { MM_PARA_PX_IMPRESSAO, type ColunaEtiqueta, type EtiquetaConfig, type ProdutoExemplo } from '../../lib/etiquetaConfig'
+import { MM_PARA_PX_IMPRESSAO, xDaColuna, type EtiquetaConfig, type ProdutoExemplo } from '../../lib/etiquetaConfig'
 import {
   mesclarItensEmissao,
   montarSequenciaImpressao,
@@ -22,14 +22,13 @@ import SelecaoProdutosModal from './SelecaoProdutosModal'
  * um produto diferente). */
 function linhasComProdutos(
   sequencia: ProdutoExemplo[],
-  colunas: ColunaEtiqueta[],
-): Array<Array<{ coluna: ColunaEtiqueta; produto: ProdutoExemplo }>> {
-  if (colunas.length === 0) return []
-  const ordenadas = [...colunas].sort((a, b) => a.numeroColuna - b.numeroColuna)
-  const linhas: Array<Array<{ coluna: ColunaEtiqueta; produto: ProdutoExemplo }>> = []
-  for (let i = 0; i < sequencia.length; i += ordenadas.length) {
-    const fatia = sequencia.slice(i, i + ordenadas.length)
-    linhas.push(fatia.map((produto, indice) => ({ coluna: ordenadas[indice], produto })))
+  numeroColunas: number,
+): Array<Array<{ indiceColuna: number; produto: ProdutoExemplo }>> {
+  if (numeroColunas <= 0) return []
+  const linhas: Array<Array<{ indiceColuna: number; produto: ProdutoExemplo }>> = []
+  for (let i = 0; i < sequencia.length; i += numeroColunas) {
+    const fatia = sequencia.slice(i, i + numeroColunas)
+    linhas.push(fatia.map((produto, indiceColuna) => ({ indiceColuna, produto })))
   }
   return linhas
 }
@@ -232,7 +231,7 @@ export default function EtiquetaEmissaoForm() {
           produto DIFERENTE por posição de etiqueta (não N cópias do mesmo). */}
       {impressao && (
         <div className="etiqueta-imprimir">
-          {linhasComProdutos(impressao.sequencia, impressao.config.colunas).map((linha, indiceLinha) => (
+          {linhasComProdutos(impressao.sequencia, impressao.config.numeroColunas).map((linha, indiceLinha) => (
             <div
               key={indiceLinha}
               style={{
@@ -247,12 +246,13 @@ export default function EtiquetaEmissaoForm() {
                   MM_PARA_PX_IMPRESSAO,
               }}
             >
-              {linha.map(({ coluna, produto }) => (
+              {linha.map(({ indiceColuna, produto }) => (
                 <div
-                  key={coluna.numeroColuna}
+                  key={indiceColuna}
                   style={{
                     position: 'absolute',
-                    left: coluna.posicaoInicialMm * MM_PARA_PX_IMPRESSAO,
+                    // x derivado (V057): margem + i x (largura + espaco entre colunas).
+                    left: xDaColuna(impressao.config, indiceColuna) * MM_PARA_PX_IMPRESSAO,
                     top: 0,
                     width: impressao.config.larguraEtiquetaMm * MM_PARA_PX_IMPRESSAO,
                     height: impressao.config.alturaEtiquetaMm * MM_PARA_PX_IMPRESSAO,

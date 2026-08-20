@@ -5,8 +5,6 @@ import com.vetor.niner.configuracao.etiqueta.EtiquetaConfigDtos.AlinhamentoEtiqu
 import com.vetor.niner.configuracao.etiqueta.EtiquetaConfigDtos.CampoEtiqueta;
 import com.vetor.niner.configuracao.etiqueta.EtiquetaConfigDtos.CampoRequest;
 import com.vetor.niner.configuracao.etiqueta.EtiquetaConfigDtos.CampoResponse;
-import com.vetor.niner.configuracao.etiqueta.EtiquetaConfigDtos.ColunaRequest;
-import com.vetor.niner.configuracao.etiqueta.EtiquetaConfigDtos.ColunaResponse;
 import com.vetor.niner.configuracao.etiqueta.EtiquetaConfigDtos.EtiquetaConfigRequest;
 import com.vetor.niner.configuracao.etiqueta.EtiquetaConfigDtos.EtiquetaConfigResponse;
 import com.vetor.niner.configuracao.etiqueta.EtiquetaConfigDtos.ExclusaoEtiquetaConfigResponse;
@@ -34,8 +32,10 @@ import static org.springframework.http.HttpStatus.NOT_FOUND;
 
 /**
  * CRUD de Configuração de Etiqueta de Produtos (docs/telas/configuracao-etiqueta.md), tabelas
- * {@code cfg_etiqueta_config}/{@code cfg_etiqueta_coluna}/{@code cfg_etiqueta_campo} (V029, RLS
- * de tenant). Coleções filhas (colunas/campos) salvas com o mesmo padrão de
+ * {@code cfg_etiqueta_config}/{@code cfg_etiqueta_campo} (V029, RLS de tenant). ⚠️ A tabela
+ * {@code cfg_etiqueta_coluna} deixou de existir na V057: a posição de cada coluna é DERIVADA de
+ * margem + espaçamento + largura (era dado redundante, e era ali que o erro de digitação entrava).
+ * A coleção de campos continua salva com o mesmo padrão de
  * {@code ProdutoService.salvarCategorias}: apaga tudo e reinsere dentro da mesma transação do
  * cabeçalho — nunca diff/patch individual.
  *
@@ -109,18 +109,16 @@ public class EtiquetaConfigService {
             long id = jdbc.sql("""
                             INSERT INTO cfg_etiqueta_config
                                 (id_tenant, nome, largura_rolo_mm, numero_colunas, largura_etiqueta_mm, altura_etiqueta_mm,
-                                 borda_superior_mm, borda_inferior_mm, borda_esquerda_mm, borda_direita_mm,
-                                 espacamento_vertical_mm, ativo)
-                            VALUES (plataforma.tenant_atual(), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                 margem_esquerda_mm, espacamento_horizontal_mm, espacamento_vertical_mm, ativo)
+                            VALUES (plataforma.tenant_atual(), ?, ?, ?, ?, ?, ?, ?, ?, ?)
                             RETURNING id_config_etiqueta
                             """)
                     .params(req.nome().trim().toUpperCase(Locale.ROOT), req.larguraRoloMm(), req.numeroColunas(), req.larguraEtiquetaMm(),
-                            req.alturaEtiquetaMm(), naoNegativoOuZero(req.bordaSuperiorMm()), naoNegativoOuZero(req.bordaInferiorMm()),
-                            naoNegativoOuZero(req.bordaEsquerdaMm()), naoNegativoOuZero(req.bordaDireitaMm()),
+                            req.alturaEtiquetaMm(), naoNegativoOuZero(req.margemEsquerdaMm()),
+                            naoNegativoOuZero(req.espacamentoHorizontalMm()),
                             naoNegativoOuZero(req.espacamentoVerticalMm()),
                             req.ativo() == null || req.ativo())
                     .query(Long.class).single();
-            salvarColunas(id, req.colunas());
             salvarCampos(id, req.campos());
             return buscar(id);
         } catch (DuplicateKeyException e) {
@@ -135,21 +133,20 @@ public class EtiquetaConfigService {
             int linhas = jdbc.sql("""
                             UPDATE cfg_etiqueta_config SET
                                 nome = ?, largura_rolo_mm = ?, numero_colunas = ?, largura_etiqueta_mm = ?,
-                                altura_etiqueta_mm = ?, borda_superior_mm = ?, borda_inferior_mm = ?,
-                                borda_esquerda_mm = ?, borda_direita_mm = ?,
-                                espacamento_vertical_mm = ?, ativo = ?, atualizado_em = now()
+                                altura_etiqueta_mm = ?, margem_esquerda_mm = ?,
+                                espacamento_horizontal_mm = ?, espacamento_vertical_mm = ?,
+                                ativo = ?, atualizado_em = now()
                             WHERE id_tenant = plataforma.tenant_atual() AND id_config_etiqueta = ?
                             """)
                     .params(req.nome().trim().toUpperCase(Locale.ROOT), req.larguraRoloMm(), req.numeroColunas(), req.larguraEtiquetaMm(),
-                            req.alturaEtiquetaMm(), naoNegativoOuZero(req.bordaSuperiorMm()), naoNegativoOuZero(req.bordaInferiorMm()),
-                            naoNegativoOuZero(req.bordaEsquerdaMm()), naoNegativoOuZero(req.bordaDireitaMm()),
+                            req.alturaEtiquetaMm(), naoNegativoOuZero(req.margemEsquerdaMm()),
+                            naoNegativoOuZero(req.espacamentoHorizontalMm()),
                             naoNegativoOuZero(req.espacamentoVerticalMm()),
                             req.ativo() == null || req.ativo(), id)
                     .update();
             if (linhas == 0) {
                 throw new ResponseStatusException(NOT_FOUND, "Configuração de etiqueta não encontrada.");
             }
-            salvarColunas(id, req.colunas());
             salvarCampos(id, req.campos());
             return buscar(id);
         } catch (DuplicateKeyException e) {
@@ -160,8 +157,6 @@ public class EtiquetaConfigService {
     @Transactional
     public ExclusaoEtiquetaConfigResponse excluir(long id) {
         jdbc.sql("DELETE FROM cfg_etiqueta_campo WHERE id_tenant = plataforma.tenant_atual() AND id_config_etiqueta = ?")
-                .param(id).update();
-        jdbc.sql("DELETE FROM cfg_etiqueta_coluna WHERE id_tenant = plataforma.tenant_atual() AND id_config_etiqueta = ?")
                 .param(id).update();
         int linhas = jdbc.sql("DELETE FROM cfg_etiqueta_config WHERE id_tenant = plataforma.tenant_atual() AND id_config_etiqueta = ?")
                 .param(id).update();
@@ -210,20 +205,6 @@ public class EtiquetaConfigService {
                 .list();
     }
 
-    /** Apaga todas as colunas da config e reinsere na lista recebida. */
-    private void salvarColunas(long idConfigEtiqueta, List<ColunaRequest> colunas) {
-        jdbc.sql("DELETE FROM cfg_etiqueta_coluna WHERE id_tenant = plataforma.tenant_atual() AND id_config_etiqueta = ?")
-                .param(idConfigEtiqueta).update();
-        for (ColunaRequest coluna : colunas) {
-            jdbc.sql("""
-                            INSERT INTO cfg_etiqueta_coluna (id_tenant, id_config_etiqueta, numero_coluna, posicao_inicial_mm)
-                            VALUES (plataforma.tenant_atual(), ?, ?, ?)
-                            """)
-                    .params(idConfigEtiqueta, coluna.numeroColuna(), coluna.posicaoInicialMm())
-                    .update();
-        }
-    }
-
     /** Apaga todos os campos da config e reinsere na lista recebida. */
     private void salvarCampos(long idConfigEtiqueta, List<CampoRequest> campos) {
         jdbc.sql("DELETE FROM cfg_etiqueta_campo WHERE id_tenant = plataforma.tenant_atual() AND id_config_etiqueta = ?")
@@ -254,17 +235,19 @@ public class EtiquetaConfigService {
         if (req.numeroColunas() < 1 || req.numeroColunas() > 4) {
             throw new IllegalArgumentException("Número de colunas deve ser entre 1 e 4.");
         }
-        if (req.colunas().size() != req.numeroColunas()) {
-            throw new IllegalArgumentException("A quantidade de colunas informadas não bate com o número de colunas.");
-        }
-        Set<Integer> numerosColuna = new HashSet<>();
-        for (ColunaRequest coluna : req.colunas()) {
-            if (coluna.numeroColuna() < 1 || coluna.numeroColuna() > req.numeroColunas()) {
-                throw new IllegalArgumentException("Número da coluna fora do intervalo esperado.");
-            }
-            if (!numerosColuna.add(coluna.numeroColuna())) {
-                throw new IllegalArgumentException("Número de coluna repetido: " + coluna.numeroColuna() + ".");
-            }
+        // ⚠️ A última coluna não pode passar da largura do rolo — o excedente é simplesmente
+        // cortado na impressão, e o operador só descobre com a etiqueta na mão. Desde a V057 dá
+        // para conferir isto no servidor, porque a geometria é derivada: antes, com posições
+        // digitadas uma a uma, a checagem existia só na tela.
+        BigDecimal fimDaUltimaColuna = naoNegativoOuZero(req.margemEsquerdaMm())
+                .add(BigDecimal.valueOf(req.numeroColunas() - 1L)
+                        .multiply(req.larguraEtiquetaMm().add(naoNegativoOuZero(req.espacamentoHorizontalMm()))))
+                .add(req.larguraEtiquetaMm());
+        if (fimDaUltimaColuna.compareTo(req.larguraRoloMm()) > 0) {
+            throw new IllegalArgumentException(
+                    "As %d colunas ocupam %s mm e não cabem num rolo de %s mm. Revise a margem, a largura da etiqueta ou o espaço entre colunas."
+                            .formatted(req.numeroColunas(), fimDaUltimaColuna.stripTrailingZeros().toPlainString(),
+                                    req.larguraRoloMm().stripTrailingZeros().toPlainString()));
         }
 
         Set<CampoEtiqueta> camposUsados = new HashSet<>();
@@ -293,9 +276,9 @@ public class EtiquetaConfigService {
 
     private static final String SELECT_BASE = """
             SELECT ec.id_config_etiqueta, ec.nome, ec.largura_rolo_mm, ec.numero_colunas, ec.largura_etiqueta_mm,
-                   ec.altura_etiqueta_mm, ec.espacamento_vertical_mm,
-                   ec.borda_superior_mm, ec.borda_inferior_mm, ec.borda_esquerda_mm,
-                   ec.borda_direita_mm, ec.ativo, ec.criado_em, ec.atualizado_em
+                   ec.altura_etiqueta_mm, ec.margem_esquerda_mm, ec.espacamento_horizontal_mm,
+                   ec.espacamento_vertical_mm,
+                   ec.ativo, ec.criado_em, ec.atualizado_em
             FROM cfg_etiqueta_config ec
             """;
 
@@ -308,27 +291,13 @@ public class EtiquetaConfigService {
                 rs.getInt("numero_colunas"),
                 rs.getBigDecimal("largura_etiqueta_mm"),
                 rs.getBigDecimal("altura_etiqueta_mm"),
+                rs.getBigDecimal("margem_esquerda_mm"),
+                rs.getBigDecimal("espacamento_horizontal_mm"),
                 rs.getBigDecimal("espacamento_vertical_mm"),
-                rs.getBigDecimal("borda_superior_mm"),
-                rs.getBigDecimal("borda_inferior_mm"),
-                rs.getBigDecimal("borda_esquerda_mm"),
-                rs.getBigDecimal("borda_direita_mm"),
                 rs.getBoolean("ativo"),
-                buscarColunas(id),
                 buscarCampos(id),
                 rs.getObject("criado_em", OffsetDateTime.class),
                 rs.getObject("atualizado_em", OffsetDateTime.class));
-    }
-
-    private List<ColunaResponse> buscarColunas(long idConfigEtiqueta) {
-        return jdbc.sql("""
-                        SELECT numero_coluna, posicao_inicial_mm FROM cfg_etiqueta_coluna
-                        WHERE id_tenant = plataforma.tenant_atual() AND id_config_etiqueta = ?
-                        ORDER BY numero_coluna
-                        """)
-                .param(idConfigEtiqueta)
-                .query((rs, n) -> new ColunaResponse(rs.getInt("numero_coluna"), rs.getBigDecimal("posicao_inicial_mm")))
-                .list();
     }
 
     private List<CampoResponse> buscarCampos(long idConfigEtiqueta) {

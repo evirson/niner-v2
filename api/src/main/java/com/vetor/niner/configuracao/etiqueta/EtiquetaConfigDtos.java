@@ -45,15 +45,6 @@ public final class EtiquetaConfigDtos {
         ESQUERDA, CENTRO, DIREITA
     }
 
-    /** Posição (mm) de uma coluna de etiqueta no rolo físico — valor explícito, não calculado
-     * por fórmula (rolos com espaçamento irregular existem na prática). */
-    public record ColunaRequest(
-            @NotNull Integer numeroColuna,
-            @NotNull @DecimalMin("0") BigDecimal posicaoInicialMm) {
-    }
-
-    public record ColunaResponse(int numeroColuna, BigDecimal posicaoInicialMm) {
-    }
 
     /**
      * Um campo posicionado na etiqueta. {@code posicaoXMm}/{@code posicaoYMm} são relativos ao
@@ -103,14 +94,15 @@ public final class EtiquetaConfigDtos {
             @NotNull Integer numeroColunas,
             @NotNull @DecimalMin("0.01") BigDecimal larguraEtiquetaMm,
             @NotNull @DecimalMin("0.01") BigDecimal alturaEtiquetaMm,
-            /** Espaco em branco ENTRE fileiras do rolo (V056). Nulo = 0 = fileiras coladas. */
+            /**
+             * Geometria do rolo (V057) - a posicao x,y de cada etiqueta e DERIVADA destes tres:
+             * x da coluna i = margem + i * (larguraEtiqueta + espacamentoHorizontal);
+             * y da fileira f = f * (alturaEtiqueta + espacamentoVertical).
+             */
+            @DecimalMin("0") @DecimalMax("500") BigDecimal margemEsquerdaMm,
+            @DecimalMin("0") @DecimalMax("100") BigDecimal espacamentoHorizontalMm,
             @DecimalMin("0") @DecimalMax("100") BigDecimal espacamentoVerticalMm,
-            BigDecimal bordaSuperiorMm,
-            BigDecimal bordaInferiorMm,
-            BigDecimal bordaEsquerdaMm,
-            BigDecimal bordaDireitaMm,
             Boolean ativo,
-            @NotNull @Valid List<ColunaRequest> colunas,
             @NotNull @Valid List<CampoRequest> campos) {
     }
 
@@ -121,13 +113,10 @@ public final class EtiquetaConfigDtos {
             int numeroColunas,
             BigDecimal larguraEtiquetaMm,
             BigDecimal alturaEtiquetaMm,
+            BigDecimal margemEsquerdaMm,
+            BigDecimal espacamentoHorizontalMm,
             BigDecimal espacamentoVerticalMm,
-            BigDecimal bordaSuperiorMm,
-            BigDecimal bordaInferiorMm,
-            BigDecimal bordaEsquerdaMm,
-            BigDecimal bordaDireitaMm,
             boolean ativo,
-            List<ColunaResponse> colunas,
             List<CampoResponse> campos,
             OffsetDateTime criadoEm,
             OffsetDateTime atualizadoEm) {

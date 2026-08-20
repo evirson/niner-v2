@@ -381,6 +381,80 @@ manual ligar. O estado `medidasDeduzidas` bloqueia qualquer recálculo até a de
 Se a impressão está deslizando, o valor a medir é o **espaço entre fileiras**. Se o texto sai
 cortado nas colunas da direita, o **espaço entre colunas** está menor que o real — informe o
 medido e as posições se recalculam.
+
+---
+
+## ✅ 2026-08-20, rodada 2 — a geometria virou DERIVADA (V057) e o modelo encolheu
+
+Proposta do dono do produto, na mesma sessão, depois de ler a rodada 1:
+
+> *"Você já sabe a largura do rolo, o número de colunas, a largura e a altura da etiqueta. O que
+> preciso a mais é margem até a primeira coluna, espaçamento entre colunas e espaçamento entre
+> fileiras. Com isso você sabe a área de impressão e a posição x,y de cada etiqueta. Aí fica fácil
+> gerar a impressão. O que você acha disso?"*
+
+Está certo, e expõe um defeito de fundo do modelo original: ele **guardava dado redundante**.
+`cfg_etiqueta_coluna.posicao_inicial_mm` sempre foi calculável — e, por ser digitado à mão, era
+exatamente ali que o erro entrava. Com a posição derivada, **o erro deixa de ser representável**.
+
+### O modelo inteiro, em 7 números
+
+| | |
+|---|---|
+| largura do rolo · nº de colunas · largura da etiqueta · altura da etiqueta | já existiam |
+| margem até a 1ª coluna · espaço entre colunas · espaço entre fileiras | as três medidas de régua |
+
+```
+x da coluna i (base 0) = margem + i × (larguraEtiqueta + espacoHorizontal)
+y da fileira f         =            f × (alturaEtiqueta + espacoVertical)
+área de impressão      = larguraEtiqueta × alturaEtiqueta
+```
+
+### O que saiu
+
+- **Tabela `cfg_etiqueta_coluna`** — apagada (com backfill antes, ver abaixo). Perde-se representar
+  **rolo de espaçamento irregular**; não é perda real, matriz de corte é padrão repetido. Junto foi
+  embora toda a complexidade que a rodada 1 tinha criado para conviver com isso: modo manual,
+  dedução de margem/espaço na abertura e a trava de ordem de efeitos que ela exigia.
+- **As 4 bordas** (`borda_superior/inferior/esquerda/direita_mm`) — decisão explícita do dono do
+  produto ("vamos esquecer as bordas"). Elas **nunca afetaram a impressão**: eram só a área
+  tracejada de aviso no editor. O aviso útil continua, agora contra a borda **real** do adesivo.
+- Duas validações de coerência da lista de colunas (quantidade divergente, número repetido) — sem
+  lista, não há como estar incoerente. No lugar entrou a validação que **importa fisicamente**:
+  *as colunas cabem no rolo?*, agora conferida **também no servidor**, o que antes era impossível
+  (com posições digitadas, o backend não tinha como saber onde cada coluna começava sem confiar no
+  que recebeu).
+
+### 🔴 Uma armadilha real na própria migration, pega só porque o resultado foi conferido
+
+A V057 nasceu com um backfill que saiu **zerado em silêncio**. Migration roda como `niner_owner`,
+e com `FORCE ROW LEVEL SECURITY` (V024) **nem o dono da tabela escapa da política**: sem
+`app.id_tenant` no contexto, o `SELECT` em `cfg_etiqueta_coluna` devolveu 0 linhas e o `UPDATE` em
+`cfg_etiqueta_config` casou 0 linhas — as colunas novas ficaram no `DEFAULT 0` e a migration
+terminou anunciando **sucesso**.
+
+Medido no banco de dev: a config existente tinha colunas em 2,50 / 40,50 / 78,50 (margem 2,50,
+espaço 4,00) e virou margem 0,00, espaço 0,00.
+
+Conserto: `NO FORCE ROW LEVEL SECURITY` nas duas tabelas antes do backfill, `FORCE` de volta
+depois. `NO FORCE` e não `DISABLE` — libera só o **dono**, mantendo a política valendo para
+`niner_app`. Provado em isolamento: como `niner_owner`, `count(*)` na mesma tabela devolve **0 com
+FORCE e 1 com NO FORCE**.
+
+⚠️ É o mesmo defeito que já tinha mordido o backup do produto (`pg_dump` sem `BYPASSRLS` levando
+estrutura completa e zero linha de cliente). **Migration que LÊ dado de tenant para transformá-lo
+precisa tratar RLS explicitamente** — e o único jeito de perceber é conferir o resultado no banco,
+porque o Flyway não tem como saber que zero linha era o número errado.
+
+### A tela final
+
+O card "Espaçamento entre Etiquetas (mm)" tem os três campos de régua e mostra o resultado como
+conferência:
+
+> Cada etiqueta começa em: **2,50 · 40,50 · 78,50** mm · ocupam **112,50** dos **110,00** mm do rolo.
+
+…e, nesse exemplo, o aviso de que **não cabem** — que é exatamente o defeito da configuração que
+motivou o diagnóstico inteiro.
 ## Ajuda da tela (manual de operação + vídeo) — obrigatório (R22 / §3.7.1)
 
 - **`chave_tela`: `configuracoes.etiquetaconfig.lista`** — várias configurações nomeadas por

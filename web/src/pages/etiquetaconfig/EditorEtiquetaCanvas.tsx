@@ -7,7 +7,6 @@ import {
   TODOS_OS_CAMPOS,
   type CampoEtiqueta,
   type CampoEtiquetaPosicionado,
-  type ColunaEtiqueta,
   type ProdutoExemplo,
 } from '../../lib/etiquetaConfig'
 
@@ -89,12 +88,9 @@ export default function EditorEtiquetaCanvas({
   larguraEtiquetaMm,
   alturaEtiquetaMm,
   espacamentoVerticalMm,
-  bordaSuperiorMm,
-  bordaInferiorMm,
-  bordaEsquerdaMm,
-  bordaDireitaMm,
+
   larguraRoloMm,
-  colunas,
+  posicoesColunas,
   campos,
   aoMudarCampos,
   produtoExemplo,
@@ -102,12 +98,10 @@ export default function EditorEtiquetaCanvas({
   larguraEtiquetaMm: number
   alturaEtiquetaMm: number
   espacamentoVerticalMm: number
-  bordaSuperiorMm: number
-  bordaInferiorMm: number
-  bordaEsquerdaMm: number
-  bordaDireitaMm: number
+
   larguraRoloMm: number
-  colunas: ColunaEtiqueta[]
+  /** Onde cada coluna comeca no rolo, em mm — DERIVADO da geometria (V057), nao guardado. */
+  posicoesColunas: number[]
   campos: CampoEtiquetaPosicionado[]
   /** Recebe uma função atualizadora (não o array pronto) — evita perder atualizações quando
    * duas mutações acontecem no mesmo ciclo do React sem re-render entre elas (ex.: pointermove
@@ -287,14 +281,22 @@ export default function EditorEtiquetaCanvas({
     moverCampoRelativo(campo.campo, dx, dy)
   }
 
+  /**
+   * Campo saindo da etiqueta.
+   *
+   * <p>⚠️ Media contra as 4 "bordas" configuraveis ate 2026-08-20; elas sairam por decisao do dono
+   * do produto ("vamos esquecer as bordas") e nunca afetaram a impressao — eram so a area
+   * tracejada de aviso. O aviso continua, agora contra a borda **real** do adesivo, que e o que de
+   * fato corta.
+   */
   function ultrapassaBorda(c: CampoEtiquetaPosicionado): boolean {
     const larguraCampo = c.larguraMm ?? 0
     const alturaCampo = c.alturaMm ?? 0
     return (
-      c.posicaoXMm < bordaEsquerdaMm ||
-      c.posicaoYMm < bordaSuperiorMm ||
-      c.posicaoXMm + larguraCampo > largura - bordaDireitaMm ||
-      c.posicaoYMm + alturaCampo > altura - bordaInferiorMm
+      c.posicaoXMm < 0 ||
+      c.posicaoYMm < 0 ||
+      c.posicaoXMm + larguraCampo > largura + 0.001 ||
+      c.posicaoYMm + alturaCampo > altura + 0.001
     )
   }
 
@@ -354,16 +356,6 @@ export default function EditorEtiquetaCanvas({
               }}
               onClick={() => setCampoSelecionado(null)}
             >
-              <div
-                className="editor-etiqueta-area-segura"
-                style={{
-                  position: 'absolute',
-                  top: bordaSuperiorMm * escala,
-                  left: bordaEsquerdaMm * escala,
-                  right: bordaDireitaMm * escala,
-                  bottom: bordaInferiorMm * escala,
-                }}
-              />
               {campos.map((c) => (
                 <CampoEtiquetaVisual
                   key={c.campo}
@@ -425,10 +417,10 @@ export default function EditorEtiquetaCanvas({
         </p>
       )}
 
-      {colunas.length > 0 && (
+      {posicoesColunas.length > 0 && (
         <div>
           <strong className="muted">
-            Prévia do rolo ({colunas.length} coluna{colunas.length === 1 ? '' : 's'} × 2 fileiras)
+            Prévia do rolo ({posicoesColunas.length} coluna{posicoesColunas.length === 1 ? '' : 's'} × 2 fileiras)
           </strong>
           {/* ⚠️ DUAS fileiras de propósito (2026-08-20). Com uma só, o "Espaço entre fileiras" não
               tinha como ser conferido antes de imprimir — e é justamente o valor cujo erro se
@@ -443,13 +435,13 @@ export default function EditorEtiquetaCanvas({
               }}
             >
               {[0, 1].map((fileira) =>
-                colunas.map((coluna) => (
+                posicoesColunas.map((x, indiceColuna) => (
                   <div
-                    key={`${fileira}-${coluna.numeroColuna}`}
+                    key={`${fileira}-${indiceColuna}`}
                     className="editor-etiqueta-rolo-etiqueta"
                     style={{
                       position: 'absolute',
-                      left: coluna.posicaoInicialMm * ESCALA_PREVIA,
+                      left: x * ESCALA_PREVIA,
                       top: fileira * (altura + espacamentoVerticalMm) * ESCALA_PREVIA,
                       width: largura * ESCALA_PREVIA,
                       height: altura * ESCALA_PREVIA,
