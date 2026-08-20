@@ -44,19 +44,29 @@ public class HorarioAcessoService {
      */
     @Transactional(readOnly = true)
     public boolean podeAcessarAgora(long idUsuario, int toleranciaMinutos) {
-        // A tolerância soma no domínio de TIMESTAMP (current_date + hora), nunca em `time`
+        // A tolerância soma no domínio de TIMESTAMP (data + hora), nunca em `time`
         // puro: `time + interval` do Postgres "embrulha" na virada da meia-noite (ex.:
         // 23:50 + 15 min vira 00:05, um limite superior MENOR que o inferior, quebrando o
         // BETWEEN sempre que o fim do expediente cai nos últimos `toleranciaMinutos` do dia —
         // bug real encontrado na verificação manual, 2026-08-11).
+        //
+        // ⚠️ 2026-08-19 — e esse timestamp é o do RELÓGIO DE PAREDE DA LOJA, não o do banco. A
+        // sessão do Postgres roda em UTC, então `now()`/`current_date` crus adiantam o dia às
+        // 21:00 de Brasília: `EXTRACT(ISODOW ...)` já devolvia o dia da semana SEGUINTE (sexta
+        // às 21h virava sábado, e a janela consultada era a do dia errado) e a janela do dia
+        // era montada sobre a data errada. `now() AT TIME ZONE 'America/Sao_Paulo'` devolve um
+        // `timestamp` sem fuso com o horário local — daí pra frente toda a conta é local e
+        // homogênea (mesma correção do "hoje" de CaixaService).
         return jdbc.sql("""
                         SELECT u.administrador OR NOT u.controla_horario_acesso OR EXISTS (
                             SELECT 1 FROM usuario_horario_acesso h
                             WHERE h.id_tenant = plataforma.tenant_atual() AND h.id_usuario = u.id_usuario
-                              AND h.dia_semana = EXTRACT(ISODOW FROM now())
+                              AND h.dia_semana = EXTRACT(ISODOW FROM (now() AT TIME ZONE 'America/Sao_Paulo'))
                               AND h.hora_inicio IS NOT NULL
-                              AND now() BETWEEN (current_date + h.hora_inicio)
-                                             AND (current_date + h.hora_fim + (? * interval '1 minute'))
+                              AND (now() AT TIME ZONE 'America/Sao_Paulo')
+                                  BETWEEN ((now() AT TIME ZONE 'America/Sao_Paulo')::date + h.hora_inicio)
+                                      AND ((now() AT TIME ZONE 'America/Sao_Paulo')::date + h.hora_fim
+                                           + (? * interval '1 minute'))
                         )
                         FROM usuario u
                         WHERE u.id_usuario = ? AND u.id_tenant = plataforma.tenant_atual()
@@ -84,17 +94,22 @@ public class HorarioAcessoService {
     public Long segundosRestantesTolerancia(long idUsuario, int toleranciaMinutos) {
         return jdbc.sql("""
                         SELECT GREATEST(0, CEIL(EXTRACT(EPOCH FROM (
-                            (current_date + h.hora_fim + (? * interval '1 minute')) - now()
+                            ((now() AT TIME ZONE 'America/Sao_Paulo')::date + h.hora_fim
+                             + (? * interval '1 minute'))
+                            - (now() AT TIME ZONE 'America/Sao_Paulo')
                         ))))::bigint
                         FROM usuario u
                         JOIN usuario_horario_acesso h
                           ON h.id_tenant = plataforma.tenant_atual() AND h.id_usuario = u.id_usuario
                         WHERE u.id_usuario = ? AND u.id_tenant = plataforma.tenant_atual()
                           AND NOT u.administrador AND u.controla_horario_acesso
-                          AND h.dia_semana = EXTRACT(ISODOW FROM now())
+                          AND h.dia_semana = EXTRACT(ISODOW FROM (now() AT TIME ZONE 'America/Sao_Paulo'))
                           AND h.hora_inicio IS NOT NULL
-                          AND now() > (current_date + h.hora_fim)
-                          AND now() <= (current_date + h.hora_fim + (? * interval '1 minute'))
+                          AND (now() AT TIME ZONE 'America/Sao_Paulo')
+                              > ((now() AT TIME ZONE 'America/Sao_Paulo')::date + h.hora_fim)
+                          AND (now() AT TIME ZONE 'America/Sao_Paulo')
+                              <= ((now() AT TIME ZONE 'America/Sao_Paulo')::date + h.hora_fim
+                                  + (? * interval '1 minute'))
                         """)
                 .params(toleranciaMinutos, idUsuario, toleranciaMinutos)
                 .query(Long.class)

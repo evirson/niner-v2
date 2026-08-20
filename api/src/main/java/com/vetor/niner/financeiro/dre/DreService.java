@@ -226,7 +226,7 @@ public class DreService {
                         LEFT JOIN funcionario fn
                              ON fn.id_funcionario = pmd.id_funcionario AND fn.id_tenant = pmd.id_tenant
                         WHERE v.id_tenant = plataforma.tenant_atual() AND v.cancelada = false
-                              AND v.data_venda::date BETWEEN ? AND ?
+                              AND (v.data_venda AT TIME ZONE 'America/Sao_Paulo')::date BETWEEN ? AND ?
                         """ + filtroEmpresaVenda)
                 .params(parametros(inicio, fim, idsEmpresa))
                 .query((rs, n) -> new BigDecimal[] {
@@ -243,7 +243,7 @@ public class DreService {
                              ON pmd.id_movimento = pmm.id_movimento AND pmd.id_tenant = pmm.id_tenant
                                 AND pmd.credito_debito = 'C'
                         WHERE pmm.id_tenant = plataforma.tenant_atual() AND pmm.tipo_movimento = 'DEVOLUCAO'
-                              AND pmm.data_movimento::date BETWEEN ? AND ?
+                              AND (pmm.data_movimento AT TIME ZONE 'America/Sao_Paulo')::date BETWEEN ? AND ?
                         """ + filtroEmpresaMovimento)
                 .params(parametros(inicio, fim, idsEmpresa))
                 .query((rs, n) -> new BigDecimal[] { rs.getBigDecimal("valor"), rs.getBigDecimal("cmv") })
@@ -257,7 +257,7 @@ public class DreService {
                         JOIN venda v ON v.id_venda = cr.id_venda AND v.id_tenant = cr.id_tenant
                         JOIN tipo_carteira tc ON tc.id_carteira = cr.id_carteira AND tc.id_tenant = cr.id_tenant
                         WHERE cr.id_tenant = plataforma.tenant_atual() AND v.cancelada = false
-                              AND v.data_venda::date BETWEEN ? AND ? AND tc.perc_desconto > 0
+                              AND (v.data_venda AT TIME ZONE 'America/Sao_Paulo')::date BETWEEN ? AND ? AND tc.perc_desconto > 0
                         """ + filtroEmpresaVenda)
                 .params(parametros(inicio, fim, idsEmpresa))
                 .query(BigDecimal.class).single();
@@ -304,7 +304,7 @@ public class DreService {
                         LEFT JOIN custo_venda cv ON cv.id_venda = cr.id_venda
                         WHERE cr.id_tenant = plataforma.tenant_atual() AND v.cancelada = false
                               AND cr.data_recebimento IS NOT NULL
-                              AND cr.data_recebimento::date BETWEEN ? AND ?
+                              AND (cr.data_recebimento AT TIME ZONE 'America/Sao_Paulo')::date BETWEEN ? AND ?
                         """ + filtroEmpresaVenda)
                 .params(parametros(inicio, fim, idsEmpresa))
                 .query((rs, n) -> new BigDecimal[] {
@@ -372,7 +372,8 @@ public class DreService {
                      ON pc.id_plano_contas = cp.id_plano_contas AND pc.id_tenant = cp.id_tenant
                 WHERE cp.id_tenant = plataforma.tenant_atual() AND pc.inclui_dre = true
                       AND pc.grupo_dre <> 'NAO_APLICA'
-                      AND %s IS NOT NULL AND %s::date BETWEEN ? AND ?%s
+                      AND %s IS NOT NULL
+                      AND (%s AT TIME ZONE 'America/Sao_Paulo')::date BETWEEN ? AND ?%s
                 GROUP BY pc.grupo_dre, cp.id_plano_contas, pc.descricao
                 """.formatted(valor, colunaData, colunaData, filtroEmpresa("cp.id_empresa", idsEmpresa));
 
@@ -396,7 +397,7 @@ public class DreService {
                         WHERE ccm.id_tenant = plataforma.tenant_atual() AND pc.inclui_dre = true
                               AND pc.grupo_dre IN ('RECEITA_BRUTA', 'RESULTADO_FINANCEIRO')
                               AND ccm.credito_debito = 'C'
-                              AND ccm.data_movimento::date BETWEEN ? AND ?
+                              AND (ccm.data_movimento AT TIME ZONE 'America/Sao_Paulo')::date BETWEEN ? AND ?
                         GROUP BY pc.grupo_dre, ccm.id_plano_contas, pc.descricao
                         """)
                 .params(inicio, fim)

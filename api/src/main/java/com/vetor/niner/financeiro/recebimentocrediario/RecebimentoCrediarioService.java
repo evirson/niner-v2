@@ -98,7 +98,7 @@ public class RecebimentoCrediarioService {
         return jdbc.sql("""
                         SELECT cr.id_conta_receber, cr.id_venda, e.codigo_empresa, v.data_venda,
                                cr.numero_parcela, cr.data_vencimento, cr.valor_receber,
-                               GREATEST(0, (CURRENT_DATE - cr.data_vencimento::date)) AS dias_atraso,
+                               GREATEST(0, ((now() AT TIME ZONE 'America/Sao_Paulo')::date - (cr.data_vencimento AT TIME ZONE 'America/Sao_Paulo')::date)) AS dias_atraso,
                                (SELECT count(*) FROM contas_receber cr2
                                 WHERE cr2.id_tenant = cr.id_tenant AND cr2.id_venda = cr.id_venda
                                       AND cr2.id_carteira = cr.id_carteira) AS total_parcelas
@@ -232,11 +232,11 @@ public class RecebimentoCrediarioService {
         List<Object> params = new ArrayList<>();
         params.add("%" + nomeCliente.trim().toUpperCase(Locale.ROOT) + "%");
         if (dataInicial != null) {
-            filtro.append(" AND crl.data_recebimento::date >= ?");
+            filtro.append(" AND (crl.data_recebimento AT TIME ZONE 'America/Sao_Paulo')::date >= ?");
             params.add(dataInicial);
         }
         if (dataFinal != null) {
-            filtro.append(" AND crl.data_recebimento::date <= ?");
+            filtro.append(" AND (crl.data_recebimento AT TIME ZONE 'America/Sao_Paulo')::date <= ?");
             params.add(dataFinal);
         }
 

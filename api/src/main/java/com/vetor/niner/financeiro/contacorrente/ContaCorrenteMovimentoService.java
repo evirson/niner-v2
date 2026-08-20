@@ -80,11 +80,11 @@ public class ContaCorrenteMovimentoService {
             params.add("%" + busca.trim() + "%");
         }
         if (dataInicial != null) {
-            filtro.append(" AND m.data_movimento::date >= ?");
+            filtro.append(" AND (m.data_movimento AT TIME ZONE 'America/Sao_Paulo')::date >= ?");
             params.add(dataInicial);
         }
         if (dataFinal != null) {
-            filtro.append(" AND m.data_movimento::date <= ?");
+            filtro.append(" AND (m.data_movimento AT TIME ZONE 'America/Sao_Paulo')::date <= ?");
             params.add(dataFinal);
         }
         switch (compensado == null ? "TODOS" : compensado.toUpperCase(Locale.ROOT)) {

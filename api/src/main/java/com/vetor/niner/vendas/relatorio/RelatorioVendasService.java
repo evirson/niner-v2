@@ -169,7 +169,7 @@ public class RelatorioVendasService {
                                     List<Long> idsEmpresaSolicitadas, Long idFuncionario) {
         StringBuilder sb = new StringBuilder(
                 " WHERE v.id_tenant = plataforma.tenant_atual() AND v.cancelada = false"
-                        + " AND v.data_venda::date BETWEEN ? AND ?");
+                        + " AND (v.data_venda AT TIME ZONE 'America/Sao_Paulo')::date BETWEEN ? AND ?");
         List<Object> params = new ArrayList<>();
         params.add(dataInicial);
         params.add(dataFinal);

@@ -113,7 +113,7 @@ public class EtiquetaEmissaoService {
                 """.formatted(CAMPOS_VARIACAO, JOINS_VARIANTES));
         List<Object> params = new ArrayList<>();
         if (dataDe != null) {
-            sql.append(" AND pmm.data_movimento::date BETWEEN ? AND ?");
+            sql.append(" AND (pmm.data_movimento AT TIME ZONE 'America/Sao_Paulo')::date BETWEEN ? AND ?");
             params.add(dataDe);
             params.add(dataAte);
         }

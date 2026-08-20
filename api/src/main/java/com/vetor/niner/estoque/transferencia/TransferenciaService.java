@@ -138,11 +138,11 @@ public class TransferenciaService {
             params.add(idEmpresaDestino);
         }
         if (dataInicial != null) {
-            filtro.append(" AND t.data_transferencia::date >= ?");
+            filtro.append(" AND (t.data_transferencia AT TIME ZONE 'America/Sao_Paulo')::date >= ?");
             params.add(dataInicial);
         }
         if (dataFinal != null) {
-            filtro.append(" AND t.data_transferencia::date <= ?");
+            filtro.append(" AND (t.data_transferencia AT TIME ZONE 'America/Sao_Paulo')::date <= ?");
             params.add(dataFinal);
         }
 

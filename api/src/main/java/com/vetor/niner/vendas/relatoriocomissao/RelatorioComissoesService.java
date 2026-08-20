@@ -125,7 +125,7 @@ public class RelatorioComissoesService {
                     JOIN produto_movimento_detalhe pmd
                            ON pmd.id_movimento = pmm.id_movimento AND pmd.id_tenant = pmm.id_tenant AND pmd.credito_debito = 'D'
                     WHERE v.id_tenant = plataforma.tenant_atual() AND v.cancelada = false
-                          AND v.data_venda::date BETWEEN ? AND ? AND pmd.id_funcionario IS NOT NULL
+                          AND (v.data_venda AT TIME ZONE 'America/Sao_Paulo')::date BETWEEN ? AND ? AND pmd.id_funcionario IS NOT NULL
                 """
                 + filtroEmpresaVendas + """
 
@@ -138,7 +138,7 @@ public class RelatorioComissoesService {
                     JOIN produto_movimento_detalhe pmd
                            ON pmd.id_movimento = pmm.id_movimento AND pmd.id_tenant = pmm.id_tenant AND pmd.credito_debito = 'C'
                     WHERE pmm.id_tenant = plataforma.tenant_atual() AND pmm.tipo_movimento = 'DEVOLUCAO'
-                          AND pmm.data_movimento::date BETWEEN ? AND ? AND pmd.id_funcionario IS NOT NULL
+                          AND (pmm.data_movimento AT TIME ZONE 'America/Sao_Paulo')::date BETWEEN ? AND ? AND pmd.id_funcionario IS NOT NULL
                 """
                 + filtroEmpresaDevolucoes + """
 

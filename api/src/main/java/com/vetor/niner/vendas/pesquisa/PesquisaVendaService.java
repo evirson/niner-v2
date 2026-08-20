@@ -88,7 +88,7 @@ public class PesquisaVendaService {
                 throw new IllegalArgumentException(
                         "Período de consulta não pode exceder " + PERIODO_MAXIMO_DIAS + " dias.");
             }
-            filtro.append(" AND v.data_venda::date BETWEEN ? AND ?");
+            filtro.append(" AND (v.data_venda AT TIME ZONE 'America/Sao_Paulo')::date BETWEEN ? AND ?");
             params.add(dataInicial);
             params.add(dataFinal);
 

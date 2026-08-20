@@ -132,17 +132,17 @@ public class RelatorioContasReceberService {
         List<Object> params = new ArrayList<>();
 
         if (periodos.dataVendaInicial() != null) {
-            filtro.append(" AND v.data_venda::date BETWEEN ? AND ?");
+            filtro.append(" AND (v.data_venda AT TIME ZONE 'America/Sao_Paulo')::date BETWEEN ? AND ?");
             params.add(periodos.dataVendaInicial());
             params.add(periodos.dataVendaFinal());
         }
         if (periodos.dataVencimentoInicial() != null) {
-            filtro.append(" AND cr.data_vencimento::date BETWEEN ? AND ?");
+            filtro.append(" AND (cr.data_vencimento AT TIME ZONE 'America/Sao_Paulo')::date BETWEEN ? AND ?");
             params.add(periodos.dataVencimentoInicial());
             params.add(periodos.dataVencimentoFinal());
         }
         if (periodos.dataRecebimentoInicial() != null) {
-            filtro.append(" AND cr.data_recebimento::date BETWEEN ? AND ?");
+            filtro.append(" AND (cr.data_recebimento AT TIME ZONE 'America/Sao_Paulo')::date BETWEEN ? AND ?");
             params.add(periodos.dataRecebimentoInicial());
             params.add(periodos.dataRecebimentoFinal());
         }

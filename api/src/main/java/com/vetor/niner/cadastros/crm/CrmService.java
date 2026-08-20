@@ -72,8 +72,8 @@ public class CrmService {
         StringBuilder sql = new StringBuilder("""
                 WITH compras AS (
                     SELECT v.id_cliente,
-                           MIN(v.data_venda)::date AS primeira_compra,
-                           MAX(v.data_venda)::date AS ultima_compra,
+                           MIN(v.data_venda AT TIME ZONE 'America/Sao_Paulo')::date AS primeira_compra,
+                           MAX(v.data_venda AT TIME ZONE 'America/Sao_Paulo')::date AS ultima_compra,
                            COUNT(DISTINCT v.id_venda) AS numero_compras,
                            COALESCE(SUM(pmd.qtd_produto * pmd.preco_venda - pmd.valor_desconto + pmd.valor_acrescimo), 0)
                                AS valor_total
@@ -94,7 +94,7 @@ public class CrmService {
                        co.primeira_compra, co.ultima_compra, COALESCE(co.numero_compras, 0) AS numero_compras,
                        COALESCE(co.valor_total, 0) AS valor_total_compras,
                        ROUND(co.valor_total / NULLIF(co.numero_compras, 0), 2) AS ticket_medio,
-                       (current_date - co.ultima_compra) AS dias_sem_ultima_compra
+                       ((now() AT TIME ZONE 'America/Sao_Paulo')::date - co.ultima_compra) AS dias_sem_ultima_compra
                 FROM cliente c
                 LEFT JOIN compras co ON co.id_cliente = c.id_cliente
                 WHERE c.id_tenant = plataforma.tenant_atual() AND c.ativo
@@ -114,11 +114,11 @@ public class CrmService {
             params.addAll(f.generos());
         }
         if (f.idadeDe() != null) {
-            sql.append(" AND EXTRACT(YEAR FROM age(current_date, c.data_nascimento)) >= ?");
+            sql.append(" AND EXTRACT(YEAR FROM age((now() AT TIME ZONE 'America/Sao_Paulo')::date, c.data_nascimento)) >= ?");
             params.add(f.idadeDe());
         }
         if (f.idadeAte() != null) {
-            sql.append(" AND EXTRACT(YEAR FROM age(current_date, c.data_nascimento)) <= ?");
+            sql.append(" AND EXTRACT(YEAR FROM age((now() AT TIME ZONE 'America/Sao_Paulo')::date, c.data_nascimento)) <= ?");
             params.add(f.idadeAte());
         }
         if (f.aniversarioDe() != null && f.aniversarioAte() != null) {
@@ -143,12 +143,12 @@ public class CrmService {
             params.addAll(f.idsCategoriaCliente());
         }
         if (f.cadastroDe() != null && f.cadastroAte() != null) {
-            sql.append(" AND c.criado_em::date BETWEEN ? AND ?");
+            sql.append(" AND (c.criado_em AT TIME ZONE 'America/Sao_Paulo')::date BETWEEN ? AND ?");
             params.add(f.cadastroDe());
             params.add(f.cadastroAte());
         }
         if (f.diasSemComprasMinimo() != null) {
-            sql.append(" AND (co.ultima_compra IS NULL OR current_date - co.ultima_compra >= ?)");
+            sql.append(" AND (co.ultima_compra IS NULL OR (now() AT TIME ZONE 'America/Sao_Paulo')::date - co.ultima_compra >= ?)");
             params.add(f.diasSemComprasMinimo());
         }
 
@@ -175,7 +175,7 @@ public class CrmService {
             exists.append(" WHERE v2.id_tenant = plataforma.tenant_atual() AND v2.id_cliente = c.id_cliente AND v2.cancelada = false");
             exists.append(filtroEmpresa(jwt, "v2", paramsExists));
             if (f.comprasDe() != null && f.comprasAte() != null) {
-                exists.append(" AND v2.data_venda::date BETWEEN ? AND ?");
+                exists.append(" AND (v2.data_venda AT TIME ZONE 'America/Sao_Paulo')::date BETWEEN ? AND ?");
                 paramsExists.add(f.comprasDe());
                 paramsExists.add(f.comprasAte());
             }

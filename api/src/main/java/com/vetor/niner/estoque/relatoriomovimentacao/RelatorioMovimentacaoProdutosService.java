@@ -138,7 +138,7 @@ public class RelatorioMovimentacaoProdutosService {
             LocalDate dataInicial, LocalDate dataFinal, List<Long> idsEmpresaEfetivo,
             List<TipoMovimentoProduto> tipos, List<String> marcas, List<Long> idsCategoria) {
         StringBuilder filtro = new StringBuilder(
-                " WHERE pmd.id_tenant = plataforma.tenant_atual() AND pmm.data_movimento::date BETWEEN ? AND ?");
+                " WHERE pmd.id_tenant = plataforma.tenant_atual() AND (pmm.data_movimento AT TIME ZONE 'America/Sao_Paulo')::date BETWEEN ? AND ?");
         List<Object> params = new ArrayList<>();
         params.add(dataInicial);
         params.add(dataFinal);
@@ -311,7 +311,7 @@ public class RelatorioMovimentacaoProdutosService {
                         FROM produto_movimento_detalhe pmd
                         JOIN produto_movimento_mestre pmm ON pmm.id_movimento = pmd.id_movimento AND pmm.id_tenant = pmd.id_tenant
                         WHERE pmd.id_tenant = plataforma.tenant_atual() AND pmd.id_variacao = ? AND pmd.id_empresa = ?
-                              AND pmm.data_movimento::date < ?
+                              AND (pmm.data_movimento AT TIME ZONE 'America/Sao_Paulo')::date < ?
                         """)
                 .params(idVariacao, idEmpresa, dataInicial)
                 .query(BigDecimal.class)
@@ -328,7 +328,7 @@ public class RelatorioMovimentacaoProdutosService {
                 LEFT JOIN fornecedor forn ON forn.id_fornecedor = pmm.id_fornecedor AND forn.id_tenant = pmm.id_tenant
                 LEFT JOIN funcionario fn ON fn.id_funcionario = pmd.id_funcionario AND fn.id_tenant = pmd.id_tenant
                 WHERE pmd.id_tenant = plataforma.tenant_atual() AND pmd.id_variacao = ? AND pmd.id_empresa = ?
-                      AND pmm.data_movimento::date BETWEEN ? AND ?
+                      AND (pmm.data_movimento AT TIME ZONE 'America/Sao_Paulo')::date BETWEEN ? AND ?
                 ORDER BY pmm.data_movimento, pmm.id_movimento, pmd.id_movimento_detalhe
                 """;
 

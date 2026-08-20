@@ -127,13 +127,25 @@ public class CaixaService {
         return status(jwt);
     }
 
-    /** Mesma regra do CHECK conceitual "1 caixa por empresa+usuário+dia": procura um caixa **já
-     *  fechado hoje**, para {@link #abrir} decidir entre reabrir e criar. */
+    /**
+     * Mesma regra do CHECK conceitual "1 caixa por empresa+usuário+dia": procura um caixa **já
+     * fechado hoje**, para {@link #abrir} decidir entre reabrir e criar.
+     *
+     * <p>⚠️ 2026-08-19 — "hoje" é o dia <b>da loja</b>, não o do banco. A sessão do Postgres roda
+     * em UTC, então {@code CURRENT_DATE} vira o dia seguinte às 21:00 de Brasília: o caixa aberto
+     * de manhã simplesmente sumia às 21h e o PDV passava a responder "não há caixa aberto hoje"
+     * no meio do expediente. Todo "hoje" deste serviço compara
+     * {@code (coluna AT TIME ZONE 'America/Sao_Paulo')::date} contra
+     * {@code (now() AT TIME ZONE 'America/Sao_Paulo')::date} — mesma correção já aplicada nos
+     * filtros de Entrada de Produtos, Contas a Pagar e Fluxo de Caixa.
+     */
     private Optional<Long> buscarIdCaixaFechadoHoje(long idEmpresa, long idUsuario) {
         return jdbc.sql("""
                         SELECT id_caixa FROM caixa_mestre
                         WHERE id_tenant = plataforma.tenant_atual() AND id_empresa = ? AND id_usuario = ?
-                              AND caixa_fechado = true AND data_abertura::date = CURRENT_DATE
+                              AND caixa_fechado = true
+                              AND (data_abertura AT TIME ZONE 'America/Sao_Paulo')::date
+                                  = (now() AT TIME ZONE 'America/Sao_Paulo')::date
                         ORDER BY id_caixa DESC LIMIT 1
                         """)
                 .params(idEmpresa, idUsuario)
@@ -203,7 +215,9 @@ public class CaixaService {
                         FROM caixa_mestre cm
                         JOIN tipo_carteira tc ON tc.id_carteira = cm.id_carteira AND tc.id_tenant = cm.id_tenant
                         WHERE cm.id_tenant = plataforma.tenant_atual() AND cm.id_empresa = ? AND cm.id_usuario = ?
-                              AND cm.caixa_fechado = false AND cm.data_abertura::date = CURRENT_DATE
+                              AND cm.caixa_fechado = false
+                              AND (cm.data_abertura AT TIME ZONE 'America/Sao_Paulo')::date
+                                  = (now() AT TIME ZONE 'America/Sao_Paulo')::date
                         ORDER BY cm.data_abertura DESC LIMIT 1
                         """)
                 .params(idEmpresa, idUsuario)
@@ -223,7 +237,8 @@ public class CaixaService {
                         FROM caixa_mestre cm
                         JOIN tipo_carteira tc ON tc.id_carteira = cm.id_carteira AND tc.id_tenant = cm.id_tenant
                         WHERE cm.id_tenant = plataforma.tenant_atual() AND cm.id_empresa = ? AND cm.id_usuario = ?
-                              AND cm.data_abertura::date = CURRENT_DATE
+                              AND (cm.data_abertura AT TIME ZONE 'America/Sao_Paulo')::date
+                                  = (now() AT TIME ZONE 'America/Sao_Paulo')::date
                         ORDER BY cm.id_caixa DESC LIMIT 1
                         """)
                 .params(idEmpresa, idUsuario)

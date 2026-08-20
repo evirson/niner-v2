@@ -81,7 +81,7 @@ public class CancelamentoDevolucaoService {
                 throw new IllegalArgumentException(
                         "Período de consulta não pode exceder " + PERIODO_MAXIMO_DIAS + " dias.");
             }
-            filtro.append(" AND vd.data_devolucao::date BETWEEN ? AND ?");
+            filtro.append(" AND (vd.data_devolucao AT TIME ZONE 'America/Sao_Paulo')::date BETWEEN ? AND ?");
             params.add(dataInicial);
             params.add(dataFinal);
 
