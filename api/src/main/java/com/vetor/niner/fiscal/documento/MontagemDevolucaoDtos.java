@@ -161,6 +161,14 @@ public final class MontagemDevolucaoDtos {
      * <p>{@code chaveNotaOriginal} é a chave da NFC-e sendo devolvida — vai no {@code NFref} do
      * cabeçalho e no {@code DFeReferenciado} de cada item (Ajuste SINIEF 8/2026).
      */
+    /**
+     * @param tipoNf {@code tpNF} — <b>0 entrada</b> (devolução de VENDA: a mercadoria volta para a
+     *               loja) ou <b>1 saída</b> (devolução de COMPRA: a mercadoria volta ao fornecedor).
+     *               Era fixo em 0 até 2026-08-20, quando a devolução ao fornecedor entrou e passou
+     *               a existir o outro sentido.
+     * @param idDestino {@code idDest} — 1 interna, 2 interestadual. Na devolução ao consumidor é
+     *               sempre 1 (balcão); na de compra depende da UF do fornecedor.
+     */
     public record DevolucaoParaMontar(
             AmbienteSefaz ambiente,
             int serie,
@@ -169,6 +177,8 @@ public final class MontagemDevolucaoDtos {
             OffsetDateTime emissao,
             String naturezaOperacao,
             String chaveNotaOriginal,
+            int tipoNf,
+            int idDestino,
             Emitente emitente,
             DestinatarioDevolucao destinatario,
             List<ItemDevolucao> itens,

@@ -523,6 +523,91 @@ Movimentação de Conta Corrente) que ainda não tinham migrado pro `SeletorPlan
 
 ## Linha do tempo
 
+### 2026-08-20 — Devolução de Produtos Comprados: o XML da entrada virou insumo, e o estoque virou limite
+
+Rotina nova: devolver mercadoria ao **fornecedor**, com baixa de estoque e **NF-e 55 de saída**.
+É o espelho da devolução do consumidor (B9), mas as duas se parecem menos do que o nome sugere —
+e as diferenças foram o trabalho de verdade. Spec completa em `docs/telas/devolucao-compra.md`.
+
+**Duas ausências pedidas pelo dono do produto, e uma delas encolheu o schema.** A devolução ao
+fornecedor **não mexe no financeiro** (o lojista negocia o crédito por fora) — e é por isso que ela
+**não tem tabela de cabeçalho**, ao contrário de `venda_devolucao`. Lá o cabeçalho existe porque a
+devolução gera um vale-mercadoria, que é objeto de negócio com vida própria. Aqui não há
+equivalente: a operação **é** o movimento de estoque, e inventar um cabeçalho vazio só criaria uma
+tabela para manter sincronizada com o ledger.
+
+**O que faltava não era código, era dado: o XML da entrada não estava sendo guardado direito.** A
+devolução espelha os impostos da nota de origem — e a nota de origem vivia numa coluna `text` do
+banco, sem tributação por item nenhuma. Duas coisas mudaram (V051): o XML da entrada passou a ser
+**arquivado no MinIO** como o de saída já era (ADR-014), e nasceu **`entrada_nfe_item`** (47
+colunas, com RLS), gravada no ato da entrada. Ela **tem IPI**, que `documento_fiscal_item` não tem:
+a NFC-e de saída não destaca IPI, a nota de compra do fornecedor destaca — copiar o schema da irmã
+teria perdido a coluna em silêncio.
+
+⚠️ **A consequência disso é um limite duro que a tela precisa dizer por extenso:** entrada anterior
+a hoje **não é devolvível**, e entrada manual ou por planilha **nunca** será. Mostrar essas
+entradas na lista e falhar na confirmação seria pior.
+
+**A regra que o dono do produto enunciou, e as duas maneiras de furá-la.** O máximo devolvível é o
+**menor entre o saldo da nota e o estoque atual** — "entrou 10 e o estoque tem 8, devolve 8; o
+estoque tem 12, devolve 10". Escrever a validação foi fácil; o que apareceu relendo foram dois
+furos: **linha repetida** (duas linhas de 5 do mesmo produto passavam uma a uma contra um estoque
+de 8) e **corrida com o PDV** (a validação usava o estoque que a grid tinha lido). Hoje o pedido é
+somado por variação antes de validar e o estoque é lido dentro da transação com a linha travada
+(`FOR UPDATE`, ordenado por `id_variacao` contra deadlock).
+
+**⚠️ Esse segundo limite é exceção deliberada à política de estoque negativo — e o javadoc diz
+"não uniformize isto".** Não é inconsistência, são situações opostas: na **venda**, o produto está
+na mão do operador e quem está errado é o cadastro — travar a venda por um número atrasado custaria
+a venda de algo que existe. Na **devolução**, ninguém tem a mercadoria na mão e o sistema vai
+emitir uma NF-e declarando que ela está saindo; se o estoque diz zero, a nota afirmaria à SEFAZ uma
+saída física que não aconteceu. A diferença não é de rigor, é de **o que a operação afirma**: a
+venda registra um fato observado, a devolução declara um fato que ninguém conferiu.
+
+**O CFOP é a única coisa que a devolução não copia da entrada.** `6101` é "venda de produção do
+estabelecimento" — do fornecedor. Repetido na nossa nota, declararia que **nós** vendemos produção
+própria. De-para fechado com o dono do produto (`x.101/102/103/104 → x.202`,
+`x.401/403/405 → x.411`, primeiro dígito acompanhando o sentido). CFOP fora do de-para **falha na
+montagem** com o motivo por extenso (F11) — remessa e consignação têm regra própria e precisam de
+decisão, não de palpite.
+
+**Duas parametrizações no lugar de duas cópias.** `MontadorXmlNfeDevolucao` ganhou `tpNF`/`idDest`
+em vez de uma segunda cópia de ~500 linhas de XML já homologado (o compilador achou os 2 chamadores;
+os 13 testes do consumidor seguiram verdes). E o cancelamento do evento 110111 passou a servir os
+dois modelos: o corpo — onde mora a regra "não reverta sem confirmação da SEFAZ" (F5) — existe uma
+vez só, e o que difere (prazo por UF, vocabulário das mensagens) entra por parâmetro.
+
+**A ordem das operações se inverte entre efetivar e cancelar**, e isso é proposital: efetivar grava
+e depois emite (se a SEFAZ estiver fora, a devolução vale e a carga não sai); cancelar cancela a
+nota **antes** de reverter o estoque (a nota autorizada já declarou que a mercadoria saiu —
+devolver o estoque antes da confirmação deixaria a loja com a mercadoria em casa e um documento
+válido dizendo o contrário). Em cada caso, o passo que vem primeiro é o que deixa o sistema no
+estado *menos* errado se o outro falhar.
+
+**Três peças já existiam e encolheram o schema:** `tipo_operacao_fiscal.DEVOLUCAO_FORNECEDOR`
+(semeada na V035 "porque acrescentar valor a ENUM depois é ALTER TYPE" — a decisão se pagou hoje),
+`documento_fiscal.id_movimento` e `documento_fiscal_referencia.id_documento_referenciado`, esta já
+documentada como "preenchida quando a nota é do próprio Niner" — ou seja, já previa referenciar
+nota de **terceiro** só pela chave, que é exatamente o caso da nota do fornecedor. Sobraram uma
+coluna (`id_movimento_origem`) e uma view (`vw_entrada_saldo_devolucao`, que ignora `cancelado` dos
+dois lados — é o que faz o cancelamento devolver o saldo sem UPDATE em linha nenhuma).
+
+**⚠️ Um achado de diagnóstico que vale para o repositório inteiro:** `rs.getObject(coluna,
+Long.class)` numa coluna `integer` **não funciona** — o driver recusa com *"conversion to class
+java.lang.Long from int4 not supported"*, e o erro chega ao controller como
+`DataIntegrityViolationException`, que o handler global traduz para **"Registro em uso por outro
+cadastro — não pode ser excluído"**. Um erro de *leitura* vira uma mensagem sobre *exclusão*, num
+GET, e o diagnóstico vai inteiro para o lado errado. Custou uma hora às cegas porque o handler
+descartava a causa: ele agora **loga a exceção original** antes de responder o 409 genérico.
+
+**Migrations:** V051 (XML da entrada no bucket + `entrada_nfe_item`), V052 (`ALTER TYPE
+tipo_movimento ADD VALUE 'DEVOLUCAO_COMPRA'`, sozinha no arquivo — o valor novo não pode ser usado
+na mesma transação em que é criado), V053 (`id_movimento_origem` + a view).
+
+**Testes: 891 (+13), tudo verde.** `DevolucaoCompraCrudTest` (7) prende os dois tetos com os
+números que o dono do produto usou, a linha repetida, a devolução parcial, o cancelamento e o
+isolamento entre tenants; `CfopDevolucaoCompraTest` (4) prende o de-para inteiro.
+
 ### 2026-08-20 — Duas caçadas de bug em paralelo: 6 defeitos corrigidos, 1 mantido por decisão
 
 Dois agentes de leitura varreram o repositório ao mesmo tempo (back e front), depois de um dia com

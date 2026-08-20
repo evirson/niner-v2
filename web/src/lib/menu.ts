@@ -159,6 +159,12 @@ export const MENU: NavGrupo[] = [
         descricao: 'Recebe mercadoria de fornecedor (XML de NF-e, lançamento manual ou planilha), gerando movimento de estoque tipo COMPRA.',
       },
       {
+        to: '/estoque/devolucao-compra',
+        label: 'Devolução de Produtos Comprados',
+        icone: IconeEstoque,
+        descricao: 'Devolve mercadoria ao fornecedor a partir da entrada que a trouxe, baixando o estoque e emitindo a NF-e de saída.',
+      },
+      {
         to: '/estoque',
         label: 'Transferência de Produtos',
         icone: IconeEstoque,

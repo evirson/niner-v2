@@ -177,6 +177,62 @@ public class DocumentoFiscalRepositorio {
         return idDocumento;
     }
 
+    /**
+     * Grava a NF-e de <b>devolução de compra</b> assinada (modelo 55, <b>saída</b>) — irmã de
+     * {@link #gravarDevolucaoAssinada}, com três diferenças que não são cosméticas:
+     *
+     * <ul>
+     *   <li>{@code tipo_operacao = 'DEVOLUCAO_FORNECEDOR'} e {@code tipo_nf = 1} (saída): a
+     *       mercadoria está indo embora, não voltando;</li>
+     *   <li>o vínculo é {@code id_movimento} (o movimento {@code DEVOLUCAO_COMPRA}), não
+     *       {@code id_devolucao} — esta operação não tem cabeçalho próprio, ela <b>é</b> o
+     *       movimento de estoque;</li>
+     *   <li>a referência vai <b>só pela chave</b>, com {@code id_documento_referenciado} nulo: a
+     *       nota referenciada é do <b>fornecedor</b> e não existe em {@code documento_fiscal}. A
+     *       coluna sempre previu isso ("preenchida quando a nota é do próprio Niner").</li>
+     * </ul>
+     */
+    public long gravarDevolucaoCompraAssinada(long idEmpresa, long idMovimento, Integer idUsuario,
+                                              DevolucaoParaMontar dev, NumeroReservado numero,
+                                              String chave, String xmlAssinado) {
+        var t = dev.totais();
+        long idDocumento = jdbc.sql("""
+                        INSERT INTO documento_fiscal (
+                            id_tenant, id_empresa, modelo, serie, numero, chave_acesso,
+                            codigo_numerico, digito_verificador, tipo_operacao, situacao, ambiente,
+                            tipo_emissao, tipo_nf, finalidade, indicador_final, indicador_presenca,
+                            id_movimento, data_emissao,
+                            valor_produtos, valor_desconto, valor_total,
+                            valor_icms, valor_icms_st, valor_pis, valor_cofins,
+                            base_ibs_cbs, valor_ibs_uf, valor_ibs_mun, valor_cbs, valor_total_tributos,
+                            xml_assinado, xml_hash, id_usuario)
+                        VALUES (plataforma.tenant_atual(), ?, 55, ?, ?, ?, ?, ?,
+                                'DEVOLUCAO_FORNECEDOR', 'ASSINADO', ?::ambiente_fiscal, 1, 1, 4, 0, 0,
+                                ?, ?,
+                                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        RETURNING id_documento_fiscal
+                        """)
+                .params(idEmpresa, numero.serie(), numero.numero(), chave,
+                        "%08d".formatted(numero.codigoNumerico()), Integer.parseInt(chave.substring(43)),
+                        dev.ambiente().name(), idMovimento, dev.emissao(),
+                        t.valorProdutos(), t.valorDesconto(), t.valorTotal(),
+                        t.valorIcms(), t.valorIcmsSt(), t.valorPis(), t.valorCofins(),
+                        t.baseIbsCbs(), t.valorIbsUf(), t.valorIbsMun(), t.valorCbs(), t.valorTotalTributos(),
+                        xmlAssinado, sha256(xmlAssinado), idUsuario)
+                .query(Long.class).single();
+
+        jdbc.sql("""
+                        INSERT INTO documento_fiscal_referencia
+                            (id_tenant, id_documento_fiscal, chave_referenciada, id_documento_referenciado)
+                        VALUES (plataforma.tenant_atual(), ?, ?, NULL)
+                        """)
+                .params(idDocumento, dev.chaveNotaOriginal())
+                .update();
+
+        gravarItensDevolucao(idDocumento, dev);
+        return idDocumento;
+    }
+
     /** Itens da devolução — os mesmos valores que foram para o XML, já espelhados da nota
      *  original pelo {@code DevolucaoFiscalAssembler} (nada é recalculado aqui). */
     private void gravarItensDevolucao(long idDocumento, DevolucaoParaMontar dev) {
@@ -511,6 +567,37 @@ public class DocumentoFiscalRepositorio {
     }
 
     /**
+     * Mesma busca, mas pelo <b>movimento de estoque</b> — a NF-e 55 de devolução ao fornecedor não
+     * nasce de uma venda, nasce de um {@code produto_movimento_mestre}, e por isso se pendura em
+     * {@code id_movimento} e não em {@code id_venda}.
+     *
+     * <p>{@code modelo = 55} no filtro não é redundância defensiva: um mesmo movimento pode, no
+     * futuro, ter mais de um documento pendurado (uma nota e um evento de outro modelo), e cancelar
+     * o documento errado é o tipo de engano que só aparece na SEFAZ.
+     */
+    public java.util.Optional<DocumentoParaCancelar> buscarAutorizadoDeMovimentoParaCancelamento(long idMovimento) {
+        return jdbc.sql("""
+                        SELECT d.id_documento_fiscal, d.chave_acesso, d.protocolo, d.data_autorizacao,
+                               d.ambiente::text AS ambiente, e.estado AS uf, e.cnpj
+                          FROM documento_fiscal d
+                          JOIN empresa e ON e.id_tenant = d.id_tenant AND e.id_empresa = d.id_empresa
+                         WHERE d.id_tenant = plataforma.tenant_atual() AND d.id_movimento = ?
+                           AND d.modelo = 55
+                           AND d.situacao = 'AUTORIZADO'
+                         ORDER BY d.criado_em DESC
+                         LIMIT 1
+                        """)
+                .param(idMovimento)
+                .query((rs, n) -> new DocumentoParaCancelar(
+                        rs.getLong("id_documento_fiscal"), rs.getString("chave_acesso"),
+                        rs.getString("protocolo"),
+                        rs.getObject("data_autorizacao", java.time.OffsetDateTime.class),
+                        MontagemNfceDtos.AmbienteSefaz.valueOf(rs.getString("ambiente")),
+                        ufDoDocumento(rs), rs.getString("cnpj")))
+                .optional();
+    }
+
+    /**
      * Grava a <b>tentativa</b> de cancelamento — sempre, autorizada ou recusada (P3, F11: nunca
      * esconder uma recusa). Só isso; quem marca {@code documento_fiscal.situacao = CANCELADO} é
      * {@link #marcarCancelado}, chamado à parte.
@@ -682,6 +769,27 @@ public class DocumentoFiscalRepositorio {
                 .update();
     }
 
+    /**
+     * Entradas por XML cujo arquivamento no bucket ainda não aconteceu (V051) — o XML segue na
+     * coluna até o job levar. {@code chave_nfe} não nula filtra entrada manual/planilha, que não
+     * tem nota de origem e nunca vai ter o que arquivar.
+     */
+    @Transactional(readOnly = true)
+    public List<Long> entradasPendentesDeArquivamento(int limite) {
+        return jdbc.sql("""
+                        SELECT ex.id_movimento
+                          FROM entrada_xml ex
+                          JOIN produto_movimento_mestre m
+                            ON m.id_tenant = ex.id_tenant AND m.id_movimento = ex.id_movimento
+                         WHERE ex.id_tenant = plataforma.tenant_atual()
+                           AND ex.xml_objeto_bucket IS NULL AND ex.xml_bruto IS NOT NULL
+                           AND m.chave_nfe IS NOT NULL
+                         ORDER BY ex.importado_em
+                         LIMIT ?
+                        """)
+                .param(limite).query(Long.class).list();
+    }
+
     /** Dentro do {@code TenantContext} (P8) — ids pendentes de arquivamento desse tenant, mais
      *  antigo primeiro. */
     @Transactional(readOnly = true)
@@ -694,6 +802,59 @@ public class DocumentoFiscalRepositorio {
                          LIMIT ?
                         """)
                 .param(limite).query(Long.class).list();
+    }
+
+    /**
+     * Contexto para arquivar o XML da <b>NF-e do fornecedor</b> (V051).
+     *
+     * <p>Mora neste repositório — e não em {@code estoque} — porque quem arquiva é o
+     * {@link ArquivamentoXmlService}, e concentrar aqui evita um segundo caminho de gravação no
+     * bucket fiscal com regra própria. A UF vem de {@code empresa} (a nota é de terceiro; a UF que
+     * decide o fuso do caminho é a de quem recebeu).
+     */
+    @Transactional(readOnly = true)
+    public java.util.Optional<EntradaXmlParaArquivar> buscarEntradaParaArquivar(long idMovimento) {
+        return jdbc.sql("""
+                        SELECT ex.xml_bruto, ex.xml_objeto_bucket, m.chave_nfe, m.data_movimento,
+                               e.estado AS uf
+                          FROM entrada_xml ex
+                          JOIN produto_movimento_mestre m
+                            ON m.id_tenant = ex.id_tenant AND m.id_movimento = ex.id_movimento
+                          JOIN empresa e ON e.id_tenant = m.id_tenant AND e.id_empresa = m.id_empresa
+                         WHERE ex.id_tenant = plataforma.tenant_atual() AND ex.id_movimento = ?
+                        """)
+                .param(idMovimento)
+                .query((rs, n) -> new EntradaXmlParaArquivar(
+                        rs.getString("xml_bruto"), rs.getString("xml_objeto_bucket"),
+                        rs.getString("chave_nfe"),
+                        rs.getObject("data_movimento", java.time.OffsetDateTime.class),
+                        rs.getString("uf")))
+                .optional();
+    }
+
+    public record EntradaXmlParaArquivar(String xmlBruto, String xmlObjetoBucketAtual, String chaveNfe,
+                                         java.time.OffsetDateTime dataMovimento, String uf) {
+    }
+
+    /**
+     * Fecha o arquivamento da entrada: grava a chave do objeto e o hash, e <b>zera o
+     * {@code xml_bruto}</b> — o XML passa a viver só no bucket, que é o ponto da mudança (tirar
+     * meio giga por mês de nota de fornecedor de dentro do Postgres e do {@code pg_dump}).
+     *
+     * <p>A ordem importa: só zera depois que a gravação no bucket voltou com a chave. Se o MinIO
+     * estiver fora, o XML continua na coluna e o job tenta de novo — nunca existe um instante em
+     * que o XML não esteja em lugar nenhum.
+     */
+    @Transactional
+    public void marcarEntradaXmlArquivada(long idMovimento, String chave, String hash) {
+        jdbc.sql("""
+                        UPDATE entrada_xml
+                           SET xml_objeto_bucket = ?, xml_hash = ?, arquivado_em = now(), xml_bruto = NULL
+                         WHERE id_tenant = plataforma.tenant_atual() AND id_movimento = ?
+                           AND xml_objeto_bucket IS NULL
+                        """)
+                .params(chave, hash, idMovimento)
+                .update();
     }
 
     /** Contexto pra arquivar o XML de um EVENTO autorizado (cancelamento 110111). */

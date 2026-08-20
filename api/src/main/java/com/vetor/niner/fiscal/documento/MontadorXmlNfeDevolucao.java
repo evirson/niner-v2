@@ -124,8 +124,10 @@ public class MontadorXmlNfeDevolucao {
                 .append(tag("serie", String.valueOf(dev.serie())))
                 .append(tag("nNF", String.valueOf(dev.numero())))
                 .append(tag("dhEmi", emissaoLocal.format(DH)))
-                .append(tag("tpNF", "0"))                     // 0 = ENTRADA (a mercadoria volta)
-                .append(tag("idDest", "1"))                   // 1 = interna: devolução de venda de balcão
+                // 0 = entrada (devolução de VENDA, a mercadoria volta para a loja);
+                // 1 = saída (devolução de COMPRA, a mercadoria volta ao fornecedor).
+                .append(tag("tpNF", String.valueOf(dev.tipoNf())))
+                .append(tag("idDest", String.valueOf(dev.idDestino())))
                 .append(tag("cMunFG", String.valueOf(e.codigoMunicipioIbge())))
                 .append(tag("tpImp", "1"))                    // 1 = DANFE retrato (A4), não o 4 da NFC-e
                 .append(tag("tpEmis", String.valueOf(TP_EMIS_NORMAL)))

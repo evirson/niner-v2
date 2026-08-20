@@ -45,7 +45,11 @@ import java.util.Optional;
 public class CancelamentoNfceService {
 
     private static final int MODELO_NFCE = 65;
-    private static final int PRAZO_PADRAO_MINUTOS = 30;
+    private static final int MODELO_NFE = 55;
+    private static final int PRAZO_PADRAO_NFCE_MINUTOS = 30;
+    /** NF-e 55: 24 h, o prazo geral do Ajuste SINIEF 07/05. So vale como piso - o valor
+     *  real vem de cfg_uf_autorizador por (UF, modelo, ambiente), que a V047 carregou. */
+    private static final int PRAZO_PADRAO_NFE_MINUTOS = 1440;
     /** ⚠️ Sempre via {@link FusoDaLoja}: o driver devolve `timestamptz` em UTC, e formatar direto
      *  imprimia 3 h a mais (achado em 2026-08-20 — "autorizada às 19:44" para uma nota das 16:44). */
     private static final DateTimeFormatter FMT = DateTimeFormatter.ofPattern("dd/MM 'às' HH:mm", Locale.of("pt", "BR"));
@@ -81,23 +85,46 @@ public class CancelamentoNfceService {
      *         devolução), SEFAZ recusou o cancelamento, ou não foi possível confirmar com a SEFAZ
      */
     public Optional<String> cancelarSeAplicavel(long idEmpresa, long idVenda, Integer idUsuario, String justificativa) {
-        Optional<DocumentoParaCancelar> docOpt = repositorio.buscarAutorizadoParaCancelamento(idVenda);
-        if (docOpt.isEmpty()) {
-            return Optional.empty();
-        }
-        DocumentoParaCancelar doc = docOpt.get();
+        return repositorio.buscarAutorizadoParaCancelamento(idVenda)
+                .map(doc -> executar(idEmpresa, doc, MODELO_NFCE, idUsuario, justificativa, ROTULO_VENDA));
+    }
 
-        Autorizador autorizador = autorizadores.buscar(doc.uf(), MODELO_NFCE, doc.ambiente().codigo());
+    /**
+     * Cancela a <b>NF-e de devolução ao fornecedor</b> antes de o Cancelamento de Devolução de
+     * Compra reverter o estoque — mesma garantia, mesma ordem: se este método voltar sem lançar,
+     * pode reverter.
+     *
+     * <p>A ordem importa mais aqui do que na venda. A nota de devolução <b>declara que a mercadoria
+     * saiu</b>; se o estoque voltasse antes e a SEFAZ recusasse o cancelamento, o sistema ficaria
+     * com a mercadoria em casa e um documento válido dizendo que ela viajou.
+     *
+     * @param idMovimento o movimento {@code DEVOLUCAO_COMPRA} que está sendo cancelado
+     */
+    public Optional<String> cancelarNotaDeDevolucaoDeCompraSeAplicavel(long idEmpresa, long idMovimento,
+                                                                      Integer idUsuario, String justificativa) {
+        return repositorio.buscarAutorizadoDeMovimentoParaCancelamento(idMovimento)
+                .map(doc -> executar(idEmpresa, doc, MODELO_NFE, idUsuario, justificativa, ROTULO_DEVOLUCAO_COMPRA));
+    }
+
+    /**
+     * O evento 110111 em si — idêntico para os dois modelos. Só o prazo (que vem da UF) e o texto
+     * das mensagens mudam, e os dois entram por parâmetro justamente para que este corpo, que é
+     * onde mora a regra "não reverta sem confirmação", exista uma vez só.
+     */
+    private String executar(long idEmpresa, DocumentoParaCancelar doc, int modelo, Integer idUsuario,
+                            String justificativa, Rotulo rotulo) {
+        Autorizador autorizador = autorizadores.buscar(doc.uf(), modelo, doc.ambiente().codigo());
+        int prazoPadrao = modelo == MODELO_NFCE ? PRAZO_PADRAO_NFCE_MINUTOS : PRAZO_PADRAO_NFE_MINUTOS;
         int prazoMinutos = autorizador.prazoCancelamentoMinutos() != null
-                ? autorizador.prazoCancelamentoMinutos() : PRAZO_PADRAO_MINUTOS;
+                ? autorizador.prazoCancelamentoMinutos() : prazoPadrao;
         OffsetDateTime limite = doc.dataAutorizacao().plusMinutes(prazoMinutos);
         if (OffsetDateTime.now().isAfter(limite)) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
-                    ("O prazo de %d minutos para cancelar esta NFC-e pela SEFAZ já passou "
-                            + "(autorizada em %s). Não é possível cancelar a venda sem antes tratar a "
-                            + "nota fiscal — emita uma nota de devolução.")
-                            .formatted(prazoMinutos, FusoDaLoja.formatarEm(
-                                    doc.dataAutorizacao(), FusoDaUf.deOuPadrao(doc.uf()), FMT)));
+                    ("O prazo de %d minutos para cancelar esta %s pela SEFAZ já passou (autorizada em %s). "
+                            + "Não é possível cancelar %s sem antes tratar a nota fiscal — %s")
+                            .formatted(prazoMinutos, rotulo.documento(),
+                                    FusoDaLoja.formatarEm(doc.dataAutorizacao(), FusoDaUf.deOuPadrao(doc.uf()), FMT),
+                                    rotulo.operacao(), rotulo.remedio()));
         }
 
         CertificadoParaAssinatura certificado = certificados.carregarAtivoParaAssinatura(idEmpresa);
@@ -110,20 +137,20 @@ public class CancelamentoNfceService {
         String envelope = montador.montarEnvelope(doc.idDocumentoFiscal(), eventoAssinado);
         validador.validarEventoCancelamento(envelope);
 
-        String url = autorizadores.urlDe(doc.uf(), MODELO_NFCE, doc.ambiente().codigo(), ServicoSefaz.RECEPCAO_EVENTO);
+        String url = autorizadores.urlDe(doc.uf(), modelo, doc.ambiente().codigo(), ServicoSefaz.RECEPCAO_EVENTO);
         RespostaSefaz resposta;
         try {
             resposta = transporte.enviar(url, "RecepcaoEvento4", envelope,
                     certificado.pkcs12(), certificado.senha(), certificado.impressaoDigital());
         } catch (FalhaDeComunicacaoException e) {
             // ⚠️ Não há como saber se o cancelamento chegou a registrar do outro lado — tratar
-            // como "recusado" e não reverter é o lado seguro do erro: reverter a venda sem
-            // confirmação deixaria o fiscal e o estoque divergindo se a SEFAZ tiver processado.
+            // como "recusado" e não reverter é o lado seguro do erro: reverter sem confirmação
+            // deixaria o fiscal e o estoque divergindo se a SEFAZ tiver processado.
             repositorio.registrarTentativaCancelamento(doc.idDocumentoFiscal(), justificativa, false,
                     null, null, e.getMessage(), envelope, idUsuario);
             throw new ResponseStatusException(HttpStatus.CONFLICT,
-                    "Não foi possível confirmar o cancelamento junto à SEFAZ. A venda NÃO foi revertida — "
-                            + "tente novamente em instantes.");
+                    "Não foi possível confirmar o cancelamento junto à SEFAZ. " + rotulo.naoRevertido()
+                            + " — tente novamente em instantes.");
         }
 
         // 135 = evento registrado e vinculado à NF-e (leiauteEventoCancNFe_v1.00.xsd). 136
@@ -134,8 +161,9 @@ public class CancelamentoNfceService {
 
         if (!autorizadoNaSefaz) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
-                    "A SEFAZ recusou o cancelamento desta NFC-e: %s (%s). A venda NÃO foi revertida."
-                            .formatted(resposta.xMotivo(), resposta.cStat()));
+                    "A SEFAZ recusou o cancelamento desta %s: %s (%s). %s."
+                            .formatted(rotulo.documento(), resposta.xMotivo(), resposta.cStat(),
+                                    rotulo.naoRevertido()));
         }
 
         // Propagação padrão (junta a transação do chamador) — ver o porquê no javadoc do método.
@@ -143,8 +171,22 @@ public class CancelamentoNfceService {
         // Caminho quente do arquivamento (handoff §4.1) — best-effort, nunca lança.
         arquivamento.arquivarEventoSeAplicavel(idEvento);
 
-        return Optional.of(resposta.protocolo());
+        return resposta.protocolo();
     }
+
+    /** O vocabulário de cada caminho — o que é o documento, o que é a operação que NÃO foi
+     *  revertida, e o que o operador deve fazer quando o prazo já passou. */
+    private record Rotulo(String documento, String operacao, String naoRevertido, String remedio) {
+    }
+
+    private static final Rotulo ROTULO_VENDA = new Rotulo("NFC-e", "a venda",
+            "A venda NÃO foi revertida", "emita uma nota de devolução.");
+
+    private static final Rotulo ROTULO_DEVOLUCAO_COMPRA = new Rotulo(
+            "NF-e de devolução ao fornecedor", "a devolução",
+            "A devolução NÃO foi cancelada",
+            "a mercadoria já saiu com nota válida; peça ao fornecedor a nota de devolução "
+                    + "correspondente para trazê-la de volta.");
 
     private static KeyStore abrir(CertificadoParaAssinatura certificado) {
         try {

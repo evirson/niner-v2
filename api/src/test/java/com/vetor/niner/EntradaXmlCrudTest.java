@@ -427,4 +427,92 @@ class EntradaXmlCrudTest {
         assertThat(sapatos147308.stream().map(i -> (String) i.get("tamanho")))
                 .containsExactlyInAnyOrder("34", "35", "36", "37", "38", "39");
     }
+
+    /**
+     * A tributação que o FORNECEDOR declarou é gravada item a item em {@code entrada_nfe_item}
+     * (V051) — pré-requisito da rotina de <b>devolução de compra</b>.
+     *
+     * <p><b>Por que este teste é obrigatório e não "nice to have".</b> A NF-e de devolução ao
+     * fornecedor tem de <b>espelhar</b> os valores e bases da nota de origem para o estorno bater,
+     * e {@code produto_movimento_detalhe} não guarda nenhum dado fiscal. É o mesmo buraco que o B9
+     * encontrou do outro lado ({@code documento_fiscal_item} existia e nunca recebia INSERT, o que
+     * só apareceu meses depois) — e o que fez ele passar despercebido foi exatamente a falta de um
+     * teste como este.
+     *
+     * <p>Os valores conferidos vêm da NF-e REAL de calçados: CFOP 6101, origem 5, ICMS CST 00 com
+     * alíquota de 12% e R$ 10,56 de imposto.
+     */
+    @Test
+    void confirmarEntradaGravaATributacaoDeCadaItemDoXml() throws Exception {
+        String token = assinarNovoTenant("tributacaoitem");
+        long idTenant = extrairIdTenant(token);
+        long idFornecedor = criarFornecedor(token, "FORNECEDOR TRIBUTACAO", "11222333000181");
+        long idProduto = criarProduto(token, "SAPATO TRIBUTADO");
+        long idVariacao = criarVariacao(token, idProduto, EAN_ITEM_1);
+
+        String preview = mvc.perform(multipart("/api/v1/estoque/entradas/xml/preview")
+                        .file(xmlDakota()).header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        String xmlBruto = JsonPath.read(preview, "$.xmlBruto");
+        String chaveNfe = JsonPath.read(preview, "$.chaveNfe");
+
+        mvc.perform(post("/api/v1/estoque/entradas").header("Authorization", "Bearer " + token)
+                        .contentType(APPLICATION_JSON)
+                        .content(new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(Map.of(
+                                "idFornecedor", idFornecedor,
+                                "chaveNfe", chaveNfe,
+                                "xmlBruto", xmlBruto,
+                                "itens", List.of(Map.of("idVariacao", idVariacao, "qtd", 1,
+                                        "precoCusto", "10.00", "codigoFornecedor", CPROD_ITEM_1))))))
+                .andExpect(status().isCreated());
+
+        try (Connection c = abrirConexao(idTenant);
+             PreparedStatement ps = c.prepareStatement("""
+                     SELECT numero_item, codigo_produto, cfop, origem_mercadoria,
+                            cst_icms, aliquota_icms, valor_icms, id_variacao
+                       FROM entrada_nfe_item WHERE id_tenant = ? ORDER BY numero_item
+                     """)) {
+            ps.setLong(1, idTenant);
+            try (var rs = ps.executeQuery()) {
+                assertThat(rs.next()).as("o item da nota tem de estar gravado").isTrue();
+                assertThat(rs.getInt("numero_item")).isEqualTo(1);
+                assertThat(rs.getString("codigo_produto")).isEqualTo(CPROD_ITEM_1);
+                assertThat(rs.getString("cfop")).isEqualTo("6101");
+                assertThat(rs.getInt("origem_mercadoria")).isEqualTo(5);
+                assertThat(rs.getString("cst_icms")).isEqualTo("00");
+                assertThat(rs.getBigDecimal("aliquota_icms")).isEqualByComparingTo("12.00");
+                assertThat(rs.getBigDecimal("valor_icms")).isEqualByComparingTo("10.56");
+                assertThat(rs.getLong("id_variacao"))
+                        .as("ligado à variação que a entrada criou/casou").isEqualTo(idVariacao);
+            }
+        }
+    }
+
+    /** Entrada MANUAL (sem XML) não alimenta a tabela — não há nota de origem para devolver. */
+    @Test
+    void entradaManualNaoGravaTributacaoDeItem() throws Exception {
+        String token = assinarNovoTenant("manualsemtrib");
+        long idTenant = extrairIdTenant(token);
+        long idFornecedor = criarFornecedor(token, "FORNECEDOR MANUAL", "11222333000181");
+        long idProduto = criarProduto(token, "PRODUTO MANUAL");
+        long idVariacao = criarVariacao(token, idProduto, null);
+
+        mvc.perform(post("/api/v1/estoque/entradas").header("Authorization", "Bearer " + token)
+                        .contentType(APPLICATION_JSON)
+                        .content("""
+                                {"idFornecedor":%d,"itens":[{"idVariacao":%d,"qtd":2,"precoCusto":10.00}]}
+                                """.formatted(idFornecedor, idVariacao)))
+                .andExpect(status().isCreated());
+
+        try (Connection c = abrirConexao(idTenant);
+             PreparedStatement ps = c.prepareStatement(
+                     "SELECT count(*) FROM entrada_nfe_item WHERE id_tenant = ?")) {
+            ps.setLong(1, idTenant);
+            try (var rs = ps.executeQuery()) {
+                assertThat(rs.next()).isTrue();
+                assertThat(rs.getInt(1)).isZero();
+            }
+        }
+    }
 }

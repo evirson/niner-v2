@@ -93,6 +93,13 @@ services:
       # devolução é recusada na montagem (e seria recusada pela SEFAZ com cStat 975).
       NINER_FISCAL_RESPTEC_ID_CSRT: ${NINER_FISCAL_RESPTEC_ID_CSRT:-}
       NINER_FISCAL_RESPTEC_CSRT: ${NINER_FISCAL_RESPTEC_CSRT:-}
+      # Primeiro SUPER_ADMIN do backoffice (StaffBootstrap). Sem estas três, `plataforma.staff`
+      # nasce vazia e o `admin/` sobe mas NINGUÉM consegue entrar — a API avisa em WARN na subida,
+      # e a única saída seria um INSERT com hash BCrypt na mão. Só é usado quando a tabela está
+      # vazia: nunca recria nem redefine senha de quem já existe. Senha mínima de 12 caracteres.
+      NINER_STAFF_INICIAL_EMAIL: ${NINER_STAFF_INICIAL_EMAIL:-}
+      NINER_STAFF_INICIAL_SENHA: ${NINER_STAFF_INICIAL_SENHA:-}
+      NINER_STAFF_INICIAL_NOME: ${NINER_STAFF_INICIAL_NOME:-Administrador Vetor}
     volumes:
       - ./api/secrets:/secrets:ro
     ports: ["${NINER_API_PORT:-8080}:8080"]

@@ -1,5 +1,6 @@
 package com.vetor.niner.estoque.entrada;
 
+import com.vetor.niner.fiscal.documento.ArquivamentoXmlService;
 import com.vetor.niner.estoque.entrada.EntradaMercadoriaDtos.AtualizarItemEntradaRequest;
 import com.vetor.niner.estoque.entrada.EntradaMercadoriaDtos.CancelamentoEntradaEfetivadoResponse;
 import com.vetor.niner.estoque.entrada.EntradaMercadoriaDtos.CancelarEntradaRequest;
@@ -37,18 +38,28 @@ public class EntradaMercadoriaController {
     private final EntradaMercadoriaService service;
     private final EntradaPlanilhaService planilhaService;
     private final EntradaXmlService xmlService;
+    private final ArquivamentoXmlService arquivamento;
 
     public EntradaMercadoriaController(EntradaMercadoriaService service, EntradaPlanilhaService planilhaService,
-                                        EntradaXmlService xmlService) {
+                                        EntradaXmlService xmlService, ArquivamentoXmlService arquivamento) {
         this.service = service;
         this.planilhaService = planilhaService;
         this.xmlService = xmlService;
+        this.arquivamento = arquivamento;
     }
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public EntradaEfetivadaResponse efetivar(@AuthenticationPrincipal Jwt jwt, @Valid @RequestBody EfetivarEntradaRequest req) {
-        return service.efetivar(jwt, req);
+        EntradaEfetivadaResponse resposta = service.efetivar(jwt, req);
+        // ⚠️ DEPOIS do commit, e no controller de propósito (V051). Duas razões, ambas já custaram
+        // caro neste projeto: gravar no bucket é I/O de rede e não pode segurar a transação que
+        // move estoque (F2); e uma falha aqui não pode derrubar a entrada — no Postgres, comando
+        // que falha aborta a transação inteira e o `try/catch` em Java NÃO desfaz isso (foi assim
+        // que o signup passou a responder 201 com a conta inexistente). Mesmo padrão de
+        // `OnboardingController.assinar` → `AquisicaoService.converter`.
+        arquivamento.arquivarEntradaXmlSeAplicavel(resposta.idMovimento());
+        return resposta;
     }
 
     @GetMapping

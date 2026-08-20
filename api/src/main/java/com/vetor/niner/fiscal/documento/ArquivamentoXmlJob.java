@@ -85,5 +85,15 @@ public class ArquivamentoXmlJob {
                 log.warn("Falha ao arquivar inutilização {} (tenant {}): {}", id, idTenant, e.toString());
             }
         }
+        // XML da NF-e do FORNECEDOR (V051) — entrada por XML cujo arquivamento no bucket ainda não
+        // aconteceu (MinIO fora do ar na hora da entrada, ou a chamada pós-commit não rodou). O XML
+        // segue no banco até aqui, então nada se perde; o que muda é onde ele descansa.
+        for (Long id : repositorio.entradasPendentesDeArquivamento(LOTE)) {
+            try {
+                arquivamento.arquivarEntradaXml(id);
+            } catch (Exception e) {
+                log.warn("Falha ao arquivar XML da entrada {} (tenant {}): {}", id, idTenant, e.toString());
+            }
+        }
     }
 }

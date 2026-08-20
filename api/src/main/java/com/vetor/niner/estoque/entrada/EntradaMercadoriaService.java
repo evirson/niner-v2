@@ -24,6 +24,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
 import java.math.RoundingMode;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -49,6 +50,9 @@ import static org.springframework.http.HttpStatus.NOT_FOUND;
  */
 @Service
 public class EntradaMercadoriaService {
+
+    private static final org.slf4j.Logger log =
+            org.slf4j.LoggerFactory.getLogger(EntradaMercadoriaService.class);
 
     private static final int TAMANHO_PAGINA_PADRAO = 20;
     private static final int TAMANHO_PAGINA_MAXIMO = 100;
@@ -226,11 +230,17 @@ public class EntradaMercadoriaService {
         }
 
         if (req.xmlBruto() != null && !req.xmlBruto().isBlank()) {
+            // ⚠️ O XML nasce no BANCO e só depois migra para o bucket (V051). A ordem é deliberada:
+            // gravar no MinIO dentro desta transação seria I/O de rede segurando a transação que
+            // move estoque (F2), e um rollback depois do upload deixaria objeto órfão numa área
+            // IMUTÁVEL, que não aceita apagar. Assim o XML nunca se perde: se o bucket estiver
+            // fora, ele fica aqui e o job de arquivamento leva depois.
             jdbc.sql("""
                             INSERT INTO entrada_xml (id_tenant, id_movimento, xml_bruto)
                             VALUES (plataforma.tenant_atual(), ?, ?)
                             """)
                     .params(idMovimento, req.xmlBruto()).update();
+            gravarTributacaoDosItens(idMovimento, req.xmlBruto());
         }
 
         // Consistência entre o total dos produtos e a soma das duplicatas (2026-08-11 na tela;
@@ -650,6 +660,105 @@ public class EntradaMercadoriaService {
      *  precoCusto} (mesmo princípio do PDV/Devolução/Transferência). Não checa saldo — saldo
      *  negativo é permitido de propósito em qualquer movimentação (2026-07-29); entrada nunca
      *  teria saldo negativo de qualquer forma (só soma). */
+    /**
+     * Grava a tributação que o fornecedor declarou, item a item, em {@code entrada_nfe_item} (V051).
+     *
+     * <p><b>Para que serve:</b> é a fonte que a <b>devolução de compra</b> vai espelhar. A NF-e de
+     * devolução tem de repetir os valores e bases da nota de origem para o estorno bater, e
+     * {@code produto_movimento_detalhe} guarda só quantidade e custo — nenhum dado fiscal. É o mesmo
+     * buraco que o B9 encontrou do outro lado ({@code documento_fiscal_item} nunca preenchida) e a
+     * mesma solução: gravar no ato, em vez de parsear o XML lá na frente.
+     *
+     * <p><b>Por que reparsear o XML aqui</b> em vez de o front devolver a tributação junto: são ~30
+     * campos por item que o operador não vê nem edita: trafegá-los pela tela só criaria chance de
+     * chegarem adulterados. O XML já vem no {@code EfetivarEntradaRequest} (é ele que a idempotência
+     * usa), então o parse é local e barato.
+     *
+     * <p><b>Ligação com a variação</b> é por {@code cProd} + {@code cEAN}, a mesma dupla que o
+     * preview usou para casar item com produto. Item que o operador não importou fica com
+     * {@code id_variacao} nulo — a tributação dele continua registrada, porque a nota do fornecedor
+     * declarou aquilo e a devolução pode precisar.
+     */
+    private void gravarTributacaoDosItens(long idMovimento, String xmlBruto) {
+        NfeXmlParser.NotaFiscalNfe nota;
+        try {
+            nota = NfeXmlParser.parse(new java.io.ByteArrayInputStream(xmlBruto.getBytes(StandardCharsets.UTF_8)));
+        } catch (RuntimeException e) {
+            // O XML já foi aceito no preview; se falhar aqui, é defeito nosso e não do arquivo —
+            // mas derrubar a entrada por causa disso seria pior que perder a tributação. Fica
+            // registrado e a entrada segue; a devolução daquela nota é que não vai existir.
+            log.warn("Não foi possível ler a tributação do XML da entrada {} — a entrada foi gravada, "
+                    + "mas a devolução de compra dessa nota não terá de onde espelhar: {}", idMovimento, e.getMessage());
+            return;
+        }
+
+        Map<String, Long> variacaoPorCodigo = variacoesDaEntrada(idMovimento);
+        for (NfeXmlParser.ItemNfe item : nota.itens()) {
+            NfeXmlParser.TributacaoItemNfe t = item.tributacao();
+            jdbc.sql("""
+                            INSERT INTO entrada_nfe_item (
+                                id_tenant, id_movimento, numero_item, id_variacao,
+                                codigo_produto, codigo_ean, descricao, codigo_ncm, cest, cfop,
+                                unidade_comercial, quantidade, valor_unitario, valor_produto, valor_desconto,
+                                valor_frete, valor_seguro, valor_outros, origem_mercadoria,
+                                cst_icms, csosn, base_calculo_icms, perc_reducao_bc, aliquota_icms, valor_icms,
+                                base_calculo_st, mva_st, aliquota_st, valor_icms_st, base_st_retido, icms_st_retido,
+                                aliquota_fcp, valor_fcp,
+                                cst_ipi, base_calculo_ipi, aliquota_ipi, valor_ipi,
+                                cst_pis, base_calculo_pis, aliquota_pis, valor_pis,
+                                cst_cofins, base_calculo_cofins, aliquota_cofins, valor_cofins)
+                            VALUES (plataforma.tenant_atual(), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                                    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                                    ?, ?, ?, ?, ?, ?, ?, ?)
+                            ON CONFLICT (id_tenant, id_movimento, numero_item) DO NOTHING
+                            """)
+                    .params(idMovimento, item.nItem(),
+                            variacaoPorCodigo.get(chaveDoItem(item)),
+                            item.cProd(), item.cEan(), item.xProd(), item.ncm(), t.cest(), t.cfop(),
+                            t.unidadeComercial(), item.qtd(), item.valorUnitario(), t.valorProduto(),
+                            nz(item.valorDesconto()), t.valorFrete(), t.valorSeguro(), t.valorOutros(),
+                            t.origemMercadoria(),
+                            t.cstIcms(), t.csosn(), t.baseIcms(), t.percReducaoBc(), t.aliquotaIcms(), t.valorIcms(),
+                            t.baseSt(), t.mvaSt(), t.aliquotaSt(), t.valorIcmsSt(), t.baseStRetido(), t.icmsStRetido(),
+                            t.aliquotaFcp(), t.valorFcp(),
+                            t.cstIpi(), t.baseIpi(), t.aliquotaIpi(), t.valorIpi(),
+                            t.cstPis(), t.basePis(), t.aliquotaPis(), t.valorPis(),
+                            t.cstCofins(), t.baseCofins(), t.aliquotaCofins(), t.valorCofins())
+                    .update();
+        }
+    }
+
+    /** Variações que ESTA entrada movimentou, indexadas por `sku` e por `ean` — as duas chaves que
+     *  o preview usa para casar o item do fornecedor com o nosso produto. */
+    private Map<String, Long> variacoesDaEntrada(long idMovimento) {
+        Map<String, Long> porCodigo = new java.util.HashMap<>();
+        jdbc.sql("""
+                        SELECT DISTINCT pb.id_variacao, pb.sku, pb.ean
+                          FROM produto_movimento_detalhe pmd
+                          JOIN produto_barra pb ON pb.id_tenant = pmd.id_tenant AND pb.id_variacao = pmd.id_variacao
+                         WHERE pmd.id_tenant = plataforma.tenant_atual() AND pmd.id_movimento = ?
+                        """)
+                .param(idMovimento)
+                .query((rs, n) -> {
+                    long idVariacao = rs.getLong("id_variacao");
+                    porCodigo.put(rs.getString("sku"), idVariacao);
+                    if (rs.getString("ean") != null) {
+                        porCodigo.put(rs.getString("ean"), idVariacao);
+                    }
+                    return idVariacao;
+                })
+                .list();
+        return porCodigo;
+    }
+
+    private static String chaveDoItem(NfeXmlParser.ItemNfe item) {
+        return item.cEan() != null ? item.cEan() : item.cProd();
+    }
+
+    private static BigDecimal nz(BigDecimal valor) {
+        return valor == null ? BigDecimal.ZERO : valor;
+    }
+
     private List<ItemResolvido> resolverItens(List<ItemEntradaRequest> itens) {
         List<ItemResolvido> resolvidos = new ArrayList<>();
         for (ItemEntradaRequest item : itens) {

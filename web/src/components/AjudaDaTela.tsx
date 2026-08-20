@@ -164,6 +164,24 @@ const CONTEUDOS: Record<string, ConteudoAjuda> = {
     ],
     urlVideo: null,
   },
+  'estoque.devolucao-compra': {
+    titulo: 'Devolução de Produtos Comprados',
+    objetivo: 'Devolver mercadoria ao fornecedor, baixando o estoque e emitindo a NF-e de saída correspondente.',
+    passos: [
+      'Ao abrir a tela, um popup pede os filtros (fornecedor, empresa, nota fiscal, período de entrada) — clique em "Localizar" para ver as entradas, ou "Fechar" para voltar.',
+      'Clique na entrada que trouxe a mercadoria. A segunda grade mostra o que ainda pode voltar.',
+      'Marque os produtos e ajuste a quantidade — ela já vem preenchida com o máximo devolvível.',
+      'Confirme: o estoque é baixado e a NF-e de devolução é emitida para o fornecedor, com os mesmos impostos da nota de entrada.',
+      'Só despache a mercadoria depois que a tela confirmar que a nota foi autorizada pela SEFAZ.',
+    ],
+    errosComuns: [
+      'Entrada lançada manualmente ou por planilha não aparece na lista: sem o XML da nota do fornecedor não há como espelhar os impostos, que é o que a devolução exige.',
+      'A coluna "Máximo" pode ser menor que o saldo da nota — isso significa que parte da mercadoria já foi vendida. Só se devolve ao fornecedor o que ainda está em estoque (diferente da venda, em que o estoque pode ficar negativo).',
+      'Se a SEFAZ recusar a nota, a devolução e a baixa de estoque continuam valendo, mas a mercadoria NÃO pode viajar — cancele a devolução ou corrija o motivo da recusa e emita de novo em Documentos Fiscais.',
+      'Cancelar a devolução depois do prazo da SEFAZ não é possível: o caminho legal passa a ser pedir ao fornecedor a nota de devolução correspondente.',
+    ],
+    urlVideo: null,
+  },
   'estoque.entrada.form': {
     titulo: 'Nova entrada de mercadoria',
     objetivo: 'Registrar a compra de mercadoria de um fornecedor, dando entrada no estoque por XML de NF-e, item a item ou por planilha.',

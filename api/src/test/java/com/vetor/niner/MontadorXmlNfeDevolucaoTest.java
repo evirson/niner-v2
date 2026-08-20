@@ -215,7 +215,7 @@ class MontadorXmlNfeDevolucaoTest {
                 "37829453000135", "MITRYUSCASH", "suporte@nainer.com.br", "4133334444", null, null);
         DevolucaoParaMontar dev = new DevolucaoParaMontar(
                 AmbienteSefaz.HOMOLOGACAO, 1, 1, 12345678, EMISSAO, "DEVOLUCAO DE VENDA",
-                CHAVE_ORIGINAL, emitente(), destinatarioPropriaLoja(),
+                CHAVE_ORIGINAL, 0, 1, emitente(), destinatarioPropriaLoja(),
                 List.of(itemBase("102", null).build(1, 3)), totais(), null, semCsrt, "1.0");
 
         assertThatThrownBy(() -> montador.montar(dev))
@@ -227,7 +227,7 @@ class MontadorXmlNfeDevolucaoTest {
     void devolucaoSemChaveDaNotaOriginalEhRecusada() {
         DevolucaoParaMontar dev = new DevolucaoParaMontar(
                 AmbienteSefaz.HOMOLOGACAO, 1, 1, 12345678, EMISSAO, "DEVOLUCAO DE VENDA",
-                null, emitente(), destinatarioPropriaLoja(), List.of(itemBase("102", null).build(1, 3)),
+                null, 0, 1, emitente(), destinatarioPropriaLoja(), List.of(itemBase("102", null).build(1, 3)),
                 totais(), null, respTec(), "1.0");
 
         assertThatThrownBy(() -> montador.montar(dev))
@@ -248,7 +248,7 @@ class MontadorXmlNfeDevolucaoTest {
     void devolucaoSemDestinatarioEhRecusadaPorqueOModelo55Exige() {
         DevolucaoParaMontar dev = new DevolucaoParaMontar(
                 AmbienteSefaz.HOMOLOGACAO, 1, 1, 12345678, EMISSAO, "DEVOLUCAO DE VENDA",
-                CHAVE_ORIGINAL, emitente(), null, List.of(itemBase("102", null).build(1, 3)),
+                CHAVE_ORIGINAL, 0, 1, emitente(), null, List.of(itemBase("102", null).build(1, 3)),
                 totais(), null, respTec(), "1.0");
 
         assertThatThrownBy(() -> montador.montar(dev))
@@ -277,7 +277,7 @@ class MontadorXmlNfeDevolucaoTest {
     private DevolucaoParaMontar devolucaoCom(List<ItemDevolucao> itens, DestinatarioDevolucao dest) {
         return new DevolucaoParaMontar(
                 AmbienteSefaz.HOMOLOGACAO, 1, 1, 12345678, EMISSAO,
-                "DEVOLUCAO DE VENDA", CHAVE_ORIGINAL, emitente(), dest, itens, totais(),
+                "DEVOLUCAO DE VENDA", CHAVE_ORIGINAL, 0, 1, emitente(), dest, itens, totais(),
                 "Devolucao referente a NFC-e " + CHAVE_ORIGINAL, respTec(), "Niner PDV 1.0");
     }
 

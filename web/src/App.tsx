@@ -42,6 +42,7 @@ import EfetivarBalanco from './pages/estoque/EfetivarBalanco'
 import EntradaMercadoriaLista from './pages/estoque/entrada/EntradaMercadoriaLista'
 import EntradaMercadoriaForm from './pages/estoque/entrada/EntradaMercadoriaForm'
 import EntradaMercadoriaDetalhe from './pages/estoque/entrada/EntradaMercadoriaDetalhe'
+import DevolucaoCompra from './pages/estoque/devolucaocompra/DevolucaoCompra'
 import EstornoRecebimentoCrediario from './pages/recebimentocrediario/EstornoRecebimentoCrediario'
 import RecebimentoCrediario from './pages/recebimentocrediario/RecebimentoCrediario'
 import ReimpressaoRecebimentoCrediario from './pages/recebimentocrediario/ReimpressaoRecebimentoCrediario'
@@ -123,6 +124,7 @@ export default function App() {
           <Route path="/canais" element={<EmBreve titulo="Canais" />} />
           <Route path="/bi-dashboard" element={<EmBreve titulo="BI Dashboard" />} />
           <Route path="/entrada-produtos-compra" element={<EntradaMercadoriaLista />} />
+          <Route path="/estoque/devolucao-compra" element={<DevolucaoCompra />} />
           <Route path="/entrada-produtos-compra/nova" element={<EntradaMercadoriaForm />} />
           <Route path="/entrada-produtos-compra/:id" element={<EntradaMercadoriaDetalhe />} />
           <Route path="/relatorio-contas-pagar" element={<EmBreve titulo="Relatório de Contas a Pagar / Pagas" />} />

@@ -125,7 +125,10 @@ public class DevolucaoFiscalAssembler {
 
         return Optional.of(new DevolucaoParaMontar(
                 config.ambiente(), config.serieNfe(), 0, 0, OffsetDateTime.now(),
-                "DEVOLUCAO DE VENDA", original.chaveAcesso(), emitente, destinatario, itens, totais,
+                "DEVOLUCAO DE VENDA", original.chaveAcesso(),
+                // 0 = entrada, 1 = interna: a mercadoria volta para a loja, operação de balcão.
+                0, 1,
+                emitente, destinatario, itens, totais,
                 montarInfoComplementar(original, destinatario, idDevolucao),
                 new ResponsavelTecnico(respTec.cnpj(), respTec.contato(), respTec.email(), respTec.telefone(),
                         codigo == null ? null : codigo.idCsrt(),

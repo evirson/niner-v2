@@ -55,11 +55,9 @@ public class ArquivamentoXmlService {
 
     private static final Logger log = LoggerFactory.getLogger(ArquivamentoXmlService.class);
 
-    /** Mesmo fuso de {@code MontadorXmlNfce.FUSO_EMISSAO} — ano/mês do caminho do objeto vêm do
-     *  instante LOCAL do fato gerador, nunca do offset cru que o pgjdbc devolve (sempre UTC). Usar
-     *  o instante sem rezoning erraria o mês pra qualquer emissão/evento perto da virada do dia em
-     *  Brasília (mesmo bug já corrigido uma vez em MontadorXmlNfce, B7). */
-    private static final ZoneId FUSO = ZoneId.of("America/Sao_Paulo");
+    // O ano/mês do caminho do objeto sai do instante LOCAL da UF do emitente (2026-08-20), nunca do
+    // offset cru que o pgjdbc devolve (sempre UTC) nem de um fuso fixo: os dois erram o mês perto
+    // da virada do dia. Ver FusoDaUf — antes disto havia aqui uma constante `America/Sao_Paulo`.
 
     private static final Pattern PROT_NFE =
             Pattern.compile("<((?:[\\w.-]+:)?protNFe)\\b([^>]*)>(.*?)</(?:[\\w.-]+:)?protNFe>", Pattern.DOTALL);
@@ -108,6 +106,53 @@ public class ArquivamentoXmlService {
             log.warn("Falha ao arquivar XML da inutilização {} — fica pendente para o job de recuperação: {}",
                     idInutilizacao, e.toString());
         }
+    }
+
+    // ---------------------------------------------------------------- entrada (XML do fornecedor)
+
+    /**
+     * Move o XML da <b>NF-e do fornecedor</b> de {@code entrada_xml.xml_bruto} para o bucket fiscal
+     * (V051). Nunca lança — o chamador é o fluxo de entrada, que não pode falhar por causa disto.
+     *
+     * <p><b>Por que o XML nasce no banco e só depois vem para cá.</b> Gravar no MinIO dentro da
+     * transação que move estoque seria I/O de rede segurando a transação (F2), e um rollback depois
+     * do upload deixaria objeto órfão numa área <b>imutável</b>, que não aceita apagar. Assim o XML
+     * nunca se perde: com o bucket fora do ar ele fica na coluna e o job leva depois.
+     *
+     * <p><b>Por que arquivar a nota de compra, se ela não é nossa.</b> A rotina de <b>devolução ao
+     * fornecedor</b> só emite contra uma nota de entrada arquivada — "arquivada" tem de significar
+     * o mesmo que significa para a nota de saída: área WORM, guarda de 5 anos, prova de origem.
+     */
+    public void arquivarEntradaXmlSeAplicavel(long idMovimento) {
+        try {
+            arquivarEntradaXml(idMovimento);
+        } catch (RuntimeException e) {
+            log.warn("Falha ao arquivar XML da entrada {} — o XML segue no banco e o job recupera: {}",
+                    idMovimento, e.toString());
+        }
+    }
+
+    /** Variante que <b>lança</b> — usada pelo job e por teste, mesmo padrão das irmãs. */
+    public void arquivarEntradaXml(long idMovimento) {
+        DocumentoFiscalRepositorio.EntradaXmlParaArquivar entrada =
+                repositorio.buscarEntradaParaArquivar(idMovimento).orElse(null);
+        // Já arquivada, sem XML (entrada manual/planilha) ou sem chave (não veio de NF-e): nada a
+        // fazer, e não é erro — só entrada por XML tem o que arquivar.
+        if (entrada == null || entrada.xmlObjetoBucketAtual() != null
+                || entrada.xmlBruto() == null || entrada.chaveNfe() == null) {
+            return;
+        }
+
+        // Prefixo `entrada/` separando do que a loja EMITIU: misturar nota de terceiro com nota
+        // própria no mesmo caminho faria o pacote do contador (DF22) sair com as duas.
+        OffsetDateTime local = entrada.dataMovimento()
+                .atZoneSameInstant(FusoDaUf.deOuPadrao(entrada.uf())).toOffsetDateTime();
+        String caminho = "entrada/%d/%02d/%s.xml".formatted(
+                local.getYear(), local.getMonthValue(), entrada.chaveNfe());
+
+        byte[] bytes = entrada.xmlBruto().getBytes(StandardCharsets.UTF_8);
+        String chave = gravarComIdempotencia(caminho, bytes);
+        repositorio.marcarEntradaXmlArquivada(idMovimento, chave, sha256(bytes));
     }
 
     // ---------------------------------------------------------------- documento (nfeProc)

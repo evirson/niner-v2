@@ -19,6 +19,9 @@ import java.net.URI;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
+    private static final org.slf4j.Logger LOG =
+            org.slf4j.LoggerFactory.getLogger(GlobalExceptionHandler.class);
+
     @ExceptionHandler(IllegalStateException.class)
     public ProblemDetail tratarEstadoInvalido(IllegalStateException ex) {
         ProblemDetail pd = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, ex.getMessage());
@@ -85,6 +88,7 @@ public class GlobalExceptionHandler {
      */
     @ExceptionHandler(DataIntegrityViolationException.class)
     public ProblemDetail tratarViolacaoDeIntegridade(DataIntegrityViolationException ex) {
+        LOG.warn("Violacao de integridade tratada como 409", ex);
         ProblemDetail pd = ProblemDetail.forStatusAndDetail(
                 HttpStatus.CONFLICT, "Registro em uso por outro cadastro — não pode ser excluído.");
         pd.setTitle("Conflito de dados");
