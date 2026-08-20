@@ -26,7 +26,7 @@ decisão de arquitetura vira ADR no formato §6 da spec.
 | DF3 | Onde mora a inteligência tributária | ✅ **No Nainer** — perfil fiscal por produto/tenant, XML sai pronto |
 | DF4 | Reforma tributária (IBS/CBS/IS) | ✅ **Desde o v1, para TODOS os regimes** — motor e schema prontos mesmo para Simples/MEI; ver §8.5 |
 | DF5 | Certificado digital | ✅ **A1 (.pfx) por upload**, cifrado **no banco** (`fiscal_certificado.arquivo_cifrado`) — não em bucket, DF21 revisada em 2026-08-17 —, senha cifrada com chave fora do banco |
-| DF6 | UF piloto | ✅ **Paraná** — autorizador próprio (`nfce.sefa.pr.gov.br`), não SVRS; ver §9.4 |
+| DF6 | UF piloto | ✅ **Paraná** — autorizador próprio (`nfce.sefa.pr.gov.br`), não SVRS; ver §9.4. ⚠️ "Piloto" é onde a **homologação** foi feita, não o alcance do produto: desde a **V047** as **27 UFs** estão carregadas em `cfg_uf_autorizador` |
 | DF7 | Base técnica em Java | ✅ **Híbrido**: lib open-source para XSD/assinatura/QR + `HttpClient` do JDK no transporte. PoC na F0 é o gate |
 | DF8 | Emissão no PDV | ✅ **Síncrona na efetivação** + **contingência offline** |
 | DF10 | Cancelamento | ✅ **Uma operação só** — cancelar a venda cancela a nota, com trava de prazo legal |
@@ -159,7 +159,7 @@ No mesmo espírito da Constituição P1–P9 da spec principal. Inegociáveis; o
 | **F7** | **Certificado é segredo de terceiro** | O `.pfx` do lojista nunca trafega em log, nunca vai para o banco em claro, nunca aparece em resposta de API, e o acesso é auditado. Vazamento = alguém emitindo nota no CNPJ do lojista |
 | **F8** | **Isolamento de tenant vale em dobro aqui** | `id_tenant` **explícito** em toda query, além do RLS (`docs/infra/isolamento-tenant-rls.md`). Vazamento cruzado no fiscal é o certificado, a numeração e a nota de outro CNPJ |
 | **F9** | **Todo cálculo é auditável e reproduzível** | Para cada item fica gravado **de onde veio cada número**: perfil, CST/CSOSN, alíquota, versão de tabela, versão do motor. O lojista precisa explicar a nota anos depois |
-| **F10** | **A UF é dado, não código** | Autorizador, endpoint, prazo de cancelamento, alíquota interna, FCP, particularidade de validação: tudo em **tabela**, nunca em `if`. É o que permite a UF piloto virar Brasil sem reescrever |
+| **F10** | **A UF é dado, não código** | Autorizador, endpoint, prazo de cancelamento, alíquota interna, FCP, particularidade de validação: tudo em **tabela**, nunca em `if`. É o que permite a UF piloto virar Brasil sem reescrever — e virou, na **V047** (27 UFs × 2 modelos × 2 ambientes) |
 | **F11** 🆕 | **Bloqueio preventivo, nunca rejeição no caixa** | Produto sem NCM/unidade/perfil, cliente sem município IBGE, empresa sem certificado válido: o sistema **impede antes**, na tela de cadastro e na Conformidade Fiscal (§12) — não deixa chegar no caixa e virar rejeição com cliente esperando |
 | **F12** 🆕 | **Fiscal desligado não muda o ERP** | Tenant sem fiscal habilitado opera exatamente como hoje. O módulo é aditivo: nenhuma coluna nova é `NOT NULL` sobre dado existente, nenhuma tela existente passa a exigir campo fiscal enquanto `emite_nfce`/`emite_nfe` estiverem falsos |
 
@@ -1628,7 +1628,7 @@ manter as tabelas nacionais atualizadas (cClassTrib, CEST, CFOP, IBPT, MVA).
 | **F5 — NF-e de devolução** ✅ | Nota de **entrada** (`tpNF=0`, `finNFe=4`) referenciando a NFC-e original, espelhando a tributação dela; DANFE A4; integração com a tela de Devolução de Produtos | Cliente devolve depois dos 30 minutos e a nota de entrada sai autorizada, com o estoque batendo |
 | **F6+ — Implementações futuras** | Tudo da §4.2, na ordem que o negócio pedir. Candidatas naturais a virem primeiro: **cancelamento por substituição** (o "fechou no cartão errado" do balcão), **baixa por perda** (a mais barata: o ajuste já existe) e **NF-e de venda a contribuinte** (a que o `NAO_EMITIDO` vai medir) | Cada uma com homologação própria |
 
-### 17.0 ⏭️ O que falta no módulo fiscal (estado em 2026-08-19 — F0 a F5 entregues)
+### 17.0 ⏭️ O que falta no módulo fiscal (estado em 2026-08-20 — F0 a F5 entregues)
 
 Resposta curta para *"o que ainda temos para fazer no fiscal?"*. **F0–F5 estão entregues**
 (B0–B9 no roteiro de blocos): o produto emite NFC-e de verdade, cancela, inutiliza, entra e sai de
@@ -1641,6 +1641,15 @@ como responsável técnico no portal da SEFAZ de cada UF** e obter o código; ho
 `cStat 974` ("CNPJ do responsavel tecnico diverge do cadastrado") e **nenhuma NF-e 55 autoriza**.
 A NFC-e — a operação do dia a dia da loja — **não** depende disso. É a única pendência que impede
 uma funcionalidade já pronta de funcionar.
+
+**1.5. ✅ Resolvido em 2026-08-20 — o alcance nacional.** Vale registrar aqui porque era a resposta
+errada mais provável a esta pergunta: até 2026-08-20 o módulo **só emitia no Paraná**, e não por
+falta de arquitetura. `cfg_uf_autorizador` tinha 4 linhas (as do PR) e qualquer outra UF batia num
+409; e o **CSRT** morava numa variável de ambiente única, quando é emitido por UF. Hoje as **27
+unidades da federação** estão carregadas (V047: 108 linhas) e o CSRT é cadastro por UF × ambiente
+(V046 + tela no backoffice). O que sobra por UF nova é operacional, não desenvolvimento: **bater o
+`url_status_servico`** dela antes da primeira emissão (endereço de webservice muda sem aviso) e
+**obter o CSRT** daquele estado. Ver §9.9 e `docs/telas/admin-csrt-por-uf.md`.
 
 **2. Prazo com data marcada — IBS/CBS em 04/01/2027.**
 Obrigatório para CRT 1, 2 e 4, que é **100% da base** (DF37). O motor já calcula IBS/CBS e o XML já

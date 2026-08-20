@@ -1,5 +1,6 @@
 package com.vetor.niner;
 
+import com.vetor.niner.fiscal.documento.ChaveAcesso;
 import com.vetor.niner.fiscal.sefaz.SefazAutorizadorService;
 import com.vetor.niner.fiscal.sefaz.SefazDtos.Autorizador;
 import com.vetor.niner.fiscal.sefaz.SefazDtos.ServicoSefaz;
@@ -14,12 +15,17 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * Autorizador por UF (F10) — os endpoints e prazos vêm de {@code cfg_uf_autorizador}, semeada na
- * V034. Tabela global, sem RLS: é referência nacional, não dado de tenant, então o teste não
+ * V034 e completada para as <b>27 unidades da federação</b> na V047. Tabela global, sem RLS: é referência nacional, não dado de tenant, então o teste não
  * precisa de tenant nenhum.
  */
 @SpringBootTest
 @Import(TestcontainersConfiguration.class)
 class SefazAutorizadorCrudTest {
+
+    /** As 27 unidades da federação — 26 estados e o Distrito Federal. */
+    private static final String[] UFS_DO_BRASIL = {
+            "AC", "AL", "AP", "AM", "BA", "CE", "DF", "ES", "GO", "MA", "MT", "MS", "MG", "PA",
+            "PB", "PR", "PE", "PI", "RJ", "RN", "RS", "RO", "RR", "SC", "SP", "SE", "TO"};
 
     @Autowired
     SefazAutorizadorService autorizadores;
@@ -63,9 +69,14 @@ class SefazAutorizadorCrudTest {
         assertThat(pr.nome()).isEqualTo("PROPRIO");
     }
 
+    /**
+     * ⚠️ Este teste usava <b>SP</b> como exemplo de UF ausente — deixou de servir na V047, que
+     * carregou as 27 unidades da federação. Sobrou como exemplo a sigla inválida, que é o que
+     * ainda pode chegar aqui (empresa com UF digitada errada).
+     */
     @Test
     void ufNaoCadastradaFalhaComMensagemQueExplicaOEscopo() {
-        assertThatThrownBy(() -> autorizadores.buscar("SP", 65, 2))
+        assertThatThrownBy(() -> autorizadores.buscar("XX", 65, 2))
                 .isInstanceOf(ResponseStatusException.class)
                 .hasMessageContaining("não está cadastrada");
     }
@@ -90,6 +101,95 @@ class SefazAutorizadorCrudTest {
         // fácil de cometer e que só apareceria na primeira transmissão real.
         assertThat(autorizadores.urlDe("PR", 55, 1, ServicoSefaz.AUTORIZACAO))
                 .doesNotContain("nfce.sefa");
+    }
+
+    // =============================================================================================
+    // V047 (2026-08-20) — as 27 unidades da federação. O produto deixou de ser "do Paraná".
+    // =============================================================================================
+
+    /** 27 UFs × 2 modelos × 2 ambientes. Faltar uma linha = lojista daquele estado sem emitir. */
+    @Test
+    void as27UnidadesDaFederacaoTemAsQuatroCombinacoes() {
+        for (String uf : UFS_DO_BRASIL) {
+            for (int modelo : new int[] {55, 65}) {
+                for (int ambiente : new int[] {1, 2}) {
+                    assertThat(autorizadores.urlDe(uf, modelo, ambiente, ServicoSefaz.AUTORIZACAO))
+                            .as("%s modelo %d ambiente %d", uf, modelo, ambiente)
+                            .isNotBlank();
+                }
+            }
+        }
+        assertThat(UFS_DO_BRASIL).hasSize(27);
+    }
+
+    /**
+     * O {@code cUF} da tabela tem de bater com o mapa do Java ({@link ChaveAcesso#codigoUfDe}), que
+     * é quem monta a <b>chave de acesso</b>. Divergir aqui produz chave inválida, e a SEFAZ recusa
+     * sem dizer que o problema é o cUF — um dos erros mais caros de diagnosticar do módulo.
+     */
+    @Test
+    void codigoIbgeDaTabelaBateComOMapaQueMontaAChaveDeAcesso() {
+        for (String uf : UFS_DO_BRASIL) {
+            assertThat(autorizadores.buscar(uf, 65, 1).codigoUfIbge())
+                    .as("cUF de %s", uf)
+                    .isEqualTo(ChaveAcesso.codigoUfDe(uf));
+        }
+    }
+
+    /**
+     * ⚠️ <b>A armadilha da carga:</b> o autorizador muda com o MODELO. BA e PE autorizam a própria
+     * NF-e 55 mas usam a SVRS na NFC-e 65; o MA usa SVAN no 55 e SVRS no 65. Quem assumir "um
+     * autorizador por UF" manda a NFC-e da Bahia para o endpoint errado.
+     */
+    @Test
+    void autorizadorMudaComOModeloEmBaPeEMa() {
+        assertThat(autorizadores.buscar("BA", 55, 1).nome()).isEqualTo("PROPRIO");
+        assertThat(autorizadores.buscar("BA", 65, 1).nome()).isEqualTo("SVRS");
+        assertThat(autorizadores.buscar("PE", 55, 1).nome()).isEqualTo("PROPRIO");
+        assertThat(autorizadores.buscar("PE", 65, 1).nome()).isEqualTo("SVRS");
+        assertThat(autorizadores.buscar("MA", 55, 1).nome()).isEqualTo("SVAN");
+        assertThat(autorizadores.buscar("MA", 65, 1).nome()).isEqualTo("SVRS");
+    }
+
+    /**
+     * Toda linha de NFC-e precisa de QR Code <b>e</b> consulta pública: {@code MontadorXmlNfce}
+     * recusa montar o {@code infNFeSupl} sem as duas, então uma UF sem elas não vende.
+     */
+    @Test
+    void todaUfTemQrCodeEConsultaPublicaNaNfce() {
+        for (String uf : UFS_DO_BRASIL) {
+            for (int ambiente : new int[] {1, 2}) {
+                Autorizador a = autorizadores.buscar(uf, 65, ambiente);
+                assertThat(a.urlQrCode()).as("QR de %s ambiente %d", uf, ambiente).isNotBlank();
+                assertThat(a.urlConsultaPublica()).as("consulta de %s ambiente %d", uf, ambiente).isNotBlank();
+            }
+        }
+    }
+
+    /** O endereço de consulta do consumidor é sempre do estado do emitente, mesmo quando quem
+     *  autoriza é a SVRS — o cupom manda o consumidor para a SEFAZ dele, não para a do RS. */
+    @Test
+    void consultaPublicaEhDaUfDoEmitenteMesmoQuandoQuemAutorizaEhASvrs() {
+        Autorizador ce = autorizadores.buscar("CE", 65, 1);
+
+        assertThat(ce.nome()).isEqualTo("SVRS");
+        assertThat(autorizadores.urlDe("CE", 65, 1, ServicoSefaz.AUTORIZACAO)).contains("svrs.rs.gov.br");
+        assertThat(ce.urlQrCode()).contains("sefaz.ce.gov.br");
+        assertThat(ce.urlQrCode()).doesNotContain("svrs");
+    }
+
+    /** Os seis serviços existem em toda linha — um nulo só apareceria no dia do cancelamento. */
+    @Test
+    void osSeisServicosExistemEmTodaLinha() {
+        for (String uf : UFS_DO_BRASIL) {
+            for (int modelo : new int[] {55, 65}) {
+                for (ServicoSefaz servico : ServicoSefaz.values()) {
+                    assertThat(autorizadores.urlDe(uf, modelo, 1, servico))
+                            .as("%s modelo %d serviço %s", uf, modelo, servico)
+                            .isNotBlank();
+                }
+            }
+        }
     }
 
     @Test

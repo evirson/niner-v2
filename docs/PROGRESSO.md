@@ -36,15 +36,18 @@ Registro cronológico das decisões e entregas. Atualizar a cada marco relevante
 > é a operação do dia a dia da loja, não é afetada** — o PR não cobra CSRT no modelo 65. Ver
 > `docs/MODULOFISCAL.md` §9.9.
 >
-> 🌎 **2026-08-20 — o fiscal saiu do "produto do Paraná" pela metade.** O CSRT deixou de ser uma
+> 🌎 **2026-08-20 — o fiscal saiu do "produto do Paraná".** O CSRT deixou de ser uma
 > variável de ambiente única e virou **cadastro por UF × ambiente** (`cfg_csrt_resptec`, V046 +
 > tela no backoffice), porque ele é emitido pela SEFAZ de **cada** estado: com o desenho anterior,
 > a primeira nota de um lojista de fora do PR sairia carimbada com o código do Paraná e voltaria
 > `cStat 974`, com o diagnóstico apontando para o CNPJ em vez da UF. A exigência do par também
-> virou dado (`cfg_uf_autorizador.exige_csrt`, por modelo). ⏭️ **A outra metade continua aberta e é
-> maior:** `cfg_uf_autorizador` tem **só as 4 linhas do PR** — endpoint, prazo, alíquota interna e
-> FECOP das outras 26 UFs não estão carregados, e qualquer emissão fora do Paraná para em 409
-> ("a UF ainda não está cadastrada"). É carga de dado do portal de cada SEFAZ, não código.
+> virou dado (`cfg_uf_autorizador.exige_csrt`, por modelo). ✅ **E a outra metade fechou no mesmo
+> dia:** a **V047** carregou as **27 unidades da federação** em `cfg_uf_autorizador` — 108 linhas
+> (27 × 2 modelos × 2 ambientes), geradas por script a partir de fonte machine-readable, não
+> digitadas. A validação: as linhas do PR que a fonte gerou saíram **idênticas** às que já
+> autorizam de verdade. ⚠️ O autorizador **muda com o modelo** (BA e PE: próprio no 55, SVRS no
+> 65; MA: SVAN no 55, SVRS no 65). Antes da primeira emissão de uma UF nova: bater o
+> `url_status_servico` dela e obter o **CSRT** daquele estado.
 >
 > 🔴✅ **Primeira emissão síncrona real contra a SEFAZ-PR fora de um script de PoC (2026-08-18)
 > achou e corrigiu um bug crítico:** a resposta síncrona real tem dois `cStat` (lote e nota) e
@@ -519,6 +522,70 @@ Movimentação de Conta Corrente) que ainda não tinham migrado pro `SeletorPlan
 ---
 
 ## Linha do tempo
+
+### 2026-08-20 — As 27 unidades da federação em `cfg_uf_autorizador`: o fiscal deixou de ser "do Paraná"
+
+Fechando a outra metade do trabalho de hoje. A tabela que governa **para onde a nota é
+transmitida** tinha **4 linhas, todas do PR** — e `SefazAutorizadorService` responde 409 ("a UF
+ainda não está cadastrada") para qualquer outra. Na prática, um lojista de fora do Paraná não
+emitia nada. A arquitetura estava pronta desde a V034 (F10: "a UF é dado, não código"); faltava o
+**dado**.
+
+**V047 carrega 108 linhas** — 27 UFs × 2 modelos (55/65) × 2 ambientes (produção/homologação).
+
+**Como isso foi feito sem digitar 108 URLs.** Transcrever endereço de webservice é exatamente o
+tipo de trabalho onde o erro entra e só aparece na primeira transmissão real do cliente. O SQL foi
+**gerado por script** a partir de arquivos machine-readable do projeto `nfephp-org/sped-nfe`
+(`autorizadores.json`, `wsnfe_4.00_mod55.xml`, `wsnfe_4.00_mod65.xml`, `uri_consulta_nfce.json`),
+com o `codigo_uf_ibge` vindo do **mapa do próprio projeto** (`ChaveAcesso.CODIGO_UF`).
+
+**A validação que dá confiança na carga:** as linhas do **PR** que a fonte gerou saíram
+**idênticas** às que a V034 já tinha — e aquelas autorizaram NFC-e e NF-e de verdade contra a
+SEFAZ-PR (B0, B7, B9), incluindo o achado do `cStat 878` sobre a URL de consulta pública não ser o
+host do webservice. A mesma fonte reproduz, sem ajuste, o que se sabe que funciona. As 4 linhas do
+PR foram **preservadas** (`ON CONFLICT DO NOTHING`): carregam observações escritas à mão que valem
+mais que a carga automática.
+
+**⚠️ A armadilha que a carga revelou: o autorizador muda com o MODELO, não só com a UF.**
+
+| UF | NF-e 55 | NFC-e 65 |
+|---|---|---|
+| BA | **próprio** | SVRS |
+| PE | **próprio** | SVRS |
+| MA | **SVAN** | SVRS |
+
+Quem assumir "um autorizador por UF" manda a NFC-e da Bahia para o endpoint da NF-e da Bahia. Por
+isso a chave da tabela sempre foi (UF, modelo, ambiente) — e agora há teste provando os três casos.
+Distribuição final: modelo 55 = 10 autorizadores próprios + 16 SVRS + 1 SVAN; modelo 65 = 8
+próprios + 19 SVRS.
+
+**O que a migration deliberadamente NÃO afirma** (está escrito no cabeçalho dela, com o porquê):
+`aliquota_interna` e `aliquota_fcp` ficam nulas — não são consumidas por nenhum caminho de código
+(o FCP do cálculo vem de `regra_fiscal`, do perfil do lojista) e preencher 27 alíquotas de memória
+seria inventar dado tributário; `exige_cbenef` fica `false` (há UF que exige `cBenef`, mas marcar
+sem confirmar quebra a emissão); `prazo_cancelamento_min` = 1440 no modelo 55 (Ajuste SINIEF
+07/2005, nacional) e 30 no 65 (o mais comum, e o mesmo default que o Java já usava). E
+`url_consulta_publica` sai **como cada SEFAZ publica** — parte com esquema, parte sem: não é
+defeito de carga, é o endereço que o consumidor vê impresso no cupom.
+
+**6 testes novos** em `SefazAutorizadorCrudTest` (13 no total): as 27 UFs com as 4 combinações; o
+`cUF` de cada linha batendo com o mapa que monta a chave de acesso (divergir aí produz chave
+inválida, e a SEFAZ recusa sem dizer que o problema é esse); o autorizador mudando com o modelo em
+BA/PE/MA; QR Code e consulta pública presentes em toda linha de NFC-e (sem os dois,
+`MontadorXmlNfce` recusa montar o `infNFeSupl`); a consulta pública sendo do estado do **emitente**
+mesmo quando quem autoriza é a SVRS; e os seis serviços não nulos em toda linha. O teste que usava
+**SP** como exemplo de "UF não cadastrada" passou a usar uma sigla inválida — SP agora existe.
+
+**Auditoria de "o que mais está preso ao Paraná":** nenhum `if (uf == "PR")` no código de produção;
+os únicos literais de UF são o mapa de `cUF` e as listas de siglas (`ESTADOS_UF` no ERP, que já
+tinha as 27). `CsrtAdminService` deixou de manter a **segunda cópia** das 27 siglas e passou a
+validar pelo `ChaveAcesso` — duas listas divergindo fariam uma aceitar o que a outra recusa.
+
+**862 testes de backend verdes.**
+
+⏭️ **O que continua valendo antes de vender para uma UF nova:** bater o `url_status_servico` dela
+(serviço mais barato, não gera documento) e obter o **CSRT** daquele estado — endereço de
+webservice muda sem aviso, e o CSRT é por UF.
 
 ### 2026-08-20 — CSRT deixa de ser variável global e vira cadastro por UF (o Nainer é para os 27 entes, não para o Paraná)
 

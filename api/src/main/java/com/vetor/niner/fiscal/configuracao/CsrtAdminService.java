@@ -1,6 +1,7 @@
 package com.vetor.niner.fiscal.configuracao;
 
 import com.vetor.niner.comum.seguranca.SegredoCifrador;
+import com.vetor.niner.fiscal.documento.ChaveAcesso;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -11,7 +12,6 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.time.OffsetDateTime;
 import java.util.List;
-import java.util.Set;
 
 import static org.springframework.http.HttpStatus.BAD_REQUEST;
 import static org.springframework.http.HttpStatus.FORBIDDEN;
@@ -26,11 +26,6 @@ import static org.springframework.http.HttpStatus.NOT_FOUND;
  */
 @Service
 public class CsrtAdminService {
-
-    /** As 27 unidades da federação — 26 estados e o Distrito Federal. */
-    private static final Set<String> UFS = Set.of(
-            "AC", "AL", "AP", "AM", "BA", "CE", "DF", "ES", "GO", "MA", "MT", "MS", "MG", "PA",
-            "PB", "PR", "PE", "PI", "RJ", "RN", "RS", "RO", "RR", "SC", "SP", "SE", "TO");
 
     private final JdbcClient jdbc;
     private final SegredoCifrador cifrador;
@@ -122,9 +117,16 @@ public class CsrtAdminService {
         }
     }
 
+    /**
+     * A lista de UFs válidas é a do {@link ChaveAcesso}, que é quem monta a chave de acesso — de
+     * propósito: manter uma segunda cópia das 27 siglas aqui só criaria a chance de uma aceitar o
+     * que a outra recusa.
+     */
     private static String validarUf(String uf) {
         String normalizada = uf == null ? "" : uf.trim().toUpperCase();
-        if (!UFS.contains(normalizada)) {
+        try {
+            ChaveAcesso.codigoUfDe(normalizada);
+        } catch (IllegalArgumentException e) {
             throw new ResponseStatusException(BAD_REQUEST, "UF inválida: " + uf);
         }
         return normalizada;
