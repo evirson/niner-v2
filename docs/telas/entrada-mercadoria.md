@@ -1,6 +1,14 @@
 # Spec: Entrada de Mercadorias (XML NF-e + lançamento manual)      Status: Implementada
 Autor: Evirson (dono do produto) + Claude · Data: 2026-07-23, implementação 2026-08-11 (Manual+Planilha), 2026-08-12 (XML, Cancelamento, Filtros), 2026-08-13 (respeito ao parâmetro "Usa Cor/Grade"), 2026-08-14 (Fase 5 — atalho de etiqueta) · Módulo(s): `estoque` (entrada) · Fase: 1 — Núcleo do ERP
 
+> ⚠️ **Desde 2026-08-20, o Cancelamento de Entrada pode ser recusado.** Cancelar uma compra
+> **debita** estoque — é a rotina de débito que ninguém lembra quando lista "saídas de estoque" —
+> e passa pela mesma regra das demais: se o lojista **desligar** "Permite quantidade de estoque
+> negativo" (Parâmetros do Sistema → Estoque), cancelar uma entrada cuja mercadoria já foi vendida
+> responde 409 e **nada** é revertido (nem o estorno, nem a marca de cancelado). Com o parâmetro no
+> padrão (ligado), nada muda. Teste:
+> `CancelamentoEntradaCrudTest.cancelarEntradaCujaMercadoriaJaSaiuEhBloqueado`.
+
 > **Estado de implementação (2026-08-14).** Todas as "Questões abertas" abaixo foram
 > respondidas "sim" pelo dono do produto e a maioria dos **[COMPLEMENTAR]** ao longo do
 > documento reflete decisões já tomadas durante a implementação (mantidos no corpo do texto

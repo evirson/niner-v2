@@ -25,7 +25,11 @@ abas"):** as quatro seções do detalhamento viraram abas — **Dados Gerais**, 
 **Movimentação de Caixa** e **Parcelas de Crediário** (esta última só aparece como aba quando
 `detalhe.temParcelasCredario`, senão a venda não tem crediário e a aba ficaria vazia). O popup
 também ganhou o botão **"Reimprimir papeleta"** no cabeçalho — reaproveita `ComprovantePapeletaModal`
-em modo `reimpressao` (mesmo componente já usado na extinta `ReimpressaoPapeletaVenda.tsx`),
+em modo `reimpressao` (mesmo componente já usado na extinta `ReimpressaoPapeletaVenda.tsx`).
+⛔ **Desde 2026-08-20 o botão NÃO aparece para venda cancelada**, e o servidor recusa o comprovante
+com 409 mesmo que alguém chame o endpoint direto: papel impresso circula, e um cupom de venda
+cancelada é um documento afirmando uma venda que não existe mais (ver `docs/telas/papeleta-venda.md`).
+O popup de reimpressão é
 empilhado por cima do popup de detalhe (usa `Fragment` para não aninhar dentro do
 `.modal-overlay` do detalhe — senão um clique no fundo do popup de reimpressão fecharia os dois
 por bubbling). O popup em si passou a ter **altura fixa** (`height: 78vh`) — antes seguia a

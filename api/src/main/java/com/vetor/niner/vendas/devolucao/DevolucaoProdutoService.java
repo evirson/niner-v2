@@ -325,7 +325,9 @@ public class DevolucaoProdutoService {
 
     /** Resolve descrição/variação/preço de cada item a partir do {@code idVariacao} — a tela
      *  nunca envia preço nem descrição (mesmo princípio do PDV/Transferência). Não checa
-     *  saldo — saldo negativo é permitido de propósito em qualquer movimentação (2026-07-29).
+     *  saldo, e aqui isso nunca importaria: devolução do consumidor só SOMA estoque. (O débito
+     *  é que passa pela regra de estoque negativo — trigger `fn_atualiza_estoque_movimento`,
+     *  V054/V055. Ver `docs/telas/configuracao-geral.md`.)
      *
      *  <p>{@code precosOriginais} (2026-08-19) tem prioridade sobre o preço do cadastro sempre que
      *  a variação estiver lá (ou seja, quando a devolução está amarrada a uma venda — ver

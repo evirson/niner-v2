@@ -18,6 +18,7 @@ Acquisition is self-service via a **public site** with a **60-day, no-card trial
 - `cadastros/` — cliente (+ histórico), fornecedor, funcionário, plano de contas, **crm**
 - `catalogo/` — produto (variação/cor/grade, NCM, imagens em object storage)
 - `estoque/` — entrada por compra (manual/planilha/XML), **devolução ao fornecedor** (+ NF-e 55 de saída), transferência, balanço, relatórios (estoque, movimentação/kardex)
+- **Parâmetros que mudam o comportamento de módulo inteiro** (`cfg_geral`): `cfg_permite_estoque_negativo` (V055, ligado por padrão — controle de estoque é opt-in), `cfg_usa_cor_grade`, `cfg_permite_qtd_decimal`, `cfg_emite_fiscal_apos_venda`. Ver `docs/telas/configuracao-geral.md` antes de assumir comportamento fixo em qualquer rotina de estoque ou venda.
 - `vendas/` — PDV, cancelamento, devolução + vale-mercadoria, cancelamento de devolução, pesquisa, relatórios (vendas, comissões, contas a receber)
 - `financeiro/` — caixa (abertura/fechamento/**reabertura**), recebimento de crediário (+ estorno), contas a pagar, conta corrente, **dre**, **fluxocaixa**
 - `configuracao/` — parâmetros do sistema, etiqueta (config + emissão), importação e exportação de dados

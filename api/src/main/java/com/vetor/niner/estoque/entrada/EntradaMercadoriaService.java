@@ -657,9 +657,9 @@ public class EntradaMercadoriaService {
 
     /** Resolve descrição/variação/preço-de-venda-atual de cada item a partir do {@code
      *  idVariacao} — a tela nunca envia esses dados, só {@code idVariacao}/{@code qtd}/{@code
-     *  precoCusto} (mesmo princípio do PDV/Devolução/Transferência). Não checa saldo — saldo
-     *  negativo é permitido de propósito em qualquer movimentação (2026-07-29); entrada nunca
-     *  teria saldo negativo de qualquer forma (só soma). */
+     *  precoCusto} (mesmo princípio do PDV/Devolução/Transferência). Não checa saldo, e aqui isso
+     *  nunca importaria: entrada só SOMA. Débito é que passa pela regra de estoque negativo
+     *  (trigger `fn_atualiza_estoque_movimento`, V054/V055). */
     /**
      * Grava a tributação que o fornecedor declarou, item a item, em {@code entrada_nfe_item} (V051).
      *

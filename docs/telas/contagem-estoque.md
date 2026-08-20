@@ -1,6 +1,12 @@
 # Spec: Rotina de Contagem de Estoque                Status: Aprovada
 Autor: Claudio Calixto (dono do produto) · Data: 2026-08-04 · Módulo(s): `estoque` · Fase: 2
 
+> ⚠️ **Desde 2026-08-20, efetivar o balanço pode ser recusado.** O ajuste de contagem debita
+> estoque quando o contado é menor que o sistema, e passa pela mesma regra das demais rotinas: se
+> o lojista **desligar** "Permite quantidade de estoque negativo" (Parâmetros do Sistema →
+> Estoque), nenhum débito pode deixar o saldo abaixo de zero — inclusive este. Com o parâmetro no
+> padrão (ligado), nada muda. Ver `docs/telas/configuracao-geral.md`.
+
 ## Problema
 
 Não existe nenhuma forma de conferir o estoque físico da loja contra o que o sistema acha que

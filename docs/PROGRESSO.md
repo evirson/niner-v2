@@ -68,12 +68,30 @@ Registro cronológico das decisões e entregas. Atualizar a cada marco relevante
 > (handler de exceção, coluna `tentativa`, e o prazo de cancelamento da NFC-e exposto na tela
 > ANTES do usuário tentar).
 >
+> 🚚 **2026-08-20 — Devolução de Produtos Comprados (devolução ao fornecedor) entrou inteira.**
+> Baixa de estoque + **NF-e 55 de saída**, espelhando os impostos da nota de entrada. Exigiu que
+> o **XML da entrada** passasse a ser arquivado no MinIO e que a **tributação por item** da nota
+> do fornecedor fosse gravada (`entrada_nfe_item`, V051) — consequência que a tela diz por
+> extenso: **entrada anterior a 20/08/2026, manual ou por planilha, não é devolvível.** Fecha a
+> DF14 e tira a operação da lista de "futuras" do §4.2 do estudo fiscal.
+> ⚠️ **Nunca foi transmitida à SEFAZ** — reusa o montador homologado do B9, mas depende do CSRT
+> acima e de homologação real. Ver `docs/telas/devolucao-compra.md`.
+>
+> 📦 **2026-08-20 — controle de estoque virou parâmetro, e a regra mora na trigger.**
+> `cfg_permite_estoque_negativo` (Parâmetros do Sistema → Estoque) **nasce ligado**: a loja típica
+> não faz gestão de estoque e o caixa não deve travar por um número que ninguém alimenta. Quem
+> **desliga** ganha o controle inteiro: nenhuma rotina tira mais do que existe, contado **por
+> empresa**. A checagem ficou em `fn_atualiza_estoque_movimento` (V054), não nos serviços, porque
+> o pedido dizia "vendas, transferências, devolução ao fornecedor, **e etc**" — e o "e etc" inclui
+> o **cancelamento de entrada**, que debita estoque e que ninguém lembra. Também neste dia: **venda
+> cancelada perdeu a reimpressão de papeleta** (409 no comprovante), porque papel impresso circula.
+>
 > ⚠️ **A MITRYUSCASH é a desenvolvedora, não uma cliente** — o certificado é da casa de software e
 > ela nunca emitirá em produção. Cada comprador do ERP terá um regime próprio (Simples, Presumido,
 > Real ou MEI), então o teste de tabela do motor (§16.1) é a **superfície principal do produto**, não
 > cobertura de borda.
 >
-> **Resumo em uma linha (2026-08-14):** ERP com **~40 telas** ponta a ponta cobrindo cadastros,
+> **Resumo em uma linha (2026-08-20):** ERP com **~42 telas** ponta a ponta cobrindo cadastros,
 > catálogo, estoque (incl. entrada por XML de NF-e), PDV e vendas, financeiro completo (caixa,
 > crediário, contas a pagar/receber, conta corrente, **DRE e Fluxo de Caixa**), relatórios,
 > etiquetas e importação/exportação. **Falta o coração da visão original**: integração com

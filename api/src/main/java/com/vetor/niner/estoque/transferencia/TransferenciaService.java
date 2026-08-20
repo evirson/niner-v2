@@ -243,9 +243,15 @@ public class TransferenciaService {
 
     /**
      * Valida que cada item (variação) existe e está ativo, e resolve o custo atual do cadastro
-     * (gravado no ledger — 2026-08-04). Não checa saldo disponível na origem — saldo negativo é
-     * permitido de propósito em qualquer movimentação de produto, entrada ou saída (pedido
-     * direto do dono do produto, 2026-07-29).
+     * (gravado no ledger — 2026-08-04).
+     *
+     * <p>⚠️ <b>Não checa saldo na origem, e não deve passar a checar.</b> Desde a V054 quem barra
+     * o débito é a trigger `fn_atualiza_estoque_movimento`, no único caminho por onde
+     * `produto_estoque` se mexe — e só quando o lojista <b>desliga</b>
+     * `cfg_permite_estoque_negativo` (que nasce ligado, V055). Duplicar a checagem aqui criaria
+     * duas verdades sobre a mesma regra; a de 2026-07-29 ("saldo negativo permitido em qualquer
+     * movimentação") deixou de ser incondicional em 2026-08-20. Ver
+     * `docs/telas/configuracao-geral.md`.
      */
     private List<ItemResolvido> resolverItens(List<ItemTransferenciaRequest> itens, long idEmpresaOrigem) {
         boolean permiteQtdDecimal = configuracaoGeralService.permiteQtdDecimalProduto();

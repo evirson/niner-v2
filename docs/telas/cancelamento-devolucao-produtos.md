@@ -1,6 +1,12 @@
 # Spec: Cancelamento de Devolução de Produtos              Status: Aprovada
 Autor: Claudio Calixto (dono do produto) · Data: 2026-08-10 · Módulo(s): `vendas` (cancelamentodevolucao) · Fase: 2 — Vendas/Financeiro
 
+> ⚠️ **Desde 2026-08-20, este cancelamento pode ser recusado.** Ele **debita** estoque (a
+> mercadoria que a devolução tinha devolvido sai de novo), então passa pela mesma regra das demais
+> rotinas: se o lojista **desligar** "Permite quantidade de estoque negativo" (Parâmetros do
+> Sistema → Estoque), nenhum débito pode deixar o saldo abaixo de zero. Com o parâmetro no padrão
+> (ligado), nada muda. Ver `docs/telas/configuracao-geral.md`.
+
 ## Problema
 
 Depois que a Devolução de Produtos passou a emitir um vale-mercadoria por devolução

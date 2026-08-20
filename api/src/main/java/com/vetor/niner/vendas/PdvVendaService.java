@@ -711,8 +711,16 @@ public class PdvVendaService {
     }
 
     /**
-     * Resolve preço/variação de TODOS os itens antes de gravar. Não checa estoque disponível —
-     * saldo negativo é permitido de propósito em qualquer movimentação (2026-07-29). Quantidade
+     * Resolve preço/variação de TODOS os itens antes de gravar.
+     *
+     * <p>⚠️ <b>Não checa estoque, e não deve passar a checar.</b> Desde a V054 quem barra o débito
+     * é a trigger `fn_atualiza_estoque_movimento`, no único caminho por onde `produto_estoque` se
+     * mexe — e só quando o lojista <b>desliga</b> `cfg_permite_estoque_negativo` (que nasce
+     * ligado, V055: a loja típica não faz gestão de estoque e o caixa não deve travar). Duplicar
+     * a checagem aqui criaria duas verdades sobre a mesma regra. Ver
+     * `docs/telas/configuracao-geral.md`.
+     *
+     * <p>Quantidade
      * decimal só é aceita se {@code cfg_geral.cfg_permite_qtd_decimal} estiver ligado
      * (Parâmetros do Sistema) — mesma regra em qualquer lugar que grava {@code qtd_produto}.
      */
