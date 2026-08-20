@@ -203,10 +203,15 @@ Detalhe técnico completo: [[feedback_react_query_cache_entre_telas]] (memória)
 Fecha a pergunta **DF20** (`docs/MODULOFISCAL.md` §10.2, "a pergunta mais importante do v1, e
 ainda sem resposta") e o item **B9** do roteiro fiscal (NF-e de devolução), que dependiam dela.
 
-> **Estado (2026-08-19):** a **grid de seleção por venda está implementada e testada ao vivo**; a
-> **NF-e de devolução emite ponta a ponta** (assembler → montador → assinatura → transporte →
-> persistência), coberta por teste de integração com certificado real. Falta o **DANFE A4** (o
-> documento impresso) e o teste ao vivo contra a SEFAZ de homologação.
+> **Estado (2026-08-19, fim do dia):** tudo implementado e testado ao vivo — grid de seleção,
+> emissão ponta a ponta (assembler → montador → assinatura → transporte → persistência) e o
+> **DANFE A4**. O teste contra a SEFAZ-PR de homologação foi feito e **derrubou duas premissas**
+> (ver "O que a SEFAZ recusou", abaixo).
+>
+> ⏭️ **Pendência que não é código:** a SEFAZ responde `cStat 974` ("CNPJ do responsavel tecnico
+> diverge do cadastrado") — a **Vetor precisa se cadastrar como responsável técnico no portal da
+> SEFAZ de cada UF e obter o CSRT**. Até lá nenhuma NF-e 55 autoriza de verdade; a devolução e o
+> vale funcionam normalmente (F3), e a NFC-e do dia a dia não é afetada.
 
 ### Dois modos de operação, decididos pelo mesmo parâmetro que já existe
 
@@ -245,15 +250,37 @@ resolvido com NFC-e autorizada**):
 | Número da venda informado, mas sem NFC-e (F12 desligado, ou nota rejeitada/não emitida) | **Não** — só vale-mercadoria, como hoje |
 | **Sem número de venda nenhum** | **Não** — mesmo tratamento do caso acima. Decidido via `AskUserQuestion`: sem nenhum documento de origem pra referenciar, uma "nota de devolução" deixa de ter base fiscal (seria juridicamente outra coisa — aquisição de terceiro não-contribuinte, fora de escopo). Revisitar só se/quando confirmado com o contador que há uma base segura. |
 
-**⚠️ Achado de pesquisa que precisa de confirmação do contador antes de ir pra produção:** existe
-uma mudança regulatória recente (**Ajuste SINIEF nº 8/2026**, em vigor desde 2026-05/08) que
-reestrutura como devolução deve ser referenciada — distinguindo devolução **total** (`refNFe`,
-referência simples pela chave) de **parcial** (grupo `DFeReferenciado`, item a item). As fontes
-consultadas não deixam claro se isso já vale pro consumidor final de balcão (NFC-e) ou só entre
-contribuintes (B2B) — não é algo pra eu decidir sozinho. Enquanto não confirmado, o padrão
-histórico documentado (CFOP 1.202 interno/2.202 interestadual, `dest` = próprio CNPJ da loja
-quando o consumidor original não foi identificado) é o ponto de partida, mas a estrutura exata de
-referência por item precisa ser revisada à luz dessa mudança antes de codar o montador do XML.
+✅ **Confirmado com o contador em 2026-08-19**, e depois **corrigido pela própria SEFAZ** — ver a
+seção seguinte. O padrão adotado é CFOP **1202** (interno) / **2202** (interestadual), ou **1411**
+quando o item tem ST, e `dest` = **próprio CNPJ da loja** quando o consumidor original não foi
+identificado (a decisão da DF20), com a chave da nota de origem nas informações complementares.
+
+### 🔴 O que a SEFAZ recusou, e o XSD tinha aprovado (2026-08-19)
+
+Transmitindo de verdade contra a SEFAZ-PR de homologação, duas premissas caíram. Nenhuma das duas
+apareceria em teste local: **o XSD não é o contrato completo** — as regras que respondem `cStat`
+vivem no autorizador, não no schema.
+
+**1. `cStat 1010` — os dois níveis de referência são mutuamente exclusivos.**
+A leitura literal do **Ajuste SINIEF 8/2026** sugeria referenciar a nota de origem nos dois
+níveis: `ide/NFref/refNFe` (a nota inteira) **e** `det/DFeReferenciado` (chave + `nItem`, item a
+item). O XSD oficial aceitou os dois juntos. A SEFAZ não: *"NF-e com referenciamento de documento
+a nivel de nota e a nivel de item"*.
+
+Ficou **só o de item**, que é estritamente mais informativo — carrega a mesma chave, mais o
+`nItem` — e é o que torna a devolução **parcial** rastreável, o caso comum do balcão. A
+**ausência** do `NFref` virou asserção de teste (`referenciaANotaOriginalSomenteItemAItem`), para
+não voltar por refatoração.
+
+**2. `cStat 975` — a NF-e 55 exige o CSRT, a NFC-e não.**
+O grupo `infRespTec` existia desde o B7, mas sem o par `idCSRT`/`hashCSRT` (NT 2018.005) — e a
+NFC-e do PR autoriza sem eles, por isso o emissor rodou meses sem que faltasse nada. A primeira
+NF-e 55 foi recusada de cara. O hash é `Base64(SHA-1(CSRT + chave))` sobre o digest **bruto** (28
+caracteres, não o hex) e a chave nos **44 dígitos sem o prefixo `NFe`** — detalhes e armadilhas em
+`docs/MODULOFISCAL.md` §9.9.
+
+Sem CSRT configurado, a montagem **falha explicitamente** (F11) citando as variáveis de ambiente,
+em vez de assinar e transmitir uma nota que já se sabe recusada.
 
 ### O que o schema já tem pronto (achado bom — B9 é mais barato do que parecia)
 
@@ -267,9 +294,9 @@ Toda a base de dados pro modelo 55 **já existe**, semeada desde o B4/B6 sem nun
 - `documento_fiscal_referencia` já existe **exatamente** pra isso: "a devolução referencia a
   NFC-e original" está no comentário da tabela desde que foi criada (V035).
 - O transporte (`SefazTransporte`), a assinatura (`AssinadorXmlNfe`) e os 243 XSD oficiais já são
-  agnósticos de modelo — o que falta é só o **montador do XML** (um `MontadorXmlNfeDevolucao`,
-  espelhando os valores tributários já gravados em `documento_fiscal_item` da nota original, sem
-  reprocessar pelo motor tributário) e o **DANFE A4** (hoje só existe o DANFCE térmico, 80mm).
+  agnósticos de modelo — faltavam só o **montador do XML** (`MontadorXmlNfeDevolucao`, espelhando
+  os valores tributários já gravados em `documento_fiscal_item` da nota original, sem reprocessar
+  pelo motor tributário) e o **DANFE A4**. Ambos feitos em 2026-08-19.
 
 ### Preço da devolução passou a ser o da VENDA, não o do cadastro (2026-08-19)
 
@@ -299,6 +326,11 @@ três coisas que a leitura do MOC não anteciparia:
 
 A terceira é a mais traiçoeira: a documentação do próprio XSD contradiz o schema do próprio XSD.
 Está fixada como asserção de teste para o par não voltar a divergir em silêncio.
+
+⚠️ A primeira virou **fato histórico**: o `NFref` não é mais emitido (a SEFAZ recusa junto com o
+`DFeReferenciado`, `cStat 1010` — ver acima). A linha fica porque a ordem no `ide` continua sendo
+o que o XSD exige *se* algum dia um documento deste projeto precisar do grupo. E as três juntas
+ensinam o limite do método: **passar no XSD não é passar na SEFAZ**.
 
 ### 🔴 Gap achado e corrigido: `documento_fiscal_item` nunca era gravada (2026-08-19)
 
@@ -354,12 +386,34 @@ emissão começa.
 - Se a venda referenciada ainda está dentro dos 30 min de cancelamento da NFC-e, vale sugerir
   "cancele a venda direto" em vez de devolução+nota nova? (Cancelamento desfaz tudo; devolução
   pode ser parcial — talvez os dois caminhos devam conviver, sem um substituir o outro.)
-- DANFE A4 — layout de referência recebido do dono do produto (`c:\fix\danfe_55.pdf`, NF-e real de
-  outro emissor): canhoto destacável, cabeçalho em 3 colunas (emitente / DANFE+tipo / chave de
-  acesso), natureza da operação + protocolo, destinatário, fatura/duplicata, cálculo do imposto em
-  duas faixas de caixas, transportador, tabela de produtos (código, descrição, NCM, O/CST, CFOP,
-  un, qtd, unitário, total, BC ICMS, valor ICMS, alíquotas) e dados adicionais. Ainda não
-  implementado — hoje só existe o DANFCE térmico de 80mm.
+- **CSRT do responsável técnico** — ⏭️ **pendência de credencial, não de código.** A Vetor precisa
+  se cadastrar como responsável técnico no portal da SEFAZ de **cada UF** e obter o CSRT; enquanto
+  isso a resposta é `cStat 974`. Ver `docs/MODULOFISCAL.md` §9.9.
+
+### ✅ DANFE A4 — implementado em 2026-08-19
+
+Layout de referência recebido do dono do produto (`c:\fix\danfe_55.pdf`, NF-e real de outro
+emissor) e reproduzido em `web/src/pages/vendas/DanfeImprimir.tsx`: canhoto destacável, cabeçalho
+em 3 colunas (emitente / DANFE+tipo / chave de acesso em grupos de 4), natureza da operação +
+protocolo, destinatário, cálculo do imposto em duas faixas de caixas, transportador, tabela de
+produtos (código, descrição, NCM, O/CST, CFOP, un, qtd, unitário, total, BC ICMS, valor ICMS,
+alíquota) e dados adicionais.
+
+Servido por `GET /api/v1/fiscal/documentos/{id}/danfe`, que devolve **só JSON** — nenhuma
+biblioteca de PDF no backend; a impressão é o diálogo nativo do navegador, que também oferece
+"Salvar como PDF". Aberto de dois lugares: o popup do vale-mercadoria (logo após a devolução) e a
+tela de **Documentos Fiscais** (reimpressão, ícone só em modelo 55 autorizado). Modelo 65 responde
+**409** — NFC-e não tem DANFE, tem DANFCE.
+
+⚠️ Duas armadilhas de CSS, ambas invisíveis na tela e em teste automatizado:
+- **`@page` nomeado é obrigatório.** O `@page` global do projeto é `size: 80mm auto` (bobina
+  térmica); sem `@page danfe-a4` + `page: danfe-a4`, o navegador espreme a folha A4 inteira em
+  80mm. Mesmo padrão do `@page guia-transferencia-a4`.
+- **Nada de `transform: scale` na pré-visualização.** `transform` não encolhe a *caixa* de layout:
+  o wrapper mantinha a largura original e o modal ganhava barra de rolagem horizontal para um
+  conteúdo que já cabia. A folha tem 210mm ≈ 794px e cabe inteira num modal de 850px, em tamanho
+  real. E o modal precisou de `width` explícito, não só `maxWidth` — a classe `.modal` já define
+  largura própria, menor, e `maxWidth` sozinho apenas limita.
 
 ## User stories
 
@@ -419,14 +473,25 @@ obrigatório.
 ## Contrato de API
 
 ```
-GET  /api/v1/vendas/devolucao/vendedor?numeroVenda=123    → { numeroVenda, idFuncionario, nomeFuncionario, itens: [{ idVariacao, sku, descricaoProduto, variacaoCor, variacaoTamanho, qtdVendida, qtdDisponivelDevolucao }] } | 404
+GET  /api/v1/vendas/devolucao/vendedor?numeroVenda=123    → { numeroVenda, idFuncionario, nomeFuncionario, itens: [{ idVariacao, sku, descricaoProduto, variacaoCor, variacaoTamanho, qtdVendida, qtdDisponivelDevolucao, precoUnitario, valorTotal }] } | 404
 GET  /api/v1/vendas/devolucao/vale/{idDevolucao}           → { idDevolucao, valorVale, valeUsado, cancelada, dataDevolucao, idVendaCredito, idVendaDebito }
 GET  /api/v1/pdv/produtos/codigo/{codigo}                  → reaproveita o endpoint já existente do PDV
 GET  /api/v1/config-geral/exige-numero-venda-devolucao     → { cfgExigeNumeroVendaDevolucao } (qualquer papel)
+GET  /api/v1/fiscal/documentos/{idDocumentoFiscal}/danfe   → { chaveAcesso, modelo, serie, numero, naturezaOperacao, situacao, homologacao, protocolo, emitente, destinatario, itens[], totais, informacoesComplementares } | 409 se modelo 65
 POST /api/v1/vendas/devolucao
      { numeroVenda?: number, itens: [{ idVariacao, qtd }] }
-     → { idMovimento, idDevolucao, valorVale, dataMovimento, idFuncionario, nomeFuncionario, itens }
+     → { idMovimento, idDevolucao, valorVale, dataMovimento, idFuncionario, nomeFuncionario, itens,
+         notaFiscal: { situacao, idDocumentoFiscal, chaveAcesso, protocolo, cStat, mensagem } | null }
 ```
+
+`precoUnitario`/`valorTotal` no endpoint do vendedor são o que a **grid de seleção** mostra: o
+preço que o cliente **pagou naquela venda**, não o do cadastro de hoje.
+
+`notaFiscal` vem `null` quando não havia nota a emitir (fiscal desligado, devolução sem venda de
+origem, ou venda sem NFC-e autorizada). Situação diferente de `AUTORIZADO` **não desfaz a
+devolução** (F3) — o popup mostra o motivo da SEFAZ e avisa que o vale continua válido; a nota
+fica em Documentos Fiscais para reprocessar. O DANFE (`/danfe`) é o mesmo endpoint usado pelo
+botão "Ver DANFE" do popup do vale e da tela de Documentos Fiscais.
 
 `ValeMercadoriaResponse` devolve o próprio `idDevolucao` (é o número do vale, o que o operador
 digita no PDV) e o par de flags que decide se o vale ainda vale: **`valeUsado`** (já resgatado
@@ -495,9 +560,10 @@ incluindo o cancelamento reabrindo o vale). Suíte completa do projeto: **500/50
 
 ## Impacto nas integrações
 
-Nenhum ainda — comissão e TEF ficam fora do v1. **Documento fiscal deixou de ser non-goal em
-2026-08-19** (planejamento, não implementado) — ver "Revisão 2026-08-19" acima; até esse trabalho
-ser codado, toda devolução continua sem nota fiscal, igual a hoje.
+Comissão e TEF ficam fora do v1. **Documento fiscal deixou de ser non-goal em 2026-08-19 e está
+implementado**: devolução de venda com NFC-e autorizada emite uma **NF-e modelo 55 de entrada**
+(bloco B9 do roteiro fiscal), com DANFE em A4 — ver "Revisão 2026-08-19" acima. A emissão acontece
+**fora** da transação da devolução (F2) e a falha dela **não desfaz** a devolução (F3).
 
 ## Non-goals
 

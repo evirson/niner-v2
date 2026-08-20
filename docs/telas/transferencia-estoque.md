@@ -104,7 +104,9 @@ volta para a listagem.
 - **Filtros (novo, 2026-07-29):** Data Inicial, Data Final, Nº da Transferência, Empresa de
   Saída, Empresa de Entrada — nessa ordem na barra. `GET /api/v1/estoque/transferencias` ganhou
   os query params `idTransferencia`/`idEmpresaOrigem`/`idEmpresaDestino`/`dataInicial`/
-  `dataFinal` (datas comparadas por `::date`, sem hora).
+  `dataFinal` (datas comparadas por `(coluna AT TIME ZONE 'America/Sao_Paulo')::date`, sem hora —
+  o `::date` cru sobre a coluna, usado até 2026-08-19, jogava toda transferência feita depois das
+  21:00 de Brasília no dia seguinte, porque a sessão do Postgres roda em `Etc/UTC`).
 - **Paginação:** por número de página, tamanho fixo em 50 — mesmo padrão do resto do projeto.
 - **Ação por linha:** visualizar (ícone verde) **e excluir (ícone vermelho, novo em
   2026-07-29)** — ver "Exclusão de transferência" abaixo. Não existe editar.

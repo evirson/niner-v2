@@ -109,9 +109,10 @@ inteira; desligado, nenhum dado de horário é pedido nem aplicado.
 **Modelo de dados** — `usuario.controla_horario_acesso boolean` + nova tabela
 `usuario_horario_acesso` (`db/migration/V033__usuario_horario_acesso.sql`): PK composta
 `(id_tenant, id_usuario, dia_semana)`, `dia_semana smallint 1..7` em **ISO** (1=segunda,
-7=domingo — bate com `EXTRACT(ISODOW FROM ...)` do Postgres e `DayOfWeek.getValue()` do Java,
-sem tradução manual de índice), `hora_inicio`/`hora_fim time` nulos juntos = sem acesso naquele
-dia. Quando o controle está ligado sempre existem as 7 linhas (idioma "apaga tudo e reinsere",
+7=domingo — bate com `EXTRACT(ISODOW FROM (now() AT TIME ZONE 'America/Sao_Paulo'))` do Postgres
+e `DayOfWeek.getValue()` do Java, sem tradução manual de índice), `hora_inicio`/`hora_fim time`
+nulos juntos = sem acesso naquele dia.
+Quando o controle está ligado sempre existem as 7 linhas (idioma "apaga tudo e reinsere",
 mesma técnica de `usuario_empresa` acima). RLS padrão do projeto (P8).
 
 **Dois pontos de bloqueio, tolerâncias diferentes** — resolve a tensão "bloquear fora do
@@ -122,13 +123,22 @@ horário" × "nunca cortar uma venda no meio":
   do filtro de tenant) — **15 minutos** de tolerância depois do `hora_fim` nominal do dia, pra
   dar tempo de terminar/emitir/imprimir uma venda já iniciada antes do horário fechar.
 - Único ponto de verdade da regra: `HorarioAcessoService.podeAcessarAgora(idUsuario,
-  toleranciaMinutos)` — uma única query SQL usando `now()` do **servidor** Postgres (nunca o
-  relógio do processo Java nem, muito menos, o do cliente — requisito explícito do produto). A
-  tolerância soma no domínio de TIMESTAMP (`current_date + hora`), nunca em `time` puro:
-  `time + interval` do Postgres embrulha na virada da meia-noite (ex.: 23:50 + 15min vira
+  toleranciaMinutos)` — uma única query SQL usando o relógio do **servidor** Postgres (nunca o
+  relógio do processo Java nem, muito menos, o do cliente — requisito explícito do produto), mas
+  sempre lido no fuso da loja: `(now() AT TIME ZONE 'America/Sao_Paulo')`. A tolerância soma no
+  domínio de TIMESTAMP (`(now() AT TIME ZONE 'America/Sao_Paulo')::date + hora`), nunca em `time`
+  puro: `time + interval` do Postgres embrulha na virada da meia-noite (ex.: 23:50 + 15min vira
   00:05, um limite superior *menor* que o inferior, quebrando a comparação sempre que o fim do
   expediente cai nos últimos 15 minutos do dia) — bug real encontrado na verificação manual,
   coberto por teste de regressão com timestamps fixos.
+- **Segundo bug real, do fuso (corrigido 2026-08-19):** a sessão do Postgres roda em `Etc/UTC`, e
+  a versão anterior usava `now()`/`current_date` crus nos dois lugares — a janela era montada
+  sobre a data errada **e** o dia da semana era consultado errado. Depois das 21:00 de Brasília o
+  banco já está no dia seguinte, então uma sexta-feira às 21h era consultada como **sábado**: o
+  usuário com horário controlado era expulso do sistema pela linha do dia errado (ou por não
+  existir linha nenhuma, se o sábado dele fosse "sem acesso"). Aqui não basta converter a
+  comparação — o `EXTRACT(ISODOW ...)` que escolhe a linha de `usuario_horario_acesso` tem que
+  ser feito sobre o horário local também.
 - Mensagem de erro compartilhada entre os dois pontos: `"Fora do horário de acesso
   permitido."` (`HorarioAcessoService.MENSAGEM_FORA_DA_JANELA`) — o frontend casa por essa
   string exata pra distinguir esse 403 de qualquer outro.

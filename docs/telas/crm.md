@@ -58,7 +58,7 @@ use popup quando precisar.
 |---|---|---|---|
 | 1.1/1.2 | Cliente Inicial / Final | `cliente.nome` | Compara só a **primeira letra** do nome (o exemplo do pedido é literalmente "A"/"Z") — evita a armadilha clássica de comparação lexicográfica de string onde `nome <= 'Z'` excluiria "Zeca" (que é `> 'Z'` como string). |
 | 1.3 | Gênero | `cliente.genero` (ENUM) | Multi-seleção (`MultiSelectGenerico`). |
-| 1.4 | Idade De/Até | `cliente.data_nascimento` | `EXTRACT(YEAR FROM age(...))`; cliente sem data cadastrada nunca aparece quando o filtro está ativo (comum em Pessoa Jurídica). |
+| 1.4 | Idade De/Até | `cliente.data_nascimento` | `EXTRACT(YEAR FROM age((now() AT TIME ZONE 'America/Sao_Paulo')::date, data_nascimento))`; cliente sem data cadastrada nunca aparece quando o filtro está ativo (comum em Pessoa Jurídica). **Única exceção do sweep de fuso de 2026-08-19 em coluna `date`:** `data_nascimento` é `date` de verdade e ficou como está, mas o "hoje" comparado com ela **não** era — o `age()` de um argumento só usa `current_date`, que a partir das 21:00 de Brasília já é o dia seguinte (a pessoa "fazia aniversário" cedo demais na virada). Por isso o hoje local entrou explícito como primeiro argumento. |
 | 1.5 | Aniversário De/Até | `cliente.data_nascimento` | Só mês/dia (`to_char(..., 'MM-DD')`), ignora o ano — suporta intervalo cruzando a virada do ano (ex.: 20/12 a 10/01). Campo de tela é `dd-mm` (dia primeiro, mesma convenção do resto do sistema), convertido pra `mm-dd` antes de comparar. |
 | 1.6 | Categoria do Cliente | `cfg_categoria_cliente` | Multi-seleção; reaproveita `GET /api/v1/categorias-cliente` já existente. |
 | 1.7 | Período de Cadastro | `cliente.criado_em` | Range fechado — os dois lados juntos ou nenhum. |
@@ -99,8 +99,9 @@ nova consulta.
   pras outras 3 colunas de agregado, sem `JOIN` extra.
 - **Ticket Médio** = `valor_total / nº_de_compras`, com `NULLIF` no divisor (cliente sem compra
   nenhuma dá `NULL`, não erro/divisão por zero).
-- **Nº de Dias sem Comprar** = `current_date - última_compra` (mesmo cálculo do filtro 1.8, mas
-  aqui como coluna de saída, sempre presente mesmo que o filtro não esteja ativo); `NULL` para
+- **Nº de Dias sem Comprar** = `(now() AT TIME ZONE 'America/Sao_Paulo')::date - última_compra`
+  (mesmo cálculo do filtro 1.8, mas aqui como coluna de saída, sempre presente mesmo que o filtro
+  não esteja ativo); `NULL` para
   quem nunca comprou (não "infinito" como no filtro — a coluna mostra o dado cru).
 
 ## Item 4 — Formato da Geração
@@ -150,7 +151,8 @@ aniversário (formato e par obrigatório), aniversário cruzando virada de ano, 
 tenant (RLS).
 
 **Bug real achado pelos próprios testes (rodada 2):** `rs.getObject(coluna, Long.class)` pra ler
-`dias_sem_ultima_compra` (resultado de `current_date - data`, tipo `integer` no Postgres) fazia
+`dias_sem_ultima_compra` (resultado de `(now() AT TIME ZONE 'America/Sao_Paulo')::date - data`,
+tipo `integer` no Postgres — a expressão mudou de fuso em 2026-08-19, o tipo devolvido não) fazia
 toda a chamada falhar com **HTTP 409** e uma mensagem de exclusão ("Registro em uso... não pode
 ser excluído" — pensada pro fluxo de `DELETE`, não `GET`), porque a coerção do driver JDBC do
 Postgres pra `Long` via `getObject(String, Class)` não é confiável para `int4`. Corrigido com o

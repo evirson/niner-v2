@@ -97,9 +97,17 @@ direto para o cadastro.
 
 A sessão do Postgres roda em UTC, mas a tela mostra datas em horário local do navegador —
 `dataVencimentoInicial/Final` e `dataPagamentoInicial/Final` comparam com
-`(coluna AT TIME ZONE 'America/Sao_Paulo')::date`, não a coluna crua (mesmo padrão adotado em
-Entrada de Produtos e Filtros de Entrada, 2026-08-12). Gravação de data usa meio-dia UTC
-(`T12:00:00Z`), não meia-noite, para não sofrer o mesmo efeito de fuso ao exibir de volta.
+`(coluna AT TIME ZONE 'America/Sao_Paulo')::date`, não a coluna crua. Gravação de data usa
+meio-dia UTC (`T12:00:00Z`), não meia-noite, para não sofrer o mesmo efeito de fuso ao exibir de
+volta.
+
+Isto nasceu como padrão local (adotado em Entrada de Produtos e Filtros de Entrada, 2026-08-12),
+mas **desde 2026-08-19 vale para o sistema inteiro**: o bug do caixa que sumia às 21h mostrou que
+não era caso isolado de filtro de tela, e sim sistêmico — `CURRENT_DATE`/`now()` crus viram o dia
+seguinte a partir das 21:00 de Brasília, e toda comparação de `coluna_timestamptz::date` estava
+respondendo pelo dia do banco, não pelo da loja. A correção passou por ~19 services. Regra atual:
+qualquer coluna `timestamptz` comparada como data vai com `AT TIME ZONE 'America/Sao_Paulo'`, dos
+dois lados (coluna e "hoje"); coluna que é `date` de verdade fica como está.
 
 ## Tela
 

@@ -91,6 +91,12 @@ Autor: Evirson (dono do produto) + Claude · Data: 2026-07-23, implementação 2
 >   horário achado e corrigido nesta rodada: a sessão do Postgres roda em UTC mas a tela mostra
 >   data em horário local do navegador — filtro de data e gravação de `dataMovimento` agora
 >   usam `(coluna AT TIME ZONE 'America/Sao_Paulo')` em vez de comparar/gravar em UTC puro.
+>   **Deixou de ser um conserto desta tela em 2026-08-19:** o caixa que sumia às 21:00 de
+>   Brasília (`CURRENT_DATE` no banco já é o dia seguinte) revelou que o problema era sistêmico,
+>   e a conversão virou convenção do sistema inteiro, aplicada em ~19 services — toda coluna
+>   `timestamptz` comparada como data leva `AT TIME ZONE 'America/Sao_Paulo'` nos dois lados
+>   (coluna e "hoje"); coluna que é `date` de verdade fica fora. Ver
+>   `docs/telas/abertura-caixa.md`.
 > - **Parâmetro "Usa Cor/Grade" desligado (2026-08-13)** — nenhum dos 3 fluxos pede ou mostra
 >   Cor/Tamanho, mesmo para um produto que já tenha `id_grade` gravado de uma sessão anterior
 >   (a grade é ignorada por completo enquanto o parâmetro estiver desligado — decisão explícita

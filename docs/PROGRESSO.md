@@ -25,9 +25,16 @@ Registro cronológico das decisões e entregas. Atualizar a cada marco relevante
 > (2026-08-18, MinIO/ADR-014 + `ArquivamentoXmlService`/`Job`: nota/evento/inutilização autorizados
 > arquivam sozinhos, `nfeProc` validado contra XSD, `GET .../xml` serve do bucket).
 >
-> ⏭️ **O que falta:** só **B9** (NF-e de devolução), travado pela **DF20** (regra de devolução sem
-> consumidor identificado, decisão do dono do produto ainda em aberto) — não bloqueia o resto do
-> produto, o v1 fiscal já emite, cancela, inutiliza, reprocessa e arquiva.
+> ✅ **B9 fechado em 2026-08-19** — a **DF20** foi decidida com o contador (devolução sem consumidor
+> identificado sai contra o CNPJ da própria loja) e a NF-e modelo 55 de devolução emite ponta a
+> ponta, com **DANFE em A4**. Blocos B0–B9 completos.
+>
+> ⏭️ **O que falta não é código: o CSRT.** A NF-e modelo 55 exige `idCSRT`/`hashCSRT` no
+> `infRespTec` (NT 2018.005) — a **Vetor precisa se cadastrar como responsável técnico no portal
+> da SEFAZ de cada UF** e obter o código. Sem ele a SEFAZ responde `cStat 974` ("CNPJ do
+> responsavel tecnico diverge do cadastrado") e nenhuma nota de devolução autoriza. **A NFC-e, que
+> é a operação do dia a dia da loja, não é afetada** — o PR não cobra CSRT no modelo 65. Ver
+> `docs/MODULOFISCAL.md` §9.9.
 >
 > 🔴✅ **Primeira emissão síncrona real contra a SEFAZ-PR fora de um script de PoC (2026-08-18)
 > achou e corrigiu um bug crítico:** a resposta síncrona real tem dois `cStat` (lote e nota) e
@@ -502,6 +509,87 @@ Movimentação de Conta Corrente) que ainda não tinham migrado pro `SeletorPlan
 ---
 
 ## Linha do tempo
+
+### 2026-08-19 — 🔴 Bug real corrigido: "hoje" era o dia do banco (UTC), não o da loja — o caixa aberto de manhã sumia às 21h
+
+Achado tentando fazer uma venda de teste às 21:30: `POST /api/v1/pdv/vendas` respondia **"Não há
+caixa aberto hoje para este usuário"** com o caixa aberto de manhã e nunca fechado. A sessão do
+Postgres roda em `Etc/UTC`, então `CURRENT_DATE` vira o dia **seguinte** às 21:00 de Brasília —
+e `caixa_mestre.data_abertura::date = CURRENT_DATE` deixa de casar. Toda loja que atende depois
+das 21h perdia o caixa no meio do expediente, e junto o Recebimento de Crediário e a baixa em
+dinheiro de Contas a Pagar, que passam pelo mesmo guard.
+
+O bug não era do caixa, era **sistêmico**: só três arquivos tinham sido corrigidos antes (Entrada
+de Produtos, Contas a Pagar e Fluxo de Caixa, todos por sintomas isolados); o resto do sistema
+continuava comparando `timestamptz::date` em UTC. Levantamento completo antes de mexer, e o
+segundo caso grave apareceu aí: `HorarioAcessoService` montava a janela de acesso sobre a data
+errada **e** consultava o dia da semana errado (`EXTRACT(ISODOW FROM now())` em UTC ⇒ sexta às
+21h é "sábado"), expulsando do sistema o usuário com horário controlado. Os outros ~14 erravam
+em silêncio — venda feita depois das 21h caía no dia seguinte em todo filtro e relatório
+(Pesquisa de Vendas, Cancelamento de Venda/Devolução, DRE, CRM, Kardex, Transferência, Conta
+Corrente, Etiquetas, Comissões, Contas a Receber, Recebimento de Crediário, Documentos Fiscais).
+
+Convenção aplicada em todos, a mesma dos três já corrigidos: `(coluna AT TIME ZONE
+'America/Sao_Paulo')::date`, e `(now() AT TIME ZONE 'America/Sao_Paulo')` onde havia
+`CURRENT_DATE`/`now()` crus. No `HorarioAcessoService` a comparação inteira passou a viver em
+timestamp **local**, preservando o cuidado anterior de somar a tolerância em domínio de timestamp
+(nunca em `time` puro, que embrulha na meia-noite — bug de 2026-08-11). Antes do sweep foi
+conferido no `information_schema` que toda coluna envolvida é `timestamptz`:
+`cliente.data_nascimento` e `conta_corrente.data_abertura` são `date` e ficaram de fora, exceto
+pelo `age()` do CRM, que passou a comparar contra o hoje local. 794 testes verdes.
+
+### 2026-08-19 — ⭐ B9 fechado no código: NF-e modelo 55 de devolução emitindo de verdade, DANFE em A4 — falta só o CSRT da Vetor na SEFAZ
+
+Fim do bloco B9 (§10.2), o último pendente do módulo fiscal. A devolução de produtos passa a
+emitir uma **NF-e modelo 55 de entrada** (`tpNF=0`, `finNFe=4`) referenciando a NFC-e da venda
+original, e o DANFE dela sai em **A4**, não na bobina.
+
+**A SEFAZ recusou duas coisas que o XSD tinha aprovado.** As duas só apareceram transmitindo de
+verdade contra a SEFAZ-PR de homologação, e cada uma virou teste:
+
+- **cStat 1010** — *"NF-e com referenciamento de documento a nivel de nota e a nivel de item"*.
+  A leitura literal do Ajuste SINIEF 8/2026 sugeria referenciar nos **dois** níveis
+  (`ide/NFref/refNFe` + `det/DFeReferenciado`), e o XSD aceitou os dois juntos. A SEFAZ não: são
+  mutuamente exclusivos. Ficou o de **item**, que é estritamente mais informativo (mesma chave,
+  mais o `nItem`) e é o que torna a devolução **parcial** rastreável — o caso comum do balcão. A
+  **ausência** do `NFref` virou assert, pra não voltar por refatoração.
+- **cStat 975** — *"Obrigatoria a informacao do identificador do CSRT e do Hash do CSRT"*. O
+  grupo `infRespTec` existia desde o B7, mas sem o par `idCSRT`/`hashCSRT` (NT 2018.005): a NFC-e
+  do PR autoriza sem eles, a NF-e 55 não. Implementado `XmlFiscal.hashCsrt` — SHA-1 de
+  `(CSRT + chave)`, o digest **bruto** em Base-64 (28 caracteres). Duas armadilhas registradas no
+  código: não é o *hex* do digest que vai pro Base-64, e a chave são os 44 dígitos sem o prefixo
+  `NFe` — errar qualquer uma dá cStat 976, que não diz qual das duas foi.
+
+⏭️ **Pendência que não é código:** a SEFAZ-PR agora responde **cStat 974** ("CNPJ do responsavel
+tecnico diverge do cadastrado"). A **Vetor precisa se cadastrar como responsável técnico no
+portal da SEFAZ de cada UF e obter o CSRT de verdade** (`NINER_FISCAL_RESPTEC_ID_CSRT` +
+`NINER_FISCAL_RESPTEC_CSRT`, segredo, via `.env`). O valor de dev é de teste e não autoriza nada
+— serviu pra provar que o caminho do hash está certo, já que a rejeição avançou de 975 pra 974.
+Enquanto isso, montar a NF-e 55 sem CSRT **falha explicitamente** (F11), com o nome das variáveis
+na mensagem, em vez de assinar e transmitir uma nota que já se sabe recusada.
+
+**DANFE A4** (`DanfeImprimir.tsx` + `DanfeModal.tsx`, `GET /api/v1/fiscal/documentos/{id}/danfe`):
+folha inteira conforme o layout de referência do MOC — canhoto, tarja de homologação, cabeçalho de
+3 colunas com a chave em grupos de 4, natureza + protocolo, destinatário, cálculo do imposto,
+transportador, itens e dados adicionais. Modelo 65 responde **409**: NFC-e não tem DANFE, tem
+DANFCE. Acessível de dois lugares — o popup do vale-mercadoria (logo após a devolução) e a tela de
+Documentos Fiscais (reimpressão). Duas armadilhas de CSS que só aparecem no pixel: (1) `@page`
+**nomeado** é obrigatório, porque o `@page` global do projeto é `size: 80mm auto` (bobina) e sem
+`@page danfe-a4` o A4 sairia espremido em 80mm; (2) nada de `transform: scale` na
+pré-visualização — `transform` não encolhe a *caixa* de layout, então o wrapper mantinha a largura
+original e o modal ganhava barra de rolagem horizontal para um conteúdo que já cabia (a folha tem
+210mm ≈ 794px e cabe inteira). O modal também precisou de `width` explícito, não só `maxWidth`: a
+classe `.modal` já define largura própria, menor, e `maxWidth` sozinho apenas limita.
+
+**Comportamento na falha (F3):** a nota rejeitada **não desfaz a devolução** — a mercadoria já
+voltou ao estoque e o vale já é do cliente. O popup mostra tarja amarela com o motivo real da
+SEFAZ e a frase de que o vale continua válido; a nota fica em Documentos Fiscais para
+reprocessar. Diferente de Cancelamento de Venda, onde cancelar a nota é **pré-condição**.
+
+Verificado ponta a ponta no navegador com venda real (595, dois produtos, NFC-e autorizada):
+devolução **parcial** de 1 das 2 unidades do segundo item gerou XML com
+`<DFeReferenciado><chaveAcesso>…</chaveAcesso><nItem>2</nItem>`, CFOP 1202, `infRespTec` com
+`idCSRT`/`hashCSRT`, e **sem** `NFref`. Ver `docs/telas/devolucao-produtos.md`.
 
 ### 2026-08-19 — Reimpressão de papeleta avisa "VENDA CANCELADA" já na primeira linha do cupom
 
@@ -7172,14 +7260,15 @@ com autenticação JWT real protegendo o ERP.
 
 **Retomar — ordem sugerida** (revisada em 2026-08-17):
 
-0. **⭐ Módulo fiscal — B0 a B8 fechados em 2026-08-17 (`docs/MODULOFISCAL.md` §17.1), mais
-   reprocessar/link público/Ver DANFCE pós-B8.** Emite NFC-e de verdade pela SEFAZ-PR, cancela,
-   inutiliza numeração, entra/sai de contingência sozinho e reprocessa documento preso. O que
-   falta: **B9 (NF-e de devolução)**, travado pela **DF20** (regra de devolução sem consumidor
-   identificado — decisão do dono do produto, ainda em aberto); e **Arquivamento** — o bucket
-   privado **já existe** desde 2026-08-17 (ADR-014, MinIO com WORM de 5 anos), falta o consumidor
-   que grava o `nfeProc` e preenche `xml_objeto_bucket`/`xml_hash`. Nenhum dos dois é urgente: o
-   v1 já cobre o ciclo de vida completo da NFC-e, que é a operação do dia a dia da loja piloto.
+0. **⭐ Módulo fiscal — B0 a B9 fechados no código (2026-08-19).** Emite NFC-e de verdade pela
+   SEFAZ-PR, cancela, inutiliza numeração, entra/sai de contingência sozinho, reprocessa documento
+   preso, arquiva o XML e **emite a NF-e modelo 55 de devolução** com DANFE em A4. A **DF20** que
+   travava o B9 foi decidida com o contador em 2026-08-19 (devolução sem consumidor identificado
+   sai contra o CNPJ da própria loja).
+   **A única pendência do módulo não é código:** a **Vetor precisa se cadastrar como responsável
+   técnico no portal da SEFAZ de cada UF e obter o CSRT** — sem ele a NF-e 55 é recusada
+   (hoje responde `cStat 974`, "CNPJ do responsavel tecnico diverge do cadastrado"). A NFC-e, que
+   é a operação do dia a dia da loja, **não** depende disso e segue autorizando normalmente.
 1. **⭐ Integração com marketplaces** — é o **coração da visão original** (P1/P2, R3–R7) e a
    lacuna central do produto hoje: `canais/`, `pedidos/`, `precos/` e `integracao/` seguem só com
    `package-info.java`, sem nenhuma implementação de domínio. O schema está pronto desde

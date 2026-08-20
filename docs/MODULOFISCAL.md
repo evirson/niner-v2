@@ -1250,13 +1250,16 @@ chave da NFC-e original. A tela de **Devolução de Produtos** — que desde 202
 produtos efetivamente vendidos e amarra no número da venda — é o lugar natural. Perdidos os 30
 minutos da NFC-e, este é o **único** caminho no PR, onde cancelamento extemporâneo não existe.
 
-> 🔴 **DF20 — a pergunta mais importante do v1, e ainda sem resposta:** e quando a venda original foi
-> **NFC-e sem identificação do consumidor**? Não há CPF, não há endereço, não há município IBGE — e
-> o `dest` da nota de entrada precisa de alguém. O tratamento é próprio por UF ⚠️ (as saídas usuais
-> são emitir contra o próprio CNPJ da loja com a justificativa nas informações complementares, ou
-> exigir o CPF **no momento da devolução**). **É o caso mais frequente do balcão inteiro** — venda
-> em dinheiro, sem CPF, cliente volta no dia seguinte. Sem resposta, a F5 entrega uma tela que falha
-> na maioria das devoluções reais. **Item obrigatório da F0**, junto com a leitura do MOC-PR.
+> ✅ **DF20 — fechada em 2026-08-19 (confirmada com o contador):** quando a venda original foi
+> **NFC-e sem identificação do consumidor** não há CPF, endereço nem município IBGE, e o `dest` da
+> nota de entrada precisa de alguém. A decisão é **emitir contra o próprio CNPJ da loja**, com a
+> chave da nota de origem nas informações complementares. Implementado em
+> `DevolucaoFiscalAssembler.resolverDestinatario()`. A alternativa descartada era exigir o CPF no
+> momento da devolução — inviável no balcão, que é justamente onde este caso acontece (venda em
+> dinheiro, sem CPF, cliente volta no dia seguinte).
+>
+> ⚠️ O que **não** foi resolvido pela decisão, e mordeu depois: a nota só é aceita com o **CSRT**
+> do responsável técnico (`idCSRT`/`hashCSRT`, NT 2018.005) — ver a tabela de blocos, B9.
 
 ### 10.3 Carta de Correção (CC-e) — fora do v1, e por um motivo estrutural
 
@@ -1497,6 +1500,47 @@ abandonadas). Construir com o que o projeto já usa — `jsPDF` no front para o 
 já calibrado) e/ou OpenPDF/Jasper no backend para o DANFE A4. Lembrar de 2026-08-14: **PDF e
 impressão térmica são caminhos separados e precisam ser conferidos separadamente.**
 
+> ✅ **Resolvido no B9 (2026-08-19), e sem OpenPDF/Jasper.** O DANFE A4 saiu como **HTML/CSS no
+> front** (`DanfeImprimir.tsx`, servido por `GET /api/v1/fiscal/documentos/{id}/danfe`, que devolve
+> só JSON), impresso pelo diálogo nativo — que também oferece "Salvar como PDF". Nenhuma biblioteca
+> de PDF entrou no backend. A armadilha aqui não é a biblioteca, é o CSS: o `@page` **global** do
+> projeto é `size: 80mm auto` (bobina térmica), então o A4 precisa de um `@page` **nomeado**
+> (`@page danfe-a4` + `page: danfe-a4`) — sem ele o navegador espreme a folha inteira em 80mm, e
+> isso não aparece na tela nem em teste automatizado, só imprimindo.
+
+### 9.9 CSRT — Código de Segurança do Responsável Técnico (NT 2018.005)
+
+O grupo `infRespTec` identifica quem **desenvolve o software emissor** (a Vetor), nunca o lojista —
+um valor só para todas as notas de todos os tenants, por isso mora em configuração de aplicação e
+não em `fiscal_config_empresa`. Além de CNPJ/contato/e-mail/telefone, ele aceita o par
+`idCSRT` + `hashCSRT`, e é aí que mora a armadilha:
+
+| | NFC-e (65) | NF-e (55) |
+|---|---|---|
+| CSRT | Opcional no PR — autoriza sem | **Obrigatório** — `cStat 975` sem ele |
+
+Ou seja: o emissor rodou meses em produção com `infRespTec` sem CSRT, porque a NFC-e não cobra. A
+primeira NF-e 55 (a devolução do B9) foi recusada de cara.
+
+**Cálculo do hash** (`XmlFiscal.hashCsrt`): SHA-1 de `CSRT + chaveDeAcesso`, o digest **bruto**
+codificado em Base-64 — 28 caracteres. Duas formas de errar, e as duas dão o mesmo `cStat 976`
+("Hash do CSRT inválido"), que não diz qual foi:
+
+1. Codificar em Base-64 a representação **hexadecimal** do digest em vez do digest binário (daria
+   56 caracteres).
+2. Concatenar a chave **com** o prefixo `NFe` — são os 44 dígitos puros, sem separador.
+
+**Configuração:** `NINER_FISCAL_RESPTEC_ID_CSRT` e `NINER_FISCAL_RESPTEC_CSRT`. ⚠️ O CSRT é
+**segredo**, tratado como senha: entra por variável de ambiente, fica no `.env` (gitignored) e
+**nunca** vai para log — o que aparece no XML é o hash, não ele. Vazio, o grupo sai sem o par
+(comportamento anterior, preservado); a montagem da NF-e 55 **falha explicitamente** (F11) citando
+as duas variáveis, em vez de assinar e transmitir uma nota que já se sabe recusada.
+
+⏭️ **Pendência aberta:** com um CSRT de teste a SEFAZ-PR responde `cStat 974` — *"CNPJ do
+responsavel tecnico diverge do cadastrado"*. A **Vetor precisa se cadastrar como responsável
+técnico no portal da SEFAZ de cada UF** e obter o CSRT real. Enquanto isso, nenhuma NF-e 55
+autoriza; a NFC-e não é afetada.
+
 ---
 
 ## 15. Segurança e multi-tenant
@@ -1562,6 +1606,11 @@ manter as tabelas nacionais atualizadas (cClassTrib, CEST, CFOP, IBPT, MVA).
 
 ### 17.1 Ponto de partida da codificação (estado em 2026-08-16)
 
+> ⚠️ **Seção histórica — vencida desde 2026-08-19.** Ela descreve o momento em que a codificação
+> do módulo *começou*, e é mantida só como registro do ponto de partida. **Hoje B0–B9 estão
+> fechados** (a tabela abaixo está marcada com ✅ bloco a bloco) e a suíte tem **794** testes
+> verdes. A única pendência do módulo não é código: o **CSRT** da Vetor na SEFAZ (§9.9).
+
 **Feito:** o schema inteiro — `V034__fiscal_referencia.sql` (referência nacional, global),
 `V035__fiscal_documento.sql` (tabelas de tenant, RLS FORCE) e as colunas fiscais nas migrations
 donas (V014 empresa, V016 cliente, V017 produto, V025 tipo_carteira). 35/35 migrations aplicam
@@ -1583,7 +1632,7 @@ paralelo às telas, se fizer sentido.
 | **B6** ✅ | Assinatura (XMLDSig) + transporte (`HttpClient` do JDK com mTLS por empresa) — `AssinadorXmlNfe` + `fiscal.sefaz` (`SefazTransporte`, `SefazAutorizadorService`), 2026-08-17. 27 testes, incluindo mTLS contra servidor HTTPS real e validação criptográfica da assinatura. **Não precisou do certificado real**: certificados autoassinados cobrem tudo menos a homologação ponta a ponta, que o B0 já fez | B5, B0 | **Sim** |
 | **B7** | PDV: emissão síncrona, DANFCE térmico, contingência offline, recusa em venda a contribuinte | B6 | **Sim** |
 | **B8** | Cancelamento (110111), inutilização, arquivamento no bucket, download em ZIP | B7 | **Sim** |
-| **B9** | NF-e de devolução de venda (entrada, `finNFe=4`), espelhando a tributação gravada em `documento_fiscal_item` | B8 | **Sim** |
+| **B9** ✅ | NF-e de devolução de venda (entrada, `finNFe=4`), espelhando a tributação gravada em `documento_fiscal_item`, + **DANFE em A4**. **Feito em 2026-08-19.** Referência à nota original **só a nível de item** (`det/DFeReferenciado`): os dois níveis juntos passam no XSD mas a SEFAZ rejeita (`cStat 1010`). Exigiu implementar o **CSRT** (`idCSRT`/`hashCSRT`, NT 2018.005), obrigatório no modelo 55 (`cStat 975` sem ele). ⏭️ **Falta credencial, não código:** a Vetor precisa se cadastrar como responsável técnico na SEFAZ de cada UF e obter o CSRT — a resposta hoje é `cStat 974` | B8 | **Sim** |
 
 **Nota (2026-08-18):** B7 e B8 fecharam em 2026-08-17 (ver `docs/PROGRESSO.md`), mas a linha do B8
 acima ficou desatualizada — "arquivamento no bucket" tinha ficado **fora** do escopo fechado
@@ -1640,7 +1689,7 @@ automatizado — os 10.515 NCMs de `cfg_produto_ncm` vieram por esse mesmo camin
 | DF16 | Licenciamento da tabela IBPT para SaaS multi-tenant | Licença única da Vetor, se o contrato permitir |
 | DF18 | Timeout de autorização no PDV antes de cair em contingência | 10 s |
 | DF19 | Quantas falhas disparam contingência automática | 2 falhas consecutivas em 60 s |
-| **DF20** | **Devolução de NFC-e sem consumidor identificado** | ⚠️ **Decisão de v1, não futura** — é o caso mais comum do balcão. Investigar na F0, decidir antes da F5 (§10.2) |
+| **DF20** | **Devolução de NFC-e sem consumidor identificado** | ✅ **Fechada 2026-08-19 com o contador:** emite contra o **CNPJ da própria loja**, com a chave da nota de origem nas informações complementares (`DevolucaoFiscalAssembler.resolverDestinatario`). Ver §10.2 |
 | **DF21** | Onde ficam certificado e XML? | ✅ **Fechada 2026-08-17, consumidor implementado 2026-08-18.** Certificado **cifrado no banco** do cliente; XML no **bucket privado** com WORM de 5 anos — **MinIO auto-hospedado** (ADR-014), arquivamento automático de nota/evento/inutilização autorizados. Ver §11.1 |
 | DF22 | Entrega do ZIP grande | Bucket + URL assinada, não cache em memória |
 | DF23 | Papel `CONTADOR` (leitura fiscal) | Futuro; no v1 o lojista baixa e repassa |
@@ -1681,6 +1730,13 @@ Legenda: ✅ fonte oficial · ◐ fontes secundárias convergentes · ✳ corrig
 | 16 🆕 | **Chave de acesso × CNPJ alfanumérico** | 🔴 **Não confirmado.** A chave é numérica de 44 posições e embute o CNPJ do emitente. Item da F0 |
 | 17 | **IBS/CBS compõem o total da nota?** | ✅ **Não** — confirmado no XSD (campo `vNFTot` separado do `vNF`), 2026-08-17 |
 | 18 🆕 | Tabelas `tPag` / `tBand` vigentes | 🔴 Conferir a versão da NT 2023.004 no MOC — os códigos acima de 16 mudaram recentemente |
+| 19 🆕 | **Ajuste SINIEF 8/2026 — referência da devolução: nota, item, ou os dois?** | ✅ ✳ **Um OU outro, nunca os dois.** A leitura literal do Ajuste sugeria `ide/NFref/refNFe` **e** `det/DFeReferenciado`, e **o XSD oficial aceita os dois juntos** — mas a SEFAZ-PR recusa na transmissão: `cStat 1010`, *"NF-e com referenciamento de documento a nivel de nota e a nivel de item"* (2026-08-19, homologação). Adotado o de **item**, que carrega a mesma chave mais o `nItem` e é o que torna a devolução parcial rastreável |
+| 20 🆕 | **CSRT é obrigatório na NF-e 55?** | ✅ **Sim** — `cStat 975` sem `idCSRT`/`hashCSRT` (2026-08-19, PR homologação). Na **NFC-e** o PR autoriza sem. Ver §9.9 |
+
+> ⚠️ **O que os itens 19 e 20 ensinam, e vale além deles: o XSD não é o contrato completo.** Os
+> dois passaram na validação contra o schema oficial e foram recusados pelo autorizador. Regra de
+> validação da SEFAZ (as que respondem `cStat`) só aparece **transmitindo de verdade** — nenhum
+> teste local, por mais rigoroso, substitui uma transmissão em homologação.
 
 ---
 
@@ -1711,6 +1767,10 @@ Resumo operacional do que a montagem do XML vai buscar onde. `(novo)` = coluna q
 | `pag` | `vTroco` | PDV *(hoje não persistido)* |
 | `infIntermed` | CNPJ e id do vendedor na plataforma | `documento_fiscal_intermediador` *(novo, DF26)* |
 | `infNFeSupl` | `qrCode`, `urlChave` | gerado na emissão (NFC-e apenas) |
+| `infRespTec` | CNPJ, `xContato`, `email`, `fone` | `niner.fiscal.resp-tec` (config da **aplicação** — é a Vetor, não o tenant) |
+| `infRespTec` | `idCSRT`, `hashCSRT` | `NINER_FISCAL_RESPTEC_ID_CSRT` + hash calculado por nota (§9.9) |
+| `ide/NFref` | — | **não é emitido**: a devolução referencia por item (ver abaixo) |
+| `det/DFeReferenciado` | `chaveAcesso`, `nItem` | `documento_fiscal_referencia` + `documento_fiscal_item.numero_item` da nota original (só na devolução) |
 
 ---
 

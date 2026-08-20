@@ -60,11 +60,21 @@ de Crediário. Um `caixa_mestre` por usuário/empresa/dia:
 
 ### Um caixa por usuário/empresa/dia
 
-`caixa_mestre` é filtrado por `id_tenant + id_empresa + id_usuario + data_abertura::date =
-CURRENT_DATE + caixa_fechado = false`. Dois usuários na mesma empresa têm caixas independentes;
-o mesmo usuário em duas empresas (ver `docs/telas/login-empresa.md`) também — a claim `eid` do
-JWT decide a empresa corrente. Tentar abrir um segundo caixa no mesmo dia responde 409
+`caixa_mestre` é filtrado por `id_tenant + id_empresa + id_usuario +
+(data_abertura AT TIME ZONE 'America/Sao_Paulo')::date = (now() AT TIME ZONE
+'America/Sao_Paulo')::date + caixa_fechado = false`. Dois usuários na mesma empresa têm caixas
+independentes; o mesmo usuário em duas empresas (ver `docs/telas/login-empresa.md`) também — a
+claim `eid` do JWT decide a empresa corrente. Tentar abrir um segundo caixa no mesmo dia responde 409
 (`ConflitoDadosException`).
+
+> **"Hoje" é o dia da LOJA, não o do banco (corrigido 2026-08-19).** A sessão do Postgres roda em
+> `Etc/UTC`, então `CURRENT_DATE`/`now()` crus já viraram o dia seguinte a partir das 21:00 de
+> Brasília. Com as expressões antigas (`data_abertura::date = CURRENT_DATE`), às 21:30 o PDV
+> respondia "Não há caixa aberto hoje para este usuário" com o caixa aberto de manhã e nunca
+> fechado — a loja simplesmente perdia o caixa no meio do expediente, e a única saída visível era
+> abrir um segundo. Vale para os **três** SQLs de `CaixaService`: sempre converter a coluna
+> (`(data_abertura AT TIME ZONE 'America/Sao_Paulo')::date`) **e** o "hoje" comparado com ela
+> (`(now() AT TIME ZONE 'America/Sao_Paulo')::date`); converter só um lado não resolve nada.
 
 ### Saldo inicial e moeda ficam no cabeçalho, não em `caixa_detalhe`
 
