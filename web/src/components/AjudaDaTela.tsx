@@ -271,11 +271,13 @@ const CONTEUDOS: Record<string, ConteudoAjuda> = {
       'Preencha o CNPJ (aceita letras nas 12 primeiras posições, conforme a regra nova da Receita Federal a partir de julho/2026) e a Inscrição Estadual.',
       'O código de município é o código de 7 dígitos do IBGE, não o nome da cidade — consulte no site do IBGE se não souber de cabeça.',
       'Digite o CEP para o endereço (logradouro, bairro, cidade, UF) ser preenchido automaticamente; corrija manualmente se precisar.',
+      'A UF é escolhida numa lista, não digitada: é ela que define o fuso horário usado nos horários do sistema e para qual SEFAZ a nota fiscal é transmitida.',
       'Salve — os dados ficam disponíveis na hora para a Conformidade Fiscal reavaliar as pendências da empresa.',
     ],
     errosComuns: [
       'Nada aqui é obrigatório para salvar: quem cobra o preenchimento antes de emitir nota é a tela de Conformidade Fiscal, não este formulário — é possível salvar parcialmente e voltar depois.',
       'CNPJ já usado por outra empresa do mesmo tenant é recusado ao salvar.',
+      'Deixei a UF em branco e os horários saíram estranhos: sem UF o sistema usa o horário de Brasília. Se a loja fica em outro fuso (AC, AM, MT, MS, RO ou RR), preencha a UF para o horário do cupom e o fechamento do dia baterem com o relógio da loja.',
       'Cheguei aqui clicando em "Corrigir" na Conformidade Fiscal: é a mesma tela, já aberta na empresa certa — preencha o campo que faltava e salve.',
     ],
     urlVideo: null,

@@ -62,7 +62,8 @@ Tabela `empresa` (V014). Quatro seções, nesta ordem:
 | Dados Fiscais | `codigo_municipio_ibge` | Código de Município (IBGE) | texto, só dígitos, 7 posições | Sem lookup/autocomplete — texto puro, link para ibge.gov.br no rodapé do campo |
 | Dados Fiscais | `cnae` | CNAE | texto | — |
 | Endereço | `cep` | CEP | texto mascarado | Autopreenche endereço/bairro/cidade/UF via ViaCEP (`buscarEnderecoPorCep`, mesmo padrão de Cliente/Fornecedor) |
-| Endereço | `endereco`, `numero`, `complemento`, `bairro`, `cidade`, `estado` | Endereço, Número, Complemento, Bairro, Cidade, UF | texto | Maiúsculas |
+| Endereço | `endereco`, `numero`, `complemento`, `bairro`, `cidade` | Endereço, Número, Complemento, Bairro, Cidade | texto | Maiúsculas |
+| Endereço | `estado` | UF | **`<select>` das 27 siglas** | ⚠️ Desde 2026-08-20 **não é mais texto livre**: a UF decide o **fuso horário da loja** (`FusoDaUf`) e **para qual SEFAZ** a nota é transmitida (`cfg_uf_autorizador`). Sigla errada não falha no cadastro — falha na primeira venda. Validada em três camadas: `<select>` no front, `EmpresaService.validarUf` na API e CHECK no banco (V049). **Vazio continua válido**: o signup cria a empresa sem UF e o caminho fiscal é quem exige |
 | Contato | `telefone` | Telefone | texto mascarado | — |
 | Contato | `email` | E-mail | texto (`type="email"`) | Validado via `FornecedorService.emailValido` quando informado |
 

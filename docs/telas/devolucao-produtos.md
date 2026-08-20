@@ -212,6 +212,10 @@ ainda sem resposta") e o item **B9** do roteiro fiscal (NF-e de devolução), qu
 > diverge do cadastrado") — a **MITRYUSCASH precisa se cadastrar como responsável técnico no portal da
 > SEFAZ de cada UF e obter o CSRT**. Até lá nenhuma NF-e 55 autoriza de verdade; a devolução e o
 > vale funcionam normalmente (F3), e a NFC-e do dia a dia não é afetada.
+>
+> **Onde o código é cadastrado (2026-08-20):** backoffice → **CSRT por UF** (`/csrt`), uma linha por
+> UF × ambiente — o CSRT é emitido pela SEFAZ de **cada** estado, então deixou de caber numa variável
+> de ambiente única. Ver `docs/telas/admin-csrt-por-uf.md`.
 
 ### Dois modos de operação, decididos pelo mesmo parâmetro que já existe
 
