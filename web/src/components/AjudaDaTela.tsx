@@ -761,6 +761,7 @@ const CONTEUDOS: Record<string, ConteudoAjuda> = {
       '"F2 Pesquisa Produto" busca por nome quando não tem o código em mãos — mostra o estoque por empresa.',
       '"F3 Altera Quantidade" corrige a quantidade do item selecionado na lista de produtos vendidos (navegue com ↑/↓).',
       '"F4 Limpa Tela" remove todos os itens lançados e recomeça a venda, com confirmação antes de apagar.',
+      '"F6 Puxar Orçamento" traz para a venda um orçamento já emitido: informe o número e os itens entram na lista, com Cliente e Vendedor já preenchidos no F5. Só funciona com a venda vazia — se já houver item lançado, limpe com F4 antes.',
       '"F5 Efetiva Venda" abre a Forma de Pagamento: escolha Cliente e Vendedor (os dois são obrigatórios), aplique um desconto (até o máximo definido em Parâmetros do Sistema) e lance uma ou mais formas de pagamento — dinheiro, cartão, crediário ou vale-mercadoria — até fechar o valor a pagar.',
       'Se "Emitir NFC-e/NF-e automaticamente após a venda" estiver ligado (Parâmetros do Sistema), o popup pergunta primeiro os dados do cliente/valor/formas de pagamento e se o CPF do cliente entra na nota — depois de responder, emite na hora e a Papeleta de Venda aparece já como cupom fiscal (DANFCE) quando a SEFAZ autoriza, pronta para imprimir, salvar em PDF ou enviar por WhatsApp.',
       'Desligado, o popup mostra direto a papeleta de venda (não fiscal), com um botão "Emitir Nota Fiscal" que abre a mesma pergunta de CPF quando o operador quiser emitir.',
@@ -768,7 +769,8 @@ const CONTEUDOS: Record<string, ConteudoAjuda> = {
     errosComuns: [
       'Sem caixa aberto no dia, nenhuma venda é efetivada — abra o caixa antes de lançar produtos.',
       '"Confirmar Venda" só libera quando as formas de pagamento lançadas fecham exatamente o valor a pagar, com Cliente e Vendedor selecionados.',
-      'Vender mais do que tem em estoque é permitido de propósito — o saldo fica negativo, sem bloqueio.',
+      'Vender mais do que tem em estoque é permitido por padrão — o saldo fica negativo, sem bloqueio. Se "Permite Quantidade de Estoque Negativo?" estiver desmarcado em Parâmetros do Sistema, a venda é recusada quando o saldo daquela empresa não cobre a quantidade.',
+      'Numa venda vinda de orçamento (F6), a quantidade de cada item orçado só pode ser DIMINUÍDA — zero significa "não levar". O preço vem congelado do orçamento e não é editável. Produto que não estava no orçamento pode ser acrescentado normalmente, com preço de cadastro.',
       'Crediário tem limite de crédito: se o cliente tiver um limite de crédito cadastrado (maior que zero), o valor em crediário desta venda somado às parcelas de crediário já em aberto não pode ultrapassar o limite.',
       'Um vale-mercadoria maior que o valor a pagar não pode ser usado sozinho — sobra de vale não gera troco.',
     ],

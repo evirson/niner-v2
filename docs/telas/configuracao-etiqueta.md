@@ -40,6 +40,13 @@ pelo dono do produto: nome da loja em fundo preto/letra branca no topo, descriç
 
 ## Tabelas (`db/migration/V029__cfg_etiqueta.sql`)
 
+> ⚠️ **Esta seção descreve o modelo COMO NASCEU em 2026-08-05. A V057 (2026-08-20) o encolheu:**
+> `cfg_etiqueta_coluna` **não existe mais** e as 4 colunas `borda_*` foram removidas; no lugar
+> entraram `margem_esquerda_mm` e `espacamento_horizontal_mm` em `cfg_etiqueta_config` (com
+> `espacamento_vertical_mm`, da V056), e a posição de cada coluna passou a ser **derivada**. O
+> modelo vigente está em *"✅ 2026-08-20, rodada 2 — a geometria virou DERIVADA (V057)"*, no fim
+> deste arquivo. O que vem abaixo fica como registro de por que o modelo era assim.
+
 ### `cfg_etiqueta_config` — cabeçalho
 
 Uma linha por configuração nomeada: `nome`, `largura_rolo_mm`, `numero_colunas` (`CHECK` 1 a 4 —

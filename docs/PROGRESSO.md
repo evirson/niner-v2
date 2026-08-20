@@ -91,12 +91,12 @@ Registro cronológico das decisões e entregas. Atualizar a cada marco relevante
 > Real ou MEI), então o teste de tabela do motor (§16.1) é a **superfície principal do produto**, não
 > cobertura de borda.
 >
-> **Resumo em uma linha (2026-08-20):** ERP com **~42 telas** ponta a ponta cobrindo cadastros,
-> catálogo, estoque (incl. entrada por XML de NF-e), PDV e vendas, financeiro completo (caixa,
-> crediário, contas a pagar/receber, conta corrente, **DRE e Fluxo de Caixa**), relatórios,
-> etiquetas e importação/exportação. **Falta o coração da visão original**: integração com
+> **Resumo em uma linha (2026-08-20):** ERP com **~44 telas** ponta a ponta cobrindo cadastros,
+> catálogo, estoque (incl. entrada por XML de NF-e), PDV, **orçamento de venda** e vendas, financeiro
+> completo (caixa, crediário, contas a pagar/receber, conta corrente, **DRE e Fluxo de Caixa**),
+> relatórios, etiquetas e importação/exportação. **Falta o coração da visão original**: integração com
 > marketplaces (`canais`/`pedidos`/`precos`/`integracao` seguem sem implementação de domínio) e o
-> app `admin/` (backoffice da plataforma). **509/509 testes de backend verdes, `tsc -b` limpo.**
+> app `admin/` (backoffice da plataforma). **909/909 testes de backend verdes, `tsc -b` limpo.**
 >
 > **Pendências adiadas pelo dono do produto (não são esquecimento):** calibragem de impressão
 > térmica da **Guia de Transferência** (ainda em folha A4) — papeleta de venda, comprovante de
@@ -541,6 +541,85 @@ Movimentação de Conta Corrente) que ainda não tinham migrado pro `SeletorPlan
 
 ## Linha do tempo
 
+### 2026-08-20 — Orçamento de Venda: a rotina inteira, do schema ao papel
+
+Área nova na frente de loja, pedida em 12 itens pelo dono do produto e fechada pergunta a pergunta
+antes de escrever a primeira linha. Spec completa: `docs/telas/orcamento.md`.
+
+O problema: o consumidor pergunta o preço e não fecha na hora. O vendedor anota num papel; o
+cliente volta três dias depois com o papel amassado e ninguém sabe quem atendeu, o que foi
+combinado, nem se aquele preço ainda vale.
+
+#### As decisões que não dão para inferir do código
+
+**O orçamento é imutável** — e isso **reverte o item 10 do pedido original** ("possibilidade de
+alterar o orçamento"), por decisão dele na mesma sessão. A necessidade que o item 10 endereçava —
+o cliente levar menos do que orçou — é resolvida no PDV, que pode **diminuir** quantidade sem
+tornar o documento mutável. É a mesma filosofia da venda: corrige-se cancelando.
+
+**O preço é congelado** na emissão e relido do banco na efetivação. É o que faz a data de validade
+significar alguma coisa: *"este preço vale até tal dia"*. A tela avisa quando o cadastro divergiu —
+**informa, não decide**; quem escolhe honrar é o operador. A descrição, ao contrário, **não** é
+congelada: resolve por JOIN, como a papeleta e o DANFE já fazem. Preço é compromisso comercial;
+congelar texto de cadastro criaria uma segunda verdade.
+
+**`VENDIDO_PARCIAL` é estado final.** O cliente que volta para buscar o resto faz uma venda nova,
+**sem vínculo nenhum** — não há saldo por item nem segunda venda ligada ao orçamento. Palavras
+dele: *"como o cliente voltou, faz uma venda nova e pronto"*.
+
+**`VENCIDO` é estado próprio, separado de `CANCELADO`.** O pedido original dizia "cancela
+automaticamente com o motivo CLIENTE NÃO VOLTOU"; virou estado próprio porque num relatório
+*quantos o vendedor cancelou* e *quantos morreram esperando o cliente* são perguntas diferentes —
+e essa é a métrica de sucesso da rotina.
+
+**Produto inativado depois não vende.** É a **única** regra do PDV que o orçamento não afrouxa, e
+o aviso aparece na consulta, antes de o operador tentar com o cliente na frente.
+
+**Item extra é permitido** (ajuste pedido depois da primeira rodada): a venda pode levar produto
+que não estava no orçamento. Esse item é venda comum — preço de cadastro, sem limite — e não conta
+para decidir se o orçamento foi parcial. A regra "só diminuir" vale para o que foi **orçado**, não
+para a venda inteira.
+
+**Não consome cota do plano** (ADR-015): cobrar pela captação desincentivaria a venda que de fato é
+cobrada.
+
+#### As três armadilhas do repositório que esta feature encostou
+
+⚠️ **Job sem `TenantContext` não enxerga nada — e não dá erro.** O job de vencimento é o ponto mais
+perigoso: `niner_app` nunca tem `BYPASSRLS`, então uma consulta de domínio fora de
+`TenantContext.comTenant` devolve **zero linhas em silêncio**. Ele "não acharia nada para vencer"
+todo dia, para sempre, sem uma linha de log. E o par obrigatório: `@Scheduled` num bean,
+`@Transactional` em outro — auto-invocação não passa pelo proxy do Spring.
+
+⚠️ **O orçamento venceria às 21h.** A sessão do Postgres roda em UTC. O "hoje" do vencimento vem da
+**UF de cada empresa** (`FusoDaLoja.da`), não de um `America/Sao_Paulo` carimbado: uma loja no Acre
+(UTC−5) e uma em Recife (UTC−3) viram o dia em momentos diferentes, e o fixo mataria o orçamento do
+lojista do Acre duas horas antes. Por isso a varredura é **por empresa**, não uma consulta só.
+
+⚠️ **Marcar o orçamento como efetivado NÃO é efeito colateral.** A regra do projeto ("efeito
+secundário roda depois do commit") nasceu do signup respondendo 201 com conta inexistente e vale
+para **medição e log**. Aqui é vínculo de negócio: se a gravação de `id_venda` falhasse depois do
+commit, sobraria uma venda feita e um orçamento aberto que o cliente usa de novo. Fica **dentro** da
+transação de `efetivarVenda`.
+
+#### Detalhes de tela que valem registro
+
+**F6 só funciona com a venda vazia** — puxar orçamento por cima de itens já lançados misturaria
+preço congelado com preço de cadastro sem o operador perceber. **O `idOrcamento` é limpo junto com
+o ledger** ao efetivar, senão a venda seguinte carimbaria um orçamento sem relação com ela. **As
+duas versões do documento ficam sempre no DOM**: o CSS decide qual vai para a impressora, e o
+WhatsApp captura sempre o **A4** (bobina é papel de balcão, não anexo de mensagem). E o A4 declara
+`@page orcamento-a4` próprio — o `@page` global do projeto é 80mm, e sem página nomeada ele sairia
+espremido na bobina, tropeço que o DANFE já deu.
+
+**Migration V058** (enum de 5 estados, `orcamento`, `orcamento_item`, RLS, GRANT, parâmetro de
+validade em `cfg_geral`), com caso novo em `PrivilegiosNinerAppTest` — o `GRANT` é invisível para a
+suíte, que conecta como superusuário.
+
+**909 testes verdes** (+15), cobrindo os 12 critérios de aceitação da spec.
+
+⚠️ **Nada de impressão foi testado** — nem o A4 nem a bobina. A calibragem térmica não aparece na
+tela, no PDF nem em teste automatizado; só imprimindo.
 ### 2026-08-20 — Etiqueta, rodada 2: a geometria virou derivada, e a migration quase apagou o dado em silêncio
 
 Proposta do dono do produto depois de ler a rodada 1: *"você já sabe a largura do rolo, o número de

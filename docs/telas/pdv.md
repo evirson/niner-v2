@@ -254,6 +254,14 @@ resolver cliente/vendedor depois, mas nunca grava faltando um dos dois.
 
 ### Teclas de atalho (revisão 2026-08-03 — F5 Devolver Produto removido, Efetiva Venda voltou a ser F5)
 
+- **F6 Puxar Orçamento** (2026-08-20) — abre o orçamento pelo número e traz os itens para o
+  ledger, já com **cliente e vendedor preenchidos** no F5 (continuam editáveis: quem vai levar pode
+  não ser quem pediu). ⚠️ Três coisas específicas deste caminho: o preço vem **congelado** do
+  orçamento (o servidor o relê do banco, a tela não manda preço); a quantidade só pode ser
+  **reduzida**, e zero significa "não levar este item"; e o F6 **só funciona com a venda vazia** —
+  puxar por cima de itens já lançados misturaria preço congelado com preço de cadastro sem o
+  operador perceber. Acrescentar produto que não estava no orçamento **é permitido** (venda comum,
+  preço de cadastro) e não torna o orçamento "parcial". Ver `docs/telas/orcamento.md`.
 - **F5 Efetiva Venda** (era F6, de 2026-07-28 até 2026-08-03) — abre a tela de Forma de
   Pagamento.
 - ~~F5 Devolver Produto~~ — **removido em 2026-08-03**. Era um atalho/botão reservado desde

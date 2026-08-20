@@ -75,6 +75,7 @@ outras.
 | `cfg_usa_cor_grade` | Usa cor/grade (calçados, confecções) | checkbox | — (default `false`, 2026-08-08; era duas flags separadas de linha/coluna) |
 | `cfg_permite_qtd_decimal` | Permite quantidade decimal para produtos | checkbox | — (default `true`) |
 | `cfg_permite_estoque_negativo` | Permite quantidade de estoque negativo | checkbox | — (**default `true`**, V055 — nasceu `false` na V054 e foi invertido no mesmo dia; ver abaixo) |
+| `cfg_dias_validade_orcamento` | Validade padrão do orçamento (dias) | inteiro | 1–365 (default `15`, V058). Só **sugere** a data na emissão; o vendedor sobrescreve caso a caso. Endpoint leve `GET /api/v1/config-geral/dias-validade-orcamento` — aberto a qualquer papel, porque quem emite orçamento é majoritariamente OPERADOR |
 | `cfg_exige_numero_venda_devolucao` | Exigir número da venda na Devolução de Produtos | checkbox | — (default `false`, 2026-08-11) |
 | `cfg_rateia_frete_entrada` | Ratear frete/IPI/ICMS-ST no custo do item | checkbox | — (default `false`, 2026-08-11) |
 | `cfg_reajusta_preco_entrada` | Reajustar preço do produto automaticamente | checkbox | — (default `false`, 2026-08-11) |
