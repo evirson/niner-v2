@@ -17,6 +17,7 @@ import {
 } from '../../lib/documentoFiscal'
 import Toast from '../../components/Toast'
 import ComprovantePapeletaModal from '../pdv/ComprovantePapeletaModal'
+import DanfeModal from '../vendas/DanfeModal'
 
 /** Só nestas situações o comprovante do PDV vem com {@code dadosFiscais} preenchido (autorizado
  *  ou em contingência) — nas outras, abrir o DANFCE mostraria um recibo comum sem QR/protocolo. */
@@ -88,6 +89,7 @@ export default function DocumentoFiscalLista() {
   const [pagina, setPagina] = useState(1)
   const [xmlAberto, setXmlAberto] = useState<DocumentoFiscalItem | null>(null)
   const [idVendaDanfce, setIdVendaDanfce] = useState<number | null>(null)
+  const [idDocumentoDanfe, setIdDocumentoDanfe] = useState<number | null>(null)
   const [consultando, setConsultando] = useState<number | null>(null)
   const [reprocessando, setReprocessando] = useState<number | null>(null)
   const [aviso, setAviso] = useState<{ mensagem: string; tipo: 'erro' | 'sucesso' } | null>(null)
@@ -274,7 +276,7 @@ export default function DocumentoFiscalLista() {
                         >
                           <IconeOlho size={18} />
                         </button>
-                        {item.idVenda !== null && SITUACOES_COM_DANFCE.has(item.situacao) && (
+                        {item.modelo === 65 && item.idVenda !== null && SITUACOES_COM_DANFCE.has(item.situacao) && (
                           <button
                             type="button"
                             className="acao-icone"
@@ -283,6 +285,20 @@ export default function DocumentoFiscalLista() {
                             onClick={() => setIdVendaDanfce(item.idVenda)}
                           >
                             <IconeRecibo size={18} />
+                          </button>
+                        )}
+                        {/* O DANFE da NF-e (modelo 55) é outro documento e outra folha: A4, não a
+                            bobina de 80mm do DANFCE. Daí a ação separada, e não o mesmo botão
+                            decidindo por dentro — o operador vê pelo ícone o que vai sair. */}
+                        {item.modelo === 55 && SITUACOES_COM_DANFCE.has(item.situacao) && (
+                          <button
+                            type="button"
+                            className="acao-icone"
+                            title="Ver DANFE"
+                            aria-label="Ver DANFE"
+                            onClick={() => setIdDocumentoDanfe(item.idDocumentoFiscal)}
+                          >
+                            <IconeDocumentoFiscal size={18} />
                           </button>
                         )}
                         {item.urlConsultaPublica && (
@@ -364,6 +380,10 @@ export default function DocumentoFiscalLista() {
 
       {idVendaDanfce !== null && (
         <ComprovantePapeletaModal idVenda={idVendaDanfce} reimpressao aoFechar={() => setIdVendaDanfce(null)} />
+      )}
+
+      {idDocumentoDanfe !== null && (
+        <DanfeModal idDocumentoFiscal={idDocumentoDanfe} aoFechar={() => setIdDocumentoDanfe(null)} />
       )}
 
       {aviso && <Toast mensagem={aviso.mensagem} tipo={aviso.tipo} aoFechar={() => setAviso(null)} />}

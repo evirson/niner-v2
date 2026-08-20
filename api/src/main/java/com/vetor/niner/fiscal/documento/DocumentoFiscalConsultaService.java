@@ -5,6 +5,10 @@ import com.vetor.niner.comum.armazenamento.ArmazenamentoPrivado;
 import com.vetor.niner.fiscal.certificado.FiscalCertificadoService;
 import com.vetor.niner.fiscal.certificado.FiscalCertificadoService.CertificadoParaAssinatura;
 import com.vetor.niner.fiscal.documento.DocumentoFiscalListaDtos.ConsultaSefazResponse;
+import com.vetor.niner.fiscal.documento.DocumentoFiscalListaDtos.DanfeItem;
+import com.vetor.niner.fiscal.documento.DocumentoFiscalListaDtos.DanfeParticipante;
+import com.vetor.niner.fiscal.documento.DocumentoFiscalListaDtos.DanfeResponse;
+import com.vetor.niner.fiscal.documento.DocumentoFiscalListaDtos.DanfeTotais;
 import com.vetor.niner.fiscal.documento.DocumentoFiscalListaDtos.DocumentoFiscalItem;
 import com.vetor.niner.fiscal.documento.DocumentoFiscalListaDtos.PaginaDocumentosFiscais;
 import com.vetor.niner.fiscal.documento.DocumentoFiscalListaDtos.XmlDocumentoFiscalResponse;
@@ -19,6 +23,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
@@ -72,7 +77,7 @@ public class DocumentoFiscalConsultaService {
 
         StringBuilder filtro = new StringBuilder("""
                  WHERE d.id_tenant = plataforma.tenant_atual() AND d.id_empresa = ?
-                   AND d.data_emissao::date BETWEEN ? AND ?
+                   AND (d.data_emissao AT TIME ZONE 'America/Sao_Paulo')::date BETWEEN ? AND ?
                 """);
         List<Object> params = new ArrayList<>(List.of(idEmpresa, dataInicial, dataFinal));
 
@@ -145,6 +150,185 @@ public class DocumentoFiscalConsultaService {
     }
 
     private record LinhaXml(String chaveAcesso, String xmlAssinado, String xmlObjetoBucket) {
+    }
+
+    /**
+     * Dados do <b>DANFE A4</b> (modelo 55) — §10.2/B9. Monta no servidor a partir do que está
+     * gravado em {@code documento_fiscal} + {@code _item} + {@code _referencia}, nunca reparseando
+     * o XML no navegador: o impresso tem que ser o documento, e reinterpretar XML no front abriria
+     * espaço para divergir dele.
+     *
+     * <p>⚠️ Recusa modelo 65: a NFC-e imprime o <b>DANFCE térmico</b>, que é outro documento com
+     * outra calibragem (80mm, `DanfceImprimir.tsx`). Pedir o A4 de uma NFC-e é erro de chamada,
+     * não um caso a suportar em silêncio.
+     */
+    @Transactional(readOnly = true)
+    public DanfeResponse buscarDanfe(Jwt jwt, long idDocumentoFiscal) {
+        exigirAdmin(jwt);
+
+        var cab = jdbc.sql("""
+                        SELECT d.id_documento_fiscal, d.chave_acesso, d.modelo, d.serie, d.numero,
+                               d.tipo_nf, d.situacao::text AS situacao, d.ambiente::text AS ambiente,
+                               d.data_emissao, d.data_autorizacao, d.protocolo,
+                               d.valor_produtos, d.valor_desconto, d.valor_frete, d.valor_seguro,
+                               d.valor_outros, d.valor_icms, d.valor_icms_st, d.valor_pis, d.valor_cofins,
+                               d.valor_total, d.valor_total_tributos, d.tipo_operacao::text AS tipo_operacao,
+                               e.razao_social AS emit_nome, e.cnpj AS emit_cnpj,
+                               e.inscricao_estadual AS emit_ie, e.endereco AS emit_endereco,
+                               e.numero AS emit_numero, e.bairro AS emit_bairro, e.cidade AS emit_cidade,
+                               e.estado AS emit_uf, e.cep AS emit_cep, e.telefone AS emit_fone,
+                               c.nome AS dest_nome, c.cpf_cnpj AS dest_doc, c.rg_ie AS dest_ie,
+                               c.endereco AS dest_endereco, c.numero AS dest_numero, c.bairro AS dest_bairro,
+                               c.cidade AS dest_cidade, c.estado AS dest_uf, c.cep AS dest_cep,
+                               c.telefone AS dest_fone,
+                               (SELECT r.chave_referenciada FROM documento_fiscal_referencia r
+                                 WHERE r.id_tenant = d.id_tenant AND r.id_documento_fiscal = d.id_documento_fiscal
+                                 LIMIT 1) AS chave_referenciada
+                          FROM documento_fiscal d
+                          JOIN empresa e ON e.id_empresa = d.id_empresa AND e.id_tenant = d.id_tenant
+                          LEFT JOIN cliente c ON c.id_cliente = d.id_cliente AND c.id_tenant = d.id_tenant
+                         WHERE d.id_tenant = plataforma.tenant_atual() AND d.id_documento_fiscal = ?
+                        """)
+                .param(idDocumentoFiscal)
+                .query((rs, n) -> new LinhaDanfe(rs))
+                .optional()
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Documento fiscal não encontrado."));
+
+        if (cab.modelo != 55) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "O DANFE em A4 é do modelo 55. A NFC-e (modelo 65) imprime o DANFCE em bobina térmica.");
+        }
+
+        List<DanfeItem> itens = jdbc.sql("""
+                        SELECT numero_item, codigo_produto, descricao, codigo_ncm, cfop, origem_mercadoria,
+                               cst_icms, csosn, unidade_comercial, quantidade, valor_unitario, valor_produto,
+                               base_calculo_icms, valor_icms, aliquota_icms
+                          FROM documento_fiscal_item
+                         WHERE id_tenant = plataforma.tenant_atual() AND id_documento_fiscal = ?
+                         ORDER BY numero_item
+                        """)
+                .param(idDocumentoFiscal)
+                .query((rs, n) -> new DanfeItem(
+                        rs.getInt("numero_item"), rs.getString("codigo_produto"), rs.getString("descricao"),
+                        rs.getString("codigo_ncm"), rs.getString("cfop"), rs.getInt("origem_mercadoria"),
+                        rs.getString("csosn") != null ? rs.getString("csosn") : rs.getString("cst_icms"),
+                        rs.getString("unidade_comercial"), rs.getBigDecimal("quantidade"),
+                        rs.getBigDecimal("valor_unitario"), rs.getBigDecimal("valor_produto"),
+                        rs.getBigDecimal("base_calculo_icms"), rs.getBigDecimal("valor_icms"),
+                        rs.getBigDecimal("aliquota_icms")))
+                .list();
+
+        // Destinatário: quando a nota é de devolução com consumidor não identificado na venda
+        // original, `id_cliente` é nulo e o destinatário É a própria loja (ver
+        // DevolucaoFiscalAssembler) — o DANFE tem que mostrar isso, não um bloco vazio.
+        DanfeParticipante emitente = new DanfeParticipante(cab.emitNome, cab.emitCnpj, cab.emitIe,
+                linhaEndereco(cab.emitEndereco, cab.emitNumero), cab.emitBairro, cab.emitCidade,
+                cab.emitUf, cab.emitCep, cab.emitFone);
+        DanfeParticipante destinatario = cab.destNome != null
+                ? new DanfeParticipante(cab.destNome, cab.destDoc, cab.destIe,
+                        linhaEndereco(cab.destEndereco, cab.destNumero), cab.destBairro, cab.destCidade,
+                        cab.destUf, cab.destCep, cab.destFone)
+                : emitente;
+
+        return new DanfeResponse(idDocumentoFiscal, cab.chaveAcesso, cab.modelo, cab.serie, cab.numero,
+                naturezaDe(cab.tipoOperacao), cab.tipoNf, cab.situacao,
+                "HOMOLOGACAO".equals(cab.ambiente), cab.dataEmissao, cab.dataAutorizacao, cab.protocolo,
+                emitente, destinatario, itens,
+                new DanfeTotais(cab.valorProdutos, cab.valorIcms, BigDecimal.ZERO, cab.valorIcmsSt,
+                        cab.valorProdutos, cab.valorFrete, cab.valorSeguro, cab.valorDesconto,
+                        cab.valorOutros, cab.valorPis, cab.valorCofins, cab.valorTotalTributos, cab.valorTotal),
+                cab.chaveReferenciada != null
+                        ? "Devolucao referente a nota fiscal " + cab.chaveReferenciada
+                        : null,
+                cab.chaveReferenciada);
+    }
+
+    private static String naturezaDe(String tipoOperacao) {
+        return "DEVOLUCAO_VENDA".equals(tipoOperacao) ? "DEVOLUCAO DE VENDA" : "VENDA";
+    }
+
+    private static String linhaEndereco(String logradouro, String numero) {
+        if (logradouro == null || logradouro.isBlank()) {
+            return "";
+        }
+        return numero == null || numero.isBlank() ? logradouro : logradouro + ", " + numero;
+    }
+
+    /** Leitura crua do cabeçalho do DANFE — campos demais para um record posicional legível. */
+    private static final class LinhaDanfe {
+        final String chaveAcesso;
+        final int modelo;
+        final int serie;
+        final long numero;
+        final int tipoNf;
+        final String situacao;
+        final String ambiente;
+        final String tipoOperacao;
+        final OffsetDateTime dataEmissao;
+        final OffsetDateTime dataAutorizacao;
+        final String protocolo;
+        final BigDecimal valorProdutos;
+        final BigDecimal valorDesconto;
+        final BigDecimal valorFrete;
+        final BigDecimal valorSeguro;
+        final BigDecimal valorOutros;
+        final BigDecimal valorIcms;
+        final BigDecimal valorIcmsSt;
+        final BigDecimal valorPis;
+        final BigDecimal valorCofins;
+        final BigDecimal valorTotal;
+        final BigDecimal valorTotalTributos;
+        final String emitNome, emitCnpj, emitIe, emitEndereco, emitNumero, emitBairro, emitCidade,
+                emitUf, emitCep, emitFone;
+        final String destNome, destDoc, destIe, destEndereco, destNumero, destBairro, destCidade,
+                destUf, destCep, destFone;
+        final String chaveReferenciada;
+
+        LinhaDanfe(java.sql.ResultSet rs) throws java.sql.SQLException {
+            chaveAcesso = rs.getString("chave_acesso");
+            modelo = rs.getInt("modelo");
+            serie = rs.getInt("serie");
+            numero = rs.getLong("numero");
+            tipoNf = rs.getInt("tipo_nf");
+            situacao = rs.getString("situacao");
+            ambiente = rs.getString("ambiente");
+            tipoOperacao = rs.getString("tipo_operacao");
+            dataEmissao = rs.getObject("data_emissao", OffsetDateTime.class);
+            dataAutorizacao = rs.getObject("data_autorizacao", OffsetDateTime.class);
+            protocolo = rs.getString("protocolo");
+            valorProdutos = rs.getBigDecimal("valor_produtos");
+            valorDesconto = rs.getBigDecimal("valor_desconto");
+            valorFrete = rs.getBigDecimal("valor_frete");
+            valorSeguro = rs.getBigDecimal("valor_seguro");
+            valorOutros = rs.getBigDecimal("valor_outros");
+            valorIcms = rs.getBigDecimal("valor_icms");
+            valorIcmsSt = rs.getBigDecimal("valor_icms_st");
+            valorPis = rs.getBigDecimal("valor_pis");
+            valorCofins = rs.getBigDecimal("valor_cofins");
+            valorTotal = rs.getBigDecimal("valor_total");
+            valorTotalTributos = rs.getBigDecimal("valor_total_tributos");
+            emitNome = rs.getString("emit_nome");
+            emitCnpj = rs.getString("emit_cnpj");
+            emitIe = rs.getString("emit_ie");
+            emitEndereco = rs.getString("emit_endereco");
+            emitNumero = rs.getString("emit_numero");
+            emitBairro = rs.getString("emit_bairro");
+            emitCidade = rs.getString("emit_cidade");
+            emitUf = rs.getString("emit_uf");
+            emitCep = rs.getString("emit_cep");
+            emitFone = rs.getString("emit_fone");
+            destNome = rs.getString("dest_nome");
+            destDoc = rs.getString("dest_doc");
+            destIe = rs.getString("dest_ie");
+            destEndereco = rs.getString("dest_endereco");
+            destNumero = rs.getString("dest_numero");
+            destBairro = rs.getString("dest_bairro");
+            destCidade = rs.getString("dest_cidade");
+            destUf = rs.getString("dest_uf");
+            destCep = rs.getString("dest_cep");
+            destFone = rs.getString("dest_fone");
+            chaveReferenciada = rs.getString("chave_referenciada");
+        }
     }
 
     /**

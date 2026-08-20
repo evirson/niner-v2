@@ -7,6 +7,7 @@ import { gerarBlobComprovanteVale, gerarPdfComprovanteVale, montarLinhasComprova
 import type { DevolucaoEfetivada } from '../../lib/devolucaoProduto'
 import { formatarMoeda } from '../../lib/masks'
 import { montarLinkWhatsApp } from '../../lib/whatsapp'
+import DanfeModal from './DanfeModal'
 
 /**
  * Comprovante do vale-mercadoria gerado por uma devolução, formatado pra bobina térmica de
@@ -39,6 +40,7 @@ export default function ComprovanteValeModal({
   const [modalWhatsAppAberto, setModalWhatsAppAberto] = useState(false)
   const [enviandoWhatsApp, setEnviandoWhatsApp] = useState(false)
   const [erroWhatsApp, setErroWhatsApp] = useState<string | null>(null)
+  const [danfeAberto, setDanfeAberto] = useState(false)
 
   async function confirmarEnvioWhatsApp(telefone: string) {
     setEnviandoWhatsApp(true)
@@ -69,6 +71,33 @@ export default function ComprovanteValeModal({
           style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
         >
           <h2 style={{ marginTop: 0, flexShrink: 0 }}>Vale-Mercadoria Gerado</h2>
+
+          {/* Desfecho da NF-e de devolução (2026-08-19, B9) — `notaFiscal` vem nulo quando não
+              havia nota a emitir (fiscal desligado, devolução sem venda de origem, ou venda sem
+              NFC-e). Autorizada, o operador pode abrir o DANFE aqui mesmo; rejeitada, o aviso
+              deixa claro que a DEVOLUÇÃO continua valendo — só a nota precisa de atenção (F3). */}
+          {devolucao.notaFiscal && (
+            <div
+              className={devolucao.notaFiscal.situacao === 'AUTORIZADO' ? 'tarja-sucesso' : 'tarja-aviso'}
+              style={{ flexShrink: 0, fontSize: 13, alignItems: 'flex-start' }}
+            >
+              <div style={{ flex: 1 }}>
+                {devolucao.notaFiscal.mensagem}
+                {devolucao.notaFiscal.situacao !== 'AUTORIZADO' && (
+                  <>
+                    <br />
+                    O vale-mercadoria abaixo continua válido — a nota fica em Documentos Fiscais para ser
+                    reprocessada.
+                  </>
+                )}
+              </div>
+              {devolucao.notaFiscal.situacao === 'AUTORIZADO' && (
+                <button type="button" className="btn ghost" onClick={() => setDanfeAberto(true)}>
+                  Ver DANFE
+                </button>
+              )}
+            </div>
+          )}
 
           <div style={{ overflowY: 'auto', flex: 1, minHeight: 0 }}>
             <pre className="papeleta-preview papeleta-imprimir">{linhas.join('\n')}</pre>
@@ -109,6 +138,16 @@ export default function ComprovanteValeModal({
             setModalWhatsAppAberto(false)
             setErroWhatsApp(null)
           }}
+        />
+      )}
+
+      {/* Irmão do overlay do vale (Fragment), não aninhado — senão clicar no fundo do DANFE
+          fecharia os dois popups por bubbling, mesma armadilha já documentada na Pesquisa de
+          Vendas quando o popup de reimpressão foi empilhado sobre o de detalhe. */}
+      {danfeAberto && devolucao.notaFiscal && (
+        <DanfeModal
+          idDocumentoFiscal={devolucao.notaFiscal.idDocumentoFiscal}
+          aoFechar={() => setDanfeAberto(false)}
         />
       )}
     </>

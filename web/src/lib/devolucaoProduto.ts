@@ -47,8 +47,25 @@ export interface ItemDevolucaoResponse {
   valorTotal: number
 }
 
+/**
+ * Desfecho da NF-e de devolução (modelo 55, entrada) emitida junto — §10.2, B9.
+ *
+ * ⚠️ Situação diferente de `AUTORIZADO` **não desfaz a devolução**: a mercadoria já voltou ao
+ * estoque e o vale já é do cliente (F3 — fiscal nunca bloqueia a operação de balcão). A nota fica
+ * em Documentos Fiscais para ser reprocessada.
+ */
+export interface NotaFiscalDevolucao {
+  situacao: 'AUTORIZADO' | 'REJEITADO' | 'DENEGADO' | 'EM_PROCESSAMENTO' | 'FALHA_COMUNICACAO'
+  idDocumentoFiscal: number
+  chaveAcesso: string | null
+  protocolo: string | null
+  cStat: string | null
+  mensagem: string
+}
+
 /** `idDevolucao` é o número do vale-mercadoria gerado (toda devolução gera um, 2026-08-03);
- *  `valorVale` é a soma dos itens devolvidos. */
+ *  `valorVale` é a soma dos itens devolvidos. `notaFiscal` é `null` quando não havia nota a
+ *  emitir (fiscal desligado, devolução sem venda de origem, ou venda sem NFC-e autorizada). */
 export interface DevolucaoEfetivada {
   idMovimento: number
   idDevolucao: number
@@ -57,6 +74,7 @@ export interface DevolucaoEfetivada {
   idFuncionario: number | null
   nomeFuncionario: string | null
   itens: ItemDevolucaoResponse[]
+  notaFiscal: NotaFiscalDevolucao | null
 }
 
 export interface ValeMercadoria {

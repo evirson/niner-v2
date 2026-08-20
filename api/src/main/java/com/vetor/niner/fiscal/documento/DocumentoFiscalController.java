@@ -1,6 +1,7 @@
 package com.vetor.niner.fiscal.documento;
 
 import com.vetor.niner.fiscal.documento.DocumentoFiscalListaDtos.ConsultaSefazResponse;
+import com.vetor.niner.fiscal.documento.DocumentoFiscalListaDtos.DanfeResponse;
 import com.vetor.niner.fiscal.documento.DocumentoFiscalListaDtos.PaginaDocumentosFiscais;
 import com.vetor.niner.fiscal.documento.DocumentoFiscalListaDtos.ReprocessamentoResponse;
 import com.vetor.niner.fiscal.documento.DocumentoFiscalListaDtos.XmlDocumentoFiscalResponse;
@@ -46,6 +47,12 @@ public class DocumentoFiscalController {
     @GetMapping("/{idDocumentoFiscal}/xml")
     public XmlDocumentoFiscalResponse xml(@AuthenticationPrincipal Jwt jwt, @PathVariable long idDocumentoFiscal) {
         return service.buscarXml(jwt, idDocumentoFiscal);
+    }
+
+    /** Dados do DANFE A4 (modelo 55) — a NFC-e imprime o DANFCE térmico, outro documento. */
+    @GetMapping("/{idDocumentoFiscal}/danfe")
+    public DanfeResponse danfe(@AuthenticationPrincipal Jwt jwt, @PathVariable long idDocumentoFiscal) {
+        return service.buscarDanfe(jwt, idDocumentoFiscal);
     }
 
     @PostMapping("/{idDocumentoFiscal}/consultar-sefaz")
