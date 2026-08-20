@@ -1510,7 +1510,7 @@ impressão térmica são caminhos separados e precisam ser conferidos separadame
 
 ### 9.9 CSRT — Código de Segurança do Responsável Técnico (NT 2018.005)
 
-O grupo `infRespTec` identifica quem **desenvolve o software emissor** (a Vetor), nunca o lojista —
+O grupo `infRespTec` identifica quem **desenvolve o software emissor** (a MITRYUSCASH), nunca o lojista —
 um valor só para todas as notas de todos os tenants, por isso mora em configuração de aplicação e
 não em `fiscal_config_empresa`. Além de CNPJ/contato/e-mail/telefone, ele aceita o par
 `idCSRT` + `hashCSRT`, e é aí que mora a armadilha:
@@ -1656,7 +1656,7 @@ primeiro, por custo/valor:
 > ⚠️ **Seção histórica — vencida desde 2026-08-19.** Ela descreve o momento em que a codificação
 > do módulo *começou*, e é mantida só como registro do ponto de partida. **Hoje B0–B9 estão
 > fechados** (a tabela abaixo está marcada com ✅ bloco a bloco) e a suíte tem **794** testes
-> verdes. A única pendência do módulo não é código: o **CSRT** da Vetor na SEFAZ (§9.9).
+> verdes. A única pendência do módulo não é código: o **CSRT** da MITRYUSCASH na SEFAZ (§9.9).
 
 **Feito:** o schema inteiro — `V034__fiscal_referencia.sql` (referência nacional, global),
 `V035__fiscal_documento.sql` (tabelas de tenant, RLS FORCE) e as colunas fiscais nas migrations
