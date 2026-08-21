@@ -285,5 +285,10 @@ legado, onde a etiqueta era um modelo de texto com marcadores, e o signup ainda 
 
 ### Código de barras mais legível
 
-`shape-rendering="crispEdges"` (sem antialiasing, que em térmica 1-bit vira barra irregular) e os
+O **módulo é derivado da largura da caixa** (`larguraPx / 95`), então o SVG nasce do tamanho do
+viewport e **nada é esticado** — era o esticamento que produzia barras de larguras irregulares. Os
 dígitos saíram do SVG para HTML, agrupados **1+6+6** como manda o padrão EAN-13.
+
+⚠️ `shape-rendering="crispEdges"` foi tentado e **revertido no mesmo dia**: ele arredonda cada borda
+para a grade de pixels e engrossou as barras a ponto de não lerem. Ver
+`docs/telas/configuracao-etiqueta.md`.

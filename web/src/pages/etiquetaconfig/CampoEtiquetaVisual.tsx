@@ -38,6 +38,15 @@ const MM_POR_PONTO = 25.4 / 72
 const ALTURA_TEXTO_BARRAS_MM = 3
 
 /**
+ * Módulos de um símbolo EAN-13 (sem as zonas de silêncio, que o `margin: 0` do jsbarcode remove).
+ *
+ * <p>É a constante que transforma a largura da caixa em largura de barra: `módulo = larguraPx / 95`.
+ * Derivar daqui é o que garante que o desenho ocupe exatamente a caixa **sem ser esticado** — e
+ * esticar era a origem das barras irregulares que a impressão de 2026-08-21 mostrou.
+ */
+const MODULOS_EAN13 = 95
+
+/**
  * Agrupa os 13 dígitos do EAN-13 como manda o padrão: **1 + 6 + 6** (`7 891234 567895`).
  *
  * <p>Não é enfeite — é assim que o olho humano confere um código de barras sem se perder no meio
@@ -103,7 +112,16 @@ function CodigoDeBarras({ valor, larguraPx, alturaPx, exibirTexto, escalaPxPorMm
       const alturaTextoPx = exibirTexto ? ALTURA_TEXTO_BARRAS_MM * escalaPxPorMm : 0
       JsBarcode(svgRef.current, valor || VALOR_BARRA_EXEMPLO, {
         format: 'EAN13',
-        width: 2,
+        // ⚠️ O módulo é DERIVADO da caixa (2026-08-21, tarde): assim os 95 módulos do EAN-13
+        // ocupam exatamente `larguraPx` e o SVG nasce do tamanho do viewport — nada é esticado.
+        //
+        // Antes era `width: 2` fixo e o SVG era esticado até caber, o que já era ruim (o fator de
+        // escala não é inteiro, então cada barra caía em fração de pixel) e virou ilegível quando
+        // somei `shape-rendering: crispEdges`: ele arredonda CADA borda para a grade de pixels
+        // independentemente, então barra de 1 módulo virava 2 px enquanto o espaço vizinho sumia.
+        // O resultado impresso foram barras grossas com espaços comidos — a razão barra/espaço,
+        // que é justamente o que o leitor mede, deixou de existir.
+        width: Math.max(larguraPx / MODULOS_EAN13, 0.1),
         height: Math.max(alturaPx - alturaTextoPx, 1),
         // ⚠️ Os dígitos NÃO são mais desenhados pelo jsbarcode (2026-08-21, pedido do dono do
         // produto: "os números estão muito próximos um do outro"). O SVG é esticado para preencher
@@ -129,12 +147,14 @@ function CodigoDeBarras({ valor, larguraPx, alturaPx, exibirTexto, escalaPxPorMm
         width={larguraPx}
         height={Math.max(alturaPx - alturaTextoPx, 1)}
         preserveAspectRatio="none"
-        /* ⚠️ `crispEdges` desliga o antialiasing das bordas das barras (2026-08-21, pedido do dono
-           do produto: "as barras estão muito perto uma da outra, dificultando a leitura"). Com
-           antialiasing, uma borda que cai em meio-pixel é pintada em CINZA — e impressora térmica é
-           1 bit: ela transforma esse cinza em pontos irregulares, o que engorda umas barras, afina
-           outras e embaralha a razão entre barra e espaço, que é justamente o que o leitor mede. */
-        shapeRendering="crispEdges"
+        /* ⚠️ NÃO reintroduzir `shapeRendering="crispEdges"` — tentado em 2026-08-21 e revertido no
+           mesmo dia, com etiqueta impressa provando. Ele arredonda cada borda para a grade de
+           pixels de forma independente, e com módulo fracionário isso ENGROSSA umas barras e come
+           os espaços vizinhos: saíram barras gordas e leitura impossível. O antialiasing parece
+           "sujo" quando ampliado na tela, mas preserva a razão barra/espaço, que é o que o leitor
+           mede — e quem decide o ponto final é o rasterizador da impressora, a 203 dpi. A
+           irregularidade de verdade vinha do SVG ser esticado, resolvida acima derivando o módulo
+           da largura da caixa. */
         style={{ display: 'block' }}
       />
       {exibirTexto && (

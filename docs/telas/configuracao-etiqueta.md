@@ -780,6 +780,35 @@ pelo cache antigo. (A geometria que ela imprime nunca esteve errada — o modelo
 fresco do servidor —, mas nome e situação podiam estar velhos.)
 
 
+
+### ⛔ `crispEdges` foi revertido — ele engrossou as barras a ponto de não ler
+
+Introduzido no mesmo dia para resolver o "borrado", e **piorou**: a etiqueta impressa saiu com
+barras gordas e espaços comidos. A foto do dono do produto encerrou a discussão.
+
+**Por quê:** `shape-rendering: crispEdges` arredonda **cada borda** para a grade de pixels, de forma
+independente. Com o módulo caindo em fração de pixel — que era o caso, porque o SVG era **esticado**
+até caber na caixa — uma barra de 1 módulo vira 2 px enquanto o espaço vizinho some. A razão
+barra/espaço, que é exatamente o que o leitor mede, deixa de existir.
+
+**A causa real do "borrado" original não era o antialiasing: era o esticamento.** O jsbarcode
+desenhava com `width: 2` fixo e o SVG era escalado por um fator arbitrário até preencher a caixa.
+Agora o **módulo é derivado da caixa** (`larguraPx / 95`, os 95 módulos do EAN-13 sem zonas de
+silêncio): o SVG nasce exatamente do tamanho do viewport e nada é escalado.
+
+O antialiasing volta a valer. Ele parece "sujo" quando ampliado na tela, mas preserva as
+proporções, e quem decide o ponto final é o rasterizador da impressora, a 203 dpi.
+
+⚠️ **O que ainda não é possível:** com a caixa de 32 mm, o módulo fica em 0,337 mm — 102% do nominal
+do EAN-13, ótimo tamanho, mas **2,7 dots** a 203 dpi. A impressora vai alternar entre 2 e 3 dots por
+módulo, e não há largura de caixa que resolva isso nesta etiqueta (3 dots exigiriam 35,6 mm, que não
+cabem; 2 dots dariam 23,75 mm = 76% do nominal, abaixo do mínimo de 80% da norma). O sistema legado
+convive com o mesmo compromisso (`mmBarWidth` 0,31 mm = 2,48 dots) e lê.
+
+**Se ainda sair grosso, o próximo suspeito é o DRIVER, não o código:** densidade (*darkness*) alta
+demais é a causa clássica de barra engordada em térmica direta — o calor espalha o ponto. Baixar a
+densidade e/ou reduzir a velocidade de impressão costuma resolver. Só depois disso vale mexer em
+*bar width reduction* (desenhar a barra ~1 dot mais fina para compensar o espalhamento).
 ### Dívida que continua aberta
 
 "Largura da Etiqueta" segue significando duas coisas — o adesivo **e** a caixa de conteúdo. Com o
@@ -826,10 +855,13 @@ justamente o que não se quer mexer sem querer.
 
 ### 4. Código de barras: dois defeitos diferentes com a mesma aparência
 
-- **Barras "borradas"** — faltava `shape-rendering="crispEdges"` no SVG. Com antialiasing, uma
-  borda que cai em meio-pixel é pintada em **cinza**; térmica é 1 bit e converte esse cinza em
-  pontos irregulares, engordando umas barras e afinando outras — e a razão barra/espaço é
-  exatamente o que o leitor mede.
+- **Barras "borradas"** — ⛔ **o diagnóstico abaixo estava ERRADO e a correção foi revertida no
+  mesmo dia**; fica registrado porque o raciocínio é plausível e alguém vai repeti-lo. Eu atribuí o
+  defeito ao antialiasing e acrescentei `shape-rendering="crispEdges"`: a etiqueta impressa saiu com
+  **barras gordas e ilegíveis**. A causa real era o **esticamento** do SVG, e a correção é derivar o
+  módulo da largura da caixa. Ver *"⛔ `crispEdges` foi revertido"*, acima.
+  <br>~~faltava `shape-rendering="crispEdges"` no SVG. Com antialiasing, uma borda que cai em
+  meio-pixel é pintada em cinza; térmica é 1 bit e converte esse cinza em pontos irregulares.~~
 - **Dígitos espremidos** — eram desenhados pelo próprio jsbarcode, **dentro** do SVG que é esticado
   para preencher a caixa (`preserveAspectRatio="none"`); esticar o desenho espremia o texto junto.
   Saíram do SVG e viraram HTML, com espaçamento proporcional ao corpo da letra e o agrupamento
