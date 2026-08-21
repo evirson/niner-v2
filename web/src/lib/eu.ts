@@ -7,7 +7,13 @@ export interface Eu {
   usuario: { idUsuario: number; nome: string; email: string; papel: string }
   /** Empresa ativa da sessão (escolhida no login, 2026-07-28) — todo cadastro feito nesta
    *  sessão com coluna `id_empresa` usa esta empresa. */
-  empresa: { idEmpresa: number; nome: string }
+  /** `nomeEtiqueta` = o texto IMPRESSO no campo "Nome da Empresa" da etiqueta de produto
+   *  (2026-08-21). Hoje é o mesmo nome fantasia/razão social de `nome`, e existe como campo
+   *  próprio para o dia em que a loja quiser um nome comercial curto só para a etiqueta — o
+   *  front já lê daqui, então virar um campo editável não mexe em nenhuma tela.
+   *  ⚠️ NÃO é `empresa.cfg_nome_etiqueta`: aquela coluna guarda um modelo de texto do ERP legado
+   *  ("{sku}\n{descricao}\n{preco_venda}"), que impresso sairia com os marcadores literais. */
+  empresa: { idEmpresa: number; nome: string; nomeEtiqueta: string }
   /** Plano e cota do mês (ADR-015). Substituiu `trial_expira_em`: não há mais trial. */
   plano: {
     nome: string

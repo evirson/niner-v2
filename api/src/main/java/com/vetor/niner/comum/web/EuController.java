@@ -55,12 +55,27 @@ public class EuController {
         // Empresa ativa da sessão (claim eid, 2026-07-28) — escolhida no login quando o
         // usuário tem acesso a mais de uma (usuario_empresa). Exibida no header do front pra
         // deixar claro em qual empresa os cadastros feitos nesta sessão vão cair.
-        var empresa = jdbc.sql(
-                        "SELECT id_empresa, COALESCE(nome_fantasia, razao_social) AS nome FROM empresa WHERE id_tenant = ? AND id_empresa = ?")
+        // ⚠️ `nomeEtiqueta` (2026-08-21) é o texto que sai IMPRESSO no campo "Nome da Empresa" da
+        // etiqueta de produto — até esta data o front mandava o literal "NOME DA LOJA" para o papel,
+        // na Emissão de verdade e não só na prévia.
+        //
+        // ⚠️ E NÃO sai de `empresa.cfg_nome_etiqueta`, apesar do nome da coluna: aquilo é herança do
+        // ERP legado, onde a etiqueta era um MODELO de texto com marcadores, e o signup ainda o
+        // semeia assim ("{sku}\n{descricao}\n{preco_venda}"). Nosso editor posiciona campos, não
+        // interpreta marcador — imprimir o conteúdo daquela coluna colocaria "{sku}" no adesivo.
+        // O nome da empresa é o nome fantasia (ou a razão social), o mesmo que o ERP mostra no
+        // cabeçalho. É a empresa da SESSÃO (claim eid): a Emissão usa empresa só como filtro de
+        // estoque, não como emitente da etiqueta.
+        var empresa = jdbc.sql("""
+                        SELECT id_empresa, COALESCE(nome_fantasia, razao_social) AS nome
+                          FROM empresa
+                         WHERE id_tenant = ? AND id_empresa = ?
+                        """)
                 .params(idTenant, idEmpresa)
                 .query((rs, n) -> Map.<String, Object>of(
                         "idEmpresa", rs.getLong("id_empresa"),
-                        "nome", rs.getString("nome")))
+                        "nome", rs.getString("nome"),
+                        "nomeEtiqueta", rs.getString("nome")))
                 .single();
 
         // Plano e cota do mês, no lugar da antiga data de expiração do trial: desde o ADR-015 a

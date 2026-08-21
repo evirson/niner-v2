@@ -27,6 +27,7 @@ import {
   type EtiquetaConfigFormState,
   type ProdutoExemplo,
 } from '../../lib/etiquetaConfig'
+import { useEu } from '../../lib/eu'
 import { aoTeclarEnterNoFormulario } from '../../lib/formularios'
 import { completarEtiquetaMm, desmascararEtiquetaMm, formatarEtiquetaMm, mascararEtiquetaMm } from '../../lib/masks'
 import { maiusculas } from '../../lib/texto'
@@ -88,6 +89,10 @@ export default function EtiquetaConfigForm({ somenteLeitura = false }: { somente
    *  "Salvar" seguinte criaria uma segunda linha em vez de atualizar a que o teste acabou de
    *  gravar — duplicata silenciosa. */
   const [idCriadoNoTeste, setIdCriadoNoTeste] = useState<number | null>(null)
+
+  // Nome IMPRESSO no campo Nome da Empresa: empresa.cfg_nome_etiqueta (2026-08-21).
+  const { data: eu } = useEu()
+  const nomeEmpresaImpressa = eu?.empresa.nomeEtiqueta || 'NOME DA EMPRESA'
 
   const { data: configExistente } = useQuery({
     queryKey: ['etiqueta-config', id],
@@ -349,7 +354,10 @@ export default function EtiquetaConfigForm({ somenteLeitura = false }: { somente
         </div>
       </div>
 
-      <div className="lista-corpo">
+      {/* `etiqueta-config-corpo` (2026-08-21): a tela inteira deixa de rolar — quem rola é a área
+          do canvas, por dentro dela. Assim aumentar o zoom do editor não empurra o formulário
+          para fora da janela. Ver styles.css. */}
+      <div className="lista-corpo etiqueta-config-corpo">
         <form
           id="form-etiqueta-config"
           className="card form-secoes form-secoes-larga"
@@ -471,7 +479,7 @@ export default function EtiquetaConfigForm({ somenteLeitura = false }: { somente
               </div>
             </section>
 
-            <section className="section">
+            <section className="section secao-editor-etiqueta">
               <p className="section-label">Campos da Etiqueta</p>
               <div className="form-grid">
                 <div className="col-12">
@@ -624,7 +632,7 @@ export default function EtiquetaConfigForm({ somenteLeitura = false }: { somente
                       campo={c}
                       escalaPxPorMm={MM_PARA_PX_IMPRESSAO}
                       produtoExemplo={produtoExemplo}
-                      nomeEmpresaExemplo="NOME DA LOJA"
+                      nomeEmpresaExemplo={nomeEmpresaImpressa}
                     />
                   ))}
                 </div>

@@ -1203,6 +1203,21 @@ a.menu-card:hover {
 .editor-etiqueta-paleta-item { justify-content: flex-start; text-align: left; }
 
 .editor-etiqueta-area { overflow: auto; padding-bottom: 4px; }
+
+/* Configuração de Etiqueta sem rolagem vertical de TELA (2026-08-21, pedido do dono do produto).
+   O corpo padrão do shell é `overflow-y: auto`, então o editor — que cresce com o zoom — empurrava
+   o formulário para fora da janela e obrigava a rolar a página inteira para ver o campo que se
+   estava ajustando. Agora a página é fixa e a rolagem mora onde o conteúdo realmente varia de
+   tamanho: a área do canvas. Aumentar o zoom passa a rolar o desenho, não a tela. */
+.lista-corpo.etiqueta-config-corpo { overflow: hidden; display: flex; }
+.etiqueta-config-corpo > form { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.etiqueta-config-corpo .form-fieldset { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+/* Só a seção do editor estica e rola; as de cima ficam do tamanho que pedem. */
+.etiqueta-config-corpo .secao-editor-etiqueta { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.etiqueta-config-corpo .secao-editor-etiqueta > .form-grid { flex: 1; min-height: 0; }
+.etiqueta-config-corpo .secao-editor-etiqueta .editor-etiqueta { height: 100%; min-height: 0; }
+.etiqueta-config-corpo .secao-editor-etiqueta .editor-etiqueta-corpo { flex: 1; min-height: 0; }
+.etiqueta-config-corpo .secao-editor-etiqueta .editor-etiqueta-area { max-height: 100%; }
 .editor-etiqueta-regua-h { position: relative; height: 16px; }
 .editor-etiqueta-marca-h {
   position: absolute; top: 0; height: 6px; border-left: 1px solid var(--line-strong);
@@ -1224,13 +1239,33 @@ a.menu-card:hover {
 .editor-etiqueta-campo { cursor: grab; touch-action: none; }
 .editor-etiqueta-campo:active { cursor: grabbing; }
 .editor-etiqueta-campo:focus-visible { outline-color: var(--accent) !important; }
+/* Alças de redimensionamento: canto (as duas dimensões), borda direita (largura) e borda inferior
+   (altura) — 2026-08-21. As de borda são barras e não quadradinhos porque a forma já diz em que
+   direção elas puxam, e o cursor confirma. */
 .editor-etiqueta-redimensionar {
-  position: absolute; width: 10px; height: 10px;
-  background: var(--accent); border: 1px solid #fff; border-radius: 2px;
-  cursor: nwse-resize; touch-action: none;
+  position: absolute; background: var(--accent); border: 1px solid #fff; border-radius: 2px;
+  touch-action: none;
 }
+.editor-etiqueta-redimensionar.redimensionar-canto { width: 10px; height: 10px; cursor: nwse-resize; }
+.editor-etiqueta-redimensionar.redimensionar-largura { width: 8px; height: 24px; cursor: ew-resize; }
+.editor-etiqueta-redimensionar.redimensionar-altura { width: 24px; height: 8px; cursor: ns-resize; }
 
 .editor-etiqueta-painel { min-width: 220px; display: flex; flex-direction: column; gap: 10px; }
+
+/* Painel de propriedades FLUTUANTE (2026-08-21) — deixou de ser `.modal-overlay`, que cobria a
+   tela e capturava todo clique: o painel que serve para ajustar o campo impedia arrastar o campo.
+   Sem camada por trás, nasce no canto inferior direito (o canvas fica à esquerda) e o cabeçalho
+   arrasta a janela para longe de onde o usuário estiver trabalhando. */
+.editor-etiqueta-painel-flutuante {
+  position: fixed; right: 24px; bottom: 24px; z-index: 30;
+  width: 310px; max-height: 76vh; overflow: auto;
+  padding: 14px; display: flex; flex-direction: column; gap: 10px;
+  background: var(--surface); color: var(--ink);
+  border: 1px solid var(--line-strong); border-radius: var(--radius);
+  box-shadow: 0 14px 36px rgba(0, 0, 0, .28);
+}
+.editor-etiqueta-painel-pegador { cursor: move; user-select: none; touch-action: none; }
+.editor-etiqueta-painel-corpo { display: flex; flex-direction: column; gap: 10px; }
 .editor-etiqueta-painel-topo { display: flex; align-items: center; justify-content: space-between; }
 .editor-etiqueta-painel-grade { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .campo-mm-label input { width: 100%; }

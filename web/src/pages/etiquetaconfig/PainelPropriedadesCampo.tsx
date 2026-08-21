@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import { IconeExcluir } from '../../components/Icones'
 import {
   CAMPOS_DE_BARRAS,
@@ -71,13 +71,17 @@ function CampoMm({ rotulo, valorMm, aoMudar, permiteVazio }: {
 }
 
 /**
- * Popup de propriedades do campo selecionado no editor (2026-08-04; virou popup em 2026-08-05,
- * pedido do dono do produto — melhor visualização e evita o scroll que o painel fixo ao lado do
- * canvas causava) — posição/tamanho precisos por número (complementa o arraste, que é bom pra
- * posicionar mas impreciso demais pra medidas exatas) + estilo (fonte/tamanho/negrito/fundo/
- * alinhamento). Mesmo padrão `.modal-overlay`/`.modal` do resto do sistema; só renderiza quando
- * `EditorEtiquetaCanvas` tem um campo selecionado (parent controla a condicional, não este
- * componente — por isso não há mais um estado "nenhum campo selecionado" aqui dentro).
+ * Painel de propriedades do campo selecionado no editor (2026-08-04; virou popup em 2026-08-05).
+ *
+ * <p>⚠️ **Deixou de ser modal em 2026-08-21** (pedido do dono do produto: *"esta tela cobre a
+ * etiqueta e não consigo mexer"*). Era `.modal-overlay`, que por definição cobre a tela inteira e
+ * captura todo clique — ou seja, o painel que existe para ajustar o campo impedia arrastar o
+ * campo. As duas coisas precisam funcionar ao mesmo tempo, porque servem ao mesmo ajuste por
+ * caminhos diferentes: o arraste posiciona rápido, o número posiciona exato.
+ *
+ * <p>Agora é uma janela flutuante (`position: fixed`), **arrastável pelo cabeçalho** para sair da
+ * frente da etiqueta, e sem nenhuma camada por trás. Nasce no canto inferior direito, longe do
+ * canvas, que fica à esquerda.
  */
 export default function PainelPropriedadesCampo({
   campo,
@@ -91,16 +95,46 @@ export default function PainelPropriedadesCampo({
   aoFechar: () => void
 }) {
   const ehBarra = (CAMPOS_DE_BARRAS as string[]).includes(campo.campo)
+  /** `null` = ainda no canto padrão do CSS; assim o painel não precisa medir a janela para nascer. */
+  const [posicao, setPosicao] = useState<{ x: number; y: number } | null>(null)
+  const arrasteRef = useRef<{ offsetX: number; offsetY: number } | null>(null)
+
+  function aoArrastarCabecalho(e: ReactPointerEvent<HTMLDivElement>) {
+    const caixa = e.currentTarget.parentElement?.getBoundingClientRect()
+    if (!caixa) return
+    arrasteRef.current = { offsetX: e.clientX - caixa.left, offsetY: e.clientY - caixa.top }
+    e.currentTarget.setPointerCapture(e.pointerId)
+  }
+
+  function aoMoverCabecalho(e: ReactPointerEvent<HTMLDivElement>) {
+    const arraste = arrasteRef.current
+    if (!arraste) return
+    // Preso à janela: um painel arrastado para fora da viewport não teria como voltar.
+    const x = Math.min(Math.max(e.clientX - arraste.offsetX, 0), window.innerWidth - 120)
+    const y = Math.min(Math.max(e.clientY - arraste.offsetY, 0), window.innerHeight - 60)
+    setPosicao({ x, y })
+  }
 
   return (
-    <div className="modal-overlay" onClick={aoFechar}>
-      <div className="modal editor-etiqueta-painel" role="dialog" aria-label="Propriedades do campo" onClick={(e) => e.stopPropagation()}>
-        <div className="editor-etiqueta-painel-topo">
-          <strong>{ROTULO_CAMPO_ETIQUETA[campo.campo]}</strong>
-          <button type="button" className="acao-icone acao-excluir" onClick={aoRemover} title="Remover campo" aria-label="Remover campo">
-            <IconeExcluir />
-          </button>
-        </div>
+    <div
+      className="editor-etiqueta-painel-flutuante"
+      role="dialog"
+      aria-label="Propriedades do campo"
+      style={posicao ? { left: posicao.x, top: posicao.y, right: 'auto', bottom: 'auto' } : undefined}
+    >
+      <div
+        className="editor-etiqueta-painel-topo editor-etiqueta-painel-pegador"
+        onPointerDown={aoArrastarCabecalho}
+        onPointerMove={aoMoverCabecalho}
+        onPointerUp={() => { arrasteRef.current = null }}
+        title="Arraste para mover o painel"
+      >
+        <strong>{ROTULO_CAMPO_ETIQUETA[campo.campo]}</strong>
+        <button type="button" className="acao-icone acao-excluir" onClick={aoRemover} title="Remover campo" aria-label="Remover campo">
+          <IconeExcluir />
+        </button>
+      </div>
+      <div className="editor-etiqueta-painel-corpo">
 
         <div className="editor-etiqueta-painel-grade">
           <CampoMm rotulo="Posição X (mm)" valorMm={campo.posicaoXMm} aoMudar={(v) => aoMudar({ ...campo, posicaoXMm: v ?? 0 })} />

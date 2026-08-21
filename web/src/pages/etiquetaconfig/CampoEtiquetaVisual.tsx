@@ -37,6 +37,19 @@ const MM_POR_PONTO = 25.4 / 72
  *  com fonte própria, então ele também precisa ser medido em milímetro e não em pixel fixo. */
 const ALTURA_TEXTO_BARRAS_MM = 3
 
+/**
+ * Agrupa os 13 dígitos do EAN-13 como manda o padrão: **1 + 6 + 6** (`7 891234 567895`).
+ *
+ * <p>Não é enfeite — é assim que o olho humano confere um código de barras sem se perder no meio
+ * de treze algarismos iguais, e é como toda etiqueta de varejo os imprime. Valor fora do padrão
+ * (não deveria acontecer: `sku` sempre vem de `gerar_ean13_interno()`) sai inteiro, sem
+ * agrupamento, em vez de ser recortado errado.
+ */
+function agruparDigitosEan(valor: string): string {
+  if (valor.length !== 13) return valor
+  return `${valor.slice(0, 1)} ${valor.slice(1, 7)} ${valor.slice(7)}`
+}
+
 function ehCampoDeBarras(campo: CampoEtiquetaPosicionado['campo']): boolean {
   return (CAMPOS_DE_BARRAS as string[]).includes(campo)
 }
@@ -92,8 +105,12 @@ function CodigoDeBarras({ valor, larguraPx, alturaPx, exibirTexto, escalaPxPorMm
         format: 'EAN13',
         width: 2,
         height: Math.max(alturaPx - alturaTextoPx, 1),
-        displayValue: exibirTexto,
-        fontSize: Math.max(alturaTextoPx * 0.9, 1),
+        // ⚠️ Os dígitos NÃO são mais desenhados pelo jsbarcode (2026-08-21, pedido do dono do
+        // produto: "os números estão muito próximos um do outro"). O SVG é esticado para preencher
+        // a caixa (`preserveAspectRatio="none"`), e esticar o desenho esticava o TEXTO junto —
+        // espremendo ou alargando os dígitos conforme a largura configurada. Agora eles saem em
+        // HTML, fora do SVG, onde o espaçamento é nosso e não sofre escala nenhuma.
+        displayValue: false,
         textMargin: 0,
         margin: 0,
       })
@@ -103,14 +120,43 @@ function CodigoDeBarras({ valor, larguraPx, alturaPx, exibirTexto, escalaPxPorMm
     }
   }, [valor, larguraPx, alturaPx, exibirTexto, escalaPxPorMm])
 
+  const alturaTextoPx = exibirTexto ? ALTURA_TEXTO_BARRAS_MM * escalaPxPorMm : 0
+
   return (
-    <svg
-      ref={svgRef}
-      width={larguraPx}
-      height={alturaPx}
-      preserveAspectRatio="none"
-      style={{ display: 'block' }}
-    />
+    <div style={{ width: larguraPx, height: alturaPx, display: 'flex', flexDirection: 'column' }}>
+      <svg
+        ref={svgRef}
+        width={larguraPx}
+        height={Math.max(alturaPx - alturaTextoPx, 1)}
+        preserveAspectRatio="none"
+        /* ⚠️ `crispEdges` desliga o antialiasing das bordas das barras (2026-08-21, pedido do dono
+           do produto: "as barras estão muito perto uma da outra, dificultando a leitura"). Com
+           antialiasing, uma borda que cai em meio-pixel é pintada em CINZA — e impressora térmica é
+           1 bit: ela transforma esse cinza em pontos irregulares, o que engorda umas barras, afina
+           outras e embaralha a razão entre barra e espaço, que é justamente o que o leitor mede. */
+        shapeRendering="crispEdges"
+        style={{ display: 'block' }}
+      />
+      {exibirTexto && (
+        <div
+          style={{
+            height: alturaTextoPx,
+            lineHeight: `${alturaTextoPx}px`,
+            // 0,78 da faixa: deixa respiro acima e abaixo dos dígitos sem roubar altura das barras.
+            fontSize: alturaTextoPx * 0.78,
+            fontFamily: "'Courier New', Courier, monospace",
+            fontWeight: 700,
+            textAlign: 'center',
+            whiteSpace: 'nowrap',
+            // Espaço entre dígitos proporcional ao corpo da letra — em milímetro, como todo o
+            // resto desta tela, para a proporção não mudar entre editor, prévia e papel.
+            letterSpacing: alturaTextoPx * 0.1,
+          }}
+        >
+          {agruparDigitosEan(valor || VALOR_BARRA_EXEMPLO)}
+        </div>
+      )}
+    </div>
   )
 }
 

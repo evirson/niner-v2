@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react'
+import { useEu } from '../../lib/eu'
 import CampoEtiquetaVisual from './CampoEtiquetaVisual'
 import PainelPropriedadesCampo from './PainelPropriedadesCampo'
 import {
@@ -16,6 +17,9 @@ const PX_POR_MM_BASE = 6
  *  ⚠️ O texto acompanha esta escala desde 2026-08-20 (`CampoEtiquetaVisual`): antes a fonte saía
  *  em `pt` fixo e a prévia mostrava letra 26% maior que a real, cortando o que na verdade cabia. */
 const ESCALA_PREVIA = PX_POR_MM_BASE * 0.5
+/** Qual dimensão a alça arrastada altera: só largura, só altura, ou as duas (alça de canto). */
+type EixoRedimensionamento = 'horizontal' | 'vertical' | 'ambos'
+
 const ZOOM_MIN = 0.5
 const ZOOM_MAX = 3
 const ZOOM_PASSO = 0.25
@@ -129,10 +133,14 @@ export default function EditorEtiquetaCanvas({
     })
   const [campoSelecionado, setCampoSelecionado] = useState<CampoEtiqueta | null>(null)
   const arrastoRef = useRef<{ campo: CampoEtiqueta; inicioPxX: number; inicioPxY: number; inicioMmX: number; inicioMmY: number } | null>(null)
-  const redimensionoRef = useRef<{ campo: CampoEtiqueta; inicioPxX: number; inicioPxY: number; inicioLarguraMm: number; inicioAlturaMm: number } | null>(null)
+  const redimensionoRef = useRef<{ campo: CampoEtiqueta; eixo: EixoRedimensionamento; inicioPxX: number; inicioPxY: number; inicioLarguraMm: number; inicioAlturaMm: number } | null>(null)
 
   const escala = PX_POR_MM_BASE * zoom
-  const nomeEmpresaExemplo = 'NOME DA LOJA'
+  // O nome que a etiqueta imprime de verdade: empresa.cfg_nome_etiqueta (2026-08-21). Antes
+  // era o literal 'NOME DA LOJA' aqui e em mais tres lugares — inclusive na Emissao, ou seja,
+  // toda etiqueta ja impressa saiu com esse texto. O fallback so cobre o /eu ainda carregando.
+  const { data: eu } = useEu()
+  const nomeEmpresaExemplo = eu?.empresa.nomeEtiqueta || 'NOME DA EMPRESA'
   const largura = Math.max(larguraEtiquetaMm, 0)
   const altura = Math.max(alturaEtiquetaMm, 0)
 
@@ -236,14 +244,26 @@ export default function EditorEtiquetaCanvas({
     arrastoRef.current = null
   }
 
-  /** Alça no canto inferior-direito do campo selecionado — `stopPropagation` no pointerdown pra
-   * não disparar `aoIniciarArraste` do campo por baixo (moveria em vez de redimensionar). */
-  function aoIniciarRedimensionar(e: React.PointerEvent<HTMLDivElement>, campo: CampoEtiquetaPosicionado) {
+  /**
+   * Alças de redimensionamento do campo selecionado — `stopPropagation` no pointerdown pra não
+   * disparar `aoIniciarArraste` do campo por baixo (moveria em vez de redimensionar).
+   *
+   * <p>São **três** desde 2026-08-21 (pedido do dono do produto: *"mudar largura, mudar altura"*):
+   * a do canto muda as duas juntas, a da borda direita só a largura e a da borda inferior só a
+   * altura. Com só a do canto, ajustar uma dimensão sem bagunçar a outra era impossível no mouse —
+   * e num campo de código de barras a altura é justamente o que não se quer mexer sem querer.
+   */
+  function aoIniciarRedimensionar(
+    e: React.PointerEvent<HTMLDivElement>,
+    campo: CampoEtiquetaPosicionado,
+    eixo: EixoRedimensionamento,
+  ) {
     e.stopPropagation()
     e.currentTarget.setPointerCapture(e.pointerId)
     setCampoSelecionado(campo.campo)
     redimensionoRef.current = {
       campo: campo.campo,
+      eixo,
       inicioPxX: e.clientX,
       inicioPxY: e.clientY,
       inicioLarguraMm: campo.larguraMm ?? 0,
@@ -254,8 +274,9 @@ export default function EditorEtiquetaCanvas({
   function aoMoverRedimensionar(e: React.PointerEvent<HTMLDivElement>) {
     const redimensiono = redimensionoRef.current
     if (!redimensiono) return
-    const deltaMmX = (e.clientX - redimensiono.inicioPxX) / escala
-    const deltaMmY = (e.clientY - redimensiono.inicioPxY) / escala
+    // O eixo não usado recebe delta zero — mantém a medida intacta em vez de recalculá-la.
+    const deltaMmX = redimensiono.eixo === 'vertical' ? 0 : (e.clientX - redimensiono.inicioPxX) / escala
+    const deltaMmY = redimensiono.eixo === 'horizontal' ? 0 : (e.clientY - redimensiono.inicioPxY) / escala
     atualizarTamanho(redimensiono.campo, redimensiono.inicioLarguraMm + deltaMmX, redimensiono.inicioAlturaMm + deltaMmY)
   }
 
@@ -383,18 +404,40 @@ export default function EditorEtiquetaCanvas({
                   }}
                 />
               ))}
-              {campoSelecionadoObj && (
-                <div
-                  className="editor-etiqueta-redimensionar"
-                  title="Arraste pra redimensionar"
-                  style={{
-                    left: (campoSelecionadoObj.posicaoXMm + (campoSelecionadoObj.larguraMm ?? 10)) * escala - 5,
-                    top: (campoSelecionadoObj.posicaoYMm + (campoSelecionadoObj.alturaMm ?? 6)) * escala - 5,
-                  }}
-                  onPointerDown={(e) => aoIniciarRedimensionar(e, campoSelecionadoObj)}
-                  onClick={(e) => e.stopPropagation()}
-                />
-              )}
+              {campoSelecionadoObj && (() => {
+                const x = campoSelecionadoObj.posicaoXMm * escala
+                const y = campoSelecionadoObj.posicaoYMm * escala
+                const larg = (campoSelecionadoObj.larguraMm ?? 10) * escala
+                const alt = (campoSelecionadoObj.alturaMm ?? 6) * escala
+                return (
+                  <>
+                    {/* Borda direita: só LARGURA. */}
+                    <div
+                      className="editor-etiqueta-redimensionar redimensionar-largura"
+                      title="Arraste pra mudar a largura"
+                      style={{ left: x + larg - 4, top: y + alt / 2 - 12 }}
+                      onPointerDown={(e) => aoIniciarRedimensionar(e, campoSelecionadoObj, 'horizontal')}
+                      onClick={(e) => e.stopPropagation()}
+                    />
+                    {/* Borda inferior: só ALTURA. */}
+                    <div
+                      className="editor-etiqueta-redimensionar redimensionar-altura"
+                      title="Arraste pra mudar a altura"
+                      style={{ left: x + larg / 2 - 12, top: y + alt - 4 }}
+                      onPointerDown={(e) => aoIniciarRedimensionar(e, campoSelecionadoObj, 'vertical')}
+                      onClick={(e) => e.stopPropagation()}
+                    />
+                    {/* Canto: as duas ao mesmo tempo. */}
+                    <div
+                      className="editor-etiqueta-redimensionar redimensionar-canto"
+                      title="Arraste pra redimensionar"
+                      style={{ left: x + larg - 5, top: y + alt - 5 }}
+                      onPointerDown={(e) => aoIniciarRedimensionar(e, campoSelecionadoObj, 'ambos')}
+                      onClick={(e) => e.stopPropagation()}
+                    />
+                  </>
+                )
+              })()}
             </div>
           </div>
         </div>

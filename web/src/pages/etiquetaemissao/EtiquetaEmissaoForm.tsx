@@ -19,6 +19,7 @@ import {
   type ItemEmissao,
   type OrigemEntrada,
 } from '../../lib/etiquetaEmissao'
+import { useEu } from '../../lib/eu'
 import CampoEtiquetaVisual from '../etiquetaconfig/CampoEtiquetaVisual'
 import EscolherModeloModal from './EscolherModeloModal'
 import SelecaoProdutosModal from './SelecaoProdutosModal'
@@ -65,6 +66,11 @@ export default function EtiquetaEmissaoForm() {
   // 2026-08-11 mas esta tela NÃO os lia — o operador caía aqui com a lista vazia e tinha que
   // redigitar fornecedor e nota. Desde 2026-08-14 abrem o popup já no modo Por Entradas, com os
   // dois filtros preenchidos; basta clicar em Localizar.
+  // Nome IMPRESSO na etiqueta: empresa.cfg_nome_etiqueta da empresa da SESSAO (2026-08-21).
+  // A empresa escolhida no popup de selecao e so filtro de estoque, nao emitente.
+  const { data: eu } = useEu()
+  const nomeEmpresaImpressa = eu?.empresa.nomeEtiqueta || 'NOME DA EMPRESA'
+
   const [params] = useSearchParams()
   const origemEntrada = origemDaEntrada(params)
 
@@ -294,7 +300,7 @@ export default function EtiquetaEmissaoForm() {
                       campo={c}
                       escalaPxPorMm={MM_PARA_PX_IMPRESSAO}
                       produtoExemplo={produto}
-                      nomeEmpresaExemplo="NOME DA LOJA"
+                      nomeEmpresaExemplo={nomeEmpresaImpressa}
                     />
                   ))}
                 </div>
