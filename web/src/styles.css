@@ -1019,6 +1019,24 @@ a.menu-card:hover {
 .pdv-tecla:hover { border-color: var(--accent); }
 .pdv-tecla:active, .pdv-tecla.pdv-ativa { transform: scale(0.97); background: rgba(var(--accent-rgb), .16); }
 
+/* Filtros do popup Buscar Orçamento (2026-08-21) — três campos de MESMA largura e o botão, numa
+   grade só. Em `display: flex` cada campo ficava do tamanho do próprio conteúdo e as caixas saíam
+   desalinhadas; aqui as três colunas são idênticas e o botão fica ancorado na linha de base dos
+   campos, não no topo do bloco. */
+.orcamento-busca-filtros {
+  display: grid; grid-template-columns: repeat(3, 1fr) auto; gap: 10px; align-items: end;
+}
+.orcamento-busca-filtros label { display: block; margin: 0 0 4px; }
+.orcamento-busca-filtros input { width: 100%; }
+
+/* Buscar Orçamento + Efetiva Venda na mesma linha (2026-08-21). `margin-top: auto` sai do botão e
+   vem para a linha, senão só o botão desceria e os dois deixariam de ficar alinhados. A venda ocupa
+   o dobro da largura: é a ação final e a que o operador acerta sem olhar. */
+.pdv-linha-fechamento {
+  display: grid; grid-template-columns: 1fr 2fr; gap: 10px; align-items: stretch; margin-top: auto;
+}
+.pdv-linha-fechamento .pdv-tecla-venda { margin-top: 0; }
+
 .pdv-tecla-venda {
   flex-shrink: 0; margin-top: auto; min-height: 52px; display: flex; align-items: center;
   justify-content: center; gap: 10px; padding: 10px 16px; border-radius: var(--radius); border: none;

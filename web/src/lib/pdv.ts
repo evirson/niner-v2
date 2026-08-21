@@ -26,6 +26,36 @@ export interface PdvProduto {
 export interface ItemVendaRequest {
   idVariacao: number
   qtd: number
+  /** `true` = esta linha é coberta pelo orçamento e sai com o preço CONGELADO dele; `false`/ausente
+   *  = venda comum, preço do cadastro. Ver {@link ItemLedger.qtdOrcada} e `dividirParaEnvio`. */
+  doOrcamento?: boolean
+}
+
+/**
+ * Divide as linhas do ledger nos itens que o servidor recebe (2026-08-21).
+ *
+ * <p>Uma linha da tela pode valer DOIS itens no envio: a parte que o orçamento cobre, com o preço
+ * congelado que a loja se comprometeu a honrar, e o que passar disso, com o preço de hoje. É o que
+ * permite ao operador ver "3 × camiseta" numa linha só quando o preço não mudou, sem que o servidor
+ * recuse a venda por "não pode levar mais do que foi orçado" — a regra do orçamento se aplica só à
+ * parte orçada.
+ *
+ * <p>Quando o preço MUDOU, a tela já mantém duas linhas separadas (`lancarProduto` só junta com
+ * preço igual) e cada uma vira um item, com a sua própria marca.
+ */
+export function dividirParaEnvio(itens: ItemLedger[]): ItemVendaRequest[] {
+  const envio: ItemVendaRequest[] = []
+  for (const item of itens) {
+    const doOrcamento = Math.min(item.qtd, item.qtdOrcada)
+    if (doOrcamento > 0) {
+      envio.push({ idVariacao: item.idVariacao, qtd: doOrcamento, doOrcamento: true })
+    }
+    const excedente = item.qtd - doOrcamento
+    if (excedente > 0) {
+      envio.push({ idVariacao: item.idVariacao, qtd: excedente, doOrcamento: false })
+    }
+  }
+  return envio
 }
 
 /** Resultado da busca de cliente (F6, 2026-07-28) — nome, CPF/CNPJ ou celular. */
@@ -36,8 +66,17 @@ export interface PdvCliente {
   telefone: string | null
 }
 
-/** Um item lançado no ledger da venda em andamento (estado local da tela, antes do F5). */
+/** Um item lançado no ledger da venda em andamento (estado local da tela, antes do F6). */
 export interface ItemLedger {
+  /**
+   * Chave da LINHA, não do produto (2026-08-21).
+   *
+   * <p>⚠️ Antes o `codigo` (SKU) fazia esse papel, e isso deixou de funcionar quando o mesmo
+   * produto passou a poder aparecer duas vezes na venda com preços diferentes — o orçado, que a
+   * loja honra, e o de hoje, para as unidades a mais. Com o SKU como chave, alterar a quantidade
+   * de uma dessas linhas alterava as DUAS, e remover uma removia as duas.
+   */
+  idLinha: number
   idVariacao: number
   codigo: string
   descricao: string
@@ -45,6 +84,15 @@ export interface ItemLedger {
   qtd: number
   precoUnit: number
   urlImagem: string | null
+  /**
+   * Quanto desta linha está coberto pelo orçamento (0 = nada; a linha é venda comum).
+   *
+   * <p>É o que permite juntar numa linha só o que foi orçado e o que o cliente resolveu levar a
+   * mais quando o preço não mudou: a tela mostra uma linha, e o envio a divide em duas — a parte
+   * orçada com o preço congelado, o excedente com o preço de hoje. Sem isso, o servidor recusaria
+   * a venda por "não pode levar mais do que foi orçado".
+   */
+  qtdOrcada: number
 }
 
 /**

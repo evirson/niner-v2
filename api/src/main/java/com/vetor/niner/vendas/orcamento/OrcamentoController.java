@@ -56,8 +56,12 @@ public class OrcamentoController {
                                    @RequestParam(required = false) Long idFuncionario,
                                    @RequestParam(required = false) String situacao,
                                    @RequestParam(required = false) Integer pagina,
-                                   @RequestParam(required = false) Integer limite) {
-        return service.listar(dataInicial, dataFinal, idCliente, idFuncionario, situacao, pagina, limite);
+                                   @RequestParam(required = false) Integer limite,
+                                   @RequestParam(required = false) String nomeCliente,
+                                   @RequestParam(required = false) String nomeFuncionario,
+                                   @RequestParam(required = false) Long numero) {
+        return service.listar(dataInicial, dataFinal, idCliente, idFuncionario, situacao, pagina, limite,
+                nomeCliente, nomeFuncionario, numero);
     }
 
     /** ⚠️ Consultar um orçamento vencido o marca como VENCIDO na hora (R6) — por isso não é um

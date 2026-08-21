@@ -91,6 +91,12 @@ export interface FiltrosOrcamento {
   situacao?: SituacaoOrcamento | ''
   pagina?: number
   limite?: number
+  /** Busca por NOME (2026-08-21) — parcial, sem diferenciar maiúsculas. Quem procura um orçamento
+   *  lembra do nome do cliente ou do vendedor, não do id do cadastro. */
+  nomeCliente?: string
+  nomeFuncionario?: string
+  /** Número do orçamento (o `idOrcamento`), quando o cliente chega com o papel na mão. */
+  numero?: number
 }
 
 export function listarOrcamentos(f: FiltrosOrcamento): Promise<PaginaOrcamentos> {
@@ -102,6 +108,9 @@ export function listarOrcamentos(f: FiltrosOrcamento): Promise<PaginaOrcamentos>
   if (f.situacao) params.set('situacao', f.situacao)
   if (f.pagina) params.set('pagina', String(f.pagina))
   if (f.limite) params.set('limite', String(f.limite))
+  if (f.nomeCliente?.trim()) params.set('nomeCliente', f.nomeCliente.trim())
+  if (f.nomeFuncionario?.trim()) params.set('nomeFuncionario', f.nomeFuncionario.trim())
+  if (f.numero) params.set('numero', String(f.numero))
   const query = params.toString()
   return api<PaginaOrcamentos>(`/api/v1/orcamentos${query ? `?${query}` : ''}`)
 }

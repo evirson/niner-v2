@@ -52,7 +52,9 @@ export default function Pdv() {
   const { data: statusCaixa } = useQuery({ queryKey: ['caixa-status'], queryFn: buscarStatusCaixa })
   const caixaFechado = statusCaixa !== undefined && !statusCaixa.aberto
   const [ledger, setLedger] = useState<ItemLedger[]>([])
-  const [selecionado, setSelecionado] = useState<string | null>(null)
+  /** Linha destacada no ledger — id da LINHA, não SKU (2026-08-21): o mesmo produto pode ocupar
+   *  duas linhas com preços diferentes. */
+  const [selecionado, setSelecionado] = useState<number | null>(null)
   const [valorBarras, setValorBarras] = useState('')
   const [flashMsg, setFlashMsg] = useState<string | null>(null)
   const [teclaAtiva, setTeclaAtiva] = useState<string | null>(null)
@@ -69,6 +71,9 @@ export default function Pdv() {
    */
   const [orcamentoPuxado, setOrcamentoPuxado] = useState<Orcamento | null>(null)
   const [mostrarPuxarOrcamento, setMostrarPuxarOrcamento] = useState(false)
+  /** Gerador de id de linha do ledger. Só precisa ser único DENTRO da venda em andamento — o
+   *  ledger é estado de tela e morre no F4/na efetivação. */
+  const proximaLinhaRef = useRef(1)
   const campoBarrasRef = useRef<HTMLInputElement>(null)
   const linhasLedgerRef = useRef<Array<HTMLDivElement | null>>([])
   const flashTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -88,7 +93,7 @@ export default function Pdv() {
     }
   }, [])
 
-  const itemSelecionado = ledger.find((i) => i.codigo === selecionado) ?? null
+  const itemSelecionado = ledger.find((i) => i.idLinha === selecionado) ?? null
 
   const mostrarFlash = (texto: string) => {
     setFlashMsg(texto)
@@ -102,30 +107,43 @@ export default function Pdv() {
     ativaTimeoutRef.current = setTimeout(() => setTeclaAtiva(null), 160)
   }
 
-  const selecionarLinha = (codigo: string) => {
-    setSelecionado(codigo)
+  const selecionarLinha = (idLinha: number) => {
+    setSelecionado(idLinha)
   }
 
   /** Navegação por ↑/↓ nos Produtos Vendidos (2026-07-28) — move a seleção e o foco de teclado. */
   const navegarLedger = (direcao: 1 | -1) => {
     if (ledger.length === 0) return
-    const indiceAtual = ledger.findIndex((i) => i.codigo === selecionado)
+    const indiceAtual = ledger.findIndex((i) => i.idLinha === selecionado)
     const novoIndice = Math.min(Math.max(indiceAtual + direcao, 0), ledger.length - 1)
-    selecionarLinha(ledger[novoIndice].codigo)
+    selecionarLinha(ledger[novoIndice].idLinha)
     linhasLedgerRef.current[novoIndice]?.focus()
   }
 
-  /** `qtd` é 1 por padrão (leitura simples) — "5*código" no campo de barras já manda a
-   *  quantidade digitada (ver {@link interpretarCodigoBarras}), somada se o item já estiver na venda. */
+  /**
+   * `qtd` é 1 por padrão (leitura simples) — "5*código" no campo de barras já manda a
+   * quantidade digitada (ver {@link interpretarCodigoBarras}), somada se o item já estiver na venda.
+   *
+   * <p>⚠️ **Junta pelo PREÇO, não só pelo produto** (2026-08-21, decisão do dono do produto). Se o
+   * item já está na venda pelo preço congelado de um orçamento e o preço de hoje é outro, a nova
+   * unidade vai para uma **linha separada, com o preço de hoje**: a loja honra o que orçou, mas o
+   * que o cliente resolveu levar a mais na hora não foi orçado e não tem por que sair mais barato
+   * (nem mais caro). Preço igual junta numa linha só, porque aí não há diferença nenhuma a mostrar.
+   */
   const lancarProduto = (produto: PdvProduto, qtd: number = 1) => {
+    // Mesma linha = mesmo produto E mesmo preço. O id novo é reservado antes para a seleção poder
+    // ser aplicada fora do updater — chamar `setState` de dentro dele roda duas vezes em StrictMode.
+    const existenteAgora = ledger.find((i) => i.codigo === produto.sku && i.precoUnit === produto.precoVenda)
+    const idLinha = existenteAgora ? existenteAgora.idLinha : proximaLinhaRef.current++
     setLedger((atual) => {
-      const existente = atual.find((i) => i.codigo === produto.sku)
+      const existente = atual.find((i) => i.codigo === produto.sku && i.precoUnit === produto.precoVenda)
       if (existente) {
-        return atual.map((i) => (i.codigo === produto.sku ? { ...i, qtd: i.qtd + qtd } : i))
+        return atual.map((i) => (i.idLinha === existente.idLinha ? { ...i, qtd: i.qtd + qtd } : i))
       }
       return [
         ...atual,
         {
+          idLinha,
           idVariacao: produto.idVariacao,
           codigo: produto.sku,
           descricao: produto.descricaoProduto,
@@ -133,10 +151,12 @@ export default function Pdv() {
           qtd,
           precoUnit: produto.precoVenda,
           urlImagem: produto.urlImagem,
+          // Linha nascida do balcão nunca é coberta pelo orçamento — nem quando o produto está nele.
+          qtdOrcada: 0,
         },
       ]
     })
-    selecionarLinha(produto.sku)
+    selecionarLinha(idLinha)
   }
 
   const lerCodigo = async (valorDigitado: string) => {
@@ -181,13 +201,13 @@ export default function Pdv() {
     setMostrarAlteraQtd(true)
   }
 
-  const aoAlterarQtd = (codigo: string, novaQtd: number) => {
-    setLedger((atual) => atual.map((i) => (i.codigo === codigo ? { ...i, qtd: novaQtd } : i)))
+  const aoAlterarQtd = (idLinha: number, novaQtd: number) => {
+    setLedger((atual) => atual.map((i) => (i.idLinha === idLinha ? { ...i, qtd: novaQtd } : i)))
   }
 
-  const aoRemoverItem = (codigo: string) => {
-    setLedger((atual) => atual.filter((i) => i.codigo !== codigo))
-    setSelecionado((atual) => (atual === codigo ? null : atual))
+  const aoRemoverItem = (idLinha: number) => {
+    setLedger((atual) => atual.filter((i) => i.idLinha !== idLinha))
+    setSelecionado((atual) => (atual === idLinha ? null : atual))
   }
 
   const f4LimpaTela = () => {
@@ -201,7 +221,7 @@ export default function Pdv() {
     campoBarrasRef.current?.focus()
   }
 
-  const f5EfetivaVenda = () => {
+  const f6EfetivaVenda = () => {
     if (ledger.length === 0) {
       mostrarFlash('Nenhum item na venda.')
       return
@@ -212,14 +232,14 @@ export default function Pdv() {
     setMostrarFormaPagamento(true)
   }
 
-  /** F6 abre o orçamento. ⚠️ Só com a venda vazia: puxar por cima de itens já lançados
+  /** F5 abre o orçamento. ⚠️ Só com a venda vazia: puxar por cima de itens já lançados
    *  misturaria preço congelado com preço de cadastro sem o operador perceber. */
-  const f6PuxarOrcamento = () => {
+  const f5BuscarOrcamento = () => {
     if (ledger.length > 0) {
       mostrarFlash('Limpe a tela (F4) antes de puxar um orçamento.')
       return
     }
-    setTeclaAtiva('f6')
+    setTeclaAtiva('f5')
     setMostrarPuxarOrcamento(true)
   }
 
@@ -247,8 +267,11 @@ export default function Pdv() {
       if (e.key === 'F2') { e.preventDefault(); f2Pesquisa(); return }
       if (e.key === 'F3') { e.preventDefault(); f3AlteraQtd(); return }
       if (e.key === 'F4') { e.preventDefault(); f4LimpaTela(); return }
-      if (e.key === 'F5') { e.preventDefault(); f5EfetivaVenda(); return }
-      if (e.key === 'F6') { e.preventDefault(); f6PuxarOrcamento(); return }
+      // ⚠️ F5 e F6 TROCARAM em 2026-08-21 (pedido do dono do produto): F5 busca orçamento, F6
+      // efetiva a venda. A ordem segue a do balcão — primeiro se puxa o que o cliente já tinha
+      // orçado, depois se fecha.
+      if (e.key === 'F5') { e.preventDefault(); f5BuscarOrcamento(); return }
+      if (e.key === 'F6') { e.preventDefault(); f6EfetivaVenda(); return }
     }
     document.addEventListener('keydown', aoTeclar)
     return () => document.removeEventListener('keydown', aoTeclar)
@@ -363,28 +386,33 @@ export default function Pdv() {
                     <span className="pdv-kbd">F4</span> Limpa Tela
                   </span>
                 </div>
-                <div
-                  className={`pdv-tecla${teclaAtiva === 'f6' ? ' pdv-ativa' : ''}`}
-                  onClick={f6PuxarOrcamento}
-                >
-                  <IconeLupa />
-                  <span>
-                    <span className="pdv-kbd">F6</span> Puxar Orçamento
-                  </span>
-                </div>
               </div>
 
               {orcamentoPuxado && (
                 <p className="pdv-dica">
                   Venda a partir do <strong>orçamento nº {orcamentoPuxado.idOrcamento}</strong> —
-                  preços travados, cliente e vendedor já preenchidos no F5.
+                  preços travados, cliente e vendedor <strong>fixos</strong>.
                 </p>
               )}
 
-              <button type="button" className="pdv-tecla-venda" onClick={f5EfetivaVenda}>
-                <IconeConfirmar size={24} />
-                <span className="pdv-kbd">F5</span>Efetiva Venda
-              </button>
+              {/* Buscar Orçamento e Efetiva Venda lado a lado (2026-08-21, pedido do dono do
+                  produto), na ordem em que o balcão acontece: primeiro se puxa o que o cliente já
+                  tinha orçado, depois se fecha a venda. */}
+              <div className="pdv-linha-fechamento">
+                <div
+                  className={`pdv-tecla${teclaAtiva === 'f5' ? ' pdv-ativa' : ''}`}
+                  onClick={f5BuscarOrcamento}
+                >
+                  <IconeLupa />
+                  <span>
+                    <span className="pdv-kbd">F5</span> Buscar Orçamento
+                  </span>
+                </div>
+                <button type="button" className="pdv-tecla-venda" onClick={f6EfetivaVenda}>
+                  <IconeConfirmar size={24} />
+                  <span className="pdv-kbd">F6</span>Efetiva Venda
+                </button>
+              </div>
             </div>
 
             <div className="pdv-coluna-dir">
@@ -401,17 +429,17 @@ export default function Pdv() {
                 ) : (
                   ledger.map((item, indice) => (
                     <div
-                      key={item.codigo}
+                      key={item.idLinha}
                       ref={(el) => {
                         linhasLedgerRef.current[indice] = el
                       }}
-                      className={`pdv-ledger-linha${item.codigo === selecionado ? ' pdv-selecionada' : ''}`}
+                      className={`pdv-ledger-linha${item.idLinha === selecionado ? ' pdv-selecionada' : ''}`}
                       tabIndex={0}
-                      onClick={() => selecionarLinha(item.codigo)}
+                      onClick={() => selecionarLinha(item.idLinha)}
                       onKeyDown={(e) => {
                         if (e.key === 'Enter' || e.key === ' ') {
                           e.preventDefault()
-                          selecionarLinha(item.codigo)
+                          selecionarLinha(item.idLinha)
                         }
                       }}
                     >
@@ -463,6 +491,7 @@ export default function Pdv() {
               orcamento.itens
                 .filter((i) => (levando[i.idVariacao] ?? 0) > 0)
                 .map((i) => ({
+                  idLinha: proximaLinhaRef.current++,
                   idVariacao: i.idVariacao,
                   codigo: i.sku,
                   descricao: i.descricao,
@@ -470,6 +499,8 @@ export default function Pdv() {
                   qtd: levando[i.idVariacao] ?? 0,
                   precoUnit: i.precoVenda,
                   urlImagem: null,
+                  // Toda esta linha é coberta pelo orçamento — o teto do que sai com preço congelado.
+                  qtdOrcada: levando[i.idVariacao] ?? 0,
                 })),
             )
             setOrcamentoPuxado(orcamento)

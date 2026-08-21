@@ -42,10 +42,28 @@ public final class PdvDtos {
             String referencia) {
     }
 
-    /** Preço nunca vem do cliente — só `idVariacao` + `qtd`; o servidor resolve o preço. */
+    /**
+     * Preço nunca vem do cliente — só {@code idVariacao} + {@code qtd}; o servidor resolve o preço.
+     *
+     * <p>{@code doOrcamento} (2026-08-21) diz se ESTA linha é uma das que o orçamento cobre. Existe
+     * porque o mesmo produto pode aparecer duas vezes na mesma venda com preços diferentes: o
+     * cliente leva o que orçou (preço congelado, que a loja tem de honrar) e mais algumas unidades
+     * do mesmo item (preço de hoje, que ele não orçou). Sem a marca por linha, o servidor mapeava o
+     * preço congelado por variação e o aplicava aos dois — e a validação "não pode levar mais do
+     * que foi orçado" somava as duas linhas e recusava a venda inteira.
+     *
+     * <p>Nulo = {@code false}: item de venda comum, preço do cadastro. Só o PDV vindo de orçamento
+     * marca {@code true}, e ainda assim apenas até a quantidade orçada.
+     */
     public record ItemVendaRequest(
             @NotNull Long idVariacao,
-            @NotNull @DecimalMin(value = "0.001") BigDecimal qtd) {
+            @NotNull @DecimalMin(value = "0.001") BigDecimal qtd,
+            Boolean doOrcamento) {
+
+        /** Sem a marca, a linha é venda comum — nunca herda o preço congelado do orçamento. */
+        public boolean ehDoOrcamento() {
+            return Boolean.TRUE.equals(doOrcamento);
+        }
     }
 
     /** Resultado da busca de cliente (F6, 2026-07-28) — nome, CPF/CNPJ ou celular (`cliente.telefone`). */

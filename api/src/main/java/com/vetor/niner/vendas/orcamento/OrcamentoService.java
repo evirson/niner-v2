@@ -129,9 +129,26 @@ public class OrcamentoService {
 
     @Transactional(readOnly = true)
     public PaginaOrcamentos listar(LocalDate dataInicial, LocalDate dataFinal, Long idCliente,
-                                    Long idFuncionario, String situacao, Integer pagina, Integer limite) {
+                                    Long idFuncionario, String situacao, Integer pagina, Integer limite,
+                                    String nomeCliente, String nomeFuncionario, Long numero) {
         StringBuilder filtro = new StringBuilder();
         List<Object> params = new ArrayList<>();
+        // Busca por NOME (2026-08-21) — o PDV e a tela de Orçamentos procuram pelo que o operador
+        // sabe de cor ("o orçamento da dona Maria"), não pelo id do cadastro. `unaccent` não está
+        // instalado neste banco, então o casamento é por ILIKE simples, que é o que as outras telas
+        // de busca do produto já fazem.
+        if (nomeCliente != null && !nomeCliente.isBlank()) {
+            filtro.append(" AND c.nome ILIKE ?");
+            params.add("%" + nomeCliente.trim() + "%");
+        }
+        if (nomeFuncionario != null && !nomeFuncionario.isBlank()) {
+            filtro.append(" AND f.nome ILIKE ?");
+            params.add("%" + nomeFuncionario.trim() + "%");
+        }
+        if (numero != null) {
+            filtro.append(" AND o.id_orcamento = ?");
+            params.add(numero);
+        }
         if (dataInicial != null) {
             // ⚠️ Comparação no fuso da LOJA, nunca no do banco: a sessão do Postgres roda em UTC e
             // um `::date` cru vira o dia seguinte às 21:00 de Brasília.
@@ -155,7 +172,15 @@ public class OrcamentoService {
             params.add(SituacaoOrcamento.valueOf(situacao).name());
         }
 
-        String base = " FROM orcamento o WHERE o.id_tenant = plataforma.tenant_atual()" + filtro;
+        // ⚠️ Os JOINs entram TAMBÉM no count (2026-08-21): o filtro por nome referencia `c`/`f`, e
+        // sem eles a contagem quebra com "missing FROM-clause entry". Como são JOINs (não LEFT) por
+        // colunas obrigatórias, a contagem continua idêntica quando não há filtro por nome.
+        // `id_tenant` explícito em cada junção — P8.
+        String base = """
+                 FROM orcamento o
+                 JOIN cliente c ON c.id_tenant = o.id_tenant AND c.id_cliente = o.id_cliente
+                 JOIN funcionario f ON f.id_tenant = o.id_tenant AND f.id_funcionario = o.id_funcionario
+                WHERE o.id_tenant = plataforma.tenant_atual()""" + filtro;
 
         long total = jdbc.sql("SELECT count(*)" + base).params(params).query(Long.class).single();
 

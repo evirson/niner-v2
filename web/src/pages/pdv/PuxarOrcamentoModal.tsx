@@ -1,13 +1,22 @@
 import { useState } from 'react'
 import { ApiError } from '../../lib/api'
-import { buscarOrcamento, type ItemOrcamento, type Orcamento } from '../../lib/orcamento'
+import {
+  buscarOrcamento,
+  listarOrcamentos,
+  type ItemOrcamento,
+  type Orcamento,
+  type OrcamentoResumo,
+} from '../../lib/orcamento'
+import { maiusculas } from '../../lib/texto'
 import { formatarMoeda } from '../../lib/masks'
 
 /** Quantidade que o operador decidiu levar de cada item, por `idVariacao`. */
 type Levando = Record<number, number>
 
 /**
- * Puxa um orçamento para dentro do PDV (docs/telas/orcamento.md, R2).
+ * Busca e puxa um orçamento para dentro do PDV (docs/telas/orcamento.md, R2). Desde 2026-08-21
+ * o popup LOCALIZA (número, cliente ou vendedor, só os em aberto) antes de abrir — o operador
+ * raramente tem o número na mão; ele tem o nome de quem está na frente dele.
  *
  * <h2>⚠️ Só dá para DIMINUIR</h2>
  *
@@ -29,20 +38,53 @@ export default function PuxarOrcamentoModal({
   aoConfirmar: (orcamento: Orcamento, levando: Levando) => void
 }) {
   const [numero, setNumero] = useState('')
+  const [nomeCliente, setNomeCliente] = useState('')
+  const [nomeVendedor, setNomeVendedor] = useState('')
+  const [resultados, setResultados] = useState<OrcamentoResumo[] | null>(null)
   const [orcamento, setOrcamento] = useState<Orcamento | null>(null)
   const [levando, setLevando] = useState<Levando>({})
   const [erro, setErro] = useState<string | null>(null)
   const [buscando, setBuscando] = useState(false)
 
-  const buscar = async () => {
-    const id = Number(numero.trim())
-    if (!id) return
+  /**
+   * Localiza orçamentos por número, cliente ou vendedor (2026-08-21) — **só os ABERTOS**.
+   *
+   * <p>Filtrar a situação no servidor, e não na tela, é o que evita oferecer ao operador um
+   * orçamento que o PDV vai recusar em seguida: vencido, cancelado ou já vendido não têm por que
+   * aparecer numa lista cujo único propósito é virar venda.
+   */
+  const localizar = async () => {
+    setBuscando(true)
+    setErro(null)
+    setOrcamento(null)
+    try {
+      const pagina = await listarOrcamentos({
+        situacao: 'ABERTO',
+        numero: numero.trim() ? Number(numero.trim()) : undefined,
+        nomeCliente: nomeCliente.trim() || undefined,
+        nomeFuncionario: nomeVendedor.trim() || undefined,
+        limite: 50,
+      })
+      setResultados(pagina.itens)
+      if (pagina.itens.length === 0) {
+        setErro('Nenhum orçamento em aberto com esses filtros.')
+      }
+    } catch (e) {
+      setErro(e instanceof ApiError ? e.message : 'Não foi possível localizar orçamentos.')
+      setResultados(null)
+    } finally {
+      setBuscando(false)
+    }
+  }
+
+  /** Abre o orçamento escolhido na lista. ⚠️ Continua checando a situação: entre a busca e o
+   *  clique o documento pode ter vencido — ler um vencido é justamente o que o marca (R6). */
+  const abrir = async (idOrcamento: number) => {
     setBuscando(true)
     setErro(null)
     try {
-      const o = await buscarOrcamento(id)
+      const o = await buscarOrcamento(idOrcamento)
       if (o.situacao !== 'ABERTO') {
-        // A mensagem do servidor diz o motivo; aqui a tela antecipa o mesmo, sem tentar vender.
         setErro(motivoDeNaoPoder(o))
         setOrcamento(null)
         return
@@ -74,38 +116,98 @@ export default function PuxarOrcamentoModal({
       <div
         className="modal modal-largo"
         role="dialog"
-        aria-label="Puxar orçamento"
+        aria-label="Buscar orçamento"
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 style={{ marginTop: 0 }}>Puxar orçamento</h2>
+        <h2 style={{ marginTop: 0 }}>Buscar Orçamento</h2>
 
-        <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
-          <div style={{ flex: '0 0 180px' }}>
-            <label htmlFor="numero-orcamento">Número do orçamento</label>
+        {/* Três filtros de mesma largura + o botão, numa grade só — os campos ficam alinhados em
+            cima e embaixo, em vez de cada um com o tamanho do próprio conteúdo. Enter em qualquer
+            um deles localiza, que é como se busca de balcão: digita e aperta. */}
+        <div className="orcamento-busca-filtros">
+          <div>
+            <label htmlFor="orc-numero">Número</label>
             <input
-              id="numero-orcamento"
+              id="orc-numero"
               autoFocus
               inputMode="numeric"
               className="mono"
               value={numero}
               onChange={(e) => setNumero(e.target.value.replace(/\D/g, ''))}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  e.preventDefault()
-                  buscar()
-                }
-              }}
+              onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), localizar())}
             />
           </div>
-          <button type="button" className="btn ghost" disabled={!numero.trim() || buscando} onClick={buscar}>
-            {buscando ? 'Buscando…' : 'Buscar'}
+          <div>
+            <label htmlFor="orc-cliente">Cliente</label>
+            <input
+              id="orc-cliente"
+              value={nomeCliente}
+              onChange={(e) => setNomeCliente(maiusculas(e.target.value))}
+              onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), localizar())}
+            />
+          </div>
+          <div>
+            <label htmlFor="orc-vendedor">Vendedor</label>
+            <input
+              id="orc-vendedor"
+              value={nomeVendedor}
+              onChange={(e) => setNomeVendedor(maiusculas(e.target.value))}
+              onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), localizar())}
+            />
+          </div>
+          <button type="button" className="btn" disabled={buscando} onClick={localizar}>
+            {buscando ? 'Buscando…' : 'Localizar'}
           </button>
         </div>
+        <p className="muted" style={{ margin: '6px 0 0' }}>
+          Só aparecem orçamentos <strong>em aberto</strong> — vencido, cancelado ou já vendido não
+          vira venda. Sem preencher nada, lista os últimos.
+        </p>
 
         {erro && <p className="erro-campo">{erro}</p>}
 
+        {resultados && resultados.length > 0 && !orcamento && (
+          <div className="table-wrap" style={{ maxHeight: '42vh', marginTop: 10 }}>
+            <table className="table table-compacta">
+              <thead>
+                <tr>
+                  <th style={{ textAlign: 'right' }}>Nº</th>
+                  <th>Cliente</th>
+                  <th>Vendedor</th>
+                  <th>Válido até</th>
+                  <th style={{ textAlign: 'right' }}>Itens</th>
+                  <th style={{ textAlign: 'right' }}>Total</th>
+                  <th />
+                </tr>
+              </thead>
+              <tbody>
+                {resultados.map((o) => (
+                  <tr key={o.idOrcamento}>
+                    <td className="mono" style={{ textAlign: 'right' }}>{o.idOrcamento}</td>
+                    <td>{o.nomeCliente}</td>
+                    <td>{o.nomeFuncionario}</td>
+                    <td className="mono">{formatarDataSimples(o.dataValidade)}</td>
+                    <td style={{ textAlign: 'right' }}>{o.qtdItens}</td>
+                    <td className="mono" style={{ textAlign: 'right' }}>R$ {formatarMoeda(o.valorTotal)}</td>
+                    <td style={{ textAlign: 'right' }}>
+                      <button type="button" className="btn ghost" disabled={buscando} onClick={() => abrir(o.idOrcamento)}>
+                        Abrir
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
         {orcamento && (
           <>
+            <p style={{ margin: '10px 0 0' }}>
+              <button type="button" className="btn ghost" onClick={() => setOrcamento(null)}>
+                ← Escolher outro
+              </button>
+            </p>
             <p className="muted" style={{ marginTop: 12 }}>
               {orcamento.nomeCliente} · Vendedor {orcamento.nomeFuncionario} · Válido até{' '}
               <strong>{formatarDataSimples(orcamento.dataValidade)}</strong>

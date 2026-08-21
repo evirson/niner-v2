@@ -38,6 +38,9 @@ export default function OrcamentoLista() {
   const [dataInicialTexto, setDataInicialTexto] = useState('')
   const [dataFinalTexto, setDataFinalTexto] = useState('')
   const [situacao, setSituacao] = useState<SituacaoOrcamento | ''>('')
+  /** Busca por nome (2026-08-21) — quem procura um orçamento lembra do nome, não do id. */
+  const [nomeCliente, setNomeCliente] = useState('')
+  const [nomeVendedor, setNomeVendedor] = useState('')
   const [pagina, setPagina] = useState(1)
 
   const [detalhe, setDetalhe] = useState<Orcamento | null>(null)
@@ -50,7 +53,7 @@ export default function OrcamentoLista() {
   const dataFinalIso = dataValida(dataFinalTexto) ? (dataParaIso(dataFinalTexto) ?? undefined) : undefined
 
   const { data, isLoading } = useQuery({
-    queryKey: ['orcamentos', { dataInicialIso, dataFinalIso, situacao, pagina }],
+    queryKey: ['orcamentos', { dataInicialIso, dataFinalIso, situacao, pagina, nomeCliente, nomeVendedor }],
     queryFn: () =>
       listarOrcamentos({
         dataInicial: dataInicialIso,
@@ -58,6 +61,8 @@ export default function OrcamentoLista() {
         situacao,
         pagina,
         limite: TAMANHO_PAGINA,
+        nomeCliente,
+        nomeFuncionario: nomeVendedor,
       }),
     placeholderData: (anterior) => anterior,
   })
@@ -135,6 +140,33 @@ export default function OrcamentoLista() {
                 value={dataFinalTexto}
                 onChange={(e) => setDataFinalTexto(mascararData(e.target.value))}
                 onFocus={(e) => e.target.select()}
+              />
+            </div>
+            {/* Busca por nome (2026-08-21) — dispara a cada tecla, como as outras listas do
+                produto; o filtro vai para o servidor, então a paginação continua correta (buscar
+                só na página carregada esconderia resultados das páginas seguintes). */}
+            <div>
+              <label htmlFor="filtro-cliente">Cliente</label>
+              <input
+                id="filtro-cliente"
+                placeholder="Nome do cliente"
+                value={nomeCliente}
+                onChange={(e) => {
+                  setNomeCliente(maiusculas(e.target.value))
+                  setPagina(1)
+                }}
+              />
+            </div>
+            <div>
+              <label htmlFor="filtro-vendedor">Vendedor</label>
+              <input
+                id="filtro-vendedor"
+                placeholder="Nome do vendedor"
+                value={nomeVendedor}
+                onChange={(e) => {
+                  setNomeVendedor(maiusculas(e.target.value))
+                  setPagina(1)
+                }}
               />
             </div>
             <div>

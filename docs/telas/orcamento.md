@@ -385,3 +385,20 @@ papel de balcão, não anexo de mensagem.
 
 **Cliente e vendedor vêm preenchidos, mas continuam editáveis** — quem vai levar pode não ser quem
 pediu o orçamento.
+
+---
+
+## ✅ 2026-08-21 — busca por nome de cliente e de vendedor
+
+`GET /api/v1/orcamentos` ganhou três filtros: **`nomeCliente`**, **`nomeFuncionario`** (parciais,
+sem diferenciar maiúsculas) e **`numero`**. Quem procura um orçamento lembra do nome de quem o
+pediu, não do id do cadastro — os filtros que existiam (`idCliente`/`idFuncionario`) só serviam a
+quem já tinha o registro na mão.
+
+A tela de Orçamentos passa a ter os dois campos na barra de filtros, e o popup **Buscar Orçamento**
+do PDV usa os três (ver `docs/telas/pdv.md`).
+
+⚠️ **Os JOINs de cliente e funcionário entraram TAMBÉM no `count(*)`.** O filtro por nome referencia
+`c`/`f`, e a contagem, que antes lia só `FROM orcamento`, quebraria com *"missing FROM-clause
+entry"* — um erro que só apareceria com o filtro preenchido, ou seja, exatamente no uso novo. Como
+são `JOIN` (não `LEFT`) por colunas obrigatórias, a contagem continua idêntica quando não há filtro.

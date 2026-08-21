@@ -16,7 +16,14 @@ import {
   mascararMoeda,
   mascararPercentual,
 } from '../../lib/masks'
-import { efetivarVenda, type ItemLedger, type PagamentoRequest, type PdvCliente, type VendaEfetivada } from '../../lib/pdv'
+import {
+  dividirParaEnvio,
+  efetivarVenda,
+  type ItemLedger,
+  type PagamentoRequest,
+  type PdvCliente,
+  type VendaEfetivada,
+} from '../../lib/pdv'
 import {
   ROTULO_CATEGORIA_CARTEIRA,
   listarTiposCarteira,
@@ -122,8 +129,12 @@ export default function FormaPagamentoModal({
    * Orçamento que originou esta venda (V058), quando a venda veio de um.
    *
    * <p>⚠️ O servidor usa isto para aplicar o preço <b>congelado</b> do orçamento e para recusar
-   * quantidade maior que a orçada. Cliente e vendedor já vêm preenchidos porque foram definidos
-   * na emissão — mas continuam editáveis: quem vai levar pode não ser quem pediu o orçamento.
+   * quantidade maior que a orçada.
+   *
+   * <p>⚠️ Também TRAVA cliente e vendedor (2026-08-21, decisão do dono do produto — antes vinham
+   * preenchidos mas editáveis). O orçamento foi emitido para aquele cliente e por aquele vendedor,
+   * e é esse par que a comissão e o compromisso de preço acompanham; deixar trocar faria a venda
+   * contradizer o documento que ela cumpre.
    */
   idOrcamento?: number | null
   clienteInicial?: PdvCliente | null
@@ -152,6 +163,8 @@ export default function FormaPagamentoModal({
   const [buscandoVale, setBuscandoVale] = useState(false)
   const [erroVale, setErroVale] = useState<string | null>(null)
   /** Cliente e vendedor são obrigatórios em toda venda do PDV (2026-07-28). */
+  /** Venda que cumpre um orçamento: cliente e vendedor ficam FIXOS (item 4 de 2026-08-21). */
+  const vindoDeOrcamento = idOrcamento != null
   const [clienteSelecionado, setClienteSelecionado] = useState<PdvCliente | null>(clienteInicial ?? null)
   const [vendedorSelecionado, setVendedorSelecionado] = useState<Pick<Funcionario, 'idFuncionario' | 'nome'> | null>(
     vendedorInicial ?? null,
@@ -341,7 +354,9 @@ export default function FormaPagamentoModal({
         idDevolucao: p.idDevolucao,
       }))
       return efetivarVenda({
-        itens: itens.map((i) => ({ idVariacao: i.idVariacao, qtd: i.qtd })),
+        // Cada linha da tela pode virar DOIS itens: a parte que o orçamento cobre (preço
+        // congelado) e o que passar disso (preço de hoje). Ver .
+        itens: dividirParaEnvio(itens),
         descontoVenda,
         pagamentos: corpoPagamentos,
         idCliente: clienteSelecionado.idCliente,
@@ -386,23 +401,35 @@ export default function FormaPagamentoModal({
       >
         <h2 style={{ marginTop: 0, marginBottom: 6 }}>Forma de Pagamento</h2>
 
+        {/* ⚠️ Venda vinda de orçamento tem cliente e vendedor FIXOS (2026-08-21, decisão do dono do
+            produto). Eles não são preenchimento de conveniência: o orçamento foi emitido para
+            aquele cliente, com aquele vendedor, e é esse par que a comissão e o compromisso de
+            preço acompanham. Trocar aqui faria a venda contradizer o documento que ela cumpre. */}
         <div className="pdv-selecao-linha">
           <div className="pdv-selecao-campo">
             <label>Cliente *</label>
             <div className="pdv-selecao-valor">
               <span>{clienteSelecionado ? clienteSelecionado.nome : 'Nenhum cliente selecionado'}</span>
-              <button type="button" className="btn ghost" onClick={() => setMostrarPesquisaCliente(true)}>
-                Selecionar
-              </button>
+              {vindoDeOrcamento ? (
+                <span className="badge">do orçamento</span>
+              ) : (
+                <button type="button" className="btn ghost" onClick={() => setMostrarPesquisaCliente(true)}>
+                  Selecionar
+                </button>
+              )}
             </div>
           </div>
           <div className="pdv-selecao-campo">
             <label>Vendedor *</label>
             <div className="pdv-selecao-valor">
               <span>{vendedorSelecionado ? vendedorSelecionado.nome : 'Nenhum vendedor selecionado'}</span>
-              <button type="button" className="btn ghost" onClick={() => setMostrarPesquisaVendedor(true)}>
-                Selecionar
-              </button>
+              {vindoDeOrcamento ? (
+                <span className="badge">do orçamento</span>
+              ) : (
+                <button type="button" className="btn ghost" onClick={() => setMostrarPesquisaVendedor(true)}>
+                  Selecionar
+                </button>
+              )}
             </div>
           </div>
         </div>

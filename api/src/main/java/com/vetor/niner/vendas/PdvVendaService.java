@@ -254,6 +254,16 @@ public class PdvVendaService {
                                                               List<ItemVendaRequest> itensDaVenda) {
         OrcamentoResponse orcamento = orcamentoService.abrirParaVenda(jwt, idOrcamento);
 
+        // ⚠️ Guarda de contrato (2026-08-21): desde que o preço congelado passou a valer POR LINHA
+        // (`doOrcamento`), um cliente que mande o `idOrcamento` mas esqueça a marca receberia a
+        // venda inteira a preço de cadastro — o orçamento seria consumido sem que a loja honrasse
+        // nada, e ninguém veria erro nenhum. Falhar aqui, alto, é melhor que cobrar errado calado.
+        if (itensDaVenda.stream().noneMatch(ItemVendaRequest::ehDoOrcamento)) {
+            throw new IllegalArgumentException(
+                    "Venda vinculada ao orçamento nº " + idOrcamento
+                            + " não trouxe nenhum item marcado como do orçamento.");
+        }
+
         Map<Long, BigDecimal> precos = new java.util.HashMap<>();
         Map<Long, BigDecimal> qtdOrcada = new java.util.HashMap<>();
         for (ItemOrcamentoResponse item : orcamento.itens()) {
@@ -266,9 +276,15 @@ public class PdvVendaService {
             }
         }
 
+        // ⚠️ Só as linhas MARCADAS como do orçamento entram nesta conta (2026-08-21). Antes somava
+        // todas as linhas da variação, então levar 2 do orçamento + 1 a mais do mesmo produto
+        // recusava a venda por "excede o orçado" — sendo que a unidade extra é venda comum, com
+        // preço de hoje, e nada tem a ver com o que a loja se comprometeu a honrar.
         Map<Long, BigDecimal> qtdPedida = new java.util.HashMap<>();
         for (ItemVendaRequest item : itensDaVenda) {
-            qtdPedida.merge(item.idVariacao(), item.qtd(), BigDecimal::add);
+            if (item.ehDoOrcamento()) {
+                qtdPedida.merge(item.idVariacao(), item.qtd(), BigDecimal::add);
+            }
         }
         for (Map.Entry<Long, BigDecimal> pedido : qtdPedida.entrySet()) {
             BigDecimal orcada = qtdOrcada.get(pedido.getKey());
@@ -293,9 +309,14 @@ public class PdvVendaService {
     /** Parcial = algum item saiu com quantidade menor que a orçada, ou não saiu. Estado FINAL: o
      *  que sobrou nunca é vendido por este orçamento (decisão do dono do produto). */
     private boolean vendaLevouMenosQueOrcado(long idOrcamento, List<ItemVendaRequest> itensDaVenda) {
+        // Só as linhas do orçamento contam (2026-08-21): unidade extra do mesmo produto é venda
+        // comum e não "completa" o orçado. Sem esse filtro, comprar 1 a mais mascararia um item
+        // levado a menos e o orçamento fecharia como VENDIDO quando foi parcial.
         Map<Long, BigDecimal> qtdPedida = new java.util.HashMap<>();
         for (ItemVendaRequest item : itensDaVenda) {
-            qtdPedida.merge(item.idVariacao(), item.qtd(), BigDecimal::add);
+            if (item.ehDoOrcamento()) {
+                qtdPedida.merge(item.idVariacao(), item.qtd(), BigDecimal::add);
+            }
         }
         return jdbc.sql("""
                         SELECT id_variacao, SUM(qtd_produto) AS qtd
@@ -849,8 +870,14 @@ public class PdvVendaService {
                     .optional()
                     .orElseThrow(() -> new IllegalArgumentException("Produto informado não existe ou está inativo."));
 
-            // Preço do orçamento tem precedência sobre o do cadastro (V058, R3).
-            BigDecimal preco = precosDoOrcamento.getOrDefault(item.idVariacao(), linha.precoVenda());
+            // Preço do orçamento tem precedência sobre o do cadastro (V058, R3) — mas SÓ na linha
+            // marcada como do orçamento (2026-08-21). A mesma variação pode estar na venda duas
+            // vezes: a parte orçada, com o preço congelado que a loja honra, e a parte a mais, com
+            // o preço de hoje. Aplicar o congelado às duas daria de graça ao cliente um desconto
+            // que ninguém prometeu.
+            BigDecimal preco = item.ehDoOrcamento()
+                    ? precosDoOrcamento.getOrDefault(item.idVariacao(), linha.precoVenda())
+                    : linha.precoVenda();
             resolvidos.add(new ItemResolvido(item.idVariacao(), item.qtd(), preco, linha.precoCusto()));
         }
         return resolvidos;

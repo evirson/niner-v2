@@ -164,7 +164,7 @@ class OrcamentoCrudTest {
                 .contentType(APPLICATION_JSON)
                 .content("""
                         {"idOrcamento":%d,"idCliente":%d,"idFuncionario":%d,"descontoVenda":0,
-                         "itens":[{"idVariacao":%d,"qtd":%s}],
+                         "itens":[{"idVariacao":%d,"qtd":%s,"doOrcamento":true}],
                          "pagamentos":[{"idCarteira":%d,"valorPago":%s,"numeroParcelas":1}]}
                         """.formatted(idOrcamento, c.idCliente(), c.idFuncionario(), c.idVariacao(), qtd,
                         idCarteiraDinheiro(c.token()), valorPago)));
@@ -251,6 +251,74 @@ class OrcamentoCrudTest {
                 .andExpect(status().isCreated())
                 // 3 × 10,00 congelados, não 3 × 25,00 do cadastro.
                 .andExpect(jsonPath("$.valorTotalProdutos").value(30.00));
+    }
+
+    /**
+     * O MESMO produto na venda duas vezes: a parte orçada com o preço congelado, a parte a mais com
+     * o preço de hoje (2026-08-21, decisão do dono do produto).
+     *
+     * <p>É a regra que o item 5 daquele dia pediu — *"a empresa tem que honrar o orçamento, mas
+     * produtos a mais não precisam"* — e nenhum teste a cobria. Antes de `doOrcamento` existir, esta
+     * venda era **recusada**: o servidor somava as duas linhas da variação e concluía que o cliente
+     * levava 3 de um orçamento de 2.
+     */
+    @Test
+    void unidadeAMaisDoMesmoProdutoSaiPeloPrecoDeHoje() throws Exception {
+        Cenario c = prepararCenario("extra-mesmo-produto", "10.00");
+        long idOrcamento = emitir(c, "2", null);
+
+        // O preço subiu depois do orçamento: 10,00 congelados contra 15,00 no cadastro.
+        jdbc.sql("""
+                        UPDATE produto SET preco_venda = 15.00
+                         WHERE id_tenant = ? AND id_produto = (
+                             SELECT id_produto FROM produto_barra
+                              WHERE id_tenant = ? AND id_variacao = ?)
+                        """)
+                .params(c.idTenant(), c.idTenant(), c.idVariacao()).update();
+
+        abrirCaixa(c.token());
+        mvc.perform(post("/api/v1/pdv/vendas").header("Authorization", "Bearer " + c.token())
+                        .contentType(APPLICATION_JSON)
+                        .content("""
+                                {"idOrcamento":%d,"idCliente":%d,"idFuncionario":%d,"descontoVenda":0,
+                                 "itens":[{"idVariacao":%d,"qtd":2,"doOrcamento":true},
+                                          {"idVariacao":%d,"qtd":1}],
+                                 "pagamentos":[{"idCarteira":%d,"valorPago":35.00,"numeroParcelas":1}]}
+                                """.formatted(idOrcamento, c.idCliente(), c.idFuncionario(),
+                                c.idVariacao(), c.idVariacao(), idCarteiraDinheiro(c.token()))))
+                .andExpect(status().isCreated())
+                // 2 × 10,00 (honrado) + 1 × 15,00 (preço de hoje) = 35,00. Se o congelado valesse
+                // para as três, daria 30,00 — um desconto que ninguém prometeu.
+                .andExpect(jsonPath("$.valorTotalProdutos").value(35.00))
+                // Levou as 2 orçadas: o orçamento fecha inteiro, e a unidade extra não o torna parcial.
+                .andExpect(jsonPath("$.orcamentoParcial").value(false));
+
+        mvc.perform(get("/api/v1/orcamentos/" + idOrcamento).header("Authorization", "Bearer " + c.token()))
+                .andExpect(jsonPath("$.situacao").value("VENDIDO"));
+    }
+
+    /**
+     * ⚠️ Guarda de contrato: mandar o `idOrcamento` sem marcar nenhuma linha como dele é recusado.
+     *
+     * <p>Sem esta guarda o defeito seria silencioso e caro — a venda sairia inteira a preço de
+     * cadastro, o orçamento seria consumido, e nada na resposta indicaria que a loja deixou de
+     * honrar o preço que prometeu.
+     */
+    @Test
+    void vendaDeOrcamentoSemNenhumaLinhaMarcadaEhRecusada() throws Exception {
+        Cenario c = prepararCenario("sem-marca", "10.00");
+        long idOrcamento = emitir(c, "2", null);
+        abrirCaixa(c.token());
+
+        mvc.perform(post("/api/v1/pdv/vendas").header("Authorization", "Bearer " + c.token())
+                        .contentType(APPLICATION_JSON)
+                        .content("""
+                                {"idOrcamento":%d,"idCliente":%d,"idFuncionario":%d,"descontoVenda":0,
+                                 "itens":[{"idVariacao":%d,"qtd":2}],
+                                 "pagamentos":[{"idCarteira":%d,"valorPago":20.00,"numeroParcelas":1}]}
+                                """.formatted(idOrcamento, c.idCliente(), c.idFuncionario(),
+                                c.idVariacao(), idCarteiraDinheiro(c.token()))))
+                .andExpect(status().isBadRequest());
     }
 
     /**
@@ -410,7 +478,7 @@ class OrcamentoCrudTest {
                         .contentType(APPLICATION_JSON)
                         .content("""
                                 {"idOrcamento":%d,"idCliente":%d,"idFuncionario":%d,"descontoVenda":0,
-                                 "itens":[{"idVariacao":%d,"qtd":2},{"idVariacao":%d,"qtd":3}],
+                                 "itens":[{"idVariacao":%d,"qtd":2,"doOrcamento":true},{"idVariacao":%d,"qtd":3}],
                                  "pagamentos":[{"idCarteira":%d,"valorPago":80.00,"numeroParcelas":1}]}
                                 """.formatted(idOrcamento, c.idCliente(), c.idFuncionario(),
                                 c.idVariacao(), idOutraVariacao, idCarteiraDinheiro(c.token()))))

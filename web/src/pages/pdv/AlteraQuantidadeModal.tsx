@@ -17,23 +17,23 @@ export default function AlteraQuantidadeModal({
 }: {
   itens: ItemLedger[]
   aoFechar: () => void
-  aoAlterarQtd: (codigo: string, novaQtd: number) => void
-  aoRemover: (codigo: string) => void
+  aoAlterarQtd: (idLinha: number, novaQtd: number) => void
+  aoRemover: (idLinha: number) => void
 }) {
-  const [confirmandoRemocao, setConfirmandoRemocao] = useState<string | null>(null)
+  const [confirmandoRemocao, setConfirmandoRemocao] = useState<number | null>(null)
   const { data: cfgQtdDecimal } = useQuery({ queryKey: ['permite-qtd-decimal'], queryFn: buscarPermiteQtdDecimal })
   const permiteQtdDecimal = cfgQtdDecimal?.cfgPermiteQtdDecimal ?? true
 
   const diminuir = (item: ItemLedger) => {
     if (item.qtd <= 1) {
-      setConfirmandoRemocao(item.codigo)
+      setConfirmandoRemocao(item.idLinha)
       return
     }
-    aoAlterarQtd(item.codigo, item.qtd - 1)
+    aoAlterarQtd(item.idLinha, item.qtd - 1)
   }
 
-  const confirmarRemocao = (codigo: string) => {
-    aoRemover(codigo)
+  const confirmarRemocao = (idLinha: number) => {
+    aoRemover(idLinha)
     setConfirmandoRemocao(null)
   }
 
@@ -60,19 +60,19 @@ export default function AlteraQuantidadeModal({
               </thead>
               <tbody>
                 {itens.map((item) => (
-                  <tr key={item.codigo}>
+                  <tr key={item.idLinha}>
                     <td>
                       {item.descricao}
                       {item.variacao && <span className="muted"> — {item.variacao}</span>}
                     </td>
                     <td>
-                      {confirmandoRemocao === item.codigo ? (
+                      {confirmandoRemocao === item.idLinha ? (
                         <div className="pdv-confirma-remocao">
                           Remover item?
                           <button type="button" className="btn ghost" onClick={() => setConfirmandoRemocao(null)}>
                             Cancelar
                           </button>
-                          <button type="button" className="btn" onClick={() => confirmarRemocao(item.codigo)}>
+                          <button type="button" className="btn" onClick={() => confirmarRemocao(item.idLinha)}>
                             Remover
                           </button>
                         </div>
@@ -85,7 +85,7 @@ export default function AlteraQuantidadeModal({
                           <button
                             type="button"
                             aria-label="Aumentar quantidade"
-                            onClick={() => aoAlterarQtd(item.codigo, item.qtd + 1)}
+                            onClick={() => aoAlterarQtd(item.idLinha, item.qtd + 1)}
                           >
                             +
                           </button>

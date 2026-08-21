@@ -526,3 +526,68 @@ Nenhuma bloqueante — decisões de escopo já fechadas com o dono do produto em
 
 Uma venda de 3 itens, à vista, do zero até "Efetiva Venda" confirmada, em menos de 30 segundos
 (fluxo de teclado: leitura → leitura → leitura → F5 → escolher forma de pagamento → confirmar).
+
+---
+
+## ✅ 2026-08-21 — F5/F6 trocam, e o orçamento deixa de sequestrar a venda inteira
+
+Sete ajustes pedidos pelo dono do produto depois de usar a tela com o orçamento no ar.
+
+### As teclas trocaram de lugar
+
+| tecla | antes | agora |
+|---|---|---|
+| **F5** | Efetiva Venda | **Buscar Orçamento** |
+| **F6** | Puxar Orçamento | **Efetiva Venda** |
+
+A ordem passou a ser a do balcão: primeiro se puxa o que o cliente já tinha orçado, depois se
+fecha. Os dois botões ficam **lado a lado** no rodapé da coluna de teclas (a venda ocupa o dobro da
+largura — é a ação final e a que o operador acerta sem olhar). Os nomes das funções no código
+acompanharam (`f5BuscarOrcamento`/`f6EfetivaVenda`); tecla renomeada com função de nome antigo é
+armadilha para quem ler depois.
+
+### Cliente e vendedor ficam FIXOS quando a venda vem de orçamento
+
+Antes vinham preenchidos mas editáveis. O orçamento foi emitido **para** aquele cliente e **por**
+aquele vendedor, e é esse par que a comissão e o compromisso de preço acompanham — trocar faria a
+venda contradizer o documento que ela cumpre. No lugar do botão "Selecionar" aparece a marca
+*"do orçamento"*.
+
+### ⛔ O mesmo produto pode ocupar DUAS linhas, com preços diferentes
+
+É o ajuste mais profundo do lote. Regra do dono do produto: *"se o preço mudou, a empresa tem que
+honrar o orçamento, mas produtos a mais não precisam honrar"*.
+
+Então lançar um produto que já está na venda **junta pelo PREÇO, não pelo SKU**: preço igual soma na
+mesma linha, preço diferente abre linha nova com o preço de hoje.
+
+Isso obrigou três mudanças que não são visíveis na tela:
+
+1. **A chave da linha deixou de ser o SKU** (`ItemLedger.idLinha`). Com o SKU como chave, alterar a
+   quantidade de uma das linhas alterava as DUAS, e remover uma removia as duas.
+2. **`ItemVendaRequest.doOrcamento`** — a marca é por LINHA, não por variação. O servidor mapeava o
+   preço congelado por `idVariacao` e o aplicava a tudo daquele produto; e a validação "não pode
+   levar mais do que foi orçado" somava as duas linhas e **recusava a venda inteira**. Hoje só as
+   linhas marcadas entram na conta do orçado, só elas recebem o preço congelado, e só elas contam
+   para decidir se a venda foi parcial.
+3. **`dividirParaEnvio`** (front) — uma linha da tela pode virar dois itens no envio quando o preço
+   não mudou: a parte que o orçamento cobre (`qtdOrcada`) e o excedente. É o que permite mostrar
+   "3 × camiseta" numa linha só sem que o servidor recuse por excesso.
+
+⚠️ **Guarda de contrato:** mandar `idOrcamento` sem nenhuma linha marcada é **recusado** (400). Sem
+ela o defeito seria silencioso e caro — a venda sairia inteira a preço de cadastro, o orçamento
+seria consumido, e nada na resposta indicaria que a loja deixou de honrar o preço prometido.
+Coberto por `OrcamentoCrudTest.vendaDeOrcamentoSemNenhumaLinhaMarcadaEhRecusada`, e o caso principal
+por `unidadeAMaisDoMesmoProdutoSaiPeloPrecoDeHoje` (2 × 10,00 honrados + 1 × 15,00 de hoje = 35,00,
+com o orçamento fechando como VENDIDO, não parcial).
+
+### O popup virou uma busca de verdade
+
+Antes pedia o **número** do orçamento — que o operador raramente tem; ele tem o nome de quem está na
+frente dele. Agora localiza por **número, cliente ou vendedor**, e a lista traz nº, cliente,
+vendedor, validade, itens e total, com um "Abrir" por linha.
+
+**Só os ABERTOS**, filtrado no servidor: vencido, cancelado ou já vendido não têm por que aparecer
+numa lista cujo único propósito é virar venda. Abrir um da lista **continua** checando a situação —
+entre a busca e o clique o documento pode ter vencido, e ler um vencido é justamente o que o marca
+(R6).
