@@ -809,6 +809,44 @@ convive com o mesmo compromisso (`mmBarWidth` 0,31 mm = 2,48 dots) e lê.
 demais é a causa clássica de barra engordada em térmica direta — o calor espalha o ponto. Baixar a
 densidade e/ou reduzir a velocidade de impressão costuma resolver. Só depois disso vale mexer em
 *bar width reduction* (desenhar a barra ~1 dot mais fina para compensar o espalhamento).
+
+### ⛔ E o que impedia a leitura era a ZONA DE SILÊNCIO ausente
+
+Barras finas e proporcionais, e mesmo assim *"ainda não tá lendo"*. A causa não estava nas barras:
+o jsbarcode era chamado com **`margin: 0`**, o que remove as **zonas de silêncio** — o branco
+obrigatório antes e depois do símbolo (**11 módulos à esquerda, 7 à direita**, GS1 General
+Specifications).
+
+Elas não são margem estética: **é por elas que o leitor sabe onde o símbolo começa e termina**. Sem
+elas o código pode estar impresso com precisão perfeita e o leitor simplesmente **recusa**. O
+`margin: 0` estava ali para o desenho "não desperdiçar espaço" da caixa — sem perceber que aquele
+espaço tem função.
+
+**Correção:** o módulo passou a ser derivado de **113 módulos** (95 do símbolo + 11 + 7), não de 95,
+e as margens são declaradas em `marginLeft`/`marginRight`. A caixa continua sendo preenchida por
+inteiro; o que muda é que parte dela é branco obrigatório.
+
+| | antes | agora |
+|---|---|---|
+| módulo | 0,337 mm (102% do nominal) | **0,283 mm (86%)** |
+| zona de silêncio | **0 mm** ❌ | **3,1 mm** esq · **2,0 mm** dir ✅ |
+| símbolo | 32,0 mm | 26,9 mm |
+
+O símbolo encolheu e continua **dentro da norma** (mínimo 80%) — e agora tem o que faltava para ser
+reconhecido. Fundo branco explícito no SVG, porque zona de silêncio precisa ser branca e o papel
+sozinho não garante isso se o campo cair sobre outro.
+
+### ⚠️ Se ainda não ler, nesta ordem
+
+1. **Altura das barras: 9,0 mm** (campo de 12 mm menos os 3 mm dos dígitos). O proporcional ao
+   módulo seria **19,6 mm**. A norma permite truncar, mas leitor de mão em ângulo sofre com barra
+   curta — é o candidato mais provável depois da zona de silêncio. Dá para ganhar altura movendo o
+   preço para cima e usando a sobra de 1,7 mm no pé da etiqueta.
+2. **Densidade (*darkness*) do driver.** Calor demais espalha o ponto e engorda a barra; é a causa
+   clássica em térmica direta, e está no driver, não no código.
+3. **O bloco preto do preço encostado no topo das barras** (termina em y=18, as barras começam em
+   y=18). Não viola a zona de silêncio, que é lateral, mas qualquer deslocamento de impressão o faz
+   invadir o símbolo. 1–2 mm de folga ali é barato.
 ### Dívida que continua aberta
 
 "Largura da Etiqueta" segue significando duas coisas — o adesivo **e** a caixa de conteúdo. Com o

@@ -37,14 +37,24 @@ const MM_POR_PONTO = 25.4 / 72
  *  com fonte própria, então ele também precisa ser medido em milímetro e não em pixel fixo. */
 const ALTURA_TEXTO_BARRAS_MM = 3
 
-/**
- * Módulos de um símbolo EAN-13 (sem as zonas de silêncio, que o `margin: 0` do jsbarcode remove).
- *
- * <p>É a constante que transforma a largura da caixa em largura de barra: `módulo = larguraPx / 95`.
- * Derivar daqui é o que garante que o desenho ocupe exatamente a caixa **sem ser esticado** — e
- * esticar era a origem das barras irregulares que a impressão de 2026-08-21 mostrou.
- */
+/** Módulos do símbolo EAN-13 propriamente dito (as barras). */
 const MODULOS_EAN13 = 95
+
+/**
+ * ⚠️ ZONAS DE SILÊNCIO — o branco obrigatório antes e depois das barras: **11 módulos à esquerda,
+ * 7 à direita** (GS1 General Specifications).
+ *
+ * <p>Não são enfeite nem margem estética: é por elas que o leitor sabe **onde o símbolo começa e
+ * termina**. Sem elas, o código pode estar impresso com precisão perfeita e mesmo assim **não ler**
+ * — foi exatamente o que aconteceu em 2026-08-21, com `margin: 0` no jsbarcode (posto ali para o
+ * desenho "não desperdiçar espaço" da caixa, sem perceber que aquele espaço tem função).
+ *
+ * <p>Por isso o módulo é derivado de **113**, não de 95: `larguraPx` é a caixa inteira, e o símbolo
+ * ocupa só a parte central dela.
+ */
+const MODULOS_SILENCIO_ESQUERDA = 11
+const MODULOS_SILENCIO_DIREITA = 7
+const MODULOS_TOTAIS_EAN13 = MODULOS_EAN13 + MODULOS_SILENCIO_ESQUERDA + MODULOS_SILENCIO_DIREITA
 
 /**
  * Agrupa os 13 dígitos do EAN-13 como manda o padrão: **1 + 6 + 6** (`7 891234 567895`).
@@ -110,27 +120,34 @@ function CodigoDeBarras({ valor, larguraPx, alturaPx, exibirTexto, escalaPxPorMm
       // fixos, a proporção barras/texto mudava entre editor, impressão e prévia — o mesmo defeito
       // do `font-size` em pt (ver MM_POR_PONTO acima).
       const alturaTextoPx = exibirTexto ? ALTURA_TEXTO_BARRAS_MM * escalaPxPorMm : 0
+      // ⚠️ O módulo é DERIVADO da caixa (2026-08-21), e de 113 módulos, não de 95: a caixa tem de
+      // acomodar o símbolo MAIS as duas zonas de silêncio. Assim o desenho ocupa exatamente
+      // `larguraPx` e o SVG nasce do tamanho do viewport — nada é esticado.
+      //
+      // Antes era `width: 2` fixo com o SVG esticado até caber, o que já era ruim (o fator de
+      // escala não é inteiro, então cada barra caía em fração de pixel) e virou ilegível quando
+      // somei `shape-rendering: crispEdges`: ele arredonda CADA borda para a grade de pixels
+      // independentemente, então barra de 1 módulo virava 2 px enquanto o espaço vizinho sumia.
+      const modulo = Math.max(larguraPx / MODULOS_TOTAIS_EAN13, 0.1)
       JsBarcode(svgRef.current, valor || VALOR_BARRA_EXEMPLO, {
         format: 'EAN13',
-        // ⚠️ O módulo é DERIVADO da caixa (2026-08-21, tarde): assim os 95 módulos do EAN-13
-        // ocupam exatamente `larguraPx` e o SVG nasce do tamanho do viewport — nada é esticado.
-        //
-        // Antes era `width: 2` fixo e o SVG era esticado até caber, o que já era ruim (o fator de
-        // escala não é inteiro, então cada barra caía em fração de pixel) e virou ilegível quando
-        // somei `shape-rendering: crispEdges`: ele arredonda CADA borda para a grade de pixels
-        // independentemente, então barra de 1 módulo virava 2 px enquanto o espaço vizinho sumia.
-        // O resultado impresso foram barras grossas com espaços comidos — a razão barra/espaço,
-        // que é justamente o que o leitor mede, deixou de existir.
-        width: Math.max(larguraPx / MODULOS_EAN13, 0.1),
+        width: modulo,
         height: Math.max(alturaPx - alturaTextoPx, 1),
-        // ⚠️ Os dígitos NÃO são mais desenhados pelo jsbarcode (2026-08-21, pedido do dono do
-        // produto: "os números estão muito próximos um do outro"). O SVG é esticado para preencher
-        // a caixa (`preserveAspectRatio="none"`), e esticar o desenho esticava o TEXTO junto —
-        // espremendo ou alargando os dígitos conforme a largura configurada. Agora eles saem em
-        // HTML, fora do SVG, onde o espaçamento é nosso e não sofre escala nenhuma.
+        // ⚠️ Os dígitos NÃO são desenhados pelo jsbarcode (2026-08-21, pedido do dono do produto:
+        // "os números estão muito próximos um do outro"). Eles saem em HTML, fora do SVG, onde o
+        // espaçamento é nosso e não sofre escala nenhuma.
         displayValue: false,
         textMargin: 0,
-        margin: 0,
+        // ⚠️ ZONAS DE SILÊNCIO, não margem estética. `margin: 0` — que era o valor aqui — colava as
+        // barras na borda da caixa e o leitor **recusava o código**, mesmo impresso com precisão.
+        // O branco antes e depois é o que delimita o símbolo para o leitor.
+        marginTop: 0,
+        marginBottom: 0,
+        marginLeft: modulo * MODULOS_SILENCIO_ESQUERDA,
+        marginRight: modulo * MODULOS_SILENCIO_DIREITA,
+        // Fundo branco explícito: a zona de silêncio precisa ser BRANCA, e num campo desenhado
+        // sobre fundo escuro (ou sobre outro campo) o papel sozinho não garante isso.
+        background: '#ffffff',
       })
     } catch (e) {
       // Valor não desenhável (ex.: vazio) — deixa o SVG em branco em vez de derrubar a tela.
