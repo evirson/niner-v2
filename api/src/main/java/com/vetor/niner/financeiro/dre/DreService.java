@@ -242,6 +242,14 @@ public class DreService {
                         JOIN produto_movimento_detalhe pmd
                              ON pmd.id_movimento = pmm.id_movimento AND pmd.id_tenant = pmm.id_tenant
                                 AND pmd.credito_debito = 'C'
+                        -- ⚠️ Devolução CANCELADA não deduz receita nem reverte CMV (achado de
+                        -- auditoria, 2026-08-21). Cancelar não apaga as linhas `DEVOLUCAO` do
+                        -- ledger — só marca `venda_devolucao.cancelada` e lança o movimento
+                        -- compensatório. Sem o filtro, o resultado do mês errava nas DUAS pontas,
+                        -- nos dois regimes, e nada na tela apontava a causa.
+                        JOIN venda_devolucao vd
+                             ON vd.id_tenant = pmm.id_tenant AND vd.id_devolucao = pmm.id_devolucao
+                            AND vd.cancelada = false
                         WHERE pmm.id_tenant = plataforma.tenant_atual() AND pmm.tipo_movimento = 'DEVOLUCAO'
                               AND (pmm.data_movimento AT TIME ZONE 'America/Sao_Paulo')::date BETWEEN ? AND ?
                         """ + filtroEmpresaMovimento)

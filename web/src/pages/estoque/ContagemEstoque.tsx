@@ -88,9 +88,32 @@ export default function ContagemEstoque() {
     setQtdEditando((atual) => ({ ...atual, [idVariacao]: mascararQuantidade(texto, permiteQtdDecimal) }))
   }
 
+  /**
+   * ⚠️ Campo VAZIO significa "não mexi", nunca "apague a contagem" (achado de auditoria,
+   * 2026-08-21).
+   *
+   * <p>O texto vazio percorria todo o caminho e virava **zero**: `completarQuantidade('')` devolve
+   * `''`, `desmascararQuantidade('')` devolve `0`, e o servidor, ao receber zero, **apaga a linha**
+   * (`ajustarContagem` faz DELETE e só reinsere com `signum() > 0`). Bastava o operador selecionar
+   * o campo (o `onFocus` seleciona tudo), apertar Delete para redigitar e ser interrompido: ao
+   * clicar em qualquer outro lugar, a contagem daquele produto sumia da grade — **sem toast, sem
+   * confirmação e sem desfazer**. Pior: o produto sumia do balanço inteiro sem sequer aparecer como
+   * divergência, porque o cálculo só olha o que foi contado.
+   *
+   * <p>Zerar de propósito continua possível digitando `0` — aí é intenção declarada, não um campo
+   * em branco no meio de uma edição.
+   */
   function aoSairQtd(linha: LinhaContagem) {
     const texto = qtdEditando[linha.idVariacao]
     if (texto === undefined) return
+    if (!texto.trim()) {
+      setQtdEditando((atual) => {
+        const proximo = { ...atual }
+        delete proximo[linha.idVariacao]
+        return proximo
+      })
+      return
+    }
     const completo = completarQuantidade(texto, permiteQtdDecimal)
     setQtdEditando((atual) => {
       const proximo = { ...atual }

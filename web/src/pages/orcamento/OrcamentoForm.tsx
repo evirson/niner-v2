@@ -12,6 +12,7 @@ import {
   type Orcamento,
 } from '../../lib/orcamento'
 import { buscarDescontoVenda } from '../../lib/configuracaoGeral'
+import { hojeMaisDiasISO } from '../../lib/datas'
 import {
   completarMoeda,
   dataParaIso,
@@ -78,9 +79,11 @@ export default function OrcamentoForm() {
     // `!validadeTexto` já bloqueava a correção. Como o orçamento é IMUTÁVEL, o documento saía com o
     // prazo errado sem conserto. Mesmo remédio de `DevolucaoProduto` e `ComprovantePapeletaModal`.
     if (config && !buscandoValidade && !validadeTexto) {
-      const d = new Date()
-      d.setDate(d.getDate() + config.cfgDiasValidadeOrcamento)
-      setValidadeTexto(isoParaData(d.toISOString().slice(0, 10)) ?? '')
+      // ⚠️ `hojeMaisDiasISO` monta a data pelos componentes LOCAIS. Era `toISOString().slice(0,10)`,
+      // que converte para UTC: a partir das 21h de Brasília o resultado já é o dia seguinte, e o
+      // orçamento saía com um dia a mais de validade — congelando o preço além da política da loja,
+      // num documento que é imutável.
+      setValidadeTexto(isoParaData(hojeMaisDiasISO(config.cfgDiasValidadeOrcamento)) ?? '')
     }
   }, [config, buscandoValidade, validadeTexto])
 

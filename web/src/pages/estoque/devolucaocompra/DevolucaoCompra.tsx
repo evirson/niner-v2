@@ -6,6 +6,7 @@ import { BotaoFecharTela } from '../../../components/BotaoFecharTela'
 import { IconeEstoque } from '../../../components/Icones'
 import Toast from '../../../components/Toast'
 import { ApiError } from '../../../lib/api'
+import { buscarPermiteQtdDecimal } from '../../../lib/configuracaoGeral'
 import {
   efetivarDevolucaoCompra,
   listarEntradasElegiveis,
@@ -16,14 +17,14 @@ import {
 import { listarEmpresasPermitidas, type Empresa } from '../../../lib/empresas'
 import { buscarFornecedoresEmissao, type FornecedorOpcaoEmissao } from '../../../lib/etiquetaEmissao'
 import {
-  completarPeso,
+  completarQuantidade,
   dataParaIso,
   dataValida,
-  desmascararPeso,
+  desmascararQuantidade,
   formatarMoeda,
-  formatarPeso,
+  formatarQuantidade,
   mascararData,
-  mascararPeso,
+  mascararQuantidade,
 } from '../../../lib/masks'
 
 const TAMANHO_PAGINA = 50
@@ -57,6 +58,16 @@ export default function DevolucaoCompra() {
   const [toast, setToast] = useState<{ texto: string; tipo: 'erro' | 'sucesso' } | null>(null)
 
   const { data: empresas } = useQuery({ queryKey: ['empresas-permitidas'], queryFn: listarEmpresasPermitidas })
+  /**
+   * ⚠️ Esta tela era a ÚNICA que movimenta estoque ignorando `cfg_permite_qtd_decimal` (achado de
+   * auditoria, 2026-08-21): usava as máscaras de PESO, fixas em 3 casas. Com o parâmetro desligado
+   * — o caso comum — todo o sistema mostrava "5" e recusava fração, e aqui aparecia "5,000" e
+   * aceitava 2,5. O servidor gravava, e daí em diante o estoque real ficava fracionário enquanto
+   * todas as demais telas o exibiam arredondado. O guard correspondente entrou no
+   * `DevolucaoCompraService` (P4: a regra vale no servidor, a tela só não deixa digitar).
+   */
+  const { data: cfgQtdDecimal } = useQuery({ queryKey: ['permite-qtd-decimal'], queryFn: buscarPermiteQtdDecimal })
+  const permiteQtdDecimal = cfgQtdDecimal?.cfgPermiteQtdDecimal ?? true
 
   const { data: fornecedoresEncontrados } = useQuery({
     queryKey: ['etiqueta-emissao-fornecedores', buscaFornecedor],
@@ -122,7 +133,7 @@ export default function DevolucaoCompra() {
       delete novasQtds[item.idVariacao]
     } else {
       novo.add(item.idVariacao)
-      novasQtds[item.idVariacao] = formatarPeso(item.qtdMaxima)
+      novasQtds[item.idVariacao] = formatarQuantidade(item.qtdMaxima, permiteQtdDecimal)
     }
     setMarcados(novo)
     setQtds(novasQtds)
@@ -130,11 +141,11 @@ export default function DevolucaoCompra() {
 
   const selecionados = (itens ?? []).filter((i) => marcados.has(i.idVariacao))
   const totalDevolucao = selecionados.reduce(
-    (soma, i) => soma + desmascararPeso(qtds[i.idVariacao] ?? '0') * (i.valorUnitario ?? 0),
+    (soma, i) => soma + desmascararQuantidade(qtds[i.idVariacao] ?? '0', permiteQtdDecimal) * (i.valorUnitario ?? 0),
     0,
   )
-  const excedeu = selecionados.filter((i) => desmascararPeso(qtds[i.idVariacao] ?? '0') > i.qtdMaxima)
-  const zerados = selecionados.filter((i) => desmascararPeso(qtds[i.idVariacao] ?? '0') <= 0)
+  const excedeu = selecionados.filter((i) => desmascararQuantidade(qtds[i.idVariacao] ?? '0', permiteQtdDecimal) > i.qtdMaxima)
+  const zerados = selecionados.filter((i) => desmascararQuantidade(qtds[i.idVariacao] ?? '0', permiteQtdDecimal) <= 0)
   const podeDevolver = selecionados.length > 0 && excedeu.length === 0 && zerados.length === 0
 
   const devolver = useMutation({
@@ -143,7 +154,7 @@ export default function DevolucaoCompra() {
         idMovimentoOrigem: entrada!.idMovimento,
         itens: selecionados.map((i) => ({
           idVariacao: i.idVariacao,
-          qtd: desmascararPeso(qtds[i.idVariacao] ?? '0'),
+          qtd: desmascararQuantidade(qtds[i.idVariacao] ?? '0', permiteQtdDecimal),
         })),
       }),
     onSuccess: (r) => {
@@ -282,7 +293,7 @@ export default function DevolucaoCompra() {
                       {(itens ?? []).map((i) => {
                         const marcado = marcados.has(i.idVariacao)
                         const digitado = qtds[i.idVariacao] ?? ''
-                        const acima = marcado && desmascararPeso(digitado || '0') > i.qtdMaxima
+                        const acima = marcado && desmascararQuantidade(digitado || '0', permiteQtdDecimal) > i.qtdMaxima
                         const limitadoPeloEstoque = i.qtdEstoque < i.qtdSaldo
                         return (
                           <tr key={i.idVariacao} className={marcado ? 'linha-selecionada' : ''}>
@@ -305,13 +316,13 @@ export default function DevolucaoCompra() {
                               )}
                             </td>
                             <td className="mono" style={{ textAlign: 'right' }}>
-                              {formatarPeso(i.qtdComprada)}
+                              {formatarQuantidade(i.qtdComprada, permiteQtdDecimal)}
                             </td>
                             <td className="mono" style={{ textAlign: 'right' }}>
-                              {formatarPeso(i.qtdDevolvida)}
+                              {formatarQuantidade(i.qtdDevolvida, permiteQtdDecimal)}
                             </td>
                             <td className="mono" style={{ textAlign: 'right' }}>
-                              {formatarPeso(i.qtdEstoque)}
+                              {formatarQuantidade(i.qtdEstoque, permiteQtdDecimal)}
                             </td>
                             <td
                               className="mono"
@@ -322,7 +333,7 @@ export default function DevolucaoCompra() {
                                   : 'Limitado pelo saldo da nota.'
                               }
                             >
-                              {formatarPeso(i.qtdMaxima)}
+                              {formatarQuantidade(i.qtdMaxima, permiteQtdDecimal)}
                               {limitadoPeloEstoque && ' *'}
                             </td>
                             <td style={{ textAlign: 'right' }}>
@@ -332,17 +343,17 @@ export default function DevolucaoCompra() {
                                 disabled={!marcado}
                                 value={digitado}
                                 onChange={(e) =>
-                                  setQtds((q) => ({ ...q, [i.idVariacao]: mascararPeso(e.target.value) }))
+                                  setQtds((q) => ({ ...q, [i.idVariacao]: mascararQuantidade(e.target.value, permiteQtdDecimal) }))
                                 }
                                 onBlur={(e) =>
-                                  setQtds((q) => ({ ...q, [i.idVariacao]: completarPeso(e.target.value) }))
+                                  setQtds((q) => ({ ...q, [i.idVariacao]: completarQuantidade(e.target.value, permiteQtdDecimal) }))
                                 }
                                 onFocus={(e) => e.target.select()}
                                 aria-invalid={acima}
                               />
                             </td>
                             <td className="mono" style={{ textAlign: 'right' }}>
-                              R$ {formatarMoeda(marcado ? desmascararPeso(digitado || '0') * (i.valorUnitario ?? 0) : 0)}
+                              R$ {formatarMoeda(marcado ? desmascararQuantidade(digitado || '0', permiteQtdDecimal) * (i.valorUnitario ?? 0) : 0)}
                             </td>
                           </tr>
                         )

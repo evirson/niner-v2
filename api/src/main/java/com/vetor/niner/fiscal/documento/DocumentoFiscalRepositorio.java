@@ -192,6 +192,22 @@ public class DocumentoFiscalRepositorio {
      *       coluna sempre previu isso ("preenchida quando a nota é do próprio Niner").</li>
      * </ul>
      */
+    /*
+     * ⚠️ `@Transactional` NÃO é decoração (achado de auditoria, 2026-08-21 — faltava aqui e a irmã
+     * `gravarDevolucaoAssinada` tem). Sem ela o método roda em autocommit, e aí o
+     * `TenantAwareTransactionManager` nunca executou o `SET LOCAL app.id_tenant`: os
+     * `plataforma.tenant_atual()` do VALUES resolvem para NULL, a coluna é NOT NULL, e o INSERT
+     * estoura. O usuário via **409 "Registro em uso por outro cadastro"** — mensagem sobre exclusão
+     * de cadastro para uma emissão de nota.
+     *
+     * <p>E o estrago não era só a mensagem: a mercadoria já tinha baixado (o serviço commitou
+     * antes), o número fiscal já tinha sido consumido em transação própria, e o documento não
+     * chegava a existir nem como pendente — cada nova tentativa queimava outro número.
+     *
+     * <p>Não existe transação vindo de fora: o controller não é transacional, o serviço já
+     * commitou e o assembler fecha a própria transação de leitura antes de retornar.
+     */
+    @Transactional
     public long gravarDevolucaoCompraAssinada(long idEmpresa, long idMovimento, Integer idUsuario,
                                               DevolucaoParaMontar dev, NumeroReservado numero,
                                               String chave, String xmlAssinado) {
@@ -575,6 +591,21 @@ public class DocumentoFiscalRepositorio {
      * futuro, ter mais de um documento pendurado (uma nota e um evento de outro modelo), e cancelar
      * o documento errado é o tipo de engano que só aparece na SEFAZ.
      */
+    /*
+     * ⚠️ `@Transactional(readOnly = true)` — a irmã do caminho da venda tem, esta não tinha, e a
+     * falta era PIOR aqui porque falha em SILÊNCIO (achado de auditoria, 2026-08-21).
+     *
+     * <p>Em autocommit, `plataforma.tenant_atual()` resolve para NULL, o filtro casa zero linhas e
+     * o método devolve `Optional.empty()`. Só que vazio, no contrato deste método, significa "não
+     * há NF-e, pode reverter à vontade" — então o cancelamento da devolução ao fornecedor **não
+     * enviava o evento 110111**, nem checava o prazo da UF, e mesmo assim devolvia o estoque e
+     * respondia 200.
+     *
+     * <p>Resultado: mercadoria de volta na loja e uma NF-e 55 autorizada e não cancelada declarando
+     * que ela saiu — exatamente o cenário que a ordem "nota primeiro, estoque depois" existe para
+     * impedir. Sem erro nenhum na tela.
+     */
+    @Transactional(readOnly = true)
     public java.util.Optional<DocumentoParaCancelar> buscarAutorizadoDeMovimentoParaCancelamento(long idMovimento) {
         return jdbc.sql("""
                         SELECT d.id_documento_fiscal, d.chave_acesso, d.protocolo, d.data_autorizacao,

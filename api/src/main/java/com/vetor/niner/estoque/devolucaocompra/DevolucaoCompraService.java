@@ -102,6 +102,7 @@ public class DevolucaoCompraService {
             """;
 
     private final JdbcClient jdbc;
+    private final com.vetor.niner.configuracao.geral.ConfiguracaoGeralService configuracaoGeralService;
 
     /**
      * Lê uma coluna {@code integer} anulável como {@code Long}.
@@ -117,8 +118,10 @@ public class DevolucaoCompraService {
         return rs.wasNull() ? null : valor;
     }
 
-    public DevolucaoCompraService(JdbcClient jdbc) {
+    public DevolucaoCompraService(JdbcClient jdbc,
+                                  com.vetor.niner.configuracao.geral.ConfiguracaoGeralService configuracaoGeralService) {
         this.jdbc = jdbc;
+        this.configuracaoGeralService = configuracaoGeralService;
     }
 
     /**
@@ -270,10 +273,21 @@ public class DevolucaoCompraService {
         // vezes, ou a tela mandou uma linha por `nItem` da nota. Somar ANTES de validar: conferir
         // linha a linha deixaria duas linhas de 5 passarem contra um estoque de 8, que e
         // exatamente o limite que esta rotina existe para respeitar.
+        // ⚠️ Esta rotina era a ÚNICA que movimenta estoque sem honrar `cfg_permite_qtd_decimal`
+        // (achado de auditoria, 2026-08-21). PDV, transferência, balanço e devolução de venda já
+        // barravam; aqui passava. Com o parâmetro desligado — o caso comum — a tela mostrava tudo
+        // como inteiro, o servidor aceitava 2,5, e daí em diante o estoque real ficava fracionário
+        // enquanto todas as telas o exibiam arredondado. A NF-e de saída ainda declarava a fração.
+        boolean permiteQtdDecimal = configuracaoGeralService.permiteQtdDecimalProduto();
+
         Map<Long, BigDecimal> pedidoPorVariacao = new LinkedHashMap<>();
         for (ItemDevolucaoCompraRequest pedido : req.itens()) {
             if (pedido.qtd() == null || pedido.qtd().signum() <= 0) {
                 throw new ConflitoDadosException("A quantidade a devolver precisa ser maior que zero.");
+            }
+            if (!permiteQtdDecimal && pedido.qtd().remainder(BigDecimal.ONE).compareTo(BigDecimal.ZERO) != 0) {
+                throw new IllegalArgumentException(
+                        "Quantidade deve ser um número inteiro — este tenant não permite quantidade decimal de produtos (Parâmetros do Sistema).");
             }
             pedidoPorVariacao.merge(pedido.idVariacao(), pedido.qtd(), BigDecimal::add);
         }

@@ -199,6 +199,35 @@ class PrivilegiosNinerAppTest {
     }
 
     /**
+     * Devolução ao fornecedor (V051–V054): os privilégios que a rotina inteira depende, e que
+     * nenhum caso cobria (achado de auditoria, 2026-08-21).
+     *
+     * <p>⚠️ O mais exposto é a <b>view</b>: {@code vw_entrada_saldo_devolucao} é a fonte única do
+     * teto de devolução (saldo ∧ estoque). Se aquele {@code GRANT SELECT} sumir numa recriação de
+     * banco, a rotina responde <i>permission denied for view</i> em runtime — e a suíte não vê
+     * nada, porque o Testcontainers conecta como superusuário. É o roteiro exato do incidente do
+     * Cancelamento de Entrada.
+     *
+     * <p>{@code entrada_nfe_item} não pode ser apagada (P3 — é o XML da entrada que fundamenta o
+     * teto), e as duas funções da trigger de estoque precisam de {@code EXECUTE}: sem ele, TODA
+     * movimentação de estoque falha.
+     */
+    @Test
+    void devolucaoAoFornecedorTemOsPrivilegiosQuePrecisa() throws Exception {
+        try (Connection c = conexaoApp(); Statement st = c.createStatement()) {
+            permissaoNegada(st, "DELETE FROM entrada_nfe_item");
+            // O que a aplicação PRECISA poder fazer:
+            st.executeQuery("SELECT 1 FROM entrada_nfe_item WHERE false").close();
+            st.executeQuery("SELECT 1 FROM vw_entrada_saldo_devolucao WHERE false").close();
+            // Assinatura COMPLETA: `has_function_privilege` resolve pela assinatura, e um nome sem
+            // os tipos estoura com "function does not exist" — um falso vermelho que parece
+            // privilégio faltando e não é. As duas assinaturas são as da V054:191-192.
+            afirmaPodeExecutar(st, "fn_aplica_delta_estoque(integer, integer, integer, numeric)");
+            afirmaPodeExecutar(st, "fn_exige_estoque_nao_negativo(integer, integer, integer, numeric, numeric)");
+        }
+    }
+
+    /**
      * P8 em job sem JWT (achado ao vivo em 2026-08-19): uma consulta em tabela de <b>domínio</b>
      * sem {@code SET app.id_tenant} não "varre todos os tenants" — o RLS {@code FORCE} devolve
      * <b>zero linhas de qualquer tenant</b>, em silêncio, sem erro. Era exatamente o que
@@ -240,5 +269,20 @@ class PrivilegiosNinerAppTest {
             return;
         }
         fail("Esperava permissão negada (SQLState " + PRIVILEGIO_INSUFICIENTE + ") em: " + sql);
+    }
+
+    /**
+     * Afirma que {@code niner_app} tem EXECUTE na função.
+     *
+     * <p>⚠️ A assinatura tem de vir COMPLETA, com os tipos: {@code has_function_privilege} resolve
+     * a função pela assinatura e um nome sem os parâmetros estoura com <i>"function does not
+     * exist"</i> — um vermelho que parece privilégio faltando e é só sintaxe.
+     */
+    private static void afirmaPodeExecutar(Statement st, String assinatura) throws SQLException {
+        try (var rs = st.executeQuery(
+                "SELECT has_function_privilege('niner_app', '" + assinatura + "', 'EXECUTE')")) {
+            assertThat(rs.next()).isTrue();
+            assertThat(rs.getBoolean(1)).as("EXECUTE de niner_app em %s", assinatura).isTrue();
+        }
     }
 }

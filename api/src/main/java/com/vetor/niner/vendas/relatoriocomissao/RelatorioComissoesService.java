@@ -137,6 +137,15 @@ public class RelatorioComissoesService {
                     FROM produto_movimento_mestre pmm
                     JOIN produto_movimento_detalhe pmd
                            ON pmd.id_movimento = pmm.id_movimento AND pmd.id_tenant = pmm.id_tenant AND pmd.credito_debito = 'C'
+                    -- ⚠️ Devolução CANCELADA não pode ser descontada da comissão (achado de
+                    -- auditoria, 2026-08-21). Cancelar uma devolução não apaga as linhas
+                    -- `DEVOLUCAO` do ledger: ela só marca `venda_devolucao.cancelada` e lança um
+                    -- movimento compensatório. Sem este filtro, o vendedor era pago a MENOS por uma
+                    -- devolução que foi desfeita — e nada na tela apontava o motivo. É o mesmo
+                    -- filtro que `DevolucaoProdutoService` já aplica no domínio.
+                    JOIN venda_devolucao vd
+                           ON vd.id_tenant = pmm.id_tenant AND vd.id_devolucao = pmm.id_devolucao
+                          AND vd.cancelada = false
                     WHERE pmm.id_tenant = plataforma.tenant_atual() AND pmm.tipo_movimento = 'DEVOLUCAO'
                           AND (pmm.data_movimento AT TIME ZONE 'America/Sao_Paulo')::date BETWEEN ? AND ? AND pmd.id_funcionario IS NOT NULL
                 """
