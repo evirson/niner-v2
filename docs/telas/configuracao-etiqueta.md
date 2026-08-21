@@ -486,3 +486,151 @@ motivou o diagnóstico inteiro.
   do tamanho "M"), mas não pedido; `fundo_preto` cobre só o binário preto-cheio/sem-fundo pedido.
   Se vier a ser pedido, é um campo novo (`estilo_fundo` com 3 valores em vez de boolean).
 - **Sobreposição visual de dois campos** (x/y colidindo) — não validada pelo banco.
+
+---
+
+## 🔴 2026-08-21 — a impressão real numa Argox OS-2140: a escala, e três defeitos de impressão
+
+Sessão inteira de diagnóstico com o rolo e a impressora do dono do produto na mão. O sintoma
+inicial: *"está imprimindo muito à direita, e o deslocamento aumenta na 2ª e na 3ª coluna; na
+vertical também está saindo muito para baixo"*.
+
+**Estado ao fim do dia: resolvido na horizontal, ⏭️ PENDENTE na vertical.** Ver "Onde parou".
+
+### O que tornou o diagnóstico possível: o quadro impresso é a régua
+
+`EtiquetaConfigForm.tsx` desenha `border: '1px solid #000'` em cada etiqueta — **só no Teste de
+Impressão**, como guia de corte. Isso faz da folha impressa um instrumento de medida: o quadro
+preto é *onde mandamos imprimir* e o adesivo é *onde a etiqueta está*. Fotografando os dois
+juntos dá para medir a diferença por pixel e — o que mais importa — medir **razões** entre
+impresso e físico no mesmo plano, que são imunes a perspectiva e não precisam de escala.
+
+⚠️ **A deriva era para a ESQUERDA, não para a direita.** O passo impresso era *menor* que o passo
+do rolo, então o conteúdo caía no vão à esquerda de cada etiqueta (foi o que cortou o "B" de
+"BOTA" na coluna 2, e mais ainda na 3). Quem relata o defeito descreve o movimento relativo que
+enxerga; confiar na direção relatada teria invertido a correção inteira.
+
+### A causa raiz: o campo pedia a largura errada
+
+A Argox OS-2140 **aceita rolo de 110 mm mas o cabeçote só imprime 104**. O campo se chamava
+"Largura do Rolo", então foi preenchido com 110 — e o driver encolheu a página inteira para caber
+no que alcança. Medido pela régua de calibragem: **93 mm onde deveriam sair 100** (≈ 0,93; e
+110 × 0,93 = 102,3 mm, que é a área imprimível real).
+
+Encolher a página encolhe *tudo*, inclusive o **passo entre colunas** — e o adesivo não encolhe
+junto. Daí o erro que cresce a cada coluna. `Escala: 100%` no Chrome **não resolve**: quem escala
+é o driver, encaixando a página na área física.
+
+**Correção:** o campo passou a se chamar **"Largura de Impressão"**, com ajuda dizendo que é a
+largura que a *impressora alcança*, não a do papel, e que declarar mais faz o driver encolher
+tudo. A coluna do banco continua `largura_rolo_mm` (migration aplicada é imutável) — só o rótulo
+conta a verdade. Trocando 110 → 102, **o alinhamento horizontal ficou correto**.
+
+### A régua de calibragem (`ReguaCalibragem.tsx`) e os DOIS defeitos que ela sofreu
+
+Duas réguas de 100 mm (deitada e em pé) impressas antes das etiquetas, ligadas por uma caixa no
+popup do Teste de Impressão. Existem porque, olhando só a etiqueta, é **impossível** separar
+"medida do cadastro errada" de "impressora escalando" — os dois produzem o mesmo estrago, e o
+conserto de um não conserta o outro. Régua longa porque erro percentual só é legível em distância
+longa: 3% em 33 mm é 1 mm (dentro do erro de leitura), em 100 mm é 3 mm.
+
+Duas versões morreram na impressora, cada uma por um motivo, e as duas lições são gerais:
+
+1. **`background: #000` NÃO IMPRIME.** Saiu do papel uma régua só com os números. O navegador
+   suprime cor de fundo na impressão por padrão (caixa "Gráficos de segundo plano", desmarcada de
+   fábrica). O diagnóstico veio do que *saiu*: números (texto, `color`) ✅, código de barras
+   (SVG `<rect>` do JsBarcode) ✅, quadro da etiqueta (`border`) ✅, traços da régua
+   (`background`) ❌.
+2. **`border` imprime, mas a espessura é arredondada para pixel inteiro.** Medido no navegador:
+   0,5 mm pedido (1,89 px) virou **1 px = 0,26 mm**. Térmica é 1 bit — haste fina sai falhada.
+3. **Solução: SVG.** Conteúdo (não fundo) e vetor (rasterizado na resolução de saída, sem
+   arredondar em pixel de tela). O código de barras é a prova viva de que funciona nesta
+   impressora. Espessura conferida no DOM: **0,50 mm exatos**.
+
+⚠️ **Defeito irmão, latente, corrigido junto:** o campo com **`fundo_preto`** em
+`CampoEtiquetaVisual` usa `background: #000` com texto branco — na tela fica perfeito, no papel
+sairia **branco no branco, campo invisível**. Ninguém tinha usado a opção ainda. Resolvido com
+`print-color-adjust: exact` (+ `-webkit-`).
+
+### Mais duas correções de geometria, da mesma sessão
+
+- **Página de altura exata, não `auto`.** `@page` passou de `size: L mm auto` para
+  `size: L mm H mm`, com `H` = calibragem + fileiras × passo. Com `auto`, quem decide onde a folha
+  acaba é o driver, e a fileira atravessada pela quebra sai partida no meio do adesivo sem aviso.
+  Rolo contínuo é uma folha só. Vale nas **duas** telas (Configuração e Emissão).
+- **Fileira POSICIONADA, não empilhada** (`yDaFileira`, `alturaFolhaMm` em `etiquetaConfig.ts`).
+  Empilhando `<div>`s de altura fracionária (33,5 mm = 126,614 px), o arredondamento de cada
+  fileira **se soma**. Derivada do índice, como o x das colunas na V057. Conferido no DOM:
+  fileiras em 132,00 / 165,50 / 199,00 / 232,50 mm — passo exato, sem acúmulo.
+
+### ⚠️ O limite físico que nenhum número resolve: 3 colunas não cabem nesta impressora
+
+Medidas do rolo (régua do dono do produto): etiqueta **34,0 × 29,5 mm**, rolo **110 mm**. A
+aritmética fecha exatamente: `2 + 34 + 2 + 34 + 2 + 34 + 2 = 110`.
+
+```
+etiquetas no rolo:  2 ────── 36 ─ 38 ────── 72 ─ 74 ────── 108 mm
+cabeçote alcança:   0 ──────────────────────────────── 102 mm  ✂
+```
+
+A 3ª etiqueta termina em **108 mm** e a impressora chega a **~102**: sobram 28 mm úteis dos 34.
+O código de barras tem 30 mm e teria de encolher para ~27 — **abaixo do mínimo de 80% do padrão
+EAN-13**, com risco de não ler no caixa. Nenhuma combinação de margem/largura/espaçamento
+contorna isso; os 108 mm são o rolo, não uma escolha.
+
+**Decisão do dono do produto (2026-08-21): ficar com 2 COLUNAS neste rolo.** As outras opções,
+registradas caso o assunto volte: 3 colunas com código de barras menor (risco de leitura), ou
+trocar por rolo cujas 3 colunas caibam em 102 mm (etiquetas de até 32 mm).
+
+⚠️ **A trava "as 3 colunas não cabem no rolo" é esse mesmo limite falando mais cedo** — ela
+impediu salvar 3 colunas com 102 mm de largura de impressão. A trava está certa; o que faltava
+era entender que a mensagem descrevia um fato físico, não um erro de digitação.
+
+### 💡 O modelo tem um ponto cego que esta impressora expôs
+
+"Largura da Etiqueta" significa **duas coisas ao mesmo tempo**: o tamanho do adesivo físico *e* a
+caixa onde o conteúdo pode ser desenhado. Enquanto a impressora alcança o rolo inteiro, são a
+mesma coisa. Nesta Argox **não são** — o adesivo tem 34 mm mas, na 3ª coluna, só 28 mm ficam ao
+alcance do cabeçote. Se a opção "3 colunas com código de barras menor" for pedida, é aqui que o
+modelo precisa mudar (dois campos, não um).
+
+### ⏭️ Onde parou (retomar por aqui)
+
+**Configuração `id_config_etiqueta = 1` (tenant 1) no ambiente de dev**, como está salva agora:
+
+| campo | valor salvo | medido no rolo |
+|---|---|---|
+| Largura de Impressão | **102,00** ✅ | (área imprimível da Argox) |
+| Número de Colunas | **2** ✅ | (decisão do dono do produto) |
+| Largura da Etiqueta | 33,00 | 34,00 |
+| Altura da Etiqueta | 30,00 | **29,50** |
+| Margem até a 1ª coluna | 2,50 | 2,00 |
+| Espaço entre colunas | 3,50 | 2,00 |
+| Espaço entre fileiras | 3,50 | **2,20** |
+| *(passo horizontal)* | *36,50* | *36,00* |
+| *(passo vertical)* | *33,50* | *31,70* |
+
+Só os dois primeiros campos foram alterados — e **isso é informação**: o alinhamento horizontal
+se resolveu *com os espaçamentos antigos*, o que mostra que o problema era, em altíssimo grau, só
+a escala.
+
+**Resultado do teste de 40 etiquetas (20 fileiras, Escala 100%, Margens Nenhuma):**
+
+- Legenda da régua deitada: **90 mm** (ela se ajusta ao espaço: com rolo 102 e margem 2,5 não
+  cabem 100 — ver `comprimentoReguaHorizontalMm`).
+- Régua em pé: **101 mm** para 100 pedidos → **vertical 1:1, escala resolvida**.
+- Última fileira: **horizontal dentro do quadro ✅, vertical desalinhada ❌**, nas duas colunas.
+
+**Próximo passo, já decidido:** o desalinhamento vertical acumulado confirma que o passo vertical
+está errado. Aplicar **Altura da Etiqueta = 29,50** e **Espaço entre fileiras = 2,20** (passo
+31,70 contra os 33,50 de hoje) e reimprimir as 40, conferindo se a última fileira cai no adesivo.
+Não foram aplicados ainda de propósito: vieram de medição em foto, e trocar número que está
+funcionando por estimativa não verificada é como se perde um resultado bom.
+
+**Pendência menor:** o dono do produto mediu **95 mm** numa régua que a legenda declara com
+**90 mm** (+5,6%). Isso brigaria com "horizontal dentro do quadro" — com 5,6% de sobra, a coluna
+2 estaria ~3 mm fora. Provável erro de leitura (a régua tinha 90 e ele esperava 100), mas **medir
+de novo, do traço do 0 ao traço do 90**, antes de dar a horizontal por encerrada.
+
+**Pendência de cadastro:** o modelo ainda se chama "CCALCADOS 3 COLUNAS" e tem 2 colunas.
+Renomear para "CCALCADOS 2 COLUNAS".

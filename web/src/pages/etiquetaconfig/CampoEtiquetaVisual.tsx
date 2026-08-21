@@ -155,6 +155,12 @@ export default function CampoEtiquetaVisual({
     textAlign: CSS_ALINHAMENTO_ETIQUETA[campo.alinhamento],
     color: campo.fundoPreto ? '#fff' : '#000',
     background: campo.fundoPreto ? '#000' : 'transparent',
+    // ⚠️ Sem isto, "fundo preto" imprime BRANCO NO BRANCO — campo invisível no papel, perfeito na
+    // tela (2026-08-21). O navegador suprime cor de fundo na impressão por padrão (a caixa
+    // "Gráficos de segundo plano" nasce desmarcada); texto e SVG não são afetados, fundo é.
+    // Descoberto porque a régua de calibragem saiu do papel só com os números.
+    printColorAdjust: 'exact',
+    WebkitPrintColorAdjust: 'exact',
     overflow: 'hidden',
     lineHeight: 1.15,
     whiteSpace: 'normal',

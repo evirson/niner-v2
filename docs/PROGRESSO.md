@@ -1,7 +1,7 @@
 # Progresso do Projeto — niner-v2
 
 Registro cronológico das decisões e entregas. Atualizar a cada marco relevante.
-**Última atualização:** 2026-08-20
+**Última atualização:** 2026-08-21
 
 ---
 
@@ -540,6 +540,63 @@ Movimentação de Conta Corrente) que ainda não tinham migrado pro `SeletorPlan
 ---
 
 ## Linha do tempo
+
+
+### 2026-08-21 — a etiqueta encontra uma impressora de verdade (Argox OS-2140)
+
+Sessão inteira de diagnóstico com o rolo, a régua e a impressora do dono do produto na mão.
+Spec completa em `docs/telas/configuracao-etiqueta.md` §"🔴 2026-08-21".
+
+**A causa raiz não era espaçamento — era o nome de um campo.** "Largura do Rolo" pedia a largura
+do **papel** (110 mm), mas a Argox OS-2140 só imprime **104**. O driver encolhia a página inteira
+em ~7% para caber, e encolher a página encolhe o **passo entre colunas** junto — o adesivo não
+encolhe. Erro de 2,8 mm por coluna, que **se acumula**: a primeira etiqueta sai perfeita e a
+terceira sai fora. Isso imita exatamente um erro de medida no cadastro, e os dois não se
+distinguem olhando a etiqueta impressa. ⚠️ `Escala: 100%` no Chrome **não corrige** — quem escala
+é o driver. Campo renomeado para **"Largura de Impressão"**, com ajuda explicando a diferença.
+
+**Nasceu a régua de calibragem** (`ReguaCalibragem.tsx`): duas réguas de 100 mm, deitada e em pé,
+impressas antes das etiquetas por uma caixa no popup do Teste de Impressão. Existem porque, sem
+elas, "medida errada" e "impressora escalando" são indistinguíveis — e o conserto de um não
+conserta o outro.
+
+**Ela morreu duas vezes na impressora antes de funcionar, e as duas lições são gerais:**
+
+1. **`background: #000` não imprime.** O navegador suprime cor de fundo por padrão. Saiu uma
+   régua só com os números — e foi o que *sobreviveu* que deu o diagnóstico: números (texto),
+   código de barras (SVG do JsBarcode) e o quadro da etiqueta (`border`) saíram.
+2. **`border` imprime, mas a espessura é arredondada para pixel inteiro** — 0,5 mm pedido virou
+   1 px = 0,26 mm, e traço fino em térmica (1 bit) sai falhado.
+3. **SVG resolve os dois**: é conteúdo (não fundo) e é vetor.
+
+⚠️ **Bug latente destapado no caminho:** o campo com `fundo_preto` usa `background` com letra
+branca — **imprimia branco no branco**, campo invisível no papel e perfeito na tela. Ninguém
+tinha usado a opção ainda. Corrigido com `print-color-adjust: exact`.
+
+**Mais duas correções de geometria**, nas duas telas (Configuração e Emissão):
+- `@page` com **altura exata** em vez de `auto` — com `auto`, quem decide onde a folha acaba é o
+  driver, e a fileira atravessada pela quebra sai partida no meio do adesivo, sem aviso.
+- **Fileira posicionada por índice** (`yDaFileira`, `alturaFolhaMm`) em vez de empilhada: bloco
+  de altura fracionária (33,5 mm = 126,614 px) soma arredondamento a cada fileira. Mesmo
+  raciocínio da V057, que derivou o x das colunas.
+
+**⛔ Um limite físico que nenhum número contorna.** Medido: etiqueta 34,0 × 29,5 mm, rolo 110 mm
+(`2 + 34 + 2 + 34 + 2 + 34 + 2 = 110`, fecha exato). A 3ª etiqueta termina em **108 mm** e o
+cabeçote alcança **~102** — sobram 28 mm úteis dos 34, e o código de barras teria de cair de 30
+para ~27 mm, abaixo do mínimo de 80% do EAN-13. **Decisão do dono do produto: 2 colunas neste
+rolo.** Alternativas registradas na spec.
+
+**Método que vale reusar:** o quadro `border: 1px solid #000` que o Teste de Impressão já
+desenhava virou **instrumento de medida** — o quadro é onde mandamos imprimir, o adesivo é onde a
+etiqueta está. Fotografando os dois juntos e medindo **razões** por pixel no mesmo plano, o
+diagnóstico dispensa calibrar escala e não sofre com perspectiva. A previsão tirada da foto ("a
+etiqueta mede ≈34,5 mm, não os 33 do cadastro") foi confirmada pela régua: **34,0**.
+
+⏭️ **Parou pela metade:** horizontal resolvida (quadro dentro do adesivo nas 2 colunas em 20
+fileiras), **vertical ainda desalinhada**. Próximo passo já decidido: aplicar Altura da Etiqueta
+**29,50** e Espaço entre fileiras **2,20** (passo 31,70 contra os 33,50 de hoje) e reimprimir 40
+etiquetas conferindo a última fileira. Não aplicado ainda porque os valores vieram de medição em
+foto e a configuração atual está imprimindo certo na horizontal.
 
 ### 2026-08-20 — Orçamento de Venda: a rotina inteira, do schema ao papel
 

@@ -11,13 +11,16 @@ import { ApiError } from '../../lib/api'
 import {
   ETIQUETA_CONFIG_VAZIA,
   MM_PARA_PX_IMPRESSAO,
+  alturaFolhaMm,
   atualizarEtiquetaConfig,
   buscarEtiquetaConfig,
   criarEtiquetaConfig,
   larguraOcupadaPelasColunas,
   linhasParaImprimir,
+  passoVertical,
   posicoesDasColunas,
   xDaColuna,
+  yDaFileira,
   paraFormulario,
   paraRequisicao,
   type CampoEtiquetaPosicionado,
@@ -30,6 +33,7 @@ import { maiusculas } from '../../lib/texto'
 import CampoEtiquetaVisual from './CampoEtiquetaVisual'
 import EditorEtiquetaCanvas from './EditorEtiquetaCanvas'
 import ProdutoExemploModal from './ProdutoExemploModal'
+import ReguaCalibragem, { ALTURA_CALIBRAGEM_MM } from './ReguaCalibragem'
 import TesteImpressaoModal from './TesteImpressaoModal'
 import type { EstadoListaEtiquetaConfig } from './EtiquetaConfigLista'
 
@@ -68,6 +72,7 @@ export default function EtiquetaConfigForm({ somenteLeitura = false }: { somente
   const [buscaProdutoAberta, setBuscaProdutoAberta] = useState(false)
   const [testeImpressaoAberto, setTesteImpressaoAberto] = useState(false)
   const [quantidadeImprimir, setQuantidadeImprimir] = useState(0)
+  const [reguaImprimir, setReguaImprimir] = useState(false)
 
   const { data: configExistente } = useQuery({
     queryKey: ['etiqueta-config', id],
@@ -85,28 +90,6 @@ export default function EtiquetaConfigForm({ somenteLeitura = false }: { somente
     desmascararEtiquetaMm(form.larguraRoloMm) > 0 &&
     desmascararEtiquetaMm(form.larguraEtiquetaMm) > 0 &&
     desmascararEtiquetaMm(form.alturaEtiquetaMm) > 0
-
-  /** Dispara o diálogo de impressão do navegador quando `quantidadeImprimir` vira > 0 — o
-   * tamanho da página (`@page`, em mm) precisa ser injetado aqui porque a largura do rolo é
-   * configurável por tenant, diferente do 80mm fixo do Comprovante de Crediário/A4 do Fechamento
-   * de Caixa (styles.css). Removido de novo em `afterprint` (fecha o diálogo do SO) e no cleanup
-   * (usuário troca a quantidade de novo ou sai da tela no meio do caminho). */
-  useEffect(() => {
-    if (quantidadeImprimir <= 0) return
-    const larguraRoloMm = desmascararEtiquetaMm(form.larguraRoloMm) || 0
-    const estilo = document.createElement('style')
-    estilo.textContent = `@page etiqueta-teste-impressao { size: ${larguraRoloMm}mm auto; margin: 0; }`
-    document.head.appendChild(estilo)
-    const aoTerminarImpressao = () => setQuantidadeImprimir(0)
-    window.addEventListener('afterprint', aoTerminarImpressao)
-    const temporizador = window.setTimeout(() => window.print(), 60)
-    return () => {
-      window.clearTimeout(temporizador)
-      window.removeEventListener('afterprint', aoTerminarImpressao)
-      estilo.remove()
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [quantidadeImprimir])
 
   const salvar = useMutation({
     mutationFn: () =>
@@ -186,6 +169,41 @@ export default function EtiquetaConfigForm({ somenteLeitura = false }: { somente
   const colunasNaoCabem =
     geometria.larguraRoloMm > 0 && geometria.larguraEtiquetaMm > 0 &&
     larguraOcupada > geometria.larguraRoloMm + 0.001
+
+  /** As fileiras do Teste de Impressão e a altura exata que elas ocupam — o recuo da calibragem
+   *  entra aqui porque a primeira fileira precisa começar depois das réguas. */
+  const fileirasTeste = linhasParaImprimir(quantidadeImprimir, form.numeroColunas)
+  const recuoCalibragemMm = reguaImprimir ? ALTURA_CALIBRAGEM_MM : 0
+  const alturaFolhaTesteMm = recuoCalibragemMm + alturaFolhaMm(geometria, fileirasTeste.length)
+
+  /**
+   * Dispara o diálogo de impressão do navegador quando `quantidadeImprimir` vira > 0 — o tamanho
+   * da página (`@page`, em mm) precisa ser injetado aqui porque a largura do rolo é configurável
+   * por tenant, diferente do 80mm fixo do Comprovante de Crediário/A4 do Fechamento de Caixa
+   * (styles.css). Removido de novo em `afterprint` (fecha o diálogo do SO) e no cleanup (usuário
+   * troca a quantidade de novo ou sai da tela no meio do caminho).
+   *
+   * <p>⚠️ A altura sai calculada, **não `auto`** (2026-08-21). Com `auto`, quem decide onde a
+   * folha termina é o driver, e o que passar do corte vai para a página seguinte: a fileira
+   * atravessada pela quebra sai partida no meio do adesivo, sem nenhum aviso na tela. Declarando
+   * a altura exata do trabalho, a folha é uma só — que é o que um rolo contínuo é de verdade.
+   */
+  useEffect(() => {
+    if (quantidadeImprimir <= 0) return
+    const estilo = document.createElement('style')
+    estilo.textContent =
+      `@page etiqueta-teste-impressao { size: ${geometria.larguraRoloMm}mm ${alturaFolhaTesteMm}mm; margin: 0; }`
+    document.head.appendChild(estilo)
+    const aoTerminarImpressao = () => setQuantidadeImprimir(0)
+    window.addEventListener('afterprint', aoTerminarImpressao)
+    const temporizador = window.setTimeout(() => window.print(), 60)
+    return () => {
+      window.clearTimeout(temporizador)
+      window.removeEventListener('afterprint', aoTerminarImpressao)
+      estilo.remove()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [quantidadeImprimir])
 
 
   const aoMudarCampos = (atualizar: (campos: CampoEtiquetaPosicionado[]) => CampoEtiquetaPosicionado[]) =>
@@ -274,10 +292,23 @@ export default function EtiquetaConfigForm({ somenteLeitura = false }: { somente
                 <div className="col-4">
                   <div className="card etiqueta-subcard">
                     <p className="card-title">Rolo e Etiqueta (mm)</p>
-                    <label htmlFor="larguraRoloMm">Largura do Rolo *</label>
+                    {/* ⚠️ O rótulo mudou em 2026-08-21 e o motivo é caro: aqui vai a largura que a
+                        IMPRESSORA alcança, não a do papel. Uma Argox OS-2140 aceita rolo de 110 mm
+                        mas o cabeçote só imprime 104 — declarando 110, o driver encolheu a página
+                        inteira em 7%, e o desalinhamento resultante cresce a cada coluna, o que
+                        parece erro de espaçamento e manda o diagnóstico para o lado errado. A
+                        coluna do banco continua `largura_rolo_mm` (migration aplicada é imutável);
+                        só o nome na tela conta a verdade. */}
+                    <label htmlFor="larguraRoloMm">Largura de Impressão *</label>
                     <input id="larguraRoloMm" inputMode="decimal" placeholder="0,00" value={form.larguraRoloMm}
                       onChange={campoMm('larguraRoloMm')} onBlur={aoSairDoCampoMm('larguraRoloMm')} />
                     {erros.larguraRoloMm && <p className="erro-campo">{erros.larguraRoloMm}</p>}
+                    <p className="etiqueta-subcard-ajuda muted">
+                      A largura que a <strong>impressora consegue imprimir</strong> — não a do papel. Muita
+                      térmica aceita rolo mais largo do que o cabeçote alcança. Declarar mais faz o driver{' '}
+                      <strong>encolher a página inteira</strong>, e o desalinhamento cresce a cada coluna. Se a
+                      régua de calibragem sair menor que o anunciado, é este número que está grande demais.
+                    </p>
 
                     <label htmlFor="numeroColunas">Número de Colunas *</label>
                     <select id="numeroColunas" value={form.numeroColunas} onChange={aoMudarNumeroColunas}>
@@ -421,8 +452,9 @@ export default function EtiquetaConfigForm({ somenteLeitura = false }: { somente
       {testeImpressaoAberto && (
         <TesteImpressaoModal
           aoFechar={() => setTesteImpressaoAberto(false)}
-          aoConfirmar={(quantidade) => {
+          aoConfirmar={(quantidade, comRegua) => {
             setTesteImpressaoAberto(false)
+            setReguaImprimir(comRegua)
             setQuantidadeImprimir(quantidade)
           }}
         />
@@ -437,19 +469,40 @@ export default function EtiquetaConfigForm({ somenteLeitura = false }: { somente
           rolo de etiqueta de verdade — `box-sizing: border-box` (global) garante que a borda fica
           por dentro do tamanho configurado, sem deslocar a coluna seguinte. */}
       {quantidadeImprimir > 0 && (
-        <div className="etiqueta-imprimir">
-          {linhasParaImprimir(quantidadeImprimir, form.numeroColunas).map((colunasDaLinha, indiceLinha) => (
+        <div
+          className="etiqueta-imprimir"
+          style={{
+            // Mesmo `position: absolute` que `.etiqueta-imprimir` já aplica em @media print — aqui
+            // explícito porque as fileiras agora se posicionam contra ESTE bloco, e um container
+            // estático as jogaria contra a página.
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            width: geometria.larguraRoloMm * MM_PARA_PX_IMPRESSAO,
+            height: alturaFolhaTesteMm * MM_PARA_PX_IMPRESSAO,
+          }}
+        >
+          {reguaImprimir && (
+            <ReguaCalibragem
+              escalaPxPorMm={MM_PARA_PX_IMPRESSAO}
+              larguraRoloMm={geometria.larguraRoloMm}
+              margemEsquerdaMm={geometria.margemEsquerdaMm}
+            />
+          )}
+          {fileirasTeste.map((colunasDaLinha, indiceLinha) => (
             <div
               key={indiceLinha}
               style={{
-                position: 'relative',
-                width: (desmascararEtiquetaMm(form.larguraRoloMm) || 0) * MM_PARA_PX_IMPRESSAO,
+                // ⚠️ Fileira POSICIONADA, não empilhada (2026-08-21). Empilhando blocos de altura
+                // fracionária (33,5 mm = 126,614 px), o arredondamento de cada fileira se soma e a
+                // última sai fora do adesivo. Derivada do índice, como o x das colunas na V057.
+                position: 'absolute',
+                left: 0,
+                top: (recuoCalibragemMm + yDaFileira(geometria, indiceLinha)) * MM_PARA_PX_IMPRESSAO,
+                width: geometria.larguraRoloMm * MM_PARA_PX_IMPRESSAO,
                 // PASSO vertical da fileira = altura + espaço entre fileiras (V056). A etiqueta em
                 // si (abaixo) continua com a altura pura — quem cresce é o passo, não o adesivo.
-                height:
-                  ((desmascararEtiquetaMm(form.alturaEtiquetaMm) || 0) +
-                    (desmascararEtiquetaMm(form.espacamentoVerticalMm) || 0)) *
-                  MM_PARA_PX_IMPRESSAO,
+                height: passoVertical(geometria) * MM_PARA_PX_IMPRESSAO,
               }}
             >
               {colunasDaLinha.map((indiceColuna) => (
@@ -460,8 +513,8 @@ export default function EtiquetaConfigForm({ somenteLeitura = false }: { somente
                     // x derivado (V057): margem + i x (largura + espaco). Nenhuma posicao guardada.
                     left: xDaColuna(geometria, indiceColuna) * MM_PARA_PX_IMPRESSAO,
                     top: 0,
-                    width: (desmascararEtiquetaMm(form.larguraEtiquetaMm) || 0) * MM_PARA_PX_IMPRESSAO,
-                    height: (desmascararEtiquetaMm(form.alturaEtiquetaMm) || 0) * MM_PARA_PX_IMPRESSAO,
+                    width: geometria.larguraEtiquetaMm * MM_PARA_PX_IMPRESSAO,
+                    height: geometria.alturaEtiquetaMm * MM_PARA_PX_IMPRESSAO,
                     background: '#fff',
                     border: '1px solid #000',
                   }}

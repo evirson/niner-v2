@@ -83,6 +83,34 @@ export function passoVertical(g: Pick<GeometriaRolo, 'alturaEtiquetaMm' | 'espac
   return g.alturaEtiquetaMm + g.espacamentoVerticalMm
 }
 
+/**
+ * y (mm) do topo da fileira `indice` (base 0) dentro da folha.
+ *
+ * <p>⚠️ Existe pelo mesmo motivo que {@link xDaColuna} (2026-08-21): a fileira precisa ser
+ * **posicionada**, não empilhada. Empilhando `<div>`s de altura fracionária (33,5 mm =
+ * 126,614 px), cada fileira é arredondada de forma independente pelo mecanismo de layout e
+ * **o resto se soma** — a 1ª sai perfeita e a última sai fora do adesivo, que é exatamente a
+ * assinatura de erro que a impressão real mostrou. Derivando do índice, o arredondamento de uma
+ * fileira nunca vira erro da seguinte.
+ */
+export function yDaFileira(g: Pick<GeometriaRolo, 'alturaEtiquetaMm' | 'espacamentoVerticalMm'>, indice: number): number {
+  return indice * passoVertical(g)
+}
+
+/**
+ * Altura total (mm) da folha impressa com `numeroFileiras` fileiras.
+ *
+ * <p>Inclui o espaço vertical **depois** da última fileira de propósito: num rolo contínuo, é
+ * esse branco final que deixa o papel parado no começo da próxima etiqueta. Cortar a folha no
+ * fim do último adesivo faria a impressão seguinte nascer meio passo adiantada.
+ */
+export function alturaFolhaMm(
+  g: Pick<GeometriaRolo, 'alturaEtiquetaMm' | 'espacamentoVerticalMm'>,
+  numeroFileiras: number,
+): number {
+  return Math.max(numeroFileiras, 0) * passoVertical(g)
+}
+
 /** Onde cada coluna começa, em ordem — usado pela tela como conferência e pelas prévias. */
 export function posicoesDasColunas(g: Pick<GeometriaRolo, 'numeroColunas' | 'margemEsquerdaMm' | 'larguraEtiquetaMm' | 'espacamentoHorizontalMm'>): number[] {
   return Array.from({ length: Math.max(g.numeroColunas, 0) }, (_, i) => Number(xDaColuna(g, i).toFixed(2)))

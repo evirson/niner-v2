@@ -12,9 +12,13 @@ export default function TesteImpressaoModal({
   aoConfirmar,
 }: {
   aoFechar: () => void
-  aoConfirmar: (quantidade: number) => void
+  aoConfirmar: (quantidade: number, comRegua: boolean) => void
 }) {
   const [quantidade, setQuantidade] = useState('10')
+  /** Ligada por padrão (2026-08-21): quem abre o Teste de Impressão está conferindo alinhamento,
+   *  e é justamente aí que a régua responde se o erro é das medidas ou da impressora. Custa
+   *  ~120 mm de rolo, então quem já calibrou desmarca. */
+  const [comRegua, setComRegua] = useState(true)
   const [erro, setErro] = useState('')
 
   const submeter = (e: FormEvent) => {
@@ -28,7 +32,7 @@ export default function TesteImpressaoModal({
       setErro(`Máximo de ${QUANTIDADE_MAXIMA} etiquetas por teste.`)
       return
     }
-    aoConfirmar(numero)
+    aoConfirmar(numero, comRegua)
   }
 
   return (
@@ -53,6 +57,15 @@ export default function TesteImpressaoModal({
             onFocus={(e) => e.target.select()}
           />
           {erro && <p className="erro-campo">{erro}</p>}
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 14 }}>
+            <input type="checkbox" checked={comRegua} onChange={(e) => setComRegua(e.target.checked)} />
+            <span>Incluir régua de calibragem</span>
+          </label>
+          <p className="muted" style={{ marginTop: 4, marginBottom: 0 }}>
+            Imprime duas réguas de 100 mm (deitada e em pé) antes das etiquetas. Meça com uma régua de
+            verdade: se não der 100 mm, a impressora está escalando a página e nenhum ajuste de medida
+            aqui vai resolver — é escala/margem no diálogo de impressão ou o tamanho de papel do driver.
+          </p>
           <div className="ajuda-rodape">
             <button type="button" className="btn ghost" onClick={aoFechar}>
               Cancelar

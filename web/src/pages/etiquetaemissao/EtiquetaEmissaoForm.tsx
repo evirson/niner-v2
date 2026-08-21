@@ -4,7 +4,15 @@ import AjudaDaTela from '../../components/AjudaDaTela'
 import { BotaoFecharTela } from '../../components/BotaoFecharTela'
 import { IconeEtiqueta, IconeExcluir } from '../../components/Icones'
 import Toast, { type TipoToast } from '../../components/Toast'
-import { MM_PARA_PX_IMPRESSAO, xDaColuna, type EtiquetaConfig, type ProdutoExemplo } from '../../lib/etiquetaConfig'
+import {
+  MM_PARA_PX_IMPRESSAO,
+  alturaFolhaMm,
+  passoVertical,
+  xDaColuna,
+  yDaFileira,
+  type EtiquetaConfig,
+  type ProdutoExemplo,
+} from '../../lib/etiquetaConfig'
 import {
   mesclarItensEmissao,
   montarSequenciaImpressao,
@@ -91,12 +99,22 @@ export default function EtiquetaEmissaoForm() {
     setImpressao({ config, sequencia: montarSequenciaImpressao(itens) })
   }
 
-  /** Mesmo mecanismo de `@page` dinâmico de `EtiquetaConfigForm.tsx` (Testar Impressão) — largura
-   * do rolo vem do modelo escolhido, não é fixa. */
+  const fileirasImpressao = impressao ? linhasComProdutos(impressao.sequencia, impressao.config.numeroColunas) : []
+  const alturaFolhaImpressaoMm = impressao ? alturaFolhaMm(impressao.config, fileirasImpressao.length) : 0
+
+  /**
+   * Mesmo mecanismo de `@page` dinâmico de `EtiquetaConfigForm.tsx` (Testar Impressão) — largura
+   * do rolo vem do modelo escolhido, não é fixa.
+   *
+   * <p>⚠️ A altura é calculada, **não `auto`** (2026-08-21): com `auto` quem escolhe onde a folha
+   * acaba é o driver, e a fileira atravessada pela quebra sai partida no meio do adesivo sem aviso
+   * nenhum. Rolo contínuo é uma folha só, e é isso que a declaração passou a dizer.
+   */
   useEffect(() => {
     if (!impressao) return
     const estilo = document.createElement('style')
-    estilo.textContent = `@page etiqueta-emissao-impressao { size: ${impressao.config.larguraRoloMm}mm auto; margin: 0; }`
+    estilo.textContent =
+      `@page etiqueta-emissao-impressao { size: ${impressao.config.larguraRoloMm}mm ${alturaFolhaImpressaoMm}mm; margin: 0; }`
     document.head.appendChild(estilo)
     const aoTerminarImpressao = () => setImpressao(null)
     window.addEventListener('afterprint', aoTerminarImpressao)
@@ -230,20 +248,33 @@ export default function EtiquetaEmissaoForm() {
           `.etiqueta-imprimir` (styles.css) do Teste de Impressão, generalizada aqui pra um
           produto DIFERENTE por posição de etiqueta (não N cópias do mesmo). */}
       {impressao && (
-        <div className="etiqueta-imprimir">
-          {linhasComProdutos(impressao.sequencia, impressao.config.numeroColunas).map((linha, indiceLinha) => (
+        <div
+          className="etiqueta-imprimir"
+          style={{
+            // `position: absolute` explícito (o mesmo que @media print já aplica): as fileiras se
+            // posicionam contra ESTE bloco, e um container estático as jogaria contra a página.
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            width: impressao.config.larguraRoloMm * MM_PARA_PX_IMPRESSAO,
+            height: alturaFolhaImpressaoMm * MM_PARA_PX_IMPRESSAO,
+          }}
+        >
+          {fileirasImpressao.map((linha, indiceLinha) => (
             <div
               key={indiceLinha}
               style={{
-                position: 'relative',
+                // ⚠️ Fileira POSICIONADA, não empilhada (2026-08-21) — empilhando blocos de altura
+                // fracionária o arredondamento de cada uma se soma e a última sai fora do adesivo.
+                position: 'absolute',
+                left: 0,
+                top: yDaFileira(impressao.config, indiceLinha) * MM_PARA_PX_IMPRESSAO,
                 width: impressao.config.larguraRoloMm * MM_PARA_PX_IMPRESSAO,
                 // ⚠️ PASSO vertical = altura da etiqueta + espaço entre fileiras (V056). Usar só a
                 // altura fazia o conteúdo subir uma fração a cada fileira num rolo com gap: na 2ª
                 // já faltava o cabeçalho, na 4ª estava inteiramente fora do adesivo. O erro não
                 // aparece na primeira etiqueta — só imprimindo uma folha inteira.
-                height:
-                  (impressao.config.alturaEtiquetaMm + (impressao.config.espacamentoVerticalMm ?? 0)) *
-                  MM_PARA_PX_IMPRESSAO,
+                height: passoVertical(impressao.config) * MM_PARA_PX_IMPRESSAO,
               }}
             >
               {linha.map(({ indiceColuna, produto }) => (
