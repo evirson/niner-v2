@@ -201,11 +201,41 @@ export default function Pdv() {
     setMostrarAlteraQtd(true)
   }
 
+  /**
+   * ⚠️ Numa linha coberta por orçamento, a quantidade só pode DIMINUIR (2026-08-21, achado em
+   * auditoria).
+   *
+   * <p>O preço da linha é o **congelado**, e o total da tela é `qtd × precoUnit`. Deixar o F3
+   * aumentar aplicava o preço congelado também às unidades a mais — mas o servidor, desde hoje,
+   * cobra o congelado só até `qtdOrcada` e o resto pelo preço de hoje. A tela pedia R$ 50 e o
+   * servidor exigia R$ 65, e a venda travava com uma mensagem sobre **pagamento que não fecha** —
+   * mandando o operador mexer nas formas de pagamento, que não tinham nada de errado.
+   *
+   * <p>Para levar mais do que foi orçado, o operador **bipa o produto de novo**: `lancarProduto`
+   * abre uma linha separada com o preço de hoje, que é exatamente a regra pedida ("a loja honra o
+   * orçamento; o que passar disso é venda comum"). E isso conversa com a regra do orçamento, que
+   * sempre foi "só dá para diminuir".
+   */
   const aoAlterarQtd = (idLinha: number, novaQtd: number) => {
-    setLedger((atual) => atual.map((i) => (i.idLinha === idLinha ? { ...i, qtd: novaQtd } : i)))
+    setLedger((atual) =>
+      atual.map((i) => {
+        if (i.idLinha !== idLinha) return i
+        const teto = i.qtdOrcada > 0 ? Math.min(novaQtd, i.qtdOrcada) : novaQtd
+        return { ...i, qtd: teto }
+      }),
+    )
+    const linha = ledger.find((i) => i.idLinha === idLinha)
+    if (linha && linha.qtdOrcada > 0 && novaQtd > linha.qtdOrcada) {
+      mostrarFlash(`O orçamento cobre ${linha.qtdOrcada}. Para levar mais, leia o produto de novo — sai pelo preço de hoje.`)
+    }
   }
 
   const aoRemoverItem = (idLinha: number) => {
+    // Se não sobra nenhuma linha coberta pelo orçamento, a venda deixou de cumpri-lo — e mandar o
+    // `idOrcamento` assim mesmo faz o servidor recusar (mesma armadilha do F4, acima). Calculado
+    // FORA do updater: `setState` dentro dele roda duas vezes em StrictMode.
+    const restante = ledger.filter((i) => i.idLinha !== idLinha)
+    if (!restante.some((i) => i.qtdOrcada > 0)) setOrcamentoPuxado(null)
     setLedger((atual) => atual.filter((i) => i.idLinha !== idLinha))
     setSelecionado((atual) => (atual === idLinha ? null : atual))
   }
@@ -214,6 +244,13 @@ export default function Pdv() {
     piscarTecla('f4')
     setLedger([])
     setSelecionado(null)
+    // ⚠️ Limpar o orçamento JUNTO (2026-08-21, achado em auditoria). Sem isto, o F4 esvaziava o
+    // ledger mas deixava o `idOrcamento` grudado na tela: o operador puxava um orçamento, o
+    // cliente desistia, ele limpava, bipava outros produtos — e a venda era recusada com 400
+    // ("não trouxe nenhum item marcado como do orçamento"), sem saída pela tela a não ser
+    // recarregar a página. Antes da guarda no servidor era pior e silencioso: a venda saía a preço
+    // de cadastro e queimava um orçamento que nada tinha a ver com ela.
+    setOrcamentoPuxado(null)
     setValorBarras('')
     setMostrarPesquisa(false)
     setMostrarAlteraQtd(false)

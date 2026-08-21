@@ -19,7 +19,13 @@ const FILEIRAS_PADRAO = 4
  */
 export function multiploDeColunas(quantidade: number, numeroColunas: number): number {
   if (numeroColunas <= 1) return quantidade
-  return Math.ceil(quantidade / numeroColunas) * numeroColunas
+  const paraCima = Math.ceil(quantidade / numeroColunas) * numeroColunas
+  // ⚠️ Arredondar para cima pode ESTOURAR o teto e produzir um número que a própria tela recusa:
+  // com 3 colunas, 200 vira 201 e o envio responde "máximo de 200". O campo escrevia um valor e
+  // depois se recusava a aceitá-lo, deixando o usuário adivinhar que precisava baixar para 198.
+  // Passando do teto, desce para o maior múltiplo que cabe.
+  if (paraCima > QUANTIDADE_MAXIMA) return Math.floor(QUANTIDADE_MAXIMA / numeroColunas) * numeroColunas
+  return paraCima
 }
 
 /**

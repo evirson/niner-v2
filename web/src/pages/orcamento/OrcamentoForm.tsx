@@ -61,7 +61,7 @@ export default function OrcamentoForm() {
   const [emitido, setEmitido] = useState<Orcamento | null>(null)
   const [toast, setToast] = useState<{ texto: string; tipo: TipoToast } | null>(null)
 
-  const { data: config } = useQuery({
+  const { data: config, isFetching: buscandoValidade } = useQuery({
     queryKey: ['orcamento-dias-validade'],
     queryFn: buscarDiasValidadeOrcamento,
   })
@@ -72,12 +72,17 @@ export default function OrcamentoForm() {
 
   /** A validade nasce sugerida por Parâmetros do Sistema (R11) e continua editável. */
   useEffect(() => {
-    if (config && !validadeTexto) {
+    // ⚠️ `!buscandoValidade` (2026-08-21, achado em auditoria): o QueryClient não define
+    // `staleTime`, então o cache entrega o valor ANTIGO no primeiro render e revalida em seguida.
+    // Decidir ali preenchia a validade com o prazo velho — e quando o valor novo chegava, a guarda
+    // `!validadeTexto` já bloqueava a correção. Como o orçamento é IMUTÁVEL, o documento saía com o
+    // prazo errado sem conserto. Mesmo remédio de `DevolucaoProduto` e `ComprovantePapeletaModal`.
+    if (config && !buscandoValidade && !validadeTexto) {
       const d = new Date()
       d.setDate(d.getDate() + config.cfgDiasValidadeOrcamento)
       setValidadeTexto(isoParaData(d.toISOString().slice(0, 10)) ?? '')
     }
-  }, [config, validadeTexto])
+  }, [config, buscandoValidade, validadeTexto])
 
   const subtotal = itens.reduce((s, i) => s + i.qtd * i.preco, 0)
   const desconto = desmascararMoeda(descontoTexto || '0')

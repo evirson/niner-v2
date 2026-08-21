@@ -272,15 +272,26 @@ public class OrcamentoService {
      */
     @Transactional
     public void marcarEfetivado(long idOrcamento, long idVenda, boolean parcial) {
-        jdbc.sql("""
+        // ⚠️ `AND situacao = 'ABERTO'` + conferência das linhas afetadas (2026-08-21, auditoria):
+        // defesa em profundidade sobre o `FOR UPDATE` de `situacaoAtual`. Sem o predicado, um
+        // caminho que chegasse aqui com o orçamento já vendido **sobrescreveria** o `id_venda`, e a
+        // primeira venda perderia o vínculo com o documento que ela cumpriu — sem erro nenhum.
+        // Zero linhas aqui significa que outra venda ganhou a corrida; falhar alto desfaz esta.
+        int linhas = jdbc.sql("""
                         UPDATE orcamento
                            SET situacao = ?::situacao_orcamento, id_venda = ?, data_efetivacao = now(),
                                atualizado_em = now()
                          WHERE id_tenant = plataforma.tenant_atual() AND id_orcamento = ?
+                           AND situacao = 'ABERTO'::situacao_orcamento
                         """)
                 .params(parcial ? SituacaoOrcamento.VENDIDO_PARCIAL.name() : SituacaoOrcamento.VENDIDO.name(),
                         idVenda, idOrcamento)
                 .update();
+        if (linhas == 0) {
+            throw new ConflitoDadosException(
+                    "O orçamento nº " + idOrcamento + " deixou de estar em aberto enquanto esta venda era registrada"
+                            + " — provavelmente ele acabou de virar outra venda. Refaça a venda sem o orçamento.");
+        }
     }
 
     /**
@@ -319,10 +330,27 @@ public class OrcamentoService {
                 .params(idOrcamento, hoje).update();
     }
 
+    /**
+     * ⚠️ `FOR UPDATE` — trava a linha do orçamento até o fim da transação (2026-08-21, achado em
+     * auditoria).
+     *
+     * <p>Sem o lock, dois caixas com o mesmo orçamento (ou um duplo clique no F6) liam
+     * {@code ABERTO} ao mesmo tempo, passavam pelas duas validações e gravavam **duas vendas
+     * completas**: estoque baixado duas vezes, dois lançamentos em contas a receber e no caixa, e a
+     * cota do plano consumida em dobro — as duas honrando o preço congelado. O orçamento acabava
+     * apontando só para a segunda venda, e a primeira ficava sem rastro de origem.
+     *
+     * <p>Chamada de dentro da transação de {@code efetivarVenda}, o lock dura até o commit e a
+     * segunda transação espera — e aí encontra {@code VENDIDO}, que é um estado final.
+     *
+     * <p>É a mesma defesa que o vale-mercadoria já tinha (`PdvVendaService`, {@code vale_usado}) e
+     * que aqui faltava.
+     */
     private SituacaoOrcamento situacaoAtual(long idOrcamento) {
         return jdbc.sql("""
                         SELECT situacao::text FROM orcamento
                          WHERE id_tenant = plataforma.tenant_atual() AND id_orcamento = ?
+                         FOR UPDATE
                         """)
                 .param(idOrcamento).query(String.class).optional()
                 .map(SituacaoOrcamento::valueOf)

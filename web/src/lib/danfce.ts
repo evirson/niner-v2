@@ -64,7 +64,12 @@ const LARGURA_MM = 80
 export async function gerarBlobDanfce(elemento: HTMLElement): Promise<Blob> {
   const canvas = await html2canvas(elemento, { scale: 3, useCORS: true, backgroundColor: '#ffffff' })
   const alturaMm = (canvas.height * LARGURA_MM) / canvas.width
-  const doc = new jsPDF({ unit: 'mm', format: [LARGURA_MM, alturaMm] })
+  // ⚠️ Piso de LARGURA_MM na altura da página (2026-08-21, achado em auditoria — era o único
+  // gerador de bobina do projeto sem ele). O jsPDF decide a orientação comparando os dois lados:
+  // numa captura mais baixa que larga ele entende RETRATO, TROCA largura por altura e o PDF sai
+  // deitado e cortado. Já aconteceu neste projeto em 2026-08-11; os irmãos (`comprovante.ts`,
+  // `orcamentoPdf.ts`) ganharam o guard na época e o DANFCE ficou de fora.
+  const doc = new jsPDF({ unit: 'mm', format: [LARGURA_MM, Math.max(LARGURA_MM, alturaMm)] })
   doc.addImage(canvas.toDataURL('image/jpeg', 0.95), 'JPEG', 0, 0, LARGURA_MM, alturaMm)
   return doc.output('blob')
 }

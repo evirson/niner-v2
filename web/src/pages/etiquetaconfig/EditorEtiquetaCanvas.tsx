@@ -146,6 +146,9 @@ export default function EditorEtiquetaCanvas({
     })
   const [campoSelecionado, setCampoSelecionado] = useState<CampoEtiqueta | null>(null)
   const areaRef = useRef<HTMLDivElement>(null)
+  /** Trava do auto-ajuste de zoom: ele vale UMA vez por montagem, nunca a cada tecla digitada nas
+   *  medidas da etiqueta. */
+  const ajusteFeitoRef = useRef(false)
   const arrastoRef = useRef<{ campo: CampoEtiqueta; inicioPxX: number; inicioPxY: number; inicioMmX: number; inicioMmY: number } | null>(null)
   const redimensionoRef = useRef<{ campo: CampoEtiqueta; eixo: EixoRedimensionamento; inicioPxX: number; inicioPxY: number; inicioLarguraMm: number; inicioAlturaMm: number } | null>(null)
 
@@ -177,10 +180,17 @@ export default function EditorEtiquetaCanvas({
    * <p>Depois da abertura o zoom é só do usuário: os botões mandam e nada mexe no valor sozinho.
    * O `requestAnimationFrame` duplo espera o layout assentar — medir antes disso lê a área com a
    * altura provisória do primeiro quadro e escolhe um zoom que não tem nada a ver com a tela.
+   *
+   * <p>⚠️ **Uma vez por montagem, de verdade** (`ajusteFeitoRef`, 2026-08-21, achado em auditoria).
+   * As dependências `[largura, altura]` vêm de campos de texto mascarado, que mudam **a cada
+   * tecla**: corrigir "Altura da Etiqueta" para 29,50 disparava o ajuste quatro vezes (`2` → `29` →
+   * `29,5` → `29,50`), o canvas pulava de tamanho enquanto o usuário digitava e o zoom que ele
+   * tinha escolhido era descartado. O docstring prometia "depois da abertura o zoom é só do
+   * usuário" e o código não cumpria.
    */
   useEffect(() => {
     const area = areaRef.current
-    if (!area || largura <= 0 || altura <= 0) return
+    if (!area || largura <= 0 || altura <= 0 || ajusteFeitoRef.current) return
     let cancelado = false
     const quadro = requestAnimationFrame(() => {
       requestAnimationFrame(() => {
@@ -191,6 +201,7 @@ export default function EditorEtiquetaCanvas({
         const cabeEmLargura = (width - 34) / (largura * PX_POR_MM_BASE)
         const cabeEmAltura = (height - 28) / (altura * PX_POR_MM_BASE)
         const cabe = Math.min(cabeEmLargura, cabeEmAltura)
+        ajusteFeitoRef.current = true
         const alvo = Math.min(ZOOM_INICIAL, Math.max(ZOOM_PISO_AJUSTE, cabe))
         // Arredonda para o passo do controle, para o número exibido casar com o que os botões fazem.
         setZoom(Math.max(ZOOM_PISO_AJUSTE, Math.floor(alvo / ZOOM_PASSO) * ZOOM_PASSO))

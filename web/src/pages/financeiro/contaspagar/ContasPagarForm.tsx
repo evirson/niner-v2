@@ -29,7 +29,7 @@ import { completarMoeda, dataValida, desmascararMoeda, formatarMoeda, isoParaDat
 import SeletorPlanoContas from '../../../components/SeletorPlanoContas'
 import { maiusculas } from '../../../lib/texto'
 
-type CampoValidavel = 'idFornecedor' | 'idEmpresa' | 'idPlanoContas' | 'dataLancamentoTexto' | 'dataVencimentoTexto' | 'valorPagarTexto'
+type CampoValidavel = 'idFornecedor' | 'idEmpresa' | 'idPlanoContas' | 'dataLancamentoTexto' | 'dataVencimentoTexto' | 'dataPagamentoTexto' | 'valorPagarTexto'
 type ErrosCampo = Partial<Record<CampoValidavel, string>>
 
 function validarCampo(chave: CampoValidavel, f: ContaPagarFormState): string | undefined {
@@ -43,6 +43,19 @@ function validarCampo(chave: CampoValidavel, f: ContaPagarFormState): string | u
   if (chave === 'dataVencimentoTexto') {
     if (!f.dataVencimentoTexto.trim()) return 'Data de vencimento é obrigatória.'
     return dataValida(f.dataVencimentoTexto) ? undefined : 'Data inválida.'
+  }
+  /**
+   * ⚠️ Opcional, mas quando preenchida tem de ser VÁLIDA (2026-08-21, achado em auditoria).
+   *
+   * <p>Ela não era validada em lugar nenhum, e o payload monta a data por template literal:
+   * `dataParaIso` devolve `null` para uma data impossível (31/02) ou incompleta, e o literal
+   * interpola isso como a **string "null"** — saía `"nullT12:00:00Z"` para a API. O Jackson
+   * recusava, o operador via um toast genérico **sem nenhum campo destacado**, e a data errada
+   * continuava na tela parecendo boa.
+   */
+  if (chave === 'dataPagamentoTexto') {
+    if (!f.dataPagamentoTexto.trim()) return undefined
+    return dataValida(f.dataPagamentoTexto) ? undefined : 'Data inválida.'
   }
   if (chave === 'valorPagarTexto') return desmascararMoeda(f.valorPagarTexto) > 0 ? undefined : 'Valor a pagar deve ser maior que zero.'
   return undefined
@@ -135,6 +148,7 @@ export default function ContasPagarForm({ somenteLeitura = false }: { somenteLei
       idPlanoContas: validarCampo('idPlanoContas', form),
       dataLancamentoTexto: validarCampo('dataLancamentoTexto', form),
       dataVencimentoTexto: validarCampo('dataVencimentoTexto', form),
+      dataPagamentoTexto: validarCampo('dataPagamentoTexto', form),
       valorPagarTexto: validarCampo('valorPagarTexto', form),
     }
     setErros(novosErros)
@@ -353,7 +367,9 @@ export default function ContasPagarForm({ somenteLeitura = false }: { somenteLei
                     value={form.dataPagamentoTexto}
                     onChange={(e) => setForm((f) => ({ ...f, dataPagamentoTexto: mascararData(e.target.value) }))}
                     onFocus={(e) => e.target.select()}
+                    onBlur={aoSairDoCampo('dataPagamentoTexto')}
                   />
+                  {erros.dataPagamentoTexto && <p className="erro-campo">{erros.dataPagamentoTexto}</p>}
                 </div>
                 <div className="col-3">
                   <label htmlFor="cp-valor-pago">Valor Pago</label>

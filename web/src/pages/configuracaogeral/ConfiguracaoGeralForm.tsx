@@ -113,6 +113,10 @@ export default function ConfiguracaoGeralForm() {
       queryClient.invalidateQueries({ queryKey: ['reajusta-preco-entrada'] })
       queryClient.invalidateQueries({ queryKey: ['consiste-valor-contas-pagar'] })
       queryClient.invalidateQueries({ queryKey: ['emite-fiscal-apos-venda'] })
+      // Faltava (2026-08-21, achado em auditoria): a validade do orcamento tem chave propria e a
+      // unica consumidora e a tela de Novo Orcamento. Sem invalidar, ela sugeria o prazo ANTIGO —
+      // e orcamento e imutavel, entao o documento saia com o prazo errado sem conserto.
+      queryClient.invalidateQueries({ queryKey: ['orcamento-dias-validade'] })
       setToastTipo('sucesso')
       setToast('Parâmetros salvos.')
     },
