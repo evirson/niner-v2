@@ -90,7 +90,9 @@ export default function EtiquetaConfigForm({ somenteLeitura = false }: { somente
    *  gravar — duplicata silenciosa. */
   const [idCriadoNoTeste, setIdCriadoNoTeste] = useState<number | null>(null)
 
-  // Nome IMPRESSO no campo Nome da Empresa: empresa.cfg_nome_etiqueta (2026-08-21).
+  // Nome IMPRESSO no campo Nome da Empresa — o nome real da empresa da sessão (2026-08-21).
+  // ⚠️ NÃO é `empresa.cfg_nome_etiqueta`: aquela coluna guarda um modelo com marcadores, do ERP
+  // legado. Ver o comentário em EuController.
   const { data: eu } = useEu()
   const nomeEmpresaImpressa = eu?.empresa.nomeEtiqueta || 'NOME DA EMPRESA'
 
@@ -368,7 +370,7 @@ export default function EtiquetaConfigForm({ somenteLeitura = false }: { somente
           noValidate
         >
           <fieldset disabled={somenteLeitura} className="form-fieldset">
-            <section className="section">
+            <section className="section secao-etiqueta-nome">
               <div className="form-grid">
                 <div className="col-2">
                   <label className="checkbox-linha" style={{ marginTop: 22 }}>
@@ -384,7 +386,7 @@ export default function EtiquetaConfigForm({ somenteLeitura = false }: { somente
               </div>
             </section>
 
-            <section className="section">
+            <section className="section secao-etiqueta-medidas">
               <div className="form-grid etiqueta-config-linha">
                 <div className="col-4">
                   <div className="card etiqueta-subcard">

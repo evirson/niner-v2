@@ -779,6 +779,7 @@ Corrigido junto um bug de cache clássico deste projeto: salvar a configuração
 pelo cache antigo. (A geometria que ela imprime nunca esteve errada — o modelo escolhido é buscado
 fresco do servidor —, mas nome e situação podiam estar velhos.)
 
+
 ### Dívida que continua aberta
 
 "Largura da Etiqueta" segue significando duas coisas — o adesivo **e** a caixa de conteúdo. Com o
@@ -841,7 +842,7 @@ justamente o que não se quer mexer sem querer.
 **abaixo do mínimo de 80%** da norma. O sistema legado convive com o mesmo compromisso
 (`mmBarWidth` 0,31 mm = 2,48 dots).
 
-### 5. Zoom abre em 250%
+### 5. Zoom: abre no maior que couber, com teto de 250%
 
 Uma etiqueta de 34 × 29,5 mm em 100% dá ~200 × 177 px, e nesse tamanho não se posiciona campo com
 precisão de meio milímetro — todo mundo subia o zoom antes de começar. "Redefinir" volta para 250%,
@@ -855,3 +856,37 @@ formulário para fora da janela e obrigava a rolar a **página** para ver o camp
 página ficou fixa e a rolagem foi para onde o conteúdo realmente varia de tamanho: a área do
 canvas. É o mesmo princípio do shell de lista do projeto (cabeçalho e rodapé fixos, só o miolo
 rola) — a tela é que não seguia.
+
+### 7. O layout: duas colunas, e o zoom que se ajusta à tela
+
+A primeira versão do "sem rolagem vertical" saiu pior que o problema: com tudo empilhado, os dois
+cards de medidas comem ~780 px de altura, então a seção do editor era espremida no que sobrava e
+**desenhava por cima das Informações do Registro**. O desenho da etiqueta — a razão de a tela
+existir — virou uma tira de 100 px. O dono do produto mandou a captura: *"não consigo ver o design
+da etiqueta"*.
+
+**Duas colunas.** Os cards de medida são estreitos e sobrava metade da largura vazia à direita.
+Medidas à esquerda, editor à direita com a altura inteira; nome e Informações do Registro
+atravessam as duas. Quem rola, quando precisa, é cada coluna por dentro.
+
+⚠️ **Fechar a cadeia de alturas é obrigatório, elo por elo.** Item de flex tem `min-height: auto`,
+isto é, **se recusa a encolher abaixo do próprio conteúdo**. Sem `min-height: 0` em cada nível (e
+`overflow: hidden` no corpo do editor), o canvas de 476 px simplesmente vaza para fora do container
+de 99 px — medido no DOM, não deduzido. Esse vazamento era a sobreposição relatada.
+
+**Espaço recuperado** (cada pixel aqui é pixel de etiqueta visível): a dica de uso da barra de
+ferramentas quebrava em duas linhas e fazia a barra ocupar **71 px** — virou uma linha só com
+reticências e o texto completo no `title` (**40 px**). Padding das seções e `gap` do editor
+reduzidos. E a **prévia do rolo virou `<details>` recolhido**: ela responde uma pergunta pontual
+("as colunas encaixam?") e estava custando ~190 px permanentes do desenho.
+
+**Zoom que se ajusta.** Mesmo com tudo isso, 250% de uma etiqueta de 31,7 mm pede 476 px e a seção
+do editor tem ~460 px numa janela de 945 px — **não cabe, com ou sem ajuste**. Então o editor abre
+no maior zoom que mostra a etiqueta **inteira**, com 250% de teto e **150% de piso**. Duas lições
+que só apareceram medindo:
+
+- **Sem piso**, uma janela baixa abria a tela em **50%** — e etiqueta minúscula é tão inútil quanto
+  etiqueta cortada. Abaixo do piso é melhor abrir grande e rolar.
+- **Com `ResizeObserver` vivo**, qualquer redimensionamento da janela **descartava o zoom que o
+  usuário tinha escolhido** — pior que abrir no valor errado. A medição é uma só, na abertura,
+  depois de dois `requestAnimationFrame` (medir antes lê a altura provisória do primeiro quadro).

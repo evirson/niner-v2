@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useEu } from '../../lib/eu'
 import CampoEtiquetaVisual from './CampoEtiquetaVisual'
 import PainelPropriedadesCampo from './PainelPropriedadesCampo'
@@ -28,6 +28,10 @@ type EixoRedimensionamento = 'horizontal' | 'vertical' | 'ambos'
  * usa a tela subia o zoom antes de trabalhar; abrir já no ponto de trabalho poupa esse passo.
  */
 const ZOOM_INICIAL = 2.5
+
+/** Abaixo disto o ajuste automático não desce: etiqueta minúscula não serve para posicionar campo,
+ *  e nesse ponto é melhor abrir grande e rolar do que abrir inteira e ilegível. */
+const ZOOM_PISO_AJUSTE = 1.5
 
 const ZOOM_MIN = 0.5
 const ZOOM_MAX = 3
@@ -141,6 +145,7 @@ export default function EditorEtiquetaCanvas({
       return novo
     })
   const [campoSelecionado, setCampoSelecionado] = useState<CampoEtiqueta | null>(null)
+  const areaRef = useRef<HTMLDivElement>(null)
   const arrastoRef = useRef<{ campo: CampoEtiqueta; inicioPxX: number; inicioPxY: number; inicioMmX: number; inicioMmY: number } | null>(null)
   const redimensionoRef = useRef<{ campo: CampoEtiqueta; eixo: EixoRedimensionamento; inicioPxX: number; inicioPxY: number; inicioLarguraMm: number; inicioAlturaMm: number } | null>(null)
 
@@ -152,6 +157,49 @@ export default function EditorEtiquetaCanvas({
   const nomeEmpresaExemplo = eu?.empresa.nomeEtiqueta || 'NOME DA EMPRESA'
   const largura = Math.max(larguraEtiquetaMm, 0)
   const altura = Math.max(alturaEtiquetaMm, 0)
+
+  /**
+   * Maior zoom que ainda mostra a etiqueta INTEIRA na área disponível, limitado a
+   * {@link ZOOM_INICIAL}.
+   *
+   * <p>⚠️ Existe porque zoom inicial fixo não sobrevive a monitores diferentes (2026-08-21): 250%
+   * numa etiqueta de 34 × 31,7 mm pede ~510 × 476 px de desenho, e medindo a tela real com a janela
+   * em 889 px de altura sobravam 188 px para o canvas — **40% da etiqueta**, que é literalmente a
+   * queixa que abriu esta rodada ("não consigo ver o design da etiqueta"). Abrir no que cabe honra
+   * a intenção do pedido (trabalhar com a etiqueta grande) em vez da letra dele (o número 250).
+   *
+   * <p>⚠️ Com PISO em {@link ZOOM_PISO_AJUSTE} e medido UMA VEZ, na abertura. As duas coisas foram
+   * aprendidas errando: sem piso, uma janela baixa levava a tela a abrir em **50%**, e etiqueta
+   * minúscula é tão inútil quanto etiqueta cortada — abaixo do piso é melhor rolar. E com um
+   * `ResizeObserver` vivo, qualquer redimensionamento da janela **descartava o zoom que o usuário
+   * tinha escolhido**, o que é pior do que abrir no valor errado.
+   *
+   * <p>Depois da abertura o zoom é só do usuário: os botões mandam e nada mexe no valor sozinho.
+   * O `requestAnimationFrame` duplo espera o layout assentar — medir antes disso lê a área com a
+   * altura provisória do primeiro quadro e escolhe um zoom que não tem nada a ver com a tela.
+   */
+  useEffect(() => {
+    const area = areaRef.current
+    if (!area || largura <= 0 || altura <= 0) return
+    let cancelado = false
+    const quadro = requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        if (cancelado) return
+        const { width, height } = area.getBoundingClientRect()
+        if (width <= 0 || height <= 0) return
+        // As réguas ocupam 22 px à esquerda e 16 px no topo; a folga extra evita nascer já com barra.
+        const cabeEmLargura = (width - 34) / (largura * PX_POR_MM_BASE)
+        const cabeEmAltura = (height - 28) / (altura * PX_POR_MM_BASE)
+        const cabe = Math.min(cabeEmLargura, cabeEmAltura)
+        const alvo = Math.min(ZOOM_INICIAL, Math.max(ZOOM_PISO_AJUSTE, cabe))
+        // Arredonda para o passo do controle, para o número exibido casar com o que os botões fazem.
+        setZoom(Math.max(ZOOM_PISO_AJUSTE, Math.floor(alvo / ZOOM_PASSO) * ZOOM_PASSO))
+      })
+    })
+    return () => { cancelado = true; cancelAnimationFrame(quadro) }
+    // Só o tamanho da etiqueta redispara: o zoom escolhido pelo usuário não pode ser desfeito aqui.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [largura, altura])
 
   const camposDisponiveis = TODOS_OS_CAMPOS.filter((c) => !campos.some((cp) => cp.campo === c))
   const campoSelecionadoObj = campos.find((c) => c.campo === campoSelecionado) ?? null
@@ -346,9 +394,12 @@ export default function EditorEtiquetaCanvas({
         <button type="button" className="btn ghost" onClick={() => setZoom(ZOOM_INICIAL)}>
           Redefinir
         </button>
-        <span className="muted" style={{ marginLeft: 'auto' }}>
-          Arraste os campos pra posicionar · arraste a alça no canto pra redimensionar · setas do teclado
-          ajustam fino (Shift = 5mm) · Delete remove
+        {/* ⚠️ Uma linha só, e cortada com reticências quando não couber (2026-08-21). Escrita por
+            extenso, esta dica quebrava em duas linhas e fazia a barra de zoom ocupar 71 px — numa
+            tela onde a etiqueta desenhada disputa cada pixel de altura com ela. O texto completo
+            continua acessível no `title`, e o mesmo conteúdo está na Ajuda da Tela. */}
+        <span className="muted editor-etiqueta-dica" title="Arraste os campos pra posicionar · arraste a alça no canto pra redimensionar · setas do teclado ajustam fino (Shift = 5mm) · Delete remove">
+          Arraste pra posicionar · alças redimensionam · setas ajustam fino (Shift = 5mm) · Delete remove
         </span>
       </div>
 
@@ -368,7 +419,7 @@ export default function EditorEtiquetaCanvas({
           )}
         </div>
 
-        <div className="editor-etiqueta-area">
+        <div className="editor-etiqueta-area" ref={areaRef}>
           <div style={{ display: 'flex' }}>
             <div style={{ width: 24 }} />
             <ReguaHorizontal comprimentoMm={largura} escala={escala} />
@@ -471,11 +522,17 @@ export default function EditorEtiquetaCanvas({
         </p>
       )}
 
+      {/* ⚠️ Recolhida por padrão desde 2026-08-21. Ela e o canvas dividem a mesma altura, e o canvas
+          é o que o usuário veio ver: com a prévia sempre aberta sobravam ~100 px para o desenho da
+          etiqueta em 250%, que precisa de ~475 px — o dono do produto abriu a tela e não conseguia
+          ver o design. A prévia responde uma pergunta pontual ("as colunas encaixam no rolo?"),
+          então abrir sob demanda é o comportamento certo; o navegador lembra nada, mas o clique é
+          um só. */}
       {posicoesColunas.length > 0 && (
-        <div>
-          <strong className="muted">
+        <details className="editor-etiqueta-previa-rolo">
+          <summary>
             Prévia do rolo ({posicoesColunas.length} coluna{posicoesColunas.length === 1 ? '' : 's'} × 2 fileiras)
-          </strong>
+          </summary>
           {/* ⚠️ DUAS fileiras de propósito (2026-08-20). Com uma só, o "Espaço entre fileiras" não
               tinha como ser conferido antes de imprimir — e é justamente o valor cujo erro se
               acumula: a primeira etiqueta sai certa e a quarta sai fora do adesivo. Aqui o
@@ -516,7 +573,7 @@ export default function EditorEtiquetaCanvas({
               )}
             </div>
           </div>
-        </div>
+        </details>
       )}
     </div>
   )

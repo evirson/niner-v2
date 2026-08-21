@@ -1197,6 +1197,11 @@ a.menu-card:hover {
    objeto físico impresso, não uma superfície de UI. */
 .editor-etiqueta { display: flex; flex-direction: column; gap: 14px; }
 .editor-etiqueta-toolbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+/* A dica não quebra linha: altura da barra é altura roubada do desenho da etiqueta (2026-08-21). */
+.editor-etiqueta-dica {
+  margin-left: auto; min-width: 0; flex: 1 1 0;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: right; font-size: 12px;
+}
 .editor-etiqueta-corpo { display: flex; gap: 18px; align-items: flex-start; flex-wrap: wrap; }
 
 .editor-etiqueta-paleta { display: flex; flex-direction: column; gap: 6px; min-width: 200px; }
@@ -1204,20 +1209,62 @@ a.menu-card:hover {
 
 .editor-etiqueta-area { overflow: auto; padding-bottom: 4px; }
 
-/* Configuração de Etiqueta sem rolagem vertical de TELA (2026-08-21, pedido do dono do produto).
-   O corpo padrão do shell é `overflow-y: auto`, então o editor — que cresce com o zoom — empurrava
-   o formulário para fora da janela e obrigava a rolar a página inteira para ver o campo que se
-   estava ajustando. Agora a página é fixa e a rolagem mora onde o conteúdo realmente varia de
-   tamanho: a área do canvas. Aumentar o zoom passa a rolar o desenho, não a tela. */
+/* Configuração de Etiqueta em DUAS COLUNAS, sem rolagem vertical de tela (2026-08-21).
+
+   ⚠️ A primeira tentativa foi só travar a rolagem da página, mantendo tudo empilhado — e ficou
+   pior que o problema: os dois cards de medidas comem ~780 px de altura, então a seção do editor
+   era espremida no que sobrava e passava POR CIMA das Informações do Registro. O desenho da
+   etiqueta, que é a razão de a tela existir, virou uma tira de 100 px.
+
+   Empilhado, não cabe: uma etiqueta de 34 × 31,7 mm no zoom de trabalho (250%) pede ~510 × 475 px
+   só de desenho. Mas os cards de medidas são ESTREITOS e sobrava metade da largura vazia à
+   direita. Então as medidas foram para uma coluna à esquerda e o editor ocupa a outra, com a
+   altura inteira da tela. Quem rola, quando precisa, é cada coluna por dentro. */
 .lista-corpo.etiqueta-config-corpo { overflow: hidden; display: flex; }
 .etiqueta-config-corpo > form { flex: 1; min-height: 0; display: flex; flex-direction: column; }
-.etiqueta-config-corpo .form-fieldset { flex: 1; min-height: 0; display: flex; flex-direction: column; }
-/* Só a seção do editor estica e rola; as de cima ficam do tamanho que pedem. */
-.etiqueta-config-corpo .secao-editor-etiqueta { flex: 1; min-height: 0; display: flex; flex-direction: column; }
-.etiqueta-config-corpo .secao-editor-etiqueta > .form-grid { flex: 1; min-height: 0; }
-.etiqueta-config-corpo .secao-editor-etiqueta .editor-etiqueta { height: 100%; min-height: 0; }
-.etiqueta-config-corpo .secao-editor-etiqueta .editor-etiqueta-corpo { flex: 1; min-height: 0; }
-.etiqueta-config-corpo .secao-editor-etiqueta .editor-etiqueta-area { max-height: 100%; }
+.etiqueta-config-corpo .form-fieldset {
+  flex: 1; min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(340px, 30%) 1fr;
+  grid-template-rows: auto 1fr auto;
+  column-gap: 20px;
+}
+/* Nome e Informações do Registro atravessam as duas colunas; medidas à esquerda, editor à direita. */
+/* Espaçamento apertado: cada pixel gasto em respiro aqui é um pixel a menos de etiqueta visível,
+   e o desenho é o conteúdo principal da tela. */
+.etiqueta-config-corpo .section { padding: 10px 0; }
+.etiqueta-config-corpo .editor-etiqueta { gap: 8px; }
+.etiqueta-config-corpo .secao-editor-etiqueta > .form-grid > .col-12:first-child > .muted { margin: 0 0 6px; }
+.etiqueta-config-corpo .secao-editor-etiqueta > .form-grid { grid-template-rows: auto minmax(0, 1fr); row-gap: 0; }
+.etiqueta-config-corpo .secao-etiqueta-nome { grid-column: 1 / -1; grid-row: 1; }
+.etiqueta-config-corpo .secao-etiqueta-medidas { grid-column: 1; grid-row: 2; min-height: 0; overflow: auto; }
+.etiqueta-config-corpo .secao-editor-etiqueta { grid-column: 2; grid-row: 2; min-height: 0; display: flex; flex-direction: column; }
+.etiqueta-config-corpo .form-fieldset > .section:last-of-type { grid-column: 1 / -1; grid-row: 3; }
+/* Na coluna estreita os dois cards de medida empilham (eram lado a lado na largura inteira). */
+.etiqueta-config-corpo .etiqueta-config-linha .col-4 { grid-column: span 12; }
+.etiqueta-config-corpo .etiqueta-config-linha .col-4 + .col-4 { margin-top: 14px; }
+/* Dentro da coluna do editor, só a área do canvas rola — a barra de zoom e a paleta ficam fixas.
+   ⚠️ `min-height: 0` em CADA elo e `overflow: hidden` no corpo não são redundância: item de flex
+   tem `min-height: auto`, ou seja, ele se recusa a encolher abaixo do conteúdo. Sem fechar a
+   cadeia inteira, o canvas de 476 px (etiqueta em 250%) simplesmente VAZA para fora do container
+   de 99 px e vai desenhar por cima das Informações do Registro — que foi exatamente o estrago da
+   primeira tentativa deste layout. */
+.etiqueta-config-corpo .secao-editor-etiqueta > .form-grid { flex: 1; min-height: 0; grid-template-rows: auto minmax(0, 1fr); }
+.etiqueta-config-corpo .secao-editor-etiqueta > .form-grid > .col-12:last-child { min-height: 0; display: flex; }
+.etiqueta-config-corpo .secao-editor-etiqueta .editor-etiqueta { flex: 1; min-height: 0; }
+.etiqueta-config-corpo .secao-editor-etiqueta .editor-etiqueta-corpo {
+  flex: 1; min-height: 0; overflow: hidden; align-items: stretch; flex-wrap: nowrap;
+}
+.etiqueta-config-corpo .secao-editor-etiqueta .editor-etiqueta-area { min-height: 0; max-height: 100%; }
+/* A prévia do rolo divide a altura com o canvas, e o canvas é o que o usuário veio ver. Teto baixo
+   e rolagem própria: ela continua servindo para conferir o encaixe das colunas sem tomar o espaço
+   do desenho que está sendo editado. */
+.etiqueta-config-corpo .editor-etiqueta-rolo-preview { max-height: 170px; overflow: auto; }
+.editor-etiqueta-previa-rolo { flex-shrink: 0; }
+.editor-etiqueta-previa-rolo > summary {
+  cursor: pointer; color: var(--ink-muted); font-weight: 700; font-size: 13px; padding: 4px 0;
+}
+.editor-etiqueta-previa-rolo > summary:hover { color: var(--ink); }
 .editor-etiqueta-regua-h { position: relative; height: 16px; }
 .editor-etiqueta-marca-h {
   position: absolute; top: 0; height: 6px; border-left: 1px solid var(--line-strong);
