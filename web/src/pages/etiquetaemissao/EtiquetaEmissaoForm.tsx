@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useSearchParams } from 'react-router-dom'
 import AjudaDaTela from '../../components/AjudaDaTela'
 import { BotaoFecharTela } from '../../components/BotaoFecharTela'
@@ -6,10 +7,8 @@ import { IconeEtiqueta, IconeExcluir } from '../../components/Icones'
 import Toast, { type TipoToast } from '../../components/Toast'
 import {
   MM_PARA_PX_IMPRESSAO,
-  alturaFolhaMm,
   passoVertical,
   xDaColuna,
-  yDaFileira,
   type EtiquetaConfig,
   type ProdutoExemplo,
 } from '../../lib/etiquetaConfig'
@@ -100,28 +99,36 @@ export default function EtiquetaEmissaoForm() {
   }
 
   const fileirasImpressao = impressao ? linhasComProdutos(impressao.sequencia, impressao.config.numeroColunas) : []
-  const alturaFolhaImpressaoMm = impressao ? alturaFolhaMm(impressao.config, fileirasImpressao.length) : 0
 
   /**
    * Mesmo mecanismo de `@page` dinâmico de `EtiquetaConfigForm.tsx` (Testar Impressão) — largura
    * do rolo vem do modelo escolhido, não é fixa.
    *
-   * <p>⚠️ A altura é calculada, **não `auto`** (2026-08-21): com `auto` quem escolhe onde a folha
-   * acaba é o driver, e a fileira atravessada pela quebra sai partida no meio do adesivo sem aviso
-   * nenhum. Rolo contínuo é uma folha só, e é isso que a declaração passou a dizer.
+   * <p>⚠️ A altura da página é o **passo do rolo**: uma fileira por página (2026-08-21, tarde).
+   * Impressora de etiqueta não imprime folha — ela encaixa cada página no adesivo pelo sensor de
+   * gap. Mandando a folha inteira, quem decide a origem vertical vira o driver, e um papel de
+   * 152,4 mm configurado nele fatiava o trabalho fora do passo: 5 fileiras em branco e a primeira
+   * etiqueta 3 mm fora do adesivo. Detalhes no comentário de `etiquetaConfig.ts`.
    */
   useEffect(() => {
     if (!impressao) return
     const estilo = document.createElement('style')
     estilo.textContent =
-      `@page etiqueta-emissao-impressao { size: ${impressao.config.larguraRoloMm}mm ${alturaFolhaImpressaoMm}mm; margin: 0; }`
+      `@page etiqueta-emissao-impressao { size: ${impressao.config.larguraRoloMm}mm ${passoVertical(impressao.config)}mm; margin: 0; }` +
+      `.etiqueta-rolo-imprimir { page: etiqueta-emissao-impressao; }`
     document.head.appendChild(estilo)
+    // No <html> TAMBÉM: é lá que mora o `overflow: hidden` do shell, e sem destravá-lo o navegador
+    // corta tudo depois da primeira página em vez de paginar (ver styles.css).
+    document.documentElement.classList.add('imprimindo-etiquetas')
+    document.body.classList.add('imprimindo-etiquetas')
     const aoTerminarImpressao = () => setImpressao(null)
     window.addEventListener('afterprint', aoTerminarImpressao)
     const temporizador = window.setTimeout(() => window.print(), 60)
     return () => {
       window.clearTimeout(temporizador)
       window.removeEventListener('afterprint', aoTerminarImpressao)
+      document.documentElement.classList.remove('imprimindo-etiquetas')
+      document.body.classList.remove('imprimindo-etiquetas')
       estilo.remove()
     }
   }, [impressao])
@@ -245,36 +252,27 @@ export default function EtiquetaEmissaoForm() {
       )}
 
       {/* Fora da tela (só existe pro navegador imprimir) — mesma técnica de isolamento
-          `.etiqueta-imprimir` (styles.css) do Teste de Impressão, generalizada aqui pra um
-          produto DIFERENTE por posição de etiqueta (não N cópias do mesmo). */}
-      {impressao && (
+          `.etiqueta-rolo-imprimir` (styles.css) do Teste de Impressão, generalizada aqui pra um
+          produto DIFERENTE por posição de etiqueta (não N cópias do mesmo). Vai por PORTAL para o
+          `<body>` pelo mesmo motivo de lá: paginar (uma fileira por página) exige fluxo normal. */}
+      {impressao && createPortal(
         <div
-          className="etiqueta-imprimir"
-          style={{
-            // `position: absolute` explícito (o mesmo que @media print já aplica): as fileiras se
-            // posicionam contra ESTE bloco, e um container estático as jogaria contra a página.
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            width: impressao.config.larguraRoloMm * MM_PARA_PX_IMPRESSAO,
-            height: alturaFolhaImpressaoMm * MM_PARA_PX_IMPRESSAO,
-          }}
+          className="etiqueta-rolo-imprimir"
+          style={{ width: impressao.config.larguraRoloMm * MM_PARA_PX_IMPRESSAO }}
         >
           {fileirasImpressao.map((linha, indiceLinha) => (
             <div
               key={indiceLinha}
               style={{
-                // ⚠️ Fileira POSICIONADA, não empilhada (2026-08-21) — empilhando blocos de altura
-                // fracionária o arredondamento de cada uma se soma e a última sai fora do adesivo.
-                position: 'absolute',
-                left: 0,
-                top: yDaFileira(impressao.config, indiceLinha) * MM_PARA_PX_IMPRESSAO,
+                // Uma fileira = UMA PÁGINA (2026-08-21, tarde), com o sensor de gap da impressora
+                // encaixando cada uma no adesivo. Altura do bloco = a da ETIQUETA, não a do passo:
+                // bloco tão alto quanto a página é o caso limite da paginação e um sub-pixel a
+                // mais nasce uma página em branco entre cada etiqueta. O gap quem dá é o `@page`.
+                position: 'relative',
                 width: impressao.config.larguraRoloMm * MM_PARA_PX_IMPRESSAO,
-                // ⚠️ PASSO vertical = altura da etiqueta + espaço entre fileiras (V056). Usar só a
-                // altura fazia o conteúdo subir uma fração a cada fileira num rolo com gap: na 2ª
-                // já faltava o cabeçalho, na 4ª estava inteiramente fora do adesivo. O erro não
-                // aparece na primeira etiqueta — só imprimindo uma folha inteira.
-                height: passoVertical(impressao.config) * MM_PARA_PX_IMPRESSAO,
+                height: impressao.config.alturaEtiquetaMm * MM_PARA_PX_IMPRESSAO,
+                breakAfter: indiceLinha === fileirasImpressao.length - 1 ? 'auto' : 'page',
+                breakInside: 'avoid',
               }}
             >
               {linha.map(({ indiceColuna, produto }) => (
@@ -303,7 +301,8 @@ export default function EtiquetaEmissaoForm() {
               ))}
             </div>
           ))}
-        </div>
+        </div>,
+        document.body,
       )}
 
       {toast && <Toast mensagem={toast.texto} tipo={toast.tipo} aoFechar={() => setToast(null)} />}

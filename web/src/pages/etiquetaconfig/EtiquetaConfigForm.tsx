@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useState, type ChangeEvent, type FocusEvent, type FormEvent, type KeyboardEvent } from 'react'
+import { createPortal } from 'react-dom'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import AjudaDaTela from '../../components/AjudaDaTela'
 import { BotaoFecharTela } from '../../components/BotaoFecharTela'
@@ -11,7 +12,6 @@ import { ApiError } from '../../lib/api'
 import {
   ETIQUETA_CONFIG_VAZIA,
   MM_PARA_PX_IMPRESSAO,
-  alturaFolhaMm,
   atualizarEtiquetaConfig,
   buscarEtiquetaConfig,
   criarEtiquetaConfig,
@@ -20,7 +20,6 @@ import {
   passoVertical,
   posicoesDasColunas,
   xDaColuna,
-  yDaFileira,
   paraFormulario,
   paraRequisicao,
   type CampoEtiquetaPosicionado,
@@ -170,11 +169,22 @@ export default function EtiquetaConfigForm({ somenteLeitura = false }: { somente
     geometria.larguraRoloMm > 0 && geometria.larguraEtiquetaMm > 0 &&
     larguraOcupada > geometria.larguraRoloMm + 0.001
 
-  /** As fileiras do Teste de Impressão e a altura exata que elas ocupam — o recuo da calibragem
-   *  entra aqui porque a primeira fileira precisa começar depois das réguas. */
+  /** As fileiras do Teste de Impressão — uma por página impressa (ver `alturaPaginaMm`). */
   const fileirasTeste = linhasParaImprimir(quantidadeImprimir, form.numeroColunas)
-  const recuoCalibragemMm = reguaImprimir ? ALTURA_CALIBRAGEM_MM : 0
-  const alturaFolhaTesteMm = recuoCalibragemMm + alturaFolhaMm(geometria, fileirasTeste.length)
+
+  /**
+   * Altura da página impressa, em mm.
+   *
+   * <p>⚠️ É o **passo do rolo**, não a folha inteira (2026-08-21, tarde — depois da Argox
+   * OS-2140). Cada fileira sai numa página própria, e é o sensor de gap da impressora que encaixa
+   * cada página no começo de um adesivo. Mandar uma folha longa entrega a origem vertical ao
+   * driver: com papel de 152,4 mm configurado, ele fatiava o trabalho em pedaços que não eram
+   * múltiplos do passo, saíam 5 fileiras em branco e a primeira etiqueta já nascia 3 mm fora.
+   *
+   * <p>No modo régua a página é a régua inteira, e só ela é impressa — os 132 mm de calibragem
+   * não convivem com uma página do tamanho de uma etiqueta.
+   */
+  const alturaPaginaMm = reguaImprimir ? ALTURA_CALIBRAGEM_MM : passoVertical(geometria)
 
   /**
    * Dispara o diálogo de impressão do navegador quando `quantidadeImprimir` vira > 0 — o tamanho
@@ -183,23 +193,29 @@ export default function EtiquetaConfigForm({ somenteLeitura = false }: { somente
    * (styles.css). Removido de novo em `afterprint` (fecha o diálogo do SO) e no cleanup (usuário
    * troca a quantidade de novo ou sai da tela no meio do caminho).
    *
-   * <p>⚠️ A altura sai calculada, **não `auto`** (2026-08-21). Com `auto`, quem decide onde a
-   * folha termina é o driver, e o que passar do corte vai para a página seguinte: a fileira
-   * atravessada pela quebra sai partida no meio do adesivo, sem nenhum aviso na tela. Declarando
-   * a altura exata do trabalho, a folha é uma só — que é o que um rolo contínuo é de verdade.
+   * <p>A classe no `<body>` liga a regra que esconde o resto da tela com `display: none`; sem ela
+   * o espaço dos elementos apenas invisíveis empurraria a primeira etiqueta para fora do adesivo
+   * (ver `.etiqueta-rolo-imprimir` em styles.css).
    */
   useEffect(() => {
     if (quantidadeImprimir <= 0) return
     const estilo = document.createElement('style')
     estilo.textContent =
-      `@page etiqueta-teste-impressao { size: ${geometria.larguraRoloMm}mm ${alturaFolhaTesteMm}mm; margin: 0; }`
+      `@page etiqueta-teste-impressao { size: ${geometria.larguraRoloMm}mm ${alturaPaginaMm}mm; margin: 0; }` +
+      `.etiqueta-rolo-imprimir { page: etiqueta-teste-impressao; }`
     document.head.appendChild(estilo)
+    // No <html> TAMBÉM: é lá que mora o `overflow: hidden` do shell, e sem destravá-lo o navegador
+    // corta tudo depois da primeira página em vez de paginar (ver styles.css).
+    document.documentElement.classList.add('imprimindo-etiquetas')
+    document.body.classList.add('imprimindo-etiquetas')
     const aoTerminarImpressao = () => setQuantidadeImprimir(0)
     window.addEventListener('afterprint', aoTerminarImpressao)
     const temporizador = window.setTimeout(() => window.print(), 60)
     return () => {
       window.clearTimeout(temporizador)
       window.removeEventListener('afterprint', aoTerminarImpressao)
+      document.documentElement.classList.remove('imprimindo-etiquetas')
+      document.body.classList.remove('imprimindo-etiquetas')
       estilo.remove()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -451,6 +467,7 @@ export default function EtiquetaConfigForm({ somenteLeitura = false }: { somente
 
       {testeImpressaoAberto && (
         <TesteImpressaoModal
+          numeroColunas={form.numeroColunas}
           aoFechar={() => setTesteImpressaoAberto(false)}
           aoConfirmar={(quantidade, comRegua) => {
             setTesteImpressaoAberto(false)
@@ -460,49 +477,47 @@ export default function EtiquetaConfigForm({ somenteLeitura = false }: { somente
         />
       )}
 
-      {/* Fora da tela (só existe pro navegador imprimir) — `.etiqueta-imprimir` (styles.css) fica
-          escondida na visualização normal e isolada em `@media print`, mesma técnica do
-          Comprovante de Crediário/Fechamento de Caixa. `escalaPxPorMm=MM_PARA_PX_IMPRESSAO`
+      {/* Fora da tela (só existe pro navegador imprimir) — `.etiqueta-rolo-imprimir` (styles.css)
+          fica escondida na visualização normal e isolada em `@media print`.
+          ⚠️ Vai por PORTAL para o `<body>` (2026-08-21, tarde): o bloco precisa ficar no fluxo
+          normal para poder paginar (uma fileira por página), e ficar no fluxo só funciona se o
+          resto da árvore sumir com `display: none` em vez de apenas `visibility: hidden`.
+          `escalaPxPorMm=MM_PARA_PX_IMPRESSAO`
           reaproveita `CampoEtiquetaVisual` já mapeando mm→px na escala física real (96dpi), não
           no zoom de tela do editor. Cada etiqueta ganha um quadro (`border`, 2026-08-05, só aqui
           no Teste de Impressão) pra servir de guia de corte ao testar em papel comum, antes do
           rolo de etiqueta de verdade — `box-sizing: border-box` (global) garante que a borda fica
           por dentro do tamanho configurado, sem deslocar a coluna seguinte. */}
-      {quantidadeImprimir > 0 && (
+      {quantidadeImprimir > 0 && createPortal(
         <div
-          className="etiqueta-imprimir"
-          style={{
-            // Mesmo `position: absolute` que `.etiqueta-imprimir` já aplica em @media print — aqui
-            // explícito porque as fileiras agora se posicionam contra ESTE bloco, e um container
-            // estático as jogaria contra a página.
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            width: geometria.larguraRoloMm * MM_PARA_PX_IMPRESSAO,
-            height: alturaFolhaTesteMm * MM_PARA_PX_IMPRESSAO,
-          }}
+          className="etiqueta-rolo-imprimir"
+          style={{ width: geometria.larguraRoloMm * MM_PARA_PX_IMPRESSAO }}
         >
-          {reguaImprimir && (
-            <ReguaCalibragem
-              escalaPxPorMm={MM_PARA_PX_IMPRESSAO}
-              larguraRoloMm={geometria.larguraRoloMm}
-              margemEsquerdaMm={geometria.margemEsquerdaMm}
-            />
-          )}
-          {fileirasTeste.map((colunasDaLinha, indiceLinha) => (
+          {reguaImprimir ? (
+            <div style={{ position: 'relative', height: ALTURA_CALIBRAGEM_MM * MM_PARA_PX_IMPRESSAO }}>
+              <ReguaCalibragem
+                escalaPxPorMm={MM_PARA_PX_IMPRESSAO}
+                larguraRoloMm={geometria.larguraRoloMm}
+                margemEsquerdaMm={geometria.margemEsquerdaMm}
+              />
+            </div>
+          ) : fileirasTeste.map((colunasDaLinha, indiceLinha) => (
             <div
               key={indiceLinha}
               style={{
-                // ⚠️ Fileira POSICIONADA, não empilhada (2026-08-21). Empilhando blocos de altura
-                // fracionária (33,5 mm = 126,614 px), o arredondamento de cada fileira se soma e a
-                // última sai fora do adesivo. Derivada do índice, como o x das colunas na V057.
-                position: 'absolute',
-                left: 0,
-                top: (recuoCalibragemMm + yDaFileira(geometria, indiceLinha)) * MM_PARA_PX_IMPRESSAO,
+                // Uma fileira = UMA PÁGINA (2026-08-21, tarde). `position: relative` porque as
+                // etiquetas se posicionam contra ela; fluxo normal porque quebra de página só
+                // acontece no fluxo — um bloco absoluto não pagina.
+                position: 'relative',
                 width: geometria.larguraRoloMm * MM_PARA_PX_IMPRESSAO,
-                // PASSO vertical da fileira = altura + espaço entre fileiras (V056). A etiqueta em
-                // si (abaixo) continua com a altura pura — quem cresce é o passo, não o adesivo.
-                height: passoVertical(geometria) * MM_PARA_PX_IMPRESSAO,
+                // ⚠️ A altura do bloco é a da ETIQUETA, não a do passo, embora a página valha o
+                // passo. Um bloco tão alto quanto a página é o caso limite da paginação: um
+                // arredondamento de sub-pixel o empurra para a página seguinte e nasce uma página
+                // em branco entre cada etiqueta. O branco do gap quem dá é o `@page`.
+                height: geometria.alturaEtiquetaMm * MM_PARA_PX_IMPRESSAO,
+                // A última não quebra: quebrar depois dela cospe uma etiqueta em branco no fim.
+                breakAfter: indiceLinha === fileirasTeste.length - 1 ? 'auto' : 'page',
+                breakInside: 'avoid',
               }}
             >
               {colunasDaLinha.map((indiceColuna) => (
@@ -532,7 +547,8 @@ export default function EtiquetaConfigForm({ somenteLeitura = false }: { somente
               ))}
             </div>
           ))}
-        </div>
+        </div>,
+        document.body,
       )}
 
       {toast && <Toast mensagem={toast} aoFechar={() => setToast('')} />}

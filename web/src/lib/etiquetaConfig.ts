@@ -83,33 +83,26 @@ export function passoVertical(g: Pick<GeometriaRolo, 'alturaEtiquetaMm' | 'espac
   return g.alturaEtiquetaMm + g.espacamentoVerticalMm
 }
 
-/**
- * y (mm) do topo da fileira `indice` (base 0) dentro da folha.
+/*
+ * ⚠️ Aqui existiam `yDaFileira` e `alturaFolhaMm` (2026-08-21, manhã), que montavam TODAS as
+ * fileiras numa folha só e posicionavam cada uma pelo índice. Foram removidas na tarde do mesmo
+ * dia, quando a impressora explicou por que a ideia não podia dar certo.
  *
- * <p>⚠️ Existe pelo mesmo motivo que {@link xDaColuna} (2026-08-21): a fileira precisa ser
- * **posicionada**, não empilhada. Empilhando `<div>`s de altura fracionária (33,5 mm =
- * 126,614 px), cada fileira é arredondada de forma independente pelo mecanismo de layout e
- * **o resto se soma** — a 1ª sai perfeita e a última sai fora do adesivo, que é exatamente a
- * assinatura de erro que a impressão real mostrou. Derivando do índice, o arredondamento de uma
- * fileira nunca vira erro da seguinte.
- */
-export function yDaFileira(g: Pick<GeometriaRolo, 'alturaEtiquetaMm' | 'espacamentoVerticalMm'>, indice: number): number {
-  return indice * passoVertical(g)
-}
-
-/**
- * Altura total (mm) da folha impressa com `numeroFileiras` fileiras.
+ * <p>Uma impressora térmica de etiqueta **não imprime folha**. A Argox OS-2140 do dono do produto
+ * estava com mídia "etiquetas cortadas com molde" (die-cut) e papel de 101,6 × 152,4 mm no driver.
+ * Mandar uma página de 102 × 634 mm (40 etiquetas em 20 fileiras) fez o driver fatiar o trabalho
+ * em pedaços de 152,4 mm — e como 152,4 não é múltiplo do passo de 31,7, cada corte caía no meio
+ * de um adesivo: saíam ~5 fileiras em branco antes da impressão começar, e a primeira etiqueta já
+ * nascia 3 mm fora. Nenhum ajuste de milímetro na geometria alcança esse erro, porque quem decide
+ * a origem vertical nesse arranjo é o driver, não o CSS.
  *
- * <p>Inclui o espaço vertical **depois** da última fileira de propósito: num rolo contínuo, é
- * esse branco final que deixa o papel parado no começo da próxima etiqueta. Cortar a folha no
- * fim do último adesivo faria a impressão seguinte nascer meio passo adiantada.
+ * <p>O modelo certo é o inverso: **uma página por fileira**, com a página valendo exatamente o
+ * passo do rolo ({@link passoVertical}). Aí o sensor de gap da impressora encaixa cada página no
+ * começo de um adesivo, que é o trabalho para o qual ele existe — e o erro de passo, que era o
+ * pesadelo da folha longa, deixa de existir por construção: ele não tem onde acumular, porque
+ * cada fileira recomeça do zero físico. Continua valendo o alerta que a versão anterior trouxe
+ * (não empilhar blocos de altura fracionária); a quebra de página resolve isso de graça.
  */
-export function alturaFolhaMm(
-  g: Pick<GeometriaRolo, 'alturaEtiquetaMm' | 'espacamentoVerticalMm'>,
-  numeroFileiras: number,
-): number {
-  return Math.max(numeroFileiras, 0) * passoVertical(g)
-}
 
 /** Onde cada coluna começa, em ordem — usado pela tela como conferência e pelas prévias. */
 export function posicoesDasColunas(g: Pick<GeometriaRolo, 'numeroColunas' | 'margemEsquerdaMm' | 'larguraEtiquetaMm' | 'espacamentoHorizontalMm'>): number[] {

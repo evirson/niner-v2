@@ -542,6 +542,83 @@ Movimentação de Conta Corrente) que ainda não tinham migrado pro `SeletorPlan
 ## Linha do tempo
 
 
+### 2026-08-21 (tarde) — as 3 colunas voltam: o papel do driver é que mandava, não o cabeçote
+
+Continuação direta da sessão da manhã (logo abaixo). O dono do produto retomou com a impressora
+ligada, e o dia terminou com **as 3 colunas alinhadas** — o oposto da conclusão da manhã, que
+tinha dado o rolo por impossível. Vale ler as duas entradas juntas: a segunda é a correção da
+primeira, e o motivo do erro é mais interessante que o erro.
+
+**1. Uma página por FILEIRA, não uma folha longa.** O modelo da manhã montava todas as fileiras
+numa página só (`@page` de 102 × 634 mm para 40 etiquetas) e posicionava cada fileira pelo índice.
+Impressora térmica de etiqueta não imprime folha: a Argox estava com mídia **die-cut** e papel de
+**101,6 × 152,4 mm** no driver, então ela fatiava o trabalho em pedaços de 152,4 mm. Como 152,4
+não é múltiplo do passo, cada corte caía no meio de um adesivo — saíam ~5 fileiras em branco antes
+de a impressão começar e a primeira etiqueta já nascia 3 mm fora. **Erro já na primeira fileira
+não é erro de passo**: passo só se manifesta acumulado, e essa distinção foi o que apontou para o
+driver em vez de para a geometria. `yDaFileira`/`alturaFolhaMm` foram removidos; a página passou a
+valer `passoVertical` e cada fileira sai numa página, deixando o **sensor de gap** encaixar cada
+uma no adesivo. O erro de passo deixa de existir por construção — não tem onde acumular.
+
+**2. Duas armadilhas de CSS que escondem trabalho em silêncio.** Para paginar, o bloco de
+impressão precisou (a) ir por **portal** para filho direto do `<body>`, com o resto da árvore
+escondido por `display: none` — o `visibility: hidden` global do projeto esconde o pixel mas
+**mantém o espaço**, e esse espaço empurrava a primeira etiqueta; e (b) **destravar
+`html, body, #root { height: 100%; overflow: hidden }`** (styles.css:84, o shell de altura fixa do
+ERP). Com `overflow: hidden` o navegador **corta** o que passa da primeira página em vez de
+paginar: saía **uma** página com a primeira fileira e as outras 19 sumiam sem aviso nenhum. As
+duas regras são presas a `body.imprimindo-etiquetas` para não vazar para as outras impressões do
+produto (papeleta, DANFE, orçamento em bobina — este último ainda usa a classe antiga
+`.etiqueta-imprimir`, que segue intacta).
+
+**3. ⛔ A conclusão da manhã estava errada, e o `.rtm` do sistema legado provou.** A manhã concluiu
+"o cabeçote alcança ~102 mm, logo 3 colunas são impossíveis neste rolo". O dono do produto
+discordou com o argumento mais forte que existe: *"tenho um sistema em Delphi e ele imprime as 3
+colunas normalmente nesta impressora"* — e mandou o template (`.rtm`, um DFM binário do
+ReportBuilder) e um PDF. Lidos os dois:
+
+| o que o legado faz | valor |
+|---|---|
+| `PrinterSetup.mmPaperWidth` | **110 mm** — o papel inteiro |
+| `PrinterSetup.mmPaperHeight` | **30 mm** — ou seja, **uma página por fileira**, o mesmo desenho |
+| `Columns` / `ColumnPositions` | 3, em **3,5 / 39 / 75 mm** |
+| `mmColumnWidth` | 34 mm |
+| código de barras | caixa de 34 mm, `taRightJustify`, `mmBarWidth` 0,31 mm (94% do padrão) |
+
+E no PDF, extraindo as coordenadas dos desenhos: as barras vão de **9,78 mm a 109,43 mm**, e os
+três grupos de texto distam 35,52 e 35,99 mm — batendo com os `ColumnPositions`. **O legado pinta
+até ~109 mm e a impressora imprime.**
+
+**A causa raiz real, então, é outra:** o problema nunca foi o alcance do cabeçote — era o **papel
+configurado no driver ser menor que a página declarada**, o que faz o Chrome encolher a página
+para caber. A régua de calibragem da manhã mediu **o encolhimento**, e o número foi lido como se
+fosse o cabeçote. O legado nunca sofreu isso porque declara o papel de 110 × 30 no próprio
+trabalho. ⚠️ **Regra que fica:** *o papel do driver tem de ser igual ou maior que a página
+declarada* — vale para toda impressão do produto, não só etiqueta.
+
+**Geometria final, validada na impressora:** Largura de Impressão **110**, **3 colunas**, etiqueta
+34 mm, margem 3, espaço entre colunas 2,5, colunas nascendo em **3 / 39 / 75** (as duas últimas
+idênticas às do legado; a primeira 0,5 mm à esquerda porque nosso modelo usa passo uniforme e o
+template tem 35,5 e 36 — provável digitação, não intenção).
+
+**4. Quantidade do Teste de Impressão travada em múltiplo do número de colunas** (pedido do dono
+do produto). Numa fileira incompleta o rolo avança igual: pedir 40 com 3 colunas imprime uma
+fileira final com uma etiqueta só, e **os outros 2 adesivos passam pelo cabeçote em branco e vão
+para o lixo**. Arredonda para cima (quem pede 40 quer pelo menos 40), no `onBlur` para o usuário
+ver o número antes de confirmar, e de novo no envio — o `onBlur` não dispara quando se digita e
+tecla Enter direto.
+
+**5. A régua saiu de junto das etiquetas.** Com página do tamanho do passo, os 132 mm dela não
+cabem; e como 132 nunca foi múltiplo do passo, ela empurrava todas as etiquetas para fora do
+adesivo — **escondendo justamente o defeito que se queria medir**. Virou impressão exclusiva
+("no lugar das etiquetas"), desmarcada por padrão.
+
+**Dívida registrada:** durante a investigação foi necessário cadastrar "Largura da Etiqueta" ora
+como o adesivo (34), ora como a área que a impressora alcança (30). São duas grandezas com um
+campo só — o ponto cego que a manhã já tinha anotado. Com o papel do driver correto elas voltaram
+a coincidir e a dívida deixou de doer, mas ela existe: rolo mais largo que o cabeçote vai
+reabrir o assunto, e aí são dois campos, não um.
+
 ### 2026-08-21 — a etiqueta encontra uma impressora de verdade (Argox OS-2140)
 
 Sessão inteira de diagnóstico com o rolo, a régua e a impressora do dono do produto na mão.

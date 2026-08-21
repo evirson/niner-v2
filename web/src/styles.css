@@ -1265,6 +1265,40 @@ a.menu-card:hover {
   }
 }
 
+/* Impressão em ROLO de etiqueta — UMA PÁGINA POR FILEIRA (2026-08-21, tarde).
+
+   ⚠️ Classe separada de `.etiqueta-imprimir` de propósito: aquela posiciona o bloco em
+   `position: absolute`, o que é certo para um documento de UMA página (o Orçamento em bobina
+   ainda a usa) e é justamente o que impede paginar. Aqui o bloco fica no FLUXO NORMAL, porque
+   quebra de página só acontece no fluxo.
+
+   Para o bloco poder ficar no fluxo e ainda assim começar no topo da primeira página, ele é
+   levado por portal para filho direto do `<body>` e o resto da árvore é escondido com
+   `display: none` — `visibility: hidden` (o padrão global deste arquivo) esconde o pixel mas
+   MANTÉM o espaço, e esse espaço empurraria a primeira etiqueta para fora do adesivo. A regra é
+   presa a `body.imprimindo-etiquetas` para não vazar para nenhuma outra impressão do sistema:
+   sem essa âncora ela apagaria o `#root` da papeleta, do DANFE e de todo o resto.
+
+   O `@page` (tamanho = largura de impressão x passo do rolo) e o `page:` desta classe são
+   injetados em runtime pelas telas de etiqueta, que conhecem a geometria do modelo. */
+@media print {
+  /* ⚠️ Destrava o shell de altura fixa do ERP (`html, body, #root { height:100%; overflow:hidden }`,
+     lá em cima). Com `overflow: hidden` o navegador **corta** o que passa da primeira página em vez
+     de paginar: saía UMA página com a primeira fileira e as outras 19 sumiam sem aviso nenhum. É a
+     armadilha gêmea do `visibility: hidden` logo abaixo — as duas escondem trabalho de verdade em
+     silêncio, e nenhuma das duas aparece na tela. */
+  html.imprimindo-etiquetas, body.imprimindo-etiquetas {
+    height: auto !important; overflow: visible !important;
+  }
+  /* Zerado explicitamente: qualquer margem/padding herdada do corpo do app viraria deslocamento
+     físico da primeira etiqueta, e milímetro de offset em etiqueta é exatamente o defeito que
+     esta rodada foi consertar. */
+  body.imprimindo-etiquetas { margin: 0 !important; padding: 0 !important; }
+  body.imprimindo-etiquetas > *:not(.etiqueta-rolo-imprimir) { display: none !important; }
+  .etiqueta-rolo-imprimir, .etiqueta-rolo-imprimir * { visibility: visible; }
+  .etiqueta-rolo-imprimir { margin: 0; padding: 0; border: 0; background: none; }
+}
+
 /* Seletor de tema do cabeçalho (2026-08-14) — Claro / Escuro / Automático. Todas as cores saem
    de token, então o próprio seletor acompanha o tema que ele mesmo troca. */
 .seletor-tema { position: relative; flex-shrink: 0; }
