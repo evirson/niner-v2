@@ -23,6 +23,7 @@ import {
   paraFormulario,
   paraRequisicao,
   type CampoEtiquetaPosicionado,
+  type EtiquetaConfig,
   type EtiquetaConfigFormState,
   type ProdutoExemplo,
 } from '../../lib/etiquetaConfig'
@@ -72,6 +73,21 @@ export default function EtiquetaConfigForm({ somenteLeitura = false }: { somente
   const [testeImpressaoAberto, setTesteImpressaoAberto] = useState(false)
   const [quantidadeImprimir, setQuantidadeImprimir] = useState(0)
   const [reguaImprimir, setReguaImprimir] = useState(false)
+  /**
+   * A configuração que o Teste de Impressão vai imprimir — **como o servidor a devolveu**, nunca o
+   * formulário em edição (2026-08-21, decisão do dono do produto: *"sempre seguir as medidas que
+   * estão no banco"*).
+   *
+   * <p>Antes o teste imprimia direto do `form`, o que permitia calibrar sem salvar mas admitia a
+   * pior divergência possível numa tela de calibragem: o papel saindo com uma medida e o cadastro
+   * guardando outra. Como o papel é a única evidência que temos, um teste que não corresponde ao
+   * que ficou gravado não prova nada. Agora o botão grava primeiro e imprime o retorno.
+   */
+  const [configImpressao, setConfigImpressao] = useState<EtiquetaConfig | null>(null)
+  /** Id de uma configuração NOVA criada pelo próprio Teste de Impressão. Sem guardá-lo, o
+   *  "Salvar" seguinte criaria uma segunda linha em vez de atualizar a que o teste acabou de
+   *  gravar — duplicata silenciosa. */
+  const [idCriadoNoTeste, setIdCriadoNoTeste] = useState<number | null>(null)
 
   const { data: configExistente } = useQuery({
     queryKey: ['etiqueta-config', id],
@@ -90,13 +106,24 @@ export default function EtiquetaConfigForm({ somenteLeitura = false }: { somente
     desmascararEtiquetaMm(form.larguraEtiquetaMm) > 0 &&
     desmascararEtiquetaMm(form.alturaEtiquetaMm) > 0
 
+  /** Id a gravar: o da URL ou, se a configuração nasceu do próprio Teste de Impressão, o que ele
+   *  criou. `null` = ainda não existe no banco, então é INSERT. */
+  const idParaGravar = id ? Number(id) : idCriadoNoTeste
+
+  const gravar = () =>
+    idParaGravar != null
+      ? atualizarEtiquetaConfig(idParaGravar, paraRequisicao(form))
+      : criarEtiquetaConfig(paraRequisicao(form))
+
   const salvar = useMutation({
-    mutationFn: () =>
-      editando
-        ? atualizarEtiquetaConfig(Number(id), paraRequisicao(form))
-        : criarEtiquetaConfig(paraRequisicao(form)),
+    mutationFn: gravar,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['etiquetas-config'] })
+      // ⚠️ A Emissão tem chave PRÓPRIA e precisa ser invalidada junto (2026-08-21): sem isto ela
+      // lista os modelos pelo cache antigo depois de a geometria mudar aqui. Mesma armadilha que
+      // já mordeu em outras telas — salvar precisa invalidar TODAS as chaves derivadas do dado,
+      // não só a da própria tela.
+      queryClient.invalidateQueries({ queryKey: ['etiquetas-config-emissao'] })
       navigate('/etiqueta-configuracao', {
         state: {
           toast: {
@@ -109,6 +136,36 @@ export default function EtiquetaConfigForm({ somenteLeitura = false }: { somente
     },
     onError: (e: unknown) =>
       setToast(e instanceof ApiError ? e.message : 'Não foi possível salvar a configuração de etiqueta.'),
+  })
+
+  /**
+   * Grava a configuração e imprime **o que o servidor devolveu** — nunca o formulário.
+   *
+   * <p>Diferente de `salvar`, não navega de volta para a lista: quem está calibrando precisa
+   * continuar na tela para o próximo ajuste. O `setForm` com o retorno mantém a tela igual ao
+   * banco (o servidor normaliza o nome para maiúsculas, por exemplo), e o toast confirma a
+   * gravação, que aqui é efeito e não intenção do usuário.
+   */
+  const salvarEImprimir = useMutation({
+    mutationFn: (_opcoes: { quantidade: number; comRegua: boolean }) => gravar(),
+    onSuccess: (config, opcoes) => {
+      if (idParaGravar == null) setIdCriadoNoTeste(config.idConfigEtiqueta)
+      setForm(paraFormulario(config))
+      queryClient.invalidateQueries({ queryKey: ['etiquetas-config'] })
+      queryClient.invalidateQueries({ queryKey: ['etiquetas-config-emissao'] })
+      setConfigImpressao(config)
+      setReguaImprimir(opcoes.comRegua)
+      setQuantidadeImprimir(opcoes.quantidade)
+      // Deixa explícito que o teste gravou — a gravação aqui é efeito, e efeito silencioso vira
+      // surpresa na próxima vez que a tela abrir com valores que o usuário não lembra de ter salvo.
+      setToast('Configuração salva. O teste imprime sempre a versão gravada.')
+    },
+    onError: (e: unknown) =>
+      setToast(
+        e instanceof ApiError
+          ? e.message
+          : 'Não foi possível salvar a configuração — o teste imprime sempre a versão gravada, então nada foi impresso.',
+      ),
   })
 
   const campoTexto = (chave: 'nome') => (e: ChangeEvent<HTMLInputElement>) =>
@@ -169,8 +226,19 @@ export default function EtiquetaConfigForm({ somenteLeitura = false }: { somente
     geometria.larguraRoloMm > 0 && geometria.larguraEtiquetaMm > 0 &&
     larguraOcupada > geometria.larguraRoloMm + 0.001
 
+  /**
+   * Geometria que o Teste de Impressão usa — **a do banco**, não a do formulário.
+   *
+   * <p>`configImpressao` é o retorno do servidor; `geometria` (acima, derivada do form) continua
+   * servindo o editor e as prévias de tela, onde ver o efeito antes de gravar é justamente o que
+   * se quer. No papel, não: papel que não corresponde ao cadastro não prova nada.
+   */
+  const geometriaImpressao = configImpressao ?? geometria
+  /** Os campos posicionados como estão gravados — mesmo motivo da geometria acima. */
+  const camposImpressao = configImpressao?.campos ?? form.campos
+
   /** As fileiras do Teste de Impressão — uma por página impressa (ver `alturaPaginaMm`). */
-  const fileirasTeste = linhasParaImprimir(quantidadeImprimir, form.numeroColunas)
+  const fileirasTeste = linhasParaImprimir(quantidadeImprimir, geometriaImpressao.numeroColunas)
 
   /**
    * Altura da página impressa, em mm.
@@ -184,7 +252,7 @@ export default function EtiquetaConfigForm({ somenteLeitura = false }: { somente
    * <p>No modo régua a página é a régua inteira, e só ela é impressa — os 132 mm de calibragem
    * não convivem com uma página do tamanho de uma etiqueta.
    */
-  const alturaPaginaMm = reguaImprimir ? ALTURA_CALIBRAGEM_MM : passoVertical(geometria)
+  const alturaPaginaMm = reguaImprimir ? ALTURA_CALIBRAGEM_MM : passoVertical(geometriaImpressao)
 
   /**
    * Dispara o diálogo de impressão do navegador quando `quantidadeImprimir` vira > 0 — o tamanho
@@ -201,7 +269,7 @@ export default function EtiquetaConfigForm({ somenteLeitura = false }: { somente
     if (quantidadeImprimir <= 0) return
     const estilo = document.createElement('style')
     estilo.textContent =
-      `@page etiqueta-teste-impressao { size: ${geometria.larguraRoloMm}mm ${alturaPaginaMm}mm; margin: 0; }` +
+      `@page etiqueta-teste-impressao { size: ${geometriaImpressao.larguraRoloMm}mm ${alturaPaginaMm}mm; margin: 0; }` +
       `.etiqueta-rolo-imprimir { page: etiqueta-teste-impressao; }`
     document.head.appendChild(estilo)
     // No <html> TAMBÉM: é lá que mora o `overflow: hidden` do shell, e sem destravá-lo o navegador
@@ -225,9 +293,8 @@ export default function EtiquetaConfigForm({ somenteLeitura = false }: { somente
   const aoMudarCampos = (atualizar: (campos: CampoEtiquetaPosicionado[]) => CampoEtiquetaPosicionado[]) =>
     setForm((f) => ({ ...f, campos: atualizar(f.campos) }))
 
-  const validarEEnviar = () => {
-    if (somenteLeitura) return
-
+  /** Valida os campos obrigatórios e destaca o que estiver errado. `true` = pode gravar. */
+  const formularioValido = (): boolean => {
     const novosErros: ErrosCampo = {
       nome: validarCampo('nome', form),
       larguraRoloMm: validarCampo('larguraRoloMm', form),
@@ -237,8 +304,14 @@ export default function EtiquetaConfigForm({ somenteLeitura = false }: { somente
     setErros(novosErros)
     if (Object.values(novosErros).some(Boolean)) {
       setToast('Corrija os campos destacados antes de salvar.')
-      return
+      return false
     }
+    return true
+  }
+
+  const validarEEnviar = () => {
+    if (somenteLeitura) return
+    if (!formularioValido()) return
     salvar.mutate()
   }
 
@@ -469,10 +542,21 @@ export default function EtiquetaConfigForm({ somenteLeitura = false }: { somente
         <TesteImpressaoModal
           numeroColunas={form.numeroColunas}
           aoFechar={() => setTesteImpressaoAberto(false)}
+          // Grava ANTES de imprimir e imprime o retorno do servidor: o papel tem de corresponder
+          // ao que ficou no banco. `quantidadeImprimir` é ligado no `onSuccess` da mutação, então
+          // uma gravação recusada não chega a imprimir nada.
           aoConfirmar={(quantidade, comRegua) => {
             setTesteImpressaoAberto(false)
-            setReguaImprimir(comRegua)
-            setQuantidadeImprimir(quantidade)
+            // Em modo visualização não há o que gravar, e o que está carregado JÁ é o banco.
+            if (somenteLeitura) {
+              if (!configExistente) return
+              setConfigImpressao(configExistente)
+              setReguaImprimir(comRegua)
+              setQuantidadeImprimir(quantidade)
+              return
+            }
+            if (!formularioValido()) return
+            salvarEImprimir.mutate({ quantidade, comRegua })
           }}
         />
       )}
@@ -491,14 +575,14 @@ export default function EtiquetaConfigForm({ somenteLeitura = false }: { somente
       {quantidadeImprimir > 0 && createPortal(
         <div
           className="etiqueta-rolo-imprimir"
-          style={{ width: geometria.larguraRoloMm * MM_PARA_PX_IMPRESSAO }}
+          style={{ width: geometriaImpressao.larguraRoloMm * MM_PARA_PX_IMPRESSAO }}
         >
           {reguaImprimir ? (
             <div style={{ position: 'relative', height: ALTURA_CALIBRAGEM_MM * MM_PARA_PX_IMPRESSAO }}>
               <ReguaCalibragem
                 escalaPxPorMm={MM_PARA_PX_IMPRESSAO}
-                larguraRoloMm={geometria.larguraRoloMm}
-                margemEsquerdaMm={geometria.margemEsquerdaMm}
+                larguraRoloMm={geometriaImpressao.larguraRoloMm}
+                margemEsquerdaMm={geometriaImpressao.margemEsquerdaMm}
               />
             </div>
           ) : fileirasTeste.map((colunasDaLinha, indiceLinha) => (
@@ -509,12 +593,12 @@ export default function EtiquetaConfigForm({ somenteLeitura = false }: { somente
                 // etiquetas se posicionam contra ela; fluxo normal porque quebra de página só
                 // acontece no fluxo — um bloco absoluto não pagina.
                 position: 'relative',
-                width: geometria.larguraRoloMm * MM_PARA_PX_IMPRESSAO,
+                width: geometriaImpressao.larguraRoloMm * MM_PARA_PX_IMPRESSAO,
                 // ⚠️ A altura do bloco é a da ETIQUETA, não a do passo, embora a página valha o
                 // passo. Um bloco tão alto quanto a página é o caso limite da paginação: um
                 // arredondamento de sub-pixel o empurra para a página seguinte e nasce uma página
                 // em branco entre cada etiqueta. O branco do gap quem dá é o `@page`.
-                height: geometria.alturaEtiquetaMm * MM_PARA_PX_IMPRESSAO,
+                height: geometriaImpressao.alturaEtiquetaMm * MM_PARA_PX_IMPRESSAO,
                 // A última não quebra: quebrar depois dela cospe uma etiqueta em branco no fim.
                 breakAfter: indiceLinha === fileirasTeste.length - 1 ? 'auto' : 'page',
                 breakInside: 'avoid',
@@ -526,15 +610,15 @@ export default function EtiquetaConfigForm({ somenteLeitura = false }: { somente
                   style={{
                     position: 'absolute',
                     // x derivado (V057): margem + i x (largura + espaco). Nenhuma posicao guardada.
-                    left: xDaColuna(geometria, indiceColuna) * MM_PARA_PX_IMPRESSAO,
+                    left: xDaColuna(geometriaImpressao, indiceColuna) * MM_PARA_PX_IMPRESSAO,
                     top: 0,
-                    width: geometria.larguraEtiquetaMm * MM_PARA_PX_IMPRESSAO,
-                    height: geometria.alturaEtiquetaMm * MM_PARA_PX_IMPRESSAO,
+                    width: geometriaImpressao.larguraEtiquetaMm * MM_PARA_PX_IMPRESSAO,
+                    height: geometriaImpressao.alturaEtiquetaMm * MM_PARA_PX_IMPRESSAO,
                     background: '#fff',
                     border: '1px solid #000',
                   }}
                 >
-                  {form.campos.map((c) => (
+                  {camposImpressao.map((c) => (
                     <CampoEtiquetaVisual
                       key={c.campo}
                       campo={c}

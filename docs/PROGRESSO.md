@@ -613,6 +613,17 @@ cabem; e como 132 nunca foi múltiplo do passo, ela empurrava todas as etiquetas
 adesivo — **escondendo justamente o defeito que se queria medir**. Virou impressão exclusiva
 ("no lugar das etiquetas"), desmarcada por padrão.
 
+**6. O Teste de Impressão passou a gravar antes de imprimir** (*"ajuste para sempre seguir as
+medidas que estão no banco"*). Antes ele imprimia do formulário — conveniente para calibrar sem
+salvar, mas admite a pior divergência possível numa tela de calibragem: o papel com uma medida e o
+cadastro com outra. Como o papel é a única evidência que temos, teste que não corresponde ao
+gravado não prova nada. Agora grava e imprime o **retorno do servidor**, sem navegar de volta
+(quem calibra fica na tela). ⚠️ Precisou guardar o id quando a configuração nasce do próprio teste
+(`idCriadoNoTeste`): sem isso o "Salvar" seguinte criaria uma **segunda linha** em vez de atualizar.
+Modo visualização não grava — imprime o que já veio do banco. Corrigido junto um bug de cache
+clássico daqui: salvar invalidava só `['etiquetas-config']` e não `['etiquetas-config-emissao']`,
+deixando a Emissão listando modelos pelo cache antigo.
+
 **Dívida registrada:** durante a investigação foi necessário cadastrar "Largura da Etiqueta" ora
 como o adesivo (34), ora como a área que a impressora alcança (30). São duas grandezas com um
 campo só — o ponto cego que a manhã já tinha anotado. Com o papel do driver correto elas voltaram

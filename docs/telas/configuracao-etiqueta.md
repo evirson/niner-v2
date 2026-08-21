@@ -750,6 +750,35 @@ ela deslocava todas as etiquetas — **escondendo justamente o defeito que se qu
 impressão exclusiva ("no lugar das etiquetas"), desmarcada por padrão. Calibrar escala e conferir
 alinhamento são duas impressões.
 
+### O Teste de Impressão grava antes de imprimir — o papel é sempre o do banco
+
+Decisão do dono do produto, no fim do dia: *"ajuste para sempre seguir as medidas que estão no
+banco"*. Até então o teste imprimia direto do **formulário**, o que permitia calibrar sem salvar —
+conveniente, mas admite a pior divergência possível numa tela de calibragem: **o papel saindo com
+uma medida e o cadastro guardando outra**. Como o papel é a única evidência de que a etiqueta está
+certa, um teste que não corresponde ao que ficou gravado não prova nada.
+
+Agora "Testar Impressão" **grava primeiro** (`salvarEImprimir`) e imprime **o retorno do
+servidor** (`configImpressao`), não o form. Detalhes que a implementação precisou cobrir:
+
+- **Não navega de volta para a lista** (diferente do botão Salvar): quem calibra continua na tela
+  para o próximo ajuste.
+- **A tela é reposta com o retorno** (`setForm(paraFormulario(config))`) — o servidor normaliza
+  coisas como o nome em maiúsculas, e a tela tem de mostrar o que ficou gravado.
+- ⚠️ **`idCriadoNoTeste`**: se a configuração ainda não existia, o teste faz INSERT — e sem
+  guardar o id gerado, o "Salvar" seguinte criaria uma **segunda linha** em vez de atualizar.
+  Duplicata silenciosa.
+- **Gravação recusada não imprime nada**: `quantidadeImprimir` só é ligado no `onSuccess`.
+- **Modo visualização** (`somenteLeitura`) não grava — imprime o `configExistente`, que já é o
+  banco.
+- **Toast explícito** ("Configuração salva…"): gravação é efeito, não intenção, e efeito silencioso
+  vira surpresa na próxima abertura da tela.
+
+Corrigido junto um bug de cache clássico deste projeto: salvar a configuração invalidava só
+`['etiquetas-config']` e **não** `['etiquetas-config-emissao']`, então a Emissão listava os modelos
+pelo cache antigo. (A geometria que ela imprime nunca esteve errada — o modelo escolhido é buscado
+fresco do servidor —, mas nome e situação podiam estar velhos.)
+
 ### Dívida que continua aberta
 
 "Largura da Etiqueta" segue significando duas coisas — o adesivo **e** a caixa de conteúdo. Com o
