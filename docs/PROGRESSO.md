@@ -542,6 +542,40 @@ Movimentação de Conta Corrente) que ainda não tinham migrado pro `SeletorPlan
 ## Linha do tempo
 
 
+### 2026-08-21 (noite) — o código de barras: duas correções, uma reversão e uma pendência aberta
+
+Com a etiqueta saindo alinhada, sobrou o problema que fecha o dia **sem solução**: o leitor não
+reconhece o código impresso. Três rodadas, nesta ordem, e o registro importa mais pelo que
+**descarta** do que pelo que resolve.
+
+**1. ⛔ `crispEdges` foi um erro meu e foi revertido.** Eu o acrescentei de manhã para resolver o
+relato de "barras borradas". A etiqueta impressa saiu com **barras gordas e ilegíveis**: ele
+arredonda **cada borda** para a grade de pixels de forma independente e, com o módulo caindo em
+fração de pixel, uma barra de 1 módulo vira 2 px enquanto o espaço vizinho some. A razão
+barra/espaço — que é o que o leitor mede — deixa de existir. A foto do dono do produto encerrou a
+discussão.
+
+**2. A causa do "borrado" nunca foi o antialiasing: era o esticamento.** O jsbarcode desenhava com
+`width: 2` fixo e o SVG era escalado por um fator arbitrário até preencher a caixa. Hoje o **módulo
+é derivado da caixa**, então o desenho nasce do tamanho do viewport e nada é escalado.
+
+**3. ⛔ E o que impedia a leitura era a ZONA DE SILÊNCIO ausente.** `margin: 0` no jsbarcode remove
+o branco obrigatório antes e depois do símbolo (**11 módulos à esquerda, 7 à direita**, GS1). Não é
+margem estética: **é por ela que o leitor sabe onde o símbolo começa e termina** — sem ela o código
+pode estar impresso com precisão perfeita e ser recusado. O módulo passou a ser derivado de **113**
+módulos (95 + 11 + 7) em vez de 95:
+
+| | antes | agora |
+|---|---|---|
+| módulo | 0,337 mm (102% do nominal) | 0,283 mm (86%, dentro da norma) |
+| zona de silêncio | **0 mm** ❌ | 3,1 mm esq · 2,0 mm dir ✅ |
+
+⏭️ **Mesmo assim não lê.** Fica como pendência aberta do dia. O atalho já identificado: o sistema
+Delphi imprime etiquetas que **leem** na mesma impressora, e o `.rtm` dele dá os números para
+comparar — módulo **0,31 mm** e altura de barra de apenas **5 mm**. ⚠️ Esse segundo número
+**derruba a hipótese da altura**, que eu tinha listado como suspeito principal: se o legado lê com
+5 mm, nossos 9 mm não são o bloqueio.
+
 ### 2026-08-21 (fim do dia) — sete ajustes da tela de etiqueta, e o PDV do orçamento
 
 Com a etiqueta saindo certa, o dono do produto usou as telas de verdade e listou o que atrapalhava.
