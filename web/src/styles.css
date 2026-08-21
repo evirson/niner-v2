@@ -1236,9 +1236,17 @@ a.menu-card:hover {
 .etiqueta-config-corpo .editor-etiqueta { gap: 8px; }
 .etiqueta-config-corpo .secao-editor-etiqueta > .form-grid > .col-12:first-child > .muted { margin: 0 0 6px; }
 .etiqueta-config-corpo .secao-editor-etiqueta > .form-grid { grid-template-rows: auto minmax(0, 1fr); row-gap: 0; }
-.etiqueta-config-corpo .secao-etiqueta-nome { grid-column: 1 / -1; grid-row: 1; }
+/* Coluna esquerda: nome + medidas, empilhados. Coluna direita: o editor ocupando as DUAS linhas —
+   ele começa lá em cima, na altura do campo Nome (2026-08-21). Antes o nome atravessava a tela
+   inteira e empurrava o editor uma linha para baixo, e era essa faixa que faltava para a etiqueta
+   caber sem rolagem. Informações do Registro segue atravessando, embaixo. */
+.etiqueta-config-corpo .secao-etiqueta-nome { grid-column: 1; grid-row: 1; }
 .etiqueta-config-corpo .secao-etiqueta-medidas { grid-column: 1; grid-row: 2; min-height: 0; overflow: auto; }
-.etiqueta-config-corpo .secao-editor-etiqueta { grid-column: 2; grid-row: 2; min-height: 0; display: flex; flex-direction: column; }
+.etiqueta-config-corpo .secao-editor-etiqueta { grid-column: 2; grid-row: 1 / 3; min-height: 0; display: flex; flex-direction: column; }
+/* Rótulo do Nome e a caixa "Ativa" na mesma linha — a caixa sozinha custava a altura de um campo. */
+.etiqueta-nome-cabecalho { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.etiqueta-nome-cabecalho > label { margin: 0; }
+.etiqueta-nome-cabecalho .checkbox-linha { display: flex; align-items: center; gap: 6px; white-space: nowrap; }
 .etiqueta-config-corpo .form-fieldset > .section:last-of-type { grid-column: 1 / -1; grid-row: 3; }
 /* Na coluna estreita os dois cards de medida empilham (eram lado a lado na largura inteira). */
 .etiqueta-config-corpo .etiqueta-config-linha .col-4 { grid-column: span 12; }

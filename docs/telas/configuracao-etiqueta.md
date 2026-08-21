@@ -890,3 +890,15 @@ que só apareceram medindo:
 - **Com `ResizeObserver` vivo**, qualquer redimensionamento da janela **descartava o zoom que o
   usuário tinha escolhido** — pior que abrir no valor errado. A medição é uma só, na abertura,
   depois de dois `requestAnimationFrame` (medir antes lê a altura provisória do primeiro quadro).
+
+### 8. O Nome desceu para a coluna esquerda, e o editor subiu
+
+Pedido do dono do produto, e é o mesmo raciocínio do item 7 levado até o fim: o campo **Nome**
+atravessava a tela inteira e empurrava o editor uma linha inteira para baixo — e era exatamente
+essa faixa de altura que faltava para a etiqueta caber sem rolagem.
+
+Agora o Nome fica na **coluna esquerda**, com a mesma largura dos campos de medida logo abaixo
+(a largura da coluna, não a da tela), e o editor ocupa as **duas linhas** do grid na coluna
+direita: ele começa lá em cima, alinhado com o Nome. A caixa **Ativa** subiu para a linha do
+rótulo, porque sozinha ela custava a altura de um campo inteiro — e essa altura agora pertence ao
+desenho da etiqueta.

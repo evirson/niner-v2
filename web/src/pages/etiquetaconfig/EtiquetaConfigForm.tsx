@@ -370,16 +370,20 @@ export default function EtiquetaConfigForm({ somenteLeitura = false }: { somente
           noValidate
         >
           <fieldset disabled={somenteLeitura} className="form-fieldset">
+            {/* Nome mora na COLUNA ESQUERDA (2026-08-21), com a mesma largura dos campos de medida
+                logo abaixo — antes atravessava a tela inteira e empurrava o editor uma linha para
+                baixo. "Ativa" subiu para a linha do rótulo: a caixa sozinha custava a altura de um
+                campo inteiro, e essa altura agora é do desenho da etiqueta. */}
             <section className="section secao-etiqueta-nome">
               <div className="form-grid">
-                <div className="col-2">
-                  <label className="checkbox-linha" style={{ marginTop: 22 }}>
-                    <input type="checkbox" checked={form.ativo} onChange={(e) => setForm((f) => ({ ...f, ativo: e.target.checked }))} />
-                    Ativa
-                  </label>
-                </div>
-                <div className="col-10">
-                  <label htmlFor="nome">Nome *</label>
+                <div className="col-12">
+                  <div className="etiqueta-nome-cabecalho">
+                    <label htmlFor="nome">Nome *</label>
+                    <label className="checkbox-linha">
+                      <input type="checkbox" checked={form.ativo} onChange={(e) => setForm((f) => ({ ...f, ativo: e.target.checked }))} />
+                      Ativa
+                    </label>
+                  </div>
                   <input id="nome" autoFocus value={form.nome} onChange={campoTexto('nome')} onBlur={aoSairDoCampo('nome')} />
                   {erros.nome && <p className="erro-campo">{erros.nome}</p>}
                 </div>
