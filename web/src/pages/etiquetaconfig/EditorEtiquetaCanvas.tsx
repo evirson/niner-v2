@@ -20,6 +20,15 @@ const ESCALA_PREVIA = PX_POR_MM_BASE * 0.5
 /** Qual dimensão a alça arrastada altera: só largura, só altura, ou as duas (alça de canto). */
 type EixoRedimensionamento = 'horizontal' | 'vertical' | 'ambos'
 
+/**
+ * Zoom em que o editor abre — 250% (2026-08-21, pedido do dono do produto).
+ *
+ * <p>Não é preferência de gosto: uma etiqueta de 34 × 29,5 mm em 100% dá cerca de 200 × 177 px na
+ * tela, e nesse tamanho não se posiciona um campo com precisão de meio milímetro. Todo mundo que
+ * usa a tela subia o zoom antes de trabalhar; abrir já no ponto de trabalho poupa esse passo.
+ */
+const ZOOM_INICIAL = 2.5
+
 const ZOOM_MIN = 0.5
 const ZOOM_MAX = 3
 const ZOOM_PASSO = 0.25
@@ -114,7 +123,7 @@ export default function EditorEtiquetaCanvas({
   aoMudarCampos: (atualizar: (campos: CampoEtiquetaPosicionado[]) => CampoEtiquetaPosicionado[]) => void
   produtoExemplo: ProdutoExemplo | null
 }) {
-  const [zoom, setZoom] = useState(1)
+  const [zoom, setZoom] = useState(ZOOM_INICIAL)
 
   /**
    * Campos cujo conteúdo não cabe na própria caixa — medido de verdade pelo
@@ -332,7 +341,9 @@ export default function EditorEtiquetaCanvas({
         <button type="button" className="btn ghost" onClick={() => setZoom((z) => Math.min(ZOOM_MAX, z + ZOOM_PASSO))}>
           +
         </button>
-        <button type="button" className="btn ghost" onClick={() => setZoom(1)}>
+        {/* Volta ao zoom de ABERTURA, não a 100%: "Redefinir" tem de devolver a tela ao estado em
+            que ela nasce, senão o botão leva para um lugar onde ninguém trabalha. */}
+        <button type="button" className="btn ghost" onClick={() => setZoom(ZOOM_INICIAL)}>
           Redefinir
         </button>
         <span className="muted" style={{ marginLeft: 'auto' }}>

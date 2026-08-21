@@ -784,3 +784,74 @@ fresco do servidor —, mas nome e situação podiam estar velhos.)
 "Largura da Etiqueta" segue significando duas coisas — o adesivo **e** a caixa de conteúdo. Com o
 papel do driver correto elas voltaram a coincidir e a dívida parou de doer, mas um rolo mais largo
 que o cabeçote reabre o assunto na hora. Quando reabrir, são dois campos, não um.
+
+---
+
+## ✅ 2026-08-21 (fim do dia) — sete ajustes da tela, depois de ela finalmente imprimir
+
+Com a etiqueta saindo certa, o dono do produto usou a tela de verdade e listou o que atrapalhava.
+Sete itens, todos da Configuração de Etiqueta (dois deles vazando para a Emissão).
+
+### 1. O campo "Nome da Empresa" imprimia um literal
+
+⚠️ **Era o defeito mais grave do lote, e não estava na prévia: estava no papel.** O front passava
+`nomeEmpresaExemplo="NOME DA LOJA"` em **quatro** lugares — incluindo `EtiquetaEmissaoForm`, a
+impressão de verdade. Ou seja, **toda etiqueta já emitida saiu com o texto "NOME DA LOJA"**.
+
+Agora vem de `GET /api/v1/eu` (`empresa.nomeEtiqueta`), da empresa da **sessão** — a empresa
+escolhida no popup da Emissão é filtro de estoque, não emitente da etiqueta.
+
+⚠️ **E não sai de `empresa.cfg_nome_etiqueta`, apesar do nome da coluna.** Aquilo é herança do ERP
+legado, onde a etiqueta era um **modelo de texto com marcadores**, e `SignupService` ainda semeia
+assim: no banco de dev o valor é literalmente `{sku}\n{descricao}\n{preco_venda}`. Nosso editor
+posiciona campos, não interpreta marcador — imprimir aquela coluna colocaria `{sku}` no adesivo. O
+nome impresso é o **nome fantasia** (ou a razão social). `nomeEtiqueta` fica como campo próprio no
+contrato, separado de `nome`, para o dia em que a loja quiser um nome comercial curto só para a
+etiqueta: o front já lê de lá, então tornar isso editável não mexe em tela nenhuma.
+
+### 2. O painel de propriedades cobria a etiqueta
+
+Era `.modal-overlay` — que por definição cobre a tela inteira e captura todo clique. Resultado: **o
+painel que existe para ajustar o campo impedia arrastar o campo**. Virou janela flutuante
+(`position: fixed`), **arrastável pelo cabeçalho**, sem camada por trás, nascendo no canto inferior
+direito (o canvas fica à esquerda). As duas formas de ajuste servem ao mesmo fim por caminhos
+diferentes — o arraste posiciona rápido, o número posiciona exato — e precisam conviver.
+
+### 3. Redimensionar por eixo
+
+A alça era uma só, no canto, mexendo nas duas dimensões juntas. Agora são **três**: canto (ambas),
+borda direita (largura) e borda inferior (altura). Num campo de código de barras a altura é
+justamente o que não se quer mexer sem querer.
+
+### 4. Código de barras: dois defeitos diferentes com a mesma aparência
+
+- **Barras "borradas"** — faltava `shape-rendering="crispEdges"` no SVG. Com antialiasing, uma
+  borda que cai em meio-pixel é pintada em **cinza**; térmica é 1 bit e converte esse cinza em
+  pontos irregulares, engordando umas barras e afinando outras — e a razão barra/espaço é
+  exatamente o que o leitor mede.
+- **Dígitos espremidos** — eram desenhados pelo próprio jsbarcode, **dentro** do SVG que é esticado
+  para preencher a caixa (`preserveAspectRatio="none"`); esticar o desenho espremia o texto junto.
+  Saíram do SVG e viraram HTML, com espaçamento proporcional ao corpo da letra e o agrupamento
+  **1+6+6** do padrão EAN-13 (`7 891234 567895`), que é como o olho confere um código sem se perder
+  entre treze algarismos.
+
+⚠️ **O que NÃO dá para resolver por software:** deixar cada módulo com largura inteira em *dots*
+(o que eliminaria de vez a irregularidade) exigiria, nesta caixa de 34 mm a 203 dpi, um módulo de
+3 dots = 0,375 mm → 35,6 mm de símbolo, que não cabe; ou 2 dots = 0,25 mm, que é 76% do nominal,
+**abaixo do mínimo de 80%** da norma. O sistema legado convive com o mesmo compromisso
+(`mmBarWidth` 0,31 mm = 2,48 dots).
+
+### 5. Zoom abre em 250%
+
+Uma etiqueta de 34 × 29,5 mm em 100% dá ~200 × 177 px, e nesse tamanho não se posiciona campo com
+precisão de meio milímetro — todo mundo subia o zoom antes de começar. "Redefinir" volta para 250%,
+não para 100%: o botão tem de devolver a tela ao estado em que ela nasce, senão leva para um lugar
+onde ninguém trabalha.
+
+### 6. A tela não rola mais na vertical
+
+O corpo do shell é `overflow-y: auto`, então o editor — que cresce com o zoom — empurrava o
+formulário para fora da janela e obrigava a rolar a **página** para ver o campo sendo ajustado. A
+página ficou fixa e a rolagem foi para onde o conteúdo realmente varia de tamanho: a área do
+canvas. É o mesmo princípio do shell de lista do projeto (cabeçalho e rodapé fixos, só o miolo
+rola) — a tela é que não seguia.
