@@ -591,3 +591,15 @@ vendedor, validade, itens e total, com um "Abrir" por linha.
 numa lista cujo único propósito é virar venda. Abrir um da lista **continua** checando a situação —
 entre a busca e o clique o documento pode ter vencido, e ler um vencido é justamente o que o marca
 (R6).
+
+### O aviso do orçamento subiu para a linha do título
+
+A frase *"Venda a partir do orçamento nº N — preços travados, cliente e vendedor fixos"* ficava
+perto do rodapé, junto das teclas. Passou para a barra do título, **centralizada** entre o nome da
+tela e os botões de ação: preço travado e cliente fixo mudam o que o operador PODE fazer, então a
+informação tem de estar onde ele já olha enquanto lança item — não num canto que ele só vê quando
+vai fechar a venda.
+
+⚠️ O selo é **irmão** de , não filho: a barra é , e
+centralizar exige ocupar o espaço entre o título e as ações ( + ).
+Dentro do bloco do título ele apenas ficaria colado no , à esquerda.

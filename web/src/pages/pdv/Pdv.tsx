@@ -291,6 +291,18 @@ export default function Pdv() {
             <IconePdv size={34} />
             <h1>PDV — Frente de Caixa</h1>
           </div>
+          {/* O aviso do orçamento fica NA LINHA DO TÍTULO, CENTRALIZADO (2026-08-21, pedido do dono
+              do produto). Antes morava perto do rodapé, junto das teclas — longe dos olhos de quem
+              está lançando item, que é justamente quando "preço travado" e "cliente fixo" mudam o
+              que o operador pode fazer. Irmão do título (não filho) porque centralizar exige que
+              ele ocupe o espaço entre o título e as ações; dentro de `.titulo-tela` ele só ficaria
+              colado no h1, à esquerda. */}
+          {orcamentoPuxado && (
+            <span className="pdv-selo-orcamento">
+              Venda a partir do <strong>orçamento nº {orcamentoPuxado.idOrcamento}</strong> — preços
+              travados, cliente e vendedor <strong>fixos</strong>.
+            </span>
+          )}
           <div className="topbar-acoes">
             <AjudaDaTela chaveTela="pdv.tela" />
             <BotaoFecharTela />
@@ -387,13 +399,6 @@ export default function Pdv() {
                   </span>
                 </div>
               </div>
-
-              {orcamentoPuxado && (
-                <p className="pdv-dica">
-                  Venda a partir do <strong>orçamento nº {orcamentoPuxado.idOrcamento}</strong> —
-                  preços travados, cliente e vendedor <strong>fixos</strong>.
-                </p>
-              )}
 
               {/* Buscar Orçamento e Efetiva Venda lado a lado (2026-08-21, pedido do dono do
                   produto), na ordem em que o balcão acontece: primeiro se puxa o que o cliente já

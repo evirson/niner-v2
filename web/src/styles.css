@@ -1019,6 +1019,21 @@ a.menu-card:hover {
 .pdv-tecla:hover { border-color: var(--accent); }
 .pdv-tecla:active, .pdv-tecla.pdv-ativa { transform: scale(0.97); background: rgba(var(--accent-rgb), .16); }
 
+/* Selo "veio de orçamento" na linha do título do PDV (2026-08-21). Fica ao lado do h1, não abaixo:
+   preço travado e cliente fixo mudam o que o operador PODE fazer, então a informação tem de estar
+   onde ele já olha. `flex-shrink` para não espremer o título em tela estreita, e quebra de linha
+   permitida — a frase é mais longa que o título e não pode virar reticências. */
+.pdv-selo-orcamento {
+  /* `flex: 1` + `text-align: center` centraliza no espaço que sobra entre o título e as ações —
+     a barra é `justify-content: space-between`, então sem ocupar esse espaço o selo apenas
+     encostaria num dos lados. `min-width: 0` deixa o texto quebrar em vez de espremer o título. */
+  flex: 1; min-width: 0; text-align: center;
+  padding: 4px 10px; border-radius: 999px;
+  background: var(--surface-2); border: 1px solid var(--line-strong); color: var(--ink-muted);
+  font-size: 12.5px; line-height: 1.35;
+}
+.pdv-selo-orcamento strong { color: var(--ink); }
+
 /* Filtros do popup Buscar Orçamento (2026-08-21) — três campos de MESMA largura e o botão, numa
    grade só. Em `display: flex` cada campo ficava do tamanho do próprio conteúdo e as caixas saíam
    desalinhadas; aqui as três colunas são idênticas e o botão fica ancorado na linha de base dos
