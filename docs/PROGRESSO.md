@@ -542,6 +542,55 @@ Movimentação de Conta Corrente) que ainda não tinham migrado pro `SeletorPlan
 ## Linha do tempo
 
 
+### 2026-08-21 (fim do dia) — sete ajustes da tela de etiqueta, e o PDV do orçamento
+
+Com a etiqueta saindo certa, o dono do produto usou as telas de verdade e listou o que atrapalhava.
+Dois lotes: a tela de Configuração de Etiqueta e o PDV/Orçamento.
+
+**Etiqueta — o defeito mais grave estava no papel, não na tela.** O campo "Nome da Empresa"
+imprimia o literal `"NOME DA LOJA"` em **quatro** lugares, incluindo a Emissão: **toda etiqueta já
+emitida saiu com esse texto**. Passou a vir de `GET /api/v1/eu`. ⚠️ E **não** de
+`empresa.cfg_nome_etiqueta`, apesar do nome da coluna — aquilo é herança do ERP legado, onde a
+etiqueta era um modelo com marcadores, e o signup ainda semeia assim (no banco de dev o valor é
+literalmente `{sku}\n{descricao}\n{preco_venda}`); imprimir aquela coluna colocaria `{sku}` no
+adesivo.
+
+Mais: o painel de propriedades era `.modal-overlay` e **cobria a etiqueta** — o painel que existe
+para ajustar o campo impedia arrastar o campo; virou janela flutuante arrastável. Alças de
+redimensionamento passaram de uma (canto) para três (canto, largura, altura). Código de barras
+ganhou `crispEdges` (antialiasing em térmica 1-bit vira barra irregular) e os dígitos saíram do SVG
+para HTML, agrupados 1+6+6 — dentro do SVG eles eram esticados junto com o desenho.
+
+⚠️ **A tela virou duas colunas depois de uma tentativa que saiu pior que o problema.** Travar a
+rolagem com tudo empilhado espremeu o editor no que sobrava e ele passou a desenhar POR CIMA das
+Informações do Registro. Medindo o DOM: item de flex tem `min-height: auto` e **se recusa a encolher
+abaixo do conteúdo** — sem `min-height: 0` em cada elo, o canvas de 476 px vaza de um container de
+99 px. Hoje: medidas à esquerda, editor à direita com a altura inteira, prévia do rolo recolhida
+(`<details>`, custava ~190 px permanentes) e a dica da barra de ferramentas em uma linha (custava
+71 px). O **zoom abre no maior que mostra a etiqueta inteira**, com teto de 250% e **piso de 150%**:
+sem piso, uma janela baixa abria em 50%; e com `ResizeObserver` vivo, redimensionar a janela
+**descartava o zoom escolhido pelo usuário**.
+
+**PDV — F5 e F6 trocaram** (F5 Buscar Orçamento, F6 Efetiva Venda, lado a lado), cliente e vendedor
+ficaram **fixos** em venda vinda de orçamento, e o popup virou busca por número/cliente/vendedor,
+só dos ABERTOS.
+
+⛔ **O ajuste mais profundo foi "juntar só se o preço for igual".** A regra do dono do produto —
+*"se o preço mudou a empresa tem que honrar o orçamento, mas produtos a mais não precisam"* — não
+cabia no modelo: o servidor amarrava o preço congelado à **variação**, não à linha, e a validação
+"não pode levar mais do que foi orçado" **somava as duas linhas e recusava a venda inteira**.
+Nasceram `ItemVendaRequest.doOrcamento` (marca por LINHA), `ItemLedger.idLinha` (o SKU era a chave e
+alterar uma linha alterava as duas) e `dividirParaEnvio` (uma linha da tela vira dois itens no envio
+quando o preço não mudou). ⚠️ Com **guarda de contrato**: mandar `idOrcamento` sem nenhuma linha
+marcada é recusado — sem ela a venda sairia inteira a preço de cadastro, o orçamento seria consumido
+e nada indicaria que a loja deixou de honrar o preço prometido.
+
+Orçamentos ganharam busca por nome de cliente e de vendedor (⚠️ os JOINs entraram **também** no
+`count(*)`, senão o filtro quebraria a contagem com *"missing FROM-clause entry"*).
+
+**911 testes verdes**, dois deles novos: `unidadeAMaisDoMesmoProdutoSaiPeloPrecoDeHoje` e
+`vendaDeOrcamentoSemNenhumaLinhaMarcadaEhRecusada`.
+
 ### 2026-08-21 (tarde) — as 3 colunas voltam: o papel do driver é que mandava, não o cabeçote
 
 Continuação direta da sessão da manhã (logo abaixo). O dono do produto retomou com a impressora

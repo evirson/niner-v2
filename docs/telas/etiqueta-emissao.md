@@ -249,3 +249,41 @@ Nenhum — tela 100% interna (configuração de impressão física), não afeta 
   navegador renderizando ~1000 nós de DOM só pra confirmar algo que a lógica já cobre).
 - **Sem tela própria de listar/editar/excluir variação** — `ProdutoBarraService` só acha-ou-cria,
   não tem CRUD completo (ver `docs/telas/produto.md`, Non-goals).
+
+---
+
+## ✅ 2026-08-21 — a impressão mudou de modelo (e o nome da loja era um literal)
+
+Esta tela **compartilha o mecanismo de impressão** com o Teste de Impressão da Configuração, então
+tudo o que aquela sessão descobriu vale aqui. O detalhe completo está em
+`docs/telas/configuracao-etiqueta.md`, seções de 2026-08-21; o resumo do que mudou **nesta tela**:
+
+### Uma página por FILEIRA, não uma folha longa
+
+`@page` passou a valer `larguraDeImpressão × passoVertical`, com `break-after: page` entre fileiras,
+e quem encaixa cada página no adesivo é o **sensor de gap** da impressora. O modelo anterior — todas
+as fileiras numa folha só — entregava a origem vertical ao driver, que fatiava o trabalho no tamanho
+do papel configurado nele; quando esse tamanho não era múltiplo do passo, saíam fileiras em branco e
+a primeira etiqueta já nascia fora do adesivo.
+
+Para paginar, o bloco de impressão vai por **portal** para o `<body>` e usa a classe
+`.etiqueta-rolo-imprimir` (a antiga `.etiqueta-imprimir` continua existindo — o Orçamento em bobina
+a usa). Duas regras do projeto precisaram ser destravadas só durante a impressão, e as duas escondem
+o estrago em silêncio: `visibility: hidden` mantém o espaço do que esconde, e o `overflow: hidden`
+do shell **corta** o que passa da primeira página em vez de paginar.
+
+### ⚠️ O nome da loja era o literal "NOME DA LOJA"
+
+O campo `NOME_EMPRESA` imprimia essa string fixa — **não só na prévia: aqui também**. Toda etiqueta
+emitida até esta data saiu com esse texto no lugar do nome da loja. Agora vem de
+`GET /api/v1/eu` (`empresa.nomeEtiqueta`), da empresa da **sessão** — a empresa escolhida no popup
+de seleção é filtro de estoque, não emitente da etiqueta.
+
+⚠️ E **não** sai de `empresa.cfg_nome_etiqueta`, apesar do nome da coluna: aquilo é herança do ERP
+legado, onde a etiqueta era um modelo de texto com marcadores, e o signup ainda semeia assim
+(`{sku}\n{descricao}\n{preco_venda}`). Imprimir aquela coluna colocaria `{sku}` no adesivo.
+
+### Código de barras mais legível
+
+`shape-rendering="crispEdges"` (sem antialiasing, que em térmica 1-bit vira barra irregular) e os
+dígitos saíram do SVG para HTML, agrupados **1+6+6** como manda o padrão EAN-13.
