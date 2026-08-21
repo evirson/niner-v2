@@ -542,6 +542,50 @@ Movimentação de Conta Corrente) que ainda não tinham migrado pro `SeletorPlan
 ## Linha do tempo
 
 
+### 2026-08-21 (fim da noite) — auditoria por dois agentes: 13 defeitos corrigidos, 18 registrados
+
+Dois agentes varreram backend e frontend em paralelo, em duas passadas cada. **Os dois acharam,
+independentemente, os mesmos dois bugs críticos do PDV** — convergência de auditorias cegas é a
+confirmação mais forte que existe. Cada achado foi conferido no código antes de virar correção;
+nenhum foi aceito só pelo relatório (um deles, `EuController` com `Map.of` e null, o próprio agente
+descartou depois de conferir a migration).
+
+**Corrigidos (13).** Os dois piores eram `@Transactional` faltando no `DocumentoFiscalRepositorio`,
+em métodos cuja irmã tem: sem a anotação o `SET LOCAL app.id_tenant` nunca roda e
+`plataforma.tenant_atual()` vira NULL. Um impedia emitir a NF-e da devolução ao fornecedor — com a
+mercadoria já baixada, o número fiscal já queimado e a mensagem *"Registro em uso por outro
+cadastro"* (sobre exclusão de cadastro, para uma emissão de nota); o outro fazia o cancelamento
+**devolver o estoque sem enviar o evento 110111**, deixando uma NF-e 55 autorizada contra uma saída
+que não aconteceu — em silêncio, com resposta 200. Nenhum teste cobria os dois: a suíte da devolução
+roda com o fiscal desligado.
+
+Três eram regressões do próprio dia: o F4 do PDV não limpava o orçamento (e a guarda criada horas
+antes transformou o defeito silencioso em venda travada), o F3 deixava aumentar a quantidade
+mantendo o preço congelado (tela pedindo R$ 250 e servidor exigindo R$ 280, com mensagem sobre
+*pagamento*), e o auto-ajuste de zoom do editor de etiqueta era descartado a cada tecla digitada nas
+medidas.
+
+Os demais: devolução cancelada ainda deduzida da comissão e do DRE; a Contagem de Estoque **apagando
+a linha** quando o campo de quantidade ficava vazio (sem toast, sem confirmação, sem desfazer, e o
+produto sumia do balanço sem virar divergência); a devolução ao fornecedor sendo a única rotina de
+estoque a ignorar `cfg_permite_qtd_decimal` — nos dois lados, e foi a ponte entre os dois agentes; a
+validade do orçamento ganhando um dia depois das 21h (`toISOString` em UTC, o último caso do `web/`);
+o orçamento nascendo com o prazo velho por cache stale e invalidação faltando; `"nullT12:00:00Z"` em
+Contas a Pagar; o DANFCE sem o piso do jsPDF; e o `multiploDeColunas` estourando o próprio teto.
+
+Mais três casos no `PrivilegiosNinerAppTest` para os GRANTs de V051–V054, que não tinham cobertura —
+Testcontainers conecta como superusuário, então GRANT faltando é invisível na suíte e só aparece em
+produção.
+
+**Registrados para decisão (18).** `docs/PENDENCIAS-AUDITORIA-2026-08-21.md` lista os 7 que exigem
+regra de negócio — dupla baixa ao cancelar entrada que já teve devolução, contingência presa em
+`TRANSMITINDO` (o dreno nunca mais a pega, com o prazo de 24 h correndo), vale-mercadoria por preço
+médio (caso que a mudança do mesmo dia tornou comum), documentos A4 que não paginam, KPI de
+devoluções medindo período diferente do DRE, orçamento de outra empresa e webhook sem lock — mais 11
+menores, cada um com cenário concreto, e as áreas que os agentes declararam sem cobertura.
+
+**912 testes verdes.**
+
 ### 2026-08-21 (noite) — o código de barras: duas correções, uma reversão e uma pendência aberta
 
 Com a etiqueta saindo alinhada, sobrou o problema que fecha o dia **sem solução**: o leitor não
