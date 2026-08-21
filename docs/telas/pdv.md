@@ -600,6 +600,6 @@ tela e os botões de ação: preço travado e cliente fixo mudam o que o operado
 informação tem de estar onde ele já olha enquanto lança item — não num canto que ele só vê quando
 vai fechar a venda.
 
-⚠️ O selo é **irmão** de , não filho: a barra é , e
-centralizar exige ocupar o espaço entre o título e as ações ( + ).
-Dentro do bloco do título ele apenas ficaria colado no , à esquerda.
+⚠️ O selo é **irmão** de `.titulo-tela`, não filho: a barra é `justify-content: space-between`, e
+centralizar exige ocupar o espaço entre o título e as ações (`flex: 1` + `text-align: center`).
+Dentro do bloco do título ele apenas ficaria colado no `h1`, à esquerda.
