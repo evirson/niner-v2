@@ -542,6 +542,75 @@ Movimentação de Conta Corrente) que ainda não tinham migrado pro `SeletorPlan
 ## Linha do tempo
 
 
+### 2026-08-21 (madrugada) — a auditoria completa: seis rodadas, 31 defeitos, e o fim decidido pelos agentes
+
+Continuação da entrada abaixo (que cobre as duas primeiras passadas). Ao todo foram **seis rodadas**
+por agente, e a auditoria terminou **por recomendação dos próprios agentes** — o backend voltou da
+sexta sem nenhum defeito e os dois disseram, independentemente, para não pedir a sétima.
+
+**Balanço: 31 defeitos corrigidos, 33 pendências registradas** em
+`docs/PENDENCIAS-AUDITORIA-2026-08-21.md`. 912 testes verdes.
+
+**Os dois piores achados do dia inteiro eram o mesmo erro:** `@Transactional` faltando em dois
+métodos do `DocumentoFiscalRepositorio`, cada um com uma irmã que tem. Sem a anotação o
+`SET LOCAL app.id_tenant` nunca roda e `plataforma.tenant_atual()` vira NULL. Um **impedia emitir** a
+NF-e da devolução ao fornecedor — com a mercadoria já baixada, o número fiscal já queimado e a
+mensagem *"Registro em uso por outro cadastro"* (sobre exclusão de cadastro, para uma emissão de
+nota); o outro fazia o cancelamento **devolver o estoque sem enviar o evento 110111**, deixando uma
+NF-e 55 autorizada contra uma saída que não aconteceu — em silêncio, com resposta 200. Nenhum teste
+via os dois: a suíte da devolução roda com o fiscal desligado.
+
+**Fiscal, o resto:** o **CST 60** não zerava a base de ICMS — gêmeo exato do CSOSN 500 corrigido em
+2026-08-19, com o javadoc dele dizendo *"mesma lógica do 500"* e mesmo assim fora da lista; é a
+rejeição cStat 531 com o cliente no caixa. O **cStat 155** (cancelamento homologado fora de prazo) era
+tratado como recusa, então a SEFAZ cancelava e o ERP não revertia. E a NF-e de devolução **descartava
+o segundo item da mesma variação** (`putIfAbsent`) — premissa que a mudança do mesmo dia quebrou;
+hoje recusa em vez de descartar.
+
+**Dinheiro:** o DRE calculava "Taxas de Cartão" com `perc_desconto` (o desconto que a loja dá ao
+cliente) em vez de `taxa_administradora` (o que a maquininha cobra) — contava em dobro um desconto já
+deduzido **e** mostrava R$ 0,00 de taxa para toda loja que não dá desconto. Devolução cancelada
+continuava deduzida da comissão e do DRE. E o backup que falha era retentado **a cada 60 segundos até
+a meia-noite** (~1.260 `pg_dump` num dia) — o que já aconteceu no primeiro dia de produção.
+
+**Estoque e tela:** a Contagem **apagava a linha** quando o campo de quantidade ficava vazio, sem
+toast e sem desfazer; a devolução ao fornecedor era a única rotina de estoque a ignorar
+`cfg_permite_qtd_decimal` (nos dois lados — foi a ponte entre os dois agentes); trocar de empresa em
+Configuração Fiscal mantinha os dados da anterior nos campos, e salvar gravava as séries fiscais da
+Matriz na Filial; marcar os campos de oferta como obrigatórios **não fazia nada** (o asterisco
+aparecia e o produto salvava vazio); e o cadastro rápido criava **produto sem variação** quando o EAN
+repetia, dizendo que não tinha criado nada.
+
+⚠️ **Três dos 31 eram regressões introduzidas no mesmo dia**, todas no PDV do orçamento: o F4 não
+limpava o orçamento (e a guarda criada horas antes transformou o defeito silencioso em venda
+travada), o F3 deixava aumentar a quantidade mantendo o preço congelado, e o auto-ajuste de zoom do
+editor de etiqueta era descartado a cada tecla.
+
+⛔ **E a descoberta que não é bug: a impersonação auditada (R21/P9) nunca foi construída.** A
+constituição promete que staff da Vetor alcança dado de lojista *"only via audited impersonation"*; a
+tabela `impersonacao_log` existe desde a V010, com `REVOKE DELETE` e teste guardando a imutabilidade
+— e **zero escritores**. O único ponto em que a superfície de staff lê domínio abre o contexto RLS
+com `set_config` à mão, sem trilha. Pendência 26, e a 30 mostra que também não há gestão de staff nem
+revogação de token: são um trabalho só.
+
+**Método que vale reusar.** Os dois agentes acharam **independentemente** os mesmos dois bugs
+críticos do PDV — convergência de auditorias cegas é a confirmação mais forte que existe. Cada
+achado foi conferido no código antes de virar correção, e alguns caíram nessa conferência (o
+`Map.of` com null do `/eu`, que o próprio agente descartou depois de ler a migration). Os
+**descartes** renderam tanto quanto os achados: o agente do backend previu um irmão do `putIfAbsent`
+na devolução ao fornecedor, foi lá e **provou que não existe**; e delimitou a superfície de staff a
+um único ponto em vez de deixar a suspeita no módulo inteiro.
+
+⚠️ **Duas armadilhas de ferramenta mordidas no caminho:** `mvn compile` deu **BUILD SUCCESS com um
+import faltando** (o contexto do Spring só quebrou em teste, com 768 erros — é o compile incremental
+que o `CLAUDE.md` já registra; `clean` pega na hora), e `EXIT=$?` depois de um pipe mede o **último**
+comando do pipe, não o Maven.
+
+⭐ **A recomendação final da auditoria não é código:** *transmitir uma devolução ao fornecedor em
+homologação*. É o único caminho fiscal do produto que **nunca rodou de verdade** — sem teste (a suíte
+roda com o fiscal desligado) e quebrado até a correção do `@Transactional` acima. Sobre ele já se
+acumulam três pendências (19, 21, 32).
+
 ### 2026-08-21 (fim da noite) — auditoria por dois agentes: 13 defeitos corrigidos, 18 registrados
 
 Dois agentes varreram backend e frontend em paralelo, em duas passadas cada. **Os dois acharam,
