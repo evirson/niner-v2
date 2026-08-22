@@ -111,7 +111,11 @@ export default function CrmForm() {
     mutationFn: async () => {
       if (colunas.length === 0) throw new ApiError(400, 'Selecione ao menos um dado do cliente para gerar a planilha.')
       if (!clientes || clientes.length === 0) throw new ApiError(400, 'Localize os clientes antes de gerar a planilha.')
-      await exportarClientesCrmExcel(clientes, colunas)
+      // ⚠️ `clientesOrdenados`, não `clientes` (achado de auditoria, 2026-08-21): a grade renderiza a
+      // lista ORDENADA pelos cabeçalhos clicáveis, e a planilha saía na ordem crua do servidor. Como
+      // o .xlsx é o produto final desta tela e a ordenação é oferecida ali mesmo, o arquivo
+      // entregue contradizia o que o operador tinha acabado de ver — sem aviso nenhum.
+      await exportarClientesCrmExcel(clientesOrdenados, colunas)
       return clientes.length
     },
     onSuccess: (qtd) => setToast({ texto: `Planilha gerada com ${qtd} cliente${qtd === 1 ? '' : 's'}.`, tipo: 'sucesso' }),

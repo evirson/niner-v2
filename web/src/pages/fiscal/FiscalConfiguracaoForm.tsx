@@ -106,11 +106,31 @@ export default function FiscalConfiguracaoForm() {
     else if (idEmpresa === null && empresas && empresas.length > 0) setIdEmpresa(empresas[0].idEmpresa)
   }, [idEmpresa, idEmpresaSessao, empresas])
 
-  const { data: config } = useQuery({
+  const { data: config, isFetching: carregandoConfig } = useQuery({
     queryKey: ['fiscal-config', idEmpresa],
     queryFn: () => buscarFiscalConfig(idEmpresa as number),
     enabled: idEmpresa !== null,
   })
+
+  /**
+   * ⚠️ Trocar de empresa LIMPA o formulário na hora (achado de auditoria, 2026-08-21).
+   *
+   * <p>O efeito abaixo só preenche `if (config)`. Ao trocar a empresa, a `queryKey` vira uma chave
+   * nunca vista e `config` volta a ser `undefined` enquanto a busca corre — então o formulário
+   * continuava exibindo **os dados da empresa anterior**, com a nova já selecionada no combo e o
+   * botão Salvar habilitado.
+   *
+   * <p>O estrago é grave e silencioso: o ADMIN abre a Matriz, troca para a Filial (que ele veio
+   * configurar justamente por estar "não configurada"), clica em Salvar — e grava na Filial o CRT,
+   * o **ambiente** e as **três séries fiscais** da Matriz. Série duplicada entre empresas e
+   * produção onde deveria ser homologação, sem nada indicar o erro até a primeira nota.
+   *
+   * <p>Pior sem limite de tempo: se a busca falhar, `config` fica `undefined` para sempre e o
+   * formulário segue mostrando a empresa anterior indefinidamente.
+   */
+  useEffect(() => {
+    setForm(VAZIO)
+  }, [idEmpresa])
 
   useEffect(() => {
     if (config) setForm(paraFormulario(config))
@@ -152,7 +172,15 @@ export default function FiscalConfiguracaoForm() {
           </div>
           <div className="topbar-acoes">
             <AjudaDaTela chaveTela={CHAVE_TELA} />
-            <button type="submit" form="form-fiscal-config" className="btn" disabled={salvar.isPending || idEmpresa === null}>
+            {/* `carregandoConfig` no disabled: salvar enquanto a configuração da empresa escolhida
+                ainda está vindo gravaria o formulário em branco (ou o da empresa anterior, antes da
+                limpeza acima). */}
+            <button
+              type="submit"
+              form="form-fiscal-config"
+              className="btn"
+              disabled={salvar.isPending || idEmpresa === null || carregandoConfig}
+            >
               {salvar.isPending ? 'Salvando…' : 'Salvar'}
             </button>
             <BotaoFecharTela />

@@ -1,6 +1,7 @@
 package com.vetor.niner.fiscal.documento;
 
 import com.vetor.niner.comum.config.NinerProperties;
+import com.vetor.niner.comum.web.ConflitoDadosException;
 import com.vetor.niner.fiscal.configuracao.CsrtService;
 import com.vetor.niner.fiscal.documento.MontagemDevolucaoDtos.DestinatarioDevolucao;
 import com.vetor.niner.fiscal.documento.MontagemDevolucaoDtos.DevolucaoParaMontar;
@@ -374,7 +375,31 @@ public class DevolucaoFiscalAssembler {
                         rs.getBigDecimal("aliquota_cbs"), rs.getBigDecimal("valor_cbs"),
                         rs.getBigDecimal("valor_total_tributos")))
                 .list()
-                .forEach(i -> mapa.putIfAbsent(i.idVariacao(), i));
+                .forEach(i -> {
+                    // ⚠️ RECUSA em vez de descartar em silêncio (achado de auditoria, 2026-08-21).
+                    //
+                    // Este mapa assume "uma variação = um item fiscal", premissa verdadeira até a
+                    // mudança de 2026-08-21: o preço congelado por LINHA faz a mesma variação
+                    // aparecer duas vezes na mesma venda, com preços diferentes, por desenho.
+                    //
+                    // Com `putIfAbsent`, o segundo item era jogado fora sem aviso e a devolução
+                    // espelhava tudo pelo preço do primeiro: devolver 2 unidades de uma venda de
+                    // 1×R$80 + 1×R$120 emitia UMA linha de 2 × R$ 80 = R$ 160 contra uma NFC-e de
+                    // R$ 200 que a própria nota referencia — e ainda entregava um vale de R$ 200.
+                    // Três números para o mesmo fato, todos gravados.
+                    //
+                    // Casar por linha (`numero_item`) é a correção de verdade e depende de decisão
+                    // de produto — está registrada em docs/PENDENCIAS-AUDITORIA-2026-08-21.md, item
+                    // 2. Até lá, falhar alto: nota fiscal errada é pior que devolução recusada.
+                    var anterior = mapa.putIfAbsent(i.idVariacao(), i);
+                    if (anterior != null) {
+                        throw new ConflitoDadosException(
+                                "O produto \"%s\" aparece em mais de um item da venda original, com preços diferentes."
+                                        .formatted(i.descricao())
+                                        + " A devolução por nota fiscal ainda não sabe a qual deles a peça devolvida"
+                                        + " corresponde. Faça a devolução de cada item separadamente ou fale com o suporte.");
+                    }
+                });
         return mapa;
     }
 

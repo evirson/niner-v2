@@ -253,15 +253,25 @@ export default function ProdutoForm({ somenteLeitura = false }: { somenteLeitura
       queryClient.invalidateQueries({ queryKey: ['produtos'] })
 
       if (!editando && arquivosNovaFoto.length > 0) {
+        // ⚠️ Conta o que subiu e NOMEIA o que faltou (achado de auditoria, 2026-08-21). O laço
+        // parava na primeira falha e avisava só "houve um problema ao enviar as fotos" — mas a
+        // navegação seguinte desmonta o formulário e leva junto `arquivosNovaFoto`, então os
+        // arquivos que não subiram somem da memória do app. O usuário caía na tela de edição vendo
+        // 2 de 5 fotos, sem saber quantas faltaram nem quais, tendo de lembrar de cabeça quais
+        // arquivos do disco eram os que faltavam — e em que ordem, porque a primeira foto é a CAPA
+        // que o PDV e a etiqueta usam.
+        let enviadas = 0
         try {
           for (const arquivo of arquivosNovaFoto) {
             await enviarImagem(produtoSalvo.idProduto, arquivo)
+            enviadas += 1
           }
         } catch (e: unknown) {
+          const faltando = arquivosNovaFoto.slice(enviadas).map((a) => a.name).join(', ')
+          const motivo = e instanceof ApiError ? e.message : 'falha ao enviar'
           setToast(
-            e instanceof ApiError
-              ? `Produto salvo, mas houve um problema ao enviar as fotos: ${e.message}`
-              : 'Produto salvo, mas não foi possível enviar as fotos.',
+            `Produto salvo. Enviadas ${enviadas} de ${arquivosNovaFoto.length} fotos (${motivo}).`
+              + ` Reenvie por aqui: ${faltando}`,
           )
           navigate(`/produtos/${produtoSalvo.idProduto}`)
           return

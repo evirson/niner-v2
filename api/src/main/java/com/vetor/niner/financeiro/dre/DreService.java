@@ -260,12 +260,12 @@ public class DreService {
         // Taxa de cartão/PIX: percentual da carteira sobre o valor pago naquela forma. Em
         // competência conta na data da VENDA, mesmo que a parcela só caia depois.
         BigDecimal taxas = jdbc.sql("""
-                        SELECT COALESCE(SUM(cr.valor_receber * tc.perc_desconto / 100), 0)
+                        SELECT COALESCE(SUM(cr.valor_receber * tc.taxa_administradora / 100), 0)
                         FROM contas_receber cr
                         JOIN venda v ON v.id_venda = cr.id_venda AND v.id_tenant = cr.id_tenant
                         JOIN tipo_carteira tc ON tc.id_carteira = cr.id_carteira AND tc.id_tenant = cr.id_tenant
                         WHERE cr.id_tenant = plataforma.tenant_atual() AND v.cancelada = false
-                              AND (v.data_venda AT TIME ZONE 'America/Sao_Paulo')::date BETWEEN ? AND ? AND tc.perc_desconto > 0
+                              AND (v.data_venda AT TIME ZONE 'America/Sao_Paulo')::date BETWEEN ? AND ? AND tc.taxa_administradora > 0
                         """ + filtroEmpresaVenda)
                 .params(parametros(inicio, fim, idsEmpresa))
                 .query(BigDecimal.class).single();
@@ -302,7 +302,7 @@ public class DreService {
                         SELECT COALESCE(SUM(cr.valor_receber), 0) AS receita,
                                COALESCE(SUM(cr.valor_desconto), 0) AS desconto,
                                COALESCE(SUM(cr.valor_recebido - cr.valor_receber), 0) AS juros,
-                               COALESCE(SUM(cr.valor_receber * tc.perc_desconto / 100), 0) AS taxas,
+                               COALESCE(SUM(cr.valor_receber * tc.taxa_administradora / 100), 0) AS taxas,
                                COALESCE(SUM(cv.cmv * (cr.valor_receber / NULLIF(tv.total, 0))), 0) AS cmv,
                                COALESCE(SUM(cv.comissao * (cr.valor_receber / NULLIF(tv.total, 0))), 0) AS comissao
                         FROM contas_receber cr

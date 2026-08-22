@@ -69,7 +69,25 @@ public class MotorTributario {
      * retido lá atrás"; esta venda não abre uma base nova, então tem que zerar igual 102/103/400.
      */
     private static final Set<String> CSOSN_SEM_ICMS = Set.of("102", "103", "300", "400", "500");
-    private static final Set<String> CST_SEM_ICMS = Set.of("40", "41", "50");
+
+    /**
+     * ⚠️ {@code 60} entrou aqui em 2026-08-21 (achado de auditoria): é o <b>gêmeo exato</b> do caso
+     * do CSOSN 500 descrito acima, e tinha ficado de fora.
+     *
+     * <p>O 60 estava só em {@link #CST_ICMS_JA_RETIDO}, que serve apenas para <i>pular a validação
+     * de alíquota zerada</i> — o fluxo seguia para {@code montarIcmsComValor} e calculava base =
+     * valor do item. Só que {@code MontadorXmlNfce} emite {@code <ICMS60>} com {@code orig}+
+     * {@code CST} e mais nada, sem {@code vBC}: o total da nota declarava uma base que nenhum item
+     * carregava. É a rejeição <b>cStat 531</b> ("Total da BC ICMS difere do somatório dos itens"),
+     * a mesma de 2026-08-19, com o cliente no caixa.
+     *
+     * <p>Agravante silencioso: com alíquota preenchida no perfil (nada impedia, já que a validação
+     * era justamente pulada), o valor também era somado em {@code <vICMS>} e gravado em
+     * {@code documento_fiscal.valor_icms} — um ICMS que nenhum item destacou.
+     *
+     * <p>Alcance: tenants <b>CRT 2</b>, os únicos onde o CHECK do schema permite {@code cst_icms}.
+     */
+    private static final Set<String> CST_SEM_ICMS = Set.of("40", "41", "50", "60");
 
     /**
      * CST 60 — ICMS já retido antes por substituição tributária: nesta venda não há ICMS NOVO a

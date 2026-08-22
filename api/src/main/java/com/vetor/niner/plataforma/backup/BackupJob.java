@@ -39,7 +39,17 @@ public class BackupJob {
                                AND (backup_ultimo_em IS NULL
                                     OR (backup_ultimo_em AT TIME ZONE 'America/Sao_Paulo')::date
                                         < (now() AT TIME ZONE 'America/Sao_Paulo')::date
-                                    OR backup_ultimo_status <> 'OK')
+                                    -- ⚠️ A retentativa depois de uma falha precisa ESPERAR (achado
+                                    -- de auditoria, 2026-08-21). Sem o intervalo, e como
+                                    -- `registrar` carimba `backup_ultimo_em` também no ERRO, uma
+                                    -- falha persistente satisfazia a condição a cada rodada de 60 s:
+                                    -- backup agendado para 03:00 que falha vira ~1.260 `pg_dump` do
+                                    -- banco inteiro até a meia-noite, cada um com conexão própria
+                                    -- fora do pool. Não é hipótese — foi o primeiro dia de produção,
+                                    -- quando faltava SELECT nas sequências para `niner_backup` e o
+                                    -- job passou o dia gravando ERRO.
+                                    OR (backup_ultimo_status <> 'OK'
+                                        AND backup_ultimo_em < now() - interval '1 hour'))
                           FROM plataforma.configuracao_plataforma WHERE id = 1
                         """)
                 .query(Boolean.class).optional().orElse(false);
