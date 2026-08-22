@@ -6,6 +6,7 @@ import {
   criarPlanoContas,
   type TipoMovimentoConta,
 } from '../lib/planoContas'
+import { codigoPlanoContasValido, mascararCodigoPlanoContas } from '../lib/masks'
 import { maiusculas } from '../lib/texto'
 import Toast from './Toast'
 
@@ -59,7 +60,11 @@ export default function PlanoContasModal({
       setToast(e instanceof ApiError ? e.message : 'Não foi possível criar o plano de contas.'),
   })
 
-  const valido = codigo.trim() && descricao.trim() && tipoMovimento
+  // ⚠️ `codigoPlanoContasValido` (achado de auditoria, 2026-08-21): antes bastava não estar
+  // vazio, e o servidor recusava com 400 depois de o operador preencher tudo — no meio do cadastro
+  // de um fornecedor, que é o motivo de este modal existir. As duas funções já existiam; só a tela
+  // cheia as usava.
+  const valido = codigoPlanoContasValido(codigo) && descricao.trim() && tipoMovimento
 
   return (
     <div className="modal-overlay" onClick={aoFechar}>
@@ -73,9 +78,12 @@ export default function PlanoContasModal({
         <input
           id="modal-plano-codigo"
           autoFocus
-          placeholder="ex.: 3.1.001"
+          /* ⚠️ O exemplo antigo era `3.1.001` — que o servidor RECUSA: a máscara é 9.99.999, com
+             DOIS dígitos no grupo do meio. A única pista que a tela dava estava errada, e o
+             operador não tem como deduzir de "9.99.999" que são 1+2+3 dígitos. */
+          placeholder="ex.: 3.01.001"
           value={codigo}
-          onChange={(e) => setCodigo(maiusculas(e.target.value))}
+          onChange={(e) => setCodigo(mascararCodigoPlanoContas(e.target.value))}
         />
 
         <label htmlFor="modal-plano-descricao">Descrição *</label>

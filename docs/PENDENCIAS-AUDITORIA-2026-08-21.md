@@ -1,12 +1,18 @@
 # Pendências da auditoria de 2026-08-21 — aguardando decisão do dono do produto
 
-Dois agentes varreram backend e frontend em **cinco passadas** cada. **28 defeitos foram corrigidos
+Dois agentes varreram backend e frontend em **seis passadas** cada — a auditoria foi encerrada por
+recomendação dos dois. **31 defeitos foram corrigidos
 e commitados** no mesmo dia (ver `docs/PROGRESSO.md`). Este arquivo lista o que **não** foi corrigido
 porque exige uma decisão de negócio, não um conserto técnico — e serve para ser cobrado na próxima
 sessão.
 
 Ordem: os sete primeiros são os que precisam de decisão; depois as menores (8–18); e no fim as que as
-rodadas 3, 4 e 5 acrescentaram (19–29).
+rodadas 3 a 6 acrescentaram (19–33).
+
+> **A auditoria terminou aqui, e por decisão dos próprios agentes.** A sexta rodada do backend veio
+> **sem nenhum defeito**, e os dois recomendaram não pedir uma sétima: as áreas de alto rendimento
+> foram consumidas, e o que sobra ou exige execução (criptografia, XSD, SEFAZ real) ou é apresentação.
+> A recomendação de onde gastar o próximo esforço está no item **32**.
 
 **As quatro que eu levaria primeiro**, por gravidade e por quanto custam se ficarem:
 
@@ -17,6 +23,7 @@ rodadas 3, 4 e 5 acrescentaram (19–29).
 | 5 | Nota presa em `TRANSMITINDO` some da fila do dreno | Prazo legal de 24 h correndo, sem alarme (ver 25) |
 | 22 | Parcela legada vira receita com CMV zero no DRE caixa | Lucro que nunca existiu, num relatório de decisão |
 | 26 | A impersonação auditada (R21/P9) **nunca foi construída** | A constituição promete trilha para acesso de staff, e não há nenhuma |
+| **32** | **Transmitir uma devolução ao fornecedor em HOMOLOGAÇÃO** | Recomendação final da auditoria: é o único caminho fiscal que nunca rodou de verdade, e já acumula 3 pendências |
 
 ---
 
@@ -379,3 +386,72 @@ a configuração da própria loja por tentativa e erro, no meio de uma entrada d
 **Decisão necessária:** os modais passam a ler a configuração (consistente com "reforçado no
 servidor"), ou o servidor dispensa a config no cadastro rápido (contraria o padrão)? Recomendo a
 primeira.
+
+## 30. Não existe gestão de staff — e o token não se revoga
+
+**Onde:** `StaffController` (2 endpoints: `POST /sessao`, `GET /eu`) e `StaffService` (1 método:
+`login`).
+
+Não há endpoint para **criar**, **trocar senha**, **desativar** ou **listar** staff. `StaffBootstrap`
+semeia o primeiro e acabou. O token de staff (`TokenService.emitirStaff`) vale 2 h, é **sem estado no
+servidor**, e `ativo` só é conferido **no login**.
+
+Consequência prática: desligar um funcionário da Vetor exige `UPDATE plataforma.staff SET ativo =
+false` por SQL direto, e o token que ele já tem **continua valendo até expirar** — enxergando a ficha
+de todos os tenants.
+
+Duas horas é uma janela curta, e por isso não é vulnerabilidade — mas é o **mesmo vazio da pendência
+26**: quem for construir a trilha de impersonação vai precisar, no mesmo movimento, de um lugar para
+revogar sessão e gerir quem é staff. Hoje não há nenhum dos dois. Vale tratar 26 e 30 como um
+trabalho só.
+
+## 31. O formulário público de lead permite sobrescrever o lead de outra pessoa
+
+**Onde:** `AquisicaoService.registrarLead` (~:97) — `ON CONFLICT (email) DO UPDATE`.
+
+O `COALESCE` protege contra `NULL` **de entrada**, não contra valor preenchido: enviar o formulário
+com o e-mail de um terceiro e um nome/WhatsApp quaisquer **substitui os dados reais dele**. O limite
+de requisição de `/api/publico/**` impede envenenamento em massa, mas o alvo dirigido passa.
+
+É a mesma exposição de qualquer formulário público de captação, e o dado é de marketing (não de
+tenant, não financeiro). Fica registrado para decisão, não como defeito.
+
+⚠️ Relacionado, também só de funil: `converter` (~:130) sobrescreve o `id_tenant` do lead num segundo
+signup com o mesmo e-mail, perdendo a atribuição da conta anterior.
+
+## 32. ⭐ A NF-e de devolução ao fornecedor NUNCA foi transmitida de verdade
+
+**Não é um item de código — é o próximo passo recomendado pela auditoria.**
+
+O caminho fiscal dessa rotina não tem teste (a suíte roda com `emite_nfe = false`) e estava
+**quebrado** até a correção do `@Transactional` da rodada 3 — ou seja, nunca chegou a emitir. Sobre
+ele já se acumulam três pendências: **19** (CST do fornecedor em nota de Simples/MEI), **21** (FIFO
+recomeçando no primeiro `nItem`) e **32** (esta).
+
+E o próprio código registra por que isso importa: *"o XSD não é o contrato completo; regra de
+validação da SEFAZ só aparece transmitindo"* — a lição do cStat 1010, que custou uma rejeição real.
+
+**Recomendação da auditoria, ao fim de seis rodadas:** o melhor uso do próximo esforço **não é mais
+leitura de código** — é **transmitir uma devolução ao fornecedor em homologação**. É o único caminho
+fiscal do produto que nunca rodou de verdade.
+
+## 33. As buscas de FORNECEDOR e de produto da Emissão truncam em 10, sem aviso
+
+**Onde:** `EtiquetaEmissaoService.buscarFornecedores` (LIMIT 10) e `buscarProdutos` (LIMIT 10).
+
+Corrigido em parte (2026-08-21): os três seletores do PDV (cliente, produto, vendedor — limite 20)
+passaram a avisar *"Mostrando os primeiros 20 — refine a busca"*. **Falta o mesmo aviso nas telas que
+usam a busca de fornecedor**, cujo limite é ainda menor: Entrada de Produtos (form e lista),
+**Devolução ao Fornecedor**, **Contas a Pagar** (form e lista) e Emissão de Etiqueta.
+
+**Cenário:** distribuidora com 15 fornecedores começando por "DISTRIBUIDORA". O operador digita,
+recebe 10, o dele não está entre eles — e conclui "não está cadastrado". O botão **"＋ Novo
+fornecedor"** está do lado, e o cadastro rápido deixa de fora, por decisão documentada, *"a
+verificação de CNPJ duplicado"*. O duplicado entra sem resistência, e a partir dali as entradas de
+nota e as contas a pagar do mesmo fornecedor ficam divididas entre dois cadastros.
+
+**Correção:** a mesma linha condicional (`resultados.length === 10`) nas cinco telas. Vale reavaliar
+se 10 é o limite certo para fornecedor, já que é o menor do produto e alimenta telas de dinheiro.
+
+⚠️ Relacionado: `PesquisaVendedorModal` **recebe** `totalItens` do servidor e o descarta — daria para
+dizer "20 de 47" em vez de "os primeiros 20".

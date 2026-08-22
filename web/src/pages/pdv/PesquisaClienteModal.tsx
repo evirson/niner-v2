@@ -102,6 +102,15 @@ export default function PesquisaClienteModal({
             </tbody>
           </table>
         </div>
+        {/* ⚠️ A busca corta em 20 no servidor e a tela não dizia nada (achado de auditoria,
+            2026-08-21). Quem tinha 20+ resultados parecidos não via o seu, concluía "não está
+            cadastrado" — e o botão de criar está ao lado, sem checagem de duplicidade. O resultado
+            era cadastro duplicado com o mesmo documento, partindo histórico e financeiro em dois. */}
+        {resultados && resultados.length === 20 && (
+          <p className="muted" style={{ marginTop: 6 }}>
+            Mostrando os primeiros {20} — refine a busca para ver mais.
+          </p>
+        )}
 
         <div className="ajuda-rodape">
           <button type="button" className="btn ghost" onClick={aoFechar}>
