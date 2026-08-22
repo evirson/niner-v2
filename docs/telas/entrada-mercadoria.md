@@ -464,3 +464,32 @@ Nenhum adapter novo — só o evento. Sem canal ativo na Fase 1, sem efeito vis�
 
 Importar uma NF-e de 50 itens, com todos os produtos já cadastrados com EAN, em menos de
 2 minutos do upload à confirmação (zero digitação de item).
+
+---
+
+## Revisão 2026-08-22 — cancelar entrada com devolução (auditoria, itens 1 e 33)
+
+**Item 1 — o estoque era debitado DUAS vezes.** `cancelar()` tinha dois guards (já cancelada; conta
+a pagar já baixada) e **não** checava se existia devolução ao fornecedor apontando para aquela
+entrada. O estorno lança um `'D'` da quantidade **cheia** da compra, ignorando o que já saiu pela
+devolução.
+
+Cenário: entrada de 10 un → devolução ao fornecedor de 4 (com **NF-e 55 autorizada**) → ADMIN
+cancela a entrada → estorno de 10 → estoque **−4**. As mesmas 4 unidades saíram duas vezes. E com
+`cfg_permite_estoque_negativo` ligado (o padrão), a trigger não barra: passa em silêncio. Ficava
+ainda uma NF-e 55 válida na SEFAZ referenciando uma entrada que não existe mais, e a entrada sumia
+da lista elegível — nem dava para desfazer pela tela de devolução.
+
+Agora há um terceiro guard, na mesma família dos outros dois: **recusa** o cancelamento enquanto
+houver `DEVOLUCAO_COMPRA` não cancelada, mandando desfazer primeiro pela tela dona (que sabe
+cancelar o evento na SEFAZ). Bloquear em vez de cascatear é o padrão da casa.
+
+**Item 33 — a busca de fornecedor truncava em 10, sem avisar.** Uma distribuidora com 15 cadastros
+começando por "DISTRIBUIDORA" recebia 10, não achava o seu, e concluía "não está cadastrado" — com o
+botão **＋ Novo** ao lado, cujo cadastro rápido deixa de fora, por decisão documentada, a
+verificação de CNPJ duplicado. Daí em diante as notas e as contas a pagar do mesmo fornecedor
+ficavam divididas entre dois cadastros.
+
+O limite subiu para 20 (o mesmo do PDV) e **as seis telas que usam essa busca passaram a avisar**
+quando o corte acontece: Entrada de Produtos (form e lista), Devolução ao Fornecedor, Contas a Pagar
+(form e lista) e Emissão de Etiqueta.

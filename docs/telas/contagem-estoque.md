@@ -206,3 +206,19 @@ Nenhuma bloqueante — o desenho de "desfazer" (item 9 acima) foi proposto pelo 
 aprovado sem alterações; os 4 bugs relatados após uso real (leitura de código de barras, mensagem
 de vazio em Diferenças, aviso em Efetivar sem contagem, confirmação por texto em Zerar) foram
 corrigidos na mesma sessão.
+
+---
+
+## Revisão 2026-08-22 — a lixeira passou a confirmar (auditoria, itens 8 e 14)
+
+**Item 8.** O ícone de excluir removia a linha **sem perguntar nada**, enquanto todo o resto do
+sistema confirma antes de excluir. E o que se perde aqui é **trabalho de contagem já gravado**:
+alguém percorreu a prateleira, contou e digitou. Um clique errado numa grade longa refaz tudo
+aquilo. Agora abre um modal com a descrição do produto (e cor/tamanho, quando houver) dizendo que a
+quantidade contada será descartada.
+
+**Item 14.** As mutações desta tela e da Zerar Contagem invalidavam só `['balanco-contagem']`, a
+própria chave. `['balanco-diferencas']` — lida por **duas** telas, Diferenças de Estoque e Efetivar
+Balanço — nunca era invalidada. O `staleTime: 0` limitava o estrago, mas o modal do Efetivar Balanço
+podia afirmar "N produtos" com o N antigo, logo antes de gravar movimento de estoque. As duas telas
+passaram a usar o helper `invalidarBalanco`, que invalida as duas chaves.

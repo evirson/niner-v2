@@ -402,3 +402,29 @@ do PDV usa os três (ver `docs/telas/pdv.md`).
 `c`/`f`, e a contagem, que antes lia só `FROM orcamento`, quebraria com *"missing FROM-clause
 entry"* — um erro que só apareceria com o filtro preenchido, ou seja, exatamente no uso novo. Como
 são `JOIN` (não `LEFT`) por colunas obrigatórias, a contagem continua idêntica quando não há filtro.
+
+---
+
+## Revisão 2026-08-22 — dois efeitos do preço congelado, achados na auditoria
+
+**Item 3 — o orçamento pertence à empresa que o fez.** `abrirParaVenda` não comparava a empresa do
+orçamento com a da sessão: o documento dizia "empresa A", a venda caía na B e o estoque baixava no
+lugar errado. Agora recusa, dizendo qual é a empresa certa. Ver `docs/telas/pdv.md`.
+
+**Item 2 — o preço congelado quebrou a devolução.** Consequência não prevista quando o Orçamento
+nasceu (2026-08-20): o mesmo produto passou a poder aparecer **duas vezes na mesma venda**, com o
+preço congelado que a loja honrou e com o preço do dia. A Devolução de Produtos agrupava por
+variação e usava a **média** — devolver uma peça de uma venda 1×R$ 50 + 1×R$ 120 gerava vale de
+R$ 85, valor que a venda nunca praticou, e o mesmo R$ 85 ia para a NF-e 55.
+
+⚠️ **A lição vale para o que vier depois:** o preço congelado tornou "duas linhas do mesmo produto
+na mesma venda" um caso **normal**, e qualquer rotina que agrupe itens de venda por `id_variacao`
+precisa ser reavaliada. Detalhe da correção em `docs/telas/devolucao-produtos.md`.
+
+**Item 18 — `@page` órfão.** O `@page orcamento-bobina` era injetado e **nada o referenciava**: a
+bobina saía certa por acaso, caindo no `@page` global do projeto (que também é 80mm). Agora a regra
+que injeta o `@page` injeta junto o seletor que o amarra.
+
+**Item 4 — o A4 não paginava.** Ver a seção correspondente abaixo/em `docs/telas/`; orçamento com
+~30 itens imprimia a primeira página e perdia total e assinatura **sem aviso**. ⚠️ A correção
+**não foi testada no papel**.

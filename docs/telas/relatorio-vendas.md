@@ -363,3 +363,34 @@ da implementação (ver "Decisões de escopo").
 Um gerente consegue montar o filtro (período + empresa/vendedor), ler os 4 KPIs e a composição
 do faturamento, e identificar visualmente o dia/hora/vendedor/marca de maior venda do período em
 menos de 30 segundos, sem sair da tela.
+
+---
+
+## Revisão 2026-08-22 — devolução no mês da devolução (auditoria, itens 6 e 11)
+
+**Item 6 — três problemas na mesma consulta.**
+
+1. O javadoc afirmava *"sempre 0 hoje — nenhuma tela cria movimento de devolução ainda"*. **Falso
+   desde 2026-08-19**, quando a Devolução de Produtos entrou. O KPI trazia número real há dias com
+   a documentação dizendo que era zero.
+2. O recorte era pela data da **venda**; o DRE e as Comissões usam `data_movimento`. Uma devolução
+   de abril, de uma venda de janeiro, entrava no relatório de **janeiro** aqui e no de **abril** lá.
+   Pior: como o valor é subtraído da venda líquida, **um mês já fechado mudava sozinho** meses
+   depois, sem nada indicar por quê.
+3. Faltava o filtro de devolução **cancelada** (`vd.cancelada = false`), que o DRE já tinha —
+   cancelar não apaga as linhas `DEVOLUCAO` do ledger, só marca `venda_devolucao.cancelada`.
+
+Decisão do dono do produto: *"valores fechados do mês não podem ser mudados; a devolução tem que
+entrar no mês da devolução."* O `Filtro` ganhou `clausulaPorDataDeMovimento()`, usada só por este
+KPI — os filtros de empresa e vendedor continuam valendo sobre a venda de origem, que é o que se
+quer.
+
+**Item 11 — quantidade não é dinheiro.** O KPI "Itens Vendidos" e o rodapé da grade usavam
+`formatarMoeda`, que força duas casas: o card mostrava **"1.234,00"** itens e o rodapé somava
+"12,00" embaixo de uma coluna que exibia "3", "5", "4". Agora usam `quantidade()`, que só mostra
+casas decimais quando a fração existe de verdade (tenant com `cfg_permite_qtd_decimal`), e a média
+por venda usa `media()`, com 2 casas mas sem cara de dinheiro.
+
+**Item 17.** O popup obrigatório de filtros fechava com `navigate('/')`, empilhando histórico —
+passou a `navigate(-1)`, que `RelatorioDre` e `FluxoCaixa` já usavam. Mesma correção em Comissões,
+Contas a Receber, Estoque e Movimentação de Produtos.

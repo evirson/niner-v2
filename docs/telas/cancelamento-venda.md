@@ -294,3 +294,23 @@ se em vez disso for a *devolução* que precisa ser desfeita, é a outra tela.
 
 Cancelamento de uma venda simples (busca → confirmação → efetivação) em menos de 30 segundos,
 com o operador sempre vendo o que será revertido antes de confirmar.
+
+---
+
+## Revisão 2026-08-22 — caixa fechado avisado ANTES (auditoria, itens 9 e 10)
+
+**Item 9.** A regra RN-02 exige caixa de hoje aberto, e o ADMIN só descobria isso **depois** de
+escrever 15+ caracteres de justificativa e apertar Cancelar. As outras três recusas (já cancelada,
+crediário recebido, prazo da SEFAZ) a tela já antecipava — esta ficava de fora.
+
+`VendaDetalheCancelamentoResponse` ganhou `caixaAbertoHoje`, e o modal mostra o aviso junto do de
+prazo da nota, escondendo o campo de motivo enquanto o caixa estiver fechado.
+
+⚠️ **O front não deduz esse valor:** a venda pode ser de outra empresa que não a da sessão, e o
+caixa é por empresa + usuário. Quem sabe é o servidor.
+
+**Item 10.** Erro de negócio do servidor ("caixa fechado", "prazo da SEFAZ passou") saía em banner
+inline (`erro-campo`), contra a convenção do projeto — e a mensagem multilinha **colapsava numa
+linha só**, escondendo a instrução do que fazer. Agora vai para `AvisoModal`, que ganhou
+`white-space: pre-line`. A validação **local** ("informe o motivo") continua inline junto ao campo,
+que é onde ela deve estar. O mesmo valeu para o `CancelamentoDevolucaoModal`.

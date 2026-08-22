@@ -207,3 +207,30 @@ parcial, cancelamento devolvendo estoque e saldo, isolamento entre tenants.
 A emissão fiscal não entra no teste de CRUD de propósito: sem configuração fiscal na empresa o
 assembler devolve vazio (F12) e a devolução acontece sem nota, que é o caminho testável sem
 certificado.
+
+---
+
+## Revisão 2026-08-22 — recusa emitir com CST de terceiro (auditoria, item 19)
+
+⚠️ **O que estava errado.** O assembler espelha `cst_icms`/`csosn` de `entrada_nfe_item` — a
+tributação que **o fornecedor** declarou — e o montador emite `ICMS00`/`ICMS20` com `pICMS` e
+`vICMS` destacados. Mas o `<emit>` leva o **CRT da nossa loja**, que por DF37 é 1, 2 ou 4. O motor
+tributário declara o invariante: *CRT 1/4 emite com CSOSN; só o CRT 2, com excesso de sublimite,
+pode usar CST* — e esta rotina não passa pelo motor, por desenho.
+
+Cenário: loja do Simples (CRT 1) compra de distribuidor do Lucro Real (CST 00, pICMS 18) e devolve.
+Saía NF-e com `<CRT>1</CRT>` e `<ICMS00>` destacando ICMS próprio. Na melhor hipótese a SEFAZ
+rejeita por incompatibilidade; na pior **autoriza**, e a loja destacou imposto que não apura,
+gerando crédito indevido ao fornecedor.
+
+**Como ficou.** `DevolucaoCompraFiscalAssembler.exigirTributacaoCompativelComOCrt` recusa montar
+quando `crt != 2` e algum item espelhado traz `cst_icms`, mandando consultar o contador.
+
+⚠️ **Recusar é o mínimo seguro, não a solução final.** A conversão para CSOSN (102, ou 500 quando a
+entrada veio com ST) levando o ICMS original para `infAdic` é **regra tributária** e depende do
+contador chancelar — decisão do dono do produto em 2026-08-22. Enquanto isso, parar é melhor que
+emitir documento fiscal errado, e é o padrão que o montador já usa para CSOSN 202/900.
+
+⚠️ **Este caminho fiscal continua SEM TESTE** (a suíte roda com `emite_nfe = false`) e **nunca foi
+transmitido de verdade** — a homologação na SEFAZ/PR está pendente. O item 21 (FIFO recomeçando no
+primeiro `nItem` a cada devolução) segue aberto pelo mesmo motivo: só se prova transmitindo.

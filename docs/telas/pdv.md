@@ -603,3 +603,18 @@ vai fechar a venda.
 ⚠️ O selo é **irmão** de `.titulo-tela`, não filho: a barra é `justify-content: space-between`, e
 centralizar exige ocupar o espaço entre o título e as ações (`flex: 1` + `text-align: center`).
 Dentro do bloco do título ele apenas ficaria colado no `h1`, à esquerda.
+
+---
+
+## Revisão 2026-08-22 — orçamento só vira venda na empresa que o fez (auditoria, item 3)
+
+`abrirParaVenda` devolvia o `idEmpresa` do orçamento e ninguém comparava com o claim `eid` da
+sessão. Não era vazamento de tenant (P8 nunca esteve em risco — as duas empresas são do mesmo
+tenant, e o RLS não separa empresas), mas o documento impresso dizia "empresa A", a venda caía na B,
+e **o estoque baixava numa empresa diferente da que a grid do orçamento mostrou**.
+
+Decisão do dono do produto: *"orçamento feito numa empresa só pode ser consumido por esta empresa."*
+`OrcamentoService.abrirParaVenda` recusa com 409, dizendo o nome da empresa correta.
+
+⚠️ A checagem ficou no **serviço do orçamento**, não no PDV, para valer para qualquer chamador
+futuro — o PDV é só o primeiro.

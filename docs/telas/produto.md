@@ -386,3 +386,32 @@ Nenhuma bloqueante.
 ## Métrica de sucesso
 
 Cadastro de um produto completo (com categorias e NCM) em menos de 1 minuto.
+
+---
+
+## Revisão 2026-08-22 — cadastro rápido virou atômico (auditoria, itens 28 e 24)
+
+**Item 28.** O cadastro rápido (PDV, Entrada de Produtos) fazia **dois POSTs** sem transação:
+`POST /produtos` e depois `POST /produtos/{id}/variacoes`. Falhando o segundo — o caso real é EAN
+repetido vindo de planilha ou XML de terceiro, que `produto_barra` recusa —, sobrava um produto
+**sem variação**: sem SKU, sem código de barras, invisível no PDV e na busca. E a tela dizia "Não
+foi possível criar o produto", então clicar de novo criava um **segundo** produto órfão.
+
+Novo `POST /api/v1/produtos/com-variacao`, transação única, devolvendo a **variação** (que já
+carrega descrição, marca, referência e preço — é com ela que o chamador segue).
+
+⚠️ **Endpoint separado de propósito**, não um campo opcional no `POST /produtos`: o formulário
+completo de Produto e todos os importadores mandam `ProdutoRequest` como **corpo raiz**, e aninhá-lo
+num envelope quebraria todos de uma vez para resolver um problema que é só do cadastro rápido.
+
+**Item 24 — campos configuráveis sem revalidação no servidor.** `exigirSeObrigatorio` só tinha
+versão para `String`, então todo campo configurável que é **número ou data** ficava sem checagem no
+servidor, por construção — apesar de o `CLAUDE.md` afirmar que a bandeira é aplicada "de novo no
+servidor". `exigirSeObrigatorioValor` cobre agora `pesoBruto`, `pesoLiquido`, `precoOferta`,
+`dataInicioOferta` e `dataFinalOferta` (e `limiteCredito` em Cliente, `percComissao` em
+Funcionário).
+
+⚠️ **Ausente é `null`; zero é valor legítimo** — decisão do dono do produto: *"se não informados,
+marcar como zero."* Quem quer o campo **fora do cadastro** usa `cfg_tela_campo.visivel = false`, que
+é a dimensão certa para isso — a tabela tem as duas, com CHECK garantindo que obrigatório implica
+visível.

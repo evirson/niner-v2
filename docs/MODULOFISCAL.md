@@ -1893,3 +1893,79 @@ Resumo operacional do que a montagem do XML vai buscar onde. `(novo)` = coluna q
 > **Nota sobre as fontes:** as ⚠️ deste documento são reais. Um módulo fiscal construído sobre blog
 > técnico funciona até a primeira rejeição em massa. A F0 existe para trocar cada ⚠️ por uma
 > referência de PDF oficial com página — e o resultado dessa leitura volta para cá, virando v2.1.
+
+---
+
+## Revisão 2026-08-22 — quatro correções da auditoria no módulo fiscal
+
+### Item 5 — nota presa em `TRANSMITINDO` sumia da fila do dreno
+
+⚠️ **O pior defeito dos quatro.** `FiscalContingenciaDrenoJob.transmitir()` marca a nota como
+`TRANSMITINDO` **antes** de enviar, mas as duas consultas que alimentam o dreno filtravam
+`situacao IN ('CONTINGENCIA','ASSINADO')`. Uma vez em `TRANSMITINDO`, a nota **nunca mais** era
+encontrada pelo job — apesar de o comentário do `catch` prometer *"volta na próxima"*.
+
+Cenário: SEFAZ cai, 12 NFC-e saem em contingência com cupom na mão dos consumidores (prazo legal de
+**24 h**). O dreno começa a transmitir, a rede oscila na 3ª nota: as 1-2 autorizam, as 4-12 voltam
+na rodada seguinte, e **a 3 fica órfã** até o prazo expirar. O painel a mostrava como pendente para
+sempre, e nada alertava.
+
+**Como ficou.** `TRANSMITINDO` entrou na fila, com **10 minutos de carência**
+(`DocumentoFiscalRepositorio.MINUTOS_CARENCIA_TRANSMITINDO`) — sem a espera, o dreno atropelaria uma
+transmissão em curso; 10 min é folgado para qualquer timeout de SEFAZ e curto perto das 24 h.
+
+⚠️ **A retomada NUNCA reenvia cega (F5).** `sincronizarAntesDeRetransmitir` consulta a chave
+(`NFeConsultaProtocolo4`) e aplica sozinho só o desfecho inequívoco:
+
+| Resposta | O que faz |
+|---|---|
+| autorizada | grava e arquiva — não há o que transmitir |
+| `cStat 217` ("não consta") | nunca chegou lá; libera a retransmissão |
+| qualquer outra | registra o que a SEFAZ disse (F9) e **não decide** (F11) — fica para o ADMIN pelo reprocessamento |
+
+Um job automático adivinhando desfecho de documento fiscal é pior que um job que para.
+
+### Item 20 — cStat 573 no cancelamento: a SEFAZ cancelava e o ERP não revertia
+
+573 ("Duplicidade de Evento") **não é recusa**: significa que o evento já está registrado, quase
+sempre de uma tentativa anterior cuja resposta se perdeu. Como o evento de cancelamento é
+determinístico (mesmo `Id`, `nSeqEvento` 1), **toda** retentativa devolvia 573 — e o operador ficava
+num beco: NFC-e cancelada na SEFAZ, venda viva no ERP, sem caminho para reconciliar.
+
+Agora `CancelamentoNfceService.notaJaEstaCanceladaNaSefaz` consulta a chave antes de decidir. Só o
+"sim" é aproveitado: qualquer outra resposta — inclusive falha de comunicação — mantém a recusa sem
+reverter, o mesmo lado seguro do erro que o `catch` da transmissão escolhe.
+
+⚠️ **Aceita apenas os cStat de topo 101 (cancelamento homologado) e 151 (homologado fora de prazo)**
+— o par do 135/155 que a transmissão do evento aceita. `<retEvento>` aninhado **não** é
+interpretado: seria adivinhar estrutura de XML fiscal sem transmitir, e neste projeto isso já custou
+caro (cStat 1010 e 975 passaram no XSD e foram recusados pela SEFAZ). Se numa UF o cancelamento vier
+só no evento aninhado, o caminho continua sendo o "Consultar SEFAZ" da tela.
+
+### Item 12 — inutilização de numeração passou a confirmar por DIGITAÇÃO
+
+É a ação mais irreversível do sistema — queima uma faixa perante o fisco, sem desfazer — e era a
+**única sem nenhuma confirmação**: um clique e pronto.
+
+Decisão do dono do produto: confirmação **com digitação da faixa**, não "Sim/Não". Pedir para
+digitar não é burocracia — força a pessoa a **olhar os números que está queimando**, que é
+exatamente o erro que um "Tem certeza?" não previne.
+
+### Item 16 — justificativa sem maiúsculas
+
+`FiscalContingenciaPainel` e `InutilizacaoNumeracao` não aplicavam `maiusculas()` na justificativa,
+contra a convenção do projeto. ⚠️ A da **inutilização vai no XML da SEFAZ**.
+
+### Item 25 — ⏸️ o alarme de nota parada continua sem existir
+
+O painel de Conformidade pode exibir *"✓ pronto para emitir"* com notas paradas há dias, e para
+achar uma o operador precisa **já suspeitar que ela existe**. Adiado em 2026-08-22: o dono do
+produto quer repensar a forma de avisar — a ideia dele é um **sino no canto superior da tela** com o
+número de avisos, que aparece sem ninguém ir procurar.
+
+⚠️ **Perdeu urgência, não deixou de existir:** com o item 5 corrigido, o dreno recupera a nota presa
+sozinho. O alarme virou segunda camada — para o caso em que a consulta devolve algo que o job
+deliberadamente não decide e para.
+
+Três decisões em aberto para quando for retomado: (a) nota **rejeitada** entra no mesmo sino? (b)
+conta só a empresa da sessão ou todas as do usuário? (c) OPERADOR vê, ou só quem pode reprocessar?

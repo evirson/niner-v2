@@ -238,3 +238,19 @@ Nenhuma bloqueante.
 ## Métrica de sucesso
 
 Localizar e dar baixa numa conta a pagar em menos de 30 segundos.
+
+---
+
+## Revisão 2026-08-22 — aviso de busca truncada (auditoria, item 33)
+
+A busca de fornecedor (form e lista) cortava em **10** resultados no servidor e a tela **não dizia
+nada**. Quem tinha mais cadastros parecidos que o limite não via o seu e concluía "não está
+cadastrado" — e o cadastro rápido ao lado não verifica CNPJ duplicado, então o duplicado entrava sem
+resistência, partindo as contas a pagar do mesmo fornecedor entre dois cadastros.
+
+O limite subiu para **20** (`EtiquetaEmissaoService.LIMITE_BUSCA`, compartilhado por seis telas) e a
+tela avisa *"Mostrando os primeiros 20 — refine a busca para ver mais."* quando o corte acontece.
+
+⚠️ O número está em **duas constantes que precisam bater**: `LIMITE_BUSCA` no serviço e
+`LIMITE_BUSCA_EMISSAO` em `web/src/lib/etiquetaEmissao.ts`. Mudar uma sem a outra faz o aviso
+aparecer na hora errada — ou nunca.

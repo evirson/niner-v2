@@ -292,3 +292,25 @@ dígitos saíram do SVG para HTML, agrupados **1+6+6** como manda o padrão EAN-
 ⚠️ `shape-rendering="crispEdges"` foi tentado e **revertido no mesmo dia**: ele arredonda cada borda
 para a grade de pixels e engrossou as barras a ponto de não lerem. Ver
 `docs/telas/configuracao-etiqueta.md`.
+
+---
+
+## Revisão 2026-08-22 — a busca deixou de truncar em silêncio (auditoria, item 33)
+
+`EtiquetaEmissaoService.buscarProdutos` e `buscarFornecedores` cortavam em **10** — o menor limite do
+produto — e nenhuma tela dizia nada.
+
+⚠️ **Essas duas buscas alimentam mais telas do que o nome do serviço sugere:** Entrada de Produtos
+(form e lista), **Devolução ao Fornecedor**, **Contas a Pagar** (form e lista) e a Emissão de
+Etiqueta. Uma distribuidora com 15 cadastros começando por "DISTRIBUIDORA" recebia 10, não achava o
+seu, e concluía "não está cadastrado" — com o botão **＋ Novo fornecedor** ao lado, cujo cadastro
+rápido deixa de fora, por decisão documentada, a verificação de CNPJ duplicado. Daí em diante as
+entradas de nota e as contas a pagar do mesmo fornecedor ficavam divididas entre dois cadastros.
+
+O limite subiu para **20** (o mesmo dos seletores do PDV) e as **seis** telas passaram a avisar
+*"Mostrando os primeiros 20 — refine a busca para ver mais."* quando o corte acontece.
+
+⚠️ **O número vive em duas constantes que precisam bater:** `LIMITE_BUSCA` em
+`EtiquetaEmissaoService` e `LIMITE_BUSCA_EMISSAO` em `web/src/lib/etiquetaEmissao.ts`. Mudar uma sem
+a outra faz o aviso aparecer na hora errada — ou nunca. **O aviso é o que resolve; o número só
+reduz a frequência.**

@@ -164,3 +164,74 @@ NULL ⇒ "em breve".
 
 Nenhum lojista descobre o limite pela venda recusada: 100% dos bloqueios precedidos de pelo menos
 um acesso à tela com aviso de 80%/100% registrado.
+
+---
+
+## Revisão 2026-08-22 — cobrança: idempotência e rede fora da transação (auditoria)
+
+### Item 7 — o lock era solto antes do processamento
+
+O javadoc de `CobrancaWebhookProcessador` promete que a separação em dois beans impede que "dois
+workers peguem o mesmo evento" — mas a transação de `pegarLote` **commita ao retornar**, soltando os
+locks do `FOR UPDATE SKIP LOCKED`; `processar` roda depois em `REQUIRES_NEW`, sem lock.
+
+Todo o `aplicar()` é idempotente por construção — **exceto o `UPDATE` da assinatura**, que empurrava
+`proxima_cobranca` mais um ciclo **a cada reaplicação**: uma notificação duplicada dava um mês (ou um
+ano, no plano anual) de graça, em silêncio.
+
+**Como ficou.** O `UPDATE` da fatura (`AND status <> 'PAGA'`) virou a **trava de idempotência**: ele
+casa exatamente uma vez por fatura, e só então a assinatura é promovida. A trava é a fatura, não uma
+comparação de datas em `proxima_cobranca` — o valor novo depende do ciclo, e comparar data acerta
+por acaso. Vale porque este é o **único** ponto do sistema que marca fatura como PAGA (conferido).
+
+⚠️ **Reachability honesta:** com uma instância de API e `@Scheduled`, isso não acontecia hoje. Vira
+real no dia em que existirem duas instâncias — cenário que o `CLAUDE.md` prevê.
+
+### Item 23 — chamada ao Mercado Pago dentro da transação
+
+`CobrancaService.iniciarPagamento` chamava `gateway.criarPix(...)` **dentro** da sua
+`@Transactional`, violando o F2 que o módulo fiscal inteiro respeita. Se a transação desse rollback
+**depois** de o PIX ser criado, ele existiria no gateway apontando para uma fatura inexistente: o
+cliente pagaria, o webhook não acharia nada, e sobraria um `log.warn`. **Dinheiro recebido,
+assinatura não promovida.**
+
+**Como ficou.** `iniciarPagamento` deixou de ser transacional e passou a **orquestrar**: transação →
+rede → transação. As duas metades vivem no bean novo `CobrancaFaturaTransacional`.
+
+⚠️ **Bean separado é obrigatório, não estilo:** método `@Transactional` chamado de dentro do próprio
+bean não passa pelo proxy do Spring e rodaria **sem transação nenhuma** — o `INSERT` da fatura em
+autocommit, e a divisão não teria servido para nada. Mesmo padrão de `CobrancaWebhookJob` ×
+`CobrancaWebhookProcessador`.
+
+Com a divisão, a fatura já está **commitada** quando o PIX é criado. Se a segunda metade falhar, o
+pior caso é uma fatura ABERTA sem código gravado — e o webhook ainda acha a fatura pela referência
+`fatura-<id>`. Estritamente melhor que antes.
+
+### Item 27 — ⏸️ estorno e chargeback NÃO revogam a assinatura
+
+⚠️ **Dívida conhecida e aceita** (2026-08-22), com pedido explícito do dono do produto: *"documente e
+avise sempre que formos revisar o ERP à procura de falhas."*
+
+`refunded`/`charged_back` viram `ESTORNADO`, e o `if (situacao != CONFIRMADO) return;` — escrito
+para FALHOU/PENDENTE, casos em que a fatura **nunca** foi paga — engole também esse. Só que no
+estorno a fatura **está** paga. Fica:
+
+| Registro | Como fica |
+|---|---|
+| `pagamento.status` | ESTORNADO ✔ (única coisa que muda) |
+| `fatura.status` | **PAGA** ✗ |
+| `assinatura.status` | **ATIVA** ✗ |
+| `assinatura.proxima_cobranca` | **empurrada um ciclo à frente** ✗ |
+
+Custo: lojista paga o plano **anual** por PIX, obtém o estorno semanas depois, e nenhuma fatura nova
+é gerada por **doze meses** — com o backoffice mostrando tudo em dia.
+
+⚠️ **O que reduz a urgência (medido, não suposto):** **nenhum status corta acesso hoje.** O login
+(`SignupService.login`) confere slug, e-mail, senha, `usuario.ativo` e horário de acesso — **não**
+olha `tenant.status` nem `assinatura.status`, e não há um único uso de `SUSPENSA`/`INADIMPLENTE` em
+`api/src/main`. Os status são **rótulo no backoffice, não fechadura**. O prejuízo é financeiro
+(cobrança que deixa de ser gerada), não de acesso indevido.
+
+⚠️ **Quando for corrigir, são TRÊS passos:** (1) reabrir a fatura; (2) **recuar `proxima_cobranca`**
+para o valor anterior — é este que se esquece, e é o que mais custa; (3) decidir o estado da
+assinatura, que é **política comercial da Vetor**, não decisão técnica.

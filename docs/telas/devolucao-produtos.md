@@ -584,3 +584,40 @@ implementado**: devolução de venda com NFC-e autorizada emite uma **NF-e model
 Devolução de um produto simples (leitura → gravar → vale impresso) em menos de 20 segundos; o
 vale gerado pode ser resgatado numa venda futura sem nenhuma etapa manual além de digitar o
 número.
+
+---
+
+## Revisão 2026-08-22 — o vale deixou de sair pela MÉDIA (auditoria, item 2)
+
+⚠️ **O que estava errado.** A grid agrupava os itens por `id_variacao` e derivava o preço unitário
+como **média ponderada** (`valor_total_vendido / qtd_vendida`). O comentário do código chamava isso
+de "raro, mas possível" — e o Orçamento (2026-08-20) tornou o caso **normal**: o mesmo produto pode
+aparecer duas vezes na mesma venda, com o preço congelado que a loja honrou e com o preço do dia
+das unidades levadas na hora.
+
+Devolver **uma** peça de uma venda 1×R$ 50 + 1×R$ 120 gerava vale de **R$ 85,00** — valor que a
+venda nunca praticou. Se o cliente devolveu a peça mais cara, ele perdeu R$ 35; se devolveu a mais
+barata, a loja pagou R$ 35 a mais. E o mesmo R$ 85 ia para a **NF-e 55 de devolução**, declarando um
+unitário que não bate com nenhum item da NFC-e original.
+
+**Como ficou.** `buscarItensDisponiveisParaDevolucao` agrupa por **(variação, preço)**: cada preço
+distinto vira uma linha da grid. No caso comum — um preço só — a tela sai idêntica à de antes.
+
+- **Na grid de seleção**, quando a mesma variação tem mais de um preço, cada linha ganha o aviso
+  *"⚠️ Este produto foi vendido por mais de um preço nesta venda — esta linha é a de R$ 120,00"*.
+  Sem ele as linhas teriam descrição idêntica e o operador escolheria no escuro.
+- **No contrato**, `ItemDevolucaoRequest.precoUnitario` é **opcional**: devolução sem venda de
+  origem não tem linha para apontar, e integrações existentes continuam válidas. Quando vem, o
+  servidor **confere que a venda teve mesmo aquela linha** — sem isso, quem chamasse a API
+  escolheria o valor do próprio vale.
+- **O saldo é por linha**: devolver a peça de R$ 50 não consome o disponível da de R$ 120.
+- **A chave da grade** virou `idVariacao|preço` (`chaveLinha`), no front e no back. Mesma lição do
+  `ItemLedger.idLinha` do PDV: o SKU deixou de servir como chave quando duas linhas do mesmo
+  produto passaram a existir.
+
+⚠️ **Devolução feita ANTES desta mudança** gravou o preço médio, e abate uma "linha do preço médio"
+que não existe mais na venda. O efeito é o saldo ficar mais **generoso**, nunca mais restrito — o
+lado seguro (nunca recusa devolução legítima). Só ocorre em venda com dois preços parcialmente
+devolvida antes de 2026-08-22.
+
+Regressão: `DevolucaoProdutoCrudTest.devolucaoDeVariacaoComDoisPrecosNaMesmaVendaUsaOPrecoDaLinhaEscolhida`.

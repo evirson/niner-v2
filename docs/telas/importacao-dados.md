@@ -673,3 +673,27 @@ Nenhuma bloqueante.
 Um lojista com 500 clientes, 50 fornecedores, 300 produtos (com grade), o estoque inicial de cada
 variação e 200 parcelas de crediário em aberto migra tudo em menos de 30 minutos, sem precisar de
 suporte técnico da Vetor.
+
+---
+
+## Revisão 2026-08-22 — a venda sintética passou a se identificar (auditoria, item 22)
+
+O importador de **Contas a Receber** cria uma venda sintética para pendurar as parcelas migradas
+(`contas_receber.id_venda` é obrigatório): uma casca sem item, sem movimento de estoque e sem custo.
+Ela agora nasce com `origem = 'IMPORTACAO'` e `importado_em = now()` (V059).
+
+**Por que era preciso.** O DRE em regime **caixa** parte de `contas_receber` e busca o custo por
+fora, com `LEFT JOIN` no ledger — que para essa venda não acha nada, e o `COALESCE` zera o CMV. Uma
+migração com R$ 45.000 de parcelas já recebidas em janeiro fazia o DRE daquele mês mostrar **receita
+integral com CMV R$ 0,00**, margem de 100%. E era incoerente com o próprio aviso que este importador
+já exibia — *"nenhum lançamento de caixa é criado para parcelas já pagas"* —, porque o dinheiro não
+entrava no Fluxo de Caixa mas entrava no DRE.
+
+⚠️ **A marca não muda nada na importação em si.** Ela existe para o DRE distinguir, e o corte lá é
+por **instante**: parcela que já veio paga sai do DRE caixa; parcela que estava em aberto e o
+cliente pagar depois, pelo Recebimento de Crediário, continua sendo receita. Detalhe em
+`docs/telas/relatorio-dre.md`.
+
+⚠️ **Sem backfill.** As vendas sintéticas de importações anteriores a esta migration ficam marcadas
+como `PDV` — aceito porque, em 2026-08-22, todo o dado importado é carga de teste (o sistema está em
+homologação). A V059 registra o `UPDATE` corretivo, caso algum dia exista importação real anterior.

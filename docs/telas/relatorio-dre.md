@@ -299,3 +299,33 @@ fechamento do mês, e o regime de caixa ser consultado quando falta dinheiro ape
    passou a copiar o plano padrão completo (76 contas) do modelo global `cfg_plano_contas_padrao`
    (V016), então um tenant novo já tem contas de despesa e a DRE nasce completa. Ver
    `docs/telas/plano-contas.md`.
+
+---
+
+## Revisão 2026-08-22 — parcela migrada não é receita do Nainer (auditoria, item 22)
+
+⚠️ **O que estava errado, no regime CAIXA.** O importador de Contas a Receber cria uma **venda
+sintética** para pendurar as parcelas migradas (`contas_receber.id_venda` é obrigatório): uma casca
+sem item, sem movimento de estoque e sem custo. O DRE caixa parte de `contas_receber` e busca o
+custo por fora, com `LEFT JOIN` no ledger — que para essa venda não acha nada, e o `COALESCE` zera
+o CMV.
+
+Resultado: migração em março trazendo 300 parcelas recebidas em janeiro (R$ 45.000) fazia o DRE de
+janeiro em regime caixa mostrar **R$ 45.000 de receita com CMV R$ 0,00** — margem de 100%, lucro que
+nunca existiu no Nainer (a mercadoria foi comprada e vendida no sistema anterior).
+
+E era **incoerente com o Fluxo de Caixa**: o próprio importador avisa que "nenhum lançamento de
+caixa é criado para parcelas já pagas", então o dinheiro **não** entrava lá mas **entrava** aqui —
+dois relatórios financeiros, o mesmo fato, respostas opostas.
+
+**Como ficou (V059).** `venda` ganhou `origem` (`PDV`/`IMPORTACAO`) e `importado_em`, com CHECK
+amarrando os dois. O DRE caixa exclui as parcelas com `data_recebimento` **anterior ao instante da
+importação**.
+
+⚠️ **O corte é por instante, não pela origem inteira** — decisão do dono do produto: parcela legada
+que estava **em aberto** na migração e o cliente vier pagar depois, pelo Recebimento de Crediário,
+**continua sendo receita**. Esse dinheiro entrou no caixa da loja de verdade; o CMV zerado ali é
+honesto, porque o custo é de antes e não existe neste sistema.
+
+O regime de **competência** nunca sofreu disso: ele faz `JOIN` (INNER) com o ledger, então a venda
+sem movimento simplesmente não aparece.
