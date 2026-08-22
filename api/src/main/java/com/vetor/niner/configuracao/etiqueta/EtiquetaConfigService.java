@@ -48,6 +48,17 @@ import static org.springframework.http.HttpStatus.NOT_FOUND;
 @Service
 public class EtiquetaConfigService {
 
+    /**
+     * Teto da busca por digitação — 20, o mesmo dos seletores do PDV e de
+     * {@code EtiquetaEmissaoService.LIMITE_BUSCA}.
+     *
+     * ⚠️ Era 10 e a tela não avisava do corte (auditoria 2026-08-21 item 33, estendido em
+     * 2026-08-22 para as duas telas que a auditoria não tinha listado). Quem tinha mais produtos
+     * parecidos que o limite não via o seu e concluía "não está cadastrado" — quando estava. O
+     * aviso na tela é o que resolve; o número só reduz a frequência.
+     */
+    private static final int LIMITE_BUSCA = 20;
+
     private static final int TAMANHO_PAGINA_PADRAO = 20;
     private static final int TAMANHO_PAGINA_MAXIMO = 100;
 
@@ -190,7 +201,7 @@ public class EtiquetaConfigService {
                 WHERE p.id_tenant = plataforma.tenant_atual() AND p.ativo
                 """
                 + filtroBusca
-                + " ORDER BY p.descricao LIMIT 10";
+                + " ORDER BY p.descricao LIMIT " + LIMITE_BUSCA + "";
 
         var query = jdbc.sql(sql);
         if (!filtroBusca.isEmpty()) {

@@ -3,6 +3,8 @@ import { useState } from 'react'
 import { buscarProdutosExemplo, type ProdutoExemplo } from '../../lib/etiquetaConfig'
 import { formatarMoeda } from '../../lib/masks'
 
+const LIMITE_BUSCA = 20 // igual ao do servidor — ver o javadoc de LIMITE_BUSCA no service
+
 function rotuloVariacao(p: ProdutoExemplo): string | null {
   if (!p.variacaoCor && !p.variacaoTamanho) return null
   return [p.variacaoCor, p.variacaoTamanho].filter(Boolean).join(' · ')
@@ -105,6 +107,13 @@ export default function ProdutoExemploModal({
             </tbody>
           </table>
         </div>
+        {/* A busca corta no servidor e a tela não dizia nada (auditoria 2026-08-21 item 33,
+            estendido em 2026-08-22 às telas que a auditoria não tinha listado). */}
+        {resultados && resultados.length === LIMITE_BUSCA && (
+          <p className="muted" style={{ marginTop: 6 }}>
+            Mostrando os primeiros {LIMITE_BUSCA} — refine a busca para ver mais.
+          </p>
+        )}
 
         <div className="ajuda-rodape">
           <button type="button" className="btn ghost" onClick={aoFechar}>

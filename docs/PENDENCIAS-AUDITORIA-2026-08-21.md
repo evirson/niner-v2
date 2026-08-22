@@ -29,6 +29,12 @@
 > - **Item 4** — cabeçalho **só na primeira página**.
 > - **Item 12** — confirmação **por digitação da faixa**.
 >
+> ⛔ **A revisão da documentação achou dois irmãos do item 33 que a auditoria NÃO tinha listado:**
+> `EtiquetaConfigService.buscarProdutos` (editor de etiqueta) e
+> `RelatorioMovimentacaoProdutosService.buscarVariacoes` (Kardex) tinham o mesmo `LIMIT 10` mudo.
+> Corrigidos junto. **Lição: corrigir "as N telas que a auditoria listou" não é o mesmo que
+> corrigir o defeito** — vale um `grep` do padrão (aqui, `LIMIT 10`) atrás dos irmãos.
+>
 > ⚠️ **Só se confirma imprimindo:** o item 4 (paginação A4) foi entregue mas **não foi testado no
 > papel** — nem a impressão do orçamento, que nunca foi testada desde que nasceu em 2026-08-20.
 

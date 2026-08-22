@@ -32,6 +32,17 @@ import java.util.Set;
 @Service
 public class RelatorioMovimentacaoProdutosService {
 
+    /**
+     * Teto da busca por digitação — 20, o mesmo dos seletores do PDV e de
+     * {@code EtiquetaEmissaoService.LIMITE_BUSCA}.
+     *
+     * ⚠️ Era 10 e a tela não avisava do corte (auditoria 2026-08-21 item 33, estendido em
+     * 2026-08-22 para as duas telas que a auditoria não tinha listado). Quem tinha mais produtos
+     * parecidos que o limite não via o seu e concluía "não está cadastrado" — quando estava. O
+     * aviso na tela é o que resolve; o número só reduz a frequência.
+     */
+    private static final int LIMITE_BUSCA = 20;
+
     private static final int PERIODO_MAXIMO_DIAS = 400;
 
     /** RESERVA/LIBERACAO_RESERVA não tiram/põem produto físico do estoque (são reserva de
@@ -92,7 +103,7 @@ public class RelatorioMovimentacaoProdutosService {
                 WHERE pb.id_tenant = plataforma.tenant_atual()
                 """
                 + filtroBusca
-                + " ORDER BY p.descricao LIMIT 10";
+                + " ORDER BY p.descricao LIMIT " + LIMITE_BUSCA + "";
 
         var query = jdbc.sql(sql);
         if (!filtroBusca.isEmpty()) {

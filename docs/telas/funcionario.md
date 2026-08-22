@@ -204,3 +204,14 @@ Nenhuma bloqueante.
 
 Tempo de cadastro de um funcionário novo (só nome) em menos de 10 segundos — ainda mais
 rápido que o cliente, por ter menos campos obrigatórios por natureza.
+
+---
+
+## Revisão 2026-08-22 — `percComissao` obrigatório agora vale no servidor (auditoria, item 24)
+
+Mesmo defeito descrito em `docs/telas/cliente.md`: `exigirSeObrigatorio` só existia para `String`, e
+`percComissao` — sendo `BigDecimal` — ficava sem revalidação no servidor mesmo quando marcado como
+obrigatório em `cfg_tela_campo`. Coberto por `exigirSeObrigatorioValor`.
+
+⚠️ Ausente é `null`; **zero é valor legítimo** (funcionário sem comissão). E o que tira o campo do
+cadastro é `visivel`, não `obrigatorio` — ver a nota em `cliente.md`.

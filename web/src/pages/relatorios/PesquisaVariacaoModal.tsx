@@ -2,6 +2,8 @@ import { useQuery } from '@tanstack/react-query'
 import { useState } from 'react'
 import { buscarVariacoesMovimentacao, type VariacaoEncontrada } from '../../lib/relatorioMovimentacaoProdutos'
 
+const LIMITE_BUSCA = 20 // igual ao do servidor — ver o javadoc de LIMITE_BUSCA no service
+
 function rotuloVariacao(v: VariacaoEncontrada): string | null {
   if (!v.variacaoCor && !v.variacaoTamanho) return null
   return [v.variacaoCor, v.variacaoTamanho].filter(Boolean).join(' · ')
@@ -101,6 +103,13 @@ export default function PesquisaVariacaoModal({
             </tbody>
           </table>
         </div>
+        {/* A busca corta no servidor e a tela não dizia nada (auditoria 2026-08-21 item 33,
+            estendido em 2026-08-22 às telas que a auditoria não tinha listado). */}
+        {resultados && resultados.length === LIMITE_BUSCA && (
+          <p className="muted" style={{ marginTop: 6 }}>
+            Mostrando os primeiros {LIMITE_BUSCA} — refine a busca para ver mais.
+          </p>
+        )}
 
         <div className="ajuda-rodape">
           <button type="button" className="btn ghost" onClick={aoFechar}>

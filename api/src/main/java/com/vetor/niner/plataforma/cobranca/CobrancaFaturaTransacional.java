@@ -36,7 +36,7 @@ import static org.springframework.http.HttpStatus.NOT_FOUND;
  *
  * <h2>Por que em outro bean, e não dois métodos aqui do lado</h2>
  *
- * <p>Método {@code @Transactional} chamado de dentro do próprio bein ({@code this.preparar()}) não
+ * <p>Método {@code @Transactional} chamado de dentro do próprio bean ({@code this.preparar()}) não
  * passa pelo proxy do Spring e roda <b>sem transação nenhuma</b> — o mesmo defeito documentado em
  * {@code CobrancaWebhookJob} × {@code CobrancaWebhookProcessador}, e que aqui seria pior: o
  * {@code INSERT} da fatura rodaria em autocommit e a divisão não teria servido para nada. Bean

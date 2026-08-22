@@ -601,6 +601,17 @@ de avisar — a ideia é um **sino** no topo da tela), 26+30 (política de staff
 de produto, não dívida técnica) e 27 (estorno não revoga assinatura: **aceito, com pedido explícito
 de ser lembrado em toda revisão do ERP**).
 
+⛔ **A segunda passada da documentação (pedida pelo dono do produto) achou uma lacuna de CÓDIGO,
+não de doc:** `EtiquetaConfigService.buscarProdutos` (editor de etiqueta) e
+`RelatorioMovimentacaoProdutosService.buscarVariacoes` (Kardex) tinham exatamente o defeito do
+item 33 — `LIMIT 10` sem avisar —, mas a auditoria não os havia listado. Corrigidos junto (limite
+20 + aviso). **Corrigir as telas listadas não é o mesmo que corrigir o defeito:** o que os achou
+foi procurar quais specs de tela ainda não citavam a data de hoje, e depois o `grep` do padrão.
+Junto vieram 5 specs sem a seção do dia (`cliente`, `funcionario`, `transferencia-estoque`,
+`fiscal-conformidade`, `configuracao-etiqueta`), a ajuda das telas que usam a busca de
+fornecedor, e dois docstrings meus escritos horas antes (um typo e uma pergunta retórica no meio
+de um comentário).
+
 **913 testes verdes** (912 + o de regressão do item 2), `tsc -b` limpo. ⚠️ `npm run build` não roda
 neste ambiente — o `node_modules` só tem o binding nativo `linux-x64-musl` do rolldown e a máquina é
 Windows; é instalação, não código (o `CLAUDE.md` já registra que falha depois do type-check é do

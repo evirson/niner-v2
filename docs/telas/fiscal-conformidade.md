@@ -264,3 +264,27 @@ Se a tela ficar lenta com 10.000 produtos, o passo seguinte é um índice parcia
 
 Um lojista com 10.000 produtos importados consegue, numa tarde, sair de "N pendências bloqueiam" para
 "Pronto para emitir" — e a primeira NFC-e do dia seguinte é autorizada de primeira.
+
+---
+
+## Revisão 2026-08-22 — o painel ainda não alarma nota parada (auditoria, item 25)
+
+⏸️ **Adiado por decisão do dono do produto:** *"por enquanto vamos esquecer este assunto, vou pensar
+melhor como informar ao usuário, e depois vemos isso."*
+
+**O que continua valendo hoje:** este painel pode exibir *"✓ pronto para emitir"* com notas paradas
+há dias em `TRANSMITINDO`/`ASSINADO`/`CONTINGENCIA`. Para achar uma, o operador precisa **já
+suspeitar que ela existe** — abrir a lista de Documentos Fiscais, escolher a empresa, acertar o
+período e filtrar a situação. `CategoriaConformidade` cobre só
+`EMPRESA`/`PRODUTOS`/`PAGAMENTOS`/`CLIENTES`.
+
+A ideia do dono do produto é um **sino no canto superior da tela** com o número de avisos — melhor
+que um contador aqui dentro, porque aparece **sem ninguém ir procurar**.
+
+⚠️ **Perdeu urgência, não deixou de existir.** Com a pendência 5 corrigida no mesmo dia, o dreno de
+contingência **recupera sozinho** a nota presa em `TRANSMITINDO` (consultando a chave antes de
+reenviar, F5). O alarme virou segunda camada — para o caso em que a consulta devolve algo que o job
+deliberadamente **não decide** e para.
+
+Três decisões em aberto para quando for retomado: (a) nota **rejeitada** entra no mesmo aviso? (b)
+conta só a empresa da sessão ou todas as do usuário? (c) OPERADOR vê, ou só quem pode reprocessar?

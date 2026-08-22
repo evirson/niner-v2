@@ -214,8 +214,12 @@ export default function ProdutoQuickCreateModal({
    *
    * <p>O caminho **com variação** deixou de precisar disso em 2026-08-22: passou a usar
    * `criarProdutoComVariacao`, um endpoint atômico — falhando a variação, o produto é desfeito
-   * junto e não sobra órfão. O `ref` continua sendo preenchido nesse caminho? Não: a chamada é uma
-   * só, e um produto "meio criado" não existe mais.
+   * junto e não sobra órfão. Nesse caminho o `ref` NÃO é preenchido: a chamada é uma só, e um
+   * produto "meio criado" deixou de existir.
+   *
+   * <p>⚠️ O `ref` ainda é LIDO no caminho com variação, para o caso de o operador ter começado
+   * pelo caminho sem variação (produto com grade criado, variação escolhida depois) e voltado: ali
+   * o produto já existe e não pode ser duplicado — a retentativa refaz só a variação.
    */
   const produtoCriadoRef = useRef<Produto | null>(null)
 

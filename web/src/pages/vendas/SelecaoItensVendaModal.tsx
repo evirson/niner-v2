@@ -21,6 +21,13 @@ function variacaoTexto(item: ItemVendaOrigem): string | null {
  * venda). Desligado, a tela continua exatamente como sempre foi: campo opcional inline + leitura
  * de código de barras livre.
  *
+ * ⚠️ **Uma linha por PREÇO, não por variação** (2026-08-22, auditoria item 2). Desde o Orçamento,
+ * o mesmo produto pode aparecer duas vezes na mesma venda — a peça orçada (preço congelado que a
+ * loja honra) e a levada na hora (preço do dia). As duas linhas têm descrição IDÊNTICA e só o preço
+ * as separa, então cada uma ganha o aviso dizendo qual é qual; a seleção é por `chaveLinha`
+ * (`idVariacao|preço`), senão marcar uma marcava as duas e devolver uma peça consumia o saldo das
+ * duas.
+ *
  * O que sai daqui já vem validado contra a venda (só itens dela, até `qtdDisponivelDevolucao`), o
  * que **não** dispensa a validação do servidor — `DevolucaoProdutoService.efetivar` recalcula
  * tudo (P4, RN-06). "Selecionar" leva a quantidade disponível inteira; devolução parcial de um

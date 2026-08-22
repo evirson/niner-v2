@@ -81,3 +81,13 @@ Popup de filtros obrigatório, PDF por captura visual (`html2canvas`+`jsPDF`), g
 rodapé fixos (`.grid-altura-fixa`, mesmo padrão do Relatório de Vendas/Contas a Receber — não o
 antigo `.relatorio-corpo-fixo`, que colapsa com KPIs+gráfico acima da grid), ordenação
 client-side por coluna, `AjudaDaTela` (R22).
+
+---
+
+## Revisão 2026-08-22 — a pesquisa de variação avisa quando corta (item 33, estendido)
+
+`RelatorioMovimentacaoProdutosService.buscarVariacoes` cortava em **10** e o
+`PesquisaVariacaoModal` **não dizia nada** — mesmo defeito do item 33, numa tela que a auditoria não
+tinha listado, encontrada ao revisar a documentação no fim do dia.
+
+Limite subiu para **20**, alinhado com os seletores do PDV, e o modal avisa quando o corte acontece.

@@ -972,3 +972,17 @@ Agora o Nome fica na **coluna esquerda**, com a mesma largura dos campos de medi
 direita: ele começa lá em cima, alinhado com o Nome. A caixa **Ativa** subiu para a linha do
 rótulo, porque sozinha ela custava a altura de um campo inteiro — e essa altura agora pertence ao
 desenho da etiqueta.
+
+---
+
+## Revisão 2026-08-22 — a busca de produto de exemplo avisa quando corta (item 33, estendido)
+
+`EtiquetaConfigService.buscarProdutos` (o seletor de "produto de exemplo" do editor) cortava em
+**10** resultados e a tela **não dizia nada** — mesmo defeito do item 33 da auditoria, numa tela que
+a auditoria não tinha listado, encontrada ao revisar a documentação no fim do dia.
+
+Limite subiu para **20** e o modal passou a avisar *"Mostrando os primeiros 20 — refine a busca para
+ver mais."*. Mesma correção em `PesquisaVariacaoModal` (Relatório de Movimentação/Kardex).
+
+⚠️ Aqui o impacto é menor que no seletor de fornecedor — não há botão de cadastro rápido ao lado
+criando duplicata —, mas o operador ainda conclui "não está cadastrado" para um produto que existe.

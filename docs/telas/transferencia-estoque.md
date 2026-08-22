@@ -215,3 +215,18 @@ Nenhuma bloqueante.
 ## Métrica de sucesso
 
 Tempo de transferência de 1–3 produtos entre duas lojas em menos de 30 segundos.
+
+---
+
+## Revisão 2026-08-22 — a Guia de Transferência passou a paginar (auditoria, item 4)
+
+A guia usava `position: absolute`, que é certo para documento de **uma** página — e é exatamente o
+que **impede paginar**. Uma transferência longa imprimia a primeira página e **o resto sumia sem
+aviso nenhum**.
+
+Agora usa `imprimirDocumentoA4()` + a classe `.documento-a4-imprimir`, o mesmo remédio que fez a
+etiqueta paginar. Sendo um `<pre>`, ganhou também `white-space: pre-wrap` e `break-inside: auto` —
+sem isso o texto longo é cortado em vez de continuar na página seguinte.
+
+⚠️ **Não foi testada no papel.** Impressão só se confirma imprimindo — ver
+`docs/telas/papeleta-venda.md` e a lição registrada sobre correção de impressão às cegas.

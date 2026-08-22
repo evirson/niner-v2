@@ -195,6 +195,7 @@ const CONTEUDOS: Record<string, ConteudoAjuda> = {
     ],
     errosComuns: [
       'Fornecedor é sempre obrigatório, mesmo em ajustes sem nota fiscal.',
+      'A busca de fornecedor mostra no máximo 20 resultados — quando bate esse limite, a tela avisa. Refine a busca em vez de concluir que o fornecedor não existe: cadastrar de novo cria um duplicado, e a partir daí as notas e as contas a pagar do mesmo fornecedor ficam divididas entre dois cadastros.',
       'Rateio de frete/IPI/ICMS-ST no custo e o reajuste automático de preço só têm efeito se as flags correspondentes estiverem ligadas em Parâmetros do Sistema (Configurações).',
       'Uma nota fiscal com a mesma chave de acesso já importada antes é rejeitada — não duplica estoque (a não ser que a importação anterior tenha sido cancelada).',
       'No fluxo por XML, cor e tamanho de um item nunca são cadastrados sozinhos — o operador sempre confirma, mesmo quando o sistema já identifica um palpite.',
@@ -212,7 +213,7 @@ const CONTEUDOS: Record<string, ConteudoAjuda> = {
     passos: [
       'Clique em "＋ Nova Transferência" para mover produtos da empresa atual para outra.',
       'Clique no ícone verde para ver os detalhes (produtos e quantidades) de uma transferência já feita.',
-      'Na tela de detalhes, use "Imprimir Guia" para gerar a Guia de Transferência (folha A4, com linhas de assinatura para conferência na origem e recebimento no destino).',
+      'Na tela de detalhes, use "Imprimir Guia" para gerar a Guia de Transferência (folha A4, com linhas de assinatura para conferência na origem e recebimento no destino). Transferência longa ocupa mais de uma folha — o cabeçalho sai só na primeira.',
     ],
     errosComuns: [
       'Transferências já feitas não podem ser editadas nem excluídas — é um registro permanente do estoque, mesma regra de uma venda.',

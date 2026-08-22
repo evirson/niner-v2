@@ -366,3 +366,22 @@ Nenhuma bloqueante. Todas as decisões de UX/validação foram fechadas nesta se
 
 Tempo de cadastro de um cliente novo no balcão (só nome + categoria) em menos de 15 segundos
 (CPF/CNPJ e demais dados opcionais não bloqueiam o fluxo rápido).
+
+---
+
+## Revisão 2026-08-22 — `limiteCredito` obrigatório agora vale no servidor (auditoria, item 24)
+
+`exigirSeObrigatorio` só tinha versão para `String`, então **todo campo configurável que é número ou
+data ficava sem revalidação no servidor**, por construção — apesar de o `CLAUDE.md` afirmar que a
+bandeira de `cfg_tela_campo` é aplicada "de novo no servidor". Aqui o campo afetado era
+`limiteCredito`; `exigirSeObrigatorioValor` cobre agora.
+
+⚠️ **Ausente é `null`; ZERO é valor legítimo.** Decisão do dono do produto: *"se não informados,
+marcar como zero."* Um cliente sem crédito tem limite R$ 0,00, e isso não é campo vazio — recusar
+zero quebraria o caso real. Como o formulário manda `desmascararMoeda('')` = 0, na prática esta
+validação nunca dispara pela tela: ela existe para o cliente de API que **omite** o campo.
+
+⚠️ **E uma confusão minha, registrada para não se repetir:** eu tratei "obrigatório" como se fosse o
+que **tira o campo do cadastro**. Não é. `cfg_tela_campo` tem **duas** dimensões — `visivel` decide
+se o campo aparece, `obrigatorio` decide se é exigido, com CHECK garantindo que obrigatório implica
+visível. Quem quer enxugar o cadastro usa `visivel = false`.
