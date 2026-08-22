@@ -234,3 +234,14 @@ emitir documento fiscal errado, e é o padrão que o montador já usa para CSOSN
 ⚠️ **Este caminho fiscal continua SEM TESTE** (a suíte roda com `emite_nfe = false`) e **nunca foi
 transmitido de verdade** — a homologação na SEFAZ/PR está pendente. O item 21 (FIFO recomeçando no
 primeiro `nItem` a cada devolução) segue aberto pelo mesmo motivo: só se prova transmitindo.
+
+
+### Também em 2026-08-22 — a busca de fornecedor avisa quando corta (item 33)
+
+A busca desta tela é a mesma de Entrada de Produtos e Contas a Pagar
+(`EtiquetaEmissaoService.buscarFornecedores`): cortava em **10** e **não dizia nada**. Quem tinha
+mais fornecedores parecidos que o limite concluía "não está cadastrado" quando estava.
+
+Limite subiu para **20** e a tela avisa *"Mostrando os primeiros 20 — refine a busca para ver
+mais."*. ⚠️ Aqui o risco é maior que numa busca comum: escolher o fornecedor errado numa devolução
+significa **emitir NF-e 55 contra o destinatário errado**.

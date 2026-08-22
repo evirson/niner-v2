@@ -612,6 +612,22 @@ Junto vieram 5 specs sem a seção do dia (`cliente`, `funcionario`, `transferen
 fornecedor, e dois docstrings meus escritos horas antes (um typo e uma pergunta retórica no meio
 de um comentário).
 
+⛔ **A TERCEIRA passada da documentação (pedida pelo dono do produto, insatisfeito com as duas
+anteriores) achou mais 8 specs de tela sem a seção do dia**, todas de telas realmente tocadas:
+`cancelamento-devolucao-produtos` (itens 10 e 13), `estorno-recebimento-crediario` (13),
+`relatorio-comissoes`, `relatorio-contas-receber` e `relatorio-estoque` (17); e três que tinham
+a seção mas não cobriam tudo — `devolucao-produtos` (faltava o item 4, o DANFE que passou a
+paginar), `devolucao-compra` (faltava o 33) e `relatorio-movimentacao-produtos` (faltava o 17).
+
+O método que as achou foi **listar os arquivos de código alterados no dia e mapear cada um à sua
+spec**, em vez de partir da lista de itens da auditoria — um mesmo item (o 17) tocou cinco telas,
+e só uma tinha sido documentada.
+
+⚠️ **Lacuna PRÉ-EXISTENTE encontrada de passagem, NÃO corrigida:** o CRUD de **Tipo de Carteira**
+não tem spec em `docs/telas/` — existe a tela, o serviço, os testes e a ajuda dentro do produto,
+mas nenhum arquivo de especificação. Não foi criada agora por ser trabalho de escopo próprio, não
+documentação do que mudou hoje. Fica registrado aqui para não se perder.
+
 **913 testes verdes** (912 + o de regressão do item 2), `tsc -b` limpo. ⚠️ `npm run build` não roda
 neste ambiente — o `node_modules` só tem o binding nativo `linux-x64-musl` do rolldown e a máquina é
 Windows; é instalação, não código (o `CLAUDE.md` já registra que falha depois do type-check é do

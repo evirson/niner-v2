@@ -186,3 +186,13 @@ Nenhuma bloqueante.
 ## Métrica de sucesso
 
 Tempo de localização e estorno de um recebimento em menos de 30 segundos.
+
+---
+
+## Revisão 2026-08-22 — foco automático no campo principal (auditoria, item 13)
+
+O campo "Nome do cliente" não tinha `autoFocus`. Convenção do projeto: **toda tela de
+lista/localização nasce com o foco no campo principal**, para o operador começar a digitar sem
+tirar a mão do teclado.
+
+Mesma correção em `CancelamentoDevolucao` e `OrcamentoLista`.

@@ -211,3 +211,19 @@ testado criando um usuário OPERADOR restrito a uma filial: só via/cancelava a 
 
 Cancelamento de um vale simples (popup de filtro → localizar → confirmar) em menos de 20
 segundos, com o operador sempre vendo o que será retirado do estoque antes de confirmar.
+
+---
+
+## Revisão 2026-08-22 — erro do servidor virou popup, e o campo ganhou foco (auditoria, 10 e 13)
+
+**Item 10.** O erro de negócio devolvido pelo servidor saía em banner inline (`erro-campo`), contra a
+convenção do projeto — toda mensagem de erro vira popup —, e a mensagem multilinha **colapsava numa
+linha só**, escondendo a instrução do que fazer. Agora vai para `AvisoModal`, que ganhou
+`white-space: pre-line`.
+
+⚠️ **A validação LOCAL continua inline**, junto ao campo: "informe o motivo" é resposta ao que o
+operador acabou de digitar, e ali o texto curto ao lado do campo é o certo. O que mudou foi só a
+recusa vinda do servidor.
+
+**Item 13.** O campo principal da tela (Nº do Vale de Devolução) não tinha `autoFocus` — convenção
+de toda tela de lista/localização desde 2026-08-22.

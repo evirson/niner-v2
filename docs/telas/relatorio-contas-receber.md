@@ -129,3 +129,11 @@ Nenhum.
 ## Questões abertas
 
 Nenhuma bloqueante.
+
+---
+
+## Revisão 2026-08-22 — o popup de filtros fecha com `navigate(-1)` (auditoria, item 17)
+
+O botão de fechar do popup obrigatório de filtros usava `navigate('/')`, empilhando histórico.
+Passou a `navigate(-1)`, alinhado com `RelatorioDre` e `FluxoCaixa`. Mesma correção em Vendas,
+Comissões, Estoque e Movimentação de Produtos.

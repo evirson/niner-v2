@@ -621,3 +621,13 @@ lado seguro (nunca recusa devolução legítima). Só ocorre em venda com dois p
 devolvida antes de 2026-08-22.
 
 Regressão: `DevolucaoProdutoCrudTest.devolucaoDeVariacaoComDoisPrecosNaMesmaVendaUsaOPrecoDaLinhaEscolhida`.
+
+
+### Também em 2026-08-22 — o DANFE da devolução passou a paginar (item 4)
+
+`DanfeImprimir` usava `position: absolute`, certo para documento de **uma** página e exatamente o
+que **impede paginar**. Uma devolução com muitos itens imprimia a primeira folha e **o resto sumia
+sem aviso**.
+
+Agora usa `imprimirDocumentoA4()` + `.documento-a4-imprimir`, com cabeçalho só na primeira página.
+⚠️ **Não foi testado no papel** — impressão só se confirma imprimindo.

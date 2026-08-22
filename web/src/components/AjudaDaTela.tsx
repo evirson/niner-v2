@@ -577,6 +577,7 @@ const CONTEUDOS: Record<string, ConteudoAjuda> = {
       'Informe o % de desconto OU o % de acréscimo aplicado na venda por essa forma de pagamento — nunca os dois juntos.',
       'Se emitir NFC-e, preencha "Dados Fiscais": a Forma de Pagamento (tPag) e, para Cartão Débito/Crédito, a Bandeira do Cartão (tBand) — são exigidos pela nota fiscal e ficam pendentes na tela de Conformidade Fiscal até serem preenchidos.',
       'Salve.',
+      'A forma de pagamento nova já fica disponível no PDV imediatamente — não é preciso recarregar a página nem sair e entrar de novo.',
     ],
     errosComuns: [
       'Nome já existe: cada tipo de carteira precisa de um nome único dentro da mesma categoria (pode repetir em categorias diferentes).',

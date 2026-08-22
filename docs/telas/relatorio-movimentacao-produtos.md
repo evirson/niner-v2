@@ -91,3 +91,9 @@ client-side por coluna, `AjudaDaTela` (R22).
 tinha listado, encontrada ao revisar a documentação no fim do dia.
 
 Limite subiu para **20**, alinhado com os seletores do PDV, e o modal avisa quando o corte acontece.
+
+
+### Também em 2026-08-22 — o popup de filtros fecha com `navigate(-1)` (item 17)
+
+O botão de fechar usava `navigate('/')`, empilhando histórico. Passou a `navigate(-1)`, alinhado com
+`RelatorioDre` e `FluxoCaixa`.
