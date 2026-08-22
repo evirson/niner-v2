@@ -48,6 +48,12 @@ function classeBadge(situacao: string): string {
   if (situacao === 'CONTINGENCIA' || situacao === 'NAO_EMITIDO') return 'badge badge-aviso'
   if (situacao === 'REJEITADO' || situacao === 'DENEGADO') return 'badge badge-perigo'
   if (situacao === 'CANCELADO') return 'badge badge-inativo'
+  // ⚠️ Nota PRESA numa transmissão que não terminou (achado de auditoria, 2026-08-21). Caía no
+  // cinza neutro do fim — o mesmo de RASCUNHO e VALIDADO —, e é o estado mais grave da lista: a
+  // venda foi feita, a nota saiu do sistema e ninguém sabe se a SEFAZ recebeu. Pior em
+  // contingência, onde o job de dreno não recupera a nota (pendência 5) e o prazo legal corre.
+  // É a mesma dupla que `SITUACOES_REPROCESSAVEIS` já trata como presa, aqui só faltava a cor.
+  if (situacao === 'TRANSMITINDO' || situacao === 'ASSINADO') return 'badge badge-perigo'
   return 'badge'
 }
 

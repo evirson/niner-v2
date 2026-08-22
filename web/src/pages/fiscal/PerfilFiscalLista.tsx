@@ -104,6 +104,8 @@ export default function PerfilFiscalLista() {
     mutationFn: excluirPerfilFiscal,
     onSuccess: (resultado) => {
       queryClient.invalidateQueries({ queryKey: ['perfis-fiscais'] })
+      // O <select> de perfil do ProdutoForm tem chave PRÓPRIA: array não casa por prefixo.
+      queryClient.invalidateQueries({ queryKey: ['perfis-fiscais-opcoes'] })
       setPerfilParaExcluir(null)
       setAviso({
         texto: resultado.acao === 'excluido' ? 'Perfil fiscal excluído.' : `Perfil fiscal inativado — ${resultado.motivo}`,

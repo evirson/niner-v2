@@ -155,11 +155,35 @@ public class CancelamentoNfceService {
 
         // 135 = evento registrado e vinculado à NF-e (leiauteEventoCancNFe_v1.00.xsd). 136
         // (registrado, NÃO vinculado) não conta como sucesso — algo deu errado mesmo respondendo.
-        boolean autorizadoNaSefaz = "135".equals(resposta.cStat());
+        //
+        // ⚠️ 155 entrou em 2026-08-21 (achado de auditoria): "Cancelamento homologado FORA DE
+        // PRAZO" também deixa o evento registrado e vinculado — a nota está cancelada na SEFAZ. Só
+        // aceitar 135 fazia o ERP recusar a reversão de uma nota que o fisco já cancelou, e aí o
+        // fiscal andava e o estoque/caixa não: exatamente a divergência que a ordem "nota primeiro,
+        // estoque depois" existe para impedir, só que na direção inversa.
+        boolean autorizadoNaSefaz = "135".equals(resposta.cStat()) || "155".equals(resposta.cStat());
         long idEvento = repositorio.registrarTentativaCancelamento(doc.idDocumentoFiscal(), justificativa,
                 autorizadoNaSefaz, resposta.protocolo(), resposta.cStat(), resposta.xMotivo(), envelope, idUsuario);
 
         if (!autorizadoNaSefaz) {
+            // ⚠️ 573 ("Duplicidade de Evento") NÃO é recusa: significa que o evento JÁ ESTÁ
+            // registrado, quase sempre de uma tentativa anterior cuja resposta se perdeu no
+            // caminho (o `catch` de falha de comunicação acima responde 409 sem reverter, que é o
+            // lado seguro do erro). Como o evento é determinístico — mesmo `Id`, `nSeqEvento` 1 —,
+            // toda retentativa devolve 573 e o operador fica num beco: a NFC-e cancelada na SEFAZ e
+            // a venda viva no ERP, sem caminho para reconciliar.
+            //
+            // Aceitar 573 como sucesso cego seria errado (não sabemos se o evento registrado é
+            // este). O certo é consultar a nota antes de decidir — mesma disciplina do F5 que a
+            // autorização já tem — e está registrado como pendência. Até lá, ao menos a mensagem
+            // manda o operador para as ferramentas que existem e resolvem.
+            if ("573".equals(resposta.cStat())) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT,
+                        ("O cancelamento desta %s já foi registrado na SEFAZ numa tentativa anterior (573)."
+                                + " %s. Use \"Consultar SEFAZ\" na tela de Documentos Fiscais para confirmar a"
+                                + " situação da nota antes de tentar de novo.")
+                                .formatted(rotulo.documento(), rotulo.naoRevertido()));
+            }
             throw new ResponseStatusException(HttpStatus.CONFLICT,
                     "A SEFAZ recusou o cancelamento desta %s: %s (%s). %s."
                             .formatted(rotulo.documento(), resposta.xMotivo(), resposta.cStat(),

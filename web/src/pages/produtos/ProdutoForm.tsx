@@ -381,9 +381,17 @@ export default function ProdutoForm({ somenteLeitura = false }: { somenteLeitura
       codigoNcm: validarCampo('codigoNcm', form, mapaConfig),
       pesoBruto: validarCampo('pesoBruto', form, mapaConfig),
       pesoLiquido: erroPesoLiquido(form) ?? validarCampo('pesoLiquido', form, mapaConfig),
-      dataInicioOferta: ofertaErros.dataInicioOferta,
-      dataFinalOferta: ofertaErros.dataFinalOferta,
-      precoOferta: ofertaErros.precoOferta,
+      // ⚠️ `?? validarCampo(...)` (achado de auditoria, 2026-08-21) — mesmo padrão do peso, na linha
+      // acima. Estes três campos eram preenchidos SÓ por `errosOferta`, cuja primeira regra é
+      // devolver tudo vazio quando nenhum dos três está preenchido ("os três juntos ou nenhum").
+      // Essa regra é correta, mas ela SUBSTITUÍA a checagem de obrigatoriedade em vez de somar-se a
+      // ela: marcar os campos de oferta como obrigatórios em Configuração de Tela desenhava o
+      // asterisco e não impedia nada — o produto salvava com os três em branco. A regra que o ADMIN
+      // configurou não existia nem aqui nem no servidor, e o único vestígio dela era um `*` que
+      // mentia.
+      dataInicioOferta: ofertaErros.dataInicioOferta ?? validarCampo('dataInicioOferta', form, mapaConfig),
+      dataFinalOferta: ofertaErros.dataFinalOferta ?? validarCampo('dataFinalOferta', form, mapaConfig),
+      precoOferta: ofertaErros.precoOferta ?? validarCampo('precoOferta', form, mapaConfig),
       idGrade: usaCorGrade?.cfgUsaCorGrade && !form.idGrade ? 'Grade é obrigatória.' : undefined,
     }
     setErros(novosErros)

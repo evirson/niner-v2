@@ -86,6 +86,8 @@ export default function PerfilFiscalForm({ somenteLeitura = false }: { somenteLe
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['perfis-fiscais'] })
+      // O <select> de perfil do ProdutoForm tem chave PRÓPRIA: array não casa por prefixo.
+      queryClient.invalidateQueries({ queryKey: ['perfis-fiscais-opcoes'] })
       navigate('/fiscal/perfis', {
         state: {
           toast: {

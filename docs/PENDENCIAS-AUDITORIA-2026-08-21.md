@@ -1,11 +1,21 @@
 # Pendências da auditoria de 2026-08-21 — aguardando decisão do dono do produto
 
-Dois agentes varreram backend e frontend em duas passadas. **13 defeitos foram corrigidos e
-commitados** no mesmo dia (ver `docs/PROGRESSO.md`). Este arquivo lista o que **não** foi corrigido
+Dois agentes varreram backend e frontend em **quatro passadas** cada. **24 defeitos foram corrigidos
+e commitados** no mesmo dia (ver `docs/PROGRESSO.md`). Este arquivo lista o que **não** foi corrigido
 porque exige uma decisão de negócio, não um conserto técnico — e serve para ser cobrado na próxima
 sessão.
 
-Ordem: os sete primeiros são os que precisam de decisão; depois vêm as pendências menores.
+Ordem: os sete primeiros são os que precisam de decisão; depois vêm as pendências menores (8–18); e
+no fim, as que as rodadas 3 e 4 acrescentaram (19–25).
+
+**As quatro que eu levaria primeiro**, por gravidade e por quanto custam se ficarem:
+
+| # | O quê | Por que primeiro |
+|---|---|---|
+| 19 | Devolução ao fornecedor emite CST do fornecedor numa nota de Simples/MEI | Documento fiscal errado saindo hoje, e **nenhum teste cobre esse caminho** |
+| 1 | Cancelar entrada com devolução debita estoque duas vezes | Estoque negativo silencioso + NF-e 55 órfã |
+| 5 | Nota presa em `TRANSMITINDO` some da fila do dreno | Prazo legal de 24 h correndo, sem alarme (ver 25) |
+| 22 | Parcela legada vira receita com CMV zero no DRE caixa | Lucro que nunca existiu, num relatório de decisão |
 
 ---
 
@@ -172,3 +182,119 @@ negócio dos importadores de Cliente/Fornecedor/Produto.
 bucket público); `PesquisaVendas` (hub de reimpressão e cancelamento); `TransferenciaDetalhe`;
 `DiferencasEstoque`; `ReimpressaoRecebimentoCrediario`; telas fiscais de configuração; `crm/`;
 cadastros em profundidade.
+
+---
+
+# Acrescentado pelas rodadas 3 e 4 da auditoria
+
+## 19. ⛔ Devolução ao fornecedor copia o CST do FORNECEDOR para uma nota emitida por Simples/MEI
+
+**Onde:** `DevolucaoCompraFiscalAssembler` (~:167) + `MontadorXmlNfeDevolucao` (~:295).
+
+O assembler espelha `cst_icms`/`csosn` de `entrada_nfe_item` — a tributação que **o fornecedor**
+declarou — e o montador emite `ICMS00`/`ICMS20` com `pICMS` e `vICMS` destacados. Mas o `<emit>` da
+nota leva o **CRT da nossa loja**, que por DF37 é 1, 2 ou 4. O próprio motor tributário declara o
+invariante: *"CRT 1/4 emite com CSOSN; só o CRT 2, com excesso de sublimite, pode usar CST"* — e
+esta rotina não passa pelo motor, por desenho.
+
+**Cenário:** loja Simples (CRT 1) compra de distribuidor do Lucro Real (CST 00, pICMS 18, vICMS
+180) e devolve. Sai uma NF-e com `<CRT>1</CRT>` e `<ICMS00>` destacando ICMS próprio. Na melhor
+hipótese a SEFAZ rejeita por incompatibilidade CRT×CST; na pior, autoriza — e a loja emitiu
+documento destacando imposto que não apura, gerando crédito indevido ao fornecedor.
+
+⚠️ **Nenhum teste cobre o caminho fiscal desta rotina** (a suíte roda com o fiscal desligado).
+
+**Decisão necessária, com o contador:** converter para CSOSN (102, ou 500 quando a entrada veio com
+ST) levando o ICMS original para `infAdic`, ou **recusar** a emissão quando `crt != 2` e o item
+original trouxer `cst_icms`? A segunda é o mínimo seguro e é o padrão que o montador já usa para
+CSOSN 202/900. **Não apliquei nenhuma das duas**: recusar pode parar uma operação que hoje passa, e
+converter é regra tributária.
+
+## 20. cStat 573 no cancelamento: a SEFAZ cancela e o ERP nunca reverte
+
+**Onde:** `CancelamentoNfceService` (~:158).
+
+Corrigido em parte (2026-08-21): o **155** ("cancelamento homologado fora de prazo") passou a
+contar como sucesso, e o **573** ganhou mensagem específica mandando o operador usar "Consultar
+SEFAZ". **Falta a correção de verdade**: no 573, consultar a nota (`NFeConsultaProtocolo4`, já usado
+pelo reprocessamento) e, se ela estiver cancelada, seguir com a reversão.
+
+Sem isso o beco continua: se a resposta do primeiro evento se perde (timeout), toda retentativa
+devolve 573 — porque o evento é determinístico (mesmo `Id`, `nSeqEvento` 1) — e a venda nunca é
+revertida no ERP com a NFC-e cancelada na SEFAZ.
+
+## 21. FIFO da devolução ao fornecedor recomeça no primeiro `nItem` a cada devolução
+
+**Onde:** `DevolucaoCompraFiscalAssembler` (~:145-151).
+
+A alocação por `numero_item` está correta e tem teto — mas parte sempre da quantidade **original**
+do item, sem descontar o que devoluções anteriores já consumiram daquele `nItem` (o saldo é
+controlado por variação, nunca por item).
+
+**Cenário:** entrada com a mesma variação em `nItem 1` (5 un a R$ 10) e `nItem 2` (5 un a R$ 12).
+Devolução A de 5 un → aloca no `nItem 1`, nota de R$ 50 (correto). Devolução B de 5 un → aloca **no
+`nItem 1` de novo**, outra nota de R$ 50. A loja devolveu R$ 110 e declarou R$ 100; o `nItem 2`
+nunca é referenciado e a tributação dele nunca é espelhada.
+
+**Decisão:** guardar o `numero_item` alocado por linha de devolução (hoje ele só existe dentro do
+XML), ou recusar a segunda devolução parcial quando a variação ocupa mais de um `nItem`.
+
+## 22. Parcela legada já recebida vira receita com CMV zero no DRE regime caixa
+
+**Onde:** `ContasReceberImportador` (~:153-171) × `DreService` (~:281-313).
+
+O importador cria uma `venda` sintética sem movimento de estoque e grava `data_recebimento` das
+parcelas pagas **antes** da migração. O DRE em competência as ignora (JOIN INNER com o ledger), mas
+o de **caixa** parte de `contas_receber` e as inclui: receita integral com `cmv` e `comissao`
+zerados pelo `COALESCE` do LEFT JOIN.
+
+**Cenário:** migração em março com 300 parcelas já recebidas em janeiro (R$ 45.000). O DRE de
+janeiro em regime caixa mostra **R$ 45.000 de receita com CMV R$ 0,00** — margem 100%, lucro que
+nunca existiu no Nainer.
+
+⚠️ E o próprio importador avisa que *"nenhum lançamento de caixa é criado para parcelas já pagas"* —
+então o dinheiro **não** entra no Fluxo de Caixa mas **entra** no DRE caixa. Dois relatórios
+financeiros, o mesmo fato, respostas opostas.
+
+**Decisão:** marcar a venda sintética (coluna de origem em `venda`) e excluí-la do DRE, ou não
+importar `data_recebimento` de parcelas anteriores à migração? A primeira preserva o Relatório de
+Contas a Receber, onde essas parcelas **devem** aparecer.
+
+## 23. `CobrancaService.iniciarPagamento` chama o Mercado Pago dentro da transação
+
+**Onde:** `CobrancaService` (~:48 e :105) — viola o F2 ("nenhuma chamada de rede dentro de transação
+de banco") que o módulo fiscal inteiro respeita.
+
+Se a transação der rollback **depois** de o PIX ser criado, ele existe no gateway apontando para uma
+fatura inexistente: o cliente paga, o webhook não acha nada, os dois `UPDATE` casam zero linhas e
+sobra um `log.warn`. **Dinheiro recebido, assinatura não promovida.** Probabilidade baixa (os
+comandos seguintes são simples), custo alto.
+
+## 24. `exigirSeObrigatorio` só existe para `String`: 7 campos configuráveis sem revalidação no servidor
+
+**Onde:** `ConfiguracaoTelaService` + os `validar()` de Cliente/Funcionário/Produto.
+
+As duas listas de `cfg_tela_campo` (front e servidor) **batem 100% em nomes** — o buraco é de tipo:
+`exigirSeObrigatorio(Map, String, String)` só tem sobrecarga para texto, então todo campo
+configurável que é número ou data fica de fora por construção: `limiteCredito`, `percComissao`,
+`pesoBruto`, `pesoLiquido`, `precoOferta`, `dataInicioOferta`, `dataFinalOferta`.
+
+Para 6 deles o formulário cobre, então o usuário da tela está protegido — mas o `CLAUDE.md` afirma
+que a bandeira é aplicada *"again on the server"*, e para estes não é: uma integração pela API grava
+sem eles.
+
+⚠️ **Ressalva de contrato:** para `limiteCredito` e `precoOferta` o front envia
+`desmascararMoeda('')` = **0**, então o servidor não distingue "vazio" de "zero legítimo" — nesses
+dois o contrato precisaria passar a mandar `null`, o que é decisão de produto. Os cinco restantes
+são mecânicos.
+
+## 25. Não há alarme para nota presa em transmissão
+
+**Onde:** `ConformidadeFiscalDtos.CategoriaConformidade` (só `EMPRESA/PRODUTOS/PAGAMENTOS/CLIENTES`).
+
+Corrigido em parte (2026-08-21): `TRANSMITINDO`/`ASSINADO` deixaram o cinza neutro e passaram a
+`badge-perigo` na lista fiscal. **Falta o alarme**: o painel de Conformidade pode exibir
+*"✓ pronto para emitir"* com notas paradas há dias, e para achar uma o operador precisa **já
+suspeitar que ela existe** (abrir a lista, escolher empresa, acertar o período e filtrar a
+situação). Precisa de um endpoint que conte documentos parados por empresa — a lista atual é
+paginada por período e não serve de contador. Casa com a pendência 5 (dreno).
