@@ -21,6 +21,7 @@ import {
   listarTiposCarteira,
   type ColunaOrdenacaoTipoCarteira,
   type TipoCarteira,
+  invalidarTiposCarteira,
 } from '../../lib/tiposCarteira'
 import { maiusculas } from '../../lib/texto'
 
@@ -121,7 +122,7 @@ export default function TipoCarteiraLista() {
   const excluir = useMutation({
     mutationFn: excluirTipoCarteira,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['tipos-carteira'] })
+      invalidarTiposCarteira(queryClient)
       setCarteiraParaExcluir(null)
       setAviso({ texto: 'Tipo de carteira excluído.', tipo: 'sucesso' })
     },

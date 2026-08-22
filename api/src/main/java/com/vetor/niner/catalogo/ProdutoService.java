@@ -1,6 +1,8 @@
 package com.vetor.niner.catalogo;
 
 import com.vetor.niner.comum.tempo.FusoDaUf;
+import com.vetor.niner.catalogo.ProdutoBarraDtos.CriarVariacaoRequest;
+import com.vetor.niner.catalogo.ProdutoBarraDtos.ProdutoBarraResponse;
 import com.vetor.niner.catalogo.ProdutoDtos.CategoriaSelecionada;
 import com.vetor.niner.catalogo.ProdutoDtos.ExclusaoProdutoResponse;
 import com.vetor.niner.catalogo.ProdutoDtos.PaginaProdutos;
@@ -61,14 +63,17 @@ public class ProdutoService {
     private final ConfiguracaoTelaService configuracaoTelaService;
     private final ConfiguracaoGeralService configuracaoGeralService;
     private final ProdutoImagemService produtoImagemService;
+    private final ProdutoBarraService produtoBarraService;
 
     public ProdutoService(JdbcClient jdbc, ConfiguracaoTelaService configuracaoTelaService,
                           ConfiguracaoGeralService configuracaoGeralService,
-                          ProdutoImagemService produtoImagemService) {
+                          ProdutoImagemService produtoImagemService,
+                          ProdutoBarraService produtoBarraService) {
         this.jdbc = jdbc;
         this.configuracaoTelaService = configuracaoTelaService;
         this.configuracaoGeralService = configuracaoGeralService;
         this.produtoImagemService = produtoImagemService;
+        this.produtoBarraService = produtoBarraService;
     }
 
     @Transactional(readOnly = true)
@@ -169,6 +174,35 @@ public class ProdutoService {
         } catch (DataIntegrityViolationException e) {
             throw erroDeVinculo(e);
         }
+    }
+
+    /**
+     * Cria o produto <b>e</b> a primeira variação na <b>mesma transação</b> (auditoria 2026-08-21,
+     * item 28).
+     *
+     * <p><b>O problema que resolve.</b> O cadastro rápido do PDV/Entrada fazia dois POSTs
+     * independentes: {@code criar} e depois {@code /variacoes}. Quando o segundo falhava — e o caso
+     * real é EAN repetido vindo de planilha ou XML de terceiro — sobrava um produto <b>sem
+     * variação</b>: sem SKU, sem código de barras, invisível no PDV. E a tela dizia "não foi
+     * possível criar o produto", então clicar de novo criava um <b>segundo</b> produto órfão.
+     *
+     * <p>O front foi mitigado em 2026-08-21 (guarda o id e repete só a variação), mas a mitigação
+     * depende de o operador clicar de novo na mesma sessão: fechando a tela, o órfão fica. Aqui a
+     * falha da variação desfaz o produto junto, que é o comportamento que o usuário já supunha.
+     *
+     * <p>⚠️ {@code this.criar(req)} <b>não</b> passa pelo proxy do Spring (auto-invocação), e isso
+     * está certo aqui: a transação já foi aberta por <b>este</b> método, e o de dentro apenas a
+     * herda. O defeito clássico da auto-invocação acontece quando <b>não há</b> transação no
+     * chamador — não é o caso.
+     */
+    @Transactional
+    public ProdutoBarraResponse criarComVariacao(ProdutoRequest req, CriarVariacaoRequest variacao) {
+        ProdutoResponse produto = criar(req);
+        // Devolve a VARIAÇÃO, não o produto: ela já carrega descrição, marca, referência e preço
+        // do produto, e é o que o chamador (PDV, Entrada) precisa para seguir — lançar o item.
+        // Devolver o produto obrigaria a uma segunda chamada só para descobrir o SKU recém-gerado.
+        return produtoBarraService.obterOuCriar(produto.idProduto(), variacao.idCor(), variacao.idTamanho(),
+                true, variacao.ean());
     }
 
     @Transactional
@@ -292,6 +326,11 @@ public class ProdutoService {
         exigirSeObrigatorio(config, "marca", req.marca());
         exigirSeObrigatorio(config, "referencia", req.referencia());
         exigirSeObrigatorio(config, "codigoNcm", req.codigoNcm());
+        exigirSeObrigatorioValor(config, "pesoBruto", req.pesoBruto());
+        exigirSeObrigatorioValor(config, "pesoLiquido", req.pesoLiquido());
+        exigirSeObrigatorioValor(config, "precoOferta", req.precoOferta());
+        exigirSeObrigatorioValor(config, "dataInicioOferta", req.dataInicioOferta());
+        exigirSeObrigatorioValor(config, "dataFinalOferta", req.dataFinalOferta());
     }
 
     /**
@@ -349,6 +388,28 @@ public class ProdutoService {
             return new IllegalArgumentException("Perfil fiscal informado não existe.");
         }
         return new IllegalArgumentException("Categoria informada não existe.");
+    }
+
+/**
+     * Mesma regra para campo NUMÉRICO/DATA (auditoria 2026-08-21, item 24).
+     *
+     * <p>Até 2026-08-22 só existia a versão para {@code String}, então <b>todo campo configurável
+     * que é número ou data ficava sem revalidação no servidor</b>, por construção — apesar de o
+     * {@code CLAUDE.md} afirmar que a bandeira é aplicada "de novo no servidor". O formulário
+     * cobria, mas uma gravação pela API passava sem.
+     *
+     * <p>⚠️ Ausente é {@code null}. <b>Zero é valor legítimo</b> (decisão do dono do produto,
+     * 2026-08-22: "se não informados, marcar como zero"), então esta validação não recusa zero.
+     * Quem quer o campo fora do cadastro usa {@code visivel = false}, que é a dimensão certa —
+     * a tabela tem as duas, com CHECK garantindo que obrigatório implica visível.
+     */
+    private static void exigirSeObrigatorioValor(Map<String, ConfiguracaoCampoResponse> config, String campo,
+                                                  Object valor) {
+        ConfiguracaoCampoResponse c = config.get(campo);
+        if (c != null && c.obrigatorio() && valor == null) {
+            throw new IllegalArgumentException(
+                    ROTULOS_CAMPO.getOrDefault(campo, campo) + " é obrigatório.");
+        }
     }
 
     private static void exigirSeObrigatorio(Map<String, ConfiguracaoCampoResponse> config, String campo, String valor) {

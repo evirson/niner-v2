@@ -5,6 +5,7 @@ import { ApiError } from '../../lib/api'
 import { buscarDetalheParaCancelamento, cancelarVenda } from '../../lib/cancelamentoVenda'
 import { formatarDataHora } from '../../lib/datas'
 import { formatarMoeda } from '../../lib/masks'
+import AvisoModal from '../../components/AvisoModal'
 
 function moeda(v: number): string {
   return `R$ ${formatarMoeda(v)}`
@@ -41,6 +42,16 @@ export default function CancelamentoVendaModal({
 }) {
   const [motivo, setMotivo] = useState('')
   const [erro, setErro] = useState('')
+  /**
+   * Erro de NEGÓCIO vindo do servidor (auditoria 2026-08-21, item 10).
+   *
+   * ⚠️ Separado do `erro` acima, que é validação local ("informe o motivo") e continua inline
+   * junto ao campo — ali o texto curto ao lado do campo é o certo. O que vinha errado era a
+   * recusa do servidor ("caixa de hoje fechado", "prazo da SEFAZ passou"): saía no mesmo
+   * `erro-campo`, contra a convenção do projeto (toda mensagem de erro vira popup), e a
+   * mensagem multilinha **colapsava numa linha só**, escondendo a instrução do que fazer.
+   */
+  const [erroServidor, setErroServidor] = useState('')
 
   const {
     data: detalhe,
@@ -55,7 +66,7 @@ export default function CancelamentoVendaModal({
   const cancelar = useMutation({
     mutationFn: () => cancelarVenda(idVenda, motivo.trim()),
     onSuccess: aoCancelarComSucesso,
-    onError: (e: unknown) => setErro(e instanceof ApiError ? e.message : 'Não foi possível cancelar a venda.'),
+    onError: (e: unknown) => setErroServidor(e instanceof ApiError ? e.message : 'Não foi possível cancelar a venda.'),
   })
 
   const confirmar = () => {
@@ -71,6 +82,15 @@ export default function CancelamentoVendaModal({
   const bloqueada = detalhe?.bloqueadaCredario ?? false
   const temNfce = detalhe?.nfceDataAutorizacao != null
   const prazoExpirado = detalhe?.nfcePrazoCancelamentoExpirado ?? false
+  /**
+   * Quarta recusa antecipada (auditoria 2026-08-21, item 9) — as outras três (já cancelada,
+   * crediário recebido, prazo da SEFAZ) a tela já avisava antes. Esta faltava, e era a mais
+   * frustrante: o ADMIN escrevia 15+ caracteres de justificativa para só então levar o erro.
+   *
+   * ⚠️ `?? true` no default: enquanto o detalhe não chegou, NÃO bloquear. Assumir fechado
+   * esconderia o campo de motivo por um instante a cada abertura do modal.
+   */
+  const caixaFechadoHoje = detalhe ? !detalhe.caixaAbertoHoje : false
 
   return (
     <div className="modal-overlay" onClick={aoFechar}>
@@ -245,9 +265,17 @@ export default function CancelamentoVendaModal({
                   minutos de prazo). Depois disso, esta venda não poderá mais ser cancelada por aqui.
                 </p>
               )}
+              {/* Caixa de hoje fechado (RN-02) — mesmo espírito do aviso de prazo acima: dizer
+                  ANTES, com o caminho da solução, em vez de recusar depois da justificativa. */}
+              {!jaCancelada && !bloqueada && !prazoExpirado && caixaFechadoHoje && (
+                <p className="erro" style={{ marginTop: 16 }}>
+                  O caixa de hoje da empresa {detalhe.nomeEmpresa} está fechado. Abra o caixa antes de cancelar
+                  esta venda — o estorno do dinheiro precisa de um caixa aberto para ser lançado.
+                </p>
+              )}
             </div>
 
-            {!jaCancelada && !bloqueada && !prazoExpirado && (
+            {!jaCancelada && !bloqueada && !prazoExpirado && !caixaFechadoHoje && (
               <div style={{ flexShrink: 0, marginTop: 16 }}>
                 <label htmlFor="motivo-cancelamento">Motivo do Cancelamento *</label>
                 <textarea
@@ -272,6 +300,10 @@ export default function CancelamentoVendaModal({
           </>
         )}
       </div>
+
+      {erroServidor && (
+        <AvisoModal titulo="Cancelamento de venda" mensagem={erroServidor} aoFechar={() => setErroServidor('')} />
+      )}
     </div>
   )
 }

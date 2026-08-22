@@ -170,18 +170,23 @@ public class CancelamentoNfceService {
             // registrado, quase sempre de uma tentativa anterior cuja resposta se perdeu no
             // caminho (o `catch` de falha de comunicação acima responde 409 sem reverter, que é o
             // lado seguro do erro). Como o evento é determinístico — mesmo `Id`, `nSeqEvento` 1 —,
-            // toda retentativa devolve 573 e o operador fica num beco: a NFC-e cancelada na SEFAZ e
-            // a venda viva no ERP, sem caminho para reconciliar.
+            // toda retentativa devolvia 573 e o operador ficava num beco: a NFC-e cancelada na
+            // SEFAZ e a venda viva no ERP, sem caminho para reconciliar.
             //
-            // Aceitar 573 como sucesso cego seria errado (não sabemos se o evento registrado é
-            // este). O certo é consultar a nota antes de decidir — mesma disciplina do F5 que a
-            // autorização já tem — e está registrado como pendência. Até lá, ao menos a mensagem
-            // manda o operador para as ferramentas que existem e resolvem.
+            // Desde 2026-08-22 (auditoria, item 20) o 573 não é mais o fim da linha: consultamos a
+            // nota antes de decidir — mesma disciplina do F5 que a autorização já tem. Aceitar 573
+            // como sucesso CEGO continuaria errado (o evento registrado pode ser outro); quem diz
+            // se a nota está cancelada é a SEFAZ, perguntada.
+            if ("573".equals(resposta.cStat()) && notaJaEstaCanceladaNaSefaz(doc, modelo, certificado)) {
+                repositorio.marcarCancelado(doc.idDocumentoFiscal());
+                arquivamento.arquivarEventoSeAplicavel(idEvento);
+                return doc.protocolo();
+            }
             if ("573".equals(resposta.cStat())) {
                 throw new ResponseStatusException(HttpStatus.CONFLICT,
-                        ("O cancelamento desta %s já foi registrado na SEFAZ numa tentativa anterior (573)."
-                                + " %s. Use \"Consultar SEFAZ\" na tela de Documentos Fiscais para confirmar a"
-                                + " situação da nota antes de tentar de novo.")
+                        ("O cancelamento desta %s já foi registrado na SEFAZ numa tentativa anterior (573), mas a"
+                                + " consulta não confirmou que a nota está cancelada. %s. Use \"Consultar SEFAZ\" na"
+                                + " tela de Documentos Fiscais antes de tentar de novo.")
                                 .formatted(rotulo.documento(), rotulo.naoRevertido()));
             }
             throw new ResponseStatusException(HttpStatus.CONFLICT,
@@ -196,6 +201,45 @@ public class CancelamentoNfceService {
         arquivamento.arquivarEventoSeAplicavel(idEvento);
 
         return resposta.protocolo();
+    }
+
+    /**
+     * Pergunta à SEFAZ se a nota <b>já está cancelada</b>, para decidir o que fazer com um
+     * {@code cStat 573} ("Duplicidade de Evento") — auditoria 2026-08-21, item 20.
+     *
+     * <p>O 573 quase sempre significa que uma tentativa anterior chegou lá e só a resposta se
+     * perdeu. Como o evento de cancelamento é determinístico (mesmo {@code Id}, {@code nSeqEvento}
+     * 1), toda retentativa devolve 573 para sempre — e sem esta consulta o operador ficava preso
+     * com a nota cancelada no fisco e a venda viva no ERP.
+     *
+     * <p><b>Só o "sim" é aproveitado.</b> Qualquer resposta que não confirme o cancelamento —
+     * inclusive falha de comunicação — devolve {@code false}, e o chamador mantém a recusa sem
+     * reverter. É o mesmo lado seguro do erro que o {@code catch} da transmissão escolhe: reverter
+     * estoque e caixa por causa de uma resposta ambígua é pior que pedir para tentar de novo.
+     *
+     * <p>⚠️ Os códigos aceitos são os de <b>topo</b> da {@code consSitNFe}: <b>101</b>
+     * (cancelamento homologado) e <b>151</b> (homologado fora de prazo) — o par do 135/155 que a
+     * transmissão do evento aceita. Não interpreto {@code <retEvento>} aninhado: seria adivinhar
+     * estrutura sem transmitir, e neste projeto já custou caro concluir coisa de XML fiscal sem
+     * homologação real (cStat 1010 e 975 passaram no XSD e foram recusados na SEFAZ). Se numa UF o
+     * cancelamento vier só no evento aninhado, o caminho continua sendo o do "Consultar SEFAZ" da
+     * tela — que é o que a mensagem de recusa manda fazer.
+     */
+    private boolean notaJaEstaCanceladaNaSefaz(DocumentoParaCancelar doc, int modelo,
+                                               CertificadoParaAssinatura certificado) {
+        try {
+            String url = autorizadores.urlDe(doc.uf(), modelo, doc.ambiente().codigo(),
+                    ServicoSefaz.CONSULTA_PROTOCOLO);
+            String consSitNFe = ("<consSitNFe xmlns=\"%s\" versao=\"4.00\">"
+                    + "<tpAmb>%d</tpAmb><xServ>CONSULTAR</xServ><chNFe>%s</chNFe></consSitNFe>")
+                    .formatted(MontadorXmlNfce.NS, doc.ambiente().codigo(), doc.chaveAcesso());
+
+            RespostaSefaz consulta = transporte.enviar(url, "NFeConsultaProtocolo4", consSitNFe,
+                    certificado.pkcs12(), certificado.senha(), certificado.impressaoDigital());
+            return "101".equals(consulta.cStat()) || "151".equals(consulta.cStat());
+        } catch (FalhaDeComunicacaoException e) {
+            return false;
+        }
     }
 
     /** O vocabulário de cada caminho — o que é o documento, o que é a operação que NÃO foi

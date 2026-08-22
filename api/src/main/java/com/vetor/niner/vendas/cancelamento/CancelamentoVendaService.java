@@ -188,13 +188,16 @@ public class CancelamentoVendaService {
         List<ParcelaRecebidaDetalhe> parcelasRecebidas = buscarParcelasCredarioRecebidas(idVenda);
         BigDecimal valorVenda = itens.stream().map(ItemVendaDetalhe::valorItem).reduce(BigDecimal.ZERO, BigDecimal::add);
         PrazoNfce prazo = buscarPrazoNfce(idVenda);
+        // Mesmo guard que `cancelar` aplica (RN-02) — aqui só para a tela poder avisar antes.
+        boolean caixaAbertoHoje = caixaService.caixaAbertoHoje(venda.idEmpresa(), idUsuario(jwt));
 
         return new VendaDetalheCancelamentoResponse(
                 venda.idVenda(), venda.idEmpresa(), venda.nomeEmpresa(), venda.dataVenda(),
                 venda.idCliente(), venda.nomeCliente(), venda.idFuncionario(), venda.nomeFuncionario(),
                 valorVenda, venda.cancelada(), venda.dataCancelamento(), venda.nomeUsuarioCancelamento(),
                 venda.motivoCancelamento(), itens, pagamentos, !parcelasRecebidas.isEmpty(), parcelasRecebidas,
-                prazo.dataAutorizacao(), prazo.prazoMinutos(), prazo.expiraEm(), prazo.expirado());
+                prazo.dataAutorizacao(), prazo.prazoMinutos(), prazo.expiraEm(), prazo.expirado(),
+                caixaAbertoHoje);
     }
 
     /**

@@ -290,6 +290,7 @@ public class ClienteService {
         exigirSeObrigatorio(config, "bairro", req.bairro());
         exigirSeObrigatorio(config, "cidade", req.cidade());
         exigirSeObrigatorio(config, "estado", req.estado());
+        exigirSeObrigatorioValor(config, "limiteCredito", req.limiteCredito());
     }
 
     private static boolean celularValidoOuVazio(String valor) {
@@ -303,6 +304,31 @@ public class ClienteService {
     private static void exigirSeObrigatorio(Map<String, ConfiguracaoCampoResponse> config, String campo, String valor) {
         ConfiguracaoCampoResponse c = config.get(campo);
         if (c != null && c.obrigatorio() && (valor == null || valor.isBlank())) {
+            throw new IllegalArgumentException(
+                    ROTULOS_CAMPO.getOrDefault(campo, campo) + " é obrigatório.");
+        }
+    }
+
+    /**
+     * Mesma regra para campo NUMÉRICO (auditoria 2026-08-21, item 24).
+     *
+     * <p>Até 2026-08-22 só existia a versão para {@code String}, então <b>todo campo configurável
+     * que é número ou data ficava sem revalidação no servidor</b>, por construção — apesar de o
+     * {@code CLAUDE.md} afirmar que a bandeira é aplicada "de novo no servidor". O formulário
+     * cobria, mas uma gravação pela API passava sem.
+     *
+     * <p>⚠️ <b>Ausente é {@code null}, e zero é valor legítimo</b> — decisão do dono do produto em
+     * 2026-08-22: <i>"se não informados, marcar como zero"</i>. Um cliente sem crédito tem limite
+     * R$ 0,00, e isso não é campo vazio. Como o formulário manda {@code desmascararMoeda('')} = 0,
+     * na prática esta validação nunca dispara pela tela — ela existe para o cliente de API que
+     * omite o campo. Quem quer o campo fora do cadastro usa {@code visivel = false}, que é a
+     * dimensão certa para isso (a tabela tem as duas, com CHECK garantindo que obrigatório implica
+     * visível).
+     */
+    private static void exigirSeObrigatorioValor(Map<String, ConfiguracaoCampoResponse> config, String campo,
+                                                  Object valor) {
+        ConfiguracaoCampoResponse c = config.get(campo);
+        if (c != null && c.obrigatorio() && valor == null) {
             throw new IllegalArgumentException(
                     ROTULOS_CAMPO.getOrDefault(campo, campo) + " é obrigatório.");
         }

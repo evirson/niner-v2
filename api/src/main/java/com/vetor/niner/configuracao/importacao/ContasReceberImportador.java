@@ -150,9 +150,16 @@ public class ContasReceberImportador implements ImportadorDeTabela {
             // SAVEPOINT por venda sintética (2026-08-10): uma falha de banco aqui (ou na parcela
             // abaixo) não pode deixar a transação do arquivo inteiro "abortada" para os grupos
             // seguintes — mesmo bug/fix de ProdutoImportador, ver ImportacaoSavepointExecutor.
+            //
+            // ⚠️ `origem = 'IMPORTACAO'` (V059, 2026-08-22) — esta venda é uma CASCA: existe só
+            // porque `contas_receber.id_venda` é obrigatório. Não tem item, movimento de estoque
+            // nem custo. Sem a marca, o DRE em regime CAIXA somava a parcela migrada como receita
+            // com CMV zerado pelo COALESCE do LEFT JOIN — margem de 100% num relatório de decisão,
+            // sobre mercadoria comprada e vendida no sistema anterior. Ver DreService.derivadasCaixa.
             Long idVenda = savepoints.executar(() -> jdbc.sql("""
-                            INSERT INTO venda (id_tenant, id_empresa, id_cliente, data_venda)
-                            VALUES (plataforma.tenant_atual(), ?, ?, ?)
+                            INSERT INTO venda (id_tenant, id_empresa, id_cliente, data_venda,
+                                               origem, importado_em)
+                            VALUES (plataforma.tenant_atual(), ?, ?, ?, 'IMPORTACAO', now())
                             RETURNING id_venda
                             """)
                     .params(idEmpresa, idCliente, dataVenda)

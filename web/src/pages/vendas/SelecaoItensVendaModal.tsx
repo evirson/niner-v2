@@ -43,8 +43,17 @@ export default function SelecaoItensVendaModal({
   const [venda, setVenda] = useState<VendedorDaVenda | null>(null)
   const [buscando, setBuscando] = useState(false)
   const [erro, setErro] = useState('')
-  /** `id_variacao` dos itens marcados — só itens com quantidade disponível entram aqui. */
-  const [selecionados, setSelecionados] = useState<Set<number>>(new Set())
+  /**
+   * Chave `idVariacao|preco` dos itens marcados — só itens com quantidade disponível entram aqui.
+   *
+   * ⚠️ Era `id_variacao` puro até 2026-08-22 (auditoria, item 2). Desde o orçamento a mesma
+   * variação pode vir DUAS VEZES na mesma venda, com preços diferentes: marcar uma marcava as
+   * duas, e devolver uma peça consumia as duas linhas.
+   */
+  const [selecionados, setSelecionados] = useState<Set<string>>(new Set())
+
+  /** Mesma chave usada pela tela de Devolução — variação + preço, com 2 casas fixas. */
+  const chaveLinha = (idVariacao: number, precoUnitario: number) => `${idVariacao}|${precoUnitario.toFixed(2)}`
 
   const itensDisponiveis = useMemo(
     () => (venda?.itens ?? []).filter((i) => i.qtdDisponivelDevolucao > 0),
@@ -74,13 +83,13 @@ export default function SelecaoItensVendaModal({
     }
   }
 
-  const alternarSelecao = (idVariacao: number) => {
+  const alternarSelecao = (chave: string) => {
     setSelecionados((atual) => {
       const novo = new Set(atual)
-      if (novo.has(idVariacao)) {
-        novo.delete(idVariacao)
+      if (novo.has(chave)) {
+        novo.delete(chave)
       } else {
-        novo.add(idVariacao)
+        novo.add(chave)
       }
       return novo
     })
@@ -89,12 +98,14 @@ export default function SelecaoItensVendaModal({
   const todosSelecionados = itensDisponiveis.length > 0 && selecionados.size === itensDisponiveis.length
 
   const alternarTodos = () => {
-    setSelecionados(todosSelecionados ? new Set() : new Set(itensDisponiveis.map((i) => i.idVariacao)))
+    setSelecionados(
+      todosSelecionados ? new Set() : new Set(itensDisponiveis.map((i) => chaveLinha(i.idVariacao, i.precoUnitario))),
+    )
   }
 
   const confirmar = () => {
     if (!venda || selecionados.size === 0) return
-    aoConfirmar(venda, itensDisponiveis.filter((i) => selecionados.has(i.idVariacao)))
+    aoConfirmar(venda, itensDisponiveis.filter((i) => selecionados.has(chaveLinha(i.idVariacao, i.precoUnitario))))
   }
 
   return (
@@ -184,13 +195,26 @@ export default function SelecaoItensVendaModal({
                     {venda.itens.map((item) => {
                       const variacao = variacaoTexto(item)
                       const indisponivel = item.qtdDisponivelDevolucao <= 0
-                      const marcado = selecionados.has(item.idVariacao)
+                      const marcado = selecionados.has(chaveLinha(item.idVariacao, item.precoUnitario))
+                      // ⚠️ A mesma variação pode ter mais de uma linha nesta venda, com preços
+                      // diferentes (o congelado do orçamento e o do dia). Quando isso acontece, as
+                      // linhas têm descrição IDÊNTICA e só o preço as separa — sem este aviso o
+                      // operador escolheria no escuro qual peça está devolvendo (auditoria, item 2).
+                      const temOutroPreco = venda.itens.some(
+                        (o) => o.idVariacao === item.idVariacao && o.precoUnitario !== item.precoUnitario,
+                      )
                       return (
-                        <tr key={item.idVariacao} className={marcado ? 'linha-selecionada' : undefined}>
+                        <tr key={chaveLinha(item.idVariacao, item.precoUnitario)} className={marcado ? 'linha-selecionada' : undefined}>
                           <td className="mono">{item.sku}</td>
                           <td style={{ minWidth: 260 }}>
                             {item.descricaoProduto}
                             {variacao && <span className="muted"> · {variacao}</span>}
+                            {temOutroPreco && (
+                              <p className="muted" style={{ margin: '2px 0 0', fontSize: 12 }}>
+                                ⚠️ Este produto foi vendido por mais de um preço nesta venda — esta linha é a
+                                de {moeda(item.precoUnitario)}.
+                              </p>
+                            )}
                             {indisponivel && (
                               <p className="muted" style={{ margin: '2px 0 0', fontSize: 12 }}>
                                 Já devolvido por completo.
@@ -217,7 +241,7 @@ export default function SelecaoItensVendaModal({
                               type="button"
                               className={marcado ? 'btn' : 'btn ghost'}
                               disabled={indisponivel}
-                              onClick={() => alternarSelecao(item.idVariacao)}
+                              onClick={() => alternarSelecao(chaveLinha(item.idVariacao, item.precoUnitario))}
                             >
                               {marcado ? 'Selecionado' : 'Selecionar'}
                             </button>

@@ -1,5 +1,38 @@
 # Pendências da auditoria de 2026-08-21 — aguardando decisão do dono do produto
 
+> ## ✅ SITUAÇÃO EM 2026-08-22 — 24 dos 33 resolvidos
+>
+> O dono do produto foi avisado das 33 pendências, decidiu todas as que dependiam dele e mandou
+> tratar o resto. **Sobram 5 adiados por decisão dele e 4 já resolvidos em parte.**
+>
+> **Corrigidos (24):** 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 22,
+> 23, 24, 28, 33.
+>
+> **⏸️ Adiados por decisão dele:**
+> | # | O quê | Motivo |
+> |---|---|---|
+> | 21 + 32 | Transmitir a NF-e de devolução ao fornecedor | Homologação na SEFAZ/PR pendente |
+> | 25 | Alarme de nota parada | Ele quer repensar a forma de avisar (ideia dele: **sino** no topo) |
+> | 26 + 30 | Impersonação auditada e gestão de staff | Política de staff ainda não definida |
+> | 27 | Estorno/chargeback não revoga assinatura | Aceito; **avisar em toda revisão do ERP** |
+>
+> **Decisões que ele tomou e valem para o futuro:**
+> - **Item 2** — devolução por **linha da venda**; o aviso de preço só aparece quando há ambiguidade.
+> - **Item 6** — *"valores fechados do mês não podem ser mudados; a devolução entra no mês da
+>   devolução."*
+> - **Item 19** — recusar a emissão quando CRT≠2 e o item trouxer CST (a conversão para CSOSN espera
+>   o contador).
+> - **Item 22** — coluna de origem na venda sintética, excluindo do DRE caixa só as parcelas
+>   recebidas **antes** da importação.
+> - **Item 24** — validar sempre no front **e** no back; `limiteCredito`/`precoOferta` não informados
+>   viram **zero** (⚠️ o que tira campo do cadastro é `visivel`, não `obrigatorio`).
+> - **Item 4** — cabeçalho **só na primeira página**.
+> - **Item 12** — confirmação **por digitação da faixa**.
+>
+> ⚠️ **Só se confirma imprimindo:** o item 4 (paginação A4) foi entregue mas **não foi testado no
+> papel** — nem a impressão do orçamento, que nunca foi testada desde que nasceu em 2026-08-20.
+
+
 Dois agentes varreram backend e frontend em **seis passadas** cada — a auditoria foi encerrada por
 recomendação dos dois. **31 defeitos foram corrigidos
 e commitados** no mesmo dia (ver `docs/PROGRESSO.md`). Este arquivo lista o que **não** foi corrigido
@@ -22,8 +55,20 @@ rodadas 3 a 6 acrescentaram (19–33).
 | 1 | Cancelar entrada com devolução debita estoque duas vezes | Estoque negativo silencioso + NF-e 55 órfã |
 | 5 | Nota presa em `TRANSMITINDO` some da fila do dreno | Prazo legal de 24 h correndo, sem alarme (ver 25) |
 | 22 | Parcela legada vira receita com CMV zero no DRE caixa | Lucro que nunca existiu, num relatório de decisão |
-| 26 | A impersonação auditada (R21/P9) **nunca foi construída** | A constituição promete trilha para acesso de staff, e não há nenhuma |
-| **32** | **Transmitir uma devolução ao fornecedor em HOMOLOGAÇÃO** | Recomendação final da auditoria: é o único caminho fiscal que nunca rodou de verdade, e já acumula 3 pendências |
+| ~~26~~ | ~~A impersonação auditada (R21/P9) **nunca foi construída**~~ | ⏸️ **ADIADO em 2026-08-22** — ver abaixo |
+| ~~**32**~~ | ~~**Transmitir uma devolução ao fornecedor em HOMOLOGAÇÃO**~~ | ⏸️ **ADIADO em 2026-08-22** — ver abaixo |
+
+## ⏸️ Adiados por decisão do dono do produto (2026-08-22)
+
+| # | O quê | Por que ficou parado |
+|---|---|---|
+| 32 (e 21) | Transmitir a NF-e de devolução ao fornecedor em homologação | **A homologação na SEFAZ/PR ainda está pendente.** Não há como transmitir de verdade, então o item 21 (FIFO do `nItem`), que só se prova transmitindo, vai junto. |
+| 26 + 30 | Impersonação auditada (R21/P9) e gestão de staff | **A política ainda não foi definida** — quem é staff, quantos papéis, o que cada papel enxerga, e como o suporte entra na conta de um lojista. Não é dívida técnica a consertar: é escopo de produto a decidir. Fica registrado para uma sessão dedicada. |
+
+⚠️ **O que muda o cálculo dos dois adiados:** hoje não há cliente real em produção e, pelo que o
+código mostra (`StaffBootstrap` é o único criador e só roda com a tabela vazia), há **um** staff.
+No dia em que existir lojista real ou um segundo funcionário da Vetor, os dois voltam a pesar — o 26
+por LGPD (responder *"quem da Vetor abriu meus dados?"*) e o 30 por revogação de acesso.
 
 ---
 
@@ -231,7 +276,11 @@ Sem isso o beco continua: se a resposta do primeiro evento se perde (timeout), t
 devolve 573 — porque o evento é determinístico (mesmo `Id`, `nSeqEvento` 1) — e a venda nunca é
 revertida no ERP com a NFC-e cancelada na SEFAZ.
 
-## 21. FIFO da devolução ao fornecedor recomeça no primeiro `nItem` a cada devolução
+## 21. ⏸️ ADIADO — FIFO da devolução ao fornecedor recomeça no primeiro `nItem` a cada devolução
+
+> ⏸️ **Adiado em 2026-08-22, junto com o 32:** a correção muda o que vai no XML e só se confirma
+> transmitindo em homologação, que está bloqueado pela SEFAZ/PR.
+
 
 **Onde:** `DevolucaoCompraFiscalAssembler` (~:145-151).
 
@@ -296,7 +345,22 @@ sem eles.
 dois o contrato precisaria passar a mandar `null`, o que é decisão de produto. Os cinco restantes
 são mecânicos.
 
-## 25. Não há alarme para nota presa em transmissão
+## 25. ⏸️ ADIADO — Não há alarme para nota presa em transmissão
+
+> ⏸️ **Adiado em 2026-08-22 pelo dono do produto:** *"por enquanto vamos esquecer este assunto, vou
+> pensar melhor como informar ao usuário, e depois vemos isso."* A ideia dele era um **sino no canto
+> superior da tela** com o número de avisos — melhor que o contador no painel de Conformidade que eu
+> havia proposto, porque aparece **sem ninguém ir procurar**. Fica para quando ele definir a forma.
+>
+> ⚠️ **O que mudou o peso deste item:** com a pendência **5** corrigida no mesmo dia, o dreno agora
+> **recupera sozinho** a nota presa em `TRANSMITINDO` (consultando a chave antes de reenviar). O
+> alarme deixou de ser o único caminho e virou segunda camada — para o caso em que a consulta
+> devolve algo que o job deliberadamente não decide sozinho e para.
+>
+> Quando for retomar, as três decisões que ficaram em aberto: (a) nota **rejeitada** entra no mesmo
+> sino? (b) conta só a empresa da sessão ou todas as do usuário? (c) OPERADOR vê, ou só quem pode
+> reprocessar?
+
 
 **Onde:** `ConformidadeFiscalDtos.CategoriaConformidade` (só `EMPRESA/PRODUTOS/PAGAMENTOS/CLIENTES`).
 
@@ -307,7 +371,13 @@ suspeitar que ela existe** (abrir a lista, escolher empresa, acertar o período 
 situação). Precisa de um endpoint que conte documentos parados por empresa — a lista atual é
 paginada por período e não serve de contador. Casa com a pendência 5 (dreno).
 
-## 26. ⛔ A impersonação auditada (R21/P9) NUNCA FOI CONSTRUÍDA — e há um acesso de staff a dado de tenant sem trilha
+## 26. ⏸️ ADIADO — A impersonação auditada (R21/P9) NUNCA FOI CONSTRUÍDA, e há um acesso de staff a dado de tenant sem trilha
+
+> ⏸️ **Adiado em 2026-08-22 por decisão do dono do produto**, junto com o item 30: *"a política de
+> staff ainda não foi definida"*. Não mexer sem decisão de escopo. O que fica valendo enquanto isso:
+> o acesso do staff a dado de lojista **não deixa rastro nenhum**, e a armadilha do `set_config`
+> descrita no fim desta seção continua armada para quem acrescentar uma consulta ali.
+
 
 **Onde:** `TenantAdminService.detalhar` (~:115-127).
 
@@ -340,7 +410,25 @@ decidir se CNPJ é informação que todo papel de staff precisa ver; (b) o certo
 com início, fim e motivo, tirando o `set_config` solto do serviço. **Não é bug de digitação: é
 dívida de escopo.**
 
-## 27. Estorno e chargeback não revogam a assinatura
+## 27. 🔔 ACEITO E A LEMBRAR — Estorno e chargeback não revogam a assinatura
+
+> 🔔 **Decisão do dono do produto, 2026-08-22:** *"documente e avise sempre que formos revisar o
+> ERP à procura de falhas"*. Não é para corrigir agora, e **não é para esquecer**: toda auditoria
+> ou revisão futura do ERP deve trazer este item de volta à mesa. Documentado no javadoc de
+> `CobrancaWebhookProcessador.aplicar`, para que quem ler o `return` não conclua que ele está
+> certo para os três casos.
+>
+> ⚠️ **O que descobri conferindo, e que reduz a urgência (mas não a corrige):** nenhum status corta
+> acesso hoje. O login (`SignupService.login`) confere slug, e-mail, senha, `usuario.ativo` e
+> horário de acesso — e **não** olha `tenant.status` nem `assinatura.status`; não há um único uso
+> de `SUSPENSA`/`INADIMPLENTE` em `api/src/main`. Os status são rótulo no backoffice, não
+> fechadura. O prejuízo real é o **financeiro**: a `proxima_cobranca` fica empurrada e nenhuma
+> fatura nova é gerada.
+>
+> ⚠️ **Quando for corrigir, são três passos, não um:** reabrir a fatura, **recuar**
+> `proxima_cobranca` para o valor anterior, e decidir o estado da assinatura. Recuar é o passo
+> que se esquece.
+
 
 **Onde:** `CobrancaWebhookProcessador.aplicar` (~:103-105).
 
@@ -387,7 +475,12 @@ a configuração da própria loja por tentativa e erro, no meio de uma entrada d
 servidor"), ou o servidor dispensa a config no cadastro rápido (contraria o padrão)? Recomendo a
 primeira.
 
-## 30. Não existe gestão de staff — e o token não se revoga
+## 30. ⏸️ ADIADO — Não existe gestão de staff, e o token não se revoga
+
+> ⏸️ **Adiado em 2026-08-22 por decisão do dono do produto**, junto com o item 26 — é o mesmo
+> trabalho. Enquanto o staff for uma pessoa só, o risco é hipotético; contratar ou desligar alguém
+> da Vetor é o gatilho para retomar.
+
 
 **Onde:** `StaffController` (2 endpoints: `POST /sessao`, `GET /eu`) e `StaffService` (1 método:
 `login`).
@@ -419,7 +512,12 @@ tenant, não financeiro). Fica registrado para decisão, não como defeito.
 ⚠️ Relacionado, também só de funil: `converter` (~:130) sobrescreve o `id_tenant` do lead num segundo
 signup com o mesmo e-mail, perdendo a atribuição da conta anterior.
 
-## 32. ⭐ A NF-e de devolução ao fornecedor NUNCA foi transmitida de verdade
+## 32. ⏸️ ADIADO — A NF-e de devolução ao fornecedor NUNCA foi transmitida de verdade
+
+> ⏸️ **Adiado em 2026-08-22:** a homologação na SEFAZ/PR ainda está pendente, então não há como
+> transmitir. O item **21** (FIFO recomeçando no primeiro `nItem`) vai junto, porque só se prova
+> transmitindo. O item **19** (CST do fornecedor) **não** vai — ele é decisão do contador e vale
+> antes de qualquer transmissão.
 
 **Não é um item de código — é o próximo passo recomendado pela auditoria.**
 

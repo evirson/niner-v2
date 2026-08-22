@@ -69,6 +69,20 @@ export function criarOuObterVariacaoEmissao(
   })
 }
 
+/**
+ * Teto das buscas por digitação deste módulo, no SERVIDOR (`EtiquetaEmissaoService.LIMITE_BUSCA`).
+ *
+ * ⚠️ Existe para a tela poder avisar quando o corte aconteceu (auditoria 2026-08-21, item 33).
+ * Era 10 e nada era dito: quem tinha mais cadastros parecidos que o limite não via o seu, concluía
+ * "não está cadastrado" e criava um duplicado pelo botão ao lado — partindo notas e contas a pagar
+ * do mesmo fornecedor em dois cadastros.
+ *
+ * Usado por cinco telas: Entrada de Produtos (form e lista), Devolução ao Fornecedor, Contas a
+ * Pagar (form e lista) e Emissão de Etiqueta. Se mudar aqui, mude junto no serviço — o número
+ * precisa ser o mesmo, senão o aviso aparece na hora errada (ou nunca).
+ */
+export const LIMITE_BUSCA_EMISSAO = 20
+
 export function buscarFornecedoresEmissao(busca: string): Promise<FornecedorOpcaoEmissao[]> {
   const params = new URLSearchParams()
   if (busca) params.set('busca', busca)

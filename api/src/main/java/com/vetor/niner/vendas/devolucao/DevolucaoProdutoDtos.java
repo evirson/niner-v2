@@ -15,9 +15,26 @@ public final class DevolucaoProdutoDtos {
     private DevolucaoProdutoDtos() {
     }
 
+    /**
+     * @param precoUnitario preço da <b>linha da venda</b> que está sendo devolvida — <b>opcional</b>.
+     *
+     * <p>⚠️ Entrou em 2026-08-22 (auditoria, item 2) porque a mesma variação passou a poder aparecer
+     * <b>duas vezes na mesma venda</b> com preços diferentes: o congelado do orçamento, que a loja
+     * honrou, e o do dia, das unidades que o cliente resolveu levar na hora. Sem identificar a
+     * linha, a devolução usava a <b>média ponderada</b> das duas — um valor que a venda nunca
+     * praticou. Devolvendo 1 peça de uma venda de 1×R$ 80 + 1×R$ 120, o vale saía R$ 100: ou a loja
+     * pagava R$ 20 a mais, ou o cliente perdia R$ 20. E o mesmo R$ 100 ia para a NF-e 55, declarando
+     * unitário que não bate com nenhum item da NFC-e original.
+     *
+     * <p><b>Por que opcional, e não obrigatório:</b> devolução <b>sem</b> venda de origem (permitida
+     * quando o tenant não exige o número da venda) não tem linha para apontar, e o contrato antigo
+     * continua válido. Quando vem, identifica a linha exata; quando não vem, o comportamento é o de
+     * antes — média, e o limite de quantidade somando todas as linhas da variação.
+     */
     public record ItemDevolucaoRequest(
             @NotNull Long idVariacao,
-            @NotNull @DecimalMin(value = "0.001") BigDecimal qtd) {
+            @NotNull @DecimalMin(value = "0.001") BigDecimal qtd,
+            BigDecimal precoUnitario) {
     }
 
     /** {@code numeroVenda} é opcional — só usado para resolver o vendedor (ver package-info). */

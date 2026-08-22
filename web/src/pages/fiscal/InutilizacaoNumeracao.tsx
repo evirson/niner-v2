@@ -13,6 +13,7 @@ import {
 } from '../../lib/fiscalInutilizacao'
 import { ApiError } from '../../lib/api'
 import Toast from '../../components/Toast'
+import { maiusculas } from '../../lib/texto'
 
 function formatarDataHora(iso: string): string {
   return new Date(iso).toLocaleString('pt-BR', {
@@ -45,6 +46,16 @@ export default function InutilizacaoNumeracao() {
   const [processando, setProcessando] = useState(false)
   const [erro, setErro] = useState<string | null>(null)
   const [sucesso, setSucesso] = useState<string | null>(null)
+  /**
+   * Confirmação por DIGITAÇÃO da faixa (auditoria 2026-08-21, item 12).
+   *
+   * ⚠️ Esta é a ação mais irreversível do sistema — queima uma faixa de numeração perante o fisco,
+   * e **não existe desfazer** — e era a única sem nenhuma confirmação: um clique e pronto. Pedir
+   * para digitar a faixa não é burocracia: força a pessoa a **olhar os números que está queimando**
+   * antes de confirmar, que é justamente o erro que um "Tem certeza? Sim/Não" não previne.
+   */
+  const [confirmacaoAberta, setConfirmacaoAberta] = useState(false)
+  const [faixaDigitada, setFaixaDigitada] = useState('')
 
   const { data: empresas } = useQuery({ queryKey: ['fiscal-empresas'], queryFn: listarEmpresasFiscal })
 
@@ -192,7 +203,7 @@ export default function InutilizacaoNumeracao() {
                   id="justificativa-inutilizacao"
                   type="text"
                   value={justificativa}
-                  onChange={(e) => setJustificativa(e.target.value)}
+                  onChange={(e) => setJustificativa(maiusculas(e.target.value))}
                   placeholder="Ex.: número perdido por falha de comunicação no caixa"
                   minLength={15}
                   maxLength={255}
@@ -202,7 +213,10 @@ export default function InutilizacaoNumeracao() {
                 type="button"
                 className="btn"
                 disabled={processando || justificativa.trim().length < 15}
-                onClick={confirmarInutilizacao}
+                onClick={() => {
+                  setFaixaDigitada('')
+                  setConfirmacaoAberta(true)
+                }}
               >
                 Inutilizar na SEFAZ
               </button>
@@ -250,6 +264,48 @@ export default function InutilizacaoNumeracao() {
           )}
         </div>
       </div>
+
+      {/* Confirmação por digitação — ver o comentário de `confirmacaoAberta`. Ação sem desfazer. */}
+      {confirmacaoAberta && faixaEscolhida && (
+        <div className="modal-overlay">
+          <div className="modal" role="dialog" aria-label="Confirmar inutilização de numeração">
+            <h2 style={{ marginTop: 0 }}>Inutilizar numeração na SEFAZ</h2>
+            <p>
+              Esta ação <strong>queima a faixa {rotuloFaixa(faixaEscolhida)}</strong> (modelo {modelo}, série{' '}
+              {serie}) perante o fisco. Os números <strong>não poderão mais ser usados</strong>, e{' '}
+              <strong>não há como desfazer</strong>.
+            </p>
+            <div style={{ marginTop: 12 }}>
+              <label htmlFor="confirmar-faixa">
+                Digite a faixa <strong>{rotuloFaixa(faixaEscolhida)}</strong> para confirmar
+              </label>
+              <input
+                id="confirmar-faixa"
+                autoFocus
+                value={faixaDigitada}
+                onChange={(e) => setFaixaDigitada(e.target.value)}
+                placeholder={rotuloFaixa(faixaEscolhida)}
+              />
+            </div>
+            <div className="ajuda-rodape" style={{ marginTop: 16 }}>
+              <button type="button" className="btn ghost" onClick={() => setConfirmacaoAberta(false)}>
+                Cancelar
+              </button>
+              <button
+                type="button"
+                className="btn"
+                disabled={processando || faixaDigitada.trim() !== rotuloFaixa(faixaEscolhida)}
+                onClick={() => {
+                  setConfirmacaoAberta(false)
+                  confirmarInutilizacao()
+                }}
+              >
+                Inutilizar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {erro && <Toast mensagem={erro} tipo="erro" aoFechar={() => setErro(null)} />}
       {sucesso && <Toast mensagem={sucesso} tipo="sucesso" aoFechar={() => setSucesso(null)} />}

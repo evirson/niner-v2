@@ -8,6 +8,7 @@ import { listarEmpresasFiscal } from '../../lib/fiscalConfiguracao'
 import { buscarContingencia, entrarEmContingencia, sairDaContingencia } from '../../lib/fiscalContingencia'
 import { ApiError } from '../../lib/api'
 import Toast from '../../components/Toast'
+import { maiusculas } from '../../lib/texto'
 
 function formatarDataHora(iso: string): string {
   return new Date(iso).toLocaleString('pt-BR', {
@@ -161,7 +162,7 @@ export default function FiscalContingenciaPainel() {
                     id="justificativa-contingencia"
                     type="text"
                     value={justificativa}
-                    onChange={(e) => setJustificativa(e.target.value)}
+                    onChange={(e) => setJustificativa(maiusculas(e.target.value))}
                     placeholder={estado.ativa ? 'Ex.: internet voltou' : 'Ex.: manutenção programada no link'}
                   />
                 </div>

@@ -58,7 +58,7 @@ const DanfeImprimir = forwardRef<HTMLDivElement, { danfe: Danfe }>(function Danf
   const entrada = d.tipoNf === 0
 
   return (
-    <div className="danfe-preview danfe-imprimir" ref={ref}>
+    <div className="danfe-preview danfe-imprimir documento-a4-imprimir" ref={ref}>
       {/* ---------------------------------------------------------------- canhoto */}
       <div className="danfe-canhoto">
         <div className="danfe-canhoto-texto">

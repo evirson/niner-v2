@@ -22,6 +22,23 @@ import java.util.List;
 @Service
 public class EtiquetaEmissaoService {
 
+    /**
+     * Teto das buscas por digitação (produto e fornecedor).
+     *
+     * <p>Era <b>10</b> — o menor do produto — e a tela não dizia nada quando cortava (auditoria
+     * 2026-08-21, item 33). Estas duas buscas alimentam mais telas do que o nome do serviço
+     * sugere: <b>Entrada de Produtos</b> (form e lista), <b>Devolução ao Fornecedor</b>,
+     * <b>Contas a Pagar</b> (form e lista) e a Emissão de Etiqueta. Uma distribuidora com 15
+     * cadastros começando por "DISTRIBUIDORA" recebia 10, não achava o seu, e concluía "não está
+     * cadastrado" — com o botão <b>＋ Novo fornecedor</b> ao lado, cujo cadastro rápido deixa de
+     * fora, por decisão documentada, a verificação de CNPJ duplicado. Daí em diante as notas e as
+     * contas a pagar do mesmo fornecedor ficavam divididas entre dois cadastros.
+     *
+     * <p>20 é o mesmo teto dos seletores do PDV, e as telas agora avisam quando o corte acontece —
+     * o aviso é que resolve; o número só reduz a frequência.
+     */
+    private static final int LIMITE_BUSCA = 20;
+
     private static final String CAMPOS_VARIACAO = """
             pb.id_variacao, pb.sku, p.descricao, p.marca, p.referencia, p.preco_venda,
             co.descricao AS variacao_cor, ta.descricao AS variacao_tamanho
@@ -49,7 +66,7 @@ public class EtiquetaEmissaoService {
                 SELECT p.id_produto, p.descricao, p.marca, p.referencia, p.id_grade
                 FROM produto p
                 WHERE p.id_tenant = plataforma.tenant_atual() AND p.ativo
-                """ + filtro + " ORDER BY p.descricao LIMIT 10");
+                """ + filtro + " ORDER BY p.descricao LIMIT " + LIMITE_BUSCA);
         if (!filtro.isEmpty()) {
             query = query.param("%" + busca.trim() + "%");
         }
@@ -85,7 +102,7 @@ public class EtiquetaEmissaoService {
                 SELECT id_fornecedor, razao_social
                 FROM fornecedor
                 WHERE id_tenant = plataforma.tenant_atual() AND ativo
-                """ + filtro + " ORDER BY razao_social LIMIT 10");
+                """ + filtro + " ORDER BY razao_social LIMIT " + LIMITE_BUSCA);
         if (!filtro.isEmpty()) {
             query = query.param("%" + busca.trim() + "%");
         }

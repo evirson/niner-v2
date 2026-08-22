@@ -32,7 +32,10 @@ export default function AvisoModal({
             <IconeFechar />
           </button>
         </div>
-        <p className="erro" style={{ margin: 0 }}>{mensagem}</p>
+        {/* ⚠️ `pre-line` (auditoria 2026-08-21, item 10): mensagem de negócio do servidor costuma
+            vir em mais de uma linha — o motivo e depois o que fazer. Sem isto, tudo colapsa numa
+            linha só e a instrução some no meio do parágrafo. */}
+        <p className="erro" style={{ margin: 0, whiteSpace: 'pre-line' }}>{mensagem}</p>
       </div>
     </div>
   )

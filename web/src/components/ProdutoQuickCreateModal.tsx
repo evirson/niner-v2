@@ -21,7 +21,7 @@ import {
   somenteDigitos,
 } from '../lib/masks'
 import { buscarNcm } from '../lib/ncm'
-import { PRODUTO_VAZIO, criarProduto, criarVariacao, paraRequisicao, type Produto, type ProdutoFormState, type VariacaoProduto } from '../lib/produtos'
+import { PRODUTO_VAZIO, criarProduto, criarProdutoComVariacao, criarVariacao, paraRequisicao, type Produto, type ProdutoFormState, type VariacaoProduto } from '../lib/produtos'
 import { criarTamanho, listarTamanhos } from '../lib/tamanhos'
 import { maiusculas } from '../lib/texto'
 import CategoriaProdutoModal from './CategoriaProdutoModal'
@@ -206,34 +206,42 @@ export default function ProdutoQuickCreateModal({
   }, [usaCorGrade, form.idGrade, cores, grade, tamanhos, gradeAutoResolvida])
 
   /**
-   * ⚠️ Id do produto já criado nesta sessão do modal (achado de auditoria, 2026-08-21).
+   * ⚠️ Produto já criado nesta sessão do modal (achado de auditoria, 2026-08-21).
    *
-   * <p>A criação são DOIS POSTs sem transação: produto e depois variação. Falhando o segundo — o
-   * caso real é EAN repetido vindo de planilha/XML de terceiro, que `produto_barra` recusa —, a
-   * mutação inteira caía no `onError` e a tela dizia **"Não foi possível criar o produto"**. Mas o
-   * produto estava criado, **sem variação**: sem SKU, sem código de barras, invisível no PDV e na
-   * busca. E clicar em Criar de novo criava um SEGUNDO produto, deixando o primeiro órfão para
-   * sempre.
+   * <p>Ainda necessário no caminho **sem variação** (produto com grade, quando a variação é
+   * escolhida depois): ali a criação continua sendo um POST só, mas a retentativa não pode criar
+   * um segundo produto.
    *
-   * <p>Guardando o id, a retentativa refaz só a variação. É o mesmo remédio do `idCriadoNoTeste` da
-   * Configuração de Etiqueta, que existe para este mesmo problema. O conserto de raiz é um endpoint
-   * que aceite produto+variação numa transação só — registrado como pendência.
+   * <p>O caminho **com variação** deixou de precisar disso em 2026-08-22: passou a usar
+   * `criarProdutoComVariacao`, um endpoint atômico — falhando a variação, o produto é desfeito
+   * junto e não sobra órfão. O `ref` continua sendo preenchido nesse caminho? Não: a chamada é uma
+   * só, e um produto "meio criado" não existe mais.
    */
   const produtoCriadoRef = useRef<Produto | null>(null)
 
   const criar = useMutation({
     mutationFn: async () => {
-      // Guarda o PRODUTO inteiro, não só o id: o caminho `semVariacao` devolve o objeto ao chamador.
-      const produto = produtoCriadoRef.current ?? (await criarProduto(paraRequisicao(form)))
-      produtoCriadoRef.current = produto
-      if (!exigirVariacaoAoCriar && produto.idGrade != null) {
+      const semVariacao = !exigirVariacaoAoCriar && form.idGrade != null
+      if (semVariacao) {
+        // Guarda o PRODUTO inteiro, não só o id: este caminho devolve o objeto ao chamador.
+        const produto = produtoCriadoRef.current ?? (await criarProduto(paraRequisicao(form)))
+        produtoCriadoRef.current = produto
         return { semVariacao: true as const, produto }
       }
-      const variacao = await criarVariacao(produto.idProduto, {
-        idCor: usaCorGrade && form.idGrade != null ? (idCor as number) : null,
-        idTamanho: usaCorGrade && form.idGrade != null ? (idTamanho as number) : null,
-        ean: ean.trim() ? ean.trim() : null,
-      })
+      // ⚠️ Transação única no servidor (item 28): EAN repetido não deixa mais produto órfão.
+      // Se o produto já foi criado numa tentativa anterior deste modal (caminho sem variação que
+      // virou com variação), refaz só a variação — o produto já existe e não pode ser duplicado.
+      const variacao = produtoCriadoRef.current
+        ? await criarVariacao(produtoCriadoRef.current.idProduto, {
+            idCor: usaCorGrade && form.idGrade != null ? (idCor as number) : null,
+            idTamanho: usaCorGrade && form.idGrade != null ? (idTamanho as number) : null,
+            ean: ean.trim() ? ean.trim() : null,
+          })
+        : await criarProdutoComVariacao(paraRequisicao(form), {
+            idCor: usaCorGrade && form.idGrade != null ? (idCor as number) : null,
+            idTamanho: usaCorGrade && form.idGrade != null ? (idTamanho as number) : null,
+            ean: ean.trim() ? ean.trim() : null,
+          })
       return { semVariacao: false as const, variacao }
     },
     onSuccess: (resultado) => {

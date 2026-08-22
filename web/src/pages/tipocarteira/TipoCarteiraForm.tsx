@@ -29,6 +29,7 @@ import {
   paraRequisicao,
   type CategoriaCarteira,
   type TipoCarteiraFormState,
+  invalidarTiposCarteira,
 } from '../../lib/tiposCarteira'
 import type { EstadoListaTipoCarteira } from './TipoCarteiraLista'
 import { maiusculas } from '../../lib/texto'
@@ -112,7 +113,7 @@ export default function TipoCarteiraForm({ somenteLeitura = false }: { somenteLe
         ? atualizarTipoCarteira(Number(id), paraRequisicao(form))
         : criarTipoCarteira(paraRequisicao(form)),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['tipos-carteira'] })
+      invalidarTiposCarteira(queryClient)
       navigate('/tipos-carteira', {
         state: {
           toast: {

@@ -223,6 +223,7 @@ public class FuncionarioService {
         exigirSeObrigatorio(config, "cpf", req.cpf());
         exigirSeObrigatorio(config, "telefone", req.telefone());
         exigirSeObrigatorio(config, "cargo", req.cargo());
+        exigirSeObrigatorioValor(config, "percComissao", req.percComissao());
     }
 
     private static boolean celularValidoOuVazio(String valor) {
@@ -231,6 +232,28 @@ public class FuncionarioService {
             return true;
         }
         return d.length() == 11 && d.charAt(2) == '9';
+    }
+
+/**
+     * Mesma regra para campo NUMÉRICO/DATA (auditoria 2026-08-21, item 24).
+     *
+     * <p>Até 2026-08-22 só existia a versão para {@code String}, então <b>todo campo configurável
+     * que é número ou data ficava sem revalidação no servidor</b>, por construção — apesar de o
+     * {@code CLAUDE.md} afirmar que a bandeira é aplicada "de novo no servidor". O formulário
+     * cobria, mas uma gravação pela API passava sem.
+     *
+     * <p>⚠️ Ausente é {@code null}. <b>Zero é valor legítimo</b> (decisão do dono do produto,
+     * 2026-08-22: "se não informados, marcar como zero"), então esta validação não recusa zero.
+     * Quem quer o campo fora do cadastro usa {@code visivel = false}, que é a dimensão certa —
+     * a tabela tem as duas, com CHECK garantindo que obrigatório implica visível.
+     */
+    private static void exigirSeObrigatorioValor(Map<String, ConfiguracaoCampoResponse> config, String campo,
+                                                  Object valor) {
+        ConfiguracaoCampoResponse c = config.get(campo);
+        if (c != null && c.obrigatorio() && valor == null) {
+            throw new IllegalArgumentException(
+                    ROTULOS_CAMPO.getOrDefault(campo, campo) + " é obrigatório.");
+        }
     }
 
     private static void exigirSeObrigatorio(Map<String, ConfiguracaoCampoResponse> config, String campo, String valor) {

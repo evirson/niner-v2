@@ -292,7 +292,7 @@ export default function RelatorioComissoes() {
           podeGerar={podeGerarRascunho}
           primeiraVez={!relatorioGerado}
           aoGerar={handleGerar}
-          aoFechar={relatorioGerado ? fecharModal : () => navigate('/')}
+          aoFechar={relatorioGerado ? fecharModal : () => navigate(-1)}
         />
       )}
     </div>

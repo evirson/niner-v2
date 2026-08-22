@@ -511,6 +511,33 @@ public class EntradaMercadoriaService {
                             + idMovimento + ".");
         }
 
+        // Terceiro bloqueio, mesma família dos dois acima (auditoria 2026-08-21, item 1).
+        //
+        // ⚠️ O estorno abaixo lança um 'D' da quantidade CHEIA da compra. Se parte dela já saiu
+        // por uma Devolução ao Fornecedor, essas unidades são debitadas DUAS vezes: entrada de 10,
+        // devolução de 4, cancelamento estorna 10 → estoque -4. E com
+        // `cfg_permite_estoque_negativo` ligado (o padrão), a trigger não barra: passa em silêncio.
+        // Pior ainda no lado fiscal — a devolução emite NF-e 55 autorizada, que ficaria válida na
+        // SEFAZ referenciando uma entrada que não existe mais, e a entrada some da lista elegível,
+        // então nem dá para desfazer pela tela de devolução.
+        //
+        // Bloquear em vez de cascatear, pelo mesmo motivo do guard da conta paga: quem quiser
+        // cancelar desfaz primeiro pela tela dona, que sabe cancelar o evento na SEFAZ.
+        boolean temDevolucao = Boolean.TRUE.equals(jdbc.sql("""
+                        SELECT EXISTS (
+                            SELECT 1 FROM produto_movimento_mestre dv
+                            WHERE dv.id_tenant = plataforma.tenant_atual() AND dv.id_movimento_origem = ?
+                              AND dv.tipo_movimento = 'DEVOLUCAO_COMPRA' AND dv.cancelado = false
+                        )
+                        """)
+                .param(idMovimento).query(Boolean.class).single());
+        if (temDevolucao) {
+            throw new ConflitoDadosException(
+                    "Esta entrada já teve mercadoria devolvida ao fornecedor. Não é possível "
+                            + "cancelá-la — cancele a devolução em Estoque › Devolução de Produtos "
+                            + "Comprados antes de cancelar a entrada nº " + idMovimento + ".");
+        }
+
         OffsetDateTime agora = OffsetDateTime.now();
         jdbc.sql("""
                         UPDATE produto_movimento_mestre

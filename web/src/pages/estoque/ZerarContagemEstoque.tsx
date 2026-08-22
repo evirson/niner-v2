@@ -6,7 +6,7 @@ import { IconeEstoque } from '../../components/Icones'
 import Toast from '../../components/Toast'
 import { ApiError } from '../../lib/api'
 import { buscarPermiteQtdDecimal } from '../../lib/configuracaoGeral'
-import { desfazerUltimaEfetivacao, listarContagemAtiva, obterUltimaEfetivacao, zerarContagem } from '../../lib/estoqueBalanco'
+import { desfazerUltimaEfetivacao, listarContagemAtiva, obterUltimaEfetivacao, zerarContagem, invalidarBalanco } from '../../lib/estoqueBalanco'
 import { formatarQuantidade } from '../../lib/masks'
 import { maiusculas } from '../../lib/texto'
 
@@ -46,7 +46,7 @@ export default function ZerarContagemEstoque() {
     onSuccess: () => {
       setConfirmandoZerar(false)
       setTextoConfirmacaoZerar('')
-      queryClient.invalidateQueries({ queryKey: ['balanco-contagem'] })
+      invalidarBalanco(queryClient)
       setToast({ texto: 'Contagem de estoque zerada.', tipo: 'sucesso' })
     },
     onError: (e: unknown) => {
@@ -60,7 +60,7 @@ export default function ZerarContagemEstoque() {
     mutationFn: desfazerUltimaEfetivacao,
     onSuccess: () => {
       setConfirmandoDesfazer(false)
-      queryClient.invalidateQueries({ queryKey: ['balanco-contagem'] })
+      invalidarBalanco(queryClient)
       queryClient.invalidateQueries({ queryKey: ['balanco-ultima-efetivacao'] })
       setToast({ texto: 'Última efetivação de balanço desfeita.', tipo: 'sucesso' })
     },

@@ -90,6 +90,25 @@ function moeda(v: number): string {
   return `R$ ${formatarMoeda(v)}`
 }
 
+/**
+ * Quantidade **não é dinheiro** (auditoria 2026-08-21, item 11).
+ *
+ * ⚠️ O KPI "Itens Vendidos" e o rodapé da grade usavam `formatarMoeda`, que força duas casas: o KPI
+ * mostrava **"1.234,00"** itens, e o rodapé somava "12,00" embaixo de uma coluna que exibia "3",
+ * "5", "4". Fração só aparece quando existe de verdade — o tenant que permite quantidade decimal
+ * (`cfg_permite_qtd_decimal`) vende 2,5 kg, e aí as três casas do peso importam.
+ */
+function quantidade(v: number): string {
+  return Number.isInteger(v)
+    ? v.toLocaleString('pt-BR')
+    : v.toLocaleString('pt-BR', { minimumFractionDigits: 3, maximumFractionDigits: 3 })
+}
+
+/** Média por venda é sempre fracionária — 2 casas, mas sem "R$" nem cara de dinheiro. */
+function media(v: number): string {
+  return v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+}
+
 function percentual(v: number): string {
   return `${formatarMoeda(v)}%`
 }
@@ -382,8 +401,8 @@ export default function RelatorioVendas() {
               </div>
               <div className="relatorio-kpi-card">
                 <p className="card-title">Itens Vendidos / Média</p>
-                <p className="relatorio-kpi-valor cor-accent">{formatarMoeda(data.kpis.itensVendidos)}</p>
-                <p className="muted">Média por venda: {formatarMoeda(data.kpis.mediaItensPorVenda)}</p>
+                <p className="relatorio-kpi-valor cor-accent">{quantidade(data.kpis.itensVendidos)}</p>
+                <p className="muted">Média por venda: {media(data.kpis.mediaItensPorVenda)}</p>
               </div>
             </div>
 
@@ -489,7 +508,7 @@ export default function RelatorioVendas() {
                           <td>{i.nomeCliente ?? '—'}</td>
                           <td>{i.nomeVendedor ?? '—'}</td>
                           <td>{i.nomeOperador ?? '—'}</td>
-                          <td className="mono" style={{ textAlign: 'right' }}>{i.qtdProdutos}</td>
+                          <td className="mono" style={{ textAlign: 'right' }}>{quantidade(i.qtdProdutos)}</td>
                           <td className="mono" style={{ textAlign: 'right' }}>{moeda(i.valorVenda)}</td>
                           <td className="mono" style={{ textAlign: 'right' }}>{moeda(i.acrescimos)}</td>
                           <td className="mono" style={{ textAlign: 'right' }}>{moeda(i.descontos)}</td>
@@ -503,7 +522,7 @@ export default function RelatorioVendas() {
                           <strong>Total ({linhasAnaliticasOrdenadas.length} vendas)</strong>
                         </td>
                         <td className="mono" style={{ textAlign: 'right' }}>
-                          {formatarMoeda(linhasAnaliticasOrdenadas.reduce((s, i) => s + i.qtdProdutos, 0))}
+                          {quantidade(linhasAnaliticasOrdenadas.reduce((s, i) => s + i.qtdProdutos, 0))}
                         </td>
                         <td className="mono" style={{ textAlign: 'right' }}>{moeda(linhasAnaliticasOrdenadas.reduce((s, i) => s + i.valorVenda, 0))}</td>
                         <td className="mono" style={{ textAlign: 'right' }}>{moeda(linhasAnaliticasOrdenadas.reduce((s, i) => s + i.acrescimos, 0))}</td>
@@ -575,7 +594,7 @@ export default function RelatorioVendas() {
           podeGerar={podeGerarRascunho}
           primeiraVez={!relatorioGerado}
           aoGerar={handleGerar}
-          aoFechar={relatorioGerado ? fecharModal : () => navigate('/')}
+          aoFechar={relatorioGerado ? fecharModal : () => navigate(-1)}
           isoParaData={isoParaData}
           aoAbrirBuscaVendedor={() => setMostrarBuscaVendedor(true)}
         />

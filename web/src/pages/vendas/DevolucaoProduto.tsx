@@ -34,6 +34,25 @@ interface ItemLinha {
   variacao: string | null
   precoVenda: number
   qtdTexto: string
+  /** `true` quando a linha veio da grid de seleção da venda — só então o preço identifica uma
+   *  linha real da venda e pode ser mandado ao servidor. Produto lançado por código de barras
+   *  (devolução sem venda de origem) carrega o preço do CADASTRO, que não identifica nada. */
+  daVenda: boolean
+}
+
+/**
+ * Identidade de uma linha da grade: variação + preço.
+ *
+ * ⚠️ A chave era só `idVariacao` até 2026-08-22 (auditoria, item 2). Desde o orçamento, o mesmo
+ * produto pode estar duas vezes na mesma venda com preços diferentes — o congelado, que a loja
+ * honrou, e o do dia. Com a chave antiga as duas linhas eram tratadas como uma: somavam
+ * quantidade, dividiam saldo e o vale saía pela média. É a mesma lição do `ItemLedger.idLinha` do
+ * PDV — o SKU deixou de servir como chave quando duas linhas do mesmo produto passaram a existir.
+ *
+ * O preço entra com 2 casas fixas para não depender de como o número chegou (80 vs 80.0 vs 80.00).
+ */
+function chaveLinha(idVariacao: number, precoVenda: number): string {
+  return `${idVariacao}|${precoVenda.toFixed(2)}`
 }
 
 function variacaoTexto(p: PdvProduto): string | null {
@@ -138,22 +157,36 @@ export default function DevolucaoProduto() {
   }
 
   /** `null` = sem restrição (nenhuma venda informada/resolvida — qualquer produto pode ser
-   *  devolvido, como sempre foi). Quando preenchido, mapeia `idVariacao -> quantidade ainda
+   *  devolvido, como sempre foi). Quando preenchido, mapeia `chaveLinha -> quantidade ainda
    *  disponível pra devolução` daquela venda (já descontando devoluções anteriores dela). */
   const mapaDisponivel = useMemo(() => {
     if (!vendedor) return null
+    const mapa = new Map<string, number>()
+    vendedor.itens.forEach((it) =>
+      mapa.set(chaveLinha(it.idVariacao, it.precoUnitario), (mapa.get(chaveLinha(it.idVariacao, it.precoUnitario)) ?? 0) + it.qtdDisponivelDevolucao),
+    )
+    return mapa
+  }, [vendedor])
+
+  /** Saldo por VARIAÇÃO — usado só para o item lançado por código de barras, que não veio da grid
+   *  e portanto não sabe a qual linha pertence. Sem isso, um produto legitimamente vendido seria
+   *  recusado com "não faz parte da venda" só por ter chegado por outro caminho. */
+  const mapaDisponivelPorVariacao = useMemo(() => {
+    if (!vendedor) return null
     const mapa = new Map<number, number>()
-    vendedor.itens.forEach((it) => mapa.set(it.idVariacao, it.qtdDisponivelDevolucao))
+    vendedor.itens.forEach((it) => mapa.set(it.idVariacao, (mapa.get(it.idVariacao) ?? 0) + it.qtdDisponivelDevolucao))
     return mapa
   }, [vendedor])
 
   /** Mensagem de erro do item (ou `null` se estiver tudo certo) — mesma regra usada tanto pra
    *  bloquear na leitura/pesquisa (toast, antes de lançar) quanto pra sinalizar na grade um item
    *  que já estava lá e deixou de ser válido (ex.: trocou o número da venda). */
-  const erroDoItem = (idVariacao: number, qtd: number): string | null => {
+  const erroDoItem = (item: { idVariacao: number; precoVenda: number; daVenda: boolean }, qtd: number): string | null => {
     if (qtd <= 0) return 'Informe uma quantidade maior que zero.'
-    if (!mapaDisponivel) return null
-    const disponivel = mapaDisponivel.get(idVariacao)
+    if (!mapaDisponivel || !mapaDisponivelPorVariacao) return null
+    const disponivel = item.daVenda
+      ? mapaDisponivel.get(chaveLinha(item.idVariacao, item.precoVenda))
+      : mapaDisponivelPorVariacao.get(item.idVariacao)
     if (disponivel === undefined) {
       return `Este produto não faz parte da venda nº ${numeroVendaTexto}.`
     }
@@ -167,7 +200,14 @@ export default function DevolucaoProduto() {
     mutationFn: () =>
       efetivarDevolucao({
         numeroVenda: numeroVendaTexto.trim() ? Number(numeroVendaTexto.trim()) : null,
-        itens: itens.map((i) => ({ idVariacao: i.idVariacao, qtd: desmascararQuantidade(i.qtdTexto, permiteQtdDecimal) })),
+        // `precoUnitario` só vai quando a linha veio da grid da venda — é ele que diz ao servidor
+        // QUAL linha está sendo devolvida (item 2). Para item lançado por código de barras o preço
+        // é o do cadastro e não identifica linha nenhuma; mandá-lo faria o servidor recusar.
+        itens: itens.map((i) => ({
+          idVariacao: i.idVariacao,
+          qtd: desmascararQuantidade(i.qtdTexto, permiteQtdDecimal),
+          ...(i.daVenda ? { precoUnitario: i.precoVenda } : {}),
+        })),
       }),
     onSuccess: (resultado) => {
       setToast({ texto: 'Devolução gravada com sucesso.', tipo: 'sucesso' })
@@ -193,6 +233,7 @@ export default function DevolucaoProduto() {
         variacao: [i.variacaoCor, i.variacaoTamanho].filter(Boolean).join(' · ') || null,
         precoVenda: i.precoUnitario,
         qtdTexto: formatarQuantidade(i.qtdDisponivelDevolucao, permiteQtdDecimal),
+        daVenda: true,
       })),
     )
     setMostrarSelecaoVenda(false)
@@ -202,10 +243,12 @@ export default function DevolucaoProduto() {
   // de duplicar a linha (mesma rotina do PDV/Transferência).
   const lancarProduto = (produto: PdvProduto, qtd: number = 1) => {
     setItens((atual) => {
-      const existente = atual.find((i) => i.idVariacao === produto.idVariacao)
+      // Só agrupa com uma linha que também NÃO veio da venda: somar no item vindo da grid da venda
+      // apagaria o preço da linha que o operador escolheu (item 2).
+      const existente = atual.find((i) => i.idVariacao === produto.idVariacao && !i.daVenda)
       if (existente) {
         return atual.map((i) =>
-          i.idVariacao === produto.idVariacao
+          i.idVariacao === produto.idVariacao && !i.daVenda
             ? { ...i, qtdTexto: formatarQuantidade(desmascararQuantidade(i.qtdTexto, permiteQtdDecimal) + qtd, permiteQtdDecimal) }
             : i,
         )
@@ -218,22 +261,27 @@ export default function DevolucaoProduto() {
           variacao: variacaoTexto(produto),
           precoVenda: produto.precoVenda,
           qtdTexto: formatarQuantidade(qtd, permiteQtdDecimal),
+          daVenda: false,
         },
       ]
     })
   }
 
   /** Quantidade já lançada na grade pra essa variação (0 se ainda não foi lançada) — soma-se ao
-   *  que está sendo lançado agora antes de validar contra `mapaDisponivel`. */
-  const qtdJaNaGrade = (idVariacao: number): number => {
-    const existente = itens.find((i) => i.idVariacao === idVariacao)
-    return existente ? desmascararQuantidade(existente.qtdTexto, permiteQtdDecimal) : 0
-  }
+   *  que está sendo lançado agora antes de validar contra `mapaDisponivel`. Conta TODAS as linhas
+   *  da variação, inclusive as vindas da venda: o saldo por variação é um só. */
+  const qtdJaNaGrade = (idVariacao: number): number =>
+    itens
+      .filter((i) => i.idVariacao === idVariacao)
+      .reduce((soma, i) => soma + desmascararQuantidade(i.qtdTexto, permiteQtdDecimal), 0)
 
   /** `true` se pode lançar — já mostra o toast de erro e retorna `false` quando não pode, pra
    *  `lerCodigo`/`aoSelecionarNaPesquisa` só chamarem `lancarProduto` no caminho feliz. */
-  const validarAntesDeLancar = (idVariacao: number, qtd: number): boolean => {
-    const erro = erroDoItem(idVariacao, qtdJaNaGrade(idVariacao) + qtd)
+  const validarAntesDeLancar = (produto: PdvProduto, qtd: number): boolean => {
+    const erro = erroDoItem(
+      { idVariacao: produto.idVariacao, precoVenda: produto.precoVenda, daVenda: false },
+      qtdJaNaGrade(produto.idVariacao) + qtd,
+    )
     if (erro) {
       setToast({ texto: erro, tipo: 'erro' })
       return false
@@ -245,7 +293,7 @@ export default function DevolucaoProduto() {
     const { qtd, codigo } = interpretarCodigoBarras(valorDigitado)
     try {
       const produto = await buscarProdutoPorCodigo(codigo)
-      if (!validarAntesDeLancar(produto.idVariacao, qtd)) return
+      if (!validarAntesDeLancar(produto, qtd)) return
       lancarProduto(produto, qtd)
     } catch (e) {
       setToast({ texto: e instanceof ApiError ? e.message : 'Não foi possível ler o código de barras.', tipo: 'erro' })
@@ -263,7 +311,7 @@ export default function DevolucaoProduto() {
 
   const aoSelecionarNaPesquisa = (produto: PdvProduto) => {
     setMostrarPesquisa(false)
-    if (!validarAntesDeLancar(produto.idVariacao, 1)) return
+    if (!validarAntesDeLancar(produto, 1)) return
     lancarProduto(produto)
     setValorBarras(produto.sku)
     if (barrasTimeoutRef.current) clearTimeout(barrasTimeoutRef.current)
@@ -273,23 +321,27 @@ export default function DevolucaoProduto() {
     }, 400)
   }
 
-  const removerItem = (idVariacao: number) => {
-    setItens((atual) => atual.filter((i) => i.idVariacao !== idVariacao))
+  const removerItem = (chave: string) => {
+    setItens((atual) => atual.filter((i) => chaveLinha(i.idVariacao, i.precoVenda) !== chave))
   }
 
-  const alterarQtd = (idVariacao: number, texto: string) => {
+  const alterarQtd = (chave: string, texto: string) => {
     setItens((atual) =>
-      atual.map((i) => (i.idVariacao === idVariacao ? { ...i, qtdTexto: mascararQuantidade(texto, permiteQtdDecimal) } : i)),
+      atual.map((i) =>
+        chaveLinha(i.idVariacao, i.precoVenda) === chave ? { ...i, qtdTexto: mascararQuantidade(texto, permiteQtdDecimal) } : i,
+      ),
     )
   }
 
-  const aoSairQtd = (idVariacao: number) => {
+  const aoSairQtd = (chave: string) => {
     setItens((atual) =>
-      atual.map((i) => (i.idVariacao === idVariacao ? { ...i, qtdTexto: completarQuantidade(i.qtdTexto, permiteQtdDecimal) } : i)),
+      atual.map((i) =>
+        chaveLinha(i.idVariacao, i.precoVenda) === chave ? { ...i, qtdTexto: completarQuantidade(i.qtdTexto, permiteQtdDecimal) } : i,
+      ),
     )
   }
 
-  const algumItemComErro = itens.some((i) => erroDoItem(i.idVariacao, desmascararQuantidade(i.qtdTexto, permiteQtdDecimal)) !== null)
+  const algumItemComErro = itens.some((i) => erroDoItem(i, desmascararQuantidade(i.qtdTexto, permiteQtdDecimal)) !== null)
   const faltaNumeroVendaObrigatorio = exigeNumeroVenda && !numeroVendaTexto.trim()
   const podeConfirmar = itens.length > 0 && !algumItemComErro && !faltaNumeroVendaObrigatorio
   const qtdTotal = itens.reduce((soma, i) => soma + desmascararQuantidade(i.qtdTexto, permiteQtdDecimal), 0)
@@ -454,9 +506,13 @@ export default function DevolucaoProduto() {
                   <tbody>
                     {itens.map((item) => {
                       const qtdNumero = desmascararQuantidade(item.qtdTexto, permiteQtdDecimal)
-                      const erro = erroDoItem(item.idVariacao, qtdNumero)
+                      const erro = erroDoItem(item, qtdNumero)
+                      const chave = chaveLinha(item.idVariacao, item.precoVenda)
+                      // ⚠️ `key` pela CHAVE DA LINHA, não pelo idVariacao (item 2): o mesmo produto
+                      // pode estar duas vezes na grade com preços diferentes, e chave repetida faz
+                      // o React embaralhar as linhas ao editar a quantidade de uma delas.
                       return (
-                        <tr key={item.idVariacao}>
+                        <tr key={chave}>
                           <td>{item.descricao}</td>
                           <td>{item.variacao ?? '—'}</td>
                           <td style={{ textAlign: 'right' }}>
@@ -465,8 +521,8 @@ export default function DevolucaoProduto() {
                               style={{ width: 110, textAlign: 'right' }}
                               inputMode={permiteQtdDecimal ? undefined : 'numeric'}
                               value={item.qtdTexto}
-                              onChange={(e) => alterarQtd(item.idVariacao, e.target.value)}
-                              onBlur={() => aoSairQtd(item.idVariacao)}
+                              onChange={(e) => alterarQtd(chave, e.target.value)}
+                              onBlur={() => aoSairQtd(chave)}
                               onFocus={(e) => e.target.select()}
                             />
                             {erro && <p className="erro-campo">{erro}</p>}
@@ -481,7 +537,7 @@ export default function DevolucaoProduto() {
                             <button
                               type="button"
                               className="acao-icone acao-excluir"
-                              onClick={() => removerItem(item.idVariacao)}
+                              onClick={() => removerItem(chave)}
                               aria-label={`Remover ${item.descricao}`}
                               title="Remover"
                             >

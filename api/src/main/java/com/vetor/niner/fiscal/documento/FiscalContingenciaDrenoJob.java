@@ -45,6 +45,11 @@ public class FiscalContingenciaDrenoJob {
     private static final int MODELO_NFCE = 65;
     private static final String SERVICO_AUTORIZACAO = "NFeAutorizacao4";
     private static final String SERVICO_STATUS = "NFeStatusServico4";
+    private static final String SERVICO_CONSULTA = "NFeConsultaProtocolo4";
+
+    /** cStat da consulta que significa "nunca chegou na SEFAZ" — só aí vale retransmitir (F5).
+     *  Mesmo valor e mesmo motivo do {@link DocumentoFiscalReprocessamentoService}. */
+    private static final String CSTAT_NAO_CONSTA = "217";
 
     /** Quantas notas por empresa por rodada: drenar devagar evita saturar a SEFAZ recém-restabelecida. */
     private static final int LOTE_POR_EMPRESA = 20;
@@ -142,6 +147,12 @@ public class FiscalContingenciaDrenoJob {
             String url = autorizadores.urlDe(empresa.uf(), MODELO_NFCE, empresa.ambienteCodigo(),
                     ServicoSefaz.AUTORIZACAO);
             CertificadoParaAssinatura cert = certificados.carregarAtivoParaAssinatura(empresa.idEmpresa());
+
+            // Nota que já saiu daqui uma vez (TRANSMITINDO) NUNCA é reenviada cega — F5.
+            if (nota.jaFoiTransmitida() && !sincronizarAntesDeRetransmitir(empresa, nota, cert)) {
+                return;
+            }
+
             String enviNFe = ("<enviNFe versao=\"4.00\" xmlns=\"%s\">"
                     + "<idLote>%d</idLote><indSinc>1</indSinc>%s</enviNFe>")
                     .formatted(MontadorXmlNfce.NS, nota.id(), nota.xmlAssinado());
@@ -173,10 +184,62 @@ public class FiscalContingenciaDrenoJob {
 
         } catch (FalhaDeComunicacaoException e) {
             // A SEFAZ respondeu ao status e caiu de novo: para a rodada desta empresa em vez de
-            // insistir nas outras 19 notas. Volta na próxima.
+            // insistir nas outras 19 notas. Volta na próxima — e agora volta MESMO, porque
+            // TRANSMITINDO passou a entrar na fila (ver MINUTOS_CARENCIA_TRANSMITINDO).
             repositorio.registrarFalhaDeComunicacao(nota.id(), e.getMessage());
             throw e;
         }
+    }
+
+    /**
+     * Consulta a chave na SEFAZ antes de reenviar uma nota que já saiu daqui uma vez (F5 — nunca
+     * retransmitir cego), e aplica sozinho o desfecho quando ele é inequívoco.
+     *
+     * <p><b>Por que existe.</b> Até 2026-08-22 uma nota marcada {@code TRANSMITINDO} que sofresse
+     * falha de rede sumia da fila do dreno para sempre (as consultas filtravam só
+     * {@code CONTINGENCIA}/{@code ASSINADO}). Agora ela volta — mas voltar reenviando às cegas
+     * seria trocar um defeito por outro pior: a nota pode ter sido <b>autorizada</b> e só a
+     * resposta ter se perdido, e o reenvio geraria uma segunda nota para a mesma venda.
+     *
+     * <p>Três desfechos, e a regra canônica é a mesma do
+     * {@link DocumentoFiscalReprocessamentoService} (o botão manual do ADMIN):
+     * <ul>
+     *   <li><b>autorizada</b> → grava e arquiva. Não há o que transmitir;</li>
+     *   <li><b>cStat 217</b> ("não consta") → nunca chegou lá; libera a retransmissão;</li>
+     *   <li><b>qualquer outra resposta</b> → registra o que a SEFAZ disse (F9) e <b>não decide</b>
+     *       (F11). Fica para o ADMIN pelo reprocessamento, com a informação na mão. Um job
+     *       automático adivinhando desfecho de documento fiscal é pior que um job que para.</li>
+     * </ul>
+     *
+     * @return {@code true} se a retransmissão deve seguir; {@code false} se a nota já teve desfecho
+     *         ou se ele não é decidível aqui
+     */
+    private boolean sincronizarAntesDeRetransmitir(EmpresaEmContingencia empresa, NotaPendente nota,
+                                                   CertificadoParaAssinatura cert) {
+        String urlConsulta = autorizadores.urlDe(empresa.uf(), MODELO_NFCE, empresa.ambienteCodigo(),
+                ServicoSefaz.CONSULTA_PROTOCOLO);
+        String consSitNFe = ("<consSitNFe xmlns=\"%s\" versao=\"4.00\">"
+                + "<tpAmb>%d</tpAmb><xServ>CONSULTAR</xServ><chNFe>%s</chNFe></consSitNFe>")
+                .formatted(MontadorXmlNfce.NS, empresa.ambienteCodigo(), nota.chaveAcesso());
+
+        RespostaSefaz consulta = transporte.enviar(urlConsulta, SERVICO_CONSULTA, consSitNFe,
+                cert.pkcs12(), cert.senha(), cert.impressaoDigital());
+
+        if (consulta.autorizado()) {
+            repositorio.marcarAutorizado(nota.id(), consulta);
+            arquivamento.arquivarDocumentoSeAplicavel(nota.id());
+            log.info("Nota em contingência já estava autorizada na SEFAZ (a resposta anterior se perdeu). "
+                    + "tenant={} documento={} chave={}", empresa.idTenant(), nota.id(), nota.chaveAcesso());
+            return false;
+        }
+        if (CSTAT_NAO_CONSTA.equals(consulta.cStat())) {
+            return true;
+        }
+        repositorio.registrarProcessamento(nota.id(), consulta);
+        log.warn("Nota em contingência presa em TRANSMITINDO com resposta que o dreno não decide sozinho — "
+                        + "reprocesse pela tela de Documentos Fiscais. tenant={} documento={} chave={} cStat={} motivo={}",
+                empresa.idTenant(), nota.id(), nota.chaveAcesso(), consulta.cStat(), consulta.xMotivo());
+        return false;
     }
 
 }

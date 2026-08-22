@@ -19,6 +19,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -85,36 +86,23 @@ public class DevolucaoProdutoService {
 
         Long idFuncionario = null;
         String nomeFuncionario = null;
-        Map<Long, BigDecimal> disponivelPorVariacao = null;
+        List<ItemVendaOrigemResponse> linhasDaVenda = null;
         Map<Long, PrecoOriginal> precosOriginais = Map.of();
         if (req.numeroVenda() != null) {
             FuncionarioVenda fv = buscarFuncionarioDaVenda(req.numeroVenda());
             idFuncionario = fv.idFuncionario();
             nomeFuncionario = fv.nomeFuncionario();
-            disponivelPorVariacao = buscarItensDisponiveisParaDevolucao(req.numeroVenda()).stream()
-                    .collect(Collectors.toMap(ItemVendaOrigemResponse::idVariacao, ItemVendaOrigemResponse::qtdDisponivelDevolucao));
+            linhasDaVenda = buscarItensDisponiveisParaDevolucao(req.numeroVenda());
             precosOriginais = buscarPrecosOriginaisDaVenda(req.numeroVenda());
         }
 
-        List<ItemResolvido> itens = resolverItens(req.itens(), precosOriginais);
+        List<ItemResolvido> itens = resolverItens(req.itens(), precosOriginais, linhasDaVenda);
 
         // Quando a venda de origem é informada, só é permitido devolver produtos que ela vendeu,
         // até o que ainda não foi devolvido dela — validado aqui (não só na tela, P4) porque é a
         // única linha de defesa real contra uma chamada direta à API.
-        if (disponivelPorVariacao != null) {
-            for (ItemResolvido item : itens) {
-                BigDecimal disponivel = disponivelPorVariacao.get(item.idVariacao());
-                if (disponivel == null) {
-                    throw new IllegalArgumentException(
-                            "O produto \"%s\" não faz parte da venda nº %d.".formatted(item.descricaoProduto(), req.numeroVenda()));
-                }
-                if (item.qtd().compareTo(disponivel) > 0) {
-                    throw new IllegalArgumentException(
-                            "Quantidade a devolver do produto \"%s\" (%s) maior que a disponível na venda nº %d (%s)."
-                                    .formatted(item.descricaoProduto(), item.qtd().stripTrailingZeros().toPlainString(),
-                                            req.numeroVenda(), disponivel.stripTrailingZeros().toPlainString()));
-                }
-            }
+        if (linhasDaVenda != null) {
+            validarContraAVenda(req, itens, linhasDaVenda);
         }
 
         long idDevolucao = jdbc.sql("""
@@ -197,17 +185,23 @@ public class DevolucaoProdutoService {
      *  venda devolve lista vazia (não lança erro aqui — quem chama decide o que fazer). */
     private List<ItemVendaOrigemResponse> buscarItensDisponiveisParaDevolucao(long idVenda) {
         record ItemVendido(long idVariacao, String sku, String descricaoProduto, String variacaoCor,
-                            String variacaoTamanho, BigDecimal qtdVendida, BigDecimal valorTotalVendido) {
+                            String variacaoTamanho, BigDecimal precoVenda, BigDecimal qtdVendida) {
         }
-        // valor_total_vendido = SUM(qtd × preço) da(s) linha(s) desta variação na venda — preço
-        // UNITÁRIO é derivado como média ponderada (valor_total / qtd) mais abaixo, não lido
-        // direto de uma linha só: a mesma variação pode aparecer em mais de uma linha da venda
-        // com preços diferentes (raro, mas possível — split de desconto por linha).
+        // ⚠️ Agrupa por (variação, PREÇO), não só por variação (2026-08-22, auditoria item 2).
+        //
+        // A média ponderada que existia aqui foi escrita quando duas linhas da mesma variação eram
+        // "raras, mas possíveis". O orçamento tornou isso NORMAL: o mesmo produto aparece com o
+        // preço congelado (que a loja honrou) e com o preço do dia, na mesma venda. Devolver uma
+        // peça de 1×R$ 80 + 1×R$ 120 gerava vale de R$ 100 — valor que a venda nunca praticou —, e
+        // o mesmo R$ 100 ia para a NF-e 55, divergindo de todo item da NFC-e original.
+        //
+        // Com o preço no GROUP BY, cada preço distinto vira uma linha da grid e o operador escolhe
+        // qual está devolvendo. No caso comum (um preço só) a lista sai idêntica à de antes.
         List<ItemVendido> vendidos = jdbc.sql("""
                         SELECT pb.id_variacao, pb.sku, p.descricao AS descricao_produto,
                                co.descricao AS variacao_cor, ta.descricao AS variacao_tamanho,
-                               SUM(pmd.qtd_produto) AS qtd_vendida,
-                               SUM(pmd.qtd_produto * pmd.preco_venda) AS valor_total_vendido
+                               pmd.preco_venda,
+                               SUM(pmd.qtd_produto) AS qtd_vendida
                         FROM produto_movimento_mestre pmm
                         JOIN produto_movimento_detalhe pmd
                                ON pmd.id_movimento = pmm.id_movimento AND pmd.id_tenant = pmm.id_tenant
@@ -216,49 +210,117 @@ public class DevolucaoProdutoService {
                         LEFT JOIN cfg_cor co ON co.id_cor = pb.id_cor AND co.id_tenant = pb.id_tenant AND co.id_cor <> 1
                         LEFT JOIN cfg_tamanho ta ON ta.id_tamanho = pb.id_tamanho AND ta.id_tenant = pb.id_tenant AND ta.id_tamanho <> 1
                         WHERE pmm.id_tenant = plataforma.tenant_atual() AND pmm.id_venda = ? AND pmm.tipo_movimento = 'VENDA'
-                        GROUP BY pb.id_variacao, pb.sku, p.descricao, co.descricao, ta.descricao
+                        GROUP BY pb.id_variacao, pb.sku, p.descricao, co.descricao, ta.descricao, pmd.preco_venda
+                        ORDER BY p.descricao, pmd.preco_venda
                         """)
                 .param(idVenda)
                 .query((rs, n) -> new ItemVendido(
                         rs.getLong("id_variacao"), rs.getString("sku"), rs.getString("descricao_produto"),
-                        rs.getString("variacao_cor"), rs.getString("variacao_tamanho"), rs.getBigDecimal("qtd_vendida"),
-                        rs.getBigDecimal("valor_total_vendido")))
+                        rs.getString("variacao_cor"), rs.getString("variacao_tamanho"),
+                        rs.getBigDecimal("preco_venda"), rs.getBigDecimal("qtd_vendida")))
                 .list();
         if (vendidos.isEmpty()) {
             return List.of();
         }
 
-        record ItemDevolvido(long idVariacao, BigDecimal qtdDevolvida) {
-        }
-        Map<Long, BigDecimal> jaDevolvido = jdbc.sql("""
-                        SELECT pmd.id_variacao, SUM(pmd.qtd_produto) AS qtd_devolvida
+        // O já-devolvido também é por (variação, preço): a linha de devolução grava o `preco_venda`
+        // da linha que devolveu, então devolver a peça de R$ 80 não pode consumir o saldo da de
+        // R$ 120. Devolução antiga, feita antes desta mudança, gravou o preço MÉDIO — ela abate a
+        // "linha do preço médio", que hoje não existe mais na venda; o efeito é o saldo da venda
+        // ficar mais generoso do que deveria nesses casos históricos, e não mais restrito, que é o
+        // lado seguro (nunca recusa devolução legítima). Só ocorre em venda com dois preços feita
+        // e parcialmente devolvida antes de 2026-08-22.
+        Map<String, BigDecimal> jaDevolvido = new HashMap<>();
+        jdbc.sql("""
+                        SELECT pmd.id_variacao, pmd.preco_venda, SUM(pmd.qtd_produto) AS qtd_devolvida
                         FROM venda_devolucao vd
                         JOIN produto_movimento_mestre pmm
                                ON pmm.id_devolucao = vd.id_devolucao AND pmm.id_tenant = vd.id_tenant
                                AND pmm.tipo_movimento = 'DEVOLUCAO'
                         JOIN produto_movimento_detalhe pmd ON pmd.id_movimento = pmm.id_movimento AND pmd.id_tenant = pmm.id_tenant
                         WHERE vd.id_tenant = plataforma.tenant_atual() AND vd.id_venda_credito = ? AND vd.cancelada = false
-                        GROUP BY pmd.id_variacao
+                        GROUP BY pmd.id_variacao, pmd.preco_venda
                         """)
                 .param(idVenda)
-                .query((rs, n) -> new ItemDevolvido(rs.getLong("id_variacao"), rs.getBigDecimal("qtd_devolvida")))
-                .list()
-                .stream()
-                .collect(Collectors.toMap(ItemDevolvido::idVariacao, ItemDevolvido::qtdDevolvida));
+                .query((rs, n) -> jaDevolvido.merge(
+                        chaveLinha(rs.getLong("id_variacao"), rs.getBigDecimal("preco_venda")),
+                        rs.getBigDecimal("qtd_devolvida"), BigDecimal::add))
+                .list();
 
         List<ItemVendaOrigemResponse> resultado = new ArrayList<>();
         for (ItemVendido v : vendidos) {
-            BigDecimal devolvido = jaDevolvido.getOrDefault(v.idVariacao(), BigDecimal.ZERO);
+            BigDecimal devolvido = jaDevolvido.getOrDefault(chaveLinha(v.idVariacao(), v.precoVenda()), BigDecimal.ZERO);
             BigDecimal disponivel = v.qtdVendida().subtract(devolvido).max(BigDecimal.ZERO);
-            // Preço unitário = média ponderada da venda (valor total ÷ qtd vendida) — nunca o
-            // preço atual do cadastro. `HALF_UP`/escala 2 casas: é o valor que vai pro vale e,
-            // futuramente, pro XML da NF-e de devolução, sempre em BigDecimal monetário (P7).
-            BigDecimal precoUnitario = v.valorTotalVendido().divide(v.qtdVendida(), 2, java.math.RoundingMode.HALF_UP);
+            // Preço da LINHA, exato — não mais uma média. É o valor que vai para o vale e para o
+            // XML da NF-e de devolução, sempre em BigDecimal monetário (P7).
+            BigDecimal precoUnitario = v.precoVenda().setScale(2, java.math.RoundingMode.HALF_UP);
             resultado.add(new ItemVendaOrigemResponse(
                     v.idVariacao(), v.sku(), v.descricaoProduto(), v.variacaoCor(), v.variacaoTamanho(),
-                    v.qtdVendida(), disponivel, precoUnitario, v.valorTotalVendido()));
+                    v.qtdVendida(), disponivel, precoUnitario, precoUnitario.multiply(v.qtdVendida())));
         }
         return resultado;
+    }
+
+    /**
+     * Confere cada item contra o que a venda de origem ainda tem a devolver — <b>por linha</b>
+     * quando o cliente identificou a linha, por variação quando não (2026-08-22, item 2).
+     *
+     * <p>Os dois caminhos existem porque o {@code precoUnitario} do request é opcional (ver
+     * {@code ItemDevolucaoRequest}):
+     * <ul>
+     *   <li><b>com preço</b> — a tela mandou de volta a linha que o operador escolheu. O saldo
+     *       conferido é o daquela linha: devolver a peça de R$ 80 não consome o saldo da de
+     *       R$ 120;</li>
+     *   <li><b>sem preço</b> — contrato antigo. Soma o disponível de todas as linhas da variação,
+     *       exatamente como era antes. Recusar aqui quebraria integrações existentes por causa de
+     *       um caso que, para elas, nem existe.</li>
+     * </ul>
+     */
+    private static void validarContraAVenda(EfetivarDevolucaoRequest req, List<ItemResolvido> itens,
+                                            List<ItemVendaOrigemResponse> linhasDaVenda) {
+        Map<String, BigDecimal> disponivelPorLinha = new HashMap<>();
+        Map<Long, BigDecimal> disponivelPorVariacao = new HashMap<>();
+        for (ItemVendaOrigemResponse l : linhasDaVenda) {
+            disponivelPorLinha.merge(chaveLinha(l.idVariacao(), l.precoUnitario()),
+                    l.qtdDisponivelDevolucao(), BigDecimal::add);
+            disponivelPorVariacao.merge(l.idVariacao(), l.qtdDisponivelDevolucao(), BigDecimal::add);
+        }
+
+        for (ItemResolvido item : itens) {
+            BigDecimal disponivel = item.identificouALinha()
+                    ? disponivelPorLinha.get(chaveLinha(item.idVariacao(), item.precoVenda()))
+                    : disponivelPorVariacao.get(item.idVariacao());
+            if (disponivel == null) {
+                // Sem a linha, o produto pode até estar na venda — só não com aquele preço. Dizer
+                // "não faz parte da venda" mandaria o operador procurar o problema no lugar errado.
+                if (item.identificouALinha() && disponivelPorVariacao.containsKey(item.idVariacao())) {
+                    throw new IllegalArgumentException(
+                            "O produto \"%s\" não foi vendido por %s na venda nº %d — recarregue a tela e escolha a linha certa."
+                                    .formatted(item.descricaoProduto(), item.precoVenda().toPlainString(), req.numeroVenda()));
+                }
+                throw new IllegalArgumentException(
+                        "O produto \"%s\" não faz parte da venda nº %d.".formatted(item.descricaoProduto(), req.numeroVenda()));
+            }
+            if (item.qtd().compareTo(disponivel) > 0) {
+                throw new IllegalArgumentException(
+                        "Quantidade a devolver do produto \"%s\" (%s) maior que a disponível na venda nº %d (%s)."
+                                .formatted(item.descricaoProduto(), item.qtd().stripTrailingZeros().toPlainString(),
+                                        req.numeroVenda(), disponivel.stripTrailingZeros().toPlainString()));
+            }
+        }
+    }
+
+    /**
+     * Identidade de uma <b>linha</b> da venda: variação + preço praticado (2026-08-22, item 2).
+     *
+     * <p>⚠️ A chave é <b>texto</b>, não o {@code BigDecimal}: {@code equals} de {@code BigDecimal}
+     * leva a escala em conta, então {@code 80.00} e {@code 80.0} — que o driver pode devolver de
+     * consultas diferentes — seriam chaves <b>distintas</b> num {@code Map}, e o saldo da linha
+     * simplesmente não casaria. Normalizar em duas casas antes de virar texto elimina isso.
+     */
+    private static String chaveLinha(long idVariacao, BigDecimal precoVenda) {
+        BigDecimal preco = precoVenda == null ? BigDecimal.ZERO : precoVenda;
+        return idVariacao + "|" + preco.setScale(2, java.math.RoundingMode.HALF_UP).toPlainString();
     }
 
     private record FuncionarioVenda(Long idFuncionario, String nomeFuncionario) {
@@ -319,8 +381,25 @@ public class DevolucaoProdutoService {
                 .collect(Collectors.toMap(Linha::idVariacao, l -> new PrecoOriginal(l.precoVenda(), l.precoCusto())));
     }
 
+    /**
+     * @param identificouALinha o cliente mandou o preço <b>e</b> ele bate com uma linha real da
+     *        venda. Decide se a validação de saldo é por linha ou por variação (contrato antigo) —
+     *        ver {@link #validarContraAVenda}.
+     */
     private record ItemResolvido(long idVariacao, BigDecimal qtd, BigDecimal precoVenda, BigDecimal precoCusto,
-                                  String sku, String descricaoProduto, String variacaoCor, String variacaoTamanho) {
+                                  String sku, String descricaoProduto, String variacaoCor, String variacaoTamanho,
+                                  boolean identificouALinha) {
+    }
+
+    /** A venda teve mesmo uma linha desta variação com este preço? Sem esta conferência, quem
+     *  chamasse a API direto escolheria o valor do próprio vale-mercadoria. */
+    private static boolean linhaExisteNaVenda(List<ItemVendaOrigemResponse> linhasDaVenda,
+                                              long idVariacao, BigDecimal preco) {
+        if (linhasDaVenda == null) {
+            return false;
+        }
+        String chave = chaveLinha(idVariacao, preco);
+        return linhasDaVenda.stream().anyMatch(l -> chaveLinha(l.idVariacao(), l.precoUnitario()).equals(chave));
     }
 
     /** Resolve descrição/variação/preço de cada item a partir do {@code idVariacao} — a tela
@@ -334,7 +413,8 @@ public class DevolucaoProdutoService {
      *  {@link PrecoOriginal} pro porquê). Vazio quando a devolução não informa venda de origem:
      *  aí não há outro valor possível, cai no cadastro como sempre foi. */
     private List<ItemResolvido> resolverItens(List<ItemDevolucaoRequest> itens,
-                                              Map<Long, PrecoOriginal> precosOriginais) {
+                                              Map<Long, PrecoOriginal> precosOriginais,
+                                              List<ItemVendaOrigemResponse> linhasDaVenda) {
         boolean permiteQtdDecimal = configuracaoGeralService.permiteQtdDecimalProduto();
         List<ItemResolvido> resolvidos = new ArrayList<>();
         for (ItemDevolucaoRequest item : itens) {
@@ -361,11 +441,30 @@ public class DevolucaoProdutoService {
                     .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Produto informado não existe ou está inativo."));
 
             PrecoOriginal original = precosOriginais.get(item.idVariacao());
-            BigDecimal precoVenda = original != null ? original.precoVenda() : linha.precoVenda();
             BigDecimal precoCusto = original != null ? original.precoCusto() : linha.precoCusto();
 
+            // Três origens para o preço de venda, nesta ordem (2026-08-22, auditoria item 2):
+            //
+            //  1. o preço da LINHA que o cliente identificou — exato, é o que o cliente pagou
+            //     naquela linha da venda. Só aceito se a venda realmente teve essa linha: sem a
+            //     conferência, quem chamasse a API direto escolheria o valor do próprio vale;
+            //  2. a média da venda (`precosOriginais`) — contrato antigo, quando não veio preço;
+            //  3. o preço do cadastro — devolução sem venda de origem, único caso em que não há
+            //     preço praticado a respeitar.
+            boolean identificouALinha = item.precoUnitario() != null
+                    && linhaExisteNaVenda(linhasDaVenda, item.idVariacao(), item.precoUnitario());
+            BigDecimal precoVenda;
+            if (identificouALinha) {
+                precoVenda = item.precoUnitario().setScale(2, java.math.RoundingMode.HALF_UP);
+            } else if (original != null) {
+                precoVenda = original.precoVenda();
+            } else {
+                precoVenda = linha.precoVenda();
+            }
+
             resolvidos.add(new ItemResolvido(item.idVariacao(), item.qtd(), precoVenda, precoCusto,
-                    linha.sku(), linha.descricaoProduto(), linha.variacaoCor(), linha.variacaoTamanho()));
+                    linha.sku(), linha.descricaoProduto(), linha.variacaoCor(), linha.variacaoTamanho(),
+                    identificouALinha));
         }
         return resolvidos;
     }

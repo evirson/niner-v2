@@ -72,7 +72,20 @@ public final class CancelamentoVendaDtos {
             OffsetDateTime nfceDataAutorizacao,
             Integer nfcePrazoCancelamentoMinutos,
             OffsetDateTime nfcePrazoCancelamentoExpiraEm,
-            boolean nfcePrazoCancelamentoExpirado) {
+            boolean nfcePrazoCancelamentoExpirado,
+            /**
+             * O caixa de HOJE da empresa da venda está aberto para o usuário logado?
+             *
+             * ⚠️ Existe para a tela ANTECIPAR a recusa (auditoria 2026-08-21, item 9). A regra
+             * RN-02 exige caixa de hoje aberto, e o ADMIN só descobria isso <b>depois</b> de
+             * escrever 15+ caracteres de justificativa e apertar Cancelar. As outras três recusas
+             * (já cancelada, crediário recebido, prazo da SEFAZ) a tela já antecipava — esta ficou
+             * de fora.
+             *
+             * <p>O front <b>não deduz</b> este valor: a venda pode ser de outra empresa que não a
+             * da sessão, e o caixa é por empresa + usuário. Quem sabe é o servidor.
+             */
+            boolean caixaAbertoHoje) {
     }
 
     public record CancelarVendaRequest(@NotBlank String motivo) {

@@ -1,7 +1,7 @@
 # Progresso do Projeto — niner-v2
 
 Registro cronológico das decisões e entregas. Atualizar a cada marco relevante.
-**Última atualização:** 2026-08-21
+**Última atualização:** 2026-08-22
 
 ---
 
@@ -540,6 +540,71 @@ Movimentação de Conta Corrente) que ainda não tinham migrado pro `SeletorPlan
 ---
 
 ## Linha do tempo
+
+### 2026-08-22 — as pendências da auditoria: 24 dos 33 resolvidos, 5 adiados por decisão
+
+Sessão inteira dedicada a `docs/PENDENCIAS-AUDITORIA-2026-08-21.md`. O dono do produto foi avisado
+(ele havia pedido duas vezes para ser cobrado), decidiu item a item e mandou tratar o resto.
+
+**Os que mexiam em dinheiro ou documento fiscal:**
+
+- **Item 2 — o vale-mercadoria saía pela MÉDIA.** Desde o orçamento, o mesmo produto pode aparecer
+  duas vezes na mesma venda: o preço congelado que a loja honrou e o preço do dia. Devolver 1 peça
+  de uma venda 1×R$ 50 + 1×R$ 120 gerava vale de **R$ 85** — valor que a venda nunca praticou — e o
+  mesmo R$ 85 ia para a NF-e 55. A grid passou a agrupar por **(variação, preço)**; cada preço vira
+  uma linha, e quando há mais de um a tela avisa qual é qual. `ItemDevolucaoRequest.precoUnitario`
+  (opcional, para não quebrar contrato) identifica a linha, e o servidor **confere que a venda teve
+  aquela linha** — senão quem chamasse a API escolheria o valor do próprio vale. Teste de
+  regressão novo em `DevolucaoProdutoCrudTest`.
+- **Item 19 — CST do fornecedor em nota de Simples/MEI.** `DevolucaoCompraFiscalAssembler` recusa
+  montar quando `crt != 2` e o item original traz `cst_icms`: emitir assim destacaria ICMS que a
+  loja não apura. Mínimo seguro por decisão do dono — a conversão para CSOSN é regra tributária e
+  espera o contador.
+- **Item 1 — cancelar entrada com devolução debitava estoque 2×.** Terceiro guard em
+  `EntradaMercadoriaService.cancelar`, ao lado dos dois que já existiam.
+- **Item 22 — parcela migrada virava lucro de 100%.** `V059` deu à `venda` as colunas `origem` e
+  `importado_em`; o DRE caixa exclui as parcelas recebidas **antes** da importação. Parcela legada
+  em aberto que o cliente pagar depois continua sendo receita — esse dinheiro entrou no caixa.
+- **Item 6 — devolução no mês da devolução.** *"Valores fechados do mês não podem ser mudados."* O
+  KPI passou a recortar por `data_movimento` (como o DRE e as Comissões) e ganhou o filtro de
+  devolução cancelada. O javadoc que afirmava "sempre 0 hoje" mentia desde 19/08.
+- **Item 5 — nota presa em `TRANSMITINDO` sumia da fila do dreno.** Volta agora, depois de 10 min de
+  carência, e **nunca é reenviada cega**: consulta a chave antes (F5). Resposta que o job não sabe
+  decidir sozinho é registrada e deixada para o ADMIN.
+- **Item 20 — cStat 573.** Consulta a nota e, se a SEFAZ confirmar o cancelamento (101/151), segue
+  com a reversão. Só o "sim" é aproveitado — qualquer outra resposta mantém a recusa.
+- **Itens 7 e 23 — cobrança.** Trava de idempotência antes de empurrar `proxima_cobranca` (uma
+  notificação duplicada dava um mês, ou um ano, de graça), e a chamada ao Mercado Pago saiu de
+  dentro da transação (novo bean `CobrancaFaturaTransacional`, padrão Job × Processador).
+- **Item 28 — produto órfão no cadastro rápido.** Novo `POST /produtos/com-variacao`, transação
+  única. Endpoint separado de propósito: aninhar `ProdutoRequest` num envelope quebraria o
+  formulário completo e todos os importadores.
+- **Item 24 — 7 campos configuráveis sem revalidação no servidor.** `exigirSeObrigatorioValor` cobre
+  número e data. ⚠️ Ausente é `null`; **zero é valor legítimo** — quem quer o campo fora do cadastro
+  usa `visivel = false`, que é a dimensão certa.
+- **Item 4 — documentos A4 não paginavam.** Orçamento, DANFE de devolução e guia de transferência
+  saíam da impressora com **uma página só**, perdendo total e assinatura sem aviso. `position:
+  absolute` fora, classe `.documento-a4-imprimir` + helper `imprimirDocumentoA4()` no lugar — o mesmo
+  remédio que fez a etiqueta paginar. Cabeçalho só na primeira página. ⚠️ **Não testado no papel.**
+- **Mecânicos 8–18 e 33:** confirmação ao remover linha de contagem; recusa de caixa fechado
+  antecipada no cancelamento (campo novo `caixaAbertoHoje` no DTO — o front não deduz, a venda pode
+  ser de outra empresa); erro de negócio em `AvisoModal` com `pre-line` em vez de banner inline;
+  quantidade deixou de ser formatada como moeda; **inutilização de numeração agora exige digitar a
+  faixa** (é a ação mais irreversível do sistema); `autoFocus`; invalidação das chaves derivadas de
+  React Query (`invalidarBalanco`, `invalidarTiposCarteira` — chave de array não casa por prefixo);
+  maiúsculas nas justificativas (a da inutilização vai no XML da SEFAZ); `navigate(-1)`; `@page`
+  órfão amarrado; e o aviso de busca truncada em 6 telas, com o limite de fornecedor subindo de 10
+  para 20.
+
+**Adiados por decisão dele:** 21+32 (homologação SEFAZ/PR pendente), 25 (ele quer repensar a forma
+de avisar — a ideia é um **sino** no topo da tela), 26+30 (política de staff não definida — é escopo
+de produto, não dívida técnica) e 27 (estorno não revoga assinatura: **aceito, com pedido explícito
+de ser lembrado em toda revisão do ERP**).
+
+**913 testes verdes** (912 + o de regressão do item 2), `tsc -b` limpo. ⚠️ `npm run build` não roda
+neste ambiente — o `node_modules` só tem o binding nativo `linux-x64-musl` do rolldown e a máquina é
+Windows; é instalação, não código (o `CLAUDE.md` já registra que falha depois do type-check é do
+bundler).
 
 
 ### 2026-08-21 (madrugada) — a auditoria completa: seis rodadas, 31 defeitos, e o fim decidido pelos agentes

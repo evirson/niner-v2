@@ -1,9 +1,8 @@
 package com.vetor.niner.plataforma.cobranca;
 
-import com.vetor.niner.comum.tempo.FusoDaPlataforma;
-import com.vetor.niner.comum.web.ConflitoDadosException;
 import com.vetor.niner.plataforma.cobranca.CobrancaDtos.Ciclo;
 import com.vetor.niner.plataforma.cobranca.CobrancaDtos.FaturaResponse;
+import com.vetor.niner.plataforma.cobranca.CobrancaFaturaTransacional.FaturaPreparada;
 import com.vetor.niner.plataforma.cobranca.CobrancaDtos.IniciarPagamentoRequest;
 import com.vetor.niner.plataforma.cobranca.CobrancaDtos.PagamentoPixResponse;
 import com.vetor.niner.plataforma.cobranca.CobrancaDtos.SituacaoFaturaResponse;
@@ -14,7 +13,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
-import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -39,101 +37,47 @@ public class CobrancaService {
 
     private final JdbcClient jdbc;
     private final GatewayCobranca gateway;
+    private final CobrancaFaturaTransacional faturas;
 
-    public CobrancaService(JdbcClient jdbc, GatewayCobranca gateway) {
+    public CobrancaService(JdbcClient jdbc, GatewayCobranca gateway, CobrancaFaturaTransacional faturas) {
         this.jdbc = jdbc;
         this.gateway = gateway;
+        this.faturas = faturas;
     }
 
-    @Transactional
+    /**
+     * Escolhe a faixa + ciclo e devolve o PIX para pagar.
+     *
+     * <p>⚠️ <b>Sem {@code @Transactional} — de propósito</b> (auditoria 2026-08-21, item 23). Este
+     * método <b>orquestra</b>: transação → rede → transação. A chamada ao gateway não pode
+     * acontecer dentro de uma transação de banco (F2), senão um rollback posterior deixa um PIX
+     * vivo no gateway apontando para uma fatura que não existe — o cliente paga e a assinatura
+     * nunca é promovida. As duas metades transacionais estão em {@link CobrancaFaturaTransacional},
+     * <b>em outro bean</b>, porque método anotado chamado de dentro do próprio bean não passa pelo
+     * proxy do Spring e rodaria sem transação nenhuma.
+     */
     public PagamentoPixResponse iniciarPagamento(Jwt jwt, IniciarPagamentoRequest req) {
         exigirAdmin(jwt);
 
-        var plano = jdbc.sql("""
-                        SELECT id_plano, nome, preco_mensal, preco_anual
-                          FROM plataforma.plano
-                         WHERE id_plano = ? AND ativo AND NOT gratuito AND faixa_ordem IS NOT NULL
-                        """)
-                .param(req.idPlano())
-                .query((rs, n) -> new Plano(rs.getLong("id_plano"), rs.getString("nome"),
-                        rs.getBigDecimal("preco_mensal"), rs.getBigDecimal("preco_anual")))
-                .optional()
-                .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Faixa de plano não encontrada."));
+        // 1. transação curta: valida e cria/atualiza a fatura da competência. COMMITA aqui.
+        FaturaPreparada fatura = faturas.preparar(req.idPlano(), req.ciclo());
 
-        // Valor SEMPRE do servidor (nunca do request) — ADR-016.
-        BigDecimal valor = req.ciclo() == Ciclo.ANUAL ? plano.precoAnual() : plano.precoMensal();
-
-        var assinatura = jdbc.sql("""
-                        SELECT a.id_assinatura, t.email_contato
-                          FROM plataforma.assinatura a
-                          JOIN plataforma.tenant t ON t.id_tenant = a.id_tenant
-                         WHERE a.id_tenant = plataforma.tenant_atual() AND a.status <> 'CANCELADA'
-                         ORDER BY a.id_assinatura DESC
-                         LIMIT 1
-                        """)
-                .query((rs, n) -> new Assinatura(rs.getLong("id_assinatura"), rs.getString("email_contato")))
-                .optional()
-                .orElseThrow(() -> new ResponseStatusException(FORBIDDEN, "Conta sem assinatura ativa."));        LocalDate competencia = LocalDate.now(FusoDaPlataforma.ZONA).withDayOfMonth(1);
-        String statusFatura = jdbc.sql("""
-                        SELECT status::text FROM plataforma.fatura
-                         WHERE id_assinatura = ? AND competencia = ?
-                        """)
-                .params(assinatura.idAssinatura(), competencia)
-                .query(String.class).optional().orElse(null);
-        if ("PAGA".equals(statusFatura)) {
-            throw new ConflitoDadosException("A fatura desta competência já está paga.");
-        }
-
-        long idFatura = jdbc.sql("""
-                        INSERT INTO plataforma.fatura
-                            (id_assinatura, id_tenant, competencia, valor, vencimento, status, id_plano, ciclo)
-                        VALUES (?, plataforma.tenant_atual(), ?, ?, ?, 'ABERTA', ?, ?::plataforma.ciclo_cobranca)
-                        ON CONFLICT (id_assinatura, competencia) DO UPDATE
-                           SET valor = EXCLUDED.valor, vencimento = EXCLUDED.vencimento,
-                               id_plano = EXCLUDED.id_plano, ciclo = EXCLUDED.ciclo, status = 'ABERTA'
-                        RETURNING id_fatura
-                        """)
-                .params(assinatura.idAssinatura(), competencia, valor, LocalDate.now(FusoDaPlataforma.ZONA).plusDays(3),
-                        plano.idPlano(), req.ciclo().name())
-                .query(Long.class).single();
-
-        // Chave de idempotência muda quando muda o que está sendo cobrado — senão o gateway
-        // devolveria a cobrança antiga (com o valor antigo) para a faixa nova.
+        // 2. rede, FORA de qualquer transação. A chave de idempotência muda quando muda o que está
+        //    sendo cobrado — senão o gateway devolveria a cobrança antiga (com o valor antigo)
+        //    para a faixa nova.
         String idempotencia = "niner-fatura-%d-%d-%s-%s".formatted(
-                idFatura, plano.idPlano(), req.ciclo().name(), valor.toPlainString());
-
+                fatura.idFatura(), fatura.idPlano(), req.ciclo().name(), fatura.valor().toPlainString());
         CobrancaPix pix = gateway.criarPix(
-                "fatura-" + idFatura, valor,
-                "Nainer — assinatura %s (%s)".formatted(plano.nome(), req.ciclo().name().toLowerCase()),
-                assinatura.emailContato(), idempotencia);
+                "fatura-" + fatura.idFatura(), fatura.valor(),
+                "Nainer — assinatura %s (%s)".formatted(fatura.nomePlano(), req.ciclo().name().toLowerCase()),
+                fatura.emailContato(), idempotencia);
 
-        jdbc.sql("""
-                        UPDATE plataforma.fatura
-                           SET id_gateway_cobranca = ?, pix_copia_cola = ?, qr_code_base64 = ?,
-                               link_pagamento = ?, expira_em = ?
-                         WHERE id_fatura = ? AND id_tenant = plataforma.tenant_atual()
-                        """)
-                .params(pix.idTransacao(), pix.copiaECola(), pix.qrCodeBase64(), pix.linkPagamento(),
-                        pix.expiraEm(), idFatura)
-                .update();
+        // 3. transação curta: grava o que o gateway devolveu.
+        faturas.registrarCobranca(fatura.idFatura(), fatura.valor(), gateway.nome(), pix);
 
-        // Uma tentativa de pagamento por transação do gateway (o índice único de pagamento cobre
-        // a repetição — P2).
-        jdbc.sql("""
-                        INSERT INTO plataforma.pagamento
-                            (id_fatura, metodo, gateway, id_gateway_transacao, valor, status)
-                        VALUES (?, 'PIX', ?, ?, ?, 'PENDENTE')
-                        -- O índice de idempotência é PARCIAL (V007): a inferência do ON CONFLICT
-                        -- precisa repetir o mesmo predicado, senão o Postgres não acha o índice.
-                        ON CONFLICT (gateway, id_gateway_transacao)
-                            WHERE gateway IS NOT NULL AND id_gateway_transacao IS NOT NULL
-                        DO NOTHING
-                        """)
-                .params(idFatura, gateway.nome(), pix.idTransacao(), valor)
-                .update();
-
-        return new PagamentoPixResponse(idFatura, plano.nome(), req.ciclo(), valor, competencia,
-                pix.copiaECola(), pix.qrCodeBase64(), pix.linkPagamento(), pix.expiraEm(), "ABERTA");
+        return new PagamentoPixResponse(fatura.idFatura(), fatura.nomePlano(), req.ciclo(), fatura.valor(),
+                fatura.competencia(), pix.copiaECola(), pix.qrCodeBase64(), pix.linkPagamento(),
+                pix.expiraEm(), "ABERTA");
     }
 
     /** Polling da tela enquanto o cliente paga — lê o estado local, que o worker atualiza. */
@@ -180,9 +124,6 @@ public class CobrancaService {
         }
     }
 
-    private record Plano(long idPlano, String nome, BigDecimal precoMensal, BigDecimal precoAnual) {
-    }
-
-    private record Assinatura(long idAssinatura, String emailContato) {
-    }
+    // Os records Plano/Assinatura saíram daqui em 2026-08-22 junto com as consultas que os
+    // preenchiam — hoje vivem em CobrancaFaturaTransacional, que é quem lê o banco.
 }

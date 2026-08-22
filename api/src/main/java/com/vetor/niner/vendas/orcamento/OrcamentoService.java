@@ -299,7 +299,8 @@ public class OrcamentoService {
      *
      * @throws ConflitoDadosException quando o orçamento não está {@code ABERTO} — com a mensagem
      *         dizendo <b>por quê</b> (vencido em tal dia, cancelado por fulano), porque "não pode"
-     *         sem motivo manda o operador adivinhar na frente do cliente
+     *         sem motivo manda o operador adivinhar na frente do cliente —, ou quando ele foi feito
+     *         em <b>outra empresa</b> (ver abaixo)
      */
     @Transactional
     public OrcamentoResponse abrirParaVenda(Jwt jwt, long idOrcamento) {
@@ -308,7 +309,20 @@ public class OrcamentoService {
         if (situacao != SituacaoOrcamento.ABERTO) {
             throw new ConflitoDadosException(mensagemDeEstadoFinal(situacao, "transformar em venda"));
         }
-        return buscarSemVencer(idOrcamento);
+        OrcamentoResponse orcamento = buscarSemVencer(idOrcamento);
+
+        // Orçamento pertence à EMPRESA que o fez (decisão do dono do produto, 2026-08-22 —
+        // auditoria, item 3). Não é isolamento de tenant (P8 nunca esteve em risco: as duas
+        // empresas são do mesmo tenant e o RLS não separa empresas), é regra de negócio: o
+        // documento impresso diz "empresa A", e sem esta recusa a venda cairia na B, baixando
+        // estoque de um lugar diferente do que a grid do orçamento mostrou.
+        long idEmpresaSessao = ((Number) jwt.getClaim("eid")).longValue();
+        if (orcamento.idEmpresa() != idEmpresaSessao) {
+            throw new ConflitoDadosException(
+                    "O orçamento nº " + idOrcamento + " foi feito em " + orcamento.nomeEmpresa()
+                            + " e só pode virar venda nessa empresa. Entre na empresa correta para usá-lo.");
+        }
+        return orcamento;
     }
 
     // ------------------------------------------------------------------ internos

@@ -516,10 +516,13 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
 }
 @media print {
   .guia-transferencia-imprimir, .guia-transferencia-imprimir * { visibility: visible; }
+  /* ⚠️ SEM `position: absolute` desde 2026-08-22 (item 4) — ver `.documento-a4-imprimir`. */
   .guia-transferencia-imprimir {
     page: guia-transferencia-a4;
-    position: absolute; top: 0; left: 0; width: auto; margin: 0; padding: 0; border: 0;
+    width: auto; margin: 0; padding: 0; border: 0;
     background: none; color: #000; font-size: 11px; line-height: 1.4;
+    /* <pre>: sem isto a guia longa é cortada em vez de continuar na página seguinte. */
+    white-space: pre-wrap; break-inside: auto;
   }
 }
 .lista-categorias { list-style: none; margin: 0 0 16px; padding: 0; display: flex; flex-direction: column; gap: 8px; }
@@ -1422,6 +1425,49 @@ a.menu-card:hover {
   .etiqueta-rolo-imprimir { margin: 0; padding: 0; border: 0; background: none; }
 }
 
+/* -------------------------------------------------------------------------------------------
+   DOCUMENTO A4 QUE PAGINA (2026-08-22, auditoria item 4)
+   -------------------------------------------------------------------------------------------
+   Os três documentos A4 do produto — orçamento, DANFE de devolução e guia de transferência —
+   eram posicionados com `position: absolute`. Absoluto é certo para documento de UMA página, e é
+   justamente o que IMPEDE paginar: um orçamento de ~30 itens passava de 297 mm, imprimia a
+   primeira página e **o resto sumia sem aviso** — total e assinatura ficavam de fora.
+
+   O remédio é o mesmo que fez a etiqueta paginar, e vence as duas regras que escondem trabalho
+   em silêncio:
+
+     * `html, body, #root { height:100%; overflow:hidden }` (o shell de altura travada do ERP) —
+       com `overflow: hidden` o navegador **corta** o que passa da primeira página em vez de
+       paginar. Precisa de `height:auto; overflow:visible`, no `<html>` E no `<body>`;
+     * `body * { visibility: hidden }` (o isolamento global de impressão) — esconde o pixel mas
+       **mantém o espaço**. Trocado por `display: none` nos irmãos do documento, que remove de
+       verdade.
+
+   ⚠️ A classe vai no `<html>` e no `<body>`, e só durante a impressão: prendê-la a um só dos dois
+   apaga o `#root` de toda impressão do produto (foi o que aconteceu na etiqueta).
+
+   Cabeçalho: **só na primeira página** (decisão do dono do produto, 2026-08-22). Nada de
+   `position: fixed` no cabeçalho — é ele que repetiria em todas. */
+@media print {
+  html.imprimindo-documento, body.imprimindo-documento {
+    height: auto !important; overflow: visible !important;
+  }
+  body.imprimindo-documento { margin: 0 !important; padding: 0 !important; }
+  body.imprimindo-documento > *:not(.documento-a4-imprimir) { display: none !important; }
+
+  .documento-a4-imprimir, .documento-a4-imprimir * { visibility: visible; }
+  /* Fluxo normal — NUNCA `position: absolute` aqui (ver o comentário do bloco). */
+  .documento-a4-imprimir {
+    position: static; margin: 0; background: none; color: #000;
+  }
+  /* Não quebra linha de tabela no meio nem separa o cabeçalho dela do corpo. */
+  .documento-a4-imprimir tr, .documento-a4-imprimir img { break-inside: avoid; }
+  .documento-a4-imprimir thead { display: table-header-group; }
+  /* Total e assinatura não podem ficar órfãos numa página só deles. */
+  .documento-a4-imprimir .orcamento-a4-totais,
+  .documento-a4-imprimir .orcamento-a4-assinatura { break-inside: avoid; }
+}
+
 /* Seletor de tema do cabeçalho (2026-08-14) — Claro / Escuro / Automático. Todas as cores saem
    de token, então o próprio seletor acompanha o tema que ele mesmo troca. */
 .seletor-tema { position: relative; flex-shrink: 0; }
@@ -1556,9 +1602,10 @@ a.menu-card:hover {
 }
 @media print {
   .danfe-imprimir, .danfe-imprimir * { visibility: visible; }
+  /* ⚠️ SEM `position: absolute` desde 2026-08-22 (item 4) — ver `.documento-a4-imprimir`. */
   .danfe-imprimir {
     page: danfe-a4;
-    position: absolute; top: 0; left: 0; width: 210mm; margin: 0; padding: 6mm;
+    width: 210mm; margin: 0; padding: 6mm;
     background: #fff; color: #000;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
@@ -1641,9 +1688,11 @@ a.menu-card:hover {
   /* `body * { visibility: hidden }` da regra global (linha ~365) esconde tudo; cada documento
      revela o seu. Sem esta linha o A4 sairia em branco. */
   .orcamento-imprimir-a4, .orcamento-imprimir-a4 * { visibility: visible; }
+  /* ⚠️ SEM `position: absolute` desde 2026-08-22 (item 4): absoluto imprime uma página só e
+     descarta o resto em silêncio. A paginação vem do bloco `.documento-a4-imprimir`. */
   .orcamento-imprimir-a4 {
     page: orcamento-a4;
-    position: absolute; top: 0; left: 0; margin: 0;
+    margin: 0;
   }
   .orcamento-imprimir-a4 .orcamento-a4-folha { padding: 10mm; }
   /* A folha oculta (a que existe só para o WhatsApp capturar) nunca vai para a impressora. */

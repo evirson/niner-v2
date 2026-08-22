@@ -113,7 +113,37 @@ public class RelatorioVendasService {
         }
     }
 
+    /** Recorte de data do relatório, sempre no fuso da loja (nunca o do banco — ver
+     *  {@code feedback_data_fuso_loja_nao_do_banco}). Fica em constante porque
+     *  {@link Filtro#clausulaPorDataDeMovimento()} a troca por texto. */
+    private static final String PREDICADO_DATA_DA_VENDA =
+            "(v.data_venda AT TIME ZONE 'America/Sao_Paulo')::date BETWEEN ? AND ?";
+    private static final String PREDICADO_DATA_DO_MOVIMENTO =
+            "(pmm.data_movimento AT TIME ZONE 'America/Sao_Paulo')::date BETWEEN ? AND ?";
+
     private record Filtro(String clausula, List<Object> params) {
+
+        /**
+         * A mesma cláusula, mas recortando pela data do <b>movimento</b> em vez da data da venda.
+         *
+         * <p>Existe para a devolução (2026-08-22, auditoria item 6): ela acontece semanas ou meses
+         * depois da venda que a originou, e recortá-la pela data da venda fazia duas coisas
+         * erradas. A devolução caía no relatório do mês da <b>venda</b>, enquanto o DRE e as
+         * Comissões a colocam no mês do <b>movimento</b> — dois relatórios do mesmo sistema
+         * discordando do mesmo fato. E, como o KPI é subtraído da venda líquida, o faturamento de
+         * um mês já fechado <b>mudava sozinho</b> meses depois, sem nada indicar por quê.
+         *
+         * <p>Decisão do dono do produto: <i>"valores fechados do mês não podem ser mudados; a
+         * devolução tem que entrar no mês da devolução"</i>. Os demais filtros (empresa, vendedor)
+         * continuam valendo sobre a venda de origem, que é o que se quer.
+         *
+         * <p>A troca é textual mas segura: as duas datas são os <b>dois primeiros</b> parâmetros da
+         * lista, e o predicado substituído tem exatamente os mesmos dois {@code ?}, então a ordem
+         * de {@link #params()} não muda.
+         */
+        String clausulaPorDataDeMovimento() {
+            return clausula.replace(PREDICADO_DATA_DA_VENDA, PREDICADO_DATA_DO_MOVIMENTO);
+        }
     }
 
     private List<VendaAgregada> buscarLinhasBase(Filtro filtro) {
@@ -169,7 +199,7 @@ public class RelatorioVendasService {
                                     List<Long> idsEmpresaSolicitadas, Long idFuncionario) {
         StringBuilder sb = new StringBuilder(
                 " WHERE v.id_tenant = plataforma.tenant_atual() AND v.cancelada = false"
-                        + " AND (v.data_venda AT TIME ZONE 'America/Sao_Paulo')::date BETWEEN ? AND ?");
+                        + " AND " + PREDICADO_DATA_DA_VENDA);
         List<Object> params = new ArrayList<>();
         params.add(dataInicial);
         params.add(dataFinal);
@@ -245,8 +275,24 @@ public class RelatorioVendasService {
         return linhas.stream().map(extrator).reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
-    /** Sempre 0 hoje — nenhuma tela do sistema cria movimento de devolução ainda (enum existe
-     *  desde V013, nunca usado em {@code api/}); a query está correta pra quando existir. */
+    /**
+     * Valor devolvido no período — <b>pela data da devolução</b>, não pela data da venda.
+     *
+     * <p>⚠️ Este javadoc já disse <i>"sempre 0 hoje — nenhuma tela cria movimento de devolução
+     * ainda"</i>, e isso deixou de ser verdade em <b>2026-08-19</b>, quando a Devolução de Produtos
+     * entrou. O KPI trouxe número real por dias com o comentário afirmando o contrário.
+     *
+     * <p>Duas correções em 2026-08-22 (auditoria, item 6):
+     * <ol>
+     *   <li>{@link Filtro#clausulaPorDataDeMovimento()} em vez de {@code clausula()} — ver o
+     *       javadoc de lá para o porquê (mês fechado que mudava sozinho, e discordância com o DRE
+     *       e as Comissões, que sempre usaram {@code data_movimento});</li>
+     *   <li>{@code vd.cancelada = false}, que o DRE já tinha: cancelar uma devolução <b>não</b>
+     *       apaga as linhas {@code DEVOLUCAO} do ledger — só marca
+     *       {@code venda_devolucao.cancelada} e lança o movimento de estorno. Sem o filtro, uma
+     *       devolução cancelada seguia abatendo a venda líquida.</li>
+     * </ol>
+     */
     private BigDecimal buscarValorDevolucao(Filtro filtro) {
         String sql = """
                 SELECT COALESCE(SUM(ABS(pmd.qtd_produto * pmd.preco_venda - pmd.valor_desconto + pmd.valor_acrescimo)), 0) AS valor
@@ -255,8 +301,11 @@ public class RelatorioVendasService {
                        ON pmm.id_venda = v.id_venda AND pmm.id_tenant = v.id_tenant AND pmm.tipo_movimento = 'DEVOLUCAO'
                 JOIN produto_movimento_detalhe pmd
                        ON pmd.id_movimento = pmm.id_movimento AND pmd.id_tenant = pmm.id_tenant
+                JOIN venda_devolucao vd
+                       ON vd.id_devolucao = pmm.id_devolucao AND vd.id_tenant = pmm.id_tenant
+                      AND vd.cancelada = false
                 """
-                + filtro.clausula();
+                + filtro.clausulaPorDataDeMovimento();
         return jdbc.sql(sql).params(filtro.params()).query(BigDecimal.class).single();
     }
 

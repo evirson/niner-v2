@@ -4,6 +4,7 @@ import { IconeFechar } from '../../components/Icones'
 import { ApiError } from '../../lib/api'
 import { buscarDanfe } from '../../lib/danfe55'
 import DanfeImprimir from './DanfeImprimir'
+import { imprimirDocumentoA4 } from '../../lib/impressaoDocumento'
 
 /**
  * Popup do DANFE modelo 55 (A4) — §10.2, bloco B9. Abre a partir da nota de devolução (do popup
@@ -70,7 +71,7 @@ export default function DanfeModal({
           <button type="button" className="btn ghost" onClick={aoFechar}>
             Fechar
           </button>
-          <button type="button" className="btn" disabled={!danfe} onClick={() => window.print()}>
+          <button type="button" className="btn" disabled={!danfe} onClick={imprimirDocumentoA4}>
             Imprimir
           </button>
         </div>

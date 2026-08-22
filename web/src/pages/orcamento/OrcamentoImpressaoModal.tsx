@@ -7,6 +7,7 @@ import { gerarBlobOrcamentoA4 } from '../../lib/orcamentoPdf'
 import { montarLinkWhatsApp } from '../../lib/whatsapp'
 import { montarLinhasOrcamentoBobina } from '../../lib/orcamentoImpressao'
 import type { Orcamento } from '../../lib/orcamento'
+import { imprimirDocumentoA4 } from '../../lib/impressaoDocumento'
 
 type Formato = 'BOBINA' | 'A4'
 
@@ -71,12 +72,24 @@ export default function OrcamentoImpressaoModal({
     }
   }
 
+  /**
+   * ⚠️ Cada `@page` nomeado precisa de uma regra que o AMARRE a um elemento (auditoria
+   * 2026-08-21, item 18).
+   *
+   * <p>O `@page orcamento-bobina` era injetado e **nada o referenciava** — nenhum seletor tinha
+   * `page: orcamento-bobina`. A bobina saía certa por acaso, porque caía no `@page` global do
+   * projeto, que também é `size: 80mm auto`. No dia em que esse global mudasse (ou uma tela
+   * injetasse outro `@page` antes), a bobina do orçamento sairia no tamanho errado sem que nada
+   * apontasse para aqui.
+   */
   useEffect(() => {
     const estilo = document.createElement('style')
     estilo.textContent =
       formato === 'A4'
         ? '@page orcamento-a4 { size: A4 portrait; margin: 0; }'
+          + '.orcamento-imprimir-a4 { page: orcamento-a4; }'
         : '@page orcamento-bobina { size: 80mm auto; margin: 0; }'
+          + '.orcamento-imprimir-bobina { page: orcamento-bobina; }'
     document.head.appendChild(estilo)
     return () => estilo.remove()
   }, [formato])
@@ -122,7 +135,7 @@ export default function OrcamentoImpressaoModal({
             <button type="button" className="btn ghost" onClick={() => setWhatsappAberto(true)}>
               Enviar por WhatsApp
             </button>
-            <button type="button" className="btn" onClick={() => window.print()}>
+            <button type="button" className="btn" onClick={imprimirDocumentoA4}>
               Imprimir
             </button>
           </div>
@@ -134,10 +147,10 @@ export default function OrcamentoImpressaoModal({
       {/* ⚠️ As duas versões ficam SEMPRE no DOM: o CSS decide qual sai na impressora, e o envio
           por WhatsApp captura a folha A4 mesmo quando a tela está mostrando a bobina (o PDF do
           cliente é sempre o A4 — bobina é papel de balcão, não anexo de mensagem). */}
-      <div className={formato === 'A4' ? 'orcamento-imprimir-a4' : 'orcamento-imprimir-oculto'}>
+      <div className={formato === 'A4' ? 'orcamento-imprimir-a4 documento-a4-imprimir' : 'orcamento-imprimir-oculto'}>
         <div className="orcamento-a4-folha" ref={folhaRef}>{corpoA4(orcamento)}</div>
       </div>
-      <div className={formato === 'BOBINA' ? 'etiqueta-imprimir' : 'orcamento-imprimir-oculto'}>
+      <div className={formato === 'BOBINA' ? 'etiqueta-imprimir orcamento-imprimir-bobina' : 'orcamento-imprimir-oculto'}>
         <pre className="papeleta-imprimir">{linhasBobina.join('\n')}</pre>
       </div>
 

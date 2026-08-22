@@ -313,6 +313,19 @@ public class DreService {
                         WHERE cr.id_tenant = plataforma.tenant_atual() AND v.cancelada = false
                               AND cr.data_recebimento IS NOT NULL
                               AND (cr.data_recebimento AT TIME ZONE 'America/Sao_Paulo')::date BETWEEN ? AND ?
+                              -- ⚠️ Parcela que JÁ VEIO PAGA na migração não é receita do Nainer
+                              -- (V059, 2026-08-22 — auditoria item 22). A venda `IMPORTACAO` é uma
+                              -- casca sem item nem movimento, então o LEFT JOIN em custo_venda não
+                              -- acha nada e o COALESCE zera o CMV: R$ 45.000 de parcelas migradas
+                              -- apareciam como receita com custo R$ 0,00 — margem de 100%, sobre
+                              -- mercadoria comprada e vendida no sistema anterior. E era incoerente
+                              -- com o Fluxo de Caixa, que nunca recebeu esse dinheiro (o importador
+                              -- não cria lançamento de caixa para parcela já paga).
+                              --
+                              -- O corte é por INSTANTE, não pela origem inteira: parcela legada que
+                              -- estava em aberto e o cliente veio pagar DEPOIS, pelo Recebimento de
+                              -- Crediário, entrou no caixa de verdade e continua sendo receita.
+                              AND (v.importado_em IS NULL OR cr.data_recebimento >= v.importado_em)
                         """ + filtroEmpresaVenda)
                 .params(parametros(inicio, fim, idsEmpresa))
                 .query((rs, n) -> new BigDecimal[] {

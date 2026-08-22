@@ -9,6 +9,7 @@ import {
 } from '../../lib/cancelamentoDevolucao'
 import { formatarDataHora } from '../../lib/datas'
 import { formatarMoeda } from '../../lib/masks'
+import AvisoModal from '../../components/AvisoModal'
 
 function moeda(v: number): string {
   return `R$ ${formatarMoeda(v)}`
@@ -32,6 +33,16 @@ export default function CancelamentoDevolucaoModal({
   const queryClient = useQueryClient()
   const [motivo, setMotivo] = useState('')
   const [erro, setErro] = useState('')
+  /**
+   * Erro de NEGÓCIO vindo do servidor (auditoria 2026-08-21, item 10).
+   *
+   * ⚠️ Separado do `erro` acima, que é validação local ("informe o motivo") e continua inline
+   * junto ao campo — ali o texto curto ao lado do campo é o certo. O que vinha errado era a
+   * recusa do servidor ("caixa de hoje fechado", "prazo da SEFAZ passou"): saía no mesmo
+   * `erro-campo`, contra a convenção do projeto (toda mensagem de erro vira popup), e a
+   * mensagem multilinha **colapsava numa linha só**, escondendo a instrução do que fazer.
+   */
+  const [erroServidor, setErroServidor] = useState('')
 
   const {
     data: detalhe,
@@ -49,7 +60,7 @@ export default function CancelamentoDevolucaoModal({
       queryClient.invalidateQueries({ queryKey: ['devolucoes-cancelamento'] })
       aoCancelarComSucesso()
     },
-    onError: (e: unknown) => setErro(e instanceof ApiError ? e.message : 'Não foi possível cancelar a devolução.'),
+    onError: (e: unknown) => setErroServidor(e instanceof ApiError ? e.message : 'Não foi possível cancelar a devolução.'),
   })
 
   const confirmar = () => {
@@ -172,6 +183,9 @@ export default function CancelamentoDevolucaoModal({
           </>
         )}
       </div>
+      {erroServidor && (
+        <AvisoModal titulo="Cancelamento de devolução" mensagem={erroServidor} aoFechar={() => setErroServidor('')} />
+      )}
     </div>
   )
 }

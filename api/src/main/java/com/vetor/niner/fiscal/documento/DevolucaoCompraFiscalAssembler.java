@@ -96,6 +96,7 @@ public class DevolucaoCompraFiscalAssembler {
                     "A devolução não tem itens com correspondência na nota de entrada — não há o que devolver "
                             + "fiscalmente.");
         }
+        exigirTributacaoCompativelComOCrt(config, itens);
 
         Emitente emitente = new Emitente(config.cnpj(), config.razaoSocial(), config.nomeFantasia(),
                 config.inscricaoEstadual(), config.crt(), config.logradouro(), config.numero(),
@@ -121,6 +122,41 @@ public class DevolucaoCompraFiscalAssembler {
                         csrt.buscar(config.uf(), config.ambiente().codigo())
                                 .map(CsrtService.Csrt::codigo).orElse(null)),
                 "Nainer 1.0"));
+    }
+
+    /**
+     * Recusa montar quando a tributação espelhada do fornecedor é <b>incompatível com o CRT da
+     * loja</b> (auditoria 2026-08-21, item 19; decisão do dono do produto em 2026-08-22).
+     *
+     * <p>O espelhamento copia {@code cst_icms} de {@code entrada_nfe_item} — a tributação que <b>o
+     * fornecedor</b> declarou — e o montador emite {@code ICMS00}/{@code ICMS20} com {@code pICMS}
+     * e {@code vICMS} destacados. Mas o {@code <emit>} desta nota leva o CRT da <b>nossa</b> loja,
+     * que por DF37 é 1 (Simples), 2 (Simples com excesso de sublimite) ou 4 (MEI). O motor
+     * tributário declara o invariante: <i>CRT 1/4 emite com CSOSN; só o CRT 2, com excesso de
+     * sublimite, pode usar CST</i> — e esta rotina não passa pelo motor, por desenho.
+     *
+     * <p>Sem esta recusa, uma loja do Simples que compra de distribuidor do Lucro Real (CST 00,
+     * pICMS 18) e devolve emite NF-e com {@code <CRT>1</CRT>} e {@code <ICMS00>} destacando ICMS
+     * próprio. Na melhor hipótese a SEFAZ rejeita por incompatibilidade; na pior <b>autoriza</b>, e
+     * a loja destacou imposto que não apura, gerando crédito indevido ao fornecedor.
+     *
+     * <p>⚠️ <b>Recusar é o mínimo seguro, não a solução final.</b> A conversão para CSOSN (102, ou
+     * 500 quando a entrada veio com ST) levando o ICMS original para {@code infAdic} é regra
+     * tributária e depende do contador chancelar. Enquanto isso, parar é melhor que emitir
+     * documento fiscal errado — e é o mesmo padrão que o montador já usa para CSOSN 202/900.
+     */
+    private static void exigirTributacaoCompativelComOCrt(ConfigEmpresa config, List<ItemDevolucao> itens) {
+        if (config.crt() == 2) {
+            return;                       // único CRT que pode destacar ICMS próprio por CST
+        }
+        boolean algumComCst = itens.stream().anyMatch(i -> i.cstIcms() != null && !i.cstIcms().isBlank());
+        if (algumComCst) {
+            throw new MontagemInvalidaException(
+                    "A nota de entrada traz tributação por CST (ICMS destacado pelo fornecedor), e esta empresa "
+                            + "emite pelo Simples Nacional (CRT " + config.crt() + "), que usa CSOSN. Emitir assim "
+                            + "destacaria imposto que a loja não apura. A nota de devolução não pode ser montada — "
+                            + "consulte o contador para definir o CSOSN correto desta operação.");
+        }
     }
 
     /**

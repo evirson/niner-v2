@@ -2,6 +2,7 @@ package com.vetor.niner.catalogo;
 
 import com.vetor.niner.catalogo.ProdutoBarraDtos.CriarVariacaoRequest;
 import com.vetor.niner.catalogo.ProdutoBarraDtos.ProdutoBarraResponse;
+import com.vetor.niner.catalogo.ProdutoBarraDtos.ProdutoComVariacaoRequest;
 import com.vetor.niner.catalogo.ProdutoDtos.ExclusaoProdutoResponse;
 import com.vetor.niner.catalogo.ProdutoDtos.PaginaProdutos;
 import com.vetor.niner.catalogo.ProdutoDtos.ProdutoRequest;
@@ -55,6 +56,26 @@ public class ProdutoController {
     @ResponseStatus(HttpStatus.CREATED)
     public ProdutoResponse criar(@Valid @RequestBody ProdutoRequest req) {
         return service.criar(req);
+    }
+
+    /**
+     * Cria o produto <b>e</b> a primeira variação numa transação só — caminho do <b>cadastro
+     * rápido</b> (PDV, Entrada de Produtos). Auditoria 2026-08-21, item 28.
+     *
+     * <p><b>Por que um endpoint separado, e não um campo opcional no {@code POST /produtos}:</b>
+     * o formulário completo de Produto e todos os importadores já mandam {@code ProdutoRequest}
+     * como corpo raiz. Aninhá-lo dentro de um envelope quebraria todos eles de uma vez, para
+     * resolver um problema que é só do cadastro rápido. Aqui o contrato existente fica intacto.
+     *
+     * <p>O que resolve: com dois POSTs separados, uma falha na variação — tipicamente EAN repetido
+     * vindo de planilha ou XML de terceiro — deixava um produto <b>sem SKU e sem código de
+     * barras</b>, invisível no PDV, enquanto a tela dizia que a criação do produto falhou. Clicar
+     * de novo criava um segundo órfão. Agora a falha da variação desfaz o produto junto.
+     */
+    @PostMapping("/com-variacao")
+    @ResponseStatus(HttpStatus.CREATED)
+    public ProdutoBarraResponse criarComVariacao(@Valid @RequestBody ProdutoComVariacaoRequest req) {
+        return service.criarComVariacao(req.produto(), req.variacao());
     }
 
     @PutMapping("/{id}")

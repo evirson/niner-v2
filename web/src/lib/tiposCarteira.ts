@@ -1,3 +1,4 @@
+import type { QueryClient } from '@tanstack/react-query'
 import { api } from './api'
 import { desmascararPercentual, formatarPercentual, mascararCpfCnpj, somenteAlfanumerico } from './masks'
 import { maiusculas } from './texto'
@@ -197,4 +198,20 @@ export function atualizarTipoCarteira(
 
 export function excluirTipoCarteira(id: number): Promise<ExclusaoTipoCarteira> {
   return api<ExclusaoTipoCarteira>(`/api/v1/tipos-carteira/${id}`, { method: 'DELETE' })
+}
+
+/**
+ * Invalida TODAS as chaves de tipo de carteira (auditoria 2026-08-21, item 15).
+ *
+ * ⚠️ O CRUD invalidava `["tipos-carteira"]`, mas o PDV lê `["tipos-carteira-pdv"]` e a Importação
+ * lê `["tipos-carteira-importacao"]` — **chave de array não casa por prefixo de string**, são
+ * chaves diferentes. Criar uma forma de pagamento e ir direto ao PDV podia não mostrá-la.
+ *
+ * Mesma lição de `feedback_react_query_cache_entre_telas`: chave nova derivada do mesmo dado
+ * precisa entrar aqui, senão nasce desatualizada em silêncio.
+ */
+export function invalidarTiposCarteira(queryClient: QueryClient): void {
+  queryClient.invalidateQueries({ queryKey: ['tipos-carteira'] })
+  queryClient.invalidateQueries({ queryKey: ['tipos-carteira-pdv'] })
+  queryClient.invalidateQueries({ queryKey: ['tipos-carteira-importacao'] })
 }

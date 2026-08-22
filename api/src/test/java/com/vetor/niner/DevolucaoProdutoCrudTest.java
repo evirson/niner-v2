@@ -604,4 +604,97 @@ class DevolucaoProdutoCrudTest {
                         .param("numeroVenda", String.valueOf(idVenda)))
                 .andExpect(status().isNotFound());
     }
+/**
+     * ⚠️ Regressão do item 2 da auditoria de 2026-08-21 (corrigido em 2026-08-22): a mesma
+     * variação em DUAS linhas da venda, com preços diferentes, fazia o vale sair pela MÉDIA.
+     *
+     * <p>O cenário virou comum com o orçamento: o cliente leva a peça que orçou (preço congelado,
+     * que a loja honra) e mais uma pelo preço do dia. Antes desta correção, devolver UMA peça de
+     * uma venda 1×R$ 50 + 1×R$ 120 gerava vale de R$ 85,00 — valor que a venda nunca praticou —,
+     * e o mesmo R$ 85 ia para a NF-e 55 de devolução.
+     *
+     * <p>A segunda linha é inserida direto no movimento porque é o estado que o PDV do orçamento
+     * produz; o que está sob teste aqui é a DEVOLUÇÃO, não o caminho que gravou a venda.
+     */
+    @Test
+    void devolucaoDeVariacaoComDoisPrecosNaMesmaVendaUsaOPrecoDaLinhaEscolhida() throws Exception {
+        TenantNovo tenant = assinarNovoTenant("duas-linhas");
+        long idTenant = extrairIdTenant(tenant.token());
+        long idProduto = criarProduto(tenant.token(), "Produto Dois Precos");
+        long idCarteira = criarTipoCarteira(tenant.token(), "DINHEIRO DOIS PRECOS", "AVISTA");
+        long idCliente = criarCliente(tenant.token(), "Cliente Dois Precos");
+        long idFuncionario = criarFuncionario(tenant.token(), "Vendedor Dois Precos");
+        abrirCaixaDinheiro(tenant.token());
+
+        long idVariacao;
+        long idVenda;
+        try (Connection c = abrirConexao(idTenant)) {
+            long idEmpresa = buscarIdEmpresa(c);
+            idVariacao = criarVariacao(c, idTenant, idProduto);
+            definirEstoque(c, idTenant, idEmpresa, idVariacao, new BigDecimal("10.000"));
+            idVenda = efetivarVenda(tenant.token(), idVariacao, idCliente, idFuncionario, idCarteira, "50.00", 1);
+
+            // Segunda linha da MESMA variação, a outro preço — o que a venda com orçamento produz.
+            try (PreparedStatement ps = c.prepareStatement("""
+                    INSERT INTO produto_movimento_detalhe
+                        (id_tenant, id_movimento, id_empresa, id_variacao, credito_debito, qtd_produto,
+                         preco_venda, preco_custo, id_funcionario, origem)
+                    SELECT ?, pmm.id_movimento, ?, ?, 'D', 1, 120.00, 10.00, ?, 'venda'
+                      FROM produto_movimento_mestre pmm
+                     WHERE pmm.id_tenant = ? AND pmm.id_venda = ? AND pmm.tipo_movimento = 'VENDA'
+                    """)) {
+                ps.setLong(1, idTenant);
+                ps.setLong(2, idEmpresa);
+                ps.setLong(3, idVariacao);
+                ps.setLong(4, idFuncionario);
+                ps.setLong(5, idTenant);
+                ps.setLong(6, idVenda);
+                ps.executeUpdate();
+            }
+        }
+
+        // A grid passa a listar UMA LINHA POR PREÇO — antes vinha uma só, com a média (85,00).
+        mvc.perform(get("/api/v1/vendas/devolucao/vendedor").header("Authorization", "Bearer " + tenant.token())
+                        .param("numeroVenda", String.valueOf(idVenda)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.itens.length()").value(2))
+                .andExpect(jsonPath("$.itens[0].precoUnitario").value(50.00))
+                .andExpect(jsonPath("$.itens[1].precoUnitario").value(120.00));
+
+        // Devolvendo a peça de 120,00, o vale é de 120,00 — NUNCA a média de 85,00.
+        String corpo = """
+                {"numeroVenda":%d,"itens":[{"idVariacao":%d,"qtd":1,"precoUnitario":120.00}]}
+                """.formatted(idVenda, idVariacao);
+        mvc.perform(post("/api/v1/vendas/devolucao").header("Authorization", "Bearer " + tenant.token())
+                        .contentType(APPLICATION_JSON).content(corpo))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.valorVale").value(120.00))
+                .andExpect(jsonPath("$.itens[0].precoVenda").value(120.00));
+
+        // E o gravado no movimento é 120,00 — é dele que saem o vale e o item da NF-e 55.
+        try (Connection c = abrirConexao(idTenant);
+             PreparedStatement ps = c.prepareStatement("""
+                     SELECT pmd.preco_venda
+                       FROM produto_movimento_mestre pmm
+                       JOIN produto_movimento_detalhe pmd ON pmd.id_movimento = pmm.id_movimento
+                      WHERE pmm.tipo_movimento = 'DEVOLUCAO' AND pmd.id_variacao = ?
+                     """)) {
+            ps.setLong(1, idVariacao);
+            try (ResultSet rs = ps.executeQuery()) {
+                rs.next();
+                assertThat(rs.getBigDecimal("preco_venda"))
+                        .as("preço da LINHA devolvida (120,00), nunca a média das duas linhas (85,00)")
+                        .isEqualByComparingTo("120.00");
+            }
+        }
+
+        // O saldo consumido é o DAQUELA linha: a de 50,00 continua inteira, e a de 120,00 zerou.
+        mvc.perform(get("/api/v1/vendas/devolucao/vendedor").header("Authorization", "Bearer " + tenant.token())
+                        .param("numeroVenda", String.valueOf(idVenda)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.itens[0].precoUnitario").value(50.00))
+                .andExpect(jsonPath("$.itens[0].qtdDisponivelDevolucao").value(1))
+                .andExpect(jsonPath("$.itens[1].precoUnitario").value(120.00))
+                .andExpect(jsonPath("$.itens[1].qtdDisponivelDevolucao").value(0));
+    }
 }

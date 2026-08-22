@@ -92,6 +92,7 @@ export default function EstornoRecebimentoCrediario() {
 
         <div className="card filtros-bar">
           <input
+            autoFocus
             placeholder="Nome do cliente *"
             value={nomeCliente}
             onChange={(e) => setNomeCliente(maiusculas(e.target.value))}

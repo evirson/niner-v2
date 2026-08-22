@@ -537,7 +537,7 @@ export default function RelatorioEstoque() {
           categorias={categorias ?? []}
           primeiraVez={!relatorioGerado}
           aoGerar={handleGerar}
-          aoFechar={relatorioGerado ? fecharModal : () => navigate('/')}
+          aoFechar={relatorioGerado ? fecharModal : () => navigate(-1)}
         />
       )}
     </div>

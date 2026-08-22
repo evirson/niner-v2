@@ -50,6 +50,14 @@ export interface VendaDetalheCancelamento {
   nfcePrazoCancelamentoMinutos: number | null
   nfcePrazoCancelamentoExpiraEm: string | null
   nfcePrazoCancelamentoExpirado: boolean
+  /**
+   * O caixa de HOJE da empresa da venda está aberto para o usuário logado?
+   *
+   * ⚠️ Vem do SERVIDOR (auditoria 2026-08-21, item 9) — o front não deduz: a venda pode ser de
+   * outra empresa que não a da sessão, e o caixa é por empresa + usuário. Sem isto, o ADMIN
+   * escrevia 15+ caracteres de justificativa só para receber a recusa.
+   */
+  caixaAbertoHoje: boolean
 }
 
 export function buscarDetalheParaCancelamento(idVenda: number): Promise<VendaDetalheCancelamento> {

@@ -31,4 +31,16 @@ public class ProdutoBarraDtos {
             String variacaoCor,
             String variacaoTamanho) {
     }
+
+    /**
+     * Corpo do cadastro rápido: produto + primeira variação, gravados numa transação só
+     * (auditoria 2026-08-21, item 28 — ver {@code ProdutoController#criarComVariacao}).
+     *
+     * <p>Os dois campos são obrigatórios: quem só quer o produto usa {@code POST /produtos}, que
+     * continua existindo com o contrato de sempre.
+     */
+    public record ProdutoComVariacaoRequest(
+            @jakarta.validation.constraints.NotNull @jakarta.validation.Valid ProdutoDtos.ProdutoRequest produto,
+            @jakarta.validation.constraints.NotNull CriarVariacaoRequest variacao) {
+    }
 }

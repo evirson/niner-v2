@@ -88,6 +88,38 @@ public class CobrancaWebhookProcessador {
         marcarProcessado(idEvento, null);
     }
 
+    /**
+     * ⚠️ <b>DÍVIDA CONHECIDA E ACEITA — estorno/chargeback não revoga a assinatura</b>
+     * (auditoria 2026-08-21 item 27; decisão do dono do produto em 2026-08-22:
+     * <i>"documente e avise sempre que formos revisar o ERP à procura de falhas"</i>).
+     *
+     * <p>{@code refunded}/{@code charged_back} viram {@link GatewayCobranca.Situacao#ESTORNADO}, e
+     * o {@code return} abaixo — escrito para FALHOU/PENDENTE, casos em que a fatura <b>nunca</b>
+     * foi paga — engole também esse. Só que no estorno a fatura <b>está</b> paga: o que fica é
+     *
+     * <ul>
+     *   <li>{@code pagamento.status = ESTORNADO} ← a única coisa que muda;</li>
+     *   <li>{@code fatura.status} continua <b>PAGA</b>;</li>
+     *   <li>{@code assinatura.status} continua <b>ATIVA</b>;</li>
+     *   <li>{@code assinatura.proxima_cobranca} continua <b>empurrada um ciclo à frente</b>.</li>
+     * </ul>
+     *
+     * <p>Custo concreto: lojista paga o plano <b>anual</b> por PIX e obtém o estorno semanas
+     * depois — nenhuma fatura nova é gerada por <b>doze meses</b>, e o backoffice mostra tudo em
+     * dia. O único rastro é o status do pagamento, que nenhuma tela exibe.
+     *
+     * <p>Por que não foi corrigido junto: <b>a política é comercial, não técnica</b> (reabrir a
+     * fatura é claro; suspender, dar prazo ou marcar inadimplente é decisão da Vetor). E o efeito
+     * prático hoje é menor do que parece — <b>nenhum status corta acesso</b>: o login
+     * ({@code SignupService#login}) confere slug, e-mail, senha, {@code usuario.ativo} e horário
+     * de acesso, e não olha {@code tenant.status} nem {@code assinatura.status}; não há um único
+     * uso de {@code SUSPENSA}/{@code INADIMPLENTE} em {@code api/src/main}. Os status são rótulo
+     * no backoffice, não fechadura.
+     *
+     * <p>⚠️ Quando a correção for feita, ela precisa de <b>três</b> passos, não um: reabrir a
+     * fatura, <b>recuar</b> {@code proxima_cobranca} para o valor anterior, e decidir o estado da
+     * assinatura. Recuar é o que costuma ser esquecido, e é o que mais custa.
+     */
     private void aplicar(SituacaoPagamento s) {
         int atualizados = jdbc.sql("""
                         UPDATE plataforma.pagamento
@@ -101,7 +133,10 @@ public class CobrancaWebhookProcessador {
             log.warn("Pagamento {} do gateway não corresponde a nenhuma tentativa registrada", s.idTransacao());
         }
         if (s.situacao() != GatewayCobranca.Situacao.CONFIRMADO) {
-            return;                                    // fatura segue ABERTA; o cliente tenta de novo
+            // FALHOU/PENDENTE: fatura segue ABERTA, o cliente tenta de novo — correto.
+            // ESTORNADO: ver o javadoc deste método. Dívida conhecida, aceita e a ser lembrada em
+            // toda revisão do ERP — NÃO é um `return` que "está certo" para os três casos.
+            return;
         }
 
         // Confirmado: a fatura fecha e a assinatura passa a valer a faixa que ela pagou.
@@ -123,8 +158,33 @@ public class CobrancaWebhookProcessador {
             return;
         }
 
-        jdbc.sql("UPDATE plataforma.fatura SET status = 'PAGA', pago_em = now() WHERE id_fatura = ? AND status <> 'PAGA'")
-                .param(idFatura).update();
+        // ⚠️ Esta linha é a TRAVA DE IDEMPOTÊNCIA de tudo o que vem abaixo (auditoria 2026-08-21,
+        // item 7). O `AND status <> 'PAGA'` faz o UPDATE casar exatamente UMA vez por fatura, então
+        // `fechouAgora` distingue a primeira aplicação de uma reaplicação.
+        //
+        // Por que fazia falta: o javadoc de `pegarLote` promete que a separação em dois beans
+        // impede que "dois workers peguem o mesmo evento" — mas a transação de `pegarLote` commita
+        // ao retornar, soltando os locks do FOR UPDATE SKIP LOCKED; `processar` roda depois em
+        // REQUIRES_NEW, sem lock nenhum. Todo o resto de `aplicar` é idempotente por construção (o
+        // UPDATE do pagamento é, e a fatura tem este guard) — EXCETO o UPDATE da assinatura, que
+        // empurra `proxima_cobranca` mais um ciclo A CADA reaplicação: uma notificação duplicada
+        // dava um mês (ou um ano) de graça, silenciosamente.
+        //
+        // Reachability honesta: com UMA instância de API e @Scheduled isso não acontece hoje. Vira
+        // real no dia em que existirem duas instâncias — cenário que o CLAUDE.md prevê.
+        //
+        // A trava é a fatura, não uma comparação de datas em `proxima_cobranca`: o valor novo
+        // depende do ciclo, e comparar data acerta por acaso. Aqui a condição é exata, e vale
+        // porque este é o ÚNICO ponto do sistema que marca fatura como PAGA (conferido).
+        boolean fechouAgora = jdbc.sql("""
+                        UPDATE plataforma.fatura SET status = 'PAGA', pago_em = now()
+                         WHERE id_fatura = ? AND status <> 'PAGA'
+                        """)
+                .param(idFatura).update() > 0;
+        if (!fechouAgora) {
+            log.info("Fatura {} já estava paga — notificação reaplicada, assinatura intacta.", idFatura);
+            return;
+        }
 
         jdbc.sql("""
                         UPDATE plataforma.assinatura a

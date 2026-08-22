@@ -3,6 +3,18 @@ import { api } from './api'
 export interface ItemDevolucaoRequest {
   idVariacao: number
   qtd: number
+  /**
+   * Preço da LINHA da venda que está sendo devolvida (2026-08-22, auditoria item 2).
+   *
+   * ⚠️ O mesmo produto pode aparecer duas vezes na mesma venda com preços diferentes — o congelado
+   * do orçamento, que a loja honrou, e o do dia, das unidades levadas na hora. Sem mandar o preço,
+   * o servidor usava a MÉDIA das duas, e o vale saía por um valor que a venda nunca praticou (1 un
+   * de uma venda 1×80 + 1×120 gerava vale de 100). O mesmo valor médio ia para a NF-e 55.
+   *
+   * Opcional: devolução sem venda de origem não tem linha para apontar, e omitir mantém o
+   * comportamento antigo.
+   */
+  precoUnitario?: number
 }
 
 /** `numeroVenda` é opcional — só usado para resolver o vendedor (comissão futura). */

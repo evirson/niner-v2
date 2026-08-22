@@ -6,7 +6,7 @@ import { IconeExcluir, IconeEstoque } from '../../components/Icones'
 import Toast from '../../components/Toast'
 import { ApiError } from '../../lib/api'
 import { buscarPermiteQtdDecimal } from '../../lib/configuracaoGeral'
-import { ajustarContagem, listarContagemAtiva, registrarContagem, removerContagem, type LinhaContagem } from '../../lib/estoqueBalanco'
+import { ajustarContagem, listarContagemAtiva, registrarContagem, removerContagem, type LinhaContagem, invalidarBalanco } from '../../lib/estoqueBalanco'
 import { completarQuantidade, desmascararQuantidade, formatarQuantidade, mascararQuantidade } from '../../lib/masks'
 import { buscarProdutoPorCodigo, interpretarCodigoBarras } from '../../lib/pdv'
 import { maiusculas } from '../../lib/texto'
@@ -38,22 +38,30 @@ export default function ContagemEstoque() {
   const permiteQtdDecimal = cfgQtdDecimal?.cfgPermiteQtdDecimal ?? true
 
   const { data: linhas, isLoading } = useQuery({ queryKey: ['balanco-contagem'], queryFn: listarContagemAtiva })
+  /**
+   * Linha aguardando confirmação de exclusão (auditoria 2026-08-21, item 8).
+   *
+   * ⚠️ A lixeira apagava direto, sem perguntar — em todo o resto do sistema exclusão confirma. E
+   * aqui o que se perde é **trabalho de contagem já gravado**: alguém percorreu a prateleira,
+   * contou e digitou. Um clique errado numa grade longa refaz tudo aquilo.
+   */
+  const [linhaParaRemover, setLinhaParaRemover] = useState<LinhaContagem | null>(null)
 
   const registrar = useMutation({
     mutationFn: ({ idVariacao, qtd }: { idVariacao: number; qtd: number }) => registrarContagem(idVariacao, qtd),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['balanco-contagem'] }),
+    onSuccess: () => invalidarBalanco(queryClient),
     onError: (e: unknown) => setToast({ texto: e instanceof ApiError ? e.message : 'Não foi possível registrar a leitura.', tipo: 'erro' }),
   })
 
   const ajustar = useMutation({
     mutationFn: ({ idVariacao, qtd }: { idVariacao: number; qtd: number }) => ajustarContagem(idVariacao, qtd),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['balanco-contagem'] }),
+    onSuccess: () => invalidarBalanco(queryClient),
     onError: (e: unknown) => setToast({ texto: e instanceof ApiError ? e.message : 'Não foi possível ajustar a contagem.', tipo: 'erro' }),
   })
 
   const remover = useMutation({
     mutationFn: (idVariacao: number) => removerContagem(idVariacao),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['balanco-contagem'] }),
+    onSuccess: () => invalidarBalanco(queryClient),
     onError: (e: unknown) => setToast({ texto: e instanceof ApiError ? e.message : 'Não foi possível remover a linha.', tipo: 'erro' }),
   })
 
@@ -211,7 +219,7 @@ export default function ContagemEstoque() {
                           <button
                             type="button"
                             className="acao-icone acao-excluir"
-                            onClick={() => remover.mutate(linha.idVariacao)}
+                            onClick={() => setLinhaParaRemover(linha)}
                             aria-label={`Remover ${linha.descricaoProduto}`}
                             title="Remover"
                           >
@@ -238,6 +246,43 @@ export default function ContagemEstoque() {
           </section>
         </div>
       </div>
+
+      {/* Confirmação de exclusão — ver o comentário de `linhaParaRemover`. */}
+      {linhaParaRemover && (
+        <div className="modal-overlay" onClick={() => setLinhaParaRemover(null)}>
+          <div className="modal" role="dialog" aria-label="Confirmar remoção" onClick={(e) => e.stopPropagation()}>
+            <h2 style={{ marginTop: 0 }}>Remover da contagem?</h2>
+            <p>
+              <strong>{linhaParaRemover.descricaoProduto}</strong>
+              {linhaParaRemover.variacaoCor || linhaParaRemover.variacaoTamanho ? (
+                <span className="muted">
+                  {' '}· {[linhaParaRemover.variacaoCor, linhaParaRemover.variacaoTamanho].filter(Boolean).join(' · ')}
+                </span>
+              ) : null}
+            </p>
+            <p className="muted">
+              A quantidade contada deste produto será descartada. Para contá-lo de novo, será preciso lançar
+              tudo outra vez.
+            </p>
+            <div className="ajuda-rodape">
+              <button type="button" className="btn ghost" onClick={() => setLinhaParaRemover(null)}>
+                Cancelar
+              </button>
+              <button
+                type="button"
+                className="btn"
+                disabled={remover.isPending}
+                onClick={() => {
+                  remover.mutate(linhaParaRemover.idVariacao)
+                  setLinhaParaRemover(null)
+                }}
+              >
+                {remover.isPending ? 'Removendo…' : 'Remover'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {toast && <Toast mensagem={toast.texto} tipo={toast.tipo} aoFechar={() => setToast(null)} />}
     </div>

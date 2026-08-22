@@ -8,6 +8,7 @@ import { criarCor, listarCores } from '../../lib/cores'
 import { buscarGrade } from '../../lib/grades'
 import {
   FILTROS_ENTRADAS_EMISSAO_VAZIO,
+  LIMITE_BUSCA_EMISSAO,
   buscarFornecedoresEmissao,
   buscarPorEntradas,
   buscarPorEstoques,
@@ -138,6 +139,13 @@ function SelecaoIndividual({ aoAdicionar }: { aoAdicionar: (itens: ItemEmissao[]
                 </tbody>
               </table>
             </div>
+          )}
+          {/* A busca corta no servidor e a tela não dizia nada (auditoria 2026-08-21, item 33)
+              — ver LIMITE_BUSCA_EMISSAO. */}
+          {resultados && resultados.length === LIMITE_BUSCA_EMISSAO && (
+            <p className="muted" style={{ marginTop: 6 }}>
+              Mostrando os primeiros {LIMITE_BUSCA_EMISSAO} — refine a busca para ver mais.
+            </p>
           )}
         </>
       )}
@@ -316,6 +324,11 @@ function SelecaoPorEntradas({
                     </tbody>
                   </table>
                 </div>
+              )}
+              {fornecedores && fornecedores.length === LIMITE_BUSCA_EMISSAO && (
+                <p className="muted" style={{ marginTop: 6 }}>
+                  Mostrando os primeiros {LIMITE_BUSCA_EMISSAO} — refine a busca para ver mais.
+                </p>
               )}
             </>
           )}

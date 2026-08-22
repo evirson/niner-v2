@@ -23,7 +23,7 @@ import { buscarStatusCaixa } from '../../../lib/caixa'
 import { listarContasCorrente } from '../../../lib/contaCorrente'
 import { hojeISO } from '../../../lib/datas'
 import { listarEmpresasPermitidas } from '../../../lib/empresas'
-import { buscarFornecedoresEmissao, type FornecedorOpcaoEmissao } from '../../../lib/etiquetaEmissao'
+import { buscarFornecedoresEmissao, LIMITE_BUSCA_EMISSAO, type FornecedorOpcaoEmissao } from '../../../lib/etiquetaEmissao'
 import { aoTeclarEnterNoFormulario } from '../../../lib/formularios'
 import { completarMoeda, dataValida, desmascararMoeda, formatarMoeda, isoParaData, mascararData, mascararMoeda } from '../../../lib/masks'
 import SeletorPlanoContas from '../../../components/SeletorPlanoContas'
@@ -239,6 +239,13 @@ export default function ContasPagarForm({ somenteLeitura = false }: { somenteLei
                             </tbody>
                           </table>
                         </div>
+                      )}
+                      {/* A busca corta no servidor e a tela não dizia nada (auditoria 2026-08-21,
+                          item 33) — ver LIMITE_BUSCA_EMISSAO. */}
+                      {fornecedoresEncontrados && fornecedoresEncontrados.length === LIMITE_BUSCA_EMISSAO && (
+                        <p className="muted" style={{ marginTop: 6 }}>
+                          Mostrando os primeiros {LIMITE_BUSCA_EMISSAO} — refine a busca para ver mais.
+                        </p>
                       )}
                     </>
                   )}

@@ -37,6 +37,27 @@ public class DocumentoFiscalRepositorio {
     private static final int MODELO_NFCE = 65;
 
     /**
+     * Quanto tempo uma nota pode ficar em {@code TRANSMITINDO} antes de o dreno de contingência
+     * voltar a considerá-la (auditoria 2026-08-21, item 5).
+     *
+     * <p><b>Por que o estado entrou na fila.</b> {@code transmitir()} marca {@code TRANSMITINDO}
+     * <b>antes</b> de enviar, e as duas consultas do dreno filtravam
+     * {@code situacao IN ('CONTINGENCIA','ASSINADO')} — então, se a rede caísse entre o
+     * {@code UPDATE} e a resposta, a nota <b>nunca mais</b> era encontrada, apesar de o
+     * {@code catch} prometer "volta na próxima". Com o prazo legal de 24 h correndo e o cupom já
+     * na mão do consumidor, ela só apareceria como pendente para sempre no painel.
+     *
+     * <p><b>Por que uma carência, e não pegar de imediato.</b> A transmissão pode estar
+     * <i>acontecendo agora</i> — sem a espera, o dreno atropelaria a tentativa em curso. Dez
+     * minutos é folgado para qualquer timeout de SEFAZ (o transporte usa dezenas de segundos) e
+     * curto perto das 24 h do prazo.
+     *
+     * <p>⚠️ A retomada <b>não</b> retransmite cego: quem pega uma nota neste estado consulta a
+     * chave antes (F5) — ver {@code FiscalContingenciaDrenoJob#sincronizarAntesDeRetransmitir}.
+     */
+    static final int MINUTOS_CARENCIA_TRANSMITINDO = 10;
+
+    /**
      * UF de um documento que <b>já existe</b>: a que está congelada na chave de acesso, não a que a
      * empresa tem hoje. Ver {@link ChaveAcesso#ufDaChave} para o porquê — em resumo, documento
      * fiscal é registro imutável, e é por esta UF que o cancelamento escolhe a SEFAZ de destino.
@@ -510,8 +531,11 @@ public class DocumentoFiscalRepositorio {
                            AND cert.ativo = true
                          WHERE d.id_tenant = plataforma.tenant_atual()
                            AND d.tipo_emissao = 9
-                           AND d.situacao IN ('CONTINGENCIA', 'ASSINADO')
-                        """)
+                           AND (d.situacao IN ('CONTINGENCIA', 'ASSINADO')
+                                OR (d.situacao = 'TRANSMITINDO'
+                                    AND (d.ultima_tentativa_em IS NULL
+                                         OR d.ultima_tentativa_em < now() - INTERVAL '%d minutes')))
+                        """.formatted(MINUTOS_CARENCIA_TRANSMITINDO))
                 .query((rs, n) -> new EmpresaEmContingencia(
                         rs.getLong("id_tenant"), rs.getLong("id_empresa"), rs.getString("uf"),
                         rs.getInt("ambiente_codigo"), rs.getInt("codigo_uf_ibge")))
@@ -528,20 +552,23 @@ public class DocumentoFiscalRepositorio {
     @Transactional(readOnly = true)
     public List<NotaPendente> pendentesDeContingencia(long idEmpresa, int limite) {
         return jdbc.sql("""
-                        SELECT id_documento_fiscal, chave_acesso, xml_assinado
+                        SELECT id_documento_fiscal, chave_acesso, xml_assinado, situacao::text AS situacao
                           FROM documento_fiscal
                          WHERE id_tenant = plataforma.tenant_atual()
                            AND id_empresa = ?
                            AND tipo_emissao = 9
-                           AND situacao IN ('CONTINGENCIA', 'ASSINADO')
+                           AND (situacao IN ('CONTINGENCIA', 'ASSINADO')
+                                OR (situacao = 'TRANSMITINDO'
+                                    AND (ultima_tentativa_em IS NULL
+                                         OR ultima_tentativa_em < now() - INTERVAL '%d minutes')))
                            AND xml_assinado IS NOT NULL
                          ORDER BY data_emissao, numero
                          LIMIT ?
-                        """)
+                        """.formatted(MINUTOS_CARENCIA_TRANSMITINDO))
                 .params(idEmpresa, limite)
                 .query((rs, n) -> new NotaPendente(
                         rs.getLong("id_documento_fiscal"), rs.getString("chave_acesso"),
-                        rs.getString("xml_assinado")))
+                        rs.getString("xml_assinado"), rs.getString("situacao")))
                 .list();
     }
 
@@ -549,7 +576,18 @@ public class DocumentoFiscalRepositorio {
                                         int codigoUfIbge) {
     }
 
-    public record NotaPendente(long id, String chaveAcesso, String xmlAssinado) {
+    /**
+     * @param situacao estado atual — {@code CONTINGENCIA}/{@code ASSINADO} (nunca transmitida) ou
+     *                 {@code TRANSMITINDO} (tentativa anterior sem desfecho). A distinção não é
+     *                 informativa: em {@code TRANSMITINDO} o dreno <b>tem</b> de consultar a chave
+     *                 antes de reenviar (F5), porque a nota pode ter sido autorizada e só a
+     *                 resposta ter se perdido.
+     */
+    public record NotaPendente(long id, String chaveAcesso, String xmlAssinado, String situacao) {
+
+        boolean jaFoiTransmitida() {
+            return "TRANSMITINDO".equals(situacao);
+        }
     }
 
     // ---------------------------------------------------------------- cancelamento (§10.1, B8)

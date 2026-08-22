@@ -217,6 +217,28 @@ export interface VariacaoProduto {
   variacaoTamanho: string | null
 }
 
+/**
+ * Cria produto + primeira variação numa TRANSAÇÃO SÓ — caminho do cadastro rápido
+ * (auditoria 2026-08-21, item 28; endpoint criado em 2026-08-22).
+ *
+ * ⚠️ Substitui a sequência `criarProduto` → `criarVariacao`, que não era atômica: falhando a
+ * variação (EAN repetido vindo de planilha/XML de terceiro), sobrava um produto sem SKU e sem
+ * código de barras, invisível no PDV, com a tela dizendo que a criação falhou — e clicar de novo
+ * criava um segundo órfão.
+ *
+ * Devolve a VARIAÇÃO, que já traz descrição, marca, referência e preço do produto — é com ela que
+ * o chamador segue (lançar o item no PDV, na entrada).
+ */
+export function criarProdutoComVariacao(
+  produto: ReturnType<typeof paraRequisicao>,
+  variacao: { idCor: number | null; idTamanho: number | null; ean?: string | null },
+): Promise<VariacaoProduto> {
+  return api<VariacaoProduto>('/api/v1/produtos/com-variacao', {
+    method: 'POST',
+    body: JSON.stringify({ produto, variacao }),
+  })
+}
+
 /** Acha a variação já cadastrada pra essa combinação produto/cor/tamanho, ou cria na hora
  *  (gera o SKU). `ean` só é gravado se esta chamada de fato criar a variação. */
 export function criarVariacao(

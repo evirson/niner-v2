@@ -580,7 +580,7 @@ export default function RelatorioMovimentacaoProdutos() {
           podeGerar={podeGerarRascunho}
           primeiraVez={!relatorioGerado}
           aoGerar={handleGerar}
-          aoFechar={relatorioGerado ? fecharModal : () => navigate('/')}
+          aoFechar={relatorioGerado ? fecharModal : () => navigate(-1)}
           aoAbrirBuscaVariacao={() => setMostrarBuscaVariacao(true)}
         />
       )}

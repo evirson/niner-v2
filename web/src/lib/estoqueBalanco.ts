@@ -1,3 +1,4 @@
+import type { QueryClient } from '@tanstack/react-query'
 import { api } from './api'
 
 /** Uma linha por produto contado — `qtdContada` é a soma de todas as leituras ativas dele. */
@@ -76,4 +77,20 @@ export function obterUltimaEfetivacao(): Promise<UltimaEfetivacao> {
 
 export function desfazerUltimaEfetivacao(): Promise<void> {
   return api<void>('/api/v1/estoque/balanco/desfazer', { method: 'POST' })
+}
+
+/**
+ * Invalida TODAS as chaves derivadas da contagem (auditoria 2026-08-21, item 14).
+ *
+ * ⚠️ As mutações da Contagem invalidavam só `["balanco-contagem"]`, a própria chave.
+ * `["balanco-diferencas"]` — lida por **duas** telas, Diferenças de Estoque e Efetivar Balanço —
+ * nunca era invalidada. O `staleTime: 0` limitava o estrago, mas o modal do Efetivar Balanço podia
+ * afirmar "N produtos" com o N antigo, logo antes de gravar movimento de estoque.
+ *
+ * É a mesma armadilha registrada em `feedback_react_query_cache_entre_telas`: quem grava precisa
+ * invalidar tudo o que DERIVA do dado, não só a lista que está na tela.
+ */
+export function invalidarBalanco(queryClient: QueryClient): void {
+  queryClient.invalidateQueries({ queryKey: ['balanco-contagem'] })
+  queryClient.invalidateQueries({ queryKey: ['balanco-diferencas'] })
 }

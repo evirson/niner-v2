@@ -22,7 +22,7 @@ import {
   type ContaPagar,
 } from '../../../lib/contasPagar'
 import { listarEmpresasPermitidas, type Empresa } from '../../../lib/empresas'
-import { buscarFornecedoresEmissao, type FornecedorOpcaoEmissao } from '../../../lib/etiquetaEmissao'
+import { buscarFornecedoresEmissao, LIMITE_BUSCA_EMISSAO, type FornecedorOpcaoEmissao } from '../../../lib/etiquetaEmissao'
 import { dataParaIso, dataValida, formatarMoeda, mascararData } from '../../../lib/masks'
 
 const JANELA_PAGINACAO = 7
@@ -414,6 +414,13 @@ export default function ContasPagarLista() {
                           </tbody>
                         </table>
                       </div>
+                    )}
+                    {/* A busca corta no servidor e a tela não dizia nada (auditoria 2026-08-21,
+                        item 33) — ver LIMITE_BUSCA_EMISSAO. */}
+                    {fornecedoresEncontrados && fornecedoresEncontrados.length === LIMITE_BUSCA_EMISSAO && (
+                      <p className="muted" style={{ marginTop: 6 }}>
+                        Mostrando os primeiros {LIMITE_BUSCA_EMISSAO} — refine a busca para ver mais.
+                      </p>
                     )}
                   </>
                 )}

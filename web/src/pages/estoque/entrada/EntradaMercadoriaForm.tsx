@@ -27,7 +27,7 @@ import {
   type ProdutoOpcaoEntrada,
 } from '../../../lib/entradaMercadoria'
 import { useEu } from '../../../lib/eu'
-import { buscarFornecedoresEmissao, type FornecedorOpcaoEmissao } from '../../../lib/etiquetaEmissao'
+import { buscarFornecedoresEmissao, LIMITE_BUSCA_EMISSAO, type FornecedorOpcaoEmissao } from '../../../lib/etiquetaEmissao'
 import { buscarGrade } from '../../../lib/grades'
 import {
   completarMoeda,
@@ -1100,6 +1100,15 @@ export default function EntradaMercadoriaForm() {
                   </tbody>
                 </table>
               </div>
+            )}
+            {/* ⚠️ Aqui o aviso vale dobrado (auditoria 2026-08-21, item 33): o botão "＋ Novo"
+                está logo acima, e o cadastro rápido de fornecedor deixa de fora, por decisão
+                documentada, a verificação de CNPJ duplicado. Não ver o próprio fornecedor na
+                lista cortada leva direto ao cadastro em dobro. */}
+            {fornecedores && fornecedores.length === LIMITE_BUSCA_EMISSAO && (
+              <p className="muted" style={{ marginTop: 6 }}>
+                Mostrando os primeiros {LIMITE_BUSCA_EMISSAO} — refine a busca para ver mais.
+              </p>
             )}
           </>
         )}

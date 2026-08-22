@@ -1,5 +1,6 @@
 import type { Transferencia } from '../../lib/transferencias'
 import { gerarPdfGuiaTransferencia, montarLinhasGuiaTransferencia } from '../../lib/transferenciaImpressao'
+import { imprimirDocumentoA4 } from '../../lib/impressaoDocumento'
 
 /**
  * Pré-visualização da Guia de Transferência antes de imprimir/salvar em PDF (2026-08-06) — folha
@@ -23,7 +24,7 @@ export default function GuiaTransferenciaModal({
       <div className="modal modal-largo" role="dialog" aria-label="Pré-visualização da guia de transferência" onClick={(e) => e.stopPropagation()}>
         <h2 style={{ marginTop: 0 }}>Pré-visualização — Guia de Transferência</h2>
 
-        <pre className="guia-transferencia-preview guia-transferencia-imprimir">{linhas.join('\n')}</pre>
+        <pre className="guia-transferencia-preview guia-transferencia-imprimir documento-a4-imprimir">{linhas.join('\n')}</pre>
 
         <div className="ajuda-rodape">
           <button type="button" className="btn ghost" onClick={aoFechar}>
@@ -37,7 +38,7 @@ export default function GuiaTransferenciaModal({
             >
               Salvar PDF
             </button>
-            <button type="button" className="btn" onClick={() => window.print()}>
+            <button type="button" className="btn" onClick={imprimirDocumentoA4}>
               Imprimir
             </button>
           </div>

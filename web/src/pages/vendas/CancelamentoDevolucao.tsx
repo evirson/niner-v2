@@ -266,6 +266,7 @@ export default function CancelamentoDevolucao() {
               <div className="col-12">
                 <label>Nº do Vale de Devolução</label>
                 <input
+                  autoFocus
                   placeholder="Deixe em branco para buscar por período…"
                   value={idDevolucaoTexto}
                   onChange={(e) => setIdDevolucaoTexto(e.target.value.replace(/\D/g, ''))}
