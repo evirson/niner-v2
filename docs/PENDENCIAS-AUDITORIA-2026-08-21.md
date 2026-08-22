@@ -1,12 +1,12 @@
 # Pendências da auditoria de 2026-08-21 — aguardando decisão do dono do produto
 
-Dois agentes varreram backend e frontend em **quatro passadas** cada. **24 defeitos foram corrigidos
+Dois agentes varreram backend e frontend em **cinco passadas** cada. **28 defeitos foram corrigidos
 e commitados** no mesmo dia (ver `docs/PROGRESSO.md`). Este arquivo lista o que **não** foi corrigido
 porque exige uma decisão de negócio, não um conserto técnico — e serve para ser cobrado na próxima
 sessão.
 
-Ordem: os sete primeiros são os que precisam de decisão; depois vêm as pendências menores (8–18); e
-no fim, as que as rodadas 3 e 4 acrescentaram (19–25).
+Ordem: os sete primeiros são os que precisam de decisão; depois as menores (8–18); e no fim as que as
+rodadas 3, 4 e 5 acrescentaram (19–29).
 
 **As quatro que eu levaria primeiro**, por gravidade e por quanto custam se ficarem:
 
@@ -16,6 +16,7 @@ no fim, as que as rodadas 3 e 4 acrescentaram (19–25).
 | 1 | Cancelar entrada com devolução debita estoque duas vezes | Estoque negativo silencioso + NF-e 55 órfã |
 | 5 | Nota presa em `TRANSMITINDO` some da fila do dreno | Prazo legal de 24 h correndo, sem alarme (ver 25) |
 | 22 | Parcela legada vira receita com CMV zero no DRE caixa | Lucro que nunca existiu, num relatório de decisão |
+| 26 | A impersonação auditada (R21/P9) **nunca foi construída** | A constituição promete trilha para acesso de staff, e não há nenhuma |
 
 ---
 
@@ -298,3 +299,83 @@ Corrigido em parte (2026-08-21): `TRANSMITINDO`/`ASSINADO` deixaram o cinza neut
 suspeitar que ela existe** (abrir a lista, escolher empresa, acertar o período e filtrar a
 situação). Precisa de um endpoint que conte documentos parados por empresa — a lista atual é
 paginada por período e não serve de contador. Casa com a pendência 5 (dreno).
+
+## 26. ⛔ A impersonação auditada (R21/P9) NUNCA FOI CONSTRUÍDA — e há um acesso de staff a dado de tenant sem trilha
+
+**Onde:** `TenantAdminService.detalhar` (~:115-127).
+
+A constituição diz: *"Platform staff reach tenant data only via **audited impersonation** (P3)"*. A
+tabela `plataforma.impersonacao_log` existe desde a V010, tem `REVOKE DELETE` na V011 e um teste de
+privilégio guardando a imutabilidade dela — e **zero escritores**. Grep no repositório inteiro por
+`impersona` só encontra a tabela, os comentários e o teste. A feature nunca saiu do papel.
+
+Enquanto isso, existe **um** ponto em que a superfície de staff alcança dado de domínio, e ele
+estabelece o contexto RLS à mão:
+
+```java
+jdbc.sql("SELECT set_config('app.id_tenant', ?, true)")...
+SELECT codigo_empresa, razao_social, cnpj, cidade, estado FROM empresa WHERE id_tenant = ?
+```
+
+`GET /api/admin/tenants/{id}`, guard `exigirStaff` — que só confere a **existência** do claim. Logo
+**qualquer papel** (SUPORTE, FINANCEIRO, SUPER_ADMIN) lê razão social, CNPJ, cidade e UF de todas as
+empresas de qualquer tenant, e **nada fica registrado**. Se um lojista perguntar "quem da Vetor
+acessou meus dados?", não há resposta — e a tabela criada para respondê-la está vazia por
+construção.
+
+⚠️ **Segundo problema, latente, na mesma linha:** o comentário afirma que o contexto *"fica restrito
+a esta consulta"*. Não fica — `set_config(..., true)` vale até o fim da **transação**, e o método é
+`@Transactional`. Qualquer consulta acrescentada dali para baixo herda acesso RLS completo àquele
+tenant, em silêncio.
+
+**Decisão necessária:** (a) curto prazo — gravar em `impersonacao_log` antes de abrir o contexto, e
+decidir se CNPJ é informação que todo papel de staff precisa ver; (b) o certo — implementar a R21,
+com início, fim e motivo, tirando o `set_config` solto do serviço. **Não é bug de digitação: é
+dívida de escopo.**
+
+## 27. Estorno e chargeback não revogam a assinatura
+
+**Onde:** `CobrancaWebhookProcessador.aplicar` (~:103-105).
+
+`refunded`/`charged_back` viram `Situacao.ESTORNADO`, e o `aplicar()` tem `if (situacao !=
+CONFIRMADO) return;` — comentário escrito para o caso FALHOU/PENDENTE (fatura nunca paga). Para
+ESTORNADO a fatura **está PAGA**: o `return` deixa `fatura.status = 'PAGA'`, `assinatura.status =
+'ATIVA'` e a `proxima_cobranca` já empurrada.
+
+**Cenário:** lojista paga o plano **anual** por PIX; semanas depois obtém o estorno. O webhook grava
+`pagamento.status = 'ESTORNADO'` e retorna. A assinatura segue ativa por **doze meses** sem cobrança
+nova, e o backoffice mostra a fatura como PAGA.
+
+**Decisão necessária:** reabrir a fatura e recuar `proxima_cobranca` é claro; o que fazer com a
+assinatura (suspender, marcar inadimplente, dar prazo) é política comercial da Vetor.
+
+## 28. Criar produto pelo cadastro rápido são dois POSTs sem transação
+
+**Onde:** `ProdutoQuickCreateModal` (front, mitigado em 2026-08-21) + falta de endpoint atômico.
+
+O modal chama `criarProduto` e depois `criarVariacao`. Falhando o segundo — o caso real é EAN
+repetido vindo de planilha/XML de terceiro —, sobrava um produto **sem variação** (sem SKU, sem
+código de barras, invisível no PDV) e a tela dizia *"Não foi possível criar o produto"*. Clicar de
+novo criava um **segundo** produto.
+
+Mitigado no front (o id do produto criado é guardado, e a retentativa refaz só a variação). **A
+correção de raiz depende do backend:** um `POST /produtos` que aceite a variação no mesmo corpo,
+numa transação só. Hoje não existe caminho atômico.
+
+## 29. Cadastro rápido de fornecedor e de produto ignora `cfg_tela_campo` — mas o servidor não
+
+**Onde:** `FornecedorQuickCreateModal` e `ProdutoQuickCreateModal` (docstrings) × `FornecedorService.validar`
+e `ProdutoService.validar`.
+
+Os dois modais declaram no docstring que campos obrigatórios por tenant *"não impedem o cadastro
+rápido"*. A premissa é falsa: os serviços chamam `exigirSeObrigatorio` igual, porque não sabem de
+onde veio a chamada.
+
+**Cenário:** loja que marcou CNPJ e Cidade como obrigatórios em Fornecedores. No cadastro rápido, os
+dois campos exibem o placeholder **"Opcional"** e o botão Criar fica habilitado — e o servidor
+responde *"CNPJ é obrigatório"*, depois *"Cidade é obrigatório"*, **um por vez**. O operador descobre
+a configuração da própria loja por tentativa e erro, no meio de uma entrada de mercadoria.
+
+**Decisão necessária:** os modais passam a ler a configuração (consistente com "reforçado no
+servidor"), ou o servidor dispensa a config no cadastro rápido (contraria o padrão)? Recomendo a
+primeira.

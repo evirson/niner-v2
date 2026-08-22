@@ -32,6 +32,10 @@ public class AquisicaoService {
 
     /** Lote maior que isto é corte, não erro: beacon com defeito não derruba a API. */
     private static final int MAX_EVENTOS = 50;
+
+    /** Teto de `evento_marketing.valor numeric(12,2)`: 10 digitos inteiros. Valor a partir daqui
+     *  estoura a coluna e abortaria a transacao do lote inteiro. */
+    private static final java.math.BigDecimal VALOR_MAXIMO_EVENTO = new java.math.BigDecimal("10000000000");
     private static final String TIPO_PAGEVIEW = "PAGEVIEW";
 
     private final JdbcClient jdbc;
@@ -59,6 +63,14 @@ public class AquisicaoService {
             if (e == null || e.tipo() == null || e.tipo().isBlank()) {
                 continue;
             }
+            // ⚠️ Descartar ANTES do INSERT, não depois (achado de auditoria, 2026-08-21). Um valor
+            // que estoura `numeric(12,2)` aborta a transação inteira no Postgres, e daí em diante
+            // nada mais do lote grava — ver o `catch` lá embaixo. O endpoint é público, então o
+            // conteúdo aqui é de terceiro: filtrar o que o schema não aceita é a defesa barata.
+            if (e.valor() != null && e.valor().abs().compareTo(VALOR_MAXIMO_EVENTO) >= 0) {
+                log.warn("Evento de marketing com valor fora da faixa descartado: {}", e.valor());
+                continue;
+            }
             try {
                 if (TIPO_PAGEVIEW.equals(e.tipo())) {
                     jdbc.sql("""
@@ -80,8 +92,18 @@ public class AquisicaoService {
                             .update();
                 }
             } catch (RuntimeException ex) {
-                // Um evento ruim não pode levar o lote inteiro junto.
-                log.debug("Evento de marketing descartado: {}", ex.getMessage());
+                // ⚠️ Este catch NÃO cumpria o que promete (achado de auditoria, 2026-08-21), e é a
+                // armadilha que este repositório já documentou duas vezes: quando o erro vem do
+                // BANCO, o Postgres aborta a transação inteira (25P02), e capturar em Java **não a
+                // reabre**. Os INSERTs seguintes falhavam todos com "current transaction is
+                // aborted", eram engolidos por este mesmo catch em DEBUG, e o COMMIT final era
+                // tratado como ROLLBACK — devolvendo 204. Um único evento ruim (o endpoint é
+                // público e `valor` é numeric(12,2): basta um número grande demais) descartava o
+                // lote inteiro em silêncio.
+                //
+                // A validação antes do INSERT é o que evita chegar aqui pelo caminho conhecido; o
+                // log sobe para WARN porque em DEBUG o sintoma ficava invisível em produção.
+                log.warn("Evento de marketing descartado: {}", ex.getMessage());
             }
         }
     }

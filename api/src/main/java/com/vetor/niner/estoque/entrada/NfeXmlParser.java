@@ -16,6 +16,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -286,11 +287,37 @@ public final class NfeXmlParser {
         return valor == null ? null : Integer.valueOf(valor);
     }
 
+    /**
+     * ⚠️ As duas datas capturam o erro de parse (achado de auditoria, 2026-08-21).
+     *
+     * <p>{@code DateTimeParseException} estende {@code DateTimeException}, **não**
+     * {@code IllegalArgumentException} — então ela escapava do tratamento de argumento inválido do
+     * handler global e virava um <b>500 "Ocorreu um erro"</b>, sem dizer que o problema era o
+     * arquivo. Os números do mesmo parser já se comportam bem (`NumberFormatException` <i>é</i>
+     * `IllegalArgumentException` e vira 400 com mensagem); só as datas divergiam.
+     *
+     * <p>Acontece com XML de fornecedor cujo {@code dhEmi} veio sem offset, ou cuja data de
+     * vencimento da duplicata veio em formato brasileiro — coisas que o operador só resolve se a
+     * mensagem disser qual é o campo.
+     */
     private static OffsetDateTime dataHora(String valor) {
-        return valor == null ? null : OffsetDateTime.parse(valor);
+        if (valor == null) return null;
+        try {
+            return OffsetDateTime.parse(valor);
+        } catch (DateTimeParseException e) {
+            throw new IllegalArgumentException(
+                    "Data/hora inválida no XML da nota: \"" + valor + "\". Esperado o formato da NF-e"
+                            + " (ex.: 2026-08-21T10:00:00-03:00).");
+        }
     }
 
     private static LocalDate data(String valor) {
-        return valor == null ? null : LocalDate.parse(valor, DateTimeFormatter.ISO_LOCAL_DATE);
+        if (valor == null) return null;
+        try {
+            return LocalDate.parse(valor, DateTimeFormatter.ISO_LOCAL_DATE);
+        } catch (DateTimeParseException e) {
+            throw new IllegalArgumentException(
+                    "Data inválida no XML da nota: \"" + valor + "\". Esperado aaaa-mm-dd.");
+        }
     }
 }

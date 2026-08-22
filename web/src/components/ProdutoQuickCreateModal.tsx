@@ -1,4 +1,4 @@
-import { useEffect, useState, type ChangeEvent } from 'react'
+import { useEffect, useRef, useState, type ChangeEvent } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ApiError } from '../lib/api'
 import { listarCategoriasProduto } from '../lib/categoriasProduto'
@@ -205,9 +205,27 @@ export default function ProdutoQuickCreateModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [usaCorGrade, form.idGrade, cores, grade, tamanhos, gradeAutoResolvida])
 
+  /**
+   * ⚠️ Id do produto já criado nesta sessão do modal (achado de auditoria, 2026-08-21).
+   *
+   * <p>A criação são DOIS POSTs sem transação: produto e depois variação. Falhando o segundo — o
+   * caso real é EAN repetido vindo de planilha/XML de terceiro, que `produto_barra` recusa —, a
+   * mutação inteira caía no `onError` e a tela dizia **"Não foi possível criar o produto"**. Mas o
+   * produto estava criado, **sem variação**: sem SKU, sem código de barras, invisível no PDV e na
+   * busca. E clicar em Criar de novo criava um SEGUNDO produto, deixando o primeiro órfão para
+   * sempre.
+   *
+   * <p>Guardando o id, a retentativa refaz só a variação. É o mesmo remédio do `idCriadoNoTeste` da
+   * Configuração de Etiqueta, que existe para este mesmo problema. O conserto de raiz é um endpoint
+   * que aceite produto+variação numa transação só — registrado como pendência.
+   */
+  const produtoCriadoRef = useRef<Produto | null>(null)
+
   const criar = useMutation({
     mutationFn: async () => {
-      const produto = await criarProduto(paraRequisicao(form))
+      // Guarda o PRODUTO inteiro, não só o id: o caminho `semVariacao` devolve o objeto ao chamador.
+      const produto = produtoCriadoRef.current ?? (await criarProduto(paraRequisicao(form)))
+      produtoCriadoRef.current = produto
       if (!exigirVariacaoAoCriar && produto.idGrade != null) {
         return { semVariacao: true as const, produto }
       }
