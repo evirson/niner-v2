@@ -22,11 +22,9 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Set;
 
 import static org.springframework.http.HttpStatus.NOT_FOUND;
 
@@ -261,11 +259,11 @@ public class EtiquetaConfigService {
                                     req.larguraRoloMm().stripTrailingZeros().toPlainString()));
         }
 
-        Set<CampoEtiqueta> camposUsados = new HashSet<>();
+        // ⚠️ Campo REPETIDO é permitido desde 2026-08-24 (V060) — a checagem de unicidade que
+        // existia aqui saiu junto com a UNIQUE do banco. O caso é a etiqueta destacável: o adesivo
+        // é picotado ao meio, uma parte fica no produto e a outra é destacada no caixa, e as duas
+        // metades precisam do mesmo código de barras, preço e descrição.
         for (CampoRequest campo : req.campos()) {
-            if (!camposUsados.add(campo.campo())) {
-                throw new IllegalArgumentException("Campo repetido na etiqueta: " + campo.campo() + ".");
-            }
             BigDecimal larguraCampo = campo.larguraMm() == null ? BigDecimal.ZERO : campo.larguraMm();
             BigDecimal alturaCampo = campo.alturaMm() == null ? BigDecimal.ZERO : campo.alturaMm();
             if (campo.posicaoXMm().add(larguraCampo).compareTo(req.larguraEtiquetaMm()) > 0

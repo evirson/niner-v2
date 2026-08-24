@@ -294,9 +294,9 @@ export default function EtiquetaEmissaoForm() {
                     background: '#fff',
                   }}
                 >
-                  {impressao.config.campos.map((c) => (
+                  {impressao.config.campos.map((c, i) => (
                     <CampoEtiquetaVisual
-                      key={c.campo}
+                      key={i}
                       campo={c}
                       escalaPxPorMm={MM_PARA_PX_IMPRESSAO}
                       produtoExemplo={produto}

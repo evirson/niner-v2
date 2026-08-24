@@ -135,22 +135,27 @@ export default function EditorEtiquetaCanvas({
    * `overflow: hidden`, o texto que sobra some em silêncio na tela e reaparece bagunçado no
    * papel (foi assim que a descrição de 3 linhas invadiu o preço em 2026-08-20).
    */
-  const [camposQueTransbordam, setCamposQueTransbordam] = useState<Set<string>>(new Set())
-  const marcarTransbordo = (campo: string, transborda: boolean) =>
+  /** ⚠️ A chave é o ÍNDICE do campo na lista, não o nome (2026-08-24, etiqueta destacável): o
+   *  mesmo campo pode aparecer duas vezes, e por nome as duas instâncias compartilhariam o aviso
+   *  de transbordo — uma cabendo e a outra não daria um aviso só, apontando as duas. */
+  const [camposQueTransbordam, setCamposQueTransbordam] = useState<Set<number>>(new Set())
+  const marcarTransbordo = (indice: number, transborda: boolean) =>
     setCamposQueTransbordam((atual) => {
-      if (atual.has(campo) === transborda) return atual
+      if (atual.has(indice) === transborda) return atual
       const novo = new Set(atual)
-      if (transborda) novo.add(campo)
-      else novo.delete(campo)
+      if (transborda) novo.add(indice)
+      else novo.delete(indice)
       return novo
     })
-  const [campoSelecionado, setCampoSelecionado] = useState<CampoEtiqueta | null>(null)
+  /** ⚠️ ÍNDICE na lista, não o nome do campo (2026-08-24): com o mesmo campo repetido, selecionar
+   *  por nome selecionaria as duas instâncias ao mesmo tempo — arrastar uma moveria a outra. */
+  const [indiceSelecionado, setIndiceSelecionado] = useState<number | null>(null)
   const areaRef = useRef<HTMLDivElement>(null)
   /** Trava do auto-ajuste de zoom: ele vale UMA vez por montagem, nunca a cada tecla digitada nas
    *  medidas da etiqueta. */
   const ajusteFeitoRef = useRef(false)
-  const arrastoRef = useRef<{ campo: CampoEtiqueta; inicioPxX: number; inicioPxY: number; inicioMmX: number; inicioMmY: number } | null>(null)
-  const redimensionoRef = useRef<{ campo: CampoEtiqueta; eixo: EixoRedimensionamento; inicioPxX: number; inicioPxY: number; inicioLarguraMm: number; inicioAlturaMm: number } | null>(null)
+  const arrastoRef = useRef<{ indice: number; inicioPxX: number; inicioPxY: number; inicioMmX: number; inicioMmY: number } | null>(null)
+  const redimensionoRef = useRef<{ indice: number; eixo: EixoRedimensionamento; inicioPxX: number; inicioPxY: number; inicioLarguraMm: number; inicioAlturaMm: number } | null>(null)
 
   const escala = PX_POR_MM_BASE * zoom
   // O nome que a etiqueta imprime de verdade: empresa.cfg_nome_etiqueta (2026-08-21). Antes
@@ -212,38 +217,55 @@ export default function EditorEtiquetaCanvas({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [largura, altura])
 
-  const camposDisponiveis = TODOS_OS_CAMPOS.filter((c) => !campos.some((cp) => cp.campo === c))
-  const campoSelecionadoObj = campos.find((c) => c.campo === campoSelecionado) ?? null
+  /** ⚠️ A paleta não esconde mais o que já está na etiqueta (2026-08-24): o mesmo campo pode ser
+   *  posicionado quantas vezes for preciso. O caso que motivou é a etiqueta **destacável** — o
+   *  adesivo é picotado ao meio, uma parte fica no produto e a outra é destacada no caixa, e as
+   *  duas metades precisam do mesmo código de barras, preço e descrição. */
+  const camposDisponiveis = TODOS_OS_CAMPOS
+  const campoSelecionadoObj = indiceSelecionado == null ? null : (campos[indiceSelecionado] ?? null)
 
-  function atualizarCampo(chave: CampoEtiqueta, alteracoes: Partial<CampoEtiquetaPosicionado>) {
-    aoMudarCampos((atual) => atual.map((c) => (c.campo === chave ? { ...c, ...alteracoes } : c)))
+  /** Quantas vezes cada campo aparece — usado só para rotular ("Preço de Venda (2)") quando há
+   *  repetição, para o usuário saber qual das instâncias está editando. */
+  const ocorrenciasPorCampo = campos.reduce<Record<string, number>>((acc, c) => {
+    acc[c.campo] = (acc[c.campo] ?? 0) + 1
+    return acc
+  }, {})
+  /** Ordinal desta instância (1º, 2º…) entre as do mesmo campo, ou `null` se ela é única. */
+  const ordinalDaInstancia = (indice: number): number | null => {
+    const campo = campos[indice]?.campo
+    if (!campo || (ocorrenciasPorCampo[campo] ?? 0) < 2) return null
+    return campos.slice(0, indice + 1).filter((c) => c.campo === campo).length
+  }
+
+  function atualizarCampo(indice: number, alteracoes: Partial<CampoEtiquetaPosicionado>) {
+    aoMudarCampos((atual) => atual.map((c, i) => (i === indice ? { ...c, ...alteracoes } : c)))
   }
 
   /** Posição ABSOLUTA (arraste — cada pointermove calcula a partir do ponto de início do
    * gesto, não incrementalmente, então ler `larguraMm`/`alturaMm` da prop fechada é seguro:
    * dimensões não mudam durante o próprio arraste). */
-  function atualizarPosicao(chave: CampoEtiqueta, xMm: number, yMm: number) {
-    const atual = campos.find((c) => c.campo === chave)
+  function atualizarPosicao(indice: number, xMm: number, yMm: number) {
+    const atual = campos[indice]
     if (!atual) return
     const larguraCampo = atual.larguraMm ?? 0
     const alturaCampo = atual.alturaMm ?? 0
     const xClamp = clamp(arredondarParaSnap(xMm), 0, Math.max(0, largura - larguraCampo))
     const yClamp = clamp(arredondarParaSnap(yMm), 0, Math.max(0, altura - alturaCampo))
-    atualizarCampo(chave, { posicaoXMm: xClamp, posicaoYMm: yClamp })
+    atualizarCampo(indice, { posicaoXMm: xClamp, posicaoYMm: yClamp })
   }
 
   /** Tamanho ABSOLUTO (redimensionamento pela alça — mesmo raciocínio de `atualizarPosicao`:
    * cada pointermove calcula a partir do tamanho no início do gesto, não incrementalmente).
    * Não deixa passar da borda direita/inferior da etiqueta (a posição X/Y do campo não muda ao
    * redimensionar, só cresce/encolhe pra direita/baixo) nem ficar menor que `TAMANHO_MINIMO_MM`. */
-  function atualizarTamanho(chave: CampoEtiqueta, larguraMmNovo: number, alturaMmNovo: number) {
-    const atual = campos.find((c) => c.campo === chave)
+  function atualizarTamanho(indice: number, larguraMmNovo: number, alturaMmNovo: number) {
+    const atual = campos[indice]
     if (!atual) return
     const larguraMaxima = Math.max(TAMANHO_MINIMO_MM, largura - atual.posicaoXMm)
     const alturaMaxima = Math.max(TAMANHO_MINIMO_MM, altura - atual.posicaoYMm)
     const larguraClamp = clamp(arredondarParaSnap(larguraMmNovo), TAMANHO_MINIMO_MM, larguraMaxima)
     const alturaClamp = clamp(arredondarParaSnap(alturaMmNovo), TAMANHO_MINIMO_MM, alturaMaxima)
-    atualizarCampo(chave, { larguraMm: larguraClamp, alturaMm: alturaClamp })
+    atualizarCampo(indice, { larguraMm: larguraClamp, alturaMm: alturaClamp })
   }
 
   /** Delta relativo (nudge do teclado) — soma dentro do próprio updater, a partir do campo mais
@@ -251,10 +273,10 @@ export default function EditorEtiquetaCanvas({
    * disparar vários keydown no mesmo ciclo do React, e cada um precisa somar em cima do último,
    * não recalcular do zero a partir de um valor desatualizado (mesmo motivo de
    * `aoMudarCampos` — ver comentário no tipo da prop). */
-  function moverCampoRelativo(chave: CampoEtiqueta, dxMm: number, dyMm: number) {
+  function moverCampoRelativo(indice: number, dxMm: number, dyMm: number) {
     aoMudarCampos((atual) =>
-      atual.map((c) => {
-        if (c.campo !== chave) return c
+      atual.map((c, i) => {
+        if (i !== indice) return c
         const larguraCampo = c.larguraMm ?? 0
         const alturaCampo = c.alturaMm ?? 0
         const xClamp = clamp(arredondarParaSnap(c.posicaoXMm + dxMm), 0, Math.max(0, largura - larguraCampo))
@@ -279,20 +301,24 @@ export default function EditorEtiquetaCanvas({
       alinhamento: 'ESQUERDA',
       exibirTextoLegivel: (CAMPOS_DE_BARRAS as string[]).includes(campo) ? true : null,
     }
+    // Entra no fim da lista, e a nova instância já nasce selecionada.
     aoMudarCampos((atual) => [...atual, novo])
-    setCampoSelecionado(campo)
+    setIndiceSelecionado(campos.length)
   }
 
-  function removerCampo(campo: CampoEtiqueta) {
-    aoMudarCampos((atual) => atual.filter((c) => c.campo !== campo))
-    if (campoSelecionado === campo) setCampoSelecionado(null)
+  /** ⚠️ Remover por índice desloca os seguintes, então a seleção é sempre LIMPA — manter um
+   *  índice antigo passaria a apontar para o campo vizinho, e o painel abriria no lugar errado. */
+  function removerCampo(indice: number) {
+    aoMudarCampos((atual) => atual.filter((_, i) => i !== indice))
+    setIndiceSelecionado(null)
+    setCamposQueTransbordam(new Set())
   }
 
-  function aoIniciarArraste(e: React.PointerEvent<HTMLDivElement>, campo: CampoEtiquetaPosicionado) {
+  function aoIniciarArraste(e: React.PointerEvent<HTMLDivElement>, campo: CampoEtiquetaPosicionado, indice: number) {
     e.currentTarget.setPointerCapture(e.pointerId)
-    setCampoSelecionado(campo.campo)
+    setIndiceSelecionado(indice)
     arrastoRef.current = {
-      campo: campo.campo,
+      indice,
       inicioPxX: e.clientX,
       inicioPxY: e.clientY,
       inicioMmX: campo.posicaoXMm,
@@ -305,7 +331,7 @@ export default function EditorEtiquetaCanvas({
     if (!arrasto) return
     const deltaMmX = (e.clientX - arrasto.inicioPxX) / escala
     const deltaMmY = (e.clientY - arrasto.inicioPxY) / escala
-    atualizarPosicao(arrasto.campo, arrasto.inicioMmX + deltaMmX, arrasto.inicioMmY + deltaMmY)
+    atualizarPosicao(arrasto.indice, arrasto.inicioMmX + deltaMmX, arrasto.inicioMmY + deltaMmY)
   }
 
   function aoSoltarArraste() {
@@ -325,12 +351,13 @@ export default function EditorEtiquetaCanvas({
     e: React.PointerEvent<HTMLDivElement>,
     campo: CampoEtiquetaPosicionado,
     eixo: EixoRedimensionamento,
+    indice: number,
   ) {
     e.stopPropagation()
     e.currentTarget.setPointerCapture(e.pointerId)
-    setCampoSelecionado(campo.campo)
+    setIndiceSelecionado(indice)
     redimensionoRef.current = {
-      campo: campo.campo,
+      indice,
       eixo,
       inicioPxX: e.clientX,
       inicioPxY: e.clientY,
@@ -345,17 +372,17 @@ export default function EditorEtiquetaCanvas({
     // O eixo não usado recebe delta zero — mantém a medida intacta em vez de recalculá-la.
     const deltaMmX = redimensiono.eixo === 'vertical' ? 0 : (e.clientX - redimensiono.inicioPxX) / escala
     const deltaMmY = redimensiono.eixo === 'horizontal' ? 0 : (e.clientY - redimensiono.inicioPxY) / escala
-    atualizarTamanho(redimensiono.campo, redimensiono.inicioLarguraMm + deltaMmX, redimensiono.inicioAlturaMm + deltaMmY)
+    atualizarTamanho(redimensiono.indice, redimensiono.inicioLarguraMm + deltaMmX, redimensiono.inicioAlturaMm + deltaMmY)
   }
 
   function aoSoltarRedimensionar() {
     redimensionoRef.current = null
   }
 
-  function aoTeclarNoCampo(e: React.KeyboardEvent<HTMLDivElement>, campo: CampoEtiquetaPosicionado) {
+  function aoTeclarNoCampo(e: React.KeyboardEvent<HTMLDivElement>, indice: number) {
     if (e.key === 'Delete' || e.key === 'Backspace') {
       e.preventDefault()
-      removerCampo(campo.campo)
+      removerCampo(indice)
       return
     }
     const passo = e.shiftKey ? NUDGE_MM_SHIFT : NUDGE_MM
@@ -367,7 +394,7 @@ export default function EditorEtiquetaCanvas({
     else if (e.key === 'ArrowDown') dy = passo
     else return
     e.preventDefault()
-    moverCampoRelativo(campo.campo, dx, dy)
+    moverCampoRelativo(indice, dx, dy)
   }
 
   /**
@@ -417,17 +444,16 @@ export default function EditorEtiquetaCanvas({
       <div className="editor-etiqueta-corpo">
         <div className="editor-etiqueta-paleta">
           <strong className="muted">Campos disponíveis</strong>
-          {camposDisponiveis.length === 0 ? (
-            <p className="muted" style={{ fontSize: 13 }}>
-              Todos os campos já estão na etiqueta.
-            </p>
-          ) : (
-            camposDisponiveis.map((c) => (
-              <button key={c} type="button" className="btn ghost editor-etiqueta-paleta-item" onClick={() => adicionarCampo(c)}>
-                ＋ {ROTULO_CAMPO_ETIQUETA[c]}
-              </button>
-            ))
-          )}
+          {camposDisponiveis.map((c) => (
+            <button key={c} type="button" className="btn ghost editor-etiqueta-paleta-item" onClick={() => adicionarCampo(c)}>
+              ＋ {ROTULO_CAMPO_ETIQUETA[c]}
+              {ocorrenciasPorCampo[c] ? <span className="muted"> ({ocorrenciasPorCampo[c]})</span> : null}
+            </button>
+          ))}
+          <p className="muted" style={{ fontSize: 12, marginTop: 4 }}>
+            Pode repetir o mesmo campo — use para etiqueta destacável, em que as duas metades
+            precisam do mesmo conteúdo.
+          </p>
         </div>
 
         <div className="editor-etiqueta-area" ref={areaRef}>
@@ -448,27 +474,27 @@ export default function EditorEtiquetaCanvas({
                 aoSoltarArraste()
                 aoSoltarRedimensionar()
               }}
-              onClick={() => setCampoSelecionado(null)}
+              onClick={() => setIndiceSelecionado(null)}
             >
-              {campos.map((c) => (
+              {campos.map((c, i) => (
                 <CampoEtiquetaVisual
-                  key={c.campo}
+                  key={i}
                   campo={c}
                   escalaPxPorMm={escala}
                   produtoExemplo={produtoExemplo}
                   nomeEmpresaExemplo={nomeEmpresaExemplo}
                   className="editor-etiqueta-campo"
-                  aoMedirTransbordo={(transborda) => marcarTransbordo(c.campo, transborda)}
+                  aoMedirTransbordo={(transborda) => marcarTransbordo(i, transborda)}
                   tabIndex={0}
-                  onPointerDown={(e) => aoIniciarArraste(e, c)}
-                  onKeyDown={(e) => aoTeclarNoCampo(e, c)}
+                  onPointerDown={(e) => aoIniciarArraste(e, c, i)}
+                  onKeyDown={(e) => aoTeclarNoCampo(e, i)}
                   onClick={(e) => {
                     e.stopPropagation()
-                    setCampoSelecionado(c.campo)
+                    setIndiceSelecionado(i)
                   }}
                   style={{
                     outline:
-                      campoSelecionado === c.campo
+                      indiceSelecionado === i
                         ? '2px solid var(--accent)'
                         : ultrapassaBorda(c)
                           ? '2px solid var(--danger)'
@@ -489,7 +515,7 @@ export default function EditorEtiquetaCanvas({
                       className="editor-etiqueta-redimensionar redimensionar-largura"
                       title="Arraste pra mudar a largura"
                       style={{ left: x + larg - 4, top: y + alt / 2 - 12 }}
-                      onPointerDown={(e) => aoIniciarRedimensionar(e, campoSelecionadoObj, 'horizontal')}
+                      onPointerDown={(e) => aoIniciarRedimensionar(e, campoSelecionadoObj, 'horizontal', indiceSelecionado!)}
                       onClick={(e) => e.stopPropagation()}
                     />
                     {/* Borda inferior: só ALTURA. */}
@@ -497,7 +523,7 @@ export default function EditorEtiquetaCanvas({
                       className="editor-etiqueta-redimensionar redimensionar-altura"
                       title="Arraste pra mudar a altura"
                       style={{ left: x + larg / 2 - 12, top: y + alt - 4 }}
-                      onPointerDown={(e) => aoIniciarRedimensionar(e, campoSelecionadoObj, 'vertical')}
+                      onPointerDown={(e) => aoIniciarRedimensionar(e, campoSelecionadoObj, 'vertical', indiceSelecionado!)}
                       onClick={(e) => e.stopPropagation()}
                     />
                     {/* Canto: as duas ao mesmo tempo. */}
@@ -505,7 +531,7 @@ export default function EditorEtiquetaCanvas({
                       className="editor-etiqueta-redimensionar redimensionar-canto"
                       title="Arraste pra redimensionar"
                       style={{ left: x + larg - 5, top: y + alt - 5 }}
-                      onPointerDown={(e) => aoIniciarRedimensionar(e, campoSelecionadoObj, 'ambos')}
+                      onPointerDown={(e) => aoIniciarRedimensionar(e, campoSelecionadoObj, 'ambos', indiceSelecionado!)}
                       onClick={(e) => e.stopPropagation()}
                     />
                   </>
@@ -519,16 +545,25 @@ export default function EditorEtiquetaCanvas({
       {campoSelecionadoObj && (
         <PainelPropriedadesCampo
           campo={campoSelecionadoObj}
-          aoMudar={(c) => atualizarCampo(c.campo, c)}
-          aoRemover={() => campoSelecionado && removerCampo(campoSelecionado)}
-          aoFechar={() => setCampoSelecionado(null)}
+          ordinal={ordinalDaInstancia(indiceSelecionado!)}
+          aoMudar={(c) => atualizarCampo(indiceSelecionado!, c)}
+          aoRemover={() => removerCampo(indiceSelecionado!)}
+          aoFechar={() => setIndiceSelecionado(null)}
         />
       )}
 
       {camposQueTransbordam.size > 0 && (
         <p className="erro-campo" style={{ marginTop: 8 }}>
           O conteúdo não cabe em{' '}
-          {[...camposQueTransbordam].map((c) => ROTULO_CAMPO_ETIQUETA[c as CampoEtiqueta]).join(', ')} — o que
+          {[...camposQueTransbordam]
+            .map((i) => {
+              const c = campos[i]
+              if (!c) return null
+              const ord = ordinalDaInstancia(i)
+              return ROTULO_CAMPO_ETIQUETA[c.campo] + (ord ? ` (${ord}ª)` : '')
+            })
+            .filter(Boolean)
+            .join(', ')} — o que
           sobra é <strong>cortado na impressão</strong>. Aumente a caixa, diminua a fonte ou encurte o texto.
         </p>
       )}
@@ -569,9 +604,9 @@ export default function EditorEtiquetaCanvas({
                       height: altura * ESCALA_PREVIA,
                     }}
                   >
-                    {campos.map((c) => (
+                    {campos.map((c, i) => (
                       <CampoEtiquetaVisual
-                        key={c.campo}
+                        key={i}
                         campo={c}
                         escalaPxPorMm={ESCALA_PREVIA}
                         produtoExemplo={produtoExemplo}

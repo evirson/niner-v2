@@ -85,11 +85,17 @@ function CampoMm({ rotulo, valorMm, aoMudar, permiteVazio }: {
  */
 export default function PainelPropriedadesCampo({
   campo,
+  ordinal,
   aoMudar,
   aoRemover,
   aoFechar,
 }: {
   campo: CampoEtiquetaPosicionado
+  /** Ordinal desta instância entre as do MESMO campo (1, 2, …), ou `null` quando ela é única.
+   *  Existe porque desde 2026-08-24 o mesmo campo pode ser posicionado mais de uma vez (etiqueta
+   *  destacável) — e sem isto o painel abriria com o título "Código de Barras (SKU)" nas duas,
+   *  sem o usuário saber qual está editando. */
+  ordinal: number | null
   aoMudar: (campo: CampoEtiquetaPosicionado) => void
   aoRemover: () => void
   aoFechar: () => void
@@ -129,7 +135,10 @@ export default function PainelPropriedadesCampo({
         onPointerUp={() => { arrasteRef.current = null }}
         title="Arraste para mover o painel"
       >
-        <strong>{ROTULO_CAMPO_ETIQUETA[campo.campo]}</strong>
+        <strong>
+          {ROTULO_CAMPO_ETIQUETA[campo.campo]}
+          {ordinal ? ` (${ordinal}ª)` : ''}
+        </strong>
         <button type="button" className="acao-icone acao-excluir" onClick={aoRemover} title="Remover campo" aria-label="Remover campo">
           <IconeExcluir />
         </button>

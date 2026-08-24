@@ -172,19 +172,46 @@ class EtiquetaConfigCrudTest {
                 .andExpect(jsonPath("$.espacamentoHorizontalMm").value(2));
     }
 
+    /**
+     * O MESMO campo pode ser posicionado mais de uma vez (2026-08-24, V060) — este teste prendia o
+     * contrário até hoje.
+     *
+     * <p><b>O caso é a etiqueta destacável:</b> numa etiqueta alta o adesivo é picotado ao meio,
+     * uma parte fica no produto e a outra é destacada no caixa, e as duas metades precisam do mesmo
+     * conteúdo — principalmente o código de barras. Antes, a segunda metade saía em branco.
+     *
+     * <p>⚠️ Confere as DUAS instâncias de volta, com posição e propriedades <b>independentes</b>,
+     * não só o 201: o que faz a repetição funcionar é `salvarCampos` reinserir a lista inteira em
+     * ordem e `buscarCampos` ler com `ORDER BY id_config_etiqueta_campo`. Um teste que olhasse só o
+     * status passaria mesmo se a leitura devolvesse uma linha só, ou as duas trocadas.
+     */
     @Test
-    void campoRepetidoEhRejeitado() throws Exception {
+    void mesmoCampoPodeAparecerMaisDeUmaVez() throws Exception {
         String token = assinarNovoTenant("campo-repetido");
         String corpo = """
-                {"nome":"ETIQUETA CAMPO REPETIDO","larguraRoloMm":50,"numeroColunas":1,"larguraEtiquetaMm":34,
-                 "alturaEtiquetaMm":30,"margemEsquerdaMm":3,
-                 "campos":[{"campo":"PRECO_VENDA","posicaoXMm":0,"posicaoYMm":0,"fonte":"ARIAL","negrito":false,"fundoPreto":false,"alinhamento":"ESQUERDA"},
-                           {"campo":"PRECO_VENDA","posicaoXMm":0,"posicaoYMm":10,"fonte":"ARIAL","negrito":false,"fundoPreto":false,"alinhamento":"ESQUERDA"}]}
+                {"nome":"ETIQUETA DESTACAVEL","larguraRoloMm":50,"numeroColunas":1,"larguraEtiquetaMm":34,
+                 "alturaEtiquetaMm":60,"margemEsquerdaMm":3,
+                 "campos":[{"campo":"SKU_BARRAS","posicaoXMm":2,"posicaoYMm":5,"larguraMm":30,"alturaMm":14,
+                            "fonte":"ARIAL","negrito":false,"fundoPreto":false,"alinhamento":"CENTRO","exibirTextoLegivel":true},
+                           {"campo":"SKU_BARRAS","posicaoXMm":2,"posicaoYMm":40,"larguraMm":30,"alturaMm":14,
+                            "fonte":"ARIAL","negrito":false,"fundoPreto":false,"alinhamento":"CENTRO","exibirTextoLegivel":false},
+                           {"campo":"PRECO_VENDA","posicaoXMm":2,"posicaoYMm":22,"larguraMm":30,"alturaMm":5,
+                            "fonte":"ARIAL","negrito":true,"fundoPreto":false,"alinhamento":"DIREITA"}]}
                 """;
 
         mvc.perform(post("/api/v1/etiquetas-config").header("Authorization", "Bearer " + token)
                         .contentType(APPLICATION_JSON).content(corpo))
-                .andExpect(status().isBadRequest());
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.campos.length()").value(3))
+                // Ordem preservada, e cada instância com a SUA posição.
+                .andExpect(jsonPath("$.campos[0].campo").value("SKU_BARRAS"))
+                .andExpect(jsonPath("$.campos[0].posicaoYMm").value(5))
+                .andExpect(jsonPath("$.campos[1].campo").value("SKU_BARRAS"))
+                .andExpect(jsonPath("$.campos[1].posicaoYMm").value(40))
+                // Propriedades independentes: a 2ª metade pode não repetir os dígitos legíveis.
+                .andExpect(jsonPath("$.campos[0].exibirTextoLegivel").value(true))
+                .andExpect(jsonPath("$.campos[1].exibirTextoLegivel").value(false))
+                .andExpect(jsonPath("$.campos[2].campo").value("PRECO_VENDA"));
     }
 
     @Test

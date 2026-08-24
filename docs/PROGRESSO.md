@@ -1,7 +1,7 @@
 # Progresso do Projeto — niner-v2
 
 Registro cronológico das decisões e entregas. Atualizar a cada marco relevante.
-**Última atualização:** 2026-08-22
+**Última atualização:** 2026-08-24
 
 ---
 
@@ -540,6 +540,196 @@ Movimentação de Conta Corrente) que ainda não tinham migrado pro `SeletorPlan
 ---
 
 ## Linha do tempo
+
+### 2026-08-24 (noite) — o mesmo campo pode aparecer mais de uma vez na etiqueta (V060)
+
+Pedido do dono do produto, ao montar um modelo 34 × 60: *"preciso ter a opção de poder colocar 2
+vezes cada campo, pois às vezes a etiqueta é destacável"*. O adesivo é picotado ao meio — uma parte
+fica no produto, a outra é destacada no caixa — e as duas metades precisam do mesmo código de
+barras, preço e descrição. Até aqui a paleta esvaziava com *"Todos os campos já estão na etiqueta"*
+e a segunda metade saía em branco.
+
+**Havia duas travas, e a segunda só apareceu testando.** A `UNIQUE (id_config_etiqueta, campo)`
+(caiu na **V060**) e uma validação Java — `"Campo repetido na etiqueta: X"` — em
+`EtiquetaConfigService.validar`, que **não estava no radar** ao ler o schema. Quem a revelou foi um
+`POST` de teste respondendo **400**: conferindo só pela tela, o editor deixaria montar o layout e a
+falha apareceria no **Salvar**, com o trabalho já feito.
+
+**O modelo relacional já suportava** — nada mais mudou no backend. A tabela tem PK própria,
+`salvarCampos` apaga e reinsere a lista inteira em ordem (padrão do projeto) e `buscarCampos` lê com
+`ORDER BY id_config_etiqueta_campo`, que preserva a ordem enviada.
+
+**No front, a identidade dos campos deixou de ser o NOME e passou a ser o ÍNDICE.** Por nome, as
+duas instâncias seriam a mesma coisa: arrastar uma moveria a outra, o painel não diria qual está
+aberto e as `key` do React duplicariam. Mudaram seleção, arraste, alças, setas do teclado, remoção,
+o `Set` de transbordo e as `key` de **quatro** renders — incluindo a **Emissão de Etiqueta**, fora
+da tela mexida e que passaria despercebida. ⚠️ Remover limpa a seleção sempre: remover por índice
+desloca os seguintes, e o índice antigo passaria a apontar para o campo vizinho.
+
+A tela agora mostra a contagem na paleta (`Código de Barras (SKU) (2)`) e o ordinal no painel
+(`Código de Barras (SKU) (2ª)`), que só aparece quando há repetição. **Sem limite de repetições**:
+travar em 2 exigiria contagem e mensagem para impedir algo que não faz mal.
+
+**Verificado:** no navegador, mover uma das duas instâncias moveu 1 de 5 campos; pela API, `POST`
+201 com dois `SKU_BARRAS` voltando na ordem certa e com `exibirTextoLegivel` independente, `PUT`
+200, `DELETE` 200 sem campo órfão. **913 testes verdes** — `campoRepetidoEhRejeitado` prendia o
+comportamento antigo e virou `mesmoCampoPodeAparecerMaisDeUmaVez`, que confere as **duas
+instâncias de volta**, não só o status: um teste que olhasse o 201 passaria mesmo se a leitura
+devolvesse uma linha só.
+
+### 2026-08-24 (fim da tarde) — a tela de CRIAR modelo de etiqueta era inutilizável, e a de editar estava perfeita
+
+Encontrado pelo dono do produto ao cadastrar um segundo modelo (34 × 60): o formulário espremido
+numa coluna com rolagem interna, o editor visual jogado **abaixo** dele reduzido a ~30 px, e meia
+tela vazia à direita. ⚠️ **Só em `/etiqueta-configuracao/novo`** — editando ficava correto, e é por
+isso que passou dias despercebido: toda a calibragem foi feita **editando** o único modelo que
+existia.
+
+**A causa: seletor posicional sobre um item condicional.** O grid posicionava a faixa de baixo com
+`.etiqueta-config-corpo .form-fieldset > .section:last-of-type`, mirando *Informações do Registro*.
+Mas `InfoRegistro` faz `if (!codigo) return null` — no modo criar ele não renderiza, e o "último
+`.section`" passa a ser a **seção do editor**. E a especificidade decide o estrago: **0,4,0** da
+regra da faixa de baixo contra **0,2,0** da que põe o editor na coluna 2. A errada vence, e o
+desenho da etiqueta — a razão de a tela existir — vai esmagado para a linha 3.
+
+O diagnóstico saiu de um comando lendo o estilo **computado** no DOM (`gridColumnStart` = `1/-1`
+onde devia ser `2`), nas duas rotas, sem teoria nenhuma.
+
+**Correção:** `InfoRegistro` ganhou a classe `secao-info-registro` e o CSS passa a mirá-la pelo
+nome. Ele é usado em **15 telas**; acrescentar classe é seguro (nada a referenciava) e foi
+conferido no navegador que em Clientes a seção segue com `border-bottom: 0` (regra global
+`.section:last-of-type`, intocada) e `grid-column: auto`.
+
+**Lição:** seletor posicional (`:last-of-type`, `:last-child`, `:nth-*`) sobre lista onde algum
+item é condicional aponta para o elemento errado exatamente quando o item some — e, por ser mais
+específico, ainda vence a regra correta. Se o CSS precisa de um alvo, dê um nome a ele. E ao mexer
+em layout de tela de cadastro, **teste os dois modos**: criar e editar.
+
+### 2026-08-24 (tarde) — o quadro de corte do Teste de Impressão mudava o layout que ele deveria provar
+
+Fecha o último defeito da etiqueta. Com as barras já lendo, sobrou um sintoma restrito: os
+**dígitos legíveis** do código de barras não saíam **pelo Teste de Impressão**; pela Emissão de
+Etiqueta saíam, na mesma impressora e no mesmo modelo.
+
+⭐ **Quem matou a hipótese errada foi o dono do produto.** Eu estava convencido de que a
+intensidade recém-baixada apagava a haste fina do Courier New; ele observou que a Emissão imprimia
+certo — e se fosse calor, as duas falhariam igual. **Duas rotinas imprimem a mesma coisa e só uma
+falha ⇒ a diferença está no código das duas**, não no mundo físico.
+
+Descartados com evidência: `exibir_texto_legivel` (está `t`), o `GET` (devolve `true`), o `PUT`
+(faz `return buscar(id)` — mesmo DTO), o render (os dígitos **existem no DOM**), o
+`visibility: hidden` da impressão (a regra do rolo vence por especificidade), o `@page`
+(`110mm 33.9mm`, correto) e o próprio navegador — **o PDF da mesma impressão traz os dígitos**.
+
+A foto do papel, calibrada pelo passo de 33,9 mm entre duas tarjas (434 px → 12,8 px/mm), mostrou
+as barras começando em **18,0 mm** (previsto 17,5) e terminando em **27,1 mm**: altura
+**reduzida**, de quando os dígitos existem — se `exibirTexto` estivesse desligado o SVG teria
+esticado até 31,5 mm. O espaço foi reservado e ficou **vazio**.
+
+**A causa:** o Teste desenhava o quadro de corte com `border: 1px solid #000`, e com o
+`* { box-sizing: border-box }` global a borda **encolhe a área interna e empurra todo o conteúdo
+1 px (0,265 mm) para baixo**. O campo de barras termina em 31,5 mm numa etiqueta de 31,70 — folga
+de 0,2 mm, menor que o deslocamento. Só os dígitos atravessavam.
+
+**Correção:** `outline` + `outlineOffset: -1px`, que desenha fora do fluxo e não ocupa espaço.
+Medido no navegador: os dígitos saíram de 0,066 mm **além** do adesivo para 0,76 px **dentro** —
+a mesma geometria da Emissão. Confirmado no papel pelo dono do produto.
+
+⚠️ **O defeito de fundo vale mais que a linha corrigida:** um enfeite da tela de calibragem estava
+alterando a geometria que ela deveria estar provando, divergindo da rotina real num item visível.
+É o mesmo princípio que a tela já defendia ao imprimir sempre a versão gravada em vez do
+formulário em edição.
+
+### 2026-08-24 (tarde) — a calibragem da etiqueta passa a sobreviver a reset de banco
+
+Pedido do dono do produto: *"pra não correr o risco de perder esta configuração de etiqueta, pois
+às vezes vamos ter que zerar o banco"*. Os números custaram duas sessões de etiqueta impressa e o
+banco de dev é recriado com frequência.
+
+`db/scripts/seed_etiqueta_calibrada.sql` recria o modelo inteiro — geometria do rolo (110 mm,
+3 colunas, 34 × 31,70, espaçamentos 3,00/2,50/2,20) e os 4 campos posicionados. Idempotente,
+resolve o `id_tenant` **pelo slug** (o id muda a cada recriação) e faz
+`set_config('app.id_tenant', ...)` — sem isso o `FORCE RLS` barra o INSERT e esconderia o SELECT.
+Termina com um `SELECT` de conferência.
+
+⛔ **Não virou migration, de propósito:** é dado de um tenant e vai mudar enquanto a calibragem
+evoluir; migration aplicada não pode ser editada (checksum do Flyway) e rodaria em produção.
+
+**Testado nos dois caminhos**: atualizando o modelo existente e criando do zero com um nome
+temporário, removido em seguida — script de restauração que ninguém conferiu não foi verificado,
+foi torcido.
+
+### 2026-08-24 — o código de barras que não lia era INTENSIDADE, e a etiqueta provou medindo
+
+Fecha a pendência aberta em 2026-08-21, que tinha resistido a **três** correções no mesmo dia —
+todas no desenho do SVG, todas necessariamente inúteis: **o desenho sempre esteve certo**.
+
+**Como a causa apareceu.** Em vez de reler o código pela quarta vez, a etiqueta impressa foi
+**medida**: `ffmpeg` recortou a foto, extraiu a faixa em cinza cru, e um script Node tirou a média
+vertical de 60 linhas (matando ruído de papel e câmera) e mediu os *runs* de preto/branco.
+
+| Medida | Esperado | Impresso |
+|---|---|---|
+| Transições de um EAN-13 | 59 | **31** |
+| Barra mais fina | 1,00 módulo | **2,25** |
+| **Largura do símbolo** | **25,2 mm** | **≈26 mm** |
+
+⭐ **A medida que fechou o diagnóstico foi a que deu certo.** O símbolo mede o que devia medir — se
+a geometria estivesse errada, essa linha acusaria. Como não acusou, o erro só podia estar na
+repartição entre preto e branco: cada barra engordou ~0,33 mm e cada espaço encolheu o mesmo.
+Isso é *bar width growth*, assinatura de **intensidade alta demais** em impressão térmica.
+
+Confirmação independente e gratuita, na mesma foto: o texto **vazado em branco** sobre a tarja
+preta saiu comido pela metade — preto invadindo branco num campo sem nenhuma relação com o SVG.
+Sintoma em dois elementos independentes aponta para a impressora; sintoma isolado apontaria para o
+desenho daquele elemento.
+
+**A correção, medida:** Argox OS-2140 PPLA, escala 0–20 — **10 (padrão de fábrica) não lê, 6 lê**.
+⚠️ A pegadinha vem antes do slider: a caixa *"Usar configuração atual de intensidade da impressora"*
+vem marcada e deixa o slider **cinza**, porque o driver passa a usar o valor gravado no firmware.
+E o ajuste fica em *Preferências de impressão* → aba **Opções** — **não** em "Propriedades da
+impressora", que é outra janela e não tem o campo. O estado real do driver saiu de
+`Get-PrintConfiguration` (o XML do Seagull traz o slider como `DisplayHint: Disabled`).
+
+**Por que virou aviso na tela e não código** (pergunta do dono do produto: *"e o usuário, que não
+vai saber fazer isso?"*): a intensidade mora no DEVMODE privado do driver e **nenhuma API web
+alcança** — nem WebUSB, porque no Windows a impressora já está capturada pelo driver de classe de
+impressora. E compensar no desenho é impossível nesta resolução: a 203 dpi o módulo tem **2,12
+dots** e a impressora só liga ou desliga dots inteiros. Do engrossamento medido, ~0,9 dot é fração
+de dot (corrigível) e **~1,8 dot é calor (não corrigível)** — mesmo zerando a parte corrigível,
+sobraria o engrossamento maior numa barra de 2 dots.
+
+**Entregue:** `web/src/pages/etiquetaconfig/AvisoIntensidadeImpressora.tsx`, exibido no popup do
+**Testar Impressão** (o momento em que o lojista imprime e confere), com o passo a passo do driver
+— inclusive a caixa que trava o slider —, mais um passo e um erro comum na `AjudaDaTela` (R22).
+Detalhe completo em `docs/telas/configuracao-etiqueta.md`.
+
+⏭️ **Fica registrado:** módulo em **dots inteiros** vale a pena (elimina os 0,9 dot) mas exige
+parâmetro novo de resolução da impressora (203/300 dpi). Conta que explica a falta de folga: numa
+etiqueta de 34 mm a 203 dpi, **2 dots é a única opção** — 3 dots dariam 42,4 mm e não cabem. O
+legado usa 0,31 mm de módulo, e é daí que vem a margem que ele tem e nós não. Caminho definitivo,
+se o volume justificar: **agente local falando PPLA**, com a própria impressora desenhando o código
+de barras — mas isso empurra contra o P6.
+
+### 2026-08-24 — subida do ambiente: o `minio-init` estava morrendo por CRLF
+
+Ao subir os servidores, `niner-minio-init` saía com **código 2** a cada tentativa
+(`set: -: invalid option` na linha do `set -eu`), e a consequência aparecia longe da causa: sem os
+buckets, `ArquivamentoXmlJob` respondia **503** para todo XML fiscal — 34 documentos e eventos do
+tenant 1 acumulados sem arquivar.
+
+Causa: `infra/minio/bootstrap.sh` estava no working tree com **CRLF**, e o `\r` entrava como
+argumento do `set`. O `.gitattributes` já manda `eol=lf` e o índice tinha LF — o estrago vinha de
+um checkout antigo com `core.autocrlf=true`, e só esse arquivo dos quatro `.sh` do repositório
+estava afetado (`git ls-files --eol` mostrava `i/lf w/crlf`). Corrigido com `rm` +
+`git checkout --`, sem tocar no índice.
+
+⚠️ O `cat -A` do Git Bash **não** mostrou o `^M`; quem provou foi hexdump dentro do container. E
+cuidado ao inspecionar: num `printf "[%s]"` o `\r` volta o cursor e o `]` sobrescreve o caractere,
+fazendo a linha parecer limpa.
+
+Confirmado ponta a ponta: o ciclo seguinte do job gravou os **34 XMLs** em
+`tenants/1/fiscal/2026/08/65/…`, sem nenhum erro.
 
 ### 2026-08-22 — as pendências da auditoria: 24 dos 33 resolvidos, 5 adiados por decisão
 

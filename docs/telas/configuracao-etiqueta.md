@@ -986,3 +986,277 @@ ver mais."*. Mesma correção em `PesquisaVariacaoModal` (Relatório de Moviment
 
 ⚠️ Aqui o impacto é menor que no seletor de fornecedor — não há botão de cadastro rápido ao lado
 criando duplicata —, mas o operador ainda conclui "não está cadastrado" para um produto que existe.
+
+---
+
+## ✅ 2026-08-24 — o código de barras não lia, e a causa não estava no desenho
+
+Fecha a pendência aberta em 2026-08-21 ("o código de barras impresso ainda não lê"), que tinha
+resistido a **três** tentativas de correção no mesmo dia — todas no desenho do SVG, todas
+inevitavelmente inúteis, porque **o defeito nunca esteve no desenho**.
+
+### Como a causa apareceu: medindo a etiqueta, não relendo o código
+
+A foto da etiqueta impressa foi recortada e teve o **perfil de intensidade** extraído (média de 60
+linhas horizontais, para eliminar ruído de papel e da câmera). O resultado não deixou margem:
+
+| Medida | Esperado | Impresso |
+|---|---|---|
+| Transições (barras + espaços) | **59** | **31** |
+| Barra mais fina | 1,00 módulo | **2,25 módulos** |
+| Espaço mais fino | 1,00 módulo | 0,82 módulo |
+| Largura do símbolo | 25,2 mm | ≈26 mm |
+
+Vinte e oito transições **desapareceram**: barras vizinhas se fundiram porque o espaço branco
+entre elas foi comido. Nenhuma barra de 1 módulo sobreviveu.
+
+⚠️ **A última linha é a que fecha o diagnóstico:** o símbolo mede o que deveria medir. Geometria,
+módulo, zonas de silêncio e escala estavam **certos** — as três correções anteriores tinham
+consertado o que já não estava quebrado. O que mudou foi a repartição entre preto e branco: cada
+barra engordou ~0,33 mm e cada espaço encolheu na mesma medida. Isso tem nome — *bar width growth*
+— e uma causa dominante em térmica: **intensidade alta demais**, o ponto queima maior que o dot
+nominal e invade o branco vizinho.
+
+### A confirmação independente, no mesmo papel
+
+A tarja preta do topo (`NOME_EMPRESA`, `fundo_preto = true`) tem o texto **vazado em branco**, e
+ele saiu **comido pela metade**. É o mesmo fenômeno visto do avesso: preto invadindo branco, num
+campo que não tem nada a ver com o SVG do código de barras. Se a causa fosse o nosso desenho, não
+havia por que o texto vazado sumir; se fosse geometria, o símbolo mediria errado — e não mede.
+
+### A correção: intensidade 10 → 6 (medido, não teórico)
+
+Argox OS-2140 PPLA, escala 0–20. Em **10** (padrão de fábrica) o leitor recusava; em **6** lê.
+
+⚠️ **A pegadinha que trava qualquer um** está antes do slider: a caixa **"Usar configuração atual
+de intensidade da impressora"** vem marcada, e enquanto estiver assim o driver usa a intensidade
+gravada no *firmware* e deixa o slider **cinza**. Quem vai direto no slider conclui que não há o
+que ajustar. Caminho completo: *Preferências de impressão* (**não** "Propriedades da impressora",
+que é outra janela e não tem o ajuste) → aba **Opções** → desmarcar a caixa → **Nível de
+intensidade** → 6.
+
+### Por que isto virou aviso na tela e não código
+
+**A intensidade é inalcançável a partir do navegador.** Mora no DEVMODE privado do driver, e não
+existe API web que chegue lá — nem CSS, nem JS, nem `window.print()`. WebUSB também não serve: no
+Windows a impressora já está capturada pelo driver de classe de impressora e o Chrome não consegue
+reivindicar a interface.
+
+**E compensar no desenho não resolveria.** A OS-2140 é 203 dpi = 8 dots/mm, então 1 dot = 0,125 mm
+e o módulo atual (30 mm ÷ 113) tem **2,12 dots**. A impressora só liga ou desliga dots inteiros:
+não há como desenhar "meio ponto mais fino", que é o que o *bar width reduction* exigiria.
+Decompondo o engrossamento medido:
+
+| Causa | Quanto | Corrigível no código? |
+|---|---|---|
+| Módulo em fração de dot (2,12) | ~0,9 dot | sim |
+| **Espalhamento térmico** | **~1,8 dot** | **não** |
+
+Mesmo zerando a parte corrigível, sobraria o engrossamento maior numa barra de 2 dots. **Só a
+intensidade resolve** — daí o aviso.
+
+Implementação: `AvisoIntensidadeImpressora.tsx`, exibido no popup do **Testar Impressão** (o
+momento em que o lojista vai imprimir e conferir), mais um passo e um erro comum na `AjudaDaTela`.
+
+### ⏭️ O que fica registrado para depois
+
+O módulo em **número inteiro de dots** continua valendo a pena (elimina a fração de 0,9 dot e dá
+margem), mas exige um parâmetro novo — a **resolução da impressora** (203/300 dpi) —, porque 2
+dots são 0,25 mm a 203 dpi e 0,254 mm a 300. Conta que vale registrar: numa etiqueta de 34 mm a
+203 dpi, **2 dots é a única opção** — 3 dots dariam 42,4 mm e não caberiam. É por isso que temos
+menos folga que o sistema legado, cujo módulo é 0,31 mm.
+
+Caminho definitivo, se algum dia o volume justificar: **agente local falando PPLA**, que define a
+densidade por comando e faz a **própria impressora** desenhar o código de barras, alinhado a dots
+por construção. Custo: executável instalado em cada loja, com atualização e suporte — empurra
+contra o P6.
+
+---
+
+## ✅ 2026-08-24, rodada 2 — o quadro de corte do Teste mudava o layout que ele deveria provar
+
+Depois de a intensidade resolver as barras, sobrou um defeito que só aparecia **no Teste de
+Impressão**: os **dígitos legíveis** do código de barras não saíam no papel. Na Emissão de
+Etiqueta, com a mesma impressora e o mesmo modelo, saíam.
+
+⭐ **Quem matou a hipótese errada foi o dono do produto**, não a medição: eu estava convencido de
+que era a intensidade baixa apagando a haste fina do Courier New. Ele observou que a Emissão
+imprimia certo — e se fosse calor, as duas falhariam igual. Uma frase encerrou a linha de
+investigação. Ver [[feedback_evidencia_do_usuario_vence_inferencia]].
+
+### O que foi descartado, com evidência
+
+| Suspeita | Como caiu |
+|---|---|
+| `exibir_texto_legivel` desligado | está `t` no banco |
+| API não devolve o campo | `GET` devolve `exibirTextoLegivel: true` |
+| O `PUT` (que o Teste usa) perde o campo | ele faz `return buscar(id)` — o mesmo DTO do `GET` |
+| Os dígitos não são renderizados | **existem no DOM**, com o texto certo |
+| `visibility: hidden` da impressão | `.etiqueta-rolo-imprimir *` vence por especificidade |
+| `@page` pequeno demais | `size: 110mm 33.9mm`, correto |
+| O navegador não desenha | **o PDF da mesma impressão traz os dígitos** |
+
+E a foto do papel, calibrada pelo passo de 33,9 mm entre duas tarjas pretas (434 px → 12,8 px/mm),
+mostrou as barras começando em **18,0 mm** (previsto 17,5) e terminando em **27,1 mm** — a altura
+**reduzida**, de quando os dígitos existem. Se `exibirTexto` estivesse desligado, o SVG teria
+esticado até 31,5 mm. Ou seja: o espaço dos dígitos foi reservado e ficou **vazio** no papel.
+
+### A causa
+
+O Teste desenhava o quadro de corte com **`border: 1px solid #000`**. Com o
+`* { box-sizing: border-box }` global, a borda **encolhe a área interna e empurra todo o conteúdo
+1 px (0,265 mm) para baixo**. O campo de barras termina em 31,5 mm numa etiqueta de 31,70 — folga
+de **0,2 mm**, menor que o deslocamento. Os dígitos ocupam os últimos 3 mm do campo, e eram os
+únicos a atravessar o limite do adesivo.
+
+Medido no navegador, antes e depois:
+
+| | Dígitos terminam | Fim do adesivo | |
+|---|---|---|---|
+| `border` (Teste) | 120,05 px | 119,80 px | passavam 0,066 mm |
+| **`outline`** | 1051,04 px | 1051,80 px | **0,76 px dentro** ✅ |
+
+### A correção e o princípio
+
+`outline: 1px solid #000` + `outlineOffset: -1px` — desenha por fora do fluxo, não ocupa espaço.
+O guia de corte continua existindo e o Teste passa a imprimir a **mesma geometria** da Emissão.
+
+⚠️ **O defeito de fundo vale mais que a linha corrigida:** um enfeite da tela de calibragem estava
+alterando a geometria que ela deveria estar provando, e chegou a divergir da rotina real num item
+visível. É o mesmo princípio que este código já defende ao imprimir sempre a versão **gravada** em
+vez do formulário em edição — um teste que não corresponde ao que sai de verdade não prova nada.
+
+### 💾 A calibragem agora sobrevive a reset de banco
+
+`db/scripts/seed_etiqueta_calibrada.sql` recria o modelo inteiro (geometria do rolo + os 4 campos).
+O banco de dev é recriado com frequência e estes números custaram duas sessões de etiqueta
+impressa. Idempotente, resolve o `id_tenant` pelo slug e seta `app.id_tenant` (sem isso o
+`FORCE RLS` barra o INSERT e esconde o SELECT). **Testado nos dois caminhos** — atualizando o
+existente e criando do zero com um nome temporário, que foi removido depois.
+
+---
+
+## 🔴 2026-08-24, rodada 3 — a tela de CRIAR modelo era inutilizável (e a de editar, perfeita)
+
+Encontrado pelo dono do produto ao cadastrar um segundo modelo (34 × 60): *"a tela está estranha,
+não aparecem os campos pra configurar"*. O formulário aparecia espremido numa coluna estreita com
+rolagem interna, o editor visual caía **abaixo** dele reduzido a uma caixa de ~30 px, e metade
+direita da tela ficava vazia.
+
+⚠️ **Só acontecia em `/etiqueta-configuracao/novo`.** Editando um modelo existente o layout estava
+correto — e é por isso que passou despercebido desde a reforma de 2026-08-21: toda a calibragem foi
+feita **editando** o único modelo que existia.
+
+### A causa: seletor posicional + componente que devolve `null`
+
+O grid de duas colunas posicionava a faixa de baixo assim:
+
+```css
+.etiqueta-config-corpo .form-fieldset > .section:last-of-type { grid-column: 1 / -1; grid-row: 3; }
+```
+
+A intenção era mirar **Informações do Registro**. Mas `InfoRegistro` começa com
+`if (!codigo) return null` — e no modo CRIAR não há registro, então ele **não renderiza**. O
+"último `.section`" passa a ser a **seção do editor**.
+
+E aí a especificidade decide: `.etiqueta-config-corpo .form-fieldset > .section:last-of-type` é
+**0,4,0**, contra **0,2,0** de `.etiqueta-config-corpo .secao-editor-etiqueta { grid-column: 2;
+grid-row: 1 / 3 }`. A regra da faixa de baixo vence, e o desenho da etiqueta — a razão de a tela
+existir — vai para a linha 3 esmagado, ocupando as duas colunas.
+
+Confirmado lendo o `grid-column` computado no DOM, nas duas rotas:
+
+| | `/novo` (antes) | `/novo` (depois) | `/1` (editar) |
+|---|---|---|---|
+| `secao-editor-etiqueta` | **col 1/-1, row 3** 🔴 | col 2, row 1/3 ✅ | col 2, row 1/3 ✅ |
+| `secao-info-registro` | (não existe) | (não existe) | col 1/-1, row 3 ✅ |
+
+### A correção
+
+`InfoRegistro` ganhou a classe **`secao-info-registro`** e o CSS passou a mirá-la pelo nome. Classe
+própria não depende de um irmão existir; `:last-of-type`, sim.
+
+⚠️ `InfoRegistro` é usado em **15 telas** — acrescentar uma classe é seguro (nenhuma regra existente
+a referencia), e foi conferido no navegador que em Clientes a seção segue com `border-bottom: 0`
+(a regra global `.section:last-of-type`, intocada) e `grid-column: auto`.
+
+**Lição:** seletor posicional (`:last-of-type`, `:last-child`, `:nth-*`) sobre uma lista onde
+**algum item é condicional** aponta para o elemento errado exatamente no caso em que o item some —
+e, por ser mais específico, ainda vence a regra correta. Se o CSS precisa de um alvo, dê um nome a
+ele.
+
+---
+
+## ✅ 2026-08-24, rodada 4 — o mesmo campo pode aparecer mais de uma vez (etiqueta destacável)
+
+Pedido do dono do produto: *"hoje podemos colocar apenas uma vez cada campo, preciso ter a opção
+de poder colocar 2 vezes cada campo, pois às vezes a etiqueta é destacável"*.
+
+**O caso.** Numa etiqueta alta (34 × 60 mm) o adesivo é picotado ao meio: uma parte fica no produto
+e a outra é destacada no caixa. As duas metades precisam do **mesmo** conteúdo — descrição, preço e
+principalmente o código de barras. Até aqui cada campo só podia ser posicionado uma vez, a paleta
+esvaziava com *"Todos os campos já estão na etiqueta"* e a segunda metade saía em branco.
+
+### Havia DUAS travas, e a segunda só apareceu testando
+
+| Trava | Onde | Como caiu |
+|---|---|---|
+| `UNIQUE (id_config_etiqueta, campo)` | banco | **V060** |
+| `"Campo repetido na etiqueta: X"` | `EtiquetaConfigService.validar` | removida |
+
+⚠️ A validação Java **não estava no radar** ao ler o schema. Foi o `POST` de teste respondendo
+**400** que a revelou — se a mudança tivesse sido conferida só pela tela, o editor deixaria montar
+o layout e a falha apareceria no **Salvar**, com o trabalho já feito.
+
+### O modelo relacional já suportava; só as travas impediam
+
+Nada mais precisou mudar no backend, e vale registrar por quê:
+
+* `cfg_etiqueta_campo` tem **PK própria** (`id_config_etiqueta_campo`, identity) — cada linha já
+  tinha identidade;
+* `salvarCampos` **apaga e reinsere a lista inteira, em ordem** (padrão do projeto, igual a
+  `ProdutoService.salvarCategorias`) — não faz diff por campo;
+* `buscarCampos` lê com **`ORDER BY id_config_etiqueta_campo`**, que preserva a ordem em que a tela
+  mandou.
+
+A V060 não recria índice nenhum no lugar: `cfg_etiqueta_campo_config_ix (id_tenant,
+id_config_etiqueta)` já atende a leitura por configuração, o único acesso que existe.
+
+### No front, a identidade deixou de ser o NOME do campo
+
+Era `CampoEtiqueta` (o enum) em todo lugar — o que, com repetição, faria as duas instâncias serem
+a mesma coisa: **arrastar uma moveria a outra**, o painel abriria sem dizer qual, e as `key` do
+React duplicariam. Passou a ser o **índice** na lista:
+
+* `indiceSelecionado` (era `campoSelecionado`), `atualizarCampo/Posicao/Tamanho`,
+  `moverCampoRelativo`, `removerCampo`, os refs de arraste e de redimensionamento;
+* `camposQueTransbordam` virou `Set<number>` — por nome, uma instância cabendo e a outra não
+  dariam um aviso só, apontando as duas;
+* `key` por índice em **quatro** renders: editor, prévia do rolo, Teste de Impressão e **Emissão de
+  Etiqueta** (esta última fora da tela, e passaria despercebida).
+
+⚠️ **Remover limpa a seleção**, sempre: remover por índice desloca os seguintes, e manter o índice
+antigo passaria a apontar para o campo vizinho — o painel abriria no lugar errado.
+
+### O que a tela mostra agora
+
+* A paleta **não esconde mais** o que já está na etiqueta, e traz a contagem: `Código de Barras
+  (SKU) (2)`.
+* O painel de propriedades diz qual instância está aberta: **"Código de Barras (SKU) (2ª)"** — o
+  ordinal só aparece quando há repetição.
+* O aviso de transbordo também distingue (`Código de Barras (SKU) (2ª)`).
+
+### Decisão: sem limite de repetições
+
+O pedido falava em "2 vezes", mas travar em 2 exigiria contagem e mensagem de erro para impedir
+algo que não faz mal. Sem limite atende o pedido e é mais simples.
+
+### Verificado
+
+* **Navegador:** com dois códigos de barras, mudar a posição de um moveu **1 de 5** campos.
+* **API:** `POST` 201 com dois `SKU_BARRAS` (y=5 e y=40), voltando na ordem certa e com
+  `exibirTextoLegivel` **independente** por instância; `PUT` 200; `DELETE` 200 sem deixar campo
+  órfão.
+* **Suíte:** 913 testes verdes. O teste `campoRepetidoEhRejeitado` prendia o comportamento antigo e
+  virou `mesmoCampoPodeAparecerMaisDeUmaVez` — que confere **as duas instâncias de volta**, não só
+  o 201: um teste que olhasse o status passaria mesmo se a leitura devolvesse uma linha só.

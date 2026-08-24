@@ -1283,7 +1283,13 @@ a.menu-card:hover {
 .etiqueta-nome-cabecalho { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .etiqueta-nome-cabecalho > label { margin: 0; }
 .etiqueta-nome-cabecalho .checkbox-linha { display: flex; align-items: center; gap: 6px; white-space: nowrap; }
-.etiqueta-config-corpo .form-fieldset > .section:last-of-type { grid-column: 1 / -1; grid-row: 3; }
+/* ⚠️ Mira a seção de Informações do Registro PELO NOME, nunca por `:last-of-type` (2026-08-24).
+   `InfoRegistro` devolve `null` enquanto o registro não existe, então no modo CRIAR o "último
+   `.section`" passava a ser o EDITOR — e esta regra (especificidade 0,4,0) vencia a que põe o
+   editor na coluna 2 (0,2,0), jogando o desenho da etiqueta para a faixa de baixo, esmagado, com
+   metade da tela vazia à direita. Ou seja: a tela de criar modelo era inutilizável, e a de editar
+   estava perfeita. Seletor posicional depende de um irmão que pode não existir. */
+.etiqueta-config-corpo .form-fieldset > .secao-info-registro { grid-column: 1 / -1; grid-row: 3; }
 /* Na coluna estreita os dois cards de medida empilham (eram lado a lado na largura inteira). */
 .etiqueta-config-corpo .etiqueta-config-linha .col-4 { grid-column: span 12; }
 .etiqueta-config-corpo .etiqueta-config-linha .col-4 + .col-4 { margin-top: 14px; }

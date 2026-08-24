@@ -1002,6 +1002,7 @@ const CONTEUDOS: Record<string, ConteudoAjuda> = {
       'ATENÇÃO ao "Espaço entre fileiras": o erro dele se ACUMULA. Se ele estiver 3mm menor que o real, a 1ª etiqueta sai perfeita, a 2ª sai 3mm fora, a 3ª 6mm, e a 4ª cai inteira fora do adesivo — foi o defeito corrigido em 20/08/2026.',
       'Confira a linha "Cada etiqueta começa em ... · ocupam X dos Y mm do rolo" logo abaixo dos campos: é a prova de que as medidas batem. Se aparecer o aviso de que as colunas não cabem, o que passar da largura do rolo será cortado na impressão.',
       'No editor visual, clique num campo da paleta (à esquerda) pra colocá-lo na etiqueta — ele aparece com uma posição padrão.',
+      'Você pode colocar O MESMO campo mais de uma vez. Serve para etiqueta DESTACÁVEL — aquela que é picotada ao meio, com uma parte ficando no produto e a outra sendo destacada no caixa: as duas metades precisam do mesmo código de barras, preço e descrição. O número entre parênteses na paleta ("Código de Barras (SKU) (2)") mostra quantas vezes o campo já está na etiqueta, e o popup de propriedades diz qual delas você está editando ("Código de Barras (SKU) (2ª)").',
       'Arraste o campo pra posicioná-lo; arraste a alça no canto inferior-direito pra redimensionar; use as setas do teclado pra ajustar fino (Shift+seta move 5mm de uma vez).',
       'Clique num campo já colocado pra abrir um popup de propriedades e ajustar posição exata, tamanho, fonte, negrito, fundo preto/letra branca e alinhamento — feche pelo botão "Fechar" ou clicando fora.',
       'Pra código de barras (SKU), marque "Mostrar os dígitos embaixo" se quiser o número legível junto com as barras.',
@@ -1009,6 +1010,7 @@ const CONTEUDOS: Record<string, ConteudoAjuda> = {
       'A régua em milímetros e o zoom (canto superior do editor) ajudam a posicionar com precisão.',
       'A "Prévia do rolo" embaixo do editor mostra DUAS fileiras — é onde você confere o espaço entre fileiras antes de gastar rolo.',
       '"Testar Impressão" (topo da tela) imprime a quantidade de etiquetas que você informar, no tamanho físico real e com um quadro de corte ao redor de cada uma — pra testar na impressora antes de emitir de verdade.',
+      'ANTES do primeiro teste numa impressora nova, ajuste a INTENSIDADE dela (o popup do "Testar Impressão" traz o passo a passo). Intensidade alta engrossa as barras até elas se encostarem, e aí o leitor recusa o código mesmo com o layout perfeito. Na Argox OS-2140 o valor medido que funciona é 6, de uma escala de 0 a 20 — o padrão de fábrica, 10, não lê.',
     ],
     errosComuns: [
       'Um campo com contorno vermelho está saindo da etiqueta — é só um aviso, não impede salvar, mas o que passar da borda do adesivo é cortado na impressão.',
@@ -1016,6 +1018,7 @@ const CONTEUDOS: Record<string, ConteudoAjuda> = {
       'O que você vê no editor é do MESMO tamanho proporcional que vai sair no papel (corrigido em 20/08/2026 — antes a letra aparecia 3x menor que a real na tela, e o texto que cabia numa linha saía em três na impressão).',
       'Aviso de coluna passando da largura do rolo: o que passa é simplesmente cortado. Confira a largura do rolo, a largura da etiqueta e o espaço entre colunas.',
       'O código de barras já sai no formato EAN-13 de verdade (o SKU sempre tem 13 dígitos com dígito verificador correto) — o que muda na impressão de verdade é só a proporção/qualidade da impressora, não a simbologia.',
+      'O LEITOR NÃO LÊ a etiqueta impressa? Na quase totalidade dos casos não é o layout, é a INTENSIDADE da impressora. Olhe as barras de perto: se houver barras encostadas umas nas outras, formando blocos pretos largos, a intensidade está alta — o calor espalha, a barra engorda e come o espaço branco vizinho, que é justamente o que o leitor usa para separar uma barra da outra. Baixe a intensidade no driver (o popup do "Testar Impressão" ensina onde) e imprima de novo. Se as barras saírem claras, falhadas ou acinzentadas, você desceu demais: suba um pouco.',
       'Deletar (tecla Delete/Backspace com o campo selecionado) remove o campo da etiqueta — ele volta pra paleta e pode ser adicionado de novo.',
       '"Testar Impressão" fica desabilitado até ter rolo/etiqueta preenchidos e pelo menos 1 campo posicionado.',
     ],

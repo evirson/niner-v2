@@ -1,0 +1,22 @@
+-- ---------------------------------------------------------------------------------------------
+-- Permite o MESMO campo mais de uma vez na etiqueta (2026-08-24).
+--
+-- POR QUÊ: etiqueta destacável. Numa etiqueta alta (34 × 60 mm, por exemplo) o adesivo é picotado
+-- ao meio: uma parte fica no produto e a outra é destacada no caixa. As duas metades precisam do
+-- mesmo conteúdo — descrição, preço e principalmente o código de barras — e até hoje cada campo
+-- só podia ser posicionado UMA vez, então a segunda metade saía em branco.
+--
+-- O QUE MUDA: cai a UNIQUE (id_config_etiqueta, campo). Nada mais.
+--   * a PK própria (`id_config_etiqueta_campo`, identity) já dava identidade a cada linha;
+--   * `EtiquetaConfigService.salvarCampos` já apaga e reinsere a lista inteira, em ordem;
+--   * `buscarCampos` já lê com `ORDER BY id_config_etiqueta_campo`, que é estável e preserva a
+--     ordem em que a tela mandou.
+-- Ou seja: o modelo relacional já suportava repetição — só esta constraint impedia.
+--
+-- ⚠️ Não recria nenhum índice no lugar: `cfg_etiqueta_campo_config_ix (id_tenant,
+-- id_config_etiqueta)` já atende a leitura por configuração, que é o único acesso que existe.
+--
+-- Só DDL: não lê nem transforma dado de tenant, então não precisa do `NO FORCE ROW LEVEL SECURITY`
+-- que backfill exige (ver docs/infra/isolamento-tenant-rls.md).
+-- ---------------------------------------------------------------------------------------------
+ALTER TABLE cfg_etiqueta_campo DROP CONSTRAINT IF EXISTS cfg_etiqueta_campo_uk;

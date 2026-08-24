@@ -629,12 +629,21 @@ export default function EtiquetaConfigForm({ somenteLeitura = false }: { somente
                     width: geometriaImpressao.larguraEtiquetaMm * MM_PARA_PX_IMPRESSAO,
                     height: geometriaImpressao.alturaEtiquetaMm * MM_PARA_PX_IMPRESSAO,
                     background: '#fff',
-                    border: '1px solid #000',
+                    // ⚠️ `outline`, NUNCA `border` (2026-08-24). Com o `* { box-sizing: border-box }`
+                    // global, uma borda de 1px encolhe a área interna e empurra TODO o conteúdo
+                    // 1px (0,265 mm) para baixo — e o campo de barras termina a 0,2 mm da borda
+                    // do adesivo, folga MENOR que esse deslocamento. Ou seja: o quadro de corte,
+                    // que existe só para ajudar a conferir, mudava o layout que a tela deveria
+                    // estar provando. `outline` desenha por fora do fluxo e não ocupa espaço, então
+                    // o Teste passa a imprimir exatamente a mesma geometria da Emissão de Etiqueta
+                    // — que é a única razão de o Teste existir.
+                    outline: '1px solid #000',
+                    outlineOffset: '-1px',
                   }}
                 >
-                  {camposImpressao.map((c) => (
+                  {camposImpressao.map((c, i) => (
                     <CampoEtiquetaVisual
-                      key={c.campo}
+                      key={i}
                       campo={c}
                       escalaPxPorMm={MM_PARA_PX_IMPRESSAO}
                       produtoExemplo={produtoExemplo}

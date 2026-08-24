@@ -23,7 +23,12 @@ export default function InfoRegistro({ codigo, criadoEm, atualizadoEm }: Props) 
   if (!codigo) return null
 
   return (
-    <section className="section">
+    // ⚠️ `secao-info-registro` existe para que o CSS possa mirar ESTA seção pelo nome (2026-08-24).
+    // Antes a Configuração de Etiqueta a posicionava no grid por `.section:last-of-type` — e como
+    // este componente devolve `null` enquanto não há registro, no modo CRIAR o "último" virava a
+    // seção do editor, que ia parar na faixa de baixo ocupando as duas colunas. Seletor posicional
+    // depende de um irmão que pode não existir; classe própria, não.
+    <section className="section secao-info-registro">
       <p className="section-label">Informações do registro</p>
 
       <div className="form-grid">

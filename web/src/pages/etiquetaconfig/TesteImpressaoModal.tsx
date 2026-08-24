@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react'
+import AvisoIntensidadeImpressora from './AvisoIntensidadeImpressora'
 
 const QUANTIDADE_MAXIMA = 200
 
@@ -84,6 +85,7 @@ export default function TesteImpressaoModal({
           Imprime a quantidade de etiquetas informada no layout configurado (tamanho real), pra testar na
           impressora antes de emitir de verdade.
         </p>
+        <AvisoIntensidadeImpressora />
         <form onSubmit={submeter}>
           <label htmlFor="etq-qtd-imprimir">Quantidade de Etiquetas *</label>
           <input
