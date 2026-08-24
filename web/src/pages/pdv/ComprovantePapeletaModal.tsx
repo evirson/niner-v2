@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { gerarBlobComprovanteVenda, gerarQrCodeDataUrl, montarLinhasComprovanteVenda } from '../../lib/comprovante'
 import { gerarBlobDanfce } from '../../lib/danfce'
+import DanfeModal from '../vendas/DanfeModal'
 import { ApiError } from '../../lib/api'
 import { buscarEmiteFiscalAposVenda, buscarPermiteQtdDecimal } from '../../lib/configuracaoGeral'
 import { buscarComprovanteVenda, emitirNfce, type ResultadoEmissaoNfce } from '../../lib/pdv'
@@ -16,6 +17,10 @@ import DanfceImprimir from './DanfceImprimir'
 /** Situações de emissão que valem como "sucesso" pro operador — a venda saiu bem das duas
  *  (AUTORIZADO) ou vai sair (CONTINGENCIA/EM_PROCESSAMENTO); as outras precisam de atenção. */
 const SITUACOES_SUCESSO = new Set(['AUTORIZADO', 'CONTINGENCIA', 'EM_PROCESSAMENTO'])
+
+/** NF-e — o documento dela e o DANFE em A4, nao o DANFCE termico. Venda a pessoa juridica sai
+ *  neste modelo desde 2026-08-25 (a fisica continua em NFC-e, modelo 65). */
+const MODELO_NFE = 55
 
 /**
  * Papeleta de venda, formatada pra bobina térmica de 80mm (2026-08-06). Abre automaticamente
@@ -90,6 +95,8 @@ export default function ComprovantePapeletaModal({
   const [enviandoWhatsApp, setEnviandoWhatsApp] = useState(false)
   const [erroWhatsApp, setErroWhatsApp] = useState<string | null>(null)
   const [resultadoFiscal, setResultadoFiscal] = useState<ResultadoEmissaoNfce | null>(null)
+  /** Id do documento fiscal cujo DANFE A4 esta aberto — so NF-e 55 chega aqui. */
+  const [danfeAberto, setDanfeAberto] = useState<number | null>(null)
   const [respondendoCpf, setRespondendoCpf] = useState(false)
   const [pedirCpfManual, setPedirCpfManual] = useState(false)
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null)
@@ -99,6 +106,17 @@ export default function ComprovantePapeletaModal({
     if (!resultado) return // F12: fiscal desligado, nada a mostrar
     setResultadoFiscal(resultado)
     queryClient.invalidateQueries({ queryKey: ['comprovante-venda', idVenda] })
+    // ⚠️ Venda a pessoa jurídica sai em NF-e 55, e o documento dela é o DANFE em A4 — na
+    // impressora comum, não na térmica (2026-08-25, decisão do dono do produto). A papeleta
+    // continua saindo, mas ela nunca substituiu a nota.
+    //
+    // Só abre quando a nota EXISTE de verdade: rejeitada, não emitida ou falha de comunicação não
+    // têm DANFE para imprimir, e abrir o popup ali daria erro de "documento não encontrado" em
+    // cima de uma mensagem que já explicava o problema.
+    if (resultado.modelo === MODELO_NFE && SITUACOES_SUCESSO.has(resultado.situacao)
+        && resultado.idDocumentoFiscal > 0) {
+      setDanfeAberto(resultado.idDocumentoFiscal)
+    }
   }
 
   function erroDeComunicacao(): ResultadoEmissaoNfce {
@@ -108,6 +126,8 @@ export default function ComprovantePapeletaModal({
     return {
       situacao: 'FALHA_COMUNICACAO',
       idDocumentoFiscal: 0,
+      // 0 = não chegou a haver documento, então não há DANFE nem DANFCE para imprimir.
+      modelo: 0,
       chaveAcesso: null,
       protocolo: null,
       cStat: null,
@@ -324,6 +344,10 @@ export default function ComprovantePapeletaModal({
             setErroWhatsApp(null)
           }}
         />
+      )}
+
+      {danfeAberto !== null && (
+        <DanfeModal idDocumentoFiscal={danfeAberto} aoFechar={() => setDanfeAberto(null)} />
       )}
 
       {resultadoFiscal && (

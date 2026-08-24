@@ -307,6 +307,9 @@ export type SituacaoEmissaoNfce =
 export interface ResultadoEmissaoNfce {
   situacao: SituacaoEmissaoNfce
   idDocumentoFiscal: number
+  /** 65 (NFC-e) ou 55 (NF-e). Decide qual documento o PDV imprime: DANFCE térmico ou DANFE A4
+   *  (2026-08-25). Quem escolhe o modelo é o servidor, a partir do cliente da venda. */
+  modelo: number
   chaveAcesso: string | null
   protocolo: string | null
   cStat: string | null

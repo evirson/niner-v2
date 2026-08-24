@@ -1,7 +1,7 @@
 # Progresso do Projeto — niner-v2
 
 Registro cronológico das decisões e entregas. Atualizar a cada marco relevante.
-**Última atualização:** 2026-08-24
+**Última atualização:** 2026-08-25
 
 ---
 
@@ -540,6 +540,40 @@ Movimentação de Conta Corrente) que ainda não tinham migrado pro `SeletorPlan
 ---
 
 ## Linha do tempo
+
+### 2026-08-25 — PF sai em NFC-e, PJ sai em NF-e 55, e o PDV imprime o DANFE A4
+
+Dois pedidos do dono do produto no mesmo dia, mais o credenciamento da MITRYUSCASH na SEFAZ/PR
+(código **79413**, sistema **NAINER**).
+
+**O gatilho mudou: pessoa jurídica, não mais "contribuinte de ICMS".** Substitui a decisão da
+véspera — antes só `indicador_ie = 1` saía em NF-e; agora toda PJ sai. É mais simples de explicar
+ao lojista ("CNPJ = NF-e") e nunca emite documento de menos. ⚠️ A **inscrição estadual** continua
+sendo exigida só de contribuinte: para `indIEDest` 2 e 9 o XSD **não aceita** a tag `IE`, e mandá-la
+seria rejeição de schema — é o caso do escritório que tem CNPJ e não tem IE.
+
+⚠️ **A armadilha que quase virou bug grave:** `cliente.fisica_juridica` vale **`true` para pessoa
+FÍSICA** (é ela que exige gênero e CPF de 11 dígitos — está no CHECK da tabela e no
+`ClienteService`). Ler o nome da coluna ao pé da letra faria **toda venda a consumidor comum sair em
+NF-e**, exigindo endereço completo de quem só queria um cupom. `Destinatario.pessoaJuridica` é o
+**inverso** da coluna, montado num ponto só e com aviso no javadoc dos dois lados.
+
+**DANFE A4 no PDV.** `ResultadoEmissao` ganhou `modelo` (65 ou 55) — é por ele que o PDV escolhe o
+documento. As sete fábricas do record não passaram a carregar o parâmetro: o modelo é aplicado num
+**ponto único**, em `emitir()`, que virou envelope de `emitirInterno()`. No
+`ComprovantePapeletaModal`, modelo 55 **e** nota existindo de verdade abre o `DanfeModal` — o mesmo
+popup A4 que a devolução e Documentos Fiscais já usavam. A papeleta térmica continua saindo; ela
+nunca substituiu a nota. ⚠️ Só abre quando há nota: rejeitada ou não emitida não têm DANFE, e o
+popup daria "documento não encontrado" em cima de uma mensagem que já explicava o problema.
+
+⚠️ **O build incremental escondeu duas quebras.** `./mvnw compile` passou verde com duas fábricas de
+`ResultadoEmissao` ainda sem o parâmetro novo; os erros só apareceram com `clean`, e disfarçados de
+falha em **outro** teste (*"Unresolved compilation problem"*). É a armadilha já registrada — em
+mudança de assinatura, `clean` não é opcional.
+
+**916 testes verdes.** ⏭️ Falta a **SVC**, a **homologação real** (nenhuma 55 de venda foi
+transmitida à SEFAZ) e o cadastro do **CSRT do PR** no backoffice — sem o par `idCSRT` + `CSRT` a
+NF-e 55 volta `cStat 975`.
 
 ### 2026-08-24 (noite, 4) — venda a contribuinte de ICMS passa a sair em NF-e 55
 

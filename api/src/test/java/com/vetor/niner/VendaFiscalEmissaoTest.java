@@ -219,13 +219,20 @@ class VendaFiscalEmissaoTest {
     }
 
     /** Cliente com CPF válido e {@code indicador_ie=1} (contribuinte) — DF13 recusa NFC-e para ele. */
+    /**
+     * Cliente <b>pessoa jurídica</b> contribuinte de ICMS — o caso que sai em NF-e 55.
+     *
+     * <p>⚠️ {@code fisicaJuridica:false} é o que faz dele PJ: a coluna vale {@code true} para
+     * pessoa FÍSICA (é ela que exige gênero e CPF de 11 dígitos). Por isso o documento aqui é
+     * CNPJ, não CPF.
+     */
     private long criarClienteContribuinte(String token, long idTenant, String nome) throws Exception {
         long idCategoria = criarCategoriaCliente(token, "PADRAO " + nome);
         String resp = mvc.perform(post("/api/v1/clientes").header("Authorization", "Bearer " + token)
                         .contentType(APPLICATION_JSON)
                         .content("""
-                                {"fisicaJuridica":true,"nome":"%s","idCategoriaCliente":%d,
-                                 "genero":"OUTROS","cpfCnpj":"11144477735"}
+                                {"fisicaJuridica":false,"nome":"%s","idCategoriaCliente":%d,
+                                 "cpfCnpj":"11222333000181"}
                                 """.formatted(nome, idCategoria)))
                 .andExpect(status().isCreated())
                 .andReturn().getResponse().getContentAsString();
@@ -599,6 +606,9 @@ class VendaFiscalEmissaoTest {
         String resp = resultado.getResponse().getContentAsString();
         assertThat(resultado.getResponse().getStatus()).as("corpo: " + resp).isEqualTo(200);
         org.junit.jupiter.api.Assertions.assertEquals("AUTORIZADO", JsonPath.read(resp, "$.situacao"));
+        // ⚠️ O modelo tem que chegar no JSON: e por ele que o PDV decide imprimir DANFE A4 em vez
+        // do DANFCE termico. Sem isso a nota sairia certa e o caixa imprimiria o documento errado.
+        assertThat(((Number) JsonPath.read(resp, "$.modelo")).intValue()).isEqualTo(55);
 
         DocumentoNfe doc = jdbc.sql("""
                         SELECT modelo, serie, xml_assinado FROM documento_fiscal
@@ -630,12 +640,15 @@ class VendaFiscalEmissaoTest {
     }
 
     /**
-     * O gatilho é o {@code indicador_ie}, <b>não</b> "tem CNPJ" (decisão do dono do produto,
-     * 2026-08-24): PJ não contribuinte — escritório, condomínio, consultório comprando para uso
-     * próprio — continua recebendo NFC-e, que é o que a legislação permite.
+     * PJ <b>não</b> contribuinte também sai em NF-e 55, mas <b>sem inscrição estadual</b>.
+     *
+     * <p>Desde 2026-08-25 o gatilho é ser pessoa jurídica, não ser contribuinte. Mas a IE continua
+     * sendo exigida só de quem se declarou contribuinte ({@code indIEDest = 1}): para 2 (isento) e
+     * 9 (não contribuinte) o <b>XSD não aceita</b> a tag {@code IE}, então mandá-la seria rejeição
+     * de schema. É o caso do escritório que tem CNPJ e não tem inscrição estadual.
      */
     @Test
-    void vendaAPessoaJuridicaNaoContribuinteContinuaSaindoEmNfce() throws Exception {
+    void pessoaJuridicaNaoContribuinteSaiEmNfeSemInscricaoEstadual() throws Exception {
         String token = assinarNovoTenant("pj-nao-contrib");
         long idTenant = idTenantDo(token);
         long idEmpresa = idEmpresaDo(token);
@@ -648,8 +661,8 @@ class VendaFiscalEmissaoTest {
         long idVariacao = criarProdutoComPerfil(token, idTenant, "PRODUTO USO PROPRIO", idPerfil, "40.00");
         long idCliente = criarClienteContribuinte(token, idTenant, "Escritorio Ltda");
         completarCadastroParaNfe(idTenant, idCliente);
-        // O que muda tudo: PJ, com CNPJ e endereço completo, mas NÃO contribuinte de ICMS.
-        jdbc.sql("UPDATE cliente SET indicador_ie = 9 WHERE id_tenant = ? AND id_cliente = ?")
+        // PJ com CNPJ e endereço completo, mas NÃO contribuinte — e sem IE nenhuma no cadastro.
+        jdbc.sql("UPDATE cliente SET indicador_ie = 9, rg_ie = NULL WHERE id_tenant = ? AND id_cliente = ?")
                 .params(idTenant, idCliente).update();
         long idFuncionario = criarFuncionario(token, "Vendedor PJ");
         long idCarteira = carteiraDinheiroComTpag(token, idTenant);
@@ -665,9 +678,22 @@ class VendaFiscalEmissaoTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.situacao").value("AUTORIZADO"));
 
-        Integer modelo = jdbc.sql("SELECT modelo FROM documento_fiscal WHERE id_tenant = ? AND id_venda = ?")
-                .params(idTenant, idVenda).query(Integer.class).single();
-        assertThat(modelo).as("PJ não contribuinte recebe NFC-e normalmente").isEqualTo(65);
+        DocumentoNfe doc = jdbc.sql("""
+                        SELECT modelo, serie, xml_assinado FROM documento_fiscal
+                         WHERE id_tenant = ? AND id_venda = ?
+                        """)
+                .params(idTenant, idVenda)
+                .query((rs, n) -> new DocumentoNfe(rs.getInt("modelo"), rs.getInt("serie"),
+                        rs.getString("xml_assinado")))
+                .single();
+
+        assertThat(doc.modelo()).as("toda PJ sai em NF-e desde 2026-08-25").isEqualTo(55);
+        assertThat(doc.xml()).contains("<indIEDest>9</indIEDest>");
+        // ⚠️ O XSD recusa a tag IE quando indIEDest != 1 — mandá-la seria rejeição de schema.
+        // Olha a IE do DESTINATÁRIO, não a do emitente: o grupo <emit> tem <IE> sempre, e um
+        // doesNotContain("<IE>") cru reprovaria a nota certa.
+        String dest = doc.xml().substring(doc.xml().indexOf("<dest>"), doc.xml().indexOf("</dest>"));
+        assertThat(dest).as("sem IE para quem não é contribuinte").doesNotContain("<IE>");
     }
 
     /**

@@ -2042,3 +2042,62 @@ o comportamento que já existia. Por isso a 55 nunca entra no caminho de conting
 - **SVC** para contingência da 55.
 - Confirmar em **homologação real** — os testes usam transporte mockado; nenhuma NF-e 55 de venda
   foi transmitida à SEFAZ ainda.
+
+---
+
+## 🔄 2026-08-25 — o gatilho passou a ser PESSOA JURÍDICA, e o PDV imprime o DANFE A4
+
+Duas mudanças pedidas pelo dono do produto: *"no PDV, quando for pessoa física imprimir NFC-e,
+quando for pessoa jurídica imprimir NF-e na A4"*.
+
+### O gatilho mudou: PJ, não mais "contribuinte de ICMS"
+
+**Substitui a decisão de 2026-08-24.** Antes, só quem tinha `indicador_ie = 1` saía em NF-e; agora
+**toda pessoa jurídica** sai. Mais simples de explicar ao lojista ("CNPJ = NF-e") e nunca emite
+documento de menos.
+
+⚠️ **A inscrição estadual continua sendo exigida só de contribuinte.** Para `indIEDest` 2 (isento) e
+9 (não contribuinte) o **XSD não aceita** a tag `IE` — mandá-la seria rejeição de schema. É o caso
+do escritório que tem CNPJ e não tem IE. Preso em
+`pessoaJuridicaNaoContribuinteSaiEmNfeSemInscricaoEstadual`.
+
+### ⚠️ A armadilha de nomenclatura que quase virou bug grave
+
+`cliente.fisica_juridica` vale **`true` para pessoa FÍSICA** — é ela que exige gênero e CPF de 11
+dígitos (`CHECK (NOT fisica_juridica OR genero IS NOT NULL)`, e `ClienteService` usa
+`somenteDigitos` quando é `true`). Ler o nome da coluna ao pé da letra e usá-la como "é PJ" faria
+**toda venda a consumidor comum sair em NF-e**, exigindo endereço completo de quem só queria um
+cupom.
+
+Por isso `Destinatario.pessoaJuridica` é o **inverso** da coluna, montado num ponto só
+(`buscarDestinatario`) e com o aviso no javadoc dos dois lados.
+
+### DANFE A4 no PDV
+
+`ResultadoEmissao` ganhou **`modelo`** (65 ou 55) — é por ele que o PDV escolhe o documento. As sete
+fábricas do record não passaram a carregar o parâmetro: o modelo é aplicado num **ponto único**, em
+`emitir()`, que virou um envelope de `emitirInterno()`.
+
+No `ComprovantePapeletaModal`, quando o resultado é modelo 55 **e** a nota existe de verdade
+(situação de sucesso e `idDocumentoFiscal > 0`), abre o `DanfeModal` — o mesmo popup A4 que a
+devolução e a tela de Documentos Fiscais já usavam. A papeleta térmica continua saindo; ela nunca
+substituiu a nota.
+
+⚠️ **Só abre quando há nota:** rejeitada, não emitida ou falha de comunicação não têm DANFE, e abrir
+o popup ali daria "documento não encontrado" em cima de uma mensagem que já explicava o problema.
+
+### ⚠️ O build incremental escondeu duas quebras
+
+`./mvnw compile` passou verde com **duas fábricas de `ResultadoEmissao` ainda sem o parâmetro novo**;
+os erros só apareceram com `clean`, e no meio de outro teste, como
+*"Unresolved compilation problem"*. É a armadilha já registrada no CLAUDE.md — **em mudança de
+assinatura, `clean` não é opcional**.
+
+### ⏭️ Continua faltando
+
+- **SVC** (contingência da 55).
+- **Homologação real**: nenhuma NF-e 55 de venda foi transmitida à SEFAZ — os testes usam transporte
+  mockado.
+- **CSRT do PR**: a MITRYUSCASH foi credenciada (código 79413, sistema NAINER), mas o par
+  `idCSRT` + `CSRT` ainda precisa ser cadastrado no backoffice (`/csrt`) para a NF-e 55 não voltar
+  `cStat 975`.

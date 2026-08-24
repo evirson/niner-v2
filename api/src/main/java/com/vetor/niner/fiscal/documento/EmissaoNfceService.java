@@ -99,6 +99,12 @@ public class EmissaoNfceService {
      *               serviço, o mais tarde possível (§9.2)
      */
     public ResultadoEmissao emitir(PedidoDeEmissao pedido) {
+        // Ponto ÚNICO onde o modelo entra no resultado — as sete fábricas de ResultadoEmissao não
+        // precisam carregar um parâmetro que nenhuma delas usa para decidir nada.
+        return emitirInterno(pedido).comModelo(pedido.modelo().codigo());
+    }
+
+    private ResultadoEmissao emitirInterno(PedidoDeEmissao pedido) {
         // ---------- DF13: contribuinte de ICMS sai em NF-e 55, não em NFC-e ----------
         // Até 2026-08-24 este caso era apenas RECUSADO aqui e a venda ficava sem documento nenhum.
         // Agora o modelo vem decidido do assembler (a partir do indicador_ie do cliente) e a
@@ -290,7 +296,19 @@ public class EmissaoNfceService {
      * cliente na frente: diz o que aconteceu com a <b>venda</b>, não só com a nota.
      */
     public record ResultadoEmissao(Situacao situacao, Long idDocumentoFiscal, String chaveAcesso,
-                                   String protocolo, String cStat, String mensagem) {
+                                   String protocolo, String cStat, String mensagem,
+                                   /** 65 (NFC-e) ou 55 (NF-e). O PDV usa para escolher o documento
+                                    *  que imprime: DANFCE térmico ou DANFE A4 (2026-08-25). As
+                                    *  fábricas abaixo nascem com 0 e o modelo é aplicado num ponto
+                                    *  só, em {@link EmissaoNfceService#emitir} — assim nenhuma
+                                    *  delas precisa carregar um parâmetro que não usa. */
+                                   int modelo) {
+
+        /** Cópia com o modelo preenchido. */
+        ResultadoEmissao comModelo(int modelo) {
+            return new ResultadoEmissao(situacao, idDocumentoFiscal, chaveAcesso, protocolo, cStat,
+                    mensagem, modelo);
+        }
 
         public enum Situacao {
             AUTORIZADO, REJEITADO, DENEGADO, EM_PROCESSAMENTO, FALHA_COMUNICACAO, CONTINGENCIA,
@@ -299,25 +317,25 @@ public class EmissaoNfceService {
 
         static ResultadoEmissao autorizado(long id, String chave, String protocolo) {
             return new ResultadoEmissao(Situacao.AUTORIZADO, id, chave, protocolo, "100",
-                    "Nota autorizada.");
+                    "Nota autorizada.", 0);
         }
 
         static ResultadoEmissao rejeitado(long id, String chave, String cStat, String motivo) {
             return new ResultadoEmissao(Situacao.REJEITADO, id, chave, null, cStat,
                     "A SEFAZ rejeitou a nota: %s (%s). A venda está registrada; corrija e emita de novo."
-                            .formatted(motivo, cStat));
+                            .formatted(motivo, cStat), 0);
         }
 
         static ResultadoEmissao denegado(long id, String chave, String cStat, String motivo) {
             return new ResultadoEmissao(Situacao.DENEGADO, id, chave, null, cStat,
                     ("Nota denegada pela SEFAZ: %s (%s). Este número não pode ser reaproveitado nem "
-                            + "cancelado — a venda continua registrada.").formatted(motivo, cStat));
+                            + "cancelado — a venda continua registrada.").formatted(motivo, cStat), 0);
         }
 
         static ResultadoEmissao emProcessamento(long id, String chave, String motivo) {
             return new ResultadoEmissao(Situacao.EM_PROCESSAMENTO, id, chave, null, null,
                     "A SEFAZ recebeu a nota e ainda está processando (%s). Não emita de novo."
-                            .formatted(motivo));
+                            .formatted(motivo), 0);
         }
 
         static ResultadoEmissao falhaDeComunicacao(long id, String chave, boolean entrouEmContingencia) {
@@ -327,7 +345,7 @@ public class EmissaoNfceService {
             return new ResultadoEmissao(Situacao.FALHA_COMUNICACAO, id, chave, null, null,
                     entrouEmContingencia
                             ? base + " As próximas vendas sairão em CONTINGÊNCIA automaticamente."
-                            : base);
+                            : base, 0);
         }
 
         /**
@@ -339,11 +357,11 @@ public class EmissaoNfceService {
             return new ResultadoEmissao(Situacao.CONTINGENCIA, id, chave, null, null,
                     "Nota emitida em CONTINGÊNCIA — a SEFAZ está fora do ar. O cupom vale e deve ser "
                             + "entregue ao cliente; a nota será transmitida automaticamente quando a "
-                            + "SEFAZ voltar.");
+                            + "SEFAZ voltar.", 0);
         }
 
         static ResultadoEmissao naoEmitido(long id, String mensagem) {
-            return new ResultadoEmissao(Situacao.NAO_EMITIDO, id, null, null, null, mensagem);
+            return new ResultadoEmissao(Situacao.NAO_EMITIDO, id, null, null, null, mensagem, 0);
         }
 
         public boolean autorizada() {

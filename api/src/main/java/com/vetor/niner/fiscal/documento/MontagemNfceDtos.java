@@ -83,13 +83,18 @@ public final class MontagemNfceDtos {
             String complemento,
             String bairro,
             String cep,
-            String telefone) {
+            String telefone,
+            /** ⚠️ TRUE quando o cliente é pessoa JURÍDICA. Cuidado com a coluna de origem:
+             *  {@code cliente.fisica_juridica} vale {@code true} para pessoa <b>FÍSICA</b> (é ela
+             *  que exige gênero e CPF de 11 dígitos) — este campo é o INVERSO dela, e trocar os
+             *  dois emitiria NF-e para todo consumidor de balcão. */
+            boolean pessoaJuridica) {
 
         /** Destinatário de NFC-e — só o que o modelo 65 aceita; o resto nasce nulo. */
         public static Destinatario nfce(String cpfCnpj, String nome, int indicadorIe,
                 Integer codigoMunicipioIbge, String municipio, String uf) {
             return new Destinatario(cpfCnpj, nome, indicadorIe, codigoMunicipioIbge, municipio, uf,
-                    null, null, null, null, null, null, null);
+                    null, null, null, null, null, null, null, false);
         }
     }
 
@@ -160,14 +165,16 @@ public final class MontagemNfceDtos {
     /**
      * Modelo do documento de <b>venda</b>: 65 (NFC-e) ou 55 (NF-e).
      *
-     * <p>A escolha é do destinatário, não do operador: venda a <b>contribuinte de ICMS</b>
-     * ({@code indIEDest = 1}) não sai em NFC-e — a mercadoria vai ser revendida, e o modelo 65 é
-     * para consumidor final (DF13). Até 2026-08-24 o PDV apenas <b>recusava</b> esse caso e
-     * deixava a venda sem documento; agora emite o 55.
+     * <p>A escolha é do destinatário, não do operador: <b>pessoa física recebe NFC-e, pessoa
+     * jurídica recebe NF-e 55</b> (decisão do dono do produto em 2026-08-25). O motivo de fundo é
+     * o DF13 — a NFC-e é documento de consumidor final, e quem compra com CNPJ costuma revender ou
+     * precisar da nota para crédito. Até 2026-08-24 o PDV apenas <b>recusava</b> esse caso e
+     * deixava a venda sem documento.
      *
-     * <p>⚠️ Uma PJ <b>não</b> contribuinte (escritório, condomínio, consultório comprando para uso
-     * próprio) continua recebendo NFC-e — decisão do dono do produto em 2026-08-24, e é o que a
-     * legislação permite. O gatilho é o {@code indicador_ie}, nunca "tem CNPJ".
+     * <p>⚠️ A regra anterior (só {@code indicador_ie = 1}) foi <b>substituída</b>: cobrir toda PJ é
+     * mais simples de explicar ao lojista e nunca emite documento de menos. A inscrição estadual
+     * continua sendo exigida só de quem se declarou contribuinte — para os demais o XML leva
+     * {@code indIEDest} 2 ou 9 e dispensa a IE.
      */
     public enum ModeloVenda {
         NFCE(65), NFE(55);

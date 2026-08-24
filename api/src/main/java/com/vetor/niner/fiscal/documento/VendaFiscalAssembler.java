@@ -87,12 +87,18 @@ public class VendaFiscalAssembler {
         Destinatario destinatario = incluirCpf ? buscarDestinatarioObrigatorio(venda.idCliente()) : null;
         String ufDestino = destinatario != null && destinatario.uf() != null ? destinatario.uf() : config.uf();
 
-        // ---------- qual documento esta venda gera (2026-08-24) ----------
-        // Contribuinte de ICMS nao recebe NFC-e (DF13) — a mercadoria vai ser revendida. Ate hoje o
-        // PDV so RECUSAVA esse caso; agora ele emite a NF-e 55. ⚠️ O gatilho e o indicador_ie, NAO
-        // "tem CNPJ": PJ nao contribuinte (escritorio, condominio, consultorio comprando para uso
-        // proprio) continua recebendo NFC-e, que e o que a legislacao permite.
-        ModeloVenda modelo = destinatario != null && destinatario.indicadorIe() == 1
+        // ---------- qual documento esta venda gera ----------
+        // Pessoa FISICA -> NFC-e; pessoa JURIDICA -> NF-e 55 (decisao do dono do produto em
+        // 2026-08-25, substituindo a regra do dia anterior, que olhava so o indicador_ie).
+        //
+        // O motivo de fundo continua o mesmo (DF13): NFC-e e documento de consumidor final, e
+        // quem compra com CNPJ costuma revender ou precisar da nota para credito. Cobrir toda PJ
+        // e mais simples de explicar ao lojista ("CNPJ = NF-e") e nunca emite documento de menos.
+        //
+        // ⚠️ ARMADILHA DE NOME: cliente.fisica_juridica vale TRUE para pessoa FISICA (e ela que
+        // exige genero e CPF de 11 digitos). Destinatario.pessoaJuridica ja e o INVERSO, montado
+        // em buscarDestinatario — trocar os dois emitiria NF-e para todo consumidor de balcao.
+        ModeloVenda modelo = destinatario != null && destinatario.pessoaJuridica()
                 ? ModeloVenda.NFE
                 : ModeloVenda.NFCE;
         String impedimentoNfe = modelo.ehNfe() ? impedimentoParaNfe(config, destinatario) : null;
@@ -248,7 +254,8 @@ public class VendaFiscalAssembler {
         // uma vez evita uma segunda consulta e mantém a decisão de modelo fora daqui.
         return jdbc.sql("""
                         SELECT cpf_cnpj, nome, indicador_ie, codigo_municipio_ibge, cidade, estado,
-                               rg_ie, endereco, numero, complemento, bairro, cep, telefone
+                               rg_ie, endereco, numero, complemento, bairro, cep, telefone,
+                               fisica_juridica
                           FROM cliente
                          WHERE id_tenant = plataforma.tenant_atual() AND id_cliente = ?
                         """)
@@ -263,7 +270,9 @@ public class VendaFiscalAssembler {
                             rs.getString("estado"),
                             rs.getString("rg_ie"), rs.getString("endereco"), rs.getString("numero"),
                             rs.getString("complemento"), rs.getString("bairro"), rs.getString("cep"),
-                            rs.getString("telefone"));
+                            rs.getString("telefone"),
+                            // ⚠️ INVERTE: fisica_juridica = true significa pessoa FÍSICA.
+                            !rs.getBoolean("fisica_juridica"));
                 })
                 .optional()
                 .orElse(null);
