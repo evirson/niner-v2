@@ -64,6 +64,7 @@ import RelatorioContasReceber from './pages/relatorios/RelatorioContasReceber'
 import RelatorioEstoque from './pages/relatorios/RelatorioEstoque'
 import FluxoCaixa from './pages/relatorios/FluxoCaixa'
 import RelatorioDre from './pages/relatorios/RelatorioDre'
+import RelatorioLucratividade from './pages/relatorios/RelatorioLucratividade'
 import RelatorioMovimentacaoProdutos from './pages/relatorios/RelatorioMovimentacaoProdutos'
 import CrmForm from './pages/crm/CrmForm'
 import EtiquetaEmissaoForm from './pages/etiquetaemissao/EtiquetaEmissaoForm'
@@ -103,6 +104,7 @@ export default function App() {
           {/* DRE é ADMIN-only (expõe lucro, despesa e pró-labore) — a API também devolve 403. */}
           <Route element={<RequireAdmin />}>
             <Route path="/relatorio-dre" element={<RelatorioDre />} />
+            <Route path="/lucratividade" element={<RelatorioLucratividade />} />
           </Route>
           <Route path="/crm" element={<CrmForm />} />
           <Route path="/etiqueta-emissao" element={<EtiquetaEmissaoForm />} />
@@ -139,7 +141,6 @@ export default function App() {
           {/* DRE e Fluxo de Caixa saíram daqui em 2026-08-14: as telas existem
               (/relatorio-dre e /fluxo-caixa, acima). Os placeholders duplicavam a rota
               /fluxo-caixa e concorriam com a tela pronta. */}
-          <Route path="/lucratividade" element={<EmBreve titulo="Lucratividade" />} />
           <Route path="/integracao-marketplace" element={<EmBreve titulo="Integração com Marketplace" />} />
           <Route path="/cobranca-crediario-atraso" element={<EmBreve titulo="Cobrança de Crediário em Atraso" />} />
           <Route path="/nfce" element={<EmBreve titulo="Nota Fiscal - NFC-e" />} />

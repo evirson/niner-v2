@@ -464,6 +464,13 @@ export const MENU: NavGrupo[] = [
         adminOnly: true,
       },
       {
+        to: '/lucratividade',
+        label: 'Relatório de Lucratividade',
+        icone: IconeRelatorio,
+        descricao: 'Venda, custo do vendido, lucro bruto, contas pagas por plano de contas e lucro líquido do período.',
+        adminOnly: true,
+      },
+      {
         to: '/crm',
         label: 'CRM',
         icone: IconeCliente,
@@ -520,15 +527,10 @@ export const MENU: NavGrupo[] = [
         icone: IconeContaCorrente,
         descricao: 'Extrato consolidado das contas correntes da loja. Em construção.',
       },
-      // DRE e Fluxo de Caixa saíram de "Implementações Futuras" em 2026-08-14: as duas telas
-      // existem e estão em Relatórios (/relatorio-dre e /fluxo-caixa). O item /fluxo-caixa
-      // daqui apontava para a MESMA rota da tela pronta, então aparecia duas vezes no menu.
-      {
-        to: '/lucratividade',
-        label: 'Lucratividade',
-        icone: IconeRelatorio,
-        descricao: 'Margem por produto, categoria ou período, cruzando preço de venda e custo. Em construção.',
-      },
+      // DRE, Fluxo de Caixa (2026-08-14) e Lucratividade (2026-08-25) saíram de "Implementações
+      // Futuras": as três telas existem e estão em Relatórios. ⚠️ Item que vira tela tem de SAIR
+      // daqui — quando o /fluxo-caixa ficou pronto, o placeholder continuou apontando para a mesma
+      // rota e o menu passou a mostrar o item duas vezes.
       {
         to: '/integracao-marketplace',
         label: 'Integração com Marketplace',

@@ -324,6 +324,27 @@ const CONTEUDOS: Record<string, ConteudoAjuda> = {
     ],
     urlVideo: null,
   },
+  'relatorios.lucratividade': {
+    titulo: 'Relatório de Lucratividade',
+    objetivo: 'Ver, num período, se a loja deu lucro — do faturamento até o que sobrou depois de pagar as contas.',
+    passos: [
+      'Escolha o período e, se quiser, as empresas. O relatório é uma página só: venda, custo do que foi vendido, lucro bruto, contas pagas e lucro líquido.',
+      '⚠️ As duas datas contam coisas diferentes: a VENDA e o CUSTO entram pela data da venda; as CONTAS PAGAS entram pela data em que você pagou. Uma conta de janeiro paga em fevereiro pesa em fevereiro.',
+      '"Valor total da venda" já é a venda menos as devoluções do período. A devolução abate no mês em que ela aconteceu, mesmo que a venda tenha sido antes.',
+      'O custo é o preço de custo gravado na própria venda — o custo do dia em que vendeu, não o de hoje. Por isso o lucro do mês passado não muda quando você reajusta o custo de um produto.',
+      'Na lista de contas pagas, "% s/ venda" mostra quanto daquela conta pesa no faturamento e "% s/ lucro bruto" quanto ela come do que sobrou da mercadoria. A segunda é a que mostra despesa fora de controle.',
+      'No fim, o lucro líquido vem com dois percentuais: sobre a venda BRUTA (tudo que foi vendido) e sobre a venda LÍQUIDA (o que ficou depois das devoluções). Sem devolução no período, os dois são iguais.',
+    ],
+    errosComuns: [
+      '⭐ "A compra de mercadoria não aparece nas contas pagas!" — e não deve mesmo. A mercadoria já está contada em "Custo das mercadorias vendidas", que é o custo do que SAIU vendido. Se ela aparecesse também na lista de contas pagas, a mesma mercadoria seria descontada duas vezes e um mês de lucro viraria prejuízo.',
+      'Pagamento de empréstimo e compra de móveis/máquinas também não aparecem: pagar o principal de um empréstimo troca dívida por dinheiro (só o juro é despesa), e equipamento é investimento, não despesa do mês.',
+      'Quer mudar o que entra ou não entra? É a marca "Inclui no DRE" de cada conta, na tela de Plano de Contas — não está travado no sistema.',
+      'Os percentuais aparecem como "—": não houve venda no período (ou o lucro bruto ficou negativo). O sistema não escreve 0%, porque 0% pareceria margem zero em vez de "não teve venda".',
+      'O lucro ficou estranho num mês em que você pagou muita conta atrasada: é o esperado, porque as contas contam pela data de pagamento. Para ver o resultado pela data em que a despesa nasceu, use a DRE em regime de competência.',
+      'Só administradores acessam esta tela — ela mostra lucro, despesa e pró-labore.',
+    ],
+    urlVideo: null,
+  },
   'relatorios.dre': {
     titulo: 'DRE — Demonstração do Resultado',
     objetivo: 'Ver se a loja deu lucro no período, e por quê.',

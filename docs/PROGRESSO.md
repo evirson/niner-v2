@@ -541,6 +541,65 @@ Movimentação de Conta Corrente) que ainda não tinham migrado pro `SeletorPlan
 
 ## Linha do tempo
 
+### 2026-08-25 — Relatório de Lucratividade (o último item de "Implementações Futuras" em Relatórios)
+
+Pedido do dono do produto com a estrutura de impressão já definida por ele: venda, custo do
+vendido, lucro bruto e %, contas pagas por plano de contas com dois percentuais, e lucro líquido
+com % sobre venda bruta e líquida. Spec em `docs/telas/relatorio-lucratividade.md`, escrita antes
+do código.
+
+**⚠️ O período tem DUAS naturezas, por pedido explícito.** Crédito (venda, devolução, custo) conta
+pela **data da venda**; débito, pela **data de pagamento** do Contas a Pagar. É um regime **misto**
+— competência de um lado, caixa do outro — e a consequência está escrita na tela e na ajuda, não só
+na spec: conta de janeiro paga em fevereiro pesa em **fevereiro**. Quem quer o resultado pelo fato
+gerador continua tendo a DRE em competência, e a tela **linka** para ela em vez de deixar o lojista
+descobrir sozinho que o número "está errado".
+
+**⭐ A decisão que faz o relatório estar certo: compra de mercadoria NÃO entra nas contas pagas.**
+Ele escolheu excluir os pagamentos que não são despesa — hoje 9 contas marcadas com
+`inclui_dre = false`: compra de mercadoria e frete sobre compra (`3.03.x`), amortização de principal
+de empréstimo (`5.02.x`) e compra de imobilizado (`6.01.x`). A mercadoria **já está contada no CMV**,
+quando sai vendida; somá-la de novo no desembolso contaria a mesma coisa duas vezes e transformaria
+em prejuízo um mês que deu lucro. ⚠️ **É o tipo de erro que ninguém percebe olhando**, porque os
+dois números são plausíveis isolados — daí o critério de aceitação 6 lançar R$ 5.000 de mercadoria
+paga contra uma venda de R$ 100, valor escolhido justamente para o teste falhar ruidosamente se a
+regra sumir. ⛔ **A regra é dado, não código**: quem decide é a marca do plano de contas, editável
+pelo lojista; não há lista de códigos no serviço.
+
+**"Venda bruta" × "venda líquida" (item 6).** Ele fechou a ambiguidade ao redefinir o item 1 como
+*"valor da venda − devoluções"*: a líquida **é** o item 1, e a bruta é a venda antes de abater
+devolução. Sem devolução no período os dois percentuais coincidem — e isso é informação, não
+redundância: mostra que a devolução não comeu margem naquele mês.
+
+**Percentual com base zero é `null`, nunca `0`** — e o front imprime `—`. Um `0%` afirmaria "margem
+zero" onde não houve venda nenhuma. Base **negativa** também devolve `null`: *"esta despesa é 40% de
+um prejuízo"* não é frase com significado, e acontece de verdade no mês de liquidação abaixo do
+custo.
+
+**Cuidados herdados de defeitos reais já corridos neste projeto:** devolução **cancelada** não
+deduz (cancelar não apaga as linhas do ledger — achado da auditoria de 2026-08-21 na DRE); venda
+cancelada fora de tudo; `id_tenant` explícito em toda query (P8); comparação de data sempre
+`AT TIME ZONE 'America/Sao_Paulo'` nos dois lados.
+
+⚠️ **O teste apura o "hoje" perguntando ao BANCO**, não com `LocalDate.now()`: o serviço compara no
+fuso da loja e o relógio da JVM roda em UTC nos containers — das 21h à meia-noite de Brasília os
+dois discordam por um dia, e a suíte passaria a falhar só nesse intervalo.
+
+**Verificado:** 11 critérios da spec viram 11 testes, todos verdes (**930 no total**, eram 919);
+`tsc -b` limpo; endpoint exercitado contra o banco de dev com dados reais (venda bruta 68.077,10,
+devoluções 1.329,10, CMV 29.517,78, lucro bruto 37.230,22 = 55,78%). ⚠️ **`contas_pagar` está vazia
+no dev**, então o item 5 aparece zerado ali — conferido no banco, não é defeito de filtro. ⏭️ **O
+visual da tela não foi conferido em navegador** (o `npm run build` do host falha por falta do
+binário nativo do rolldown no `node_modules`, problema de ambiente pré-existente — só o
+`binding-linux-x64-musl` está instalado, o do container).
+
+⏭️ **Questão aberta registrada na spec:** comissão e taxa de cartão **não** entram como despesa
+aqui, porque o item 5 é "contas pagas" e elas não têm lançamento em Contas a Pagar. A DRE as
+**deriva** do movimento. Confirmar com o dono do produto se quer o mesmo aqui — mudaria o lucro
+líquido.
+
+---
+
 ### 2026-08-24 (noite, 7) — 🔴 o `cStat 974` continua de pé, e o CSRT não era a causa
 
 Fecho honesto do dia: **a NF-e 55 ainda não foi autorizada pela SEFAZ.**
