@@ -109,3 +109,44 @@ Três detalhes que a anotação precisa respeitar:
 
 **Teste:** `CsrtPorUfTest.recusaCodigoCurtoDemaisComoCsrt` — manda `79413` no campo do código e
 espera **400**.
+
+## 🔴 Revisão 2026-08-24 (parte 2) — o CSRT correto **não** resolveu o `cStat 974`
+
+Fechando o ciclo da revisão acima, para que ninguém repita o diagnóstico: **o piso de tamanho era
+uma correção real e necessária, e ainda assim não era a causa do 974.**
+
+Com o código de 36 caracteres gravado — conferido **sem revelar o segredo**, pela matemática do
+cifrado: `octet_length(decode(csrt_cifrado,'base64'))` = **64** = 12 (nonce) + **36** + 16 (tag) —
+a retransmissão da mesma venda voltou **974 outra vez**.
+
+### Como a SEFAZ chega ao 974, e por que a mensagem engana
+
+Ela **não** compara o `<infRespTec><CNPJ>` com o CNPJ do emitente. O caminho é:
+
+1. busca o CSRT cadastrado **pelo `idCSRT`**;
+2. lê para qual CNPJ aquele código foi emitido;
+3. compara com o CNPJ declarado no `infRespTec`.
+
+Divergiu no passo 3 → **974**. A consequência prática é contraintuitiva: **um `idCSRT` errado
+produz uma mensagem sobre CNPJ**, e o identificador não é citado em lugar nenhum.
+
+### ⚠️ O `idCSRT` vem pré-preenchido com `01` — e isso é a mesma armadilha
+
+O formulário inicializa `idCsrt` em `'01'`. É **chute do formulário, não valor conferido**: quem
+cadastra vê um campo preenchido e passa direto. Se o portal emitiu o CSRT com identificador `02`
+(ou qualquer outro), o cadastro fica silenciosamente errado e o erro só aparece na SEFAZ, com o
+texto acima.
+
+É a **mesma família de defeito** do campo do CSRT sem piso: *um default com cara de valor
+conferido*. ⏭️ **Pendente de confirmação com o portal:** se for esse o caso, o default sai e o campo
+passa a nascer vazio e obrigatório — um campo em branco é honesto sobre o que ele não sabe.
+
+### O que conferir no portal da SEFAZ, nesta ordem
+
+| # | Verificar | Onde corrigir |
+|---|---|---|
+| 1 | O **`idCSRT`** (2 dígitos) que veio junto com o código de 36 | `/csrt` |
+| 2 | O **CNPJ** para o qual o CSRT foi emitido | `NINER_FISCAL_RESPTEC_CNPJ` (hoje cai no default `37829453000135` do `application.yml`) |
+| 3 | Propagação do credenciamento (saiu em 24/08) | só depois de descartar 1 e 2 |
+
+**Estado:** 9 documentos `REJEITADO` com 974, **nenhum autorizado**. Nada preso, nada a estornar.

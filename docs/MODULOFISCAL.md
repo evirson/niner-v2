@@ -2101,3 +2101,95 @@ assinatura, `clean` não é opcional**.
 - **CSRT do PR**: a MITRYUSCASH foi credenciada (código 79413, sistema NAINER), mas o par
   `idCSRT` + `CSRT` ainda precisa ser cadastrado no backoffice (`/csrt`) para a NF-e 55 não voltar
   `cStat 975`.
+
+---
+
+## 🔴 2026-08-24 — a primeira NF-e 55 transmitida de verdade, e as quatro rejeições
+
+Primeiro exercício do modelo 55 **contra a SEFAZ-PR real** (homologação, `tpAmb 2`), com venda de
+verdade e certificado de verdade. Quatro rejeições em sequência, cada uma escondendo a seguinte.
+**Nenhuma delas aparecia na suíte** — o caminho 55 era código novo, e os testes usam transporte
+mockado, que aceita o que o montador produz.
+
+### ✅ `cStat 253` — "Dígito Verificador da chave de acesso composta inválida"
+
+`MontadorXmlNfce` montava a chave com a constante `MODELO_NFCE` **fixa** em vez de
+`nota.modelo().codigo()`. O XML declarava `mod 55` e a chave carregava `65` nas **posições 21–22**.
+
+⚠️ **Por que nada falhou localmente:** o DV é calculado sobre os 43 dígitos que o próprio montador
+acabou de produzir — **fecha consigo mesmo**. Quem recompõe a chave a partir dos campos do XML é a
+SEFAZ, e é lá que a divergência aparece. *Validação que confere o próprio resultado não prova nada.*
+A mensagem aponta para o **DV**, que estava certo; o errado era o modelo.
+
+O mesmo defeito estava em `DocumentoFiscalRepositorio` (nota **55 no XML, 65 no banco**).
+
+### ✅ `cStat 733` — "CFOP de operação interna e idDest difere de 1"
+
+O `idDest` já saía 2. O CFOP vinha da regra fiscal, que tinha **um valor só**. Nasceu
+`cfg_perfil_fiscal_regra.cfop_interestadual` (**V061**) — ver `docs/telas/fiscal-perfil.md` para o
+motivo de os dois CFOPs serem cadastrados e nunca derivados (`5405` **não** vira `6405`, que não
+existe; é `6404`).
+
+### ✅ `enderDest` incompleto — o dado já estava chegando
+
+NF-e 55 exige endereço completo do destinatário, `cMun` incluído. O preventivo (F11) recusava
+dizendo *"Falta: município (código IBGE)"* — correto, e inútil para quem não sabia onde achar o
+número. **O ViaCEP sempre devolveu o campo `ibge`**; ele só não estava declarado na interface do
+front e era descartado (**V062** deu os mesmos campos ao fornecedor).
+
+### 🔴 `cStat 974` — "CNPJ do responsável técnico diverge do cadastrado" (EM ABERTO)
+
+**Este ainda não está resolvido.** Duas descobertas, na ordem:
+
+**1. O campo do CSRT aceitava qualquer tamanho** (só tinha `@Size(max = 200)`), e recebeu o
+**número do credenciamento** (5 dígitos) no lugar do código de 36 caracteres. Corrigido com
+`@Pattern` de 20–200 mantendo o vazio válido — ver `docs/telas/admin-csrt-por-uf.md`.
+
+**2. ⚠️ Mas o CSRT correto NÃO resolveu o 974.** Com o código de 36 caracteres gravado (conferido
+pela matemática do cifrado: 64 bytes = 12 do nonce + **36** + 16 do tag), a retransmissão da mesma
+venda voltou **974 de novo**. Ou seja: o CSRT curto era um defeito real e independente — não era a
+causa desta rejeição.
+
+**Como a SEFAZ chega ao 974.** Ela **não** compara o `<infRespTec><CNPJ>` com o emitente. Ela busca
+o CSRT **pelo `idCSRT`**, vê para qual CNPJ aquele código foi emitido, e compara com o CNPJ
+declarado. Divergiu ali → 974. Isso significa que **um `idCSRT` errado produz uma mensagem sobre
+CNPJ**, sem nunca mencionar o identificador.
+
+O XML está enviando:
+
+```xml
+<infRespTec><CNPJ>37829453000135</CNPJ><xContato>MITRYUSCASH</xContato>
+  <email>suporte@nainer.com.br</email><fone>4133334444</fone><idCSRT>01</idCSRT><hashCSRT>…</hashCSRT>
+```
+
+`37829453000135` é o CNPJ da MITRYUSCASH LTDA — o mesmo do emitente, e o default de
+`NINER_FISCAL_RESPTEC_CNPJ` no `application.yml` (a variável nunca foi definida no `.env`).
+
+**As hipóteses, em ordem de probabilidade:**
+
+1. ⚠️ **O `idCSRT` está errado.** A tela do backoffice traz **`01` pré-preenchido por padrão** — é
+   chute do formulário, não valor conferido. Se o portal emitiu o CSRT com identificador `02` (ou
+   outro), a SEFAZ busca o registro errado e acusa divergência de CNPJ. **É a mesma família de
+   armadilha do campo do CSRT sem piso: um default com cara de valor conferido.** Se confirmado,
+   o default sai e o campo passa a ser vazio e obrigatório.
+2. **O CNPJ do credenciamento 79413 não é `37829453000135`** — se a MITRYUSCASH foi credenciada com
+   outra inscrição, é essa que vai no `infRespTec`, via `NINER_FISCAL_RESPTEC_CNPJ`.
+3. **Propagação**: o credenciamento saiu em 2026-08-24 de manhã e pode não ter chegado ao ambiente
+   de homologação. Só considerar depois de descartar 1 e 2.
+
+**Estado no banco:** 9 documentos `REJEITADO` com 974, **nenhum autorizado** — nada preso no meio,
+nada a estornar. A numeração queimada é irrelevante em homologação.
+
+### ⚠️ E um quinto defeito, que não era da SEFAZ
+
+O `catch` do `ComprovantePapeletaModal` trocava **qualquer** exceção pelo erro genérico
+*"Não foi possível falar com o serviço fiscal"* — inclusive o **409 com a mensagem preventiva**.
+Todo o trabalho do F11 chegava ao operador como **falha de rede**, mandando o diagnóstico para
+servidor, certificado e internet. Ver `docs/telas/pdv.md` (revisão 2026-08-24).
+
+### ⏭️ Continua faltando
+
+- 🔴 **O `cStat 974`** — ver as três hipóteses acima. **Nenhuma NF-e 55 foi autorizada ainda.**
+- **SVC** (contingência da 55).
+- **CSOSN 500 com ST retido**: `vBCSTRet`/`pST`/`vICMSSTRet` no modelo 55 (`cStat 938`). Depende de
+  dado da compra e de decisão do contador.

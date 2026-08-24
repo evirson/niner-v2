@@ -541,6 +541,50 @@ Movimentação de Conta Corrente) que ainda não tinham migrado pro `SeletorPlan
 
 ## Linha do tempo
 
+### 2026-08-24 (noite, 7) — 🔴 o `cStat 974` continua de pé, e o CSRT não era a causa
+
+Fecho honesto do dia: **a NF-e 55 ainda não foi autorizada pela SEFAZ.**
+
+**O que foi testado de verdade.** Com o CSRT correto cadastrado no backoffice, reprocessei a venda
+608 contra a SEFAZ-PR (homologação): **974 de novo**. Antes de transmitir, confirmei o tamanho do
+código gravado **sem revelar o segredo**, pela matemática do cifrado —
+`octet_length(decode(csrt_cifrado,'base64'))` = **64** = 12 (nonce) + **36** + 16 (tag). O código de
+36 caracteres está lá.
+
+⚠️ **Ou seja: a correção do piso de tamanho do CSRT era real e necessária, e mesmo assim não era a
+causa do 974.** Registro isso explicitamente porque a tentação era dar o caso por encerrado quando
+o campo passou a recusar valor curto — o defeito estava provado, a correção estava certa, e a
+conclusão *"então o 974 acabou"* seria inferência, não medição. **Só a retransmissão provou.**
+
+**Como a SEFAZ chega ao 974.** Ela **não** compara o `<infRespTec><CNPJ>` com o emitente: busca o
+CSRT **pelo `idCSRT`**, lê para qual CNPJ aquele código foi emitido, e compara. Divergiu ali → 974.
+Consequência contraintuitiva: **um `idCSRT` errado produz uma mensagem sobre CNPJ**, e o
+identificador não é citado em lugar nenhum da resposta.
+
+**⚠️ O `idCSRT` da tela vem pré-preenchido com `01`** — chute do formulário, não valor conferido.
+É a **mesma família** do campo do CSRT sem piso: *um default com cara de valor conferido*. É a
+hipótese nº 1 e depende do portal para confirmar.
+
+As três hipóteses, em ordem: (1) `idCSRT` diferente de `01`; (2) o CNPJ do credenciamento 79413 não
+é `37829453000135` — hoje o `NINER_FISCAL_RESPTEC_CNPJ` cai no default do `application.yml`, a
+variável nunca foi definida; (3) propagação do credenciamento, que saiu na manhã de 24/08 — só
+considerar depois de descartar as duas primeiras.
+
+**Estado no banco:** 9 documentos `REJEITADO` com 974, **nenhum autorizado**. Nada preso no meio,
+nada a estornar; numeração queimada é irrelevante em homologação.
+
+**⛔ Erro de processo do dia, e o conserto.** Editei V061 e V062 **depois de aplicadas** no banco de
+dev — para corrigir uma data de comentário — e o Flyway recusou subir com *checksum mismatch* nas
+duas. Como ainda não estavam commitadas e só existiam neste banco, `flyway repair` realinhou; as
+colunas foram **conferidas no `information_schema`** depois, porque `repair` não reexecuta nada. É
+a regra do CLAUDE.md que já parou um deploy de produção, repetida por um motivo tão pequeno quanto
+um comentário — e as datas que eu estava "corrigindo" eram as que eu próprio tinha escrito um dia
+no futuro.
+
+**919 testes verdes**, `tsc -b` limpo, oito serviços no ar.
+
+---
+
 ### 2026-08-24 (noite, 6) — as quatro rejeições que separavam a NF-e 55 da autorização (V061, V062)
 
 Sequência de um caminho novo sendo exercitado pela primeira vez contra a SEFAZ. Cada erro escondia
