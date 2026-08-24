@@ -53,6 +53,19 @@ public class CsrtAdminService {
             @NotBlank(message = "Informe o identificador do CSRT (2 dígitos).")
             @Pattern(regexp = "\\d{2}", message = "O identificador do CSRT tem exatamente 2 dígitos.")
             String idCsrt,
+            // ⚠️ Tamanho MÍNIMO, não só o máximo (2026-08-24). O CSRT da NT 2018.005 tem 36
+            // caracteres; sem piso, o campo aceitava o NÚMERO DO CREDENCIAMENTO (5 dígitos) no
+            // lugar dele — e o erro só aparecia lá na frente, como uma rejeição da SEFAZ que fala
+            // em CNPJ. Aconteceu de verdade. 20 e não 36 exatos porque o formato é definido por
+            // NT nacional mas quem gera é cada UF: piso generoso barra a confusão sem engessar.
+            // ⚠️ VAZIO continua valendo "manter o que está gravado" (convenção do projeto para
+            // segredo), por isso o regex aceita a string vazia em vez de um @Size(min) — que
+            // barraria justamente o caso de só corrigir a observação ou o idCSRT.
+            // `@Pattern` usa `matches()`, que já ancora nas duas pontas — daí não precisar de ^ $.
+            @Pattern(regexp = "|.{20,200}", flags = Pattern.Flag.DOTALL,
+                    message = "O CSRT tem 36 caracteres — confira se você não copiou o número do "
+                            + "credenciamento por engano. Ele é gerado na área do responsável "
+                            + "técnico do portal da SEFAZ.")
             @Size(max = 200) String csrt,
             @Size(max = 500) String observacao) {
     }

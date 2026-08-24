@@ -260,6 +260,11 @@ export default function ClienteForm({
         bairro: endereco.bairro ? maiusculas(endereco.bairro) : f.bairro,
         cidade: endereco.localidade ? maiusculas(endereco.localidade) : f.cidade,
         estado: endereco.uf || f.estado,
+        // O ViaCEP sempre devolveu o código IBGE do município — só não estava sendo lido
+        // (2026-08-24). É o que a NF-e exige do destinatário, e o que obrigava o lojista a
+        // consultar o site do IBGE à mão. Só sobrescreve quando vem: CEP de rua nova pode
+        // voltar sem ele, e apagar o que já estava preenchido seria pior.
+        codigoMunicipioIbge: endereco.ibge ? endereco.ibge.replace(/D/g, '').slice(0, 7) : f.codigoMunicipioIbge,
       }))
     } else {
       setErros((e) => ({ ...e, cep: 'CEP inválido.' }))
@@ -483,7 +488,22 @@ export default function ClienteForm({
                         {form.fisicaJuridica ? 'RG' : 'Inscrição Estadual'}
                         {campoObrigatorio('rgIe', mapaConfig) && ' *'}
                       </label>
-                      <input id="rgIe" value={form.rgIe} onChange={campo('rgIe')} onBlur={aoSairDoCampo('rgIe')} />
+                      <input
+                        id="rgIe"
+                        value={form.rgIe}
+                        onChange={campo('rgIe')}
+                        onBlur={(e) => {
+                          aoSairDoCampo('rgIe')(e)
+                          // PJ que informou inscricao estadual e contribuinte de ICMS — marcar
+                          // sozinho poupa um campo que o lojista nao sabe responder (2026-08-24).
+                          // ⚠️ So SOBE de 9 para 1: quem escolheu "isento" ou trocou a mao nao e
+                          // desfeito, e apagar a IE nao volta para 9 — o contador pode ter marcado
+                          // contribuinte de proposito.
+                          if (!form.fisicaJuridica && form.rgIe.trim() && form.indicadorIe === '9') {
+                            setForm((f) => ({ ...f, indicadorIe: '1' }))
+                          }
+                        }}
+                      />
                       {erros.rgIe && <p className="erro-campo">{erros.rgIe}</p>}
                     </>
                   ),
@@ -784,6 +804,61 @@ export default function ClienteForm({
                         ))}
                       </select>
                       {erros.estado && <p className="erro-campo">{erros.estado}</p>}
+                    </>
+                  ),
+                },
+                {
+                  // Código IBGE do município — exigido pela NF-e 55 (grupo enderDest), que sai em
+                  // toda venda a pessoa jurídica desde 2026-08-24. A NFC-e não usa, e por isso o
+                  // campo nunca existiu aqui: o cadastro nasceu para o balcão.
+                  // ⚠️ Só para PJ: a venda a pessoa física sai em NFC-e, que não tem enderDest —
+                  // pedir o código do IBGE ao cadastrar um consumidor comum seria ruído puro.
+                  visivel: !form.fisicaJuridica,
+                  peso: 3,
+                  children: (
+                    <>
+                      <label htmlFor="codigoMunicipioIbge">Código do Município (IBGE)</label>
+                      <input
+                        id="codigoMunicipioIbge"
+                        inputMode="numeric"
+                        placeholder="7 dígitos"
+                        value={form.codigoMunicipioIbge}
+                        onChange={(e) =>
+                          setForm((f) => ({ ...f, codigoMunicipioIbge: e.target.value.replace(/D/g, '').slice(0, 7) }))
+                        }
+                      />
+                      <p className="muted" style={{ fontSize: 12, marginTop: 4 }}>
+                        Só é exigido para emitir NF-e a pessoa jurídica. Consulte em{' '}
+                        <a href="https://www.ibge.gov.br/explica/codigos-dos-municipios.php" target="_blank" rel="noreferrer">
+                          ibge.gov.br
+                        </a>
+                        .
+                      </p>
+                    </>
+                  ),
+                },
+                {
+                  // Como o cliente se declara ao ICMS. ⚠️ E ELE que decide se a inscricao estadual
+                  // entra na NF-e: o XSD recusa a tag IE quando indIEDest nao e 1. Antes de
+                  // 2026-08-24 nao havia este campo, entao todo cliente ficava com 9 e a IE
+                  // cadastrada nunca chegava a nota. Só para PJ, pelo mesmo motivo do IBGE acima.
+                  visivel: !form.fisicaJuridica,
+                  peso: 3,
+                  children: (
+                    <>
+                      <label htmlFor="indicadorIe">Contribuinte de ICMS</label>
+                      <select
+                        id="indicadorIe"
+                        value={form.indicadorIe}
+                        onChange={(e) => setForm((f) => ({ ...f, indicadorIe: e.target.value }))}
+                      >
+                        <option value="9">Não contribuinte</option>
+                        <option value="1">Contribuinte de ICMS</option>
+                        <option value="2">Isento de inscrição estadual</option>
+                      </select>
+                      <p className="muted" style={{ fontSize: 12, marginTop: 4 }}>
+                        Só o contribuinte leva a inscrição estadual na NF-e.
+                      </p>
                     </>
                   ),
                 },

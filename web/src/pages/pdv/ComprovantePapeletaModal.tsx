@@ -19,7 +19,7 @@ import DanfceImprimir from './DanfceImprimir'
 const SITUACOES_SUCESSO = new Set(['AUTORIZADO', 'CONTINGENCIA', 'EM_PROCESSAMENTO'])
 
 /** NF-e — o documento dela e o DANFE em A4, nao o DANFCE termico. Venda a pessoa juridica sai
- *  neste modelo desde 2026-08-25 (a fisica continua em NFC-e, modelo 65). */
+ *  neste modelo desde 2026-08-24 (a fisica continua em NFC-e, modelo 65). */
 const MODELO_NFE = 55
 
 /**
@@ -107,7 +107,7 @@ export default function ComprovantePapeletaModal({
     setResultadoFiscal(resultado)
     queryClient.invalidateQueries({ queryKey: ['comprovante-venda', idVenda] })
     // ⚠️ Venda a pessoa jurídica sai em NF-e 55, e o documento dela é o DANFE em A4 — na
-    // impressora comum, não na térmica (2026-08-25, decisão do dono do produto). A papeleta
+    // impressora comum, não na térmica (2026-08-24, decisão do dono do produto). A papeleta
     // continua saindo, mas ela nunca substituiu a nota.
     //
     // Só abre quando a nota EXISTE de verdade: rejeitada, não emitida ou falha de comunicação não
@@ -139,8 +139,14 @@ export default function ComprovantePapeletaModal({
     setRespondendoCpf(true)
     try {
       processarResultadoEmissao(await emitirNfce(idVenda, incluirCpf))
-    } catch {
-      setResultadoFiscal(erroDeComunicacao())
+    } catch (e) {
+      // ⚠️ O catch mudo ENGOLIA a mensagem do servidor (2026-08-24). Um 409 dizendo "cadastre a
+      // regra em Perfil Fiscal" virava "não foi possível falar com o serviço fiscal" — e o
+      // operador ia procurar problema de rede enquanto faltava um cadastro. A mensagem genérica
+      // só vale quando o erro NÃO tem explicação (rede caiu, 5xx sem corpo).
+      setResultadoFiscal(e instanceof ApiError && e.message
+        ? { ...erroDeComunicacao(), situacao: 'NAO_EMITIDO', mensagem: e.message }
+        : erroDeComunicacao())
     } finally {
       setRespondendoCpf(false)
       setPedirCpfManual(false)

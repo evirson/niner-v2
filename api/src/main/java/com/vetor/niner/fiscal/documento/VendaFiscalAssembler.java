@@ -25,6 +25,8 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
+import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -89,7 +91,7 @@ public class VendaFiscalAssembler {
 
         // ---------- qual documento esta venda gera ----------
         // Pessoa FISICA -> NFC-e; pessoa JURIDICA -> NF-e 55 (decisao do dono do produto em
-        // 2026-08-25, substituindo a regra do dia anterior, que olhava so o indicador_ie).
+        // 2026-08-24, substituindo a regra do dia anterior, que olhava so o indicador_ie).
         //
         // O motivo de fundo continua o mesmo (DF13): NFC-e e documento de consumidor final, e
         // quem compra com CNPJ costuma revender ou precisar da nota para credito. Cobrir toda PJ
@@ -101,6 +103,20 @@ public class VendaFiscalAssembler {
         ModeloVenda modelo = destinatario != null && destinatario.pessoaJuridica()
                 ? ModeloVenda.NFE
                 : ModeloVenda.NFCE;
+
+        // ⚠️ O TIPO DE DESTINATARIO vem do indicador_ie, NAO do modelo (corrigido em 2026-08-24,
+        // na 1a transmissao real). Sao coisas diferentes: uma PJ NAO contribuinte recebe NF-e 55
+        // (porque e PJ) mas continua sendo CONSUMIDOR FINAL para efeito de CFOP — ela compra para
+        // uso proprio, nao para revender. Amarrar o tipo ao modelo mandava toda PJ para a regra de
+        // contribuinte, que nem existe cadastrada, e o CFOP saia errado.
+        TipoDestinatario tipoDestinatario = destinatario != null && destinatario.indicadorIe() == 1
+                ? TipoDestinatario.CONTRIBUINTE
+                : TipoDestinatario.CONSUMIDOR_FINAL;
+
+        // Operacao interestadual: o CFOP muda com o destino (5xxx dentro do estado, 6xxx fora).
+        // Mesma comparacao que decide o idDest do XML — as duas TEM que concordar, senao a SEFAZ
+        // recusa com cStat 733 ("CFOP de operacao interna e idDest difere de 1").
+        boolean interestadual = !ufDestino.equalsIgnoreCase(config.uf());
         String impedimentoNfe = modelo.ehNfe() ? impedimentoParaNfe(config, destinatario) : null;
 
         List<ItemBruto> itensBrutos = buscarItens(idVenda);
@@ -114,7 +130,8 @@ public class VendaFiscalAssembler {
         for (int i = 0; i < itensBrutos.size(); i++) {
             ItemBruto b = itensBrutos.get(i);
             int nItem = i + 1;
-            RegraFiscal regra = buscarRegra(b, config.crt(), ufDestino);
+            RegraFiscal regra = buscarRegra(b, config.crt(), ufDestino, tipoDestinatario,
+                    interestadual, b.descricao());
             itensOperacao.add(new ItemOperacao(nItem, b.qtd(), b.precoVenda(), b.valorDesconto(),
                     b.valorAcrescimo(), regra, aliquotaTribFederal(b), b.alqEstadual(), b.alqMunicipal()));
             itensNota.add(new ItemNota(nItem, b.sku(), b.gtin(), b.descricao(), b.ncm(), b.cest(),
@@ -126,9 +143,7 @@ public class VendaFiscalAssembler {
                 // ⚠️ CONTRIBUINTE muda o CFOP que o motor escolhe (revenda, nao consumo) — e e por
                 // isso que a venda saiu do modelo 65. Declarar CONSUMIDOR_FINAL aqui contradiria o
                 // indFinal=0 e o indIEDest=1 que o XML leva.
-                new OperacaoFiscal(TipoOperacao.VENDA, ufDestino,
-                        modelo.ehNfe() ? TipoDestinatario.CONTRIBUINTE : TipoDestinatario.CONSUMIDOR_FINAL,
-                        itensOperacao),
+                new OperacaoFiscal(TipoOperacao.VENDA, ufDestino, tipoDestinatario, itensOperacao),
                 new ContextoFiscalEmpresa(config.crt(), config.uf()));
 
         List<Pagamento> pagamentos = buscarPagamentos(idVenda);
@@ -300,14 +315,14 @@ public class VendaFiscalAssembler {
      */
     private String impedimentoParaNfe(ConfigEmpresa config, Destinatario destinatario) {
         if (!config.emiteNfe()) {
-            return "O cliente é contribuinte de ICMS, então a venda exige NF-e (modelo 55) — a NFC-e "
-                    + "não serve para revenda. A emissão de NF-e não está ligada para esta empresa: "
-                    + "ligue em Configuração Fiscal e emita a nota em Documentos Fiscais.";
+            return "O cliente é pessoa jurídica, então a venda exige NF-e (modelo 55) — a NFC-e é "
+                    + "documento de consumidor final. A emissão de NF-e não está ligada para esta "
+                    + "empresa: ligue em Configuração Fiscal e emita a nota em Documentos Fiscais.";
         }
         String falta = faltaParaNfe(destinatario);
         if (falta != null) {
-            return "O cliente é contribuinte de ICMS, então a venda exige NF-e (modelo 55), que pede "
-                    + "o cadastro completo do cliente. Falta: " + falta
+            return "O cliente é pessoa jurídica, então a venda exige NF-e (modelo 55), que pede o "
+                    + "cadastro completo do cliente. Falta: " + falta
                     + ". Complete em Clientes e emita a nota em Documentos Fiscais.";
         }
         return null;
@@ -395,9 +410,48 @@ public class VendaFiscalAssembler {
      * A regra mais específica vence: UF exata bate antes do coringa {@code '*'}. Sem regra que
      * case, erro explícito (F11) — nunca uma alíquota chutada.
      */
-    private RegraFiscal buscarRegra(ItemBruto item, int crt, String ufDestino) {
+    /**
+     * O CFOP da operação: {@code cfop} dentro do estado, {@code cfop_interestadual} para fora
+     * (2026-08-24).
+     *
+     * <p><b>Por que a regra carrega os dois, e o sistema não deriva um do outro.</b> Parece que
+     * bastaria trocar o 5 pelo 6 mantendo o sufixo, e para os CFOPs comuns funciona (5102 → 6102).
+     * Mas não é regra geral: {@code 5405} (revenda com ST, contribuinte substituído) <b>não</b>
+     * vira {@code 6405} — esse CFOP não existe na tabela oficial; o correspondente é {@code 6404}.
+     * Derivar às cegas emitiria nota com CFOP inválido ou, pior, com um CFOP válido que descreve
+     * outra operação. A escolha é do contador.
+     *
+     * <p>Faltando o interestadual numa venda para fora do estado, a emissão para <b>aqui</b>, com
+     * a UF na mensagem — nunca com um CFOP chutado (F11).
+     */
+    private static String cfopDaOperacao(ResultSet rs, boolean interestadual, String descricaoProduto,
+                                         String ufDestino) throws SQLException {
+        if (!interestadual) {
+            return rs.getString("cfop");
+        }
+        String cfopFora = rs.getString("cfop_interestadual");
+        if (cfopFora == null || cfopFora.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Venda para outro estado (" + ufDestino + ") e a regra fiscal do produto \""
+                            + descricaoProduto + "\" não tem CFOP interestadual. O CFOP muda com o "
+                            + "destino (5xxx dentro do estado, 6xxx para fora): preencha o CFOP "
+                            + "interestadual em Perfil Fiscal antes de emitir.");
+        }
+        return cfopFora;
+    }
+
+    private RegraFiscal buscarRegra(ItemBruto item, int crt, String ufDestino,
+                                    TipoDestinatario tipoDestinatario, boolean interestadual,
+                                    String descricaoProduto) {
+        // ⚠️ Ate 2026-08-24 estes dois eram LITERAIS na consulta: toda venda buscava a regra de
+        // CONSUMIDOR_FINAL/VENDA_CONSUMIDOR, mesmo quando o destinatario era contribuinte. O CFOP
+        // vem da regra, entao a nota saia com o CFOP da operacao errada.
+        String tipo = tipoDestinatario.name();
+        String operacao = tipoDestinatario == TipoDestinatario.CONTRIBUINTE
+                ? "VENDA_CONTRIBUINTE"
+                : "VENDA_CONSUMIDOR";
         return jdbc.sql("""
-                        SELECT r.cfop, r.cst_icms, r.csosn, r.aliquota_icms, r.perc_reducao_bc,
+                        SELECT r.cfop, r.cfop_interestadual, r.cst_icms, r.csosn, r.aliquota_icms, r.perc_reducao_bc,
                                r.aliquota_fcp, r.cst_pis, r.aliquota_pis, r.cst_cofins, r.aliquota_cofins,
                                r.cst_ibscbs, r.cclasstrib, r.codigo_beneficio,
                                COALESCE(t.perc_reducao_ibs, 0) AS perc_reducao_ibs,
@@ -407,14 +461,15 @@ public class VendaFiscalAssembler {
                          WHERE r.id_tenant = plataforma.tenant_atual()
                            AND r.id_perfil_fiscal = ?
                            AND r.crt = ?
-                           AND r.tipo_destinatario = 'CONSUMIDOR_FINAL'
-                           AND r.tipo_operacao = 'VENDA_CONSUMIDOR'
+                           AND r.tipo_destinatario = ?::tipo_destinatario_fiscal
+                           AND r.tipo_operacao = ?::tipo_operacao_fiscal
                            AND r.uf_destino IN (?, '*')
                          ORDER BY (r.uf_destino = ?) DESC
                          LIMIT 1
                         """)
-                .params(item.idPerfilFiscal(), crt, ufDestino, ufDestino)
-                .query((rs, n) -> new RegraFiscal(rs.getString("cfop"), rs.getString("cst_icms"),
+                .params(item.idPerfilFiscal(), crt, tipo, operacao, ufDestino, ufDestino)
+                .query((rs, n) -> new RegraFiscal(cfopDaOperacao(rs, interestadual, descricaoProduto, ufDestino),
+                        rs.getString("cst_icms"),
                         rs.getString("csosn"), rs.getBigDecimal("aliquota_icms"),
                         rs.getBigDecimal("perc_reducao_bc"), rs.getBigDecimal("aliquota_fcp"),
                         rs.getString("cst_pis"), rs.getBigDecimal("aliquota_pis"),

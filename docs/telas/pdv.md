@@ -618,3 +618,62 @@ Decisão do dono do produto: *"orçamento feito numa empresa só pode ser consum
 
 ⚠️ A checagem ficou no **serviço do orçamento**, não no PDV, para valer para qualquer chamador
 futuro — o PDV é só o primeiro.
+
+## Revisão 2026-08-24 — as três rejeições da primeira NF-e 55, e o `catch` que escondia a quarta
+
+Continuação direta da revisão anterior (PF em NFC-e, PJ em NF-e 55). Com o caminho do modelo 55
+sendo exercitado pela primeira vez contra a SEFAZ, três defeitos apareceram em sequência — cada um
+escondendo o seguinte — e **nenhum deles aparecia na suíte**, porque era código novo sem venda real.
+
+### `cStat 253` — a chave dizia 65 e o XML dizia 55
+
+`MontadorXmlNfce` montava a chave de acesso com a constante `MODELO_NFCE` **fixa**, em vez de
+`nota.modelo().codigo()`. O modelo ocupa as posições **21–22** da chave, então o XML declarava
+`mod 55` e a chave carregava `65`. O DV batia com a chave que o montador produziu — por isso nada
+falhou localmente —, mas a SEFAZ **recompõe a chave a partir dos campos do XML** e chega a outro
+número, e a mensagem que volta fala em **dígito verificador**, não em modelo.
+
+⚠️ **Constante literal onde existe um campo de domínio é bomba-relógio.** Enquanto o produto só
+emitia NFC-e, `MODELO_NFCE` estava correta em todos os lugares onde aparecia. O segundo modelo é
+que revelou quais delas eram, na verdade, `nota.modelo()`.
+
+### `cStat 733` — CFOP interno numa operação interestadual
+
+O `idDest` já saía 2. O CFOP vinha da regra fiscal, que tinha um valor só. Resolvido com
+`cfop_interestadual` (**V061**) — ver [fiscal-perfil.md](fiscal-perfil.md) para o motivo de os dois
+CFOPs serem cadastrados em vez de derivados.
+
+### O `enderDest` que faltava, e o dado que já estava chegando
+
+NF-e 55 exige endereço completo do destinatário, incluindo `cMun`. A validação preventiva (F11)
+recusava a venda dizendo *"Falta: município (código IBGE)"* — correta, e mesmo assim inútil para
+quem não sabia onde achar o número. O ViaCEP **já devolvia** o código; ver
+[cliente.md](cliente.md#revisão-2026-08-24).
+
+### ⚠️ O `catch` do front anulava a validação preventiva inteira
+
+`ComprovantePapeletaModal` trocava **qualquer** exceção pelo erro genérico
+*"Não foi possível falar com o serviço fiscal. A venda está registrada."* — inclusive o **409 com a
+mensagem do que falta**. Ou seja: todo o trabalho de escrever mensagens preventivas específicas
+(F11) chegava ao operador como **falha de rede**, mandando o diagnóstico para o servidor, para a
+internet, para o certificado — para qualquer lugar menos para o cadastro incompleto.
+
+```tsx
+} catch (e) {
+  setResultadoFiscal(e instanceof ApiError && e.message
+    ? { ...erroDeComunicacao(), situacao: 'NAO_EMITIDO', mensagem: e.message }
+    : erroDeComunicacao())
+}
+```
+
+O erro genérico continua valendo para falha **real** de transporte, que é o caso em que ele é
+verdadeiro. **Front que engole mensagem de erro do back não degrada a experiência: apaga a feature.**
+
+### Impressão
+
+PJ imprime **DANFE A4** (`DanfeModal`, aberto quando `modelo === 55`); PF segue no cupom térmico.
+O `ResultadoEmissao` passou a carregar o `modelo` para o front saber qual abrir sem inferir.
+
+⚠️ **Nenhuma NF-e 55 foi autorizada pela SEFAZ até a data desta revisão** — o CSRT correto ainda não
+estava cadastrado. Os três defeitos acima estão corrigidos e cobertos por teste; o que falta é a
+confirmação de ponta a ponta.

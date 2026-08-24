@@ -45,6 +45,10 @@ public final class PerfilFiscalDtos {
             @NotNull TipoDestinatarioFiscal tipoDestinatario,
             @NotNull TipoOperacaoFiscal tipoOperacao,
             @NotBlank @Size(min = 4, max = 4) String cfop,
+            /** CFOP quando o cliente e de OUTRA UF (6xxx). Vazio = a regra so cobre operacao
+             *  interna, e a venda interestadual e recusada com mensagem — nunca com um CFOP
+             *  derivado: 5405 nao vira 6405, que nem existe (o correspondente e 6404). */
+            @Size(max = 4) String cfopInterestadual,
             @Size(min = 2, max = 2) String cstIcms,
             @Size(min = 3, max = 3) String csosn,
             BigDecimal aliquotaIcms,
@@ -67,6 +71,7 @@ public final class PerfilFiscalDtos {
             TipoDestinatarioFiscal tipoDestinatario,
             TipoOperacaoFiscal tipoOperacao,
             String cfop,
+            String cfopInterestadual,
             String cstIcms,
             String csosn,
             BigDecimal aliquotaIcms,

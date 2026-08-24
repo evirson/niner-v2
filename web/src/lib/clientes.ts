@@ -38,6 +38,8 @@ export interface Cliente {
   facebook: string | null
   tiktok: string | null
   cep: string | null
+  codigoMunicipioIbge: string | null
+  indicadorIe: number
   endereco: string | null
   numero: string | null
   complemento: string | null
@@ -66,6 +68,8 @@ export interface ClienteFormState {
   facebook: string
   tiktok: string
   cep: string
+  codigoMunicipioIbge: string
+  indicadorIe: string
   endereco: string
   numero: string
   complemento: string
@@ -91,6 +95,8 @@ export const CLIENTE_VAZIO: ClienteFormState = {
   facebook: '',
   tiktok: '',
   cep: '',
+  codigoMunicipioIbge: '',
+  indicadorIe: '9',
   endereco: '',
   numero: '',
   complemento: '',
@@ -117,6 +123,8 @@ export function paraFormulario(c: Cliente): ClienteFormState {
     facebook: c.facebook ?? '',
     tiktok: c.tiktok ?? '',
     cep: c.cep ? mascararCep(c.cep) : '',
+    codigoMunicipioIbge: c.codigoMunicipioIbge ?? '',
+    indicadorIe: String(c.indicadorIe ?? 9),
     endereco: c.endereco ?? '',
     numero: c.numero ?? '',
     complemento: c.complemento ?? '',
@@ -162,6 +170,8 @@ export function paraRequisicao(f: ClienteFormState) {
     facebook: maiusculoOuNulo(f.facebook),
     tiktok: maiusculoOuNulo(f.tiktok),
     cep: semMascara(f.cep),
+    codigoMunicipioIbge: f.codigoMunicipioIbge.trim() || null,
+    indicadorIe: Number(f.indicadorIe || 9),
     endereco: maiusculoOuNulo(f.endereco),
     numero: maiusculoOuNulo(f.numero),
     complemento: maiusculoOuNulo(f.complemento),

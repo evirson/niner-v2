@@ -154,6 +154,16 @@ class VendaFiscalEmissaoTest {
                         VALUES (?, ?, 1, '*', 'CONSUMIDOR_FINAL', 'VENDA_CONSUMIDOR', '5102', '102', '99', '99')
                         """)
                 .params(idTenant, idPerfil).update();
+        // Regra da venda a CONTRIBUINTE (2026-08-24): o CFOP vem da regra, e ate esta data a busca
+        // usava CONSUMIDOR_FINAL literal — toda venda pegava o CFOP da operacao errada. 5405 e a
+        // revenda com ST, que e o caso de quem compra para revender.
+        jdbc.sql("""
+                        INSERT INTO cfg_perfil_fiscal_regra
+                            (id_tenant, id_perfil_fiscal, crt, uf_destino, tipo_destinatario, tipo_operacao,
+                             cfop, cfop_interestadual, csosn, cst_pis, cst_cofins)
+                        VALUES (?, ?, 1, '*', 'CONTRIBUINTE', 'VENDA_CONTRIBUINTE', '5405', '6404', '500', '99', '99')
+                        """)
+                .params(idTenant, idPerfil).update();
         return idPerfil;
     }
 
@@ -497,7 +507,7 @@ class VendaFiscalEmissaoTest {
      * (F3) — só o documento fiscal fica {@code NAO_EMITIDO}, sem consumir número (F4).
      */
     @Test
-    void vendaAContribuinteFicaNaoEmitidaMasVendaContinuaRegistrada() throws Exception {
+    void vendaAPessoaJuridicaSemNfeLigadaFicaNaoEmitidaMasVendaContinuaRegistrada() throws Exception {
         String token = assinarNovoTenant("contribuinte");
         long idTenant = idTenantDo(token);
         long idEmpresa = idEmpresaDo(token);
@@ -521,7 +531,10 @@ class VendaFiscalEmissaoTest {
                         .contentType(APPLICATION_JSON).content("{\"incluirCpf\":true}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.situacao").value("NAO_EMITIDO"))
-                .andExpect(jsonPath("$.mensagem").value(org.hamcrest.Matchers.containsString("contribuinte")));
+                // A mensagem tem que dizer o motivo REAL: desde 2026-08-24 o gatilho e ser pessoa
+                // juridica, nao ser contribuinte — e a mensagem antiga falava em contribuinte para
+                // um cliente que podia estar declarado como nao contribuinte.
+                .andExpect(jsonPath("$.mensagem").value(org.hamcrest.Matchers.containsString("pessoa jurídica")));
 
         Mockito.verifyNoInteractions(transporte);
 
@@ -622,6 +635,16 @@ class VendaFiscalEmissaoTest {
         assertThat(doc.modelo()).as("venda a contribuinte tem que sair em NF-e, não NFC-e").isEqualTo(55);
         assertThat(doc.serie()).as("a NF-e usa a série PRÓPRIA (serie_nfe), não a da NFC-e").isEqualTo(7);
 
+        // ⚠️ O MODELO faz parte da CHAVE DE ACESSO (posições 21-22), e o dígito verificador é
+        // calculado sobre ela inteira. Com o modelo fixo em 65 na montagem da chave, a nota saía
+        // com a chave dizendo 65 e o XML dizendo 55 — e a SEFAZ devolvia cStat 253, "Dígito
+        // Verificador da chave de acesso composta inválida". Só apareceu na PRIMEIRA transmissão
+        // real (2026-08-24): com transporte simulado o DV bate, porque nós geramos os dois lados.
+        String chaveDoBanco = jdbc.sql("SELECT chave_acesso FROM documento_fiscal WHERE id_tenant = ? AND id_venda = ?")
+                .params(idTenant, idVenda).query(String.class).single();
+        assertThat(chaveDoBanco).hasSize(44);
+        assertThat(chaveDoBanco.substring(20, 22)).as("o modelo dentro da chave").isEqualTo("55");
+
         String xml = doc.xml();
         assertThat(xml).contains("<mod>55</mod>");
         assertThat(xml).as("endereço do destinatário é obrigatório na 55").contains("<enderDest>");
@@ -642,7 +665,7 @@ class VendaFiscalEmissaoTest {
     /**
      * PJ <b>não</b> contribuinte também sai em NF-e 55, mas <b>sem inscrição estadual</b>.
      *
-     * <p>Desde 2026-08-25 o gatilho é ser pessoa jurídica, não ser contribuinte. Mas a IE continua
+     * <p>Desde 2026-08-24 o gatilho é ser pessoa jurídica, não ser contribuinte. Mas a IE continua
      * sendo exigida só de quem se declarou contribuinte ({@code indIEDest = 1}): para 2 (isento) e
      * 9 (não contribuinte) o <b>XSD não aceita</b> a tag {@code IE}, então mandá-la seria rejeição
      * de schema. É o caso do escritório que tem CNPJ e não tem inscrição estadual.
@@ -687,7 +710,7 @@ class VendaFiscalEmissaoTest {
                         rs.getString("xml_assinado")))
                 .single();
 
-        assertThat(doc.modelo()).as("toda PJ sai em NF-e desde 2026-08-25").isEqualTo(55);
+        assertThat(doc.modelo()).as("toda PJ sai em NF-e desde 2026-08-24").isEqualTo(55);
         assertThat(doc.xml()).contains("<indIEDest>9</indIEDest>");
         // ⚠️ O XSD recusa a tag IE quando indIEDest != 1 — mandá-la seria rejeição de schema.
         // Olha a IE do DESTINATÁRIO, não a do emitente: o grupo <emit> tem <IE> sempre, e um
@@ -736,5 +759,104 @@ class VendaFiscalEmissaoTest {
         Boolean cancelada = jdbc.sql("SELECT cancelada FROM venda WHERE id_tenant = ? AND id_venda = ?")
                 .params(idTenant, idVenda).query(Boolean.class).single();
         assertThat(cancelada).as("F3: a venda continua registrada").isFalse();
+    }
+
+    /**
+     * Venda para OUTRO estado usa o CFOP interestadual da regra — nunca o interno (2026-08-24).
+     *
+     * <p><b>O caso que a SEFAZ recusou de verdade.</b> Uma venda do PR para um contribuinte de SP
+     * saía com {@code idDest 2} (correto) e CFOP {@code 5405} (interno), e voltou
+     * <b>cStat 733</b> — "CFOP de operação interna e idDest difere de 1". O CFOP vem da regra
+     * fiscal, e a regra tinha um CFOP só.
+     *
+     * <p>⚠️ <b>Por que a regra carrega os dois CFOPs em vez de o sistema derivar um do outro:</b>
+     * trocar o 5 pelo 6 mantendo o sufixo funciona para os CFOPs comuns (5102 → 6102), mas não é
+     * regra geral — {@code 5405} não vira {@code 6405}, que <b>não existe</b> na tabela oficial
+     * (o correspondente é {@code 6404}). Derivar às cegas emitiria nota com CFOP inválido ou, pior,
+     * com um CFOP válido que descreve outra operação.
+     */
+    @Test
+    void vendaParaOutroEstadoUsaOCfopInterestadualDaRegra() throws Exception {
+        String token = assinarNovoTenant("nfe-interestadual");
+        long idTenant = idTenantDo(token);
+        long idEmpresa = idEmpresaDo(token);
+        String cnpj = "33444555000143";
+
+        completarDadosDaEmpresa(idTenant, idEmpresa, cnpj);   // empresa no PR
+        enviarCertificado(token, idEmpresa, cnpj);
+        ligarFiscalComNfe(token, idEmpresa);
+        long idPerfil = criarPerfilFiscalCsosn102(idTenant);
+        long idVariacao = criarProdutoComPerfil(token, idTenant, "PRODUTO INTERESTADUAL", idPerfil, "70.00");
+        long idCliente = criarClienteContribuinte(token, idTenant, "Revendedora Paulista");
+        completarCadastroParaNfe(idTenant, idCliente);
+        // O que muda tudo: destinatário em SP, enquanto a empresa emitente é do PR.
+        jdbc.sql("""
+                        UPDATE cliente SET estado = 'SP', cidade = 'EMBU DAS ARTES',
+                               codigo_municipio_ibge = 3515004
+                         WHERE id_tenant = ? AND id_cliente = ?
+                        """)
+                .params(idTenant, idCliente).update();
+        long idFuncionario = criarFuncionario(token, "Vendedor Interestadual");
+        long idCarteira = carteiraDinheiroComTpag(token, idTenant);
+        abrirCaixa(token, idCarteira);
+
+        long idVenda = efetivarVenda(token, idVariacao, idCliente, idFuncionario, idCarteira, "70.00");
+
+        Mockito.when(transporte.enviar(any(), any(), any(), any(), any(), any()))
+                .thenAnswer(inv -> autorizada(extrairChaveDoEnvi(inv.getArgument(2))));
+
+        var resultado = mvc.perform(post("/api/v1/pdv/vendas/" + idVenda + "/nfce")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(APPLICATION_JSON).content("{\"incluirCpf\":true}"))
+                .andReturn();
+        String resp = resultado.getResponse().getContentAsString();
+        assertThat(resultado.getResponse().getStatus()).as("corpo: " + resp).isEqualTo(200);
+
+        String xml = jdbc.sql("SELECT xml_assinado FROM documento_fiscal WHERE id_tenant = ? AND id_venda = ?")
+                .params(idTenant, idVenda).query(String.class).single();
+
+        // As duas coisas que a SEFAZ cruza: idDest 2 (outra UF) e CFOP 6xxx (interestadual).
+        assertThat(xml).as("outra UF").contains("<idDest>2</idDest>");
+        assertThat(xml).as("CFOP interestadual da regra").contains("<CFOP>6404</CFOP>");
+        assertThat(xml).as("o CFOP interno não pode aparecer").doesNotContain("<CFOP>5405</CFOP>");
+        assertThat(xml).contains("<UF>SP</UF>");
+    }
+
+    /**
+     * Sem CFOP interestadual cadastrado, a venda para fora do estado é recusada <b>com o motivo</b>
+     * — nunca com um CFOP derivado (F11).
+     */
+    @Test
+    void vendaParaOutroEstadoSemCfopInterestadualDizOQueFalta() throws Exception {
+        String token = assinarNovoTenant("nfe-sem-cfop-inter");
+        long idTenant = idTenantDo(token);
+        long idEmpresa = idEmpresaDo(token);
+        String cnpj = "33444555000143";
+
+        completarDadosDaEmpresa(idTenant, idEmpresa, cnpj);
+        enviarCertificado(token, idEmpresa, cnpj);
+        ligarFiscalComNfe(token, idEmpresa);
+        long idPerfil = criarPerfilFiscalCsosn102(idTenant);
+        // Tira o CFOP interestadual que o fixture cadastra — simula a regra que só cobre o estado.
+        jdbc.sql("UPDATE cfg_perfil_fiscal_regra SET cfop_interestadual = NULL WHERE id_tenant = ? AND id_perfil_fiscal = ?")
+                .params(idTenant, idPerfil).update();
+        long idVariacao = criarProdutoComPerfil(token, idTenant, "PRODUTO SEM CFOP FORA", idPerfil, "70.00");
+        long idCliente = criarClienteContribuinte(token, idTenant, "Cliente De Fora");
+        completarCadastroParaNfe(idTenant, idCliente);
+        jdbc.sql("UPDATE cliente SET estado = 'SP', codigo_municipio_ibge = 3515004 WHERE id_tenant = ? AND id_cliente = ?")
+                .params(idTenant, idCliente).update();
+        long idFuncionario = criarFuncionario(token, "Vendedor Sem Cfop");
+        long idCarteira = carteiraDinheiroComTpag(token, idTenant);
+        abrirCaixa(token, idCarteira);
+
+        long idVenda = efetivarVenda(token, idVariacao, idCliente, idFuncionario, idCarteira, "70.00");
+
+        mvc.perform(post("/api/v1/pdv/vendas/" + idVenda + "/nfce").header("Authorization", "Bearer " + token)
+                        .contentType(APPLICATION_JSON).content("{\"incluirCpf\":true}"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.detail").value(org.hamcrest.Matchers.containsString("CFOP interestadual")))
+                .andExpect(jsonPath("$.detail").value(org.hamcrest.Matchers.containsString("SP")));
+
+        Mockito.verifyNoInteractions(transporte);
     }
 }

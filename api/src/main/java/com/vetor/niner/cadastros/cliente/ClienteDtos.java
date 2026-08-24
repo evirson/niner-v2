@@ -40,6 +40,13 @@ public final class ClienteDtos {
             @Size(max = 60) String facebook,
             @Size(max = 60) String tiktok,
             @Size(max = 9) String cep,
+            /** Codigo IBGE do municipio (7 digitos) — obrigatorio para a NF-e 55 (enderDest),
+             *  que sai em toda venda a pessoa juridica desde 2026-08-24. A NFC-e nao usa. */
+            @Size(max = 7) String codigoMunicipioIbge,
+            /** Como o destinatario se declara ao ICMS: 1 contribuinte · 2 isento · 9 nao
+             *  contribuinte. Vai no indIEDest da NF-e, e e ELE que decide se a inscricao estadual
+             *  entra na nota — o XSD recusa a tag IE quando nao e 1. Nulo mantem o padrao 9. */
+            Integer indicadorIe,
             @Size(max = 160) String endereco,
             @Size(max = 20) String numero,
             @Size(max = 80) String complemento,
@@ -67,6 +74,8 @@ public final class ClienteDtos {
             String facebook,
             String tiktok,
             String cep,
+            String codigoMunicipioIbge,
+            Integer indicadorIe,
             String endereco,
             String numero,
             String complemento,

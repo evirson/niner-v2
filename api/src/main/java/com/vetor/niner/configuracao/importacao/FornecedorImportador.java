@@ -177,6 +177,10 @@ public class FornecedorImportador implements ImportadorDeTabela {
                 email,
                 linha.valor("TELEFONE"),
                 linha.valor("CEP"),
+                // Código IBGE e indicador de IE fora do escopo desta importação: quem migra de
+                // outro sistema raramente os traz, e a tela preenche o IBGE sozinha pelo CEP.
+                null,
+                null,
                 linha.valor("ENDERECO"),
                 linha.valor("NUMERO"),
                 linha.valor("BAIRRO"),

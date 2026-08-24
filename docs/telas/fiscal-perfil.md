@@ -304,3 +304,30 @@ do seed.
 
 Um lojista de calçados liga o fiscal, aponta os produtos para os dois perfis já prontos desde o
 signup, e emite NFC-e sem digitar CFOP nem CST em nenhum produto individualmente.
+
+## Revisão 2026-08-24 — a regra passou a carregar o CFOP interestadual (V061)
+
+**A rejeição que motivou.** Venda do PR para um contribuinte de SP saía com `idDest 2` (correto) e
+CFOP `5405` (**interno**), e a SEFAZ devolveu **`cStat 733`: "CFOP de operação interna e idDest
+difere de 1"**. O `idDest` já era derivado da UF; o CFOP vinha da regra, e a regra tinha **um só**.
+
+**A coluna.** `cfg_perfil_fiscal_regra.cfop_interestadual character(4)`, **opcional** (V061). Quando
+o destinatário está em outra UF, o motor usa este; dentro do estado, o `cfop` de sempre.
+
+⚠️ **Por que são dois valores cadastrados e não um derivado do outro.** A tentação é trocar o
+primeiro dígito mantendo o sufixo — funciona nos CFOPs comuns (`5102` → `6102`) e **não é regra
+geral**: `5405` **não** vira `6405`, que **não existe** na tabela oficial de CFOP; o correspondente
+é `6404`. Derivar às cegas produziria um de dois desfechos, e o segundo é pior que o primeiro:
+CFOP inválido (a SEFAZ recusa, e o lojista descobre) ou **CFOP válido descrevendo outra operação**
+(a SEFAZ autoriza, e ninguém descobre até a fiscalização). Classificação fiscal é do contador.
+
+⚠️ **Sem o interestadual cadastrado, a venda para fora do estado é recusada dizendo o que falta**
+(F11), com a UF do destinatário na mensagem — nunca emitida com o CFOP interno e nunca com um
+palpite. É o mesmo princípio já aplicado ao CST em emitente do Simples.
+
+**Testes** (`VendaFiscalEmissaoTest`):
+
+- `vendaParaOutroEstadoUsaOCfopInterestadualDaRegra` — confere `<idDest>2</idDest>` **e**
+  `<CFOP>6404</CFOP>` no XML assinado, e que o CFOP interno **não** aparece.
+- `vendaParaOutroEstadoSemCfopInterestadualDizOQueFalta` — espera **409** com a UF na mensagem, e
+  `verifyNoInteractions(transporte)`: preventivo é antes de transmitir, não depois.

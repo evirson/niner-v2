@@ -16,6 +16,8 @@ export interface Fornecedor {
   email: string | null
   telefone: string | null
   cep: string | null
+  codigoMunicipioIbge: string | null
+  indicadorIe: number
   endereco: string | null
   numero: string | null
   bairro: string | null
@@ -36,6 +38,8 @@ export interface FornecedorFormState {
   email: string
   telefone: string
   cep: string
+  codigoMunicipioIbge: string
+  indicadorIe: string
   endereco: string
   numero: string
   bairro: string
@@ -53,6 +57,8 @@ export const FORNECEDOR_VAZIO: FornecedorFormState = {
   email: '',
   telefone: '',
   cep: '',
+  codigoMunicipioIbge: '',
+  indicadorIe: '9',
   endereco: '',
   numero: '',
   bairro: '',
@@ -72,6 +78,8 @@ export function paraFormulario(f: Fornecedor): FornecedorFormState {
     email: f.email ?? '',
     telefone: f.telefone ? mascararTelefone(f.telefone) : '',
     cep: f.cep ? mascararCep(f.cep) : '',
+    codigoMunicipioIbge: f.codigoMunicipioIbge ?? '',
+    indicadorIe: String(f.indicadorIe ?? 9),
     endereco: f.endereco ?? '',
     numero: f.numero ?? '',
     bairro: f.bairro ?? '',
@@ -99,6 +107,8 @@ export function paraRequisicao(f: FornecedorFormState) {
     email: semEspacos(f.email),
     telefone: semMascara(f.telefone),
     cep: semMascara(f.cep),
+    codigoMunicipioIbge: f.codigoMunicipioIbge.trim() || null,
+    indicadorIe: Number(f.indicadorIe || 9),
     endereco: maiusculoOuNulo(f.endereco),
     numero: maiusculoOuNulo(f.numero),
     bairro: maiusculoOuNulo(f.bairro),

@@ -163,6 +163,13 @@ public class ClienteImportador implements ImportadorDeTabela {
                 linha.valor("TELEFONE"),
                 null, null, null, null, // whatsapp/instagram/facebook/tiktok fora do escopo desta importação
                 linha.valor("CEP"),
+                // Código IBGE do município fora do escopo desta importação: quem migra de outro
+                // sistema raramente o traz, e ele só é exigido na NF-e 55 (venda a PJ), que barra
+                // com mensagem dizendo o que falta. Preencher pela tela de Clientes.
+                null,
+                // Indicador de IE fora do escopo: a coluna tem default 9 (não contribuinte), que é
+                // o caso da esmagadora maioria. Quem for contribuinte se marca na tela de Clientes.
+                null,
                 linha.valor("ENDERECO"),
                 linha.valor("NUMERO"),
                 linha.valor("COMPLEMENTO"),

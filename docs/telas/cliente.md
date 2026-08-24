@@ -385,3 +385,39 @@ validação nunca dispara pela tela: ela existe para o cliente de API que **omit
 que **tira o campo do cadastro**. Não é. `cfg_tela_campo` tem **duas** dimensões — `visivel` decide
 se o campo aparece, `obrigatorio` decide se é exigido, com CHECK garantindo que obrigatório implica
 visível. Quem quer enxugar o cadastro usa `visivel = false`.
+
+## Revisão 2026-08-24 — o que a NF-e exige do destinatário aparece só quando faz sentido
+
+Pedido do dono do produto depois de consultar o site do IBGE à mão para conseguir emitir uma nota.
+
+**Pessoa física esconde dois campos.** `Código do município (IBGE)` e `Contribuinte de ICMS` só
+aparecem quando o cliente é **jurídico**. A NFC-e — o documento que a pessoa física recebe — não
+pede nenhum dos dois, então exibi-los era pedir ao operador um dado que o sistema nunca usaria.
+
+**Pessoa jurídica preenche os dois sozinha:**
+
+| Gatilho | Efeito |
+|---|---|
+| CEP completo (8 dígitos) | busca o endereço **e** grava o código IBGE do município |
+| Inscrição estadual preenchida | marca **Contribuinte de ICMS** |
+
+⚠️ **O ViaCEP sempre devolveu o código IBGE.** O campo `ibge` vinha na resposta desde sempre — ele
+só não estava declarado na interface `EnderecoViaCep` (`web/src/lib/viacep.ts`), e por isso era
+descartado na desserialização. O lojista consultava o site do IBGE para preencher à mão um dado que
+já estava chegando na mesma requisição que trouxe a rua e o bairro. **Antes de construir a busca de
+um dado, confira o que a integração que você já chama devolve.**
+
+⚠️ **Esconder não é o mesmo que apagar.** Os dois campos continuam no DTO e na tabela; um cliente
+que já foi jurídico e passou a físico **mantém** os valores gravados. Quem some é o controle na
+tela — a regra de visibilidade é de apresentação, não de dado.
+
+**Relação com `cfg_tela_campo`.** Esta visibilidade é **derivada do próprio registro** (o tipo de
+pessoa), não configurável por tenant: não passa por `cfg_tela_campo`, e a configuração por tenant
+continua valendo por cima, para quem quiser sumir com o campo também na pessoa jurídica. Ver
+[[cfg_tela_campo: `visivel` ≠ `obrigatorio`]] em `CLAUDE.md`.
+
+**Por que isso estava travando a emissão.** Com o gatilho de modelo passando a ser *pessoa jurídica
+sai em NF-e 55* (revisão anterior), o `enderDest` virou obrigatório — e `cMun` é parte dele. Sem o
+código IBGE, a validação preventiva (F11) recusava a venda antes de transmitir, dizendo
+*"Falta: município (código IBGE)"*. Correto, e ainda assim inútil para quem não sabia onde achar o
+número.

@@ -170,3 +170,27 @@ Nenhuma bloqueante.
 
 Cadastro de um fornecedor completo em menos de 30 segundos (assumindo o plano de contas já
 existente).
+
+## Revisão 2026-08-24 — o fornecedor ganhou município (IBGE) e indicador de IE (V062)
+
+O cadastro **não tinha** os dois campos que a NF-e pede de quem participa da operação. Entraram na
+**V062**:
+
+| Coluna | Tipo | Default | Observação |
+|---|---|---|---|
+| `codigo_municipio_ibge` | `integer` | `NULL` | 7 dígitos, preenchido pelo CEP |
+| `indicador_ie` | `smallint NOT NULL` | `9` | CHECK em (1, 2, 9) — 9 = não contribuinte |
+
+**Comportamento na tela**, o mesmo já adotado em [cliente](cliente.md): o **CEP** traz o município
+e grava o código IBGE; a **inscrição estadual** preenchida marca o fornecedor como **contribuinte**.
+Aqui não há a distinção física/jurídica do cliente — fornecedor é sempre pessoa jurídica no produto,
+então os dois campos aparecem sempre.
+
+⚠️ **`indicador_ie` é `NOT NULL DEFAULT 9`, e o default importa.** A alternativa (`NULL` = "não
+sei") empurraria a decisão para o momento da emissão, que é o pior lugar para descobrir que falta
+dado. `9` (não contribuinte) é o caso mais comum e o mais seguro: quem **é** contribuinte tem a
+inscrição estadual preenchida, e a tela marca sozinha.
+
+**A importação de dados deixa os dois nulos/default de propósito** — planilha migrada de outro
+sistema raramente traz classificação fiscal, e a tela preenche o IBGE sozinha pelo CEP na primeira
+edição. Mesmo espírito da isenção de validação de TELEFONE e e-mail descrita acima.

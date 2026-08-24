@@ -18,6 +18,7 @@ interface FormState {
   tipoDestinatario: TipoDestinatarioFiscal
   tipoOperacao: TipoOperacaoFiscal
   cfop: string
+  cfopInterestadual: string
   modoIcms: 'CSOSN' | 'CST'
   csosn: string
   cstIcms: string
@@ -42,6 +43,7 @@ function estadoInicial(r: PerfilFiscalRegraRequest | null): FormState {
       tipoDestinatario: 'CONSUMIDOR_FINAL',
       tipoOperacao: 'VENDA_CONSUMIDOR',
       cfop: '',
+      cfopInterestadual: '',
       modoIcms: 'CSOSN',
       csosn: '102',
       cstIcms: '',
@@ -64,6 +66,7 @@ function estadoInicial(r: PerfilFiscalRegraRequest | null): FormState {
     tipoDestinatario: r.tipoDestinatario,
     tipoOperacao: r.tipoOperacao,
     cfop: r.cfop,
+    cfopInterestadual: r.cfopInterestadual ?? '',
     modoIcms: r.cstIcms ? 'CST' : 'CSOSN',
     csosn: r.csosn ?? '102',
     cstIcms: r.cstIcms ?? '00',
@@ -88,6 +91,7 @@ function paraRequisicao(f: FormState): PerfilFiscalRegraRequest {
     tipoDestinatario: f.tipoDestinatario,
     tipoOperacao: f.tipoOperacao,
     cfop: f.cfop.trim(),
+    cfopInterestadual: f.cfopInterestadual.trim() || null,
     csosn: f.crt === 2 && f.modoIcms === 'CST' ? null : f.csosn,
     cstIcms: f.crt === 2 && f.modoIcms === 'CST' ? f.cstIcms : null,
     aliquotaIcms: desmascararPercentual(f.aliquotaIcms),
@@ -165,6 +169,21 @@ export default function RegraFiscalModal({
               inputMode="numeric"
               onChange={(e) => setF((s) => ({ ...s, cfop: e.target.value.replace(/\D/g, '') }))}
             />
+          </div>
+          <div className="col-4">
+            <label htmlFor="regra-cfop-inter">CFOP fora da UF</label>
+            <input
+              id="regra-cfop-inter"
+              value={f.cfopInterestadual}
+              maxLength={4}
+              inputMode="numeric"
+              placeholder="6xxx"
+              onChange={(e) => setF((s) => ({ ...s, cfopInterestadual: e.target.value.replace(/D/g, '') }))}
+            />
+            <p className="muted" style={{ fontSize: 12, marginTop: 4 }}>
+              Usado quando o cliente é de outro estado. Vazio = a regra só vale dentro da UF, e a
+              venda interestadual é recusada com aviso — nunca com um CFOP adivinhado.
+            </p>
           </div>
           <div className="col-6">
             <label htmlFor="regra-destinatario">Destinatário *</label>

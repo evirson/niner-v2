@@ -77,3 +77,35 @@ tabela da UF e a mensagem de F11 citando a UF.
 - `docs/MODULOFISCAL.md` §9.9 — o CSRT, o cálculo do hash e as três formas de errar.
 - `docs/telas/fiscal-configuracao.md` — configuração fiscal **do lojista** (outra coisa: certificado,
   série, ambiente, CSC).
+
+## Revisão 2026-08-24 — o campo do código passou a ter tamanho mínimo
+
+**O que aconteceu.** O credenciamento da casa de software na SEFAZ/PR entrega **duas coisas com
+cara de código**: o **número do credenciamento** (5 dígitos, identifica a empresa no portal) e o
+**CSRT** (36 caracteres, o segredo da NT 2018.005). O primeiro foi cadastrado no campo do segundo.
+A tela aceitou — o campo só tinha `@Size(max = 200)` — e o defeito só apareceu na transmissão, como
+**`cStat 974`: "CNPJ do responsável técnico diverge do cadastrado"**, uma mensagem que fala em CNPJ
+e manda o diagnóstico inteiro para o lado errado.
+
+**A correção.** `@Pattern` de **20 a 200 caracteres** em `SalvarCsrtRequest.csrt`, com
+`Flag.DOTALL`, e mensagem que nomeia a confusão: *"O CSRT tem 36 caracteres — confira se você não
+copiou o número do credenciamento por engano."*
+
+Três detalhes que a anotação precisa respeitar:
+
+- **Vazio continua válido.** Em branco significa **manter o código gravado** (a convenção do projeto
+  para segredo, a mesma da senha de SMTP). Por isso é um `@Pattern` com alternativa vazia
+  (`"|.{20,200}"`) e **não** um `@Size(min = 20)`, que barraria justamente quem só quer corrigir a
+  observação ou o `idCSRT`.
+- **20, e não 36 exatos.** O formato vem de NT nacional, mas quem gera o código é **cada UF**. Piso
+  generoso barra a confusão sem engessar o produto nas outras 26 unidades.
+- **`@Pattern` usa `matches()`**, que já ancora nas duas pontas — âncoras explícitas (`^`, `\z`) são
+  redundantes e, se o escape se perder na edição, viram caractere literal e o regex passa a recusar
+  tudo. Foi o que aconteceu na primeira tentativa desta correção.
+
+**O número do credenciamento não vai em campo nenhum.** O grupo `infRespTec` leva `CNPJ`,
+`xContato`, `email`, `fone`, `idCSRT` e `hashCSRT` — não existe tag para ele. O lugar dele é a
+**Observação**, que é texto livre.
+
+**Teste:** `CsrtPorUfTest.recusaCodigoCurtoDemaisComoCsrt` — manda `79413` no campo do código e
+espera **400**.

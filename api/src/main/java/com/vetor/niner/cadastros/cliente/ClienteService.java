@@ -152,10 +152,10 @@ public class ClienteService {
             long id = jdbc.sql("""
                             INSERT INTO cliente (id_tenant, fisica_juridica, nome, id_categoria_cliente,
                                 cpf_cnpj, rg_ie, data_nascimento, genero, email, telefone, whatsapp,
-                                instagram, facebook, tiktok, cep, endereco, numero, complemento, bairro,
-                                cidade, estado, limite_credito, ativo)
+                                instagram, facebook, tiktok, cep, codigo_municipio_ibge, indicador_ie, endereco,
+                                numero, complemento, bairro, cidade, estado, limite_credito, ativo)
                             VALUES (plataforma.tenant_atual(), ?, ?, ?, ?, ?, ?, ?::genero_cliente, ?, ?,
-                                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                             RETURNING id_cliente
                             """)
                     .params(params)
@@ -184,7 +184,8 @@ public class ClienteService {
                                 fisica_juridica = ?, nome = ?, id_categoria_cliente = ?, cpf_cnpj = ?,
                                 rg_ie = ?, data_nascimento = ?, genero = ?::genero_cliente, email = ?,
                                 telefone = ?, whatsapp = ?, instagram = ?, facebook = ?, tiktok = ?,
-                                cep = ?, endereco = ?, numero = ?, complemento = ?, bairro = ?,
+                                cep = ?, codigo_municipio_ibge = ?, indicador_ie = ?, endereco = ?,
+                                numero = ?, complemento = ?, bairro = ?,
                                 cidade = ?, estado = ?, limite_credito = ?, ativo = ?, atualizado_em = now()
                             WHERE id_cliente = ? AND id_tenant = plataforma.tenant_atual()
                             """)
@@ -356,6 +357,13 @@ public class ClienteService {
         params.add(trimMaiusculoOuNulo(r.facebook()));
         params.add(trimMaiusculoOuNulo(r.tiktok()));
         params.add(Documentos.somenteDigitos(r.cep()));
+        // Codigo IBGE: numero na coluna, texto no DTO (7 digitos, com zero a esquerda possivel).
+        // Vazio vira NULL — a NFC-e nao usa, e a NF-e barra antes com mensagem dizendo que falta.
+        String ibge = r.codigoMunicipioIbge() == null ? null : Documentos.somenteDigitos(r.codigoMunicipioIbge());
+        params.add(ibge == null || ibge.isBlank() ? null : Integer.valueOf(ibge));
+        // Coluna NOT NULL com default 9 — nulo do cliente vira 9 (nao contribuinte), que e o caso
+        // da esmagadora maioria e o que a NFC-e sempre usou.
+        params.add(r.indicadorIe() == null ? 9 : r.indicadorIe());
         params.add(trimMaiusculoOuNulo(r.endereco()));
         params.add(trimMaiusculoOuNulo(r.numero()));
         params.add(trimMaiusculoOuNulo(r.complemento()));
@@ -378,6 +386,18 @@ public class ClienteService {
         return (s == null || s.isBlank()) ? null : s.trim();
     }
 
+    /**
+     * Código IBGE do município como texto — a coluna é {@code integer} e o DTO é {@code String}.
+     *
+     * <p>⚠️ {@code rs.getObject(coluna, String.class)} <b>não lê</b> {@code int4} no driver do
+     * Postgres, e o erro chegaria ao cliente como 409 "registro em uso por outro cadastro" num
+     * GET — diagnóstico inteiro para o lado errado. {@code getInt} + {@code wasNull} é o caminho.
+     */
+    private static String ibgeComoTexto(java.sql.ResultSet rs) throws java.sql.SQLException {
+        int valor = rs.getInt("codigo_municipio_ibge");
+        return rs.wasNull() ? null : String.valueOf(valor);
+    }
+
     private static String trimMaiusculoOuNulo(String s) {
         return (s == null || s.isBlank()) ? null : s.trim().toUpperCase(Locale.ROOT);
     }
@@ -386,7 +406,8 @@ public class ClienteService {
             SELECT c.id_cliente, c.fisica_juridica, c.nome, c.id_categoria_cliente,
                    cc.nome_categoria, c.cpf_cnpj, c.rg_ie, c.data_nascimento,
                    c.genero::text AS genero, c.email, c.telefone, c.whatsapp, c.instagram,
-                   c.facebook, c.tiktok, c.cep, c.endereco, c.numero, c.complemento, c.bairro,
+                   c.facebook, c.tiktok, c.cep, c.codigo_municipio_ibge, c.indicador_ie,
+                   c.endereco, c.numero, c.complemento, c.bairro,
                    c.cidade, c.estado, c.limite_credito, c.ativo, c.criado_em, c.atualizado_em
             FROM cliente c
             JOIN cfg_categoria_cliente cc ON cc.id_categoria_cliente = c.id_categoria_cliente AND cc.id_tenant = c.id_tenant
@@ -411,6 +432,11 @@ public class ClienteService {
                 rs.getString("facebook"),
                 rs.getString("tiktok"),
                 rs.getString("cep"),
+                // ⚠️ Coluna `integer`, DTO `String`: getObject(..., String.class) NÃO lê int4 no
+                // driver do Postgres, e o erro sairia como 409 "registro em uso" num GET. Ver
+                // [[feedback_getobject_long_em_coluna_int]].
+                ibgeComoTexto(rs),
+                rs.getInt("indicador_ie"),
                 rs.getString("endereco"),
                 rs.getString("numero"),
                 rs.getString("complemento"),

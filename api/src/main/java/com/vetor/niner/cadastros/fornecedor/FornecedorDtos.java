@@ -28,6 +28,12 @@ public final class FornecedorDtos {
             @Email @Size(max = 160) String email,
             @Size(max = 30) String telefone,
             @Size(max = 9) String cep,
+            /** Codigo IBGE do municipio (7 digitos) — preenchido pelo CEP na tela. Exigido pela
+             *  NF-e 55 da DEVOLUCAO AO FORNECEDOR, onde o fornecedor e o destinatario. */
+            @Size(max = 7) String codigoMunicipioIbge,
+            /** 1 contribuinte · 2 isento · 9 nao contribuinte. Decide se a IE entra na nota.
+             *  Nulo mantem o padrao 9. */
+            Integer indicadorIe,
             @Size(max = 160) String endereco,
             @Size(max = 20) String numero,
             @Size(max = 80) String bairro,
@@ -47,6 +53,8 @@ public final class FornecedorDtos {
             String email,
             String telefone,
             String cep,
+            String codigoMunicipioIbge,
+            Integer indicadorIe,
             String endereco,
             String numero,
             String bairro,

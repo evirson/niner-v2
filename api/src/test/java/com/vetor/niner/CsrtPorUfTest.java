@@ -37,7 +37,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class CsrtPorUfTest {
 
     private static final String SENHA_STAFF = "senha-de-teste-123";
-    private static final String CSRT_SP = "CSRTDESAOPAULO000000000000000000000";
+    private static final String CSRT_SP = "CSRTDESAOPAULO0000000000000000000000";
 
     @Autowired
     MockMvc mvc;
@@ -190,5 +190,25 @@ class CsrtPorUfTest {
     void mensagemDeCsrtFaltandoDizAUf() {
         assertThat(CsrtService.mensagemFaltando("sp", 55))
                 .contains("SP").contains("55").contains("CSRT");
+    }
+
+    /**
+     * O campo do CSRT recusa um código curto demais — o caso real de 2026-08-24.
+     *
+     * <p>O dono do produto recebeu o credenciamento da casa de software com um <b>número de
+     * credenciamento</b> (5 dígitos) e um <b>CSRT</b> (36 caracteres), e cadastrou o primeiro no
+     * campo do segundo. O campo só tinha {@code @Size(max)}, então aceitou — e o defeito só
+     * apareceu na SEFAZ, como <b>cStat 974</b>, uma mensagem que fala em <b>CNPJ</b> e manda o
+     * diagnóstico para o lado errado. Piso de tamanho custa uma anotação e economiza essa viagem.
+     */
+    @Test
+    void recusaCodigoCurtoDemaisComoCsrt() throws Exception {
+        String token = token("super-csrt@vetor.com.br", "SUPER_ADMIN");
+
+        mvc.perform(put("/api/admin/fiscal/csrt/SP/2").header("Authorization", "Bearer " + token)
+                        .contentType(APPLICATION_JSON)
+                        // 79413 — o número do credenciamento, não o CSRT.
+                        .content("{\"idCsrt\":\"07\",\"csrt\":\"79413\"}"))
+                .andExpect(status().isBadRequest());
     }
 }

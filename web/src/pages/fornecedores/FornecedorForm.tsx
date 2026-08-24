@@ -196,6 +196,10 @@ export default function FornecedorForm({ somenteLeitura = false }: { somenteLeit
         bairro: endereco.bairro ? maiusculas(endereco.bairro) : f.bairro,
         cidade: endereco.localidade ? maiusculas(endereco.localidade) : f.cidade,
         estado: endereco.uf || f.estado,
+        // O ViaCEP sempre devolveu o código IBGE do município — só não estava sendo lido
+        // (2026-08-24). É o que a NF-e 55 da devolução ao fornecedor pede no destinatário.
+        // Só sobrescreve quando vem: CEP de rua nova pode voltar sem ele.
+        codigoMunicipioIbge: endereco.ibge ? endereco.ibge.replace(/D/g, '').slice(0, 7) : f.codigoMunicipioIbge,
       }))
     } else {
       setErros((e) => ({ ...e, cep: 'CEP inválido.' }))
@@ -383,9 +387,39 @@ export default function FornecedorForm({ somenteLeitura = false }: { somenteLeit
                         id="inscricaoEstadual"
                         value={form.inscricaoEstadual}
                         onChange={campo('inscricaoEstadual')}
-                        onBlur={aoSairDoCampo('inscricaoEstadual')}
+                        onBlur={(e) => {
+                          aoSairDoCampo('inscricaoEstadual')(e)
+                          // Fornecedor com inscrição estadual é contribuinte de ICMS — marcar
+                          // sozinho poupa um campo que ninguém sabe responder (2026-08-24).
+                          // ⚠️ Só SOBE de 9 para 1: escolha manual (isento, por exemplo) não é
+                          // desfeita, e apagar a IE não volta para 9.
+                          if (form.inscricaoEstadual.trim() && form.indicadorIe === '9') {
+                            setForm((f) => ({ ...f, indicadorIe: '1' }))
+                          }
+                        }}
                       />
                       {erros.inscricaoEstadual && <p className="erro-campo">{erros.inscricaoEstadual}</p>}
+                    </>
+                  ),
+                },
+                {
+                  // Como o fornecedor se declara ao ICMS. ⚠️ É ele que decide se a inscrição
+                  // estadual entra na NF-e 55 da devolução ao fornecedor: o XSD recusa a tag IE
+                  // quando indIEDest não é 1. Preenchido sozinho ao informar a inscrição.
+                  visivel: true,
+                  peso: 3,
+                  children: (
+                    <>
+                      <label htmlFor="indicadorIe">Contribuinte de ICMS</label>
+                      <select
+                        id="indicadorIe"
+                        value={form.indicadorIe}
+                        onChange={(e) => setForm((f) => ({ ...f, indicadorIe: e.target.value }))}
+                      >
+                        <option value="9">Não contribuinte</option>
+                        <option value="1">Contribuinte de ICMS</option>
+                        <option value="2">Isento de inscrição estadual</option>
+                      </select>
                     </>
                   ),
                 },
@@ -549,6 +583,30 @@ export default function FornecedorForm({ somenteLeitura = false }: { somenteLeit
                         onBlur={aoSairDoCampo('cidade')}
                       />
                       {erros.cidade && <p className="erro-campo">{erros.cidade}</p>}
+                    </>
+                  ),
+                },
+                {
+                  // Código IBGE do município — exigido pela NF-e 55 da devolução ao fornecedor.
+                  // Vem preenchido do CEP; o campo fica visível para conferência e para o caso de
+                  // o ViaCEP não devolver (acontece em rua nova).
+                  visivel: true,
+                  peso: 3,
+                  children: (
+                    <>
+                      <label htmlFor="codigoMunicipioIbge">Código do Município (IBGE)</label>
+                      <input
+                        id="codigoMunicipioIbge"
+                        inputMode="numeric"
+                        placeholder="7 dígitos"
+                        value={form.codigoMunicipioIbge}
+                        onChange={(e) =>
+                          setForm((f) => ({ ...f, codigoMunicipioIbge: e.target.value.replace(/D/g, '').slice(0, 7) }))
+                        }
+                      />
+                      <p className="muted" style={{ fontSize: 12, marginTop: 4 }}>
+                        Preenchido automaticamente pelo CEP.
+                      </p>
                     </>
                   ),
                 },

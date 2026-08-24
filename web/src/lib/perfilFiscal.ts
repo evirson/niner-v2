@@ -50,6 +50,8 @@ export interface PerfilFiscalRegra {
   tipoDestinatario: TipoDestinatarioFiscal
   tipoOperacao: TipoOperacaoFiscal
   cfop: string
+  /** CFOP quando o cliente e de outra UF (6xxx). Nulo = a regra so cobre operacao interna. */
+  cfopInterestadual: string | null
   cstIcms: string | null
   csosn: string | null
   aliquotaIcms: number
@@ -71,6 +73,8 @@ export interface PerfilFiscalRegraRequest {
   tipoDestinatario: TipoDestinatarioFiscal
   tipoOperacao: TipoOperacaoFiscal
   cfop: string
+  /** CFOP quando o cliente e de outra UF (6xxx). Nulo = a regra so cobre operacao interna. */
+  cfopInterestadual: string | null
   cstIcms: string | null
   csosn: string | null
   aliquotaIcms: number

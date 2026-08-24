@@ -5,6 +5,10 @@ export interface EnderecoViaCep {
   bairro: string
   localidade: string
   uf: string
+  /** Código IBGE do município (7 dígitos). ⚠️ O ViaCEP SEMPRE devolveu este campo — ele só não
+   *  estava declarado aqui, e por isso era descartado. É exatamente o que a NF-e pede no
+   *  destinatário, e o que fazia o lojista ter de consultar o site do IBGE à mão (2026-08-24). */
+  ibge?: string
   erro?: boolean
 }
 

@@ -267,15 +267,18 @@ public class PerfilFiscalService {
                 jdbc.sql("""
                                 INSERT INTO cfg_perfil_fiscal_regra (
                                     id_tenant, id_perfil_fiscal, crt, uf_destino, tipo_destinatario, tipo_operacao,
-                                    cfop, cst_icms, csosn, aliquota_icms, perc_reducao_bc, mva_st, aliquota_fcp,
+                                    cfop, cfop_interestadual, cst_icms, csosn, aliquota_icms, perc_reducao_bc, mva_st, aliquota_fcp,
                                     cst_pis, aliquota_pis, cst_cofins, aliquota_cofins,
                                     cst_ibscbs, cclasstrib, codigo_beneficio)
                                 VALUES (plataforma.tenant_atual(), ?, ?, ?, ?::tipo_destinatario_fiscal,
-                                        ?::tipo_operacao_fiscal, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                        ?::tipo_operacao_fiscal, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                                 """)
                         .params(idPerfilFiscal, r.crt(), normalizarUf(r.ufDestino()),
                                 r.tipoDestinatario().name(), r.tipoOperacao().name(),
-                                r.cfop(), r.cstIcms(), r.csosn(),
+                                r.cfop(),
+                                r.cfopInterestadual() == null || r.cfopInterestadual().isBlank()
+                                        ? null : r.cfopInterestadual(),
+                                r.cstIcms(), r.csosn(),
                                 nz(r.aliquotaIcms()), nz(r.percReducaoBc()), nz(r.mvaSt()), nz(r.aliquotaFcp()),
                                 r.cstPis(), nz(r.aliquotaPis()), r.cstCofins(), nz(r.aliquotaCofins()),
                                 r.cstIbscbs(), r.cclasstrib(), r.codigoBeneficio())
@@ -321,7 +324,7 @@ public class PerfilFiscalService {
 
         List<PerfilFiscalRegraResponse> regras = jdbc.sql("""
                         SELECT id_regra, crt, uf_destino, tipo_destinatario::text AS tipo_destinatario,
-                               tipo_operacao::text AS tipo_operacao, cfop, cst_icms, csosn,
+                               tipo_operacao::text AS tipo_operacao, cfop, cfop_interestadual, cst_icms, csosn,
                                aliquota_icms, perc_reducao_bc, mva_st, aliquota_fcp,
                                cst_pis, aliquota_pis, cst_cofins, aliquota_cofins,
                                cst_ibscbs, cclasstrib, codigo_beneficio
@@ -351,7 +354,7 @@ public class PerfilFiscalService {
                 rs.getLong("id_regra"), rs.getInt("crt"), rs.getString("uf_destino"),
                 TipoDestinatarioFiscal.valueOf(rs.getString("tipo_destinatario")),
                 TipoOperacaoFiscal.valueOf(rs.getString("tipo_operacao")),
-                rs.getString("cfop"), rs.getString("cst_icms"), rs.getString("csosn"),
+                rs.getString("cfop"), rs.getString("cfop_interestadual"), rs.getString("cst_icms"), rs.getString("csosn"),
                 rs.getBigDecimal("aliquota_icms"), rs.getBigDecimal("perc_reducao_bc"),
                 rs.getBigDecimal("mva_st"), rs.getBigDecimal("aliquota_fcp"),
                 rs.getString("cst_pis"), rs.getBigDecimal("aliquota_pis"),

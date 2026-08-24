@@ -135,8 +135,15 @@ public class MontadorXmlNfce {
                 .atZoneSameInstant(FusoDaUf.de(nota.emitente().uf())).toOffsetDateTime();
 
         String cnpjEmitente = apenasAlfanumerico(nota.emitente().cnpj());
+        // ⚠️ O MODELO faz parte da chave de acesso (posições 21-22) — e o dígito verificador é
+        // calculado sobre ela inteira. Com 65 fixo aqui, a NF-e 55 saía com a chave dizendo 65 e o
+        // XML dizendo 55: a SEFAZ recalcula o DV e devolve **cStat 253**, "Dígito Verificador da
+        // chave de acesso composta inválida" — mensagem que fala em DV e manda o diagnóstico para
+        // o cálculo do dígito, quando o errado é o modelo que entrou na conta. Achado na PRIMEIRA
+        // transmissão real de uma NF-e 55 de venda (2026-08-24); nenhum teste com transporte
+        // simulado pegaria, porque o DV que geramos bate com a chave que geramos.
         String chave = ChaveAcesso.montar(codigoUfDe(nota.emitente().uf()), emissaoLocal, cnpjEmitente,
-                MODELO_NFCE, nota.serie(), nota.numero(), nota.tipoEmissao(), nota.codigoNumerico());
+                nota.modelo().codigo(), nota.serie(), nota.numero(), nota.tipoEmissao(), nota.codigoNumerico());
 
         StringBuilder xml = new StringBuilder(8192);
         xml.append("<NFe xmlns=\"").append(NS).append("\">");

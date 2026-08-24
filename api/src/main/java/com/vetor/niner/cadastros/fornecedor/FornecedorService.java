@@ -167,9 +167,9 @@ public class FornecedorService {
         try {
             long id = jdbc.sql("""
                             INSERT INTO fornecedor (id_tenant, razao_social, id_plano_contas, nome_fantasia,
-                                cnpj, inscricao_estadual, email, telefone, cep, endereco, numero, bairro,
-                                cidade, estado, ativo)
-                            VALUES (plataforma.tenant_atual(), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                cnpj, inscricao_estadual, email, telefone, cep, codigo_municipio_ibge,
+                                indicador_ie, endereco, numero, bairro, cidade, estado, ativo)
+                            VALUES (plataforma.tenant_atual(), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                             RETURNING id_fornecedor
                             """)
                     .params(params)
@@ -194,7 +194,8 @@ public class FornecedorService {
             int linhas = jdbc.sql("""
                             UPDATE fornecedor SET
                                 razao_social = ?, id_plano_contas = ?, nome_fantasia = ?, cnpj = ?,
-                                inscricao_estadual = ?, email = ?, telefone = ?, cep = ?, endereco = ?,
+                                inscricao_estadual = ?, email = ?, telefone = ?, cep = ?,
+                                codigo_municipio_ibge = ?, indicador_ie = ?, endereco = ?,
                                 numero = ?, bairro = ?, cidade = ?, estado = ?, ativo = ?,
                                 atualizado_em = now()
                             WHERE id_fornecedor = ? AND id_tenant = plataforma.tenant_atual()
@@ -306,6 +307,17 @@ public class FornecedorService {
      * das SQLs. Texto livre em MAIÚSCULAS (convenção do projeto); exceção: e-mail. CNPJ com
      * {@code somenteAlfanumerico} — convenção do CNPJ alfanumérico (CLAUDE.md).
      */
+    /**
+     * Codigo IBGE como texto — a coluna e {@code integer} e o DTO e {@code String}.
+     *
+     * <p>⚠️ {@code getObject(coluna, String.class)} NAO le {@code int4} no driver do Postgres, e o
+     * erro chegaria como 409 "registro em uso" num GET. Ver o mesmo helper em ClienteService.
+     */
+    private static String ibgeComoTexto(ResultSet rs) throws SQLException {
+        int valor = rs.getInt("codigo_municipio_ibge");
+        return rs.wasNull() ? null : String.valueOf(valor);
+    }
+
     private static void adicionarCamposComuns(List<Object> params, FornecedorRequest r) {
         params.add(trimMaiusculoOuNulo(r.nomeFantasia()));
         params.add(Documentos.somenteAlfanumerico(vazioParaNulo(r.cnpj())));
@@ -313,6 +325,11 @@ public class FornecedorService {
         params.add(trimOuNulo(r.email()));
         params.add(vazioParaNulo(Documentos.somenteDigitos(r.telefone())));
         params.add(vazioParaNulo(Documentos.somenteDigitos(r.cep())));
+        // Codigo IBGE: coluna integer, DTO String (7 digitos). Vazio vira NULL.
+        String ibge = r.codigoMunicipioIbge() == null ? null : Documentos.somenteDigitos(r.codigoMunicipioIbge());
+        params.add(ibge == null || ibge.isBlank() ? null : Integer.valueOf(ibge));
+        // Coluna NOT NULL com default 9 (nao contribuinte), o caso da maioria.
+        params.add(r.indicadorIe() == null ? 9 : r.indicadorIe());
         params.add(trimMaiusculoOuNulo(r.endereco()));
         params.add(trimMaiusculoOuNulo(r.numero()));
         params.add(trimMaiusculoOuNulo(r.bairro()));
@@ -340,6 +357,7 @@ public class FornecedorService {
     private static final String SELECT_BASE = """
             SELECT f.id_fornecedor, f.razao_social, f.id_plano_contas, pc.descricao AS descricao_plano_contas,
                    f.nome_fantasia, f.cnpj, f.inscricao_estadual, f.email, f.telefone, f.cep,
+                   f.codigo_municipio_ibge, f.indicador_ie,
                    f.endereco, f.numero, f.bairro, f.cidade, f.estado, f.ativo, f.criado_em, f.atualizado_em
             FROM fornecedor f
             JOIN cfg_plano_contas pc
@@ -358,6 +376,8 @@ public class FornecedorService {
                 rs.getString("email"),
                 rs.getString("telefone"),
                 rs.getString("cep"),
+                ibgeComoTexto(rs),
+                rs.getInt("indicador_ie"),
                 rs.getString("endereco"),
                 rs.getString("numero"),
                 rs.getString("bairro"),

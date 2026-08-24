@@ -215,6 +215,7 @@ export default function PerfilFiscalForm({ somenteLeitura = false }: { somenteLe
                         <th>Destinatário</th>
                         <th>Operação</th>
                         <th>CFOP</th>
+                        <th title="CFOP usado quando o cliente é de outra UF">CFOP fora da UF</th>
                         <th>ICMS</th>
                         {!somenteLeitura && <th aria-label="Ações" />}
                       </tr>
@@ -227,6 +228,9 @@ export default function PerfilFiscalForm({ somenteLeitura = false }: { somenteLe
                           <td>{rotuloDestinatario(r.tipoDestinatario)}</td>
                           <td>{rotuloOperacao(r.tipoOperacao)}</td>
                           <td>{r.cfop}</td>
+                          {/* Vazio = a regra só cobre operação interna; a venda interestadual é
+                              recusada com mensagem, nunca com CFOP derivado (2026-08-24). */}
+                          <td>{r.cfopInterestadual ?? <span className="muted">—</span>}</td>
                           <td>{r.csosn ? `CSOSN ${r.csosn}` : `CST ${r.cstIcms}`}</td>
                           {!somenteLeitura && (
                             <td className="acoes-cell">

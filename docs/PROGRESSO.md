@@ -541,7 +541,64 @@ Movimentação de Conta Corrente) que ainda não tinham migrado pro `SeletorPlan
 
 ## Linha do tempo
 
-### 2026-08-25 — PF sai em NFC-e, PJ sai em NF-e 55, e o PDV imprime o DANFE A4
+### 2026-08-24 (noite, 6) — as quatro rejeições que separavam a NF-e 55 da autorização (V061, V062)
+
+Sequência de um caminho novo sendo exercitado pela primeira vez contra a SEFAZ. Cada erro escondia
+o seguinte, e **nenhum deles aparecia na suíte** — o modelo 55 era código novo sem venda real.
+
+**1. `cStat 253` — "Dígito Verificador da chave de acesso composta inválida".** `MontadorXmlNfce`
+montava a chave com a constante `MODELO_NFCE` fixa em vez de `nota.modelo().codigo()`. O XML dizia
+`mod 55` e a chave dizia `65` nas posições 21–22 — o DV batia com a chave que ele montou, mas a
+SEFAZ recompõe a chave a partir dos campos do XML e chega noutro número. ⚠️ **Constante literal
+onde existe um campo de domínio é bomba-relógio**: enquanto só havia um modelo, ela estava certa.
+
+**2. `cStat 733` — "CFOP de operação interna e idDest difere de 1".** O `idDest` já saía 2 (outra
+UF), mas o CFOP vinha da regra fiscal, e a regra tinha **um CFOP só**. Solução: `cfop_interestadual`
+na `cfg_perfil_fiscal_regra` (**V061**), coluna nova, opcional. ⚠️ **Por que a regra carrega os dois
+em vez de o sistema derivar um do outro:** trocar o 5 pelo 6 mantendo o sufixo funciona nos CFOPs
+comuns (5102 → 6102) e **não é regra geral** — `5405` não vira `6405`, que **não existe** na tabela
+oficial (o correspondente é `6404`). Derivar às cegas emitiria CFOP inválido ou, pior, um CFOP
+válido que descreve outra operação. Sem o interestadual cadastrado, a venda para fora do estado é
+**recusada dizendo o que falta** (F11), nunca com um CFOP adivinhado.
+
+**3. "Não foi possível falar com o serviço fiscal" — e o serviço tinha respondido.** O `catch` do
+`ComprovantePapeletaModal` trocava **qualquer** exceção pelo erro genérico de comunicação,
+descartando a mensagem do 409. Ou seja: as validações preventivas (F11), escritas justamente para
+dizer o que falta, chegavam ao operador como falha de rede. Agora o `catch` distingue `ApiError`
+com mensagem de falha real de transporte. ⚠️ **Front que engole mensagem de erro do back anula a
+validação preventiva inteira** — o trabalho de escrever a mensagem certa já estava feito.
+
+**4. `cStat 974` — "CNPJ do responsável técnico diverge do cadastrado".** A mensagem fala em
+**CNPJ** e o problema era o **CSRT**: o campo só tinha `@Size(max)`, sem piso, e aceitou o **número
+do credenciamento** (5 dígitos) no lugar do código de 36 caracteres. O `hashCSRT` saiu calculado
+sobre o valor errado. Corrigido com `@Pattern` de 20–200 caracteres, mantendo o **vazio** válido
+(convenção do projeto: em branco = manter o segredo gravado). Teste `recusaCodigoCurtoDemaisComoCsrt`
+prende o caso real. ⚠️ **Piso de tamanho em campo de segredo custa uma anotação e economiza uma
+viagem à SEFAZ** — sem ele, o erro só aparece do outro lado, com um texto que aponta para o lado
+errado.
+
+**Autopreenchimento do que a NF-e exige do destinatário (V062).** Pedido do dono do produto depois
+de consultar o site do IBGE à mão: em pessoa **física**, código do município e contribuinte de ICMS
+somem da tela (a NFC-e não os pede); em pessoa **jurídica**, o CEP traz o município já preenchido e
+a inscrição estadual marca o contribuinte. ⚠️ **O ViaCEP sempre devolveu o campo `ibge`** — ele só
+não estava declarado na interface `EnderecoViaCep` e por isso era descartado na desserialização.
+O **fornecedor não tinha os dois campos**: `codigo_municipio_ibge` e `indicador_ie` (default 9,
+"não contribuinte") entraram na **V062**, com CHECK. A importação de dados deixa os dois nulos de
+propósito — planilha migrada raramente os traz, e a tela preenche o IBGE sozinha pelo CEP.
+
+**⛔ Erro de processo cometido e consertado na hora:** editei V061 e V062 **depois de aplicadas** no
+banco de dev (para corrigir uma data de comentário), e o Flyway recusou subir com *checksum
+mismatch* nas duas. Como ainda não estavam commitadas e só existiam neste banco, `flyway repair`
+realinhou — e as colunas foram **conferidas no `information_schema`** depois, já que `repair` não
+reexecuta nada. É a regra do CLAUDE.md que já parou um deploy de produção, repetida por um motivo
+tão pequeno quanto um comentário.
+
+**919 testes verdes** (eram 913), front limpo no `tsc -b`. ⚠️ **Nenhuma NF-e 55 foi autorizada pela
+SEFAZ ainda** — o CSRT correto ainda não estava cadastrado quando esta entrada foi escrita.
+
+---
+
+### 2026-08-24 (noite, 5) — PF sai em NFC-e, PJ sai em NF-e 55, e o PDV imprime o DANFE A4
 
 Dois pedidos do dono do produto no mesmo dia, mais o credenciamento da MITRYUSCASH na SEFAZ/PR
 (código **79413**, sistema **NAINER**).
