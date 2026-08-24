@@ -78,9 +78,62 @@ export function xDaColuna(g: Pick<GeometriaRolo, 'margemEsquerdaMm' | 'larguraEt
   return g.margemEsquerdaMm + indice * (g.larguraEtiquetaMm + g.espacamentoHorizontalMm)
 }
 
-/** Passo vertical (mm) de uma fileira para a seguinte — altura do adesivo + o branco entre elas. */
+/**
+ * Passo vertical (mm) de uma fileira para a seguinte — altura do adesivo + o branco entre elas.
+ *
+ * ⚠️ **NÃO é a altura da página de impressão** (2026-08-24). Foi por acreditar que era que a
+ * etiqueta alta saía partida em duas. Ver {@link alturaPaginaImpressaoMm}.
+ */
 export function passoVertical(g: Pick<GeometriaRolo, 'alturaEtiquetaMm' | 'espacamentoVerticalMm'>): number {
   return g.alturaEtiquetaMm + g.espacamentoVerticalMm
+}
+
+/**
+ * Altura (mm) da página de impressão de UMA fileira — a altura do **adesivo**, sem o branco entre
+ * fileiras (2026-08-24).
+ *
+ * <p><b>Por que não é o passo.</b> A impressora térmica faz duas coisas em sequência: imprime o
+ * bitmap da página e **depois avança o papel até o próximo gap**. Quem produz o espaço entre
+ * fileiras é esse avanço, não o nosso desenho. Somando o gap à página, o bitmap cobria o adesivo
+ * <b>e</b> o vão — e o avanço seguinte ainda somava o vão de novo, desencontrando tudo.
+ *
+ * <p><b>A evidência.</b> Os dois relatórios do sistema Delphi que imprimem certo nesta mesma
+ * impressora declaram o papel com a altura do adesivo, nunca com o passo:
+ * <ul>
+ *   <li>modelo 30 × 34: {@code mmPaperHeight = 30000} (30 mm)</li>
+ *   <li>modelo 60 × 35: {@code mmPaperHeight = 60000} (60 mm)</li>
+ * </ul>
+ *
+ * <p>⚠️ <b>Por que o modelo de 31,7 mm funcionava mesmo com a conta errada:</b> o papel do driver
+ * estava em 31,0 mm e <b>cortava</b> a nossa página de 33,9 — sobrando por acaso ≈ a altura do
+ * adesivo. O erro estava lá o tempo todo, escondido por esse corte. Foi por isso que aumentar o
+ * papel do driver para 62 mm não consertou a etiqueta alta: sem o corte, a página de 61,2 mm
+ * passou inteira e o desencontro apareceu por completo.
+ *
+ * <p>Continua valendo <b>uma página por fileira</b> — a parte certa da decisão de 2026-08-21. O
+ * que muda é só o valor.
+ */
+export function alturaPaginaImpressaoMm(g: Pick<GeometriaRolo, 'alturaEtiquetaMm'>): number {
+  return g.alturaEtiquetaMm
+}
+
+/**
+ * Folga (mm) entre o bloco de uma fileira e a página que o contém.
+ *
+ * <p>Enquanto a página valia o passo do rolo, a folga vinha de graça: o bloco tinha a altura do
+ * adesivo e a página tinha o adesivo + o vão. Agora que as duas valem a mesma coisa
+ * ({@link alturaPaginaImpressaoMm}), o bloco encosta na página — e bloco tão alto quanto a página
+ * é o caso limite da paginação: um arredondamento de sub-pixel o empurra para a página seguinte e
+ * nasce **uma página em branco entre cada etiqueta**, gastando o rolo inteiro pela metade.
+ *
+ * <p>Dois décimos de milímetro resolvem e não deslocam nada: os campos são posicionados em
+ * absoluto a partir do topo do bloco, então encurtar a base não move nenhum deles.
+ */
+export const FOLGA_PAGINACAO_MM = 0.2
+
+/** Altura (mm) do bloco de uma fileira — a página menos {@link FOLGA_PAGINACAO_MM}. */
+export function alturaBlocoFileiraMm(g: Pick<GeometriaRolo, 'alturaEtiquetaMm'>): number {
+  return Math.max(alturaPaginaImpressaoMm(g) - FOLGA_PAGINACAO_MM, 1)
 }
 
 /*

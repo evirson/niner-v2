@@ -17,7 +17,8 @@ import {
   criarEtiquetaConfig,
   larguraOcupadaPelasColunas,
   linhasParaImprimir,
-  passoVertical,
+  alturaBlocoFileiraMm,
+  alturaPaginaImpressaoMm,
   posicoesDasColunas,
   xDaColuna,
   paraFormulario,
@@ -259,7 +260,7 @@ export default function EtiquetaConfigForm({ somenteLeitura = false }: { somente
    * <p>No modo régua a página é a régua inteira, e só ela é impressa — os 132 mm de calibragem
    * não convivem com uma página do tamanho de uma etiqueta.
    */
-  const alturaPaginaMm = reguaImprimir ? ALTURA_CALIBRAGEM_MM : passoVertical(geometriaImpressao)
+  const alturaPaginaMm = reguaImprimir ? ALTURA_CALIBRAGEM_MM : alturaPaginaImpressaoMm(geometriaImpressao)
 
   /**
    * Dispara o diálogo de impressão do navegador quando `quantidadeImprimir` vira > 0 — o tamanho
@@ -608,11 +609,11 @@ export default function EtiquetaConfigForm({ somenteLeitura = false }: { somente
                 // acontece no fluxo — um bloco absoluto não pagina.
                 position: 'relative',
                 width: geometriaImpressao.larguraRoloMm * MM_PARA_PX_IMPRESSAO,
-                // ⚠️ A altura do bloco é a da ETIQUETA, não a do passo, embora a página valha o
-                // passo. Um bloco tão alto quanto a página é o caso limite da paginação: um
-                // arredondamento de sub-pixel o empurra para a página seguinte e nasce uma página
-                // em branco entre cada etiqueta. O branco do gap quem dá é o `@page`.
-                height: geometriaImpressao.alturaEtiquetaMm * MM_PARA_PX_IMPRESSAO,
+                // ⚠️ Um triz MENOR que a página (2026-08-24): bloco tão alto quanto a página é o
+                // caso limite da paginação — um arredondamento de sub-pixel o empurra para a
+                // seguinte e nasce uma página em branco entre cada etiqueta. Ver FOLGA_PAGINACAO_MM.
+                // O branco entre fileiras quem dá é o avanço da impressora até o gap, não o desenho.
+                height: alturaBlocoFileiraMm(geometriaImpressao) * MM_PARA_PX_IMPRESSAO,
                 // A última não quebra: quebrar depois dela cospe uma etiqueta em branco no fim.
                 breakAfter: indiceLinha === fileirasTeste.length - 1 ? 'auto' : 'page',
                 breakInside: 'avoid',

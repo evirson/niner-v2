@@ -541,6 +541,75 @@ Movimentação de Conta Corrente) que ainda não tinham migrado pro `SeletorPlan
 
 ## Linha do tempo
 
+### 2026-08-24 (noite, 2) — a altura da página de etiqueta era o PASSO, e devia ser a altura do ADESIVO
+
+Ao cadastrar um segundo rolo (**34 × 60**, destacável), a etiqueta saía **partida em duas tiras** —
+nome/descrição/preço numa, os códigos de barras na seguinte. O modelo de 34 × 31,7 imprimia
+perfeito, e o **PDF da mesma impressão saía completo**: o navegador desenhava certo, o defeito
+estava do papel para lá.
+
+⭐ **Quem resolveu foi o `.rtm` do Delphi — e eu demorei a pedir.** O dono do produto disse desde
+cedo que o sistema legado imprime os dois modelos na mesma impressora sem ajuste nenhum, o que
+encerra qualquer hipótese de limitação física. A regra já estava escrita no projeto
+(*evidência do usuário vence inferência minha*) e eu a repeti como erro: gastei duas rodadas de
+etiqueta e um ajuste de driver antes de pedir o arquivo. Lido com um parser de DFM binário escrito
+para isto, o veredito estava em uma linha:
+
+| | `PrinterSetup.mmPaperHeight` |
+|---|---|
+| `ETQ_30_34.rtm` | **30 mm** (adesivo de 30) |
+| `ETQ_60_35.rtm` | **60 mm** (adesivo de 60) |
+
+O Delphi declara a página com a **altura do adesivo**; nós declarávamos **adesivo + espaçamento
+entre fileiras**. E somar o gap está errado por um motivo físico: a impressora imprime o bitmap e
+**depois avança até o próximo gap** — quem produz o branco entre fileiras é o avanço, não o desenho.
+
+⚠️ **Por que o modelo de 31,7 funcionava com a conta errada:** o papel do driver estava em 31,0 mm e
+**cortava** a página de 33,9, sobrando por acaso ≈ a altura do adesivo. O erro estava lá desde
+21/08, mascarado. Foi por isso que subir o papel para 62 mm não consertou a etiqueta alta — tirou o
+corte que escondia o defeito.
+
+Continua valendo **uma página por fileira** (a parte certa de 21/08); mudou o valor.
+`alturaPaginaImpressaoMm()` devolve a altura da etiqueta, `passoVertical()` ficou marcada como **não
+sendo** a altura da página, e `FOLGA_PAGINACAO_MM` (0,2 mm) evita o efeito colateral: com página e
+bloco valendo o mesmo, um sub-pixel nasce uma página em branco entre cada etiqueta.
+
+**Resultado no papel:** o modelo 34 × 60 passou a sair com o conteúdo inteiro em cada adesivo, e o
+34 × 31,7 continuou correto.
+
+### 2026-08-24 (noite, 3) — o papel do driver controla o AVANÇO, e é por isso que a web não alcança
+
+O teste seguinte trouxe o achado que fecha o assunto:
+
+| Papel no driver | 34 × 31,7 | 34 × 60 |
+|---|---|---|
+| **31 mm** | ✅ correto | ❌ partido em duas tiras |
+| **60 mm** | ❌ **imprime uma e pula uma em branco** | ✅ correto |
+
+Papel 60 com página de 31,7 faz a impressora andar 60 mm e **saltar uma etiqueta**. Ou seja: o papel
+não é só a área de desenho, é o **avanço** — e não existe valor único que sirva aos dois rolos.
+
+**O Delphi escapa porque grava o tamanho DENTRO do relatório** e o aplica por trabalho via DEVMODE
+do Windows. **Aplicação web não tem essa API:** `@page size` é uma dica, quem escolhe o papel é o
+driver. Também descartado o caminho dos **formulários do Windows** — o sistema tem 33 cadastrados,
+mas o driver Seagull expõe apenas os **4 tamanhos próprios** e ignora os do Windows.
+
+Restam dois caminhos, e a escolha é de produto: (a) trocar o papel do driver junto com o rolo — são
+dois rolos físicos, a troca já é manual; (b) **agente local de impressão**, que definiria o papel
+por trabalho como o Delphi e resolveria a intensidade junto, ao custo de instalação, atualização e
+suporte em cada loja (empurra contra o P6). ⏭️ **Decisão pendente do dono do produto.**
+
+⏭️ Fica pendente também mostrar na tela o papel que cada modelo exige (*"este modelo exige papel
+110 × 60 mm no driver"*) — hoje esse número é invisível, e foi ele que custou o dia.
+
+**Geometria horizontal.** Medindo a foto dá para separar erro de passo de erro de origem, porque
+ela tem as duas referências: as **linhas impressas** (preto sólido) e os **picotes físicos** (vinco,
+queda leve de brilho). Dois limiares no mesmo perfil: passo impresso 234 px, passo físico 242 px
+(+3,4%) → o rolo tem **≈ 35,7 mm** e imprimíamos 34,5. ⚠️ E eu tinha mandado **zerar a margem
+esquerda** copiando o `.rtm`, o que fez a coluna 1 começar antes do papel — os 3,00 mm que já
+estavam lá eram os certos. **O `.rtm` do legado é evidência sobre o comportamento (a altura da
+página), não sobre a geometria do rolo que está na impressora agora.**
+
 ### 2026-08-24 (noite) — o mesmo campo pode aparecer mais de uma vez na etiqueta (V060)
 
 Pedido do dono do produto, ao montar um modelo 34 × 60: *"preciso ter a opção de poder colocar 2

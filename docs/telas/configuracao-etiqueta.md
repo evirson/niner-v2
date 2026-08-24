@@ -1260,3 +1260,95 @@ algo que não faz mal. Sem limite atende o pedido e é mais simples.
 * **Suíte:** 913 testes verdes. O teste `campoRepetidoEhRejeitado` prendia o comportamento antigo e
   virou `mesmoCampoPodeAparecerMaisDeUmaVez` — que confere **as duas instâncias de volta**, não só
   o 201: um teste que olhasse o status passaria mesmo se a leitura devolvesse uma linha só.
+
+---
+
+## 🔴 2026-08-24, rodada 5 — a altura da página era o PASSO, e devia ser a altura do ADESIVO
+
+Ao cadastrar um segundo rolo (**34 × 60**, destacável), a etiqueta saía **partida em duas**: nome,
+descrição e preço numa tira, os códigos de barras na tira seguinte. O modelo de 34 × 31,7 imprimia
+perfeitamente. O PDF da mesma impressão saía **correto e completo** — ou seja, o navegador desenhava
+certo e o defeito estava do papel para lá.
+
+### ⭐ Quem resolveu foi o `.rtm` do Delphi, e eu demorei a pedir
+
+O dono do produto disse desde cedo: *"em Delphi imprimo os 2 modelos e não precisa de ajustes na
+impressora"*. Isso encerra qualquer hipótese de limitação física — se o sistema legado imprime na
+mesma impressora, é possível. **A regra de [[feedback_evidencia_do_usuario_vence_inferencia]] já
+estava escrita no projeto e eu a repeti como erro:** gastei duas rodadas de etiqueta e um ajuste de
+driver antes de pedir o arquivo.
+
+Os dois relatórios, lidos com um parser de DFM binário escrito para isto:
+
+| | `PrinterSetup.mmPaperHeight` | Altura do adesivo |
+|---|---|---|
+| `ETQ_30_34.rtm` | **30 mm** | 30 mm |
+| `ETQ_60_35.rtm` | **60 mm** | 60 mm |
+
+O Delphi declara a página com a **altura do adesivo**. Nós declarávamos **adesivo + espaçamento
+entre fileiras** (33,9 e 61,2).
+
+### Por que somar o gap está errado
+
+A impressora faz duas coisas **em sequência**: imprime o bitmap da página e **depois avança até o
+próximo gap**. Quem produz o branco entre fileiras é esse avanço, não o nosso desenho. Somando o
+gap, o bitmap cobria o adesivo **e** o vão, e o avanço somava o vão de novo.
+
+⚠️ **Por que o modelo de 31,7 mm funcionava com a conta errada:** o papel do driver estava em
+**31,0 mm** e **cortava** a página de 33,9 — sobrando por acaso ≈ a altura do adesivo. O erro
+estava lá desde 2026-08-21, mascarado por esse corte. Foi por isso que subir o papel para 62 mm
+**não** consertou a etiqueta alta: sem o corte, a página de 61,2 mm passou inteira e o desencontro
+apareceu por completo.
+
+Continua valendo **uma página por fileira** — a parte certa da decisão de 21/08. Mudou só o valor:
+`alturaPaginaImpressaoMm()` devolve a altura da etiqueta, e `passoVertical()` ficou marcada como
+**não sendo** a altura da página.
+
+### `FOLGA_PAGINACAO_MM` — o efeito colateral que a mudança criou
+
+Enquanto a página valia o passo, a folga entre bloco e página vinha de graça. Com as duas valendo o
+mesmo, o bloco encosta na página — e bloco tão alto quanto a página é o caso limite da paginação: um
+arredondamento de sub-pixel nasce **uma página em branco entre cada etiqueta**. Daí
+`alturaBlocoFileiraMm()` = página − **0,2 mm**. Não desloca nada, porque os campos são absolutos a
+partir do topo do bloco.
+
+### ⚠️ O papel do driver controla o AVANÇO, não só a área de desenho
+
+Descoberto no teste seguinte, e é o achado mais importante desta rodada:
+
+| Papel no driver | Modelo 34 × 31,7 | Modelo 34 × 60 |
+|---|---|---|
+| **31 mm** | ✅ correto | ❌ partido em duas tiras |
+| **60 mm** | ❌ **imprime uma e pula uma em branco** | ✅ correto |
+
+Papel 60 com página de 31,7 faz a impressora andar 60 mm e saltar uma etiqueta. Ou seja: **o papel
+precisa casar com o rolo**, e não há valor único que sirva aos dois.
+
+**O Delphi escapa porque grava o tamanho DENTRO do relatório** (`PrinterSetup.mmPaperHeight`) e o
+aplica a cada trabalho via DEVMODE do Windows. **Aplicação web não tem essa API** — `@page size` é
+uma dica, quem escolhe o papel é o driver. Testado também o caminho dos **formulários do Windows**:
+o sistema tem 33 cadastrados, mas o driver Seagull expõe só os **4 tamanhos próprios** e ignora os
+do Windows. Não há saída por CSS.
+
+Sobram: (a) trocar o papel do driver junto com o rolo — são dois rolos físicos, a troca já é manual;
+(b) **agente local de impressão**, que definiria o papel por trabalho como o Delphi (e resolveria a
+intensidade junto). Ver `docs/PROGRESSO.md`.
+
+### A geometria horizontal, e um erro meu
+
+Medindo a foto impressa dá para separar **erro de passo** de **erro de origem**, porque a foto tem
+as duas referências: as **linhas impressas** (quadro de corte, preto sólido) e os **picotes
+físicos** (vinco, queda leve de brilho). Dois limiares no mesmo perfil horizontal separam as duas:
+
+```
+LINHAS IMPRESSAS: x 304 … 538      → passo impresso 234 px
+TODAS as marcas:  x 331 … 573      → passo físico   242 px  (+3,4%)
+```
+
+Passo impresso 34,5 mm → passo real do rolo **≈ 35,7 mm**, ou seja **espaço entre colunas 1,7 mm**
+(35,7 − 34).
+
+⚠️ **E eu tinha mandado zerar a margem esquerda, copiando o `.rtm`** — errado: a coluna 1 passou a
+começar antes do papel e "Descrição do Produto" saiu cortada. Os **3,00 mm** que o dono do produto
+já tinha estavam certos. **Lição: o `.rtm` do legado é evidência sobre o COMPORTAMENTO (a altura da
+página), não necessariamente sobre a geometria do rolo que está na impressora agora.**

@@ -7,7 +7,8 @@ import { IconeEtiqueta, IconeExcluir } from '../../components/Icones'
 import Toast, { type TipoToast } from '../../components/Toast'
 import {
   MM_PARA_PX_IMPRESSAO,
-  passoVertical,
+  alturaBlocoFileiraMm,
+  alturaPaginaImpressaoMm,
   xDaColuna,
   type EtiquetaConfig,
   type ProdutoExemplo,
@@ -120,7 +121,7 @@ export default function EtiquetaEmissaoForm() {
     if (!impressao) return
     const estilo = document.createElement('style')
     estilo.textContent =
-      `@page etiqueta-emissao-impressao { size: ${impressao.config.larguraRoloMm}mm ${passoVertical(impressao.config)}mm; margin: 0; }` +
+      `@page etiqueta-emissao-impressao { size: ${impressao.config.larguraRoloMm}mm ${alturaPaginaImpressaoMm(impressao.config)}mm; margin: 0; }` +
       `.etiqueta-rolo-imprimir { page: etiqueta-emissao-impressao; }`
     document.head.appendChild(estilo)
     // No <html> TAMBÉM: é lá que mora o `overflow: hidden` do shell, e sem destravá-lo o navegador
@@ -271,12 +272,14 @@ export default function EtiquetaEmissaoForm() {
               key={indiceLinha}
               style={{
                 // Uma fileira = UMA PÁGINA (2026-08-21, tarde), com o sensor de gap da impressora
-                // encaixando cada uma no adesivo. Altura do bloco = a da ETIQUETA, não a do passo:
-                // bloco tão alto quanto a página é o caso limite da paginação e um sub-pixel a
-                // mais nasce uma página em branco entre cada etiqueta. O gap quem dá é o `@page`.
+                // encaixando cada uma no adesivo. ⚠️ O bloco fica um triz MENOR que a página
+                // (2026-08-24): bloco tão alto quanto ela é o caso limite da paginação e um
+                // sub-pixel a mais nasce uma página em branco entre cada etiqueta. Ver
+                // FOLGA_PAGINACAO_MM. O branco entre fileiras quem dá é o avanço da impressora
+                // até o gap — não o desenho, e não o `@page`.
                 position: 'relative',
                 width: impressao.config.larguraRoloMm * MM_PARA_PX_IMPRESSAO,
-                height: impressao.config.alturaEtiquetaMm * MM_PARA_PX_IMPRESSAO,
+                height: alturaBlocoFileiraMm(impressao.config) * MM_PARA_PX_IMPRESSAO,
                 breakAfter: indiceLinha === fileirasImpressao.length - 1 ? 'auto' : 'page',
                 breakInside: 'avoid',
               }}
