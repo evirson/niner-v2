@@ -140,7 +140,7 @@ class MontadorXmlNfceTest {
                 "UN", um("3"), um("10.00"), null, null, null, 6);
 
         XmlMontado montado = montador.montar(new NotaParaMontar(
-                AmbienteSefaz.HOMOLOGACAO, 1, 5, 13230051, EMISSAO, "VENDA AO CONSUMIDOR", 1,
+                AmbienteSefaz.HOMOLOGACAO, ModeloVenda.NFCE, 1, 5, 13230051, EMISSAO, "VENDA AO CONSUMIDOR", 1,
                 emitente(1), null, List.of(item), calculo.itens(), calculo.totais(),
                 List.of(new Pagamento("01", calculo.totais().valorNota(), null, null)), null, null,
                 respTec(), urls(), csc(), "Niner 1.0"));
@@ -168,7 +168,7 @@ class MontadorXmlNfceTest {
                 "UN", um("3"), um("10.00"), null, null, null, 0);
 
         XmlMontado montado = montador.montar(new NotaParaMontar(
-                AmbienteSefaz.HOMOLOGACAO, 1, 5, 13230051, EMISSAO, "VENDA AO CONSUMIDOR", 1,
+                AmbienteSefaz.HOMOLOGACAO, ModeloVenda.NFCE, 1, 5, 13230051, EMISSAO, "VENDA AO CONSUMIDOR", 1,
                 emitente(1), null, List.of(item), calculo.itens(), calculo.totais(),
                 List.of(new Pagamento("01", calculo.totais().valorNota(), null, null)), null, null,
                 respTec(), urls(), csc(), "Niner 1.0"));
@@ -244,7 +244,7 @@ class MontadorXmlNfceTest {
 
     @Test
     void vendaComCpfEmiteODestinatarioComCpf() {
-        Destinatario cliente = new Destinatario("111.444.777-35", "MARIA SILVA", 9, 4106902, "CURITIBA", "PR");
+        Destinatario cliente = Destinatario.nfce("111.444.777-35", "MARIA SILVA", 9, 4106902, "CURITIBA", "PR");
         XmlMontado montado = montarVendaSimples(1, "102", cliente);
 
         validarEstrutura(montado);
@@ -263,7 +263,7 @@ class MontadorXmlNfceTest {
      */
     @Test
     void emHomologacaoODestinatarioLevaAFraseNoLugarDoNomeReal() {
-        Destinatario cliente = new Destinatario("111.444.777-35", "MARIA SILVA", 9, 4106902, "CURITIBA", "PR");
+        Destinatario cliente = Destinatario.nfce("111.444.777-35", "MARIA SILVA", 9, 4106902, "CURITIBA", "PR");
         XmlMontado montado = montarVendaSimples(1, "102", cliente);
 
         validarEstrutura(montado);
@@ -306,7 +306,7 @@ class MontadorXmlNfceTest {
      *  XML — só em homologação ele é substituído pela frase. */
     @Test
     void emProducaoODestinatarioLevaONomeReal() {
-        Destinatario cliente = new Destinatario("111.444.777-35", "MARIA SILVA", 9, 4106902, "CURITIBA", "PR");
+        Destinatario cliente = Destinatario.nfce("111.444.777-35", "MARIA SILVA", 9, 4106902, "CURITIBA", "PR");
         XmlMontado montado = montador.montar(notaBase(1, regraSimples("102"), cliente, AmbienteSefaz.PRODUCAO,
                 null, null));
 
@@ -340,7 +340,7 @@ class MontadorXmlNfceTest {
     @Test
     void semCscOnlineEhRecusado() {
         NotaParaMontar base = notaBase(1, regraSimples("102"), null, AmbienteSefaz.HOMOLOGACAO, null, null);
-        NotaParaMontar semCsc = new NotaParaMontar(base.ambiente(), base.serie(), base.numero(),
+        NotaParaMontar semCsc = new NotaParaMontar(base.ambiente(), ModeloVenda.NFCE, base.serie(), base.numero(),
                 base.codigoNumerico(), base.emissao(), base.naturezaOperacao(), base.tipoEmissao(),
                 base.emitente(), base.destinatario(), base.itens(), base.itensTributados(),
                 base.totais(), base.pagamentos(), base.troco(), base.informacoesComplementares(),
@@ -438,7 +438,7 @@ class MontadorXmlNfceTest {
                 pagamentoDe("28.00"), null);
         ItemNota comEComercial = new ItemNota(1, "P1", null, "SABAO P&G <PROMO>", "61091000", null,
                 "UN", um("3"), um("10.00"), null, null, null, 0);
-        NotaParaMontar nota = new NotaParaMontar(base.ambiente(), base.serie(), base.numero(),
+        NotaParaMontar nota = new NotaParaMontar(base.ambiente(), ModeloVenda.NFCE, base.serie(), base.numero(),
                 base.codigoNumerico(), base.emissao(), base.naturezaOperacao(), base.tipoEmissao(),
                 base.emitente(), base.destinatario(), List.of(comEComercial), base.itensTributados(),
                 base.totais(), base.pagamentos(), base.troco(), base.informacoesComplementares(),
@@ -497,7 +497,7 @@ class MontadorXmlNfceTest {
     @Test
     void qrCodeDeContingenciaComCpfPreencheIndicadorEDocumento() {
         XmlMontado montado = montarEmContingencia(
-                new Destinatario("22233344405", null, 9, 4106902, "CURITIBA", "PR"));
+                Destinatario.nfce("22233344405", null, 9, 4106902, "CURITIBA", "PR"));
 
         assertThatCode(() -> validarEstrutura(montado)).doesNotThrowAnyException();
         assertThat(montado.xml()).contains("|28.00|1|22233344405|");
@@ -520,7 +520,7 @@ class MontadorXmlNfceTest {
         // 19:44 UTC == 16:44 em Brasília (-03:00) — a mesma hora que pgjdbc devolveria para uma
         // venda registrada às 16:44 no horário do lojista.
         OffsetDateTime emissaoUtc = OffsetDateTime.of(2026, 8, 17, 19, 44, 0, 0, ZoneOffset.UTC);
-        NotaParaMontar nota = new NotaParaMontar(base.ambiente(), base.serie(), base.numero(),
+        NotaParaMontar nota = new NotaParaMontar(base.ambiente(), ModeloVenda.NFCE, base.serie(), base.numero(),
                 base.codigoNumerico(), emissaoUtc, base.naturezaOperacao(), base.tipoEmissao(),
                 base.emitente(), base.destinatario(), base.itens(), base.itensTributados(),
                 base.totais(), base.pagamentos(), base.troco(), base.informacoesComplementares(),
@@ -572,7 +572,7 @@ class MontadorXmlNfceTest {
     private NotaParaMontar notaEmContingencia(Destinatario destinatario) {
         NotaParaMontar base = notaBase(1, regraSimples("102"), destinatario, AmbienteSefaz.PRODUCAO,
                 pagamentoDe("28.00"), null);
-        return new NotaParaMontar(base.ambiente(), base.serie(), base.numero(),
+        return new NotaParaMontar(base.ambiente(), ModeloVenda.NFCE, base.serie(), base.numero(),
                 base.codigoNumerico(), base.emissao(), base.naturezaOperacao(),
                 MontadorXmlNfce.TP_EMIS_CONTINGENCIA_OFFLINE,
                 base.emitente(), base.destinatario(), base.itens(), base.itensTributados(),
@@ -605,7 +605,7 @@ class MontadorXmlNfceTest {
                 new ItemNota(1, "P1", null, "PRIMEIRO PRODUTO", "61091000", null, "UN", um("3"), um("10.00"), null, null, null, 0),
                 new ItemNota(2, "P2", null, "SEGUNDO PRODUTO", "61091000", null, "UN", um("1"), um("5.00"), null, null, null, 0));
 
-        return montador.montar(new NotaParaMontar(ambiente, 1, 5, 13230051, EMISSAO,
+        return montador.montar(new NotaParaMontar(ambiente, ModeloVenda.NFCE, 1, 5, 13230051, EMISSAO,
                 "VENDA AO CONSUMIDOR", 1, emitente(1), null, itens, calculo.itens(), calculo.totais(),
                 List.of(new Pagamento("01", calculo.totais().valorNota(), null, null)), null, null,
                 respTec(), urls(), csc(), "Niner 1.0"));
@@ -626,7 +626,7 @@ class MontadorXmlNfceTest {
                 ? pagamentos
                 : List.of(new Pagamento("01", calculo.totais().valorNota(), null, null));
 
-        return new NotaParaMontar(ambiente, 1, 5, 13230051, EMISSAO, "VENDA AO CONSUMIDOR", 1,
+        return new NotaParaMontar(ambiente, ModeloVenda.NFCE, 1, 5, 13230051, EMISSAO, "VENDA AO CONSUMIDOR", 1,
                 emitente(crt), destinatario, List.of(item), calculo.itens(), calculo.totais(),
                 pags, troco, null, respTec(), urls(), csc(), "Niner 1.0");
     }

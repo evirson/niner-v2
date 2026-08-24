@@ -99,21 +99,26 @@ public class EmissaoNfceService {
      *               serviço, o mais tarde possível (§9.2)
      */
     public ResultadoEmissao emitir(PedidoDeEmissao pedido) {
-        // ---------- DF13: NFC-e não serve para contribuinte de ICMS ----------
-        // Recusa ANTES de queimar número: nada de inutilizar depois por um caso que dava para
-        // prever. A venda continua existindo (F3) e o documento fica em NAO_EMITIDO com o motivo.
+        // ---------- DF13: contribuinte de ICMS sai em NF-e 55, não em NFC-e ----------
+        // Até 2026-08-24 este caso era apenas RECUSADO aqui e a venda ficava sem documento nenhum.
+        // Agora o modelo vem decidido do assembler (a partir do indicador_ie do cliente) e a
+        // emissão segue este mesmo caminho — o que muda é o modelo, a série e o autorizador.
+        // Os pré-requisitos da 55 (emite_nfe ligado, cadastro do cliente completo) são conferidos
+        // no assembler, ANTES de qualquer número ser reservado: nada de queimar numeração por um
+        // caso que dava para prever.
         Destinatario dest = pedido.destinatario();
-        if (dest != null && dest.indicadorIe() == 1) {
-            long id = repositorio.gravarNaoEmitido(pedido,
-                    "Venda a contribuinte de ICMS não sai em NFC-e (modelo 65). "
-                            + "Este cliente exige NF-e modelo 55.");
-            return ResultadoEmissao.naoEmitido(id,
-                    "O cliente é contribuinte de ICMS — a NFC-e não serve para revenda. A venda foi "
-                            + "registrada normalmente e aparece em Documentos Fiscais como não emitida.");
+        int modelo = pedido.modelo().codigo();
+
+        // A venda exige NF-e 55 mas ela não pode sair agora (emite_nfe desligado, cadastro do
+        // cliente incompleto). F3: a venda continua registrada e o documento guarda o motivo —
+        // travar o fechamento por causa disso deixaria o caixa parado com cliente na frente.
+        if (pedido.impedimentoNfe() != null) {
+            long id = repositorio.gravarNaoEmitido(pedido, pedido.impedimentoNfe());
+            return ResultadoEmissao.naoEmitido(id, pedido.impedimentoNfe());
         }
 
         Autorizador autorizador = autorizadores.buscar(
-                pedido.emitente().uf(), MODELO_NFCE, pedido.ambiente().codigo());
+                pedido.emitente().uf(), modelo, pedido.ambiente().codigo());
         CertificadoParaAssinatura certificado = certificados.carregarAtivoParaAssinatura(pedido.idEmpresa());
         KeyStore keystore = abrir(certificado);
 
@@ -121,23 +126,34 @@ public class EmissaoNfceService {
         // A empresa já está em contingência: não adianta tentar a SEFAZ a cada venda e fazer o
         // caixa esperar 10 s de timeout. Sai direto em tpEmis 9, na série própria (DF33), e a
         // transmissão fica para o job que drena a fila quando a SEFAZ voltar.
-        FiscalContingenciaService.Estado estado = contingencia.consultar(pedido.idEmpresa());
-        int tipoEmissao = estado.ativa() ? MontadorXmlNfce.TP_EMIS_CONTINGENCIA_OFFLINE : TP_EMIS_NORMAL;
-        int serie = estado.ativa() ? estado.serieContingencia() : pedido.serie();
+        // ⚠️ Contingência OFFLINE (tpEmis 9) é EXCLUSIVA da NFC-e. A NF-e 55 só tem SVC (Sefaz
+        // Virtual de Contingência), que não está implementada — decisão do dono do produto em
+        // 2026-08-24: se a SEFAZ não responder, a venda é registrada e a nota fica em NAO_EMITIDO
+        // para reprocessar em Documentos Fiscais, que é o comportamento que já existia. Por isso a
+        // 55 nunca entra neste caminho.
+        FiscalContingenciaService.Estado estado = pedido.modelo().ehNfe()
+                ? null
+                : contingencia.consultar(pedido.idEmpresa());
+        boolean emContingencia = estado != null && estado.ativa();
+        int tipoEmissao = emContingencia ? MontadorXmlNfce.TP_EMIS_CONTINGENCIA_OFFLINE : TP_EMIS_NORMAL;
+        int serie = emContingencia ? estado.serieContingencia() : pedido.serie();
 
         // O CSC só entra no QR Code ONLINE (NT 2015.002 v2) — em contingência quem garante a
         // autenticidade é a assinatura do certificado, não o CSC (ver MontadorXmlNfce.qrCodeOffline).
-        CscEmpresa csc = tipoEmissao == MontadorXmlNfce.TP_EMIS_CONTINGENCIA_OFFLINE
+        // Nem na NF-e 55: ela não tem QR Code (o grupo infNFeSupl não existe no XSD do 55).
+        CscEmpresa csc = pedido.modelo().ehNfe() || tipoEmissao == MontadorXmlNfce.TP_EMIS_CONTINGENCIA_OFFLINE
                 ? null
                 : carregarCsc(pedido.idEmpresa());
 
         // ---------- 1. numeração — transação curta e própria (F4) ----------
-        NumeroReservado numero = numeracao.reservar(pedido.idEmpresa(), MODELO_NFCE, serie);
+        // ⚠️ Numeração é por (empresa, modelo, série): a NF-e 55 tem sequência PRÓPRIA, e é por
+        // isso que o modelo entra aqui em vez do MODELO_NFCE fixo.
+        NumeroReservado numero = numeracao.reservar(pedido.idEmpresa(), modelo, serie);
 
         // ---------- 2. montar, assinar e validar — nenhum I/O de rede ----------
         XmlMontado montado = montador.montar(
                 new NotaParaMontar(
-                        pedido.ambiente(), numero.serie(), numero.numero(), numero.codigoNumerico(),
+                        pedido.ambiente(), pedido.modelo(), numero.serie(), numero.numero(), numero.codigoNumerico(),
                         pedido.emissao(), pedido.naturezaOperacao(), tipoEmissao,
                         pedido.emitente(), dest, pedido.itens(), pedido.itensTributados(), pedido.totais(),
                         pedido.pagamentos(), pedido.troco(), pedido.informacoesComplementares(),
@@ -160,13 +176,13 @@ public class EmissaoNfceService {
         // Em contingência a emissão termina aqui: o cupom sai, a venda segue, e a nota entra na
         // fila. Tentar transmitir agora só devolveria o mesmo timeout que colocou a empresa em
         // contingência — e faria o caixa esperar por ele em toda venda.
-        if (estado.ativa()) {
+        if (emContingencia) {
             repositorio.marcarEmContingencia(idDocumento);
             return ResultadoEmissao.emContingencia(idDocumento, montado.chaveAcesso());
         }
 
         // ---------- 3. transmitir — FORA de transação, pode levar 10 s ----------
-        String url = autorizadores.urlDe(pedido.emitente().uf(), MODELO_NFCE,
+        String url = autorizadores.urlDe(pedido.emitente().uf(), modelo,
                 pedido.ambiente().codigo(), ServicoSefaz.AUTORIZACAO);
         String enviNFe = ("<enviNFe versao=\"4.00\" xmlns=\"%s\">"
                 + "<idLote>%d</idLote><indSinc>1</indSinc>%s</enviNFe>")
@@ -239,12 +255,21 @@ public class EmissaoNfceService {
      * transmitir, menos número perdido para inutilizar depois).
      */
     public record PedidoDeEmissao(
+            /** Motivo por extenso quando a venda exige NF-e 55 mas ela não pode sair agora
+             *  ({@code emite_nfe} desligado, cadastro do cliente incompleto). {@code null} = pode
+             *  emitir. ⚠️ É mensagem, não exceção: <b>F3</b> — a venda nunca deixa de ser
+             *  registrada porque a nota falhou. Ver {@code VendaFiscalAssembler.impedimentoParaNfe}. */
+            String impedimentoNfe,
             long idTenant,
             long idEmpresa,
             Integer idVenda,
             Integer idCliente,
             Integer idUsuario,
             AmbienteSefaz ambiente,
+            /** 65 ou 55 — decidido pelo {@code VendaFiscalAssembler} a partir do
+             *  {@code indicador_ie} do cliente (2026-08-24). Ver {@link ModeloVenda}. */
+            ModeloVenda modelo,
+            /** Já é a série do modelo escolhido: {@code serie_nfce} ou {@code serie_nfe}. */
             int serie,
             OffsetDateTime emissao,
             String naturezaOperacao,

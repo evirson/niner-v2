@@ -73,7 +73,24 @@ public final class MontagemNfceDtos {
             int indicadorIe,
             Integer codigoMunicipioIbge,
             String municipio,
-            String uf) {
+            String uf,
+            /** Daqui para baixo, só a <b>NF-e 55</b> usa (2026-08-24, venda a contribuinte). Na
+             *  NFC-e o grupo {@code enderDest} nem existe, então estes campos vêm nulos e são
+             *  ignorados — ver {@code MontadorXmlNfce.montarDest}. */
+            String inscricaoEstadual,
+            String logradouro,
+            String numero,
+            String complemento,
+            String bairro,
+            String cep,
+            String telefone) {
+
+        /** Destinatário de NFC-e — só o que o modelo 65 aceita; o resto nasce nulo. */
+        public static Destinatario nfce(String cpfCnpj, String nome, int indicadorIe,
+                Integer codigoMunicipioIbge, String municipio, String uf) {
+            return new Destinatario(cpfCnpj, nome, indicadorIe, codigoMunicipioIbge, municipio, uf,
+                    null, null, null, null, null, null, null);
+        }
     }
 
     /**
@@ -140,8 +157,40 @@ public final class MontagemNfceDtos {
      * A nota inteira, pronta para virar XML. {@code numero}/{@code serie}/{@code codigoNumerico}
      * vêm da reserva de numeração (F4); {@code itensTributados} e {@code totais} vêm do motor.
      */
+    /**
+     * Modelo do documento de <b>venda</b>: 65 (NFC-e) ou 55 (NF-e).
+     *
+     * <p>A escolha é do destinatário, não do operador: venda a <b>contribuinte de ICMS</b>
+     * ({@code indIEDest = 1}) não sai em NFC-e — a mercadoria vai ser revendida, e o modelo 65 é
+     * para consumidor final (DF13). Até 2026-08-24 o PDV apenas <b>recusava</b> esse caso e
+     * deixava a venda sem documento; agora emite o 55.
+     *
+     * <p>⚠️ Uma PJ <b>não</b> contribuinte (escritório, condomínio, consultório comprando para uso
+     * próprio) continua recebendo NFC-e — decisão do dono do produto em 2026-08-24, e é o que a
+     * legislação permite. O gatilho é o {@code indicador_ie}, nunca "tem CNPJ".
+     */
+    public enum ModeloVenda {
+        NFCE(65), NFE(55);
+
+        private final int codigo;
+
+        ModeloVenda(int codigo) {
+            this.codigo = codigo;
+        }
+
+        public int codigo() {
+            return codigo;
+        }
+
+        public boolean ehNfe() {
+            return this == NFE;
+        }
+    }
+
     public record NotaParaMontar(
             AmbienteSefaz ambiente,
+            /** 65 ou 55 — ver {@link ModeloVenda}. */
+            ModeloVenda modelo,
             int serie,
             long numero,
             int codigoNumerico,

@@ -7,6 +7,7 @@ import com.vetor.niner.fiscal.documento.MontagemNfceDtos.AmbienteSefaz;
 import com.vetor.niner.fiscal.documento.MontagemNfceDtos.Destinatario;
 import com.vetor.niner.fiscal.documento.MontagemNfceDtos.Emitente;
 import com.vetor.niner.fiscal.documento.MontagemNfceDtos.ItemNota;
+import com.vetor.niner.fiscal.documento.MontagemNfceDtos.ModeloVenda;
 import com.vetor.niner.fiscal.documento.MontagemNfceDtos.Pagamento;
 import com.vetor.niner.fiscal.documento.MontagemNfceDtos.ResponsavelTecnico;
 import com.vetor.niner.fiscal.motor.MotorTributario;
@@ -86,6 +87,16 @@ public class VendaFiscalAssembler {
         Destinatario destinatario = incluirCpf ? buscarDestinatarioObrigatorio(venda.idCliente()) : null;
         String ufDestino = destinatario != null && destinatario.uf() != null ? destinatario.uf() : config.uf();
 
+        // ---------- qual documento esta venda gera (2026-08-24) ----------
+        // Contribuinte de ICMS nao recebe NFC-e (DF13) — a mercadoria vai ser revendida. Ate hoje o
+        // PDV so RECUSAVA esse caso; agora ele emite a NF-e 55. ⚠️ O gatilho e o indicador_ie, NAO
+        // "tem CNPJ": PJ nao contribuinte (escritorio, condominio, consultorio comprando para uso
+        // proprio) continua recebendo NFC-e, que e o que a legislacao permite.
+        ModeloVenda modelo = destinatario != null && destinatario.indicadorIe() == 1
+                ? ModeloVenda.NFE
+                : ModeloVenda.NFCE;
+        String impedimentoNfe = modelo.ehNfe() ? impedimentoParaNfe(config, destinatario) : null;
+
         List<ItemBruto> itensBrutos = buscarItens(idVenda);
         if (itensBrutos.isEmpty()) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
@@ -106,7 +117,12 @@ public class VendaFiscalAssembler {
         }
 
         TributacaoResultado calculo = motor.calcular(
-                new OperacaoFiscal(TipoOperacao.VENDA, ufDestino, TipoDestinatario.CONSUMIDOR_FINAL, itensOperacao),
+                // ⚠️ CONTRIBUINTE muda o CFOP que o motor escolhe (revenda, nao consumo) — e e por
+                // isso que a venda saiu do modelo 65. Declarar CONSUMIDOR_FINAL aqui contradiria o
+                // indFinal=0 e o indIEDest=1 que o XML leva.
+                new OperacaoFiscal(TipoOperacao.VENDA, ufDestino,
+                        modelo.ehNfe() ? TipoDestinatario.CONTRIBUINTE : TipoDestinatario.CONSUMIDOR_FINAL,
+                        itensOperacao),
                 new ContextoFiscalEmpresa(config.crt(), config.uf()));
 
         List<Pagamento> pagamentos = buscarPagamentos(idVenda);
@@ -122,17 +138,24 @@ public class VendaFiscalAssembler {
         // motivo por extenso, em vez de assinar e transmitir uma nota que voltaria com cStat 975.
         int tpAmb = config.ambiente().codigo();
         Optional<CsrtService.Csrt> codigo = csrt.buscar(config.uf(), tpAmb);
-        if (codigo.isEmpty() && csrt.exigeCsrt(config.uf(), 65, tpAmb)) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, CsrtService.mensagemFaltando(config.uf(), 65));
+        // O modelo importa: a exigencia de CSRT e por (UF, modelo) — ha UF que cobra no 55 e nao
+        // no 65 (ver docs/MODULOFISCAL.md §9.9).
+        if (codigo.isEmpty() && csrt.exigeCsrt(config.uf(), modelo.codigo(), tpAmb)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    CsrtService.mensagemFaltando(config.uf(), modelo.codigo()));
         }
         ResponsavelTecnico responsavelTecnico = new ResponsavelTecnico(
                 respTec.cnpj(), respTec.contato(), respTec.email(), respTec.telefone(),
                 codigo.map(CsrtService.Csrt::idCsrt).orElse(null),
                 codigo.map(CsrtService.Csrt::codigo).orElse(null));
 
-        return Optional.of(new PedidoDeEmissao(idTenant, idEmpresa, (int) idVenda,
+        return Optional.of(new PedidoDeEmissao(impedimentoNfe, idTenant, idEmpresa, (int) idVenda,
                 venda.idCliente() == null ? null : venda.idCliente().intValue(), idUsuario,
-                config.ambiente(), config.serieNfce(), venda.dataVenda(), "VENDA AO CONSUMIDOR",
+                config.ambiente(), modelo,
+                modelo.ehNfe() ? config.serieNfe() : config.serieNfce(), venda.dataVenda(),
+                // A natureza da operacao aparece no DANFE e descreve o que a nota e: "ao consumidor"
+                // seria falso numa venda para revenda.
+                modelo.ehNfe() ? "VENDA DE MERCADORIA" : "VENDA AO CONSUMIDOR",
                 emitente, destinatario, itensNota, calculo.itens(), calculo.totais(), pagamentos,
                 // O PDV não tem campo de troco explícito hoje — pagamentos sempre fecham o saldo
                 // exato (split-tender). documento_fiscal.valor_troco é NOT NULL: zero é o valor
@@ -144,7 +167,7 @@ public class VendaFiscalAssembler {
 
     private ConfigEmpresa buscarConfig(long idEmpresa) {
         return jdbc.sql("""
-                        SELECT c.emite_nfce, c.ambiente::text AS ambiente, c.serie_nfce, c.crt,
+                        SELECT c.emite_nfce, c.emite_nfe, c.ambiente::text AS ambiente, c.serie_nfce, c.serie_nfe, c.crt,
                                e.cnpj, e.razao_social, e.nome_fantasia, e.inscricao_estadual,
                                e.endereco, e.numero, e.complemento, e.bairro,
                                e.codigo_municipio_ibge, e.cidade, e.estado, e.cep, e.telefone
@@ -157,7 +180,7 @@ public class VendaFiscalAssembler {
                 .query((rs, n) -> {
                     boolean emite = rs.getBoolean("emite_nfce");
                     if (rs.wasNull() || !emite) {
-                        return new ConfigEmpresa(false, null, 0, 0, null, null, null, null,
+                        return new ConfigEmpresa(false, false, null, 0, 0, 0, null, null, null, null,
                                 null, null, null, null, 0, null, null, null, null);
                     }
                     exigir(rs.getString("cnpj"), "CNPJ da empresa");
@@ -168,8 +191,9 @@ public class VendaFiscalAssembler {
                                 "Município (código IBGE) da empresa não está preenchido. "
                                         + "Complete o cadastro da empresa antes de emitir.");
                     }
-                    return new ConfigEmpresa(true, AmbienteSefaz.valueOf(rs.getString("ambiente")),
-                            rs.getInt("serie_nfce"), rs.getInt("crt"), rs.getString("cnpj"),
+                    return new ConfigEmpresa(true, rs.getBoolean("emite_nfe"),
+                            AmbienteSefaz.valueOf(rs.getString("ambiente")),
+                            rs.getInt("serie_nfce"), rs.getInt("serie_nfe"), rs.getInt("crt"), rs.getString("cnpj"),
                             rs.getString("razao_social"), rs.getString("nome_fantasia"),
                             rs.getString("inscricao_estadual"), rs.getString("endereco"),
                             rs.getString("numero"), rs.getString("complemento"), rs.getString("bairro"),
@@ -219,8 +243,12 @@ public class VendaFiscalAssembler {
      * comum. NFC-e permite omitir o grupo {@code dest} inteiro nesse caso (confirmado no B0).
      */
     private Destinatario buscarDestinatario(int idCliente) {
+        // ⚠️ Lê o cadastro INTEIRO, não só o que a NFC-e usa (2026-08-24): quando o cliente é
+        // contribuinte de ICMS a venda sai em NF-e 55, e ali `enderDest` é obrigatório. Buscar de
+        // uma vez evita uma segunda consulta e mantém a decisão de modelo fora daqui.
         return jdbc.sql("""
-                        SELECT cpf_cnpj, nome, indicador_ie, codigo_municipio_ibge, cidade, estado
+                        SELECT cpf_cnpj, nome, indicador_ie, codigo_municipio_ibge, cidade, estado,
+                               rg_ie, endereco, numero, complemento, bairro, cep, telefone
                           FROM cliente
                          WHERE id_tenant = plataforma.tenant_atual() AND id_cliente = ?
                         """)
@@ -232,10 +260,73 @@ public class VendaFiscalAssembler {
                     }
                     return new Destinatario(documento, rs.getString("nome"), rs.getInt("indicador_ie"),
                             (Integer) rs.getObject("codigo_municipio_ibge"), rs.getString("cidade"),
-                            rs.getString("estado"));
+                            rs.getString("estado"),
+                            rs.getString("rg_ie"), rs.getString("endereco"), rs.getString("numero"),
+                            rs.getString("complemento"), rs.getString("bairro"), rs.getString("cep"),
+                            rs.getString("telefone"));
                 })
                 .optional()
                 .orElse(null);
+    }
+
+    /**
+     * O que impede esta venda de sair em NF-e 55 — {@code null} quando nada impede.
+     *
+     * <p>⚠️ <b>Devolve mensagem em vez de lançar, e isso é o ponto</b> (2026-08-24). A primeira
+     * versão lançava 409 e <b>travava o fechamento da venda</b> por cadastro incompleto de cliente
+     * — violando o <b>F3</b> ("a venda nunca desaparece porque a nota falhou"), que é justamente o
+     * princípio que o resto deste módulo protege com cuidado. Quem pegou foi
+     * {@code VendaFiscalEmissaoTest.vendaAContribuinteFicaNaoEmitidaMasVendaContinuaRegistrada}.
+     * O caminho certo é o que já existia: a venda é registrada, o documento fica em
+     * {@code NAO_EMITIDO} com o motivo por extenso, e o lojista resolve em Documentos Fiscais.
+     *
+     * <p>Dois pré-requisitos:
+     * <ol>
+     *   <li><b>{@code emite_nfe} ligado</b> na empresa — ter NFC-e ligada não implica ter NF-e:
+     *       são séries e credenciamentos distintos;</li>
+     *   <li><b>cadastro do cliente completo</b> — a 55 exige {@code enderDest}, que a NFC-e nem
+     *       tem. Conferir aqui evita queimar número para receber uma rejeição de XSD que não diria
+     *       ao operador que o problema é o cadastro.</li>
+     * </ol>
+     */
+    private String impedimentoParaNfe(ConfigEmpresa config, Destinatario destinatario) {
+        if (!config.emiteNfe()) {
+            return "O cliente é contribuinte de ICMS, então a venda exige NF-e (modelo 55) — a NFC-e "
+                    + "não serve para revenda. A emissão de NF-e não está ligada para esta empresa: "
+                    + "ligue em Configuração Fiscal e emita a nota em Documentos Fiscais.";
+        }
+        String falta = faltaParaNfe(destinatario);
+        if (falta != null) {
+            return "O cliente é contribuinte de ICMS, então a venda exige NF-e (modelo 55), que pede "
+                    + "o cadastro completo do cliente. Falta: " + falta
+                    + ". Complete em Clientes e emita a nota em Documentos Fiscais.";
+        }
+        return null;
+    }
+
+    /**
+     * O que falta no cadastro para a venda sair em NF-e 55 — {@code null} quando está tudo lá.
+     *
+     * <p><b>Por que existe.</b> A NFC-e aceita destinatário só com CPF e nome; a NF-e 55 exige
+     * endereço completo e, do contribuinte, a inscrição estadual. Sem esta conferência o defeito
+     * apareceria tarde e caro: número de NF-e <b>queimado</b>, rejeição da SEFAZ com uma mensagem
+     * de XSD, e o operador sem saber que o problema é o cadastro do cliente. Mesma linha do DF13,
+     * que já recusava antes de reservar numeração.
+     */
+    static String faltaParaNfe(Destinatario d) {
+        List<String> faltando = new ArrayList<>();
+        if (vazio(d.logradouro())) faltando.add("endereço");
+        if (vazio(d.numero())) faltando.add("número");
+        if (vazio(d.bairro())) faltando.add("bairro");
+        if (d.codigoMunicipioIbge() == null || d.codigoMunicipioIbge() == 0) faltando.add("município (código IBGE)");
+        if (vazio(d.uf())) faltando.add("UF");
+        // A IE só é exigida de quem se declarou contribuinte — para 2/9 o XSD nem aceita o campo.
+        if (d.indicadorIe() == 1 && vazio(d.inscricaoEstadual())) faltando.add("inscrição estadual");
+        return faltando.isEmpty() ? null : String.join(", ", faltando);
+    }
+
+    private static boolean vazio(String s) {
+        return s == null || s.isBlank();
     }
 
     /** Em ordem de inserção (PK autoincremento) — a mesma ordem em que o PDV lançou os itens. */
@@ -369,7 +460,8 @@ public class VendaFiscalAssembler {
 
     // ---------------------------------------------------------------- registros internos
 
-    private record ConfigEmpresa(boolean emiteNfce, AmbienteSefaz ambiente, int serieNfce, int crt,
+    private record ConfigEmpresa(boolean emiteNfce, boolean emiteNfe, AmbienteSefaz ambiente,
+                                 int serieNfce, int serieNfe, int crt,
                                  String cnpj, String razaoSocial, String nomeFantasia,
                                  String inscricaoEstadual, String logradouro, String numero,
                                  String complemento, String bairro, int codigoMunicipioIbge,

@@ -535,4 +535,180 @@ class VendaFiscalEmissaoTest {
     private record DocumentoGravado(String situacao, String protocolo, boolean xmlPresente,
                                     boolean hashPresente, int modelo, int tipoEmissao) {
     }
+
+    /** Liga também a NF-e 55 — o {@link #ligarFiscal} padrão deixa {@code emiteNfe:false}, que é o
+     *  caso da maioria das lojas. Série 7 de propósito: prova que a 55 usa a série PRÓPRIA. */
+    private void ligarFiscalComNfe(String token, long idEmpresa) throws Exception {
+        mvc.perform(put("/api/v1/fiscal/config/" + idEmpresa).header("Authorization", "Bearer " + token)
+                        .contentType(APPLICATION_JSON)
+                        .content("""
+                                {"crt":1,"emiteNfce":true,"emiteNfe":true,
+                                 "ambiente":"HOMOLOGACAO","serieNfce":1,"serieNfe":7,"serieContingencia":9,
+                                 "cscId":"000001","cscToken":"csc-fake-de-teste"}
+                                """))
+                .andExpect(status().isOk());
+    }
+
+    /** Completa o que a NF-e 55 exige e a NFC-e não: endereço e inscrição estadual. */
+    private void completarCadastroParaNfe(long idTenant, long idCliente) {
+        jdbc.sql("""
+                        UPDATE cliente SET rg_ie = '1234567890', endereco = 'RUA DAS FLORES',
+                               numero = '100', bairro = 'CENTRO', cidade = 'CURITIBA', estado = 'PR',
+                               cep = '80010000', codigo_municipio_ibge = 4106902, telefone = '4133334444'
+                         WHERE id_tenant = ? AND id_cliente = ?
+                        """)
+                .params(idTenant, idCliente).update();
+    }
+
+    /**
+     * Venda a contribuinte de ICMS sai em <b>NF-e 55</b>, não em NFC-e (2026-08-24).
+     *
+     * <p>⚠️ Confere o <b>XML gravado</b>, não só a situação: o que prova que saiu a nota certa é o
+     * {@code mod} 55, a série própria, o {@code enderDest} (que a NFC-e nem tem), a IE do
+     * destinatário e a <b>ausência</b> do QR Code — o grupo {@code infNFeSupl} não existe no XSD do
+     * 55, então incluí-lo seria rejeição de schema. Um teste que olhasse só o status passaria com
+     * uma NFC-e disfarçada de 55.
+     */
+    @Test
+    void vendaAContribuinteSaiEmNfe55ComEnderecoESemQrCode() throws Exception {
+        String token = assinarNovoTenant("nfe-contrib");
+        long idTenant = idTenantDo(token);
+        long idEmpresa = idEmpresaDo(token);
+        String cnpj = "33444555000143";
+
+        completarDadosDaEmpresa(idTenant, idEmpresa, cnpj);
+        enviarCertificado(token, idEmpresa, cnpj);
+        ligarFiscalComNfe(token, idEmpresa);
+        long idPerfil = criarPerfilFiscalCsosn102(idTenant);
+        long idVariacao = criarProdutoComPerfil(token, idTenant, "PRODUTO PARA REVENDA", idPerfil, "80.00");
+        long idCliente = criarClienteContribuinte(token, idTenant, "Revendedora Ltda");
+        completarCadastroParaNfe(idTenant, idCliente);
+        long idFuncionario = criarFuncionario(token, "Vendedor NFe");
+        long idCarteira = carteiraDinheiroComTpag(token, idTenant);
+        abrirCaixa(token, idCarteira);
+
+        long idVenda = efetivarVenda(token, idVariacao, idCliente, idFuncionario, idCarteira, "80.00");
+
+        Mockito.when(transporte.enviar(any(), any(), any(), any(), any(), any()))
+                .thenAnswer(inv -> autorizada(extrairChaveDoEnvi(inv.getArgument(2))));
+
+        var resultado = mvc.perform(post("/api/v1/pdv/vendas/" + idVenda + "/nfce")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(APPLICATION_JSON).content("{\"incluirCpf\":true}"))
+                .andReturn();
+        String resp = resultado.getResponse().getContentAsString();
+        assertThat(resultado.getResponse().getStatus()).as("corpo: " + resp).isEqualTo(200);
+        org.junit.jupiter.api.Assertions.assertEquals("AUTORIZADO", JsonPath.read(resp, "$.situacao"));
+
+        DocumentoNfe doc = jdbc.sql("""
+                        SELECT modelo, serie, xml_assinado FROM documento_fiscal
+                         WHERE id_tenant = ? AND id_venda = ?
+                        """)
+                .params(idTenant, idVenda)
+                .query((rs, n) -> new DocumentoNfe(rs.getInt("modelo"), rs.getInt("serie"),
+                        rs.getString("xml_assinado")))
+                .single();
+
+        assertThat(doc.modelo()).as("venda a contribuinte tem que sair em NF-e, não NFC-e").isEqualTo(55);
+        assertThat(doc.serie()).as("a NF-e usa a série PRÓPRIA (serie_nfe), não a da NFC-e").isEqualTo(7);
+
+        String xml = doc.xml();
+        assertThat(xml).contains("<mod>55</mod>");
+        assertThat(xml).as("endereço do destinatário é obrigatório na 55").contains("<enderDest>");
+        assertThat(xml).contains("<xLgr>RUA DAS FLORES</xLgr>");
+        assertThat(xml).as("IE do contribuinte").contains("<IE>1234567890</IE>");
+        assertThat(xml).as("indIEDest 1 = contribuinte").contains("<indIEDest>1</indIEDest>");
+        assertThat(xml).as("ele revende, não é consumidor final").contains("<indFinal>0</indFinal>");
+        assertThat(xml).as("tpImp 1 = DANFE retrato").contains("<tpImp>1</tpImp>");
+        assertThat(xml).as("mesma UF do emitente").contains("<idDest>1</idDest>");
+        // ⚠️ O grupo do QR Code não existe no XSD da NF-e 55 — presença aqui é rejeição de schema.
+        assertThat(xml).as("NF-e 55 não tem QR Code").doesNotContain("infNFeSupl");
+        assertThat(xml).doesNotContain("qrCode");
+    }
+
+    private record DocumentoNfe(int modelo, int serie, String xml) {
+    }
+
+    /**
+     * O gatilho é o {@code indicador_ie}, <b>não</b> "tem CNPJ" (decisão do dono do produto,
+     * 2026-08-24): PJ não contribuinte — escritório, condomínio, consultório comprando para uso
+     * próprio — continua recebendo NFC-e, que é o que a legislação permite.
+     */
+    @Test
+    void vendaAPessoaJuridicaNaoContribuinteContinuaSaindoEmNfce() throws Exception {
+        String token = assinarNovoTenant("pj-nao-contrib");
+        long idTenant = idTenantDo(token);
+        long idEmpresa = idEmpresaDo(token);
+        String cnpj = "33444555000143";
+
+        completarDadosDaEmpresa(idTenant, idEmpresa, cnpj);
+        enviarCertificado(token, idEmpresa, cnpj);
+        ligarFiscalComNfe(token, idEmpresa);
+        long idPerfil = criarPerfilFiscalCsosn102(idTenant);
+        long idVariacao = criarProdutoComPerfil(token, idTenant, "PRODUTO USO PROPRIO", idPerfil, "40.00");
+        long idCliente = criarClienteContribuinte(token, idTenant, "Escritorio Ltda");
+        completarCadastroParaNfe(idTenant, idCliente);
+        // O que muda tudo: PJ, com CNPJ e endereço completo, mas NÃO contribuinte de ICMS.
+        jdbc.sql("UPDATE cliente SET indicador_ie = 9 WHERE id_tenant = ? AND id_cliente = ?")
+                .params(idTenant, idCliente).update();
+        long idFuncionario = criarFuncionario(token, "Vendedor PJ");
+        long idCarteira = carteiraDinheiroComTpag(token, idTenant);
+        abrirCaixa(token, idCarteira);
+
+        long idVenda = efetivarVenda(token, idVariacao, idCliente, idFuncionario, idCarteira, "40.00");
+
+        Mockito.when(transporte.enviar(any(), any(), any(), any(), any(), any()))
+                .thenAnswer(inv -> autorizada(extrairChaveDoEnvi(inv.getArgument(2))));
+
+        mvc.perform(post("/api/v1/pdv/vendas/" + idVenda + "/nfce").header("Authorization", "Bearer " + token)
+                        .contentType(APPLICATION_JSON).content("{\"incluirCpf\":true}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.situacao").value("AUTORIZADO"));
+
+        Integer modelo = jdbc.sql("SELECT modelo FROM documento_fiscal WHERE id_tenant = ? AND id_venda = ?")
+                .params(idTenant, idVenda).query(Integer.class).single();
+        assertThat(modelo).as("PJ não contribuinte recebe NFC-e normalmente").isEqualTo(65);
+    }
+
+    /**
+     * Cadastro incompleto <b>não trava o caixa</b> — F3.
+     *
+     * <p>A NF-e 55 exige endereço, e o cliente contribuinte pode ter sido cadastrado só com CNPJ.
+     * A venda é registrada, o documento fica em {@code NAO_EMITIDO} dizendo <b>qual campo falta</b>,
+     * e nada é transmitido. A primeira versão desta funcionalidade respondia 409 aqui e travava o
+     * fechamento da venda — foi este teste que pegou.
+     */
+    @Test
+    void contribuinteComCadastroIncompletoNaoTravaAVendaEDizOQueFalta() throws Exception {
+        String token = assinarNovoTenant("nfe-incompleto");
+        long idTenant = idTenantDo(token);
+        long idEmpresa = idEmpresaDo(token);
+        String cnpj = "33444555000143";
+
+        completarDadosDaEmpresa(idTenant, idEmpresa, cnpj);
+        enviarCertificado(token, idEmpresa, cnpj);
+        ligarFiscalComNfe(token, idEmpresa);
+        long idPerfil = criarPerfilFiscalCsosn102(idTenant);
+        long idVariacao = criarProdutoComPerfil(token, idTenant, "PRODUTO SEM ENDERECO", idPerfil, "25.00");
+        // Contribuinte, mas SEM endereço/IE — o cadastro que a NFC-e aceitava e a NF-e não aceita.
+        long idCliente = criarClienteContribuinte(token, idTenant, "Contribuinte Sem Endereco");
+        long idFuncionario = criarFuncionario(token, "Vendedor Incompleto");
+        long idCarteira = carteiraDinheiroComTpag(token, idTenant);
+        abrirCaixa(token, idCarteira);
+
+        long idVenda = efetivarVenda(token, idVariacao, idCliente, idFuncionario, idCarteira, "25.00");
+
+        mvc.perform(post("/api/v1/pdv/vendas/" + idVenda + "/nfce").header("Authorization", "Bearer " + token)
+                        .contentType(APPLICATION_JSON).content("{\"incluirCpf\":true}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.situacao").value("NAO_EMITIDO"))
+                .andExpect(jsonPath("$.mensagem").value(org.hamcrest.Matchers.containsString("endereço")))
+                .andExpect(jsonPath("$.mensagem").value(org.hamcrest.Matchers.containsString("inscrição estadual")));
+
+        Mockito.verifyNoInteractions(transporte);
+
+        Boolean cancelada = jdbc.sql("SELECT cancelada FROM venda WHERE id_tenant = ? AND id_venda = ?")
+                .params(idTenant, idVenda).query(Boolean.class).single();
+        assertThat(cancelada).as("F3: a venda continua registrada").isFalse();
+    }
 }

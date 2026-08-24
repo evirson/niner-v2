@@ -34,6 +34,10 @@ import java.util.Map;
 @Repository
 public class DocumentoFiscalRepositorio {
 
+    /** ⚠️ NÃO usar para gravar documento de VENDA: desde 2026-08-24 o modelo vem do pedido
+     *  ({@code pedido.modelo()}), porque venda a contribuinte de ICMS sai em NF-e 55. Gravar 65
+     *  fixo aqui fazia a nota nascer 55 no XML e 65 no banco — divergência que só um teste
+     *  conferindo a COLUNA pega, nunca um que olhe o status da resposta. */
     private static final int MODELO_NFCE = 65;
 
     /**
@@ -91,7 +95,7 @@ public class DocumentoFiscalRepositorio {
                                 ?::ambiente_fiscal, ?, ?, ?, ?, ?)
                         RETURNING id_documento_fiscal
                         """)
-                .params(pedido.idEmpresa(), MODELO_NFCE, pedido.ambiente().name(),
+                .params(pedido.idEmpresa(), pedido.modelo().codigo(), pedido.ambiente().name(),
                         pedido.idVenda(), pedido.idCliente(), pedido.totais().valorNota(),
                         motivo, pedido.idUsuario())
                 .query(Long.class).single();
@@ -116,7 +120,7 @@ public class DocumentoFiscalRepositorio {
                                 ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         RETURNING id_documento_fiscal
                         """)
-                .params(pedido.idEmpresa(), MODELO_NFCE, numero.serie(), numero.numero(), chave,
+                .params(pedido.idEmpresa(), pedido.modelo().codigo(), numero.serie(), numero.numero(), chave,
                         "%08d".formatted(numero.codigoNumerico()),
                         Integer.parseInt(chave.substring(43)),
                         pedido.ambiente().name(), tipoEmissao,

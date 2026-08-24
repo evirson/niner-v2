@@ -273,7 +273,7 @@ class AssinadorXmlNfeTest {
                 "UN", new BigDecimal("3"), new BigDecimal("10.00"), null, null, null, 0);
 
         return montador.montar(new NotaParaMontar(
-                AmbienteSefaz.HOMOLOGACAO, 1, 5, 13230051, EMISSAO, "VENDA AO CONSUMIDOR", 1,
+                AmbienteSefaz.HOMOLOGACAO, ModeloVenda.NFCE, 1, 5, 13230051, EMISSAO, "VENDA AO CONSUMIDOR", 1,
                 new Emitente(CNPJ, "MITRYUSCASH LTDA", null, "9122793165", 1,
                         "RUA MARIO CHALBAUD BISCAIA", "25", null, "NOVO MUNDO",
                         4106902, "CURITIBA", "PR", "81050240", null),

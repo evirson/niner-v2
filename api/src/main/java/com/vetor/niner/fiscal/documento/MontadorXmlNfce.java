@@ -151,7 +151,12 @@ public class MontadorXmlNfce {
         montarInfAdic(xml, nota);
         montarInfRespTec(xml, nota.responsavelTecnico(), chave);
         xml.append("</infNFe>");
-        montarInfNFeSupl(xml, nota, chave, assinadorQrOffline, emissaoLocal);
+        // ⚠️ `infNFeSupl` (QR Code + link de consulta) é EXCLUSIVO da NFC-e. Na NF-e 55 o grupo não
+        // existe no XSD: incluí-lo é rejeição de schema, não um extra ignorado. Quem consulta a 55
+        // usa a chave de acesso impressa no DANFE.
+        if (!nota.modelo().ehNfe()) {
+            montarInfNFeSupl(xml, nota, chave, assinadorQrOffline, emissaoLocal);
+        }
         xml.append("</NFe>");
 
         return new XmlMontado(chave, xml.toString());
@@ -165,23 +170,46 @@ public class MontadorXmlNfce {
                 .append(tag("cUF", "%02d".formatted(codigoUfDe(e.uf()))))
                 .append(tag("cNF", "%08d".formatted(nota.codigoNumerico())))
                 .append(tag("natOp", texto(nota.naturezaOperacao())))
-                .append(tag("mod", String.valueOf(MODELO_NFCE)))
+                .append(tag("mod", String.valueOf(nota.modelo().codigo())))
                 .append(tag("serie", String.valueOf(nota.serie())))
                 .append(tag("nNF", String.valueOf(nota.numero())))
                 .append(tag("dhEmi", emissaoLocal.format(DH)))
                 .append(tag("tpNF", "1"))                     // 1 = saída
-                .append(tag("idDest", "1"))                   // 1 = operação interna (NFC-e é sempre)
+                // ⚠️ A NFC-e é sempre interna (1); a NF-e 55 pode cruzar a fronteira do estado, e
+                // idDest errado é rejeição na hora (cStat 247). Compara a UF do emitente com a do
+                // destinatário — que na 55 é obrigatório, então nunca é nulo aqui.
+                .append(tag("idDest", String.valueOf(idDest(nota))))
                 .append(tag("cMunFG", String.valueOf(e.codigoMunicipioIbge())))
-                .append(tag("tpImp", "4"))                    // 4 = DANFE NFC-e
+                // 4 = DANFE NFC-e (bobina) · 1 = DANFE retrato, que é o da NF-e 55.
+                .append(tag("tpImp", nota.modelo().ehNfe() ? "1" : "4"))
                 .append(tag("tpEmis", String.valueOf(nota.tipoEmissao())))
                 .append(tag("cDV", chave.substring(43)))
                 .append(tag("tpAmb", String.valueOf(nota.ambiente().codigo())))
                 .append(tag("finNFe", "1"))                   // 1 = normal
-                .append(tag("indFinal", "1"))                 // 1 = consumidor final
-                .append(tag("indPres", "1"))                  // 1 = presencial
+                // ⚠️ indFinal 0 na NF-e a contribuinte: ele NÃO é consumidor final, vai revender —
+                // é justamente por isso que a venda não pode sair em NFC-e (DF13). Declarar 1 aqui
+                // contradiria o indIEDest = 1 do destinatário.
+                .append(tag("indFinal", nota.modelo().ehNfe() ? "0" : "1"))
+                .append(tag("indPres", "1"))                  // 1 = presencial (venda no balcão)
                 .append(tag("procEmi", "0"))                  // 0 = emissão por app do contribuinte
                 .append(tag("verProc", texto(nota.versaoAplicativo())))
                 .append("</ide>");
+    }
+
+    /**
+     * {@code idDest} — 1 interna, 2 interestadual, 3 exterior.
+     *
+     * <p>NFC-e é sempre 1 (operação presencial no balcão, dentro do estado). Na NF-e 55 depende:
+     * o contribuinte que compra pode ser de outra UF, e {@code idDest} errado é rejeição imediata.
+     * Exterior (3) não é caso do PDV — venda ao exterior não sai por este caminho.
+     */
+    private int idDest(NotaParaMontar nota) {
+        if (!nota.modelo().ehNfe()) {
+            return 1;
+        }
+        Destinatario d = nota.destinatario();
+        String ufDest = d == null ? null : d.uf();
+        return ufDest != null && !ufDest.equalsIgnoreCase(nota.emitente().uf()) ? 2 : 1;
     }
 
     // ---------------------------------------------------------------- emit / dest
@@ -231,9 +259,31 @@ public class MontadorXmlNfce {
         // ("Razão Social do destinatário diferente de..."). Achado numa emissão real com cliente
         // identificado; o B0 nunca testou esse caminho (só venda anônima, sem dest).
         String xNome = nota.ambiente() == AmbienteSefaz.HOMOLOGACAO ? FRASE_HOMOLOGACAO_DESTINATARIO : d.nome();
-        xml.append(opcional("xNome", xNome))
-                .append(tag("indIEDest", String.valueOf(d.indicadorIe())))
-                .append("</dest>");
+        xml.append(opcional("xNome", xNome));
+        // ⚠️ enderDest é OBRIGATÓRIO na NF-e 55 e não existe na NFC-e (2026-08-24). Por isso a
+        // venda a contribuinte exige o cadastro do cliente completo — quem barra antes de queimar
+        // número é VendaFiscalAssembler, com mensagem dizendo qual campo falta.
+        if (nota.modelo().ehNfe()) {
+            xml.append("<enderDest>")
+                    .append(tag("xLgr", texto(d.logradouro())))
+                    .append(tag("nro", texto(d.numero())))
+                    .append(opcional("xCpl", d.complemento()))
+                    .append(tag("xBairro", texto(d.bairro())))
+                    .append(tag("cMun", String.valueOf(d.codigoMunicipioIbge())))
+                    .append(tag("xMun", texto(d.municipio())))
+                    .append(tag("UF", d.uf()))
+                    .append(opcional("CEP", apenasDigitos(d.cep())))
+                    .append(tag("cPais", "1058"))
+                    .append(tag("xPais", "BRASIL"))
+                    .append(opcional("fone", apenasDigitos(d.telefone())))
+                    .append("</enderDest>");
+        }
+        xml.append(tag("indIEDest", String.valueOf(d.indicadorIe())));
+        // IE só quando o destinatário é contribuinte (indIEDest = 1) — para 2/9 o XSD não aceita.
+        if (nota.modelo().ehNfe() && d.indicadorIe() == 1) {
+            xml.append(tag("IE", apenasAlfanumerico(d.inscricaoEstadual())));
+        }
+        xml.append("</dest>");
     }
 
     // ---------------------------------------------------------------- det
@@ -651,15 +701,34 @@ public class MontadorXmlNfce {
         if (nota.emitente() == null) {
             throw new MontagemInvalidaException("Emitente não informado.");
         }
-        if (nota.urls() == null || vazio(nota.urls().urlQrCode()) || vazio(nota.urls().urlConsultaChave())) {
-            throw new MontagemInvalidaException(
-                    "URLs de consulta da UF não informadas — sem elas não há QR Code válido (F10).");
+        // ⚠️ URLs e CSC existem para o QR Code, e QR Code é coisa de NFC-e (2026-08-24): o grupo
+        // infNFeSupl nem existe no XSD da NF-e 55. Exigi-los no 55 barraria a emissão por falta de
+        // um dado que aquela nota não usa — e o autorizador do modelo 55 sequer tem urlQrCode.
+        // Quem pegou foi VendaFiscalEmissaoTest.vendaAContribuinteSaiEmNfe55ComEnderecoESemQrCode.
+        if (!nota.modelo().ehNfe()) {
+            if (nota.urls() == null || vazio(nota.urls().urlQrCode()) || vazio(nota.urls().urlConsultaChave())) {
+                throw new MontagemInvalidaException(
+                        "URLs de consulta da UF não informadas — sem elas não há QR Code válido (F10).");
+            }
+            if (nota.tipoEmissao() != TP_EMIS_CONTINGENCIA_OFFLINE && (nota.csc() == null
+                    || vazio(nota.csc().id()) || vazio(nota.csc().token()))) {
+                throw new MontagemInvalidaException(
+                        "CSC (Código de Segurança do Contribuinte) não informado — sem ele o QR Code "
+                                + "online da NFC-e não é aceito pelo portal de consulta da SEFAZ.");
+            }
         }
-        if (nota.tipoEmissao() != TP_EMIS_CONTINGENCIA_OFFLINE && (nota.csc() == null
-                || vazio(nota.csc().id()) || vazio(nota.csc().token()))) {
-            throw new MontagemInvalidaException(
-                    "CSC (Código de Segurança do Contribuinte) não informado — sem ele o QR Code "
-                            + "online da NFC-e não é aceito pelo portal de consulta da SEFAZ.");
+        // A NF-e 55, em compensação, exige destinatário COMPLETO — o que a NFC-e nem tem.
+        if (nota.modelo().ehNfe()) {
+            if (nota.destinatario() == null) {
+                throw new MontagemInvalidaException(
+                        "NF-e (modelo 55) exige destinatário identificado.");
+            }
+            if (vazio(nota.destinatario().logradouro()) || vazio(nota.destinatario().bairro())
+                    || nota.destinatario().codigoMunicipioIbge() == null
+                    || vazio(nota.destinatario().uf())) {
+                throw new MontagemInvalidaException(
+                        "NF-e (modelo 55) exige o endereço completo do destinatário.");
+            }
         }
         for (Pagamento p : nota.pagamentos()) {
             if (vazio(p.codigoMeioPagamento())) {

@@ -1969,3 +1969,76 @@ deliberadamente não decide e para.
 
 Três decisões em aberto para quando for retomado: (a) nota **rejeitada** entra no mesmo sino? (b)
 conta só a empresa da sessão ou todas as do usuário? (c) OPERADOR vê, ou só quem pode reprocessar?
+
+---
+
+## ✅ 2026-08-24 — venda a contribuinte de ICMS sai em NF-e 55 (DF13 fechada)
+
+Pedido do dono do produto: *"estou fazendo a venda para pessoa jurídica, mas no caixa para pessoa
+jurídica tem que ser emitida a NF-e e não a NFC-e"*.
+
+Até aqui o PDV **detectava** o caso e apenas **recusava**: `EmissaoNfceService` gravava o documento
+em `NAO_EMITIDO` com *"Este cliente exige NF-e modelo 55"* e a venda ficava sem nota. Agora ele
+emite a 55.
+
+### O gatilho é o `indicador_ie`, não "tem CNPJ"
+
+Decisão do dono do produto: sai NF-e quando o cliente é **contribuinte de ICMS**
+(`indicador_ie = 1`). Uma PJ **não** contribuinte — escritório, condomínio, consultório comprando
+para uso próprio — continua recebendo **NFC-e**, que é o que a legislação permite. Preso em
+`vendaAPessoaJuridicaNaoContribuinteContinuaSaindoEmNfce`.
+
+### Um montador parametrizado, não um terceiro montador
+
+`MontadorXmlNfeDevolucao` existe separado porque ali a tributação é **espelhada** da nota original.
+Na venda a contribuinte a tributação é **calculada**, igual à NFC-e — cerca de **80%** do montador
+(itens, impostos, totais, pagamentos, resp. técnico) é idêntico. Duplicar isso trocaria uma
+condicional por 600 linhas divergindo com o tempo, então `MontadorXmlNfce` recebeu
+`NotaParaMontar.modelo` (`ModeloVenda.NFCE`/`NFE`). O que muda:
+
+| | NFC-e 65 | NF-e 55 |
+|---|---|---|
+| `mod` | 65 | **55** |
+| `idDest` | 1 sempre | **calculado** — 2 se a UF do destinatário difere da do emitente |
+| `tpImp` | 4 (bobina) | **1** (DANFE retrato) |
+| `indFinal` | 1 | **0** — ele revende, e é por isso que não pode ser NFC-e |
+| `dest` | opcional, só CPF+nome | **obrigatório**, com `enderDest` e `IE` |
+| `infNFeSupl` (QR Code) | sim | **não existe no XSD** |
+| Série | `serie_nfce` | **`serie_nfe`** |
+| Contingência | offline (tpEmis 9) | **não** — só SVC, não implementada |
+
+### ⚠️ Três defeitos que só apareceram testando
+
+1. **Trava do caixa (F3).** A primeira versão lançava **409** quando o cadastro do cliente estava
+   incompleto — travando o fechamento da venda por um campo faltando no cliente. Isso viola o F3
+   ("a venda nunca desaparece porque a nota falhou"), que é justamente o princípio que o resto do
+   módulo protege. Hoje o assembler **devolve mensagem** (`impedimentoParaNfe`) e o serviço grava
+   `NAO_EMITIDO` dizendo **qual campo falta**. Pego por
+   `vendaAContribuinteFicaNaoEmitidaMasVendaContinuaRegistrada`, que já existia.
+2. **Validação de QR Code barrando a 55.** O montador exigia `urls` e `csc` — que existem para o QR
+   Code, e o autorizador do modelo 55 sequer tem `urlQrCode`. A 55 morria na validação por falta de
+   um dado que não usa.
+3. **Modelo gravado fixo em 65.** `DocumentoFiscalRepositorio` gravava `MODELO_NFCE` literal: a nota
+   saía **55 no XML e 65 no banco**. ⚠️ Divergência que **só um teste conferindo a coluna pega** —
+   um que olhasse o status da resposta passaria com a nota errada gravada.
+
+### Pré-requisitos, conferidos antes de queimar numeração
+
+`emite_nfe` ligado na empresa (ter NFC-e ligada **não** implica ter NF-e — são credenciamentos e
+séries distintos) e cadastro do cliente completo: endereço, número, bairro, município IBGE, UF e —
+do contribuinte — inscrição estadual. Faltando qualquer um, `NAO_EMITIDO` com a lista do que falta.
+
+### Contingência
+
+A NFC-e cai em contingência **offline** (tpEmis 9) quando a SEFAZ não responde. A NF-e 55 **não
+pode** — só SVC (Sefaz Virtual de Contingência), que não está implementada. Decisão do dono do
+produto: a venda é registrada e a nota fica pendente para reprocessar em Documentos Fiscais, que é
+o comportamento que já existia. Por isso a 55 nunca entra no caminho de contingência.
+
+### ⏭️ O que falta
+
+- **DANFE A4 ao fechar a venda** (decisão: imprimir na impressora comum, reaproveitando o DANFE que
+  a devolução já usa). O back emite; a tela do PDV ainda não oferece a impressão.
+- **SVC** para contingência da 55.
+- Confirmar em **homologação real** — os testes usam transporte mockado; nenhuma NF-e 55 de venda
+  foi transmitida à SEFAZ ainda.

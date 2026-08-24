@@ -541,6 +541,46 @@ Movimentação de Conta Corrente) que ainda não tinham migrado pro `SeletorPlan
 
 ## Linha do tempo
 
+### 2026-08-24 (noite, 4) — venda a contribuinte de ICMS passa a sair em NF-e 55
+
+Pedido do dono do produto: *"no caixa, para pessoa jurídica tem que ser emitida a NF-e e não a
+NFC-e"*. Até aqui o PDV **detectava** o caso (DF13) e apenas **recusava** — a venda ficava sem nota,
+em `NAO_EMITIDO`. Agora ele emite a 55.
+
+**Quase toda a infraestrutura já existia:** séries separadas (`serie_nfce`/`serie_nfe`), flags
+`emite_nfce`/`emite_nfe`, numeração por (empresa, modelo, série), autorizador por **UF e modelo**
+(BA/PE/MA já divergem entre 55 e 65), cadastro de cliente com `rg_ie`/endereço/IBGE, DANFE A4 e todo
+o transporte. Faltava a montagem do 55 **de saída com tributação calculada** — o que havia era o da
+NFC-e (saída, calculada) e o da devolução (55, espelhada).
+
+**Decisões do dono do produto:** o gatilho é o **`indicador_ie`**, não "tem CNPJ" — PJ não
+contribuinte (escritório, condomínio) continua recebendo NFC-e, que a legislação permite; DANFE em
+**A4 na impressora comum**; e se a SEFAZ cair, **a venda é registrada e a nota fica pendente**
+(sem SVC, que não está implementado).
+
+**Um montador parametrizado, não um terceiro.** `MontadorXmlNfeDevolucao` é separado porque ali a
+tributação é *espelhada*; aqui ela é *calculada*, igual à NFC-e — ~80% do montador é idêntico.
+`NotaParaMontar` ganhou `modelo`, e só `ide`, `dest` e o QR Code divergem.
+
+⚠️ **Três defeitos que só apareceram testando**, e valem mais que a funcionalidade:
+
+1. **A primeira versão travava o caixa (F3).** Lançava 409 quando o cadastro do cliente estava
+   incompleto, impedindo o fechamento da venda por um campo faltando no *cliente*. Isso viola o F3
+   — "a venda nunca desaparece porque a nota falhou" —, que é justamente o princípio que o resto do
+   módulo protege. Hoje o assembler devolve **mensagem** e o serviço grava `NAO_EMITIDO` dizendo
+   qual campo falta. Quem pegou foi um teste que **já existia**.
+2. **A validação de QR Code barrava a 55.** O montador exigia `urls` e `csc` — que existem para o QR
+   Code, e o autorizador do modelo 55 sequer tem `urlQrCode`.
+3. **`DocumentoFiscalRepositorio` gravava o modelo fixo em 65**, então a nota saía **55 no XML e 65
+   no banco**. ⚠️ Divergência que **só um teste conferindo a coluna pega** — um que olhasse o status
+   da resposta passaria com a nota errada gravada. Foi por isso que o teste novo confere `modelo`,
+   `serie` e o **XML**: `<mod>55</mod>`, `<enderDest>`, `<IE>`, `<indFinal>0</indFinal>` e a
+   **ausência** de `infNFeSupl`.
+
+**916 testes verdes** (913 + 3). ⏭️ Falta o DANFE A4 ao fechar a venda no PDV (o back já emite), a
+SVC, e a confirmação em homologação real — os testes usam transporte mockado e **nenhuma NF-e 55 de
+venda foi transmitida à SEFAZ ainda**.
+
 ### 2026-08-24 (noite, 2) — a altura da página de etiqueta era o PASSO, e devia ser a altura do ADESIVO
 
 Ao cadastrar um segundo rolo (**34 × 60**, destacável), a etiqueta saía **partida em duas tiras** —
