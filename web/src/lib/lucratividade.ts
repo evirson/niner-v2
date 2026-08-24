@@ -2,11 +2,15 @@ import { api } from './api'
 
 /** Relatório de Lucratividade (docs/telas/relatorio-lucratividade.md) — ADMIN-only na API. */
 
-/** Uma conta analítica com pagamento no período (item 5 do relatório). */
-export interface ContaPagaLucratividade {
+/** Uma linha de despesa do período (item 5), agrupada por conta analítica. */
+export interface LinhaDespesaLucratividade {
   idPlanoContas: string
   descricao: string
   valor: number
+  /** `false` = conta paga (data de PAGAMENTO). `true` = calculada do movimento —
+   *  comissão e taxa de cartão, que não têm lançamento em Contas a Pagar e por isso contam pela
+   *  data da VENDA. ⚠️ A tabela mistura duas bases de data, e a tela precisa dizer qual é qual. */
+  derivada: boolean
   /** `null` quando a venda líquida é zero — o front imprime `—`, nunca `0%`. */
   percentualSobreVenda: number | null
   /** `null` quando o lucro bruto é zero **ou negativo**: "40% de um prejuízo" não significa nada. */
@@ -28,8 +32,8 @@ export interface RespostaLucratividade {
   custoMercadoriaVendida: number
   lucroBruto: number
   percentualLucroBruto: number | null
-  contasPagas: ContaPagaLucratividade[]
-  totalContasPagas: number
+  despesas: LinhaDespesaLucratividade[]
+  totalDespesas: number
   lucroLiquido: number
   percentualSobreVendaBruta: number | null
   percentualSobreVendaLiquida: number | null

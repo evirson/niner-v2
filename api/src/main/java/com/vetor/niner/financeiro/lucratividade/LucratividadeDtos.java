@@ -14,8 +14,15 @@ public final class LucratividadeDtos {
     }
 
     /**
-     * Uma conta analítica com pagamento no período (item 5 do relatório).
+     * Uma linha de despesa do período (item 5 do relatório), agrupada por conta analítica.
      *
+     * @param derivada                  {@code false} = veio de {@code contas_pagar}, com data de
+     *                                  <b>pagamento</b> no período. {@code true} = <b>calculada do
+     *                                  movimento</b> (comissão e taxa de cartão), porque não existe
+     *                                  lançamento em Contas a Pagar para elas. ⚠️ Linha derivada
+     *                                  conta pela data da <b>venda</b> — é a única data que ela tem
+     *                                  —, então o relatório mistura duas bases de data dentro da
+     *                                  mesma tabela e a tela precisa dizer qual é qual.
      * @param percentualSobreVenda      {@code null} quando a venda líquida é zero.
      * @param percentualSobreLucroBruto {@code null} quando o lucro bruto é zero. ⚠️ Também é
      *                                  {@code null} — e não negativo — quando o lucro bruto é
@@ -23,10 +30,11 @@ public final class LucratividadeDtos {
      *                                  frase com significado, e imprimi-la faria o lojista somar
      *                                  percentuais que não somam.
      */
-    public record ContaPaga(
+    public record LinhaDespesa(
             String idPlanoContas,
             String descricao,
             BigDecimal valor,
+            boolean derivada,
             BigDecimal percentualSobreVenda,
             BigDecimal percentualSobreLucroBruto) {
     }
@@ -47,8 +55,8 @@ public final class LucratividadeDtos {
             BigDecimal custoMercadoriaVendida,
             BigDecimal lucroBruto,
             BigDecimal percentualLucroBruto,
-            List<ContaPaga> contasPagas,
-            BigDecimal totalContasPagas,
+            List<LinhaDespesa> despesas,
+            BigDecimal totalDespesas,
             BigDecimal lucroLiquido,
             BigDecimal percentualSobreVendaBruta,
             BigDecimal percentualSobreVendaLiquida) {

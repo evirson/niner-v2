@@ -228,7 +228,7 @@ export default function RelatorioLucratividade() {
               </table>
             </div>
 
-            <p className="section-label" style={{ marginTop: 24 }}>Contas Pagas no Período</p>
+            <p className="section-label" style={{ marginTop: 24 }}>Despesas do Período</p>
             <div className={`card table-wrap${gerandoPdf ? ' pdf-expandido' : ''}`}>
               <table className="table table-compacta dre-tabela">
                 <thead>
@@ -244,14 +244,24 @@ export default function RelatorioLucratividade() {
                   </tr>
                 </thead>
                 <tbody>
-                  {data.contasPagas.length === 0 && (
+                  {data.despesas.length === 0 && (
                     <tr>
-                      <td colSpan={4} className="muted">Nenhuma conta paga no período.</td>
+                      <td colSpan={4} className="muted">Nenhuma despesa no período.</td>
                     </tr>
                   )}
-                  {data.contasPagas.map((conta) => (
+                  {data.despesas.map((conta) => (
                     <tr key={conta.idPlanoContas} className="dre-linha dre-linha-conta">
-                      <td>{conta.idPlanoContas} — {conta.descricao}</td>
+                      <td>
+                        {conta.idPlanoContas} — {conta.descricao}
+                        {/* ⚠️ A marca não é enfeite: linha derivada conta pela data da VENDA, e as
+                            demais pela data de PAGAMENTO. Sem dizer qual é qual, a tabela mistura
+                            duas bases de data em silêncio. */}
+                        {conta.derivada && (
+                          <span className="muted" title="Calculada do movimento das vendas — não existe conta a pagar para ela, então conta pela data da venda">
+                            {' '}(calculado)
+                          </span>
+                        )}
+                      </td>
                       <td style={{ textAlign: 'right' }}>{moeda(conta.valor)}</td>
                       <td style={{ textAlign: 'right' }} className="muted">
                         {percentual(conta.percentualSobreVenda)}
@@ -262,8 +272,8 @@ export default function RelatorioLucratividade() {
                     </tr>
                   ))}
                   <tr className="dre-linha dre-linha-subtotal">
-                    <td>Total das contas pagas</td>
-                    <td style={{ textAlign: 'right' }}>{moeda(data.totalContasPagas)}</td>
+                    <td>Total das despesas</td>
+                    <td style={{ textAlign: 'right' }}>{moeda(data.totalDespesas)}</td>
                     <td colSpan={2} />
                   </tr>
                 </tbody>
@@ -300,9 +310,10 @@ export default function RelatorioLucratividade() {
                 explica um número que parece errado, e precisa viajar junto no PDF impresso. */}
             <p className="muted" style={{ marginTop: 16, fontSize: '0.85em' }}>
               A venda e o custo contam pela <strong>data da venda</strong>; as contas pagas, pela{' '}
-              <strong>data de pagamento</strong>. Uma conta de um mês paga no mês seguinte pesa no mês
-              em que foi paga. Compra de mercadoria não aparece nas contas pagas: ela já está no custo
-              das mercadorias vendidas.
+              <strong>data de pagamento</strong> — uma conta de um mês paga no mês seguinte pesa no mês
+              em que foi paga. As linhas marcadas <strong>(calculado)</strong> — comissão e taxa de
+              cartão — não têm conta a pagar: saem do movimento das vendas e contam pela data da venda.
+              Compra de mercadoria não aparece aqui: ela já está no custo das mercadorias vendidas.
               {!gerandoPdf && (
                 <> Para o resultado pelo fato gerador, use a <Link to="/relatorio-dre">DRE em competência</Link>.</>
               )}

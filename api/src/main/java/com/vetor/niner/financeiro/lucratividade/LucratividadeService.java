@@ -1,6 +1,6 @@
 package com.vetor.niner.financeiro.lucratividade;
 
-import com.vetor.niner.financeiro.lucratividade.LucratividadeDtos.ContaPaga;
+import com.vetor.niner.financeiro.lucratividade.LucratividadeDtos.LinhaDespesa;
 import com.vetor.niner.financeiro.lucratividade.LucratividadeDtos.LucratividadeResponse;
 import com.vetor.niner.financeiro.lucratividade.LucratividadeDtos.PeriodoLucratividade;
 import org.springframework.http.HttpStatus;
@@ -14,24 +14,30 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 
 /**
  * Relatório de Lucratividade (docs/telas/relatorio-lucratividade.md) — venda, custo, lucro bruto,
- * contas pagas por plano de contas e lucro líquido, numa página só.
+ * despesas por plano de contas e lucro líquido, numa página só.
  *
  * <p><b>Não é a DRE.</b> A DRE tem regime escolhível, comparação entre períodos e a estrutura
  * contábil de grupos; aqui a leitura é direta e o regime é fixo. Os dois relatórios convivem de
  * propósito: quem quer a leitura contábil vai na DRE, quem quer saber se sobrou dinheiro vem aqui.
  *
- * <p><b>⚠️ O período tem duas naturezas, e isso é decisão de produto.</b> O <b>crédito</b> (venda,
- * devolução e o custo que sai com elas) conta pela <b>data da venda</b>; o <b>débito</b> conta pela
- * <b>data de pagamento</b> do Contas a Pagar. É um regime misto — competência de um lado, caixa do
- * outro — pedido assim para casar "o que vendi neste mês" com "o que saiu da minha conta neste
- * mês". A consequência é real e está escrita na ajuda da tela: conta de janeiro paga em fevereiro
- * pesa em fevereiro.
+ * <p><b>⚠️ As datas do relatório têm TRÊS naturezas</b>, e isso é decisão de produto:
+ * <ol>
+ *   <li><b>Venda, devolução e custo</b> — data da <b>venda</b>;</li>
+ *   <li><b>Contas pagas</b> — data de <b>pagamento</b> do Contas a Pagar (pedido explícito: casar
+ *       "o que vendi neste mês" com "o que saiu da minha conta neste mês");</li>
+ *   <li><b>Comissão e taxa de cartão</b> — data da <b>venda</b>, porque elas <b>não têm data de
+ *       pagamento</b>: não existe lançamento em Contas a Pagar para elas. É a única data que
+ *       possuem.</li>
+ * </ol>
+ * A consequência está escrita na tela e na ajuda, não só aqui: conta de janeiro paga em fevereiro
+ * pesa em fevereiro, enquanto a comissão da venda de janeiro pesa em janeiro.
  *
- * <p><b>⚠️ Compra de mercadoria não entra nas contas pagas</b> — {@code cfg_plano_contas
+ * <p><b>⚠️ Compra de mercadoria não entra nas despesas</b> — {@code cfg_plano_contas
  * .inclui_dre = false}, a mesma marca que a DRE respeita. A mercadoria já está contada no CMV,
  * quando <i>sai vendida</i>; somá-la de novo no desembolso contaria a mesma coisa duas vezes e
  * transformaria em prejuízo um mês que deu lucro. Vale igual para amortização de empréstimo
@@ -44,6 +50,12 @@ public class LucratividadeService {
 
     private static final int PERIODO_MAXIMO_DIAS = 400;
     private static final int ESCALA_PERCENTUAL = 2;
+
+    /** Contas das duas despesas derivadas — as mesmas que a DRE usa, para os relatórios baterem. */
+    private static final String CONTA_COMISSAO = "3.02.001";
+    private static final String CONTA_TAXA_CARTAO = "3.02.002";
+    private static final String DESCRICAO_COMISSAO = "Comissões sobre Vendas";
+    private static final String DESCRICAO_TAXA_CARTAO = "Taxas de Cartão e PIX";
 
     private final JdbcClient jdbc;
 
@@ -68,37 +80,46 @@ public class LucratividadeService {
         BigDecimal cmv = vendas[1].subtract(devolucoes[1]);
         BigDecimal lucroBruto = vendaLiquida.subtract(cmv);
 
-        List<ContaPaga> contasPagas = apurarContasPagas(dataInicial, dataFinal, idsEmpresa, vendaLiquida, lucroBruto);
-        BigDecimal totalContasPagas = contasPagas.stream()
-                .map(ContaPaga::valor).reduce(BigDecimal.ZERO, BigDecimal::add);
-        BigDecimal lucroLiquido = lucroBruto.subtract(totalContasPagas);
+        List<LinhaDespesa> despesas = apurarDespesas(
+                dataInicial, dataFinal, idsEmpresa, vendas[2], vendaLiquida, lucroBruto);
+        BigDecimal totalDespesas = despesas.stream()
+                .map(LinhaDespesa::valor).reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal lucroLiquido = lucroBruto.subtract(totalDespesas);
 
         return new LucratividadeResponse(
                 new PeriodoLucratividade(dataInicial, dataFinal),
                 vendaBruta, valorDevolvido, vendaLiquida, cmv, lucroBruto,
                 percentual(lucroBruto, vendaLiquida),
-                contasPagas, totalContasPagas, lucroLiquido,
+                despesas, totalDespesas, lucroLiquido,
                 percentual(lucroLiquido, vendaBruta),
                 percentual(lucroLiquido, vendaLiquida));
     }
 
-    // ------------------------------------------------------------------ apuração
+    // ------------------------------------------------------------------ crédito
 
     /**
-     * Vendas do período: valor e custo na mesma varredura do ledger (uma linha por item vendido).
+     * Vendas do período: valor, custo e comissão na mesma varredura do ledger (uma linha por item
+     * vendido).
      *
      * <p>O valor da linha é {@code qtd × preço + acréscimo − desconto} — o que o cliente
      * efetivamente pagou, o mesmo número que sai na papeleta. A DRE separa o desconto numa linha de
      * dedução porque a estrutura contábil pede; aqui o lojista quer "o que vendi", e o desconto já
      * é parte do preço praticado.
      *
-     * @return {@code [valor, custo]}
+     * <p>A <b>comissão</b> sai daqui, e não de uma consulta própria, porque depende do
+     * {@code perc_comissao} do funcionário <b>daquela linha</b> — a mesma venda pode ter itens de
+     * vendedores diferentes. A base é {@code qtd × preço − desconto}, igual à da DRE, para os dois
+     * relatórios baterem.
+     *
+     * @return {@code [valor, custo, comissao]}
      */
     private BigDecimal[] apurarVendas(LocalDate inicio, LocalDate fim, List<Long> idsEmpresa) {
         return jdbc.sql("""
                         SELECT COALESCE(SUM(pmd.qtd_produto * pmd.preco_venda
                                             + pmd.valor_acrescimo - pmd.valor_desconto), 0) AS valor,
-                               COALESCE(SUM(pmd.qtd_produto * pmd.preco_custo), 0) AS custo
+                               COALESCE(SUM(pmd.qtd_produto * pmd.preco_custo), 0) AS custo,
+                               COALESCE(SUM((pmd.qtd_produto * pmd.preco_venda - pmd.valor_desconto)
+                                            * COALESCE(fn.perc_comissao, 0) / 100), 0) AS comissao
                         FROM venda v
                         JOIN produto_movimento_mestre pmm
                              ON pmm.id_venda = v.id_venda AND pmm.id_tenant = v.id_tenant
@@ -106,11 +127,14 @@ public class LucratividadeService {
                         JOIN produto_movimento_detalhe pmd
                              ON pmd.id_movimento = pmm.id_movimento AND pmd.id_tenant = pmm.id_tenant
                                 AND pmd.credito_debito = 'D'
+                        LEFT JOIN funcionario fn
+                             ON fn.id_funcionario = pmd.id_funcionario AND fn.id_tenant = pmd.id_tenant
                         WHERE v.id_tenant = plataforma.tenant_atual() AND v.cancelada = false
                               AND (v.data_venda AT TIME ZONE 'America/Sao_Paulo')::date BETWEEN ? AND ?
                         """ + filtroEmpresa("v.id_empresa", idsEmpresa))
                 .params(parametros(inicio, fim, idsEmpresa))
-                .query((rs, n) -> new BigDecimal[] { rs.getBigDecimal("valor"), rs.getBigDecimal("custo") })
+                .query((rs, n) -> new BigDecimal[] {
+                        rs.getBigDecimal("valor"), rs.getBigDecimal("custo"), rs.getBigDecimal("comissao") })
                 .single();
     }
 
@@ -125,6 +149,10 @@ public class LucratividadeService {
      * <p>⚠️ O corte é pela <b>data da devolução</b>, não pela data da venda de origem: devolver em
      * março uma venda de fevereiro reduz o total de <b>março</b>. O contrário obrigaria a
      * recalcular meses já fechados a cada devolução.
+     *
+     * <p>⚠️ <b>A devolução NÃO estorna comissão nem taxa de cartão</b>, igual à DRE: o vendedor
+     * vendeu, e a operadora do cartão já cobrou a taxa sobre a transação original. Reverter seria
+     * uma regra de negócio nova, e divergente da DRE.
      *
      * @return {@code [valor, custo]}
      */
@@ -148,19 +176,40 @@ public class LucratividadeService {
                 .single();
     }
 
+    // ------------------------------------------------------------------ débito
+
+    /** Item 5 — contas pagas + as duas despesas derivadas, ordenadas pelo código da conta. */
+    private List<LinhaDespesa> apurarDespesas(
+            LocalDate inicio, LocalDate fim, List<Long> idsEmpresa,
+            BigDecimal comissao, BigDecimal vendaLiquida, BigDecimal lucroBruto) {
+        List<LinhaDespesa> linhas = new ArrayList<>(contasPagas(inicio, fim, idsEmpresa, vendaLiquida, lucroBruto));
+
+        acrescentarDerivada(linhas, CONTA_COMISSAO, DESCRICAO_COMISSAO,
+                arredondar(comissao), vendaLiquida, lucroBruto);
+        acrescentarDerivada(linhas, CONTA_TAXA_CARTAO, DESCRICAO_TAXA_CARTAO,
+                arredondar(taxasDeCartao(inicio, fim, idsEmpresa)), vendaLiquida, lucroBruto);
+
+        linhas.sort(Comparator.comparing(LinhaDespesa::idPlanoContas));
+        return linhas;
+    }
+
     /**
-     * Item 5 — contas pagas no período, agrupadas por conta analítica do plano de contas.
+     * Contas pagas no período, agrupadas por conta analítica do plano de contas.
      *
      * <p>O corte é a <b>data de pagamento</b>: conta vencida no período mas paga depois não entra;
      * conta lançada antes e paga dentro entra.
      *
      * <p>{@code COALESCE(NULLIF(valor_pago, 0), valor_pagar)} — conta marcada como paga sem o valor
-     * preenchido vale pelo valor original, mesma convenção da DRE em regime de caixa.
+     * preenchido vale pelo valor original. ⚠️ O {@code NULLIF} não é defensividade:
+     * {@code valor_pago} é {@code NOT NULL DEFAULT 0} e o Contas a Pagar grava zero quando a tela
+     * manda o campo vazio, então um {@code COALESCE} puro nunca cairia no fallback e a baixa
+     * "cheia" entraria como R$ 0,00. Mesma expressão da DRE em regime de caixa — se uma mudar, a
+     * outra muda junto.
      */
-    private List<ContaPaga> apurarContasPagas(
+    private List<LinhaDespesa> contasPagas(
             LocalDate inicio, LocalDate fim, List<Long> idsEmpresa,
             BigDecimal vendaLiquida, BigDecimal lucroBruto) {
-        List<ContaPaga> contas = new ArrayList<>();
+        List<LinhaDespesa> contas = new ArrayList<>();
         jdbc.sql("""
                         SELECT cp.id_plano_contas, pc.descricao,
                                COALESCE(SUM(COALESCE(NULLIF(cp.valor_pago, 0), cp.valor_pagar)), 0) AS valor
@@ -174,18 +223,63 @@ public class LucratividadeService {
                         """ + filtroEmpresa("cp.id_empresa", idsEmpresa) + """
                         GROUP BY cp.id_plano_contas, pc.descricao
                         HAVING COALESCE(SUM(COALESCE(NULLIF(cp.valor_pago, 0), cp.valor_pagar)), 0) <> 0
-                        ORDER BY cp.id_plano_contas
                         """)
                 .params(parametros(inicio, fim, idsEmpresa))
                 .query((rs, n) -> {
                     BigDecimal valor = rs.getBigDecimal("valor");
-                    contas.add(new ContaPaga(
-                            rs.getString("id_plano_contas"), rs.getString("descricao"), valor,
+                    contas.add(new LinhaDespesa(
+                            rs.getString("id_plano_contas"), rs.getString("descricao"), valor, false,
                             percentual(valor, vendaLiquida), percentual(valor, lucroBruto)));
                     return 1;
                 })
                 .list();
         return contas;
+    }
+
+    /**
+     * Taxa de cartão/PIX: percentual da carteira sobre o valor a receber, pela data da <b>venda</b>
+     * — mesmo que a parcela só caia depois. Igual à DRE em competência.
+     */
+    private BigDecimal taxasDeCartao(LocalDate inicio, LocalDate fim, List<Long> idsEmpresa) {
+        return jdbc.sql("""
+                        SELECT COALESCE(SUM(cr.valor_receber * tc.taxa_administradora / 100), 0)
+                        FROM contas_receber cr
+                        JOIN venda v ON v.id_venda = cr.id_venda AND v.id_tenant = cr.id_tenant
+                        JOIN tipo_carteira tc ON tc.id_carteira = cr.id_carteira AND tc.id_tenant = cr.id_tenant
+                        WHERE cr.id_tenant = plataforma.tenant_atual() AND v.cancelada = false
+                              AND tc.taxa_administradora > 0
+                              AND (v.data_venda AT TIME ZONE 'America/Sao_Paulo')::date BETWEEN ? AND ?
+                        """ + filtroEmpresa("v.id_empresa", idsEmpresa))
+                .params(parametros(inicio, fim, idsEmpresa))
+                .query(BigDecimal.class).single();
+    }
+
+    /**
+     * Acrescenta uma despesa derivada, se ela existir no período.
+     *
+     * <p>⚠️ <b>Zero não vira linha.</b> Loja sem comissionamento (o caso comum: {@code
+     * perc_comissao = 0} em todo funcionário) veria "Comissões sobre Vendas — R$ 0,00" todo mês,
+     * sugerindo que falta configurar algo. Mesma regra do {@code HAVING <> 0} das contas pagas.
+     *
+     * <p>A descrição é a que o lojista deu à conta, quando ela existe no plano dele. O código só
+     * serve de chave — o signup semeia poucas contas, e o plano padrão completo é um seed à parte
+     * que nem todo tenant aplicou; se a linha dependesse de {@code 3.02.001} existir, a comissão
+     * sumiria do relatório de um tenant novo. É o mesmo cuidado que a DRE tomou em 2026-08-14.
+     */
+    private void acrescentarDerivada(
+            List<LinhaDespesa> linhas, String idPlanoContas, String descricaoPadrao,
+            BigDecimal valor, BigDecimal vendaLiquida, BigDecimal lucroBruto) {
+        if (valor.compareTo(BigDecimal.ZERO) == 0) {
+            return;
+        }
+        String descricao = jdbc.sql("""
+                        SELECT descricao FROM cfg_plano_contas
+                        WHERE id_tenant = plataforma.tenant_atual() AND id_plano_contas = ?
+                        """)
+                .param(idPlanoContas)
+                .query(String.class).optional().orElse(descricaoPadrao);
+        linhas.add(new LinhaDespesa(idPlanoContas, descricao, valor, true,
+                percentual(valor, vendaLiquida), percentual(valor, lucroBruto)));
     }
 
     // ------------------------------------------------------------------ apoio
@@ -206,6 +300,11 @@ public class LucratividadeService {
         }
         return parte.multiply(BigDecimal.valueOf(100))
                 .divide(base, ESCALA_PERCENTUAL, RoundingMode.HALF_UP);
+    }
+
+    /** Valor derivado nasce com casas demais (percentual sobre percentual) — arredonda a centavo. */
+    private static BigDecimal arredondar(BigDecimal valor) {
+        return valor == null ? BigDecimal.ZERO : valor.setScale(2, RoundingMode.HALF_UP);
     }
 
     /** ADMIN-only, como a DRE: o relatório expõe lucro, despesa e pró-labore. */

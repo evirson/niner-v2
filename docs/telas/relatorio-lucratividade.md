@@ -13,7 +13,7 @@ pró-labore.
 completa, com regime escolhível, comparação entre períodos e a estrutura contábil de grupos
 (deduções, custos variáveis, despesas fixas, depreciação, resultado financeiro, tributo sobre o
 lucro). A Lucratividade é **uma página só, sem regime, sem comparação**: venda, custo, lucro bruto,
-o que foi pago, lucro líquido. Quem quer a leitura contábil vai na DRE; quem quer saber se sobrou
+despesas, lucro líquido. Quem quer a leitura contábil vai na DRE; quem quer saber se sobrou
 dinheiro vem aqui.
 
 ## Filtros
@@ -27,12 +27,13 @@ dinheiro vem aqui.
 Popup de filtros ao entrar na tela, como em todo relatório do produto (`relatorio-vendas.md`).
 Período máximo de **400 dias**, o mesmo limite da DRE.
 
-### ⚠️ O período tem DUAS naturezas, e isso é decisão de produto
+### ⚠️ O período tem TRÊS naturezas, e isso é decisão de produto
 
 | Lado | Qual data conta |
 |---|---|
 | **Crédito** (venda, devolução, custo) | a data da **venda** |
-| **Débito** (contas pagas) | a data de **pagamento** do Contas a Pagar |
+| **Débito lançado** (contas pagas) | a data de **pagamento** do Contas a Pagar |
+| **Débito derivado** (comissão, taxa de cartão) | a data da **venda** — é a única que elas têm |
 
 É um **regime misto** — competência de um lado, caixa do outro — e foi pedido assim: o lojista quer
 casar *"o que vendi neste mês"* com *"o que saiu da minha conta neste mês"*.
@@ -89,17 +90,31 @@ lucro bruto = (1) valor total da venda − (2) CMV
 Vazio (`—`) quando o valor total da venda é zero — não existe base para o percentual, e imprimir
 `0%` afirmaria margem zero onde não houve venda nenhuma.
 
-### 5. Contas pagas, por plano de contas
+### 5. Despesas do período, por plano de contas
 
-Uma linha por conta analítica com pagamento no período, com três colunas:
+Uma linha por conta analítica, com três colunas:
 
 | Coluna | Cálculo |
 |---|---|
-| Valor | `SUM(valor pago)` das contas daquele plano de contas |
+| Valor | conta paga: `SUM(valor pago)`. Derivada: o valor calculado do movimento |
 | % sobre a venda | `valor ÷ (1) valor total da venda × 100` |
 | % sobre o lucro bruto | `valor ÷ (3) lucro bruto × 100` |
 
-Fonte: `contas_pagar` com `data_pagamento` no período. O valor é
+**Duas fontes, marcadas na tela.** As linhas de **conta paga** vêm de `contas_pagar` com
+`data_pagamento` no período. As linhas **derivadas** — **comissão sobre vendas** (`3.02.001`) e
+**taxa de cartão e PIX** (`3.02.002`) — são calculadas do movimento, porque não existe lançamento
+em Contas a Pagar para elas; a tela as marca com **(calculado)**.
+
+⚠️ **Derivada conta pela data da VENDA**, não de pagamento — é a única data que ela tem. Sem a
+marca na tela, a tabela misturaria duas bases de data em silêncio.
+
+⚠️ **Zero não vira linha.** A loja típica não comissiona e vende no dinheiro; sem essa regra, ela
+veria "Comissões — R$ 0,00" e "Taxas de Cartão — R$ 0,00" todo mês, sugerindo configuração faltando.
+
+⚠️ **Devolução NÃO estorna comissão nem taxa**, igual à DRE: o vendedor vendeu, e a operadora já
+cobrou sobre a transação original. Reverter seria regra de negócio nova e divergente da DRE.
+
+O valor da conta paga é
 `COALESCE(NULLIF(valor_pago, 0), valor_pagar)` — conta marcada como paga sem o valor preenchido
 vale pelo valor original, como já faz a DRE em regime de caixa.
 
@@ -125,7 +140,7 @@ não há lista de códigos escrita no serviço.
 ### 6. Lucro líquido
 
 ```
-lucro líquido = (3) lucro bruto − total das contas pagas do item 5
+lucro líquido = (3) lucro bruto − total das despesas do item 5
 % sobre a venda bruta   = lucro líquido ÷ vendas do período (ANTES das devoluções) × 100
 % sobre a venda líquida = lucro líquido ÷ (1) valor total da venda × 100
 ```
@@ -154,11 +169,11 @@ devolução não comeu margem naquele mês.
   "custoMercadoriaVendida": 55000.00,
   "lucroBruto": 43000.00,
   "percentualLucroBruto": 43.88,  // null quando vendaLiquida = 0
-  "contasPagas": [
+  "despesas": [
     { "idPlanoContas": "4.01.001", "descricao": "Aluguel",
-      "valor": 6000.00, "percentualSobreVenda": 6.12, "percentualSobreLucroBruto": 13.95 }
+      "valor": 6000.00, "derivada": false, "percentualSobreVenda": 6.12, "percentualSobreLucroBruto": 13.95 },
   ],
-  "totalContasPagas": 19200.00,
+  "totalDespesas": 19200.00,
   "lucroLiquido": 23800.00,
   "percentualSobreVendaBruta": 23.80,
   "percentualSobreVendaLiquida": 24.29
@@ -191,6 +206,12 @@ Todo percentual é `null` quando a base é zero — nunca `0`. O front imprime `
     (P8 — filtro `id_tenant` explícito em toda query, não só RLS).
 11. **Dado** o filtro de empresa preenchido, **então** venda, devolução e contas pagas respeitam a
     mesma seleção.
+12. **Dado** um vendedor com 10% de comissão e uma venda de R$ 100,00, **então** aparece a linha
+    derivada `3.02.001` com R$ 10,00, marcada como `derivada: true`, e o lucro líquido cai 10,00.
+13. **Dado** uma carteira com 3% de taxa e uma venda de R$ 100,00 nela, **então** aparece a linha
+    derivada `3.02.002` com R$ 3,00.
+14. ⚠️ **Dado** uma loja sem comissionamento que vende no dinheiro, **então** as duas linhas
+    derivadas **não aparecem** — zero não vira linha.
 
 ## Ajuda da tela (R22 / §3.7.1) — obrigatório
 
@@ -216,10 +237,12 @@ Chave `relatorios.lucratividade`. Precisa explicar, em linguagem de lojista:
 
 ## Questões abertas
 
-- **Comissão e taxa de cartão não entram como despesa** enquanto não houver lançamento em Contas a
-  Pagar para elas. A DRE as **deriva** do movimento; aqui, por o item 5 ser explicitamente "contas
-  pagas", elas só aparecem se o lojista as lançar. ⏭️ Confirmar com o dono do produto se quer que
-  sejam derivadas como na DRE — mudaria o lucro líquido.
+- ✅ **Resolvida em 2026-08-25:** comissão e taxa de cartão **entram** como despesa, derivadas do
+  movimento igual à DRE (decisão do dono do produto). O item 5 deixou de ser "contas pagas" e virou
+  "despesas do período", com as linhas derivadas marcadas **(calculado)** na tela.
+- ⏭️ **Devolução não estorna comissão nem taxa.** Segue a DRE, e é defensável (o vendedor vendeu; a
+  operadora cobrou sobre a transação original). Se o lojista descontar comissão de venda devolvida
+  na prática, vira regra nova — e teria de mudar na DRE junto, senão os dois relatórios divergem.
 
 ## Ver também
 

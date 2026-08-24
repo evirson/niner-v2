@@ -548,8 +548,10 @@ vendido, lucro bruto e %, contas pagas por plano de contas com dois percentuais,
 com % sobre venda bruta e líquida. Spec em `docs/telas/relatorio-lucratividade.md`, escrita antes
 do código.
 
-**⚠️ O período tem DUAS naturezas, por pedido explícito.** Crédito (venda, devolução, custo) conta
-pela **data da venda**; débito, pela **data de pagamento** do Contas a Pagar. É um regime **misto**
+**⚠️ O período tem TRÊS naturezas.** Crédito (venda, devolução, custo) conta pela **data da
+venda**; conta paga, pela **data de pagamento** do Contas a Pagar; e as duas despesas **derivadas**
+(comissão e taxa de cartão) pela **data da venda**, porque não têm data de pagamento — não existe
+lançamento em Contas a Pagar para elas. É um regime **misto**
 — competência de um lado, caixa do outro — e a consequência está escrita na tela e na ajuda, não só
 na spec: conta de janeiro paga em fevereiro pesa em **fevereiro**. Quem quer o resultado pelo fato
 gerador continua tendo a DRE em competência, e a tela **linka** para ela em vez de deixar o lojista
@@ -585,7 +587,7 @@ cancelada fora de tudo; `id_tenant` explícito em toda query (P8); comparação 
 fuso da loja e o relógio da JVM roda em UTC nos containers — das 21h à meia-noite de Brasília os
 dois discordam por um dia, e a suíte passaria a falhar só nesse intervalo.
 
-**Verificado:** 11 critérios da spec viram 11 testes, todos verdes (**930 no total**, eram 919);
+**Verificado:** 14 critérios da spec viram 14 testes, todos verdes (**933 no total**, eram 919);
 `tsc -b` limpo; endpoint exercitado contra o banco de dev com dados reais (venda bruta 68.077,10,
 devoluções 1.329,10, CMV 29.517,78, lucro bruto 37.230,22 = 55,78%). ⚠️ **`contas_pagar` está vazia
 no dev**, então o item 5 aparece zerado ali — conferido no banco, não é defeito de filtro. ⏭️ **O
@@ -593,10 +595,19 @@ visual da tela não foi conferido em navegador** (o `npm run build` do host falh
 binário nativo do rolldown no `node_modules`, problema de ambiente pré-existente — só o
 `binding-linux-x64-musl` está instalado, o do container).
 
-⏭️ **Questão aberta registrada na spec:** comissão e taxa de cartão **não** entram como despesa
-aqui, porque o item 5 é "contas pagas" e elas não têm lançamento em Contas a Pagar. A DRE as
-**deriva** do movimento. Confirmar com o dono do produto se quer o mesmo aqui — mudaria o lucro
-líquido.
+**✅ Comissão e taxa de cartão entram, derivadas do movimento** (ele confirmou no mesmo dia). O
+item 5 deixou de ser "contas pagas" e virou **"Despesas do Período"**, com as linhas derivadas
+marcadas **(calculado)** na tela — a marca não é enfeite: sem ela a tabela misturaria duas bases de
+data em silêncio. Contas: `3.02.001` (Comissões) e `3.02.002` (Taxas de Cartão e PIX), **as mesmas
+da DRE**, para os dois relatórios baterem. ⚠️ **Zero não vira linha** — a loja típica não comissiona
+e vende no dinheiro, e veria duas linhas de R$ 0,00 todo mês sugerindo configuração faltando.
+⚠️ **Devolução não estorna comissão nem taxa**, igual à DRE: o vendedor vendeu e a operadora já
+cobrou sobre a transação original; reverter seria regra nova e divergente.
+
+**Cruzamento com a DRE, no mesmo período e com dados reais do dev:** taxa de cartão **94,96** no
+novo relatório = 94,96 conferido direto no banco = −94,96 na DRE (sinal invertido porque a DRE usa
+o sinal do efeito); CMV **29.517,78** idêntico nos dois. Comissão ausente nos dois — o único
+funcionário do dev tem `perc_comissao = 0`.
 
 ---
 

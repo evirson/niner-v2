@@ -270,7 +270,7 @@ class RelatorioLucratividadeCrudTest {
      *  depois do filtro (…)[0] não funciona: a indexação tem de ser em Java. */
     private static double numeroDaConta(String json, String codigo, String campo) {
         List<Number> valores = JsonPath.read(
-                json, "$.contasPagas[?(@.idPlanoContas=='" + codigo + "')]." + campo);
+                json, "$.despesas[?(@.idPlanoContas=='" + codigo + "')]." + campo);
         assertThat(valores).as("conta " + codigo + " no relatório").hasSize(1);
         return valores.get(0).doubleValue();
     }
@@ -424,9 +424,9 @@ class RelatorioLucratividadeCrudTest {
 
         String json = gerar(tenant.token(), hoje, hoje);
 
-        List<String> contas = JsonPath.read(json, "$.contasPagas[*].idPlanoContas");
+        List<String> contas = JsonPath.read(json, "$.despesas[*].idPlanoContas");
         assertThat(contas).contains("4.01.001");
-        assertThat(numero(json, "$.totalContasPagas")).isEqualTo(10.00);
+        assertThat(numero(json, "$.totalDespesas")).isEqualTo(10.00);
         assertThat(numero(json, "$.lucroLiquido")).isEqualTo(30.00);
         // % da despesa sobre a venda (10/100) e sobre o lucro bruto (10/40).
         assertThat(numeroDaConta(json, "4.01.001", "percentualSobreVenda"))
@@ -466,9 +466,9 @@ class RelatorioLucratividadeCrudTest {
 
         String json = gerar(tenant.token(), hoje, hoje);
 
-        List<String> contas = JsonPath.read(json, "$.contasPagas[*].idPlanoContas");
+        List<String> contas = JsonPath.read(json, "$.despesas[*].idPlanoContas");
         assertThat(contas).doesNotContain("3.03.001");
-        assertThat(numero(json, "$.totalContasPagas")).isZero();
+        assertThat(numero(json, "$.totalDespesas")).isZero();
         assertThat(numero(json, "$.lucroLiquido")).isEqualTo(40.00);
     }
 
@@ -491,9 +491,9 @@ class RelatorioLucratividadeCrudTest {
 
         String json = gerar(tenant.token(), hoje, hoje);
 
-        List<String> contas = JsonPath.read(json, "$.contasPagas[*].idPlanoContas");
+        List<String> contas = JsonPath.read(json, "$.despesas[*].idPlanoContas");
         assertThat(contas).contains("4.01.002").doesNotContain("4.01.003");
-        assertThat(numero(json, "$.totalContasPagas")).isEqualTo(70.00);
+        assertThat(numero(json, "$.totalDespesas")).isEqualTo(70.00);
     }
 
     /** Critério 8 — sem venda, todo percentual é `null` (nunca zero) e o lucro é o negativo do pago. */
@@ -517,7 +517,7 @@ class RelatorioLucratividadeCrudTest {
                 .andExpect(jsonPath("$.percentualLucroBruto").doesNotExist())
                 .andExpect(jsonPath("$.percentualSobreVendaBruta").doesNotExist())
                 .andExpect(jsonPath("$.percentualSobreVendaLiquida").doesNotExist())
-                .andExpect(jsonPath("$.contasPagas[0].percentualSobreVenda").doesNotExist())
+                .andExpect(jsonPath("$.despesas[0].percentualSobreVenda").doesNotExist())
                 .andExpect(jsonPath("$.lucroLiquido").value(-250.00));
     }
 
@@ -610,7 +610,7 @@ class RelatorioLucratividadeCrudTest {
                 .andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString();
         assertThat(numero(comMovimento, "$.vendaLiquida")).isEqualTo(100.00);
-        assertThat(numero(comMovimento, "$.totalContasPagas")).isEqualTo(20.00);
+        assertThat(numero(comMovimento, "$.totalDespesas")).isEqualTo(20.00);
 
         // Filtrando pela outra empresa: venda E contas pagas zeram juntas.
         long idOutraEmpresa = ((Number) JsonPath.read(respEmpresa, "$.idEmpresa")).longValue();
@@ -621,6 +621,113 @@ class RelatorioLucratividadeCrudTest {
                 .andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString();
         assertThat(numero(semMovimento, "$.vendaLiquida")).isZero();
-        assertThat(numero(semMovimento, "$.totalContasPagas")).isZero();
+        assertThat(numero(semMovimento, "$.totalDespesas")).isZero();
+    }
+    /**
+     * Critério 12 — a <b>comissão</b> do vendedor entra como despesa, <b>derivada</b> do movimento.
+     *
+     * <p>Ela não tem lançamento em Contas a Pagar, então é calculada da própria linha da venda —
+     * e por isso conta pela data da <b>venda</b>, a única que possui. Vendedor com 10% sobre uma
+     * venda de R$ 100,00 gera R$ 10,00.
+     */
+    @Test
+    void comissaoDoVendedorEntraComoDespesaDerivada() throws Exception {
+        TenantNovo tenant = assinarNovoTenant("comissao");
+        long idTenant = extrairIdTenant(tenant.token());
+        LocalDate hoje;
+        long idVariacao;
+        try (Connection c = abrirConexao(idTenant)) {
+            hoje = hojeNoFusoDaLoja(c);
+            idVariacao = criarVariacaoComEstoque(c, idTenant, buscarIdEmpresa(c),
+                    criarProduto(tenant.token(), "PRODUTO COMISSIONADO"));
+        }
+        String respFunc = mvc.perform(post("/api/v1/funcionarios").header("Authorization", "Bearer " + tenant.token())
+                        .contentType(APPLICATION_JSON)
+                        .content("{\"nome\":\"VENDEDOR COMISSIONADO\",\"percComissao\":10}"))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        long idFuncionario = ((Number) JsonPath.read(respFunc, "$.idFuncionario")).longValue();
+
+        long idCarteira = carteiraDinheiro(tenant.token());
+        abrirCaixa(tenant.token(), idCarteira);
+        efetivarVenda(tenant.token(), idVariacao, criarCliente(tenant.token(), "Cliente Comissao"),
+                idFuncionario, idCarteira, 1, "100.00");
+
+        String json = gerar(tenant.token(), hoje, hoje);
+
+        assertThat(numeroDaConta(json, "3.02.001", "valor")).isEqualTo(10.00);
+        List<Boolean> derivada = JsonPath.read(json, "$.despesas[?(@.idPlanoContas=='3.02.001')].derivada");
+        assertThat(derivada).containsExactly(true);
+        // Lucro bruto 40 menos comissão 10.
+        assertThat(numero(json, "$.totalDespesas")).isEqualTo(10.00);
+        assertThat(numero(json, "$.lucroLiquido")).isEqualTo(30.00);
+    }
+
+    /**
+     * Critério 13 — a <b>taxa de cartão</b> entra como despesa derivada, pela taxa da carteira.
+     *
+     * <p>Também pela data da venda, mesmo que a parcela só caia depois — igual à DRE em
+     * competência. Carteira com 3% sobre R$ 100,00 gera R$ 3,00.
+     */
+    @Test
+    void taxaDeCartaoEntraComoDespesaDerivada() throws Exception {
+        TenantNovo tenant = assinarNovoTenant("taxa");
+        long idTenant = extrairIdTenant(tenant.token());
+        LocalDate hoje;
+        long idVariacao;
+        try (Connection c = abrirConexao(idTenant)) {
+            hoje = hojeNoFusoDaLoja(c);
+            idVariacao = criarVariacaoComEstoque(c, idTenant, buscarIdEmpresa(c),
+                    criarProduto(tenant.token(), "PRODUTO NO CARTAO"));
+        }
+        String respCart = mvc.perform(post("/api/v1/tipos-carteira").header("Authorization", "Bearer " + tenant.token())
+                        .contentType(APPLICATION_JSON)
+                        .content("""
+                                {"nomeCarteira":"CARTAO DEBITO TESTE","categoriaCarteira":"CARTAO_DEBITO",
+                                 "prazoPagamento":30,"pcMinima":1,"pcMaxima":1,
+                                 "taxaAdministradora":"3.00","permiteReceberCrediario":false}
+                                """))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        long idCartao = ((Number) JsonPath.read(respCart, "$.idCarteira")).longValue();
+
+        abrirCaixa(tenant.token(), carteiraDinheiro(tenant.token()));
+        efetivarVenda(tenant.token(), idVariacao, criarCliente(tenant.token(), "Cliente Cartao"),
+                criarFuncionario(tenant.token(), "Vendedor Cartao"), idCartao, 1, "100.00");
+
+        String json = gerar(tenant.token(), hoje, hoje);
+
+        assertThat(numeroDaConta(json, "3.02.002", "valor")).isEqualTo(3.00);
+        assertThat(numero(json, "$.lucroLiquido")).isEqualTo(37.00);
+    }
+
+    /**
+     * ⚠️ Critério 14 — despesa derivada de valor <b>zero não vira linha</b>.
+     *
+     * <p>A loja típica não comissiona (`perc_comissao = 0` em todo funcionário) e vende no
+     * dinheiro. Sem esta regra, ela veria "Comissões sobre Vendas — R$ 0,00" e "Taxas de Cartão e
+     * PIX — R$ 0,00" em todo relatório, sugerindo que falta configurar alguma coisa.
+     */
+    @Test
+    void despesaDerivadaZeradaNaoViraLinha() throws Exception {
+        TenantNovo tenant = assinarNovoTenant("semderivada");
+        long idTenant = extrairIdTenant(tenant.token());
+        LocalDate hoje;
+        long idVariacao;
+        try (Connection c = abrirConexao(idTenant)) {
+            hoje = hojeNoFusoDaLoja(c);
+            idVariacao = criarVariacaoComEstoque(c, idTenant, buscarIdEmpresa(c),
+                    criarProduto(tenant.token(), "PRODUTO SEM DERIVADA"));
+        }
+        long idCarteira = carteiraDinheiro(tenant.token());
+        abrirCaixa(tenant.token(), idCarteira);
+        efetivarVenda(tenant.token(), idVariacao, criarCliente(tenant.token(), "Cliente Simples"),
+                criarFuncionario(tenant.token(), "Vendedor Sem Comissao"), idCarteira, 1, "100.00");
+
+        String json = gerar(tenant.token(), hoje, hoje);
+
+        List<String> contas = JsonPath.read(json, "$.despesas[*].idPlanoContas");
+        assertThat(contas).doesNotContain("3.02.001", "3.02.002");
+        assertThat(numero(json, "$.totalDespesas")).isZero();
     }
 }
