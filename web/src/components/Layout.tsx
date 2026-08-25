@@ -54,7 +54,7 @@ export default function Layout() {
     <div className="app">
       <header className="app-header">
         <a className="brand" href="/">
-          NI<span>NER</span>
+          NAI<span>NER</span>
         </a>
         {/* Sempre renderizado, mesmo vazio: é a coluna do meio do grid do cabeçalho, e é ela
             que mantém o nome da loja centralizado na tela independentemente das laterais. */}

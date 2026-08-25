@@ -66,7 +66,7 @@ export default function Login() {
       <div className="login-wrap">
         <div className="card login-card">
           <a className="brand" href="/" style={{ fontSize: 22 }}>
-            NI<span>NER</span>
+            NAI<span>NER</span>
           </a>
           <h1 style={{ fontSize: 22, margin: '8px 0 4px' }}>Qual empresa você quer acessar?</h1>
           <p className="muted" style={{ marginTop: 0 }}>
@@ -106,7 +106,7 @@ export default function Login() {
     <div className="login-wrap">
       <form className="card login-card" onSubmit={submeter}>
         <a className="brand" href="/" style={{ fontSize: 22 }}>
-          NI<span>NER</span>
+          NAI<span>NER</span>
         </a>
         <h1 style={{ fontSize: 22, margin: '8px 0 4px' }}>Entrar na sua loja</h1>
         <p className="muted" style={{ marginTop: 0 }}>Acesse o painel do seu ERP.</p>
