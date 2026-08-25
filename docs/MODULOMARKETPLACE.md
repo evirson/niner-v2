@@ -493,3 +493,67 @@ como um teste unitário provar que o chamador vai passar `preco_venda` e não `p
 chamador é o M3 e ainda não existe. **Quando o M3 for escrito, o teste dele precisa incluir um
 produto com oferta vigente**, provando que o preço do anúncio ignora a oferta. Sem esse teste, esta
 decisão está protegida só por javadoc.
+
+---
+
+## 10. Estado da implementação (2026-08-25)
+
+**M0 fechado, mais três blocos adiantados** enquanto a conta da MITRYUSCASH é validada no Mercado
+Livre. Nada aqui depende do `client_id` — foi escolhido de propósito para a espera não travar.
+
+| Bloco | Estado | Onde |
+|---|---|---|
+| **M0** — fundação | ✅ | `V063`, `V064`, `canais/` |
+| **Adapter do ML** (parte do M2/M3) | ✅ contra WireMock | `integracao/mercadolivre/` |
+| **Worker do outbox** | ✅ | `integracao/outbox/` |
+| **Tela + painel de saúde** (R7) | ✅ | `web/src/pages/canais/CanaisVenda.tsx` |
+| **M1 — OAuth** | ⏸️ | **bloqueado no `client_id`** |
+| M5–M7 — pedidos, fila de expedição | ⏭️ | depende do M1 |
+| M8 — NF-e 55 | ⏭️ | depende do `cStat 974` |
+
+**997 testes verdes**, `tsc -b` limpo.
+
+### 10.1 As decisões de implementação que valem revisão
+
+**`atualizarEstoque` recebe a lista inteira de variações.** Não é assinatura desajeitada — é a
+armadilha da §2.4 transformada em barreira: uma assinatura do tipo *"variação X agora tem N"*
+convidaria todo adapter futuro a mandar um `PUT` parcial e apagar as demais variações do anúncio.
+O adapter **lê o anúncio antes de escrever**, sempre, e paga uma chamada a mais por sincronização.
+A assimetria decide: o limite do ML é 1.500/min (folgado), e o custo de errar é perda de dado no
+anúncio do lojista.
+
+**Falha transitória × definitiva é a decisão central do transporte.** `429` (corpo vazio) e `5xx`
+viram `CanalIndisponivelException` e o outbox reagenda; `4xx` de negócio vira erro definitivo.
+Confundir custa nos dois sentidos: definitivo tratado como transitório gira até o dead-letter
+escondendo a causa atrás de trinta tentativas idênticas; transitório tratado como definitivo joga
+no dead-letter algo que só precisava esperar meio minuto.
+
+**Agendador e trabalho em beans separados.** `@Transactional` não vale em auto-invocação: chamado
+de dentro do próprio bean, o método roda **sem transação**, o lock do `FOR UPDATE SKIP LOCKED` se
+solta no fim do `SELECT` e dois workers pegam o mesmo evento. Mesmo desenho de
+`CobrancaWebhookJob` × `CobrancaWebhookProcessador`.
+
+**⚠️ `outbox_evento` tem RLS.** Worker sem `TenantContext` lê **zero linha em silêncio** — sem
+erro, sem log, apenas nunca despachando. Foi assim que os jobs de fiscal ficaram inertes até
+2026-08-19. Daí o laço por tenant a partir de `plataforma.tenant`.
+
+**O painel conta os três estados separadamente.** Pendente é normal, erro está tentando sozinho,
+dead-letter parou e espera gente. Um "total de problemas" mostraria número alarmante num dia
+saudável.
+
+**Reprocessar zera as tentativas** — senão o evento que chegou ao dead-letter com 12 falhas
+voltaria e morreria na tentativa seguinte, e o botão pareceria não funcionar.
+
+**Desconectar apaga a credencial de verdade** (`credenciais = NULL`), não só troca o status. Os
+vínculos de anúncio ficam: são trabalho do lojista, e desconexão temporária não pode custar tudo.
+
+### 10.2 ⚠️ O que NÃO está coberto, dito de propósito
+
+- **Nenhuma chamada real ao Mercado Livre foi feita.** Tudo está verificado contra WireMock, que
+  responde o que eu programei que ele responda. Os fatos da §2 vieram de documentação lida, e este
+  projeto já aprendeu que documentação lida não é comportamento medido (o XSD passou e a SEFAZ
+  recusou). **A primeira chamada real vai encontrar divergências** — é esperado, não é fracasso.
+- **A regra "preço de oferta não acompanha" está protegida só por javadoc** (§8.6). O teste que a
+  prende pertence ao chamador, que é o M3 e ainda não existe.
+- **A tela nunca foi usada com um canal conectado de verdade** — o estado `CONECTADO` só existe em
+  teste, escrito por SQL.

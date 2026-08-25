@@ -541,6 +541,70 @@ Movimentação de Conta Corrente) que ainda não tinham migrado pro `SeletorPlan
 
 ## Linha do tempo
 
+### 2026-08-25 (3) — começou a integração com marketplaces: estudo, decisões e quatro blocos
+
+O coração da visão original do produto (P1/P2, R3–R7) saiu do papel. `canais/`, `pedidos/`,
+`precos/` e `integracao/` tinham só `package-info.java` desde julho; o schema (V020–V022) existia
+e nunca fora usado.
+
+**Estudo primeiro** (`docs/MODULOMARKETPLACE.md`), como manda o repositório: o que o ML exige, três
+colisões com o ERP que já existe, sete perguntas, e três opções de escopo. ⚠️ Os fatos da API do ML
+vieram de **documentação lida**, não medida — o portal deles responde 403 a leitura automatizada, e
+este projeto já sabe que documentação lida não é comportamento medido.
+
+#### As decisões do dono do produto
+
+| Decisão | Consequência |
+|---|---|
+| **Pedido de marketplace VIRA `venda`** | custou **um valor de enum** (V063): `venda.id_caixa`, `venda.id_cliente` e `produto_movimento_detalhe.id_funcionario` já aceitavam NULL, então "sem caixa" e "sem comissão" saíram de graça |
+| **Escopo A + B**; NF-e 55 depois | a Opção C espera o `cStat 974` |
+| ⛔ **"Se vende em marketplace, não pode existir estoque negativo"** | **dois** guardas, não um |
+| **Preço próprio por canal, maior OU menor** | V064: `canal.perc_preco` (aceita negativo) + `anuncio.preco_manual` |
+| **Preço em oferta não acompanha** | a regra lê `preco_venda`; virou proibição explícita no javadoc |
+| Cota do plano: **conta** (recomendação minha) | direção cujo arrependimento é barato — reduzir depois é presente, aumentar é churn |
+
+⚠️ **O segundo guarda de estoque é o que se esquece:** não basta barrar a conexão do canal; é
+preciso barrar o **religar do parâmetro** enquanto houver canal conectado. Só o primeiro seria
+trava decorativa — a loja conectaria com o controle ligado e religaria no dia seguinte, com o
+anúncio seguindo em frente prometendo estoque que não existe.
+
+#### O que foi construído (997 testes verdes)
+
+- **M0** — `CanalDeVenda` (a anti-corrupção), `CredenciaisCanal` (com `toString` que nunca imprime
+  token), `PrecoDoCanal`, os dois guardas.
+- **Adapter do Mercado Livre contra WireMock.** ⛔ A armadilha central: no ML, um `PUT` em
+  `variations` **apaga as que não forem enviadas**. O adapter lê o anúncio antes de escrever e
+  reenvia todas com seus `id`. WireMock (dependência nova, escopo de teste) entrou porque o defeito
+  é de **payload** — mock de interface passaria por ele sem ver — e porque **o ML não tem sandbox**:
+  os testes reais rodam na produção deles, com usuários de teste limitados a 10 e que expiram.
+- **Worker do outbox** — `FOR UPDATE SKIP LOCKED`, backoff 1min→1h, dead-letter. Agendador e
+  trabalho em **beans separados** (auto-invocação não passa pelo proxy e roda sem transação, o que
+  soltaria o lock). ⚠️ `outbox_evento` tem RLS: sem `TenantContext` a fila sai **vazia sem erro**.
+- **Tela de Canais de Venda** com painel de saúde (R7), conferida no navegador. Saiu de
+  "Implementações Futuras" para Configurações.
+
+#### Três coisas que eu errei e valem mais que o que acertei
+
+1. **Documentei um número que não conferi.** O javadoc do backoff dizia "10 tentativas ≈ 6 horas";
+   a soma real de 10 é **4h03**. Quem pegou foi o teste que soma a janela inteira — escrito
+   justamente porque número desses apodrece calado. Hoje são 12 (6h03) e o teste afirma o valor
+   **exato**.
+2. **Um teste meu ficou PULADO e eu quase não vi.** O que prova que não se exclui canal com anúncio
+   vinculado usava `assumeTrue` sobre massa que não existe em tenant novo — o guarda nunca era
+   exercitado. Teste pulado conta como verde e **não prova nada**; passou a criar a própria massa.
+3. **Quase "consertei" um defeito que não existia.** O Toast do erro não aparecia nos meus
+   screenshots e eu já suspeitava do front que engole mensagem do back. Medindo o DOM, o Toast
+   estava lá com o texto certo: os **6 segundos de auto-fechamento** passavam entre o clique e a
+   captura. A ferramenta era lenta, não o código.
+
+#### ⏸️ Onde parou
+
+**M1 (OAuth) espera o `client_id`.** A MITRYUSCASH precisa de uma conta ML **pessoa jurídica** com
+o titular validado (upload de documento — é a parte que demora), e então criar a aplicação. ⚠️ **No
+Brasil o ML permite só 1 aplicação por conta**, então dev e produção compartilham o mesmo
+`client_id`; a mitigação é registrar várias URLs de redirect. Não existe "conta de integrador": é
+conta comum, e quem vende é o lojista, que autoriza a aplicação na conta dele.
+
 ### 2026-08-25 (2) — o 974 fechado do nosso lado (chamado na SEFAZ), e três defeitos que um documento sem chave revelou
 
 #### 🔴 `cStat 974` — chamado aberto, bola com a SEFAZ/PR
