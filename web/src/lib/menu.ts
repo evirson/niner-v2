@@ -288,6 +288,12 @@ export const MENU: NavGrupo[] = [
     adminOnly: true,
     itens: [
       {
+        to: '/canais',
+        label: 'Canais de Venda',
+        icone: IconeCanais,
+        descricao: 'Conexão com marketplaces, regra de preço por canal e saúde da sincronização.',
+      },
+      {
         to: '/minha-conta',
         label: 'Minha Conta',
         icone: IconePainel,
@@ -502,12 +508,6 @@ export const MENU: NavGrupo[] = [
         label: 'Pedidos',
         icone: IconePedidos,
         descricao: 'Fila única com os pedidos importados dos marketplaces. Em construção.',
-      },
-      {
-        to: '/canais',
-        label: 'Canais',
-        icone: IconeCanais,
-        descricao: 'Conexão com Mercado Livre, Shopee e demais canais de venda. Em construção.',
       },
       {
         to: '/bi-dashboard',

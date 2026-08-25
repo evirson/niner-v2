@@ -466,6 +466,26 @@ const CONTEUDOS: Record<string, ConteudoAjuda> = {
     ],
     urlVideo: null,
   },
+  'canais.tela': {
+    titulo: 'Canais de Venda',
+    objetivo: 'Conectar a loja aos marketplaces, definir o preço que vai para cada canal e acompanhar se a sincronização de estoque está em dia.',
+    passos: [
+      'Antes de tudo: desligue "Permite estoque negativo" em Parâmetros do Sistema → Estoque. Vender em marketplace exige controle de estoque — o anúncio promete o saldo que o ERP informa.',
+      'Clique em "+ Novo Canal", dê um nome e informe o ajuste de preço (%).',
+      'O ajuste define o preço do anúncio: preço de venda da loja + o percentual. Positivo para cobrir a comissão do marketplace, negativo para vender mais barato que na loja, zero para o mesmo preço do balcão.',
+      'Os três números do topo mostram a fila: "Na fila" é normal, "Tentando de novo" o sistema resolve sozinho, e "Parados" são os que precisam de você.',
+      'Um item parado mostra o motivo exato que o canal devolveu. Resolvido o motivo, clique em "Reprocessar" para devolvê-lo à fila.',
+    ],
+    errosComuns: [
+      'Só administradores acessam esta tela.',
+      'Não dá para cadastrar canal com "Permite estoque negativo" ligado — e, com um canal conectado, o sistema também não deixa religar esse parâmetro. É proposital: saldo errado no anúncio gera cancelamento e perda de reputação no marketplace.',
+      'Preço de oferta da loja NÃO vai para o canal. Promoção de fim de semana no balcão não derruba o preço do anúncio.',
+      'Preço que você digitou direto no anúncio não é sobrescrito por reajuste da loja — mas a tela avisa quando ele fica defasado.',
+      '"Excluir" só aparece em canal sem anúncio vinculado. Para parar a sincronização sem perder o de-para, use "Desconectar".',
+      'Desconectar apaga a autorização de acesso à conta. Para voltar, é preciso autorizar de novo.',
+    ],
+    urlVideo: null,
+  },
   'fiscal.contingencia.tela': {
     titulo: 'Contingência Fiscal',
     objetivo: 'Ver se a empresa está emitindo NFC-e direto pela SEFAZ ou em contingência offline, e quantas notas ainda esperam transmissão.',
