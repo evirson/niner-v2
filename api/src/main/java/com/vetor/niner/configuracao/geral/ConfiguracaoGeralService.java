@@ -1,5 +1,6 @@
 package com.vetor.niner.configuracao.geral;
 
+import com.vetor.niner.canais.ControleEstoqueCanalGuard;
 import com.vetor.niner.configuracao.geral.ConfiguracaoGeralDtos.ConfiguracaoGeralRequest;
 import com.vetor.niner.configuracao.geral.ConfiguracaoGeralDtos.ConfiguracaoGeralResponse;
 import org.springframework.http.HttpStatus;
@@ -37,9 +38,11 @@ public class ConfiguracaoGeralService {
             """;
 
     private final JdbcClient jdbc;
+    private final ControleEstoqueCanalGuard guardaCanal;
 
-    public ConfiguracaoGeralService(JdbcClient jdbc) {
+    public ConfiguracaoGeralService(JdbcClient jdbc, ControleEstoqueCanalGuard guardaCanal) {
         this.jdbc = jdbc;
+        this.guardaCanal = guardaCanal;
     }
 
     @Transactional(readOnly = true)
@@ -223,6 +226,13 @@ public class ConfiguracaoGeralService {
     @Transactional
     public ConfiguracaoGeralResponse atualizar(Jwt jwt, ConfiguracaoGeralRequest req) {
         exigirAdmin(jwt);
+        // ⛔ "Se vende em marketplace, não pode existir estoque negativo" (2026-08-25). Este é o
+        // SEGUNDO guarda — o primeiro barra a conexão do canal. Sem este, a loja conectaria o
+        // canal com o controle ligado e religaria o parâmetro no dia seguinte, destravando o
+        // overselling pela porta dos fundos. Ver ControleEstoqueCanalGuard.
+        if (Boolean.TRUE.equals(req.cfgPermiteEstoqueNegativo())) {
+            guardaCanal.exigirNenhumCanalConectado();
+        }
         int linhas = jdbc.sql("""
                         UPDATE cfg_geral SET
                             percentual_desconto_venda = ?, juros_crediario_dias = ?, juros_crediario = ?,
