@@ -183,6 +183,24 @@
 			<artifactId>testcontainers-postgresql</artifactId>
 			<scope>test</scope>
 		</dependency>
+		<!--
+		  WireMock (spec §Fase 2: "WireMock simulando ML em testes"). Escopo de teste apenas.
+
+		  ⚠️ Por que uma lib nova num projeto que evita libs (o módulo fiscal fala com a SEFAZ em
+		  HttpClient puro, "sem Axis2, sem lib de NF-e"): porque o Mercado Livre NÃO TEM SANDBOX.
+		  Os testes de verdade rodam na produção deles, com usuários de teste que são no máximo 10
+		  e expiram. WireMock deixa de ser conforto e vira a única rede de proteção barata.
+
+		  E o que ele dá que um mock de interface não daria: afirmar o CORPO EXATO da requisição.
+		  A armadilha das variações do ML (as omitidas são APAGADAS) é um defeito de payload —
+		  mockar a interface do transporte passaria por ele sem ver.
+		-->
+		<dependency>
+			<groupId>org.wiremock</groupId>
+			<artifactId>wiremock-standalone</artifactId>
+			<version>3.13.1</version>
+			<scope>test</scope>
+		</dependency>
 	</dependencies>
 
 	<build>
