@@ -557,3 +557,60 @@ vínculos de anúncio ficam: são trabalho do lojista, e desconexão temporária
   prende pertence ao chamador, que é o M3 e ainda não existe.
 - **A tela nunca foi usada com um canal conectado de verdade** — o estado `CONECTADO` só existe em
   teste, escrito por SQL.
+
+---
+
+## 11. Passo a passo para criar a aplicação no Mercado Livre
+
+Levantado em 2026-08-25, quando o dono do produto foi criar a conta. São **duas coisas
+diferentes**, e confundi-las custa tempo.
+
+### 11.1 A conta ML — **https://www.mercadolivre.com.br/**
+
+⚠️ **Não existe "conta de integrador" no Mercado Livre.** É conta comum. O que separa vendedor de
+integrador não é o tipo de conta, é o que se faz com ela.
+
+- Cadastrar como **pessoa jurídica**, no CNPJ da **MITRYUSCASH**.
+- ⛔ **Tem de ser a conta do proprietário da solução** — não a pessoal de ninguém, não a de um
+  cliente. O próprio ML avisa que isso evita "problemas futuros de transferência de conta": a
+  aplicação nasce presa à conta, e mover depois é dor de cabeça.
+- Se a MITRYUSCASH já tiver conta da empresa, ela serve.
+
+⚠️ **A conta da Vetor nunca vende nada no ML.** Ela é dona da aplicação e cria os usuários de
+teste. Quem vende é o lojista, na conta de vendedor dele, que **autoriza** a aplicação. Mesmo
+modelo do Mercado Pago.
+
+### 11.2 A aplicação — **https://developers.mercadolivre.com.br/devcenter**
+
+Logado com aquela conta: *Minhas aplicações* → **Criar uma aplicação**.
+
+⏳ **Começar pela validação do titular** (upload do documento do responsável): é a única parte que
+depende do ML e pode levar dias. O formulário em si leva minutos.
+
+| Campo | Valor |
+|---|---|
+| URI de redirect | `https://api.nainer.com.br/api/publico/canais/mercadolivre/retorno` |
+| Escopos | `read`, `write`, **`offline_access`** |
+| PKCE | desligado (o segredo fica no servidor) |
+| Tópicos de notificação | `orders_v2`, `items`, `shipments` |
+| Callback | `https://api.nainer.com.br/api/publico/webhooks/mercadolivre` |
+
+⚠️ **`offline_access` é o que mais dói esquecer:** sem ele o `access_token` morre em 6 h e o
+lojista teria de reautorizar quatro vezes por dia.
+
+⚠️ **A URI de redirect tem de bater caractere por caractere** com a do código, e não aceita parte
+variável — é por isso que o `id_tenant` viaja no `state`, nunca na URL (§2.1).
+
+### 11.3 ⛔ Uma aplicação só, e o que isso obriga
+
+**No Brasil o ML permite apenas 1 aplicação por conta** depois da validação do titular. Não dá para
+ter "Nainer Dev" e "Nainer Prod" separados, como fizemos com o Mercado Pago.
+
+Consequência: **um único `client_id` para dev e produção**. A mitigação é que a aplicação aceita
+**várias URLs de redirect** — registrar a de produção e a de desenvolvimento. Se a tela só aceitar
+uma, fica a de produção e o dev resolve por túnel.
+
+### 11.4 O que volta para cá
+
+Só o **`client_id`** (é público). ⛔ O `client_secret` **nunca por chat** — entra por variável de
+ambiente, como `NINER_MP_ACCESS_TOKEN` do Mercado Pago (ADR-016).
