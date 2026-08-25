@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { IconeFechar } from '../../components/Icones'
 import { ApiError } from '../../lib/api'
 import {
   buscarOrcamento,
@@ -113,14 +114,28 @@ export default function PuxarOrcamentoModal({
 
   return (
     <div className="modal-overlay" onClick={aoFechar}>
+      {/* ⚠️ `overflow: hidden` + coluna flex faz o MIOLO rolar, não o modal inteiro. Sem isto o
+          `.modal` rola como um bloco só (ele tem `max-height: 85vh; overflow-y: auto`) e o título
+          — junto com o ✕ de fechar — sai de vista quando o orçamento tem muitos itens. */}
       <div
         className="modal modal-largo"
         role="dialog"
         aria-label="Buscar orçamento"
         onClick={(e) => e.stopPropagation()}
+        style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
       >
-        <h2 style={{ marginTop: 0 }}>Buscar Orçamento</h2>
+        {/* Padrão do produto: fechar é o ✕ no canto superior direito, nunca um botão "Fechar"
+            no rodapé — o rodapé fica só para a ação que a tela existe para fazer. Mesmo desenho
+            de FechamentoCaixaPreviewModal e AvisoModal. */}
+        <div className="lightbox-topo" style={{ flexShrink: 0 }}>
+          <h2 style={{ margin: 0 }}>Buscar Orçamento</h2>
+          <button type="button" className="btn ghost btn-fechar-tela" onClick={aoFechar}
+                  aria-label="Fechar" title="Fechar">
+            <IconeFechar />
+          </button>
+        </div>
 
+        <div className="orcamento-modal-miolo">
         {/* Três filtros de mesma largura + o botão, numa grade só — os campos ficam alinhados em
             cima e embaixo, em vez de cada um com o tamanho do próprio conteúdo. Enter em qualquer
             um deles localiza, que é como se busca de balcão: digita e aperta. */}
@@ -218,7 +233,7 @@ export default function PuxarOrcamentoModal({
               orçamento.
             </p>
 
-            <div className="table-wrap" style={{ maxHeight: '44vh' }}>
+            <div className="orcamento-itens-wrap">
               <table className="table table-compacta">
                 <thead>
                   <tr>
@@ -289,19 +304,25 @@ export default function PuxarOrcamentoModal({
           </>
         )}
 
-        <div className="ajuda-rodape">
-          <button type="button" className="btn ghost" onClick={aoFechar}>
-            Fechar
-          </button>
-          <button
-            type="button"
-            className="btn"
-            disabled={!orcamento || !algumItem}
-            onClick={() => orcamento && aoConfirmar(orcamento, levando)}
-          >
-            Levar para a venda
-          </button>
         </div>
+
+        {/* ⚠️ "Levar para a venda" só existe DEPOIS de abrir um orçamento. Antes, na tela de
+            busca, ele aparecia desabilitado — um botão sem sentido naquele momento, que é
+            justamente o que o dono do produto pediu para tirar. A ação continua sendo a razão de
+            ser da tela; o que mudou é ela não se anunciar antes de haver o que levar. */}
+        {orcamento && (
+          <div className="ajuda-rodape" style={{ flexShrink: 0, marginTop: 12 }}>
+            <span />
+            <button
+              type="button"
+              className="btn"
+              disabled={!algumItem}
+              onClick={() => aoConfirmar(orcamento, levando)}
+            >
+              Levar para a venda
+            </button>
+          </div>
+        )}
       </div>
     </div>
   )

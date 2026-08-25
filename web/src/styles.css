@@ -1704,3 +1704,31 @@ a.menu-card:hover {
   /* A folha oculta (a que existe só para o WhatsApp capturar) nunca vai para a impressora. */
   .orcamento-imprimir-oculto, .orcamento-imprimir-oculto * { display: none !important; }
 }
+
+/* ------------------------------------------------------------------ Buscar Orçamento (F5 do PDV)
+   A grade de itens do orçamento aberto NÃO pode rolar na horizontal (pedido do dono do produto,
+   2026-08-25): dentro de um modal, a barra horizontal esconde colunas que o operador precisa
+   comparar (Orçado × Levar × Preço) e obriga a rolar de lado no meio da venda.
+
+   ⚠️ A causa do scroll é o `white-space: nowrap` global de `.table th/td`. A correção é LOCAL, não
+   global: deixar só a coluna "Produto" quebrar linha. Mudar a regra global faria toda tabela do
+   produto quebrar texto — inclusive as que dependem de nowrap para alinhar número.
+
+   O cabeçalho fixo não precisa de nada: `.table th` já é `position: sticky; top: 0`. */
+/* O MIOLO do modal e o unico scroller: titulo e rodape ficam fixos, e o `th` sticky do
+   `.table` gruda no topo dele — cabecalho da grade sempre visivel. */
+.orcamento-modal-miolo { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; }
+/* ⚠️ A grade NAO cria scroll proprio: dois scrollers aninhados fazem a roda do mouse rolar o
+   errado, e o `th` sticky grudaria no de dentro em vez do miolo. */
+.orcamento-itens-wrap { overflow: visible; height: auto; }
+.orcamento-itens-wrap .table { table-layout: fixed; }
+.orcamento-itens-wrap .table td:nth-child(2),
+.orcamento-itens-wrap .table th:nth-child(2) { white-space: normal; word-break: break-word; }
+/* Larguras somando 100% — sem isto, `table-layout: fixed` divide igualmente e a descrição fica
+   apertada enquanto as colunas numéricas sobram. */
+.orcamento-itens-wrap .table th:nth-child(1) { width: 16%; }
+.orcamento-itens-wrap .table th:nth-child(2) { width: 40%; }
+.orcamento-itens-wrap .table th:nth-child(3),
+.orcamento-itens-wrap .table th:nth-child(4),
+.orcamento-itens-wrap .table th:nth-child(5),
+.orcamento-itens-wrap .table th:nth-child(6) { width: 11%; }

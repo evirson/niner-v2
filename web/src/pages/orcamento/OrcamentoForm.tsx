@@ -23,7 +23,6 @@ import {
   mascararData,
   mascararMoeda,
 } from '../../lib/masks'
-import { maiusculas } from '../../lib/texto'
 import PesquisaClienteModal from '../pdv/PesquisaClienteModal'
 import PesquisaProdutoModal from '../pdv/PesquisaProdutoModal'
 import PesquisaVendedorModal from '../pdv/PesquisaVendedorModal'
@@ -53,7 +52,6 @@ export default function OrcamentoForm() {
   const [vendedor, setVendedor] = useState<{ id: number; nome: string } | null>(null)
   const [validadeTexto, setValidadeTexto] = useState('')
   const [descontoTexto, setDescontoTexto] = useState('')
-  const [observacao, setObservacao] = useState('')
   const [itens, setItens] = useState<ItemEmMontagem[]>([])
 
   const [pesquisaProduto, setPesquisaProduto] = useState(false)
@@ -133,7 +131,6 @@ export default function OrcamentoForm() {
         idFuncionario: vendedor!.id,
         dataValidade: dataParaIso(validadeTexto),
         valorDesconto: desconto,
-        observacao: observacao.trim() || null,
         itens: itens.map((i) => ({ idVariacao: i.idVariacao, qtd: i.qtd })),
       }),
     onSuccess: (o) => setEmitido(o),
@@ -200,15 +197,6 @@ export default function OrcamentoForm() {
                 </p>
               </div>
 
-              <div className="col-12">
-                <label htmlFor="observacao">Observações</label>
-                <input
-                  id="observacao"
-                  value={observacao}
-                  placeholder="Condições de pagamento, prazo de entrega, frete…"
-                  onChange={(e) => setObservacao(maiusculas(e.target.value))}
-                />
-              </div>
             </div>
           </section>
 

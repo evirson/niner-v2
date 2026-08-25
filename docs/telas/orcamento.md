@@ -1,4 +1,4 @@
-# Spec: Orçamento de Venda                                     Status: Aprovada
+| `observacao` | `text` | ⚠️ **coluna mantida, campo REMOVIDO da tela em 2026-08-25** — ver §Observações # Spec: Orçamento de Venda                                     Status: Aprovada
 Autor: Claudio Calixto (dono do produto) + Claude · Data: 2026-08-20 · Módulo(s): `vendas` (orcamento) · Fase: 2 — Vendas/Financeiro
 
 ## Problema
@@ -428,3 +428,62 @@ que injeta o `@page` injeta junto o seletor que o amarra.
 **Item 4 — o A4 não paginava.** Ver a seção correspondente abaixo/em `docs/telas/`; orçamento com
 ~30 itens imprimia a primeira página e perdia total e assinatura **sem aviso**. ⚠️ A correção
 **não foi testada no papel**.
+
+## Observações: campo removido da tela (2026-08-25)
+
+Pedido do dono do produto: *"na tela de orçamentos, retire o campo Observações"*.
+
+**A coluna `orcamento.observacao` continua no banco**, e continua sendo **exibida** na impressão
+(A4 e bobina) e no detalhe da lista, sempre condicionada a ter conteúdo. Orçamentos emitidos antes
+desta data mantêm o texto que já tinham — remover o campo da tela **não pode** apagar histórico.
+
+⚠️ **Por que dava para remover sem risco de perda:** o orçamento é **imutável** e o formulário é
+**somente criação** (só existe a rota `/orcamentos/novo`). Não há caminho de edição que pudesse
+enviar `observacao: null` por cima de um texto existente. Se um dia surgir uma tela de edição,
+este raciocínio deixa de valer.
+
+O `observacao` do request já era opcional no contrato (`observacao?` no TS, sem `@NotNull` no
+record), então bastou parar de enviá-lo — nada mudou no backend.
+
+### ⚠️ E o espaçamento ficou como estava
+
+O pedido veio junto: *"na tela principal, não diminua os espaços entre os campos pra não ter scroll
+vertical"*. O ganho de altura tinha de vir **da remoção do campo**, não de apertar o que sobrou.
+Medido depois da mudança: `scrollHeight` = `clientHeight` = 707 px, ou seja **sem barra vertical**,
+com o espaçamento intacto.
+
+## Buscar Orçamento (F5 do PDV) — ajustes de 2026-08-25
+
+Quatro pedidos do dono do produto, todos sobre o popup `PuxarOrcamentoModal`:
+
+1. **Fechar virou ✕ no canto superior direito**, nos dois estados (busca e orçamento aberto). O
+   botão "Fechar" do rodapé saiu. Padrão que já existia em `FechamentoCaixaPreviewModal` e
+   `AvisoModal` — o rodapé fica só para a ação que a tela existe para fazer.
+2. **"Levar para a venda" só aparece depois de abrir um orçamento.** Antes ele ficava no rodapé o
+   tempo todo, desabilitado, na tela de busca — um botão sem sentido naquele momento.
+   ⚠️ A ação continua sendo a razão de ser do popup; o que mudou é ela não se anunciar antes de
+   haver o que levar.
+3. **Sem scroll horizontal na grade de itens.** ⚠️ A causa era o `white-space: nowrap` global de
+   `.table th/td`. A correção é **local** (`.orcamento-itens-wrap`): `table-layout: fixed`, larguras
+   somando 100% e quebra de linha só na coluna "Produto". Mexer na regra global faria toda tabela do
+   produto quebrar texto, inclusive as que dependem de `nowrap` para alinhar número.
+4. **Grade com scroll vertical e cabeçalho fixo.**
+
+### ⚠️ O que quase passou batido no item 4
+
+O `.table th` do projeto **já é** `position: sticky; top: 0` — então "cabeçalho fixo" parecia
+resolvido. Não estava: quem rolava era o **`.modal` inteiro** (ele tem `max-height: 85vh;
+overflow-y: auto`), e um `sticky` gruda no scroller mais próximo, não na tela. Com o modal rolando
+como um bloco só, o **título e o ✕ saíam de vista** num orçamento com muitos itens.
+
+A correção foi transformar o modal em coluna flex com `overflow: hidden`, e criar um **miolo**
+(`.orcamento-modal-miolo`) como **único** scroller — título fixo em cima, rodapé fixo embaixo, e o
+`th` sticky grudando no miolo.
+
+⚠️ **A grade deixou de ter scroll próprio** (`overflow: visible`, sem `maxHeight`). Dois scrollers
+aninhados fariam a roda do mouse rolar o errado, e o `th` grudaria no de dentro em vez do miolo —
+que é justamente o defeito que se queria corrigir.
+
+**Medido no navegador depois da mudança:** modal não rola · miolo rola na vertical · **não rola na
+horizontal** · grade não cria scroll próprio · `th` computado como `sticky` · título visível com o
+miolo rolado até o fim.
