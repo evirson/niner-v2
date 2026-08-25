@@ -448,3 +448,24 @@ pouco. Um componente torna a divergência **impossível de escrever sem querer**
   no ✕ inicia um arraste de 1px e o clique se perde.
 - **Backoffice (`admin/`)** — app separado, sem a biblioteca de ícones do ERP. Usa `✕` como texto,
   com a classe `.btn-fechar-tela` própria; o `.topo-pagina` de lá já alinha à direita.
+
+### ⏭️ 39 popups que ficaram de fora — e por quê
+
+A varredura de 2026-08-25 procurou o que o dono do produto pediu: telas **com botão "Fechar"**.
+Ao conferir no navegador apareceu um popup **sem ✕ e sem "Fechar"** (o "Filtros e Dados do
+Cliente", do CRM) — ele nunca teve o botão, então nunca esteve no alcance da busca. Uma varredura
+seguinte achou **39 arquivos** nessa situação. Nada regrediu; são casos que já eram assim.
+
+Eles se dividem em dois grupos, e **a diferença importa**:
+
+1. **Popups de trabalho** — "Filtros do Relatório" (5 telas), "Nova cor", "Novo fornecedor",
+   "Novo produto", "Forma de Pagamento", "Filtros e Dados do Cliente", "Escolher Modelo de
+   Etiqueta", "Testar Impressão"… Estes são iguais aos 34 já convertidos e **deveriam** receber o
+   ✕.
+2. **Diálogos de confirmação** — "Excluir cliente?", "Salvar dados?", "Zerar Contagem?",
+   "Efetivar Balanço?"… ⚠️ Aqui o ✕ é **ambíguo**: o diálogo existe para obter uma resposta, e
+   "Cancelar"/"Não" já É a saída. Um ✕ ao lado de "Não" pergunta ao operador a mesma coisa duas
+   vezes — e em "Salvar dados?" nem fica claro se fechar significa salvar ou descartar.
+
+Por isso o grupo 2 ficou **de fora até decisão do dono do produto**. O grupo 1 é candidato natural
+à mesma conversão.
