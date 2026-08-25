@@ -1732,3 +1732,29 @@ a.menu-card:hover {
 .orcamento-itens-wrap .table th:nth-child(4),
 .orcamento-itens-wrap .table th:nth-child(5),
 .orcamento-itens-wrap .table th:nth-child(6) { width: 11%; }
+
+/* ---------------------------------------------------- Novo Orçamento: caber sem scroll de página
+   Pedido do dono do produto (2026-08-25, com a tela marcada): a página inteira NÃO pode rolar —
+   só a grade de produtos. Com o formulário rolando junto, o operador perde de vista o total e o
+   botão de emitir justamente quando o orçamento cresce.
+
+   ⚠️ Tudo aqui é LOCAL (`.orcamento-form-tela`). O cabeçalho `.topbar-tela`/`.titulo-tela` é o
+   padrão de TODA tela do produto; encolhê-lo no global mudaria ~40 telas para resolver uma. */
+.orcamento-form-tela .lista-topo { padding-bottom: 4px; }
+.orcamento-form-tela .titulo-tela h1 { font-size: 22px; margin: 0; }
+.orcamento-form-tela .lista-corpo { overflow: hidden; display: flex; padding-top: 8px; }
+.orcamento-form-tela .form-secoes {
+  margin-top: 0; display: flex; flex-direction: column; flex: 1; min-height: 0;
+}
+/* Seções de cima e de baixo têm altura própria; só a de produtos estica. */
+.orcamento-form-tela .section { padding: 12px 0; }
+.orcamento-form-tela .section-produtos { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+/* ⚠️ `min-height: 0` é o que permite o filho encolher abaixo do conteúdo — sem ele o flex usa a
+   altura natural da tabela e a página volta a rolar, que é exatamente o defeito a corrigir. */
+.orcamento-form-tela .section-produtos .table-wrap { flex: 1; min-height: 0; margin-top: 8px; }
+
+/* Rodapé numa linha só: emitir à ESQUERDA, desconto ao CENTRO, totais à direita. */
+.orcamento-rodape { display: flex; align-items: flex-start; gap: 16px; }
+.orcamento-rodape-acao { flex: 1; display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
+.orcamento-rodape-desconto { width: 150px; flex-shrink: 0; }
+.orcamento-rodape-totais { flex: 1; text-align: right; }

@@ -142,11 +142,11 @@ export default function OrcamentoForm() {
   })
 
   return (
-    <div className="lista-tela">
+    <div className="lista-tela orcamento-form-tela">
       <div className="lista-topo">
         <div className="topbar-tela">
           <div className="titulo-tela">
-            <IconePdv size={34} />
+            <IconePdv size={26} />
             <h1>Novo Orçamento</h1>
           </div>
           <div className="topbar-acoes">
@@ -200,7 +200,7 @@ export default function OrcamentoForm() {
             </div>
           </section>
 
-          <section className="section">
+          <section className="section section-produtos">
             <div className="ajuda-rodape" style={{ justifyContent: 'space-between', marginTop: 0 }}>
               <p className="section-label" style={{ margin: 0 }}>
                 Produtos {itens.length > 0 && `(${itens.length})`}
@@ -210,8 +210,8 @@ export default function OrcamentoForm() {
               </button>
             </div>
 
-            <div className="table-wrap" style={{ marginTop: 12, maxHeight: 380 }}>
-              <table className="table">
+            <div className="table-wrap">
+              <table className="table table-compacta">
                 <thead>
                   <tr>
                     <th>SKU</th>
@@ -281,9 +281,23 @@ export default function OrcamentoForm() {
             </div>
           </section>
 
+          {/* Rodapé numa LINHA só (2026-08-25): emitir à esquerda, desconto ao centro, totais à
+              direita. Antes eram duas seções empilhadas, e a altura que elas somavam era parte do
+              que empurrava a página para o scroll. */}
           <section className="section">
-            <div className="form-grid">
-              <div className="col-4">
+            <div className="orcamento-rodape">
+              <div className="orcamento-rodape-acao">
+                <button type="button" className="btn" disabled={!podeEmitir || emitir.isPending} onClick={() => emitir.mutate()}>
+                  {emitir.isPending ? 'Emitindo…' : 'Emitir Orçamento'}
+                </button>
+                {/* O aviso da imutabilidade fica sob o botão: ocupa altura que a coluna dos
+                    totais já usa de qualquer forma, então não custa linha nova. */}
+                <p className="muted" style={{ margin: 0, fontSize: 12 }}>
+                  ⚠️ Depois de emitido <strong>não pode ser alterado</strong> — cancele e emita outro.
+                </p>
+              </div>
+
+              <div className="orcamento-rodape-desconto">
                 <label htmlFor="desconto">Desconto (R$)</label>
                 <input
                   id="desconto"
@@ -294,16 +308,10 @@ export default function OrcamentoForm() {
                   onBlur={(e) => setDescontoTexto(completarMoeda(e.target.value))}
                   onFocus={(e) => e.target.select()}
                 />
-                {descontoAcimaDoTeto && (
-                  <p className="erro-campo">
-                    Máximo permitido: R$ {formatarMoeda(tetoDesconto)} (
-                    {descontoMaximo?.percentualDescontoVenda}% do subtotal, definido em Parâmetros do
-                    Sistema).
-                  </p>
-                )}
               </div>
-              <div className="col-8">
-                <p className="muted" style={{ textAlign: 'right', margin: 0 }}>
+
+              <div className="orcamento-rodape-totais">
+                <p className="muted" style={{ margin: 0 }}>
                   Subtotal <strong className="mono">R$ {formatarMoeda(subtotal)}</strong>
                   {desconto > 0 && (
                     <>
@@ -311,23 +319,22 @@ export default function OrcamentoForm() {
                     </>
                   )}
                 </p>
-                <p style={{ textAlign: 'right', fontSize: 22, margin: '4px 0 0' }}>
+                <p style={{ fontSize: 22, margin: '4px 0 0' }}>
                   Total <strong className="mono">R$ {formatarMoeda(total)}</strong>
                 </p>
               </div>
             </div>
-          </section>
 
-          <section className="section">
-            <div className="ajuda-rodape" style={{ justifyContent: 'flex-start' }}>
-              <button type="button" className="btn" disabled={!podeEmitir || emitir.isPending} onClick={() => emitir.mutate()}>
-                {emitir.isPending ? 'Emitindo…' : 'Emitir Orçamento'}
-              </button>
-              <p className="muted" style={{ margin: 0 }}>
-                ⚠️ Depois de emitido o orçamento <strong>não pode ser alterado</strong> — para mudar,
-                cancele e emita outro.
+            {/* ⚠️ O erro do teto fica FORA da linha, largura inteira: dentro da coluna de 150px
+                ele quebraria em cinco linhas e esticaria o rodapé — desfazendo o ganho de altura
+                justamente quando o operador erra, que é quando ele mais precisa ver o total. */}
+            {descontoAcimaDoTeto && (
+              <p className="erro-campo" style={{ marginTop: 8 }}>
+                Desconto acima do máximo permitido: R$ {formatarMoeda(tetoDesconto)} (
+                {descontoMaximo?.percentualDescontoVenda}% do subtotal, definido em Parâmetros do
+                Sistema).
               </p>
-            </div>
+            )}
           </section>
         </div>
       </div>

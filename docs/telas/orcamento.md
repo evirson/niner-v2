@@ -487,3 +487,43 @@ que é justamente o defeito que se queria corrigir.
 **Medido no navegador depois da mudança:** modal não rola · miolo rola na vertical · **não rola na
 horizontal** · grade não cria scroll próprio · `th` computado como `sticky` · título visível com o
 miolo rolado até o fim.
+
+## Layout da tela: caber sem scroll de página (2026-08-25)
+
+Pedido do dono do produto, com a tela marcada em imagem: **a página inteira não pode rolar** — só
+a grade de produtos. Com o formulário rolando junto, o operador perde de vista o total e o botão
+de emitir justamente quando o orçamento cresce.
+
+Quatro mudanças, todas **locais** à tela (`.orcamento-form-tela`):
+
+| O que | Como |
+|---|---|
+| Cabeçalho mais baixo (marcado em azul) | ícone 34 → 26, `h1` 22px sem margem, menos respiro no topo |
+| Espaçamento da grade (marcado em amarelo) | classe `table-compacta` (padding 6px em vez de 12px) |
+| Desconto menor e ao centro | coluna de 150px no meio da linha do rodapé |
+| Emitir Orçamento na mesma linha, à esquerda | rodapé virou uma linha só: ação · desconto · totais |
+
+### ⚠️ A altura da grade NÃO é um número fixo
+
+A versão anterior tinha `maxHeight: 380`. Número mágico quebra na primeira janela de tamanho
+diferente — em tela baixa continua rolando, em tela alta desperdiça espaço. Hoje a seção de
+produtos é `flex: 1` dentro de uma coluna flex, e **absorve a altura que sobrar**.
+
+⚠️ **`min-height: 0` é o que faz isso funcionar.** Sem ele o item flex não encolhe abaixo da
+altura natural do conteúdo, a tabela empurra o container e a página volta a rolar — que é
+exatamente o defeito a corrigir. Vale para a seção e para o `.table-wrap` dentro dela.
+
+### ⚠️ Tudo local, nada global
+
+`.topbar-tela`/`.titulo-tela` são o cabeçalho de **toda** tela do produto, e `.table` é a tabela
+de todas as listas. Encolher qualquer um deles no global mudaria ~40 telas para resolver uma.
+Por isso as regras são todas prefixadas por `.orcamento-form-tela`.
+
+### O erro do desconto fica fora da linha
+
+O aviso de "desconto acima do máximo" saiu de dentro da coluna do campo: com 150px de largura ele
+quebraria em cinco linhas e esticaria o rodapé — desfazendo o ganho de altura **justamente quando
+o operador erra**, que é quando ele mais precisa enxergar o total.
+
+**Medido no navegador com 12 itens:** página não rola · grade rola na vertical · grade **não** rola
+na horizontal · cabeçalho da grade computado como `sticky`.
