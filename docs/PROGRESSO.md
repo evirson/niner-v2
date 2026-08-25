@@ -541,6 +541,92 @@ Movimentação de Conta Corrente) que ainda não tinham migrado pro `SeletorPlan
 
 ## Linha do tempo
 
+### 2026-08-25 (4) — a rodada de interface: padrão de fechar, layout do orçamento e o nome do produto
+
+Seis mudanças pedidas pelo dono do produto, todas conferidas **no navegador** — nenhuma delas
+seria provada por compilar.
+
+#### ✕ no canto superior direito, em todo popup
+
+*"Para as telas ficarem no mesmo padrão."* A varredura achou **39 botões "Fechar" em 37 arquivos**,
+em **cinco marcações diferentes** (`btn ghost`, `btn`, `btn-secundario`, `btn-secondary` e uma com
+espaçamento próprio) — o que acontece quando o padrão vive na memória de quem escreve.
+
+Por isso a saída **não** foi repetir a marcação 39 vezes: nasceu o **`CabecalhoModal`** (título +
+✕ com os rótulos de acessibilidade certos), usado por **34 popups**. Um componente torna a
+divergência impossível de escrever sem querer, que é o que o pedido pede de verdade.
+
+**A regra que fica:** o rodapé do popup é para a **ação que a tela existe para fazer**. Fechar não
+é ação de negócio — é saída, e saída mora no ✕.
+
+⚠️ **O codemod criou ✕ duplicado em 2 arquivos** que já tinham um (`DanfeModal`,
+`PesquisaProdutoEntradaModal`) — ele trocou o `<h2>` que estava *dentro* de um cabeçalho pronto.
+Corrigidos à mão; a conferência final varre os 166 `.tsx` procurando duplicata e sobra: 0 e 0.
+
+⏭️ **39 popups ficaram de fora** porque nunca tiveram "Fechar" — e eles **não são todos iguais**:
+os de *trabalho* (Filtros do Relatório, Nova cor, Forma de Pagamento…) merecem o ✕; os de
+*confirmação* ("Excluir cliente?", "Salvar dados?") **não**, porque ali o ✕ é ambíguo — "Cancelar"
+já É a saída, e em "Salvar dados?" fechar não diz se salva ou descarta. Decisão pendente.
+
+#### Novo Orçamento: campo removido e a página parou de rolar
+
+Campo **Observações** saiu da tela. ⚠️ A **coluna fica no banco** e continua exibida na impressão e
+no detalhe — orçamento antigo não perde texto. Deu para remover sem risco porque o orçamento é
+**imutável** e o formulário é só de criação (só existe `/orcamentos/novo`): não há caminho de
+edição que pudesse gravar `null` por cima.
+
+Depois, com a tela marcada em imagem: cabeçalho mais baixo, grade mais compacta, desconto menor e
+ao centro, "Emitir Orçamento" na mesma linha à esquerda.
+
+⚠️ **A altura da grade deixou de ser número fixo.** Havia `maxHeight: 380` — número mágico quebra
+na primeira janela de tamanho diferente. Hoje a seção é `flex: 1` e absorve o que sobra;
+**`min-height: 0`** é o que permite o item flex encolher abaixo do conteúdo (sem ele a tabela
+empurra o container e a página volta a rolar). Medido com 12 itens: página não rola.
+
+#### F5 do PDV
+
+✕ no canto nos dois estados · "Levar para a venda" só aparece **depois de abrir** um orçamento ·
+grade sem scroll horizontal · cabeçalho fixo.
+
+⚠️ **O cabeçalho fixo quase passou batido:** `.table th` **já era** `position: sticky` — e não
+funcionava, porque quem rolava era o **`.modal` inteiro**, e sticky gruda no scroller mais próximo.
+O título e o ✕ saíam de vista. O modal virou coluna flex com um **miolo** como único scroller; a
+grade **perdeu** o scroll próprio de propósito (dois scrollers aninhados fariam o `th` grudar no
+de dentro).
+
+#### A marca na tela dizia NINER
+
+O produto se chama **Nainer**. O site público e o backoffice já estavam certos; só o ERP ficou para
+trás, no cabeçalho e nas duas ocorrências do login.
+
+⚠️ **Não aparecia numa busca por "NINER"**: a marca é renderizada **partida** —
+`NI<span>NER</span>`, para o CSS pintar as metades de cores diferentes. `grep` devolveu 15 acertos
+e **nenhum era tela**. Foi olhando o navegador que o problema apareceu.
+
+⛔ Ficaram de fora, de propósito: `NINER_API_BASE` (configuração de runtime), chaves de
+`localStorage` (renomear **desloga todo mundo**), nomes de evento, pacote Java, banco `niner_db`. E
+os nomes de cookie listados na página de **Privacidade**: aquilo é texto visível, mas é a
+*declaração do nome real do cookie* — trocar sem trocar o cookie seria informação falsa.
+
+#### Menu: 3 itens prometiam "Em construção" para função pronta
+
+O subgrupo "Módulo Fiscal" oferecia quatro telas; **três já existem em outro lugar** (NFC-e e NF-e
+saem do PDV, o cancelamento fica em Documentos Fiscais). Item de menu assim é pior que item
+ausente: manda o lojista procurar onde a coisa não está.
+
+⚠️ **A quarta ficou** — e conferi antes de apagar: **"Exportação de XML" não existe**, nem tela nem
+endpoint de exportação em lote. É lacuna real. Renomeada para "Exportação de XML em Lote", com a
+descrição dizendo onde baixar o XML de uma nota. ⚠️ E o `MODULOFISCAL.md` §11.2 lista
+`fiscal.download` como se existisse — **não existe**.
+
+#### `docs/TELAS.md` — inventário completo
+
+**56 telas em uso · 6 em construção · 20 telas-filhas**, gerado do código (`menu.ts` + `App.tsx`),
+com rota e spec de cada uma. ⚠️ O casamento com a spec **errou 4 vezes** na primeira geração,
+sempre preferindo o arquivo de nome mais longo (PDV → `cancelamento-venda.md`). Corrigidos, e todos
+os caminhos conferidos no disco. ⚠️ **Duas telas sem spec nenhuma: Efetivar Balanço e Tipo de
+Carteira.**
+
 ### 2026-08-25 (3) — começou a integração com marketplaces: estudo, decisões e quatro blocos
 
 O coração da visão original do produto (P1/P2, R3–R7) saiu do papel. `canais/`, `pedidos/`,
