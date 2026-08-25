@@ -421,3 +421,30 @@ sai em NF-e 55* (revisão anterior), o `enderDest` virou obrigatório — e `cMu
 código IBGE, a validação preventiva (F11) recusava a venda antes de transmitir, dizendo
 *"Falta: município (código IBGE)"*. Correto, e ainda assim inútil para quem não sabia onde achar o
 número.
+
+## Fechar popup: ✕ no canto superior direito (2026-08-25)
+
+Pedido do dono do produto: *"faça uma busca em todas as telas que tenham o botão Fechar e coloque
+o botão de fechar no canto superior direito, marcado com um X — para as telas ficarem no mesmo
+padrão"*.
+
+**A regra:** popup fecha pelo **✕ do canto superior direito**, nunca por um botão "Fechar" no
+rodapé. O rodapé fica para a **ação que a tela existe para fazer** — Salvar, Imprimir, Adicionar.
+Fechar não é ação de negócio; é saída, e saída mora no ✕.
+
+Use **`<CabecalhoModal titulo="…" aoFechar={…} />`** (`web/src/components/CabecalhoModal.tsx`).
+Ele já traz título + ✕ com o `aria-label`/`title` corretos.
+
+### Por que virou componente e não marcação repetida
+
+A varredura achou **39 botões "Fechar" em 37 arquivos**, em **5 marcações diferentes**:
+`btn ghost`, `btn`, `btn-secundario`, `btn-secondary` e uma variante com espaçamento próprio.
+Isso é o que acontece quando o padrão vive na memória de quem escreve: cada tela reinventa um
+pouco. Um componente torna a divergência **impossível de escrever sem querer**.
+
+⚠️ **Dois casos não são popup e ficaram diferentes, de propósito:**
+- **Painel de propriedades do editor de etiqueta** — janela flutuante arrastável pelo cabeçalho. O
+  ✕ entrou ao lado do ícone de excluir, com `onPointerDown` + `stopPropagation`: sem isso, clicar
+  no ✕ inicia um arraste de 1px e o clique se perde.
+- **Backoffice (`admin/`)** — app separado, sem a biblioteca de ícones do ERP. Usa `✕` como texto,
+  com a classe `.btn-fechar-tela` própria; o `.topo-pagina` de lá já alinha à direita.

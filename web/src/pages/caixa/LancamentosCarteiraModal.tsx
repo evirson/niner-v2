@@ -1,3 +1,4 @@
+import CabecalhoModal from '../../components/CabecalhoModal'
 import { useQuery } from '@tanstack/react-query'
 import { ApiError } from '../../lib/api'
 import { listarLancamentosDaCarteira } from '../../lib/caixa'
@@ -36,7 +37,7 @@ export default function LancamentosCarteiraModal({
   return (
     <div className="modal-overlay" onClick={aoFechar}>
       <div className="modal modal-largo" role="dialog" aria-label={`Lançamentos de ${nomeCarteira}`} onClick={(e) => e.stopPropagation()}>
-        <h2 style={{ marginTop: 0 }}>Lançamentos — {nomeCarteira}</h2>
+        <CabecalhoModal titulo=<>Lançamentos — {nomeCarteira}</> aoFechar={aoFechar} />
 
         {isLoading ? (
           <p className="muted">Carregando…</p>
@@ -72,9 +73,7 @@ export default function LancamentosCarteiraModal({
         )}
 
         <div className="ajuda-rodape">
-          <button type="button" className="btn ghost" onClick={aoFechar}>
-            Fechar
-          </button>
+
         </div>
       </div>
     </div>

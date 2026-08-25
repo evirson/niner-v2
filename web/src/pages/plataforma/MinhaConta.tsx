@@ -1,3 +1,4 @@
+import CabecalhoModal from '../../components/CabecalhoModal'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
@@ -384,7 +385,7 @@ function ModalPagamento({
   return (
     <div className="modal-overlay" onClick={aoFechar}>
       <div className="modal" role="dialog" aria-label="Assinar faixa" onClick={(e) => e.stopPropagation()}>
-        <h2 style={{ marginTop: 0 }}>Assinar uma faixa</h2>
+        <CabecalhoModal titulo="Assinar uma faixa" aoFechar={aoFechar} />
 
         {!pix ? (
           <>
@@ -463,9 +464,7 @@ function ModalPagamento({
               <textarea id="copiaecola" className="mono" readOnly rows={3} value={pix.copiaECola} />
             </div>
             <div className="footer-bar">
-              <button type="button" className="btn btn-secondary" onClick={aoFechar}>
-                Fechar
-              </button>
+
               <button
                 type="button"
                 className="btn btn-primary"

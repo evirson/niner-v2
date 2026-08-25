@@ -1,3 +1,4 @@
+import CabecalhoModal from '../../components/CabecalhoModal'
 import { useQuery } from '@tanstack/react-query'
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
@@ -257,7 +258,7 @@ export default function CancelamentoDevolucao() {
       {filtrosAberto && (
         <div className="modal-overlay">
           <div className="modal" role="dialog" aria-label="Filtros de Cancelamento de Devolução" onClick={(e) => e.stopPropagation()}>
-            <h2 style={{ marginTop: 0 }}>Cancelamento de Devolução de Produtos</h2>
+            <CabecalhoModal titulo="Cancelamento de Devolução de Produtos" aoFechar={() => navigate(-1)} />
             <p className="muted" style={{ marginTop: 4 }}>
               Informe o número do vale, ou a data inicial e final da devolução.
             </p>
@@ -302,9 +303,7 @@ export default function CancelamentoDevolucao() {
             {erroFiltros && <p className="erro-campo">{erroFiltros}</p>}
 
             <div className="ajuda-rodape">
-              <button type="button" className="btn ghost" onClick={() => navigate(-1)}>
-                Fechar
-              </button>
+
               <button type="button" className="btn" onClick={confirmarFiltros}>
                 Localizar Devoluções
               </button>

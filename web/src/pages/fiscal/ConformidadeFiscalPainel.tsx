@@ -1,3 +1,4 @@
+import CabecalhoModal from '../../components/CabecalhoModal'
 import { useEffect, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
@@ -143,7 +144,7 @@ function DrillDownModal({
   return (
     <div className="modal-overlay" onClick={aoFechar}>
       <div className="modal modal-largo" role="dialog" aria-label={`Pendências — ${categoria.rotulo}`} onClick={(e) => e.stopPropagation()}>
-        <h2 style={{ marginTop: 0 }}>{categoria.rotulo}</h2>
+        <CabecalhoModal titulo=<>{categoria.rotulo}</> aoFechar={aoFechar} />
 
         {isLoading ? (
           <p className="muted">Carregando…</p>
@@ -214,9 +215,7 @@ function DrillDownModal({
         )}
 
         <div className="ajuda-rodape">
-          <button type="button" className="btn ghost" onClick={aoFechar}>
-            Fechar
-          </button>
+
         </div>
       </div>
     </div>

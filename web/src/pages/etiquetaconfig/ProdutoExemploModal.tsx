@@ -1,3 +1,4 @@
+import CabecalhoModal from '../../components/CabecalhoModal'
 import { useQuery } from '@tanstack/react-query'
 import { useState } from 'react'
 import { buscarProdutosExemplo, type ProdutoExemplo } from '../../lib/etiquetaConfig'
@@ -32,7 +33,7 @@ export default function ProdutoExemploModal({
   return (
     <div className="modal-overlay" onClick={aoFechar}>
       <div className="modal modal-largo" role="dialog" aria-label="Escolher produto de exemplo" onClick={(e) => e.stopPropagation()}>
-        <h2 style={{ marginTop: 0 }}>Escolher Produto de Exemplo</h2>
+        <CabecalhoModal titulo="Escolher Produto de Exemplo" aoFechar={aoFechar} />
         <p className="muted" style={{ marginTop: 4 }}>
           Digite a descrição ou o código (SKU) do produto e clique numa linha (ou Enter/Espaço com o foco nela) pra
           pré-visualizar a etiqueta com os dados reais desse produto.
@@ -116,9 +117,7 @@ export default function ProdutoExemploModal({
         )}
 
         <div className="ajuda-rodape">
-          <button type="button" className="btn ghost" onClick={aoFechar}>
-            Fechar
-          </button>
+
         </div>
       </div>
     </div>

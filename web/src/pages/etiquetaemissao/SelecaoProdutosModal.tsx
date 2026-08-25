@@ -1,3 +1,4 @@
+import CabecalhoModal from '../../components/CabecalhoModal'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { useEu } from '../../lib/eu'
@@ -449,7 +450,7 @@ export default function SelecaoProdutosModal({
   return (
     <div className="modal-overlay" onClick={aoFechar}>
       <div className="modal modal-largo" role="dialog" aria-label="Selecionar Produtos" onClick={(e) => e.stopPropagation()}>
-        <h2 style={{ marginTop: 0 }}>Selecionar Produtos</h2>
+        <CabecalhoModal titulo="Selecionar Produtos" aoFechar={aoFechar} />
 
         <div className="editor-etiqueta-segmentado" style={{ marginBottom: 16 }}>
           <button type="button" className={`btn ghost ${modo === 'INDIVIDUAL' ? 'ativa' : ''}`} onClick={() => setModo('INDIVIDUAL')}>
@@ -468,9 +469,7 @@ export default function SelecaoProdutosModal({
         {modo === 'ESTOQUES' && <SelecaoPorEstoques aoAdicionar={aoAdicionar} />}
 
         <div className="ajuda-rodape">
-          <button type="button" className="btn" onClick={aoFechar}>
-            Fechar
-          </button>
+
         </div>
       </div>
     </div>

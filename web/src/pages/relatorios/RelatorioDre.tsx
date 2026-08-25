@@ -1,3 +1,4 @@
+import CabecalhoModal from '../../components/CabecalhoModal'
 import { useQuery } from '@tanstack/react-query'
 import { useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
@@ -292,7 +293,7 @@ export default function RelatorioDre() {
       {modalAberto && (
         <div className="modal-overlay">
           <div className="modal" role="dialog" aria-label="Filtros da DRE" onClick={(e) => e.stopPropagation()}>
-            <h2 style={{ marginTop: 0 }}>DRE — Demonstração do Resultado</h2>
+            <CabecalhoModal titulo="DRE — Demonstração do Resultado" aoFechar={() => (relatorioGerado ? setModalAberto(false) : navigate(-1))} />
             <p className="muted" style={{ marginTop: 4 }}>
               Escolha o período e o regime. <strong>Competência</strong> mostra o lucro do que foi
               vendido no período; <strong>Caixa</strong>, o que entrou e saiu de dinheiro.
@@ -360,9 +361,7 @@ export default function RelatorioDre() {
             {erroFiltros && <p className="erro-campo">{erroFiltros}</p>}
 
             <div className="ajuda-rodape">
-              <button type="button" className="btn ghost" onClick={() => (relatorioGerado ? setModalAberto(false) : navigate(-1))}>
-                Fechar
-              </button>
+
               <button type="button" className="btn" onClick={gerar}>
                 Gerar DRE
               </button>

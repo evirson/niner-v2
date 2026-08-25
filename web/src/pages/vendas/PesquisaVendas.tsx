@@ -1,3 +1,4 @@
+import CabecalhoModal from '../../components/CabecalhoModal'
 import { useQuery } from '@tanstack/react-query'
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
@@ -303,7 +304,7 @@ export default function PesquisaVendas() {
             aria-label="Filtros de Pesquisa de Vendas"
             onClick={(e) => e.stopPropagation()}
           >
-            <h2 style={{ marginTop: 0 }}>Pesquisa de Vendas</h2>
+            <CabecalhoModal titulo="Pesquisa de Vendas" aoFechar={() => navigate(-1)} />
             <p className="muted" style={{ marginTop: 4, marginBottom: 24 }}>
               Informe o número da venda, ou a data inicial e final.
             </p>
@@ -437,9 +438,7 @@ export default function PesquisaVendas() {
             )}
 
             <div className="ajuda-rodape" style={{ marginTop: 28 }}>
-              <button type="button" className="btn ghost" onClick={() => navigate(-1)}>
-                Fechar
-              </button>
+
               <button type="button" className="btn" onClick={confirmarFiltros}>
                 Localizar Vendas
               </button>

@@ -1,3 +1,4 @@
+import CabecalhoModal from '../../components/CabecalhoModal'
 import { useQuery } from '@tanstack/react-query'
 import { useState } from 'react'
 import { buscarPermiteQtdDecimal } from '../../lib/configuracaoGeral'
@@ -40,7 +41,7 @@ export default function AlteraQuantidadeModal({
   return (
     <div className="modal-overlay" onClick={aoFechar}>
       <div className="modal modal-medio" role="dialog" aria-label="Altera quantidade" onClick={(e) => e.stopPropagation()}>
-        <h2 style={{ marginTop: 0 }}>Altera Quantidade</h2>
+        <CabecalhoModal titulo="Altera Quantidade" aoFechar={aoFechar} />
         <p className="muted" style={{ marginTop: 4 }}>
           Use os botões pra ajustar a quantidade de cada item da venda.
         </p>
@@ -100,9 +101,7 @@ export default function AlteraQuantidadeModal({
         )}
 
         <div className="ajuda-rodape">
-          <button type="button" className="btn ghost" onClick={aoFechar}>
-            Fechar
-          </button>
+
         </div>
       </div>
     </div>

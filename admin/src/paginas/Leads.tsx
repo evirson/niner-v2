@@ -110,7 +110,7 @@ function Ficha({ idLead, aoFechar }: { idLead: number; aoFechar: () => void }) {
     <section className="card secao">
       <div className="topo-pagina" style={{ marginBottom: 12 }}>
         <h2>{detalhe.lead.nome ?? detalhe.lead.email}</h2>
-        <button className="btn btn-secundario" onClick={aoFechar}>Fechar</button>
+        <button className="btn btn-secundario btn-fechar-tela" onClick={aoFechar} aria-label="Fechar" title="Fechar">✕</button>
       </div>
 
       <p className="muted">

@@ -1,3 +1,4 @@
+import CabecalhoModal from '../../components/CabecalhoModal'
 import { useQuery } from '@tanstack/react-query'
 import { Fragment, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
@@ -392,7 +393,7 @@ export default function FluxoCaixa() {
       {modalAberto && (
         <div className="modal-overlay">
           <div className="modal" role="dialog" aria-label="Filtros do Fluxo de Caixa" onClick={(e) => e.stopPropagation()}>
-            <h2 style={{ marginTop: 0 }}>Fluxo de Caixa — {aba === 'REALIZADO' ? 'Realizado' : 'Projeção'}</h2>
+            <CabecalhoModal titulo=<>Fluxo de Caixa — {aba === 'REALIZADO' ? 'Realizado' : 'Projeção'}</> aoFechar={() => (gerado ? setModalAberto(false) : navigate(-1))} />
             <p className="muted" style={{ marginTop: 4 }}>
               {aba === 'REALIZADO'
                 ? 'Entradas e saídas de dinheiro que já aconteceram, por atividade.'
@@ -465,9 +466,7 @@ export default function FluxoCaixa() {
             {erroFiltros && <p className="erro-campo">{erroFiltros}</p>}
 
             <div className="ajuda-rodape">
-              <button type="button" className="btn ghost" onClick={() => (gerado ? setModalAberto(false) : navigate(-1))}>
-                Fechar
-              </button>
+
               <button type="button" className="btn" onClick={gerar}>
                 Gerar
               </button>

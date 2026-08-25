@@ -1,3 +1,4 @@
+import CabecalhoModal from '../../components/CabecalhoModal'
 import MultiSelectGenerico from '../../components/MultiSelectGenerico'
 import {
   FILTROS_CLIENTES_CRM_VAZIO,
@@ -41,7 +42,7 @@ export default function FiltrosClientesModal({
   return (
     <div className="modal-overlay" onClick={aoFechar}>
       <div className="modal modal-largo" role="dialog" aria-label="Filtros de Clientes" onClick={(e) => e.stopPropagation()}>
-        <h2 style={{ marginTop: 0 }}>Filtros de Clientes</h2>
+        <CabecalhoModal titulo="Filtros de Clientes" aoFechar={aoFechar} />
         <p className="muted" style={{ marginTop: 4 }}>
           Todos os campos são opcionais — combine quantos quiser.
         </p>
@@ -166,9 +167,7 @@ export default function FiltrosClientesModal({
           <button type="button" className="btn ghost" onClick={() => aoMudar(FILTROS_CLIENTES_CRM_VAZIO)}>
             Limpar
           </button>
-          <button type="button" className="btn" onClick={aoFechar}>
-            Fechar
-          </button>
+
         </div>
       </div>
     </div>

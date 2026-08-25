@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
-import { IconeExcluir } from '../../components/Icones'
+import { IconeExcluir, IconeFechar } from '../../components/Icones'
 import {
   CAMPOS_DE_BARRAS,
   ROTULO_CAMPO_ETIQUETA,
@@ -139,9 +139,24 @@ export default function PainelPropriedadesCampo({
           {ROTULO_CAMPO_ETIQUETA[campo.campo]}
           {ordinal ? ` (${ordinal}ª)` : ''}
         </strong>
-        <button type="button" className="acao-icone acao-excluir" onClick={aoRemover} title="Remover campo" aria-label="Remover campo">
-          <IconeExcluir />
-        </button>
+        <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+          <button type="button" className="acao-icone acao-excluir" onClick={aoRemover} title="Remover campo" aria-label="Remover campo">
+            <IconeExcluir />
+          </button>
+          {/* Fechar no canto superior direito, como no resto do produto (2026-08-25). ⚠️ Este
+              cabeçalho é o "pegador" que arrasta o painel — `stopPropagation` no pointerDown
+              impede que clicar no ✕ comece um arraste de 1px e o clique se perca. */}
+          <button
+            type="button"
+            className="acao-icone"
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={aoFechar}
+            title="Fechar"
+            aria-label="Fechar"
+          >
+            <IconeFechar />
+          </button>
+        </div>
       </div>
       <div className="editor-etiqueta-painel-corpo">
 
@@ -211,11 +226,6 @@ export default function PainelPropriedadesCampo({
           </label>
         )}
 
-        <div className="ajuda-rodape" style={{ justifyContent: 'flex-end' }}>
-          <button type="button" className="btn ghost" onClick={aoFechar}>
-            Fechar
-          </button>
-        </div>
       </div>
     </div>
   )

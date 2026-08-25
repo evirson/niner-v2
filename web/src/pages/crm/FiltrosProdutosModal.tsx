@@ -1,3 +1,4 @@
+import CabecalhoModal from '../../components/CabecalhoModal'
 import MultiSelectGenerico from '../../components/MultiSelectGenerico'
 import { FILTROS_PRODUTOS_CRM_VAZIO, type FiltrosProdutosCrm, type OpcaoCrm } from '../../lib/crm'
 import { mascararData } from '../../lib/masks'
@@ -33,7 +34,7 @@ export default function FiltrosProdutosModal({
   return (
     <div className="modal-overlay" onClick={aoFechar}>
       <div className="modal modal-largo" role="dialog" aria-label="Filtros de Produtos Comprados" onClick={(e) => e.stopPropagation()}>
-        <h2 style={{ marginTop: 0 }}>Filtros de Produtos Comprados</h2>
+        <CabecalhoModal titulo="Filtros de Produtos Comprados" aoFechar={aoFechar} />
         <p className="muted" style={{ marginTop: 4 }}>
           Todos os campos são opcionais. Preenchendo mais de um, só entram clientes que compraram um produto que bate
           em todos ao mesmo tempo (a mesma compra).
@@ -100,9 +101,7 @@ export default function FiltrosProdutosModal({
           <button type="button" className="btn ghost" onClick={() => aoMudar(FILTROS_PRODUTOS_CRM_VAZIO)}>
             Limpar
           </button>
-          <button type="button" className="btn" onClick={aoFechar}>
-            Fechar
-          </button>
+
         </div>
       </div>
     </div>

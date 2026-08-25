@@ -1,3 +1,4 @@
+import CabecalhoModal from '../../components/CabecalhoModal'
 import { useQuery } from '@tanstack/react-query'
 import { useState } from 'react'
 import { listarFuncionarios, type Funcionario } from '../../lib/funcionarios'
@@ -26,7 +27,7 @@ export default function PesquisaVendedorModal({
   return (
     <div className="modal-overlay" onClick={aoFechar}>
       <div className="modal modal-largo" role="dialog" aria-label="Pesquisa de vendedor" onClick={(e) => e.stopPropagation()}>
-        <h2 style={{ marginTop: 0 }}>Pesquisa de Vendedor</h2>
+        <CabecalhoModal titulo="Pesquisa de Vendedor" aoFechar={aoFechar} />
         <p className="muted" style={{ marginTop: 4 }}>
           Digite o nome do funcionário e clique numa linha (ou Enter/Espaço com o foco nela) pra selecionar.
         </p>
@@ -105,9 +106,7 @@ export default function PesquisaVendedorModal({
         )}
 
         <div className="ajuda-rodape">
-          <button type="button" className="btn ghost" onClick={aoFechar}>
-            Fechar
-          </button>
+
         </div>
       </div>
     </div>

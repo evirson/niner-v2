@@ -1,3 +1,4 @@
+import CabecalhoModal from '../../components/CabecalhoModal'
 import { useMemo, useState } from 'react'
 import { ApiError } from '../../lib/api'
 import { buscarVendedorDaVenda, type ItemVendaOrigem, type VendedorDaVenda } from '../../lib/devolucaoProduto'
@@ -127,7 +128,7 @@ export default function SelecaoItensVendaModal({
         // a coluna do botão "Selecionar" saía fora da área visível, atrás de um scroll horizontal.
         style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden', maxHeight: '85vh', maxWidth: 1240 }}
       >
-        <h2 style={{ marginTop: 0, flexShrink: 0 }}>Devolução de Produtos</h2>
+        <CabecalhoModal titulo="Devolução de Produtos" aoFechar={aoFechar} />
         <p className="muted" style={{ marginTop: 4, flexShrink: 0 }}>
           Informe o número da venda e escolha os produtos que o cliente está devolvendo.
         </p>
@@ -264,9 +265,7 @@ export default function SelecaoItensVendaModal({
         </div>
 
         <div className="ajuda-rodape" style={{ flexShrink: 0 }}>
-          <button type="button" className="btn ghost" onClick={aoFechar}>
-            Fechar
-          </button>
+
           <button type="button" className="btn" disabled={selecionados.size === 0} onClick={confirmar}>
             {selecionados.size === 0
               ? 'Confirmar Seleção'

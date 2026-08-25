@@ -1,3 +1,4 @@
+import CabecalhoModal from '../../components/CabecalhoModal'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import AjudaDaTela from '../../components/AjudaDaTela'
@@ -182,7 +183,7 @@ export default function EstornoRecebimentoCrediario() {
       {loteParaVisualizar && (
         <div className="modal-overlay" onClick={() => setLoteParaVisualizar(null)}>
           <div className="modal" role="dialog" aria-label="Parcelas do recebimento" onClick={(e) => e.stopPropagation()}>
-            <h2 style={{ marginTop: 0 }}>Parcelas do recebimento</h2>
+            <CabecalhoModal titulo="Parcelas do recebimento" aoFechar={() => setLoteParaVisualizar(null)} />
             <p className="muted" style={{ marginTop: -4 }}>
               {loteParaVisualizar.nomeCliente} — {formatarData(loteParaVisualizar.dataRecebimento)}
             </p>
@@ -225,9 +226,7 @@ export default function EstornoRecebimentoCrediario() {
             </div>
 
             <div className="ajuda-rodape">
-              <button type="button" className="btn ghost" onClick={() => setLoteParaVisualizar(null)}>
-                Fechar
-              </button>
+
             </div>
           </div>
         </div>

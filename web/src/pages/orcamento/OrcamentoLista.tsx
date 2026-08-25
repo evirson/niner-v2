@@ -1,3 +1,4 @@
+import CabecalhoModal from '../../components/CabecalhoModal'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
@@ -286,7 +287,7 @@ export default function OrcamentoLista() {
           >
             <div className="lightbox-topo" style={{ marginBottom: 12 }}>
               <div className="titulo-tela">
-                <h2 style={{ margin: 0 }}>Orçamento nº {detalhe.idOrcamento}</h2>
+                <CabecalhoModal titulo=<>Orçamento nº {detalhe.idOrcamento}</> aoFechar={() => setDetalhe(null)} />
                 <span className={CLASSE_SITUACAO[detalhe.situacao]}>{ROTULO_SITUACAO[detalhe.situacao]}</span>
               </div>
               <div style={{ display: 'flex', gap: 8 }}>
@@ -386,9 +387,7 @@ export default function OrcamentoLista() {
             {detalhe.observacao && <p className="muted">Observações: {detalhe.observacao}</p>}
 
             <div className="ajuda-rodape">
-              <button type="button" className="btn" onClick={() => setDetalhe(null)}>
-                Fechar
-              </button>
+
             </div>
           </div>
         </div>

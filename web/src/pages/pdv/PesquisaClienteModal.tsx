@@ -1,3 +1,4 @@
+import CabecalhoModal from '../../components/CabecalhoModal'
 import { useQuery } from '@tanstack/react-query'
 import { useState } from 'react'
 import { buscarClientesPdv, type PdvCliente } from '../../lib/pdv'
@@ -25,7 +26,7 @@ export default function PesquisaClienteModal({
   return (
     <div className="modal-overlay" onClick={aoFechar}>
       <div className="modal modal-largo" role="dialog" aria-label="Pesquisa de cliente" onClick={(e) => e.stopPropagation()}>
-        <h2 style={{ marginTop: 0 }}>Pesquisa de Cliente</h2>
+        <CabecalhoModal titulo="Pesquisa de Cliente" aoFechar={aoFechar} />
         <p className="muted" style={{ marginTop: 4 }}>
           Digite o nome, CPF/CNPJ ou celular e clique numa linha (ou Enter/Espaço com o foco nela) pra selecionar.
           Não encontrou? Cadastre um cliente novo sem sair da venda.
@@ -113,9 +114,7 @@ export default function PesquisaClienteModal({
         )}
 
         <div className="ajuda-rodape">
-          <button type="button" className="btn ghost" onClick={aoFechar}>
-            Fechar
-          </button>
+
         </div>
       </div>
 

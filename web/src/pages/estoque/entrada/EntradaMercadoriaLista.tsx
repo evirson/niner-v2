@@ -1,3 +1,4 @@
+import CabecalhoModal from '../../../components/CabecalhoModal'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
@@ -330,7 +331,7 @@ export default function EntradaMercadoriaLista() {
       {filtrosAberto && (
         <div className="modal-overlay">
           <div className="modal" role="dialog" aria-label="Filtros de Entrada de Produtos" onClick={(e) => e.stopPropagation()}>
-            <h2 style={{ marginTop: 0 }}>Entrada de Produtos por Compra</h2>
+            <CabecalhoModal titulo="Entrada de Produtos por Compra" aoFechar={() => navigate(-1)} />
             <p className="muted" style={{ marginTop: 4 }}>
               Filtre as entradas já lançadas, ou pule direto para uma nova entrada.
             </p>
@@ -434,9 +435,7 @@ export default function EntradaMercadoriaLista() {
             </div>
 
             <div className="ajuda-rodape">
-              <button type="button" className="btn ghost" onClick={() => navigate(-1)}>
-                Fechar
-              </button>
+
               <button type="button" className="btn ghost" onClick={() => navigate('/entrada-produtos-compra/nova')}>
                 ＋ Nova entrada
               </button>

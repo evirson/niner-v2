@@ -1,3 +1,4 @@
+import CabecalhoModal from '../../components/CabecalhoModal'
 import { useQuery } from '@tanstack/react-query'
 import { useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
@@ -334,7 +335,7 @@ export default function RelatorioLucratividade() {
       {modalAberto && (
         <div className="modal-overlay">
           <div className="modal" role="dialog" aria-label="Filtros da Lucratividade" onClick={(e) => e.stopPropagation()}>
-            <h2 style={{ marginTop: 0 }}>Relatório de Lucratividade</h2>
+            <CabecalhoModal titulo="Relatório de Lucratividade" aoFechar={() => (relatorioGerado ? setModalAberto(false) : navigate(-1))} />
             <p className="muted" style={{ marginTop: 4 }}>
               A venda conta pela <strong>data da venda</strong>; as contas pagas, pela{' '}
               <strong>data de pagamento</strong>.
@@ -378,13 +379,7 @@ export default function RelatorioLucratividade() {
             {erroFiltros && <p className="erro-campo">{erroFiltros}</p>}
 
             <div className="ajuda-rodape">
-              <button
-                type="button"
-                className="btn ghost"
-                onClick={() => (relatorioGerado ? setModalAberto(false) : navigate(-1))}
-              >
-                Fechar
-              </button>
+
               <button type="button" className="btn" onClick={gerar}>
                 Gerar Relatório
               </button>

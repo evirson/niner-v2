@@ -1,3 +1,4 @@
+import CabecalhoModal from '../components/CabecalhoModal'
 import { useState } from 'react'
 import { IconeAjuda } from './Icones'
 
@@ -1291,7 +1292,7 @@ export default function AjudaDaTela({ chaveTela }: { chaveTela: string }) {
               if (e.key === 'Escape') setAberto(false)
             }}
           >
-            <h2 style={{ marginTop: 0 }}>{conteudo.titulo}</h2>
+            <CabecalhoModal titulo=<>{conteudo.titulo}</> aoFechar={() => setAberto(false)} />
             <p className="muted">{conteudo.objetivo}</p>
 
             <p className="card-title" style={{ marginTop: 16 }}>Passo a passo</p>
@@ -1322,9 +1323,7 @@ export default function AjudaDaTela({ chaveTela }: { chaveTela: string }) {
                   Vídeo em breve
                 </button>
               )}
-              <button type="button" className="btn ghost" onClick={() => setAberto(false)}>
-                Fechar
-              </button>
+
             </div>
           </div>
         </div>

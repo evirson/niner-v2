@@ -1,3 +1,4 @@
+import CabecalhoModal from '../components/CabecalhoModal'
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { criarCategoria, listarCategorias, renomearCategoria } from '../lib/clientes'
@@ -43,7 +44,7 @@ export default function CategoriaClienteModal({
   return (
     <div className="modal-overlay" onClick={aoFechar}>
       <div className="modal" role="dialog" aria-label="Categorias de cliente" onClick={(e) => e.stopPropagation()}>
-        <h2 style={{ marginTop: 0 }}>Categorias de cliente</h2>
+        <CabecalhoModal titulo="Categorias de cliente" aoFechar={aoFechar} />
 
         {categorias && categorias.length > 0 && (
           <ul className="lista-categorias">
@@ -92,9 +93,7 @@ export default function CategoriaClienteModal({
         </div>
 
         <div className="ajuda-rodape">
-          <button type="button" className="btn ghost" onClick={aoFechar}>
-            Fechar
-          </button>
+
         </div>
       </div>
 

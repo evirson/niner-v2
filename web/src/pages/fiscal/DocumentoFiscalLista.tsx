@@ -1,3 +1,4 @@
+import CabecalhoModal from '../../components/CabecalhoModal'
 import { useEffect, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import AjudaDaTela from '../../components/AjudaDaTela'
@@ -419,7 +420,7 @@ function XmlModal({ item, aoFechar }: { item: DocumentoFiscalItem; aoFechar: () 
         onClick={(e) => e.stopPropagation()}
         style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
       >
-        <h2 style={{ marginTop: 0, flexShrink: 0 }}>XML — {item.chaveAcesso}</h2>
+        <CabecalhoModal titulo=<>XML — {item.chaveAcesso}</> aoFechar={aoFechar} />
         <div style={{ overflow: 'auto', flex: 1, minHeight: 0 }}>
           {isLoading ? (
             <p className="muted">Carregando…</p>
@@ -432,9 +433,7 @@ function XmlModal({ item, aoFechar }: { item: DocumentoFiscalItem; aoFechar: () 
           )}
         </div>
         <div className="ajuda-rodape" style={{ flexShrink: 0 }}>
-          <button type="button" className="btn ghost" onClick={aoFechar}>
-            Fechar
-          </button>
+
         </div>
       </div>
     </div>

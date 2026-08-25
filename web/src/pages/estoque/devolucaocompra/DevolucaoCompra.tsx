@@ -1,3 +1,4 @@
+import CabecalhoModal from '../../../components/CabecalhoModal'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
@@ -391,7 +392,7 @@ export default function DevolucaoCompra() {
       {filtrosAberto && (
         <div className="modal-overlay">
           <div className="modal" role="dialog" aria-label="Filtros da Devolução de Produtos Comprados">
-            <h2 style={{ marginTop: 0 }}>Devolução de Produtos Comprados</h2>
+            <CabecalhoModal titulo="Devolução de Produtos Comprados" aoFechar={() => navigate(-1)} />
             <p className="muted" style={{ marginTop: 4 }}>
               Localize a entrada que originou a mercadoria a devolver.
             </p>
@@ -496,9 +497,7 @@ export default function DevolucaoCompra() {
             </div>
 
             <div className="ajuda-rodape">
-              <button type="button" className="btn ghost" onClick={() => navigate(-1)}>
-                Fechar
-              </button>
+
               <button
                 type="button"
                 className="btn"
@@ -547,7 +546,7 @@ export default function DevolucaoCompra() {
       {resultado && (
         <div className="modal-overlay">
           <div className="modal" role="dialog" aria-label="Devolução gerada">
-            <h2 style={{ marginTop: 0 }}>Devolução nº {resultado.idMovimento} gerada</h2>
+            <CabecalhoModal titulo=<>Devolução nº {resultado.idMovimento} gerada</> aoFechar={() => setResultado(null)} />
             <p className="muted" style={{ marginTop: 4 }}>
               Estoque baixado. Total de R$ {formatarMoeda(resultado.valorTotal)} devolvido para{' '}
               {resultado.nomeFornecedor ?? 'o fornecedor'}.
@@ -565,9 +564,7 @@ export default function DevolucaoCompra() {
               </p>
             )}
             <div className="ajuda-rodape">
-              <button type="button" className="btn" onClick={() => setResultado(null)}>
-                Fechar
-              </button>
+
             </div>
           </div>
         </div>

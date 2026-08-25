@@ -1,3 +1,4 @@
+import CabecalhoModal from '../../components/CabecalhoModal'
 import { useEffect, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import AjudaDaTela from '../../components/AjudaDaTela'
@@ -245,7 +246,7 @@ function UsosDrillDownModal({ idCertificado, aoFechar }: { idCertificado: number
   return (
     <div className="modal-overlay" onClick={aoFechar}>
       <div className="modal" role="dialog" aria-label="Histórico de uso do certificado" onClick={(e) => e.stopPropagation()}>
-        <h2 style={{ marginTop: 0 }}>Histórico de uso</h2>
+        <CabecalhoModal titulo="Histórico de uso" aoFechar={aoFechar} />
         {isLoading ? (
           <p className="muted">Carregando…</p>
         ) : !usos || usos.length === 0 ? (
@@ -269,9 +270,7 @@ function UsosDrillDownModal({ idCertificado, aoFechar }: { idCertificado: number
           </table>
         )}
         <div className="ajuda-rodape">
-          <button type="button" className="btn ghost" onClick={aoFechar}>
-            Fechar
-          </button>
+
         </div>
       </div>
     </div>

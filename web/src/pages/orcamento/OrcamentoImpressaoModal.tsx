@@ -1,3 +1,4 @@
+import CabecalhoModal from '../../components/CabecalhoModal'
 import { useEffect, useRef, useState } from 'react'
 import EnviarWhatsAppModal from '../../components/EnviarWhatsAppModal'
 import { ApiError } from '../../lib/api'
@@ -101,7 +102,7 @@ export default function OrcamentoImpressaoModal({
       <div className="modal-overlay">
         <div className="modal modal-largo" role="dialog" aria-label={`Orçamento nº ${orcamento.idOrcamento}`}>
           <div className="lightbox-topo" style={{ marginBottom: 12 }}>
-            <h2 style={{ margin: 0 }}>Orçamento nº {orcamento.idOrcamento}</h2>
+            <CabecalhoModal titulo=<>Orçamento nº {orcamento.idOrcamento}</> aoFechar={aoFechar} />
             <div style={{ display: 'flex', gap: 8 }}>
               <button
                 type="button"
@@ -129,9 +130,7 @@ export default function OrcamentoImpressaoModal({
           </div>
 
           <div className="ajuda-rodape">
-            <button type="button" className="btn ghost" onClick={aoFechar}>
-              Fechar
-            </button>
+
             <button type="button" className="btn ghost" onClick={() => setWhatsappAberto(true)}>
               Enviar por WhatsApp
             </button>

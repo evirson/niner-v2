@@ -1,3 +1,4 @@
+import CabecalhoModal from '../../components/CabecalhoModal'
 import { useQuery } from '@tanstack/react-query'
 import { useState } from 'react'
 import { buscarPermiteQtdDecimal } from '../../lib/configuracaoGeral'
@@ -30,7 +31,7 @@ export default function PesquisaProdutoModal({
   return (
     <div className="modal-overlay" onClick={aoFechar}>
       <div className="modal modal-largo" role="dialog" aria-label="Pesquisa de produto" onClick={(e) => e.stopPropagation()}>
-        <h2 style={{ marginTop: 0 }}>Pesquisa de Produto</h2>
+        <CabecalhoModal titulo="Pesquisa de Produto" aoFechar={aoFechar} />
         <p className="muted" style={{ marginTop: 4 }}>
           Digite o nome do produto e clique numa linha (ou Enter/Espaço com o foco nela) pra lançar na venda.
         </p>
@@ -125,9 +126,7 @@ export default function PesquisaProdutoModal({
         )}
 
         <div className="ajuda-rodape">
-          <button type="button" className="btn ghost" onClick={aoFechar}>
-            Fechar
-          </button>
+
         </div>
       </div>
     </div>

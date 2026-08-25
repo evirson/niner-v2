@@ -1,3 +1,4 @@
+import CabecalhoModal from '../../components/CabecalhoModal'
 import { useState } from 'react'
 import EnviarWhatsAppModal from '../../components/EnviarWhatsAppModal'
 import { IconeWhatsapp } from '../../components/Icones'
@@ -70,7 +71,7 @@ export default function ComprovanteValeModal({
           onClick={(e) => e.stopPropagation()}
           style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
         >
-          <h2 style={{ marginTop: 0, flexShrink: 0 }}>Vale-Mercadoria Gerado</h2>
+          <CabecalhoModal titulo="Vale-Mercadoria Gerado" aoFechar={aoFechar} />
 
           {/* Desfecho da NF-e de devolução (2026-08-19, B9) — `notaFiscal` vem nulo quando não
               havia nota a emitir (fiscal desligado, devolução sem venda de origem, ou venda sem
@@ -104,9 +105,7 @@ export default function ComprovanteValeModal({
           </div>
 
           <div className="ajuda-rodape" style={{ flexShrink: 0 }}>
-            <button type="button" className="btn ghost" onClick={aoFechar}>
-              Fechar
-            </button>
+
             <div style={{ display: 'flex', gap: 8 }}>
               <button
                 type="button"

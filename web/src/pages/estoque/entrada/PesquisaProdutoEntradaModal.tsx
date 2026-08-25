@@ -1,7 +1,7 @@
+import CabecalhoModal from '../../../components/CabecalhoModal'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { useState } from 'react'
 import CorQuickCreateModal from '../../../components/CorQuickCreateModal'
-import { IconeFechar } from '../../../components/Icones'
 import { ApiError } from '../../../lib/api'
 import { buscarPermiteQtdDecimal, buscarUsaCorGrade } from '../../../lib/configuracaoGeral'
 import { listarCores } from '../../../lib/cores'
@@ -207,12 +207,7 @@ export default function PesquisaProdutoEntradaModal({
   return (
     <div className="modal-overlay" onClick={aoFechar}>
       <div className="modal modal-largo" role="dialog" aria-label="Pesquisa de produto" onClick={(e) => e.stopPropagation()}>
-        <div className="lightbox-topo" style={{ marginBottom: 12 }}>
-          <h2 style={{ margin: 0 }}>Pesquisa de Produto</h2>
-          <button type="button" className="btn ghost btn-fechar-tela" onClick={aoFechar} aria-label="Fechar" title="Fechar">
-            <IconeFechar />
-          </button>
-        </div>
+        <CabecalhoModal titulo="Pesquisa de Produto" aoFechar={aoFechar} />
 
         {!produtoEscolhido ? (
           <>
@@ -299,9 +294,7 @@ export default function PesquisaProdutoEntradaModal({
             </div>
 
             <div className="ajuda-rodape">
-              <button type="button" className="btn ghost" onClick={aoFechar}>
-                Fechar
-              </button>
+
             </div>
           </>
         ) : (
@@ -421,9 +414,7 @@ export default function PesquisaProdutoEntradaModal({
             {erro && <p className="erro-campo">{erro}</p>}
 
             <div className="ajuda-rodape">
-              <button type="button" className="btn ghost" onClick={aoFechar}>
-                Fechar
-              </button>
+              <span />
               <button type="button" className="btn" disabled={adicionar.isPending || vendaMenorQueCusto} onClick={() => adicionar.mutate()}>
                 {adicionar.isPending ? 'Adicionando…' : 'Adicionar à Entrada'}
               </button>

@@ -1,6 +1,6 @@
+import CabecalhoModal from '../../components/CabecalhoModal'
 import { useQuery } from '@tanstack/react-query'
 import { useRef } from 'react'
-import { IconeFechar } from '../../components/Icones'
 import { ApiError } from '../../lib/api'
 import { buscarDanfe } from '../../lib/danfe55'
 import DanfeImprimir from './DanfeImprimir'
@@ -44,12 +44,7 @@ export default function DanfeModal({
           width: 'min(96vw, 850px)', maxWidth: 'min(96vw, 850px)', maxHeight: '92vh',
         }}
       >
-        <div className="lightbox-topo" style={{ flexShrink: 0 }}>
-          <h2 style={{ margin: 0 }}>DANFE — Nota Fiscal Eletrônica</h2>
-          <button type="button" className="btn ghost btn-fechar-tela" onClick={aoFechar} aria-label="Fechar" title="Fechar">
-            <IconeFechar />
-          </button>
-        </div>
+        <CabecalhoModal titulo="DANFE — Nota Fiscal Eletrônica" aoFechar={aoFechar} />
 
         <div style={{ overflow: 'auto', flex: 1, minHeight: 0, marginTop: 12 }}>
           {isLoading ? (
@@ -68,9 +63,7 @@ export default function DanfeModal({
         </div>
 
         <div className="ajuda-rodape" style={{ flexShrink: 0 }}>
-          <button type="button" className="btn ghost" onClick={aoFechar}>
-            Fechar
-          </button>
+
           <button type="button" className="btn" disabled={!danfe} onClick={imprimirDocumentoA4}>
             Imprimir
           </button>

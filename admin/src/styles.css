@@ -142,3 +142,12 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--a
   .lateral .rodape { margin-top: 0; border-top: none; }
   .conteudo { padding: 20px 16px; }
 }
+
+/* Fechar de painel de detalhe: ✕ no canto superior direito, o mesmo padrão do ERP
+   (2026-08-25, pedido do dono do produto — "para as telas ficarem no mesmo padrão").
+   `.topo-pagina` já é `space-between`, então o botão nasce à direita. */
+.btn-fechar-tela {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 34px; height: 34px; padding: 0; font-size: 18px; line-height: 1;
+  background: transparent; color: var(--ink); border-color: var(--line-strong);
+}

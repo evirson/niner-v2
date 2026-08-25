@@ -1,3 +1,4 @@
+import CabecalhoModal from '../../components/CabecalhoModal'
 import type { Transferencia } from '../../lib/transferencias'
 import { gerarPdfGuiaTransferencia, montarLinhasGuiaTransferencia } from '../../lib/transferenciaImpressao'
 import { imprimirDocumentoA4 } from '../../lib/impressaoDocumento'
@@ -22,14 +23,12 @@ export default function GuiaTransferenciaModal({
   return (
     <div className="modal-overlay" onClick={aoFechar}>
       <div className="modal modal-largo" role="dialog" aria-label="Pré-visualização da guia de transferência" onClick={(e) => e.stopPropagation()}>
-        <h2 style={{ marginTop: 0 }}>Pré-visualização — Guia de Transferência</h2>
+        <CabecalhoModal titulo="Pré-visualização — Guia de Transferência" aoFechar={aoFechar} />
 
         <pre className="guia-transferencia-preview guia-transferencia-imprimir documento-a4-imprimir">{linhas.join('\n')}</pre>
 
         <div className="ajuda-rodape">
-          <button type="button" className="btn ghost" onClick={aoFechar}>
-            Fechar
-          </button>
+
           <div style={{ display: 'flex', gap: 8 }}>
             <button
               type="button"
