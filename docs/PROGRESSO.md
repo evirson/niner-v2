@@ -541,6 +541,73 @@ Movimentação de Conta Corrente) que ainda não tinham migrado pro `SeletorPlan
 
 ## Linha do tempo
 
+### 2026-08-25 (5) — aplicação do Mercado Livre criada no DevCenter: o formulário campo a campo, e onde o `client_id` mora
+
+Destrava o **M1** que a entrada (3) deixou parado. Nenhuma linha de código: é o cadastro da
+aplicação OAuth da Vetor no *DevCenter* do ML, feito pelo dono do produto com as escolhas abaixo.
+
+⚠️ **O formulário do DevCenter não usa o vocabulário da documentação.** O estudo
+(`docs/MODULOMARKETPLACE.md` §2.1) fala em **escopos** `read`/`write`/`offline_access`; a tela
+pede **fluxos OAuth**, **negócios** e **permissões** por área funcional. A tradução abaixo é
+leitura da tela, não da doc — quem for mexer, confira antes de afirmar.
+
+#### O que foi preenchido
+
+| Campo | Valor | Por quê |
+|---|---|---|
+| URI de redirect | `https://api.nainer.com.br/api/publico/canais/mercadolivre/retorno` | HTTPS obrigatório, bate caractere por caractere, **sem parte variável** — por isso o `id_tenant` viaja no `state` (§2.1) |
+| Fluxo **Authorization Code** | ✅ | É o lojista autorizando a aplicação da Vetor |
+| Fluxo **Client Credentials** | ❌ | Token da própria aplicação, sem lojista — não usamos |
+| Fluxo **Refresh Token** | ✅ | **É o `offline_access` neste formulário.** Sem ele o `access_token` morre em 6 h e o lojista reautorizaria 4× por dia |
+| **PKCE necessário** | ❌ | Protege segredo que vive no cliente; o nosso fica no servidor (variável de ambiente) |
+| Negócio **Mercado Livre** | ✅ | É o marketplace de produto |
+| Negócio **VIS** | ❌ | Classificados (Veículos, Imóveis e Serviços) — outro negócio |
+| Callback de notificação | `https://api.nainer.com.br/api/publico/webhooks/mercadolivre` | Campo **diferente** do redirect: aquele recebe o lojista no navegador uma vez, este recebe notificação servidor-a-servidor para sempre |
+
+**Permissões** (a tela pede tipo de acesso por área): *Usuários* → leitura (`GET /users/me`, para
+saber de qual vendedor é o token que chegou) · *Publicação e sincronização* → **leitura + escrita**
+(a leitura não é opcional: `PUT` em variações **apaga as omitidas**, §2.4) · *Venda e envios* →
+leitura + escrita (importar pedido; `confirmarEnvio` de volta) · *Faturamento* → leitura + escrita
+(é por onde o XML da NF-e 55 sobe para liberar a etiqueta, §2.6). Recusadas: *Comunicações pré e
+pós-venda*, *Publicidade*, *Métricas*, *Promoções e cupons*.
+
+⚠️ **Por que pedimos além da Opção A:** hoje o recorte é A+B, e *Faturamento* só serve à C. Pedimos
+assim mesmo porque **ampliar escopo depois costuma obrigar cada lojista a reautorizar** — pedir
+agora custa uma linha na tela de consentimento, pedir depois custa mexer em todo lojista já
+conectado. É comportamento padrão de OAuth e o que vimos no Mercado Pago; **não foi confirmado na
+doc do ML**.
+
+#### ⛔ Tópicos de notificação ficaram DESMARCADOS de propósito
+
+Os três que interessam são `items`, `orders_v2` e `shipments` (§2.3) — e nenhum foi marcado, porque
+**`/api/publico/webhooks/mercadolivre` ainda não existe no código**. Tópico marcado contra endpoint
+inexistente é 404 a cada notificação, e plataforma costuma **desativar sozinha** um callback que
+falha repetidamente. Marcar é passo do painel, não recriação da aplicação: quem implementar o
+endpoint liga os três lá.
+
+Isso **não bloqueia a Opção A** — espelho de estoque e preço é escrita nossa para o ML, não depende
+de webhook.
+
+#### 📁 A credencial
+
+O **`client_id`** (público) está em **`docs/mercadolivre/api.md`**, fora do git. O
+`client_secret` **não entrou no repositório nem no chat** — vai por variável de ambiente quando o
+M1 for implementado, no desenho do `NINER_MP_ACCESS_TOKEN` (ADR-016).
+
+⚠️ **O arquivo nasceu em `docs/mercadopago/` por engano de pasta** e foi movido no mesmo dia. É a
+§11.5 do estudo acontecendo de novo — agora na arrumação do arquivo, não na credencial. A regra do
+`.gitignore` (`docs/mercadolivre/` + `*mercadolivre*secret*`) foi criada **antes** de a pasta
+existir, de propósito: pasta de credencial ainda não ignorada é exatamente onde o `client_secret`
+entra num commit sem ninguém notar.
+
+#### ⏭️ Próximo passo para quem pegar daqui
+
+Implementar o **M1**: `GET /api/publico/canais/mercadolivre/autorizar` (monta a URL de consentimento
+com `state` = anti-CSRF **+ `id_tenant`**), `GET .../retorno` (troca `code` por token, cifra e grava
+em `canal`), e o refresh automático do token de 6 h. ⚠️ Errar o `state` conecta a conta ML de um
+lojista no tenant de outro — falha de isolamento (P8) logo na porta de entrada. Depois disso, o
+endpoint de webhook e os três tópicos.
+
 ### 2026-08-25 (4) — a rodada de interface: padrão de fechar, layout do orçamento e o nome do produto
 
 Seis mudanças pedidas pelo dono do produto, todas conferidas **no navegador** — nenhuma delas

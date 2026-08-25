@@ -30,3 +30,8 @@ CERTIFICADO_HOMOLOGACAO/
 # variável de ambiente (NINER_MP_ACCESS_TOKEN / NINER_MP_WEBHOOK_SECRET), nunca no repositório.
 docs/mercadopago/
 *mercadopago*secret*
+
+# Credenciais do Mercado Livre (marketplace) — outra empresa, outra credencial: o `client_id` e o
+# `client_secret` da aplicação OAuth. Mesmo tratamento, pasta separada de propósito.
+docs/mercadolivre/
+*mercadolivre*secret*

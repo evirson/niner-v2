@@ -212,9 +212,9 @@ A spec deixou isto em vermelho desde julho (§3.3): *"Unificar o modelo de pedid
 
 | # | O que | Por quê | Bloqueia |
 |---|---|---|---|
-| 1 | **Criar a aplicação no *My Applications*** (conta ML da Vetor/MITRYUSCASH) e me passar o `client_id`. ⛔ O `client_secret` **não por chat** — vai por variável de ambiente, como o do Mercado Pago | É a identidade da integração; uma só para todos os lojistas | Tudo |
-| 2 | **Declarar o `redirect_uri`** na aplicação. Sugestão: `https://api.nainer.com.br/api/publico/canais/mercadolivre/retorno` | Tem de bater exatamente, e ser HTTPS | OAuth |
-| 3 | **Marcar os tópicos de notificação** e o callback `https://api.nainer.com.br/api/publico/webhooks/mercadolivre` | Sem isso, só resta polling | Pedido em tempo real |
+| 1 | ✅ **FEITO (2026-08-25).** **Criar a aplicação no *My Applications*** (conta ML da Vetor/MITRYUSCASH) e me passar o `client_id`. ⛔ O `client_secret` **não por chat** — vai por variável de ambiente, como o do Mercado Pago | É a identidade da integração; uma só para todos os lojistas | Tudo |
+| 2 | ✅ **FEITO (2026-08-25).** **Declarar o `redirect_uri`** na aplicação. Sugestão: `https://api.nainer.com.br/api/publico/canais/mercadolivre/retorno` | Tem de bater exatamente, e ser HTTPS | OAuth |
+| 3 | ⏸️ **URL preenchida, tópicos DESMARCADOS de propósito (2026-08-25) — o endpoint ainda não existe; ver §11.6.** **Marcar os tópicos de notificação** e o callback `https://api.nainer.com.br/api/publico/webhooks/mercadolivre` | Sem isso, só resta polling | Pedido em tempo real |
 | 4 | **Responder as 7 perguntas da §4** | Definem o escopo | O desenho inteiro |
 | 5 | **Dizer qual conta ML será usada no piloto** | Decide se o primeiro erro é caro | Homologação |
 | 6 | ⏭️ **Destravar o `cStat 974`** (já em curso, chamado aberto) | Marketplace vende em NF-e 55 | Só a Opção C |
@@ -601,6 +601,28 @@ lojista teria de reautorizar quatro vezes por dia.
 ⚠️ **A URI de redirect tem de bater caractere por caractere** com a do código, e não aceita parte
 variável — é por isso que o `id_tenant` viaja no `state`, nunca na URL (§2.1).
 
+### 11.2.1 ✅ Como o formulário foi preenchido de verdade (2026-08-25)
+
+⚠️ **A tela do DevCenter não usa o vocabulário da doc.** Ela não pede "escopos": pede **fluxos
+OAuth**, **negócios** e **permissões** por área funcional. A tradução que usamos — e que quem for
+mexer deve conferir na tela antes de repetir:
+
+| Na tela | Escolhido | Equivale a |
+|---|---|---|
+| Fluxo **Authorization Code** | ✅ | o fluxo do lojista autorizando |
+| Fluxo **Refresh Token** | ✅ | **o `offline_access`** — é aqui que ele aparece |
+| Fluxo **Client Credentials** | ❌ | token da aplicação sem lojista, não usamos |
+| **PKCE necessário** | ❌ | segredo fica no servidor |
+| Negócio **Mercado Livre** / **VIS** | ✅ / ❌ | VIS são os classificados (Veículos, Imóveis, Serviços) |
+
+**Permissões:** *Usuários* → leitura · *Publicação e sincronização* → leitura **+** escrita
+(a leitura não é opcional, §2.4) · *Venda e envios* → leitura + escrita · *Faturamento* → leitura +
+escrita (§2.6). Recusadas: comunicações, publicidade, métricas, promoções.
+
+⚠️ *Faturamento* só serve à Opção C, que está travada — pedimos assim mesmo porque **ampliar escopo
+depois costuma obrigar cada lojista a reautorizar**. É o padrão de OAuth e o que vimos no Mercado
+Pago; **não confirmado na doc do ML**.
+
 ### 11.3 ⛔ Uma aplicação só, e o que isso obriga
 
 **No Brasil o ML permite apenas 1 aplicação por conta** depois da validação do titular. Não dá para
@@ -614,6 +636,13 @@ uma, fica a de produção e o dev resolve por túnel.
 
 Só o **`client_id`** (é público). ⛔ O `client_secret` **nunca por chat** — entra por variável de
 ambiente, como `NINER_MP_ACCESS_TOKEN` do Mercado Pago (ADR-016).
+
+📁 **Onde o `client_id` está** (2026-08-25): `docs/mercadolivre/api.md`, fora do git
+(`.gitignore`: `docs/mercadolivre/` + `*mercadolivre*secret*`). Nasceu em `docs/mercadopago/` por
+engano de pasta e foi movido no mesmo dia — é a §11.5 acontecendo na prática, agora na arrumação
+do arquivo em vez da credencial. ⚠️ A regra do `.gitignore` foi criada **antes** de a pasta
+existir, de propósito: pasta de credencial que ainda não está ignorada é onde o `client_secret`
+entra no commit sem ninguém notar.
 
 ### 11.5 ⚠️ Mercado Pago **não é** Mercado Livre — a credencial não serve
 
@@ -644,3 +673,13 @@ colado no chat.
 
 ⛔ **A regra continua:** `client_id` é público e pode vir por chat; **`client_secret` e token vão
 por variável de ambiente**, nunca por conversa.
+
+### 11.6 ⛔ Tópicos de notificação: desmarcados até o endpoint existir
+
+Os três que interessam são `items`, `orders_v2` e `shipments` (§2.3). Em 2026-08-25 **nenhum foi
+marcado**, e a razão vale para qualquer plataforma: `/api/publico/webhooks/mercadolivre` **não
+existe no código** — tópico ligado contra endpoint inexistente é 404 a cada notificação, e
+plataforma costuma **desativar sozinha** o callback que falha repetidamente. Ligar os tópicos é
+passo do painel, não recriação da aplicação.
+
+✅ Isso **não bloqueia a Opção A**: espelho de estoque e preço é escrita nossa para o ML.
