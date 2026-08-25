@@ -543,37 +543,17 @@ export const MENU: NavGrupo[] = [
         icone: IconeRecebimentoCrediario,
         descricao: 'Régua de cobrança das parcelas de crediário vencidas e não pagas. Em construção.',
       },
+      // ⚠️ O subgrupo "Módulo Fiscal" saiu daqui em 2026-08-25. Ele prometia quatro telas, e
+      // TRÊS delas já existem — em outro lugar: NFC-e e NF-e são emitidas pelo próprio PDV, e o
+      // cancelamento fica em Documentos Fiscais. Item de menu que oferece "Em construção" para
+      // função pronta é pior que item ausente: manda o lojista procurar onde não está.
+      // Sobrou só a exportação em LOTE, que de fato não existe (o XML individual já se baixa em
+      // Documentos Fiscais).
       {
-        chave: 'modulo-fiscal',
-        label: 'Módulo Fiscal',
+        to: '/exportacao-xml-fiscal',
+        label: 'Exportação de XML em Lote',
         icone: IconePlanoContas,
-        descricao: 'Emissão e cancelamento de documentos fiscais eletrônicos. Em construção.',
-        itens: [
-          {
-            to: '/nfce',
-            label: 'Nota Fiscal - NFC-e',
-            icone: IconePlanoContas,
-            descricao: 'Emissão de Nota Fiscal de Consumidor Eletrônica para as vendas do PDV. Em construção.',
-          },
-          {
-            to: '/nfe',
-            label: 'Nota Fiscal - NF-e',
-            icone: IconePlanoContas,
-            descricao: 'Emissão de Nota Fiscal Eletrônica para vendas e transferências entre empresas. Em construção.',
-          },
-          {
-            to: '/cancelamento-documento-fiscal',
-            label: 'Cancelamento de Documento Fiscal',
-            icone: IconeCancelamentoVenda,
-            descricao: 'Cancela uma NFC-e ou NF-e já emitida, dentro do prazo permitido pela SEFAZ. Em construção.',
-          },
-          {
-            to: '/exportacao-xml-fiscal',
-            label: 'Exportação de XML',
-            icone: IconePlanoContas,
-            descricao: 'Baixa o XML das notas fiscais emitidas (NFC-e/NF-e) para contabilidade ou SEFAZ. Em construção.',
-          },
-        ],
+        descricao: 'Baixa em lote o XML das notas de um período, para a contabilidade. O XML de uma nota específica já pode ser baixado em Documentos Fiscais. Em construção.',
       },
     ],
   },

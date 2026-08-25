@@ -144,9 +144,6 @@ export default function App() {
               /fluxo-caixa e concorriam com a tela pronta. */}
           <Route path="/integracao-marketplace" element={<EmBreve titulo="Integração com Marketplace" />} />
           <Route path="/cobranca-crediario-atraso" element={<EmBreve titulo="Cobrança de Crediário em Atraso" />} />
-          <Route path="/nfce" element={<EmBreve titulo="Nota Fiscal - NFC-e" />} />
-          <Route path="/nfe" element={<EmBreve titulo="Nota Fiscal - NF-e" />} />
-          <Route path="/cancelamento-documento-fiscal" element={<EmBreve titulo="Cancelamento de Documento Fiscal" />} />
           <Route path="/exportacao-xml-fiscal" element={<EmBreve titulo="Exportação de XML" />} />
           <Route path="/cancelamento-devolucao-produtos" element={<CancelamentoDevolucao />} />
           <Route path="/clientes" element={<ClienteLista />} />
