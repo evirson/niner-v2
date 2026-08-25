@@ -614,3 +614,33 @@ uma, fica a de produção e o dev resolve por túnel.
 
 Só o **`client_id`** (é público). ⛔ O `client_secret` **nunca por chat** — entra por variável de
 ambiente, como `NINER_MP_ACCESS_TOKEN` do Mercado Pago (ADR-016).
+
+### 11.5 ⚠️ Mercado Pago **não é** Mercado Livre — a credencial não serve
+
+Aconteceu em 2026-08-25: o dono do produto trouxe credenciais dizendo *"já tenho as credenciais do
+Mercado Livre"*, e eram do **Mercado Pago** (aplicação `nainer-erp-assinatura`).
+
+A confusão é fácil e vai se repetir:
+
+| | Mercado Pago | Mercado Livre |
+|---|---|---|
+| Para quê | **cobrar a mensalidade** do lojista (ADR-016) | **vender** no marketplace (este módulo) |
+| Portal | `mercadopago.com.br/developers` | `developers.mercadolivre.com.br/devcenter` |
+| Credencial | `APP_USR-…` | `client_id` + `client_secret` |
+
+⚠️ **Mesma empresa, mesmo prefixo de token, cadastros separados.** Credencial do Mercado Pago
+**não** abre a API de anúncios e pedidos do Mercado Livre, e vice-versa.
+
+**Como saber o que uma credencial `APP_USR-` é**, sem adivinhar pelo prefixo — que não diz nada
+(credencial de *usuário de teste* também começa com `APP_USR-`):
+
+```
+curl -H "Authorization: Bearer <token>" https://api.mercadopago.com/users/me
+```
+
+`"tags": ["…","test_user"]` e apelido `TESTUSER…` ⇒ sandbox. Foi assim que se confirmou, em
+2026-08-25, que o token trazido era de teste — e portanto de baixo risco, apesar de ter sido
+colado no chat.
+
+⛔ **A regra continua:** `client_id` é público e pode vir por chat; **`client_secret` e token vão
+por variável de ambiente**, nunca por conversa.
