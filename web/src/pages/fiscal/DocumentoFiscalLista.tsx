@@ -259,11 +259,11 @@ export default function DocumentoFiscalLista() {
                   <tr key={item.idDocumentoFiscal}>
                     <td>{item.modelo === 65 ? 'NFC-e' : 'NF-e'}</td>
                     <td className="mono">
-                      {item.serie}/{item.numero}
+                      {item.numero === null ? '—' : `${item.serie}/${item.numero}`}
                       {item.tipoEmissao === 9 && <span className="badge badge-aviso" style={{ marginLeft: 6 }}>Conting.</span>}
                     </td>
-                    <td className="mono" title={item.chaveAcesso}>
-                      …{item.chaveAcesso.slice(-8)}
+                    <td className="mono" title={item.chaveAcesso ?? undefined}>
+                      {item.chaveAcesso === null ? '—' : `…${item.chaveAcesso.slice(-8)}`}
                     </td>
                     <td>
                       <span className={classeBadge(item.situacao)}>{ROTULO_SITUACAO[item.situacao] ?? item.situacao}</span>
@@ -273,15 +273,20 @@ export default function DocumentoFiscalLista() {
                     <td className="mono">{moeda(item.valorTotal)}</td>
                     <td>
                       <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
-                        <button
-                          type="button"
-                          className="acao-icone"
-                          title="Ver XML"
-                          aria-label="Ver XML"
-                          onClick={() => abrirXml(item)}
-                        >
-                          <IconeOlho size={18} />
-                        </button>
+                        {/* Sem chave de acesso o documento nunca foi transmitido (parou no
+                            bloqueio preventivo F11): não há XML para ver nem o que consultar na
+                            SEFAZ. Oferecer a ação e deixá-la falhar é pior que não oferecer. */}
+                        {item.chaveAcesso !== null && (
+                          <button
+                            type="button"
+                            className="acao-icone"
+                            title="Ver XML"
+                            aria-label="Ver XML"
+                            onClick={() => abrirXml(item)}
+                          >
+                            <IconeOlho size={18} />
+                          </button>
+                        )}
                         {item.modelo === 65 && item.idVenda !== null && SITUACOES_COM_DANFCE.has(item.situacao) && (
                           <button
                             type="button"
@@ -319,14 +324,16 @@ export default function DocumentoFiscalLista() {
                             <IconeLinkExterno size={18} />
                           </a>
                         )}
-                        <button
-                          type="button"
-                          className="btn ghost"
-                          disabled={consultando === item.idDocumentoFiscal}
-                          onClick={() => consultarSefaz(item)}
-                        >
-                          {consultando === item.idDocumentoFiscal ? 'Consultando…' : 'Consultar SEFAZ'}
-                        </button>
+                        {item.chaveAcesso !== null && (
+                          <button
+                            type="button"
+                            className="btn ghost"
+                            disabled={consultando === item.idDocumentoFiscal}
+                            onClick={() => consultarSefaz(item)}
+                          >
+                            {consultando === item.idDocumentoFiscal ? 'Consultando…' : 'Consultar SEFAZ'}
+                          </button>
+                        )}
                         {SITUACOES_REPROCESSAVEIS.has(item.situacao) && (
                           <button
                             type="button"

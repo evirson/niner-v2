@@ -289,8 +289,12 @@ cadastrado) e `emitirNfce`/`VendaFiscalAssembler.montar`/`VendaFiscalController`
 parâmetro `incluirCpf` (corpo `POST .../nfce` passou a exigir `{"incluirCpf": boolean}`):
 
 - **Cliente com CPF/CNPJ cadastrado:** a tela mostra o documento mascarado
-  (`mascararCpfCnpj`, PF/PJ inferido pelo tamanho do documento — 11 dígitos = CPF) e dois botões,
-  "Sim, incluir CPF" e "Não, emitir para consumidor".
+  (`mascararCpfCnpj`, PF/PJ inferido pelo tamanho do documento — 11 dígitos = CPF) e dois botões.
+  ⚠️ **Revisado em 2026-08-25** (ver "A escolha troca o modelo" logo abaixo): o rótulo era fixo em
+  "CPF" e os botões não diziam o que sairia. Hoje o rótulo acompanha o cliente
+  ("CPF do cliente" × "CNPJ do cliente") e os botões nomeiam o documento:
+  **"Sim, identificar — NF-e (modelo 55)"** (ou "— NFC-e", se PF) e
+  **"Não, emitir para consumidor — NFC-e"**.
 - **Cliente sem documento (ou venda sem cliente identificado com CPF):** a tela mostra só um
   aviso ("a nota vai sair para consumidor não identificado") e um botão único, "Confirmar e
   emitir" — nunca oferece a opção de incluir o que não existe.
@@ -342,3 +346,34 @@ foi ela que substituiu as 64 colunas ilegíveis do primeiro corte. O ajuste foi 
 ## Métrica de sucesso
 
 Papeleta pronta pra imprimir em menos de 2 segundos depois da venda confirmada.
+
+### ⚠️ A escolha do popup TROCA o modelo do documento (2026-08-25)
+
+Levantado pelo dono do produto ao investigar o `cStat 974`: *"se eu clicar em sim, incluir CPF vai
+pra este modelo que está dando erro, se eu clicar em não, emitir para consumidor, vai pro modelo
+65"*. Está certo, e a regra real tem **duas** condições, não uma
+(`VendaFiscalAssembler.montar`):
+
+```java
+Destinatario destinatario = incluirCpf ? buscarDestinatarioObrigatorio(...) : null;
+ModeloVenda modelo = destinatario != null && destinatario.pessoaJuridica()
+        ? ModeloVenda.NFE      // 55
+        : ModeloVenda.NFCE;    // 65
+```
+
+| Escolha | Cliente PF | Cliente PJ |
+|---|---|---|
+| "Sim, identificar" | NFC-e (65), com `<dest><CPF>` | **NF-e (55)**, com `<dest><CNPJ>` |
+| "Não, emitir para consumidor" | NFC-e (65), sem `dest` | **NFC-e (65)**, sem `dest` |
+
+⚠️ **Não é "PJ ⇒ NF-e 55" e ponto** — é *destinatário informado **e** PJ*. Responder "não" para um
+cliente PJ emite NFC-e ao consumidor, sem o CNPJ do comprador.
+
+**Por que virou mudança de tela.** O operador estava escolhendo entre **dois documentos
+fiscalmente diferentes** sem nenhuma indicação disso. Pior no cenário que provocou a descoberta:
+quem clicar em "não" só para escapar do erro do 974 emite NFC-e para uma empresa que provavelmente
+precisa da nota para crédito — exatamente o que a regra PJ→55 (2026-08-24) existe para evitar. Por
+isso os botões agora nomeiam o modelo, e para PJ entra uma linha explicando a consequência.
+
+⛔ Esta tela **não segue o padrão do projeto** e será reformulada — decisão do dono do produto em
+2026-08-25. As mudanças acima são corretivas, não o redesenho.

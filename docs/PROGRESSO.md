@@ -541,6 +541,69 @@ Movimentação de Conta Corrente) que ainda não tinham migrado pro `SeletorPlan
 
 ## Linha do tempo
 
+### 2026-08-25 (2) — o 974 fechado do nosso lado (chamado na SEFAZ), e três defeitos que um documento sem chave revelou
+
+#### 🔴 `cStat 974` — chamado aberto, bola com a SEFAZ/PR
+
+Todas as hipóteses foram **medidas** e descartadas, e o chamado está escrito em
+`docs/fiscal/chamado-sefaz-pr-csrt-974.md`. Detalhe completo em `docs/MODULOFISCAL.md` §974.
+
+⚠️ **A entrada de ontem (08-24, noite, 7) estava errada no método, não no fato.** Ela afirmava
+*"o CSRT correto não resolveu o 974"* — mas a retransmissão citada rodou às **08:14** e o CSRT
+conferido só foi gravado depois. **Concluir um fracasso a partir de um teste anterior à correção**
+é o espelho de concluir um sucesso sem reproduzir o sintoma, e custa mais caro: fecha uma hipótese
+verdadeira. A afirmação virou verdadeira hoje às 08:55, quando a primeira transmissão com o CSRT
+conferido voltou 974 — aí sim medido.
+
+O que foi descartado, em ordem, cada um com evidência: **`idCSRT` `01` × `1`** (o XSD exige 2
+dígitos, `<xs:pattern value="[0-9]{2}"/>`); **CNPJ do responsável técnico** (o portal mostra
+`37.829.453/0001-35`, idêntico ao transmitido); **CSRT de produção em homologação** (o portal só
+tem token de homologação); **cálculo do hash** (hash errado dá `cStat 976`, não 974 — ⚠️ este é
+leitura da NT, o 976 nunca foi observado aqui); e **propagação**, derrubada pelo teste decisivo:
+foi solicitado um **segundo token (Id 2) sem revogar o primeiro**, e uma nota transmitida minutos
+após a ativação falhou idêntico.
+
+A prova que isola o problema: a **NFC-e 65 do mesmo emitente, mesmo ambiente, mesmo certificado,
+autoriza** (`cStat 100`) — ela não exige CSRT no PR, então nunca exercita esse caminho. Os dois
+modelos respondem inclusive por aplicações diferentes da SEFAZ-PR (`PR-v4_5_39` × `PR-v4_9_87-2`).
+
+#### Documentos Fiscais ficava em branco — e eram três defeitos, não um
+
+Relatado como *"a tela fica toda em branco e não faz nada"*. Era **crash de render**: exceção no
+render do React **apaga a página inteira**, e o sintoma soa como falha de rota ou de API. O console
+do navegador deu arquivo, linha e stack em um passo.
+
+Causa: 3 documentos `NAO_EMITIDO` (do bloqueio preventivo F11, durante o trabalho da NF-e 55 em
+24/08) têm `serie`, `numero` e `chave_acesso` **NULL**, e a tela nunca tinha visto essa linha.
+Bastava um cair no período filtrado. Os três defeitos, em camadas diferentes:
+
+1. **Front:** `item.chaveAcesso.slice(-8)` com nulo → `TypeError` → tela em branco.
+2. **Back, silencioso:** o DTO declarava `int serie, long numero` (**primitivos**) sobre colunas
+   nullable — o driver converte NULL em **0 sem erro nenhum**, e a lista exibiria **"0/0"** como se
+   fosse número real de nota. Hoje `Integer`/`Long` via `getIntOuNulo`/`getLongOuNulo`.
+3. **Back, grave:** "Consultar SEFAZ" num documento sem chave montava `<chNFe>null</chNFe>` e
+   **transmitia de verdade ao fisco**, colhendo `cStat 215`. Agora recusa com **409 antes de
+   qualquer envio**, e o guard está **no serviço**, não só escondendo o botão — o front não é o
+   único cliente da API.
+
+⚠️ **A armadilha ao escrever o teste:** a primeira versão do teste do 409 **passaria com o defeito
+presente** — sem certificado no tenant de teste, a consulta morreria no passo *seguinte* ao guard e
+o transporte também não seria chamado. Só vale com o certificado enviado antes. Os dois testes
+foram conferidos **revertendo as correções**, e reprovam: o do zero silencioso com a mensagem
+`Expected no value at "$.itens[0].serie" but found: 0`.
+
+#### Popup de emissão do PDV: a escolha trocava o modelo em silêncio
+
+Levantado pelo dono do produto. O popup dizia "CPF" mesmo com CNPJ na tela, e — mais sério — os
+dois botões produzem **documentos fiscalmente diferentes** para cliente PJ (identificar → NF-e 55;
+não identificar → NFC-e 65) sem nenhuma indicação. Quem clicasse em "não" só para escapar do 974
+emitiria NFC-e para uma empresa que precisa da nota para crédito, que é justamente o que a regra
+PJ→55 existe para evitar. Rótulo agora acompanha o cliente e os botões nomeiam o modelo. ⛔ A tela
+**não segue o padrão do projeto** e será reformulada — o que foi feito aqui é corretivo.
+⚠️ **Não conferido em navegador:** o popup só aparece depois de uma venda.
+
+**935 testes verdes** (eram 933), `tsc -b` limpo.
+
 ### 2026-08-25 — Relatório de Lucratividade (o último item de "Implementações Futuras" em Relatórios)
 
 Pedido do dono do produto com a estrutura de impressão já definida por ele: venda, custo do

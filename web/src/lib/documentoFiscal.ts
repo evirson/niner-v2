@@ -3,9 +3,12 @@ import { api } from './api'
 export interface DocumentoFiscalItem {
   idDocumentoFiscal: number
   modelo: number
-  serie: number
-  numero: number
-  chaveAcesso: string
+  /** ⚠️ Nulos quando `situacao === 'NAO_EMITIDO'`: o documento parou no bloqueio preventivo
+   *  (F11) antes de tirar numeração e montar a chave. Eram declarados não-nulos até 2026-08-25,
+   *  e `chaveAcesso.slice(-8)` derrubava a tela inteira em branco. */
+  serie: number | null
+  numero: number | null
+  chaveAcesso: string | null
   tipoOperacao: string
   situacao: string
   tipoEmissao: number

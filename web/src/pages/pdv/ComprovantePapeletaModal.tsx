@@ -168,6 +168,16 @@ export default function ComprovantePapeletaModal({
   const mostrarPerguntaCpf = perguntaAutomatica || pedirCpfManual
   const documentoCliente = comprovante?.documentoCliente ?? null
   const clienteFisicaJuridica = (documentoCliente?.length ?? 0) <= 11
+  /** Alias legível: `clienteFisicaJuridica` segue a convenção invertida do projeto (TRUE = pessoa
+   *  FÍSICA), e no meio de um JSX isso se lê errado com facilidade. */
+  const ehPessoaFisica = clienteFisicaJuridica
+  /**
+   * ⚠️ Identificar o cliente **troca o modelo do documento** quando ele é PJ — a regra é
+   * `destinatário informado && pessoa jurídica → NF-e 55`, senão NFC-e 65
+   * (`VendaFiscalAssembler.montar`). Até 2026-08-25 o popup não dizia isso, e o operador escolhia
+   * entre dois documentos fiscalmente diferentes sem saber.
+   */
+  const modeloSeIdentificar = ehPessoaFisica ? 'NFC-e' : 'NF-e (modelo 55)'
 
   useEffect(() => {
     if (!comprovante?.dadosFiscais) {
@@ -274,15 +284,22 @@ export default function ComprovantePapeletaModal({
                 {documentoCliente ? (
                   <>
                     <p>
-                      <strong>CPF/CNPJ do cliente:</strong> {mascararCpfCnpj(documentoCliente, clienteFisicaJuridica)}
+                      <strong>{ehPessoaFisica ? 'CPF' : 'CNPJ'} do cliente:</strong>{' '}
+                      {mascararCpfCnpj(documentoCliente, clienteFisicaJuridica)}
                     </p>
-                    <p>Deseja incluir o CPF do cliente nesta nota fiscal?</p>
+                    <p>Deseja identificar o cliente nesta nota fiscal?</p>
+                    {!ehPessoaFisica && (
+                      <p className="muted" style={{ marginTop: -4 }}>
+                        Cliente com CNPJ: ao identificar, a nota sai como <strong>NF-e modelo 55</strong>, que a
+                        empresa pode usar para crédito. Sem identificar, sai <strong>NFC-e</strong> ao consumidor.
+                      </p>
+                    )}
                     <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                       <button type="button" className="btn" disabled={respondendoCpf} onClick={() => confirmarEmissao(true)}>
-                        {respondendoCpf ? 'Emitindo…' : 'Sim, incluir CPF'}
+                        {respondendoCpf ? 'Emitindo…' : `Sim, identificar — ${modeloSeIdentificar}`}
                       </button>
                       <button type="button" className="btn ghost" disabled={respondendoCpf} onClick={() => confirmarEmissao(false)}>
-                        Não, emitir para consumidor
+                        Não, emitir para consumidor — NFC-e
                       </button>
                       {pedirCpfManual && (
                         <button type="button" className="btn ghost" disabled={respondendoCpf} onClick={() => setPedirCpfManual(false)}>

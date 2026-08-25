@@ -230,6 +230,75 @@ class DocumentoFiscalListaTest {
                 .andExpect(jsonPath("$.cStat").value("100"));
     }
 
+    /**
+     * Documento que morreu no bloqueio preventivo (F11) não tem numeração nem chave: as três
+     * colunas são NULL no banco. O DTO declarava {@code int serie}/{@code long numero}
+     * (primitivos), e o driver devolvia <b>0</b> em silêncio — a lista exibia "0/0" como se fosse
+     * número real de nota fiscal. Este teste falha se alguém voltar aos primitivos.
+     */
+    private long criarDocumentoNaoEmitido(long idTenant, long idEmpresa) {
+        return jdbc.sql("""
+                        INSERT INTO documento_fiscal (
+                            id_tenant, id_empresa, modelo, tipo_operacao, situacao, ambiente,
+                            tipo_emissao, data_emissao, valor_produtos, valor_desconto, valor_outros,
+                            valor_total, valor_troco)
+                        VALUES (?, ?, 55, 'VENDA_CONSUMIDOR', 'NAO_EMITIDO', 'HOMOLOGACAO', 1, now(),
+                                30.00, 0, 0, 30.00, 0)
+                        RETURNING id_documento_fiscal
+                        """)
+                .params(idTenant, idEmpresa).query(Long.class).single();
+    }
+
+    @Test
+    void documentoNaoEmitidoDevolveSerieNumeroEChaveNulos() throws Exception {
+        String token = assinarNovoTenant("nao-emitido");
+        long idTenant = idTenantDo(token);
+        long idEmpresa = idEmpresaDo(token);
+        criarDocumentoNaoEmitido(idTenant, idEmpresa);
+
+        mvc.perform(get("/api/v1/fiscal/documentos")
+                        .header("Authorization", "Bearer " + token)
+                        .param("idEmpresa", String.valueOf(idEmpresa))
+                        .param("dataInicial", LocalDate.now().minusDays(1).toString())
+                        .param("dataFinal", LocalDate.now().plusDays(1).toString()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalItens").value(1))
+                .andExpect(jsonPath("$.itens[0].situacao").value("NAO_EMITIDO"))
+                // ⚠️ O ponto do teste: NULO, não 0 nem "". Zero seria lido como número de nota.
+                .andExpect(jsonPath("$.itens[0].serie").doesNotExist())
+                .andExpect(jsonPath("$.itens[0].numero").doesNotExist())
+                .andExpect(jsonPath("$.itens[0].chaveAcesso").doesNotExist());
+    }
+
+    /**
+     * Consultar na SEFAZ um documento sem chave montava {@code <chNFe>null</chNFe>} e
+     * <b>transmitia de verdade</b>, colhendo {@code cStat 215} ("Falha no schema XML"). O guard
+     * está no serviço, não só escondendo o botão: o front não é o único cliente da API.
+     */
+    @Test
+    void consultarNaSefazRecusaDocumentoSemChaveSemChamarOFisco() throws Exception {
+        String token = assinarNovoTenant("consulta-sem-chave");
+        long idTenant = idTenantDo(token);
+        long idEmpresa = idEmpresaDo(token);
+        long idDoc = criarDocumentoNaoEmitido(idTenant, idEmpresa);
+
+        // ⚠️ O certificado é ESSENCIAL para este teste valer alguma coisa. Sem ele, a consulta
+        // morreria no passo seguinte ao guard (carregar certificado) e o transporte também não
+        // seria chamado — o teste passaria com o defeito presente. Com o certificado no lugar,
+        // a ÚNICA coisa entre a chamada e a SEFAZ é o guard.
+        jdbc.sql("UPDATE empresa SET cnpj = '11222333000181' WHERE id_tenant = ? AND id_empresa = ?")
+                .params(idTenant, idEmpresa).update();
+        enviarCertificado(token, idEmpresa, "11222333000181");
+
+        mvc.perform(post("/api/v1/fiscal/documentos/" + idDoc + "/consultar-sefaz")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isConflict());
+
+        // O que realmente importa: nenhuma requisição saiu para a SEFAZ. Conferir só o 409
+        // passaria mesmo se o guard estivesse depois do envio.
+        Mockito.verify(transporte, Mockito.never()).enviar(any(), any(), any(), any(), any(), any());
+    }
+
     @Test
     void operadorNaoAcessa() throws Exception {
         String token = assinarNovoTenant("operador");

@@ -109,8 +109,8 @@ public class DocumentoFiscalConsultaService {
                         """ + filtro + " ORDER BY d.data_emissao DESC, d.id_documento_fiscal DESC LIMIT ? OFFSET ?")
                 .params(paramsPagina)
                 .query((rs, n) -> new DocumentoFiscalItem(
-                        rs.getLong("id_documento_fiscal"), rs.getInt("modelo"), rs.getInt("serie"),
-                        rs.getLong("numero"), rs.getString("chave_acesso"), rs.getString("tipo_operacao"),
+                        rs.getLong("id_documento_fiscal"), rs.getInt("modelo"), getIntOuNulo(rs, "serie"),
+                        getLongOuNulo(rs, "numero"), rs.getString("chave_acesso"), rs.getString("tipo_operacao"),
                         rs.getString("situacao"), rs.getInt("tipo_emissao"), rs.getString("ambiente"),
                         rs.getObject("data_emissao", OffsetDateTime.class),
                         rs.getObject("data_autorizacao", OffsetDateTime.class),
@@ -343,6 +343,16 @@ public class DocumentoFiscalConsultaService {
         var ctx = repositorio.buscarContextoParaConsulta(idDocumentoFiscal)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Documento fiscal não encontrado."));
 
+        // ⚠️ Sem chave não há o que consultar: o documento parou no bloqueio preventivo (F11)
+        // antes de a numeração ser tirada. Até 2026-08-25 este caminho seguia adiante e mandava
+        // a string literal "null" no <chNFe> — chamada real à SEFAZ, que respondia cStat 215
+        // ("Falha no schema XML"). Barrar aqui, e não só escondendo o botão, porque o front não é
+        // o único cliente da API.
+        if (ctx.chaveAcesso() == null || ctx.chaveAcesso().isBlank()) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Este documento não chegou a ser transmitido — não tem chave de acesso para consultar na SEFAZ.");
+        }
+
         CertificadoParaAssinatura certificado = certificados.carregarAtivoParaAssinatura(ctx.idEmpresa());
         String url = autorizadores.urlDe(ctx.uf(), ctx.modelo(), ctx.ambiente().codigo(), ServicoSefaz.CONSULTA_PROTOCOLO);
         String consulta = "<consSitNFe xmlns=\"%s\" versao=\"4.00\"><tpAmb>%d</tpAmb><xServ>CONSULTAR</xServ><chNFe>%s</chNFe></consSitNFe>"
@@ -359,6 +369,15 @@ public class DocumentoFiscalConsultaService {
      *  jeito seguro de ler uma coluna {@code integer} nullable como {@code Long}. */
     private static Long getLongOuNulo(java.sql.ResultSet rs, String coluna) throws java.sql.SQLException {
         long valor = rs.getLong(coluna);
+        return rs.wasNull() ? null : valor;
+    }
+
+    /** Irmã de {@link #getLongOuNulo} para coluna {@code smallint}/{@code integer} lida como
+     *  {@code Integer}. Sem o {@code wasNull}, NULL vira {@code 0} <b>sem erro nenhum</b> — foi
+     *  assim que a lista de Documentos Fiscais exibiu série/número "0/0" para os documentos que
+     *  pararam no bloqueio preventivo (F11) e nunca receberam numeração. */
+    private static Integer getIntOuNulo(java.sql.ResultSet rs, String coluna) throws java.sql.SQLException {
+        int valor = rs.getInt(coluna);
         return rs.wasNull() ? null : valor;
     }
 

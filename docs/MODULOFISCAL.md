@@ -1386,7 +1386,7 @@ maiúsculas nos campos de texto, seção de auditoria (`InfoRegistro.tsx`) no fi
 | `fiscal.certificado` | Certificado Digital | ADMIN | Upload do `.pfx`, validade, alerta de vencimento (30/15/7 dias). Nunca devolve o arquivo |
 | `fiscal.perfil` | Perfis Fiscais | ADMIN | CRUD de perfil + regras por UF/destinatário/operação. Padrão de cadastro |
 | **`fiscal.conformidade`** 🆕 | Conformidade Fiscal | ADMIN | **Antes de ligar o fiscal:** lista o que impede emitir — produtos sem NCM/unidade/origem/perfil, clientes sem município IBGE, empresa sem certificado ou sem CNAE. Com contagem, filtro e link para a tela de correção. É a diferença entre ligar o fiscal numa segunda-feira e descobrir os problemas no caixa |
-| `fiscal.documentos` | Documentos Fiscais | ADMIN + OPERADOR | Lista com popup de filtros; ver XML, DANFCE/DANFE, reprocessar, cancelar, consultar na SEFAZ. Mostra também os `NAO_EMITIDO` (§9.1) |
+| `fiscal.documentos` | Documentos Fiscais | ADMIN + OPERADOR | Lista com popup de filtros; ver XML, DANFCE/DANFE, reprocessar, cancelar, consultar na SEFAZ. Mostra também os `NAO_EMITIDO` (§9.1) — ⚠️ estes **não têm série, número nem chave**, ver §12.1 |
 | `fiscal.download` | Download de XML | ADMIN | ZIP por período com progresso ao vivo (§11.2) |
 | `fiscal.inutilizacao` | Inutilização de Numeração | ADMIN | Faixa + justificativa; detecta buracos sozinho |
 | `fiscal.contingencia` | Painel de Contingência | ADMIN | Estado, fila pendente, entrar/sair manualmente |
@@ -2137,48 +2137,71 @@ dizendo *"Falta: município (código IBGE)"* — correto, e inútil para quem n�
 número. **O ViaCEP sempre devolveu o campo `ibge`**; ele só não estava declarado na interface do
 front e era descartado (**V062** deu os mesmos campos ao fornecedor).
 
-### 🔴 `cStat 974` — "CNPJ do responsável técnico diverge do cadastrado" (EM ABERTO)
+### 🔴 `cStat 974` — "CNPJ do responsável técnico diverge do cadastrado" (EM ABERTO, na SEFAZ)
 
-**Este ainda não está resolvido.** Duas descobertas, na ordem:
+**Estado em 2026-08-25: chamado aberto na SEFAZ/PR.** Tudo que está sob nosso controle foi
+**medido** e está correto; a divergência é entre o portal da Receita/PR e a base de validação do
+autorizador de NF-e. Texto do chamado pronto em `docs/fiscal/chamado-sefaz-pr-csrt-974.md`.
 
-**1. O campo do CSRT aceitava qualquer tamanho** (só tinha `@Size(max = 200)`), e recebeu o
-**número do credenciamento** (5 dígitos) no lugar do código de 36 caracteres. Corrigido com
-`@Pattern` de 20–200 mantendo o vazio válido — ver `docs/telas/admin-csrt-por-uf.md`.
+#### ⚠️ O erro de método que atrasou o diagnóstico (2026-08-24 → 25)
 
-**2. ⚠️ Mas o CSRT correto NÃO resolveu o 974.** Com o código de 36 caracteres gravado (conferido
-pela matemática do cifrado: 64 bytes = 12 do nonce + **36** + 16 do tag), a retransmissão da mesma
-venda voltou **974 de novo**. Ou seja: o CSRT curto era um defeito real e independente — não era a
-causa desta rejeição.
+A versão anterior desta seção afirmava *"o CSRT correto NÃO resolveu o 974"* e listava três
+hipóteses. **A afirmação era inferência, não medição:** a retransmissão citada rodou às **08:14** e
+o estado então vigente do CSRT foi gravado depois. Só em **08:55**, com o CSRT conferido pelo dono
+do produto contra o portal, houve a primeira transmissão que de fato testou a configuração — e
+essa sim voltou 974.
 
-**Como a SEFAZ chega ao 974.** Ela **não** compara o `<infRespTec><CNPJ>` com o emitente. Ela busca
-o CSRT **pelo `idCSRT`**, vê para qual CNPJ aquele código foi emitido, e compara com o CNPJ
-declarado. Divergiu ali → 974. Isso significa que **um `idCSRT` errado produz uma mensagem sobre
-CNPJ**, sem nunca mencionar o identificador.
+Lição, prima de [[feedback_defeito_provado_nao_e_causa_provada]]: **antes de escrever "corrigi e
+não resolveu", confira o carimbo de tempo da correção contra o da medição.** Concluir um fracasso
+a partir de um teste anterior à correção é o mesmo erro de concluir um sucesso sem reproduzir o
+sintoma — só que na direção oposta, e custa mais caro, porque fecha uma hipótese verdadeira.
 
-O XML está enviando:
+#### As hipóteses, todas fechadas com evidência
+
+| Hipótese | Como foi descartada |
+|---|---|
+| CSRT curto (recebeu o nº do credenciamento, 5 dígitos) | Defeito real, corrigido com `@Pattern` — mas **não era a causa** |
+| `idCSRT` deveria ser `1`, não `01` | ❌ O XSD exige 2 dígitos: `<xs:pattern value="[0-9]{2}"/>` em `leiauteNFe_v4.00.xsd`. Não existe XML válido com um dígito |
+| CNPJ do responsável técnico errado | ❌ Portal mostra `37.829.453/0001-35`, idêntico ao transmitido |
+| CSRT de produção usado em homologação | ❌ O portal **só tem token de homologação** ("Não há tokens ativos de produção para esse fornecedor") |
+| Cálculo do `hashCSRT` errado | ❌ Hash inválido responde **`cStat 976`**, não 974 — a rejeição acontece **antes** da conferência do hash. ⚠️ Este argumento é leitura da NT: o 976 **nunca foi observado aqui** |
+| Propagação pendente do token de 24/08 | ❌ Um **token novo (id 2), ativado minutos antes**, falhou idêntico |
+
+#### O que o portal mostra (conferido pelo dono do produto, 25/08)
+
+Tela *"Solicitação de Token - Fornecedor"* do ReceitaPR: CNPJ `37.829.453/0001-35`,
+MITRYUSCASH LTDA, IE `91227931-65`, situação **Credenciado**, sistema **NAINER** código **79413**.
+Tokens de Homologação: **Id do Token 1**, situação **ATIVO**, ativado **24/08/2026**. Depois foi
+solicitado um **segundo** token (Id 2) sem revogar o primeiro — a NT 2018.005 permite múltiplos
+CSRT por fornecedor, e é justamente para isso que existe o `idCSRT`.
+
+#### O que sai no XML (medido, não suposto)
 
 ```xml
 <infRespTec><CNPJ>37829453000135</CNPJ><xContato>MITRYUSCASH</xContato>
-  <email>suporte@nainer.com.br</email><fone>4133334444</fone><idCSRT>01</idCSRT><hashCSRT>…</hashCSRT>
+  <email>suporte@nainer.com.br</email><fone>4133334444</fone>
+  <idCSRT>02</idCSRT><hashCSRT>tYhFZBNscAi2+hLxXPXlZy8nW8w=</hashCSRT></infRespTec>
 ```
 
-`37829453000135` é o CNPJ da MITRYUSCASH LTDA — o mesmo do emitente, e o default de
-`NINER_FISCAL_RESPTEC_CNPJ` no `application.yml` (a variável nunca foi definida no `.env`).
+Emitente conferido no mesmo XML: CNPJ `37829453000135`, IE `9122793165`, CRT 1 — batem com o
+portal. O `hashCSRT` **muda a cada nota**, como tem que mudar (SHA-1 de `CSRT + chave de acesso`).
 
-**As hipóteses, em ordem de probabilidade:**
+#### A evidência que isola o problema
 
-1. ⚠️ **O `idCSRT` está errado.** A tela do backoffice traz **`01` pré-preenchido por padrão** — é
-   chute do formulário, não valor conferido. Se o portal emitiu o CSRT com identificador `02` (ou
-   outro), a SEFAZ busca o registro errado e acusa divergência de CNPJ. **É a mesma família de
-   armadilha do campo do CSRT sem piso: um default com cara de valor conferido.** Se confirmado,
-   o default sai e o campo passa a ser vazio e obrigatório.
-2. **O CNPJ do credenciamento 79413 não é `37829453000135`** — se a MITRYUSCASH foi credenciada com
-   outra inscrição, é essa que vai no `infRespTec`, via `NINER_FISCAL_RESPTEC_CNPJ`.
-3. **Propagação**: o credenciamento saiu em 2026-08-24 de manhã e pode não ter chegado ao ambiente
-   de homologação. Só considerar depois de descartar 1 e 2.
+A **NFC-e modelo 65 do mesmo emitente, no mesmo ambiente, com o mesmo certificado, autoriza
+normalmente** (`cStat 100`, protocolo `141260001550802`, 24/08 17:01). Ela não exige CSRT no PR
+(`cfg_uf_autorizador.exige_csrt = false` para o modelo 65), então nunca exercita esse caminho —
+o que prova que certificado, transporte e assinatura estão bons e joga o problema inteiro no
+cadastro do responsável técnico. Note também que os dois modelos respondem por **aplicações
+diferentes** da SEFAZ-PR: `PR-v4_5_39` (NFC-e) × `PR-v4_9_87-2` (NF-e).
 
-**Estado no banco:** 9 documentos `REJEITADO` com 974, **nenhum autorizado** — nada preso no meio,
-nada a estornar. A numeração queimada é irrelevante em homologação.
+**Estado no banco:** documentos `REJEITADO` com 974 nas séries 55/1 nº 17–20; **nenhuma NF-e 55
+autorizada até hoje**. Nada preso em `TRANSMITINDO`, nada a estornar; numeração queimada é
+irrelevante em homologação.
+
+**Impacto no produto:** bloqueia só o que depende do modelo 55 — **venda a PJ**, **devolução ao
+fornecedor** e **devolução de venda**. A operação do dia a dia (NFC-e ao consumidor) segue normal.
+
 
 ### ⚠️ E um quinto defeito, que não era da SEFAZ
 
@@ -2189,7 +2212,66 @@ servidor, certificado e internet. Ver `docs/telas/pdv.md` (revisão 2026-08-24).
 
 ### ⏭️ Continua faltando
 
-- 🔴 **O `cStat 974`** — ver as três hipóteses acima. **Nenhuma NF-e 55 foi autorizada ainda.**
+- 🔴 **O `cStat 974`** — **chamado aberto na SEFAZ/PR em 2026-08-25**; aguardando resposta. Todas as
+  hipóteses do nosso lado foram medidas e descartadas (ver a tabela acima). **Nenhuma NF-e 55 foi
+  autorizada ainda.**
 - **SVC** (contingência da 55).
 - **CSOSN 500 com ST retido**: `vBCSTRet`/`pST`/`vICMSSTRet` no modelo 55 (`cStat 938`). Depende de
   dado da compra e de decisão do contador.
+
+---
+
+## §12.1 — Documento sem chave de acesso: três defeitos que ele revelou (2026-08-25)
+
+Um documento em `NAO_EMITIDO` morreu no **bloqueio preventivo (F11)** antes de a numeração ser
+tirada e a chave montada: `serie`, `numero` e `chave_acesso` são **NULL de verdade**. Isso não é
+caso de borda — é o desfecho normal de toda venda barrada por cadastro incompleto, e passou a
+acontecer com frequência durante o trabalho da NF-e 55 em 24/08.
+
+A tela de Documentos Fiscais nunca tinha visto essa linha. Quando viu, apareceram **três**
+defeitos, em camadas diferentes:
+
+### 1. A tela inteira ficava em branco
+
+`item.chaveAcesso.slice(-8)` com `chaveAcesso` nulo lança `TypeError` **durante o render**, e uma
+exceção no render do React **apaga a página toda** — não degrada, não mostra a linha quebrada:
+some tudo. O sintoma relatado foi *"a tela fica toda em branco e não faz nada"*, que soa como
+falha de rota ou de API e manda o diagnóstico para o lado errado.
+
+⚠️ **O console do navegador dá a resposta em um passo** (arquivo, linha e stack). Vale mais que
+qualquer releitura de código — foi o que apontou a linha exata em segundos.
+
+### 2. O back devolvia `0` no lugar de NULL, em silêncio
+
+`DocumentoFiscalItem` declarava `int serie, long numero` — **primitivos** sobre colunas nullable.
+O driver do Postgres converte NULL em **0 sem erro nenhum**, e a lista exibia **"0/0"** como se
+fosse número real de nota fiscal. Hoje são `Integer`/`Long`, lidos por `getIntOuNulo`/
+`getLongOuNulo` (`getInt` + `wasNull`), e o front declara `serie/numero/chaveAcesso` como
+`| null`, imprimindo `—`.
+
+Mesma família de [[feedback_jackson_record_primitivo_e_problemdetails]]: **o tipo primitivo num
+record é uma afirmação de que a coluna nunca é nula** — se o schema discorda, o erro não aparece,
+o dado é que fica errado.
+
+### 3. "Consultar SEFAZ" transmitia a string `"null"` ao fisco
+
+Este é o mais grave. Sem chave, o serviço montava `<chNFe>null</chNFe>` e **fazia chamada real à
+SEFAZ**, que respondia `cStat 215 — "Falha no schema XML"`. Medido, não suposto.
+
+Hoje o serviço recusa com **409** antes de qualquer transmissão. ⚠️ **O guard está no serviço, não
+só escondendo o botão** — o front não é o único cliente da API. O botão também sumiu (junto com
+"Ver XML"), porque oferecer uma ação que só pode falhar é pior que não oferecer.
+
+### ⚠️ A armadilha ao escrever o teste de regressão
+
+A primeira versão de `consultarNaSefazRecusaDocumentoSemChaveSemChamarOFisco` **passava com o
+defeito presente**: sem certificado cadastrado no tenant de teste, a consulta morreria no passo
+*seguinte* ao guard (carregar o certificado) e o transporte também não seria chamado. O teste só
+vale porque o certificado é enviado antes — aí o guard é a **única** coisa entre a chamada e a
+SEFAZ.
+
+Os dois testes foram conferidos **revertendo as correções**: reprovam com o defeito presente. O do
+zero silencioso reprova com a mensagem exata `Expected no value at "$.itens[0].serie" but found: 0`.
+
+Testes: `DocumentoFiscalListaTest.documentoNaoEmitidoDevolveSerieNumeroEChaveNulos` e
+`.consultarNaSefazRecusaDocumentoSemChaveSemChamarOFisco`.

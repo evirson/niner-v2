@@ -10,8 +10,16 @@ public final class DocumentoFiscalListaDtos {
     private DocumentoFiscalListaDtos() {
     }
 
+    /**
+     * ⚠️ {@code serie}, {@code numero} e {@code chaveAcesso} são <b>nulos de verdade</b>, não por
+     * descuido: um documento em {@code NAO_EMITIDO} morreu no bloqueio preventivo (F11) antes de
+     * a numeração ser tirada e a chave montada. Eram primitivos (`int serie`, `long numero`) até
+     * 2026-08-25, e o driver devolvia {@code 0} para a coluna NULL <b>em silêncio</b> — a lista
+     * exibia "0/0" como se fosse número real de nota. Ver
+     * {@code DocumentoFiscalConsultaService.getIntOuNulo}.
+     */
     public record DocumentoFiscalItem(
-            long idDocumentoFiscal, int modelo, int serie, long numero, String chaveAcesso,
+            long idDocumentoFiscal, int modelo, Integer serie, Long numero, String chaveAcesso,
             String tipoOperacao, String situacao, int tipoEmissao, String ambiente,
             OffsetDateTime dataEmissao, OffsetDateTime dataAutorizacao, String protocolo,
             BigDecimal valorTotal, Long idVenda, String nomeCliente,
