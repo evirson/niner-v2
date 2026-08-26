@@ -36,12 +36,28 @@ public class PedidoWebhookRepositorio {
     }
 
     /**
-     * Registra a notificação. <b>Idempotente</b>: a mesma chave duas vezes não cria duas linhas.
+     * Registra a notificação — <b>uma linha por recurso</b>, reaberta a cada aviso novo.
      *
-     * <p>⚠️ {@code ON CONFLICT DO NOTHING} e não "atualizar": se a notificação anterior ainda não
-     * foi processada, ela já vai buscar o estado <b>atual</b> do pedido — reescrevê-la não
-     * acrescenta nada. E se já foi processada, reprocessar por conta própria seria trabalho
-     * repetido sem pedido de ninguém.
+     * <h2>⛔ Por que REABRE em vez de {@code DO NOTHING}</h2>
+     *
+     * A primeira versão deste método usava {@code ON CONFLICT DO NOTHING}, e estava errada de um
+     * jeito que só apareceu no teste do M6: o marketplace notifica <b>cada mudança de estado do
+     * mesmo pedido</b> — "recebido", depois "pago", depois "enviado" —, todas com o mesmo recurso
+     * ({@code /orders/123}). Com {@code DO NOTHING}, a segunda notificação era <b>engolida</b>, e
+     * era justamente ela que trazia a mudança que importa. O pedido ficaria eternamente reservado,
+     * nunca viraria venda, e nada no log diria por quê.
+     *
+     * <p>A linha aqui não é um <i>registro de log</i>, é uma <b>tarefa</b>: "olhe este pedido".
+     * Avisar de novo significa "olhe de novo".
+     *
+     * <p>⚠️ E isso continua idempotente onde importa: o worker busca o <b>estado atual</b> na API
+     * do canal, e as operações de domínio (reservar, converter) são travadas por {@code UPDATE}
+     * condicional no banco. Reabrir uma notificação duplicada de verdade custa uma consulta ao
+     * canal e não muda nada.
+     *
+     * <p>⚠️ {@code tentativas} volta a zero de propósito: um aviso novo é informação nova, e o
+     * contador existe para parar de insistir sozinho — não para punir um recurso sobre o qual o
+     * canal acabou de falar.
      */
     @Transactional
     public void registrar(long idCanal, String chave, String topico, String recurso, String payload) {
@@ -49,7 +65,9 @@ public class PedidoWebhookRepositorio {
                         INSERT INTO webhook_recebido
                                (id_tenant, id_canal, webhook_id, topico, recurso, payload)
                         VALUES (plataforma.tenant_atual(), ?, ?, ?, ?, CAST(? AS jsonb))
-                        ON CONFLICT (id_canal, webhook_id) DO NOTHING
+                        ON CONFLICT (id_canal, webhook_id) DO UPDATE
+                           SET processado_em = NULL, erro = NULL, tentativas = 0,
+                               recebido_em = now(), payload = EXCLUDED.payload
                         """)
                 .params(idCanal, chave, topico, recurso, payload)
                 .update();

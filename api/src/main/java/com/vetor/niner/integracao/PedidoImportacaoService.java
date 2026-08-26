@@ -43,13 +43,16 @@ public class PedidoImportacaoService {
 
     private final PedidoImportacaoRepositorio repositorio;
     private final CredenciaisCanalRepositorio credenciais;
+    private final PedidoVendaService vendas;
     private final List<CanalDeVenda> adapters;
 
     public PedidoImportacaoService(PedidoImportacaoRepositorio repositorio,
                                    CredenciaisCanalRepositorio credenciais,
+                                   PedidoVendaService vendas,
                                    List<CanalDeVenda> adapters) {
         this.repositorio = repositorio;
         this.credenciais = credenciais;
+        this.vendas = vendas;
         this.adapters = adapters;
     }
 
@@ -96,17 +99,27 @@ public class PedidoImportacaoService {
         }
 
         var resultado = repositorio.salvarPedido(idCanal, doCanal);
-        if (!resultado.novo()) {
+        if (resultado.novo()) {
+            for (Pendencia p : pendencias) {
+                repositorio.inserirItem(resultado.idPedido(), p.vinculo(), p.item());
+            }
+            log.info("Pedido {} do canal {} importado com {} item(ns).",
+                    idExterno, idCanal, pendencias.size());
+        } else {
             // Já existia: o status e os totais foram atualizados, os itens não. Ver o javadoc do
-            // repositório — regravar item duplicaria movimento quando o M6 chegar.
+            // repositório — regravar item duplicaria o movimento de estoque da conversão.
             log.debug("Pedido {} do canal {} já existia — status atualizado.", idExterno, idCanal);
-            return;
         }
-        for (Pendencia p : pendencias) {
-            repositorio.inserirItem(resultado.idPedido(), p.vinculo(), p.item());
-        }
-        log.info("Pedido {} do canal {} importado com {} item(ns).",
-                idExterno, idCanal, pendencias.size());
+
+        // ⭐ Reage ao estado do pedido (M6): RECEBIDO reserva, PAGO vira venda, CANCELADO libera.
+        //
+        // ⚠️ Roda TAMBÉM quando o pedido já existia — e é o ponto: a mudança de RECEBIDO para PAGO
+        // chega numa notificação posterior, sobre um pedido que já está aqui. Só reagir ao pedido
+        // novo faria a venda nunca nascer, e ninguém notaria até o fim do mês.
+        //
+        // As duas rotinas são idempotentes por UPDATE condicional no banco, então chamar a cada
+        // chegada é seguro.
+        vendas.aoMudarStatus(resultado.idPedido());
     }
 
     private record Pendencia(ItemDoPedido item, VinculoDoItem vinculo) {

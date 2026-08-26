@@ -82,12 +82,15 @@ public class PedidoPollingProcessador {
             try {
                 importacao.importar(idCanal, tipo, idExterno);
                 importados++;
-            } catch (PedidoNaoImportavelException e) {
-                // ⚠️ Silencioso no nível de INFO, de propósito: enquanto o lojista não vincular o
-                // anúncio, ESTE MESMO pedido vai reaparecer a cada 15 minutos. Registrar como erro
-                // encheria o log de uma pendência que já está visível na tela — e log que grita
-                // todo dia é log que ninguém lê.
-                log.debug("Polling: pedido {} do canal {} aguardando vínculo — {}",
+            } catch (PedidoNaoImportavelException | PedidoVendaService.ConversaoBloqueadaException e) {
+                // ⚠️ Capturado DENTRO do laço, e é o ponto: um pedido bloqueado (anúncio ainda não
+                // vinculado, canal sem carteira) não pode impedir os outros 19 da mesma rodada de
+                // entrar. Deixá-lo subir faria uma pendência de um produto travar a loja inteira.
+                //
+                // ⚠️ E fica em DEBUG, não em ERROR: enquanto o lojista não resolver, ESTE MESMO
+                // pedido reaparece a cada 15 minutos. Gritar no log todo dia sobre uma pendência
+                // que já está visível na tela é a receita para ninguém mais ler o log.
+                log.debug("Polling: pedido {} do canal {} aguardando ação do lojista — {}",
                         idExterno, idCanal, e.getMessage());
             }
         }

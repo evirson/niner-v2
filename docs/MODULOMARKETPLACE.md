@@ -1,8 +1,8 @@
 # Estudo: Integração com Marketplaces — Mercado Livre (primeiro canal)
 
-> **Status: EM IMPLEMENTAÇÃO.** As decisões da §4 estão fechadas (§8) e a **Opção A está completa** e o **M5** (pedidos) entrou — os blocos M0 a M5
+> **Status: EM IMPLEMENTAÇÃO.** As decisões da §4 estão fechadas (§8) e a **Opção A está completa** e os blocos **M5** e **M6** (pedidos → venda) entraram — M0 a M6
 > existem em código — ver o estado real na **§10**, que é a seção a acreditar quando esta divergir.
-> Escrito em 2026-08-25 como estudo; cabeçalho corrigido em 2026-08-26, quando M1, M2, M3 e M5 entraram.
+> Escrito em 2026-08-25 como estudo; cabeçalho corrigido em 2026-08-26, quando M1, M2, M3, M5 e M6 entraram.
 > Requisitos cobertos: R3, R5, R6, R7 · Princípios: P1, P2, P3, P8
 >
 > ⚠️ **Nenhuma chamada real ao Mercado Livre foi feita até hoje.** Tudo o que está verificado, está
@@ -385,7 +385,7 @@ verificável, e o que depende de terceiro isolado no fim.
 | **M3** | ✅ **FEITO 2026-08-26.** Escrita: `atualizarEstoque` via outbox, honrando `429` e **lendo o anúncio antes de escrever** (armadilha das variações, §2.4) | M2 |
 | **M4** | ✅ **FEITO.** Painel de saúde: fila de erros, dead-letter, reprocessar (R7) | M3 |
 | **M5** | ✅ **FEITO 2026-08-26.** Webhook `orders_v2` + polling de segurança; importação idempotente | M1 ✅ |
-| **M6** | Pedido vira `venda` (origem MARKETPLACE, sem caixa, sem comissão); reserva no recebido (ADR-004) | M5 |
+| **M6** | ✅ **FEITO 2026-08-26.** Pedido vira `venda` (origem MARKETPLACE, sem caixa, sem comissão); reserva no recebido (ADR-004) | M5 |
 | **M7** | Fila de expedição (R5): estados, baixa de estoque no envio, cancelamento devolve reserva | M6 |
 | ⏭️ **M8** | *(Opção C, adiado)* NF-e 55, XML ao ML, etiqueta, `confirmarEnvio` | `cStat 974` |
 
@@ -525,10 +525,11 @@ vincula, mas **não publica nada** (§10.5).
 | **M4** — painel de saúde | ✅ | `CanaisVenda.tsx` |
 | **M3** — escrita de estoque/preço | ✅ **2026-08-26** | `V067`, `integracao/Sincronizacao*` |
 | **M5** — webhook + polling + importação | ✅ **2026-08-26** | `V068`, `integracao/Pedido*` |
-| M6–M7 — pedido vira venda, fila de expedição | ⏭️ | depende do M5 ✅ |
+| **M6** — pedido vira venda + reserva | ✅ **2026-08-26** | `V069`, `integracao/PedidoVenda*` |
+| M7 — fila de expedição | ⏭️ | depende do M6 ✅ |
 | M8 — NF-e 55 | ⏭️ | depende do `cStat 974` |
 
-**1043 testes verdes**, `tsc -b` limpo.
+**1050 testes verdes**, `tsc -b` limpo.
 
 
 ### 10.1 As decisões de implementação que valem revisão
@@ -746,6 +747,49 @@ da §8 — a que mais muda o desenho.
 
 ✅ **Os três tópicos do painel do ML podem ser ligados agora** (§11.6): o endpoint existe. Ligar
 continua sendo passo do painel, e o polling cobre enquanto não forem.
+
+### 10.9 M6 — o que a conversão decide, e as duas dívidas conscientes
+
+O ciclo: **RECEBIDO** reserva o estoque · **PAGO** vira venda (libera a reserva, dá baixa de
+verdade, cria a parcela a receber e consome cota) · **CANCELADO** libera a reserva.
+
+⭐ **A reserva fecha o laço do anti-overselling sozinha.** `disponivel` é coluna gerada
+(`qtd_estoque − reservado`), o M3 publica `disponivel`, e o gatilho da V067 dispara em qualquer
+UPDATE de `produto_estoque` — inclusive de `reservado`. Reservar um pedido **republica o saldo
+menor no anúncio** sem ninguém pedir.
+
+⭐ **O dinheiro entra pela carteira do canal** (§8 item 4): `canal.id_carteira` aponta para um
+`tipo_carteira` com `taxa_administradora` (a comissão do marketplace) e `prazo_pagamento` (dias até
+liquidar), categoria CARTAO_CREDITO. A venda nasce como **parcela em aberto** em
+`contas_receber` — como uma venda no cartão —, e então **DRE, Lucratividade e Fluxo de Caixa
+funcionam pelo caminho que já existe**. A carteira é criada junto com o canal, com o nome dele.
+
+⚠️ **Ela nasce com taxa ZERO**, e isso é decisão: o ML cobra 11–19%, mas arbitrar um percentual
+seria decidir a margem do lojista (mesmo motivo de `perc_preco` nascer 0, §8.5). ⛔ **Enquanto a
+taxa estiver zerada, a DRE superestima o lucro** — número plausível e errado, a família de defeito
+que a Lucratividade documentou em 2026-08-25. A tela precisa avisar.
+
+#### ⛔ Dívida 1 — cancelamento no canal NÃO cancela a venda
+
+Se o pedido já virou venda e o marketplace o cancela, o M6 **libera a reserva e registra**, mas não
+cancela a venda. Cancelar venda no Nainer é rotina com regra própria: estorna estoque, mexe em
+caixa, exige motivo e, havendo nota, fala com a SEFAZ. **Disparar isso a partir de uma notificação
+automática de terceiro seria deixar um marketplace cancelar documento fiscal da loja.** O pedido
+fica marcado CANCELADO e o lojista decide na tela de Cancelamento de Venda.
+
+#### ⛔ Dívida 2 — pedido sem estoque não vira venda, e fica tentando
+
+Com o controle de estoque ligado (que marketplace **exige**, §8.1), converter um pedido cujo
+produto está zerado é recusado pela trava de estoque negativo — a mensagem diz qual produto e
+quanto falta, e o polling tenta de novo a cada 15 min, então **conserta sozinho** quando o lojista
+acertar o saldo.
+
+⚠️ É o comportamento **consistente com o resto do produto** (o PDV também é barrado), mas o custo
+está escrito: **enquanto não for resolvido, a venda não existe no ERP** — não aparece em relatório
+nem no financeiro, embora o dinheiro seja real. Acontece quando o saldo do ERP e o do anúncio
+divergem (venda simultânea no balcão, sincronização atrasada). ⏭️ **Decisão do dono do produto:**
+manter assim, ou permitir a exceção para venda de marketplace, já que ela **registra um fato
+observado** — a peça saiu.
 
 ## 11. Passo a passo para criar a aplicação no Mercado Livre
 

@@ -169,6 +169,14 @@ class PedidoCanalTest {
         return idCanal;
     }
 
+    /**
+     * ⚠️ Cria a variação <b>com estoque</b>.
+     *
+     * <p>Desde o M6 o pedido {@code paid} vira venda na hora, e a venda debita estoque de verdade
+     * — com o controle de estoque ligado (que marketplace exige), um produto sem saldo faz a
+     * conversão ser recusada pela trava de estoque negativo. Não é um ajuste de conveniência do
+     * teste: é a regra do produto aparecendo.
+     */
     private long criarVariacao(String token, String descricao) throws Exception {
         String resp = mvc.perform(post2("/api/v1/produtos").header("Authorization", "Bearer " + token)
                         .contentType(APPLICATION_JSON)
@@ -185,7 +193,26 @@ class PedidoCanalTest {
                         .contentType(APPLICATION_JSON).content("{}"))
                 .andExpect(status().isCreated())
                 .andReturn().getResponse().getContentAsString();
-        return ((Number) JsonPath.read(varResp, "$.idVariacao")).longValue();
+        long idVariacao = ((Number) JsonPath.read(varResp, "$.idVariacao")).longValue();
+
+        long idTenant = idTenantDo(token);
+        long idEmpresa = idEmpresaDo(token);
+        var tx = new TransactionTemplate(txManager);
+        TenantContext.comTenant(idTenant, () -> tx.executeWithoutResult(s -> {
+            Long idMestre = jdbc.sql("""
+                            INSERT INTO produto_movimento_mestre
+                                   (id_tenant, id_empresa, tipo_movimento, data_movimento)
+                            VALUES (plataforma.tenant_atual(), ?, 'COMPRA', now())
+                            RETURNING id_movimento
+                            """).params(idEmpresa).query(Long.class).single();
+            jdbc.sql("""
+                            INSERT INTO produto_movimento_detalhe
+                                   (id_tenant, id_empresa, id_movimento, id_variacao,
+                                    credito_debito, qtd_produto, preco_custo, preco_venda)
+                            VALUES (plataforma.tenant_atual(), ?, ?, ?, 'C', 50, 10, 50)
+                            """).params(idEmpresa, idMestre, idVariacao).update();
+        }));
+        return idVariacao;
     }
 
     private void vincular(String token, long idCanal, String idExterno, long idVariacao) throws Exception {

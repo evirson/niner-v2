@@ -72,7 +72,7 @@ public class PedidoWebhookProcessador {
                 webhooks.marcarFalha(p.id(), e.getMessage());
                 log.warn("Notificação {}: canal indisponível — fica na fila. {}", p.id(), e.getMessage());
 
-            } catch (PedidoNaoImportavelException e) {
+            } catch (PedidoNaoImportavelException | PedidoVendaService.ConversaoBloqueadaException e) {
                 // ⭐ Precisa de ação do lojista (quase sempre: anúncio ainda não vinculado). Também
                 // NÃO marca processado: no minuto em que ele vincular, a mesma notificação passa
                 // sozinha. A mensagem fica na linha, e é ela que a tela mostra.

@@ -29,12 +29,15 @@ public class CanalService {
     private final JdbcClient jdbc;
     private final ControleEstoqueCanalGuard guardaEstoque;
     private final CredenciaisCanalRepositorio credenciais;
+    private final com.vetor.niner.integracao.PedidoVendaRepositorio carteirasDeCanal;
 
     public CanalService(JdbcClient jdbc, ControleEstoqueCanalGuard guardaEstoque,
-                        CredenciaisCanalRepositorio credenciais) {
+                        CredenciaisCanalRepositorio credenciais,
+                        com.vetor.niner.integracao.PedidoVendaRepositorio carteirasDeCanal) {
         this.jdbc = jdbc;
         this.guardaEstoque = guardaEstoque;
         this.credenciais = credenciais;
+        this.carteirasDeCanal = carteirasDeCanal;
     }
 
     @Transactional(readOnly = true)
@@ -99,6 +102,16 @@ public class CanalService {
                         req.nome().toUpperCase(java.util.Locale.ROOT), req.percPreco())
                 .query(Long.class)
                 .single();
+
+        // ⭐ Cria a carteira que representa o dinheiro deste canal (§8 item 4, M6). É ela que faz
+        // DRE, Lucratividade e Fluxo de Caixa enxergarem a venda de marketplace sem código novo:
+        // `taxa_administradora` é a comissão do canal e `prazo_pagamento` os dias até liquidar.
+        //
+        // ⚠️ Nasce com taxa ZERO, e a tela avisa sobre isso — o ML cobra 11–19%, e uma taxa zerada
+        // faria a DRE superestimar o lucro com um número plausível. Arbitrar um percentual aqui
+        // seria decidir a margem do lojista, que é o mesmo motivo de `perc_preco` nascer 0 (§8.5).
+        carteirasDeCanal.criarCarteiraDoCanal(id, req.nome().toUpperCase(java.util.Locale.ROOT));
+
         return buscar(jwt, id);
     }
 

@@ -541,6 +541,83 @@ Movimentação de Conta Corrente) que ainda não tinham migrado pro `SeletorPlan
 
 ## Linha do tempo
 
+### 2026-08-26 (5) — M6: o pedido de marketplace vira VENDA, e a reserva fecha o laço do anti-overselling
+
+Quinta entrega do dia, e a decisão nº 1 da §8 — a que mais mudava o desenho. **1050 testes verdes**
+(eram 1043), `tsc -b` limpo.
+
+#### ⭐ Por que "virar venda" era a escolha certa
+
+Tudo no ERP pendura em `venda`: DRE, Lucratividade, Relatório de Vendas, Kardex, cota do plano. Um
+pedido que **não** virasse venda precisaria de telas e relatórios próprios, e a venda de
+marketplace não apareceria em lugar nenhum onde o lojista olha. Virando venda, aparece em tudo —
+**sem uma linha de código nesses relatórios**. Há teste chamando o Relatório de Vendas justamente
+para provar que ela passa pelo mesmo caminho.
+
+#### ⭐ A reserva fecha o laço sozinha, e isso não estava planejado
+
+`disponivel` é coluna **gerada** (`qtd_estoque − reservado`), o M3 publica `disponivel`, e o
+gatilho da V067 dispara em qualquer UPDATE de `produto_estoque` — inclusive de `reservado`.
+Resultado: **reservar um pedido republica o saldo menor no anúncio**, sem ninguém pedir. As três
+peças foram construídas separadas e se encaixaram.
+
+#### O dinheiro entra pela carteira do canal
+
+Decisão do dono do produto (§8 item 4): `canal.id_carteira` aponta para um `tipo_carteira` com
+`taxa_administradora` (comissão do marketplace) e `prazo_pagamento` (dias até liquidar). A venda
+nasce como **parcela em aberto** em `contas_receber`, como uma venda no cartão — e então DRE,
+Lucratividade e Fluxo de Caixa enxergam tudo pelo caminho que já existe. A carteira é criada junto
+com o canal.
+
+⚠️ **Nasce com taxa ZERO**, e é decisão: arbitrar 15% seria decidir a margem do lojista (mesmo
+motivo de `perc_preco` nascer 0). ⛔ Mas enquanto estiver zerada **a DRE superestima o lucro** —
+número plausível e errado, a família de defeito que a Lucratividade documentou em 25/08. A tela
+precisa avisar; ainda não avisa.
+
+#### ⛔ Três nulos que SÃO a decisão de produto
+
+`venda.id_caixa` nulo (o dinheiro do ML não passa pela gaveta — vinculá-lo quebraria a conferência
+do Fechamento de Caixa) · `venda.id_cliente` nulo (o comprador não vira cadastro) ·
+`produto_movimento_detalhe.id_funcionario` nulo (**sem vendedor, logo sem comissão**, sem nenhuma
+linha de código: o relatório agrupa por funcionário). Os três viraram asserção de teste, para que
+ninguém "conserte" um deles achando que é campo esquecido.
+
+#### ⚠️ Um defeito real, achado pelo teste do ciclo
+
+A chave de idempotência do webhook era `topico + recurso` com `ON CONFLICT DO NOTHING` — e o
+marketplace notifica **cada mudança de estado do mesmo pedido** com o mesmo recurso. A segunda
+notificação ("agora está pago") era **engolida**: o pedido ficaria eternamente reservado, nunca
+viraria venda, e **nada no log diria por quê**.
+
+⭐ O conserto veio de reenquadrar o que a linha é: ela não é um *registro de log*, é uma **tarefa**
+("olhe este pedido"). Avisar de novo significa "olhe de novo" — `ON CONFLICT DO UPDATE` reabre.
+Continua idempotente onde importa, porque o worker busca o **estado atual** na API do canal e as
+operações de domínio são travadas por `UPDATE` condicional no banco.
+
+⚠️ E note o parentesco com a decisão do M3 de **não deduplicar** eventos do outbox: nos dois casos,
+deduplicar pelo identificador do assunto engole a informação mais nova. Foi o mesmo raciocínio,
+alcançado por caminhos diferentes.
+
+#### ⚠️ E o M6 quebrou 4 testes do M5 — corretamente
+
+Os pedidos do M5 eram `paid` e os produtos não tinham estoque. Agora que `paid` vira venda, a trava
+de estoque negativo recusa a baixa. **Não é ajuste de conveniência**: é a regra do produto
+aparecendo, e os testes passaram a criar estoque.
+
+#### ⛔ Duas dívidas conscientes, escritas para não sumirem
+
+1. **Cancelamento no canal NÃO cancela a venda.** Cancelar venda no Nainer estorna estoque, mexe em
+   caixa, exige motivo e — havendo nota — fala com a SEFAZ. Disparar isso a partir de notificação
+   automática de terceiro seria deixar um marketplace **cancelar documento fiscal da loja**. Fica
+   registrado e o lojista decide.
+2. **Pedido sem estoque não vira venda, e fica tentando.** O polling reconsidera a cada 15 min, e
+   conserta sozinho quando o saldo for acertado. É consistente com o resto do produto (o PDV também
+   é barrado), mas o custo está escrito: **enquanto não resolver, a venda não existe no ERP** —
+   embora o dinheiro seja real. ⏭️ Decisão do dono do produto: manter, ou abrir exceção para
+   marketplace, já que a venda **registra um fato observado**.
+
+⛔ E, pela quinta vez no dia: **nenhum pedido real do Mercado Livre passou por aqui.**
+
 ### 2026-08-26 (4) — M5: a venda do marketplace chega ao ERP, e a notificação anônima ganha dono
 
 Quarta entrega do dia. **1043 testes verdes** (eram 1032), `tsc -b` limpo.
