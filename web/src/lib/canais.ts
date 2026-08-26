@@ -171,3 +171,51 @@ export function vincularAnuncio(
 export function desvincularAnuncio(idCanal: number, idAnuncio: number): Promise<void> {
   return api<void>(`/api/v1/canais/${idCanal}/anuncios/${idAnuncio}`, { method: 'DELETE' })
 }
+
+// ------------------------------------------------------------------ Fila de expedição (R5, M7)
+
+/**
+ * Uma linha da fila de expedição.
+ *
+ * ⚠️ A fila é "o que já foi pago e ainda não saiu". Pedido não pago NÃO entra: separar mercadoria
+ * para quem pode não pagar é trabalho jogado fora, e a peça some do fluxo da loja. A reserva de
+ * estoque já segura a peça.
+ */
+export interface PedidoNaFila {
+  idPedido: number
+  idExterno: string
+  nomeCanal: string
+  status: 'PAGO' | 'EM_SEPARACAO'
+  comprador: string | null
+  total: number
+  criadoEm: string
+  dataSeparacao: string | null
+  codigoRastreio: string | null
+  itens: number
+}
+
+export interface ItemAExpedir {
+  sku: string
+  descricao: string
+  quantidade: number
+}
+
+export function listarFilaExpedicao(): Promise<PedidoNaFila[]> {
+  return api<PedidoNaFila[]>('/api/v1/expedicao')
+}
+
+export function listarItensDoPedido(idPedido: number): Promise<ItemAExpedir[]> {
+  return api<ItemAExpedir[]>(`/api/v1/expedicao/${idPedido}/itens`)
+}
+
+export function separarPedido(idPedido: number): Promise<void> {
+  return api<void>(`/api/v1/expedicao/${idPedido}/separar`, { method: 'POST' })
+}
+
+/** O rastreio é opcional: em Mercado Envios quem o gera é o próprio marketplace. */
+export function enviarPedido(idPedido: number, codigoRastreio: string): Promise<void> {
+  return api<void>(`/api/v1/expedicao/${idPedido}/enviar`, {
+    method: 'POST',
+    body: JSON.stringify({ codigoRastreio }),
+  })
+}

@@ -88,6 +88,16 @@ export const MENU: NavGrupo[] = [
         descricao: 'Venda no balcão com leitura de código de barras, desconto, formas de pagamento e comprovante.',
       },
       {
+        // ⚠️ Fica em Frente de Loja, e NÃO no grupo de Canais de Venda (que é ADMIN-only): quem
+        // separa e embala é o operador. Exigir ADMIN aqui obrigaria o dono a despachar tudo, ou a
+        // dar acesso de administrador a quem só precisa de uma lista de itens.
+        to: '/expedicao',
+        label: 'Fila de Expedição',
+        icone: IconeCanais,
+        descricao:
+          'Pedidos de marketplace já pagos que ainda não saíram: separar, conferir os itens e confirmar o despacho.',
+      },
+      {
         to: '/orcamentos',
         label: 'Orçamentos',
         icone: IconePdv,

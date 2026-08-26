@@ -1,8 +1,8 @@
 # Estudo: Integração com Marketplaces — Mercado Livre (primeiro canal)
 
-> **Status: EM IMPLEMENTAÇÃO.** As decisões da §4 estão fechadas (§8) e a **Opção A está completa** e os blocos **M5** e **M6** (pedidos → venda) entraram — M0 a M6
+> **Status: EM IMPLEMENTAÇÃO.** As decisões da §4 estão fechadas (§8) e o **escopo A+B aprovado está completo** — M0 a M7
 > existem em código — ver o estado real na **§10**, que é a seção a acreditar quando esta divergir.
-> Escrito em 2026-08-25 como estudo; cabeçalho corrigido em 2026-08-26, quando M1, M2, M3, M5 e M6 entraram.
+> Escrito em 2026-08-25 como estudo; cabeçalho corrigido em 2026-08-26, quando M1, M2, M3 e M5–M7 entraram.
 > Requisitos cobertos: R3, R5, R6, R7 · Princípios: P1, P2, P3, P8
 >
 > ⚠️ **Nenhuma chamada real ao Mercado Livre foi feita até hoje.** Tudo o que está verificado, está
@@ -386,7 +386,7 @@ verificável, e o que depende de terceiro isolado no fim.
 | **M4** | ✅ **FEITO.** Painel de saúde: fila de erros, dead-letter, reprocessar (R7) | M3 |
 | **M5** | ✅ **FEITO 2026-08-26.** Webhook `orders_v2` + polling de segurança; importação idempotente | M1 ✅ |
 | **M6** | ✅ **FEITO 2026-08-26.** Pedido vira `venda` (origem MARKETPLACE, sem caixa, sem comissão); reserva no recebido (ADR-004) | M5 |
-| **M7** | Fila de expedição (R5): estados, baixa de estoque no envio, cancelamento devolve reserva | M6 |
+| **M7** | ✅ **FEITO 2026-08-26.** Fila de expedição (R5): estados e fila (a baixa de estoque ficou no PAGO, no M6 — ver §10.10) | M6 |
 | ⏭️ **M8** | *(Opção C, adiado)* NF-e 55, XML ao ML, etiqueta, `confirmarEnvio` | `cStat 974` |
 
 **M0 não depende de nada** e começa agora.
@@ -526,10 +526,10 @@ vincula, mas **não publica nada** (§10.5).
 | **M3** — escrita de estoque/preço | ✅ **2026-08-26** | `V067`, `integracao/Sincronizacao*` |
 | **M5** — webhook + polling + importação | ✅ **2026-08-26** | `V068`, `integracao/Pedido*` |
 | **M6** — pedido vira venda + reserva | ✅ **2026-08-26** | `V069`, `integracao/PedidoVenda*` |
-| M7 — fila de expedição | ⏭️ | depende do M6 ✅ |
+| **M7** — fila de expedição (R5) | ✅ **2026-08-26** | `V070`, `integracao/Expedicao*`, `web/.../FilaExpedicao.tsx` |
 | M8 — NF-e 55 | ⏭️ | depende do `cStat 974` |
 
-**1050 testes verdes**, `tsc -b` limpo.
+**1056 testes verdes**, `tsc -b` limpo.
 
 
 ### 10.1 As decisões de implementação que valem revisão
@@ -790,6 +790,52 @@ nem no financeiro, embora o dinheiro seja real. Acontece quando o saldo do ERP e
 divergem (venda simultânea no balcão, sincronização atrasada). ⏭️ **Decisão do dono do produto:**
 manter assim, ou permitir a exceção para venda de marketplace, já que ela **registra um fato
 observado** — a peça saiu.
+
+### 10.10 M7 — a fila de expedição, e um desvio do roteiro que vale explicar
+
+`PAGO → EM_SEPARACAO → ENVIADO`. Três estados, não seis: cada estado a mais é uma pergunta a mais
+para quem está com a caixa na mão, e a fila de uma loja pequena não comporta cerimônia.
+
+⚠️ **O roteiro dizia "baixa de estoque no envio", e ela ficou no PAGO (M6).** É onde a venda nasce
+— e uma venda sem baixa de estoque seria um buraco entre o M6 e o M7, com o saldo do ERP mentindo
+durante todo o intervalo de separação. A **reserva** já cobre o que a baixa-no-envio pretendia
+proteger: a peça fica indisponível desde o RECEBIDO.
+
+⛔ **RECEBIDO não entra na fila.** Pedido não pago pode não ser pago nunca: separar mercadoria para
+ele é trabalho jogado fora e, pior, a peça sai da prateleira e some do fluxo da loja. A reserva
+segura o estoque; a separação espera o dinheiro.
+
+⚠️ **A tela NÃO é ADMIN-only**, ao contrário do resto do módulo de canais — quem separa e embala é
+o operador. Exigir ADMIN obrigaria o dono a despachar tudo, ou a dar acesso de administrador a quem
+só precisa de uma lista de itens. Por isso ela vive em **Frente de Loja**, não no grupo de Canais.
+
+#### ⭐ O defeito que a V070 existe para impedir
+
+`salvarPedido` atualiza o status a cada chegada do pedido — e o pedido chega muitas vezes. Se o
+lojista marca EM_SEPARACAO às 10h e o polling roda às 10h15 com o marketplace ainda dizendo
+"paid", um UPDATE ingênuo devolveria o pedido à fila — **já separado** — e alguém montaria um
+segundo pacote para a mesma venda. Silenciosamente.
+
+A regra vive numa função do banco (`fn_status_pedido_do_canal`) para não depender de quem escreve
+o próximo UPDATE: **CANCELADO do canal sempre vence** (o comprador desistiu, é fato do canal), e
+fora isso o canal só manda enquanto o trabalho físico não começou. Preso por dois testes.
+
+#### ⛔ `confirmarEnvio` no Mercado Livre não faz nada — de propósito
+
+Em **Mercado Envios** quem controla o estado do envio é o **próprio marketplace**: o pedido vira
+"enviado" quando a transportadora bipa a etiqueta, e a etiqueta é liberada pela **NF-e** (§2.6, e é
+a Opção C, travada no `cStat 974`). Não existe "avisar o ML que despachei" — a informação vai no
+sentido contrário.
+
+⚠️ **Não fazer nada é melhor que inventar uma chamada.** A alternativa seria chutar um endpoint que
+a documentação não descreve para este caso e, sem sandbox no ML, o primeiro teste seria em produção
+no envio de um lojista de verdade.
+
+⭐ O manipulador de outbox existe assim mesmo porque a **Shopee** e o **envio próprio** precisam
+dele, e porque é a interface que a spec definiu — descobrir isso ao plugar o segundo canal seria
+tarde. E o aviso passa pelo outbox, não pela requisição: o despacho **já aconteceu no mundo
+físico**, e uma indisponibilidade do marketplace não pode impedir o lojista de registrar que o
+pacote saiu.
 
 ## 11. Passo a passo para criar a aplicação no Mercado Livre
 

@@ -53,9 +53,15 @@ public class PedidoImportacaoRepositorio {
                 .orElse(null);
 
         if (existente != null) {
+            // ⛔ O status do canal NÃO atropela o estado local de expedição (V070). Se o lojista
+            // marcou EM_SEPARACAO e o polling roda 15 min depois com o ML ainda dizendo "paid", um
+            // UPDATE direto devolveria o pedido à fila de separação — já separado — e alguém o
+            // separaria de novo. `fn_status_pedido_do_canal` guarda essa regra no banco, para não
+            // depender de quem escreve o próximo UPDATE.
             jdbc.sql("""
                             UPDATE pedido
-                               SET status = CAST(? AS status_pedido), total = ?, frete = ?,
+                               SET status = fn_status_pedido_do_canal(status, CAST(? AS status_pedido)),
+                                   total = ?, frete = ?,
                                    payload_bruto = CAST(? AS jsonb), atualizado_em = now()
                              WHERE id_tenant = plataforma.tenant_atual() AND id_pedido = ?
                             """)

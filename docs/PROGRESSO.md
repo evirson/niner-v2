@@ -541,6 +541,71 @@ Movimentação de Conta Corrente) que ainda não tinham migrado pro `SeletorPlan
 
 ## Linha do tempo
 
+### 2026-08-26 (6) — M7: a fila de expedição, e o escopo A+B fecha
+
+Sexta e última entrega do dia. **1056 testes verdes** (eram 1050), `tsc -b` limpo. Com isto o
+**escopo aprovado (Opção A + B) está completo**: conectar, vincular, publicar estoque e preço,
+importar pedido, virar venda e despachar.
+
+#### ⭐ O defeito que a V070 existe para impedir — e que só apareceu ao escrever a fila
+
+`salvarPedido` atualiza o status a cada chegada do pedido, e o pedido chega **muitas** vezes
+(webhook a cada mudança + reenvio + polling a cada 15 min). Se o lojista marcar EM_SEPARACAO às
+10h e o polling rodar às 10h15 com o marketplace ainda dizendo `paid`, um UPDATE ingênuo
+devolveria o pedido à fila — **já separado** — e alguém montaria um **segundo pacote para a mesma
+venda**. Sem nada avisando.
+
+A regra ficou numa função do banco (`fn_status_pedido_do_canal`) para não depender de quem escreve
+o próximo UPDATE: **CANCELADO do canal sempre vence** (o comprador desistiu, é fato dele), e fora
+isso o canal só manda enquanto o trabalho físico não começou. Dois testes prendem os dois lados.
+
+⚠️ É o mesmo padrão das duas entregas anteriores: **quem manda em cada campo muda conforme o
+estado**, e escrever "o canal é a verdade" sem qualificar produz um defeito silencioso.
+
+#### Três estados, não seis
+
+`PAGO → EM_SEPARACAO → ENVIADO`. Cada estado a mais é uma pergunta a mais para quem está com a
+caixa na mão, e a fila de uma loja pequena não comporta cerimônia.
+
+⛔ **RECEBIDO não entra na fila**: pedido não pago pode não ser pago nunca, e separar mercadoria
+para ele é trabalho jogado fora — a peça sai da prateleira e some do fluxo da loja. A **reserva**
+(M6) já segura o estoque; a separação espera o dinheiro.
+
+⚠️ **A tela não é ADMIN-only**, ao contrário do resto do módulo — quem separa e embala é o
+operador. Exigir ADMIN obrigaria o dono a despachar tudo, ou a dar acesso de administrador a quem
+só precisa de uma lista de itens. Por isso ela mora em **Frente de Loja**, não no grupo de Canais.
+
+#### ⚠️ Um desvio do roteiro, explicado
+
+O roteiro dizia *"baixa de estoque no envio"*; ela ficou no **PAGO** (M6), que é onde a venda
+nasce. Uma venda sem baixa de estoque seria um buraco entre os dois blocos, com o saldo do ERP
+mentindo durante todo o intervalo de separação — e a reserva já cobre o que a baixa-no-envio
+pretendia proteger.
+
+#### ⛔ `confirmarEnvio` no Mercado Livre NÃO faz nada, de propósito
+
+Em Mercado Envios quem controla o estado do envio é o **próprio marketplace**: o pedido vira
+"enviado" quando a transportadora bipa a etiqueta — e a etiqueta é liberada pela **NF-e**, que é a
+Opção C, travada no `cStat 974`. Não existe "avisar o ML que despachei": a informação vai no
+sentido contrário.
+
+⚠️ **Não fazer nada é melhor que inventar uma chamada.** A alternativa seria chutar um endpoint que
+a documentação não descreve para este caso e, sem sandbox no ML, o primeiro teste seria em produção
+no envio de um lojista de verdade.
+
+⭐ O manipulador de outbox existe assim mesmo porque a **Shopee** e o **envio próprio** precisam
+dele — e porque descobrir a lacuna ao plugar o segundo canal seria tarde. E o aviso passa pelo
+outbox: o despacho **já aconteceu no mundo físico**, e uma indisponibilidade do marketplace não
+pode impedir o lojista de registrar que o pacote saiu.
+
+#### ⏭️ O que sobra do módulo
+
+Só o **M8** (NF-e 55 + XML ao ML + etiqueta), travado no `cStat 974` — e a **validação contra o
+Mercado Livre de verdade**, que é o próximo passo combinado.
+
+⛔ **Seis blocos, zero chamadas reais.** Tudo foi verificado contra WireMock, que responde o que eu
+programei. É a maior dívida do módulo, e ela vence agora.
+
 ### 2026-08-26 (5) — M6: o pedido de marketplace vira VENDA, e a reserva fecha o laço do anti-overselling
 
 Quinta entrega do dia, e a decisão nº 1 da §8 — a que mais mudava o desenho. **1050 testes verdes**

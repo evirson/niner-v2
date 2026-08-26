@@ -173,6 +173,25 @@ public interface CanalDeVenda {
     void atualizarPreco(CredenciaisCanal credenciais, String idExternoItem,
                         String idExternoVariacao, BigDecimal preco);
 
+    /**
+     * Avisa o canal que o pedido foi despachado (R5, M7).
+     *
+     * <p>⚠️ <b>Passa pelo outbox</b>, como toda escrita no canal (P2) — nunca de dentro da
+     * requisição em que o lojista clicou "Enviar".
+     *
+     * <p>⚠️ <b>Nem todo canal precisa ser avisado, e o Mercado Livre é um deles.</b> Em Mercado
+     * Envios quem controla o estado do envio é o <i>próprio marketplace</i>: o status muda quando
+     * a transportadora bipa a etiqueta, não quando nós dizemos. Nossa chamada só faz sentido em
+     * envio próprio (o vendedor usa transportadora dele e informa o rastreio). Um adapter para
+     * quem isso não se aplica deve <b>não fazer nada</b> — e dizer no javadoc que não faz —, em vez
+     * de inventar uma chamada que o canal recusa.
+     *
+     * @param idExternoEnvio  id do envio no canal; {@code null} quando o pedido não tem envio
+     * @param codigoRastreio  informado pelo lojista; {@code null} quando não há
+     */
+    void confirmarEnvio(CredenciaisCanal credenciais, String idExternoPedido, String idExternoEnvio,
+                        String codigoRastreio);
+
     /** Falha transitória: o outbox reagenda com backoff. Não confundir com erro de negócio. */
     class CanalIndisponivelException extends RuntimeException {
         public CanalIndisponivelException(String mensagem) {

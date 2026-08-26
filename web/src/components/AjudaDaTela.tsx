@@ -492,6 +492,27 @@ const CONTEUDOS: Record<string, ConteudoAjuda> = {
     ],
     urlVideo: null,
   },
+  'expedicao.tela': {
+    titulo: 'Fila de Expedição',
+    objetivo:
+      'Separar, conferir e despachar os pedidos vendidos no marketplace, sem precisar abrir o painel do canal.',
+    passos: [
+      'A fila mostra os pedidos JÁ PAGOS que ainda não saíram, do mais antigo para o mais novo.',
+      'Clique em "Separar" quando pegar a caixa: o pedido sai da fila de quem ainda não pegou, e todo mundo vê que ele está com você.',
+      'Clique em "Despachar…" para ver a lista de itens do pacote — produto, código de barras e quantidade.',
+      'Conferido, informe o código de rastreio (se houver) e clique em "Confirmar despacho".',
+      'A tela se atualiza sozinha a cada 30 segundos: pedido novo aparece e pedido que um colega pegou some.',
+    ],
+    errosComuns: [
+      'Pedido AGUARDANDO PAGAMENTO não aparece aqui, de propósito: ele pode não ser pago nunca, e separar mercadoria à toa tira a peça da prateleira. O estoque dele já está reservado.',
+      'Se "Separar" for recusado dizendo que o pedido está em separação, um colega já pegou — a mensagem sempre diz a situação real.',
+      'Não dá para despachar um pedido que não foi separado. A ordem existe para ninguém pular a conferência.',
+      'No Mercado Envios quem gera a etiqueta e o código de rastreio é o próprio Mercado Livre — preencha o rastreio só se estiver despachando por conta própria.',
+      'Confirmar o despacho aqui registra o trabalho na SUA loja. No Mercado Livre o pedido muda de estado quando a transportadora bipa a etiqueta, não quando você confirma aqui.',
+      'Se o comprador cancelar no marketplace depois de você separar, o pedido some da fila e fica marcado como cancelado — confira antes de despachar.',
+    ],
+    urlVideo: null,
+  },
   'canais.anuncios.tela': {
     titulo: 'Vincular Anúncios',
     objetivo:

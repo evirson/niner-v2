@@ -210,6 +210,36 @@ public class MercadoLivreAdapter implements CanalDeVenda {
         };
     }
 
+    /**
+     * {@inheritDoc}
+     *
+     * <h2>⛔ No Mercado Livre isto deliberadamente NÃO faz nada</h2>
+     *
+     * Em <b>Mercado Envios</b> — que é como a esmagadora maioria das lojas vende no ML — quem
+     * controla o estado do envio é o <b>próprio marketplace</b>: o pedido vira "enviado" quando a
+     * transportadora bipa a etiqueta, e a etiqueta é liberada pela nota fiscal (§2.6). Não existe
+     * "avisar o ML que despachei": a informação vai no sentido contrário.
+     *
+     * <p>⚠️ E a etiqueta depende da <b>NF-e 55</b>, que é a <b>Opção C</b> — hoje travada no
+     * {@code cStat 974}. Enquanto ela não existir, o lojista emite a nota no painel do ML e o
+     * despacho acontece lá.
+     *
+     * <p>⭐ <b>Por que então marcar ENVIADO no ERP importa?</b> Porque a fila de expedição é da
+     * <b>loja</b>: é ela que diz o que já foi separado, o que já saiu e quem despachou (P3). Esse
+     * trabalho é real mesmo quando o marketplace não precisa saber dele.
+     *
+     * <p>⚠️ <b>Não fazer nada é melhor que inventar uma chamada.</b> A alternativa seria chutar um
+     * endpoint que a documentação não descreve para este caso — e, sem sandbox no ML, o primeiro
+     * teste seria em produção, no envio de um lojista de verdade.
+     */
+    @Override
+    public void confirmarEnvio(CredenciaisCanal credenciais, String idExternoPedido,
+                               String idExternoEnvio, String codigoRastreio) {
+        log.debug("Pedido {} despachado no ERP. O Mercado Livre não é avisado: em Mercado Envios "
+                + "quem controla o estado do envio é o próprio marketplace (envio {}).",
+                idExternoPedido, idExternoEnvio);
+    }
+
     // ------------------------------------------------------------------ escrita (R3)
 
     /**
