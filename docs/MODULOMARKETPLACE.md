@@ -960,3 +960,91 @@ plataforma costuma **desativar sozinha** o callback que falha repetidamente. Lig
 passo do painel, não recriação da aplicação.
 
 ✅ Isso **não bloqueia a Opção A**: espelho de estoque e preço é escrita nossa para o ML.
+
+---
+
+## 12. ⏭️ Como testar contra o Mercado Livre de verdade — passo a passo
+
+> **Estado em 2026-08-26:** ⏸️ **adiado.** O escopo A+B (M0–M7) está pronto e **nenhuma chamada
+> real ao Mercado Livre foi feita**. O dono do produto optou por usar **usuário de teste**, e o
+> Evirson vai passar as credenciais depois. Esta seção existe para o teste ser executado sem
+> reconstruir o raciocínio.
+>
+> ✅ Já validado uma vez, em 2026-08-26: o túnel alcança a API (`200` no health), o endpoint de
+> retorno responde pelo túnel (`302`), e a URL de consentimento passa a carregar a `redirect_uri`
+> do túnel. Só falta o Mercado Livre do outro lado.
+
+### 12.1 ⚠️ Por que não dá para testar em `localhost` sem túnel
+
+O ML exige `redirect_uri` **HTTPS público** e a compara **caractere por caractere**. A URI
+registrada no DevCenter é a de **produção** (`https://api.nainer.com.br/...`) — se o teste rodar em
+dev sem trocar nada, o lojista autoriza, o ML devolve o navegador para **produção**, que tem outro
+banco e não conhece o `state`. A volta acusa *"este pedido de conexão não vale mais"*, e a causa
+não aparece em log nenhum do dev.
+
+### 12.2 ⚠️ O ovo e a galinha do usuário de teste
+
+Criar um *test user* é `POST /users/test_user` e **exige um access token do ML** — que vem do
+OAuth, que é o que se quer testar.
+
+⭐ **A saída:** a **primeira** conexão é a própria **MITRYUSCASH** autorizando o app dela mesma no
+ERP. É seguro: essa conta não vende nada, ela só é dona da aplicação. Com o token dela, criam-se os
+usuários de teste.
+
+⚠️ **A conferir no painel:** o formulário do DevCenter foi preenchido com o fluxo **Client
+Credentials DESMARCADO** (§11.2.1). Se o `POST /users/test_user` exigir token de *aplicação* em vez
+de token de *usuário*, vai faltar — é uma caixa para marcar. **Não foi confirmado na doc do ML**;
+descobre-se na primeira chamada, e um `401` ali aponta para isso.
+
+### 12.3 Os passos
+
+**1. Instalar o túnel** (uma vez), no PowerShell — e **reabrir o terminal** depois:
+```
+winget install --id Cloudflare.cloudflared
+```
+
+**2. Ligar o túnel** e deixar o terminal **aberto** (fechar muda o endereço):
+```
+cloudflared tunnel --url http://localhost:8080
+```
+Ele imprime `https://<aleatorio>.trycloudflare.com`.
+
+**3. Apontar o ERP para o túnel** — em `.env` (que está no `.gitignore`), e reiniciar a API:
+```
+NINER_ML_REDIRECT_URI=https://<aleatorio>.trycloudflare.com/api/publico/canais/mercadolivre/retorno
+docker compose up -d api
+```
+⚠️ Conferir dentro do container: `docker exec niner-api sh -c 'echo $NINER_ML_REDIRECT_URI'`.
+
+**4. Trocar a URI de redirect no DevCenter** para exatamente a mesma linha. ⛔ **Anotar a de
+produção antes** — no fim ela volta.
+
+**5. Pré-requisito do produto:** `cfg_permite_estoque_negativo` tem de estar **desligado**
+(Parâmetros do Sistema → Estoque). Marketplace exige controle de estoque (§8.1) e sem isso nem o
+canal é criado.
+
+**6. Conectar a MITRYUSCASH** — `http://localhost:5173` → Canais de Venda → **+ Novo Canal**
+(⚠️ a **empresa é imutável** depois de criada; o estoque publicado sai dela) → **Conectar**.
+✅ Se voltar verde com o código do vendedor na coluna Conta, **o M1 está validado contra o ML real**.
+
+**7. Criar dois usuários de teste** (`POST /users/test_user`): um **vendedor** e um **comprador** —
+precisa dos dois para simular uma compra. ⚠️ Máximo 10 por conta, e **eles expiram**.
+⛔ As senhas vão para `docs/mercadolivre/api.md` (fora do git), nunca para o repositório.
+
+**8. Reconectar o canal com o vendedor de teste**, publicar um anúncio na conta dele pelo painel do
+ML, e **vincular** esse anúncio a um produto do ERP (Canais → Vincular anúncios).
+
+**9. O teste que importa:**
+- mexer no estoque no ERP e **ver a quantidade do anúncio mudar no ML** (⏱️ worker a cada 30 s);
+- comprar com o usuário comprador;
+- ver o pedido em **Frente de Loja → Fila de Expedição** e a venda no Relatório de Vendas.
+
+**10. ⛔ Repor a URI de produção no DevCenter.** Enquanto apontar para o túnel, **produção não
+conecta ninguém**.
+
+### 12.4 O que este teste retira de dúvida
+
+Tudo o que está em código foi verificado contra **WireMock**, que responde o que nós programamos.
+Este roteiro é o que transforma seis blocos de suposição em comportamento medido — e o precedente
+do projeto diz que **vai** haver divergência (o XSD passou e a SEFAZ recusou). Divergência aqui é
+resultado esperado, não fracasso.
