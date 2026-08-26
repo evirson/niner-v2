@@ -13,6 +13,7 @@
 
 | Tela | Rota | Spec |
 |---|---|---|
+| Fila de Expedição | `/expedicao` | `docs/MODULOMARKETPLACE.md` §10.10 |
 | PDV - Vendas | `/pdv` | `docs/telas/pdv.md` · `papeleta-venda.md` |
 | Orçamentos | `/orcamentos` | `docs/telas/orcamento.md` |
 | Pesquisa de Vendas | `/pesquisa-vendas` | `docs/telas/pesquisa-vendas.md` |
@@ -69,6 +70,7 @@
 | Tela | Rota | Spec |
 |---|---|---|
 | Canais de Venda | `/canais` | `docs/MODULOMARKETPLACE.md` |
+| Vincular Anúncios | `/canais/:idCanal/anuncios` | `docs/MODULOMARKETPLACE.md` §10.7 |
 | Minha Conta | `/minha-conta` | `docs/telas/conta-corrente-movimento.md` |
 | Usuários | `/usuarios` | `docs/telas/usuario.md` |
 | Empresas | `/empresas` | `docs/telas/empresa.md` |
@@ -153,6 +155,8 @@ Abrem a partir de uma lista (criar/editar/configurar) e por isso não têm item 
 
 ---
 
-**56 telas em uso** · **6 em construção** · **20 telas-filhas**.
+**58 telas em uso** · **6 em construção** · **20 telas-filhas**.
+
+⚠️ Atualizado em 2026-08-26 com a **Fila de Expedição** e o **Vincular Anúncios** (M2 e M7 do módulo de marketplace).
 
 ⚠️ Sem spec localizada: **Efetivar Balanço** · **Tipo de Carteira**.
