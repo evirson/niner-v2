@@ -541,6 +541,91 @@ Movimentação de Conta Corrente) que ainda não tinham migrado pro `SeletorPlan
 
 ## Linha do tempo
 
+### 2026-08-26 (3) — M3: o saldo do ERP finalmente chega ao anúncio, e a Opção A fica completa
+
+Terceira entrega do dia, e a que transforma a integração em produto: até agora o ERP **conectava**
+(M1) e **vinculava** (M2), mas não publicava nada. **1032 testes verdes** (eram 1023), `tsc -b` limpo.
+
+#### ⛔ Duas coisas faltavam, e a primeira não era óbvia
+
+**`canal.id_empresa` (V067).** `produto_estoque` é **por empresa** e `canal` era por **tenant**.
+Um tenant com 5 filiais não tinha como responder *"5 peças de qual loja?"* — e publicar a soma
+seria pior, prometendo ao comprador um estoque espalhado em cinco endereços. O estudo (§8.3) já
+assumia `canal → empresa` e deixou "confirmar no primeiro uso real"; o primeiro uso real chegou.
+
+⛔ E a empresa é **imutável**: trocá-la faria anúncios já publicados passarem a mostrar o saldo de
+outra filial, sem nada na tela dizendo isso. Quem quiser vender pela outra filial cria outro canal.
+
+#### ⭐ Quem avisa é o BANCO, e a escolha é a mesma do estoque negativo
+
+Debitam ou creditam estoque: o PDV, a transferência, a devolução ao fornecedor, a devolução de
+venda, o **cancelamento de entrada** (de que ninguém lembra), o cancelamento de devolução, o
+balanço e a importação — mais o que vier. Espalhar o "avise o canal" por serviço garante
+**matematicamente** que uma rotina fique de fora, e a que ficar de fora vira anúncio prometendo
+estoque que não existe, em silêncio.
+
+`produto_estoque` é onde o saldo realmente mora, qualquer que seja o caminho — e é lá que o
+gatilho da V067 mora. O `INSERT` no outbox acontece **na mesma transação** do movimento: ou o
+estoque muda e o evento existe, ou nenhum dos dois. Isso é o outbox pattern inteiro (P2).
+
+⚠️ **O caminho comum não paga quase nada:** um `EXISTS` indexado sai antes de tudo quando a loja
+não tem canal conectado — que é a loja típica deste ERP. Enfileirar sempre encheria o outbox de
+eventos que ninguém consome, e o painel de saúde passaria a mostrar fila num dia normal.
+
+#### ⭐ O gatilho de preço só AVISA; quem calcula é o Java
+
+Seria fácil recalcular `anuncio.preco` em SQL, dentro do próprio gatilho. Não faz: `PrecoDoCanal`
+arredonda **HALF_UP**, arredonda **uma vez no fim** e recusa preço nulo. Reescrever isso em plpgsql
+criaria **duas implementações da mesma regra de dinheiro** (P7) — e elas divergem no dia em que só
+uma for corrigida, num centavo que ninguém explica ao lojista.
+
+⚠️ E o gatilho **nem dispara** quando só `preco_oferta` muda: o preço do anúncio ignora a oferta da
+loja (§8.6). Promoção de fim de semana no balcão não derruba o preço no marketplace.
+
+#### ⛔ Duas conversões que só podem errar para um lado
+
+1. **Fracionário vira inteiro para BAIXO.** `qtd_estoque` é `numeric(14,3)` e o ML só entende
+   `available_quantity` inteiro. **2,7 vira 2**, nunca 3.
+2. **Negativo vira zero.** Estoque negativo é permitido no ERP (parâmetro, e nasce ligado — V055),
+   mas "−3 disponíveis" não significa nada num anúncio.
+
+As duas erram de propósito para o lado de **prometer menos**: vender menos do que se tem custa uma
+venda; vender mais custa a reputação do lojista no marketplace, que é o ativo dele.
+
+#### ⚠️ Vincular também enfileira — e é o único ponto em que Java enfileirar é certo
+
+O gatilho reage a mudança de `produto_estoque`, e **vincular não mexe em estoque nenhum**. Sem esse
+disparo, o anúncio recém-vinculado ficaria com o saldo (errado) do ML até a próxima venda daquele
+produto — que pode levar semanas. E o caso comum é o lojista vincular *justamente porque* o número
+lá está errado.
+
+#### ⭐ O teste que quase passou pelo motivo errado
+
+O teste principal — *"mexer no estoque publica o saldo"* — **não provava nada** na primeira versão:
+o evento criado pelo **vincular** já produziria o `PUT` com o saldo atual, mesmo com o gatilho
+desligado. Percebi relendo, e a correção foi **drenar a fila antes** de mexer no estoque: a partir
+dali, qualquer evento só pode ter vindo do gatilho.
+
+⚠️ E foi conferido do jeito que este projeto aprendeu: **desliguei o gatilho de propósito** (um
+`RETURN NEW` antes do `INSERT`), rodei, e o teste reprovou com a mensagem exata *"o gatilho da V067
+não enfileirou o movimento de estoque"*. Depois revertí. É a mesma disciplina de
+`feedback_teste_de_guard_passa_pelo_motivo_errado` — e desta vez o erro era **meu**, não herdado.
+
+#### ⛔ O que NÃO foi coberto, dito de propósito
+
+- **Nenhum saldo chegou a um anúncio de verdade.** Tudo contra WireMock, pela terceira vez no dia.
+- ⚠️ **A chamada HTTP ao canal acontece dentro da transação do lote do outbox.** É o desenho que já
+  existia (a transação segura os locks do `SKIP LOCKED`), mas com lote de 25 e timeout de 30 s o
+  pior caso segura uma conexão do pool por minutos. Registrado como risco conhecido; não
+  redesenhado aqui.
+- ⚠️ **Eventos repetidos não são deduplicados**, e é deliberado: dedupe por índice parcial sobre
+  `PENDENTE` abriria uma janela real de **perda** — o worker mantém o status `PENDENTE` enquanto
+  processa, então uma mudança de saldo nesse intervalo seria engolida e o ML ficaria com o valor
+  antigo, sem evento pendente para corrigir. Publicar duas vezes é desperdício; perder a última
+  mudança é o defeito que o módulo existe para não ter.
+- **A tela de preço manual não existe** — a coluna `preco_manual` (V064) é respeitada pelo gatilho
+  e pelo manipulador, mas nenhuma tela a liga ainda.
+
 ### 2026-08-26 (2) — M2: vincular anúncio ↔ produto, e a descoberta de que o outbox está desligado dos dois lados
 
 Segunda entrega do dia. **1023 testes verdes** (eram 1011), `tsc -b` limpo.

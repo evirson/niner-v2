@@ -180,6 +180,26 @@ public class AnuncioRepositorio {
                         """)
                 .params(idCanal, idVariacao, idExterno, idExternoVariacao, preco)
                 .update();
+
+        // ⭐ Publica o saldo AGORA, na mesma transação do vínculo.
+        //
+        // Sem isto, um anúncio recém-vinculado ficaria com o saldo que estiver no Mercado Livre
+        // até a próxima venda daquele produto — que pode levar semanas. E o pior caso é o comum:
+        // o lojista vincula justamente porque o número lá está errado.
+        //
+        // ⚠️ O gatilho da V067 não cobre este caso: ele reage a mudança de `produto_estoque`, e
+        // vincular não mexe em estoque nenhum. É o único ponto em que enfileirar por Java é certo.
+        jdbc.sql("""
+                        INSERT INTO outbox_evento (id_tenant, tipo, agregado_id, payload)
+                        SELECT plataforma.tenant_atual(), 'ESTOQUE_ATUALIZADO',
+                               ? || ':' || c.id_empresa,
+                               jsonb_build_object('idVariacao', CAST(? AS bigint),
+                                                  'idEmpresa', c.id_empresa)
+                          FROM canal c
+                         WHERE c.id_tenant = plataforma.tenant_atual() AND c.id_canal = ?
+                        """)
+                .params(idVariacao, idVariacao, idCanal)
+                .update();
     }
 
     /** Já existe vínculo desta variação do ERP neste canal? Decide QUAL mensagem de conflito dar. */

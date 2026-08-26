@@ -56,6 +56,13 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @Import(TestcontainersConfiguration.class)
 class MercadoLivreOAuthTest {
 
+
+    /** A empresa em que o usuário entrou — o canal precisa dela desde a V067 (estoque é por empresa). */
+    private static long idEmpresaDo(String token) {
+        String payload = new String(java.util.Base64.getUrlDecoder()
+                .decode(token.substring(token.indexOf('.') + 1, token.lastIndexOf('.'))));
+        return ((Number) com.jayway.jsonpath.JsonPath.read(payload, "$.eid")).longValue();
+    }
     /** ⚠️ Estático e iniciado aqui: {@code @DynamicPropertySource} roda antes do contexto subir. */
     private static final WireMockServer ML = new WireMockServer(
             com.github.tomakehurst.wiremock.core.WireMockConfiguration.options().dynamicPort());
@@ -138,7 +145,8 @@ class MercadoLivreOAuthTest {
                         .post("/api/v1/canais/MERCADO_LIVRE")
                         .header("Authorization", "Bearer " + token)
                         .contentType(APPLICATION_JSON)
-                        .content("{\"nome\":\"%s\",\"percPreco\":0}".formatted(nome)))
+                        .content("{\"nome\":\"%s\",\"percPreco\":0,\"idEmpresa\":%d}"
+                                .formatted(nome, idEmpresaDo(token))))
                 .andExpect(status().isCreated())
                 .andReturn().getResponse().getContentAsString();
         return ((Number) JsonPath.read(resp, "$.idCanal")).longValue();

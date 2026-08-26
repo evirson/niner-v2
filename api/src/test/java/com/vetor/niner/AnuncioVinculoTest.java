@@ -47,6 +47,13 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @Import(TestcontainersConfiguration.class)
 class AnuncioVinculoTest {
 
+
+    /** A empresa em que o usuário entrou — o canal precisa dela desde a V067 (estoque é por empresa). */
+    private static long idEmpresaDo(String token) {
+        String payload = new String(java.util.Base64.getUrlDecoder()
+                .decode(token.substring(token.indexOf('.') + 1, token.lastIndexOf('.'))));
+        return ((Number) com.jayway.jsonpath.JsonPath.read(payload, "$.eid")).longValue();
+    }
     private static final WireMockServer ML = new WireMockServer(
             com.github.tomakehurst.wiremock.core.WireMockConfiguration.options().dynamicPort());
 
@@ -116,7 +123,8 @@ class AnuncioVinculoTest {
         String resp = mvc.perform(post2("/api/v1/canais/MERCADO_LIVRE")
                         .header("Authorization", "Bearer " + token)
                         .contentType(APPLICATION_JSON)
-                        .content("{\"nome\":\"ML VINCULO\",\"percPreco\":%s}".formatted(percPreco)))
+                        .content("{\"nome\":\"ML VINCULO\",\"percPreco\":%s,\"idEmpresa\":%d}"
+                                .formatted(percPreco, idEmpresaDo(token))))
                 .andExpect(status().isCreated())
                 .andReturn().getResponse().getContentAsString();
         long idCanal = ((Number) JsonPath.read(resp, "$.idCanal")).longValue();
@@ -453,7 +461,8 @@ class AnuncioVinculoTest {
         ligarControleDeEstoque(token);
         String resp = mvc.perform(post2("/api/v1/canais/MERCADO_LIVRE")
                         .header("Authorization", "Bearer " + token).contentType(APPLICATION_JSON)
-                        .content("{\"nome\":\"ML SEM CONEXAO\",\"percPreco\":0}"))
+                        .content("{\"nome\":\"ML SEM CONEXAO\",\"percPreco\":0,\"idEmpresa\":%d}"
+                                .formatted(idEmpresaDo(token))))
                 .andExpect(status().isCreated())
                 .andReturn().getResponse().getContentAsString();
         long idCanal = ((Number) JsonPath.read(resp, "$.idCanal")).longValue();

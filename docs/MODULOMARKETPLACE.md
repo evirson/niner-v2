@@ -1,8 +1,8 @@
 # Estudo: Integração com Marketplaces — Mercado Livre (primeiro canal)
 
-> **Status: EM IMPLEMENTAÇÃO.** As decisões da §4 estão fechadas (§8) e três blocos já
-> existem em código (M0, M1 e M2) — ver o estado real na **§10**, que é a seção a acreditar quando esta divergir.
-> Escrito em 2026-08-25 como estudo; cabeçalho corrigido em 2026-08-26, quando M1 e M2 entraram.
+> **Status: EM IMPLEMENTAÇÃO.** As decisões da §4 estão fechadas (§8) e a **Opção A está completa** — os blocos M0 a M4
+> existem em código — ver o estado real na **§10**, que é a seção a acreditar quando esta divergir.
+> Escrito em 2026-08-25 como estudo; cabeçalho corrigido em 2026-08-26, quando M1, M2 e M3 entraram.
 > Requisitos cobertos: R3, R5, R6, R7 · Princípios: P1, P2, P3, P8
 >
 > ⚠️ **Nenhuma chamada real ao Mercado Livre foi feita até hoje.** Tudo o que está verificado, está
@@ -43,7 +43,7 @@ E os blocos de código reaproveitáveis também existem, todos já exercitados p
 
 **O que faltava (julho):** nenhuma linha de domínio em `canais/`, `pedidos/`, `precos/`, `integracao/`
 — os quatro pacotes tinham só `package-info.java`. ✅ Hoje `canais/` e `integracao/mercadolivre/`
-existem (M0–M2); `pedidos/` e `precos/` continuam vazios.
+existem (M0–M4); `pedidos/` e `precos/` continuam vazios — são o M5–M7.
 
 ---
 
@@ -381,8 +381,8 @@ verificável, e o que depende de terceiro isolado no fim.
 | **M0** | Migration `origem_venda += MARKETPLACE`; interface `CanalDeVenda`; modelo de `canal` com credenciais cifradas; **os dois guardas de estoque (§8.1)** | nada ✅ |
 | **M1** | ✅ **FEITO 2026-08-26.** OAuth do ML: iniciar (`/api/v1`, autenticado — ver §10.3), retorno com `state` (`/api/publico`), refresh automático do token de 6 h | `client_id` da Vetor ✅ |
 | **M2** | ✅ **FEITO 2026-08-26.** Leitura: listar anúncios do lojista, tela de **vincular anúncio ↔ variação** (R6), com sugestão por SKU | M1 ✅ |
-| **M3** | Escrita: `atualizarEstoque` via outbox, honrando `429` e **lendo o anúncio antes de escrever** (armadilha das variações, §2.4) | M2 |
-| **M4** | Painel de saúde: fila de erros, dead-letter, reprocessar (R7) | M3 |
+| **M3** | ✅ **FEITO 2026-08-26.** Escrita: `atualizarEstoque` via outbox, honrando `429` e **lendo o anúncio antes de escrever** (armadilha das variações, §2.4) | M2 |
+| **M4** | ✅ **FEITO.** Painel de saúde: fila de erros, dead-letter, reprocessar (R7) | M3 |
 | **M5** | Webhook `orders_v2` + polling de segurança; importação idempotente | M1 |
 | **M6** | Pedido vira `venda` (origem MARKETPLACE, sem caixa, sem comissão); reserva no recebido (ADR-004) | M5 |
 | **M7** | Fila de expedição (R5): estados, baixa de estoque no envio, cancelamento devolve reserva | M6 |
@@ -506,7 +506,7 @@ decisão está protegida só por javadoc.
 
 ## 10. Estado da implementação (2026-08-26)
 
-**M0, M1, M2 e M4 fechados.** Até 25/08 os blocos foram escolhidos para não depender do
+**M0 a M4 fechados** — a Opção A está completa. Até 25/08 os blocos foram escolhidos para não depender do
 `client_id` (que a MITRYUSCASH ainda estava providenciando); com ele em mãos em 26/08, o OAuth (M1)
 e o vínculo de anúncios (M2) entraram no mesmo dia.
 
@@ -522,11 +522,11 @@ vincula, mas **não publica nada** (§10.5).
 | **M1 — OAuth** | ✅ **2026-08-26** | `V065`, `canais/EstadoOAuthRepositorio`, `integracao/mercadolivre/MercadoLivreOAuth*` |
 | **M2** — vincular anúncio ↔ variação (R6) | ✅ **2026-08-26** | `V066`, `canais/Anuncio*`, `web/.../VincularAnuncios.tsx` |
 | **M4** — painel de saúde | ✅ | `CanaisVenda.tsx` |
-| **M3** — escrita de estoque/preço | ⏭️ **o próximo** | ver §10.5 |
+| **M3** — escrita de estoque/preço | ✅ **2026-08-26** | `V067`, `integracao/Sincronizacao*` |
 | M5–M7 — pedidos, fila de expedição | ⏭️ | depende do M1 ✅ |
 | M8 — NF-e 55 | ⏭️ | depende do `cStat 974` |
 
-**1023 testes verdes**, `tsc -b` limpo.
+**1032 testes verdes**, `tsc -b` limpo.
 
 
 ### 10.1 As decisões de implementação que valem revisão
@@ -579,8 +579,20 @@ vínculos de anúncio ficam: são trabalho do lojista, e desconexão temporária
   falhar não provou nada.
 - **Nenhuma tela foi usada com um canal conectado de verdade.** O estado `CONECTADO` já é
   alcançável pelo OAuth (M1), mas só contra WireMock; nenhum lojista real autorizou nada ainda.
-- **O outbox continua desligado dos dois lados** — ver §10.5. Conectar e vincular funcionam;
-  publicar saldo no ML é o M3.
+- ✅ **O outbox foi ligado nas duas pontas** (M3, §10.5) — mas **contra WireMock**. Nenhum saldo
+  chegou a um anúncio de verdade.
+- ⚠️ **A chamada HTTP ao canal acontece DENTRO da transação do lote do outbox.** É o desenho que já
+  existia: `OutboxProcessador.processarLoteDoTenantCorrente()` é `@Transactional` porque é a
+  transação que segura os locks do `SKIP LOCKED`. Com lote de 25 e timeout de 30 s por chamada, o
+  pior caso segura uma conexão do pool por vários minutos. Não foi redesenhado no M3 — fica
+  registrado como risco conhecido, a medir quando houver volume real.
+- ⚠️ **Eventos repetidos não são deduplicados.** Uma importação que mexe várias vezes na mesma
+  variação enfileira um evento por vez. É **deliberado**: dedupe por índice parcial sobre
+  `PENDENTE` abriria uma janela real de perda — o worker mantém o status `PENDENTE` enquanto
+  processa, então uma mudança de saldo que chegasse nesse intervalo seria engolida por
+  `ON CONFLICT DO NOTHING` e o ML ficaria com o valor antigo, sem evento pendente para corrigir.
+  Publicar duas vezes é desperdício; perder a última mudança é o defeito que o módulo existe para
+  não ter.
 
 ---
 ### 10.3 ⚠️ O M1 desviou da §9 em um ponto — e o desvio é o certo
@@ -620,17 +632,41 @@ Duas saídas, e é decisão do dono do produto:
    de produção"* — **não conferido na tela**), e exige **hostname fixo**: túnel grátis muda de
    endereço a cada restart, e casamento exato significa que todo restart quebraria o login.
 
-### 10.5 ⛔ O outbox está pronto e DESLIGADO dos dois lados
+### 10.5 ✅ O outbox foi ligado nas duas pontas (M3)
 
-Medido em 2026-08-26, antes do M2: **ninguém chama `OutboxRepositorio.enfileirar()`** e **nenhum
-`ManipuladorDeEvento` está registrado**. O motor funciona (worker, retry, dead-letter, painel), mas
-um evento que chegasse à fila hoje viraria dead-letter com *"nenhum manipulador registrado"*.
+**Medido em 2026-08-26, antes do M3:** ninguém chamava `OutboxRepositorio.enfileirar()` e **nenhum
+`ManipuladorDeEvento` estava registrado**. O motor funcionava (worker, retry, dead-letter, painel),
+mas um evento que chegasse à fila viraria dead-letter com *"nenhum manipulador registrado"* — e o
+painel mostrando *"0 pendentes, 0 erros"* parecia saúde quando era **ausência de trabalho**.
 
-Ou seja: **conectar** (M1) e **vincular** (M2) funcionam; **sincronizar** ainda não existe. É esse
-o buraco que o **M3** fecha, e são duas pontas:
+As duas pontas fechadas:
 
-1. enfileirar quando o saldo (ou o preço) muda no ERP;
-2. registrar o manipulador que chama `CanalDeVenda.atualizarEstoque` / `atualizarPreco`.
+**1. Quem avisa — gatilho no banco (V067), não nos serviços.** Mesma decisão do
+`cfg_permite_estoque_negativo` (V054) e pelo mesmo motivo: debitam ou creditam estoque o PDV, a
+transferência, a devolução ao fornecedor, a devolução de venda, o **cancelamento de entrada** (de
+que ninguém lembra), o cancelamento de devolução, o balanço e a importação — mais o que vier.
+Espalhar o "avise o canal" por serviço garante matematicamente que uma rotina fique de fora, e a
+que ficar de fora vira anúncio prometendo estoque que não existe, **em silêncio**.
+`produto_estoque` é onde o saldo realmente mora, qualquer que seja o caminho — e o INSERT no
+outbox acontece **na mesma transação** do movimento, que é o outbox pattern inteiro (P2).
+
+⭐ O gatilho de **preço** só avisa; **quem calcula é o Java**. Recalcular `anuncio.preco` em SQL
+criaria duas implementações da mesma regra de dinheiro (P7) — `PrecoDoCanal` arredonda HALF_UP,
+uma vez no fim, e recusa preço nulo. Elas divergiriam no dia em que só uma fosse corrigida, num
+centavo que ninguém explica ao lojista.
+
+**2. Quem executa** — `SincronizacaoEstoqueManipulador` e `SincronizacaoPrecoManipulador`.
+
+⚠️ **Duas conversões que só podem errar para um lado:** saldo fracionário
+(`numeric(14,3)`) vira inteiro **para baixo** — 2,7 → **2**, porque arredondar para cima promete
+uma peça que não existe; e saldo negativo (permitido no ERP) vira **zero**, porque "−3
+disponíveis" não significa nada num anúncio. As duas erram para o lado de **prometer menos**:
+vender menos do que se tem custa uma venda, vender mais custa a reputação do lojista.
+
+⚠️ **Vincular também enfileira**, e é o único ponto em que enfileirar por Java é certo: o gatilho
+reage a mudança de `produto_estoque`, e vincular não mexe em estoque nenhum. Sem isso o anúncio
+recém-vinculado ficaria com o saldo errado do ML até a próxima venda — e o caso comum é o lojista
+vincular **justamente porque** o número lá está errado.
 
 ### 10.6 ⚠️ Uma decisão de produto tomada no M2, à espera de confirmação
 

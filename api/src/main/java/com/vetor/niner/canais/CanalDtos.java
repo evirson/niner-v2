@@ -24,7 +24,7 @@ public final class CanalDtos {
      * CSRT e do certificado digital.
      */
     public record CanalResponse(
-            long idCanal, String tipo, String tipoRotulo, String nome, String status,
+            long idCanal, String tipo, String tipoRotulo, String nome, String status, long idEmpresa,
             String contaExterna, BigDecimal percPreco, int anunciosVinculados,
             OffsetDateTime criadoEm, OffsetDateTime atualizadoEm) {
     }
@@ -35,6 +35,9 @@ public final class CanalDtos {
      */
     public record CanalRequest(
             @NotBlank @Size(max = 60) String nome,
+            /** ⚠️ De qual filial sai o estoque publicado. Obrigatório: `produto_estoque` é POR
+             *  EMPRESA, então sem isto "5 peças" não responde "de qual loja" (V067). */
+            @jakarta.validation.constraints.NotNull @jakarta.validation.constraints.Positive Long idEmpresa,
             /**
              * ⚠️ Aceita <b>negativo</b>: decisão do dono do produto em 2026-08-25, o preço do
              * marketplace pode ser menor que o da loja física. Os limites espelham o CHECK da

@@ -13,6 +13,14 @@ export interface Canal {
   tipoRotulo: string
   nome: string
   status: 'CONECTADO' | 'DESCONECTADO' | 'ERRO'
+  /**
+   * De qual empresa (filial) sai o estoque publicado neste canal.
+   *
+   * ⚠️ Obrigatório e **imutável**: `produto_estoque` é por empresa, então sem isto "5 peças" não
+   * responde "de qual loja". Trocar depois faria anúncios já publicados passarem a mostrar o
+   * saldo de outra filial — por isso o servidor recusa a troca (V067).
+   */
+  idEmpresa: number
   /** Id do vendedor no canal. `null` enquanto não conectado. */
   contaExterna: string | null
   /**
@@ -28,6 +36,8 @@ export interface Canal {
 export interface CanalRequest {
   nome: string
   percPreco: number
+  /** ⚠️ Só muda na criação — o servidor recusa a troca num canal já criado. */
+  idEmpresa: number
 }
 
 /** Uma sincronização que não passou. `erro` vem cru do canal, de propósito — é a pista do suporte. */

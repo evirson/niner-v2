@@ -17,6 +17,7 @@ import {
   reprocessarEvento,
   type Canal,
 } from '../../lib/canais'
+import { listarEmpresas } from '../../lib/empresas'
 import { completarPercentual, desmascararPercentual, mascararPercentual } from '../../lib/masks'
 import { maiusculas } from '../../lib/texto'
 
@@ -63,8 +64,11 @@ export default function CanaisVenda() {
   const [nome, setNome] = useState('')
   const [percTexto, setPercTexto] = useState('0,00')
   const [criando, setCriando] = useState(false)
+  const [idEmpresa, setIdEmpresa] = useState<number | null>(null)
   const [params, setParams] = useSearchParams()
   const navigate = useNavigate()
+
+  const { data: empresas } = useQuery({ queryKey: ['empresas'], queryFn: listarEmpresas })
 
   const { data: canais, isLoading } = useQuery({ queryKey: ['canais'], queryFn: listarCanais })
   const { data: saude } = useQuery({
@@ -92,7 +96,13 @@ export default function CanaisVenda() {
 
   const salvar = useMutation({
     mutationFn: async () => {
-      const payload = { nome: maiusculas(nome), percPreco: desmascararPercentual(percTexto) }
+      const payload = {
+        nome: maiusculas(nome),
+        percPreco: desmascararPercentual(percTexto),
+        // Na edição manda a mesma empresa de volta: o servidor recusa a troca, e mandar outra
+        // coisa transformaria um salvar comum num 409 que o lojista não provocou.
+        idEmpresa: idEmpresa ?? (empresas?.[0]?.idEmpresa ?? 0),
+      }
       if (emEdicao === null) return criarCanal('MERCADO_LIVRE', payload)
       return atualizarCanal(emEdicao, payload)
     },
@@ -176,6 +186,9 @@ export default function CanaisVenda() {
     setEmEdicao(null)
     setNome('')
     setPercTexto('0,00')
+    // Primeira empresa como padrão. A maioria das lojas tem uma só, e quem tem mais troca no
+    // seletor — arbitrar aqui é melhor que abrir o formulário com um campo obrigatório vazio.
+    setIdEmpresa(empresas?.[0]?.idEmpresa ?? null)
   }
 
   function abrirEdicao(canal: Canal) {
@@ -183,6 +196,7 @@ export default function CanaisVenda() {
     setEmEdicao(canal.idCanal)
     setNome(canal.nome)
     setPercTexto(mascararPercentual(String(canal.percPreco).replace('.', ',')))
+    setIdEmpresa(canal.idEmpresa)
   }
 
   return (
@@ -305,6 +319,23 @@ export default function CanaisVenda() {
                     maxLength={60}
                     onChange={(e) => setNome(maiusculas(e.target.value))}
                   />
+                </div>
+                {/* ⚠️ Só na criação: o servidor recusa trocar a empresa de um canal já criado,
+                    porque anúncios já vinculados passariam a publicar o saldo de outra filial. */}
+                <div>
+                  <label htmlFor="canal-empresa">Empresa (de onde sai o estoque)</label>
+                  <select
+                    id="canal-empresa"
+                    value={idEmpresa ?? ''}
+                    disabled={emEdicao !== null}
+                    onChange={(e) => setIdEmpresa(Number(e.target.value))}
+                  >
+                    {(empresas ?? []).map((e) => (
+                      <option key={e.idEmpresa} value={e.idEmpresa}>
+                        {e.nomeFantasia ?? e.razaoSocial}
+                      </option>
+                    ))}
+                  </select>
                 </div>
                 <div>
                   <label htmlFor="canal-perc">Ajuste de preço (%)</label>

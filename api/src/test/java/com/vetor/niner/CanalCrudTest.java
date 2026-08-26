@@ -29,6 +29,13 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @Import(TestcontainersConfiguration.class)
 class CanalCrudTest {
 
+
+    /** A empresa em que o usuário entrou — o canal precisa dela desde a V067 (estoque é por empresa). */
+    private static long idEmpresaDo(String token) {
+        String payload = new String(java.util.Base64.getUrlDecoder()
+                .decode(token.substring(token.indexOf('.') + 1, token.lastIndexOf('.'))));
+        return ((Number) com.jayway.jsonpath.JsonPath.read(payload, "$.eid")).longValue();
+    }
     @Autowired
     MockMvc mvc;
 
@@ -73,7 +80,8 @@ class CanalCrudTest {
         String resp = mvc.perform(post("/api/v1/canais/MERCADO_LIVRE")
                         .header("Authorization", "Bearer " + token)
                         .contentType(APPLICATION_JSON)
-                        .content("{\"nome\":\"%s\",\"percPreco\":%s}".formatted(nome, percPreco)))
+                        .content("{\"nome\":\"%s\",\"percPreco\":%s,\"idEmpresa\":%d}"
+                                .formatted(nome, percPreco, idEmpresaDo(token))))
                 .andExpect(status().isCreated())
                 .andReturn().getResponse().getContentAsString();
         return ((Number) JsonPath.read(resp, "$.idCanal")).longValue();
@@ -86,7 +94,8 @@ class CanalCrudTest {
 
         mvc.perform(post("/api/v1/canais/MERCADO_LIVRE").header("Authorization", "Bearer " + token)
                         .contentType(APPLICATION_JSON)
-                        .content("{\"nome\":\"minha loja no ml\",\"percPreco\":18.00}"))
+                        .content("{\"nome\":\"minha loja no ml\",\"percPreco\":18.00,\"idEmpresa\":%d}"
+                                .formatted(idEmpresaDo(token))))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.tipo").value("MERCADO_LIVRE"))
                 .andExpect(jsonPath("$.tipoRotulo").value("Mercado Livre"))
@@ -108,7 +117,8 @@ class CanalCrudTest {
 
         mvc.perform(post("/api/v1/canais/MERCADO_LIVRE").header("Authorization", "Bearer " + token)
                         .contentType(APPLICATION_JSON)
-                        .content("{\"nome\":\"ML\",\"percPreco\":0}"))
+                        .content("{\"nome\":\"ML\",\"percPreco\":0,\"idEmpresa\":%d}"
+                                .formatted(idEmpresaDo(token))))
                 .andExpect(status().isConflict());
     }
 
@@ -120,7 +130,8 @@ class CanalCrudTest {
 
         mvc.perform(post("/api/v1/canais/MERCADO_LIVRE").header("Authorization", "Bearer " + token)
                         .contentType(APPLICATION_JSON)
-                        .content("{\"nome\":\"ML PROMO\",\"percPreco\":-12.50}"))
+                        .content("{\"nome\":\"ML PROMO\",\"percPreco\":-12.50,\"idEmpresa\":%d}"
+                                .formatted(idEmpresaDo(token))))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.percPreco").value(-12.50));
     }
@@ -133,7 +144,8 @@ class CanalCrudTest {
         // 1500 é o dedo escorregado de quem queria 15,00 — o CHECK da V064 e o DTO barram os dois.
         mvc.perform(post("/api/v1/canais/MERCADO_LIVRE").header("Authorization", "Bearer " + token)
                         .contentType(APPLICATION_JSON)
-                        .content("{\"nome\":\"ML\",\"percPreco\":1500}"))
+                        .content("{\"nome\":\"ML\",\"percPreco\":1500,\"idEmpresa\":%d}"
+                                .formatted(idEmpresaDo(token))))
                 .andExpect(status().isBadRequest());
     }
 

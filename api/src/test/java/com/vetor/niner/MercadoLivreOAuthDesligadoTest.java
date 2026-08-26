@@ -30,6 +30,13 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @Import(TestcontainersConfiguration.class)
 class MercadoLivreOAuthDesligadoTest {
 
+
+    /** A empresa em que o usuário entrou — o canal precisa dela desde a V067 (estoque é por empresa). */
+    private static long idEmpresaDo(String token) {
+        String payload = new String(java.util.Base64.getUrlDecoder()
+                .decode(token.substring(token.indexOf('.') + 1, token.lastIndexOf('.'))));
+        return ((Number) com.jayway.jsonpath.JsonPath.read(payload, "$.eid")).longValue();
+    }
     @Autowired
     MockMvc mvc;
 
@@ -58,7 +65,8 @@ class MercadoLivreOAuthDesligadoTest {
         String canal = mvc.perform(post("/api/v1/canais/MERCADO_LIVRE")
                         .header("Authorization", "Bearer " + token)
                         .contentType(APPLICATION_JSON)
-                        .content("{\"nome\":\"ML DESLIGADO\",\"percPreco\":0}"))
+                        .content("{\"nome\":\"ML DESLIGADO\",\"percPreco\":0,\"idEmpresa\":%d}"
+                                .formatted(idEmpresaDo(token))))
                 .andExpect(status().isCreated())
                 .andReturn().getResponse().getContentAsString();
         long idCanal = ((Number) JsonPath.read(canal, "$.idCanal")).longValue();

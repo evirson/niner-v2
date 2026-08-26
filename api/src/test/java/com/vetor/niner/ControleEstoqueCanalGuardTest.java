@@ -73,12 +73,14 @@ class ControleEstoqueCanalGuardTest {
                 """.formatted(permiteEstoqueNegativo);
     }
 
+    /** ⚠️ `id_empresa` é obrigatório desde a V067: estoque é por empresa, e o canal diz de qual. */
     private void criarCanalConectado(long idTenant) {
         jdbc.sql("""
-                        INSERT INTO canal (id_tenant, tipo, nome, status)
-                        VALUES (?, 'MERCADO_LIVRE', 'Mercado Livre', 'CONECTADO')
+                        INSERT INTO canal (id_tenant, id_empresa, tipo, nome, status)
+                        SELECT ?, min(e.id_empresa), 'MERCADO_LIVRE', 'Mercado Livre', 'CONECTADO'
+                          FROM empresa e WHERE e.id_tenant = ?
                         """)
-                .params(idTenant).update();
+                .params(idTenant, idTenant).update();
     }
 
     // ------------------------------------------------------------------ guarda 1: conectar canal
@@ -160,9 +162,10 @@ class ControleEstoqueCanalGuardTest {
         String token = assinarNovoTenant("g2-desconectado");
         long idTenant = idTenantDo(token);
         TenantContext.comTenant(idTenant, () -> jdbc.sql("""
-                        INSERT INTO canal (id_tenant, tipo, nome, status)
-                        VALUES (?, 'MERCADO_LIVRE', 'ML abandonado', 'DESCONECTADO')
-                        """).params(idTenant).update());
+                        INSERT INTO canal (id_tenant, id_empresa, tipo, nome, status)
+                        SELECT ?, min(e.id_empresa), 'MERCADO_LIVRE', 'ML abandonado', 'DESCONECTADO'
+                          FROM empresa e WHERE e.id_tenant = ?
+                        """).params(idTenant, idTenant).update());
 
         // Integração abandonada não publica saldo em lugar nenhum; prender o lojista por causa
         // dela seria travá-lo numa configuração por um canal que ele já largou.

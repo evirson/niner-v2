@@ -39,7 +39,7 @@ public class CanalService {
         exigirAdmin(jwt);
         return jdbc.sql("""
                         SELECT c.id_canal, c.tipo::text AS tipo, c.nome, c.status::text AS status,
-                               c.perc_preco, c.criado_em, c.atualizado_em,
+                               c.id_empresa, c.perc_preco, c.criado_em, c.atualizado_em,
                                c.credenciais ->> 'contaExterna' AS conta_externa,
                                (SELECT count(*) FROM anuncio a
                                  WHERE a.id_tenant = c.id_tenant AND a.id_canal = c.id_canal)
@@ -52,7 +52,7 @@ public class CanalService {
                     String tipo = rs.getString("tipo");
                     return new CanalResponse(
                             rs.getLong("id_canal"), tipo, TipoCanal.valueOf(tipo).rotulo(),
-                            rs.getString("nome"), rs.getString("status"),
+                            rs.getString("nome"), rs.getString("status"), rs.getLong("id_empresa"),
                             rs.getString("conta_externa"), rs.getBigDecimal("perc_preco"),
                             rs.getInt("anuncios_vinculados"),
                             rs.getObject("criado_em", OffsetDateTime.class),
@@ -75,20 +75,46 @@ public class CanalService {
         exigirAdmin(jwt);
         guardaEstoque.exigirControleDeEstoqueLigado();
 
+        // ⚠️ A empresa é conferida contra o tenant do chamador. A FK composta da V067 já barraria
+        // um id de outro tenant, mas o erro que ela produz é 409 "registro em uso" — genérico e
+        // sobre exclusão, que manda o diagnóstico para o lado errado (2026-08-20).
+        Integer daEmpresa = jdbc.sql("""
+                        SELECT count(*) FROM empresa
+                         WHERE id_tenant = plataforma.tenant_atual() AND id_empresa = ?
+                        """)
+                .params(req.idEmpresa()).query(Integer.class).single();
+        if (daEmpresa == null || daEmpresa == 0) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Empresa não encontrada.");
+        }
+
         long id = jdbc.sql("""
-                        INSERT INTO canal (id_tenant, tipo, nome, status, perc_preco)
-                        VALUES (plataforma.tenant_atual(), CAST(? AS tipo_canal), ?, 'DESCONECTADO', ?)
+                        INSERT INTO canal (id_tenant, id_empresa, tipo, nome, status, perc_preco)
+                        VALUES (plataforma.tenant_atual(), ?, CAST(? AS tipo_canal), ?, 'DESCONECTADO', ?)
                         RETURNING id_canal
                         """)
-                .params(tipo.name(), req.nome().toUpperCase(java.util.Locale.ROOT), req.percPreco())
+                .params(req.idEmpresa(), tipo.name(),
+                        req.nome().toUpperCase(java.util.Locale.ROOT), req.percPreco())
                 .query(Long.class)
                 .single();
         return buscar(jwt, id);
     }
 
+    /**
+     * ⛔ <b>A empresa do canal não pode ser trocada.</b> Trocá-la mudaria, de um instante para o
+     * outro, <i>qual estoque</i> abastece anúncios que já estão publicados — os saldos da filial
+     * nova iriam para anúncios vinculados pensando na antiga, sem nada na tela dizendo isso. Quem
+     * quiser vender pela outra filial cria outro canal.
+     */
     @Transactional
     public CanalResponse atualizar(Jwt jwt, long idCanal, CanalRequest req) {
         exigirAdmin(jwt);
+        CanalResponse atual = buscar(jwt, idCanal);
+        if (req.idEmpresa() != null && req.idEmpresa() != atual.idEmpresa()) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Não é possível trocar a empresa de um canal já criado: os anúncios vinculados "
+                            + "passariam a publicar o estoque de outra loja. Crie outro canal para a "
+                            + "outra empresa.");
+        }
         int linhas = jdbc.sql("""
                         UPDATE canal SET nome = ?, perc_preco = ?, atualizado_em = now()
                          WHERE id_tenant = plataforma.tenant_atual() AND id_canal = ?
