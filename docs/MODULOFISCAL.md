@@ -1387,7 +1387,7 @@ maiúsculas nos campos de texto, seção de auditoria (`InfoRegistro.tsx`) no fi
 | `fiscal.perfil` | Perfis Fiscais | ADMIN | CRUD de perfil + regras por UF/destinatário/operação. Padrão de cadastro |
 | **`fiscal.conformidade`** 🆕 | Conformidade Fiscal | ADMIN | **Antes de ligar o fiscal:** lista o que impede emitir — produtos sem NCM/unidade/origem/perfil, clientes sem município IBGE, empresa sem certificado ou sem CNAE. Com contagem, filtro e link para a tela de correção. É a diferença entre ligar o fiscal numa segunda-feira e descobrir os problemas no caixa |
 | `fiscal.documentos` | Documentos Fiscais | ADMIN + OPERADOR | Lista com popup de filtros; ver XML, DANFCE/DANFE, reprocessar, cancelar, consultar na SEFAZ. Mostra também os `NAO_EMITIDO` (§9.1) — ⚠️ estes **não têm série, número nem chave**, ver §12.1 |
-| `fiscal.download` | Download de XML | ADMIN | ZIP por período com progresso ao vivo (§11.2) |
+| `fiscal.download` ✅ | **Exportação de XML em Lote** | ADMIN | ✅ **Implementada em 2026-08-26** como `/fiscal/exportacao-xml` — ⚠️ na versão **síncrona**, não a assíncrona com progresso ao vivo que esta linha previa. Ver `docs/telas/exportacao-xml-lote.md` |
 | `fiscal.inutilizacao` | Inutilização de Numeração | ADMIN | Faixa + justificativa; detecta buracos sozinho |
 | `fiscal.contingencia` | Painel de Contingência | ADMIN | Estado, fila pendente, entrar/sair manualmente |
 | `catalogo.produto` | *(alteração)* | — | Seção fiscal: unidade, perfil, CEST, origem, unidade tributável |
@@ -1421,8 +1421,14 @@ POST     /api/v1/fiscal/nfe/devolucao                       { idDevolucao }
 POST     /api/v1/fiscal/inutilizacoes
 GET      /api/v1/fiscal/status-sefaz/{idEmpresa}
 POST     /api/v1/fiscal/contingencia/{entrar|sair}
+⚠️ NÃO IMPLEMENTADOS — o desenho assíncrono abaixo continua sendo o caminho para quando o teto de
+   2.000 documentos por parte virar limitação real, mas NÃO é o que existe hoje:
 POST     /api/v1/fiscal/download                            (assíncrono, devolve idJob)
 GET      /api/v1/fiscal/download/progresso/{idJob}
+
+✅ O QUE EXISTE desde 2026-08-26 (síncrono, particionado — docs/telas/exportacao-xml-lote.md):
+GET      /api/v1/fiscal/exportacao-xml/resumo               (pré-conferência: contagens + totalPartes)
+GET      /api/v1/fiscal/exportacao-xml                      (devolve o ZIP; ?parte=N&ateIdDocumento=N)
 GET      /api/v1/fiscal/simular-tributos                    (motor puro, sem emitir — ouro pro suporte)
 ```
 

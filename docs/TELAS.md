@@ -161,6 +161,10 @@ Abrem a partir de uma lista (criar/editar/configurar) e por isso não têm item 
 
 **60 telas em uso** · **4 em construção** · **20 telas-filhas**.
 
-⚠️ Atualizado em 2026-08-26 com o **Relatório de Contas a Pagar / Pagas**, que saiu de "em construção" para tela real — a rota `/relatorio-contas-pagar` já existia apontando para o placeholder `EmBreve`.
+⚠️ Atualizado em 2026-08-26. Entraram três telas: **Relatório de Contas a Pagar / Pagas** e
+**Exportação de XML em Lote** (as duas saíram de "em construção" — ⚠️ a rota de cada uma já existia
+apontando para o placeholder `EmBreve`, que foi removido junto, ver
+[[feedback_placeholder_embreve_vira_rota_duplicada]]), além de **Fila de Expedição** e **Vincular
+Anúncios** do marketplace. O grupo **Relatórios** ganhou a coluna **Subgrupo** no mesmo dia.
 
 ⚠️ Sem spec localizada: **Efetivar Balanço** · **Tipo de Carteira**.

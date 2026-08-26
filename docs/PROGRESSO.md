@@ -7,6 +7,45 @@ Registro cronológico das decisões e entregas. Atualizar a cada marco relevante
 
 ## Estado atual
 
+> ## 📌 2026-08-26 — onde o projeto está hoje
+>
+> **60 telas em uso · 4 em construção** (`docs/TELAS.md`) · **1088 testes de backend verdes, 0
+> pulados** · `web/` sem erro de tipo (`npx tsc -b`).
+>
+> **Fechado hoje, em ordem:**
+>
+> 1. **Marketplace (Mercado Livre) — escopo A+B completo**, blocos M1 a M7: OAuth, vincular anúncio
+>    ↔ variação, publicar estoque e preço pelo outbox, webhook + polling, o pedido virando venda com
+>    reserva de estoque, e a fila de expedição. ⛔ **Nenhuma chamada real ao ML foi feita** — tudo
+>    verificado contra WireMock.
+> 2. **Relatório de Contas a Pagar / Pagas** — ⭐ com a regra **oposta** à da Lucratividade: compra de
+>    mercadoria **aparece** aqui (é dinheiro que sai, não lucro).
+> 3. **Relatórios divididos em subgrupos** — Faturamento · Estoque · Financeiro · Resultados · CRM.
+> 4. **PDF dos relatórios não sai mais no tema escuro** — nos 10 relatórios. O mecanismo antigo
+>    existia e falhava de forma intermitente porque apostava na cascata do CSS.
+> 5. **Exportação de XML em Lote** — a última tela que sobrava em "Implementações Futuras". Período
+>    grande é **particionado**, não recusado.
+>
+> **⏭️ O que depende de outra pessoa ou de um passo fora do código:**
+>
+> - 🔴 **Teste real do Mercado Livre** — espera as credenciais de test user com o Evirson. Quando ele
+>   disser "vamos testar", os passos precisam ser repassados **todos de novo e poucos por vez**.
+> - 🔴 **NF-e 55 e o `cStat 974`** — o CSRT correto está gravado e o erro **continuou**; a causa não
+>   está identificada. A NFC-e do dia a dia não é afetada.
+> - 🔴 **Papel do driver por rolo de etiqueta** — decisão de produto pendente: trocar o papel a cada
+>   rolo × escrever um agente local de impressão.
+> - ⚠️ **Intensidade da impressora de etiqueta**: Argox OS-2140 precisa estar em **6**, não no padrão
+>   de fábrica (10), senão o código de barras não lê. Não tem correção por código — é aviso na tela.
+>
+> **⚠️ O que ficou sem verificação real (é o que mais merece atenção amanhã):**
+>
+> - **Nenhum relatório foi impresso no papel** depois da correção do tema. O PDF foi conferido na
+>   tela e por análise de pixels; papel é outra coisa.
+> - **A exportação de XML nunca rodou com volume grande.** A partição em 2.000 é validada pela
+>   aritmética e por um teste de congelamento — mas nunca por um período que realmente estoure.
+> - **Marketplace nunca falou com o Mercado Livre de verdade.**
+
+
 > **MÓDULO FISCAL — B0 a B8 fechados no mesmo dia (2026-08-17), mais 3 melhorias pós-B8.**
 > Estudo fechado (`docs/MODULOFISCAL.md` v2.1), schema no banco (V034/V035), tabelas nacionais de
 > IBS/CBS carregadas e **243 XSD oficiais versionados**. Escopo do v1: **NFC-e ao consumidor final

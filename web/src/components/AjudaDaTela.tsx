@@ -580,7 +580,8 @@ const CONTEUDOS: Record<string, ConteudoAjuda> = {
     passos: [
       'Escolha a empresa e o período de emissão (data inicial e final) — o período máximo é de 365 dias.',
       'Opcionalmente escolha só NFC-e (65) ou só NF-e (55); o padrão traz as duas.',
-      'A tela confere o período e mostra quantos XMLs vão no pacote e qual será o nome do arquivo (Empresa + mês/ano da emissão).',
+      'Clique em "Gerar Dados". A tela confere o período e mostra quantos XMLs vão no pacote e qual será o nome do arquivo (Empresa + mês/ano da emissão). Enquanto consulta, aparece um indicador girando — a tela não travou.',
+      'Mexeu num filtro depois de gerar? O resultado some e é preciso clicar em "Gerar Dados" de novo — é proposital, para a tela nunca mostrar um número que não corresponde aos filtros que estão à vista.',
       'Clique em "Baixar ZIP". Dentro dele, os XMLs ficam em pastas por mês (AAAA-MM/saidas), os eventos de cancelamento em AAAA-MM/eventos, e há um relatorio.csv com a relação de todas as notas do período.',
       'Se o período tiver mais de 2.000 notas, a tela avisa em quantos arquivos ele será dividido e o botão passa a dizer "Baixar N arquivos ZIP" — os arquivos vêm um atrás do outro, sem você precisar refazer nada.',
       'Onde o arquivo é salvo depende do navegador: no Chrome, no Edge e no Opera de computador abre o "Salvar como" e você escolhe a pasta; nos demais (Firefox, Safari, celular) o arquivo vai direto para a pasta de downloads.',
