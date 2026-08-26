@@ -43,6 +43,16 @@ export interface NavItem {
   icone: IconeComponente
   /** Frase curta que explica o que a tela faz — aparece no card da página-hub do grupo. */
   descricao: string
+  /**
+   * Termos que também devem achar esta tela na busca do topo, além do rótulo e da descrição.
+   *
+   * ⚠️ Existe por causa de um efeito colateral concreto: ao dividir Relatórios em subgrupos
+   * (2026-08-26), os rótulos encurtaram — "Relatório de Vendas" virou "Vendas" dentro de
+   * Faturamento. Sem sinônimo, quem digitasse o nome antigo receberia **nada**, e uma tela que
+   * some da busca logo depois de uma reorganização de menu parece uma tela que foi removida.
+   * Serve também para o nome que o lojista usa e não está no rótulo (ex.: "kardex").
+   */
+  sinonimos?: string[]
   end?: boolean
   adminOnly?: boolean
 }
@@ -435,74 +445,125 @@ export const MENU: NavGrupo[] = [
     label: 'Relatórios',
     icone: IconeRelatorio,
     descricao: 'Números da operação, prontos para conferir na tela ou levar em PDF.',
+    // Dividido em subgrupos por assunto em 2026-08-26, a pedido do dono do produto — a lista
+    // corrida de 11 itens tinha deixado de caber de uma olhada.
+    //
+    // ⚠️ As chaves dos subgrupos são prefixadas com `relatorios-` de propósito: a rota da
+    // página-hub é `/menu/:chave` **global** e `acharGrupo` procura por chave na árvore inteira.
+    // Um subgrupo chamado `estoque` ou `financeiro` colidiria com os grupos de topo de mesmo nome
+    // — `/menu/estoque` acharia o primeiro na ordem e o subgrupo ficaria inalcançável, sem erro
+    // nenhum aparecendo. O `label` é que fica curto; a chave é que precisa ser única.
     itens: [
       {
-        to: '/relatorio-vendas',
-        label: 'Relatório de Vendas',
+        chave: 'relatorios-faturamento',
+        label: 'Faturamento',
         icone: IconeRelatorio,
-        descricao: 'Vendas do período com totais por forma de pagamento e geração de PDF com filtros no cabeçalho.',
+        descricao: 'O que a loja vendeu no período e quanto disso virou comissão.',
+        itens: [
+          {
+            to: '/relatorio-vendas',
+            label: 'Vendas',
+            icone: IconeRelatorio,
+            descricao: 'Vendas do período com totais por forma de pagamento e geração de PDF com filtros no cabeçalho.',
+            sinonimos: ['Relatório de Vendas'],
+          },
+          {
+            to: '/relatorio-comissoes',
+            label: 'Comissões',
+            icone: IconeRelatorio,
+            descricao: 'Venda, devolução e comissão por funcionário no período, subtotal por empresa.',
+            sinonimos: ['Relatório de Comissões'],
+          },
+        ],
       },
       {
-        to: '/relatorio-comissoes',
-        label: 'Relatório de Comissões',
-        icone: IconeRelatorio,
-        descricao: 'Venda, devolução e comissão por funcionário no período, subtotal por empresa.',
+        chave: 'relatorios-estoque',
+        label: 'Estoque',
+        icone: IconeEstoque,
+        descricao: 'O que existe em estoque, como ele se moveu e as etiquetas dos produtos.',
+        itens: [
+          {
+            to: '/relatorio-estoque',
+            label: 'Posição de Estoque',
+            icone: IconeRelatorio,
+            descricao: 'Inventário, sintético ou analítico por empresa, marca e categoria, com custo e quantidade.',
+            sinonimos: ['Relatório de Estoque', 'Inventário'],
+          },
+          {
+            to: '/relatorio-movimentacao-produtos',
+            label: 'Movimentação de Produtos',
+            icone: IconeRelatorio,
+            descricao: 'Kardex do estoque: analítico, ficha por produto com saldo corrido, ou totais por tipo de movimento.',
+            sinonimos: ['Relatório de Movimentação de Produtos', 'Kardex'],
+          },
+          {
+            to: '/etiqueta-emissao',
+            label: 'Etiquetas de Produtos',
+            icone: IconeEtiqueta,
+            descricao: 'Selecione produtos (individual, por entrada ou por estoque) e imprima etiquetas em lote.',
+            sinonimos: ['Emissão de Etiqueta de Produtos'],
+          },
+        ],
       },
       {
-        to: '/relatorio-contas-receber',
-        label: 'Contas a Receber / Recebidas',
-        icone: IconeRelatorio,
-        descricao: 'Parcelas de cartão e crediário por período de venda, vencimento ou recebimento, com valor bruto e líquido.',
+        chave: 'relatorios-financeiro',
+        label: 'Financeiro',
+        icone: IconeContaCorrente,
+        descricao: 'Dinheiro a entrar, dinheiro a sair e a projeção do saldo.',
+        itens: [
+          {
+            to: '/relatorio-contas-receber',
+            label: 'Contas a Receber / Recebidas',
+            icone: IconeRelatorio,
+            descricao: 'Parcelas de cartão e crediário por período de venda, vencimento ou recebimento, com valor bruto e líquido.',
+          },
+          {
+            to: '/relatorio-contas-pagar',
+            label: 'Contas a Pagar / Pagas',
+            icone: IconeRelatorio,
+            descricao: 'Duplicatas por fornecedor e plano de contas, com vencido, a vencer e pago no período — inclui compra de mercadoria.',
+          },
+          {
+            to: '/fluxo-caixa',
+            label: 'Fluxo de Caixa',
+            icone: IconeRelatorio,
+            descricao: 'Entradas e saídas de dinheiro por atividade, e a projeção do saldo a partir das contas a receber e a pagar.',
+          },
+        ],
       },
       {
-        to: '/relatorio-contas-pagar',
-        label: 'Contas a Pagar / Pagas',
+        // ⚠️ Os dois itens são `adminOnly`, e o subgrupo NÃO precisa ser marcado: `filtrarPorPapel`
+        // é recursivo e descarta grupo que ficou sem filhos — para um OPERADOR, "Resultados"
+        // simplesmente não aparece.
+        chave: 'relatorios-resultados',
+        label: 'Resultados',
         icone: IconeRelatorio,
-        descricao: 'Duplicatas por fornecedor e plano de contas, com vencido, a vencer e pago no período — inclui compra de mercadoria.',
+        descricao: 'Se a loja deu lucro no período, e de onde ele veio.',
+        itens: [
+          {
+            to: '/relatorio-dre',
+            label: 'DRE — Demonstração do Resultado',
+            icone: IconeRelatorio,
+            descricao: 'Lucro do período em regime de competência ou de caixa, com CMV, margem e comparação com o período anterior.',
+            adminOnly: true,
+          },
+          {
+            to: '/lucratividade',
+            label: 'Lucratividade',
+            icone: IconeRelatorio,
+            descricao: 'Venda, custo do vendido, lucro bruto, contas pagas por plano de contas e lucro líquido do período.',
+            sinonimos: ['Relatório de Lucratividade'],
+            adminOnly: true,
+          },
+        ],
       },
       {
-        to: '/relatorio-estoque',
-        label: 'Relatório de Estoque',
-        icone: IconeRelatorio,
-        descricao: 'Inventário, sintético ou analítico por empresa, marca e categoria, com custo e quantidade.',
-      },
-      {
-        to: '/relatorio-movimentacao-produtos',
-        label: 'Movimentação de Produtos',
-        icone: IconeRelatorio,
-        descricao: 'Kardex do estoque: analítico, ficha por produto com saldo corrido, ou totais por tipo de movimento.',
-      },
-      {
-        to: '/fluxo-caixa',
-        label: 'Fluxo de Caixa',
-        icone: IconeRelatorio,
-        descricao: 'Entradas e saídas de dinheiro por atividade, e a projeção do saldo a partir das contas a receber e a pagar.',
-      },
-      {
-        to: '/relatorio-dre',
-        label: 'DRE — Demonstração do Resultado',
-        icone: IconeRelatorio,
-        descricao: 'Lucro do período em regime de competência ou de caixa, com CMV, margem e comparação com o período anterior.',
-        adminOnly: true,
-      },
-      {
-        to: '/lucratividade',
-        label: 'Relatório de Lucratividade',
-        icone: IconeRelatorio,
-        descricao: 'Venda, custo do vendido, lucro bruto, contas pagas por plano de contas e lucro líquido do período.',
-        adminOnly: true,
-      },
-      {
+        // Fica como item solto ao lado dos quatro subgrupos, como pedido — não tem irmão que
+        // justifique um subgrupo de um item só (mesmo raciocínio que dissolveu "Reimpressões").
         to: '/crm',
         label: 'CRM',
         icone: IconeCliente,
         descricao: 'Filtre clientes por perfil e histórico de compras e exporte a lista para planilha Excel.',
-      },
-      {
-        to: '/etiqueta-emissao',
-        label: 'Emissão de Etiqueta de Produtos',
-        icone: IconeEtiqueta,
-        descricao: 'Selecione produtos (individual, por entrada ou por estoque) e imprima etiquetas em lote.',
       },
     ],
   },
@@ -628,8 +689,11 @@ export function pontuarTela(tela: TelaBuscavel, termo: string): number | null {
   // Cada palavra do nome conta: "vendas" acha "Pesquisa de Vendas" antes de quem só contém.
   if (nome.split(/\s+/).some((p) => p.startsWith(termo))) return 1
   if (nome.includes(termo)) return 2
-  if (normalizar(tela.trilha.join(' ')).includes(termo)) return 3
-  if (normalizar(tela.item.descricao).includes(termo)) return 4
+  // Sinônimo vale quase como o nome — quem digita o rótulo ANTIGO da tela está tentando acertar
+  // o nome dela, não tropeçando na descrição de outra.
+  if ((tela.item.sinonimos ?? []).some((s) => normalizar(s).includes(termo))) return 3
+  if (normalizar(tela.trilha.join(' ')).includes(termo)) return 4
+  if (normalizar(tela.item.descricao).includes(termo)) return 5
   return null
 }
 

@@ -102,19 +102,23 @@
 
 ## Relatórios
 
-| Tela | Rota | Spec |
-|---|---|---|
-| Relatório de Vendas | `/relatorio-vendas` | `docs/telas/relatorio-vendas.md` |
-| Relatório de Comissões | `/relatorio-comissoes` | `docs/telas/relatorio-comissoes.md` |
-| Contas a Receber / Recebidas | `/relatorio-contas-receber` | `docs/telas/relatorio-contas-receber.md` |
-| Contas a Pagar / Pagas (relatório) | `/relatorio-contas-pagar` | `docs/telas/relatorio-contas-pagar.md` |
-| Relatório de Estoque | `/relatorio-estoque` | `docs/telas/relatorio-estoque.md` |
-| Movimentação de Produtos | `/relatorio-movimentacao-produtos` | `docs/telas/relatorio-movimentacao-produtos.md` |
-| Fluxo de Caixa | `/fluxo-caixa` | `docs/telas/fluxo-caixa.md` |
-| DRE — Demonstração do Resultado | `/relatorio-dre` | `docs/telas/relatorio-dre.md` |
-| Relatório de Lucratividade | `/lucratividade` | `docs/telas/relatorio-lucratividade.md` |
-| CRM | `/crm` | `docs/telas/crm.md` |
-| Emissão de Etiqueta de Produtos | `/etiqueta-emissao` | `docs/telas/etiqueta-emissao.md` |
+Dividido em subgrupos por assunto em 2026-08-26 — a coluna **Subgrupo** é a de `web/src/lib/menu.ts`.
+⚠️ Cinco rótulos encurtaram junto (o prefixo "Relatório de" ficou redundante dentro do subgrupo); os
+nomes antigos continuam achando a tela na busca do topo via `sinonimos`.
+
+| Subgrupo | Tela | Rota | Spec |
+|---|---|---|---|
+| Faturamento | Vendas | `/relatorio-vendas` | `docs/telas/relatorio-vendas.md` |
+| Faturamento | Comissões | `/relatorio-comissoes` | `docs/telas/relatorio-comissoes.md` |
+| Estoque | Posição de Estoque | `/relatorio-estoque` | `docs/telas/relatorio-estoque.md` |
+| Estoque | Movimentação de Produtos | `/relatorio-movimentacao-produtos` | `docs/telas/relatorio-movimentacao-produtos.md` |
+| Estoque | Etiquetas de Produtos | `/etiqueta-emissao` | `docs/telas/etiqueta-emissao.md` |
+| Financeiro | Contas a Receber / Recebidas | `/relatorio-contas-receber` | `docs/telas/relatorio-contas-receber.md` |
+| Financeiro | Contas a Pagar / Pagas | `/relatorio-contas-pagar` | `docs/telas/relatorio-contas-pagar.md` |
+| Financeiro | Fluxo de Caixa | `/fluxo-caixa` | `docs/telas/fluxo-caixa.md` |
+| Resultados | DRE — Demonstração do Resultado | `/relatorio-dre` | `docs/telas/relatorio-dre.md` |
+| Resultados | Lucratividade | `/lucratividade` | `docs/telas/relatorio-lucratividade.md` |
+| *(solto)* | CRM | `/crm` | `docs/telas/crm.md` |
 
 ## Implementações Futuras
 

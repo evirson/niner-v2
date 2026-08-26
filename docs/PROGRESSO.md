@@ -541,6 +541,52 @@ Movimentação de Conta Corrente) que ainda não tinham migrado pro `SeletorPlan
 
 ## Linha do tempo
 
+### 2026-08-26 (8) — Relatórios em subgrupos, e o rótulo curto que quase levou a busca junto
+
+Pedido do dono do produto: dividir a aba de Relatórios em **Faturamento** (Vendas, Comissões),
+**Estoque** (Posição de Estoque, Movimentação de Produtos, Etiquetas de Produtos), **Financeiro**
+(Contas a Receber, Contas a Pagar, Fluxo de Caixa), **Resultados** (DRE, Lucratividade) e **CRM**
+solto. A lista corrida de 11 itens tinha deixado de caber de uma olhada.
+
+Os 11 itens da lista dele batem exatamente com os 11 que existiam — nada some, nada sobra.
+
+**O que já funcionava sozinho.** A árvore do menu suporta subgrupo genericamente desde 2026-08-03:
+rota única `/menu/:chave`, `acharGrupo`/`acharPai`/`listarTelas`/`filtrarPorPapel` todos recursivos.
+Em particular, `filtrarPorPapel` **descarta grupo que ficou sem filhos** — como DRE e Lucratividade
+são `adminOnly`, o subgrupo "Resultados" desaparece sozinho para um OPERADOR, sem precisar marcar
+nada nele. Medido: para OPERADOR sobram `relatorios-faturamento`, `relatorios-estoque`,
+`relatorios-financeiro` e `/crm`.
+
+**⚠️ Colisão de chave, que não daria erro nenhum.** As chaves `estoque` e `financeiro` **já existem**
+como grupos de topo, e a rota da página-hub é `/menu/:chave` **global**, resolvida por `acharGrupo`
+na árvore inteira. Um subgrupo chamado `estoque` faria `/menu/estoque` achar o grupo de topo — o
+subgrupo de Relatórios ficaria inalcançável, em silêncio. Por isso as chaves são
+`relatorios-faturamento`, `relatorios-estoque`, `relatorios-financeiro` e `relatorios-resultados`; o
+**label** é que fica curto, a **chave** é que precisa ser única.
+
+**⚠️ O efeito colateral que quase passou: rótulo curto quebra a busca do topo.** Dentro do subgrupo o
+prefixo "Relatório de" virou redundante, então cinco rótulos encurtaram ("Relatório de Vendas" →
+"Vendas", "Relatório de Estoque" → "Posição de Estoque", "Emissão de Etiqueta de Produtos" →
+"Etiquetas de Produtos", e mais dois). Só que `pontuarTela` casa contra rótulo, trilha e descrição —
+e nenhum dos três contém a frase antiga. **Quem digitasse "relatório de vendas" receberia nada**, e
+uma tela que some da busca logo depois de uma reorganização de menu parece uma tela que foi removida.
+
+Conserto: campo opcional `NavItem.sinonimos`, pontuado logo abaixo do nome (peso 3, acima de trilha e
+descrição — quem digita o rótulo antigo está tentando acertar o nome da tela, não tropeçando na
+descrição de outra). Serve também para o nome que o lojista usa e não está no rótulo ("kardex",
+"inventário").
+
+**Medido, não relido.** Um script fez o bundle do `menu.ts` real com esbuild e rodou `buscarTelas`
+contra 13 termos — os 13 acham a tela certa, e as trilhas saem `Relatórios > Faturamento > Vendas`,
+`Relatórios > Financeiro > Contas a Pagar / Pagas`, `Relatórios > CRM`. Depois **removi os
+`sinonimos` de propósito e rodei de novo**: cinco buscas passaram a devolver lista vazia, exatamente
+as dos nomes antigos. É isso que prova que o conserto é o que faz a verificação passar, e não outra
+coisa ([[feedback_teste_de_guard_passa_pelo_motivo_errado]]).
+
+⏭️ **A verificação foi pontual, não virou teste permanente:** `web/` não tem suíte de testes, e criar
+uma seria escopo bem além do pedido. O script ficou no scratchpad da sessão. Quem mexer em
+`pontuarTela` ou encurtar mais um rótulo não tem nada que o reprove.
+
 ### 2026-08-26 (7) — Relatório de Contas a Pagar / Pagas: o gêmeo do Contas a Receber, com a regra oposta sobre compra de mercadoria
 
 Pedido do dono do produto: *"Vamos Implementar o Relatorio de Contas a Pagar / Pagas — filtros Empresa | Fornecedor | Plano de Contas | Período de Lançamento | Vencimento | Pagamento; na abertura da tela já vir com um popup com os filtros; gráficos e KPIs como nos outros relatórios."*
