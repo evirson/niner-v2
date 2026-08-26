@@ -17,6 +17,15 @@ public final class ExportacaoXmlLoteDtos {
      * autorizada cuja gravação no bucket falhou tem valor fiscal e ficaria de fora do pacote sem
      * nada avisar. Ver decisão 3 da spec.
      */
+    /**
+     * @param totalPartes    em quantos ZIPs o período vai sair. ⭐ Desde 2026-08-26 um período
+     *                       grande é <b>particionado</b>, não recusado: a tela pede parte 1, 2, 3…
+     *                       e salva um arquivo por parte.
+     * @param ateIdDocumento teto de {@code id_documento_fiscal} <b>congelado agora</b>, que a tela
+     *                       devolve em cada parte. ⚠️ É ele que impede uma nota emitida no meio do
+     *                       download de deslocar a paginação e fazer um documento ser pulado, sem
+     *                       nada avisar. {@code null} quando o período não tem nenhuma nota.
+     */
     public record ResumoExportacaoXml(
             String nomeArquivo,
             long totalDocumentos,
@@ -24,7 +33,8 @@ public final class ExportacaoXmlLoteDtos {
             long documentosSemXml,
             long totalEventos,
             int limiteDocumentos,
-            boolean excedeLimite) {
+            int totalPartes,
+            Long ateIdDocumento) {
     }
 
     /**

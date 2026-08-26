@@ -10,7 +10,18 @@ export interface ResumoExportacaoXml {
   documentosSemXml: number
   totalEventos: number
   limiteDocumentos: number
-  excedeLimite: boolean
+  /**
+   * ⭐ Em quantos ZIPs o período vai sair. Período grande é **particionado**, não recusado
+   * (2026-08-26): a tela pede parte 1, 2, 3… e salva um arquivo por parte.
+   */
+  totalPartes: number
+  /**
+   * ⚠️ Teto de id congelado nesta pré-conferência, que a tela **repassa em todas as partes**. Sem
+   * ele, uma nota emitida enquanto o lojista baixa a parte 2 entraria no meio da ordenação e a
+   * paginação passaria a pular um documento — em silêncio, e justamente no caso comum de exportar
+   * o mês corrente durante o expediente.
+   */
+  ateIdDocumento: number | null
 }
 
 export interface FiltrosExportacaoXml {
@@ -74,9 +85,18 @@ export class DownloadCancelado extends Error {
  * <p>⚠️ A requisição precisa do Bearer token, então não dá para ser um `<a href>` simples — o
  * arquivo vem por `fetch` e vira `blob` (mesmo padrão de `baixarModeloPlanilha`).
  */
-export async function baixarZipExportacaoXml(filtros: FiltrosExportacaoXml, nomeArquivo: string): Promise<void> {
+export async function baixarZipExportacaoXml(
+  filtros: FiltrosExportacaoXml,
+  nomeArquivo: string,
+  parte = 1,
+  ateIdDocumento: number | null = null,
+  usarPicker = true,
+): Promise<void> {
   const token = getToken()
-  const res = await fetch(`${API_BASE}/api/v1/fiscal/exportacao-xml?${querystring(filtros)}`, {
+  const params = new URLSearchParams(querystring(filtros))
+  params.set('parte', String(parte))
+  if (ateIdDocumento !== null) params.set('ateIdDocumento', String(ateIdDocumento))
+  const res = await fetch(`${API_BASE}/api/v1/fiscal/exportacao-xml?${params.toString()}`, {
     headers: token ? { Authorization: `Bearer ${token}` } : {},
   })
   if (!res.ok) {
@@ -94,7 +114,7 @@ export async function baixarZipExportacaoXml(filtros: FiltrosExportacaoXml, nome
   }
 
   const blob = await res.blob()
-  const picker = pickerDisponivel()
+  const picker = usarPicker ? pickerDisponivel() : null
   if (picker) {
     try {
       const arquivo = await picker.showSaveFilePicker({
@@ -123,4 +143,37 @@ export async function baixarZipExportacaoXml(filtros: FiltrosExportacaoXml, nome
   a.click()
   a.remove()
   URL.revokeObjectURL(url)
+}
+
+/**
+ * Baixa **todas as partes** de um período, em sequência.
+ *
+ * ⭐ Período grande é particionado, não recusado (decisão do dono do produto em 2026-08-26): antes,
+ * acima do limite a exportação respondia 409 mandando reduzir o período — empurrando para o lojista
+ * um trabalho que o sistema sabe fazer.
+ *
+ * ⚠️ **Com mais de uma parte, o "Salvar como" é desligado de propósito.** Dois motivos medidos:
+ *
+ * 1. `showSaveFilePicker()` exige *transient user activation*, que **expira** durante o download da
+ *    parte anterior — a partir da segunda parte o diálogo é recusado, e o lojista veria a
+ *    exportação falhar no meio.
+ * 2. Sete diálogos "Salvar como" seguidos, um por parte, seriam piores que o download direto.
+ *
+ * ⛔ **O navegador bloqueia downloads múltiplos automáticos** (medido no Chrome em 2026-08-26: a
+ * partir do 2º ou 3º arquivo seguido, o clique simplesmente não gera arquivo). Na primeira vez o
+ * Chrome pergunta *"Fazer o download de vários arquivos?"* — a tela avisa isso **antes** de
+ * começar, porque um "permitir" negado por engano faria as partes seguintes sumirem sem erro
+ * nenhum. É por isso que `aoProgredir` reporta cada parte concluída: o lojista consegue conferir
+ * quantos arquivos realmente chegaram.
+ */
+export async function baixarTodasAsPartes(
+  filtros: FiltrosExportacaoXml,
+  resumo: ResumoExportacaoXml,
+  aoProgredir?: (parteConcluida: number, total: number) => void,
+): Promise<void> {
+  const total = Math.max(resumo.totalPartes, 1)
+  for (let parte = 1; parte <= total; parte++) {
+    await baixarZipExportacaoXml(filtros, resumo.nomeArquivo, parte, resumo.ateIdDocumento, total === 1)
+    aoProgredir?.(parte, total)
+  }
 }

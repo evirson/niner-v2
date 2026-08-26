@@ -13,6 +13,7 @@ import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Collectors;
 import java.util.Optional;
 
 /**
@@ -61,6 +62,21 @@ public class ExportacaoXmlLoteRepositorio {
                     ON d.id_tenant = e.id_tenant AND d.id_tenant = plataforma.tenant_atual()
                    AND d.id_documento_fiscal = e.id_documento_fiscal
              WHERE e.id_tenant = plataforma.tenant_atual() AND d.id_empresa = ?
+               AND e.autorizado = true AND e.xml_objeto_bucket IS NOT NULL
+            """;
+
+    /**
+     * Mesma consulta de {@link #SQL_EVENTOS_BASE}, sem o filtro de empresa: quem restringe é a
+     * lista de documentos da parte, que já veio filtrada por empresa e período.
+     */
+    private static final String SQL_EVENTOS_BASE_SEM_EMPRESA = """
+            SELECT e.id_evento, d.chave_acesso, e.tipo_evento, e.sequencia,
+                   d.data_emissao, e.xml_objeto_bucket
+              FROM documento_fiscal_evento e
+              JOIN documento_fiscal d
+                    ON d.id_tenant = e.id_tenant AND d.id_tenant = plataforma.tenant_atual()
+                   AND d.id_documento_fiscal = e.id_documento_fiscal
+             WHERE e.id_tenant = plataforma.tenant_atual()
                AND e.autorizado = true AND e.xml_objeto_bucket IS NOT NULL
             """;
 
@@ -125,6 +141,24 @@ public class ExportacaoXmlLoteRepositorio {
     @Transactional(readOnly = true)
     public List<DocumentoDoPacote> listarDocumentos(long idEmpresa, LocalDate dataInicial, LocalDate dataFinal,
                                                     Integer modelo) {
+        return listarDocumentos(idEmpresa, dataInicial, dataFinal, modelo, null, null, 0);
+    }
+
+    /**
+     * Uma <b>parte</b> do período, para a exportação particionada.
+     *
+     * @param ateIdDocumento teto de {@code id_documento_fiscal} congelado na pré-conferência, ou
+     *                       {@code null} para não limitar. ⚠️ É ele que torna a partição estável:
+     *                       sem teto, uma nota emitida <b>entre</b> a parte 1 e a parte 3 entraria
+     *                       no meio da ordenação e o {@code OFFSET} passaria a pular um documento
+     *                       que ninguém baixou — silenciosamente, e justamente no caso comum de
+     *                       exportar o mês corrente durante o expediente.
+     * @param limite         quantos documentos nesta parte, ou {@code null} para todos.
+     */
+    @Transactional(readOnly = true)
+    public List<DocumentoDoPacote> listarDocumentos(long idEmpresa, LocalDate dataInicial, LocalDate dataFinal,
+                                                    Integer modelo, Long ateIdDocumento,
+                                                    Integer limite, int deslocamento) {
         StringBuilder sql = new StringBuilder("""
                 SELECT d.id_documento_fiscal, d.modelo, d.serie, d.numero, d.chave_acesso,
                        d.situacao::text AS situacao, d.data_emissao, d.valor_total, d.xml_objeto_bucket,
@@ -145,7 +179,18 @@ public class ExportacaoXmlLoteRepositorio {
             sql.append(" AND d.modelo = ?");
             params.add(modelo);
         }
+        if (ateIdDocumento != null) {
+            sql.append(" AND d.id_documento_fiscal <= ?");
+            params.add(ateIdDocumento);
+        }
+        // A ordenação é a chave da partição: precisa ser total e estável, por isso o id entra
+        // como desempate da data (duas notas do mesmo instante existem).
         sql.append(" ORDER BY d.data_emissao, d.id_documento_fiscal");
+        if (limite != null) {
+            sql.append(" LIMIT ? OFFSET ?");
+            params.add(limite);
+            params.add(deslocamento);
+        }
 
         return jdbc.sql(sql.toString()).params(params)
                 .query((rs, n) -> new DocumentoDoPacote(
@@ -176,6 +221,61 @@ public class ExportacaoXmlLoteRepositorio {
         sql.append(" ORDER BY d.data_emissao, e.id_evento");
 
         return jdbc.sql(sql.toString()).params(params)
+                .query((rs, n) -> new EventoDoPacote(
+                        rs.getLong("id_evento"),
+                        rs.getString("chave_acesso"),
+                        rs.getString("tipo_evento"),
+                        rs.getInt("sequencia"),
+                        rs.getObject("data_emissao", OffsetDateTime.class),
+                        rs.getString("xml_objeto_bucket")))
+                .list();
+    }
+
+    /**
+     * Maior {@code id_documento_fiscal} do período <b>agora</b> — o teto que congela a partição.
+     * {@code null} quando o período está vazio.
+     */
+    @Transactional(readOnly = true)
+    public Long maiorIdDocumento(long idEmpresa, LocalDate dataInicial, LocalDate dataFinal, Integer modelo) {
+        StringBuilder sql = new StringBuilder("""
+                SELECT COALESCE(max(d.id_documento_fiscal), 0) AS teto
+                  FROM documento_fiscal d
+                 WHERE d.id_tenant = plataforma.tenant_atual() AND d.id_empresa = ?
+                """);
+        List<Object> params = new ArrayList<>(List.of(idEmpresa, dataInicial, dataFinal));
+        sql.append(FILTRO_PERIODO);
+        if (modelo != null) {
+            sql.append(" AND d.modelo = ?");
+            params.add(modelo);
+        }
+        // ⚠️ O `COALESCE` não é enfeite: um mapper que devolve `null` quebra o JdbcClient dos dois
+        // jeitos — `.single()` recusa com "Result value is null but no null value expected", e
+        // `.list().stream().findFirst()` estoura NullPointerException ao ver o null no stream
+        // (medido aqui em 2026-08-26, derrubou 3 testes). Como `id_documento_fiscal` começa em 1,
+        // **0 significa "período sem nenhuma nota"** sem precisar de null em lugar nenhum.
+        long teto = jdbc.sql(sql.toString()).params(params).query(Long.class).single();
+        return teto == 0 ? null : teto;
+    }
+
+    /**
+     * Eventos dos documentos <b>desta parte</b>, e não do período inteiro.
+     *
+     * ⚠️ Filtrar por período de novo colocaria <b>todos</b> os eventos do mês em <b>todas</b> as
+     * partes: o comprovante de cancelamento apareceria repetido em cada ZIP, e o contador veria o
+     * mesmo evento N vezes sem a nota correspondente ao lado.
+     */
+    @Transactional(readOnly = true)
+    public List<EventoDoPacote> listarEventosDosDocumentos(List<Long> idsDocumento) {
+        if (idsDocumento.isEmpty()) {
+            return List.of();
+        }
+        // Os ids vêm de `long` lido do banco — concatenar é seguro aqui, e um `IN` com milhares de
+        // parâmetros vinculados esbarraria no teto do driver.
+        String lista = idsDocumento.stream().map(String::valueOf).collect(Collectors.joining(","));
+        String sql = SQL_EVENTOS_BASE_SEM_EMPRESA
+                + " AND e.id_documento_fiscal IN (" + lista + ")"
+                + " ORDER BY d.data_emissao, e.id_evento";
+        return jdbc.sql(sql)
                 .query((rs, n) -> new EventoDoPacote(
                         rs.getLong("id_evento"),
                         rs.getString("chave_acesso"),

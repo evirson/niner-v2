@@ -54,8 +54,13 @@ public class ExportacaoXmlLoteController {
             @RequestParam long idEmpresa,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dataInicial,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dataFinal,
-            @RequestParam(required = false) Integer modelo) {
-        PacoteZip pacote = service.exportar(jwt, idEmpresa, dataInicial, dataFinal, modelo);
+            @RequestParam(required = false) Integer modelo,
+            // ⭐ Período grande é particionado, não recusado (2026-08-26). A tela chama este mesmo
+            // endpoint uma vez por parte, repassando o `ateIdDocumento` que a pré-conferência
+            // congelou — sem ele, uma nota emitida durante o download deslocaria a paginação.
+            @RequestParam(required = false, defaultValue = "1") int parte,
+            @RequestParam(required = false) Long ateIdDocumento) {
+        PacoteZip pacote = service.exportar(jwt, idEmpresa, dataInicial, dataFinal, modelo, parte, ateIdDocumento);
         return ResponseEntity.ok()
                 .contentType(MediaType.parseMediaType("application/zip"))
                 .header(HttpHeaders.CONTENT_DISPOSITION,

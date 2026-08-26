@@ -11,7 +11,7 @@ import { dataParaIso, dataValida, isoParaData, mascararData } from '../../lib/ma
 import { listarEmpresasFiscal } from '../../lib/fiscalConfiguracao'
 import {
   DownloadCancelado,
-  baixarZipExportacaoXml,
+  baixarTodasAsPartes,
   resumirExportacaoXml,
 } from '../../lib/exportacaoXmlLote'
 
@@ -39,6 +39,8 @@ export default function ExportacaoXmlLote() {
   const [dataFinalTexto, setDataFinalTexto] = useState(isoParaData(hojeISO()))
   const [modelo, setModelo] = useState<'' | '65' | '55'>('')
   const [baixando, setBaixando] = useState(false)
+  /** Progresso quando o período sai em mais de um ZIP — `null` fora de um download. */
+  const [parteAtual, setParteAtual] = useState<{ feita: number; total: number } | null>(null)
   const [toast, setToast] = useState('')
   const [toastTipo, setToastTipo] = useState<TipoToast>('erro')
 
@@ -73,21 +75,26 @@ export default function ExportacaoXmlLote() {
   })
 
   const podeBaixar =
-    !!resumo && !resumo.excedeLimite && resumo.documentosComXml > 0 && !baixando && !buscandoResumo
+    !!resumo && resumo.documentosComXml > 0 && !baixando && !buscandoResumo
 
   async function baixar() {
     if (!filtros || !resumo) return
     setBaixando(true)
     try {
-      await baixarZipExportacaoXml(filtros, resumo.nomeArquivo)
+      await baixarTodasAsPartes(filtros, resumo, (feita, total) => setParteAtual({ feita, total }))
       setToastTipo('sucesso')
-      setToast(`${resumo.documentosComXml} XML exportado(s) em "${resumo.nomeArquivo}".`)
+      setToast(
+        resumo.totalPartes > 1
+          ? `${resumo.documentosComXml} XML exportado(s) em ${resumo.totalPartes} arquivos ZIP.`
+          : `${resumo.documentosComXml} XML exportado(s) em "${resumo.nomeArquivo}".`,
+      )
     } catch (e) {
       if (e instanceof DownloadCancelado) return // desistir não é erro
       setToastTipo('erro')
       setToast(e instanceof ApiError ? e.message : 'Não foi possível gerar o arquivo ZIP.')
     } finally {
       setBaixando(false)
+      setParteAtual(null)
     }
   }
 
@@ -183,14 +190,20 @@ export default function ExportacaoXmlLote() {
                 </p>
               )}
 
-              {resumo.excedeLimite && (
-                <p className="erro" style={{ margin: '10px 0 0' }}>
-                  O período tem {resumo.totalDocumentos} notas, acima do limite de {resumo.limiteDocumentos} por
-                  exportação. Reduza o período — por exemplo, exporte um mês por vez.
+              {/* ⭐ Período grande é particionado, não recusado (2026-08-26). O aviso é informativo
+                  (não bloqueia), e diz as duas coisas que mudam a expectativa do lojista: virão N
+                  arquivos, e o navegador vai pedir permissão para baixar vários. Sem esse segundo
+                  aviso, um "permitir" negado por engano faria as partes seguintes sumirem sem erro. */}
+              {resumo.totalPartes > 1 && (
+                <p className="muted" style={{ margin: '10px 0 0' }}>
+                  ⚠️ O período tem {resumo.totalDocumentos} notas, acima de {resumo.limiteDocumentos} por arquivo:
+                  será dividido em <strong>{resumo.totalPartes} arquivos ZIP</strong>, baixados em sequência. O
+                  navegador vai pedir permissão para baixar vários arquivos — é preciso permitir, senão só o
+                  primeiro chega.
                 </p>
               )}
 
-              {!resumo.excedeLimite && resumo.documentosComXml === 0 && (
+              {resumo.documentosComXml === 0 && (
                 <p className="erro" style={{ margin: '10px 0 0' }}>
                   {resumo.totalDocumentos === 0
                     ? 'Nenhuma nota fiscal foi emitida por esta empresa no período selecionado.'
@@ -200,7 +213,13 @@ export default function ExportacaoXmlLote() {
 
               <div style={{ marginTop: 20 }}>
                 <button type="button" className="btn" disabled={!podeBaixar} onClick={baixar}>
-                  {baixando ? 'Gerando ZIP…' : 'Baixar ZIP'}
+                  {baixando
+                    ? parteAtual
+                      ? `Baixando… ${parteAtual.feita} de ${parteAtual.total}`
+                      : 'Gerando ZIP…'
+                    : resumo.totalPartes > 1
+                      ? `Baixar ${resumo.totalPartes} arquivos ZIP`
+                      : 'Baixar ZIP'}
                 </button>
                 <p className="muted" style={{ margin: '8px 0 0' }}>
                   O navegador vai perguntar onde salvar — ou baixar direto para a pasta de downloads, conforme a

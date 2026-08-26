@@ -1,6 +1,7 @@
 package com.vetor.niner;
 
 import com.jayway.jsonpath.JsonPath;
+import com.vetor.niner.fiscal.exportacao.ExportacaoXmlLoteService;
 import com.vetor.niner.comum.armazenamento.AreaPrivada;
 import com.vetor.niner.comum.armazenamento.ArmazenamentoPrivado;
 import com.vetor.niner.comum.seguranca.TokenService;
@@ -606,5 +607,129 @@ class ExportacaoXmlLoteTest {
         assertThat(zip).doesNotContainKey(pastaDoMes(ontem) + "/saidas/" + orfa + ".xml");
         assertThat(new String(zip.get("relatorio.csv"), StandardCharsets.UTF_8))
                 .contains(orfa).contains("(nao arquivado)");
+    }
+
+    // ------------------------------------------------------- exportação particionada (2026-08-26)
+
+    /**
+     * A conta que decide em quantos ZIPs o período sai. Arredonda <b>para cima</b>: 2.001 notas com
+     * teto 2.000 são 2 partes, não 1 — errar para baixo deixaria a última nota fora do pacote.
+     *
+     * <p>Zero documentos = 1 parte, e não zero: com zero partes a tela não teria o que pedir e o
+     * lojista não veria a mensagem que explica que não há nota no período.
+     */
+    @Test
+    void totalDePartesArredondaParaCimaENuncaEhZero() {
+        assertThat(ExportacaoXmlLoteService.calcularTotalPartes(0)).isEqualTo(1);
+        assertThat(ExportacaoXmlLoteService.calcularTotalPartes(1)).isEqualTo(1);
+        assertThat(ExportacaoXmlLoteService.calcularTotalPartes(2000)).isEqualTo(1);
+        assertThat(ExportacaoXmlLoteService.calcularTotalPartes(2001)).isEqualTo(2);
+        assertThat(ExportacaoXmlLoteService.calcularTotalPartes(4000)).isEqualTo(2);
+        assertThat(ExportacaoXmlLoteService.calcularTotalPartes(4001)).isEqualTo(3);
+    }
+
+    /** A pré-conferência entrega o que a tela precisa para pedir as partes. */
+    @Test
+    void resumoInformaQuantasPartesEOTetoDeId() throws Exception {
+        String token = assinarNovoTenant("partes-resumo");
+        long idTenant = idTenantDo(token);
+        long idEmpresa = idEmpresaDo(token);
+        LocalDate ontem = hojeMais(-1);
+
+        String chave = chaveDe(801);
+        long doc = criarDocumento(idTenant, idEmpresa, 65, 801, chave, "AUTORIZADO", ontem);
+        arquivar(idTenant, doc, 65, chave, ontem, "<nfeProc>A</nfeProc>");
+
+        mvc.perform(get("/api/v1/fiscal/exportacao-xml/resumo")
+                        .header("Authorization", "Bearer " + token)
+                        .param("idEmpresa", String.valueOf(idEmpresa))
+                        .param("dataInicial", hojeMais(-5).toString())
+                        .param("dataFinal", hojeMais(0).toString()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalPartes").value(1))
+                .andExpect(jsonPath("$.ateIdDocumento").value((int) doc));
+    }
+
+    /**
+     * ⭐ <b>O teste que prende a decisão de particionar.</b>
+     *
+     * O lojista pede a pré-conferência (que congela o teto), e <b>enquanto baixa</b> a loja emite
+     * outra nota — o caso comum de exportar o mês corrente durante o expediente. Com o teto, a nota
+     * nova simplesmente não entra no pacote que já estava sendo montado.
+     *
+     * ⚠️ Sem esse congelamento o defeito seria <b>invisível</b>: a nota nova entraria no meio da
+     * ordenação por data, empurrando as demais, e o {@code OFFSET} da parte seguinte passaria a
+     * pular um documento que ninguém baixou — sem erro, sem aviso, e só descoberto na fiscalização.
+     */
+    @Test
+    void tetoDeIdCongelaOConjuntoEUmaNotaEmitidaDepoisNaoEntra() throws Exception {
+        String token = assinarNovoTenant("teto");
+        long idTenant = idTenantDo(token);
+        long idEmpresa = idEmpresaDo(token);
+        LocalDate ontem = hojeMais(-1);
+
+        String chaveA = chaveDe(811);
+        String chaveB = chaveDe(812);
+        long docA = criarDocumento(idTenant, idEmpresa, 65, 811, chaveA, "AUTORIZADO", ontem);
+        long docB = criarDocumento(idTenant, idEmpresa, 65, 812, chaveB, "AUTORIZADO", ontem);
+        arquivar(idTenant, docA, 65, chaveA, ontem, "<nfeProc>A</nfeProc>");
+        arquivar(idTenant, docB, 65, chaveB, ontem, "<nfeProc>B</nfeProc>");
+
+        // ... a tela leu o resumo aqui; o teto é o maior id existente NESTE instante.
+        long teto = docB;
+
+        // ... e agora a loja emite mais uma, no mesmo período, enquanto o download acontece.
+        String chaveC = chaveDe(813);
+        long docC = criarDocumento(idTenant, idEmpresa, 65, 813, chaveC, "AUTORIZADO", ontem);
+        arquivar(idTenant, docC, 65, chaveC, ontem, "<nfeProc>C</nfeProc>");
+
+        byte[] pacote = mvc.perform(get("/api/v1/fiscal/exportacao-xml")
+                        .header("Authorization", "Bearer " + token)
+                        .param("idEmpresa", String.valueOf(idEmpresa))
+                        .param("dataInicial", hojeMais(-5).toString())
+                        .param("dataFinal", hojeMais(0).toString())
+                        .param("parte", "1")
+                        .param("ateIdDocumento", String.valueOf(teto)))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsByteArray();
+
+        String pasta = pastaDoMes(ontem);
+        Map<String, byte[]> zip = lerZip(pacote);
+        assertThat(zip).containsKeys(pasta + "/saidas/" + chaveA + ".xml", pasta + "/saidas/" + chaveB + ".xml");
+        assertThat(zip).doesNotContainKey(pasta + "/saidas/" + chaveC + ".xml");
+
+        // E sem o teto ela entra — é o que prova que o filtro acima é o responsável, e não um acaso
+        // da ordenação (o mesmo pedido, mudando só o parâmetro, traz as três).
+        Map<String, byte[]> semTeto = lerZip(baixarZip(token, idEmpresa, hojeMais(-5), hojeMais(0), null));
+        assertThat(semTeto).containsKey(pasta + "/saidas/" + chaveC + ".xml");
+    }
+
+    /** Pedir uma parte que não existe é erro do cliente, não um ZIP vazio entregue como se fosse o pacote. */
+    @Test
+    void parteInexistenteEhRecusadaEmVezDeVirVazia() throws Exception {
+        String token = assinarNovoTenant("parte-inexistente");
+        long idTenant = idTenantDo(token);
+        long idEmpresa = idEmpresaDo(token);
+        LocalDate ontem = hojeMais(-1);
+
+        String chave = chaveDe(821);
+        long doc = criarDocumento(idTenant, idEmpresa, 65, 821, chave, "AUTORIZADO", ontem);
+        arquivar(idTenant, doc, 65, chave, ontem, "<nfeProc>A</nfeProc>");
+
+        mvc.perform(get("/api/v1/fiscal/exportacao-xml")
+                        .header("Authorization", "Bearer " + token)
+                        .param("idEmpresa", String.valueOf(idEmpresa))
+                        .param("dataInicial", hojeMais(-5).toString())
+                        .param("dataFinal", hojeMais(0).toString())
+                        .param("parte", "2"))
+                .andExpect(status().isConflict());
+
+        mvc.perform(get("/api/v1/fiscal/exportacao-xml")
+                        .header("Authorization", "Bearer " + token)
+                        .param("idEmpresa", String.valueOf(idEmpresa))
+                        .param("dataInicial", hojeMais(-5).toString())
+                        .param("dataFinal", hojeMais(0).toString())
+                        .param("parte", "0"))
+                .andExpect(status().isBadRequest());
     }
 }

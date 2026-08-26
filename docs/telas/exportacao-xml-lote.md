@@ -104,23 +104,64 @@ ACESSO`, `EMISSAO`, `SITUACAO`, `VALOR TOTAL`, `DESTINATARIO`, `CPF/CNPJ`, `ARQU
 Valor com **vírgula** decimal (`1234,56`), sem separador de milhar — é o que o Excel pt-BR lê como
 número. Campo de texto tem `;` e `"` escapados.
 
-### 6. Teto: **2.000 documentos** por exportação, e o número aparece ANTES do clique
+### 6. ⭐ Acima de **2.000 documentos** o período é PARTICIONADO, não recusado
 
-Um período largo de uma loja movimentada pode ter dezenas de milhares de XMLs (§11.2). Sem teto, a
-requisição estoura em algum lugar que ninguém escolheu — memória, timeout do proxy, timeout do
-navegador — e o lojista vê "não foi possível conectar ao servidor", que é uma afirmação **falsa**
-sobre a rede.
+> **Revisado em 2026-08-26, no mesmo dia.** A primeira versão respondia **409** mandando reduzir o
+> período. O dono do produto pediu o contrário: *"em vez de limitar a 2 mil notas, faça o seguinte:
+> se for mais que 2 mil notas, então você mesmo particione o pedido, e vai fazendo de 2 mil em 2 mil
+> e gerando os arquivos zip"*. Ele está certo — recusar empurrava para o lojista um trabalho que o
+> sistema sabe fazer: quem tem 12.000 notas teria de descobrir sozinho em quantos pedaços cortar e
+> repetir a tela seis vezes acertando as datas na mão, sem nenhuma garantia de não deixar buraco
+> entre um período e o seguinte.
 
-Com teto: a pré-conferência mostra `131 notas` (ou `12.400 notas — acima do limite`), o botão de
-baixar fica desabilitado quando excede, e a API responde **409** com a mensagem *"O período
-selecionado tem N notas, acima do limite de 2.000 por exportação. Reduza o período (ex.: um mês por
-vez)."* — que diz o que fazer, não só o que deu errado.
+A pré-conferência devolve `totalPartes`, a tela chama o **mesmo endpoint** uma vez por parte
+(`?parte=1`, `?parte=2`, …) e salva um ZIP por parte.
 
-⏭️ Quando esse teto virar limitação real, o caminho já está desenhado: **geração assíncrona com
-progresso ao vivo + entrega por URL assinada** (§11.2, DF22). Isso exige um método novo em
-`ArmazenamentoPrivado` e uma **área nova, apagável** (o ZIP é artefato descartável, regerável — não
-pertence à `FISCAL_XML`, que é WORM de 5 anos). É decisão de produto a registrar, não método a
-acrescentar em silêncio.
+⚠️ **O teto por parte continua existindo, e pelo mesmo motivo da decisão 2:** o ZIP é montado em
+memória porque o `TenantContext` é um `ScopedValue` que não sobrevive a um streaming. Particionar
+**não afrouxa** esse limite — é ele que torna cada parte segura.
+
+#### ⚠️ `ateIdDocumento`: por que a partição precisa de um teto congelado
+
+Paginar com `LIMIT/OFFSET` puro tem um defeito que **não aparece em teste feito com dados parados**:
+se uma nota nova for emitida **entre** a parte 1 e a parte 3 — o caso comum de exportar o mês
+corrente durante o expediente —, ela entra no meio da ordenação por data, empurra as demais, e o
+`OFFSET` da parte seguinte passa a **pular um documento que ninguém baixou**. Sem erro, sem aviso, e
+só descoberto na fiscalização.
+
+Por isso a pré-conferência congela o **maior `id_documento_fiscal` do período naquele instante** e a
+tela repassa esse teto em todas as partes. Uma nota emitida depois simplesmente fica de fora do
+pacote — e entra na próxima exportação, que é o comportamento correto.
+
+O critério de aceitação correspondente **quebra o filtro de propósito** para provar que é ele o
+responsável: `tetoDeIdCongelaOConjuntoEUmaNotaEmitidaDepoisNaoEntra` compara o mesmo pedido com e
+sem `ateIdDocumento` (com teto traz 2 notas, sem teto traz 3). Verificado removendo o filtro do SQL
+e vendo o teste reprovar.
+
+#### Nome dos arquivos
+
+O sufixo de parte só aparece quando há **mais de uma** — numerar `parte-1-de-1` um arquivo único
+seria ruído no nome que o contador arquiva todo mês. Com duas ou mais, o nome carrega **a parte e o
+total** (`LOJA_08-2026_parte-2-de-7.zip`), com zero à esquerda para o explorador de arquivos ordenar
+certo. Só "parte-2" não responderia a pergunta que importa — *recebi todos?* —, e faltar um pedaço
+de um pacote fiscal é o tipo de falha que só aparece meses depois.
+
+#### ⛔ O navegador bloqueia downloads múltiplos automáticos
+
+Medido no Chrome em 2026-08-26: a partir do 2º ou 3º arquivo seguido, o clique **simplesmente não
+gera arquivo**. Na primeira vez o navegador pergunta *"Fazer o download de vários arquivos?"*. Por
+isso a tela avisa **antes** de começar que virão N arquivos e que é preciso permitir — um "permitir"
+negado por engano faria as partes seguintes sumirem sem erro nenhum — e o botão mostra o progresso
+(`Baixando… 3 de 7`), para o lojista conferir quantos realmente chegaram.
+
+⚠️ **Com mais de uma parte, o "Salvar como" (decisão 9) é desligado de propósito:**
+`showSaveFilePicker()` exige *transient user activation*, que **expira** durante o download da parte
+anterior — a partir da segunda parte o diálogo seria recusado e a exportação falharia no meio. Sete
+diálogos seguidos também seriam piores que o download direto.
+
+⏭️ Quando **uma parte só** virar limitação real (uma nota gigante, um lote fora do comum), o caminho
+continua sendo o desenho assíncrono do §11.2 (DF22), com progresso ao vivo e entrega por URL
+assinada.
 
 ### 7. Período máximo: **365 dias**, igual à lista de Documentos Fiscais
 
@@ -237,7 +278,8 @@ Pré-conferência. Não toca no bucket — só conta no banco.
   "documentosSemXml": 3,
   "totalEventos": 4,
   "limiteDocumentos": 2000,
-  "excedeLimite": false
+  "totalPartes": 1,
+  "ateIdDocumento": 48123
 }
 ```
 
@@ -245,9 +287,10 @@ Pré-conferência. Não toca no bucket — só conta no banco.
 
 ```
 ?idEmpresa=1&dataInicial=2026-08-01&dataFinal=2026-08-31&modelo=65   (modelo opcional)
+&parte=2&ateIdDocumento=48123                                       (partição; ver decisão 6)
 
 200 application/zip
-    Content-Disposition: attachment; filename="LOJA_CENTRO_08-2026.zip"
+    Content-Disposition: attachment; filename="LOJA_CENTRO_08-2026_parte-2-de-7.zip"
 ```
 
 Erros em **Problem Details (RFC 9457)**:

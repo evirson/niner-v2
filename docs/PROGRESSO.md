@@ -587,6 +587,47 @@ ADMIN-only como todo o módulo fiscal. 12 testes.
   estoura em algum lugar que ninguém escolheu e o lojista vê "não foi possível conectar ao
   servidor" — uma afirmação **falsa** sobre a rede.
 
+**Revisão no mesmo dia — período grande passou a ser PARTICIONADO, não recusado.** Pedido do dono do
+produto: *"em vez de limitar a 2 mil notas, faça o seguinte: se for mais que 2 mil notas, então você
+mesmo particione o pedido, e vai fazendo de 2 mil em 2 mil e gerando os arquivos zip"*. Ele está
+certo — recusar empurrava para o lojista um trabalho que o sistema sabe fazer: quem tem 12.000 notas
+teria de descobrir sozinho em quantos pedaços cortar e repetir a tela seis vezes acertando datas na
+mão, sem garantia de não deixar buraco entre um período e o seguinte.
+
+A pré-conferência devolve `totalPartes`, a tela chama o **mesmo endpoint** uma vez por parte e salva
+um ZIP por parte. ⚠️ **O teto por parte continua existindo** e pelo mesmo motivo: o ZIP é montado em
+memória porque o `TenantContext` é um `ScopedValue` que não sobrevive a um streaming. Particionar
+não afrouxa o limite — é ele que torna cada parte segura.
+
+⭐ **O detalhe que faz a diferença entre funcionar e falhar em silêncio: `ateIdDocumento`.** Paginar
+com `LIMIT/OFFSET` puro tem um defeito que **não aparece em teste com dados parados** — se uma nota
+for emitida **entre** a parte 1 e a parte 3 (o caso comum de exportar o mês corrente durante o
+expediente), ela entra no meio da ordenação por data, empurra as demais, e o `OFFSET` da parte
+seguinte passa a **pular um documento que ninguém baixou**. Sem erro, sem aviso, e só descoberto na
+fiscalização. Por isso a pré-conferência congela o maior `id_documento_fiscal` do período naquele
+instante e a tela repassa esse teto em todas as partes.
+
+**Verificado quebrando de propósito:** removi o filtro do teto do SQL e
+`tetoDeIdCongelaOConjuntoEUmaNotaEmitidaDepoisNaoEntra` reprovou; restaurado, passa. O teste compara
+o mesmo pedido com e sem `ateIdDocumento` (com teto traz 2 notas, sem teto traz 3) — é o que impede
+ele de passar pelo motivo errado ([[feedback_teste_de_guard_passa_pelo_motivo_errado]]).
+
+⛔ **O navegador bloqueia downloads múltiplos automáticos** — medido no Chrome hoje mesmo, enquanto
+eu depurava o PDF: a partir do 2º ou 3º arquivo seguido, o clique simplesmente não gera arquivo. Na
+primeira vez ele pergunta *"Fazer o download de vários arquivos?"*. A tela avisa **antes** de
+começar e o botão mostra o progresso (`Baixando… 3 de 7`), porque um "permitir" negado por engano
+faria as partes seguintes sumirem sem erro nenhum. ⚠️ E com mais de uma parte o "Salvar como" é
+**desligado de propósito**: `showSaveFilePicker()` exige *transient user activation*, que expira
+durante o download da parte anterior — da segunda em diante o diálogo seria recusado e a exportação
+falharia no meio.
+
+⚠️ **Armadilha de JdbcClient que custou 3 testes:** o mapper que devolvia `null` para "período sem
+nota" quebra dos **dois** jeitos — `.single()` recusa com *"Result value is null but no null value
+expected"* (já registrado no M6) e `.list().stream().findFirst()` estoura **NullPointerException**
+ao ver o null no stream. A saída foi não ter null nenhum: `COALESCE(max(...), 0)` e tratar **0 como
+ausência**, que funciona porque `id_documento_fiscal` começa em 1.
+
+
 **Nota de processo:** este trabalho começou num agente em segundo plano e foi trazido para a thread
 principal a pedido do dono do produto, que queria acompanhar. Revisado aqui contra as armadilhas do
 projeto antes de commitar — `id_tenant` explícito nas 3 consultas, `@Transactional` nos 5 métodos de

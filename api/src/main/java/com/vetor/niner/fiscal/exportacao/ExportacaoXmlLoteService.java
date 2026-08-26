@@ -98,14 +98,16 @@ public class ExportacaoXmlLoteService {
         var contagem = repositorio.contar(idEmpresa, dataInicial, dataFinal, modelo);
         long eventos = repositorio.contarEventos(idEmpresa, dataInicial, dataFinal, modelo);
 
+        int totalPartes = calcularTotalPartes(contagem.total());
         return new ResumoExportacaoXml(
-                nomeDoArquivo(empresa, dataInicial, dataFinal),
+                nomeDoArquivo(empresa, dataInicial, dataFinal, 1, totalPartes),
                 contagem.total(),
                 contagem.comXml(),
                 contagem.total() - contagem.comXml(),
                 eventos,
                 LIMITE_DOCUMENTOS,
-                contagem.total() > LIMITE_DOCUMENTOS);
+                totalPartes,
+                repositorio.maiorIdDocumento(idEmpresa, dataInicial, dataFinal, modelo));
     }
 
     // ------------------------------------------------------------------ o pacote
@@ -114,18 +116,50 @@ public class ExportacaoXmlLoteService {
     public record PacoteZip(String nomeArquivo, byte[] conteudo) {
     }
 
-    public PacoteZip exportar(Jwt jwt, long idEmpresa, LocalDate dataInicial, LocalDate dataFinal, Integer modelo) {
+    /**
+     * Monta <b>uma parte</b> do pacote.
+     *
+     * <p>⭐ <b>Período grande é particionado, não recusado</b> (decisão do dono do produto em
+     * 2026-08-26). Antes, acima de {@link #LIMITE_DOCUMENTOS} a exportação respondia 409 mandando
+     * reduzir o período — o que empurrava para o lojista um trabalho que o sistema sabe fazer:
+     * quem tem 12.000 notas teria de descobrir sozinho em quantos pedaços cortar, e repetir a tela
+     * seis vezes acertando as datas na mão. Agora a tela pede parte 1, 2, 3… e o servidor devolve
+     * um ZIP por parte, cada um com {@link #LIMITE_DOCUMENTOS} documentos.
+     *
+     * <p>⚠️ O teto por parte <b>continua existindo</b> e pelo mesmo motivo de antes: o ZIP é montado
+     * em memória porque o {@code TenantContext} é um {@code ScopedValue} que não sobrevive a um
+     * streaming. Particionar não afrouxa esse limite — ele é o que torna cada parte segura.
+     *
+     * @param parte          1-based.
+     * @param ateIdDocumento teto vindo da pré-conferência, que congela o conjunto. Ver
+     *                       {@code ExportacaoXmlLoteRepositorio#listarDocumentos}.
+     */
+    public PacoteZip exportar(Jwt jwt, long idEmpresa, LocalDate dataInicial, LocalDate dataFinal, Integer modelo,
+                              int parte, Long ateIdDocumento) {
         exigirAdmin(jwt);
         validarFiltros(dataInicial, dataFinal, modelo);
         EmpresaDoPacote empresa = exigirEmpresa(idEmpresa);
-
-        List<DocumentoDoPacote> documentos = repositorio.listarDocumentos(idEmpresa, dataInicial, dataFinal, modelo);
-        if (documentos.size() > LIMITE_DOCUMENTOS) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT,
-                    ("O período selecionado tem %d notas, acima do limite de %d por exportação. "
-                            + "Reduza o período (ex.: um mês por vez).")
-                            .formatted(documentos.size(), LIMITE_DOCUMENTOS));
+        if (parte < 1) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Parte inválida.");
         }
+
+        // Sem teto vindo do cliente, congela agora — assim uma exportação de parte única também
+        // fica imune a uma nota emitida no meio dela.
+        Long teto = ateIdDocumento != null
+                ? ateIdDocumento
+                : repositorio.maiorIdDocumento(idEmpresa, dataInicial, dataFinal, modelo);
+
+        long totalNoPeriodo = repositorio.contar(idEmpresa, dataInicial, dataFinal, modelo).total();
+        int totalPartes = calcularTotalPartes(totalNoPeriodo);
+        if (parte > Math.max(totalPartes, 1)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "O período tem %d parte(s); a parte %d não existe.".formatted(totalPartes, parte));
+        }
+
+        List<DocumentoDoPacote> documentos = repositorio.listarDocumentos(
+                idEmpresa, dataInicial, dataFinal, modelo, teto, LIMITE_DOCUMENTOS,
+                (parte - 1) * LIMITE_DOCUMENTOS);
+
         // ⛔ Nunca gerar ZIP vazio em silêncio: um arquivo que abre e não tem nada dentro parece
         // pacote entregue, e o lojista só descobre quando o contador reclama.
         if (documentos.stream().noneMatch(d -> d.xmlObjetoBucket() != null)) {
@@ -136,7 +170,10 @@ public class ExportacaoXmlLoteService {
                             .formatted(documentos.size()));
         }
 
-        List<EventoDoPacote> eventos = repositorio.listarEventos(idEmpresa, dataInicial, dataFinal, modelo);
+        // Eventos DESTA parte: filtrar por período de novo repetiria o mesmo comprovante de
+        // cancelamento em todos os ZIPs, longe da nota a que ele pertence.
+        List<EventoDoPacote> eventos = repositorio.listarEventosDosDocumentos(
+                documentos.stream().map(DocumentoDoPacote::idDocumentoFiscal).toList());
         ZoneId fuso = FusoDaUf.deOuPadrao(empresa.uf());
 
         ByteArrayOutputStream saida = new ByteArrayOutputStream();
@@ -167,7 +204,19 @@ public class ExportacaoXmlLoteService {
             throw new IllegalStateException("Falha ao montar o ZIP da exportação de XML.", e);
         }
 
-        return new PacoteZip(nomeDoArquivo(empresa, dataInicial, dataFinal), saida.toByteArray());
+        return new PacoteZip(
+                nomeDoArquivo(empresa, dataInicial, dataFinal, parte, totalPartes), saida.toByteArray());
+    }
+
+    /**
+     * Quantos ZIPs o período rende. Zero documentos = 1 parte (que vai responder 409 dizendo que
+     * não há nota) — devolver 0 partes faria a tela não ter o que pedir e calar sobre o porquê.
+     */
+    public static int calcularTotalPartes(long totalDocumentos) {
+        if (totalDocumentos <= 0) {
+            return 1;
+        }
+        return (int) ((totalDocumentos + LIMITE_DOCUMENTOS - 1) / LIMITE_DOCUMENTOS);
     }
 
     /**
@@ -281,13 +330,34 @@ public class ExportacaoXmlLoteService {
      * período de agosto sem nenhuma nota ainda é "agosto".
      */
     private static String nomeDoArquivo(EmpresaDoPacote empresa, LocalDate dataInicial, LocalDate dataFinal) {
+        return nomeDoArquivo(empresa, dataInicial, dataFinal, 1, 1);
+    }
+
+    /**
+     * ⭐ O sufixo de parte só aparece quando há <b>mais de uma</b>: numerar "parte-1-de-1" um
+     * arquivo único seria ruído no nome que o contador arquiva todo mês.
+     *
+     * <p>Com duas ou mais, o nome carrega <b>a parte e o total</b> (`parte-2-de-7`) — não só o
+     * número da parte. Quem recebe sete arquivos precisa saber, olhando qualquer um deles, se
+     * recebeu todos; "parte-2" sozinho não responde isso, e faltar um pedaço de um pacote fiscal
+     * é o tipo de falha que só aparece meses depois, na fiscalização.
+     *
+     * <p>Zero à esquerda (`parte-02-de-10`) para o explorador de arquivos ordenar certo — sem ele,
+     * a ordenação alfabética põe 10 antes de 2.
+     */
+    private static String nomeDoArquivo(EmpresaDoPacote empresa, LocalDate dataInicial, LocalDate dataFinal,
+                                        int parte, int totalPartes) {
         String nome = empresa.nomeFantasia() == null || empresa.nomeFantasia().isBlank()
                 ? empresa.razaoSocial()
                 : empresa.nomeFantasia();
         String inicio = mesAno(dataInicial);
         String fim = mesAno(dataFinal);
         String periodo = inicio.equals(fim) ? inicio : inicio + "_a_" + fim;
-        return "%s_%s.zip".formatted(sanitizarNome(nome), periodo);
+        String sufixo = totalPartes > 1
+                ? "_parte-%0{larg}d-de-%d".replace("{larg}", String.valueOf(String.valueOf(totalPartes).length()))
+                        .formatted(parte, totalPartes)
+                : "";
+        return "%s_%s%s.zip".formatted(sanitizarNome(nome), periodo, sufixo);
     }
 
     private static String mesAno(LocalDate data) {
