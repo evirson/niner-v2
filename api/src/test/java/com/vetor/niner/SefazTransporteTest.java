@@ -127,7 +127,7 @@ class SefazTransporteTest {
 
     private SefazTransporte transporteComTruststore() {
         NinerProperties props = new NinerProperties(null, null, null, null, null, null,
-                new NinerProperties.Fiscal(truststoreCliente.toString(), SENHA, null), null);
+                new NinerProperties.Fiscal(truststoreCliente.toString(), SENHA, null), null, null);
         return new SefazTransporte(props);
     }
 
@@ -288,7 +288,7 @@ class SefazTransporteTest {
     void servidorNaoConfiavelViraFalhaDeComunicacaoNaoRejeicaoFiscal() {
         respostaParaDevolver.set(respostaSefaz("100", "Autorizado", "1", "2"));
         NinerProperties semTruststore = new NinerProperties(null, null, null, null, null, null,
-                new NinerProperties.Fiscal(null, null, null), null);
+                new NinerProperties.Fiscal(null, null, null), null, null);
         SefazTransporte semConfianca = new SefazTransporte(semTruststore);
 
         assertThatThrownBy(() -> semConfianca.enviar(urlBase + "/nfce/NFeAutorizacao4", "NFeAutorizacao4",

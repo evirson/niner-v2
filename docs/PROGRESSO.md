@@ -541,6 +541,100 @@ Movimentação de Conta Corrente) que ainda não tinham migrado pro `SeletorPlan
 
 ## Linha do tempo
 
+### 2026-08-26 — M1: o lojista conecta a conta do Mercado Livre (OAuth), e o `state` é o que impede conectar na loja errada
+
+Destrava o bloco que esperava o `client_id` desde 25/08. A aplicação OAuth foi criada no DevCenter
+na véspera; hoje entrou o código que a usa. **1011 testes verdes** (eram 997), `tsc -b` limpo.
+
+#### ⭐ A decisão central: o `state` virou uma linha de banco (V065)
+
+O Mercado Livre exige que a `redirect_uri` bata **caractere por caractere** e **não aceita parte
+variável**. Não existe "…/retorno/{idTenant}". Quando o navegador do lojista volta do
+consentimento, ele chega **sem JWT** — e a API precisa descobrir de quem é aquela autorização.
+
+`plataforma.oauth_estado_canal` responde isso: guarda o **hash** do `state` (nunca o valor), com
+`id_tenant`, `id_canal`, `id_usuario`, uso único e validade de 10 minutos. Três propriedades, não
+uma — imprevisível (32 bytes de `SecureRandom`), de uso único e de vida curta.
+
+⚠️ **Mora em `plataforma`, sem RLS, de propósito:** o endpoint de retorno roda **sem**
+`TenantContext` — é ele que vai *descobrir* o tenant. Sob RLS a consulta devolveria **zero linha em
+silêncio** e toda conexão falharia com "estado inválido", sem nada em log apontando a causa. É o
+mesmo defeito que deixou os jobs do fiscal inertes até 2026-08-19. Precedente idêntico no projeto:
+`plataforma.recuperacao_senha` (V042), que também guarda hash e é de uso único.
+
+⚠️ **A consumação é um comando só** (`UPDATE … WHERE usado_em IS NULL AND expira_em > now()
+RETURNING …`). Ler, conferir em Java e depois marcar deixaria janela para duas voltas simultâneas
+passarem pelo mesmo `state`. E ela acontece **antes** da troca do `code` por token: um `state` que
+sobrevive a uma troca malsucedida poderia ser reapresentado com outro `code`, e o custo de errar
+para o lado seguro é o lojista clicar "Conectar" de novo.
+
+#### ⚠️ O desvio do roteiro — e por que ele é o certo
+
+A §9 do estudo previa as duas metades do OAuth em `/api/publico`. **Não dá.** Um endpoint anônimo
+não tem como saber de que loja é a autorização, e a URI de redirect não aceita parte variável para
+dizer. Ficou assim:
+
+| | Onde | Por quê |
+|---|---|---|
+| **Iniciar** | `GET /api/v1/canais/{id}/mercadolivre/autorizar` — **autenticado**, ADMIN | é aqui que se sabe *quem* está conectando, e é isso que vai para o `state` |
+| **Concluir** | `GET /api/publico/canais/mercadolivre/retorno` — **anônimo** | quem chega é o navegador devolvido pelo ML, sem JWT |
+
+⚠️ O endereço do retorno **não pode mudar** sem mexer no painel do ML: renomear esse mapeamento
+quebra a conexão de todos os lojistas de uma vez, com uma mensagem do ML que não diz que a culpa
+é nossa.
+
+#### O que mais entrou
+
+- **`MercadoLivreOAuth`** — transporte do `POST /oauth/token`. ⚠️ Não reusa `MercadoLivreApi`: aquele
+  carimba `Bearer` em tudo e fala JSON; este é **não autenticado** (é ele que emite o token) e manda
+  o corpo em `x-www-form-urlencoded`. Forçar um dentro do outro daria um cliente com dois modos.
+- **Renovação automática** (`MercadoLivreTokenJob` × `MercadoLivreTokenRenovador`) — o token dura
+  **6 h**; sem isso o lojista reautorizaria **4× por dia**. Renova com **1 h** de folga, a cada 10
+  min: seis oportunidades antes de vencer, o que atravessa uma indisponibilidade do ML sem ele
+  notar. Agendador e trabalho em **beans separados** — `@Transactional` não vale em auto-invocação,
+  e sem transação não há `SET LOCAL app.id_tenant`.
+- **Credencial cifrada por campo, não em bloco** — `accessToken` e `refreshToken` passam pelo
+  `SegredoCifrador` (AES-256-GCM, chave fora do banco); `contaExterna` e `expiraEm` ficam legíveis
+  **porque precisam ser lidos por SQL** (o painel lê `credenciais ->> 'contaExterna'`, e o job de
+  renovação filtra por vencimento no banco — cifrar obrigaria a decifrar todo canal de todo tenant
+  a cada rodada). Nenhum dos dois é segredo.
+- **Front** — botão **Conectar** (e **Reconectar** no canal em `ERRO`, que é o caso de autorização
+  revogada), e a volta do ML tratada por `useEffect` que mostra o aviso, invalida o cache e
+  **limpa a query string** — sem isso um F5 repetiria "conectado" para sempre. `AjudaDaTela`
+  atualizada.
+- O aviso da tela deixou de dizer "em preparação" e passou a avisar sobre a **comissão de 11–19%**
+  do ML: o percentual nasce 0 porque não é papel do sistema arbitrar a margem do lojista, e esse
+  texto é o que substitui o palpite que decidimos não dar (§8.5).
+
+#### ⚠️ Três armadilhas que só apareceram executando
+
+1. **Esta aplicação não expõe bean de `ObjectMapper`.** Injetá-lo num `@Repository` ou num método
+   `@Bean` derruba o contexto na subida ("No qualifying bean of type ObjectMapper"). Já estava
+   escrito no javadoc do `OutboxRepositorio` — e eu escrevi as duas classes injetando assim mesmo.
+   Cada bean cria o próprio.
+2. **O `application.yml` de teste SOMBREIA o de produção.** O bloco `niner.canais` precisou existir
+   nos **dois** arquivos; sem isso `api-url` chegava nula e o contexto não subia. O próprio arquivo
+   de teste já avisa disso no bloco `cobranca` — e o teste "sem credencial" foi justamente quem
+   pegou.
+3. **Acrescentar um componente a `NinerProperties` quebra `new NinerProperties(...)` nos testes** —
+   três chamadas em `ArmazenamentoPrivadoTest` e `SefazTransporteTest` pararam de compilar. Barato,
+   mas é o tipo de coisa que faz um `record` de configuração doer mais do que parece.
+
+#### ⛔ O que NÃO foi verificado (e é o que importa saber)
+
+- **Nenhuma chamada real ao Mercado Livre.** Tudo passou contra **WireMock**, que responde o que eu
+  programei. A primeira chamada real vai encontrar divergências — é esperado.
+- **O primeiro OAuth real não fecha em `localhost`.** A `redirect_uri` registrada é a de
+  **produção**: o ML devolve o navegador para `api.nainer.com.br`, que tem outro banco e não conhece
+  o `state` gerado em dev. A volta acusa "este pedido de conexão não vale mais", e a causa não
+  aparece em log nenhum do dev. ⏭️ **Decisão pendente do dono do produto**, em §10.4: testar em
+  produção, ou registrar uma segunda URI de redirect para um túnel de **hostname fixo** (depende de
+  o painel do ML aceitar mais de uma — não conferido na tela).
+- Conferido em dev **até onde dava**: a API sobe enxergando a credencial, o guarda de estoque
+  recusa com a mensagem certa, e `/autorizar` devolve a URL de consentimento real com o
+  `client_id` verdadeiro, gravando só o hash do `state`. O canal e o parâmetro que mexi para esse
+  teste foram **restaurados ao estado original** e conferidos no banco.
+
 ### 2026-08-25 (5) — aplicação do Mercado Livre criada no DevCenter: o formulário campo a campo, e onde o `client_id` mora
 
 Destrava o **M1** que a entrada (3) deixou parado. Nenhuma linha de código: é o cadastro da

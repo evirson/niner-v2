@@ -149,3 +149,21 @@ niner:
       # NÃO (cStat 975 "Obrigatoria a informacao do identificador do CSRT e do Hash do CSRT").
       id-csrt: ${NINER_FISCAL_RESPTEC_ID_CSRT:}
       csrt: ${NINER_FISCAL_RESPTEC_CSRT:}
+
+  canais:                      # marketplaces (docs/MODULOMARKETPLACE.md) — plano do LOJISTA
+    mercadolivre:
+      # Aplicação OAuth da Vetor no DevCenter do ML, criada em 2026-08-25. UMA para todos os
+      # lojistas: cada lojista autoriza esta aplicação na conta dele.
+      # ⛔ client-id é público; client-secret NUNCA no repositório (variável de ambiente).
+      # Vazio = integração desligada: a API sobe igual e só o /autorizar responde 503.
+      client-id: ${NINER_ML_CLIENT_ID:}
+      client-secret: ${NINER_ML_CLIENT_SECRET:}
+      # ⚠️ Tem de bater CARACTERE POR CARACTERE com a registrada no DevCenter, e o ML não aceita
+      # parte variável — por isso o vínculo com o tenant viaja no `state` (V065), não na URL.
+      redirect-uri: ${NINER_ML_REDIRECT_URI:https://api.nainer.com.br/api/publico/canais/mercadolivre/retorno}
+      # ⚠️ Host do CONSENTIMENTO — é outro host do da API. Trocar os dois é erro clássico: a tela
+      # que o lojista vê não mora em api.mercadolibre.com.
+      auth-url: ${NINER_ML_AUTH_URL:https://auth.mercadolivre.com.br}
+      api-url: ${NINER_ML_API_URL:https://api.mercadolibre.com}
+      # Para onde a API devolve o NAVEGADOR do lojista depois de conectar (tela de Canais do ERP).
+      retorno-web: ${NINER_ML_RETORNO_WEB:http://localhost:5173/canais}

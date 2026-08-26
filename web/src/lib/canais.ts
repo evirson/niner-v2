@@ -81,3 +81,15 @@ export function excluirCanal(idCanal: number): Promise<void> {
 export function reprocessarEvento(idEvento: number): Promise<void> {
   return api<void>(`/api/v1/canais/eventos/${idEvento}/reprocessar`, { method: 'POST' })
 }
+
+/**
+ * Começa a conexão OAuth: pede ao servidor a URL do consentimento do Mercado Livre.
+ *
+ * ⚠️ O servidor devolve a URL em JSON, e **não** um redirecionamento — um 302 aqui quebraria
+ * este `fetch`, que precisa do endereço para levar o lojista até lá. Quem termina a conexão é o
+ * próprio Mercado Livre, devolvendo o navegador para `/api/publico/canais/mercadolivre/retorno`,
+ * que por sua vez redireciona de volta para esta tela com o resultado na query string.
+ */
+export function iniciarConexaoMercadoLivre(idCanal: number): Promise<{ url: string }> {
+  return api<{ url: string }>(`/api/v1/canais/${idCanal}/mercadolivre/autorizar`)
+}

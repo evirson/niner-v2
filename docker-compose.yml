@@ -100,6 +100,14 @@ services:
       NINER_STAFF_INICIAL_EMAIL: ${NINER_STAFF_INICIAL_EMAIL:-}
       NINER_STAFF_INICIAL_SENHA: ${NINER_STAFF_INICIAL_SENHA:-}
       NINER_STAFF_INICIAL_NOME: ${NINER_STAFF_INICIAL_NOME:-Administrador Vetor}
+
+      # Canais de venda — aplicação OAuth do Mercado Livre (bloco M1).
+      # ⛔ client-secret NUNCA aqui com valor: vem do .env, que está no .gitignore.
+      # Vazio = integração desligada (a API sobe igual, só o /autorizar responde 503).
+      NINER_ML_CLIENT_ID: ${NINER_ML_CLIENT_ID:-}
+      NINER_ML_CLIENT_SECRET: ${NINER_ML_CLIENT_SECRET:-}
+      NINER_ML_REDIRECT_URI: ${NINER_ML_REDIRECT_URI:-https://api.nainer.com.br/api/publico/canais/mercadolivre/retorno}
+      NINER_ML_RETORNO_WEB: ${NINER_ML_RETORNO_WEB:-http://localhost:5173/canais}
     volumes:
       - ./api/secrets:/secrets:ro
     ports: ["${NINER_API_PORT:-8080}:8080"]

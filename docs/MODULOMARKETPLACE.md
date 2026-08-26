@@ -1,7 +1,14 @@
 # Estudo: Integração com Marketplaces — Mercado Livre (primeiro canal)
 
-> **Status: ESTUDO, aguardando decisões do dono do produto.** Nada foi implementado.
-> Data: 2026-08-25 · Requisitos cobertos: R3, R5, R6, R7 · Princípios: P1, P2, P3, P8
+> **Status: EM IMPLEMENTAÇÃO.** As decisões da §4 estão fechadas (§8) e os blocos **M0 e M1** já
+> existem em código — ver o estado real na **§10**, que é a seção a acreditar quando esta divergir.
+> Escrito em 2026-08-25 como estudo; cabeçalho corrigido em 2026-08-26, quando o M1 entrou.
+> Requisitos cobertos: R3, R5, R6, R7 · Princípios: P1, P2, P3, P8
+>
+> ⚠️ **Nenhuma chamada real ao Mercado Livre foi feita até hoje.** Tudo o que está verificado, está
+> verificado contra **WireMock**, que responde o que nós programamos. Os fatos da §2 vieram de
+> documentação lida, e leitura de documentação já nos traiu aqui (o XSD passou e a SEFAZ recusou).
+> A primeira chamada real vai encontrar divergências — é esperado, não é fracasso.
 >
 > ⚠️ **O que aqui é verificado × o que é suposto.** Os fatos da API do ML foram levantados na
 > documentação pública em 25/08/2026. **Nenhuma chamada foi feita contra a API do Mercado Livre
@@ -371,7 +378,7 @@ verificável, e o que depende de terceiro isolado no fim.
 | Bloco | Entrega | Depende de |
 |---|---|---|
 | **M0** | Migration `origem_venda += MARKETPLACE`; interface `CanalDeVenda`; modelo de `canal` com credenciais cifradas; **os dois guardas de estoque (§8.1)** | nada ✅ |
-| **M1** | OAuth do ML: iniciar, retorno com `state`, refresh automático do token de 6 h | `client_id` da Vetor |
+| **M1** | ✅ **FEITO 2026-08-26.** OAuth do ML: iniciar (`/api/v1`, autenticado — ver §10.3), retorno com `state` (`/api/publico`), refresh automático do token de 6 h | `client_id` da Vetor ✅ |
 | **M2** | Leitura: listar anúncios do lojista, tela de **vincular anúncio ↔ variação** (R6) | M1 |
 | **M3** | Escrita: `atualizarEstoque` via outbox, honrando `429` e **lendo o anúncio antes de escrever** (armadilha das variações, §2.4) | M2 |
 | **M4** | Painel de saúde: fila de erros, dead-letter, reprocessar (R7) | M3 |
@@ -507,11 +514,49 @@ Livre. Nada aqui depende do `client_id` — foi escolhido de propósito para a e
 | **Adapter do ML** (parte do M2/M3) | ✅ contra WireMock | `integracao/mercadolivre/` |
 | **Worker do outbox** | ✅ | `integracao/outbox/` |
 | **Tela + painel de saúde** (R7) | ✅ | `web/src/pages/canais/CanaisVenda.tsx` |
-| **M1 — OAuth** | ⏸️ | **bloqueado no `client_id`** |
-| M5–M7 — pedidos, fila de expedição | ⏭️ | depende do M1 |
+| **M1 — OAuth** | ✅ **2026-08-26** | `V065`, `canais/EstadoOAuthRepositorio`, `integracao/mercadolivre/MercadoLivreOAuth*` |
+| M2–M4 — vincular anúncio, escrita, painel | ⏭️ | depende do M1 ✅ |
+| M5–M7 — pedidos, fila de expedição | ⏭️ | depende do M1 ✅ |
 | M8 — NF-e 55 | ⏭️ | depende do `cStat 974` |
 
-**997 testes verdes**, `tsc -b` limpo.
+**1011 testes verdes**, `tsc -b` limpo.
+
+### 10.3 ⚠️ O M1 desviou da §9 em um ponto — e o desvio é o certo
+
+A §9 dizia *"OAuth do ML: **iniciar**, retorno com `state`, refresh"*, e a §5 previa **as duas
+metades em `/api/publico`**. Não dá:
+
+- **Iniciar** ficou em **`/api/v1`, autenticado** (`GET /api/v1/canais/{id}/mercadolivre/autorizar`).
+  Um endpoint anônimo não tem como saber de que loja é a autorização — e a URI de redirect não
+  aceita parte variável para dizer. Ou o tenant vem do JWT no início, ou viria da URL, que é
+  escolhida por quem chama.
+- **Concluir** ficou em **`/api/publico`, anônimo** (`GET /api/publico/canais/mercadolivre/retorno`),
+  porque quem chega ali é o navegador do lojista devolvido pelo ML, sem JWT nenhum. Este é o
+  endereço registrado no DevCenter, e **renomeá-lo quebra a conexão de todos os lojistas de uma
+  vez**, com uma mensagem do ML que não diz que a culpa é nossa.
+
+O vínculo entre as duas metades é a linha da **V065** (`plataforma.oauth_estado_canal`): hash do
+`state`, uso único, 10 minutos, em `plataforma` porque o retorno roda **sem** `TenantContext` — é
+ele que vai *descobrir* o tenant, e sob RLS a consulta devolveria zero linha em silêncio.
+
+### 10.4 ⛔ O primeiro OAuth real NÃO fecha em `localhost` — decisão pendente
+
+A `redirect_uri` registrada é **de produção** (`https://api.nainer.com.br/...`) e o ML exige
+casamento **caractere por caractere**, sem parte variável. Clicar em "Conectar" numa API rodando
+em `localhost` leva o lojista ao consentimento normalmente — e o ML devolve o navegador para a
+**API de produção**, que tem outro banco e não conhece aquele `state`. Resultado: a volta acusa
+"este pedido de conexão não vale mais", e a causa não aparece em log nenhum do dev.
+
+Duas saídas, e é decisão do dono do produto:
+
+1. **Testar em produção** — publicar e deixar que a primeira autorização real seja o teste. O
+   `redirect_uri` já está certo; o `client_secret` vai para a variável de ambiente **do servidor**.
+   ⚠️ Cada rodada de diagnóstico passa a depender de deploy, e diagnóstico de OAuth é feito de
+   rodadas.
+2. **Registrar uma segunda URI de redirect** apontando para um túnel. Depende de o painel do ML
+   aceitar mais de uma (§11.3 diz que a aplicação aceita várias, *"se a tela só aceitar uma, fica a
+   de produção"* — **não conferido na tela**), e exige **hostname fixo**: túnel grátis muda de
+   endereço a cada restart, e casamento exato significa que todo restart quebraria o login.
 
 ### 10.1 As decisões de implementação que valem revisão
 

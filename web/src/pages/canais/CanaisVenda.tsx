@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import AjudaDaTela from '../../components/AjudaDaTela'
 import { BotaoFecharTela } from '../../components/BotaoFecharTela'
@@ -11,6 +12,7 @@ import {
   criarCanal,
   desconectarCanal,
   excluirCanal,
+  iniciarConexaoMercadoLivre,
   listarCanais,
   reprocessarEvento,
   type Canal,
@@ -47,9 +49,12 @@ function classeStatus(status: Canal['status']): string {
  * <p>Não é tela de cadastro: não tem paginação nem popup de filtros. Segue o mesmo desvio do
  * padrão de `FiscalContingenciaPainel` — cards de estado e uma lista de problemas.
  *
- * <p>⏭️ **Conectar ainda não existe.** A conexão é OAuth (bloco M1) e depende da aplicação da
- * Vetor no Mercado Livre, que ainda não foi criada. A tela diz isso por extenso, em vez de
- * mostrar um botão que só pode falhar — mensagem honesta vale mais que botão bonito.
+ * <p>✅ **Conectar existe desde o bloco M1** (2026-08-26). O botão leva o lojista ao consentimento
+ * do Mercado Livre; quem termina é o servidor, que redireciona de volta para cá com o resultado
+ * na query string — ver o `useEffect` da volta.
+ *
+ * <p>⚠️ **A tela não vê token nenhum.** A credencial é cifrada e nunca volta pela API: o que
+ * aparece aqui é a situação e `contaExterna` (o id público do vendedor no ML).
  */
 export default function CanaisVenda() {
   const queryClient = useQueryClient()
@@ -58,6 +63,7 @@ export default function CanaisVenda() {
   const [nome, setNome] = useState('')
   const [percTexto, setPercTexto] = useState('0,00')
   const [criando, setCriando] = useState(false)
+  const [params, setParams] = useSearchParams()
 
   const { data: canais, isLoading } = useQuery({ queryKey: ['canais'], queryFn: listarCanais })
   const { data: saude } = useQuery({
@@ -98,6 +104,19 @@ export default function CanaisVenda() {
     onError: tratarErro,
   })
 
+  /**
+   * Conectar (bloco M1).
+   *
+   * ⚠️ Sai desta aba com `location.assign`, e não numa janela nova: o Mercado Livre devolve o
+   * navegador para o servidor, que redireciona de volta para cá — abrir popup faria o retorno
+   * cair numa janela órfã, sem a tela que precisa mostrar o resultado.
+   */
+  const conectar = useMutation({
+    mutationFn: (idCanal: number) => iniciarConexaoMercadoLivre(idCanal),
+    onSuccess: ({ url }) => window.location.assign(url),
+    onError: tratarErro,
+  })
+
   const desconectar = useMutation({
     mutationFn: (idCanal: number) => desconectarCanal(idCanal),
     onSuccess: () => {
@@ -124,6 +143,32 @@ export default function CanaisVenda() {
     },
     onError: tratarErro,
   })
+
+  /**
+   * A volta do Mercado Livre.
+   *
+   * O servidor redireciona para cá com `?canal=N&conectado=…` ou `?canal=N&erro=…`. ⚠️ A query
+   * string é **limpa** logo depois: sem isso, um F5 na tela repetiria o aviso de "conectado" para
+   * sempre, e o lojista acabaria acreditando numa conexão que talvez já tenha sido desfeita.
+   *
+   * ⚠️ E invalida as consultas: quem conectou foi o servidor, então o cache do React Query desta
+   * aba ainda tem o canal como desconectado.
+   */
+  useEffect(() => {
+    const conectado = params.get('conectado')
+    const erro = params.get('erro')
+    if (!conectado && !erro) return
+
+    setAviso({ mensagem: conectado ?? erro ?? '', tipo: conectado ? 'sucesso' : 'erro' })
+    invalidarTudo()
+
+    const limpos = new URLSearchParams(params)
+    limpos.delete('conectado')
+    limpos.delete('erro')
+    limpos.delete('canal')
+    setParams(limpos, { replace: true })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [params])
 
   function abrirCriacao() {
     setCriando(true)
@@ -155,13 +200,16 @@ export default function CanaisVenda() {
       </div>
 
       <div className="lista-corpo">
-        {/* ⏭️ Aviso honesto no lugar de um botão que só pode falhar. */}
+        {/* ⚠️ O aviso da comissão é obrigatório, não decorativo: o percentual nasce 0 (mesmo preço
+            da loja) porque não é papel do sistema arbitrar a margem do lojista — e este texto é o
+            que substitui o palpite que decidimos não dar. Ver MODULOMARKETPLACE.md §8.5. */}
         <div className="card" style={{ marginBottom: 16 }}>
-          <strong>Conexão com o Mercado Livre — em preparação.</strong>
+          <strong>Antes de conectar, confira o ajuste de preço.</strong>
           <p className="muted" style={{ marginBottom: 0 }}>
-            O cadastro do canal e a regra de preço já podem ser configurados aqui. A autorização da
-            conta (OAuth) depende do aplicativo da Vetor no Mercado Livre, ainda em criação — até
-            lá o canal fica <em>desconectado</em> e nada é publicado.
+            O Mercado Livre cobra comissão por venda (em geral entre 11% e 19%), além do frete.
+            Com o ajuste em <strong>0%</strong>, o anúncio sai pelo mesmo preço do balcão e essa
+            comissão sai inteira da sua margem. O ajuste aceita valor <em>negativo</em>, se você
+            quiser vender mais barato no marketplace do que na loja.
           </p>
         </div>
 
@@ -323,6 +371,18 @@ export default function CanaisVenda() {
                         <button type="button" className="btn ghost" onClick={() => abrirEdicao(c)}>
                           Editar
                         </button>
+                        {/* Conectar aparece também em ERRO: é justamente o caso de autorização
+                            revogada ou expirada, cujo conserto é reconectar. */}
+                        {c.status !== 'CONECTADO' && c.tipo === 'MERCADO_LIVRE' && (
+                          <button
+                            type="button"
+                            className="btn"
+                            disabled={conectar.isPending}
+                            onClick={() => conectar.mutate(c.idCanal)}
+                          >
+                            {c.status === 'ERRO' ? 'Reconectar' : 'Conectar'}
+                          </button>
+                        )}
                         {c.status === 'CONECTADO' && (
                           <button
                             type="button"
