@@ -77,6 +77,7 @@ import FiscalCertificadoLista from './pages/fiscal/FiscalCertificadoLista'
 import ConformidadeFiscalPainel from './pages/fiscal/ConformidadeFiscalPainel'
 import FiscalContingenciaPainel from './pages/fiscal/FiscalContingenciaPainel'
 import CanaisVenda from './pages/canais/CanaisVenda'
+import VincularAnuncios from './pages/canais/VincularAnuncios'
 import DocumentoFiscalLista from './pages/fiscal/DocumentoFiscalLista'
 import InutilizacaoNumeracao from './pages/fiscal/InutilizacaoNumeracao'
 
@@ -129,6 +130,7 @@ export default function App() {
           <Route path="/estoque/:id" element={<TransferenciaDetalhe />} />
           <Route path="/pedidos" element={<EmBreve titulo="Pedidos" />} />
           <Route path="/canais" element={<CanaisVenda />} />
+          <Route path="/canais/:idCanal/anuncios" element={<VincularAnuncios />} />
           <Route path="/bi-dashboard" element={<EmBreve titulo="BI Dashboard" />} />
           <Route path="/entrada-produtos-compra" element={<EntradaMercadoriaLista />} />
           <Route path="/estoque/devolucao-compra" element={<DevolucaoCompra />} />

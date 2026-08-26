@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import AjudaDaTela from '../../components/AjudaDaTela'
 import { BotaoFecharTela } from '../../components/BotaoFecharTela'
@@ -64,6 +64,7 @@ export default function CanaisVenda() {
   const [percTexto, setPercTexto] = useState('0,00')
   const [criando, setCriando] = useState(false)
   const [params, setParams] = useSearchParams()
+  const navigate = useNavigate()
 
   const { data: canais, isLoading } = useQuery({ queryKey: ['canais'], queryFn: listarCanais })
   const { data: saude } = useQuery({
@@ -381,6 +382,17 @@ export default function CanaisVenda() {
                             onClick={() => conectar.mutate(c.idCanal)}
                           >
                             {c.status === 'ERRO' ? 'Reconectar' : 'Conectar'}
+                          </button>
+                        )}
+                        {/* Vincular só faz sentido com o canal conectado: a tela lista os
+                            anúncios consultando o marketplace. */}
+                        {c.status === 'CONECTADO' && (
+                          <button
+                            type="button"
+                            className="btn"
+                            onClick={() => navigate(`/canais/${c.idCanal}/anuncios`)}
+                          >
+                            Vincular anúncios
                           </button>
                         )}
                         {c.status === 'CONECTADO' && (

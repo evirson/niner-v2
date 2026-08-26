@@ -52,9 +52,39 @@ public interface CanalDeVenda {
                         int quantidade) {
     }
 
-    /** Um anúncio como o canal o descreve — o mínimo para a tela de vínculo (R6). */
+    /**
+     * Uma variação <b>dentro</b> de um anúncio do canal (tamanho, cor…).
+     *
+     * <p>⚠️ Não confundir com a variação do ERP: esta é a do <i>marketplace</i>, e o trabalho do
+     * R6 é justamente ligar uma na outra.
+     *
+     * @param idExterno  id da variação no canal — é ele que vai em {@link SaldoAnuncio}, e é o que
+     *                   impede o {@code PUT} de apagar a variação (§2.4)
+     * @param descricao  como o canal a descreve ("Cor: Azul, Tamanho: M"), para o lojista
+     *                   reconhecer qual é na hora de vincular
+     * @param sku        o SKU que o lojista digitou no canal, quando digitou. ⭐ É a pista que
+     *                   permite <b>sugerir</b> o vínculo automaticamente
+     */
+    record VariacaoDoCanal(String idExterno, String descricao, String sku, BigDecimal preco,
+                           int quantidadeDisponivel) {
+    }
+
+    /**
+     * Um anúncio como o canal o descreve — o mínimo para a tela de vínculo (R6).
+     *
+     * <p>⚠️ {@code variacoes} vazia significa <b>anúncio simples</b> (um saldo só). Antes de
+     * 2026-08-26 isto era um booleano {@code temVariacoes}, que bastava para <i>avisar</i> mas não
+     * para <b>vincular</b>: o lojista precisa escolher a variação do ERP para <i>cada</i> variação
+     * do canal, e um booleano não diz quais são. Numa loja de roupa — que é o alvo deste ERP,
+     * com cor e grade — o anúncio com variações é a regra, não a exceção.
+     */
     record AnuncioDoCanal(String idExterno, String titulo, String sku, BigDecimal preco,
-                          int quantidadeDisponivel, String status, boolean temVariacoes) {
+                          int quantidadeDisponivel, String status,
+                          List<VariacaoDoCanal> variacoes) {
+
+        public boolean temVariacoes() {
+            return variacoes != null && !variacoes.isEmpty();
+        }
     }
 
     /**

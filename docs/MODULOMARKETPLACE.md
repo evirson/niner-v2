@@ -1,8 +1,8 @@
 # Estudo: Integração com Marketplaces — Mercado Livre (primeiro canal)
 
-> **Status: EM IMPLEMENTAÇÃO.** As decisões da §4 estão fechadas (§8) e os blocos **M0 e M1** já
-> existem em código — ver o estado real na **§10**, que é a seção a acreditar quando esta divergir.
-> Escrito em 2026-08-25 como estudo; cabeçalho corrigido em 2026-08-26, quando o M1 entrou.
+> **Status: EM IMPLEMENTAÇÃO.** As decisões da §4 estão fechadas (§8) e três blocos já
+> existem em código (M0, M1 e M2) — ver o estado real na **§10**, que é a seção a acreditar quando esta divergir.
+> Escrito em 2026-08-25 como estudo; cabeçalho corrigido em 2026-08-26, quando M1 e M2 entraram.
 > Requisitos cobertos: R3, R5, R6, R7 · Princípios: P1, P2, P3, P8
 >
 > ⚠️ **Nenhuma chamada real ao Mercado Livre foi feita até hoje.** Tudo o que está verificado, está
@@ -41,8 +41,9 @@ E os blocos de código reaproveitáveis também existem, todos já exercitados p
   *agendador × trabalho transacional* que o P2 exige.
 - **Webhook idempotente** — `/api/publico/webhooks/mercadopago` é o molde pronto.
 
-**O que não existe:** nenhuma linha de domínio em `canais/`, `pedidos/`, `precos/`, `integracao/`
-— os quatro pacotes têm só `package-info.java`. É código novo do zero, sobre schema pronto.
+**O que faltava (julho):** nenhuma linha de domínio em `canais/`, `pedidos/`, `precos/`, `integracao/`
+— os quatro pacotes tinham só `package-info.java`. ✅ Hoje `canais/` e `integracao/mercadolivre/`
+existem (M0–M2); `pedidos/` e `precos/` continuam vazios.
 
 ---
 
@@ -379,7 +380,7 @@ verificável, e o que depende de terceiro isolado no fim.
 |---|---|---|
 | **M0** | Migration `origem_venda += MARKETPLACE`; interface `CanalDeVenda`; modelo de `canal` com credenciais cifradas; **os dois guardas de estoque (§8.1)** | nada ✅ |
 | **M1** | ✅ **FEITO 2026-08-26.** OAuth do ML: iniciar (`/api/v1`, autenticado — ver §10.3), retorno com `state` (`/api/publico`), refresh automático do token de 6 h | `client_id` da Vetor ✅ |
-| **M2** | Leitura: listar anúncios do lojista, tela de **vincular anúncio ↔ variação** (R6) | M1 |
+| **M2** | ✅ **FEITO 2026-08-26.** Leitura: listar anúncios do lojista, tela de **vincular anúncio ↔ variação** (R6), com sugestão por SKU | M1 ✅ |
 | **M3** | Escrita: `atualizarEstoque` via outbox, honrando `429` e **lendo o anúncio antes de escrever** (armadilha das variações, §2.4) | M2 |
 | **M4** | Painel de saúde: fila de erros, dead-letter, reprocessar (R7) | M3 |
 | **M5** | Webhook `orders_v2` + polling de segurança; importação idempotente | M1 |
@@ -503,10 +504,14 @@ decisão está protegida só por javadoc.
 
 ---
 
-## 10. Estado da implementação (2026-08-25)
+## 10. Estado da implementação (2026-08-26)
 
-**M0 fechado, mais três blocos adiantados** enquanto a conta da MITRYUSCASH é validada no Mercado
-Livre. Nada aqui depende do `client_id` — foi escolhido de propósito para a espera não travar.
+**M0, M1, M2 e M4 fechados.** Até 25/08 os blocos foram escolhidos para não depender do
+`client_id` (que a MITRYUSCASH ainda estava providenciando); com ele em mãos em 26/08, o OAuth (M1)
+e o vínculo de anúncios (M2) entraram no mesmo dia.
+
+⏭️ **O próximo é o M3** — e ele é o que transforma a integração em produto: sem ele o ERP conecta e
+vincula, mas **não publica nada** (§10.5).
 
 | Bloco | Estado | Onde |
 |---|---|---|
@@ -515,48 +520,14 @@ Livre. Nada aqui depende do `client_id` — foi escolhido de propósito para a e
 | **Worker do outbox** | ✅ | `integracao/outbox/` |
 | **Tela + painel de saúde** (R7) | ✅ | `web/src/pages/canais/CanaisVenda.tsx` |
 | **M1 — OAuth** | ✅ **2026-08-26** | `V065`, `canais/EstadoOAuthRepositorio`, `integracao/mercadolivre/MercadoLivreOAuth*` |
-| M2–M4 — vincular anúncio, escrita, painel | ⏭️ | depende do M1 ✅ |
+| **M2** — vincular anúncio ↔ variação (R6) | ✅ **2026-08-26** | `V066`, `canais/Anuncio*`, `web/.../VincularAnuncios.tsx` |
+| **M4** — painel de saúde | ✅ | `CanaisVenda.tsx` |
+| **M3** — escrita de estoque/preço | ⏭️ **o próximo** | ver §10.5 |
 | M5–M7 — pedidos, fila de expedição | ⏭️ | depende do M1 ✅ |
 | M8 — NF-e 55 | ⏭️ | depende do `cStat 974` |
 
-**1011 testes verdes**, `tsc -b` limpo.
+**1023 testes verdes**, `tsc -b` limpo.
 
-### 10.3 ⚠️ O M1 desviou da §9 em um ponto — e o desvio é o certo
-
-A §9 dizia *"OAuth do ML: **iniciar**, retorno com `state`, refresh"*, e a §5 previa **as duas
-metades em `/api/publico`**. Não dá:
-
-- **Iniciar** ficou em **`/api/v1`, autenticado** (`GET /api/v1/canais/{id}/mercadolivre/autorizar`).
-  Um endpoint anônimo não tem como saber de que loja é a autorização — e a URI de redirect não
-  aceita parte variável para dizer. Ou o tenant vem do JWT no início, ou viria da URL, que é
-  escolhida por quem chama.
-- **Concluir** ficou em **`/api/publico`, anônimo** (`GET /api/publico/canais/mercadolivre/retorno`),
-  porque quem chega ali é o navegador do lojista devolvido pelo ML, sem JWT nenhum. Este é o
-  endereço registrado no DevCenter, e **renomeá-lo quebra a conexão de todos os lojistas de uma
-  vez**, com uma mensagem do ML que não diz que a culpa é nossa.
-
-O vínculo entre as duas metades é a linha da **V065** (`plataforma.oauth_estado_canal`): hash do
-`state`, uso único, 10 minutos, em `plataforma` porque o retorno roda **sem** `TenantContext` — é
-ele que vai *descobrir* o tenant, e sob RLS a consulta devolveria zero linha em silêncio.
-
-### 10.4 ⛔ O primeiro OAuth real NÃO fecha em `localhost` — decisão pendente
-
-A `redirect_uri` registrada é **de produção** (`https://api.nainer.com.br/...`) e o ML exige
-casamento **caractere por caractere**, sem parte variável. Clicar em "Conectar" numa API rodando
-em `localhost` leva o lojista ao consentimento normalmente — e o ML devolve o navegador para a
-**API de produção**, que tem outro banco e não conhece aquele `state`. Resultado: a volta acusa
-"este pedido de conexão não vale mais", e a causa não aparece em log nenhum do dev.
-
-Duas saídas, e é decisão do dono do produto:
-
-1. **Testar em produção** — publicar e deixar que a primeira autorização real seja o teste. O
-   `redirect_uri` já está certo; o `client_secret` vai para a variável de ambiente **do servidor**.
-   ⚠️ Cada rodada de diagnóstico passa a depender de deploy, e diagnóstico de OAuth é feito de
-   rodadas.
-2. **Registrar uma segunda URI de redirect** apontando para um túnel. Depende de o painel do ML
-   aceitar mais de uma (§11.3 diz que a aplicação aceita várias, *"se a tela só aceitar uma, fica a
-   de produção"* — **não conferido na tela**), e exige **hostname fixo**: túnel grátis muda de
-   endereço a cada restart, e casamento exato significa que todo restart quebraria o login.
 
 ### 10.1 As decisões de implementação que valem revisão
 
@@ -598,12 +569,92 @@ vínculos de anúncio ficam: são trabalho do lojista, e desconexão temporária
   responde o que eu programei que ele responda. Os fatos da §2 vieram de documentação lida, e este
   projeto já aprendeu que documentação lida não é comportamento medido (o XSD passou e a SEFAZ
   recusou). **A primeira chamada real vai encontrar divergências** — é esperado, não é fracasso.
-- **A regra "preço de oferta não acompanha" está protegida só por javadoc** (§8.6). O teste que a
-  prende pertence ao chamador, que é o M3 e ainda não existe.
-- **A tela nunca foi usada com um canal conectado de verdade** — o estado `CONECTADO` só existe em
-  teste, escrito por SQL.
+- ✅ **A regra "preço de oferta não acompanha" (§8.6) saiu do javadoc e virou teste** em
+  2026-08-26. A dívida dizia *"quando o M3 for escrito, o teste dele precisa incluir um produto com
+  oferta vigente"* — mas o **chamador nasceu no M2**, ao vincular o anúncio, então a dívida venceu
+  ali: `AnuncioVinculoTest.precoDoAnuncioIgnoraAOfertaDaLoja` lança uma oferta vigente de R$ 10,00
+  sobre um preço de venda de R$ 100,00 e exige que o anúncio publique **100,00**. ⚠️ Conferido do
+  jeito que este projeto aprendeu a conferir: a regra foi **quebrada de propósito** (derivando de
+  `COALESCE(preco_oferta, preco_venda)`) e o teste **reprovou** — teste de guarda que ninguém viu
+  falhar não provou nada.
+- **Nenhuma tela foi usada com um canal conectado de verdade.** O estado `CONECTADO` já é
+  alcançável pelo OAuth (M1), mas só contra WireMock; nenhum lojista real autorizou nada ainda.
+- **O outbox continua desligado dos dois lados** — ver §10.5. Conectar e vincular funcionam;
+  publicar saldo no ML é o M3.
 
 ---
+### 10.3 ⚠️ O M1 desviou da §9 em um ponto — e o desvio é o certo
+
+A §9 dizia *"OAuth do ML: **iniciar**, retorno com `state`, refresh"*, e a §5 previa **as duas
+metades em `/api/publico`**. Não dá:
+
+- **Iniciar** ficou em **`/api/v1`, autenticado** (`GET /api/v1/canais/{id}/mercadolivre/autorizar`).
+  Um endpoint anônimo não tem como saber de que loja é a autorização — e a URI de redirect não
+  aceita parte variável para dizer. Ou o tenant vem do JWT no início, ou viria da URL, que é
+  escolhida por quem chama.
+- **Concluir** ficou em **`/api/publico`, anônimo** (`GET /api/publico/canais/mercadolivre/retorno`),
+  porque quem chega ali é o navegador do lojista devolvido pelo ML, sem JWT nenhum. Este é o
+  endereço registrado no DevCenter, e **renomeá-lo quebra a conexão de todos os lojistas de uma
+  vez**, com uma mensagem do ML que não diz que a culpa é nossa.
+
+O vínculo entre as duas metades é a linha da **V065** (`plataforma.oauth_estado_canal`): hash do
+`state`, uso único, 10 minutos, em `plataforma` porque o retorno roda **sem** `TenantContext` — é
+ele que vai *descobrir* o tenant, e sob RLS a consulta devolveria zero linha em silêncio.
+
+### 10.4 ⛔ O primeiro OAuth real NÃO fecha em `localhost` — decisão pendente
+
+A `redirect_uri` registrada é **de produção** (`https://api.nainer.com.br/...`) e o ML exige
+casamento **caractere por caractere**, sem parte variável. Clicar em "Conectar" numa API rodando
+em `localhost` leva o lojista ao consentimento normalmente — e o ML devolve o navegador para a
+**API de produção**, que tem outro banco e não conhece aquele `state`. Resultado: a volta acusa
+"este pedido de conexão não vale mais", e a causa não aparece em log nenhum do dev.
+
+Duas saídas, e é decisão do dono do produto:
+
+1. **Testar em produção** — publicar e deixar que a primeira autorização real seja o teste. O
+   `redirect_uri` já está certo; o `client_secret` vai para a variável de ambiente **do servidor**.
+   ⚠️ Cada rodada de diagnóstico passa a depender de deploy, e diagnóstico de OAuth é feito de
+   rodadas.
+2. **Registrar uma segunda URI de redirect** apontando para um túnel. Depende de o painel do ML
+   aceitar mais de uma (§11.3 diz que a aplicação aceita várias, *"se a tela só aceitar uma, fica a
+   de produção"* — **não conferido na tela**), e exige **hostname fixo**: túnel grátis muda de
+   endereço a cada restart, e casamento exato significa que todo restart quebraria o login.
+
+### 10.5 ⛔ O outbox está pronto e DESLIGADO dos dois lados
+
+Medido em 2026-08-26, antes do M2: **ninguém chama `OutboxRepositorio.enfileirar()`** e **nenhum
+`ManipuladorDeEvento` está registrado**. O motor funciona (worker, retry, dead-letter, painel), mas
+um evento que chegasse à fila hoje viraria dead-letter com *"nenhum manipulador registrado"*.
+
+Ou seja: **conectar** (M1) e **vincular** (M2) funcionam; **sincronizar** ainda não existe. É esse
+o buraco que o **M3** fecha, e são duas pontas:
+
+1. enfileirar quando o saldo (ou o preço) muda no ERP;
+2. registrar o manipulador que chama `CanalDeVenda.atualizarEstoque` / `atualizarPreco`.
+
+### 10.6 ⚠️ Uma decisão de produto tomada no M2, à espera de confirmação
+
+**Um produto do ERP só pode alimentar UM anúncio por canal** (índice
+`anuncio_canal_variacao_erp_uk`, V066). Duas linhas apontando para a mesma variação com 5 peças
+publicariam 5 em **cada** anúncio — prometendo 10 ao comprador com 5 no estoque, e o marketplace
+pune cancelamento com reputação, que é o ativo do lojista.
+
+⚠️ **Isto fecha um caso de uso real:** o lojista que anuncia o mesmo produto duas vezes para ganhar
+alcance. Fechar foi a escolha segura enquanto não existe uma regra de **rateio** decidida pelo dono
+do produto — inventar o rateio no código seria decidir por ele. Havendo decisão, é **um índice para
+remover**, mais a regra de divisão.
+
+### 10.7 O que o M2 entregou, e o que ele NÃO cobre
+
+✅ Lista os anúncios da conta conectada · **uma linha por variação do canal** (anúncio com 12
+tamanhos = 12 linhas, porque é o saldo da variação que se publica) · **sugestão por SKU**, casando
+`seller_custom_field` do ML com `produto_barra.sku` **ou** `.ean` · vincular/desvincular · lista de
+vínculos que **não depende do ML estar no ar**.
+
+⛔ **Não cobre**: publicar anúncio novo no ML (o R6 é *vincular* anúncio existente — publicar do
+zero exige categoria, ficha técnica e atributos obrigatórios que variam por categoria, e é escopo
+próprio); editar o preço do anúncio à mão (a coluna `preco_manual` existe e ninguém a liga ainda);
+e a tela **nunca foi usada com um canal conectado de verdade** — tudo contra WireMock.
 
 ## 11. Passo a passo para criar a aplicação no Mercado Livre
 

@@ -34,4 +34,19 @@ public class MercadoLivreConfig {
         return new MercadoLivreOAuth(ml.apiUrl(), ml.clientId(), ml.clientSecret(),
                 ml.redirectUri(), JSON);
     }
+
+    /**
+     * O adapter do ML como bean, para o domínio recebê-lo por {@code List<CanalDeVenda>}.
+     *
+     * <p>⭐ É a lista que faz a Shopee (spec §Fase 3) caber sem tocar em quem chama: o serviço
+     * escolhe o adapter por {@code tipo()}, e acrescentar um canal é acrescentar um bean. Um campo
+     * do tipo {@code MercadoLivreAdapter} injetado direto teria o efeito oposto — amarraria o
+     * domínio ao primeiro marketplace, que é exatamente o que a anti-corruption layer existe para
+     * evitar.
+     */
+    @Bean
+    public MercadoLivreAdapter mercadoLivreAdapter(NinerProperties props) {
+        return new MercadoLivreAdapter(
+                new MercadoLivreApi(props.canais().mercadolivre().apiUrl(), JSON), JSON);
+    }
 }

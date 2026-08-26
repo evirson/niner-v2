@@ -541,6 +541,105 @@ Movimentação de Conta Corrente) que ainda não tinham migrado pro `SeletorPlan
 
 ## Linha do tempo
 
+### 2026-08-26 (2) — M2: vincular anúncio ↔ produto, e a descoberta de que o outbox está desligado dos dois lados
+
+Segunda entrega do dia. **1023 testes verdes** (eram 1011), `tsc -b` limpo.
+
+#### ⛔ A medição que mudou a prioridade
+
+Antes de escrever qualquer coisa, medi o estado do outbox — e ele está **pronto e desligado nas
+duas pontas**: ninguém chama `OutboxRepositorio.enfileirar()`, e **nenhum `ManipuladorDeEvento`
+está registrado**. O motor funciona (worker, retry, dead-letter, painel de saúde), mas um evento
+que chegasse à fila hoje viraria dead-letter com *"nenhum manipulador registrado"*.
+
+Ou seja: conectar (M1) e vincular (M2) funcionam; **sincronizar ainda não existe**. Vale registrar
+porque a tela de saúde mostrando "0 pendentes, 0 erros" parece saúde, e é ausência de trabalho.
+
+#### O de-para precisou descer até a variação (V066)
+
+`anuncio` guardava só `id_externo` — o id do **item** no marketplace. Num anúncio com variações
+(que numa loja de roupa é a **regra**, já que este ERP tem cor e grade) um item carrega N
+variações, e cada uma aponta para uma variação diferente do ERP. Sem `id_externo_variacao`, o
+vínculo só sabia dizer *"o anúncio MLB123 é o produto X"*, e o saldo publicado seria o de um
+tamanho só.
+
+⚠️ O adapter **já falava essa linguagem** desde 25/08 (`SaldoAnuncio.idExternoVariacao`); quem não
+sabia expressá-la era a tabela.
+
+⚠️ **`UNIQUE … NULLS NOT DISTINCT`**, e o detalhe não é cosmético: no padrão do Postgres dois NULL
+são **diferentes** entre si, então `(canal, MLB123, NULL)` entraria duas vezes e o mesmo anúncio
+simples ficaria vinculado a dois produtos — exatamente o que a restrição existe para impedir.
+Disponível desde o PG 15; rodamos 18. O irmão disso em Java: string vazia vinda do front vira
+`NULL` antes do INSERT, senão `""` passaria pela UNIQUE como se fosse uma variação de verdade.
+
+#### ⛔ Uma decisão de produto que eu tomei — e que espera confirmação
+
+**Um produto do ERP só alimenta UM anúncio por canal** (índice `anuncio_canal_variacao_erp_uk`).
+Duas linhas apontando para a mesma variação com 5 peças publicariam 5 em **cada** anúncio:
+10 prometidas, 5 no estoque. O marketplace pune cancelamento com reputação, que é o ativo do
+lojista, e "zero overselling" é a promessa central do produto (P1).
+
+⚠️ Isso **fecha um caso de uso real** — o lojista que anuncia o mesmo produto duas vezes para ganhar
+alcance. Fechar foi a escolha segura enquanto não existe regra de **rateio** decidida pelo dono do
+produto; inventar o rateio no código seria decidir por ele. Havendo decisão, é um índice para
+remover mais a regra de divisão.
+
+#### ⭐ A sugestão por SKU é o que torna a tela usável
+
+O ML guarda um campo livre de SKU do vendedor (`seller_custom_field`). Quando ele bate com o SKU
+**ou o EAN** do ERP, a linha já vem com o produto sugerido e vincular é um clique. Vincular 600
+anúncios a dedo é uma tarde perdida.
+
+⚠️ **Sugerir, nunca vincular sozinho.** Quem confirma é o lojista: um vínculo criado por
+coincidência de texto publicaria saldo errado sem nada na tela dizendo de onde aquilo veio.
+
+⚠️ E olha as **duas** colunas (`sku` e `ean`) porque o SKU do ERP é gerado
+(`gerar_ean13_interno()`) mas o lojista pode ter digitado o **EAN real** no campo do ML — checar só
+uma perderia metade das sugestões.
+
+#### ✅ A dívida do §8.6 venceu aqui, não no M3
+
+O estudo dizia por escrito: *"quando o M3 for escrito, o teste dele precisa incluir um produto com
+oferta vigente"* — a regra de que o preço do anúncio deriva de `preco_venda` e **ignora a oferta da
+loja** estava protegida só por javadoc. Mas o **chamador nasceu no M2**, ao vincular: é ali que o
+preço do anúncio é calculado pela primeira vez. Então o teste entrou aqui.
+
+⚠️ **E foi conferido do jeito certo:** quebrei a regra de propósito (derivando de
+`COALESCE(preco_oferta, preco_venda)`), rodei, **o teste reprovou**, e revertí. Teste de guarda que
+ninguém viu falhar não provou nada — é a lição de `feedback_teste_de_guard_passa_pelo_motivo_errado`.
+
+#### ⚠️ Dois tropeços meus, dignos de registro
+
+1. **Escrevi três métodos `@Transactional` chamados de dentro do próprio bean.** Auto-invocação não
+   passa pelo proxy do Spring: rodariam **sem transação**, sem `SET LOCAL app.id_tenant`, e o
+   `SELECT` voltaria **vazio em silêncio**. Percebi relendo antes de compilar e separei em
+   `AnuncioRepositorio` — que é o motivo de o repositório existir, e não organização.
+2. **O teste da oferta falhou na primeira rodada com 400**, porque `ProdutoService` recusa oferta
+   começando no passado e eu usei "ontem". Ao corrigir, a data virou **meio-dia de hoje no fuso de
+   São Paulo**, explícito: `OffsetDateTime.now()` no fuso da JVM (UTC no container) cairia no dia
+   seguinte depois das 21h de Brasília e o teste passaria a falhar **só à noite**.
+
+#### A tela
+
+`/canais/:idCanal/anuncios`, alcançada pelo botão **Vincular anúncios** (que só aparece em canal
+conectado). Uma linha por variação do canal; "Vincular ao sugerido" quando há sugestão, "Escolher
+produto…" quando não há (popup que **reusa** a busca de variações do Kardex, em vez de um endpoint
+novo com a mesma consulta).
+
+⭐ **A lista de vínculos é uma consulta separada, de propósito:** ela não fala com o marketplace.
+No dia em que o ML estiver fora do ar, a lista de anúncios falha com 502 — mas o lojista continua
+vendo e podendo desfazer o que vinculou. Tela que só sabe se mostrar consultando o terceiro fica
+inútil exatamente quando ele falha.
+
+#### ⛔ O que NÃO foi coberto
+
+- **Nenhuma chamada real ao Mercado Livre**, de novo: tudo contra WireMock. A tela nunca viu um
+  anúncio de verdade.
+- **Publicar anúncio novo** no ML não entra no M2 — o R6 é *vincular* anúncio existente. Publicar
+  do zero exige categoria, ficha técnica e atributos obrigatórios que variam por categoria.
+- **Editar o preço do anúncio à mão**: a coluna `preco_manual` existe desde a V064 e ninguém a liga
+  ainda.
+
 ### 2026-08-26 — M1: o lojista conecta a conta do Mercado Livre (OAuth), e o `state` é o que impede conectar na loja errada
 
 Destrava o bloco que esperava o `client_id` desde 25/08. A aplicação OAuth foi criada no DevCenter

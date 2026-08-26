@@ -76,9 +76,46 @@ public class MercadoLivreAdapter implements CanalDeVenda {
                     corpo.path("price").isNumber() ? corpo.path("price").decimalValue() : null,
                     corpo.path("available_quantity").asInt(0),
                     corpo.path("status").asText(),
-                    corpo.path("variations").isArray() && !corpo.path("variations").isEmpty()));
+                    lerVariacoes(corpo)));
         }
         return anuncios;
+    }
+
+    /**
+     * As variações do anúncio, do jeito que a tela de vínculo (R6) precisa.
+     *
+     * <p>⚠️ O ML descreve a variação em {@code attribute_combinations} (uma lista de
+     * {name, value_name}), não num rótulo pronto. Montamos <b>"Cor: Azul · Tamanho: M"</b> porque
+     * é assim que o lojista reconhece a variação na tela dele — mostrar o id cru
+     * ({@code 179553826123}) obrigaria a abrir o Mercado Livre em outra aba para saber o que se
+     * está vinculando, que é justamente o trabalho que esta tela existe para evitar.
+     */
+    private static List<VariacaoDoCanal> lerVariacoes(JsonNode corpo) {
+        JsonNode variacoes = corpo.path("variations");
+        if (!variacoes.isArray() || variacoes.isEmpty()) {
+            return List.of();
+        }
+        List<VariacaoDoCanal> lidas = new ArrayList<>();
+        for (JsonNode v : variacoes) {
+            StringBuilder descricao = new StringBuilder();
+            for (JsonNode atributo : v.path("attribute_combinations")) {
+                if (!descricao.isEmpty()) {
+                    descricao.append(" · ");
+                }
+                descricao.append(atributo.path("name").asText())
+                        .append(": ")
+                        .append(atributo.path("value_name").asText());
+            }
+            lidas.add(new VariacaoDoCanal(
+                    v.path("id").asText(),
+                    // Variação sem atributo nenhum não deveria existir, mas linha em branco na
+                    // tela é pior que o id cru — que ao menos casa com o painel do ML.
+                    descricao.isEmpty() ? v.path("id").asText() : descricao.toString(),
+                    textoOuNulo(v.path("seller_custom_field")),
+                    v.path("price").isNumber() ? v.path("price").decimalValue() : null,
+                    v.path("available_quantity").asInt(0)));
+        }
+        return lidas;
     }
 
     // ------------------------------------------------------------------ escrita (R3)

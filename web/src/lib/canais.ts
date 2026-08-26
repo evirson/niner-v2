@@ -93,3 +93,71 @@ export function reprocessarEvento(idEvento: number): Promise<void> {
 export function iniciarConexaoMercadoLivre(idCanal: number): Promise<{ url: string }> {
   return api<{ url: string }>(`/api/v1/canais/${idCanal}/mercadolivre/autorizar`)
 }
+
+/**
+ * Uma LINHA da tela de vínculo (R6) — não um anúncio.
+ *
+ * Um anúncio com variações vira várias linhas, uma por variação do canal: é a variação que se
+ * vincula, e é o saldo dela que será publicado. Anúncio simples tem `idExternoVariacao` nulo.
+ */
+export interface LinhaParaVincular {
+  idExterno: string
+  idExternoVariacao: string | null
+  titulo: string
+  descricaoVariacao: string | null
+  sku: string | null
+  precoNoCanal: number | null
+  quantidadeNoCanal: number
+  statusNoCanal: string
+  /** Preenchido = já vinculado. */
+  idAnuncio: number | null
+  idVariacao: number | null
+  descricaoVariacaoErp: string | null
+  /** ⭐ Sugestão por casamento de SKU — sugestão, NÃO vínculo: quem confirma é o lojista. */
+  idVariacaoSugerida: number | null
+  descricaoSugerida: string | null
+}
+
+export interface AnunciosDoCanal {
+  idCanal: number
+  nomeCanal: string
+  pagina: number
+  linhas: LinhaParaVincular[]
+}
+
+export interface VinculoGravado {
+  idAnuncio: number
+  idExterno: string
+  idExternoVariacao: string | null
+  idVariacao: number
+  sku: string
+  descricaoVariacaoErp: string
+  preco: number
+  precoManual: boolean
+  statusSync: string
+  ultimoErro: string | null
+}
+
+/** ⚠️ Fala com o Mercado Livre: pode demorar, e pode responder 502 se o ML estiver fora. */
+export function listarAnunciosDoCanal(idCanal: number, pagina: number): Promise<AnunciosDoCanal> {
+  return api<AnunciosDoCanal>(`/api/v1/canais/${idCanal}/anuncios?pagina=${pagina}`)
+}
+
+/** Não fala com o marketplace — continua funcionando com o ML fora do ar. */
+export function listarVinculos(idCanal: number): Promise<VinculoGravado[]> {
+  return api<VinculoGravado[]>(`/api/v1/canais/${idCanal}/anuncios/vinculos`)
+}
+
+export function vincularAnuncio(
+  idCanal: number,
+  payload: { idExterno: string; idExternoVariacao: string | null; idVariacao: number },
+): Promise<void> {
+  return api<void>(`/api/v1/canais/${idCanal}/anuncios`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+}
+
+export function desvincularAnuncio(idCanal: number, idAnuncio: number): Promise<void> {
+  return api<void>(`/api/v1/canais/${idCanal}/anuncios/${idAnuncio}`, { method: 'DELETE' })
+}

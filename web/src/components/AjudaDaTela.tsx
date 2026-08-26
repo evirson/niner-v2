@@ -492,6 +492,28 @@ const CONTEUDOS: Record<string, ConteudoAjuda> = {
     ],
     urlVideo: null,
   },
+  'canais.anuncios.tela': {
+    titulo: 'Vincular Anúncios',
+    objetivo:
+      'Dizer ao sistema qual produto do seu estoque corresponde a cada anúncio do marketplace. Sem esse de-para o sistema não sabe qual saldo publicar em qual anúncio.',
+    passos: [
+      'A tela consulta seus anúncios direto no Mercado Livre — por isso pode demorar alguns segundos.',
+      'Cada linha é uma VARIAÇÃO, não um anúncio: um anúncio com 12 tamanhos aparece como 12 linhas, porque é o saldo de cada tamanho que será publicado.',
+      'Quando o SKU que você cadastrou no marketplace bate com o código de barras do produto aqui, a linha já vem com o produto sugerido — clique em "Vincular ao sugerido".',
+      'Não veio sugestão? Clique em "Escolher produto…", pesquise por descrição, marca ou código de barras e clique na linha do produto.',
+      'Para trocar um vínculo errado, clique em "Desvincular" e vincule de novo.',
+      'Use "Anterior" e "Próxima" para percorrer os anúncios. O marketplace devolve até 50 por página.',
+    ],
+    errosComuns: [
+      'Só administradores acessam esta tela.',
+      'O canal precisa estar CONECTADO. Se não estiver, use "Conectar" na tela de Canais de Venda primeiro.',
+      'Um produto só pode ser vinculado a UM anúncio por canal. Se ele alimentasse dois, o mesmo saldo seria publicado duas vezes e você prometeria o dobro do que tem em estoque.',
+      'A sugestão por SKU é só uma sugestão — nada é vinculado sozinho. Confira antes de confirmar: vincular a linha errada faz o anúncio publicar o estoque de outro produto.',
+      'Se o Mercado Livre estiver fora do ar, a lista de anúncios falha — mas os vínculos que você já fez continuam aparecendo embaixo e podem ser desfeitos.',
+      'O preço que aparece em "Vínculos deste canal" é o que o ERP vai publicar: preço de venda da loja mais o ajuste do canal. Ele ignora promoção do balcão de propósito.',
+    ],
+    urlVideo: null,
+  },
   'fiscal.contingencia.tela': {
     titulo: 'Contingência Fiscal',
     objetivo: 'Ver se a empresa está emitindo NFC-e direto pela SEFAZ ou em contingência offline, e quantas notas ainda esperam transmissão.',
