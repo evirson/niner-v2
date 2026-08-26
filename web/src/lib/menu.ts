@@ -455,6 +455,12 @@ export const MENU: NavGrupo[] = [
         descricao: 'Parcelas de cartão e crediário por período de venda, vencimento ou recebimento, com valor bruto e líquido.',
       },
       {
+        to: '/relatorio-contas-pagar',
+        label: 'Contas a Pagar / Pagas',
+        icone: IconeRelatorio,
+        descricao: 'Duplicatas por fornecedor e plano de contas, com vencido, a vencer e pago no período — inclui compra de mercadoria.',
+      },
+      {
         to: '/relatorio-estoque',
         label: 'Relatório de Estoque',
         icone: IconeRelatorio,
@@ -524,12 +530,6 @@ export const MENU: NavGrupo[] = [
         label: 'BI Dashboard',
         icone: IconePainel,
         descricao: 'Painel gerencial com indicadores consolidados do negócio. Em construção.',
-      },
-      {
-        to: '/relatorio-contas-pagar',
-        label: 'Relatório de Contas a Pagar / Pagas',
-        icone: IconeRelatorio,
-        descricao: 'Situação das contas a pagar da loja, em aberto e quitadas. Em construção.',
       },
       {
         to: '/relatorio-movimentacao-bancaria',

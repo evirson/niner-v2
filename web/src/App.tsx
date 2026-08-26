@@ -61,6 +61,7 @@ import ContasPagarForm from './pages/financeiro/contaspagar/ContasPagarForm'
 import RelatorioVendas from './pages/relatorios/RelatorioVendas'
 import RelatorioComissoes from './pages/relatorios/RelatorioComissoes'
 import RelatorioContasReceber from './pages/relatorios/RelatorioContasReceber'
+import RelatorioContasPagar from './pages/relatorios/RelatorioContasPagar'
 import RelatorioEstoque from './pages/relatorios/RelatorioEstoque'
 import FluxoCaixa from './pages/relatorios/FluxoCaixa'
 import RelatorioDre from './pages/relatorios/RelatorioDre'
@@ -100,6 +101,7 @@ export default function App() {
           <Route path="/relatorio-vendas" element={<RelatorioVendas />} />
           <Route path="/relatorio-comissoes" element={<RelatorioComissoes />} />
           <Route path="/relatorio-contas-receber" element={<RelatorioContasReceber />} />
+          <Route path="/relatorio-contas-pagar" element={<RelatorioContasPagar />} />
           <Route path="/relatorio-estoque" element={<RelatorioEstoque />} />
           <Route path="/relatorio-movimentacao-produtos" element={<RelatorioMovimentacaoProdutos />} />
           {/* Fluxo de Caixa é aberto (só entrada/saída de dinheiro); a DRE, não. */}
@@ -138,7 +140,6 @@ export default function App() {
           <Route path="/estoque/devolucao-compra" element={<DevolucaoCompra />} />
           <Route path="/entrada-produtos-compra/nova" element={<EntradaMercadoriaForm />} />
           <Route path="/entrada-produtos-compra/:id" element={<EntradaMercadoriaDetalhe />} />
-          <Route path="/relatorio-contas-pagar" element={<EmBreve titulo="Relatório de Contas a Pagar / Pagas" />} />
           <Route
             path="/relatorio-movimentacao-bancaria"
             element={<EmBreve titulo="Relatório de Movimentação Bancária" />}

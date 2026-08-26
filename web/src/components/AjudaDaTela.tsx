@@ -982,6 +982,28 @@ const CONTEUDOS: Record<string, ConteudoAjuda> = {
     ],
     urlVideo: null,
   },
+  'relatorios.contaspagar.tela': {
+    titulo: 'Contas a Pagar / Pagas',
+    objetivo: 'Ver o que a loja deve e o que já pagou, por fornecedor e por plano de contas, em qualquer um dos três períodos.',
+    passos: [
+      'Preencha ao menos um dos três períodos (Lançamento, Vencimento ou Pagamento) — dá pra combinar mais de um ao mesmo tempo.',
+      'Filtre por fornecedor digitando parte do nome — a lista aparece embaixo do campo e você escolhe.',
+      'Escolhendo uma conta de grupo no Plano de Contas (a que termina em 000), o relatório traz todas as contas dentro dela.',
+      'Filtre por situação se quiser: Todas, só Em Aberto ou só Pagas.',
+      'Os cartões no topo mostram Total do Período, Em Aberto, Vencido, A Vencer e Pago no Período.',
+      'Os dois gráficos mostram onde o dinheiro foi comprometido: por plano de contas e pelos 7 maiores fornecedores (o resto vira "Outros").',
+      'A grid traz uma linha por conta, com as três datas, o valor da conta, o já pago e o que falta pagar.',
+      'Com mais de uma empresa no resultado, aparece um subtotal logo depois das linhas de cada empresa, além do total geral no fim.',
+      '"Gerar PDF" captura a tela como está, com os filtros aplicados na 1ª página.',
+    ],
+    errosComuns: [
+      'Uma conta só é considerada PAGA quando tem data de pagamento — a marca "Documento Pago" sozinha não basta. Quando as duas discordam, a linha vem marcada como divergente pra você conferir.',
+      'Vencido + A Vencer é igual a Em Aberto, e nunca ao Total do Período — somar os três daria o dobro do que a loja deve.',
+      'Compra de mercadoria APARECE aqui, ao contrário da DRE e da Lucratividade: este relatório é sobre dinheiro que sai, não sobre lucro.',
+      'O período não pode passar de 400 dias — pra um intervalo maior, gere em partes.',
+    ],
+    urlVideo: null,
+  },
   'estoque.contagem': {
     titulo: 'Contagem de Estoque',
     objetivo: 'Registrar a contagem física dos produtos da loja lendo o código de barras.',

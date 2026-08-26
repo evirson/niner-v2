@@ -541,6 +541,31 @@ Movimentação de Conta Corrente) que ainda não tinham migrado pro `SeletorPlan
 
 ## Linha do tempo
 
+### 2026-08-26 (7) — Relatório de Contas a Pagar / Pagas: o gêmeo do Contas a Receber, com a regra oposta sobre compra de mercadoria
+
+Pedido do dono do produto: *"Vamos Implementar o Relatorio de Contas a Pagar / Pagas — filtros Empresa | Fornecedor | Plano de Contas | Período de Lançamento | Vencimento | Pagamento; na abertura da tela já vir com um popup com os filtros; gráficos e KPIs como nos outros relatórios."*
+
+Spec escrita antes do código: `docs/telas/relatorio-contas-pagar.md`. Back completo com **15 testes verdes** (`RelatorioContasPagarCrudTest`), front em `web/src/pages/relatorios/RelatorioContasPagar.tsx`.
+
+**As três decisões que não são óbvias:**
+
+1. ⭐ **Compra de mercadoria APARECE aqui — ao contrário da DRE e da Lucratividade.** É a regra invertida da lição de 2026-08-25 (`3.03.x` fora das despesas da Lucratividade), e inverter é o certo: lá o assunto é **lucro**, e contar a mercadoria como despesa a contaria duas vezes (ela já está no CMV); aqui o assunto é **dinheiro que sai**, e omitir a maior saída de caixa da loja faria o relatório mentir por baixo. Ou seja, este relatório **não** consulta `cfg_plano_contas.inclui_dre`. O teste `compraDeMercadoriaAPARECE()` prende isso — se alguém "padronizar" os dois relatórios por simetria, ele reprova.
+
+2. ⚠️ **"Paga" é `data_pagamento IS NOT NULL`, não a marca `documento_pago`.** As duas colunas existem e podem discordar. Adotei o mesmo critério do `FluxoCaixaService` — data é fato, marca é intenção — mas em vez de resolver a divergência em silêncio, a linha volta com `divergente = true` e a tela sinaliza. Escolher um dos dois e calar faria dois relatórios da mesma loja darem números diferentes sem nada apontar para a causa.
+
+3. ⚠️ **`vencido + aVencer = emAberto`, e nunca `totalPeriodo`.** Os cinco KPIs não são cinco parcelas de um todo: `totalPeriodo` já contém o que foi pago. Somar os cinco daria o dobro do que a loja deve. Está escrito no javadoc do DTO e no `errosComuns` da AjudaDaTela, porque é o erro que um leitor apressado comete olhando os cartões.
+
+**Detalhes de implementação:**
+
+- **Plano de contas casa por PREFIXO** (`3.03.000` → `3.03.%`): lançamento nunca cai em conta sintética, então filtrar por igualdade traria zero linhas e pareceria defeito. O popup explica isso em uma linha, senão o lojista conclui que o filtro não funciona.
+- **Fornecedor por BUSCA, não `<select>`** — a lista é paginada e um select carregado com uma página só esconderia todos os fornecedores fora dela ([[feedback_select_truncado_por_paginacao]]).
+- **Vencido é medido no fuso da loja** (`(cp.data_vencimento AT TIME ZONE 'America/Sao_Paulo')::date < (now() AT TIME ZONE 'America/Sao_Paulo')::date`) — dos dois lados, como manda a convenção de 2026-08-19.
+- Ordenação por allowlist no backend (`COLUNAS_ORDENAVEIS`), `id_tenant` explícito no texto de toda query (P8), período máximo de 400 dias, subtotal por empresa.
+- ⚠️ `f.nome` **não existe** em `fornecedor` — o nome sai de `COALESCE(f.nome_fantasia, f.razao_social)`.
+- Testes com datas **relativas** (`hojeMais(n)` em America/Sao_Paulo), nunca literais ([[feedback_testes_frageis_por_relogio]]).
+
+**⚠️ Achado ao ligar a tela: a rota já existia apontando para o placeholder.** `App.tsx` tinha `<Route path="/relatorio-contas-pagar" element={<EmBreve …/>} />` e o menu tinha o item em *Implementações Futuras* com a descrição *"Em construção"*. Registrar a tela nova sem apagar os dois deixaria **duas rotas com o mesmo caminho** e um menu prometendo "em construção" para função pronta — exatamente o defeito corrigido em 2026-08-25. Os dois foram removidos; `docs/TELAS.md` foi de 58 para 59 telas em uso e de 6 para 5 em construção.
+
 ### 2026-08-26 (6) — M7: a fila de expedição, e o escopo A+B fecha
 
 Sexta e última entrega do dia. **1056 testes verdes** (eram 1050), `tsc -b` limpo. Com isto o

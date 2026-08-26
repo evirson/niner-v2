@@ -107,6 +107,7 @@
 | Relatório de Vendas | `/relatorio-vendas` | `docs/telas/relatorio-vendas.md` |
 | Relatório de Comissões | `/relatorio-comissoes` | `docs/telas/relatorio-comissoes.md` |
 | Contas a Receber / Recebidas | `/relatorio-contas-receber` | `docs/telas/relatorio-contas-receber.md` |
+| Contas a Pagar / Pagas (relatório) | `/relatorio-contas-pagar` | `docs/telas/relatorio-contas-pagar.md` |
 | Relatório de Estoque | `/relatorio-estoque` | `docs/telas/relatorio-estoque.md` |
 | Movimentação de Produtos | `/relatorio-movimentacao-produtos` | `docs/telas/relatorio-movimentacao-produtos.md` |
 | Fluxo de Caixa | `/fluxo-caixa` | `docs/telas/fluxo-caixa.md` |
@@ -122,7 +123,6 @@
 | Painel | `/` | `docs/telas/painel-assinatura.md` |
 | ⏭️ Pedidos | `/pedidos` | *em construção* |
 | ⏭️ BI Dashboard | `/bi-dashboard` | *em construção* |
-| ⏭️ Relatório de Contas a Pagar / Pagas | `/relatorio-contas-pagar` | *em construção* |
 | Relatório de Movimentação Bancária | `/relatorio-movimentacao-bancaria` | `docs/telas/relatorio-movimentacao-produtos.md` |
 | ⏭️ Integração com Marketplace | `/integracao-marketplace` | *em construção* |
 | ⏭️ Cobrança de Crediário em Atraso | `/cobranca-crediario-atraso` | *em construção* |
@@ -155,8 +155,8 @@ Abrem a partir de uma lista (criar/editar/configurar) e por isso não têm item 
 
 ---
 
-**58 telas em uso** · **6 em construção** · **20 telas-filhas**.
+**59 telas em uso** · **5 em construção** · **20 telas-filhas**.
 
-⚠️ Atualizado em 2026-08-26 com a **Fila de Expedição** e o **Vincular Anúncios** (M2 e M7 do módulo de marketplace).
+⚠️ Atualizado em 2026-08-26 com o **Relatório de Contas a Pagar / Pagas**, que saiu de "em construção" para tela real — a rota `/relatorio-contas-pagar` já existia apontando para o placeholder `EmBreve`.
 
 ⚠️ Sem spec localizada: **Efetivar Balanço** · **Tipo de Carteira**.
