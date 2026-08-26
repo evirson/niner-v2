@@ -1,6 +1,6 @@
 import html2canvas from 'html2canvas'
 import { jsPDF } from 'jspdf'
-import { forcarTemaClaroNoClone } from './temaClaroParaCaptura'
+import { aguardarGraficosEstaveis, forcarTemaClaroNoClone } from './temaClaroParaCaptura'
 
 /** Mesmo mecanismo de `relatorioContasReceberCaptura.ts`/`estoqueDiferencasCaptura.ts` — sobe a
  *  árvore a partir do alvo desclipando altura/overflow/flex de cada ancestral, só no clone
@@ -99,6 +99,9 @@ function desenharCabecalhoERodape(doc: jsPDF, titulo: string, dataHoraGeracao: s
 /** Gera o PDF do Relatório de Estoque como captura visual (mesmo padrão dos outros relatórios) —
  *  um único elemento (filtros aplicados + grid do modelo escolhido + total). */
 export async function gerarPdfCapturaRelatorioEstoque(elemento: HTMLElement, rodapeEsquerda: string): Promise<void> {
+  // ⚠️ Sem isto, exportar logo depois de gerar fotografa o gráfico no meio da animação
+  // do recharts e as barras saem VAZIAS no PDF (achado de 2026-08-26).
+  await aguardarGraficosEstaveis(elemento)
   const doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'landscape' })
 
   await desenharElementoPaginado(doc, elemento)

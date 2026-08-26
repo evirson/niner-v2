@@ -1,6 +1,6 @@
 import html2canvas from 'html2canvas'
 import { jsPDF } from 'jspdf'
-import { forcarTemaClaroNoClone } from './temaClaroParaCaptura'
+import { aguardarGraficosEstaveis, forcarTemaClaroNoClone } from './temaClaroParaCaptura'
 
 /** Ver `relatorioComissoesCaptura.ts` — mesmo mecanismo: o `.lista-corpo` tem altura travada pelo
  *  layout flex da tela, então sem liberar altura/overflow de cada ancestral (só no clone isolado,
@@ -112,6 +112,9 @@ function desenharCabecalhoERodape(
  */
 export async function gerarPdfCapturaFluxoCaixa(
   elemento: HTMLElement, subtitulo: string, rodapeEsquerda: string): Promise<void> {
+  // ⚠️ Sem isto, exportar logo depois de gerar fotografa o gráfico no meio da animação
+  // do recharts e as barras saem VAZIAS no PDF (achado de 2026-08-26).
+  await aguardarGraficosEstaveis(elemento)
   const doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' })
 
   await desenharElementoPaginado(doc, elemento)

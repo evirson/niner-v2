@@ -589,6 +589,33 @@ legível sobre branco e trocá-la é decisão visual do dono do produto, não co
 da animação do recharts e **as barras saem vazias** — reproduzido clicando ~2 s após gerar. A
 correção envolve escolha (desligar a animação na tela × esperar um tempo fixo antes de capturar).
 
+**Complemento no mesmo dia — as duas pendências que eu tinha deixado em aberto foram fechadas a
+pedido dele ("sim faça isso"):**
+
+1. **A cor dos gráficos agora acompanha a paleta clara.** ⛔ A primeira tentativa foi reescrever o
+   atributo (`setAttribute('fill', '#1f6f6b')` no clone) e **não funciona**: medido, o atributo
+   muda mas o **estilo computado continua o antigo**, e é o computado que o html2canvas pinta — a
+   captura saía idêntica com e sem a reescrita. Era código que parecia resolver e não fazia nada.
+   ⭐ CSS **muda** o computado (provado antes pela regra do texto dos eixos) e ainda vence atributo
+   de apresentação, que tem especificidade zero. Então o helper gera **uma regra por valor de
+   atributo encontrado no clone** (`[fill="var(--accent)"]{fill:#1f6f6b !important}`), e não uma cor
+   só para tudo: o Fluxo de Caixa distingue entrada de saída por `--sucesso` × `--danger`, e pintar
+   todas as barras de `--accent` apagaria a informação do gráfico.
+   **Medido:** sem a correção a barra computa `rgb(79,189,178)` (tema escuro); com ela,
+   `rgb(31,111,107)` = `#1f6f6b`, o accent do tema claro.
+
+2. **`aguardarGraficosEstaveis`** (novo, chamado pelas 10 funções de captura): espera a geometria
+   das barras **estabilizar** antes de fotografar. Escolhido em vez de desligar a animação (que é
+   decisão visual do dono do produto) ou dormir um tempo fixo — curto demais captura no meio, longo
+   demais atrasa todo mundo. Custa **0 ms** quando o gráfico já está parado (medido) e tem teto de
+   ~90 quadros para nunca travar o PDF.
+
+⚠️ **Armadilha do ambiente de teste, que quase virou diagnóstico errado:** em aba controlada por
+automação (sem foco), o `requestAnimationFrame` é suspenso, a animação do recharts **congela no
+início** e a barra sai como um tracinho — parece que a captura quebrou. Quem for validar isto de
+novo: confirme o **mecanismo** (o `fill` computado no clone, antes × depois), que independe da
+animação, em vez de contar pixels da imagem.
+
 ⚠️ **Nota de método:** o `perl` de substituição em massa casou em **2 dos 10** arquivos na primeira
 tentativa — os outros 8 têm CRLF e o `\n` do padrão não casa `\r\n`. Não deu erro; conferir a
 contagem depois foi o que pegou ([[feedback_perl_falha_em_silencio]]).

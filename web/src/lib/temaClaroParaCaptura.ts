@@ -80,19 +80,79 @@ function valorDoToken(declaracoes: string, token: string): string | null {
   return achado ? achado[1].trim() : null
 }
 
+/** Monta `{'--accent': '#1f6f6b', …}` a partir do bloco de declarações já lido. */
+function mapaDeTokens(declaracoes: string): Map<string, string> {
+  const mapa = new Map<string, string>()
+  for (const par of declaracoes.split(';')) {
+    const corte = par.indexOf(':')
+    if (corte < 0) continue
+    const nome = par.slice(0, corte).trim()
+    if (!nome.startsWith('--')) continue
+    mapa.set(nome, par.slice(corte + 1).replace('!important', '').trim())
+  }
+  return mapa
+}
+
 /**
- * Repinta o texto dos gráficos (recharts) com a cor clara, em valor **literal**.
+ * Resolve `var(--x)` e `var(--x, alternativa)` (inclusive aninhado) contra a paleta clara.
+ * Devolve `null` quando não conhece o token — aí o valor original fica como está.
+ */
+function resolverVar(expressao: string, tokens: Map<string, string>): string | null {
+  const achado = /^var\(\s*(--[\w-]+)\s*(?:,\s*(.+)\s*)?\)$/.exec(expressao.trim())
+  if (!achado) return null
+  const [, token, alternativa] = achado
+  const valor = tokens.get(token)
+  if (valor) return valor
+  if (!alternativa) return null
+  return alternativa.trim().startsWith('var(') ? resolverVar(alternativa, tokens) : alternativa.trim()
+}
+
+/**
+ * Gera uma regra CSS por cor de SVG usada na página, repintando-a com o valor da paleta **clara**.
  *
- * ⚠️ Medido em 2026-08-26: dentro do clone, um `fill="var(--accent)"` de SVG **continua
- * resolvendo para a cor do tema escuro** mesmo com `--accent` já valendo a cor clara no `:root`
- * — o Chrome não reinvalida o estilo do SVG adotado. Por isso a cor aqui é literal: reemitir
- * `var(...)` reproduziria o mesmo problema.
+ * ⚠️ Duas medições de 2026-08-26 explicam por que é assim, e não do jeito óbvio:
  *
- * Efeito prático: os rótulos dos eixos saíam em cinza-claro sobre papel branco, quase ilegíveis.
- * CSS vence atributo de apresentação (que tem especificidade zero), então basta a regra.
+ * 1. Dentro do clone, `fill="var(--accent)"` de SVG **continua resolvendo para a cor do tema
+ *    escuro** mesmo com `--accent` já valendo a cor clara no `:root` — o Chrome não reinvalida o
+ *    estilo do SVG adotado. Sem isto, as barras e os rótulos dos eixos saem na paleta escura (os
+ *    rótulos, em cinza-claro sobre papel branco, ficam quase ilegíveis).
+ * 2. ⛔ **Reescrever o atributo não adianta**: medido, `setAttribute('fill', '#1f6f6b')` no clone
+ *    grava o atributo mas o **estilo computado continua o antigo**, e é o computado que o
+ *    html2canvas pinta — a captura saía idêntica com e sem a reescrita. Foi uma tentativa que
+ *    parecia funcionar e não fazia nada. CSS, por outro lado, **muda o computado** (provado pela
+ *    regra do texto dos eixos), e ainda vence atributo de apresentação, que tem especificidade zero.
  *
- * ⏭️ **A cor das barras continua a do tema escuro** e não é mexida aqui de propósito: ela é
- * legível no claro e trocá-la é decisão visual do dono do produto, não conserto de legibilidade.
+ * ⭐ Uma regra por **valor de atributo encontrado**, casado literalmente (`[fill="var(--accent)"]`),
+ * em vez de uma cor só para tudo: o Fluxo de Caixa distingue entrada de saída por `--sucesso` ×
+ * `--danger`, e pintar todas as barras de `--accent` apagaria a informação do gráfico.
+ */
+function regrasDeCorDeSvg(doc: Document, declaracoes: string): string {
+  const tokens = mapaDeTokens(declaracoes)
+  if (tokens.size === 0) return ''
+  const regras: string[] = []
+  const jaFeitos = new Set<string>()
+  for (const elemento of Array.from(doc.querySelectorAll('[fill],[stroke]'))) {
+    for (const atributo of ['fill', 'stroke'] as const) {
+      const valor = elemento.getAttribute(atributo)
+      if (!valor || !valor.trim().startsWith('var(')) continue
+      const chave = `${atributo}=${valor}`
+      if (jaFeitos.has(chave)) continue
+      jaFeitos.add(chave)
+      const resolvido = resolverVar(valor, tokens)
+      // Aspas duplas quebrariam o seletor; nenhum valor nosso tem, mas não custa recusar.
+      if (!resolvido || valor.includes('"')) continue
+      regras.push(`[${atributo}="${valor}"]{${atributo}:${resolvido} !important;}`)
+    }
+  }
+  return regras.join('')
+}
+
+/**
+ * Rede de segurança para o texto dos gráficos: repinta com a cor clara **literal**.
+ *
+ * Complementa `resolverCoresDeSvgNoClone` — aquela reescreve o `var()` que está **no atributo**,
+ * esta cobre o texto cuja cor chega por CSS herdado, sem atributo nenhum para reescrever. CSS
+ * vence atributo de apresentação (especificidade zero), então as duas convivem sem conflito.
  */
 function regrasDoGrafico(declaracoes: string): string {
   const inkMuted = valorDoToken(declaracoes, '--ink-muted')
@@ -144,8 +204,50 @@ export function forcarTemaClaroNoClone(doc: Document): void {
   const declaracoes = lerPaletaClaraDoCss() ?? PALETA_CLARA_FALLBACK
   const estilo = doc.createElement('style')
   estilo.setAttribute('data-origem', 'captura-pdf-tema-claro')
-  estilo.textContent = `:root{${declaracoes}}${REGRA_SEM_IMPRESSAO}${regrasDoGrafico(declaracoes)}`
+  estilo.textContent =
+    `:root{${declaracoes}}` +
+    REGRA_SEM_IMPRESSAO +
+    regrasDoGrafico(declaracoes) +
+    // Lê o clone para descobrir quais cores de SVG existem nesta tela — por isso vem antes do
+    // `appendChild`, e não numa constante.
+    regrasDeCorDeSvg(doc, declaracoes)
   // No fim do <head>: empata em especificidade com o resto e vence por ordem, e o `!important`
   // resolve o que a ordem não resolveria.
   doc.head.appendChild(estilo)
+}
+
+/**
+ * Espera os gráficos pararem de se mexer antes de fotografar a tela.
+ *
+ * ⚠️ Achado em 2026-08-26 gerando o PDF de verdade: exportando **logo depois** de gerar o
+ * relatório (~2 s), o recharts ainda está animando a barra de 0 até o valor, e o PDF sai com os
+ * **gráficos vazios** — só os eixos. Não aparece na tela (lá a animação termina e fica certo) nem
+ * em teste; só no papel, e de forma intermitente, que é o pior jeito de um defeito existir.
+ *
+ * ⭐ Espera o desenho **estabilizar**, em vez de desligar a animação ou dormir um tempo fixo:
+ * a animação continua existindo na tela (é decisão visual do dono do produto, não minha), e um
+ * `setTimeout` fixo seria chute — curto demais captura no meio, longo demais atrasa todo mundo.
+ *
+ * Compara a geometria das barras entre quadros; dois quadros iguais bastam. O teto de ~2,5 s
+ * garante que nada trave o PDF se algum gráfico animar para sempre.
+ */
+export async function aguardarGraficosEstaveis(elemento: HTMLElement): Promise<void> {
+  const LIMITE_QUADROS = 90 // ~1,5 s a 60 fps, acima da animação padrão do recharts
+  const quadro = () => new Promise<void>((r) => requestAnimationFrame(() => r()))
+
+  const geometria = () =>
+    Array.from(elemento.querySelectorAll('.recharts-bar-rectangle path, .recharts-rectangle, .recharts-line-curve'))
+      .map((e) => e.getAttribute('d') ?? `${e.getAttribute('width')}x${e.getAttribute('height')}`)
+      .join('|')
+
+  if (!geometria()) return // tela sem gráfico: não há o que esperar
+
+  let anterior = geometria()
+  let iguais = 0
+  for (let i = 0; i < LIMITE_QUADROS && iguais < 2; i++) {
+    await quadro()
+    const atual = geometria()
+    iguais = atual === anterior ? iguais + 1 : 0
+    anterior = atual
+  }
 }

@@ -1,6 +1,6 @@
 import html2canvas from 'html2canvas'
 import { jsPDF } from 'jspdf'
-import { forcarTemaClaroNoClone } from './temaClaroParaCaptura'
+import { aguardarGraficosEstaveis, forcarTemaClaroNoClone } from './temaClaroParaCaptura'
 
 /** A tela usa `.lista-corpo` normal (a página inteira rola) e a grid (`.grid-altura-fixa`,
  *  2026-08-04) tem altura própria limitada a 60vh com rolagem interna — sem isto, o html2canvas
@@ -113,6 +113,9 @@ function desenharCabecalhoERodape(doc: jsPDF, titulo: string, dataHoraGeracao: s
 /** Gera o PDF do Relatório de Contas a Pagar / Pagas como captura visual — mesmo padrão
  *  do Relatório de Comissões (um único elemento: filtros aplicados + grid banda). */
 export async function gerarPdfCapturaRelatorioContasPagar(elemento: HTMLElement, rodapeEsquerda: string): Promise<void> {
+  // ⚠️ Sem isto, exportar logo depois de gerar fotografa o gráfico no meio da animação
+  // do recharts e as barras saem VAZIAS no PDF (achado de 2026-08-26).
+  await aguardarGraficosEstaveis(elemento)
   const doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'landscape' })
 
   await desenharElementoPaginado(doc, elemento)

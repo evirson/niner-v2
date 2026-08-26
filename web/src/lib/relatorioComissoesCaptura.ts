@@ -1,6 +1,6 @@
 import html2canvas from 'html2canvas'
 import { jsPDF } from 'jspdf'
-import { forcarTemaClaroNoClone } from './temaClaroParaCaptura'
+import { aguardarGraficosEstaveis, forcarTemaClaroNoClone } from './temaClaroParaCaptura'
 
 /** Este relatório usa `.relatorio-corpo-fixo` (cabeçalho/rodapé da grid fixos, só as linhas
  *  rolam — ver styles.css) — sem isto, o html2canvas capturaria só a altura VISÍVEL do
@@ -110,6 +110,9 @@ function desenharCabecalhoERodape(doc: jsPDF, titulo: string, dataHoraGeracao: s
  *  Vendas) — um único elemento (filtros aplicados + grid banda, com os subtotais/total já no
  *  DOM), sem separação em duas páginas forçadas por não ter KPIs/gráficos pesados. */
 export async function gerarPdfCapturaRelatorioComissoes(elemento: HTMLElement, rodapeEsquerda: string): Promise<void> {
+  // ⚠️ Sem isto, exportar logo depois de gerar fotografa o gráfico no meio da animação
+  // do recharts e as barras saem VAZIAS no PDF (achado de 2026-08-26).
+  await aguardarGraficosEstaveis(elemento)
   const doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'landscape' })
 
   await desenharElementoPaginado(doc, elemento)
