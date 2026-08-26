@@ -1,0 +1,65 @@
+package com.vetor.niner.fiscal.exportacao;
+
+import com.vetor.niner.fiscal.exportacao.ExportacaoXmlLoteDtos.ResumoExportacaoXml;
+import com.vetor.niner.fiscal.exportacao.ExportacaoXmlLoteService.PacoteZip;
+import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.http.ContentDisposition;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+
+import java.time.LocalDate;
+
+/**
+ * Exportação de XML em Lote (`docs/telas/exportacao-xml-lote.md`) — superfície do tenant
+ * (`/api/v1`, JWT + RLS). ADMIN-only, conferido no serviço.
+ */
+@RestController
+@RequestMapping("/api/v1/fiscal/exportacao-xml")
+public class ExportacaoXmlLoteController {
+
+    private final ExportacaoXmlLoteService service;
+
+    public ExportacaoXmlLoteController(ExportacaoXmlLoteService service) {
+        this.service = service;
+    }
+
+    /**
+     * Pré-conferência: quantas notas o período tem, quantas já têm XML arquivado e como o arquivo
+     * vai se chamar. É o que impede o clique que geraria um pacote vazio, ou que estouraria o teto.
+     */
+    @GetMapping("/resumo")
+    public ResumoExportacaoXml resumo(
+            @AuthenticationPrincipal Jwt jwt,
+            @RequestParam long idEmpresa,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dataInicial,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dataFinal,
+            @RequestParam(required = false) Integer modelo) {
+        return service.resumir(jwt, idEmpresa, dataInicial, dataFinal, modelo);
+    }
+
+    /**
+     * O ZIP. O nome do arquivo vai no {@code Content-Disposition} — é dele que o navegador tira o
+     * nome sugerido no "Salvar como", então ele é montado no servidor (P4), não no front.
+     */
+    @GetMapping
+    public ResponseEntity<byte[]> exportar(
+            @AuthenticationPrincipal Jwt jwt,
+            @RequestParam long idEmpresa,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dataInicial,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dataFinal,
+            @RequestParam(required = false) Integer modelo) {
+        PacoteZip pacote = service.exportar(jwt, idEmpresa, dataInicial, dataFinal, modelo);
+        return ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType("application/zip"))
+                .header(HttpHeaders.CONTENT_DISPOSITION,
+                        ContentDisposition.attachment().filename(pacote.nomeArquivo()).build().toString())
+                .body(pacote.conteudo());
+    }
+}

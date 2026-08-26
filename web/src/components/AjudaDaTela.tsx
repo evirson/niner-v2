@@ -573,6 +573,29 @@ const CONTEUDOS: Record<string, ConteudoAjuda> = {
     ],
     urlVideo: null,
   },
+  'fiscal.exportacao-xml.tela': {
+    titulo: 'Exportação de XML em Lote',
+    objetivo:
+      'Baixar de uma vez, num único arquivo ZIP, o XML de todas as NFC-e e NF-e emitidas pela empresa num período — é o pacote que se entrega ao contador todo mês.',
+    passos: [
+      'Escolha a empresa e o período de emissão (data inicial e final) — o período máximo é de 365 dias.',
+      'Opcionalmente escolha só NFC-e (65) ou só NF-e (55); o padrão traz as duas.',
+      'A tela confere o período e mostra quantos XMLs vão no pacote e qual será o nome do arquivo (Empresa + mês/ano da emissão).',
+      'Clique em "Baixar ZIP". Dentro dele, os XMLs ficam em pastas por mês (AAAA-MM/saidas), os eventos de cancelamento em AAAA-MM/eventos, e há um relatorio.csv com a relação de todas as notas do período.',
+      'Onde o arquivo é salvo depende do navegador: no Chrome, no Edge e no Opera de computador abre o "Salvar como" e você escolhe a pasta; nos demais (Firefox, Safari, celular) o arquivo vai direto para a pasta de downloads.',
+      'Para que o Chrome sempre pergunte onde salvar: Configurações → Downloads → ligue "Perguntar onde salvar cada arquivo antes de fazer o download".',
+    ],
+    errosComuns: [
+      'Só administradores acessam esta tela.',
+      'Notas rejeitadas, denegadas ou "não emitidas" não entram no pacote — elas não chegaram a existir como documento fiscal, então não há XML autorizado para arquivar nem para entregar.',
+      'Nota CANCELADA entra normalmente, junto com o XML do evento de cancelamento: é o par que prova o cancelamento. O XML da nota sozinho não diz que ela foi cancelada.',
+      '"N notas ainda não tiveram o XML arquivado": são notas autorizadas cujo arquivo ainda não subiu para o armazenamento (o servidor de arquivos pode ter ficado fora do ar no momento da emissão). O sistema tenta de novo sozinho a cada 10 minutos — espere e repita a exportação. Elas aparecem no relatorio.csv marcadas como "(nao arquivado)".',
+      'Período com mais de 2.000 notas é recusado: exporte um mês por vez. Um pacote muito grande não sai numa requisição só.',
+      'Nunca é gerado um ZIP vazio: se o período não tiver nenhum XML, a tela avisa em vez de baixar um arquivo sem nada dentro.',
+      'O XML de uma nota específica continua disponível em Documentos Fiscais (ícone de olho) — esta tela é para o lote.',
+    ],
+    urlVideo: null,
+  },
   'fiscal.inutilizacao.tela': {
     titulo: 'Inutilização de Numeração',
     objetivo: 'Tapar formalmente um "buraco" na numeração fiscal — número que a série já alocou mas que nunca virou nota (venda cancelada no meio, rejeição da SEFAZ nunca corrigida etc.).',

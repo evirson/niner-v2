@@ -98,6 +98,7 @@
 | Conformidade Fiscal | `/fiscal/conformidade` | `docs/MODULOFISCAL.md §B3` |
 | Contingência Fiscal | `/fiscal/contingencia` | `docs/MODULOFISCAL.md §9.7` |
 | Documentos Fiscais | `/fiscal/documentos` | `docs/MODULOFISCAL.md §12` |
+| Exportação de XML em Lote | `/fiscal/exportacao-xml` | `docs/telas/exportacao-xml-lote.md` |
 | Inutilização de Numeração | `/fiscal/inutilizacao` | `docs/MODULOFISCAL.md §9.8` |
 
 ## Relatórios
@@ -130,7 +131,6 @@ nomes antigos continuam achando a tela na busca do topo via `sinonimos`.
 | Relatório de Movimentação Bancária | `/relatorio-movimentacao-bancaria` | `docs/telas/relatorio-movimentacao-produtos.md` |
 | ⏭️ Integração com Marketplace | `/integracao-marketplace` | *em construção* |
 | ⏭️ Cobrança de Crediário em Atraso | `/cobranca-crediario-atraso` | *em construção* |
-| ⏭️ Exportação de XML em Lote | `/exportacao-xml-fiscal` | *em construção* |
 
 ## Telas-filhas
 
@@ -159,7 +159,7 @@ Abrem a partir de uma lista (criar/editar/configurar) e por isso não têm item 
 
 ---
 
-**59 telas em uso** · **5 em construção** · **20 telas-filhas**.
+**60 telas em uso** · **4 em construção** · **20 telas-filhas**.
 
 ⚠️ Atualizado em 2026-08-26 com o **Relatório de Contas a Pagar / Pagas**, que saiu de "em construção" para tela real — a rota `/relatorio-contas-pagar` já existia apontando para o placeholder `EmBreve`.
 

@@ -541,6 +541,58 @@ Movimentação de Conta Corrente) que ainda não tinham migrado pro `SeletorPlan
 
 ## Linha do tempo
 
+### 2026-08-26 (10) — Exportação de XML em Lote: o pacote que o contador pede todo mês
+
+Pedido do dono do produto: filtros de Empresa e período de emissão, tudo compactado num ZIP,
+nome do ZIP = empresa + mês + ano, o usuário escolhe onde salvar, cobrindo NFC-e e NF-e. É a
+`fiscal.download` (DF22) que o `docs/MODULOFISCAL.md` §11.2 já previa — a **última** que sobrava em
+"Implementações Futuras" no menu. Spec: `docs/telas/exportacao-xml-lote.md`.
+
+Tela em **Configurações → Fiscal → Exportação de XML em Lote** (`/fiscal/exportacao-xml`),
+ADMIN-only como todo o módulo fiscal. 12 testes.
+
+**As decisões que não eram óbvias:**
+
+- ⭐ **O ZIP é montado no backend.** Zipar no navegador significaria N requisições autenticadas
+  fazendo exatamente o mesmo `GET` no bucket que o servidor faria uma vez — o XML mora no MinIO
+  **privado** (ADR-014) e não tem URL pública nem assinada, de propósito. E decidir *quais*
+  documentos entram é regra de negócio, que no front viraria uma segunda implementação (P4).
+- ⛔ **Em memória, `byte[]`, nunca `StreamingResponseBody`** — parece o contrário do recomendado
+  para download grande, e a razão é deste projeto: `TenantContext` é um `ScopedValue` ligado ao
+  escopo da requisição, e o corpo de um streaming é escrito **depois** que o controller retorna.
+  `ArmazenamentoPrivado` monta e confere o prefixo `tenants/{id_tenant}/` a partir dele (P8), então
+  o callback quebraria — ou, pior, leria com o tenant errado se um dia o contexto passar a ser
+  herdado. É o teto de 2.000 documentos que mantém essa escolha segura.
+- ⭐ **Os eventos de cancelamento entram junto, e não foram pedidos.** Uma NFC-e cancelada sozinha
+  no ZIP é um XML de nota **autorizada** — nada nele diz que foi cancelada. Quem prova o
+  cancelamento é o evento 110111, já arquivado no mesmo bucket. Sem ele, o pacote **afirma uma
+  venda que não existe**.
+- ⚠️ **Nota autorizada cujo XML não chegou ao bucket some do pacote — e isso é dito, não omitido.**
+  Ela tem valor fiscal e não tem arquivo (MinIO fora do ar na emissão). A pré-conferência mostra o
+  aviso **antes** do clique, e o `relatorio.csv` lista todos os documentos do período marcando
+  `(nao arquivado)` nos que ficaram de fora. Sem isso, seria mais um sumiço em silêncio.
+- ⚠️ **`catch` estreito na leitura do bucket:** engole **só** o 404 (arquivo ausente); **403**
+  (vazamento de tenant, P8) e **503** (MinIO fora) sobem e abortam o pacote. Engolir tudo
+  transformaria um vazamento, ou um bucket fora do ar, num ZIP silenciosamente incompleto.
+- ⚠️ **Item 4 do pedido não existe como o pedido descreve.** Nenhum navegador deixa uma página
+  escrever numa pasta escolhida. A tela usa `showSaveFilePicker()` (diálogo "Salvar como" de
+  verdade — só Chrome/Edge/Opera de desktop, em contexto seguro) e cai no download normal nos
+  demais. ⛔ A tela **não promete** seletor de pastas: diz que o navegador vai perguntar onde salvar
+  *ou* baixar direto, conforme a configuração dele. E **cancelar o diálogo não é erro** —
+  `AbortError` é escolha do usuário, não falha para mostrar em Toast vermelho.
+- **Nome do ZIP quando o período cruza meses:** `LOJA_CENTRO_08-2026.zip` num mês só,
+  `LOJA_CENTRO_07-2026_a_09-2026.zip` quando cruza. O mês/ano sai das **datas do filtro**, não das
+  notas encontradas — o nome precisa ser previsível antes de saber o que existe no período.
+- **Teto de 2.000 documentos, com o número aparecendo ANTES do clique.** Sem teto, a requisição
+  estoura em algum lugar que ninguém escolheu e o lojista vê "não foi possível conectar ao
+  servidor" — uma afirmação **falsa** sobre a rede.
+
+**Nota de processo:** este trabalho começou num agente em segundo plano e foi trazido para a thread
+principal a pedido do dono do produto, que queria acompanhar. Revisado aqui contra as armadilhas do
+projeto antes de commitar — `id_tenant` explícito nas 3 consultas, `@Transactional` nos 5 métodos de
+repositório, `AT TIME ZONE` no filtro de data, nenhum `ObjectMapper` injetado, nenhum teste pulado.
+`docs/TELAS.md` foi de 59 para **60 telas em uso** e de 5 para **4 em construção**.
+
 ### 2026-08-26 (9) — PDF saindo no tema escuro: o mecanismo era uma aposta na cascata
 
 Relatado pelo dono do produto: *"O pdf esta gerando com tema dark, e mesmo que o navegador esteja no

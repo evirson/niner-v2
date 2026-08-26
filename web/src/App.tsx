@@ -81,6 +81,7 @@ import CanaisVenda from './pages/canais/CanaisVenda'
 import VincularAnuncios from './pages/canais/VincularAnuncios'
 import FilaExpedicao from './pages/canais/FilaExpedicao'
 import DocumentoFiscalLista from './pages/fiscal/DocumentoFiscalLista'
+import ExportacaoXmlLote from './pages/fiscal/ExportacaoXmlLote'
 import InutilizacaoNumeracao from './pages/fiscal/InutilizacaoNumeracao'
 
 export default function App() {
@@ -149,7 +150,9 @@ export default function App() {
               /fluxo-caixa e concorriam com a tela pronta. */}
           <Route path="/integracao-marketplace" element={<EmBreve titulo="Integração com Marketplace" />} />
           <Route path="/cobranca-crediario-atraso" element={<EmBreve titulo="Cobrança de Crediário em Atraso" />} />
-          <Route path="/exportacao-xml-fiscal" element={<EmBreve titulo="Exportação de XML" />} />
+          {/* /exportacao-xml-fiscal saiu daqui em 2026-08-26: a tela existe
+              (/fiscal/exportacao-xml, abaixo). ⚠️ Placeholder que sobrevive à tela pronta vira
+              rota duplicada e item de menu repetido — foi o que aconteceu com /fluxo-caixa. */}
           <Route path="/cancelamento-devolucao-produtos" element={<CancelamentoDevolucao />} />
           <Route path="/clientes" element={<ClienteLista />} />
           <Route path="/clientes/novo" element={<ClienteForm />} />
@@ -221,6 +224,7 @@ export default function App() {
             <Route path="/fiscal/conformidade" element={<ConformidadeFiscalPainel />} />
             <Route path="/fiscal/contingencia" element={<FiscalContingenciaPainel />} />
             <Route path="/fiscal/documentos" element={<DocumentoFiscalLista />} />
+            <Route path="/fiscal/exportacao-xml" element={<ExportacaoXmlLote />} />
             <Route path="/fiscal/inutilizacao" element={<InutilizacaoNumeracao />} />
           </Route>
         </Route>

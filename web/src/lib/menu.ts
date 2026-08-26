@@ -431,6 +431,12 @@ export const MENU: NavGrupo[] = [
             descricao: 'Lista de NFC-e/NF-e emitidas, XML, consulta de situação na SEFAZ.',
           },
           {
+            to: '/fiscal/exportacao-xml',
+            label: 'Exportação de XML em Lote',
+            icone: IconeDocumentoFiscal,
+            descricao: 'Baixa num ZIP o XML de todas as NFC-e/NF-e de um período, para entregar ao contador.',
+          },
+          {
             to: '/fiscal/inutilizacao',
             label: 'Inutilização de Numeração',
             icone: IconeInutilizacao,
@@ -618,14 +624,9 @@ export const MENU: NavGrupo[] = [
       // TRÊS delas já existem — em outro lugar: NFC-e e NF-e são emitidas pelo próprio PDV, e o
       // cancelamento fica em Documentos Fiscais. Item de menu que oferece "Em construção" para
       // função pronta é pior que item ausente: manda o lojista procurar onde não está.
-      // Sobrou só a exportação em LOTE, que de fato não existe (o XML individual já se baixa em
-      // Documentos Fiscais).
-      {
-        to: '/exportacao-xml-fiscal',
-        label: 'Exportação de XML em Lote',
-        icone: IconePlanoContas,
-        descricao: 'Baixa em lote o XML das notas de um período, para a contabilidade. O XML de uma nota específica já pode ser baixado em Documentos Fiscais. Em construção.',
-      },
+      // A última que sobrava, "Exportação de XML em Lote", foi implementada em 2026-08-26 e saiu
+      // daqui junto com a rota placeholder /exportacao-xml-fiscal — agora é
+      // Configurações → Fiscal → Exportação de XML em Lote (/fiscal/exportacao-xml).
     ],
   },
 ]
