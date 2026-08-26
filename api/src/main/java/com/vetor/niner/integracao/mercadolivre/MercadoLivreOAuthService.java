@@ -163,14 +163,27 @@ public class MercadoLivreOAuthService {
         // ⭐ Daqui para baixo é dado de tenant: sem entrar no contexto, o UPDATE não casa linha
         // nenhuma e a conexão "daria certo" sem gravar nada (P8).
         return TenantContext.comTenant(consumido.idTenant(), () -> {
-            // Guarda 1 de novo, e não é redundância: entre pedir a autorização e voltar dela, o
-            // lojista pode ter religado "permite estoque negativo" em outra aba. Conferir só na
-            // porta da frente é a trava decorativa da §8.1.
-            guardaEstoque.exigirControleDeEstoqueLigado();
+            boolean gravou;
+            try {
+                // Guarda 1 de novo, e não é redundância: entre pedir a autorização e voltar dela, o
+                // lojista pode ter religado "permite estoque negativo" em outra aba. Conferir só na
+                // porta da frente é a trava decorativa da §8.1.
+                guardaEstoque.exigirControleDeEstoqueLigado();
 
-            boolean gravou = credenciais.salvar(consumido.idCanal(),
-                    new CredenciaisCanal(consumido.idCanal(), tokens.contaExterna(),
-                            tokens.accessToken(), tokens.refreshToken(), tokens.expiraEm()));
+                gravou = credenciais.salvar(consumido.idCanal(),
+                        new CredenciaisCanal(consumido.idCanal(), tokens.contaExterna(),
+                                tokens.accessToken(), tokens.refreshToken(), tokens.expiraEm()));
+            } catch (ResponseStatusException e) {
+                // ⛔ Quem está deste lado é uma PESSOA olhando um navegador, no fim da jornada de
+                // consentimento. Deixar um 409 escapar daqui devolveria um Problem Details cru na
+                // tela — o javadoc do controller diz "sempre redireciona", e é aqui que essa
+                // promessa se cumpre. A mensagem do guarda (estoque negativo religado, conta já
+                // conectada em outro canal) é justamente a que ele precisa ler.
+                log.warn("Retorno do Mercado Livre recusado no canal {}: {}",
+                        consumido.idCanal(), e.getReason());
+                return new Desfecho(false, consumido.idCanal(),
+                        e.getReason() == null ? "Não foi possível concluir a conexão." : e.getReason());
+            }
 
             if (!gravou) {
                 // Canal apagado no meio do caminho — ou, o que importa de verdade, um `state`

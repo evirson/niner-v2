@@ -1,8 +1,8 @@
 # Estudo: Integração com Marketplaces — Mercado Livre (primeiro canal)
 
-> **Status: EM IMPLEMENTAÇÃO.** As decisões da §4 estão fechadas (§8) e a **Opção A está completa** — os blocos M0 a M4
+> **Status: EM IMPLEMENTAÇÃO.** As decisões da §4 estão fechadas (§8) e a **Opção A está completa** e o **M5** (pedidos) entrou — os blocos M0 a M5
 > existem em código — ver o estado real na **§10**, que é a seção a acreditar quando esta divergir.
-> Escrito em 2026-08-25 como estudo; cabeçalho corrigido em 2026-08-26, quando M1, M2 e M3 entraram.
+> Escrito em 2026-08-25 como estudo; cabeçalho corrigido em 2026-08-26, quando M1, M2, M3 e M5 entraram.
 > Requisitos cobertos: R3, R5, R6, R7 · Princípios: P1, P2, P3, P8
 >
 > ⚠️ **Nenhuma chamada real ao Mercado Livre foi feita até hoje.** Tudo o que está verificado, está
@@ -43,7 +43,8 @@ E os blocos de código reaproveitáveis também existem, todos já exercitados p
 
 **O que faltava (julho):** nenhuma linha de domínio em `canais/`, `pedidos/`, `precos/`, `integracao/`
 — os quatro pacotes tinham só `package-info.java`. ✅ Hoje `canais/` e `integracao/mercadolivre/`
-existem (M0–M4); `pedidos/` e `precos/` continuam vazios — são o M5–M7.
+existem (M0–M5), e a importação de pedido vive em `integracao/Pedido*`; `pedidos/` e `precos/`
+continuam vazios como pacote — o M6 decide se o domínio de pedido mora lá ou vira `venda`.
 
 ---
 
@@ -383,7 +384,7 @@ verificável, e o que depende de terceiro isolado no fim.
 | **M2** | ✅ **FEITO 2026-08-26.** Leitura: listar anúncios do lojista, tela de **vincular anúncio ↔ variação** (R6), com sugestão por SKU | M1 ✅ |
 | **M3** | ✅ **FEITO 2026-08-26.** Escrita: `atualizarEstoque` via outbox, honrando `429` e **lendo o anúncio antes de escrever** (armadilha das variações, §2.4) | M2 |
 | **M4** | ✅ **FEITO.** Painel de saúde: fila de erros, dead-letter, reprocessar (R7) | M3 |
-| **M5** | Webhook `orders_v2` + polling de segurança; importação idempotente | M1 |
+| **M5** | ✅ **FEITO 2026-08-26.** Webhook `orders_v2` + polling de segurança; importação idempotente | M1 ✅ |
 | **M6** | Pedido vira `venda` (origem MARKETPLACE, sem caixa, sem comissão); reserva no recebido (ADR-004) | M5 |
 | **M7** | Fila de expedição (R5): estados, baixa de estoque no envio, cancelamento devolve reserva | M6 |
 | ⏭️ **M8** | *(Opção C, adiado)* NF-e 55, XML ao ML, etiqueta, `confirmarEnvio` | `cStat 974` |
@@ -523,10 +524,11 @@ vincula, mas **não publica nada** (§10.5).
 | **M2** — vincular anúncio ↔ variação (R6) | ✅ **2026-08-26** | `V066`, `canais/Anuncio*`, `web/.../VincularAnuncios.tsx` |
 | **M4** — painel de saúde | ✅ | `CanaisVenda.tsx` |
 | **M3** — escrita de estoque/preço | ✅ **2026-08-26** | `V067`, `integracao/Sincronizacao*` |
-| M5–M7 — pedidos, fila de expedição | ⏭️ | depende do M1 ✅ |
+| **M5** — webhook + polling + importação | ✅ **2026-08-26** | `V068`, `integracao/Pedido*` |
+| M6–M7 — pedido vira venda, fila de expedição | ⏭️ | depende do M5 ✅ |
 | M8 — NF-e 55 | ⏭️ | depende do `cStat 974` |
 
-**1032 testes verdes**, `tsc -b` limpo.
+**1043 testes verdes**, `tsc -b` limpo.
 
 
 ### 10.1 As decisões de implementação que valem revisão
@@ -691,6 +693,59 @@ vínculos que **não depende do ML estar no ar**.
 zero exige categoria, ficha técnica e atributos obrigatórios que variam por categoria, e é escopo
 próprio); editar o preço do anúncio à mão (a coluna `preco_manual` existe e ninguém a liga ainda);
 e a tela **nunca foi usada com um canal conectado de verdade** — tudo contra WireMock.
+
+### 10.8 M5 — a notificação chega SEM tenant, e é o mesmo problema do `state`
+
+⭐ **Vale registrar o padrão, porque ele volta sempre que algo de fora bate na porta.** O webhook do
+Mercado Livre chega sem JWT e sem `TenantContext`; o corpo traz o **`user_id` do vendedor**, e é
+só isso. Descobrir de quem é exigiria varrer `canal` — que tem RLS e devolveria **zero linha em
+silêncio**.
+
+A solução é a mesma da V065: **uma tabela global, sem RLS** — `plataforma.canal_externo`, mapeando
+`(marketplace, vendedor) → (tenant, canal)`. ⚠️ Ela **não guarda segredo**: `conta_externa` é o id
+público do vendedor, o mesmo que já aparece na tela de Canais. O token continua cifrado em
+`canal.credenciais`, sob RLS.
+
+⛔ **E a chave é UNIQUE por (tipo, conta_externa):** a mesma conta de Mercado Livre não pode estar
+conectada em dois tenants. Se estivesse, uma notificação de venda seria **ambígua** — e o desempate
+importaria o pedido de um lojista dentro da loja de outro (P8). Tentar conectar uma conta já
+conectada é recusado com uma frase que diz o que houve.
+
+#### ⚠️ Responder 200 mesmo no caso ruim
+
+O ML **reenvia** o que falha e **desativa** o callback que falha repetidamente. Devolver 4xx para
+uma notificação de vendedor desconhecido — que acontece de verdade: lojista que desconectou, conta
+de teste antiga, notificação atrasada — treinaria a plataforma a desligar o nosso endereço, e aí
+**nenhum** lojista receberia pedido. O endpoint responde 200 **sempre**, e registra.
+
+#### ⛔ Item sem vínculo recusa o pedido INTEIRO
+
+Se qualquer item aponta para um anúncio ainda não vinculado (R6), a importação **não grava nada**.
+As alternativas eram piores: importar só os itens vinculados daria um pedido com metade das linhas
+— que parece completo na tela de expedição e faria a loja **despachar um pacote faltando produto**;
+e inventar uma variação gravaria a venda de um produto no estoque de outro.
+
+⭐ **O custo de recusar é baixo porque a fila não desiste:** a notificação continua pendente com a
+mensagem visível, e o polling traz o pedido de novo. No minuto em que o lojista vincular o anúncio,
+a importação passa sozinha — sem ninguém reprocessar nada à mão. Isso está preso por teste.
+
+#### ⭐ O polling de segurança não é redundância
+
+Três situações reais em que o webhook simplesmente não existe: (a) em desenvolvimento não há URL
+pública; (b) os três tópicos ficaram **desmarcados** no painel do ML até este bloco existir; (c)
+plataforma desativa callback que falha repetidamente — e o dia em que isso acontecer é justamente
+o dia em que ninguém está olhando. Quinze minutos é o intervalo que a spec previu: um pedido que
+demora quinze minutos para aparecer é um aborrecimento; um que **nunca** aparece é uma venda
+perdida e uma reclamação no marketplace.
+
+#### ⏭️ O que o M5 NÃO faz
+
+Importa o pedido para a **fila de expedição** (`pedido`/`pedido_item`) e para por aí: **não** vira
+`venda`, **não** reserva estoque, **não** consome cota do plano. Isso é o **M6**, e é a decisão nº 1
+da §8 — a que mais muda o desenho.
+
+✅ **Os três tópicos do painel do ML podem ser ligados agora** (§11.6): o endpoint existe. Ligar
+continua sendo passo do painel, e o polling cobre enquanto não forem.
 
 ## 11. Passo a passo para criar a aplicação no Mercado Livre
 

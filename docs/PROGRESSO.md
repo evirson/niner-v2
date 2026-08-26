@@ -541,6 +541,92 @@ Movimentação de Conta Corrente) que ainda não tinham migrado pro `SeletorPlan
 
 ## Linha do tempo
 
+### 2026-08-26 (4) — M5: a venda do marketplace chega ao ERP, e a notificação anônima ganha dono
+
+Quarta entrega do dia. **1043 testes verdes** (eram 1032), `tsc -b` limpo.
+
+#### ⭐ O mesmo problema do `state`, de novo — e vale registrar o padrão
+
+O webhook do Mercado Livre chega **sem JWT e sem `TenantContext`**. O corpo traz o **`user_id` do
+vendedor**, e é só isso. Descobrir de qual lojista é aquilo exigiria varrer `canal` — que tem RLS e
+devolveria **zero linha em silêncio**.
+
+A solução é a mesma da V065 (o `state` do OAuth): **uma tabela global, sem RLS** —
+`plataforma.canal_externo`, mapeando `(marketplace, vendedor) → (tenant, canal)`. É a terceira vez
+esta semana que algo de fora bate na porta sem dizer de quem é, e a resposta é sempre a mesma
+forma: um mapa fora do RLS, sem segredo dentro.
+
+⚠️ **Ela não guarda segredo:** `conta_externa` é o id **público** do vendedor, o mesmo que já
+aparece na tela de Canais. O token continua cifrado em `canal.credenciais`, sob RLS, onde sempre
+esteve.
+
+⛔ **UNIQUE por (tipo, conta_externa):** a mesma conta de ML não pode estar conectada em dois
+tenants. Se estivesse, uma notificação de venda seria **ambígua** — e o desempate importaria o
+pedido de um lojista dentro da loja de outro (P8).
+
+#### ⚠️ Responder 200 mesmo no caso ruim
+
+O ML **reenvia** o que falha e **desativa** o callback que falha repetidamente. Devolver 4xx para
+uma notificação de vendedor desconhecido — que acontece de verdade: lojista que desconectou, conta
+de teste antiga, notificação atrasada — treinaria a plataforma a desligar o nosso endereço, e aí
+**nenhum** lojista receberia pedido. O endpoint responde **200 sempre**, e registra.
+
+E ele **não decide nada**: grava e devolve. Quem aplica efeito é o worker, **consultando a API do
+ML**. É isso que torna um payload forjado inofensivo (P2) — está preso por um teste que afirma que
+o webhook **não fala com o marketplace na hora**.
+
+#### ⛔ Item sem vínculo recusa o pedido INTEIRO
+
+Se qualquer item aponta para um anúncio ainda não vinculado (R6), a importação **não grava nada**.
+As alternativas eram piores:
+
+- **importar só os itens vinculados** daria um pedido com metade das linhas — que parece completo
+  na tela de expedição e faria a loja **despachar um pacote faltando produto**;
+- **inventar uma variação** gravaria a venda de um produto no estoque de outro.
+
+⭐ **E o custo de recusar é baixo porque a fila não desiste:** a notificação continua pendente com a
+mensagem visível, e o polling traz o pedido de novo. No minuto em que o lojista vincular, a
+importação passa **sozinha** — tem teste para isso (`depoisDeVincularAMesmaNotificacaoPassaSozinha`).
+
+#### ⭐ O polling de segurança não é redundância
+
+Três situações reais em que o webhook simplesmente não existe: em desenvolvimento não há URL
+pública; os três tópicos ficaram **desmarcados** no painel do ML até hoje; e plataforma desativa
+callback que falha repetidamente — no dia em que isso acontecer, ninguém está olhando. Um pedido
+que demora quinze minutos para aparecer é aborrecimento; um que **nunca** aparece é venda perdida
+e reclamação no marketplace.
+
+#### ⚠️ Dois defeitos que os testes pegaram — os dois meus
+
+1. **`@RequestBody JsonNode` responde 500.** A aplicação converte HTTP com **Jackson 3**
+   (`tools.jackson`) e o `JsonNode` que o projeto usa em código é o do **Jackson 2**
+   (`com.fasterxml.jackson`): declará-lo no parâmetro dá *"Cannot construct instance of JsonNode"*.
+   O webhook do Mercado Pago já sabia disso — recebe `String` e faz o parse com o próprio mapper.
+   Eu não olhei antes de escrever.
+2. ⛔ **O retorno do OAuth respondeu 409 em vez de redirecionar.** A regra nova ("mesma conta não
+   conecta em dois lugares") lança `ResponseStatusException` de dentro do fluxo de retorno — e ela
+   escapava até o controller, entregando um **Problem Details cru** no fim da jornada de
+   consentimento. É exatamente o que o javadoc daquele controller proíbe, escrito por mim ontem.
+   Agora o retorno **sempre** redireciona, com a mensagem do guarda na query string.
+
+#### ⚠️ E a regra nova quebrou 14 testes existentes — corretamente
+
+`SincronizacaoCanalTest` e `AnuncioVinculoTest` reusavam o vendedor `777` em todos os canais. Com o
+UNIQUE, o segundo canal de cada classe deixou de conectar — e a falha aparecia como *"nenhum PUT
+chegou"*, longe da causa. Os testes passaram a usar **um vendedor por tenant**. A regra está certa;
+os testes é que assumiam o que o produto agora proíbe.
+
+#### ⏭️ O que o M5 NÃO faz
+
+Importa o pedido para a fila de expedição (`pedido`/`pedido_item`) e **para por aí**: não vira
+`venda`, não reserva estoque, não consome cota. Isso é o **M6** — a decisão nº 1 da §8, a que mais
+muda o desenho.
+
+✅ **Os três tópicos do painel do ML já podem ser ligados** (§11.6): o endpoint existe.
+
+⛔ E, pela quarta vez no dia: **nenhuma notificação real do Mercado Livre chegou até hoje.** Tudo
+contra WireMock.
+
 ### 2026-08-26 (3) — M3: o saldo do ERP finalmente chega ao anúncio, e a Opção A fica completa
 
 Terceira entrega do dia, e a que transforma a integração em produto: até agora o ERP **conectava**

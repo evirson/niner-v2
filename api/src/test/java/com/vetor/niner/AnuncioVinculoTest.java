@@ -21,6 +21,7 @@ import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
 import static com.github.tomakehurst.wiremock.client.WireMock.get;
 import static com.github.tomakehurst.wiremock.client.WireMock.post;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
+import static com.github.tomakehurst.wiremock.client.WireMock.urlMatching;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlPathEqualTo;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.http.MediaType.APPLICATION_JSON;
@@ -50,9 +51,23 @@ class AnuncioVinculoTest {
 
     /** A empresa em que o usuário entrou — o canal precisa dela desde a V067 (estoque é por empresa). */
     private static long idEmpresaDo(String token) {
-        String payload = new String(java.util.Base64.getUrlDecoder()
+        return ((Number) com.jayway.jsonpath.JsonPath.read(payloadDo(token), "$.eid")).longValue();
+    }
+
+    /**
+     * Um vendedor de marketplace <b>diferente por tenant</b>.
+     *
+     * <p>⚠️ Desde a V068 a mesma conta de marketplace não pode estar conectada em dois canais.
+     * Reusar um id fixo faria o segundo teste desta classe não conectar — e a falha apareceria
+     * como "nenhum anúncio listado", longe da causa.
+     */
+    private static long vendedorDe(String token) {
+        return 700000 + ((Number) com.jayway.jsonpath.JsonPath.read(payloadDo(token), "$.tid")).longValue();
+    }
+
+    private static String payloadDo(String token) {
+        return new String(java.util.Base64.getUrlDecoder()
                 .decode(token.substring(token.indexOf('.') + 1, token.lastIndexOf('.'))));
-        return ((Number) com.jayway.jsonpath.JsonPath.read(payload, "$.eid")).longValue();
     }
     private static final WireMockServer ML = new WireMockServer(
             com.github.tomakehurst.wiremock.core.WireMockConfiguration.options().dynamicPort());
@@ -141,8 +156,8 @@ class AnuncioVinculoTest {
                 .withHeader("Content-Type", "application/json")
                 .withBody("""
                         {"access_token":"tok","token_type":"bearer","expires_in":21600,
-                         "user_id":777,"refresh_token":"ref"}
-                        """)));
+                         "user_id":%d,"refresh_token":"ref"}
+                        """.formatted(vendedorDe(token)))));
 
         mvc.perform(get2("/api/publico/canais/mercadolivre/retorno")
                         .param("code", "c").param("state", state))
@@ -183,7 +198,7 @@ class AnuncioVinculoTest {
 
     /** O ML responde a busca de itens do vendedor e o detalhe em lote. */
     private void mlTemAnuncios(String corpoDoLote, String... ids) {
-        ML.stubFor(get(urlPathEqualTo("/users/777/items/search")).willReturn(aResponse()
+        ML.stubFor(get(urlMatching("/users/[0-9]+/items/search.*")).willReturn(aResponse()
                 .withStatus(200).withHeader("Content-Type", "application/json")
                 .withBody("{\"results\":[%s]}".formatted(
                         String.join(",", java.util.Arrays.stream(ids).map(i -> "\"" + i + "\"").toList())))));
@@ -481,7 +496,7 @@ class AnuncioVinculoTest {
         ligarControleDeEstoque(token);
         long idCanal = criarCanalConectado(token, "0");
 
-        ML.stubFor(get(urlPathEqualTo("/users/777/items/search"))
+        ML.stubFor(get(urlMatching("/users/[0-9]+/items/search.*"))
                 .willReturn(aResponse().withStatus(503)));
 
         mvc.perform(get2("/api/v1/canais/%d/anuncios".formatted(idCanal))

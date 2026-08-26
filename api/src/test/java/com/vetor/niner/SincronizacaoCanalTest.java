@@ -151,12 +151,15 @@ class SincronizacaoCanalTest {
         String state = java.net.URLDecoder.decode(
                 url.substring(url.indexOf("&state=") + 7), java.nio.charset.StandardCharsets.UTF_8);
 
+        // ⚠️ Vendedor DIFERENTE por tenant. Desde a V068 a mesma conta de marketplace não pode
+        // estar conectada em dois canais — reusar "777" faria o segundo teste desta classe não
+        // conectar, e a falha apareceria como "nenhum PUT chegou", longe da causa.
         ML.stubFor(post(urlEqualTo("/oauth/token")).willReturn(aResponse().withStatus(200)
                 .withHeader("Content-Type", "application/json")
                 .withBody("""
                         {"access_token":"tok","token_type":"bearer","expires_in":21600,
-                         "user_id":777,"refresh_token":"ref"}
-                        """)));
+                         "user_id":%d,"refresh_token":"ref"}
+                        """.formatted(700000 + idTenantDo(token)))));
         mvc.perform(get2("/api/publico/canais/mercadolivre/retorno")
                         .param("code", "c").param("state", state))
                 .andExpect(status().isFound());

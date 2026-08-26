@@ -7,6 +7,8 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.vetor.niner.canais.CanalDeVenda;
 import com.vetor.niner.canais.CredenciaisCanal;
 import com.vetor.niner.canais.TipoCanal;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
@@ -22,6 +24,8 @@ import java.util.Map;
  * chama é o worker do outbox (P2), que já estabeleceu o {@code TenantContext} (P8).
  */
 public class MercadoLivreAdapter implements CanalDeVenda {
+
+    private static final Logger log = LoggerFactory.getLogger(MercadoLivreAdapter.class);
 
     /** Página do ML é por {@code offset}/{@code limit}, e o teto de {@code limit} é 50. */
     private static final int LIMITE_MAXIMO = 50;
@@ -116,6 +120,94 @@ public class MercadoLivreAdapter implements CanalDeVenda {
                     v.path("available_quantity").asInt(0)));
         }
         return lidas;
+    }
+
+    // ------------------------------------------------------------------ pedidos (R5)
+
+    /**
+     * {@inheritDoc}
+     *
+     * <h2>⚠️ Um pedido custa DUAS chamadas</h2>
+     *
+     * O formato novo de {@code /orders} (que o cabeçalho {@code x-format-new: true} pede, e que
+     * {@link MercadoLivreApi} manda sempre) <b>não traz mais os dados de envio</b> — eles saem de
+     * {@code /shipments/{id}}. O adapter junta as duas antes de entregar ao domínio, porque
+     * "pedido pela metade" não é um conceito que o ERP deva conhecer.
+     *
+     * <p>⚠️ E a segunda chamada é <b>tolerante</b>: pedido sem envio existe (retirada, digital, ou
+     * simplesmente ainda não despachado). Falhar o pedido inteiro porque o envio não respondeu
+     * seria perder a venda por causa do acessório.
+     */
+    @Override
+    public PedidoDoCanal buscarPedido(CredenciaisCanal credenciais, String idExterno) {
+        JsonNode pedido = api.get("/orders/" + idExterno, credenciais.accessToken());
+
+        List<ItemDoPedido> itens = new ArrayList<>();
+        for (JsonNode linha : pedido.path("order_items")) {
+            JsonNode item = linha.path("item");
+            itens.add(new ItemDoPedido(
+                    item.path("id").asText(),
+                    textoOuNulo(item.path("variation_id")),
+                    item.path("title").asText(),
+                    new BigDecimal(linha.path("quantity").asText("0")),
+                    linha.path("unit_price").isNumber()
+                            ? linha.path("unit_price").decimalValue()
+                            : BigDecimal.ZERO));
+        }
+
+        String idEnvio = textoOuNulo(pedido.path("shipping").path("id"));
+        BigDecimal frete = BigDecimal.ZERO;
+        if (idEnvio != null) {
+            try {
+                JsonNode envio = api.get("/shipments/" + idEnvio, credenciais.accessToken());
+                if (envio.path("shipping_option").path("cost").isNumber()) {
+                    frete = envio.path("shipping_option").path("cost").decimalValue();
+                }
+            } catch (RuntimeException e) {
+                // Ver a nota do método: o frete é acessório, o pedido não.
+                log.warn("Envio {} não pôde ser lido; pedido {} entra sem frete: {}",
+                        idEnvio, idExterno, e.getMessage());
+            }
+        }
+
+        return new PedidoDoCanal(
+                pedido.path("id").asText(),
+                traduzirStatus(pedido.path("status").asText("")),
+                pedido.path("total_amount").isNumber()
+                        ? pedido.path("total_amount").decimalValue() : BigDecimal.ZERO,
+                frete,
+                textoOuNulo(pedido.path("buyer").path("nickname")),
+                idEnvio,
+                itens,
+                pedido.toString());
+    }
+
+    @Override
+    public List<String> idsDePedidosRecentes(CredenciaisCanal credenciais, int limite) {
+        JsonNode busca = api.get("/orders/search?seller=%s&sort=date_desc&limit=%d"
+                .formatted(credenciais.contaExterna(), Math.min(Math.max(limite, 1), LIMITE_MAXIMO)),
+                credenciais.accessToken());
+
+        List<String> ids = new ArrayList<>();
+        for (JsonNode pedido : busca.path("results")) {
+            ids.add(pedido.path("id").asText());
+        }
+        return ids;
+    }
+
+    /**
+     * Vocabulário do ML → {@code status_pedido} do ERP.
+     *
+     * <p>⚠️ O que <b>não</b> é reconhecido cai em {@code RECEBIDO}, e é a escolha segura: um status
+     * novo do marketplace (eles acrescentam) não pode fazer o pedido sumir da fila de expedição
+     * nem parecer entregue. Recebido é o estado que pede atenção humana.
+     */
+    private static String traduzirStatus(String doMl) {
+        return switch (doMl) {
+            case "paid" -> "PAGO";
+            case "cancelled" -> "CANCELADO";
+            default -> "RECEBIDO";
+        };
     }
 
     // ------------------------------------------------------------------ escrita (R3)

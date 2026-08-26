@@ -28,10 +28,13 @@ public class CanalService {
 
     private final JdbcClient jdbc;
     private final ControleEstoqueCanalGuard guardaEstoque;
+    private final CredenciaisCanalRepositorio credenciais;
 
-    public CanalService(JdbcClient jdbc, ControleEstoqueCanalGuard guardaEstoque) {
+    public CanalService(JdbcClient jdbc, ControleEstoqueCanalGuard guardaEstoque,
+                        CredenciaisCanalRepositorio credenciais) {
         this.jdbc = jdbc;
         this.guardaEstoque = guardaEstoque;
+        this.credenciais = credenciais;
     }
 
     @Transactional(readOnly = true)
@@ -149,6 +152,9 @@ public class CanalService {
     @Transactional
     public CanalResponse desconectar(Jwt jwt, long idCanal) {
         exigirAdmin(jwt);
+        // ⚠️ Tira do mapa global (V068) junto: deixar a linha faria notificações de uma conta já
+        // desconectada continuarem sendo aceitas, e impediria reconectá-la em outro canal.
+        credenciais.esquecerContaExterna(idCanal);
         int linhas = jdbc.sql("""
                         UPDATE canal
                            SET status = 'DESCONECTADO', credenciais = NULL, atualizado_em = now()
@@ -171,6 +177,7 @@ public class CanalService {
     @Transactional
     public void excluir(Jwt jwt, long idCanal) {
         exigirAdmin(jwt);
+        credenciais.esquecerContaExterna(idCanal);
         Integer vinculados = jdbc.sql("""
                         SELECT count(*) FROM anuncio
                          WHERE id_tenant = plataforma.tenant_atual() AND id_canal = ?

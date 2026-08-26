@@ -95,6 +95,54 @@ public interface CanalDeVenda {
     List<AnuncioDoCanal> listarAnuncios(CredenciaisCanal credenciais, int pagina, int limite);
 
     /**
+     * Um item vendido, do jeito que o canal o descreve.
+     *
+     * <p>⚠️ Vem identificado pelo <b>anúncio</b> ({@code idExternoItem} + {@code
+     * idExternoVariacao}), não pelo produto do ERP: quem traduz um no outro é o de-para do R6.
+     * Um item cujo anúncio não está vinculado não tem como virar linha de pedido — e o domínio
+     * precisa saber disso em vez de adivinhar.
+     */
+    record ItemDoPedido(String idExternoItem, String idExternoVariacao, String titulo,
+                        BigDecimal quantidade, BigDecimal precoUnitario) {
+    }
+
+    /**
+     * Um pedido como o canal o descreve.
+     *
+     * @param status         já traduzido para o vocabulário do ERP ({@code status_pedido})
+     * @param idExternoEnvio id do envio no canal, quando houver. É por ele que se busca etiqueta
+     *                       e rastreio depois (M7)
+     * @param payloadBruto   o JSON cru do canal. ⚠️ Guardado de propósito: quando a primeira
+     *                       notificação real chegar num formato diferente do que a documentação
+     *                       descreve — e vai —, é o único lugar onde dá para ver o que veio
+     */
+    record PedidoDoCanal(String idExterno, String status, BigDecimal total, BigDecimal frete,
+                         String comprador, String idExternoEnvio, List<ItemDoPedido> itens,
+                         String payloadBruto) {
+    }
+
+    /**
+     * Busca um pedido pelo id no canal (R5).
+     *
+     * <p>⚠️ <b>É sempre o canal que responde, nunca o corpo do webhook.</b> A notificação diz
+     * apenas <i>"o pedido X mudou"</i>; quem conta o que mudou é a API do marketplace. Confiar no
+     * corpo faria um payload forjado criar pedido, mexer em estoque e consumir cota (P2).
+     *
+     * @throws CanalIndisponivelException falha transitória — o worker reagenda
+     */
+    PedidoDoCanal buscarPedido(CredenciaisCanal credenciais, String idExterno);
+
+    /**
+     * Ids dos pedidos recentes da conta, do mais novo para o mais antigo.
+     *
+     * <p>⭐ É a <b>rede de segurança</b> do webhook: notificação se perde, chega fora de ordem, ou
+     * simplesmente não existe em desenvolvimento (onde não há URL pública). Um marketplace que
+     * nunca notificasse ainda assim teria os pedidos importados por aqui — mais devagar, e é o
+     * bastante.
+     */
+    List<String> idsDePedidosRecentes(CredenciaisCanal credenciais, int limite);
+
+    /**
      * Publica o saldo no canal.
      *
      * <p>⚠️ {@code saldos} tem de conter <b>todas</b> as variações do anúncio, não só as que

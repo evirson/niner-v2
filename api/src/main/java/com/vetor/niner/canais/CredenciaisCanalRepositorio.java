@@ -80,7 +80,7 @@ public class CredenciaisCanalRepositorio {
         no.put("refreshToken", cred.refreshToken() == null ? null : cifrador.cifrar(cred.refreshToken()));
         no.put("expiraEm", cred.expiraEm() == null ? null : cred.expiraEm().toString());
 
-        return jdbc.sql("""
+        boolean gravou = jdbc.sql("""
                         UPDATE canal
                            SET credenciais = CAST(? AS jsonb), status = 'CONECTADO',
                                atualizado_em = now()
@@ -88,6 +88,82 @@ public class CredenciaisCanalRepositorio {
                         """)
                 .params(no.toString(), idCanal)
                 .update() == 1;
+
+        if (gravou && cred.contaExterna() != null) {
+            mapearContaExterna(idCanal, cred.contaExterna());
+        }
+        return gravou;
+    }
+
+    /**
+     * Publica o par (marketplace, vendedor) no mapa global — é por ele que um webhook anônimo
+     * descobre de quem é a notificação (V068).
+     *
+     * <p>⛔ <b>Recusa quando aquela conta já está conectada em outro canal.</b> A mesma conta de
+     * Mercado Livre em dois lugares tornaria toda notificação de venda ambígua, e o desempate
+     * seria um palpite que erra metade das vezes — importando o pedido de um lojista dentro da
+     * loja de outro (P8). Melhor recusar a conexão, com uma frase que diz o que houve.
+     */
+    private void mapearContaExterna(long idCanal, String contaExterna) {
+        int linhas = jdbc.sql("""
+                        INSERT INTO plataforma.canal_externo (tipo, conta_externa, id_tenant, id_canal)
+                        SELECT c.tipo::text, ?, c.id_tenant, c.id_canal
+                          FROM canal c
+                         WHERE c.id_tenant = plataforma.tenant_atual() AND c.id_canal = ?
+                        ON CONFLICT (tipo, conta_externa) DO UPDATE
+                           SET id_tenant = EXCLUDED.id_tenant, id_canal = EXCLUDED.id_canal,
+                               atualizado_em = now()
+                         WHERE plataforma.canal_externo.id_tenant = EXCLUDED.id_tenant
+                           AND plataforma.canal_externo.id_canal  = EXCLUDED.id_canal
+                        """)
+                .params(contaExterna, idCanal)
+                .update();
+
+        if (linhas == 0) {
+            throw new org.springframework.web.server.ResponseStatusException(
+                    org.springframework.http.HttpStatus.CONFLICT,
+                    "Esta conta do marketplace já está conectada a outro canal. "
+                            + "Desconecte-a lá antes de conectá-la aqui — a mesma conta em dois "
+                            + "lugares tornaria cada venda ambígua.");
+        }
+    }
+
+    /**
+     * Tira o canal do mapa global.
+     *
+     * <p>⚠️ Chamado ao desconectar e ao excluir. Deixar a linha para trás faria notificações de
+     * uma conta já desconectada continuarem sendo aceitas — e, pior, impediria o lojista de
+     * reconectar aquela conta em outro canal, com uma mensagem que não faria sentido para ele.
+     */
+    @Transactional
+    public void esquecerContaExterna(long idCanal) {
+        jdbc.sql("""
+                        DELETE FROM plataforma.canal_externo
+                         WHERE id_tenant = plataforma.tenant_atual() AND id_canal = ?
+                        """)
+                .params(idCanal)
+                .update();
+    }
+
+    /**
+     * De quem é esta conta do marketplace? A pergunta que o webhook anônimo faz (V068).
+     *
+     * <p>⚠️ Roda <b>sem</b> {@code TenantContext}, de propósito — é justamente o que ela descobre.
+     * Por isso a tabela é global e sem RLS.
+     */
+    @Transactional(readOnly = true)
+    public Optional<DonoDaConta> donoDaConta(String tipo, String contaExterna) {
+        return jdbc.sql("""
+                        SELECT id_tenant, id_canal FROM plataforma.canal_externo
+                         WHERE tipo = ? AND conta_externa = ?
+                        """)
+                .params(tipo, contaExterna)
+                .query((rs, n) -> new DonoDaConta(rs.getLong("id_tenant"), rs.getLong("id_canal")))
+                .optional();
+    }
+
+    /** A quem pertence uma conta de marketplace. */
+    public record DonoDaConta(long idTenant, long idCanal) {
     }
 
     /** A credencial decifrada de um canal, ou vazio se ele não tem (nunca conectou/desconectou). */
