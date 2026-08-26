@@ -105,8 +105,18 @@ public class ExportacaoXmlLoteRepositorio {
      */
     @Transactional(readOnly = true)
     public ContagemDocumentos contar(long idEmpresa, LocalDate dataInicial, LocalDate dataFinal, Integer modelo) {
+        // ⚠️ "Sem XML" tem DOIS significados, e tratá-los como um só faz a tela mentir (achado em
+        // 2026-08-26, conferindo um pacote real: das 40 notas sem XML, 36 eram REJEITADAS, 3
+        // NAO_EMITIDO e só 1 era caso de esperar). A nota rejeitada **nunca** vai ter XML — mandar
+        // "aguarde o arquivamento e repita" manda o lojista esperar para sempre.
         StringBuilder sql = new StringBuilder("""
-                SELECT count(*) AS total, count(d.xml_objeto_bucket) AS com_xml
+                SELECT count(*) AS total,
+                       count(d.xml_objeto_bucket) AS com_xml,
+                       count(*) FILTER (
+                           WHERE d.situacao IN ('AUTORIZADO', 'CANCELADO')
+                             AND d.xml_objeto_bucket IS NULL) AS pendente_arquivamento,
+                       count(*) FILTER (
+                           WHERE d.situacao IN ('REJEITADO', 'DENEGADO', 'NAO_EMITIDO')) AS sem_valor_fiscal
                   FROM documento_fiscal d
                  WHERE d.id_tenant = plataforma.tenant_atual() AND d.id_empresa = ?
                 """);
@@ -117,7 +127,8 @@ public class ExportacaoXmlLoteRepositorio {
             params.add(modelo);
         }
         return jdbc.sql(sql.toString()).params(params)
-                .query((rs, n) -> new ContagemDocumentos(rs.getLong("total"), rs.getLong("com_xml")))
+                .query((rs, n) -> new ContagemDocumentos(rs.getLong("total"), rs.getLong("com_xml"),
+                        rs.getLong("pendente_arquivamento"), rs.getLong("sem_valor_fiscal")))
                 .single();
     }
 
@@ -286,8 +297,14 @@ public class ExportacaoXmlLoteRepositorio {
                 .list();
     }
 
-    /** Total do período e quantos deles já têm XML no bucket. */
-    public record ContagemDocumentos(long total, long comXml) {
+    /**
+     * @param pendenteArquivamento notas com valor fiscal (AUTORIZADO/CANCELADO) cujo XML ainda não
+     *                             subiu ao bucket — <b>essas</b> resolvem esperando o job.
+     * @param semValorFiscal       REJEITADO/DENEGADO/NAO_EMITIDO: não existem como documento fiscal
+     *                             e <b>nunca</b> terão XML. Contá-las junto com as de cima faria a
+     *                             tela mandar o lojista esperar por um arquivo que não vem.
+     */
+    public record ContagemDocumentos(long total, long comXml, long pendenteArquivamento, long semValorFiscal) {
     }
 
     /**

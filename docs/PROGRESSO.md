@@ -628,6 +628,43 @@ ao ver o null no stream. A saída foi não ter null nenhum: `COALESCE(max(...), 
 ausência**, que funciona porque `id_documento_fiscal` começa em 1.
 
 
+**Três ajustes na tela, pedidos depois de usá-la (mesmo dia):**
+
+1. **"No static resource api/v1/fiscal/exportacao-xml/resumo"** — o mesmo caso de horas antes: a API
+   no ar era a build anterior. `docker compose up -d --build api`. ⚠️ **Segunda reincidência no
+   mesmo dia** (ver [[feedback_docker_api_precisa_rebuild]]): entregar back novo tem de incluir o
+   rebuild **e** uma chamada autenticada de verdade, senão o dono do produto vira o verificador.
+
+2. **Botão "Gerar Dados".** A conferência disparava sozinha a cada tecla digitada numa data, e a
+   tela piscava números sem que o lojista soubesse por quê. Agora só roda no clique. ⚠️ Junto veio o
+   cuidado que faz a mudança valer: **trocar qualquer filtro apaga o resultado** (`aoTrocarFiltro`),
+   e o `placeholderData` do React Query foi **removido** — número na tela que não corresponde aos
+   filtros visíveis é pior que tela vazia, porque parece atual.
+
+3. **Gauge durante a consulta.** O anel já existia (`GaugeProgresso`, usado em 4 telas) mas só
+   aparecia durante o download. Agora também durante a conferência.
+
+⭐ **E o achado que só apareceu porque abri o ZIP de verdade:** a tela avisava *"40 notas ainda não
+tiveram o XML arquivado — o arquivamento tenta de novo a cada 10 minutos, aguarde e repita"*.
+Conferindo o `relatorio.csv` do pacote real: das 40, **36 eram REJEITADAS, 3 NAO_EMITIDO e só 1 era
+pendência de verdade**. Nota rejeitada **nunca** vai ter XML — a mensagem mandava o lojista esperar
+para sempre por um arquivo que não vem.
+
+"Sem XML" tinha dois significados com **conselhos opostos**, somados num número só. Agora são duas
+contagens (`documentosPendentesArquivamento` × `documentosSemValorFiscal`, por `FILTER (WHERE …)` na
+mesma varredura) e duas mensagens. No período real: **1** pendência e **39** sem valor fiscal.
+Preso por `rejeitadaNaoContaComoPendenciaDeArquivamento`.
+
+⚠️ Ninguém teria visto isso lendo o código, nem rodando os testes: o teste antigo criava **uma**
+nota autorizada sem XML e passava. O defeito só existia na proporção dos dados reais — e só apareceu
+porque a validação foi **baixar o pacote e ler o CSV**, não conferir o status HTTP
+([[feedback_medir_a_saida_nao_reler_o_codigo]]).
+
+**Validação com dados reais** (primeira desta tela): 75 documentos no período, ZIP com **37
+arquivos** = 35 XMLs de nota + 1 evento de cancelamento + `relatorio.csv`, todos `nfeProc` de notas
+efetivamente autorizadas na SEFAZ, com BOM UTF-8 no CSV e as 40 linhas marcadas `(nao arquivado)`.
+
+
 **Nota de processo:** este trabalho começou num agente em segundo plano e foi trazido para a thread
 principal a pedido do dono do produto, que queria acompanhar. Revisado aqui contra as armadilhas do
 projeto antes de commitar — `id_tenant` explícito nas 3 consultas, `@Transactional` nos 5 métodos de

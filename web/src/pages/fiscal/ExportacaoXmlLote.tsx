@@ -43,6 +43,16 @@ export default function ExportacaoXmlLote() {
   const [parteAtual, setParteAtual] = useState<{ feita: number; total: number } | null>(null)
   const [toast, setToast] = useState('')
   const [toastTipo, setToastTipo] = useState<TipoToast>('erro')
+  /**
+   * ⭐ A conferência só roda depois do clique em **Gerar Dados** (2026-08-26, pedido do dono do
+   * produto: *"coloque um botão gerar dados, para facilitar o entendimento do usuário"*). Antes ela
+   * disparava sozinha a cada tecla numa data, e a tela ficava piscando números sem que o lojista
+   * soubesse por quê — ou o que ele tinha feito para provocá-los.
+   *
+   * ⚠️ Trocar um filtro **apaga** o resultado (ver `aoTrocarFiltro`): número na tela que não
+   * corresponde aos filtros visíveis é pior que tela vazia — ele parece atual e não é.
+   */
+  const [gerado, setGerado] = useState(false)
 
   const { data: empresas } = useQuery({ queryKey: ['fiscal-empresas'], queryFn: listarEmpresasFiscal })
 
@@ -70,12 +80,21 @@ export default function ExportacaoXmlLote() {
   } = useQuery({
     queryKey: ['exportacao-xml-resumo', idEmpresa, dataInicialIso, dataFinalIso, modelo],
     queryFn: () => resumirExportacaoXml(filtros!),
-    enabled: filtrosValidos,
-    placeholderData: (anterior) => anterior,
+    enabled: filtrosValidos && gerado,
+    // ⚠️ Sem `placeholderData`: manter o resultado anterior enquanto a próxima consulta corre faria
+    // a tela mostrar a contagem de OUTRO período durante a espera, com cara de resultado atual.
   })
 
-  const podeBaixar =
-    !!resumo && resumo.documentosComXml > 0 && !baixando && !buscandoResumo
+  /** Qualquer mexida num filtro invalida o que está na tela — ver o comentário de `gerado`. */
+  function aoTrocarFiltro<T>(setter: (v: T) => void) {
+    return (valor: T) => {
+      setGerado(false)
+      setter(valor)
+    }
+  }
+
+  const podeGerar = filtrosValidos && !buscandoResumo && !baixando
+  const podeBaixar = !!resumo && resumo.documentosComXml > 0 && !baixando && !buscandoResumo
 
   async function baixar() {
     if (!filtros || !resumo) return
@@ -116,7 +135,7 @@ export default function ExportacaoXmlLote() {
           <select
             autoFocus
             value={idEmpresa ?? ''}
-            onChange={(e) => setIdEmpresa(Number(e.target.value))}
+            onChange={(e) => aoTrocarFiltro(setIdEmpresa)(Number(e.target.value))}
             aria-label="Empresa"
           >
             {(empresas ?? []).map((emp) => (
@@ -131,7 +150,7 @@ export default function ExportacaoXmlLote() {
             className="mono"
             placeholder="dd/mm/aaaa"
             value={dataInicialTexto}
-            onChange={(e) => setDataInicialTexto(mascararData(e.target.value))}
+            onChange={(e) => aoTrocarFiltro(setDataInicialTexto)(mascararData(e.target.value))}
             onFocus={(e) => e.target.select()}
             aria-label="Emissão inicial"
             style={{ maxWidth: 130 }}
@@ -140,16 +159,20 @@ export default function ExportacaoXmlLote() {
             className="mono"
             placeholder="dd/mm/aaaa"
             value={dataFinalTexto}
-            onChange={(e) => setDataFinalTexto(mascararData(e.target.value))}
+            onChange={(e) => aoTrocarFiltro(setDataFinalTexto)(mascararData(e.target.value))}
             onFocus={(e) => e.target.select()}
             aria-label="Emissão final"
             style={{ maxWidth: 130 }}
           />
-          <select value={modelo} onChange={(e) => setModelo(e.target.value as '' | '65' | '55')} aria-label="Modelo">
+          <select value={modelo} onChange={(e) => aoTrocarFiltro(setModelo)(e.target.value as '' | '65' | '55')} aria-label="Modelo">
             <option value="">NFC-e e NF-e</option>
             <option value="65">Só NFC-e (65)</option>
             <option value="55">Só NF-e (55)</option>
           </select>
+          {/* ⭐ A conferência não roda mais sozinha: o lojista escolhe os filtros e clica aqui. */}
+          <button type="button" className="btn" disabled={!podeGerar} onClick={() => setGerado(true)}>
+            {buscandoResumo ? 'Consultando…' : 'Gerar Dados'}
+          </button>
         </div>
       </div>
 
@@ -159,12 +182,21 @@ export default function ExportacaoXmlLote() {
 
           {!filtrosValidos ? (
             <p className="muted">Escolha a empresa e informe a data inicial e final de emissão.</p>
+          ) : buscandoResumo ? (
+            /* ⭐ Consultar o período varre a tabela de documentos fiscais e pode demorar num
+               período largo. Sem o anel girando, uma tela parada por alguns segundos parece
+               travada, e o lojista clica de novo (2026-08-26, pedido do dono do produto). */
+            <div style={{ display: 'flex', justifyContent: 'center', padding: '12px 0' }}>
+              <GaugeProgresso rotulo="Consultando as notas do período…" />
+            </div>
           ) : erroResumo ? (
             <p className="erro">
               {erroResumo instanceof ApiError ? erroResumo.message : 'Não foi possível conferir o período.'}
             </p>
           ) : !resumo ? (
-            <p className="muted">Conferindo o período…</p>
+            <p className="muted">
+              Confira os filtros acima e clique em <strong>Gerar Dados</strong> para ver o que vai no arquivo.
+            </p>
           ) : (
             <>
               <p style={{ margin: '4px 0 0' }}>
@@ -180,13 +212,28 @@ export default function ExportacaoXmlLote() {
                 Arquivo: <span className="mono">{resumo.nomeArquivo}</span>
               </p>
 
-              {resumo.documentosSemXml > 0 && (
-                // ⚠️ Nota AUTORIZADA cujo XML ainda não subiu ao bucket tem valor fiscal e ficaria
-                // de fora do pacote sem nada avisar. Este é o aviso.
+              {/* ⚠️ Nota AUTORIZADA cujo XML ainda não subiu ao bucket tem valor fiscal e ficaria
+                  de fora do pacote sem nada avisar. Este é o aviso — e SÓ para esse caso: esperar
+                  resolve. */}
+              {resumo.documentosPendentesArquivamento > 0 && (
                 <p className="muted" style={{ margin: '10px 0 0' }}>
-                  ⚠️ {resumo.documentosSemXml} nota(s) do período ainda não tiveram o XML arquivado e vão ficar de
-                  fora. Elas aparecem no <span className="mono">relatorio.csv</span> marcadas como “(nao arquivado)”. O
-                  arquivamento é automático e tenta de novo a cada 10 minutos — aguarde e repita a exportação.
+                  ⚠️ {resumo.documentosPendentesArquivamento} nota(s) com valor fiscal ainda não tiveram o XML
+                  arquivado e vão ficar de fora. Elas aparecem no <span className="mono">relatorio.csv</span> marcadas
+                  como “(nao arquivado)”. O arquivamento é automático e tenta de novo a cada 10 minutos — aguarde e
+                  repita a exportação.
+                </p>
+              )}
+
+              {/* ⛔ Mensagem OPOSTA à de cima, e é por isso que as duas contagens são separadas
+                  (2026-08-26): rejeitada/denegada/não emitida NUNCA vai ter XML. Dizer "aguarde o
+                  arquivamento" aqui mandaria o lojista esperar por um arquivo que não vem — e num
+                  período real deste banco eram 36 rejeitadas contra 1 pendência de verdade. */}
+              {resumo.documentosSemValorFiscal > 0 && (
+                <p className="muted" style={{ margin: '10px 0 0' }}>
+                  {resumo.documentosSemValorFiscal} nota(s) do período foram rejeitadas, denegadas ou não chegaram a
+                  ser emitidas: não existem como documento fiscal e <strong>não geram XML</strong>. Ficam no{' '}
+                  <span className="mono">relatorio.csv</span> para conferência, mas não há o que esperar nem o que
+                  exportar delas.
                 </p>
               )}
 

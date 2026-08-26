@@ -318,7 +318,7 @@ class ExportacaoXmlLoteTest {
 
     /**
      * ⭐ Nota AUTORIZADA cujo XML não subiu ao bucket tem valor fiscal e sumiria do pacote sem nada
-     * avisar. O resumo a conta em {@code documentosSemXml} e o {@code relatorio.csv} a marca.
+     * avisar. O resumo a conta em {@code documentosPendentesArquivamento} e o {@code relatorio.csv} a marca.
      */
     @Test
     void notaAutorizadaSemXmlArquivadoApareceNoResumoEFicaMarcadaNoCsv() throws Exception {
@@ -341,7 +341,10 @@ class ExportacaoXmlLoteTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.totalDocumentos").value(2))
                 .andExpect(jsonPath("$.documentosComXml").value(1))
-                .andExpect(jsonPath("$.documentosSemXml").value(1));
+                .andExpect(jsonPath("$.documentosPendentesArquivamento").value(1))
+                // ⚠️ E a nota AUTORIZADA sem XML não pode cair no balde das que nunca terão XML:
+                // são mensagens opostas na tela (esperar resolve × esperar não resolve nunca).
+                .andExpect(jsonPath("$.documentosSemValorFiscal").value(0));
 
         Map<String, byte[]> zip = lerZip(baixarZip(token, idEmpresa, hojeMais(-5), hojeMais(0), null));
         assertThat(zip).containsKey(pastaDoMes(ontem) + "/saidas/" + comXml + ".xml");
@@ -731,5 +734,41 @@ class ExportacaoXmlLoteTest {
                         .param("dataFinal", hojeMais(0).toString())
                         .param("parte", "0"))
                 .andExpect(status().isBadRequest());
+    }
+
+    /**
+     * ⭐ "Sem XML" tem <b>dois</b> significados e a tela dá conselhos opostos para cada um — este
+     * teste é o que impede alguém de voltar a somá-los num número só.
+     *
+     * <p>Achado em 2026-08-26 conferindo um pacote real: das 40 notas "sem XML" do período, 36 eram
+     * REJEITADAS e só 1 era pendência de arquivamento de verdade. A mensagem única mandava
+     * "aguarde o arquivamento e repita" — para uma nota rejeitada, isso é esperar para sempre.
+     */
+    @Test
+    void rejeitadaNaoContaComoPendenciaDeArquivamento() throws Exception {
+        String token = assinarNovoTenant("sem-valor-fiscal");
+        long idTenant = idTenantDo(token);
+        long idEmpresa = idEmpresaDo(token);
+        LocalDate ontem = hojeMais(-1);
+
+        String comXml = chaveDe(841);
+        long doc = criarDocumento(idTenant, idEmpresa, 65, 841, comXml, "AUTORIZADO", ontem);
+        arquivar(idTenant, doc, 65, comXml, ontem, "<nfeProc>OK</nfeProc>");
+        criarDocumento(idTenant, idEmpresa, 65, 842, chaveDe(842), "AUTORIZADO", ontem);   // espera resolver
+        criarDocumento(idTenant, idEmpresa, 65, 843, chaveDe(843), "REJEITADO", ontem);    // nunca terá XML
+        criarDocumento(idTenant, idEmpresa, 65, 844, chaveDe(844), "REJEITADO", ontem);
+        criarDocumento(idTenant, idEmpresa, 65, 845, chaveDe(845), "DENEGADO", ontem);
+
+        mvc.perform(get("/api/v1/fiscal/exportacao-xml/resumo")
+                        .header("Authorization", "Bearer " + token)
+                        .param("idEmpresa", String.valueOf(idEmpresa))
+                        .param("dataInicial", hojeMais(-5).toString())
+                        .param("dataFinal", hojeMais(0).toString()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalDocumentos").value(5))
+                .andExpect(jsonPath("$.documentosComXml").value(1))
+                // Só a AUTORIZADA sem XML é pendência — as 3 sem valor fiscal ficam no outro balde.
+                .andExpect(jsonPath("$.documentosPendentesArquivamento").value(1))
+                .andExpect(jsonPath("$.documentosSemValorFiscal").value(3));
     }
 }

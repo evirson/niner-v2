@@ -6,8 +6,15 @@ export interface ResumoExportacaoXml {
   nomeArquivo: string
   totalDocumentos: number
   documentosComXml: number
-  /** Notas do período que ainda não tiveram o XML gravado no bucket — ficam de fora do pacote. */
-  documentosSemXml: number
+  /** AUTORIZADO/CANCELADO cujo XML ainda não subiu ao bucket — resolve esperando o job. */
+  documentosPendentesArquivamento: number
+  /**
+   * ⚠️ REJEITADO/DENEGADO/NAO_EMITIDO: **nunca** terão XML, porque não chegaram a existir como
+   * documento fiscal. Separado de `documentosPendentesArquivamento` porque a mensagem é a oposta —
+   * ali o lojista espera e repete; aqui esperar não resolve nunca. Achado em 2026-08-26 conferindo
+   * um pacote real: das 40 notas "sem XML", 36 eram rejeitadas e só 1 era caso de esperar.
+   */
+  documentosSemValorFiscal: number
   totalEventos: number
   limiteDocumentos: number
   /**

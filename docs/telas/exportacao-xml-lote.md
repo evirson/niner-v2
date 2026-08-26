@@ -85,6 +85,21 @@ que nada avise — e é exatamente o tipo de silêncio que este projeto já pago
 - a mensagem diz o que fazer: o `ArquivamentoXmlJob` tenta de novo a cada 10 minutos, então basta
   esperar e repetir a exportação.
 
+#### ⚠️ "Sem XML" tem DOIS significados, com conselhos opostos
+
+Revisado em 2026-08-26 conferindo um pacote real: das 40 notas "sem XML" do período, **36 eram
+REJEITADAS, 3 NAO_EMITIDO e só 1 era pendência de arquivamento**. A mensagem única dizia "aguarde o
+arquivamento e repita" — para uma nota rejeitada, isso é esperar para sempre por um arquivo que não
+vem. Hoje são duas contagens e duas mensagens:
+
+| Contagem | Situações | O que a tela diz |
+|---|---|---|
+| `documentosPendentesArquivamento` | AUTORIZADO / CANCELADO sem XML | aguarde o job (10 min) e repita |
+| `documentosSemValorFiscal` | REJEITADO / DENEGADO / NAO_EMITIDO | não geram XML; não há o que esperar |
+
+As duas saem da **mesma varredura** (`count(*) FILTER (WHERE …)`), sem query extra e sem risco de
+discordarem. Preso por `rejeitadaNaoContaComoPendenciaDeArquivamento`.
+
 ### 4. Os **eventos de cancelamento** entram junto — não foram pedidos, e sem eles o pacote mente
 
 Uma NFC-e cancelada, sozinha no ZIP, é um XML de nota **autorizada**: nada nele diz que foi

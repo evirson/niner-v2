@@ -13,7 +13,7 @@ public final class ExportacaoXmlLoteDtos {
      * Pré-conferência mostrada na tela <b>antes</b> do clique em baixar. Não toca no bucket: só
      * conta no banco.
      *
-     * <p>{@code documentosSemXml} é o campo que existe para <b>não</b> deixar um silêncio: nota
+     * <p>{@code documentosPendentesArquivamento} é o campo que existe para <b>não</b> deixar um silêncio: nota
      * autorizada cuja gravação no bucket falhou tem valor fiscal e ficaria de fora do pacote sem
      * nada avisar. Ver decisão 3 da spec.
      */
@@ -30,7 +30,10 @@ public final class ExportacaoXmlLoteDtos {
             String nomeArquivo,
             long totalDocumentos,
             long documentosComXml,
-            long documentosSemXml,
+            /** AUTORIZADO/CANCELADO sem XML no bucket: resolve esperando o job de arquivamento. */
+            long documentosPendentesArquivamento,
+            /** ⚠️ REJEITADO/DENEGADO/NAO_EMITIDO: nunca terão XML. Esperar não adianta. */
+            long documentosSemValorFiscal,
             long totalEventos,
             int limiteDocumentos,
             int totalPartes,
