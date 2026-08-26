@@ -196,6 +196,11 @@ Nenhum.
 
 ## Questões abertas
 
-1. O filtro de **Situação** foi acrescentado sem ter sido pedido (decisão 4) — confirmar com o
-   dono do produto.
-2. O corte dos gráficos em **top 7 + Outros** é palpite; ajustar se ele achar curto ou longo.
+✅ **Nenhuma** — as duas foram confirmadas pelo dono do produto em 2026-08-26:
+
+1. ✅ O filtro de **Situação** (Todas / Em Aberto / Pagas), acrescentado sem ter sido pedido
+   (decisão 4), foi **mantido**. Justificativa aceita: é a pergunta mais comum de quem abre um
+   relatório de contas a pagar, e sem ele o lojista teria de ler a coluna linha a linha.
+2. ✅ O corte dos gráficos em **top 7 + "Outros"** foi **mantido**, igual aos demais relatórios do
+   sistema. ⚠️ O "Outros" não é enfeite: sem ele o total do gráfico deixaria de bater com o total do
+   relatório, e nada avisaria.
