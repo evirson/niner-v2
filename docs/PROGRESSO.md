@@ -541,6 +541,58 @@ Movimentação de Conta Corrente) que ainda não tinham migrado pro `SeletorPlan
 
 ## Linha do tempo
 
+### 2026-08-26 (9) — PDF saindo no tema escuro: o mecanismo era uma aposta na cascata
+
+Relatado pelo dono do produto: *"O pdf esta gerando com tema dark, e mesmo que o navegador esteja no
+tema dark, os relatorio nao podem sair com este tema."*
+
+**O mecanismo já existia — e essa foi a parte difícil.** Os 10 `lib/*Captura.ts` já faziam
+`doc.documentElement.setAttribute('data-theme', 'light')` no `onclone` do html2canvas, e
+`lib/tema.ts` até documentava isso como "a paleta clara já roda em produção". Ou seja, não era
+código faltando: era código presente que **quase sempre** funciona.
+
+⭐ **Reproduzido uma vez, e não reproduziu em quatro tentativas seguintes** — o PDF escuro está no
+disco como prova, e depois disso todos saíram claros. Foi essa intermitência que apontou a causa:
+
+⚠️ **Trocar o atributo é apostar na cascata.** O clone roda dentro de um iframe que **herda
+`prefers-color-scheme: dark` do sistema operacional** (medido: `matchMedia` responde `true` lá
+dentro), então a paleta escura continua viva no clone e só perde por especificidade. Basta o
+atributo não pegar — ordem, timing, uma folha injetada depois — e o relatório inteiro sai escuro
+**sem erro nenhum**. Medido: clone com `data-theme='dark'` produz `--surface: #1a2225`.
+
+**Correção:** `lib/temaClaroParaCaptura.ts` (novo), usado pelos 10 módulos. Além do atributo, injeta
+no clone um `<style>` que declara a paleta clara com `!important`. ⭐ Os valores **saem do próprio
+`styles.css`** (lê a regra `:root[data-theme='light']` via `document.styleSheets`), com cópia
+literal só como fallback — uma cópia fixa divergiria no dia em que alguém ajustasse uma cor lá, e o
+PDF ganharia uma paleta que ninguém escolheu.
+
+**Verificação que separa "funciona" de "funciona por sorte":** depois de aplicar a correção, o
+`onclone` **sabota o atributo de volta para `dark`** e mede — `--surface` continua `#ffffff` e os
+pixels saem claros. Sem a correção, o mesmo teste dá `#1a2225`. É isso que prova que o resultado
+deixou de depender da cascata ([[feedback_teste_de_guard_passa_pelo_motivo_errado]]).
+
+**Dois defeitos que só apareceram gerando o PDF de verdade** (nenhum aparece na tela nem em teste):
+
+1. **O aviso "Atualizando…" era IMPRESSO no relatório.** Ele mora dentro do elemento que a captura
+   fotografa, em **6 telas**. Virou `[data-sem-impressao]{display:none}` no CSS injetado + a marca
+   nos 6 `<p>` — melhor que condicionar a renderização em cada tela, porque quem escrever a próxima
+   só precisa marcar o elemento, sem saber que existe captura.
+2. **O texto dos gráficos saía na cor do tema escuro**, cinza-claro sobre papel branco, quase
+   ilegível. ⚠️ Causa medida: dentro do clone, `fill="var(--accent)"` de SVG **continua resolvendo
+   para a cor escura** mesmo com `--accent` já valendo a cor clara no `:root` — o Chrome não
+   reinvalida o estilo do SVG adotado. Por isso a regra do gráfico usa a cor **literal**, extraída
+   das declarações lidas; reemitir `var(...)` reproduziria o problema.
+
+⏭️ **Ficou de fora, de propósito:** a **cor das barras** continua a do tema escuro (`#4fbdb2`). É
+legível sobre branco e trocá-la é decisão visual do dono do produto, não conserto de legibilidade.
+⚠️ E há um segundo achado **não corrigido**: exportar logo depois de gerar captura o gráfico no meio
+da animação do recharts e **as barras saem vazias** — reproduzido clicando ~2 s após gerar. A
+correção envolve escolha (desligar a animação na tela × esperar um tempo fixo antes de capturar).
+
+⚠️ **Nota de método:** o `perl` de substituição em massa casou em **2 dos 10** arquivos na primeira
+tentativa — os outros 8 têm CRLF e o `\n` do padrão não casa `\r\n`. Não deu erro; conferir a
+contagem depois foi o que pegou ([[feedback_perl_falha_em_silencio]]).
+
 ### 2026-08-26 (8) — Relatórios em subgrupos, e o rótulo curto que quase levou a busca junto
 
 Pedido do dono do produto: dividir a aba de Relatórios em **Faturamento** (Vendas, Comissões),

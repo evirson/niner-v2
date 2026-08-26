@@ -1,5 +1,6 @@
 import html2canvas from 'html2canvas'
 import { jsPDF } from 'jspdf'
+import { forcarTemaClaroNoClone } from './temaClaroParaCaptura'
 
 /** A tela usa `.lista-corpo` normal (a página inteira rola) e a grid (`.grid-altura-fixa`,
  *  2026-08-04) tem altura própria limitada a 60vh com rolagem interna — sem isto, o html2canvas
@@ -34,7 +35,7 @@ const OPCOES_CAPTURA = {
   useCORS: true,
   ignoreElements: (el: Element) => el.closest('.app-header, .app-nav, .modal-overlay') !== null,
   onclone: (doc: Document) => {
-    doc.documentElement.setAttribute('data-theme', 'light')
+    forcarTemaClaroNoClone(doc)
     liberarAlturaDosAncestrais(doc, '.relatorio-conteudo')
   },
 } as const

@@ -1,5 +1,6 @@
 import html2canvas from 'html2canvas'
 import { jsPDF } from 'jspdf'
+import { forcarTemaClaroNoClone } from './temaClaroParaCaptura'
 
 /** Ver `relatorioDreCaptura.ts` — mesmo mecanismo: o `.lista-corpo` tem altura travada pelo layout
  *  flex da tela, então sem liberar altura/overflow de cada ancestral (só no clone isolado, nunca na
@@ -21,7 +22,7 @@ const OPCOES_CAPTURA = {
   ignoreElements: (el: Element) => el.closest('.app-header, .app-nav, .modal-overlay') !== null,
   onclone: (doc: Document) => {
     // Tema claro só no clone: PDF em dark gasta muito mais tinta, e a tela não pisca.
-    doc.documentElement.setAttribute('data-theme', 'light')
+    forcarTemaClaroNoClone(doc)
     liberarAlturaDosAncestrais(doc, '.relatorio-conteudo')
   },
 } as const

@@ -1,5 +1,6 @@
 import html2canvas from 'html2canvas'
 import { jsPDF } from 'jspdf'
+import { forcarTemaClaroNoClone } from './temaClaroParaCaptura'
 
 /** Este relatório usa `.relatorio-corpo-fixo` (cabeçalho/rodapé da grid fixos, só as linhas
  *  rolam — ver styles.css) — sem isto, o html2canvas capturaria só a altura VISÍVEL do
@@ -30,7 +31,7 @@ const OPCOES_CAPTURA = {
   useCORS: true,
   ignoreElements: (el: Element) => el.closest('.app-header, .app-nav, .modal-overlay') !== null,
   onclone: (doc: Document) => {
-    doc.documentElement.setAttribute('data-theme', 'light')
+    forcarTemaClaroNoClone(doc)
     liberarAlturaDosAncestrais(doc, '.relatorio-conteudo')
   },
 } as const

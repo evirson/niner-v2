@@ -320,7 +320,11 @@ export default function RelatorioMovimentacaoProdutos() {
         ) : (
           <div>
             <div ref={topoRef}>
-              {isFetching && <p className="muted">Atualizando…</p>}
+              {isFetching && (
+              <p className="muted" data-sem-impressao>
+                Atualizando…
+              </p>
+            )}
 
               {gerandoPdf && (
                 <>

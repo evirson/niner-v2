@@ -268,7 +268,11 @@ export default function RelatorioContasPagar() {
           </p>
         ) : (
           <div ref={conteudoRef} className="relatorio-conteudo">
-            {isFetching && <p className="muted">Atualizando…</p>}
+            {isFetching && (
+              <p className="muted" data-sem-impressao>
+                Atualizando…
+              </p>
+            )}
 
             {gerandoPdf && (
               <>

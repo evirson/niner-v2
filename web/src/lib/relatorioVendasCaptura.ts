@@ -1,5 +1,6 @@
 import html2canvas from 'html2canvas'
 import { jsPDF } from 'jspdf'
+import { forcarTemaClaroNoClone } from './temaClaroParaCaptura'
 
 /** A grid (segunda captura, `gridEl`) usa `.grid-altura-fixa` (cabeçalho/rodapé fixos, só as
  *  linhas rolam — ver styles.css) — sem isto, o html2canvas capturaria só a altura MÁXIMA
@@ -43,7 +44,7 @@ const OPCOES_CAPTURA = {
   // `:root[data-theme='light']` pronto (especificidade maior que a media query
   // `prefers-color-scheme`), só nunca era setado por ninguém.
   onclone: (doc: Document) => {
-    doc.documentElement.setAttribute('data-theme', 'light')
+    forcarTemaClaroNoClone(doc)
     liberarAlturaDosAncestrais(doc, '.relatorio-grid-conteudo')
   },
 } as const

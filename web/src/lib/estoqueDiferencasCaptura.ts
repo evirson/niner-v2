@@ -1,5 +1,6 @@
 import html2canvas from 'html2canvas'
 import { jsPDF } from 'jspdf'
+import { forcarTemaClaroNoClone } from './temaClaroParaCaptura'
 
 /** Mesmo mecanismo de `relatorioContasReceberCaptura.ts`/`relatorioComissoesCaptura.ts` — ver
  *  comentário lá pro raciocínio completo (sobe a árvore a partir do alvo desclipando altura/
@@ -20,7 +21,7 @@ const OPCOES_CAPTURA = {
   useCORS: true,
   ignoreElements: (el: Element) => el.closest('.app-header, .app-nav, .modal-overlay') !== null,
   onclone: (doc: Document) => {
-    doc.documentElement.setAttribute('data-theme', 'light')
+    forcarTemaClaroNoClone(doc)
     liberarAlturaDosAncestrais(doc, '.relatorio-conteudo')
   },
 } as const

@@ -243,7 +243,11 @@ export default function RelatorioContasReceber() {
           <p className="erro">{error instanceof ApiError ? error.message : 'Não foi possível gerar o relatório.'}</p>
         ) : (
           <div ref={conteudoRef} className="relatorio-conteudo">
-            {isFetching && <p className="muted">Atualizando…</p>}
+            {isFetching && (
+              <p className="muted" data-sem-impressao>
+                Atualizando…
+              </p>
+            )}
 
             {gerandoPdf && (
               <>

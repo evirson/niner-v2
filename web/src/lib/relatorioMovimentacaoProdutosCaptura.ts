@@ -1,5 +1,6 @@
 import html2canvas from 'html2canvas'
 import { jsPDF } from 'jspdf'
+import { forcarTemaClaroNoClone } from './temaClaroParaCaptura'
 
 /** Mesmo mecanismo de `relatorioVendasCaptura.ts` — a grid (`.grid-altura-fixa`, 60vh com
  *  rolagem interna) precisa ser desclipada no clone isolado que o html2canvas monta, senão a
@@ -25,7 +26,7 @@ const OPCOES_CAPTURA = {
   useCORS: true,
   ignoreElements: (el: Element) => el.closest('.app-header, .app-nav, .modal-overlay') !== null,
   onclone: (doc: Document) => {
-    doc.documentElement.setAttribute('data-theme', 'light')
+    forcarTemaClaroNoClone(doc)
     liberarAlturaDosAncestrais(doc, '.relatorio-grid-conteudo')
   },
 } as const
