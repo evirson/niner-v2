@@ -11,6 +11,28 @@ Registro cronológico das decisões e entregas. Atualizar a cada marco relevante
 
 ## Estado atual
 
+> ## 📌 2026-08-27 — o dia do acesso
+>
+> **63 telas · 1117 testes verdes.** Cinco entregas, todas commitadas:
+>
+> 1. **Login sem identificador de loja** — e-mail + senha. O mesmo e-mail pode estar em várias
+>    contas; a senha é conferida em cada uma e só se casar em mais de uma é que a tela pergunta.
+>    Quem descobre a conta é `plataforma.diretorio_login` (V071), que amanhã vira o catálogo do
+>    parque de células.
+> 2. **Recuperação de senha completa** — o backend existia, mas o link do e-mail apontava para uma
+>    rota que **não existia** no `web/`. Ninguém tinha notado porque o sistema nunca havia enviado
+>    um e-mail: o SMTP (Hostinger) foi configurado nesta manhã.
+> 3. **Ramo de atividade** (28 ramos, V072) com sugestão pelo CNAE do CNPJ, e a **contratação**
+>    perguntando *mesmo grupo × grupo separado* quando o e-mail já tem conta.
+> 4. **Cobrança por CNPJ contratado** — reverte parte do ADR-015; a isenção de 100 vendas continua
+>    por tenant, somando todos os CNPJs.
+> 5. **RBAC** (V073–V078) — permissão por tela e por ação, presa ao usuário, com a trava valendo
+>    **no servidor**.
+>
+> Detalhe de cada uma: `docs/telas/login.md`, `ramo-atividade.md`, `contratacao-grupo.md`,
+> `usuario-permissoes.md` e `docs/infra/parque-de-celulas.md`.
+
+
 > ## 📌 2026-08-26 — onde o projeto está hoje
 >
 > **60 telas em uso · 4 em construção** (`docs/TELAS.md`) · **1088 testes de backend verdes, 0

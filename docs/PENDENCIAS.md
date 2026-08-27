@@ -14,7 +14,7 @@
 > **Última revisão:** 2026-08-27, fim do dia (registrada a pedido dele: *"deixe todas estas pendências
 > documentadas, não esqueça de nada, e quando eu te perguntar as pendências você me fala"*).
 
-**Estado na data desta revisão:** 62 telas em uso · 1105 testes verdes (medido, não estimado).
+**Estado na data desta revisão:** 63 telas em uso · 1117 testes verdes (medido, não estimado).
 
 ---
 
@@ -182,8 +182,24 @@ O fluxo tem teste automatizado ponta a ponta e a tela foi verificada com token i
 feliz no navegador exige clicar num link de e-mail real, **o que troca a senha da conta**. Basta
 ele fazer uma vez com uma conta descartável. **Bola dele.**
 
+### 33. ⚠️ RBAC: telas que compartilham controller herdam a mesma permissão 🟢
+Três simplificações conscientes, registradas em `docs/telas/usuario-permissoes.md`: quem tem
+**Contagem de Estoque** alcança também Diferenças, Efetivar e Zerar (mesmo controller); quem tem
+**Recebimento de Crediário** alcança Reimpressão e Estorno; quem tem **Pesquisa de Vendas** com
+"excluir" pode cancelar venda. Separá-las exige anotar método a método. **Bola minha**, quando
+ele achar que vale.
+
+### 34. ⚠️ Conceder "Usuários" permite criar usuário, não configurar permissão 🔵
+Usuários saiu da lista de telas exclusivas (2026-08-27). Quem receber essa tela cria e edita
+usuários da conta; configurar **permissões** segue exclusivo do administrador, checado no
+servidor. Se não for o desejado, é só devolver Usuários às exclusivas. **Decisão dele.**
+
 ## ✅ Fechadas recentemente (para não reabrir por engano)
 
+- **2026-08-27 (tarde)** — **RBAC completo**: permissão por tela e por ação, presa ao usuário
+  (sem perfis), com a trava valendo **no servidor** — 55 controllers anotados, 8 métodos de
+  desfazer classificados como "excluir" e 10 endpoints marcados como livres. 9 telas seguem
+  exclusivas do administrador e não aparecem na grade.
 - **2026-08-27** — **Login sem identificador** (e-mail + senha; o mesmo e-mail pode estar em várias
   contas) · **Recuperação de senha completa** (o link do e-mail apontava para uma rota que não
   existia) · **SMTP configurado** — o sistema enviou o primeiro e-mail da sua vida · **Ramo de

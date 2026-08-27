@@ -1,4 +1,4 @@
-# Spec: Permissões do usuário (RBAC)               Status: Aprovada — parte 1 de 2
+# Spec: Permissões do usuário (RBAC)               Status: Aprovada — implementada (partes 1 e 2)
 Autor: Claudio Calixto (dono do produto) · Data: 2026-08-27 · Módulo(s): `identidade.permissao` · Fase: 1 — Núcleo do ERP
 
 ## Problema
@@ -22,7 +22,7 @@ por `usuario_permissao`, agora com as quatro ações.
 
 ## Modelo (V073)
 
-- **`cfg_tela`** — catálogo das 63 telas (chave, nome, grupo, `admin_apenas`). Global, sem RLS: a
+- **`cfg_tela`** — catálogo das telas (57 hoje; 48 concedíveis) (chave, nome, grupo, `admin_apenas`). Global, sem RLS: a
   lista de telas é do **produto**, igual para todos; o que é por tenant é a permissão. Gerado a
   partir de `web/src/lib/menu.ts`, que até aqui era a única lista real de telas — e que o backend
   não enxergava.
@@ -32,10 +32,10 @@ por `usuario_permissao`, agora com as quatro ações.
 ⚠️ **CHECK no banco:** incluir/alterar/excluir sem `acessar` é recusado. A combinação não faz
 sentido e a tela mostraria "pode excluir" para quem nem abre a tela.
 
-⚠️ **Tela `admin_apenas` não é concedível**, nem por engano. O `PUT` **recusa com 400 nomeando a
-tela** — ignorar em silêncio faria o admin achar que concedeu. Isto foi descoberto **testando ao
-vivo**: antes da trava, a DRE era gravada na grade e aparecia no menu do operador, para a rotina
-negar depois — o usuário culparia o sistema, não a permissão.
+⚠️ **Tela `admin_apenas` não é concedível**, e desde 2026-08-27 **nem aparece na grade**. O `PUT`
+continua recusando com 400 nomeando a tela, como defesa contra cliente de API. Isto foi descoberto
+**testando ao vivo**: antes da trava, uma tela exclusiva era gravada na grade e aparecia no menu do
+operador, para a rotina negar depois — o usuário culparia o sistema, não a permissão.
 
 ## Telas e endpoints
 
@@ -57,26 +57,71 @@ permissão desmarcada que não chega ao servidor continuaria valendo.
 - **Dado** um usuário recém-criado, **então** ele não acessa **nenhuma** tela.
 - **Dado** PDV com incluir e Clientes com alterar, **então** é exatamente isso que ele recebe — nem
   incluir em Clientes, nem alterar no PDV.
-- **Dado** um pedido para conceder a **DRE**, **então** 400 citando a tela.
+- **Dado** um pedido para conceder uma tela exclusiva (ex.: **Empresas**), **então** 400 citando a tela.
 - **Dado** um operador, **então** ele não lê nem grava permissões (403), nem as próprias.
 - **Dado** o admin de outra conta, **então** 404 ao tentar configurar usuário alheio (P8).
 - **Dado** um segundo `PUT` menor, **então** o que ficou de fora **deixa de valer**.
 
 Testes: `api/src/test/java/com/vetor/niner/PermissaoPorTelaTest.java` (8 casos).
 
-## ⛔ Parte 2 — o que ainda NÃO está protegido
+## Parte 2 — a trava no servidor (feita no mesmo dia)
 
-O que existe hoje é: **o modelo, a concessão e o menu**. O menu esconde o que o usuário não pode
-acessar, e a grade está gravada e é respeitada por `PermissaoService`.
+O menu escondido evita o erro honesto; não evita quem digita a URL. Agora um **interceptor**
+confere a permissão antes de cada rotina de `/api/v1`.
 
-**Falta aplicar `PermissaoService.exigir(...)` nas rotinas.** Enquanto isso não for feito, um
-usuário sem permissão **não vê a tela no menu, mas alcança o endpoint** se souber a URL ou chamar a
-API direto. Ou seja: hoje isto é **controle de interface**, não de segurança.
+- **55 controllers** declaram `@Tela("chave")`. Uma linha por arquivo.
+- Tradução padrão: **GET→acessar, POST→incluir, PUT/PATCH→alterar, DELETE→excluir**.
+- **8 métodos declaram `@Acao(EXCLUIR)`** porque o verbo mente: cancelar venda, cancelar entrada,
+  cancelar devolução ao fornecedor, estornar crediário, reabrir caixa, desfazer e zerar contagem
+  são todos POST. Regra dele: **desfazer é excluir** — assim o caixa pode vender sem poder
+  cancelar, que é a separação que interessa a quem configura permissão.
 
-⚠️ Dizer isso claramente importa mais que a funcionalidade em si: um RBAC que parece proteger e não
-protege é pior que nenhum, porque o administrador confia nele para separar responsabilidades.
+⚠️ **`@Livre` marca 10 endpoints** que já eram abertos a qualquer papel antes do RBAC — o javadoc
+de cada um dizia isso, em português. O caso que obrigou a criar a anotação: o **PDV** lê
+`/config-geral/*` (tela de ADMIN) para montar a venda. Sem `@Livre`, **o caixa não conseguiria
+vender**.
 
-O caminho previsto é uma anotação por controller (`@Tela("vendas.pdv")`) + interceptor, mapeando o
-método HTTP para a ação (GET→acessar, POST→incluir, PUT→alterar, DELETE→excluir), com as exceções
-declaradas caso a caso — há rotinas em que POST não é inclusão (efetivar, cancelar, estornar), e
-essas precisam ser decididas uma a uma, não por convenção.
+⚠️ **Controller sem `@Tela` não é bloqueado**, por decisão dele: são as consultas auxiliares entre
+domínios (o PDV busca cliente pela API de Clientes). O custo, dito claramente: quem entra no
+sistema consegue **ler** dado auxiliar da própria conta sem ter a tela; o que ele não consegue é
+**abrir a tela** nem **criar, alterar ou excluir** por ela.
+
+### Dois defeitos meus, ambos silenciosos
+
+1. **`exigir()` chamava `pode()` no próprio bean.** Auto-invocação não passa pelo proxy do Spring,
+   então o `@Transactional` de `pode` era ignorado, a consulta rodava sem transação, o
+   `SET LOCAL app.id_tenant` nunca acontecia e `plataforma.tenant_atual()` vinha NULL. Resultado
+   medido: **403 para quem TINHA a permissão gravada**, sem nada em log. É a armadilha já
+   documentada no projeto, num caminho novo.
+2. **O helper de teste filtrava com JsonPath booleano** (`$[?(@.adminApenas == false)]`), recebia
+   lista vazia, concedia nada — e o PUT respondia **200**. O teste falhava 400 linhas depois, com
+   um 403 que parecia bug do RBAC.
+
+## As 9 telas exclusivas do administrador
+
+Revisadas por ele **tela a tela** (V078). Ficam exclusivas as que mexem na **conta** e as de
+**carga de implantação**:
+
+Canais de Venda · Minha Conta · Empresas · Importação de Clientes, Contas a Receber, Fornecedores,
+Produtos e Estoque Inicial · Exportação de Dados
+
+⚠️ **Exclusiva não aparece na grade.** Antes elas eram listadas e o salvamento recusava — ao
+clicar em "liberar tudo", ele recebeu um erro citando 22 telas que nem sabia estarem ali.
+Oferecer o que o sistema depois recusa é convidar ao erro.
+
+⚠️ **O menu precisou mudar junto:** o grupo Configurações era ADMIN-only **em bloco**, então o
+operador não veria as telas recém-liberadas (Parâmetros do Sistema, o bloco Fiscal) nem tendo
+permissão. Hoje a marca é item a item e espelha `cfg_tela.admin_apenas`.
+
+⚠️ **Tela fora do catálogo não é controlada por permissão** e continua no menu — hoje são as de
+"Implementações Futuras". Tratar ausência como "proibida" faria qualquer tela nova sumir do menu
+no dia em que fosse criada, sem erro nenhum.
+
+## Estreia sem backfill
+
+Ligar a trava faz todo usuário sem grade receber 403 — e nenhuma grade existia. Como o Nainer
+está em **homologação**, sem cliente real, ninguém foi afetado, e o comportamento de estreia é o
+definitivo: usuário novo não enxerga nada até ser liberado.
+
+⚠️ **No dia da produção isto muda:** se já houver operadores em uso, é obrigatório conceder a
+grade cheia a eles **antes** de a trava subir, senão perdem o acesso sem aviso.
