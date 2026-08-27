@@ -1,7 +1,11 @@
 # Progresso do Projeto — niner-v2
 
 Registro cronológico das decisões e entregas. Atualizar a cada marco relevante.
-**Última atualização:** 2026-08-25
+**Última atualização:** 2026-08-27
+
+> 📄 **O que ainda falta está em `docs/PENDENCIAS.md`** (lista viva, agrupada por *de quem é a
+> bola*). Este arquivo conta a **história**; aquele conta o que está **aberto**. Ao fechar uma
+> pendência, risque-a lá e registre a entrega aqui.
 
 ---
 
