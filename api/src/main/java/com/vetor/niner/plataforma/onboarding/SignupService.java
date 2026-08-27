@@ -82,10 +82,13 @@ public class SignupService {
         boolean jaCadastrado = Boolean.TRUE.equals(jdbc.sql(
                         "SELECT exists(SELECT 1 FROM plataforma.tenant WHERE lower(email_contato) = ?)")
                 .param(emailNormalizado).query(Boolean.class).single());
-        if (jaCadastrado) {
-            throw new ResponseStatusException(CONFLICT,
-                    "Já existe uma conta com este e-mail. Entre nela ou use \"esqueci minha senha\". "
-                            + "Para vender com outro CNPJ, cadastre uma nova empresa dentro da mesma conta.");
+        // Bandeira ligada = ele já viu a pergunta na tela de contratação e escolheu grupo
+        // separado, sabendo que perde a visão consolidada e ganha uma segunda assinatura.
+        boolean grupoSeparado = Boolean.TRUE.equals(req.criarGrupoSeparado());
+        if (jaCadastrado && !grupoSeparado) {
+            throw new ContaJaExisteException(
+                    "Já existe uma conta com este e-mail. Você pode acrescentar esta empresa ao grupo "
+                            + "que já tem, ou criar um grupo separado.");
         }
 
         // 1) tenant (global, P9) — nasce ATIVA no plano Gratuito (ADR-015: não existe mais trial

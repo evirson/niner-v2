@@ -204,6 +204,11 @@ services:
     image: node:26-alpine
     profiles: [fronts]
     working_dir: /app
+    environment:
+      # Mesmo motivo do serviço  (2026-07-21) — e aqui a falta mordeu em 2026-08-27: a
+      # página servida continuava sendo a antiga depois de editar o arquivo no host, sem erro
+      # nenhum, o que parece bug do código e é o watcher não vendo a mudança.
+      CHOKIDAR_USEPOLLING: "true"
     volumes:
       - ./site:/app
     command: sh -c "npm install && npm run dev -- --host"

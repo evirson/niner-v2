@@ -29,7 +29,22 @@ public final class OnboardingDtos {
              * funcionamento do ERP. Um id inválido é tratado como não informado — nada aqui pode
              * impedir alguém de criar a conta.
              */
-            Integer idRamo) {
+            Integer idRamo,
+            /**
+             * Contratação de um <b>grupo separado</b> para quem já tem conta com este e-mail
+             * (2026-08-27). Sem esta bandeira, e-mail repetido é recusado — a trava de
+             * 2026-08-19 existe porque repetir o cadastro por engano dividia os dados do mesmo
+             * lojista entre duas contas sem ele perceber.
+             *
+             * <p>⚠️ Marcá-la é uma escolha <b>consciente</b> feita na tela de contratação, depois
+             * de ler o que se perde: um grupo separado nunca terá relatório somando as empresas
+             * do outro grupo, e são duas assinaturas. Não é um "force" técnico.
+             *
+             * <p>⚠️ E ela <b>não</b> exige a senha da conta que já existe — é uma conta nova, que
+             * só por acaso usa o mesmo e-mail, e nada da conta antiga é tocado. Quem quer entrar
+             * no grupo <b>existente</b> é que precisa autenticar.
+             */
+            Boolean criarGrupoSeparado) {
     }
 
     /**

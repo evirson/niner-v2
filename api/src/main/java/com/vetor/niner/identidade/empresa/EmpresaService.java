@@ -124,7 +124,7 @@ public class EmpresaService {
     @Transactional(readOnly = true)
     public List<EmpresaResponse> listar() {
         return jdbc.sql("""
-                        SELECT id_empresa, codigo_empresa, razao_social, nome_fantasia, ativo
+                        SELECT id_empresa, codigo_empresa, razao_social, nome_fantasia, id_ramo, ativo
                         FROM empresa
                         WHERE id_tenant = plataforma.tenant_atual()
                         ORDER BY codigo_empresa ASC
@@ -147,7 +147,7 @@ public class EmpresaService {
         }
         long idUsuario = Long.parseLong(jwt.getSubject());
         return jdbc.sql("""
-                        SELECT e.id_empresa, e.codigo_empresa, e.razao_social, e.nome_fantasia, e.ativo
+                        SELECT e.id_empresa, e.codigo_empresa, e.razao_social, e.nome_fantasia, e.id_ramo, e.ativo
                         FROM usuario_empresa ue
                         JOIN empresa e ON e.id_empresa = ue.id_empresa AND e.id_tenant = ue.id_tenant
                         WHERE ue.id_tenant = plataforma.tenant_atual() AND ue.id_usuario = ?
@@ -281,6 +281,7 @@ public class EmpresaService {
                 rs.getInt("codigo_empresa"),
                 rs.getString("razao_social"),
                 rs.getString("nome_fantasia"),
+                idRamo(rs),
                 rs.getBoolean("ativo"));
     }
 

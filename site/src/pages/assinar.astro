@@ -50,7 +50,54 @@ import Base from '../layouts/Base.astro';
           </p>
         </form>
 
-        <aside class="form-aside reveal" data-delay="1">
+        <!-- Aparece no lugar do formulário quando o e-mail digitado já tem conta. As duas saídas
+             ficam lado a lado, com o que se ganha E o que se perde em cada uma: esconder o custo
+             de qualquer um dos lados transformaria a escolha num arrependimento depois. -->
+        <div id="escolha-grupo" class="form-card" hidden>
+          <h2 style="font-size:20px; margin:0 0 4px;">Este e-mail já tem conta no Nainer</h2>
+          <p class="muted" style="margin-top:0;">
+            Você está cadastrando <b id="eco-loja"></b>. O que quer fazer com ela?
+          </p>
+
+          <div class="li" style="align-items:flex-start; margin-top:16px;">
+            <div>
+              <b>Acrescentar ao grupo que já tenho</b>
+              <p class="muted" style="margin:4px 0 0; font-size:14px;">
+                Você vê os relatórios das empresas <b>somados</b> e pode comparar uma com a outra.
+                Uma assinatura só, e as vendas de todas somam o mesmo limite mensal.<br />
+                <span style="color:var(--danger)">Em compensação:</span> produtos, clientes,
+                fornecedores e plano de contas ficam <b>juntos</b> — a lista de uma aparece na tela
+                da outra.
+              </p>
+              <button id="btn-juntar" class="btn btn-primary btn-block" type="button" style="margin-top:10px;">
+                Acrescentar ao meu grupo
+              </button>
+              <p class="muted" style="font-size:12px; margin-top:6px;">
+                Vamos usar a senha que você digitou para confirmar que a conta é sua.
+              </p>
+            </div>
+          </div>
+
+          <div class="li" style="align-items:flex-start; margin-top:20px;">
+            <div>
+              <b>Criar um grupo separado</b>
+              <p class="muted" style="margin:4px 0 0; font-size:14px;">
+                Cada negócio com o cadastro limpo, nada se mistura.<br />
+                <span style="color:var(--danger)">Em compensação:</span> você <b>perde a visão de
+                grupo</b> — não vai existir relatório somando as empresas dos dois grupos —, são
+                duas assinaturas, e na entrada você escolhe em qual quer entrar.
+              </p>
+              <button id="btn-separar" class="btn btn-block" type="button" style="margin-top:10px;">
+                Criar um grupo separado
+              </button>
+            </div>
+          </div>
+
+          <p id="erro-grupo" role="alert" style="color:var(--danger); min-height:20px; margin:12px 0 0; font-size:14px;"></p>
+          <button id="btn-voltar" class="btn btn-block" type="button" style="margin-top:8px;">Voltar</button>
+        </div>
+
+        <aside id="beneficios" class="form-aside reveal" data-delay="1">
           <div class="li"><span class="mk">✓</span><span><b>Grátis para sempre</b> até 100 vendas por mês, sem cartão.</span></div>
           <div class="li"><span class="mk">✓</span><span><b>Sem prazo de validade</b> — não existe data em que você perde o acesso.</span></div>
           <div class="li"><span class="mk">✓</span><span>Produto inteiro liberado, inclusive <b>NFC-e e NF-e</b>. Nada é bloqueado por plano.</span></div>
@@ -65,15 +112,21 @@ import Base from '../layouts/Base.astro';
     const form = document.getElementById('form-assinar');
     const erro = document.getElementById('erro');
     const btn = document.getElementById('btn');
+    const painelEscolha = document.getElementById('escolha-grupo');
+    const erroGrupo = document.getElementById('erro-grupo');
+    const API = () => window.NINER_API_BASE;
+
+    let ramosPorId = {};
 
     // Ramos de atividade (V072): a lista vem da API para que acrescentar um ramo seja INSERT,
     // e não deploy dos três aplicativos. Se a chamada falhar, o campo fica só com "Selecione…"
     // e a conta é criada sem ramo — nada aqui pode impedir alguém de se cadastrar.
-    fetch(window.NINER_API_BASE + '/api/publico/ramos')
+    fetch(API() + '/api/publico/ramos')
       .then((r) => (r.ok ? r.json() : []))
       .then((ramos) => {
         const sel = document.getElementById('idRamo');
         for (const ramo of ramos) {
+          ramosPorId[ramo.idRamo] = ramo.nome;
           const op = document.createElement('option');
           op.value = ramo.idRamo;
           op.textContent = ramo.nome;
@@ -82,10 +135,8 @@ import Base from '../layouts/Base.astro';
       })
       .catch(() => {});
 
-    form.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      erro.textContent = '';
-      const dados = {
+    function dadosDoFormulario() {
+      return {
         nomeLoja: form.nomeLoja.value.trim(),
         nomeAdmin: form.nomeAdmin.value.trim(),
         email: form.email.value.trim(),
@@ -96,27 +147,60 @@ import Base from '../layouts/Base.astro';
         // quando o visitante bloqueia cookie/JS — o cadastro segue igual, só sem atribuição.
         visitanteId: window.NINER_VISITANTE_ID || null,
       };
+    }
+
+    function entrarNoSistema(token) {
+      localStorage.setItem('niner_token', token);
+      // O `niner_slug` que era guardado aqui saiu em 2026-08-27: ninguém o lia (o handoff usa só
+      // o token) e, desde que o login deixou de pedir identificador, guardá-lo dava a impressão
+      // errada de que o front precisa dele para alguma coisa.
+      window.location.href = '/bem-vindo';
+    }
+
+    function mostrarEscolhaDeGrupo() {
+      document.getElementById('eco-loja').textContent = form.nomeLoja.value.trim();
+      form.hidden = true;
+      document.getElementById('beneficios').hidden = true;
+      painelEscolha.hidden = false;
+      erroGrupo.textContent = '';
+    }
+
+    document.getElementById('btn-voltar').addEventListener('click', () => {
+      painelEscolha.hidden = true;
+      form.hidden = false;
+      document.getElementById('beneficios').hidden = false;
+    });
+
+    async function criarConta(dados) {
+      const res = await fetch(API() + '/api/publico/assinar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(dados),
+      });
+      if (res.status === 201) return { ok: true, corpo: await res.json() };
+      const problema = await res.json().catch(() => ({}));
+      return { ok: false, status: res.status, problema };
+    }
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      erro.textContent = '';
       if (window.ninerEvento) window.ninerEvento('SIGNUP_ENVIADO', 'assinar');
       btn.disabled = true;
       btn.textContent = 'Criando...';
       try {
-        const res = await fetch(window.NINER_API_BASE + '/api/publico/assinar', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(dados),
-        });
-        if (res.status === 201) {
-          const r = await res.json();
-          // auto-login: guarda o token e leva ao primeiro uso
-          localStorage.setItem('niner_token', r.token);
-          // O `niner_slug` que era guardado aqui saiu em 2026-08-27: ninguém o lia (o handoff
-          // usa só o token) e, desde que o login deixou de pedir identificador, guardá-lo dava
-          // a impressão errada de que o front precisa dele para alguma coisa.
-          window.location.href = '/bem-vindo';
+        const r = await criarConta(dadosDoFormulario());
+        if (r.ok) {
+          entrarNoSistema(r.corpo.token);
           return;
         }
-        const problema = await res.json().catch(() => ({}));
-        erro.textContent = problema.detail || problema.title || 'Não foi possível criar a conta. Verifique os dados.';
+        // O tipo é o que distingue "já tem conta" (uma decisão a tomar) de erro de verdade.
+        // Comparar pela MENSAGEM quebraria no dia em que alguém melhorasse o texto.
+        if (r.problema.type === 'urn:niner:erro:conta-ja-existe') {
+          mostrarEscolhaDeGrupo();
+          return;
+        }
+        erro.textContent = r.problema.detail || r.problema.title || 'Não foi possível criar a conta. Verifique os dados.';
       } catch (_) {
         erro.textContent = 'Não foi possível conectar ao servidor. Tente novamente.';
       } finally {
@@ -124,5 +208,171 @@ import Base from '../layouts/Base.astro';
         btn.textContent = 'Criar conta e entrar';
       }
     });
+
+    // ---- Criar um grupo separado -------------------------------------------------------------
+    // Não pede a senha da conta que já existe: é uma conta nova, independente, que só por acaso
+    // usa o mesmo e-mail. A senha do formulário vira a senha DESTA conta.
+    document.getElementById('btn-separar').addEventListener('click', async () => {
+      erroGrupo.textContent = '';
+      const alvo = document.getElementById('btn-separar');
+      alvo.disabled = true;
+      alvo.textContent = 'Criando...';
+      try {
+        const dados = dadosDoFormulario();
+        dados.criarGrupoSeparado = true;
+        const r = await criarConta(dados);
+        if (r.ok) {
+          entrarNoSistema(r.corpo.token);
+          return;
+        }
+        erroGrupo.textContent = r.problema.detail || 'Não foi possível criar o grupo separado.';
+      } catch (_) {
+        erroGrupo.textContent = 'Não foi possível conectar ao servidor. Tente novamente.';
+      } finally {
+        alvo.disabled = false;
+        alvo.textContent = 'Criar um grupo separado';
+      }
+    });
+
+    // ---- Acrescentar ao grupo existente ------------------------------------------------------
+    // Aqui a senha é obrigatória: a empresa vai entrar num grupo cujos dados já são de alguém.
+    document.getElementById('btn-juntar').addEventListener('click', async () => {
+      erroGrupo.textContent = '';
+      const alvo = document.getElementById('btn-juntar');
+      alvo.disabled = true;
+      alvo.textContent = 'Entrando...';
+      try {
+        const token = await autenticar();
+        if (!token) return;
+        if (!(await confirmarRamoDiferente(token))) return;
+
+        const res = await fetch(API() + '/api/v1/empresas', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+          body: JSON.stringify({
+            razaoSocial: form.nomeLoja.value.trim(),
+            idRamo: form.idRamo.value ? Number(form.idRamo.value) : null,
+          }),
+        });
+        if (res.status === 201) {
+          entrarNoSistema(token);
+          return;
+        }
+        const problema = await res.json().catch(() => ({}));
+        erroGrupo.textContent = problema.detail || 'Não foi possível acrescentar a empresa ao grupo.';
+      } catch (_) {
+        erroGrupo.textContent = 'Não foi possível conectar ao servidor. Tente novamente.';
+      } finally {
+        alvo.disabled = false;
+        alvo.textContent = 'Acrescentar ao meu grupo';
+      }
+    });
+
+    /** Login com o e-mail e a senha do formulário. Devolve o token, ou null com o erro na tela. */
+    async function autenticar(idTenant) {
+      const res = await fetch(API() + '/api/publico/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: form.email.value.trim(), senha: form.senha.value, idTenant }),
+      });
+      if (res.status === 401) {
+        erroGrupo.innerHTML =
+          'A senha não confere com a conta que já existe neste e-mail. ' +
+          'Use <a href="' + (window.NINER_WEB_BASE || 'http://localhost:5173') + '/esqueci-senha">esqueci minha senha</a> ' +
+          'ou escolha criar um grupo separado.';
+        return null;
+      }
+      if (!res.ok) {
+        erroGrupo.textContent = 'Não foi possível confirmar a senha agora.';
+        return null;
+      }
+      const r = await res.json();
+      // A senha casou em mais de uma conta: ele precisa dizer em qual grupo a empresa entra.
+      if (r.escolherConta) return await perguntarQualGrupo(r.contas);
+      // Mais de uma empresa no grupo: qualquer uma serve para obter o token, porque a empresa
+      // ativa da sessão não muda onde a empresa NOVA é criada (ela nasce no tenant, não na
+      // empresa). Escolher aqui só pouparia um clique que o ERP já faz depois.
+      if (r.escolherEmpresa) return await autenticarComEmpresa(r.empresas[0].idEmpresa);
+      return r.token;
+    }
+
+    async function autenticarComEmpresa(idEmpresa) {
+      const res = await fetch(API() + '/api/publico/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: form.email.value.trim(), senha: form.senha.value, idEmpresa }),
+      });
+      if (!res.ok) {
+        erroGrupo.textContent = 'Não foi possível confirmar a senha agora.';
+        return null;
+      }
+      return (await res.json()).token;
+    }
+
+    /** Pergunta em qual grupo a empresa entra, quando o e-mail tem mais de uma conta. */
+    function perguntarQualGrupo(contas) {
+      return new Promise((resolve) => {
+        erroGrupo.textContent = '';
+        const caixa = document.createElement('div');
+        caixa.style.marginTop = '12px';
+        caixa.innerHTML = '<p class="muted" style="margin:0 0 6px;">Em qual grupo esta empresa deve entrar?</p>';
+        for (const conta of contas) {
+          const b = document.createElement('button');
+          b.type = 'button';
+          b.className = 'btn btn-block';
+          b.style.marginTop = '6px';
+          b.textContent = conta.nomeConta;
+          b.addEventListener('click', async () => {
+            caixa.remove();
+            resolve(await autenticar(conta.idTenant));
+          });
+          caixa.appendChild(b);
+        }
+        painelEscolha.appendChild(caixa);
+      });
+    }
+
+    /**
+     * Avisa quando a empresa que entra é de um ramo diferente do que o grupo já tem — o caso que
+     * o dono do produto levantou: calçados e panificadora dividindo o mesmo cadastro. Só avisa
+     * quando os dois ramos são conhecidos; sem ramo cadastrado não há o que comparar, e inventar
+     * um alerta a partir de "não informado" só ensinaria o usuário a ignorar avisos.
+     */
+    async function confirmarRamoDiferente(token) {
+      const escolhido = form.idRamo.value ? Number(form.idRamo.value) : null;
+      if (!escolhido) return true;
+      const res = await fetch(API() + '/api/v1/empresas', { headers: { Authorization: 'Bearer ' + token } });
+      if (!res.ok) return true;                       // não dá para comparar: segue sem atrapalhar
+      const empresas = await res.json();
+      const ramosDoGrupo = [...new Set(empresas.map((e) => e.idRamo).filter((x) => x))];
+      if (ramosDoGrupo.length === 0 || ramosDoGrupo.includes(escolhido)) return true;
+
+      const nomes = ramosDoGrupo.map((id) => ramosPorId[id] || 'outro ramo').join(', ');
+      const desta = ramosPorId[escolhido] || 'outro ramo';
+      // Confirmação na própria página, não `window.confirm`: o diálogo nativo destoa do resto do
+      // produto, não cabe texto formatado e trava a página inteira enquanto está aberto.
+      return new Promise((resolve) => {
+        const caixa = document.createElement('div');
+        caixa.style.cssText = 'margin-top:12px; padding:12px; border:1px solid var(--danger); border-radius:8px;';
+        caixa.innerHTML =
+          '<p style="margin:0 0 8px; font-size:14px;">As empresas deste grupo são de <b>' + nomes +
+          '</b>, e esta é de <b>' + desta + '</b>. Juntando, elas vão dividir o mesmo cadastro de ' +
+          'produtos, clientes e fornecedores — a lista de uma aparece na tela da outra.</p>';
+        const sim = document.createElement('button');
+        sim.type = 'button';
+        sim.className = 'btn btn-block';
+        sim.textContent = 'Juntar assim mesmo';
+        const nao = document.createElement('button');
+        nao.type = 'button';
+        nao.className = 'btn btn-block';
+        nao.style.marginTop = '6px';
+        nao.textContent = 'Deixa pra lá';
+        sim.addEventListener('click', () => { caixa.remove(); resolve(true); });
+        nao.addEventListener('click', () => { caixa.remove(); resolve(false); });
+        caixa.appendChild(sim);
+        caixa.appendChild(nao);
+        painelEscolha.appendChild(caixa);
+      });
+    }
   </script>
 </Base>

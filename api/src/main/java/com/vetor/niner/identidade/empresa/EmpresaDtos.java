@@ -12,7 +12,7 @@ public final class EmpresaDtos {
     }
 
     public record EmpresaResponse(
-            long idEmpresa, int codigoEmpresa, String razaoSocial, String nomeFantasia, boolean ativo) {
+            long idEmpresa, int codigoEmpresa, String razaoSocial, String nomeFantasia, Integer idRamo, boolean ativo) {
     }
 
     /**

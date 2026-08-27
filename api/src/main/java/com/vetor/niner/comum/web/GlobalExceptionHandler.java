@@ -1,6 +1,7 @@
 package com.vetor.niner.comum.web;
 
 import com.vetor.niner.fiscal.documento.MontagemNfceDtos.MontagemInvalidaException;
+import com.vetor.niner.plataforma.onboarding.ContaJaExisteException;
 import com.vetor.niner.plataforma.uso.LimiteVendasExcedidoException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
@@ -64,6 +65,22 @@ public class GlobalExceptionHandler {
      * recomendada como propriedades do Problem Details, para a tela oferecer o upgrade na hora —
      * é o momento de conversão do produto, não só um erro.
      */
+    /**
+     * E-mail já tem conta no Nainer (2026-08-27). Tipo próprio para a tela de contratação
+     * reconhecer a situação e oferecer a escolha — acrescentar a empresa ao grupo existente ou
+     * abrir um grupo separado — em vez de mostrar um erro sem saída.
+     *
+     * <p>⚠️ Nenhuma propriedade extra aqui, de propósito: neste ponto ninguém provou ser dono do
+     * e-mail, então a resposta não pode dizer o nome nem a quantidade de contas.
+     */
+    @ExceptionHandler(ContaJaExisteException.class)
+    public ProblemDetail tratarContaJaExiste(ContaJaExisteException ex) {
+        ProblemDetail pd = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, ex.getMessage());
+        pd.setTitle("Este e-mail já tem conta");
+        pd.setType(URI.create("urn:niner:erro:conta-ja-existe"));
+        return pd;
+    }
+
     @ExceptionHandler(LimiteVendasExcedidoException.class)
     public ProblemDetail tratarLimiteDeVendas(LimiteVendasExcedidoException ex) {
         ProblemDetail pd = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, ex.getMessage());

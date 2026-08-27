@@ -1,4 +1,4 @@
-# Spec: Ramo de atividade da empresa               Status: Aprovada (parte 1 de 2)
+# Spec: Ramo de atividade da empresa               Status: Aprovada (parte 1 de 2 — a parte 2 está em contratacao-grupo.md)
 Autor: Claudio Calixto (dono do produto) · Data: 2026-08-27 · Módulo(s): `comum.ramo`, `identidade.empresa`, `plataforma.onboarding` · Fase: 1 — Núcleo do ERP
 
 ## Problema
@@ -18,7 +18,8 @@ Hoje não está: `empresa` tem só o `cnae`, texto livre digitado à mão.
 
 Esta spec cobre **o dado**: a lista de ramos, o mapa CNAE→ramo, a gravação e as duas telas onde o
 ramo é escolhido. O **fluxo de decisão de tenant** na contratação (comparar ramos, perguntar, e
-explicar o impacto de cada escolha) é a **parte 2**, ainda não implementada.
+explicar o impacto de cada escolha) é a **parte 2**, feita no mesmo dia e documentada em
+[`contratacao-grupo.md`](contratacao-grupo.md).
 
 ## Solução
 
@@ -104,9 +105,7 @@ Testes: `api/src/test/java/com/vetor/niner/RamoAtividadeTest.java` (8 casos).
 superusuário, que não sofre isso. A V072 traz o `GRANT`, e ele foi verificado **ao vivo** no banco
 de dev, gravando o ramo pela API.
 
-## Parte 2 — o que falta
+## Parte 2 — feita no mesmo dia
 
-O fluxo de contratação de nova empresa: comparar o ramo escolhido com o das empresas do tenant, e
-quando forem diferentes perguntar **mesmo tenant × tenant novo**, explicando o impacto de cada um
-(dado compartilhado, relatórios somados e uma assinatura só, contra separação total e duas
-assinaturas). Nada disso existe ainda.
+O fluxo de contratação que usa este dado (comparar o ramo da empresa que entra com o das empresas
+do tenant e oferecer **mesmo grupo × grupo separado**) está em [contratacao-grupo.md](contratacao-grupo.md).
