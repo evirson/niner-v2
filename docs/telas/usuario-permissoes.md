@@ -138,7 +138,7 @@ O administrador não passa por nada disso: o teto dele é o sistema inteiro.
 
 Dez telas apareciam na grade mas tinham uma segunda tranca escrita no serviço ("só ADMIN"),
 anterior ao RBAC. Conceder a tela não surtia efeito: o operador via o item no menu, clicava e
-recebia acesso negado. **34 chamadas de  foram removidas** de Usuários, Parâmetros do
+recebia acesso negado. **34 chamadas de `exigirAdmin` foram removidas** de Usuários, Parâmetros do
 Sistema e do bloco Fiscal inteiro — quem decide agora é a grade.
 
 Três casos especiais, decididos por ele tela a tela:
