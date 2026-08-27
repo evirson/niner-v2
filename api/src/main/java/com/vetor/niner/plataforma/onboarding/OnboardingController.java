@@ -3,6 +3,8 @@ package com.vetor.niner.plataforma.onboarding;
 import com.vetor.niner.plataforma.aquisicao.AquisicaoService;
 import com.vetor.niner.plataforma.onboarding.OnboardingDtos.*;
 import com.vetor.niner.plataforma.onboarding.RecuperacaoSenhaDtos.RedefinirSenhaRequest;
+import com.vetor.niner.plataforma.onboarding.OnboardingDtos.CodigoLoginRequest;
+import com.vetor.niner.plataforma.onboarding.OnboardingDtos.ReenviarCodigoRequest;
 import com.vetor.niner.plataforma.onboarding.RecuperacaoSenhaDtos.SolicitarRecuperacaoRequest;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
@@ -50,8 +52,30 @@ public class OnboardingController {
 
     /** Login de usuário do tenant (slug da loja + email + senha). */
     @PostMapping("/login")
-    public TokenResponse login(@Valid @RequestBody LoginRequest req) {
-        return signup.login(req);
+    public TokenResponse login(@Valid @RequestBody LoginRequest req, jakarta.servlet.http.HttpServletRequest http) {
+        return signup.login(req, http.getRemoteAddr());
+    }
+
+    /**
+     * Segunda etapa do login em duas etapas (V079): o código de 4 dígitos que chegou por e-mail.
+     *
+     * <p>⚠️ Só o {@code desafio} (UUID opaco) e o código — a senha não trafega de novo.
+     */
+    @PostMapping("/login/codigo")
+    public TokenResponse loginComCodigo(@Valid @RequestBody CodigoLoginRequest req) {
+        return signup.concluirLoginComCodigo(req);
+    }
+
+    /**
+     * Reenvia o código, gerando um novo e invalidando o anterior.
+     *
+     * <p>⚠️ Responde <b>204</b> e nunca diz se o desafio existe — informar isso transformaria o
+     * endpoint num verificador de desafios alheios.
+     */
+    @PostMapping("/login/codigo/reenviar")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void reenviarCodigo(@Valid @RequestBody ReenviarCodigoRequest req) {
+        signup.reenviarCodigoLogin(req);
     }
 
     /**

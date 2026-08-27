@@ -20,6 +20,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
+import java.util.UUID;
 
 import static org.springframework.http.HttpStatus.CONFLICT;
 import static org.springframework.http.HttpStatus.FORBIDDEN;
@@ -52,9 +53,12 @@ public class SignupService {
     private final HorarioAcessoService horarioAcesso;
     private final DiretorioLogin diretorio;
     private final RamoAtividadeService ramos;
+    private final CodigoLoginService codigos;
+    private final ContaDoUsuario contas;
 
     public SignupService(JdbcClient jdbc, PasswordEncoder senhas, TokenService tokens, NinerProperties props,
-            HorarioAcessoService horarioAcesso, DiretorioLogin diretorio, RamoAtividadeService ramos) {
+            HorarioAcessoService horarioAcesso, DiretorioLogin diretorio, RamoAtividadeService ramos,
+            CodigoLoginService codigos, ContaDoUsuario contas) {
         this.jdbc = jdbc;
         this.senhas = senhas;
         this.tokens = tokens;
@@ -62,6 +66,8 @@ public class SignupService {
         this.horarioAcesso = horarioAcesso;
         this.diretorio = diretorio;
         this.ramos = ramos;
+        this.codigos = codigos;
+        this.contas = contas;
     }
 
     @Transactional
@@ -326,7 +332,7 @@ public class SignupService {
      * porque o front mandou.
      */
     @Transactional
-    public TokenResponse login(LoginRequest req) {
+    public TokenResponse login(LoginRequest req, String ip) {
         List<ContaCandidata> candidatas = diretorio.porEmail(req.email());
         if (req.idTenant() != null) {
             // Segunda volta: o usuário escolheu uma conta. A senha é conferida de novo — a
@@ -357,7 +363,7 @@ public class SignupService {
                     .map(a -> new ContaOpcaoLogin(a.conta().idTenant(), a.conta().nomeConta()))
                     .toList();
             // idTenant/slug ficam vazios de propósito: ainda não há conta escolhida.
-            return new TokenResponse(null, 0L, null, true, contas, false, List.of());
+            return new TokenResponse(null, 0L, null, true, contas, false, List.of(), false, null, null);
         }
 
         ContaCandidata conta = autenticadas.get(0).conta();
@@ -402,12 +408,21 @@ public class SignupService {
         } else if (empresas.size() == 1) {
             idEmpresa = empresas.get(0).idEmpresa();
         } else {
-            return new TokenResponse(null, idTenant, conta.slug(), false, List.of(), true, empresas);
+            return new TokenResponse(null, idTenant, conta.slug(), false, List.of(), true, empresas, false, null, null);
         }
 
-        List<String> roles = List.of(usuario.administrador() ? "ADMIN" : "OPERADOR");
-        String token = tokens.emitir(usuario.idUsuario(), idTenant, idEmpresa, req.email(), roles);
-        return new TokenResponse(token, idTenant, conta.slug(), false, List.of(), false, List.of());
+        // Login em duas etapas (V079): a senha bateu e a conta/empresa estão resolvidas — é aqui,
+        // no último passo antes do token, que o código entra. Pedi-lo antes da senha entregaria a
+        // qualquer um a informação de que aquele e-mail existe, e mandaria e-mail à toa.
+        if (usuario.exigeCodigoLogin()) {
+            var desafio = codigos.criarDesafio(idTenant, usuario.idUsuario(), idEmpresa,
+                    usuario.nome(), usuario.email(), ip);
+            return new TokenResponse(null, idTenant, conta.slug(), false, List.of(), false, List.of(),
+                    true, desafio.toString(), mascarar(usuario.email()));
+        }
+
+        return emitirToken(usuario.idUsuario(), idTenant, idEmpresa, usuario.email(),
+                usuario.administrador(), conta.slug());
     }
 
     /**
@@ -425,13 +440,16 @@ public class SignupService {
         // Aqui é o caminho de autenticação: um vazamento de RLS nesta query específica
         // significaria autenticação cross-tenant, não só leitura indevida.
         UsuarioAuth usuario = jdbc.sql("""
-                        SELECT id_usuario, senha_hash, administrador, ativo
+                        SELECT id_usuario, senha_hash, administrador, ativo,
+                               nome_usuario, email, exige_codigo_login
                         FROM usuario WHERE id_tenant = ? AND lower(email) = lower(?)
                         """)
                 .params(conta.idTenant(), email)
                 .query((rs, n) -> new UsuarioAuth(
                         rs.getLong("id_usuario"), rs.getString("senha_hash"),
-                        rs.getBoolean("administrador"), rs.getBoolean("ativo")))
+                        rs.getBoolean("administrador"), rs.getBoolean("ativo"),
+                        rs.getString("nome_usuario"), rs.getString("email"),
+                        rs.getBoolean("exige_codigo_login")))
                 .optional().orElse(null);
 
         if (usuario == null || !usuario.ativo() || !senhas.matches(senha, usuario.senhaHash())) {
@@ -446,7 +464,73 @@ public class SignupService {
                 .param(Long.toString(idTenant)).query(String.class).single();
     }
 
-    private record UsuarioAuth(long idUsuario, String senhaHash, boolean administrador, boolean ativo) {
+    /**
+     * Segunda etapa do login: confere o código de 4 dígitos e emite o token (V079).
+     *
+     * <p>⚠️ O desafio carrega tenant, usuário e empresa — nada disso vem do cliente. Aceitar
+     * qualquer um dos três no corpo da requisicao deixaria quem tem um desafio válido entrar em
+     * outra conta.
+     */
+    public TokenResponse concluirLoginComCodigo(CodigoLoginRequest req) {
+        UUID idDesafio = lerDesafio(req.desafio());
+        var d = codigos.conferir(idDesafio, req.codigo());
+        var dados = contas.buscar(d.idTenant(), d.idUsuario());
+
+        // Horário de acesso conferido de novo: entre a senha e o código passam até 10 minutos, e a
+        // janela pode ter fechado no meio.
+        if (!horarioAcesso.podeAcessarAgora(d.idUsuario(), 0)) {
+            throw new ResponseStatusException(FORBIDDEN, HorarioAcessoService.MENSAGEM_FORA_DA_JANELA);
+        }
+        return emitirToken(d.idUsuario(), d.idTenant(), d.idEmpresa(), dados.email(),
+                dados.administrador(), dados.slug());
+    }
+
+    /**
+     * Reenvia o código do desafio. Responde 204 mesmo para desafio inexistente — dizer "não existe"
+     * transformaria o endpoint num verificador de identificadores alheios.
+     */
+    public void reenviarCodigoLogin(ReenviarCodigoRequest req) {
+        UUID idDesafio;
+        try {
+            idDesafio = UUID.fromString(req.desafio());
+        } catch (IllegalArgumentException e) {
+            return;
+        }
+        var d = codigos.buscar(idDesafio);
+        if (d == null || d.usado()) {
+            return;
+        }
+        var dados = contas.buscar(d.idTenant(), d.idUsuario());
+        codigos.reenviar(idDesafio, dados.nome(), dados.email());
+    }
+
+    private static UUID lerDesafio(String texto) {
+        try {
+            return UUID.fromString(texto);
+        } catch (IllegalArgumentException e) {
+            throw new ResponseStatusException(UNAUTHORIZED, "Código inválido ou expirado. Faça o login novamente.");
+        }
+    }
+
+    /** Emite o token — o mesmo caminho para o login direto e para a segunda etapa. */
+    private TokenResponse emitirToken(long idUsuario, long idTenant, long idEmpresa, String email,
+            boolean administrador, String slug) {
+        List<String> roles = List.of(administrador ? "ADMIN" : "OPERADOR");
+        String token = tokens.emitir(idUsuario, idTenant, idEmpresa, email, roles);
+        return new TokenResponse(token, idTenant, slug, false, List.of(), false, List.of(), false, null, null);
+    }
+
+    /** j***@gmail.com — confirma para a pessoa que o e-mail é o dela, sem expor o endereço. */
+    static String mascarar(String email) {
+        int arroba = email.indexOf('@');
+        if (arroba <= 1) {
+            return email;
+        }
+        return email.charAt(0) + "***" + email.substring(arroba);
+    }
+
+    private record UsuarioAuth(long idUsuario, String senhaHash, boolean administrador, boolean ativo,
+            String nome, String email, boolean exigeCodigoLogin) {
     }
 
     /** Candidata do diretório cuja senha foi conferida com sucesso. */

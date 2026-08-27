@@ -60,6 +60,11 @@ preocupação que faz a recuperação de senha responder `204` sempre.
 3. `{email, senha, idTenant?, idEmpresa}` — a escolha de empresa que já existia desde 2026-07-28
    (`docs/telas/login-empresa.md`), inalterada.
 
+⭐ Desde 2026-08-27 pode haver uma **quarta** pergunta, depois de todas essas: o **código de 4
+dígitos** do login em duas etapas, quando o usuário tem a opção ligada no cadastro dele. Ela vem
+por último de propósito — pedir o código antes da senha entregaria a informação de que aquele
+e-mail existe. Ver `docs/telas/login-duas-etapas.md`.
+
 ## Contrato de API
 
 **Requisição**

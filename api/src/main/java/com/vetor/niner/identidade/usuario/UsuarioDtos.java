@@ -36,7 +36,13 @@ public final class UsuarioDtos {
             Boolean ativo,
             @NotEmpty List<Long> idsEmpresa,
             Boolean controlaHorarioAcesso,
-            List<@Valid HorarioAcessoRequest> horarios) {
+            List<@Valid HorarioAcessoRequest> horarios,
+            /**
+             * Login em duas etapas (V079): depois da senha, exige um código de 4 dígitos enviado
+             * por e-mail. É por usuário — o dono pode querer para si e não para o caixa, que entra
+             * e sai do sistema o dia inteiro no balcão.
+             */
+            Boolean exigeCodigoLogin) {
     }
 
     /** Uma linha de horário permitido por dia da semana (1=segunda..7=domingo, ISO). Os dois
@@ -59,6 +65,7 @@ public final class UsuarioDtos {
             List<EmpresaAcesso> empresas,
             boolean controlaHorarioAcesso,
             List<HorarioAcessoResponse> horarios,
+            boolean exigeCodigoLogin,
             OffsetDateTime criadoEm,
             OffsetDateTime atualizadoEm) {
     }

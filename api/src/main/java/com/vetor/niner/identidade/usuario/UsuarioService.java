@@ -123,13 +123,15 @@ public class UsuarioService {
         try {
             long id = jdbc.sql("""
                             INSERT INTO usuario (id_tenant, id_empresa, nome_usuario, email, senha_hash, ativo,
-                                                  administrador, controla_horario_acesso)
-                            VALUES (plataforma.tenant_atual(), ?, ?, ?, ?, ?, ?, ?)
+                                                  administrador, controla_horario_acesso,
+                                                  exige_codigo_login)
+                            VALUES (plataforma.tenant_atual(), ?, ?, ?, ?, ?, ?, ?, ?)
                             RETURNING id_usuario
                             """)
                     .params(req.idsEmpresa().get(0), req.nome().trim().toUpperCase(Locale.ROOT),
                             req.email().trim().toLowerCase(Locale.ROOT), senhas.encode(req.senha()),
-                            req.ativo() == null || req.ativo(), false, Boolean.TRUE.equals(req.controlaHorarioAcesso()))
+                            req.ativo() == null || req.ativo(), false, Boolean.TRUE.equals(req.controlaHorarioAcesso()),
+                            Boolean.TRUE.equals(req.exigeCodigoLogin()))
                     .query(Long.class).single();
             salvarEmpresas(id, req.idsEmpresa());
             salvarHorarios(id, Boolean.TRUE.equals(req.controlaHorarioAcesso()), req.horarios());
@@ -150,7 +152,8 @@ public class UsuarioService {
             List<Object> params = new ArrayList<>(List.of(
                     req.idsEmpresa().get(0), req.nome().trim().toUpperCase(Locale.ROOT),
                     req.email().trim().toLowerCase(Locale.ROOT),
-                    req.ativo() == null || req.ativo(), Boolean.TRUE.equals(req.controlaHorarioAcesso())));
+                    req.ativo() == null || req.ativo(), Boolean.TRUE.equals(req.controlaHorarioAcesso()),
+                    Boolean.TRUE.equals(req.exigeCodigoLogin())));
             String setSenha = "";
             if (req.senha() != null && !req.senha().isBlank()) {
                 setSenha = ", senha_hash = ?";
@@ -159,7 +162,7 @@ public class UsuarioService {
             params.add(id);
             int linhas = jdbc.sql("""
                             UPDATE usuario SET id_empresa = ?, nome_usuario = ?, email = ?, ativo = ?,
-                                                controla_horario_acesso = ?
+                                                controla_horario_acesso = ?, exige_codigo_login = ?
                             """ + setSenha + """
                             , atualizado_em = now()
                             WHERE id_usuario = ? AND id_tenant = plataforma.tenant_atual()
@@ -278,12 +281,14 @@ public class UsuarioService {
     }
 
     private record UsuarioBase(String nome, String email, boolean ativo, boolean administrador,
-            boolean controlaHorarioAcesso, OffsetDateTime criadoEm, OffsetDateTime atualizadoEm) {
+            boolean controlaHorarioAcesso, boolean exigeCodigoLogin, OffsetDateTime criadoEm,
+            OffsetDateTime atualizadoEm) {
     }
 
     private UsuarioResponse montar(long id) {
         UsuarioBase base = jdbc.sql("""
                         SELECT nome_usuario, email, ativo, administrador, controla_horario_acesso,
+                               exige_codigo_login,
                                criado_em, atualizado_em
                         FROM usuario WHERE id_usuario = ? AND id_tenant = plataforma.tenant_atual()
                         """)
@@ -291,6 +296,7 @@ public class UsuarioService {
                 .query((rs, n) -> new UsuarioBase(
                         rs.getString("nome_usuario"), rs.getString("email"),
                         rs.getBoolean("ativo"), rs.getBoolean("administrador"), rs.getBoolean("controla_horario_acesso"),
+                        rs.getBoolean("exige_codigo_login"),
                         rs.getObject("criado_em", OffsetDateTime.class),
                         rs.getObject("atualizado_em", OffsetDateTime.class)))
                 .optional()
@@ -318,7 +324,8 @@ public class UsuarioService {
                 .list();
 
         return new UsuarioResponse(id, base.nome(), base.email(), base.ativo(), base.administrador(),
-                empresas, base.controlaHorarioAcesso(), horarios, base.criadoEm(), base.atualizadoEm());
+                empresas, base.controlaHorarioAcesso(), horarios, base.exigeCodigoLogin(),
+                base.criadoEm(), base.atualizadoEm());
     }
 
     private static void exigirAdmin(Jwt jwt) {

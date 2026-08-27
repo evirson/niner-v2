@@ -23,6 +23,9 @@ interface LoginResp {
   contas: ContaOpcaoLogin[]
   escolherEmpresa: boolean
   empresas: EmpresaOpcaoLogin[]
+  exigeCodigo: boolean
+  desafio: string | null
+  emailMascarado: string | null
 }
 
 /**
@@ -52,6 +55,9 @@ export default function Login() {
   const [empresas, setEmpresas] = useState<EmpresaOpcaoLogin[] | null>(null)
   // Guardado entre as duas voltas: a escolha da conta precisa acompanhar a escolha da empresa.
   const [idTenantEscolhido, setIdTenantEscolhido] = useState<number | null>(null)
+  // Terceira pergunta possível: o código de 4 dígitos (V079), quando o usuário tem login em duas
+  // etapas ligado no cadastro dele.
+  const [desafio, setDesafio] = useState<{ id: string; email: string } | null>(null)
 
   const entrar = async (idTenant?: number, idEmpresa?: number) => {
     setErro('')
@@ -71,6 +77,12 @@ export default function Login() {
         setEmpresas(r.empresas)
         return
       }
+      if (r.exigeCodigo) {
+        setContas(null)
+        setEmpresas(null)
+        setDesafio({ id: r.desafio as string, email: r.emailMascarado ?? '' })
+        return
+      }
       login(r.token as string)
       navigate('/', { replace: true })
     } catch (err) {
@@ -78,6 +90,7 @@ export default function Login() {
       setContas(null)
       setEmpresas(null)
       setIdTenantEscolhido(null)
+      setDesafio(null)
     } finally {
       setCarregando(false)
     }
@@ -92,6 +105,31 @@ export default function Login() {
     setContas(null)
     setEmpresas(null)
     setIdTenantEscolhido(null)
+    setDesafio(null)
+    setSenha('')
+  }
+
+  if (desafio) {
+    return (
+      <CodigoCard
+        emailMascarado={desafio.email}
+        aoConferir={async (codigo) => {
+          const r = await api<LoginResp>('/api/publico/login/codigo', {
+            method: 'POST',
+            body: JSON.stringify({ desafio: desafio.id, codigo }),
+          })
+          login(r.token as string)
+          navigate('/', { replace: true })
+        }}
+        aoReenviar={() =>
+          api<void>('/api/publico/login/codigo/reenviar', {
+            method: 'POST',
+            body: JSON.stringify({ desafio: desafio.id }),
+          })
+        }
+        aoVoltar={voltarParaCredenciais}
+      />
+    )
   }
 
   if (contas) {
@@ -219,6 +257,108 @@ function EscolhaCard({
           Voltar
         </button>
       </div>
+    </div>
+  )
+}
+
+/**
+ * Terceira etapa: o código de 4 dígitos que chegou por e-mail (V079).
+ *
+ * ⚠️ **Voltar limpa a senha.** Sair daqui é recomeçar o login inteiro — deixar a senha preenchida
+ * na tela de trás faria a segunda etapa parecer opcional para quem só quer fechar o card.
+ */
+function CodigoCard({
+  emailMascarado,
+  aoConferir,
+  aoReenviar,
+  aoVoltar,
+}: {
+  emailMascarado: string
+  aoConferir: (codigo: string) => Promise<void>
+  aoReenviar: () => Promise<void>
+  aoVoltar: () => void
+}) {
+  const [codigo, setCodigo] = useState('')
+  const [erro, setErro] = useState('')
+  const [aviso, setAviso] = useState('')
+  const [carregando, setCarregando] = useState(false)
+
+  const conferir = async (valor: string) => {
+    setErro('')
+    setCarregando(true)
+    try {
+      await aoConferir(valor)
+    } catch (err) {
+      setErro(err instanceof ApiError ? err.message : 'Não foi possível conferir o código.')
+      setCodigo('')
+    } finally {
+      setCarregando(false)
+    }
+  }
+
+  const reenviar = async () => {
+    setErro('')
+    setCarregando(true)
+    try {
+      await aoReenviar()
+      setCodigo('')
+      setAviso('Enviamos um código novo. O anterior deixou de valer.')
+    } catch (err) {
+      setErro(err instanceof ApiError ? err.message : 'Não foi possível reenviar o código.')
+    } finally {
+      setCarregando(false)
+    }
+  }
+
+  return (
+    <div className="login-wrap">
+      <form
+        className="card login-card"
+        onSubmit={(e) => {
+          e.preventDefault()
+          if (codigo.length === 4) conferir(codigo)
+        }}
+      >
+        <a className="brand" href="/" style={{ fontSize: 22 }}>
+          NAI<span>NER</span>
+        </a>
+        <h1 style={{ fontSize: 22, margin: '8px 0 4px' }}>Confirme que é você</h1>
+        <p className="muted" style={{ marginTop: 0 }}>
+          Enviamos um código de 4 dígitos para {emailMascarado}. Ele vale por 10 minutos.
+        </p>
+
+        <label htmlFor="codigo">Código</label>
+        <input
+          id="codigo"
+          autoFocus
+          inputMode="numeric"
+          autoComplete="one-time-code"
+          maxLength={4}
+          value={codigo}
+          onChange={(e) => {
+            const so = e.target.value.replace(/[^0-9]/g, '').slice(0, 4)
+            setCodigo(so)
+            // Digitou o quarto dígito: confere sozinho. Pedir um clique depois disso é um passo
+            // que não decide nada.
+            if (so.length === 4) conferir(so)
+          }}
+          style={{ fontSize: 28, letterSpacing: 12, textAlign: 'center', fontWeight: 700 }}
+          required
+        />
+
+        {erro && <Toast mensagem={erro} aoFechar={() => setErro('')} />}
+        {aviso && <Toast mensagem={aviso} tipo="sucesso" aoFechar={() => setAviso('')} />}
+
+        <button className="btn" type="submit" disabled={carregando || codigo.length < 4} style={{ width: '100%', marginTop: 12 }}>
+          {carregando ? 'Conferindo…' : 'Entrar'}
+        </button>
+        <button type="button" className="btn ghost" style={{ width: '100%', marginTop: 8 }} disabled={carregando} onClick={reenviar}>
+          Reenviar código
+        </button>
+        <button type="button" className="btn ghost" style={{ width: '100%', marginTop: 8 }} onClick={aoVoltar}>
+          Voltar
+        </button>
+      </form>
     </div>
   )
 }

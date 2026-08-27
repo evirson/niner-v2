@@ -118,6 +118,26 @@ public final class OnboardingDtos {
             boolean escolherConta,
             List<ContaOpcaoLogin> contas,
             boolean escolherEmpresa,
-            List<EmpresaOpcaoLogin> empresas) {
+            List<EmpresaOpcaoLogin> empresas,
+            /**
+             * Login em duas etapas (V079): a senha bateu, mas falta o código de 4 dígitos que
+             * acabou de ser enviado por e-mail. O front manda {@code desafio} + código em
+             * {@code POST /api/publico/login/codigo}.
+             *
+             * <p>⚠️ O desafio é um UUID opaco: a senha não trafega de novo, e o identificador não
+             * diz nada sobre a conta.
+             */
+            boolean exigeCodigo,
+            String desafio,
+            /** Para a tela dizer "enviamos para j***@gmail.com" sem expor o endereço inteiro. */
+            String emailMascarado) {
+    }
+
+    /** Segunda etapa do login em duas etapas (V079). */
+    public record CodigoLoginRequest(@NotBlank String desafio, @NotBlank String codigo) {
+    }
+
+    /** Pedido de reenvio do código (V079). */
+    public record ReenviarCodigoRequest(@NotBlank String desafio) {
     }
 }

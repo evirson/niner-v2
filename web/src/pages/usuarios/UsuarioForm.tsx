@@ -276,6 +276,25 @@ export default function UsuarioForm({ somenteLeitura = false }: { somenteLeitura
           {erros.idsEmpresa && <p className="erro-campo">{erros.idsEmpresa}</p>}
         </section>
 
+        <section className="section">
+          <p className="section-label">Segurança</p>
+
+          <label className="checkbox-linha" style={{ marginTop: 0 }}>
+            <input
+              type="checkbox"
+              checked={form.exigeCodigoLogin}
+              onChange={(e) => setForm((f) => ({ ...f, exigeCodigoLogin: e.target.checked }))}
+            />
+            Login em duas etapas (código por e-mail)
+          </label>
+          <p className="muted" style={{ marginTop: 0 }}>
+            Depois de acertar a senha, o usuário recebe no e-mail dele um código de 4 dígitos e
+            precisa digitá-lo para entrar. O código vale por 10 minutos e pode ser reenviado.
+            {/* Vale para o administrador também, ao contrário do horário de acesso: aqui a
+                proteção é justamente para a conta mais poderosa. */}
+          </p>
+        </section>
+
         {!usuarioExistente?.administrador && (
           <section className="section">
             <p className="section-label">Horário de acesso</p>

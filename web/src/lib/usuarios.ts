@@ -25,6 +25,7 @@ export interface Usuario {
   administrador: boolean
   empresas: EmpresaAcesso[]
   controlaHorarioAcesso: boolean
+  exigeCodigoLogin: boolean
   horarios: HorarioAcesso[]
   criadoEm: string
   atualizadoEm: string
@@ -55,6 +56,7 @@ export interface UsuarioFormState {
   ativo: boolean
   idsEmpresa: number[]
   controlaHorarioAcesso: boolean
+  exigeCodigoLogin: boolean
   horarios: HorarioAcessoFormState[]
 }
 
@@ -65,6 +67,7 @@ export const USUARIO_VAZIO: UsuarioFormState = {
   ativo: true,
   idsEmpresa: [],
   controlaHorarioAcesso: false,
+  exigeCodigoLogin: false,
   horarios: horariosEmBranco(),
 }
 
@@ -77,6 +80,7 @@ export function paraFormulario(u: Usuario): UsuarioFormState {
     ativo: u.ativo,
     idsEmpresa: u.empresas.map((e) => e.idEmpresa),
     controlaHorarioAcesso: u.controlaHorarioAcesso,
+    exigeCodigoLogin: u.exigeCodigoLogin,
     horarios: horariosEmBranco().map((vazio) => {
       const h = porDia.get(vazio.diaSemana)
       return h
@@ -94,6 +98,7 @@ export function paraRequisicao(f: UsuarioFormState) {
     ativo: f.ativo,
     idsEmpresa: f.idsEmpresa,
     controlaHorarioAcesso: f.controlaHorarioAcesso,
+    exigeCodigoLogin: f.exigeCodigoLogin,
     horarios: f.horarios.map((h) => ({
       diaSemana: h.diaSemana,
       horaInicio: horaParaIso(h.horaInicio),

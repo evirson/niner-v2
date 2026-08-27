@@ -13,7 +13,7 @@ Registro cronológico das decisões e entregas. Atualizar a cada marco relevante
 
 > ## 📌 2026-08-27 — o dia do acesso
 >
-> **63 telas · 1117 testes verdes.** Cinco entregas, todas commitadas:
+> **63 telas.** Seis entregas:
 >
 > 1. **Login sem identificador de loja** — e-mail + senha. O mesmo e-mail pode estar em várias
 >    contas; a senha é conferida em cada uma e só se casar em mais de uma é que a tela pergunta.
@@ -28,9 +28,16 @@ Registro cronológico das decisões e entregas. Atualizar a cada marco relevante
 >    por tenant, somando todos os CNPJs.
 > 5. **RBAC** (V073–V078) — permissão por tela e por ação, presa ao usuário, com a trava valendo
 >    **no servidor**.
+> 6. **Login em duas etapas** (V079) — opção por usuário; depois da senha, um código de 4 dígitos
+>    por e-mail, válido 10 minutos, uso único, com reenvio. ⚠️ **O que segura a força bruta não é o
+>    tamanho do código** (4 dígitos = 10.000 combinações) e sim os três limites: 5 tentativas, 10
+>    minutos, 3 reenvios — e o teto de tentativas **quase nasceu inerte**, porque um
+>    `@Transactional` por hábito fazia o rollback da exceção de erro apagar o incremento que
+>    acabara de ser gravado. Medido: cinco erros deixavam o banco em `tentativas = 0`. Nada na tela
+>    mudaria.
 >
 > Detalhe de cada uma: `docs/telas/login.md`, `ramo-atividade.md`, `contratacao-grupo.md`,
-> `usuario-permissoes.md` e `docs/infra/parque-de-celulas.md`.
+> `usuario-permissoes.md`, `login-duas-etapas.md` e `docs/infra/parque-de-celulas.md`.
 
 
 > ## 📌 2026-08-26 — onde o projeto está hoje
