@@ -43,7 +43,7 @@ operador, para a rotina negar depois — o usuário culparia o sistema, não a p
 |---|---|
 | `GET /api/v1/telas` | monta a grade |
 | `GET /api/v1/eu/permissoes` | o **próprio** usuário — o front usa para o menu e os botões |
-| `GET|PUT /api/v1/usuarios/{id}/permissoes` | o **administrador**, para conceder (ADMIN-only) |
+| `GET|PUT /api/v1/usuarios/{id}/permissoes` | quem concede: o administrador **ou** quem tem a tela Usuários com "alterar" (ver o teto, adiante) |
 
 A tela: `/usuarios/:id/permissoes`, alcançada pelo ícone de cadeado na lista de Usuários — que
 **não aparece para o administrador**, porque não há o que configurar nele.
@@ -58,11 +58,11 @@ permissão desmarcada que não chega ao servidor continuaria valendo.
 - **Dado** PDV com incluir e Clientes com alterar, **então** é exatamente isso que ele recebe — nem
   incluir em Clientes, nem alterar no PDV.
 - **Dado** um pedido para conceder uma tela exclusiva (ex.: **Empresas**), **então** 400 citando a tela.
-- **Dado** um operador, **então** ele não lê nem grava permissões (403), nem as próprias.
+- **Dado** um operador **sem** a tela Usuários, **então** ele não lê nem grava permissões (403). Com a tela, ele grava — limitado pelo teto, e nunca a própria grade.
 - **Dado** o admin de outra conta, **então** 404 ao tentar configurar usuário alheio (P8).
 - **Dado** um segundo `PUT` menor, **então** o que ficou de fora **deixa de valer**.
 
-Testes: `api/src/test/java/com/vetor/niner/PermissaoPorTelaTest.java` (8 casos).
+Testes: `api/src/test/java/com/vetor/niner/PermissaoPorTelaTest.java` (12 casos).
 
 ## Parte 2 — a trava no servidor (feita no mesmo dia)
 
