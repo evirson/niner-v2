@@ -24,6 +24,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
 import static org.springframework.http.MediaType.APPLICATION_JSON;
@@ -241,5 +242,129 @@ class LoginEmDuasEtapasTest {
                                 {"email":"donoe@duasetapas.com","senha":"segredo123"}
                                 """))
                 .andExpect(jsonPath("$.exigeCodigo").value(false));
+    }
+
+    /**
+     * ⚠️ <b>A janela de horário tem de valer na SEGUNDA etapa também.</b> Entre a senha e o código
+     * passam até 10 minutos. A primeira versão <b>não</b> bloqueava: a consulta de horário depende
+     * de {@code plataforma.tenant_atual()}, o endpoint do código é público (sem TenantContext), a
+     * consulta casava zero linhas e o {@code .orElse(true)} respondia "pode acessar". SELECT vazio
+     * lido como permissão — a armadilha de sempre, num caminho novo.
+     */
+    @Test
+    void janelaFechadaEntreAsDuasEtapasBloqueia() throws Exception {
+        // Uma janela no passado exige que o relógio já tenha passado de 01:30 — senão ela cruzaria
+        // a meia-noite, que o domínio não expressa (a janela é por dia da semana).
+        assumeTrue(java.time.LocalTime.now().isAfter(java.time.LocalTime.of(1, 30)),
+                "janela no passado cruzaria a meia-noite neste horário");
+        when(email.enviar(anyString(), anyString(), anyString())).thenReturn(true);
+        Conta conta = assinar("f");
+        long idOperador = criarOperadorComHorario(conta.token(), "operadorf@duasetapas.com");
+        exigirCodigo(conta.idTenant(), "operadorf@duasetapas.com");
+
+        String desafio = JsonPath.read(logar("operadorf@duasetapas.com", "senha1234"), "$.desafio");
+        String codigo = codigoEnviado();
+
+        // A janela fecha enquanto o código está na caixa de entrada.
+        executar("UPDATE usuario_horario_acesso SET hora_inicio = (now() - interval '60 minutes')::time,"
+                + " hora_fim = (now() - interval '30 minutes')::time WHERE id_tenant = " + conta.idTenant()
+                + " AND id_usuario = " + idOperador
+                + " AND dia_semana = EXTRACT(ISODOW FROM (now() AT TIME ZONE 'America/Sao_Paulo'))");
+
+        mvc.perform(post("/api/publico/login/codigo").contentType(APPLICATION_JSON)
+                        .content("""
+                                {"desafio":"%s","codigo":"%s"}
+                                """.formatted(desafio, codigo)))
+                .andExpect(status().isForbidden());
+    }
+
+    /**
+     * ⚠️ <b>Reenviar não pode devolver as tentativas gastas.</b> Zerando o contador, o teto de 5
+     * vira 20 por desafio — e o reenvio é pedido pelo próprio atacante, não custa nada a ele. Quem
+     * errou cinco vezes recomeça o login; é o preço de um código de 4 dígitos.
+     */
+    @Test
+    void reenviarNaoDevolveAsTentativasGastas() throws Exception {
+        when(email.enviar(anyString(), anyString(), anyString())).thenReturn(true);
+        Conta conta = assinar("g");
+        exigirCodigo(conta.idTenant(), "donog@duasetapas.com");
+
+        String desafio = JsonPath.read(logar("donog@duasetapas.com", "segredo123"), "$.desafio");
+        for (int i = 0; i < 5; i++) {
+            mvc.perform(post("/api/publico/login/codigo").contentType(APPLICATION_JSON)
+                            .content("""
+                                    {"desafio":"%s","codigo":"0000"}
+                                    """.formatted(desafio)))
+                    .andExpect(status().isUnauthorized());
+        }
+
+        // O reenvio recusa e manda recomeçar o login, em vez de devolver 5 palpites novos.
+        mvc.perform(post("/api/publico/login/codigo/reenviar").contentType(APPLICATION_JSON)
+                        .content("""
+                                {"desafio":"%s"}
+                                """.formatted(desafio)))
+                .andExpect(status().isTooManyRequests());
+
+        // E o desafio continua esgotado — nenhum código o reabre.
+        mvc.perform(post("/api/publico/login/codigo").contentType(APPLICATION_JSON)
+                        .content("""
+                                {"desafio":"%s","codigo":"%s"}
+                                """.formatted(desafio, codigoEnviado())))
+                .andExpect(status().isTooManyRequests());
+    }
+
+    /**
+     * ⚠️ <b>Refazer o login não pode ser a saída para a força bruta.</b> Cada login válido cria um
+     * desafio novo, de contador zerado — sem teto de desafios, quem já tem a senha tenta à vontade,
+     * cinco palpites por vez, e o teto por desafio não significa nada.
+     */
+    @Test
+    void desafiosDemaisNaMesmaHoraSaoRecusados() throws Exception {
+        when(email.enviar(anyString(), anyString(), anyString())).thenReturn(true);
+        Conta conta = assinar("h");
+        exigirCodigo(conta.idTenant(), "donoh@duasetapas.com");
+
+        for (int i = 0; i < 10; i++) {
+            logar("donoh@duasetapas.com", "segredo123");
+        }
+        mvc.perform(post("/api/publico/login").contentType(APPLICATION_JSON)
+                        .content("""
+                                {"email":"donoh@duasetapas.com","senha":"segredo123"}
+                                """))
+                .andExpect(status().isTooManyRequests());
+    }
+
+    /** Operador com controle de horário ligado e a janela de hoje aberta. */
+    private long criarOperadorComHorario(String token, String emailOperador) throws Exception {
+        String empresas = mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                        .get("/api/v1/empresas").header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        long idEmpresa = ((Number) JsonPath.read(empresas, "$[0].idEmpresa")).longValue();
+
+        StringBuilder horarios = new StringBuilder();
+        for (int dia = 1; dia <= 7; dia++) {
+            if (dia > 1) {
+                horarios.append(",");
+            }
+            horarios.append("{\"diaSemana\":").append(dia)
+                    .append(",\"horaInicio\":\"00:01:00\",\"horaFim\":\"23:59:00\"}");
+        }
+        String body = """
+                {"nome":"Operador Codigo","email":"%s","senha":"senha1234","idsEmpresa":[%d],
+                 "controlaHorarioAcesso":true,"horarios":[%s]}
+                """.formatted(emailOperador, idEmpresa, horarios);
+        String resp = mvc.perform(post("/api/v1/usuarios").header("Authorization", "Bearer " + token)
+                        .contentType(APPLICATION_JSON).content(body))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        return ((Number) JsonPath.read(resp, "$.idUsuario")).longValue();
+    }
+
+    private void executar(String sql) throws Exception {
+        try (Connection c = DriverManager.getConnection(postgres.getJdbcUrl(), postgres.getUsername(),
+                postgres.getPassword());
+                Statement st = c.createStatement()) {
+            st.executeUpdate(sql);
+        }
     }
 }

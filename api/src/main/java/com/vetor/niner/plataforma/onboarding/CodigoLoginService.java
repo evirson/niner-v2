@@ -47,6 +47,7 @@ public class CodigoLoginService {
     private static final Duration VALIDADE = Duration.ofMinutes(10);
     private static final int MAX_TENTATIVAS = 5;
     private static final int MAX_REENVIOS = 3;
+    private static final int MAX_DESAFIOS_POR_HORA = 10;
     private static final SecureRandom ALEATORIO = new SecureRandom();
 
     private final JdbcClient jdbc;
@@ -66,6 +67,22 @@ public class CodigoLoginService {
      */
     public UUID criarDesafio(long idTenant, long idUsuario, long idEmpresa, String nome, String emailDestino,
             String ip) {
+        // ⚠️ Teto de DESAFIOS, não só de tentativas dentro de um desafio. Sem ele, quem já tem a
+        // senha (que é exatamente o caso que a segunda etapa existe para cobrir) refaz o login
+        // quantas vezes quiser e ganha 5 palpites novos a cada vez — o teto por desafio não
+        // significaria nada. Cada desafio manda um e-mail ao dono da conta, então o limite também
+        // impede transformar o login numa metralhadora de e-mail contra o usuário.
+        int recentes = jdbc.sql("""
+                        SELECT count(*) FROM plataforma.codigo_login
+                        WHERE id_tenant = ? AND id_usuario = ? AND criado_em > now() - interval '1 hour'
+                        """)
+                .params(idTenant, idUsuario)
+                .query(Integer.class).single();
+        if (recentes >= MAX_DESAFIOS_POR_HORA) {
+            throw new ResponseStatusException(TOO_MANY_REQUESTS,
+                    "Muitos pedidos de código para esta conta. Tente novamente daqui a pouco.");
+        }
+
         String codigo = gerarCodigo();
         UUID desafio = jdbc.sql("""
                         INSERT INTO plataforma.codigo_login
@@ -131,16 +148,19 @@ public class CodigoLoginService {
         if (d == null || d.usado()) {
             throw new ResponseStatusException(UNAUTHORIZED, "Não há código pendente. Faça o login novamente.");
         }
-        if (d.reenvios() >= MAX_REENVIOS) {
+        if (d.reenvios() >= MAX_REENVIOS || d.tentativas() >= MAX_TENTATIVAS) {
             throw new ResponseStatusException(TOO_MANY_REQUESTS,
                     "Você já pediu o código várias vezes. Faça o login novamente daqui a pouco.");
         }
 
         String codigo = gerarCodigo();
+        // ⚠️ `tentativas` NÃO volta a zero. Zerando, o teto de 5 vira 20 por desafio (5 × 3
+        // reenvios) — e o reenvio é pedido pelo próprio atacante, não custa nada a ele. Quem errou
+        // cinco vezes de verdade recomeça o login; é o preço de um código de 4 dígitos.
         jdbc.sql("""
                         UPDATE plataforma.codigo_login
                            SET codigo_hash = ?, expira_em = now() + make_interval(mins => ?),
-                               reenvios = reenvios + 1, tentativas = 0
+                               reenvios = reenvios + 1
                          WHERE id_desafio = ? AND usado_em IS NULL
                         """)
                 .params(hash(codigo), (int) VALIDADE.toMinutes(), idDesafio)

@@ -14,7 +14,7 @@
 > **Última revisão:** 2026-08-27, fim do dia (registrada a pedido dele: *"deixe todas estas pendências
 > documentadas, não esqueça de nada, e quando eu te perguntar as pendências você me fala"*).
 
-**Estado na data desta revisão:** 63 telas em uso · 1117 testes verdes (medido, não estimado).
+**Estado na data desta revisão:** 63 telas em uso · 1130 testes verdes (medido, não estimado).
 
 ---
 
@@ -193,6 +193,116 @@ ele achar que vale.
 Usuários saiu da lista de telas exclusivas (2026-08-27). Quem receber essa tela cria e edita
 usuários da conta; configurar **permissões** segue exclusivo do administrador, checado no
 servidor. Se não for o desejado, é só devolver Usuários às exclusivas. **Decisão dele.**
+
+## 🔐 Auditoria de segurança de 2026-08-27 (front + back, por agentes)
+
+> **O que já está resolvido não está aqui.** Três achados eram do 2FA escrito horas antes e foram
+> corrigidos e medidos no mesmo dia (janela de horário na 2ª etapa, reenvio zerando tentativas,
+> falta de teto de desafios) — estão em `docs/telas/login-duas-etapas.md`.
+>
+> ⭐ **O que a auditoria descartou vale tanto quanto o que achou:** P8 (isolamento de tenant) e
+> injeção de SQL saíram **limpos, com medida** — 671 referências a tabela de domínio com alias,
+> **todas** filtrando `id_tenant`; os 18 `ORDER BY` do cliente todos por allowlist. Também
+> descartados: preço/desconto vindos do cliente no PDV (o DTO não tem campo de preço), cota do
+> plano, os dois `JwtDecoder`, prefixo de tenant no object storage, recuperação de senha, webhooks,
+> `state` do OAuth, jobs `@Scheduled` e segredos no repositório.
+>
+> ⚠️ **Nada foi executado** — é leitura de código. Os itens marcados 🧪 pedem medição antes da
+> correção.
+
+### 35. 🔴 Operador com a tela "Usuários" toma a conta do administrador 🔵
+`UsuarioService` teve as 5 chamadas de `exigirAdmin` removidas quando o RBAC entrou (o método ficou
+órfão, **medido**: 0 chamadas), e a V078 tirou `usuarios` de `admin_apenas`. O `PUT` não protege o
+alvo: quem tem *Usuários: alterar* reescreve **senha e e-mail do administrador** (e agora também
+desliga o 2FA dele) e entra no lugar. O `DELETE` só barra a auto-exclusão — apagar o administrador
+deixa a conta **sem admin para sempre**, porque `criar` grava `administrador = false` fixo e a
+restrição de um-admin-por-conta é imutável.
+**Decisão dele:** devolver Usuários às telas exclusivas (item 34) **ou** eu proteger alvo
+administrador no `PUT`/`DELETE`. Relacionado ao item 34.
+
+### 36. 🔴 Nenhum operador consegue vender: o PDV responde 403 para quem não é admin 🟢
+`cfg_tela.pdv` está com `tem_incluir = false` (V076), e `POST /pdv/vendas` traduz para INCLUIR —
+então a permissão **não pode nem ser concedida**. Confirmado no banco. Não é brecha, é o RBAC de
+ontem quebrando o caixa. Correção é um `UPDATE` em `cfg_tela` + um teste de estreia (*operador com
+grade cheia efetiva uma venda*), que hoje não existe. Revisar junto `pesquisa-vendas` e
+`reimpressao-recebimento-crediario`. **Bola minha.**
+
+### 37. 🔴 Emissão de NFC-e não é idempotente 🟢
+`documento_fiscal_venda_ix` é **índice, não UNIQUE**, e nada no serviço pergunta se a venda já tem
+documento (confirmado). Duplo clique, retry de rede ou reimpressão geram **duas notas autorizadas
+para a mesma venda** — receita e ICMS em dobro, e só se desfaz cancelando na SEFAZ dentro da janela
+de 30 min. **Bola minha.**
+
+### 38. 🔴 Inutilização aceita numeração de nota em contingência 🟢
+`SITUACOES_NAO_SAO_BURACO` lista só `AUTORIZADO, CANCELADO, DENEGADO` de dez situações possíveis, e
+governa tanto o que a tela **sugere** quanto o que o POST **bloqueia**. SEFAZ cai, a loja emite em
+contingência, e a tela oferece esses números como buraco — inutilizar homologado **não se desfaz**,
+e as notas viram recusa quando o dreno transmitir. Correção: acrescentar `CONTINGENCIA`,
+`TRANSMITINDO`, `ASSINADO` à constante. **Bola minha.**
+
+### 39. 🟠 `X-Forwarded-For` forjável anula o limite de requisição em produção 🧪🟢
+O filtro lê o **primeiro** elemento do cabeçalho, que é o que o cliente manda; o nginx acrescenta o
+IP real no **fim**. Com `confiar-proxy=true` (produção), qualquer um cria um balde novo por
+requisição. Sobra o `limit_req` do nginx — 6× o teto pretendido. Ler `X-Real-IP` (o nginx
+sobrescreve) ou o último elemento. **Bola minha.**
+
+### 40. 🟠 Login do backoffice sem teto de tentativas, e com oráculo de tempo 🧪🔵🟢
+`POST /api/admin/sessao` não passa pelo limite de requisição (que cobre só `/api/publico/**`) e não
+tem bloqueio de conta — é a credencial mais valiosa do sistema. E o hash de mentira que deveria dar
+tempo constante tem **63 caracteres** onde o BCrypt exige 60: o `matches` recusa o formato e
+**retorna sem calcular**, então e-mail existente demora ~50-300 ms e inexistente ~1 ms —
+enumeração de staff medível pela internet. 🧪 Um `curl` cronometrado fecha o diagnóstico em
+minutos. **Bola minha** o código; **dele** decidir se restringe o backoffice por IP (o allowlist já
+está escrito e comentado no nginx).
+
+### 41. 🟠 "Empresas com acesso" não vale em nenhuma rota do módulo fiscal 🟢
+24 endpoints recebem `idEmpresa` por path/query sem conferir `usuario_empresa` — as rotas de
+dinheiro usam o claim `eid` corretamente, o bloco fiscal não. Operador da filial 1 põe a **filial
+2** em contingência, ou baixa o XML fiscal dela. P8 continua intacto (é dentro do mesmo tenant); o
+que se atravessa é a fronteira entre empresas. **Bola minha.**
+
+### 42. 🟠 Devolução aceita venda já cancelada como origem 🟢
+`venda.cancelada` nunca aparece no caminho da devolução: vender → cancelar (estoque volta, dinheiro
+sai) → devolver a mesma venda → **vale-mercadoria integral**. **Bola minha.**
+
+### 43. 🟠 Ambiente fiscal é trocável a quente, e a numeração não separa ambientes 🔵
+A série é protegida depois da primeira nota autorizada; o **ambiente** não. Trocar para homologação
+faz as vendas saírem sem valor jurídico com o PDV dizendo "autorizada" — e as notas de teste
+**consomem números da sequência de produção**, criando buracos que exigem inutilização formal.
+**Decisão dele:** travar o ambiente como a série já é travada.
+
+### 44. 🟡 Sessão não é revogável: 8 h de sobrevida 🔵
+O JWT vale 8 h, sem `jti` e sem denylist. Desativar, excluir ou trocar a senha **não derruba
+sessão**: demitido continua operando até o token vencer. Correção: `token_version` no usuário,
+conferida no filtro (uma query indexada por requisição). **Decisão dele** — custa uma consulta a
+cada chamada.
+
+### 45. 🟡 Desconto do tipo de carteira contorna o teto de desconto da venda 🟢
+`tipo_carteira.perc_desconto` é `numeric(5,2)` sem CHECK e sem teto no serviço, enquanto
+`descontoVenda` é revalidado contra `cfg_geral`. 999,99% numa forma de pagamento fecha venda de
+R$ 1.000 com ~R$ 91. **Bola minha** (CHECK 0–100 + submeter ao mesmo teto).
+
+### 46. 🟡 Sobras de coerência do RBAC 🟢
+(a) **DRE** e **Lucratividade** saíram de `admin_apenas` mas mantêm `exigirAdmin` no serviço
+(confirmado) — o admin concede e o operador toma 403; idem `fechamento-caixa` (aqui a decisão de
+reabrir-só-admin é explícita, falta a caixa sumir da grade). (b) `CategoriaProdutoController` e
+`CategoriaClienteController` fazem POST/PUT **sem `@Tela`** — qualquer autenticado de grade vazia
+cria e renomeia categorias. (c) `MarketingAdminController` é o único de `/api/admin` sem
+`exigirStaff`. **Bola minha.**
+
+### 47. 🟡 Signup diz quem já é cliente, e o lead grava consentimento não dado 🔵
+`POST /assinar` responde 409 para e-mail já cadastrado e 201 para novo — um verificador de "é
+cliente do Nainer?", ao contrário do 204-sempre da recuperação de senha. E o `ON CONFLICT` do lead
+deixa um anônimo sobrescrever nome/telefone de um lead existente, gravando `consentimento_em` que
+a pessoa não deu (justo o campo que provaria a base legal do contato — LGPD).
+**Decisão dele:** a mensagem do 409 existe para o lojista não duplicar conta; o preço é este.
+
+### 48. 🟢 Cobertura de teste de isolamento e privilégio 🟢
+19 testes `isolamentoEntreTenants` para ~112 classes — ficam sem teste PDV/venda, caixa, contas a
+pagar, crediário, transferência e os cadastros. O código está correto (foi lido), mas **nada trava
+o comportamento contra a próxima edição**. E a suíte conecta como superusuário do container, então
+os `GRANT/REVOKE` novos (V071, V079) não têm caso em `PrivilegiosNinerAppTest` — é o
+`REVOKE INSERT/UPDATE/DELETE ON diretorio_login` que sustenta "só a trigger escreve". **Bola minha.**
 
 ## ✅ Fechadas recentemente (para não reabrir por engano)
 

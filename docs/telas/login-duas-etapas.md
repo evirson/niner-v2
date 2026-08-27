@@ -61,6 +61,7 @@ Quem segura são os três limites juntos, e nenhum deles é dispensável:
 | Tentativas erradas por desafio | **5** |
 | Validade | **10 minutos** |
 | Reenvios por desafio | **3** |
+| Desafios por usuário por hora | **10** |
 
 ⚠️ Aumentar o código para 6 dígitos **sem** esses limites seria pior que 4 dígitos com eles.
 
@@ -100,6 +101,33 @@ transação (o `SET LOCAL app.id_tenant` só existe dentro de uma) e a conferên
 em nenhuma. Como método anotado chamado de dentro do próprio bean não passa pelo proxy do Spring
 — armadilha já conhecida no projeto —, a transação tem de começar em **outro** bean.
 
+## Mais três defeitos, achados pela auditoria de segurança no mesmo dia
+
+Os três **passavam** pelos 6 testes iniciais. Cada um foi reproduzido antes de corrigir — os testes
+novos falharam com **200** onde deviam bloquear.
+
+**1. O horário de acesso não valia na segunda etapa.** A consulta de horário termina em
+`AND u.id_tenant = plataforma.tenant_atual()`, e o endpoint do código é **público** — roda sem
+`TenantContext`. A consulta casava zero linhas, o `.optional()` vinha vazio, e o `.orElse(true)` do
+serviço respondia "pode acessar". Operador com janela até 18:00 digitava o código às 18:05 e
+**entrava**. Hoje a checagem passa por `ContaDoUsuario.podeAcessarAgora`, que põe o tenant na
+própria transação. ⚠️ É a armadilha de sempre — SELECT vazio lido como permissão — num caminho novo.
+
+**2. Reenviar devolvia as 5 tentativas.** O `UPDATE` do reenvio zerava `tentativas`, então o teto
+virava **20 palpites por desafio** (5 × 3 reenvios) — e o reenvio é pedido pelo próprio atacante,
+não custa nada a ele. Hoje o contador **não** volta a zero, e o reenvio de um desafio esgotado é
+recusado com 429 mandando refazer o login.
+
+**3. Não havia teto de DESAFIOS.** Cada login válido criava um desafio novo, de contador zerado —
+quem já tem a senha (que é exatamente o caso que a segunda etapa existe para cobrir) refazia o
+login à vontade, cinco palpites por vez, e o teto por desafio não significava nada. Hoje: **10
+desafios por usuário por hora**. Isso também impede transformar o login numa metralhadora de e-mail
+contra o dono da conta.
+
+⭐ O padrão dos três é o mesmo: **o teto que existe só vale se não houver uma porta ao lado que o
+zere ou o pule.** Antes de dar um limite por pronto, pergunte o que acontece quando ele é atingido
+e quem pode acionar o caminho que o reinicia.
+
 ## Sem SMTP configurado, ninguém entra
 
 O envio falhando vira **503 com mensagem clara**, e não silêncio. É deliberado: com a segunda etapa
@@ -122,7 +150,12 @@ funcionando** (Backoffice → Configuração).
   se existe.
 - **Dado** um usuário **sem** a opção, **então** o login continua de um passo só.
 
-Testes: `api/src/test/java/com/vetor/niner/LoginEmDuasEtapasTest.java` (6 casos).
+- **Dado** um usuário com janela de horário, **quando** ela fecha entre a senha e o código,
+  **então** 403 na segunda etapa.
+- **Dado** 5 erros, **então** o reenvio é recusado (429) em vez de devolver palpites.
+- **Dado** 10 desafios na mesma hora, **então** o 11º login é recusado com 429.
+
+Testes: `api/src/test/java/com/vetor/niner/LoginEmDuasEtapasTest.java` (9 casos).
 
 ## Tela
 

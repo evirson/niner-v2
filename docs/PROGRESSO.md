@@ -35,6 +35,12 @@ Registro cronológico das decisões e entregas. Atualizar a cada marco relevante
 >    `@Transactional` por hábito fazia o rollback da exceção de erro apagar o incremento que
 >    acabara de ser gravado. Medido: cinco erros deixavam o banco em `tentativas = 0`. Nada na tela
 >    mudaria.
+> 7. **Auditoria de segurança do ERP inteiro** (agentes em background, front + back). ⭐ O resultado
+>    mais valioso foi o **descarte**: P8 (isolamento de tenant) e injeção de SQL saíram limpos, com
+>    medida — **671 referências a tabela de domínio com alias, todas** filtrando `id_tenant`, e os 18
+>    `ORDER BY` do cliente todos por allowlist. Os buracos estão no RBAC novo, no bloco fiscal e no
+>    login. Três achados eram do 2FA escrito horas antes e **já foram corrigidos e medidos**; o
+>    restante está em `docs/PENDENCIAS.md` esperando decisão do dono do produto.
 >
 > Detalhe de cada uma: `docs/telas/login.md`, `ramo-atividade.md`, `contratacao-grupo.md`,
 > `usuario-permissoes.md`, `login-duas-etapas.md` e `docs/infra/parque-de-celulas.md`.

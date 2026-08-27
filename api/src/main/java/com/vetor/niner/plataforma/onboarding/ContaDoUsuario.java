@@ -1,5 +1,6 @@
 package com.vetor.niner.plataforma.onboarding;
 
+import com.vetor.niner.identidade.usuario.HorarioAcessoService;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -25,9 +26,11 @@ import static org.springframework.http.HttpStatus.UNAUTHORIZED;
 public class ContaDoUsuario {
 
     private final JdbcClient jdbc;
+    private final HorarioAcessoService horarioAcesso;
 
-    public ContaDoUsuario(JdbcClient jdbc) {
+    public ContaDoUsuario(JdbcClient jdbc, HorarioAcessoService horarioAcesso) {
         this.jdbc = jdbc;
+        this.horarioAcesso = horarioAcesso;
     }
 
     @Transactional
@@ -52,6 +55,24 @@ public class ContaDoUsuario {
             throw new ResponseStatusException(UNAUTHORIZED, "Credenciais inválidas.");
         }
         return dados;
+    }
+
+    /**
+     * Confere a janela de horário de acesso <b>dentro</b> de uma transação com o tenant posto.
+     *
+     * <p>⚠️ <b>Chamar {@code HorarioAcessoService.podeAcessarAgora} direto daqui do caminho público
+     * não bloqueia nada.</b> A consulta dele termina em {@code AND u.id_tenant =
+     * plataforma.tenant_atual()}; a segunda etapa do login roda sem {@code TenantContext} (é
+     * pública — o token ainda não existe), então a consulta casa <b>zero linhas</b>, o
+     * {@code .optional()} vem vazio e o {@code .orElse(true)} do serviço responde "pode acessar".
+     * SELECT vazio lido como permissão. Medido: operador com janela até 18:00 entrava às 18:05
+     * pela segunda etapa. É por isso que a checagem passa por aqui.
+     */
+    @Transactional
+    public boolean podeAcessarAgora(long idTenant, long idUsuario) {
+        jdbc.sql("SELECT set_config('app.id_tenant', ?, true)")
+                .param(Long.toString(idTenant)).query(String.class).single();
+        return horarioAcesso.podeAcessarAgora(idUsuario, 0);
     }
 
     public record Dados(String nome, String email, boolean administrador, boolean ativo, String slug) {

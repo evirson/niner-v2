@@ -478,7 +478,9 @@ public class SignupService {
 
         // Horário de acesso conferido de novo: entre a senha e o código passam até 10 minutos, e a
         // janela pode ter fechado no meio.
-        if (!horarioAcesso.podeAcessarAgora(d.idUsuario(), 0)) {
+        // ⚠️ Via `contas`, nunca direto: este caminho é público e não tem TenantContext — o
+        // serviço de horário consultado sem tenant devolve vazio e responde "pode acessar".
+        if (!contas.podeAcessarAgora(d.idTenant(), d.idUsuario())) {
             throw new ResponseStatusException(FORBIDDEN, HorarioAcessoService.MENSAGEM_FORA_DA_JANELA);
         }
         return emitirToken(d.idUsuario(), d.idTenant(), d.idEmpresa(), dados.email(),
