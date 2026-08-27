@@ -12,6 +12,7 @@ import {
   IconeProximaPagina,
   IconeUltimaPagina,
   IconeUsuario,
+  IconeCadeado,
 } from '../../components/Icones'
 import Toast, { type TipoToast } from '../../components/Toast'
 import { ApiError } from '../../lib/api'
@@ -215,6 +216,18 @@ export default function UsuarioLista() {
                     >
                       <IconeEditar />
                     </Link>
+                    {/* O administrador não tem grade: ele pode tudo, por definição — oferecer o
+                        link levaria a uma tela que só diria isso. */}
+                    {!u.administrador && (
+                      <Link
+                        className="acao-icone"
+                        to={`/usuarios/${u.idUsuario}/permissoes`}
+                        aria-label={`Permissões de ${u.nome}`}
+                        title="Permissões"
+                      >
+                        <IconeCadeado />
+                      </Link>
+                    )}
                     <button
                       type="button"
                       className="acao-icone acao-excluir"

@@ -1,4 +1,5 @@
 import type { ReactElement } from 'react'
+import { chaveDaRota } from './permissoes'
 import {
   IconeCanais,
   IconeCancelamentoVenda,
@@ -647,6 +648,33 @@ export function filtrarPorPapel(nos: NavNode[], isAdmin: boolean): NavNode[] {
       resultado.push({ ...n, itens: filhos })
     } else {
       if (n.adminOnly && !isAdmin) continue
+      resultado.push(n)
+    }
+  }
+  return resultado
+}
+
+
+/**
+ * Remove do menu as telas que o usuário não pode ACESSAR (RBAC, V073).
+ *
+ * ⚠️ Complementa `filtrarPorPapel`, não o substitui: aquele trata do que é exclusivo do
+ * administrador por natureza (Configurações, DRE), este trata do que o administrador concedeu a
+ * cada usuário. Uma tela precisa passar pelos dois.
+ *
+ * ⚠️ `chavesPermitidas` vazio significa "ainda não carregou" e devolve o menu inteiro — o
+ * contrário faria o menu piscar vazio a cada abertura, e um menu que aparece vazio por meio
+ * segundo parece sistema quebrado. Quem carrega decide quando aplicar.
+ */
+export function filtrarPorPermissao(nos: NavNode[], chavesPermitidas: Set<string> | null): NavNode[] {
+  if (!chavesPermitidas) return nos
+  const resultado: NavNode[] = []
+  for (const n of nos) {
+    if (eGrupo(n)) {
+      const filhos = filtrarPorPermissao(n.itens, chavesPermitidas)
+      if (filhos.length === 0 && n.itens.length > 0) continue
+      resultado.push({ ...n, itens: filhos })
+    } else if (chavesPermitidas.has(chaveDaRota(n.to))) {
       resultado.push(n)
     }
   }

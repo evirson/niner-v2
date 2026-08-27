@@ -38,6 +38,23 @@ function configuracaoDeTela(cadastro: string): ConteudoAjuda {
 }
 
 const CONTEUDOS: Record<string, ConteudoAjuda> = {
+  'usuario-permissoes': {
+    titulo: 'Permissões do usuário',
+    objetivo: 'Escolher, tela a tela, o que este usuário pode fazer no sistema.',
+    passos: [
+      'Cada linha é uma tela. "Acessar" libera a tela; "Incluir", "Alterar" e "Excluir" liberam o que ele pode fazer dentro dela.',
+      'Sem "Acessar", as outras três não valem — e ficam desabilitadas.',
+      'Use "Liberar grupo" ou "Bloquear grupo" para tratar um bloco inteiro de uma vez.',
+      'Clique em "Salvar". A mudança vale na hora, sem o usuário precisar sair e entrar.',
+    ],
+    errosComuns: [
+      'Usuário novo não enxerga nada até você liberar — é de propósito: o contrário deixaria toda tela nova aberta para todo mundo.',
+      'O administrador não aparece nesta lista: ele pode tudo, e isso não se configura.',
+      'Telas exclusivas do administrador (Configurações, DRE, Lucratividade) não podem ser concedidas a ninguém.',
+      'Esconder a tela do menu é conveniência; quem realmente bloqueia é o servidor, a cada operação.',
+    ],
+    urlVideo: null,
+  },
   'cadastros.cliente.lista': {
     titulo: 'Clientes',
     objetivo: 'Encontrar e gerenciar os clientes já cadastrados.',

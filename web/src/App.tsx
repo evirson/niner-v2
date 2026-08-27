@@ -29,6 +29,7 @@ import ProdutoForm from './pages/produtos/ProdutoForm'
 import ConfiguracaoTelaProduto from './pages/produtos/ConfiguracaoTelaProduto'
 import UsuarioLista from './pages/usuarios/UsuarioLista'
 import UsuarioForm from './pages/usuarios/UsuarioForm'
+import UsuarioPermissoes from './pages/usuarios/UsuarioPermissoes'
 import EmpresaLista from './pages/identidade/EmpresaLista'
 import MinhaConta from './pages/plataforma/MinhaConta'
 import EmpresaForm from './pages/identidade/EmpresaForm'
@@ -216,6 +217,7 @@ export default function App() {
             <Route path="/empresas/:id" element={<EmpresaForm />} />
             <Route path="/usuarios" element={<UsuarioLista />} />
             <Route path="/usuarios/novo" element={<UsuarioForm />} />
+            <Route path="/usuarios/:id/permissoes" element={<UsuarioPermissoes />} />
             <Route path="/usuarios/:id/visualizar" element={<UsuarioForm somenteLeitura />} />
             <Route path="/usuarios/:id" element={<UsuarioForm />} />
             <Route path="/etiqueta-configuracao" element={<EtiquetaConfigLista />} />
