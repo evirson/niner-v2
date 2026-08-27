@@ -41,6 +41,21 @@ Nainer é um **ERP em nuvem (SaaS por assinatura)** da Vetor Sistemas para o **p
 
 ## 5. Planos e preços — faixas por volume (ADR-015)
 
+
+> ⭐ **Revisão de 2026-08-27 — a cobrança passa a ser por CNPJ contratado.** Cinco regras, ditadas
+> pelo dono do produto:
+> 1. Dentro do mesmo tenant, **CNPJ e usuários são ilimitados** (não há trava de quantidade).
+> 2. **A cobrança é por CNPJ contratado** — nos planos pagos, cada CNPJ pesa no valor.
+> 3. **A isenção é de 100 vendas por tenant**, somando todos os CNPJs — quem fica abaixo disso
+>    não paga nada, tendo 1 ou 5 CNPJs. É exatamente como `LimiteVendasService` já mede.
+> 4. O plano (grátis ou pago) é **escolhido na contratação**; os planos pagos serão definidos.
+> 5. **O plano é do TENANT, não da empresa** — dentro de um tenant, ou é tudo grátis ou tudo pago.
+>
+> ⚠️ Isto **substitui** a decisão do ADR-015 de que CNPJ seria ilimitado e não cobrado. A
+> alternativa "cobrar por CNPJ" tinha sido rejeitada ali com o argumento de que criaria o
+> incentivo de espremer tudo num CNPJ só, piorando o dado fiscal; a regra 3 é o que segura esse
+> incentivo, porque abrir um segundo CNPJ **não custa nada** enquanto o volume couber na isenção.
+
 **Plano Gratuito — sem prazo de validade.** Até **100 vendas/mês** (o contador zera na virada do mês), com **todas** as funcionalidades liberadas, inclusive o módulo fiscal, e **CNPJs, usuários e produtos ilimitados**. Não existe data de expiração: quem vende pouco usa de graça para sempre.
 
 **Faixas pagas — geradas por fórmula, não digitadas.** A faixa *n* cobre `passo × n` vendas/mês e custa:
@@ -70,7 +85,7 @@ anual(n)  = mensal(n) × 12 × (1 − desconto_anual)
 *Exemplo ilustrativo* com `preco_base = R$ 99`, `f = 1` e teto `R$ 990`: 500 → R$ 99 · 1.000 → R$ 198 · 1.500 → R$ 297 · 5.000 → R$ 990 (teto) · acima → R$ 990. Com `f = 0,8`: 500 → R$ 99 · 1.000 → R$ 178,20 · 1.500 → R$ 241,56. **Os números da tabela acima são o que decide** — este exemplo não é compromisso de preço.
 
 **Política de limite (R19, reescrita):**
-- **Vendas/mês é a única dimensão medida.** Estruturais (canais, SKUs, usuários, CNPJs) ficam **ilimitados** em todos os planos.
+- **Vendas/mês é a única dimensão MEDIDA** (o que barra a venda no PDV). Estruturais (canais, SKUs, usuários, CNPJs) não têm trava de quantidade. ⚠️ Desde 2026-08-27, porém, **CNPJ entra no PREÇO** do plano pago — medir e cobrar deixaram de ser a mesma lista.
 - **Cota conta venda emitida; cancelamento não devolve.** Não contam: importação de dados legada e devolução.
 - **Escalada de aviso:** 80% da cota (aviso) → 100% (aviso forte, entra na tolerância) → tolerância esgotada (**bloqueia só a emissão de venda nova**; login, relatórios, recebimentos e financeiro continuam funcionando).
 
@@ -152,7 +167,7 @@ Regra prática: qualquer coisa com *assinatura/plano/trial/mensalidade/gateway* 
 | D1 | Modelo de preço | ✅ **Fechada (2026-08-18, ADR-015):** Gratuito até 100 vendas/mês + faixas por volume geradas por fórmula, anual −15%. 🔴 Falta só **preencher os parâmetros** (`preco_base`, `fator_faixa`, `preco_maximo`, `vendas_maximo`, `tolerancia_vendas`) — são dado, não código. |
 | D2 | Trial por tempo | ⛔ **Superada (2026-08-18, ADR-015)** — não há mais trial: o plano Gratuito não expira, limita volume. |
 | D3 | Gateway de cobrança | ✅ **Fechada (2026-08-18, ADR-016):** **Mercado Pago** — PIX avulso mensal + recorrência (preapproval), atrás da interface `GatewayCobranca`. Integração já dominada pela equipe (`ecommerce-revo`, `s7classificados`). |
-| D4 | Multi-CNPJ por tenant | ✅ **Revisada (2026-08-18, ADR-015):** **ilimitado em todos os planos**, criado pelo próprio ADMIN no painel. Não é recurso de plano — a cota de vendas soma todos os CNPJs. |
+| D4 | Multi-CNPJ por tenant | ✅ **Revisada de novo (2026-08-27):** ilimitado em quantidade, mas **a cobrança é por CNPJ contratado** nos planos pagos; a isenção de 100 vendas continua somando todos. ⛔ E a inclusão **sai do ERP**: passa a ser feita na tela de contratação, porque incluir CNPJ virou ato comercial. |
 | D5 | Nome comercial "Nainer" + domínio do site | 🔴 Confirmar |
 | D6 | NFS-e da assinatura (Vetor→lojista): emissor/município | 🔴 Aberta |
 | D7 | Overage | ✅ **Revisada (2026-08-18):** vendas/mês tem **tolerância configurável** antes do bloqueio; pedido de marketplace importado nunca é descartado (regra original mantida). |

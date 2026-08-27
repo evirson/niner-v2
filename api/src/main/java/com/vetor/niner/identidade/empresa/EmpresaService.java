@@ -64,6 +64,17 @@ public class EmpresaService {
      * criada no signup), {@code cfg_nome_etiqueta} padrão, e o vínculo em {@code usuario_empresa}
      * do ADMIN que criou — sem ele, a empresa nova não apareceria para ninguém no login.
      *
+     * <p>⛔ <b>Este caminho não pode ganhar tela dentro do ERP</b> (decisão do dono do produto,
+     * 2026-08-27): incluir CNPJ deixou de ser ato operacional e virou <b>ato comercial</b>, porque
+     * a cobrança passou a ser por CNPJ contratado. A inclusão acontece na <b>tela de
+     * contratação</b>, que é quem apresenta o plano e a escolha entre acrescentar ao grupo
+     * existente ou abrir um grupo separado. O endpoint continua existindo para servir a esse
+     * fluxo — hoje ele não é alcançável por nenhuma tela do `web/`.
+     *
+     * <p>⚠️ O que <b>não</b> mudou: a cota de vendas continua sendo do TENANT, somando todos os
+     * CNPJs (regra 3 de 2026-08-27) — incluir um CNPJ não cria cota nova nem assinatura nova.
+     * O plano é do tenant, nunca da empresa.
+     *
      * <p>O que <b>não</b> nasce junto: plano de contas, tipos de carteira e perfis fiscais são
      * <b>por tenant</b> (ver {@code SignupService.assinar}) e já existem; {@code
      * fiscal_config_empresa} é por empresa, mas só é criada quando o lojista ligar o fiscal
