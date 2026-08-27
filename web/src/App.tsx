@@ -2,7 +2,9 @@ import { Navigate, Route, Routes } from 'react-router-dom'
 import RequireAdmin from './components/RequireAdmin'
 import RequireAuth from './components/RequireAuth'
 import Layout from './components/Layout'
+import EsqueciSenha from './pages/EsqueciSenha'
 import Login from './pages/Login'
+import RedefinirSenha from './pages/RedefinirSenha'
 import Dashboard from './pages/Dashboard'
 import EmBreve from './pages/EmBreve'
 import MenuGrupo from './pages/MenuGrupo'
@@ -88,6 +90,11 @@ export default function App() {
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
+      {/* Públicas como o /login: quem esqueceu a senha, por definição, não está autenticado.
+          `/redefinir-senha` é o destino do link que o e-mail já mandava desde antes de a rota
+          existir — mudar este caminho quebra links vivos na caixa de entrada de alguém. */}
+      <Route path="/esqueci-senha" element={<EsqueciSenha />} />
+      <Route path="/redefinir-senha" element={<RedefinirSenha />} />
       <Route element={<RequireAuth />}>
         <Route element={<Layout />}>
           <Route path="/" element={<Dashboard />} />

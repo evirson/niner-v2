@@ -11,6 +11,8 @@ import org.springframework.context.annotation.Import;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -23,6 +25,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.http.MediaType.APPLICATION_JSON;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -46,20 +49,18 @@ class RecuperacaoSenhaTest {
     @MockitoBean
     EmailService email;
 
-    private String criarLoja(String sufixo) throws Exception {
-        String resp = mvc.perform(post("/api/publico/assinar").contentType(APPLICATION_JSON)
+    private void criarLoja(String sufixo) throws Exception {
+        mvc.perform(post("/api/publico/assinar").contentType(APPLICATION_JSON)
                         .content("""
                                 {"nomeLoja":"Loja Senha %s","email":"dono%s@lojasenha.com",
                                  "senha":"senhaAntiga1","nomeAdmin":"Dono"}
                                 """.formatted(sufixo, sufixo)))
-                .andExpect(status().isCreated())
-                .andReturn().getResponse().getContentAsString();
-        return JsonPath.read(resp, "$.slug");
+                .andExpect(status().isCreated());
     }
 
-    private void solicitar(String slug, String emailUsuario) throws Exception {
+    private void solicitar(String emailUsuario) throws Exception {
         mvc.perform(post("/api/publico/recuperar-senha").contentType(APPLICATION_JSON)
-                        .content("{\"slug\":\"%s\",\"email\":\"%s\"}".formatted(slug, emailUsuario)))
+                        .content("{\"email\":\"%s\"}".formatted(emailUsuario)))
                 .andExpect(status().isNoContent());
     }
 
@@ -77,33 +78,33 @@ class RecuperacaoSenhaTest {
                 .andExpect(status().is(statusEsperado));
     }
 
-    private void login(String slug, String emailUsuario, String senha, int statusEsperado) throws Exception {
+    private void login(String emailUsuario, String senha, int statusEsperado) throws Exception {
         mvc.perform(post("/api/publico/login").contentType(APPLICATION_JSON)
-                        .content("{\"slug\":\"%s\",\"email\":\"%s\",\"senha\":\"%s\"}"
-                                .formatted(slug, emailUsuario, senha)))
+                        .content("{\"email\":\"%s\",\"senha\":\"%s\"}"
+                                .formatted(emailUsuario, senha)))
                 .andExpect(status().is(statusEsperado));
     }
 
     @Test
     void fluxoCompletoTrocaASenhaEInvalidaAAntiga() throws Exception {
         when(email.enviar(anyString(), anyString(), anyString())).thenReturn(true);
-        String slug = criarLoja("fluxo");
+        criarLoja("fluxo");
         String usuario = "donofluxo@lojasenha.com";
 
-        solicitar(slug, usuario);
+        solicitar(usuario);
         redefinir(capturarToken(), "senhaNova2026", 204);
 
-        login(slug, usuario, "senhaNova2026", 200);
-        login(slug, usuario, "senhaAntiga1", 401);
+        login(usuario, "senhaNova2026", 200);
+        login(usuario, "senhaAntiga1", 401);
     }
 
     @Test
     void naoRevelaSeAContaExiste() throws Exception {
-        String slug = criarLoja("sigilo");
+        criarLoja("sigilo");
 
         // Loja existente + e-mail inexistente, e loja inexistente: os dois respondem 204…
-        solicitar(slug, "nao-existe@lojasenha.com");
-        solicitar("loja-que-nao-existe", "qualquer@email.com");
+        solicitar("nao-existe@lojasenha.com");
+        solicitar("qualquer@email.com");
 
         // …e nenhum e-mail sai, então nem o tempo de resposta entrega a diferença.
         verify(email, never()).enviar(eq("nao-existe@lojasenha.com"), anyString(), anyString());
@@ -113,35 +114,90 @@ class RecuperacaoSenhaTest {
     @Test
     void tokenValeUmaVezSo() throws Exception {
         when(email.enviar(anyString(), anyString(), anyString())).thenReturn(true);
-        String slug = criarLoja("umavez");
-        solicitar(slug, "donoumavez@lojasenha.com");
+        criarLoja("umavez");
+        solicitar("donoumavez@lojasenha.com");
         String token = capturarToken();
 
         redefinir(token, "primeiraNova123", 204);
         redefinir(token, "segundaNova123", 400);
-        login(slug, "donoumavez@lojasenha.com", "primeiraNova123", 200);
+        login("donoumavez@lojasenha.com", "primeiraNova123", 200);
     }
 
     @Test
     void pedidoNovoInvalidaOAnterior() throws Exception {
         when(email.enviar(anyString(), anyString(), anyString())).thenReturn(true);
-        String slug = criarLoja("doispedidos");
+        criarLoja("doispedidos");
         String usuario = "donodoispedidos@lojasenha.com";
 
-        solicitar(slug, usuario);
+        solicitar(usuario);
         String tokenAntigo = capturarToken();
-        solicitar(slug, usuario);
+        solicitar(usuario);
         String tokenNovo = capturarToken();
 
         assertThat(tokenNovo).isNotEqualTo(tokenAntigo);
         redefinir(tokenAntigo, "naoDeveValer1", 400);   // link velho esquecido na caixa de entrada
         redefinir(tokenNovo, "valeSim123456", 204);
-        login(slug, usuario, "valeSim123456", 200);
+        login(usuario, "valeSim123456", 200);
     }
 
     @Test
     void tokenInventadoNaoRedefine() throws Exception {
         redefinir("token-que-nunca-existiu", "qualquerCoisa1", 400);
         verify(email, never()).enviar(anyString(), anyString(), any());
+    }
+    /**
+     * ⚠️ O mesmo e-mail pode estar em mais de uma conta (o dono que vende cosméticos numa e
+     * sapatos noutra). Chega **um** e-mail com **um link por conta**, cada um nomeando a conta —
+     * senão a pessoa recebe dois links idênticos e redefine a senha da conta errada.
+     */
+    @Test
+    void umEmailEmDuasContasRecebeUmLinkParaCada() throws Exception {
+        when(email.enviar(anyString(), anyString(), anyString())).thenReturn(true);
+        String compartilhado = "dono-duas-contas@lojasenha.com";
+        criarContaCom("Sapataria Senha", "sapataria-senha@lojasenha.com", compartilhado, "senhaSapato1");
+        criarContaCom("Padaria Senha", "padaria-senha@lojasenha.com", compartilhado, "senhaPao12345");
+
+        solicitar(compartilhado);
+
+        ArgumentCaptor<String> corpo = ArgumentCaptor.forClass(String.class);
+        verify(email, atLeastOnce()).enviar(eq(compartilhado), anyString(), corpo.capture());
+        String html = corpo.getAllValues().getLast();
+
+        Matcher m = LINK.matcher(html);
+        List<String> tokens = new ArrayList<>();
+        while (m.find()) {
+            tokens.add(m.group(1));
+        }
+        assertThat(tokens).as("um token por conta").hasSize(2);
+        assertThat(tokens.get(0)).isNotEqualTo(tokens.get(1));
+        assertThat(html).contains("Sapataria Senha").contains("Padaria Senha");
+
+        // E cada token redefine a senha da SUA conta: depois de usar o primeiro, a senha antiga
+        // da outra conta continua valendo.
+        redefinir(tokens.get(0), "trocadaAgora1", 204);
+        login(compartilhado, "trocadaAgora1", 200);
+    }
+
+    /** Conta criada com um usuário extra, para pôr o mesmo e-mail em dois tenants. */
+    private void criarContaCom(String nomeLoja, String emailDono, String emailExtra, String senhaExtra)
+            throws Exception {
+        String resp = mvc.perform(post("/api/publico/assinar").contentType(APPLICATION_JSON)
+                        .content("""
+                                {"nomeLoja":"%s","email":"%s","senha":"senhaAntiga1","nomeAdmin":"Dono"}
+                                """.formatted(nomeLoja, emailDono)))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        String token = JsonPath.read(resp, "$.token");
+
+        String eu = mvc.perform(get("/api/v1/eu").header("Authorization", "Bearer " + token))
+                .andReturn().getResponse().getContentAsString();
+        long idEmpresa = ((Number) JsonPath.read(eu, "$.empresa.idEmpresa")).longValue();
+
+        mvc.perform(post("/api/v1/usuarios").header("Authorization", "Bearer " + token)
+                        .contentType(APPLICATION_JSON).content("""
+                                {"nome":"Dono Repetido","email":"%s","senha":"%s","administrador":false,
+                                 "idsEmpresa":[%d]}
+                                """.formatted(emailExtra, senhaExtra, idEmpresa)))
+                .andExpect(status().isCreated());
     }
 }

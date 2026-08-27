@@ -122,9 +122,47 @@ nasce ligada sem que nada no arquivo da migration diga isso.
 
 Testes: `api/src/test/java/com/vetor/niner/LoginSemIdentificadorTest.java` (8 casos).
 
-## Pendente
+## Recuperação de senha (2026-08-27, no mesmo dia)
 
-A **recuperação de senha** ainda exige o identificador — e o front **não tem tela nenhuma** para
-ela (o e-mail aponta para `/redefinir-senha`, rota que não existe no `web/`). Isso só apareceu em
-2026-08-27, quando o SMTP foi configurado e o sistema enviou o primeiro e-mail da sua vida. É a
-etapa 2 deste trabalho.
+A tela de login ganhou **"Esqueci minha senha"**, e o fluxo inteiro passou a existir de ponta a
+ponta. Antes deste dia ele estava pela metade: o backend existia, mas **nenhuma tela** — e o link
+que o e-mail mandava (`{web-base-url}/redefinir-senha?token=…`) apontava para uma rota que **não
+existia no `web/`**. Ninguém tinha notado porque o sistema nunca havia enviado um e-mail: o SMTP
+foi configurado nesta mesma manhã.
+
+**O pedido também perdeu o identificador.** Era o pior lugar para exigi-lo — quem esqueceu a senha
+não lembra de um valor que o sistema inventou — e, como a resposta é sempre `204`, errá-lo
+significava **nenhum e-mail chegando, sem explicação**.
+
+**Um e-mail, um link por conta.** Se o e-mail estiver em mais de uma conta, chega uma única
+mensagem com uma linha por conta, cada uma nomeando-a ("Redefinir a senha de **SAPATARIA**").
+Sem isso a pessoa receberia dois links idênticos e redefiniria a senha da conta errada.
+
+⚠️ **O caminho `/redefinir-senha` não pode ser renomeado**: ele é o destino de links que vivem 2
+horas na caixa de entrada de alguém.
+
+⚠️ Conta **inativa** é pulada em silêncio ao montar o e-mail: mandar um link que não vai
+funcionar é pior do que não mandar linha nenhuma para ela.
+
+Telas: `web/src/pages/EsqueciSenha.tsx` (pede o e-mail) e `RedefinirSenha.tsx` (cria a senha).
+A tela de pedido responde no **condicional** ("se houver uma conta com esse e-mail") — afirmar que
+o e-mail foi enviado seria mentir em metade dos casos, já que a API responde igual para conta
+inexistente.
+
+Testes: `RecuperacaoSenhaTest` (6 casos, incluindo o e-mail em duas contas recebendo um link para
+cada).
+
+### Critérios de aceitação
+
+- **Dado** um e-mail com conta, **quando** ele pede a redefinição **sem informar identificador**,
+  **então** o e-mail sai com o link e o pedido anterior daquele usuário é invalidado.
+- **Dado** um e-mail em **duas** contas, **então** chega **um** e-mail com **dois** links, cada um
+  nomeando a sua conta.
+- **Dado** um e-mail sem conta nenhuma, **então** a resposta é `204` e **nenhum** e-mail sai.
+- **Dado** um token já usado, expirado ou inventado, **então** a redefinição responde `400` e a
+  tela **mostra a mensagem do servidor**, não uma genérica.
+
+⚠️ **O que não foi exercitado na tela real:** o caminho com token **válido**. Ele está coberto no
+teste automatizado (que captura o link do e-mail dublado) e a tela foi verificada com token
+inválido; para fechar no navegador basta clicar no link de um e-mail de verdade — o que **troca a
+senha da conta**, e por isso não foi feito com a conta de desenvolvimento.

@@ -1,6 +1,6 @@
 import { SITE_BASE } from '../lib/config'
 import { useState, type FormEvent } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import Toast from '../components/Toast'
 import { api, ApiError } from '../lib/api'
 import { useAuth } from '../lib/auth'
@@ -39,6 +39,11 @@ interface LoginResp {
 export default function Login() {
   const { login } = useAuth()
   const navigate = useNavigate()
+  const location = useLocation()
+  // Mensagem vinda de outra tela (hoje: "Senha alterada", enviada por RedefinirSenha ao
+  // devolver o usuário para cá). Sem isto o aviso seria montado e nunca exibido.
+  const avisoDeOutraTela = (location.state as { toast?: { texto: string } } | null)?.toast?.texto ?? ''
+  const [sucesso, setSucesso] = useState(avisoDeOutraTela)
   const [email, setEmail] = useState('')
   const [senha, setSenha] = useState('')
   const [erro, setErro] = useState('')
@@ -142,9 +147,13 @@ export default function Login() {
         <input id="senha" type="password" value={senha} onChange={(e) => setSenha(e.target.value)} required />
 
         {erro && <Toast mensagem={erro} aoFechar={() => setErro('')} />}
+        {sucesso && <Toast mensagem={sucesso} tipo="sucesso" aoFechar={() => setSucesso('')} />}
         <button className="btn" type="submit" disabled={carregando} style={{ width: '100%', marginTop: 12 }}>
           {carregando ? 'Entrando…' : 'Entrar'}
         </button>
+        <p className="muted" style={{ fontSize: 13, marginTop: 14, textAlign: 'center' }}>
+          <Link to="/esqueci-senha">Esqueci minha senha</Link>
+        </p>
         <p className="muted" style={{ fontSize: 13, marginTop: 14 }}>
           Ainda não tem conta?{' '}
           {/* Texto do trial de 14 dias sobreviveu a DUAS mudanças de modelo comercial (14 → 60

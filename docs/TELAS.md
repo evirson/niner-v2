@@ -1,6 +1,6 @@
 # Telas do Nainer — inventário completo
 
-> Gerado a partir de `web/src/lib/menu.ts` + `web/src/App.tsx` em 2026-08-25.
+> Gerado a partir de `web/src/lib/menu.ts` + `web/src/App.tsx` em 2026-08-25; as telas de entrada foram acrescentadas em 2026-08-27 (elas não estão no menu, por serem públicas).
 >
 > ⚠️ **É retrato do CÓDIGO, não da intenção.** Se divergir de outra documentação, o código
 > está certo e a outra doc envelheceu.
@@ -8,6 +8,16 @@
 > A coluna **Spec** é casada por semelhança de nome, com um de-para manual para os casos em
 > que o arquivo tem outro nome. ⚠️ Um `—` ali significa *não encontrei*, **não** *não existe*.
 
+
+## Entrada (públicas, sem login)
+
+| Tela | Rota | Spec |
+|---|---|---|
+| Entrar | `/login` | `docs/telas/login.md` · `login-empresa.md` |
+| Esqueci minha senha | `/esqueci-senha` | `docs/telas/login.md` |
+| Criar senha nova | `/redefinir-senha` | `docs/telas/login.md` |
+
+⚠️ `/redefinir-senha` é o destino do link enviado por e-mail — renomear a rota quebra links vivos.
 
 ## Frente de Loja
 

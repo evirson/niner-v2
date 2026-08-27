@@ -11,10 +11,10 @@
 > **Como apresentar:** resumido e **agrupado por dono**, não as ~27 linhas cruas — ele já reclamou
 > de informação demais de uma vez (*"TA MUITO CONFUSO"*).
 >
-> **Última revisão:** 2026-08-27 (registrada a pedido dele: *"deixe todas estas pendências
+> **Última revisão:** 2026-08-27, fim do dia (registrada a pedido dele: *"deixe todas estas pendências
 > documentadas, não esqueça de nada, e quando eu te perguntar as pendências você me fala"*).
 
-**Estado na data desta revisão:** 60 telas em uso · 1088 testes verdes · `main` em `7792b5d`.
+**Estado na data desta revisão:** 62 telas em uso · 1105 testes verdes (medido, não estimado).
 
 ---
 
@@ -153,7 +153,41 @@ Lote de 25 × timeout de 30 s. Desenho **preexistente**; risco registrado, a med
 
 ---
 
+## Abertos em 2026-08-27 (trabalho do dia)
+
+### 28. Planos pagos não estão definidos 🔵
+A contratação vai perguntar se o cliente quer o plano grátis ou pago, mas **as faixas pagas não
+existem** — nem preço, nem regra de quanto pesa cada CNPJ. Enquanto isso, a tela de contratação só
+consegue oferecer o gratuito. **Bola dele.**
+
+### 29. Tela de contratação com escolha de grupo (parte 2 do ramo) 🟢
+Comparar o ramo da empresa que entra com o das empresas do tenant e, quando diferentes, oferecer
+**mesmo grupo × grupo separado** explicando o impacto: mesmo grupo dá visão consolidada mas mistura
+cadastros; grupo separado limpa o cadastro mas **elimina a visão de grupo para sempre**, e são duas
+assinaturas. Combinado que a contratação acontece **fora do ERP**, na tela de contratação.
+**Bola minha**, depende do item 28 para a parte de planos.
+
+### 30. SPF/DKIM/DMARC do domínio `nainer.com.br` 🔵
+O SMTP da Hostinger foi configurado hoje e o e-mail chega, mas sem esses registros a mensagem tende
+a cair em spam nos destinatários. Ajuste no painel da Hostinger. **Bola dele.**
+
+### 31. ⚠️ Conferir 3 campos da empresa que eu não consegui recuperar 🔵
+Um `PUT` de teste meu apagou a ficha fiscal da empresa 1 (detalhe e correção no histórico do dia).
+Restaurei tudo do XML da última NFC-e autorizada e o CNAE da consulta ao CNPJ — a Conformidade
+Fiscal voltou a dizer "Pronto para emitir". **Mas Inscrição Municipal, telefone e e-mail não
+estavam no XML**: se algum deles estava preenchido, precisa ser digitado de novo. **Bola dele.**
+
+### 32. Token válido de redefinição não foi exercitado na tela 🔵
+O fluxo tem teste automatizado ponta a ponta e a tela foi verificada com token inválido; o caminho
+feliz no navegador exige clicar num link de e-mail real, **o que troca a senha da conta**. Basta
+ele fazer uma vez com uma conta descartável. **Bola dele.**
+
 ## ✅ Fechadas recentemente (para não reabrir por engano)
+
+- **2026-08-27** — **Login sem identificador** (e-mail + senha; o mesmo e-mail pode estar em várias
+  contas) · **Recuperação de senha completa** (o link do e-mail apontava para uma rota que não
+  existia) · **SMTP configurado** — o sistema enviou o primeiro e-mail da sua vida · **Ramo de
+  atividade** (28 ramos, sugestão pelo CNAE do CNPJ) · **Cobrança por CNPJ** decidida e documentada.
 
 - **2026-08-26** — `fiscal.download` / DF22: **Exportação de XML em Lote** (`/fiscal/exportacao-xml`),
   validada com dados reais, na versão **síncrona e particionada** (o desenho assíncrono do
