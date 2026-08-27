@@ -47,7 +47,6 @@ public class ConfiguracaoGeralService {
 
     @Transactional(readOnly = true)
     public ConfiguracaoGeralResponse buscar(Jwt jwt) {
-        exigirAdmin(jwt);
         return buscarSemChecarPapel();
     }
 
@@ -225,7 +224,6 @@ public class ConfiguracaoGeralService {
 
     @Transactional
     public ConfiguracaoGeralResponse atualizar(Jwt jwt, ConfiguracaoGeralRequest req) {
-        exigirAdmin(jwt);
         // ⛔ "Se vende em marketplace, não pode existir estoque negativo" (2026-08-25). Este é o
         // SEGUNDO guarda — o primeiro barra a conexão do canal. Sem este, a loja conectaria o
         // canal com o controle ligado e religaria o parâmetro no dia seguinte, destravando o

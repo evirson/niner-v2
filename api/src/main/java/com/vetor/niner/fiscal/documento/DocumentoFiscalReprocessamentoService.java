@@ -62,9 +62,7 @@ public class DocumentoFiscalReprocessamentoService {
         this.arquivamento = arquivamento;
     }
 
-    public ReprocessamentoResponse reprocessar(Jwt jwt, long idDocumentoFiscal) {
-        exigirAdmin(jwt);
-        ContextoReprocessamento ctx = repositorio.buscarParaReprocessar(idDocumentoFiscal)
+    public ReprocessamentoResponse reprocessar(Jwt jwt, long idDocumentoFiscal) {        ContextoReprocessamento ctx = repositorio.buscarParaReprocessar(idDocumentoFiscal)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Documento fiscal não encontrado."));
 
         if (!"TRANSMITINDO".equals(ctx.situacao()) && !"ASSINADO".equals(ctx.situacao())) {

@@ -61,7 +61,6 @@ public class DocumentoFiscalConsultaService {
     @Transactional(readOnly = true)
     public PaginaDocumentosFiscais listar(Jwt jwt, long idEmpresa, LocalDate dataInicial, LocalDate dataFinal,
                                           Integer modelo, String situacao, Integer pagina, Integer limite) {
-        exigirAdmin(jwt);
         if (dataInicial == null || dataFinal == null) {
             throw new IllegalArgumentException("Informe a data inicial e a data final.");
         }
@@ -130,7 +129,6 @@ public class DocumentoFiscalConsultaService {
      */
     @Transactional(readOnly = true)
     public XmlDocumentoFiscalResponse buscarXml(Jwt jwt, long idDocumentoFiscal) {
-        exigirAdmin(jwt);
         var linha = jdbc.sql("""
                         SELECT chave_acesso, xml_assinado, xml_objeto_bucket FROM documento_fiscal
                          WHERE id_tenant = plataforma.tenant_atual() AND id_documento_fiscal = ?
@@ -164,7 +162,6 @@ public class DocumentoFiscalConsultaService {
      */
     @Transactional(readOnly = true)
     public DanfeResponse buscarDanfe(Jwt jwt, long idDocumentoFiscal) {
-        exigirAdmin(jwt);
 
         var cab = jdbc.sql("""
                         SELECT d.id_documento_fiscal, d.chave_acesso, d.modelo, d.serie, d.numero,
@@ -339,7 +336,6 @@ public class DocumentoFiscalConsultaService {
      * gravar é uma rotina separada (fora do escopo desta consulta pontual).
      */
     public ConsultaSefazResponse consultarNaSefaz(Jwt jwt, long idDocumentoFiscal) {
-        exigirAdmin(jwt);
         var ctx = repositorio.buscarContextoParaConsulta(idDocumentoFiscal)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Documento fiscal não encontrado."));
 

@@ -79,7 +79,6 @@ public class CancelamentoVendaService {
     public PaginaVendasCancelamento listar(Jwt jwt, Long numeroVenda, Long idEmpresa, Long idCliente,
                                             LocalDate dataInicial, LocalDate dataFinal, Long idFuncionario,
                                             Integer pagina, Integer limite, String ordenarPor, String direcao) {
-        exigirAdmin(jwt);
         int tamanho = limite == null ? TAMANHO_PAGINA_PADRAO : Math.min(Math.max(limite, 1), TAMANHO_PAGINA_MAXIMO);
         int paginaAtual = pagina == null ? 1 : Math.max(pagina, 1);
         String coluna = ordenarPor == null ? "v.data_venda" : COLUNAS_ORDENAVEIS.getOrDefault(ordenarPor, "v.data_venda");
@@ -181,7 +180,6 @@ public class CancelamentoVendaService {
 
     @Transactional(readOnly = true)
     public VendaDetalheCancelamentoResponse buscarDetalhe(Jwt jwt, long idVenda) {
-        exigirAdmin(jwt);
         Venda venda = buscarVenda(idVenda);
         List<ItemVendaDetalhe> itens = buscarItens(idVenda);
         List<PagamentoVendaDetalhe> pagamentos = buscarPagamentos(idVenda);
@@ -229,7 +227,6 @@ public class CancelamentoVendaService {
 
     @Transactional
     public CancelamentoEfetivadoResponse cancelar(Jwt jwt, long idVenda, CancelarVendaRequest req) {
-        exigirAdmin(jwt);
         long idUsuario = idUsuario(jwt);
 
         Cabecalho venda = jdbc.sql("""

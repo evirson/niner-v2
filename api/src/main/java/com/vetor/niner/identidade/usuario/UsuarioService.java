@@ -79,7 +79,6 @@ public class UsuarioService {
     @Transactional(readOnly = true)
     public PaginaUsuarios listar(Jwt jwt, String nome, String status, Integer pagina, Integer limite,
                                   String ordenarPor, String direcao) {
-        exigirAdmin(jwt);
         int tamanho = limite == null ? TAMANHO_PAGINA_PADRAO : Math.min(Math.max(limite, 1), TAMANHO_PAGINA_MAXIMO);
         int paginaAtual = pagina == null ? 1 : Math.max(pagina, 1);
         String coluna = ordenarPor == null ? "u.nome_usuario" : COLUNAS_ORDENAVEIS.getOrDefault(ordenarPor, "u.nome_usuario");
@@ -115,13 +114,11 @@ public class UsuarioService {
 
     @Transactional(readOnly = true)
     public UsuarioResponse buscar(Jwt jwt, long id) {
-        exigirAdmin(jwt);
         return montar(id);
     }
 
     @Transactional
     public UsuarioResponse criar(Jwt jwt, UsuarioRequest req) {
-        exigirAdmin(jwt);
         validar(req, true);
         try {
             long id = jdbc.sql("""
@@ -146,7 +143,6 @@ public class UsuarioService {
 
     @Transactional
     public UsuarioResponse atualizar(Jwt jwt, long id, UsuarioRequest req) {
-        exigirAdmin(jwt);
         validar(req, false);
         try {
             // administrador NUNCA entra aqui — nem pra manter o valor atual explicitamente,
@@ -191,7 +187,6 @@ public class UsuarioService {
      */
     @Transactional
     public ExclusaoUsuarioResponse excluir(Jwt jwt, long id) {
-        exigirAdmin(jwt);
         if (id == Long.parseLong(jwt.getSubject())) {
             throw new IllegalArgumentException("Você não pode excluir a própria conta.");
         }

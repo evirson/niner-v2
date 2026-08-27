@@ -117,6 +117,38 @@ permissão. Hoje a marca é item a item e espelha `cfg_tela.admin_apenas`.
 "Implementações Futuras". Tratar ausência como "proibida" faria qualquer tela nova sumir do menu
 no dia em que fosse criada, sem erro nenhum.
 
+
+## Ninguém delega o que não tem (2026-08-27)
+
+Regra dele: *"as permissões que ele pode delegar para este novo usuário são no máximo as
+permissões que ele tem"*. Configurar permissão deixou de ser exclusivo do administrador — passa a
+poder quem tem a tela **Usuários** com "alterar".
+
+⚠️ **O teto sozinho seria contornável em dois passos**, então vêm três travas juntas:
+
+1. **Teto** — não concede tela que não tem, nem ação que não tem dentro de uma tela que tem (quem
+   não pode excluir produto não dá "excluir produto" a ninguém).
+2. **Não edita a própria grade** — senão marca tudo para si e o teto vira decoração.
+3. **Não edita quem tem mais permissão que ele** — senão tira o acesso de um colega mais graduado,
+   ou usa a conta dele como degrau.
+
+O administrador não passa por nada disso: o teto dele é o sistema inteiro.
+
+## As travas antigas removidas
+
+Dez telas apareciam na grade mas tinham uma segunda tranca escrita no serviço ("só ADMIN"),
+anterior ao RBAC. Conceder a tela não surtia efeito: o operador via o item no menu, clicava e
+recebia acesso negado. **34 chamadas de  foram removidas** de Usuários, Parâmetros do
+Sistema e do bloco Fiscal inteiro — quem decide agora é a grade.
+
+Três casos especiais, decididos por ele tela a tela:
+
+| Tela | Decisão |
+|---|---|
+| Fechamento de Caixa | operador fecha o próprio; **reabrir continua só do administrador** |
+| Pesquisa de Vendas | operador **pode cancelar**, desde que o caixa esteja aberto (RN-02, que já existia) |
+| Entrada de Produtos | operador faz **tudo** |
+
 ## Estreia sem backfill
 
 Ligar a trava faz todo usuário sem grade receber 403 — e nenhuma grade existia. Como o Nainer

@@ -70,7 +70,6 @@ public class PerfilFiscalService {
     @Transactional(readOnly = true)
     public PaginaPerfisFiscais listar(Jwt jwt, String busca, Integer pagina, Integer limite,
                                       String ordenarPor, String direcao) {
-        exigirAdmin(jwt);
         int tamanho = limite == null ? TAMANHO_PAGINA_PADRAO : Math.min(Math.max(limite, 1), TAMANHO_PAGINA_MAXIMO);
         int paginaAtual = pagina == null ? 1 : Math.max(pagina, 1);
         String coluna = ordenarPor == null ? "p.nome" : COLUNAS_ORDENAVEIS.getOrDefault(ordenarPor, "p.nome");
@@ -114,7 +113,6 @@ public class PerfilFiscalService {
 
     @Transactional(readOnly = true)
     public PerfilFiscalResponse buscar(Jwt jwt, long id) {
-        exigirAdmin(jwt);
         return carregar(id);
     }
 
@@ -132,7 +130,6 @@ public class PerfilFiscalService {
 
     @Transactional
     public PerfilFiscalResponse criar(Jwt jwt, PerfilFiscalRequest req) {
-        exigirAdmin(jwt);
         validarRegras(req.regras());
         try {
             long id = jdbc.sql("""
@@ -151,7 +148,6 @@ public class PerfilFiscalService {
 
     @Transactional
     public PerfilFiscalResponse atualizar(Jwt jwt, long id, PerfilFiscalRequest req) {
-        exigirAdmin(jwt);
         validarRegras(req.regras());
         try {
             int linhas = jdbc.sql("""
@@ -179,7 +175,6 @@ public class PerfilFiscalService {
      */
     @Transactional
     public ExclusaoPerfilFiscalResponse excluir(Jwt jwt, long id) {
-        exigirAdmin(jwt);
         boolean temProduto = Boolean.TRUE.equals(jdbc.sql("""
                         SELECT EXISTS (SELECT 1 FROM produto
                                        WHERE id_tenant = plataforma.tenant_atual() AND id_perfil_fiscal = ?)

@@ -220,4 +220,123 @@ class PermissaoPorTelaTest {
                 "produtos deveria ter saído da grade");
         assertEquals(false, acao(agora, "clientes", "excluir"), "o segundo PUT não concedeu excluir");
     }
+/**
+     * ⚠️ <b>Ninguém delega o que não tem</b> — regra dele (2026-08-27): "as permissões que ele pode
+     * delegar para este novo usuário são no máximo as permissões que ele tem". O caso do enunciado:
+     * um usuário com Produtos, Usuários e PDV criando outro usuário.
+     */
+    @Test
+    void naoDelegaOQueNaoTem() throws Exception {
+        Conta c = contaComOperador("teto");
+        String url = "/api/v1/usuarios/" + c.idOperador() + "/permissoes";
+
+        mvc.perform(put(url).header("Authorization", "Bearer " + c.token()).contentType(APPLICATION_JSON)
+                        .content("""
+                                [{"chaveTela":"produtos","acessar":true,"incluir":true,"alterar":true,"excluir":false},
+                                 {"chaveTela":"usuarios","acessar":true,"incluir":true,"alterar":true,"excluir":false},
+                                 {"chaveTela":"pdv","acessar":true,"incluir":false,"alterar":false,"excluir":false}]
+                                """))
+                .andExpect(status().isOk());
+
+        String tokenOperador = entrar("opteto@lojarbac.com", "senha12345");
+        long idEmpresa = ((Number) JsonPath.read(
+                mvc.perform(get("/api/v1/eu").header("Authorization", "Bearer " + tokenOperador))
+                        .andReturn().getResponse().getContentAsString(), "$.empresa.idEmpresa")).longValue();
+
+        // Ele CRIA um usuário — o que só é possível porque a tela Usuários deixou de ser exclusiva
+        // do administrador e ele recebeu "incluir" nela.
+        String novo = mvc.perform(post("/api/v1/usuarios").header("Authorization", "Bearer " + tokenOperador)
+                        .contentType(APPLICATION_JSON).content("""
+                                {"nome":"Ajudante","email":"ajudante-teto@lojarbac.com","senha":"senha12345",
+                                 "administrador":false,"idsEmpresa":[%d]}
+                                """.formatted(idEmpresa)))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        String urlNovo = "/api/v1/usuarios/" + ((Number) JsonPath.read(novo, "$.idUsuario")).longValue()
+                + "/permissoes";
+
+        // TELA que ele não tem → recusado
+        mvc.perform(put(urlNovo).header("Authorization", "Bearer " + tokenOperador).contentType(APPLICATION_JSON)
+                        .content("""
+                                [{"chaveTela":"contas-pagar","acessar":true,"incluir":false,"alterar":false,"excluir":false}]
+                                """))
+                .andExpect(status().isForbidden());
+
+        // AÇÃO que ele não tem, numa tela que ele tem → recusado (ele não pode excluir produto)
+        mvc.perform(put(urlNovo).header("Authorization", "Bearer " + tokenOperador).contentType(APPLICATION_JSON)
+                        .content("""
+                                [{"chaveTela":"produtos","acessar":true,"incluir":true,"alterar":true,"excluir":true}]
+                                """))
+                .andExpect(status().isForbidden());
+
+        // dentro do teto → passa
+        mvc.perform(put(urlNovo).header("Authorization", "Bearer " + tokenOperador).contentType(APPLICATION_JSON)
+                        .content("""
+                                [{"chaveTela":"produtos","acessar":true,"incluir":true,"alterar":false,"excluir":false}]
+                                """))
+                .andExpect(status().isOk());
+    }
+
+    /**
+     * ⚠️ O teto sozinho seria contornável em um passo: bastaria marcar tudo para si mesmo. Esta
+     * trava e a seguinte são o que o tornam efetivo.
+     */
+    @Test
+    void naoAlteraAPropriaGrade() throws Exception {
+        Conta c = contaComOperador("propria");
+        mvc.perform(put("/api/v1/usuarios/" + c.idOperador() + "/permissoes")
+                        .header("Authorization", "Bearer " + c.token()).contentType(APPLICATION_JSON)
+                        .content("""
+                                [{"chaveTela":"usuarios","acessar":true,"incluir":true,"alterar":true,"excluir":false}]
+                                """))
+                .andExpect(status().isOk());
+
+        String tokenOperador = entrar("oppropria@lojarbac.com", "senha12345");
+        mvc.perform(put("/api/v1/usuarios/" + c.idOperador() + "/permissoes")
+                        .header("Authorization", "Bearer " + tokenOperador).contentType(APPLICATION_JSON)
+                        .content("""
+                                [{"chaveTela":"usuarios","acessar":true,"incluir":true,"alterar":true,"excluir":true}]
+                                """))
+                .andExpect(status().isForbidden());
+    }
+
+    /** ⚠️ E não mexe em quem está acima — seria tirar o acesso de um colega mais graduado. */
+    @Test
+    void naoAlteraQuemTemMaisPermissao() throws Exception {
+        Conta c = contaComOperador("acima");
+        long idEmpresa = ((Number) JsonPath.read(
+                mvc.perform(get("/api/v1/eu").header("Authorization", "Bearer " + c.token()))
+                        .andReturn().getResponse().getContentAsString(), "$.empresa.idEmpresa")).longValue();
+
+        String outro = mvc.perform(post("/api/v1/usuarios").header("Authorization", "Bearer " + c.token())
+                        .contentType(APPLICATION_JSON).content("""
+                                {"nome":"Graduado","email":"graduado-acima@lojarbac.com","senha":"senha12345",
+                                 "administrador":false,"idsEmpresa":[%d]}
+                                """.formatted(idEmpresa)))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        long idGraduado = ((Number) JsonPath.read(outro, "$.idUsuario")).longValue();
+
+        mvc.perform(put("/api/v1/usuarios/" + c.idOperador() + "/permissoes")
+                        .header("Authorization", "Bearer " + c.token()).contentType(APPLICATION_JSON)
+                        .content("""
+                                [{"chaveTela":"usuarios","acessar":true,"incluir":true,"alterar":true,"excluir":false}]
+                                """))
+                .andExpect(status().isOk());
+        mvc.perform(put("/api/v1/usuarios/" + idGraduado + "/permissoes")
+                        .header("Authorization", "Bearer " + c.token()).contentType(APPLICATION_JSON)
+                        .content("""
+                                [{"chaveTela":"contas-pagar","acessar":true,"incluir":false,"alterar":false,"excluir":false}]
+                                """))
+                .andExpect(status().isOk());
+
+        String tokenOperador = entrar("opacima@lojarbac.com", "senha12345");
+        mvc.perform(put("/api/v1/usuarios/" + idGraduado + "/permissoes")
+                        .header("Authorization", "Bearer " + tokenOperador).contentType(APPLICATION_JSON)
+                        .content("""
+                                [{"chaveTela":"usuarios","acessar":true,"incluir":false,"alterar":false,"excluir":false}]
+                                """))
+                .andExpect(status().isForbidden());
+    }
 }
+

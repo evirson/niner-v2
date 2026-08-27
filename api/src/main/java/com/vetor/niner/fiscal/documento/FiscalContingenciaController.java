@@ -37,7 +37,6 @@ public class FiscalContingenciaController {
 
     @GetMapping("/{idEmpresa}")
     public ContingenciaResponse consultar(@AuthenticationPrincipal Jwt jwt, @PathVariable long idEmpresa) {
-        exigirAdmin(jwt);
         var estado = service.consultar(idEmpresa);
         return new ContingenciaResponse(estado.ativa(), estado.desde(), estado.justificativa(),
                 estado.serieContingencia(), estado.pendentes(), estado.duracao().toMinutes());
@@ -47,7 +46,6 @@ public class FiscalContingenciaController {
     @PostMapping("/{idEmpresa}/entrar")
     public ContingenciaResponse entrar(@AuthenticationPrincipal Jwt jwt, @PathVariable long idEmpresa,
                                        @Valid @RequestBody EntrarSairRequest req) {
-        exigirAdmin(jwt);
         service.entrar(idEmpresa, "Manual: " + req.justificativa());
         return consultar(jwt, idEmpresa);
     }
@@ -56,7 +54,6 @@ public class FiscalContingenciaController {
     @PostMapping("/{idEmpresa}/sair")
     public ContingenciaResponse sair(@AuthenticationPrincipal Jwt jwt, @PathVariable long idEmpresa,
                                      @Valid @RequestBody EntrarSairRequest req) {
-        exigirAdmin(jwt);
         service.sair(idEmpresa, "Manual: " + req.justificativa());
         return consultar(jwt, idEmpresa);
     }

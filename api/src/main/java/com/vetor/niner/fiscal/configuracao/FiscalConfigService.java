@@ -68,13 +68,11 @@ public class FiscalConfigService {
 
     @Transactional(readOnly = true)
     public FiscalConfigResponse buscar(Jwt jwt, long idEmpresa) {
-        exigirAdmin(jwt);
         return carregar(idEmpresa);
     }
 
     @Transactional(readOnly = true)
     public List<EmpresaFiscalResponse> listarEmpresas(Jwt jwt) {
-        exigirAdmin(jwt);
         return jdbc.sql("""
                         SELECT e.id_empresa, e.razao_social,
                                (c.id_fiscal_config IS NOT NULL) AS configurado,
@@ -101,7 +99,6 @@ public class FiscalConfigService {
      */
     @Transactional
     public FiscalConfigResponse salvar(Jwt jwt, long idEmpresa, FiscalConfigRequest req) {
-        exigirAdmin(jwt);
         FiscalConfigResponse atual = carregar(idEmpresa);
 
         validarRegime(req);

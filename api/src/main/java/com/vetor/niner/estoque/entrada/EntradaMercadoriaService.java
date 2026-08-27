@@ -454,7 +454,6 @@ public class EntradaMercadoriaService {
      */
     @Transactional
     public CancelamentoEntradaEfetivadoResponse cancelar(Jwt jwt, long idMovimento, CancelarEntradaRequest req) {
-        exigirAdmin(jwt);
         long idUsuario = Long.parseLong(jwt.getSubject());
 
         record Cabecalho(long idEmpresa, Long idFornecedor, boolean cancelado, OffsetDateTime dataCancelamento,

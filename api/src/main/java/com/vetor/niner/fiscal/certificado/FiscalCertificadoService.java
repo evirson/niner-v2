@@ -80,7 +80,6 @@ public class FiscalCertificadoService {
 
     @Transactional(readOnly = true)
     public List<FiscalCertificadoResponse> listar(Jwt jwt, long idEmpresa) {
-        exigirAdmin(jwt);
         return jdbc.sql("""
                         SELECT id_certificado, id_empresa, cnpj_titular, razao_social_titular,
                                valido_de, valido_ate, impressao_digital, ativo, criado_em
@@ -95,7 +94,6 @@ public class FiscalCertificadoService {
 
     @Transactional(readOnly = true)
     public List<FiscalCertificadoUsoResponse> listarUsos(Jwt jwt, long idCertificado) {
-        exigirAdmin(jwt);
         boolean existe = Boolean.TRUE.equals(jdbc.sql("""
                         SELECT EXISTS (SELECT 1 FROM fiscal_certificado
                                        WHERE id_tenant = plataforma.tenant_atual() AND id_certificado = ?)
@@ -120,7 +118,6 @@ public class FiscalCertificadoService {
 
     @Transactional
     public FiscalCertificadoResponse enviar(Jwt jwt, long idEmpresa, MultipartFile arquivo, String senha) {
-        exigirAdmin(jwt);
         if (arquivo == null || arquivo.isEmpty()) {
             throw new ResponseStatusException(BAD_REQUEST, "Envie o arquivo .pfx do certificado.");
         }

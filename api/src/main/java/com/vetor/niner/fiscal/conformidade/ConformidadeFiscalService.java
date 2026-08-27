@@ -61,9 +61,7 @@ public class ConformidadeFiscalService {
     }
 
     @Transactional(readOnly = true)
-    public PainelConformidadeResponse painel(Jwt jwt, long idEmpresa) {
-        exigirAdmin(jwt);
-        exigirEmpresaDoTenant(idEmpresa);
+    public PainelConformidadeResponse painel(Jwt jwt, long idEmpresa) {        exigirEmpresaDoTenant(idEmpresa);
 
         Integer crt = crtDaEmpresa(idEmpresa);
         long pendenciasEmpresa = pendenciasEmpresa(idEmpresa).size();
@@ -88,9 +86,7 @@ public class ConformidadeFiscalService {
 
     @Transactional(readOnly = true)
     public PaginaPendencias drillDown(Jwt jwt, long idEmpresa, CategoriaConformidade categoria,
-                                      Integer pagina, Integer limite) {
-        exigirAdmin(jwt);
-        exigirEmpresaDoTenant(idEmpresa);
+                                      Integer pagina, Integer limite) {        exigirEmpresaDoTenant(idEmpresa);
 
         int tamanho = limite == null ? TAMANHO_PAGINA_PADRAO : Math.min(Math.max(limite, 1), TAMANHO_PAGINA_MAXIMO);
         int paginaAtual = pagina == null ? 1 : Math.max(pagina, 1);

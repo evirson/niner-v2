@@ -91,7 +91,6 @@ public class ExportacaoXmlLoteService {
      */
     public ResumoExportacaoXml resumir(Jwt jwt, long idEmpresa, LocalDate dataInicial, LocalDate dataFinal,
                                        Integer modelo) {
-        exigirAdmin(jwt);
         validarFiltros(dataInicial, dataFinal, modelo);
         EmpresaDoPacote empresa = exigirEmpresa(idEmpresa);
 
@@ -137,7 +136,6 @@ public class ExportacaoXmlLoteService {
      */
     public PacoteZip exportar(Jwt jwt, long idEmpresa, LocalDate dataInicial, LocalDate dataFinal, Integer modelo,
                               int parte, Long ateIdDocumento) {
-        exigirAdmin(jwt);
         validarFiltros(dataInicial, dataFinal, modelo);
         EmpresaDoPacote empresa = exigirEmpresa(idEmpresa);
         if (parte < 1) {

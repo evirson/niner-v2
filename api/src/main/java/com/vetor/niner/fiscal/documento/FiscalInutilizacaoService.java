@@ -68,12 +68,10 @@ public class FiscalInutilizacaoService {
      * foram inutilizados, agrupados em faixas contíguas para a tela sugerir de uma vez.
      */
     public List<FaixaBuraco> detectarBuracos(Jwt jwt, long idEmpresa, int modelo, int serie) {
-        exigirAdmin(jwt);
         return agrupar(repositorio.buracos(idEmpresa, modelo, serie));
     }
 
     public List<InutilizacaoItem> listar(Jwt jwt, long idEmpresa) {
-        exigirAdmin(jwt);
         return repositorio.listar(idEmpresa);
     }
 
@@ -83,7 +81,6 @@ public class FiscalInutilizacaoService {
      */
     public ResultadoInutilizacao executar(Jwt jwt, long idEmpresa, int modelo, int serie, int numeroInicial,
                                           int numeroFinal, String justificativa) {
-        exigirAdmin(jwt);
         int idUsuario = (int) Long.parseLong(jwt.getSubject());
         validarFaixaEJustificativa(numeroInicial, numeroFinal, justificativa);
 

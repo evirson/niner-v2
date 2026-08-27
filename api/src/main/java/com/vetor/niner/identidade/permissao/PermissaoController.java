@@ -9,6 +9,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -65,9 +66,11 @@ public class PermissaoController {
             SQL_DO_USUARIO.replace("ORDER BY t.ordem", "WHERE NOT t.admin_apenas ORDER BY t.ordem");
 
     private final JdbcClient jdbc;
+    private final PermissaoService permissoes;
 
-    public PermissaoController(JdbcClient jdbc) {
+    public PermissaoController(JdbcClient jdbc, PermissaoService permissoes) {
         this.jdbc = jdbc;
+        this.permissoes = permissoes;
     }
 
     @GetMapping("/api/v1/telas")
@@ -109,7 +112,7 @@ public class PermissaoController {
     @GetMapping("/api/v1/usuarios/{idUsuario}/permissoes")
     @Transactional(readOnly = true)
     public List<PermissaoResponse> doUsuario(@AuthenticationPrincipal Jwt jwt, @PathVariable long idUsuario) {
-        exigirAdmin(jwt);
+        exigirQuemConfiguraPermissao(jwt);
         exigirUsuarioDoTenant(idUsuario);
         return jdbc.sql(SQL_DO_USUARIO_CONCEDIVEIS)
                 .param(idUsuario)
@@ -130,8 +133,9 @@ public class PermissaoController {
     @Transactional
     public List<PermissaoResponse> salvar(@AuthenticationPrincipal Jwt jwt, @PathVariable long idUsuario,
             @Valid @RequestBody List<@Valid PermissaoRequest> grade) {
-        exigirAdmin(jwt);
+        exigirQuemConfiguraPermissao(jwt);
         exigirUsuarioDoTenant(idUsuario);
+        exigirDentroDoTeto(jwt, idUsuario, grade);
         if (idUsuario == Long.parseLong(jwt.getSubject())) {
             // O admin não tem grade e não pode criar uma para si — seria o caminho para uma conta
             // sem administrador nenhum, e não existe quem devolva o acesso depois.
@@ -200,10 +204,87 @@ public class PermissaoController {
     private record AcoesDaTela(boolean incluir, boolean alterar, boolean excluir) {
     }
 
-    private void exigirAdmin(Jwt jwt) {
-        if (!PermissaoService.ehAdmin(jwt)) {
-            throw new ResponseStatusException(FORBIDDEN, "Só o administrador da conta configura permissões.");
+    /**
+     * Quem pode mexer na grade de outro: o administrador, ou quem recebeu a tela <b>Usuários</b>
+     * com "alterar" — decisão do dono do produto (2026-08-27), junto com a regra do teto abaixo.
+     */
+    private void exigirQuemConfiguraPermissao(Jwt jwt) {
+        if (PermissaoService.ehAdmin(jwt)) {
+            return;
         }
+        if (!permissoes.pode(jwt, "usuarios", PermissaoService.Acao.ALTERAR)) {
+            throw new ResponseStatusException(FORBIDDEN,
+                    "Você não tem permissão para configurar as permissões de outros usuários.");
+        }
+    }
+
+    /**
+     * <b>Ninguém delega o que não tem.</b> Regra dele: <i>"as permissões que ele pode delegar para
+     * este novo usuário são no máximo as permissões que ele tem"</i>.
+     *
+     * <p>⚠️ O teto sozinho seria contornável em dois passos, e por isso vêm junto duas travas:
+     * <ul>
+     *   <li><b>não editar a própria grade</b> — senão ele marca tudo para si e o teto vira
+     *       decoração;</li>
+     *   <li><b>não editar quem tem mais permissão que ele</b> — senão tira o acesso de um colega
+     *       mais graduado, ou usa a conta dele como degrau.</li>
+     * </ul>
+     *
+     * <p>O administrador não passa por nada disto: ele tem tudo, e o teto dele é o sistema inteiro.
+     */
+    private void exigirDentroDoTeto(Jwt jwt, long idAlvo, List<PermissaoRequest> grade) {
+        if (PermissaoService.ehAdmin(jwt)) {
+            return;
+        }
+        long idQuemConcede = Long.parseLong(jwt.getSubject());
+        if (idQuemConcede == idAlvo) {
+            throw new ResponseStatusException(FORBIDDEN,
+                    "Você não pode alterar as suas próprias permissões. Peça ao administrador da conta.");
+        }
+
+        Map<String, PermissaoResponse> minhas = new java.util.HashMap<>();
+        for (PermissaoResponse p : minhas(jwt)) {
+            minhas.put(p.chave(), p);
+        }
+
+        // Quem já tem alguma permissão que eu não tenho está acima de mim — não mexo nele.
+        for (PermissaoResponse alvo : doUsuarioSemChecar(idAlvo)) {
+            PermissaoResponse eu = minhas.get(alvo.chave());
+            boolean euNaoTenho = eu == null
+                    || (alvo.acessar() && !eu.acessar()) || (alvo.incluir() && !eu.incluir())
+                    || (alvo.alterar() && !eu.alterar()) || (alvo.excluir() && !eu.excluir());
+            if (euNaoTenho) {
+                throw new ResponseStatusException(FORBIDDEN,
+                        "Este usuário tem permissões que você não possui (" + alvo.nome() + "). "
+                                + "Só o administrador pode alterá-lo.");
+            }
+        }
+
+        List<String> excedem = new ArrayList<>();
+        for (PermissaoRequest pedido : grade) {
+            PermissaoResponse eu = minhas.get(pedido.chaveTela());
+            if (eu == null && (pedido.acessar() || pedido.incluir() || pedido.alterar() || pedido.excluir())) {
+                excedem.add(pedido.chaveTela());
+                continue;
+            }
+            if (eu == null) {
+                continue;
+            }
+            if ((pedido.acessar() && !eu.acessar()) || (pedido.incluir() && !eu.incluir())
+                    || (pedido.alterar() && !eu.alterar()) || (pedido.excluir() && !eu.excluir())) {
+                excedem.add(eu.nome());
+            }
+        }
+        if (!excedem.isEmpty()) {
+            throw new ResponseStatusException(FORBIDDEN,
+                    "Você só pode conceder o que você mesmo tem. Fora do seu alcance: "
+                            + String.join(", ", excedem) + ".");
+        }
+    }
+
+    /** A grade de um usuário, sem checar quem está perguntando — uso interno do teto. */
+    private List<PermissaoResponse> doUsuarioSemChecar(long idUsuario) {
+        return jdbc.sql(SQL_DO_USUARIO_CONCEDIVEIS).param(idUsuario).query(PermissaoController::mapear).list();
     }
 
     /** P8: id vindo do cliente é sempre conferido contra o tenant da sessão. */
@@ -214,6 +295,14 @@ public class PermissaoController {
         if (!existe) {
             throw new ResponseStatusException(NOT_FOUND, "Usuário não encontrado.");
         }
+    }
+
+    private static PermissaoResponse mapear(java.sql.ResultSet rs, int n) throws java.sql.SQLException {
+        return new PermissaoResponse(
+                rs.getString("chave"), rs.getString("nome"), rs.getString("grupo"), rs.getString("subgrupo"),
+                rs.getBoolean("tem_incluir"), rs.getBoolean("tem_alterar"), rs.getBoolean("tem_excluir"),
+                rs.getBoolean("acessar"), rs.getBoolean("incluir"),
+                rs.getBoolean("alterar"), rs.getBoolean("excluir"));
     }
 
     public record TelaResponse(String chave, String nome, String grupo, String subgrupo, boolean adminApenas,
