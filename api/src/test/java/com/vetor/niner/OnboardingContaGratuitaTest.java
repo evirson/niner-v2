@@ -79,7 +79,7 @@ class OnboardingContaGratuitaTest {
 
         // E a loja original continua de pé, com o login funcionando.
         String login = """
-                {"slug":"loja-do-ze","email":"ze@lojadoze.com","senha":"segredo123"}
+                {"email":"ze@lojadoze.com","senha":"segredo123"}
                 """;
         mvc.perform(post("/api/publico/login").contentType(APPLICATION_JSON).content(login))
                 .andExpect(status().isOk())
@@ -123,7 +123,7 @@ class OnboardingContaGratuitaTest {
                 .andExpect(status().isCreated());
 
         String login = """
-                {"slug":"loja-login","email":"admin@lojalogin.com","senha":"segredo123"}
+                {"email":"admin@lojalogin.com","senha":"segredo123"}
                 """;
         mvc.perform(post("/api/publico/login").contentType(APPLICATION_JSON).content(login))
                 .andExpect(status().isOk())
@@ -131,7 +131,7 @@ class OnboardingContaGratuitaTest {
                 .andExpect(jsonPath("$.slug").value("loja-login"));
 
         String senhaErrada = """
-                {"slug":"loja-login","email":"admin@lojalogin.com","senha":"errada"}
+                {"email":"admin@lojalogin.com","senha":"errada"}
                 """;
         mvc.perform(post("/api/publico/login").contentType(APPLICATION_JSON).content(senhaErrada))
                 .andExpect(status().isUnauthorized());

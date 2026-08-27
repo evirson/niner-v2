@@ -78,8 +78,8 @@ class LoginEmpresaTest {
         TenantNovo tenant = assinarNovoTenant("uma-empresa");
 
         String login = """
-                {"slug":"%s","email":"donouma-empresa@lojalogin.com","senha":"segredo123"}
-                """.formatted(tenant.slug());
+                {"email":"donouma-empresa@lojalogin.com","senha":"segredo123"}
+                """;
         mvc.perform(post("/api/publico/login").contentType(APPLICATION_JSON).content(login))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.token").exists())
@@ -107,8 +107,8 @@ class LoginEmpresaTest {
                 .andExpect(status().isOk());
 
         String login = """
-                {"slug":"%s","email":"donoduas-empresas@lojalogin.com","senha":"segredo123"}
-                """.formatted(tenant.slug());
+                {"email":"donoduas-empresas@lojalogin.com","senha":"segredo123"}
+                """;
         mvc.perform(post("/api/publico/login").contentType(APPLICATION_JSON).content(login))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.token").doesNotExist())
@@ -116,8 +116,8 @@ class LoginEmpresaTest {
                 .andExpect(jsonPath("$.empresas.length()").value(2));
 
         String loginComEmpresa = """
-                {"slug":"%s","email":"donoduas-empresas@lojalogin.com","senha":"segredo123","idEmpresa":%d}
-                """.formatted(tenant.slug(), idEmpresa2);
+                {"email":"donoduas-empresas@lojalogin.com","senha":"segredo123","idEmpresa":%d}
+                """.formatted(idEmpresa2);
         mvc.perform(post("/api/publico/login").contentType(APPLICATION_JSON).content(loginComEmpresa))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.token").exists())
@@ -132,8 +132,8 @@ class LoginEmpresaTest {
         // idEmpresaDeOutraFilial NÃO foi concedida ao usuário (usuario_empresa só tem a 1ª).
 
         String login = """
-                {"slug":"%s","email":"donoempresa-invalida@lojalogin.com","senha":"segredo123","idEmpresa":%d}
-                """.formatted(tenant.slug(), idEmpresaDeOutraFilial);
+                {"email":"donoempresa-invalida@lojalogin.com","senha":"segredo123","idEmpresa":%d}
+                """.formatted(idEmpresaDeOutraFilial);
         mvc.perform(post("/api/publico/login").contentType(APPLICATION_JSON).content(login))
                 .andExpect(status().isUnauthorized());
     }

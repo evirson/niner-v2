@@ -10,39 +10,59 @@ interface EmpresaOpcaoLogin {
   nomeEmpresa: string
 }
 
+interface ContaOpcaoLogin {
+  idTenant: number
+  nomeConta: string
+}
+
 interface LoginResp {
   token: string | null
   idTenant: number
-  slug: string
+  slug: string | null
+  escolherConta: boolean
+  contas: ContaOpcaoLogin[]
   escolherEmpresa: boolean
   empresas: EmpresaOpcaoLogin[]
 }
 
 /**
- * Login do lojista: slug da loja + email + senha → token (JWT). Quando o usuário tem acesso a
- * mais de uma empresa (`usuario_empresa`, 2026-07-28), a API responde `escolherEmpresa=true`
- * em vez do token — a tela troca pra uma segunda etapa pedindo qual empresa ele quer acessar
- * nesta sessão; tudo que ele cadastrar depois (registros com `id_empresa`) usa essa escolha.
+ * Login do lojista: **e-mail + senha**. O campo "Loja (identificador)" saiu em 2026-08-27 —
+ * ele era gerado pelo sistema no signup (o usuário nunca o escolheu, só o via num canto do
+ * Painel) e ainda assim era exigido para entrar. Quem descobre a conta agora é o back
+ * (`plataforma.diretorio_login`).
+ *
+ * Podem aparecer até duas perguntas depois da senha, nesta ordem, e as duas são raras:
+ * 1. **Qual conta?** — o mesmo e-mail existe em mais de uma conta E a senha casou em mais de uma
+ *    (senhas diferentes resolvem sozinhas: só uma casa e o usuário entra direto).
+ * 2. **Qual empresa?** — o usuário alcança mais de uma empresa da conta (`usuario_empresa`).
  */
 export default function Login() {
   const { login } = useAuth()
   const navigate = useNavigate()
-  const [slug, setSlug] = useState('')
   const [email, setEmail] = useState('')
   const [senha, setSenha] = useState('')
   const [erro, setErro] = useState('')
   const [carregando, setCarregando] = useState(false)
+  const [contas, setContas] = useState<ContaOpcaoLogin[] | null>(null)
   const [empresas, setEmpresas] = useState<EmpresaOpcaoLogin[] | null>(null)
+  // Guardado entre as duas voltas: a escolha da conta precisa acompanhar a escolha da empresa.
+  const [idTenantEscolhido, setIdTenantEscolhido] = useState<number | null>(null)
 
-  const entrarComEmpresa = async (idEmpresa?: number) => {
+  const entrar = async (idTenant?: number, idEmpresa?: number) => {
     setErro('')
     setCarregando(true)
     try {
       const r = await api<LoginResp>('/api/publico/login', {
         method: 'POST',
-        body: JSON.stringify({ slug: slug.trim(), email: email.trim(), senha, idEmpresa }),
+        body: JSON.stringify({ email: email.trim(), senha, idTenant, idEmpresa }),
       })
+      if (r.escolherConta) {
+        setContas(r.contas)
+        return
+      }
       if (r.escolherEmpresa) {
+        setIdTenantEscolhido(idTenant ?? r.idTenant)
+        setContas(null)
         setEmpresas(r.empresas)
         return
       }
@@ -50,7 +70,9 @@ export default function Login() {
       navigate('/', { replace: true })
     } catch (err) {
       setErro(err instanceof ApiError ? err.message : 'Não foi possível entrar.')
+      setContas(null)
       setEmpresas(null)
+      setIdTenantEscolhido(null)
     } finally {
       setCarregando(false)
     }
@@ -58,47 +80,42 @@ export default function Login() {
 
   const submeter = (e: FormEvent) => {
     e.preventDefault()
-    entrarComEmpresa()
+    entrar()
+  }
+
+  const voltarParaCredenciais = () => {
+    setContas(null)
+    setEmpresas(null)
+    setIdTenantEscolhido(null)
+  }
+
+  if (contas) {
+    return (
+      <EscolhaCard
+        titulo="Qual conta você quer acessar?"
+        ajuda="Este e-mail está em mais de uma conta."
+        opcoes={contas.map((c) => ({ chave: c.idTenant, rotulo: c.nomeConta }))}
+        carregando={carregando}
+        aoEscolher={(idTenant) => entrar(idTenant)}
+        erro={erro}
+        aoFecharErro={() => setErro('')}
+        aoVoltar={voltarParaCredenciais}
+      />
+    )
   }
 
   if (empresas) {
     return (
-      <div className="login-wrap">
-        <div className="card login-card">
-          <a className="brand" href="/" style={{ fontSize: 22 }}>
-            NAI<span>NER</span>
-          </a>
-          <h1 style={{ fontSize: 22, margin: '8px 0 4px' }}>Qual empresa você quer acessar?</h1>
-          <p className="muted" style={{ marginTop: 0 }}>
-            Tudo que você cadastrar nesta sessão vai ficar registrado na empresa escolhida.
-          </p>
-
-          <div className="lista-categorias" style={{ marginTop: 12 }}>
-            {empresas.map((emp) => (
-              <button
-                key={emp.idEmpresa}
-                type="button"
-                className="btn ghost"
-                style={{ width: '100%', justifyContent: 'flex-start' }}
-                disabled={carregando}
-                onClick={() => entrarComEmpresa(emp.idEmpresa)}
-              >
-                {emp.nomeEmpresa}
-              </button>
-            ))}
-          </div>
-
-          {erro && <Toast mensagem={erro} aoFechar={() => setErro('')} />}
-          <button
-            type="button"
-            className="btn ghost"
-            style={{ width: '100%', marginTop: 12 }}
-            onClick={() => setEmpresas(null)}
-          >
-            Voltar
-          </button>
-        </div>
-      </div>
+      <EscolhaCard
+        titulo="Qual empresa você quer acessar?"
+        ajuda="Tudo que você cadastrar nesta sessão vai ficar registrado na empresa escolhida."
+        opcoes={empresas.map((e) => ({ chave: e.idEmpresa, rotulo: e.nomeEmpresa }))}
+        carregando={carregando}
+        aoEscolher={(idEmpresa) => entrar(idTenantEscolhido ?? undefined, idEmpresa)}
+        erro={erro}
+        aoFecharErro={() => setErro('')}
+        aoVoltar={voltarParaCredenciais}
+      />
     )
   }
 
@@ -108,14 +125,18 @@ export default function Login() {
         <a className="brand" href="/" style={{ fontSize: 22 }}>
           NAI<span>NER</span>
         </a>
-        <h1 style={{ fontSize: 22, margin: '8px 0 4px' }}>Entrar na sua loja</h1>
+        <h1 style={{ fontSize: 22, margin: '8px 0 4px' }}>Entrar</h1>
         <p className="muted" style={{ marginTop: 0 }}>Acesse o painel do seu ERP.</p>
 
-        <label htmlFor="slug">Loja (identificador)</label>
-        <input id="slug" value={slug} onChange={(e) => setSlug(e.target.value)} placeholder="ex.: minha-loja" required />
-
         <label htmlFor="email">E-mail</label>
-        <input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+        <input
+          id="email"
+          type="email"
+          autoFocus
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          required
+        />
 
         <label htmlFor="senha">Senha</label>
         <input id="senha" type="password" value={senha} onChange={(e) => setSenha(e.target.value)} required />
@@ -132,6 +153,63 @@ export default function Login() {
           <a href={`${SITE_BASE}/assinar`}>Crie grátis — até 100 vendas por mês</a>.
         </p>
       </form>
+    </div>
+  )
+}
+
+/**
+ * Segunda etapa do login — a mesma moldura serve para escolher conta e para escolher empresa.
+ * As duas perguntas têm o mesmo formato (uma lista de botões) e aparecem no mesmo lugar; duplicar
+ * o markup faria as duas divergirem no primeiro ajuste visual.
+ */
+function EscolhaCard({
+  titulo,
+  ajuda,
+  opcoes,
+  carregando,
+  aoEscolher,
+  erro,
+  aoFecharErro,
+  aoVoltar,
+}: {
+  titulo: string
+  ajuda: string
+  opcoes: { chave: number; rotulo: string }[]
+  carregando: boolean
+  aoEscolher: (chave: number) => void
+  erro: string
+  aoFecharErro: () => void
+  aoVoltar: () => void
+}) {
+  return (
+    <div className="login-wrap">
+      <div className="card login-card">
+        <a className="brand" href="/" style={{ fontSize: 22 }}>
+          NAI<span>NER</span>
+        </a>
+        <h1 style={{ fontSize: 22, margin: '8px 0 4px' }}>{titulo}</h1>
+        <p className="muted" style={{ marginTop: 0 }}>{ajuda}</p>
+
+        <div className="lista-categorias" style={{ marginTop: 12 }}>
+          {opcoes.map((o) => (
+            <button
+              key={o.chave}
+              type="button"
+              className="btn ghost"
+              style={{ width: '100%', justifyContent: 'flex-start' }}
+              disabled={carregando}
+              onClick={() => aoEscolher(o.chave)}
+            >
+              {o.rotulo}
+            </button>
+          ))}
+        </div>
+
+        {erro && <Toast mensagem={erro} aoFechar={aoFecharErro} />}
+        <button type="button" className="btn ghost" style={{ width: '100%', marginTop: 12 }} onClick={aoVoltar}>
+          Voltar
+        </button>
+      </div>
     </div>
   )
 }

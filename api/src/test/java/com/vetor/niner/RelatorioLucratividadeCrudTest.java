@@ -541,8 +541,8 @@ class RelatorioLucratividadeCrudTest {
                 .andExpect(status().isCreated());
         String respLogin = mvc.perform(post("/api/publico/login").contentType(APPLICATION_JSON)
                         .content("""
-                                {"slug":"%s","email":"operador@lojalucro-papel.com","senha":"segredo123"}
-                                """.formatted(tenant.slug())))
+                                {"email":"operador@lojalucro-papel.com","senha":"segredo123"}
+                                """))
                 .andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString();
         String tokenOperador = JsonPath.read(respLogin, "$.token");

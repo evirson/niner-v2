@@ -38,15 +38,27 @@ public final class OnboardingDtos {
     }
 
     /**
-     * Login de usuário do tenant (identificado pelo slug da loja). {@code idEmpresa}
-     * (2026-07-28) é opcional — só é usado na segunda chamada, depois que a primeira responde
-     * {@code escolherEmpresa=true} porque o usuário tem acesso a mais de uma empresa (ver
-     * {@code SignupService.login}).
+     * Login de usuário do tenant: <b>e-mail + senha</b>, sem identificador de conta.
+     *
+     * <p><b>O {@code slug} saiu em 2026-08-27</b> (decisão do dono do produto). Ele era derivado
+     * pelo próprio sistema no signup ({@code slugUnico}) — o usuário nunca o escolheu, só o via
+     * num canto do Painel —, e ainda assim era exigido para entrar. Quem descobre a conta agora é
+     * {@code plataforma.diretorio_login} (V071).
+     *
+     * <p>Os dois campos opcionais são <b>voltas seguintes</b> do mesmo formulário, cada uma
+     * respondendo a uma pergunta que a anterior deixou em aberto:
+     * <ul>
+     *   <li>{@code idTenant} — o mesmo e-mail existe em mais de uma conta e a senha casou em
+     *       várias (resposta a {@code escolherConta=true});</li>
+     *   <li>{@code idEmpresa} — o usuário tem acesso a mais de uma empresa da conta
+     *       (resposta a {@code escolherEmpresa=true}, 2026-07-28).</li>
+     * </ul>
+     * As duas podem acontecer na mesma sessão, nesta ordem: conta primeiro, empresa depois.
      */
     public record LoginRequest(
-            @NotBlank String slug,
             @NotBlank @Email String email,
             @NotBlank String senha,
+            Long idTenant,
             Long idEmpresa) {
     }
 
@@ -55,12 +67,33 @@ public final class OnboardingDtos {
     }
 
     /**
-     * {@code token} vem preenchido quando o login se completa. Quando o usuário tem acesso a
-     * mais de uma empresa e a requisição não informou {@code idEmpresa}, {@code token} vem
-     * {@code null} e {@code escolherEmpresa=true} — o front deve reapresentar as credenciais
-     * com o {@code idEmpresa} escolhido em {@code empresas}.
+     * Uma conta (tenant) que o usuário pode escolher ao logar (2026-08-27).
+     *
+     * <p>⚠️ Esta lista <b>só é montada depois que a senha bate</b> — ver
+     * {@code SignupService.login}. Devolvê-la antes transformaria o login numa consulta pública
+     * de "este e-mail é cliente de vocês, e de quantas contas?", que é exatamente o que a
+     * recuperação de senha evita respondendo 204 sempre.
+     */
+    public record ContaOpcaoLogin(long idTenant, String nomeConta) {
+    }
+
+    /**
+     * {@code token} vem preenchido quando o login se completa. Quando falta uma escolha, ele vem
+     * {@code null} e exatamente um dos dois sinalizadores vem ligado:
+     * <ul>
+     *   <li>{@code escolherConta} — a senha casou em mais de uma conta; o front reapresenta as
+     *       credenciais com o {@code idTenant} escolhido em {@code contas};</li>
+     *   <li>{@code escolherEmpresa} — a conta está definida, mas o usuário alcança mais de uma
+     *       empresa; o front reapresenta com o {@code idEmpresa} escolhido em {@code empresas}.</li>
+     * </ul>
      */
     public record TokenResponse(
-            String token, long idTenant, String slug, boolean escolherEmpresa, List<EmpresaOpcaoLogin> empresas) {
+            String token,
+            long idTenant,
+            String slug,
+            boolean escolherConta,
+            List<ContaOpcaoLogin> contas,
+            boolean escolherEmpresa,
+            List<EmpresaOpcaoLogin> empresas) {
     }
 }

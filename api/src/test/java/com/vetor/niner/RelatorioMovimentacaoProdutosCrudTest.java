@@ -492,8 +492,8 @@ class RelatorioMovimentacaoProdutosCrudTest {
                                 """.formatted(email, idEmpresaOrigem)))
                 .andExpect(status().isCreated());
         String login = """
-                {"slug":"%s","email":"%s","senha":"senha1234"}
-                """.formatted(tenant.slug(), email);
+                {"email":"%s","senha":"senha1234"}
+                """.formatted(email);
         String respLogin = mvc.perform(post("/api/publico/login").contentType(APPLICATION_JSON).content(login))
                 .andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString();

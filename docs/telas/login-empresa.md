@@ -1,6 +1,11 @@
 # Spec: Login com escolha de empresa               Status: Aprovada
 Autor: Claudio Calixto (dono do produto) · Data: 2026-07-28 · Módulo(s): `plataforma.onboarding`, `identidade` · Fase: 1 — Núcleo do ERP
 
+> ⚠️ **Atualizada em 2026-08-27:** o login deixou de pedir o identificador da loja — a
+> primeira chamada leva só `{email, senha}`, e antes da escolha de empresa pode haver uma escolha
+> de **conta**. Esta spec continua valendo para tudo que diz respeito à empresa; a descoberta da
+> conta está em [`login.md`](login.md).
+
 ## Problema
 
 Com a tela de Usuários (`docs/telas/usuario.md`) um usuário pode ter acesso a mais de uma
@@ -20,7 +25,7 @@ valor. Com uma única empresa, não há pergunta nenhuma: resolve direto, sem fr
 
 `POST /api/publico/login` em até duas voltas:
 
-1. **Primeira chamada** — `{slug, email, senha}` (sem `idEmpresa`). Valida a senha, busca as
+1. **Primeira chamada** — `{email, senha}` (sem `idEmpresa`). Valida a senha, busca as
    empresas do usuário (`usuario_empresa`). Casos:
    - **Zero empresas**: `401` — "Usuário sem empresa vinculada. Contate o administrador."
      (não deveria acontecer — toda criação de usuário exige ao menos uma — mas é a resposta
@@ -37,7 +42,7 @@ só tem uma empresa — nunca aceito "de graça" por coincidência.
 
 ## Tela de login (front)
 
-`web/src/pages/Login.tsx`: formulário normal (loja/e-mail/senha) submete a primeira chamada.
+`web/src/pages/Login.tsx`: formulário normal (e-mail/senha) submete a primeira chamada.
 Se a resposta pedir escolha, a tela troca para uma lista de botões (um por empresa) — clicar
 reenvia a segunda chamada com o `idEmpresa`. Botão "Voltar" descarta a escolha e volta ao
 formulário (sem perder loja/e-mail/senha, que ficam em memória). Sucesso navega pro Painel

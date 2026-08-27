@@ -3,7 +3,11 @@ package com.vetor.niner.plataforma.onboarding;
 import com.vetor.niner.comum.config.NinerProperties;
 import com.vetor.niner.comum.seguranca.TokenService;
 import com.vetor.niner.identidade.usuario.HorarioAcessoService;
+import com.vetor.niner.plataforma.diretorio.DiretorioLogin;
+import com.vetor.niner.plataforma.diretorio.DiretorioLogin.ContaCandidata;
 import com.vetor.niner.plataforma.onboarding.OnboardingDtos.*;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -11,8 +15,10 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.text.Normalizer;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Optional;
 
 import static org.springframework.http.HttpStatus.CONFLICT;
 import static org.springframework.http.HttpStatus.FORBIDDEN;
@@ -29,19 +35,30 @@ import static org.springframework.http.HttpStatus.UNAUTHORIZED;
 @Service
 public class SignupService {
 
+    private static final Logger log = LoggerFactory.getLogger(SignupService.class);
+
+    /**
+     * Acima disto, um mesmo e-mail em muitas contas deixa de ser o caso legítimo (o dono com duas
+     * empresas) e passa a ser sinal de que algo precisa ser olhado — cada candidata custa uma
+     * verificação de senha, e BCrypt é caro de propósito.
+     */
+    private static final int AVISO_CONTAS_POR_EMAIL = 10;
+
     private final JdbcClient jdbc;
     private final PasswordEncoder senhas;
     private final TokenService tokens;
     private final NinerProperties props;
     private final HorarioAcessoService horarioAcesso;
+    private final DiretorioLogin diretorio;
 
     public SignupService(JdbcClient jdbc, PasswordEncoder senhas, TokenService tokens, NinerProperties props,
-            HorarioAcessoService horarioAcesso) {
+            HorarioAcessoService horarioAcesso, DiretorioLogin diretorio) {
         this.jdbc = jdbc;
         this.senhas = senhas;
         this.tokens = tokens;
         this.props = props;
         this.horarioAcesso = horarioAcesso;
+        this.diretorio = diretorio;
     }
 
     @Transactional
@@ -277,40 +294,66 @@ public class SignupService {
     }
 
     /**
-     * Login em duas voltas quando o usuário acessa mais de uma empresa
-     * (docs/telas/usuario.md, `usuario_empresa`, 2026-07-28): a primeira chamada (sem
-     * {@code idEmpresa}) valida a senha e, se houver mais de uma empresa, devolve a lista em
-     * vez do token ({@code escolherEmpresa=true}); o front reenvia as mesmas credenciais com o
-     * {@code idEmpresa} escolhido, que aí sim emite o token com a empresa ativa da sessão
-     * ({@code eid}). Com uma única empresa, resolve direto — sem segunda volta.
+     * Login por <b>e-mail e senha</b> — sem identificador de conta (2026-08-27).
+     *
+     * <p><b>Como a conta é descoberta.</b> O e-mail é único apenas <i>dentro</i> do tenant
+     * (V015), então ele pode existir em várias contas — o caso real é o dono que vende cosméticos
+     * numa conta e sapatos em outra. Quem diz onde procurar é o {@link DiretorioLogin} (V071);
+     * quem diz se é a conta certa é a <b>senha</b>, conferida uma vez por candidata.
+     *
+     * <p><b>A lista de contas só existe depois que a senha bate.</b> Devolvê-la antes
+     * transformaria o login numa consulta pública de "este e-mail é cliente de vocês?" — o mesmo
+     * motivo pelo qual a recuperação de senha responde 204 para conta inexistente. Senhas
+     * diferentes em contas diferentes resolvem sozinhas: só uma casa, e o usuário entra direto,
+     * sem ver tela de escolha nenhuma.
+     *
+     * <p><b>Até duas voltas, nesta ordem:</b> {@code escolherConta} (a senha casou em mais de uma
+     * conta) e depois {@code escolherEmpresa} (o usuário alcança mais de uma empresa da conta —
+     * `usuario_empresa`, 2026-07-28, docs/telas/usuario.md). Cada volta reenvia as mesmas
+     * credenciais acrescidas da escolha, e a escolha é <b>sempre revalidada</b>: nada é aceito só
+     * porque o front mandou.
      */
     @Transactional
     public TokenResponse login(LoginRequest req) {
-        // Resolve o tenant pelo slug da loja (global) e estabelece o contexto para o RLS.
-        Long idTenant = jdbc.sql("SELECT id_tenant FROM plataforma.tenant WHERE slug = ?")
-                .param(req.slug()).query(Long.class).optional().orElse(null);
-        if (idTenant == null) {
+        List<ContaCandidata> candidatas = diretorio.porEmail(req.email());
+        if (req.idTenant() != null) {
+            // Segunda volta: o usuário escolheu uma conta. A senha é conferida de novo — a
+            // escolha só restringe onde olhar, nunca substitui a autenticação.
+            candidatas = candidatas.stream().filter(c -> c.idTenant() == req.idTenant()).toList();
+        }
+        if (candidatas.size() > AVISO_CONTAS_POR_EMAIL) {
+            // Sem teto: truncar deixaria a última conta impossível de acessar, e em silêncio.
+            // O aviso existe porque cada candidata custa uma verificação de senha (BCrypt é
+            // caro de propósito) — se isto aparecer no log, o limite de requisição da superfície
+            // pública é o que segura, e vale revisar o desenho.
+            log.warn("E-mail com {} contas no diretório — login vai conferir a senha em todas.", candidatas.size());
+        }
+
+        List<ContaAutenticada> autenticadas = new ArrayList<>();
+        for (ContaCandidata candidata : candidatas) {
+            autenticar(candidata, req.email(), req.senha())
+                    .ifPresent(usuario -> autenticadas.add(new ContaAutenticada(candidata, usuario)));
+        }
+
+        if (autenticadas.isEmpty()) {
+            // Mensagem única para e-mail inexistente, senha errada, conta inativa e escolha
+            // inválida: qualquer distinção aqui vira oráculo para quem está tentando adivinhar.
             throw new ResponseStatusException(UNAUTHORIZED, "Credenciais inválidas.");
         }
-        jdbc.sql("SELECT set_config('app.id_tenant', ?, true)")
-                .param(Long.toString(idTenant)).query(String.class).single();
-
-        // id_tenant explícito (defesa em profundidade) — ver comentário em ProdutoService.listar.
-        // Aqui é o caminho de autenticação: um vazamento de RLS nesta query específica
-        // significaria autenticação cross-tenant, não só leitura indevida.
-        var usuario = jdbc.sql("""
-                        SELECT id_usuario, senha_hash, administrador, ativo
-                        FROM usuario WHERE id_tenant = ? AND email = ?
-                        """)
-                .params(idTenant, req.email())
-                .query((rs, n) -> new UsuarioAuth(
-                        rs.getLong("id_usuario"), rs.getString("senha_hash"),
-                        rs.getBoolean("administrador"), rs.getBoolean("ativo")))
-                .optional().orElse(null);
-
-        if (usuario == null || !usuario.ativo() || !senhas.matches(req.senha(), usuario.senhaHash())) {
-            throw new ResponseStatusException(UNAUTHORIZED, "Credenciais inválidas.");
+        if (autenticadas.size() > 1) {
+            List<ContaOpcaoLogin> contas = autenticadas.stream()
+                    .map(a -> new ContaOpcaoLogin(a.conta().idTenant(), a.conta().nomeConta()))
+                    .toList();
+            // idTenant/slug ficam vazios de propósito: ainda não há conta escolhida.
+            return new TokenResponse(null, 0L, null, true, contas, false, List.of());
         }
+
+        ContaCandidata conta = autenticadas.get(0).conta();
+        UsuarioAuth usuario = autenticadas.get(0).usuario();
+        long idTenant = conta.idTenant();
+        // O contexto ficou no último candidato testado — reposiciona no escolhido antes de
+        // qualquer consulta de domínio (P8).
+        entrarNoTenant(idTenant);
 
         // Horário de acesso (2026-08-11) — sem tolerância nenhuma aqui: não existe "rotina em
         // andamento" pra proteger numa sessão que ainda nem começou (a tolerância padrão só
@@ -347,15 +390,55 @@ public class SignupService {
         } else if (empresas.size() == 1) {
             idEmpresa = empresas.get(0).idEmpresa();
         } else {
-            return new TokenResponse(null, idTenant, req.slug(), true, empresas);
+            return new TokenResponse(null, idTenant, conta.slug(), false, List.of(), true, empresas);
         }
 
         List<String> roles = List.of(usuario.administrador() ? "ADMIN" : "OPERADOR");
         String token = tokens.emitir(usuario.idUsuario(), idTenant, idEmpresa, req.email(), roles);
-        return new TokenResponse(token, idTenant, req.slug(), false, List.of());
+        return new TokenResponse(token, idTenant, conta.slug(), false, List.of(), false, List.of());
+    }
+
+    /**
+     * Confere a senha dentro da conta candidata. {@code Optional.empty()} = não é esta conta —
+     * e não distingue "não existe" de "senha errada" de "inativo", porque quem chama responde
+     * a mesma coisa nos três casos.
+     *
+     * <p>A busca é por {@code (id_tenant, lower(email))}, a chave de negócio, e não pelo
+     * {@code id_usuario} que o diretório carrega: o diretório é um índice reconstruível, então
+     * ele diz <b>onde</b> procurar, nunca <b>quem</b> é o usuário.
+     */
+    private Optional<UsuarioAuth> autenticar(ContaCandidata conta, String email, String senha) {
+        entrarNoTenant(conta.idTenant());
+        // id_tenant explícito (defesa em profundidade) — ver comentário em ProdutoService.listar.
+        // Aqui é o caminho de autenticação: um vazamento de RLS nesta query específica
+        // significaria autenticação cross-tenant, não só leitura indevida.
+        UsuarioAuth usuario = jdbc.sql("""
+                        SELECT id_usuario, senha_hash, administrador, ativo
+                        FROM usuario WHERE id_tenant = ? AND lower(email) = lower(?)
+                        """)
+                .params(conta.idTenant(), email)
+                .query((rs, n) -> new UsuarioAuth(
+                        rs.getLong("id_usuario"), rs.getString("senha_hash"),
+                        rs.getBoolean("administrador"), rs.getBoolean("ativo")))
+                .optional().orElse(null);
+
+        if (usuario == null || !usuario.ativo() || !senhas.matches(senha, usuario.senhaHash())) {
+            return Optional.empty();
+        }
+        return Optional.of(usuario);
+    }
+
+    /** Estabelece o {@code app.id_tenant} da transação corrente — base do RLS de domínio (P8). */
+    private void entrarNoTenant(long idTenant) {
+        jdbc.sql("SELECT set_config('app.id_tenant', ?, true)")
+                .param(Long.toString(idTenant)).query(String.class).single();
     }
 
     private record UsuarioAuth(long idUsuario, String senhaHash, boolean administrador, boolean ativo) {
+    }
+
+    /** Candidata do diretório cuja senha foi conferida com sucesso. */
+    private record ContaAutenticada(ContaCandidata conta, UsuarioAuth usuario) {
     }
 
     /** Deriva um slug URL-safe do nome da loja e garante unicidade (sufixo -2, -3, …). */

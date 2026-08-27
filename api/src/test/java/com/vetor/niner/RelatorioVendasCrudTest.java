@@ -82,8 +82,8 @@ class RelatorioVendasCrudTest {
                                 """.formatted(sufixo, email, idEmpresa)))
                 .andExpect(status().isCreated());
         String login = """
-                {"slug":"%s","email":"%s","senha":"senha1234"}
-                """.formatted(slug, email);
+                {"email":"%s","senha":"senha1234"}
+                """.formatted(email);
         String resp = mvc.perform(post("/api/publico/login").contentType(APPLICATION_JSON).content(login))
                 .andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString();

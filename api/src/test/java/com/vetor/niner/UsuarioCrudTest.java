@@ -154,8 +154,8 @@ class UsuarioCrudTest {
                 .andExpect(status().isCreated());
 
         String login = """
-                {"slug":"%s","email":"operador@loja.com","senha":"senha1234"}
-                """.formatted(tenant.slug());
+                {"email":"operador@loja.com","senha":"senha1234"}
+                """;
         String resp = mvc.perform(post("/api/publico/login").contentType(APPLICATION_JSON).content(login))
                 .andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString();
@@ -256,8 +256,8 @@ class UsuarioCrudTest {
                 .andExpect(jsonPath("$.nome").value("MANTEM SENHA EDITADO"));
 
         String login = """
-                {"slug":"%s","email":"mantemsenha@loja.com","senha":"senhaoriginal1"}
-                """.formatted(tenant.slug());
+                {"email":"mantemsenha@loja.com","senha":"senhaoriginal1"}
+                """;
         mvc.perform(post("/api/publico/login").contentType(APPLICATION_JSON).content(login))
                 .andExpect(status().isOk());
     }

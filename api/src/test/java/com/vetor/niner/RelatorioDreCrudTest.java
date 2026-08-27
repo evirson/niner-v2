@@ -448,8 +448,8 @@ class RelatorioDreCrudTest {
                 .andExpect(status().isCreated());
 
         String login = """
-                {"slug":"%s","email":"operador@lojadre-papel.com","senha":"segredo123"}
-                """.formatted(tenant.slug());
+                {"email":"operador@lojadre-papel.com","senha":"segredo123"}
+                """;
         String respLogin = mvc.perform(post("/api/publico/login").contentType(APPLICATION_JSON).content(login))
                 .andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString();

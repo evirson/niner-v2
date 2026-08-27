@@ -85,7 +85,9 @@ import Base from '../layouts/Base.astro';
           const r = await res.json();
           // auto-login: guarda o token e leva ao primeiro uso
           localStorage.setItem('niner_token', r.token);
-          localStorage.setItem('niner_slug', r.slug);
+          // O `niner_slug` que era guardado aqui saiu em 2026-08-27: ninguém o lia (o handoff
+          // usa só o token) e, desde que o login deixou de pedir identificador, guardá-lo dava
+          // a impressão errada de que o front precisa dele para alguma coisa.
           window.location.href = '/bem-vindo';
           return;
         }
