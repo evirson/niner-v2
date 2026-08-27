@@ -114,14 +114,10 @@ public class PermissaoController {
     public List<PermissaoResponse> doUsuario(@AuthenticationPrincipal Jwt jwt, @PathVariable long idUsuario) {
         exigirQuemConfiguraPermissao(jwt);
         exigirUsuarioDoTenant(idUsuario);
-        return jdbc.sql(SQL_DO_USUARIO_CONCEDIVEIS)
-                .param(idUsuario)
-                .query((rs, n) -> new PermissaoResponse(
-                        rs.getString("chave"), rs.getString("nome"), rs.getString("grupo"), rs.getString("subgrupo"),
-                        rs.getBoolean("tem_incluir"), rs.getBoolean("tem_alterar"), rs.getBoolean("tem_excluir"),
-                        rs.getBoolean("acessar"), rs.getBoolean("incluir"),
-                        rs.getBoolean("alterar"), rs.getBoolean("excluir")))
-                .list();
+        // ⚠️ Quem não é admin vê na grade SÓ o que pode delegar. Mostrar tudo e recusar no Salvar
+        // é o mesmo incômodo que o dono do produto relatou com o "liberar tudo": ele marcaria
+        // telas fora do alcance e só descobriria no fim, com um erro listando o que não pode.
+        return recortarPeloMeuTeto(jwt, doUsuarioSemChecar(idUsuario));
     }
 
     /**
@@ -280,6 +276,34 @@ public class PermissaoController {
                     "Você só pode conceder o que você mesmo tem. Fora do seu alcance: "
                             + String.join(", ", excedem) + ".");
         }
+    }
+
+    /**
+     * Deixa na grade apenas as telas que <b>quem está configurando</b> pode delegar. O
+     * administrador recebe tudo — o teto dele é o sistema inteiro.
+     */
+    private List<PermissaoResponse> recortarPeloMeuTeto(Jwt jwt, List<PermissaoResponse> grade) {
+        if (PermissaoService.ehAdmin(jwt)) {
+            return grade;
+        }
+        Map<String, PermissaoResponse> minhas = new java.util.HashMap<>();
+        for (PermissaoResponse p : minhas(jwt)) {
+            minhas.put(p.chave(), p);
+        }
+        List<PermissaoResponse> recortada = new ArrayList<>();
+        for (PermissaoResponse p : grade) {
+            PermissaoResponse eu = minhas.get(p.chave());
+            if (eu == null || !eu.acessar()) {
+                continue;
+            }
+            // As AÇÕES que eu não tenho somem da linha, pelo mesmo motivo: a tela mostraria uma
+            // caixa que o servidor depois recusaria.
+            recortada.add(new PermissaoResponse(p.chave(), p.nome(), p.grupo(), p.subgrupo(),
+                    p.temIncluir() && eu.incluir(), p.temAlterar() && eu.alterar(),
+                    p.temExcluir() && eu.excluir(),
+                    p.acessar(), p.incluir(), p.alterar(), p.excluir()));
+        }
+        return recortada;
     }
 
     /** A grade de um usuário, sem checar quem está perguntando — uso interno do teto. */

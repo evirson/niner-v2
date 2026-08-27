@@ -134,6 +134,10 @@ poder quem tem a tela **Usuários** com "alterar".
 
 O administrador não passa por nada disso: o teto dele é o sistema inteiro.
 
+⚠️ **A grade mostra só o que ele pode delegar.** Para quem não é admin, as telas e as ações fora
+do seu alcance **não aparecem** — mostrar tudo e recusar no Salvar seria repetir o incômodo do
+"liberar tudo": marcar dezenas de itens e descobrir no fim que metade não podia.
+
 ## As travas antigas removidas
 
 Dez telas apareciam na grade mas tinham uma segunda tranca escrita no serviço ("só ADMIN"),

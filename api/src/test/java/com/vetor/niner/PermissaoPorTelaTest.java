@@ -338,5 +338,53 @@ class PermissaoPorTelaTest {
                                 """))
                 .andExpect(status().isForbidden());
     }
+/**
+     * ⚠️ A grade mostra ao não-admin <b>apenas o que ele pode delegar</b> — telas e ações. Mostrar
+     * tudo e recusar no Salvar é o mesmo incômodo que o dono do produto relatou com o "liberar
+     * tudo": marcar dezenas de itens e descobrir no fim que metade não podia.
+     */
+    @Test
+    void gradeMostraSoOQuePodeDelegar() throws Exception {
+        Conta c = contaComOperador("recorte");
+        mvc.perform(put("/api/v1/usuarios/" + c.idOperador() + "/permissoes")
+                        .header("Authorization", "Bearer " + c.token()).contentType(APPLICATION_JSON)
+                        .content("""
+                                [{"chaveTela":"produtos","acessar":true,"incluir":true,"alterar":false,"excluir":false},
+                                 {"chaveTela":"usuarios","acessar":true,"incluir":true,"alterar":true,"excluir":false}]
+                                """))
+                .andExpect(status().isOk());
+
+        String tokenOperador = entrar("oprecorte@lojarbac.com", "senha12345");
+        long idEmpresa = ((Number) JsonPath.read(
+                mvc.perform(get("/api/v1/eu").header("Authorization", "Bearer " + tokenOperador))
+                        .andReturn().getResponse().getContentAsString(), "$.empresa.idEmpresa")).longValue();
+        String novo = mvc.perform(post("/api/v1/usuarios").header("Authorization", "Bearer " + tokenOperador)
+                        .contentType(APPLICATION_JSON).content("""
+                                {"nome":"Novato","email":"novato-recorte@lojarbac.com","senha":"senha12345",
+                                 "administrador":false,"idsEmpresa":[%d]}
+                                """.formatted(idEmpresa)))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        long idNovo = ((Number) JsonPath.read(novo, "$.idUsuario")).longValue();
+
+        String grade = mvc.perform(get("/api/v1/usuarios/" + idNovo + "/permissoes")
+                        .header("Authorization", "Bearer " + tokenOperador))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+
+        // só as duas telas dele, e não as 48 do catálogo
+        assertEquals(2, ((java.util.List<?>) JsonPath.read(grade, "$")).size());
+        // e a ação que ele NÃO tem some da linha: ele não pode alterar produto
+        assertEquals(false, acao(grade, "produtos", "temAlterar"));
+        assertEquals(true, acao(grade, "produtos", "temIncluir"));
+        assertEquals(true, acao(grade, "usuarios", "temAlterar"));
+
+        // o administrador continua vendo a grade inteira
+        String gradeAdmin = mvc.perform(get("/api/v1/usuarios/" + idNovo + "/permissoes")
+                        .header("Authorization", "Bearer " + c.token()))
+                .andReturn().getResponse().getContentAsString();
+        assertTrue(((java.util.List<?>) JsonPath.read(gradeAdmin, "$")).size() > 40,
+                "o admin vê o catálogo todo");
+    }
 }
 
