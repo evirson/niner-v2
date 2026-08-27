@@ -24,7 +24,7 @@ public final class EmpresaDtos {
             long idEmpresa, int codigoEmpresa, String razaoSocial, String nomeFantasia, boolean matriz,
             String cnpj, String inscricaoEstadual, String inscricaoMunicipal, Integer codigoMunicipioIbge, String cnae,
             String endereco, String numero, String complemento, String bairro, String cidade, String estado, String cep,
-            String telefone, String email, boolean ativo, OffsetDateTime criadoEm, OffsetDateTime atualizadoEm) {
+            String telefone, String email, Integer idRamo, boolean ativo, OffsetDateTime criadoEm, OffsetDateTime atualizadoEm) {
     }
 
     /**
@@ -49,7 +49,9 @@ public final class EmpresaDtos {
             @Size(max = 2) String estado,
             @Size(max = 9) String cep,
             @Size(max = 20) String telefone,
-            @Size(max = 200) String email) {
+            @Size(max = 200) String email,
+            /** Ramo de atividade (V072). Null = não informado; id inexistente é recusado. */
+            Integer idRamo) {
     }
 
     /**
@@ -61,6 +63,8 @@ public final class EmpresaDtos {
     public record CriarEmpresaRequest(
             @NotBlank @Size(max = 200) String razaoSocial,
             @Size(max = 200) String nomeFantasia,
-            @Size(max = 14) String cnpj) {
+            @Size(max = 14) String cnpj,
+            /** Ramo de atividade (V072) — na tela ele vem SUGERIDO pelo CNAE do CNPJ consultado. */
+            Integer idRamo) {
     }
 }

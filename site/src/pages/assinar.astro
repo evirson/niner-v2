@@ -24,6 +24,12 @@ import Base from '../layouts/Base.astro';
             <input id="nomeLoja" name="nomeLoja" required autocomplete="organization" placeholder="Ex.: Loja do Zé" />
           </div>
           <div class="field">
+            <label for="idRamo">Ramo de atividade</label>
+            <select id="idRamo" name="idRamo">
+              <option value="">Selecione…</option>
+            </select>
+          </div>
+          <div class="field">
             <label for="nomeAdmin">Seu nome</label>
             <input id="nomeAdmin" name="nomeAdmin" required autocomplete="name" placeholder="Ex.: Zé da Silva" />
           </div>
@@ -60,6 +66,22 @@ import Base from '../layouts/Base.astro';
     const erro = document.getElementById('erro');
     const btn = document.getElementById('btn');
 
+    // Ramos de atividade (V072): a lista vem da API para que acrescentar um ramo seja INSERT,
+    // e não deploy dos três aplicativos. Se a chamada falhar, o campo fica só com "Selecione…"
+    // e a conta é criada sem ramo — nada aqui pode impedir alguém de se cadastrar.
+    fetch(window.NINER_API_BASE + '/api/publico/ramos')
+      .then((r) => (r.ok ? r.json() : []))
+      .then((ramos) => {
+        const sel = document.getElementById('idRamo');
+        for (const ramo of ramos) {
+          const op = document.createElement('option');
+          op.value = ramo.idRamo;
+          op.textContent = ramo.nome;
+          sel.appendChild(op);
+        }
+      })
+      .catch(() => {});
+
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
       erro.textContent = '';
@@ -68,6 +90,8 @@ import Base from '../layouts/Base.astro';
         nomeAdmin: form.nomeAdmin.value.trim(),
         email: form.email.value.trim(),
         senha: form.senha.value,
+        // Opcional: sem escolha, a conta nasce sem ramo (é dado de segmentação).
+        idRamo: form.idRamo.value ? Number(form.idRamo.value) : null,
         // Fecha o funil (ADR-017): o mesmo id que veio do primeiro pageview anônimo. Ausente
         // quando o visitante bloqueia cookie/JS — o cadastro segue igual, só sem atribuição.
         visitanteId: window.NINER_VISITANTE_ID || null,

@@ -18,6 +18,7 @@ import {
 import { aoTeclarEnterNoFormulario } from '../../lib/formularios'
 import { ESTADOS_UF, mascararCep, mascararCpfCnpj, mascararTelefone, somenteDigitos } from '../../lib/masks'
 import { maiusculas } from '../../lib/texto'
+import { consultarCnpj, listarRamos } from '../../lib/ramos'
 import { buscarEnderecoPorCep } from '../../lib/viacep'
 
 const EMPRESA_VAZIA: EmpresaFormState = {
@@ -36,6 +37,7 @@ const EMPRESA_VAZIA: EmpresaFormState = {
   cep: '',
   telefone: '',
   email: '',
+  idRamo: '',
 }
 
 /**
@@ -59,6 +61,8 @@ export default function EmpresaForm() {
 
   const [form, setForm] = useState<EmpresaFormState>(EMPRESA_VAZIA)
   const [erroCep, setErroCep] = useState('')
+  const [avisoCnpj, setAvisoCnpj] = useState('')
+  const { data: ramos = [] } = useQuery({ queryKey: ['ramos'], queryFn: listarRamos, staleTime: Infinity })
   const [toast, setToast] = useState('')
   const [confirmarSalvarAberto, setConfirmarSalvarAberto] = useState(false)
 
@@ -87,6 +91,34 @@ export default function EmpresaForm() {
 
   const campoMaiusculo = (chave: keyof EmpresaFormState) => (e: ChangeEvent<HTMLInputElement>) =>
     setForm((f) => ({ ...f, [chave]: maiusculas(e.target.value) }))
+
+  /**
+   * Ao completar os 14 dígitos do CNPJ, consulta os dados públicos e usa o CNAE para SUGERIR o
+   * ramo de atividade — decisão do dono do produto (2026-08-27): dar a sugestão, mas quem
+   * define é o usuário. Por isso a sugestão só entra em campo VAZIO: quem já escolheu um ramo
+   * não o vê ser trocado por um palpite, e o CNAE digitado à mão não é sobrescrito.
+   *
+   * Consulta que falha não vira erro — o cadastro segue manual, como sempre foi.
+   */
+  const aoMudarCnpj = async (e: ChangeEvent<HTMLInputElement>) => {
+    const mascarado = mascararCpfCnpj(e.target.value, false)
+    setForm((f) => ({ ...f, cnpj: mascarado }))
+    setAvisoCnpj('')
+    if (somenteDigitos(mascarado).length !== 14) return
+    const dados = await consultarCnpj(mascarado)
+    if (!dados) return
+    setForm((f) => ({
+      ...f,
+      cnae: f.cnae.trim() ? f.cnae : (dados.cnae ?? ''),
+      nomeFantasia: f.nomeFantasia.trim() ? f.nomeFantasia : maiusculas(dados.nomeFantasia ?? ''),
+      idRamo: f.idRamo.trim() ? f.idRamo : (dados.ramoSugerido ? String(dados.ramoSugerido.idRamo) : ''),
+    }))
+    if (dados.ramoSugerido) {
+      setAvisoCnpj(`Ramo sugerido pelo CNAE deste CNPJ: ${dados.ramoSugerido.nome}. Troque se não for o caso.`)
+    } else if (dados.cnae) {
+      setAvisoCnpj('O CNAE deste CNPJ não identifica um ramo específico — escolha o ramo abaixo.')
+    }
+  }
 
   const aoMudarCep = async (e: ChangeEvent<HTMLInputElement>) => {
     const mascarado = mascararCep(e.target.value)
@@ -180,7 +212,7 @@ export default function EmpresaForm() {
                   id="cnpj"
                   placeholder="00.000.000/0000-00"
                   value={form.cnpj}
-                  onChange={(e) => setForm((f) => ({ ...f, cnpj: mascararCpfCnpj(e.target.value, false) }))}
+                  onChange={aoMudarCnpj}
                 />
               </div>
               <div className="col-4">
@@ -211,6 +243,22 @@ export default function EmpresaForm() {
               <div className="col-4">
                 <label htmlFor="cnae">CNAE</label>
                 <input id="cnae" placeholder="0000-0/00" value={form.cnae} onChange={campo('cnae')} />
+              </div>
+              <div className="col-4">
+                <label htmlFor="idRamo">Ramo de Atividade</label>
+                <select id="idRamo" value={form.idRamo} onChange={(e) => setForm((f) => ({ ...f, idRamo: e.target.value }))}>
+                  <option value="">Não informado</option>
+                  {ramos.map((r) => (
+                    <option key={r.idRamo} value={r.idRamo}>
+                      {r.nome}
+                    </option>
+                  ))}
+                </select>
+                {avisoCnpj && (
+                  <p className="muted" style={{ fontSize: 12, marginTop: 4 }}>
+                    {avisoCnpj}
+                  </p>
+                )}
               </div>
             </div>
           </section>

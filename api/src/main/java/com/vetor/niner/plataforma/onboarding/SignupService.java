@@ -1,6 +1,7 @@
 package com.vetor.niner.plataforma.onboarding;
 
 import com.vetor.niner.comum.config.NinerProperties;
+import com.vetor.niner.comum.ramo.RamoAtividadeService;
 import com.vetor.niner.comum.seguranca.TokenService;
 import com.vetor.niner.identidade.usuario.HorarioAcessoService;
 import com.vetor.niner.plataforma.diretorio.DiretorioLogin;
@@ -50,15 +51,17 @@ public class SignupService {
     private final NinerProperties props;
     private final HorarioAcessoService horarioAcesso;
     private final DiretorioLogin diretorio;
+    private final RamoAtividadeService ramos;
 
     public SignupService(JdbcClient jdbc, PasswordEncoder senhas, TokenService tokens, NinerProperties props,
-            HorarioAcessoService horarioAcesso, DiretorioLogin diretorio) {
+            HorarioAcessoService horarioAcesso, DiretorioLogin diretorio, RamoAtividadeService ramos) {
         this.jdbc = jdbc;
         this.senhas = senhas;
         this.tokens = tokens;
         this.props = props;
         this.horarioAcesso = horarioAcesso;
         this.diretorio = diretorio;
+        this.ramos = ramos;
     }
 
     @Transactional
@@ -131,11 +134,17 @@ public class SignupService {
         // empresa do tenant, Q6); cfg_nome_etiqueta recebe um modelo padrão (o lojista
         // personaliza depois) — ambas NOT NULL sem DEFAULT em `empresa` (V014).
         long idEmpresa = jdbc.sql("""
-                        INSERT INTO empresa (id_tenant, codigo_empresa, razao_social, cfg_nome_etiqueta)
-                        VALUES (?, 1, ?, ?)
+                        INSERT INTO empresa (id_tenant, codigo_empresa, razao_social, cfg_nome_etiqueta, id_ramo)
+                        VALUES (?, 1, ?, ?, ?)
                         RETURNING id_empresa
                         """)
-                .params(idTenant, req.nomeLoja(), "{sku}\n{descricao}\n{preco_venda}")
+                // Ramo de atividade (V072, 2026-08-27): perguntado no signup em vez de deduzido do
+                // CNPJ, porque o signup não pede CNPJ — acrescentar esse campo ao funil de
+                // aquisição custaria conversão. Dentro do sistema, onde o CNPJ existe, o ramo passa
+                // a ser SUGERIDO pelo CNAE. Id inválido é tratado como não informado em vez de
+                // derrubar a criação da conta: ramo é dado de segmentação, não requisito do ERP.
+                .params(idTenant, req.nomeLoja(), "{sku}\n{descricao}\n{preco_venda}",
+                        ramos.existe(req.idRamo()) ? req.idRamo() : null)
                 .query(Long.class).single();
 
         // 5a) plano de contas mínimo pra Entrada de Produtos (mesma árvore de V032, replicada

@@ -47,6 +47,7 @@ export interface EmpresaDetalhe {
   cep: string | null
   telefone: string | null
   email: string | null
+  idRamo: number | null
   ativo: boolean
   criadoEm: string
   atualizadoEm: string
@@ -68,6 +69,8 @@ export interface EmpresaFormState {
   cep: string
   telefone: string
   email: string
+  /** Ramo de atividade (V072). Vazio = não informado. */
+  idRamo: string
 }
 
 export function paraFormularioEmpresa(e: EmpresaDetalhe): EmpresaFormState {
@@ -87,6 +90,7 @@ export function paraFormularioEmpresa(e: EmpresaDetalhe): EmpresaFormState {
     cep: e.cep ? mascararCep(e.cep) : '',
     telefone: e.telefone ? mascararTelefone(e.telefone) : '',
     email: e.email ?? '',
+    idRamo: e.idRamo == null ? '' : String(e.idRamo),
   }
 }
 
@@ -113,6 +117,7 @@ export function paraRequisicaoEmpresa(f: EmpresaFormState) {
     cep: f.cep.trim() ? somenteDigitos(f.cep) : null,
     telefone: f.telefone.trim() ? somenteDigitos(f.telefone) : null,
     email: nuloSeVazio(f.email),
+    idRamo: f.idRamo.trim() ? Number(f.idRamo) : null,
   }
 }
 

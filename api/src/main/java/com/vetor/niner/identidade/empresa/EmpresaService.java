@@ -1,6 +1,7 @@
 package com.vetor.niner.identidade.empresa;
 
 import com.vetor.niner.cadastros.fornecedor.FornecedorService;
+import com.vetor.niner.comum.ramo.RamoAtividadeService;
 import com.vetor.niner.comum.web.ConflitoDadosException;
 import com.vetor.niner.identidade.empresa.EmpresaDtos.AtualizarEmpresaRequest;
 import com.vetor.niner.identidade.empresa.EmpresaDtos.CriarEmpresaRequest;
@@ -45,10 +46,12 @@ public class EmpresaService {
 
     private final JdbcClient jdbc;
     private final UsoTenantService usoTenant;
+    private final RamoAtividadeService ramos;
 
-    public EmpresaService(JdbcClient jdbc, UsoTenantService usoTenant) {
+    public EmpresaService(JdbcClient jdbc, UsoTenantService usoTenant, RamoAtividadeService ramos) {
         this.jdbc = jdbc;
         this.usoTenant = usoTenant;
+        this.ramos = ramos;
     }
 
     /**
@@ -79,15 +82,16 @@ public class EmpresaService {
         try {
             idEmpresa = jdbc.sql("""
                             INSERT INTO empresa (id_tenant, codigo_empresa, razao_social, nome_fantasia, cnpj,
-                                                 matriz, cfg_nome_etiqueta)
+                                                 matriz, cfg_nome_etiqueta, id_ramo)
                             SELECT plataforma.tenant_atual(),
                                    COALESCE(MAX(e.codigo_empresa), 0) + 1,
-                                   ?, ?, ?, false, ?
+                                   ?, ?, ?, false, ?, ?
                               FROM empresa e
                              WHERE e.id_tenant = plataforma.tenant_atual()
                             RETURNING id_empresa
                             """)
-                    .params(maiusculas(req.razaoSocial()), maiusculas(req.nomeFantasia()), cnpj, ETIQUETA_PADRAO)
+                    .params(maiusculas(req.razaoSocial()), maiusculas(req.nomeFantasia()), cnpj, ETIQUETA_PADRAO,
+                            ramoValido(req.idRamo()))
                     .query(Long.class).single();
         } catch (DuplicateKeyException e) {
             throw new ConflitoDadosException("Já existe uma empresa com esse CNPJ neste tenant.");
@@ -183,7 +187,7 @@ public class EmpresaService {
                             UPDATE empresa SET
                                 nome_fantasia = ?, cnpj = ?, inscricao_estadual = ?, inscricao_municipal = ?,
                                 codigo_municipio_ibge = ?, cnae = ?, endereco = ?, numero = ?, complemento = ?,
-                                bairro = ?, cidade = ?, estado = ?, cep = ?, telefone = ?, email = ?,
+                                bairro = ?, cidade = ?, estado = ?, cep = ?, telefone = ?, email = ?, id_ramo = ?,
                                 atualizado_em = now()
                             WHERE id_tenant = plataforma.tenant_atual() AND id_empresa = ?
                             """)
@@ -193,7 +197,7 @@ public class EmpresaService {
                             vazioParaNulo(req.cnae()), maiusculas(req.endereco()), maiusculas(req.numero()),
                             maiusculas(req.complemento()), maiusculas(req.bairro()), maiusculas(req.cidade()),
                             estado, vazioParaNulo(req.cep()),
-                            vazioParaNulo(req.telefone()), email, idEmpresa)
+                            vazioParaNulo(req.telefone()), email, ramoValido(req.idRamo()), idEmpresa)
                     .update();
         } catch (DuplicateKeyException e) {
             throw new ConflitoDadosException("Já existe outra empresa com esse CNPJ neste tenant.");
@@ -272,9 +276,32 @@ public class EmpresaService {
     private static final String SELECT_DETALHE = """
             SELECT id_empresa, codigo_empresa, razao_social, nome_fantasia, matriz, cnpj, inscricao_estadual,
                    inscricao_municipal, codigo_municipio_ibge, cnae, endereco, numero, complemento, bairro,
-                   cidade, estado, cep, telefone, email, ativo, criado_em, atualizado_em
+                   cidade, estado, cep, telefone, email, id_ramo, ativo, criado_em, atualizado_em
             FROM empresa
             """;
+
+    /**
+     * Ramo de atividade conferido contra {@code cfg_ramo_atividade} (V072). Id que não existe é
+     * <b>recusado</b>, e não silenciosamente ignorado: aqui, ao contrário do signup, o usuário
+     * está numa tela do sistema escolhendo numa lista — um id fora dela significa cliente de API
+     * mandando lixo, não alguém pulando um campo opcional. {@code null} continua valendo como
+     * "não informado".
+     */
+    private Integer ramoValido(Integer idRamo) {
+        if (idRamo == null) {
+            return null;
+        }
+        if (!ramos.existe(idRamo)) {
+            throw new IllegalArgumentException("Ramo de atividade inválido.");
+        }
+        return idRamo;
+    }
+
+    /** {@code id_ramo} é {@code smallint} e pode ser nulo — {@code getInt} devolveria 0. */
+    private static Integer idRamo(ResultSet rs) throws SQLException {
+        int valor = rs.getInt("id_ramo");
+        return rs.wasNull() ? null : valor;
+    }
 
     private static EmpresaDetalheResponse mapearDetalhe(ResultSet rs, int rowNum) throws SQLException {
         Object codigoMunicipio = rs.getObject("codigo_municipio_ibge");
@@ -285,7 +312,7 @@ public class EmpresaService {
                 codigoMunicipio == null ? null : ((Number) codigoMunicipio).intValue(), rs.getString("cnae"),
                 rs.getString("endereco"), rs.getString("numero"), rs.getString("complemento"), rs.getString("bairro"),
                 rs.getString("cidade"), rs.getString("estado"), rs.getString("cep"), rs.getString("telefone"),
-                rs.getString("email"), rs.getBoolean("ativo"),
+                rs.getString("email"), idRamo(rs), rs.getBoolean("ativo"),
                 rs.getObject("criado_em", java.time.OffsetDateTime.class),
                 rs.getObject("atualizado_em", java.time.OffsetDateTime.class));
     }

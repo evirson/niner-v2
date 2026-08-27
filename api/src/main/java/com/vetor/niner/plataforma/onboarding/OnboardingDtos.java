@@ -20,7 +20,16 @@ public final class OnboardingDtos {
             @NotBlank @Size(max = 120) String nomeAdmin,
             /** UUID do cookie first-party do site (ADR-017). Opcional: sem ele o signup funciona
              *  igual, só não dá para atribuir a conta à campanha que a trouxe. */
-            String visitanteId) {
+            String visitanteId,
+            /**
+             * Ramo de atividade da empresa (V072, 2026-08-27) — perguntado direto no formulário,
+             * porque o signup não pede CNPJ e portanto não há CNAE de onde deduzir.
+             *
+             * <p>Opcional de propósito: ramo serve à decisão de tenant e à segmentação, não ao
+             * funcionamento do ERP. Um id inválido é tratado como não informado — nada aqui pode
+             * impedir alguém de criar a conta.
+             */
+            Integer idRamo) {
     }
 
     /**
