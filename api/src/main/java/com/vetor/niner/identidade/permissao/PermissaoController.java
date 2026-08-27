@@ -113,7 +113,7 @@ public class PermissaoController {
     @Transactional(readOnly = true)
     public List<PermissaoResponse> doUsuario(@AuthenticationPrincipal Jwt jwt, @PathVariable long idUsuario) {
         exigirQuemConfiguraPermissao(jwt);
-        exigirUsuarioDoTenant(idUsuario);
+        exigirUsuarioDoTenant(jwt, idUsuario);
         // ⚠️ Quem não é admin vê na grade SÓ o que pode delegar. Mostrar tudo e recusar no Salvar
         // é o mesmo incômodo que o dono do produto relatou com o "liberar tudo": ele marcaria
         // telas fora do alcance e só descobriria no fim, com um erro listando o que não pode.
@@ -130,7 +130,7 @@ public class PermissaoController {
     public List<PermissaoResponse> salvar(@AuthenticationPrincipal Jwt jwt, @PathVariable long idUsuario,
             @Valid @RequestBody List<@Valid PermissaoRequest> grade) {
         exigirQuemConfiguraPermissao(jwt);
-        exigirUsuarioDoTenant(idUsuario);
+        exigirUsuarioDoTenant(jwt, idUsuario);
         exigirDentroDoTeto(jwt, idUsuario, grade);
         if (idUsuario == Long.parseLong(jwt.getSubject())) {
             // O admin não tem grade e não pode criar uma para si — seria o caminho para uma conta
@@ -312,11 +312,23 @@ public class PermissaoController {
     }
 
     /** P8: id vindo do cliente é sempre conferido contra o tenant da sessão. */
-    private void exigirUsuarioDoTenant(long idUsuario) {
-        boolean existe = Boolean.TRUE.equals(jdbc.sql(
-                        "SELECT exists(SELECT 1 FROM usuario WHERE id_tenant = plataforma.tenant_atual() AND id_usuario = ?)")
-                .param(idUsuario).query(Boolean.class).single());
-        if (!existe) {
+    /**
+     * O usuário existe nesta conta <b>e</b> quem está pedindo pode enxergá-lo.
+     *
+     * <p>⛔ <b>Para quem não é administrador, o cadastro do administrador não existe</b> (decisão do
+     * dono do produto, 2026-08-27) — mesmo 404 de {@code UsuarioService.exigirAlvoAcessivel}, e
+     * pelo mesmo motivo: um 403 confirmaria qual id é o dele.
+     */
+    private void exigirUsuarioDoTenant(Jwt jwt, long idUsuario) {
+        Boolean alvoEhAdmin = jdbc.sql(
+                        "SELECT administrador FROM usuario WHERE id_tenant = plataforma.tenant_atual() AND id_usuario = ?")
+                .param(idUsuario).query(Boolean.class).optional().orElse(null);
+        if (alvoEhAdmin == null) {
+            throw new ResponseStatusException(NOT_FOUND, "Usuário não encontrado.");
+        }
+        List<String> roles = jwt.getClaimAsStringList("roles");
+        boolean souAdmin = roles != null && roles.contains("ADMIN");
+        if (alvoEhAdmin && !souAdmin) {
             throw new ResponseStatusException(NOT_FOUND, "Usuário não encontrado.");
         }
     }

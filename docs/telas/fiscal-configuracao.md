@@ -45,6 +45,22 @@ recarrega o formulário inteiro — é outra linha, não outro filtro.
 4. **`ambiente` tem aviso visual permanente.** Em `HOMOLOGACAO`, a tela exibe uma tarja fixa
    "AMBIENTE DE HOMOLOGAÇÃO — NOTAS SEM VALOR FISCAL". Nota de homologação não vale nada e já causou
    lojista achando que estava emitindo (§9.6 do estudo).
+   ⭐ **E a escolha de ambiente some quando a instalação estiver em produção** (decisão do dono do
+   produto, 2026-08-27): *"quando o sistema estiver em produção, o sistema de emissão de notas
+   fiscais não deverá ter a opção homologação ou produção — sempre vai ter que estar em produção,
+   travado nisso"*. A trava é `niner.fiscal.ambiente-fixo` (env `NINER_FISCAL_AMBIENTE_FIXO`), hoje
+   **vazia** porque o Nainer está homologando junto às SEFAZ dos estados; no go-live basta
+   `NINER_FISCAL_AMBIENTE_FIXO=PRODUCAO`. Com ela ligada, o `GET` devolve `ambienteTravado: true`,
+   a tela **esconde o campo** (não o desabilita — campo cinza convida a perguntar como se habilita,
+   e a resposta é que não se habilita) e o `PUT` **sobrescreve** o que vier em vez de recusar, para
+   não travar a edição dos outros campos de quem tinha HOMOLOGACAO gravado antes da virada.
+
+   ⚠️ **Por que travar isto importa mais do que parece** (achado da auditoria de segurança de
+   2026-08-27): a série já era imutável depois da primeira nota autorizada, o ambiente **não era**.
+   Trocá-lo faz as vendas seguintes saírem com `tpAmb=2` — sem valor jurídico — **enquanto o PDV
+   segue dizendo "Nota autorizada"**. E `fiscal_numeracao` tem PK `(tenant, empresa, modelo, série)`,
+   **sem ambiente**: as notas de teste consomem números da sequência de produção e abrem buracos que
+   depois exigem inutilização formal. Testes: `AmbienteFiscalTravadoTest`.
 5. **Sem `cfg_tela_campo`.** Não há campo configurável por tenant aqui — a obrigatoriedade é
    determinada pelo regime e pelos gates, não por preferência do lojista.
 6. **`InfoRegistro` normal** — a tabela tem `criado_em` e `atualizado_em`, então o bloco de auditoria

@@ -73,6 +73,9 @@ niner:
     # HTTPS local usa certificado autoassinado), então este default não é usado por ele.
     truststore-path: ""
     truststore-senha: ""
+    # Vazio = a suite exercita a escolha livre de ambiente, que e o estado de hoje. O caso da
+    # trava ligada tem teste proprio, que sobrescreve esta propriedade.
+    ambiente-fixo: ""
     resp-tec:
       cnpj: "37829453000135"
       contato: MITRYUSCASH

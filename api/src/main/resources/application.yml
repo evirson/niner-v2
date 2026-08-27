@@ -133,6 +133,12 @@ niner:
     # Vazio = truststore padrão do JDK (serve para teste local, não para a SEFAZ real).
     truststore-path: ${NINER_FISCAL_TRUSTSTORE:}
     truststore-senha: ${NINER_FISCAL_TRUSTSTORE_SENHA:}
+    # ⭐ Trava do ambiente de emissao (decisao do dono do produto, 2026-08-27): preenchido com
+    # PRODUCAO, a escolha "homologacao x producao" some da tela de Configuracao Fiscal e toda
+    # empresa emite em producao. Hoje VAZIO de proposito -- o Nainer esta homologando junto as
+    # SEFAZ dos estados e precisa do ambiente 2. Ligar no dia do go-live:
+    # NINER_FISCAL_AMBIENTE_FIXO=PRODUCAO
+    ambiente-fixo: ${NINER_FISCAL_AMBIENTE_FIXO:}
     # infRespTec (B7): o responsável técnico é a MITRYUSCASH (casa de software), o mesmo em toda nota de todo
     # tenant — nunca o lojista. CNPJ é o mesmo usado no B0 (homologação real na SEFAZ-PR).
     resp-tec:

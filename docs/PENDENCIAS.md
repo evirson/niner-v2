@@ -14,7 +14,7 @@
 > **Última revisão:** 2026-08-27, fim do dia (registrada a pedido dele: *"deixe todas estas pendências
 > documentadas, não esqueça de nada, e quando eu te perguntar as pendências você me fala"*).
 
-**Estado na data desta revisão:** 63 telas em uso · 1130 testes verdes (medido, não estimado).
+**Estado na data desta revisão:** 63 telas em uso · 1136 testes verdes (medido, não estimado).
 
 ---
 
@@ -189,10 +189,12 @@ Três simplificações conscientes, registradas em `docs/telas/usuario-permissoe
 "excluir" pode cancelar venda. Separá-las exige anotar método a método. **Bola minha**, quando
 ele achar que vale.
 
-### 34. ⚠️ Conceder "Usuários" permite criar usuário, não configurar permissão 🔵
+### 34. ✅ FECHADO pelo item 35 — Conceder "Usuários" permite criar usuário, não configurar permissão
 Usuários saiu da lista de telas exclusivas (2026-08-27). Quem receber essa tela cria e edita
-usuários da conta; configurar **permissões** segue exclusivo do administrador, checado no
-servidor. Se não for o desejado, é só devolver Usuários às exclusivas. **Decisão dele.**
+usuários da conta; configurar **permissões** segue exclusivo do administrador, checado no servidor.
+**Resolvido pela decisão do item 35 (2026-08-27):** "Usuários" continua concedível, e o cadastro do
+**administrador** passou a ser inalcançável para quem não é administrador — que era o risco real
+por trás desta dúvida.
 
 ## 🔐 Auditoria de segurança de 2026-08-27 (front + back, por agentes)
 
@@ -210,15 +212,19 @@ servidor. Se não for o desejado, é só devolver Usuários às exclusivas. **De
 > ⚠️ **Nada foi executado** — é leitura de código. Os itens marcados 🧪 pedem medição antes da
 > correção.
 
-### 35. 🔴 Operador com a tela "Usuários" toma a conta do administrador 🔵
+### 35. ✅ FECHADO — Operador com a tela "Usuários" tomava a conta do administrador
 `UsuarioService` teve as 5 chamadas de `exigirAdmin` removidas quando o RBAC entrou (o método ficou
 órfão, **medido**: 0 chamadas), e a V078 tirou `usuarios` de `admin_apenas`. O `PUT` não protege o
 alvo: quem tem *Usuários: alterar* reescreve **senha e e-mail do administrador** (e agora também
 desliga o 2FA dele) e entra no lugar. O `DELETE` só barra a auto-exclusão — apagar o administrador
 deixa a conta **sem admin para sempre**, porque `criar` grava `administrador = false` fixo e a
 restrição de um-admin-por-conta é imutável.
-**Decisão dele:** devolver Usuários às telas exclusivas (item 34) **ou** eu proteger alvo
-administrador no `PUT`/`DELETE`. Relacionado ao item 34.
+**Decisão dele (2026-08-27):** *"operador jamais pode acessar o cadastro do usuário
+administrador"*. **Feito:** o administrador some da listagem e todos os caminhos — `GET`, `PUT`,
+`DELETE` e a grade de permissões — respondem **404**, não 403 (403 confirmaria qual id é o dele).
+Verificado **revertendo a trava**: sem ela, o `PUT` responde 200 e a tomada de conta acontece.
+⭐ Isto **fecha também o item 34**: "Usuários" continua concedível, e conceder já não expõe o
+administrador.
 
 ### 36. 🔴 Nenhum operador consegue vender: o PDV responde 403 para quem não é admin 🟢
 `cfg_tela.pdv` está com `tem_incluir = false` (V076), e `POST /pdv/vendas` traduz para INCLUIR —
@@ -265,17 +271,31 @@ que se atravessa é a fronteira entre empresas. **Bola minha.**
 `venda.cancelada` nunca aparece no caminho da devolução: vender → cancelar (estoque volta, dinheiro
 sai) → devolver a mesma venda → **vale-mercadoria integral**. **Bola minha.**
 
-### 43. 🟠 Ambiente fiscal é trocável a quente, e a numeração não separa ambientes 🔵
+### 43. ✅ FECHADO — Ambiente fiscal era trocável a quente (trava pronta para o go-live)
 A série é protegida depois da primeira nota autorizada; o **ambiente** não. Trocar para homologação
 faz as vendas saírem sem valor jurídico com o PDV dizendo "autorizada" — e as notas de teste
 **consomem números da sequência de produção**, criando buracos que exigem inutilização formal.
-**Decisão dele:** travar o ambiente como a série já é travada.
+**Decisão dele (2026-08-27):** *"a emissão das notas está agora em homologação, pois estamos
+homologando junto à SEFAZ de todos os estados; mas quando o sistema estiver em produção, o sistema
+de emissão de notas fiscais não deverá ter a opção homologação ou produção — sempre vai ter que
+estar em produção, travado nisso"*. **Feito:** `NINER_FISCAL_AMBIENTE_FIXO`, hoje **vazia** (a
+homologação precisa do ambiente 2). Com ela em `PRODUCAO`, a escolha some da tela e o `PUT`
+sobrescreve o que vier.
+🔵 **Fica com ele o passo do go-live:** definir a variável no compose de produção.
+⚠️ **E fica aberto o irmão:** `fiscal_numeracao` não separa ambientes, então as notas de
+homologação de **hoje** consomem números da sequência que valerá em produção. Com a trava, isso não
+volta a acontecer depois do go-live — mas é bom saber que a numeração de produção vai começar de um
+número alto.
 
-### 44. 🟡 Sessão não é revogável: 8 h de sobrevida 🔵
+### 44. ✅ FECHADO — Sessão não era revogável (8 h de sobrevida)
 O JWT vale 8 h, sem `jti` e sem denylist. Desativar, excluir ou trocar a senha **não derruba
-sessão**: demitido continua operando até o token vencer. Correção: `token_version` no usuário,
-conferida no filtro (uma query indexada por requisição). **Decisão dele** — custa uma consulta a
-cada chamada.
+sessão**: demitido continua operando até o token vencer.
+**Decisão dele (2026-08-27):** *"sim, corrija isso — se a senha for trocada ou o usuário
+desativado, tem que efetuar o logoff do respectivo usuário o mais breve possível; algo que não
+deixe o sistema lento e não consuma muitos recursos do servidor"*. **Feito sem nenhuma consulta
+nova** (V080): `usuario.sessao_valida_desde` entrou na consulta que o filtro de horário de acesso
+já fazia a cada requisição. O logoff acontece na requisição seguinte. Ver
+`docs/telas/revogacao-de-sessao.md`.
 
 ### 45. 🟡 Desconto do tipo de carteira contorna o teto de desconto da venda 🟢
 `tipo_carteira.perc_desconto` é `numeric(5,2)` sem CHECK e sem teto no serviço, enquanto
@@ -290,12 +310,17 @@ reabrir-só-admin é explícita, falta a caixa sumir da grade). (b) `CategoriaPr
 cria e renomeia categorias. (c) `MarketingAdminController` é o único de `/api/admin` sem
 `exigirStaff`. **Bola minha.**
 
-### 47. 🟡 Signup diz quem já é cliente, e o lead grava consentimento não dado 🔵
+### 47. 🟡 Lead grava consentimento não dado (a parte do 409 foi decidida) 🔵
 `POST /assinar` responde 409 para e-mail já cadastrado e 201 para novo — um verificador de "é
 cliente do Nainer?", ao contrário do 204-sempre da recuperação de senha. E o `ON CONFLICT` do lead
 deixa um anônimo sobrescrever nome/telefone de um lead existente, gravando `consentimento_em` que
 a pessoa não deu (justo o campo que provaria a base legal do contato — LGPD).
-**Decisão dele:** a mensagem do 409 existe para o lojista não duplicar conta; o preço é este.
+**Decisão dele (2026-08-27): mantém o 409** — a mensagem existe para o lojista não duplicar conta,
+e o preço (confirmar que aquele e-mail já é cliente) está aceito e registrado.
+⚠️ **A outra metade continua aberta e é outra coisa:** o `ON CONFLICT` de `plataforma.lead` deixa um
+anônimo sobrescrever nome e telefone de um lead existente, e grava `consentimento_em` para quem
+nunca consentiu — justo o campo que provaria a base legal do contato (LGPD). Não mexi porque muda o
+funil de aquisição. **Decisão dele.**
 
 ### 48. 🟢 Cobertura de teste de isolamento e privilégio 🟢
 19 testes `isolamentoEntreTenants` para ~112 classes — ficam sem teste PDV/venda, caixa, contas a

@@ -31,10 +31,13 @@ import static org.springframework.http.HttpStatus.NOT_FOUND;
 
 /**
  * CRUD de usuários do tenant (docs/telas/usuario.md). Tabela {@code usuario} sob RLS (V015/
- * V024) — mesmo padrão de {@code cadastros.funcionario}, mas toda a superfície é restrita a
- * {@code ADMIN} ({@link #exigirAdmin}, mesmo mecanismo de {@code ConfiguracaoGeralService}):
- * gerenciar quem acessa o sistema é sensível o bastante pra não seguir a regra geral de
- * "OPERADOR também tem acesso" do resto de {@code cadastros}.
+ * V024) — mesmo padrão de {@code cadastros.funcionario}. Até 2026-08-27 toda a superfície exigia
+ * {@code ADMIN} no serviço; com o RBAC (V073–V078) quem decide passou a ser a grade da tela
+ * {@code usuarios}, e as cinco chamadas de {@code exigirAdmin} saíram.
+ *
+ * <p>⛔ <b>Com uma exceção que o dono do produto pôs de volta no mesmo dia:</b> o cadastro do
+ * <b>administrador</b> é inacessível a quem não é administrador — ver
+ * {@link #exigirAlvoAcessivel}. Sem isso, "Usuários: alterar" era o caminho para tomar a conta.
  *
  * <p><b>Só existe um ADMIN por tenant, para sempre (2026-07-28, decisão de produto).</b> Ele
  * nasce no signup ({@code SignupService.assinar}) e esta tela NUNCA cria nem edita o campo
@@ -86,6 +89,13 @@ public class UsuarioService {
 
         StringBuilder filtro = new StringBuilder(" WHERE u.id_tenant = plataforma.tenant_atual()");
         List<Object> params = new ArrayList<>();
+        if (!ehAdmin(jwt)) {
+            // ⛔ O administrador nem aparece para quem não é administrador (ver
+            // exigirAlvoAcessivel). Escondê-lo aqui é o que faz o 404 dos outros caminhos ser
+            // coerente: uma lista que mostra o registro e um GET que diz "não existe" entregaria
+            // exatamente a informação que o 404 evita.
+            filtro.append(" AND u.administrador = false");
+        }
         if (nome != null && !nome.isBlank()) {
             filtro.append(" AND (u.nome_usuario ILIKE ? OR u.email ILIKE ?)");
             params.add("%" + nome.trim() + "%");
@@ -114,6 +124,7 @@ public class UsuarioService {
 
     @Transactional(readOnly = true)
     public UsuarioResponse buscar(Jwt jwt, long id) {
+        exigirAlvoAcessivel(jwt, id);
         return montar(id);
     }
 
@@ -145,6 +156,7 @@ public class UsuarioService {
 
     @Transactional
     public UsuarioResponse atualizar(Jwt jwt, long id, UsuarioRequest req) {
+        exigirAlvoAcessivel(jwt, id);
         validar(req, false);
         try {
             // administrador NUNCA entra aqui — nem pra manter o valor atual explicitamente,
@@ -159,11 +171,19 @@ public class UsuarioService {
                 setSenha = ", senha_hash = ?";
                 params.add(senhas.encode(req.senha()));
             }
+            // ⚠️ Revogação de sessão (V080): trocar a senha OU desativar tem de derrubar quem já
+            // está dentro. Desativar sem expulsar é o caso do funcionário demitido que continua
+            // operando o resto do dia — o token vale 8 horas e não sabia de nada.
+            String setSessao = "";
+            boolean desativando = req.ativo() != null && !req.ativo();
+            if (!setSenha.isEmpty() || desativando) {
+                setSessao = ", sessao_valida_desde = now()";
+            }
             params.add(id);
             int linhas = jdbc.sql("""
                             UPDATE usuario SET id_empresa = ?, nome_usuario = ?, email = ?, ativo = ?,
                                                 controla_horario_acesso = ?, exige_codigo_login = ?
-                            """ + setSenha + """
+                            """ + setSenha + setSessao + """
                             , atualizado_em = now()
                             WHERE id_usuario = ? AND id_tenant = plataforma.tenant_atual()
                             """)
@@ -193,14 +213,16 @@ public class UsuarioService {
         if (id == Long.parseLong(jwt.getSubject())) {
             throw new IllegalArgumentException("Você não pode excluir a própria conta.");
         }
+        exigirAlvoAcessivel(jwt, id);
 
         boolean temCaixa = Boolean.TRUE.equals(
                 jdbc.sql("SELECT EXISTS (SELECT 1 FROM caixa_mestre WHERE id_usuario = ? AND id_tenant = plataforma.tenant_atual())")
                         .param(id).query(Boolean.class).single());
 
         if (temCaixa) {
+            // Inativar aqui é o que substitui a exclusão — logo, derruba a sessão igual (V080).
             int linhas = jdbc.sql("""
-                            UPDATE usuario SET ativo = false, atualizado_em = now()
+                            UPDATE usuario SET ativo = false, sessao_valida_desde = now(), atualizado_em = now()
                             WHERE id_usuario = ? AND id_tenant = plataforma.tenant_atual()
                             """)
                     .param(id).update();
@@ -328,10 +350,39 @@ public class UsuarioService {
                 base.criadoEm(), base.atualizadoEm());
     }
 
-    private static void exigirAdmin(Jwt jwt) {
+    private static boolean ehAdmin(Jwt jwt) {
         List<String> roles = jwt.getClaimAsStringList("roles");
-        if (roles == null || !roles.contains("ADMIN")) {
-            throw new ResponseStatusException(FORBIDDEN, "Apenas administradores podem gerenciar usuários.");
+        return roles != null && roles.contains("ADMIN");
+    }
+
+    /**
+     * ⛔ <b>Operador jamais acessa o cadastro do administrador</b> (decisão do dono do produto,
+     * 2026-08-27).
+     *
+     * <p>Quando o RBAC entrou, as cinco chamadas de {@code exigirAdmin} deste serviço saíram — a
+     * decisão passou a ser da grade — e a tela <b>Usuários</b> deixou de ser exclusiva. Só que o
+     * teto de delegação protege a <b>grade de permissões</b>, não o <b>registro do usuário</b>:
+     * quem recebesse "Usuários: alterar" reescrevia senha e e-mail do administrador (e, depois da
+     * V079, desligava o segundo fator dele antes) e entrava no lugar dele. O {@code DELETE} era
+     * pior: só barrava a auto-exclusão, e apagar o administrador deixa a conta <b>sem admin para
+     * sempre</b> — {@code criar} grava {@code administrador = false} fixo e
+     * {@code usuario_um_admin_uk} não deixa promover ninguém.
+     *
+     * <p>⚠️ <b>Responde 404, não 403.</b> "Você não pode mexer neste" confirmaria qual id é o do
+     * administrador — para quem está procurando um alvo, isso é meio caminho. Pelo mesmo motivo o
+     * administrador <b>não aparece na listagem</b> de quem não é admin.
+     */
+    private void exigirAlvoAcessivel(Jwt jwt, long idAlvo) {
+        if (ehAdmin(jwt)) {
+            return;
+        }
+        boolean alvoEhAdmin = Boolean.TRUE.equals(jdbc.sql("""
+                        SELECT administrador FROM usuario
+                        WHERE id_usuario = ? AND id_tenant = plataforma.tenant_atual()
+                        """)
+                .param(idAlvo).query(Boolean.class).optional().orElse(false));
+        if (alvoEhAdmin) {
+            throw new ResponseStatusException(NOT_FOUND, "Usuário não encontrado.");
         }
     }
 

@@ -62,6 +62,13 @@ public final class FiscalConfigDtos {
             String versaoTabelaIbpt,
             boolean serieNfceBloqueada,
             boolean serieNfeBloqueada,
+            /**
+             * {@code true} quando a instalação fixa o ambiente de emissão (hoje, produção): a tela
+             * esconde a escolha "homologação × produção" em vez de oferecer algo que o servidor vai
+             * sobrescrever. Vem de {@code niner.fiscal.ambiente-fixo}, não do banco — é decisão da
+             * instalação, não do lojista.
+             */
+            boolean ambienteTravado,
             OffsetDateTime criadoEm,
             OffsetDateTime atualizadoEm) {
     }

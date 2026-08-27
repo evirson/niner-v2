@@ -30,6 +30,8 @@ export interface FiscalConfig {
   versaoTabelaIbpt: string | null
   serieNfceBloqueada: boolean
   serieNfeBloqueada: boolean
+  /** A instalação fixa o ambiente de emissão: a tela esconde a escolha (decisão de 2026-08-27). */
+  ambienteTravado: boolean
   criadoEm: string | null
   atualizadoEm: string | null
 }

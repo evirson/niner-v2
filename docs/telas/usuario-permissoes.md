@@ -138,6 +138,30 @@ O administrador não passa por nada disso: o teto dele é o sistema inteiro.
 do seu alcance **não aparecem** — mostrar tudo e recusar no Salvar seria repetir o incômodo do
 "liberar tudo": marcar dezenas de itens e descobrir no fim que metade não podia.
 
+## ⛔ O cadastro do administrador é intocável (2026-08-27, depois da auditoria)
+
+Ordem do dono do produto: *"operador jamais pode acessar o cadastro do usuário administrador"*.
+
+O teto de delegação protege a **grade de permissões**; não protegia o **registro do usuário**.
+Quem recebesse "Usuários: alterar" — concessão plausível, *"deixe o gerente cadastrar gente"* —
+reescrevia **senha e e-mail do administrador** (e, depois da V079, desligava o segundo fator dele
+antes) e entrava no lugar. O `DELETE` era pior: só barrava a auto-exclusão, e apagar o
+administrador deixa a conta **sem admin para sempre**, porque `criar` grava
+`administrador = false` fixo e `usuario_um_admin_uk` não deixa promover ninguém.
+
+Hoje, para quem não é administrador:
+
+- ele **não aparece na listagem**;
+- `GET`, `PUT`, `DELETE` e a grade de permissões dele respondem **404**.
+
+⚠️ **404 e não 403**, de propósito: *"você não pode mexer neste"* confirmaria qual id é o do
+administrador, e para quem procura um alvo isso é meio caminho. Esconder da lista e responder 404
+são a mesma decisão — uma lista que mostra o registro e um GET que diz "não existe" entregariam
+exatamente a informação que o 404 evita.
+
+Teste: `PermissaoPorTelaTest.operadorNaoAlcancaOCadastroDoAdministrador`. ⭐ Ele foi verificado
+**revertendo a trava**: sem ela, o `PUT` responde 200 e a tomada de conta acontece.
+
 ## As travas antigas removidas
 
 Dez telas apareciam na grade mas tinham uma segunda tranca escrita no serviço ("só ADMIN"),

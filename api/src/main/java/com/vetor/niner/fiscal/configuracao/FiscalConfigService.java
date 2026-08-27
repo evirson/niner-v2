@@ -1,5 +1,6 @@
 package com.vetor.niner.fiscal.configuracao;
 
+import com.vetor.niner.comum.config.NinerProperties;
 import com.vetor.niner.comum.seguranca.SegredoCifrador;
 import com.vetor.niner.fiscal.configuracao.FiscalConfigDtos.AmbienteFiscal;
 import com.vetor.niner.fiscal.configuracao.FiscalConfigDtos.CscParaEmissao;
@@ -60,8 +61,10 @@ public class FiscalConfigService {
 
     private final JdbcClient jdbc;
     private final SegredoCifrador cifrador;
+    private final NinerProperties props;
 
-    public FiscalConfigService(JdbcClient jdbc, SegredoCifrador cifrador) {
+    public FiscalConfigService(JdbcClient jdbc, SegredoCifrador cifrador, NinerProperties props) {
+        this.props = props;
         this.jdbc = jdbc;
         this.cifrador = cifrador;
     }
@@ -119,7 +122,7 @@ public class FiscalConfigService {
                             WHERE id_tenant = plataforma.tenant_atual() AND id_empresa = ?
                             """)
                     .params(req.crt(),
-                            req.emiteNfce(), req.emiteNfe(), req.ambiente().name(),
+                            req.emiteNfce(), req.emiteNfe(), ambienteParaGravar(req).name(),
                             req.serieNfce(), req.serieNfe(), req.serieContingencia(),
                             req.inscricaoEstadualSt(), req.suframa(),
                             req.cscId(), cscToken, idEmpresa)
@@ -136,7 +139,7 @@ public class FiscalConfigService {
                                     ?, ?, ?::ambiente_fiscal, ?, ?, ?, ?, ?, ?, ?)
                             """)
                     .params(idEmpresa, req.crt(),
-                            req.emiteNfce(), req.emiteNfe(), req.ambiente().name(),
+                            req.emiteNfce(), req.emiteNfe(), ambienteParaGravar(req).name(),
                             req.serieNfce(), req.serieNfe(), req.serieContingencia(),
                             req.inscricaoEstadualSt(), req.suframa(),
                             req.cscId(), cscToken)
@@ -176,6 +179,46 @@ public class FiscalConfigService {
      * Trocar a série depois da primeira nota autorizada quebraria essa garantia — por isso o
      * campo vira somente-leitura na tela e o servidor recusa aqui também (P4).
      */
+    /**
+     * ⭐ <b>Instalação em produção não oferece escolha de ambiente</b> (decisão do dono do produto,
+     * 2026-08-27): <i>"quando o sistema estiver em produção, o sistema de emissão de notas fiscais
+     * não deverá ter a opção homologação ou produção — sempre vai ter que estar em produção,
+     * travado nisso"</i>.
+     *
+     * <p>⚠️ <b>Por que travar isto importa mais do que parece.</b> A série já era imutável depois
+     * da primeira nota autorizada; o ambiente não era, e trocá-lo faz as vendas seguintes saírem
+     * com {@code tpAmb=2} — <b>sem valor jurídico</b> — enquanto o PDV segue dizendo "Nota
+     * autorizada". Pior: {@code fiscal_numeracao} tem PK {@code (tenant, empresa, modelo, série)},
+     * <b>sem ambiente</b>, então as notas de teste consomem números da sequência de produção e
+     * abrem buracos que depois exigem inutilização formal.
+     *
+     * <p>Enquanto {@code niner.fiscal.ambiente-fixo} está vazio — que é o caso hoje, com o produto
+     * homologando junto às SEFAZ dos estados — a escolha continua livre.
+     */
+    private AmbienteFiscal ambientePadrao() {
+        String fixo = props.fiscal().ambienteFixo();
+        return fixo == null || fixo.isBlank()
+                ? AmbienteFiscal.HOMOLOGACAO
+                : AmbienteFiscal.valueOf(fixo.trim().toUpperCase(java.util.Locale.ROOT));
+    }
+
+    private boolean ambienteTravado() {
+        String fixo = props.fiscal().ambienteFixo();
+        return fixo != null && !fixo.isBlank();
+    }
+
+    /**
+     * O ambiente que vai para o banco: o do request enquanto a instalação deixa escolher, o fixo
+     * quando não deixa.
+     *
+     * <p>⚠️ <b>Sobrescreve em vez de recusar</b>, de propósito: recusar travaria a edição de
+     * qualquer outro campo para quem tivesse ficado com HOMOLOGACAO gravado antes da virada — e a
+     * resposta devolve o ambiente real, então a tela mostra a verdade na hora.
+     */
+    private AmbienteFiscal ambienteParaGravar(FiscalConfigRequest req) {
+        return ambienteTravado() ? ambientePadrao() : req.ambiente();
+    }
+
     private void validarSerieImutavel(FiscalConfigResponse atual, FiscalConfigRequest req) {
         if (!atual.configurado()) {
             return;
@@ -342,7 +385,13 @@ public class FiscalConfigService {
                 .optional()
                 .orElseThrow(() -> naoEncontrada(idEmpresa));
         if (!base.configurado()) {
-            return base;
+            return new FiscalConfigResponse(
+                    base.idEmpresa(), base.razaoSocialEmpresa(), false, base.crt(),
+                    base.emiteNfce(), base.emiteNfe(), ambientePadrao(),
+                    base.serieNfce(), base.serieNfe(), base.serieContingencia(),
+                    base.inscricaoEstadualSt(), base.suframa(),
+                    base.cscId(), base.cscConfigurado(), base.versaoTabelaIbpt(),
+                    false, false, ambienteTravado(), base.criadoEm(), base.atualizadoEm());
         }
         boolean nfceBloqueada = existeNumeracao(idEmpresa, 65, base.serieNfce());
         boolean nfeBloqueada = existeNumeracao(idEmpresa, 55, base.serieNfe());
@@ -352,7 +401,7 @@ public class FiscalConfigService {
                 base.serieNfce(), base.serieNfe(), base.serieContingencia(),
                 base.inscricaoEstadualSt(), base.suframa(),
                 base.cscId(), base.cscConfigurado(), base.versaoTabelaIbpt(),
-                nfceBloqueada, nfeBloqueada, base.criadoEm(), base.atualizadoEm());
+                nfceBloqueada, nfeBloqueada, ambienteTravado(), base.criadoEm(), base.atualizadoEm());
     }
 
     private boolean existeNumeracao(long idEmpresa, int modelo, int serie) {
@@ -375,7 +424,7 @@ public class FiscalConfigService {
                     rs.getLong("id_empresa"), rs.getString("razao_social"), false,
                     1, false, false, AmbienteFiscal.HOMOLOGACAO,
                     1, 1, 9, null, null, null, false, null,
-                    false, false, null, null);
+                    false, false, false, null, null);
         }
         return new FiscalConfigResponse(
                 rs.getLong("id_empresa"), rs.getString("razao_social"), true,
@@ -387,7 +436,7 @@ public class FiscalConfigService {
                 rs.getString("csc_id"),
                 rs.getString("csc_token_cifrado") != null,   // F7: nunca o token, só se existe
                 rs.getString("versao_tabela_ibpt"),
-                false, false,
+                false, false, false,
                 rs.getObject("criado_em", OffsetDateTime.class),
                 rs.getObject("atualizado_em", OffsetDateTime.class));
     }

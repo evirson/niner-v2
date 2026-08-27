@@ -41,6 +41,17 @@ Registro cronológico das decisões e entregas. Atualizar a cada marco relevante
 >    `ORDER BY` do cliente todos por allowlist. Os buracos estão no RBAC novo, no bloco fiscal e no
 >    login. Três achados eram do 2FA escrito horas antes e **já foram corrigidos e medidos**; o
 >    restante está em `docs/PENDENCIAS.md` esperando decisão do dono do produto.
+> 8. **As quatro decisões dele sobre a auditoria, implementadas no mesmo dia:** ⛔ o cadastro do
+>    **administrador** ficou inalcançável para quem não é administrador (some da lista, 404 em todo
+>    caminho — era possível reescrever a senha dele e tomar a conta); a **revogação de sessão**
+>    (V080) passou a derrubar o token ao trocar senha/desativar/excluir, **sem nenhuma consulta
+>    nova** — a coluna entrou na consulta que o filtro de horário já fazia; e o **ambiente fiscal**
+>    ganhou trava para o go-live (`NINER_FISCAL_AMBIENTE_FIXO`, hoje vazia porque o produto está
+>    homologando junto às SEFAZ). O 409 do signup fica como está, por decisão dele.
+>    ⭐ **O caso NEGATIVO da revogação foi o que pegou o defeito:** o `iat` do JWT conta em segundos
+>    inteiros, então comparar cru fazia todo usuário recém-criado nascer com a sessão revogada —
+>    o token que o signup acabava de devolver era recusado. Uma suíte só de casos positivos teria
+>    aprovado um mecanismo que expulsava todo mundo.
 >
 > Detalhe de cada uma: `docs/telas/login.md`, `ramo-atividade.md`, `contratacao-grupo.md`,
 > `usuario-permissoes.md`, `login-duas-etapas.md` e `docs/infra/parque-de-celulas.md`.

@@ -14,8 +14,12 @@ import org.springframework.web.bind.annotation.*;
 
 /**
  * CRUD de usuários (docs/telas/usuario.md), superfície do tenant (`/api/v1`, JWT + RLS).
- * Toda a superfície é restrita a ADMIN — verificado no serviço a partir do claim {@code roles}
- * do JWT (mesmo mecanismo de {@code ConfiguracaoGeralService}).
+ * Quem entra aqui é decidido pela grade de permissões (tela {@code usuarios}), não mais por um
+ * {@code exigirAdmin} no serviço — as cinco chamadas saíram quando o RBAC entrou.
+ *
+ * <p>⛔ <b>Exceção que não é opcional:</b> o cadastro do <b>administrador</b> só é acessível ao
+ * próprio administrador — não aparece na listagem de terceiros e responde 404 no GET, PUT e
+ * DELETE (ver {@code UsuarioService.exigirAlvoAcessivel}).
  */
 @RestController
 @RequestMapping("/api/v1/usuarios")

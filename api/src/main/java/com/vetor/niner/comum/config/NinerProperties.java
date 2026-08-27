@@ -77,7 +77,20 @@ public record NinerProperties(
      * horas suspeitando do certificado do lojista (achado do B0). Vazio = truststore padrão do
      * JDK, que serve para teste local mas não para a SEFAZ real.
      */
-    public record Fiscal(String truststorePath, String truststoreSenha, RespTec respTec) {
+    /**
+     * @param ambienteFixo quando preenchido (hoje só {@code PRODUCAO} faz sentido), a escolha de
+     *        ambiente da tela de Configuração Fiscal <b>deixa de existir</b>: toda empresa emite
+     *        em produção e o campo some do formulário.
+     *        <p>⭐ Decisão do dono do produto (2026-08-27): <i>"quando o sistema estiver em
+     *        produção, o sistema de emissão de notas fiscais não deverá ter a opção homologação ou
+     *        produção — sempre vai ter que estar em produção, travado nisso"</i>. Hoje fica
+     *        <b>vazio</b>, porque o Nainer está justamente homologando junto às SEFAZ dos estados.
+     *        <p>⚠️ É variável de ambiente e não coluna no banco de propósito: a escolha é da
+     *        <b>instalação</b>, não do lojista — deixá-la no banco devolveria ao lojista a decisão
+     *        que se quer tirar dele.
+     */
+    public record Fiscal(String truststorePath, String truststoreSenha, RespTec respTec,
+                         String ambienteFixo) {
     }
 
     /**

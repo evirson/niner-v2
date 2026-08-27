@@ -276,17 +276,22 @@ export default function FiscalConfiguracaoForm() {
                     Emitir NF-e (modelo 55) de devolução
                   </label>
                 </div>
-                <div className="col-6">
-                  <label htmlFor="ambiente">Ambiente *</label>
-                  <select
-                    id="ambiente"
-                    value={form.ambiente}
-                    onChange={(e) => setForm((f) => ({ ...f, ambiente: e.target.value as AmbienteFiscal }))}
-                  >
-                    <option value="HOMOLOGACAO">Homologação</option>
-                    <option value="PRODUCAO">Produção</option>
-                  </select>
-                </div>
+                {/* ⭐ Instalação em produção não oferece escolha: o campo some, não fica
+                    desabilitado. Campo cinza convida a perguntar "como eu habilito isso?" — e a
+                    resposta é que não se habilita. Decisão do dono do produto, 2026-08-27. */}
+                {!config.ambienteTravado && (
+                  <div className="col-6">
+                    <label htmlFor="ambiente">Ambiente *</label>
+                    <select
+                      id="ambiente"
+                      value={form.ambiente}
+                      onChange={(e) => setForm((f) => ({ ...f, ambiente: e.target.value as AmbienteFiscal }))}
+                    >
+                      <option value="HOMOLOGACAO">Homologação</option>
+                      <option value="PRODUCAO">Produção</option>
+                    </select>
+                  </div>
+                )}
               </div>
             </section>
 

@@ -171,8 +171,12 @@ public class RecuperacaoSenhaService {
         jdbc.sql("SELECT set_config('app.id_tenant', ?, true)")
                 .param(Long.toString(pedido.idTenant())).query(String.class).single();
 
+        // ⚠️ `sessao_valida_desde = now()` (V080) derruba toda sessão aberta com a senha antiga —
+        // é o caso principal da revogação: quem redefine a senha costuma estar redefinindo porque
+        // alguém entrou na conta dele, e trocar a senha sem expulsar quem já está dentro não
+        // resolve nada.
         jdbc.sql("""
-                        UPDATE usuario SET senha_hash = ?, atualizado_em = now()
+                        UPDATE usuario SET senha_hash = ?, sessao_valida_desde = now(), atualizado_em = now()
                          WHERE id_tenant = ? AND id_usuario = ?
                         """)
                 .params(senhas.encode(req.novaSenha()), pedido.idTenant(), pedido.idUsuario())

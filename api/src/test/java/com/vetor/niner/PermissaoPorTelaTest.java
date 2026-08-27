@@ -386,5 +386,69 @@ class PermissaoPorTelaTest {
         assertTrue(((java.util.List<?>) JsonPath.read(gradeAdmin, "$")).size() > 40,
                 "o admin vê o catálogo todo");
     }
+
+    /**
+     * ⛔ <b>Operador jamais acessa o cadastro do administrador</b> (decisão do dono do produto,
+     * 2026-08-27, depois da auditoria de segurança).
+     *
+     * <p>O teto de delegação protege a <b>grade</b>; não protegia o <b>registro</b>. Com
+     * "Usuários: alterar" — concessão plausível, "deixe o gerente cadastrar gente" — dava para
+     * reescrever senha e e-mail do administrador (e desligar o segundo fator dele antes) e entrar
+     * no lugar. O {@code DELETE} era pior: apagar o administrador deixa a conta <b>sem admin para
+     * sempre</b>, porque criar grava {@code administrador = false} fixo e a restrição de um-só é
+     * imutável.
+     *
+     * <p>⚠️ Tudo responde <b>404</b>, não 403: "você não pode mexer neste" confirmaria qual id é o
+     * do administrador. Pelo mesmo motivo ele some da listagem.
+     */
+    @Test
+    void operadorNaoAlcancaOCadastroDoAdministrador() throws Exception {
+        Conta c = contaComOperador("alvo-admin");
+        // A concessão que abria o buraco: a tela Usuários inteira.
+        mvc.perform(put("/api/v1/usuarios/" + c.idOperador() + "/permissoes")
+                        .header("Authorization", "Bearer " + c.token())
+                        .contentType(APPLICATION_JSON).content("""
+                                [{"chaveTela":"usuarios","acessar":true,"incluir":true,"alterar":true,"excluir":true}]
+                                """))
+                .andExpect(status().isOk());
+        String tokenOperador = entrar("opalvo-admin@lojarbac.com", "senha12345");
+
+        // Qual é o id do admin? O operador não descobre pela lista: ele não está lá.
+        String lista = mvc.perform(get("/api/v1/usuarios?status=TODOS")
+                        .header("Authorization", "Bearer " + tokenOperador))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        assertEquals(0, ((java.util.List<?>) JsonPath.read(lista, "$.itens[?(@.administrador == true)]")).size(),
+                "o administrador não pode aparecer na listagem de quem não é administrador");
+
+        // Mas o id é adivinhável (o admin nasce no signup) — então cada caminho é fechado de novo.
+        String listaAdmin = mvc.perform(get("/api/v1/usuarios?status=TODOS")
+                        .header("Authorization", "Bearer " + c.token()))
+                .andReturn().getResponse().getContentAsString();
+        @SuppressWarnings("unchecked")
+        var adminsNaLista = (java.util.List<java.util.Map<String, Object>>) JsonPath.read(
+                listaAdmin, "$.itens[?(@.administrador == true)]");
+        long idAdmin = ((Number) adminsNaLista.get(0).get("idUsuario")).longValue();
+
+        mvc.perform(get("/api/v1/usuarios/" + idAdmin).header("Authorization", "Bearer " + tokenOperador))
+                .andExpect(status().isNotFound());
+
+        mvc.perform(put("/api/v1/usuarios/" + idAdmin).header("Authorization", "Bearer " + tokenOperador)
+                        .contentType(APPLICATION_JSON).content("""
+                                {"nome":"ADMIN","email":"atacante@x.com","senha":"NovaSenha123",
+                                 "idsEmpresa":[1],"exigeCodigoLogin":false}
+                                """))
+                .andExpect(status().isNotFound());
+
+        mvc.perform(delete("/api/v1/usuarios/" + idAdmin).header("Authorization", "Bearer " + tokenOperador))
+                .andExpect(status().isNotFound());
+
+        mvc.perform(get("/api/v1/usuarios/" + idAdmin + "/permissoes")
+                        .header("Authorization", "Bearer " + tokenOperador))
+                .andExpect(status().isNotFound());
+
+        // E o administrador segue entrando com a senha dele — a tentativa não pode ter passado.
+        assertTrue(entrar("donoalvo-admin@lojarbac.com", "segredo123").length() > 20);
+    }
 }
 
