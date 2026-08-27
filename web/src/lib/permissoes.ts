@@ -11,6 +11,9 @@ export interface Permissao {
   chave: string
   nome: string
   grupo: string
+  /** Subgrupo dentro da aba (ex.: "Cancelamentos" dentro de Frente de Loja). `null` quando o
+   *  grupo não tem subdivisão. */
+  subgrupo: string | null
   acessar: boolean
   incluir: boolean
   alterar: boolean

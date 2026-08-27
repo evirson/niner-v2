@@ -211,7 +211,15 @@ export default function UsuarioPermissoes() {
                   </tr>
                 </thead>
                 <tbody>
-                  {linhasVisiveis.map((p) => (
+                  {linhasVisiveis.map((p, i) => (
+                    <>
+                      {/* Separador de subgrupo: sem ele, as 20 telas de Configurações viram uma
+                          lista corrida e o admin perde a referência de onde está. */}
+                      {!termo && p.subgrupo && p.subgrupo !== linhasVisiveis[i - 1]?.subgrupo && (
+                        <tr key={`sub-${p.subgrupo}`} className="linha-subgrupo">
+                          <td colSpan={1 + ACOES.length}>{p.subgrupo}</td>
+                        </tr>
+                      )}
                     <tr key={p.chave}>
                       <td>{p.nome}</td>
                       {termo && <td className="muted">{p.grupo}</td>}
@@ -230,6 +238,7 @@ export default function UsuarioPermissoes() {
                         </td>
                       ))}
                     </tr>
+                    </>
                   ))}
                 </tbody>
               </table>

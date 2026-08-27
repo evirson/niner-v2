@@ -666,16 +666,27 @@ export function filtrarPorPapel(nos: NavNode[], isAdmin: boolean): NavNode[] {
  * contrário faria o menu piscar vazio a cada abertura, e um menu que aparece vazio por meio
  * segundo parece sistema quebrado. Quem carrega decide quando aplicar.
  */
-export function filtrarPorPermissao(nos: NavNode[], chavesPermitidas: Set<string> | null): NavNode[] {
+export function filtrarPorPermissao(
+  nos: NavNode[],
+  chavesPermitidas: Set<string> | null,
+  chavesCatalogadas?: Set<string>,
+): NavNode[] {
   if (!chavesPermitidas) return nos
   const resultado: NavNode[] = []
   for (const n of nos) {
     if (eGrupo(n)) {
-      const filhos = filtrarPorPermissao(n.itens, chavesPermitidas)
+      const filhos = filtrarPorPermissao(n.itens, chavesPermitidas, chavesCatalogadas)
       if (filhos.length === 0 && n.itens.length > 0) continue
       resultado.push({ ...n, itens: filhos })
-    } else if (chavesPermitidas.has(chaveDaRota(n.to))) {
-      resultado.push(n)
+    } else {
+      const chave = chaveDaRota(n.to)
+      // ⚠️ Tela FORA do catálogo não é controlada por permissão e continua aparecendo — hoje
+      // são as de "Implementações Futuras", que saíram da grade a pedido dele ("quando o ERP
+      // for concluído este item não vai existir") mas devem seguir no menu. Tratar ausência
+      // como "proibida" faria qualquer tela nova sumir do menu no dia em que fosse criada,
+      // antes de alguém pensar em catalogá-la — e sumir sem erro é o pior tipo de bug.
+      const naoCatalogada = chavesCatalogadas ? !chavesCatalogadas.has(chave) : false
+      if (naoCatalogada || chavesPermitidas.has(chave)) resultado.push(n)
     }
   }
   return resultado

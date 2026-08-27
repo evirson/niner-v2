@@ -34,11 +34,11 @@ import static org.springframework.http.HttpStatus.NOT_FOUND;
 public class PermissaoController {
 
     private static final String SQL_CATALOGO = """
-            SELECT chave, nome, grupo, admin_apenas FROM cfg_tela ORDER BY ordem
+            SELECT chave, nome, grupo, subgrupo, admin_apenas FROM cfg_tela ORDER BY ordem
             """;
 
     private static final String SQL_DO_USUARIO = """
-            SELECT t.chave, t.nome, t.grupo, t.admin_apenas,
+            SELECT t.chave, t.nome, t.grupo, t.subgrupo, t.admin_apenas,
                    COALESCE(p.acessar, false) AS acessar,
                    COALESCE(p.incluir, false) AS incluir,
                    COALESCE(p.alterar, false) AS alterar,
@@ -62,7 +62,7 @@ public class PermissaoController {
     public List<TelaResponse> catalogo() {
         return jdbc.sql(SQL_CATALOGO)
                 .query((rs, n) -> new TelaResponse(rs.getString("chave"), rs.getString("nome"),
-                        rs.getString("grupo"), rs.getBoolean("admin_apenas")))
+                        rs.getString("grupo"), rs.getString("subgrupo"), rs.getBoolean("admin_apenas")))
                 .list();
     }
 
@@ -82,7 +82,7 @@ public class PermissaoController {
                     // usuário culparia o sistema, não a permissão.
                     boolean bloqueada = !admin && rs.getBoolean("admin_apenas");
                     return new PermissaoResponse(
-                            rs.getString("chave"), rs.getString("nome"), rs.getString("grupo"),
+                            rs.getString("chave"), rs.getString("nome"), rs.getString("grupo"), rs.getString("subgrupo"),
                             !bloqueada && (admin || rs.getBoolean("acessar")),
                             !bloqueada && (admin || rs.getBoolean("incluir")),
                             !bloqueada && (admin || rs.getBoolean("alterar")),
@@ -99,7 +99,7 @@ public class PermissaoController {
         return jdbc.sql(SQL_DO_USUARIO)
                 .param(idUsuario)
                 .query((rs, n) -> new PermissaoResponse(
-                        rs.getString("chave"), rs.getString("nome"), rs.getString("grupo"),
+                        rs.getString("chave"), rs.getString("nome"), rs.getString("grupo"), rs.getString("subgrupo"),
                         rs.getBoolean("acessar"), rs.getBoolean("incluir"),
                         rs.getBoolean("alterar"), rs.getBoolean("excluir")))
                 .list();
@@ -174,10 +174,10 @@ public class PermissaoController {
         }
     }
 
-    public record TelaResponse(String chave, String nome, String grupo, boolean adminApenas) {
+    public record TelaResponse(String chave, String nome, String grupo, String subgrupo, boolean adminApenas) {
     }
 
-    public record PermissaoResponse(String chave, String nome, String grupo,
+    public record PermissaoResponse(String chave, String nome, String grupo, String subgrupo,
             boolean acessar, boolean incluir, boolean alterar, boolean excluir) {
     }
 
