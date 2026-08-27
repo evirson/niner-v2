@@ -53,6 +53,17 @@ public class PermissaoController {
              ORDER BY t.ordem
             """;
 
+    /**
+     * A mesma grade, sem as telas exclusivas do administrador.
+     *
+     * <p>⚠️ Elas não são apenas "não concedíveis": elas <b>não aparecem</b>. Antes desta
+     * separação a tela listava tudo e o salvamento recusava — ao clicar em "liberar tudo", o
+     * administrador recebia um erro citando 22 telas que ele nem sabia estarem ali. Oferecer o
+     * que o sistema depois recusa é convidar ao erro.
+     */
+    private static final String SQL_DO_USUARIO_CONCEDIVEIS =
+            SQL_DO_USUARIO.replace("ORDER BY t.ordem", "WHERE NOT t.admin_apenas ORDER BY t.ordem");
+
     private final JdbcClient jdbc;
 
     public PermissaoController(JdbcClient jdbc) {
@@ -100,7 +111,7 @@ public class PermissaoController {
     public List<PermissaoResponse> doUsuario(@AuthenticationPrincipal Jwt jwt, @PathVariable long idUsuario) {
         exigirAdmin(jwt);
         exigirUsuarioDoTenant(idUsuario);
-        return jdbc.sql(SQL_DO_USUARIO)
+        return jdbc.sql(SQL_DO_USUARIO_CONCEDIVEIS)
                 .param(idUsuario)
                 .query((rs, n) -> new PermissaoResponse(
                         rs.getString("chave"), rs.getString("nome"), rs.getString("grupo"), rs.getString("subgrupo"),

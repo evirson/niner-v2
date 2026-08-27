@@ -147,7 +147,7 @@ class PermissaoPorTelaTest {
 
     /**
      * ⚠️ Tela exclusiva do administrador não é concedível — e a recusa é explícita, com o nome da
-     * tela. Ignorar em silêncio faria o admin achar que concedeu, e a permissão "não salvaria"
+     * tela — e, desde 2026-08-27, ela nem aparece na grade. Ignorar em silêncio faria o admin achar que concedeu, e a permissão "não salvaria"
      * sem explicação nenhuma. Descoberto testando ao vivo: antes desta trava, a DRE era gravada e
      * aparecia no menu do operador, para a rotina negar depois.
      */
@@ -157,10 +157,10 @@ class PermissaoPorTelaTest {
         mvc.perform(put("/api/v1/usuarios/" + c.idOperador() + "/permissoes")
                         .header("Authorization", "Bearer " + c.token())
                         .contentType(APPLICATION_JSON).content("""
-                                [{"chaveTela":"relatorio-dre","acessar":true,"incluir":false,"alterar":false,"excluir":false}]
+                                [{"chaveTela":"empresas","acessar":true,"incluir":false,"alterar":false,"excluir":false}]
                                 """))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.detail").value(org.hamcrest.Matchers.containsString("DRE")));
+                .andExpect(jsonPath("$.detail").value(org.hamcrest.Matchers.containsString("Empresas")));
     }
 
     /** Quem não é administrador não configura permissão — nem a própria. */

@@ -305,14 +305,18 @@ export const MENU: NavGrupo[] = [
     chave: 'configuracoes',
     label: 'Configurações',
     icone: IconeParametros,
-    descricao: 'Ajustes da conta e do comportamento do sistema. Só para administradores.',
-    adminOnly: true,
+    descricao: 'Ajustes da conta e do comportamento do sistema.',
+    // ⚠️ O grupo NÃO é mais adminOnly em bloco (2026-08-27). Ele era, e isso escondia do
+    // operador telas que o dono do produto decidiu poder conceder — Parâmetros do Sistema,
+    // o bloco Fiscal inteiro, Configuração de Etiqueta. Agora a marca é item a item, e as 9
+    // exclusivas espelham `cfg_tela.admin_apenas` (V078).
     itens: [
       {
         to: '/canais',
         label: 'Canais de Venda',
         icone: IconeCanais,
         descricao: 'Conexão com marketplaces, regra de preço por canal e saúde da sincronização.',
+        adminOnly: true,
       },
       {
         to: '/minha-conta',
@@ -320,6 +324,7 @@ export const MENU: NavGrupo[] = [
         icone: IconePainel,
         descricao:
           'Plano, quantas vendas do mês já foram usadas, histórico e os CNPJs da conta. É o que a loja paga à Vetor — não confundir com o caixa da loja.',
+        adminOnly: true,
       },
       {
         to: '/usuarios',
@@ -332,6 +337,7 @@ export const MENU: NavGrupo[] = [
         label: 'Empresas',
         icone: IconeEmpresa,
         descricao: 'Identificação, endereço e dados fiscais (CNPJ, Inscrição Estadual, CNAE) de cada empresa do tenant.',
+        adminOnly: true,
       },
       {
         to: '/configuracoes-gerais',
@@ -382,12 +388,17 @@ export const MENU: NavGrupo[] = [
             descricao: 'Importa o saldo inicial de estoque a partir de uma planilha Excel (.xlsx ou .xls) — o produto precisa já ter sido importado.',
           },
         ],
+        // As cinco importações são exclusivas do administrador (V078) — marcar o SUBGRUPO basta:
+        // `filtrarPorPapel` derruba o subgrupo inteiro, e um grupo que fica sem filhos some
+        // sozinho. Marcar item a item aqui repetiria a mesma regra cinco vezes.
+        adminOnly: true,
       },
       {
         to: '/exportacao-dados',
         label: 'Exportação de Dados',
         icone: IconePedidos,
         descricao: 'Baixe em planilha Excel empresas, clientes, fornecedores, funcionários, financeiro, estoque e código de barras.',
+        adminOnly: true,
       },
       {
         chave: 'fiscal',
@@ -539,9 +550,9 @@ export const MENU: NavGrupo[] = [
         ],
       },
       {
-        // ⚠️ Os dois itens são `adminOnly`, e o subgrupo NÃO precisa ser marcado: `filtrarPorPapel`
-        // é recursivo e descarta grupo que ficou sem filhos — para um OPERADOR, "Resultados"
-        // simplesmente não aparece.
+        // ⚠️ DRE e Lucratividade deixaram de ser adminOnly em 2026-08-27: passaram a ser
+        // concedíveis pela tela de permissões (V078). Quem não receber a permissão continua sem
+        // ver — mas agora por RBAC, não por papel.
         chave: 'relatorios-resultados',
         label: 'Resultados',
         icone: IconeRelatorio,
@@ -552,7 +563,6 @@ export const MENU: NavGrupo[] = [
             label: 'DRE — Demonstração do Resultado',
             icone: IconeRelatorio,
             descricao: 'Lucro do período em regime de competência ou de caixa, com CMV, margem e comparação com o período anterior.',
-            adminOnly: true,
           },
           {
             to: '/lucratividade',
@@ -560,7 +570,6 @@ export const MENU: NavGrupo[] = [
             icone: IconeRelatorio,
             descricao: 'Venda, custo do vendido, lucro bruto, contas pagas por plano de contas e lucro líquido do período.',
             sinonimos: ['Relatório de Lucratividade'],
-            adminOnly: true,
           },
         ],
       },
