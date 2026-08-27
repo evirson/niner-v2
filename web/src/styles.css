@@ -1758,3 +1758,71 @@ a.menu-card:hover {
 .orcamento-rodape-acao { flex: 1; display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
 .orcamento-rodape-desconto { width: 150px; flex-shrink: 0; }
 .orcamento-rodape-totais { flex: 1; text-align: right; }
+
+/* ── Permissões do usuário (RBAC, 2026-08-27) ─────────────────────────────────────────────── */
+/* Abas por grupo de menu. 63 telas numa página só viram rolagem sem fim, e o cabeçalho das
+   colunas some da vista — foi a queixa do dono do produto ao ver a primeira versão: "não sei
+   qual quadro pertence ao que". */
+.abas-permissao {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.aba-permissao {
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--ink-muted);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  padding: 7px 12px;
+}
+
+.aba-permissao:hover { border-color: var(--accent); }
+
+.aba-permissao-ativa {
+  background: rgba(var(--accent-rgb), 0.16);
+  border-color: var(--accent);
+  color: var(--ink);
+  font-weight: 600;
+}
+
+/* Quantas telas do grupo já estão liberadas — responde "onde foi que eu liberei alguma coisa?"
+   sem o admin abrir aba por aba. */
+.aba-permissao-contador {
+  background: var(--accent);
+  border-radius: 10px;
+  color: var(--accent-ink);
+  font-size: 11px;
+  font-weight: 700;
+  min-width: 18px;
+  padding: 1px 6px;
+  text-align: center;
+}
+
+.acoes-grupo-permissao {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+/* Coluna de ação: largura fixa e centralizada nas DUAS pontas (cabeçalho e caixa), senão o
+   rótulo "Excluir" fica sobre a caixa do "Alterar" e ninguém sabe o que está marcando. */
+.col-acao-permissao {
+  text-align: center;
+  width: 92px;
+}
+
+.col-acao-permissao input[type='checkbox'] {
+  cursor: pointer;
+  height: 16px;
+  margin: 0;
+  width: 16px;
+}
+
+.col-acao-permissao input[type='checkbox']:disabled { cursor: not-allowed; opacity: 0.35; }

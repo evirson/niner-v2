@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useParams } from 'react-router-dom'
 import AjudaDaTela from '../../components/AjudaDaTela'
 import { BotaoFecharTela } from '../../components/BotaoFecharTela'
-import { IconeUsuario } from '../../components/Icones'
+import { IconeCadeado } from '../../components/Icones'
 import Toast from '../../components/Toast'
 import { ApiError } from '../../lib/api'
 import { permissoesDoUsuario, salvarPermissoes, type Permissao } from '../../lib/permissoes'
@@ -23,11 +23,13 @@ const ACOES: { chave: Acao; rotulo: string }[] = [
  * Decisões do dono do produto (2026-08-27) que esta tela materializa:
  * - **sem perfis**: a grade é deste usuário, porque *"às vezes para um tenant o estoquista pode
  *   fazer uma coisa, e no outro tenant vai fazer coisas diferentes"*;
- * - **o administrador pode tudo** e não aparece aqui — não há o que configurar para ele;
+ * - **o administrador pode tudo** e não aparece aqui;
  * - **usuário novo nasce sem nada**, e o admin libera tela a tela.
  *
- * ⚠️ Desmarcar **Acessar** apaga as outras três da linha: incluir sem poder abrir a tela é
- * combinação que o banco recusa (CHECK da V073) e que na tela só confundiria.
+ * ⚠️ **Uma aba por grupo** (pedido dele ao ver a primeira versão): 63 telas empilhadas numa página
+ * só viram rolagem sem fim, e o cabeçalho das colunas some da vista assim que o primeiro grupo
+ * passa — que foi exatamente a queixa, *"não sei qual quadro pertence ao que"*. Com abas, o
+ * cabeçalho fica sempre acima das linhas que ele está marcando.
  */
 export default function UsuarioPermissoes() {
   const { id } = useParams()
@@ -38,6 +40,7 @@ export default function UsuarioPermissoes() {
   const [erro, setErro] = useState('')
   const [sucesso, setSucesso] = useState('')
   const [filtro, setFiltro] = useState('')
+  const [abaAtiva, setAbaAtiva] = useState<string | null>(null)
 
   const { data, isLoading } = useQuery({
     queryKey: ['permissoes', idUsuario],
@@ -54,8 +57,8 @@ export default function UsuarioPermissoes() {
     onSuccess: (r) => {
       setGrade(r)
       setSucesso('Permissões salvas.')
-      // A grade do próprio usuário logado alimenta o menu — se ele mudou a si mesmo por outra
-      // aba, o menu precisa reagir (ver feedback do React Query entre telas).
+      // A grade do usuário logado alimenta o menu — se ele mexeu na própria por outra aba, o menu
+      // precisa reagir (React Query entre telas).
       queryClient.invalidateQueries({ queryKey: ['minhas-permissoes'] })
     },
     onError: (e) => setErro(e instanceof ApiError ? e.message : 'Não foi possível salvar as permissões.'),
@@ -87,102 +90,152 @@ export default function UsuarioPermissoes() {
     )
   }
 
-  const visiveis = useMemo(() => {
-    const termo = filtro.trim().toLowerCase()
-    if (!termo) return grade
-    return grade.filter((p) => p.nome.toLowerCase().includes(termo) || p.grupo.toLowerCase().includes(termo))
-  }, [grade, filtro])
-
+  /** Grupos na ordem do catálogo (que é a ordem do menu), com quantas telas já foram liberadas. */
   const grupos = useMemo(() => {
     const mapa = new Map<string, Permissao[]>()
-    for (const p of visiveis) {
+    for (const p of grade) {
       const lista = mapa.get(p.grupo) ?? []
       lista.push(p)
       mapa.set(p.grupo, lista)
     }
-    return [...mapa.entries()]
-  }, [visiveis])
+    return [...mapa.entries()].map(([nome, telas]) => ({
+      nome,
+      telas,
+      liberadas: telas.filter((t) => t.acessar).length,
+    }))
+  }, [grade])
+
+  useEffect(() => {
+    if (!abaAtiva && grupos.length > 0) setAbaAtiva(grupos[0].nome)
+  }, [grupos, abaAtiva])
+
+  const termo = filtro.trim().toLowerCase()
+
+  /**
+   * Com filtro digitado, a busca atravessa as abas — procurar "estoque" e receber "nada nesta
+   * aba" seria pior do que não ter busca.
+   */
+  const linhasVisiveis = useMemo(() => {
+    if (termo) {
+      return grade.filter(
+        (p) => p.nome.toLowerCase().includes(termo) || p.grupo.toLowerCase().includes(termo),
+      )
+    }
+    return grupos.find((g) => g.nome === abaAtiva)?.telas ?? []
+  }, [grade, grupos, abaAtiva, termo])
 
   const liberadas = grade.filter((p) => p.acessar).length
 
   return (
-    <div className="tela">
-      <header className="tela-header">
-        <h1>
-          <IconeUsuario size={22} /> Permissões do Usuário
-        </h1>
-        <div className="acoes-header">
-          <AjudaDaTela chaveTela="usuario-permissoes" />
-          <BotaoFecharTela />
-          <button className="btn" disabled={salvar.isPending} onClick={() => salvar.mutate()}>
-            {salvar.isPending ? 'Salvando…' : 'Salvar'}
-          </button>
+    <div className="lista-tela">
+      <div className="lista-topo">
+        <div className="topbar-tela">
+          <div className="titulo-tela">
+            <IconeCadeado size={34} />
+            <h1>Permissões do Usuário</h1>
+          </div>
+          <div className="topbar-acoes">
+            <AjudaDaTela chaveTela="usuario-permissoes" />
+            <button className="btn" disabled={salvar.isPending} onClick={() => salvar.mutate()}>
+              {salvar.isPending ? 'Salvando…' : 'Salvar'}
+            </button>
+            <BotaoFecharTela />
+          </div>
         </div>
-      </header>
 
-      <div className="tela-corpo">
-        <p className="muted" style={{ marginTop: 0 }}>
-          {liberadas === 0
-            ? 'Este usuário ainda não acessa nenhuma tela. Marque o que ele pode usar.'
-            : `Este usuário acessa ${liberadas} de ${grade.length} telas.`}
-        </p>
+        <div className="card filtros-bar">
+          <input
+            autoFocus
+            placeholder="Buscar tela em todos os grupos…"
+            value={filtro}
+            onChange={(e) => setFiltro(e.target.value)}
+            aria-label="Buscar tela"
+          />
+          <span className="muted">
+            {liberadas === 0
+              ? 'Este usuário ainda não acessa nenhuma tela.'
+              : `Acessa ${liberadas} de ${grade.length} telas.`}
+          </span>
+        </div>
 
-        <input
-          autoFocus
-          placeholder="Filtrar por tela ou grupo…"
-          value={filtro}
-          onChange={(e) => setFiltro(e.target.value)}
-          style={{ maxWidth: 360, marginBottom: 12 }}
-        />
-
-        {isLoading && <p className="muted">Carregando…</p>}
-
-        {grupos.map(([grupo, telas]) => (
-          <section key={grupo} className="section">
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-              <p className="section-label" style={{ margin: 0 }}>{grupo}</p>
-              <button type="button" className="btn ghost" onClick={() => marcarGrupo(grupo, true)}>
-                Liberar grupo
+        {/* Abas dos grupos. O número em cada uma responde à pergunta que o admin faz o tempo todo
+            — "onde foi mesmo que eu liberei alguma coisa?" — sem abrir aba por aba. */}
+        {!termo && (
+          <div className="abas-permissao" role="tablist">
+            {grupos.map((g) => (
+              <button
+                key={g.nome}
+                type="button"
+                role="tab"
+                aria-selected={g.nome === abaAtiva}
+                className={`aba-permissao${g.nome === abaAtiva ? ' aba-permissao-ativa' : ''}`}
+                onClick={() => setAbaAtiva(g.nome)}
+              >
+                {g.nome}
+                {g.liberadas > 0 && <span className="aba-permissao-contador">{g.liberadas}</span>}
               </button>
-              <button type="button" className="btn ghost" onClick={() => marcarGrupo(grupo, false)}>
-                Bloquear grupo
-              </button>
-            </div>
-            <table className="grid">
-              <thead>
-                <tr>
-                  <th style={{ width: '40%' }}>Tela</th>
-                  {ACOES.map((a) => (
-                    <th key={a.chave} style={{ textAlign: 'center' }}>{a.rotulo}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {telas.map((p) => (
-                  <tr key={p.chave}>
-                    <td>{p.nome}</td>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="lista-corpo">
+        <div className="card table-wrap">
+          {isLoading ? (
+            <p className="muted">Carregando…</p>
+          ) : linhasVisiveis.length === 0 ? (
+            <p className="muted">Nenhuma tela encontrada{termo ? ` para "${filtro}"` : ''}.</p>
+          ) : (
+            <>
+              {!termo && abaAtiva && (
+                <div className="acoes-grupo-permissao">
+                  <button type="button" className="btn ghost" onClick={() => marcarGrupo(abaAtiva, true)}>
+                    Liberar tudo neste grupo
+                  </button>
+                  <button type="button" className="btn ghost" onClick={() => marcarGrupo(abaAtiva, false)}>
+                    Bloquear tudo neste grupo
+                  </button>
+                </div>
+              )}
+
+              <table className="table table-compacta">
+                <thead>
+                  <tr>
+                    <th>Tela</th>
+                    {termo && <th>Grupo</th>}
                     {ACOES.map((a) => (
-                      <td key={a.chave} style={{ textAlign: 'center' }}>
-                        <input
-                          type="checkbox"
-                          aria-label={`${a.rotulo} em ${p.nome}`}
-                          checked={p[a.chave]}
-                          // Sem "acessar", as outras três ficam desabilitadas em vez de sumirem:
-                          // some deixaria a grade com buracos e faria o admin procurar o que não
-                          // está faltando.
-                          disabled={a.chave !== 'acessar' && !p.acessar}
-                          onChange={(e) => marcar(p.chave, a.chave, e.target.checked)}
-                        />
-                      </td>
+                      <th key={a.chave} className="col-acao-permissao">
+                        {a.rotulo}
+                      </th>
                     ))}
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </section>
-        ))}
-
-        {!isLoading && grupos.length === 0 && <p className="muted">Nenhuma tela encontrada para "{filtro}".</p>}
+                </thead>
+                <tbody>
+                  {linhasVisiveis.map((p) => (
+                    <tr key={p.chave}>
+                      <td>{p.nome}</td>
+                      {termo && <td className="muted">{p.grupo}</td>}
+                      {ACOES.map((a) => (
+                        <td key={a.chave} className="col-acao-permissao">
+                          <input
+                            type="checkbox"
+                            aria-label={`${a.rotulo} em ${p.nome}`}
+                            checked={p[a.chave]}
+                            // Sem "acessar", as outras três ficam desabilitadas em vez de sumirem:
+                            // sumir deixaria buracos na grade e faria o admin procurar o que não
+                            // está faltando.
+                            disabled={a.chave !== 'acessar' && !p.acessar}
+                            onChange={(e) => marcar(p.chave, a.chave, e.target.checked)}
+                          />
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </>
+          )}
+        </div>
       </div>
 
       {erro && <Toast mensagem={erro} aoFechar={() => setErro('')} />}
