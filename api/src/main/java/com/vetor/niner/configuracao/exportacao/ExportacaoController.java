@@ -1,5 +1,7 @@
 package com.vetor.niner.configuracao.exportacao;
 
+import com.vetor.niner.identidade.permissao.Tela;
+
 import com.vetor.niner.configuracao.exportacao.ExportacaoDtos.TabelaExportavel;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -18,6 +20,7 @@ import java.util.Map;
  */
 @RestController
 @RequestMapping("/api/v1/exportacao")
+@Tela("exportacao-dados")
 public class ExportacaoController {
 
     private final ExportacaoService service;

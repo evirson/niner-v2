@@ -14,6 +14,11 @@ export interface Permissao {
   /** Subgrupo dentro da aba (ex.: "Cancelamentos" dentro de Frente de Loja). `null` quando o
    *  grupo não tem subdivisão. */
   subgrupo: string | null
+  /** ⚠️ A AÇÃO EXISTE nesta tela? Um relatório não tem "incluir" — marcar concederia uma
+   *  permissão inexistente e sugeriria um controle que o sistema não faz. */
+  temIncluir: boolean
+  temAlterar: boolean
+  temExcluir: boolean
   acessar: boolean
   incluir: boolean
   alterar: boolean

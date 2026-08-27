@@ -1,5 +1,7 @@
 package com.vetor.niner.catalogo;
 
+import com.vetor.niner.identidade.permissao.Tela;
+
 import com.vetor.niner.catalogo.GradeDtos.GradeRequest;
 import com.vetor.niner.catalogo.GradeDtos.GradeResponse;
 import jakarta.validation.Valid;
@@ -14,6 +16,7 @@ import java.util.List;
  */
 @RestController
 @RequestMapping("/api/v1/grades")
+@Tela("produtos")
 public class GradeController {
 
     private final GradeService service;

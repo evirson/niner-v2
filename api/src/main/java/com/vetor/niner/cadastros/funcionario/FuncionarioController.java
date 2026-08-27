@@ -1,5 +1,7 @@
 package com.vetor.niner.cadastros.funcionario;
 
+import com.vetor.niner.identidade.permissao.Tela;
+
 import com.vetor.niner.cadastros.funcionario.FuncionarioDtos.ExclusaoFuncionarioResponse;
 import com.vetor.niner.cadastros.funcionario.FuncionarioDtos.FuncionarioRequest;
 import com.vetor.niner.cadastros.funcionario.FuncionarioDtos.FuncionarioResponse;
@@ -17,6 +19,7 @@ import org.springframework.web.bind.annotation.*;
  */
 @RestController
 @RequestMapping("/api/v1/funcionarios")
+@Tela("funcionarios")
 public class FuncionarioController {
 
     private final FuncionarioService service;

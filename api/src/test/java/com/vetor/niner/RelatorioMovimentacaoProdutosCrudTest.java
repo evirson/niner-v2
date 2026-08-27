@@ -491,6 +491,10 @@ class RelatorioMovimentacaoProdutosCrudTest {
                                  "administrador":false,"idsEmpresa":[%d]}
                                 """.formatted(email, idEmpresaOrigem)))
                 .andExpect(status().isCreated());
+
+        // RBAC (2026-08-27): operador nasce sem acesso a nada. Este teste é sobre outra
+        // regra, então recebe a grade que um administrador daria — ver PermissaoDeTeste.
+        PermissaoDeTeste.liberarTudoPorEmail(mvc, tenant.token(), email);
         String login = """
                 {"email":"%s","senha":"senha1234"}
                 """.formatted(email);

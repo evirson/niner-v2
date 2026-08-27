@@ -1,5 +1,7 @@
 package com.vetor.niner.financeiro.contacorrente;
 
+import com.vetor.niner.identidade.permissao.Tela;
+
 import com.vetor.niner.financeiro.contacorrente.ContaCorrenteMovimentoDtos.ContaCorrenteMovimentoRequest;
 import com.vetor.niner.financeiro.contacorrente.ContaCorrenteMovimentoDtos.ContaCorrenteMovimentoResponse;
 import com.vetor.niner.financeiro.contacorrente.ContaCorrenteMovimentoDtos.ExclusaoContaCorrenteMovimentoResponse;
@@ -18,6 +20,7 @@ import java.time.LocalDate;
  */
 @RestController
 @RequestMapping("/api/v1/contas-corrente-movimento")
+@Tela("contas-corrente-movimento")
 public class ContaCorrenteMovimentoController {
 
     private final ContaCorrenteMovimentoService service;

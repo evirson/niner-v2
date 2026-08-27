@@ -1,5 +1,7 @@
 package com.vetor.niner.cadastros.crm;
 
+import com.vetor.niner.identidade.permissao.Tela;
+
 import com.vetor.niner.cadastros.crm.CrmDtos.ClienteCrmResponse;
 import com.vetor.niner.cadastros.crm.CrmDtos.OpcoesCrmResponse;
 import com.vetor.niner.cadastros.crm.CrmService.FiltrosCrm;
@@ -20,6 +22,7 @@ import java.util.List;
  */
 @RestController
 @RequestMapping("/api/v1/crm")
+@Tela("crm")
 public class CrmController {
 
     private final CrmService service;

@@ -1,5 +1,7 @@
 package com.vetor.niner.cadastros.cliente;
 
+import com.vetor.niner.identidade.permissao.Tela;
+
 import com.vetor.niner.cadastros.cliente.ClienteDtos.ClienteRequest;
 import com.vetor.niner.cadastros.cliente.ClienteDtos.ClienteResponse;
 import com.vetor.niner.cadastros.cliente.ClienteDtos.ExclusaoClienteResponse;
@@ -15,6 +17,7 @@ import org.springframework.web.bind.annotation.*;
  */
 @RestController
 @RequestMapping("/api/v1/clientes")
+@Tela("clientes")
 public class ClienteController {
 
     private final ClienteService service;

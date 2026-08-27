@@ -1,5 +1,7 @@
 package com.vetor.niner.cadastros.fornecedor;
 
+import com.vetor.niner.identidade.permissao.Tela;
+
 import com.vetor.niner.cadastros.fornecedor.FornecedorDtos.ExclusaoFornecedorResponse;
 import com.vetor.niner.cadastros.fornecedor.FornecedorDtos.FornecedorRequest;
 import com.vetor.niner.cadastros.fornecedor.FornecedorDtos.FornecedorResponse;
@@ -15,6 +17,7 @@ import org.springframework.web.bind.annotation.*;
  */
 @RestController
 @RequestMapping("/api/v1/fornecedores")
+@Tela("fornecedores")
 public class FornecedorController {
 
     private final FornecedorService service;

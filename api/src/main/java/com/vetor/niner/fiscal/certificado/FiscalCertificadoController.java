@@ -1,5 +1,7 @@
 package com.vetor.niner.fiscal.certificado;
 
+import com.vetor.niner.identidade.permissao.Tela;
+
 import com.vetor.niner.fiscal.certificado.FiscalCertificadoDtos.FiscalCertificadoResponse;
 import com.vetor.niner.fiscal.certificado.FiscalCertificadoDtos.FiscalCertificadoUsoResponse;
 import org.springframework.http.HttpStatus;
@@ -18,6 +20,7 @@ import java.util.List;
  */
 @RestController
 @RequestMapping("/api/v1/fiscal/certificados")
+@Tela("fiscal.certificados")
 public class FiscalCertificadoController {
 
     private final FiscalCertificadoService service;

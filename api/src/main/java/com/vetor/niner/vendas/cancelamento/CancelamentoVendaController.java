@@ -1,5 +1,10 @@
 package com.vetor.niner.vendas.cancelamento;
 
+import com.vetor.niner.identidade.permissao.Acao;
+import com.vetor.niner.identidade.permissao.PermissaoService;
+
+import com.vetor.niner.identidade.permissao.Tela;
+
 import com.vetor.niner.vendas.cancelamento.CancelamentoVendaDtos.CancelamentoEfetivadoResponse;
 import com.vetor.niner.vendas.cancelamento.CancelamentoVendaDtos.CancelarVendaRequest;
 import com.vetor.niner.vendas.cancelamento.CancelamentoVendaDtos.PaginaVendasCancelamento;
@@ -18,6 +23,7 @@ import java.time.LocalDate;
  */
 @RestController
 @RequestMapping("/api/v1/vendas/cancelamento")
+@Tela("pesquisa-vendas")
 public class CancelamentoVendaController {
 
     private final CancelamentoVendaService service;
@@ -48,6 +54,7 @@ public class CancelamentoVendaController {
         return service.buscarDetalhe(jwt, idVenda);
     }
 
+    @Acao(PermissaoService.Acao.EXCLUIR)   // desfazer, não incluir
     @PostMapping("/{idVenda}")
     public CancelamentoEfetivadoResponse cancelar(
             @AuthenticationPrincipal Jwt jwt, @PathVariable long idVenda, @Valid @RequestBody CancelarVendaRequest req) {

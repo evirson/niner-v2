@@ -1,5 +1,7 @@
 package com.vetor.niner.fiscal.documento;
 
+import com.vetor.niner.identidade.permissao.Tela;
+
 import com.vetor.niner.fiscal.documento.FiscalInutilizacaoDtos.FaixaBuracoResponse;
 import com.vetor.niner.fiscal.documento.FiscalInutilizacaoDtos.InutilizacaoItemResponse;
 import com.vetor.niner.fiscal.documento.FiscalInutilizacaoDtos.InutilizacaoRequest;
@@ -20,6 +22,7 @@ import java.util.List;
 /** Inutilização de numeração (§10.4/§12, bloco B8), superfície do tenant (`/api/v1`). ADMIN-only. */
 @RestController
 @RequestMapping("/api/v1/fiscal/inutilizacoes")
+@Tela("fiscal.inutilizacao")
 public class FiscalInutilizacaoController {
 
     private final FiscalInutilizacaoService service;

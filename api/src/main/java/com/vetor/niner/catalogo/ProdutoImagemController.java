@@ -1,5 +1,7 @@
 package com.vetor.niner.catalogo;
 
+import com.vetor.niner.identidade.permissao.Tela;
+
 import com.vetor.niner.catalogo.ProdutoImagemDtos.ImagemResponse;
 import com.vetor.niner.catalogo.ProdutoImagemDtos.ReordenarImagensRequest;
 import jakarta.validation.Valid;
@@ -16,6 +18,7 @@ import java.util.List;
  */
 @RestController
 @RequestMapping("/api/v1/produtos/{idProduto}/imagens")
+@Tela("produtos")
 public class ProdutoImagemController {
 
     private final ProdutoImagemService service;

@@ -1,5 +1,7 @@
 package com.vetor.niner.fiscal.documento;
 
+import com.vetor.niner.identidade.permissao.Tela;
+
 import com.vetor.niner.fiscal.documento.FiscalContingenciaDtos.ContingenciaResponse;
 import com.vetor.niner.fiscal.documento.FiscalContingenciaDtos.EntrarSairRequest;
 import jakarta.validation.Valid;
@@ -24,6 +26,7 @@ import java.util.List;
  */
 @RestController
 @RequestMapping("/api/v1/fiscal/contingencia")
+@Tela("fiscal.contingencia")
 public class FiscalContingenciaController {
 
     private final FiscalContingenciaService service;

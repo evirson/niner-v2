@@ -1,5 +1,7 @@
 package com.vetor.niner.fiscal.exportacao;
 
+import com.vetor.niner.identidade.permissao.Tela;
+
 import com.vetor.niner.fiscal.exportacao.ExportacaoXmlLoteDtos.ResumoExportacaoXml;
 import com.vetor.niner.fiscal.exportacao.ExportacaoXmlLoteService.PacoteZip;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -22,6 +24,7 @@ import java.time.LocalDate;
  */
 @RestController
 @RequestMapping("/api/v1/fiscal/exportacao-xml")
+@Tela("fiscal.exportacao-xml")
 public class ExportacaoXmlLoteController {
 
     private final ExportacaoXmlLoteService service;

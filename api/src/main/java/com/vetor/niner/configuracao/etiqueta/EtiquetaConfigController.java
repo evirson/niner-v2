@@ -1,5 +1,7 @@
 package com.vetor.niner.configuracao.etiqueta;
 
+import com.vetor.niner.identidade.permissao.Tela;
+
 import com.vetor.niner.configuracao.etiqueta.EtiquetaConfigDtos.EtiquetaConfigRequest;
 import com.vetor.niner.configuracao.etiqueta.EtiquetaConfigDtos.EtiquetaConfigResponse;
 import com.vetor.niner.configuracao.etiqueta.EtiquetaConfigDtos.ExclusaoEtiquetaConfigResponse;
@@ -19,6 +21,7 @@ import java.util.List;
  */
 @RestController
 @RequestMapping("/api/v1/etiquetas-config")
+@Tela("etiqueta-configuracao")
 public class EtiquetaConfigController {
 
     private final EtiquetaConfigService service;

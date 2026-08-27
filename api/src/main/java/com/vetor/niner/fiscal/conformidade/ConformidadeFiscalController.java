@@ -1,5 +1,7 @@
 package com.vetor.niner.fiscal.conformidade;
 
+import com.vetor.niner.identidade.permissao.Tela;
+
 import com.vetor.niner.fiscal.conformidade.ConformidadeFiscalDtos.CategoriaConformidade;
 import com.vetor.niner.fiscal.conformidade.ConformidadeFiscalDtos.PaginaPendencias;
 import com.vetor.niner.fiscal.conformidade.ConformidadeFiscalDtos.PainelConformidadeResponse;
@@ -18,6 +20,7 @@ import static org.springframework.http.HttpStatus.BAD_REQUEST;
  */
 @RestController
 @RequestMapping("/api/v1/fiscal/conformidade")
+@Tela("fiscal.conformidade")
 public class ConformidadeFiscalController {
 
     private final ConformidadeFiscalService service;

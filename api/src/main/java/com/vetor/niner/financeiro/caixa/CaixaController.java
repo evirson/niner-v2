@@ -1,5 +1,10 @@
 package com.vetor.niner.financeiro.caixa;
 
+import com.vetor.niner.identidade.permissao.Acao;
+import com.vetor.niner.identidade.permissao.PermissaoService;
+
+import com.vetor.niner.identidade.permissao.Tela;
+
 import com.vetor.niner.financeiro.caixa.CaixaDtos.AbrirCaixaRequest;
 import com.vetor.niner.financeiro.caixa.CaixaDtos.CaixaAbertoResponse;
 import com.vetor.niner.financeiro.caixa.CaixaDtos.CaixaStatusResponse;
@@ -27,6 +32,7 @@ import java.util.List;
  */
 @RestController
 @RequestMapping("/api/v1/caixa")
+@Tela("fechamento-caixa")
 public class CaixaController {
 
     private final CaixaService service;
@@ -70,6 +76,7 @@ public class CaixaController {
     /** Reabre um caixa fechado (2026-08-14) — **ADMIN-only, checado no service**, com motivo
      *  obrigatório. Existe pra destravar o estorno de crediário e a exclusão/reabertura de conta
      *  a pagar, que recusam apagar lançamento de caixa já fechado. */
+    @Acao(PermissaoService.Acao.EXCLUIR)   // desfazer, não incluir
     @PostMapping("/fechamento/{idCaixa}/reabrir")
     public ReaberturaCaixaResponse reabrir(
             @AuthenticationPrincipal Jwt jwt, @PathVariable long idCaixa,

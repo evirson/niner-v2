@@ -1,5 +1,7 @@
 package com.vetor.niner.financeiro.contacorrente;
 
+import com.vetor.niner.identidade.permissao.Tela;
+
 import com.vetor.niner.financeiro.contacorrente.ContaCorrenteDtos.ContaCorrenteOpcaoResponse;
 import com.vetor.niner.financeiro.contacorrente.ContaCorrenteDtos.ContaCorrenteRequest;
 import com.vetor.niner.financeiro.contacorrente.ContaCorrenteDtos.ContaCorrenteResponse;
@@ -18,6 +20,7 @@ import java.util.List;
  */
 @RestController
 @RequestMapping("/api/v1/contas-corrente")
+@Tela("contas-corrente")
 public class ContaCorrenteController {
 
     private final ContaCorrenteService service;

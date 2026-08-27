@@ -1,5 +1,7 @@
 package com.vetor.niner.estoque.relatoriomovimentacao;
 
+import com.vetor.niner.identidade.permissao.Tela;
+
 import com.vetor.niner.estoque.relatoriomovimentacao.RelatorioMovimentacaoProdutosDtos.ModeloRelatorioMovimentacao;
 import com.vetor.niner.estoque.relatoriomovimentacao.RelatorioMovimentacaoProdutosDtos.RelatorioMovimentacaoProdutosResponse;
 import com.vetor.niner.estoque.relatoriomovimentacao.RelatorioMovimentacaoProdutosDtos.TipoMovimentoProduto;
@@ -22,6 +24,7 @@ import java.util.List;
  */
 @RestController
 @RequestMapping("/api/v1/relatorios/movimentacao-produtos")
+@Tela("relatorio-movimentacao-produtos")
 public class RelatorioMovimentacaoProdutosController {
 
     private final RelatorioMovimentacaoProdutosService service;

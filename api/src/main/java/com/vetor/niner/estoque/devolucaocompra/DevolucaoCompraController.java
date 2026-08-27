@@ -1,5 +1,10 @@
 package com.vetor.niner.estoque.devolucaocompra;
 
+import com.vetor.niner.identidade.permissao.Acao;
+import com.vetor.niner.identidade.permissao.PermissaoService;
+
+import com.vetor.niner.identidade.permissao.Tela;
+
 import com.vetor.niner.estoque.devolucaocompra.DevolucaoCompraDtos.CancelarDevolucaoCompraRequest;
 import com.vetor.niner.estoque.devolucaocompra.DevolucaoCompraDtos.DevolucaoCompraCanceladaResponse;
 import com.vetor.niner.estoque.devolucaocompra.DevolucaoCompraDtos.DevolucaoCompraEfetivadaResponse;
@@ -50,6 +55,7 @@ import java.util.List;
  */
 @RestController
 @RequestMapping("/api/v1/estoque/devolucao-compra")
+@Tela("estoque.devolucao-compra")
 public class DevolucaoCompraController {
 
     private final DevolucaoCompraService service;
@@ -119,6 +125,7 @@ public class DevolucaoCompraController {
      * <b>nada</b> é revertido - a mensagem explica ao operador o caminho legal, que é pedir a nota
      * de devolução ao fornecedor.
      */
+    @Acao(PermissaoService.Acao.EXCLUIR)   // desfazer, não incluir
     @PostMapping("/{idMovimento}/cancelar")
     public DevolucaoCompraCanceladaResponse cancelar(@AuthenticationPrincipal Jwt jwt,
                                                      @PathVariable long idMovimento,

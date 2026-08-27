@@ -1,5 +1,7 @@
 package com.vetor.niner.vendas.devolucao;
 
+import com.vetor.niner.identidade.permissao.Tela;
+
 import com.vetor.niner.fiscal.documento.EmissaoNfeDevolucaoService;
 import com.vetor.niner.vendas.devolucao.DevolucaoProdutoDtos.DevolucaoEfetivadaResponse;
 import com.vetor.niner.vendas.devolucao.DevolucaoProdutoDtos.EfetivarDevolucaoRequest;
@@ -25,6 +27,7 @@ import org.springframework.web.bind.annotation.RestController;
  */
 @RestController
 @RequestMapping("/api/v1/vendas/devolucao")
+@Tela("devolucao-produto")
 public class DevolucaoProdutoController {
 
     private final DevolucaoProdutoService service;

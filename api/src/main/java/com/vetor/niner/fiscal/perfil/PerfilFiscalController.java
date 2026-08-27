@@ -1,5 +1,9 @@
 package com.vetor.niner.fiscal.perfil;
 
+import com.vetor.niner.identidade.permissao.Livre;
+
+import com.vetor.niner.identidade.permissao.Tela;
+
 import com.vetor.niner.fiscal.perfil.PerfilFiscalDtos.ExclusaoPerfilFiscalResponse;
 import com.vetor.niner.fiscal.perfil.PerfilFiscalDtos.PaginaPerfisFiscais;
 import com.vetor.niner.fiscal.perfil.PerfilFiscalDtos.PerfilFiscalOpcaoResponse;
@@ -19,6 +23,7 @@ import java.util.List;
  */
 @RestController
 @RequestMapping("/api/v1/fiscal/perfis")
+@Tela("fiscal.perfis")
 public class PerfilFiscalController {
 
     private final PerfilFiscalService service;
@@ -39,6 +44,7 @@ public class PerfilFiscalController {
     }
 
     /** Sem checagem de papel — alimenta o `<select>` de Produto, operado por OPERADOR. */
+    @Livre   // já era aberto a qualquer papel antes do RBAC
     @GetMapping("/opcoes")
     public List<PerfilFiscalOpcaoResponse> listarOpcoes() {
         return service.listarOpcoes();

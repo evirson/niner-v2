@@ -89,7 +89,16 @@ public class PermissaoService {
      * <p>A mensagem nomeia a tela e a ação de propósito: "acesso negado" sozinho faz o operador
      * ligar para o suporte, enquanto "você não tem permissão para excluir em Clientes" ele resolve
      * pedindo ao próprio administrador da loja.
+     *
+     * <p>⚠️ <b>O {@code @Transactional} aqui não é enfeite.</b> Este método chama {@link #pode}
+     * no <b>próprio bean</b>, e auto-invocação não passa pelo proxy do Spring — o
+     * {@code @Transactional} de {@code pode} seria ignorado, a consulta rodaria sem transação, o
+     * {@code SET LOCAL app.id_tenant} nunca aconteceria e {@code plataforma.tenant_atual()} viria
+     * NULL. Resultado medido antes desta anotação: <b>403 para quem TINHA a permissão gravada</b>,
+     * sem nada em log dizendo por quê. É a armadilha já documentada no projeto, aplicada a um
+     * caminho novo.
      */
+    @Transactional(readOnly = true)
     public void exigir(Jwt jwt, String chaveTela, Acao acao) {
         if (pode(jwt, chaveTela, acao)) {
             return;

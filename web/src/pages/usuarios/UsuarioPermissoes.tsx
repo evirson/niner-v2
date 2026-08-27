@@ -7,6 +7,7 @@ import { IconeCadeado } from '../../components/Icones'
 import Toast from '../../components/Toast'
 import { ApiError } from '../../lib/api'
 import { permissoesDoUsuario, salvarPermissoes, type Permissao } from '../../lib/permissoes'
+import { buscarUsuario } from '../../lib/usuarios'
 
 type Acao = 'acessar' | 'incluir' | 'alterar' | 'excluir'
 
@@ -42,6 +43,14 @@ export default function UsuarioPermissoes() {
   const [filtro, setFiltro] = useState('')
   const [abaAtiva, setAbaAtiva] = useState<string | null>(null)
 
+  // Só para informar de quem é a grade — sem isto, o admin que abre duas abas não sabe qual é
+  // qual, e permissão aplicada na pessoa errada não dá erro nenhum.
+  const { data: usuario } = useQuery({
+    queryKey: ['usuario', idUsuario],
+    queryFn: () => buscarUsuario(idUsuario),
+    enabled: Number.isFinite(idUsuario),
+  })
+
   const { data, isLoading } = useQuery({
     queryKey: ['permissoes', idUsuario],
     queryFn: () => permissoesDoUsuario(idUsuario),
@@ -64,6 +73,13 @@ export default function UsuarioPermissoes() {
     onError: (e) => setErro(e instanceof ApiError ? e.message : 'Não foi possível salvar as permissões.'),
   })
 
+  /** A tela oferece esta ação? "Acessar" toda tela tem; as outras três vêm do catálogo. */
+  const temAcao = (p: Permissao, acao: Acao) =>
+    acao === 'acessar' ||
+    (acao === 'incluir' && p.temIncluir) ||
+    (acao === 'alterar' && p.temAlterar) ||
+    (acao === 'excluir' && p.temExcluir)
+
   const marcar = (chave: string, acao: Acao, valor: boolean) => {
     setGrade((g) =>
       g.map((p) => {
@@ -83,7 +99,15 @@ export default function UsuarioPermissoes() {
       g.map((p) =>
         p.grupo === grupo
           ? valor
-            ? { ...p, acessar: true }
+            ? // Liberar o grupo marca também incluir/alterar/excluir — mas só onde a tela tem a
+              // ação, senão a grade exibiria permissão que não existe.
+              {
+                ...p,
+                acessar: true,
+                incluir: p.temIncluir,
+                alterar: p.temAlterar,
+                excluir: p.temExcluir,
+              }
             : { ...p, acessar: false, incluir: false, alterar: false, excluir: false }
           : p,
       ),
@@ -133,6 +157,10 @@ export default function UsuarioPermissoes() {
           <div className="titulo-tela">
             <IconeCadeado size={34} />
             <h1>Permissões do Usuário</h1>
+          </div>
+          {/* Nome ao centro, só como informação — a tela inteira é sobre esta pessoa. */}
+          <div className="usuario-da-grade">{usuario?.nome ?? ""}</div>
+          <div>
           </div>
           <div className="topbar-acoes">
             <AjudaDaTela chaveTela="usuario-permissoes" />
@@ -225,6 +253,11 @@ export default function UsuarioPermissoes() {
                       {termo && <td className="muted">{p.grupo}</td>}
                       {ACOES.map((a) => (
                         <td key={a.chave} className="col-acao-permissao">
+                          {!temAcao(p, a.chave) ? (
+                            // Traço, não caixa desabilitada: caixa vazia parece "pode marcar e
+                            // ninguém marcou"; o traço diz que a ação não existe nesta tela.
+                            <span className="acao-inexistente" title="Esta tela não tem esta ação">—</span>
+                          ) : (
                           <input
                             type="checkbox"
                             aria-label={`${a.rotulo} em ${p.nome}`}
@@ -235,6 +268,7 @@ export default function UsuarioPermissoes() {
                             disabled={a.chave !== 'acessar' && !p.acessar}
                             onChange={(e) => marcar(p.chave, a.chave, e.target.checked)}
                           />
+                          )}
                         </td>
                       ))}
                     </tr>

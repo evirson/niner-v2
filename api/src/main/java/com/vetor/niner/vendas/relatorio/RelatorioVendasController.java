@@ -1,5 +1,7 @@
 package com.vetor.niner.vendas.relatorio;
 
+import com.vetor.niner.identidade.permissao.Tela;
+
 import com.vetor.niner.vendas.relatorio.RelatorioVendasDtos.DetalheTotalizadorResponse;
 import com.vetor.niner.vendas.relatorio.RelatorioVendasDtos.RelatorioVendasResponse;
 import com.vetor.niner.vendas.relatorio.RelatorioVendasDtos.TotalizarPor;
@@ -17,6 +19,7 @@ import java.util.List;
  */
 @RestController
 @RequestMapping("/api/v1/relatorios/vendas")
+@Tela("relatorio-vendas")
 public class RelatorioVendasController {
 
     private final RelatorioVendasService service;

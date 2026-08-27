@@ -1,5 +1,9 @@
 package com.vetor.niner.configuracao.geral;
 
+import com.vetor.niner.identidade.permissao.Livre;
+
+import com.vetor.niner.identidade.permissao.Tela;
+
 import com.vetor.niner.configuracao.geral.ConfiguracaoGeralDtos.ConfiguracaoGeralRequest;
 import com.vetor.niner.configuracao.geral.ConfiguracaoGeralDtos.ConfiguracaoGeralResponse;
 import com.vetor.niner.configuracao.geral.ConfiguracaoGeralDtos.DiasValidadeOrcamentoResponse;
@@ -34,6 +38,7 @@ import org.springframework.web.bind.annotation.*;
  */
 @RestController
 @RequestMapping("/api/v1/config-geral")
+@Tela("configuracoes-gerais")
 public class ConfiguracaoGeralController {
 
     private final ConfiguracaoGeralService service;
@@ -52,16 +57,19 @@ public class ConfiguracaoGeralController {
         return service.atualizar(jwt, req);
     }
 
+    @Livre   // já era aberto a qualquer papel antes do RBAC
     @GetMapping("/usa-cor-grade")
     public UsaCorGradeResponse usaCorGrade() {
         return new UsaCorGradeResponse(service.usaCorGrade());
     }
 
+    @Livre   // já era aberto a qualquer papel antes do RBAC
     @GetMapping("/desconto-venda")
     public DescontoVendaResponse descontoVenda() {
         return new DescontoVendaResponse(service.percentualDescontoVenda());
     }
 
+    @Livre   // já era aberto a qualquer papel antes do RBAC
     @GetMapping("/permite-qtd-decimal")
     public PermiteQtdDecimalResponse permiteQtdDecimal() {
         return new PermiteQtdDecimalResponse(service.permiteQtdDecimalProduto());
@@ -69,16 +77,19 @@ public class ConfiguracaoGeralController {
 
     /** Dias de validade sugeridos para o orçamento (V058) — aberto a qualquer papel: quem emite
      *  orçamento é majoritariamente OPERADOR, e o GET completo é ADMIN-only. */
+    @Livre   // já era aberto a qualquer papel antes do RBAC
     @GetMapping("/dias-validade-orcamento")
     public DiasValidadeOrcamentoResponse diasValidadeOrcamento() {
         return new DiasValidadeOrcamentoResponse(service.diasValidadeOrcamento());
     }
 
+    @Livre   // já era aberto a qualquer papel antes do RBAC
     @GetMapping("/exige-numero-venda-devolucao")
     public ExigeNumeroVendaDevolucaoResponse exigeNumeroVendaDevolucao() {
         return new ExigeNumeroVendaDevolucaoResponse(service.exigeNumeroVendaDevolucao());
     }
 
+    @Livre   // já era aberto a qualquer papel antes do RBAC
     @GetMapping("/rateia-frete-entrada")
     public RateiaFreteEntradaResponse rateiaFreteEntrada() {
         return new RateiaFreteEntradaResponse(service.rateiaFreteEntrada());
@@ -99,6 +110,7 @@ public class ConfiguracaoGeralController {
         return new PlanoContasCompraMercadoriaResponse(service.idPlanoContasCompraMercadoria());
     }
 
+    @Livre   // já era aberto a qualquer papel antes do RBAC
     @GetMapping("/emite-fiscal-apos-venda")
     public EmiteFiscalAposVendaResponse emiteFiscalAposVenda() {
         return new EmiteFiscalAposVendaResponse(service.emiteFiscalAposVenda());

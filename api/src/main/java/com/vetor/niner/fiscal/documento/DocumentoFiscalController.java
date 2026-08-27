@@ -1,5 +1,7 @@
 package com.vetor.niner.fiscal.documento;
 
+import com.vetor.niner.identidade.permissao.Tela;
+
 import com.vetor.niner.fiscal.documento.DocumentoFiscalListaDtos.ConsultaSefazResponse;
 import com.vetor.niner.fiscal.documento.DocumentoFiscalListaDtos.DanfeResponse;
 import com.vetor.niner.fiscal.documento.DocumentoFiscalListaDtos.PaginaDocumentosFiscais;
@@ -20,6 +22,7 @@ import java.time.LocalDate;
 /** Documentos Fiscais (§12, bloco B8), superfície do tenant (`/api/v1`, JWT + RLS). ADMIN-only. */
 @RestController
 @RequestMapping("/api/v1/fiscal/documentos")
+@Tela("fiscal.documentos")
 public class DocumentoFiscalController {
 
     private final DocumentoFiscalConsultaService service;

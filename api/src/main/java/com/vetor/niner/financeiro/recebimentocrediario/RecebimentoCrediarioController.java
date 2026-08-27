@@ -1,5 +1,10 @@
 package com.vetor.niner.financeiro.recebimentocrediario;
 
+import com.vetor.niner.identidade.permissao.Acao;
+import com.vetor.niner.identidade.permissao.PermissaoService;
+
+import com.vetor.niner.identidade.permissao.Tela;
+
 import com.vetor.niner.financeiro.recebimentocrediario.RecebimentoCrediarioDtos.CarteiraDisponivelResponse;
 import com.vetor.niner.financeiro.recebimentocrediario.RecebimentoCrediarioDtos.ClienteCrediarioResponse;
 import com.vetor.niner.financeiro.recebimentocrediario.RecebimentoCrediarioDtos.ComprovanteRecebimentoResponse;
@@ -24,6 +29,7 @@ import java.util.List;
  */
 @RestController
 @RequestMapping("/api/v1/recebimento-crediario")
+@Tela("recebimento-crediario")
 public class RecebimentoCrediarioController {
 
     private final RecebimentoCrediarioService service;
@@ -74,6 +80,7 @@ public class RecebimentoCrediarioController {
         return service.listarParcelasDoLote(idLoteRecebimento);
     }
 
+    @Acao(PermissaoService.Acao.EXCLUIR)   // desfazer, não incluir
     @PostMapping("/estornos/{idLoteRecebimento}")
     public EstornoEfetivadoResponse estornar(@PathVariable long idLoteRecebimento) {
         return service.estornarLote(idLoteRecebimento);

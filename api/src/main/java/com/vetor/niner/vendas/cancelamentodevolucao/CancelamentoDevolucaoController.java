@@ -1,5 +1,10 @@
 package com.vetor.niner.vendas.cancelamentodevolucao;
 
+import com.vetor.niner.identidade.permissao.Acao;
+import com.vetor.niner.identidade.permissao.PermissaoService;
+
+import com.vetor.niner.identidade.permissao.Tela;
+
 import com.vetor.niner.vendas.cancelamentodevolucao.CancelamentoDevolucaoDtos.CancelamentoDevolucaoEfetivadoResponse;
 import com.vetor.niner.vendas.cancelamentodevolucao.CancelamentoDevolucaoDtos.CancelarDevolucaoRequest;
 import com.vetor.niner.vendas.cancelamentodevolucao.CancelamentoDevolucaoDtos.DevolucaoDetalheCancelamentoResponse;
@@ -19,6 +24,7 @@ import java.time.LocalDate;
  */
 @RestController
 @RequestMapping("/api/v1/vendas/cancelamento-devolucao")
+@Tela("cancelamento-devolucao-produtos")
 public class CancelamentoDevolucaoController {
 
     private final CancelamentoDevolucaoService service;
@@ -45,6 +51,7 @@ public class CancelamentoDevolucaoController {
         return service.buscarDetalhe(jwt, idDevolucao);
     }
 
+    @Acao(PermissaoService.Acao.EXCLUIR)   // desfazer, não incluir
     @PostMapping("/{idDevolucao}")
     public CancelamentoDevolucaoEfetivadoResponse cancelar(
             @AuthenticationPrincipal Jwt jwt, @PathVariable long idDevolucao, @Valid @RequestBody CancelarDevolucaoRequest req) {

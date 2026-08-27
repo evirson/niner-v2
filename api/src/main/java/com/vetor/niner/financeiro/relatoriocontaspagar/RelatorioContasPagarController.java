@@ -1,5 +1,7 @@
 package com.vetor.niner.financeiro.relatoriocontaspagar;
 
+import com.vetor.niner.identidade.permissao.Tela;
+
 import com.vetor.niner.financeiro.relatoriocontaspagar.RelatorioContasPagarDtos.RelatorioContasPagarResponse;
 import com.vetor.niner.financeiro.relatoriocontaspagar.RelatorioContasPagarService.FiltrosPeriodo;
 import com.vetor.niner.financeiro.relatoriocontaspagar.RelatorioContasPagarService.SituacaoConta;
@@ -20,6 +22,7 @@ import java.util.List;
  */
 @RestController
 @RequestMapping("/api/v1/relatorios/contas-pagar")
+@Tela("relatorio-contas-pagar")
 public class RelatorioContasPagarController {
 
     private final RelatorioContasPagarService service;

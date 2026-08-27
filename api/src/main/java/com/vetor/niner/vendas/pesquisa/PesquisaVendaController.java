@@ -1,5 +1,7 @@
 package com.vetor.niner.vendas.pesquisa;
 
+import com.vetor.niner.identidade.permissao.Tela;
+
 import com.vetor.niner.vendas.pesquisa.PesquisaVendaDtos.PaginaVendasPesquisa;
 import com.vetor.niner.vendas.pesquisa.PesquisaVendaDtos.VendaDetalhePesquisaResponse;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -15,6 +17,7 @@ import java.time.LocalDate;
  */
 @RestController
 @RequestMapping("/api/v1/vendas/pesquisa")
+@Tela("pesquisa-vendas")
 public class PesquisaVendaController {
 
     private final PesquisaVendaService service;

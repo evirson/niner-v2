@@ -1,5 +1,10 @@
 package com.vetor.niner.estoque.balanco;
 
+import com.vetor.niner.identidade.permissao.Acao;
+import com.vetor.niner.identidade.permissao.PermissaoService;
+
+import com.vetor.niner.identidade.permissao.Tela;
+
 import com.vetor.niner.estoque.balanco.BalancoEstoqueDtos.AjustarContagemRequest;
 import com.vetor.niner.estoque.balanco.BalancoEstoqueDtos.DiferencasResponse;
 import com.vetor.niner.estoque.balanco.BalancoEstoqueDtos.EfetivacaoResponse;
@@ -21,6 +26,7 @@ import java.util.List;
  */
 @RestController
 @RequestMapping("/api/v1/estoque/balanco")
+@Tela("estoque.contagem")
 public class BalancoEstoqueController {
 
     private final BalancoEstoqueService service;
@@ -38,6 +44,7 @@ public class BalancoEstoqueController {
     // `api()` do frontend só tratava explicitamente o 204 como "sem corpo" (2026-08-04, bug
     // real: 201/200 com corpo vazio fazia `res.json()` lançar `SyntaxError`, e a leitura de
     // código de barras aparecia como falha mesmo tendo gravado certinho no banco).
+    @Acao(PermissaoService.Acao.EXCLUIR)   // desfazer, não incluir
     @PostMapping("/contagem")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void registrarContagem(@AuthenticationPrincipal Jwt jwt, @Valid @RequestBody RegistrarContagemRequest req) {
@@ -78,6 +85,7 @@ public class BalancoEstoqueController {
         return service.obterUltimaEfetivacao(jwt);
     }
 
+    @Acao(PermissaoService.Acao.EXCLUIR)   // desfazer, não incluir
     @PostMapping("/desfazer")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void desfazer(@AuthenticationPrincipal Jwt jwt) {

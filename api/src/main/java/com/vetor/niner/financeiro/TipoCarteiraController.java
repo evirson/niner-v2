@@ -1,5 +1,7 @@
 package com.vetor.niner.financeiro;
 
+import com.vetor.niner.identidade.permissao.Tela;
+
 import com.vetor.niner.financeiro.TipoCarteiraDtos.ExclusaoTipoCarteiraResponse;
 import com.vetor.niner.financeiro.TipoCarteiraDtos.PaginaTiposCarteira;
 import com.vetor.niner.financeiro.TipoCarteiraDtos.TipoCarteiraRequest;
@@ -14,6 +16,7 @@ import org.springframework.web.bind.annotation.*;
  */
 @RestController
 @RequestMapping("/api/v1/tipos-carteira")
+@Tela("tipos-carteira")
 public class TipoCarteiraController {
 
     private final TipoCarteiraService service;

@@ -1,5 +1,10 @@
 package com.vetor.niner.estoque.entrada;
 
+import com.vetor.niner.identidade.permissao.Acao;
+import com.vetor.niner.identidade.permissao.PermissaoService;
+
+import com.vetor.niner.identidade.permissao.Tela;
+
 import com.vetor.niner.fiscal.documento.ArquivamentoXmlService;
 import com.vetor.niner.estoque.entrada.EntradaMercadoriaDtos.AtualizarItemEntradaRequest;
 import com.vetor.niner.estoque.entrada.EntradaMercadoriaDtos.CancelamentoEntradaEfetivadoResponse;
@@ -33,6 +38,7 @@ import java.util.List;
  */
 @RestController
 @RequestMapping("/api/v1/estoque/entradas")
+@Tela("entrada-produtos-compra")
 public class EntradaMercadoriaController {
 
     private final EntradaMercadoriaService service;
@@ -98,6 +104,7 @@ public class EntradaMercadoriaController {
     }
 
     /** Cancelamento de Entrada (2026-08-12) — ADMIN-only (ver {@link EntradaMercadoriaService#cancelar}). */
+    @Acao(PermissaoService.Acao.EXCLUIR)   // desfazer, não incluir
     @PostMapping("/{id}/cancelar")
     public CancelamentoEntradaEfetivadoResponse cancelar(@AuthenticationPrincipal Jwt jwt, @PathVariable long id,
                                                            @Valid @RequestBody CancelarEntradaRequest req) {

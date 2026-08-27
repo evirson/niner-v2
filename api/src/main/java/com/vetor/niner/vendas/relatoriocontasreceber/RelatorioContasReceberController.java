@@ -1,5 +1,7 @@
 package com.vetor.niner.vendas.relatoriocontasreceber;
 
+import com.vetor.niner.identidade.permissao.Tela;
+
 import com.vetor.niner.vendas.relatoriocontasreceber.RelatorioContasReceberDtos.RelatorioContasReceberResponse;
 import com.vetor.niner.vendas.relatoriocontasreceber.RelatorioContasReceberService.CategoriaParcela;
 import com.vetor.niner.vendas.relatoriocontasreceber.RelatorioContasReceberService.FiltrosPeriodo;
@@ -21,6 +23,7 @@ import java.util.List;
  */
 @RestController
 @RequestMapping("/api/v1/relatorios/contas-receber")
+@Tela("relatorio-contas-receber")
 public class RelatorioContasReceberController {
 
     private final RelatorioContasReceberService service;

@@ -1,5 +1,7 @@
 package com.vetor.niner.catalogo;
 
+import com.vetor.niner.identidade.permissao.Tela;
+
 import com.vetor.niner.catalogo.TamanhoDtos.TamanhoRequest;
 import com.vetor.niner.catalogo.TamanhoDtos.TamanhoResponse;
 import jakarta.validation.Valid;
@@ -14,6 +16,7 @@ import java.util.List;
  */
 @RestController
 @RequestMapping("/api/v1/tamanhos")
+@Tela("produtos")
 public class TamanhoController {
 
     private final TamanhoService service;

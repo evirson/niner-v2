@@ -1,5 +1,7 @@
 package com.vetor.niner.catalogo;
 
+import com.vetor.niner.identidade.permissao.Tela;
+
 import com.vetor.niner.catalogo.ProdutoBarraDtos.CriarVariacaoRequest;
 import com.vetor.niner.catalogo.ProdutoBarraDtos.ProdutoBarraResponse;
 import com.vetor.niner.catalogo.ProdutoBarraDtos.ProdutoComVariacaoRequest;
@@ -19,6 +21,7 @@ import java.util.List;
  */
 @RestController
 @RequestMapping("/api/v1/produtos")
+@Tela("produtos")
 public class ProdutoController {
 
     private final ProdutoService service;

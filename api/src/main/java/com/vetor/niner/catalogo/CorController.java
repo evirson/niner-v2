@@ -1,5 +1,7 @@
 package com.vetor.niner.catalogo;
 
+import com.vetor.niner.identidade.permissao.Tela;
+
 import com.vetor.niner.catalogo.CorDtos.CorRequest;
 import com.vetor.niner.catalogo.CorDtos.CorResponse;
 import jakarta.validation.Valid;
@@ -14,6 +16,7 @@ import java.util.List;
  */
 @RestController
 @RequestMapping("/api/v1/cores")
+@Tela("produtos")
 public class CorController {
 
     private final CorService service;

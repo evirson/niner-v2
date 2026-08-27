@@ -1,5 +1,7 @@
 package com.vetor.niner.canais;
 
+import com.vetor.niner.identidade.permissao.Tela;
+
 import com.vetor.niner.canais.CanalDtos.CanalRequest;
 import com.vetor.niner.canais.CanalDtos.CanalResponse;
 import com.vetor.niner.canais.CanalDtos.SaudeCanaisResponse;
@@ -28,6 +30,7 @@ import java.util.List;
  */
 @RestController
 @RequestMapping("/api/v1/canais")
+@Tela("canais")
 public class CanalController {
 
     private final CanalService service;

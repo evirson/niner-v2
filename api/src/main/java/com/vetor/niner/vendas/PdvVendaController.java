@@ -1,5 +1,7 @@
 package com.vetor.niner.vendas;
 
+import com.vetor.niner.identidade.permissao.Tela;
+
 import com.vetor.niner.vendas.PdvDtos.ComprovanteVendaResponse;
 import com.vetor.niner.vendas.PdvDtos.EfetivarVendaRequest;
 import com.vetor.niner.vendas.PdvDtos.VendaEfetivadaResponse;
@@ -18,6 +20,7 @@ import org.springframework.web.bind.annotation.RestController;
 /** Efetivação da venda do PDV — F5 (docs/telas/pdv.md). */
 @RestController
 @RequestMapping("/api/v1/pdv/vendas")
+@Tela("pdv")
 public class PdvVendaController {
 
     private final PdvVendaService service;

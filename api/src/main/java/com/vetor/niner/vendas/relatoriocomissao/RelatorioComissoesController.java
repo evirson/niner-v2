@@ -1,5 +1,7 @@
 package com.vetor.niner.vendas.relatoriocomissao;
 
+import com.vetor.niner.identidade.permissao.Tela;
+
 import com.vetor.niner.vendas.relatoriocomissao.RelatorioComissoesDtos.RelatorioComissoesResponse;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -18,6 +20,7 @@ import java.util.List;
  */
 @RestController
 @RequestMapping("/api/v1/relatorios/comissoes")
+@Tela("relatorio-comissoes")
 public class RelatorioComissoesController {
 
     private final RelatorioComissoesService service;

@@ -1,5 +1,7 @@
 package com.vetor.niner.canais;
 
+import com.vetor.niner.identidade.permissao.Tela;
+
 import com.vetor.niner.canais.AnuncioDtos.AnuncioParaVincular;
 import com.vetor.niner.canais.AnuncioDtos.VinculoGravado;
 import com.vetor.niner.canais.AnuncioDtos.VinculoRequest;
@@ -26,6 +28,7 @@ import org.springframework.web.bind.annotation.RestController;
  */
 @RestController
 @RequestMapping("/api/v1/canais/{idCanal}/anuncios")
+@Tela("canais")
 public class AnuncioController {
 
     /** O ML limita a busca de itens a 50 por página — pedir mais não traz mais. */

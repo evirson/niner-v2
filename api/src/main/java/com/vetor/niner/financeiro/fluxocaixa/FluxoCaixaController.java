@@ -1,5 +1,7 @@
 package com.vetor.niner.financeiro.fluxocaixa;
 
+import com.vetor.niner.identidade.permissao.Tela;
+
 import com.vetor.niner.financeiro.fluxocaixa.FluxoCaixaDtos.Agrupamento;
 import com.vetor.niner.financeiro.fluxocaixa.FluxoCaixaDtos.FluxoProjecaoResponse;
 import com.vetor.niner.financeiro.fluxocaixa.FluxoCaixaDtos.FluxoRealizadoResponse;
@@ -23,6 +25,7 @@ import java.util.List;
  */
 @RestController
 @RequestMapping("/api/v1/relatorios/fluxo-caixa")
+@Tela("fluxo-caixa")
 public class FluxoCaixaController {
 
     private final FluxoCaixaService service;

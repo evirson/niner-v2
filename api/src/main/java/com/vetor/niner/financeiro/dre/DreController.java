@@ -1,5 +1,7 @@
 package com.vetor.niner.financeiro.dre;
 
+import com.vetor.niner.identidade.permissao.Tela;
+
 import com.vetor.niner.financeiro.dre.DreDtos.Comparacao;
 import com.vetor.niner.financeiro.dre.DreDtos.DreResponse;
 import com.vetor.niner.financeiro.dre.DreDtos.Regime;
@@ -20,6 +22,7 @@ import java.util.List;
  */
 @RestController
 @RequestMapping("/api/v1/relatorios/dre")
+@Tela("relatorio-dre")
 public class DreController {
 
     private final DreService service;

@@ -136,10 +136,13 @@ class PermissaoPorTelaTest {
                 .andReturn().getResponse().getContentAsString();
 
         assertEquals(2, contar(minhas, "acessar"));
-        assertEquals(true, acao(minhas, "pdv", "incluir"));
+        // ⚠️ O PDV recebeu "incluir" no pedido e NÃO ficou com ele: a V076 diz que essa tela não
+        // tem a ação — no PDV, acessar já é vender. Conceder o que não existe encheria a grade de
+        // permissão impossível, e este teste é o que impede alguém de "consertar" isso.
+        assertEquals(false, acao(minhas, "pdv", "incluir"));
         assertEquals(false, acao(minhas, "pdv", "alterar"));
-        assertEquals(true, acao(minhas, "clientes", "alterar"));
-        assertEquals(false, acao(minhas, "clientes", "incluir"));
+        assertEquals(true, acao(minhas, "clientes", "alterar"), "cadastro tem alterar");
+        assertEquals(false, acao(minhas, "clientes", "incluir"), "não foi concedido");
     }
 
     /**
@@ -200,8 +203,8 @@ class PermissaoPorTelaTest {
 
         mvc.perform(put(url).header("Authorization", "Bearer " + c.token()).contentType(APPLICATION_JSON)
                         .content("""
-                                [{"chaveTela":"pdv","acessar":true,"incluir":true,"alterar":true,"excluir":true},
-                                 {"chaveTela":"clientes","acessar":true,"incluir":true,"alterar":true,"excluir":true}]
+                                [{"chaveTela":"clientes","acessar":true,"incluir":true,"alterar":true,"excluir":true},
+                                 {"chaveTela":"produtos","acessar":true,"incluir":true,"alterar":true,"excluir":true}]
                                 """))
                 .andExpect(status().isOk());
 
@@ -214,7 +217,7 @@ class PermissaoPorTelaTest {
         String agora = mvc.perform(get(url).header("Authorization", "Bearer " + c.token()))
                 .andReturn().getResponse().getContentAsString();
         assertEquals(1, contar(agora, "acessar"),
-                "clientes deveria ter saído da grade");
-        assertEquals(false, acao(agora, "pdv", "excluir"));
+                "produtos deveria ter saído da grade");
+        assertEquals(false, acao(agora, "clientes", "excluir"), "o segundo PUT não concedeu excluir");
     }
 }

@@ -1,5 +1,7 @@
 package com.vetor.niner.integracao;
 
+import com.vetor.niner.identidade.permissao.Tela;
+
 import com.vetor.niner.integracao.ExpedicaoRepositorio.ItemAExpedir;
 import com.vetor.niner.integracao.ExpedicaoRepositorio.PedidoNaFila;
 import jakarta.validation.constraints.Size;
@@ -19,6 +21,7 @@ import java.util.List;
 /** Fila de expedição (R5, M7). ⚠️ Não é ADMIN-only — ver o javadoc de {@link ExpedicaoService}. */
 @RestController
 @RequestMapping("/api/v1/expedicao")
+@Tela("expedicao")
 public class ExpedicaoController {
 
     private final ExpedicaoService service;

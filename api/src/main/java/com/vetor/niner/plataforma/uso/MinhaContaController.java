@@ -1,5 +1,7 @@
 package com.vetor.niner.plataforma.uso;
 
+import com.vetor.niner.identidade.permissao.Tela;
+
 import com.vetor.niner.plataforma.uso.MinhaContaDtos.MinhaContaResponse;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -13,6 +15,7 @@ import org.springframework.web.bind.annotation.RestController;
  */
 @RestController
 @RequestMapping("/api/v1/minha-conta")
+@Tela("minha-conta")
 public class MinhaContaController {
 
     private final MinhaContaService service;

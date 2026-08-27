@@ -79,6 +79,10 @@ class RelatorioEstoqueCrudTest {
                                  "administrador":false,"idsEmpresa":[%d]}
                                 """.formatted(sufixo, email, idEmpresa)))
                 .andExpect(status().isCreated());
+
+        // RBAC (2026-08-27): operador nasce sem acesso a nada. Este teste é sobre outra
+        // regra, então recebe a grade que um administrador daria — ver PermissaoDeTeste.
+        PermissaoDeTeste.liberarTudoPorEmail(mvc, tokenAdmin, email);
         String login = """
                 {"email":"%s","senha":"senha1234"}
                 """.formatted(email);

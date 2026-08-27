@@ -1,5 +1,7 @@
 package com.vetor.niner.financeiro.contaspagar;
 
+import com.vetor.niner.identidade.permissao.Tela;
+
 import com.vetor.niner.financeiro.contaspagar.ContaPagarDtos.ContaPagarRequest;
 import com.vetor.niner.financeiro.contaspagar.ContaPagarDtos.ContaPagarResponse;
 import com.vetor.niner.financeiro.contaspagar.ContaPagarDtos.ExclusaoContaPagarResponse;
@@ -20,6 +22,7 @@ import java.time.LocalDate;
  */
 @RestController
 @RequestMapping("/api/v1/contas-pagar")
+@Tela("contas-pagar")
 public class ContaPagarController {
 
     private final ContaPagarService service;

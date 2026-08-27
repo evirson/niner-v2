@@ -1,5 +1,7 @@
 package com.vetor.niner.estoque.transferencia;
 
+import com.vetor.niner.identidade.permissao.Tela;
+
 import com.vetor.niner.estoque.transferencia.TransferenciaDtos.CriarTransferenciaRequest;
 import com.vetor.niner.estoque.transferencia.TransferenciaDtos.PaginaTransferencias;
 import com.vetor.niner.estoque.transferencia.TransferenciaDtos.TransferenciaResponse;
@@ -18,6 +20,7 @@ import java.time.LocalDate;
  */
 @RestController
 @RequestMapping("/api/v1/estoque/transferencias")
+@Tela("estoque")
 public class TransferenciaController {
 
     private final TransferenciaService service;

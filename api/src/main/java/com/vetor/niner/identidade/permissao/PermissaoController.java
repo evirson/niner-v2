@@ -10,6 +10,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
+import java.util.Map;
 
 import static org.springframework.http.HttpStatus.BAD_REQUEST;
 import static org.springframework.http.HttpStatus.FORBIDDEN;
@@ -34,11 +35,12 @@ import static org.springframework.http.HttpStatus.NOT_FOUND;
 public class PermissaoController {
 
     private static final String SQL_CATALOGO = """
-            SELECT chave, nome, grupo, subgrupo, admin_apenas FROM cfg_tela ORDER BY ordem
+            SELECT chave, nome, grupo, subgrupo, admin_apenas, tem_incluir, tem_alterar, tem_excluir FROM cfg_tela ORDER BY ordem
             """;
 
     private static final String SQL_DO_USUARIO = """
             SELECT t.chave, t.nome, t.grupo, t.subgrupo, t.admin_apenas,
+                   t.tem_incluir, t.tem_alterar, t.tem_excluir,
                    COALESCE(p.acessar, false) AS acessar,
                    COALESCE(p.incluir, false) AS incluir,
                    COALESCE(p.alterar, false) AS alterar,
@@ -62,7 +64,8 @@ public class PermissaoController {
     public List<TelaResponse> catalogo() {
         return jdbc.sql(SQL_CATALOGO)
                 .query((rs, n) -> new TelaResponse(rs.getString("chave"), rs.getString("nome"),
-                        rs.getString("grupo"), rs.getString("subgrupo"), rs.getBoolean("admin_apenas")))
+                        rs.getString("grupo"), rs.getString("subgrupo"), rs.getBoolean("admin_apenas"),
+                        rs.getBoolean("tem_incluir"), rs.getBoolean("tem_alterar"), rs.getBoolean("tem_excluir")))
                 .list();
     }
 
@@ -83,6 +86,7 @@ public class PermissaoController {
                     boolean bloqueada = !admin && rs.getBoolean("admin_apenas");
                     return new PermissaoResponse(
                             rs.getString("chave"), rs.getString("nome"), rs.getString("grupo"), rs.getString("subgrupo"),
+                            rs.getBoolean("tem_incluir"), rs.getBoolean("tem_alterar"), rs.getBoolean("tem_excluir"),
                             !bloqueada && (admin || rs.getBoolean("acessar")),
                             !bloqueada && (admin || rs.getBoolean("incluir")),
                             !bloqueada && (admin || rs.getBoolean("alterar")),
@@ -100,6 +104,7 @@ public class PermissaoController {
                 .param(idUsuario)
                 .query((rs, n) -> new PermissaoResponse(
                         rs.getString("chave"), rs.getString("nome"), rs.getString("grupo"), rs.getString("subgrupo"),
+                        rs.getBoolean("tem_incluir"), rs.getBoolean("tem_alterar"), rs.getBoolean("tem_excluir"),
                         rs.getBoolean("acessar"), rs.getBoolean("incluir"),
                         rs.getBoolean("alterar"), rs.getBoolean("excluir")))
                 .list();
@@ -138,7 +143,9 @@ public class PermissaoController {
                             + String.join(", ", bloqueadas) + ".");
         }
 
+        Map<String, AcoesDaTela> acoes = acoesPorTela();
         for (PermissaoRequest p : grade) {
+            AcoesDaTela disponiveis = acoes.getOrDefault(p.chaveTela(), new AcoesDaTela(false, false, false));
             // Linha sem nada marcado não é gravada: ausência já significa "sem acesso", e gravar
             // 63 linhas de `false` por usuário só encheria a tabela.
             if (!p.acessar() && !p.incluir() && !p.alterar() && !p.excluir()) {
@@ -152,10 +159,34 @@ public class PermissaoController {
                     // Marcar uma ação sem "acessar" é recusado pelo banco (CHECK da V073); aqui o
                     // acessar é ligado junto, porque a intenção de quem marcou "pode excluir" é
                     // óbvia e devolver erro por isso seria implicância.
-                    .params(idUsuario, p.chaveTela(), true, p.incluir(), p.alterar(), p.excluir())
+                    // A ação que a tela não tem é descartada aqui também, não só na interface:
+                    // um cliente de API poderia mandar "excluir" num relatório e a grade passaria
+                    // a exibir uma permissão impossível.
+                    .params(idUsuario, p.chaveTela(), true,
+                            p.incluir() && disponiveis.incluir(),
+                            p.alterar() && disponiveis.alterar(),
+                            p.excluir() && disponiveis.excluir())
                     .update();
         }
         return doUsuario(jwt, idUsuario);
+    }
+
+    /**
+     * Quais ações cada tela tem (V076), num mapa só.
+     *
+     * <p>⚠️ Lido de uma vez, e não por linha: com 57 telas × 3 colunas, consultar dentro do laço
+     * daria 171 idas ao banco a cada gravação. E evita concatenar nome de coluna em SQL, ainda que
+     * viesse de constante — o projeto não abre exceção para isso.
+     */
+    private Map<String, AcoesDaTela> acoesPorTela() {
+        return jdbc.sql("SELECT chave, tem_incluir, tem_alterar, tem_excluir FROM cfg_tela")
+                .query((rs, n) -> Map.entry(rs.getString("chave"), new AcoesDaTela(
+                        rs.getBoolean("tem_incluir"), rs.getBoolean("tem_alterar"), rs.getBoolean("tem_excluir"))))
+                .stream()
+                .collect(java.util.stream.Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+    }
+
+    private record AcoesDaTela(boolean incluir, boolean alterar, boolean excluir) {
     }
 
     private void exigirAdmin(Jwt jwt) {
@@ -174,10 +205,17 @@ public class PermissaoController {
         }
     }
 
-    public record TelaResponse(String chave, String nome, String grupo, String subgrupo, boolean adminApenas) {
+    public record TelaResponse(String chave, String nome, String grupo, String subgrupo, boolean adminApenas,
+            boolean temIncluir, boolean temAlterar, boolean temExcluir) {
     }
 
+        /**
+     * ⚠️ `temIncluir`/`temAlterar`/`temExcluir` dizem se a AÇÃO EXISTE naquela tela — não se o
+     * usuário a tem. Um relatório não tem "incluir"; marcar essa caixa concederia uma permissão
+     * que não existe e sugeriria um controle que o sistema não faz.
+     */
     public record PermissaoResponse(String chave, String nome, String grupo, String subgrupo,
+            boolean temIncluir, boolean temAlterar, boolean temExcluir,
             boolean acessar, boolean incluir, boolean alterar, boolean excluir) {
     }
 

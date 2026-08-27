@@ -541,7 +541,11 @@ class EntradaMercadoriaCrudTest {
                                 """.formatted(email, idEmpresa)))
                 .andExpect(status().isCreated())
                 .andReturn().getResponse().getContentAsString();
-        return ((Number) JsonPath.read(resp, "$.idUsuario")).longValue();
+        long idUsuario = ((Number) JsonPath.read(resp, "$.idUsuario")).longValue();
+        // RBAC (2026-08-27): operador nasce sem acesso a nada. Este teste é sobre a regra de
+        // empresa liberada, então recebe a grade que um administrador daria — ver PermissaoDeTeste.
+        PermissaoDeTeste.liberarTudo(mvc, tokenAdmin, idUsuario);
+        return idUsuario;
     }
 
     private String logarComo(String slug, String email) throws Exception {

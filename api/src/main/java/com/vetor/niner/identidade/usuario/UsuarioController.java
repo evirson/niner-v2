@@ -1,5 +1,7 @@
 package com.vetor.niner.identidade.usuario;
 
+import com.vetor.niner.identidade.permissao.Tela;
+
 import com.vetor.niner.identidade.usuario.UsuarioDtos.ExclusaoUsuarioResponse;
 import com.vetor.niner.identidade.usuario.UsuarioDtos.PaginaUsuarios;
 import com.vetor.niner.identidade.usuario.UsuarioDtos.UsuarioRequest;
@@ -17,6 +19,7 @@ import org.springframework.web.bind.annotation.*;
  */
 @RestController
 @RequestMapping("/api/v1/usuarios")
+@Tela("usuarios")
 public class UsuarioController {
 
     private final UsuarioService service;

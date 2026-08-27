@@ -1,5 +1,9 @@
 package com.vetor.niner.identidade.empresa;
 
+import com.vetor.niner.identidade.permissao.Livre;
+
+import com.vetor.niner.identidade.permissao.Tela;
+
 import com.vetor.niner.identidade.empresa.EmpresaDtos.AtualizarEmpresaRequest;
 import com.vetor.niner.identidade.empresa.EmpresaDtos.CriarEmpresaRequest;
 import com.vetor.niner.identidade.empresa.EmpresaDtos.EmpresaDetalheResponse;
@@ -23,6 +27,7 @@ import java.util.List;
  *  e atualização (2026-08-19) são ADMIN-only, checado em {@link EmpresaService}. */
 @RestController
 @RequestMapping("/api/v1/empresas")
+@Tela("empresas")
 public class EmpresaController {
 
     private final EmpresaService service;
@@ -31,6 +36,7 @@ public class EmpresaController {
         this.service = service;
     }
 
+    @Livre   // já era aberto a qualquer papel antes do RBAC
     @GetMapping
     public List<EmpresaResponse> listar() {
         return service.listar();
@@ -38,6 +44,7 @@ public class EmpresaController {
 
     /** Empresas que o usuário logado pode operar (ADMIN: todas; OPERADOR: só as liberadas) —
      *  usado pela Entrada de Produtos por Compra pra escolher em qual empresa dar entrada. */
+    @Livre   // já era aberto a qualquer papel antes do RBAC
     @GetMapping("/permitidas")
     public List<EmpresaResponse> listarPermitidas(@AuthenticationPrincipal Jwt jwt) {
         return service.listarPermitidas(jwt);

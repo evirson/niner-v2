@@ -1,5 +1,7 @@
 package com.vetor.niner.fiscal.configuracao;
 
+import com.vetor.niner.identidade.permissao.Tela;
+
 import com.vetor.niner.fiscal.configuracao.FiscalConfigDtos.EmpresaFiscalResponse;
 import com.vetor.niner.fiscal.configuracao.FiscalConfigDtos.FiscalConfigRequest;
 import com.vetor.niner.fiscal.configuracao.FiscalConfigDtos.FiscalConfigResponse;
@@ -26,6 +28,7 @@ import java.util.List;
  */
 @RestController
 @RequestMapping("/api/v1/fiscal/config")
+@Tela("fiscal.configuracao")
 public class FiscalConfigController {
 
     private final FiscalConfigService service;

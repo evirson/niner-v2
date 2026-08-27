@@ -1,5 +1,7 @@
 package com.vetor.niner.estoque.relatorioestoque;
 
+import com.vetor.niner.identidade.permissao.Tela;
+
 import com.vetor.niner.estoque.relatorioestoque.RelatorioEstoqueDtos.ModeloRelatorioEstoque;
 import com.vetor.niner.estoque.relatorioestoque.RelatorioEstoqueDtos.RelatorioEstoqueResponse;
 import com.vetor.niner.estoque.relatorioestoque.RelatorioEstoqueDtos.SituacaoProduto;
@@ -20,6 +22,7 @@ import java.util.List;
  */
 @RestController
 @RequestMapping("/api/v1/relatorios/estoque")
+@Tela("relatorio-estoque")
 public class RelatorioEstoqueController {
 
     private final RelatorioEstoqueService service;

@@ -1,5 +1,7 @@
 package com.vetor.niner.vendas.orcamento;
 
+import com.vetor.niner.identidade.permissao.Tela;
+
 import com.vetor.niner.vendas.orcamento.OrcamentoDtos.CancelarOrcamentoRequest;
 import com.vetor.niner.vendas.orcamento.OrcamentoDtos.EmitirOrcamentoRequest;
 import com.vetor.niner.vendas.orcamento.OrcamentoDtos.OrcamentoCanceladoResponse;
@@ -32,6 +34,7 @@ import java.time.LocalDate;
  */
 @RestController
 @RequestMapping("/api/v1/orcamentos")
+@Tela("orcamentos")
 public class OrcamentoController {
 
     private final OrcamentoService service;

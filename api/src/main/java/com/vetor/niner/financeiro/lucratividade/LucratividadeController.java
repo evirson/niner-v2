@@ -1,5 +1,7 @@
 package com.vetor.niner.financeiro.lucratividade;
 
+import com.vetor.niner.identidade.permissao.Tela;
+
 import com.vetor.niner.financeiro.lucratividade.LucratividadeDtos.LucratividadeResponse;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -19,6 +21,7 @@ import java.util.List;
  */
 @RestController
 @RequestMapping("/api/v1/relatorios/lucratividade")
+@Tela("lucratividade")
 public class LucratividadeController {
 
     private final LucratividadeService service;

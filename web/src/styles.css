@@ -1837,3 +1837,20 @@ a.menu-card:hover {
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }
+
+/* Nome do usuário no meio do cabeçalho da tela de permissões — só informação, para o admin não
+   confundir de quem é a grade quando tem duas abas abertas. */
+.usuario-da-grade {
+  color: var(--ink-muted);
+  flex: 1;
+  font-size: 15px;
+  font-weight: 600;
+  text-align: center;
+}
+
+/* Ação que a tela não tem. Traço em vez de caixa desabilitada: caixa vazia parece "pode marcar e
+   ninguém marcou"; o traço diz que a ação não existe ali. */
+.acao-inexistente {
+  color: var(--line-strong);
+  user-select: none;
+}
