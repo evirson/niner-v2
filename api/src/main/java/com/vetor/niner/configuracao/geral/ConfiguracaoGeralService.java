@@ -13,6 +13,7 @@ import java.math.BigDecimal;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.OffsetDateTime;
+import java.util.Arrays;
 import java.util.List;
 
 /**
@@ -31,7 +32,8 @@ public class ConfiguracaoGeralService {
                    cfg_exige_numero_venda_devolucao,
                    cfg_rateia_frete_entrada, cfg_reajusta_preco_entrada,
                    cfg_consiste_valor_contas_pagar,
-                   id_plano_contas_compra_mercadoria, cfg_emite_fiscal_apos_venda, atualizado_em
+                   id_plano_contas_compra_mercadoria, cfg_emite_fiscal_apos_venda, cfg_usa_servicos,
+                   atualizado_em
             FROM cfg_geral
             WHERE id_tenant = plataforma.tenant_atual()
             """;
@@ -59,6 +61,27 @@ public class ConfiguracaoGeralService {
     public boolean usaCorGrade() {
         return jdbc.sql("""
                         SELECT cfg_usa_cor_grade FROM cfg_geral
+                        WHERE id_tenant = plataforma.tenant_atual()
+                        """)
+                .query(Boolean.class)
+                .optional()
+                .orElse(false);
+    }
+
+    /**
+     * Só a flag do módulo de serviços (V085), sem checagem de papel — mesmo motivo do
+     * {@link #usaCorGrade()}: quem cadastra produto precisa saber se o seletor
+     * "Mercadoria/Serviço" aparece no formulário, e isso não é privilégio de ADMIN.
+     *
+     * <p>⚠️ <b>Fallback {@code false} não é detalhe, é o padrão do produto.</b> Decisão do dono em
+     * 2026-08-28: <i>"por padrão o módulo de serviço vai precisar ligar ele pra funcionar, pois as
+     * empresas de serviço são menos que as de comércio"</i>. Tenant sem a linha de {@code cfg_geral}
+     * (ou sem o campo) se comporta como loja de comércio, que é a maioria da base.
+     */
+    @Transactional(readOnly = true)
+    public boolean usaServicos() {
+        return jdbc.sql("""
+                        SELECT cfg_usa_servicos FROM cfg_geral
                         WHERE id_tenant = plataforma.tenant_atual()
                         """)
                 .query(Boolean.class)
@@ -236,10 +259,15 @@ public class ConfiguracaoGeralService {
                             cfg_rateia_frete_entrada = ?, cfg_reajusta_preco_entrada = ?,
                             cfg_consiste_valor_contas_pagar = ?,
                             id_plano_contas_compra_mercadoria = ?, cfg_emite_fiscal_apos_venda = ?,
+                            cfg_usa_servicos = COALESCE(?, cfg_usa_servicos),
                             atualizado_em = now()
                         WHERE id_tenant = plataforma.tenant_atual()
                         """)
-                .params(List.of(
+                // ⚠️ Arrays.asList e NÃO List.of: `cfgUsaServicos` é o único campo NULLABLE deste
+                // request (nulo = "mantém", para o cliente antigo que não manda o campo — F12), e
+                // `List.of` lança NullPointerException com elemento nulo. Trocar por List.of aqui
+                // derruba 41 testes de outras telas com um NPE que não menciona o campo.
+                .params(Arrays.asList(
                         req.percentualDescontoVenda(), req.jurosCrediarioDias(), req.jurosCrediario(),
                         req.multaCrediarioDias(), req.multaCrediario(), req.cfgUsaCorGrade(),
                         req.cfgPermiteQtdDecimal(), req.cfgPermiteEstoqueNegativo(),
@@ -247,7 +275,8 @@ public class ConfiguracaoGeralService {
                         req.cfgExigeNumeroVendaDevolucao(),
                         req.cfgRateiaFreteEntrada(), req.cfgReajustaPrecoEntrada(),
                         req.cfgConsisteValorContasPagar(),
-                        req.idPlanoContasCompraMercadoria(), req.cfgEmiteFiscalAposVenda()))
+                        req.idPlanoContasCompraMercadoria(), req.cfgEmiteFiscalAposVenda(),
+                        req.cfgUsaServicos()))
                 .update();
         // Não deveria acontecer — a linha nasce no signup — mas 404 é mais honesto que
         // seguir em frente como se tivesse atualizado algo.
@@ -290,6 +319,7 @@ public class ConfiguracaoGeralService {
                 rs.getBoolean("cfg_consiste_valor_contas_pagar"),
                 rs.getString("id_plano_contas_compra_mercadoria"),
                 rs.getBoolean("cfg_emite_fiscal_apos_venda"),
+                rs.getBoolean("cfg_usa_servicos"),
                 rs.getObject("atualizado_em", OffsetDateTime.class));
     }
 }

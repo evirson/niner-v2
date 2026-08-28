@@ -1,0 +1,438 @@
+package com.vetor.niner;
+
+import com.jayway.jsonpath.JsonPath;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.context.annotation.Import;
+import org.springframework.test.web.servlet.MockMvc;
+import org.testcontainers.postgresql.PostgreSQLContainer;
+
+import java.math.BigDecimal;
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Statement;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.http.MediaType.APPLICATION_JSON;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+/**
+ * Bloco <b>S1</b> do módulo de serviços (V085/V086) — <i>o item que não é mercadoria</i>.
+ * Spec: {@code docs/MODULOSERVICOS.md} §3.4 (DS1), §3.5 (DS2).
+ *
+ * <p>⚠️ <b>O que estes testes protegem, e por que conferem o BANCO e não o HTTP.</b> A decisão de
+ * modelagem (serviço mora em {@code produto}, sem estoque) só é segura enquanto o efeito colateral
+ * <i>não</i> acontecer. Um teste que valide só o status da resposta passaria com serviço criando
+ * saldo em {@code produto_estoque} — que é exatamente o defeito que não daria erro em lugar nenhum
+ * e apareceria meses depois, num Relatório de Estoque convidando o lojista a contar banhos.
+ */
+@SpringBootTest
+@AutoConfigureMockMvc
+@Import(TestcontainersConfiguration.class)
+class ServicoNoCatalogoTest {
+
+    @Autowired
+    MockMvc mvc;
+
+    @Autowired
+    PostgreSQLContainer postgres;
+
+    private String assinarNovoTenant(String sufixo) throws Exception {
+        String body = """
+                {"nomeLoja":"Loja Servico %s","email":"dono%s@lojaservico.com",
+                 "senha":"segredo123","nomeAdmin":"Dono da Loja"}
+                """.formatted(sufixo, sufixo);
+        String resp = mvc.perform(post("/api/publico/assinar").contentType(APPLICATION_JSON).content(body))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        return JsonPath.read(resp, "$.token");
+    }
+
+    private long idTenantDoToken(String token) throws Exception {
+        String resp = mvc.perform(get("/api/v1/eu").header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        return ((Number) JsonPath.read(resp, "$.id_tenant")).longValue();
+    }
+
+    private Connection abrirConexao(long idTenant) throws SQLException {
+        Connection c = DriverManager.getConnection(postgres.getJdbcUrl(), "niner_app", "dev_app");
+        try (Statement st = c.createStatement()) {
+            st.execute("SET app.id_tenant = " + idTenant);
+        }
+        return c;
+    }
+
+    /** Liga o módulo — desligado por padrão (decisão do dono do produto, 2026-08-28). */
+    private void ligarServicos(String token) throws Exception {
+        String atual = mvc.perform(get("/api/v1/config-geral").header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        String body = atual.replaceFirst("\"cfgUsaServicos\":\\s*false", "\"cfgUsaServicos\":true");
+        mvc.perform(put("/api/v1/config-geral").header("Authorization", "Bearer " + token)
+                        .contentType(APPLICATION_JSON).content(body))
+                .andExpect(status().isOk());
+    }
+
+    private long criarProduto(String token, String descricao, String tipoItem) throws Exception {
+        String servico = tipoItem == null ? "" : ",\"tipoItem\":\"%s\"".formatted(tipoItem);
+        String body = """
+                {"descricao":"%s","precoCusto":10.00,"percentualVenda":0,"precoVenda":80.00%s}
+                """.formatted(descricao, servico);
+        String resp = mvc.perform(post("/api/v1/produtos").header("Authorization", "Bearer " + token)
+                        .contentType(APPLICATION_JSON).content(body))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        return ((Number) JsonPath.read(resp, "$.idProduto")).longValue();
+    }
+
+    private long criarVariacao(Connection c, long idTenant, long idProduto) throws SQLException {
+        try (PreparedStatement ps = c.prepareStatement(
+                "INSERT INTO produto_barra (id_tenant, id_produto, sku) VALUES (?, ?, gerar_ean13_interno())"
+                        + " RETURNING id_variacao")) {
+            ps.setLong(1, idTenant);
+            ps.setLong(2, idProduto);
+            try (ResultSet rs = ps.executeQuery()) {
+                rs.next();
+                return rs.getLong(1);
+            }
+        }
+    }
+
+    private long buscarIdEmpresa(Connection c) throws SQLException {
+        try (Statement st = c.createStatement();
+             ResultSet rs = st.executeQuery("SELECT id_empresa FROM empresa LIMIT 1")) {
+            rs.next();
+            return rs.getLong(1);
+        }
+    }
+
+    /** Lança uma saída (venda) da variação e devolve o id do movimento, para poder apagar depois. */
+    private long lancarSaida(Connection c, long idTenant, long idEmpresa, long idVariacao) throws SQLException {
+        long idMovimento;
+        try (PreparedStatement ps = c.prepareStatement(
+                "INSERT INTO produto_movimento_mestre (id_tenant, tipo_movimento, data_movimento, id_empresa)"
+                        + " VALUES (?, 'VENDA', now(), ?) RETURNING id_movimento")) {
+            ps.setLong(1, idTenant);
+            ps.setLong(2, idEmpresa);
+            try (ResultSet rs = ps.executeQuery()) {
+                rs.next();
+                idMovimento = rs.getLong(1);
+            }
+        }
+        try (PreparedStatement ps = c.prepareStatement("""
+                INSERT INTO produto_movimento_detalhe
+                    (id_tenant, id_movimento, id_empresa, id_variacao, credito_debito, qtd_produto, preco_venda)
+                VALUES (?, ?, ?, ?, 'D', 1, 80.00)
+                """)) {
+            ps.setLong(1, idTenant);
+            ps.setLong(2, idMovimento);
+            ps.setLong(3, idEmpresa);
+            ps.setLong(4, idVariacao);
+            ps.executeUpdate();
+        }
+        return idMovimento;
+    }
+
+    private int linhasDeEstoque(Connection c, long idVariacao) throws SQLException {
+        try (PreparedStatement ps = c.prepareStatement(
+                "SELECT count(*) FROM produto_estoque WHERE id_variacao = ?")) {
+            ps.setLong(1, idVariacao);
+            try (ResultSet rs = ps.executeQuery()) {
+                rs.next();
+                return rs.getInt(1);
+            }
+        }
+    }
+
+    private BigDecimal saldo(Connection c, long idVariacao) throws SQLException {
+        try (PreparedStatement ps = c.prepareStatement(
+                "SELECT qtd_estoque FROM produto_estoque WHERE id_variacao = ?")) {
+            ps.setLong(1, idVariacao);
+            try (ResultSet rs = ps.executeQuery()) {
+                rs.next();
+                return rs.getBigDecimal(1);
+            }
+        }
+    }
+
+    // ---------------------------------------------------------------- o caso que a feature existe para
+
+    @Test
+    void servicoVendidoNaoCriaSaldoDeEstoque() throws Exception {
+        String token = assinarNovoTenant("a");
+        long idTenant = idTenantDoToken(token);
+        ligarServicos(token);
+        long idServico = criarProduto(token, "BANHO E TOSA", "SERVICO");
+
+        try (Connection c = abrirConexao(idTenant)) {
+            long idEmpresa = buscarIdEmpresa(c);
+            long idVariacao = criarVariacao(c, idTenant, idServico);
+            lancarSaida(c, idTenant, idEmpresa, idVariacao);
+
+            // ⭐ Zero LINHAS, não saldo zero: a trigger sai antes do UPSERT, então produto_estoque
+            // nem chega a conhecer o serviço. Saldo 0 e ausência de linha são coisas diferentes —
+            // a primeira apareceria no Relatório de Estoque, a segunda não.
+            assertThat(linhasDeEstoque(c, idVariacao)).isZero();
+        }
+    }
+
+    /**
+     * ⭐ O par negativo — sem ele, um curto-circuito grande demais (que desligasse o estoque para
+     * todo mundo) passaria verde. É a lição de {@code feedback_caso_negativo_pega_guarda_que_expulsa_todos}.
+     */
+    @Test
+    void mercadoriaVendidaContinuaBaixandoEstoqueNormalmente() throws Exception {
+        String token = assinarNovoTenant("b");
+        long idTenant = idTenantDoToken(token);
+        long idProduto = criarProduto(token, "COLEIRA", null);   // sem tipoItem = MERCADORIA
+
+        try (Connection c = abrirConexao(idTenant)) {
+            long idEmpresa = buscarIdEmpresa(c);
+            long idVariacao = criarVariacao(c, idTenant, idProduto);
+            lancarSaida(c, idTenant, idEmpresa, idVariacao);
+
+            assertThat(linhasDeEstoque(c, idVariacao)).isEqualTo(1);
+            assertThat(saldo(c, idVariacao)).isEqualByComparingTo("-1.000");
+        }
+    }
+
+    /**
+     * O ramo do DELETE. Sem o curto-circuito ali, apagar o item de serviço de uma venda cancelada
+     * <b>creditaria</b> estoque — criando do nada a linha que a venda nunca criou.
+     */
+    @Test
+    void apagarMovimentoDeServicoNaoCreditaEstoque() throws Exception {
+        String token = assinarNovoTenant("c");
+        long idTenant = idTenantDoToken(token);
+        ligarServicos(token);
+        long idServico = criarProduto(token, "CONSULTA VETERINARIA", "SERVICO");
+
+        try (Connection c = abrirConexao(idTenant)) {
+            long idEmpresa = buscarIdEmpresa(c);
+            long idVariacao = criarVariacao(c, idTenant, idServico);
+            long idMovimento = lancarSaida(c, idTenant, idEmpresa, idVariacao);
+
+            try (PreparedStatement ps = c.prepareStatement(
+                    "DELETE FROM produto_movimento_detalhe WHERE id_movimento = ?")) {
+                ps.setLong(1, idMovimento);
+                ps.executeUpdate();
+            }
+            assertThat(linhasDeEstoque(c, idVariacao)).isZero();
+        }
+    }
+
+    /**
+     * ⭐ O item <b>continua no ledger</b> — é isso que faz serviço existir para a DRE, a
+     * Lucratividade, as Comissões, o Relatório de Vendas e a papeleta (§2.3 do estudo: 33 leitores).
+     * Se alguém "otimizar" deixando de gravar o movimento, o serviço some de todos eles em silêncio.
+     */
+    @Test
+    void servicoAparaceNoLedgerDeMovimento() throws Exception {
+        String token = assinarNovoTenant("d");
+        long idTenant = idTenantDoToken(token);
+        ligarServicos(token);
+        long idServico = criarProduto(token, "TOSA HIGIENICA", "SERVICO");
+
+        try (Connection c = abrirConexao(idTenant)) {
+            long idEmpresa = buscarIdEmpresa(c);
+            long idVariacao = criarVariacao(c, idTenant, idServico);
+            lancarSaida(c, idTenant, idEmpresa, idVariacao);
+
+            try (PreparedStatement ps = c.prepareStatement(
+                    "SELECT count(*) FROM produto_movimento_detalhe WHERE id_variacao = ?")) {
+                ps.setLong(1, idVariacao);
+                try (ResultSet rs = ps.executeQuery()) {
+                    rs.next();
+                    assertThat(rs.getInt(1)).isEqualTo(1);
+                }
+            }
+        }
+    }
+
+    // ---------------------------------------------------------------- cadastro
+
+    @Test
+    void aVariacaoHerdaOTipoDoProduto() throws Exception {
+        String token = assinarNovoTenant("e");
+        long idTenant = idTenantDoToken(token);
+        ligarServicos(token);
+        long idServico = criarProduto(token, "HIDRATACAO", "SERVICO");
+
+        try (Connection c = abrirConexao(idTenant)) {
+            long idVariacao = criarVariacao(c, idTenant, idServico);
+            try (PreparedStatement ps = c.prepareStatement(
+                    "SELECT tipo_item::text FROM produto_barra WHERE id_variacao = ?")) {
+                ps.setLong(1, idVariacao);
+                try (ResultSet rs = ps.executeQuery()) {
+                    rs.next();
+                    assertThat(rs.getString(1)).isEqualTo("SERVICO");
+                }
+            }
+        }
+    }
+
+    @Test
+    void servicoGuardaDuracaoEComissaoPropria() throws Exception {
+        String token = assinarNovoTenant("f");
+        ligarServicos(token);
+        String body = """
+                {"descricao":"BANHO GRANDE PORTE","precoCusto":0,"percentualVenda":0,"precoVenda":120.00,
+                 "tipoItem":"SERVICO","duracaoMinutos":90,"percComissaoServico":15.00}
+                """;
+        String resp = mvc.perform(post("/api/v1/produtos").header("Authorization", "Bearer " + token)
+                        .contentType(APPLICATION_JSON).content(body))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.tipoItem").value("SERVICO"))
+                .andExpect(jsonPath("$.duracaoMinutos").value(90))
+                .andExpect(jsonPath("$.percComissaoServico").value(15.00))
+                .andReturn().getResponse().getContentAsString();
+        long id = ((Number) JsonPath.read(resp, "$.idProduto")).longValue();
+
+        mvc.perform(get("/api/v1/produtos/" + id).header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.duracaoMinutos").value(90));
+    }
+
+    /** Mercadoria não ganha linha em {@code produto_servico} — a extensão é 1:1 com serviço. */
+    @Test
+    void mercadoriaNaoGanhaLinhaDeServico() throws Exception {
+        String token = assinarNovoTenant("g");
+        long idTenant = idTenantDoToken(token);
+        long idProduto = criarProduto(token, "RACAO PREMIUM", "MERCADORIA");
+
+        try (Connection c = abrirConexao(idTenant)) {
+            try (PreparedStatement ps = c.prepareStatement(
+                    "SELECT count(*) FROM produto_servico WHERE id_produto = ?")) {
+                ps.setLong(1, idProduto);
+                try (ResultSet rs = ps.executeQuery()) {
+                    rs.next();
+                    assertThat(rs.getInt(1)).isZero();
+                }
+            }
+        }
+    }
+
+    // ---------------------------------------------------------------- as travas
+
+    /**
+     * ⛔ O módulo é <b>opt-in</b>: <i>"por padrão o módulo de serviço vai precisar ligar ele pra
+     * funcionar, pois as empresas de serviço são menos que as de comércio"</i> (dono do produto,
+     * 2026-08-28). Sem esta trava, a API aceitaria criar serviço enquanto a tela não oferece o
+     * campo — e o item viraria uma linha que nenhuma tela explica.
+     */
+    @Test
+    void naoCadastraServicoComOModuloDesligado() throws Exception {
+        String token = assinarNovoTenant("h");
+        String body = """
+                {"descricao":"BANHO","precoCusto":0,"percentualVenda":0,"precoVenda":50.00,
+                 "tipoItem":"SERVICO"}
+                """;
+        mvc.perform(post("/api/v1/produtos").header("Authorization", "Bearer " + token)
+                        .contentType(APPLICATION_JSON).content(body))
+                .andExpect(status().isBadRequest());
+    }
+
+    /** O par: com o módulo desligado, o cadastro de mercadoria segue exatamente como sempre foi. */
+    @Test
+    void mercadoriaContinuaSendoCadastradaComOModuloDesligado() throws Exception {
+        String token = assinarNovoTenant("i");
+        mvc.perform(get("/api/v1/config-geral").header("Authorization", "Bearer " + token))
+                .andExpect(jsonPath("$.cfgUsaServicos").value(false));
+        criarProduto(token, "OSSO DE COURO", null);
+    }
+
+    /**
+     * O tipo é imutável: virar um produto com estoque e histórico em serviço deixaria
+     * {@code produto_estoque} com saldo de algo que não tem saldo, e a NFC-e de ontem descrevendo
+     * mercadoria que hoje é mão de obra — tudo sem erro.
+     */
+    @Test
+    void naoTrocaMercadoriaPorServicoDepoisDeCriado() throws Exception {
+        String token = assinarNovoTenant("j");
+        long idTenant = idTenantDoToken(token);
+        ligarServicos(token);
+        long idProduto = criarProduto(token, "SHAMPOO", "MERCADORIA");
+
+        try (Connection c = abrirConexao(idTenant);
+             PreparedStatement ps = c.prepareStatement(
+                     "UPDATE produto SET tipo_item = 'SERVICO' WHERE id_produto = ?")) {
+            ps.setLong(1, idProduto);
+            try {
+                ps.executeUpdate();
+                throw new AssertionError("a troca de tipo deveria ter sido recusada pela trigger");
+            } catch (SQLException e) {
+                assertThat(e.getMessage()).contains("TIPO_ITEM_IMUTAVEL");
+            }
+        }
+    }
+
+    /**
+     * ⭐ Achado testando ao vivo em 2026-08-28, não previsto na spec: num tenant com
+     * {@code cfg_usa_cor_grade} ligado — o caso da petshop que também vende ração em tamanhos —
+     * cadastrar um serviço era recusado com <i>"Grade é obrigatória para este tenant"</i>, mandando
+     * o operador procurar uma curva de tamanhos para um banho de cachorro.
+     *
+     * <p>Serviço não tem grade, nem cor, nem tamanho. A exigência vale para mercadoria.
+     */
+    @Test
+    void servicoNaoExigeGradeMesmoNoTenantQueUsaCorEGrade() throws Exception {
+        String token = assinarNovoTenant("l");
+        ligarServicos(token);
+
+        // liga cor/grade, como a petshop que vende ração em tamanhos
+        String atual = mvc.perform(get("/api/v1/config-geral").header("Authorization", "Bearer " + token))
+                .andReturn().getResponse().getContentAsString();
+        mvc.perform(put("/api/v1/config-geral").header("Authorization", "Bearer " + token)
+                        .contentType(APPLICATION_JSON)
+                        .content(atual.replaceFirst("\"cfgUsaCorGrade\":\\s*false", "\"cfgUsaCorGrade\":true")))
+                .andExpect(status().isOk());
+
+        // serviço passa sem grade...
+        mvc.perform(post("/api/v1/produtos").header("Authorization", "Bearer " + token)
+                        .contentType(APPLICATION_JSON).content("""
+                                {"descricao":"BANHO E TOSA","precoCusto":0,"percentualVenda":0,
+                                 "precoVenda":80.00,"tipoItem":"SERVICO"}
+                                """))
+                .andExpect(status().isCreated());
+
+        // ...e a mercadoria continua exigindo, que é de onde a regra veio (o par negativo).
+        mvc.perform(post("/api/v1/produtos").header("Authorization", "Bearer " + token)
+                        .contentType(APPLICATION_JSON).content("""
+                                {"descricao":"RACAO","precoCusto":0,"percentualVenda":0,"precoVenda":50.00}
+                                """))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void tipoInvalidoEhRecusadoComMensagemLegivel() throws Exception {
+        String token = assinarNovoTenant("k");
+        ligarServicos(token);
+        String body = """
+                {"descricao":"ALGO","precoCusto":0,"percentualVenda":0,"precoVenda":10.00,
+                 "tipoItem":"OUTRA_COISA"}
+                """;
+        mvc.perform(post("/api/v1/produtos").header("Authorization", "Bearer " + token)
+                        .contentType(APPLICATION_JSON).content(body))
+                .andExpect(status().isBadRequest());
+    }
+
+    /** P8 — o de sempre: o que é de um tenant não aparece no outro. */
+    @Test
+    void isolamentoEntreTenants() throws Exception {
+        String tokenA = assinarNovoTenant("x");
+        ligarServicos(tokenA);
+        long idServicoA = criarProduto(tokenA, "BANHO EXCLUSIVO A", "SERVICO");
+
+        String tokenB = assinarNovoTenant("y");
+        mvc.perform(get("/api/v1/produtos/" + idServicoA).header("Authorization", "Bearer " + tokenB))
+                .andExpect(status().isNotFound());
+    }
+}

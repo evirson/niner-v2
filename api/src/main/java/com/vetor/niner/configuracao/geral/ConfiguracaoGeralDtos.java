@@ -36,7 +36,13 @@ public final class ConfiguracaoGeralDtos {
             @NotNull Boolean cfgReajustaPrecoEntrada,
             @NotNull Boolean cfgConsisteValorContasPagar,
             @NotBlank String idPlanoContasCompraMercadoria,
-            @NotNull Boolean cfgEmiteFiscalAposVenda) {
+            @NotNull Boolean cfgEmiteFiscalAposVenda,
+            /**
+             * Liga o modulo de servicos (V085). DESLIGADO por padrao, por decisao do dono do
+             * produto em 2026-08-28: empresa de servico e minoria da base.
+             * <p>Nulo = mantem o valor atual, para cliente antigo que nao manda o campo (F12).
+             */
+            Boolean cfgUsaServicos) {
     }
 
     public record ConfiguracaoGeralResponse(
@@ -55,6 +61,7 @@ public final class ConfiguracaoGeralDtos {
             boolean cfgConsisteValorContasPagar,
             String idPlanoContasCompraMercadoria,
             boolean cfgEmiteFiscalAposVenda,
+            boolean cfgUsaServicos,
             OffsetDateTime atualizadoEm) {
     }
 

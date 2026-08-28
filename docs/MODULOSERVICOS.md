@@ -68,6 +68,7 @@ continua sendo recomendação minha.**
 |---|---|---|
 | **P3** | A Ordem de Serviço entra no v1? | ✅ **Sim** |
 | **P5** | Dá para entregar sem NFS-e? | ⚠️ **O produto tem de OFERECER a emissão — mas o lojista pode escolher só a papeleta.** Ver a leitura abaixo |
+| **P1** | Serviço nasce ligado ou desligado? | ✅ **Desligado (opt-in)** — *"as empresas de serviço são menos que as de comércio"* |
 | **P4** | Existe CNPJ com Inscrição Municipal para testar? | ✅ **Sim, ele tem uma empresa que pode testar** |
 
 ### ⚠️ P5 — a leitura correta, depois do esclarecimento dele
@@ -149,9 +150,11 @@ fatos sobre ela antes de começar, e nenhum é dedutível:
   de Empresa já tem e que quase ninguém preenche (foi um dos três que se perderam no `PUT` de teste
   de 27/08).
 
-⚠️ **P1, P2 e P6 continuam abertas** e não bloqueiam o S0 — mas P1 (nasce ligado ou desligado)
-precisa ser respondida antes do **S1**, porque é `DEFAULT` de migration, e inverter default depois
-de existir tenant é retrabalho medido (V054 → V055).
+✅ **P1 foi respondida em 2026-08-28: desligado (opt-in)**, com a razão dele — *"as empresas de
+serviço são menos que as de comércio"*. O **S1 está destravado**.
+
+⚠️ **P2 e P6 continuam abertas**, e nenhuma das duas bloqueia código: P2 é seed de ramo (dado) e P6
+é decisão comercial que depende do item 28 das pendências (planos pagos).
 
 ---
 
@@ -1271,8 +1274,13 @@ já dita e o custo de cada resposta.
 > resposta de P5 mudou no desenho. **P1, P2 e P6 seguem abertas**; P1 precisa ser respondida antes
 > do bloco S1, porque é `DEFAULT` de migration.
 
-**P1 — Serviço nasce ligado ou desligado?**
-*Recomendação:* **desligado** (`cfg_usa_servicos = false`), como `cfg_usa_cor_grade`.
+**P1 — ✅ RESPONDIDA (2026-08-28): DESLIGADO.** Palavras dele: *"por padrão o módulo de serviço vai
+precisar ligar ele pra funcionar, pois as empresas de serviço são menos que as de comércio"*.
+⭐ A justificativa é a mesma que sustenta o `cfg_usa_cor_grade` e o **F12**: o padrão serve a
+**maioria da base**, e quem é exceção liga. Vale como critério para todo parâmetro futuro deste
+produtor — o default acompanha o cliente típico, não o caso mais rico.
+
+*Recomendação original (confirmada):* **desligado** (`cfg_usa_servicos = false`), como `cfg_usa_cor_grade`.
 *Se ligado:* toda loja de calçados ganha um seletor "Mercadoria/Serviço" que nunca vai usar, e a
 tela de Produtos fica mais poluída para 100% da base por causa de uma minoria.
 *Se desligado:* quem quer serviço tem de achar o parâmetro — mitigado pela sugestão vinda do ramo.

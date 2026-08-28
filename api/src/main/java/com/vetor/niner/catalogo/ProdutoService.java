@@ -28,6 +28,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+import static org.springframework.http.HttpStatus.BAD_REQUEST;
 import static org.springframework.http.HttpStatus.NOT_FOUND;
 
 /**
@@ -158,18 +159,23 @@ public class ProdutoService {
         validar(req, usaCorGrade);
         List<Object> params = new ArrayList<>();
         adicionarCamposComuns(params, req, usaCorGrade);
+        // tipo_item entra só no INSERT: é imutável (V085), então o UPDATE não o toca — e é por isso
+        // que ele não está em adicionarCamposComuns, que os dois caminhos compartilham.
+        params.add(tipoItemValidado(req));
 
         try {
             long id = jdbc.sql("""
                             INSERT INTO produto (id_tenant, ativo, marca, referencia, descricao, preco_custo,
                                 percentual_venda, preco_venda, data_inicio_oferta, data_final_oferta, preco_oferta,
-                                codigo_ncm, peso_bruto, peso_liquido, id_grade, id_perfil_fiscal)
-                            VALUES (plataforma.tenant_atual(), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                codigo_ncm, peso_bruto, peso_liquido, id_grade, id_perfil_fiscal, tipo_item)
+                            VALUES (plataforma.tenant_atual(), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                                    CAST(? AS tipo_item))
                             RETURNING id_produto
                             """)
                     .params(params)
                     .query(Long.class).single();
             salvarCategorias(id, req.categorias());
+            salvarServico(id, req);
             return buscar(id);
         } catch (DataIntegrityViolationException e) {
             throw erroDeVinculo(e);
@@ -228,6 +234,7 @@ public class ProdutoService {
                 throw new ResponseStatusException(NOT_FOUND, "Produto não encontrado.");
             }
             salvarCategorias(id, req.categorias());
+            salvarServico(id, req);
             return buscar(id);
         } catch (DataIntegrityViolationException e) {
             throw erroDeVinculo(e);
@@ -311,7 +318,12 @@ public class ProdutoService {
         if (pesoLiquido.compareTo(pesoBruto) > 0) {
             throw new IllegalArgumentException("Peso líquido deve ser menor ou igual ao peso bruto.");
         }
-        if (usaCorGrade && req.idGrade() == null) {
+        // ⚠️ Serviço não tem grade — nem cor, nem tamanho. Achado testando ao vivo em 2026-08-28:
+        // num tenant com `cfg_usa_cor_grade` ligado (o caso da petshop que também vende ração em
+        // tamanhos), cadastrar "BANHO E TOSA" era recusado com *"Grade é obrigatória"*, mensagem
+        // que manda o operador procurar uma curva de tamanhos para um banho de cachorro.
+        // A exigência vale para MERCADORIA, que é de onde ela veio.
+        if (usaCorGrade && req.idGrade() == null && !ehServico(req)) {
             throw new IllegalArgumentException("Grade é obrigatória para este tenant.");
         }
         if (req.categorias() != null) {
@@ -450,6 +462,75 @@ public class ProdutoService {
         return (s == null || s.isBlank()) ? null : s.trim().toUpperCase(Locale.ROOT);
     }
 
+    /**
+     * {@code MERCADORIA} (padrão) ou {@code SERVICO}, validado aqui e não só pelo ENUM do banco —
+     * um valor inválido chegaria como {@code DataIntegrityViolationException} e sairia como
+     * <i>"registro em uso por outro cadastro"</i>, mensagem sobre exclusão para um cadastro
+     * (mesma armadilha do {@code GlobalExceptionHandler} registrada em 2026-08-20).
+     *
+     * <p>⚠️ Nulo = {@code MERCADORIA}: cliente antigo que não manda o campo continua funcionando
+     * exatamente como antes (F12).
+     *
+     * <p>⚠️ Cadastrar serviço exige o módulo ligado ({@code cfg_usa_servicos}, desligado por
+     * padrão — decisão do dono do produto em 2026-08-28). Sem isso, a API aceitaria criar serviço
+     * enquanto a tela não oferece o campo, e o item viraria uma linha que nenhuma tela explica.
+     */
+    /** Só a leitura do campo — sem validar nem consultar nada, para poder ser usada na validação. */
+    private static boolean ehServico(ProdutoRequest req) {
+        return req.tipoItem() != null && "SERVICO".equalsIgnoreCase(req.tipoItem().trim());
+    }
+
+    private String tipoItemValidado(ProdutoRequest req) {
+        String tipo = req.tipoItem() == null || req.tipoItem().isBlank()
+                ? "MERCADORIA"
+                : req.tipoItem().trim().toUpperCase(Locale.ROOT);
+        if (!tipo.equals("MERCADORIA") && !tipo.equals("SERVICO")) {
+            throw new ResponseStatusException(BAD_REQUEST,
+                    "Tipo de item inválido: use MERCADORIA ou SERVICO.");
+        }
+        if (tipo.equals("SERVICO") && !configuracaoGeralService.usaServicos()) {
+            throw new ResponseStatusException(BAD_REQUEST,
+                    "O módulo de serviços está desligado. Ligue \"Usa serviços\" em "
+                    + "Parâmetros do Sistema para cadastrar serviços.");
+        }
+        return tipo;
+    }
+
+    /**
+     * Grava (ou apaga) a extensão 1:1 de serviço. Padrão "apaga e regrava" já usado em
+     * {@code salvarCategorias} — mais simples que diferenciar insert de update, e o volume é 1.
+     *
+     * <p>⚠️ Lê o tipo <b>do banco</b>, não do request: no {@code atualizar} o tipo é imutável e o
+     * cliente pode nem tê-lo enviado. Confiar no request faria a edição de um serviço apagar a
+     * linha de {@code produto_servico} sempre que o campo viesse vazio.
+     */
+    private void salvarServico(long idProduto, ProdutoRequest req) {
+        boolean ehServico = Boolean.TRUE.equals(jdbc.sql("""
+                        SELECT tipo_item = 'SERVICO' FROM produto
+                         WHERE id_tenant = plataforma.tenant_atual() AND id_produto = ?
+                        """)
+                .param(idProduto).query(Boolean.class).optional().orElse(false));
+
+        jdbc.sql("DELETE FROM produto_servico WHERE id_tenant = plataforma.tenant_atual() AND id_produto = ?")
+                .param(idProduto).update();
+        if (!ehServico) {
+            return;
+        }
+        jdbc.sql("""
+                        INSERT INTO produto_servico (id_tenant, id_produto, duracao_minutos, perc_comissao)
+                        VALUES (plataforma.tenant_atual(), ?, ?, ?)
+                        """)
+                .params(idProduto, req.duracaoMinutos(), req.percComissaoServico())
+                .update();
+    }
+
+    /** {@code getInt} + {@code wasNull}: o driver recusa {@code getObject(col, Integer.class)} sobre
+     *  {@code int4}, e o erro sai disfarçado de 409 (achado de 2026-08-20). */
+    private static Integer duracaoOuNulo(ResultSet rs) throws SQLException {
+        int v = rs.getInt("duracao_minutos");
+        return rs.wasNull() ? null : v;
+    }
+
     private List<CategoriaSelecionada> buscarCategorias(long idProduto) {
         return jdbc.sql("""
                         SELECT pc.id_categoria, cc.nome_categoria, pc.indice
@@ -469,10 +550,12 @@ public class ProdutoService {
                    p.preco_venda, p.data_inicio_oferta, p.data_final_oferta, p.preco_oferta, p.codigo_ncm,
                    p.peso_bruto, p.peso_liquido, p.id_grade, g.descricao AS descricao_grade, p.ativo,
                    p.id_perfil_fiscal, pf.nome AS nome_perfil_fiscal,
+                   p.tipo_item, ps.duracao_minutos, ps.perc_comissao AS perc_comissao_servico,
                    p.criado_em, p.atualizado_em, p.reajustado_em
             FROM produto p
             LEFT JOIN cfg_grade g ON g.id_grade = p.id_grade AND g.id_tenant = p.id_tenant AND g.id_grade <> 1
             LEFT JOIN cfg_perfil_fiscal pf ON pf.id_perfil_fiscal = p.id_perfil_fiscal AND pf.id_tenant = p.id_tenant
+            LEFT JOIN produto_servico ps ON ps.id_produto = p.id_produto AND ps.id_tenant = p.id_tenant
             """;
 
     /** id_grade=1 é a grade PADRÃO (2026-08-13, reservada/invisível, ver {@code SignupService})
@@ -502,6 +585,11 @@ public class ProdutoService {
                 rs.getBigDecimal("peso_liquido"),
                 idGrade == 1 ? null : idGrade,
                 rs.getString("descricao_grade"),
+                rs.getString("tipo_item"),
+                // getInt + wasNull, nunca getObject(..., Integer.class): o driver recusa a conversão
+                // a partir de int4 e o erro sai como 409 "registro em uso" (achado de 2026-08-20).
+                duracaoOuNulo(rs),
+                rs.getBigDecimal("perc_comissao_servico"),
                 rs.getBoolean("ativo"),
                 buscarCategorias(id),
                 produtoImagemService.listar(id),

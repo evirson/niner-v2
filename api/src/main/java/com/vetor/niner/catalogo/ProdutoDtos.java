@@ -1,8 +1,10 @@
 package com.vetor.niner.catalogo;
 
+import jakarta.validation.constraints.DecimalMax;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
 
 import java.math.BigDecimal;
@@ -44,7 +46,23 @@ public final class ProdutoDtos {
             Long idGrade,
             Boolean ativo,
             List<Long> categorias,
-            Long idPerfilFiscal) {
+            Long idPerfilFiscal,
+            /* --- serviço (V085, bloco S1 de docs/MODULOSERVICOS.md) --- */
+            /**
+             * {@code MERCADORIA} (padrão) ou {@code SERVICO}. Nulo = MERCADORIA, para o cliente
+             * antigo que não manda o campo continuar funcionando igual (F12).
+             * <p>⚠️ É <b>imutável</b> depois de criado — a trigger {@code tg_produto_tipo_item_imutavel}
+             * (V085) recusa a troca, porque histórico de estoque, relatórios e notas já emitidas
+             * descrevem o item como ele era.
+             */
+            String tipoItem,
+            /** Só faz sentido em serviço; duração típica, para dimensionar o dia. */
+            @Positive Integer duracaoMinutos,
+            /**
+             * Comissão <b>deste serviço</b>, que sobrepõe a do funcionário quando preenchida (DS5).
+             * Nulo = usa a do funcionário, como hoje.
+             */
+            @DecimalMin("0") @DecimalMax("100") BigDecimal percComissaoServico) {
     }
 
     public record CategoriaSelecionada(long idCategoria, String nomeCategoria, int indice) {
@@ -66,6 +84,9 @@ public final class ProdutoDtos {
             BigDecimal pesoLiquido,
             Long idGrade,
             String descricaoGrade,
+            String tipoItem,
+            Integer duracaoMinutos,
+            BigDecimal percComissaoServico,
             boolean ativo,
             List<CategoriaSelecionada> categorias,
             List<ProdutoImagemDtos.ImagemResponse> imagens,
