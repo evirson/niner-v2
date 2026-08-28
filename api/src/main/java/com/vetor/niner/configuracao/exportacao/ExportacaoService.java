@@ -174,7 +174,9 @@ public class ExportacaoService {
             JOIN produto p ON p.id_produto = pb.id_produto AND p.id_tenant = pb.id_tenant
             LEFT JOIN cfg_cor co ON co.id_cor = pb.id_cor AND co.id_tenant = pb.id_tenant AND co.id_cor <> 1
             LEFT JOIN cfg_tamanho ta ON ta.id_tamanho = pb.id_tamanho AND ta.id_tenant = pb.id_tenant AND ta.id_tamanho <> 1
-            WHERE pb.id_tenant = plataforma.tenant_atual()
+            -- Só MERCADORIA: esta planilha existe para levar códigos de barras para outro sistema
+            -- ou para conferência de prateleira, e serviço não tem prateleira (V085, bloco S1).
+            WHERE pb.id_tenant = plataforma.tenant_atual() AND pb.tipo_item = 'MERCADORIA'
             ORDER BY p.descricao
             """;
 
@@ -195,6 +197,10 @@ public class ExportacaoService {
                    pb.sku AS "SKU", co.descricao AS "Cor", ta.descricao AS "Tamanho",
                    pe.qtd_estoque AS "Qtd. em Estoque", pe.reservado AS "Reservado", pe.disponivel AS "Disponível",
                    pe.minimo AS "Estoque Mínimo"
+            -- ⭐ Serviço não precisa de filtro AQUI: esta consulta parte de `produto_estoque`, e
+            -- serviço nunca ganha linha lá (a trigger sai antes do UPSERT, V086). A exclusão é
+            -- estrutural, não um predicado que alguém pode esquecer ao mexer — que é o mais
+            -- seguro dos dois jeitos.
             FROM produto_estoque pe
             JOIN empresa e ON e.id_empresa = pe.id_empresa AND e.id_tenant = pe.id_tenant
             JOIN produto_barra pb ON pb.id_variacao = pe.id_variacao AND pb.id_tenant = pe.id_tenant

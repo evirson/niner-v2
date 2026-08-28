@@ -193,6 +193,11 @@ public class ConformidadeFiscalService {
 
     private static final String FILTRO_PRODUTOS_PROBLEMATICOS = """
             WHERE p.id_tenant = plataforma.tenant_atual() AND p.ativo
+              -- ⛔ Serviço não tem NCM nem perfil fiscal de ICMS — a tributação dele é ISS, em
+              -- NFS-e (V085, bloco S1). Sem este filtro, TODO serviço cadastrado viraria pendência
+              -- permanente justamente na tela que existe para dizer que está tudo pronto para
+              -- emitir — e pendência que não se resolve treina o operador a ignorar a tela.
+              AND p.tipo_item = 'MERCADORIA'
               AND (p.codigo_ncm IS NULL OR p.id_perfil_fiscal IS NULL
                    OR (p.id_perfil_fiscal IS NOT NULL AND ?::int IS NOT NULL AND NOT EXISTS (
                          SELECT 1 FROM cfg_perfil_fiscal_regra r

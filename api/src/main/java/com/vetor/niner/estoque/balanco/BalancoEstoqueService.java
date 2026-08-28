@@ -18,6 +18,7 @@ import java.sql.SQLException;
 import java.time.OffsetDateTime;
 import java.util.List;
 
+import static org.springframework.http.HttpStatus.BAD_REQUEST;
 import static org.springframework.http.HttpStatus.NOT_FOUND;
 
 /**
@@ -348,6 +349,21 @@ public class BalancoEstoqueService {
                 .query(Boolean.class).single());
         if (!existe) {
             throw new ResponseStatusException(NOT_FOUND, "Produto não encontrado para a variação informada.");
+        }
+        // ⛔ Serviço não se conta: não tem saldo (V086), então "contar" um banho produziria uma
+        // diferença que o Efetivar Balanço tentaria ajustar — e o ajuste é um movimento de estoque
+        // que a trigger ignora, deixando a contagem eternamente divergente. Mensagem própria
+        // porque "produto não encontrado" mandaria o operador procurar erro de digitação.
+        boolean ehServico = Boolean.TRUE.equals(jdbc.sql("""
+                        SELECT EXISTS (SELECT 1 FROM produto_barra pb
+                                       WHERE pb.id_tenant = plataforma.tenant_atual()
+                                             AND pb.id_variacao = ? AND pb.tipo_item = 'SERVICO')
+                        """)
+                .param(idVariacao)
+                .query(Boolean.class).single());
+        if (ehServico) {
+            throw new ResponseStatusException(BAD_REQUEST,
+                    "Serviço não entra na contagem de estoque — serviço não tem saldo.");
         }
     }
 

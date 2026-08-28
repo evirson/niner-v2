@@ -88,7 +88,7 @@ public class RelatorioEstoqueService {
     private RelatorioEstoqueResponse gerarInventario(
             List<Long> idsEmpresaEfetivo, List<String> marcas, List<Long> idsCategoria,
             TipoQuantidade tipoQuantidade, SituacaoProduto situacao) {
-        StringBuilder filtro = new StringBuilder(" WHERE p.id_tenant = plataforma.tenant_atual()");
+        StringBuilder filtro = new StringBuilder(" WHERE p.id_tenant = plataforma.tenant_atual() AND p.tipo_item = 'MERCADORIA'");
         List<Object> paramsFiltro = new ArrayList<>();
         aplicarFiltrosProduto(filtro, paramsFiltro, marcas, idsCategoria, situacao);
 
@@ -135,7 +135,7 @@ public class RelatorioEstoqueService {
     private RelatorioEstoqueResponse gerarSinteticoOuAnalitico(
             ModeloRelatorioEstoque modelo, List<ColunaEmpresa> colunas, List<Long> idsEmpresaEfetivo,
             List<String> marcas, List<Long> idsCategoria, TipoQuantidade tipoQuantidade, SituacaoProduto situacao) {
-        StringBuilder filtro = new StringBuilder(" WHERE p.id_tenant = plataforma.tenant_atual()");
+        StringBuilder filtro = new StringBuilder(" WHERE p.id_tenant = plataforma.tenant_atual() AND p.tipo_item = 'MERCADORIA'");
         List<Object> paramsFiltro = new ArrayList<>();
         aplicarFiltrosProduto(filtro, paramsFiltro, marcas, idsCategoria, situacao);
 

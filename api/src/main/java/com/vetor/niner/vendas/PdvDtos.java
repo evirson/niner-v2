@@ -39,7 +39,14 @@ public final class PdvDtos {
             /** Marca/referência do produto (2026-08-12) — usados como filtro de busca na
              *  Entrada de Produtos por Compra, exibidos no resultado para desambiguar. */
             String marca,
-            String referencia) {
+            String referencia,
+            /**
+             * {@code MERCADORIA} ou {@code SERVICO} (V085). ⚠️ A busca do PDV traz os DOIS de
+             * proposito — o operador precisa lancar banho e tosa na mesma venda da racao. O que
+             * ele NAO pode e confundir: servico nao tem saldo, e a coluna de estoque mostraria
+             * "0", que na tela do caixa se le como "nao tem, nao venda".
+             */
+            String tipoItem) {
     }
 
     /**

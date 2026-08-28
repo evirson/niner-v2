@@ -65,7 +65,11 @@ public class EtiquetaEmissaoService {
         var query = jdbc.sql("""
                 SELECT p.id_produto, p.descricao, p.marca, p.referencia, p.id_grade
                 FROM produto p
+                -- Etiqueta de código de barras é de MERCADORIA: serviço não vai na prateleira nem
+                -- passa pelo leitor (V085, bloco S1). "Etiqueta de CONSULTA VETERINÁRIA" seria uma
+                -- oferta que não faz sentido nenhum, e ninguém reclamaria — só não usaria.
                 WHERE p.id_tenant = plataforma.tenant_atual() AND p.ativo
+                  AND p.tipo_item = 'MERCADORIA'
                 """ + filtro + " ORDER BY p.descricao LIMIT " + LIMITE_BUSCA);
         if (!filtro.isEmpty()) {
             query = query.param("%" + busca.trim() + "%");

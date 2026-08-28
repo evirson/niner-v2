@@ -100,7 +100,8 @@ public class RelatorioMovimentacaoProdutosService {
                 JOIN produto p ON p.id_produto = pb.id_produto AND p.id_tenant = pb.id_tenant
                 LEFT JOIN cfg_cor co ON co.id_cor = pb.id_cor AND co.id_tenant = pb.id_tenant AND co.id_cor <> 1
                 LEFT JOIN cfg_tamanho ta ON ta.id_tamanho = pb.id_tamanho AND ta.id_tenant = pb.id_tenant AND ta.id_tamanho <> 1
-                WHERE pb.id_tenant = plataforma.tenant_atual()
+                -- Kardex e relatorio de ESTOQUE: servico nao tem saldo, entao nao tem kardex.
+                WHERE pb.id_tenant = plataforma.tenant_atual() AND pb.tipo_item = 'MERCADORIA'
                 """
                 + filtroBusca
                 + " ORDER BY p.descricao LIMIT " + LIMITE_BUSCA + "";
@@ -149,7 +150,11 @@ public class RelatorioMovimentacaoProdutosService {
             LocalDate dataInicial, LocalDate dataFinal, List<Long> idsEmpresaEfetivo,
             List<TipoMovimentoProduto> tipos, List<String> marcas, List<Long> idsCategoria) {
         StringBuilder filtro = new StringBuilder(
-                " WHERE pmd.id_tenant = plataforma.tenant_atual() AND (pmm.data_movimento AT TIME ZONE 'America/Sao_Paulo')::date BETWEEN ? AND ?");
+                " WHERE pmd.id_tenant = plataforma.tenant_atual()"
+                // Este relatorio e o Kardex — movimento de ESTOQUE. Servico gera movimento (e por
+                // isso aparece na DRE e nas Comissoes) mas nao tem saldo, entao nao tem kardex.
+                + " AND pb.tipo_item = 'MERCADORIA'"
+                + " AND (pmm.data_movimento AT TIME ZONE 'America/Sao_Paulo')::date BETWEEN ? AND ?");
         List<Object> params = new ArrayList<>();
         params.add(dataInicial);
         params.add(dataFinal);

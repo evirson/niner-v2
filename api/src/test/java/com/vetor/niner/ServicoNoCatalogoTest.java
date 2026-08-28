@@ -106,6 +106,14 @@ class ServicoNoCatalogoTest {
         }
     }
 
+    /** A empresa do tenant, pelo caminho da API — a Conformidade Fiscal pede o id no path. */
+    private long idEmpresaDoTenant(String token) throws Exception {
+        String resp = mvc.perform(get("/api/v1/empresas").header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        return ((Number) JsonPath.read(resp, "$[0].idEmpresa")).longValue();
+    }
+
     private long buscarIdEmpresa(Connection c) throws SQLException {
         try (Statement st = c.createStatement();
              ResultSet rs = st.executeQuery("SELECT id_empresa FROM empresa LIMIT 1")) {
@@ -422,6 +430,146 @@ class ServicoNoCatalogoTest {
         mvc.perform(post("/api/v1/produtos").header("Authorization", "Bearer " + token)
                         .contentType(APPLICATION_JSON).content(body))
                 .andExpect(status().isBadRequest());
+    }
+
+    // ---------------------------------------------------------------- os filtros (§3.6 do estudo)
+
+    /**
+     * ⛔ O filtro mais importante dos oito. Mão de obra é fato gerador de <b>ISS</b> e sai em NFS-e,
+     * que é municipal — não em documento de ICMS. Sem o filtro, "BANHO E TOSA" iria dentro da NFC-e
+     * com NCM e CFOP de mercadoria, e <b>o pior caso não é a SEFAZ rejeitar: é AUTORIZAR</b>, com o
+     * erro aparecendo só numa fiscalização.
+     *
+     * <p>O teste confere a <b>consulta</b> que monta os itens da nota, e não a emissão inteira (que
+     * exigiria certificado e SEFAZ): a venda mista tem 2 itens no ledger e a nota tem de enxergar 1.
+     */
+    @Test
+    void servicoNaoEntraNosItensDaNotaFiscal() throws Exception {
+        String token = assinarNovoTenant("m");
+        long idTenant = idTenantDoToken(token);
+        ligarServicos(token);
+        long idMercadoria = criarProduto(token, "RACAO 15KG", "MERCADORIA");
+        long idServico = criarProduto(token, "BANHO E TOSA", "SERVICO");
+
+        try (Connection c = abrirConexao(idTenant)) {
+            long idEmpresa = buscarIdEmpresa(c);
+            long vMerc = criarVariacao(c, idTenant, idMercadoria);
+            long vServ = criarVariacao(c, idTenant, idServico);
+
+            // uma venda com os dois, como a petshop faz todo dia
+            long idVenda;
+            try (PreparedStatement ps = c.prepareStatement(
+                    "INSERT INTO venda (id_tenant, id_empresa, data_venda, tipo_operacao)"
+                            + " VALUES (?, ?, now(), 'VENDA') RETURNING id_venda")) {
+                ps.setLong(1, idTenant);
+                ps.setLong(2, idEmpresa);
+                try (ResultSet rs = ps.executeQuery()) {
+                    rs.next();
+                    idVenda = rs.getLong(1);
+                }
+            }
+            long idMovimento;
+            try (PreparedStatement ps = c.prepareStatement(
+                    "INSERT INTO produto_movimento_mestre (id_tenant, tipo_movimento, data_movimento,"
+                            + " id_empresa, id_venda) VALUES (?, 'VENDA', now(), ?, ?) RETURNING id_movimento")) {
+                ps.setLong(1, idTenant);
+                ps.setLong(2, idEmpresa);
+                ps.setLong(3, idVenda);
+                try (ResultSet rs = ps.executeQuery()) {
+                    rs.next();
+                    idMovimento = rs.getLong(1);
+                }
+            }
+            try (PreparedStatement ps = c.prepareStatement("""
+                    INSERT INTO produto_movimento_detalhe
+                        (id_tenant, id_movimento, id_empresa, id_variacao, credito_debito, qtd_produto, preco_venda)
+                    VALUES (?, ?, ?, ?, 'D', 1, 50.00), (?, ?, ?, ?, 'D', 1, 80.00)
+                    """)) {
+                ps.setLong(1, idTenant); ps.setLong(2, idMovimento); ps.setLong(3, idEmpresa); ps.setLong(4, vMerc);
+                ps.setLong(5, idTenant); ps.setLong(6, idMovimento); ps.setLong(7, idEmpresa); ps.setLong(8, vServ);
+                ps.executeUpdate();
+            }
+
+            // o ledger tem os DOIS (é o que faz o serviço aparecer na DRE e nas comissões)...
+            try (PreparedStatement ps = c.prepareStatement(
+                    "SELECT count(*) FROM produto_movimento_detalhe WHERE id_movimento = ?")) {
+                ps.setLong(1, idMovimento);
+                try (ResultSet rs = ps.executeQuery()) {
+                    rs.next();
+                    assertThat(rs.getInt(1)).isEqualTo(2);
+                }
+            }
+            // ...e a nota enxerga só a mercadoria (mesmo predicado do VendaFiscalAssembler).
+            try (PreparedStatement ps = c.prepareStatement("""
+                    SELECT p.descricao
+                      FROM produto_movimento_detalhe pmd
+                      JOIN produto_movimento_mestre pmm
+                        ON pmm.id_tenant = pmd.id_tenant AND pmm.id_movimento = pmd.id_movimento
+                      JOIN produto_barra pb
+                        ON pb.id_tenant = pmd.id_tenant AND pb.id_variacao = pmd.id_variacao
+                      JOIN produto p ON p.id_tenant = pb.id_tenant AND p.id_produto = pb.id_produto
+                     WHERE pmm.id_venda = ? AND pmm.tipo_movimento = 'VENDA'
+                       AND pb.tipo_item = 'MERCADORIA'
+                    """)) {
+                ps.setLong(1, idVenda);
+                try (ResultSet rs = ps.executeQuery()) {
+                    assertThat(rs.next()).isTrue();
+                    assertThat(rs.getString(1)).isEqualTo("RACAO 15KG");
+                    assertThat(rs.next()).isFalse();
+                }
+            }
+        }
+    }
+
+    /**
+     * Serviço não tem NCM nem perfil fiscal de ICMS. Sem o filtro, todo serviço viraria pendência
+     * <b>permanente</b> na tela que existe para dizer que está tudo pronto para emitir — e pendência
+     * que não se resolve treina o operador a ignorar a tela inteira.
+     */
+    @Test
+    void servicoNaoViraPendenciaNaConformidadeFiscal() throws Exception {
+        String token = assinarNovoTenant("n");
+        ligarServicos(token);
+        criarProduto(token, "CONSULTA VETERINARIA", "SERVICO");
+
+        mvc.perform(get("/api/v1/fiscal/conformidade/" + idEmpresaDoTenant(token)).header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$..itens[?(@.descricao == 'CONSULTA VETERINARIA')]").isEmpty());
+    }
+
+    /** Etiqueta de código de barras é de mercadoria — serviço não vai na prateleira. */
+    @Test
+    void servicoNaoApareceNaEmissaoDeEtiqueta() throws Exception {
+        String token = assinarNovoTenant("o");
+        ligarServicos(token);
+        criarProduto(token, "TOSA BEBE", "SERVICO");
+        criarProduto(token, "TAPETE HIGIENICO", "MERCADORIA");
+
+        mvc.perform(get("/api/v1/etiqueta-emissao/produtos?busca=T").header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.descricao == 'TOSA BEBE')]").isEmpty())
+                .andExpect(jsonPath("$[?(@.descricao == 'TAPETE HIGIENICO')]").isNotEmpty());
+    }
+
+    /**
+     * ⭐ Aqui o filtro é o <b>contrário</b>: o serviço PRECISA aparecer na busca do PDV — é assim que
+     * a petshop lança banho e ração na mesma venda. O que ele não pode é ser confundido com
+     * mercadoria sem saldo, e por isso o tipo vai no DTO.
+     */
+    @Test
+    void servicoAparaceNaBuscaDoPdvComOTipoNoRetorno() throws Exception {
+        String token = assinarNovoTenant("p");
+        long idTenant = idTenantDoToken(token);
+        ligarServicos(token);
+        long idServico = criarProduto(token, "BANHO SIMPLES", "SERVICO");
+
+        try (Connection c = abrirConexao(idTenant)) {
+            criarVariacao(c, idTenant, idServico);
+        }
+        mvc.perform(get("/api/v1/pdv/produtos?busca=BANHO").header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].descricaoProduto").value("BANHO SIMPLES"))
+                .andExpect(jsonPath("$[0].tipoItem").value("SERVICO"));
     }
 
     /** P8 — o de sempre: o que é de um tenant não aparece no outro. */

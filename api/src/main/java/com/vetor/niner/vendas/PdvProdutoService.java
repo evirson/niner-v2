@@ -81,6 +81,7 @@ public class PdvProdutoService {
     private record LinhaEstoque(
             long idVariacao, String descricaoProduto, String variacaoCor, String variacaoTamanho,
             String sku, BigDecimal precoVenda, String urlImagem, String marca, String referencia,
+            String tipoItem,
             int codigoEmpresa, String nomeEmpresa, BigDecimal qtdEstoque) {
     }
 
@@ -96,6 +97,7 @@ public class PdvProdutoService {
                 chaveImagem == null ? null : armazenamento.urlPublica(chaveImagem),
                 rs.getString("marca"),
                 rs.getString("referencia"),
+                rs.getString("tipo_item"),
                 rs.getInt("codigo_empresa"),
                 rs.getString("nome_empresa"),
                 rs.getBigDecimal("qtd_estoque"));
@@ -122,7 +124,7 @@ public class PdvProdutoService {
             resultado.add(new PdvProdutoResponse(
                     primeira.idVariacao(), primeira.descricaoProduto(), primeira.variacaoCor(), primeira.variacaoTamanho(),
                     primeira.sku(), primeira.precoVenda(), estoquePorEmpresa, total, primeira.urlImagem(),
-                    primeira.marca(), primeira.referencia()));
+                    primeira.marca(), primeira.referencia(), primeira.tipoItem()));
         }
         return resultado;
     }
@@ -130,7 +132,8 @@ public class PdvProdutoService {
     private static final String VARIACOES_BASE = """
             SELECT pb.id_variacao, p.descricao AS descricao_produto,
                    co.descricao AS variacao_cor, ta.descricao AS variacao_tamanho,
-                   pb.sku, p.preco_venda, pi.imagem AS imagem_produto, p.marca, p.referencia
+                   pb.sku, p.preco_venda, pi.imagem AS imagem_produto, p.marca, p.referencia,
+                   pb.tipo_item
             FROM produto_barra pb
             JOIN produto p ON p.id_produto = pb.id_produto AND p.id_tenant = pb.id_tenant
             LEFT JOIN cfg_cor co ON co.id_cor = pb.id_cor AND co.id_tenant = pb.id_tenant AND co.id_cor <> 1
@@ -141,7 +144,7 @@ public class PdvProdutoService {
 
     private static final String ESTOQUE_POR_EMPRESA = """
             SELECT v.id_variacao, v.descricao_produto, v.variacao_cor, v.variacao_tamanho, v.sku, v.preco_venda,
-                   v.imagem_produto, v.marca, v.referencia,
+                   v.imagem_produto, v.marca, v.referencia, v.tipo_item,
                    e.codigo_empresa, COALESCE(e.nome_fantasia, e.razao_social) AS nome_empresa,
                    COALESCE(pe.qtd_estoque, 0) AS qtd_estoque
             FROM variacoes v

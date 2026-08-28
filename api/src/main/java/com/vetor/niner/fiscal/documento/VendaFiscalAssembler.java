@@ -121,8 +121,16 @@ public class VendaFiscalAssembler {
 
         List<ItemBruto> itensBrutos = buscarItens(idVenda);
         if (itensBrutos.isEmpty()) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT,
-                    "Venda nº " + idVenda + " não tem itens — não há o que emitir.");
+            // ⚠️ Duas causas diferentes, dois conselhos diferentes — e a mensagem tem de dizer qual
+            // é (mesma lição de "40 notas sem XML", 2026-08-26: agrupar populações com conselhos
+            // opostos num aviso só manda o operador resolver o problema errado).
+            // Venda 100% serviço TEM itens; o que ela não tem é mercadoria, e NFC-e é documento de
+            // ICMS. Dizer "não tem itens" mandaria o operador procurar um item que está na tela.
+            throw new ResponseStatusException(HttpStatus.CONFLICT, somenteServico(idVenda)
+                    ? "Venda nº " + idVenda + " só tem serviços — NFC-e/NF-e é documento de "
+                      + "mercadoria. O documento fiscal de serviço é a NFS-e, que ainda não é "
+                      + "emitida pelo Nainer; imprima a papeleta."
+                    : "Venda nº " + idVenda + " não tem itens — não há o que emitir.");
         }
 
         List<ItemOperacao> itensOperacao = new ArrayList<>();
@@ -353,6 +361,23 @@ public class VendaFiscalAssembler {
         return s == null || s.isBlank();
     }
 
+    /**
+     * A venda tem movimento, mas <b>nenhuma mercadoria</b> — é 100% serviço. Serve só para
+     * escolher a mensagem certa: sem isto, a venda de um banho e tosa receberia
+     * <i>"não tem itens"</i>, e o operador iria procurar na tela um item que está lá.
+     */
+    private boolean somenteServico(long idVenda) {
+        return Boolean.TRUE.equals(jdbc.sql("""
+                        SELECT EXISTS (SELECT 1
+                                         FROM produto_movimento_detalhe pmd
+                                         JOIN produto_movimento_mestre pmm
+                                           ON pmm.id_tenant = pmd.id_tenant AND pmm.id_movimento = pmd.id_movimento
+                                        WHERE pmd.id_tenant = plataforma.tenant_atual()
+                                          AND pmm.id_venda = ? AND pmm.tipo_movimento = 'VENDA')
+                        """)
+                .param(idVenda).query(Boolean.class).optional().orElse(false));
+    }
+
     /** Em ordem de inserção (PK autoincremento) — a mesma ordem em que o PDV lançou os itens. */
     private List<ItemBruto> buscarItens(long idVenda) {
         return jdbc.sql("""
@@ -371,6 +396,13 @@ public class VendaFiscalAssembler {
                             ON n.codigo_ncm = p.codigo_ncm
                          WHERE pmd.id_tenant = plataforma.tenant_atual()
                            AND pmm.id_venda = ? AND pmm.tipo_movimento = 'VENDA'
+                           -- ⛔ SERVIÇO NÃO ENTRA NA NFC-e/NF-e (V085, bloco S1 do módulo de
+                           -- serviços). Mão de obra é fato gerador de ISS e sai em NFS-e, que é
+                           -- MUNICIPAL — não em documento de ICMS. Sem este filtro, "BANHO E TOSA"
+                           -- iria dentro da nota com NCM e CFOP de mercadoria, e ⚠️ o pior caso
+                           -- não é a SEFAZ rejeitar: é AUTORIZAR, e o erro só aparecer numa
+                           -- fiscalização.
+                           AND pb.tipo_item = 'MERCADORIA'
                          ORDER BY pmd.id_movimento_detalhe
                         """)
                 .param(idVenda)
