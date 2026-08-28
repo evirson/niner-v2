@@ -1,7 +1,7 @@
 # Progresso do Projeto — niner-v2
 
 Registro cronológico das decisões e entregas. Atualizar a cada marco relevante.
-**Última atualização:** 2026-08-27
+**Última atualização:** 2026-08-28
 
 > 📄 **O que ainda falta está em `docs/PENDENCIAS.md`** (lista viva, agrupada por *de quem é a
 > bola*). Este arquivo conta a **história**; aquele conta o que está **aberto**. Ao fechar uma
@@ -10,6 +10,51 @@ Registro cronológico das decisões e entregas. Atualizar a cada marco relevante
 ---
 
 ## Estado atual
+
+> ## 📌 2026-08-28 — a integração com marketplaces foi REMOVIDA
+>
+> **57 telas · 1024 testes verdes, 0 pulados** · migrations até **V084** · `web/` sem erro de tipo.
+>
+> Decisão do dono do produto: *"vamos mudar o projeto de integração com marketplaces, então preciso
+> que você remova tudo o que foi feito pra integração com o Mercado Livre; a integração vai ficar em
+> implementações futuras"*. A implementação inteira dos blocos **M0–M7** (feita em 26/08) saiu:
+>
+> - **Código:** 36 classes — `canais/` (adapter, OAuth, guarda de estoque, preço por canal) e
+>   `integracao/` (Mercado Livre, outbox, webhook, polling, pedido→venda, expedição). Os quatro
+>   pacotes (`canais/`, `integracao/`, `pedidos/`, `precos/`) voltaram a ter só `package-info.java`,
+>   como no desenho de julho.
+> - **Telas:** `/canais`, `/canais/:idCanal/anuncios` e `/expedicao`, mais as três entradas de
+>   `AjudaDaTela` e os dois itens de menu. ⭐ **Nada precisou entrar em "Implementações Futuras"** —
+>   os placeholders `/pedidos` e `/integracao-marketplace` nunca tinham sido removidos quando as
+>   telas reais nasceram, e desta vez isso saiu de graça.
+> - **Banco (V084):** desfaz V063–V070 — inclusive os **dois gatilhos** que enfileiravam
+>   sincronização a cada gravação de `produto_estoque` e de `produto` (o que mais importava tirar,
+>   por rodar em caminho quente), a função de arbitragem de status do pedido, as duas tabelas de
+>   `plataforma` (OAuth e mapa de conta externa), as colunas acrescentadas em `canal`/`anuncio`/
+>   `pedido`/`webhook_recebido`, e as duas linhas de `cfg_tela` (RBAC).
+> - **Suporte:** os 14 testes, a dependência do **WireMock**, as variáveis `NINER_ML_*` do
+>   `docker-compose.yml` e o bloco `canais:` dos dois `application.yml`.
+>
+> **O que ficou de pé, e por quê:** `canal`, `anuncio`, `pedido`, `pedido_item`, `outbox_evento` e
+> `webhook_recebido` são de **V020–V022 (julho)**, parte do desenho original da spec e dormentes até
+> 26/08 — voltaram a ficar vazias e sem código. O valor `MARKETPLACE` do enum `origem_venda` também
+> ficou: o Postgres não remove valor de enum sem recriar o tipo que `venda.origem` usa, e **nenhuma
+> venda** tinha essa origem (medido antes de decidir — 344 vendas, todas `PDV`).
+>
+> ⭐ **O que a remoção ensinou:** quem achou os dois acoplamentos que a leitura não tinha visto foi o
+> **compilador**. `ConfiguracaoGeralService` injetava o guarda de estoque do canal, e três
+> construções **posicionais** de `NinerProperties` quebraram em dois testes (fiscal e storage)
+> quando o record perdeu um componente — a armadilha de mudar assinatura de `record` em Java, já
+> catalogada no `CLAUDE.md`. Nenhum dos dois aparecia em nenhuma busca por "canal" ou "marketplace"
+> fora dos pacotes removidos.
+>
+> ⚠️ **O que fica registrado para quando a integração voltar:** a regra *"quem vende em marketplace
+> não pode ter estoque negativo"* tinha **dois** guardas, e os dois saíram juntos. Voltar só o da
+> conexão do canal seria pior que não ter nenhum. As demais lições (dedupe de webhook, autoridade
+> por estado, campo nulo como decisão, adapter inerte) estão em `docs/MODULOMARKETPLACE.md` §13, que
+> continua existindo como **estudo** — o que foi descartado é a implementação, não o estudo.
+>
+> Nove pendências fecharam por desaparecimento do assunto (`docs/PENDENCIAS.md`, seção de 28/08).
 
 > ## 📌 2026-08-27 — o dia do acesso
 >

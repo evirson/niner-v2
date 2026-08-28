@@ -1,21 +1,34 @@
 # Estudo: Integração com Marketplaces — Mercado Livre (primeiro canal)
 
-> **Status: EM IMPLEMENTAÇÃO.** As decisões da §4 estão fechadas (§8) e o **escopo A+B aprovado está completo** — M0 a M7
-> existem em código — ver o estado real na **§10**, que é a seção a acreditar quando esta divergir.
-> Escrito em 2026-08-25 como estudo; cabeçalho corrigido em 2026-08-26, quando M1, M2, M3 e M5–M7 entraram.
-> Requisitos cobertos: R3, R5, R6, R7 · Princípios: P1, P2, P3, P8
+> # ⛔ STATUS: IMPLEMENTAÇÃO REMOVIDA EM 2026-08-28 — VOLTOU A SER "IMPLEMENTAÇÕES FUTURAS"
 >
-> ⚠️ **Nenhuma chamada real ao Mercado Livre foi feita até hoje.** Tudo o que está verificado, está
-> verificado contra **WireMock**, que responde o que nós programamos. Os fatos da §2 vieram de
-> documentação lida, e leitura de documentação já nos traiu aqui (o XSD passou e a SEFAZ recusou).
-> A primeira chamada real vai encontrar divergências — é esperado, não é fracasso.
+> Decisão do dono do produto, literal: *"vamos mudar o projeto de integração com marketplaces,
+> então preciso que você remova tudo o que foi feito pra integração com o Mercado Livre; a
+> integração vai ficar em implementações futuras"*.
 >
-> ⚠️ **O que aqui é verificado × o que é suposto.** Os fatos da API do ML foram levantados na
-> documentação pública em 25/08/2026. **Nenhuma chamada foi feita contra a API do Mercado Livre
-> ainda** — tudo aqui é leitura, e leitura de documentação já nos traiu neste projeto (o XSD
-> passou e a SEFAZ recusou, ver `MODULOFISCAL.md`). Trate os números como "o que a doc diz", a
-> confirmar na primeira chamada real.
-
+> **O que foi removido** (migration **V084** + código): os blocos M0–M7 inteiros — os pacotes
+> `canais/` e `integracao/` (adapter do ML, OAuth, outbox, webhook, polling, pedido→venda,
+> expedição), as três telas (`/canais`, `/canais/:idCanal/anuncios`, `/expedicao`), os 14 testes,
+> a dependência do WireMock, as variáveis `NINER_ML_*` do compose e do `application.yml`, as duas
+> telas do catálogo de RBAC (`cfg_tela`), e o schema das **V063–V070** — inclusive os dois
+> gatilhos que enfileiravam sincronização a cada gravação de estoque e de preço.
+>
+> **O que ficou de pé, e por quê:** as tabelas `canal`, `anuncio`, `pedido`, `pedido_item`,
+> `outbox_evento` e `webhook_recebido` são de **V020–V022 (julho)**, parte do desenho original da
+> spec (§3.3.5/§3.3.6) e dormentes até 26/08 — voltaram a ficar vazias e sem código, como estavam.
+> O valor `MARKETPLACE` do enum `origem_venda` também ficou: o Postgres não remove valor de enum
+> sem recriar o tipo que `venda.origem` usa, e **nenhuma venda** tinha essa origem (medido).
+>
+> ⚠️ **Por que este arquivo continua existindo:** ele é o **estudo**, e o estudo não foi
+> descartado — foi a implementação. Os fatos da API do ML (§2), as três colisões com o ERP (§3),
+> as decisões do dono do produto (§8), o roteiro em blocos (§9) e o passo a passo do teste real
+> (§11, §12) são o ponto de partida de quando a integração voltar, em qualquer formato.
+>
+> ⚠️ **Leia o resto deste documento no passado.** Tudo que a §10 e as §§8.x descrevem como
+> "FEITO" **existiu** entre 26/08 e 28/08 e **não existe mais**. Nenhuma chamada real ao Mercado
+> Livre chegou a ser feita: o que foi verificado, foi verificado contra WireMock.
+>
+> As lições técnicas que sobreviveram à remoção estão consolidadas na **§13**, no fim do arquivo.
 ---
 
 ## 1. O que já existe e não precisa ser refeito
@@ -1048,3 +1061,63 @@ Tudo o que está em código foi verificado contra **WireMock**, que responde o q
 Este roteiro é o que transforma seis blocos de suposição em comportamento medido — e o precedente
 do projeto diz que **vai** haver divergência (o XSD passou e a SEFAZ recusou). Divergência aqui é
 resultado esperado, não fracasso.
+
+---
+
+## 13. Lições preservadas da implementação removida (2026-08-28)
+
+A implementação saiu; o que ela ensinou, não. Cada item abaixo é uma armadilha **medida** durante
+o M0–M7, e vale para além do marketplace — por isso ficou aqui em vez de ser apagada junto com o
+código. As três primeiras já estavam no `CLAUDE.md` como regra geral e continuam lá.
+
+### 13.1 Deduplicar por "assunto" engole a informação mais nova
+A chave de idempotência do webhook era `topico + recurso` com `ON CONFLICT DO NOTHING`, e o
+marketplace notifica **cada mudança de estado do mesmo pedido** com o mesmo recurso. A segunda
+notificação (*"agora está pago"*) era descartada: o pedido ficava eternamente reservado e **nada
+no log dizia por quê**. ⭐ O conserto veio de reenquadrar o que a linha é — **não é registro de
+log, é tarefa** ("olhe este pedido"): avisar de novo significa "olhe de novo", então
+`ON CONFLICT DO UPDATE` reabre. **Regra geral: antes de deduplicar por identificador, pergunte se
+duas chegadas com a mesma chave podem carregar conteúdos diferentes.**
+
+### 13.2 "O sistema externo é a verdade" precisa de qualificação por estado
+O pedido chegava muitas vezes com o status junto — mas a partir do momento em que a loja começou o
+trabalho **físico** (separar, embalar), quem manda é a loja. Sem qualificar, o polling devolvia à
+fila um pedido **já separado** (o ML ainda dizia "paid" 15 min depois) e alguém montaria um
+**segundo pacote para a mesma venda**, em silêncio. A regra morava numa função do banco
+(`fn_status_pedido_do_canal`) justamente para não depender de quem escrevesse o próximo `UPDATE`.
+**Regra geral: em toda sincronização bidirecional, pergunte campo a campo quem é a autoridade — e
+se a resposta muda com o estado.**
+
+### 13.3 Campo nulo que é decisão de produto vira asserção de teste
+A venda de marketplace nascia com `venda.id_caixa`, `venda.id_cliente` e
+`produto_movimento_detalhe.id_funcionario` **nulos**, cada um por uma razão de negócio (o dinheiro
+do canal não passa pela gaveta; o comprador não vira cadastro; sem vendedor não há comissão).
+⛔ Nulo sem teste parece campo esquecido e alguém "conserta". ⚠️ E `.single()` do `JdbcClient`
+**recusa mapper que devolve null** — para afirmar ausência, pergunte `coluna IS NULL` no SQL e
+devolva boolean.
+
+### 13.4 Adapter que não faz nada é resposta legítima
+`confirmarEnvio` no Mercado Livre era deliberadamente inerte: em Mercado Envios quem controla o
+estado do envio é o próprio marketplace. A alternativa era chutar um endpoint que a documentação
+não descreve — e, **sem sandbox no ML**, o primeiro teste seria em produção, no envio de um
+lojista de verdade. **Quando um adapter não faz nada, diga no javadoc que não faz e por quê** —
+senão o próximo leitor "conserta" o vazio.
+
+### 13.5 Antes de "ligar" um mecanismo pronto, meça se ele está ligado nas duas pontas
+O outbox tinha worker, retry, dead-letter e painel de saúde funcionando — e estava **desligado dos
+dois lados**: ninguém chamava `enfileirar()` e nenhum manipulador estava registrado. ⛔ O sintoma
+engana: o painel dizendo *"0 pendentes, 0 erros"* parece saúde e é **ausência de trabalho**.
+
+### 13.6 O que fica registrado sobre a remoção em si
+⭐ **O compilador e a suíte foram os verificadores.** Remover 36 classes deixou dois acoplamentos
+que nenhuma leitura tinha apontado: `ConfiguracaoGeralService` injetava o guarda de estoque do
+canal, e três construções **posicionais** de `NinerProperties` em dois testes de fiscal e de
+storage quebraram quando o record perdeu um componente — a armadilha já catalogada de mudar
+assinatura de `record` em Java. Depois disso, **1024 testes verdes, 0 pulados**.
+
+⚠️ **E ficou de pé um guarda pela metade, de propósito:** a regra *"quem vende em marketplace não
+pode ter estoque negativo"* tinha **dois** pontos (barrar a conexão do canal e barrar o religamento
+do parâmetro). Os dois saíram juntos. Quando a integração voltar, **os dois voltam juntos** — só o
+da conexão seria decorativo, porque a loja conectaria o canal com o controle ligado e religaria o
+parâmetro no dia seguinte. Está registrado como comentário no próprio
+`ConfiguracaoGeralService.atualizar`, que é onde alguém vai procurar.

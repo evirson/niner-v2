@@ -23,7 +23,6 @@
 
 | Tela | Rota | Spec |
 |---|---|---|
-| Fila de Expedição | `/expedicao` | `docs/MODULOMARKETPLACE.md` §10.10 |
 | PDV - Vendas | `/pdv` | `docs/telas/pdv.md` · `papeleta-venda.md` |
 | Orçamentos | `/orcamentos` | `docs/telas/orcamento.md` |
 | Pesquisa de Vendas | `/pesquisa-vendas` | `docs/telas/pesquisa-vendas.md` |
@@ -79,8 +78,6 @@
 
 | Tela | Rota | Spec |
 |---|---|---|
-| Canais de Venda | `/canais` | `docs/MODULOMARKETPLACE.md` |
-| Vincular Anúncios | `/canais/:idCanal/anuncios` | `docs/MODULOMARKETPLACE.md` §10.7 |
 | Minha Conta | `/minha-conta` | `docs/telas/conta-corrente-movimento.md` |
 | Usuários | `/usuarios` | `docs/telas/usuario.md` |
 | Empresas | `/empresas` | `docs/telas/empresa.md` |
@@ -171,7 +168,7 @@ Abrem a partir de uma lista (criar/editar/configurar) e por isso não têm item 
 
 ---
 
-**60 telas em uso** · **4 em construção** · **21 telas-filhas**.
+**57 telas em uso** · **4 em construção** · **21 telas-filhas**.
 
 ⚠️ Atualizado em 2026-08-26. Entraram três telas: **Relatório de Contas a Pagar / Pagas** e
 **Exportação de XML em Lote** (as duas saíram de "em construção" — ⚠️ a rota de cada uma já existia
@@ -196,3 +193,23 @@ conta?" e "qual empresa?". Spec: `docs/telas/login-duas-etapas.md`.
 
 ⚠️ **A escolha de ambiente some da Configuração Fiscal** quando a instalação estiver em produção
 (`NINER_FISCAL_AMBIENTE_FIXO`) — hoje vazia, porque o produto está homologando junto às SEFAZ.
+
+---
+
+## Atualização de 2026-08-28 — o marketplace saiu
+
+Saíram **três telas** com a remoção da integração com marketplaces (decisão do dono do produto):
+**Canais de Venda** (`/canais`), **Vincular Anúncios** (`/canais/:idCanal/anuncios`) e **Fila de
+Expedição** (`/expedicao`). Foram de 60 para **57 telas em uso**.
+
+⚠️ **Nada entrou em "Implementações Futuras" por causa disso** — os placeholders `/pedidos` e
+`/integracao-marketplace` **já existiam** lá e nunca haviam sido removidos quando as telas reais
+nasceram em 26/08. Ou seja: a contagem de "em construção" **não muda** (segue 4). É o inverso da
+armadilha de sempre ([[feedback_placeholder_embreve_vira_rota_duplicada]]) — desta vez o
+placeholder sobrevivente foi o que deixou o menu correto de graça.
+
+⚠️ As duas telas também saíram do catálogo de RBAC (`cfg_tela`, migration **V084**). Tela
+catalogada sem controller reprova `AcoesPorTelaConferemTest`, e grade oferecendo permissão para
+tela inexistente é exatamente o defeito que a V076 introduziu e esse teste passou a impedir.
+
+Detalhe da remoção: `docs/MODULOMARKETPLACE.md` (cabeçalho e §13).

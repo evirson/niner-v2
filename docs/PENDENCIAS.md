@@ -11,10 +11,10 @@
 > **Como apresentar:** resumido e **agrupado por dono**, não as ~27 linhas cruas — ele já reclamou
 > de informação demais de uma vez (*"TA MUITO CONFUSO"*).
 >
-> **Última revisão:** 2026-08-27, fim do dia (registrada a pedido dele: *"deixe todas estas pendências
-> documentadas, não esqueça de nada, e quando eu te perguntar as pendências você me fala"*).
+> **Última revisão:** 2026-08-28 — a remoção da integração com marketplaces fechou nove itens
+> por desaparecimento do assunto (2, 3, 4, 15, 16, 18, 20, 21 e 27). Ver a seção no fim do arquivo.
 
-**Estado na data desta revisão:** 63 telas em uso · 1145 testes verdes (medido, não estimado).
+**Estado na data desta revisão:** 57 telas em uso · 1024 testes verdes, 0 pulados (medido, não estimado).
 
 ---
 
@@ -32,24 +32,6 @@ do mesmo emitente autoriza, o que isola o problema no cadastro do responsável t
 ---
 
 ## 🔵 Bola dele (dono do produto)
-
-### 2. Teste real do Mercado Livre — ADIADO
-M0–M7 prontos (escopo **A+B completo**), **zero chamadas reais** ao ML: tudo verificado contra
-WireMock. Espera as credenciais do **usuário de teste**, que ele vai passar.
-⚠️ Quando ele disser *"vamos testar"*, repassar **todos** os passos, **poucos por vez**.
-⚠️ Não existe "conta de integrador" no ML — é conta comum, do **proprietário da solução**
-(MITRYUSCASH, PJ, titular validado). Aplicação em **developers.mercadolivre.com.br/devcenter**,
-⛔ **não** no painel do Mercado Pago (ele já trouxe credencial do MP por engano uma vez). Só o
-`client_id` vem por chat; o secret vai por variável de ambiente.
-Roteiro: `docs/MODULOMARKETPLACE.md` §12.
-
-### 3. Ligar os 3 tópicos de notificação no painel do ML
-`items`, `orders_v2`, `shipments` estão **desmarcados de propósito** — o endpoint
-`/api/publico/webhooks/mercadolivre` não existia quando a aplicação foi criada. **Ele existe desde
-o M5**, então os tópicos podem ser ligados. Passo de painel, não de código.
-
-### 4. Nenhuma tela do módulo de marketplace foi aberta em navegador
-Canais, Vincular Anúncios e Fila de Expedição só passaram por teste automatizado.
 
 ### 5. Tela de Lucratividade nunca aberta em navegador
 (O Relatório de Contas a Pagar foi aberto em 2026-08-26 e funciona.)
@@ -87,34 +69,14 @@ Decisão dele: promover ou manter.
 ### 14. Devolução não estorna comissão nem taxa
 Decisão de negócio.
 
-### 15. Pedido de marketplace sem estoque não vira venda — e fica tentando
-Consistente com o PDV, mas a venda não existe no ERP embora o dinheiro seja real. Manter ou abrir
-exceção? Decisão dele.
-
-### 16. Um produto só alimenta UM anúncio por canal
-Índice na V066 fecha o caso de anunciar o mesmo produto duas vezes para ganhar alcance. Confirmar ou
-liberar com regra de rateio.
-
 ### 17. 🔔 Estorno não revoga assinatura
 Dívida **conhecida e aceita**, política dele. **Pedido explícito: avisar em toda revisão/auditoria.**
-
-### 18. Taxa do canal — pôr o valor
-A carteira do canal nasce com **0%**; o ML cobra 11–19%. Enquanto ficar zerada, a **DRE
-superestima o lucro**. Parte dele: cadastrar a taxa. (A parte minha está no item 20.)
-
----
 
 ## 🟢 Bola minha
 
 ### 19. A exportação de XML nunca rodou com período acima de 2.000 notas
 A partição é validada pela aritmética e por um teste de congelamento, nunca por um período que
 realmente estoure. Depende dele usar + de mim medir.
-
-### 20. A tela não avisa que a taxa do canal está zerada
-Enquanto `taxa = 0%`, a DRE superestima o lucro e nada na tela diz isso. Aviso é meu (par do item 18).
-
-### 21. Tela de preço manual do anúncio não existe
-`anuncio.preco_manual` é respeitada pelo gatilho e pelo manipulador, mas **nada a liga**.
 
 ### 22. SVC — contingência da NF-e 55
 Não implementada.
@@ -131,9 +93,6 @@ As ~35 migrations seguintes nunca foram indexadas.
 ### 26. Itens adiados da auditoria de 2026-08-21
 21+32, 25, 26+30, 27 — detalhe em `docs/PENDENCIAS-AUDITORIA-2026-08-21.md` (24 das 33 já
 corrigidas em 08-22).
-
-### 27. ⚠️ Chamada HTTP ao canal roda dentro da transação do lote do outbox
-Lote de 25 × timeout de 30 s. Desenho **preexistente**; risco registrado, a medir com volume real.
 
 ---
 
@@ -383,3 +342,82 @@ os `GRANT/REVOKE` novos (V071, V079) não têm caso em `PrivilegiosNinerAppTest`
   `MODULOFISCAL.md` §11.2 **não** foi feito).
 - **2026-08-26** — Marketplace **M1–M7**, Relatório de Contas a Pagar/Pagas, Relatórios em
   subgrupos, PDF dos 10 relatórios fora do tema escuro.
+
+---
+
+## 2026-08-28 — a integração com marketplaces saiu, e nove pendências saíram com ela
+
+Decisão do dono do produto: *"vamos mudar o projeto de integração com marketplaces, então preciso
+que você remova tudo o que foi feito pra integração com o Mercado Livre; a integração vai ficar em
+implementações futuras"*.
+
+**Nove itens foram fechados por desaparecimento do assunto** — não por terem sido resolvidos.
+Registrado assim de propósito: quando a integração voltar, **estes nove voltam junto**, e a lista
+abaixo é o que evita redescobri-los um a um.
+
+| # | Item | Por que voltará |
+|---|---|---|
+| 2 | Teste real do Mercado Livre (credenciais de test user) | nada foi validado contra o ML de verdade |
+| 3 | Ligar os 3 tópicos de notificação no painel do ML | passo de painel, some com o endpoint |
+| 4 | Nenhuma tela do marketplace aberta em navegador | as telas não existem mais |
+| 15 | Pedido sem estoque não vira venda e fica tentando | decisão de produto, ainda não tomada |
+| 16 | Um produto só alimenta UM anúncio por canal | decisão de produto, ainda não tomada |
+| 18 | Taxa do canal em 0% (a DRE superestimava o lucro) | volta com a carteira do canal |
+| 20 | A tela não avisava que a taxa está zerada | par do item 18 |
+| 21 | Tela de preço manual do anúncio não existe | `anuncio.preco_manual` saiu junto |
+| 27 | Chamada HTTP dentro da transação do lote do outbox | risco do worker, que saiu |
+
+⚠️ **Uma pendência NÃO some com isso e merece atenção quando a integração voltar:** a regra *"quem
+vende em marketplace não pode ter estoque negativo"* tinha **dois** guardas (barrar a conexão do
+canal e barrar o religamento do parâmetro em Parâmetros do Sistema). Os dois saíram juntos, o que é
+o certo — mas **voltar só um seria pior que não ter nenhum**, porque dá sensação de proteção sem a
+proteção. Está registrado no comentário de `ConfiguracaoGeralService.atualizar` e em
+`docs/MODULOMARKETPLACE.md` §13.6.
+
+**O que a remoção mexeu:** migration **V084** (desfaz V063–V070, incluindo os dois gatilhos de
+sincronização que rodavam a cada gravação de estoque e de preço), 36 classes Java, 3 telas, 14
+testes, a dependência do WireMock, as variáveis `NINER_ML_*` e duas linhas de `cfg_tela` (RBAC).
+Suíte depois da remoção: **1024 testes verdes, 0 pulados**.
+
+---
+
+## 2026-08-28 — módulo de Serviços aprovado como próximo trabalho
+
+O estudo está em **`docs/MODULOSERVICOS.md`** (§0.1 traz as decisões dele). O que ficou pendente,
+por dono:
+
+### 49. 🔵 Credenciais da empresa para homologar a NFS-e
+Ele tem uma empresa que pode testar, mas **as credenciais ainda não estão em mãos**. Sem elas o
+bloco **S0** (prova de conceito contra o Emissor Nacional) e o **S6/S7** (emissão e ciclo de vida)
+não saem do papel. ⚠️ Faltam três fatos sobre ela, e nenhum é dedutível: **regime** (MEI × ME/EPP do
+Simples — muda o que sai na nota e se a obrigatoriedade já vale), **município** (adesão é de 100%
+dos entes, mas *aderir ≠ operar*, e as fontes divergem entre 392 e 1.898 operando de fato) e
+**Inscrição Municipal + CNAE de serviço** no cadastro da empresa.
+⚠️ Falta também **o contador** que valida alíquota, retenção e o percentual de ISS do Simples —
+nada dessa parte pode ser implementado por dedução. É o candidato nº 1 a virar bloqueio de terceiro,
+como o CSRT virou.
+
+### 50. 🔵 P1 — serviço nasce ligado ou desligado?
+`cfg_usa_servicos` é `DEFAULT` de migration, e inverter default depois de existir tenant é
+retrabalho medido (V054 → V055). **Recomendação: desligado**, como `cfg_usa_cor_grade` — a loja de
+calçados não deve ganhar um seletor "Mercadoria/Serviço" que nunca vai usar. Precisa da resposta
+**antes do bloco S1**.
+
+### 51. 🔵 P2 e P6 — ramos de serviço e o efeito no preço
+**P2:** os 28 ramos são todos de varejo; uma oficina hoje se cadastra como `AUTOPECAS` ou `OUTROS` e
+o dado de segmentação nasce errado. Recomendação: acrescentar oficina, salão/barbearia, assistência
+técnica, clínica veterinária e lava-rápido, com os CNAEs carregados da fonte do IBGE.
+**P6:** a oficina faz 40 vendas/mês de R$ 800 e a loja de calçados 400 de R$ 80 — mesmo faturamento,
+cotas diferentes. Isso barateia o produto para o público novo, mas é receita que não vem. Depende do
+item 28 (planos pagos).
+
+### 52. 🟢 O que dá para construir sem as credenciais
+**Blocos S1 a S5** — catálogo com `tipo_item`, venda mista no PDV, papeleta com os dois blocos,
+comissão por serviço, Ordem de Serviço e o cadastro tributário (lista da LC 116 carregada da fonte
+oficial, como o NCM e as 27 UFs). É o v1 operando: petshop e oficina vendendo, com comissão e OS.
+⭐ **A ordem recomendada coincide com o que a falta de credencial impõe:** validar a modelagem antes
+de construir a nota em cima dela. Trava mesmo só o S6/S7.
+⚠️ Do **S0** dá para adiantar a leitura da documentação técnica do Emissor Nacional (os PDFs foram
+localizados e **não** lidos) e montar/assinar uma DPS localmente — o certificado A1 da MITRYUSCASH já
+está cifrado no banco. Mas isso é preparação, **não** é prova: *"o XSD não é o contrato da SEFAZ"*
+(no B9 a nota passou no schema e voltou `cStat 1010`).
