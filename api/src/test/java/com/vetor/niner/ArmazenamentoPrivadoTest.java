@@ -95,7 +95,7 @@ class ArmazenamentoPrivadoTest {
         NinerProperties.Privado privado = new NinerProperties.Privado(
                 endpoint, USUARIO, SENHA, "us-east-1", BUCKET_FISCAL, BUCKET_PRIVADO);
         NinerProperties props = new NinerProperties(null, null, null,
-                new NinerProperties.Storage(null, null, null, privado), null, null, null, null, null);
+                new NinerProperties.Storage(null, null, null, privado), null, null, null, null);
         armazenamento = new S3ArmazenamentoPrivado(props, s3);
     }
 

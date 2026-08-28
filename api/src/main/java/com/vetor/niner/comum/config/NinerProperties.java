@@ -14,7 +14,7 @@ import java.util.List;
 public record NinerProperties(
         Jwt jwt, Trial trial, Cors cors, Storage storage,
         ArquivoCompartilhado arquivoCompartilhado, Seguranca seguranca, Fiscal fiscal,
-        Cobranca cobranca, Canais canais) {
+        Cobranca cobranca) {
 
     public record Jwt(String secret, Duration expiracao, String emissor) {
     }
@@ -142,49 +142,5 @@ public record NinerProperties(
      */
     public record MercadoPago(String baseUrl, String accessToken, String webhookSecret,
                               String notificationUrl, Duration validadePix) {
-    }
-
-    /**
-     * Canais de venda (marketplaces). Um sub-registro por canal — a fiação de credencial é
-     * própria de cada um, e misturá-las num registro só faria o dia da Shopee mexer no do
-     * Mercado Livre.
-     */
-    public record Canais(MercadoLivre mercadolivre) {
-    }
-
-    /**
-     * Aplicação OAuth da Vetor no Mercado Livre (bloco M1). É <b>uma só para todos os lojistas</b>
-     * — cada lojista autoriza essa aplicação na conta dele, e não cria aplicação nenhuma. Mesmo
-     * modelo do Mercado Pago.
-     *
-     * <p>⛔ <b>{@code clientSecret} nunca vai para o repositório</b> — variável de ambiente
-     * ({@code NINER_ML_CLIENT_SECRET}), como o {@code NINER_MP_ACCESS_TOKEN} do gateway
-     * (ADR-016). {@code clientId} é público e pode viver em configuração.
-     *
-     * <p>{@code clientId} <b>vazio = integração desligada</b>: a API sobe normalmente e só o
-     * endpoint de autorização responde 503. Mesmo desenho da cobrança — módulo sem credencial não
-     * pode impedir o ERP de subir.
-     *
-     * <p>⚠️ {@code redirectUri} tem de bater <b>caractere por caractere</b> com a registrada no
-     * DevCenter, e o ML <b>não aceita parte variável</b> nela. É por isso que o vínculo com o
-     * tenant viaja no {@code state} (V065), nunca na URL.
-     *
-     * @param authUrl   host do <i>consentimento</i> ({@code auth.mercadolivre.com.br}) — é
-     *                  <b>outro</b> host do da API, e trocá-los é erro clássico: a tela que o
-     *                  lojista vê não mora em {@code api.mercadolibre.com}
-     * @param apiUrl    host da API (troca e renovação de token)
-     * @param retornoWeb para onde mandar o navegador do lojista depois de conectar. ⚠️ Não é a
-     *                  {@code redirectUri}: aquela é onde o <b>ML</b> devolve o navegador (na
-     *                  API); esta é onde a <b>API</b> devolve o lojista (no ERP), com o resultado
-     *                  na query string
-     */
-    public record MercadoLivre(String clientId, String clientSecret, String redirectUri,
-                               String authUrl, String apiUrl, String retornoWeb) {
-
-        /** Sem {@code client_id} não há integração — o endpoint de autorização responde 503. */
-        public boolean configurado() {
-            return clientId != null && !clientId.isBlank()
-                    && clientSecret != null && !clientSecret.isBlank();
-        }
     }
 }

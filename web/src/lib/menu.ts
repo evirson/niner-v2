@@ -99,16 +99,6 @@ export const MENU: NavGrupo[] = [
         descricao: 'Venda no balcão com leitura de código de barras, desconto, formas de pagamento e comprovante.',
       },
       {
-        // ⚠️ Fica em Frente de Loja, e NÃO no grupo de Canais de Venda (que é ADMIN-only): quem
-        // separa e embala é o operador. Exigir ADMIN aqui obrigaria o dono a despachar tudo, ou a
-        // dar acesso de administrador a quem só precisa de uma lista de itens.
-        to: '/expedicao',
-        label: 'Fila de Expedição',
-        icone: IconeCanais,
-        descricao:
-          'Pedidos de marketplace já pagos que ainda não saíram: separar, conferir os itens e confirmar o despacho.',
-      },
-      {
         to: '/orcamentos',
         label: 'Orçamentos',
         icone: IconePdv,
@@ -311,13 +301,6 @@ export const MENU: NavGrupo[] = [
     // o bloco Fiscal inteiro, Configuração de Etiqueta. Agora a marca é item a item, e as 9
     // exclusivas espelham `cfg_tela.admin_apenas` (V078).
     itens: [
-      {
-        to: '/canais',
-        label: 'Canais de Venda',
-        icone: IconeCanais,
-        descricao: 'Conexão com marketplaces, regra de preço por canal e saúde da sincronização.',
-        adminOnly: true,
-      },
       {
         to: '/minha-conta',
         label: 'Minha Conta',

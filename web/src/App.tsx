@@ -80,9 +80,6 @@ import PerfilFiscalForm from './pages/fiscal/PerfilFiscalForm'
 import FiscalCertificadoLista from './pages/fiscal/FiscalCertificadoLista'
 import ConformidadeFiscalPainel from './pages/fiscal/ConformidadeFiscalPainel'
 import FiscalContingenciaPainel from './pages/fiscal/FiscalContingenciaPainel'
-import CanaisVenda from './pages/canais/CanaisVenda'
-import VincularAnuncios from './pages/canais/VincularAnuncios'
-import FilaExpedicao from './pages/canais/FilaExpedicao'
 import DocumentoFiscalLista from './pages/fiscal/DocumentoFiscalLista'
 import ExportacaoXmlLote from './pages/fiscal/ExportacaoXmlLote'
 import InutilizacaoNumeracao from './pages/fiscal/InutilizacaoNumeracao'
@@ -141,9 +138,9 @@ export default function App() {
           <Route path="/estoque/efetivar-balanco" element={<EfetivarBalanco />} />
           <Route path="/estoque/:id" element={<TransferenciaDetalhe />} />
           <Route path="/pedidos" element={<EmBreve titulo="Pedidos" />} />
-          <Route path="/canais" element={<CanaisVenda />} />
-          <Route path="/canais/:idCanal/anuncios" element={<VincularAnuncios />} />
-          <Route path="/expedicao" element={<FilaExpedicao />} />
+          {/* Canais de Venda, Vincular Anúncios e Fila de Expedição saíram em 2026-08-28: a
+              integração com marketplaces voltou para Implementações Futuras (ver
+              /integracao-marketplace e /pedidos, os placeholders abaixo). */}
           <Route path="/bi-dashboard" element={<EmBreve titulo="BI Dashboard" />} />
           <Route path="/entrada-produtos-compra" element={<EntradaMercadoriaLista />} />
           <Route path="/estoque/devolucao-compra" element={<DevolucaoCompra />} />

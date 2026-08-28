@@ -37,17 +37,6 @@ niner:
       webhook-secret: ""
       notification-url: ""
       validade-pix: PT24H
-  canais:
-    # Este arquivo SOMBREIA o application.yml de producao (ver nota no topo), entao o bloco
-    # precisa existir aqui tambem. Sem credencial por padrao = integracao desligada;
-    # MercadoLivreOAuthTest sobrescreve via @DynamicPropertySource apontando para um ML falso.
-    mercadolivre:
-      client-id: ""
-      client-secret: ""
-      redirect-uri: https://api.nainer.com.br/api/publico/canais/mercadolivre/retorno
-      auth-url: https://auth.mercadolivre.com.br
-      api-url: http://localhost:1
-      retorno-web: http://localhost:5173/canais
   cors:
     origins:
       - http://localhost:5175
