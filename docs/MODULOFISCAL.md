@@ -2281,3 +2281,90 @@ zero silencioso reprova com a mensagem exata `Expected no value at "$.itens[0].s
 
 Testes: `DocumentoFiscalListaTest.documentoNaoEmitidoDevolveSerieNumeroEChaveNulos` e
 `.consultarNaSefazRecusaDocumentoSemChaveSemChamarOFisco`.
+
+---
+
+## Auditoria de segurança de 2026-08-27 — três correções no módulo fiscal
+
+Os três passaram por 1130 testes verdes e foram achados por leitura adversarial do código.
+Cada um tem teste que **reprova sem a correção** (verificado sabotando o código, não inferido).
+
+### 1. Emissão de NFC-e não era idempotente — duas notas para a mesma venda (V082)
+
+`documento_fiscal_venda_ix` era **índice, não UNIQUE**, e nada no serviço perguntava se a venda já
+tinha documento. Cada chamada reservava número novo e sorteava um `cNF` novo, então a segunda nota
+passava limpa por `documento_fiscal_chave_uk` e `documento_fiscal_numero_uk`.
+
+⚠️ **Não precisava de má-fé:** duplo clique no PDV, retry de rede do front ou uma reimpressão
+produzem a mesma sequência. Duas NFC-e autorizadas para uma venda = receita e ICMS declarados em
+dobro, sem contrapartida em estoque, e só se desfaz cancelando na SEFAZ dentro dos 30 minutos.
+
+**Correção em duas camadas:**
+
+| Camada | O quê |
+|---|---|
+| Banco (V082) | `UNIQUE (id_tenant, id_venda, modelo) WHERE situacao IN ('AUTORIZADO','CONTINGENCIA','TRANSMITINDO','ASSINADO')` |
+| Serviço | recusa **antes de reservar número**, nomeando a nota que já existe |
+
+⚠️ **Por que a recusa vem antes do índice.** Chegar ao índice significaria queimar um número da
+sequência para depois falhar — e número queimado vira **buraco**, que vira **inutilização formal**
+perante a SEFAZ. O índice é a última linha de defesa, não a mensagem.
+
+⚠️ **Só as situações vivas barram.** `REJEITADA`, `DENEGADA` e `NAO_EMITIDO` nunca viraram nota — a
+venda **precisa** poder tentar de novo; `CANCELADO` significa que a operação foi desfeita perante a
+SEFAZ, e reemitir é legítimo. E a chave inclui **`modelo`**: a mesma venda pode ter NFC-e 65 e NF-e
+55 de devolução, que são documentos diferentes sobre o mesmo fato.
+
+⭐ **Decisão do dono do produto: recusar, não devolver a nota anterior.** O caixa vê "esta venda já
+tem a NFC-e nº X emitida — use a reimpressão", em vez de receber em silêncio um comprovante que ele
+não sabe se acabou de ser emitido.
+
+Teste: `VendaFiscalEmissaoTest.segundaEmissaoDaMesmaVendaEhRecusadaSemQueimarNumero` — ⚠️ ele
+confere **no banco** que `proximo_numero` não andou e que existe **uma** nota. Validar só o 409
+passaria com a recusa vindo depois de queimar o número.
+
+### 2. Inutilização aceitava numeração de nota em contingência
+
+`SITUACOES_NAO_SAO_BURACO` listava só `AUTORIZADO, CANCELADO, DENEGADO` — três de **dez** situações
+do enum. E essa constante governa **as duas pontas**: o que a tela **sugere** como buraco e o que o
+POST **bloqueia**.
+
+**O cenário, sem atacante nenhum:** a SEFAZ cai; a loja emite 50 NFC-e em **contingência** (cupons
+na mão dos consumidores, XML assinado, aguardando o dreno de 24 h). A tela de Inutilização
+**oferece esses 50 números como buraco**. O operador confirma, a SEFAZ homologa — e **inutilização
+homologada não se desfaz**. Quando o dreno transmitir, as 50 voltam recusadas: 50 consumidores com
+cupom e sem documento fiscal. Em `TRANSMITINDO` é pior: inutiliza-se o número de uma nota que pode
+já estar autorizada, com a resposta perdida.
+
+⚠️ **O detalhe que ensina:** os guardas de **faixa** (número final ≥ próximo, sobreposição,
+justificativa) estavam **todos corretos** e não pegavam nada. O furo era a lista de situações, uma
+camada abaixo deles — validar o intervalo não é validar o estado.
+
+Hoje a constante inclui `CONTINGENCIA`, `TRANSMITINDO` e `ASSINADO`.
+Teste: `FiscalInutilizacaoTest.naoDeixaInutilizarNumeroDeNotaEmContingencia` (cobre a tela **e** o
+POST).
+
+### 3. Nenhuma rota fiscal conferia "empresas com acesso"
+
+**14 endpoints** dos 7 controllers fiscais recebiam `idEmpresa` por path ou query e não conferiam
+nada. As rotas de dinheiro (PDV, caixa, devolução, orçamento, recebimento) já usavam o claim `eid`
+corretamente — o bloco fiscal, não. `FiscalContingenciaController` chegava a receber o `jwt` e não
+usá-lo.
+
+Um operador da filial 1, com a tela concedida, punha a **filial 2** em contingência, inutilizava
+numeração dela ou baixava o ZIP com todo o XML fiscal dela.
+
+⚠️ **P8 nunca esteve em jogo aqui** — toda query filtra `id_tenant`. O que se atravessava era a
+fronteira entre **empresas da mesma conta**, que é exatamente o que "empresas com acesso" existe
+para governar (`docs/telas/usuario.md`).
+
+**Decisão do dono do produto (2026-08-27):** quem não é administrador opera **só a empresa da
+sessão**. `comum.seguranca.EmpresaDaSessao.exigirAcesso(jwt, idEmpresa)` nos 14 endpoints; o
+administrador continua alcançando todas.
+
+⚠️ **403 e não 404** (ao contrário do cadastro do administrador, que responde 404): a existência da
+outra filial não é segredo — ela aparece no seletor de empresas do login —, e a pessoa precisa
+entender que o caminho é **trocar de empresa**, não que a filial sumiu.
+
+Teste: `EmpresaDaSessaoNoFiscalTest` — cobre o bloqueio nos oito caminhos **e** o caso positivo (a
+própria empresa continua funcionando; trava que fecha o uso normal não é trava, é defeito).

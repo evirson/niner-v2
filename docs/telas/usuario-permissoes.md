@@ -185,3 +185,57 @@ definitivo: usuário novo não enxerga nada até ser liberado.
 
 ⚠️ **No dia da produção isto muda:** se já houver operadores em uso, é obrigatório conceder a
 grade cheia a eles **antes** de a trava subir, senão perdem o acesso sem aviso.
+
+## O que a auditoria de segurança encontrou no RBAC (2026-08-27)
+
+Três dias depois de nascer, o RBAC passou por uma auditoria adversarial. O que ela achou aqui:
+
+### ⛔ A tela do PDV estava catalogada sem "incluir" — e ninguém conseguia vender
+
+`cfg_tela.pdv.tem_incluir = false` (V076) contra um `POST /api/v1/pdv/vendas` que o interceptor
+traduz para **INCLUIR**. Resultado: **403 em toda venda de todo operador**, e sem conserto pela
+tela — `PermissaoController.salvar` grava `p.incluir() AND disponiveis.incluir()`, então a
+concessão era descartada mesmo vinda pela API. O administrador liberava tudo o que a grade oferecia
+e o caixa não trabalhava.
+
+**Eram seis telas divergentes, não uma** (V081):
+
+| Tela | Ação | Efeito |
+|---|---|---|
+| `pdv` | incluir | ninguém vendia |
+| `etiqueta-emissao` | incluir | ninguém emitia etiqueta |
+| `entrada-produtos-compra` | alterar | ninguém editava item de entrada |
+| `empresas` | incluir | (tela exclusiva — sem efeito prático) |
+| `estoque` | alterar **a mais** | caixa que não governa nada |
+| `minha-conta` | incluir **a mais** | idem |
+
+⚠️ **As duas últimas são o erro na direção oposta, e não são inofensivas:** oferecem uma caixa que
+não faz nada, e quem configura permissão passa a desconfiar do que a grade diz.
+
+⭐ **O conserto durável não é a migration, é o teste.** A V076 mediu as ações pelos métodos HTTP que
+o **front** chama; `AcoesPorTelaConferemTest` varre os controllers, deriva a ação pela **mesma regra
+do interceptor** e compara com `cfg_tela`. Sem ele, a próxima tela nova volta a divergir e ninguém
+descobre até um operador não conseguir trabalhar. O teste **falha** se não achar os fontes, em vez
+de passar vazio.
+
+⚠️ **Um teste existente prendia o defeito.** `concederPorTelaEPorAcao` afirmava que o PDV *não*
+ficava com "incluir", justificando: *"no PDV, acessar já é vender"* — falso. Ele passava verde com o
+caixa travado. Foi **invertido**, não apagado. E entrou o teste de estreia que faltava: *operador
+com a grade cheia atravessa o interceptor do PDV* — nenhum teste exercitava o PDV como
+não-administrador, e é por isso que o defeito passou.
+
+### As outras três sobras
+
+- **DRE e Lucratividade** saíram de `admin_apenas` na V078 mas mantinham `exigirAdmin` no serviço:
+  o admin concedia, o operador tomava 403. As duas travas mortas foram removidas — é o mesmo
+  defeito das "duas trancas na mesma porta" que o commit `fa85474` eliminou de outras dez telas, e
+  que esqueceu destas duas.
+- **`CategoriaProdutoController` e `CategoriaClienteController`** faziam POST/PUT **sem `@Tela`**:
+  qualquer autenticado, com a grade vazia, criava e renomeava categorias — contra a promessa
+  escrita aqui ("o que ele não consegue é criar, alterar ou excluir"). Agora declaram `@Tela`
+  (Produtos e Clientes), com o `GET` `@Livre` porque outras telas consultam a lista.
+- **`MarketingAdminController`** era o único de `/api/admin` sem `exigirStaff` — qualquer papel de
+  staff editava lead, que é dado pessoal de quem se cadastrou no site.
+
+⚠️ **`fechamento-caixa` NÃO entrou nessa lista**: reabrir caixa continua exclusivo do administrador
+**por decisão dele**, tela a tela, e está documentado acima. Não é sobra, é regra.

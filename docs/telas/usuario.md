@@ -251,15 +251,19 @@ Nenhum.
 
 ## Non-goals desta feature
 
-- **Permissão fina por rotina/tela** (`usuario_rotina`, legado) — a tabela existe (V015) mas
-  esta feature não grava nem lê nela. Fica para quando o produto definir a granularidade
-  (RBAC simples ADMIN/OPERADOR × rotinas finas — spec §3.3.2 já marca isso como pendência 🔴).
-  **Anotado explicitamente a pedido do dono do produto (2026-07-28): próxima etapa depois desta
-  tela.**
+- ~~**Permissão fina por rotina/tela**~~ — ✅ **ENTREGUE em 2026-08-27** (V073–V081). A tabela
+  `usuario_rotina` (V015) foi **substituída** por `usuario_permissao`, agora com as quatro ações
+  (acessar/incluir/alterar/excluir) e sem perfis — a grade é do usuário, por decisão dele. Spec
+  própria: `docs/telas/usuario-permissoes.md`.
+  ⚠️ **Esta linha era o "non-goal" mais antigo do arquivo** e ficou falsa no dia em que a feature
+  entrou. Non-goal é a parte da spec que apodrece mais rápido: ao entregar algo, procure onde ele
+  estava escrito como "não faz".
 - **CRUD de empresa** — a tela só lista (`GET /api/v1/empresas`) para alimentar o seletor;
   criar/editar/excluir empresa fica para outra feature.
-- **Redefinição de senha por e-mail (esqueci minha senha)** — só troca de senha via edição do
-  próprio ADMIN por enquanto.
+- ~~**Redefinição de senha por e-mail (esqueci minha senha)**~~ — ✅ **ENTREGUE em 2026-08-27**:
+  `POST /api/publico/recuperar-senha` (204 sempre, para não revelar quem é cliente) + token de uso
+  único de 2 h. ⚠️ E hoje ela **derruba a sessão aberta** com a senha antiga (V080) — quem redefine
+  a senha costuma estar redefinindo porque alguém entrou na conta dele.
 - **Auditoria de quem alterou o quê** (P3) além do `atualizado_em` padrão — sem log de mudança
   de papel/empresas nesta versão.
 
@@ -285,3 +289,52 @@ Nenhuma bloqueante.
 
 Tempo de cadastro de um usuário novo (nome, e-mail, senha, uma empresa) em menos de 20
 segundos.
+
+---
+
+## O que mudou em 2026-08-27 (RBAC + auditoria de segurança)
+
+### 1. ⛔ O cadastro do administrador é inalcançável para quem não é administrador
+
+Ordem do dono do produto: *"operador jamais pode acessar o cadastro do usuário administrador"*.
+
+Quando o RBAC entrou, as cinco chamadas de `exigirAdmin` deste serviço saíram (a decisão passou a
+ser da grade) e a tela **Usuários** deixou de ser exclusiva. Só que o teto de delegação protege a
+**grade de permissões**, não o **registro do usuário**: quem recebesse "Usuários: alterar" —
+concessão plausível, *"deixe o gerente cadastrar gente"* — reescrevia **senha e e-mail do
+administrador** (e, depois da V079, desligava o segundo fator dele antes) e entrava no lugar. O
+`DELETE` era pior: só barrava a auto-exclusão, e apagar o administrador deixa a conta **sem admin
+para sempre**, porque `criar` grava `administrador = false` fixo e `usuario_um_admin_uk` não deixa
+promover ninguém.
+
+Hoje, para quem não é administrador: ele **não aparece na listagem**, e `GET`, `PUT`, `DELETE` e a
+grade de permissões dele respondem **404**.
+
+⚠️ **404 e não 403.** "Você não pode mexer neste" confirmaria qual id é o do administrador — para
+quem procura um alvo, isso é meio caminho. Esconder da lista e responder 404 são a **mesma**
+decisão: uma lista que mostra o registro e um GET que diz "não existe" entregariam exatamente a
+informação que o 404 evita.
+
+Teste: `PermissaoPorTelaTest.operadorNaoAlcancaOCadastroDoAdministrador`, verificado **revertendo a
+trava** (sem ela o `PUT` responde 200 e a tomada de conta acontece).
+
+### 2. "Empresas com acesso" passou a valer no módulo fiscal
+
+Este campo sempre prometeu governar **em quais empresas o usuário opera**. As rotas de dinheiro
+cumpriam (claim `eid`); as **14 rotas fiscais não conferiam nada** — um operador da filial 1 punha a
+filial 2 em contingência ou baixava o XML fiscal dela.
+
+Decisão dele: **quem não é administrador opera só a empresa da sessão**
+(`comum.seguranca.EmpresaDaSessao`). Ver `docs/MODULOFISCAL.md`, seção da auditoria.
+
+### 3. Login em duas etapas (V079)
+
+Checkbox novo na seção **Segurança**: ligado, o usuário passa a precisar de um código de 4 dígitos
+enviado por e-mail depois da senha. Vale para o administrador também, ao contrário do horário de
+acesso. Spec própria: `docs/telas/login-duas-etapas.md`.
+
+### 4. Revogação de sessão (V080)
+
+Trocar a senha ou desativar o usuário **derruba a sessão dele** na requisição seguinte — antes, o
+token valia 8 horas e demitir alguém não o tirava do sistema. Spec própria:
+`docs/telas/revogacao-de-sessao.md`.

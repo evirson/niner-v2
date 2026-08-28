@@ -631,3 +631,25 @@ sem aviso**.
 
 Agora usa `imprimirDocumentoA4()` + `.documento-a4-imprimir`, com cabeçalho só na primeira página.
 ⚠️ **Não foi testado no papel** — impressão só se confirma imprimindo.
+
+## ⛔ Venda cancelada não é origem de devolução (2026-08-27, auditoria de segurança)
+
+Vender uma peça de R$ 500 → **cancelar** a venda (o estoque volta e o dinheiro sai do caixa) →
+"devolver" a mesma venda gerava um **vale-mercadoria de R$ 500** por mercadoria que já tinha voltado
+à prateleira e já tinha sido reembolsada. A loja pagava **duas vezes** pela mesma peça.
+
+⚠️ **O teto de "não devolver mais do que foi vendido" existia e não pegava isto** — e é o ponto que
+vale guardar: ele mede contra os **itens** da venda, e cancelar **não apaga esses itens** (o
+cancelamento grava um movimento próprio, do tipo `CANCELAMENTO`). O guarda estava correto para o
+que ele foi escrito, e cego para o estado da venda.
+
+Hoje `exigirVendaNaoCancelada` recusa com 409 antes de qualquer gravação, dizendo o motivo em
+português ("o valor já foi devolvido ao cliente e a mercadoria já voltou ao estoque").
+
+⚠️ **Só vale quando há venda de origem.** A devolução **sem** número de venda continua permitida —
+é o caso do cliente que perdeu o comprovante —, e é por isso que a checagem mora dentro do bloco que
+só roda quando `numeroVenda` foi informado, não numa validação de request.
+
+Regressão: `DevolucaoProdutoCrudTest.naoDeixaDevolverVendaJaCancelada`. ⚠️ Ele **confere o banco**
+(nenhuma linha em `venda_devolucao`, estoque intacto), não só o 409 — um teste que valida o status
+passaria se a recusa viesse depois da gravação.

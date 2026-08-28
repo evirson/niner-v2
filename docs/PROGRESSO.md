@@ -13,7 +13,8 @@ Registro cronológico das decisões e entregas. Atualizar a cada marco relevante
 
 > ## 📌 2026-08-27 — o dia do acesso
 >
-> **63 telas.** Seis entregas:
+> **63 telas · 1145 testes verdes** (2 pulados: o guard de meia-noite do horário de acesso).
+> Nove entregas:
 >
 > 1. **Login sem identificador de loja** — e-mail + senha. O mesmo e-mail pode estar em várias
 >    contas; a senha é conferida em cada uma e só se casar em mais de uma é que a tela pergunta.

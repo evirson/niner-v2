@@ -164,12 +164,14 @@ Abrem a partir de uma lista (criar/editar/configurar) e por isso não têm item 
 - `/fornecedores/novo`
 - `/fornecedores/configuracao`
 - `/usuarios/novo`
+- `/usuarios/:id/permissoes` — **Permissões do usuário** (RBAC, 2026-08-27; ícone de cadeado na
+  lista de Usuários, que **não aparece** para o administrador — não há o que configurar nele)
 - `/etiqueta-configuracao/novo`
 - `/fiscal/perfis/novo`
 
 ---
 
-**60 telas em uso** · **4 em construção** · **20 telas-filhas**.
+**60 telas em uso** · **4 em construção** · **21 telas-filhas**.
 
 ⚠️ Atualizado em 2026-08-26. Entraram três telas: **Relatório de Contas a Pagar / Pagas** e
 **Exportação de XML em Lote** (as duas saíram de "em construção" — ⚠️ a rota de cada uma já existia
@@ -178,3 +180,19 @@ apontando para o placeholder `EmBreve`, que foi removido junto, ver
 Anúncios** do marketplace. O grupo **Relatórios** ganhou a coluna **Subgrupo** no mesmo dia.
 
 ⚠️ Sem spec localizada: **Efetivar Balanço** · **Tipo de Carteira**.
+⚠️ Do Tipo de Carteira, ao menos o teto de 0–100% do desconto/acréscimo ficou registrado em
+`docs/telas/configuracao-geral.md` (auditoria de 2026-08-27) — a spec da tela continua faltando.
+
+---
+
+## Atualização de 2026-08-27
+
+Entrou **Permissões do usuário** (`/usuarios/:id/permissoes`), a grade do RBAC — tela-filha de
+Usuários, alcançada pelo ícone de cadeado. Spec: `docs/telas/usuario-permissoes.md`.
+
+⚠️ **A tela de login ganhou uma etapa a mais** (código de 4 dígitos, quando o usuário tem login em
+duas etapas ligado) — não é rota nova: é um estado do próprio `/login`, como as perguntas "qual
+conta?" e "qual empresa?". Spec: `docs/telas/login-duas-etapas.md`.
+
+⚠️ **A escolha de ambiente some da Configuração Fiscal** quando a instalação estiver em produção
+(`NINER_FISCAL_AMBIENTE_FIXO`) — hoje vazia, porque o produto está homologando junto às SEFAZ.

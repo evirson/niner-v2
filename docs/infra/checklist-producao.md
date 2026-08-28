@@ -50,7 +50,25 @@ mas porque cada um tem consequência concreta com cliente real dentro.
    Details com `Retry-After`. Leitura de catálogo e **webhook de gateway ficam de fora** (recusar
    notificação é perder confirmação de pagamento). Em produção, manter também `limit_req` no nginx
    e ligar `NINER_LIMITE_CONFIAR_PROXY=true` — sem isso o filtro conta o IP do proxy, não o do
-   visitante. Coberto por `LimiteRequisicaoTest` (4 casos).
+   visitante. Coberto por `LimiteRequisicaoTest` (6 casos).
+
+   ⛔ **Correção de 2026-08-27 (auditoria de segurança): o filtro lia o cabeçalho ERRADO.** Ele
+   pegava o **primeiro** elemento de `X-Forwarded-For` — que é exatamente o que o **cliente**
+   manda. O nginx usa `proxy_add_x_forwarded_for`, que **acrescenta** o IP real ao **fim** da lista
+   e preserva o começo. Bastava `curl -H "X-Forwarded-For: 10.0.0.$RANDOM"` em laço para criar um
+   balde novo a cada requisição e **o limite deixar de existir** — justamente em produção, onde
+   `confiar-proxy` está ligado. Sobrava só o `limit_req` do nginx (60 r/m por
+   `$binary_remote_addr`), **6× o teto pretendido**, e a segunda camada do desenho deixava de
+   existir. O alvo pior era o código de 4 dígitos do login em duas etapas.
+
+   Hoje o filtro lê **`X-Real-IP`**, que o nginx **sobrescreve** com `$remote_addr`
+   (`infra/nginx/nainer.conf:230`) e o cliente não tem como forjar. O último elemento do
+   `X-Forwarded-For` é a reserva, para um proxy que não mande `X-Real-IP`: é o salto mais próximo, o
+   único que o cliente não escolhe.
+
+   ⚠️ **Se trocar de proxy, confira isto primeiro.** A regra que torna o valor confiável não está no
+   Java — está na configuração do proxy que sobrescreve o cabeçalho. Um proxy que só *acrescenta*
+   reabre o buraco, e nada no código acusa.
 5. ✅ **RESOLVIDO (2026-08-19).** ~~**Não existe recuperação de senha nem e-mail transacional.**~~
    *Feito:* `POST /api/publico/recuperar-senha` (responde 204 sempre, para não revelar quem é
    cliente) e `POST /api/publico/redefinir-senha` com token de **uso único**, validade de 2h e

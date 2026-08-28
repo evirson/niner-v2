@@ -291,3 +291,28 @@ Nenhuma bloqueante.
 ## Métrica de sucesso
 
 Ajuste de um parâmetro em menos de 10 segundos.
+
+## ⚠️ O desconto máximo tinha uma porta ao lado (2026-08-27, auditoria de segurança)
+
+`percentual_desconto_venda` é revalidado no servidor com cuidado, e **falha fechado** quando o teto
+é 0 — está certo. Mas ele vigia **um** campo: `descontoVenda`, o desconto que o operador digita na
+venda.
+
+O **tipo de carteira** tem o próprio percentual (`tipo_carteira.perc_desconto`), e o PDV calcula a
+cobertura do pagamento como `valorPago × (1 + perc/100)`. A coluna é `numeric(5,2)` — aceita até
+**999,99** — e a única validação recusava o negativo. Ou seja: gravar 999,99% numa forma de
+pagamento fazia **R$ 10 fecharem uma venda de R$ 109,99**, sem tocar no campo que o teto vigia.
+
+⚠️ A tela **Tipos de Carteira** não é exclusiva do administrador e tem "alterar": quem recebia essa
+tela alcançava o desconto de todas as vendas da loja.
+
+**Corrigido (V083):** CHECK `0..100` no banco (`NOT VALID`, com conferência das linhas existentes na
+própria migration) + validação no serviço.
+
+⭐ **A lição, que vale além deste caso:** *um teto que existe num campo e não no irmão não é um
+teto.* Ao criar um limite, procure todos os caminhos que chegam ao mesmo número — aqui eram dois, e
+só um era vigiado.
+
+⚠️ Havia um teste **prendendo o comportamento antigo** (`percentualAcimaDeCemEhAceito`, com o
+comentário "sem limite superior, herdado de moeda"). Ele foi **invertido**, não apagado — é ele que
+prende a regra nova agora.
