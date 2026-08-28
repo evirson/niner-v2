@@ -113,11 +113,32 @@ public class LimiteRequisicaoFilter extends OncePerRequestFilter {
         return c.registrar() > limite;
     }
 
+    /**
+     * IP do cliente, atrás do proxy.
+     *
+     * <p>⛔ <b>Nunca o primeiro elemento de {@code X-Forwarded-For}</b> (achado da auditoria de
+     * segurança, 2026-08-27). O nginx usa {@code proxy_add_x_forwarded_for}, que <b>acrescenta</b> o
+     * IP real ao <b>fim</b> da lista e preserva o que o cliente mandou no começo. Lendo o primeiro,
+     * qualquer um passava {@code X-Forwarded-For: 10.0.0.<aleatório>} a cada requisição, criava um
+     * balde novo no mapa e <b>o limite deixava de existir</b> — justamente em produção, onde
+     * {@code confiar-proxy} está ligado. O alvo pior era o código de 4 dígitos do login em duas
+     * etapas.
+     *
+     * <p>⭐ Hoje o valor vem de {@code X-Real-IP}, que o nginx <b>sobrescreve</b> com
+     * {@code $remote_addr} (`nainer.conf`) — o cliente não tem como forjá-lo. O último elemento do
+     * {@code X-Forwarded-For} serve de reserva para um proxy que não mande {@code X-Real-IP}: é o
+     * salto mais próximo, o único que o cliente não escolhe.
+     */
     private String ipDe(HttpServletRequest req) {
         if (confiarProxy) {
+            String real = req.getHeader("X-Real-IP");
+            if (real != null && !real.isBlank()) {
+                return real.trim();
+            }
             String encaminhado = req.getHeader("X-Forwarded-For");
             if (encaminhado != null && !encaminhado.isBlank()) {
-                return encaminhado.split(",")[0].trim();
+                String[] saltos = encaminhado.split(",");
+                return saltos[saltos.length - 1].trim();
             }
         }
         return req.getRemoteAddr();

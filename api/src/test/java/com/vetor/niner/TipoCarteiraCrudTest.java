@@ -194,9 +194,21 @@ class TipoCarteiraCrudTest {
                 .andExpect(status().isBadRequest());
     }
 
-    /** Sem limite superior (2026-07-23, herdado de moeda) — só não pode ser negativo. */
+    /**
+     * ⛔ <b>Percentual acima de 100 passou a ser recusado</b> (auditoria de segurança, 2026-08-27).
+     *
+     * <p>⚠️ Este teste é a <b>inversão</b> de {@code percentualAcimaDeCemEhAceito}, que prendia o
+     * comportamento anterior ("sem limite superior, herdado de moeda"). Ele foi invertido, não
+     * apagado: o que ele prende agora é a regra nova.
+     *
+     * <p>O furo: a coluna é {@code numeric(5,2)} (até 999,99) e só o negativo era barrado. O PDV
+     * calcula a cobertura como {@code valorPago × (1 + perc/100)} — com <b>999,99%</b>, R$ 10
+     * fechavam uma venda de R$ 109,99, <b>contornando inteiramente</b> o desconto máximo dos
+     * Parâmetros do Sistema (que vigia outro campo). E a tela Tipos de Carteira não é exclusiva do
+     * administrador.
+     */
     @Test
-    void percentualAcimaDeCemEhAceito() throws Exception {
+    void percentualAcimaDeCemEhRejeitado() throws Exception {
         String token = assinarNovoTenant("percentual-alto");
 
         mvc.perform(post("/api/v1/tipos-carteira").header("Authorization", "Bearer " + token)
@@ -205,8 +217,31 @@ class TipoCarteiraCrudTest {
                                 {"nomeCarteira":"CARTEIRA ACRESCIMO ALTO","categoriaCarteira":"CARTAO_CREDITO","prazoPagamento":30,
                                  "pcMinima":1,"pcMaxima":6,"percAcrescimo":150,"permiteReceberCrediario":false}
                                 """))
+                .andExpect(status().isBadRequest());
+
+        // O desconto é o caminho que vira dinheiro na venda — mesmo teto, teste próprio.
+        mvc.perform(post("/api/v1/tipos-carteira").header("Authorization", "Bearer " + token)
+                        .contentType(APPLICATION_JSON)
+                        .content("""
+                                {"nomeCarteira":"CARTEIRA DESCONTO ABSURDO","categoriaCarteira":"AVISTA","prazoPagamento":0,
+                                 "pcMinima":1,"pcMaxima":1,"percDesconto":999.99,"permiteReceberCrediario":false}
+                                """))
+                .andExpect(status().isBadRequest());
+    }
+
+    /** 100% continua valendo: é o limite, não o proibido. */
+    @Test
+    void percentualDeCemEhAceito() throws Exception {
+        String token = assinarNovoTenant("percentual-cem");
+
+        mvc.perform(post("/api/v1/tipos-carteira").header("Authorization", "Bearer " + token)
+                        .contentType(APPLICATION_JSON)
+                        .content("""
+                                {"nomeCarteira":"CARTEIRA CEM","categoriaCarteira":"AVISTA","prazoPagamento":0,
+                                 "pcMinima":1,"pcMaxima":1,"percDesconto":100,"permiteReceberCrediario":false}
+                                """))
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.percAcrescimo").value(150));
+                .andExpect(jsonPath("$.percDesconto").value(100));
     }
 
     /**

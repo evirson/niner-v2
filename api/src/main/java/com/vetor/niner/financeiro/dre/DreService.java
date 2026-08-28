@@ -90,7 +90,11 @@ public class DreService {
     public DreResponse gerar(
             Jwt jwt, LocalDate dataInicial, LocalDate dataFinal, Regime regime,
             List<Long> idsEmpresaSolicitadas, Comparacao comparacao) {
-        exigirAdmin(jwt);
+        // ⛔ O "exigirAdmin" que existia aqui saiu em 2026-08-27: a V078 tirou esta tela de
+        // `admin_apenas`, então o administrador podia concedê-la — e o operador tomava 403 numa
+        // tela que a grade jurava ter liberado, sem nada explicando por quê. Quem decide agora é a
+        // permissão por tela (PermissaoInterceptor). Era o defeito das "duas trancas na mesma
+        // porta", que o commit fa85474 removeu de outras dez telas e esqueceu destas duas.
         validarPeriodo(dataInicial, dataFinal);
         Regime regimeEfetivo = regime == null ? Regime.COMPETENCIA : regime;
         Comparacao comparacaoEfetiva = comparacao == null ? Comparacao.NENHUM : comparacao;

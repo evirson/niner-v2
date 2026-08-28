@@ -209,8 +209,8 @@ public class TipoCarteiraService {
         if (temDesconto && temAcrescimo) {
             throw new IllegalArgumentException("Informe % de desconto OU % de acréscimo — nunca os dois.");
         }
-        exigirNaoNegativoSePresente(req.percDesconto(), "% de desconto");
-        exigirNaoNegativoSePresente(req.percAcrescimo(), "% de acréscimo");
+        exigirPercentualValido(req.percDesconto(), "% de desconto");
+        exigirPercentualValido(req.percAcrescimo(), "% de acréscimo");
 
         // Fiscal (2026-08-18) — opcional no cadastro (a Conformidade Fiscal cobra sem bloquear),
         // mas quando preenchido tem que ser um CNPJ de verdade (dígito verificador).
@@ -220,9 +220,31 @@ public class TipoCarteiraService {
         }
     }
 
-    private static void exigirNaoNegativoSePresente(BigDecimal valor, String rotulo) {
-        if (valor != null && valor.compareTo(BigDecimal.ZERO) < 0) {
+    /**
+     * Percentual entre 0 e 100.
+     *
+     * <p>⛔ <b>O teto de 100 é o achado da auditoria de segurança de 2026-08-27</b>, e o furo era
+     * maior do que parece: a coluna é {@code numeric(5,2)} (aceita até 999,99) e só o negativo era
+     * recusado. O PDV calcula a cobertura do pagamento como
+     * {@code valorPago × (1 + percDesconto/100)} — com <b>999,99%</b> numa forma de pagamento,
+     * R$ 10 fechavam uma venda de R$ 109,99.
+     *
+     * <p>⚠️ E isso <b>contornava inteiramente</b> o desconto máximo dos Parâmetros do Sistema, que
+     * é revalidado no servidor com cuidado: aquele teto vigia o campo {@code descontoVenda}, e este
+     * caminho não passa por ele. Um teto que existe num campo e não no irmão não é um teto.
+     *
+     * <p>A tela <b>Tipos de Carteira</b> não é exclusiva do administrador e tem "alterar", então
+     * quem recebe essa tela alcançava o desconto de todas as vendas da loja.
+     */
+    private static void exigirPercentualValido(BigDecimal valor, String rotulo) {
+        if (valor == null) {
+            return;
+        }
+        if (valor.compareTo(BigDecimal.ZERO) < 0) {
             throw new IllegalArgumentException(rotulo + " não pode ser negativo.");
+        }
+        if (valor.compareTo(new BigDecimal("100")) > 0) {
+            throw new IllegalArgumentException(rotulo + " não pode passar de 100%.");
         }
     }
 

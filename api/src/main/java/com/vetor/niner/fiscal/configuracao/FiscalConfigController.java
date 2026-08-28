@@ -1,5 +1,6 @@
 package com.vetor.niner.fiscal.configuracao;
 
+import com.vetor.niner.comum.seguranca.EmpresaDaSessao;
 import com.vetor.niner.identidade.permissao.Tela;
 
 import com.vetor.niner.fiscal.configuracao.FiscalConfigDtos.EmpresaFiscalResponse;
@@ -47,6 +48,7 @@ public class FiscalConfigController {
     @GetMapping("/{idEmpresa}")
     public FiscalConfigResponse buscar(@AuthenticationPrincipal Jwt jwt,
                                        @PathVariable long idEmpresa) {
+        EmpresaDaSessao.exigirAcesso(jwt, idEmpresa);
         return service.buscar(jwt, idEmpresa);
     }
 
@@ -55,6 +57,7 @@ public class FiscalConfigController {
     public FiscalConfigResponse salvar(@AuthenticationPrincipal Jwt jwt,
                                        @PathVariable long idEmpresa,
                                        @Valid @RequestBody FiscalConfigRequest req) {
+        EmpresaDaSessao.exigirAcesso(jwt, idEmpresa);
         return service.salvar(jwt, idEmpresa, req);
     }
 }

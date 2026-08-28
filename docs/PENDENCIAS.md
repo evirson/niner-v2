@@ -14,7 +14,7 @@
 > **Última revisão:** 2026-08-27, fim do dia (registrada a pedido dele: *"deixe todas estas pendências
 > documentadas, não esqueça de nada, e quando eu te perguntar as pendências você me fala"*).
 
-**Estado na data desta revisão:** 63 telas em uso · 1136 testes verdes (medido, não estimado).
+**Estado na data desta revisão:** 63 telas em uso · 1145 testes verdes (medido, não estimado).
 
 ---
 
@@ -198,6 +198,11 @@ por trás desta dúvida.
 
 ## 🔐 Auditoria de segurança de 2026-08-27 (front + back, por agentes)
 
+> ✅ **Fechada no mesmo dia.** Dos 14 achados, **12 foram corrigidos** (35–46), cada um com teste
+> que reprova sem a correção; **2 continuam abertos e são decisão dele** — o passo do go-live do
+> item 43 (definir `NINER_FISCAL_AMBIENTE_FIXO=PRODUCAO`) e a metade LGPD do item 47.
+> O item 48 (cobertura de teste) é trabalho meu, sem urgência.
+
 > **O que já está resolvido não está aqui.** Três achados eram do 2FA escrito horas antes e foram
 > corrigidos e medidos no mesmo dia (janela de horário na 2ª etapa, reenvio zerando tentativas,
 > falta de teto de desafios) — estão em `docs/telas/login-duas-etapas.md`.
@@ -226,27 +231,43 @@ Verificado **revertendo a trava**: sem ela, o `PUT` responde 200 e a tomada de c
 ⭐ Isto **fecha também o item 34**: "Usuários" continua concedível, e conceder já não expõe o
 administrador.
 
-### 36. 🔴 Nenhum operador consegue vender: o PDV responde 403 para quem não é admin 🟢
+### 36. ✅ FECHADO — Nenhum operador conseguia vender (e mais 5 telas divergentes)
 `cfg_tela.pdv` está com `tem_incluir = false` (V076), e `POST /pdv/vendas` traduz para INCLUIR —
 então a permissão **não pode nem ser concedida**. Confirmado no banco. Não é brecha, é o RBAC de
 ontem quebrando o caixa. Correção é um `UPDATE` em `cfg_tela` + um teste de estreia (*operador com
 grade cheia efetiva uma venda*), que hoje não existe. Revisar junto `pesquisa-vendas` e
-`reimpressao-recebimento-crediario`. **Bola minha.**
+`reimpressao-recebimento-crediario`.
+**Feito (V081):** as seis divergências corrigidas — `pdv` e `etiqueta-emissao` não ofereciam
+"incluir" (ninguém vendia nem emitia etiqueta), `entrada-produtos-compra` não oferecia "alterar",
+e `estoque`/`minha-conta` ofereciam caixas que não governavam nada.
+⭐ **O conserto de verdade não é a migration, é `AcoesPorTelaConferemTest`:** ele varre os
+controllers, deriva a ação de cada endpoint pela mesma regra do interceptor e compara com
+`cfg_tela`. A V076 mediu pelo front e errou seis vezes; sem o teste, a próxima tela nova volta a
+divergir e ninguém descobre até um operador não conseguir trabalhar.
 
-### 37. 🔴 Emissão de NFC-e não é idempotente 🟢
+### 37. ✅ FECHADO — Emissão de NFC-e não era idempotente
 `documento_fiscal_venda_ix` é **índice, não UNIQUE**, e nada no serviço pergunta se a venda já tem
 documento (confirmado). Duplo clique, retry de rede ou reimpressão geram **duas notas autorizadas
 para a mesma venda** — receita e ICMS em dobro, e só se desfaz cancelando na SEFAZ dentro da janela
-de 30 min. **Bola minha.**
+de 30 min.
+**Feito (V082):** índice único parcial `(tenant, venda, modelo)` sobre as situações **vivas**
+(autorizado, contingência, transmitindo, assinado) — rejeitada, denegada, não emitida e cancelada
+ficam de fora, porque nesses casos reemitir é o certo. A recusa com mensagem legível ("esta venda já
+tem a NFC-e nº X") acontece **antes** de reservar número: chegar ao índice queimaria um número da
+sequência, e número queimado vira buraco, que vira inutilização formal.
+⚠️ O teste confere no banco que a sequência **não** andou — validar só o 409 passaria com o defeito
+presente. Decisão dele: **recusar**, não devolver a nota existente.
 
-### 38. 🔴 Inutilização aceita numeração de nota em contingência 🟢
+### 38. ✅ FECHADO — Inutilização aceitava numeração de nota em contingência
 `SITUACOES_NAO_SAO_BURACO` lista só `AUTORIZADO, CANCELADO, DENEGADO` de dez situações possíveis, e
 governa tanto o que a tela **sugere** quanto o que o POST **bloqueia**. SEFAZ cai, a loja emite em
 contingência, e a tela oferece esses números como buraco — inutilizar homologado **não se desfaz**,
 e as notas viram recusa quando o dreno transmitir. Correção: acrescentar `CONTINGENCIA`,
-`TRANSMITINDO`, `ASSINADO` à constante. **Bola minha.**
+`TRANSMITINDO`, `ASSINADO` à constante.
+**Feito.** ⚠️ Os guardas de **faixa** estavam todos corretos e não pegavam nada: o furo era a lista
+de situações, uma camada abaixo deles.
 
-### 39. 🟠 `X-Forwarded-For` forjável anula o limite de requisição em produção 🧪🟢
+### 39. ✅ FECHADO — `X-Forwarded-For` forjável anulava o limite de requisição
 O filtro lê o **primeiro** elemento do cabeçalho, que é o que o cliente manda; o nginx acrescenta o
 IP real no **fim**. Com `confiar-proxy=true` (produção), qualquer um cria um balde novo por
 requisição. Sobra o `limit_req` do nginx — 6× o teto pretendido. Ler `X-Real-IP` (o nginx
@@ -261,15 +282,22 @@ enumeração de staff medível pela internet. 🧪 Um `curl` cronometrado fecha 
 minutos. **Bola minha** o código; **dele** decidir se restringe o backoffice por IP (o allowlist já
 está escrito e comentado no nginx).
 
-### 41. 🟠 "Empresas com acesso" não vale em nenhuma rota do módulo fiscal 🟢
+### 41. ✅ FECHADO — Módulo fiscal não checava "empresas com acesso"
 24 endpoints recebem `idEmpresa` por path/query sem conferir `usuario_empresa` — as rotas de
 dinheiro usam o claim `eid` corretamente, o bloco fiscal não. Operador da filial 1 põe a **filial
 2** em contingência, ou baixa o XML fiscal dela. P8 continua intacto (é dentro do mesmo tenant); o
-que se atravessa é a fronteira entre empresas. **Bola minha.**
+que se atravessa é a fronteira entre empresas.
+**Feito (decisão dele: operador fica preso à empresa da sessão).** `EmpresaDaSessao.exigirAcesso`
+em **14 endpoints** dos 7 controllers fiscais; administrador continua alcançando todas. Responde
+**403** (e não 404 como o cadastro do admin) porque a existência da outra filial não é segredo — ela
+aparece no seletor do login — e a pessoa precisa entender que o caminho é trocar de empresa.
 
-### 42. 🟠 Devolução aceita venda já cancelada como origem 🟢
+### 42. ✅ FECHADO — Devolução aceitava venda cancelada como origem
 `venda.cancelada` nunca aparece no caminho da devolução: vender → cancelar (estoque volta, dinheiro
-sai) → devolver a mesma venda → **vale-mercadoria integral**. **Bola minha.**
+sai) → devolver a mesma venda → **vale-mercadoria integral**.
+**Feito.** ⚠️ O teto de "não devolver mais do que foi vendido" existia e não pegava isto: ele mede
+contra os **itens** da venda, e cancelar não os apaga. O teste confere no banco que **nenhum vale
+nasceu** — validar só o 409 passaria se a recusa viesse depois da gravação.
 
 ### 43. ✅ FECHADO — Ambiente fiscal era trocável a quente (trava pronta para o go-live)
 A série é protegida depois da primeira nota autorizada; o **ambiente** não. Trocar para homologação
@@ -297,18 +325,28 @@ nova** (V080): `usuario.sessao_valida_desde` entrou na consulta que o filtro de 
 já fazia a cada requisição. O logoff acontece na requisição seguinte. Ver
 `docs/telas/revogacao-de-sessao.md`.
 
-### 45. 🟡 Desconto do tipo de carteira contorna o teto de desconto da venda 🟢
+### 45. ✅ FECHADO — Desconto do tipo de carteira sem teto
 `tipo_carteira.perc_desconto` é `numeric(5,2)` sem CHECK e sem teto no serviço, enquanto
 `descontoVenda` é revalidado contra `cfg_geral`. 999,99% numa forma de pagamento fecha venda de
-R$ 1.000 com ~R$ 91. **Bola minha** (CHECK 0–100 + submeter ao mesmo teto).
+R$ 1.000 com ~R$ 91.
+**Feito (V083):** CHECK 0–100 no banco + validação no serviço.
+⚠️ Havia um teste **prendendo o comportamento antigo** (`percentualAcimaDeCemEhAceito`, "sem limite
+superior, herdado de moeda"). Ele foi **invertido**, não apagado — é ele que prende a regra nova
+agora.
 
-### 46. 🟡 Sobras de coerência do RBAC 🟢
+### 46. ✅ FECHADO — Sobras de coerência do RBAC
 (a) **DRE** e **Lucratividade** saíram de `admin_apenas` mas mantêm `exigirAdmin` no serviço
 (confirmado) — o admin concede e o operador toma 403; idem `fechamento-caixa` (aqui a decisão de
 reabrir-só-admin é explícita, falta a caixa sumir da grade). (b) `CategoriaProdutoController` e
 `CategoriaClienteController` fazem POST/PUT **sem `@Tela`** — qualquer autenticado de grade vazia
 cria e renomeia categorias. (c) `MarketingAdminController` é o único de `/api/admin` sem
-`exigirStaff`. **Bola minha.**
+`exigirStaff`.
+**Feito:** (a) os dois `exigirAdmin` removidos — quem decide é a grade, como nas outras dez telas
+do commit `fa85474`; (b) os dois controllers de categoria passaram a declarar `@Tela` (Produtos e
+Clientes), com o `GET` `@Livre` porque outras telas consultam a lista; (c) `MarketingAdminController`
+ganhou `exigirStaff` nos 5 endpoints — lead é dado pessoal de quem se cadastrou no site.
+⚠️ **`fechamento-caixa` fica como está:** reabrir caixa continua só do administrador **por decisão
+dele** (2026-08-27, tela a tela), e isso está documentado — não é a mesma sobra.
 
 ### 47. 🟡 Lead grava consentimento não dado (a parte do 409 foi decidida) 🔵
 `POST /assinar` responde 409 para e-mail já cadastrado e 201 para novo — um verificador de "é

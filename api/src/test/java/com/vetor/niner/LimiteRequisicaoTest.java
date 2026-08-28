@@ -35,6 +35,8 @@ class LimiteRequisicaoTest {
         registro.add("niner.limite-requisicao.habilitado", () -> true);
         registro.add("niner.limite-requisicao.escrita-por-minuto", () -> 3);
         registro.add("niner.limite-requisicao.beacon-por-minuto", () -> 5);
+        // Produção roda atrás do nginx, e é lá que o cabeçalho forjado importa.
+        registro.add("niner.limite-requisicao.confiar-proxy", () -> true);
     }
 
     @Autowired
@@ -120,5 +122,39 @@ class LimiteRequisicaoTest {
                             .content("{\"id\":%d,\"type\":\"payment\",\"data\":{\"id\":\"1\"}}".formatted(500 + i)))
                     .andExpect(status().isOk());
         }
+    }
+    /**
+     * ⛔ <b>{@code X-Forwarded-For} forjado não cria balde novo</b> (achado da auditoria de
+     * segurança, 2026-08-27).
+     *
+     * <p>O filtro lia o <b>primeiro</b> elemento do cabeçalho — que é exatamente o que o cliente
+     * manda. O nginx usa {@code proxy_add_x_forwarded_for}, que <b>acrescenta</b> o IP real ao fim
+     * e preserva o começo. Bastava variar o valor a cada requisição para o limite deixar de
+     * existir, em produção, na superfície pública inteira: signup, lead, recuperação de senha e o
+     * código de 4 dígitos do login em duas etapas.
+     *
+     * <p>Hoje vale o {@code X-Real-IP}, que o nginx <b>sobrescreve</b> e o cliente não consegue
+     * forjar.
+     */
+    @Test
+    void cabecalhoDeIpForjadoNaoBurlaOLimite() throws Exception {
+        RequestPostProcessor comIpReal = req -> {
+            req.setRemoteAddr("203.0.113.77");
+            req.addHeader("X-Real-IP", "203.0.113.77");
+            return req;
+        };
+
+        for (int i = 0; i < 3; i++) {
+            mvc.perform(post("/api/publico/leads").with(comIpReal)
+                            .header("X-Forwarded-For", "10.0.0." + i + ", 203.0.113.77")
+                            .contentType(APPLICATION_JSON).content(corpoLead()))
+                    .andExpect(status().is2xxSuccessful());
+        }
+
+        // A 4ª, com um "IP" novo inventado no cabeçalho, tem de bater no mesmo balde.
+        mvc.perform(post("/api/publico/leads").with(comIpReal)
+                        .header("X-Forwarded-For", "10.0.0.99, 203.0.113.77")
+                        .contentType(APPLICATION_JSON).content(corpoLead()))
+                .andExpect(status().isTooManyRequests());
     }
 }

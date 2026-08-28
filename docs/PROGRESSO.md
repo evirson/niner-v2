@@ -52,6 +52,16 @@ Registro cronológico das decisões e entregas. Atualizar a cada marco relevante
 >    inteiros, então comparar cru fazia todo usuário recém-criado nascer com a sessão revogada —
 >    o token que o signup acabava de devolver era recusado. Uma suíte só de casos positivos teria
 >    aprovado um mecanismo que expulsava todo mundo.
+> 9. **Os 8 achados restantes da auditoria, todos fechados no mesmo dia** — cada um com teste que
+>    **reprova sem a correção** (verificado sabotando o código e medindo). Os dois que aconteciam
+>    sozinhos: **nenhum operador conseguia vender** (a tela do PDV catalogada sem "incluir" — e mais
+>    cinco telas divergentes, V081) e **NFC-e emitida em dobro no duplo clique** (V082, recusa antes
+>    de reservar número). Mais: inutilização aceitando nota em contingência, `X-Forwarded-For`
+>    forjável furando o rate limit, 14 endpoints fiscais sem checar a empresa da sessão, devolução
+>    de venda cancelada, desconto de carteira sem teto (V083) e as sobras do RBAC.
+>    ⭐ **O melhor conserto do dia não foi uma migration, foi um teste:** `AcoesPorTelaConferemTest`
+>    varre os controllers, deriva a ação de cada endpoint e compara com o catálogo de telas. A V076
+>    tinha medido isso pelo *front* e errado seis vezes — a pior delas travando o caixa inteiro.
 >
 > Detalhe de cada uma: `docs/telas/login.md`, `ramo-atividade.md`, `contratacao-grupo.md`,
 > `usuario-permissoes.md`, `login-duas-etapas.md` e `docs/infra/parque-de-celulas.md`.

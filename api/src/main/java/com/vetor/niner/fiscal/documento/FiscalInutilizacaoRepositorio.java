@@ -23,8 +23,25 @@ import java.util.Optional;
 @Repository
 public class FiscalInutilizacaoRepositorio {
 
-    /** Uma nota com número queimado legitimamente perante a SEFAZ — não é buraco. */
-    private static final String SITUACOES_NAO_SAO_BURACO = "'AUTORIZADO', 'CANCELADO', 'DENEGADO'";
+    /**
+     * Número <b>ocupado</b> — não é buraco, e inutilizá-lo seria destruir documento existente.
+     *
+     * <p>⚠️ <b>Esta constante governa as DUAS pontas</b>: o que a tela oferece como buraco
+     * ({@code buracos}) e o que o POST bloqueia ({@code numerosJaConsumidos}). Faltando um valor
+     * aqui, a tela <b>sugere</b> o erro e o servidor <b>deixa passar</b> — os guardas de faixa
+     * (número final ≥ próximo, sobreposição, justificativa) continuam corretos e não pegam nada,
+     * porque o furo é uma camada abaixo deles.
+     *
+     * <p>⛔ <b>Os três valores acrescentados em 2026-08-27 são o motivo de este javadoc existir.</b>
+     * Sem eles, o cenário era: a SEFAZ cai, a loja emite 50 NFC-e em <b>contingência</b> (cupons na
+     * mão dos consumidores, XML assinado, esperando o dreno de 24 h), e a tela de Inutilização
+     * <b>oferece esses 50 números como buraco</b>. O operador confirma, a SEFAZ homologa — e
+     * <b>inutilização homologada não se desfaz</b>. Quando o dreno transmitir, as 50 são recusadas:
+     * 50 consumidores com cupom e sem documento fiscal. Em {@code TRANSMITINDO} é pior ainda, porque
+     * se inutiliza o número de uma nota que pode já estar autorizada, com a resposta perdida.
+     */
+    private static final String SITUACOES_NAO_SAO_BURACO =
+            "'AUTORIZADO', 'CANCELADO', 'DENEGADO', 'CONTINGENCIA', 'TRANSMITINDO', 'ASSINADO'";
 
     private final JdbcClient jdbc;
 
@@ -63,10 +80,12 @@ public class FiscalInutilizacaoRepositorio {
     }
 
     /**
-     * Números da faixa pedida que já foram consumidos por uma nota de verdade (autorizada,
-     * cancelada ou denegada) — inutilizá-los seria pedir à SEFAZ para apagar uma nota que existe,
-     * não tapar um buraco. Bloqueio preventivo (F11): mais barato recusar aqui do que esperar a
-     * SEFAZ recusar.
+     * Números da faixa pedida que já foram consumidos por um documento — inutilizá-los seria pedir
+     * à SEFAZ para apagar uma nota que existe, não tapar um buraco. Bloqueio preventivo (F11):
+     * mais barato recusar aqui do que esperar a SEFAZ recusar.
+     *
+     * <p>⚠️ "Documento que existe" inclui o que ainda <b>não</b> foi transmitido — contingência e
+     * assinado — e o que está com resposta desconhecida. Ver {@link #SITUACOES_NAO_SAO_BURACO}.
      */
     @Transactional(readOnly = true)
     public List<Integer> numerosJaConsumidos(long idEmpresa, int modelo, int serie,

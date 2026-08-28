@@ -1,5 +1,6 @@
 package com.vetor.niner.fiscal.documento;
 
+import com.vetor.niner.comum.seguranca.EmpresaDaSessao;
 import com.vetor.niner.identidade.permissao.Tela;
 
 import com.vetor.niner.fiscal.documento.FiscalContingenciaDtos.ContingenciaResponse;
@@ -37,6 +38,7 @@ public class FiscalContingenciaController {
 
     @GetMapping("/{idEmpresa}")
     public ContingenciaResponse consultar(@AuthenticationPrincipal Jwt jwt, @PathVariable long idEmpresa) {
+        EmpresaDaSessao.exigirAcesso(jwt, idEmpresa);
         var estado = service.consultar(idEmpresa);
         return new ContingenciaResponse(estado.ativa(), estado.desde(), estado.justificativa(),
                 estado.serieContingencia(), estado.pendentes(), estado.duracao().toMinutes());
@@ -46,6 +48,7 @@ public class FiscalContingenciaController {
     @PostMapping("/{idEmpresa}/entrar")
     public ContingenciaResponse entrar(@AuthenticationPrincipal Jwt jwt, @PathVariable long idEmpresa,
                                        @Valid @RequestBody EntrarSairRequest req) {
+        EmpresaDaSessao.exigirAcesso(jwt, idEmpresa);
         service.entrar(idEmpresa, "Manual: " + req.justificativa());
         return consultar(jwt, idEmpresa);
     }
@@ -54,6 +57,7 @@ public class FiscalContingenciaController {
     @PostMapping("/{idEmpresa}/sair")
     public ContingenciaResponse sair(@AuthenticationPrincipal Jwt jwt, @PathVariable long idEmpresa,
                                      @Valid @RequestBody EntrarSairRequest req) {
+        EmpresaDaSessao.exigirAcesso(jwt, idEmpresa);
         service.sair(idEmpresa, "Manual: " + req.justificativa());
         return consultar(jwt, idEmpresa);
     }

@@ -136,10 +136,16 @@ class PermissaoPorTelaTest {
                 .andReturn().getResponse().getContentAsString();
 
         assertEquals(2, contar(minhas, "acessar"));
-        // ⚠️ O PDV recebeu "incluir" no pedido e NÃO ficou com ele: a V076 diz que essa tela não
-        // tem a ação — no PDV, acessar já é vender. Conceder o que não existe encheria a grade de
-        // permissão impossível, e este teste é o que impede alguém de "consertar" isso.
-        assertEquals(false, acao(minhas, "pdv", "incluir"));
+        // ⭐ INVERTIDO em 2026-08-27 (auditoria de segurança). Este teste dizia o contrário — que o
+        // PDV NÃO ficava com "incluir" — e o comentário justificava assim: "no PDV, acessar já é
+        // vender". Era falso: `POST /pdv/vendas` traduz para INCLUIR no interceptor, então
+        // **nenhum operador conseguia vender**, e a concessão era descartada no salvamento porque
+        // a V076 tinha marcado a tela como sem a ação.
+        //
+        // ⚠️ O teste foi invertido, não apagado: ele prendia o comportamento antigo e passava
+        // verde enquanto o caixa estava travado. Hoje prende a regra certa — quem recebe "incluir"
+        // no PDV fica com ele. Quem impede a divergência de voltar é `AcoesPorTelaConferemTest`.
+        assertEquals(true, acao(minhas, "pdv", "incluir"), "sem isto o operador não vende");
         assertEquals(false, acao(minhas, "pdv", "alterar"));
         assertEquals(true, acao(minhas, "clientes", "alterar"), "cadastro tem alterar");
         assertEquals(false, acao(minhas, "clientes", "incluir"), "não foi concedido");
@@ -450,5 +456,30 @@ class PermissaoPorTelaTest {
         // E o administrador segue entrando com a senha dele — a tentativa não pode ter passado.
         assertTrue(entrar("donoalvo-admin@lojarbac.com", "segredo123").length() > 20);
     }
-}
+    /**
+     * ⭐ <b>O teste de estreia que faltava:</b> um operador com a grade cheia <b>chega a vender</b>.
+     *
+     * <p>Nenhum teste exercitava o PDV como não-administrador, e por isso o defeito passou: a tela
+     * estava catalogada sem "incluir", a concessão era descartada no salvamento, e
+     * {@code POST /pdv/vendas} respondia <b>403 para todo operador</b> — com o administrador jurando
+     * ter liberado tudo.
+     *
+     * <p>⚠️ O que se afirma aqui é <b>"não é 403"</b>, não "a venda deu certo": montar uma venda
+     * completa exige caixa aberto, produto com estoque e forma de pagamento, e isso já é coberto
+     * por {@code PdvVendaCrudTest}. O que <b>só</b> este teste cobre é a fronteira da permissão —
+     * e um 400 por corpo vazio prova que a requisição <b>atravessou</b> o interceptor.
+     */
+    @Test
+    void operadorComGradeCheiaAtravessaOInterceptorDoPdv() throws Exception {
+        Conta c = contaComOperador("pdv-estreia");
+        PermissaoDeTeste.liberarTudo(mvc, c.token(), c.idOperador());
+        String tokenOperador = entrar("oppdv-estreia@lojarbac.com", "senha12345");
 
+        int status = mvc.perform(post("/api/v1/pdv/vendas").header("Authorization", "Bearer " + tokenOperador)
+                        .contentType(APPLICATION_JSON).content("{}"))
+                .andReturn().getResponse().getStatus();
+
+        assertTrue(status != 403,
+                "operador com a grade cheia não pode tomar 403 no PDV — foi assim que ninguém vendia");
+    }
+}

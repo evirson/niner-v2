@@ -697,4 +697,55 @@ class DevolucaoProdutoCrudTest {
                 .andExpect(jsonPath("$.itens[1].precoUnitario").value(120.00))
                 .andExpect(jsonPath("$.itens[1].qtdDisponivelDevolucao").value(0));
     }
+    /**
+     * ⛔ <b>Venda cancelada não pode virar vale-mercadoria</b> (auditoria de segurança, 2026-08-27).
+     *
+     * <p>O teto de "não devolver mais do que foi vendido" existia e não pegava isto: ele mede
+     * contra os <b>itens</b> da venda, e cancelar não apaga esses itens — o cancelamento grava um
+     * movimento próprio. Então vender uma peça, cancelar (o estoque volta e o dinheiro sai do
+     * caixa) e em seguida "devolver" a mesma venda gerava um vale <b>integral</b> por mercadoria já
+     * reembolsada e já de volta na prateleira. A loja pagava duas vezes pela mesma peça.
+     */
+    @Test
+    void naoDeixaDevolverVendaJaCancelada() throws Exception {
+        TenantNovo tenant = assinarNovoTenant("venda-cancelada");
+        long idTenant = extrairIdTenant(tenant.token());
+        long idProduto = criarProduto(tenant.token(), "Produto Venda Cancelada");
+        long idCarteira = criarTipoCarteira(tenant.token(), "DINHEIRO CANCELADA", "AVISTA");
+        long idCliente = criarCliente(tenant.token(), "Cliente Venda Cancelada");
+        long idFuncionario = criarFuncionario(tenant.token(), "Vendedor Venda Cancelada");
+        abrirCaixaDinheiro(tenant.token());
+
+        long idVariacao;
+        long idVenda;
+        try (Connection c = abrirConexao(idTenant)) {
+            long idEmpresa = buscarIdEmpresa(c);
+            idVariacao = criarVariacao(c, idTenant, idProduto);
+            definirEstoque(c, idTenant, idEmpresa, idVariacao, new BigDecimal("10.000"));
+            idVenda = efetivarVenda(tenant.token(), idVariacao, idCliente, idFuncionario, idCarteira, "50.00", 1);
+        }
+
+        mvc.perform(post("/api/v1/vendas/cancelamento/" + idVenda)
+                        .header("Authorization", "Bearer " + tenant.token())
+                        .contentType(APPLICATION_JSON)
+                        .content("{\"motivo\":\"Cliente desistiu da compra no balcao\"}"))
+                .andExpect(status().isOk());
+
+        mvc.perform(post("/api/v1/vendas/devolucao").header("Authorization", "Bearer " + tenant.token())
+                        .contentType(APPLICATION_JSON)
+                        .content("""
+                                {"numeroVenda":%d,"itens":[{"idVariacao":%d,"qtd":1}]}
+                                """.formatted(idVenda, idVariacao)))
+                .andExpect(status().isConflict());
+
+        // ⚠️ Conferir o BANCO: nenhum vale pode ter nascido. Um teste que só valida 409 passaria
+        // se a recusa viesse depois da gravação.
+        try (Connection c = abrirConexao(idTenant)) {
+            assertThat(contarLinhas(c, "SELECT count(*) FROM venda_devolucao WHERE id_venda_credito = ?", idVenda))
+                    .as("venda cancelada não pode gerar vale-mercadoria")
+                    .isZero();
+            // E o estoque continua o que o cancelamento deixou — sem crédito em dobro.
+            assertThat(buscarQtdEstoque(c, idVariacao)).isEqualByComparingTo("10.000");
+        }
+    }
 }

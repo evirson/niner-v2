@@ -1,5 +1,6 @@
 package com.vetor.niner.fiscal.conformidade;
 
+import com.vetor.niner.comum.seguranca.EmpresaDaSessao;
 import com.vetor.niner.identidade.permissao.Tela;
 
 import com.vetor.niner.fiscal.conformidade.ConformidadeFiscalDtos.CategoriaConformidade;
@@ -31,6 +32,7 @@ public class ConformidadeFiscalController {
 
     @GetMapping("/{idEmpresa}")
     public PainelConformidadeResponse painel(@AuthenticationPrincipal Jwt jwt, @PathVariable long idEmpresa) {
+        EmpresaDaSessao.exigirAcesso(jwt, idEmpresa);
         return service.painel(jwt, idEmpresa);
     }
 
@@ -43,6 +45,7 @@ public class ConformidadeFiscalController {
                                       @PathVariable String categoria,
                                       @RequestParam(required = false) Integer pagina,
                                       @RequestParam(required = false) Integer limite) {
+        EmpresaDaSessao.exigirAcesso(jwt, idEmpresa);
         return service.drillDown(jwt, idEmpresa, categoriaDaUrl(categoria), pagina, limite);
     }
 

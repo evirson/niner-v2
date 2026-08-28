@@ -859,4 +859,67 @@ class VendaFiscalEmissaoTest {
 
         Mockito.verifyNoInteractions(transporte);
     }
+    /**
+     * ⭐ <b>Duplo clique não emite a segunda nota.</b> Nada impedia isso até a V082: o índice de
+     * {@code id_venda} era ÍNDICE, não UNIQUE, e cada chamada sorteava {@code cNF} novo e reservava
+     * número novo — a segunda nota passava limpa por toda restrição existente.
+     *
+     * <p>⚠️ <b>Não precisa de má-fé:</b> duplo clique no PDV, retry de rede do front ou uma
+     * reimpressão produzem a mesma sequência. Duas NFC-e autorizadas para uma venda são receita e
+     * ICMS declarados em dobro, e só se desfazem cancelando na SEFAZ dentro de 30 minutos.
+     *
+     * <p>Decisão do dono do produto (2026-08-27): <b>recusar nomeando a nota que já existe</b>, em
+     * vez de devolver a nota anterior em silêncio.
+     */
+    @Test
+    void segundaEmissaoDaMesmaVendaEhRecusadaSemQueimarNumero() throws Exception {
+        String token = assinarNovoTenant("duplo-clique");
+        long idTenant = idTenantDo(token);
+        long idEmpresa = idEmpresaDo(token);
+        String cnpj = "11222333000181";
+
+        completarDadosDaEmpresa(idTenant, idEmpresa, cnpj);
+        enviarCertificado(token, idEmpresa, cnpj);
+        ligarFiscal(token, idEmpresa);
+        long idPerfil = criarPerfilFiscalCsosn102(idTenant);
+        long idVariacao = criarProdutoComPerfil(token, idTenant, "PRODUTO DUPLO CLIQUE", idPerfil, "30.00");
+        long idCliente = criarClienteAnonimo(token, "Cliente Balcao");
+        long idFuncionario = criarFuncionario(token, "Vendedor Fiscal");
+        long idCarteira = carteiraDinheiroComTpag(token, idTenant);
+        abrirCaixa(token, idCarteira);
+        long idVenda = efetivarVenda(token, idVariacao, idCliente, idFuncionario, idCarteira, "30.00");
+
+        Mockito.when(transporte.enviar(any(), any(), any(), any(), any(), any()))
+                .thenAnswer(inv -> autorizada(extrairChaveDoEnvi(inv.getArgument(2))));
+
+        mvc.perform(post("/api/v1/pdv/vendas/" + idVenda + "/nfce").header("Authorization", "Bearer " + token)
+                        .contentType(APPLICATION_JSON).content("{\"incluirCpf\":false}"))
+                .andExpect(status().isOk());
+
+        int proximoAntes = proximoNumero(idTenant, idEmpresa);
+
+        mvc.perform(post("/api/v1/pdv/vendas/" + idVenda + "/nfce").header("Authorization", "Bearer " + token)
+                        .contentType(APPLICATION_JSON).content("{\"incluirCpf\":false}"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.detail").value(org.hamcrest.Matchers.containsString("já tem a NFC-e")));
+
+        // ⚠️ Conferir o BANCO, não só o status: um teste que valida 409 passaria mesmo se a recusa
+        // viesse do índice único DEPOIS de reservar número — e número queimado vira buraco na
+        // numeração, que vira inutilização formal perante a SEFAZ.
+        assertThat(proximoNumero(idTenant, idEmpresa))
+                .as("a recusa não pode consumir número da sequência")
+                .isEqualTo(proximoAntes);
+
+        long notas = jdbc.sql("SELECT count(*) FROM documento_fiscal WHERE id_tenant = ? AND id_venda = ?")
+                .params(idTenant, idVenda).query(Long.class).single();
+        assertThat(notas).as("uma venda, uma nota").isEqualTo(1L);
+    }
+
+    private int proximoNumero(long idTenant, long idEmpresa) {
+        return jdbc.sql("""
+                        SELECT proximo_numero FROM fiscal_numeracao
+                         WHERE id_tenant = ? AND id_empresa = ? AND modelo = 65
+                        """)
+                .params(idTenant, idEmpresa).query(Integer.class).single();
+    }
 }

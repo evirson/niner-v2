@@ -34,6 +34,33 @@ import java.util.Map;
 @Repository
 public class DocumentoFiscalRepositorio {
 
+    /**
+     * Número da nota <b>viva</b> daquela venda, se existir — a que impede uma segunda emissão
+     * (V082).
+     *
+     * <p>⚠️ Só as situações vivas contam. Rejeitada, denegada, não emitida e cancelada precisam
+     * permitir nova tentativa: nas três primeiras a nota nunca existiu, e na quarta a operação foi
+     * desfeita perante a SEFAZ.
+     *
+     * <p>⚠️ Este método mora <b>aqui</b>, e não no {@code VendaFiscalService} que o consome, por um
+     * motivo específico: chamado de dentro do próprio bean, o {@code @Transactional} não passaria
+     * pelo proxy do Spring, a consulta rodaria sem transação, {@code plataforma.tenant_atual()}
+     * viria NULL e o SELECT devolveria <b>vazio em silêncio</b> — ou seja, a trava responderia
+     * "pode emitir" sempre. É a armadilha já documentada no projeto, e num guarda ela é invisível.
+     */
+    @Transactional(readOnly = true)
+    public String numeroDaNotaVivaDaVenda(long idEmpresa, long idVenda, int modelo) {
+        return jdbc.sql("""
+                        SELECT numero::text FROM documento_fiscal
+                         WHERE id_tenant = plataforma.tenant_atual() AND id_empresa = ?
+                           AND id_venda = ? AND modelo = ?
+                           AND situacao IN ('AUTORIZADO', 'CONTINGENCIA', 'TRANSMITINDO', 'ASSINADO')
+                         LIMIT 1
+                        """)
+                .params(idEmpresa, idVenda, modelo)
+                .query(String.class).optional().orElse(null);
+    }
+
     /** ⚠️ NÃO usar para gravar documento de VENDA: desde 2026-08-24 o modelo vem do pedido
      *  ({@code pedido.modelo()}), porque venda a contribuinte de ICMS sai em NF-e 55. Gravar 65
      *  fixo aqui fazia a nota nascer 55 no XML e 65 no banco — divergência que só um teste

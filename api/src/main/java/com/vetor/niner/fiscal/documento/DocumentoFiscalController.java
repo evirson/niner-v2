@@ -1,5 +1,6 @@
 package com.vetor.niner.fiscal.documento;
 
+import com.vetor.niner.comum.seguranca.EmpresaDaSessao;
 import com.vetor.niner.identidade.permissao.Tela;
 
 import com.vetor.niner.fiscal.documento.DocumentoFiscalListaDtos.ConsultaSefazResponse;
@@ -44,6 +45,7 @@ public class DocumentoFiscalController {
             @RequestParam(required = false) String situacao,
             @RequestParam(required = false) Integer pagina,
             @RequestParam(required = false) Integer limite) {
+        EmpresaDaSessao.exigirAcesso(jwt, idEmpresa);
         return service.listar(jwt, idEmpresa, dataInicial, dataFinal, modelo, situacao, pagina, limite);
     }
 

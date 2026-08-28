@@ -434,4 +434,70 @@ class FiscalInutilizacaoTest {
 
         Mockito.verifyNoInteractions(transporte);
     }
+    /**
+     * ⭐ <b>Nota em contingência não é buraco</b> — nem para a tela sugerir, nem para o POST aceitar.
+     *
+     * <p>O cenário real: a SEFAZ cai, a loja emite em contingência (cupom na mão do consumidor, XML
+     * assinado, esperando o dreno de 24 h). Até 2026-08-27, a tela de Inutilização <b>oferecia
+     * esses números como buraco</b> e o servidor aceitava. A SEFAZ homologa a inutilização — e
+     * <b>inutilização homologada não se desfaz</b>. Quando o dreno transmitisse, cada nota voltaria
+     * recusada: consumidores com cupom e sem documento fiscal.
+     *
+     * <p>⚠️ Os guardas de <b>faixa</b> (número final ≥ próximo, sobreposição, justificativa) estavam
+     * todos corretos e não pegavam nada: o furo era a <b>lista de situações</b>, uma camada abaixo.
+     */
+    @Test
+    void naoDeixaInutilizarNumeroDeNotaEmContingencia() throws Exception {
+        String token = assinarNovoTenant("contingencia-buraco");
+        long idTenant = idTenantDo(token);
+        long idEmpresa = idEmpresaDo(token);
+        completarDadosDaEmpresa(idTenant, idEmpresa, "55666777000165");
+        enviarCertificado(token, idEmpresa, "55666777000165");
+        ligarFiscal(token, idEmpresa);
+
+        // Uma nota em contingência ocupando o número 1: XML assinado, aguardando o dreno.
+        jdbc.sql("""
+                        INSERT INTO documento_fiscal (id_tenant, id_empresa, modelo, serie, numero,
+                                                       situacao, tipo_operacao, tipo_emissao, ambiente,
+                                                       chave_acesso, valor_total)
+                        VALUES (?, ?, 65, 1, 1, 'CONTINGENCIA', 'VENDA_CONSUMIDOR', 9, 'HOMOLOGACAO',
+                                '41260111222333000181650010000000011000000017', 30.00)
+                        """)
+                .params(idTenant, idEmpresa).update();
+        // A numeração precisa ter passado do 1, senão o guarda de "número ainda não alocado" é que
+        // barraria — e o teste passaria pelo motivo errado.
+        jdbc.sql("""
+                        INSERT INTO fiscal_numeracao (id_tenant, id_empresa, modelo, serie, proximo_numero)
+                        VALUES (?, ?, 65, 1, 5)
+                        ON CONFLICT (id_tenant, id_empresa, modelo, serie)
+                        DO UPDATE SET proximo_numero = 5
+                        """)
+                .params(idTenant, idEmpresa).update();
+
+        // A tela não pode nem oferecer.
+        String buracos = mvc.perform(get("/api/v1/fiscal/inutilizacoes/buracos")
+                        .param("idEmpresa", String.valueOf(idEmpresa)).param("modelo", "65").param("serie", "1")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        // ⚠️ Asserção sobre a FAIXA, não sobre o texto do JSON: o endpoint devolve
+        // {numeroInicial, numeroFinal}, então procurar "1" no corpo casaria com qualquer coisa.
+        java.util.List<java.util.Map<String, Object>> faixas =
+                com.jayway.jsonpath.JsonPath.read(buracos, "$");
+        org.assertj.core.api.Assertions.assertThat(faixas)
+                .as("o número da nota em contingência não pode ser oferecido como buraco: " + buracos)
+                .noneMatch(f -> ((Number) f.get("numeroInicial")).intValue() <= 1
+                        && ((Number) f.get("numeroFinal")).intValue() >= 1);
+
+        // E o POST recusa, mesmo que alguém chame a API direto.
+        mvc.perform(post("/api/v1/fiscal/inutilizacoes").header("Authorization", "Bearer " + token)
+                        .contentType(APPLICATION_JSON)
+                        .content("""
+                                {"idEmpresa":%d,"modelo":65,"serie":1,"numeroInicial":1,"numeroFinal":1,
+                                 "justificativa":"Tentativa indevida sobre nota em contingencia"}
+                                """.formatted(idEmpresa)))
+                .andExpect(status().isConflict());
+
+        Mockito.verifyNoInteractions(transporte);
+    }
 }

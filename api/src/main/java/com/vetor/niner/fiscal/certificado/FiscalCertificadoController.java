@@ -1,5 +1,6 @@
 package com.vetor.niner.fiscal.certificado;
 
+import com.vetor.niner.comum.seguranca.EmpresaDaSessao;
 import com.vetor.niner.identidade.permissao.Tela;
 
 import com.vetor.niner.fiscal.certificado.FiscalCertificadoDtos.FiscalCertificadoResponse;
@@ -32,6 +33,7 @@ public class FiscalCertificadoController {
     @GetMapping
     public List<FiscalCertificadoResponse> listar(@AuthenticationPrincipal Jwt jwt,
                                                    @RequestParam long idEmpresa) {
+        EmpresaDaSessao.exigirAcesso(jwt, idEmpresa);
         return service.listar(jwt, idEmpresa);
     }
 
@@ -41,6 +43,7 @@ public class FiscalCertificadoController {
                                             @RequestParam long idEmpresa,
                                             @RequestParam("arquivo") MultipartFile arquivo,
                                             @RequestParam String senha) {
+        EmpresaDaSessao.exigirAcesso(jwt, idEmpresa);
         return service.enviar(jwt, idEmpresa, arquivo, senha);
     }
 

@@ -1,5 +1,6 @@
 package com.vetor.niner.fiscal.documento;
 
+import com.vetor.niner.comum.seguranca.EmpresaDaSessao;
 import com.vetor.niner.identidade.permissao.Tela;
 
 import com.vetor.niner.fiscal.documento.FiscalInutilizacaoDtos.FaixaBuracoResponse;
@@ -33,12 +34,14 @@ public class FiscalInutilizacaoController {
 
     @GetMapping
     public List<InutilizacaoItemResponse> listar(@AuthenticationPrincipal Jwt jwt, @RequestParam long idEmpresa) {
+        EmpresaDaSessao.exigirAcesso(jwt, idEmpresa);
         return service.listar(jwt, idEmpresa).stream().map(FiscalInutilizacaoController::mapear).toList();
     }
 
     @GetMapping("/buracos")
     public List<FaixaBuracoResponse> buracos(@AuthenticationPrincipal Jwt jwt, @RequestParam long idEmpresa,
                                              @RequestParam int modelo, @RequestParam int serie) {
+        EmpresaDaSessao.exigirAcesso(jwt, idEmpresa);
         return service.detectarBuracos(jwt, idEmpresa, modelo, serie).stream()
                 .map(f -> new FaixaBuracoResponse(f.numeroInicial(), f.numeroFinal()))
                 .toList();

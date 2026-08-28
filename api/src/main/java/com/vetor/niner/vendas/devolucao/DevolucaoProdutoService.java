@@ -1,5 +1,6 @@
 package com.vetor.niner.vendas.devolucao;
 
+import com.vetor.niner.comum.web.ConflitoDadosException;
 import com.vetor.niner.configuracao.geral.ConfiguracaoGeralService;
 import com.vetor.niner.vendas.devolucao.DevolucaoProdutoDtos.DevolucaoEfetivadaResponse;
 import com.vetor.niner.vendas.devolucao.DevolucaoProdutoDtos.EfetivarDevolucaoRequest;
@@ -89,6 +90,7 @@ public class DevolucaoProdutoService {
         List<ItemVendaOrigemResponse> linhasDaVenda = null;
         Map<Long, PrecoOriginal> precosOriginais = Map.of();
         if (req.numeroVenda() != null) {
+            exigirVendaNaoCancelada(req.numeroVenda());
             FuncionarioVenda fv = buscarFuncionarioDaVenda(req.numeroVenda());
             idFuncionario = fv.idFuncionario();
             nomeFuncionario = fv.nomeFuncionario();
@@ -183,6 +185,33 @@ public class DevolucaoProdutoService {
      *  contar contra o limite). Base tanto pra alimentar a tela (via {@link #buscarVendedorDaVenda})
      *  quanto pra validar de verdade em {@link #efetivar}. Venda inexistente ou sem itens de
      *  venda devolve lista vazia (não lança erro aqui — quem chama decide o que fazer). */
+    /**
+     * ⛔ <b>Venda cancelada não é origem de devolução</b> (auditoria de segurança, 2026-08-27).
+     *
+     * <p>O teto de "não devolver mais do que foi vendido" existia e funcionava — mas ele mede
+     * contra os <b>itens</b> da venda, e cancelar não apaga esses itens (o cancelamento cria um
+     * movimento próprio, do tipo {@code CANCELAMENTO}). Resultado: vender uma peça de R$ 500,
+     * cancelar a venda (o estoque volta e o dinheiro sai do caixa) e em seguida "devolver" a mesma
+     * venda gerava um <b>vale-mercadoria de R$ 500</b> por mercadoria que já tinha voltado ao
+     * estoque e já tinha sido reembolsada. A loja paga duas vezes pela mesma peça.
+     *
+     * <p>⚠️ Só vale quando há venda de origem: a devolução <b>sem</b> venda continua permitida (é o
+     * caso do cliente que perdeu o comprovante), e é justamente por isso que a checagem mora aqui e
+     * não numa validação de request.
+     */
+    private void exigirVendaNaoCancelada(long idVenda) {
+        boolean cancelada = Boolean.TRUE.equals(jdbc.sql("""
+                        SELECT cancelada FROM venda
+                         WHERE id_tenant = plataforma.tenant_atual() AND id_venda = ?
+                        """)
+                .param(idVenda).query(Boolean.class).optional().orElse(false));
+        if (cancelada) {
+            throw new ConflitoDadosException(
+                    "A venda nº " + idVenda + " foi cancelada — o valor já foi devolvido ao cliente "
+                            + "e a mercadoria já voltou ao estoque. Não há o que devolver.");
+        }
+    }
+
     private List<ItemVendaOrigemResponse> buscarItensDisponiveisParaDevolucao(long idVenda) {
         record ItemVendido(long idVariacao, String sku, String descricaoProduto, String variacaoCor,
                             String variacaoTamanho, BigDecimal precoVenda, BigDecimal qtdVendida) {

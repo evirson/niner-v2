@@ -1,5 +1,6 @@
 package com.vetor.niner.fiscal.exportacao;
 
+import com.vetor.niner.comum.seguranca.EmpresaDaSessao;
 import com.vetor.niner.identidade.permissao.Tela;
 
 import com.vetor.niner.fiscal.exportacao.ExportacaoXmlLoteDtos.ResumoExportacaoXml;
@@ -44,6 +45,7 @@ public class ExportacaoXmlLoteController {
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dataInicial,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dataFinal,
             @RequestParam(required = false) Integer modelo) {
+        EmpresaDaSessao.exigirAcesso(jwt, idEmpresa);
         return service.resumir(jwt, idEmpresa, dataInicial, dataFinal, modelo);
     }
 
@@ -63,6 +65,7 @@ public class ExportacaoXmlLoteController {
             // congelou — sem ele, uma nota emitida durante o download deslocaria a paginação.
             @RequestParam(required = false, defaultValue = "1") int parte,
             @RequestParam(required = false) Long ateIdDocumento) {
+        EmpresaDaSessao.exigirAcesso(jwt, idEmpresa);
         PacoteZip pacote = service.exportar(jwt, idEmpresa, dataInicial, dataFinal, modelo, parte, ateIdDocumento);
         return ResponseEntity.ok()
                 .contentType(MediaType.parseMediaType("application/zip"))
