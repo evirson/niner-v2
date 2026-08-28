@@ -46,6 +46,10 @@ Todas 🔴 até ele decidir. A coluna "Recomendação" é minha, com o porquê n
 | **DS9** | NFS-e mora em `documento_fiscal`? | ⛔ **Não.** Tabelas próprias (`nfse_*`). `documento_fiscal` é NF-e/NFC-e da carcaça até o osso | §5.1 |
 | **DS10** | O v1 pode sair sem NFS-e? | ⚠️ **Meio-termo, decidido por ele em 2026-08-28:** o **produto** tem de oferecer a emissão (S5–S7 no escopo), mas **emitir é opção do lojista** — quem não emite opera com a papeleta, e isso é caminho permanente, não ponte. Mesmo desenho do F12 no fiscal. Ver §0.1 | §5.9 / §0.1 |
 | **DS11** | Serviço conta na cota do plano? | ✅ **Conta a VENDA, como hoje** — não o item, não a nota. Nenhuma dimensão nova (ADR-015 / P6) | §7.6 |
+| **DS17** | Reserva de OS parada expira? | ⛔ **Não** — decidido por ele em 2026-08-28: quem resolve é **cancelar a OS**, e o cancelamento já libera a reserva. Sem worker, sem prazo a calibrar. ⚠️ Dívida aceita: OS que ninguém cancela segura a peça para sempre | §4.3 |
+| **DS15** | Peça da OS reserva estoque? | ✅ **SIM** — decidido por ele em 2026-08-28, **contra** a minha recomendação e com razão: na oficina a peça é separada fisicamente para aquele carro. Estreia de `produto_estoque.reservado`, que existe desde julho sem produtor. ⚠️ Reserva **avisa**, não bloqueia venda | §4.3 |
+| **DS16** | Preço da OS é congelado? | ✅ **SIM**, como no orçamento — e com a consequência: chave de linha é **(item, preço)** | §4.3 |
+| **DS14** | Como a OS chega ao PDV | ✅ **A OS nasce com serviço + peças e o PDV puxa tudo**, podendo acrescentar mais dos dois. Decidido por ele em 2026-08-28 — fecha a dúvida do serviço avulso: acrescentar no PDV **é** a venda avulsa | §4.3 |
 | **DS13** | Quando a NFS-e é emitida | ✅ **Depois da papeleta, por decisão do usuário** — reusa `cfg_emite_fiscal_apos_venda`, o mesmo parâmetro da NFC-e. Decidido por ele em 2026-08-28 | §0.1 |
 | **DS12** | Custo do serviço | ✅ **Campo do cadastro, preenchido pelo lojista**, default 0 — mas com **aviso na Lucratividade** quando zerado, senão serviço vira margem 100% | §7.5 |
 
@@ -528,7 +532,14 @@ mesmo tenant **e ativo**, com o mesmo `SELECT` que `PdvVendaService` já faz na 
 
 ### 4.2 A Ordem de Serviço — o que ela é, e o que ela **não** é
 
-⭐ **Ela não é uma tela nova do zero: é o Orçamento com estado de execução.** O Orçamento (V058) já
+⛔ **Ordem de Serviço e Orçamento são coisas DIFERENTES** — reforço explícito dele em 2026-08-28,
+e o parágrafo abaixo já foi reescrito por causa disso. O que a OS reaproveita do Orçamento é a
+**forma da tela e o mecanismo de conversão em venda**, não a entidade: tabela própria, numeração
+própria, estados próprios, telas próprias. Fundir as duas numa tabela com uma coluna `tipo` é a
+alternativa **(i)**, rejeitada logo abaixo.
+
+⭐ **Dito isso, ela não é uma tela do zero: o Orçamento já resolveu quase toda a mecânica.** O
+Orçamento (V058) já
 tem cliente, funcionário, itens com preço congelado, validade, cinco estados, conversão em venda
 pelo F5 do PDV e o `CHECK` que amarra situação × `id_venda`. Falta-lhe exatamente três coisas para
 virar OS:
@@ -567,6 +578,126 @@ de crédito do crediário, o vale-mercadoria, a cota do plano, a papeleta e a em
 segunda porta de faturamento teria de reimplementar as nove — e a memória
 `feedback_teto_com_porta_ao_lado` é exatamente sobre isso: *"o limite existe num caminho e o caminho
 vizinho não passa por ele"*.
+
+
+### ✅ DS14 — a OS nasce com serviço **e** peças; o PDV puxa tudo e ainda acrescenta (2026-08-28)
+
+Desenho definido por ele, com estas palavras:
+
+> *"quando abrir uma OS, já vai o serviço e os produtos deste serviço também, aí puxa tudo no PDV,
+> e lá no PDV pode incluir mais serviços e mais produtos"*
+
+⭐ **Isto fecha a pergunta que a §4.3 tinha deixado em aberto** (*"o PDV pode vender serviço avulso,
+sem OS?"*): sim, e não por exceção — *"no PDV pode incluir mais serviços"* **é** a venda avulsa.
+Não existe trava a construir, e o caminho já entregue no S1 continua valendo.
+
+⭐ **E não é desenho novo: é o do Orçamento, que já funciona.** A regra de item extra do orçamento
+(`docs/telas/orcamento.md`) diz que a venda pode levar produto que não estava no documento — venda
+comum, preço de cadastro, sem limite — e que isso **não** o torna parcial. A OS herda isso inteiro.
+
+| | Orçamento (V058) | Ordem de Serviço |
+|---|---|---|
+| Conteúdo | mercadoria | **serviço + peças, juntos** |
+| Mutável? | ⛔ **não** (corrige-se cancelando) | ✅ **sim, até faturar** — o mecânico abre o motor e acha mais serviço |
+| Vira venda | F5 do PDV | **o mesmo F5** |
+| Item extra no PDV | permitido, não torna parcial | idem |
+
+⚠️ **O que muda em relação ao S1 entregue:** nada. O PDV já aceita serviço como item; a OS entra
+como origem alternativa, não como substituta.
+
+#### 🔴 Duas perguntas que este desenho abre, e que são dele
+
+**P7 — O preço da OS é congelado, como no orçamento?**
+*Recomendação:* **sim.** O cliente aprovou R$ 800 de mão de obra e a loja honra, mesmo que a tabela
+suba antes de faturar — é o mesmo compromisso comercial que faz a validade do orçamento significar
+alguma coisa. ⚠️ E vem junto a lição que já custou caro aqui: com preço congelado, **duas linhas do
+mesmo item com preços diferentes na mesma venda deixam de ser exceção** (o que o cliente aprovou ×
+o que ele acrescentou na hora). A chave de linha é **(item, preço)**, nunca só o item — ver
+`feedback_duas_linhas_mesmo_produto_na_venda`, que nasceu de um vale-mercadoria calculado por média
+ponderada.
+
+**P8 — A peça lançada na OS reserva estoque?**
+*Recomendação:* **não no v1** — mesmo raciocínio da R8 do orçamento. ⚠️ **Mas esta é a recomendação
+de que eu menos tenho certeza, e a oficina é justamente onde ela dói:** a peça foi separada
+fisicamente para aquele carro, e sem reserva outro cliente leva a última do estoque. A tabela
+`produto_estoque.reservado` **já existe** (V019) e não tem nenhum produtor hoje — a reserva seria o
+primeiro. Decidir isso depois de rodar com oficina de verdade é mais barato que decidir agora.
+
+
+#### ✅ Respostas dele (2026-08-28)
+
+**P7 — preço congelado na OS: SIM.** Mesmo compromisso comercial do orçamento — o cliente aprovou
+R$ 800 de mão de obra e a loja honra, ainda que a tabela suba antes de faturar.
+⚠️ **A consequência que vem junto, e que já custou caro aqui:** com preço congelado, **duas linhas
+do mesmo item com preços diferentes na mesma venda deixam de ser exceção** (o que ele aprovou × o
+que acrescentou na hora). A chave de linha é **(item, preço)** — nunca só o item, e nunca
+`BigDecimal` como chave de mapa (`80.00` e `80.0` viram chaves distintas). Ver
+`feedback_duas_linhas_mesmo_produto_na_venda`, que nasceu de um vale-mercadoria calculado por
+média ponderada de um preço que a venda nunca praticou.
+
+**P8 — a peça da OS RESERVA estoque: SIM.** ⚠️ **Ele decidiu contra a minha recomendação, e com
+razão:** na oficina a peça é separada fisicamente para aquele carro; sem reserva, outro cliente
+leva a última e o serviço para. O meu argumento (*"reserva mal calibrada trava estoque"*) continua
+valendo — mas vira **requisito de projeto**, não motivo para não fazer.
+
+⭐ **Esta é a estreia de `produto_estoque.reservado`.** A coluna existe desde a V019 (julho) e
+**nunca teve um produtor** — foi desenhada para o pedido de marketplace (ADR-004), que saiu do
+produto em 28/08. A OS é o primeiro. O que o ADR-004 já tinha decidido e vale aqui:
+
+| Momento | O que acontece com a reserva |
+|---|---|
+| Peça lançada na OS | `reservado += qtd` — some do `disponivel` (coluna gerada, V019) |
+| OS faturada no PDV | a reserva vira **baixa**: `reservado -= qtd` e o ledger debita `qtd_estoque` |
+| OS cancelada | `reservado -= qtd`, e o saldo volta a aparecer |
+| Item removido/alterado na OS | reserva ajustada pelo **delta**, nunca recriada |
+
+⚠️ **A reserva NÃO bloqueia venda** — é o mesmo raciocínio do `cfg_permite_estoque_negativo`: o
+disponível cai, a informação aparece, mas travar o balcão por um número que talvez ninguém alimente
+não é o comportamento deste produto. O que ela faz é **avisar**.
+
+⚠️ E ela precisa do par que o ADR-004 já previa: **reserva sem prazo é peça travada para sempre.**
+Carro abandonado na oficina é caso real. Ver 🔴 P9.
+
+**⛔ E o reforço dele sobre vocabulário:** *"orçamento é uma coisa, ordem de serviço é outra coisa"*.
+Este documento vinha dizendo *"a OS é o Orçamento com estado"* como atalho de explicação — e o
+atalho é perigoso, porque sugere fundir as duas numa tabela com uma coluna `tipo`, que a §4.2 já
+tinha **rejeitado** (alternativa (i)). São **entidades separadas**: tabela própria, numeração
+própria, estados próprios, telas próprias. O que se reaproveita é o **mecanismo de conversão em
+venda** (o F5 do PDV) — não a entidade.
+
+**✅ P9 — RESPONDIDA (2026-08-28): a reserva não expira; quem resolve é o CANCELAMENTO da OS.**
+
+Palavras dele: *"se acontecer isso, alguém vai ter a possibilidade de cancelar a OS, aí com ela
+cancelada volta a peça pro estoque"*.
+
+⭐ **É mais simples que as três alternativas que eu tinha levantado, e não pede nada novo:** o
+cancelamento da OS já precisava liberar a reserva de qualquer forma (tabela acima). A decisão
+apenas **elimina o worker de expiração** — e com ele o prazo a calibrar, a tela de "reservas
+antigas" e a chance de um job liberar automaticamente a reserva de uma peça que está na bancada do
+mecânico.
+
+⭐ E é o mesmo gesto que o produto inteiro já usa: *corrige-se cancelando*. Venda, orçamento,
+devolução, entrada — todos assim. A OS não inventa um caminho próprio.
+
+⚠️ **A dívida, conhecida e aceita:** OS que ninguém cancela segura a peça **para sempre**. Não há
+alarme, não há relatório de reserva antiga, e o saldo disponível fica menor que o físico sem nada
+apontando a causa. Se isso aparecer como reclamação de oficina real, o remédio já está desenhado
+(uma tela listando OS paradas com reserva) — mas construir antes de doer seria adivinhar.
+
+<details><summary>As três alternativas que eu tinha levantado (registro)</summary>
+
+**🔴 P9 — o que acontece com a reserva de uma OS parada?**
+*Sem recomendação forte, e é decisão dele.* Carro que o cliente não busca há dois meses segura a
+peça no estoque; o ADR-004 resolveu isso com expiração automática por worker. Os caminhos:
+(a) **nunca expira** — o mais previsível, e o que trava peça para sempre;
+(b) **expira em N dias** parada num estado (ex.: aprovada e não iniciada), liberando a reserva com
+aviso na tela da OS;
+(c) **não expira, mas a tela mostra** as OS com reserva antiga, e quem libera é uma pessoa.
+⭐ Minha inclinação é **(c)**: o estoque é físico, e um worker liberando reserva de peça que está
+na bancada do mecânico cria um número tão errado quanto o outro. Mas isso é operação de oficina, e
+você conhece melhor do que eu.
+
+</details>
 
 ### 4.4 A venda mista, e os dois documentos
 
