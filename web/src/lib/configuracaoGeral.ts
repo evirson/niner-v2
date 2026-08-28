@@ -105,6 +105,16 @@ export function buscarUsaCorGrade(): Promise<UsaCorGrade> {
   return api<UsaCorGrade>('/api/v1/config-geral/usa-cor-grade')
 }
 
+export interface UsaServicos {
+  cfgUsaServicos: boolean
+}
+
+/** Aberto a qualquer papel — usado pelo cadastro de produto (seletor Mercadoria/Serviço) e pelo
+ *  PDV. Desligado por padrão: empresa de serviço é minoria da base (decisão de 2026-08-28). */
+export function buscarUsaServicos(): Promise<UsaServicos> {
+  return api<UsaServicos>('/api/v1/config-geral/usa-servicos')
+}
+
 export interface DescontoVenda {
   percentualDescontoVenda: number
 }

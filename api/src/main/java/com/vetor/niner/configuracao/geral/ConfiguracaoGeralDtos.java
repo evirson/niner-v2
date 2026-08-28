@@ -67,6 +67,11 @@ public final class ConfiguracaoGeralDtos {
 
     /** Só a flag de cor/grade, sem checagem de papel — usada por {@code catalogo.Produto} (o
      * campo Grade só aparece no formulário quando o tenant usa) e pela Emissão de Etiqueta. */
+    /** Só a flag do módulo de serviços — mesma razão do {@code UsaCorGradeResponse}: o cadastro de
+     *  produto precisa saber se o seletor Mercadoria/Serviço aparece, e isso não é de ADMIN. */
+    public record UsaServicosResponse(boolean cfgUsaServicos) {
+    }
+
     public record UsaCorGradeResponse(boolean cfgUsaCorGrade) {
     }
 

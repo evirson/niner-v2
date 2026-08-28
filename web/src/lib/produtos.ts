@@ -16,6 +16,8 @@ import { maiusculas } from './texto'
 
 export type StatusProduto = 'ATIVOS' | 'INATIVOS' | 'TODOS'
 
+export type TipoItem = 'MERCADORIA' | 'SERVICO'
+
 export interface CategoriaSelecionada {
   idCategoria: number
   nomeCategoria: string
@@ -42,6 +44,10 @@ export interface Produto {
   categorias: CategoriaSelecionada[]
   imagens: ImagemProduto[]
   idPerfilFiscal: number | null
+  /** MERCADORIA (padrão) ou SERVICO — V085. */
+  tipoItem: TipoItem
+  duracaoMinutos: number | null
+  percComissaoServico: number | null
   nomePerfilFiscal: string | null
   criadoEm: string
   atualizadoEm: string
@@ -69,6 +75,12 @@ export interface ProdutoFormState {
   /** Fiscal (2026-08-18, `docs/MODULOFISCAL.md` §6.2/DF3) — opcional aqui de propósito: quem
    * cobra o preenchimento antes de emitir é a tela de Conformidade Fiscal, não este cadastro. */
   idPerfilFiscal: number | null
+  /** ⚠️ Só escolhido na CRIAÇÃO: o tipo é imutável (trigger da V085) e a tela desabilita o
+   *  seletor ao editar — trocar deixaria estoque, relatórios e notas já emitidas
+   *  descrevendo o item como ele era. */
+  tipoItem: TipoItem
+  duracaoMinutos: string
+  percComissaoServico: string
 }
 
 export const PRODUTO_VAZIO: ProdutoFormState = {
@@ -89,6 +101,9 @@ export const PRODUTO_VAZIO: ProdutoFormState = {
   ativo: true,
   categorias: [],
   idPerfilFiscal: null,
+  tipoItem: 'MERCADORIA',
+  duracaoMinutos: '',
+  percComissaoServico: '',
 }
 
 /** "dd/mm/aaaa" (campo de texto, ver masks.ts#mascararData) -> ISO com hora, para a API. */
@@ -116,6 +131,9 @@ export function paraFormulario(p: Produto): ProdutoFormState {
     ativo: p.ativo,
     categorias: [...p.categorias].sort((a, b) => a.indice - b.indice),
     idPerfilFiscal: p.idPerfilFiscal,
+    tipoItem: p.tipoItem ?? 'MERCADORIA',
+    duracaoMinutos: p.duracaoMinutos == null ? '' : String(p.duracaoMinutos),
+    percComissaoServico: p.percComissaoServico == null ? '' : formatarPercentual(p.percComissaoServico),
   }
 }
 
@@ -139,6 +157,12 @@ export function paraRequisicao(f: ProdutoFormState) {
     ativo: f.ativo,
     categorias: f.categorias.map((c) => c.idCategoria),
     idPerfilFiscal: f.idPerfilFiscal,
+    tipoItem: f.tipoItem,
+    // Só fazem sentido em serviço; vazio vira null (zero é valor legítimo em percentual).
+    duracaoMinutos: f.tipoItem === 'SERVICO' && f.duracaoMinutos.trim() ? Number(f.duracaoMinutos) : null,
+    percComissaoServico: f.tipoItem === 'SERVICO' && f.percComissaoServico.trim()
+      ? desmascararPercentual(f.percComissaoServico)
+      : null,
   }
 }
 

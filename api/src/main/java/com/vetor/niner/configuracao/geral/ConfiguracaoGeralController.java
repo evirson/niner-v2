@@ -16,6 +16,7 @@ import com.vetor.niner.configuracao.geral.ConfiguracaoGeralDtos.PlanoContasCompr
 import com.vetor.niner.configuracao.geral.ConfiguracaoGeralDtos.RateiaFreteEntradaResponse;
 import com.vetor.niner.configuracao.geral.ConfiguracaoGeralDtos.ReajustaPrecoEntradaResponse;
 import com.vetor.niner.configuracao.geral.ConfiguracaoGeralDtos.UsaCorGradeResponse;
+import com.vetor.niner.configuracao.geral.ConfiguracaoGeralDtos.UsaServicosResponse;
 import jakarta.validation.Valid;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -63,7 +64,12 @@ public class ConfiguracaoGeralController {
         return new UsaCorGradeResponse(service.usaCorGrade());
     }
 
-    @Livre   // já era aberto a qualquer papel antes do RBAC
+    @Livre   // mesma razão do /usa-cor-grade: quem cadastra produto não é só o ADMIN
+    @GetMapping("/usa-servicos")
+    public UsaServicosResponse usaServicos() {
+        return new UsaServicosResponse(service.usaServicos());
+    }
+
     @GetMapping("/desconto-venda")
     public DescontoVendaResponse descontoVenda() {
         return new DescontoVendaResponse(service.percentualDescontoVenda());

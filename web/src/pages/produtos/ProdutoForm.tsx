@@ -23,7 +23,7 @@ import { ApiError } from '../../lib/api'
 import { listarCategoriasProduto } from '../../lib/categoriasProduto'
 import { enviarImagem, type ImagemProduto } from '../../lib/produtoImagens'
 import { buscarConfiguracaoTela, paraMapa, type ConfiguracaoCampo } from '../../lib/configuracaoTela'
-import { buscarUsaCorGrade } from '../../lib/configuracaoGeral'
+import { buscarUsaCorGrade, buscarUsaServicos } from '../../lib/configuracaoGeral'
 import { hojeISO } from '../../lib/datas'
 import { listarGrades } from '../../lib/grades'
 import { useEu } from '../../lib/eu'
@@ -56,6 +56,7 @@ import {
   paraFormulario,
   paraRequisicao,
   type ProdutoFormState,
+  type TipoItem,
 } from '../../lib/produtos'
 import { maiusculas } from '../../lib/texto'
 
@@ -211,6 +212,11 @@ export default function ProdutoForm({ somenteLeitura = false }: { somenteLeitura
   const { data: usaCorGrade } = useQuery({
     queryKey: ['config-geral', 'usa-cor-grade'],
     queryFn: buscarUsaCorGrade,
+  })
+
+  const { data: usaServicos } = useQuery({
+    queryKey: ['config-geral', 'usa-servicos'],
+    queryFn: buscarUsaServicos,
   })
 
   const { data: categorias } = useQuery({
@@ -392,7 +398,7 @@ export default function ProdutoForm({ somenteLeitura = false }: { somenteLeitura
       dataInicioOferta: ofertaErros.dataInicioOferta ?? validarCampo('dataInicioOferta', form, mapaConfig),
       dataFinalOferta: ofertaErros.dataFinalOferta ?? validarCampo('dataFinalOferta', form, mapaConfig),
       precoOferta: ofertaErros.precoOferta ?? validarCampo('precoOferta', form, mapaConfig),
-      idGrade: usaCorGrade?.cfgUsaCorGrade && !form.idGrade ? 'Grade é obrigatória.' : undefined,
+      idGrade: usaCorGrade?.cfgUsaCorGrade && form.tipoItem !== 'SERVICO' && !form.idGrade ? 'Grade é obrigatória.' : undefined,
     }
     setErros(novosErros)
     if (Object.values(novosErros).some(Boolean)) {
@@ -571,6 +577,63 @@ export default function ProdutoForm({ somenteLeitura = false }: { somenteLeitura
             />
           </div>
         </section>
+
+        {usaServicos?.cfgUsaServicos && (
+          <section className="section">
+            <p className="section-label">Tipo de Item</p>
+            <p className="muted" style={{ marginTop: -4 }}>
+              Serviço não tem estoque, não entra na nota fiscal de mercadoria e não sai em etiqueta.
+              {editando && ' O tipo não muda depois de cadastrado — se estiver errado, inative este cadastro e crie outro.'}
+            </p>
+
+            <div className="form-grid">
+              <div className="col-4">
+                <label htmlFor="tipoItem">O que é este item?</label>
+                <select
+                  id="tipoItem"
+                  value={form.tipoItem}
+                  /* ⚠️ Imutável depois de criado (trigger da V085): o histórico de estoque, os
+                     relatórios e as notas já emitidas descrevem o item como ele era. Desabilitar
+                     ao editar é melhor que deixar tentar e receber erro do banco. */
+                  disabled={editando || somenteLeitura}
+                  onChange={(e) => setForm((f) => ({ ...f, tipoItem: e.target.value as TipoItem }))}
+                >
+                  <option value="MERCADORIA">Mercadoria (tem estoque)</option>
+                  <option value="SERVICO">Serviço (mão de obra, sem estoque)</option>
+                </select>
+              </div>
+
+              {form.tipoItem === 'SERVICO' && (
+                <>
+                  <div className="col-4">
+                    <label htmlFor="duracaoMinutos">Duração (minutos)</label>
+                    <input
+                      id="duracaoMinutos"
+                      inputMode="numeric"
+                      value={form.duracaoMinutos}
+                      disabled={somenteLeitura}
+                      onChange={(e) => setForm((f) => ({ ...f, duracaoMinutos: somenteDigitos(e.target.value) }))}
+                    />
+                  </div>
+                  <div className="col-4">
+                    <label htmlFor="percComissaoServico">% Comissão do Serviço</label>
+                    <input
+                      id="percComissaoServico"
+                      inputMode="decimal"
+                      value={form.percComissaoServico}
+                      disabled={somenteLeitura}
+                      onChange={(e) => setForm((f) => ({ ...f, percComissaoServico: mascararPercentual(e.target.value) }))}
+                      onBlur={(e) => setForm((f) => ({ ...f, percComissaoServico: completarPercentual(e.target.value) }))}
+                    />
+                    <p className="muted" style={{ marginTop: 4 }}>
+                      Em branco, vale a comissão do funcionário.
+                    </p>
+                  </div>
+                </>
+              )}
+            </div>
+          </section>
+        )}
 
         <section className="section">
           <p className="section-label">Fiscal</p>
@@ -823,7 +886,12 @@ export default function ProdutoForm({ somenteLeitura = false }: { somenteLeitura
           </div>
         </section>
 
-        {(campoVisivel('pesoBruto', mapaConfig) || campoVisivel('pesoLiquido', mapaConfig)
+        {/* ⚠️ Serviço não tem peso nem grade — a seção inteira some. O back deixou de exigir a
+            grade (achado ao testar ao vivo em 2026-08-28), mas manter o campo na tela com o
+            asterisco de obrigatório pediria ao operador algo que o servidor não quer, e a
+            validação do front barraria antes de a requisição sair. */}
+        {form.tipoItem !== 'SERVICO'
+          && (campoVisivel('pesoBruto', mapaConfig) || campoVisivel('pesoLiquido', mapaConfig)
           || usaCorGrade?.cfgUsaCorGrade) && (
           <section className="section">
             <p className="section-label">Dimensões e Grade</p>
@@ -853,7 +921,7 @@ export default function ProdutoForm({ somenteLeitura = false }: { somenteLeitura
                             onBlur={() =>
                               setErros((atual) => ({
                                 ...atual,
-                                idGrade: usaCorGrade?.cfgUsaCorGrade && !form.idGrade ? 'Grade é obrigatória.' : undefined,
+                                idGrade: usaCorGrade?.cfgUsaCorGrade && form.tipoItem !== 'SERVICO' && !form.idGrade ? 'Grade é obrigatória.' : undefined,
                               }))
                             }
                           >
