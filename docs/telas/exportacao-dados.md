@@ -16,11 +16,18 @@ grupo do menu, **Configurações**, `ADMIN`-only. Bem mais simples que a importa
 sem validação, sem escolha prévia, sem dependência entre tabelas: um clique numa tabela já baixa
 o arquivo.
 
-Cobre **9 tabelas**: Empresas, Clientes, Fornecedores, Funcionários, Contas a Receber/Recebidas,
-Contas a Pagar/Pagas, Código de Barras, Plano de Contas e Estoque — deliberadamente mais ampla que
+Cobre **10 tabelas**: Empresas, Clientes, Fornecedores, Funcionários, Contas a Receber/Recebidas,
+Contas a Pagar/Pagas, Código de Barras, Plano de Contas, Estoque e **Ordens de Serviço** — deliberadamente mais ampla que
 a importação (que cobre 5: clientes, fornecedores, produtos, contas a receber e estoque), porque
 exportar não tem o mesmo risco de misturar dado ruim no
 tenant; qualquer tabela de leitura pode entrar.
+
+⭐ A 10ª entrou em 2026-08-29: a rotina exportava nove tabelas e **nenhuma de serviço**, então uma
+oficina que quisesse levar os próprios dados embora — que é a razão de a rotina existir — deixaria
+para trás o módulo inteiro em que trabalha. Sai **uma linha por ITEM**, não por cabeçalho: é o item
+que carrega o preço **congelado** na aprovação e **quem executou** cada serviço, que é a base da
+comissão; um CSV por cabeçalho esconderia as duas coisas. A tela não precisou de nada — ela já
+lista as tabelas que a API oferece.
 
 ## User stories
 
@@ -75,7 +82,7 @@ Sem etapas intermediárias — diferente da importação, não há nada a config
 
 ## Critérios de aceitação
 
-- Dado um `ADMIN` autenticado, quando exporta qualquer uma das 9 tabelas, então recebe um
+- Dado um `ADMIN` autenticado, quando exporta qualquer uma das 10 tabelas, então recebe um
   `.xlsx` com uma linha por registro do tenant, cabeçalho em português.
 - Dado um `OPERADOR`, quando tenta acessar `/api/v1/exportacao/**`, então recebe `403`.
 - Dado um tenant sem nenhum registro numa tabela, quando exporta, então a tela mostra "Nenhum
@@ -86,7 +93,7 @@ Sem etapas intermediárias — diferente da importação, não há nada a config
 ## Impacto no contrato de API
 
 ```
-GET /api/v1/exportacao/tabelas       lista as 9 tabelas (chave + título)
+GET /api/v1/exportacao/tabelas       lista as 10 tabelas (chave + título)
 GET /api/v1/exportacao/{tabela}      todos os registros do tenant, já formatados (colunas em
                                       português, datas dd/mm/aaaa, booleanos SIM/NAO)
 ```
@@ -139,5 +146,5 @@ Nenhuma bloqueante.
 
 ## Métrica de sucesso
 
-Exportar qualquer uma das 9 tabelas em menos de 5 segundos, sem precisar de nenhuma configuração
+Exportar qualquer uma das 10 tabelas em menos de 5 segundos, sem precisar de nenhuma configuração
 prévia.
