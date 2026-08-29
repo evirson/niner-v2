@@ -343,8 +343,6 @@ class OrdemServicoTest {
     // ---------------------------------------------------------------- a OS virando venda
 
     private void abrirCaixa() throws Exception {
-        String resp = mvc.perform(get("/api/v1/caixa/carteiras").header("Authorization", "Bearer " + token))
-                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
         mvc.perform(post("/api/v1/caixa/abrir").header("Authorization", "Bearer " + token)
                         .contentType(APPLICATION_JSON)
                         .content("{\"idCarteira\":%d,\"saldoInicial\":100.00}".formatted(idCarteiraDinheiro())))
@@ -513,6 +511,105 @@ class OrdemServicoTest {
                 .andExpect(status().isOk()).andExpect(jsonPath("$.itens.length()").value(1));
         mvc.perform(get("/api/v1/ordens-servico?busca=XYZ-0000").header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.itens.length()").value(0));
+    }
+
+    /**
+     * ⭐ A resposta traz cor e tamanho — e o par NEGATIVO é o que importa aqui.
+     *
+     * <p>Achado abrindo a tela em 2026-08-28: a linha nasce com a variação (vem da pesquisa de
+     * produto) e a <b>perdia ao recarregar</b>, porque a resposta não a trazia de volta. Numa OS
+     * com duas peças do mesmo produto em cores diferentes, as duas linhas ficariam idênticas.
+     *
+     * <p>O caso negativo prende a sentinela: produto sem grade tem {@code id_cor = 1} (PADRÃO) e
+     * precisa vir <b>nulo</b>, não a palavra "PADRÃO" impressa ao lado de todo item da oficina.
+     */
+    @Test
+    void aRespostaTrazCorETamanhoESentinelaVemNula() throws Exception {
+        prepararTenant("z2");
+        long idVariacaoComGrade;
+        // ⚠️ `cfg_cor`/`cfg_tamanho` têm PK de NEGÓCIO (id_tenant, id_cor) — sem sequência, o id
+        // vem do chamador. O 1 é a sentinela PADRÃO; qualquer outro serve.
+        long idCor = 100;
+        long idTamanho = 100;
+        try (Connection c = abrirConexao()) {
+            inserir(c, "INSERT INTO cfg_cor (id_tenant, id_cor, descricao) VALUES (?, " + idCor + ", 'FERRUGEM')");
+            inserir(c, "INSERT INTO cfg_tamanho (id_tenant, id_tamanho, descricao) VALUES (?, " + idTamanho + ", '35')");
+            long idProduto = criarProduto("PALHETA", "MERCADORIA", "30.00");
+            try (PreparedStatement ps = c.prepareStatement(
+                    "INSERT INTO produto_barra (id_tenant, id_produto, id_cor, id_tamanho, sku)"
+                            + " VALUES (?, ?, ?, ?, gerar_ean13_interno()) RETURNING id_variacao")) {
+                ps.setLong(1, idTenant);
+                ps.setLong(2, idProduto);
+                ps.setLong(3, idCor);
+                ps.setLong(4, idTamanho);
+                try (ResultSet rs = ps.executeQuery()) {
+                    rs.next();
+                    idVariacaoComGrade = rs.getLong(1);
+                }
+            }
+        }
+
+        String body = """
+                {"idCliente":%d,"idFuncionario":%d,"objetoServico":"ABC-1234",
+                 "itens":[{"idVariacao":%d,"qtdProduto":1},{"idVariacao":%d,"qtdProduto":1}]}
+                """.formatted(idCliente, idFuncionario, idVariacaoComGrade, idVariacaoServico);
+        String resp = mvc.perform(post("/api/v1/ordens-servico").header("Authorization", "Bearer " + token)
+                        .contentType(APPLICATION_JSON).content(body))
+                .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
+        long id = ((Number) JsonPath.read(resp, "$.idOrdemServico")).longValue();
+
+        mvc.perform(get("/api/v1/ordens-servico/" + id).header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                // a peça com grade traz os dois…
+                .andExpect(jsonPath("$.itens[0].variacaoCor").value("FERRUGEM"))
+                .andExpect(jsonPath("$.itens[0].variacaoTamanho").value("35"))
+                // …e o serviço, que não tem grade, traz NULO — nunca a sentinela PADRÃO.
+                .andExpect(jsonPath("$.itens[1].variacaoCor").doesNotExist())
+                .andExpect(jsonPath("$.itens[1].variacaoTamanho").doesNotExist());
+    }
+
+    private void inserir(Connection c, String sql) throws SQLException {
+        try (PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setLong(1, idTenant);
+            ps.executeUpdate();
+        }
+    }
+
+    /**
+     * ⛔ Abrir OS exige o módulo ligado — e a trava é do SERVIDOR, não do menu (P4).
+     *
+     * <p>⭐ E o par completo: com o módulo desligado depois, <b>alterar e cancelar continuam
+     * valendo</b>. Sem isso, quem desligasse o módulo com OS abertas trancaria as peças reservadas
+     * para sempre, sem caminho para devolvê-las ao estoque — uma trava que impede de sair da
+     * situação é pior que a situação.
+     */
+    @Test
+    void semOModuloNaoSeAbreOsMasSeCancelaAQueJaExiste() throws Exception {
+        prepararTenant("z3");
+        long id = criarOs("2");
+        assertThat(reservado(idVariacaoPeca)).isEqualByComparingTo("2.000");
+
+        desligarServicos();
+
+        mvc.perform(post("/api/v1/ordens-servico").header("Authorization", "Bearer " + token)
+                        .contentType(APPLICATION_JSON).content(corpoDaOs("1")))
+                .andExpect(status().isBadRequest());
+
+        // …mas a OS que já existe continua podendo ser desfeita, e a reserva volta.
+        mvc.perform(post("/api/v1/ordens-servico/" + id + "/cancelar")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(APPLICATION_JSON).content("{\"motivo\":\"CLIENTE DESISTIU\"}"))
+                .andExpect(status().isOk());
+        assertThat(reservado(idVariacaoPeca)).isEqualByComparingTo("0");
+    }
+
+    private void desligarServicos() throws Exception {
+        String atual = mvc.perform(get("/api/v1/config-geral").header("Authorization", "Bearer " + token))
+                .andReturn().getResponse().getContentAsString();
+        mvc.perform(put("/api/v1/config-geral").header("Authorization", "Bearer " + token)
+                        .contentType(APPLICATION_JSON)
+                        .content(atual.replaceFirst("\"cfgUsaServicos\":\s*true", "\"cfgUsaServicos\":false")))
+                .andExpect(status().isOk());
     }
 
     @Test

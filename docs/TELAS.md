@@ -1,6 +1,8 @@
 # Telas do Nainer — inventário completo
 
-> Gerado a partir de `web/src/lib/menu.ts` + `web/src/App.tsx` em 2026-08-25; as telas de entrada foram acrescentadas em 2026-08-27 (elas não estão no menu, por serem públicas).
+> Gerado a partir de `web/src/lib/menu.ts` + `web/src/App.tsx` em 2026-08-25; as telas de entrada foram acrescentadas em 2026-08-27 (elas não estão no menu, por serem públicas) e Ordens de Serviço em 2026-08-28.
+>
+> ⚠️ **Ordens de Serviço só aparece no menu com o módulo de serviços ligado** (`cfg_geral.cfg_usa_servicos`, desligado por padrão) — ela está no código e pode não estar na tela do lojista.
 >
 > ⚠️ **É retrato do CÓDIGO, não da intenção.** Se divergir de outra documentação, o código
 > está certo e a outra doc envelheceu.
@@ -25,6 +27,7 @@
 |---|---|---|
 | PDV - Vendas | `/pdv` | `docs/telas/pdv.md` · `papeleta-venda.md` |
 | Orçamentos | `/orcamentos` | `docs/telas/orcamento.md` |
+| Ordens de Serviço | `/ordens-servico` | `docs/telas/ordem-servico.md` |
 | Pesquisa de Vendas | `/pesquisa-vendas` | `docs/telas/pesquisa-vendas.md` |
 | Recebimento de Crediário | `/recebimento-crediario` | `docs/telas/recebimento-crediario.md` |
 | Reimpressão de Recebimento de Crediário | `/reimpressao-recebimento-crediario` | `docs/telas/comprovante-recebimento-crediario.md` |

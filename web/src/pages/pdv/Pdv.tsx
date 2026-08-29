@@ -3,11 +3,12 @@ import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import AberturaCaixaModal from '../../components/AberturaCaixaModal'
 import AjudaDaTela from '../../components/AjudaDaTela'
+import CabecalhoModal from '../../components/CabecalhoModal'
 import { BotaoFecharTela } from '../../components/BotaoFecharTela'
 import { IconeAjustar, IconeConfirmar, IconeLimpar, IconeLupa, IconePdv } from '../../components/Icones'
 import { ApiError } from '../../lib/api'
 import { buscarStatusCaixa } from '../../lib/caixa'
-import { buscarPermiteQtdDecimal } from '../../lib/configuracaoGeral'
+import { buscarPermiteQtdDecimal, buscarUsaServicos } from '../../lib/configuracaoGeral'
 import { formatarMoeda, formatarQuantidade } from '../../lib/masks'
 import {
   buscarProdutoPorCodigo,
@@ -17,6 +18,7 @@ import {
   type VendaEfetivada,
 } from '../../lib/pdv'
 import type { Orcamento } from '../../lib/orcamento'
+import type { OrdemServico } from '../../lib/ordensServico'
 import { useRotinaCritica } from '../../lib/rotinaCritica'
 import { maiusculas } from '../../lib/texto'
 import AlteraQuantidadeModal from './AlteraQuantidadeModal'
@@ -24,6 +26,7 @@ import ComprovantePapeletaModal from './ComprovantePapeletaModal'
 import FormaPagamentoModal from './FormaPagamentoModal'
 import PesquisaProdutoModal from './PesquisaProdutoModal'
 import PuxarOrcamentoModal from './PuxarOrcamentoModal'
+import PuxarOrdemServicoModal from './PuxarOrdemServicoModal'
 
 function moeda(v: number): string {
   return `R$ ${formatarMoeda(v)}`
@@ -50,6 +53,11 @@ export default function Pdv() {
   const queryClient = useQueryClient()
   const { setEmAndamento } = useRotinaCritica()
   const { data: statusCaixa } = useQuery({ queryKey: ['caixa-status'], queryFn: buscarStatusCaixa })
+  /** Módulo de serviços (S1) — decide se o F5 oferece Ordem de Serviço além do orçamento. */
+  const { data: usaServicos } = useQuery({
+    queryKey: ['config-geral', 'usa-servicos'],
+    queryFn: buscarUsaServicos,
+  })
   const caixaFechado = statusCaixa !== undefined && !statusCaixa.aberto
   const [ledger, setLedger] = useState<ItemLedger[]>([])
   /** Linha destacada no ledger — id da LINHA, não SKU (2026-08-21): o mesmo produto pode ocupar
@@ -71,6 +79,17 @@ export default function Pdv() {
    */
   const [orcamentoPuxado, setOrcamentoPuxado] = useState<Orcamento | null>(null)
   const [mostrarPuxarOrcamento, setMostrarPuxarOrcamento] = useState(false)
+  /**
+   * Ordem de Serviço puxada para esta venda (V087, S4).
+   *
+   * <p>⛔ Estado **separado** do orçamento, e nunca os dois ao mesmo tempo — o servidor recusa a
+   * venda que chega com ambos. São documentos diferentes: o orçamento é proposta, a OS é trabalho
+   * feito. Limpar a venda limpa isto também, pela mesma razão do orçamento.
+   */
+  const [osPuxada, setOsPuxada] = useState<OrdemServico | null>(null)
+  const [mostrarPuxarOs, setMostrarPuxarOs] = useState(false)
+  /** Só existe com o módulo de serviços ligado: é o passo que pergunta "orçamento ou OS?". */
+  const [mostrarEscolhaDocumento, setMostrarEscolhaDocumento] = useState(false)
   /** Gerador de id de linha do ledger. Só precisa ser único DENTRO da venda em andamento — o
    *  ledger é estado de tela e morre no F4/na efetivação. */
   const proximaLinhaRef = useRef(1)
@@ -82,7 +101,7 @@ export default function Pdv() {
 
   const algumModalAberto =
     mostrarPesquisa || mostrarAlteraQtd || mostrarFormaPagamento || mostrarPuxarOrcamento ||
-    idVendaPapeleta !== null || caixaFechado
+    mostrarPuxarOs || mostrarEscolhaDocumento || idVendaPapeleta !== null || caixaFechado
 
   useEffect(() => {
     campoBarrasRef.current?.focus()
@@ -235,7 +254,10 @@ export default function Pdv() {
     // `idOrcamento` assim mesmo faz o servidor recusar (mesma armadilha do F4, acima). Calculado
     // FORA do updater: `setState` dentro dele roda duas vezes em StrictMode.
     const restante = ledger.filter((i) => i.idLinha !== idLinha)
-    if (!restante.some((i) => i.qtdOrcada > 0)) setOrcamentoPuxado(null)
+    if (!restante.some((i) => i.qtdOrcada > 0)) {
+      setOrcamentoPuxado(null)
+      setOsPuxada(null)
+    }
     setLedger((atual) => atual.filter((i) => i.idLinha !== idLinha))
     setSelecionado((atual) => (atual === idLinha ? null : atual))
   }
@@ -251,6 +273,7 @@ export default function Pdv() {
     // recarregar a página. Antes da guarda no servidor era pior e silencioso: a venda saía a preço
     // de cadastro e queimava um orçamento que nada tinha a ver com ela.
     setOrcamentoPuxado(null)
+    setOsPuxada(null)
     setValorBarras('')
     setMostrarPesquisa(false)
     setMostrarAlteraQtd(false)
@@ -269,15 +292,22 @@ export default function Pdv() {
     setMostrarFormaPagamento(true)
   }
 
-  /** F5 abre o orçamento. ⚠️ Só com a venda vazia: puxar por cima de itens já lançados
-   *  misturaria preço congelado com preço de cadastro sem o operador perceber. */
-  const f5BuscarOrcamento = () => {
+  /**
+   * F5 puxa um documento anterior para a venda. ⚠️ Só com a venda vazia: puxar por cima de itens
+   * já lançados misturaria preço fechado com preço de cadastro sem o operador perceber.
+   *
+   * <p>Com o módulo de serviços LIGADO existem dois documentos possíveis (orçamento e ordem de
+   * serviço) e o F5 pergunta qual. Desligado — que é a loja típica deste ERP — ele vai direto ao
+   * orçamento, exatamente como antes: quem nunca vai abrir uma OS não paga um clique por ela.
+   */
+  const f5BuscarDocumento = () => {
     if (ledger.length > 0) {
-      mostrarFlash('Limpe a tela (F4) antes de puxar um orçamento.')
+      mostrarFlash('Limpe a tela (F4) antes de puxar um documento.')
       return
     }
     setTeclaAtiva('f5')
-    setMostrarPuxarOrcamento(true)
+    if (usaServicos?.cfgUsaServicos) setMostrarEscolhaDocumento(true)
+    else setMostrarPuxarOrcamento(true)
   }
 
   const aoVendaEfetivada = (resultado: VendaEfetivada) => {
@@ -288,6 +318,7 @@ export default function Pdv() {
     // ⚠️ Limpar o orçamento junto: sem isto, a PRÓXIMA venda carimbaria um orçamento que não tem
     // nada a ver com ela — e o servidor recusaria (já vendido), com o operador sem entender.
     setOrcamentoPuxado(null)
+    setOsPuxada(null)
     setIdVendaPapeleta(resultado.idVenda)
   }
 
@@ -307,7 +338,7 @@ export default function Pdv() {
       // ⚠️ F5 e F6 TROCARAM em 2026-08-21 (pedido do dono do produto): F5 busca orçamento, F6
       // efetiva a venda. A ordem segue a do balcão — primeiro se puxa o que o cliente já tinha
       // orçado, depois se fecha.
-      if (e.key === 'F5') { e.preventDefault(); f5BuscarOrcamento(); return }
+      if (e.key === 'F5') { e.preventDefault(); f5BuscarDocumento(); return }
       if (e.key === 'F6') { e.preventDefault(); f6EfetivaVenda(); return }
     }
     document.addEventListener('keydown', aoTeclar)
@@ -338,6 +369,12 @@ export default function Pdv() {
             <span className="pdv-selo-orcamento">
               Venda a partir do <strong>orçamento nº {orcamentoPuxado.idOrcamento}</strong> — preços
               travados, cliente e vendedor <strong>fixos</strong>.
+            </span>
+          )}
+          {osPuxada && (
+            <span className="pdv-selo-orcamento">
+              Venda a partir da <strong>OS nº {osPuxada.idOrdemServico}</strong> ({osPuxada.objetoServico})
+              — preços travados, cliente e vendedor <strong>fixos</strong>.
             </span>
           )}
           <div className="topbar-acoes">
@@ -443,11 +480,12 @@ export default function Pdv() {
               <div className="pdv-linha-fechamento">
                 <div
                   className={`pdv-tecla${teclaAtiva === 'f5' ? ' pdv-ativa' : ''}`}
-                  onClick={f5BuscarOrcamento}
+                  onClick={f5BuscarDocumento}
                 >
                   <IconeLupa />
                   <span>
-                    <span className="pdv-kbd">F5</span> Buscar Orçamento
+                    <span className="pdv-kbd">F5</span>{' '}
+                    {usaServicos?.cfgUsaServicos ? 'Buscar Orçamento / OS' : 'Buscar Orçamento'}
                   </span>
                 </div>
                 <button type="button" className="pdv-tecla-venda" onClick={f6EfetivaVenda}>
@@ -543,6 +581,7 @@ export default function Pdv() {
                   urlImagem: null,
                   // Toda esta linha é coberta pelo orçamento — o teto do que sai com preço congelado.
                   qtdOrcada: levando[i.idVariacao] ?? 0,
+                  origemDocumento: 'ORCAMENTO' as const,
                 })),
             )
             setOrcamentoPuxado(orcamento)
@@ -552,21 +591,100 @@ export default function Pdv() {
           }}
         />
       )}
+      {/* Passo "de onde vem esta venda?" — só existe com o módulo de serviços ligado. Dois botões
+          grandes, sem lista: a lista é do popup seguinte, que sabe filtrar por situação. */}
+      {mostrarEscolhaDocumento && (
+        <div className="modal-overlay" onClick={() => setMostrarEscolhaDocumento(false)}>
+          <div
+            className="modal"
+            role="dialog"
+            aria-label="Puxar documento para a venda"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <CabecalhoModal titulo="Puxar para a venda" aoFechar={() => setMostrarEscolhaDocumento(false)} />
+            <p className="muted" style={{ marginTop: 0 }}>
+              De onde vem esta venda?
+            </p>
+            <div style={{ display: 'flex', gap: 12 }}>
+              <button
+                type="button"
+                className="btn"
+                style={{ flex: 1 }}
+                onClick={() => {
+                  setMostrarEscolhaDocumento(false)
+                  setMostrarPuxarOrcamento(true)
+                }}
+              >
+                Orçamento
+              </button>
+              <button
+                type="button"
+                className="btn"
+                style={{ flex: 1 }}
+                onClick={() => {
+                  setMostrarEscolhaDocumento(false)
+                  setMostrarPuxarOs(true)
+                }}
+              >
+                Ordem de Serviço
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {mostrarPuxarOs && (
+        <PuxarOrdemServicoModal
+          aoFechar={() => setMostrarPuxarOs(false)}
+          aoConfirmar={(os) => {
+            // ⚠️ A OS entra INTEIRA — não há campo de quantidade no popup. O trabalho já foi feito
+            // e a peça já foi aplicada; "levar metade da mão de obra" não existe. Quem quiser
+            // cobrar diferente cancela a OS e abre outra.
+            setLedger(
+              os.itens.map((i) => ({
+                idLinha: proximaLinhaRef.current++,
+                idVariacao: i.idVariacao,
+                codigo: i.sku,
+                descricao: i.descricaoProduto,
+                variacao:
+                  [i.variacaoCor, i.variacaoTamanho].filter(Boolean).join(' · ') ||
+                  (i.tipoItem === 'SERVICO' ? 'Serviço' : null),
+                qtd: i.qtdProduto,
+                precoUnit: i.precoVenda,
+                urlImagem: null,
+                // Toda a linha é coberta pela OS — é o teto do que sai com o preço fechado nela.
+                qtdOrcada: i.qtdProduto,
+                origemDocumento: 'OS' as const,
+              })),
+            )
+            setOsPuxada(os)
+            setSelecionado(null)
+            setMostrarPuxarOs(false)
+            mostrarFlash(`OS nº ${os.idOrdemServico} carregada — ${os.nomeCliente}.`)
+          }}
+        />
+      )}
       {mostrarFormaPagamento && (
         <FormaPagamentoModal
           itens={ledger}
           valorTotal={valorTotal}
           idOrcamento={orcamentoPuxado?.idOrcamento ?? null}
+          idOrdemServico={osPuxada?.idOrdemServico ?? null}
           clienteInicial={
             orcamentoPuxado
               ? { idCliente: orcamentoPuxado.idCliente, nome: orcamentoPuxado.nomeCliente,
                   cpfCnpj: orcamentoPuxado.documentoCliente, telefone: orcamentoPuxado.telefoneCliente }
-              : null
+              : osPuxada
+                // A OS não guarda documento nem telefone do cliente — quem precisar deles (nota
+                // fiscal, crediário) usa o cadastro, que é onde eles moram de verdade.
+                ? { idCliente: osPuxada.idCliente, nome: osPuxada.nomeCliente, cpfCnpj: null, telefone: null }
+                : null
           }
           vendedorInicial={
             orcamentoPuxado
               ? { idFuncionario: orcamentoPuxado.idFuncionario, nome: orcamentoPuxado.nomeFuncionario }
-              : null
+              : osPuxada
+                ? { idFuncionario: osPuxada.idFuncionario, nome: osPuxada.nomeFuncionario }
+                : null
           }
           aoFechar={() => {
             // Cancelou sem efetivar — libera a rotina crítica; a venda nunca chegou a existir.

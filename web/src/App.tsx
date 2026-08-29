@@ -47,6 +47,8 @@ import EntradaMercadoriaForm from './pages/estoque/entrada/EntradaMercadoriaForm
 import EntradaMercadoriaDetalhe from './pages/estoque/entrada/EntradaMercadoriaDetalhe'
 import DevolucaoCompra from './pages/estoque/devolucaocompra/DevolucaoCompra'
 import OrcamentoForm from './pages/orcamento/OrcamentoForm'
+import OrdemServicoForm from './pages/ordensservico/OrdemServicoForm'
+import OrdensServico from './pages/ordensservico/OrdensServico'
 import OrcamentoLista from './pages/orcamento/OrcamentoLista'
 import EstornoRecebimentoCrediario from './pages/recebimentocrediario/EstornoRecebimentoCrediario'
 import RecebimentoCrediario from './pages/recebimentocrediario/RecebimentoCrediario'
@@ -102,6 +104,10 @@ export default function App() {
           <Route path="/pdv" element={<Pdv />} />
           <Route path="/orcamentos" element={<OrcamentoLista />} />
           <Route path="/orcamentos/novo" element={<OrcamentoForm />} />
+          <Route path="/ordens-servico" element={<OrdensServico />} />
+          <Route path="/ordens-servico/nova" element={<OrdemServicoForm />} />
+          <Route path="/ordens-servico/:id" element={<OrdemServicoForm />} />
+          <Route path="/ordens-servico/:id/:modo" element={<OrdemServicoForm />} />
           <Route path="/pesquisa-vendas" element={<PesquisaVendas />} />
           <Route path="/devolucao-produto" element={<DevolucaoProduto />} />
           <Route path="/relatorio-vendas" element={<RelatorioVendas />} />

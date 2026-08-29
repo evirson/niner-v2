@@ -2,7 +2,8 @@ import { useRef, useState } from 'react'
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { useAuth } from '../lib/auth'
 import { useEu } from '../lib/eu'
-import { filtrarPorPapel, filtrarPorPermissao, MENU, rotaDoGrupo, type NavGrupo } from '../lib/menu'
+import { filtrarPorModulo, filtrarPorPapel, filtrarPorPermissao, MENU, rotaDoGrupo, type NavGrupo } from '../lib/menu'
+import { buscarUsaServicos } from '../lib/configuracaoGeral'
 import { minhasPermissoes } from '../lib/permissoes'
 import { useQuery } from '@tanstack/react-query'
 import BuscaDeTelas from './BuscaDeTelas'
@@ -26,12 +27,22 @@ export default function Layout() {
   // pré-existente (grupo.chave) que apareceria por filtrarPorPapel devolver NavNode[] genérico.
     // RBAC (V073): o menu mostra só o que o usuário pode acessar. Enquanto a grade não chegou,
   // `null` mantém o menu inteiro — menu piscando vazio parece sistema quebrado.
+  /** Módulo de serviços (S1): desligado, Ordens de Serviço não aparece no menu nem na busca. */
+  const { data: usaServicos } = useQuery({
+    queryKey: ['config-geral', 'usa-servicos'],
+    queryFn: buscarUsaServicos,
+    staleTime: 60_000,
+  })
   const { data: permissoes } = useQuery({ queryKey: ['minhas-permissoes'], queryFn: minhasPermissoes, staleTime: 60_000 })
   const catalogadas = permissoes ? new Set(permissoes.map((p) => p.chave)) : undefined
   const permitidas = permissoes
     ? new Set(permissoes.filter((p) => p.acessar).map((p) => p.chave))
     : null
-  const menu = filtrarPorPermissao(filtrarPorPapel(MENU, isAdmin), permitidas, catalogadas) as NavGrupo[]
+  const menu = filtrarPorPermissao(
+    filtrarPorModulo(filtrarPorPapel(MENU, isAdmin), usaServicos?.cfgUsaServicos),
+    permitidas,
+    catalogadas,
+  ) as NavGrupo[]
 
   const [recolhido, setRecolhido] = useState(() => localStorage.getItem(CHAVE_RECOLHIDO) === '1')
   // "Espiada" ao passar o mouse/focar (2026-07-31, pedido do dono do produto): com o menu

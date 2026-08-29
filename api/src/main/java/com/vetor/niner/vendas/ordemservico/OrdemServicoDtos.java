@@ -62,6 +62,16 @@ public final class OrdemServicoDtos {
             long idVariacao,
             String sku,
             String descricaoProduto,
+            /**
+             * Cor e tamanho da variação, nulos quando o produto não tem grade.
+             *
+             * <p>⚠️ Sem eles, duas peças do MESMO produto em cores diferentes saem idênticas na
+             * tela — a OS mostraria duas linhas "CHIN FEM HAVAIANAS" e ninguém saberia qual é
+             * qual. Achado abrindo a tela: a linha nasce com a variação (vem da pesquisa de
+             * produto) e a perdia ao recarregar, porque a resposta não a trazia de volta.
+             */
+            String variacaoCor,
+            String variacaoTamanho,
             /** {@code MERCADORIA} ou {@code SERVICO} — a tela mostra os dois blocos separados. */
             String tipoItem,
             BigDecimal qtdProduto,

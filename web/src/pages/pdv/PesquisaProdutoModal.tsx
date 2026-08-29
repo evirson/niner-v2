@@ -101,13 +101,20 @@ export default function PesquisaProdutoModal({
                     <td>{produto.descricaoProduto}</td>
                     <td>{produto.variacaoCor ?? '—'}</td>
                     <td>{produto.variacaoTamanho ?? '—'}</td>
+                    {/* ⚠️ Serviço mostra "—", nunca "0" (S1): serviço não tem saldo, e um zero
+                        aqui lê como "acabou" — o operador deixaria de vender o banho e tosa
+                        achando que faltou alguma coisa. */}
                     {produto.estoquePorEmpresa.map((e) => (
                       <td key={e.codigoEmpresa} className="mono" style={{ textAlign: 'right' }}>
-                        {formatarQuantidade(e.qtd, permiteQtdDecimal)}
+                        {produto.tipoItem === 'SERVICO' ? '—' : formatarQuantidade(e.qtd, permiteQtdDecimal)}
                       </td>
                     ))}
                     <td className="mono" style={{ textAlign: 'right' }}>
-                      <strong>{formatarQuantidade(produto.estoqueTotal, permiteQtdDecimal)}</strong>
+                      <strong>
+                        {produto.tipoItem === 'SERVICO'
+                          ? '—'
+                          : formatarQuantidade(produto.estoqueTotal, permiteQtdDecimal)}
+                      </strong>
                     </td>
                   </tr>
                 ))

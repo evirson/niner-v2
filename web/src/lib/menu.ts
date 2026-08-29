@@ -23,6 +23,7 @@ import {
   IconeFuncionario,
   IconeLimpar,
   IconeMovimentoContaCorrente,
+  IconeOrdemServico,
   IconePainel,
   IconeParametros,
   IconePdv,
@@ -56,6 +57,15 @@ export interface NavItem {
   sinonimos?: string[]
   end?: boolean
   adminOnly?: boolean
+  /**
+   * Tela que só existe com o **módulo de serviços** ligado (`cfg_geral.cfg_usa_servicos`, S1).
+   *
+   * ⚠️ É diferente de `adminOnly` e de permissão: aqui a tela não está *proibida*, ela **não faz
+   * sentido** para o tenant. Mostrar "Ordens de Serviço" para uma loja de calçados é prometer uma
+   * função que ela nunca vai usar — e o módulo é opt-in justamente porque empresa de serviço é
+   * minoria da base (decisão do dono do produto, 2026-08-28).
+   */
+  moduloServicos?: boolean
 }
 
 export interface NavGrupo {
@@ -103,6 +113,16 @@ export const MENU: NavGrupo[] = [
         label: 'Orçamentos',
         icone: IconePdv,
         descricao: 'Emite orçamento com validade para o cliente que ainda não fechou, imprime, envia por WhatsApp e transforma em venda no PDV.',
+      },
+      {
+        to: '/ordens-servico',
+        label: 'Ordens de Serviço',
+        icone: IconeOrdemServico,
+        descricao:
+          'Abre a ordem do trabalho que leva tempo (oficina, banho e tosa), com serviços e peças, acompanha a execução e cobra no PDV pelo F5.',
+        // O lojista chama de "OS" e procura pelo que está em serviço, não pelo nome da tela.
+        sinonimos: ['os', 'oficina', 'banho e tosa', 'servico', 'serviço', 'mao de obra', 'mão de obra'],
+        moduloServicos: true,
       },
       {
         to: '/pesquisa-vendas',
@@ -646,6 +666,32 @@ export function filtrarPorPapel(nos: NavNode[], isAdmin: boolean): NavNode[] {
   return resultado
 }
 
+
+/**
+ * Remove as telas do módulo de serviços quando ele está desligado (S1).
+ *
+ * ⚠️ `usaServicos === undefined` significa "ainda não carregou" e **mantém** as telas, pela mesma
+ * razão de `filtrarPorPermissao`: um item que aparece e some meio segundo depois é pior que um
+ * item que demora a aparecer.
+ *
+ * ⚠️ Isto é só a tela. Quem impede de **cadastrar** serviço é o servidor (`ProdutoService`), e
+ * quem impede de abrir OS sem o módulo é o `OrdemServicoService` — esconder no menu nunca foi
+ * proteção (P4).
+ */
+export function filtrarPorModulo(nos: NavNode[], usaServicos: boolean | undefined): NavNode[] {
+  if (usaServicos !== false) return nos
+  const resultado: NavNode[] = []
+  for (const n of nos) {
+    if (eGrupo(n)) {
+      const filhos = filtrarPorModulo(n.itens, usaServicos)
+      if (filhos.length === 0 && n.itens.length > 0) continue
+      resultado.push({ ...n, itens: filhos })
+    } else if (!n.moduloServicos) {
+      resultado.push(n)
+    }
+  }
+  return resultado
+}
 
 /**
  * Remove do menu as telas que o usuário não pode ACESSAR (RBAC, V073).

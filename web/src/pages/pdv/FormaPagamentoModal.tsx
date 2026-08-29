@@ -118,6 +118,7 @@ export default function FormaPagamentoModal({
   itens,
   valorTotal,
   idOrcamento,
+  idOrdemServico,
   clienteInicial,
   vendedorInicial,
   aoFechar,
@@ -137,6 +138,13 @@ export default function FormaPagamentoModal({
    * contradizer o documento que ela cumpre.
    */
   idOrcamento?: number | null
+  /**
+   * Ordem de Serviço que originou esta venda (S4), quando a venda veio de uma.
+   *
+   * <p>Vale tudo o que vale para o orçamento acima — preço fechado, teto de quantidade, cliente e
+   * vendedor travados. ⚠️ E os dois <b>nunca</b> chegam preenchidos juntos: o servidor recusa.
+   */
+  idOrdemServico?: number | null
   clienteInicial?: PdvCliente | null
   vendedorInicial?: Pick<Funcionario, 'idFuncionario' | 'nome'> | null
   aoFechar: () => void
@@ -163,8 +171,13 @@ export default function FormaPagamentoModal({
   const [buscandoVale, setBuscandoVale] = useState(false)
   const [erroVale, setErroVale] = useState<string | null>(null)
   /** Cliente e vendedor são obrigatórios em toda venda do PDV (2026-07-28). */
-  /** Venda que cumpre um orçamento: cliente e vendedor ficam FIXOS (item 4 de 2026-08-21). */
-  const vindoDeOrcamento = idOrcamento != null
+  /** Venda que cumpre um orçamento OU uma Ordem de Serviço: cliente e vendedor ficam FIXOS
+   *  (item 4 de 2026-08-21; a OS entrou em 2026-08-28 pela mesma razão — o documento foi aberto
+   *  para aquele cliente, e trocá-lo aqui faria a venda contradizer o que ela cumpre). */
+  const vindoDeOrcamento = idOrcamento != null || idOrdemServico != null
+  /** ⚠️ O selo nomeia o documento CERTO. Dizer "do orçamento" numa venda vinda de OS manda o
+   *  operador procurar um orçamento que não existe — e OS não é orçamento. */
+  const rotuloDocumento = idOrdemServico != null ? 'da OS' : 'do orçamento'
   const [clienteSelecionado, setClienteSelecionado] = useState<PdvCliente | null>(clienteInicial ?? null)
   const [vendedorSelecionado, setVendedorSelecionado] = useState<Pick<Funcionario, 'idFuncionario' | 'nome'> | null>(
     vendedorInicial ?? null,
@@ -362,6 +375,7 @@ export default function FormaPagamentoModal({
         idCliente: clienteSelecionado.idCliente,
         idFuncionario: vendedorSelecionado.idFuncionario,
         idOrcamento: idOrcamento ?? null,
+        idOrdemServico: idOrdemServico ?? null,
       })
     },
     onSuccess: (resultado) => aoEfetivada(resultado),
@@ -411,7 +425,7 @@ export default function FormaPagamentoModal({
             <div className="pdv-selecao-valor">
               <span>{clienteSelecionado ? clienteSelecionado.nome : 'Nenhum cliente selecionado'}</span>
               {vindoDeOrcamento ? (
-                <span className="badge">do orçamento</span>
+                <span className="badge">{rotuloDocumento}</span>
               ) : (
                 <button type="button" className="btn ghost" onClick={() => setMostrarPesquisaCliente(true)}>
                   Selecionar
@@ -424,7 +438,7 @@ export default function FormaPagamentoModal({
             <div className="pdv-selecao-valor">
               <span>{vendedorSelecionado ? vendedorSelecionado.nome : 'Nenhum vendedor selecionado'}</span>
               {vindoDeOrcamento ? (
-                <span className="badge">do orçamento</span>
+                <span className="badge">{rotuloDocumento}</span>
               ) : (
                 <button type="button" className="btn ghost" onClick={() => setMostrarPesquisaVendedor(true)}>
                   Selecionar

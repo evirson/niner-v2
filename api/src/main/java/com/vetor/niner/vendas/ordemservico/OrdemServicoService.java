@@ -2,6 +2,7 @@ package com.vetor.niner.vendas.ordemservico;
 
 import com.vetor.niner.comum.seguranca.EmpresaDaSessao;
 import com.vetor.niner.comum.web.ConflitoDadosException;
+import com.vetor.niner.configuracao.geral.ConfiguracaoGeralService;
 import com.vetor.niner.vendas.ordemservico.OrdemServicoDtos.ItemRequest;
 import com.vetor.niner.vendas.ordemservico.OrdemServicoDtos.ItemResponse;
 import com.vetor.niner.vendas.ordemservico.OrdemServicoDtos.LinhaListagem;
@@ -57,8 +58,10 @@ public class OrdemServicoService {
     private static final String ESTADO_FATURAVEL = "CONCLUIDA";
 
     private final JdbcClient jdbc;
+    private final ConfiguracaoGeralService configuracaoGeralService;
 
-    public OrdemServicoService(JdbcClient jdbc) {
+    public OrdemServicoService(JdbcClient jdbc, ConfiguracaoGeralService configuracaoGeralService) {
+        this.configuracaoGeralService = configuracaoGeralService;
         this.jdbc = jdbc;
     }
 
@@ -170,6 +173,7 @@ public class OrdemServicoService {
 
     @Transactional
     public OrdemServicoResponse criar(Jwt jwt, OrdemServicoRequest req) {
+        exigirModuloLigado();
         long idEmpresa = EmpresaDaSessao.idEmpresaDaSessao(jwt);
         long idUsuario = Long.parseLong(jwt.getSubject());
 
@@ -528,14 +532,37 @@ public class OrdemServicoService {
                         "Item não encontrado no catálogo."));
     }
 
+    /**
+     * ⛔ Abrir OS exige o módulo de serviços ligado (S1/R8) — esconder o item no menu <b>nunca foi
+     * proteção</b> (P4), e sem esta trava um POST direto abriria OS numa loja de calçados,
+     * reservando estoque por um mecanismo que ninguém naquele tenant sabe que existe.
+     *
+     * <p>⚠️ Só o <b>criar</b> é travado, de propósito. Alterar, concluir e cancelar continuam
+     * valendo com o módulo desligado: quem desliga o módulo com OS abertas trancaria as peças
+     * reservadas <b>para sempre</b> — não haveria caminho para devolvê-las ao estoque. Uma trava
+     * que impede de sair da situação é pior que a situação.
+     */
+    private void exigirModuloLigado() {
+        if (!configuracaoGeralService.usaServicos()) {
+            throw new ResponseStatusException(BAD_REQUEST,
+                    "O módulo de serviços está desligado. Ligue \"Usa serviços\" em "
+                    + "Parâmetros do Sistema para abrir ordens de serviço.");
+        }
+    }
+
     private List<ItemResponse> buscarItens(long idOrdemServico) {
         return jdbc.sql("""
                         SELECT i.id_ordem_servico_item, i.id_variacao, pb.sku, p.descricao,
+                               co.descricao AS variacao_cor, ta.descricao AS variacao_tamanho,
                                pb.tipo_item::text AS tipo_item, i.qtd_produto, i.preco_venda,
                                i.id_funcionario, f.nome AS nome_funcionario, i.qtd_reservada
                           FROM ordem_servico_item i
                           JOIN produto_barra pb ON pb.id_tenant = i.id_tenant AND pb.id_variacao = i.id_variacao
                           JOIN produto p ON p.id_tenant = pb.id_tenant AND p.id_produto = pb.id_produto
+                          -- id_cor/id_tamanho = 1 e a sentinela PADRAO (produto sem grade): o
+                          -- "<> 1" a transforma em NULL, como faz a pesquisa de produto do PDV.
+                          LEFT JOIN cfg_cor co ON co.id_tenant = pb.id_tenant AND co.id_cor = pb.id_cor AND co.id_cor <> 1
+                          LEFT JOIN cfg_tamanho ta ON ta.id_tenant = pb.id_tenant AND ta.id_tamanho = pb.id_tamanho AND ta.id_tamanho <> 1
                           LEFT JOIN funcionario f ON f.id_tenant = i.id_tenant AND f.id_funcionario = i.id_funcionario
                          WHERE i.id_tenant = plataforma.tenant_atual() AND i.id_ordem_servico = ?
                          ORDER BY i.id_ordem_servico_item
@@ -546,7 +573,9 @@ public class OrdemServicoService {
                     BigDecimal preco = rs.getBigDecimal("preco_venda");
                     return new ItemResponse(
                             rs.getLong("id_ordem_servico_item"), rs.getLong("id_variacao"),
-                            rs.getString("sku"), rs.getString("descricao"), rs.getString("tipo_item"),
+                            rs.getString("sku"), rs.getString("descricao"),
+                            rs.getString("variacao_cor"), rs.getString("variacao_tamanho"),
+                            rs.getString("tipo_item"),
                             qtd, preco, qtd.multiply(preco),
                             idFuncionarioOuNulo(rs), rs.getString("nome_funcionario"),
                             rs.getBigDecimal("qtd_reservada"));

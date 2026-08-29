@@ -1,4 +1,5 @@
 import { api } from './api'
+import type { TipoItem } from './produtos'
 
 /** Estoque de uma variação numa empresa específica — `0` quando não há linha em `produto_estoque`. */
 export interface EstoqueEmpresa {
@@ -21,6 +22,9 @@ export interface PdvProduto {
   urlImagem: string | null
   marca: string | null
   referencia: string | null
+  /** `'MERCADORIA'` ou `'SERVICO'` (S1). Serviço não tem saldo — `estoqueTotal` vem 0 e não
+   *  significa "acabou": a tela não pode tratar os dois do mesmo jeito. */
+  tipoItem: TipoItem
 }
 
 export interface ItemVendaRequest {
@@ -29,6 +33,15 @@ export interface ItemVendaRequest {
   /** `true` = esta linha é coberta pelo orçamento e sai com o preço CONGELADO dele; `false`/ausente
    *  = venda comum, preço do cadastro. Ver {@link ItemLedger.qtdOrcada} e `dividirParaEnvio`. */
   doOrcamento?: boolean
+  /**
+   * `true` = esta linha veio da **Ordem de Serviço** puxada no F5 (S4).
+   *
+   * <p>⛔ É uma marca **separada** de `doOrcamento`, não um sinônimo: orçamento e OS são
+   * documentos diferentes, e a mesma venda nunca carrega os dois (o servidor recusa). O que a
+   * marca faz aqui é o mesmo que lá — dizer ao servidor quais linhas conferir contra o documento
+   * de origem, com o preço que aquele documento fechou.
+   */
+  daOrdemServico?: boolean
 }
 
 /**
@@ -46,11 +59,19 @@ export interface ItemVendaRequest {
 export function dividirParaEnvio(itens: ItemLedger[]): ItemVendaRequest[] {
   const envio: ItemVendaRequest[] = []
   for (const item of itens) {
-    const doOrcamento = Math.min(item.qtd, item.qtdOrcada)
-    if (doOrcamento > 0) {
-      envio.push({ idVariacao: item.idVariacao, qtd: doOrcamento, doOrcamento: true })
+    // ⚠️ `qtdOrcada` serve aos DOIS documentos porque eles nunca convivem na mesma venda (o
+    // servidor recusa orçamento + OS juntos). Quem diz QUAL documento é `origemDocumento` — e a
+    // marca enviada muda com ele, senão o servidor procuraria a linha no documento errado e
+    // recusaria a venda falando de um documento que o operador nem abriu.
+    const doDocumento = Math.min(item.qtd, item.qtdOrcada)
+    if (doDocumento > 0) {
+      envio.push(
+        item.origemDocumento === 'OS'
+          ? { idVariacao: item.idVariacao, qtd: doDocumento, daOrdemServico: true }
+          : { idVariacao: item.idVariacao, qtd: doDocumento, doOrcamento: true },
+      )
     }
-    const excedente = item.qtd - doOrcamento
+    const excedente = item.qtd - doDocumento
     if (excedente > 0) {
       envio.push({ idVariacao: item.idVariacao, qtd: excedente, doOrcamento: false })
     }
@@ -91,8 +112,19 @@ export interface ItemLedger {
    * mais quando o preço não mudou: a tela mostra uma linha, e o envio a divide em duas — a parte
    * orçada com o preço congelado, o excedente com o preço de hoje. Sem isso, o servidor recusaria
    * a venda por "não pode levar mais do que foi orçado".
+   *
+   * <p>⚠️ Desde a Ordem de Serviço (S4) este número também conta as linhas vindas de uma **OS** —
+   * o teto e o preço fechado funcionam igual. Quem diz de qual documento a linha veio é
+   * {@link ItemLedger.origemDocumento}; o nome do campo ficou por ser o caso original.
    */
   qtdOrcada: number
+  /**
+   * De qual documento esta linha veio: `'ORCAMENTO'`, `'OS'` ou ausente (venda comum).
+   *
+   * <p>⛔ Não dá para inferir pelo estado da tela: os dois documentos preenchem `qtdOrcada` do
+   * mesmo jeito, e mandar a marca errada faz o servidor procurar a linha no documento errado.
+   */
+  origemDocumento?: 'ORCAMENTO' | 'OS'
 }
 
 /**
@@ -121,6 +153,15 @@ export interface EfetivarVendaRequest {
   /** Orcamento que originou a venda (V058). O servidor usa o preco CONGELADO dele e recusa
    *  quantidade maior que a orcada. */
   idOrcamento?: number | null
+  /**
+   * Ordem de Serviço que originou a venda (V087, S4) — mesmo efeito do orçamento: preço fechado
+   * na OS e teto de quantidade. Ao efetivar, a OS passa a FATURADA e a reserva de estoque das
+   * peças é liberada (o estoque sai de verdade agora, pela venda).
+   *
+   * <p>⛔ Nunca junto com `idOrcamento`: o servidor recusa os dois na mesma venda, porque cada
+   * um traria o próprio preço fechado para a mesma linha e não há como desempatar.
+   */
+  idOrdemServico?: number | null
 }
 
 export interface ParcelaGerada {

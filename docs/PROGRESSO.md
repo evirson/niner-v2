@@ -11,6 +11,72 @@ Registro cronológico das decisões e entregas. Atualizar a cada marco relevante
 
 ## Estado atual
 
+> ## 📌 2026-08-28 (2) — o módulo de SERVIÇOS: a oficina e o petshop entram no ERP
+>
+> **58 telas · 1062 testes verdes, 0 pulados** · migrations até **V087** · `web/` sem erro de tipo.
+>
+> O ERP cobria a **peça** e não cobria o **trabalho**. Pedido dele: *"atendemos uma petshop pra
+> venda de produtos, mas o serviço de banho e tosa não está coberto; ou uma oficina mecânica, a
+> parte de peças cobre o ERP, mas a mão de obra não cobre"*. Entraram três blocos:
+>
+> - **S1 (V085) — serviço no catálogo.** `produto.tipo_item` (`MERCADORIA` | `SERVICO`), denormalizado
+>   em `produto_barra` por uma trigger, mais `produto_servico` (duração, comissão). O tipo é
+>   **imutável** depois de criado: trocá-lo deixaria estoque, relatórios e notas já emitidas
+>   descrevendo o item como ele *era*.
+> - **S2 (V086) — serviço não mexe no estoque.** O curto-circuito está nos **três** ramos de
+>   `fn_atualiza_estoque_movimento`, a trigger — não nos serviços. Mesma decisão do
+>   `cfg_permite_estoque_negativo` (V054) e pelo mesmo motivo: são **oito** rotinas que movimentam
+>   estoque, e espalhar a checagem garante matematicamente que uma fique de fora.
+> - **S4 (V087) — Ordem de Serviço.** Desenho dele: *"quando abrir uma OS, já vai o serviço e os
+>   produtos deste serviço também, aí puxa tudo no PDV, e lá no PDV pode incluir mais serviços e
+>   mais produtos"*. Estados `ABERTA → APROVADA → EM_EXECUCAO → CONCLUIDA → FATURADA`, e a OS
+>   concluída vira venda pelo **F5 do PDV**, o mesmo caminho do orçamento.
+>
+> ⛔ **OS não é orçamento** — reforço literal dele: *"lembre-se, orçamento é uma coisa, ordem de
+> serviço é outra coisa"*. Eu vinha escrevendo "a OS é o orçamento com estado", e isso estava
+> errado: o orçamento é **imutável** (proposta que a loja honra) e a OS é **mutável** (o mecânico
+> abre o motor e acha mais serviço). O que as duas compartilham é o mecanismo de virar venda.
+>
+> ⭐ **A reserva de estoque foi decisão DELE, contra a minha recomendação — e com razão melhor.**
+> Eu havia recomendado não reservar (complexidade); ele apontou o fato físico: *a peça foi separada
+> para aquele carro*, está na bancada, não na prateleira. Reserva ao **lançar** (antes da
+> aprovação), ajuste **por delta** ao alterar, e liberação em dois caminhos — cancelamento (devolve)
+> e faturamento (o estoque sai de verdade). ⚠️ O caminho da OS abandonada é **cancelar**, também
+> decisão dele: *"alguém vai ter a possibilidade de cancelar a OS, aí com ela cancelada volta a peça
+> pro estoque"* — nada de worker de expiração devolvendo peça com o carro no elevador.
+>
+> ⛔ **Não existe botão "faturar" na tela da OS.** Quem cobra é o PDV, onde já moram caixa aberto,
+> split-tender, desconto máximo, limite de crédito, cota do plano, papeleta e emissão fiscal — sete
+> regras que uma segunda porta teria de reimplementar e que divergiriam na primeira correção feita
+> em só um dos lados.
+>
+> **Quatro defeitos, e o que cada um ensinou:**
+>
+> 1. **`INSERT … ON CONFLICT DO UPDATE` com delta negativo estoura o CHECK.** O Postgres avalia os
+>    CHECK da tupla **proposta antes** de resolver o conflito, então `reservado = -1` reprovava
+>    `reservado >= 0` mesmo que o `DO UPDATE` fosse produzir 0. E o erro chegava ao usuário como
+>    *"registro em uso por outro cadastro"*. Virou UPDATE-primeiro, INSERT-só-se-não-achou.
+> 2. **A guarda "orçamento OU OS" estava depois de resolver o orçamento**, então um 404 mascarava a
+>    mensagem certa. **Quem achou foi o teste, não a leitura.**
+> 3. **A cor/tamanho da peça sumia ao reabrir a OS** — a linha nascia com a variação (vinha da
+>    pesquisa de produto) e a perdia no recarregamento, porque a resposta não a trazia. Numa OS com
+>    duas peças do mesmo produto em cores diferentes, as duas linhas ficariam idênticas.
+>    **Achado abrindo a tela**, não lendo o código.
+> 4. **Eu escrevi na doc que o menu respeitava o módulo e que o servidor recusava abrir OS sem ele —
+>    e nenhuma das duas coisas existia.** Conferir a própria afirmação antes de publicá-la é o que
+>    transformou duas frases falsas em `filtrarPorModulo` (menu, hub e busca) e
+>    `exigirModuloLigado()` (servidor). ⚠️ E a trava é **só no criar**: alterar e cancelar continuam
+>    valendo com o módulo desligado, senão quem o desligasse com OS abertas trancaria as peças
+>    reservadas **para sempre**.
+>
+> ⚠️ **O módulo é opt-in** (decisão dele: *"as empresas de serviço são menos que as de comércio"*),
+> desligado por padrão. Com ele desligado o F5 do PDV vai direto ao orçamento, como sempre foi.
+>
+> ⏭️ **A NFS-e não entrou** — e não é falta de decisão: ele decidiu que o produto **vai** oferecer a
+> emissão, e que o padrão é a papeleta primeiro (o mesmo desenho da venda de mercadoria). O que
+> falta são as **credenciais municipais** da empresa de homologação. Estudo completo em
+> `docs/MODULOSERVICOS.md`; a tela em `docs/telas/ordem-servico.md`.
+
 > ## 📌 2026-08-28 — a integração com marketplaces foi REMOVIDA
 >
 > **57 telas · 1024 testes verdes, 0 pulados** · migrations até **V084** · `web/` sem erro de tipo.

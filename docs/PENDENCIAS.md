@@ -12,9 +12,10 @@
 > de informação demais de uma vez (*"TA MUITO CONFUSO"*).
 >
 > **Última revisão:** 2026-08-28 — a remoção da integração com marketplaces fechou nove itens
-> por desaparecimento do assunto (2, 3, 4, 15, 16, 18, 20, 21 e 27). Ver a seção no fim do arquivo.
+> por desaparecimento do assunto (2, 3, 4, 15, 16, 18, 20, 21 e 27), e o módulo de Serviços (S1–S4)
+> foi implementado no mesmo dia, fechando o item 50. Ver as duas seções no fim do arquivo.
 
-**Estado na data desta revisão:** 57 telas em uso · 1024 testes verdes, 0 pulados (medido, não estimado).
+**Estado na data desta revisão:** 58 telas em uso · 1062 testes verdes, 0 pulados (medido, não estimado).
 
 ---
 
@@ -378,6 +379,31 @@ proteção. Está registrado no comentário de `ConfiguracaoGeralService.atualiz
 sincronização que rodavam a cada gravação de estoque e de preço), 36 classes Java, 3 telas, 14
 testes, a dependência do WireMock, as variáveis `NINER_ML_*` e duas linhas de `cfg_tela` (RBAC).
 Suíte depois da remoção: **1024 testes verdes, 0 pulados**.
+
+---
+
+## 2026-08-28 (2) — módulo de Serviços: S1, S2, S3 e S4 IMPLEMENTADOS
+
+`V085`, `V086` e `V087`. Serviço no catálogo (tipo imutável, sem estoque), os 8 leitores filtrados
+e a **Ordem de Serviço** completa, virando venda pelo F5 do PDV. Spec: `docs/telas/ordem-servico.md`.
+Suíte: **1062 testes verdes, 0 pulados** · **58 telas**.
+
+**O item 50 fechou:** ele respondeu *"sim, por padrão o módulo de serviço vai precisar ligar ele pra
+funcionar, pois as empresas de serviço são menos que as de comércio"* — `cfg_usa_servicos` nasce
+**desligado** (V085), como recomendado.
+
+**Continuam abertos:** 49 (credenciais da NFS-e — é o bloqueio real), 51 (P2 ramos de serviço e P6
+efeito no preço, este dependendo do item 28).
+
+### 53. 🟢 O que o S4 deixou de propósito para depois
+Nada disso trava a operação — todos são "existe o dado, falta quem o consuma":
+- **`produto_servico.duracao_minutos`** é gravada e ninguém lê. É a semente de uma agenda/hora
+  marcada, que o petshop vai pedir. ⏭️ Adiado por ser feature própria, não detalhe da OS.
+- **`ordem_servico_item.id_funcionario`** (quem executou **aquele** item) é gravado, mas o
+  Relatório de Comissões continua agrupando pelo **vendedor da venda**. Numa oficina com dois
+  mecânicos isso paga a comissão à pessoa errada.
+- **A papeleta lista serviço e peça juntos.** A separação existe na tela da OS e no banco; falta no
+  comprovante — e é a mesma separação que a NFS-e vai precisar.
 
 ---
 

@@ -1,7 +1,27 @@
 # Módulo de Serviços — mão de obra, ordem de serviço e NFS-e
 
-**Produto:** Nainer (Vetor Sistemas) · **Banco:** `niner_db` · **Versão do documento:** 1.0
-**Data:** 2026-08-28 · **Status:** ⛔ **ESTUDO — nada implementado, nenhuma linha de código escrita.**
+**Produto:** Nainer (Vetor Sistemas) · **Banco:** `niner_db` · **Versão do documento:** 1.1
+**Data:** 2026-08-28 · **Status:** ⚠️ **PARCIALMENTE IMPLEMENTADO** — este documento nasceu como
+estudo e virou base de implementação no mesmo dia, a pedido dele.
+
+> ## ⚠️ O que já está no código (2026-08-28)
+>
+> | Bloco | O que é | Onde |
+> |---|---|---|
+> | **S1** | Serviço no catálogo: `produto.tipo_item`, `produto_servico`, tipo imutável, `cfg_usa_servicos` | `V085` · `ProdutoService` · `ProdutoForm.tsx` |
+> | **S2** | Serviço não mexe no estoque — curto-circuito nos 3 ramos da trigger | `V086` |
+> | **S3** | Os 8 leitores do catálogo filtrados por `tipo_item` (fiscal, estoque, kardex, balanço, etiqueta, exportação…) | vários serviços |
+> | **S4** | **Ordem de Serviço** completa + integração com o F5 do PDV | `V087` · `vendas/ordemservico/` · `docs/telas/ordem-servico.md` |
+>
+> ⛔ **O que continua sendo só estudo:** a **NFS-e** (§5 em diante). Ele decidiu que o produto vai
+> oferecer a emissão — falta a credencial municipal da empresa de homologação, e nenhuma linha de
+> código fiscal de serviço foi escrita.
+>
+> ⚠️ **Ao ler as seções abaixo, lembre que elas foram escritas ANTES da implementação.** Onde uma
+> decisão foi refinada ao codificar, quem manda é `docs/telas/ordem-servico.md`. Duas divergências
+> conhecidas: a OS entra **inteira** no PDV (sem campo de quantidade, ao contrário do orçamento), e
+> a trava do módulo vale **só no criar** — alterar e cancelar continuam valendo com ele desligado,
+> senão as peças reservadas ficariam trancadas para sempre.
 
 > **Como este documento nasceu.** O dono do produto pediu, literalmente:
 >
