@@ -162,6 +162,16 @@ export const MENU: NavGrupo[] = [
         descricao: 'Escolhe um caixa aberto, confere o movimento por carteira e encerra a sessão.',
       },
       {
+        // ⭐ Ao lado do Fechamento de propósito: é a mesma gaveta, e a sangria é o que o
+        // operador faz ANTES de fechar. Até 2026-08-29 não havia como tirar dinheiro do caixa —
+        // a loja depositava no banco e o sistema seguia dizendo que o dinheiro estava lá.
+        to: '/sangria-caixa',
+        label: 'Sangria de Caixa',
+        icone: IconeFechamentoCaixa,
+        descricao: 'Tira dinheiro da gaveta e deposita numa conta bancária, com o lançamento nos dois lados.',
+        sinonimos: ['deposito', 'retirada de caixa', 'debito de caixa', 'malote'],
+      },
+      {
         chave: 'cancelamentos',
         label: 'Cancelamentos',
         icone: IconeCancelamentoVenda,

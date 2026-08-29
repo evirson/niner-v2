@@ -156,7 +156,7 @@ public class CancelamentoDevolucaoService {
 
         Cabecalho c = jdbc.sql("""
                         SELECT vd.id_devolucao, vd.id_empresa, e.razao_social AS nome_empresa, vd.data_devolucao,
-                               vd.id_venda_credito, vd.vale_usado, vd.cancelada, vd.data_cancelamento,
+                               vd.id_venda_credito, vd.id_venda_debito, vd.vale_usado, vd.cancelada, vd.data_cancelamento,
                                vd.motivo_cancelamento, u.nome_usuario AS nome_usuario_cancelamento
                         FROM venda_devolucao vd
                         JOIN empresa e ON e.id_empresa = vd.id_empresa AND e.id_tenant = vd.id_tenant
@@ -185,8 +185,10 @@ public class CancelamentoDevolucaoService {
         // schema liga o vale à venda que o consumiu, só o booleano. Dizer o caminho é o máximo
         // honesto sem mudar o schema — está registrado em docs/PENDENCIAS.md.
             throw new ConflitoDadosException(
-                    "O vale-mercadoria nº " + c.idDevolucao() + " já foi usado — não é possível cancelar a devolução. "
-                            + "Cancele antes a venda em que ele foi usado: isso libera o vale e permite cancelar esta devolução.");
+                    "O vale-mercadoria nº " + c.idDevolucao() + " já foi usado"
+                            + (c.idVendaDebito() != null ? " na venda nº " + c.idVendaDebito() : "")
+                            + " — não é possível cancelar a devolução. Cancele antes essa venda: "
+                            + "isso libera o vale e permite cancelar esta devolução.");
         }
 
         OffsetDateTime agora = OffsetDateTime.now();
@@ -246,7 +248,7 @@ public class CancelamentoDevolucaoService {
     }
 
     private record Cabecalho(long idDevolucao, long idEmpresa, String nomeEmpresa, OffsetDateTime dataDevolucao,
-                              Long idVendaCredito, boolean valeUsado, boolean cancelada,
+                              Long idVendaCredito, Long idVendaDebito, boolean valeUsado, boolean cancelada,
                               OffsetDateTime dataCancelamento, String nomeUsuarioCancelamento, String motivoCancelamento) {
     }
 
@@ -270,6 +272,7 @@ public class CancelamentoDevolucaoService {
         return new Cabecalho(
                 rs.getLong("id_devolucao"), rs.getLong("id_empresa"), rs.getString("nome_empresa"),
                 rs.getObject("data_devolucao", OffsetDateTime.class), getLongOuNulo(rs, "id_venda_credito"),
+                getLongOuNulo(rs, "id_venda_debito"),
                 rs.getBoolean("vale_usado"), rs.getBoolean("cancelada"),
                 rs.getObject("data_cancelamento", OffsetDateTime.class), rs.getString("nome_usuario_cancelamento"),
                 rs.getString("motivo_cancelamento"));

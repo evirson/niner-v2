@@ -54,6 +54,7 @@ import EstornoRecebimentoCrediario from './pages/recebimentocrediario/EstornoRec
 import RecebimentoCrediario from './pages/recebimentocrediario/RecebimentoCrediario'
 import ReimpressaoRecebimentoCrediario from './pages/recebimentocrediario/ReimpressaoRecebimentoCrediario'
 import FechamentoCaixa from './pages/caixa/FechamentoCaixa'
+import SangriaCaixa from './pages/caixa/SangriaCaixa'
 import PesquisaVendas from './pages/vendas/PesquisaVendas'
 import DevolucaoProduto from './pages/vendas/DevolucaoProduto'
 import CancelamentoDevolucao from './pages/vendas/CancelamentoDevolucao'
@@ -126,6 +127,7 @@ export default function App() {
           <Route path="/crm" element={<CrmForm />} />
           <Route path="/etiqueta-emissao" element={<EtiquetaEmissaoForm />} />
           <Route path="/fechamento-caixa" element={<FechamentoCaixa />} />
+          <Route path="/sangria-caixa" element={<SangriaCaixa />} />
           <Route path="/recebimento-crediario" element={<RecebimentoCrediario />} />
           <Route path="/estorno-recebimento-crediario" element={<EstornoRecebimentoCrediario />} />
           <Route path="/reimpressao-recebimento-crediario" element={<ReimpressaoRecebimentoCrediario />} />

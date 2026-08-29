@@ -749,4 +749,62 @@ class OrdemServicoTest {
         mvc.perform(get("/api/v1/ordens-servico/" + idOutroTenant).header("Authorization", "Bearer " + token))
                 .andExpect(status().isNotFound());
     }
+    /**
+     * ⭐ Cancelar a venda <b>cancela a OS</b> — e a OS guarda qual venda caiu.
+     *
+     * <h2>⛔ O que acontecia antes (medido ao vivo em 2026-08-28, venda 621 ← OS 3)</h2>
+     *
+     * <p>A venda era cancelada, o estoque voltava, e a OS continuava {@code FATURADA} apontando
+     * para uma venda que não existe mais — <b>sem caminho de volta</b>: {@code FATURADA} não se
+     * cancela pela tela da OS e o F5 só oferece {@code CONCLUIDA}. O lojista teria de abrir outra
+     * OS do zero, redigitando serviços, peças e executor de um trabalho já feito.
+     *
+     * <p>Decisão do dono do produto (2026-08-29): <i>"Se for cancelada uma venda, que tem uma OS ou
+     * um ORÇAMENTO, cancela a venda e tb OS e ou ORÇAMENTO."</i>
+     *
+     * <h2>⚠️ As três coisas que este teste confere, e nenhuma é opcional</h2>
+     *
+     * <ol>
+     *   <li>a OS ficou {@code CANCELADA};</li>
+     *   <li>o {@code id_venda} <b>sobreviveu</b> — é ele que responde "qual venda caiu?" (a V092
+     *       afrouxou o CHECK exatamente para isso). Um teste que olhasse só a situação passaria
+     *       com o rastro perdido;</li>
+     *   <li>a reserva <b>continua zerada</b>. O faturamento já a liberou; o cancelamento não pode
+     *       liberar de novo, senão desconta de `produto_estoque` uma reserva que não existe mais —
+     *       e é o tipo de erro que só aparece semanas depois, num disponível menor que o físico.</li>
+     * </ol>
+     */
+    @Test
+    void cancelarAVendaCancelaAOrdemDeServicoDeOrigem() throws Exception {
+        prepararTenant("cancel-os");
+        abrirCaixa();
+        long id = criarOs("1");
+        mvc.perform(put("/api/v1/ordens-servico/" + id + "/situacao?para=CONCLUIDA")
+                .header("Authorization", "Bearer " + token)).andExpect(status().isOk());
+
+        String venda = venderDaOs(id, "165.00")
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        long idVenda = ((Number) JsonPath.read(venda, "$.idVenda")).longValue();
+
+        mvc.perform(get("/api/v1/ordens-servico/" + id).header("Authorization", "Bearer " + token))
+                .andExpect(jsonPath("$.situacao").value("FATURADA"));
+
+        mvc.perform(post("/api/v1/vendas/cancelamento/" + idVenda)
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(APPLICATION_JSON)
+                        .content("{\"motivo\":\"Cliente desistiu do servico\"}"))
+                .andExpect(status().isOk());
+
+        mvc.perform(get("/api/v1/ordens-servico/" + id).header("Authorization", "Bearer " + token))
+                .andExpect(jsonPath("$.situacao").value("CANCELADA"))
+                .andExpect(jsonPath("$.idVenda").value((int) idVenda))
+                .andExpect(jsonPath("$.motivoCancelamento").value(
+                        org.hamcrest.Matchers.containsString("VENDA Nº " + idVenda + " CANCELADA")));
+
+        assertThat(reservado(idVariacaoPeca))
+                .as("a reserva foi liberada no faturamento; o cancelamento não pode liberar de novo")
+                .isEqualByComparingTo("0");
+    }
+
 }

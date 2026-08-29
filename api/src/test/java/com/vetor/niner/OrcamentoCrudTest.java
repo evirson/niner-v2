@@ -430,13 +430,25 @@ class OrcamentoCrudTest {
     }
 
     /**
-     * Critério 12 + decisão explícita: cancelar a venda <b>não</b> reabre o orçamento.
+     * Cancelar a venda <b>cancela</b> o orçamento que a originou.
      *
-     * <p>Diferente do vale-mercadoria, que o Cancelamento de Venda reabre. Aqui o dono do produto
-     * decidiu o contrário: "o orçamento não pode ser reaberto".
+     * <h2>⚠️ Este teste foi INVERTIDO em 2026-08-29 — ele prendia o comportamento antigo</h2>
+     *
+     * <p>Ele se chamava {@code cancelarAVendaNaoReabreOOrcamento} e exigia {@code VENDIDO} depois
+     * do cancelamento, apoiado numa decisão anterior ("o orçamento não pode ser reaberto"). A
+     * decisão continua valendo — reabrir nunca esteve em questão —, mas ele passava <b>verde com
+     * o defeito presente</b>: o orçamento ficava {@code VENDIDO} apontando para uma venda que não
+     * existe mais.
+     *
+     * <p>Decisão do dono do produto (2026-08-29): <i>"Se for cancelada uma venda, que tem uma OS ou
+     * um ORÇAMENTO, cancela a venda e tb OS e ou ORÇAMENTO."</i> — não é reabrir, é <b>cancelar</b>.
+     *
+     * <p>⚠️ Confere também que o {@code id_venda} <b>sobrevive</b> na linha cancelada: é ele que
+     * responde "qual venda caiu?" (a V092 afrouxou o CHECK exatamente para isso). Um teste que
+     * olhasse só a situação passaria com o rastro perdido.
      */
     @Test
-    void cancelarAVendaNaoReabreOOrcamento() throws Exception {
+    void cancelarAVendaCancelaOOrcamentoDeOrigem() throws Exception {
         Cenario c = prepararCenario("nao-reabre", "10.00");
         long idOrcamento = emitir(c, "4", null);
         abrirCaixa(c.token());
@@ -453,7 +465,10 @@ class OrcamentoCrudTest {
                 .andExpect(status().isOk());
 
         mvc.perform(get("/api/v1/orcamentos/" + idOrcamento).header("Authorization", "Bearer " + c.token()))
-                .andExpect(jsonPath("$.situacao").value("VENDIDO"));
+                .andExpect(jsonPath("$.situacao").value("CANCELADO"))
+                .andExpect(jsonPath("$.idVenda").value((int) idVenda))
+                .andExpect(jsonPath("$.motivoCancelamento").value(
+                        org.hamcrest.Matchers.containsString("VENDA Nº " + idVenda + " CANCELADA")));
     }
 
 

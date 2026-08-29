@@ -11,19 +11,18 @@
 > **Como apresentar:** resumido e **agrupado por dono**, não as ~27 linhas cruas — ele já reclamou
 > de informação demais de uma vez (*"TA MUITO CONFUSO"*).
 >
-> **Última revisão:** 2026-08-29 — dia inteiro de auditoria. Primeiro **cinco rodadas de dois
-> agentes caçadores de bugs** (front e back em paralelo, ~55 correções); depois, com ele mandando
-> seguir, foram fechados os itens **58** (cinco travas de concorrência em rotinas de dinheiro),
-> **59** (dois `exigirAdmin` mortos com javadoc falso), a parte concreta do **56** (a Exportação de
-> Dados agora leva as OS) e o **63** (os seis `@Scheduled` disparavam dentro da suíte). O **33** foi
-> em grande parte resolvido pela `@Tela` de várias chaves. Entraram os itens **60**–**62**.
+> **Última revisão:** 2026-08-29 — dia inteiro. Manhã: **cinco rodadas de dois agentes caçadores
+> de bugs** (~55 correções). Tarde: as pendências que eram minha bola (**58**, **59**, **63**, parte
+> do **56**). Noite: **ele decidiu as 12 pendências item a item** e mandou executar — fecharam
+> **55**, **57**, **61**, **62**, **51**, **31**, **30** e **32**; entraram **60**–**62** e **64**.
 >
-> **Hoje:** **12 itens esperam por ele** (🔵) e **5 são minha bola** (🟢). Os que mais pesam: o
-> **#55** (cancelar a venda deixa a OS e o orçamento órfãos), o **#60** (a NF-e 55 de devolução
-> declara valor bruto — só se corrige podendo transmitir) e o **#62** (o vendedor ganha comissão
-> sobre o acréscimo? hoje o sistema responde SIM, de forma consistente).
+> **Hoje:** **29 itens abertos**, e a maioria é verificação no papel/navegador que só ele pode
+> fazer. Os que precisam de DECISÃO dele: **#64** (o dinheiro que fica na gaveta quando o caixa
+> fecha — a pergunta que a Sangria abriu), **#28** (planos pagos, que ele adiou), **#40** e **#47**
+> (segurança e LGPD, que ele mandou guardar para cobrar depois) e **#49** (credenciais da NFS-e,
+> 🔔 prometidas para a segunda-feira).
 
-**Estado na data desta revisão:** 56 telas do ERP + 3 públicas · 1077 testes verdes, **de 0 a 5 pulados conforme a HORA** — o guard de meia-noite do `HorarioAcessoTest`, que se pula sozinho quando a janela pedida cruzaria a virada do dia (à meia-noite são 5 — 4 do horário de acesso e 1 do 2FA —, de manhã 0). ⚠️ Não é regressão, e o número oscilar é o mecanismo funcionando (tudo medido, não estimado; a contagem de telas é a de `docs/TELAS.md`, que declara a base).
+**Estado na data desta revisão:** 57 telas do ERP + 3 públicas · 1077 testes verdes, **de 0 a 5 pulados conforme a HORA** — o guard de meia-noite do `HorarioAcessoTest`, que se pula sozinho quando a janela pedida cruzaria a virada do dia (à meia-noite são 5 — 4 do horário de acesso e 1 do 2FA —, de manhã 0). ⚠️ Não é regressão, e o número oscilar é o mecanismo funcionando (tudo medido, não estimado; a contagem de telas é a de `docs/TELAS.md`, que declara a base).
 
 ---
 
@@ -135,17 +134,17 @@ cadastros; grupo separado limpa o cadastro mas **elimina a visão de grupo para 
 assinaturas. Combinado que a contratação acontece **fora do ERP**, na tela de contratação.
 **Bola minha**, depende do item 28 para a parte de planos.
 
-### 30. SPF/DKIM/DMARC do domínio `nainer.com.br` 🔵
+### 30. ✅ Ajustado por ele — **FECHADO em 2026-08-29** · SPF/DKIM/DMARC do domínio
 O SMTP da Hostinger foi configurado hoje e o e-mail chega, mas sem esses registros a mensagem tende
 a cair em spam nos destinatários. Ajuste no painel da Hostinger. **Bola dele.**
 
-### 31. ⚠️ Conferir 3 campos da empresa que eu não consegui recuperar 🔵
+### 31. ✅ Conferido por ele — **FECHADO em 2026-08-29**
 Um `PUT` de teste meu apagou a ficha fiscal da empresa 1 (detalhe e correção no histórico do dia).
 Restaurei tudo do XML da última NFC-e autorizada e o CNAE da consulta ao CNPJ — a Conformidade
 Fiscal voltou a dizer "Pronto para emitir". **Mas Inscrição Municipal, telefone e e-mail não
 estavam no XML**: se algum deles estava preenchido, precisa ser digitado de novo. **Bola dele.**
 
-### 32. Token válido de redefinição não foi exercitado na tela 🔵
+### 32. ✅ Testado por ele (*"já testei e está tudo ok"*) — **FECHADO em 2026-08-29**
 O fluxo tem teste automatizado ponta a ponta e a tela foi verificada com token inválido; o caminho
 feliz no navegador exige clicar num link de e-mail real, **o que troca a senha da conta**. Basta
 ele fazer uma vez com uma conta descartável. **Bola dele.**
@@ -397,6 +396,71 @@ Suíte depois da remoção: **1024 testes verdes, 0 pulados**.
 
 ---
 
+## 2026-08-29 (2) — ele decidiu as 12 pendências, item a item
+
+Ele leu a lista completa e respondeu cada uma. Cinco viraram código (`V092`–`V094`), quatro
+continuam abertas **por decisão dele** (com o texto do pedido registrado) e três foram fechadas por
+confirmação. As entregas estão em `docs/PROGRESSO.md`.
+
+### ✅ Fechadas nesta rodada
+
+- **#55** — cancelar a venda **cancela** a OS e o orçamento (V092). *"cancela a venda e tb OS e ou
+  ORÇAMENTO"*. Teste com controle negativo dos dois lados.
+- **#57** — criada a **Sangria de Caixa** (V094, `docs/telas/sangria-caixa.md`) e o fundo de troco
+  passou a contar uma vez por operador. ⚠️ **Mas sobrou uma pergunta para ele — ver o item 64.**
+- **#61** — a mensagem do beco agora **nomeia a venda** que consumiu o vale. Sem migration: a
+  coluna `venda_devolucao.id_venda_debito` já existia desde a V018, e a pendência afirmava o
+  contrário. (Terceira afirmação minha sobre "o que o sistema não faz" que caiu na conferência, no
+  mesmo dia.)
+- **#62** — confirmado, **sem mudança de código**: *"o que vale é o total pago pelo cliente"* é
+  exatamente o que o sistema faz desde que a DRE e a Lucratividade foram alinhadas ao Relatório de
+  Comissões nesta mesma data.
+- **#51** — cinco ramos de serviço (V093), com os CNAEs carregados da API do IBGE. ⚠️ A parte **P6**
+  (a cota pesar diferente em serviço) continua dependendo do **#28** e vai junto com ele.
+- **#31**, **#30**, **#32** — fechadas por confirmação dele (*"ok"*, *"ok"*, *"já testei e está tudo
+  ok"*).
+
+### 🔵 Continuam abertas — decisão registrada dele
+
+- **#28** — *"iremos definir esta questão comercial mais para frente, anote como pendência"*.
+- **#40** e **#47** — *"documente e deixe como pendência, pra me cobrar mais pra frente"*. Os dois
+  já estão **medidos**, não suspeitos: o hash falso do login de staff tem 63 caracteres onde o
+  BCrypt exige 60, então `matches` recusa o formato e **retorna sem calcular** (e-mail existente
+  ~50-300 ms × inexistente ~1 ms); e o `ON CONFLICT` do lead deixa um anônimo sobrescrever nome e
+  telefone de um lead existente.
+- **#49** — *"na próxima segunda-feira já terei as credenciais, e vamos testar"*. 🔔 **Cobrar na
+  segunda:** sem elas o S0/S6/S7 da NFS-e não sai do papel, e faltam três fatos que não são
+  dedutíveis — **regime** (MEI × Simples), **município** e o padrão que ele usa.
+
+---
+
+### 64. ⏭️ A sangria abre uma pergunta: e o dinheiro que fica na gaveta no fechamento? 🔵
+
+A Sangria de Caixa (#57) resolveu o buraco principal, mas o desenho tem um limite que só aparece
+agora que ela existe.
+
+**O que ficou:** o fundo de troco conta **uma vez por operador** (o do último caixa aberto até a
+data), e a sangria tira o resto para o banco. Fecha certo quando o operador **sangra tudo** que
+vendeu e deixa só o fundo na gaveta.
+
+**O que não fecha:** se ele fechar o caixa com R$ 800 em dinheiro e abrir amanhã com fundo de
+R$ 200, os R$ 600 que continuam fisicamente na gaveta **somem do saldo** — o fechamento não grava
+saída, e o fundo de amanhã não os inclui. Ou seja: o número volta a estar errado, na direção
+oposta à de antes (a menos, em vez de a mais).
+
+**As três saídas possíveis**, e nenhuma é minha para escolher:
+1. **O fechamento exige sangrar até o fundo** — o operador é obrigado a deixar na gaveta exatamente
+   o que vai abrir amanhã. É o mais simples e o que a maioria dos ERPs faz.
+2. **O fechamento lança automaticamente a diferença** como sangria para uma conta configurada.
+   Menos digitação, mas decide dinheiro por conta própria.
+3. **O saldo passa a vir do fechamento**, não da abertura — o que está na gaveta é o que foi
+   **contado** no último fechamento. Mais fiel, mas muda o significado da tela.
+
+⚠️ Registrado como pendência em vez de escolhido porque as três mudam a rotina do caixa, e a #1 em
+particular acrescenta uma obrigação ao operador no fim do dia.
+
+---
+
 ## 2026-08-29 — auditoria por agentes: 5 rodadas, front e back em paralelo
 
 Pedido dele: *"dois agentes em paralelo, 5 rodadas cada, para ser preciso na varredura; procure a
@@ -405,7 +469,7 @@ fundo o ERP, verifique tudo"* — e, da rodada 2 em diante, **varrer o ERP intei
 O que foi corrigido está em `docs/PROGRESSO.md`. Aqui ficam só os itens que **dependem de decisão
 dele** ou que sobraram por escolha.
 
-### 57. Fluxo de Caixa soma o fundo de troco a CADA abertura 🔵
+### 57. ✅ Fundo de troco e a Sangria de Caixa — **FECHADO em 2026-08-29** (V094; ver o item 64)
 
 `FluxoCaixaService.saldoAte` soma `SUM(cm.saldo_inicial)` de **todos** os caixas abertos até a data,
 e nada retira esse dinheiro depois — `CaixaService.fechar` não grava saída, e não existe sangria.
@@ -483,7 +547,7 @@ junto — foi ele que, afirmando o contrário do que era verdade, gerou este ite
 
 ---
 
-### 61. Nada no schema liga o vale-mercadoria à venda que o consumiu 🔵
+### 61. ✅ A mensagem NOMEIA a venda que consumiu o vale — **FECHADO em 2026-08-29** (a coluna já existia)
 
 **O sintoma:** se o vale já foi resgatado, o cancelamento da venda diz *"cancele primeiro a
 devolução"* e o cancelamento da devolução responde *"o vale já foi usado — não é possível
@@ -501,7 +565,7 @@ usado.
 
 ---
 
-### 62. Comissão sobre ACRÉSCIMO: confirmação de regra 🔵
+### 62. ✅ Comissão sobre o TOTAL PAGO — **CONFIRMADO em 2026-08-29**, sem mudança de código
 
 Em 29/08 três relatórios (DRE ×2 e Lucratividade) calculavam a comissão sobre
 `qtd × preço − desconto`, e o **Relatório de Comissões — o número que a loja efetivamente paga** —
@@ -565,7 +629,7 @@ Suíte: **1065 testes verdes, 1–2 pulados** (o guard de meia-noite, que se pul
 - **Executor por LINHA quando a mesma variação se repete na OS.** Hoje o mapa fica com o primeiro
   executor; resolver exige a chave de linha que o PDV ainda não carrega para a OS.
 
-### 55. Cancelar a venda deixa o documento de origem ÓRFÃO (OS **e** orçamento) 🔵
+### 55. ✅ Cancelar a venda CANCELA a OS e o orçamento — **FECHADO em 2026-08-29** (V092)
 
 **Medido ao vivo em 2026-08-28**, cancelando a venda 621 que veio da OS 3:
 
@@ -660,7 +724,7 @@ retrabalho medido (V054 → V055). **Recomendação: desligado**, como `cfg_usa_
 calçados não deve ganhar um seletor "Mercadoria/Serviço" que nunca vai usar. Precisa da resposta
 **antes do bloco S1**.
 
-### 51. P2 e P6 — ramos de serviço e o efeito no preço 🔵
+### 51. ✅ Cinco ramos de SERVIÇO criados (V093) — o P6 (cota) segue junto do #28
 **P2:** os 28 ramos são todos de varejo; uma oficina hoje se cadastra como `AUTOPECAS` ou `OUTROS` e
 o dado de segmentação nasce errado. Recomendação: acrescentar oficina, salão/barbearia, assistência
 técnica, clínica veterinária e lava-rápido, com os CNAEs carregados da fonte do IBGE.

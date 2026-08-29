@@ -210,18 +210,33 @@ public class ContaCorrenteMovimentoService {
      * passar por este serviço.
      */
     private void exigirLancamentoManual(long localizador, String acao) {
-        long idContaPagar = jdbc.sql("""
-                        SELECT COALESCE(id_conta_pagar, 0) FROM conta_corrente_movimento
+        record Origem(long idContaPagar, long idSangria) {
+        }
+        Origem origem = jdbc.sql("""
+                        SELECT COALESCE(id_conta_pagar, 0) AS id_conta_pagar,
+                               COALESCE(id_sangria, 0) AS id_sangria
+                          FROM conta_corrente_movimento
                          WHERE id_tenant = plataforma.tenant_atual() AND localizador = ?
                         """)
                 .param(localizador)
-                .query(Long.class)
+                .query((rs, n) -> new Origem(rs.getLong("id_conta_pagar"), rs.getLong("id_sangria")))
                 .optional()
-                .orElse(0L);
+                .orElse(new Origem(0, 0));
 
-        if (idContaPagar != 0) {
+        // ⚠️ A sangria entrou aqui junto com a rotina (V094, 2026-08-29), não depois: a lição de
+        // 2026-08-15 é que uma tabela de CRUD manual que passa a receber lançamento automático
+        // precisa RECUSAR a edição no mesmo dia — senão o extrato descasa do caixa em silêncio, e
+        // o banco não impede porque é uma linha comum.
+        if (origem.idSangria() != 0) {
             throw new ConflitoDadosException(
-                    "Este lançamento foi gerado pela baixa da conta a pagar nº " + idContaPagar
+                    "Este lançamento é o depósito da sangria nº " + origem.idSangria()
+                            + " e não pode ser " + acao + " por aqui — ele tem um débito de caixa do "
+                            + "outro lado, e mexer só neste descasaria o extrato do caixa.");
+        }
+
+        if (origem.idContaPagar() != 0) {
+            throw new ConflitoDadosException(
+                    "Este lançamento foi gerado pela baixa da conta a pagar nº " + origem.idContaPagar()
                             + " e não pode ser " + acao + " por aqui. Altere ou desfaça o pagamento em "
                             + "Financeiro › Contas a Pagar / Pagas — o movimento da conta corrente acompanha.");
         }

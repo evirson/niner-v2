@@ -372,7 +372,68 @@ public class CancelamentoVendaService {
                 .param(idVenda)
                 .update();
 
+        cancelarDocumentoDeOrigem(idVenda, idUsuario, agora, req.motivo());
+
         return new CancelamentoEfetivadoResponse(idVenda, agora);
+    }
+
+    /**
+     * Cancela junto a <b>Ordem de Serviço</b> e/ou o <b>orçamento</b> que originaram esta venda.
+     *
+     * <h2>⛔ O que acontecia antes (medido ao vivo em 2026-08-28, venda 621 ← OS 3)</h2>
+     *
+     * <p>A venda era cancelada, o estoque voltava — e a OS continuava {@code FATURADA} apontando
+     * para uma venda que não existe mais, <b>sem caminho de volta</b>: {@code FATURADA} não se
+     * cancela pela tela da OS (é a venda que tem caixa, contas a receber e nota a reverter) e o F5
+     * só oferece {@code CONCLUIDA}. O lojista teria de abrir outra OS do zero, redigitando
+     * serviços, peças e executor de um trabalho já feito.
+     *
+     * <p>⚠️ O orçamento tinha o mesmo defeito desde sempre (ficava {@code VENDIDO} apontando para
+     * venda cancelada) — não era regressão do módulo de serviços, só doía menos.
+     *
+     * <h2>A decisão (dono do produto, 2026-08-29)</h2>
+     *
+     * <p><i>"Se for cancelada uma venda, que tem uma OS ou um ORÇAMENTO, cancela a venda e tb OS e
+     * ou ORÇAMENTO."</i> — o documento de origem é <b>cancelado</b>, não devolvido a
+     * concluído/aberto.
+     *
+     * <p>⭐ Isso dissolve a pergunta da reserva de estoque: documento cancelado não reserva nada.
+     * ⚠️ E é <b>proibido</b> liberar reserva aqui — {@code marcarFaturada} já liberou e zerou
+     * {@code qtd_reservada} no faturamento; liberar de novo descontaria de `produto_estoque` uma
+     * reserva que não existe mais.
+     *
+     * <p>⚠️ O {@code id_venda} é <b>preservado</b> na linha cancelada (a V092 afrouxou os dois
+     * CHECK exatamente para isso): sem ele, a OS cancelada não saberia dizer QUAL venda caiu, e a
+     * pergunta "por que esta OS foi cancelada?" ficaria sem resposta na própria linha (P3).
+     *
+     * <p>⚠️ SQL direto, sem passar por {@code OrdemServicoService.cancelar}: aquele método recusa
+     * OS faturada de propósito — e recusa certo, porque quem chama por lá não está desfazendo a
+     * venda. Este caminho é o dono da reversão inteira e já está dentro da transação dela.
+     */
+    private void cancelarDocumentoDeOrigem(long idVenda, long idUsuario, OffsetDateTime agora, String motivo) {
+        String motivoOrigem = ("VENDA Nº " + idVenda + " CANCELADA — " + motivo)
+                .toUpperCase(java.util.Locale.ROOT);
+
+        jdbc.sql("""
+                        UPDATE ordem_servico
+                           SET situacao = 'CANCELADA', data_cancelamento = ?,
+                               id_usuario_cancelamento = ?, motivo_cancelamento = ?, atualizado_em = now()
+                         WHERE id_tenant = plataforma.tenant_atual() AND id_venda = ?
+                           AND situacao = 'FATURADA'
+                        """)
+                .params(agora, idUsuario, motivoOrigem, idVenda)
+                .update();
+
+        // ⚠️ `VENDIDO_PARCIAL` também: o cliente levou parte do orçamento, e essa venda caiu.
+        jdbc.sql("""
+                        UPDATE orcamento
+                           SET situacao = 'CANCELADO', data_cancelamento = ?,
+                               id_usuario_cancelamento = ?, motivo_cancelamento = ?, atualizado_em = now()
+                         WHERE id_tenant = plataforma.tenant_atual() AND id_venda = ?
+                           AND situacao IN ('VENDIDO', 'VENDIDO_PARCIAL')
+                        """)
+                .params(agora, idUsuario, motivoOrigem, idVenda)
+                .update();
     }
 
     /** Devolve ao estoque cada item vendido — novo {@code produto_movimento_mestre} (tipo

@@ -11,6 +11,102 @@ Registro cronológico das decisões e entregas. Atualizar a cada marco relevante
 
 ## Estado atual
 
+> ## 📌 2026-08-29 (3) — as decisões dele sobre as 12 pendências
+>
+> Ele leu a lista, decidiu item a item e mandou executar tudo. Cinco viraram código
+> (`V092`–`V094`), quatro viraram pendência anotada e três foram fechadas por confirmação dele.
+>
+> ### #55 — cancelar a venda cancela a OS e o orçamento
+>
+> > *"Se for cancelada uma venda, que tem uma OS ou um ORÇAMENTO, cancela a venda e tb OS e ou
+> > ORÇAMENTO."*
+>
+> Não é "devolver para concluído", é **cancelar**. Isso dissolveu a segunda pergunta que eu tinha
+> feito (as peças reservam de novo?): documento cancelado não reserva nada. ⚠️ E é **proibido**
+> liberar reserva no cancelamento — `marcarFaturada` já liberou e zerou `qtd_reservada` no
+> faturamento; liberar de novo descontaria de `produto_estoque` uma reserva que não existe mais.
+>
+> ⭐ A **V092** só afrouxa dois CHECK, e o motivo é auditoria: `ordem_servico_faturada_ck` e
+> `orcamento_efetivado_ck` amarravam estado × venda com igualdade estrita, então cancelar exigiria
+> `id_venda = NULL` — e aí a OS cancelada não saberia dizer **qual** venda caiu. A invariante que
+> importa continua: FATURADA/VENDIDO obriga venda, ABERTA/CONCLUIDA/VENCIDO obriga venda nula. O
+> único caso novo é CANCELADA carregando a venda que foi cancelada.
+>
+> ⚠️ **Um teste prendia o comportamento antigo e reprovou na hora:**
+> `cancelarAVendaNaoReabreOOrcamento` exigia `VENDIDO` depois do cancelamento, apoiado numa decisão
+> anterior ("o orçamento não pode ser reaberto") — que continua valendo, porque reabrir nunca esteve
+> em questão. Ele passava **verde com o defeito presente**. Invertido, não apagado.
+>
+> ### #62 — comissão sobre o total pago pelo cliente
+>
+> > *"Vendedor ganha comissão sobre o total da venda, se tem desconto ou acréscimo, o que vale é o
+> > total pago pelo cliente."*
+>
+> ⭐ É exatamente o que o sistema já faz desde a manhã, quando aliei a DRE e a Lucratividade ao
+> Relatório de Comissões (`qtd × preço − desconto + acréscimo`). Nada a mudar — a confirmação
+> fechou a pergunta aberta em vez de gerar código.
+>
+> ### #57 — a sangria que não existia
+>
+> Ele perguntou se dava para sangrar pela rotina de débito de caixa. **Não dava**, e a resposta
+> exigiu medir: o valor `DEBITO_CAIXA` está no enum desde a V025 — o que engana quem lê o código —
+> mas o único que o emite é a baixa de Contas a Pagar, que paga fornecedor, não deposita no banco.
+> `CREDITO_CAIXA` só existe como rótulo do Fluxo de Caixa; ninguém o emite.
+>
+> A **V094** criou a rotina inteira, com a regra dele no centro: *"esta sangria tem que ter um
+> destino: sempre será depositada numa conta bancária"*. ⭐ Por isso sangria é **transferência**, não
+> saída: três linhas na mesma transação (mestre + débito no caixa + crédito no banco), ligadas por
+> `id_sangria` **com FK de verdade**. Detalhes em `docs/telas/sangria-caixa.md`.
+>
+> ⚠️ **E a sangria sozinha não consertava o número inflado.** O Fluxo de Caixa somava
+> `saldo_inicial` de todas as aberturas: loja que abre com R$ 200 todo dia mostrava R$ 4.000 depois
+> de 20 dias úteis, com R$ 200 na gaveta. Juntando a decisão dele ("o fundo compõe o saldo final")
+> com a sangria, a conta que fecha é o fundo do **último caixa de cada operador** — o de ontem é a
+> mesma cédula, e o que saiu virou sangria e está no banco. A contrapartida no período passou a ser
+> a **variação** do fundo, senão a igualdade `saldo inicial + movimentos = saldo final` quebraria em
+> toda loja que abre o caixa mais de uma vez.
+>
+> ### #61 — a coluna que eu disse não existir
+>
+> ⛔ Eu escrevi na pendência que *"nada no schema liga o vale à venda que o consumiu"*. **Existe**:
+> `venda_devolucao.id_venda_debito`, desde a V018. Não precisou de migration nenhuma — só ler a
+> coluna e nomear a venda na mensagem do beco. É a terceira vez no mesmo dia que uma afirmação minha
+> sobre o que o sistema *não* faz se mostra falsa ao ser conferida.
+>
+> ### #51 — cinco ramos de serviço, e a fonte pagou o próprio custo
+>
+> A **V093** acrescenta oficina mecânica, salão/barbearia, assistência técnica, clínica veterinária
+> e lava-rápido. ⭐ Os CNAEs vieram da API do IBGE (1.332 subclasses baixadas na hora), não da
+> memória — e a fonte se pagou imediatamente: eu ia escrever `4541206` para motocicletas; a tabela
+> oficial mostrou que esse código é *comércio de peças para motos*, **já mapeado para AUTOPEÇAS**, e
+> que o serviço é `4543900`. Como `cnae` é PRIMARY KEY, o palpite teria estourado a migration — ou,
+> pior, mandado toda oficina de motos para o ramo errado em silêncio.
+>
+> ⚠️ De brinde, o **pet shop** ganhou os dois CNAEs que descrevem o serviço dele (`9609207`
+> alojamento e `9609208` banho e tosa): a V072 só mapeou o comércio, então um pet shop cujo CNAE
+> principal fosse banho e tosa não recebia sugestão nenhuma — e é justamente esse o pet shop que o
+> módulo de Serviços atende.
+>
+> ⚠️ `RamoAtividadeTest` travava o número 28 e reprovou na hora. É o comportamento certo dele:
+> catálogo não muda sem alguém decidir. Além de virar 33, o teste passou a conferir a **ordem
+> alfabética** (a V093 reordena o conjunto em SQL em vez de redigitar 33 números) e a presença dos
+> cinco códigos novos.
+>
+> ### O que virou pendência anotada, por decisão dele
+>
+> - **#28** (planos pagos) — *"iremos definir esta questão comercial mais para frente"*.
+> - **#40** (login do backoffice sem teto e com oráculo de tempo) e **#47** (lead grava consentimento
+>   não dado) — *"documente e deixe como pendência, pra me cobrar mais pra frente"*. Os dois estão
+>   medidos: o hash falso tem **63 caracteres** onde o BCrypt exige 60, então o `matches` recusa o
+>   formato e **retorna sem calcular** — e-mail existente ~50-300 ms, inexistente ~1 ms.
+> - **#49** (credenciais da NFS-e) — *"na próxima segunda-feira já terei as credenciais"*.
+>
+> ### Fechadas por confirmação dele
+>
+> **#31** (conferir 3 campos da empresa), **#30** (SPF/DKIM/DMARC) e **#32** — *"já testei e está
+> tudo ok"*.
+>
+
 > ## 📌 2026-08-29 (2) — as pendências que eram minha bola
 >
 > Ele mandou seguir depois das cinco rodadas. Fechados os itens **58**, **59**, **63** e a parte

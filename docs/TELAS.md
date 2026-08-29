@@ -7,8 +7,9 @@
 > ⚠️ **É retrato do CÓDIGO, não da intenção.** Se divergir de outra documentação, o código
 > está certo e a outra doc envelheceu.
 >
-> **Contagem em 2026-08-28 (medida deste arquivo, não estimada):** **56 telas do ERP em uso** +
-> **3 públicas** (entrada, sem login) + **6 em Implementações Futuras** = 65 linhas.
+> **Contagem em 2026-08-29 (medida deste arquivo, não estimada):** **57 telas do ERP em uso** +
+> **3 públicas** (entrada, sem login) + **6 em Implementações Futuras** = 66 linhas. A 57ª é a
+> **Sangria de Caixa** (V094, 2026-08-29).
 >
 > ⚠️ **Declare sempre a base ao citar o número.** Até hoje três documentos traziam contagens
 > diferentes (57, 58 e 60) porque cada um incluía coisas distintas — as públicas, as futuras, ou
@@ -41,6 +42,7 @@
 | Reimpressão de Recebimento de Crediário | `/reimpressao-recebimento-crediario` | `docs/telas/comprovante-recebimento-crediario.md` |
 | Devolução de Produtos | `/devolucao-produto` | `docs/telas/devolucao-produtos.md` |
 | Fechamento de Caixa | `/fechamento-caixa` | `docs/telas/fechamento-caixa.md` |
+| Sangria de Caixa | `/sangria-caixa` | `docs/telas/sangria-caixa.md` |
 
 ## Cancelamentos
 

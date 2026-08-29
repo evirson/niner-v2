@@ -38,6 +38,22 @@ function configuracaoDeTela(cadastro: string): ConteudoAjuda {
 }
 
 const CONTEUDOS: Record<string, ConteudoAjuda> = {
+  'sangria-caixa': {
+    titulo: 'Sangria de Caixa',
+    objetivo: 'Tirar dinheiro da gaveta e depositar numa conta bancária, sem que ele suma do sistema.',
+    passos: [
+      'O topo mostra quanto há para sangrar — só o dinheiro em espécie do seu caixa aberto.',
+      'Escolha a conta de destino (o banco, ou o caixa central, que também é cadastrado como conta corrente).',
+      'Escolha o plano de contas, digite o valor e registre. O sistema lança a saída no caixa e a entrada na conta, juntas.',
+      'A grid abaixo lista as sangrias deste caixa, para você conferir antes de fechar.',
+    ],
+    errosComuns: [
+      'Cartão e crediário não entram no disponível: esse dinheiro não está na gaveta, quem paga é o adquirente depois.',
+      'A sangria sempre tem destino. Não existe "tirar dinheiro" sem dizer para onde — dinheiro sem destino desaparece do Fluxo de Caixa.',
+      'Sangria não se altera nem se exclui, e o lançamento dela no extrato da conta também não: os dois lados andam juntos.',
+      'Sem caixa aberto não há sangria. Abra o caixa primeiro.',
+    ],
+  },
   // ⚠️ Faltava (auditoria 2026-08-29) — e a falha era MUDA: `AjudaDaTela` faz
   // `if (!conteudo) return null`, então o botão de Ajuda simplesmente não aparecia nesta tela.
   // Conferidas as 59 chaves usadas contra as 77 definidas, esta era a única órfã.

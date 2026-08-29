@@ -119,24 +119,23 @@ public class FluxoCaixaService {
         List<Movimento> movimentos = new ArrayList<>();
 
         if (origem != OrigemDinheiro.CONTA_CORRENTE) {
-            // Abertura de caixa dentro do período conta como ENTRADA (2026-08-14, achado no teste):
-            // `caixa_mestre.saldo_inicial` é dinheiro que entra na gaveta sem gerar linha em
-            // `caixa_detalhe`. Sem contá-lo aqui, o saldo final do período não fecha com o saldo
-            // real — que é justamente a promessa do relatório (o teste acusou -150 onde o dinheiro
-            // real era 850). `saldoAte` já o considerava; faltava a contrapartida no período.
-            movimentos.addAll(jdbc.sql("""
-                            SELECT 'OPERACIONAL' AS grupo, 'Abertura de caixa (saldo inicial)' AS rotulo,
-                                   COALESCE(SUM(cm.saldo_inicial), 0) AS valor
-                            FROM caixa_mestre cm
-                            WHERE cm.id_tenant = plataforma.tenant_atual() AND cm.saldo_inicial <> 0
-                                  AND (cm.data_abertura AT TIME ZONE 'America/Sao_Paulo')::date BETWEEN ? AND ?
-                            """ + filtroEmpresa("cm.id_empresa", empresas) + """
-
-                            HAVING COALESCE(SUM(cm.saldo_inicial), 0) <> 0
-                            """)
-                    .params(parametros(inicio, fim, empresas))
-                    .query((rs, n) -> new Movimento(rs.getString("grupo"), rs.getString("rotulo"), rs.getBigDecimal("valor")))
-                    .list());
+            // ⭐ A contrapartida do fundo no período é a VARIAÇÃO dele, não a soma das aberturas
+            // (2026-08-29). O relatório promete `saldo inicial + movimentos = saldo final`, e
+            // `saldoAte` passou a contar o fundo uma vez por operador (ver `fundoDeCaixaAte`):
+            // somar aqui todas as aberturas quebraria a igualdade em toda loja que abre o caixa
+            // mais de uma vez no período.
+            // ⚠️ O caso que motivou esta linha em 2026-08-14 continua certo: no PRIMEIRO dia de
+            // uso o fundo anterior é 0 e o do fim é 200 — a variação é 200, exatamente o que o
+            // teste exigia ("acusou −150 onde o dinheiro real era 850"). No vigésimo dia a
+            // variação é 0, que também é a verdade: nenhum dinheiro novo entrou na gaveta.
+            BigDecimal fundoAntes = fundoDeCaixaAte(inicio.minusDays(1), empresas);
+            BigDecimal fundoDepois = fundoDeCaixaAte(fim, empresas);
+            BigDecimal variacaoDoFundo = fundoDepois.subtract(fundoAntes);
+            if (variacaoDoFundo.signum() != 0) {
+                movimentos.add(new Movimento("OPERACIONAL",
+                        variacaoDoFundo.signum() > 0 ? "Fundo de troco (aporte)" : "Fundo de troco (retirada)",
+                        variacaoDoFundo));
+            }
 
             movimentos.addAll(jdbc.sql("""
                             SELECT COALESCE(NULLIF(pc.grupo_dfc::text, 'NAO_APLICA'), 'OPERACIONAL') AS grupo,
@@ -187,18 +186,52 @@ public class FluxoCaixaService {
      * lá — é dinheiro que estava na gaveta e não tem lançamento em {@code caixa_detalhe}; ignorá-lo
      * faria o saldo do relatório nunca bater com o dinheiro real.
      */
+    /**
+     * O fundo de troco que está fisicamente na gaveta na data — <b>uma vez por operador</b>, não
+     * uma vez por abertura.
+     *
+     * <h2>⛔ O que estava errado</h2>
+     *
+     * <p>Era {@code SUM(saldo_inicial)} de <b>todas</b> as aberturas até a data. Uma loja que abre
+     * todo dia com R$ 200 (a mesma cédula que dorme na gaveta) e não vende nada mostrava, após 20
+     * dias úteis, <b>"saldo real: R$ 4.000"</b> — com R$ 200 na gaveta. A Projeção parte desse
+     * número, e a conciliação não denunciava porque os dois lados usavam a mesma soma inflada.
+     *
+     * <h2>A decisão (dono do produto, 2026-08-29)</h2>
+     *
+     * <p><i>"Fundo de caixa compõe o saldo final"</i> — ele conta. E a Sangria de Caixa (V094),
+     * criada no mesmo pedido, é o que tira o resto: o dinheiro vendido sai da gaveta para a conta
+     * corrente e aparece do outro lado.
+     *
+     * <p>⭐ Juntando as duas coisas, a conta que fecha é esta: <b>o fundo do último caixa de cada
+     * operador</b>. É o dinheiro que ele tem na mão agora; o de ontem é a mesma cédula, e o que
+     * saiu virou sangria e está no banco. {@code DISTINCT ON} por (empresa, usuário) porque duas
+     * pessoas com caixa próprio têm duas gavetas de verdade.
+     *
+     * <p>⚠️ Funciona para data passada também: pergunta "qual era a última abertura ATÉ aquele
+     * dia", não "qual está aberto agora".
+     */
+    private BigDecimal fundoDeCaixaAte(LocalDate data, List<Long> empresas) {
+        return jdbc.sql("""
+                        SELECT COALESCE(SUM(ultimo.saldo_inicial), 0) FROM (
+                            SELECT DISTINCT ON (cm.id_empresa, cm.id_usuario) cm.saldo_inicial
+                              FROM caixa_mestre cm
+                             WHERE cm.id_tenant = plataforma.tenant_atual()
+                               AND (cm.data_abertura AT TIME ZONE 'America/Sao_Paulo')::date <= ?
+                        """ + filtroEmpresa("cm.id_empresa", empresas) + """
+
+                             ORDER BY cm.id_empresa, cm.id_usuario, cm.data_abertura DESC, cm.id_caixa DESC
+                        ) ultimo
+                        """)
+                .params(parametrosData(data, empresas))
+                .query(BigDecimal.class).single();
+    }
+
     private BigDecimal saldoAte(LocalDate data, List<Long> empresas, OrigemDinheiro origem) {
         BigDecimal saldo = BigDecimal.ZERO;
 
         if (origem != OrigemDinheiro.CONTA_CORRENTE) {
-            saldo = saldo.add(jdbc.sql("""
-                            SELECT COALESCE(SUM(cm.saldo_inicial), 0)
-                            FROM caixa_mestre cm
-                            WHERE cm.id_tenant = plataforma.tenant_atual()
-                                  AND (cm.data_abertura AT TIME ZONE 'America/Sao_Paulo')::date <= ?
-                            """ + filtroEmpresa("cm.id_empresa", empresas))
-                    .params(parametrosData(data, empresas))
-                    .query(BigDecimal.class).single());
+            saldo = saldo.add(fundoDeCaixaAte(data, empresas));
 
             saldo = saldo.add(jdbc.sql("""
                             SELECT COALESCE(SUM(CASE WHEN cd.credito_debito = 'C' THEN cd.valor ELSE -cd.valor END), 0)

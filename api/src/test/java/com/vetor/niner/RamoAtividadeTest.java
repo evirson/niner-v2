@@ -17,6 +17,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * Ramo de atividade da empresa (V072, 2026-08-27) — a lista curta que o lojista escolhe e o mapa
@@ -38,12 +39,28 @@ class RamoAtividadeTest {
     RamoAtividadeService ramos;
 
     @Test
-    void listaOs28RamosNaOrdemDefinida() throws Exception {
+    void listaOsRamosNaOrdemDefinida() throws Exception {
         var lista = ramos.listar();
-        assertEquals(28, lista.size());
+        // ⚠️ Eram 28 (só varejo) até 2026-08-29; a V093 acrescentou os CINCO de serviço, junto
+        // com a Ordem de Serviço. Este teste prendia o número antigo e reprovou na hora — é o
+        // comportamento certo dele: número de catálogo não muda sem alguém decidir.
+        assertEquals(33, lista.size());
         assertEquals("Açougue e peixaria", lista.get(0).nome());
         assertEquals("Outros", lista.get(lista.size() - 1).nome(),
                 "\"Outros\" é o fallback manual e fica sempre por último");
+
+        // ⭐ A ordem é alfabética por nome, com "Outros" fora dela. A V093 reordena o conjunto
+        // inteiro em SQL em vez de redigitar 33 números — e é isto que confere que deu certo.
+        var nomes = lista.stream().map(r -> r.nome()).toList();
+        var semOutros = nomes.subList(0, nomes.size() - 1);
+        assertEquals(semOutros.stream().sorted(java.text.Collator.getInstance(
+                        java.util.Locale.of("pt", "BR"))).toList(), semOutros,
+                "os ramos saem em ordem alfabética; só \"Outros\" escapa dela");
+
+        // Os cinco de serviço estão lá, pelo código (que é o que o Java referencia).
+        var codigos = lista.stream().map(r -> r.codigo()).toList();
+        assertThat(codigos).contains("OFICINA_MECANICA", "SALAO_BARBEARIA", "ASSISTENCIA_TECNICA",
+                "CLINICA_VETERINARIA", "LAVA_RAPIDO");
     }
 
     @Test
@@ -80,7 +97,7 @@ class RamoAtividadeTest {
     void listaDeRamosEhPublica() throws Exception {
         mvc.perform(get("/api/publico/ramos"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.length()").value(28));
+                .andExpect(jsonPath("$.length()").value(33));
     }
 
     @Test
