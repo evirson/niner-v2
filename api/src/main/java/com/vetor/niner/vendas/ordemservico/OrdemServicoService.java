@@ -1,6 +1,7 @@
 package com.vetor.niner.vendas.ordemservico;
 
 import com.vetor.niner.comum.seguranca.EmpresaDaSessao;
+import com.vetor.niner.comum.web.ConflitoDadosException;
 import com.vetor.niner.vendas.ordemservico.OrdemServicoDtos.ItemRequest;
 import com.vetor.niner.vendas.ordemservico.OrdemServicoDtos.ItemResponse;
 import com.vetor.niner.vendas.ordemservico.OrdemServicoDtos.LinhaListagem;
@@ -343,6 +344,62 @@ public class OrdemServicoService {
                         rs.getObject("data_abertura", OffsetDateTime.class),
                         rs.getBigDecimal("total"), idVendaOuNulo(rs)))
                 .list();
+    }
+
+    /**
+     * Abre a OS para o PDV faturar. ⛔ Só <b>CONCLUÍDA</b> (DS18) e ainda não faturada.
+     *
+     * <p>⚠️ A recusa vem com o estado por extenso porque o operador está com o cliente na frente:
+     * "esta OS ainda está em execução" resolve sozinha; "não é possível faturar" mandaria ele
+     * procurar o problema em outro lugar.
+     */
+    @Transactional(readOnly = true)
+    public OrdemServicoResponse abrirParaVenda(long id) {
+        OrdemServicoResponse os = buscar(id);
+        if (os.idVenda() != null) {
+            throw new ConflitoDadosException(
+                    "A ordem de serviço nº " + id + " já virou a venda nº " + os.idVenda() + ".");
+        }
+        if (!ESTADO_FATURAVEL.equals(os.situacao())) {
+            throw new ConflitoDadosException(
+                    "A ordem de serviço nº " + id + " está " + os.situacao().toLowerCase(Locale.ROOT)
+                    + " — só é possível faturar depois de concluída.");
+        }
+        return os;
+    }
+
+    /**
+     * Marca a OS como faturada e <b>libera a reserva</b>.
+     *
+     * <p>⛔ <b>Liberar a reserva aqui não é opcional:</b> a venda acabou de debitar
+     * {@code qtd_estoque} pelo ledger. Se a reserva ficasse, a mesma peça estaria contada duas
+     * vezes — saiu do saldo <b>e</b> continua segurando disponível —, e o estoque disponível ficaria
+     * permanentemente menor que o físico, sem nada apontando a causa.
+     *
+     * <p>⚠️ Chamado <b>dentro</b> da transação da venda: se a venda falhar depois disto, a OS volta
+     * a não estar faturada e a reserva volta a existir, juntas.
+     */
+    @Transactional
+    public void marcarFaturada(long id, long idVenda) {
+        liberarReservas(id);
+        jdbc.sql("UPDATE ordem_servico_item SET qtd_reservada = 0"
+                        + " WHERE id_tenant = plataforma.tenant_atual() AND id_ordem_servico = ?")
+                .param(id).update();
+        int linhas = jdbc.sql("""
+                        UPDATE ordem_servico
+                           SET situacao = 'FATURADA', id_venda = ?, data_faturamento = now(),
+                               atualizado_em = now()
+                         WHERE id_tenant = plataforma.tenant_atual() AND id_ordem_servico = ?
+                           AND id_venda IS NULL
+                        """)
+                .params(idVenda, id).update();
+        if (linhas == 0) {
+            // ⚠️ UPDATE condicional em vez de conferir antes: duas vendas simultâneas da mesma OS
+            // passariam por uma checagem prévia e só uma passa por esta. Mesma técnica que a
+            // importação de pedido de marketplace usava.
+            throw new ConflitoDadosException(
+                    "A ordem de serviço nº " + id + " já havia sido faturada.");
+        }
     }
 
     // ---------------------------------------------------------------- privados

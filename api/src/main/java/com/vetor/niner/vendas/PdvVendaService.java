@@ -4,6 +4,8 @@ import com.vetor.niner.comum.web.ConflitoDadosException;
 import com.vetor.niner.vendas.orcamento.OrcamentoDtos.ItemOrcamentoResponse;
 import com.vetor.niner.vendas.orcamento.OrcamentoDtos.OrcamentoResponse;
 import com.vetor.niner.vendas.orcamento.OrcamentoService;
+import com.vetor.niner.vendas.ordemservico.OrdemServicoDtos.OrdemServicoResponse;
+import com.vetor.niner.vendas.ordemservico.OrdemServicoService;
 import com.vetor.niner.configuracao.geral.ConfiguracaoGeralService;
 import com.vetor.niner.financeiro.TipoCarteiraDtos.CategoriaCarteira;
 import com.vetor.niner.financeiro.caixa.CaixaService;
@@ -91,15 +93,17 @@ public class PdvVendaService {
     private final CaixaService caixaService;
     private final LimiteVendasService limiteVendas;
     private final OrcamentoService orcamentoService;
+    private final OrdemServicoService ordemServicoService;
 
     public PdvVendaService(JdbcClient jdbc, ConfiguracaoGeralService configuracaoGeralService,
             CaixaService caixaService, LimiteVendasService limiteVendas,
-            OrcamentoService orcamentoService) {
+            OrcamentoService orcamentoService, OrdemServicoService ordemServicoService) {
         this.jdbc = jdbc;
         this.configuracaoGeralService = configuracaoGeralService;
         this.caixaService = caixaService;
         this.limiteVendas = limiteVendas;
         this.orcamentoService = orcamentoService;
+        this.ordemServicoService = ordemServicoService;
     }
 
     @Transactional
@@ -113,11 +117,28 @@ public class PdvVendaService {
         // ⚠️ Venda vinda de orçamento usa o preço CONGELADO dele, lido do BANCO — nunca do que a
         // tela mandou. A regra do PDV ("o servidor resolve o preço, a tela nunca manda") continua
         // valendo de pé: o que muda é a fonte, que passa a ser o orçamento em vez do cadastro.
+        // ⛔ Orçamento e OS não se combinam: uma venda vem de um OU de outro, nunca dos dois.
+        // Permitir os dois exigiria decidir qual preço vence quando o mesmo item aparece nos dois
+        // documentos — pergunta que ninguém fez e que não tem resposta óbvia.
+        // ⚠️ A checagem vem ANTES de resolver qualquer um dos dois, e a ordem importa: com ela
+        // depois, um orçamento inexistente respondia 404 e a mensagem certa nunca aparecia. Achado
+        // pelo teste, não pela leitura.
+        if (req.idOrcamento() != null && req.idOrdemServico() != null) {
+            throw new IllegalArgumentException(
+                    "Uma venda vem de um orçamento OU de uma ordem de serviço, não dos dois.");
+        }
+
         Map<Long, BigDecimal> precosDoOrcamento = req.idOrcamento() == null
                 ? Map.of()
                 : precosCongeladosDoOrcamento(jwt, req.idOrcamento(), req.itens());
 
-        List<ItemResolvido> itens = resolverItens(req.itens(), idEmpresa, precosDoOrcamento);
+        // ⚠️ Mesmo contrato para a Ordem de Serviço (V087, DS16): preço congelado lido do BANCO.
+        Map<Long, BigDecimal> precosDaOrdemServico = req.idOrdemServico() == null
+                ? Map.of()
+                : precosCongeladosDaOrdemServico(req.idOrdemServico(), req.itens());
+
+        List<ItemResolvido> itens = resolverItens(req.itens(), idEmpresa,
+                req.idOrdemServico() == null ? precosDoOrcamento : precosDaOrdemServico);
 
         BigDecimal valorTotalProdutos = itens.stream()
                 .map(ItemResolvido::valorItem)
@@ -236,8 +257,16 @@ public class PdvVendaService {
             orcamentoService.marcarEfetivado(req.idOrcamento(), idVenda, orcamentoParcial);
         }
 
+        // ⛔ Mesma razão: DENTRO da transação. E aqui há um segundo motivo, mais duro — marcar a OS
+        // como faturada é o que LIBERA a reserva de estoque das peças (V087). Se ficasse fora e
+        // falhasse, a venda existiria com o estoque debitado pelo ledger E a reserva ainda de pé:
+        // a mesma peça contada duas vezes, com o disponível permanentemente menor que o físico.
+        if (req.idOrdemServico() != null) {
+            ordemServicoService.marcarFaturada(req.idOrdemServico(), idVenda);
+        }
+
         return new VendaEfetivadaResponse(idVenda, valorTotalProdutos, descontoVenda, valorLiquido,
-                pagamentos, req.idOrcamento(), orcamentoParcial);
+                pagamentos, req.idOrcamento(), orcamentoParcial, req.idOrdemServico());
     }
 
     /**
@@ -250,6 +279,58 @@ public class PdvVendaService {
      * nenhuma regra do PDV, e {@code resolverItens} já recusaria — aqui a recusa vem antes e com
      * nome do produto, para o operador não descobrir com o cliente na frente.
      */
+    /**
+     * Preços congelados da <b>Ordem de Serviço</b> (V087/DS16) e a mesma regra do orçamento: só dá
+     * para <b>diminuir</b> o que foi aprovado.
+     *
+     * <p>⛔ {@code abrirParaVenda} recusa OS que não esteja <b>CONCLUÍDA</b> (DS18) ou que já tenha
+     * virado venda, com a mensagem dizendo o estado — o operador está com o cliente na frente.
+     *
+     * <p>⚠️ <b>A mesma guarda de contrato do orçamento, e pela mesma razão:</b> mandar
+     * {@code idOrdemServico} sem nenhuma linha marcada faria a venda inteira sair a preço de
+     * cadastro, consumindo a OS sem que a loja honrasse o que aprovou — e ninguém veria erro.
+     */
+    private Map<Long, BigDecimal> precosCongeladosDaOrdemServico(long idOrdemServico,
+                                                                 List<ItemVendaRequest> itensDaVenda) {
+        OrdemServicoResponse os = ordemServicoService.abrirParaVenda(idOrdemServico);
+
+        if (itensDaVenda.stream().noneMatch(ItemVendaRequest::ehDaOrdemServico)) {
+            throw new IllegalArgumentException(
+                    "Venda vinculada à ordem de serviço nº " + idOrdemServico
+                            + " não trouxe nenhum item marcado como da ordem de serviço.");
+        }
+
+        Map<Long, BigDecimal> precos = new java.util.HashMap<>();
+        Map<Long, BigDecimal> qtdAprovada = new java.util.HashMap<>();
+        for (var item : os.itens()) {
+            precos.put(item.idVariacao(), item.precoVenda());
+            qtdAprovada.merge(item.idVariacao(), item.qtdProduto(), BigDecimal::add);
+        }
+
+        // Só as linhas MARCADAS entram na conta — o item que o cliente resolveu levar a mais é
+        // venda comum, a preço de hoje, e não tem relação com o que foi aprovado na OS (DS14).
+        Map<Long, BigDecimal> qtdPedida = new java.util.HashMap<>();
+        for (ItemVendaRequest item : itensDaVenda) {
+            if (item.ehDaOrdemServico()) {
+                qtdPedida.merge(item.idVariacao(), item.qtd(), BigDecimal::add);
+            }
+        }
+        for (Map.Entry<Long, BigDecimal> pedido : qtdPedida.entrySet()) {
+            BigDecimal aprovada = qtdAprovada.get(pedido.getKey());
+            if (aprovada == null) {
+                throw new IllegalArgumentException(
+                        "Um item marcado como da ordem de serviço nº " + idOrdemServico
+                                + " não está nela. Retire a marca ou corrija o item.");
+            }
+            if (pedido.getValue().compareTo(aprovada) > 0) {
+                throw new IllegalArgumentException(
+                        "A venda leva mais de um item do que a ordem de serviço nº " + idOrdemServico
+                                + " aprovou. O cliente pode levar menos, nunca mais.");
+            }
+        }
+        return precos;
+    }
+
     private Map<Long, BigDecimal> precosCongeladosDoOrcamento(Jwt jwt, long idOrcamento,
                                                               List<ItemVendaRequest> itensDaVenda) {
         OrcamentoResponse orcamento = orcamentoService.abrirParaVenda(jwt, idOrcamento);

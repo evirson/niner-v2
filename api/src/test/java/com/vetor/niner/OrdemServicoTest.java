@@ -340,6 +340,165 @@ class OrdemServicoTest {
                 .andExpect(jsonPath("$[0].objetoServico").value("ABC-1234"));
     }
 
+    // ---------------------------------------------------------------- a OS virando venda
+
+    private void abrirCaixa() throws Exception {
+        String resp = mvc.perform(get("/api/v1/caixa/carteiras").header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        mvc.perform(post("/api/v1/caixa/abrir").header("Authorization", "Bearer " + token)
+                        .contentType(APPLICATION_JSON)
+                        .content("{\"idCarteira\":%d,\"saldoInicial\":100.00}".formatted(idCarteiraDinheiro())))
+                .andExpect(status().isOk());
+    }
+
+    private long idCarteiraDinheiro() throws Exception {
+        String resp = mvc.perform(get("/api/v1/caixa/carteiras").header("Authorization", "Bearer " + token))
+                .andReturn().getResponse().getContentAsString();
+        java.util.List<java.util.Map<String, Object>> carteiras = JsonPath.read(resp, "$");
+        return ((Number) carteiras.stream()
+                .filter(x -> "DINHEIRO".equals(x.get("nomeCarteira")))
+                .findFirst().orElseThrow().get("idCarteira")).longValue();
+    }
+
+    /** Vende a OS inteira: 1 peça + 1 serviço, ambos marcados como dela. */
+    private org.springframework.test.web.servlet.ResultActions venderDaOs(long idOs, String valorPago)
+            throws Exception {
+        return mvc.perform(post("/api/v1/pdv/vendas").header("Authorization", "Bearer " + token)
+                .contentType(APPLICATION_JSON)
+                .content("""
+                        {"idOrdemServico":%d,"idCliente":%d,"idFuncionario":%d,"descontoVenda":0,
+                         "itens":[{"idVariacao":%d,"qtd":1,"daOrdemServico":true},
+                                  {"idVariacao":%d,"qtd":1,"daOrdemServico":true}],
+                         "pagamentos":[{"idCarteira":%d,"valorPago":%s,"numeroParcelas":1}]}
+                        """.formatted(idOs, idCliente, idFuncionario, idVariacaoPeca, idVariacaoServico,
+                        idCarteiraDinheiro(), valorPago)));
+    }
+
+    /**
+     * ⭐ O caminho completo: OS concluída vira venda pelo PDV, com o preço <b>congelado</b> (DS16).
+     *
+     * <p>⛔ E o que mais importa aqui: <b>a reserva é liberada</b>. A venda debitou o estoque pelo
+     * ledger; se a reserva ficasse, a mesma peça estaria contada duas vezes e o disponível ficaria
+     * permanentemente menor que o físico, sem nada apontando a causa.
+     */
+    @Test
+    void osConcluidaViraVendaNoPdvELiberaAReserva() throws Exception {
+        prepararTenant("m");
+        abrirCaixa();
+        long id = criarOs("1");
+        mvc.perform(put("/api/v1/ordens-servico/" + id + "/situacao?para=CONCLUIDA")
+                .header("Authorization", "Bearer " + token)).andExpect(status().isOk());
+
+        assertThat(reservado(idVariacaoPeca)).isEqualByComparingTo("1.000");
+
+        venderDaOs(id, "165.00")   // 45,00 da peça + 120,00 do serviço
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.idOrdemServico").value(id))
+                .andExpect(jsonPath("$.valorTotalProdutos").value(165.00));
+
+        // a reserva sumiu...
+        assertThat(reservado(idVariacaoPeca)).isEqualByComparingTo("0");
+        // ...e o estoque baixou de verdade (só a peça — serviço não tem saldo)
+        try (Connection c = abrirConexao();
+             PreparedStatement ps = c.prepareStatement(
+                     "SELECT qtd_estoque FROM produto_estoque WHERE id_variacao = ?")) {
+            ps.setLong(1, idVariacaoPeca);
+            try (ResultSet rs = ps.executeQuery()) {
+                rs.next();
+                assertThat(rs.getBigDecimal(1)).isEqualByComparingTo("-1.000");
+            }
+        }
+        assertThat(reservado(idVariacaoServico)).isEqualByComparingTo("0");
+
+        mvc.perform(get("/api/v1/ordens-servico/" + id).header("Authorization", "Bearer " + token))
+                .andExpect(jsonPath("$.situacao").value("FATURADA"))
+                .andExpect(jsonPath("$.idVenda").isNotEmpty());
+    }
+
+    /** ⛔ DS18 — OS que não está concluída não vira venda, e a mensagem diz o estado. */
+    @Test
+    void osNaoConcluidaNaoViraVenda() throws Exception {
+        prepararTenant("n");
+        abrirCaixa();
+        long id = criarOs("1");
+        venderDaOs(id, "165.00").andExpect(status().isConflict());
+    }
+
+    /** A mesma OS não vira duas vendas — o UPDATE condicional é quem garante. */
+    @Test
+    void aMesmaOsNaoViraDuasVendas() throws Exception {
+        prepararTenant("o");
+        abrirCaixa();
+        long id = criarOs("1");
+        mvc.perform(put("/api/v1/ordens-servico/" + id + "/situacao?para=CONCLUIDA")
+                .header("Authorization", "Bearer " + token)).andExpect(status().isOk());
+
+        venderDaOs(id, "165.00").andExpect(status().isCreated());
+        venderDaOs(id, "165.00").andExpect(status().isConflict());
+    }
+
+    /**
+     * ⚠️ A guarda de contrato, igual à do orçamento: mandar {@code idOrdemServico} sem marcar
+     * nenhuma linha faria a venda sair a preço de cadastro e consumir a OS sem honrar o aprovado —
+     * e ninguém veria erro nenhum.
+     */
+    @Test
+    void vendaComOsMasSemLinhaMarcadaEhRecusada() throws Exception {
+        prepararTenant("p");
+        abrirCaixa();
+        long id = criarOs("1");
+        mvc.perform(put("/api/v1/ordens-servico/" + id + "/situacao?para=CONCLUIDA")
+                .header("Authorization", "Bearer " + token)).andExpect(status().isOk());
+
+        mvc.perform(post("/api/v1/pdv/vendas").header("Authorization", "Bearer " + token)
+                        .contentType(APPLICATION_JSON)
+                        .content("""
+                                {"idOrdemServico":%d,"idCliente":%d,"idFuncionario":%d,"descontoVenda":0,
+                                 "itens":[{"idVariacao":%d,"qtd":1}],
+                                 "pagamentos":[{"idCarteira":%d,"valorPago":45.00,"numeroParcelas":1}]}
+                                """.formatted(id, idCliente, idFuncionario, idVariacaoPeca,
+                                idCarteiraDinheiro())))
+                .andExpect(status().isBadRequest());
+    }
+
+    /** Levar MAIS do que a OS aprovou é recusado — pode-se levar menos, nunca mais (DS16). */
+    @Test
+    void naoSeLevaMaisDoQueAOsAprovou() throws Exception {
+        prepararTenant("q");
+        abrirCaixa();
+        long id = criarOs("1");
+        mvc.perform(put("/api/v1/ordens-servico/" + id + "/situacao?para=CONCLUIDA")
+                .header("Authorization", "Bearer " + token)).andExpect(status().isOk());
+
+        mvc.perform(post("/api/v1/pdv/vendas").header("Authorization", "Bearer " + token)
+                        .contentType(APPLICATION_JSON)
+                        .content("""
+                                {"idOrdemServico":%d,"idCliente":%d,"idFuncionario":%d,"descontoVenda":0,
+                                 "itens":[{"idVariacao":%d,"qtd":5,"daOrdemServico":true}],
+                                 "pagamentos":[{"idCarteira":%d,"valorPago":225.00,"numeroParcelas":1}]}
+                                """.formatted(id, idCliente, idFuncionario, idVariacaoPeca,
+                                idCarteiraDinheiro())))
+                .andExpect(status().isBadRequest());
+    }
+
+    /** ⛔ Orçamento e OS não se combinam: qual preço venceria se o item estivesse nos dois? */
+    @Test
+    void naoSeVendeDeOrcamentoEDeOsAoMesmoTempo() throws Exception {
+        prepararTenant("r");
+        abrirCaixa();
+        long id = criarOs("1");
+        mvc.perform(post("/api/v1/pdv/vendas").header("Authorization", "Bearer " + token)
+                        .contentType(APPLICATION_JSON)
+                        .content("""
+                                {"idOrdemServico":%d,"idOrcamento":1,"idCliente":%d,"idFuncionario":%d,
+                                 "descontoVenda":0,
+                                 "itens":[{"idVariacao":%d,"qtd":1,"daOrdemServico":true}],
+                                 "pagamentos":[{"idCarteira":%d,"valorPago":45.00,"numeroParcelas":1}]}
+                                """.formatted(id, idCliente, idFuncionario, idVariacaoPeca,
+                                idCarteiraDinheiro())))
+                .andExpect(status().isBadRequest());
+    }
+
     // ---------------------------------------------------------------- busca e isolamento
 
     /** O balcão procura pela placa/animal, não pelo número — é o campo que a §4.2 tornou obrigatório. */

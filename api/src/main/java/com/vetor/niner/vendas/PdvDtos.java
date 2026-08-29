@@ -65,11 +65,23 @@ public final class PdvDtos {
     public record ItemVendaRequest(
             @NotNull Long idVariacao,
             @NotNull @DecimalMin(value = "0.001") BigDecimal qtd,
-            Boolean doOrcamento) {
+            Boolean doOrcamento,
+            /**
+             * Marca a linha como vinda da <b>Ordem de Serviço</b> (V087) — mesma mecânica do
+             * {@code doOrcamento}, e pela mesma razão: o preço congelado vale <b>por linha</b>,
+             * não por variação. O mesmo item pode aparecer duas vezes na venda — o que o cliente
+             * aprovou na OS e o que ele acrescentou no balcão, a preço de hoje.
+             */
+            Boolean daOrdemServico) {
 
         /** Sem a marca, a linha é venda comum — nunca herda o preço congelado do orçamento. */
         public boolean ehDoOrcamento() {
             return Boolean.TRUE.equals(doOrcamento);
+        }
+
+        /** Idem para a OS: sem a marca, é venda comum a preço de cadastro. */
+        public boolean ehDaOrdemServico() {
+            return Boolean.TRUE.equals(daOrdemServico);
         }
     }
 
@@ -120,7 +132,16 @@ public final class PdvDtos {
              * podem ser <b>menores ou iguais</b> às orçadas (R2): o cliente pode levar menos, nunca
              * mais nem por outro preço.
              */
-            Long idOrcamento) {
+            Long idOrcamento,
+            /**
+             * Ordem de Serviço que originou esta venda (V087), ou nulo.
+             *
+             * <p>⚠️ Mesmo contrato do orçamento: preço <b>congelado</b> lido do banco, quantidade
+             * nunca maior que a aprovada, e as linhas precisam vir marcadas com
+             * {@code daOrdemServico}. ⛔ Só OS <b>CONCLUÍDA</b> é aceita (DS18) — o trabalho tem de
+             * estar pronto para virar venda.
+             */
+            Long idOrdemServico) {
     }
 
     /** `paga` = true quando a parcela já nasce recebida (categoria AVISTA/CARTAO_DEBITO). */
@@ -149,7 +170,9 @@ public final class PdvDtos {
             List<PagamentoGerado> pagamentos,
             /** Orçamento que virou esta venda, e se foi parcial (V058). Nulo em venda normal. */
             Long idOrcamento,
-            Boolean orcamentoParcial) {
+            Boolean orcamentoParcial,
+            /** OS que virou esta venda (V087). Nulo em venda normal. */
+            Long idOrdemServico) {
     }
 
     /** Uma linha de item da papeleta de venda (2026-08-06) — {@code valorTotal} é bruto
