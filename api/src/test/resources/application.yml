@@ -10,6 +10,11 @@ spring:
     locations: filesystem:../db/migration
 
 niner:
+  # Os seis @Scheduled ficam DESLIGADOS na suíte: com initialDelay de 15s a 2min e uma suíte de
+  # vários minutos, eles disparavam no meio dos testes. Um deles chega a alterar dados
+  # (vencimento de orçamento). Teste que quer exercitar um job injeta o bean e chama o método.
+  agendadores:
+    ativos: false
   jwt:
     secret: niner-test-secret-0123456789abcdef0123456789abcdef
     expiracao: PT8H

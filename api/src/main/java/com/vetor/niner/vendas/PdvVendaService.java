@@ -886,9 +886,21 @@ public class PdvVendaService {
             return;
         }
 
+        // ⭐ `FOR UPDATE` na linha do CLIENTE, e é ela de propósito (pendência 58.1, 2026-08-29).
+        // A checagem lê o saldo em aberto e insere as parcelas depois; sem trava, dois caixas
+        // vendendo R$ 800 em crediário para o mesmo cliente com limite de R$ 1.000 leem "R$ 0 em
+        // aberto" ao mesmo tempo e **gravam os dois** — o limite vira decoração, que é o mesmo
+        // defeito dos tetos de 2026-08-27.
+        // ⚠️ Travar `contas_receber` não serviria: o problema é a linha que **ainda não existe**,
+        // e não se trava o que não está lá. A linha do cliente é o único ponto que as duas
+        // transações disputam — é o mesmo desenho de `LimiteVendasService`, que trava a linha do
+        // tenant para incrementar e validar a cota na mesma chamada.
+        // ⚠️ A trava vem ANTES da leitura do saldo, senão a leitura acontece fora dela e a corrida
+        // continua inteira.
         BigDecimal limiteCredito = jdbc.sql("""
                         SELECT limite_credito FROM cliente
                         WHERE id_tenant = plataforma.tenant_atual() AND id_cliente = ?
+                              FOR UPDATE
                         """)
                 .param(idCliente).query(BigDecimal.class).single();
         if (limiteCredito.compareTo(BigDecimal.ZERO) <= 0) {

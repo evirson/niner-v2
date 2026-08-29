@@ -11,6 +11,88 @@ Registro cronológico das decisões e entregas. Atualizar a cada marco relevante
 
 ## Estado atual
 
+> ## 📌 2026-08-29 (2) — as pendências que eram minha bola
+>
+> Ele mandou seguir depois das cinco rodadas. Fechados os itens **58**, **59**, **63** e a parte
+> concreta do **56**; o **33** ficou em grande parte resolvido de graça pelo trabalho da manhã.
+>
+> ### Cinco travas de concorrência em rotinas de dinheiro (item 58)
+>
+> Nenhuma tinha gatilho fácil — todas exigem duas requisições simultâneas —, e o modelo certo já
+> existia ao lado, em `DevolucaoCompraService.travarEstoque`, com o javadoc explicando por quê.
+>
+> - **Limite de crédito**: `FOR UPDATE` na linha do **cliente**, antes da leitura do saldo. Dois
+>   caixas vendendo R$ 800 em crediário para o mesmo cliente com limite de R$ 1.000 liam "R$ 0 em
+>   aberto" ao mesmo tempo e gravavam os dois. ⚠️ Travar `contas_receber` não serviria: o que as
+>   duas transações disputam é a linha que **ainda não existe**, e não se trava o que não está lá.
+> - **Devolução de Produtos**: `travarVenda()` antes de qualquer leitura de saldo. Duplo clique
+>   gerava **dois vales** e devolvia a peça duas vezes. Trava a venda, não as linhas do ledger, pelo
+>   mesmo motivo — e um ponto único por venda também elimina deadlock por ordem de travamento.
+> - **Fechar caixa duas vezes**: `buscarCaixaTravado()` no `fechar` e no `reabrir`. Como
+>   `caixa_fechamento_conferencia` não tem UNIQUE, os dois cliques inseriam e a tela passava a
+>   mostrar cada carteira em dobro. Método separado de propósito — o `buscarCaixaPorIdObrigatorio`
+>   também serve consultas `readOnly`, onde `FOR UPDATE` não cabe.
+> - **`PUT` de item em entrada CANCELADA**: agora 409. A trigger de estoque trata UPDATE aplicando
+>   o delta, então editar item de entrada cancelada **mexia no saldo** de uma compra que, para o
+>   sistema, nunca entrou. Nenhuma tela chega ali — é alcançável só pela API, que é ameaça que este
+>   repositório trata.
+>
+> ⭐ **Só um dos cinco ganhou teste, e isso é uma escolha declarada.** O do `PUT` é determinístico:
+> `naoEditaItemDeEntradaJaCancelada` confere o 409 **e** que ele não gravou metade; sabotado,
+> responde 200. Os outros três são corridas — teste single-thread passa com o defeito presente e
+> não prova nada. Provar exigiria duas conexões JDBC coordenadas, que é teste lento e intermitente.
+> Ficou escrito nas pendências o que não foi coberto e por quê.
+>
+> ### Dois `exigirAdmin` mortos, e dois javadocs que mentiam (item 59)
+>
+> `CancelamentoVendaService.exigirAdmin` e `EntradaMercadoriaService.exigirAdmin` não eram chamados
+> por ninguém desde que o RBAC assumiu (V073–V081), e os javadocs das duas classes continuavam
+> afirmando *"ADMIN-only… rejeita OPERADOR com 403"*. ⭐ Que eram mesmo código morto ficou **provado
+> pela compilação**: remover método privado usado não compila. O texto novo diz o que é verdade —
+> quem governa é o `@Acao(EXCLUIR)`, o que significa que o administrador **pode conceder** desfazer
+> venda ou entrada a um operador.
+>
+> ### ⛔ Os seis `@Scheduled` disparavam DENTRO da suíte (item 63)
+>
+> Achado rodando a suíte inteira depois do item 58: `FiscalInutilizacaoTest` reprovou com *"No
+> interactions wanted here… but found `FiscalContingenciaDrenoJob.sefazRespondendo`"*. Isolado,
+> verde. O `@EnableScheduling` vivia na classe da aplicação e valia nos testes; com `initialDelay`
+> de 15 s a 2 min e uma suíte de vários minutos, os jobs disparavam no meio dela.
+>
+> ⚠️ **O dreno era o sintoma mais visível, não o mais grave:** o `OrcamentoVencimentoJob` **altera
+> dados**. Um job que muda linha no meio de um teste produz falha que ninguém explica lendo o teste
+> — e o custo real disso é gente aprendendo a ignorar build vermelho.
+>
+> Hoje o `@EnableScheduling` mora em `comum.AgendadoresConfig`, condicionado a
+> `niner.agendadores.ativos`, **padrão ligado**: sem a propriedade — o caso de produção — os jobs
+> continuam. Uma chave que precisasse ser declarada para *ligar* deixaria produção sem job no dia
+> em que alguém esquecesse a linha, que é a direção errada de errar. Os beans continuam existindo:
+> teste que quer exercitar um job injeta e chama o método, como `OrcamentoCrudTest` já fazia.
+>
+> ⭐ **O guarda mede o mecanismo, não a ausência de falha.** `AgendadoresDesligadosNaSuiteTest`
+> pergunta ao Spring quantas tarefas agendadas existem — porque *"a suíte passou"* não prova nada
+> sobre defeito de temporização: pode só não ter disparado nesta rodada. Religando a propriedade,
+> ele reprova citando o caso.
+>
+> ### Exportação de Dados finalmente leva as OS (parte do item 56)
+>
+> A rotina exportava nove tabelas e **nenhuma de serviço**: uma oficina que quisesse levar os
+> próprios dados embora — que é a razão de a rotina existir — deixaria para trás o módulo inteiro em
+> que trabalha. ⭐ Sai **uma linha por ITEM**, não por cabeçalho: é o item que carrega o preço
+> **congelado** na aprovação (que pode diferir do cadastro de hoje) e **quem executou** cada serviço,
+> que é a base da comissão; um CSV por cabeçalho esconderia as duas coisas. A tela não precisou de
+> nada — ela já lista o que a API oferece.
+>
+> ### O item 33 encolheu sozinho
+>
+> As **ações** de Zerar Contagem, Efetivar Balanço, Diferenças e Estorno de Crediário já têm chave
+> própria desde a manhã. O que continua compartilhado é a **leitura**, e agora por decisão: uma tela
+> precisa ser abrível por quem recebeu qualquer uma das chaves que a servem. Sobra um caso, e ele é
+> coerente — quem tem Pesquisa de Vendas com "excluir" cancela venda, que é a ação destrutiva
+> daquela tela e não tem concorrente lá. Criar chave separada virou decisão de produto, não
+> correção.
+>
+
 > ## 📌 2026-08-29 — cinco rodadas de dois agentes caçadores de bugs
 >
 > Ele pediu **dois agentes em paralelo — um de front, um de back — e cinco rodadas cada**, com a

@@ -444,7 +444,8 @@ public class EntradaMercadoriaService {
 
     /**
      * Cancelamento de Entrada (2026-08-12) — mesmo padrão de {@code CancelamentoVendaService}/
-     * {@code CancelamentoDevolucaoService}: ADMIN-only, o {@code produto_movimento_mestre}
+     * {@code CancelamentoDevolucaoService}: quem governa é o `@Acao(EXCLUIR)` do RBAC (não mais
+     * ADMIN por papel — a afirmação era falsa desde a V073), o {@code produto_movimento_mestre}
      * original NUNCA é apagado nem tem os itens tocados (P3), só marcado {@code cancelado=true}
      * (quem/quando/motivo). O estorno de estoque é um novo movimento (tipo CANCELAMENTO,
      * {@code credito_debito='D'} — inverso do 'C' da COMPRA original) e as duplicatas geradas em
@@ -596,18 +597,43 @@ public class EntradaMercadoriaService {
         }
     }
 
-    private static void exigirAdmin(Jwt jwt) {
-        List<String> roles = jwt.getClaimAsStringList("roles");
-        if (roles == null || !roles.contains("ADMIN")) {
-            throw new ResponseStatusException(FORBIDDEN, "Apenas administradores podem cancelar entradas.");
-        }
-    }
+    /**
+     * ⛔ REMOVIDO em 2026-08-29 (pendência 59): havia aqui um `exigirAdmin(Jwt)` privado que
+     * <b>nenhum caminho chamava</b> — código morto desde que o RBAC por tela e ação assumiu
+     * (V073–V081). Quem governa este cancelamento hoje é o `@Acao(EXCLUIR)` do controller, que o
+     * `PermissaoInterceptor` traduz na permissão de "excluir" desta tela.
+     *
+     * <p>⚠️ Isso muda quem pode desfazer: com o RBAC, o administrador <b>pode conceder</b> a ação
+     * a um operador — antes era papel fixo. É comportamento intencional do RBAC, e o javadoc que
+     * dizia "ADMIN-only" descrevia um mundo que não existia mais.
+     */
 
     /** Correção pós-confirmação — edição direta (decisão do dono do produto, 2026-08-11), sem
      *  tabela de histórico por ora. A trigger de estoque já trata UPDATE (desfaz o delta antigo,
      *  aplica o novo), então não há nenhum ajuste manual de saldo aqui. */
     @Transactional
     public void atualizarItem(long idMovimento, long idMovimentoDetalhe, AtualizarItemEntradaRequest req) {
+        // ⛔ Entrada CANCELADA não se edita (pendência 58.4, fechada em 2026-08-29). O UPDATE não
+        // conferia `pmm.cancelado`, e a trigger de estoque trata UPDATE aplicando o delta: editar
+        // um item de uma entrada já cancelada **mexia no saldo** de uma compra que, para o
+        // sistema, nunca entrou — e o cancelamento já havia lançado o movimento inverso. Nenhuma
+        // tela chama isso (a edição só aparece em entrada ativa); é alcançável por chamada direta
+        // à API, que é ameaça que este repositório trata.
+        // ⚠️ `FOR UPDATE` no mestre: sem ele, um cancelamento em curso e esta edição leriam o
+        // mesmo `cancelado = false` e as duas passariam.
+        Boolean cancelado = jdbc.sql("""
+                        SELECT cancelado FROM produto_movimento_mestre
+                         WHERE id_tenant = plataforma.tenant_atual() AND id_movimento = ?
+                           FOR UPDATE
+                        """)
+                .param(idMovimento).query(Boolean.class).optional()
+                .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Entrada não encontrada."));
+        if (Boolean.TRUE.equals(cancelado)) {
+            throw new ConflitoDadosException(
+                    "Esta entrada foi cancelada — o estoque e as contas a pagar dela já foram "
+                            + "revertidos. Lance uma entrada nova em vez de corrigir esta.");
+        }
+
         int linhas = jdbc.sql("""
                         UPDATE produto_movimento_detalhe
                         SET qtd_produto = ?, preco_custo = ?

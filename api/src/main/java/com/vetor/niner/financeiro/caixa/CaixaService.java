@@ -329,7 +329,7 @@ public class CaixaService {
      */
     @Transactional
     public ResultadoFechamentoResponse fechar(Jwt jwt, FecharCaixaRequest req) {
-        Caixa caixa = buscarCaixaPorIdObrigatorio(req.idCaixa());
+        Caixa caixa = buscarCaixaTravado(req.idCaixa());
 
         if (caixa.idUsuario() != idUsuario(jwt)) {
             exigirAdmin(jwt);
@@ -425,7 +425,9 @@ public class CaixaService {
     @Transactional
     public ReaberturaCaixaResponse reabrir(Jwt jwt, long idCaixa, ReabrirCaixaRequest req) {
         exigirAdmin(jwt, "reabrir um caixa fechado");
-        Caixa caixa = buscarCaixaPorIdObrigatorio(idCaixa);
+        // Travada também aqui: reabrir apaga a conferência gravada, e dois cliques simultâneos
+        // apagariam duas vezes enquanto ambos ainda leem o caixa como fechado.
+        Caixa caixa = buscarCaixaTravado(idCaixa);
         if (!caixa.fechado()) {
             throw new ConflitoDadosException("Este caixa já está aberto.");
         }
@@ -579,6 +581,33 @@ public class CaixaService {
     private static Long getLongOuNulo(ResultSet rs, String coluna) throws SQLException {
         long valor = rs.getLong(coluna);
         return rs.wasNull() ? null : valor;
+    }
+
+    /**
+     * O mesmo caixa, com a linha <b>travada</b> até o fim da transação — para quem vai MUDAR o
+     * estado dele (pendência 58.3, fechada em 2026-08-29).
+     *
+     * <p>⛔ Sem trava, dois cliques em "Fechar caixa" liam {@code caixa_fechado = false} ao mesmo
+     * tempo, os dois passavam pela conferência e os dois inseriam em
+     * {@code caixa_fechamento_conferencia} — que <b>não tem UNIQUE</b>. A tela de fechamento
+     * passava a mostrar cada carteira em dobro, e o "Este caixa já foi fechado" existia sem
+     * proteger nada, porque a leitura que ele consulta acontecia fora de qualquer trava.
+     *
+     * <p>⚠️ Método separado de propósito: {@code buscarCaixaPorIdObrigatorio} também serve
+     * consultas em {@code @Transactional(readOnly = true)}, onde {@code FOR UPDATE} não cabe.
+     */
+    private Caixa buscarCaixaTravado(long idCaixa) {
+        return jdbc.sql("""
+                        SELECT id_caixa, id_empresa, id_usuario, id_carteira, saldo_inicial,
+                               data_abertura, data_fechamento, caixa_fechado
+                        FROM caixa_mestre
+                        WHERE id_tenant = plataforma.tenant_atual() AND id_caixa = ?
+                          FOR UPDATE
+                        """)
+                .param(idCaixa)
+                .query(CaixaService::mapearCaixa)
+                .optional()
+                .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Caixa não encontrado."));
     }
 
     private Caixa buscarCaixaPorIdObrigatorio(long idCaixa) {

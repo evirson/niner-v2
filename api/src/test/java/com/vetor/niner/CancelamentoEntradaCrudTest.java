@@ -324,6 +324,62 @@ class CancelamentoEntradaCrudTest {
         }
     }
 
+    /**
+     * ⛔ Entrada cancelada não se edita — nem por chamada direta à API.
+     *
+     * <p>O `PUT /itens/{idDetalhe}` não conferia `pmm.cancelado` (pendência 58.4). A trigger de
+     * estoque trata UPDATE aplicando o delta, então editar um item de uma entrada já cancelada
+     * <b>mexia no saldo</b> de uma compra que, para o sistema, nunca entrou — e cujo movimento
+     * inverso o cancelamento já havia lançado.
+     *
+     * <p>⚠️ Nenhuma tela chega aqui (a edição só aparece em entrada ativa), e é exatamente por
+     * isso que o teste existe: o caminho é alcançável só pela API, que é ameaça que este
+     * repositório trata. Um teste de tela nunca encontraria.
+     */
+    @Test
+    void naoEditaItemDeEntradaJaCancelada() throws Exception {
+        TenantENota tenant = prepararTenantComProduto("edita-cancelada");
+        long idMovimento = efetivarEntrada(tenant.token(), tenant.idFornecedor(), tenant.idVariacao(), null);
+
+        long idDetalhe;
+        try (Connection c = abrirConexao(extrairIdTenant(tenant.token()));
+             PreparedStatement ps = c.prepareStatement(
+                     "SELECT id_movimento_detalhe FROM produto_movimento_detalhe WHERE id_movimento = ?")) {
+            ps.setLong(1, idMovimento);
+            try (ResultSet rs = ps.executeQuery()) {
+                assertThat(rs.next()).isTrue();
+                idDetalhe = rs.getLong(1);
+            }
+        }
+
+        // Enquanto ativa, a edição funciona — senão o teste passaria pelo motivo errado.
+        mvc.perform(put("/api/v1/estoque/entradas/" + idMovimento + "/itens/" + idDetalhe)
+                        .header("Authorization", "Bearer " + tenant.token())
+                        .contentType(APPLICATION_JSON).content("{\"qtd\":4,\"precoCusto\":10.00}"))
+                .andExpect(status().isOk());
+
+        mvc.perform(post("/api/v1/estoque/entradas/" + idMovimento + "/cancelar")
+                        .header("Authorization", "Bearer " + tenant.token())
+                        .contentType(APPLICATION_JSON).content("{\"motivo\":\"Cancelamento\"}"))
+                .andExpect(status().isOk());
+
+        mvc.perform(put("/api/v1/estoque/entradas/" + idMovimento + "/itens/" + idDetalhe)
+                        .header("Authorization", "Bearer " + tenant.token())
+                        .contentType(APPLICATION_JSON).content("{\"qtd\":99,\"precoCusto\":10.00}"))
+                .andExpect(status().isConflict());
+
+        // E o item continua como estava: o 409 não pode ter gravado metade.
+        try (Connection c = abrirConexao(extrairIdTenant(tenant.token()));
+             PreparedStatement ps = c.prepareStatement(
+                     "SELECT qtd_produto FROM produto_movimento_detalhe WHERE id_movimento_detalhe = ?")) {
+            ps.setLong(1, idDetalhe);
+            try (ResultSet rs = ps.executeQuery()) {
+                assertThat(rs.next()).isTrue();
+                assertThat(rs.getBigDecimal(1)).isEqualByComparingTo("4.000");
+            }
+        }
+    }
+
     @Test
     void naoPodeCancelarUmaEntradaJaCancelada() throws Exception {
         TenantENota tenant = prepararTenantComProduto("duplo-cancel");

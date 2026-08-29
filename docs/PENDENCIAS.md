@@ -11,17 +11,19 @@
 > **Como apresentar:** resumido e **agrupado por dono**, não as ~27 linhas cruas — ele já reclamou
 > de informação demais de uma vez (*"TA MUITO CONFUSO"*).
 >
-> **Última revisão:** 2026-08-29 — cinco rodadas de dois agentes caçadores de bugs (front e back
-> em paralelo), ~55 correções. A maior parte foi corrigida na hora e está em `docs/PROGRESSO.md`;
-> aqui entraram os itens **57**–**62**, que dependem de decisão dele ou de uma sessão em que dê
-> para transmitir nota fiscal em homologação.
+> **Última revisão:** 2026-08-29 — dia inteiro de auditoria. Primeiro **cinco rodadas de dois
+> agentes caçadores de bugs** (front e back em paralelo, ~55 correções); depois, com ele mandando
+> seguir, foram fechados os itens **58** (cinco travas de concorrência em rotinas de dinheiro),
+> **59** (dois `exigirAdmin` mortos com javadoc falso), a parte concreta do **56** (a Exportação de
+> Dados agora leva as OS) e o **63** (os seis `@Scheduled` disparavam dentro da suíte). O **33** foi
+> em grande parte resolvido pela `@Tela` de várias chaves. Entraram os itens **60**–**62**.
 >
-> **Hoje:** **12 itens esperam por ele** (🔵) e **8 são minha bola** (🟢). Os que mais pesam: o
+> **Hoje:** **12 itens esperam por ele** (🔵) e **5 são minha bola** (🟢). Os que mais pesam: o
 > **#55** (cancelar a venda deixa a OS e o orçamento órfãos), o **#60** (a NF-e 55 de devolução
 > declara valor bruto — só se corrige podendo transmitir) e o **#62** (o vendedor ganha comissão
 > sobre o acréscimo? hoje o sistema responde SIM, de forma consistente).
 
-**Estado na data desta revisão:** 56 telas do ERP + 3 públicas · 1075 testes verdes, **de 0 a 5 pulados conforme a HORA** — o guard de meia-noite do `HorarioAcessoTest`, que se pula sozinho quando a janela pedida cruzaria a virada do dia (à meia-noite são 5 — 4 do horário de acesso e 1 do 2FA —, de manhã 0). ⚠️ Não é regressão, e o número oscilar é o mecanismo funcionando (tudo medido, não estimado; a contagem de telas é a de `docs/TELAS.md`, que declara a base).
+**Estado na data desta revisão:** 56 telas do ERP + 3 públicas · 1077 testes verdes, **de 0 a 5 pulados conforme a HORA** — o guard de meia-noite do `HorarioAcessoTest`, que se pula sozinho quando a janela pedida cruzaria a virada do dia (à meia-noite são 5 — 4 do horário de acesso e 1 do 2FA —, de manhã 0). ⚠️ Não é regressão, e o número oscilar é o mecanismo funcionando (tudo medido, não estimado; a contagem de telas é a de `docs/TELAS.md`, que declara a base).
 
 ---
 
@@ -148,12 +150,19 @@ O fluxo tem teste automatizado ponta a ponta e a tela foi verificada com token i
 feliz no navegador exige clicar num link de e-mail real, **o que troca a senha da conta**. Basta
 ele fazer uma vez com uma conta descartável. **Bola dele.**
 
-### 33. ⚠️ RBAC: telas que compartilham controller herdam a mesma permissão 🟢
-Três simplificações conscientes, registradas em `docs/telas/usuario-permissoes.md`: quem tem
-**Contagem de Estoque** alcança também Diferenças, Efetivar e Zerar (mesmo controller); quem tem
-**Recebimento de Crediário** alcança Reimpressão e Estorno; quem tem **Pesquisa de Vendas** com
-"excluir" pode cancelar venda. Separá-las exige anotar método a método. **Bola minha**, quando
-ele achar que vale.
+### 33. ⚠️ RBAC: telas que compartilham controller — **em grande parte resolvido em 2026-08-29**
+
+As **ações** foram separadas: Zerar Contagem, Efetivar Balanço, Diferenças e Estorno de Crediário
+têm chave própria (V091 + `@Tela` de método), e conceder a tela-mãe não dá mais nenhuma delas.
+
+O que **continua compartilhado é a LEITURA**, e agora por decisão, não por descuido: `@Tela` aceita
+várias chaves e uma tela precisa ser abrível por quem recebeu qualquer uma delas — foi o beco que
+a própria separação abriu (403 na abertura citando tela que o admin não liberou).
+
+⚠️ **Sobra um caso**, e ele é coerente: quem tem **Pesquisa de Vendas** com "excluir" cancela
+venda. Não há chave `cancelamento-venda` em `cfg_tela`, e cancelar É a ação destrutiva daquela
+tela — não existe outro "excluir" ali. Criar chave separada é decisão de produto (migration, item
+de menu, mais uma caixa na grade), não correção. 🔵
 
 ### 34. ✅ FECHADO pelo item 35 — Conceder "Usuários" permite criar usuário, não configurar permissão
 Usuários saiu da lista de telas exclusivas (2026-08-27). Quem receber essa tela cria e edita
@@ -415,32 +424,38 @@ abertura em diante não é tratado ali. A pergunta é de produto:
 - Ou é **aporte novo** a cada dia? Então o certo é um lançamento em `caixa_detalhe`, e a coluna sai
   do somatório.
 
-### 58. Cinco travas de concorrência ausentes em rotinas de dinheiro 🟢
+### 58. ✅ Cinco travas de concorrência ausentes em rotinas de dinheiro — **FECHADO em 2026-08-29**
 
-Nenhuma tem gatilho fácil, e todas exigem duas requisições simultâneas — por isso não entraram na
-correção imediata, mas todas são reais:
+Todas exigiam duas requisições simultâneas, por isso não entraram na correção imediata. Fechadas
+com o modelo que já existia ao lado (`DevolucaoCompraService.travarEstoque`):
 
-1. **Limite de crédito** (`PdvVendaService.validarLimiteCredito`) lê o saldo em aberto e insere
-   depois, sem `FOR UPDATE` na linha do cliente. Dois caixas vendendo R$ 800 em crediário para o
-   mesmo cliente com limite de R$ 1.000 gravam **os dois**. ⭐ O modelo certo está ao lado:
-   `LimiteVendasService` incrementa e valida na mesma chamada, de propósito.
-2. **Devolução de Produtos** confere o saldo devolvível sem travar — duplo clique gera **dois vales**
-   e devolve a peça duas vezes. A irmã (`DevolucaoCompraService.travarEstoque`) trava e documenta
-   por quê.
-3. **Fechar caixa duas vezes** duplica `caixa_fechamento_conferencia` (a tabela não tem UNIQUE e o
-   `SELECT` do caixa não trava) — a tela de fechamento passa a mostrar cada carteira em dobro.
-4. **`PUT /estoque/entradas/{id}/itens/{idDetalhe}`** altera o ledger de uma entrada **cancelada**
-   (não confere `pmm.cancelado`). Sem tela que chame — só por chamada direta à API.
-5. **Fuso na importação** (`ContasReceberImportador`, `ProdutoImportador`) usa
-   `ZoneId.systemDefault()` em vez do fuso da loja. ⚠️ Hoje **não** dá defeito em produção
-   (`docker-compose.prod.yml` define `TZ`), mas é fragilidade dependente de variável de ambiente.
+1. **Limite de crédito** — `FOR UPDATE` na linha do **cliente**, antes da leitura do saldo. Travar
+   `contas_receber` não serviria: o que as duas transações disputam é a linha que **ainda não
+   existe**, e não se trava o que não está lá. É o desenho de `LimiteVendasService`.
+2. **Devolução de Produtos** — `travarVenda()` logo no início, antes de qualquer leitura de saldo.
+   Trava a venda, não as linhas do ledger, pelo mesmo motivo — e um ponto único por venda também
+   elimina deadlock por ordem de travamento.
+3. **Fechar caixa duas vezes** — `buscarCaixaTravado()` no `fechar` e no `reabrir`. Método separado
+   de propósito: o `buscarCaixaPorIdObrigatorio` também serve consultas `readOnly`, onde
+   `FOR UPDATE` não cabe.
+4. **`PUT /estoque/entradas/{id}/itens/{idDetalhe}` em entrada cancelada** — agora 409, com
+   `FOR UPDATE` no mestre. ⭐ **Com teste** (`naoEditaItemDeEntradaJaCancelada`), porque este é o
+   único determinístico dos cinco; sabotado, responde 200 em vez de 409. O teste confere também
+   que o 409 **não gravou metade**.
+5. **Fuso na importação** — fechado mais cedo no mesmo dia, pelo guarda de fuso ampliado.
 
-### 59. Dois `exigirAdmin` que existem e nunca são chamados 🟢
+⚠️ **O que ficou sem teste, e por quê:** 1, 2 e 3 são corridas — teste single-thread passa com o
+defeito presente e não prova nada. Provar exigiria duas conexões JDBC coordenadas, que é teste
+lento e propenso a intermitência. A correção é a mesma dos casos já provados do repositório, e o
+javadoc de cada uma diz o cenário exato.
 
-`CancelamentoVendaService.exigirAdmin` e `EntradaMercadoriaService.exigirAdmin` são código morto, e
-os javadocs das duas classes ainda afirmam *"ADMIN-only… rejeita OPERADOR com 403"*. Hoje quem
-governa é o `@Acao(EXCLUIR)` do RBAC. ⚠️ Não é bug de comportamento — são **duas afirmações falsas
-em doc de código** sobre quem pode desfazer venda e entrada.
+### 59. ✅ Dois `exigirAdmin` mortos e dois javadocs falsos — **FECHADO em 2026-08-29**
+
+`CancelamentoVendaService.exigirAdmin` e `EntradaMercadoriaService.exigirAdmin` foram removidos, e
+o javadoc que afirmava *"ADMIN-only"* passou a dizer o que é verdade: quem governa é o
+`@Acao(EXCLUIR)` do RBAC (V073–V081), o que significa que o administrador **pode conceder** a ação
+a um operador. ⭐ Que eram mesmo código morto ficou **provado pela compilação**: remover método
+privado usado não compila.
 
 ---
 
@@ -497,6 +512,29 @@ Comissões alteraria quanto o vendedor recebe com base num palpite meu.
 acréscimo?* Hoje o sistema responde **SIM**, de forma consistente nos quatro lugares. Se a resposta
 for **não**, muda-se o Relatório de Comissões e os três atrás dele — os pontos estão marcados com
 comentário citando este item.
+
+---
+
+### 63. ⛔ Os seis `@Scheduled` disparavam DENTRO da suíte — ✅ FECHADO em 2026-08-29
+
+Achado ao rodar a suíte inteira depois de fechar o item 58: `FiscalInutilizacaoTest` reprovou com
+*"No interactions wanted here… but found FiscalContingenciaDrenoJob.sefazRespondendo"*. Rodando o
+arquivo isolado, verde. O `@EnableScheduling` vivia na classe da aplicação e valia nos testes; com
+`initialDelay` de 15 s a 2 min e uma suíte de vários minutos, os jobs disparavam no meio dela.
+
+⚠️ **O dreno era o sintoma mais visível, não o mais grave:** o `OrcamentoVencimentoJob` **altera
+dados** (marca orçamento como vencido). Um job que muda linha no meio de um teste produz falha que
+ninguém explica lendo o teste — e o custo real disso é gente aprendendo a ignorar build vermelho.
+
+**Fechado assim:** `comum.AgendadoresConfig` carrega o `@EnableScheduling`, condicionado a
+`niner.agendadores.ativos` (padrão **ligado** — sem a propriedade, produção continua com jobs).
+`src/test/resources/application.yml` declara `false`. Os beans continuam existindo: teste que quer
+exercitar um job injeta e chama o método, como `OrcamentoCrudTest` já fazia.
+
+⭐ **O guarda mede o mecanismo, não a ausência de falha:** `AgendadoresDesligadosNaSuiteTest`
+pergunta ao Spring quantas tarefas agendadas existem. "A suíte passou" não prova nada sobre defeito
+de temporização — pode só não ter disparado nesta rodada. Religando a propriedade, o teste reprova
+citando o caso.
 
 ---
 
@@ -562,7 +600,10 @@ já considerava livre.
 ### 56. Lacunas menores da OS (nenhuma bloqueia a operação) 🟢
 
 Levantadas conferindo o código em 2026-08-28, depois de fechar o item 53:
-- **Exportação de Dados não inclui as OS** — exporta 9 tabelas, nenhuma de serviço.
+- ✅ **Exportação de Dados já inclui as OS** (2026-08-29) — décima tabela, **uma linha por ITEM**,
+  não por cabeçalho: é o item que carrega o preço **congelado** na aprovação e **quem executou**,
+  que é a base da comissão; um CSV por cabeçalho esconderia as duas coisas. A tela não precisou de
+  nada — ela já lista as tabelas que a API oferece.
 - **Não há relatório de OS** — produtividade por mecânico, tempo médio de execução, OS abertas por
   período. Hoje só a lista com filtros.
 - **Campos não configuráveis por tenant** (`cfg_tela_campo`). ⚠️ O **orçamento também não tem**,

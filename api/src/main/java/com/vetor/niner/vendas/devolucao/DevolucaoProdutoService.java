@@ -90,6 +90,9 @@ public class DevolucaoProdutoService {
         List<ItemVendaOrigemResponse> linhasDaVenda = null;
         Map<Long, PrecoOriginal> precosOriginais = Map.of();
         if (req.numeroVenda() != null) {
+            // A trava vem ANTES de qualquer leitura de saldo — depois dela, a leitura já
+            // aconteceu fora da trava e a corrida continua inteira.
+            travarVenda(req.numeroVenda());
             exigirVendaNaoCancelada(req.numeroVenda());
             FuncionarioVenda fv = buscarFuncionarioDaVenda(req.numeroVenda());
             idFuncionario = fv.idFuncionario();
@@ -245,6 +248,32 @@ public class DevolucaoProdutoService {
      * caso do cliente que perdeu o comprovante), e é justamente por isso que a checagem mora aqui e
      * não numa validação de request.
      */
+    /**
+     * Trava a linha da venda pelo resto da transação — <b>duas devoluções da mesma venda não
+     * podem se cruzar</b> (pendência 58.2, fechada em 2026-08-29).
+     *
+     * <p>⛔ O saldo devolvível é derivado (vendido menos já devolvido) e era lido <b>sem trava</b>:
+     * um duplo clique, ou dois caixas na mesma venda, liam "resta 1" ao mesmo tempo e gravavam
+     * <b>dois vales</b> — a loja devolvia a peça duas vezes e pagava duas vezes por ela. A irmã
+     * `DevolucaoCompraService.travarEstoque` já travava, e documentava por quê; esta não.
+     *
+     * <p>⚠️ Trava a <b>venda</b>, não as linhas do ledger: o que as duas transações disputam é o
+     * saldo de uma venda inteira, e a linha de devolução que a outra vai inserir <b>ainda não
+     * existe</b> — não se trava o que não está lá. Um ponto único por venda também elimina
+     * deadlock por ordem de travamento.
+     *
+     * <p>Sem número de venda não há o que travar: aquele caminho não tem saldo a conferir (usa o
+     * preço de cadastro e não abate nada), então não há corrida.
+     */
+    private void travarVenda(long idVenda) {
+        jdbc.sql("""
+                        SELECT id_venda FROM venda
+                         WHERE id_tenant = plataforma.tenant_atual() AND id_venda = ?
+                           FOR UPDATE
+                        """)
+                .param(idVenda).query(Long.class).optional();
+    }
+
     private void exigirVendaNaoCancelada(long idVenda) {
         boolean cancelada = Boolean.TRUE.equals(jdbc.sql("""
                         SELECT cancelada FROM venda

@@ -538,12 +538,16 @@ public class CancelamentoVendaService {
         return rs.wasNull() ? null : valor;
     }
 
-    private static void exigirAdmin(Jwt jwt) {
-        List<String> roles = jwt.getClaimAsStringList("roles");
-        if (roles == null || !roles.contains("ADMIN")) {
-            throw new ResponseStatusException(FORBIDDEN, "Apenas administradores podem cancelar vendas.");
-        }
-    }
+    /**
+     * ⛔ REMOVIDO em 2026-08-29 (pendência 59): havia aqui um `exigirAdmin(Jwt)` privado que
+     * <b>nenhum caminho chamava</b> — código morto desde que o RBAC por tela e ação assumiu
+     * (V073–V081). Quem governa este cancelamento hoje é o `@Acao(EXCLUIR)` do controller, que o
+     * `PermissaoInterceptor` traduz na permissão de "excluir" desta tela.
+     *
+     * <p>⚠️ Isso muda quem pode desfazer: com o RBAC, o administrador <b>pode conceder</b> a ação
+     * a um operador — antes era papel fixo. É comportamento intencional do RBAC, e o javadoc que
+     * dizia "ADMIN-only" descrevia um mundo que não existia mais.
+     */
 
     private static long idUsuario(Jwt jwt) {
         return Long.parseLong(jwt.getSubject());

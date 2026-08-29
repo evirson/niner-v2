@@ -47,7 +47,8 @@ public class ExportacaoService {
                 new TabelaExportavel("contas_pagar", "Contas a Pagar / Pagas"),
                 new TabelaExportavel("codigo_barras", "Código de Barras"),
                 new TabelaExportavel("plano_contas", "Plano de Contas"),
-                new TabelaExportavel("estoque", "Estoque"));
+                new TabelaExportavel("estoque", "Estoque"),
+                new TabelaExportavel("ordem_servico", "Ordens de Serviço"));
     }
 
     @Transactional(readOnly = true)
@@ -63,6 +64,7 @@ public class ExportacaoService {
             case "codigo_barras" -> jdbcTemplate.queryForList(SQL_CODIGO_BARRAS);
             case "plano_contas" -> jdbcTemplate.queryForList(SQL_PLANO_CONTAS);
             case "estoque" -> jdbcTemplate.queryForList(SQL_ESTOQUE);
+            case "ordem_servico" -> jdbcTemplate.queryForList(SQL_ORDEM_SERVICO);
             default -> throw new IllegalArgumentException("Tabela de exportação desconhecida: \"" + tabela + "\".");
         };
     }
@@ -210,4 +212,52 @@ public class ExportacaoService {
             WHERE pe.id_tenant = plataforma.tenant_atual()
             ORDER BY e.razao_social, p.descricao
             """;
+
+    /**
+     * Ordens de Serviço — <b>uma linha por ITEM</b>, não por OS (pendência 56, fechada em
+     * 2026-08-29).
+     *
+     * <p>⛔ A exportação levava nove tabelas e <b>nenhuma de serviço</b>: uma oficina que quisesse
+     * levar os próprios dados embora — que é a razão de a rotina existir — deixaria para trás o
+     * módulo inteiro em que ela trabalha.
+     *
+     * <p>⭐ Por item, e não por cabeçalho, porque é o item que carrega o que a oficina precisa
+     * conferir: o preço <b>congelado</b> na aprovação (que pode diferir do cadastro de hoje) e
+     * <b>quem executou</b> cada serviço, que é a base da comissão. Um CSV por cabeçalho esconderia
+     * as duas coisas. O cabeçalho vem repetido em cada linha, como numa planilha dinâmica.
+     *
+     * <p>⚠️ Datas convertidas para o fuso da loja: `to_char` sobre `timestamptz` formata no fuso da
+     * SESSÃO, que é UTC, e a planilha sairia com a virada do dia errada — foi o defeito que o guarda
+     * de fuso pegou nesta mesma auditoria.
+     */
+    private static final String SQL_ORDEM_SERVICO = """
+            SELECT os.id_ordem_servico AS "Nº OS", e.razao_social AS "Empresa",
+                   c.nome AS "Cliente", os.objeto_servico AS "Objeto do Serviço",
+                   os.situacao::text AS "Situação",
+                   to_char(os.data_abertura AT TIME ZONE 'America/Sao_Paulo', 'DD/MM/YYYY HH24:MI') AS "Abertura",
+                   to_char(os.data_conclusao AT TIME ZONE 'America/Sao_Paulo', 'DD/MM/YYYY HH24:MI') AS "Conclusão",
+                   to_char(os.data_faturamento AT TIME ZONE 'America/Sao_Paulo', 'DD/MM/YYYY HH24:MI') AS "Faturamento",
+                   os.id_venda AS "Nº da Venda",
+                   fa.nome AS "Atendente",
+                   p.descricao AS "Item", pb.sku AS "SKU",
+                   CASE p.tipo_item WHEN 'SERVICO' THEN 'Serviço' ELSE 'Peça' END AS "Tipo",
+                   osi.qtd_produto AS "Qtde", osi.preco_venda AS "Preço Unitário",
+                   (osi.qtd_produto * osi.preco_venda) AS "Total do Item",
+                   fe.nome AS "Executado por",
+                   os.valor_desconto AS "Desconto da OS", os.observacao AS "Observação",
+                   os.motivo_cancelamento AS "Motivo do Cancelamento"
+            FROM ordem_servico_item osi
+            JOIN ordem_servico os ON os.id_ordem_servico = osi.id_ordem_servico AND os.id_tenant = osi.id_tenant
+            JOIN empresa e ON e.id_empresa = os.id_empresa AND e.id_tenant = os.id_tenant
+            JOIN cliente c ON c.id_cliente = os.id_cliente AND c.id_tenant = os.id_tenant
+            JOIN produto_barra pb ON pb.id_variacao = osi.id_variacao AND pb.id_tenant = osi.id_tenant
+            JOIN produto p ON p.id_produto = pb.id_produto AND p.id_tenant = pb.id_tenant
+            LEFT JOIN funcionario fa ON fa.id_funcionario = os.id_funcionario AND fa.id_tenant = os.id_tenant
+            -- Executor é opcional (peça normalmente não tem) — LEFT JOIN, senão a linha da peça
+            -- desapareceria da planilha em silêncio, que é o pior jeito de errar num export.
+            LEFT JOIN funcionario fe ON fe.id_funcionario = osi.id_funcionario AND fe.id_tenant = osi.id_tenant
+            WHERE osi.id_tenant = plataforma.tenant_atual()
+            ORDER BY os.id_ordem_servico, osi.id_ordem_servico_item
+            """;
+
 }
