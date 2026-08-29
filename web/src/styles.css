@@ -1870,3 +1870,27 @@ a.menu-card:hover {
   color: var(--line-strong);
   user-select: none;
 }
+
+/* Tela do error boundary (`components/LimiteDeErro.tsx`, 2026-08-29). Só aparece quando uma
+   exceção escapa do render/efeito de alguma tela — antes disso o que sobrava era o fundo do
+   <body>, ou seja, a TELA PRETA no tema escuro. Usa os tokens de tema para valer nos dois. */
+.limite-erro {
+  max-width: 640px;
+  margin: 64px auto;
+  padding: 24px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--ink);
+}
+.limite-erro h2 { margin: 0 0 8px; color: var(--danger); }
+.limite-erro-detalhe {
+  margin: 16px 0;
+  padding: 12px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 12px;
+}

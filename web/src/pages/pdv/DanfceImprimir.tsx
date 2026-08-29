@@ -182,9 +182,18 @@ const DanfceImprimir = forwardRef<
 
         <Separador />
         <div className="danfce-consulta">
-          Consulte pela chave de acesso em:
-          <br />
-          {f.urlConsultaChave}
+          {/* ⚠️ `urlConsultaChave` é `null` na NF-e 55 (2026-08-29) — sem a guarda, o cupom saía
+              com a frase "Consulte pela chave de acesso em:" seguida de NADA, mandando o cliente
+              a um endereço em branco. Sem endereço, a chave se apresenta sozinha. */}
+          {f.urlConsultaChave ? (
+            <>
+              Consulte pela chave de acesso em:
+              <br />
+              {f.urlConsultaChave}
+            </>
+          ) : (
+            'Chave de acesso:'
+          )}
           <br />
           <span className="danfce-chave">{formatarChaveGrupos4(f.chaveAcesso)}</span>
         </div>

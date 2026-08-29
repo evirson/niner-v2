@@ -1,4 +1,5 @@
-import { Navigate, Route, Routes } from 'react-router-dom'
+import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
+import LimiteDeErro from './components/LimiteDeErro'
 import RequireAdmin from './components/RequireAdmin'
 import RequireAuth from './components/RequireAuth'
 import Layout from './components/Layout'
@@ -88,7 +89,12 @@ import ExportacaoXmlLote from './pages/fiscal/ExportacaoXmlLote'
 import InutilizacaoNumeracao from './pages/fiscal/InutilizacaoNumeracao'
 
 export default function App() {
+  // ⚠️ A rota é a chave de reset do boundary (ver `LimiteDeErro`): sem ela, uma tela que quebrou
+  // deixaria a mensagem de erro presa para sempre — trocar a tela preta por um erro eterno não
+  // seria conserto nenhum. Trocando de tela, o erro se limpa sozinho.
+  const { pathname } = useLocation()
   return (
+    <LimiteDeErro chaveDeReset={pathname}>
     <Routes>
       <Route path="/login" element={<Login />} />
       {/* Públicas como o /login: quem esqueceu a senha, por definição, não está autenticado.
@@ -245,5 +251,6 @@ export default function App() {
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
+    </LimiteDeErro>
   )
 }

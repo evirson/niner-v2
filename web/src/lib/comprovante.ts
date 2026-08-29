@@ -403,8 +403,23 @@ export function gerarBlobComprovanteVenda(linhas: string[], qrCodeDataUrl?: stri
  * (`<img src>`) quanto embutido no PDF ({@link gerarBlobComprovanteVenda}). O CONTEÚDO do QR
  * (`url`) já vem pronto do backend, extraído do XML assinado — esta função só desenha o
  * desenho, nunca decide o texto que vai dentro (ver `DadosFiscaisComprovante.qrCodeUrl`).
+ *
+ * ⚠️ **Sem URL devolve `null`, e isso é caso normal, não erro** (2026-08-29): o QR Code é da
+ * **NFC-e 65**; a **NF-e 55** — que toda venda a pessoa jurídica emite desde 2026-08-24 — não tem
+ * QR nenhum, então `qrCodeUrl` chega `null` legitimamente. Devolver `null` aqui é o que separa
+ * "esta nota não tem QR" de "falhou ao desenhar o QR".
+ *
+ * ⛔ **A guarda não é preciosismo — sem ela a lib derruba a TELA INTEIRA com um erro que mente.**
+ * `QRCode.toDataURL` é sobrecarregada (`(texto, opts)` **ou** `(canvas, texto, opts)`) e decide
+ * pelo tipo do 1º argumento: qualquer coisa que não seja string vira "canvas", e a chamada estoura
+ * **síncrona** com `Cannot read properties of null (reading 'getContext')` — uma mensagem sobre
+ * `<canvas>` para um problema de dado fiscal. Como o disparo é dentro de um `useEffect` e o
+ * projeto não tem error boundary, a exceção desmontava a árvore do React e a tela ficava **preta**,
+ * sem mensagem nenhuma: era assim que reimprimir a papeleta de uma venda PJ e emitir a NF-e 55 no
+ * PDV apagavam o ERP.
  */
-export function gerarQrCodeDataUrl(url: string): Promise<string> {
+export function gerarQrCodeDataUrl(url: string | null | undefined): Promise<string | null> {
+  if (!url) return Promise.resolve(null)
   return QRCode.toDataURL(url, { margin: 1, width: 256 })
 }
 

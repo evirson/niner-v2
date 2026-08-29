@@ -274,9 +274,18 @@ export interface DadosFiscaisComprovante {
   dataAutorizacao: string | null
   homologacao: boolean
   contingencia: boolean
-  /** URL completa do QR Code (já com `?p=...`) — extraída do XML assinado, nunca remontada aqui. */
-  qrCodeUrl: string
-  urlConsultaChave: string
+  /**
+   * URL completa do QR Code (já com `?p=...`) — extraída do XML assinado, nunca remontada aqui.
+   *
+   * ⚠️ **`null` quando a nota é NF-e modelo 55** (2026-08-29): QR Code e URL de consulta são do
+   * DANFE **NFC-e**; a NF-e 55 não tem nem um nem outro. O tipo dizia `string` — e essa mentira
+   * foi exatamente o que impediu o `tsc -b` de apontar o defeito que apagava a tela ao reimprimir
+   * a papeleta de uma venda a pessoa jurídica. Campo que o servidor pode devolver nulo é
+   * `| null` **no tipo**, senão o type-check vira carimbo.
+   */
+  qrCodeUrl: string | null
+  /** `null` na NF-e 55, pelo mesmo motivo de `qrCodeUrl`. */
+  urlConsultaChave: string | null
   valorTotalTributos: number
   numero: number
   serie: number

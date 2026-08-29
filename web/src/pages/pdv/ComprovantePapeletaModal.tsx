@@ -179,19 +179,25 @@ export default function ComprovantePapeletaModal({
    */
   const modeloSeIdentificar = ehPessoaFisica ? 'NFC-e' : 'NF-e (modelo 55)'
 
+  // ⚠️ `dadosFiscais` presente NÃO significa "tem QR Code" (2026-08-29): a NF-e 55 da venda a
+  // pessoa jurídica é autorizada, tem chave e protocolo, e mesmo assim `qrCodeUrl` vem `null` —
+  // QR é da NFC-e 65. Testar só a presença de `dadosFiscais` mandava `null` para dentro do
+  // gerador, que estourava síncrono e, sem error boundary, deixava a TELA PRETA em vez da
+  // papeleta (ver `gerarQrCodeDataUrl`). A guarda vive nos dois lados de propósito.
+  const qrCodeUrl = comprovante?.dadosFiscais?.qrCodeUrl ?? null
   useEffect(() => {
-    if (!comprovante?.dadosFiscais) {
+    if (!qrCodeUrl) {
       setQrDataUrl(null)
       return
     }
     let cancelado = false
-    gerarQrCodeDataUrl(comprovante.dadosFiscais.qrCodeUrl).then((url) => {
+    gerarQrCodeDataUrl(qrCodeUrl).then((url) => {
       if (!cancelado) setQrDataUrl(url)
     })
     return () => {
       cancelado = true
     }
-  }, [comprovante?.dadosFiscais])
+  }, [qrCodeUrl])
 
   const linhas = comprovante ? montarLinhasComprovanteVenda(comprovante, reimpressao) : []
 
