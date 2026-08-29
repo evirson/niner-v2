@@ -179,7 +179,7 @@ public class DevolucaoProdutoService {
             BigDecimal valorTotalItem = item.precoVenda().multiply(item.qtd()).subtract(descontoDaLinha);
             itensResponse.add(new ItemDevolucaoResponse(
                     item.idVariacao(), item.sku(), item.descricaoProduto(), item.variacaoCor(), item.variacaoTamanho(),
-                    item.qtd(), item.precoVenda(), valorTotalItem));
+                    item.qtd(), item.precoVenda(), descontoDaLinha, valorTotalItem));
             valorVale = valorVale.add(valorTotalItem);
         }
 
@@ -289,7 +289,10 @@ public class DevolucaoProdutoService {
 
     private List<ItemVendaOrigemResponse> buscarItensDisponiveisParaDevolucao(long idVenda) {
         record ItemVendido(long idVariacao, String sku, String descricaoProduto, String variacaoCor,
-                            String variacaoTamanho, BigDecimal precoVenda, BigDecimal qtdVendida) {
+                            String variacaoTamanho, BigDecimal precoVenda, BigDecimal qtdVendida,
+                            /** Desconto por unidade desta linha da venda — o que separa o bruto do
+                             *  que o cliente PAGOU, e o que o vale vai valer. */
+                            BigDecimal descontoUnitario) {
         }
         // ⚠️ Agrupa por (variação, PREÇO), não só por variação (2026-08-22, auditoria item 2).
         //
@@ -305,7 +308,12 @@ public class DevolucaoProdutoService {
                         SELECT pb.id_variacao, pb.sku, p.descricao AS descricao_produto,
                                co.descricao AS variacao_cor, ta.descricao AS variacao_tamanho,
                                pmd.preco_venda,
-                               SUM(pmd.qtd_produto) AS qtd_vendida
+                               SUM(pmd.qtd_produto) AS qtd_vendida,
+                               -- MESMA formula de `descontoUnitarioDaVenda`, de proposito: o valor que a tela
+                               -- MOSTRA tem de sair da conta que a efetivacao GRAVA, senao o operador
+                               -- anuncia um vale e o cliente recebe outro (auditoria 2026-08-29).
+                               COALESCE(SUM(pmd.valor_desconto), 0) / NULLIF(SUM(pmd.qtd_produto), 0)
+                                   AS desconto_unitario
                         FROM produto_movimento_mestre pmm
                         JOIN produto_movimento_detalhe pmd
                                ON pmd.id_movimento = pmm.id_movimento AND pmd.id_tenant = pmm.id_tenant
@@ -321,7 +329,8 @@ public class DevolucaoProdutoService {
                 .query((rs, n) -> new ItemVendido(
                         rs.getLong("id_variacao"), rs.getString("sku"), rs.getString("descricao_produto"),
                         rs.getString("variacao_cor"), rs.getString("variacao_tamanho"),
-                        rs.getBigDecimal("preco_venda"), rs.getBigDecimal("qtd_vendida")))
+                        rs.getBigDecimal("preco_venda"), rs.getBigDecimal("qtd_vendida"),
+                        rs.getBigDecimal("desconto_unitario")))
                 .list();
         if (vendidos.isEmpty()) {
             return List.of();
@@ -358,9 +367,18 @@ public class DevolucaoProdutoService {
             // Preço da LINHA, exato — não mais uma média. É o valor que vai para o vale e para o
             // XML da NF-e de devolução, sempre em BigDecimal monetário (P7).
             BigDecimal precoUnitario = v.precoVenda().setScale(2, java.math.RoundingMode.HALF_UP);
+            // ⚠️ `valorTotal` é LÍQUIDO — o que o cliente PAGOU (auditoria 2026-08-29). Era
+            // `precoUnitario × qtd`, o bruto, enquanto o vale que a efetivação grava já era
+            // líquido: a tela e o popup de seleção anunciavam R$ 100,00 e o cliente recebia um
+            // vale de R$ 90,00, com o operador sem ter como explicar. `precoUnitario` continua
+            // BRUTO de propósito — é a chave de linha que casa com a venda.
+            BigDecimal descontoUnitario = v.descontoUnitario() != null ? v.descontoUnitario() : BigDecimal.ZERO;
+            BigDecimal totalLiquido = precoUnitario.subtract(descontoUnitario).multiply(v.qtdVendida())
+                    .setScale(2, java.math.RoundingMode.HALF_UP);
             resultado.add(new ItemVendaOrigemResponse(
                     v.idVariacao(), v.sku(), v.descricaoProduto(), v.variacaoCor(), v.variacaoTamanho(),
-                    v.qtdVendida(), disponivel, precoUnitario, precoUnitario.multiply(v.qtdVendida())));
+                    v.qtdVendida(), disponivel, precoUnitario,
+                    descontoUnitario.setScale(2, java.math.RoundingMode.HALF_UP), totalLiquido));
         }
         return resultado;
     }

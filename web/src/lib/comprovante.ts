@@ -457,14 +457,23 @@ export function montarLinhasComprovanteVale(d: DevolucaoEfetivada, nomeEmpresa: 
     descRestante.forEach((linhaDesc) => {
       linhas.push(' '.repeat(COL_CODIGO + 1) + colEsq(linhaDesc, COL_DESCRICAO))
     })
+    // ⚠️ O TOTAL DA LINHA É O BRUTO (2026-08-29). `item.valorTotal` é LÍQUIDO desde que o vale
+    // passou a valer o que o cliente pagou, e imprimi-lo ao lado do unitário BRUTO produzia
+    // `1 x 100,00 … 90,00` — uma conta que não fecha, num papel que o cliente leva para casa e
+    // apresenta depois. O desconto aparece onde a papeleta de venda já o mostra: no resumo.
     linhas.push(linhaValoresItem(
       formatarQuantidadeSimples(item.qtd),
       formatarMoeda(item.precoVenda),
-      formatarMoeda(item.valorTotal),
+      formatarMoeda(item.qtd * item.precoVenda),
     ))
   })
 
   linhas.push(linhaVenda())
+  const descontoTotal = d.itens.reduce((s, i) => s + i.valorDesconto, 0)
+  if (descontoTotal > 0) {
+    linhas.push(linhaResumoVenda('SUB-TOTAL....:', formatarMoeda(d.itens.reduce((s, i) => s + i.qtd * i.precoVenda, 0))))
+    linhas.push(linhaResumoVenda('DESCONTOS....:', formatarMoeda(descontoTotal)))
+  }
   linhas.push(linhaResumoVenda('VALOR DO VALE..:', formatarMoeda(d.valorVale)))
   linhas.push(linhaVenda())
   linhas.push(centralizarVenda('Apresente este vale para'))

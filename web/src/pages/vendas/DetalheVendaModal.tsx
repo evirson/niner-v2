@@ -1,9 +1,9 @@
 import { Fragment, useState } from 'react'
+import { usePermissaoDaTela } from '../../lib/usePermissaoDaTela'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { IconeFechar } from '../../components/Icones'
 import Toast, { type TipoToast } from '../../components/Toast'
 import { ApiError } from '../../lib/api'
-import { useEu } from '../../lib/eu'
 import { buscarDetalhePesquisaVenda } from '../../lib/pesquisaVendas'
 import { formatarMoeda, mascararCpfCnpj } from '../../lib/masks'
 import ComprovantePapeletaModal from '../pdv/ComprovantePapeletaModal'
@@ -60,8 +60,14 @@ type Aba = 'geral' | 'produtos' | 'caixa' | 'parcelas'
  */
 export default function DetalheVendaModal({ idVenda, aoFechar }: { idVenda: number; aoFechar: () => void }) {
   const queryClient = useQueryClient()
-  const { data: eu } = useEu()
-  const ehAdmin = eu?.usuario.papel === 'ADMIN'
+  /**
+   * ⚠️ Cancelar venda deixou de ser papel fixo em 2026-08-29: o `exigirAdmin` do serviço saiu e
+   * quem governa é o `@Acao(EXCLUIR)` da tela `pesquisa-vendas`, que o administrador **pode
+   * conceder** a um operador. O front continuava escondendo o botão por `ehAdmin` — o dono
+   * marcava "excluir" para a gerente de loja justamente para ela cancelar venda errada sem ligar
+   * para ele, e o botão simplesmente não existia. Permissão concedida, gravada e inalcançável.
+   */
+  const podeCancelar = usePermissaoDaTela('pesquisa-vendas').excluir
 
   const {
     data: detalhe,
@@ -104,7 +110,7 @@ export default function DetalheVendaModal({ idVenda, aoFechar }: { idVenda: numb
             )}
           </div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            {detalhe && !detalhe.cancelada && ehAdmin && (
+            {detalhe && !detalhe.cancelada && podeCancelar && (
               <button type="button" className="btn ghost" onClick={() => setMostrarCancelamento(true)}>
                 Cancelar venda
               </button>

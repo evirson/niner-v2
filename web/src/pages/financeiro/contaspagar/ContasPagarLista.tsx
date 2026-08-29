@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import CabecalhoModal from '../../../components/CabecalhoModal'
 import { useEffect, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import AjudaDaTela from '../../../components/AjudaDaTela'
@@ -78,6 +79,12 @@ export default function ContasPagarLista() {
   }, [])
 
   const [filtrosAberto, setFiltrosAberto] = useState(true)
+  /** ⚠️ O popup abre sozinho e cobre a tela INTEIRA (`.modal-overlay` é `position: fixed; inset: 0`,
+   *  então cobre o menu e o ✕ da topbar). Sem saída própria, quem entrasse aqui por engano só
+   *  escapava executando uma ação que não queria ("Localizar") ou pelo Voltar do navegador
+   *  (auditoria 2026-08-29). Depois da primeira busca o ✕ volta para a grade, em vez de fechar a
+   *  tela e descartar a pesquisa — mesmo comportamento do CRM e dos relatórios. */
+  const [jaPesquisou, setJaPesquisou] = useState(false)
   const [buscaFornecedor, setBuscaFornecedor] = useState('')
   const [fornecedorEscolhido, setFornecedorEscolhido] = useState<FornecedorOpcaoEmissao | null>(null)
   const [idEmpresaFiltro, setIdEmpresaFiltro] = useState<number | ''>('')
@@ -117,7 +124,7 @@ export default function ContasPagarLista() {
 
   const confirmarFiltros = () => {
     setPagina(1)
-    setFiltrosAberto(false)
+    setJaPesquisou(true); setFiltrosAberto(false)
   }
 
   const partesFiltro: string[] = []
@@ -371,7 +378,10 @@ export default function ContasPagarLista() {
       {filtrosAberto && (
         <div className="modal-overlay">
           <div className="modal" role="dialog" aria-label="Filtros de Contas a Pagar" onClick={(e) => e.stopPropagation()}>
-            <h2 style={{ marginTop: 0 }}>Contas a Pagar / Pagas</h2>
+            <CabecalhoModal
+              titulo="Contas a Pagar / Pagas"
+              aoFechar={() => (jaPesquisou ? setFiltrosAberto(false) : navigate(-1))}
+            />
             <p className="muted" style={{ marginTop: 4 }}>
               Filtre as contas já lançadas, ou pule direto para uma nova conta a pagar.
             </p>

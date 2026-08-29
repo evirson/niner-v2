@@ -238,8 +238,20 @@ export default function SelecaoItensVendaModal({
                           <td className="mono" style={{ textAlign: 'right' }}>
                             {formatarQuantidade(item.qtdVendida, permiteQtdDecimal)}
                           </td>
-                          <td className="mono" style={{ textAlign: 'right' }}>
-                            {moeda(item.precoUnitario)}
+                          {/* ⚠️ Unitário LÍQUIDO — o que o cliente pagou por unidade (2026-08-29).
+                              Mostrar o bruto ao lado de um total líquido fazia a linha não fechar:
+                              1 × R$ 100,00 aparecia com total R$ 90,00. O bruto continua no
+                              `title`, porque é ele que identifica a linha da venda. */}
+                          <td
+                            className="mono"
+                            style={{ textAlign: 'right' }}
+                            title={
+                              item.descontoUnitario > 0
+                                ? `Preço da venda ${moeda(item.precoUnitario)} − desconto ${moeda(item.descontoUnitario)}`
+                                : undefined
+                            }
+                          >
+                            {moeda(item.precoUnitario - item.descontoUnitario)}
                           </td>
                           <td className="mono" style={{ textAlign: 'right' }}>
                             {moeda(item.valorTotal)}

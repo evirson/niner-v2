@@ -20,6 +20,8 @@ export interface ContaCorrenteMovimento {
    *  não são editáveis nem excluíveis por esta tela; a alteração é feita na conta a pagar, e o
    *  movimento acompanha. `null` em lançamento digitado aqui. */
   idContaPagar: number | null
+  /** Preenchido = depósito de uma sangria de caixa; o extrato não edita nem exclui (2026-08-29). */
+  idSangria: number | null
   criadoEm: string
   atualizadoEm: string
 }

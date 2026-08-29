@@ -52,6 +52,16 @@ public final class ContaCorrenteMovimentoDtos {
             BigDecimal valor,
             String observacao,
             Long idContaPagar,
+            /**
+             * ⚠️ Preenchido = <b>depósito de uma sangria de caixa</b>, e a tela precisa saber
+             * (auditoria 2026-08-29). A regra do projeto para tabela de CRUD manual que também
+             * recebe lançamento automático tem três partes: (a) expor a marca de origem, (b)
+             * recusar a alteração com 409, (c) <b>esconder a ação na grid</b>. A sangria só tinha
+             * a (b) — o extrato oferecia o lápis e a lixeira, o operador preenchia o formulário
+             * inteiro e levava 409 no Salvar. Caminho oferecido que nunca podia funcionar é pior
+             * que caminho não oferecido.
+             */
+            Long idSangria,
             OffsetDateTime criadoEm,
             OffsetDateTime atualizadoEm) {
     }

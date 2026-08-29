@@ -167,7 +167,20 @@ export default function FormaPagamentoModal({
   // ⚠️ Semeado do documento de origem, e o teto continua revalidado sobre o subtotal desta
   // venda (descontoValorMaximo) — é o que a spec do orçamento manda: o valor viaja, e as regras
   // do PDV valem a partir daí.
-  const [descontoPercentualTexto, setDescontoPercentualTexto] = useState('')
+  /**
+   * ⚠️ **O % também é semeado, e não era** (2026-08-29). O campo % tem `autoFocus`, e o `onBlur`
+   * dele recalcula o R$ a partir do %. Nascendo **vazio** com o R$ preenchido, o primeiro blur —
+   * que é inevitável, porque escolher a forma de pagamento tira o foco daqui — chamava
+   * `aoSairDescontoPercentual('')`, lia 0% e **zerava o desconto do documento**: um orçamento de
+   * R$ 1.000 com R$ 50 de desconto virava R$ 1.000 a pagar, cobrando do cliente R$ 50 a mais do
+   * que o papel na mão dele. Pior, o aviso que disparava culpava o *teto da loja*, mandando o
+   * operador para Parâmetros do Sistema em vez de redigitar o desconto.
+   */
+  const percentualInicialTexto =
+    descontoInicial && descontoInicial > 0 && valorTotal > 0
+      ? formatarPercentual(arredondar2((descontoInicial / valorTotal) * 100))
+      : ''
+  const [descontoPercentualTexto, setDescontoPercentualTexto] = useState(percentualInicialTexto)
   const [descontoValorTexto, setDescontoValorTexto] = useState(
     descontoInicial && descontoInicial > 0 ? formatarMoeda(descontoInicial) : '',
   )
@@ -225,6 +238,15 @@ export default function FormaPagamentoModal({
   const descontoTravado = pagamentos.length > 0
 
   const aoSairDescontoPercentual = (texto: string) => {
+    // ⚠️ Campo em branco é "não mexi", NUNCA "zere o valor ao lado" — mesma lição do
+    // `aoSairQtd` da Contagem de Estoque. Sem esta linha, sair de um campo % vazio apagava um
+    // desconto que veio do orçamento e que o operador nunca tocou.
+    if (!texto.trim()) return
+    // ⚠️ Texto intocado = o percentual que NÓS semeamos do documento de origem. Recalcular o R$
+    // a partir dele PERDE CENTAVOS, porque o % só carrega 2 casas: R$ 33,33 sobre R$ 1.000 vira
+    // 3,33% e volta como R$ 33,30. O valor que veio do documento é o exato; ele só cede quando o
+    // operador de fato digitar outro percentual.
+    if (texto === percentualInicialTexto) return
     const completo = completarPercentual(texto)
     const percentual = Math.min(Math.max(desmascararPercentual(completo), 0), percentualMaximoPermitido)
     const valor = arredondar2((valorTotalProdutos * percentual) / 100)

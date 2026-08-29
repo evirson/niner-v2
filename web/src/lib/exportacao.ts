@@ -1,4 +1,5 @@
 import writeExcelFile from 'write-excel-file/browser'
+import { hojeISO } from './datas'
 import { api } from './api'
 
 export interface TabelaExportavel {
@@ -38,6 +39,7 @@ export async function exportarParaExcel(chave: string, titulo: string, linhas: R
     },
     width: 20,
   }))
-  const carimbo = new Date().toISOString().slice(0, 10)
+  // ⚠️ UTC carimbaria o arquivo com o dia seguinte depois das 21h — ver `lib/datas.ts`.
+  const carimbo = hojeISO()
   await writeExcelFile(linhas, { columns: schema, sheet: nomeAbaSeguro(titulo) }).toFile(`${chave}-${carimbo}.xlsx`)
 }

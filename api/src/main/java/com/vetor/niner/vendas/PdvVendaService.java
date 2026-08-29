@@ -135,7 +135,7 @@ public class PdvVendaService {
         // ⚠️ Mesmo contrato para a Ordem de Serviço (V087, DS16): preço congelado lido do BANCO.
         Map<Long, BigDecimal> precosDaOrdemServico = req.idOrdemServico() == null
                 ? Map.of()
-                : precosCongeladosDaOrdemServico(req.idOrdemServico(), req.itens());
+                : precosCongeladosDaOrdemServico(jwt, req.idOrdemServico(), req.itens());
 
         // ⭐ Quem EXECUTOU cada item da OS (DS5). Sem isto, o `id_funcionario` de todas as linhas
         // era o vendedor da venda, e a comissão do mecânico que fez o serviço ia para quem estava
@@ -305,9 +305,9 @@ public class PdvVendaService {
      * {@code idOrdemServico} sem nenhuma linha marcada faria a venda inteira sair a preço de
      * cadastro, consumindo a OS sem que a loja honrasse o que aprovou — e ninguém veria erro.
      */
-    private Map<Long, BigDecimal> precosCongeladosDaOrdemServico(long idOrdemServico,
+    private Map<Long, BigDecimal> precosCongeladosDaOrdemServico(Jwt jwt, long idOrdemServico,
                                                                  List<ItemVendaRequest> itensDaVenda) {
-        OrdemServicoResponse os = ordemServicoService.abrirParaVenda(idOrdemServico);
+        OrdemServicoResponse os = ordemServicoService.abrirParaVenda(jwt, idOrdemServico);
 
         if (itensDaVenda.stream().noneMatch(ItemVendaRequest::ehDaOrdemServico)) {
             throw new IllegalArgumentException(

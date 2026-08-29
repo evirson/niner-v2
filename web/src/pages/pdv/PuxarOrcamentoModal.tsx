@@ -9,7 +9,13 @@ import {
   type OrcamentoResumo,
 } from '../../lib/orcamento'
 import { maiusculas } from '../../lib/texto'
-import { formatarMoeda } from '../../lib/masks'
+import {
+  completarQuantidade,
+  desmascararQuantidade,
+  formatarMoeda,
+  formatarQuantidade,
+  mascararQuantidade,
+} from '../../lib/masks'
 
 /** Quantidade que o operador decidiu levar de cada item, por `idVariacao`. */
 type Levando = Record<number, number>
@@ -43,7 +49,16 @@ export default function PuxarOrcamentoModal({
   const [nomeVendedor, setNomeVendedor] = useState('')
   const [resultados, setResultados] = useState<OrcamentoResumo[] | null>(null)
   const [orcamento, setOrcamento] = useState<Orcamento | null>(null)
-  const [levando, setLevando] = useState<Levando>({})
+  /**
+   * ⛔ **Texto mascarado** (auditoria 2026-08-29). O campo filtrava com `replace(/\D/g,'')`, e
+   * `{i.qtd}` era impresso cru: um orçamento de **2,5 m** mostrava `2.5` (com ponto) na coluna
+   * "Orçado" e o operador **não conseguia levar a fração** — só 2 ou 25. `levando` continua sendo
+   * número no contrato com o PDV; o texto é só a digitação.
+   */
+  const [levandoTexto, setLevandoTexto] = useState<Record<number, string>>({})
+  const levando: Levando = Object.fromEntries(
+    Object.entries(levandoTexto).map(([id, texto]) => [Number(id), desmascararQuantidade(texto, true)]),
+  )
   const [erro, setErro] = useState<string | null>(null)
   const [buscando, setBuscando] = useState(false)
 
@@ -91,11 +106,11 @@ export default function PuxarOrcamentoModal({
         return
       }
       setOrcamento(o)
-      const inicial: Levando = {}
+      const inicial: Record<number, string> = {}
       for (const item of o.itens) {
-        inicial[item.idVariacao] = item.produtoInativo ? 0 : item.qtd
+        inicial[item.idVariacao] = formatarQuantidade(item.produtoInativo ? 0 : item.qtd, true)
       }
-      setLevando(inicial)
+      setLevandoTexto(inicial)
     } catch (e) {
       setErro(e instanceof ApiError ? e.message : 'Não foi possível abrir o orçamento.')
       setOrcamento(null)
@@ -263,21 +278,34 @@ export default function PuxarOrcamentoModal({
                           </span>
                         )}
                       </td>
-                      <td style={{ textAlign: 'right' }}>{i.qtd}</td>
+                      {/* ⚠️ Formatado: `{i.qtd}` cru imprimia `2.5`, com PONTO, num sistema em que
+                          todo número decimal aparece com vírgula. */}
+                      <td style={{ textAlign: 'right' }}>{formatarQuantidade(i.qtd, true)}</td>
                       <td style={{ textAlign: 'right' }}>
                         <input
                           className="mono"
-                          inputMode="numeric"
-                          style={{ width: 80, textAlign: 'right' }}
+                          inputMode="decimal"
+                          style={{ width: 90, textAlign: 'right' }}
                           disabled={i.produtoInativo}
-                          value={String(levando[i.idVariacao] ?? 0)}
+                          value={levandoTexto[i.idVariacao] ?? ''}
                           onFocus={(e) => e.target.select()}
-                          onChange={(e) => {
-                            const digitos = e.target.value.replace(/\D/g, '')
-                            // Teto = quantidade orçada. Digitar mais simplesmente não sobe.
-                            const q = Math.min(digitos === '' ? 0 : Number(digitos), i.qtd)
-                            setLevando((atual) => ({ ...atual, [i.idVariacao]: q }))
-                          }}
+                          onChange={(e) =>
+                            setLevandoTexto((atual) => ({
+                              ...atual,
+                              [i.idVariacao]: mascararQuantidade(e.target.value, true),
+                            }))
+                          }
+                          onBlur={() =>
+                            setLevandoTexto((atual) => {
+                              const completo = completarQuantidade(atual[i.idVariacao] ?? '', true)
+                              // Teto = quantidade orçada. Digitar mais não sobe — o teto é
+                              // aplicado no BLUR (antes era a cada tecla, o que impedia digitar
+                              // "10" quando o orçado era 12: o "1" já valia 1 e o "0" fazia 10,
+                              // mas em "2,5" o teto batia no meio da digitação).
+                              const q = Math.min(desmascararQuantidade(completo, true), i.qtd)
+                              return { ...atual, [i.idVariacao]: formatarQuantidade(q, true) }
+                            })
+                          }
                         />
                       </td>
                       <td className="mono" style={{ textAlign: 'right' }}>R$ {formatarMoeda(i.precoVenda)}</td>

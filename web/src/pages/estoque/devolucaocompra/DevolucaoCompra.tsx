@@ -43,6 +43,8 @@ export default function DevolucaoCompra() {
   const queryClient = useQueryClient()
 
   const [filtrosAberto, setFiltrosAberto] = useState(true)
+  /** Já houve uma busca? É o que decide se o ✕ do popup volta para a grade ou sai da tela. */
+  const [jaPesquisou, setJaPesquisou] = useState(false)
   const [buscaFornecedor, setBuscaFornecedor] = useState('')
   const [fornecedorEscolhido, setFornecedorEscolhido] = useState<FornecedorOpcaoEmissao | null>(null)
   const [idEmpresaFiltro, setIdEmpresaFiltro] = useState<number | ''>('')
@@ -392,7 +394,14 @@ export default function DevolucaoCompra() {
       {filtrosAberto && (
         <div className="modal-overlay">
           <div className="modal" role="dialog" aria-label="Filtros da Devolução de Produtos Comprados">
-            <CabecalhoModal titulo="Devolução de Produtos Comprados" aoFechar={() => navigate(-1)} />
+            {/* ⚠️ O ✕ só sai da TELA enquanto nada foi pesquisado (auditoria 2026-08-29). Depois
+                da primeira busca, a barra "Alterar Filtros" reabre este mesmo popup — e fechar
+                com o ✕ jogava o operador para fora, descartando uma pesquisa que ele acabara de
+                fazer. Mesmo comportamento do CRM e dos relatórios. */}
+            <CabecalhoModal
+              titulo="Devolução de Produtos Comprados"
+              aoFechar={() => (jaPesquisou ? setFiltrosAberto(false) : navigate(-1))}
+            />
             <p className="muted" style={{ marginTop: 4 }}>
               Localize a entrada que originou a mercadoria a devolver.
             </p>
@@ -504,6 +513,7 @@ export default function DevolucaoCompra() {
                 onClick={() => {
                   setPagina(1)
                   setEntrada(null)
+                  setJaPesquisou(true)
                   setFiltrosAberto(false)
                 }}
               >

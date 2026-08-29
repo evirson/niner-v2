@@ -34,10 +34,12 @@ export interface ItemVendaOrigem {
   variacaoTamanho: string | null
   qtdVendida: number
   qtdDisponivelDevolucao: number
-  /** Preço que o cliente PAGOU nesta venda (não o do cadastro atual, que pode ter mudado desde
-   *  então) — é ele que a grid de seleção mostra e que o vale-mercadoria usa. */
+  /** ⚠️ Preço BRUTO praticado na venda (não o do cadastro atual). É a chave de linha que casa a
+   *  devolução com a venda — o que o cliente pagou é `precoUnitario - descontoUnitario`. */
   precoUnitario: number
-  /** `qtdVendida × precoUnitario` — o total daquele item na venda original. */
+  /** Desconto por unidade desta linha da venda (2026-08-29). */
+  descontoUnitario: number
+  /** ⚠️ LÍQUIDO: `(precoUnitario - descontoUnitario) × qtdVendida` — o que o vale vai valer. */
   valorTotal: number
 }
 
@@ -55,7 +57,11 @@ export interface ItemDevolucaoResponse {
   variacaoCor: string | null
   variacaoTamanho: string | null
   qtd: number
+  /** ⚠️ BRUTO — é a chave de linha que casa com a linha da venda; nunca o líquido. */
   precoVenda: number
+  /** Desconto rateado desta linha; é ele que explica `qtd × precoVenda ≠ valorTotal`. */
+  valorDesconto: number
+  /** ⚠️ LÍQUIDO desde 2026-08-29 (`qtd × precoVenda − valorDesconto`) — o que o cliente PAGOU. */
   valorTotal: number
 }
 

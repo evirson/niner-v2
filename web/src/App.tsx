@@ -126,10 +126,12 @@ export default function App() {
           {/* Fluxo de Caixa é aberto (só entrada/saída de dinheiro); a DRE, não. */}
           <Route path="/fluxo-caixa" element={<FluxoCaixa />} />
           {/* DRE é ADMIN-only (expõe lucro, despesa e pró-labore) — a API também devolve 403. */}
-          <Route element={<RequireAdmin />}>
-            <Route path="/relatorio-dre" element={<RelatorioDre />} />
-            <Route path="/lucratividade" element={<RelatorioLucratividade />} />
-          </Route>
+          {/* ⚠️ SEM `RequireAdmin` desde a auditoria de 2026-08-29: a V078 tirou estas telas de
+              `admin_apenas` e o back trocou o `exigirAdmin` pelo RBAC (`@Tela`). Enquanto a rota
+              exigia papel, o admin concedia a permissão, o item aparecia no menu, e clicar nele
+              devolvia o usuário ao Painel EM SILÊNCIO — permissão impossível de exercer. */}
+          <Route path="/relatorio-dre" element={<RelatorioDre />} />
+          <Route path="/lucratividade" element={<RelatorioLucratividade />} />
           <Route path="/crm" element={<CrmForm />} />
           <Route path="/etiqueta-emissao" element={<EtiquetaEmissaoForm />} />
           <Route path="/fechamento-caixa" element={<FechamentoCaixa />} />
@@ -222,31 +224,35 @@ export default function App() {
             <Route path="/importacao-dados/produtos" element={<ImportacaoTabelaPage tabela="produto" />} />
             <Route path="/importacao-dados/estoque" element={<ImportacaoTabelaPage tabela="estoque" />} />
             <Route path="/exportacao-dados" element={<ExportacaoDadosPage />} />
-            <Route path="/configuracoes-gerais" element={<ConfiguracaoGeralForm />} />
             <Route path="/minha-conta" element={<MinhaConta />} />
             <Route path="/empresas" element={<EmpresaLista />} />
             <Route path="/empresas/:id" element={<EmpresaForm />} />
-            <Route path="/usuarios" element={<UsuarioLista />} />
-            <Route path="/usuarios/novo" element={<UsuarioForm />} />
-            <Route path="/usuarios/:id/permissoes" element={<UsuarioPermissoes />} />
-            <Route path="/usuarios/:id/visualizar" element={<UsuarioForm somenteLeitura />} />
-            <Route path="/usuarios/:id" element={<UsuarioForm />} />
-            <Route path="/etiqueta-configuracao" element={<EtiquetaConfigLista />} />
-            <Route path="/etiqueta-configuracao/novo" element={<EtiquetaConfigForm />} />
-            <Route path="/etiqueta-configuracao/:id/visualizar" element={<EtiquetaConfigForm somenteLeitura />} />
-            <Route path="/etiqueta-configuracao/:id" element={<EtiquetaConfigForm />} />
-            <Route path="/fiscal/configuracao" element={<FiscalConfiguracaoForm />} />
-            <Route path="/fiscal/perfis" element={<PerfilFiscalLista />} />
-            <Route path="/fiscal/perfis/novo" element={<PerfilFiscalForm />} />
-            <Route path="/fiscal/perfis/:id/visualizar" element={<PerfilFiscalForm somenteLeitura />} />
-            <Route path="/fiscal/perfis/:id" element={<PerfilFiscalForm />} />
-            <Route path="/fiscal/certificados" element={<FiscalCertificadoLista />} />
-            <Route path="/fiscal/conformidade" element={<ConformidadeFiscalPainel />} />
-            <Route path="/fiscal/contingencia" element={<FiscalContingenciaPainel />} />
-            <Route path="/fiscal/documentos" element={<DocumentoFiscalLista />} />
-            <Route path="/fiscal/exportacao-xml" element={<ExportacaoXmlLote />} />
-            <Route path="/fiscal/inutilizacao" element={<InutilizacaoNumeracao />} />
           </Route>
+          {/* ⚠️ Concedíveis pelo RBAC — NÃO exigem papel de administrador (auditoria 2026-08-29).
+              A V078 reduziu `admin_apenas` a 8 chaves (empresas, minha conta, importações e
+              exportação de dados) e o back passou a decidir por `@Tela`/`@Acao`; o `App.tsx`
+              ficou para trás e transformava cada concessão destas telas em beco sem saída. */}
+          <Route path="/configuracoes-gerais" element={<ConfiguracaoGeralForm />} />
+          <Route path="/usuarios" element={<UsuarioLista />} />
+          <Route path="/usuarios/novo" element={<UsuarioForm />} />
+          <Route path="/usuarios/:id/permissoes" element={<UsuarioPermissoes />} />
+          <Route path="/usuarios/:id/visualizar" element={<UsuarioForm somenteLeitura />} />
+          <Route path="/usuarios/:id" element={<UsuarioForm />} />
+          <Route path="/etiqueta-configuracao" element={<EtiquetaConfigLista />} />
+          <Route path="/etiqueta-configuracao/novo" element={<EtiquetaConfigForm />} />
+          <Route path="/etiqueta-configuracao/:id/visualizar" element={<EtiquetaConfigForm somenteLeitura />} />
+          <Route path="/etiqueta-configuracao/:id" element={<EtiquetaConfigForm />} />
+          <Route path="/fiscal/configuracao" element={<FiscalConfiguracaoForm />} />
+          <Route path="/fiscal/perfis" element={<PerfilFiscalLista />} />
+          <Route path="/fiscal/perfis/novo" element={<PerfilFiscalForm />} />
+          <Route path="/fiscal/perfis/:id/visualizar" element={<PerfilFiscalForm somenteLeitura />} />
+          <Route path="/fiscal/perfis/:id" element={<PerfilFiscalForm />} />
+          <Route path="/fiscal/certificados" element={<FiscalCertificadoLista />} />
+          <Route path="/fiscal/conformidade" element={<ConformidadeFiscalPainel />} />
+          <Route path="/fiscal/contingencia" element={<FiscalContingenciaPainel />} />
+          <Route path="/fiscal/documentos" element={<DocumentoFiscalLista />} />
+          <Route path="/fiscal/exportacao-xml" element={<ExportacaoXmlLote />} />
+          <Route path="/fiscal/inutilizacao" element={<InutilizacaoNumeracao />} />
         </Route>
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />

@@ -32,7 +32,15 @@ interface ItemLinha {
   idVariacao: number
   descricao: string
   variacao: string | null
+  /** BRUTO — a chave de linha que casa com a venda. */
   precoVenda: number
+  /**
+   * Desconto por unidade da linha da venda (auditoria 2026-08-29). Sem ele a tela somava o
+   * BRUTO e anunciava ao cliente um valor maior do que o vale que ela mesma ia emitir: uma peça
+   * de R$ 100 vendida com R$ 10 de desconto aparecia como R$ 100 no rodapé e virava vale de
+   * R$ 90. Devolução sem venda de origem não tem desconto a herdar — fica zero.
+   */
+  descontoUnitario: number
   qtdTexto: string
   /** `true` quando a linha veio da grid de seleção da venda — só então o preço identifica uma
    *  linha real da venda e pode ser mandado ao servidor. Produto lançado por código de barras
@@ -232,6 +240,7 @@ export default function DevolucaoProduto() {
         descricao: i.descricaoProduto,
         variacao: [i.variacaoCor, i.variacaoTamanho].filter(Boolean).join(' · ') || null,
         precoVenda: i.precoUnitario,
+        descontoUnitario: i.descontoUnitario,
         qtdTexto: formatarQuantidade(i.qtdDisponivelDevolucao, permiteQtdDecimal),
         daVenda: true,
       })),
@@ -260,6 +269,8 @@ export default function DevolucaoProduto() {
           descricao: produto.descricaoProduto,
           variacao: variacaoTexto(produto),
           precoVenda: produto.precoVenda,
+          // Sem venda de origem não há desconto a herdar — o preço do cadastro é o próprio líquido.
+          descontoUnitario: 0,
           qtdTexto: formatarQuantidade(qtd, permiteQtdDecimal),
           daVenda: false,
         },
@@ -345,7 +356,12 @@ export default function DevolucaoProduto() {
   const faltaNumeroVendaObrigatorio = exigeNumeroVenda && !numeroVendaTexto.trim()
   const podeConfirmar = itens.length > 0 && !algumItemComErro && !faltaNumeroVendaObrigatorio
   const qtdTotal = itens.reduce((soma, i) => soma + desmascararQuantidade(i.qtdTexto, permiteQtdDecimal), 0)
-  const valorTotal = itens.reduce((soma, i) => soma + desmascararQuantidade(i.qtdTexto, permiteQtdDecimal) * i.precoVenda, 0)
+  // ⚠️ LÍQUIDO — é o valor do vale que vai ser emitido. Somar o bruto aqui fazia a tela
+  // prometer um crédito que o servidor não ia gravar (auditoria 2026-08-29).
+  const valorTotal = itens.reduce(
+    (soma, i) => soma + desmascararQuantidade(i.qtdTexto, permiteQtdDecimal) * (i.precoVenda - i.descontoUnitario),
+    0,
+  )
 
   return (
     <div className="lista-tela">

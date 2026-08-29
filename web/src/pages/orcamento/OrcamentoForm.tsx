@@ -11,17 +11,21 @@ import {
   emitirOrcamento,
   type Orcamento,
 } from '../../lib/orcamento'
-import { buscarDescontoVenda } from '../../lib/configuracaoGeral'
+import { buscarDescontoVenda, buscarPermiteQtdDecimal } from '../../lib/configuracaoGeral'
 import { hojeMaisDiasISO } from '../../lib/datas'
 import {
   completarMoeda,
+  completarQuantidade,
   dataParaIso,
   dataValida,
   desmascararMoeda,
+  desmascararQuantidade,
   formatarMoeda,
+  formatarQuantidade,
   isoParaData,
   mascararData,
   mascararMoeda,
+  mascararQuantidade,
 } from '../../lib/masks'
 import PesquisaClienteModal from '../pdv/PesquisaClienteModal'
 import PesquisaProdutoModal from '../pdv/PesquisaProdutoModal'
@@ -35,8 +39,20 @@ interface ItemEmMontagem {
   sku: string
   descricao: string
   variacao: string
-  qtd: number
+  /**
+   * ⛔ **Texto mascarado, não `number`** (auditoria 2026-08-29). O campo filtrava com
+   * `replace(/\D/g,'')`, e a vírgula era engolida em silêncio: 2,5 m de tecido viravam **25**, o
+   * total ia de R$ 50 para R$ 500 — num documento **imutável** (R1), que só se conserta cancelando
+   * e refazendo, e que já saiu impresso para o cliente. Mesmo defeito corrigido na Ordem de
+   * Serviço no mesmo dia; o Orçamento era a ponta que ficou sem varrer.
+   */
+  qtdTexto: string
   preco: number
+}
+
+/** Quantidade do item como número — sempre pelo desmascarador, que remove os pontos de milhar. */
+function qtdDe(item: ItemEmMontagem): number {
+  return desmascararQuantidade(item.qtdTexto, true)
 }
 
 /**
@@ -68,6 +84,12 @@ export default function OrcamentoForm() {
     queryKey: ['pdv-desconto-venda'],
     queryFn: buscarDescontoVenda,
   })
+  const { data: cfgQtdDecimal } = useQuery({
+    queryKey: ['permite-qtd-decimal'],
+    queryFn: buscarPermiteQtdDecimal,
+  })
+  /** `cfg_permite_qtd_decimal` nasce LIGADO, então o default enquanto a query não resolve é `true`. */
+  const permiteQtdDecimal = cfgQtdDecimal?.cfgPermiteQtdDecimal ?? true
 
   /** A validade nasce sugerida por Parâmetros do Sistema (R11) e continua editável. */
   useEffect(() => {
@@ -85,7 +107,7 @@ export default function OrcamentoForm() {
     }
   }, [config, buscandoValidade, validadeTexto])
 
-  const subtotal = itens.reduce((s, i) => s + i.qtd * i.preco, 0)
+  const subtotal = itens.reduce((s, i) => s + qtdDe(i) * i.preco, 0)
   const desconto = desmascararMoeda(descontoTexto || '0')
   const total = subtotal - desconto
   const tetoDesconto = descontoMaximo
@@ -108,7 +130,11 @@ export default function OrcamentoForm() {
     setItens((atual) => {
       const existente = atual.find((i) => i.idVariacao === p.idVariacao)
       if (existente) {
-        return atual.map((i) => (i.idVariacao === p.idVariacao ? { ...i, qtd: i.qtd + 1 } : i))
+        return atual.map((i) =>
+          i.idVariacao === p.idVariacao
+            ? { ...i, qtdTexto: formatarQuantidade(qtdDe(i) + 1, permiteQtdDecimal) }
+            : i,
+        )
       }
       return [
         ...atual,
@@ -117,7 +143,7 @@ export default function OrcamentoForm() {
           sku: p.sku,
           descricao: p.descricao,
           variacao: [p.variacaoCor, p.variacaoTamanho].filter(Boolean).join(' · '),
-          qtd: 1,
+          qtdTexto: formatarQuantidade(1, permiteQtdDecimal),
           preco: p.precoVenda,
         },
       ]
@@ -131,7 +157,7 @@ export default function OrcamentoForm() {
         idFuncionario: vendedor!.id,
         dataValidade: dataParaIso(validadeTexto),
         valorDesconto: desconto,
-        itens: itens.map((i) => ({ idVariacao: i.idVariacao, qtd: i.qtd })),
+        itens: itens.map((i) => ({ idVariacao: i.idVariacao, qtd: qtdDe(i) })),
       }),
     onSuccess: (o) => setEmitido(o),
     onError: (e: unknown) =>
@@ -239,29 +265,35 @@ export default function OrcamentoForm() {
                         </td>
                         <td style={{ textAlign: 'right' }}>
                           <input
-                            inputMode="numeric"
-                            style={{ width: 80, textAlign: 'right' }}
-                            value={i.qtd === 0 ? '' : String(i.qtd)}
+                            inputMode="decimal"
+                            style={{ width: 90, textAlign: 'right' }}
+                            value={i.qtdTexto}
                             onFocus={(e) => e.target.select()}
-                            onChange={(e) => {
-                              const digitos = e.target.value.replace(/\D/g, '')
+                            onChange={(e) =>
                               setItens((atual) =>
                                 atual.map((x) =>
                                   x.idVariacao === i.idVariacao
-                                    ? { ...x, qtd: digitos === '' ? 0 : Number(digitos) }
+                                    ? { ...x, qtdTexto: mascararQuantidade(e.target.value, permiteQtdDecimal) }
                                     : x,
                                 ),
                               )
-                            }}
+                            }
                             onBlur={() =>
                               setItens((atual) =>
-                                atual.map((x) => (x.idVariacao === i.idVariacao && x.qtd < 1 ? { ...x, qtd: 1 } : x)),
+                                atual.map((x) => {
+                                  if (x.idVariacao !== i.idVariacao) return x
+                                  const completo = completarQuantidade(x.qtdTexto, permiteQtdDecimal)
+                                  // Zero não é quantidade: cai para 1, como nas outras grades.
+                                  return desmascararQuantidade(completo, permiteQtdDecimal) > 0
+                                    ? { ...x, qtdTexto: completo }
+                                    : { ...x, qtdTexto: formatarQuantidade(1, permiteQtdDecimal) }
+                                }),
                               )
                             }
                           />
                         </td>
                         <td className="mono" style={{ textAlign: 'right' }}>R$ {formatarMoeda(i.preco)}</td>
-                        <td className="mono" style={{ textAlign: 'right' }}>R$ {formatarMoeda(i.qtd * i.preco)}</td>
+                        <td className="mono" style={{ textAlign: 'right' }}>R$ {formatarMoeda(qtdDe(i) * i.preco)}</td>
                         <td>
                           <button
                             type="button"

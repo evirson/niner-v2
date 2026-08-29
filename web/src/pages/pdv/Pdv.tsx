@@ -752,7 +752,7 @@ export default function Pdv() {
         <AberturaCaixaModal
           statusCaixa={statusCaixa}
           aoAbrir={() => queryClient.invalidateQueries({ queryKey: ['caixa-status'] })}
-          aoVoltar={() => navigate('/')}
+          aoVoltar={() => navigate(-1)}
         />
       )}
     </div>

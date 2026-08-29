@@ -275,6 +275,16 @@ export default function ContaCorrenteMovimentoLista() {
                       >
                         Baixa automática
                       </span>
+                    ) : m.idSangria !== null ? (
+                      /* Depósito de sangria (2026-08-29): o backend já recusava com 409, mas a grid
+                         oferecia o lápis e a lixeira — o operador preenchia o formulário inteiro e
+                         só descobria no Salvar. Mesmo tratamento da baixa automática. */
+                      <span
+                        className="badge badge-inativo"
+                        title={`Depósito da sangria de caixa nº ${m.idSangria}. Ele acompanha a sangria e não se altera por aqui.`}
+                      >
+                        Sangria de caixa
+                      </span>
                     ) : (
                       <>
                     <Link

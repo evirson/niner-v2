@@ -62,7 +62,13 @@ public final class DevolucaoProdutoDtos {
             String variacaoTamanho,
             BigDecimal qtdVendida,
             BigDecimal qtdDisponivelDevolucao,
+            /** ⚠️ BRUTO — chave de linha que casa com a venda. O que o cliente pagou é
+             *  {@code precoUnitario − descontoUnitario}. */
             BigDecimal precoUnitario,
+            /** Desconto por unidade desta linha da venda (2026-08-29). */
+            BigDecimal descontoUnitario,
+            /** ⚠️ LÍQUIDO — {@code (precoUnitario − descontoUnitario) × qtdVendida}. Era bruto, e a
+             *  tela anunciava um valor maior do que o vale que ela mesma ia emitir. */
             BigDecimal valorTotal) {
     }
 
@@ -70,9 +76,19 @@ public final class DevolucaoProdutoDtos {
             long numeroVenda, Long idFuncionario, String nomeFuncionario, List<ItemVendaOrigemResponse> itens) {
     }
 
-    /** {@code sku}/{@code valorTotal} (2026-08-07) — mesmas colunas de {@code ItemComprovanteVenda}
-     *  (PdvDtos), pra a papeleta do vale-mercadoria usar a mesma tabela de itens da papeleta de
-     *  venda; {@code valorTotal} é bruto ({@code precoVenda × qtd}). */
+    /**
+     * {@code sku}/{@code valorTotal} (2026-08-07) — mesmas colunas de {@code ItemComprovanteVenda}
+     * (PdvDtos), pra a papeleta do vale-mercadoria usar a mesma tabela de itens da papeleta de
+     * venda.
+     *
+     * <p>⚠️ <b>{@code precoVenda} é BRUTO e {@code valorTotal} é LÍQUIDO</b> (2026-08-29). Este
+     * javadoc afirmava que {@code valorTotal} era bruto, e virou mentira no dia em que o vale
+     * passou a valer o que o cliente PAGOU — foi essa frase que fez o defeito passar em revisão:
+     * o comprovante imprimia <i>1 x 100,00 … 90,00</i>, uma conta que não fecha, no papel que vai
+     * para a mão do cliente. {@code precoVenda} continua bruto de propósito — é a <b>chave de
+     * linha</b> que casa com a linha da venda, e mudá-lo liberaria devolver duas vezes.
+     * {@code valorDesconto} é o que explica a diferença, e é por ele que o comprovante fecha.
+     */
     public record ItemDevolucaoResponse(
             long idVariacao,
             String sku,
@@ -81,6 +97,8 @@ public final class DevolucaoProdutoDtos {
             String variacaoTamanho,
             BigDecimal qtd,
             BigDecimal precoVenda,
+            /** Desconto rateado desta linha (o mesmo gravado em {@code produto_movimento_detalhe}). */
+            BigDecimal valorDesconto,
             BigDecimal valorTotal) {
     }
 

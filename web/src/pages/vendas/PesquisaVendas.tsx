@@ -79,6 +79,8 @@ export default function PesquisaVendas() {
   const ehAdmin = eu?.usuario.papel === 'ADMIN'
 
   const [filtrosAberto, setFiltrosAberto] = useState(true)
+  /** Já houve uma busca? É o que decide se o ✕ do popup volta para a grade ou sai da tela. */
+  const [jaPesquisou, setJaPesquisou] = useState(false)
   const [erroFiltros, setErroFiltros] = useState('')
   const [numeroVendaTexto, setNumeroVendaTexto] = useState('')
   const [idEmpresa, setIdEmpresa] = useState<number | ''>('')
@@ -120,6 +122,7 @@ export default function PesquisaVendas() {
     setErroFiltros('')
     setPagina(1)
     setIdVendaSelecionada(null)
+    setJaPesquisou(true)
     setFiltrosAberto(false)
   }
 
@@ -304,7 +307,14 @@ export default function PesquisaVendas() {
             aria-label="Filtros de Pesquisa de Vendas"
             onClick={(e) => e.stopPropagation()}
           >
-            <CabecalhoModal titulo="Pesquisa de Vendas" aoFechar={() => navigate(-1)} />
+            {/* ⚠️ O ✕ só sai da TELA enquanto nada foi pesquisado (auditoria 2026-08-29). Depois
+                da primeira busca, a barra "Alterar Filtros" reabre este mesmo popup — e fechar
+                com o ✕ jogava o operador para fora, descartando uma pesquisa que ele acabara de
+                fazer. Mesmo comportamento do CRM e dos relatórios. */}
+            <CabecalhoModal
+              titulo="Pesquisa de Vendas"
+              aoFechar={() => (jaPesquisou ? setFiltrosAberto(false) : navigate(-1))}
+            />
             <p className="muted" style={{ marginTop: 4, marginBottom: 24 }}>
               Informe o número da venda, ou a data inicial e final.
             </p>

@@ -162,19 +162,26 @@ public class FluxoCaixaService {
         }
 
         if (origem != OrigemDinheiro.CAIXA) {
-            // conta_corrente não tem id_empresa — o filtro de empresa não se aplica ao banco.
+            // ⚠️ `conta_corrente` TEM `id_empresa` (V028, NOT NULL, com FK) — o comentário que
+            // ficava aqui afirmava o contrário, e por causa dele o banco entrava SEM filtro de
+            // empresa (auditoria 2026-08-29). O Fluxo de Caixa da Filial somava os R$ 200 mil da
+            // Matriz, e a linha de conciliação não acusava nada porque `saldoAte` errava do mesmo
+            // jeito nos dois lados. O JOIN é o que traz a empresa da conta.
             movimentos.addAll(jdbc.sql("""
                             SELECT COALESCE(NULLIF(pc.grupo_dfc::text, 'NAO_APLICA'), 'OPERACIONAL') AS grupo,
                                    pc.descricao AS rotulo,
                                    SUM(CASE WHEN ccm.credito_debito = 'C' THEN ccm.valor ELSE -ccm.valor END) AS valor
                             FROM conta_corrente_movimento ccm
+                            JOIN conta_corrente cc
+                                 ON cc.id_conta_corrente = ccm.id_conta_corrente AND cc.id_tenant = ccm.id_tenant
                             JOIN cfg_plano_contas pc
                                  ON pc.id_plano_contas = ccm.id_plano_contas AND pc.id_tenant = ccm.id_tenant
                             WHERE ccm.id_tenant = plataforma.tenant_atual()
                                   AND (ccm.data_movimento AT TIME ZONE 'America/Sao_Paulo')::date BETWEEN ? AND ?
+                            """ + filtroEmpresa("cc.id_empresa", empresas) + """
                             GROUP BY 1, 2
                             """)
-                    .params(inicio, fim)
+                    .params(parametros(inicio, fim, empresas))
                     .query((rs, n) -> new Movimento(rs.getString("grupo"), rs.getString("rotulo"), rs.getBigDecimal("valor")))
                     .list());
         }
@@ -248,10 +255,13 @@ public class FluxoCaixaService {
             saldo = saldo.add(jdbc.sql("""
                             SELECT COALESCE(SUM(CASE WHEN ccm.credito_debito = 'C' THEN ccm.valor ELSE -ccm.valor END), 0)
                             FROM conta_corrente_movimento ccm
+                            JOIN conta_corrente cc
+                                 ON cc.id_conta_corrente = ccm.id_conta_corrente AND cc.id_tenant = ccm.id_tenant
                             WHERE ccm.id_tenant = plataforma.tenant_atual()
                                   AND (ccm.data_movimento AT TIME ZONE 'America/Sao_Paulo')::date <= ?
+                            """ + filtroEmpresa("cc.id_empresa", empresas) + """
                             """)
-                    .param(data)
+                    .params(parametrosData(data, empresas))
                     .query(BigDecimal.class).single());
         }
         return saldo;

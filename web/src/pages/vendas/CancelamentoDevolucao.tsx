@@ -58,6 +58,8 @@ function paginasVisiveis(atual: number, total: number): number[] {
 export default function CancelamentoDevolucao() {
   const navigate = useNavigate()
   const [filtrosAberto, setFiltrosAberto] = useState(true)
+  /** Já houve uma busca? É o que decide se o ✕ do popup volta para a grade ou sai da tela. */
+  const [jaPesquisou, setJaPesquisou] = useState(false)
   const [idDevolucaoTexto, setIdDevolucaoTexto] = useState('')
   const [dataInicialTexto, setDataInicialTexto] = useState(isoParaData(primeiroDiaDoMesISO()))
   const [dataFinalTexto, setDataFinalTexto] = useState(isoParaData(hojeISO()))
@@ -89,6 +91,7 @@ export default function CancelamentoDevolucao() {
     }
     setErroFiltros('')
     setPagina(1)
+    setJaPesquisou(true)
     setFiltrosAberto(false)
   }
 
@@ -258,7 +261,14 @@ export default function CancelamentoDevolucao() {
       {filtrosAberto && (
         <div className="modal-overlay">
           <div className="modal" role="dialog" aria-label="Filtros de Cancelamento de Devolução" onClick={(e) => e.stopPropagation()}>
-            <CabecalhoModal titulo="Cancelamento de Devolução de Produtos" aoFechar={() => navigate(-1)} />
+            {/* ⚠️ O ✕ só sai da TELA enquanto nada foi pesquisado (auditoria 2026-08-29). Depois
+                da primeira busca, a barra "Alterar Filtros" reabre este mesmo popup — e fechar
+                com o ✕ jogava o operador para fora, descartando uma pesquisa que ele acabara de
+                fazer. Mesmo comportamento do CRM e dos relatórios. */}
+            <CabecalhoModal
+              titulo="Cancelamento de Devolução de Produtos"
+              aoFechar={() => (jaPesquisou ? setFiltrosAberto(false) : navigate(-1))}
+            />
             <p className="muted" style={{ marginTop: 4 }}>
               Informe o número do vale, ou a data inicial e final da devolução.
             </p>

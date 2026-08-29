@@ -254,8 +254,15 @@ public class CancelamentoDevolucaoService {
 
     private Cabecalho buscarCabecalho(long idDevolucao) {
         return jdbc.sql("""
+                        -- ⚠️ `id_venda_debito` é lido por `lerCabecalho` e FALTAVA aqui (2026-08-29):
+                        -- o mapper é compartilhado com o SELECT de `cancelar`, que ganhou a coluna e
+                        -- deixou este irmão para trás. Sem ela, `rs.getLong` estoura
+                        -- `The column name id_venda_debito was not found in this ResultSet` e a tela
+                        -- de detalhe NUNCA abria. ⛔ Não separe os mappers para "resolver": um mapper
+                        -- por SELECT é o que reabre a divergência que causou isto.
                         SELECT vd.id_devolucao, vd.id_empresa, e.razao_social AS nome_empresa, vd.data_devolucao,
-                               vd.id_venda_credito, vd.vale_usado, vd.cancelada, vd.data_cancelamento,
+                               vd.id_venda_credito, vd.id_venda_debito, vd.vale_usado, vd.cancelada,
+                               vd.data_cancelamento,
                                vd.motivo_cancelamento, u.nome_usuario AS nome_usuario_cancelamento
                         FROM venda_devolucao vd
                         JOIN empresa e ON e.id_empresa = vd.id_empresa AND e.id_tenant = vd.id_tenant

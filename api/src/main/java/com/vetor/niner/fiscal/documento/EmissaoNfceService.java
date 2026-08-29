@@ -320,10 +320,29 @@ public class EmissaoNfceService {
                     "Nota autorizada.", 0);
         }
 
+        /**
+         * ⚠️ <b>Alguns {@code cStat} apontam para um cadastro específico, e dizer isso economiza
+         * horas</b> (2026-08-29). O texto genérico <i>"corrija e emita de novo"</i> não diz o que
+         * corrigir: o {@code 464} chegou ao dono do produto como uma falha misteriosa do QR Code,
+         * quando a causa era o CSC gravado não conferir com o credenciado na SEFAZ — medido
+         * recalculando o hash da última nota autorizada com o CSC atual, que <b>não</b> o
+         * reproduziu. Mesma família do {@code cStat 974}, que fala em CNPJ e é do CSRT.
+         */
+        private static String dicaDoCstat(String cStat) {
+            return switch (cStat) {
+                case "464" -> " O hash do QR Code é calculado com o CSC: este erro significa que o CSC "
+                        + "gravado não é o que está credenciado na SEFAZ. Confira o CSC e o ID do CSC em "
+                        + "Fiscal › Configuração Fiscal, copiando de novo do portal da SEFAZ.";
+                case "539" -> " Já existe uma nota autorizada com esta chave e conteúdo diferente —"
+                        + " consulte a chave antes de reemitir.";
+                default -> "";
+            };
+        }
+
         static ResultadoEmissao rejeitado(long id, String chave, String cStat, String motivo) {
             return new ResultadoEmissao(Situacao.REJEITADO, id, chave, null, cStat,
-                    "A SEFAZ rejeitou a nota: %s (%s). A venda está registrada; corrija e emita de novo."
-                            .formatted(motivo, cStat), 0);
+                    ("A SEFAZ rejeitou a nota: %s (%s). A venda está registrada; corrija e emita de novo."
+                            + "%s").formatted(motivo, cStat, dicaDoCstat(cStat)), 0);
         }
 
         static ResultadoEmissao denegado(long id, String chave, String cStat, String motivo) {

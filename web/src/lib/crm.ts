@@ -1,4 +1,5 @@
 import writeExcelFile from 'write-excel-file/browser'
+import { hojeISO } from './datas'
 import { api } from './api'
 import { dataParaIso, formatarMoeda, isoParaData, mascararTelefone } from './masks'
 
@@ -271,7 +272,8 @@ export async function exportarClientesCrmExcel(clientes: ClienteCrm[], colunas: 
     width: chave === 'nome' || chave === 'email' ? 28 : 16,
   }))
 
-  const agora = new Date()
-  const carimbo = agora.toISOString().slice(0, 10)
+  // ⚠️ `toISOString()` converte para UTC: depois das 21h de Brasília o arquivo baixava
+  // carimbado com o DIA SEGUINTE (auditoria 2026-08-29). `lib/datas.ts` proíbe isso por escrito.
+  const carimbo = hojeISO()
   await writeExcelFile(clientes, { columns: schemaColunas, sheet: 'Clientes' }).toFile(`crm-clientes-${carimbo}.xlsx`)
 }

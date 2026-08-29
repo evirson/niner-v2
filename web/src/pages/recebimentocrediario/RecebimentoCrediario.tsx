@@ -210,8 +210,11 @@ export default function RecebimentoCrediario() {
   })
 
   const cancelar = () => {
+    // ⚠️ `navigate(-1)`, não rota fixa (convenção do projeto): mandar para o Painel tira o
+    // operador de onde ele estava e ainda empilha uma entrada no histórico — o ← do navegador o
+    // devolve para cá, reabrindo o mesmo popup obrigatório, em looping.
     if (clienteSelecionado) trocarCliente()
-    else navigate('/')
+    else navigate(-1)
   }
 
   return (
@@ -513,7 +516,7 @@ export default function RecebimentoCrediario() {
         <AberturaCaixaModal
           statusCaixa={statusCaixa}
           aoAbrir={() => queryClient.invalidateQueries({ queryKey: ['caixa-status'] })}
-          aoVoltar={() => navigate('/')}
+          aoVoltar={() => navigate(-1)}
         />
       )}
     </div>

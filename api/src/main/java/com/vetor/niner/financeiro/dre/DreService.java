@@ -435,20 +435,30 @@ public class DreService {
                 .list();
 
         // Movimento de conta corrente: só contas de receita (ver javadoc). `credito_debito = 'C'`
-        // é entrada de dinheiro; a conta corrente não tem id_empresa, então não entra no filtro.
+        // é entrada de dinheiro.
+        // ⚠️ `conta_corrente` TEM `id_empresa` (V028, NOT NULL, com FK) — o comentário que ficava
+        // aqui dizia o contrário, e a DRE da Filial recebia as "outras receitas" da Matriz
+        // (auditoria 2026-08-29). Mesmo defeito, mesma frase, no Fluxo de Caixa.
+        // ⛔ E a SANGRIA fica de fora: ela é TRANSFERÊNCIA (o dinheiro já foi contado como receita
+        // quando a venda entrou no caixa), então somá-la aqui contaria a mesma venda duas vezes —
+        // bastaria o operador escolher uma conta de receita no seletor, que nada o impede.
         jdbc.sql("""
                         SELECT pc.grupo_dre::text AS grupo, ccm.id_plano_contas, pc.descricao,
                                COALESCE(SUM(ccm.valor), 0) AS valor
                         FROM conta_corrente_movimento ccm
+                        JOIN conta_corrente cc
+                             ON cc.id_conta_corrente = ccm.id_conta_corrente AND cc.id_tenant = ccm.id_tenant
                         JOIN cfg_plano_contas pc
                              ON pc.id_plano_contas = ccm.id_plano_contas AND pc.id_tenant = ccm.id_tenant
                         WHERE ccm.id_tenant = plataforma.tenant_atual() AND pc.inclui_dre = true
                               AND pc.grupo_dre IN ('RECEITA_BRUTA', 'RESULTADO_FINANCEIRO')
                               AND ccm.credito_debito = 'C'
+                              AND ccm.id_sangria IS NULL
                               AND (ccm.data_movimento AT TIME ZONE 'America/Sao_Paulo')::date BETWEEN ? AND ?
+                        """ + filtroEmpresa("cc.id_empresa", idsEmpresa) + """
                         GROUP BY pc.grupo_dre, ccm.id_plano_contas, pc.descricao
                         """)
-                .params(inicio, fim)
+                .params(parametros(inicio, fim, idsEmpresa))
                 .query((rs, n) -> {
                     adicionar(porGrupo, rs.getString("grupo"), new ValorConta(
                             rs.getString("id_plano_contas"), rs.getString("descricao"), rs.getBigDecimal("valor")));

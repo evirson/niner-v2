@@ -372,8 +372,23 @@ public class OrdemServicoService {
      * procurar o problema em outro lugar.
      */
     @Transactional(readOnly = true)
-    public OrdemServicoResponse abrirParaVenda(long id) {
+    public OrdemServicoResponse abrirParaVenda(Jwt jwt, long id) {
         OrdemServicoResponse os = buscar(id);
+        // ⚠️ A OS pertence à EMPRESA que a abriu — a mesma regra que o orçamento ganhou em
+        // 2026-08-22 (auditoria, item 3) e que a OS nasceu sem (auditoria 2026-08-29).
+        // Não é isolamento de tenant (P8 nunca esteve em risco: as duas empresas são do mesmo
+        // tenant), é regra de negócio, e aqui ela custa mais caro que no orçamento: as peças
+        // ficam RESERVADAS na empresa da OS. Faturando pela outra, a venda debitava o estoque da
+        // empresa errada (que nunca teve as peças → saldo negativo, permitido) enquanto
+        // `marcarFaturada` liberava a reserva na empresa certa — as peças físicas ficavam de um
+        // lado e a dívida de estoque do outro. A lista do F5 já filtra por empresa, então só uma
+        // chamada direta à API chegava aqui; P4 diz que a trava é do servidor, não da tela.
+        long idEmpresaSessao = ((Number) jwt.getClaim("eid")).longValue();
+        if (os.idEmpresa() != idEmpresaSessao) {
+            throw new ConflitoDadosException(
+                    "A ordem de serviço nº " + id + " foi aberta em " + os.nomeEmpresa()
+                            + " e só pode virar venda nessa empresa. Entre na empresa correta para usá-la.");
+        }
         if (os.idVenda() != null) {
             throw new ConflitoDadosException(
                     "A ordem de serviço nº " + id + " já virou a venda nº " + os.idVenda() + ".");

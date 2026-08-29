@@ -72,6 +72,8 @@ export default function EntradaMercadoriaLista() {
    *  direto pra tela de criação e "Fechar" volta pra tela anterior (`navigate(-1)`, mesmo
    *  comportamento do BotaoFecharTela do cabeçalho) sem abrir a listagem. */
   const [filtrosAberto, setFiltrosAberto] = useState(true)
+  /** Já houve uma busca? É o que decide se o ✕ do popup volta para a grade ou sai da tela. */
+  const [jaPesquisou, setJaPesquisou] = useState(false)
   const [buscaFornecedor, setBuscaFornecedor] = useState('')
   const [fornecedorEscolhido, setFornecedorEscolhido] = useState<FornecedorOpcaoEmissao | null>(null)
   const [idEmpresaFiltro, setIdEmpresaFiltro] = useState<number | ''>('')
@@ -106,6 +108,7 @@ export default function EntradaMercadoriaLista() {
 
   const confirmarFiltros = () => {
     setPagina(1)
+    setJaPesquisou(true)
     setFiltrosAberto(false)
   }
 
@@ -331,7 +334,14 @@ export default function EntradaMercadoriaLista() {
       {filtrosAberto && (
         <div className="modal-overlay">
           <div className="modal" role="dialog" aria-label="Filtros de Entrada de Produtos" onClick={(e) => e.stopPropagation()}>
-            <CabecalhoModal titulo="Entrada de Produtos por Compra" aoFechar={() => navigate(-1)} />
+            {/* ⚠️ O ✕ só sai da TELA enquanto nada foi pesquisado (auditoria 2026-08-29). Depois
+                da primeira busca, a barra "Alterar Filtros" reabre este mesmo popup — e fechar
+                com o ✕ jogava o operador para fora, descartando uma pesquisa que ele acabara de
+                fazer. Mesmo comportamento do CRM e dos relatórios. */}
+            <CabecalhoModal
+              titulo="Entrada de Produtos por Compra"
+              aoFechar={() => (jaPesquisou ? setFiltrosAberto(false) : navigate(-1))}
+            />
             <p className="muted" style={{ marginTop: 4 }}>
               Filtre as entradas já lançadas, ou pule direto para uma nova entrada.
             </p>

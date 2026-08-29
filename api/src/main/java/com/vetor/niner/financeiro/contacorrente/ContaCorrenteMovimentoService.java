@@ -250,7 +250,7 @@ public class ContaCorrenteMovimentoService {
             SELECT m.localizador, m.id_conta_corrente, cc.descricao AS descricao_conta_corrente,
                    m.id_plano_contas, pc.descricao AS descricao_plano_contas, m.data_movimento,
                    m.numero_documento, m.credito_debito::text AS credito_debito, m.compensado, m.valor,
-                   m.observacao, m.id_conta_pagar, m.criado_em, m.atualizado_em
+                   m.observacao, m.id_conta_pagar, m.id_sangria, m.criado_em, m.atualizado_em
             FROM conta_corrente_movimento m
             JOIN conta_corrente cc ON cc.id_tenant = m.id_tenant AND cc.id_conta_corrente = m.id_conta_corrente
             JOIN cfg_plano_contas pc ON pc.id_tenant = m.id_tenant AND pc.id_plano_contas = m.id_plano_contas
@@ -270,6 +270,7 @@ public class ContaCorrenteMovimentoService {
                 rs.getBigDecimal("valor"),
                 rs.getString("observacao"),
                 getLongOuNulo(rs, "id_conta_pagar"),
+                getLongOuNulo(rs, "id_sangria"),
                 rs.getObject("criado_em", OffsetDateTime.class),
                 rs.getObject("atualizado_em", OffsetDateTime.class));
     }
