@@ -11,11 +11,16 @@
 > **Como apresentar:** resumido e **agrupado por dono**, não as ~27 linhas cruas — ele já reclamou
 > de informação demais de uma vez (*"TA MUITO CONFUSO"*).
 >
-> **Última revisão:** 2026-08-28 — a remoção da integração com marketplaces fechou nove itens
-> por desaparecimento do assunto (2, 3, 4, 15, 16, 18, 20, 21 e 27), e o módulo de Serviços (S1–S4)
-> foi implementado no mesmo dia, fechando o item 50. Ver as duas seções no fim do arquivo.
+> **Última revisão:** 2026-08-28 (fim do dia) — três movimentos no mesmo dia: a remoção da
+> integração com marketplaces fechou **nove** itens por desaparecimento do assunto (2, 3, 4, 15, 16,
+> 18, 20, 21 e 27); o módulo de Serviços (S1–S4) foi implementado, fechando o **50** e o **52**; e
+> as lacunas da Ordem de Serviço foram fechadas, encerrando o **53**. Entraram os itens **54**, **55**
+> e **56**. Ver as quatro seções no fim do arquivo.
+>
+> **Hoje:** **9 itens esperam por ele** (🔵) e **5 são minha bola** (🟢). O mais novo e o único que
+> bloqueia decisão é o **#55** — cancelar a venda deixa a OS (e o orçamento) órfãos.
 
-**Estado na data desta revisão:** 58 telas em uso · 1065 testes verdes, 1 pulado (medido, não estimado — o pulado é o guard de meia-noite do horário de acesso).
+**Estado na data desta revisão:** 56 telas do ERP + 3 públicas · 1065 testes verdes, **1 ou 2 pulados conforme a HORA** — o guard de meia-noite do `HorarioAcessoTest`, que se pula sozinho quando a janela pedida cruzaria a virada do dia (rodando às 23h50 são 2; de manhã, 0). ⚠️ Não é regressão, e o número oscilar é o mecanismo funcionando (tudo medido, não estimado; a contagem de telas é a de `docs/TELAS.md`, que declara a base).
 
 ---
 
@@ -385,7 +390,7 @@ Suíte depois da remoção: **1024 testes verdes, 0 pulados**.
 ## 2026-08-28 (3) — as lacunas da OS fechadas (item 53 resolvido)
 
 Pedido dele: *"faça tudo o que pode ser feito, menos a emissão da NFS-e"*. **V088, V089 e V090.**
-Suíte: **1065 testes verdes, 1 pulado** (guard de meia-noite, conhecido).
+Suíte: **1065 testes verdes, 1–2 pulados** (o guard de meia-noite, que se pula sozinho perto da virada do dia).
 
 **O item 53 fechou por inteiro**, e com mais do que ele listava:
 - ✅ Via impressa da OS (bobina + A4 + WhatsApp) — a lacuna que **não** estava na lista original e
@@ -402,12 +407,59 @@ Suíte: **1065 testes verdes, 1 pulado** (guard de meia-noite, conhecido).
    derivavam "o vendedor da venda" dali — a Pesquisa de Vendas mostrou o mecânico como vendedor.
    Corrigido com `venda.id_funcionario` (V089), cujo backfill saiu vazio e precisou da V090.
 
-### 54. ⏭️ O que a OS deixou para depois (era o item 53, agora reduzido)
+### 54. O que a OS deixou para depois (era o item 53, agora reduzido) ⏭️
 - **Agenda / hora marcada.** A duração já vira estimativa na tela; reservar horário é feature
   própria e depende de decisões de produto ainda não tomadas (horário de funcionamento,
   disponibilidade por profissional, conflito).
 - **Executor por LINHA quando a mesma variação se repete na OS.** Hoje o mapa fica com o primeiro
   executor; resolver exige a chave de linha que o PDV ainda não carrega para a OS.
+
+### 55. Cancelar a venda deixa o documento de origem ÓRFÃO (OS **e** orçamento) 🔵
+
+**Medido ao vivo em 2026-08-28**, cancelando a venda 621 que veio da OS 3:
+
+| | Antes | Depois |
+|---|---|---|
+| Venda | ativa | **cancelada** ✅ |
+| Estoque da peça | 2 | **3** (voltou) ✅ |
+| OS | `FATURADA` → venda 621 | **`FATURADA` → venda 621** ❌ |
+
+A OS continua afirmando que virou uma venda que não existe mais, e **não há caminho de volta**: ela
+está `FATURADA` e o F5 só oferece `CONCLUIDA`. O lojista teria de abrir outra OS do zero,
+redigitando serviços, peças e executor de um trabalho que já foi feito.
+
+⚠️ **Não é regressão do módulo de serviços — o ORÇAMENTO tem exatamente o mesmo comportamento**
+desde que existe (fica `VENDIDO` apontando para venda cancelada). `CancelamentoVendaService` não
+conhece nem um nem outro. A diferença é o custo: um orçamento se refaz em dois minutos, uma OS
+carrega o histórico da execução.
+
+**🔵 Precisa de decisão dele**, e são três perguntas encadeadas:
+1. Cancelar a venda deve **devolver a OS para `CONCLUIDA`** (podendo ser refaturada) ou deixá-la
+   `FATURADA` com um aviso de que a venda caiu?
+2. Se voltar para `CONCLUIDA`, as peças devem **reservar de novo**? (O estoque já voltou ao livre
+   no cancelamento — reservar de novo é coerente com "a OS está de pé outra vez".)
+3. Vale para o **orçamento** também, ou só para a OS?
+
+⛔ **Não implementei por conta própria**: as três respostas mudam o comportamento de uma rotina que
+mexe em dinheiro e estoque, e a segunda em particular pode tirar do balcão uma peça que o lojista
+já considerava livre.
+
+---
+
+### 56. Lacunas menores da OS (nenhuma bloqueia a operação) 🟢
+
+Levantadas conferindo o código em 2026-08-28, depois de fechar o item 53:
+- **Exportação de Dados não inclui as OS** — exporta 9 tabelas, nenhuma de serviço.
+- **Não há relatório de OS** — produtividade por mecânico, tempo médio de execução, OS abertas por
+  período. Hoje só a lista com filtros.
+- **Campos não configuráveis por tenant** (`cfg_tela_campo`). ⚠️ O **orçamento também não tem**,
+  então a OS está consistente com a tela irmã — é padrão de tela de *documento*, não lacuna.
+
+✅ **Conferido e correto** (não confundir com pendência): RBAC (`AcoesPorTelaConferemTest` verde),
+DRE (o serviço entra na receita — medido: R$ 423,60 no dia do teste), e a ausência de ordenação por
+coluna e de bloco de auditoria, que o orçamento também não tem.
+
+---
 
 ---
 
@@ -415,7 +467,7 @@ Suíte: **1065 testes verdes, 1 pulado** (guard de meia-noite, conhecido).
 
 `V085`, `V086` e `V087`. Serviço no catálogo (tipo imutável, sem estoque), os 8 leitores filtrados
 e a **Ordem de Serviço** completa, virando venda pelo F5 do PDV. Spec: `docs/telas/ordem-servico.md`.
-Suíte: **1062 testes verdes, 0 pulados** · **58 telas**.
+Suíte: **1062 testes verdes, 0 pulados**.
 
 **O item 50 fechou:** ele respondeu *"sim, por padrão o módulo de serviço vai precisar ligar ele pra
 funcionar, pois as empresas de serviço são menos que as de comércio"* — `cfg_usa_servicos` nasce
@@ -424,15 +476,8 @@ funcionar, pois as empresas de serviço são menos que as de comércio"* — `cf
 **Continuam abertos:** 49 (credenciais da NFS-e — é o bloqueio real), 51 (P2 ramos de serviço e P6
 efeito no preço, este dependendo do item 28).
 
-### 53. 🟢 O que o S4 deixou de propósito para depois
-Nada disso trava a operação — todos são "existe o dado, falta quem o consuma":
-- **`produto_servico.duracao_minutos`** é gravada e ninguém lê. É a semente de uma agenda/hora
-  marcada, que o petshop vai pedir. ⏭️ Adiado por ser feature própria, não detalhe da OS.
-- **`ordem_servico_item.id_funcionario`** (quem executou **aquele** item) é gravado, mas o
-  Relatório de Comissões continua agrupando pelo **vendedor da venda**. Numa oficina com dois
-  mecânicos isso paga a comissão à pessoa errada.
-- **A papeleta lista serviço e peça juntos.** A separação existe na tela da OS e no banco; falta no
-  comprovante — e é a mesma separação que a NFS-e vai precisar.
+### 53. ✅ O que o S4 deixou para depois — **FECHADO no mesmo dia** (ver seção 2026-08-28 (3)).
+  O que sobrou virou os itens **54** (agenda e executor por linha) e **56** (lacunas menores).
 
 ---
 
@@ -441,7 +486,7 @@ Nada disso trava a operação — todos são "existe o dado, falta quem o consum
 O estudo está em **`docs/MODULOSERVICOS.md`** (§0.1 traz as decisões dele). O que ficou pendente,
 por dono:
 
-### 49. 🔵 Credenciais da empresa para homologar a NFS-e
+### 49. Credenciais da empresa para homologar a NFS-e 🔵
 Ele tem uma empresa que pode testar, mas **as credenciais ainda não estão em mãos**. Sem elas o
 bloco **S0** (prova de conceito contra o Emissor Nacional) e o **S6/S7** (emissão e ciclo de vida)
 não saem do papel. ⚠️ Faltam três fatos sobre ela, e nenhum é dedutível: **regime** (MEI × ME/EPP do
@@ -452,13 +497,16 @@ dos entes, mas *aderir ≠ operar*, e as fontes divergem entre 392 e 1.898 opera
 nada dessa parte pode ser implementado por dedução. É o candidato nº 1 a virar bloqueio de terceiro,
 como o CSRT virou.
 
-### 50. 🔵 P1 — serviço nasce ligado ou desligado?
+### 50. ✅ P1 — serviço nasce ligado ou desligado? **RESPONDIDO: desligado** (V085).
+
+<sub>Texto original abaixo, mantido para o histórico da decisão.</sub>
+
 `cfg_usa_servicos` é `DEFAULT` de migration, e inverter default depois de existir tenant é
 retrabalho medido (V054 → V055). **Recomendação: desligado**, como `cfg_usa_cor_grade` — a loja de
 calçados não deve ganhar um seletor "Mercadoria/Serviço" que nunca vai usar. Precisa da resposta
 **antes do bloco S1**.
 
-### 51. 🔵 P2 e P6 — ramos de serviço e o efeito no preço
+### 51. P2 e P6 — ramos de serviço e o efeito no preço 🔵
 **P2:** os 28 ramos são todos de varejo; uma oficina hoje se cadastra como `AUTOPECAS` ou `OUTROS` e
 o dado de segmentação nasce errado. Recomendação: acrescentar oficina, salão/barbearia, assistência
 técnica, clínica veterinária e lava-rápido, com os CNAEs carregados da fonte do IBGE.
@@ -466,7 +514,10 @@ técnica, clínica veterinária e lava-rápido, com os CNAEs carregados da fonte
 cotas diferentes. Isso barateia o produto para o público novo, mas é receita que não vem. Depende do
 item 28 (planos pagos).
 
-### 52. 🟢 O que dá para construir sem as credenciais
+### 52. ✅ O que dá para construir sem as credenciais — **CONSTRUÍDO** (S1–S4 em 2026-08-28).
+
+<sub>Restam do bloco só a NFS-e (S6/S7, item 49) e o cadastro tributário da LC 116 (S5), que só faz sentido junto com ela. Texto original abaixo.</sub>
+
 **Blocos S1 a S5** — catálogo com `tipo_item`, venda mista no PDV, papeleta com os dois blocos,
 comissão por serviço, Ordem de Serviço e o cadastro tributário (lista da LC 116 carregada da fonte
 oficial, como o NCM e as 27 UFs). É o v1 operando: petshop e oficina vendendo, com comissão e OS.

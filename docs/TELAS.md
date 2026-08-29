@@ -7,6 +7,14 @@
 > ⚠️ **É retrato do CÓDIGO, não da intenção.** Se divergir de outra documentação, o código
 > está certo e a outra doc envelheceu.
 >
+> **Contagem em 2026-08-28 (medida deste arquivo, não estimada):** **56 telas do ERP em uso** +
+> **3 públicas** (entrada, sem login) + **6 em Implementações Futuras** = 65 linhas.
+>
+> ⚠️ **Declare sempre a base ao citar o número.** Até hoje três documentos traziam contagens
+> diferentes (57, 58 e 60) porque cada um incluía coisas distintas — as públicas, as futuras, ou
+> as telas do marketplace que saíram em 2026-08-28. Comando que reproduz a conta:
+> `awk '/^## /{sec=$0} /^| .* | `//{cnt[sec]++} END{for(s in cnt) print cnt[s], s}' docs/TELAS.md`
+>
 > A coluna **Spec** é casada por semelhança de nome, com um de-para manual para os casos em
 > que o arquivo tem outro nome. ⚠️ Um `—` ali significa *não encontrei*, **não** *não existe*.
 

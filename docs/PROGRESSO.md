@@ -11,9 +11,47 @@ Registro cronológico das decisões e entregas. Atualizar a cada marco relevante
 
 ## Estado atual
 
+> ## 📌 2026-08-28 (4) — fechamento do dia: a varredura de consistência
+>
+> Ao fechar, ele pediu **atenção redobrada** *"pois hoje alteramos muita coisa, e tiramos do
+> projeto a integração com o Mercado Livre"*. A varredura achou quatro coisas — nenhuma no código,
+> todas na **documentação e na memória**, que é onde uma remoção deixa rastro falso.
+>
+> **1. Três contagens de telas diferentes, ao mesmo tempo.** `CLAUDE.md` dizia **60**,
+> `docs/PROGRESSO.md` **58** e `docs/PENDENCIAS.md` **58** — e nenhum estava certo, porque cada um
+> incluía coisas distintas (as públicas, as futuras, as três do marketplace que saíram hoje).
+> ⭐ O conserto não foi acertar o número: foi fazer o **`docs/TELAS.md` declarar a base** e trazer o
+> comando que reproduz a conta. Medido: **56 telas do ERP + 3 públicas + 6 em Implementações
+> Futuras**. Os outros documentos agora apontam para lá em vez de repetir o número.
+>
+> **2. `CLAUDE.md` ainda dizia `V001–V084`** — parou na remoção do marketplace e não acompanhou as
+> seis migrations do módulo de serviços. Corrigido para `V001–V090`.
+>
+> **3. ⛔ Três memórias com DESCRIÇÃO falsa** — o pior achado, porque é a descrição que decide se
+> uma memória é recuperada:
+> - `project_integracao_marketplace_ml` começava com *"✅ Escopo A+B **COMPLETO**"*, descrevendo
+>   como pronto um código que foi **removido** horas antes.
+> - `project_teste_mercadolivre_passo_a_passo` mantinha um **gatilho ativo** (*"quando ele disser
+>   que vamos testar o Mercado Livre, passar todos os passos"*) para um teste que não existe mais.
+> - `project_inventario_de_telas` trazia *"60 em uso, 4 em construção"*, de antes das duas mudanças.
+>
+> As três foram marcadas como **SUPERADAS** na própria descrição, e a do inventário passou a dizer
+> *"nunca cite o número de memória — leia o arquivo"*. ⚠️ O índice `MEMORY.md` **já** marcava duas
+> delas como superadas, e isso não bastou: quem decide a relevância na recuperação é a descrição do
+> arquivo, não a linha do índice.
+>
+> **4. Uma pendência nova, achada testando** (#55): cancelar a venda deixa a OS `FATURADA`
+> apontando para uma venda cancelada, **sem caminho de volta**. Medido ao vivo com a venda 621.
+> ⚠️ O **orçamento tem o mesmo defeito** desde sempre — não é regressão do módulo de serviços.
+> Espera decisão dele (três perguntas encadeadas em `docs/PENDENCIAS.md`).
+>
+> ✅ **Conferido e limpo:** nenhuma referência a `mercadolivre`/`NINER_ML_` sobrou em `api/` ou
+> `web/`; os quatro pacotes do marketplace têm só `package-info.java`; 90 migrations no disco e 90
+> aplicadas; sem rota nem item de menu duplicado; `tsc -b` limpo.
+
 > ## 📌 2026-08-28 (3) — a OS ganha via impressa, comissão do executor, e a regressão que ela causou
 >
-> **58 telas · 1065 testes verdes, 1 pulado** (o guard de meia-noite do horário de acesso, conhecido)
+> **56 telas do ERP + 3 públicas · 1065 testes verdes, **1 ou 2 pulados conforme a HORA** — o guard de meia-noite do `HorarioAcessoTest`, que se pula sozinho quando a janela pedida cruzaria a virada do dia (rodando às 23h50 são 2; de manhã, 0). ⚠️ Não é regressão, e o número oscilar é o mecanismo funcionando** (a contagem de telas é a de `docs/TELAS.md`, que declara a base)
 > · migrations até **V090** · `web/` sem erro de tipo.
 >
 > Pedido dele depois de eu listar as lacunas da OS: *"faça tudo o que pode ser feito, menos a
@@ -53,7 +91,7 @@ Registro cronológico das decisões e entregas. Atualizar a cada marco relevante
 
 > ## 📌 2026-08-28 (2) — o módulo de SERVIÇOS: a oficina e o petshop entram no ERP
 >
-> **58 telas · 1062 testes verdes, 0 pulados** · migrations até **V087** · `web/` sem erro de tipo.
+> **56 telas do ERP + 3 públicas · 1062 testes verdes, 0 pulados** · migrations até **V087** · `web/` sem erro de tipo.
 >
 > O ERP cobria a **peça** e não cobria o **trabalho**. Pedido dele: *"atendemos uma petshop pra
 > venda de produtos, mas o serviço de banho e tosa não está coberto; ou uma oficina mecânica, a
