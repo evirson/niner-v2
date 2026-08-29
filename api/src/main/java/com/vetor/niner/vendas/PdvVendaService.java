@@ -619,7 +619,8 @@ public class PdvVendaService {
      */
     private DadosFiscaisComprovante buscarDadosFiscais(long idVenda) {
         return jdbc.sql("""
-                        SELECT chave_acesso, protocolo, data_autorizacao, ambiente::text AS ambiente,
+                        SELECT id_documento_fiscal, modelo,
+                               chave_acesso, protocolo, data_autorizacao, ambiente::text AS ambiente,
                                tipo_emissao, valor_total_tributos, xml_assinado, numero, serie,
                                base_ibs_cbs, valor_ibs_uf, valor_ibs_mun, valor_cbs,
                                valor_trib_federal, valor_trib_estadual, valor_trib_municipal
@@ -640,6 +641,7 @@ public class PdvVendaService {
                     String cpf = extrairTag(dest, "CPF");
                     String documentoConsumidor = cpf != null ? cpf : extrairTag(dest, "CNPJ");
                     return new DadosFiscaisComprovante(
+                            rs.getLong("id_documento_fiscal"), rs.getInt("modelo"),
                             rs.getString("chave_acesso"), rs.getString("protocolo"),
                             rs.getObject("data_autorizacao", OffsetDateTime.class),
                             "HOMOLOGACAO".equals(rs.getString("ambiente")), rs.getInt("tipo_emissao") == 9,

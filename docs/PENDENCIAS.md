@@ -17,7 +17,12 @@
 > **55**, **57**, **61**, **62**, **51**, **31**, **30** e **32**; entraram **60**–**62** e a **64**,
 > que ele decidiu na mesma conversa (V095 — o fechamento exige a sangria).
 >
-> **Hoje:** **28 itens abertos**, e a maioria é verificação no papel/navegador que só ele pode
+> **Revisão de 2026-08-29 (fim do dia):** a NF-e 55 **passou a autorizar** — o `cStat 974` saiu da
+> lista (item 1) e não há mais nada bloqueado em terceiros. No mesmo dia entrou e saiu um defeito
+> novo: **NF-e 55 sem QR Code apagava a tela inteira** (papeleta e emissão) — corrigido e medido,
+> ver `docs/telas/papeleta-venda.md`; sobrou dele só **confirmar pelo PDV**, listado abaixo.
+>
+> **Hoje:** **27 itens abertos**, e a maioria é verificação no papel/navegador que só ele pode
 > fazer. Precisam de DECISÃO dele: **#28** (planos pagos, adiado por ele), **#40** e **#47**
 > (segurança e LGPD, que ele mandou guardar para cobrar depois). 🔔 E **#49** — ele prometeu as
 > **credenciais da NFS-e para a segunda-feira**.
@@ -28,14 +33,20 @@
 
 ## 🔴 Bloqueadas em terceiros
 
-### 1. `cStat 974` — nenhuma NF-e modelo 55 autorizada
-Chamado **aberto na SEFAZ/PR** (texto em `docs/fiscal/chamado-sefaz-pr-csrt-974.md`). Encerrado do
-nosso lado: todas as hipóteses foram **medidas e descartadas** — idCSRT, CNPJ, ambiente, hash e
-propagação (esta derrubada por um token novo, ativado minutos antes, falhando idêntico). A NFC-e 65
-do mesmo emitente autoriza, o que isola o problema no cadastro do responsável técnico.
+*(Nenhuma nesta data — a única saiu em 2026-08-29; ver logo abaixo.)*
+
+### ✅ 1. `cStat 974` — RESOLVIDO em 2026-08-29 (a NF-e 55 autoriza)
+Medido no banco, não inferido: as NF-e **nº 24 e 25** (29/08, 16:42 e 16:44) voltaram
+`cStat 100 — Autorizado o uso da NF-e`, com protocolo (`141260000529224`/`...225`). A última
+rejeição por `974` foi a **nº 23**, em 27/08. O DANFE das duas abre e imprime.
+
+⚠️ **O que resolveu NÃO foi medido.** Entre a última rejeição e a primeira autorização o
+`verAplic` da SEFAZ/PR mudou de `PR-v4_10_06` para `PR-v4_10_12`, e o chamado estava aberto — mas
+nada aqui prova qual das duas coisas destravou, e o cadastro do responsável técnico pode ter sido
+ajustado do outro lado. Registrado como **fato observado**, não como causa estabelecida.
+
 ⛔ CSRT é segredo — nunca por chat; confere-se pelo tamanho da coluna cifrada
 (`octet_length(decode(csrt_cifrado,'base64'))` = 64 ⇒ 36 caracteres em claro).
-**Bola:** SEFAZ/PR.
 
 ---
 

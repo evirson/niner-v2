@@ -377,3 +377,66 @@ isso os botões agora nomeiam o modelo, e para PJ entra uma linha explicando a c
 
 ⛔ Esta tela **não segue o padrão do projeto** e será reformulada — decisão do dono do produto em
 2026-08-25. As mudanças acima são corretivas, não o redesenho.
+
+---
+
+## ⚠️ NF-e 55 no popup: a papeleta é comum e o DANFE vem por botão (2026-08-29)
+
+**O que o dono do produto viu.** Venda 623, cliente pessoa jurídica. A papeleta saía certo, mas
+**emitir a nota fiscal modelo 55 no PDV** e **reimprimir a papeleta pela Pesquisa de Vendas**
+deixavam a **tela preta**, com a URL parada em `/pdv` e `/pesquisa-vendas`.
+
+### O defeito que apagava a tela
+
+`qrCodeUrl` chega **`null`** na NF-e 55 — QR Code é da **NFC-e 65**, e a 55 não tem nenhum. O
+`useEffect` do `ComprovantePapeletaModal` testava só a presença de `dadosFiscais` e mandava esse
+`null` para `gerarQrCodeDataUrl`.
+
+⚠️ **A lib mente sobre a causa.** `QRCode.toDataURL` é sobrecarregada — `(texto, opts)` **ou**
+`(canvas, texto, opts)` — e decide pelo **tipo do 1º argumento**: o que não é string vira "canvas",
+e a chamada estoura **síncrona** com `Cannot read properties of null (reading 'getContext')`. Uma
+mensagem sobre `<canvas>` para um problema de **dado fiscal**.
+
+⛔ **E o que transformou uma linha em "não sai nada" foi a ausência de error boundary.** Exceção
+que escapa de um efeito desmonta a árvore inteira do React, e o que sobra é o fundo do `<body>` —
+no tema escuro, **preto**, sem mensagem e sem stack. Hoje existe `components/LimiteDeErro.tsx`, com
+a rota como chave de reset (sem a chave o erro ficaria **preso**, trocando a tela preta por um erro
+eterno).
+
+⚠️ **Por que o `tsc -b` não avisou:** o tipo declarava `qrCodeUrl: string` e `urlConsultaChave:
+string`, e os dois são nulos na 55. **Campo que o servidor pode devolver nulo é `| null` no tipo,
+senão o type-check vira carimbo.** Não foi regressão das rodadas de auditoria de 29/08: nasceu em
+**24/08**, quando a venda a PJ passou a sair em NF-e 55 — e só aparece nesse caminho, porque PF
+continua em NFC-e, que tem QR.
+
+### O segundo defeito, achado ao corrigir o primeiro
+
+Com a tela viva, apareceu o que ela mostrava: a reimpressão de uma venda **PJ** montava o **DANFCE
+térmico**, com o cabeçalho *"DANFE NFC-e — Documento Auxiliar da Nota Fiscal Eletrônica de
+Consumidor Final"* e o aviso *"NFC-e não permite aproveitamento de crédito de ICMS"* — **sobre uma
+NF-e modelo 55**. Um papel na mão do cliente afirmando o que não é. A linha "Consulte pela chave de
+acesso em:" saía seguida de **nada**, porque `urlConsultaChave` também é nulo na 55.
+
+Causa: o front só sabia que *"tem documento fiscal"*. **`modelo` não vinha no contrato** —
+`DadosFiscaisComprovante` agora carrega `modelo` e `idDocumentoFiscal`, lidos de
+`documento_fiscal`. ⛔ Derivar o modelo da chave de acesso ou assumir 65 seria a mesma armadilha da
+constante literal que já custou um `cStat 253` aqui.
+
+### O desenho (decisão do dono do produto, 2026-08-29)
+
+Na **NF-e 55**, reimprimir mostra a **papeleta comum, não fiscal** (título "Reimpressão de Papeleta
+de Venda") e o DANFE vem pelo botão **"Ver DANFE"** no rodapé, que abre o `DanfeModal` em A4 — o
+**mesmo desenho que o PDV já fazia ao emitir**: papeleta na térmica, DANFE no A4, e a papeleta
+nunca substituiu a nota.
+
+Na **NFC-e 65** nada muda: o cupom continua sendo o documento, com QR Code e URL de consulta, e o
+botão "Ver DANFE" **não aparece** — ele prometeria um DANFE que não existe.
+
+### Medido, não inferido
+
+- Reimpressão da venda **623** (NF-e 55): antes, tela preta + `TypeError` no console. Depois,
+  papeleta comum, botão "Ver DANFE" abrindo o DANFE A4 com protocolo, console **limpo**.
+- Controle negativo, venda **603** (NFC-e 65): continua "Reimpressão de Nota Fiscal — NFC-e", com
+  QR Code, URL de consulta e **sem** o botão "Ver DANFE".
+- ⚠️ **Não medido pelo caminho dele:** emitir a NF-e 55 **pelo PDV** exige uma venda nova. É o
+  mesmo componente e a mesma linha, mas essa prova está faltando.

@@ -277,6 +277,18 @@ public final class PdvDtos {
      * uma assinatura própria que não dá para recalcular fora do momento da emissão (B7).
      */
     public record DadosFiscaisComprovante(
+            /** Documento que este comprovante representa — é por ele que a tela abre o DANFE A4 na
+             *  reimpressão de uma venda a pessoa jurídica (2026-08-29). */
+            long idDocumentoFiscal,
+            /**
+             * ⚠️ <b>65 (NFC-e) ou 55 (NF-e), e a tela PRECISA disto</b> (2026-08-29): sem o modelo,
+             * o front só sabia que "tem documento fiscal" e imprimia o DANFCE térmico para as duas
+             * — um cupom de venda a pessoa jurídica saía afirmando <i>"DANFE NFC-e … Consumidor
+             * Final"</i> e <i>"NFC-e não permite aproveitamento de crédito de ICMS"</i> sobre uma
+             * NF-e 55. Modelo é campo de domínio; derivar da chave de acesso ou assumir 65 é a
+             * mesma armadilha da constante literal que já custou um {@code cStat 253} aqui.
+             */
+            int modelo,
             String chaveAcesso, String protocolo, OffsetDateTime dataAutorizacao,
             boolean homologacao, boolean contingencia, String qrCodeUrl, String urlConsultaChave,
             BigDecimal valorTotalTributos, int numero, int serie,

@@ -816,6 +816,7 @@ const CONTEUDOS: Record<string, ConteudoAjuda> = {
       'No popup inicial, informe o número da venda (ignora os demais filtros) ou um intervalo de datas — cliente, vendedor, empresa (admin) e situação são opcionais.',
       'Clique numa linha do resultado para abrir o detalhamento em abas: Dados Gerais, Produtos Vendidos, Movimentação de Caixa e, se a venda for de crediário, Parcelas de Crediário.',
       '"Reimprimir papeleta" abre a mesma papeleta da 1ª via, com "REIMPRESSÃO" e a data/hora — imprima, salve em PDF ou envie por WhatsApp. Venda cancelada não tem reimpressão: o botão nem aparece, porque um cupom impresso circula afirmando uma venda que não existe mais.',
+      'Se a venda foi para pessoa jurídica, a nota dela é uma NF-e (modelo 55), cujo documento é o DANFE em A4 — não o cupom da bobina. Nesse caso a reimpressão mostra a papeleta comum e um botão "Ver DANFE" abre a nota em A4 para imprimir. Na venda a pessoa física (NFC-e, modelo 65) o próprio cupom já é a nota, e o botão não aparece.',
       '"Cancelar venda" (só administrador, e só se a venda ainda não estiver cancelada) mostra o resumo do que será revertido e pede o motivo antes de confirmar — a mesma rotina que era uma tela separada. Se a venda tiver nota fiscal (NFC-e), o popup também mostra até quando a SEFAZ permite cancelá-la.',
       'Vendas canceladas aparecem sinalizadas na grid, mas não entram na soma do rodapé.',
     ],

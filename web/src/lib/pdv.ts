@@ -269,6 +269,14 @@ export interface ParcelaComprovanteVenda {
  * exatamente como sempre foi, sem nenhuma menção fiscal.
  */
 export interface DadosFiscaisComprovante {
+  /** Documento que este comprovante representa — abre o DANFE A4 na reimpressão de venda PJ. */
+  idDocumentoFiscal: number
+  /**
+   * ⚠️ `65` = NFC-e (cupom térmico), `55` = NF-e (DANFE A4). Sem este campo a tela só sabia que
+   * "tem documento fiscal" e imprimia o DANFCE para os dois — o cupom de uma venda a pessoa
+   * jurídica saía dizendo "NFC-e … Consumidor Final" sobre uma NF-e 55 (2026-08-29).
+   */
+  modelo: number
   chaveAcesso: string
   protocolo: string | null
   dataAutorizacao: string | null

@@ -201,15 +201,29 @@ export default function ComprovantePapeletaModal({
 
   const linhas = comprovante ? montarLinhasComprovanteVenda(comprovante, reimpressao) : []
 
+  /**
+   * ⚠️ **Ter documento fiscal não significa ser NFC-e** (2026-08-29). Venda a pessoa jurídica sai
+   * em **NF-e modelo 55**, cujo documento é o **DANFE A4** — nunca o cupom térmico. Enquanto isto
+   * não existiu, a reimpressão de uma venda PJ montava o DANFCE assim mesmo, e o cupom saía
+   * afirmando *"DANFE NFC-e … Consumidor Final"* e *"NFC-e não permite aproveitamento de crédito
+   * de ICMS"* sobre uma nota 55 — um papel na mão do cliente dizendo o que não é.
+   *
+   * Decisão do dono do produto (2026-08-29): na NF-e 55 a reimpressão mostra a **papeleta comum,
+   * não fiscal**, e o DANFE vem por um botão — o mesmo desenho que o PDV já fazia ao emitir.
+   */
+  const ehNfe55 = dadosFiscais?.modelo === MODELO_NFE
+  /** Só a NFC-e 65 vira cupom fiscal na térmica; a 55 cai na papeleta comum. */
+  const mostrarDanfce = !!dadosFiscais && !ehNfe55
+
   // O popup se chamava sempre "Papeleta de Venda", mesmo quando o conteúdo já era o DANFCE — em
   // homologação (a maioria dos ambientes de teste) o cupom nem escreve "DANFCE" em lugar nenhum
   // (mostra a tarja "SEM VALOR FISCAL"), então nada no popup deixava claro que aquilo já era a
   // nota fiscal. 2026-08-19: título muda quando há dado fiscal.
   const titulo = reimpressao
-    ? dadosFiscais
+    ? mostrarDanfce
       ? 'Reimpressão de Nota Fiscal — NFC-e'
       : 'Reimpressão de Papeleta de Venda'
-    : dadosFiscais
+    : mostrarDanfce
       ? 'Nota Fiscal — NFC-e'
       : 'Papeleta de Venda'
 
@@ -330,7 +344,7 @@ export default function ComprovantePapeletaModal({
                   </>
                 )}
               </div>
-            ) : dadosFiscais && comprovante ? (
+            ) : mostrarDanfce && comprovante ? (
               <DanfceImprimir
                 ref={danfceRef}
                 comprovante={comprovante}
@@ -354,6 +368,18 @@ export default function ComprovantePapeletaModal({
                 <IconeWhatsapp size={18} />
                 Enviar por WhatsApp
               </button>
+              {/* ⚠️ Só na NF-e 55: o documento dela é o DANFE em A4, e a papeleta ao lado nunca
+                  substituiu a nota (2026-08-24). Na NFC-e 65 o próprio cupom já É o documento, e
+                  um botão aqui prometeria um DANFE que não existe. */}
+              {ehNfe55 && dadosFiscais && (
+                <button
+                  type="button"
+                  className="btn ghost"
+                  onClick={() => setDanfeAberto(dadosFiscais.idDocumentoFiscal)}
+                >
+                  Ver DANFE
+                </button>
+              )}
               <button type="button" className="btn" disabled={!comprovante} onClick={() => window.print()}>
                 Imprimir
               </button>
