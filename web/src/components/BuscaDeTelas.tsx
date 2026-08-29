@@ -1,9 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useEu } from '../lib/eu'
-import { buscarTelas, filtrarPorModulo, filtrarPorPapel, listarTelas, MENU, type TelaBuscavel } from '../lib/menu'
-import { buscarUsaServicos } from '../lib/configuracaoGeral'
-import { useQuery } from '@tanstack/react-query'
+import { useMenuFiltrado } from '../lib/useMenuFiltrado'
+import { buscarTelas, listarTelas, type TelaBuscavel } from '../lib/menu'
 import { maiusculas } from '../lib/texto'
 import { IconeLupa } from './Icones'
 
@@ -14,8 +12,6 @@ const MAX_RESULTADOS = 8
  * o Enter. Ctrl+K (ou ⌘K) foca o campo de qualquer lugar do ERP. */
 export default function BuscaDeTelas() {
   const navigate = useNavigate()
-  const { data: eu } = useEu()
-  const isAdmin = eu?.usuario.papel === 'ADMIN'
 
   const [termo, setTermo] = useState('')
   const [aberto, setAberto] = useState(false)
@@ -23,17 +19,8 @@ export default function BuscaDeTelas() {
   const campoRef = useRef<HTMLInputElement>(null)
   const caixaRef = useRef<HTMLDivElement>(null)
 
-  /** Módulo de serviços (S1): desligado, Ordens de Serviço não aparece no menu nem na busca. */
-  const { data: usaServicos } = useQuery({
-    queryKey: ['config-geral', 'usa-servicos'],
-    queryFn: buscarUsaServicos,
-    staleTime: 60_000,
-  })
-
-  const telas = useMemo(
-    () => listarTelas(filtrarPorModulo(filtrarPorPapel(MENU, isAdmin), usaServicos?.cfgUsaServicos)),
-    [isAdmin, usaServicos],
-  )
+  const menu = useMenuFiltrado()
+  const telas = useMemo(() => listarTelas(menu), [menu])
 
   const resultados = useMemo(() => buscarTelas(telas, termo, MAX_RESULTADOS), [telas, termo])
 

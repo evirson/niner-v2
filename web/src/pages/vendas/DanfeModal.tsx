@@ -4,6 +4,7 @@ import { useRef } from 'react'
 import { ApiError } from '../../lib/api'
 import { buscarDanfe } from '../../lib/danfe55'
 import DanfeImprimir from './DanfeImprimir'
+import PortalDeImpressao from '../../components/PortalDeImpressao'
 import { imprimirDocumentoA4 } from '../../lib/impressaoDocumento'
 
 /**
@@ -61,6 +62,14 @@ export default function DanfeModal({
             <DanfeImprimir ref={danfeRef} danfe={danfe} />
           )}
         </div>
+
+        {/* ⛔ A via impressa é uma CÓPIA no portal, fora do `#root`: o isolamento de impressão
+            apaga o `#root` inteiro, e a folha sairia em branco. Ver PortalDeImpressao. */}
+        {danfe && (
+          <PortalDeImpressao>
+            <DanfeImprimir danfe={danfe} paraImpressao />
+          </PortalDeImpressao>
+        )}
 
         <div className="ajuda-rodape" style={{ flexShrink: 0 }}>
 

@@ -274,6 +274,13 @@ public class ProdutoService {
 
         jdbc.sql("DELETE FROM produto_categoria WHERE id_produto = ? AND id_tenant = plataforma.tenant_atual()")
                 .param(id).update();
+        // ⚠️ `produto_servico` é filha EXCLUSIVA do produto (extensão 1:1 da V085), como a
+        // categoria — e a FK não tem cascade. Sem este DELETE, excluir um serviço recém-cadastrado
+        // violava a FK e o handler global respondia 409 "Registro em uso por outro cadastro",
+        // falando de um vínculo que o usuário não encontra em tela nenhuma; o produto não era nem
+        // excluído nem inativado. Achado de auditoria, 2026-08-29.
+        jdbc.sql("DELETE FROM produto_servico WHERE id_produto = ? AND id_tenant = plataforma.tenant_atual()")
+                .param(id).update();
         int linhas = jdbc.sql("DELETE FROM produto WHERE id_produto = ? AND id_tenant = plataforma.tenant_atual()")
                 .param(id).update();
         if (linhas == 0) {

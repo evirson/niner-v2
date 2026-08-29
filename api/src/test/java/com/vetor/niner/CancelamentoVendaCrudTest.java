@@ -294,6 +294,63 @@ class CancelamentoVendaCrudTest {
                 .andExpect(status().isForbidden());
     }
 
+    /**
+     * ⛔ Venda com DEVOLUÇÃO em aberto não se cancela — a dupla contagem custa em três lugares.
+     *
+     * <p>Achado de auditoria em 2026-08-29. Sem o guard, cancelar uma venda cuja peça já voltou
+     * produzia tudo isto de uma vez:
+     * <ul>
+     *   <li><b>estoque</b>: o estorno credita a quantidade CHEIA, sem descontar o que já voltou —
+     *       sobra peça que não existe;</li>
+     *   <li><b>caixa</b>: o DELETE tira o valor da venda inteira;</li>
+     *   <li><b>vale</b>: o vale-mercadoria da devolução continua válido e é resgatado depois.</li>
+     * </ul>
+     *
+     * <p>⚠️ O caminho inverso já era fechado desde 2026-08-27 ({@code exigirVendaNaoCancelada}),
+     * com javadoc descrevendo exatamente esta dupla contagem — <b>faltava só este lado</b>.
+     */
+    @Test
+    void naoCancelaVendaQueTemDevolucaoEmAberto() throws Exception {
+        TenantNovo tenant = assinarNovoTenant("com-devolucao-aberta");
+        long idTenant = extrairIdTenant(tenant.token());
+        long idProduto = criarProduto(tenant.token(), "Produto Devolvido Antes");
+        long idCarteira = criarTipoCarteira(tenant.token(), "DINHEIRO DEV ANTES", "AVISTA");
+        long idCliente = criarCliente(tenant.token(), "Cliente Dev Antes");
+        long idFuncionario = criarFuncionario(tenant.token(), "Vendedor Dev Antes");
+        abrirCaixaDinheiro(tenant.token());
+
+        long idVenda;
+        long idVariacao;
+        try (Connection c = abrirConexao(idTenant)) {
+            long idEmpresa = buscarIdEmpresa(c);
+            idVariacao = criarVariacao(c, idTenant, idProduto);
+            definirEstoque(c, idTenant, idEmpresa, idVariacao, new BigDecimal("10.000"));
+            idVenda = efetivarVenda(tenant.token(), idVariacao, idCliente, idFuncionario, idCarteira, "50.00", 1);
+        }
+
+        // O cliente devolve o que comprou — gera o vale e devolve a peça ao estoque.
+        mvc.perform(post("/api/v1/vendas/devolucao").header("Authorization", "Bearer " + tenant.token())
+                        .contentType(APPLICATION_JSON)
+                        .content("""
+                                {"numeroVenda":%d,"idFuncionario":%d,
+                                 "itens":[{"idVariacao":%d,"qtd":1}]}
+                                """.formatted(idVenda, idFuncionario, idVariacao)))
+                .andExpect(status().isCreated());
+
+        // …e agora a venda não pode mais ser cancelada: seria creditar a mesma peça duas vezes.
+        mvc.perform(post("/api/v1/vendas/cancelamento/" + idVenda)
+                        .header("Authorization", "Bearer " + tenant.token())
+                        .contentType(APPLICATION_JSON)
+                        .content("{\"motivo\":\"ENGANO DO OPERADOR\"}"))
+                .andExpect(status().isConflict());
+
+        // ⭐ E o estoque continua como a devolução o deixou: 10 − 1 vendida + 1 devolvida = 10.
+        // Sem esta asserção o teste passaria com o guard respondendo 409 DEPOIS de mexer no saldo.
+        try (Connection c = abrirConexao(idTenant)) {
+            assertThat(buscarQtdEstoque(c, idVariacao)).isEqualByComparingTo("10.000");
+        }
+    }
+
     @Test
     void cancelarVendaAVistaComSucessoRevertaEstoqueCaixaEContasReceber() throws Exception {
         TenantNovo tenant = assinarNovoTenant("sucesso-avista");

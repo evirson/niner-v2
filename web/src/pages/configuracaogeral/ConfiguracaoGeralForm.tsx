@@ -35,6 +35,7 @@ const VAZIO: ConfiguracaoGeralFormState = {
   cfgConsisteValorContasPagar: true,
   idPlanoContasCompraMercadoria: '',
   cfgEmiteFiscalAposVenda: true,
+  cfgUsaServicos: false,
 }
 
 type CampoValidavel = 'percentualDescontoVenda' | 'jurosCrediarioDias' | 'jurosCrediario' | 'multaCrediarioDias' | 'multaCrediario'
@@ -117,6 +118,24 @@ export default function ConfiguracaoGeralForm() {
       // unica consumidora e a tela de Novo Orcamento. Sem invalidar, ela sugeria o prazo ANTIGO —
       // e orcamento e imutavel, entao o documento saia com o prazo errado sem conserto.
       queryClient.invalidateQueries({ queryKey: ['orcamento-dias-validade'] })
+      // ⭐ Faltava (2026-08-29, achado em auditoria) — e esta é a mais visível de todas, porque
+      // muda o MENU. O `Layout` é o shell persistente da SPA: ele nunca desmonta, então a query
+      // `['config-geral','usa-servicos']` não refaz o fetch sozinha. Sem invalidar, ligar "Usa
+      // serviços" mostrava o toast verde e **nada mudava** — nem o menu, nem a busca do topo, nem
+      // o F5 do PDV —, e só um F5 na página resolvia. O admin concluiria que o parâmetro não
+      // funciona.
+      // ⚠️ Correção de 2026-08-29: eu havia escrito aqui que `['config-geral']` não casaria com
+      // `['config-geral','usa-servicos']` por prefixo — **está errado**, o React Query casa por
+      // PREFIXO em chave de array. O que de fato não casa é `['usa-cor-grade']` com
+      // `['config-geral','usa-cor-grade']`: aí o primeiro elemento já é diferente. A regra real é
+      // "mesmo começo", não "mesmo array".
+      // ⭐ Por PREFIXO: cobre TODA chave derivada `['config-geral', …]` de uma vez — hoje
+      // `usa-servicos` e `plano-contas-compra-mercadoria`, e as que vierem. A do plano de contas
+      // faltava (achado de auditoria, 2026-08-29) e o efeito era mudo: o admin trocava a conta da
+      // compra, cadastrava um fornecedor pelo atalho da Entrada, e ele nascia com a conta ANTIGA —
+      // o campo não aparece na tela (é atribuído por baixo dos panos), então nada denunciava, e
+      // toda compra futura desse fornecedor entrava na conta errada da DRE.
+      queryClient.invalidateQueries({ queryKey: ['config-geral'] })
       setToastTipo('sucesso')
       setToast('Parâmetros salvos.')
     },
@@ -253,6 +272,31 @@ export default function ConfiguracaoGeralForm() {
                 Ligado: o operador precisa informar o número da venda de origem antes de gravar a
                 devolução, e só pode devolver produtos que fizeram parte dela. Desligado: o campo
                 continua opcional (padrão) — sem ele, qualquer produto pode ser devolvido livremente.
+              </p>
+            </div>
+          </div>
+        </section>
+
+        <section className="section">
+          <p className="section-label">Serviços</p>
+
+          <div className="form-grid">
+            <div className="col-6">
+              <label className="checkbox-linha" style={{ marginTop: 0 }}>
+                <input
+                  type="checkbox"
+                  checked={form.cfgUsaServicos}
+                  onChange={(e) => setForm((f) => ({ ...f, cfgUsaServicos: e.target.checked }))}
+                />
+                Usa serviços — oficina, petshop, salão
+              </label>
+              <p className="muted" style={{ fontSize: 12, marginTop: 4 }}>
+                Desligado (padrão): a loja só vende mercadoria, e nada de serviço aparece — empresa
+                de serviço é minoria da base. Ligue para vender <strong>mão de obra</strong>: o
+                cadastro de produto ganha o seletor Mercadoria/Serviço, o menu ganha{' '}
+                <strong>Ordens de Serviço</strong> e o <strong>F5</strong> do PDV passa a perguntar
+                se a venda vem de um orçamento ou de uma OS. Serviço não tem estoque nem entra em
+                NFC-e (o documento fiscal de serviço é a NFS-e, municipal).
               </p>
             </div>
           </div>

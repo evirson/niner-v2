@@ -1030,7 +1030,17 @@ public class PdvVendaService {
             // vezes: a parte orçada, com o preço congelado que a loja honra, e a parte a mais, com
             // o preço de hoje. Aplicar o congelado às duas daria de graça ao cliente um desconto
             // que ninguém prometeu.
-            BigDecimal preco = item.ehDoOrcamento()
+            // ⛔ AS DUAS MARCAS, não só a do orçamento (achado de auditoria, 2026-08-29). O mapa
+            // recebido é o do orçamento OU o da OS (`efetivarVenda` escolhe), e a linha vinda da OS
+            // chega com `daOrdemServico: true` e `doOrcamento` ausente — testar só
+            // `ehDoOrcamento()` fazia a venda da OS sair pelo preço de CADASTRO DE HOJE, e o preço
+            // congelado nunca era aplicado.
+            // ⚠️ O sintoma engana: com o preço reajustado para MAIS, a venda é recusada com
+            // "os pagamentos não fecham o saldo" — mensagem sobre forma de pagamento para um
+            // problema de preço. Com o preço para MENOS, ela fecha e a loja cobra menos do que
+            // aprovou na OS, sem erro nenhum.
+            boolean cobertaPeloDocumento = item.ehDoOrcamento() || item.ehDaOrdemServico();
+            BigDecimal preco = cobertaPeloDocumento
                     ? precosDoOrcamento.getOrDefault(item.idVariacao(), linha.precoVenda())
                     : linha.precoVenda();
             // Executor da linha: quem fez o serviço na OS, ou o vendedor da venda. ⚠️ A OS pode

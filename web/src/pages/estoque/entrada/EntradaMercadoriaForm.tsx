@@ -812,6 +812,15 @@ export default function EntradaMercadoriaForm() {
       if (preview.fornecedor.idFornecedor != null) {
         setFornecedorEscolhido({ idFornecedor: preview.fornecedor.idFornecedor, razaoSocial: preview.fornecedor.razaoSocial ?? '' })
         setFornecedorXmlSemCadastro(null)
+                    // ⛔ Faltava (achado de auditoria, 2026-08-29), e o efeito era mudo: esta
+                    // flag trava o efeito que divide o total em N parcelas. Depois de uma
+                    // entrada por XML com duplicatas, a entrada SEGUINTE — manual ou por
+                    // planilha — digitava "3" em Nº de Parcelas e NENHUMA linha aparecia. Não há
+                    // botão de acrescentar parcela (o Nº de Parcelas é a única fonte, decisão de
+                    // 2026-08-11), então o operador ou gravava a entrada SEM as contas a pagar
+                    // da compra, ou ficava travado sem entender. Só um F5 consertava.
+                    setXmlTemDuplicatas(false)
+                    setPendenteEmResolucao(null)
       } else {
         // CNPJ do emitente não bate com nenhum fornecedor cadastrado — já abre o cadastro
         // rápido preenchido com os dados do XML (2026-08-12, pedido do dono do produto: "já

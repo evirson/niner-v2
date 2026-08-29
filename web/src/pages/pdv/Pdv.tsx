@@ -245,7 +245,10 @@ export default function Pdv() {
     )
     const linha = ledger.find((i) => i.idLinha === idLinha)
     if (linha && linha.qtdOrcada > 0 && novaQtd > linha.qtdOrcada) {
-      mostrarFlash(`O orçamento cobre ${linha.qtdOrcada}. Para levar mais, leia o produto de novo — sai pelo preço de hoje.`)
+      // ⚠️ Nomeia o documento CERTO: numa venda vinda de OS, falar em "orçamento" manda o
+      // operador procurar um documento que ele não abriu (mesmo cuidado do selo do pagamento).
+      const documento = linha.origemDocumento === 'OS' ? 'a OS' : 'o orçamento'
+      mostrarFlash(`${documento === 'a OS' ? 'A OS' : 'O orçamento'} cobre ${linha.qtdOrcada}. Para levar mais, leia o produto de novo — sai pelo preço de hoje.`)
     }
   }
 
@@ -305,9 +308,37 @@ export default function Pdv() {
       mostrarFlash('Limpe a tela (F4) antes de puxar um documento.')
       return
     }
-    setTeclaAtiva('f5')
+    // `piscarTecla`, não `setTeclaAtiva`: sem o timeout que a apaga, a F5 ficava destacada para
+    // sempre depois do primeiro uso.
+    piscarTecla('f5')
     if (usaServicos?.cfgUsaServicos) setMostrarEscolhaDocumento(true)
     else setMostrarPuxarOrcamento(true)
+  }
+
+  /**
+   * O desconto do documento, na PROPORÇÃO do que está sendo levado.
+   *
+   * <p>⛔ Passar o valor cheio estava errado (achado de auditoria, 2026-08-29): o popup do
+   * orçamento deixa reduzir a quantidade item a item, então um orçamento de R$ 1.000 com R$ 100 de
+   * desconto do qual o cliente leva só um item de R$ 200 abria o PDV com R$ 100 de desconto sobre
+   * R$ 200 — <b>50%</b>, e passava se o teto da loja fosse ≥ 50%.
+   *
+   * <p>A conta é a única honesta: quem leva 20% do documento leva 20% do desconto. Documento
+   * levado inteiro devolve o valor cheio, que é o caso normal.
+   *
+   * <p>⚠️ Arredonda para BAIXO (`floor` de centavos): entre dar um centavo a mais e um a menos de
+   * desconto, o produto erra para o lado de não prometer o que não combinou.
+   */
+  const descontoProporcionalDoDocumento = (): number => {
+    const desconto = osPuxada?.valorDesconto ?? orcamentoPuxado?.valorDesconto ?? 0
+    if (desconto <= 0) return 0
+    const subtotalDoDocumento = osPuxada
+      ? osPuxada.totalServicos + osPuxada.totalPecas
+      : (orcamentoPuxado?.subtotal ?? 0)
+    if (subtotalDoDocumento <= 0) return 0
+    const levado = ledger.reduce((soma, i) => soma + totalLinha(i), 0)
+    if (levado >= subtotalDoDocumento) return desconto
+    return Math.floor((desconto * levado * 100) / subtotalDoDocumento) / 100
   }
 
   const aoVendaEfetivada = (resultado: VendaEfetivada) => {
@@ -669,6 +700,7 @@ export default function Pdv() {
           valorTotal={valorTotal}
           idOrcamento={orcamentoPuxado?.idOrcamento ?? null}
           idOrdemServico={osPuxada?.idOrdemServico ?? null}
+          descontoInicial={descontoProporcionalDoDocumento()}
           clienteInicial={
             orcamentoPuxado
               ? { idCliente: orcamentoPuxado.idCliente, nome: orcamentoPuxado.nomeCliente,

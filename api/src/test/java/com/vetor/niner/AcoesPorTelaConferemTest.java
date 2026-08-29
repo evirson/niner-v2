@@ -14,6 +14,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.TreeMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -94,6 +95,61 @@ class AcoesPorTelaConferemTest {
                         + "nova, no espírito da V081.");
     }
 
+    /**
+     * ⛔ O lado INVERSO: chave que a grade oferece e nenhum {@code @Tela} do código usa.
+     *
+     * <p>Uma chave assim é uma <b>caixa que não governa nada</b>, e as duas direções doem (achado
+     * de auditoria, 2026-08-29 — cinco chaves nessa situação):
+     * <ul>
+     *   <li><b>falsa proteção</b>: o admin deixa "Estorno de Crediário" desmarcado, o item some do
+     *       menu, e o POST responde <b>200</b> porque o servidor pedia a permissão da tela-mãe —
+     *       ele acredita ter fechado a porta de dinheiro saindo do caixa;</li>
+     *   <li><b>permissão impossível</b>: o admin marca só "Efetivar Balanço" e leva 403 citando
+     *       "Contagem de Estoque", uma tela que ele não liberou e cujo nome não aparece na decisão
+     *       que ele tomou.</li>
+     * </ul>
+     *
+     * <p>⚠️ O teste irmão acima pega o contrário (código anotado sem linha na grade). Os dois
+     * juntos fecham o cerco: nenhuma chave sem dono, nenhum dono sem chave.
+     */
+    @Test
+    void nenhumaChaveDaGradeFicaSemDonoNoCodigo() throws IOException {
+        Set<String> anotadasNoCodigo = lerDoCodigo().keySet();
+
+        List<String> orfas = new ArrayList<>();
+        jdbc.sql("SELECT chave FROM cfg_tela ORDER BY chave")
+                .query((rs, n) -> rs.getString("chave"))
+                .list()
+                .forEach(chave -> {
+                    if (!anotadasNoCodigo.contains(chave) && !TELAS_SEM_ENDPOINT_PROPRIO.contains(chave)) {
+                        orfas.add(chave);
+                    }
+                });
+
+        assertEquals(List.of(), orfas,
+                "Estas chaves aparecem na grade de permissão e NENHUM @Tela do código as usa — "
+                        + "o admin marca/desmarca e o servidor ignora. Ou anote o método com "
+                        + "@Tela(\"chave\") (o interceptor prefere a anotação de método), ou "
+                        + "declare em TELAS_SEM_ENDPOINT_PROPRIO por que ela não tem dono.");
+    }
+
+    /**
+     * Chaves cuja tela não tem endpoint próprio — a permissão governa só a navegação.
+     *
+     * <p>⚠️ Entrar aqui é uma decisão: significa afirmar que <b>não existe</b> chamada de API
+     * exclusiva daquela tela. Se existir, a permissão vira decoração.
+     */
+    private static final Set<String> TELAS_SEM_ENDPOINT_PROPRIO = Set.of(
+            // As cinco telas de Importação de Dados são `admin_apenas = true` e o
+            // `ImportacaoService` chama `exigirAdmin` nos seis métodos: a permissão por tela é
+            // irrelevante ali, porque só o administrador chega — e ele passa por cima da grade.
+            // ⚠️ Se alguma delas deixar de ser admin_apenas, sai desta lista e ganha `@Tela`.
+            "importacao-dados.clientes",
+            "importacao-dados.contas-receber",
+            "importacao-dados.estoque",
+            "importacao-dados.fornecedores",
+            "importacao-dados.produtos");
+
     private Map<String, Acoes> lerDoCodigo() throws IOException {
         Path raiz = Path.of("src/main/java/com/vetor/niner");
         if (!Files.isDirectory(raiz)) {
@@ -109,8 +165,11 @@ class AcoesPorTelaConferemTest {
                 if (!mTela.find()) {
                     continue;
                 }
-                boolean[] acoes = acumulado.computeIfAbsent(mTela.group(1), k -> new boolean[3]);
-                acumularMetodos(fonte, acoes);
+                // ⚠️ A primeira @Tela do arquivo é a da CLASSE; um método pode ter a sua e ela
+                // VENCE (o PermissaoInterceptor prefere a de método). Até 2026-08-29 este leitor
+                // atribuía todo método à tela da classe, e as chaves declaradas por método
+                // ficavam invisíveis para os dois testes.
+                acumularMetodos(fonte, mTela.group(1), acumulado);
             }
         }
         Map<String, Acoes> resultado = new HashMap<>();
@@ -119,7 +178,10 @@ class AcoesPorTelaConferemTest {
     }
 
     /** Percorre os blocos "anotações + assinatura pública", que é como um endpoint se parece. */
-    private void acumularMetodos(String fonte, boolean[] acoes) {
+    private void acumularMetodos(String fonte, String telaDaClasse, Map<String, boolean[]> acumulado) {
+        // Garante que a tela da CLASSE apareça mesmo num controller cujos métodos sejam todos
+        // anotados: sem isto ela sumiria do mapa e o teste irmão acusaria falso.
+        acumulado.computeIfAbsent(telaDaClasse, k -> new boolean[3]);
         List<String> anotacoes = new ArrayList<>();
         for (String linha : fonte.split("\\R")) {
             String t = linha.trim();
@@ -128,7 +190,10 @@ class AcoesPorTelaConferemTest {
                 continue;
             }
             if (t.startsWith("public ") && !anotacoes.isEmpty()) {
-                classificar(String.join(" ", anotacoes), acoes);
+                String bloco = String.join(" ", anotacoes);
+                Matcher mTelaDoMetodo = TELA.matcher(bloco);
+                String tela = mTelaDoMetodo.find() ? mTelaDoMetodo.group(1) : telaDaClasse;
+                classificar(bloco, acumulado.computeIfAbsent(tela, k -> new boolean[3]));
                 anotacoes.clear();
                 continue;
             }

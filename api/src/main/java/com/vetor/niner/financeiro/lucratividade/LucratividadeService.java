@@ -123,7 +123,7 @@ public class LucratividadeService {
                                             + pmd.valor_acrescimo - pmd.valor_desconto), 0) AS valor,
                                COALESCE(SUM(pmd.qtd_produto * pmd.preco_custo), 0) AS custo,
                                COALESCE(SUM((pmd.qtd_produto * pmd.preco_venda - pmd.valor_desconto)
-                                            * COALESCE(fn.perc_comissao, 0) / 100), 0) AS comissao
+                                            * COALESCE(pmd.perc_comissao, fn.perc_comissao, 0) / 100), 0) AS comissao
                         FROM venda v
                         JOIN produto_movimento_mestre pmm
                              ON pmm.id_venda = v.id_venda AND pmm.id_tenant = v.id_tenant

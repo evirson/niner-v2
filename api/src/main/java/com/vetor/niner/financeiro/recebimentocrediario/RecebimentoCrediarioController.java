@@ -62,6 +62,9 @@ public class RecebimentoCrediarioController {
         return service.efetivarRecebimento(jwt, req);
     }
 
+    // ⛔ `@Tela` DE MÉTODO — a Reimpressão é uma tela própria na grade de permissão e no menu, e
+    // o servidor exigia `recebimento-crediario` (achado de auditoria, 2026-08-29).
+    @Tela("reimpressao-recebimento-crediario")
     @GetMapping("/{idLoteRecebimento}/comprovante")
     public ComprovanteRecebimentoResponse buscarComprovante(@PathVariable long idLoteRecebimento) {
         return service.buscarComprovante(idLoteRecebimento);
@@ -80,6 +83,12 @@ public class RecebimentoCrediarioController {
         return service.listarParcelasDoLote(idLoteRecebimento);
     }
 
+    // ⛔ O mais grave dos cinco: "Estorno de Crediário" é tela própria na grade, e o servidor
+    // aceitava a permissão de `recebimento-crediario` EXCLUIR. O admin que concedia o recebimento
+    // (para o operador poder desfazer o próprio erro do dia) e deixava o Estorno desmarcado via o
+    // item sumir do menu — e o POST respondia 200. **Estorno é dinheiro saindo do caixa**, e ele
+    // acreditava ter fechado a porta.
+    @Tela("estorno-recebimento-crediario")
     @Acao(PermissaoService.Acao.EXCLUIR)   // desfazer, não incluir
     @PostMapping("/estornos/{idLoteRecebimento}")
     public EstornoEfetivadoResponse estornar(@PathVariable long idLoteRecebimento) {

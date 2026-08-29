@@ -224,6 +224,17 @@ class PrivilegiosNinerAppTest {
             // privilégio faltando e não é. As duas assinaturas são as da V054:191-192.
             afirmaPodeExecutar(st, "fn_aplica_delta_estoque(integer, integer, integer, numeric)");
             afirmaPodeExecutar(st, "fn_exige_estoque_nao_negativo(integer, integer, integer, numeric, numeric)");
+            // ⚠️ `fn_item_e_servico` roda na PRIMEIRA linha dos três ramos da mesma trigger (V086):
+            // sem o GRANT, TODA movimentação de estoque falha com "permission denied for function",
+            // exatamente o roteiro do incidente do Cancelamento de Entrada. Faltava caso aqui
+            // (achado de auditoria, 2026-08-29).
+            afirmaPodeExecutar(st, "fn_item_e_servico(smallint, integer)");
+            // As três tabelas do módulo de serviços — o Testcontainers conecta como superusuário,
+            // então sem estes SELECT a suíte ficaria verde mesmo com o GRANT sumindo numa
+            // recriação do bootstrap, e o erro só apareceria em produção.
+            st.executeQuery("SELECT 1 FROM produto_servico WHERE false").close();
+            st.executeQuery("SELECT 1 FROM ordem_servico WHERE false").close();
+            st.executeQuery("SELECT 1 FROM ordem_servico_item WHERE false").close();
         }
     }
 

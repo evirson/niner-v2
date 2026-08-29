@@ -1,4 +1,5 @@
 import CabecalhoModal from '../../components/CabecalhoModal'
+import PortalDeImpressao from '../../components/PortalDeImpressao'
 import type { Transferencia } from '../../lib/transferencias'
 import { gerarPdfGuiaTransferencia, montarLinhasGuiaTransferencia } from '../../lib/transferenciaImpressao'
 import { imprimirDocumentoA4 } from '../../lib/impressaoDocumento'
@@ -25,7 +26,12 @@ export default function GuiaTransferenciaModal({
       <div className="modal modal-largo" role="dialog" aria-label="Pré-visualização da guia de transferência" onClick={(e) => e.stopPropagation()}>
         <CabecalhoModal titulo="Pré-visualização — Guia de Transferência" aoFechar={aoFechar} />
 
-        <pre className="guia-transferencia-preview guia-transferencia-imprimir documento-a4-imprimir">{linhas.join('\n')}</pre>
+        <pre className="guia-transferencia-preview">{linhas.join('\n')}</pre>
+        {/* ⛔ A via impressa vai por PORTAL, fora do `#root` — sem isso a folha sai EM BRANCO
+            (o isolamento é `body > *` e apaga o `#root` inteiro). Ver PortalDeImpressao. */}
+        <PortalDeImpressao>
+          <pre className="guia-transferencia-imprimir documento-a4-imprimir">{linhas.join('\n')}</pre>
+        </PortalDeImpressao>
 
         <div className="ajuda-rodape">
 

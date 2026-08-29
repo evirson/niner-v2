@@ -99,7 +99,8 @@ public class RelatorioVendasService {
 
     /** Vendedor = {@code venda.id_funcionario} (V089), mesmo critério de
      *  {@code PesquisaVendaService}. ⚠️ Era {@code MAX(pmd.id_funcionario)} — o ledger deixou de
-     *  servir na V088, quando cada linha passou a carregar quem EXECUTOU aquele item. Operador de caixa =
+     *  servir na V088, quando cada linha passou a carregar quem EXECUTOU aquele item. O FILTRO por
+     *  vendedor casa com os dois (vendeu OU executou), como a Pesquisa de Vendas. Operador de caixa =
      *  usuário dono da sessão de caixa que recebeu o pagamento da venda, via {@code LATERAL}
      *  (evita multiplicar as linhas de item quando há mais de um lançamento de caixa por venda,
      *  caso de split-tender). */
@@ -214,15 +215,23 @@ public class RelatorioVendasService {
         }
 
         if (idFuncionario != null) {
+            // ⚠️ Filtra por quem VENDEU **ou** por quem EXECUTOU alguma linha (V088/V089) — o mesmo
+            // critério da Pesquisa de Vendas. Este `EXISTS` ficou para trás quando o SELECT migrou
+            // para `v.id_funcionario` (achado de auditoria, 2026-08-29): filtrando pela vendedora
+            // que fechou uma venda vinda de OS, o EXISTS dava falso — porque a linha do ledger
+            // leva o MECÂNICO — e **a venda dela sumia do relatório**, com o total a menos.
+            // ⛔ Restringir só a `v.id_funcionario` esconderia a venda de quem executou; filtro que
+            // esconde é pior que filtro amplo demais.
             sb.append("""
-                     AND EXISTS (
+                     AND (v.id_funcionario = ? OR EXISTS (
                          SELECT 1 FROM produto_movimento_mestre pmm2
                          JOIN produto_movimento_detalhe pmd2
                                 ON pmd2.id_movimento = pmm2.id_movimento AND pmd2.id_tenant = pmm2.id_tenant
                          WHERE pmm2.id_tenant = v.id_tenant AND pmm2.id_venda = v.id_venda
                                AND pmm2.tipo_movimento = 'VENDA' AND pmd2.id_funcionario = ?
-                     )
+                     ))
                     """);
+            params.add(idFuncionario);
             params.add(idFuncionario);
         }
 

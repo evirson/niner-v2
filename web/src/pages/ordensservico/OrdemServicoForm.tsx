@@ -6,12 +6,16 @@ import { BotaoFecharTela } from '../../components/BotaoFecharTela'
 import { IconeExcluir, IconeOrdemServico } from '../../components/Icones'
 import Toast, { type TipoToast } from '../../components/Toast'
 import { ApiError } from '../../lib/api'
-import { buscarDescontoVenda } from '../../lib/configuracaoGeral'
+import { buscarDescontoVenda, buscarPermiteQtdDecimal } from '../../lib/configuracaoGeral'
 import {
   completarMoeda,
+  completarQuantidade,
   desmascararMoeda,
+  desmascararQuantidade,
   formatarMoeda,
+  formatarQuantidade,
   mascararMoeda,
+  mascararQuantidade,
 } from '../../lib/masks'
 import {
   ESTADOS_EDITAVEIS,
@@ -38,7 +42,8 @@ interface ItemEmMontagem {
   descricao: string
   variacao: string
   tipoItem: 'MERCADORIA' | 'SERVICO'
-  qtd: number
+  /** TEXTO mascarado — é a fonte da verdade do campo; o número sai por `qtdDe`. */
+  qtdTexto: string
   preco: number
   /**
    * Quem EXECUTA este serviço (DS5) — nulo = o responsável pelo atendimento.
@@ -48,6 +53,17 @@ interface ItemEmMontagem {
    */
   idFuncionario: number | null
   nomeFuncionario: string | null
+}
+
+/**
+ * O número por trás do campo mascarado — a grade guarda TEXTO, os cálculos usam isto.
+ *
+ * ⚠️ O `true` fixo é seguro nos DOIS modos, e não um descuido: quem já normalizou o texto foi a
+ * máscara na digitação. No modo inteiro o texto vem como "1.234" (com separador de milhar), e
+ * `desmascararQuantidade` remove os pontos antes de converter — devolve 1234, não 1,234.
+ */
+function qtdDe(item: ItemEmMontagem): number {
+  return desmascararQuantidade(item.qtdTexto, true)
 }
 
 /**
@@ -95,6 +111,13 @@ export default function OrdemServicoForm() {
     queryFn: buscarDescontoVenda,
   })
 
+  // ⚠️ Mesma chave que o PDV e a Transferência usam — a tela de Parâmetros invalida esta.
+  const { data: cfgQtdDecimal } = useQuery({
+    queryKey: ['permite-qtd-decimal'],
+    queryFn: buscarPermiteQtdDecimal,
+  })
+  const permiteQtdDecimal = cfgQtdDecimal?.cfgPermiteQtdDecimal ?? true
+
   useEffect(() => {
     if (!existente) return
     setCliente({ id: existente.idCliente, nome: existente.nomeCliente })
@@ -110,7 +133,7 @@ export default function OrdemServicoForm() {
         descricao: i.descricaoProduto,
         variacao: [i.variacaoCor, i.variacaoTamanho].filter(Boolean).join(' · '),
         tipoItem: i.tipoItem,
-        qtd: i.qtdProduto,
+        qtdTexto: formatarQuantidade(i.qtdProduto, permiteQtdDecimal),
         preco: i.precoVenda,
         idFuncionario: i.idFuncionario,
         nomeFuncionario: i.nomeFuncionario,
@@ -120,8 +143,8 @@ export default function OrdemServicoForm() {
 
   const servicos = itens.filter((i) => i.tipoItem === 'SERVICO')
   const pecas = itens.filter((i) => i.tipoItem === 'MERCADORIA')
-  const totalServicos = servicos.reduce((s, i) => s + i.qtd * i.preco, 0)
-  const totalPecas = pecas.reduce((s, i) => s + i.qtd * i.preco, 0)
+  const totalServicos = servicos.reduce((s, i) => s + qtdDe(i) * i.preco, 0)
+  const totalPecas = pecas.reduce((s, i) => s + qtdDe(i) * i.preco, 0)
   const subtotal = totalServicos + totalPecas
   const desconto = desmascararMoeda(descontoTexto || '0')
   const total = subtotal - desconto
@@ -147,7 +170,11 @@ export default function OrdemServicoForm() {
     setItens((atual) => {
       const existenteNaGrade = atual.find((i) => i.idVariacao === p.idVariacao)
       if (existenteNaGrade) {
-        return atual.map((i) => (i.idVariacao === p.idVariacao ? { ...i, qtd: i.qtd + 1 } : i))
+        return atual.map((i) =>
+          i.idVariacao === p.idVariacao
+            ? { ...i, qtdTexto: formatarQuantidade(qtdDe(i) + 1, permiteQtdDecimal) }
+            : i,
+        )
       }
       return [
         ...atual,
@@ -157,7 +184,7 @@ export default function OrdemServicoForm() {
           descricao: p.descricaoProduto,
           variacao: [p.variacaoCor, p.variacaoTamanho].filter(Boolean).join(' · '),
           tipoItem: p.tipoItem,
-          qtd: 1,
+          qtdTexto: formatarQuantidade(1, permiteQtdDecimal),
           preco: p.precoVenda,
           idFuncionario: null,
           nomeFuncionario: null,
@@ -175,7 +202,7 @@ export default function OrdemServicoForm() {
     valorDesconto: desconto,
     itens: itens.map((i) => ({
       idVariacao: i.idVariacao,
-      qtdProduto: i.qtd,
+      qtdProduto: qtdDe(i),
       // Só serviço carrega executor; mandar em peça sujaria a comissão sem ninguém pedir.
       idFuncionario: i.tipoItem === 'SERVICO' ? i.idFuncionario : null,
     })),
@@ -269,29 +296,42 @@ export default function OrdemServicoForm() {
                   </td>
                 )}
                 <td style={{ textAlign: 'right' }}>
+                  {/* ⛔ Máscara de QUANTIDADE, não `replace(/D/g,'')` (achado de auditoria,
+                      2026-08-29): o filtro de dígitos transformava "2,5" em 25 — a oficina que
+                      lançasse 2,5 litros de óleo reservava 25 e cobrava 10× o valor. O parâmetro
+                      `cfg_permite_qtd_decimal` nasce LIGADO e o backend da OS aceita decimal;
+                      só esta tela ignorava, enquanto PDV, Transferência e Histórico respeitam. */}
                   <input
-                    inputMode="numeric"
+                    inputMode="decimal"
                     disabled={!editavel}
-                    style={{ width: 80, textAlign: 'right' }}
-                    value={i.qtd === 0 ? '' : String(i.qtd)}
+                    style={{ width: 90, textAlign: 'right' }}
+                    value={i.qtdTexto}
                     onFocus={(e) => e.target.select()}
-                    onChange={(e) => {
-                      const digitos = e.target.value.replace(/\D/g, '')
+                    onChange={(e) =>
                       setItens((atual) =>
                         atual.map((x) =>
-                          x.idVariacao === i.idVariacao ? { ...x, qtd: digitos === '' ? 0 : Number(digitos) } : x,
+                          x.idVariacao === i.idVariacao
+                            ? { ...x, qtdTexto: mascararQuantidade(e.target.value, permiteQtdDecimal) }
+                            : x,
                         ),
                       )
-                    }}
+                    }
                     onBlur={() =>
                       setItens((atual) =>
-                        atual.map((x) => (x.idVariacao === i.idVariacao && x.qtd < 1 ? { ...x, qtd: 1 } : x)),
+                        atual.map((x) => {
+                          if (x.idVariacao !== i.idVariacao) return x
+                          const completo = completarQuantidade(x.qtdTexto, permiteQtdDecimal)
+                          // Zero não é quantidade: cai para 1, como as outras grades do produto.
+                          return desmascararQuantidade(completo, permiteQtdDecimal) > 0
+                            ? { ...x, qtdTexto: completo }
+                            : { ...x, qtdTexto: formatarQuantidade(1, permiteQtdDecimal) }
+                        }),
                       )
                     }
                   />
                 </td>
                 <td className="mono" style={{ textAlign: 'right' }}>R$ {formatarMoeda(i.preco)}</td>
-                <td className="mono" style={{ textAlign: 'right' }}>R$ {formatarMoeda(i.qtd * i.preco)}</td>
+                <td className="mono" style={{ textAlign: 'right' }}>R$ {formatarMoeda(qtdDe(i) * i.preco)}</td>
                 <td>
                   {editavel && (
                     <button

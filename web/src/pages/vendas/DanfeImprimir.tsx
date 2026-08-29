@@ -50,15 +50,20 @@ function Campo({
  * papel A4 comum, sem QR: a NF-e se confere pela chave de acesso e pelo protocolo, no portal
  * nacional. Os dois documentos não compartilham nada além do nome parecido.
  *
- * <p>`ref` aponta pro elemento raiz — o pai usa para `window.print()` (a calibragem de impressão
- * está em `.danfe-imprimir`, `styles.css`) e para capturar o PDF do envio por WhatsApp.
+ * <p>`ref` aponta pro elemento raiz — o pai usa para capturar o PDF do envio por WhatsApp.
+ *
+ * <p>⚠️ `paraImpressao` marca a cópia que vai para a impressora, e ela precisa estar num
+ * <b>portal</b> para o `<body>` (ver `PortalDeImpressao`): o isolamento de impressão é
+ * `body > *:not(...)`, então uma cópia renderizada dentro do `#root` é apagada junto com ele e a
+ * folha sai <b>em branco</b> — medido em 2026-08-29. A cópia da tela fica sem a classe.
  */
-const DanfeImprimir = forwardRef<HTMLDivElement, { danfe: Danfe }>(function DanfeImprimir({ danfe }, ref) {
+const DanfeImprimir = forwardRef<HTMLDivElement, { danfe: Danfe; paraImpressao?: boolean }>(
+    function DanfeImprimir({ danfe, paraImpressao = false }, ref) {
   const d = danfe
   const entrada = d.tipoNf === 0
 
   return (
-    <div className="danfe-preview danfe-imprimir documento-a4-imprimir" ref={ref}>
+    <div className={`danfe-preview danfe-imprimir${paraImpressao ? ' documento-a4-imprimir' : ''}`} ref={ref}>
       {/* ---------------------------------------------------------------- canhoto */}
       <div className="danfe-canhoto">
         <div className="danfe-canhoto-texto">

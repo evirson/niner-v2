@@ -1459,7 +1459,17 @@ a.menu-card:hover {
     height: auto !important; overflow: visible !important;
   }
   body.imprimindo-documento { margin: 0 !important; padding: 0 !important; }
-  body.imprimindo-documento > *:not(.documento-a4-imprimir) { display: none !important; }
+  /* ⚠️ O seletor é `body > *` — FILHO DIRETO. O `<body>` tem um filho só, o `#root`, e todo
+     bloco de impressão renderizado dentro dele seria apagado junto (`display:none` no ancestral
+     não se desfaz com `visibility:visible` no descendente). Por isso os blocos vão por
+     <PortalDeImpressao> para o `<body>` — medido em 2026-08-29: sem o portal, o `#root` fica
+     `display:none` e a largura visível do documento é ZERO, ou seja, a folha sai EM BRANCO.
+     ⚠️ A lista de exceções cobre também os blocos de BOBINA (`.etiqueta-imprimir`): o mesmo botão
+     do modal imprime os dois formatos e sempre aplica esta classe, então sem eles aqui a bobina
+     do orçamento e da OS sairia em branco pelo mesmo motivo. */
+  body.imprimindo-documento > *:not(.documento-a4-imprimir):not(.etiqueta-imprimir):not(.etiqueta-rolo-imprimir) {
+    display: none !important;
+  }
 
   .documento-a4-imprimir, .documento-a4-imprimir * { visibility: visible; }
   /* Fluxo normal — NUNCA `position: absolute` aqui (ver o comentário do bloco). */

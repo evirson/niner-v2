@@ -17,6 +17,8 @@ export interface ConfiguracaoGeral {
   cfgConsisteValorContasPagar: boolean
   idPlanoContasCompraMercadoria: string
   cfgEmiteFiscalAposVenda: boolean
+  /** Módulo de serviços (S1) — desligado por padrão; é ele que faz a OS existir na tela. */
+  cfgUsaServicos: boolean
   atualizadoEm: string
 }
 
@@ -37,6 +39,7 @@ export interface ConfiguracaoGeralFormState {
   cfgConsisteValorContasPagar: boolean
   idPlanoContasCompraMercadoria: string
   cfgEmiteFiscalAposVenda: boolean
+  cfgUsaServicos: boolean
 }
 
 export function paraFormulario(c: ConfiguracaoGeral): ConfiguracaoGeralFormState {
@@ -56,6 +59,7 @@ export function paraFormulario(c: ConfiguracaoGeral): ConfiguracaoGeralFormState
     cfgConsisteValorContasPagar: c.cfgConsisteValorContasPagar,
     idPlanoContasCompraMercadoria: c.idPlanoContasCompraMercadoria,
     cfgEmiteFiscalAposVenda: c.cfgEmiteFiscalAposVenda,
+    cfgUsaServicos: c.cfgUsaServicos,
   }
 }
 
@@ -77,6 +81,7 @@ export function paraRequisicao(f: ConfiguracaoGeralFormState) {
     cfgConsisteValorContasPagar: f.cfgConsisteValorContasPagar,
     idPlanoContasCompraMercadoria: f.idPlanoContasCompraMercadoria,
     cfgEmiteFiscalAposVenda: f.cfgEmiteFiscalAposVenda,
+    cfgUsaServicos: f.cfgUsaServicos,
   }
 }
 

@@ -210,7 +210,11 @@ export default function ProdutoForm({ somenteLeitura = false }: { somenteLeitura
   const mapaConfig = paraMapa(configuracao)
 
   const { data: usaCorGrade } = useQuery({
-    queryKey: ['config-geral', 'usa-cor-grade'],
+    // ⚠️ A chave é ['usa-cor-grade'], igual à dos outros três consumidores e à que Parâmetros do
+    // Sistema invalida. Estava ['config-geral','usa-cor-grade'] e NÃO casava (achado de auditoria,
+    // 2026-08-29): esta tela — a principal consumidora — servia o valor velho depois de o admin
+    // trocar o parâmetro, e na janela do refetch deixava gravar produto sem grade.
+    queryKey: ['usa-cor-grade'],
     queryFn: buscarUsaCorGrade,
   })
 

@@ -51,7 +51,7 @@ Registro cronológico das decisões e entregas. Atualizar a cada marco relevante
 
 > ## 📌 2026-08-28 (3) — a OS ganha via impressa, comissão do executor, e a regressão que ela causou
 >
-> **56 telas do ERP + 3 públicas · 1065 testes verdes, **1 ou 2 pulados conforme a HORA** — o guard de meia-noite do `HorarioAcessoTest`, que se pula sozinho quando a janela pedida cruzaria a virada do dia (rodando às 23h50 são 2; de manhã, 0). ⚠️ Não é regressão, e o número oscilar é o mecanismo funcionando** (a contagem de telas é a de `docs/TELAS.md`, que declara a base)
+> **56 telas do ERP + 3 públicas · 1065 testes verdes, **de 0 a 5 pulados conforme a HORA** — o guard de meia-noite do `HorarioAcessoTest`, que se pula sozinho quando a janela pedida cruzaria a virada do dia (à meia-noite são 5 — 4 do horário de acesso e 1 do 2FA —, de manhã 0). ⚠️ Não é regressão, e o número oscilar é o mecanismo funcionando** (a contagem de telas é a de `docs/TELAS.md`, que declara a base)
 > · migrations até **V090** · `web/` sem erro de tipo.
 >
 > Pedido dele depois de eu listar as lacunas da OS: *"faça tudo o que pode ser feito, menos a

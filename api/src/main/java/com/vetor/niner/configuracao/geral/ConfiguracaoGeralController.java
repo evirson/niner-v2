@@ -70,6 +70,13 @@ public class ConfiguracaoGeralController {
         return new UsaServicosResponse(service.usaServicos());
     }
 
+    // ⚠️ Este `@Livre` é do /desconto-venda, e ele já se perdeu uma vez: em 2026-08-28 o
+    // /usa-servicos foi inserido ENTRE a anotação e o método que ela protegia, e o desconto ficou
+    // exigindo ADMIN — o campo de desconto SUMIA da tela do caixa (o front lê 0 e esconde o
+    // campo), e o admin não via nada errado porque ele passa. ⛔ Ao acrescentar endpoint aqui,
+    // acrescente no FIM da classe ou confira as duas linhas vizinhas: anotação de método é
+    // posicional e não avisa quando muda de dono.
+    @Livre   // já era aberto a qualquer papel antes do RBAC
     @GetMapping("/desconto-venda")
     public DescontoVendaResponse descontoVenda() {
         return new DescontoVendaResponse(service.percentualDescontoVenda());
@@ -101,16 +108,29 @@ public class ConfiguracaoGeralController {
         return new RateiaFreteEntradaResponse(service.rateiaFreteEntrada());
     }
 
+    @Livre   // já era aberto a qualquer papel antes do RBAC (o javadoc da classe já o listava)
     @GetMapping("/reajusta-preco-entrada")
     public ReajustaPrecoEntradaResponse reajustaPrecoEntrada() {
         return new ReajustaPrecoEntradaResponse(service.reajustaPrecoEntrada());
     }
 
+    // ⚠️ Sem `@Livre`, o operador sem a tela de Parâmetros levava 403 e o front caía no fallback
+    // `?? true`: um tenant que DESLIGOU a consistência continuava vendo "a soma das duplicatas não
+    // bate com o total" barrar a entrada, sem ninguém entender — e o admin, que passa, via
+    // funcionar. Achado de auditoria, 2026-08-29.
+    @Livre   // já era aberto a qualquer papel antes do RBAC
     @GetMapping("/consiste-valor-contas-pagar")
     public ConsisteValorContasPagarResponse consisteValorContasPagar() {
         return new ConsisteValorContasPagarResponse(service.consisteValorContasPagar());
     }
 
+    // ⛔ Este era o pior dos três: o operador com Entrada de Produtos liberada e Parâmetros não
+    // (o padrão — a grade nasce vazia) clicava em criar fornecedor, levava 403 aqui, e
+    // `form.idPlanoContas` ficava vazio PARA SEMPRE — o botão "Criar" nunca habilitava, sem
+    // mensagem nenhuma, e o modal não tem campo de plano de contas (é atribuído por baixo dos
+    // panos). A entrada da nota travava. Reincidência exata do bug de 2026-08-14 que motivou a
+    // criação deste endpoint, reaberta pela porta do RBAC.
+    @Livre   // já era aberto a qualquer papel antes do RBAC
     @GetMapping("/plano-contas-compra-mercadoria")
     public PlanoContasCompraMercadoriaResponse planoContasCompraMercadoria() {
         return new PlanoContasCompraMercadoriaResponse(service.idPlanoContasCompraMercadoria());

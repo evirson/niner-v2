@@ -1,9 +1,7 @@
 import { Link, useParams } from 'react-router-dom'
+import { useMenuFiltrado } from '../lib/useMenuFiltrado'
 import { IconeVoltar } from '../components/Icones'
-import { useEu } from '../lib/eu'
-import { acharGrupo, acharPai, eGrupo, filtrarPorModulo, filtrarPorPapel, MENU, rotaDoGrupo, type NavGrupo, type NavItem } from '../lib/menu'
-import { buscarUsaServicos } from '../lib/configuracaoGeral'
-import { useQuery } from '@tanstack/react-query'
+import { acharGrupo, acharPai, eGrupo, rotaDoGrupo, type NavGrupo, type NavItem } from '../lib/menu'
 
 function CardDeItem({ item }: { item: NavItem }) {
   const Icone = item.icone
@@ -47,17 +45,8 @@ function CardDeSubgrupo({ grupo }: { grupo: NavGrupo }) {
  * é subgrupo abre o próximo nível, com seta de retorno para o grupo de cima. */
 export default function MenuGrupo() {
   const { grupo: chave } = useParams<{ grupo: string }>()
-  const { data: eu } = useEu()
-  const isAdmin = eu?.usuario.papel === 'ADMIN'
 
-  /** Módulo de serviços (S1): desligado, Ordens de Serviço não aparece no menu nem na busca. */
-  const { data: usaServicos } = useQuery({
-    queryKey: ['config-geral', 'usa-servicos'],
-    queryFn: buscarUsaServicos,
-    staleTime: 60_000,
-  })
-
-  const menu = filtrarPorModulo(filtrarPorPapel(MENU, isAdmin), usaServicos?.cfgUsaServicos)
+  const menu = useMenuFiltrado()
   const grupo = chave ? acharGrupo(menu, chave) : null
   const pai = chave ? acharPai(menu, chave) : null
 

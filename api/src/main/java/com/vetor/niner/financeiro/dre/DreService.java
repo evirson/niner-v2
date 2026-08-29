@@ -219,7 +219,7 @@ public class DreService {
                                COALESCE(SUM(pmd.valor_desconto), 0) AS desconto,
                                COALESCE(SUM(pmd.qtd_produto * pmd.preco_custo), 0) AS cmv,
                                COALESCE(SUM((pmd.qtd_produto * pmd.preco_venda - pmd.valor_desconto)
-                                            * COALESCE(fn.perc_comissao, 0) / 100), 0) AS comissao
+                                            * COALESCE(pmd.perc_comissao, fn.perc_comissao, 0) / 100), 0) AS comissao
                         FROM venda v
                         JOIN produto_movimento_mestre pmm
                              ON pmm.id_venda = v.id_venda AND pmm.id_tenant = v.id_tenant
@@ -293,7 +293,7 @@ public class DreService {
                             SELECT pmm.id_venda,
                                    SUM(pmd.qtd_produto * pmd.preco_custo) AS cmv,
                                    SUM((pmd.qtd_produto * pmd.preco_venda - pmd.valor_desconto)
-                                       * COALESCE(fn.perc_comissao, 0) / 100) AS comissao
+                                       * COALESCE(pmd.perc_comissao, fn.perc_comissao, 0) / 100) AS comissao
                             FROM produto_movimento_mestre pmm
                             JOIN produto_movimento_detalhe pmd
                                  ON pmd.id_movimento = pmm.id_movimento AND pmd.id_tenant = pmm.id_tenant

@@ -256,6 +256,39 @@ public class CancelamentoVendaService {
                             + " por " + venda.nomeUsuarioCancelamento() + ".");
         }
 
+        // ⛔ Venda com DEVOLUÇÃO em aberto não se cancela (achado de auditoria, 2026-08-29).
+        // O caminho inverso já era fechado desde 2026-08-27 (`DevolucaoProdutoService
+        // .exigirVendaNaoCancelada`, com javadoc descrevendo esta mesma dupla contagem) — só
+        // faltava este lado, e ele custa nos três lugares ao mesmo tempo:
+        //   • ESTOQUE: `estornarEstoque` devolve a quantidade CHEIA do movimento de venda, sem
+        //     descontar o que já voltou pela devolução — 2 vendidas, 1 devolvida, cancelar credita
+        //     2 e o saldo fica +1 peça que não existe;
+        //   • CAIXA: o DELETE de `caixa_detalhe` tira os R$ 200 da venda inteira;
+        //   • VALE: o vale-mercadoria da devolução continua VÁLIDO e é resgatado depois.
+        // A loja estorna o valor cheio, ainda deve o vale e ganha estoque fantasma.
+        // ⚠️ A saída é a mesma dos três guards do Cancelamento de Entrada: mandar desfazer na ordem
+        // inversa — cancele a devolução primeiro, depois a venda.
+        List<Long> devolucoesAbertas = jdbc.sql("""
+                        SELECT vd.id_devolucao
+                          FROM venda_devolucao vd
+                         WHERE vd.id_tenant = plataforma.tenant_atual()
+                           AND vd.id_venda_credito = ? AND vd.cancelada = false
+                         ORDER BY vd.id_devolucao
+                        """)
+                .param(idVenda)
+                .query(Long.class)
+                .list();
+        if (!devolucoesAbertas.isEmpty()) {
+            StringBuilder msg = new StringBuilder(
+                    "Esta venda tem devolução registrada e não pode ser cancelada. Cancele primeiro a "
+                            + "devolução (o vale-mercadoria continua valendo enquanto ela existir), "
+                            + "depois cancele a venda.");
+            for (Long id : devolucoesAbertas) {
+                msg.append(System.lineSeparator()).append("- Devolução nº ").append(id);
+            }
+            throw new ConflitoDadosException(msg.toString());
+        }
+
         // RN-03 — checado ANTES do caixa, pro operador receber a mensagem certa já na primeira tentativa.
         List<ParcelaRecebidaDetalhe> parcelasRecebidas = buscarParcelasCredarioRecebidas(idVenda);
         if (!parcelasRecebidas.isEmpty()) {

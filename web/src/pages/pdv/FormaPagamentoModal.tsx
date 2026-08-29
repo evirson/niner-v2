@@ -119,6 +119,7 @@ export default function FormaPagamentoModal({
   valorTotal,
   idOrcamento,
   idOrdemServico,
+  descontoInicial,
   clienteInicial,
   vendedorInicial,
   aoFechar,
@@ -145,14 +146,31 @@ export default function FormaPagamentoModal({
    * vendedor travados. ⚠️ E os dois <b>nunca</b> chegam preenchidos juntos: o servidor recusa.
    */
   idOrdemServico?: number | null
+  /**
+   * Desconto que o documento de origem (orçamento ou OS) já concedeu ao cliente.
+   *
+   * <p>⛔ Sem isto o desconto era **perdido no faturamento** (achado de auditoria, 2026-08-29):
+   * a via impressa que o cliente levou dizia "DESCONTO 50,00 / TOTAL 450,00", o popup do F5
+   * exibia o mesmo, e o PDV cobrava **R$ 500** — porque o ledger soma só os itens e este campo
+   * abria vazio. Ninguém era avisado; o operador só perceberia comparando o papel com a tela.
+   *
+   * <p>⚠️ No orçamento isso contrariava a spec ESCRITA (docs/telas/orcamento.md, R5: "na
+   * efetivação o valor viaja para o campo de desconto do PDV"). Não viajava.
+   */
+  descontoInicial?: number
   clienteInicial?: PdvCliente | null
   vendedorInicial?: Pick<Funcionario, 'idFuncionario' | 'nome'> | null
   aoFechar: () => void
   aoEfetivada: (resultado: VendaEfetivada) => void
 }) {
   const [pagamentos, setPagamentos] = useState<LinhaLocal[]>([])
+  // ⚠️ Semeado do documento de origem, e o teto continua revalidado sobre o subtotal desta
+  // venda (descontoValorMaximo) — é o que a spec do orçamento manda: o valor viaja, e as regras
+  // do PDV valem a partir daí.
   const [descontoPercentualTexto, setDescontoPercentualTexto] = useState('')
-  const [descontoValorTexto, setDescontoValorTexto] = useState('')
+  const [descontoValorTexto, setDescontoValorTexto] = useState(
+    descontoInicial && descontoInicial > 0 ? formatarMoeda(descontoInicial) : '',
+  )
   const [categoriaAberta, setCategoriaAberta] = useState<CategoriaCarteira | null>(null)
   const [idCarteiraEdicao, setIdCarteiraEdicao] = useState<number | null>(null)
   const [valorPagoTexto, setValorPagoTexto] = useState('')
@@ -455,6 +473,22 @@ export default function FormaPagamentoModal({
               <span className="mono">{moeda(valorTotalProdutos)}</span>
             </div>
 
+            {/* ⚠️ Aviso quando o desconto do documento NÃO couber inteiro (achado de auditoria,
+                2026-08-29). Havia dois jeitos de o valor sumir em silêncio: o `Math.min` do teto
+                cortava e o campo continuava exibindo o número cheio, e com o parâmetro de
+                desconto ZERADO o bloco inteiro nem era renderizado — a via impressa na mão do
+                cliente dizia "DESCONTO 50,00" e o PDV cobrava o valor cheio, sem nada na tela. */}
+            {descontoInicial != null && descontoInicial > descontoVenda + 0.001 && (
+              <div className="pdv-resumo-linha">
+                <span className="erro-campo" style={{ margin: 0 }}>
+                  ⚠️ O documento concedia {moeda(descontoInicial)} de desconto e esta venda
+                  aplica {moeda(descontoVenda)}
+                  {temDesconto
+                    ? ' — o teto da loja não cobre o restante.'
+                    : ' — o desconto está desligado em Parâmetros do Sistema.'}
+                </span>
+              </div>
+            )}
             {temDesconto && (
               <>
                 <div className="pdv-resumo-linha pdv-resumo-divisor pdv-resumo-desconto-gerencial">

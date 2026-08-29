@@ -177,8 +177,21 @@ public class FuncionarioService {
                 jdbc.sql("""
                                 SELECT EXISTS (SELECT 1 FROM produto_movimento_detalhe
                                                WHERE id_tenant = plataforma.tenant_atual() AND id_funcionario = ?)
+                                -- ⚠️ Os três vínculos abaixo nasceram em 2026-08-28 e não estavam
+                                -- aqui (achado de auditoria, 2026-08-29). O caso que dói é o
+                                -- consultor de balcão que SÓ ABRE OS e nunca vende — normal numa
+                                -- oficina, onde quem fecha o caixa é outro: ele não aparecia em
+                                -- `produto_movimento_detalhe`, o DELETE violava a FK e o handler
+                                -- respondia 409 genérico, em vez do "inativado" que o padrão de
+                                -- cadastro promete — sem saída pela tela.
+                                    OR EXISTS (SELECT 1 FROM venda
+                                               WHERE id_tenant = plataforma.tenant_atual() AND id_funcionario = ?)
+                                    OR EXISTS (SELECT 1 FROM ordem_servico
+                                               WHERE id_tenant = plataforma.tenant_atual() AND id_funcionario = ?)
+                                    OR EXISTS (SELECT 1 FROM ordem_servico_item
+                                               WHERE id_tenant = plataforma.tenant_atual() AND id_funcionario = ?)
                                 """)
-                        .param(id).query(Boolean.class).single());
+                        .params(id, id, id, id).query(Boolean.class).single());
 
         if (temMovimento) {
             int linhas = jdbc.sql("""
@@ -189,7 +202,7 @@ public class FuncionarioService {
             if (linhas == 0) {
                 throw new ResponseStatusException(NOT_FOUND, "Funcionário não encontrado.");
             }
-            return new ExclusaoFuncionarioResponse("inativado", "Funcionário possui movimentações associadas.");
+            return new ExclusaoFuncionarioResponse("inativado", "Funcionário possui vendas, movimentações ou ordens de serviço associadas.");
         }
 
         int linhas = jdbc.sql("DELETE FROM funcionario WHERE id_funcionario = ? AND id_tenant = plataforma.tenant_atual()")

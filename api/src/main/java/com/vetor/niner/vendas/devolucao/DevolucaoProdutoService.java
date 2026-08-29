@@ -127,10 +127,11 @@ public class DevolucaoProdutoService {
             jdbc.sql("""
                             INSERT INTO produto_movimento_detalhe
                                 (id_tenant, id_movimento, id_empresa, id_variacao, credito_debito, qtd_produto,
-                                 preco_venda, preco_custo, id_funcionario, origem)
-                            VALUES (plataforma.tenant_atual(), ?, ?, ?, 'C', ?, ?, ?, ?, 'devolução manual')
+                                 preco_venda, preco_custo, id_funcionario, origem, perc_comissao)
+                            VALUES (plataforma.tenant_atual(), ?, ?, ?, 'C', ?, ?, ?, ?, 'devolução manual', ?)
                             """)
-                    .params(idMovimento, idEmpresa, item.idVariacao(), item.qtd(), item.precoVenda(), item.precoCusto(), idFuncionario)
+                    .params(idMovimento, idEmpresa, item.idVariacao(), item.qtd(), item.precoVenda(), item.precoCusto(),
+                            idFuncionario, percComissaoDaVenda(req.numeroVenda(), item.idVariacao()))
                     .update();
             BigDecimal valorTotalItem = item.precoVenda().multiply(item.qtd());
             itensResponse.add(new ItemDevolucaoResponse(
@@ -305,6 +306,43 @@ public class DevolucaoProdutoService {
      *       um caso que, para elas, nem existe.</li>
      * </ul>
      */
+    /**
+     * O percentual de comissão que a VENDA original congelou naquela linha (V088).
+     *
+     * <p>⛔ Sem isto, a devolução caía no {@code COALESCE} do relatório e usava o percentual
+     * <b>de hoje</b> do funcionário — e a comissão líquida saía errada de dois jeitos (achado de
+     * auditoria, 2026-08-29):
+     * <ul>
+     *   <li>serviço com percentual próprio: venda a 20% e devolução a 5% deixavam
+     *       <b>R$ 15,00 de comissão sobre uma venda integralmente devolvida</b>;</li>
+     *   <li>funcionário promovido entre a venda e a devolução: 3% − 5% = <b>comissão negativa</b>
+     *       sobre a mesma mercadoria.</li>
+     * </ul>
+     *
+     * <p>⚠️ Devolve {@code null} na devolução <b>sem venda de origem</b>, que é caminho legítimo do
+     * produto: nulo faz o relatório cair no cadastro, o comportamento correto quando não existe
+     * percentual congelado para copiar.
+     */
+    private BigDecimal percComissaoDaVenda(Long numeroVenda, long idVariacao) {
+        if (numeroVenda == null) {
+            return null;
+        }
+        return jdbc.sql("""
+                        SELECT pmd.perc_comissao
+                          FROM produto_movimento_mestre pmm
+                          JOIN produto_movimento_detalhe pmd
+                                 ON pmd.id_tenant = pmm.id_tenant AND pmd.id_movimento = pmm.id_movimento
+                         WHERE pmm.id_tenant = plataforma.tenant_atual()
+                           AND pmm.id_venda = ? AND pmm.tipo_movimento = 'VENDA'
+                           AND pmd.id_variacao = ? AND pmd.perc_comissao IS NOT NULL
+                         LIMIT 1
+                        """)
+                .params(numeroVenda, idVariacao)
+                .query(BigDecimal.class)
+                .optional()
+                .orElse(null);
+    }
+
     private static void validarContraAVenda(EfetivarDevolucaoRequest req, List<ItemResolvido> itens,
                                             List<ItemVendaOrigemResponse> linhasDaVenda) {
         Map<String, BigDecimal> disponivelPorLinha = new HashMap<>();

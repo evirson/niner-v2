@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 import CabecalhoModal from '../../components/CabecalhoModal'
+import PortalDeImpressao from '../../components/PortalDeImpressao'
 import EnviarWhatsAppModal from '../../components/EnviarWhatsAppModal'
 import { ApiError } from '../../lib/api'
 import { compartilharArquivo } from '../../lib/compartilhamento'
-import { formatarMoeda } from '../../lib/masks'
+import { formatarMoeda, formatarQuantidade } from '../../lib/masks'
 import { gerarBlobDocumentoA4 } from '../../lib/orcamentoPdf'
 import { imprimirDocumentoA4 } from '../../lib/impressaoDocumento'
 import { montarLinhasOrdemServicoBobina } from '../../lib/ordemServicoImpressao'
@@ -121,12 +122,16 @@ export default function OrdemServicoImpressaoModal({
       {/* ⚠️ As duas versões ficam SEMPRE no DOM: o CSS decide qual sai na impressora, e o envio por
           WhatsApp captura a folha A4 mesmo com a tela mostrando a bobina — o PDF do cliente é
           sempre o A4, porque bobina é papel de balcão, não anexo de mensagem. */}
-      <div className={formato === 'A4' ? 'os-imprimir-a4 documento-a4-imprimir' : 'orcamento-imprimir-oculto'}>
-        <div className="orcamento-a4-folha" ref={folhaRef}>{corpoA4(os)}</div>
-      </div>
-      <div className={formato === 'BOBINA' ? 'etiqueta-imprimir os-imprimir-bobina' : 'orcamento-imprimir-oculto'}>
-        <pre className="papeleta-imprimir">{linhasBobina.join('\n')}</pre>
-      </div>
+      <PortalDeImpressao>
+        <div className={formato === 'A4' ? 'os-imprimir-a4 documento-a4-imprimir' : 'orcamento-imprimir-oculto'}>
+          <div className="orcamento-a4-folha" ref={folhaRef}>{corpoA4(os)}</div>
+        </div>
+      </PortalDeImpressao>
+      <PortalDeImpressao>
+        <div className={formato === 'BOBINA' ? 'etiqueta-imprimir os-imprimir-bobina' : 'orcamento-imprimir-oculto'}>
+          <pre className="papeleta-imprimir">{linhasBobina.join('\n')}</pre>
+        </div>
+      </PortalDeImpressao>
 
       {whatsappAberto && (
         <EnviarWhatsAppModal
@@ -168,7 +173,7 @@ function blocoItens(titulo: string, itens: ItemOs[], subtotal: number, mostrarEx
                   ` ${[i.variacaoCor, i.variacaoTamanho].filter(Boolean).join(' · ')}`}
               </td>
               {mostrarExecutor && <td>{i.nomeFuncionario ?? '—'}</td>}
-              <td style={{ textAlign: 'right' }}>{i.qtdProduto}</td>
+              <td style={{ textAlign: 'right' }}>{formatarQuantidade(i.qtdProduto, true)}</td>
               <td style={{ textAlign: 'right' }}>R$ {formatarMoeda(i.precoVenda)}</td>
               <td style={{ textAlign: 'right' }}>R$ {formatarMoeda(i.total)}</td>
             </tr>

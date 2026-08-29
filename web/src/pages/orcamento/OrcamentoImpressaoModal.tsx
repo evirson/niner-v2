@@ -1,4 +1,5 @@
 import CabecalhoModal from '../../components/CabecalhoModal'
+import PortalDeImpressao from '../../components/PortalDeImpressao'
 import { useEffect, useRef, useState } from 'react'
 import EnviarWhatsAppModal from '../../components/EnviarWhatsAppModal'
 import { ApiError } from '../../lib/api'
@@ -146,12 +147,16 @@ export default function OrcamentoImpressaoModal({
       {/* ⚠️ As duas versões ficam SEMPRE no DOM: o CSS decide qual sai na impressora, e o envio
           por WhatsApp captura a folha A4 mesmo quando a tela está mostrando a bobina (o PDF do
           cliente é sempre o A4 — bobina é papel de balcão, não anexo de mensagem). */}
-      <div className={formato === 'A4' ? 'orcamento-imprimir-a4 documento-a4-imprimir' : 'orcamento-imprimir-oculto'}>
-        <div className="orcamento-a4-folha" ref={folhaRef}>{corpoA4(orcamento)}</div>
-      </div>
-      <div className={formato === 'BOBINA' ? 'etiqueta-imprimir orcamento-imprimir-bobina' : 'orcamento-imprimir-oculto'}>
-        <pre className="papeleta-imprimir">{linhasBobina.join('\n')}</pre>
-      </div>
+      <PortalDeImpressao>
+        <div className={formato === 'A4' ? 'orcamento-imprimir-a4 documento-a4-imprimir' : 'orcamento-imprimir-oculto'}>
+          <div className="orcamento-a4-folha" ref={folhaRef}>{corpoA4(orcamento)}</div>
+        </div>
+      </PortalDeImpressao>
+      <PortalDeImpressao>
+        <div className={formato === 'BOBINA' ? 'etiqueta-imprimir orcamento-imprimir-bobina' : 'orcamento-imprimir-oculto'}>
+          <pre className="papeleta-imprimir">{linhasBobina.join('\n')}</pre>
+        </div>
+      </PortalDeImpressao>
 
       {whatsappAberto && (
         <EnviarWhatsAppModal

@@ -178,6 +178,7 @@ public class OrdemServicoService {
     @Transactional
     public OrdemServicoResponse criar(Jwt jwt, OrdemServicoRequest req) {
         exigirModuloLigado();
+        exigirDescontoDentroDoTeto(req);
         long idEmpresa = EmpresaDaSessao.idEmpresaDaSessao(jwt);
         long idUsuario = Long.parseLong(jwt.getSubject());
 
@@ -211,8 +212,17 @@ public class OrdemServicoService {
     public OrdemServicoResponse atualizar(Jwt jwt, long id, OrdemServicoRequest req) {
         String situacao = situacaoAtual(id);
         exigirEditavel(situacao, "alterar");
+        exigirDescontoDentroDoTeto(req);
 
-        long idEmpresa = EmpresaDaSessao.idEmpresaDaSessao(jwt);
+        // ⛔ A empresa é a DA OS, não a da sessão (achado de auditoria, 2026-08-29). `liberarReservas`
+        // sempre leu `os.id_empresa`; `gravarItens` recebia a da sessão. Num tenant com duas
+        // empresas, abrir a OS da empresa A com a sessão em B liberava a reserva em A e aplicava em
+        // B — e como a OS continua sendo de A, todo `liberarReservas` seguinte descontava de A
+        // (onde `GREATEST(reservado - x, 0)` já é 0): **a reserva ficava pendurada em B para
+        // sempre**, e o disponível de B nunca voltava.
+        // ⚠️ O `jwt` continua no parâmetro porque a assinatura é pública e o controller a usa;
+        // trocá-la aqui seria churn sem ganho.
+        long idEmpresa = empresaDaOs(id);
         jdbc.sql("""
                         UPDATE ordem_servico SET id_cliente = ?, id_funcionario = ?, objeto_servico = ?,
                                observacao = ?, valor_desconto = ?, atualizado_em = now()
@@ -416,7 +426,18 @@ public class OrdemServicoService {
         for (ItemRequest item : itens) {
             // O preço vem do cadastro quando o cliente não manda — nunca se aceita preço do cliente
             // sem conferência (o DTO documenta o porquê).
-            BigDecimal preco = item.precoVenda() != null ? item.precoVenda() : precoDeCadastro(item.idVariacao());
+            // ⚠️ O javadoc do DTO promete que preço do cliente não é aceito sem conferência — e até
+            // 2026-08-29 nada conferia (achado de auditoria). Hoje o front nunca manda o campo, mas
+            // a API é pública ao tenant: sem isto, um cliente da API escolheria quanto custa o
+            // serviço. O teto é o preço de cadastro; abaixo dele é desconto legítimo de negociação,
+            // acima seria a OS inventando preço que a loja não pratica.
+            BigDecimal precoCadastro = precoDeCadastro(item.idVariacao());
+            BigDecimal preco = item.precoVenda() != null ? item.precoVenda() : precoCadastro;
+            if (preco.compareTo(precoCadastro) > 0) {
+                throw new IllegalArgumentException(
+                        "O preço informado (R$ " + preco + ") é maior que o preço de cadastro (R$ "
+                                + precoCadastro + "). A ordem de serviço não define preço acima da tabela.");
+            }
             boolean ehServico = ehServico(item.idVariacao());
             // ⭐ DS15/DS19 — a peça reserva ao ser lançada, antes mesmo da aprovação. Serviço nunca
             // reserva: não tem saldo (V086).
@@ -479,6 +500,54 @@ public class OrdemServicoService {
     }
 
     /** Devolve ao estoque o que CADA linha reservou — pelo valor guardado nela, não pelo de agora. */
+    /**
+     * O desconto da OS respeita o mesmo teto da venda ({@code cfg_geral.percentual_desconto_venda}).
+     *
+     * <p>⛔ Até 2026-08-29 o teto era validado <b>só no front</b> — "teto com porta ao lado", o
+     * padrão que este projeto já pagou caro quatro vezes num dia. E aqui ele tem consequência
+     * direta: o desconto da OS agora <b>viaja</b> para o campo de desconto do PDV, então uma OS
+     * gravada com desconto acima do máximo empurraria esse valor para dentro da venda.
+     *
+     * <p>⚠️ A conta é sobre o subtotal dos ITENS da OS, que é o mesmo que a tela mostra.
+     */
+    private void exigirDescontoDentroDoTeto(OrdemServicoRequest req) {
+        BigDecimal desconto = req.valorDesconto();
+        if (desconto == null || desconto.signum() <= 0) {
+            return;
+        }
+        BigDecimal subtotal = BigDecimal.ZERO;
+        for (ItemRequest item : req.itens()) {
+            BigDecimal preco = item.precoVenda() != null ? item.precoVenda() : precoDeCadastro(item.idVariacao());
+            subtotal = subtotal.add(preco.multiply(item.qtdProduto()));
+        }
+        BigDecimal percentualMaximo = configuracaoGeralService.percentualDescontoVenda();
+        BigDecimal maximo = percentualMaximo.signum() > 0
+                ? subtotal.multiply(percentualMaximo).divide(BigDecimal.valueOf(100), 2, java.math.RoundingMode.DOWN)
+                : BigDecimal.ZERO;
+        if (desconto.compareTo(maximo) > 0) {
+            throw new IllegalArgumentException(
+                    "Desconto de R$ " + desconto + " excede o máximo permitido de " + percentualMaximo
+                            + "% (R$ " + maximo + ").");
+        }
+    }
+
+    /**
+     * A empresa a que a OS pertence — nunca a da sessão.
+     *
+     * <p>⚠️ Toda escrita de reserva tem de usar a MESMA empresa que a leitura, senão o saldo some
+     * de uma e nasce na outra. A OS é aberta numa empresa e não migra.
+     */
+    private long empresaDaOs(long idOrdemServico) {
+        return jdbc.sql("""
+                        SELECT id_empresa FROM ordem_servico
+                         WHERE id_tenant = plataforma.tenant_atual() AND id_ordem_servico = ?
+                        """)
+                .param(idOrdemServico)
+                .query(Long.class)
+                .optional()
+                .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Ordem de serviço não encontrada."));
+    }
+
     private void liberarReservas(long idOrdemServico) {
         record Reserva(long idEmpresa, long idVariacao, BigDecimal qtd) {
         }

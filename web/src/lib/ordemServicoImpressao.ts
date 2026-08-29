@@ -34,6 +34,17 @@ function formatarData(iso: string): string {
   return new Date(iso).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })
 }
 
+/**
+ * Quantidade como o resto do produto imprime: vírgula decimal, sem casa sobrando no inteiro.
+ *
+ * ⚠️ Interpolar o `number` cru saía "2.5" com PONTO na via do cliente (achado de auditoria,
+ * 2026-08-29) — enquanto a papeleta de venda da mesma loja imprime "2,5" e a grade da própria OS
+ * mostra "2,500". Não erra dinheiro; erra o documento entregue ao cliente.
+ */
+function qtdImpressa(qtd: number): string {
+  return Number.isInteger(qtd) ? String(qtd) : String(qtd).replace('.', ',')
+}
+
 /** Quebra em 42 colunas sem cortar palavra no meio. */
 function quebrar(texto: string): string[] {
   const saida: string[] = []
@@ -84,7 +95,7 @@ export function montarLinhasOrdemServicoBobina(os: OrdemServico): string[] {
       // O executor sai na via do cliente de propósito: numa oficina ele é a referência de quem
       // procurar quando o serviço volta.
       if (item.nomeFuncionario) linhas.push(`  por ${item.nomeFuncionario}`.slice(0, LARGURA))
-      linhas.push(doisLados(`  ${item.qtdProduto} x ${formatarMoeda(item.precoVenda)}`,
+      linhas.push(doisLados(`  ${qtdImpressa(item.qtdProduto)} x ${formatarMoeda(item.precoVenda)}`,
         formatarMoeda(item.total)))
     }
     linhas.push(doisLados('  Subtotal servicos', formatarMoeda(os.totalServicos)))
@@ -96,7 +107,7 @@ export function montarLinhasOrdemServicoBobina(os: OrdemServico): string[] {
     for (const item of pecas) {
       const variacao = [item.variacaoCor, item.variacaoTamanho].filter(Boolean).join(' ')
       linhas.push(`${item.descricaoProduto}${variacao ? ' ' + variacao : ''}`.slice(0, LARGURA))
-      linhas.push(doisLados(`  ${item.qtdProduto} x ${formatarMoeda(item.precoVenda)}`,
+      linhas.push(doisLados(`  ${qtdImpressa(item.qtdProduto)} x ${formatarMoeda(item.precoVenda)}`,
         formatarMoeda(item.total)))
     }
     linhas.push(doisLados('  Subtotal pecas', formatarMoeda(os.totalPecas)))

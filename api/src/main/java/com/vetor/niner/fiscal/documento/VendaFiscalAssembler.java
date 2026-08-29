@@ -25,6 +25,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.OffsetDateTime;
@@ -154,7 +155,11 @@ public class VendaFiscalAssembler {
                 new OperacaoFiscal(TipoOperacao.VENDA, ufDestino, tipoDestinatario, itensOperacao),
                 new ContextoFiscalEmpresa(config.crt(), config.uf()));
 
-        List<Pagamento> pagamentos = buscarPagamentos(idVenda);
+        // ⚠️ Rateado para fechar com o vNF (2026-08-29). Ver `ratearParaOTotalDaNota`: numa venda
+        // MISTA (serviço + mercadoria) os itens são filtrados e os pagamentos não eram, e o XML
+        // saía declarando mais dinheiro do que a nota vale.
+        List<Pagamento> pagamentos = ratearParaOTotalDaNota(
+                buscarPagamentos(idVenda), calculo.totais().valorNota());
 
         Emitente emitente = new Emitente(config.cnpj(), config.razaoSocial(), config.nomeFantasia(),
                 config.inscricaoEstadual(), config.crt(), config.logradouro(), config.numero(),
@@ -522,6 +527,51 @@ public class VendaFiscalAssembler {
      * de pagamento no XML, e {@code contas_receber} grava 3 linhas (uma por parcela) para o mesmo
      * meio.
      */
+    /**
+     * Ajusta os pagamentos para somarem <b>exatamente</b> o total da nota.
+     *
+     * <p>⛔ <b>O defeito que isto conserta é de venda MISTA</b> (achado de auditoria, 2026-08-29).
+     * {@code buscarItens} filtra {@code tipo_item = 'MERCADORIA'} — certo, NFC-e é documento de
+     * ICMS — mas {@code buscarPagamentos} soma {@code contas_receber} da venda <b>inteira</b>. Numa
+     * OS de oficina com R$ 200 de mão de obra + R$ 100 de peça pagos em dinheiro, o XML saía com
+     * {@code vNF = 100,00} e {@code vPag = 300,00}.
+     *
+     * <p>⚠️ E o pior caso não é a SEFAZ rejeitar: é <b>autorizar</b> uma nota que declara R$ 300
+     * pagos contra R$ 100 de mercadoria. Venda mista é o caso <b>normal</b> de oficina e petshop
+     * (a OS nasce com serviço E peças, DS14), e com {@code cfg_emite_fiscal_apos_venda} ligado a
+     * emissão é automática — ninguém olharia o XML.
+     *
+     * <p>O rateio é <b>proporcional</b> e o resto do arredondamento vai na última forma, mesmo
+     * padrão de {@code PdvVendaService.ratear}: assim a soma bate no centavo, que é o que a regra
+     * de conferência do modelo 65 exige.
+     *
+     * <p>⚠️ Venda sem serviço nenhuma — a esmagadora maioria — passa <b>intacta</b> pelo atalho da
+     * primeira linha: os valores já são iguais, e reprocessar introduziria risco de arredondamento
+     * onde não havia problema.
+     */
+    // Visível ao teste de propósito: é lógica pura de dinheiro, e testá-la pelo assembler
+    // inteiro exigiria montar empresa, perfil fiscal e motor tributário para provar uma soma.
+    static List<Pagamento> ratearParaOTotalDaNota(List<Pagamento> pagamentos, BigDecimal valorNota) {
+        BigDecimal totalPago = pagamentos.stream()
+                .map(Pagamento::valor).reduce(BigDecimal.ZERO, BigDecimal::add);
+        if (totalPago.compareTo(valorNota) == 0 || totalPago.signum() == 0) {
+            return pagamentos;
+        }
+
+        List<Pagamento> ajustados = new ArrayList<>();
+        BigDecimal acumulado = BigDecimal.ZERO;
+        for (int i = 0; i < pagamentos.size(); i++) {
+            Pagamento p = pagamentos.get(i);
+            BigDecimal parte = i == pagamentos.size() - 1
+                    // A última absorve o resto — garante que a soma feche exatamente no vNF.
+                    ? valorNota.subtract(acumulado)
+                    : p.valor().multiply(valorNota).divide(totalPago, 2, RoundingMode.DOWN);
+            acumulado = acumulado.add(parte);
+            ajustados.add(new Pagamento(p.codigoMeioPagamento(), parte, p.bandeira(), p.cnpjCredenciadora()));
+        }
+        return ajustados;
+    }
+
     private List<Pagamento> buscarPagamentos(long idVenda) {
         return jdbc.sql("""
                         SELECT tc.codigo_tpag, tc.codigo_bandeira, tc.cnpj_credenciadora, tc.nome_carteira,

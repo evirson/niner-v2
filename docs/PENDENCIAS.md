@@ -20,7 +20,7 @@
 > **Hoje:** **9 itens esperam por ele** (🔵) e **5 são minha bola** (🟢). O mais novo e o único que
 > bloqueia decisão é o **#55** — cancelar a venda deixa a OS (e o orçamento) órfãos.
 
-**Estado na data desta revisão:** 56 telas do ERP + 3 públicas · 1065 testes verdes, **1 ou 2 pulados conforme a HORA** — o guard de meia-noite do `HorarioAcessoTest`, que se pula sozinho quando a janela pedida cruzaria a virada do dia (rodando às 23h50 são 2; de manhã, 0). ⚠️ Não é regressão, e o número oscilar é o mecanismo funcionando (tudo medido, não estimado; a contagem de telas é a de `docs/TELAS.md`, que declara a base).
+**Estado na data desta revisão:** 56 telas do ERP + 3 públicas · 1065 testes verdes, **de 0 a 5 pulados conforme a HORA** — o guard de meia-noite do `HorarioAcessoTest`, que se pula sozinho quando a janela pedida cruzaria a virada do dia (à meia-noite são 5 — 4 do horário de acesso e 1 do 2FA —, de manhã 0). ⚠️ Não é regressão, e o número oscilar é o mecanismo funcionando (tudo medido, não estimado; a contagem de telas é a de `docs/TELAS.md`, que declara a base).
 
 ---
 
@@ -384,6 +384,62 @@ proteção. Está registrado no comentário de `ConfiguracaoGeralService.atualiz
 sincronização que rodavam a cada gravação de estoque e de preço), 36 classes Java, 3 telas, 14
 testes, a dependência do WireMock, as variáveis `NINER_ML_*` e duas linhas de `cfg_tela` (RBAC).
 Suíte depois da remoção: **1024 testes verdes, 0 pulados**.
+
+---
+
+## 2026-08-29 — auditoria por agentes: 5 rodadas, front e back em paralelo
+
+Pedido dele: *"dois agentes em paralelo, 5 rodadas cada, para ser preciso na varredura; procure a
+fundo o ERP, verifique tudo"* — e, da rodada 2 em diante, **varrer o ERP inteiro**.
+
+O que foi corrigido está em `docs/PROGRESSO.md`. Aqui ficam só os itens que **dependem de decisão
+dele** ou que sobraram por escolha.
+
+### 57. Fluxo de Caixa soma o fundo de troco a CADA abertura 🔵
+
+`FluxoCaixaService.saldoAte` soma `SUM(cm.saldo_inicial)` de **todos** os caixas abertos até a data,
+e nada retira esse dinheiro depois — `CaixaService.fechar` não grava saída, e não existe sangria.
+
+**Medido no código:** loja que abre todo dia com R$ 200 de fundo de troco (a mesma cédula que dorme
+na gaveta) e não vende nada tem, após 20 dias úteis, **"saldo real: R$ 4.000"** na tela — com R$ 200
+na gaveta. A Projeção parte desse número, e a conciliação não denuncia porque os dois lados usam a
+mesma soma inflada.
+
+⚠️ **Não corrigi por conta própria**: `docs/telas/fluxo-caixa.md` justifica a linha considerando só
+o **primeiro** dia de uso ("o teste acusou −150 onde o dinheiro real era 850"), e o caso da segunda
+abertura em diante não é tratado ali. A pergunta é de produto:
+
+- `saldo_inicial` é **dinheiro que permanece na gaveta** (fundo de troco reaproveitado)? Então só a
+  primeira abertura da série deveria contar — ou o fechamento deveria abatê-lo.
+- Ou é **aporte novo** a cada dia? Então o certo é um lançamento em `caixa_detalhe`, e a coluna sai
+  do somatório.
+
+### 58. Cinco travas de concorrência ausentes em rotinas de dinheiro 🟢
+
+Nenhuma tem gatilho fácil, e todas exigem duas requisições simultâneas — por isso não entraram na
+correção imediata, mas todas são reais:
+
+1. **Limite de crédito** (`PdvVendaService.validarLimiteCredito`) lê o saldo em aberto e insere
+   depois, sem `FOR UPDATE` na linha do cliente. Dois caixas vendendo R$ 800 em crediário para o
+   mesmo cliente com limite de R$ 1.000 gravam **os dois**. ⭐ O modelo certo está ao lado:
+   `LimiteVendasService` incrementa e valida na mesma chamada, de propósito.
+2. **Devolução de Produtos** confere o saldo devolvível sem travar — duplo clique gera **dois vales**
+   e devolve a peça duas vezes. A irmã (`DevolucaoCompraService.travarEstoque`) trava e documenta
+   por quê.
+3. **Fechar caixa duas vezes** duplica `caixa_fechamento_conferencia` (a tabela não tem UNIQUE e o
+   `SELECT` do caixa não trava) — a tela de fechamento passa a mostrar cada carteira em dobro.
+4. **`PUT /estoque/entradas/{id}/itens/{idDetalhe}`** altera o ledger de uma entrada **cancelada**
+   (não confere `pmm.cancelado`). Sem tela que chame — só por chamada direta à API.
+5. **Fuso na importação** (`ContasReceberImportador`, `ProdutoImportador`) usa
+   `ZoneId.systemDefault()` em vez do fuso da loja. ⚠️ Hoje **não** dá defeito em produção
+   (`docker-compose.prod.yml` define `TZ`), mas é fragilidade dependente de variável de ambiente.
+
+### 59. Dois `exigirAdmin` que existem e nunca são chamados 🟢
+
+`CancelamentoVendaService.exigirAdmin` e `EntradaMercadoriaService.exigirAdmin` são código morto, e
+os javadocs das duas classes ainda afirmam *"ADMIN-only… rejeita OPERADOR com 403"*. Hoje quem
+governa é o `@Acao(EXCLUIR)` do RBAC. ⚠️ Não é bug de comportamento — são **duas afirmações falsas
+em doc de código** sobre quem pode desfazer venda e entrada.
 
 ---
 

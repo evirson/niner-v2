@@ -500,6 +500,48 @@ class OrdemServicoTest {
         return ((Number) JsonPath.read(resp, "$.idOrdemServico")).longValue();
     }
 
+    /**
+     * ⭐ O preço da OS é CONGELADO — a venda sai pelo preço que a OS fechou, não pelo de hoje.
+     *
+     * <p><b>O defeito que este teste prende</b> (achado de auditoria, 2026-08-29): o
+     * {@code resolverItens} do PDV testava só {@code item.ehDoOrcamento()}, e a linha vinda da OS
+     * chega com {@code daOrdemServico: true} e {@code doOrcamento} ausente — o preço congelado
+     * <b>nunca era aplicado</b> e a venda saía pelo cadastro de hoje.
+     *
+     * <p>⚠️ <b>Por que o teste que existia não pegou:</b> {@code osConcluidaViraVendaNoPdv...} cria
+     * a OS sem preço explícito e nunca mexe no cadastro — preço da OS = preço de cadastro, e as
+     * duas fontes ficam indistinguíveis. Aqui o cadastro é <b>reajustado depois</b> de a OS existir,
+     * que é o único jeito de separar uma da outra.
+     *
+     * <p>⚠️ O sintoma engana nas duas direções: preço para MAIS recusa a venda com <i>"os
+     * pagamentos não fecham o saldo"</i> (mensagem sobre pagamento para um problema de preço); para
+     * MENOS, a venda fecha e a loja cobra menos do que aprovou, sem erro nenhum.
+     */
+    @Test
+    void aVendaUsaOPrecoCONGELADOdaOsMesmoDepoisDeReajuste() throws Exception {
+        prepararTenant("z5");
+        long id = criarOs("1");   // peça a 45,00 + serviço a 120,00 = 165,00
+        mvc.perform(put("/api/v1/ordens-servico/" + id + "/situacao?para=CONCLUIDA")
+                .header("Authorization", "Bearer " + token)).andExpect(status().isOk());
+
+        // O lojista reajusta a tabela DEPOIS de a OS estar fechada com o cliente.
+        try (Connection c = abrirConexao();
+             PreparedStatement ps = c.prepareStatement("""
+                     UPDATE produto SET preco_venda = preco_venda * 2
+                      WHERE id_produto IN (SELECT id_produto FROM produto_barra WHERE id_variacao IN (?, ?))
+                     """)) {
+            ps.setLong(1, idVariacaoPeca);
+            ps.setLong(2, idVariacaoServico);
+            ps.executeUpdate();
+        }
+
+        abrirCaixa();
+        // A venda continua fechando em 165,00 — o preço que a OS prometeu, não os 330,00 de hoje.
+        venderDaOs(id, "165.00")
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.valorTotalProdutos").value(165.00));
+    }
+
     @Test
     void osNaoConcluidaNaoViraVenda() throws Exception {
         prepararTenant("n");
