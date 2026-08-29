@@ -211,7 +211,7 @@ class FiscalConfigCrudTest {
                         .header("Authorization", "Bearer " + token)
                         .contentType(APPLICATION_JSON)
                         .content(corpo(1, false, 1, 9,
-                                ",\"cscId\":\"000001\",\"cscToken\":\"SEGREDO-DO-CSC\"")))
+                                ",\"cscId\":\"000001\",\"cscToken\":\"SEGREDO-DO-CSC-0123456789abcdef0123\"")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.cscConfigurado").value(true))
                 // F7: o token não aparece em nenhum campo da resposta.
@@ -236,7 +236,7 @@ class FiscalConfigCrudTest {
                         .header("Authorization", "Bearer " + token)
                         .contentType(APPLICATION_JSON)
                         .content(corpo(1, false, 1, 9,
-                                ",\"cscToken\":\"SEGREDO-DO-CSC\"")))
+                                ",\"cscToken\":\"SEGREDO-DO-CSC-0123456789abcdef0123\"")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.cscConfigurado").value(true));
 

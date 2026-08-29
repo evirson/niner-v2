@@ -61,9 +61,27 @@ public class LimiteRequisicaoFilter extends OncePerRequestFilter {
         this.limiteBeacon = limiteBeacon;
     }
 
+    /**
+     * Login do <b>backoffice</b> — a credencial mais valiosa do produto, e a que estava de fora
+     * (auditoria 2026-08-29).
+     *
+     * <p>⚠️ O filtro cobria só {@code /api/publico/**}, então {@code POST /api/admin/sessao} tinha
+     * apenas a zona genérica do nginx (600 r/min) e <b>nenhum</b> contador: dava para varrer senhas
+     * de staff indefinidamente. Um token de staff alcança a lista de contas, os leads (LGPD), o
+     * CSRT por UF e a configuração da plataforma. Efeito secundário do mesmo buraco: cada
+     * tentativa roda um BCrypt (a comparação acontece <b>mesmo com e-mail inexistente</b>, de
+     * propósito, para não vazar por tempo), então 600/min por IP saturam um núcleo — negação de
+     * serviço barata.
+     */
+    private static final String LOGIN_STAFF = "/api/admin/sessao";
+
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
-        return !habilitado || !request.getRequestURI().startsWith("/api/publico/");
+        if (!habilitado) {
+            return true;
+        }
+        String uri = request.getRequestURI();
+        return !uri.startsWith("/api/publico/") && !uri.startsWith(LOGIN_STAFF);
     }
 
     @Override
@@ -71,6 +89,8 @@ public class LimiteRequisicaoFilter extends OncePerRequestFilter {
             throws ServletException, IOException {
 
         boolean beacon = req.getRequestURI().startsWith("/api/publico/eventos");
+        // Login de staff entra no MESMO balde de escrita do signup — é POST e é adivinhável.
+        boolean loginStaff = req.getRequestURI().startsWith(LOGIN_STAFF);
         // GET público (catálogo de planos) é leitura barata e cacheável: fora do limite.
         if (!beacon && !"POST".equalsIgnoreCase(req.getMethod())) {
             chain.doFilter(req, resp);
@@ -78,7 +98,7 @@ public class LimiteRequisicaoFilter extends OncePerRequestFilter {
         }
         // Webhook de gateway não entra no limite: quem chama é o Mercado Pago, e recusar
         // notificação por excesso significaria perder confirmação de pagamento.
-        if (req.getRequestURI().startsWith("/api/publico/webhooks/")) {
+        if (!loginStaff && req.getRequestURI().startsWith("/api/publico/webhooks/")) {
             chain.doFilter(req, resp);
             return;
         }

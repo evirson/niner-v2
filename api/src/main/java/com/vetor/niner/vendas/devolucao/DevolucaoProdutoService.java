@@ -373,12 +373,19 @@ public class DevolucaoProdutoService {
             // vale de R$ 90,00, com o operador sem ter como explicar. `precoUnitario` continua
             // BRUTO de propósito — é a chave de linha que casa com a venda.
             BigDecimal descontoUnitario = v.descontoUnitario() != null ? v.descontoUnitario() : BigDecimal.ZERO;
-            BigDecimal totalLiquido = precoUnitario.subtract(descontoUnitario).multiply(v.qtdVendida())
-                    .setScale(2, java.math.RoundingMode.HALF_UP);
+            // ⚠️ **6 casas, não 2** (auditoria 2026-08-29, rodada 3). O rateio unitário é dízima o
+            // tempo todo — R$ 10 de desconto em 3 unidades dá 3,3333… — e a efetivação arredonda
+            // UMA vez, no desconto da linha inteira (`descontoDaLinha`, HALF_UP). Mandando o
+            // unitário já arredondado a 2 casas, a tela multiplicava 3,33 × 3 = 9,99 e prometia
+            // R$ 20,01 onde o vale ia valer R$ 20,00: o mesmo defeito de antes, com um centavo em
+            // vez de dez reais. Com casas suficientes, o front reproduz a conta do servidor.
+            BigDecimal descontoUnitarioPreciso = descontoUnitario.setScale(6, java.math.RoundingMode.HALF_UP);
+            BigDecimal totalLiquido = precoUnitario.multiply(v.qtdVendida())
+                    .subtract(descontoUnitario.multiply(v.qtdVendida()).setScale(2, java.math.RoundingMode.HALF_UP));
             resultado.add(new ItemVendaOrigemResponse(
                     v.idVariacao(), v.sku(), v.descricaoProduto(), v.variacaoCor(), v.variacaoTamanho(),
                     v.qtdVendida(), disponivel, precoUnitario,
-                    descontoUnitario.setScale(2, java.math.RoundingMode.HALF_UP), totalLiquido));
+                    descontoUnitarioPreciso, totalLiquido));
         }
         return resultado;
     }

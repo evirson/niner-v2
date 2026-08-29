@@ -1,4 +1,5 @@
 import CabecalhoModal from '../../../components/CabecalhoModal'
+import { usePermissaoDaTela } from '../../../lib/usePermissaoDaTela'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
@@ -23,7 +24,6 @@ import {
   type EntradaResumoResponse,
 } from '../../../lib/entradaMercadoria'
 import { buscarFornecedoresEmissao, LIMITE_BUSCA_EMISSAO, type FornecedorOpcaoEmissao } from '../../../lib/etiquetaEmissao'
-import { useEu } from '../../../lib/eu'
 import { dataParaIso, dataValida, formatarMoeda, mascararData } from '../../../lib/masks'
 import { maiusculas } from '../../../lib/texto'
 
@@ -57,8 +57,7 @@ const ORIGENS: Record<string, string> = {
 export default function EntradaMercadoriaLista() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
-  const { data: eu } = useEu()
-  const isAdmin = eu?.usuario.papel === 'ADMIN'
+  const podeCancelar = usePermissaoDaTela('entrada-produtos-compra').excluir
   const [pagina, setPagina] = useState(1)
   const [ordenarPor, setOrdenarPor] = useState<ColunaOrdenacaoEntrada>('dataMovimento')
   const [direcao, setDirecao] = useState<'ASC' | 'DESC'>('DESC')
@@ -245,7 +244,11 @@ export default function EntradaMercadoriaLista() {
                       >
                         <IconeOlho />
                       </Link>
-                      {isAdmin && !e.cancelada && (
+                      {/* ⚠️ Permissão, não papel (rodada 3): o `exigirAdmin` do serviço saiu em
+                          2026-08-29 e a V077 deu `tem_excluir` a esta tela — o admin PODE conceder
+                          o cancelamento a um operador. Escondendo por `isAdmin`, a permissão ficava
+                          concedida, gravada e inalcançável. Mesma ponta do "Cancelar venda". */}
+                      {podeCancelar && !e.cancelada && (
                         <button
                           type="button"
                           className="acao-icone acao-excluir"

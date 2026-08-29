@@ -356,12 +356,30 @@ export default function DevolucaoProduto() {
   const faltaNumeroVendaObrigatorio = exigeNumeroVenda && !numeroVendaTexto.trim()
   const podeConfirmar = itens.length > 0 && !algumItemComErro && !faltaNumeroVendaObrigatorio
   const qtdTotal = itens.reduce((soma, i) => soma + desmascararQuantidade(i.qtdTexto, permiteQtdDecimal), 0)
-  // ⚠️ LÍQUIDO — é o valor do vale que vai ser emitido. Somar o bruto aqui fazia a tela
-  // prometer um crédito que o servidor não ia gravar (auditoria 2026-08-29).
-  const valorTotal = itens.reduce(
-    (soma, i) => soma + desmascararQuantidade(i.qtdTexto, permiteQtdDecimal) * (i.precoVenda - i.descontoUnitario),
+  /**
+   * ⚠️ Desconto da linha **arredondado UMA vez**, exatamente como a efetivação grava
+   * (`descontoDaLinha`, HALF_UP em `DevolucaoProdutoService`). Multiplicar um unitário já
+   * arredondado dava outro centavo: R$ 10 de desconto em 3 unidades vira 3,3333… e a tela
+   * prometia R$ 20,01 onde o vale valia R$ 20,00. O servidor manda o unitário com 6 casas
+   * justamente para o front conseguir refazer a conta dele.
+   */
+  const descontoDaLinha = (item: ItemLinha, qtd: number) =>
+    Math.round(qtd * item.descontoUnitario * 100) / 100
+  const totalDaLinha = (item: ItemLinha, qtd: number) =>
+    qtd * item.precoVenda - descontoDaLinha(item, qtd)
+
+  // Subtotal BRUTO, descontos e total LÍQUIDO — as três linhas que o comprovante do vale imprime.
+  // A grade mostra as três: uma coluna que não soma ela mesma é o que o operador confere com o
+  // cliente na frente (regressão da rodada 1, achada na rodada 3).
+  const subtotalBruto = itens.reduce(
+    (soma, i) => soma + desmascararQuantidade(i.qtdTexto, permiteQtdDecimal) * i.precoVenda,
     0,
   )
+  const descontoTotal = itens.reduce(
+    (soma, i) => soma + descontoDaLinha(i, desmascararQuantidade(i.qtdTexto, permiteQtdDecimal)),
+    0,
+  )
+  const valorTotal = subtotalBruto - descontoTotal
 
   return (
     <div className="lista-tela">
@@ -515,6 +533,7 @@ export default function DevolucaoProduto() {
                       <th>Variação</th>
                       <th style={{ textAlign: 'right' }}>Quantidade</th>
                       <th style={{ textAlign: 'right' }}>Valor Unitário</th>
+                      <th style={{ textAlign: 'right' }}>Desconto</th>
                       <th style={{ textAlign: 'right' }}>Valor Total</th>
                       <th aria-label="Ações" />
                     </tr>
@@ -547,7 +566,10 @@ export default function DevolucaoProduto() {
                             {moeda(item.precoVenda)}
                           </td>
                           <td className="mono" style={{ textAlign: 'right' }}>
-                            {moeda(qtdNumero * item.precoVenda)}
+                            {descontoDaLinha(item, qtdNumero) > 0 ? `- ${moeda(descontoDaLinha(item, qtdNumero))}` : '—'}
+                          </td>
+                          <td className="mono" style={{ textAlign: 'right' }}>
+                            {moeda(totalDaLinha(item, qtdNumero))}
                           </td>
                           <td className="acoes-cell">
                             <button
@@ -573,6 +595,9 @@ export default function DevolucaoProduto() {
                         <strong>{formatarQuantidade(qtdTotal, permiteQtdDecimal)}</strong>
                       </td>
                       <td />
+                      <td className="mono" style={{ textAlign: 'right' }}>
+                        {descontoTotal > 0 ? <strong>- {moeda(descontoTotal)}</strong> : null}
+                      </td>
                       <td className="mono" style={{ textAlign: 'right' }}>
                         <strong>{moeda(valorTotal)}</strong>
                       </td>

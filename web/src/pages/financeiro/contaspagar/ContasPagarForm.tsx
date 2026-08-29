@@ -124,7 +124,11 @@ export default function ContasPagarForm({ somenteLeitura = false }: { somenteLei
       editando ? atualizarContaPagar(Number(id), paraRequisicao(form)) : criarContaPagar(paraRequisicao(form)),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['contas-pagar'] })
+      // ⚠️ `replace` (rodada 3): sem ele o formulário fica no histórico, e o ✕ do popup de
+      // filtros da lista — que faz `navigate(-1)` — devolvia o operador para o formulário em
+      // branco que ele acabou de salvar.
       navigate('/contas-pagar', {
+        replace: true,
         state: {
           toast: {
             texto: editando ? 'Conta a pagar atualizada com sucesso.' : 'Conta a pagar cadastrada com sucesso.',

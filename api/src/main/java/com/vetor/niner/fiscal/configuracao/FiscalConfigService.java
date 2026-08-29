@@ -331,7 +331,14 @@ public class FiscalConfigService {
             return null;
         }
         if (!vazio(req.cscToken())) {
-            return cifrador.cifrar(req.cscToken());
+            // ⚠️ **`trim` antes de cifrar** (auditoria 2026-08-29, rodada 3). O CSC tem 36
+            // caracteres e é colado do portal da SEFAZ; levar um espaço ou uma quebra de linha
+            // na seleção é o modo NORMAL de errar num campo desses. O campo é `type="password"`,
+            // então nada aparece na tela, `cscConfigurado` vira `true`, e TODA NFC-e volta com
+            // `cStat 464 — hash do QR Code difere do calculado`, que não menciona CSC em lugar
+            // nenhum. Era o único campo do request que não passava por `trim` (os outros três
+            // passam já no front).
+            return cifrador.cifrar(req.cscToken().trim());
         }
         if (!atual.configurado() || !atual.cscConfigurado()) {
             return null;

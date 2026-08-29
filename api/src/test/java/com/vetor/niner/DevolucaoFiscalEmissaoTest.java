@@ -306,7 +306,7 @@ class DevolucaoFiscalEmissaoTest {
                         .content("""
                                 {"crt":1,"emiteNfce":true,"emiteNfe":%s,
                                  "ambiente":"HOMOLOGACAO","serieNfce":1,"serieNfe":1,"serieContingencia":9,
-                                 "cscId":"000001","cscToken":"csc-fake-de-teste"}
+                                 "cscId":"000001","cscToken":"csc-fake-de-teste-0123456789abcdef01"}
                                 """.formatted(emiteNfe)))
                 .andExpect(status().isOk());
     }

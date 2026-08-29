@@ -54,6 +54,13 @@ class PrivilegiosNinerAppTest {
         return DriverManager.getConnection(postgres.getJdbcUrl(), "niner_app", "dev_app");
     }
 
+    /** Conexão do container (superusuário) — usada só para INSPECIONAR o catálogo do Postgres,
+     *  nunca para exercitar privilégio (para isso vale só {@link #conexaoApp()}). */
+    private Connection conexaoDeInspecao() throws SQLException {
+        return DriverManager.getConnection(
+                postgres.getJdbcUrl(), postgres.getUsername(), postgres.getPassword());
+    }
+
     /** P8: a role da app nunca pode escapar do RLS nem ser dona do banco. */
     @Test
     void ninerAppNaoTemBypassRlsNemSuperusuario() throws Exception {
@@ -71,6 +78,57 @@ class PrivilegiosNinerAppTest {
      * P3 / V024: {@code produto_movimento_mestre} é imutável — correção é sempre um novo
      * movimento compensatório, nunca edição do original.
      */
+    /**
+     * A sangria de caixa é <b>rastro de dinheiro saindo da gaveta</b>: a V094 concede só
+     * {@code SELECT, INSERT} de propósito, para que um DELETE acidental falhe no banco em vez de
+     * sumir com o rastro (P3).
+     *
+     * <p>⚠️ <b>Essa decisão não estava travada por nada</b> (auditoria 2026-08-29). A suíte conecta
+     * como superusuário do container, então {@code SangriaCaixaCrudTest} fica verde qualquer que
+     * seja o GRANT — e bastaria uma migration futura repetir o laço genérico da V024/V025
+     * ({@code GRANT SELECT, INSERT, UPDATE, DELETE ON %I}) incluindo {@code caixa_sangria} para a
+     * proteção sumir sem nenhum vermelho. É o roteiro do incidente do Cancelamento de Entrada, ao
+     * contrário.
+     */
+    @Test
+    void sangriaDeCaixaNaoPodeSerApagadaNemEditadaPorNinerApp() throws Exception {
+        try (Connection c = conexaoApp(); Statement st = c.createStatement()) {
+            permissaoNegada(st, "DELETE FROM caixa_sangria");
+            permissaoNegada(st, "UPDATE caixa_sangria SET valor = 1 WHERE false");
+        }
+    }
+
+    /**
+     * P8 vale para <b>toda</b> tabela de tenant, inclusive a que ainda vai ser criada.
+     *
+     * <p>⚠️ O guarda-corpo que checava isso era repetido dentro das migrations (V024–V031) e
+     * <b>deixou de ser copiado a partir da V033</b> (auditoria 2026-08-29). Hoje nenhuma tabela
+     * está descoberta — conferido uma a uma —, mas o guarda só valia no dia em que cada migration
+     * rodou. Aqui ele passa a valer para sempre: uma tabela nova com {@code id_tenant} e sem
+     * RLS nasceria legível por <b>todos os tenants</b>, e nem o Flyway nem a suíte reclamariam.
+     *
+     * <p>⛔ {@code plataforma.*} é a exceção documentada (control plane, fora do RLS de tenant).
+     */
+    @Test
+    void todaTabelaComIdTenantTemRlsHabilitadoEForcado() throws Exception {
+        try (Connection c = conexaoDeInspecao(); Statement st = c.createStatement();
+             var rs = st.executeQuery("""
+                     SELECT string_agg(c.relname, ', ' ORDER BY c.relname)
+                       FROM pg_class c
+                       JOIN pg_namespace n ON n.oid = c.relnamespace
+                      WHERE n.nspname = 'public' AND c.relkind = 'r'
+                        AND EXISTS (SELECT 1 FROM pg_attribute a
+                                     WHERE a.attrelid = c.oid AND a.attname = 'id_tenant'
+                                       AND NOT a.attisdropped)
+                        AND NOT (c.relrowsecurity AND c.relforcerowsecurity)
+                     """)) {
+            assertThat(rs.next()).isTrue();
+            assertThat(rs.getString(1))
+                    .as("tabelas com id_tenant sem ROW LEVEL SECURITY habilitado E forçado (P8)")
+                    .isNull();
+        }
+    }
+
     @Test
     void ledgerDeEstoqueEhImutavelParaNinerApp() throws Exception {
         try (Connection c = conexaoApp(); Statement st = c.createStatement()) {

@@ -73,7 +73,10 @@ export default function UsuarioPermissoes() {
       // `isFetching`, e um refetch de foco (Alt-Tab e voltar) reescrevia a grade inteira,
       // **apagando as marcações que o admin fez depois de salvar** — sem aviso, e ele salvava
       // de novo achando que tinha salvado tudo.
-      queryClient.setQueryData(['permissoes', idUsuario], grade)
+      // ⚠️ A RESPOSTA do servidor, não a grade local: ele pode recortar o que foi enviado
+      // (teto do próprio usuário, tela `admin_apenas` descartada), e gravar a intenção fazia o
+      // cache afirmar caixas marcadas que nunca foram persistidas.
+      queryClient.setQueryData(['permissoes', idUsuario], r)
       queryClient.invalidateQueries({ queryKey: ['minhas-permissoes'] })
     },
     onError: (e) => setErro(e instanceof ApiError ? e.message : 'Não foi possível salvar as permissões.'),

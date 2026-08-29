@@ -97,7 +97,7 @@ class FiscalInutilizacaoTest {
                         .content("""
                                 {"crt":1,"emiteNfce":true,"emiteNfe":false,
                                  "ambiente":"HOMOLOGACAO","serieNfce":1,"serieNfe":1,"serieContingencia":9,
-                                 "cscId":"000001","cscToken":"csc-fake-de-teste"}
+                                 "cscId":"000001","cscToken":"csc-fake-de-teste-0123456789abcdef01"}
                                 """))
                 .andExpect(status().isOk());
     }

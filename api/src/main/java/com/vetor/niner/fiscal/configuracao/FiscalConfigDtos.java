@@ -3,6 +3,7 @@ package com.vetor.niner.fiscal.configuracao;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 
 import java.time.OffsetDateTime;
@@ -35,7 +36,22 @@ public final class FiscalConfigDtos {
             @Size(max = 20) String inscricaoEstadualSt,
             @Size(max = 20) String suframa,
             @Size(max = 60) String cscId,
-            String cscToken,
+            // ⚠️ Tamanho MÍNIMO, não só o máximo (auditoria 2026-08-29). É o GÊMEO do defeito que o
+            // campo do CSRT ganhou em 2026-08-24 e que ficou aberto aqui: sem piso, o Token do CSC
+            // aceita qualquer coisa — o número do credenciamento, um CSRT, um pedaço colado errado
+            // — e o erro só aparece na PRÓXIMA NFC-e, como `cStat 464` ("Código de Hash no QR-Code
+            // difere do calculado"), que não menciona CSC em lugar nenhum.
+            // ⚠️ Isto NÃO teria impedido o caso real de 29/08: o valor gravado tinha 36 caracteres
+            // válidos, só não era o credenciado. Piso barra a confusão grosseira, não a troca de
+            // um segredo por outro do mesmo formato.
+            // ⚠️ VAZIO continua valendo "manter o que está gravado" (convenção do projeto para
+            // segredo) — por isso `@Pattern` com alternativa vazia, e não `@Size(min)`, que
+            // barraria quem só quer mudar a série ou a inscrição estadual.
+            @Pattern(regexp = "|.{20,200}", flags = Pattern.Flag.DOTALL,
+                    message = "O CSC tem 36 caracteres — confira se você não colou o CSRT ou o "
+                            + "número do credenciamento por engano. Ele é gerado no portal da "
+                            + "SEFAZ, junto com o identificador (ID do CSC).")
+            @Size(max = 200) String cscToken,
             Boolean removerCsc) {
     }
 

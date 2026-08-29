@@ -195,6 +195,7 @@ export default function SelecaoItensVendaModal({
                       <th>Descrição do Produto</th>
                       <th style={{ textAlign: 'right' }}>Qtd. Vendida</th>
                       <th style={{ textAlign: 'right' }}>Preço Unitário</th>
+                      <th style={{ textAlign: 'right' }}>Desconto</th>
                       <th style={{ textAlign: 'right' }}>Preço Total</th>
                       <th aria-label="Selecionar" />
                     </tr>
@@ -238,20 +239,18 @@ export default function SelecaoItensVendaModal({
                           <td className="mono" style={{ textAlign: 'right' }}>
                             {formatarQuantidade(item.qtdVendida, permiteQtdDecimal)}
                           </td>
-                          {/* ⚠️ Unitário LÍQUIDO — o que o cliente pagou por unidade (2026-08-29).
-                              Mostrar o bruto ao lado de um total líquido fazia a linha não fechar:
-                              1 × R$ 100,00 aparecia com total R$ 90,00. O bruto continua no
-                              `title`, porque é ele que identifica a linha da venda. */}
-                          <td
-                            className="mono"
-                            style={{ textAlign: 'right' }}
-                            title={
-                              item.descontoUnitario > 0
-                                ? `Preço da venda ${moeda(item.precoUnitario)} − desconto ${moeda(item.descontoUnitario)}`
-                                : undefined
-                            }
-                          >
-                            {moeda(item.precoUnitario - item.descontoUnitario)}
+                          {/* ⚠️ Unitário BRUTO + coluna de DESCONTO (rodada 3). Exibir o unitário líquido ao
+                              lado do total líquido parecia fechar, mas o rateio é dízima — 3 un. com
+                              R$ 10 de desconto dá 6,67 × 3 = 20,01 contra um total de 20,00 — e ainda
+                              contradizia a grade da Devolução, que mostra o bruto. As duas telas agora
+                              mostram bruto, desconto e líquido, como a papeleta e o comprovante. */}
+                          <td className="mono" style={{ textAlign: 'right' }}>
+                            {moeda(item.precoUnitario)}
+                          </td>
+                          <td className="mono" style={{ textAlign: 'right' }}>
+                            {item.descontoUnitario > 0
+                              ? `- ${moeda(item.qtdVendida * item.precoUnitario - item.valorTotal)}`
+                              : '—'}
                           </td>
                           <td className="mono" style={{ textAlign: 'right' }}>
                             {moeda(item.valorTotal)}

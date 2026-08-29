@@ -46,8 +46,24 @@ public class GcsArmazenamento implements ArmazenamentoDeArquivos {
         return chave;
     }
 
+    /**
+     * ⚠️ <b>Confere o prefixo do tenant antes de apagar</b> (auditoria 2026-08-29) — o adapter
+     * privado ({@code S3ArmazenamentoPrivado.exigirChaveDoTenant}) já fazia isso e este não, sem
+     * nenhuma justificativa escrita para a assimetria.
+     *
+     * <p>Vale mesmo para chave lida do banco, e é justamente esse o ponto: se um SELECT esquecer
+     * o filtro de {@code id_tenant} — o defeito que a auditoria de 2026-08-08 <b>provou ser
+     * possível</b> neste projeto —, a exclusão apagaria a foto de produto de <b>outra loja</b>,
+     * de forma irreversível e sem erro nenhum. Defesa em profundidade: o filtro do SELECT
+     * continua sendo a trava principal (P8), esta é a segunda.
+     */
     @Override
     public void apagar(String chave) {
+        String prefixo = "tenants/%d/".formatted(TenantContext.idTenantAtual());
+        if (chave == null || !chave.startsWith(prefixo)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                    "Chave de armazenamento fora do escopo do tenant atual.");
+        }
         try {
             Blob existente = storage.get(BlobId.of(props.bucket(), chave));
             if (existente != null) {

@@ -81,7 +81,9 @@ function paraRequisicao(f: FormState): FiscalConfigRequest {
     cscId: f.cscId.trim() || null,
     // Sem token digitado e sem pedido de remoção: omite o campo — o backend preserva o que
     // já está gravado. Mandar string vazia apagaria o CSC em silêncio (F7).
-    ...(f.removerCsc ? { removerCsc: true } : f.cscToken ? { cscToken: f.cscToken } : {}),
+    // ⚠️ `.trim()`: era o único campo sem ele, e um espaço colado junto do CSC quebra TODA
+    // NFC-e com `cStat 464` — sem nada aparecer na tela, porque o campo é de senha.
+    ...(f.removerCsc ? { removerCsc: true } : f.cscToken.trim() ? { cscToken: f.cscToken.trim() } : {}),
   }
 }
 

@@ -181,6 +181,17 @@ export default function FormaPagamentoModal({
       ? formatarPercentual(arredondar2((descontoInicial / valorTotal) * 100))
       : ''
   const [descontoPercentualTexto, setDescontoPercentualTexto] = useState(percentualInicialTexto)
+  /**
+   * ⚠️ **Intenção, não comparação de texto** (rodada 3 da auditoria de 2026-08-29). As guardas do
+   * `onBlur` eram `!texto.trim()` e `texto === percentualInicialTexto`, e as duas erravam:
+   *  • apagar o campo de propósito (entrar, Delete, sair) **não zerava** o desconto — o R$ ficava
+   *    com o valor do orçamento e o operador jurava tê-lo removido;
+   *  • a segunda guarda **nunca expirava**: alterar para 3% e voltar digitando `5,00` caía nela,
+   *    deixando a tela mostrando 5% com R$ 30,00 cobrados.
+   * Um booleano que morre no primeiro `onChange` separa "nunca toquei" de "editei", que é a
+   * pergunta real.
+   */
+  const [percentualTocado, setPercentualTocado] = useState(false)
   const [descontoValorTexto, setDescontoValorTexto] = useState(
     descontoInicial && descontoInicial > 0 ? formatarMoeda(descontoInicial) : '',
   )
@@ -238,15 +249,11 @@ export default function FormaPagamentoModal({
   const descontoTravado = pagamentos.length > 0
 
   const aoSairDescontoPercentual = (texto: string) => {
-    // ⚠️ Campo em branco é "não mexi", NUNCA "zere o valor ao lado" — mesma lição do
-    // `aoSairQtd` da Contagem de Estoque. Sem esta linha, sair de um campo % vazio apagava um
-    // desconto que veio do orçamento e que o operador nunca tocou.
-    if (!texto.trim()) return
-    // ⚠️ Texto intocado = o percentual que NÓS semeamos do documento de origem. Recalcular o R$
-    // a partir dele PERDE CENTAVOS, porque o % só carrega 2 casas: R$ 33,33 sobre R$ 1.000 vira
-    // 3,33% e volta como R$ 33,30. O valor que veio do documento é o exato; ele só cede quando o
-    // operador de fato digitar outro percentual.
-    if (texto === percentualInicialTexto) return
+    // ⚠️ Campo NUNCA tocado não recalcula nada: o R$ que veio do orçamento é o valor exato, e
+    // derivá-lo do % (que só carrega 2 casas) PERDE CENTAVOS — R$ 33,33 sobre R$ 1.000 vira 3,33%
+    // e volta como R$ 33,30. Depois que o operador edita, o % manda: inclusive apagar, que é como
+    // ele zera o desconto.
+    if (!percentualTocado) return
     const completo = completarPercentual(texto)
     const percentual = Math.min(Math.max(desmascararPercentual(completo), 0), percentualMaximoPermitido)
     const valor = arredondar2((valorTotalProdutos * percentual) / 100)
@@ -526,7 +533,10 @@ export default function FormaPagamentoModal({
                       value={descontoPercentualTexto}
                       disabled={descontoTravado}
                       title={descontoTravado ? 'Remova os pagamentos lançados para alterar o desconto.' : undefined}
-                      onChange={(e) => setDescontoPercentualTexto(mascararPercentual(e.target.value))}
+                      onChange={(e) => {
+                        setPercentualTocado(true)
+                        setDescontoPercentualTexto(mascararPercentual(e.target.value))
+                      }}
                       onBlur={(e) => aoSairDescontoPercentual(e.target.value)}
                       onFocus={(e) => e.target.select()}
                     />

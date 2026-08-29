@@ -58,7 +58,13 @@ class AcaoAnotadaCasaComOVerboTest {
             "CaixaController.reabrir",
             "RecebimentoCrediarioController.estornar",
             "BalancoEstoqueController.desfazer",
-            "OrdemServicoController.cancelar");
+            "OrdemServicoController.cancelar",
+            // Cancelar orçamento entrou aqui em 2026-08-29 (auditoria, rodada 2): era o ÚNICO
+            // desfazer do sistema SEM `@Acao(EXCLUIR)`, e sem ela o interceptor caía no verbo —
+            // POST → INCLUIR —, de modo que quem podia EMITIR orçamento cancelava o de qualquer
+            // colega, num documento imutável com preço congelado. Desfaz de verdade: marca
+            // CANCELADO e destrói o compromisso de preço. Ver V096.
+            "OrcamentoController.cancelar");
 
     private static final Pattern ANOTACAO = Pattern.compile(
             "@Acao\\(PermissaoService\\.Acao\\.([A-Z_]+)\\)");

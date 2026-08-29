@@ -652,7 +652,7 @@ class MontadorXmlNfceTest {
     }
 
     private static CscEmpresa csc() {
-        return new CscEmpresa("000001", "csc-fake-de-teste");
+        return new CscEmpresa("000001", "csc-fake-de-teste-0123456789abcdef01");
     }
 
     /** Mesma fórmula de {@code MontadorXmlNfce.sha1Hex} — recalculada aqui, não importada, porque

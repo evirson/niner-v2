@@ -282,7 +282,7 @@ class AssinadorXmlNfeTest {
                 new ResponsavelTecnico(CNPJ, "MITRYUSCASH", "suporte@nainer.com.br", "4133334444", null, null),
                 new UrlsConsultaUf("http://www.fazenda.pr.gov.br/nfce/qrcode",
                         "http://www.fazenda.pr.gov.br/nfce/consulta"),
-                new CscEmpresa("000001", "csc-fake-de-teste"),
+                new CscEmpresa("000001", "csc-fake-de-teste-0123456789abcdef01"),
                 "Niner 1.0"));
     }
 }

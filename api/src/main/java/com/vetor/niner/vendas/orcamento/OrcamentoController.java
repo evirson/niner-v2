@@ -1,5 +1,7 @@
 package com.vetor.niner.vendas.orcamento;
 
+import com.vetor.niner.identidade.permissao.Acao;
+import com.vetor.niner.identidade.permissao.PermissaoService;
 import com.vetor.niner.identidade.permissao.Tela;
 
 import com.vetor.niner.vendas.orcamento.OrcamentoDtos.CancelarOrcamentoRequest;
@@ -74,6 +76,15 @@ public class OrcamentoController {
         return service.buscar(jwt, idOrcamento);
     }
 
+    /**
+     * ⚠️ <b>Desfazer é EXCLUIR</b> (V077) — e este era o único desfazer do sistema sem a
+     * anotação (auditoria 2026-08-29). Sem ela o interceptor cai na regra por verbo (POST →
+     * INCLUIR), e quem podia <b>emitir</b> orçamento cancelava o de qualquer colega — um
+     * documento imutável, com preço congelado que a loja se comprometeu a honrar. O admin não
+     * tinha como impedir: a caixa "excluir" nem aparecia na grade (V096 corrige o catálogo e
+     * migra as concessões).
+     */
+    @Acao(PermissaoService.Acao.EXCLUIR)
     @PostMapping("/{idOrcamento}/cancelar")
     public OrcamentoCanceladoResponse cancelar(@AuthenticationPrincipal Jwt jwt,
                                                @PathVariable long idOrcamento,

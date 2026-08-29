@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react'
-import { NavLink, Outlet, useNavigate } from 'react-router-dom'
+import LimiteDeErro from './LimiteDeErro'
+import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../lib/auth'
 import { useEu } from '../lib/eu'
 import { useMenuFiltrado } from '../lib/useMenuFiltrado'
@@ -19,6 +20,7 @@ const CHAVE_RECOLHIDO = 'niner_nav_recolhido'
 export default function Layout() {
   const { logout } = useAuth()
   const navigate = useNavigate()
+  const { pathname } = useLocation()
   const { data: eu } = useEu()
   // ⛔ Os três filtros num hook único (2026-08-29): a lateral, a página-hub e a busca do topo
   // divergiam, e só esta aplicava `filtrarPorPermissao` — tela negada sumia do menu e continuava
@@ -110,7 +112,14 @@ export default function Layout() {
           })}
         </nav>
         <main className="app-main">
-          <Outlet />
+          {/* ⚠️ O boundary fica AQUI, não em volta das rotas (rodada 3 da auditoria 2026-08-29).
+              Envolvendo `<Routes>` inteiro ele substituía a aplicação toda — inclusive o menu —
+              enquanto a mensagem mandava "use o menu para ir a outra tela". E, sem menu, nada
+              podia mudar a rota, que é a chave de reset: o usuário ficava preso numa tela sem
+              saída. Dentro do `<main>`, o menu sobrevive e navegar limpa o erro. */}
+          <LimiteDeErro chaveDeReset={pathname}>
+            <Outlet />
+          </LimiteDeErro>
         </main>
       </div>
     </div>
