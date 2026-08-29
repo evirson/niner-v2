@@ -98,7 +98,7 @@ public class LimiteRequisicaoFilter extends OncePerRequestFilter {
         }
         // Webhook de gateway não entra no limite: quem chama é o Mercado Pago, e recusar
         // notificação por excesso significaria perder confirmação de pagamento.
-        if (!loginStaff && req.getRequestURI().startsWith("/api/publico/webhooks/")) {
+        if (req.getRequestURI().startsWith("/api/publico/webhooks/")) {
             chain.doFilter(req, resp);
             return;
         }

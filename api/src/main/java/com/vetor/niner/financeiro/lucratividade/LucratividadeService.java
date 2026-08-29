@@ -72,8 +72,11 @@ public class LucratividadeService {
         // permissão por tela (PermissaoInterceptor). Era o defeito das "duas trancas na mesma
         // porta", que o commit fa85474 removeu de outras dez telas e esqueceu destas duas.
         validarPeriodo(dataInicial, dataFinal);
-        List<Long> idsEmpresa = (idsEmpresaSolicitadas == null || idsEmpresaSolicitadas.isEmpty())
-                ? null : idsEmpresaSolicitadas;
+        // ⛔ OPERADOR fica preso à empresa da SESSÃO (auditoria 2026-08-29). Esta tela deixou de ser
+        // ADMIN-only, e sem o filtro o gerente da Filial abriria a Lucratividade CONSOLIDADA do
+        // tenant — ou escolheria a empresa que quisesse mandando `idsEmpresa` na URL. Mesma regra
+        // do Fluxo de Caixa; a DRE tinha o mesmo buraco.
+        List<Long> idsEmpresa = resolverIdsEmpresa(jwt, idsEmpresaSolicitadas);
 
         BigDecimal[] vendas = apurarVendas(dataInicial, dataFinal, idsEmpresa);
         BigDecimal[] devolucoes = apurarDevolucoes(dataInicial, dataFinal, idsEmpresa);
@@ -362,5 +365,15 @@ public class LucratividadeService {
             params.addAll(idsEmpresa);
         }
         return params;
+    }
+
+    /** ADMIN filtra livremente (vazio = todas); qualquer outro papel só a empresa ativa da sessão. */
+    private static List<Long> resolverIdsEmpresa(Jwt jwt, List<Long> idsEmpresaSolicitadas) {
+        List<String> roles = jwt.getClaimAsStringList("roles");
+        boolean admin = roles != null && roles.contains("ADMIN");
+        if (!admin) {
+            return List.of(((Number) jwt.getClaim("eid")).longValue());
+        }
+        return (idsEmpresaSolicitadas == null || idsEmpresaSolicitadas.isEmpty()) ? null : idsEmpresaSolicitadas;
     }
 }

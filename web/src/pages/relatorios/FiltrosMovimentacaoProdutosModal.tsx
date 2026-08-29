@@ -124,6 +124,7 @@ export default function FiltrosMovimentacaoProdutosModal({
             <div style={{ display: 'flex', gap: 6 }}>
               <input
                 className="mono"
+                autoFocus
                 placeholder="dd/mm/aaaa"
                 value={valores.dataInicial}
                 onChange={(e) => aoMudar({ dataInicial: mascararData(e.target.value) })}

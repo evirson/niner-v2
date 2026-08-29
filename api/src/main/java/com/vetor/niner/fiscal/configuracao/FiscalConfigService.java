@@ -125,7 +125,7 @@ public class FiscalConfigService {
                             req.emiteNfce(), req.emiteNfe(), ambienteParaGravar(req).name(),
                             req.serieNfce(), req.serieNfe(), req.serieContingencia(),
                             req.inscricaoEstadualSt(), req.suframa(),
-                            req.cscId(), cscToken, idEmpresa)
+                            trimOuNulo(req.cscId()), cscToken, idEmpresa)
                     .update();
         } else {
             jdbc.sql("""
@@ -142,7 +142,7 @@ public class FiscalConfigService {
                             req.emiteNfce(), req.emiteNfe(), ambienteParaGravar(req).name(),
                             req.serieNfce(), req.serieNfe(), req.serieContingencia(),
                             req.inscricaoEstadualSt(), req.suframa(),
-                            req.cscId(), cscToken)
+                            trimOuNulo(req.cscId()), cscToken)
                     .update();
         }
         return carregar(idEmpresa);
@@ -248,7 +248,7 @@ public class FiscalConfigService {
         // CSC só existe pro modelo 65 (QR Code da NFC-e) — a NF-e (modelo 55) não imprime QR pro
         // consumidor, então não trava por isso. Achado em 2026-08-19: sem este gate, dava pra
         // ligar emite_nfce sem CSC e todo QR Code impresso saía com "URL mal formatado" na SEFAZ.
-        if (ligandoNfce && (vazio(req.cscId()) || cscToken == null)) {
+        if (ligandoNfce && (vazio(trimOuNulo(req.cscId())) || cscToken == null)) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
                     "Não é possível ligar a emissão de NFC-e: CSC (Código de Segurança do "
                             + "Contribuinte) não configurado — obrigatório para o QR Code do cupom.");
@@ -473,5 +473,10 @@ public class FiscalConfigService {
     private static ResponseStatusException naoEncontrada(long idEmpresa) {
         return new ResponseStatusException(HttpStatus.NOT_FOUND,
                 "Empresa %d não encontrada neste tenant.".formatted(idEmpresa));
+    }
+
+    /** {@code trim} que preserva {@code null} — o ID do CSC é colado do portal como o token. */
+    private static String trimOuNulo(String valor) {
+        return valor == null ? null : valor.trim();
     }
 }

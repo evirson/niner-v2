@@ -79,6 +79,7 @@ export default function FiltrosEstoqueModal({
               Modelo
             </label>
             <select
+              autoFocus
               value={valores.modelo}
               onChange={(e) => aoMudar({ modelo: e.target.value as ModeloRelatorioEstoque })}
               aria-label="Modelo do relatório"

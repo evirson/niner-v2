@@ -120,13 +120,31 @@ export default function FluxoCaixa() {
   const consulta = aba === 'REALIZADO' ? realizado : projecao
   const temDados = aba === 'REALIZADO' ? Boolean(realizado.data) : Boolean(projecao.data)
 
-  /** Trocar de aba troca o período padrão (mês corrente × próximos 90 dias) — mas só quando o
-   *  usuário ainda não mexeu nos filtros, pra não jogar fora uma escolha dele. */
+  /**
+   * Trocar de aba troca o período padrão (mês corrente × próximos 90 dias) — mas só quando o
+   * usuário ainda não mexeu nos filtros, para não jogar fora uma escolha dele.
+   *
+   * ⛔ **A guarda era `if (!gerado)`, e isso é código MORTO** (auditoria 2026-08-29): `gerado` é
+   * justamente a condição que destrava as abas — o popup de filtros nasce aberto e cobre a tela
+   * inteira, então quando o usuário consegue clicar numa aba `gerado` já é `true`. Resultado: a
+   * **Projeção rodava sempre no período do Realizado**, isto é, num intervalo inteiramente no
+   * PASSADO. A tela dizia "Projeção a partir do saldo de hoje" sobre dias já vencidos, e o
+   * lojista concluía que não tinha nada a receber nem a pagar nos próximos 90 dias.
+   *
+   * A pergunta certa não é "já gerou?", é "o período ainda é o padrão?" — que é o que o docstring
+   * sempre prometeu.
+   */
   function trocarAba(nova: Aba) {
+    const padraoDaAtual = filtrosIniciais(aba)
+    const periodoIntocado =
+      aplicado.dataInicial === padraoDaAtual.dataInicial && aplicado.dataFinal === padraoDaAtual.dataFinal
     setAba(nova)
-    if (!gerado) {
-      setAplicado(filtrosIniciais(nova))
-      setRascunho(filtrosIniciais(nova))
+    if (periodoIntocado) {
+      const padraoDaNova = filtrosIniciais(nova)
+      // Só as DATAS mudam com a aba: empresa, origem e agrupamento são escolha do usuário e
+      // sobrevivem à troca.
+      setAplicado((atual) => ({ ...atual, dataInicial: padraoDaNova.dataInicial, dataFinal: padraoDaNova.dataFinal }))
+      setRascunho((atual) => ({ ...atual, dataInicial: padraoDaNova.dataInicial, dataFinal: padraoDaNova.dataFinal }))
     }
   }
 

@@ -11,6 +11,74 @@ Registro cronológico das decisões e entregas. Atualizar a cada marco relevante
 
 ## Estado atual
 
+> ## 📌 2026-08-29 (5) — rodada 4 da auditoria: a DRE vazava empresa, e a Projeção olhava para o passado
+>
+> A rodada 4 rodou com os dois agentes em paralelo (front e back). Cinco achados confirmados, e o
+> primeiro é de **vazamento entre empresas do mesmo tenant** — não entre tenants, mas com o mesmo
+> efeito prático para o lojista que tem Matriz e Filial.
+>
+> - ⛔ **DRE e Lucratividade entregavam o consolidado do tenant a qualquer OPERADOR.** As duas
+>   deixaram de ser `admin_apenas` na **V078**, e a rodada 2 tirou o `RequireAdmin` da rota — mas
+>   `resolverIdsEmpresa` continuou devolvendo "todas as empresas" para qualquer papel, com um
+>   javadoc afirmando *"qualquer outro papel não chega aqui (ADMIN-only)"*. O gerente da Filial
+>   abria o relatório e lia **receita, CMV, comissões e pró-labore da Matriz** — e bastava mandar
+>   `idsEmpresa=1` na URL para escolher a empresa que quisesse. O irmão
+>   `FluxoCaixaService.resolverEmpresas` sempre fez o certo: **os dois discordavam, e ninguém
+>   comparou**. ⚠️ A lição não é o filtro que faltava, é que **invariante afirmado em javadoc
+>   apodrece quando outra camada muda** — e este apodreceu sem nada reclamar, porque o `jwt` sequer
+>   era lido pelo método.
+> - ⛔ **A Projeção do Fluxo de Caixa rodava sempre no período do Realizado** — um intervalo
+>   inteiramente no **passado**. A guarda `if (!gerado)` era **código morto**: `gerado` é justamente
+>   a condição que destrava as abas (o popup de filtros nasce aberto e cobre a tela), então quando
+>   o usuário consegue clicar numa aba ela já é `true`. A tela dizia *"Projeção a partir do saldo de
+>   hoje"* sobre dias vencidos, e o lojista concluía que **não tinha nada a receber nem a pagar nos
+>   próximos 90 dias**. A pergunta certa não é *"já gerou?"*, é *"o período ainda é o padrão?"* — o
+>   que o próprio docstring prometia.
+> - **ID do CSC sem `trim`**: `MontadorXmlNfce` faz `Integer.parseInt` nele, e um espaço colado do
+>   portal vira `NumberFormatException` não tratada — a venda recebe **500 sem mensagem** em vez do
+>   `cStat 464` legível. Só o token tinha ganhado a proteção na rodada 3; o ID vem do mesmo portal,
+>   na mesma tela, para o mesmo QR Code.
+> - **Piso do CSC baixado de 36 para 16 caracteres.** O piso de 36 era o tamanho do **Paraná**, e o
+>   produto atende os 27 entes: quem gera o CSC é cada SEFAZ, então travar no tamanho do PR
+>   impediria a loja de outra UF de cadastrar o código correto dela — com uma mensagem afirmando um
+>   tamanho que não é o seu, num campo `type="password"` em que ninguém vê o que colou. O piso serve
+>   contra a confusão grosseira (o número do credenciamento, 5 dígitos), não contra a troca de um
+>   segredo por outro do mesmo formato.
+> - **Devolução: resíduo do vale-mercadoria.** O casamento do desconto é por `(variação, preço)`,
+>   mas o contrato antigo (request sem `precoUnitario`) manda o **preço médio** da venda — que,
+>   quando o mesmo SKU aparece duas vezes com preços diferentes, não é nenhum dos preços do ledger.
+>   O casamento saía vazio, o desconto virava **zero** e o vale voltava ao **bruto**: 1×R$ 80 +
+>   1×R$ 120 com R$ 20 de desconto gerava vale de R$ 100 por mercadoria que o cliente pagou menos.
+>   Agora há fallback pela variação, **saindo da mesma população** que o preço médio usa.
+> - **Toast de erro saindo verde** na Configuração de Etiqueta (`toastTipo` é estado e fica preso no
+>   último valor: depois de um "Testar Impressão" bem-sucedido, a gravação recusada saía em verde,
+>   com `role="status"` em vez de `role="alert"`), e `autoFocus` faltando em dois modais de filtro.
+>
+> ### ⭐ E a V096 tinha saído VAZIA — pela quarta vez o mesmo defeito
+>
+> A **V097** conserta a migração de concessões da V096: migration roda como `niner_owner`, e
+> `FORCE ROW LEVEL SECURITY` **não poupa nem o dono da tabela**. Medido neste banco — e é a
+> diferença entre as duas leituras que prova o mecanismo:
+>
+> ```
+> SET app.id_tenant=1; SELECT count(*) FROM usuario_permissao;  -->  4
+> (sem SET)            SELECT count(*) FROM usuario_permissao;  -->  0
+> ```
+>
+> O Flyway anunciou **sucesso**. Em produção o vendedor que cancelava orçamento ontem levaria **403
+> hoje** — tirado em silêncio, exatamente o que a V096 dizia estar evitando. Já mordeu na **V057**,
+> na **V089** e agora na **V096**.
+>
+> ⭐ **O conserto durável não é a V097, é o `MigrationQueMexeEmDadoDeTenantTest`**: ele varre
+> `db/migration`, descobre pelo próprio DDL quais tabelas têm `id_tenant`, e reprova qualquer
+> migration futura que faça `UPDATE`/`DELETE`/`INSERT … SELECT` nelas sem a liberação. O
+> guarda-corpo desta regra existia **copiado dentro das migrations** (V024–V031) e deixou de ser
+> repetido a partir da V033 — ou seja, valia só no dia em que cada uma rodou. As oito migrations já
+> aplicadas entram numa lista de isenção **conferida uma a uma no banco**, com o motivo escrito.
+>
+> **1045 testes verdes** (0 pulados, 0 falhas) · `tsc -b` limpo · migrations até **V097**.
+
+
 > ## 📌 2026-08-29 (4) — o fechamento passou a exigir a sangria (V095)
 >
 > Apresentei a ele as três saídas da pendência **#64** — a que a Sangria de Caixa abriu — e ele

@@ -181,12 +181,19 @@ export default function EtiquetaConfigForm({ somenteLeitura = false }: { somente
       setToastTipo('sucesso')
       setToast('Configuração salva. O teste imprime sempre a versão gravada.')
     },
-    onError: (e: unknown) =>
+    onError: (e: unknown) => {
+      // ⚠️ `setToastTipo('erro')` (auditoria 2026-08-29): o tipo é ESTADO e fica preso no último
+      // valor. Depois de um "Testar Impressão" bem-sucedido — que grava `'sucesso'` — uma
+      // gravação recusada pelo servidor saía num toast VERDE, numa tela de calibragem em que o
+      // operador está justamente procurando sinal de que algo deu errado. E `role="status"` em
+      // vez de `role="alert"`, então nem o leitor de tela anunciava como erro.
+      setToastTipo('erro')
       setToast(
         e instanceof ApiError
           ? e.message
           : 'Não foi possível salvar a configuração — o teste imprime sempre a versão gravada, então nada foi impresso.',
-      ),
+      )
+    },
   })
 
   const campoTexto = (chave: 'nome') => (e: ChangeEvent<HTMLInputElement>) =>
@@ -324,6 +331,7 @@ export default function EtiquetaConfigForm({ somenteLeitura = false }: { somente
     }
     setErros(novosErros)
     if (Object.values(novosErros).some(Boolean)) {
+      setToastTipo('erro')
       setToast('Corrija os campos destacados antes de salvar.')
       return false
     }

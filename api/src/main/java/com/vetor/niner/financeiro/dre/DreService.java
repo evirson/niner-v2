@@ -129,8 +129,28 @@ public class DreService {
         }
     }
 
-    /** ADMIN filtra livremente (vazio = todas); qualquer outro papel não chega aqui (ADMIN-only). */
+    /**
+     * ADMIN filtra livremente (vazio = todas); qualquer outro papel fica preso à empresa da sessão.
+     *
+     * <p>⛔ <b>Isto passou a ser necessário na auditoria de 2026-08-29, e por culpa da rodada
+     * anterior.</b> O javadoc que ficava aqui dizia <i>"qualquer outro papel não chega aqui
+     * (ADMIN-only)"</i> — verdade até a V078 tirar estas telas de {@code admin_apenas} e a
+     * rodada 2 remover o {@code RequireAdmin} da rota. A partir dali um OPERADOR podia receber a
+     * tela por concessão do administrador e, sem este filtro, veria a DRE/Lucratividade
+     * <b>consolidada do tenant inteiro</b>: o gerente da Filial abriria o relatório e leria
+     * receita, CMV, comissões e pró-labore da Matriz. Bastava também mandar {@code idsEmpresa=1}
+     * na URL para escolher a empresa que quisesse.
+     *
+     * <p>⚠️ Invariante afirmado em javadoc apodrece quando outra camada muda — e este apodreceu
+     * sem que nada reclamasse, porque o {@code jwt} sequer era lido. O irmão
+     * {@code FluxoCaixaService.resolverEmpresas} sempre fez o certo; os dois discordavam.
+     */
     private static List<Long> resolverIdsEmpresa(Jwt jwt, List<Long> idsEmpresaSolicitadas) {
+        List<String> roles = jwt.getClaimAsStringList("roles");
+        boolean admin = roles != null && roles.contains("ADMIN");
+        if (!admin) {
+            return List.of(((Number) jwt.getClaim("eid")).longValue());
+        }
         return (idsEmpresaSolicitadas == null || idsEmpresaSolicitadas.isEmpty()) ? null : idsEmpresaSolicitadas;
     }
 

@@ -452,6 +452,38 @@ public class DevolucaoProdutoService {
                 .params(numeroVenda, idVariacao, precoVenda)
                 .query(BigDecimal.class)
                 .optional()
+                // ⚠️ **Fallback pela VARIAÇÃO quando o preço não casa** (auditoria 2026-08-29,
+                // rodada 3). O casamento é por `preco_venda = ?`, e o contrato antigo (request sem
+                // `precoUnitario`) manda o preço MÉDIO da venda — que, quando o mesmo SKU aparece
+                // duas vezes com preços diferentes, não é nenhum dos preços do ledger. O casamento
+                // devolvia vazio, o desconto virava ZERO, e o vale saía pelo BRUTO: uma venda de
+                // 1×R$ 80 + 1×R$ 120 com R$ 20 de desconto gerava vale de R$ 100 por mercadoria que
+                // o cliente pagou menos — e estornava comissão sobre o bruto. Era o resíduo do
+                // mesmo defeito que a rodada 1 fechou nos outros caminhos.
+                .orElseGet(() -> descontoUnitarioMedioDaVariacao(numeroVenda, idVariacao));
+    }
+
+    /**
+     * Desconto unitário médio da VARIAÇÃO na venda, sem casar preço — o par exato do preço médio
+     * que {@code resolverItens} usa quando o request não identifica a linha. As duas contas
+     * precisam sair da mesma população, senão o desconto não corresponde ao preço.
+     */
+    private BigDecimal descontoUnitarioMedioDaVariacao(Long numeroVenda, long idVariacao) {
+        if (numeroVenda == null) {
+            return BigDecimal.ZERO;
+        }
+        return jdbc.sql("""
+                        SELECT COALESCE(SUM(pmd.valor_desconto), 0) / NULLIF(SUM(pmd.qtd_produto), 0)
+                          FROM produto_movimento_mestre pmm
+                          JOIN produto_movimento_detalhe pmd
+                                 ON pmd.id_tenant = pmm.id_tenant AND pmd.id_movimento = pmm.id_movimento
+                         WHERE pmm.id_tenant = plataforma.tenant_atual()
+                           AND pmm.id_venda = ? AND pmm.tipo_movimento = 'VENDA'
+                           AND pmd.id_variacao = ?
+                        """)
+                .params(numeroVenda, idVariacao)
+                .query(BigDecimal.class)
+                .optional()
                 .orElse(BigDecimal.ZERO);
     }
 

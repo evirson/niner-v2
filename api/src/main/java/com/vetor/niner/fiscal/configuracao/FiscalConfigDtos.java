@@ -35,6 +35,12 @@ public final class FiscalConfigDtos {
             @NotNull @Min(1) @Max(999) Integer serieContingencia,
             @Size(max = 20) String inscricaoEstadualSt,
             @Size(max = 20) String suframa,
+            // ⚠️ O ID do CSC entra no MESMO QR Code e é colado do MESMO portal, na mesma tela
+            // (auditoria 2026-08-29). `MontadorXmlNfce` faz `Integer.parseInt` nele: um espaço
+            // junto vira `NumberFormatException` — que não é tratada — e a venda recebe **500 sem
+            // mensagem** em vez do `cStat 464` legível. Só o token tinha ganhado a proteção.
+            @Pattern(regexp = "|\\s*\\d{1,6}\\s*",
+                    message = "O ID do CSC é numérico (ex.: 000001) — ele vem ao lado do código no portal da SEFAZ.")
             @Size(max = 60) String cscId,
             // ⚠️ Tamanho MÍNIMO, não só o máximo (auditoria 2026-08-29). É o GÊMEO do defeito que o
             // campo do CSRT ganhou em 2026-08-24 e que ficou aberto aqui: sem piso, o Token do CSC
@@ -47,9 +53,14 @@ public final class FiscalConfigDtos {
             // ⚠️ VAZIO continua valendo "manter o que está gravado" (convenção do projeto para
             // segredo) — por isso `@Pattern` com alternativa vazia, e não `@Size(min)`, que
             // barraria quem só quer mudar a série ou a inscrição estadual.
-            @Pattern(regexp = "|.{20,200}", flags = Pattern.Flag.DOTALL,
-                    message = "O CSC tem 36 caracteres — confira se você não colou o CSRT ou o "
-                            + "número do credenciamento por engano. Ele é gerado no portal da "
+            // ⚠️ Piso 16, não 36: o produto atende os 27 entes e quem gera o CSC é cada SEFAZ — travar no
+            // tamanho do PR impediria a loja de outra UF de cadastrar o código correto dela, com uma
+            // mensagem afirmando um tamanho que não é o seu (o campo é `password`: ninguém veria).
+            // O piso serve contra a confusão grosseira (número do credenciamento, 5 dígitos), não
+            // contra a troca de um segredo por outro do mesmo formato.
+            @Pattern(regexp = "|.{16,200}", flags = Pattern.Flag.DOTALL,
+                    message = "O CSC costuma ter 36 caracteres — confira se você não colou o CSRT ou "
+                            + "o número do credenciamento por engano. Ele é gerado no portal da "
                             + "SEFAZ, junto com o identificador (ID do CSC).")
             @Size(max = 200) String cscToken,
             Boolean removerCsc) {
