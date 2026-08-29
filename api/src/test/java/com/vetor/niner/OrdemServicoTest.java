@@ -414,6 +414,92 @@ class OrdemServicoTest {
     }
 
     /** ⛔ DS18 — OS que não está concluída não vira venda, e a mensagem diz o estado. */
+    /**
+     * ⭐ O executor do item da OS vira o funcionário da LINHA do movimento (DS5), e o vendedor da
+     * venda continua sendo quem fechou o caixa.
+     *
+     * <p>Este é o par que pega a regressão de 2026-08-28: ao gravar o executor por linha, cinco
+     * telas que derivavam "o vendedor da venda" do ledger (com {@code MAX(pmd.id_funcionario)} ou
+     * {@code LIMIT 1}) passaram a mostrar o <b>mecânico</b> no lugar de quem vendeu — a Pesquisa
+     * de Vendas exibiu isso primeiro. A V089 deu à venda o próprio vendedor.
+     *
+     * <p>⚠️ O caso NEGATIVO é a segunda metade: a linha da <b>peça</b>, que a OS não atribuiu a
+     * ninguém, tem de ficar com o vendedor da venda. Sem ela, uma implementação que jogasse o
+     * executor em todas as linhas passaria no positivo.
+     */
+    @Test
+    void oExecutorVaiParaALinhaEOVendedorFicaNaVenda() throws Exception {
+        prepararTenant("z4");
+        long idMecanico = criarFuncionarioMecanico();
+        long id = criarOsComExecutor(idMecanico);
+        mvc.perform(put("/api/v1/ordens-servico/" + id + "/situacao?para=CONCLUIDA")
+                .header("Authorization", "Bearer " + token)).andExpect(status().isOk());
+        abrirCaixa();
+
+        String resp = venderDaOs(id, "165.00").andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        long idVenda = ((Number) JsonPath.read(resp, "$.idVenda")).longValue();
+
+        try (Connection c = abrirConexao()) {
+            // A venda guarda quem VENDEU — o `idFuncionario` que o PDV recebeu, não o mecânico.
+            try (PreparedStatement ps = c.prepareStatement(
+                    "SELECT id_funcionario FROM venda WHERE id_venda = ?")) {
+                ps.setLong(1, idVenda);
+                try (ResultSet rs = ps.executeQuery()) {
+                    rs.next();
+                    assertThat(rs.getLong(1)).isEqualTo(idFuncionario);
+                }
+            }
+            // …e cada LINHA guarda quem executou: o serviço com o mecânico, a peça com o vendedor.
+            try (PreparedStatement ps = c.prepareStatement("""
+                    SELECT pmd.id_variacao, pmd.id_funcionario, pmd.perc_comissao
+                      FROM produto_movimento_mestre pmm
+                      JOIN produto_movimento_detalhe pmd
+                             ON pmd.id_movimento = pmm.id_movimento AND pmd.id_tenant = pmm.id_tenant
+                     WHERE pmm.id_venda = ? AND pmm.tipo_movimento = 'VENDA'
+                    """)) {
+                ps.setLong(1, idVenda);
+                int conferidas = 0;
+                try (ResultSet rs = ps.executeQuery()) {
+                    while (rs.next()) {
+                        long idVariacao = rs.getLong("id_variacao");
+                        if (idVariacao == idVariacaoServico) {
+                            assertThat(rs.getLong("id_funcionario")).isEqualTo(idMecanico);
+                            conferidas++;
+                        } else if (idVariacao == idVariacaoPeca) {
+                            assertThat(rs.getLong("id_funcionario")).isEqualTo(idFuncionario);
+                            conferidas++;
+                        }
+                        // O percentual é congelado na gravação (V088), nunca nulo em linha nova.
+                        assertThat(rs.getBigDecimal("perc_comissao")).isNotNull();
+                    }
+                }
+                assertThat(conferidas).isEqualTo(2);
+            }
+        }
+    }
+
+    private long criarFuncionarioMecanico() throws Exception {
+        String resp = mvc.perform(post("/api/v1/funcionarios").header("Authorization", "Bearer " + token)
+                        .contentType(APPLICATION_JSON)
+                        .content("{\"nome\":\"MECANICO DO SERVICO\",\"percComissao\":15.00}"))
+                .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
+        return ((Number) JsonPath.read(resp, "$.idFuncionario")).longValue();
+    }
+
+    /** Igual a criarOs("1"), mas atribuindo o SERVIÇO a um executor próprio. */
+    private long criarOsComExecutor(long idExecutor) throws Exception {
+        String body = """
+                {"idCliente":%d,"idFuncionario":%d,"objetoServico":"ABC-1234",
+                 "itens":[{"idVariacao":%d,"qtdProduto":1},
+                          {"idVariacao":%d,"qtdProduto":1,"idFuncionario":%d}]}
+                """.formatted(idCliente, idFuncionario, idVariacaoPeca, idVariacaoServico, idExecutor);
+        String resp = mvc.perform(post("/api/v1/ordens-servico").header("Authorization", "Bearer " + token)
+                        .contentType(APPLICATION_JSON).content(body))
+                .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
+        return ((Number) JsonPath.read(resp, "$.idOrdemServico")).longValue();
+    }
+
     @Test
     void osNaoConcluidaNaoViraVenda() throws Exception {
         prepararTenant("n");

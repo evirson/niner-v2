@@ -22,3 +22,12 @@ export async function gerarBlobOrcamentoA4(elemento: HTMLElement): Promise<Blob>
   doc.addImage(canvas.toDataURL('image/jpeg', 0.95), 'JPEG', 0, 0, LARGURA_A4_MM, alturaProporcional)
   return doc.output('blob')
 }
+
+/**
+ * Mesmo motor, nome honesto: a função nunca dependeu de ser um orçamento — recebe um elemento e
+ * devolve o PDF A4 dele. A Ordem de Serviço (S4) usa este alias.
+ *
+ * ⚠️ O nome antigo continua exportado porque cinco telas o chamam; renomear em massa num arquivo
+ * que já está correto é churn, não melhoria.
+ */
+export const gerarBlobDocumentoA4 = gerarBlobOrcamentoA4

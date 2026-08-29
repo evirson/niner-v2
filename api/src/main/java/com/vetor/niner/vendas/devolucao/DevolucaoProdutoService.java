@@ -355,18 +355,23 @@ public class DevolucaoProdutoService {
     private record FuncionarioVenda(Long idFuncionario, String nomeFuncionario) {
     }
 
-    /** Mesma query de {@code CancelamentoVendaService.buscarFuncionarioDaVenda} — um vendedor por
-     *  venda (não por item), gravado igual em toda linha de {@code produto_movimento_detalhe}
-     *  da venda original. Devolve {@code (null, null)} se a venda não tiver item de venda. */
+    /**
+     * O vendedor da venda original — lido de {@code venda.id_funcionario} (V089).
+     *
+     * <p>⚠️ Este javadoc dizia, até 2026-08-28, que o vendedor era "gravado igual em toda linha de
+     * {@code produto_movimento_detalhe}". <b>Deixou de ser verdade</b> na V088: cada linha passa a
+     * carregar quem EXECUTOU aquele item, e numa venda vinda de ordem de serviço o mecânico e o
+     * caixa são pessoas diferentes. A suposição estava certa quando foi escrita e virou defeito
+     * silencioso — o `LIMIT 1` devolveria o executor da primeira linha.
+     *
+     * <p>Devolve {@code (null, null)} quando a venda não tem vendedor identificado.
+     */
     private FuncionarioVenda buscarFuncionarioDaVenda(long idVenda) {
         return jdbc.sql("""
-                        SELECT pmd.id_funcionario, fn.nome AS nome_funcionario
-                        FROM produto_movimento_mestre pmm
-                        JOIN produto_movimento_detalhe pmd
-                               ON pmd.id_movimento = pmm.id_movimento AND pmd.id_tenant = pmm.id_tenant
-                        LEFT JOIN funcionario fn ON fn.id_funcionario = pmd.id_funcionario AND fn.id_tenant = pmd.id_tenant
-                        WHERE pmm.id_tenant = plataforma.tenant_atual() AND pmm.id_venda = ? AND pmm.tipo_movimento = 'VENDA'
-                        LIMIT 1
+                        SELECT v.id_funcionario, fn.nome AS nome_funcionario
+                        FROM venda v
+                        LEFT JOIN funcionario fn ON fn.id_funcionario = v.id_funcionario AND fn.id_tenant = v.id_tenant
+                        WHERE v.id_tenant = plataforma.tenant_atual() AND v.id_venda = ?
                         """)
                 .param(idVenda)
                 .query((rs, n) -> new FuncionarioVenda(getLongOuNulo(rs, "id_funcionario"), rs.getString("nome_funcionario")))

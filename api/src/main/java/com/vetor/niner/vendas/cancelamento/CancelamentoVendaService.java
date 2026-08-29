@@ -141,7 +141,9 @@ public class CancelamentoVendaService {
         String baseSelect = """
                         SELECT v.id_venda, v.id_empresa, e.razao_social AS nome_empresa, v.data_venda,
                                v.id_cliente, c.nome AS nome_cliente,
-                               MAX(pmd.id_funcionario) AS id_funcionario, MAX(fn.nome) AS nome_funcionario,
+                               -- ⚠️ Vendedor vem de `venda` (V089), não do ledger: ali
+                               -- `id_funcionario` é quem EXECUTOU a linha desde a V088.
+                               v.id_funcionario, fn.nome AS nome_funcionario,
                                v.cancelada,
                                COALESCE(SUM(CASE WHEN pmd.credito_debito = 'D'
                                    THEN pmd.qtd_produto * pmd.preco_venda - pmd.valor_desconto + pmd.valor_acrescimo
@@ -159,9 +161,10 @@ public class CancelamentoVendaService {
                                ON pmm.id_venda = v.id_venda AND pmm.id_tenant = v.id_tenant AND pmm.tipo_movimento = 'VENDA'
                         LEFT JOIN produto_movimento_detalhe pmd
                                ON pmd.id_movimento = pmm.id_movimento AND pmd.id_tenant = pmm.id_tenant
-                        LEFT JOIN funcionario fn ON fn.id_funcionario = pmd.id_funcionario AND fn.id_tenant = pmd.id_tenant
+                        LEFT JOIN funcionario fn ON fn.id_funcionario = v.id_funcionario AND fn.id_tenant = v.id_tenant
                         """;
-        String agrupamento = " GROUP BY v.id_venda, v.id_empresa, e.razao_social, v.data_venda, v.id_cliente, c.nome, v.cancelada";
+        String agrupamento = " GROUP BY v.id_venda, v.id_empresa, e.razao_social, v.data_venda, v.id_cliente, c.nome,"
+                + " v.cancelada, v.id_funcionario, fn.nome";
         String ordenacao = " ORDER BY " + coluna + " " + direcaoOrdenacao
                 + ", v.id_venda " + direcaoOrdenacao + " LIMIT ? OFFSET ?";
 
@@ -420,13 +423,10 @@ public class CancelamentoVendaService {
 
     private FuncionarioVenda buscarFuncionarioDaVenda(long idVenda) {
         return jdbc.sql("""
-                        SELECT pmd.id_funcionario, fn.nome AS nome_funcionario
-                        FROM produto_movimento_mestre pmm
-                        JOIN produto_movimento_detalhe pmd
-                               ON pmd.id_movimento = pmm.id_movimento AND pmd.id_tenant = pmm.id_tenant
-                        LEFT JOIN funcionario fn ON fn.id_funcionario = pmd.id_funcionario AND fn.id_tenant = pmd.id_tenant
-                        WHERE pmm.id_tenant = plataforma.tenant_atual() AND pmm.id_venda = ? AND pmm.tipo_movimento = 'VENDA'
-                        LIMIT 1
+                        SELECT v.id_funcionario, fn.nome AS nome_funcionario
+                        FROM venda v
+                        LEFT JOIN funcionario fn ON fn.id_funcionario = v.id_funcionario AND fn.id_tenant = v.id_tenant
+                        WHERE v.id_tenant = plataforma.tenant_atual() AND v.id_venda = ?
                         """)
                 .param(idVenda)
                 .query((rs, n) -> new FuncionarioVenda(getLongOuNulo(rs, "id_funcionario"), rs.getString("nome_funcionario")))

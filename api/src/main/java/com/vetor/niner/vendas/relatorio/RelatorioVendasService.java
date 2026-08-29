@@ -97,8 +97,9 @@ public class RelatorioVendasService {
 
     // --- Dataset-base (1 linha por venda) ------------------------------------------------
 
-    /** Vendedor = primeiro item do ledger da venda ({@code MAX(pmd.id_funcionario)}, mesmo
-     *  critério de {@code PesquisaVendaService}) — não é rateado por item. Operador de caixa =
+    /** Vendedor = {@code venda.id_funcionario} (V089), mesmo critério de
+     *  {@code PesquisaVendaService}. ⚠️ Era {@code MAX(pmd.id_funcionario)} — o ledger deixou de
+     *  servir na V088, quando cada linha passou a carregar quem EXECUTOU aquele item. Operador de caixa =
      *  usuário dono da sessão de caixa que recebeu o pagamento da venda, via {@code LATERAL}
      *  (evita multiplicar as linhas de item quando há mais de um lançamento de caixa por venda,
      *  caso de split-tender). */
@@ -150,7 +151,7 @@ public class RelatorioVendasService {
         String sql = """
                 SELECT v.id_venda, v.id_empresa, e.razao_social AS nome_empresa, v.data_venda,
                        v.id_cliente, cli.nome AS nome_cliente,
-                       MAX(pmd.id_funcionario) AS id_funcionario, MAX(fn.nome) AS nome_funcionario,
+                       v.id_funcionario, fn.nome AS nome_funcionario,
                        MAX(op.id_usuario) AS id_operador, MAX(op.nome_usuario) AS nome_operador,
                        COALESCE(SUM(pmd.qtd_produto), 0) AS qtd_itens,
                        COALESCE(SUM(pmd.qtd_produto * pmd.preco_venda), 0) AS valor_bruto,
@@ -163,7 +164,7 @@ public class RelatorioVendasService {
                        ON pmm.id_venda = v.id_venda AND pmm.id_tenant = v.id_tenant AND pmm.tipo_movimento = 'VENDA'
                 LEFT JOIN produto_movimento_detalhe pmd
                        ON pmd.id_movimento = pmm.id_movimento AND pmd.id_tenant = pmm.id_tenant AND pmd.credito_debito = 'D'
-                LEFT JOIN funcionario fn ON fn.id_funcionario = pmd.id_funcionario AND fn.id_tenant = pmd.id_tenant
+                LEFT JOIN funcionario fn ON fn.id_funcionario = v.id_funcionario AND fn.id_tenant = v.id_tenant
                 LEFT JOIN LATERAL (
                     SELECT u2.id_usuario, u2.nome_usuario
                     FROM caixa_detalhe cd2
@@ -175,7 +176,8 @@ public class RelatorioVendasService {
                 ) op ON true
                 """
                 + filtro.clausula()
-                + " GROUP BY v.id_venda, v.id_empresa, e.razao_social, v.data_venda, v.id_cliente, cli.nome"
+                + " GROUP BY v.id_venda, v.id_empresa, e.razao_social, v.data_venda, v.id_cliente, cli.nome,"
+                + " v.id_funcionario, fn.nome"
                 + " ORDER BY v.data_venda";
 
         return jdbc.sql(sql)

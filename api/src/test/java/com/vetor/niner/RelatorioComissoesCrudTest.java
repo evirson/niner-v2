@@ -219,6 +219,108 @@ class RelatorioComissoesCrudTest {
                 .andExpect(jsonPath("$.totalGeral.valorComissao").value(20.00));
     }
 
+    /**
+     * ⭐ DS5, parte 1 — o percentual usado é o CONGELADO no dia da venda (V088).
+     *
+     * <p>Este é o par que a decisão cobra explicitamente: <b>venda antiga não muda de valor</b>
+     * quando o percentual do funcionário é editado. Antes da V088 o relatório calculava
+     * `líquido × funcionario.perc_comissao` na consulta, então promover o vendedor de 10% para
+     * 25% <b>reescrevia a comissão de todos os meses passados</b> — inclusive os já pagos, que
+     * deixavam de bater com a folha que os originou.
+     */
+    @Test
+    void editarOPercentualDoFuncionarioNaoMudaAComissaoJaVendida() throws Exception {
+        TenantNovo tenant = assinarNovoTenant("congelada");
+        long idTenant = extrairIdTenant(tenant.token());
+        long idProduto = criarProdutoComPreco(tenant.token(), "Produto Comissao Congelada", "200.00");
+        long idCarteira = criarTipoCarteira(tenant.token(), "DINHEIRO CONGELADA", "AVISTA");
+        long idCliente = criarCliente(tenant.token(), "Cliente Congelada");
+        long idFuncionario = criarFuncionarioComComissao(tenant.token(), "Vendedor Congelada", "10.00");
+        abrirCaixaDinheiro(tenant.token());
+
+        try (Connection c = abrirConexao(idTenant)) {
+            long idEmpresa = buscarIdEmpresa(c);
+            long idVariacao = criarVariacao(c, idTenant, idProduto);
+            definirEstoque(c, idTenant, idEmpresa, idVariacao, new BigDecimal("10.000"));
+            efetivarVenda(tenant.token(), idVariacao, idCliente, idFuncionario, idCarteira, "200.00");
+        }
+
+        String hoje = hojeISO();
+        // A venda saiu com 10% — R$ 20,00.
+        mvc.perform(get("/api/v1/relatorios/comissoes").header("Authorization", "Bearer " + tenant.token())
+                        .param("dataInicial", hoje).param("dataFinal", hoje))
+                .andExpect(jsonPath("$.linhas[0].valorComissao").value(20.00));
+
+        // O vendedor é promovido a 25% HOJE.
+        mvc.perform(put("/api/v1/funcionarios/" + idFuncionario).header("Authorization", "Bearer " + tenant.token())
+                        .contentType(APPLICATION_JSON)
+                        .content("{\"nome\":\"VENDEDOR CONGELADA\",\"percComissao\":25.00}"))
+                .andExpect(status().isOk());
+
+        // …e a venda de antes continua valendo R$ 20,00, não R$ 50,00.
+        mvc.perform(get("/api/v1/relatorios/comissoes").header("Authorization", "Bearer " + tenant.token())
+                        .param("dataInicial", hoje).param("dataFinal", hoje))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.linhas[0].valorComissao").value(20.00))
+                .andExpect(jsonPath("$.linhas[0].percComissao").value(10.00));
+    }
+
+    /**
+     * ⭐ DS5, parte 2 — a comissão do SERVIÇO vence a da pessoa.
+     *
+     * <p>O tosador ganha 20% do banho e 10% da tosa: é a prática de mercado, e é o que
+     * {@code produto_servico.perc_comissao} passou a permitir. Aqui o funcionário tem 10% no
+     * cadastro e o serviço tem 20% — a comissão sai R$ 40,00, não R$ 20,00.
+     *
+     * <p>⚠️ O caso NEGATIVO está no teste acima ({@code vendaSemDevolucaoCalculaComissaoSobreValor
+     * Liquido}), que vende uma <b>mercadoria</b> e continua usando os 10% do funcionário — sem ele,
+     * este teste passaria com uma implementação que aplicasse 20% a tudo.
+     */
+    @Test
+    void aComissaoDoServicoVenceADoFuncionario() throws Exception {
+        TenantNovo tenant = assinarNovoTenant("comissao-servico");
+        long idTenant = extrairIdTenant(tenant.token());
+        ligarModuloDeServicos(tenant.token());
+
+        String corpoServico = """
+                {"descricao":"BANHO E TOSA","precoCusto":"0","percentualVenda":"0","precoVenda":"200.00",
+                 "tipoItem":"SERVICO","percComissaoServico":20.00}
+                """;
+        String resp = mvc.perform(post("/api/v1/produtos").header("Authorization", "Bearer " + tenant.token())
+                        .contentType(APPLICATION_JSON).content(corpoServico))
+                .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
+        long idProduto = ((Number) JsonPath.read(resp, "$.idProduto")).longValue();
+
+        long idCarteira = criarTipoCarteira(tenant.token(), "DINHEIRO SERVICO", "AVISTA");
+        long idCliente = criarCliente(tenant.token(), "Cliente do Banho");
+        long idFuncionario = criarFuncionarioComComissao(tenant.token(), "Tosador", "10.00");
+        abrirCaixaDinheiro(tenant.token());
+
+        try (Connection c = abrirConexao(idTenant)) {
+            long idVariacao = criarVariacao(c, idTenant, idProduto);
+            // ⚠️ Serviço NÃO precisa de estoque — é justamente o que a V086 garante. Se este teste
+            // exigisse definirEstoque(), ele estaria provando o contrário do que o módulo decidiu.
+            efetivarVenda(tenant.token(), idVariacao, idCliente, idFuncionario, idCarteira, "200.00");
+        }
+
+        String hoje = hojeISO();
+        mvc.perform(get("/api/v1/relatorios/comissoes").header("Authorization", "Bearer " + tenant.token())
+                        .param("dataInicial", hoje).param("dataFinal", hoje))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.linhas[0].valorVenda").value(200.00))
+                .andExpect(jsonPath("$.linhas[0].valorComissao").value(40.00))   // 20% do serviço…
+                .andExpect(jsonPath("$.linhas[0].percComissao").value(20.00));   // …e não os 10% dele
+    }
+
+    private void ligarModuloDeServicos(String token) throws Exception {
+        String atual = mvc.perform(get("/api/v1/config-geral").header("Authorization", "Bearer " + token))
+                .andReturn().getResponse().getContentAsString();
+        mvc.perform(put("/api/v1/config-geral").header("Authorization", "Bearer " + token)
+                        .contentType(APPLICATION_JSON)
+                        .content(atual.replaceFirst("\"cfgUsaServicos\":\s*false", "\"cfgUsaServicos\":true")))
+                .andExpect(status().isOk());
+    }
+
     @Test
     void devolucaoComVendedorIdentificadoReduzValorLiquidoEComissao() throws Exception {
         TenantNovo tenant = assinarNovoTenant("com-devolucao");

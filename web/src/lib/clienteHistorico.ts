@@ -1,4 +1,5 @@
 import { api } from './api'
+import type { SituacaoOs } from './ordensServico'
 import type { CategoriaCarteira } from './tiposCarteira'
 
 export interface VendaHistorico {
@@ -53,11 +54,21 @@ export interface ResumoCrediario {
   total: ResumoParcelasComJuros
 }
 
+/** Uma OS deste cliente ainda EM ABERTO (S4) — faturada vira venda e some daqui. */
+export interface OrdemServicoHistorico {
+  idOrdemServico: number
+  objetoServico: string
+  situacao: SituacaoOs
+  dataAbertura: string
+  total: number
+}
+
 export interface ClienteHistorico {
   compras: VendaHistorico[]
   produtos: ItemVendaHistorico[]
   parcelas: ParcelaHistorico[]
   resumoCrediario: ResumoCrediario
+  ordensServico: OrdemServicoHistorico[]
 }
 
 export function buscarHistoricoCliente(idCliente: number): Promise<ClienteHistorico> {

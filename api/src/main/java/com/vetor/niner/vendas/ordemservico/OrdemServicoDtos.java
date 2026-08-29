@@ -80,7 +80,16 @@ public final class OrdemServicoDtos {
             Long idFuncionario,
             String nomeFuncionario,
             /** Quanto esta linha reservou de estoque. Serviço é sempre 0 (não tem saldo). */
-            BigDecimal qtdReservada) {
+            BigDecimal qtdReservada,
+            /**
+             * Duração cadastrada do serviço, em minutos — nula em peça e em serviço sem duração.
+             *
+             * <p>⚠️ Serve para a tela somar a <b>previsão de conclusão</b> da OS, que é o que o
+             * balcão responde quando o cliente pergunta "fica pronto quando?". ⛔ Não é agenda:
+             * ninguém reserva horário, ninguém checa conflito, e a soma ignora o fato de dois
+             * mecânicos poderem trabalhar em paralelo — é uma estimativa, e a tela a chama assim.
+             */
+            Integer duracaoMinutos) {
     }
 
     public record OrdemServicoResponse(
@@ -88,6 +97,15 @@ public final class OrdemServicoDtos {
             long idEmpresa,
             long idCliente,
             String nomeCliente,
+            /**
+             * Documento e telefone do cliente + razão social da empresa: existem para a VIA
+             * IMPRESSA da OS e para o envio por WhatsApp. ⚠️ Sem o telefone aqui, o popup de envio
+             * abriria com o campo vazio e o operador teria de digitar de cabeça o número de quem
+             * está na frente dele — que é exatamente o erro que a via impressa quer evitar.
+             */
+            String documentoCliente,
+            String telefoneCliente,
+            String nomeEmpresa,
             long idFuncionario,
             String nomeFuncionario,
             String objetoServico,

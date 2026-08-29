@@ -52,6 +52,30 @@ export interface ItemOs {
   nomeFuncionario: string | null
   /** Quanto esta linha segura em estoque. Serviço é sempre 0 — não tem saldo. */
   qtdReservada: number
+  /** Minutos cadastrados do serviço; nulo em peça e em serviço sem duração. */
+  duracaoMinutos: number | null
+}
+
+/**
+ * Soma a duração dos serviços de uma OS, em minutos. `null` quando nenhum serviço tem duração
+ * cadastrada — o que é diferente de "zero minutos" e faz a tela não mostrar previsão nenhuma.
+ *
+ * ⛔ **Isto não é agenda.** Ninguém reserva horário, ninguém checa conflito, e a soma ignora que
+ * dois mecânicos podem trabalhar em paralelo. É a estimativa que responde "fica pronto quando?"
+ * no balcão, e a tela a rotula como estimativa.
+ */
+export function duracaoTotalMinutos(itens: ItemOs[]): number | null {
+  const comDuracao = itens.filter((i) => i.tipoItem === 'SERVICO' && i.duracaoMinutos != null)
+  if (comDuracao.length === 0) return null
+  return comDuracao.reduce((s, i) => s + (i.duracaoMinutos ?? 0) * i.qtdProduto, 0)
+}
+
+/** "1h30" / "45min" / "2h" — o formato que o balcão fala, não "90 minutos". */
+export function formatarDuracao(minutos: number): string {
+  const h = Math.floor(minutos / 60)
+  const m = Math.round(minutos % 60)
+  if (h === 0) return `${m}min`
+  return m === 0 ? `${h}h` : `${h}h${String(m).padStart(2, '0')}`
 }
 
 export interface OrdemServico {
@@ -59,6 +83,10 @@ export interface OrdemServico {
   idEmpresa: number
   idCliente: number
   nomeCliente: string
+  /** Para a VIA IMPRESSA e o envio por WhatsApp — sem o telefone aqui, o popup abriria vazio. */
+  documentoCliente: string | null
+  telefoneCliente: string | null
+  nomeEmpresa: string
   idFuncionario: number
   nomeFuncionario: string
   objetoServico: string

@@ -192,7 +192,7 @@ ganhou o parágrafo do F5 com OS.
 
 ---
 
-## Critérios de aceitação (`OrdemServicoTest`, 20 testes)
+## Critérios de aceitação (`OrdemServicoTest`, 22 testes + 2 em `RelatorioComissoesCrudTest`)
 
 | Dado | Quando | Então |
 |---|---|---|
@@ -214,14 +214,120 @@ ganhou o parágrafo do F5 com OS.
 | Peça com cor/tamanho e serviço sem grade | Leio a OS | Cor/tamanho vêm preenchidos na peça e **nulos** no serviço |
 | OS de outro tenant | Leio/altero | 404 (P8) |
 
+-
+---
+
+## O que entrou depois da primeira entrega (2026-08-28, mesma data)
+
+A OS nasceu operável e com seis lacunas, todas fechadas no mesmo dia a pedido do dono do produto
+(*"faça tudo o que pode ser feito, menos a emissão da NFS-e"*).
+
+### R9 — A via impressa (o que mais faltava)
+
+A OS não tinha **nenhuma** forma de imprimir, e isso a deixava inutilizável no balcão que ela existe
+para atender: o cliente deixa o carro e não leva nada na mão. Toda oficina trabalha com a via do
+cliente; no petshop ela é o comprovante de entrega do animal.
+
+`OrdemServicoImpressaoModal` — **bobina** (80mm, 42 colunas) e **A4**, mais envio por WhatsApp, no
+mesmo desenho do orçamento. ⭐ Diferente do orçamento, os itens saem em **dois blocos** com subtotal
+cada um, e o **executor** aparece ao lado do serviço: numa oficina ele é a referência de quem
+procurar quando o serviço volta.
+
+⚠️ O botão só existe depois que a OS foi salva, e imprime **o que está gravado**, nunca o que está
+na tela. Alteração não salva não sai no papel — é a garantia, não a limitação.
+
+### R10 — Quem executa cada serviço
+
+Coluna **"Executado por"** na grade de Serviços (não na de Peças: em peça, quem vende leva). O
+campo já existia no banco e na API desde a V087; faltava a tela oferecê-lo.
+
+⛔ O seletor é um **botão que abre a pesquisa**, não um `<select>`: a lista de funcionários é
+paginada, e um select só acharia quem está na primeira página.
+
+### R11 — A comissão vai para quem executou, com o percentual do serviço (DS5)
+
+Duas partes, as duas na V088:
+
+1. **`produto_movimento_detalhe.id_funcionario` passa a ser quem EXECUTOU aquela linha.** Antes o
+   PDV gravava o vendedor da venda em todas as linhas, e o mecânico nunca via a comissão do próprio
+   trabalho.
+2. **`perc_comissao` é congelado na linha**, resolvido como
+   `COALESCE(produto_servico.perc_comissao, funcionario.perc_comissao)` — a comissão do **serviço**
+   vence a da pessoa (o tosador ganha 20% do banho e 10% da tosa).
+
+⭐ O congelamento conserta um defeito antigo que ninguém tinha notado: o relatório calculava
+`líquido × perc_comissao` **na consulta**, então **promover um vendedor reescrevia a comissão de
+todos os meses passados** — inclusive os já pagos, que deixavam de bater com a folha. Medido: com a
+sabotagem, R$ 20,00 de março viravam R$ 50,00.
+
+⚠️ O relatório agora **soma por linha** e mostra o percentual **efetivo** (comissão ÷ líquido).
+Quando todas as linhas têm o mesmo percentual, o número é idêntico ao de antes.
+
+### ⛔ R12 — A regressão que a V088 causou, e a coluna que faltava (V089/V090)
+
+A venda **nunca teve vendedor próprio**: cinco serviços o derivavam do ledger com
+`MAX(pmd.id_funcionario)` ou `LIMIT 1`, e isso funcionava porque todas as linhas tinham o mesmo
+funcionário — suposição correta, e **escrita em lugar nenhum** (só num javadoc da Devolução, que
+dizia "gravado igual em toda linha").
+
+Com a R11 a suposição morreu, e a **Pesquisa de Vendas passou a mostrar "Vendedor: MECANICO JOAO"**
+numa venda fechada por outra pessoa. ⚠️ **Nenhum teste pegou; quem pegou foi abrir a tela.**
+
+A correção não é reverter (a comissão é a feature), é dar à venda o próprio vendedor:
+
+| Coluna | Significa |
+|---|---|
+| `venda.id_funcionario` (V089) | quem **vendeu** — o atendimento, o caixa |
+| `produto_movimento_detalhe.id_funcionario` (V088) | quem **executou aquela linha** |
+
+Os cinco leitores passaram a ler de `venda`: Pesquisa de Vendas (grade e detalhe), Cancelamento
+(grade e detalhe), Devolução, Relatório de Vendas e a **papeleta** — esta última era a mais grave,
+porque um cupom de oficina sairia na mão do consumidor com o nome do mecânico no campo "Vendedor".
+
+⚠️ **O filtro "Vendedor" da Pesquisa ficou abrangente de propósito** (`v.id_funcionario` **OU**
+participação no ledger): o mecânico que procura pelo próprio nome quer achar a venda em que
+trabalhou. Filtro que esconde é pior que filtro amplo demais.
+
+⛔ **E a V089 saiu com o backfill VAZIO** — medido: 347 vendas, 0 preenchidas. O `NO FORCE ROW
+LEVEL SECURITY` foi aplicado só na tabela **escrita**, e o UPDATE **lê** de outras duas, que
+continuaram bloqueadas. A **V090** conserta (migration nova, nunca editando a aplicada) e é
+idempotente. ⭐ A regra completa: `NO FORCE` vale **por tabela** e precisa cobrir tudo o que a
+migration toca — lê e escreve.
+
+### R13 — A OS na ficha do cliente
+
+Faixa no **topo** do Histórico do Cliente, antes das compras — a pergunta que o balcão faz ao abrir
+a ficha é "este cliente tem alguma coisa comigo agora?", e uma OS em execução é um carro no elevador.
+
+⛔ Só as **em aberto**: a faturada já aparece como venda na aba de compras, e listar as duas
+repetiria o mesmo dinheiro. Some por completo quando não há nenhuma.
+
+### R14 — A papeleta separa serviço de produto
+
+Dois blocos com subtotal, **só quando a venda tem os dois**. ⚠️ Venda só de mercadoria — a esmagadora
+maioria — sai **exatamente** como antes: um comprovante de padaria não ganha a palavra "PRODUTOS" no
+meio por causa de um módulo que aquela loja nem ligou.
+
+### R15 — A duração vira estimativa, não agenda
+
+`produto_servico.duracao_minutos` era gravada e nunca lida. Agora a tela soma a duração dos serviços
+e mostra **"Tempo estimado dos serviços: 1h30"**.
+
+⛔ **Não é agenda**: ninguém reserva horário, ninguém checa conflito, e a soma ignora que dois
+mecânicos podem trabalhar em paralelo. Por isso o rótulo diz *estimado* e não promete um horário —
+prometer "pronto às 15h30" com esse cálculo seria mentir com precisão.
+
 ---
 
 ## Fora de escopo desta versão
 
 - **NFS-e.** O produto vai oferecer a emissão (decisão dele), mas ela espera as credenciais
-  municipais da empresa de homologação. Hoje a venda de serviço sai na **papeleta**, e a nota é
-  decisão do lojista — o mesmo desenho da venda de mercadoria.
-- **Agenda / hora marcada.** `produto_servico.duracao_minutos` já é gravada, mas nada a consome.
-- **Comissão por item.** `ordem_servico_item.id_funcionario` (quem executou) é gravado, mas o
-  relatório de comissões continua olhando o vendedor da venda.
-- **Papeleta com serviço e peça separados.** Hoje o comprovante lista tudo junto.
+  municipais da empresa de homologação. Hoje a venda de serviço sai na **papeleta** — já com os
+  blocos separados que a nota vai precisar — e a emissão é decisão do lojista, o mesmo desenho da
+  venda de mercadoria.
+- **Agenda / hora marcada.** A duração já é somada e mostrada como estimativa (R15), mas ninguém
+  reserva horário. Agenda é feature própria, com decisões de produto que ainda não foram tomadas
+  (horário de funcionamento, disponibilidade por profissional, conflito).
+- **Executor por LINHA quando a mesma variação se repete.** `executoresDaOrdemServico` mapeia por
+  variação e fica com o primeiro executor — o javadoc registra o limite em vez de fingir que ele
+  não existe. Resolver exige a chave de linha que o PDV ainda não carrega para a OS.

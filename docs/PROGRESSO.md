@@ -11,6 +11,46 @@ Registro cronológico das decisões e entregas. Atualizar a cada marco relevante
 
 ## Estado atual
 
+> ## 📌 2026-08-28 (3) — a OS ganha via impressa, comissão do executor, e a regressão que ela causou
+>
+> **58 telas · 1065 testes verdes, 1 pulado** (o guard de meia-noite do horário de acesso, conhecido)
+> · migrations até **V090** · `web/` sem erro de tipo.
+>
+> Pedido dele depois de eu listar as lacunas da OS: *"faça tudo o que pode ser feito, menos a
+> emissão da NFS-e"*. Seis entregas, e um defeito que só apareceu porque a tela foi aberta.
+>
+> - **Via impressa da OS** (bobina 80mm + A4 + WhatsApp) — era a maior lacuna e não estava na minha
+>   primeira lista: a OS não tinha *nenhuma* forma de imprimir, e o cliente deixava o carro sem
+>   levar nada na mão. Serviços e peças em blocos separados, com o executor ao lado do serviço.
+> - **Executor por item** na tela (coluna "Executado por", só em Serviços).
+> - **Comissão (DS5, V088)**: a linha do ledger passa a gravar **quem executou** e o **percentual
+>   congelado**, com `COALESCE(produto_servico.perc_comissao, funcionario.perc_comissao)` — a
+>   comissão do serviço vence a da pessoa.
+> - **OS na ficha do cliente**, faixa no topo, só as em aberto.
+> - **Papeleta separando serviço de produto**, só quando a venda tem os dois.
+> - **`duracao_minutos` vira "Tempo estimado: 1h30"** — ⛔ estimativa, não agenda.
+>
+> ⭐ **O congelamento consertou um defeito de um ano que ninguém tinha notado.** O relatório
+> calculava `líquido × funcionario.perc_comissao` **na consulta**: promover um vendedor de 10% para
+> 25% **reescrevia a comissão de todos os meses passados**, inclusive os já pagos. Medido com a
+> correção sabotada: R$ 20,00 de uma venda antiga viravam R$ 50,00.
+>
+> ⛔ **E a mudança causou uma regressão que nenhum teste pegou.** `produto_movimento_detalhe.
+> id_funcionario` sempre significou "o vendedor da venda, repetido em toda linha", e **cinco**
+> serviços dependiam disso (`MAX(...)`/`LIMIT 1`). Ao passar a gravar o executor ali, a **Pesquisa
+> de Vendas mostrou "Vendedor: MECANICO JOAO"** numa venda fechada por outra pessoa — e a
+> **papeleta** faria o mesmo, num cupom na mão do consumidor. Quem pegou foi **abrir a tela**.
+> A correção não foi reverter (o significado novo é a feature): a **V089** deu à venda o próprio
+> vendedor, e os cinco leitores passaram a ler de `venda.id_funcionario`.
+>
+> ⛔ **A V089, por sua vez, saiu com o backfill VAZIO** — 347 vendas, 0 preenchidas, medido. O
+> `NO FORCE ROW LEVEL SECURITY` foi aplicado só na tabela **escrita**, e o UPDATE **lia** de outras
+> duas, que continuaram bloqueadas; o Flyway anunciou sucesso. A **V090** conserta (migration nova
+> e idempotente — nunca se edita uma já aplicada). ⭐ A regra completa, agora no `CLAUDE.md`: o
+> `NO FORCE` vale **por tabela** e cobre tudo o que a migration toca, lê e escreve.
+>
+> ⏭️ O que ficou de fora continua sendo só a **NFS-e** (credencial municipal) e a **agenda**.
+
 > ## 📌 2026-08-28 (2) — o módulo de SERVIÇOS: a oficina e o petshop entram no ERP
 >
 > **58 telas · 1062 testes verdes, 0 pulados** · migrations até **V087** · `web/` sem erro de tipo.

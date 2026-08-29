@@ -78,10 +78,23 @@ public final class ClienteHistoricoDtos {
             ResumoParcelasComJuros vencidas, ResumoParcelasSemJuros aVencer, ResumoParcelasComJuros total) {
     }
 
+    /**
+     * Uma Ordem de Serviço deste cliente (S4).
+     *
+     * <p>⭐ Só as <b>em andamento</b> — o que a ficha do cliente precisa responder no balcão é
+     * "este cliente tem alguma coisa comigo agora?". A OS já faturada aparece como VENDA na aba de
+     * compras (é o que ela virou), e listar as duas repetiria o mesmo dinheiro em duas abas.
+     */
+    public record OrdemServicoHistorico(
+            long idOrdemServico, String objetoServico, String situacao,
+            java.time.OffsetDateTime dataAbertura, BigDecimal total) {
+    }
+
     public record ClienteHistoricoResponse(
             List<VendaHistorico> compras,
             List<ItemVendaHistorico> produtos,
             List<ParcelaHistorico> parcelas,
-            ResumoCrediario resumoCrediario) {
+            ResumoCrediario resumoCrediario,
+            List<OrdemServicoHistorico> ordensServico) {
     }
 }

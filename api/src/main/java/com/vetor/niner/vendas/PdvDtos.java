@@ -178,9 +178,16 @@ public final class PdvDtos {
     /** Uma linha de item da papeleta de venda (2026-08-06) — {@code valorTotal} é bruto
      *  ({@code valorUnitario × qtd}); desconto/acréscimo só aparecem somados no rodapé da
      *  papeleta, nunca por item (mesmo formato do mockup pedido pelo dono do produto). */
+    /**
+     * ⚠️ {@code tipoItem} entrou com o módulo de serviços (S4): a papeleta separa SERVIÇOS de
+     * PRODUTOS em dois blocos, com subtotal cada um. Uma venda de oficina que lista "troca de
+     * óleo" no meio dos filtros não responde a pergunta que o cliente faz no balcão — quanto foi
+     * mão de obra e quanto foi peça —, e é a mesma divisão que a NFS-e vai precisar.
+     */
     public record ItemComprovanteVenda(
             String sku, String descricaoProduto, String variacaoCor, String variacaoTamanho,
-            BigDecimal qtd, String unidadeComercial, BigDecimal valorUnitario, BigDecimal valorTotal) {
+            BigDecimal qtd, String unidadeComercial, BigDecimal valorUnitario, BigDecimal valorTotal,
+            String tipoItem) {
     }
 
     /** {@code crediario} (2026-08-06) diferencia o rótulo na papeleta: "VALOR PAGO EM" (dinheiro/

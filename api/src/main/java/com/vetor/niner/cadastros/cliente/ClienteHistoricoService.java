@@ -2,6 +2,7 @@ package com.vetor.niner.cadastros.cliente;
 
 import com.vetor.niner.cadastros.cliente.ClienteHistoricoDtos.ClienteHistoricoResponse;
 import com.vetor.niner.cadastros.cliente.ClienteHistoricoDtos.ItemVendaHistorico;
+import com.vetor.niner.cadastros.cliente.ClienteHistoricoDtos.OrdemServicoHistorico;
 import com.vetor.niner.cadastros.cliente.ClienteHistoricoDtos.ParcelaHistorico;
 import com.vetor.niner.cadastros.cliente.ClienteHistoricoDtos.ResumoCrediario;
 import com.vetor.niner.cadastros.cliente.ClienteHistoricoDtos.ResumoParcelasComJuros;
@@ -46,7 +47,43 @@ public class ClienteHistoricoService {
         exigirClienteExistente(idCliente);
         return new ClienteHistoricoResponse(
                 buscarCompras(idCliente), buscarProdutos(idCliente), buscarParcelas(idCliente),
-                buscarResumoCrediario(idCliente));
+                buscarResumoCrediario(idCliente), buscarOrdensServico(idCliente));
+    }
+
+    /**
+     * As OS deste cliente que ainda estão de pé (S4).
+     *
+     * <p>⛔ FATURADA e CANCELADA ficam de fora de propósito: a primeira já aparece como venda na
+     * aba de compras — mostrar as duas contaria o mesmo dinheiro duas vezes na ficha — e a segunda
+     * não é compromisso nenhum. O que o balcão precisa saber é o que está <b>em aberto</b>.
+     *
+     * <p>⚠️ Devolve lista vazia para o tenant sem o módulo ligado, sem custo perceptível: a
+     * consulta é indexada por cliente e a tabela está vazia nesses tenants. Condicionar a leitura
+     * ao parâmetro exigiria injetar a configuração aqui só para economizar uma varredura de zero
+     * linhas.
+     */
+    private java.util.List<OrdemServicoHistorico> buscarOrdensServico(long idCliente) {
+        return jdbc.sql("""
+                        SELECT os.id_ordem_servico, os.objeto_servico, os.situacao::text AS situacao,
+                               os.data_abertura,
+                               COALESCE((SELECT SUM(i.qtd_produto * i.preco_venda)
+                                           FROM ordem_servico_item i
+                                          WHERE i.id_tenant = os.id_tenant
+                                            AND i.id_ordem_servico = os.id_ordem_servico), 0)
+                                 - os.valor_desconto AS total
+                          FROM ordem_servico os
+                         WHERE os.id_tenant = plataforma.tenant_atual()
+                           AND os.id_cliente = ?
+                           AND os.situacao NOT IN ('FATURADA', 'CANCELADA')
+                         ORDER BY os.data_abertura DESC
+                        """)
+                .param(idCliente)
+                .query((rs, n) -> new OrdemServicoHistorico(
+                        rs.getLong("id_ordem_servico"), rs.getString("objeto_servico"),
+                        rs.getString("situacao"),
+                        rs.getObject("data_abertura", java.time.OffsetDateTime.class),
+                        rs.getBigDecimal("total")))
+                .list();
     }
 
     private java.util.List<VendaHistorico> buscarCompras(long idCliente) {

@@ -242,6 +242,8 @@ export interface ItemComprovanteVenda {
   unidadeComercial: string | null
   valorUnitario: number
   valorTotal: number
+  /** `'SERVICO'` faz a papeleta abrir um bloco separado, com subtotal próprio (S4). */
+  tipoItem: TipoItem
 }
 
 /** `crediario` diferencia o rótulo na papeleta: "VALOR PAGO EM" (já circulou) vs "VALOR A PAGAR

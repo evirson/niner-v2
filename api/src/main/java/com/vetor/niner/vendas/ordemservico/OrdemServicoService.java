@@ -140,6 +140,8 @@ public class OrdemServicoService {
     public OrdemServicoResponse buscar(long id) {
         OrdemServicoResponse cabecalho = jdbc.sql("""
                         SELECT os.id_ordem_servico, os.id_empresa, os.id_cliente, c.nome AS nome_cliente,
+                               c.cpf_cnpj AS documento_cliente, c.telefone AS telefone_cliente,
+                               e.razao_social AS nome_empresa,
                                os.id_funcionario, f.nome AS nome_funcionario, os.objeto_servico, os.observacao,
                                os.situacao::text AS situacao, os.data_abertura, os.data_conclusao,
                                os.valor_desconto, os.id_venda, os.data_faturamento,
@@ -147,6 +149,7 @@ public class OrdemServicoService {
                           FROM ordem_servico os
                           JOIN cliente c ON c.id_tenant = os.id_tenant AND c.id_cliente = os.id_cliente
                           JOIN funcionario f ON f.id_tenant = os.id_tenant AND f.id_funcionario = os.id_funcionario
+                          JOIN empresa e ON e.id_tenant = os.id_tenant AND e.id_empresa = os.id_empresa
                          WHERE os.id_tenant = plataforma.tenant_atual() AND os.id_ordem_servico = ?
                         """)
                 .param(id)
@@ -161,7 +164,8 @@ public class OrdemServicoService {
 
         return new OrdemServicoResponse(
                 cabecalho.idOrdemServico(), cabecalho.idEmpresa(), cabecalho.idCliente(),
-                cabecalho.nomeCliente(), cabecalho.idFuncionario(), cabecalho.nomeFuncionario(),
+                cabecalho.nomeCliente(), cabecalho.documentoCliente(), cabecalho.telefoneCliente(),
+                cabecalho.nomeEmpresa(), cabecalho.idFuncionario(), cabecalho.nomeFuncionario(),
                 cabecalho.objetoServico(), cabecalho.observacao(), cabecalho.situacao(),
                 cabecalho.dataAbertura(), cabecalho.dataConclusao(), cabecalho.valorDesconto(),
                 totalServicos, totalPecas, total, itens,
@@ -550,12 +554,20 @@ public class OrdemServicoService {
         }
     }
 
+    /** ⚠️ `getInt` devolve 0 em coluna nula, e 0 minuto é diferente de "sem duração cadastrada" —
+     *  daí o `wasNull`, e nunca `getObject(col, Integer.class)` numa coluna `integer`. */
+    private static Integer duracaoOuNula(ResultSet rs) throws SQLException {
+        int v = rs.getInt("duracao_minutos");
+        return rs.wasNull() ? null : v;
+    }
+
     private List<ItemResponse> buscarItens(long idOrdemServico) {
         return jdbc.sql("""
                         SELECT i.id_ordem_servico_item, i.id_variacao, pb.sku, p.descricao,
                                co.descricao AS variacao_cor, ta.descricao AS variacao_tamanho,
                                pb.tipo_item::text AS tipo_item, i.qtd_produto, i.preco_venda,
-                               i.id_funcionario, f.nome AS nome_funcionario, i.qtd_reservada
+                               i.id_funcionario, f.nome AS nome_funcionario, i.qtd_reservada,
+                               ps.duracao_minutos
                           FROM ordem_servico_item i
                           JOIN produto_barra pb ON pb.id_tenant = i.id_tenant AND pb.id_variacao = i.id_variacao
                           JOIN produto p ON p.id_tenant = pb.id_tenant AND p.id_produto = pb.id_produto
@@ -563,6 +575,7 @@ public class OrdemServicoService {
                           -- "<> 1" a transforma em NULL, como faz a pesquisa de produto do PDV.
                           LEFT JOIN cfg_cor co ON co.id_tenant = pb.id_tenant AND co.id_cor = pb.id_cor AND co.id_cor <> 1
                           LEFT JOIN cfg_tamanho ta ON ta.id_tenant = pb.id_tenant AND ta.id_tamanho = pb.id_tamanho AND ta.id_tamanho <> 1
+                          LEFT JOIN produto_servico ps ON ps.id_tenant = p.id_tenant AND ps.id_produto = p.id_produto
                           LEFT JOIN funcionario f ON f.id_tenant = i.id_tenant AND f.id_funcionario = i.id_funcionario
                          WHERE i.id_tenant = plataforma.tenant_atual() AND i.id_ordem_servico = ?
                          ORDER BY i.id_ordem_servico_item
@@ -578,7 +591,7 @@ public class OrdemServicoService {
                             rs.getString("tipo_item"),
                             qtd, preco, qtd.multiply(preco),
                             idFuncionarioOuNulo(rs), rs.getString("nome_funcionario"),
-                            rs.getBigDecimal("qtd_reservada"));
+                            rs.getBigDecimal("qtd_reservada"), duracaoOuNula(rs));
                 })
                 .list();
     }
@@ -605,7 +618,9 @@ public class OrdemServicoService {
     private OrdemServicoResponse mapearCabecalho(ResultSet rs, int rowNum) throws SQLException {
         return new OrdemServicoResponse(
                 rs.getLong("id_ordem_servico"), rs.getLong("id_empresa"), rs.getLong("id_cliente"),
-                rs.getString("nome_cliente"), rs.getLong("id_funcionario"), rs.getString("nome_funcionario"),
+                rs.getString("nome_cliente"), rs.getString("documento_cliente"),
+                rs.getString("telefone_cliente"), rs.getString("nome_empresa"),
+                rs.getLong("id_funcionario"), rs.getString("nome_funcionario"),
                 rs.getString("objeto_servico"), rs.getString("observacao"), rs.getString("situacao"),
                 rs.getObject("data_abertura", OffsetDateTime.class),
                 rs.getObject("data_conclusao", OffsetDateTime.class),

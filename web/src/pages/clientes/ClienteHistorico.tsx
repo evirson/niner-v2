@@ -1,10 +1,11 @@
 import { useQuery } from '@tanstack/react-query'
 import { useEffect, useRef, useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 import AjudaDaTela from '../../components/AjudaDaTela'
 import { BotaoFecharTela } from '../../components/BotaoFecharTela'
-import { IconeHistorico, IconeSetaBaixo, IconeSetaCima } from '../../components/Icones'
+import { IconeHistorico, IconeOlho, IconeSetaBaixo, IconeSetaCima } from '../../components/Icones'
 import { buscarHistoricoCliente } from '../../lib/clienteHistorico'
+import { SITUACAO_OS } from '../../lib/ordensServico'
 import { buscarCliente } from '../../lib/clientes'
 import { buscarPermiteQtdDecimal } from '../../lib/configuracaoGeral'
 import { formatarDataHora } from '../../lib/datas'
@@ -24,6 +25,7 @@ function moeda(valor: number): string {
  */
 export default function ClienteHistorico() {
   const { id } = useParams()
+  const navigate = useNavigate()
   const idCliente = Number(id)
 
   // Linha selecionada de cada grid — clique, Enter/Espaço ou ▲/▼ destaca a linha, como uma
@@ -99,6 +101,58 @@ export default function ClienteHistorico() {
           <p className="muted">Carregando…</p>
         ) : (
           <>
+            {/* ⭐ Fica ANTES das compras, e não numa aba: a pergunta que o balcão faz ao abrir a
+                ficha é "este cliente tem alguma coisa comigo agora?". Uma OS em execução é um
+                carro no elevador ou um animal no banho — informação que não pode depender de o
+                atendente lembrar de clicar em outro lugar.
+                ⚠️ Some por completo quando não há nenhuma: loja sem o módulo de serviços não
+                ganha uma faixa vazia na ficha de todo cliente. */}
+            {historico.ordensServico.length > 0 && (
+              <div className="card" style={{ marginBottom: 12 }}>
+                <p className="section-label">
+                  Ordens de serviço em aberto ({historico.ordensServico.length})
+                </p>
+                <table className="table table-compacta">
+                  <thead>
+                    <tr>
+                      <th>Nº</th>
+                      <th>Abertura</th>
+                      <th>Objeto do serviço</th>
+                      <th>Situação</th>
+                      <th style={{ textAlign: 'right' }}>Total</th>
+                      <th aria-label="Ações" />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {historico.ordensServico.map((os) => (
+                      <tr key={os.idOrdemServico}>
+                        <td className="mono">{os.idOrdemServico}</td>
+                        <td>{new Date(os.dataAbertura).toLocaleDateString('pt-BR')}</td>
+                        <td>{os.objetoServico}</td>
+                        <td>
+                          <span style={{ color: SITUACAO_OS[os.situacao].cor, fontWeight: 600 }}>
+                            {SITUACAO_OS[os.situacao].rotulo}
+                          </span>
+                        </td>
+                        <td className="mono" style={{ textAlign: 'right' }}>{moeda(os.total)}</td>
+                        <td className="acoes-cell">
+                          <button
+                            type="button"
+                            className="acao-icone acao-visualizar"
+                            title="Abrir ordem de serviço"
+                            aria-label={`Abrir ordem de serviço nº ${os.idOrdemServico}`}
+                            onClick={() => navigate(`/ordens-servico/${os.idOrdemServico}`)}
+                          >
+                            <IconeOlho />
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
             <div className="historico-grid">
               <div className="card historico-coluna-esquerda">
                 <div className="secao-cabecalho">

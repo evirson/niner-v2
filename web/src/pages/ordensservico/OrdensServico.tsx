@@ -3,17 +3,20 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import AjudaDaTela from '../../components/AjudaDaTela'
 import { BotaoFecharTela } from '../../components/BotaoFecharTela'
-import { IconeEditar, IconeExcluir, IconeOlho, IconeOrdemServico } from '../../components/Icones'
+import { IconeEditar, IconeExcluir, IconeOlho, IconeOrdemServico, IconeRecibo } from '../../components/Icones'
 import Toast, { type TipoToast } from '../../components/Toast'
 import { ApiError } from '../../lib/api'
 import { dataParaIso, dataValida, formatarMoeda, mascararData } from '../../lib/masks'
 import {
   SITUACAO_OS,
+  buscarOrdemServico,
   cancelarOrdemServico,
   listarOrdensServico,
   type LinhaOs,
+  type OrdemServico,
   type SituacaoOs,
 } from '../../lib/ordensServico'
+import OrdemServicoImpressaoModal from './OrdemServicoImpressaoModal'
 import { maiusculas } from '../../lib/texto'
 
 const TAMANHO_PAGINA = 50
@@ -45,7 +48,21 @@ export default function OrdensServico() {
 
   const [cancelando, setCancelando] = useState<LinhaOs | null>(null)
   const [motivo, setMotivo] = useState('')
+  const [imprimindo, setImprimindo] = useState<OrdemServico | null>(null)
   const [toast, setToast] = useState<{ texto: string; tipo: TipoToast } | null>(null)
+
+  /** A grade não carrega os itens (a listagem é enxuta de propósito) — a via impressa precisa
+   *  deles, então a OS é relida ao clicar. */
+  const abrirImpressao = async (idOrdemServico: number) => {
+    try {
+      setImprimindo(await buscarOrdemServico(idOrdemServico))
+    } catch (e) {
+      setToast({
+        texto: e instanceof ApiError ? e.message : 'Não foi possível abrir a ordem de serviço.',
+        tipo: 'erro',
+      })
+    }
+  }
 
   const dataInicialIso = dataValida(dataInicialTexto) ? (dataParaIso(dataInicialTexto) ?? undefined) : undefined
   const dataFinalIso = dataValida(dataFinalTexto) ? (dataParaIso(dataFinalTexto) ?? undefined) : undefined
@@ -217,6 +234,15 @@ export default function OrdensServico() {
                           <IconeEditar />
                         </button>
                       )}
+                      <button
+                        type="button"
+                        className="acao-icone acao-visualizar"
+                        title="Imprimir / enviar por WhatsApp"
+                        aria-label={`Imprimir ordem de serviço nº ${o.idOrdemServico}`}
+                        onClick={() => abrirImpressao(o.idOrdemServico)}
+                      >
+                        <IconeRecibo />
+                      </button>
                       {/* ⚠️ Cancelar é a única saída de uma OS que não vai virar venda — e é ela
                           que devolve as peças reservadas ao estoque (DS17). Ícone vermelho porque
                           "desfazer é excluir": quem pode abrir OS não deveria poder cancelar a de
@@ -305,6 +331,10 @@ export default function OrdensServico() {
             </div>
           </div>
         </div>
+      )}
+
+      {imprimindo && (
+        <OrdemServicoImpressaoModal os={imprimindo} aoFechar={() => setImprimindo(null)} />
       )}
 
       {toast && <Toast mensagem={toast.texto} tipo={toast.tipo} aoFechar={() => setToast(null)} />}

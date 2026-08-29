@@ -15,7 +15,7 @@
 > por desaparecimento do assunto (2, 3, 4, 15, 16, 18, 20, 21 e 27), e o módulo de Serviços (S1–S4)
 > foi implementado no mesmo dia, fechando o item 50. Ver as duas seções no fim do arquivo.
 
-**Estado na data desta revisão:** 58 telas em uso · 1062 testes verdes, 0 pulados (medido, não estimado).
+**Estado na data desta revisão:** 58 telas em uso · 1065 testes verdes, 1 pulado (medido, não estimado — o pulado é o guard de meia-noite do horário de acesso).
 
 ---
 
@@ -379,6 +379,35 @@ proteção. Está registrado no comentário de `ConfiguracaoGeralService.atualiz
 sincronização que rodavam a cada gravação de estoque e de preço), 36 classes Java, 3 telas, 14
 testes, a dependência do WireMock, as variáveis `NINER_ML_*` e duas linhas de `cfg_tela` (RBAC).
 Suíte depois da remoção: **1024 testes verdes, 0 pulados**.
+
+---
+
+## 2026-08-28 (3) — as lacunas da OS fechadas (item 53 resolvido)
+
+Pedido dele: *"faça tudo o que pode ser feito, menos a emissão da NFS-e"*. **V088, V089 e V090.**
+Suíte: **1065 testes verdes, 1 pulado** (guard de meia-noite, conhecido).
+
+**O item 53 fechou por inteiro**, e com mais do que ele listava:
+- ✅ Via impressa da OS (bobina + A4 + WhatsApp) — a lacuna que **não** estava na lista original e
+  era a maior: a OS não tinha nenhuma forma de imprimir.
+- ✅ Executor por item na tela + comissão indo para ele, com o percentual do **serviço** (DS5).
+- ✅ Papeleta separando serviço de produto.
+- ✅ `duracao_minutos` consumida como **estimativa** (não agenda).
+- ✅ OS na ficha do cliente.
+
+**Dois defeitos achados no caminho, os dois documentados no `CLAUDE.md`:**
+1. A comissão era calculada **na consulta**, então editar o percentual do funcionário reescrevia
+   meses já pagos. Congelada na linha (V088).
+2. Mudar o significado de `produto_movimento_detalhe.id_funcionario` quebrou **cinco** leitores que
+   derivavam "o vendedor da venda" dali — a Pesquisa de Vendas mostrou o mecânico como vendedor.
+   Corrigido com `venda.id_funcionario` (V089), cujo backfill saiu vazio e precisou da V090.
+
+### 54. ⏭️ O que a OS deixou para depois (era o item 53, agora reduzido)
+- **Agenda / hora marcada.** A duração já vira estimativa na tela; reservar horário é feature
+  própria e depende de decisões de produto ainda não tomadas (horário de funcionamento,
+  disponibilidade por profissional, conflito).
+- **Executor por LINHA quando a mesma variação se repete na OS.** Hoje o mapa fica com o primeiro
+  executor; resolver exige a chave de linha que o PDV ainda não carrega para a OS.
 
 ---
 

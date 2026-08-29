@@ -2,7 +2,7 @@ import { jsPDF } from 'jspdf'
 import QRCode from 'qrcode'
 import type { ComprovanteRecebimento } from './recebimentoCrediario'
 import type { DevolucaoEfetivada } from './devolucaoProduto'
-import type { ComprovanteVenda } from './pdv'
+import type { ComprovanteVenda, ItemComprovanteVenda } from './pdv'
 import { formatarMoeda } from './masks'
 
 /**
@@ -284,7 +284,13 @@ export function montarLinhasComprovanteVenda(c: ComprovanteVenda, reimpressao: b
   linhas.push(colEsq(' '.repeat(COL_CODIGO + 1) + 'QTD x UNITARIO', LARGURA_VENDA - COL_TOTAL) + colDir('TOTAL', COL_TOTAL))
   linhas.push(linhaVenda())
 
-  c.itens.forEach((item) => {
+  // ⭐ Serviços e produtos em BLOCOS SEPARADOS quando a venda tem os dois (S4). A oficina cobra
+  // mão de obra e peça na mesma conta, e "quanto foi cada coisa" é a primeira pergunta do
+  // cliente no balcão — misturados numa lista só, o comprovante não a responde.
+  // ⚠️ Venda só de mercadoria (a esmagadora maioria) sai EXATAMENTE como antes: sem título de
+  // bloco e sem subtotal. Um comprovante de padaria não ganha a palavra "PRODUTOS" no meio por
+  // causa de um módulo que aquela loja nem ligou.
+  const imprimirItem = (item: ItemComprovanteVenda) => {
     const [desc1, ...descRestante] = montarDescricaoEmLinhas(item.descricaoProduto, item.variacaoCor, item.variacaoTamanho)
     linhas.push(`${colEsq(item.sku, COL_CODIGO)} ${colEsq(desc1, COL_DESCRICAO)}`)
     descRestante.forEach((linhaDesc) => {
@@ -295,7 +301,23 @@ export function montarLinhasComprovanteVenda(c: ComprovanteVenda, reimpressao: b
       formatarMoeda(item.valorUnitario),
       formatarMoeda(item.valorTotal),
     ))
-  })
+  }
+
+  const servicos = c.itens.filter((i) => i.tipoItem === 'SERVICO')
+  const produtos = c.itens.filter((i) => i.tipoItem !== 'SERVICO')
+  const somar = (itens: ItemComprovanteVenda[]) => itens.reduce((s, i) => s + i.valorTotal, 0)
+
+  if (servicos.length > 0 && produtos.length > 0) {
+    linhas.push('SERVICOS:')
+    servicos.forEach(imprimirItem)
+    linhas.push(linhaResumoVenda('Subtotal servicos:', formatarMoeda(somar(servicos))))
+    linhas.push(linhaVenda())
+    linhas.push('PRODUTOS:')
+    produtos.forEach(imprimirItem)
+    linhas.push(linhaResumoVenda('Subtotal produtos:', formatarMoeda(somar(produtos))))
+  } else {
+    c.itens.forEach(imprimirItem)
+  }
 
   linhas.push(linhaVenda())
   if (c.descontos === 0 && c.acrescimos === 0) {

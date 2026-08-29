@@ -43,8 +43,14 @@ public class RelatorioComissoesService {
             Map.entry("valorVenda", "valor_venda"),
             Map.entry("valorDevolucao", "valor_devolucao"),
             Map.entry("valorLiquido", "(COALESCE(v.valor_venda, 0) - COALESCE(d.valor_devolucao, 0))"),
-            Map.entry("percComissao", "perc_comissao"),
-            Map.entry("valorComissao", "(COALESCE(v.valor_venda, 0) - COALESCE(d.valor_devolucao, 0)) * fn.perc_comissao / 100"),
+            // ⚠️ As duas passaram a apontar para a comissão SOMADA POR LINHA (V088). Antes
+            // ordenavam por "líquido × percentual do cadastro", que deixou de ser o número
+            // mostrado — a grade sairia ordenada por uma coluna que ela não exibe.
+            Map.entry("percComissao",
+                    "CASE WHEN (COALESCE(v.valor_venda, 0) - COALESCE(d.valor_devolucao, 0)) = 0 THEN fn.perc_comissao"
+                            + " ELSE (COALESCE(v.comissao_venda, 0) - COALESCE(d.comissao_devolucao, 0))"
+                            + " / (COALESCE(v.valor_venda, 0) - COALESCE(d.valor_devolucao, 0)) * 100 END"),
+            Map.entry("valorComissao", "(COALESCE(v.comissao_venda, 0) - COALESCE(d.comissao_devolucao, 0))"),
             Map.entry("quantidadeVendas", "qtd_vendas"),
             Map.entry("ticketMedio",
                     "CASE WHEN COALESCE(qtd_vendas, 0) = 0 THEN 0"
@@ -115,15 +121,26 @@ public class RelatorioComissoesService {
         String filtroEmpresaDevolucoes = idsEmpresaEfetivo != null ? " AND pmm.id_empresa IN (" + placeholdersEmpresa + ")" : "";
 
         String sql = """
+                -- ⭐ A comissão é somada POR LINHA desde a V088 (DS5), não mais aplicando um
+                -- percentual único ao total do funcionário. Duas razões: (a) o serviço pode ter
+                -- percentual próprio — o tosador ganha 20% do banho e 10% da tosa — e (b) o
+                -- percentual usado é o CONGELADO no dia da venda, então editar a comissão do
+                -- funcionário deixou de reescrever meses já pagos.
+                -- ⚠️ O COALESCE com `fn.perc_comissao` é o histórico: linha anterior à V088 não
+                -- tem percentual gravado, e para ela vale o comportamento antigo.
                 WITH vendas AS (
                     SELECT v.id_empresa, pmd.id_funcionario,
                            SUM(pmd.qtd_produto * pmd.preco_venda - pmd.valor_desconto + pmd.valor_acrescimo) AS valor_venda,
+                           SUM((pmd.qtd_produto * pmd.preco_venda - pmd.valor_desconto + pmd.valor_acrescimo)
+                               * COALESCE(pmd.perc_comissao, fnc.perc_comissao) / 100) AS comissao_venda,
                            COUNT(DISTINCT v.id_venda) AS qtd_vendas
                     FROM venda v
                     JOIN produto_movimento_mestre pmm
                            ON pmm.id_venda = v.id_venda AND pmm.id_tenant = v.id_tenant AND pmm.tipo_movimento = 'VENDA'
                     JOIN produto_movimento_detalhe pmd
                            ON pmd.id_movimento = pmm.id_movimento AND pmd.id_tenant = pmm.id_tenant AND pmd.credito_debito = 'D'
+                    JOIN funcionario fnc
+                           ON fnc.id_funcionario = pmd.id_funcionario AND fnc.id_tenant = pmd.id_tenant
                     WHERE v.id_tenant = plataforma.tenant_atual() AND v.cancelada = false
                           AND (v.data_venda AT TIME ZONE 'America/Sao_Paulo')::date BETWEEN ? AND ? AND pmd.id_funcionario IS NOT NULL
                 """
@@ -133,10 +150,14 @@ public class RelatorioComissoesService {
                 ),
                 devolucoes AS (
                     SELECT pmm.id_empresa, pmd.id_funcionario,
-                           SUM(pmd.qtd_produto * pmd.preco_venda) AS valor_devolucao
+                           SUM(pmd.qtd_produto * pmd.preco_venda) AS valor_devolucao,
+                           SUM(pmd.qtd_produto * pmd.preco_venda
+                               * COALESCE(pmd.perc_comissao, fnc.perc_comissao) / 100) AS comissao_devolucao
                     FROM produto_movimento_mestre pmm
                     JOIN produto_movimento_detalhe pmd
                            ON pmd.id_movimento = pmm.id_movimento AND pmd.id_tenant = pmm.id_tenant AND pmd.credito_debito = 'C'
+                    JOIN funcionario fnc
+                           ON fnc.id_funcionario = pmd.id_funcionario AND fnc.id_tenant = pmd.id_tenant
                     -- ⚠️ Devolução CANCELADA não pode ser descontada da comissão (achado de
                     -- auditoria, 2026-08-21). Cancelar uma devolução não apaga as linhas
                     -- `DEVOLUCAO` do ledger: ela só marca `venda_devolucao.cancelada` e lança um
@@ -156,7 +177,8 @@ public class RelatorioComissoesService {
                 SELECT COALESCE(v.id_empresa, d.id_empresa) AS id_empresa, e.razao_social AS nome_empresa,
                        COALESCE(v.id_funcionario, d.id_funcionario) AS id_funcionario, fn.nome AS nome_funcionario,
                        COALESCE(v.valor_venda, 0) AS valor_venda, COALESCE(d.valor_devolucao, 0) AS valor_devolucao,
-                       fn.perc_comissao AS perc_comissao, COALESCE(v.qtd_vendas, 0) AS qtd_vendas
+                       COALESCE(v.comissao_venda, 0) - COALESCE(d.comissao_devolucao, 0) AS valor_comissao,
+                       fn.perc_comissao AS perc_comissao_funcionario, COALESCE(v.qtd_vendas, 0) AS qtd_vendas
                 FROM vendas v
                 FULL OUTER JOIN devolucoes d ON d.id_funcionario = v.id_funcionario AND d.id_empresa = v.id_empresa
                 JOIN empresa e ON e.id_empresa = COALESCE(v.id_empresa, d.id_empresa) AND e.id_tenant = plataforma.tenant_atual()
@@ -178,9 +200,16 @@ public class RelatorioComissoesService {
                     BigDecimal valorVenda = rs.getBigDecimal("valor_venda");
                     BigDecimal valorDevolucao = rs.getBigDecimal("valor_devolucao");
                     BigDecimal valorLiquido = valorVenda.subtract(valorDevolucao);
-                    BigDecimal percComissao = rs.getBigDecimal("perc_comissao");
-                    BigDecimal valorComissao = valorLiquido.multiply(percComissao)
-                            .divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
+                    // A comissão vem SOMADA POR LINHA do banco (V088/DS5) — o Java não a
+                    // recalcula, só arredonda uma vez no fim (P7).
+                    BigDecimal valorComissao = rs.getBigDecimal("valor_comissao")
+                            .setScale(2, RoundingMode.HALF_UP);
+                    // ⚠️ O percentual mostrado é o EFETIVO (comissão ÷ líquido), não mais o do
+                    // cadastro do funcionário: com percentual por serviço, um número só do cadastro
+                    // mentiria sobre uma linha que mistura 20% de banho com 10% de tosa. Quando
+                    // todas as linhas têm o mesmo percentual, o efetivo é idêntico ao de antes.
+                    BigDecimal percComissao = percentualEfetivo(valorComissao, valorLiquido,
+                            rs.getBigDecimal("perc_comissao_funcionario"));
                     int quantidadeVendas = rs.getInt("qtd_vendas");
                     BigDecimal ticketMedio = calcularTicketMedio(valorLiquido, quantidadeVendas);
                     return new LinhaComissao(
@@ -190,6 +219,22 @@ public class RelatorioComissoesService {
                             quantidadeVendas, ticketMedio);
                 })
                 .list();
+    }
+
+    /**
+     * Percentual efetivo = comissão ÷ líquido × 100.
+     *
+     * <p>⚠️ Líquido zero cai no percentual do cadastro em vez de dividir por zero — acontece de
+     * verdade quando o funcionário só aparece por devolução no período, e mostrar "0%" ali daria a
+     * entender que ele não tem comissão nenhuma cadastrada.
+     */
+    private static BigDecimal percentualEfetivo(BigDecimal comissao, BigDecimal liquido,
+                                                BigDecimal percentualDoCadastro) {
+        if (liquido.compareTo(BigDecimal.ZERO) == 0) {
+            return percentualDoCadastro == null ? BigDecimal.ZERO : percentualDoCadastro;
+        }
+        return comissao.multiply(BigDecimal.valueOf(100))
+                .divide(liquido, 2, RoundingMode.HALF_UP);
     }
 
     /** Ticket médio = valor líquido ÷ quantidade de vendas; zero quando não há venda no período

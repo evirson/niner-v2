@@ -101,15 +101,22 @@ public class PesquisaVendaService {
                 params.add(idCliente);
             }
             if (idFuncionario != null) {
+                // ⚠️ Filtra por quem VENDEU **ou** por quem EXECUTOU alguma linha (V088/V089).
+                // Desde que a linha do ledger passou a carregar o executor, os dois podem ser
+                // pessoas diferentes na mesma venda — e o mecânico que procura pelo próprio nome
+                // quer achar a venda em que ele trabalhou, não só as que ele fechou no caixa.
+                // ⛔ Restringir a `v.id_funcionario` esconderia venda que a pessoa de fato fez;
+                // um filtro que esconde é pior que um filtro amplo demais.
                 filtro.append("""
-                         AND EXISTS (
+                         AND (v.id_funcionario = ? OR EXISTS (
                              SELECT 1 FROM produto_movimento_mestre pmm2
                              JOIN produto_movimento_detalhe pmd2
                                     ON pmd2.id_movimento = pmm2.id_movimento AND pmd2.id_tenant = pmm2.id_tenant
                              WHERE pmm2.id_tenant = v.id_tenant AND pmm2.id_venda = v.id_venda
                                    AND pmm2.tipo_movimento = 'VENDA' AND pmd2.id_funcionario = ?
-                         )
+                         ))
                         """);
+                params.add(idFuncionario);
                 params.add(idFuncionario);
             }
             if ("ATIVAS".equalsIgnoreCase(situacao)) {
@@ -156,7 +163,12 @@ public class PesquisaVendaService {
         String baseSelect = """
                         SELECT v.id_venda, v.id_empresa, e.razao_social AS nome_empresa, v.data_venda,
                                v.id_cliente, c.nome AS nome_cliente,
-                               MAX(pmd.id_funcionario) AS id_funcionario, MAX(fn.nome) AS nome_funcionario,
+                               -- ⚠️ O vendedor vem de `venda`, NÃO do ledger (V089). Era
+                               -- `MAX(pmd.id_funcionario)`, e isso funcionava só porque todas as
+                               -- linhas tinham o mesmo funcionário. Desde a V088 cada linha
+                               -- carrega quem EXECUTOU aquele item, e o MAX passou a devolver o
+                               -- mecânico da ordem de serviço no lugar de quem vendeu.
+                               v.id_funcionario, fn.nome AS nome_funcionario,
                                v.cancelada,
                                COALESCE(SUM(CASE WHEN pmd.credito_debito = 'D'
                                    THEN pmd.qtd_produto * pmd.preco_venda - pmd.valor_desconto + pmd.valor_acrescimo
@@ -168,9 +180,10 @@ public class PesquisaVendaService {
                                ON pmm.id_venda = v.id_venda AND pmm.id_tenant = v.id_tenant AND pmm.tipo_movimento = 'VENDA'
                         LEFT JOIN produto_movimento_detalhe pmd
                                ON pmd.id_movimento = pmm.id_movimento AND pmd.id_tenant = pmm.id_tenant
-                        LEFT JOIN funcionario fn ON fn.id_funcionario = pmd.id_funcionario AND fn.id_tenant = pmd.id_tenant
+                        LEFT JOIN funcionario fn ON fn.id_funcionario = v.id_funcionario AND fn.id_tenant = v.id_tenant
                         """;
-        String agrupamento = " GROUP BY v.id_venda, v.id_empresa, e.razao_social, v.data_venda, v.id_cliente, c.nome, v.cancelada";
+        String agrupamento = " GROUP BY v.id_venda, v.id_empresa, e.razao_social, v.data_venda, v.id_cliente, c.nome,"
+                + " v.cancelada, v.id_funcionario, fn.nome";
         String ordenacao = " ORDER BY " + coluna + " " + direcaoOrdenacao
                 + ", v.id_venda " + direcaoOrdenacao + " LIMIT ? OFFSET ?";
 
@@ -254,15 +267,13 @@ public class PesquisaVendaService {
     private record FuncionarioVenda(Long idFuncionario, String nomeFuncionario) {
     }
 
+    /** ⚠️ Lê de `venda` (V089), não do ledger: ali `id_funcionario` é quem EXECUTOU a linha. */
     private FuncionarioVenda buscarFuncionarioDaVenda(long idVenda) {
         return jdbc.sql("""
-                        SELECT pmd.id_funcionario, fn.nome AS nome_funcionario
-                        FROM produto_movimento_mestre pmm
-                        JOIN produto_movimento_detalhe pmd
-                               ON pmd.id_movimento = pmm.id_movimento AND pmd.id_tenant = pmm.id_tenant
-                        LEFT JOIN funcionario fn ON fn.id_funcionario = pmd.id_funcionario AND fn.id_tenant = pmd.id_tenant
-                        WHERE pmm.id_tenant = plataforma.tenant_atual() AND pmm.id_venda = ? AND pmm.tipo_movimento = 'VENDA'
-                        LIMIT 1
+                        SELECT v.id_funcionario, fn.nome AS nome_funcionario
+                        FROM venda v
+                        LEFT JOIN funcionario fn ON fn.id_funcionario = v.id_funcionario AND fn.id_tenant = v.id_tenant
+                        WHERE v.id_tenant = plataforma.tenant_atual() AND v.id_venda = ?
                         """)
                 .param(idVenda)
                 .query((rs, n) -> new FuncionarioVenda(getLongOuNulo(rs, "id_funcionario"), rs.getString("nome_funcionario")))

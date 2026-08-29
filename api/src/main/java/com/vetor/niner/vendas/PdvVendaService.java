@@ -137,8 +137,16 @@ public class PdvVendaService {
                 ? Map.of()
                 : precosCongeladosDaOrdemServico(req.idOrdemServico(), req.itens());
 
+        // ⭐ Quem EXECUTOU cada item da OS (DS5). Sem isto, o `id_funcionario` de todas as linhas
+        // era o vendedor da venda, e a comissão do mecânico que fez o serviço ia para quem estava
+        // no caixa — numa oficina com dois mecânicos, sempre a pessoa errada.
+        Map<Long, Long> executoresDaOrdemServico = req.idOrdemServico() == null
+                ? Map.of()
+                : executoresDaOrdemServico(req.idOrdemServico());
+
         List<ItemResolvido> itens = resolverItens(req.itens(), idEmpresa,
-                req.idOrdemServico() == null ? precosDoOrcamento : precosDaOrdemServico);
+                req.idOrdemServico() == null ? precosDoOrcamento : precosDaOrdemServico,
+                executoresDaOrdemServico, idFuncionario);
 
         BigDecimal valorTotalProdutos = itens.stream()
                 .map(ItemResolvido::valorItem)
@@ -185,11 +193,16 @@ public class PdvVendaService {
         limiteVendas.registrarVenda();
 
         long idVenda = jdbc.sql("""
-                        INSERT INTO venda (id_tenant, id_empresa, id_cliente, id_caixa)
-                        VALUES (plataforma.tenant_atual(), ?, ?, ?)
+                        INSERT INTO venda (id_tenant, id_empresa, id_cliente, id_caixa, id_funcionario)
+                        VALUES (plataforma.tenant_atual(), ?, ?, ?, ?)
                         RETURNING id_venda
                         """)
-                .params(idEmpresa, idCliente, idCaixa).query(Long.class).single();
+                // ⚠️ venda.id_funcionario é quem VENDEU (V089), e não o mesmo que
+                // produto_movimento_detalhe.id_funcionario, que desde a V088 é quem EXECUTOU
+                // aquela linha. Numa venda vinda de ordem de serviço os dois são pessoas
+                // diferentes — antes da V089 a Pesquisa de Vendas mostrava o mecânico como
+                // vendedor, porque derivava o vendedor do ledger com MAX().
+                .params(idEmpresa, idCliente, idCaixa, idFuncionario).query(Long.class).single();
 
         long idMovimento = jdbc.sql("""
                         INSERT INTO produto_movimento_mestre (id_tenant, id_empresa, tipo_movimento, id_venda)
@@ -203,11 +216,13 @@ public class PdvVendaService {
             jdbc.sql("""
                             INSERT INTO produto_movimento_detalhe
                                 (id_tenant, id_movimento, id_empresa, id_variacao, credito_debito, qtd_produto,
-                                 preco_venda, preco_custo, valor_desconto, valor_acrescimo, id_funcionario)
-                            VALUES (plataforma.tenant_atual(), ?, ?, ?, 'D', ?, ?, ?, ?, ?, ?)
+                                 preco_venda, preco_custo, valor_desconto, valor_acrescimo, id_funcionario,
+                                 perc_comissao)
+                            VALUES (plataforma.tenant_atual(), ?, ?, ?, 'D', ?, ?, ?, ?, ?, ?, ?)
                             """)
                     .params(idMovimento, idEmpresa, item.idVariacao(), item.qtd(), item.precoVenda(), item.precoCusto(),
-                            descontoPorItem.get(i), acrescimoPorItem.get(i), idFuncionario)
+                            descontoPorItem.get(i), acrescimoPorItem.get(i), item.idFuncionarioExecutor(),
+                            item.percComissao())
                     .update();
         }
 
@@ -475,14 +490,14 @@ public class PdvVendaService {
 
         record Vendedor(String nome, Integer codigo) {
         }
+        // ⚠️ O vendedor da PAPELETA vem de `venda` (V089), não do ledger: desde a V088 a linha
+        // do ledger carrega quem EXECUTOU aquele item, e um cupom de oficina sairia com o nome do
+        // mecânico no campo "Vendedor" — na mão do consumidor, afirmando algo que não aconteceu.
         Vendedor vendedor = jdbc.sql("""
                         SELECT f.nome, f.id_funcionario
-                        FROM produto_movimento_mestre pmm
-                        JOIN produto_movimento_detalhe pmd
-                               ON pmd.id_tenant = pmm.id_tenant AND pmd.id_movimento = pmm.id_movimento
-                        JOIN funcionario f ON f.id_tenant = pmd.id_tenant AND f.id_funcionario = pmd.id_funcionario
-                        WHERE pmm.id_tenant = plataforma.tenant_atual() AND pmm.id_venda = ? AND pmm.tipo_movimento = 'VENDA'
-                        LIMIT 1
+                        FROM venda v
+                        JOIN funcionario f ON f.id_tenant = v.id_tenant AND f.id_funcionario = v.id_funcionario
+                        WHERE v.id_tenant = plataforma.tenant_atual() AND v.id_venda = ?
                         """)
                 .param(idVenda)
                 .query((rs, n) -> new Vendedor(rs.getString("nome"), rs.getInt("id_funcionario")))
@@ -493,7 +508,8 @@ public class PdvVendaService {
                         SELECT pb.sku, p.descricao AS descricao_produto,
                                co.descricao AS variacao_cor, ta.descricao AS variacao_tamanho,
                                pmd.qtd_produto, p.unidade_comercial, pmd.preco_venda,
-                               (pmd.qtd_produto * pmd.preco_venda) AS valor_total
+                               (pmd.qtd_produto * pmd.preco_venda) AS valor_total,
+                               pb.tipo_item::text AS tipo_item
                         FROM produto_movimento_mestre pmm
                         JOIN produto_movimento_detalhe pmd
                                ON pmd.id_tenant = pmm.id_tenant AND pmd.id_movimento = pmm.id_movimento
@@ -509,7 +525,8 @@ public class PdvVendaService {
                         rs.getString("sku"), rs.getString("descricao_produto"),
                         rs.getString("variacao_cor"), rs.getString("variacao_tamanho"),
                         rs.getBigDecimal("qtd_produto"), rs.getString("unidade_comercial"),
-                        rs.getBigDecimal("preco_venda"), rs.getBigDecimal("valor_total")))
+                        rs.getBigDecimal("preco_venda"), rs.getBigDecimal("valor_total"),
+                        rs.getString("tipo_item")))
                 .list();
 
         record Totais(BigDecimal subtotal, BigDecimal descontos, BigDecimal acrescimos) {
@@ -902,13 +919,21 @@ public class PdvVendaService {
                 .orElseThrow(() -> new IllegalArgumentException("Vendedor informado não existe ou está inativo."));
     }
 
-    private record ItemResolvido(long idVariacao, BigDecimal qtd, BigDecimal precoVenda, BigDecimal precoCusto) {
+    /**
+     * {@code idFuncionarioExecutor} nulo = a linha é do vendedor da venda; preenchido = quem
+     * executou ESTE item (vem da OS, DS5). {@code percComissao} é o percentual congelado na
+     * gravação (V088) — nulo só se não houver nem serviço nem funcionário com percentual.
+     */
+    private record ItemResolvido(long idVariacao, BigDecimal qtd, BigDecimal precoVenda, BigDecimal precoCusto,
+                                 Long idFuncionarioExecutor, BigDecimal percComissao) {
         BigDecimal valorItem() {
             return precoVenda.multiply(qtd);
         }
     }
 
-    private record LinhaItem(String descricaoProduto, String variacaoCor, String variacaoTamanho, BigDecimal precoVenda, BigDecimal precoCusto) {
+    /** {@code percComissaoServico} é nulo em mercadoria e em serviço sem percentual próprio. */
+    private record LinhaItem(String descricaoProduto, String variacaoCor, String variacaoTamanho,
+                             BigDecimal precoVenda, BigDecimal precoCusto, BigDecimal percComissaoServico) {
     }
 
     /**
@@ -925,8 +950,54 @@ public class PdvVendaService {
      * decimal só é aceita se {@code cfg_geral.cfg_permite_qtd_decimal} estiver ligado
      * (Parâmetros do Sistema) — mesma regra em qualquer lugar que grava {@code qtd_produto}.
      */
+    /**
+     * Quem executou cada item da OS, por variação (DS5).
+     *
+     * <p>⚠️ Uma variação pode aparecer duas vezes na OS com executores diferentes (dois mecânicos
+     * na mesma peça é raro, mas o alinhamento e o balanceamento são o mesmo serviço). O mapa fica
+     * com o <b>primeiro</b>, e o javadoc registra o limite em vez de fingir que ele não existe:
+     * resolver isso direito exige a chave de linha que o PDV ainda não carrega para a OS.
+     */
+    private Map<Long, Long> executoresDaOrdemServico(long idOrdemServico) {
+        Map<Long, Long> executores = new java.util.HashMap<>();
+        jdbc.sql("""
+                        SELECT id_variacao, id_funcionario
+                          FROM ordem_servico_item
+                         WHERE id_tenant = plataforma.tenant_atual()
+                           AND id_ordem_servico = ? AND id_funcionario IS NOT NULL
+                         ORDER BY id_ordem_servico_item
+                        """)
+                .param(idOrdemServico)
+                .query((rs, n) -> {
+                    executores.putIfAbsent(rs.getLong("id_variacao"), rs.getLong("id_funcionario"));
+                    return null;
+                })
+                .list();
+        return executores;
+    }
+
+    /**
+     * O percentual de comissão do funcionário HOJE — que é o que se congela na linha (V088).
+     *
+     * <p>⚠️ Devolve 0 para funcionário sem cadastro de comissão, nunca {@code null}: a coluna
+     * aceita nulo só para as linhas <b>anteriores</b> à V088, e gravar nulo numa linha nova faria
+     * o relatório cair no percentual de hoje — exatamente o comportamento que o congelamento
+     * existe para eliminar.
+     */
+    private BigDecimal percComissaoDoFuncionario(long idFuncionario) {
+        return jdbc.sql("""
+                        SELECT COALESCE(perc_comissao, 0) FROM funcionario
+                         WHERE id_tenant = plataforma.tenant_atual() AND id_funcionario = ?
+                        """)
+                .param(idFuncionario)
+                .query(BigDecimal.class)
+                .optional()
+                .orElse(BigDecimal.ZERO);
+    }
+
     private List<ItemResolvido> resolverItens(List<ItemVendaRequest> itens, long idEmpresa,
-                                              Map<Long, BigDecimal> precosDoOrcamento) {
+                                              Map<Long, BigDecimal> precosDoOrcamento,
+                                              Map<Long, Long> executores, long idFuncionarioDaVenda) {
         boolean permiteQtdDecimal = configuracaoGeralService.permiteQtdDecimalProduto();
         List<ItemResolvido> resolvidos = new ArrayList<>();
         for (ItemVendaRequest item : itens) {
@@ -937,9 +1008,11 @@ public class PdvVendaService {
             LinhaItem linha = jdbc.sql("""
                             SELECT p.descricao AS descricao_produto,
                                    co.descricao AS variacao_cor, ta.descricao AS variacao_tamanho,
-                                   p.preco_venda, p.preco_custo
+                                   p.preco_venda, p.preco_custo, ps.perc_comissao AS perc_comissao_servico
                             FROM produto_barra pb
                             JOIN produto p ON p.id_produto = pb.id_produto AND p.id_tenant = pb.id_tenant
+                            -- A comissão do SERVIÇO vence a da pessoa quando preenchida (DS5).
+                            LEFT JOIN produto_servico ps ON ps.id_produto = p.id_produto AND ps.id_tenant = p.id_tenant
                             LEFT JOIN cfg_cor co ON co.id_cor = pb.id_cor AND co.id_tenant = pb.id_tenant AND co.id_cor <> 1
                             LEFT JOIN cfg_tamanho ta ON ta.id_tamanho = pb.id_tamanho AND ta.id_tenant = pb.id_tenant AND ta.id_tamanho <> 1
                             WHERE pb.id_tenant = plataforma.tenant_atual() AND pb.id_variacao = ? AND p.ativo = true
@@ -947,7 +1020,8 @@ public class PdvVendaService {
                     .params(item.idVariacao())
                     .query((rs, n) -> new LinhaItem(
                             rs.getString("descricao_produto"), rs.getString("variacao_cor"), rs.getString("variacao_tamanho"),
-                            rs.getBigDecimal("preco_venda"), rs.getBigDecimal("preco_custo")))
+                            rs.getBigDecimal("preco_venda"), rs.getBigDecimal("preco_custo"),
+                            rs.getBigDecimal("perc_comissao_servico")))
                     .optional()
                     .orElseThrow(() -> new IllegalArgumentException("Produto informado não existe ou está inativo."));
 
@@ -959,7 +1033,20 @@ public class PdvVendaService {
             BigDecimal preco = item.ehDoOrcamento()
                     ? precosDoOrcamento.getOrDefault(item.idVariacao(), linha.precoVenda())
                     : linha.precoVenda();
-            resolvidos.add(new ItemResolvido(item.idVariacao(), item.qtd(), preco, linha.precoCusto()));
+            // Executor da linha: quem fez o serviço na OS, ou o vendedor da venda. ⚠️ A OS pode
+            // não ter atribuído executor ao item (é normal em peça), e aí vale o vendedor.
+            Long executor = item.ehDaOrdemServico() ? executores.get(item.idVariacao()) : null;
+            long idFuncionarioDaLinha = executor != null ? executor : idFuncionarioDaVenda;
+
+            // ⭐ Percentual CONGELADO (V088/DS5): a comissão do serviço vence a da pessoa quando
+            // preenchida. Congelar conserta um defeito antigo — editar o percentual do funcionário
+            // reescrevia a comissão de todos os meses passados, inclusive os já pagos.
+            BigDecimal percComissao = linha.percComissaoServico() != null
+                    ? linha.percComissaoServico()
+                    : percComissaoDoFuncionario(idFuncionarioDaLinha);
+
+            resolvidos.add(new ItemResolvido(item.idVariacao(), item.qtd(), preco, linha.precoCusto(),
+                    idFuncionarioDaLinha, percComissao));
         }
         return resolvidos;
     }

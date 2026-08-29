@@ -17,6 +17,8 @@ import {
   ESTADOS_EDITAVEIS,
   PROXIMO_ESTADO,
   SITUACAO_OS,
+  duracaoTotalMinutos,
+  formatarDuracao,
   atualizarOrdemServico,
   buscarOrdemServico,
   criarOrdemServico,
@@ -27,6 +29,7 @@ import { maiusculas } from '../../lib/texto'
 import PesquisaClienteModal from '../pdv/PesquisaClienteModal'
 import PesquisaProdutoModal from '../pdv/PesquisaProdutoModal'
 import PesquisaVendedorModal from '../pdv/PesquisaVendedorModal'
+import OrdemServicoImpressaoModal from './OrdemServicoImpressaoModal'
 
 /** Uma linha em montagem. `preco` é o que o operador vê; quem grava o valor é o servidor. */
 interface ItemEmMontagem {
@@ -37,6 +40,14 @@ interface ItemEmMontagem {
   tipoItem: 'MERCADORIA' | 'SERVICO'
   qtd: number
   preco: number
+  /**
+   * Quem EXECUTA este serviço (DS5) — nulo = o responsável pelo atendimento.
+   *
+   * ⚠️ Só faz sentido em serviço: é ele que carrega comissão própria, e é numa oficina com dois
+   * mecânicos que a diferença aparece. Em peça, quem vende leva.
+   */
+  idFuncionario: number | null
+  nomeFuncionario: string | null
 }
 
 /**
@@ -68,6 +79,9 @@ export default function OrdemServicoForm() {
   const [pesquisaProduto, setPesquisaProduto] = useState(false)
   const [pesquisaCliente, setPesquisaCliente] = useState(false)
   const [pesquisaResponsavel, setPesquisaResponsavel] = useState(false)
+  /** Qual linha de serviço está escolhendo executor (null = nenhuma). */
+  const [escolhendoExecutorPara, setEscolhendoExecutorPara] = useState<number | null>(null)
+  const [imprimindo, setImprimindo] = useState(false)
   const [toast, setToast] = useState<{ texto: string; tipo: TipoToast } | null>(null)
 
   const { data: existente } = useQuery({
@@ -98,6 +112,8 @@ export default function OrdemServicoForm() {
         tipoItem: i.tipoItem,
         qtd: i.qtdProduto,
         preco: i.precoVenda,
+        idFuncionario: i.idFuncionario,
+        nomeFuncionario: i.nomeFuncionario,
       })),
     )
   }, [existente])
@@ -143,6 +159,8 @@ export default function OrdemServicoForm() {
           tipoItem: p.tipoItem,
           qtd: 1,
           preco: p.precoVenda,
+          idFuncionario: null,
+          nomeFuncionario: null,
         },
       ]
     })
@@ -155,7 +173,12 @@ export default function OrdemServicoForm() {
     objetoServico: maiusculas(objetoServico.trim()),
     observacao: observacao.trim() ? maiusculas(observacao.trim()) : null,
     valorDesconto: desconto,
-    itens: itens.map((i) => ({ idVariacao: i.idVariacao, qtdProduto: i.qtd })),
+    itens: itens.map((i) => ({
+      idVariacao: i.idVariacao,
+      qtdProduto: i.qtd,
+      // Só serviço carrega executor; mandar em peça sujaria a comissão sem ninguém pedir.
+      idFuncionario: i.tipoItem === 'SERVICO' ? i.idFuncionario : null,
+    })),
   })
 
   const salvar = useMutation({
@@ -198,7 +221,7 @@ export default function OrdemServicoForm() {
 
   const proximo = PROXIMO_ESTADO[situacao]
 
-  const gradeItens = (titulo: string, lista: ItemEmMontagem[], vazio: string) => (
+  const gradeItens = (titulo: string, lista: ItemEmMontagem[], vazio: string, comExecutor = false) => (
     <div className="table-wrap">
       <p className="section-label" style={{ marginBottom: 4 }}>
         {titulo} {lista.length > 0 && `(${lista.length})`}
@@ -208,6 +231,7 @@ export default function OrdemServicoForm() {
           <tr>
             <th>SKU</th>
             <th>Descrição</th>
+            {comExecutor && <th>Executado por</th>}
             <th style={{ textAlign: 'right' }}>Qtde</th>
             <th style={{ textAlign: 'right' }}>Preço</th>
             <th style={{ textAlign: 'right' }}>Total</th>
@@ -217,7 +241,7 @@ export default function OrdemServicoForm() {
         <tbody>
           {lista.length === 0 ? (
             <tr>
-              <td colSpan={6}>
+              <td colSpan={comExecutor ? 7 : 6}>
                 <p className="muted" style={{ margin: '12px 0' }}>{vazio}</p>
               </td>
             </tr>
@@ -229,6 +253,21 @@ export default function OrdemServicoForm() {
                   {i.descricao}
                   {i.variacao && <span className="muted"> {i.variacao}</span>}
                 </td>
+                {comExecutor && (
+                  <td>
+                    {/* Botão em vez de select: a lista de funcionários é paginada, e um select
+                        só acharia quem está na primeira página — armadilha já catalogada. */}
+                    <button
+                      type="button"
+                      className="btn ghost"
+                      disabled={!editavel}
+                      style={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis' }}
+                      onClick={() => setEscolhendoExecutorPara(i.idVariacao)}
+                    >
+                      {i.nomeFuncionario ?? 'Definir…'}
+                    </button>
+                  </td>
+                )}
                 <td style={{ textAlign: 'right' }}>
                   <input
                     inputMode="numeric"
@@ -291,6 +330,14 @@ export default function OrdemServicoForm() {
           </div>
           <div className="topbar-acoes">
             <AjudaDaTela chaveTela="vendas.ordemservico.form" />
+            {/* ⚠️ Imprime o que está GRAVADO, não o que está na tela — por isso só aparece depois
+                de a OS existir, e o que o cliente leva é sempre igual ao que o sistema tem.
+                Alterações não salvas não saem no papel, e isso é a garantia, não a limitação. */}
+            {idOs != null && existente && (
+              <button type="button" className="btn ghost" onClick={() => setImprimindo(true)}>
+                Imprimir / WhatsApp
+              </button>
+            )}
             <BotaoFecharTela />
           </div>
         </div>
@@ -353,7 +400,17 @@ export default function OrdemServicoForm() {
 
             <section className="section">
               <div className="ajuda-rodape" style={{ justifyContent: 'space-between', marginTop: 0 }}>
-                <p className="section-label" style={{ margin: 0 }}>Serviços e peças</p>
+                <p className="section-label" style={{ margin: 0 }}>
+                  Serviços e peças
+                  {/* ⛔ "Tempo estimado", não "pronto às 15h30": a soma ignora paralelismo e fila.
+                      Prometer um horário exato com esse cálculo seria mentir com precisão. */}
+                  {existente && duracaoTotalMinutos(existente.itens) !== null && (
+                    <span className="muted" style={{ fontWeight: 400, marginLeft: 12 }}>
+                      Tempo estimado dos serviços:{' '}
+                      <strong>{formatarDuracao(duracaoTotalMinutos(existente.itens)!)}</strong>
+                    </span>
+                  )}
+                </p>
                 <button type="button" className="btn ghost" disabled={!editavel} onClick={() => setPesquisaProduto(true)}>
                   ＋ Adicionar serviço ou peça
                 </button>
@@ -363,7 +420,7 @@ export default function OrdemServicoForm() {
                   obra e quanto foi material — é essa divisão que a NFS-e vai precisar quando o
                   módulo fiscal de serviço entrar, e é ela que o dono da oficina usa para saber
                   onde ganhou dinheiro. */}
-              {gradeItens('Serviços', servicos, 'Nenhum serviço nesta ordem.')}
+              {gradeItens('Serviços', servicos, 'Nenhum serviço nesta ordem.', true)}
               {gradeItens('Peças', pecas, 'Nenhuma peça nesta ordem.')}
 
               {pecas.length > 0 && editavel && (
@@ -467,8 +524,27 @@ export default function OrdemServicoForm() {
           }}
         />
       )}
+      {escolhendoExecutorPara !== null && (
+        <PesquisaVendedorModal
+          aoFechar={() => setEscolhendoExecutorPara(null)}
+          aoSelecionar={(f) => {
+            setItens((atual) =>
+              atual.map((x) =>
+                x.idVariacao === escolhendoExecutorPara
+                  ? { ...x, idFuncionario: f.idFuncionario, nomeFuncionario: f.nome }
+                  : x,
+              ),
+            )
+            setEscolhendoExecutorPara(null)
+          }}
+        />
+      )}
       {pesquisaProduto && (
         <PesquisaProdutoModal aoFechar={() => setPesquisaProduto(false)} aoSelecionar={acrescentarItem} />
+      )}
+
+      {imprimindo && existente && (
+        <OrdemServicoImpressaoModal os={existente} aoFechar={() => setImprimindo(false)} />
       )}
 
       {toast && <Toast mensagem={toast.texto} tipo={toast.tipo} aoFechar={() => setToast(null)} />}
