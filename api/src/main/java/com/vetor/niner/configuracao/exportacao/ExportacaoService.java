@@ -82,7 +82,7 @@ public class ExportacaoService {
                    bairro AS "Bairro", cidade AS "Cidade", estado AS "UF", cep AS "CEP",
                    telefone AS "Telefone", email AS "E-mail",
                    CASE WHEN ativo THEN 'SIM' ELSE 'NAO' END AS "Ativo",
-                   to_char(criado_em, 'DD/MM/YYYY HH24:MI') AS "Cadastrado em"
+                   to_char(criado_em AT TIME ZONE 'America/Sao_Paulo', 'DD/MM/YYYY HH24:MI') AS "Cadastrado em"
             FROM empresa
             WHERE id_tenant = plataforma.tenant_atual()
             ORDER BY codigo_empresa
@@ -99,7 +99,7 @@ public class ExportacaoService {
                    c.bairro AS "Bairro", c.cidade AS "Cidade", c.estado AS "UF", c.cep AS "CEP",
                    c.limite_credito AS "Limite de Crédito",
                    CASE WHEN c.ativo THEN 'SIM' ELSE 'NAO' END AS "Ativo",
-                   to_char(c.criado_em, 'DD/MM/YYYY HH24:MI') AS "Cadastrado em"
+                   to_char(c.criado_em AT TIME ZONE 'America/Sao_Paulo', 'DD/MM/YYYY HH24:MI') AS "Cadastrado em"
             FROM cliente c
             JOIN cfg_categoria_cliente cc ON cc.id_categoria_cliente = c.id_categoria_cliente AND cc.id_tenant = c.id_tenant
             WHERE c.id_tenant = plataforma.tenant_atual()
@@ -114,7 +114,7 @@ public class ExportacaoService {
                    f.endereco AS "Endereço", f.numero AS "Número", f.bairro AS "Bairro",
                    f.cidade AS "Cidade", f.estado AS "UF", f.cep AS "CEP",
                    CASE WHEN f.ativo THEN 'SIM' ELSE 'NAO' END AS "Ativo",
-                   to_char(f.criado_em, 'DD/MM/YYYY HH24:MI') AS "Cadastrado em"
+                   to_char(f.criado_em AT TIME ZONE 'America/Sao_Paulo', 'DD/MM/YYYY HH24:MI') AS "Cadastrado em"
             FROM fornecedor f
             JOIN cfg_plano_contas pc ON pc.id_plano_contas = f.id_plano_contas AND pc.id_tenant = f.id_tenant
             WHERE f.id_tenant = plataforma.tenant_atual()
@@ -125,7 +125,7 @@ public class ExportacaoService {
             SELECT nome AS "Nome", cpf AS "CPF", telefone AS "Celular", cargo AS "Cargo",
                    perc_comissao AS "% Comissão",
                    CASE WHEN ativo THEN 'SIM' ELSE 'NAO' END AS "Ativo",
-                   to_char(criado_em, 'DD/MM/YYYY HH24:MI') AS "Cadastrado em"
+                   to_char(criado_em AT TIME ZONE 'America/Sao_Paulo', 'DD/MM/YYYY HH24:MI') AS "Cadastrado em"
             FROM funcionario
             WHERE id_tenant = plataforma.tenant_atual()
             ORDER BY nome
@@ -134,8 +134,8 @@ public class ExportacaoService {
     private static final String SQL_CONTAS_RECEBER = """
             SELECT cl.nome AS "Cliente", e.razao_social AS "Empresa", tc.nome_carteira AS "Carteira",
                    cr.numero_parcela AS "Nº Parcela",
-                   to_char(cr.data_vencimento, 'DD/MM/YYYY') AS "Vencimento",
-                   to_char(cr.data_recebimento, 'DD/MM/YYYY') AS "Recebimento",
+                   to_char(cr.data_vencimento AT TIME ZONE 'America/Sao_Paulo', 'DD/MM/YYYY') AS "Vencimento",
+                   to_char(cr.data_recebimento AT TIME ZONE 'America/Sao_Paulo', 'DD/MM/YYYY') AS "Recebimento",
                    cr.valor_receber AS "Valor a Receber", cr.valor_juros AS "Juros",
                    cr.valor_desconto AS "Desconto", cr.valor_recebido AS "Valor Recebido",
                    CASE WHEN cr.documento_recebido THEN 'RECEBIDO' ELSE 'EM ABERTO' END AS "Situação"
@@ -152,9 +152,9 @@ public class ExportacaoService {
             SELECT f.razao_social AS "Fornecedor", e.razao_social AS "Empresa",
                    (pc.id_plano_contas || ' - ' || pc.descricao) AS "Plano de Contas",
                    cp.nota_fiscal AS "Nota Fiscal", cp.numero_duplicata AS "Duplicata",
-                   to_char(cp.data_lancamento, 'DD/MM/YYYY') AS "Lançamento",
-                   to_char(cp.data_vencimento, 'DD/MM/YYYY') AS "Vencimento",
-                   to_char(cp.data_pagamento, 'DD/MM/YYYY') AS "Pagamento",
+                   to_char(cp.data_lancamento AT TIME ZONE 'America/Sao_Paulo', 'DD/MM/YYYY') AS "Lançamento",
+                   to_char(cp.data_vencimento AT TIME ZONE 'America/Sao_Paulo', 'DD/MM/YYYY') AS "Vencimento",
+                   to_char(cp.data_pagamento AT TIME ZONE 'America/Sao_Paulo', 'DD/MM/YYYY') AS "Pagamento",
                    cp.valor_pagar AS "Valor a Pagar", cp.valor_pago AS "Valor Pago",
                    CASE WHEN cp.documento_pago THEN 'PAGO' ELSE 'EM ABERTO' END AS "Situação"
             FROM contas_pagar cp

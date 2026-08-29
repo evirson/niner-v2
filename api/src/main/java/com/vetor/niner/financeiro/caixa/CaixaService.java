@@ -173,7 +173,7 @@ public class CaixaService {
                             id_carteira = ?,
                             saldo_inicial = ?,
                             observacoes = COALESCE(observacoes || E'\\n', '') ||
-                                'REABERTO (MESMO DIA) EM ' || to_char(now(), 'DD/MM/YYYY HH24:MI') ||
+                                'REABERTO (MESMO DIA) EM ' || to_char(now() AT TIME ZONE 'America/Sao_Paulo', 'DD/MM/YYYY HH24:MI') ||
                                 ' POR USUARIO ' || ?
                         WHERE id_tenant = plataforma.tenant_atual() AND id_caixa = ?
                         """)
@@ -456,7 +456,7 @@ public class CaixaService {
                             id_usuario_fechamento = NULL,
                             valor_contado_dinheiro = NULL,
                             observacoes = COALESCE(observacoes || E'\\n', '') ||
-                                'REABERTO EM ' || to_char(now(), 'DD/MM/YYYY HH24:MI') ||
+                                'REABERTO EM ' || to_char(now() AT TIME ZONE 'America/Sao_Paulo', 'DD/MM/YYYY HH24:MI') ||
                                 ' POR USUARIO ' || ? || ': ' || ?
                         WHERE id_tenant = plataforma.tenant_atual() AND id_caixa = ?
                         """)

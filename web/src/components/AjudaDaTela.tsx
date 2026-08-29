@@ -38,6 +38,23 @@ function configuracaoDeTela(cadastro: string): ConteudoAjuda {
 }
 
 const CONTEUDOS: Record<string, ConteudoAjuda> = {
+  // ⚠️ Faltava (auditoria 2026-08-29) — e a falha era MUDA: `AjudaDaTela` faz
+  // `if (!conteudo) return null`, então o botão de Ajuda simplesmente não aparecia nesta tela.
+  // Conferidas as 59 chaves usadas contra as 77 definidas, esta era a única órfã.
+  'plataforma.minha-conta': {
+    titulo: 'Minha Conta',
+    objetivo: 'Ver o plano contratado, quanto da cota de vendas do mês já foi usada e quais CNPJs estão na assinatura.',
+    passos: [
+      '"Plano atual" mostra a faixa contratada e o consumo do mês — a única coisa cobrada é venda emitida, somando todas as empresas.',
+      '"Empresas (CNPJs)" lista o que está coberto pela assinatura. "Adicionar empresa" inclui outro CNPJ.',
+      'Quando houver fatura em aberto, o pagamento por PIX é gerado aqui mesmo.',
+    ],
+    errosComuns: [
+      'Cancelar uma venda NÃO devolve cota: o contador do mês só sobe. É assim de propósito — o que se cobra é a emissão.',
+      'Esta tela é da assinatura que a loja paga à Vetor. O caixa, o crediário e as contas da loja ficam no menu Financeiro — são coisas diferentes.',
+      'Cota estourada bloqueia venda nova até a virada do mês ou a contratação de uma faixa maior.',
+    ],
+  },
   'usuario-permissoes': {
     titulo: 'Permissões do usuário',
     objetivo: 'Escolher, tela a tela, o que este usuário pode fazer no sistema.',

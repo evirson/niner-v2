@@ -60,7 +60,17 @@ public class PermissaoInterceptor implements HandlerInterceptor {
 
         Acao anotada = metodo.getMethodAnnotation(Acao.class);
         PermissaoService.Acao acao = anotada != null ? anotada.value() : porVerbo(req.getMethod());
-        permissoes.exigir(jwt, tela.value(), acao);
+        // Qualquer uma das chaves basta — ver o javadoc de `Tela.value()`. Com uma só (o caso
+        // normal) o laço é idêntico ao `exigir` de antes.
+        String[] chaves = tela.value();
+        for (String chave : chaves) {
+            if (permissoes.pode(jwt, chave, acao)) {
+                return true;
+            }
+        }
+        // Nenhuma passou: o 403 nomeia a PRIMEIRA, que é a tela dona do endpoint — citar todas
+        // faria a mensagem descrever a implementação em vez do que o usuário precisa pedir.
+        permissoes.exigir(jwt, chaves[0], acao);
         return true;
     }
 

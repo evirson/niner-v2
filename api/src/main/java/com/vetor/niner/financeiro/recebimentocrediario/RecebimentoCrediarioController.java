@@ -47,8 +47,9 @@ public class RecebimentoCrediarioController {
     }
 
     @GetMapping("/parcelas")
-    public List<ParcelaCrediarioResponse> listarParcelas(@RequestParam long idCliente) {
-        return service.listarParcelas(idCliente);
+    public List<ParcelaCrediarioResponse> listarParcelas(@RequestParam long idCliente,
+                                                        @AuthenticationPrincipal Jwt jwt) {
+        return service.listarParcelas(idCliente, jwt);
     }
 
     @GetMapping("/carteiras")
@@ -64,12 +65,17 @@ public class RecebimentoCrediarioController {
 
     // ⛔ `@Tela` DE MÉTODO — a Reimpressão é uma tela própria na grade de permissão e no menu, e
     // o servidor exigia `recebimento-crediario` (achado de auditoria, 2026-08-29).
-    @Tela("reimpressao-recebimento-crediario")
+    @Tela({"reimpressao-recebimento-crediario", "recebimento-crediario"})
     @GetMapping("/{idLoteRecebimento}/comprovante")
     public ComprovanteRecebimentoResponse buscarComprovante(@PathVariable long idLoteRecebimento) {
         return service.buscarComprovante(idLoteRecebimento);
     }
 
+    // ⭐ TRÊS chaves: esta lista alimenta o Recebimento, o Estorno e a Reimpressão — e quem
+    // recebe só uma dessas telas precisa conseguir abri-la. Sem isto, conceder apenas
+    // "Estorno de Crediário" (a configuração que a V091 passou a produzir) dava 403 na
+    // abertura, citando "Recebimento de Crediário", uma tela que o admin decidiu NÃO liberar.
+    @Tela({"recebimento-crediario", "estorno-recebimento-crediario", "reimpressao-recebimento-crediario"})
     @GetMapping("/estornos")
     public List<LoteRecebimentoResponse> listarLotes(
             @RequestParam String nomeCliente,
@@ -78,6 +84,11 @@ public class RecebimentoCrediarioController {
         return service.listarLotes(nomeCliente, dataInicial, dataFinal);
     }
 
+    // ⭐ TRÊS chaves: esta lista alimenta o Recebimento, o Estorno e a Reimpressão — e quem
+    // recebe só uma dessas telas precisa conseguir abri-la. Sem isto, conceder apenas
+    // "Estorno de Crediário" (a configuração que a V091 passou a produzir) dava 403 na
+    // abertura, citando "Recebimento de Crediário", uma tela que o admin decidiu NÃO liberar.
+    @Tela({"recebimento-crediario", "estorno-recebimento-crediario", "reimpressao-recebimento-crediario"})
     @GetMapping("/estornos/{idLoteRecebimento}/parcelas")
     public List<ParcelaDoLoteResponse> listarParcelasDoLote(@PathVariable long idLoteRecebimento) {
         return service.listarParcelasDoLote(idLoteRecebimento);

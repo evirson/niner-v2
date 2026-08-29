@@ -2,6 +2,7 @@ package com.vetor.niner.configuracao.importacao;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.vetor.niner.cadastros.cliente.Documentos;
+import com.vetor.niner.comum.tempo.FusoDaLoja;
 import com.vetor.niner.configuracao.importacao.ImportacaoDtos.LinhaErro;
 import com.vetor.niner.configuracao.importacao.ImportacaoDtos.RelatorioImportacao;
 import com.vetor.niner.configuracao.importacao.ImportacaoPlanilha.LinhaPlanilha;
@@ -43,11 +44,13 @@ public class ContasReceberImportador implements ImportadorDeTabela {
     private final JdbcClient jdbc;
     private final TipoCarteiraService tipoCarteiraService;
     private final ImportacaoSavepointExecutor savepoints;
+    private final FusoDaLoja fusoDaLoja;
 
-    public ContasReceberImportador(JdbcClient jdbc, TipoCarteiraService tipoCarteiraService, ImportacaoSavepointExecutor savepoints) {
+    public ContasReceberImportador(JdbcClient jdbc, TipoCarteiraService tipoCarteiraService, ImportacaoSavepointExecutor savepoints, FusoDaLoja fusoDaLoja) {
         this.jdbc = jdbc;
         this.tipoCarteiraService = tipoCarteiraService;
         this.savepoints = savepoints;
+        this.fusoDaLoja = fusoDaLoja;
     }
 
     @Override
@@ -80,6 +83,9 @@ public class ContasReceberImportador implements ImportadorDeTabela {
     @Override
     @Transactional
     public RelatorioImportacao processar(List<LinhaPlanilha> linhas, JsonNode escolhas, boolean confirmar, Jwt jwt) {
+        // O fuso da loja resolvido UMA vez por importação: é uma consulta ao banco (UF da
+        // empresa) e a planilha pode ter milhares de linhas.
+        ZoneId fuso = fusoDaLoja.daSessao(jwt);
         long idCarteira = resolverCarteiraCrediario(escolhas);
 
         record LinhaResolvida(LinhaPlanilha origem, long idCliente, long idEmpresa, int numeroParcela,
@@ -131,7 +137,7 @@ public class ContasReceberImportador implements ImportadorDeTabela {
                 String chaveGrupo = idCliente + "|" + idEmpresa;
                 grupos.computeIfAbsent(chaveGrupo, k -> new ArrayList<>()).add(new LinhaResolvida(
                         linha, idCliente, idEmpresa, numeroParcela,
-                        inicioDoDia(vencimento), recebimento == null ? null : inicioDoDia(recebimento),
+                        inicioDoDia(vencimento, fuso), recebimento == null ? null : inicioDoDia(recebimento, fuso),
                         valorReceber, recebimento != null && valorRecebido != null ? valorRecebido : BigDecimal.ZERO));
             } catch (RuntimeException e) {
                 erros.add(LinhaErro.de(linha.numeroLinha(), e));
@@ -252,8 +258,18 @@ public class ContasReceberImportador implements ImportadorDeTabela {
                 .query(Long.class).optional();
     }
 
-    private static OffsetDateTime inicioDoDia(LocalDate data) {
-        return data.atStartOfDay(ZoneId.systemDefault()).toOffsetDateTime();
+    /**
+     * Meia-noite da data digitada na planilha, <b>no fuso da loja</b>.
+     *
+     * <p>⚠️ Era {@code ZoneId.systemDefault()} até 2026-08-29 (achado do guarda de fuso, ampliado
+     * na mesma auditoria). O fuso padrão da JVM é o {@code TZ} do container — que <b>só existe em
+     * produção</b> ({@code docker-compose.prod.yml}); em dev e na suíte ele é UTC. Ou seja: o
+     * defeito não reproduz na máquina de quem escreve. Com UTC, o vencimento de 01/09 virava
+     * {@code 2026-09-01T00:00Z} = <b>31/08 às 21h em Brasília</b>, e a parcela nascia importada com
+     * um dia a menos — vencida um dia antes, no relatório e na cobrança.
+     */
+    private static OffsetDateTime inicioDoDia(LocalDate data, ZoneId fusoDaLoja) {
+        return data.atStartOfDay(fusoDaLoja).toOffsetDateTime();
     }
 
 }

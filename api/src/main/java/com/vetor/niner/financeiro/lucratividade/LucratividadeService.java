@@ -112,8 +112,8 @@ public class LucratividadeService {
      *
      * <p>A <b>comissão</b> sai daqui, e não de uma consulta própria, porque depende do
      * {@code perc_comissao} do funcionário <b>daquela linha</b> — a mesma venda pode ter itens de
-     * vendedores diferentes. A base é {@code qtd × preço − desconto}, igual à da DRE, para os dois
-     * relatórios baterem.
+     * vendedores diferentes. A base é {@code qtd × preço − desconto + acréscimo}, igual à da DRE e à do
+     * Relatório de Comissões — o número que a loja PAGA é a referência dos três.
      *
      * @return {@code [valor, custo, comissao]}
      */
@@ -122,7 +122,16 @@ public class LucratividadeService {
                         SELECT COALESCE(SUM(pmd.qtd_produto * pmd.preco_venda
                                             + pmd.valor_acrescimo - pmd.valor_desconto), 0) AS valor,
                                COALESCE(SUM(pmd.qtd_produto * pmd.preco_custo), 0) AS custo,
-                               COALESCE(SUM((pmd.qtd_produto * pmd.preco_venda - pmd.valor_desconto)
+                               -- ⭐ A base inclui o ACRÉSCIMO desde 2026-08-29 (auditoria). Os três
+                               -- relatórios que MOSTRAM comissão (DRE ×2 e Lucratividade) usavam
+                               -- `qtd × preço − desconto`, e o Relatório de Comissões — o número que a
+                               -- loja de fato PAGA — usa `qtd × preço − desconto + acréscimo`. Quem
+                               -- manda é o pagador: alinhar os relatórios à folha é seguro, o inverso
+                               -- mudaria quanto o vendedor recebe com base num palpite meu.
+                               -- ⚠️ "O vendedor ganha comissão sobre o acréscimo?" é decisão do dono do
+                               -- produto, hoje respondida SIM pelo caminho que paga. Se ele decidir que
+                               -- não, muda-se o Relatório de Comissões e estes três atrás dele.
+                               COALESCE(SUM((pmd.qtd_produto * pmd.preco_venda - pmd.valor_desconto + pmd.valor_acrescimo)
                                             * COALESCE(pmd.perc_comissao, fn.perc_comissao, 0) / 100), 0) AS comissao
                         FROM venda v
                         JOIN produto_movimento_mestre pmm
@@ -162,7 +171,12 @@ public class LucratividadeService {
      */
     private BigDecimal[] apurarDevolucoes(LocalDate inicio, LocalDate fim, List<Long> idsEmpresa) {
         return jdbc.sql("""
-                        SELECT COALESCE(SUM(pmd.qtd_produto * pmd.preco_venda), 0) AS valor,
+                        -- ⭐ LÍQUIDO (auditoria 2026-08-29). A linha de DEVOLUÇÃO grava `preco_venda` bruto — é a chave
+                        -- que casa com a linha da venda — e carrega o desconto rateado em `valor_desconto`. Ler só o
+                        -- bruto fazia o comprovante impresso dizer R$ 90 e o PDV resgatar R$ 100 no mesmo vale.
+                        -- ⚠️ Linha anterior a 29/08 tem `valor_desconto = 0` e continua valendo o bruto, de propósito:
+                        -- é o valor que foi impresso no papel que o cliente tem na mão.
+                        SELECT COALESCE(SUM(pmd.qtd_produto * pmd.preco_venda - pmd.valor_desconto), 0) AS valor,
                                COALESCE(SUM(pmd.qtd_produto * pmd.preco_custo), 0) AS custo
                         FROM produto_movimento_mestre pmm
                         JOIN produto_movimento_detalhe pmd

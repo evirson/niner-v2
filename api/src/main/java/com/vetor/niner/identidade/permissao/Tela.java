@@ -27,5 +27,22 @@ import java.lang.annotation.Target;
 public @interface Tela {
 
     /** Chave em {@code cfg_tela} (ex.: {@code "clientes"}, {@code "relatorio-dre"}). */
-    String value();
+    /**
+     * Uma ou <b>mais</b> chaves de {@code cfg_tela} (ex.: {@code "clientes"}).
+     *
+     * <p>Com mais de uma, vale <b>qualquer uma</b>: o endpoint libera se o usuário tiver a ação
+     * exigida em pelo menos uma delas.
+     *
+     * <p>⛔ <b>Por que isso existe</b> (auditoria 2026-08-29): ao mover um endpoint de ação para
+     * uma chave própria — o estorno de crediário saiu de {@code recebimento-crediario} —, as
+     * <b>consultas de apoio da mesma tela</b> ficaram na chave antiga. O admin concedia só
+     * "Estorno de Crediário", o operador abria a tela e levava <b>403 citando uma tela que o
+     * admin decidiu não liberar</b>, com a lista vazia. Era a direção "permissão impossível" que
+     * a V091 dizia ter fechado, reaberta na porta ao lado: fechada no endpoint que age, aberta
+     * nos que leem.
+     *
+     * <p>⚠️ A regra é <b>ou</b>, nunca <b>e</b>: exigir as duas devolveria o mesmo beco, agora
+     * pedindo uma permissão a mais.
+     */
+    String[] value();
 }

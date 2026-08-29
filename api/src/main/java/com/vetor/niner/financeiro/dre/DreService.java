@@ -218,7 +218,16 @@ public class DreService {
                         SELECT COALESCE(SUM(pmd.qtd_produto * pmd.preco_venda + pmd.valor_acrescimo), 0) AS receita,
                                COALESCE(SUM(pmd.valor_desconto), 0) AS desconto,
                                COALESCE(SUM(pmd.qtd_produto * pmd.preco_custo), 0) AS cmv,
-                               COALESCE(SUM((pmd.qtd_produto * pmd.preco_venda - pmd.valor_desconto)
+                               -- ⭐ A base inclui o ACRÉSCIMO desde 2026-08-29 (auditoria). Os três
+                               -- relatórios que MOSTRAM comissão (DRE ×2 e Lucratividade) usavam
+                               -- `qtd × preço − desconto`, e o Relatório de Comissões — o número que a
+                               -- loja de fato PAGA — usa `qtd × preço − desconto + acréscimo`. Quem
+                               -- manda é o pagador: alinhar os relatórios à folha é seguro, o inverso
+                               -- mudaria quanto o vendedor recebe com base num palpite meu.
+                               -- ⚠️ "O vendedor ganha comissão sobre o acréscimo?" é decisão do dono do
+                               -- produto, hoje respondida SIM pelo caminho que paga. Se ele decidir que
+                               -- não, muda-se o Relatório de Comissões e estes três atrás dele.
+                               COALESCE(SUM((pmd.qtd_produto * pmd.preco_venda - pmd.valor_desconto + pmd.valor_acrescimo)
                                             * COALESCE(pmd.perc_comissao, fn.perc_comissao, 0) / 100), 0) AS comissao
                         FROM venda v
                         JOIN produto_movimento_mestre pmm
@@ -240,7 +249,12 @@ public class DreService {
 
         // Devoluções do período: deduzem receita e revertem o CMV correspondente.
         var devolucoes = jdbc.sql("""
-                        SELECT COALESCE(SUM(pmd.qtd_produto * pmd.preco_venda), 0) AS valor,
+                        -- ⭐ LÍQUIDO (auditoria 2026-08-29). A linha de DEVOLUÇÃO grava `preco_venda` bruto — é a chave
+                        -- que casa com a linha da venda — e carrega o desconto rateado em `valor_desconto`. Ler só o
+                        -- bruto fazia o comprovante impresso dizer R$ 90 e o PDV resgatar R$ 100 no mesmo vale.
+                        -- ⚠️ Linha anterior a 29/08 tem `valor_desconto = 0` e continua valendo o bruto, de propósito:
+                        -- é o valor que foi impresso no papel que o cliente tem na mão.
+                        SELECT COALESCE(SUM(pmd.qtd_produto * pmd.preco_venda - pmd.valor_desconto), 0) AS valor,
                                COALESCE(SUM(pmd.qtd_produto * pmd.preco_custo), 0) AS cmv
                         FROM produto_movimento_mestre pmm
                         JOIN produto_movimento_detalhe pmd
@@ -292,7 +306,16 @@ public class DreService {
                         custo_venda AS (
                             SELECT pmm.id_venda,
                                    SUM(pmd.qtd_produto * pmd.preco_custo) AS cmv,
-                                   SUM((pmd.qtd_produto * pmd.preco_venda - pmd.valor_desconto)
+                                   -- ⭐ A base inclui o ACRÉSCIMO desde 2026-08-29 (auditoria). Os três
+                                   -- relatórios que MOSTRAM comissão (DRE ×2 e Lucratividade) usavam
+                                   -- `qtd × preço − desconto`, e o Relatório de Comissões — o número que a
+                                   -- loja de fato PAGA — usa `qtd × preço − desconto + acréscimo`. Quem
+                                   -- manda é o pagador: alinhar os relatórios à folha é seguro, o inverso
+                                   -- mudaria quanto o vendedor recebe com base num palpite meu.
+                                   -- ⚠️ "O vendedor ganha comissão sobre o acréscimo?" é decisão do dono do
+                                   -- produto, hoje respondida SIM pelo caminho que paga. Se ele decidir que
+                                   -- não, muda-se o Relatório de Comissões e estes três atrás dele.
+                                   SUM((pmd.qtd_produto * pmd.preco_venda - pmd.valor_desconto + pmd.valor_acrescimo)
                                        * COALESCE(pmd.perc_comissao, fn.perc_comissao, 0) / 100) AS comissao
                             FROM produto_movimento_mestre pmm
                             JOIN produto_movimento_detalhe pmd

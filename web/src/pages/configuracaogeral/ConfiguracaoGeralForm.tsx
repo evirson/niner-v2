@@ -135,7 +135,16 @@ export default function ConfiguracaoGeralForm() {
       // compra, cadastrava um fornecedor pelo atalho da Entrada, e ele nascia com a conta ANTIGA —
       // o campo não aparece na tela (é atribuído por baixo dos panos), então nada denunciava, e
       // toda compra futura desse fornecedor entrava na conta errada da DRE.
-      queryClient.invalidateQueries({ queryKey: ['config-geral'] })
+      // ⚠️ A chave da PRÓPRIA tela é marcada como velha SEM refetch agora (auditoria 2026-08-29).
+      // Invalidar por prefixo casa também `['config-geral']` exata; o refetch que ela dispara
+      // aterrissa uns ~150 ms depois e o efeito de carga reescreve o formulário — marcar outro
+      // checkbox nesse intervalo fazia a marcação sumir sem aviso nenhum. `refetchType: 'none'`
+      // mantém o dado marcado como velho (a próxima montagem busca de novo) sem competir com o que
+      // o usuário está digitando agora.
+      queryClient.invalidateQueries({ queryKey: ['config-geral'], exact: true, refetchType: 'none' })
+      // As derivadas (`usa-servicos`, `plano-contas-compra-mercadoria`, e as que vierem) precisam
+      // do refetch de verdade: quem as consome é outra tela, que não tem o valor novo em mão.
+      queryClient.invalidateQueries({ queryKey: ['config-geral'], predicate: (q) => q.queryKey.length > 1 })
       setToastTipo('sucesso')
       setToast('Parâmetros salvos.')
     },

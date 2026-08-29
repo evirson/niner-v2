@@ -335,7 +335,7 @@ public class RelatorioVendasService {
 
     private static List<PontoGrafico> zeroFillPorDia(List<VendaAgregada> linhas, LocalDate dataInicial, LocalDate dataFinal) {
         Map<LocalDate, BigDecimal> porData = linhas.stream().collect(Collectors.groupingBy(
-                l -> l.dataVenda().toLocalDate(),
+                l -> naLoja(l.dataVenda()).toLocalDate(),
                 Collectors.reducing(BigDecimal.ZERO, VendaAgregada::valorLiquido, BigDecimal::add)));
         List<PontoGrafico> pontos = new ArrayList<>();
         for (LocalDate d = dataInicial; !d.isAfter(dataFinal); d = d.plusDays(1)) {
@@ -346,7 +346,7 @@ public class RelatorioVendasService {
 
     private static List<PontoGrafico> zeroFillPorHora(List<VendaAgregada> linhas) {
         Map<Integer, BigDecimal> porHora = linhas.stream().collect(Collectors.groupingBy(
-                l -> l.dataVenda().getHour(),
+                l -> naLoja(l.dataVenda()).getHour(),
                 Collectors.reducing(BigDecimal.ZERO, VendaAgregada::valorLiquido, BigDecimal::add)));
         List<PontoGrafico> pontos = new ArrayList<>();
         for (int h = 0; h < 24; h++) {
@@ -357,7 +357,7 @@ public class RelatorioVendasService {
 
     private static List<PontoGrafico> zeroFillPorDiaSemana(List<VendaAgregada> linhas) {
         Map<DayOfWeek, BigDecimal> porDia = linhas.stream().collect(Collectors.groupingBy(
-                l -> l.dataVenda().getDayOfWeek(),
+                l -> naLoja(l.dataVenda()).getDayOfWeek(),
                 Collectors.reducing(BigDecimal.ZERO, VendaAgregada::valorLiquido, BigDecimal::add)));
         List<PontoGrafico> pontos = new ArrayList<>();
         for (DayOfWeek dia : DayOfWeek.values()) {
@@ -438,7 +438,7 @@ public class RelatorioVendasService {
 
     private static String chaveGrupo(VendaAgregada l, TotalizarPor totalizarPor) {
         return switch (totalizarPor) {
-            case DATA_VENDA -> l.dataVenda().toLocalDate().toString();
+            case DATA_VENDA -> naLoja(l.dataVenda()).toLocalDate().toString();
             case CLIENTE -> l.idCliente() == null ? "SEM_CLIENTE" : String.valueOf(l.idCliente());
             case VENDEDOR -> l.idFuncionario() == null ? "SEM_VENDEDOR" : String.valueOf(l.idFuncionario());
             case OPERADOR_CAIXA -> l.idOperador() == null ? "SEM_OPERADOR" : String.valueOf(l.idOperador());
@@ -449,7 +449,7 @@ public class RelatorioVendasService {
 
     private static String nomeGrupo(VendaAgregada l, TotalizarPor totalizarPor) {
         return switch (totalizarPor) {
-            case DATA_VENDA -> l.dataVenda().toLocalDate().toString();
+            case DATA_VENDA -> naLoja(l.dataVenda()).toLocalDate().toString();
             case CLIENTE -> l.idCliente() == null ? "Consumidor Final" : l.nomeCliente();
             case VENDEDOR -> l.idFuncionario() == null ? "Sem vendedor" : l.nomeFuncionario();
             case OPERADOR_CAIXA -> l.idOperador() == null ? "Sem operador" : l.nomeOperador();
@@ -469,6 +469,28 @@ public class RelatorioVendasService {
     private static Long getLongOuNulo(ResultSet rs, String coluna) throws SQLException {
         long valor = rs.getLong(coluna);
         return rs.wasNull() ? null : valor;
+    }
+
+    /**
+     * O instante no fuso da loja — o MESMO que o filtro SQL usa.
+     *
+     * <p>⛔ Os agrupamentos usavam `OffsetDateTime` cru, que o driver devolve em <b>UTC</b>,
+     * enquanto o filtro é `(v.data_venda AT TIME ZONE 'America/Sao_Paulo')::date` (achado de
+     * auditoria, 2026-08-29). O descasamento fazia <b>valor sumir do gráfico</b>: uma venda das
+     * 21:30 de 31/08 entrava no total do relatório (data SP = 31/08) e caía no balde
+     * `2026-09-01` — e como o zero-fill só emite pontos dentro do período pedido, os R$ 800
+     * simplesmente não apareciam, sem nada indicando por quê.
+     *
+     * <p>No gráfico por HORA o efeito era pior de perceber: a loja que vende das 09h às 18h
+     * aparecia vendendo das 12h às 21h, com todo o eixo deslocado 3 horas. E o "por dia da semana"
+     * jogava a noite de sexta em sábado.
+     *
+     * <p>⚠️ Fuso FIXO de São Paulo, e não o da UF da empresa, de propósito: é o mesmo que o SQL
+     * deste relatório usa no filtro. Agrupar num fuso e filtrar em outro reabriria o defeito pela
+     * outra ponta — os dois lados têm de ser o mesmo, seja qual for a escolha.
+     */
+    private static java.time.ZonedDateTime naLoja(java.time.OffsetDateTime instante) {
+        return instante.atZoneSameInstant(java.time.ZoneId.of("America/Sao_Paulo"));
     }
 
     private static boolean ehAdmin(Jwt jwt) {

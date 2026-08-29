@@ -300,7 +300,10 @@ function ModalNovaEmpresa({ aoFechar, aoCriar }: { aoFechar: () => void; aoCriar
           />
         </div>
 
-        {erro && <p className="erro">{erro}</p>}
+        {/* ⚠️ Toast, não banner inline (auditoria 2026-08-29). A convenção do projeto é erro em
+            vermelho pelo `Toast.tsx`; aqui a mensagem — inclusive a do gateway, como o 503 de
+            cobrança desligada — saía num parágrafo acima do rodapé, sem `role="alert"`. */}
+        {erro && <Toast mensagem={erro} tipo="erro" aoFechar={() => setErro(null)} />}
 
         <div className="footer-bar">
           <button type="button" className="btn btn-secondary" onClick={aoFechar}>
@@ -428,7 +431,10 @@ function ModalPagamento({
             <p className="valor-cobranca">
               Total a pagar agora: <b>{REAL.format(valor)}</b>
             </p>
-            {erro && <p className="erro">{erro}</p>}
+            {/* ⚠️ Toast, não banner inline (auditoria 2026-08-29). A convenção do projeto é erro em
+                vermelho pelo `Toast.tsx`; aqui a mensagem — inclusive a do gateway, como o 503 de
+                cobrança desligada — saía num parágrafo acima do rodapé, sem `role="alert"`. */}
+            {erro && <Toast mensagem={erro} tipo="erro" aoFechar={() => setErro(null)} />}
 
             <div className="footer-bar">
               <button type="button" className="btn btn-secondary" onClick={aoFechar}>

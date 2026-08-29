@@ -67,7 +67,22 @@ class ComparacaoDeDataNoFusoCertoTest {
             // definido em PRODUÇÃO (`TZ` no docker-compose.prod.yml). Em dev roda em UTC, então o
             // bug não reproduz na máquina de quem escreveu. `OffsetDateTime.now()` fica de fora de
             // propósito: representa um instante, e comparar instante independe de fuso.
-            Pattern.compile("\\bLocal(Date|DateTime|Time)\\.now\\s*\\(\\s*\\)"));
+            Pattern.compile("\\bLocal(Date|DateTime|Time)\\.now\\s*\\(\\s*\\)"),
+            // ⚠️ Os dois abaixo entraram em 2026-08-29, depois de uma auditoria achar QUATRO
+            // defeitos de fuso que este guarda deixava passar por não conhecer o padrão:
+            //   • `to_char(timestamptz, …)` formata no fuso da SESSÃO (UTC) — a planilha do
+            //     contador saía com o mês de competência errado;
+            //   • `ZoneId.systemDefault()` pega o TZ do container, que só existe em produção.
+            // ⛔ Fora do alcance de regex e por isso NÃO cobertos: `.toLocalDate()`/`.getHour()`
+            // sobre OffsetDateTime e `DateTimeFormatter.format(OffsetDateTime)` — os dois deram
+            // defeito no mesmo dia (valor sumindo do gráfico, mensagem com o dia errado). Quem
+            // escrever qualquer um dos dois precisa lembrar sozinho: passe pelo FusoDaLoja.
+            // ⚠️ `data_nascimento` e `data_abertura` ficam de fora por serem colunas `date` de
+            // verdade — `AT TIME ZONE` sobre `date` não significa nada, e reprovar o build por elas
+            // treinaria quem lê a falha a ignorá-la.
+            Pattern.compile("to_char\\s*\\(\\s*[a-z_]+\\.(criado_em|atualizado_em|data_(?!nascimento|abertura)[a-z_]+)\\s*,",
+                    Pattern.CASE_INSENSITIVE),
+            Pattern.compile("\\bZoneId\\.systemDefault\\s*\\(\\s*\\)"));
 
     /** A conversão que redime qualquer uma das acima. */
     private static final Pattern CONVERTIDA =

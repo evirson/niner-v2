@@ -1,3 +1,4 @@
+import { qtdImpressa } from '../../lib/ordemServicoImpressao'
 import { useState } from 'react'
 import CabecalhoModal from '../../components/CabecalhoModal'
 import { ApiError } from '../../lib/api'
@@ -157,7 +158,9 @@ export default function PuxarOrdemServicoModal({
                         {i.nomeFuncionario && <span className="muted"> · {i.nomeFuncionario}</span>}
                       </td>
                       <td>{i.tipoItem === 'SERVICO' ? 'Serviço' : 'Peça'}</td>
-                      <td style={{ textAlign: 'right' }}>{i.qtdProduto}</td>
+              {/* Interpolar o `number` cru saía "2.5" com PONTO desde que a OS aceita decimal
+                  (2,5 litros de óleo) — a mesma correção que a via impressa recebeu. */}
+                      <td style={{ textAlign: 'right' }}>{qtdImpressa(i.qtdProduto)}</td>
                       <td className="mono" style={{ textAlign: 'right' }}>R$ {formatarMoeda(i.precoVenda)}</td>
                       <td className="mono" style={{ textAlign: 'right' }}>R$ {formatarMoeda(i.total)}</td>
                     </tr>

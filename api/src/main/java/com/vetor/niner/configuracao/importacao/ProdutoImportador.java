@@ -1,6 +1,7 @@
 package com.vetor.niner.configuracao.importacao;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.vetor.niner.comum.tempo.FusoDaLoja;
 import com.vetor.niner.catalogo.GradeDtos.GradeResponse;
 import com.vetor.niner.catalogo.GradeService;
 import com.vetor.niner.catalogo.ProdutoDtos.ProdutoRequest;
@@ -79,15 +80,17 @@ public class ProdutoImportador implements ImportadorDeTabela {
     private final ConfiguracaoGeralService configuracaoGeralService;
     private final GradeService gradeService;
     private final ImportacaoSavepointExecutor savepoints;
+    private final FusoDaLoja fusoDaLoja;
 
     public ProdutoImportador(JdbcClient jdbc, ProdutoService produtoService,
                               ConfiguracaoGeralService configuracaoGeralService, GradeService gradeService,
-                              ImportacaoSavepointExecutor savepoints) {
+                              ImportacaoSavepointExecutor savepoints, FusoDaLoja fusoDaLoja) {
         this.jdbc = jdbc;
         this.produtoService = produtoService;
         this.configuracaoGeralService = configuracaoGeralService;
         this.gradeService = gradeService;
         this.savepoints = savepoints;
+        this.fusoDaLoja = fusoDaLoja;
     }
 
     @Override
@@ -119,6 +122,8 @@ public class ProdutoImportador implements ImportadorDeTabela {
     @Override
     @Transactional
     public RelatorioImportacao processar(List<LinhaPlanilha> linhas, JsonNode escolhas, boolean confirmar, Jwt jwt) {
+        // Uma consulta ao banco por importação, não por linha (a planilha pode ter milhares).
+        ZoneId fuso = fusoDaLoja.daSessao(jwt);
         boolean usaCorGrade = configuracaoGeralService.usaCorGrade();
 
         List<LinhaErro> erros = new ArrayList<>();
@@ -151,7 +156,7 @@ public class ProdutoImportador implements ImportadorDeTabela {
                 // validação Java) numa linha deixa a transação do arquivo inteiro "abortada" e
                 // toda linha seguinte falha em cascata com "current transaction is aborted"
                 // (Postgres 25P02) — achado real ao validar uma planilha de Produtos.
-                if (savepoints.executar(() -> processarLinha(linha, usaCorGrade, tamanhoCache,
+                if (savepoints.executar(() -> processarLinha(linha, fuso, usaCorGrade, tamanhoCache,
                         idPerfilNormal, idPerfilSubstituicao, idPerfilNaoInformado, linhasSemTributacao))) {
                     importadas++;
                 } else {
@@ -197,7 +202,7 @@ public class ProdutoImportador implements ImportadorDeTabela {
 
     /** {@code true} se um produto novo foi criado; {@code false} se já existia (ignorada — mesma
      *  convenção de dedup do resto da importação: reaproveita, nunca duplica). */
-    private boolean processarLinha(LinhaPlanilha linha, boolean usaCorGrade, Map<String, Long> tamanhoCache,
+    private boolean processarLinha(LinhaPlanilha linha, ZoneId fuso, boolean usaCorGrade, Map<String, Long> tamanhoCache,
                                    Long idPerfilNormal, Long idPerfilSubstituicao, Long idPerfilNaoInformado,
                                    List<Integer> linhasSemTributacao) {
         String descricao = exigir(linha, "DESCRICAO");
@@ -231,8 +236,8 @@ public class ProdutoImportador implements ImportadorDeTabela {
 
         ProdutoRequest req = new ProdutoRequest(
                 descricao, marca, referencia, precoCusto, percentualVenda, precoVenda,
-                inicioDoDiaOuNulo(ImportacaoPlanilha.data("DATA_INICIO_OFERTA", linha.valor("DATA_INICIO_OFERTA"))),
-                inicioDoDiaOuNulo(ImportacaoPlanilha.data("DATA_FINAL_OFERTA", linha.valor("DATA_FINAL_OFERTA"))),
+                inicioDoDiaOuNulo(ImportacaoPlanilha.data("DATA_INICIO_OFERTA", linha.valor("DATA_INICIO_OFERTA")), fuso),
+                inicioDoDiaOuNulo(ImportacaoPlanilha.data("DATA_FINAL_OFERTA", linha.valor("DATA_FINAL_OFERTA")), fuso),
                 precoOferta,
                 ncmExistenteOuNulo(linha.valor("CODIGO_NCM")),
                 ImportacaoPlanilha.decimal("PESO_BRUTO", linha.valor("PESO_BRUTO")),
@@ -414,7 +419,16 @@ public class ProdutoImportador implements ImportadorDeTabela {
         return v;
     }
 
-    private static OffsetDateTime inicioDoDiaOuNulo(LocalDate data) {
-        return data == null ? null : data.atStartOfDay(ZoneId.systemDefault()).toOffsetDateTime();
+    /**
+     * Meia-noite da data digitada na planilha, <b>no fuso da loja</b>.
+     *
+     * <p>⚠️ Era {@code ZoneId.systemDefault()} até 2026-08-29 (guarda de fuso ampliado numa
+     * auditoria). O padrão da JVM é o {@code TZ} do container, que <b>só existe em produção</b> —
+     * em dev e na suíte é UTC, então o defeito não reproduzia na máquina de quem escreveu. Numa
+     * oferta importada, "vale de 01/09 a 30/09" virava vigência começando <b>31/08 às 21h</b>: o
+     * preço promocional entrava um dia antes e saía um dia antes do que a loja combinou.
+     */
+    private static OffsetDateTime inicioDoDiaOuNulo(LocalDate data, ZoneId fusoDaLoja) {
+        return data == null ? null : data.atStartOfDay(fusoDaLoja).toOffsetDateTime();
     }
 }

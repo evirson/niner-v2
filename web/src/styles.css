@@ -518,6 +518,12 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
   .guia-transferencia-imprimir, .guia-transferencia-imprimir * { visibility: visible; }
   /* ⚠️ SEM `position: absolute` desde 2026-08-22 (item 4) — ver `.documento-a4-imprimir`. */
   .guia-transferencia-imprimir {
+    /* ⚠️ A família tem de estar AQUI (auditoria 2026-08-29). Enquanto as duas classes viviam no
+       mesmo <pre>, a impressão herdava a Courier da pré-visualização; ao separar em portal, este
+       bloco ficou sem `font-family` e caiu no monoespaçado padrão do navegador. Continua
+       alinhando, mas o papel saía com fonte diferente da tela — e este projeto já pagou caro por
+       confiar em métrica de fonte em impressão. */
+    font-family: 'Courier New', Courier, monospace;
     page: guia-transferencia-a4;
     width: auto; margin: 0; padding: 0; border: 0;
     background: none; color: #000; font-size: 11px; line-height: 1.4;

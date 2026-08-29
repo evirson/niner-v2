@@ -7,7 +7,7 @@ import { BotaoFecharTela } from '../../components/BotaoFecharTela'
 import ConfirmarSalvarModal from '../../components/ConfirmarSalvarModal'
 import { IconeEtiqueta } from '../../components/Icones'
 import InfoRegistro from '../../components/InfoRegistro'
-import Toast from '../../components/Toast'
+import Toast, { type TipoToast } from '../../components/Toast'
 import { ApiError } from '../../lib/api'
 import {
   ETIQUETA_CONFIG_VAZIA,
@@ -69,6 +69,10 @@ export default function EtiquetaConfigForm({ somenteLeitura = false }: { somente
 
   const [erros, setErros] = useState<ErrosCampo>({})
   const [toast, setToast] = useState('')
+  // ⚠️ Sem isto o Toast caía no default 'erro' (vermelho, com role="alert") — e a ÚNICA mensagem
+  // de sucesso desta tela saía como alerta vermelho, justamente numa tela de calibragem, onde o
+  // usuário está procurando sinal de que algo deu errado. Achado de auditoria, 2026-08-29.
+  const [toastTipo, setToastTipo] = useState<TipoToast>('erro')
   const [confirmarSalvarAberto, setConfirmarSalvarAberto] = useState(false)
   const [produtoExemplo, setProdutoExemplo] = useState<ProdutoExemplo | null>(null)
   const [buscaProdutoAberta, setBuscaProdutoAberta] = useState(false)
@@ -142,8 +146,10 @@ export default function EtiquetaConfigForm({ somenteLeitura = false }: { somente
         },
       })
     },
-    onError: (e: unknown) =>
-      setToast(e instanceof ApiError ? e.message : 'Não foi possível salvar a configuração de etiqueta.'),
+    onError: (e: unknown) => {
+      setToastTipo('erro')
+      setToast(e instanceof ApiError ? e.message : 'Não foi possível salvar a configuração de etiqueta.')
+    },
   })
 
   /**
@@ -159,6 +165,12 @@ export default function EtiquetaConfigForm({ somenteLeitura = false }: { somente
     onSuccess: (config, opcoes) => {
       if (idParaGravar == null) setIdCriadoNoTeste(config.idConfigEtiqueta)
       setForm(paraFormulario(config))
+      // ⛔ A chave da PRÓPRIA tela é singular (`etiqueta-config`) e não casa por prefixo com a
+      // plural — sem o `setQueryData`, o ciclo normal de calibragem perdia trabalho: o usuário
+      // clica em Testar Impressão, SAI DA JANELA para medir a etiqueta com a régua, volta ao
+      // navegador → refetch de foco → o formulário é sobrescrito e os milímetros que ele já
+      // tinha ajustado somem. Achado de auditoria, 2026-08-29.
+      queryClient.setQueryData(['etiqueta-config', String(config.idConfigEtiqueta)], config)
       queryClient.invalidateQueries({ queryKey: ['etiquetas-config'] })
       queryClient.invalidateQueries({ queryKey: ['etiquetas-config-emissao'] })
       setConfigImpressao(config)
@@ -166,6 +178,7 @@ export default function EtiquetaConfigForm({ somenteLeitura = false }: { somente
       setQuantidadeImprimir(opcoes.quantidade)
       // Deixa explícito que o teste gravou — a gravação aqui é efeito, e efeito silencioso vira
       // surpresa na próxima vez que a tela abrir com valores que o usuário não lembra de ter salvo.
+      setToastTipo('sucesso')
       setToast('Configuração salva. O teste imprime sempre a versão gravada.')
     },
     onError: (e: unknown) =>
@@ -659,7 +672,7 @@ export default function EtiquetaConfigForm({ somenteLeitura = false }: { somente
         document.body,
       )}
 
-      {toast && <Toast mensagem={toast} aoFechar={() => setToast('')} />}
+      {toast && <Toast mensagem={toast} tipo={toastTipo} aoFechar={() => setToast('')} />}
     </div>
   )
 }

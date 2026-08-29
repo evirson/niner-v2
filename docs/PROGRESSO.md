@@ -1,7 +1,7 @@
 # Progresso do Projeto — niner-v2
 
 Registro cronológico das decisões e entregas. Atualizar a cada marco relevante.
-**Última atualização:** 2026-08-28
+**Última atualização:** 2026-08-29
 
 > 📄 **O que ainda falta está em `docs/PENDENCIAS.md`** (lista viva, agrupada por *de quem é a
 > bola*). Este arquivo conta a **história**; aquele conta o que está **aberto**. Ao fechar uma
@@ -10,6 +10,137 @@ Registro cronológico das decisões e entregas. Atualizar a cada marco relevante
 ---
 
 ## Estado atual
+
+> ## 📌 2026-08-29 — cinco rodadas de dois agentes caçadores de bugs
+>
+> Ele pediu **dois agentes em paralelo — um de front, um de back — e cinco rodadas cada**, com a
+> observação *"da segunda em diante, varra todo o ERP"*. Foram ~55 correções. O que este dia
+> ensinou não é a lista de defeitos; é um padrão que apareceu três vezes e vale mais que qualquer
+> um deles.
+>
+> ### ⭐ A lição do dia: metade das rodadas 3–5 achou defeito nas correções das rodadas 1–2
+>
+> Das quatro regressões que o agente de front reportou na rodada 5, quatro eram minhas. Do lado do
+> back, três das sete correções que mandei verificar estavam incompletas. Não é acaso — é a forma
+> que o erro toma quando se corrige rápido:
+>
+> - **Correção que muda uma ponta e não varre as outras.** O vale-mercadoria passou a ser calculado
+>   líquido na resposta do POST — e os cinco leitores autoritativos continuaram no bruto. O
+>   comprovante impresso dizia R$ 30 e o PDV resgatava R$ 50. ⛔ Antes da correção os dois números
+>   pelo menos batiam (errados, mas iguais): meio caminho ficou pior que nenhum.
+> - **Correção posta no lugar errado, sobrescrita 16 linhas abaixo.** `setXmlTemDuplicatas(false)`
+>   entrou no `onSuccess` do XML, onde o mesmo handler já o reescrevia. Código morto: o defeito
+>   continuou inteiro, com uma correção no diff parecendo prová-lo resolvido.
+> - **Correção que troca um sintoma por outro.** O `diasAtraso` do servidor passou a usar o fuso da
+>   UF; a listagem continuou cravada em São Paulo. Para loja em UTC−4/−5 o mesmo travamento voltou,
+>   deslocado para outros estados.
+> - **Correção que abre um furo novo.** Aceitar as marcas de orçamento e de OS indistintamente
+>   deixou uma linha `daOrdemServico` receber o preço congelado do orçamento e escapar da validação
+>   de quantidade orçada.
+>
+> ⭐ A regra que sai daqui: ao corrigir, `grep` por todos os leitores do dado que você mudou — e
+> rode uma rodada de auditoria sobre as próprias correções. Foi a rodada 5, a que só verificava o
+> que as anteriores fizeram, a que mais rendeu.
+>
+> ### Os achados que mais custavam dinheiro
+>
+> **1. O vale-mercadoria devolvia o que a loja nunca recebeu.** A devolução ignorava o desconto
+> rateado por item: venda de R$ 50 com R$ 20 de desconto (cliente pagou R$ 30) gerava vale de
+> R$ 50. Hoje a linha de devolução grava `preco_venda` bruto — é a chave que casa com a linha da
+> venda, e mudá-la quebraria o "já devolvido", liberando devolver duas vezes — e carrega o desconto
+> em `valor_desconto`. Os cinco leitores (`buscarVale`, `resolverVale` do PDV, CancelamentoDevolução
+> ×2, DRE, Lucratividade, Comissões) somam `qtd × preco_venda − valor_desconto`. ⚠️ Sem backfill:
+> linha anterior a hoje fica com desconto 0 e continua valendo o bruto, que é o valor impresso no
+> papel que o cliente tem na mão.
+>
+> **2. Comissão estornada de quem nunca a recebeu.** A linha de devolução gravava o `perc_comissao`
+> da linha da venda (na OS, de quem executou) junto com o `id_funcionario` da venda (de quem fechou
+> o caixa). Numa OS em que MARIA executou R$ 200 a 20% e JOÃO fechou a venda, devolver o serviço
+> tirava R$ 40 de JOÃO — que podia fechar o mês negativo — e deixava os R$ 40 com MARIA. Os dois
+> valores agora saem da mesma linha. No caminho, o `LIMIT 1` sem `ORDER BY` e sem casar o preço foi
+> corrigido: duas linhas da mesma variação na mesma venda é normal desde o preço congelado, e o
+> método irmão escrito no mesmo dia já casava por preço — os dois discordavam entre si.
+>
+> **3. Desconto de documento inflado por item de balcão.** O desconto proporcional somava o ledger
+> inteiro, inclusive o bipado depois do F5. Orçamento de R$ 1.000 com R$ 100 de desconto: o cliente
+> leva só o item de R$ 200 (devia dar R$ 20) e acrescenta um produto de R$ 800 do balcão → desconto
+> integral. A loja dava R$ 80 que ninguém prometeu, e o aviso não disparava — ele só avisa quando o
+> desconto é cortado, nunca quando infla.
+>
+> **4. Três relatórios discordando da folha de comissão.** DRE (×2) e Lucratividade calculavam
+> `(qtd × preço − desconto) × perc`; o Relatório de Comissões — o número que a loja paga — inclui o
+> acréscimo. Alinhei os três ao pagador, nunca o contrário: mudar o Comissões alteraria quanto o
+> vendedor recebe com base num palpite meu. ⚠️ "O vendedor ganha comissão sobre o acréscimo?" é
+> decisão do dono do produto, hoje respondida SIM pelo caminho que paga.
+>
+> ### Permissão: caixa que não governa nada, e permissão impossível de conceder
+>
+> A V091 fechou cinco chaves de `cfg_tela` que nenhum `@Tela` usava — o admin marcava e o servidor
+> ignorava; o estorno de crediário respondia 200 para quem tinha só o recebimento. Mas a correção
+> reabriu a direção oposta na porta ao lado: as `@Tela` de método deixaram as consultas de apoio da
+> mesma tela na chave antiga, e quem recebia só "Estorno de Crediário" levava 403 na abertura,
+> citando uma tela que o admin decidiu não liberar.
+>
+> ⭐ A saída foi dar à anotação a forma que o problema pedia: `@Tela` aceita várias chaves, e vale
+> qualquer uma. A regra é OU, nunca E — exigir as duas devolveria o mesmo beco, agora pedindo uma
+> permissão a mais. Quatro conjuntos de endpoints foram anotados assim (as três telas do balanço, as
+> três do crediário). ⚠️ E o guarda `AcoesPorTelaConferemTest` não entendia a sintaxe nova e acusou
+> duas telas de "sem dono": guarda que não acompanha a linguagem acusa falso e treina quem lê a
+> falha a desconfiar dele. O parser aprendeu as duas formas.
+>
+> ### O guarda de fuso tinha buraco, e o buraco tinha defeito dentro
+>
+> `ComparacaoDeDataNoFusoCertoTest` não conhecia `to_char(timestamptz, …)` (formata no fuso da
+> SESSÃO, UTC) nem `ZoneId.systemDefault()`. Ampliado, reprovou o build na hora com dois defeitos
+> reais: os importadores de Contas a Receber e de Produto convertiam a data da planilha com o fuso
+> do container — que só existe em produção. Em dev e na suíte é UTC, então o vencimento de 01/09
+> virava 31/08 às 21h: a parcela nascia com um dia a menos, e a oferta importada começava e
+> terminava um dia antes. ⚠️ Defeito que não reproduz na máquina de quem escreve é exatamente o que
+> um guarda automático existe para pegar.
+>
+> Ficou escrito no próprio teste o que ele NÃO cobre: `.toLocalDate()`/`.getHour()` sobre
+> `OffsetDateTime` e `DateTimeFormatter.format(OffsetDateTime)` estão fora do alcance de regex — e
+> os dois deram defeito neste mesmo dia. Limite declarado vale mais que limite descoberto no
+> próximo incidente.
+>
+> ### Silêncio: três defeitos que nenhum erro denunciava
+>
+> - **PDF da Guia de Transferência descartava o que passava de uma página.** `jsPDF` sem `addPage`:
+>   a partir de ~44 itens o texto era desenhado fora da A4 e não renderizava. Uma transferência de
+>   60 SKUs saía sem as linhas de "Conferido por / Recebido por" — o que a guia existe para colher.
+>   O botão Imprimir ao lado sempre saiu certo, então os dois caminhos discordavam. É o irmão do
+>   defeito do `position: absolute` de 22/08, no caminho do jsPDF.
+> - **Botão de Ajuda que nunca aparecia.** `AjudaDaTela` faz `if (!conteudo) return null`: a chave
+>   `plataforma.minha-conta` não existia no catálogo. Conferidas as 59 chaves usadas contra as 77
+>   definidas — era a única órfã.
+> - **Confirmação da inutilização afrouxada demais.** A correção que aceitava o traço do rótulo
+>   apagava tudo que não é dígito: "100105" liberava o botão que queima a faixa 100–105 na SEFAZ.
+>   Hoje normaliza só os traços Unicode, que era o problema real.
+>
+> ### O que ficou pendente, e por quê
+>
+> ⛔ A NF-e 55 de devolução ainda declara o valor BRUTO — `DevolucaoFiscalAssembler` não lê
+> `documento_fiscal_item.valor_desconto` (a coluna existe e é gravada) e fixa `vDesc = ZERO`.
+> Devolução total de uma venda com desconto emite nota de entrada de R$ 100 referenciando uma NFC-e
+> de R$ 90. Não corrigi de propósito: montagem de XML fiscal só se valida transmitindo, e a suíte
+> roda com `emite_nfe = false`. O javadoc que afirmava tê-lo corrigido foi acertado — a afirmação
+> era minha e era falsa.
+>
+> ⚠️ Beco entre duas telas: se o vale já foi resgatado, o cancelamento da venda manda "cancele
+> primeiro a devolução" e o cancelamento da devolução responde "o vale já foi usado". A saída existe
+> (cancelar a venda que consumiu o vale libera `vale_usado`), mas nada no schema liga o vale à venda
+> que o consumiu — só um booleano. As duas mensagens agora dizem o caminho; nomear a venda exige
+> coluna nova.
+>
+> ### Teste novo, com controle negativo
+>
+> `valeDeVendaComDescontoValeOLiquidoNaRespostaNoBancoENoResgate` confere os TRÊS lugares: a
+> resposta do POST (o que o comprovante imprime), o que ficou no banco (preço bruto + desconto em
+> coluna própria) e o GET do vale (o que o caixa credita). Um teste que olhasse só o POST passaria
+> com o segundo defeito inteiro — foi exatamente assim que ele sobreviveu à primeira correção.
+> Sabotando o `resolverVale` de volta ao bruto, o teste reprova no ponto certo: POST 30,00 ×
+> resgate 50,00.
+>
 
 > ## 📌 2026-08-28 (4) — fechamento do dia: a varredura de consistência
 >

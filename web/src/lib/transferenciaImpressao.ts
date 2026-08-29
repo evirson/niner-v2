@@ -103,8 +103,27 @@ export function gerarPdfGuiaTransferencia(linhas: string[], idTransferencia: num
   const doc = new jsPDF({ unit: 'mm', format: 'a4' })
   doc.setFont('courier', 'normal')
   doc.setFontSize(tamanhoFonte)
-  linhas.forEach((texto, indice) => {
-    doc.text(texto, margem, margem + (indice + 1) * alturaLinha)
-  })
+  // ⛔ PAGINA (achado de auditoria, 2026-08-29). Sem isto o `forEach` desenhava em
+  // `y = 15 + (i+1) * 4.6` sem limite: a partir de ~44 itens o texto ia para fora da A4 e o jsPDF
+  // simplesmente NÃO o renderizava — sem erro nenhum. Uma transferência de 60 SKUs gerava um PDF
+  // que terminava no meio da lista, **sem as linhas de "Conferido por / Recebido por"**, que é
+  // justamente o que a guia existe para colher. O botão "Imprimir" ao lado sempre saiu certo (o
+  // `.documento-a4-imprimir` pagina no navegador), então os dois caminhos discordavam.
+  // ⚠️ É o irmão exato do defeito do `position: absolute` de 2026-08-22, no caminho do jsPDF.
+  const alturaPagina = doc.internal.pageSize.getHeight()
+  const ultimaLinhaUtil = alturaPagina - margem
+  let y = margem + alturaLinha
+  for (const texto of linhas) {
+    if (y > ultimaLinhaUtil) {
+      doc.addPage()
+      // `addPage` reseta fonte e corpo — redeclarar é obrigatório, senão a página 2 sai
+      // proporcional e desalinha as colunas que a monoespaçada garante.
+      doc.setFont('courier', 'normal')
+      doc.setFontSize(tamanhoFonte)
+      y = margem + alturaLinha
+    }
+    doc.text(texto, margem, y)
+    y += alturaLinha
+  }
   doc.save(`guia-transferencia-${idTransferencia}.pdf`)
 }

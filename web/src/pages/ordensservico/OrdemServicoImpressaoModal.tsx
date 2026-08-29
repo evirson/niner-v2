@@ -4,10 +4,10 @@ import PortalDeImpressao from '../../components/PortalDeImpressao'
 import EnviarWhatsAppModal from '../../components/EnviarWhatsAppModal'
 import { ApiError } from '../../lib/api'
 import { compartilharArquivo } from '../../lib/compartilhamento'
-import { formatarMoeda, formatarQuantidade } from '../../lib/masks'
+import { formatarMoeda } from '../../lib/masks'
 import { gerarBlobDocumentoA4 } from '../../lib/orcamentoPdf'
 import { imprimirDocumentoA4 } from '../../lib/impressaoDocumento'
-import { montarLinhasOrdemServicoBobina } from '../../lib/ordemServicoImpressao'
+import { montarLinhasOrdemServicoBobina, qtdImpressa } from '../../lib/ordemServicoImpressao'
 import { SITUACAO_OS, type ItemOs, type OrdemServico } from '../../lib/ordensServico'
 import { montarLinkWhatsApp } from '../../lib/whatsapp'
 
@@ -173,7 +173,12 @@ function blocoItens(titulo: string, itens: ItemOs[], subtotal: number, mostrarEx
                   ` ${[i.variacaoCor, i.variacaoTamanho].filter(Boolean).join(' · ')}`}
               </td>
               {mostrarExecutor && <td>{i.nomeFuncionario ?? '—'}</td>}
-              <td style={{ textAlign: 'right' }}>{formatarQuantidade(i.qtdProduto, true)}</td>
+              {/* ⛔ A MESMA regra da bobina (2ª auditoria de 2026-08-29). A primeira correção pôs
+                  `formatarQuantidade(x, true)` aqui, que é sempre 3 casas: a via A4 passou a
+                  imprimir "2,000" enquanto a bobina da MESMA OS imprimia "2" — dois documentos do
+                  mesmo atendimento discordando. Numa loja com quantidade decimal desligada, toda
+                  linha de toda OS saía "1,000". */}
+              <td style={{ textAlign: 'right' }}>{qtdImpressa(i.qtdProduto)}</td>
               <td style={{ textAlign: 'right' }}>R$ {formatarMoeda(i.precoVenda)}</td>
               <td style={{ textAlign: 'right' }}>R$ {formatarMoeda(i.total)}</td>
             </tr>

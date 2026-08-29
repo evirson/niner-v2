@@ -35,6 +35,9 @@ public class BalancoEstoqueController {
         this.service = service;
     }
 
+    // Leitura de apoio das TRÊS telas do balanço: a Contagem, o Zerar e o Efetivar. Quem
+    // recebe só "Zerar Contagem" precisa VER a contagem que vai zerar.
+    @Tela({"estoque.contagem", "estoque.zerar-contagem", "estoque.efetivar-balanco"})
     @GetMapping("/contagem")
     public List<LinhaContagem> listarContagem(@AuthenticationPrincipal Jwt jwt) {
         return service.listarContagemAtiva(jwt);
@@ -84,7 +87,10 @@ public class BalancoEstoqueController {
     // inventário inteiro); e quem marcava SÓ "Efetivar Balanço" levava 403 citando "Contagem de
     // Estoque", uma tela que ele não liberou. O interceptor prefere a anotação de método à de
     // classe, então basta declarar aqui.
-    @Tela("estoque.diferencas")
+    // ⭐ E as TRÊS chaves na mesma anotação: a tela Efetivar Balanço abre com esta consulta, e
+    // deixá-la só em `estoque.diferencas` trocava o 403 de nome ("Diferenças de Estoque" em vez
+    // de "Contagem de Estoque") sem tirar o beco de quem recebeu só o Efetivar.
+    @Tela({"estoque.diferencas", "estoque.efetivar-balanco", "estoque.contagem"})
     @GetMapping("/diferencas")
     public DiferencasResponse obterDiferencas(@AuthenticationPrincipal Jwt jwt) {
         return service.obterDiferencas(jwt);
@@ -96,6 +102,9 @@ public class BalancoEstoqueController {
         return service.efetivar(jwt);
     }
 
+    // Leitura de apoio das TRÊS telas do balanço: a Contagem, o Zerar e o Efetivar. Quem
+    // recebe só "Zerar Contagem" precisa VER a contagem que vai zerar.
+    @Tela({"estoque.contagem", "estoque.zerar-contagem", "estoque.efetivar-balanco"})
     @GetMapping("/ultima-efetivacao")
     public UltimaEfetivacaoResponse obterUltimaEfetivacao(@AuthenticationPrincipal Jwt jwt) {
         return service.obterUltimaEfetivacao(jwt);

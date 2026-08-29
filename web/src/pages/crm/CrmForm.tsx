@@ -1,5 +1,7 @@
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import CabecalhoModal from '../../components/CabecalhoModal'
 import AjudaDaTela from '../../components/AjudaDaTela'
 import { BotaoFecharTela } from '../../components/BotaoFecharTela'
 import GaugeProgresso from '../../components/GaugeProgresso'
@@ -45,6 +47,7 @@ function rotuloContagem(n: number): string {
  * round-trip — só reordena o array já carregado.
  */
 export default function CrmForm() {
+  const navigate = useNavigate()
   const [filtrosClientes, setFiltrosClientes] = useState<FiltrosClientesCrm>(FILTROS_CLIENTES_CRM_VAZIO)
   const [filtrosProdutos, setFiltrosProdutos] = useState<FiltrosProdutosCrm>(FILTROS_PRODUTOS_CRM_VAZIO)
   const [colunas, setColunas] = useState<ColunaSaidaCrm[]>(TODAS_AS_COLUNAS_CRM)
@@ -231,7 +234,16 @@ export default function CrmForm() {
       {configAberto && (
         <div className="modal-overlay">
           <div className="modal modal-largo" role="dialog" aria-label="Filtros e Dados do Cliente" onClick={(e) => e.stopPropagation()}>
-            <h2 style={{ marginTop: 0 }}>Filtros e Dados do Cliente</h2>
+            {/* ⛔ Sem o ✕ este popup não tinha SAÍDA (achado de auditoria, 2026-08-29): ele nasce
+                aberto, o overlay é `position:fixed; inset:0` e cobre o BotaoFecharTela da topbar,
+                e o rodapé só tinha "Localizar Clientes". Quem clicasse em CRM por engano só saía
+                executando a busca — ou pelo Voltar do navegador. As quatro telas irmãs com o mesmo
+                desenho (Entrada, Devolução ao Fornecedor, Pesquisa de Vendas, Cancelamento de
+                Devolução) já usavam CabecalhoModal com navigate(-1). */}
+            <CabecalhoModal
+              titulo="Filtros e Dados do Cliente"
+              aoFechar={() => (clientes !== null ? setConfigAberto(false) : navigate(-1))}
+            />
             <p className="muted" style={{ marginTop: 4 }}>
               Configure os filtros e as colunas desejadas e clique em "Localizar Clientes".
             </p>

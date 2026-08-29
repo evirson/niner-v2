@@ -276,7 +276,12 @@ public class RelatorioMovimentacaoProdutosService {
         for (LinhaAnalitica l : linhas) {
             porTipo.merge(l.tipoMovimento(), l.valorMovimentado(), BigDecimal::add);
 
-            String dia = l.dataMovimento().toLocalDate().format(formatoDia);
+            // ⛔ Mesmo defeito do Relatório de Vendas (2026-08-29): o filtro usa
+            // `AT TIME ZONE 'America/Sao_Paulo'` e o agrupamento usava o instante cru, que o
+            // driver devolve em UTC — um movimento das 21:30 virava a barra do dia SEGUINTE, fora
+            // do período pedido.
+            String dia = l.dataMovimento().atZoneSameInstant(java.time.ZoneId.of("America/Sao_Paulo"))
+                    .toLocalDate().format(formatoDia);
             porDia.merge(dia, l.valorMovimentado(), BigDecimal::add);
 
             if ("AJUSTE".equals(l.tipoMovimento()) && l.saida().signum() > 0) {

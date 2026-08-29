@@ -812,15 +812,7 @@ export default function EntradaMercadoriaForm() {
       if (preview.fornecedor.idFornecedor != null) {
         setFornecedorEscolhido({ idFornecedor: preview.fornecedor.idFornecedor, razaoSocial: preview.fornecedor.razaoSocial ?? '' })
         setFornecedorXmlSemCadastro(null)
-                    // ⛔ Faltava (achado de auditoria, 2026-08-29), e o efeito era mudo: esta
-                    // flag trava o efeito que divide o total em N parcelas. Depois de uma
-                    // entrada por XML com duplicatas, a entrada SEGUINTE — manual ou por
-                    // planilha — digitava "3" em Nº de Parcelas e NENHUMA linha aparecia. Não há
-                    // botão de acrescentar parcela (o Nº de Parcelas é a única fonte, decisão de
-                    // 2026-08-11), então o operador ou gravava a entrada SEM as contas a pagar
-                    // da compra, ou ficava travado sem entender. Só um F5 consertava.
-                    setXmlTemDuplicatas(false)
-                    setPendenteEmResolucao(null)
+        setPendenteEmResolucao(null)
       } else {
         // CNPJ do emitente não bate com nenhum fornecedor cadastrado — já abre o cadastro
         // rápido preenchido com os dados do XML (2026-08-12, pedido do dono do produto: "já
@@ -1371,6 +1363,17 @@ export default function EntradaMercadoriaForm() {
                     setSerieNotaXml(null)
                     setChaveJaImportada(false)
                     setFornecedorXmlSemCadastro(null)
+                    // ⛔ AQUI, não no `onSuccess` do XML (2ª auditoria de 2026-08-29). A primeira
+                    // correção pôs este reset dentro do processamento do XML — e 16 linhas abaixo,
+                    // no MESMO handler, `setXmlTemDuplicatas(preview.duplicatas.length > 0)`
+                    // sobrescrevia: dois setState na mesma função, o último vence. Era código
+                    // morto, e o defeito continuou inteiro.
+                    // Sintoma: entrada por XML com duplicatas → Nova Entrada → Manual/Planilha →
+                    // digitar "3" em Nº de Parcelas → NENHUMA parcela é gerada, porque o efeito sai
+                    // na primeira linha (`if (parcelasEditadas || xmlTemDuplicatas) return`). Não há
+                    // botão de acrescentar parcela: ou grava a compra sem contas a pagar, ou trava.
+                    setXmlTemDuplicatas(false)
+                    setPendenteEmResolucao(null)
                   }}
                 >
                   Nova Entrada

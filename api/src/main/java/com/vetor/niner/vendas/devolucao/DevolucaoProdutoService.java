@@ -124,16 +124,56 @@ public class DevolucaoProdutoService {
         List<ItemDevolucaoResponse> itensResponse = new ArrayList<>();
         BigDecimal valorVale = BigDecimal.ZERO;
         for (ItemResolvido item : itens) {
+            // ⭐ Funcionário e percentual saem da MESMA linha da venda — ver o javadoc de
+            // `comissaoDaLinhaDaVenda`: separá-los estornava a comissão de quem não a recebeu.
+            ComissaoDaLinha comissao = comissaoDaLinhaDaVenda(req.numeroVenda(), item.idVariacao(),
+                    item.precoVenda());
+            BigDecimal descontoUnitario = descontoUnitarioDaVenda(req.numeroVenda(), item.idVariacao(),
+                    item.precoVenda());
+            // ⭐ O desconto vai para o LEDGER, não só para o vale (achado de auditoria,
+            // 2026-08-29). A linha de devolução gravava `preco_venda` bruto e `valor_desconto`
+            // zero, e o Relatório de Comissões estornava sobre esse bruto enquanto a venda pagara
+            // sobre o líquido: devolver uma peça de R$ 100 vendida com R$ 30 de desconto tirava
+            // do vendedor comissão sobre R$ 100 — mais do que ele recebeu. Com desconto grande e
+            // várias devoluções, a comissão do mês fica NEGATIVA.
+            // ⚠️ `preco_venda` continua BRUTO de propósito: é a chave que casa a devolução com a
+            // linha da venda (`chaveLinha`, o "já devolvido"). Quem carrega o desconto é a coluna
+            // própria — mudar o preço quebraria o casamento e liberaria devolver duas vezes.
+            // ⚠️ Sem backfill: linha antiga fica com 0 e mantém o comportamento antigo, em vez de
+            // reescrever comissão de mês já pago (mesma decisão da V088).
+            // ⚠️ Arredonda UMA vez, aqui, e é este valor que vai para o banco (P7). O rateio
+            // unitário é dízima o tempo todo — R$ 10 de desconto em 3 unidades dá 3,333… — e sem
+            // o `setScale` o vale saía com dezenas de casas na resposta e no comprovante.
+            BigDecimal descontoDaLinha = descontoUnitario.multiply(item.qtd())
+                    .setScale(2, java.math.RoundingMode.HALF_UP);
             jdbc.sql("""
                             INSERT INTO produto_movimento_detalhe
                                 (id_tenant, id_movimento, id_empresa, id_variacao, credito_debito, qtd_produto,
-                                 preco_venda, preco_custo, id_funcionario, origem, perc_comissao)
-                            VALUES (plataforma.tenant_atual(), ?, ?, ?, 'C', ?, ?, ?, ?, 'devolução manual', ?)
+                                 preco_venda, preco_custo, id_funcionario, origem, perc_comissao, valor_desconto)
+                            VALUES (plataforma.tenant_atual(), ?, ?, ?, 'C', ?, ?, ?, ?, 'devolução manual', ?, ?)
                             """)
                     .params(idMovimento, idEmpresa, item.idVariacao(), item.qtd(), item.precoVenda(), item.precoCusto(),
-                            idFuncionario, percComissaoDaVenda(req.numeroVenda(), item.idVariacao()))
+                            comissao.idFuncionario() != null ? comissao.idFuncionario() : idFuncionario,
+                            comissao.percComissao(), descontoDaLinha)
                     .update();
-            BigDecimal valorTotalItem = item.precoVenda().multiply(item.qtd());
+            // ⛔ LÍQUIDO, não bruto (achado de auditoria, 2026-08-29). O PDV rateia o desconto da
+            // venda por item (`produto_movimento_detalhe.valor_desconto`) e o caminho da devolução
+            // ignorava essa coluna por completo: vendia-se 1 peça de R$ 100 com R$ 10 de desconto,
+            // o cliente pagava R$ 90 — e o vale saía R$ 100. **A loja devolvia dinheiro que nunca
+            // recebeu**, em toda devolução de venda com desconto, que é o caso comum.
+            // ⚠️ A DRE e o vale já acompanham (os cinco leitores do ledger foram alinhados junto).
+            // ⛔ A NF-e 55 de devolução AINDA declara o BRUTO — conferido em 2026-08-29, não é
+            // suposição: `DevolucaoFiscalAssembler.buscarItensDaNotaOriginal` não lê
+            // `documento_fiscal_item.valor_desconto` (a coluna existe e é gravada, V035) e
+            // `somar()` fixa `vDesc = ZERO`, com `vNF = soma dos vProd`. Devolução total de uma
+            // venda com desconto emite nota de entrada de R$ 100 referenciando uma NFC-e de R$ 90.
+            // Não foi corrigido aqui de propósito: mexer em montagem de XML fiscal só se valida
+            // TRANSMITINDO, e a suíte roda com `emite_nfe = false`. Está em docs/PENDENCIAS.md.
+            // ⭐ Derivado do que foi GRAVADO, não recalculado a partir do preço líquido: é
+            // exatamente a conta que os cinco leitores fazem em SQL
+            // (`qtd * preco_venda - valor_desconto`). Calcular por outro caminho reabriria a
+            // divergência de centavo entre o comprovante impresso e o resgate no PDV.
+            BigDecimal valorTotalItem = item.precoVenda().multiply(item.qtd()).subtract(descontoDaLinha);
             itensResponse.add(new ItemDevolucaoResponse(
                     item.idVariacao(), item.sku(), item.descricaoProduto(), item.variacaoCor(), item.variacaoTamanho(),
                     item.qtd(), item.precoVenda(), valorTotalItem));
@@ -167,7 +207,12 @@ public class DevolucaoProdutoService {
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Vale-mercadoria não encontrado."));
 
         BigDecimal valorVale = jdbc.sql("""
-                        SELECT COALESCE(SUM(pmd.qtd_produto * pmd.preco_venda), 0)
+                        -- ⭐ LÍQUIDO (auditoria 2026-08-29). A linha de DEVOLUÇÃO grava `preco_venda` bruto — é a chave
+                        -- que casa com a linha da venda — e carrega o desconto rateado em `valor_desconto`. Ler só o
+                        -- bruto fazia o comprovante impresso dizer R$ 90 e o PDV resgatar R$ 100 no MESMO vale.
+                        -- ⚠️ Linha anterior a 29/08 tem `valor_desconto = 0` e continua valendo o bruto, de propósito:
+                        -- é o valor impresso no papel que o cliente tem na mão.
+                        SELECT COALESCE(SUM(pmd.qtd_produto * pmd.preco_venda - pmd.valor_desconto), 0)
                         FROM produto_movimento_mestre pmm
                         JOIN produto_movimento_detalhe pmd
                                ON pmd.id_movimento = pmm.id_movimento AND pmd.id_tenant = pmm.id_tenant
@@ -323,24 +368,85 @@ public class DevolucaoProdutoService {
      * produto: nulo faz o relatório cair no cadastro, o comportamento correto quando não existe
      * percentual congelado para copiar.
      */
-    private BigDecimal percComissaoDaVenda(Long numeroVenda, long idVariacao) {
+    /**
+     * O desconto que a venda deu <b>por unidade</b> naquela linha — zero quando não houve.
+     *
+     * <p>O PDV grava o desconto da venda <b>rateado por item</b> em
+     * {@code produto_movimento_detalhe.valor_desconto}, para o total da linha. Aqui ele volta a ser
+     * unitário, para valer qualquer que seja a quantidade devolvida.
+     *
+     * <p>⚠️ Casa por (variação, PREÇO) — a mesma chave de linha que o resto da devolução usa desde
+     * 2026-08-22: a mesma variação pode estar na venda duas vezes com preços diferentes, e cada
+     * uma tem o seu desconto.
+     *
+     * <p>⚠️ Devolve zero na devolução <b>sem venda de origem</b>: não há desconto a herdar, e o
+     * preço informado já é o que o operador digitou.
+     */
+    private BigDecimal descontoUnitarioDaVenda(Long numeroVenda, long idVariacao, BigDecimal precoVenda) {
         if (numeroVenda == null) {
-            return null;
+            return BigDecimal.ZERO;
         }
         return jdbc.sql("""
-                        SELECT pmd.perc_comissao
+                        SELECT COALESCE(SUM(pmd.valor_desconto), 0) / NULLIF(SUM(pmd.qtd_produto), 0)
                           FROM produto_movimento_mestre pmm
                           JOIN produto_movimento_detalhe pmd
                                  ON pmd.id_tenant = pmm.id_tenant AND pmd.id_movimento = pmm.id_movimento
                          WHERE pmm.id_tenant = plataforma.tenant_atual()
                            AND pmm.id_venda = ? AND pmm.tipo_movimento = 'VENDA'
-                           AND pmd.id_variacao = ? AND pmd.perc_comissao IS NOT NULL
-                         LIMIT 1
+                           AND pmd.id_variacao = ? AND pmd.preco_venda = ?
                         """)
-                .params(numeroVenda, idVariacao)
+                .params(numeroVenda, idVariacao, precoVenda)
                 .query(BigDecimal.class)
                 .optional()
-                .orElse(null);
+                .orElse(BigDecimal.ZERO);
+    }
+
+    /** O funcionário e o percentual de comissão CONGELADOS na linha da venda que está sendo devolvida. */
+    private record ComissaoDaLinha(Long idFuncionario, BigDecimal percComissao) {
+    }
+
+    /**
+     * De quem era a comissão daquela linha, e a que percentual — os DOIS da mesma linha.
+     *
+     * <h2>⛔ Dois defeitos que este método corrige (auditoria 2026-08-29)</h2>
+     *
+     * <p><b>(a) O percentual era do executor, o funcionário era do vendedor.</b> A linha de
+     * devolução gravava {@code perc_comissao} lido da linha da venda (na OS, quem <i>executou</i>)
+     * junto com o {@code id_funcionario} da venda (quem <i>fechou o caixa</i>). O Relatório de
+     * Comissões agrupa por {@code id_funcionario}: numa OS em que MARIA executou R$ 200 a 20% e
+     * JOÃO fechou a venda, devolver o serviço tirava <b>R$ 40 de JOÃO</b> — que nunca os recebeu,
+     * podendo fechar o mês negativo — e <b>deixava os R$ 40 com MARIA</b>. Agora os dois valores
+     * saem da mesma linha, então o estorno cai em quem foi creditado.
+     *
+     * <p><b>(b) {@code LIMIT 1} sem {@code ORDER BY} e sem casar o preço.</b> Duas linhas da mesma
+     * variação na mesma venda é <b>normal</b> desde o preço congelado do orçamento — o método
+     * escolhia uma arbitrariamente. O irmão escrito no mesmo dia, {@code descontoUnitarioDaVenda},
+     * já casava por {@code preco_venda}, que é a chave de linha do projeto desde 2026-08-22; os
+     * dois discordavam entre si. Agora ambos usam a mesma chave.
+     *
+     * <p>⚠️ Devolve {@code null} nos dois campos quando a linha não é encontrada — quem chama cai
+     * no vendedor da venda, o comportamento antigo, em vez de gravar um funcionário errado.
+     */
+    private ComissaoDaLinha comissaoDaLinhaDaVenda(Long numeroVenda, long idVariacao, BigDecimal precoVenda) {
+        if (numeroVenda == null) {
+            return new ComissaoDaLinha(null, null);
+        }
+        return jdbc.sql("""
+                        SELECT pmd.id_funcionario, pmd.perc_comissao
+                          FROM produto_movimento_mestre pmm
+                          JOIN produto_movimento_detalhe pmd
+                                 ON pmd.id_tenant = pmm.id_tenant AND pmd.id_movimento = pmm.id_movimento
+                         WHERE pmm.id_tenant = plataforma.tenant_atual()
+                           AND pmm.id_venda = ? AND pmm.tipo_movimento = 'VENDA'
+                           AND pmd.id_variacao = ? AND pmd.preco_venda = ?
+                         ORDER BY pmd.id_movimento_detalhe
+                         LIMIT 1
+                        """)
+                .params(numeroVenda, idVariacao, precoVenda)
+                .query((rs, n) -> new ComissaoDaLinha(getLongOuNulo(rs, "id_funcionario"),
+                        rs.getBigDecimal("perc_comissao")))
+                .optional()
+                .orElse(new ComissaoDaLinha(null, null));
     }
 
     private static void validarContraAVenda(EfetivarDevolucaoRequest req, List<ItemResolvido> itens,

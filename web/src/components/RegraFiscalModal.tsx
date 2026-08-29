@@ -178,7 +178,7 @@ export default function RegraFiscalModal({
               maxLength={4}
               inputMode="numeric"
               placeholder="6xxx"
-              onChange={(e) => setF((s) => ({ ...s, cfopInterestadual: e.target.value.replace(/D/g, '') }))}
+              onChange={(e) => setF((s) => ({ ...s, cfopInterestadual: e.target.value.replace(/\D/g, '') }))}
             />
             <p className="muted" style={{ fontSize: 12, marginTop: 4 }}>
               Usado quando o cliente é de outro estado. Vazio = a regra só vale dentro da UF, e a

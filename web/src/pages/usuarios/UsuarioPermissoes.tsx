@@ -68,6 +68,12 @@ export default function UsuarioPermissoes() {
       setSucesso('Permissões salvas.')
       // A grade do usuário logado alimenta o menu — se ele mexeu na própria por outra aba, o menu
       // precisa reagir (React Query entre telas).
+      // ⛔ `setQueryData` na chave da PRÓPRIA tela (achado de auditoria, 2026-08-29). Sem isto o
+      // cache ficava com a grade PRÉ-salvamento; o efeito de preenchimento não tem guarda de
+      // `isFetching`, e um refetch de foco (Alt-Tab e voltar) reescrevia a grade inteira,
+      // **apagando as marcações que o admin fez depois de salvar** — sem aviso, e ele salvava
+      // de novo achando que tinha salvado tudo.
+      queryClient.setQueryData(['permissoes', idUsuario], grade)
       queryClient.invalidateQueries({ queryKey: ['minhas-permissoes'] })
     },
     onError: (e) => setErro(e instanceof ApiError ? e.message : 'Não foi possível salvar as permissões.'),

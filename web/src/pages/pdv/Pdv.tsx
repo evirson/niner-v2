@@ -336,7 +336,14 @@ export default function Pdv() {
       ? osPuxada.totalServicos + osPuxada.totalPecas
       : (orcamentoPuxado?.subtotal ?? 0)
     if (subtotalDoDocumento <= 0) return 0
-    const levado = ledger.reduce((soma, i) => soma + totalLinha(i), 0)
+    // ⛔ Só a parte COBERTA pelo documento (2ª auditoria de 2026-08-29). A primeira correção somou
+    // o ledger inteiro — e o ledger tem também o que foi bipado no balcão depois do F5 (nasce com
+    // `qtdOrcada: 0`) e a quantidade que passou do orçado. Bastava a venda ALCANÇAR o subtotal do
+    // documento para o desconto sair INTEIRO: orçamento de R$ 1.000 com R$ 100 de desconto, o
+    // cliente leva só o item de R$ 200 (devia dar R$ 20) e acrescenta um produto de R$ 800 do
+    // balcão → `levado = 1.000` → R$ 100 de desconto. A loja deu R$ 80 que ninguém prometeu, e o
+    // aviso novo não dispara, porque ele só avisa quando o desconto é CORTADO, nunca quando infla.
+    const levado = ledger.reduce((soma, i) => soma + Math.min(i.qtd, i.qtdOrcada) * i.precoUnit, 0)
     if (levado >= subtotalDoDocumento) return desconto
     return Math.floor((desconto * levado * 100) / subtotalDoDocumento) / 100
   }

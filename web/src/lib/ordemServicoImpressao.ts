@@ -40,8 +40,12 @@ function formatarData(iso: string): string {
  * ⚠️ Interpolar o `number` cru saía "2.5" com PONTO na via do cliente (achado de auditoria,
  * 2026-08-29) — enquanto a papeleta de venda da mesma loja imprime "2,5" e a grade da própria OS
  * mostra "2,500". Não erra dinheiro; erra o documento entregue ao cliente.
+ *
+ * ⚠️ Exportado desde 2026-08-29: a via A4 da OS usava `formatarQuantidade(x, true)` (sempre 3
+ * casas) e imprimia "2,000" enquanto esta bobina imprimia "2", no mesmo atendimento. Duas vias do
+ * mesmo documento têm de dizer o mesmo número — a regra mora num lugar só.
  */
-function qtdImpressa(qtd: number): string {
+export function qtdImpressa(qtd: number): string {
   return Number.isInteger(qtd) ? String(qtd) : String(qtd).replace('.', ',')
 }
 

@@ -183,6 +183,20 @@ class DevolucaoProdutoCrudTest {
         }
     }
 
+    /** Venda de 1 unidade COM desconto — o caso em que o vale bruto e o líquido divergem. */
+    private long efetivarVendaComDesconto(String token, long idVariacao, long idCliente, long idFuncionario,
+                                          long idCarteira, String desconto, String valorPago) throws Exception {
+        String corpo = """
+                {"itens":[{"idVariacao":%d,"qtd":1}],"descontoVenda":%s,"idCliente":%d,"idFuncionario":%d,
+                 "pagamentos":[{"idCarteira":%d,"valorPago":%s,"numeroParcelas":1}]}
+                """.formatted(idVariacao, desconto, idCliente, idFuncionario, idCarteira, valorPago);
+        String resp = mvc.perform(post("/api/v1/pdv/vendas").header("Authorization", "Bearer " + token)
+                        .contentType(APPLICATION_JSON).content(corpo))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        return ((Number) JsonPath.read(resp, "$.idVenda")).longValue();
+    }
+
     /** Efetiva uma venda de 1 unidade via PDV de verdade (não SQL bruto) — devolve o id_venda. */
     private long efetivarVenda(String token, long idVariacao, long idCliente, long idFuncionario,
                                 long idCarteira, String valorPago, int numeroParcelas) throws Exception {
@@ -198,6 +212,20 @@ class DevolucaoProdutoCrudTest {
     }
 
     /** `assinarNovoTenant` já devolve token ADMIN — PUT exige o corpo inteiro (sem campo nullable). */
+    /** Libera desconto até `percentual` no PDV — o teto nasce em 0 (nenhum desconto permitido). */
+    private void definirTetoDeDesconto(String token, String percentual) throws Exception {
+        mvc.perform(put("/api/v1/config-geral").header("Authorization", "Bearer " + token)
+                        .contentType(APPLICATION_JSON)
+                        .content("""
+                                {"percentualDescontoVenda":%s,"jurosCrediarioDias":0,"jurosCrediario":0,
+                                 "multaCrediarioDias":0,"multaCrediario":0,"cfgUsaCorGrade":false,
+                                 "cfgPermiteQtdDecimal":true,"cfgPermiteEstoqueNegativo":true,"cfgDiasValidadeOrcamento":15,"cfgExigeNumeroVendaDevolucao":false,
+                                 "cfgRateiaFreteEntrada":false,"cfgReajustaPrecoEntrada":false,"cfgConsisteValorContasPagar":false,
+                                 "idPlanoContasCompraMercadoria":"3.03.001","cfgEmiteFiscalAposVenda":true}
+                                """.formatted(percentual)))
+                .andExpect(status().isOk());
+    }
+
     private void definirExigeNumeroVendaDevolucao(String token, boolean exige) throws Exception {
         mvc.perform(put("/api/v1/config-geral").header("Authorization", "Bearer " + token)
                         .contentType(APPLICATION_JSON)
@@ -748,4 +776,80 @@ class DevolucaoProdutoCrudTest {
             assertThat(buscarQtdEstoque(c, idVariacao)).isEqualByComparingTo("10.000");
         }
     }
+    /**
+     * ⭐ O vale vale o que o cliente PAGOU — e o valor impresso é o mesmo que o PDV resgata.
+     *
+     * <p>⛔ Dois defeitos, achados no mesmo dia (2026-08-29) e em rodadas diferentes de auditoria:
+     * <ol>
+     *   <li>a devolução ignorava o desconto rateado da venda — vendia-se a R$ 100 com R$ 30 de
+     *       desconto, o cliente pagava R$ 70 e levava vale de <b>R$ 100</b>. A loja devolvia
+     *       dinheiro que nunca recebeu, em toda devolução de venda com desconto;</li>
+     *   <li>a <b>correção</b> do primeiro mudou só a RESPOSTA do POST. O ledger continuava bruto,
+     *       e os leitores autoritativos com ele: o comprovante impresso dizia R$ 70 e o resgate no
+     *       caixa creditava R$ 100. Antes da correção os dois números pelo menos <i>batiam</i>.</li>
+     * </ol>
+     *
+     * <p>⚠️ Por isso este teste confere os <b>três</b> lugares — a resposta, o que ficou no banco e
+     * o GET do vale. Um teste que olhasse só o POST passaria com o segundo defeito inteiro.
+     */
+    @Test
+    void valeDeVendaComDescontoValeOLiquidoNaRespostaNoBancoENoResgate() throws Exception {
+        TenantNovo tenant = assinarNovoTenant("vale-liquido");
+        long idTenant = extrairIdTenant(tenant.token());
+        long idProduto = criarProduto(tenant.token(), "Produto Vale Liquido");   // cadastro a 50,00
+        long idCarteira = criarTipoCarteira(tenant.token(), "DINHEIRO VALE", "AVISTA");
+        long idCliente = criarCliente(tenant.token(), "Cliente Vale Liquido");
+        long idFuncionario = criarFuncionario(tenant.token(), "Vendedor Vale Liquido");
+        abrirCaixaDinheiro(tenant.token());
+        // O teto de desconto nasce em 0 — sem isto o PDV recusa a venda com 400, e o teste
+        // falharia por um motivo que não tem nada a ver com o que ele mede.
+        definirTetoDeDesconto(tenant.token(), "50.00");
+
+        long idVariacao;
+        long idVenda;
+        try (Connection c = abrirConexao(idTenant)) {
+            long idEmpresa = buscarIdEmpresa(c);
+            idVariacao = criarVariacao(c, idTenant, idProduto);
+            definirEstoque(c, idTenant, idEmpresa, idVariacao, new BigDecimal("10.000"));
+            // R$ 50,00 com R$ 20,00 de desconto: o cliente paga R$ 30,00.
+            idVenda = efetivarVendaComDesconto(tenant.token(), idVariacao, idCliente, idFuncionario,
+                    idCarteira, "20.00", "30.00");
+        }
+
+        String resp = mvc.perform(post("/api/v1/vendas/devolucao").header("Authorization", "Bearer " + tenant.token())
+                        .contentType(APPLICATION_JSON).content("""
+                                {"numeroVenda":%d,"itens":[{"idVariacao":%d,"qtd":1}]}
+                                """.formatted(idVenda, idVariacao)))
+                .andExpect(status().isCreated())
+                // (1) a resposta do POST — o número que o comprovante imprime
+                .andExpect(jsonPath("$.valorVale").value(30.00))
+                .andReturn().getResponse().getContentAsString();
+        long idDevolucao = ((Number) JsonPath.read(resp, "$.idDevolucao")).longValue();
+
+        // (2) o que ficou GRAVADO: preço BRUTO (é a chave que casa com a linha da venda) e o
+        // desconto em coluna própria. Trocar o preço quebraria o "já devolvido" e liberaria
+        // devolver duas vezes — por isso a conferência é dos dois campos, não do total.
+        try (Connection c = abrirConexao(idTenant);
+             PreparedStatement ps = c.prepareStatement("""
+                     SELECT pmd.preco_venda, pmd.valor_desconto
+                       FROM produto_movimento_mestre pmm
+                       JOIN produto_movimento_detalhe pmd ON pmd.id_movimento = pmm.id_movimento
+                      WHERE pmm.id_devolucao = ? AND pmm.tipo_movimento = 'DEVOLUCAO'
+                     """)) {
+            ps.setLong(1, idDevolucao);
+            try (ResultSet rs = ps.executeQuery()) {
+                assertThat(rs.next()).isTrue();
+                assertThat(rs.getBigDecimal("preco_venda")).isEqualByComparingTo("50.00");
+                assertThat(rs.getBigDecimal("valor_desconto")).isEqualByComparingTo("20.00");
+            }
+        }
+
+        // (3) o GET do vale — a mesma consulta que o PDV usa no resgate. É este o número que o
+        // caixa credita, e é ele que discordava do papel.
+        mvc.perform(get("/api/v1/vendas/devolucao/vale/" + idDevolucao)
+                        .header("Authorization", "Bearer " + tenant.token()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.valorVale").value(30.00));
+    }
+
 }

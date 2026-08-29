@@ -35,6 +35,33 @@ function rotuloFaixa(f: FaixaBuraco): string {
  * sequência. Mesmo desvio de padrão do `FiscalContingenciaPainel.tsx`: seletor de empresa + card
  * de ação, sem paginação nem popup de filtros — o histórico abaixo é só leitura.
  */
+/**
+ * Compara a faixa digitada ignorando o SEPARADOR.
+ *
+ * ⛔ `rotuloFaixa` monta a faixa com **en dash** (U+2013), e a comparação era de texto exato: o
+ * operador digitava "100-105" com o hífen do teclado e o botão **nunca habilitava**, sem nada
+ * explicando por quê (achado de auditoria, 2026-08-29). O placeholder não é selecionável, então a
+ * única saída era copiar o texto do parágrafo acima.
+ *
+ * ⚠️ Pior: faixa de número ÚNICO funcionava (não tem separador), o que tornava a falha
+ * intermitente — e isto é a confirmação da ação mais irreversível do sistema, com prazo legal.
+ */
+/**
+ * Normaliza SÓ o separador da faixa — nunca apaga os separadores.
+ *
+ * <p>⛔ Era `replace(/[^0-9]/g, '')` (2ª auditoria de 2026-08-29). A correção original existia
+ * para aceitar o traço que o rótulo usa (en dash "–") quando o operador digita hífen comum, e
+ * apagar tudo que não é dígito resolvia — afrouxando demais: **"100105" liberava o botão que queima
+ * a faixa 100–105 na SEFAZ**, e também "100/105", "100.105" e "1 0 0 1 0 5". A fricção deliberada da
+ * ação mais irreversível do produto (numeração inutilizada não volta) ficou menor do que o
+ * necessário para resolver o problema, que era só o traço.
+ */
+function faixaNormalizada(texto: string): string {
+  // Os quatro traços Unicode que aparecem em rótulo (hífen-menos, hífen, traço-de-figura, en, em)
+  // viram hífen ASCII; o resto do texto fica como está.
+  return texto.replace(/[‐‑‒–—]/g, '-').trim()
+}
+
 export default function InutilizacaoNumeracao() {
   const queryClient = useQueryClient()
   const { idEmpresa: idEmpresaSessao } = useAuth()
@@ -294,7 +321,7 @@ export default function InutilizacaoNumeracao() {
               <button
                 type="button"
                 className="btn"
-                disabled={processando || faixaDigitada.trim() !== rotuloFaixa(faixaEscolhida)}
+                disabled={processando || faixaNormalizada(faixaDigitada) !== faixaNormalizada(rotuloFaixa(faixaEscolhida))}
                 onClick={() => {
                   setConfirmacaoAberta(false)
                   confirmarInutilizacao()

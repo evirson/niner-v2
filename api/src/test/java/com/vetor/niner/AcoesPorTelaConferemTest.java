@@ -50,7 +50,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @Import(TestcontainersConfiguration.class)
 class AcoesPorTelaConferemTest {
 
-    private static final Pattern TELA = Pattern.compile("@Tela\\(\"([^\"]+)\"\\)");
+    // ⚠️ As DUAS formas: `@Tela("x")` e `@Tela({"x", "y"})`. Até 2026-08-29 só a primeira era
+    // reconhecida — e no dia em que a anotação passou a aceitar várias chaves, as declaradas em
+    // array ficaram INVISÍVEIS aqui: o teste irmão acusou duas telas como "sem dono no código"
+    // quando elas tinham dono. Guarda que não entende a sintaxe nova acusa falso e treina quem lê
+    // a falha a desconfiar dele.
+    private static final Pattern TELA = Pattern.compile("@Tela\\(\\s*(\\{[^}]*\\}|\"[^\"]+\")\\s*\\)");
     private static final Pattern ACAO = Pattern.compile("@Acao\\(([A-Za-z._]+)\\)");
     private static final Pattern MAPPING = Pattern.compile("@(Get|Post|Put|Patch|Delete)Mapping");
 
@@ -169,7 +174,7 @@ class AcoesPorTelaConferemTest {
                 // VENCE (o PermissaoInterceptor prefere a de método). Até 2026-08-29 este leitor
                 // atribuía todo método à tela da classe, e as chaves declaradas por método
                 // ficavam invisíveis para os dois testes.
-                acumularMetodos(fonte, mTela.group(1), acumulado);
+                acumularMetodos(fonte, chavesDe(mTela.group(1)), acumulado);
             }
         }
         Map<String, Acoes> resultado = new HashMap<>();
@@ -178,10 +183,26 @@ class AcoesPorTelaConferemTest {
     }
 
     /** Percorre os blocos "anotações + assinatura pública", que é como um endpoint se parece. */
-    private void acumularMetodos(String fonte, String telaDaClasse, Map<String, boolean[]> acumulado) {
+    /**
+     * As chaves de uma `@Tela` — uma, ou várias quando declarada em array.
+     *
+     * <p>Com várias, vale <b>qualquer uma</b> (é a semântica do `PermissaoInterceptor`), então a
+     * ação do endpoint é registrada em <b>todas</b>: cada uma delas precisa oferecer a caixa
+     * correspondente na grade, senão o admin tenta conceder por uma tela e não consegue.
+     */
+    private static List<String> chavesDe(String valorDaAnotacao) {
+        Matcher m = Pattern.compile("\"([^\"]+)\"").matcher(valorDaAnotacao);
+        List<String> chaves = new ArrayList<>();
+        while (m.find()) {
+            chaves.add(m.group(1));
+        }
+        return chaves;
+    }
+
+    private void acumularMetodos(String fonte, List<String> telasDaClasse, Map<String, boolean[]> acumulado) {
         // Garante que a tela da CLASSE apareça mesmo num controller cujos métodos sejam todos
         // anotados: sem isto ela sumiria do mapa e o teste irmão acusaria falso.
-        acumulado.computeIfAbsent(telaDaClasse, k -> new boolean[3]);
+        telasDaClasse.forEach(t -> acumulado.computeIfAbsent(t, x -> new boolean[3]));
         List<String> anotacoes = new ArrayList<>();
         for (String linha : fonte.split("\\R")) {
             String t = linha.trim();
@@ -192,8 +213,12 @@ class AcoesPorTelaConferemTest {
             if (t.startsWith("public ") && !anotacoes.isEmpty()) {
                 String bloco = String.join(" ", anotacoes);
                 Matcher mTelaDoMetodo = TELA.matcher(bloco);
-                String tela = mTelaDoMetodo.find() ? mTelaDoMetodo.group(1) : telaDaClasse;
-                classificar(bloco, acumulado.computeIfAbsent(tela, k -> new boolean[3]));
+                List<String> telas = mTelaDoMetodo.find()
+                        ? chavesDe(mTelaDoMetodo.group(1))
+                        : telasDaClasse;
+                for (String tela : telas) {
+                    classificar(bloco, acumulado.computeIfAbsent(tela, x -> new boolean[3]));
+                }
                 anotacoes.clear();
                 continue;
             }

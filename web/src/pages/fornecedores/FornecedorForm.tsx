@@ -199,7 +199,7 @@ export default function FornecedorForm({ somenteLeitura = false }: { somenteLeit
         // O ViaCEP sempre devolveu o código IBGE do município — só não estava sendo lido
         // (2026-08-24). É o que a NF-e 55 da devolução ao fornecedor pede no destinatário.
         // Só sobrescreve quando vem: CEP de rua nova pode voltar sem ele.
-        codigoMunicipioIbge: endereco.ibge ? endereco.ibge.replace(/D/g, '').slice(0, 7) : f.codigoMunicipioIbge,
+        codigoMunicipioIbge: endereco.ibge ? endereco.ibge.replace(/\D/g, '').slice(0, 7) : f.codigoMunicipioIbge,
       }))
     } else {
       setErros((e) => ({ ...e, cep: 'CEP inválido.' }))
@@ -601,7 +601,7 @@ export default function FornecedorForm({ somenteLeitura = false }: { somenteLeit
                         placeholder="7 dígitos"
                         value={form.codigoMunicipioIbge}
                         onChange={(e) =>
-                          setForm((f) => ({ ...f, codigoMunicipioIbge: e.target.value.replace(/D/g, '').slice(0, 7) }))
+                          setForm((f) => ({ ...f, codigoMunicipioIbge: e.target.value.replace(/\D/g, '').slice(0, 7) }))
                         }
                       />
                       <p className="muted" style={{ fontSize: 12, marginTop: 4 }}>

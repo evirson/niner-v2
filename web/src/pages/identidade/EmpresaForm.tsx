@@ -134,6 +134,14 @@ export default function EmpresaForm() {
         bairro: endereco.bairro ? maiusculas(endereco.bairro) : f.bairro,
         cidade: endereco.localidade ? maiusculas(endereco.localidade) : f.cidade,
         estado: endereco.uf || f.estado,
+        // ⛔ O ViaCEP já devolve o código IBGE e esta era a ÚNICA das três telas que o
+        // descartava (cliente e fornecedor já o liam). O campo ficava em branco e o lojista
+        // concluía que o endereço estava pronto — mas este é o <cMun> do <enderEmit> de TODA
+        // nota, e a falta só aparecia como pendência na Conformidade Fiscal, longe daqui.
+        // Achado de auditoria, 2026-08-29.
+        codigoMunicipioIbge: endereco.ibge
+          ? endereco.ibge.replace(/[^0-9]/g, '').slice(0, 7)
+          : f.codigoMunicipioIbge,
       }))
     } else {
       setErroCep('CEP não encontrado — endereço não preenchido automaticamente.')

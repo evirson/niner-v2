@@ -150,8 +150,12 @@ public class RelatorioComissoesService {
                 ),
                 devolucoes AS (
                     SELECT pmm.id_empresa, pmd.id_funcionario,
-                           SUM(pmd.qtd_produto * pmd.preco_venda) AS valor_devolucao,
-                           SUM(pmd.qtd_produto * pmd.preco_venda
+                           -- ⭐ LÍQUIDO, igual à venda (auditoria 2026-08-29). O estorno somava o
+                           -- bruto contra uma comissão que fora paga sobre o líquido: devolver uma
+                           -- peça de R$ 100 vendida com R$ 30 de desconto tirava do vendedor mais
+                           -- do que ele ganhou, e o mês podia fechar NEGATIVO.
+                           SUM(pmd.qtd_produto * pmd.preco_venda - pmd.valor_desconto) AS valor_devolucao,
+                           SUM((pmd.qtd_produto * pmd.preco_venda - pmd.valor_desconto)
                                * COALESCE(pmd.perc_comissao, fnc.perc_comissao) / 100) AS comissao_devolucao
                     FROM produto_movimento_mestre pmm
                     JOIN produto_movimento_detalhe pmd

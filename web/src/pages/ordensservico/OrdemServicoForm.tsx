@@ -139,7 +139,11 @@ export default function OrdemServicoForm() {
         nomeFuncionario: i.nomeFuncionario,
       })),
     )
-  }, [existente])
+    // ⚠️ `permiteQtdDecimal` NAS DEPS (auditoria 2026-08-29): ele vem de outra query e cai no
+    // default `?? true` enquanto não resolve. Sem a dependência, abrir uma OS existente numa loja
+    // com decimal desligado podia mostrar "2,000" em vez de "2" e ficar assim — o valor está
+    // certo (`qtdDe` não depende disso), é só a exibição, mas some só no primeiro toque no campo.
+  }, [existente, permiteQtdDecimal])
 
   const servicos = itens.filter((i) => i.tipoItem === 'SERVICO')
   const pecas = itens.filter((i) => i.tipoItem === 'MERCADORIA')

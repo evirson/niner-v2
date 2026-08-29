@@ -146,7 +146,7 @@ public class PdvVendaService {
 
         List<ItemResolvido> itens = resolverItens(req.itens(), idEmpresa,
                 req.idOrdemServico() == null ? precosDoOrcamento : precosDaOrdemServico,
-                executoresDaOrdemServico, idFuncionario);
+                executoresDaOrdemServico, idFuncionario, req.idOrdemServico() != null);
 
         BigDecimal valorTotalProdutos = itens.stream()
                 .map(ItemResolvido::valorItem)
@@ -763,7 +763,12 @@ public class PdvVendaService {
                         org.springframework.http.HttpStatus.NOT_FOUND, "Vale-mercadoria não encontrado."));
 
         BigDecimal valor = jdbc.sql("""
-                        SELECT COALESCE(SUM(pmd.qtd_produto * pmd.preco_venda), 0)
+                        -- ⭐ LÍQUIDO (auditoria 2026-08-29). A linha de DEVOLUÇÃO grava `preco_venda` bruto — é a chave
+                        -- que casa com a linha da venda — e carrega o desconto rateado em `valor_desconto`. Ler só o
+                        -- bruto fazia o comprovante impresso dizer R$ 90 e o PDV resgatar R$ 100 no MESMO vale.
+                        -- ⚠️ Linha anterior a 29/08 tem `valor_desconto = 0` e continua valendo o bruto, de propósito:
+                        -- é o valor impresso no papel que o cliente tem na mão.
+                        SELECT COALESCE(SUM(pmd.qtd_produto * pmd.preco_venda - pmd.valor_desconto), 0)
                         FROM produto_movimento_mestre pmm
                         JOIN produto_movimento_detalhe pmd
                                ON pmd.id_movimento = pmm.id_movimento AND pmd.id_tenant = pmm.id_tenant
@@ -997,7 +1002,8 @@ public class PdvVendaService {
 
     private List<ItemResolvido> resolverItens(List<ItemVendaRequest> itens, long idEmpresa,
                                               Map<Long, BigDecimal> precosDoOrcamento,
-                                              Map<Long, Long> executores, long idFuncionarioDaVenda) {
+                                              Map<Long, Long> executores, long idFuncionarioDaVenda,
+                                              boolean vendaDeOrdemServico) {
         boolean permiteQtdDecimal = configuracaoGeralService.permiteQtdDecimalProduto();
         List<ItemResolvido> resolvidos = new ArrayList<>();
         for (ItemVendaRequest item : itens) {
@@ -1039,7 +1045,21 @@ public class PdvVendaService {
             // "os pagamentos não fecham o saldo" — mensagem sobre forma de pagamento para um
             // problema de preço. Com o preço para MENOS, ela fecha e a loja cobra menos do que
             // aprovou na OS, sem erro nenhum.
-            boolean cobertaPeloDocumento = item.ehDoOrcamento() || item.ehDaOrdemServico();
+            // ⛔ A marca tem de CASAR com o documento informado (2ª auditoria do mesmo dia). Aceitar
+            // as duas marcas indistintamente abriu um furo: numa venda de ORÇAMENTO, uma linha
+            // marcada `daOrdemServico` recebia o preço congelado do orçamento E escapava da
+            // validação de quantidade orçada, que só conta `ehDoOrcamento()`. Orçamento com 1
+            // unidade congelada a R$ 50 (hoje R$ 100): mandar 1 linha `doOrcamento` + 1 linha
+            // `daOrdemServico` levava 2 unidades a R$ 50, sem nenhuma guarda reclamar.
+            // ⚠️ A marca órfã é RECUSADA, não ignorada: ignorar em silêncio cobraria o preço de
+            // hoje numa linha que o cliente do API pediu congelada, e ninguém saberia por quê.
+            boolean marcaDoOutroDocumento = vendaDeOrdemServico ? item.ehDoOrcamento() : item.ehDaOrdemServico();
+            if (marcaDoOutroDocumento) {
+                throw new IllegalArgumentException(vendaDeOrdemServico
+                        ? "Item marcado como vindo de orçamento numa venda de ordem de serviço."
+                        : "Item marcado como vindo de ordem de serviço numa venda que não é de ordem de serviço.");
+            }
+            boolean cobertaPeloDocumento = vendaDeOrdemServico ? item.ehDaOrdemServico() : item.ehDoOrcamento();
             BigDecimal preco = cobertaPeloDocumento
                     ? precosDoOrcamento.getOrDefault(item.idVariacao(), linha.precoVenda())
                     : linha.precoVenda();

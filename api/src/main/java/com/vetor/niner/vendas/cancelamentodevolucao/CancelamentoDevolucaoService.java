@@ -108,7 +108,12 @@ public class CancelamentoDevolucaoService {
                         SELECT vd.id_devolucao, vd.id_empresa, e.razao_social AS nome_empresa, vd.data_devolucao,
                                vd.id_venda_credito, vd.vale_usado, vd.cancelada,
                                COALESCE((
-                                   SELECT SUM(pmd.qtd_produto * pmd.preco_venda)
+                                   -- ⭐ LÍQUIDO (auditoria 2026-08-29). A linha de DEVOLUÇÃO grava `preco_venda` bruto — é a chave
+                                   -- que casa com a linha da venda — e carrega o desconto rateado em `valor_desconto`. Ler só o
+                                   -- bruto fazia o comprovante impresso dizer R$ 90 e o PDV resgatar R$ 100 no mesmo vale.
+                                   -- ⚠️ Linha anterior a 29/08 tem `valor_desconto = 0` e continua valendo o bruto, de propósito:
+                                   -- é o valor que foi impresso no papel que o cliente tem na mão.
+                                   SELECT SUM(pmd.qtd_produto * pmd.preco_venda - pmd.valor_desconto)
                                    FROM produto_movimento_mestre pmm
                                    JOIN produto_movimento_detalhe pmd
                                           ON pmd.id_movimento = pmm.id_movimento AND pmd.id_tenant = pmm.id_tenant
@@ -173,8 +178,15 @@ public class CancelamentoDevolucaoService {
                             + " por " + c.nomeUsuarioCancelamento() + ".");
         }
         if (c.valeUsado()) {
+        // ⚠️ A segunda frase existe para tirar o operador de um BECO (auditoria 2026-08-29): o
+        // cancelamento da venda manda "cancele primeiro a devolução" e este manda "não dá" — as
+        // duas telas se apontando, sem nenhuma dizer a saída, que existe (cancelar a venda que
+        // consumiu o vale devolve `vale_usado = false`). ⛔ Não dá para NOMEAR essa venda: nada no
+        // schema liga o vale à venda que o consumiu, só o booleano. Dizer o caminho é o máximo
+        // honesto sem mudar o schema — está registrado em docs/PENDENCIAS.md.
             throw new ConflitoDadosException(
-                    "O vale-mercadoria nº " + c.idDevolucao() + " já foi usado — não é possível cancelar a devolução.");
+                    "O vale-mercadoria nº " + c.idDevolucao() + " já foi usado — não é possível cancelar a devolução. "
+                            + "Cancele antes a venda em que ele foi usado: isso libera o vale e permite cancelar esta devolução.");
         }
 
         OffsetDateTime agora = OffsetDateTime.now();
@@ -267,7 +279,12 @@ public class CancelamentoDevolucaoService {
         return jdbc.sql("""
                         SELECT p.descricao AS descricao_produto, co.descricao AS variacao_cor,
                                ta.descricao AS variacao_tamanho, pmd.qtd_produto, pmd.preco_venda,
-                               pmd.qtd_produto * pmd.preco_venda AS valor_item
+                               -- ⭐ LÍQUIDO (auditoria 2026-08-29). A linha de DEVOLUÇÃO grava `preco_venda` bruto — é a chave
+                               -- que casa com a linha da venda — e carrega o desconto rateado em `valor_desconto`. Ler só o
+                               -- bruto fazia o comprovante impresso dizer R$ 90 e o PDV resgatar R$ 100 no mesmo vale.
+                               -- ⚠️ Linha anterior a 29/08 tem `valor_desconto = 0` e continua valendo o bruto, de propósito:
+                               -- é o valor que foi impresso no papel que o cliente tem na mão.
+                               pmd.qtd_produto * pmd.preco_venda - pmd.valor_desconto AS valor_item
                         FROM produto_movimento_mestre pmm
                         JOIN produto_movimento_detalhe pmd
                                ON pmd.id_movimento = pmm.id_movimento AND pmd.id_tenant = pmm.id_tenant

@@ -31,6 +31,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
+import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -96,12 +97,19 @@ public class RecebimentoCrediarioService {
 
     /** RN002: só parcelas ainda não recebidas; escopo desta tela: categoria CREDIARIO (o nome da tela). */
     @Transactional(readOnly = true)
-    public List<ParcelaCrediarioResponse> listarParcelas(long idCliente) {
+    public List<ParcelaCrediarioResponse> listarParcelas(long idCliente, Jwt jwt) {
+        // ⛔ O MESMO fuso do servidor, não "America/Sao_Paulo" cravado (2ª auditoria do dia). O
+        // cálculo de `efetivar` já usa a UF da empresa; a listagem que o operador vê continuava
+        // em SP. Para loja em UTC−4 (AM, RO, RR, MT, MS) ou UTC−5 (AC), parcela de venda feita
+        // entre 21h e meia-noite fazia a tela cobrar 1 dia de multa e o servidor calcular 0 — e a
+        // conferência recusava com "os pagamentos não fecham o total". Era o defeito original
+        // mudando de estado, não sendo corrigido.
+        ZoneId fuso = fusoDaLoja.daSessao(jwt);
         ConfigCrediario cfg = buscarConfigCrediario();
         return jdbc.sql("""
                         SELECT cr.id_conta_receber, cr.id_venda, e.codigo_empresa, v.data_venda,
                                cr.numero_parcela, cr.data_vencimento, cr.valor_receber,
-                               GREATEST(0, ((now() AT TIME ZONE 'America/Sao_Paulo')::date - (cr.data_vencimento AT TIME ZONE 'America/Sao_Paulo')::date)) AS dias_atraso,
+                               GREATEST(0, ((now() AT TIME ZONE ?::text)::date - (cr.data_vencimento AT TIME ZONE ?::text)::date)) AS dias_atraso,
                                (SELECT count(*) FROM contas_receber cr2
                                 WHERE cr2.id_tenant = cr.id_tenant AND cr2.id_venda = cr.id_venda
                                       AND cr2.id_carteira = cr.id_carteira) AS total_parcelas
@@ -115,7 +123,7 @@ public class RecebimentoCrediarioService {
                               AND v.id_cliente = ?
                         ORDER BY cr.data_vencimento ASC, cr.numero_parcela ASC
                         """)
-                .param(idCliente)
+                .params(fuso.getId(), fuso.getId(), idCliente)
                 .query((rs, n) -> mapearParcela(rs, cfg))
                 .list();
     }
@@ -151,7 +159,8 @@ public class RecebimentoCrediarioService {
         List<Long> idsUnicos = req.idsContaReceber().stream().distinct().toList();
         List<ParcelaResolvida> parcelas = new ArrayList<>();
         for (long idContaReceber : idsUnicos) {
-            parcelas.add(resolverParcelaParaRecebimento(idContaReceber, req.idCliente(), cfg, fusoDaLoja.hoje(jwt)));
+            parcelas.add(resolverParcelaParaRecebimento(idContaReceber, req.idCliente(), cfg,
+                    fusoDaLoja.hoje(jwt), fusoDaLoja.daSessao(jwt)));
         }
         parcelas.sort(Comparator.comparing(ParcelaResolvida::dataVencimento).thenComparing(ParcelaResolvida::numeroParcela));
 
@@ -460,7 +469,7 @@ public class RecebimentoCrediarioService {
     /**  hoje dia da LOJA (fuso da UF da empresa) — multa e juros contam dias de atraso, e
      *              "hoje" do servidor viraria um dia antes da hora para quem está a oeste. */
     private ParcelaResolvida resolverParcelaParaRecebimento(long idContaReceber, long idClienteEsperado,
-                                                            ConfigCrediario cfg, LocalDate hoje) {
+                                                            ConfigCrediario cfg, LocalDate hoje, ZoneId fuso) {
         record Linha(long idVenda, long idCliente, BigDecimal valorOriginal, OffsetDateTime dataVencimento,
                       int numeroParcela, String categoriaCarteira) {
         }
@@ -491,7 +500,15 @@ public class RecebimentoCrediarioService {
             throw new IllegalArgumentException("A parcela #" + idContaReceber + " não é uma parcela de crediário.");
         }
 
-        long diasAtraso = Math.max(0, ChronoUnit.DAYS.between(linha.dataVencimento().toLocalDate(), hoje));
+        // ⛔ O vencimento vem do driver em UTC; `toLocalDate()` cru dava a data UTC enquanto
+        // `hoje` já é o dia da LOJA — e a listagem da tela compara os dois no fuso de SP. O
+        // descasamento TRAVAVA o recebimento (achado de auditoria, 2026-08-29): a parcela herda a
+        // hora da venda, então uma venda das 21:30 vence "01/08 01:30 UTC"; no dia 01/08 a tela
+        // mostrava 1 dia de atraso e cobrava multa, o servidor calculava 0 dias, e a conferência
+        // recusava com 400 — "os pagamentos (R$ 102,00) não fecham o total (R$ 100,00)". O
+        // operador não tinha como receber. Atinge toda parcela que vence entre 21h e meia-noite.
+        long diasAtraso = Math.max(0,
+                ChronoUnit.DAYS.between(linha.dataVencimento().atZoneSameInstant(fuso).toLocalDate(), hoje));
         BigDecimal[] multaJuros = calcularMultaJuros(linha.valorOriginal(), diasAtraso, cfg);
         BigDecimal total = linha.valorOriginal().add(multaJuros[0]).add(multaJuros[1]);
         return new ParcelaResolvida(idContaReceber, linha.idVenda(), linha.dataVencimento(), linha.numeroParcela(), total);

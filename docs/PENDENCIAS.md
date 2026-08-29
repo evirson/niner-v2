@@ -11,16 +11,17 @@
 > **Como apresentar:** resumido e **agrupado por dono**, não as ~27 linhas cruas — ele já reclamou
 > de informação demais de uma vez (*"TA MUITO CONFUSO"*).
 >
-> **Última revisão:** 2026-08-28 (fim do dia) — três movimentos no mesmo dia: a remoção da
-> integração com marketplaces fechou **nove** itens por desaparecimento do assunto (2, 3, 4, 15, 16,
-> 18, 20, 21 e 27); o módulo de Serviços (S1–S4) foi implementado, fechando o **50** e o **52**; e
-> as lacunas da Ordem de Serviço foram fechadas, encerrando o **53**. Entraram os itens **54**, **55**
-> e **56**. Ver as quatro seções no fim do arquivo.
+> **Última revisão:** 2026-08-29 — cinco rodadas de dois agentes caçadores de bugs (front e back
+> em paralelo), ~55 correções. A maior parte foi corrigida na hora e está em `docs/PROGRESSO.md`;
+> aqui entraram os itens **57**–**62**, que dependem de decisão dele ou de uma sessão em que dê
+> para transmitir nota fiscal em homologação.
 >
-> **Hoje:** **9 itens esperam por ele** (🔵) e **5 são minha bola** (🟢). O mais novo e o único que
-> bloqueia decisão é o **#55** — cancelar a venda deixa a OS (e o orçamento) órfãos.
+> **Hoje:** **12 itens esperam por ele** (🔵) e **8 são minha bola** (🟢). Os que mais pesam: o
+> **#55** (cancelar a venda deixa a OS e o orçamento órfãos), o **#60** (a NF-e 55 de devolução
+> declara valor bruto — só se corrige podendo transmitir) e o **#62** (o vendedor ganha comissão
+> sobre o acréscimo? hoje o sistema responde SIM, de forma consistente).
 
-**Estado na data desta revisão:** 56 telas do ERP + 3 públicas · 1065 testes verdes, **de 0 a 5 pulados conforme a HORA** — o guard de meia-noite do `HorarioAcessoTest`, que se pula sozinho quando a janela pedida cruzaria a virada do dia (à meia-noite são 5 — 4 do horário de acesso e 1 do 2FA —, de manhã 0). ⚠️ Não é regressão, e o número oscilar é o mecanismo funcionando (tudo medido, não estimado; a contagem de telas é a de `docs/TELAS.md`, que declara a base).
+**Estado na data desta revisão:** 56 telas do ERP + 3 públicas · 1075 testes verdes, **de 0 a 5 pulados conforme a HORA** — o guard de meia-noite do `HorarioAcessoTest`, que se pula sozinho quando a janela pedida cruzaria a virada do dia (à meia-noite são 5 — 4 do horário de acesso e 1 do 2FA —, de manhã 0). ⚠️ Não é regressão, e o número oscilar é o mecanismo funcionando (tudo medido, não estimado; a contagem de telas é a de `docs/TELAS.md`, que declara a base).
 
 ---
 
@@ -440,6 +441,62 @@ correção imediata, mas todas são reais:
 os javadocs das duas classes ainda afirmam *"ADMIN-only… rejeita OPERADOR com 403"*. Hoje quem
 governa é o `@Acao(EXCLUIR)` do RBAC. ⚠️ Não é bug de comportamento — são **duas afirmações falsas
 em doc de código** sobre quem pode desfazer venda e entrada.
+
+---
+
+### 60. ⛔ A NF-e 55 de devolução declara o valor BRUTO 🟢
+
+**Onde:** `api/.../fiscal/documento/DevolucaoFiscalAssembler.java` — `buscarItensDaNotaOriginal`
+não lê `documento_fiscal_item.valor_desconto` (a coluna existe e é gravada, V035:409) e `somar()`
+fixa `vDesc = ZERO`, com `vNF = soma dos vProd`.
+
+**O efeito:** devolução total de uma venda com desconto emite nota de entrada de **R$ 100**
+referenciando uma NFC-e cujo `vNF` é **R$ 90**. Não é regressão de 29/08 — é anterior; o que mudou
+naquele dia foi que todo o resto (vale, DRE, Lucratividade, Comissões, cancelamento) passou a
+trabalhar no líquido, e a nota fiscal ficou sendo o único lugar no bruto.
+
+**Por que não foi corrigido junto:** a máquina de rateio já existe (`ratear(valor, proporcao,
+total)`), então a mudança é mecânica — ler a coluna, rateá-la pela quantidade devolvida, somar em
+`vDesc` e fazer `vNF = vProd − vDesc`. ⛔ **Mas montagem de XML fiscal só se valida transmitindo**,
+e a suíte roda com `emite_nfe = false`: uma alteração aqui aprovada por 1.075 testes verdes não
+teria sido verificada por nenhum deles. Fica para uma sessão em que dê para transmitir em
+homologação e conferir o `cStat`.
+
+**Cuidado ao pegar:** o javadoc da devolução em `DevolucaoProdutoService` já **afirma** que este
+ponto continua no bruto, com a localização exata. Se corrigir, aquele comentário tem de mudar
+junto — foi ele que, afirmando o contrário do que era verdade, gerou este item.
+
+---
+
+### 61. Nada no schema liga o vale-mercadoria à venda que o consumiu 🔵
+
+**O sintoma:** se o vale já foi resgatado, o cancelamento da venda diz *"cancele primeiro a
+devolução"* e o cancelamento da devolução responde *"o vale já foi usado — não é possível
+cancelar"*. As duas telas se apontam.
+
+**A saída existe** — cancelar a venda que consumiu o vale devolve `vale_usado = false` — e desde
+29/08 as duas mensagens **dizem esse caminho**. O que não dá para fazer é **nomear** a venda: a
+tabela `venda_devolucao` só guarda o booleano `vale_usado`, sem nenhuma coluna apontando para a
+venda que o gastou.
+
+**Decisão dele:** vale a pena uma coluna nova (`venda_devolucao.id_venda_uso`, preenchida no
+resgate) para a mensagem poder dizer *"cancele antes a venda nº 1234"*? É uma migration pequena e
+resolve o beco de vez; sem ela, o operador precisa descobrir sozinho em qual venda o vale foi
+usado.
+
+---
+
+### 62. Comissão sobre ACRÉSCIMO: confirmação de regra 🔵
+
+Em 29/08 três relatórios (DRE ×2 e Lucratividade) calculavam a comissão sobre
+`qtd × preço − desconto`, e o **Relatório de Comissões — o número que a loja efetivamente paga** —
+sobre `qtd × preço − desconto + acréscimo`. Alinhei os três **ao pagador**, porque mudar o
+Comissões alteraria quanto o vendedor recebe com base num palpite meu.
+
+**A pergunta que sobra é de produto, não de código:** *o vendedor ganha comissão sobre o
+acréscimo?* Hoje o sistema responde **SIM**, de forma consistente nos quatro lugares. Se a resposta
+for **não**, muda-se o Relatório de Comissões e os três atrás dele — os pontos estão marcados com
+comentário citando este item.
 
 ---
 

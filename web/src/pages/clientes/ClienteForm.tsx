@@ -264,7 +264,7 @@ export default function ClienteForm({
         // (2026-08-24). É o que a NF-e exige do destinatário, e o que obrigava o lojista a
         // consultar o site do IBGE à mão. Só sobrescreve quando vem: CEP de rua nova pode
         // voltar sem ele, e apagar o que já estava preenchido seria pior.
-        codigoMunicipioIbge: endereco.ibge ? endereco.ibge.replace(/D/g, '').slice(0, 7) : f.codigoMunicipioIbge,
+        codigoMunicipioIbge: endereco.ibge ? endereco.ibge.replace(/\D/g, '').slice(0, 7) : f.codigoMunicipioIbge,
       }))
     } else {
       setErros((e) => ({ ...e, cep: 'CEP inválido.' }))
@@ -824,7 +824,7 @@ export default function ClienteForm({
                         placeholder="7 dígitos"
                         value={form.codigoMunicipioIbge}
                         onChange={(e) =>
-                          setForm((f) => ({ ...f, codigoMunicipioIbge: e.target.value.replace(/D/g, '').slice(0, 7) }))
+                          setForm((f) => ({ ...f, codigoMunicipioIbge: e.target.value.replace(/\D/g, '').slice(0, 7) }))
                         }
                       />
                       <p className="muted" style={{ fontSize: 12, marginTop: 4 }}>

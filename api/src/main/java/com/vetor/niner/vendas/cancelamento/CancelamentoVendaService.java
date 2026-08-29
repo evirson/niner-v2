@@ -282,6 +282,7 @@ public class CancelamentoVendaService {
             StringBuilder msg = new StringBuilder(
                     "Esta venda tem devolução registrada e não pode ser cancelada. Cancele primeiro a "
                             + "devolução (o vale-mercadoria continua valendo enquanto ela existir), "
+                            + "e, se o vale já tiver sido usado, cancele antes a venda em que ele foi usado. "
                             + "depois cancele a venda.");
             for (Long id : devolucoesAbertas) {
                 msg.append(System.lineSeparator()).append("- Devolução nº ").append(id);
@@ -297,8 +298,11 @@ public class CancelamentoVendaService {
                             + "em nenhuma hipótese. Cancele os recebimentos, para depois cancelar a venda.");
             for (ParcelaRecebidaDetalhe p : parcelasRecebidas) {
                 msg.append("\n- Parcela ").append(p.numeroParcela())
-                        .append(", venc. ").append(FMT_DATA.format(p.dataVencimento()))
-                        .append(", recebida em ").append(FMT_DATA.format(p.dataRecebimento()))
+                        // ⚠️ Pelo fuso da LOJA: `OffsetDateTime` cru sai em UTC, e uma parcela
+                        // recebida às 21:30 aparecia como "recebida em [dia seguinte]" — o
+                        // operador ia procurar um recebimento num dia sem movimento nenhum.
+                        .append(", venc. ").append(fusoDaLoja.formatar(p.dataVencimento(), venda.idEmpresa(), FMT_DATA))
+                        .append(", recebida em ").append(fusoDaLoja.formatar(p.dataRecebimento(), venda.idEmpresa(), FMT_DATA))
                         .append(", R$ ").append(p.valorRecebido());
             }
             throw new ConflitoDadosException(msg.toString());
