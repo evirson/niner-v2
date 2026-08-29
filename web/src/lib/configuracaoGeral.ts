@@ -19,6 +19,7 @@ export interface ConfiguracaoGeral {
   cfgEmiteFiscalAposVenda: boolean
   /** Módulo de serviços (S1) — desligado por padrão; é ele que faz a OS existir na tela. */
   cfgUsaServicos: boolean
+  cfgExigeSangriaFechamento: boolean
   atualizadoEm: string
 }
 
@@ -40,6 +41,7 @@ export interface ConfiguracaoGeralFormState {
   idPlanoContasCompraMercadoria: string
   cfgEmiteFiscalAposVenda: boolean
   cfgUsaServicos: boolean
+  cfgExigeSangriaFechamento: boolean
 }
 
 export function paraFormulario(c: ConfiguracaoGeral): ConfiguracaoGeralFormState {
@@ -60,6 +62,7 @@ export function paraFormulario(c: ConfiguracaoGeral): ConfiguracaoGeralFormState
     idPlanoContasCompraMercadoria: c.idPlanoContasCompraMercadoria,
     cfgEmiteFiscalAposVenda: c.cfgEmiteFiscalAposVenda,
     cfgUsaServicos: c.cfgUsaServicos,
+    cfgExigeSangriaFechamento: c.cfgExigeSangriaFechamento,
   }
 }
 
@@ -82,6 +85,7 @@ export function paraRequisicao(f: ConfiguracaoGeralFormState) {
     idPlanoContasCompraMercadoria: f.idPlanoContasCompraMercadoria,
     cfgEmiteFiscalAposVenda: f.cfgEmiteFiscalAposVenda,
     cfgUsaServicos: f.cfgUsaServicos,
+    cfgExigeSangriaFechamento: f.cfgExigeSangriaFechamento,
   }
 }
 
@@ -112,6 +116,7 @@ export function buscarUsaCorGrade(): Promise<UsaCorGrade> {
 
 export interface UsaServicos {
   cfgUsaServicos: boolean
+  cfgExigeSangriaFechamento: boolean
 }
 
 /** Aberto a qualquer papel — usado pelo cadastro de produto (seletor Mercadoria/Serviço) e pelo

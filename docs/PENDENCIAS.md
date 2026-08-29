@@ -14,15 +14,15 @@
 > **Última revisão:** 2026-08-29 — dia inteiro. Manhã: **cinco rodadas de dois agentes caçadores
 > de bugs** (~55 correções). Tarde: as pendências que eram minha bola (**58**, **59**, **63**, parte
 > do **56**). Noite: **ele decidiu as 12 pendências item a item** e mandou executar — fecharam
-> **55**, **57**, **61**, **62**, **51**, **31**, **30** e **32**; entraram **60**–**62** e **64**.
+> **55**, **57**, **61**, **62**, **51**, **31**, **30** e **32**; entraram **60**–**62** e a **64**,
+> que ele decidiu na mesma conversa (V095 — o fechamento exige a sangria).
 >
-> **Hoje:** **29 itens abertos**, e a maioria é verificação no papel/navegador que só ele pode
-> fazer. Os que precisam de DECISÃO dele: **#64** (o dinheiro que fica na gaveta quando o caixa
-> fecha — a pergunta que a Sangria abriu), **#28** (planos pagos, que ele adiou), **#40** e **#47**
-> (segurança e LGPD, que ele mandou guardar para cobrar depois) e **#49** (credenciais da NFS-e,
-> 🔔 prometidas para a segunda-feira).
+> **Hoje:** **28 itens abertos**, e a maioria é verificação no papel/navegador que só ele pode
+> fazer. Precisam de DECISÃO dele: **#28** (planos pagos, adiado por ele), **#40** e **#47**
+> (segurança e LGPD, que ele mandou guardar para cobrar depois). 🔔 E **#49** — ele prometeu as
+> **credenciais da NFS-e para a segunda-feira**.
 
-**Estado na data desta revisão:** 57 telas do ERP + 3 públicas · 1077 testes verdes, **de 0 a 5 pulados conforme a HORA** — o guard de meia-noite do `HorarioAcessoTest`, que se pula sozinho quando a janela pedida cruzaria a virada do dia (à meia-noite são 5 — 4 do horário de acesso e 1 do 2FA —, de manhã 0). ⚠️ Não é regressão, e o número oscilar é o mecanismo funcionando (tudo medido, não estimado; a contagem de telas é a de `docs/TELAS.md`, que declara a base).
+**Estado na data desta revisão:** 57 telas do ERP + 3 públicas · 1085 testes verdes, **de 0 a 5 pulados conforme a HORA** — o guard de meia-noite do `HorarioAcessoTest`, que se pula sozinho quando a janela pedida cruzaria a virada do dia (à meia-noite são 5 — 4 do horário de acesso e 1 do 2FA —, de manhã 0). ⚠️ Não é regressão, e o número oscilar é o mecanismo funcionando (tudo medido, não estimado; a contagem de telas é a de `docs/TELAS.md`, que declara a base).
 
 ---
 
@@ -434,30 +434,18 @@ confirmação. As entregas estão em `docs/PROGRESSO.md`.
 
 ---
 
-### 64. ⏭️ A sangria abre uma pergunta: e o dinheiro que fica na gaveta no fechamento? 🔵
+### 64. ✅ O dinheiro que fica na gaveta no fechamento — **RESOLVIDO em 2026-08-29** (V095)
 
-A Sangria de Caixa (#57) resolveu o buraco principal, mas o desenho tem um limite que só aparece
-agora que ela existe.
+Ele escolheu a **opção 1** das três apresentadas: *"o fechamento exige sangrar até o fundo — o
+operador é obrigado a deixar na gaveta exatamente o que vai abrir amanhã"*.
 
-**O que ficou:** o fundo de troco conta **uma vez por operador** (o do último caixa aberto até a
-data), e a sangria tira o resto para o banco. Fecha certo quando o operador **sangra tudo** que
-vendeu e deixa só o fundo na gaveta.
+`CaixaService.exigirExcedenteSangrado` recusa com 409 dizendo quanto sangrar e onde. É parâmetro
+(`cfg_exige_sangria_fechamento`), **ligado por padrão** — a regra bloqueia o fechamento e sangria
+exige conta corrente cadastrada, então a loja que não deposita em banco precisa de escape. Caixa
+*abaixo* do fundo fecha normalmente. Detalhes: `docs/telas/sangria-caixa.md`.
 
-**O que não fecha:** se ele fechar o caixa com R$ 800 em dinheiro e abrir amanhã com fundo de
-R$ 200, os R$ 600 que continuam fisicamente na gaveta **somem do saldo** — o fechamento não grava
-saída, e o fundo de amanhã não os inclui. Ou seja: o número volta a estar errado, na direção
-oposta à de antes (a menos, em vez de a mais).
-
-**As três saídas possíveis**, e nenhuma é minha para escolher:
-1. **O fechamento exige sangrar até o fundo** — o operador é obrigado a deixar na gaveta exatamente
-   o que vai abrir amanhã. É o mais simples e o que a maioria dos ERPs faz.
-2. **O fechamento lança automaticamente a diferença** como sangria para uma conta configurada.
-   Menos digitação, mas decide dinheiro por conta própria.
-3. **O saldo passa a vir do fechamento**, não da abertura — o que está na gaveta é o que foi
-   **contado** no último fechamento. Mais fiel, mas muda o significado da tela.
-
-⚠️ Registrado como pendência em vez de escolhido porque as três mudam a rotina do caixa, e a #1 em
-particular acrescenta uma obrigação ao operador no fim do dia.
+⭐ **Com isso o modelo do Fluxo de Caixa fecha inteiro** — era o último buraco: antes da sangria o
+número inflava, depois dela e sem esta regra ele encolheria.
 
 ---
 

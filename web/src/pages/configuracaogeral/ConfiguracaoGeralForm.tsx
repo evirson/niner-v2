@@ -36,6 +36,8 @@ const VAZIO: ConfiguracaoGeralFormState = {
   idPlanoContasCompraMercadoria: '',
   cfgEmiteFiscalAposVenda: true,
   cfgUsaServicos: false,
+  // ⭐ LIGADO no estado inicial: é o padrão do banco (V095) e a escolha do dono do produto.
+  cfgExigeSangriaFechamento: true,
 }
 
 type CampoValidavel = 'percentualDescontoVenda' | 'jurosCrediarioDias' | 'jurosCrediario' | 'multaCrediarioDias' | 'multaCrediario'
@@ -306,6 +308,25 @@ export default function ConfiguracaoGeralForm() {
                 <strong>Ordens de Serviço</strong> e o <strong>F5</strong> do PDV passa a perguntar
                 se a venda vem de um orçamento ou de uma OS. Serviço não tem estoque nem entra em
                 NFC-e (o documento fiscal de serviço é a NFS-e, municipal).
+              </p>
+            </div>
+            <div className="col-6">
+              <label className="checkbox-linha" style={{ marginTop: 0 }}>
+                <input
+                  type="checkbox"
+                  checked={form.cfgExigeSangriaFechamento}
+                  onChange={(e) => setForm((f) => ({ ...f, cfgExigeSangriaFechamento: e.target.checked }))}
+                />
+                Exigir sangria antes de fechar o caixa
+              </label>
+              <p className="muted" style={{ fontSize: 12, marginTop: 4 }}>
+                Ligado (padrão): o caixa não fecha enquanto houver dinheiro em espécie{' '}
+                <strong>acima do fundo de troco</strong> — o operador precisa registrar a sangria do
+                excedente para uma conta bancária. É o que mantém o Fluxo de Caixa correto: o fundo
+                fica na gaveta e o resto aparece no banco. ⚠️ Desligando, o fechamento passa, mas o
+                dinheiro que sobrar na gaveta <strong>some do saldo</strong> até alguém abrir o caixa
+                seguinte com o valor real. Caixa que ficou <em>abaixo</em> do fundo fecha normalmente
+                nos dois casos — não há o que sangrar.
               </p>
             </div>
           </div>

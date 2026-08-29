@@ -42,7 +42,14 @@ public final class ConfiguracaoGeralDtos {
              * produto em 2026-08-28: empresa de servico e minoria da base.
              * <p>Nulo = mantem o valor atual, para cliente antigo que nao manda o campo (F12).
              */
-            Boolean cfgUsaServicos) {
+            Boolean cfgUsaServicos,
+            /**
+             * Liga a exigência de sangrar o excedente antes de fechar o caixa (V095).
+             * <b>LIGADO</b> por padrão — decisão do dono do produto em 2026-08-29, escolhendo entre
+             * três desenhos: <i>"o fechamento exige sangrar até o fundo"</i>.
+             * <p>⚠️ Nulo = mantém o valor atual, pelo mesmo motivo do campo acima (F12).
+             */
+            Boolean cfgExigeSangriaFechamento) {
     }
 
     public record ConfiguracaoGeralResponse(
@@ -62,6 +69,7 @@ public final class ConfiguracaoGeralDtos {
             String idPlanoContasCompraMercadoria,
             boolean cfgEmiteFiscalAposVenda,
             boolean cfgUsaServicos,
+            boolean cfgExigeSangriaFechamento,
             OffsetDateTime atualizadoEm) {
     }
 

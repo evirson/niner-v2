@@ -760,4 +760,101 @@ class FechamentoCaixaCrudTest {
         mvc.perform(get("/api/v1/caixa/fechamento/" + idCaixaA).header("Authorization", "Bearer " + tenantB.token()))
                 .andExpect(status().isNotFound());
     }
+    /** Liga ou desliga a exigência de sangria antes do fechamento (V095). */
+    private void definirExigeSangria(String token, boolean exige) throws Exception {
+        mvc.perform(put("/api/v1/config-geral").header("Authorization", "Bearer " + token)
+                        .contentType(APPLICATION_JSON)
+                        .content("""
+                                {"percentualDescontoVenda":0,"jurosCrediarioDias":0,"jurosCrediario":0,
+                                 "multaCrediarioDias":0,"multaCrediario":0,"cfgUsaCorGrade":false,
+                                 "cfgPermiteQtdDecimal":true,"cfgPermiteEstoqueNegativo":true,
+                                 "cfgDiasValidadeOrcamento":15,"cfgExigeNumeroVendaDevolucao":false,
+                                 "cfgRateiaFreteEntrada":false,"cfgReajustaPrecoEntrada":false,
+                                 "cfgConsisteValorContasPagar":false,
+                                 "idPlanoContasCompraMercadoria":"3.03.001","cfgEmiteFiscalAposVenda":true,
+                                 "cfgExigeSangriaFechamento":%s}
+                                """.formatted(exige)))
+                .andExpect(status().isOk());
+    }
+
+    /**
+     * ⭐ O caixa não fecha com dinheiro acima do fundo de troco (V095).
+     *
+     * <p>Decisão do dono do produto (2026-08-29): <i>"o fechamento exige sangrar até o fundo — o
+     * operador é obrigado a deixar na gaveta exatamente o que vai abrir amanhã"</i>. É a
+     * disciplina que faz o Fluxo de Caixa fechar: o fundo conta uma vez por operador, e o resto
+     * vira sangria visível na conta bancária. Sem ela, quem fecha com R$ 800 e abre amanhã com
+     * R$ 200 faz os R$ 600 da gaveta sumirem do saldo.
+     *
+     * <p>⚠️ A mensagem tem de dizer QUANTO sangrar — um 409 genérico deixaria o operador
+     * procurando a conta no fim do expediente.
+     */
+    @Test
+    void naoFechaOCaixaComDinheiroAcimaDoFundoDeTroco() throws Exception {
+        TenantNovo tenant = assinarNovoTenant("exige-sangria");
+        long idTenant = extrairIdTenant(tenant.token());
+        abrirCaixaDinheiro(tenant.token());          // fundo de 100,00
+        efetivarRecebimento(tenant.token(), idTenant, "250.00");
+        long idCaixa = buscarIdCaixaAtual(tenant.token());
+        long idCarteiraDinheiro = buscarIdCarteiraDinheiro(tenant.token());
+
+        mvc.perform(post("/api/v1/caixa/fechamento").header("Authorization", "Bearer " + tenant.token())
+                        .contentType(APPLICATION_JSON)
+                        .content(corpoFechamento(idCaixa, java.util.Map.of(idCarteiraDinheiro, "350.00"))))
+                .andExpect(status().isConflict())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers
+                        .jsonPath("$.detail").value(org.hamcrest.Matchers.containsString("250.00")));
+
+        // ⚠️ E o caixa continua ABERTO: o 409 não pode ter fechado metade.
+        mvc.perform(get("/api/v1/caixa/status").header("Authorization", "Bearer " + tenant.token()))
+                .andExpect(jsonPath("$.aberto").value(true));
+    }
+
+    /**
+     * Caixa <b>abaixo</b> do fundo fecha normalmente — não há o que sangrar.
+     *
+     * <p>⭐ Só o caso NEGATIVO pega um guarda que trava todo mundo: com a regra escrita "o
+     * dinheiro tem de ser igual ao fundo", uma loja que pagou despesa em dinheiro pelo caixa
+     * ficaria <b>sem conseguir fechar</b>, e nenhum teste positivo denunciaria.
+     */
+    @Test
+    void caixaSemExcedenteFechaNormalmente() throws Exception {
+        TenantNovo tenant = assinarNovoTenant("sem-excedente");
+        abrirCaixaDinheiro(tenant.token());          // fundo de 100,00, sem nenhum movimento
+        long idCaixa = buscarIdCaixaAtual(tenant.token());
+        long idCarteiraDinheiro = buscarIdCarteiraDinheiro(tenant.token());
+
+        mvc.perform(post("/api/v1/caixa/fechamento").header("Authorization", "Bearer " + tenant.token())
+                        .contentType(APPLICATION_JSON)
+                        .content(corpoFechamento(idCaixa, java.util.Map.of(idCarteiraDinheiro, "100.00"))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.fechado").value(true));
+    }
+
+    /**
+     * Com o parâmetro DESLIGADO, o mesmo caixa do primeiro teste fecha.
+     *
+     * <p>⚠️ O escape existe porque a regra <b>bloqueia</b> o fechamento e a sangria exige uma conta
+     * corrente cadastrada: a loja pequena que paga despesa em dinheiro e leva o resto para casa
+     * ficaria sem conseguir fechar o caixa no primeiro dia. Mesmo raciocínio que deixou
+     * {@code cfg_permite_estoque_negativo} ligado por padrão — travar a operação por um controle
+     * que a loja não alimenta é pior que não ter o controle.
+     */
+    @Test
+    void comOParametroDesligadoOCaixaFechaComExcedente() throws Exception {
+        TenantNovo tenant = assinarNovoTenant("sangria-desligada");
+        long idTenant = extrairIdTenant(tenant.token());
+        definirExigeSangria(tenant.token(), false);
+        abrirCaixaDinheiro(tenant.token());
+        efetivarRecebimento(tenant.token(), idTenant, "250.00");
+        long idCaixa = buscarIdCaixaAtual(tenant.token());
+        long idCarteiraDinheiro = buscarIdCarteiraDinheiro(tenant.token());
+
+        mvc.perform(post("/api/v1/caixa/fechamento").header("Authorization", "Bearer " + tenant.token())
+                        .contentType(APPLICATION_JSON)
+                        .content(corpoFechamento(idCaixa, java.util.Map.of(idCarteiraDinheiro, "350.00"))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.fechado").value(true));
+    }
+
 }

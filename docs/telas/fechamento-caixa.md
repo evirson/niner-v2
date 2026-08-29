@@ -1,6 +1,12 @@
 # Spec: Fechamento de Caixa                        Status: Aprovada
 Autor: Claudio Calixto (dono do produto) · Data: 2026-07-30 · Módulo(s): `financeiro` (caixa) · Fase: 2 — Crediário/Caixa (Q5/ADR-010)
 
+> ⭐ **Desde 2026-08-29 (V095), o fechamento EXIGE que o excedente do fundo de troco tenha sido
+> sangrado.** `CaixaService.exigirExcedenteSangrado` responde **409** dizendo quanto sangrar e onde,
+> enquanto houver dinheiro em espécie acima do `saldo_inicial` com que o caixa foi aberto. É
+> parâmetro (`cfg_exige_sangria_fechamento`), **ligado por padrão**. Caixa *abaixo* do fundo fecha
+> normalmente — não há o que sangrar. Detalhes e o porquê: `docs/telas/sangria-caixa.md`.
+
 ## Problema
 
 `caixa_mestre.caixa_fechado`/`data_fechamento` existiam no schema desde V025, mas nenhuma tela ou

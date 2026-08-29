@@ -1,5 +1,6 @@
 package com.vetor.niner.financeiro.caixa;
 
+import com.vetor.niner.configuracao.geral.ConfiguracaoGeralService;
 import com.vetor.niner.comum.tempo.FusoDaLoja;
 import com.vetor.niner.comum.web.ConflitoDadosException;
 import com.vetor.niner.financeiro.caixa.CaixaDtos.AbrirCaixaRequest;
@@ -59,10 +60,12 @@ public class CaixaService {
 
     private final JdbcClient jdbc;
     private final FusoDaLoja fusoDaLoja;
+    private final ConfiguracaoGeralService configuracaoGeralService;
 
-    public CaixaService(JdbcClient jdbc, FusoDaLoja fusoDaLoja) {
+    public CaixaService(JdbcClient jdbc, FusoDaLoja fusoDaLoja, ConfiguracaoGeralService configuracaoGeralService) {
         this.jdbc = jdbc;
         this.fusoDaLoja = fusoDaLoja;
+        this.configuracaoGeralService = configuracaoGeralService;
     }
 
     /**
@@ -338,6 +341,8 @@ public class CaixaService {
             throw new ConflitoDadosException("Este caixa já foi fechado.");
         }
 
+        exigirExcedenteSangrado(caixa);
+
         List<LinhaTotalCarteiraResponse> linhasEsperadas = calcularLinhas(caixa);
         Map<Long, BigDecimal> contadosPorCarteira = new LinkedHashMap<>();
         for (ValorContadoRequest vc : req.valoresContados()) {
@@ -596,6 +601,62 @@ public class CaixaService {
      * <p>⚠️ Método separado de propósito: {@code buscarCaixaPorIdObrigatorio} também serve
      * consultas em {@code @Transactional(readOnly = true)}, onde {@code FOR UPDATE} não cabe.
      */
+    /**
+     * Recusa o fechamento enquanto houver dinheiro em espécie <b>acima do fundo de troco</b> com
+     * que este caixa foi aberto (V095).
+     *
+     * <h2>⭐ Por que isto existe</h2>
+     *
+     * <p>Decisão do dono do produto (2026-08-29), escolhendo entre três desenhos depois que a
+     * Sangria de Caixa nasceu: <i>"o fechamento exige sangrar até o fundo — o operador é obrigado
+     * a deixar na gaveta exatamente o que vai abrir amanhã"</i>.
+     *
+     * <p>É a disciplina que faz o Fluxo de Caixa fechar. O fundo passou a contar <b>uma vez por
+     * operador</b> (o do último caixa aberto, ver {@code FluxoCaixaService.fundoDeCaixaAte}); sem
+     * esta regra, quem fecha com R$ 800 e abre amanhã com R$ 200 faz os R$ 600 que continuam
+     * fisicamente na gaveta <b>sumirem do saldo</b> — o erro de antes, na direção oposta.
+     *
+     * <h2>⚠️ Três decisões que o guarda embute</h2>
+     *
+     * <ol>
+     *   <li><b>Só cobra EXCEDENTE.</b> Caixa que ficou abaixo do fundo (pagou despesa em dinheiro
+     *       pela baixa de conta a pagar) fecha normalmente — não há o que sangrar, e travar ali
+     *       prenderia o operador sem saída nenhuma.</li>
+     *   <li><b>Só a carteira de ABERTURA.</b> Cartão e crediário não estão na gaveta e não se
+     *       depositam; cobrar por eles tornaria o fechamento impossível em qualquer loja que
+     *       venda no cartão.</li>
+     *   <li><b>Compara o ESPERADO, não o contado.</b> O fechamento é às cegas: o operador conta e
+     *       o sistema confere. Ele só consegue sangrar o que o sistema sabe que entrou — cobrar
+     *       sobre o valor contado transformaria uma sobra de caixa em fechamento bloqueado.</li>
+     * </ol>
+     *
+     * <p>⚠️ A mensagem diz <b>quanto</b> sangrar e <b>onde</b>: um 409 que só dissesse "sangre
+     * antes de fechar" deixaria o operador procurando a tela no fim do expediente.
+     */
+    private void exigirExcedenteSangrado(Caixa caixa) {
+        if (!configuracaoGeralService.exigeSangriaNoFechamento()) {
+            return;
+        }
+        BigDecimal movimento = jdbc.sql("""
+                        SELECT COALESCE(SUM(CASE WHEN credito_debito = 'C' THEN valor ELSE -valor END), 0)
+                          FROM caixa_detalhe
+                         WHERE id_tenant = plataforma.tenant_atual() AND id_caixa = ? AND id_carteira = ?
+                        """)
+                .params(caixa.idCaixa(), caixa.idCarteira())
+                .query(BigDecimal.class)
+                .single();
+        BigDecimal naGaveta = caixa.saldoInicial().add(movimento);
+        BigDecimal excedente = naGaveta.subtract(caixa.saldoInicial());
+        if (excedente.signum() <= 0) {
+            return;
+        }
+        throw new ConflitoDadosException(
+                "Ainda há R$ " + excedente + " em dinheiro acima do fundo de troco (R$ "
+                        + caixa.saldoInicial() + "). Registre a sangria desse valor em "
+                        + "Frente de Loja › Sangria de Caixa e feche depois — assim o dinheiro "
+                        + "aparece na conta bancária em vez de sumir do Fluxo de Caixa.");
+    }
+
     private Caixa buscarCaixaTravado(long idCaixa) {
         return jdbc.sql("""
                         SELECT id_caixa, id_empresa, id_usuario, id_carteira, saldo_inicial,

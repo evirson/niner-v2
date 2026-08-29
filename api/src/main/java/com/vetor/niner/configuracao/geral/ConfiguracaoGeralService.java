@@ -32,7 +32,7 @@ public class ConfiguracaoGeralService {
                    cfg_exige_numero_venda_devolucao,
                    cfg_rateia_frete_entrada, cfg_reajusta_preco_entrada,
                    cfg_consiste_valor_contas_pagar,
-                   id_plano_contas_compra_mercadoria, cfg_emite_fiscal_apos_venda, cfg_usa_servicos,
+                   id_plano_contas_compra_mercadoria, cfg_emite_fiscal_apos_venda, cfg_usa_servicos, cfg_exige_sangria_fechamento,
                    atualizado_em
             FROM cfg_geral
             WHERE id_tenant = plataforma.tenant_atual()
@@ -87,6 +87,28 @@ public class ConfiguracaoGeralService {
                 .query(Boolean.class)
                 .optional()
                 .orElse(false);
+    }
+
+    /**
+     * O fechamento do caixa exige sangrar o excedente do fundo de troco? (V095)
+     *
+     * <p><b>LIGADO por padrão</b> — decisão do dono do produto em 2026-08-29, escolhendo entre
+     * três desenhos: <i>"o fechamento exige sangrar até o fundo"</i>. É a disciplina que faz o
+     * Fluxo de Caixa fechar: o fundo conta uma vez por operador e o resto vira sangria, visível
+     * na conta corrente.
+     *
+     * <p>⚠️ O fallback aqui é {@code true}, ao contrário de {@code usaServicos} — tenant sem a
+     * linha se comporta como o padrão escolhido, não como "sem regra".
+     */
+    @Transactional(readOnly = true)
+    public boolean exigeSangriaNoFechamento() {
+        return jdbc.sql("""
+                        SELECT cfg_exige_sangria_fechamento FROM cfg_geral
+                        WHERE id_tenant = plataforma.tenant_atual()
+                        """)
+                .query(Boolean.class)
+                .optional()
+                .orElse(true);
     }
 
     /**
@@ -260,6 +282,7 @@ public class ConfiguracaoGeralService {
                             cfg_consiste_valor_contas_pagar = ?,
                             id_plano_contas_compra_mercadoria = ?, cfg_emite_fiscal_apos_venda = ?,
                             cfg_usa_servicos = COALESCE(?, cfg_usa_servicos),
+                            cfg_exige_sangria_fechamento = COALESCE(?, cfg_exige_sangria_fechamento),
                             atualizado_em = now()
                         WHERE id_tenant = plataforma.tenant_atual()
                         """)
@@ -276,7 +299,7 @@ public class ConfiguracaoGeralService {
                         req.cfgRateiaFreteEntrada(), req.cfgReajustaPrecoEntrada(),
                         req.cfgConsisteValorContasPagar(),
                         req.idPlanoContasCompraMercadoria(), req.cfgEmiteFiscalAposVenda(),
-                        req.cfgUsaServicos()))
+                        req.cfgUsaServicos(), req.cfgExigeSangriaFechamento()))
                 .update();
         // Não deveria acontecer — a linha nasce no signup — mas 404 é mais honesto que
         // seguir em frente como se tivesse atualizado algo.
@@ -320,6 +343,7 @@ public class ConfiguracaoGeralService {
                 rs.getString("id_plano_contas_compra_mercadoria"),
                 rs.getBoolean("cfg_emite_fiscal_apos_venda"),
                 rs.getBoolean("cfg_usa_servicos"),
+                rs.getBoolean("cfg_exige_sangria_fechamento"),
                 rs.getObject("atualizado_em", OffsetDateTime.class));
     }
 }

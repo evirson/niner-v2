@@ -11,6 +11,57 @@ Registro cronológico das decisões e entregas. Atualizar a cada marco relevante
 
 ## Estado atual
 
+> ## 📌 2026-08-29 (4) — o fechamento passou a exigir a sangria (V095)
+>
+> Apresentei a ele as três saídas da pendência **#64** — a que a Sangria de Caixa abriu — e ele
+> escolheu a **primeira**:
+>
+> > *"O fechamento exige sangrar até o fundo — o operador é obrigado a deixar na gaveta exatamente
+> > o que vai abrir amanhã."*
+>
+> `CaixaService.exigirExcedenteSangrado` recusa o fechamento com **409** enquanto houver dinheiro em
+> espécie acima do `saldo_inicial` com que o caixa foi aberto, dizendo **quanto** sangrar e **onde**
+> — um 409 genérico deixaria o operador procurando a tela no fim do expediente.
+>
+> ⭐ **Com isso o modelo do Fluxo de Caixa fecha inteiro.** O fundo conta uma vez por operador, o
+> excedente vira sangria e aparece no banco, e nada some. Era o último buraco: antes da sangria o
+> número inflava (o mesmo fundo somado a cada abertura); depois dela, e sem esta regra, ele
+> encolheria (o dinheiro deixado na gaveta sumiria).
+>
+> ### ⚠️ Virou parâmetro, e a ressalva foi dita antes de construir
+>
+> A regra **bloqueia** o fechamento do caixa, e sangria exige conta corrente cadastrada. A loja
+> pequena que paga despesa em dinheiro e leva o resto para casa — parte do público deste produto —
+> ficaria **sem conseguir fechar o caixa no primeiro dia**. É o mesmo raciocínio que deixou
+> `cfg_permite_estoque_negativo` ligado por padrão em 2026-08-20: travar a operação por um controle
+> que a loja não alimenta é pior que não ter o controle.
+>
+> Por isso `cfg_exige_sangria_fechamento` (V095), **ligado por padrão** — que é a escolha dele e a
+> opção que mantém o número certo. O custo de desligar está escrito no `COMMENT` da coluna e na
+> tela de Parâmetros do Sistema.
+>
+> ### As três decisões que o guarda embute
+>
+> 1. **Só cobra EXCEDENTE.** Caixa que ficou *abaixo* do fundo (pagou despesa em dinheiro pela baixa
+>    de conta a pagar) fecha normalmente — não há o que sangrar, e travar ali prenderia o operador
+>    sem saída nenhuma.
+> 2. **Só a carteira de ABERTURA.** Cobrar por cartão e crediário tornaria o fechamento impossível
+>    em qualquer loja que venda no cartão — o dinheiro do adquirente não está na gaveta.
+> 3. **Compara o ESPERADO, não o contado.** O fechamento é às cegas: o operador conta e o sistema
+>    confere. Ele só consegue sangrar o que o sistema sabe que entrou; cobrar sobre o valor contado
+>    transformaria uma **sobra de caixa** em fechamento bloqueado.
+>
+> ### ⭐ O teste que importa é o negativo
+>
+> Três testes novos, e o que prova o guarda é `caixaSemExcedenteFechaNormalmente`: com a regra
+> escrita como "o dinheiro tem de ser igual ao fundo", a loja que pagou despesa em dinheiro ficaria
+> sem conseguir fechar — e **nenhum teste positivo denunciaria**. É a mesma lição da revogação de
+> sessão em 2026-08-27, onde só o caso negativo pegou o guarda que expulsava todo mundo.
+>
+> Os outros dois: o 409 com excedente (conferindo que o caixa **continua aberto** — o 409 não pode
+> ter fechado metade) e o parâmetro desligado deixando fechar. Sabotado, o primeiro responde 200.
+>
+
 > ## 📌 2026-08-29 (3) — as decisões dele sobre as 12 pendências
 >
 > Ele leu a lista, decidiu item a item e mandou executar tudo. Cinco viraram código

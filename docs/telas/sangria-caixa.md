@@ -1,7 +1,7 @@
 # Sangria de Caixa
 
 > **Rota:** `/sangria-caixa` · **Chave RBAC:** `sangria-caixa` · **Menu:** Frente de Loja, ao lado
-> do Fechamento de Caixa · **Migration:** `V094__sangria_de_caixa.sql` (2026-08-29)
+> do Fechamento de Caixa · **Migration:** `V094__sangria_de_caixa.sql` + `V095__exige_sangria_no_fechamento.sql` (2026-08-29)
 
 ## O problema que ela resolve
 
@@ -90,8 +90,46 @@ igualdade que o relatório promete (`saldo inicial + movimentos = saldo final`) 
 loja que abre o caixa mais de uma vez no período. No primeiro dia de uso a variação é o próprio
 fundo, que é exatamente o que o teste de 2026-08-14 exigia.
 
+## ⭐ O fechamento do caixa EXIGE a sangria (V095)
+
+Decisão do dono do produto (2026-08-29), escolhendo entre três desenhos depois que a Sangria
+nasceu: **"o fechamento exige sangrar até o fundo — o operador é obrigado a deixar na gaveta
+exatamente o que vai abrir amanhã"**.
+
+`CaixaService.exigirExcedenteSangrado` recusa o fechamento com **409** enquanto houver dinheiro em
+espécie acima do `saldo_inicial` com que o caixa foi aberto, dizendo **quanto** sangrar e **onde**.
+
+Três decisões embutidas no guarda:
+
+1. **Só cobra EXCEDENTE.** Caixa que ficou *abaixo* do fundo (pagou despesa em dinheiro pela baixa
+   de conta a pagar) fecha normalmente — não há o que sangrar, e travar ali prenderia o operador
+   sem saída nenhuma. ⭐ É o caso **negativo** que prova o guarda: sem ele, a loja que paga despesa
+   em dinheiro ficaria sem conseguir fechar, e nenhum teste positivo denunciaria.
+2. **Só a carteira de ABERTURA.** Cobrar por cartão e crediário tornaria o fechamento impossível
+   em qualquer loja que venda no cartão.
+3. **Compara o ESPERADO, não o contado.** O fechamento é às cegas; o operador só consegue sangrar
+   o que o sistema sabe que entrou. Cobrar sobre o contado transformaria uma sobra de caixa em
+   fechamento bloqueado.
+
+### ⚠️ Por que é parâmetro (`cfg_exige_sangria_fechamento`), e não regra fixa
+
+Porque **bloqueia** o fechamento, e sangria exige conta corrente cadastrada. A loja pequena que
+paga despesa em dinheiro e leva o resto para casa — parte do público deste produto — ficaria sem
+conseguir fechar o caixa no primeiro dia. Mesmo raciocínio que deixou `cfg_permite_estoque_negativo`
+ligado por padrão: travar a operação por um controle que a loja não alimenta é pior que não ter o
+controle.
+
+⭐ Mas o padrão aqui é **LIGADO** — foi a escolha explícita dele, e é a opção que mantém o Fluxo de
+Caixa correto. O custo de desligar está escrito no `COMMENT` da coluna e na tela de Parâmetros.
+
 ## Testes
 
 `SangriaCaixaCrudTest` — quatro casos, e o principal confere **os três lados no banco**, não o 201:
 um teste que olhasse só o status passaria com metade do mecanismo, e metade é exatamente o defeito.
 Sabotado (removendo o crédito no banco), dois dos quatro reprovam.
+
+
+`FechamentoCaixaCrudTest` ganhou três: o 409 com excedente (conferindo que o caixa continua
+ABERTO — o 409 não pode ter fechado metade), o caixa **sem** excedente fechando normalmente
+(o caso negativo, que é o que pega um guarda que trava todo mundo) e o parâmetro desligado
+deixando fechar. Sabotado, o primeiro responde 200 em vez de 409.

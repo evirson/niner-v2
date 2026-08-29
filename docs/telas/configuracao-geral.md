@@ -316,3 +316,20 @@ só um era vigiado.
 ⚠️ Havia um teste **prendendo o comportamento antigo** (`percentualAcimaDeCemEhAceito`, com o
 comentário "sem limite superior, herdado de moeda"). Ele foi **invertido**, não apagado — é ele que
 prende a regra nova agora.
+
+
+## `cfg_exige_sangria_fechamento` — exigir sangria antes de fechar o caixa (V095, 2026-08-29)
+
+**Ligado por padrão.** Decisão do dono do produto, escolhendo entre três desenhos depois que a
+Sangria de Caixa nasceu: *"o fechamento exige sangrar até o fundo — o operador é obrigado a
+deixar na gaveta exatamente o que vai abrir amanhã"*.
+
+É o que mantém o Fluxo de Caixa correto: o fundo conta **uma vez por operador** e o resto vira
+sangria, visível na conta bancária. Sem a regra, quem fecha com R$ 800 e abre amanhã com R$ 200
+faz os R$ 600 que continuam na gaveta **sumirem do saldo**.
+
+⚠️ **Por que é parâmetro:** ele **bloqueia** o fechamento, e sangria exige conta corrente
+cadastrada. A loja pequena que paga despesa em dinheiro e leva o resto para casa ficaria sem
+conseguir fechar o caixa no primeiro dia — mesmo raciocínio que deixou
+`cfg_permite_estoque_negativo` ligado por padrão. ⚠️ Caixa **abaixo** do fundo fecha nos dois
+casos: não há o que sangrar, e travar ali prenderia o operador sem saída.
