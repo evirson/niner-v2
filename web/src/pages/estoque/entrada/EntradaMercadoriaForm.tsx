@@ -1300,7 +1300,11 @@ export default function EntradaMercadoriaForm() {
           </div>
           <div className="topbar-acoes">
             <AjudaDaTela chaveTela="estoque.entrada.form" />
-            <BotaoFecharTela onClick={() => navigate('/entrada-produtos-compra')} />
+            {/* ⛔ , não rota fixa (auditoria 2026-08-29, rodada 2). Voltar por PUSH
+                empilhava a lista no histórico: menu → lista → nova → ✕ → lista, e o ✕ da lista
+                (que é ) devolvia o usuário à Nova Entrada, com o popup de origem na
+                cara — a tela que ele acabou de fechar. Repetindo, ficava preso no vaivém. */}
+            <BotaoFecharTela />
             {!entradaGravada && modo !== null && (
               <button type="button" className="btn" disabled={!podeConfirmar || efetivar.isPending} onClick={() => efetivar.mutate()}>
                 {efetivar.isPending ? 'Confirmando…' : 'Confirmar Entrada'}
@@ -1685,7 +1689,7 @@ export default function EntradaMercadoriaForm() {
               <button
                 type="button"
                 className="btn ghost btn-fechar-tela"
-                onClick={() => navigate('/entrada-produtos-compra')}
+                onClick={() => navigate(-1)}
                 aria-label="Fechar"
                 title="Fechar"
               >

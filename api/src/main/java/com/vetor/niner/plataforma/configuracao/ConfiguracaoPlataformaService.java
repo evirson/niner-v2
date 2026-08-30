@@ -105,13 +105,13 @@ public class ConfiguracaoPlataformaService {
                             atualizado_por = ?
                         WHERE id = 1
                         """)
-                .params(req.smtpHabilitado(), vazioParaNulo(req.smtpHost()), req.smtpPorta(),
+                .params(Boolean.TRUE.equals(req.smtpHabilitado()), vazioParaNulo(req.smtpHost()), req.smtpPorta(),
                         vazioParaNulo(req.smtpUsuario()),
                         cifrarOuMarcador(req.smtpSenha()), cifrarOuMarcador(req.smtpSenha()),
                         cifrarOuMarcador(req.smtpSenha()),
-                        req.smtpStarttls(), vazioParaNulo(req.smtpRemetenteEmail()),
+                        Boolean.TRUE.equals(req.smtpStarttls()), vazioParaNulo(req.smtpRemetenteEmail()),
                         vazioParaNulo(req.smtpRemetenteNome()),
-                        req.backupHabilitado(), req.backupHora(), req.backupRetencaoDias(),
+                        Boolean.TRUE.equals(req.backupHabilitado()), req.backupHora(), req.backupRetencaoDias(),
                         cifrarOuMarcador(req.mpAccessToken()), cifrarOuMarcador(req.mpAccessToken()),
                         cifrarOuMarcador(req.mpAccessToken()),
                         cifrarOuMarcador(req.mpWebhookSecret()), cifrarOuMarcador(req.mpWebhookSecret()),

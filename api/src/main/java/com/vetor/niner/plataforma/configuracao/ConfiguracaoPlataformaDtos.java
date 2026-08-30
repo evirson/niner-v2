@@ -21,7 +21,7 @@ public final class ConfiguracaoPlataformaDtos {
     public record ConfiguracaoResponse(
             boolean smtpHabilitado, String smtpHost, Integer smtpPorta, String smtpUsuario,
             boolean smtpSenhaDefinida, boolean smtpStarttls, String smtpRemetenteEmail, String smtpRemetenteNome,
-            boolean backupHabilitado, LocalTime backupHora, int backupRetencaoDias,
+            Boolean backupHabilitado, LocalTime backupHora, int backupRetencaoDias,
             OffsetDateTime backupUltimoEm, String backupUltimoStatus, String backupUltimoDetalhe,
             boolean mpAccessTokenDefinido, boolean mpWebhookSecretDefinido, String mpNotificationUrl,
             OffsetDateTime atualizadoEm) {
@@ -38,7 +38,7 @@ public final class ConfiguracaoPlataformaDtos {
             @Min(1) @Max(65535) Integer smtpPorta,
             @Size(max = 200) String smtpUsuario,
             @Size(max = 400) String smtpSenha,
-            boolean smtpStarttls,
+            Boolean smtpStarttls,
             @Email @Size(max = 200) String smtpRemetenteEmail,
             @Size(max = 120) String smtpRemetenteNome,
             boolean backupHabilitado,

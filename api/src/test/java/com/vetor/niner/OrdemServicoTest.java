@@ -807,4 +807,137 @@ class OrdemServicoTest {
                 .isEqualByComparingTo("0");
     }
 
+
+    // ------------------------------------------- auditoria 2026-08-29, rodada 1
+
+    /**
+     * ⛔ <b>A venda não pode cobrar mais do que a OS aprovou.</b>
+     *
+     * <p>Até esta data o servidor lia do banco o <b>preço</b> congelado e aceitava o
+     * <b>desconto</b> cru de {@code req.descontoVenda()} — calculado no {@code Pdv.tsx}. Uma OS de
+     * R$ 165,00 com R$ 65,00 de desconto, impressa e assinada em R$ 100,00, fechava a venda em
+     * R$ 165,00 se o cliente da API mandasse {@code descontoVenda: 0}: a OS ia para FATURADA
+     * apontando para essa venda e <b>nada</b> registrava que a loja cobrou R$ 65,00 a mais.
+     *
+     * <p>⚠️ O par positivo está em {@link #descontoDaOsMenorPeloQueFoiLevadoEhAceito()} — sem ele,
+     * uma versão que recusasse toda venda parcial passaria neste teste.
+     */
+    @Test
+    void vendaDaOsNaoPodeIgnorarODescontoAprovado() throws Exception {
+        prepararTenant("w1");
+        abrirCaixa();
+        permitirDesconto();
+        long id = criarOsComDesconto("65.00");
+        mvc.perform(put("/api/v1/ordens-servico/" + id + "/situacao?para=CONCLUIDA")
+                .header("Authorization", "Bearer " + token)).andExpect(status().isOk());
+
+        venderDaOs(id, "165.00")
+                .andExpect(status().isConflict());
+
+        // E com o desconto que a OS aprovou, a mesma venda passa.
+        venderDaOsComDesconto(id, "65.00", "100.00").andExpect(status().isCreated());
+    }
+
+    /**
+     * ⭐ O caso NEGATIVO do guarda acima: o cliente pode <b>levar menos</b> do que a OS aprovou, e
+     * aí o desconto exigido é <b>proporcional</b> — cobrar o desconto cheio sobre metade dos itens
+     * transformaria uma venda parcial legítima em 409.
+     *
+     * <p>A OS aprova peça (R$ 45,00) + serviço (R$ 120,00) = R$ 165,00 com R$ 66,00 de desconto
+     * (40%). Levando só o serviço, o piso é 40% de R$ 120,00 = R$ 48,00.
+     */
+    @Test
+    void descontoDaOsMenorPeloQueFoiLevadoEhAceito() throws Exception {
+        prepararTenant("w2");
+        abrirCaixa();
+        permitirDesconto();
+        long id = criarOsComDesconto("66.00");
+        mvc.perform(put("/api/v1/ordens-servico/" + id + "/situacao?para=CONCLUIDA")
+                .header("Authorization", "Bearer " + token)).andExpect(status().isOk());
+
+        mvc.perform(post("/api/v1/pdv/vendas").header("Authorization", "Bearer " + token)
+                        .contentType(APPLICATION_JSON)
+                        .content("""
+                                {"idOrdemServico":%d,"idCliente":%d,"idFuncionario":%d,"descontoVenda":48.00,
+                                 "itens":[{"idVariacao":%d,"qtd":1,"daOrdemServico":true}],
+                                 "pagamentos":[{"idCarteira":%d,"valorPago":72.00,"numeroParcelas":1}]}
+                                """.formatted(id, idCliente, idFuncionario, idVariacaoServico,
+                                idCarteiraDinheiro())))
+                .andExpect(status().isCreated());
+    }
+
+    /**
+     * ⛔ <b>A mesma variação não pode entrar duas vezes com preços diferentes.</b>
+     *
+     * <p>O PDV congela o preço da OS num {@code Map<idVariacao, preco>}, então de duas linhas só a
+     * última sobrevivia — enquanto a validação de quantidade somava as duas. O serviço a
+     * 1 × R$ 100,00 (negociado) + 1 × R$ 120,00 virava uma venda de <b>2 × R$ 120,00 = R$ 240,00</b>
+     * contra os R$ 220,00 que a OS impressa promete.
+     *
+     * <p>⚠️ Recusa na ORIGEM: travar no fechamento da venda deixaria o operador com o cliente na
+     * frente e uma OS impossível de faturar.
+     */
+    @Test
+    void osNaoAceitaAMesmaVariacaoComDoisPrecos() throws Exception {
+        prepararTenant("w3");
+        String body = """
+                {"idCliente":%d,"idFuncionario":%d,"objetoServico":"ABC-1234",
+                 "itens":[{"idVariacao":%d,"qtdProduto":1,"precoVenda":120.00},
+                          {"idVariacao":%d,"qtdProduto":1,"precoVenda":100.00}]}
+                """.formatted(idCliente, idFuncionario, idVariacaoServico, idVariacaoServico);
+        mvc.perform(post("/api/v1/ordens-servico").header("Authorization", "Bearer " + token)
+                        .contentType(APPLICATION_JSON).content(body))
+                .andExpect(status().isConflict());
+
+        // O par: o MESMO preço nas duas linhas continua valendo — a trava é sobre divergência,
+        // não sobre repetir o item.
+        String iguais = """
+                {"idCliente":%d,"idFuncionario":%d,"objetoServico":"ABC-1234",
+                 "itens":[{"idVariacao":%d,"qtdProduto":1,"precoVenda":100.00},
+                          {"idVariacao":%d,"qtdProduto":1,"precoVenda":100.00}]}
+                """.formatted(idCliente, idFuncionario, idVariacaoServico, idVariacaoServico);
+        mvc.perform(post("/api/v1/ordens-servico").header("Authorization", "Bearer " + token)
+                        .contentType(APPLICATION_JSON).content(iguais))
+                .andExpect(status().isCreated());
+    }
+
+    /**
+     * Libera desconto de venda até 50% neste tenant — o padrão é 0% ("nenhum desconto"), e sem
+     * isto a própria OS com desconto é recusada por {@code exigirDescontoDentroDoTeto}.
+     */
+    private void permitirDesconto() throws Exception {
+        String atual = mvc.perform(get("/api/v1/config-geral").header("Authorization", "Bearer " + token))
+                .andReturn().getResponse().getContentAsString();
+        mvc.perform(put("/api/v1/config-geral").header("Authorization", "Bearer " + token)
+                        .contentType(APPLICATION_JSON)
+                        .content(atual.replaceFirst("\"percentualDescontoVenda\":\s*[0-9.]+", "\"percentualDescontoVenda\":50")))
+                .andExpect(status().isOk());
+    }
+
+    /** OS com desconto de documento — o total impresso é 165,00 menos o desconto. */
+    private long criarOsComDesconto(String desconto) throws Exception {
+        String body = """
+                {"idCliente":%d,"idFuncionario":%d,"objetoServico":"ABC-1234","valorDesconto":%s,
+                 "itens":[{"idVariacao":%d,"qtdProduto":1},
+                          {"idVariacao":%d,"qtdProduto":1,"idFuncionario":%d}]}
+                """.formatted(idCliente, idFuncionario, desconto, idVariacaoPeca,
+                idVariacaoServico, idFuncionario);
+        String resp = mvc.perform(post("/api/v1/ordens-servico").header("Authorization", "Bearer " + token)
+                        .contentType(APPLICATION_JSON).content(body))
+                .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
+        return ((Number) JsonPath.read(resp, "$.idOrdemServico")).longValue();
+    }
+
+    private org.springframework.test.web.servlet.ResultActions venderDaOsComDesconto(
+            long idOs, String desconto, String valorPago) throws Exception {
+        return mvc.perform(post("/api/v1/pdv/vendas").header("Authorization", "Bearer " + token)
+                .contentType(APPLICATION_JSON)
+                .content("""
+                        {"idOrdemServico":%d,"idCliente":%d,"idFuncionario":%d,"descontoVenda":%s,
+                         "itens":[{"idVariacao":%d,"qtd":1,"daOrdemServico":true},
+                                  {"idVariacao":%d,"qtd":1,"daOrdemServico":true}],
+                         "pagamentos":[{"idCarteira":%d,"valorPago":%s,"numeroParcelas":1}]}
+                        """.formatted(idOs, idCliente, idFuncionario, desconto, idVariacaoPeca,
+                        idVariacaoServico, idCarteiraDinheiro(), valorPago)));
+    }
 }

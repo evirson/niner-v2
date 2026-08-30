@@ -359,6 +359,87 @@ class RelatorioComissoesCrudTest {
                 .andExpect(jsonPath("$.linhas[0].valorComissao").value(0));
     }
 
+    /**
+     * ⭐ <b>A DRE e a Lucratividade contam a MESMA história que a folha.</b>
+     *
+     * <p>⛔ Até 2026-08-29 não contavam: as duas <b>nunca estornavam a comissão da devolução</b> —
+     * a consulta de devoluções nem selecionava a coluna. Com o vendedor a 10%, vender R$ 100 e
+     * receber tudo de volta no mesmo mês dava <b>R$ 0,00</b> no Relatório de Comissões (o número
+     * que a loja PAGA) e <b>R$ 10,00 de despesa de comissão</b> na DRE — um mês que não movimentou
+     * nada fechava com prejuízo. O javadoc da Lucratividade ainda <i>afirmava</i> que não estornar
+     * era a regra, "igual à DRE": estava alinhado ao relatório errado.
+     *
+     * <p>⚠️ Este teste é um <b>cruzamento</b>, não uma conta isolada: ele compara os três
+     * relatórios sobre a mesma massa. É o formato que pegou o defeito, porque cada número sozinho
+     * era plausível.
+     */
+    @Test
+    void devolucaoEstornaAComissaoTambemNaDreENaLucratividade() throws Exception {
+        TenantNovo tenant = assinarNovoTenant("comissao-dre");
+        long idTenant = extrairIdTenant(tenant.token());
+        long idProduto = criarProdutoComPreco(tenant.token(), "Produto Comissao DRE", "100.00");
+        long idCarteira = criarTipoCarteira(tenant.token(), "DINHEIRO COMISSAO DRE", "AVISTA");
+        long idCliente = criarCliente(tenant.token(), "Cliente Comissao DRE");
+        long idFuncionario = criarFuncionarioComComissao(tenant.token(), "Vendedor Comissao DRE", "10.00");
+        abrirCaixaDinheiro(tenant.token());
+
+        long idVenda;
+        long idVariacao;
+        try (Connection c = abrirConexao(idTenant)) {
+            long idEmpresa = buscarIdEmpresa(c);
+            idVariacao = criarVariacao(c, idTenant, idProduto);
+            definirEstoque(c, idTenant, idEmpresa, idVariacao, new BigDecimal("10.000"));
+            idVenda = efetivarVenda(tenant.token(), idVariacao, idCliente, idFuncionario, idCarteira, "100.00");
+        }
+
+        String hoje = hojeISO();
+
+        // Antes da devolução os três concordam: R$ 10,00 de comissão.
+        mvc.perform(get("/api/v1/relatorios/comissoes").header("Authorization", "Bearer " + tenant.token())
+                        .param("dataInicial", hoje).param("dataFinal", hoje))
+                .andExpect(jsonPath("$.linhas[0].valorComissao").value(10.00));
+        org.assertj.core.api.Assertions.assertThat(comissaoNaDre(tenant.token(), hoje))
+                .as("antes da devolução a DRE mostra a mesma comissão da folha")
+                .isEqualTo(-10.00);
+
+        mvc.perform(post("/api/v1/vendas/devolucao").header("Authorization", "Bearer " + tenant.token())
+                        .contentType(APPLICATION_JSON)
+                        .content("""
+                                {"numeroVenda":%d,"itens":[{"idVariacao":%d,"qtd":1}]}
+                                """.formatted(idVenda, idVariacao)))
+                .andExpect(status().isCreated());
+
+        // Depois: a folha zera, e os outros dois TÊM de zerar junto.
+        mvc.perform(get("/api/v1/relatorios/comissoes").header("Authorization", "Bearer " + tenant.token())
+                        .param("dataInicial", hoje).param("dataFinal", hoje))
+                .andExpect(jsonPath("$.linhas[0].valorComissao").value(0));
+        org.assertj.core.api.Assertions.assertThat(comissaoNaDre(tenant.token(), hoje))
+                .as("a devolução estorna a comissão na DRE, como já estornava na folha")
+                .isEqualTo(0.0);
+        org.assertj.core.api.Assertions.assertThat(comissaoNaLucratividade(tenant.token(), hoje))
+                .as("e na Lucratividade também")
+                .isEqualTo(0.0);
+    }
+
+    /** A linha "Comissões sobre Vendas" da DRE de competência (conta 3.02.001, valor negativo). */
+    private double comissaoNaDre(String token, String dia) throws Exception {
+        String json = mvc.perform(get("/api/v1/relatorios/dre").header("Authorization", "Bearer " + token)
+                        .param("dataInicial", dia).param("dataFinal", dia).param("regime", "COMPETENCIA"))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        java.util.List<Double> valores = JsonPath.read(json, "$.linhas[?(@.chave=='3.02.001')].valor");
+        return valores.isEmpty() ? 0d : valores.get(0);
+    }
+
+    /** A despesa de comissão da Lucratividade — a linha derivada, não a de plano de contas. */
+    private double comissaoNaLucratividade(String token, String dia) throws Exception {
+        String json = mvc.perform(get("/api/v1/relatorios/lucratividade").header("Authorization", "Bearer " + token)
+                        .param("dataInicial", dia).param("dataFinal", dia))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        java.util.List<Double> valores =
+                JsonPath.read(json, "$.despesas[?(@.descricao =~ /.*omiss.*/i)].valor");
+        return valores.isEmpty() ? 0d : valores.stream().mapToDouble(Double::doubleValue).sum();
+    }
+
     @Test
     void vendaCanceladaNaoEntraNoRelatorio() throws Exception {
         TenantNovo tenant = assinarNovoTenant("cancelada");

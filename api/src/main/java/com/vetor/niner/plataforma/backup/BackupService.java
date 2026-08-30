@@ -152,14 +152,33 @@ public class BackupService {
         pb.redirectErrorStream(true);
         Process processo = pb.start();
 
-        String saida;
-        try (InputStream is = processo.getInputStream()) {
-            saida = new String(is.readAllBytes()).trim();
-        }
+        // ⛔ O TIMEOUT ERA DECORATIVO (auditoria 2026-08-29, rodada 2). `readAllBytes()` só retorna
+        // no EOF do stdout, isto é, quando o `pg_dump` termina — o `waitFor(timeout)` rodava DEPOIS
+        // e nunca chegava a esperar nada. Um dump preso (rede para o Postgres cai no meio, lock de
+        // longa duração) travava a thread para sempre.
+        //
+        // ⚠️ E o estrago não parava no backup: `spring.task.scheduling.pool.size` não é declarado,
+        // então os `@Scheduled` do produto compartilham UMA thread. Com ela presa aqui, param em
+        // silêncio o dreno de contingência fiscal (prazo legal de 24 h), o arquivamento de XML, o
+        // vencimento de orçamentos e o processador de webhook de cobrança — até o próximo restart.
+        // `backup_ultimo_status` também não era gravado, então a tela seguia mostrando o de ontem.
+        //
+        // A leitura vai para uma thread própria: o `waitFor` volta a ser quem manda no relógio.
+        StringBuilder capturada = new StringBuilder();
+        Thread dreno = Thread.ofVirtual().start(() -> {
+            try (InputStream is = processo.getInputStream()) {
+                capturada.append(new String(is.readAllBytes()));
+            } catch (IOException ignorado) {
+                // Stream fechado pelo destroyForcibly — a mensagem de timeout já diz o que houve.
+            }
+        });
         if (!processo.waitFor(TIMEOUT_DUMP.toMinutes(), TimeUnit.MINUTES)) {
             processo.destroyForcibly();
+            dreno.join(java.time.Duration.ofSeconds(5));
             throw new IOException("pg_dump excedeu " + TIMEOUT_DUMP.toMinutes() + " minutos");
         }
+        dreno.join(java.time.Duration.ofSeconds(5));
+        String saida = capturada.toString().trim();
         if (processo.exitValue() != 0) {
             throw new IOException("pg_dump falhou (código " + processo.exitValue() + "): " + saida);
         }

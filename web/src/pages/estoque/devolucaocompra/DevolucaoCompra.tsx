@@ -263,6 +263,38 @@ export default function DevolucaoCompra() {
                   </tbody>
                 </table>
               )}
+              {/* ⛔ A PAGINAÇÃO EXISTIA E ERA INALCANÇÁVEL (auditoria 2026-08-29, rodada 2). O
+                  estado `pagina` ia para a query, o servidor devolvia `total`/`totalPaginas` — e
+                  `setPagina` só era chamado no Localizar, para voltar à página 1. Não havia barra,
+                  nem contador, nem aviso de corte: numa loja que recebe XML todo dia, o operador
+                  via as 50 entradas mais recentes e a nota de três meses atrás simplesmente não
+                  existia. Pior, a própria tela reforçava a conclusão errada com o texto "só é
+                  possível devolver entrada recebida por XML" — ele culpava a origem da entrada. */}
+              {(entradas ? Math.ceil(entradas.total / entradas.limite) : 0) > 1 && (
+                <div className="paginacao-bar" style={{ marginTop: 8 }}>
+                  <span className="muted">
+                    {entradas?.total} entradas · página {pagina} de {Math.ceil((entradas?.total ?? 0) / (entradas?.limite || TAMANHO_PAGINA))}
+                  </span>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <button
+                      type="button"
+                      className="btn ghost"
+                      disabled={pagina <= 1}
+                      onClick={() => setPagina((p) => Math.max(1, p - 1))}
+                    >
+                      Anterior
+                    </button>
+                    <button
+                      type="button"
+                      className="btn ghost"
+                      disabled={pagina >= Math.ceil((entradas?.total ?? 0) / (entradas?.limite || TAMANHO_PAGINA))}
+                      onClick={() => setPagina((p) => p + 1)}
+                    >
+                      Próxima
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
 
             {entrada && (

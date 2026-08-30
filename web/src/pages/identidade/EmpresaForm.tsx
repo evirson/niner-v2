@@ -81,6 +81,15 @@ export default function EmpresaForm() {
       queryClient.invalidateQueries({ queryKey: ['empresas'] })
       queryClient.invalidateQueries({ queryKey: ['empresa', idEmpresa] })
       queryClient.invalidateQueries({ queryKey: ['fiscal-conformidade'] })
+      // ⚠️ Três OUTRAS keys servem a mesma lista de empresas (auditoria 2026-08-29, rodada 2).
+      // Sem elas, renomear "LOJA 2" para "FILIAL CENTRO" deixava o nome velho no select da Entrada
+      // de Produtos, no filtro da Devolução ao Fornecedor, na Configuração Fiscal e — o pior — no
+      // mapeamento de colunas da Importação de Estoque, onde apontar a coluna para a empresa errada
+      // por confiar no rótulo custa estoque trocado. É o padrão de sempre: invalidar TODAS as keys
+      // derivadas, não só a óbvia.
+      queryClient.invalidateQueries({ queryKey: ['empresas-permitidas'] })
+      queryClient.invalidateQueries({ queryKey: ['fiscal-empresas'] })
+      queryClient.invalidateQueries({ queryKey: ['empresas-importacao'] })
       navigate('/empresas', { state: { toast: { texto: 'Dados da empresa atualizados com sucesso.', tipo: 'sucesso' } } })
     },
     onError: (e: unknown) => setToast(e instanceof ApiError ? e.message : 'Não foi possível salvar a empresa.'),

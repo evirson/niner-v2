@@ -277,8 +277,16 @@ public class PlanoContasService {
                                        WHERE id_tenant = plataforma.tenant_atual() AND id_plano_contas = ?)
                             OR EXISTS (SELECT 1 FROM conta_corrente_movimento
                                        WHERE id_tenant = plataforma.tenant_atual() AND id_plano_contas = ?)
+                            -- ⚠️ E a Configuração Geral (V032), que aponta a conta de COMPRA DE
+                            -- MERCADORIA (auditoria 2026-08-29, rodada 2). O contador que cria uma
+                            -- conta própria, aponta o parâmetro para ela e depois volta atrás não
+                            -- conseguia excluir a conta nem inativá-la: 409 genérico, sem dizer que o
+                            -- vínculo está em Parâmetros do Sistema.
+                            OR EXISTS (SELECT 1 FROM cfg_geral
+                                       WHERE id_tenant = plataforma.tenant_atual()
+                                         AND id_plano_contas_compra_mercadoria = ?)
                         """)
-                .params(codigo, codigo, codigo, codigo)
+                .params(codigo, codigo, codigo, codigo, codigo)
                 .query(Boolean.class).single());
     }
 

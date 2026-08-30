@@ -188,10 +188,15 @@ public class FuncionarioService {
                                                WHERE id_tenant = plataforma.tenant_atual() AND id_funcionario = ?)
                                     OR EXISTS (SELECT 1 FROM ordem_servico
                                                WHERE id_tenant = plataforma.tenant_atual() AND id_funcionario = ?)
+                                -- ⚠️ E o ORÇAMENTO, que a correção do dia anterior esqueceu: o vendedor
+                                -- novo que faz três orçamentos na primeira semana e é desligado antes
+                                -- de fechar qualquer venda caía no mesmo 409 sem saída (rodada 2).
+                                    OR EXISTS (SELECT 1 FROM orcamento
+                                               WHERE id_tenant = plataforma.tenant_atual() AND id_funcionario = ?)
                                     OR EXISTS (SELECT 1 FROM ordem_servico_item
                                                WHERE id_tenant = plataforma.tenant_atual() AND id_funcionario = ?)
                                 """)
-                        .params(id, id, id, id).query(Boolean.class).single());
+                        .params(id, id, id, id, id).query(Boolean.class).single());
 
         if (temMovimento) {
             int linhas = jdbc.sql("""

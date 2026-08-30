@@ -11,6 +11,7 @@ import com.vetor.niner.identidade.usuario.UsuarioDtos.UsuarioResponse;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.jdbc.core.simple.JdbcClient;
+import com.vetor.niner.plataforma.uso.UsoTenantService;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Service;
@@ -73,10 +74,14 @@ public class UsuarioService {
 
     private final JdbcClient jdbc;
     private final PasswordEncoder senhas;
+    /** ⚠️ `plataforma.uso_tenant.qtd_usuarios` nascia 1 no signup e NUNCA mudava — a tela Tenants
+     *  do backoffice mostrava "1 usuário" para todo tenant (auditoria 2026-08-29, rodada 2). */
+    private final UsoTenantService usoTenant;
 
-    public UsuarioService(JdbcClient jdbc, PasswordEncoder senhas) {
+    public UsuarioService(JdbcClient jdbc, PasswordEncoder senhas, UsoTenantService usoTenant) {
         this.jdbc = jdbc;
         this.senhas = senhas;
+        this.usoTenant = usoTenant;
     }
 
     @Transactional(readOnly = true)
@@ -146,6 +151,7 @@ public class UsuarioService {
                     .query(Long.class).single();
             salvarEmpresas(id, req.idsEmpresa());
             salvarHorarios(id, Boolean.TRUE.equals(req.controlaHorarioAcesso()), req.horarios());
+            usoTenant.recontarUsuarios();
             return montar(id);
         } catch (DuplicateKeyException e) {
             throw duplicidade(e);
@@ -229,6 +235,7 @@ public class UsuarioService {
             if (linhas == 0) {
                 throw new ResponseStatusException(NOT_FOUND, "Usuário não encontrado.");
             }
+            usoTenant.recontarUsuarios();
             return new ExclusaoUsuarioResponse("inativado", "Usuário possui caixa(s) associado(s).");
         }
 
@@ -237,6 +244,7 @@ public class UsuarioService {
         if (linhas == 0) {
             throw new ResponseStatusException(NOT_FOUND, "Usuário não encontrado.");
         }
+        usoTenant.recontarUsuarios();
         return new ExclusaoUsuarioResponse("excluido", null);
     }
 

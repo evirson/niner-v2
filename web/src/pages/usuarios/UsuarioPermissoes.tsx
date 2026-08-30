@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { Fragment, useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useParams } from 'react-router-dom'
 import AjudaDaTela from '../../components/AjudaDaTela'
@@ -249,7 +249,13 @@ export default function UsuarioPermissoes() {
                 </thead>
                 <tbody>
                   {linhasVisiveis.map((p, i) => (
-                    <>
+                    /* ⚠️ `Fragment key=`, não o fragmento curto (auditoria 2026-08-29, rodada 2):
+                       sem chave no fragmento, o React reconcilia estas linhas por ÍNDICE — e a
+                       lista muda de tamanho a cada tecla digitada na busca da grade. Hoje o
+                       sintoma é só o aviso no console (os checkboxes são controlados pelo estado
+                       `grade`), mas é o tipo de reconciliação que quebra de verdade no dia em que
+                       alguém puser estado local numa linha. */
+                    <Fragment key={p.chave}>
                       {/* Separador de subgrupo: sem ele, as 20 telas de Configurações viram uma
                           lista corrida e o admin perde a referência de onde está. */}
                       {!termo && p.subgrupo && p.subgrupo !== linhasVisiveis[i - 1]?.subgrupo && (
@@ -281,7 +287,7 @@ export default function UsuarioPermissoes() {
                         </td>
                       ))}
                     </tr>
-                    </>
+                    </Fragment>
                   ))}
                 </tbody>
               </table>

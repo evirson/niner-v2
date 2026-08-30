@@ -285,7 +285,25 @@ export function desmascararEtiquetaMm(valor: string): number {
  * a máscara de peso é só reaproveitada por dentro quando o modo decimal está ligado.
  */
 export function mascararQuantidade(valor: string, permiteDecimal: boolean): string {
-  return permiteDecimal ? mascararPeso(valor) : formatarParteInteira(somenteDigitos(valor))
+  // ⛔ No modo inteiro, a vírgula era ENGOLIDA e os decimais viravam unidades (auditoria
+  // 2026-08-29, rodada 2): `somenteDigitos('2,5')` = `'25'`, e a tela mostrava **25**. O operador
+  // que vem de outro sistema e digita `2,5` por hábito lançava 25 no estoque — um valor válido,
+  // que nada acusa. Cortar na vírgula deixa `2`, que é o que "não permite decimal" significa.
+  return permiteDecimal ? mascararPeso(valor) : formatarParteInteira(somenteDigitos(cortarNaVirgula(valor)))
+}
+
+/**
+ * Descarta o que vem depois da primeira VÍRGULA — o modo inteiro não tem casas decimais.
+ *
+ * ⛔ <b>Só a vírgula, nunca o ponto</b> — e esta ressalva não é teórica: eu escrevi
+ * `split(/[,.]/)` na primeira versão desta correção, e ela transformaria **1.234 em 1**. O ponto é
+ * o separador de MILHAR em pt-BR, e é a própria `formatarParteInteira` (via `toLocaleString`) que
+ * o insere: o texto que a máscara devolve para o campo volta por `desmascararQuantidade` no envio.
+ * Uma contagem de 1.234 unidades viraria 1 no estoque, calada. É a assinatura do defeito que este
+ * projeto mais repete — corrigir uma ponta e não olhar quem mais lê o mesmo dado.
+ */
+function cortarNaVirgula(valor: string): string {
+  return valor.split(',')[0]
 }
 
 /** Completa o campo de quantidade ao sair dele (sem efeito no modo inteiro) — ver {@link completarValorDecimal}. */
@@ -296,7 +314,9 @@ export function completarQuantidade(valor: string, permiteDecimal: boolean): str
 /** Desfaz {@link mascararQuantidade}/{@link completarQuantidade}, devolvendo o número para enviar à API. */
 export function desmascararQuantidade(valor: string, permiteDecimal: boolean): number {
   if (permiteDecimal) return desmascararPeso(valor)
-  const n = Number(somenteDigitos(valor))
+  // ⚠️ O mesmo corte da máscara — as duas TÊM de concordar, senão a tela mostra 2 e o payload
+  // manda 25 (ou o contrário), que é pior que qualquer um dos dois sozinho.
+  const n = Number(somenteDigitos(cortarNaVirgula(valor)))
   return Number.isFinite(n) ? n : 0
 }
 

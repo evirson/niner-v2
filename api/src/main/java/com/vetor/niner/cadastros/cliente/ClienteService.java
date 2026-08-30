@@ -211,11 +211,31 @@ public class ClienteService {
      */
     @Transactional
     public ExclusaoClienteResponse excluir(long id) {
-        boolean temVenda = Boolean.TRUE.equals(
-                jdbc.sql("SELECT EXISTS (SELECT 1 FROM venda WHERE id_tenant = plataforma.tenant_atual() AND id_cliente = ?)")
-                        .param(id).query(Boolean.class).single());
+        // ⚠️ CINCO tabelas apontam para `cliente`, e o guard conhecia UMA (auditoria 2026-08-29,
+        // rodada 2 — medido no banco, não inferido: venda, contas_receber_lote, documento_fiscal,
+        // orcamento e ordem_servico). As duas últimas nasceram em 2026-08-28 e **não implicam
+        // venda nenhuma**: o balcão cadastra JOÃO, faz um orçamento que ele não fecha, e semanas
+        // depois o cadastro não pode ser excluído NEM inativado — o DELETE viola a FK e o
+        // `GlobalExceptionHandler` responde 409 "Registro em uso por outro cadastro", que é uma
+        // mensagem sem saída: a tela não oferece outro caminho e o padrão de cadastro PROMETE o
+        // fallback "inativado". É o mesmo defeito que `FuncionarioService` corrigiu no dia
+        // anterior — a varredura parou num cadastro só ([[feedback_corrigir_uma_ponta_sem_varrer_as_outras]]).
+        boolean temVinculo = Boolean.TRUE.equals(
+                jdbc.sql("""
+                                SELECT EXISTS (SELECT 1 FROM venda
+                                               WHERE id_tenant = plataforma.tenant_atual() AND id_cliente = ?)
+                                    OR EXISTS (SELECT 1 FROM contas_receber_lote
+                                               WHERE id_tenant = plataforma.tenant_atual() AND id_cliente = ?)
+                                    OR EXISTS (SELECT 1 FROM documento_fiscal
+                                               WHERE id_tenant = plataforma.tenant_atual() AND id_cliente = ?)
+                                    OR EXISTS (SELECT 1 FROM orcamento
+                                               WHERE id_tenant = plataforma.tenant_atual() AND id_cliente = ?)
+                                    OR EXISTS (SELECT 1 FROM ordem_servico
+                                               WHERE id_tenant = plataforma.tenant_atual() AND id_cliente = ?)
+                                """)
+                        .params(id, id, id, id, id).query(Boolean.class).single());
 
-        if (temVenda) {
+        if (temVinculo) {
             int linhas = jdbc.sql("""
                             UPDATE cliente SET ativo = false, atualizado_em = now()
                             WHERE id_cliente = ? AND id_tenant = plataforma.tenant_atual()
@@ -224,7 +244,9 @@ public class ClienteService {
             if (linhas == 0) {
                 throw new ResponseStatusException(NOT_FOUND, "Cliente não encontrado.");
             }
-            return new ExclusaoClienteResponse("inativado", "Cliente possui vendas associadas.");
+            return new ExclusaoClienteResponse("inativado",
+                    "Cliente tem histórico no sistema (venda, orçamento, ordem de serviço, "
+                            + "recebimento ou nota fiscal) e por isso foi inativado em vez de excluído.");
         }
 
         int linhas = jdbc.sql("DELETE FROM cliente WHERE id_cliente = ? AND id_tenant = plataforma.tenant_atual()")
@@ -244,7 +266,7 @@ public class ClienteService {
      * mesmo que o cliente da API não seja o `web/` (ex.: integração futura).
      */
     private void validar(ClienteRequest req) {
-        if (req.fisicaJuridica() && req.genero() == null) {
+        if (Boolean.TRUE.equals(req.fisicaJuridica()) && req.genero() == null) {
             throw new IllegalArgumentException("Gênero é obrigatório para pessoa física.");
         }
         // Data de nascimento é sempre opcional (2026-07-21); quando preenchida, não pode ser
@@ -346,7 +368,7 @@ public class ClienteService {
         // CNPJ é alfanumérico (Receita Federal, a partir de julho/2026) — não usar
         // somenteDigitos aqui, senão as letras da raiz/ordem seriam descartadas. CPF
         // continua só dígitos.
-        params.add(r.fisicaJuridica() ? Documentos.somenteDigitos(r.cpfCnpj()) : Documentos.somenteAlfanumerico(r.cpfCnpj()));
+        params.add(Boolean.TRUE.equals(r.fisicaJuridica()) ? Documentos.somenteDigitos(r.cpfCnpj()) : Documentos.somenteAlfanumerico(r.cpfCnpj()));
         params.add(trimMaiusculoOuNulo(r.rgIe()));
         params.add(r.dataNascimento());
         params.add(r.genero() == null ? null : r.genero().name());

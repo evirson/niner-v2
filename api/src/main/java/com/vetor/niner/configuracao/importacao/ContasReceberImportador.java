@@ -90,7 +90,8 @@ public class ContasReceberImportador implements ImportadorDeTabela {
 
         record LinhaResolvida(LinhaPlanilha origem, long idCliente, long idEmpresa, int numeroParcela,
                                OffsetDateTime dataVencimento, OffsetDateTime dataRecebimento,
-                               BigDecimal valorReceber, BigDecimal valorRecebido) {
+                               BigDecimal valorReceber, BigDecimal valorJuros, BigDecimal valorDesconto,
+                               BigDecimal valorRecebido) {
         }
 
         List<LinhaErro> erros = new ArrayList<>();
@@ -133,12 +134,30 @@ public class ContasReceberImportador implements ImportadorDeTabela {
                 }
                 LocalDate recebimento = ImportacaoPlanilha.data("DATA_RECEBIMENTO", linha.valor("DATA_RECEBIMENTO"));
                 BigDecimal valorRecebido = ImportacaoPlanilha.decimal("VALOR_RECEBIDO", linha.valor("VALOR_RECEBIDO"));
+                // ⛔ JUROS e DESCONTO eram DESCARTADOS (auditoria 2026-08-29, rodada 2). As duas colunas
+                // estão em `COLUNAS`, o modelo de planilha as gera com exemplo, `contas_receber` tem as
+                // duas (V025) — e o importador nunca as lia: entravam com o DEFAULT 0. A loja que migra
+                // 4.000 parcelas, várias já pagas com juros de atraso, via o Histórico do Cliente e a
+                // Exportação de Dados mostrarem juros zero em TODA a base migrada, com o relatório de
+                // importação anunciando "4.000 importadas". Oferecer a coluna e ignorá-la é pior que não
+                // oferecer: o lojista preencheu conforme o modelo e o dado sumiu sem aviso nenhum.
+                BigDecimal valorJuros = ImportacaoPlanilha.decimal("VALOR_JUROS", linha.valor("VALOR_JUROS"));
+                BigDecimal valorDesconto = ImportacaoPlanilha.decimal("VALOR_DESCONTO", linha.valor("VALOR_DESCONTO"));
+
+                // ⚠️ Recebimento COM data e SEM valor é o caso normal de quem pagou o valor de face —
+                // gravava `documento_recebido = true` com `valor_recebido = 0`, e a parcela aparecia
+                // como recebida por zero. Sem valor digitado, o recebido é o que a parcela valia.
+                BigDecimal recebidoEfetivo = recebimento == null
+                        ? BigDecimal.ZERO
+                        : valorRecebido != null
+                                ? valorRecebido
+                                : valorReceber.add(zeroSeNulo(valorJuros)).subtract(zeroSeNulo(valorDesconto));
 
                 String chaveGrupo = idCliente + "|" + idEmpresa;
                 grupos.computeIfAbsent(chaveGrupo, k -> new ArrayList<>()).add(new LinhaResolvida(
                         linha, idCliente, idEmpresa, numeroParcela,
                         inicioDoDia(vencimento, fuso), recebimento == null ? null : inicioDoDia(recebimento, fuso),
-                        valorReceber, recebimento != null && valorRecebido != null ? valorRecebido : BigDecimal.ZERO));
+                        valorReceber, zeroSeNulo(valorJuros), zeroSeNulo(valorDesconto), recebidoEfetivo));
             } catch (RuntimeException e) {
                 erros.add(LinhaErro.de(linha.numeroLinha(), e));
             } finally {
@@ -180,7 +199,8 @@ public class ContasReceberImportador implements ImportadorDeTabela {
                                     VALUES (plataforma.tenant_atual(), ?, ?, ?, ?, ?, ?, ?, ?)
                                     """)
                             .params(idVenda, idCarteira, r.numeroParcela(), r.dataVencimento(), r.dataRecebimento(),
-                                    r.valorReceber(), r.valorRecebido(), r.dataRecebimento() != null)
+                                    r.valorReceber(), r.valorJuros(), r.valorDesconto(),
+                                    r.valorRecebido(), r.dataRecebimento() != null)
                             .update());
                     importadas++;
                 } catch (RuntimeException e) {
@@ -272,4 +292,8 @@ public class ContasReceberImportador implements ImportadorDeTabela {
         return data.atStartOfDay(fusoDaLoja).toOffsetDateTime();
     }
 
+    /** Coluna opcional em branco vale zero — ausente é null, zero é valor legítimo. */
+    private static BigDecimal zeroSeNulo(BigDecimal valor) {
+        return valor == null ? BigDecimal.ZERO : valor;
+    }
 }

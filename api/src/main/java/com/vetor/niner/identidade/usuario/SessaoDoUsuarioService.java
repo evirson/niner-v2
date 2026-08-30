@@ -1,5 +1,6 @@
 package com.vetor.niner.identidade.usuario;
 
+import com.vetor.niner.comum.tempo.FusoDaUf;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -32,9 +33,12 @@ import java.time.temporal.ChronoUnit;
 public class SessaoDoUsuarioService {
 
     private final JdbcClient jdbc;
+    /** Só é consultado nas UFs fora do fuso de Brasília — ver o comentário em `avaliar`. */
+    private final HorarioAcessoService horarioAcesso;
 
-    public SessaoDoUsuarioService(JdbcClient jdbc) {
+    public SessaoDoUsuarioService(JdbcClient jdbc, HorarioAcessoService horarioAcesso) {
         this.jdbc = jdbc;
+        this.horarioAcesso = horarioAcesso;
     }
 
     /**
@@ -49,6 +53,8 @@ public class SessaoDoUsuarioService {
         Estado e = jdbc.sql("""
                         SELECT u.ativo,
                                u.sessao_valida_desde,
+                               (u.administrador OR NOT u.controla_horario_acesso) AS dispensado,
+                               emp.estado AS uf,
                                (u.administrador OR NOT u.controla_horario_acesso OR EXISTS (
                                    SELECT 1 FROM usuario_horario_acesso h
                                    WHERE h.id_tenant = plataforma.tenant_atual() AND h.id_usuario = u.id_usuario
@@ -60,12 +66,16 @@ public class SessaoDoUsuarioService {
                                                   + (? * interval '1 minute'))
                                )) AS dentro_da_janela
                         FROM usuario u
+                        LEFT JOIN empresa emp
+                               ON emp.id_empresa = u.id_empresa AND emp.id_tenant = u.id_tenant
                         WHERE u.id_usuario = ? AND u.id_tenant = plataforma.tenant_atual()
                         """)
                 .params(toleranciaMinutos, idUsuario)
                 .query((rs, n) -> new Estado(rs.getBoolean("ativo"),
                         rs.getObject("sessao_valida_desde", OffsetDateTime.class),
-                        rs.getBoolean("dentro_da_janela")))
+                        rs.getBoolean("dentro_da_janela"),
+                        rs.getBoolean("dispensado"),
+                        rs.getString("uf")))
                 .optional().orElse(null);
 
         // ⚠️ Linha ausente = usuário EXCLUÍDO (ou id que não é deste tenant): sessão morta. Até a
@@ -89,6 +99,20 @@ public class SessaoDoUsuarioService {
                 && emitidoEm.isBefore(e.sessaoValidaDesde().toInstant().truncatedTo(ChronoUnit.SECONDS))) {
             return Veredito.SESSAO_ENCERRADA;
         }
+        // ⛔ A janela acima foi calculada em `America/Sao_Paulo`, e o expediente é no RELÓGIO DA
+        // LOJA (auditoria 2026-08-29, rodada 2). Numa loja do Acre (UTC−5) com janela 08:00–18:00,
+        // às 16:00 do relógio da loja já são 18:00 em Brasília: o operador era expulso DUAS HORAS
+        // antes do fim do expediente, com venda aberta, e o login não o deixava voltar.
+        //
+        // ⚠️ A recomputação só acontece nas UFs cujo fuso NÃO é o de Brasília — AM, RO, RR, MT, MS
+        // (1 h) e AC (2 h). Para o resto do país, e para quem nem controla horário, o custo desta
+        // correção é exatamente zero: nenhuma consulta a mais numa rotina que roda em TODA
+        // requisição autenticada. Trocar um erro de 1 h em seis UFs por um SELECT por requisição
+        // em todas seria um mau negócio.
+        if (!e.dispensado() && !FusoDaUf.deOuPadrao(e.uf()).equals(FusoDaUf.PADRAO)) {
+            return horarioAcesso.podeAcessarAgora(idUsuario, toleranciaMinutos)
+                    ? Veredito.OK : Veredito.FORA_DO_HORARIO;
+        }
         return e.dentroDaJanela() ? Veredito.OK : Veredito.FORA_DO_HORARIO;
     }
 
@@ -100,6 +124,9 @@ public class SessaoDoUsuarioService {
         SESSAO_ENCERRADA
     }
 
-    private record Estado(boolean ativo, OffsetDateTime sessaoValidaDesde, boolean dentroDaJanela) {
+    /** {@code uf} e {@code dispensado} existem só para decidir se vale recomputar a janela no fuso
+     *  da loja — ver o comentário em `avaliar`. */
+    private record Estado(boolean ativo, OffsetDateTime sessaoValidaDesde, boolean dentroDaJanela,
+                          boolean dispensado, String uf) {
     }
 }

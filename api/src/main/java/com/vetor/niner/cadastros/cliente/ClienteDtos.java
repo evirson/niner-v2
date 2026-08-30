@@ -26,7 +26,17 @@ public final class ClienteDtos {
      * campos além de {@code nome}/{@code idCategoriaCliente} são opcionais.
      */
     public record ClienteRequest(
-            boolean fisicaJuridica,
+            /**
+             * ⚠️ {@code Boolean} com {@code @NotNull}, não {@code boolean} (auditoria 2026-08-29,
+             * rodada 2). Com o primitivo, a chave <b>ausente</b> no JSON resolvia para
+             * {@code false} — e aqui {@code TRUE} é pessoa <b>física</b>, então omitir o campo
+             * virava o cliente em <b>jurídica</b> em silêncio. Num {@code PUT} vindo de qualquer
+             * cliente da API que não seja o {@code web/} (integração, script de correção em
+             * massa), o CPF passava a ser normalizado como CNPJ, a exigência de gênero deixava de
+             * valer, e a venda a esse cliente passava a emitir <b>NF-e 55 em vez de NFC-e</b>.
+             * Exigir explicitamente transforma o silêncio num 400 que diz qual campo falta.
+             */
+            @NotNull Boolean fisicaJuridica,
             @NotBlank @Size(max = 160) String nome,
             @NotNull Integer idCategoriaCliente,
             @Size(max = 20) String cpfCnpj,

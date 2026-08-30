@@ -11,6 +11,81 @@ Registro cronológico das decisões e entregas. Atualizar a cada marco relevante
 
 ## Estado atual
 
+> ## 📌 2026-08-29 (7) — auditoria, rodada 2: os cadastros que não podiam ser excluídos nem inativados
+>
+> Rodada nas áreas que a rodada 1 declarou **não** ter coberto (identidade, cadastros, catálogo,
+> configuração, plataforma). **16 achados**; corrigi 15 e deixei 1 registrado.
+>
+> ### ⭐ Três cadastros presos num 409 sem saída
+>
+> O padrão de cadastro deste produto **promete** que, havendo vínculo, o registro é *inativado* em
+> vez de excluído. Três guards não conheciam todas as FKs — e o que acontece então não é o
+> fallback: é o `DELETE` violando a FK e o handler global respondendo **"Registro em uso por outro
+> cadastro"**, uma mensagem sem caminho de volta, porque a tela não oferece outro botão.
+>
+> - **Cliente** conhecia **uma** das cinco FKs (medido no banco, não inferido: `venda`,
+>   `contas_receber_lote`, `documento_fiscal`, `orcamento`, `ordem_servico`). As duas últimas
+>   nasceram em 2026-08-28 e **não implicam venda nenhuma**: o balcão cadastra JOÃO, faz um
+>   orçamento que ele não fecha, e semanas depois o cadastro não sai nem é inativado.
+> - **Funcionário** — a correção do dia anterior, que existia exatamente para isso, **esqueceu o
+>   orçamento**: o vendedor novo que faz três orçamentos na primeira semana e é desligado antes de
+>   fechar qualquer venda caía no mesmo beco.
+> - **Plano de contas** não conhecia `cfg_geral.id_plano_contas_compra_mercadoria`: o contador que
+>   cria uma conta própria, aponta o parâmetro para ela e depois volta atrás fica com a conta presa,
+>   sem que a mensagem diga que o vínculo está em Parâmetros do Sistema.
+>
+> ### ⭐ E o backoffice mentia sobre todo tenant
+>
+> `plataforma.uso_tenant.qtd_usuarios` nascia **1** no `INSERT` literal do signup e **nunca mais
+> mudava** — criar ou excluir usuário não tocava a coluna. A tela Tenants mostrava *"1 usuário"*
+> para um tenant com 12 operadores, para todos, sempre. É o número que o suporte usa para
+> dimensionar a conta e a Vetor para métrica de uso. ⚠️ **Ninguém percebeu porque 1 é plausível**
+> num tenant recém-criado — que é o caso de todo banco de desenvolvimento. Número plausível e
+> errado não se denuncia sozinho.
+>
+> ### O que mais saiu
+>
+> - **A importação de Contas a Receber descartava `VALOR_JUROS` e `VALOR_DESCONTO`** — colunas que
+>   ela mesma declara, gera no modelo de planilha com exemplo, e que existem na tabela. Entravam
+>   com o `DEFAULT 0`. A loja que migra 4.000 parcelas via juros zero em toda a base, com o
+>   relatório anunciando "4.000 importadas". ⚠️ Oferecer a coluna e ignorá-la é pior que não
+>   oferecer: o lojista preencheu conforme o modelo e o dado sumiu sem aviso. No mesmo método,
+>   recebimento **com data e sem valor** — o caso normal de quem pagou o valor de face — gravava a
+>   parcela como recebida por **R$ 0,00**.
+> - **O timeout de 30 min do `pg_dump` era decorativo:** `readAllBytes()` só retorna quando o
+>   processo termina, e o `waitFor(timeout)` rodava **depois** — nunca chegava a esperar. ⛔ E o
+>   estrago não parava no backup: `spring.task.scheduling.pool.size` não era declarado, então os
+>   **seis** `@Scheduled` do produto dividiam **uma** thread. Com ela presa num dump travado,
+>   paravam em silêncio o dreno de contingência fiscal (prazo legal de 24 h), o arquivamento de
+>   XML, o vencimento de orçamentos e o webhook de cobrança — até o próximo restart.
+> - **O horário de acesso comparava no fuso de Brasília, não no da loja.** Numa loja do **Acre**
+>   (UTC−5) com janela 08:00–18:00, às **16:00 do relógio da loja** o filtro respondia 403 e o
+>   operador era expulso **duas horas antes** do fim do expediente — com venda aberta, e sem
+>   conseguir voltar (o login usa tolerância 0). ⭐ A correção **não custa nada no caso comum**: a
+>   recomputação só acontece nas UFs fora do fuso de Brasília, e o caminho de quem não controla
+>   horário sai antes de qualquer consulta nova — numa rotina que roda em **toda** requisição
+>   autenticada, isso era condição para a correção valer a pena.
+> - **`ClienteRequest.fisicaJuridica` era `boolean` primitivo** e `TRUE` significa pessoa
+>   **física**: a chave ausente resolvia para `false` = **jurídica**, em silêncio. Num `PUT` vindo
+>   de integração, o CPF passava a ser normalizado como CNPJ, a exigência de gênero sumia, e a
+>   venda a esse cliente passava a emitir **NF-e 55 em vez de NFC-e**.
+> - No front: a tela de **Usuários** ficou de fora do RBAC da rodada 1 (é a 15ª lista, e a mais
+>   sensível — a mesma chave governa o link de Permissões); a **paginação da Devolução ao
+>   Fornecedor existia e era inalcançável** (`setPagina` só era chamado no Localizar, sem barra nem
+>   aviso: a nota de três meses atrás simplesmente não existia, e o texto da tela reforçava a
+>   conclusão errada); renomear uma **empresa** deixava o nome velho em três telas, inclusive no
+>   mapeamento de colunas da Importação de Estoque; e dois ✕ da Entrada de Produtos voltavam por
+>   **push**, prendendo o usuário num vaivém.
+>
+> ### ⚠️ E a correção que quase virou o defeito
+>
+> No modo "quantidade inteira" a vírgula era engolida e `2,5` virava **25** no estoque. Escrevi
+> `split(/[,.]/)` — e isso transformaria **1.234 em 1**, porque o **ponto é separador de milhar em
+> pt-BR** e é a própria máscara que o insere. Peguei antes de commitar, **medindo a ida e volta**
+> (`2,5 → 2`, `1.234 → 1.234 → 1234`), não relendo. É a assinatura do defeito que este projeto mais
+> repete: corrigir uma ponta sem olhar quem mais lê o mesmo dado.
+
+
 > ## 📌 2026-08-29 (6) — auditoria, rodada 1: a comissão que a DRE não estornava e o vale que virava dinheiro
 >
 > Primeira das cinco rodadas que ele pediu, com os dois agentes em paralelo. **12 achados

@@ -2,6 +2,16 @@ spring:
   application:
     name: niner-api
 
+  # ⚠️ O padrão do Spring é UMA thread para TODOS os @Scheduled (auditoria 2026-08-29, rodada 2).
+  # São seis jobs no produto, e um deles chama `pg_dump` num processo externo: enquanto o backup
+  # roda — ou trava —, param junto o dreno de contingência fiscal (prazo legal de 24 h), o
+  # arquivamento de XML, o vencimento de orçamentos e o webhook de cobrança. Nenhum deles registra
+  # que não rodou, então a falha é silenciosa e só aparece no dia em que a nota não foi transmitida.
+  task:
+    scheduling:
+      pool:
+        size: 4
+
   # A API conecta como niner_app (SEM BYPASSRLS) — P8. Overridable por env no compose.
   datasource:
     url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/niner_db}

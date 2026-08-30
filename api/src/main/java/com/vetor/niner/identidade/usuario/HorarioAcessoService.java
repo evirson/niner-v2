@@ -1,5 +1,7 @@
 package com.vetor.niner.identidade.usuario;
 
+import com.vetor.niner.comum.tempo.FusoDaLoja;
+import com.vetor.niner.comum.tempo.FusoDaUf;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -31,9 +33,50 @@ public class HorarioAcessoService {
     public static final int TOLERANCIA_MINUTOS_PADRAO = 15;
 
     private final JdbcClient jdbc;
+    private final FusoDaLoja fusoDaLoja;
 
-    public HorarioAcessoService(JdbcClient jdbc) {
+    public HorarioAcessoService(JdbcClient jdbc, FusoDaLoja fusoDaLoja) {
         this.jdbc = jdbc;
+        this.fusoDaLoja = fusoDaLoja;
+    }
+
+    /**
+     * O fuso do <b>relógio de parede da loja</b> a que este usuário pertence.
+     *
+     * <p>⛔ Era {@code 'America/Sao_Paulo'} cravado no texto do SQL (auditoria 2026-08-29, rodada
+     * 2). Numa loja do <b>Acre</b> (UTC−5) com janela 08:00–18:00, às <b>16:00 do relógio da
+     * loja</b> já são 18:00 em Brasília: o filtro respondia 403 <i>"Fora do horário de acesso
+     * permitido"</i> e o operador era expulso <b>duas horas antes</b> do fim do expediente — com
+     * uma venda aberta, e sem conseguir entrar de novo (o login usa tolerância 0). No Amazonas e
+     * no Mato Grosso (UTC−4) o erro é de 1 h. E o {@code EXTRACT(ISODOW …)} erra o <b>dia da
+     * semana</b> pelo mesmo motivo perto da meia-noite, que é o defeito que a correção de
+     * 2026-08-19 veio consertar — ela trocou o fuso do banco pelo de Brasília e parou ali.
+     *
+     * <p>⚠️ A resolução é <b>preguiçosa</b>, e isso é deliberado: o filtro roda em <b>toda</b>
+     * requisição autenticada, e a maioria dos usuários não controla horário. A consulta da janela
+     * já responde {@code true} de graça para admin e para quem não controla; pagar um SELECT de
+     * UF por requisição para todo mundo trocaria um erro de 1 h em seis UFs por um custo em todas.
+     */
+    private String fusoDoUsuario(long idUsuario) {
+        Long idEmpresa = jdbc.sql("""
+                        SELECT id_empresa FROM usuario
+                        WHERE id_tenant = plataforma.tenant_atual() AND id_usuario = ?
+                        """)
+                .param(idUsuario).query(Long.class).optional().orElse(null);
+        return idEmpresa == null ? FusoDaUf.PADRAO.getId() : fusoDaLoja.da(idEmpresa).getId();
+    }
+
+    /** {@code true} quando o usuário nem chega a ter janela (admin, ou controle desligado). */
+    private boolean dispensadoDeJanela(long idUsuario) {
+        return Boolean.TRUE.equals(jdbc.sql("""
+                        SELECT u.administrador OR NOT u.controla_horario_acesso
+                        FROM usuario u
+                        WHERE u.id_usuario = ? AND u.id_tenant = plataforma.tenant_atual()
+                        """)
+                .param(idUsuario).query(Boolean.class).optional()
+                // usuário não encontrado (JWT de sessão morta, id inválido) — deixa a checagem
+                // seguinte da cadeia tratar; não é papel deste serviço.
+                .orElse(true));
     }
 
     /**
@@ -57,25 +100,27 @@ public class HorarioAcessoService {
         // era montada sobre a data errada. `now() AT TIME ZONE 'America/Sao_Paulo'` devolve um
         // `timestamp` sem fuso com o horário local — daí pra frente toda a conta é local e
         // homogênea (mesma correção do "hoje" de CaixaService).
+        if (dispensadoDeJanela(idUsuario)) {
+            return true;
+        }
+        String fuso = fusoDoUsuario(idUsuario);
         return jdbc.sql("""
-                        SELECT u.administrador OR NOT u.controla_horario_acesso OR EXISTS (
+                        SELECT EXISTS (
                             SELECT 1 FROM usuario_horario_acesso h
                             WHERE h.id_tenant = plataforma.tenant_atual() AND h.id_usuario = u.id_usuario
-                              AND h.dia_semana = EXTRACT(ISODOW FROM (now() AT TIME ZONE 'America/Sao_Paulo'))
+                              AND h.dia_semana = EXTRACT(ISODOW FROM (now() AT TIME ZONE ?::text))
                               AND h.hora_inicio IS NOT NULL
-                              AND (now() AT TIME ZONE 'America/Sao_Paulo')
-                                  BETWEEN ((now() AT TIME ZONE 'America/Sao_Paulo')::date + h.hora_inicio)
-                                      AND ((now() AT TIME ZONE 'America/Sao_Paulo')::date + h.hora_fim
+                              AND (now() AT TIME ZONE ?::text)
+                                  BETWEEN ((now() AT TIME ZONE ?::text)::date + h.hora_inicio)
+                                      AND ((now() AT TIME ZONE ?::text)::date + h.hora_fim
                                            + (? * interval '1 minute'))
                         )
                         FROM usuario u
                         WHERE u.id_usuario = ? AND u.id_tenant = plataforma.tenant_atual()
                         """)
-                .params(toleranciaMinutos, idUsuario)
+                .params(fuso, fuso, fuso, fuso, toleranciaMinutos, idUsuario)
                 .query(Boolean.class)
                 .optional()
-                // usuário não encontrado (JWT de sessão morta, id inválido) — deixa a checagem
-                // seguinte da cadeia (autorização/existência) tratar; não é papel deste serviço.
                 .orElse(true);
     }
 
@@ -92,26 +137,34 @@ public class HorarioAcessoService {
      */
     @Transactional(readOnly = true)
     public Long segundosRestantesTolerancia(long idUsuario, int toleranciaMinutos) {
+        // ⚠️ O MESMO fuso de `podeAcessarAgora` — as duas contas precisam concordar, senão o anel
+        // de contagem regressiva mostra tempo de sobra numa loja que o filtro já está expulsando
+        // (é o javadoc acima que exige isso, para o aviso visual bater com o bloqueio real).
+        if (dispensadoDeJanela(idUsuario)) {
+            return null;
+        }
+        String fuso = fusoDoUsuario(idUsuario);
         return jdbc.sql("""
                         SELECT GREATEST(0, CEIL(EXTRACT(EPOCH FROM (
-                            ((now() AT TIME ZONE 'America/Sao_Paulo')::date + h.hora_fim
+                            ((now() AT TIME ZONE ?::text)::date + h.hora_fim
                              + (? * interval '1 minute'))
-                            - (now() AT TIME ZONE 'America/Sao_Paulo')
+                            - (now() AT TIME ZONE ?::text)
                         ))))::bigint
                         FROM usuario u
                         JOIN usuario_horario_acesso h
                           ON h.id_tenant = plataforma.tenant_atual() AND h.id_usuario = u.id_usuario
                         WHERE u.id_usuario = ? AND u.id_tenant = plataforma.tenant_atual()
                           AND NOT u.administrador AND u.controla_horario_acesso
-                          AND h.dia_semana = EXTRACT(ISODOW FROM (now() AT TIME ZONE 'America/Sao_Paulo'))
+                          AND h.dia_semana = EXTRACT(ISODOW FROM (now() AT TIME ZONE ?::text))
                           AND h.hora_inicio IS NOT NULL
-                          AND (now() AT TIME ZONE 'America/Sao_Paulo')
-                              > ((now() AT TIME ZONE 'America/Sao_Paulo')::date + h.hora_fim)
-                          AND (now() AT TIME ZONE 'America/Sao_Paulo')
-                              <= ((now() AT TIME ZONE 'America/Sao_Paulo')::date + h.hora_fim
+                          AND (now() AT TIME ZONE ?::text)
+                              > ((now() AT TIME ZONE ?::text)::date + h.hora_fim)
+                          AND (now() AT TIME ZONE ?::text)
+                              <= ((now() AT TIME ZONE ?::text)::date + h.hora_fim
                                   + (? * interval '1 minute'))
                         """)
-                .params(toleranciaMinutos, idUsuario, toleranciaMinutos)
+                .params(fuso, toleranciaMinutos, fuso, idUsuario, fuso, fuso, fuso, fuso, fuso,
+                        toleranciaMinutos)
                 .query(Long.class)
                 .optional()
                 .orElse(null);

@@ -16,6 +16,7 @@ import {
 } from '../../components/Icones'
 import Toast, { type TipoToast } from '../../components/Toast'
 import { ApiError } from '../../lib/api'
+import { usePermissaoDaTela } from '../../lib/usePermissaoDaTela'
 import { useEu } from '../../lib/eu'
 import { maiusculas } from '../../lib/texto'
 import {
@@ -46,6 +47,10 @@ function paginasVisiveis(atual: number, total: number): number[] {
 }
 
 export default function UsuarioLista() {
+  // â RBAC: o admin pode conceder sÃ³ "acessar" â sem isto o operador preenchia a ficha
+  // inteira e perdia tudo num 403 no Salvar (auditoria 2026-08-29). ConveniÃªncia de
+  // interface, nunca seguranÃ§a: quem recusa Ã© o @Acao do controller (P4).
+  const acoes = usePermissaoDaTela('usuarios')
   const location = useLocation()
   const [nome, setNome] = useState('')
   const [status, setStatus] = useState<StatusUsuario>('ATIVOS')
@@ -129,9 +134,11 @@ export default function UsuarioLista() {
           </div>
           <div className="topbar-acoes">
             <AjudaDaTela chaveTela="identidade.usuario.lista" />
-            <Link className="btn" to="/usuarios/novo">
-              ＋ Novo usuário
-            </Link>
+            {acoes.incluir && (
+              <Link className="btn" to="/usuarios/novo">
+                ＋ Novo usuário
+              </Link>
+            )}
             <BotaoFecharTela />
           </div>
         </div>
@@ -208,17 +215,22 @@ export default function UsuarioLista() {
                     >
                       <IconeOlho />
                     </Link>
-                    <Link
-                      className="acao-icone acao-editar"
-                      to={`/usuarios/${u.idUsuario}`}
-                      aria-label={`Editar ${u.nome}`}
-                      title="Editar"
-                    >
-                      <IconeEditar />
-                    </Link>
+                    {acoes.alterar && (
+                      <Link
+                        className="acao-icone acao-editar"
+                        to={`/usuarios/${u.idUsuario}`}
+                        aria-label={`Editar ${u.nome}`}
+                        title="Editar"
+                      >
+                        <IconeEditar />
+                      </Link>
+                    )}
                     {/* O administrador não tem grade: ele pode tudo, por definição — oferecer o
                         link levaria a uma tela que só diria isso. */}
-                    {!u.administrador && (
+                    {/* ⛔ Configurar permissão é ALTERAR o usuário — sem esta guarda, quem recebeu
+                        só "acessar" abria a grade inteira e levava 403 no Salvar, depois de marcar
+                        dezenas de caixas (auditoria 2026-08-29, rodada 2). */}
+                    {!u.administrador && acoes.alterar && (
                       <Link
                         className="acao-icone"
                         to={`/usuarios/${u.idUsuario}/permissoes`}
@@ -228,16 +240,18 @@ export default function UsuarioLista() {
                         <IconeCadeado />
                       </Link>
                     )}
-                    <button
-                      type="button"
-                      className="acao-icone acao-excluir"
-                      disabled={excluir.isPending || u.idUsuario === eu?.usuario.idUsuario}
-                      onClick={() => setUsuarioParaExcluir(u)}
-                      aria-label={`Excluir ${u.nome}`}
-                      title={u.idUsuario === eu?.usuario.idUsuario ? 'Você não pode excluir a própria conta' : 'Excluir'}
-                    >
-                      <IconeExcluir />
-                    </button>
+                    {acoes.excluir && (
+                      <button
+                        type="button"
+                        className="acao-icone acao-excluir"
+                        disabled={excluir.isPending || u.idUsuario === eu?.usuario.idUsuario}
+                        onClick={() => setUsuarioParaExcluir(u)}
+                        aria-label={`Excluir ${u.nome}`}
+                        title={u.idUsuario === eu?.usuario.idUsuario ? 'Você não pode excluir a própria conta' : 'Excluir'}
+                      >
+                        <IconeExcluir />
+                      </button>
+                    )}
                   </td>
                 </tr>
               ))}
