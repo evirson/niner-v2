@@ -22,6 +22,7 @@ import {
 } from '../../lib/perfilFiscal'
 import type { EstadoListaPerfilFiscal } from './PerfilFiscalLista'
 import { maiusculas } from '../../lib/texto'
+import { fecharAoClicarNoFundo } from '../../lib/modais'
 
 function rotuloDestinatario(v: string): string {
   return TIPO_DESTINATARIO_OPCOES.find((o) => o.valor === v)?.rotulo ?? v
@@ -282,7 +283,7 @@ export default function PerfilFiscalForm({ somenteLeitura = false }: { somenteLe
       )}
 
       {regraParaExcluir !== null && (
-        <div className="modal-overlay" onClick={() => setRegraParaExcluir(null)}>
+        <div className="modal-overlay" onClick={fecharAoClicarNoFundo(() => setRegraParaExcluir(null))}>
           <div className="modal" role="dialog" aria-label="Remover regra" onClick={(e) => e.stopPropagation()}>
             <h2 style={{ marginTop: 0 }}>Remover regra?</h2>
             <p className="muted">A regra só é removida de verdade quando o perfil for salvo.</p>

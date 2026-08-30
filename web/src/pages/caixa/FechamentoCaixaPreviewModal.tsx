@@ -1,6 +1,7 @@
 import { IconeFechar } from '../../components/Icones'
 import type { FechamentoCaixa } from '../../lib/caixa'
 import { montarLinhasFechamento } from '../../lib/fechamentoCaixaImpressao'
+import { fecharAoClicarNoFundo } from '../../lib/modais'
 
 /**
  * Impressão do Fechamento de Caixa (2026-08-19) — bobina térmica 80mm/42 colunas, mesmo formato e
@@ -20,7 +21,7 @@ export default function FechamentoCaixaPreviewModal({
   const linhas = montarLinhasFechamento(fechamento)
 
   return (
-    <div className="modal-overlay" onClick={aoFechar}>
+    <div className="modal-overlay" onClick={fecharAoClicarNoFundo(aoFechar)}>
       <div className="modal modal-medio" role="dialog" aria-label="Impressão do Fechamento de Caixa" onClick={(e) => e.stopPropagation()}>
         <div className="lightbox-topo">
           <h2 style={{ margin: 0 }}>Fechamento de Caixa</h2>

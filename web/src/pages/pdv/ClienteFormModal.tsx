@@ -1,6 +1,7 @@
 import type { Cliente } from '../../lib/clientes'
 import type { PdvCliente } from '../../lib/pdv'
 import ClienteForm from '../clientes/ClienteForm'
+import { fecharAoClicarNoFundo } from '../../lib/modais'
 
 /**
  * Cadastro de cliente completo dentro do PDV (item 2, revisado 2026-07-31) — a mesma tela de
@@ -17,7 +18,7 @@ export default function ClienteFormModal({
   aoCriar: (cliente: PdvCliente) => void
 }) {
   return (
-    <div className="modal-overlay" onClick={aoFechar}>
+    <div className="modal-overlay" onClick={fecharAoClicarNoFundo(aoFechar)}>
       <div
         className="modal modal-largo"
         role="dialog"

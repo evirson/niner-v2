@@ -18,6 +18,7 @@ import { completarMoeda, desmascararMoeda, formatarMoeda, mascararMoeda } from '
 import FechamentoCaixaPreviewModal from './FechamentoCaixaPreviewModal'
 import LancamentosCarteiraModal from './LancamentosCarteiraModal'
 import { usePermissaoDaTela } from '../../lib/usePermissaoDaTela'
+import { fecharAoClicarNoFundo } from '../../lib/modais'
 
 function moeda(v: number): string {
   return `R$ ${formatarMoeda(v)}`
@@ -515,7 +516,7 @@ export default function FechamentoCaixa() {
       {/* Motivo obrigatório, mesmo par ADMIN + motivo do Cancelamento de Venda — sem o porquê
           gravado em `caixa_mestre.observacoes`, ninguém audita a reabertura depois (P3). */}
       {reaberturaAberta && fechamento && (
-        <div className="modal-overlay" onClick={() => setReaberturaAberta(false)}>
+        <div className="modal-overlay" onClick={fecharAoClicarNoFundo(() => setReaberturaAberta(false))}>
           <div className="modal" role="dialog" aria-label="Reabrir Caixa" onClick={(e) => e.stopPropagation()}>
             <h2 style={{ marginTop: 0 }}>Reabrir Caixa</h2>
             <p className="muted">

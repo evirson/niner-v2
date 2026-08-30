@@ -9,6 +9,7 @@ import type { DevolucaoEfetivada } from '../../lib/devolucaoProduto'
 import { formatarMoeda } from '../../lib/masks'
 import { montarLinkWhatsApp } from '../../lib/whatsapp'
 import DanfeModal from './DanfeModal'
+import { fecharAoClicarNoFundo } from '../../lib/modais'
 
 /**
  * Comprovante do vale-mercadoria gerado por uma devolução, formatado pra bobina térmica de
@@ -63,7 +64,7 @@ export default function ComprovanteValeModal({
 
   return (
     <>
-      <div className="modal-overlay" onClick={aoFechar}>
+      <div className="modal-overlay" onClick={fecharAoClicarNoFundo(aoFechar)}>
         <div
           className="modal modal-medio"
           role="dialog"
@@ -84,12 +85,28 @@ export default function ComprovanteValeModal({
             >
               <div style={{ flex: 1 }}>
                 {devolucao.notaFiscal.mensagem}
-                {devolucao.notaFiscal.situacao !== 'AUTORIZADO' && (
+                {/* ⚠️ As duas frases são DIFERENTES de propósito (2026-08-30). "A nota fica em
+                    Documentos Fiscais para ser reprocessada" só é verdade quando o documento
+                    chegou a existir no banco — REJEITADO e FALHA_COMUNICACAO nascem depois do
+                    `gravarDevolucaoAssinada`. `FALHA_NA_EMISSAO` é o caso em que a emissão parou
+                    ANTES disso (cadastro incompleto, certificado, XSD): não há linha em
+                    `documento_fiscal`, e mandar o operador procurar lá faz com que ele não ache
+                    nada e conclua que o sistema perdeu a nota. */}
+                {devolucao.notaFiscal.situacao === 'FALHA_NA_EMISSAO' ? (
                   <>
                     <br />
-                    O vale-mercadoria abaixo continua válido — a nota fica em Documentos Fiscais para ser
-                    reprocessada.
+                    O vale-mercadoria abaixo continua válido e a mercadoria já voltou ao estoque —
+                    mas a nota <strong>não chegou a ser emitida</strong>. Corrija o que a mensagem
+                    acima aponta e emita a NF-e de devolução de novo.
                   </>
+                ) : (
+                  devolucao.notaFiscal.situacao !== 'AUTORIZADO' && (
+                    <>
+                      <br />
+                      O vale-mercadoria abaixo continua válido — a nota fica em Documentos Fiscais para ser
+                      reprocessada.
+                    </>
+                  )
                 )}
               </div>
               {devolucao.notaFiscal.situacao === 'AUTORIZADO' && (

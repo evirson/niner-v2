@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { ApiError } from '../../lib/api'
 import { listarLancamentosDaCarteira } from '../../lib/caixa'
 import { formatarMoeda } from '../../lib/masks'
+import { fecharAoClicarNoFundo } from '../../lib/modais'
 
 function moeda(v: number): string {
   return `R$ ${formatarMoeda(v)}`
@@ -35,7 +36,7 @@ export default function LancamentosCarteiraModal({
   })
 
   return (
-    <div className="modal-overlay" onClick={aoFechar}>
+    <div className="modal-overlay" onClick={fecharAoClicarNoFundo(aoFechar)}>
       <div className="modal modal-largo" role="dialog" aria-label={`Lançamentos de ${nomeCarteira}`} onClick={(e) => e.stopPropagation()}>
         <CabecalhoModal titulo=<>Lançamentos — {nomeCarteira}</> aoFechar={aoFechar} />
 

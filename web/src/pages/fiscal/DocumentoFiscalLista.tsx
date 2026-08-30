@@ -20,6 +20,7 @@ import {
 import Toast from '../../components/Toast'
 import ComprovantePapeletaModal from '../pdv/ComprovantePapeletaModal'
 import DanfeModal from '../vendas/DanfeModal'
+import { fecharAoClicarNoFundo } from '../../lib/modais'
 
 /** Só nestas situações o comprovante do PDV vem com {@code dadosFiscais} preenchido (autorizado
  *  ou em contingência) — nas outras, abrir o DANFCE mostraria um recibo comum sem QR/protocolo. */
@@ -417,7 +418,7 @@ function XmlModal({ item, aoFechar }: { item: DocumentoFiscalItem; aoFechar: () 
   })
 
   return (
-    <div className="modal-overlay" onClick={aoFechar}>
+    <div className="modal-overlay" onClick={fecharAoClicarNoFundo(aoFechar)}>
       <div
         className="modal modal-largo"
         role="dialog"

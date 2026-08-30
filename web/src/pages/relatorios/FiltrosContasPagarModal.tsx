@@ -11,6 +11,7 @@ import {
 import { mascararData } from '../../lib/masks'
 import { maiusculas } from '../../lib/texto'
 import type { SituacaoConta } from '../../lib/relatorioContasPagar'
+import { fecharAoClicarNoFundo } from '../../lib/modais'
 
 export interface FiltrosTextoContasPagar {
   dataLancamentoInicial: string
@@ -133,7 +134,7 @@ export default function FiltrosContasPagarModal({
   })
 
   return (
-    <div className="modal-overlay" onClick={primeiraVez ? undefined : aoFechar}>
+    <div className="modal-overlay" onClick={fecharAoClicarNoFundo(primeiraVez ? undefined : aoFechar)}>
       <div
         className="modal modal-medio"
         role="dialog"

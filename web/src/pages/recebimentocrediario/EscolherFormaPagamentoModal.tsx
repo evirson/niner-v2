@@ -1,5 +1,6 @@
 import type { CarteiraDisponivel } from '../../lib/recebimentoCrediario'
 import { ROTULO_CATEGORIA_CARTEIRA } from '../../lib/tiposCarteira'
+import { fecharAoClicarNoFundo } from '../../lib/modais'
 
 const CATEGORIAS_ORDEM: CarteiraDisponivel['categoriaCarteira'][] = ['AVISTA', 'CARTAO_DEBITO', 'CARTAO_CREDITO']
 
@@ -41,7 +42,7 @@ export default function EscolherFormaPagamentoModal({
   aoFechar: () => void
 }) {
   return (
-    <div className="modal-overlay" onClick={aoFechar}>
+    <div className="modal-overlay" onClick={fecharAoClicarNoFundo(aoFechar)}>
       <div className="modal" role="dialog" aria-label="Receber" onClick={(e) => e.stopPropagation()}>
         <h2 style={{ marginTop: 0 }}>Receber</h2>
 

@@ -10,6 +10,7 @@ import {
   type ImagemProduto,
 } from '../lib/produtoImagens'
 import Toast from './Toast'
+import { fecharAoClicarNoFundo } from '../lib/modais'
 
 /**
  * Galeria de fotos do produto (docs/infra/armazenamento-imagens.md, ADR-013) — máximo de
@@ -228,7 +229,7 @@ export default function GaleriaImagensProduto({
       {toast && <Toast mensagem={toast} aoFechar={() => setToast('')} />}
 
       {indiceParaExcluir !== null && (
-        <div className="modal-overlay" onClick={() => setIndiceParaExcluir(null)}>
+        <div className="modal-overlay" onClick={fecharAoClicarNoFundo(() => setIndiceParaExcluir(null))}>
           <div className="modal" role="dialog" aria-label="Confirmar exclusão" onClick={(e) => e.stopPropagation()}>
             <h2 style={{ marginTop: 0 }}>Excluir foto?</h2>
             <p className="muted">Tem certeza que deseja excluir esta foto?</p>
@@ -245,7 +246,7 @@ export default function GaleriaImagensProduto({
       )}
 
       {indiceAmpliado !== null && itens[indiceAmpliado] && (
-        <div className="modal-overlay" onClick={() => setIndiceAmpliado(null)}>
+        <div className="modal-overlay" onClick={fecharAoClicarNoFundo(() => setIndiceAmpliado(null))}>
           <div
             className="modal modal-lightbox"
             role="dialog"

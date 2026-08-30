@@ -22,6 +22,7 @@ import {
 } from '../../../lib/masks'
 import { criarVariacao } from '../../../lib/produtos'
 import { maiusculas } from '../../../lib/texto'
+import { fecharAoClicarNoFundo } from '../../../lib/modais'
 
 /** Uma variação já resolvida (achada ou criada), pronta pra virar uma linha em `itens` —
  *  `precoCusto`/`precoVenda` vêm à parte (mesmo valor pra todo o lote deste lançamento). */
@@ -205,7 +206,7 @@ export default function PesquisaProdutoEntradaModal({
   })
 
   return (
-    <div className="modal-overlay" onClick={aoFechar}>
+    <div className="modal-overlay" onClick={fecharAoClicarNoFundo(aoFechar)}>
       <div className="modal modal-largo" role="dialog" aria-label="Pesquisa de produto" onClick={(e) => e.stopPropagation()}>
         <CabecalhoModal titulo="Pesquisa de Produto" aoFechar={aoFechar} />
 

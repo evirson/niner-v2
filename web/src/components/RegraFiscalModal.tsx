@@ -11,6 +11,7 @@ import {
   type TipoOperacaoFiscal,
 } from '../lib/perfilFiscal'
 import { completarPercentual, desmascararPercentual, formatarPercentual, mascararPercentual } from '../lib/masks'
+import { fecharAoClicarNoFundo } from '../lib/modais'
 
 interface FormState {
   crt: number
@@ -128,7 +129,7 @@ export default function RegraFiscalModal({
   const valido = f.cfop.trim().length === 4 && (f.modoIcms === 'CSOSN' ? !!f.csosn : !!f.cstIcms)
 
   return (
-    <div className="modal-overlay" onClick={aoFechar}>
+    <div className="modal-overlay" onClick={fecharAoClicarNoFundo(aoFechar)}>
       <div className="modal modal-largo" role="dialog" aria-label="Regra do perfil fiscal" onClick={(e) => e.stopPropagation()}>
         <h2 style={{ marginTop: 0 }}>{regraInicial ? 'Editar regra' : 'Nova regra'}</h2>
 

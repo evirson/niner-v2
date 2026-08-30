@@ -24,6 +24,7 @@ import {
 import { formatarEtiquetaMm } from '../../lib/masks'
 import { maiusculas } from '../../lib/texto'
 import { usePermissaoDaTela } from '../../lib/usePermissaoDaTela'
+import { fecharAoClicarNoFundo } from '../../lib/modais'
 
 const JANELA_PAGINACAO = 7
 const TAMANHO_PAGINA = 50
@@ -309,7 +310,7 @@ export default function EtiquetaConfigLista() {
       )}
 
       {configParaExcluir && (
-        <div className="modal-overlay" onClick={() => setConfigParaExcluir(null)}>
+        <div className="modal-overlay" onClick={fecharAoClicarNoFundo(() => setConfigParaExcluir(null))}>
           <div className="modal" role="dialog" aria-label="Confirmar exclusão" onClick={(e) => e.stopPropagation()}>
             <h2 style={{ marginTop: 0 }}>Excluir configuração de etiqueta?</h2>
             <p className="muted">

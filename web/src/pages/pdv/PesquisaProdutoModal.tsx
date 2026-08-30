@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { buscarPermiteQtdDecimal } from '../../lib/configuracaoGeral'
 import { formatarQuantidade } from '../../lib/masks'
 import { buscarProdutosPdv, type PdvProduto } from '../../lib/pdv'
+import { fecharAoClicarNoFundo } from '../../lib/modais'
 
 /**
  * F2 — Pesquisa Produto (docs/telas/pdv.md): busca por nome via `GET /api/v1/pdv/produtos`
@@ -29,7 +30,7 @@ export default function PesquisaProdutoModal({
   const empresas = resultados && resultados.length > 0 ? resultados[0].estoquePorEmpresa.map((e) => e.nomeEmpresa) : []
 
   return (
-    <div className="modal-overlay" onClick={aoFechar}>
+    <div className="modal-overlay" onClick={fecharAoClicarNoFundo(aoFechar)}>
       <div className="modal modal-largo" role="dialog" aria-label="Pesquisa de produto" onClick={(e) => e.stopPropagation()}>
         <CabecalhoModal titulo="Pesquisa de Produto" aoFechar={aoFechar} />
         <p className="muted" style={{ marginTop: 4 }}>

@@ -7,6 +7,7 @@ import { criarTamanho, listarTamanhos } from '../lib/tamanhos'
 import { maiusculas } from '../lib/texto'
 import { IconeExcluir, IconeSetaBaixo, IconeSetaCima } from './Icones'
 import Toast from './Toast'
+import { fecharAoClicarNoFundo } from '../lib/modais'
 
 const MAX_TAMANHOS = 20
 
@@ -92,7 +93,7 @@ export default function GradeModal({
   }
 
   return (
-    <div className="modal-overlay" onClick={aoFechar}>
+    <div className="modal-overlay" onClick={fecharAoClicarNoFundo(aoFechar)}>
       <div className="modal" role="dialog" aria-label="Grades de produto" onClick={(e) => e.stopPropagation()}>
         <CabecalhoModal titulo="Grades" aoFechar={aoFechar} />
 

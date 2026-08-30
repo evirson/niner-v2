@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { Empresa } from '../../lib/empresas'
+import { fecharAoClicarNoFundo } from '../../lib/modais'
 
 /**
  * Primeiro passo de "Nova Transferência" (2026-07-29) — mostra a empresa de origem (sempre a
@@ -24,7 +25,7 @@ export default function EscolherDestinoModal({
   }, [])
 
   return (
-    <div className="modal-overlay" onClick={aoFechar}>
+    <div className="modal-overlay" onClick={fecharAoClicarNoFundo(aoFechar)}>
       <div className="modal" role="dialog" aria-label="Nova transferência" onClick={(e) => e.stopPropagation()}>
         <h2 style={{ marginTop: 0 }}>Nova Transferência</h2>
         <div className="form-grid">

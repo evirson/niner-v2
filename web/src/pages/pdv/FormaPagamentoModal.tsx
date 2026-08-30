@@ -32,6 +32,7 @@ import {
 } from '../../lib/tiposCarteira'
 import PesquisaClienteModal from './PesquisaClienteModal'
 import PesquisaVendedorModal from './PesquisaVendedorModal'
+import { fecharAoClicarNoFundo } from '../../lib/modais'
 
 const CATEGORIAS_ORDEM: CategoriaCarteira[] = ['AVISTA', 'CARTAO_DEBITO', 'CARTAO_CREDITO', 'CREDIARIO', 'VALE_MERCADORIA']
 
@@ -453,7 +454,7 @@ export default function FormaPagamentoModal({
   }
 
   return (
-    <div className="modal-overlay" onClick={aoFechar}>
+    <div className="modal-overlay" onClick={fecharAoClicarNoFundo(aoFechar)}>
       <div
         className="modal modal-largo pdv-modal-pagamento"
         role="dialog"

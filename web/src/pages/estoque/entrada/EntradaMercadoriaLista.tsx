@@ -26,6 +26,7 @@ import { buscarFornecedoresEmissao, LIMITE_BUSCA_EMISSAO, type FornecedorOpcaoEm
 import { dataParaIso, dataValida, formatarMoeda, mascararData } from '../../../lib/masks'
 import { maiusculas } from '../../../lib/texto'
 import { usePermissaoDaTela } from '../../../lib/usePermissaoDaTela'
+import { fecharAoClicarNoFundo } from '../../../lib/modais'
 
 const JANELA_PAGINACAO = 7
 const TAMANHO_PAGINA = 50
@@ -470,7 +471,7 @@ export default function EntradaMercadoriaLista() {
       )}
 
       {entradaParaCancelar && (
-        <div className="modal-overlay" onClick={() => (cancelar.isPending ? null : setEntradaParaCancelar(null))}>
+        <div className="modal-overlay" onClick={fecharAoClicarNoFundo(() => (cancelar.isPending ? null : setEntradaParaCancelar(null)))}>
           <div className="modal" role="dialog" aria-label="Cancelar entrada" onClick={(e) => e.stopPropagation()}>
             <h2 style={{ marginTop: 0 }}>Cancelar entrada nº {entradaParaCancelar.idMovimento}</h2>
             <p className="muted" style={{ marginTop: 4 }}>

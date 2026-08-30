@@ -89,15 +89,52 @@ public class ConfiguracaoPlataformaService {
                             -- resposta confirmando `false`. Os campos irmãos do mesmo UPDATE
                             -- (`backup_hora`, `backup_retencao_dias`) já mantinham o valor por
                             -- COALESCE — os dois booleanos eram os únicos que apagavam por omissão.
-                            smtp_habilitado = COALESCE(CAST(? AS boolean), smtp_habilitado), smtp_host = ?, smtp_porta = ?, smtp_usuario = ?,
+                            -- ⚠️ E a correção da rodada 5 PAROU NA METADE (2026-08-30): o comentário
+                            -- acima afirma que "os dois booleanos eram os únicos que apagavam por
+                            -- omissão", e não era verdade. `smtp_host`, `smtp_porta`,
+                            -- `smtp_usuario`, `smtp_remetente_email` e `mp_notification_url`
+                            -- entravam CRUS no mesmo UPDATE — a assimetria entre
+                            -- `smtp_remetente_email` e o vizinho `smtp_remetente_nome`, que já
+                            -- tinha COALESCE, é o que denuncia o descuido.
+                            --
+                            -- O estrago do PUT parcial era pior que o do backup: os segredos são
+                            -- preservados pela regra "em branco = manter", então `consultar`
+                            -- continuava devolvendo `smtp_senha_definida = true` e a tela do
+                            -- backoffice mostrava "senha configurada" — parecendo configurado sem
+                            -- estar. E `EmailService` NUNCA lança (envio é efeito colateral), então
+                            -- a partir dali a recuperação de senha e o CÓDIGO DE LOGIN EM DUAS
+                            -- ETAPAS deixavam de sair em silêncio, trancando fora todo usuário com
+                            -- 2FA ligado.
+                            --
+                            -- ⭐ O idioma é o mesmo dos segredos, e sem sentinela: campo AUSENTE do
+                            -- JSON chega `null` e MANTÉM; campo mandado VAZIO chega `''` e APAGA.
+                            -- Por isso o `vazioParaNulo` saiu daqui — era ele que colapsava os dois
+                            -- casos em NULL, e é essa fusão que criava o defeito.
+                            smtp_habilitado = COALESCE(CAST(? AS boolean), smtp_habilitado),
+                            smtp_host = CASE
+                                WHEN CAST(? AS text) IS NULL THEN smtp_host
+                                WHEN CAST(? AS text) = ''    THEN NULL
+                                ELSE CAST(? AS text) END,
+                            smtp_porta = COALESCE(CAST(? AS integer), smtp_porta),
+                            smtp_usuario = CASE
+                                WHEN CAST(? AS text) IS NULL THEN smtp_usuario
+                                WHEN CAST(? AS text) = ''    THEN NULL
+                                ELSE CAST(? AS text) END,
                             -- Parâmetro comparado com NULL/'' precisa de CAST explícito: sem ele o
                             -- Postgres não infere o tipo e recusa o comando inteiro.
                             smtp_senha_cifrada = CASE
                                 WHEN CAST(? AS text) IS NULL THEN smtp_senha_cifrada  -- em branco: mantém
                                 WHEN CAST(? AS text) = ''    THEN NULL                -- LIMPAR: apaga
                                 ELSE CAST(? AS text) END,
-                            smtp_starttls = COALESCE(CAST(? AS boolean), smtp_starttls), smtp_remetente_email = ?,
-                            smtp_remetente_nome = COALESCE(CAST(? AS text), smtp_remetente_nome),
+                            smtp_starttls = COALESCE(CAST(? AS boolean), smtp_starttls),
+                            smtp_remetente_email = CASE
+                                WHEN CAST(? AS text) IS NULL THEN smtp_remetente_email
+                                WHEN CAST(? AS text) = ''    THEN NULL
+                                ELSE CAST(? AS text) END,
+                            smtp_remetente_nome = CASE
+                                WHEN CAST(? AS text) IS NULL THEN smtp_remetente_nome
+                                WHEN CAST(? AS text) = ''    THEN NULL
+                                ELSE CAST(? AS text) END,
                             backup_habilitado = COALESCE(CAST(? AS boolean), backup_habilitado),
                             backup_hora = COALESCE(CAST(? AS time), backup_hora),
                             backup_retencao_dias = COALESCE(CAST(? AS smallint), backup_retencao_dias),
@@ -109,23 +146,33 @@ public class ConfiguracaoPlataformaService {
                                 WHEN CAST(? AS text) IS NULL THEN mp_webhook_secret_cifrado
                                 WHEN CAST(? AS text) = ''    THEN NULL
                                 ELSE CAST(? AS text) END,
-                            mp_notification_url = ?,
+                            mp_notification_url = CASE
+                                WHEN CAST(? AS text) IS NULL THEN mp_notification_url
+                                WHEN CAST(? AS text) = ''    THEN NULL
+                                ELSE CAST(? AS text) END,
                             atualizado_em = now(),
                             atualizado_por = ?
                         WHERE id = 1
                         """)
-                .params(req.smtpHabilitado(), vazioParaNulo(req.smtpHost()), req.smtpPorta(),
-                        vazioParaNulo(req.smtpUsuario()),
+                // ⚠️ Os campos de texto vão CRUS e TRÊS vezes cada (o `CASE` tem três `?`), como já
+                // acontecia com os segredos. Passar por `vazioParaNulo` aqui reabriria o defeito:
+                // era ele que fazia "ausente" e "vazio" chegarem iguais ao banco.
+                .params(req.smtpHabilitado(),
+                        textoNormalizado(req.smtpHost()), textoNormalizado(req.smtpHost()), textoNormalizado(req.smtpHost()),
+                        req.smtpPorta(),
+                        textoNormalizado(req.smtpUsuario()), textoNormalizado(req.smtpUsuario()), textoNormalizado(req.smtpUsuario()),
                         cifrarOuMarcador(req.smtpSenha()), cifrarOuMarcador(req.smtpSenha()),
                         cifrarOuMarcador(req.smtpSenha()),
-                        req.smtpStarttls(), vazioParaNulo(req.smtpRemetenteEmail()),
-                        vazioParaNulo(req.smtpRemetenteNome()),
+                        req.smtpStarttls(),
+                        textoNormalizado(req.smtpRemetenteEmail()), textoNormalizado(req.smtpRemetenteEmail()), textoNormalizado(req.smtpRemetenteEmail()),
+                        textoNormalizado(req.smtpRemetenteNome()), textoNormalizado(req.smtpRemetenteNome()), textoNormalizado(req.smtpRemetenteNome()),
                         req.backupHabilitado(), req.backupHora(), req.backupRetencaoDias(),
                         cifrarOuMarcador(req.mpAccessToken()), cifrarOuMarcador(req.mpAccessToken()),
                         cifrarOuMarcador(req.mpAccessToken()),
                         cifrarOuMarcador(req.mpWebhookSecret()), cifrarOuMarcador(req.mpWebhookSecret()),
                         cifrarOuMarcador(req.mpWebhookSecret()),
-                        vazioParaNulo(req.mpNotificationUrl()), Long.parseLong(jwt.getSubject()))
+                        textoNormalizado(req.mpNotificationUrl()), textoNormalizado(req.mpNotificationUrl()), textoNormalizado(req.mpNotificationUrl()),
+                        Long.parseLong(jwt.getSubject()))
                 .update();
 
         log.info("Configuração da plataforma atualizada pelo staff {}", jwt.getSubject());
@@ -202,8 +249,20 @@ public class ConfiguracaoPlataformaService {
         }
     }
 
-    private static String vazioParaNulo(String valor) {
-        return valor == null || valor.isBlank() ? null : valor.trim();
+    /**
+     * Normaliza um campo de texto <b>preservando a diferença entre ausente e vazio</b>, que é o que
+     * o {@code CASE} do UPDATE usa para decidir entre manter e apagar.
+     *
+     * <p>⚠️ Substitui o antigo {@code vazioParaNulo}, que devolvia {@code null} nos dois casos — era
+     * essa fusão que fazia um PUT parcial <b>apagar</b> host, usuário e remetente do SMTP.
+     *
+     * <p>⭐ O {@code trim} continua aqui de propósito: valor colado de um portal costuma vir com
+     * espaço na ponta, e o projeto já pagou por isso uma vez (o ID do CSC com espaço virava
+     * {@code NumberFormatException} não tratada, respondendo 500 sem mensagem em vez do
+     * {@code cStat} legível).
+     */
+    private static String textoNormalizado(String valor) {
+        return valor == null ? null : valor.trim();
     }
 
     private static void exigirStaff(Jwt jwt) {

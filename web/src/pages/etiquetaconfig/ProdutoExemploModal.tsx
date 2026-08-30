@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useState } from 'react'
 import { buscarProdutosExemplo, type ProdutoExemplo } from '../../lib/etiquetaConfig'
 import { formatarMoeda } from '../../lib/masks'
+import { fecharAoClicarNoFundo } from '../../lib/modais'
 
 const LIMITE_BUSCA = 20 // igual ao do servidor — ver o javadoc de LIMITE_BUSCA no service
 
@@ -31,7 +32,7 @@ export default function ProdutoExemploModal({
   })
 
   return (
-    <div className="modal-overlay" onClick={aoFechar}>
+    <div className="modal-overlay" onClick={fecharAoClicarNoFundo(aoFechar)}>
       <div className="modal modal-largo" role="dialog" aria-label="Escolher produto de exemplo" onClick={(e) => e.stopPropagation()}>
         <CabecalhoModal titulo="Escolher Produto de Exemplo" aoFechar={aoFechar} />
         <p className="muted" style={{ marginTop: 4 }}>

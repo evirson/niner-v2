@@ -8,6 +8,7 @@ import { formatarMoeda, mascararCpfCnpj } from '../../lib/masks'
 import ComprovantePapeletaModal from '../pdv/ComprovantePapeletaModal'
 import CancelamentoVendaModal from './CancelamentoVendaModal'
 import { usePermissaoDaTela } from '../../lib/usePermissaoDaTela'
+import { fecharAoClicarNoFundo } from '../../lib/modais'
 
 function moeda(v: number): string {
   return `R$ ${formatarMoeda(v)}`
@@ -85,7 +86,7 @@ export default function DetalheVendaModal({ idVenda, aoFechar }: { idVenda: numb
 
   return (
     <Fragment>
-    <div className="modal-overlay" onClick={aoFechar}>
+    <div className="modal-overlay" onClick={fecharAoClicarNoFundo(aoFechar)}>
       <div
         className="modal modal-largo"
         role="dialog"

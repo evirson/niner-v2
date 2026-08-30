@@ -13,6 +13,7 @@ import { IconeFechar, IconeWhatsapp } from '../../components/Icones'
 import EnviarWhatsAppModal from '../../components/EnviarWhatsAppModal'
 import Toast from '../../components/Toast'
 import DanfceImprimir from './DanfceImprimir'
+import { fecharAoClicarNoFundo } from '../../lib/modais'
 
 /** Situações de emissão que valem como "sucesso" pro operador — a venda saiu bem das duas
  *  (AUTORIZADO) ou vai sair (CONTINGENCIA/EM_PROCESSAMENTO); as outras precisam de atenção. */
@@ -254,7 +255,7 @@ export default function ComprovantePapeletaModal({
 
   return (
     <>
-      <div className="modal-overlay" onClick={aoFechar}>
+      <div className="modal-overlay" onClick={fecharAoClicarNoFundo(aoFechar)}>
         <div
           className="modal modal-medio"
           role="dialog"

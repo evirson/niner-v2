@@ -5,6 +5,7 @@ import { criarCategoria, listarCategorias, renomearCategoria } from '../lib/clie
 import { ApiError } from '../lib/api'
 import { maiusculas } from '../lib/texto'
 import Toast from './Toast'
+import { fecharAoClicarNoFundo } from '../lib/modais'
 
 /**
  * Gestão embutida da categoria de cliente (docs/telas/cliente.md): criar e renomear,
@@ -42,7 +43,7 @@ export default function CategoriaClienteModal({
   })
 
   return (
-    <div className="modal-overlay" onClick={aoFechar}>
+    <div className="modal-overlay" onClick={fecharAoClicarNoFundo(aoFechar)}>
       <div className="modal" role="dialog" aria-label="Categorias de cliente" onClick={(e) => e.stopPropagation()}>
         <CabecalhoModal titulo="Categorias de cliente" aoFechar={aoFechar} />
 

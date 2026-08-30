@@ -25,6 +25,7 @@ import {
 } from '../../lib/tiposCarteira'
 import { maiusculas } from '../../lib/texto'
 import { usePermissaoDaTela } from '../../lib/usePermissaoDaTela'
+import { fecharAoClicarNoFundo } from '../../lib/modais'
 
 const JANELA_PAGINACAO = 7
 const TAMANHO_PAGINA = 50
@@ -322,7 +323,7 @@ export default function TipoCarteiraLista() {
       )}
 
       {carteiraParaExcluir && (
-        <div className="modal-overlay" onClick={() => setCarteiraParaExcluir(null)}>
+        <div className="modal-overlay" onClick={fecharAoClicarNoFundo(() => setCarteiraParaExcluir(null))}>
           <div className="modal" role="dialog" aria-label="Confirmar exclusão" onClick={(e) => e.stopPropagation()}>
             <h2 style={{ marginTop: 0 }}>Excluir tipo de carteira?</h2>
             <p className="muted">

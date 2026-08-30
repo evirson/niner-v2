@@ -23,6 +23,7 @@ import {
 } from '../../lib/perfilFiscal'
 import { maiusculas } from '../../lib/texto'
 import { usePermissaoDaTela } from '../../lib/usePermissaoDaTela'
+import { fecharAoClicarNoFundo } from '../../lib/modais'
 
 const JANELA_PAGINACAO = 7
 const TAMANHO_PAGINA = 50
@@ -317,7 +318,7 @@ export default function PerfilFiscalLista() {
       )}
 
       {perfilParaExcluir && (
-        <div className="modal-overlay" onClick={() => setPerfilParaExcluir(null)}>
+        <div className="modal-overlay" onClick={fecharAoClicarNoFundo(() => setPerfilParaExcluir(null))}>
           <div className="modal" role="dialog" aria-label="Confirmar exclusão" onClick={(e) => e.stopPropagation()}>
             <h2 style={{ marginTop: 0 }}>Excluir perfil fiscal?</h2>
             <p className="muted">

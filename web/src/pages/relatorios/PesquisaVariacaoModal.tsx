@@ -2,6 +2,7 @@ import CabecalhoModal from '../../components/CabecalhoModal'
 import { useQuery } from '@tanstack/react-query'
 import { useState } from 'react'
 import { buscarVariacoesMovimentacao, type VariacaoEncontrada } from '../../lib/relatorioMovimentacaoProdutos'
+import { fecharAoClicarNoFundo } from '../../lib/modais'
 
 const LIMITE_BUSCA = 20 // igual ao do servidor — ver o javadoc de LIMITE_BUSCA no service
 
@@ -30,7 +31,7 @@ export default function PesquisaVariacaoModal({
   })
 
   return (
-    <div className="modal-overlay" onClick={aoFechar}>
+    <div className="modal-overlay" onClick={fecharAoClicarNoFundo(aoFechar)}>
       <div className="modal modal-largo" role="dialog" aria-label="Pesquisa de produto" onClick={(e) => e.stopPropagation()}>
         <CabecalhoModal titulo="Pesquisa de Produto" aoFechar={aoFechar} />
         <p className="muted" style={{ marginTop: 4 }}>

@@ -6,6 +6,7 @@ import { buscarDanfe } from '../../lib/danfe55'
 import DanfeImprimir from './DanfeImprimir'
 import PortalDeImpressao from '../../components/PortalDeImpressao'
 import { imprimirDocumentoA4 } from '../../lib/impressaoDocumento'
+import { fecharAoClicarNoFundo } from '../../lib/modais'
 
 /**
  * Popup do DANFE modelo 55 (A4) — §10.2, bloco B9. Abre a partir da nota de devolução (do popup
@@ -31,7 +32,7 @@ export default function DanfeModal({
   })
 
   return (
-    <div className="modal-overlay" onClick={aoFechar}>
+    <div className="modal-overlay" onClick={fecharAoClicarNoFundo(aoFechar)}>
       <div
         className="modal"
         role="dialog"

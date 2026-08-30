@@ -21,6 +21,7 @@ import {
   type SituacaoUso,
 } from '../../lib/minhaConta'
 import { maiusculas } from '../../lib/texto'
+import { fecharAoClicarNoFundo } from '../../lib/modais'
 
 /**
  * Minha Conta (ADR-015, docs/telas/painel-assinatura.md) — plano, cota de vendas do mês,
@@ -265,7 +266,7 @@ function ModalNovaEmpresa({ aoFechar, aoCriar }: { aoFechar: () => void; aoCriar
   })
 
   return (
-    <div className="modal-overlay" onClick={aoFechar}>
+    <div className="modal-overlay" onClick={fecharAoClicarNoFundo(aoFechar)}>
       <div className="modal" role="dialog" aria-label="Adicionar empresa" onClick={(e) => e.stopPropagation()}>
         <h2 style={{ marginTop: 0 }}>Adicionar empresa</h2>
         <p className="muted">
@@ -386,7 +387,7 @@ function ModalPagamento({
   const valor = faixaEscolhida ? (ciclo === 'ANUAL' ? faixaEscolhida.precoAnual : faixaEscolhida.precoMensal) : 0
 
   return (
-    <div className="modal-overlay" onClick={aoFechar}>
+    <div className="modal-overlay" onClick={fecharAoClicarNoFundo(aoFechar)}>
       <div className="modal" role="dialog" aria-label="Assinar faixa" onClick={(e) => e.stopPropagation()}>
         <CabecalhoModal titulo="Assinar uma faixa" aoFechar={aoFechar} />
 

@@ -4,6 +4,7 @@ import { ApiError } from '../lib/api'
 import { criarCor, type Cor } from '../lib/cores'
 import { maiusculas } from '../lib/texto'
 import Toast from './Toast'
+import { fecharAoClicarNoFundo } from '../lib/modais'
 
 /**
  * Cadastro rápido de cor (2026-08-12) — popup dedicado, substitui o antigo padrão "campo +
@@ -33,7 +34,7 @@ export default function CorQuickCreateModal({
   })
 
   return (
-    <div className="modal-overlay" onClick={aoFechar}>
+    <div className="modal-overlay" onClick={fecharAoClicarNoFundo(aoFechar)}>
       <div className="modal" role="dialog" aria-label="Nova cor" onClick={(e) => e.stopPropagation()}>
         <h2 style={{ marginTop: 0 }}>Nova cor</h2>
 

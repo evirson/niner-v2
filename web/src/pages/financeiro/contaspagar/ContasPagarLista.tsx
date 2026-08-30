@@ -26,6 +26,7 @@ import { listarEmpresasPermitidas, type Empresa } from '../../../lib/empresas'
 import { buscarFornecedoresEmissao, LIMITE_BUSCA_EMISSAO, type FornecedorOpcaoEmissao } from '../../../lib/etiquetaEmissao'
 import { dataParaIso, dataValida, formatarMoeda, mascararData } from '../../../lib/masks'
 import { usePermissaoDaTela } from '../../../lib/usePermissaoDaTela'
+import { fecharAoClicarNoFundo } from '../../../lib/modais'
 
 const JANELA_PAGINACAO = 7
 const TAMANHO_PAGINA = 50
@@ -541,7 +542,7 @@ export default function ContasPagarLista() {
       )}
 
       {contaParaExcluir && (
-        <div className="modal-overlay" onClick={() => setContaParaExcluir(null)}>
+        <div className="modal-overlay" onClick={fecharAoClicarNoFundo(() => setContaParaExcluir(null))}>
           <div className="modal" role="dialog" aria-label="Confirmar exclusão" onClick={(e) => e.stopPropagation()}>
             <h2 style={{ marginTop: 0 }}>Excluir conta a pagar?</h2>
             <p className="muted">

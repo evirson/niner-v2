@@ -4,6 +4,7 @@ import EmpresaMultiSelect from '../../components/EmpresaMultiSelect'
 import type { Funcionario } from '../../lib/funcionarios'
 import { mascararData } from '../../lib/masks'
 import type { TotalizarPor } from '../../lib/relatorioVendas'
+import { fecharAoClicarNoFundo } from '../../lib/modais'
 
 export type PeriodoPreset = 'PERSONALIZADO' | 'MES_ATUAL' | 'MES_ANTERIOR' | 'ULTIMOS_3_MESES' | 'ULTIMOS_6_MESES' | 'ULTIMOS_12_MESES'
 
@@ -116,7 +117,7 @@ export default function FiltrosVendasModal({
   }, [valores.periodoPreset])
 
   return (
-    <div className="modal-overlay" onClick={primeiraVez ? undefined : aoFechar}>
+    <div className="modal-overlay" onClick={fecharAoClicarNoFundo(primeiraVez ? undefined : aoFechar)}>
       <div className="modal modal-medio" role="dialog" aria-label="Filtros do relatório" onClick={(e) => e.stopPropagation()}>
         <h2 style={{ marginTop: 0 }}>Filtros do Relatório</h2>
         <p className="muted" style={{ marginTop: -4 }}>

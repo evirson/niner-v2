@@ -11,6 +11,7 @@ import { formatarDataHora } from '../../lib/datas'
 import { formatarMoeda } from '../../lib/masks'
 import { usePermissaoDaTela } from '../../lib/usePermissaoDaTela'
 import AvisoModal from '../../components/AvisoModal'
+import { fecharAoClicarNoFundo } from '../../lib/modais'
 
 function moeda(v: number): string {
   return `R$ ${formatarMoeda(v)}`
@@ -81,7 +82,7 @@ export default function CancelamentoDevolucaoModal({
   const jaUsado = detalhe?.valeUsado ?? false
 
   return (
-    <div className="modal-overlay" onClick={aoFechar}>
+    <div className="modal-overlay" onClick={fecharAoClicarNoFundo(aoFechar)}>
       <div
         className="modal modal-largo"
         role="dialog"

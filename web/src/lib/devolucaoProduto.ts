@@ -73,7 +73,20 @@ export interface ItemDevolucaoResponse {
  * em Documentos Fiscais para ser reprocessada.
  */
 export interface NotaFiscalDevolucao {
-  situacao: 'AUTORIZADO' | 'REJEITADO' | 'DENEGADO' | 'EM_PROCESSAMENTO' | 'FALHA_COMUNICACAO'
+  /**
+   * ⚠️ `FALHA_NA_EMISSAO` NÃO vem do enum `situacao_documento_fiscal` do banco — é um valor que só
+   * o controller produz (2026-08-30), quando a emissão estourou **antes** de existir linha em
+   * `documento_fiscal`. A diferença importa na tela: os outros valores são reprocessáveis em
+   * Documentos Fiscais, este não é (não há o que reprocessar) — mandar o operador procurar lá faz
+   * com que ele não ache nada e conclua que o sistema perdeu a nota.
+   */
+  situacao:
+    | 'AUTORIZADO'
+    | 'REJEITADO'
+    | 'DENEGADO'
+    | 'EM_PROCESSAMENTO'
+    | 'FALHA_COMUNICACAO'
+    | 'FALHA_NA_EMISSAO'
   idDocumentoFiscal: number
   chaveAcesso: string | null
   protocolo: string | null

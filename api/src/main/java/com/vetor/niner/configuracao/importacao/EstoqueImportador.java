@@ -194,12 +194,18 @@ public class EstoqueImportador implements ImportadorDeTabela {
         // mesmo padrão do restante da importação.
         Map<Long, Long> movimentoPorEmpresa = new LinkedHashMap<>();
 
-        for (List<LinhaResolvida> grupo : grupos.values()) {
+        for (Map.Entry<String, List<LinhaResolvida>> entradaGrupo : grupos.entrySet()) {
+            List<LinhaResolvida> grupo = entradaGrupo.getValue();
             // ⚠️ O que estes dois mapas cacheiam é id de linha GRAVADA no banco, e o savepoint pode
-            // desfazer a gravação sem que o mapa saiba. Guardar as chaves de antes é o que permite
-            // devolver o cache ao estado consistente quando o grupo falha.
+            // desfazer a gravação sem que o mapa saiba. É por isso que o `catch` abaixo limpa.
+            //
+            // ⚠️ O snapshot é só de `movimentoPorEmpresa`, que tem uma entrada POR EMPRESA (duas ou
+            // três). Para `variacoesExistentes` a chave é conhecida — é a do próprio grupo —, e
+            // copiar o mapa inteiro a cada grupo era quadrático: 10.000 grupos com o mapa crescendo
+            // dariam dezenas de milhões de inserções em sets descartados logo em seguida.
             Set<Long> movimentosAntes = Set.copyOf(movimentoPorEmpresa.keySet());
-            Set<String> variacoesAntes = Set.copyOf(variacoesExistentes.keySet());
+            String chaveDoGrupo = entradaGrupo.getKey();
+            boolean variacaoJaEraConhecida = variacoesExistentes.containsKey(chaveDoGrupo);
             try {
                 importadas += savepoints.executar(
                         () -> processarGrupo(grupo, mapeamentoEmpresas, movimentoPorEmpresa, avisos, gradesPorProduto, variacoesExistentes));
@@ -214,7 +220,9 @@ public class EstoqueImportador implements ImportadorDeTabela {
                 // de volta também. O relatório saía acusando erro em TODAS as linhas, escondendo
                 // qual era a única linha ruim.
                 movimentoPorEmpresa.keySet().retainAll(movimentosAntes);
-                variacoesExistentes.keySet().retainAll(variacoesAntes);
+                if (!variacaoJaEraConhecida) {
+                    variacoesExistentes.remove(chaveDoGrupo);
+                }
                 for (LinhaResolvida r : grupo) {
                     erros.add(LinhaErro.de(r.origem().numeroLinha(), e));
                 }

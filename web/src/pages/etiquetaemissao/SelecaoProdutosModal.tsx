@@ -25,6 +25,7 @@ import {
 } from '../../lib/etiquetaEmissao'
 import { mascararData } from '../../lib/masks'
 import { maiusculas } from '../../lib/texto'
+import { fecharAoClicarNoFundo } from '../../lib/modais'
 
 type ModoSelecao = 'INDIVIDUAL' | 'ENTRADAS' | 'ESTOQUES'
 
@@ -448,7 +449,7 @@ export default function SelecaoProdutosModal({
   const [modo, setModo] = useState<ModoSelecao>(origemEntrada ? 'ENTRADAS' : 'INDIVIDUAL')
 
   return (
-    <div className="modal-overlay" onClick={aoFechar}>
+    <div className="modal-overlay" onClick={fecharAoClicarNoFundo(aoFechar)}>
       <div className="modal modal-largo" role="dialog" aria-label="Selecionar Produtos" onClick={(e) => e.stopPropagation()}>
         <CabecalhoModal titulo="Selecionar Produtos" aoFechar={aoFechar} />
 

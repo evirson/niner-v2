@@ -29,6 +29,7 @@ import GradeModal from './GradeModal'
 import { IconeExcluir, IconeLupa, IconeSetaBaixo, IconeSetaCima } from './Icones'
 import PesquisaNcmModal from './PesquisaNcmModal'
 import Toast from './Toast'
+import { fecharAoClicarNoFundo } from '../lib/modais'
 
 /**
  * Criação rápida de produto embutida (Entrada de Produtos por Compra, 2026-08-11) — quando o
@@ -338,7 +339,7 @@ export default function ProdutoQuickCreateModal({
     (!precisaCorTamanho || (idCor !== '' && idTamanho !== ''))
 
   return (
-    <div className="modal-overlay" onClick={aoFechar}>
+    <div className="modal-overlay" onClick={fecharAoClicarNoFundo(aoFechar)}>
       <div className="modal modal-largo" role="dialog" aria-label="Novo produto" onClick={(e) => e.stopPropagation()}>
         <h2 style={{ marginTop: 0 }}>Novo produto</h2>
         <p className="muted" style={{ marginTop: 4 }}>

@@ -27,6 +27,7 @@ import FormaPagamentoModal from './FormaPagamentoModal'
 import PesquisaProdutoModal from './PesquisaProdutoModal'
 import PuxarOrcamentoModal from './PuxarOrcamentoModal'
 import PuxarOrdemServicoModal from './PuxarOrdemServicoModal'
+import { fecharAoClicarNoFundo } from '../../lib/modais'
 
 function moeda(v: number): string {
   return `R$ ${formatarMoeda(v)}`
@@ -639,7 +640,7 @@ export default function Pdv() {
       {/* Passo "de onde vem esta venda?" — só existe com o módulo de serviços ligado. Dois botões
           grandes, sem lista: a lista é do popup seguinte, que sabe filtrar por situação. */}
       {mostrarEscolhaDocumento && (
-        <div className="modal-overlay" onClick={() => setMostrarEscolhaDocumento(false)}>
+        <div className="modal-overlay" onClick={fecharAoClicarNoFundo(() => setMostrarEscolhaDocumento(false))}>
           <div
             className="modal"
             role="dialog"

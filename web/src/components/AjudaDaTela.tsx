@@ -1,6 +1,7 @@
 import CabecalhoModal from '../components/CabecalhoModal'
 import { useState } from 'react'
 import { IconeAjuda } from './Icones'
+import { fecharAoClicarNoFundo } from '../lib/modais'
 
 /**
  * Ajuda contextual obrigatória em toda tela (R22 / spec §3.7.1). O catálogo `ajuda_tela`
@@ -1406,7 +1407,7 @@ export default function AjudaDaTela({ chaveTela }: { chaveTela: string }) {
         <IconeAjuda />
       </button>
       {aberto && (
-        <div className="modal-overlay" onClick={() => setAberto(false)}>
+        <div className="modal-overlay" onClick={fecharAoClicarNoFundo(() => setAberto(false))}>
           <div
             className="modal"
             role="dialog"

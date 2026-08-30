@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react'
 import AvisoIntensidadeImpressora from './AvisoIntensidadeImpressora'
+import { fecharAoClicarNoFundo } from '../../lib/modais'
 
 const QUANTIDADE_MAXIMA = 200
 
@@ -78,7 +79,7 @@ export default function TesteImpressaoModal({
   }
 
   return (
-    <div className="modal-overlay" onClick={aoFechar}>
+    <div className="modal-overlay" onClick={fecharAoClicarNoFundo(aoFechar)}>
       <div className="modal" role="dialog" aria-label="Testar impressão" onClick={(e) => e.stopPropagation()}>
         <h2 style={{ marginTop: 0 }}>Testar Impressão</h2>
         <p className="muted" style={{ marginTop: 4 }}>

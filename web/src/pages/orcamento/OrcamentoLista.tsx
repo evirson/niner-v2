@@ -20,6 +20,7 @@ import { dataParaIso, dataValida, formatarMoeda, mascararData } from '../../lib/
 import { maiusculas } from '../../lib/texto'
 import OrcamentoImpressaoModal from './OrcamentoImpressaoModal'
 import { usePermissaoDaTela } from '../../lib/usePermissaoDaTela'
+import { fecharAoClicarNoFundo } from '../../lib/modais'
 
 const TAMANHO_PAGINA = 50
 
@@ -296,7 +297,7 @@ export default function OrcamentoLista() {
       )}
 
       {detalhe && (
-        <div className="modal-overlay" onClick={() => setDetalhe(null)}>
+        <div className="modal-overlay" onClick={fecharAoClicarNoFundo(() => setDetalhe(null))}>
           <div
             className="modal modal-largo"
             role="dialog"
@@ -419,7 +420,7 @@ export default function OrcamentoLista() {
       )}
 
       {cancelando && (
-        <div className="modal-overlay" onClick={() => (cancelar.isPending ? null : setCancelando(null))}>
+        <div className="modal-overlay" onClick={fecharAoClicarNoFundo(() => (cancelar.isPending ? null : setCancelando(null)))}>
           <div className="modal" role="dialog" aria-label="Cancelar orçamento" onClick={(e) => e.stopPropagation()}>
             <h2 style={{ marginTop: 0 }}>Cancelar orçamento nº {cancelando.idOrcamento}</h2>
             <p className="muted" style={{ marginTop: 4 }}>

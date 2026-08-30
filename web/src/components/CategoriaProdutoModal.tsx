@@ -5,6 +5,7 @@ import { ApiError } from '../lib/api'
 import { criarCategoriaProduto, listarCategoriasProduto, renomearCategoriaProduto } from '../lib/categoriasProduto'
 import { maiusculas } from '../lib/texto'
 import Toast from './Toast'
+import { fecharAoClicarNoFundo } from '../lib/modais'
 
 /**
  * Gestão embutida da categoria de produto (item 1 do pedido de Produtos): criar e renomear,
@@ -43,7 +44,7 @@ export default function CategoriaProdutoModal({
   })
 
   return (
-    <div className="modal-overlay" onClick={aoFechar}>
+    <div className="modal-overlay" onClick={fecharAoClicarNoFundo(aoFechar)}>
       <div className="modal" role="dialog" aria-label="Categorias de produto" onClick={(e) => e.stopPropagation()}>
         <CabecalhoModal titulo="Categorias de produto" aoFechar={aoFechar} />
 

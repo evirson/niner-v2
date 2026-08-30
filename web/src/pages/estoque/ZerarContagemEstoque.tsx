@@ -10,6 +10,7 @@ import { desfazerUltimaEfetivacao, listarContagemAtiva, obterUltimaEfetivacao, z
 import { formatarQuantidade } from '../../lib/masks'
 import { maiusculas } from '../../lib/texto'
 import { usePermissaoDaTela } from '../../lib/usePermissaoDaTela'
+import { fecharAoClicarNoFundo } from '../../lib/modais'
 
 const CHAVE_TELA = 'estoque.zerar-contagem'
 const FRASE_CONFIRMACAO_ZERAR = 'zerar estoque'
@@ -222,7 +223,7 @@ export default function ZerarContagemEstoque() {
       )}
 
       {confirmandoDesfazer && ultimaEfetivacao?.existe && (
-        <div className="modal-overlay" onClick={() => !desfazer.isPending && setConfirmandoDesfazer(false)}>
+        <div className="modal-overlay" onClick={fecharAoClicarNoFundo(() => !desfazer.isPending && setConfirmandoDesfazer(false))}>
           <div className="modal" role="dialog" aria-label="Confirmar desfazer efetivação" onClick={(e) => e.stopPropagation()}>
             <h2 style={{ marginTop: 0 }}>Desfazer Última Efetivação?</h2>
             <p>

@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { buscarPermiteQtdDecimal } from '../../lib/configuracaoGeral'
 import { formatarQuantidade } from '../../lib/masks'
 import type { ItemLedger } from '../../lib/pdv'
+import { fecharAoClicarNoFundo } from '../../lib/modais'
 
 /**
  * F3 — Altera Quantidade (2026-07-27): lista os itens já lançados na venda com um stepper de
@@ -39,7 +40,7 @@ export default function AlteraQuantidadeModal({
   }
 
   return (
-    <div className="modal-overlay" onClick={aoFechar}>
+    <div className="modal-overlay" onClick={fecharAoClicarNoFundo(aoFechar)}>
       <div className="modal modal-medio" role="dialog" aria-label="Altera quantidade" onClick={(e) => e.stopPropagation()}>
         <CabecalhoModal titulo="Altera Quantidade" aoFechar={aoFechar} />
         <p className="muted" style={{ marginTop: 4 }}>

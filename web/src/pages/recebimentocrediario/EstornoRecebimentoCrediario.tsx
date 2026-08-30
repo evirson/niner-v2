@@ -15,6 +15,7 @@ import {
 } from '../../lib/recebimentoCrediario'
 import { maiusculas } from '../../lib/texto'
 import { usePermissaoDaTela } from '../../lib/usePermissaoDaTela'
+import { fecharAoClicarNoFundo } from '../../lib/modais'
 
 function moeda(v: number): string {
   return `R$ ${formatarMoeda(v)}`
@@ -189,7 +190,7 @@ export default function EstornoRecebimentoCrediario() {
       </div>
 
       {loteParaVisualizar && (
-        <div className="modal-overlay" onClick={() => setLoteParaVisualizar(null)}>
+        <div className="modal-overlay" onClick={fecharAoClicarNoFundo(() => setLoteParaVisualizar(null))}>
           <div className="modal" role="dialog" aria-label="Parcelas do recebimento" onClick={(e) => e.stopPropagation()}>
             <CabecalhoModal titulo="Parcelas do recebimento" aoFechar={() => setLoteParaVisualizar(null)} />
             <p className="muted" style={{ marginTop: -4 }}>
@@ -241,7 +242,7 @@ export default function EstornoRecebimentoCrediario() {
       )}
 
       {loteParaEstornar && (
-        <div className="modal-overlay" onClick={() => setLoteParaEstornar(null)}>
+        <div className="modal-overlay" onClick={fecharAoClicarNoFundo(() => setLoteParaEstornar(null))}>
           <div className="modal" role="dialog" aria-label="Confirmar estorno" onClick={(e) => e.stopPropagation()}>
             <h2 style={{ marginTop: 0 }}>Estornar recebimento?</h2>
             <p className="muted">

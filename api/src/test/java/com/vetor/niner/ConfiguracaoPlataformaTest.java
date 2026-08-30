@@ -120,6 +120,49 @@ class ConfiguracaoPlataformaTest {
                 .andExpect(jsonPath("$.smtpSenhaDefinida").value(false));
     }
 
+    /**
+     * ⛔ Um PUT PARCIAL não pode apagar o que ele nem mencionou.
+     *
+     * <p>Este é o par negativo que faltava. Até 2026-08-30, `smtp_host`, `smtp_porta`,
+     * `smtp_usuario`, `smtp_remetente_email` e `mp_notification_url` entravam crus no UPDATE — um
+     * corpo com só `{"backupHora": "..."}` respondia <b>200</b> e zerava os cinco. E o estrago era
+     * invisível: os segredos são preservados pela regra "em branco = manter", então a tela do
+     * backoffice continuava mostrando "senha configurada". A partir dali o `EmailService` — que
+     * <b>nunca lança</b> — parava de entregar em silêncio, e com ele o <b>código de login em duas
+     * etapas</b>, trancando fora todo usuário com 2FA ligado.
+     *
+     * <p>⭐ E o teste confere as DUAS direções, porque só a segunda pega uma correção que trave
+     * demais: campo <b>ausente</b> mantém, campo mandado <b>vazio</b> apaga. Uma correção com
+     * `COALESCE` cru passaria na primeira metade e reprovaria na segunda — o admin não conseguiria
+     * mais limpar o host pela tela.
+     */
+    @Test
+    void putParcialMantemOsCamposQueNaoVieramEVazioApaga() throws Exception {
+        String token = token("config-admin3@vetor.com.br", "SUPER_ADMIN");
+
+        mvc.perform(put("/api/admin/configuracao").header("Authorization", "Bearer " + token)
+                        .contentType(APPLICATION_JSON).content(corpo("senha-smtp", null)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.smtpHost").value("smtp.vetor.com.br"));
+
+        // Corpo parcial: só a hora do backup. Nada mais foi mencionado — nada mais pode mudar.
+        mvc.perform(put("/api/admin/configuracao").header("Authorization", "Bearer " + token)
+                        .contentType(APPLICATION_JSON).content("{\"backupHora\":\"03:15\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.backupHora").value("03:15:00"))
+                .andExpect(jsonPath("$.smtpHost").value("smtp.vetor.com.br"))
+                .andExpect(jsonPath("$.smtpPorta").value(587))
+                .andExpect(jsonPath("$.smtpUsuario").value("envio@vetorsistemas.com.br"))
+                .andExpect(jsonPath("$.smtpRemetenteEmail").value("nao-responda@nainer.com.br"))
+                .andExpect(jsonPath("$.smtpSenhaDefinida").value(true));
+
+        // A outra direção: mandar vazio de propósito APAGA — senão não haveria como limpar o campo.
+        mvc.perform(put("/api/admin/configuracao").header("Authorization", "Bearer " + token)
+                        .contentType(APPLICATION_JSON).content("{\"smtpHost\":\"\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.smtpHost").doesNotExist());
+    }
+
     @Test
     void suporteLeMasNaoAltera() throws Exception {
         String tokenSuporte = token("config-suporte@vetor.com.br", "SUPORTE");

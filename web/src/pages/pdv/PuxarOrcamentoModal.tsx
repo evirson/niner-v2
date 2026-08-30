@@ -18,6 +18,7 @@ import {
   formatarQuantidade,
   mascararQuantidade,
 } from '../../lib/masks'
+import { fecharAoClicarNoFundo } from '../../lib/modais'
 
 /** Quantidade que o operador decidiu levar de cada item, por `idVariacao`. */
 type Levando = Record<number, number>
@@ -139,7 +140,7 @@ export default function PuxarOrcamentoModal({
   const algumItem = Object.values(levando).some((q) => q > 0)
 
   return (
-    <div className="modal-overlay" onClick={aoFechar}>
+    <div className="modal-overlay" onClick={fecharAoClicarNoFundo(aoFechar)}>
       {/* ⚠️ `overflow: hidden` + coluna flex faz o MIOLO rolar, não o modal inteiro. Sem isto o
           `.modal` rola como um bloco só (ele tem `max-height: 85vh; overflow-y: auto`) e o título
           — junto com o ✕ de fechar — sai de vista quando o orçamento tem muitos itens. */}

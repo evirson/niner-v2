@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { buscarClientesPdv, type PdvCliente } from '../../lib/pdv'
 import ClienteFormModal from './ClienteFormModal'
 import { usePermissaoDaTela } from '../../lib/usePermissaoDaTela'
+import { fecharAoClicarNoFundo } from '../../lib/modais'
 
 /**
  * F6 — Cliente da Venda (2026-07-28): busca por nome, CPF/CNPJ ou celular via
@@ -26,7 +27,7 @@ export default function PesquisaClienteModal({
   })
 
   return (
-    <div className="modal-overlay" onClick={aoFechar}>
+    <div className="modal-overlay" onClick={fecharAoClicarNoFundo(aoFechar)}>
       <div className="modal modal-largo" role="dialog" aria-label="Pesquisa de cliente" onClick={(e) => e.stopPropagation()}>
         <CabecalhoModal titulo="Pesquisa de Cliente" aoFechar={aoFechar} />
         <p className="muted" style={{ marginTop: 4 }}>

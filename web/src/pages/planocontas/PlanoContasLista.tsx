@@ -25,6 +25,7 @@ import {
 } from '../../lib/planoContas'
 import { maiusculas } from '../../lib/texto'
 import { usePermissaoDaTela } from '../../lib/usePermissaoDaTela'
+import { fecharAoClicarNoFundo } from '../../lib/modais'
 
 const JANELA_PAGINACAO = 7
 const TAMANHO_PAGINA = 50
@@ -329,7 +330,7 @@ export default function PlanoContasLista() {
       )}
 
       {planoParaExcluir && (
-        <div className="modal-overlay" onClick={() => setPlanoParaExcluir(null)}>
+        <div className="modal-overlay" onClick={fecharAoClicarNoFundo(() => setPlanoParaExcluir(null))}>
           <div
             className="modal"
             role="dialog"

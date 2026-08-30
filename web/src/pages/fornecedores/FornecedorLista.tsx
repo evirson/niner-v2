@@ -28,6 +28,7 @@ import { useEu } from '../../lib/eu'
 import { mascararCpfCnpj, mascararTelefone } from '../../lib/masks'
 import { maiusculas } from '../../lib/texto'
 import { usePermissaoDaTela } from '../../lib/usePermissaoDaTela'
+import { fecharAoClicarNoFundo } from '../../lib/modais'
 
 const JANELA_PAGINACAO = 7
 const TAMANHO_PAGINA = 50
@@ -333,7 +334,7 @@ export default function FornecedorLista() {
       )}
 
       {fornecedorParaExcluir && (
-        <div className="modal-overlay" onClick={() => setFornecedorParaExcluir(null)}>
+        <div className="modal-overlay" onClick={fecharAoClicarNoFundo(() => setFornecedorParaExcluir(null))}>
           <div
             className="modal"
             role="dialog"

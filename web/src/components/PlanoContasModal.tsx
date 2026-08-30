@@ -9,6 +9,7 @@ import {
 import { codigoPlanoContasValido, mascararCodigoPlanoContas } from '../lib/masks'
 import { maiusculas } from '../lib/texto'
 import Toast from './Toast'
+import { fecharAoClicarNoFundo } from '../lib/modais'
 
 /**
  * Criação rápida de plano de contas embutida (docs/telas/fornecedor.md) — mesmo papel do
@@ -67,7 +68,7 @@ export default function PlanoContasModal({
   const valido = codigoPlanoContasValido(codigo) && descricao.trim() && tipoMovimento
 
   return (
-    <div className="modal-overlay" onClick={aoFechar}>
+    <div className="modal-overlay" onClick={fecharAoClicarNoFundo(aoFechar)}>
       <div className="modal" role="dialog" aria-label="Novo plano de contas" onClick={(e) => e.stopPropagation()}>
         <h2 style={{ marginTop: 0 }}>Novo plano de contas</h2>
         <p className="muted" style={{ marginTop: 4 }}>

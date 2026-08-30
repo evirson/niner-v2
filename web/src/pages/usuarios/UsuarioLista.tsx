@@ -26,6 +26,7 @@ import {
   type StatusUsuario,
   type Usuario,
 } from '../../lib/usuarios'
+import { fecharAoClicarNoFundo } from '../../lib/modais'
 
 const JANELA_PAGINACAO = 7
 const TAMANHO_PAGINA = 50
@@ -327,7 +328,7 @@ export default function UsuarioLista() {
       )}
 
       {usuarioParaExcluir && (
-        <div className="modal-overlay" onClick={() => setUsuarioParaExcluir(null)}>
+        <div className="modal-overlay" onClick={fecharAoClicarNoFundo(() => setUsuarioParaExcluir(null))}>
           <div
             className="modal"
             role="dialog"

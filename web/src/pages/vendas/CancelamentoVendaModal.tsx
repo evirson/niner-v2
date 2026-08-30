@@ -6,6 +6,7 @@ import { buscarDetalheParaCancelamento, cancelarVenda } from '../../lib/cancelam
 import { formatarDataHora } from '../../lib/datas'
 import { formatarMoeda } from '../../lib/masks'
 import AvisoModal from '../../components/AvisoModal'
+import { fecharAoClicarNoFundo } from '../../lib/modais'
 
 function moeda(v: number): string {
   return `R$ ${formatarMoeda(v)}`
@@ -93,7 +94,7 @@ export default function CancelamentoVendaModal({
   const caixaFechadoHoje = detalhe ? !detalhe.caixaAbertoHoje : false
 
   return (
-    <div className="modal-overlay" onClick={aoFechar}>
+    <div className="modal-overlay" onClick={fecharAoClicarNoFundo(aoFechar)}>
       <div
         className="modal modal-largo"
         role="dialog"

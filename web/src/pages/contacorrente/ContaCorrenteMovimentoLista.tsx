@@ -28,6 +28,7 @@ import {
 import { listarEmpresas } from '../../lib/empresas'
 import { dataParaIso, dataValida, formatarMoeda, mascararData } from '../../lib/masks'
 import { usePermissaoDaTela } from '../../lib/usePermissaoDaTela'
+import { fecharAoClicarNoFundo } from '../../lib/modais'
 
 const JANELA_PAGINACAO = 7
 const TAMANHO_PAGINA = 50
@@ -393,7 +394,7 @@ export default function ContaCorrenteMovimentoLista() {
       )}
 
       {movimentoParaExcluir && (
-        <div className="modal-overlay" onClick={() => setMovimentoParaExcluir(null)}>
+        <div className="modal-overlay" onClick={fecharAoClicarNoFundo(() => setMovimentoParaExcluir(null))}>
           <div className="modal" role="dialog" aria-label="Confirmar exclusão" onClick={(e) => e.stopPropagation()}>
             <h2 style={{ marginTop: 0 }}>Excluir lançamento?</h2>
             <p className="muted">

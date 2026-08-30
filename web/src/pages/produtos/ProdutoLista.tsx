@@ -28,6 +28,7 @@ import {
 } from '../../lib/produtos'
 import { maiusculas } from '../../lib/texto'
 import { usePermissaoDaTela } from '../../lib/usePermissaoDaTela'
+import { fecharAoClicarNoFundo } from '../../lib/modais'
 
 const JANELA_PAGINACAO = 7
 const TAMANHO_PAGINA = 50
@@ -338,7 +339,7 @@ export default function ProdutoLista() {
       )}
 
       {produtoParaExcluir && (
-        <div className="modal-overlay" onClick={() => setProdutoParaExcluir(null)}>
+        <div className="modal-overlay" onClick={fecharAoClicarNoFundo(() => setProdutoParaExcluir(null))}>
           <div
             className="modal"
             role="dialog"

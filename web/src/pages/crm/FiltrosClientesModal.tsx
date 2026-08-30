@@ -8,6 +8,7 @@ import {
   type OpcaoCrm,
 } from '../../lib/crm'
 import { mascararData, mascararDiaMes } from '../../lib/masks'
+import { fecharAoClicarNoFundo } from '../../lib/modais'
 
 const OPCOES_GENERO: Array<{ chave: GeneroCrm; rotulo: string }> = [
   { chave: 'MASCULINO', rotulo: ROTULO_GENERO_CRM.MASCULINO },
@@ -40,7 +41,7 @@ export default function FiltrosClientesModal({
     aoMudar({ ...valor, [chave]: v })
 
   return (
-    <div className="modal-overlay" onClick={aoFechar}>
+    <div className="modal-overlay" onClick={fecharAoClicarNoFundo(aoFechar)}>
       <div className="modal modal-largo" role="dialog" aria-label="Filtros de Clientes" onClick={(e) => e.stopPropagation()}>
         <CabecalhoModal titulo="Filtros de Clientes" aoFechar={aoFechar} />
         <p className="muted" style={{ marginTop: 4 }}>

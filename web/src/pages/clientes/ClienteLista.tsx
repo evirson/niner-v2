@@ -29,6 +29,7 @@ import { useEu } from '../../lib/eu'
 import { mascararCpfCnpj, mascararIdWhatsapp, mascararTelefone } from '../../lib/masks'
 import { maiusculas } from '../../lib/texto'
 import { usePermissaoDaTela } from '../../lib/usePermissaoDaTela'
+import { fecharAoClicarNoFundo } from '../../lib/modais'
 
 const JANELA_PAGINACAO = 7
 const TAMANHO_PAGINA = 50
@@ -358,7 +359,7 @@ export default function ClienteLista() {
       )}
 
       {clienteParaExcluir && (
-        <div className="modal-overlay" onClick={() => setClienteParaExcluir(null)}>
+        <div className="modal-overlay" onClick={fecharAoClicarNoFundo(() => setClienteParaExcluir(null))}>
           <div
             className="modal"
             role="dialog"

@@ -2,6 +2,7 @@ import { useMutation, useQuery } from '@tanstack/react-query'
 import { useState } from 'react'
 import { ApiError } from '../../lib/api'
 import { buscarEtiquetaConfig, listarEtiquetasConfig, type EtiquetaConfig } from '../../lib/etiquetaConfig'
+import { fecharAoClicarNoFundo } from '../../lib/modais'
 
 /**
  * Popup obrigatório antes de imprimir (item 5 do pedido, 2026-08-05) — pede qual modelo de
@@ -36,7 +37,7 @@ export default function EscolherModeloModal({
   })
 
   return (
-    <div className="modal-overlay" onClick={aoFechar}>
+    <div className="modal-overlay" onClick={fecharAoClicarNoFundo(aoFechar)}>
       <div className="modal" role="dialog" aria-label="Escolher Modelo de Etiqueta" onClick={(e) => e.stopPropagation()}>
         <h2 style={{ marginTop: 0 }}>Escolher Modelo de Etiqueta</h2>
         <p className="muted" style={{ marginTop: 4 }}>

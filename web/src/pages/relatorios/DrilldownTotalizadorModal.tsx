@@ -3,6 +3,7 @@ import { IconeFechar } from '../../components/Icones'
 import { ApiError } from '../../lib/api'
 import { formatarMoeda } from '../../lib/masks'
 import { buscarDetalheTotalizador, type FiltrosRelatorioVendas } from '../../lib/relatorioVendas'
+import { fecharAoClicarNoFundo } from '../../lib/modais'
 
 function moeda(v: number): string {
   return `R$ ${formatarMoeda(v)}`
@@ -40,7 +41,7 @@ export default function DrilldownTotalizadorModal({
   const itens = data?.itens ?? []
 
   return (
-    <div className="modal-overlay" onClick={aoFechar}>
+    <div className="modal-overlay" onClick={fecharAoClicarNoFundo(aoFechar)}>
       <div
         className="modal modal-largo"
         role="dialog"

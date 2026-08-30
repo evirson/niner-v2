@@ -1,4 +1,5 @@
 import { IconeFechar } from './Icones'
+import { fecharAoClicarNoFundo } from '../lib/modais'
 
 /**
  * Popup de aviso/erro centralizado na tela, com título fixo + botão X (mesmo padrão de
@@ -19,7 +20,7 @@ export default function AvisoModal({
   aoFechar: () => void
 }) {
   return (
-    <div className="modal-overlay" onClick={aoFechar}>
+    <div className="modal-overlay" onClick={fecharAoClicarNoFundo(aoFechar)}>
       <div
         className="modal modal-medio"
         role="alertdialog"

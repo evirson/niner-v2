@@ -12,6 +12,7 @@ import { buscarPlanoContasCompraMercadoria } from '../lib/configuracaoGeral'
 import { ESTADOS_UF, mascararCep, mascararCpfCnpj, mascararTelefone } from '../lib/masks'
 import { maiusculas } from '../lib/texto'
 import Toast from './Toast'
+import { fecharAoClicarNoFundo } from '../lib/modais'
 
 /**
  * Criação rápida de fornecedor embutida (Entrada de Produtos por Compra) — o operador não
@@ -73,7 +74,7 @@ export default function FornecedorQuickCreateModal({
   const valido = form.razaoSocial.trim() && form.idPlanoContas.trim()
 
   return (
-    <div className="modal-overlay" onClick={aoFechar}>
+    <div className="modal-overlay" onClick={fecharAoClicarNoFundo(aoFechar)}>
       <div className="modal modal-largo" role="dialog" aria-label="Novo fornecedor" onClick={(e) => e.stopPropagation()}>
         <h2 style={{ marginTop: 0 }}>Novo fornecedor</h2>
         <p className="muted" style={{ marginTop: 4 }}>

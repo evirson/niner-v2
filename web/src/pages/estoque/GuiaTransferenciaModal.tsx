@@ -3,6 +3,7 @@ import PortalDeImpressao from '../../components/PortalDeImpressao'
 import type { Transferencia } from '../../lib/transferencias'
 import { gerarPdfGuiaTransferencia, montarLinhasGuiaTransferencia } from '../../lib/transferenciaImpressao'
 import { imprimirDocumentoA4 } from '../../lib/impressaoDocumento'
+import { fecharAoClicarNoFundo } from '../../lib/modais'
 
 /**
  * Pré-visualização da Guia de Transferência antes de imprimir/salvar em PDF (2026-08-06) — folha
@@ -22,7 +23,7 @@ export default function GuiaTransferenciaModal({
   const linhas = montarLinhasGuiaTransferencia(transferencia, permiteQtdDecimal)
 
   return (
-    <div className="modal-overlay" onClick={aoFechar}>
+    <div className="modal-overlay" onClick={fecharAoClicarNoFundo(aoFechar)}>
       <div className="modal modal-largo" role="dialog" aria-label="Pré-visualização da guia de transferência" onClick={(e) => e.stopPropagation()}>
         <CabecalhoModal titulo="Pré-visualização — Guia de Transferência" aoFechar={aoFechar} />
 

@@ -2,6 +2,7 @@ import CabecalhoModal from '../../components/CabecalhoModal'
 import MultiSelectGenerico from '../../components/MultiSelectGenerico'
 import { FILTROS_PRODUTOS_CRM_VAZIO, type FiltrosProdutosCrm, type OpcaoCrm } from '../../lib/crm'
 import { mascararData } from '../../lib/masks'
+import { fecharAoClicarNoFundo } from '../../lib/modais'
 
 function paraItens(opcoes: OpcaoCrm[]): Array<{ chave: string; rotulo: string }> {
   return opcoes.map((o) => ({ chave: String(o.id), rotulo: o.rotulo }))
@@ -32,7 +33,7 @@ export default function FiltrosProdutosModal({
     aoMudar({ ...valor, [chave]: v })
 
   return (
-    <div className="modal-overlay" onClick={aoFechar}>
+    <div className="modal-overlay" onClick={fecharAoClicarNoFundo(aoFechar)}>
       <div className="modal modal-largo" role="dialog" aria-label="Filtros de Produtos Comprados" onClick={(e) => e.stopPropagation()}>
         <CabecalhoModal titulo="Filtros de Produtos Comprados" aoFechar={aoFechar} />
         <p className="muted" style={{ marginTop: 4 }}>

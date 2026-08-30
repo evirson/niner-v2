@@ -14,6 +14,7 @@ import {
   type CategoriaConformidadeResponse,
 } from '../../lib/conformidadeFiscal'
 import { listarEmpresasFiscal } from '../../lib/fiscalConfiguracao'
+import { fecharAoClicarNoFundo } from '../../lib/modais'
 
 /**
  * Conformidade Fiscal (docs/telas/fiscal-conformidade.md, bloco B3) — painel de diagnóstico
@@ -142,7 +143,7 @@ function DrillDownModal({
   })
 
   return (
-    <div className="modal-overlay" onClick={aoFechar}>
+    <div className="modal-overlay" onClick={fecharAoClicarNoFundo(aoFechar)}>
       <div className="modal modal-largo" role="dialog" aria-label={`Pendências — ${categoria.rotulo}`} onClick={(e) => e.stopPropagation()}>
         <CabecalhoModal titulo=<>{categoria.rotulo}</> aoFechar={aoFechar} />
 

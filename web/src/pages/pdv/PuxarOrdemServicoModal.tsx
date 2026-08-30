@@ -10,6 +10,7 @@ import {
   type OrdemServico,
 } from '../../lib/ordensServico'
 import { maiusculas } from '../../lib/texto'
+import { fecharAoClicarNoFundo } from '../../lib/modais'
 
 /**
  * Busca e puxa uma **Ordem de Serviço** para dentro do PDV (S4, `docs/MODULOSERVICOS.md` §4.2).
@@ -88,7 +89,7 @@ export default function PuxarOrdemServicoModal({
   }
 
   return (
-    <div className="modal-overlay" onClick={aoFechar}>
+    <div className="modal-overlay" onClick={fecharAoClicarNoFundo(aoFechar)}>
       {/* `overflow: hidden` + coluna flex faz o MIOLO rolar, não o modal inteiro — senão o título
           e o ✕ saem de vista numa OS com muitos itens (mesma razão do popup do orçamento). */}
       <div

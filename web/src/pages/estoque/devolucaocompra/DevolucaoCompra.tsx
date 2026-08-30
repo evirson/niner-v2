@@ -28,6 +28,7 @@ import {
   mascararData,
   mascararQuantidade,
 } from '../../../lib/masks'
+import { fecharAoClicarNoFundo } from '../../../lib/modais'
 
 const TAMANHO_PAGINA = 50
 
@@ -564,7 +565,7 @@ export default function DevolucaoCompra() {
       )}
 
       {confirmando && (
-        <div className="modal-overlay" onClick={() => (devolver.isPending ? null : setConfirmando(false))}>
+        <div className="modal-overlay" onClick={fecharAoClicarNoFundo(() => (devolver.isPending ? null : setConfirmando(false)))}>
           <div className="modal" role="dialog" aria-label="Confirmar devolução" onClick={(e) => e.stopPropagation()}>
             <h2 style={{ marginTop: 0 }}>Confirmar devolução ao fornecedor</h2>
             <p className="muted" style={{ marginTop: 4 }}>

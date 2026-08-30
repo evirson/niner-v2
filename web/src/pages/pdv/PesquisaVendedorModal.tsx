@@ -2,6 +2,7 @@ import CabecalhoModal from '../../components/CabecalhoModal'
 import { useQuery } from '@tanstack/react-query'
 import { useState } from 'react'
 import { listarFuncionarios, type Funcionario } from '../../lib/funcionarios'
+import { fecharAoClicarNoFundo } from '../../lib/modais'
 
 /**
  * F6 — Vendedor da Venda (2026-07-28): busca por nome via `GET /api/v1/funcionarios` (só
@@ -25,7 +26,7 @@ export default function PesquisaVendedorModal({
   const resultados = pagina?.itens ?? []
 
   return (
-    <div className="modal-overlay" onClick={aoFechar}>
+    <div className="modal-overlay" onClick={fecharAoClicarNoFundo(aoFechar)}>
       <div className="modal modal-largo" role="dialog" aria-label="Pesquisa de vendedor" onClick={(e) => e.stopPropagation()}>
         <CabecalhoModal titulo="Pesquisa de Vendedor" aoFechar={aoFechar} />
         <p className="muted" style={{ marginTop: 4 }}>

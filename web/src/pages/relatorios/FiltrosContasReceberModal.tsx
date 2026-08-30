@@ -2,6 +2,7 @@ import type { Empresa } from '../../lib/empresas'
 import EmpresaMultiSelect from '../../components/EmpresaMultiSelect'
 import { mascararData } from '../../lib/masks'
 import type { CategoriaParcela, StatusParcela } from '../../lib/relatorioContasReceber'
+import { fecharAoClicarNoFundo } from '../../lib/modais'
 
 export interface FiltrosTexto {
   dataVendaInicial: string
@@ -113,7 +114,7 @@ export default function FiltrosContasReceberModal({
   aoFechar: () => void
 }) {
   return (
-    <div className="modal-overlay" onClick={primeiraVez ? undefined : aoFechar}>
+    <div className="modal-overlay" onClick={fecharAoClicarNoFundo(primeiraVez ? undefined : aoFechar)}>
       <div className="modal modal-medio" role="dialog" aria-label="Filtros do relatório" onClick={(e) => e.stopPropagation()}>
         <h2 style={{ marginTop: 0 }}>Filtros do Relatório</h2>
         <p className="muted" style={{ marginTop: -4 }}>

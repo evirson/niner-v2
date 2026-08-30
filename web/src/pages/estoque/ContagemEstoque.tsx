@@ -11,6 +11,7 @@ import { completarQuantidade, desmascararQuantidade, formatarQuantidade, mascara
 import { buscarProdutoPorCodigo, interpretarCodigoBarras } from '../../lib/pdv'
 import { maiusculas } from '../../lib/texto'
 import { usePermissaoDaTela } from '../../lib/usePermissaoDaTela'
+import { fecharAoClicarNoFundo } from '../../lib/modais'
 
 const CHAVE_TELA = 'estoque.contagem'
 const QTD_MAXIMA_POR_LEITURA = 1000
@@ -258,7 +259,7 @@ export default function ContagemEstoque() {
 
       {/* Confirmação de exclusão — ver o comentário de `linhaParaRemover`. */}
       {linhaParaRemover && (
-        <div className="modal-overlay" onClick={() => setLinhaParaRemover(null)}>
+        <div className="modal-overlay" onClick={fecharAoClicarNoFundo(() => setLinhaParaRemover(null))}>
           <div className="modal" role="dialog" aria-label="Confirmar remoção" onClick={(e) => e.stopPropagation()}>
             <h2 style={{ marginTop: 0 }}>Remover da contagem?</h2>
             <p>

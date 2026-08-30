@@ -1,5 +1,6 @@
 package com.vetor.niner.estoque.devolucaocompra;
 
+import com.vetor.niner.comum.web.MotivoDeFalha;
 import com.vetor.niner.identidade.permissao.Acao;
 import com.vetor.niner.identidade.permissao.PermissaoService;
 
@@ -123,7 +124,7 @@ public class DevolucaoCompraController {
             LOG.warn("Devolução ao fornecedor {} gravada, mas a NF-e 55 falhou — a resposta foi preservada",
                     dev.idMovimento(), e);
             nota = new NotaFiscalDevolucaoCompraResponse("FALHA_NA_EMISSAO", 0L, null, null, null,
-                    e.getMessage() == null ? "Não foi possível emitir a NF-e de devolução." : e.getMessage());
+                    MotivoDeFalha.legivel(e, "Não foi possível emitir a NF-e de devolução."));
         }
 
         return new DevolucaoCompraEfetivadaResponse(dev.idMovimento(), dev.idMovimentoOrigem(),

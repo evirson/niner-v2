@@ -18,6 +18,7 @@ import { listarEmpresasFiscal } from '../../lib/fiscalConfiguracao'
 import { formatarSoData } from '../../lib/datas'
 import { mascararCpfCnpj } from '../../lib/masks'
 import { usePermissaoDaTela } from '../../lib/usePermissaoDaTela'
+import { fecharAoClicarNoFundo } from '../../lib/modais'
 
 const BADGE_POR_SITUACAO: Record<SituacaoCertificado, { rotulo: string; classe: string }> = {
   ATIVO: { rotulo: 'Ativo', classe: 'badge-sucesso' },
@@ -179,7 +180,7 @@ export default function FiscalCertificadoLista() {
       </div>
 
       {uploadAberto && (
-        <div className="modal-overlay" onClick={() => setUploadAberto(false)}>
+        <div className="modal-overlay" onClick={fecharAoClicarNoFundo(() => setUploadAberto(false))}>
           <div className="modal" role="dialog" aria-label="Enviar certificado" onClick={(e) => e.stopPropagation()}>
             <h2 style={{ marginTop: 0 }}>Enviar certificado</h2>
             <p className="muted">
@@ -250,7 +251,7 @@ function UsosDrillDownModal({ idCertificado, aoFechar }: { idCertificado: number
   })
 
   return (
-    <div className="modal-overlay" onClick={aoFechar}>
+    <div className="modal-overlay" onClick={fecharAoClicarNoFundo(aoFechar)}>
       <div className="modal" role="dialog" aria-label="Histórico de uso do certificado" onClick={(e) => e.stopPropagation()}>
         <CabecalhoModal titulo="Histórico de uso" aoFechar={aoFechar} />
         {isLoading ? (

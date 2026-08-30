@@ -2,6 +2,7 @@ import CabecalhoModal from '../components/CabecalhoModal'
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { buscarNcmsPorNome, type Ncm } from '../lib/ncm'
+import { fecharAoClicarNoFundo } from '../lib/modais'
 
 /**
  * Pesquisa de NCM por nome (2026-08-11, pedido do dono do produto) — quem cadastra um produto
@@ -25,7 +26,7 @@ export default function PesquisaNcmModal({
   })
 
   return (
-    <div className="modal-overlay" onClick={aoFechar}>
+    <div className="modal-overlay" onClick={fecharAoClicarNoFundo(aoFechar)}>
       <div className="modal modal-largo" role="dialog" aria-label="Pesquisa de NCM" onClick={(e) => e.stopPropagation()}>
         <CabecalhoModal titulo="Pesquisa de NCM" aoFechar={aoFechar} />
         <p className="muted" style={{ marginTop: 4 }}>

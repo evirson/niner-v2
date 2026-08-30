@@ -7,6 +7,7 @@ import { compartilharArquivo } from '../../lib/compartilhamento'
 import { montarLinkWhatsApp } from '../../lib/whatsapp'
 import { IconeFechar, IconeWhatsapp } from '../../components/Icones'
 import EnviarWhatsAppModal from '../../components/EnviarWhatsAppModal'
+import { fecharAoClicarNoFundo } from '../../lib/modais'
 
 /**
  * Comprovante de pagamento de crediário, formatado pra bobina térmica de 80mm (2026-07-30).
@@ -78,7 +79,7 @@ export default function ComprovanteRecebimentoModal({
 
   return (
     <>
-      <div className="modal-overlay" onClick={aoFechar}>
+      <div className="modal-overlay" onClick={fecharAoClicarNoFundo(aoFechar)}>
         <div
           className="modal modal-medio"
           role="dialog"

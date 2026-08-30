@@ -163,6 +163,20 @@ public class ProdutoImportador implements ImportadorDeTabela {
                     ignoradas++;
                 }
             } catch (RuntimeException e) {
+                // ⛔ MESMO defeito que o `EstoqueImportador` teve: `idTamanhoOuCriar` faz
+                // `INSERT INTO cfg_tamanho` e cacheia o id — **dentro** do savepoint da linha. Se a
+                // linha falhar DEPOIS disso (preço de venda menor que o custo, NCM inexistente,
+                // código duplicado…), o savepoint desfaz o INSERT e o `tamanhoCache` fica com um id
+                // que não existe mais. Da linha seguinte em diante, toda linha com aquele tamanho
+                // violava a FK de `cfg_grade` e rolava de volta — o relatório acusava erro em quase
+                // toda a planilha e ESCONDIA que só uma linha estava ruim, que é exatamente o
+                // efeito-cascata que o savepoint por linha existe para eliminar.
+                //
+                // ⚠️ Limpar o cache inteiro (e não só a chave criada) é de propósito: aqui uma linha
+                // pode criar VÁRIOS tamanhos (a grade vem em `TAMANHO_1..N`) e não há como saber
+                // quais sem mudar quatro assinaturas. O custo é só um SELECT a mais por tamanho
+                // depois de uma linha com erro — `idTamanhoOuCriar` consulta antes de inserir.
+                tamanhoCache.clear();
                 erros.add(LinhaErro.de(linha.numeroLinha(), e));
             } finally {
                 ImportacaoProgressoContext.avancar();

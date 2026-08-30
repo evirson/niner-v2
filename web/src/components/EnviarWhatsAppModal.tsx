@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react'
 import { celularValido, mascararTelefone } from '../lib/masks'
+import { fecharAoClicarNoFundo } from '../lib/modais'
 
 /**
  * Popup genérico "confirme o destinatário antes de enviar por WhatsApp" — pré-preenche com o
@@ -35,7 +36,7 @@ export default function EnviarWhatsAppModal({
   }
 
   return (
-    <div className="modal-overlay" onClick={aoFechar}>
+    <div className="modal-overlay" onClick={fecharAoClicarNoFundo(aoFechar)}>
       <div className="modal" role="dialog" aria-label="Enviar por WhatsApp" onClick={(e) => e.stopPropagation()}>
         <h2 style={{ marginTop: 0 }}>Enviar por WhatsApp</h2>
         <p className="muted" style={{ marginTop: 4 }}>

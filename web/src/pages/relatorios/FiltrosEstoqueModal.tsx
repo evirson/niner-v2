@@ -3,6 +3,7 @@ import EmpresaMultiSelect from '../../components/EmpresaMultiSelect'
 import MultiSelectGenerico from '../../components/MultiSelectGenerico'
 import type { Empresa } from '../../lib/empresas'
 import type { ModeloRelatorioEstoque, SituacaoProduto, TipoQuantidade } from '../../lib/relatorioEstoque'
+import { fecharAoClicarNoFundo } from '../../lib/modais'
 
 export interface FiltrosEstoqueTexto {
   modelo: ModeloRelatorioEstoque
@@ -69,7 +70,7 @@ export default function FiltrosEstoqueModal({
   aoFechar: () => void
 }) {
   return (
-    <div className="modal-overlay" onClick={primeiraVez ? undefined : aoFechar}>
+    <div className="modal-overlay" onClick={fecharAoClicarNoFundo(primeiraVez ? undefined : aoFechar)}>
       <div className="modal modal-medio" role="dialog" aria-label="Filtros do relatório" onClick={(e) => e.stopPropagation()}>
         <h2 style={{ marginTop: 0 }}>Filtros do Relatório</h2>
 
