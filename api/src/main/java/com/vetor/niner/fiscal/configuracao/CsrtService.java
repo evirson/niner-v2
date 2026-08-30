@@ -40,6 +40,8 @@ import java.util.Optional;
 @Service
 public class CsrtService {
 
+    private static final org.slf4j.Logger LOG = org.slf4j.LoggerFactory.getLogger(CsrtService.class);
+
     private final JdbcClient jdbc;
     private final SegredoCifrador cifrador;
     private final NinerProperties.RespTec respTec;
@@ -67,9 +69,19 @@ public class CsrtService {
                         """)
                 .params(ufNormalizada, ambiente)
                 .query((rs, n) -> new Csrt(rs.getString("id_csrt").trim(),
-                        cifrador.decifrar(rs.getString("csrt_cifrado"))))
+                        decifrarOuNulo(rs.getString("csrt_cifrado"))))
                 .optional();
-        if (doBanco.isPresent()) {
+        // ⚠️ Linha existente com segredo ilegível conta como AUSENTE, não como erro cru. Sem isto,
+        // este era o único consumidor de `decifrar` sem guarda (o irmão em
+        // `ConfiguracaoPlataformaService` já trata), e dois caminhos reais derrubavam a emissão com
+        // exceção crua em vez da mensagem que o projeto escreveu para o caso — `mensagemFaltando()`,
+        // que fica inalcançável quando a exceção sobe: (a) `csrt_cifrado = ''`, que
+        // `CsrtAdminService` grava por `COALESCE(?, '')` numa corrida entre o SELECT e o INSERT,
+        // fazendo `decifrar("")` estourar `IllegalArgumentException: 12 > 0` (que NÃO é
+        // `GeneralSecurityException` e escapa do catch do cifrador); (b) chave mestra divergente
+        // num deploy sem `NINER_CHAVE_SEGREDOS`. Nos dois, toda NF-e 55 daquela UF morria com uma
+        // mensagem sobre índice de array.
+        if (doBanco.isPresent() && doBanco.get().codigo() != null) {
             return doBanco;
         }
         // Fallback do env — restrito à UF que o declara. Ver a ordem de resolução no javadoc.
@@ -119,5 +131,24 @@ public class CsrtService {
 
     private static boolean vazio(String s) {
         return s == null || s.isBlank();
+    }
+
+    /**
+     * Decifra o CSRT tratando segredo ilegível como AUSENTE — nunca deixando a exceção subir.
+     *
+     * <p>⚠️ Note o {@code catch (RuntimeException)}, não {@code GeneralSecurityException}: com a
+     * coluna vazia o {@code decifrar} estoura {@code IllegalArgumentException} lá dentro (o
+     * {@code copyOfRange(vazio, 12, 0)}), que escapa do tratamento do próprio cifrador.
+     */
+    private String decifrarOuNulo(String cifrado) {
+        if (vazio(cifrado)) {
+            return null;
+        }
+        try {
+            return cifrador.decifrar(cifrado);
+        } catch (RuntimeException e) {
+            LOG.error("CSRT gravado não pôde ser decifrado (a chave mestra mudou?): {}", e.getMessage());
+            return null;
+        }
     }
 }

@@ -463,8 +463,13 @@ public class VendaFiscalAssembler {
      */
     private static String cfopDaOperacao(ResultSet rs, boolean interestadual, String descricaoProduto,
                                          String ufDestino) throws SQLException {
+        // ⚠️ `trim()` obrigatório: as duas colunas são `character(4)` (V017/V061), e o Postgres
+        // COMPLETA COM ESPAÇOS o que foi gravado menor. Um `<CFOP>6   </CFOP>` é recusado pelo XSD
+        // (`TCfop` é `[0-9]{4}`) já no balcão. A validação de gravação nasceu só em 2026-08-30 —
+        // regra cadastrada ANTES disso pode estar curta no banco, e é a leitura que precisa
+        // segurar. Corrigir só a escrita deixaria de pé exatamente o caso que já existe.
         if (!interestadual) {
-            return rs.getString("cfop");
+            return exigirCfopCompleto(rs.getString("cfop"), descricaoProduto, "CFOP");
         }
         String cfopFora = rs.getString("cfop_interestadual");
         if (cfopFora == null || cfopFora.isBlank()) {
@@ -474,7 +479,24 @@ public class VendaFiscalAssembler {
                             + "destino (5xxx dentro do estado, 6xxx para fora): preencha o CFOP "
                             + "interestadual em Perfil Fiscal antes de emitir.");
         }
-        return cfopFora;
+        return exigirCfopCompleto(cfopFora, descricaoProduto, "CFOP interestadual");
+    }
+
+    /**
+     * O CFOP sem os espaços do {@code character(4)}, recusando o que ficou incompleto.
+     *
+     * <p>F11: a emissão nunca chuta um CFOP nem manda um valor que a SEFAZ vai rejeitar — recusa
+     * com uma mensagem que aponta o cadastro. Um {@code "6   "} sairia no XML e voltaria como erro
+     * de schema, que não diz nada sobre Perfil Fiscal.
+     */
+    private static String exigirCfopCompleto(String bruto, String descricaoProduto, String rotulo) {
+        String cfop = bruto == null ? "" : bruto.trim();
+        if (cfop.length() != 4) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "O " + rotulo + " da regra fiscal do produto \"" + descricaoProduto + "\" está incompleto (\""
+                            + cfop + "\"). Corrija em Perfil Fiscal — o CFOP tem 4 dígitos.");
+        }
+        return cfop;
     }
 
     private RegraFiscal buscarRegra(ItemBruto item, int crt, String ufDestino,

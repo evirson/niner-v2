@@ -655,7 +655,19 @@ export default function EntradaMercadoriaForm() {
 
     if (pendenteEmResolucao != null) {
       const nomeAlvo = normalizarNomeProduto(produto.descricao)
-      let qtdAtualizadas = 0
+      // ⚠️ A contagem sai do estado ATUAL, antes do `setPendentes` — nunca de um contador
+      // incrementado DENTRO do updater. O `setModalProdutoAberto(false)` da primeira linha já marca
+      // trabalho pendente no fiber, o que desliga o caminho de eager-state do React: o updater
+      // passa a rodar na renderização, DEPOIS do `setToast`, e `qtdAtualizadas` era lido como 0 —
+      // então o toast saía sempre no singular, escondendo justamente o que ele existe para avisar
+      // (que as outras linhas do mesmo produto também foram resolvidas). O irmão `aoCriarProduto`,
+      // logo acima, sempre calculou `irmas.length` de forma síncrona; a assimetria era o sinal.
+      const alvos = pendentes.filter(
+        (p) =>
+          p.numeroLinha === pendenteEmResolucao ||
+          (p.idProdutoEncontrado == null && p.nomeProduto != null && normalizarNomeProduto(p.nomeProduto) === nomeAlvo),
+      )
+      const qtdAtualizadas = alvos.length
       setPendentes((atual) =>
         atual.map((p) => {
           // A linha que disparou o cadastro sempre entra, mesmo que o operador tenha editado a
@@ -664,7 +676,6 @@ export default function EntradaMercadoriaForm() {
           const éLinhaAtual = p.numeroLinha === pendenteEmResolucao
           const mesmoNome = p.idProdutoEncontrado == null && p.nomeProduto != null && normalizarNomeProduto(p.nomeProduto) === nomeAlvo
           if (éLinhaAtual || mesmoNome) {
-            qtdAtualizadas++
             return { ...p, idProdutoEncontrado: produto.idProduto, idGradeEncontrada: produto.idGrade }
           }
           return p
@@ -833,13 +844,31 @@ export default function EntradaMercadoriaForm() {
       // "Empresa não encontrada ou não liberada para este usuário" — depois de resolver as
       // pendências, conferir 30 custos e digitar as duplicatas. E não havia saída: o seletor de
       // Empresa só é renderizado com `empresasPermitidas.length > 1`, então repetir o upload
-      // reproduzia o mesmo beco. Ignorar em silêncio é o comportamento já documentado para "sem
-      // match": mantém a empresa da sessão.
-      if (
-        preview.idEmpresaEncontrada != null &&
-        empresasPermitidas?.some((e) => e.idEmpresa === preview.idEmpresaEncontrada)
-      ) {
-        setIdEmpresaEscolhida(preview.idEmpresaEncontrada)
+      // reproduzia o mesmo beco.
+      //
+      // ⛔ MAS ignorar EM SILÊNCIO seria pior que o beco, e a primeira versão desta correção fazia
+      // exatamente isso: a entrada era gravada com 200 e toast verde na empresa ERRADA (estoque,
+      // custo e contas a pagar na filial, enquanto `xmlBruto` e `chaveNfe` dizem matriz), e o
+      // `chaveJaImportada` passava a barrar a reimportação — a entrada certa só sairia depois de
+      // cancelar a errada. Com UMA empresa permitida o operador nem vê o seletor, então não teria
+      // como desconfiar. Trocar "404 tardio, sem dado errado" por "sucesso com dado errado" é meio
+      // caminho, e meio caminho é pior que nenhum.
+      //
+      // ⚠️ `empresasPermitidas != null` explícito: `undefined` significa "ainda não sei" (ou a
+      // query falhou), não "não permitida" — e nesse estado não há o que avisar.
+      if (preview.idEmpresaEncontrada != null && empresasPermitidas != null) {
+        if (empresasPermitidas.some((e) => e.idEmpresa === preview.idEmpresaEncontrada)) {
+          setIdEmpresaEscolhida(preview.idEmpresaEncontrada)
+        } else {
+          const atual = empresasPermitidas.find((e) => e.idEmpresa === idEmpresaEscolhida)
+          setToast({
+            texto:
+              'Esta nota foi faturada contra outra empresa, que não está liberada para o seu usuário. '
+              + `A entrada será lançada em ${atual?.nomeFantasia ?? atual?.razaoSocial ?? 'sua empresa atual'}`
+              + ' — se não for isso, peça acesso à empresa correta antes de confirmar.',
+            tipo: 'erro',
+          })
+        }
       }
 
       setXmlTemDuplicatas(preview.duplicatas.length > 0)
@@ -1348,10 +1377,12 @@ export default function EntradaMercadoriaForm() {
           </div>
           <div className="topbar-acoes">
             <AjudaDaTela chaveTela="estoque.entrada.form" />
-            {/* ⛔ , não rota fixa (auditoria 2026-08-29, rodada 2). Voltar por PUSH
+            {/* ⛔ `navigate(-1)`, não rota fixa (auditoria 2026-08-29, rodada 2). Voltar por PUSH
                 empilhava a lista no histórico: menu → lista → nova → ✕ → lista, e o ✕ da lista
-                (que é ) devolvia o usuário à Nova Entrada, com o popup de origem na
-                cara — a tela que ele acabou de fechar. Repetindo, ficava preso no vaivém. */}
+                (que é `navigate(-1)`) devolvia o usuário à Nova Entrada, com o popup de origem na
+                cara — a tela que ele acabou de fechar. Repetindo, ficava preso no vaivém.
+                ⚠️ As duas chamadas foram comidas por interpolação de crase ao editar este
+                comentário por script; a frase ficou sem sujeito por um dia. */}
             <BotaoFecharTela />
             {!entradaGravada && modo !== null && (
               <button type="button" className="btn" disabled={!podeConfirmar || efetivar.isPending} onClick={() => efetivar.mutate()}>

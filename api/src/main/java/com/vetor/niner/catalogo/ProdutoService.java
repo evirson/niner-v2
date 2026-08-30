@@ -531,8 +531,11 @@ public class ProdutoService {
                 .update();
     }
 
-    /** {@code getInt} + {@code wasNull}: o driver recusa {@code getObject(col, Integer.class)} sobre
-     *  {@code int4}, e o erro sai disfarçado de 409 (achado de 2026-08-20). */
+    /** {@code getInt} + {@code wasNull} para {@code int} anulável — idioma do projeto.
+     *  ⚠️ Este javadoc afirmava que o driver "recusa {@code getObject(col, Integer.class)} sobre
+     *  {@code int4}"; é FALSO (corrigido em 2026-08-30). O que o driver recusa é
+     *  {@code Long.class} sobre {@code int4} — esse sim medido em 2026-08-20, e esse sim sai
+     *  disfarçado de 409. */
     private static Integer duracaoOuNulo(ResultSet rs) throws SQLException {
         int v = rs.getInt("duracao_minutos");
         return rs.wasNull() ? null : v;
@@ -593,8 +596,11 @@ public class ProdutoService {
                 idGrade == 1 ? null : idGrade,
                 rs.getString("descricao_grade"),
                 rs.getString("tipo_item"),
-                // getInt + wasNull, nunca getObject(..., Integer.class): o driver recusa a conversão
-                // a partir de int4 e o erro sai como 409 "registro em uso" (achado de 2026-08-20).
+                // getInt + wasNull para ler int anulável. ⚠️ O comentário anterior afirmava que o
+                // driver "recusa getObject(..., Integer.class) a partir de int4" — FALSO, corrigido
+                // em 2026-08-30: o defeito medido naquele dia foi `Long.class` sobre int4.
+                // `Integer.class` funciona; `getInt`+`wasNull` continua sendo o idioma do projeto
+                // por clareza, não por impossibilidade.
                 duracaoOuNulo(rs),
                 rs.getBigDecimal("perc_comissao_servico"),
                 rs.getBoolean("ativo"),

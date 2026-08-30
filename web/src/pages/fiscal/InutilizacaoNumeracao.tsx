@@ -211,11 +211,15 @@ export default function InutilizacaoNumeracao() {
                 <button
                   key={`${f.numeroInicial}-${f.numeroFinal}`}
                   type="button"
-                  // ⚠️ Comparação por VALOR, não por identidade: `buracos` é `data` do React Query e o
-                  // `refetchOnWindowFocus` (ligado, `staleTime` 0) devolve objetos novos. Alternar para
-                  // outra janela e voltar apagava o destaque de TODOS os botões — na tela da ação mais
-                  // irreversível do produto, o operador perdia a confirmação visual de qual faixa
-                  // escolheu, enquanto a justificativa abaixo continuava citando a faixa certa.
+                  // ⚠️ Comparação por VALOR, não por identidade de objeto. `buracos` é `data` do React
+                  // Query, e comparar com `===` amarra o destaque à referência que veio de uma consulta
+                  // específica.
+                  // ⚠️ CORREÇÃO DO PRÓPRIO COMENTÁRIO: a primeira versão dizia que um alt-tab apagava o
+                  // destaque, e isso NÃO reproduz — o `structuralSharing` do React Query devolve a MESMA
+                  // referência quando o refetch traz dado deep-equal. A perda de identidade acontece
+                  // quando a lista MUDA (outro terminal inutiliza uma faixa anterior, os índices
+                  // deslocam e o `replaceEqualDeep` deixa de reusar as referências à frente) — mais
+                  // raro, e real. Um cenário que não reproduz faz a próxima pessoa reverter a correção.
                   className={
                     faixaEscolhida?.numeroInicial === f.numeroInicial && faixaEscolhida?.numeroFinal === f.numeroFinal
                       ? 'btn'

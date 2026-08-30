@@ -34,7 +34,7 @@ export default function ConformidadeFiscalPainel() {
     else if (idEmpresa === null && empresas && empresas.length > 0) setIdEmpresa(empresas[0].idEmpresa)
   }, [idEmpresa, idEmpresaSessao, empresas])
 
-  const { data: painel, isLoading } = useQuery({
+  const { data: painel, isLoading, isError } = useQuery({
     queryKey: ['fiscal-conformidade', idEmpresa],
     queryFn: () => buscarPainelConformidade(idEmpresa as number),
     enabled: idEmpresa !== null,
@@ -74,7 +74,15 @@ export default function ConformidadeFiscalPainel() {
       </div>
 
       <div className="lista-corpo">
-        {isLoading || !painel ? (
+        {/* ⚠️ O ramo de ERRO vem ANTES do de carregamento. Com a consulta em falha, `isLoading`
+            é false e `painel` é undefined — a condição antiga caía no primeiro ramo PARA SEMPRE, e
+            a tela ficava em "Carregando…" indefinidamente, sem erro visível para o lojista. Ele
+            recarrega, espera, liga para o suporte. */}
+        {isError ? (
+          <p className="erro">
+            Não foi possível carregar a conformidade fiscal desta empresa. Tente de novo em instantes.
+          </p>
+        ) : isLoading || !painel ? (
           <p className="muted">Carregando…</p>
         ) : (
           <>
@@ -136,7 +144,7 @@ function DrillDownModal({
 }) {
   const [pagina, setPagina] = useState(1)
 
-  const { data, isLoading, isFetching } = useQuery({
+  const { data, isLoading, isFetching, isError: erroDrilldown } = useQuery({
     queryKey: ['fiscal-conformidade-drilldown', idEmpresa, categoria.categoria, pagina],
     queryFn: () => buscarDrillDown(idEmpresa, categoria.categoria as CategoriaConformidade, pagina),
     placeholderData: (anterior) => anterior,
@@ -147,7 +155,13 @@ function DrillDownModal({
       <div className="modal modal-largo" role="dialog" aria-label={`Pendências — ${categoria.rotulo}`} onClick={(e) => e.stopPropagation()}>
         <CabecalhoModal titulo=<>{categoria.rotulo}</> aoFechar={aoFechar} />
 
-        {isLoading ? (
+        {/* ⛔ "Nenhuma pendência." é uma AFIRMAÇÃO, e com a consulta em falha ela era falsa: o
+            card atrás diz "7 pendências — bloqueia", o ADMIN clica para ver quais são, o drill-down
+            responde 500, e o popup responde que está tudo certo. A tela existe para dizer "posso
+            emitir nota?" — respondendo "sim" com base numa requisição que falhou. */}
+        {erroDrilldown ? (
+          <p className="erro">Não foi possível carregar as pendências desta categoria. Tente de novo.</p>
+        ) : isLoading ? (
           <p className="muted">Carregando…</p>
         ) : !data || data.itens.length === 0 ? (
           <p className="muted">Nenhuma pendência.</p>

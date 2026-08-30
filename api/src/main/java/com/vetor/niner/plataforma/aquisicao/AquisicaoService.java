@@ -154,13 +154,25 @@ public class AquisicaoService {
                             VALUES (CAST(? AS uuid), ?, ?, ?, 'CONVERTIDO', ?, now())
                             ON CONFLICT (email) DO UPDATE
                                SET status = 'CONVERTIDO',
-                                   -- ⚠️ COALESCE: preserva a PRIMEIRA conversão. Desde que o "criar grupo
-                                   -- separado" existe (2026-08-27), o mesmo e-mail pode abrir uma segunda
-                                   -- conta — e o `EXCLUDED` sobrescrevia o `id_tenant` da única linha de
-                                   -- lead que existe para ele, fazendo a PRIMEIRA conta desaparecer da
-                                   -- atribuição: o funil passava a contar 1 conta onde houve 2, e a receita
-                                   -- da campanha era subestimada. É a mesma regra de primeiro toque que as
-                                   -- colunas vizinhas deste UPDATE já seguem.
+                                   -- ⚠️ COALESCE: a atribuição fica com a PRIMEIRA conversão, não com a
+                                   -- última. Desde que o "criar grupo separado" existe (2026-08-27), o mesmo
+                                   -- e-mail pode abrir uma segunda conta, e o `EXCLUDED` trocava o
+                                   -- `id_tenant` da única linha de lead que existe para ele.
+                                   --
+                                   -- ⛔ SEJA HONESTO SOBRE O QUE ISTO RESOLVE: **não** conserta a contagem.
+                                   -- Há uma linha de lead por e-mail e uma coluna `id_tenant`, então o
+                                   -- `count(DISTINCT l.id_tenant)` do funil continua contando 1 onde houve
+                                   -- 2 — o que muda é QUAL das duas contas recebe o crédito. A primeira
+                                   -- versão deste comentário afirmava que a correção consertava a
+                                   -- subestimação da receita, e a medição não sustenta isso: se a conta
+                                   -- ABANDONADA for a primeira e a que PAGA for a segunda, o COALESCE
+                                   -- atribui R$ 0 à campanha — a mesma subestimação, do outro lado.
+                                   --
+                                   -- Escolhemos "primeiro toque" por coerência: é o que as colunas
+                                   -- vizinhas deste mesmo UPDATE já fazem e o que o `SignupService`
+                                   -- documenta. ⏭️ A atribuição 1:N de verdade pede uma linha por conversão
+                                   -- (`lead_conversao`), não uma coluna em `lead` — pendência declarada,
+                                   -- porque muda o significado do funil.
                                    id_tenant = COALESCE(plataforma.lead.id_tenant, EXCLUDED.id_tenant),
                                    visitante_id = COALESCE(plataforma.lead.visitante_id, EXCLUDED.visitante_id),
                                    atualizado_em = now()

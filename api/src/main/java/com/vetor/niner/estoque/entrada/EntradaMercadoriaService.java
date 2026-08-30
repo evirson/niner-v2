@@ -223,10 +223,19 @@ public class EntradaMercadoriaService {
                     // seja, ela trocou "não sei qual número está errado" por "não acho o campo" —
                     // a mesma família do defeito que veio corrigir. Nome do campo e da aba agora
                     // são os que estão na tela, literais.
-                    throw new IllegalArgumentException(
-                            ("Preço de venda (R$ %s) não pode ser menor que o preço de custo COM o rateio do frete "
-                                    + "(R$ %s). Reveja o campo \"Frete/Acréscimo a Ratear\", na aba \"1. Dados "
-                                    + "Gerais\", ou aumente o preço de venda.")
+                    // ⛔ E a mensagem é RAMIFICADA porque o campo que ela cita é CONDICIONAL:
+                    // `cfg_rateia_frete_entrada` nasce **false** (V023), e a tela só renderiza
+                    // "Frete/Acréscimo a Ratear" quando a flag está ligada. Numa loja recém-criada
+                    // — a configuração padrão! — a mensagem citava, entre aspas, um campo que não
+                    // existe na tela dela, sobre um rateio que foi R$ 0,00. Era o defeito "não acho
+                    // o campo" reintroduzido para o caso mais comum, e com mais convicção.
+                    throw new IllegalArgumentException(valorAcrescimo.signum() > 0
+                            ? ("Preço de venda (R$ %s) não pode ser menor que o preço de custo COM o rateio do "
+                                    + "frete (R$ %s). Reveja o campo \"Frete/Acréscimo a Ratear\", na aba "
+                                    + "\"1. Dados Gerais\", ou aumente o preço de venda.")
+                                    .formatted(emReais(novoPrecoVenda), emReais(custoUnitarioComRateio))
+                            : ("Preço de venda (R$ %s) não pode ser menor que o preço de custo (R$ %s). "
+                                    + "Corrija o preço de venda ou o preço de custo deste item.")
                                     .formatted(emReais(novoPrecoVenda), emReais(custoUnitarioComRateio)));
                 }
                 jdbc.sql("""
@@ -951,6 +960,10 @@ public class EntradaMercadoriaService {
      * fornecedor esperando.
      */
     private static String emReais(BigDecimal valor) {
-        return valor.setScale(2, RoundingMode.HALF_UP).toPlainString().replace('.', ',');
+        // ⚠️ Separador de MILHAR também: a tela usa `toLocaleString('pt-BR')` (`masks.ts`), então
+        // 1234.5 aparece como "1.234,50" lá e sairia como "1234,50" aqui. A primeira versão deste
+        // helper resolveu a vírgula e deixou o ponto de milhar — meia formatação, pelo mesmo
+        // argumento que a justificava.
+        return String.format(java.util.Locale.of("pt", "BR"), "%,.2f", valor.setScale(2, RoundingMode.HALF_UP));
     }
 }

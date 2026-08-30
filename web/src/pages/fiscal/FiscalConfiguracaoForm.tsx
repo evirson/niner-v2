@@ -73,6 +73,10 @@ function paraRequisicao(f: FormState): FiscalConfigRequest {
     emiteNfce: f.emiteNfce,
     emiteNfe: f.emiteNfe,
     ambiente: f.ambiente,
+    // ⚠️ O `|| 1` continua como rede de segurança de TIPO, não como default de negócio: quem
+    // impede o campo vazio de chegar aqui é `serieVazia`, que bloqueia o Salvar. Antes, apagar a
+    // série para redigitar e ser interrompido gravava série 1 com toast VERDE — e série é o que
+    // separa uma numeração fiscal de outra.
     serieNfce: Number(f.serieNfce) || 1,
     serieNfe: Number(f.serieNfe) || 1,
     serieContingencia: Number(f.serieContingencia) || 9,
@@ -108,7 +112,7 @@ export default function FiscalConfiguracaoForm() {
     else if (idEmpresa === null && empresas && empresas.length > 0) setIdEmpresa(empresas[0].idEmpresa)
   }, [idEmpresa, idEmpresaSessao, empresas])
 
-  const { data: config, isFetching: carregandoConfig } = useQuery({
+  const { data: config, isFetching: carregandoConfig, isError: erroConfig } = useQuery({
     queryKey: ['fiscal-config', idEmpresa],
     queryFn: () => buscarFiscalConfig(idEmpresa as number),
     enabled: idEmpresa !== null,
@@ -137,6 +141,20 @@ export default function FiscalConfiguracaoForm() {
   useEffect(() => {
     if (config) setForm(paraFormulario(config))
   }, [config])
+
+  /**
+   * ⛔ Série em branco NÃO pode virar o default em silêncio.
+   *
+   * O campo aceita ficar vazio (o `replace(/\D/g,'')` sobre um backspace), e o payload fazia
+   * `Number(f.serieNfce) || 1`. A loja está na série 2, o ADMIN seleciona o campo para digitar 3,
+   * é interrompido e clica em Salvar → grava **série 1**, com toast **verde**. Série é o que separa
+   * uma numeração fiscal de outra, e o estrago cabe justamente antes da primeira nota — que é
+   * quando esta tela é usada.
+   */
+  const serieVazia =
+    (form.emiteNfce && !form.serieNfce.trim())
+    || (form.emiteNfe && !form.serieNfe.trim())
+    || !form.serieContingencia.trim()
 
   const salvar = useMutation({
     mutationFn: () => salvarFiscalConfig(idEmpresa as number, paraRequisicao(form)),
@@ -181,7 +199,12 @@ export default function FiscalConfiguracaoForm() {
               type="submit"
               form="form-fiscal-config"
               className="btn"
-              disabled={salvar.isPending || idEmpresa === null || carregandoConfig}
+              // ⛔ `erroConfig` e `serieVazia` no disabled. Com a carga em falha o <form> inteiro
+              // não renderiza (`{config && …}`), e este botão é `type="submit" form="form-fiscal-config"`
+              // apontando para um id que não existe no DOM: clicar não produzia NADA — nem
+              // requisição, nem toast, nem log. O ADMIN abria a tela para ligar a emissão antes do
+              // go-live, via só o combo de empresa, e clicava num botão morto.
+              disabled={salvar.isPending || idEmpresa === null || carregandoConfig || erroConfig || serieVazia}
             >
               {salvar.isPending ? 'Salvando…' : 'Salvar'}
             </button>
@@ -206,6 +229,12 @@ export default function FiscalConfiguracaoForm() {
             ))}
           </select>
         </div>
+
+        {erroConfig && (
+          <p className="erro">
+            Não foi possível carregar a configuração fiscal desta empresa. Tente de novo em instantes.
+          </p>
+        )}
 
         {config && (
           <form

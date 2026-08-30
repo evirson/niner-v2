@@ -77,6 +77,7 @@ export default function ExportacaoXmlLote() {
     data: resumo,
     isFetching: buscandoResumo,
     error: erroResumo,
+    refetch: refazerResumo,
   } = useQuery({
     queryKey: ['exportacao-xml-resumo', idEmpresa, dataInicialIso, dataFinalIso, modelo],
     queryFn: () => resumirExportacaoXml(filtros!),
@@ -170,7 +171,19 @@ export default function ExportacaoXmlLote() {
             <option value="55">Só NF-e (55)</option>
           </select>
           {/* ⭐ A conferência não roda mais sozinha: o lojista escolhe os filtros e clica aqui. */}
-          <button type="button" className="btn" disabled={!podeGerar} onClick={() => setGerado(true)}>
+          {/* ⚠️ `refetch` quando JÁ gerou: com os mesmos filtros, `setGerado(true)` sobre um
+              estado que já é `true` é descartado pelo React e NADA acontece. Depois de um 500
+              transitório, o card mostrava o erro, o botão continuava habilitado, e clicar de novo
+              não reagia — a única saída era mexer num filtro e desfazer, para mudar a queryKey. */}
+          <button
+            type="button"
+            className="btn"
+            disabled={!podeGerar}
+            onClick={() => {
+              if (gerado) refazerResumo()
+              else setGerado(true)
+            }}
+          >
             {buscandoResumo ? 'Consultando…' : 'Gerar Dados'}
           </button>
         </div>

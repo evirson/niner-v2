@@ -201,7 +201,11 @@ class ConfiguracaoPlataformaTest {
                          WHERE table_schema = 'plataforma' AND table_name = 'configuracao_plataforma'
                            AND column_name = 'smtp_remetente_nome'
                         """).query(String.class).single())
-                .isEqualTo("'Nainer'::text");
+                // ⚠️ `startsWith`, não igualdade: o sufixo é o TIPO da coluna. Um `ALTER … TYPE
+                // varchar(80)` futuro devolveria `'Nainer'::character varying` e o teste reprovaria o
+                // build por um motivo que NÃO é o defeito que ele existe para pegar — e guarda que
+                // acusa falso treina quem lê a falha a desconfiar dele.
+                .startsWith("'Nainer'");
     }
 
     @Test

@@ -283,9 +283,16 @@ public class PerfilFiscalService {
                                 """)
                         .params(idPerfilFiscal, r.crt(), normalizarUf(r.ufDestino()),
                                 r.tipoDestinatario().name(), r.tipoOperacao().name(),
-                                r.cfop(),
+                                // ⚠️ TRIM antes de gravar, nas duas colunas. `validarRegras` confere o valor
+                                // TRIMADO e isto persistia o CRU: " 6404" (colado com espaço à frente) passava
+                                // na validação e ia com 5 caracteres para uma coluna `character(4)` —
+                                // `value too long`, `DataIntegrityViolationException`, e o handler global
+                                // respondendo 409 "Registro em uso por outro cadastro" numa tela de cadastro
+                                // fiscal. E " 640" é pior: tem 4 caracteres, passa no `@Size(min=4,max=4)`,
+                                // cabe na coluna e vai INTEIRO para o XML.
+                                r.cfop() == null ? null : r.cfop().trim(),
                                 r.cfopInterestadual() == null || r.cfopInterestadual().isBlank()
-                                        ? null : r.cfopInterestadual(),
+                                        ? null : r.cfopInterestadual().trim(),
                                 r.cstIcms(), r.csosn(),
                                 nz(r.aliquotaIcms()), nz(r.percReducaoBc()), nz(r.mvaSt()), nz(r.aliquotaFcp()),
                                 r.cstPis(), nz(r.aliquotaPis()), r.cstCofins(), nz(r.aliquotaCofins()),

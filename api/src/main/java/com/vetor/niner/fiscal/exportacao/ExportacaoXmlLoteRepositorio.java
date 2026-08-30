@@ -308,9 +308,18 @@ public class ExportacaoXmlLoteRepositorio {
     }
 
     /**
-     * ⚠️ {@code rs.getObject(coluna, Integer.class)} numa coluna {@code smallint} recusa com
-     * "conversion ... not supported", e o erro chega ao controller como 409 "registro em uso"
-     * (2026-08-20). {@code getInt} + {@code wasNull} é o caminho que funciona.
+     * {@code getInt} + {@code wasNull} para ler um {@code smallint} anulável.
+     *
+     * <p>⚠️ <b>Correção de uma afirmação FALSA que esteve aqui</b> (2026-08-30): este javadoc dizia
+     * que {@code rs.getObject(coluna, Integer.class)} "numa coluna {@code smallint} recusa". Não
+     * recusa — o driver aceita {@code Integer.class} para {@code int2} e {@code int4}, e há prova
+     * executável: {@code DevolucaoCompraCrudTest} exercita verde um endpoint que lê
+     * {@code serie_nota} ({@code smallint}) exatamente assim. O defeito real medido em 2026-08-20
+     * foi {@code Long.class} sobre {@code int4}, que é outra coisa.
+     *
+     * <p>⭐ O motivo de corrigir um comentário: uma auditoria desta madrugada gastou tempo caçando
+     * o "bug" que esta frase descrevia, e não existe. Afirmação errada em javadoc não fica inerte —
+     * ela dirige o próximo leitor para o lugar errado.
      */
     private static Integer inteiroOuNulo(ResultSet rs, String coluna) throws SQLException {
         int valor = rs.getInt(coluna);
