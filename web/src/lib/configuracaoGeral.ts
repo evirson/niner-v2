@@ -116,7 +116,12 @@ export function buscarUsaCorGrade(): Promise<UsaCorGrade> {
 
 export interface UsaServicos {
   cfgUsaServicos: boolean
-  cfgExigeSangriaFechamento: boolean
+  // ⚠️ NADA de `cfgExigeSangriaFechamento` aqui: /usa-servicos devolve UM campo só
+  // (`UsaServicosResponse`). O campo estava declarado e o endpoint nunca o mandou —
+  // quem o lesse receberia `undefined`, que é falsy, ou seja "não exige sangria", o
+  // OPOSTO do padrão (o parâmetro nasce ligado, V095) — e sem erro de compilação,
+  // porque `api<T>()` acredita na assinatura. Ele mora em `ConfiguracaoGeral`, que vem
+  // do endpoint completo. (medido contra a API em 2026-08-30)
 }
 
 /** Aberto a qualquer papel — usado pelo cadastro de produto (seletor Mercadoria/Serviço) e pelo
