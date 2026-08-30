@@ -331,3 +331,30 @@ prometer "pronto às 15h30" com esse cálculo seria mentir com precisão.
 - **Executor por LINHA quando a mesma variação se repete.** `executoresDaOrdemServico` mapeia por
   variação e fica com o primeiro executor — o javadoc registra o limite em vez de fingir que ele
   não existe. Resolver exige a chave de linha que o PDV ainda não carrega para a OS.
+
+---
+
+## ⛔ 2026-08-29 (auditoria, 2ª leva) — a mesma variação não entra duas vezes com preços diferentes
+
+O PDV congela o preço da OS num `Map<idVariacao, preco>`, então de duas linhas da mesma variação
+**só a última sobrevivia** — enquanto a validação de quantidade somava as duas. Uma OS com
+`TROCA DE ÓLEO` 1 × R$ 100 (negociado) + 1 × R$ 150 virava uma venda de **2 × R$ 150 = R$ 300**
+contra os R$ 250 que o documento impresso promete. O cliente reclama com o papel na mão e nada no
+sistema explica os R$ 50.
+
+⭐ **O orçamento NÃO tem esse problema**, e a diferença é o motivo de a trava morar na OS: lá o preço
+vem sempre do cadastro (`OrcamentoService.resolverItens`), então duas linhas da mesma variação têm
+forçosamente o mesmo preço. Na OS o preço **pode vir do cliente** (limitado ao teto do cadastro), e
+é isso que abre a divergência.
+
+⚠️ **A trava é na ORIGEM, não no PDV:** travar no fechamento da venda deixaria o operador com o
+cliente na frente e uma OS impossível de faturar. Aqui ele ainda está montando a ordem.
+
+⚠️ **E preço nulo não é "sem preço", é o preço de CADASTRO.** A primeira versão da trava fazia
+`continue` na linha sem preço, e isso reabria o buraco pela porta ao lado: linha A a R$ 100 +
+linha B da mesma variação com `precoVenda: null` (→ R$ 150) passava direto. `gravarItens` e
+`exigirDescontoDentroDoTeto` já resolviam o nulo assim; a trava é que discordava das duas.
+
+**Guarda:** `OrdemServicoTest.osNaoAceitaAMesmaVariacaoComDoisPrecos`, com o par que garante que
+repetir o item **com o mesmo preço** continua valendo — a trava é sobre divergência, não sobre
+repetição.

@@ -333,3 +333,14 @@ cadastrada. A loja pequena que paga despesa em dinheiro e leva o resto para casa
 conseguir fechar o caixa no primeiro dia — mesmo raciocínio que deixou
 `cfg_permite_estoque_negativo` ligado por padrão. ⚠️ Caixa **abaixo** do fundo fecha nos dois
 casos: não há o que sangrar, e travar ali prenderia o operador sem saída.
+---
+
+## ⚠️ 2026-08-29 (auditoria, 2ª leva) — a palavra `CAMPO` estava impressa na tela, e a sangria estava sob "Serviços"
+
+1. **`CAMPO` aparecia para o usuário.** Um texto solto dentro do JSX (`<div className="form-grid">CAMPO`),
+   renderizado acima do checkbox "Emitir NFC-e/NF-e automaticamente após a venda", na aba Fiscal.
+   ⚠️ O `tsc -b` **não acusa** — texto dentro de JSX é válido. Entrou no commit da V095.
+2. **"Exigir sangria antes de fechar o caixa" estava sob o rótulo `Serviços`**, ao lado de "Usa
+   serviços". Quem leva o 409 do fechamento vem procurar por *"caixa"* em Parâmetros do Sistema, não
+   acha nada com essa cara e conclui que a regra **não é configurável**. Rotulagem não muda cálculo
+   — muda a decisão de quem lê. Hoje tem seção própria, **Caixa**.

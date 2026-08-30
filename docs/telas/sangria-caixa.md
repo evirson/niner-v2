@@ -133,3 +133,26 @@ Sabotado (removendo o crédito no banco), dois dos quatro reprovam.
 ABERTO — o 409 não pode ter fechado metade), o caixa **sem** excedente fechando normalmente
 (o caso negativo, que é o que pega um guarda que trava todo mundo) e o parâmetro desligado
 deixando fechar. Sabotado, o primeiro responde 200 em vez de 409.
+---
+
+## ⚠️ 2026-08-29 (auditoria, 2ª leva) — a tela nasceu inteira fora do padrão, e sem RBAC
+
+Duas coisas que só apareceram porque um agente comparou as classes **usadas** com as **declaradas**
+em `styles.css` — nenhuma delas quebra build, `tsc -b` ou teste:
+
+1. **Quatro classes que não existem.** `page`, `page-header`, `page-header-acoes` e `btn-primary`
+   não estão em `styles.css`, e a `<table>` da lista de sangrias era a única do produto sem
+   `className`. Resultado: topbar desalinhada, ícone em `size={22}` contra os 34 do padrão, e a
+   grade saindo como tabela HTML crua — sem borda, sem zebra, sem cabeçalho.
+   ⚠️ **E corrigir pela metade era pior:** trocar `page` por `lista-tela` **sem** os filhos
+   `lista-topo`/`lista-corpo` troca "sem estilo nenhum" por **altura travada de 100% sem área de
+   rolagem** — o conteúdo estoura e some numa janela baixa. `lista-tela` é `height: 100%` com
+   `flex-direction: column`, e é o `lista-corpo` que carrega o `flex: 1; min-height: 0; overflow-y: auto`.
+2. **O botão "Registrar sangria" não consultava a permissão.** `sangria-caixa` é `@Tela`, o POST
+   vira INCLUIR pelo interceptor e a V094 já criou a tela no catálogo com `tem_incluir = true` — a
+   permissão **existe e é concedível**, só o front não a lia. O admin que liberasse a tela marcando
+   só *"Acessar"* deixava o operador escolher a conta, o plano de contas, digitar R$ 800,00 e a
+   observação para levar **403** com o caixa aberto e o dinheiro na mão.
+
+⭐ Isso vale para todas as telas novas: **classe CSS que não existe não dá erro em lugar nenhum**, e
+foi assim que a tela mais recente do produto ficou fora do padrão sem ninguém notar.

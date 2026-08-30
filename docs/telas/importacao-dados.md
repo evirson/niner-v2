@@ -697,3 +697,32 @@ cliente pagar depois, pelo Recebimento de Crediário, continua sendo receita. De
 ⚠️ **Sem backfill.** As vendas sintéticas de importações anteriores a esta migration ficam marcadas
 como `PDV` — aceito porque, em 2026-08-22, todo o dado importado é carga de teste (o sistema está em
 homologação). A V059 registra o `UPDATE` corretivo, caso algum dia exista importação real anterior.
+
+---
+
+## ⛔ 2026-08-29 (auditoria, 2ª leva) — Contas a Receber descartava JUROS e DESCONTO
+
+`VALOR_JUROS` e `VALOR_DESCONTO` estão em `COLUNAS`, o modelo de planilha as gera com exemplo, e
+`contas_receber` tem as duas colunas (V025) — **o importador nunca as lia**. Entravam com o
+`DEFAULT 0`.
+
+**O que o lojista via:** migra 4.000 parcelas, várias já pagas com juros de atraso, preenchendo o
+modelo que o próprio sistema forneceu. Depois da importação, o **Histórico do Cliente** e a
+**Exportação de Dados** mostram **juros 0 e desconto 0** em toda a base migrada — com o relatório
+anunciando *"4.000 importadas"*. ⚠️ Oferecer a coluna e ignorá-la é pior que não oferecer: ele
+preencheu, conferiu contra o modelo, e o dado sumiu sem aviso.
+
+⚠️ **No mesmo método:** recebimento **com data e sem valor** — o caso normal de quem pagou o valor
+de face — gravava `documento_recebido = true` com `valor_recebido = 0`. Hoje, sem valor digitado, o
+recebido é `valor_receber + juros − desconto`.
+
+### ⚠️ E o recurso não tinha NENHUM teste
+Foi por isso que a correção acima, aplicada com os campos na lista de **parâmetros** e não na de
+**colunas** (9 colunas, 8 `?`, 10 parâmetros), passou por uma suíte de **1049 testes verdes** — e
+teria quebrado a importação inteira: toda linha estourando *"The column index is out of range"*,
+relatório com **0 importadas**, e uma **venda-casca órfã** por grupo (ela é criada antes do laço de
+parcelas, com savepoint próprio).
+
+`ContasReceberImportadorCrudTest` nasceu daí, com 3 casos que conferem o **banco** e não o status
+HTTP — os erros vêm **dentro** do corpo do relatório, então um teste de "200 OK" passaria com o
+defeito presente. ⭐ Sabotei os placeholders e confirmei: 3 falhas com o defeito, 3 verdes sem ele.

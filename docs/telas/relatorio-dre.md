@@ -329,3 +329,38 @@ honesto, porque o custo é de antes e não existe neste sistema.
 
 O regime de **competência** nunca sofreu disso: ele faz `JOIN` (INNER) com o ledger, então a venda
 sem movimento simplesmente não aparece.
+
+---
+
+## ⚠️ 2026-08-29 (auditoria, 2ª leva) — três correções que mudam NÚMERO
+
+### A devolução passou a estornar a COMISSÃO
+A consulta de devoluções **nem selecionava a coluna**: JOÃO vendia R$ 1.000 a 10%, o cliente
+devolvia tudo no mesmo mês, e a DRE fechava com **R$ 100 de prejuízo** sobre uma operação que não
+movimentou nada — enquanto o **Relatório de Comissões**, o número que a loja de fato PAGA, já dava
+R$ 0,00.
+
+⚠️ **O javadoc afirmava que não estornar era a regra** (*"igual à DRE; reverter seria regra de
+negócio nova"*): estava alinhado, e ao relatório errado. Alinhamento entre dois relatórios não prova
+nada quando nenhum dos dois é o pagador. ⚠️ A **taxa de cartão continua sem estorno**, de propósito:
+a operadora já cobrou a taxa da transação original e não a devolve quando a mercadoria volta — é
+fato do mundo, não simetria contábil.
+
+### Resgate de vale-mercadoria saiu do regime CAIXA
+No regime caixa a linha só pode entrar se **entrou dinheiro**, e o vale não é dinheiro: a receita já
+foi reconhecida quando a venda original foi paga. Sem o corte, uma venda de R$ 90 em espécie,
+devolvida e represtada com o vale, virava **R$ 180 de receita e CMV em dobro** para R$ 90 e uma
+única saída de mercadoria. ⭐ É o mesmo argumento — e o mesmo precedente — do corte da parcela
+migrada: *"o Fluxo de Caixa nunca recebeu esse dinheiro"*.
+
+### OPERADOR ficou preso à empresa da sessão
+Esta tela deixou de ser `admin_apenas` na V078 e `resolverIdsEmpresa` continuou devolvendo **todas
+as empresas do tenant** para qualquer papel, com um javadoc afirmando *"qualquer outro papel não
+chega aqui"*. O gerente da Filial abria a DRE e lia **receita, CMV, comissões e pró-labore da
+Matriz** — e bastava mandar `idsEmpresa=1` na URL. ⚠️ O sinal estava à vista: o método recebia
+`jwt` e **nunca o lia**. O irmão `FluxoCaixaService.resolverEmpresas` sempre fez o certo; os dois
+discordavam e ninguém comparou.
+
+**Guarda:** `RelatorioComissoesCrudTest.devolucaoEstornaAComissaoTambemNaDreENaLucratividade` cruza
+os **três** relatórios sobre a mesma massa — é o formato que pegou o defeito, porque cada número
+sozinho era plausível.

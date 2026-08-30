@@ -493,3 +493,38 @@ ficavam divididas entre dois cadastros.
 O limite subiu para 20 (o mesmo do PDV) e **as seis telas que usam essa busca passaram a avisar**
 quando o corte acontece: Entrada de Produtos (form e lista), Devolução ao Fornecedor, Contas a Pagar
 (form e lista) e Emissão de Etiqueta.
+
+---
+
+## ⛔ 2026-08-29 (auditoria, 2ª leva) — nota SEM GTIN perdia o vínculo com a variação
+
+A chave que liga o item do XML à nossa variação era `cEAN ?? cProd`, e o `NfeXmlParser` converte
+`cEAN` ausente ou `"SEM GTIN"` em `null` — então a chave virava o `cProd`, o **código do
+fornecedor**, que por definição não é o nosso SKU nem o nosso EAN. O `entrada_nfe_item.id_variacao`
+nascia **NULL** e **ninguém via nada**: o estoque entrava certo, a entrada fechava, tudo normal.
+
+⛔ **A conta chegava semanas depois, na Devolução ao Fornecedor:** os itens **aparecem** na tela (a
+view não depende do vínculo), a devolução é gravada, **o estoque BAIXA** — e só então a montagem da
+NF-e 55 não encontra o item e recusa com *"a devolução tem quantidade acima do que a nota de entrada
+trouxe — cancele a devolução e refaça a seleção"*. Mercadoria baixada, sem nota, e a mensagem
+acusando o operador de um erro de seleção que ele não cometeu.
+
+**Como ficou:** o mapa é indexado pelo **`codigoFornecedor` que o próprio operador casou na tela** —
+o par que a aba "Não Localizados" resolveu e que `produto_fornecedor` aprende.
+
+⚠️ **E a busca também mudou de ordem, o que era a metade que faltava.** A primeira versão da
+correção indexou o mapa e **deixou a chave de busca no `cEAN`**: o caso *"GTIN presente e
+desconhecido por nós"* seguia intacto — o operador aponta a linha para uma variação **já cadastrada**
+(cuja `ean` é nula, porque veio de planilha ou cadastro manual) e a busca ia no GTIN do fornecedor.
+Hoje o **código do fornecedor vem primeiro**: entre o que a loja casou na tela e o que o emitente
+declarou, vale o da loja. ⚠️ E não se autocorrigia — na segunda nota do mesmo fornecedor o preview
+resolve por `produto_fornecedor`, mas a busca continuava caindo no `cEAN`.
+
+### ⚠️ E o rateio de frete perdia centavos
+Arredondando item a item, R$ 10,00 entre 3 itens iguais viravam 3 × R$ 3,33 = **R$ 9,99**, entrada
+após entrada, contaminando custo e margem. O resíduo agora vai no último item — mas com **teto no
+que resta**, não com truncamento: `DOWN` puro faria 1/3 de R$ 30,00 (= R$ 9,999999999) virar
+R$ 9,99, e foi o teste `rateioDeFreteDistribuiProporcionalmenteQuandoFlagLigada` que provou isso.
+Sem o teto, o resíduo do último item podia ficar **NEGATIVO**: 900 itens com R$ 5,00 de frete dão
+cota de R$ 0,00555, que arredonda para R$ 0,01 em cada linha — 899 × R$ 0,01 = R$ 8,99, e o item
+900 recebia **−R$ 3,99**.

@@ -391,3 +391,26 @@ tela de cadastro assim). Non-goals da época, todos **superados** pelas revisõe
 "hierarquia/árvore de contas", "validação de formato do código", "seed de plano de contas padrão
 no signup" (este último continua non-goal, mas existe um script de seed manual pronto, o que não
 existia antes). Ver `git log -p docs/telas/plano-contas.md` pro texto original completo.
+
+---
+
+## ⚠️ 2026-08-29 (auditoria, 2ª leva) — o guard de exclusão não conhecia todas as FKs
+
+O padrão de cadastro **promete** que, havendo vínculo, o registro é *inativado* em vez de excluído.
+Quando o guard não conhece uma FK, o que acontece não é o fallback: o `DELETE` viola a restrição e o
+handler global responde **409 "Registro em uso por outro cadastro"** — mensagem **sem caminho de
+volta**, porque a tela não oferece outro botão.
+
+As FKs foram levantadas **no banco** (`pg_constraint`), não de memória — e é assim que se refaz esta
+conferência quando um módulo novo passar a apontar para o cadastro:
+
+```sql
+SELECT c.conrelid::regclass, a.attname FROM pg_constraint c
+  JOIN unnest(c.conkey) k(attnum) ON true
+  JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attnum = k.attnum
+ WHERE c.contype='f' AND c.confrelid = 'cliente'::regclass;
+```
+
+**No plano de contas faltava `cfg_geral.id_plano_contas_compra_mercadoria`** (V032). O contador que
+cria uma conta própria de compra de mercadoria, aponta o parâmetro para ela e depois volta atrás
+ficava com a conta presa — e a mensagem não dizia que o vínculo está em **Parâmetros do Sistema**.

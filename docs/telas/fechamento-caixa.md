@@ -462,3 +462,15 @@ Nenhuma bloqueante.
 
 Fechamento de caixa em menos de 30 segundos quando os valores contados batem; quando não batem, a
 divergência por carteira e o drill-down analítico ficam visíveis antes de tentar de novo.
+
+---
+
+## ⚠️ 2026-08-29 (auditoria, 2ª leva) — RBAC e o Enter que perdia o foco
+
+- **"Fechar Caixa" e "Reabrir Caixa" não consultavam a permissão.** As duas ações são governadas
+  (`fechamento-caixa`: INCLUIR e EXCLUIR) e concedíveis pelo catálogo; a varredura de RBAC das
+  rodadas anteriores cobriu os **cadastros** e deixou as **rotinas operacionais** de fora.
+- **O campo "Ver Caixa Já Fechado (nº)" tratava Enter sem `preventDefault`.** A tela não está dentro
+  de um `<form>`, então o listener global de Enter também roda e leva o foco para o campo seguinte:
+  a busca acontece e o cursor sai do lugar. Era a **única** violação restante desse padrão — os
+  cinco leitores de código de barras e os quatro campos de busca do projeto já o chamavam.

@@ -248,3 +248,15 @@ Chave `relatorios.lucratividade`. Precisa explicar, em linguagem de lojista:
 
 `relatorio-dre.md` (o irmão contábil, com regime e comparação) · `fluxo-caixa.md` (dinheiro, não
 resultado) · `contas-pagar.md` (a origem do item 5) · `plano-contas.md` (onde mora `inclui_dre`).
+
+---
+
+## ⚠️ 2026-08-29 (auditoria, 2ª leva) — a comissão da devolução, e o vazamento de empresa
+
+Mesmas duas correções da DRE, pelo mesmo motivo — ver `relatorio-dre.md` para o detalhe:
+
+1. **A devolução estorna a comissão.** O javadoc de `apurarDevolucoes` dizia o contrário (*"não
+   estorna, igual à DRE"*) e estava alinhado ao relatório errado: quem manda é o **pagador**.
+2. **OPERADOR fica preso à empresa da sessão.** A tela saiu de `admin_apenas` na V078 e o filtro
+   nunca acompanhou — a Lucratividade **consolidada do tenant** ficava ao alcance de quem recebesse
+   a tela por concessão, com a empresa escolhível pela URL.

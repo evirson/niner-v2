@@ -393,3 +393,28 @@ Nenhum. Nada é gravado no bucket — só leitura da área `FISCAL_XML`.
    caminho não é subir o número — é o desenho assíncrono do §11.2 (DF22).
 4. **O seletor de modelo (Todos/NFC-e/NF-e) deve ficar?** Não foi pedido; foi acrescentado porque
    o contador às vezes pede só as 55.
+
+---
+
+## ⚠️ 2026-08-29 (auditoria, 2ª leva) — a mensagem do ZIP e o nome dos arquivos
+
+### A correção de 26/08 tinha ficado só no resumo
+O `resumir()` já separava *"pendente de arquivamento"* de *"sem valor fiscal"*; o `exportar()` não —
+contava `documentos.size()` cru. No caso real que motivou aquela correção (40 documentos: **36
+rejeitados**, 3 não emitidos, 1 pendente de verdade), a mensagem do ZIP mandava o lojista **aguardar
+o arquivamento de 39 notas que nunca terão XML**. Agora as duas populações são contadas e a mensagem
+diz qual é qual.
+
+### Nota CANCELADA com arquivamento pendente nunca mais era arquivada
+As duas consultas do job de arquivamento filtravam `situacao = 'AUTORIZADO'`. A nota autorizada cujo
+arquivamento falhou (MinIO fora do ar — o caminho quente engole a falha, por desenho) e que é
+**cancelada em seguida** deixava de ser AUTORIZADO antes de o job pegá-la: o `nfeProc` **nunca mais**
+era arquivado e sumia da guarda legal de 5 anos. ⚠️ E esta tela **contava** essa nota como pendente
+(`situacao IN ('AUTORIZADO','CANCELADO')`) — duas rotinas com populações diferentes para o mesmo
+conceito, com a tela mandando aguardar um job que a ignorava.
+
+### O nome do ZIP identifica a parte
+`baixarTodasAsPartes` passava o **mesmo nome** para todas as partes, e `a.download` sobrescreve o
+`Content-Disposition`: o Chrome renomeava para `… (1).zip`, `… (2).zip` — **continuando a numeração
+de arquivos de exportações anteriores** que estivessem na pasta. O contador recebia um conjunto em
+que não dá para dizer qual parte é qual, nem se falta alguma. Agora sai `-parte-N-de-M`.

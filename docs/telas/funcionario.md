@@ -215,3 +215,26 @@ obrigatório em `cfg_tela_campo`. Coberto por `exigirSeObrigatorioValor`.
 
 ⚠️ Ausente é `null`; **zero é valor legítimo** (funcionário sem comissão). E o que tira o campo do
 cadastro é `visivel`, não `obrigatorio` — ver a nota em `cliente.md`.
+
+---
+
+## ⚠️ 2026-08-29 (auditoria, 2ª leva) — o guard de exclusão não conhecia todas as FKs
+
+O padrão de cadastro **promete** que, havendo vínculo, o registro é *inativado* em vez de excluído.
+Quando o guard não conhece uma FK, o que acontece não é o fallback: o `DELETE` viola a restrição e o
+handler global responde **409 "Registro em uso por outro cadastro"** — mensagem **sem caminho de
+volta**, porque a tela não oferece outro botão.
+
+As FKs foram levantadas **no banco** (`pg_constraint`), não de memória — e é assim que se refaz esta
+conferência quando um módulo novo passar a apontar para o cadastro:
+
+```sql
+SELECT c.conrelid::regclass, a.attname FROM pg_constraint c
+  JOIN unnest(c.conkey) k(attnum) ON true
+  JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attnum = k.attnum
+ WHERE c.contype='f' AND c.confrelid = 'cliente'::regclass;
+```
+
+**No funcionário faltava `orcamento.id_funcionario`** — e a correção do dia anterior, feita
+exatamente para fechar este tipo de buraco, o esqueceu. O caso: vendedor novo faz três orçamentos na
+primeira semana e é desligado antes de fechar qualquer venda.

@@ -1,7 +1,7 @@
 # Progresso do Projeto — niner-v2
 
 Registro cronológico das decisões e entregas. Atualizar a cada marco relevante.
-**Última atualização:** 2026-08-29
+**Última atualização:** 2026-08-29 (fechamento do dia — segunda leva de auditoria, V097, 1052 testes)
 
 > 📄 **O que ainda falta está em `docs/PENDENCIAS.md`** (lista viva, agrupada por *de quem é a
 > bola*). Este arquivo conta a **história**; aquele conta o que está **aberto**. Ao fechar uma
@@ -10,6 +10,58 @@ Registro cronológico das decisões e entregas. Atualizar a cada marco relevante
 ---
 
 ## Estado atual
+
+> ## 📌 2026-08-29 (11) — FECHAMENTO DO DIA: a segunda leva de cinco rodadas
+>
+> **Estado medido agora, não estimado:** **57 telas do ERP + 3 públicas** (contagem de
+> `docs/TELAS.md`) · **1052 testes verdes, 0 falhas** (0 a 5 pulados conforme a hora, pelo guard de meia-noite do
+> `HorarioAcessoTest`) · migrations até **V097** · `web/` sem erro de tipo · **10 commits pushados**.
+>
+> ### O dia teve DUAS levas de auditoria, e um apagão no meio
+>
+> A energia caiu e o micro reiniciou durante a **rodada 4 da primeira leva**. Nada se perdeu: o
+> trabalho estava no disco, foi validado (suíte + `tsc -b`), documentado e commitado antes de
+> seguir. Depois ele pediu **mais cinco rodadas**, que renderam **~75 correções** em 6 commits.
+>
+> ### ⭐ O que este dia ensinou, e que vale mais que a lista de defeitos
+>
+> **A rodada que audita as PRÓPRIAS correções rende mais que a que varre código novo** — e isso
+> agora está medido **duas vezes no mesmo dia**. Na rodada 3 da segunda leva, **nove dos treze
+> achados** eram defeitos das minhas correções das rodadas 1–2; na rodada 5, **cinco de dezesseis**.
+> As formas, todas colhidas hoje:
+>
+> | Forma | Caso desta leva |
+> |---|---|
+> | **Meia correção** | Indexei o mapa do item da NF-e pelo código do fornecedor e **não mudei a chave de busca** — o caso que a correção descrevia continuou de pé |
+> | **Troca o sintoma de lugar** | `replace: true` trocou *"o ✕ te devolve à tela que você fechou"* por *"o ✕ não faz nada"* |
+> | **Piora o caso comum** | `DOWN` no rateio consertou o resíduo negativo e passou a truncar 1/3 de R$ 30,00 em R$ 9,99 |
+> | **O diff PROVA e não existe** | Boxing no record errado, com `Boolean.TRUE.equals` compilando por autoboxing sobre primitivo |
+> | **Guarda sem `@Transactional`** | O método novo não falhava: **liberava sempre** |
+>
+> ⭐ **Três dessas cinco foram pegas por testes que JÁ EXISTIAM** — o do rateio, o da segunda emissão
+> de nota e o do desconto da OS. É o argumento mais forte a favor de P5 que este projeto produziu:
+> não foi a revisão que segurou, foi a suíte.
+>
+> ### O que mais custava dinheiro (os dois dias somados)
+>
+> - A **DRE e a Lucratividade** nunca estornavam a comissão da devolução — e o javadoc afirmava que
+>   essa era a regra, alinhado ao relatório errado.
+> - O **vale-mercadoria virava dinheiro** no Fluxo de Caixa e na DRE de caixa, de forma cumulativa.
+> - O **desconto do orçamento/OS só existia no front** — a venda podia cobrar mais do que o
+>   documento assinado.
+> - A **trava de uma nota por venda** só olhava o modelo 65: venda a PJ **queimava número da série**.
+> - **Toda nota sem GTIN perdia o vínculo com a variação**, e a conta chegava na devolução, com o
+>   estoque já baixado.
+> - **Salvar antes de carregar apagava todas as permissões** de um usuário, com toast verde.
+>
+> ### ⛔ O limite, dito por inteiro
+>
+> **Nada disso foi executado.** As dez varreduras foram leitura, `tsc -b` e suíte — nenhuma tela
+> aberta no navegador, nenhum PDF gerado, nada transmitido à SEFAZ. Os **três defeitos de classe CSS
+> inexistente** (Sangria, Relatório de Contas a Pagar, Minha Conta) são a prova viva: seriam pegos em
+> dois minutos de navegador e escaparam de dez varreduras de código. Está em `docs/PENDENCIAS.md`
+> **#68**, com a lista do que continua sem cobertura por construção.
+
 
 > ## 📌 2026-08-29 (10) — auditoria, rodada 5 (última): o que as minhas correções deixaram pela metade
 >

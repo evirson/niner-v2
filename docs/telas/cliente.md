@@ -469,3 +469,35 @@ Eles se dividem em dois grupos, e **a diferença importa**:
 
 Por isso o grupo 2 ficou **de fora até decisão do dono do produto**. O grupo 1 é candidato natural
 à mesma conversão.
+
+---
+
+## ⚠️ 2026-08-29 (auditoria, 2ª leva) — o guard de exclusão não conhecia todas as FKs
+
+O padrão de cadastro **promete** que, havendo vínculo, o registro é *inativado* em vez de excluído.
+Quando o guard não conhece uma FK, o que acontece não é o fallback: o `DELETE` viola a restrição e o
+handler global responde **409 "Registro em uso por outro cadastro"** — mensagem **sem caminho de
+volta**, porque a tela não oferece outro botão.
+
+As FKs foram levantadas **no banco** (`pg_constraint`), não de memória — e é assim que se refaz esta
+conferência quando um módulo novo passar a apontar para o cadastro:
+
+```sql
+SELECT c.conrelid::regclass, a.attname FROM pg_constraint c
+  JOIN unnest(c.conkey) k(attnum) ON true
+  JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attnum = k.attnum
+ WHERE c.contype='f' AND c.confrelid = 'cliente'::regclass;
+```
+
+**No cliente eram cinco, e o guard conhecia uma:** `venda`, `contas_receber_lote`,
+`documento_fiscal`, `orcamento` e `ordem_servico`. ⚠️ As duas últimas nasceram em 2026-08-28 e
+**não implicam venda nenhuma** — foi por isso que escaparam de quem escreveu o guard pensando em
+"cliente que já comprou": o balcão cadastra JOÃO, faz um orçamento que ele não fecha, e semanas
+depois o cadastro não sai nem é inativado.
+
+### ⚠️ E `fisicaJuridica` era `boolean` primitivo — com `TRUE` significando pessoa FÍSICA
+A chave **ausente** no JSON resolvia para `false` = **jurídica**, em silêncio. Num `PUT` vindo de
+qualquer cliente que não seja o `web/` (integração, script de correção em massa), o CPF passava a
+ser normalizado como CNPJ, a exigência de gênero deixava de valer, e a venda a esse cliente passava
+a emitir **NF-e 55 em vez de NFC-e**. Hoje é `@NotNull Boolean`: o silêncio virou um 400 que diz
+qual campo falta.

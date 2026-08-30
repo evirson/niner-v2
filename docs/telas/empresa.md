@@ -186,3 +186,20 @@ no front, `Documentos.java` no back. Nunca limpar letras com um filtro só-dígi
 próximo login** (o login em duas voltas trata múltiplas empresas — `docs/telas/login-empresa.md`)
 e oferece o link direto para esta tela, *Dados da Empresa*, completar endereço, IE, IM, código
 IBGE e CNAE. Nada disso é obrigatório para salvar — quem cobra é a Conformidade Fiscal.
+
+---
+
+## ⚠️ 2026-08-29 (auditoria, 2ª leva) — renomear a empresa deixava o nome velho em cinco lugares
+
+O salvamento invalidava `['empresas']`, `['empresa', id]` e `['fiscal-conformidade']`. Faltavam
+**quatro** chaves que servem o mesmo dado:
+
+- `['empresas-permitidas']` — select da Entrada de Produtos e filtro da Devolução ao Fornecedor;
+- `['fiscal-empresas']` — Configuração Fiscal, Certificados, Documentos;
+- `['empresas-importacao']` — **mapeamento de colunas da Importação de Estoque** (apontar a coluna
+  para a empresa errada por confiar no rótulo custa estoque trocado);
+- `['eu']` — a **maior leitora do nome**: topbar, cabeçalho de **todos** os PDFs de relatório, guia
+  de transferência, comprovante de devolução e o nome impresso na **etiqueta**.
+
+⚠️ A `['eu']` ficou de fora até a rodada 5 — a correção da rodada 3 acrescentou as três primeiras e
+parou. É o padrão de sempre: invalidar **todas** as chaves derivadas, não só as óbvias.

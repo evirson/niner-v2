@@ -677,3 +677,43 @@ O `ResultadoEmissao` passou a carregar o `modelo` para o front saber qual abrir 
 ⚠️ **Nenhuma NF-e 55 foi autorizada pela SEFAZ até a data desta revisão** — o CSRT correto ainda não
 estava cadastrado. Os três defeitos acima estão corrigidos e cobertos por teste; o que falta é a
 confirmação de ponta a ponta.
+
+---
+
+## ⛔ 2026-08-29 (auditoria, 2ª leva) — o desconto do documento passou a ser conferido no SERVIDOR
+
+O PDV sempre resolveu o **preço** congelado do orçamento/OS lendo do banco. O **desconto** chegava
+cru em `req.descontoVenda()`, calculado no front (`Pdv.tsx`:
+`osPuxada?.valorDesconto ?? orcamentoPuxado?.valorDesconto ?? 0`).
+
+**O que isso permitia:** OS nº 12 aprovada com R$ 1.000 em peças e serviços e **R$ 100 de desconto**
+— total impresso e assinado pelo cliente, **R$ 900**. Um `POST /pdv/vendas` com
+`idOrdemServico: 12` e `descontoVenda: 0` fechava a venda em **R$ 1.000**, marcava a OS FATURADA
+apontando para ela, e **nada** — nem tela, nem log, nem teste — registrava que a loja cobrou R$ 100
+a mais do que aprovou. Bastava uma chamada direta à API, ou o front perder o estado.
+
+⚠️ O javadoc de `OrdemServicoService.exigirDescontoDentroDoTeto` já afirmava que o desconto
+*"viaja"* para o PDV: viajava **pelo front**, que P4 diz não ser barreira.
+
+**Como ficou:**
+- O piso é **proporcional ao que a venda levou** — o cliente pode levar menos do que o documento
+  aprovou (regra que já existia), e exigir o desconto cheio sobre metade dos itens transformaria uma
+  venda parcial legítima em 409.
+- **Só o piso é cobrado.** Dar mais desconto continua livre; quem faz isso é a loja abrindo mão de
+  margem, e o teto do tipo de carteira já limita o outro lado.
+- ⛔ **O documento VENCE o teto percentual.** O piso é congelado no documento e o teto é lido na hora
+  da venda: se o dono baixa o "% máximo de desconto" **depois** de o cliente assinar, os dois se
+  cruzam e a venda fica impossível por qualquer caminho — 400 pelo desconto aprovado, 409 pelo teto
+  — com as peças da OS **reservadas para sempre**. Honrar o papel que está na mão do cliente é a
+  única saída que não inventa dinheiro nem prende o operador.
+
+**Guardas:** `OrdemServicoTest.vendaDaOsNaoPodeIgnorarODescontoAprovado` e o par negativo
+`descontoDaOsMenorPeloQueFoiLevadoEhAceito` — sem ele, uma versão que recusasse toda venda parcial
+passaria no primeiro. ⭐ Sabotei a guarda e confirmei que o teste reprova (409 → 201) antes de dar
+por boa.
+
+### ⚠️ E o F5 era a última tela a ignorar `cfg_permite_qtd_decimal`
+`PuxarOrcamentoModal` tinha `true` cravado em cinco chamadas: num tenant com quantidade decimal
+**desligada**, a coluna mostrava `2,000` enquanto todo o resto do PDV mostra `2`, o operador
+conseguia digitar `1,5`, e a recusa só vinha do **servidor**, no fechamento da venda, com o cliente
+na frente.

@@ -653,3 +653,23 @@ só roda quando `numeroVenda` foi informado, não numa validação de request.
 Regressão: `DevolucaoProdutoCrudTest.naoDeixaDevolverVendaJaCancelada`. ⚠️ Ele **confere o banco**
 (nenhuma linha em `venda_devolucao`, estoque intacto), não só o 409 — um teste que valida o status
 passaria se a recusa viesse depois da gravação.
+
+---
+
+## ⚠️ 2026-08-29 (auditoria, 2ª leva) — o desconto voltava a ZERO quando o preço não casava
+
+O casamento do desconto é por **(variação, preço)** — a chave de linha. Mas o contrato antigo (request
+sem `precoUnitario`) manda o **preço MÉDIO** da venda, que, quando o mesmo SKU aparece duas vezes com
+preços diferentes, **não é nenhum dos preços do ledger**. O casamento saía vazio, o desconto virava
+**zero** e o vale voltava ao **bruto**: uma venda de 1×R$ 80 + 1×R$ 120 com R$ 20 de desconto gerava
+vale de **R$ 100** por mercadoria que o cliente pagou menos — e estornava comissão sobre o bruto.
+
+Era o resíduo do mesmo defeito que a leva anterior fechou nos outros caminhos. Hoje há fallback pela
+variação, **saindo da mesma população** que o preço médio usa: as duas contas precisam vir do mesmo
+conjunto, senão o desconto não corresponde ao preço.
+
+### ⚠️ E a tela ficou atrás da permissão
+"Gravar Devolução" é POST em `devolucao-produto` (⇒ INCLUIR) e não consultava `usePermissaoDaTela`.
+A varredura de RBAC das rodadas anteriores cobriu os **cadastros** e deixou as **rotinas
+operacionais** de fora — que é onde o 403 tardio custa mais caro: aqui o operador monta a devolução
+inteira, com o cliente na frente, antes de descobrir.

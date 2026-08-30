@@ -259,3 +259,16 @@ Nenhuma bloqueante.
 ## Métrica de sucesso
 
 Tempo de recebimento de 1–3 parcelas de crediário em menos de 30 segundos.
+
+---
+
+## ⚠️ 2026-08-29 (auditoria, 2ª leva) — o 403 chegava com o dinheiro já contado
+
+"Efetivar Recebimento" é POST em `recebimento-crediario` (⇒ INCLUIR) e a tela não consultava
+`usePermissaoDaTela`. O cenário é o pior da família: o operador com só *"Acessar"* localiza o
+crediário **com o cliente no balcão**, monta o split-tender (dinheiro + cartão), fecha o saldo — e o
+**403 chega no botão final**, com o dinheiro contado na mão.
+
+⭐ É o mesmo defeito que as rodadas anteriores fecharam em ~15 telas de cadastro. A varredura tinha
+coberto os **cadastros** e não as **rotinas operacionais**, que são justamente onde o 403 tardio
+custa mais caro.

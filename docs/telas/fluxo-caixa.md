@@ -240,3 +240,34 @@ de erro do relatório.
    `AberturaCaixaModal`; ver a pendência de UX em `docs/telas/abertura-caixa.md`).
 2. Contas a pagar **já baixadas** no banco de dev ficam fora do realizado (sem movimento). Aceito
    para dev; confirmar que não vira problema quando houver tenant real.
+
+---
+
+## ⚠️ 2026-08-29 (auditoria, 2ª leva) — o vale que virava dinheiro, a Projeção no passado e o fuso
+
+### ⛔ Vale-mercadoria NÃO é dinheiro na gaveta
+O resgate credita `caixa_detalhe` como qualquer carteira, e a **emissão do vale não lança nada**:
+não existe contrapartida. Venda de R$ 90 em espécie → devolução com vale de R$ 90 → venda seguinte
+paga com ele: o "Saldo real atual" dizia **R$ 180 com R$ 90 na gaveta**.
+
+⛔ **E a linha `Diferença` não denunciava**, porque `saldoFinal` e `saldoRealAtual` saem da **mesma
+soma inflada** — o mesmo modo de falha do fundo de caixa corrigido horas antes. Pior: é
+**cumulativo e permanente**, porque `exigirExcedenteSangrado` só cobra a carteira de abertura,
+então o crédito nunca sai do acumulado.
+
+⚠️ **A linha continua em `caixa_detalhe`, de propósito:** o fechamento agrupa por carteira e o
+operador confere o vale físico que recebeu. O que ela não pode é entrar num relatório que responde
+*"quanto dinheiro existe"*.
+
+### ⛔ A Projeção rodava sempre no período do REALIZADO
+A guarda `if (!gerado)` era **código morto**: `gerado` é justamente a condição que destrava as abas
+(o popup de filtros nasce aberto e cobre a tela), então quando o usuário consegue clicar numa aba
+ela já é `true`. A Projeção rodava num intervalo **inteiramente no passado**, com a tela dizendo
+*"Projeção a partir do saldo de hoje"* — e o lojista concluindo que não tinha nada a receber nem a
+pagar nos próximos 90 dias. A pergunta certa não é *"já gerou?"*, é *"o período ainda é o padrão?"*.
+
+### ⚠️ O fuso virou parâmetro
+`hoje` vinha de `FusoDaLoja` e o SQL tinha `'America/Sao_Paulo'` cravado nos nove pontos. Em Manaus
+(UTC−4), a venda em dinheiro das 23h30 caía no bucket do dia seguinte: o "Saldo real atual" mostrava
+menos do que a gaveta tem e a **Diferença acusava divergência inexistente** — o oposto do que a
+conciliação existe para fazer. Vale para AM/RO/RR/MT/MS (1 h/dia) e AC (2 h).

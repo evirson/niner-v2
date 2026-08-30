@@ -239,3 +239,26 @@ não-administrador, e é por isso que o defeito passou.
 
 ⚠️ **`fechamento-caixa` NÃO entrou nessa lista**: reabrir caixa continua exclusivo do administrador
 **por decisão dele**, tela a tela, e está documentado acima. Não é sobra, é regra.
+
+---
+
+## ⛔ 2026-08-29 (auditoria, 2ª leva) — salvar antes de carregar APAGAVA todas as permissões
+
+O estado da grade nasce `[]` e o `PUT` manda exatamente esse array. No servidor, `salvar` faz
+`DELETE FROM usuario_permissao WHERE id_usuario = ?` e **depois** itera a lista — que está vazia.
+
+**O que o usuário via:** um clique em **Salvar** enquanto a tela ainda dizia *"Carregando…"* — rede
+lenta, duplo clique no cadeado da lista, ou reflexo — devolvia **HTTP 200**, toast **VERDE**
+*"Permissões salvas."*, a grade aparecia **inteira desmarcada**, e o operador ficava sem acesso a
+nada (menu vazio, 403 em qualquer tela).
+
+⚠️ **E não há como desfazer:** o estado final é **indistinguível** do de quem nunca teve permissão.
+Ninguém sabe o que reconceder.
+
+⭐ `FiscalConfiguracaoForm` já tinha exatamente essa guarda, com o comentário explicando o porquê —
+esta era a irmã que ficou de fora.
+
+**Como ficou:** o botão espera a grade (`disabled={salvar.isPending || isLoading || grade.length === 0}`)
+**e o servidor recusa lista vazia** com 400. P4: a trava que vale é a do servidor. ⚠️ Tirar todas as
+permissões de propósito continua possível — manda-se a grade **completa** com as caixas desmarcadas,
+que é o que a tela envia; o que se recusa é a lista **vazia**, e a mensagem do 400 diz isso.

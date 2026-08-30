@@ -204,3 +204,26 @@ Nenhum.
 2. ✅ O corte dos gráficos em **top 7 + "Outros"** foi **mantido**, igual aos demais relatórios do
    sistema. ⚠️ O "Outros" não é enfeite: sem ele o total do gráfico deixaria de bater com o total do
    relatório, e nada avisaria.
+
+---
+
+## ⚠️ 2026-08-29 (auditoria, 2ª leva) — os 5 KPIs saíam EMPILHADOS, na tela e no PDF
+
+`className="relatorio-kpis"` — classe que **não existe** em `styles.css`. A do projeto é
+`relatorio-kpis-grid` (`display: grid; grid-template-columns: repeat(4, 1fr)`), usada pelo Relatório
+de Vendas e pelo de Movimentação.
+
+O lojista recebia "Total no período", "Em aberto", "Vencido", "A vencer" e "Pago no período" como
+**cinco cartões de largura total, um embaixo do outro**, empurrando a grade para fora da primeira
+dobra — enquanto os relatórios irmãos mostram a mesma faixa lado a lado. ⚠️ E como o **PDF é captura
+visual**, o arquivo entregue ao contador saía igual: quase uma folha inteira só de KPIs.
+
+⭐ Classe CSS inexistente **não dá erro em build, `tsc -b` nem teste** — só aparece abrindo a tela.
+Foi achada por script comparando classes usadas × declaradas, junto com as da Sangria de Caixa e da
+Minha Conta. ⚠️ São 5 cards numa grade de 4 colunas: o 5º fica sozinho na segunda linha, e vale
+conferir no navegador se isso é aceitável ou se a grade precisa de variante.
+
+### ⚠️ E o filtro de fornecedor empurrava o "Gerar Relatório" para fora
+A lista de sugestões usava `lista-sugestoes`, que também não existe: com 20 resultados, os botões
+empurravam "Plano de Contas", "Situação" e o rodapé para baixo — num modal de altura fixa, o
+operador ficava **sem como gerar** até apagar a busca.

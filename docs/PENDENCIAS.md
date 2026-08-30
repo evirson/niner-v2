@@ -22,12 +22,36 @@
 > novo: **NF-e 55 sem QR Code apagava a tela inteira** (papeleta e emissão) — corrigido e medido,
 > ver `docs/telas/papeleta-venda.md`; sobrou dele só **confirmar pelo PDV**, listado abaixo.
 >
-> **Hoje:** **27 itens abertos**, e a maioria é verificação no papel/navegador que só ele pode
+> **Revisão de 2026-08-29 (madrugada) — a SEGUNDA leva de cinco rodadas.** A energia caiu e o micro
+> reiniciou no meio da rodada 4 da primeira leva; ao retomar, ele pediu **mais cinco rodadas** dos
+> dois agentes em paralelo. Deu **~75 correções**, em 6 commits. ⭐ O achado que vale mais que a
+> lista: **metade do que as rodadas 3 e 5 encontraram eram defeitos das MINHAS correções das
+> rodadas anteriores** — meia correção, correção que troca o sintoma de lugar, correção que piora o
+> caso comum, correção que o diff prova e que não existe, e um guarda copiado sem `@Transactional`
+> que passou a **liberar sempre**. Entraram quatro pendências: **#65** (impressão térmica),
+> **#66** (ano da inutilização), **#67** (reimportar XML) e **#68** — o **limite conhecido**, que
+> vale ler antes de confiar no resto.
+>
+> **Hoje:** **31 itens abertos**, e a maioria é verificação no papel/navegador que só ele pode
 > fazer. Precisam de DECISÃO dele: **#28** (planos pagos, adiado por ele), **#40** e **#47**
-> (segurança e LGPD, que ele mandou guardar para cobrar depois). 🔔 E **#49** — ele prometeu as
-> **credenciais da NFS-e para a segunda-feira**.
+> (segurança e LGPD, que ele mandou guardar para cobrar depois), **#66** (inutilização de exercício
+> encerrado — pergunta para o contador). 🔔 E **#49** — ele prometeu as **credenciais da NFS-e para
+> a segunda-feira**.
 
-**Estado na data desta revisão:** 57 telas do ERP + 3 públicas · 1085 testes verdes, **de 0 a 5 pulados conforme a HORA** — o guard de meia-noite do `HorarioAcessoTest`, que se pula sozinho quando a janela pedida cruzaria a virada do dia (à meia-noite são 5 — 4 do horário de acesso e 1 do 2FA —, de manhã 0). ⚠️ Não é regressão, e o número oscilar é o mecanismo funcionando (tudo medido, não estimado; a contagem de telas é a de `docs/TELAS.md`, que declara a base).
+**Estado na data desta revisão (tudo medido agora, não estimado):** **57 telas do ERP + 3 públicas**
+(contagem de `docs/TELAS.md`, que declara a base) · **1052 testes verdes, 0 falhas** ·
+migrations até **V097** · `web/` sem erro de tipo (`tsc -b`).
+
+⚠️ **O total de testes aparece MENOR que o 1085 da revisão anterior, e eu não sei explicar a
+diferença** — não reconferi como aquele número foi contado, e não vou inventar a causa. O que posso
+afirmar é o que medi agora: `./mvnw clean test` termina com **exit 0**, e a soma dos relatórios do
+Surefire, arquivo a arquivo, dá **1052 testes / 0 falhas / 0 erros**. Nesta leva
+**entraram 7 testes novos**: 3 na Ordem de Serviço (desconto do documento, com o par negativo, e
+preço duplicado), 1 cruzando os três relatórios de comissão sobre a mesma massa, e 3 na importação
+de Contas a Receber — que **não tinha nenhum**, e foi por isso que um defeito que quebrava a
+importação inteira passou por uma suíte verde. ⚠️ Os "0 a 5 pulados conforme a hora" do guard de
+meia-noite continuam valendo — a última execução, já passada da meia-noite, deu **1 pulado**
+(`HorarioAcessoTest`), que é o mecanismo funcionando e não regressão.
 
 ---
 
