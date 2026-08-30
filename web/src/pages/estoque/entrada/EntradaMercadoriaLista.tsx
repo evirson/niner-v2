@@ -57,7 +57,12 @@ const ORIGENS: Record<string, string> = {
 export default function EntradaMercadoriaLista() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
-  const podeCancelar = usePermissaoDaTela('entrada-produtos-compra').excluir
+  // ⛔ Esta tela só consultava `.excluir` (auditoria 2026-08-29, rodada 3). Os dois "Nova entrada"
+  // ficavam livres — e este é o fluxo MAIS LONGO do ERP: o operador escolhe "Por XML", sobe a nota,
+  // resolve os produtos não localizados um a um, monta as parcelas de contas a pagar, e o 403 só
+  // chega no Confirmar Entrada. É onde o 403 tardio custa mais caro.
+  const acoes = usePermissaoDaTela('entrada-produtos-compra')
+  const podeCancelar = acoes.excluir
   const [pagina, setPagina] = useState(1)
   const [ordenarPor, setOrdenarPor] = useState<ColunaOrdenacaoEntrada>('dataMovimento')
   const [direcao, setDirecao] = useState<'ASC' | 'DESC'>('DESC')
@@ -168,9 +173,11 @@ export default function EntradaMercadoriaLista() {
           </div>
           <div className="topbar-acoes">
             <AjudaDaTela chaveTela="estoque.entrada.lista" />
-            <button type="button" className="btn" onClick={() => navigate('/entrada-produtos-compra/nova')}>
-              ＋ Nova entrada
-            </button>
+            {acoes.incluir && (
+              <button type="button" className="btn" onClick={() => navigate('/entrada-produtos-compra/nova')}>
+                ＋ Nova entrada
+              </button>
+            )}
             <BotaoFecharTela />
           </div>
         </div>
@@ -449,9 +456,11 @@ export default function EntradaMercadoriaLista() {
 
             <div className="ajuda-rodape">
 
-              <button type="button" className="btn ghost" onClick={() => navigate('/entrada-produtos-compra/nova')}>
-                ＋ Nova entrada
-              </button>
+              {acoes.incluir && (
+                <button type="button" className="btn ghost" onClick={() => navigate('/entrada-produtos-compra/nova')}>
+                  ＋ Nova entrada
+                </button>
+              )}
               <button type="button" className="btn" onClick={confirmarFiltros}>
                 Localizar
               </button>

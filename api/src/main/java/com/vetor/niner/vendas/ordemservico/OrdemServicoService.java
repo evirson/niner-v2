@@ -457,19 +457,24 @@ public class OrdemServicoService {
      * <p>⚠️ Recusar na ORIGEM, não no PDV: travar no fechamento da venda deixaria o operador com o
      * cliente na frente e uma OS impossível de faturar. Aqui ele ainda está montando a ordem.
      */
-    private static void exigirUmPrecoPorVariacao(List<ItemRequest> itens) {
+    private void exigirUmPrecoPorVariacao(List<ItemRequest> itens) {
         Map<Long, BigDecimal> precoPorVariacao = new HashMap<>();
         for (ItemRequest item : itens) {
-            if (item.precoVenda() == null) {
-                continue;
-            }
-            BigDecimal anterior = precoPorVariacao.putIfAbsent(item.idVariacao(), item.precoVenda());
-            if (anterior != null && anterior.compareTo(item.precoVenda()) != 0) {
+            // ⛔ Preço NULO não é "sem preço" — é o preço de CADASTRO (auditoria 2026-08-29, rodada
+            // 3, sobre a correção da rodada 1). Eu tinha escrito `continue` aqui, e isso reabria o
+            // buraco pela porta ao lado: linha A com `precoVenda: 100` (negociado) + linha B da
+            // MESMA variação com `precoVenda: null` (→ cadastro, R$ 150) passava pela trava e
+            // produzia exatamente a venda de 2 × um dos preços que ela existe para impedir.
+            // `gravarItens` e `exigirDescontoDentroDoTeto` já resolvem o null da mesma forma; a
+            // trava é que estava discordando das duas.
+            BigDecimal preco = item.precoVenda() != null ? item.precoVenda() : precoDeCadastro(item.idVariacao());
+            BigDecimal anterior = precoPorVariacao.putIfAbsent(item.idVariacao(), preco);
+            if (anterior != null && anterior.compareTo(preco) != 0) {
                 throw new ConflitoDadosException(
                         ("O mesmo item aparece duas vezes com preços diferentes (R$ %s e R$ %s). "
                                 + "Junte na mesma linha somando a quantidade, ou use o desconto da ordem "
                                 + "de serviço — senão a venda cobraria só um dos dois preços.")
-                                .formatted(anterior.toPlainString(), item.precoVenda().toPlainString()));
+                                .formatted(anterior.toPlainString(), preco.toPlainString()));
             }
         }
     }

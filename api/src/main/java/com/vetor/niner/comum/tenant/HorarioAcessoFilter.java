@@ -59,8 +59,11 @@ public class HorarioAcessoFilter extends OncePerRequestFilter {
             return;
         }
 
+        // ⚠️ O `eid` vai junto: a janela de horário é a da empresa em que a pessoa ESTÁ operando,
+        // não a do cadastro dela (auditoria 2026-08-29, rodada 3).
+        Object eid = token.getClaim("eid");
         var veredito = sessoes.avaliar(idUsuario, HorarioAcessoService.TOLERANCIA_MINUTOS_PADRAO,
-                token.getIssuedAt());
+                token.getIssuedAt(), eid == null ? null : ((Number) eid).longValue());
         switch (veredito) {
             case OK -> chain.doFilter(request, response);
             case FORA_DO_HORARIO -> recusar(response, HttpServletResponse.SC_FORBIDDEN,

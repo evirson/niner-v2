@@ -90,6 +90,11 @@ export default function EmpresaForm() {
       queryClient.invalidateQueries({ queryKey: ['empresas-permitidas'] })
       queryClient.invalidateQueries({ queryKey: ['fiscal-empresas'] })
       queryClient.invalidateQueries({ queryKey: ['empresas-importacao'] })
+      // ⛔ E a MAIOR leitora do nome ficou de fora na rodada 2 (rodada 3): `eu.empresa.nome`
+      // alimenta a topbar, o cabeçalho de TODOS os PDFs de relatório, a guia de transferência, o
+      // comprovante de devolução e o nome impresso na ETIQUETA. Renomear e gerar o PDF em seguida
+      // saía com o nome antigo; a topbar (que nunca desmonta) só se curava num refetch por foco.
+      queryClient.invalidateQueries({ queryKey: ['eu'] })
       navigate('/empresas', { state: { toast: { texto: 'Dados da empresa atualizados com sucesso.', tipo: 'sucesso' } } })
     },
     onError: (e: unknown) => setToast(e instanceof ApiError ? e.message : 'Não foi possível salvar a empresa.'),

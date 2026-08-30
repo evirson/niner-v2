@@ -54,9 +54,9 @@ function paginasVisiveis(atual: number, total: number): number[] {
  * então o botão não pede confirmação de "vai virar inativo": o resultado aparece no toast.
  */
 export default function PerfilFiscalLista() {
-  // â RBAC: o admin pode conceder sÃ³ "acessar" â sem isto o operador preenchia a ficha
-  // inteira e perdia tudo num 403 no Salvar (auditoria 2026-08-29). ConveniÃªncia de
-  // interface, nunca seguranÃ§a: quem recusa Ã© o @Acao do controller (P4).
+  // ⛔ RBAC: o admin pode conceder só "acessar" — sem isto o operador preenchia a ficha
+  // inteira e perdia tudo num 403 no Salvar (auditoria 2026-08-29). Conveniência de
+  // interface, nunca segurança: quem recusa é o @Acao do controller (P4).
   const acoes = usePermissaoDaTela('fiscal.perfis')
   const location = useLocation()
   const estadoRecebido = (

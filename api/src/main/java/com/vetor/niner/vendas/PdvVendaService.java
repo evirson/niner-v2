@@ -154,19 +154,30 @@ public class PdvVendaService {
                 .map(ItemResolvido::valorItem)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
+        DocumentoCongelado documento = req.idOrdemServico() != null ? ordemCongelada : orcamentoCongelado;
+        BigDecimal descontoDoDocumento = descontoMinimoDoDocumento(req, documento);
+
         BigDecimal percentualMaximoDesconto = buscarPercentualDescontoVenda();
         BigDecimal descontoMaximoPermitido = percentualMaximoDesconto.compareTo(BigDecimal.ZERO) > 0
                 ? valorTotalProdutos.multiply(percentualMaximoDesconto)
                         .divide(BigDecimal.valueOf(100), 2, RoundingMode.DOWN)
                 : BigDecimal.ZERO;
+        // ⛔ O DOCUMENTO VENCE O TETO (auditoria 2026-08-29, rodada 3, sobre a correção da rodada
+        // 1). O piso é congelado no orçamento/OS e o teto é lido na hora da venda — se o dono baixa
+        // o "% máximo de desconto" DEPOIS de o cliente assinar, os dois se cruzam e a venda fica
+        // impossível por qualquer caminho: pelo desconto aprovado leva 400 ("excede o máximo"),
+        // pelo teto leva 409 ("menor que o aprovado"), e as peças da OS ficam reservadas para
+        // sempre. Antes da correção a venda ao menos fechava — meio caminho teria ficado pior que
+        // nenhum. Honrar o papel que está na mão do cliente é a única saída que não inventa
+        // dinheiro nem prende o operador.
+        BigDecimal tetoEfetivo = descontoMaximoPermitido.max(descontoDoDocumento);
         BigDecimal descontoVenda = req.descontoVenda();
-        if (descontoVenda.compareTo(descontoMaximoPermitido.add(TOLERANCIA_SALDO)) > 0) {
+        if (descontoVenda.compareTo(tetoEfetivo.add(TOLERANCIA_SALDO)) > 0) {
             throw new IllegalArgumentException(
                     "Desconto informado (R$ " + descontoVenda + ") excede o máximo permitido de "
                             + percentualMaximoDesconto + "% (R$ " + descontoMaximoPermitido + ").");
         }
-        exigirDescontoDoDocumento(req,
-                req.idOrdemServico() != null ? ordemCongelada : orcamentoCongelado, descontoVenda);
+        exigirDescontoDoDocumento(req, documento, descontoVenda, descontoDoDocumento);
 
         BigDecimal valorLiquido = valorTotalProdutos.subtract(descontoVenda);
 
@@ -348,10 +359,17 @@ public class PdvVendaService {
      * <p>⚠️ Arredondamento para BAIXO no piso, mais {@code TOLERANCIA_SALDO}: um centavo de dízima
      * no rateio não pode recusar a venda com o cliente na frente.
      */
-    private void exigirDescontoDoDocumento(
-            EfetivarVendaRequest req, DocumentoCongelado documento, BigDecimal descontoVenda) {
+    /**
+     * O desconto que o documento aprovou para os itens que esta venda está levando — zero quando
+     * não há documento, quando ele não tem desconto, ou quando nenhuma linha dele foi marcada.
+     *
+     * <p>Separado da verificação porque o valor é usado <b>duas vezes</b>: como piso (aqui) e para
+     * levantar o teto percentual quando o parâmetro mudou depois do documento — ver
+     * {@code efetivarVenda}.
+     */
+    private BigDecimal descontoMinimoDoDocumento(EfetivarVendaRequest req, DocumentoCongelado documento) {
         if (documento.valorDesconto().signum() <= 0 || documento.totalItens().signum() <= 0) {
-            return;
+            return BigDecimal.ZERO;
         }
         boolean daOrdem = req.idOrdemServico() != null;
         BigDecimal levadoDoDocumento = BigDecimal.ZERO;
@@ -363,12 +381,19 @@ public class PdvVendaService {
             }
         }
         if (levadoDoDocumento.signum() <= 0) {
-            return;
+            return BigDecimal.ZERO;
         }
         BigDecimal proporcao = levadoDoDocumento.min(documento.totalItens())
                 .divide(documento.totalItens(), 6, RoundingMode.DOWN);
-        BigDecimal descontoMinimo = documento.valorDesconto().multiply(proporcao)
-                .setScale(2, RoundingMode.DOWN);
+        return documento.valorDesconto().multiply(proporcao).setScale(2, RoundingMode.DOWN);
+    }
+
+    private void exigirDescontoDoDocumento(EfetivarVendaRequest req, DocumentoCongelado documento,
+                                           BigDecimal descontoVenda, BigDecimal descontoMinimo) {
+        boolean daOrdem = req.idOrdemServico() != null;
+        if (descontoMinimo.signum() <= 0) {
+            return;
+        }
         if (descontoVenda.add(TOLERANCIA_SALDO).compareTo(descontoMinimo) < 0) {
             throw new ConflitoDadosException(
                     ("O desconto desta venda (R$ %s) é menor que o aprovado n%s nº %d para os itens levados "

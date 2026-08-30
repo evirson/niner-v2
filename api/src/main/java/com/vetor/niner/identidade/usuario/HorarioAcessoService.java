@@ -57,7 +57,14 @@ public class HorarioAcessoService {
      * já responde {@code true} de graça para admin e para quem não controla; pagar um SELECT de
      * UF por requisição para todo mundo trocaria um erro de 1 h em seis UFs por um custo em todas.
      */
-    private String fusoDoUsuario(long idUsuario) {
+    private String fusoDoUsuario(long idUsuario, Long idEmpresaDaSessao) {
+        // ⚠️ A empresa da SESSÃO vem primeiro (auditoria 2026-08-29, rodada 3): o produto tem
+        // `usuario_empresa` N:N e login com escolha de empresa, então o cadastro do usuário aponta
+        // uma empresa e ele pode estar operando em outra. O login (`ContaDoUsuario`) ainda não tem
+        // token e cai no cadastro, que ali é a única referência disponível.
+        if (idEmpresaDaSessao != null) {
+            return fusoDaLoja.da(idEmpresaDaSessao).getId();
+        }
         Long idEmpresa = jdbc.sql("""
                         SELECT id_empresa FROM usuario
                         WHERE id_tenant = plataforma.tenant_atual() AND id_usuario = ?
@@ -87,6 +94,12 @@ public class HorarioAcessoService {
      */
     @Transactional(readOnly = true)
     public boolean podeAcessarAgora(long idUsuario, int toleranciaMinutos) {
+        return podeAcessarAgora(idUsuario, toleranciaMinutos, null);
+    }
+
+    /** Variante que sabe a empresa da SESSÃO — ver `fusoDoUsuario`. */
+    @Transactional(readOnly = true)
+    public boolean podeAcessarAgora(long idUsuario, int toleranciaMinutos, Long idEmpresaDaSessao) {
         // A tolerância soma no domínio de TIMESTAMP (data + hora), nunca em `time`
         // puro: `time + interval` do Postgres "embrulha" na virada da meia-noite (ex.:
         // 23:50 + 15 min vira 00:05, um limite superior MENOR que o inferior, quebrando o
@@ -103,7 +116,7 @@ public class HorarioAcessoService {
         if (dispensadoDeJanela(idUsuario)) {
             return true;
         }
-        String fuso = fusoDoUsuario(idUsuario);
+        String fuso = fusoDoUsuario(idUsuario, idEmpresaDaSessao);
         return jdbc.sql("""
                         SELECT EXISTS (
                             SELECT 1 FROM usuario_horario_acesso h
@@ -137,13 +150,19 @@ public class HorarioAcessoService {
      */
     @Transactional(readOnly = true)
     public Long segundosRestantesTolerancia(long idUsuario, int toleranciaMinutos) {
+        return segundosRestantesTolerancia(idUsuario, toleranciaMinutos, null);
+    }
+
+    /** Variante que sabe a empresa da SESSÃO — ver `fusoDoUsuario`. */
+    @Transactional(readOnly = true)
+    public Long segundosRestantesTolerancia(long idUsuario, int toleranciaMinutos, Long idEmpresaDaSessao) {
         // ⚠️ O MESMO fuso de `podeAcessarAgora` — as duas contas precisam concordar, senão o anel
         // de contagem regressiva mostra tempo de sobra numa loja que o filtro já está expulsando
         // (é o javadoc acima que exige isso, para o aviso visual bater com o bloqueio real).
         if (dispensadoDeJanela(idUsuario)) {
             return null;
         }
-        String fuso = fusoDoUsuario(idUsuario);
+        String fuso = fusoDoUsuario(idUsuario, idEmpresaDaSessao);
         return jdbc.sql("""
                         SELECT GREATEST(0, CEIL(EXTRACT(EPOCH FROM (
                             ((now() AT TIME ZONE ?::text)::date + h.hora_fim

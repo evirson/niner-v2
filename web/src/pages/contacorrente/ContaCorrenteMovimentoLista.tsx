@@ -59,9 +59,9 @@ function formatarData(iso: string): string {
  * `financeiro.contacorrente` (PK de negócio), mesmo padrão de `cadastros.funcionario`.
  */
 export default function ContaCorrenteMovimentoLista() {
-  // â RBAC: o admin pode conceder sÃ³ "acessar" â sem isto o operador preenchia a ficha
-  // inteira e perdia tudo num 403 no Salvar (auditoria 2026-08-29). ConveniÃªncia de
-  // interface, nunca seguranÃ§a: quem recusa Ã© o @Acao do controller (P4).
+  // ⛔ RBAC: o admin pode conceder só "acessar" — sem isto o operador preenchia a ficha
+  // inteira e perdia tudo num 403 no Salvar (auditoria 2026-08-29). Conveniência de
+  // interface, nunca segurança: quem recusa é o @Acao do controller (P4).
   const acoes = usePermissaoDaTela('contas-corrente-movimento')
   const location = useLocation()
   const [busca, setBusca] = useState('')

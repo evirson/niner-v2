@@ -9,6 +9,8 @@ import {
   type OrcamentoResumo,
 } from '../../lib/orcamento'
 import { maiusculas } from '../../lib/texto'
+import { useQuery } from '@tanstack/react-query'
+import { buscarPermiteQtdDecimal } from '../../lib/configuracaoGeral'
 import {
   completarQuantidade,
   desmascararQuantidade,
@@ -56,8 +58,17 @@ export default function PuxarOrcamentoModal({
    * número no contrato com o PDV; o texto é só a digitação.
    */
   const [levandoTexto, setLevandoTexto] = useState<Record<number, string>>({})
+  /**
+   * ⛔ Era `true` CRAVADO nas cinco chamadas (auditoria 2026-08-29, rodada 3) — o F5 era a última
+   * tela do produto a ignorar `cfg_permite_qtd_decimal`. Num tenant com quantidade decimal
+   * DESLIGADA, a coluna mostrava `2,000` enquanto todo o resto do PDV mostra `2`, o operador
+   * conseguia digitar `1,5`, e a recusa só vinha do SERVIDOR no fechamento da venda, com o cliente
+   * na frente. É a irmã exata do defeito que a Devolução ao Fornecedor corrigiu em 21/08.
+   */
+  const { data: cfgQtdDecimal } = useQuery({ queryKey: ['permite-qtd-decimal'], queryFn: buscarPermiteQtdDecimal })
+  const permiteQtdDecimal = cfgQtdDecimal?.cfgPermiteQtdDecimal ?? true
   const levando: Levando = Object.fromEntries(
-    Object.entries(levandoTexto).map(([id, texto]) => [Number(id), desmascararQuantidade(texto, true)]),
+    Object.entries(levandoTexto).map(([id, texto]) => [Number(id), desmascararQuantidade(texto, permiteQtdDecimal)]),
   )
   const [erro, setErro] = useState<string | null>(null)
   const [buscando, setBuscando] = useState(false)
@@ -108,7 +119,7 @@ export default function PuxarOrcamentoModal({
       setOrcamento(o)
       const inicial: Record<number, string> = {}
       for (const item of o.itens) {
-        inicial[item.idVariacao] = formatarQuantidade(item.produtoInativo ? 0 : item.qtd, true)
+        inicial[item.idVariacao] = formatarQuantidade(item.produtoInativo ? 0 : item.qtd, permiteQtdDecimal)
       }
       setLevandoTexto(inicial)
     } catch (e) {
@@ -280,7 +291,7 @@ export default function PuxarOrcamentoModal({
                       </td>
                       {/* ⚠️ Formatado: `{i.qtd}` cru imprimia `2.5`, com PONTO, num sistema em que
                           todo número decimal aparece com vírgula. */}
-                      <td style={{ textAlign: 'right' }}>{formatarQuantidade(i.qtd, true)}</td>
+                      <td style={{ textAlign: 'right' }}>{formatarQuantidade(i.qtd, permiteQtdDecimal)}</td>
                       <td style={{ textAlign: 'right' }}>
                         <input
                           className="mono"
@@ -292,18 +303,18 @@ export default function PuxarOrcamentoModal({
                           onChange={(e) =>
                             setLevandoTexto((atual) => ({
                               ...atual,
-                              [i.idVariacao]: mascararQuantidade(e.target.value, true),
+                              [i.idVariacao]: mascararQuantidade(e.target.value, permiteQtdDecimal),
                             }))
                           }
                           onBlur={() =>
                             setLevandoTexto((atual) => {
-                              const completo = completarQuantidade(atual[i.idVariacao] ?? '', true)
+                              const completo = completarQuantidade(atual[i.idVariacao] ?? '', permiteQtdDecimal)
                               // Teto = quantidade orçada. Digitar mais não sobe — o teto é
                               // aplicado no BLUR (antes era a cada tecla, o que impedia digitar
                               // "10" quando o orçado era 12: o "1" já valia 1 e o "0" fazia 10,
                               // mas em "2,5" o teto batia no meio da digitação).
-                              const q = Math.min(desmascararQuantidade(completo, true), i.qtd)
-                              return { ...atual, [i.idVariacao]: formatarQuantidade(q, true) }
+                              const q = Math.min(desmascararQuantidade(completo, permiteQtdDecimal), i.qtd)
+                              return { ...atual, [i.idVariacao]: formatarQuantidade(q, permiteQtdDecimal) }
                             })
                           }
                         />

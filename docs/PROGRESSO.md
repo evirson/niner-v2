@@ -11,6 +11,77 @@ Registro cronológico das decisões e entregas. Atualizar a cada marco relevante
 
 ## Estado atual
 
+> ## 📌 2026-08-29 (8) — auditoria, rodada 3: a rodada que auditou as MINHAS correções
+>
+> Como ontem, a rodada que audita as correções anteriores foi a que mais rendeu: **das 13 coisas
+> encontradas, 9 eram defeitos das minhas próprias correções das rodadas 1 e 2**.
+>
+> ### ⛔ A pior: a importação de Contas a Receber ficou 100% quebrada
+>
+> Ao ligar `VALOR_JUROS` e `VALOR_DESCONTO`, acrescentei os dois à lista de **parâmetros** e esqueci
+> a lista de **colunas e o `VALUES`**: 9 colunas, 8 `?`, 10 parâmetros. Toda linha estouraria
+> *"The column index is out of range"*, o relatório sairia **0 importadas / 4.000 erros** — e, pior,
+> a venda-casca de cada grupo é criada **antes** do laço de parcelas e **não** é revertida: cada
+> importação deixaria vendas órfãs no banco.
+>
+> ⚠️ **Por que passou nos 1049 testes:** `ContasReceberImportador` **não tem teste nenhum**. É o
+> recurso inteiro sem cobertura — e a suíte verde deu a impressão contrária.
+>
+> ### ⛔ E a correção que o diff provava e que não existia
+>
+> Ao boxear os booleanos da configuração da plataforma, eu boxei o campo do **`ConfiguracaoResponse`**
+> (que é construído em Java e nunca é nulo) e deixei os **dois do request** primitivos — com um
+> `Boolean.TRUE.equals(...)` em volta que **compila por autoboxing e é no-op**. O diff parecia
+> provar a correção; ela não existia. É o mesmo modo de falha do `setXmlTemDuplicatas(false)` que
+> virou código morto em 2026-08-29 de manhã.
+>
+> ### As outras sete
+>
+> - **A trava de "um preço por variação" da OS ignorava a linha sem preço** — e preço nulo não é
+>   "sem preço", é o preço de **cadastro**. Linha A a R$ 100 (negociado) + linha B da mesma variação
+>   com `precoVenda: null` (→ R$ 150) passava pela trava e reabria exatamente o buraco que ela
+>   fecha. `gravarItens` e `exigirDescontoDentroDoTeto` já resolviam o nulo assim; a trava discordava
+>   das duas.
+> - **O piso de desconto podia ficar ACIMA do teto e travar o faturamento.** O piso é congelado no
+>   documento, o teto é lido na hora da venda: se o dono baixa o "% máximo de desconto" depois de o
+>   cliente assinar, a OS fica impossível de faturar por qualquer caminho — 400 pelo desconto
+>   aprovado, 409 pelo teto — e as peças ficam reservadas para sempre. **Antes da correção a venda
+>   ao menos fechava**; meio caminho teria ficado pior que nenhum. Hoje o documento vence o teto.
+> - **A comparação de fuso era de `ZoneId`, não de offset** — e meu comentário afirmava "seis UFs".
+>   Só 11 UFs mapeiam para `America/Sao_Paulo`; BA, CE, PE, PB, PI, RN, AL, SE, MA, PA, AP e TO têm
+>   identificador próprio com o **mesmo UTC−3**. As doze pagariam três consultas por requisição
+>   para chegar ao resultado que a consulta já tinha dado, enquanto o comentário jurava custo zero.
+>   Comparar o **offset do instante** também sobrevive à volta do horário de verão.
+> - **A janela de horário usava a empresa do CADASTRO, não a da sessão** — reabrindo o mesmo defeito
+>   uma linha adiante: o produto tem `usuario_empresa` N:N e login com escolha de empresa, então o
+>   operador cujo cadastro aponta a matriz em SP, logado na filial de Manaus, seria expulso duas
+>   horas antes. O `eid` do JWT agora viaja até lá.
+> - **Dois "＋ Novo" ficaram fora do RBAC** — e eram os de maior tráfego: o de Contas a Pagar mora
+>   no popup de filtros que **abre sozinho** na entrada da tela, e o de Entrada de Produtos é o
+>   começo do **fluxo mais longo do ERP** (XML → produtos não localizados → parcelas → Confirmar),
+>   onde o 403 tardio custa mais caro. Mais o "＋ Novo Cliente" do PDV (403 no meio da venda), o
+>   quick-create do Plano de Contas e a lista de Certificados inteira.
+> - **`['eu']` ficou fora das invalidações da empresa** — e é a maior leitora do nome: topbar,
+>   cabeçalho de **todos** os PDFs de relatório, guia de transferência, comprovante de devolução e
+>   o nome impresso na **etiqueta**.
+> - **O "Ver Listagem" continuava empilhando o histórico**, recriando a armadilha que o ✕ ao lado
+>   tinha acabado de perder — com o comentário da correção descrevendo o problema logo acima.
+> - **Perfil fiscal INATIVADO sumia do select do produto** enquanto continuava valendo na nota: o
+>   `/opcoes` filtra `ativo = true` e a exclusão **inativa** quando há produto apontando. O campo
+>   mostrava "Não informado" e a NFC-e seguia calculada pelo perfil — a tela mentia na direção que
+>   faz o operador "consertar" escolhendo outro.
+> - **O F5 do PDV era a última tela a ignorar `cfg_permite_qtd_decimal`** (`true` cravado em cinco
+>   chamadas): num tenant com decimal desligado, a coluna mostrava `2,000`, o operador digitava
+>   `1,5` e a recusa só vinha do servidor no fechamento, com o cliente na frente.
+> - E **15 arquivos com o comentário do RBAC corrompido** (mojibake) pelo script que fez a
+>   transformação em massa — não muda comportamento, mas é doc ilegível no lugar onde a próxima
+>   pessoa vai procurar o porquê.
+>
+> ⭐ **A lição, de novo e medida:** *corrigir uma ponta e não varrer as outras* continua sendo o
+> defeito mais comum das minhas correções. E duas das nove só existiam porque **o diff parecia
+> provar** o que não estava feito.
+
+
 > ## 📌 2026-08-29 (7) — auditoria, rodada 2: os cadastros que não podiam ser excluídos nem inativados
 >
 > Rodada nas áreas que a rodada 1 declarou **não** ter coberto (identidade, cadastros, catálogo,

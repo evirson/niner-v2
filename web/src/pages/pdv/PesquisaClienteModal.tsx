@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useState } from 'react'
 import { buscarClientesPdv, type PdvCliente } from '../../lib/pdv'
 import ClienteFormModal from './ClienteFormModal'
+import { usePermissaoDaTela } from '../../lib/usePermissaoDaTela'
 
 /**
  * F6 — Cliente da Venda (2026-07-28): busca por nome, CPF/CNPJ ou celular via
@@ -17,6 +18,7 @@ export default function PesquisaClienteModal({
 }) {
   const [busca, setBusca] = useState('')
   const [modalNovoClienteAberto, setModalNovoClienteAberto] = useState(false)
+  const podeCriarCliente = usePermissaoDaTela('clientes').incluir
 
   const { data: resultados, isLoading, isError } = useQuery({
     queryKey: ['pdv-clientes', busca],
@@ -42,9 +44,14 @@ export default function PesquisaClienteModal({
             value={busca}
             onChange={(e) => setBusca(e.target.value.toUpperCase())}
           />
-          <button type="button" className="btn ghost" onClick={() => setModalNovoClienteAberto(true)}>
-            ＋ Novo Cliente
-          </button>
+          {/* ⛔ O "＋" de modal embutido é o mesmo defeito noutro lugar (auditoria 2026-08-29,
+              rodada 3): o cadastro rápido daqui é um POST em `clientes`, então quem não recebeu
+              `clientes.incluir` levava 403 NO MEIO DA VENDA, com o cliente no balcão. */}
+          {podeCriarCliente && (
+            <button type="button" className="btn ghost" onClick={() => setModalNovoClienteAberto(true)}>
+              ＋ Novo Cliente
+            </button>
+          )}
         </div>
 
         <div className="table-wrap" style={{ marginTop: 16, maxHeight: 360 }}>

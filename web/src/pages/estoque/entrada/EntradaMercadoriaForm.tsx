@@ -1340,7 +1340,15 @@ export default function EntradaMercadoriaForm() {
                 >
                   Emitir Etiquetas desta Nota
                 </Link>
-                <button type="button" className="btn" onClick={() => navigate('/entrada-produtos-compra')}>
+                {/* ⚠️ `replace: true` (auditoria 2026-08-29, rodada 3). O ✕ desta tela deixou de
+                    empilhar, mas este botão continuava criando a MESMA armadilha que o comentário
+                    lá em cima descreve: Ver Listagem (push) → ✕ da lista (`navigate(-1)`) → de
+                    volta à tela "entrada gravada", com os dois botões de novo. */}
+                <button
+                  type="button"
+                  className="btn"
+                  onClick={() => navigate('/entrada-produtos-compra', { replace: true })}
+                >
                   Ver Listagem
                 </button>
                 <button

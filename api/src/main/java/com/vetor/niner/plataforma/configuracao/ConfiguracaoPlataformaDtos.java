@@ -21,7 +21,7 @@ public final class ConfiguracaoPlataformaDtos {
     public record ConfiguracaoResponse(
             boolean smtpHabilitado, String smtpHost, Integer smtpPorta, String smtpUsuario,
             boolean smtpSenhaDefinida, boolean smtpStarttls, String smtpRemetenteEmail, String smtpRemetenteNome,
-            Boolean backupHabilitado, LocalTime backupHora, int backupRetencaoDias,
+            boolean backupHabilitado, LocalTime backupHora, int backupRetencaoDias,
             OffsetDateTime backupUltimoEm, String backupUltimoStatus, String backupUltimoDetalhe,
             boolean mpAccessTokenDefinido, boolean mpWebhookSecretDefinido, String mpNotificationUrl,
             OffsetDateTime atualizadoEm) {
@@ -33,7 +33,14 @@ public final class ConfiguracaoPlataformaDtos {
      * porque apagar credencial por engano derruba cobrança ou e-mail sem aviso.
      */
     public record AtualizarConfiguracaoRequest(
-            boolean smtpHabilitado,
+            // ⚠️ `Boolean`, não primitivo (auditoria 2026-08-29): chave ausente no JSON resolvia
+            // para `false` em silêncio — desligar SMTP ou backup por omissão, não por decisão.
+            // ⛔ E a rodada 3 pegou esta correção pela metade: na rodada 2 eu boxei o campo do
+            // `ConfiguracaoResponse` (que é construído em Java e nunca é nulo) e deixei os DOIS do
+            // request primitivos, com um `Boolean.TRUE.equals(...)` em volta que compila por
+            // autoboxing e é NO-OP. O diff parecia provar a correção; ela não existia. É o mesmo
+            // modo de falha do `setXmlTemDuplicatas(false)` que virou código morto.
+            Boolean smtpHabilitado,
             @Size(max = 200) String smtpHost,
             @Min(1) @Max(65535) Integer smtpPorta,
             @Size(max = 200) String smtpUsuario,
@@ -41,7 +48,7 @@ public final class ConfiguracaoPlataformaDtos {
             Boolean smtpStarttls,
             @Email @Size(max = 200) String smtpRemetenteEmail,
             @Size(max = 120) String smtpRemetenteNome,
-            boolean backupHabilitado,
+            Boolean backupHabilitado,
             LocalTime backupHora,
             @Min(1) @Max(3650) Integer backupRetencaoDias,
             @Size(max = 400) String mpAccessToken,

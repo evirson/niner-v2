@@ -10,6 +10,7 @@ import LinhaGrid from '../../components/LinhaGrid'
 import PlanoContasModal from '../../components/PlanoContasModal'
 import Toast from '../../components/Toast'
 import { ApiError } from '../../lib/api'
+import { usePermissaoDaTela } from '../../lib/usePermissaoDaTela'
 import { buscarConfiguracaoTela, paraMapa, type ConfiguracaoCampo } from '../../lib/configuracaoTela'
 import { useEu } from '../../lib/eu'
 import { aoTeclarEnterNoFormulario } from '../../lib/formularios'
@@ -105,6 +106,7 @@ function validarCampo(
 }
 
 export default function FornecedorForm({ somenteLeitura = false }: { somenteLeitura?: boolean }) {
+  const podeCriarPlanoContas = usePermissaoDaTela('planos-contas').incluir
   const { id } = useParams()
   const editando = Boolean(id)
   const navigate = useNavigate()
@@ -345,14 +347,18 @@ export default function FornecedorForm({ somenteLeitura = false }: { somenteLeit
                   onBlur={() => setErros((atual) => ({ ...atual, idPlanoContas: validarCampo('idPlanoContas', form, mapaConfig) }))}
                 />
                 {/* fora da ordem de tabulação, como o "+ Nova categoria" do cliente */}
-                <button
-                  type="button"
-                  tabIndex={-1}
-                  className="btn ghost"
-                  onClick={() => setModalPlanoAberto(true)}
-                >
-                  ＋ Novo
-                </button>
+                {/* ⛔ O quick-create cria uma conta do PLANO DE CONTAS, não um fornecedor — a
+                    permissão que vale é a daquela tela (auditoria 2026-08-29, rodada 3). */}
+                {podeCriarPlanoContas && (
+                  <button
+                    type="button"
+                    tabIndex={-1}
+                    className="btn ghost"
+                    onClick={() => setModalPlanoAberto(true)}
+                  >
+                    ＋ Novo
+                  </button>
+                )}
               </div>
               {erros.idPlanoContas && <p className="erro-campo">{erros.idPlanoContas}</p>}
             </div>

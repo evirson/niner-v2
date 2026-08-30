@@ -655,6 +655,19 @@ export default function ProdutoForm({ somenteLeitura = false }: { somenteLeitura
                 onChange={(e) => setForm((f) => ({ ...f, idPerfilFiscal: e.target.value ? Number(e.target.value) : null }))}
               >
                 <option value="">Não informado</option>
+                {/* ⛔ O perfil INATIVADO continua valendo na nota, e sumia da tela (auditoria
+                    2026-08-29, rodada 3). `/fiscal/perfis/opcoes` filtra `ativo = true`, e
+                    `PerfilFiscalService.excluir` INATIVA em vez de excluir quando há produto
+                    apontando — comportamento documentado. Resultado: excluir o perfil "REVENDA
+                    MONOFÁSICO" fazia todo produto que o usa abrir com "Não informado", enquanto a
+                    NFC-e continuava sendo calculada por ele. A tela mentia, e mentia na direção
+                    que faz o operador "consertar" escolhendo outro perfil. */}
+                {form.idPerfilFiscal != null
+                  && !(perfisFiscais ?? []).some((p) => p.idPerfilFiscal === form.idPerfilFiscal) && (
+                  <option value={form.idPerfilFiscal}>
+                    Perfil nº {form.idPerfilFiscal} (inativo — continua valendo nas notas)
+                  </option>
+                )}
                 {(perfisFiscais ?? []).map((p) => (
                   <option key={p.idPerfilFiscal} value={p.idPerfilFiscal}>
                     {p.nome}

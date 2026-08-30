@@ -17,6 +17,7 @@ import {
 import { listarEmpresasFiscal } from '../../lib/fiscalConfiguracao'
 import { formatarSoData } from '../../lib/datas'
 import { mascararCpfCnpj } from '../../lib/masks'
+import { usePermissaoDaTela } from '../../lib/usePermissaoDaTela'
 
 const BADGE_POR_SITUACAO: Record<SituacaoCertificado, { rotulo: string; classe: string }> = {
   ATIVO: { rotulo: 'Ativo', classe: 'badge-sucesso' },
@@ -45,6 +46,9 @@ const FINALIDADE_ROTULO: Record<string, string> = {
  * imutável, F7). Write-only: o formulário de envio nunca mostra o arquivo nem a senha de volta.
  */
 export default function FiscalCertificadoLista() {
+  // ⛔ Tela governada (`fiscal.certificados`) e o item de menu não é adminOnly, mas ela ficou fora
+  // do RBAC das rodadas 1 e 2 (auditoria 2026-08-29, rodada 3).
+  const acoes = usePermissaoDaTela('fiscal.certificados')
   const queryClient = useQueryClient()
   const { idEmpresa: idEmpresaSessao } = useAuth()
   const [idEmpresa, setIdEmpresa] = useState<number | null>(null)
@@ -97,9 +101,11 @@ export default function FiscalCertificadoLista() {
           </div>
           <div className="topbar-acoes">
             <AjudaDaTela chaveTela="fiscal.certificado.tela" />
-            <button type="button" className="btn" disabled={idEmpresa === null} onClick={() => setUploadAberto(true)}>
-              ＋ Enviar certificado
-            </button>
+            {acoes.incluir && (
+              <button type="button" className="btn" disabled={idEmpresa === null} onClick={() => setUploadAberto(true)}>
+                ＋ Enviar certificado
+              </button>
+            )}
             <BotaoFecharTela />
           </div>
         </div>

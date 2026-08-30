@@ -59,9 +59,9 @@ function paginasVisiveis(atual: number, total: number): number[] {
  * de campos (os campos realmente obrigatórios continuam estruturalmente NOT NULL).
  */
 export default function PlanoContasLista() {
-  // â RBAC: o admin pode conceder sÃ³ "acessar" â sem isto o operador preenchia a ficha
-  // inteira e perdia tudo num 403 no Salvar (auditoria 2026-08-29). ConveniÃªncia de
-  // interface, nunca seguranÃ§a: quem recusa Ã© o @Acao do controller (P4).
+  // ⛔ RBAC: o admin pode conceder só "acessar" — sem isto o operador preenchia a ficha
+  // inteira e perdia tudo num 403 no Salvar (auditoria 2026-08-29). Conveniência de
+  // interface, nunca segurança: quem recusa é o @Acao do controller (P4).
   const acoes = usePermissaoDaTela('planos-contas')
   const location = useLocation()
   const [busca, setBusca] = useState('')

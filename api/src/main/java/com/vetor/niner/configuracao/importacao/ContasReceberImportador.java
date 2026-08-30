@@ -195,8 +195,9 @@ public class ContasReceberImportador implements ImportadorDeTabela {
                     savepoints.executarSemRetorno(() -> jdbc.sql("""
                                     INSERT INTO contas_receber
                                         (id_tenant, id_venda, id_carteira, numero_parcela, data_vencimento,
-                                         data_recebimento, valor_receber, valor_recebido, documento_recebido)
-                                    VALUES (plataforma.tenant_atual(), ?, ?, ?, ?, ?, ?, ?, ?)
+                                         data_recebimento, valor_receber, valor_juros, valor_desconto,
+                                         valor_recebido, documento_recebido)
+                                    VALUES (plataforma.tenant_atual(), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                                     """)
                             .params(idVenda, idCarteira, r.numeroParcela(), r.dataVencimento(), r.dataRecebimento(),
                                     r.valorReceber(), r.valorJuros(), r.valorDesconto(),

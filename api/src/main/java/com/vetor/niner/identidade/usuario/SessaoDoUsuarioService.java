@@ -49,7 +49,7 @@ public class SessaoDoUsuarioService {
      *                  inteiro se algum emissor parasse de mandá-lo
      */
     @Transactional(readOnly = true)
-    public Veredito avaliar(long idUsuario, int toleranciaMinutos, Instant emitidoEm) {
+    public Veredito avaliar(long idUsuario, int toleranciaMinutos, Instant emitidoEm, Long idEmpresaDaSessao) {
         Estado e = jdbc.sql("""
                         SELECT u.ativo,
                                u.sessao_valida_desde,
@@ -66,11 +66,17 @@ public class SessaoDoUsuarioService {
                                                   + (? * interval '1 minute'))
                                )) AS dentro_da_janela
                         FROM usuario u
+                        -- ⚠️ A empresa da SESSÃO (claim `eid`), com a do cadastro só de reserva
+                        -- (auditoria 2026-08-29, rodada 3). O produto tem `usuario_empresa` N:N e
+                        -- login com escolha de empresa: um operador cujo cadastro aponta a matriz
+                        -- em SP, logado na filial de Manaus, teria a janela avaliada no fuso de SP
+                        -- — que é exatamente o defeito que esta correção veio fechar, reaberto uma
+                        -- linha adiante. A referência do projeto é `FusoDaLoja.daSessao`.
                         LEFT JOIN empresa emp
-                               ON emp.id_empresa = u.id_empresa AND emp.id_tenant = u.id_tenant
+                               ON emp.id_empresa = COALESCE(?, u.id_empresa) AND emp.id_tenant = u.id_tenant
                         WHERE u.id_usuario = ? AND u.id_tenant = plataforma.tenant_atual()
                         """)
-                .params(toleranciaMinutos, idUsuario)
+                .params(toleranciaMinutos, idEmpresaDaSessao, idUsuario)
                 .query((rs, n) -> new Estado(rs.getBoolean("ativo"),
                         rs.getObject("sessao_valida_desde", OffsetDateTime.class),
                         rs.getBoolean("dentro_da_janela"),
@@ -104,13 +110,24 @@ public class SessaoDoUsuarioService {
         // às 16:00 do relógio da loja já são 18:00 em Brasília: o operador era expulso DUAS HORAS
         // antes do fim do expediente, com venda aberta, e o login não o deixava voltar.
         //
-        // ⚠️ A recomputação só acontece nas UFs cujo fuso NÃO é o de Brasília — AM, RO, RR, MT, MS
+        // ⚠️ A recomputação só acontece nas UFs cujo relógio realmente difere — AM, RO, RR, MT, MS
         // (1 h) e AC (2 h). Para o resto do país, e para quem nem controla horário, o custo desta
-        // correção é exatamente zero: nenhuma consulta a mais numa rotina que roda em TODA
-        // requisição autenticada. Trocar um erro de 1 h em seis UFs por um SELECT por requisição
-        // em todas seria um mau negócio.
-        if (!e.dispensado() && !FusoDaUf.deOuPadrao(e.uf()).equals(FusoDaUf.PADRAO)) {
-            return horarioAcesso.podeAcessarAgora(idUsuario, toleranciaMinutos)
+        // correção é zero: nenhuma consulta a mais numa rotina que roda em TODA requisição
+        // autenticada. Trocar um erro de 1 h em seis UFs por um SELECT por requisição em todas
+        // seria um mau negócio.
+        //
+        // ⛔ A comparação é de OFFSET, não de `ZoneId` (rodada 3, sobre a correção da rodada 2).
+        // Escrevi `.equals(FusoDaUf.PADRAO)` e afirmei "seis UFs" no comentário: só 11 UFs mapeiam
+        // para `America/Sao_Paulo`, e BA, CE, PE, PB, PI, RN, AL, SE, MA, PA, AP e TO têm
+        // identificador PRÓPRIO com o MESMO UTC−3 — as doze pagariam três consultas por
+        // requisição para chegar ao resultado que a consulta acima já tinha dado, enquanto o
+        // comentário jurava custo zero. Comparar o offset do instante também sobrevive à volta do
+        // horário de verão, que a lista fixa de seis UFs não sobreviveria.
+        java.time.Instant agora = java.time.Instant.now();
+        boolean mesmoRelogio = FusoDaUf.deOuPadrao(e.uf()).getRules().getOffset(agora)
+                .equals(FusoDaUf.PADRAO.getRules().getOffset(agora));
+        if (!e.dispensado() && !mesmoRelogio) {
+            return horarioAcesso.podeAcessarAgora(idUsuario, toleranciaMinutos, idEmpresaDaSessao)
                     ? Veredito.OK : Veredito.FORA_DO_HORARIO;
         }
         return e.dentroDaJanela() ? Veredito.OK : Veredito.FORA_DO_HORARIO;

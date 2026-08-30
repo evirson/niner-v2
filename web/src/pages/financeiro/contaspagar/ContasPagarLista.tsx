@@ -63,9 +63,9 @@ function formatarData(iso: string | null): string {
  * definitiva).
  */
 export default function ContasPagarLista() {
-  // â RBAC: o admin pode conceder sÃ³ "acessar" â sem isto o operador preenchia a ficha
-  // inteira e perdia tudo num 403 no Salvar (auditoria 2026-08-29). ConveniÃªncia de
-  // interface, nunca seguranÃ§a: quem recusa Ã© o @Acao do controller (P4).
+  // ⛔ RBAC: o admin pode conceder só "acessar" — sem isto o operador preenchia a ficha
+  // inteira e perdia tudo num 403 no Salvar (auditoria 2026-08-29). Conveniência de
+  // interface, nunca segurança: quem recusa é o @Acao do controller (P4).
   const acoes = usePermissaoDaTela('contas-pagar')
   const navigate = useNavigate()
   const location = useLocation()
@@ -523,9 +523,15 @@ export default function ContasPagarLista() {
             </div>
 
             <div className="ajuda-rodape">
-              <button type="button" className="btn ghost" onClick={() => navigate('/contas-pagar/nova')}>
-                ＋ Nova Conta a Pagar
-              </button>
+              {/* ⛔ O SEGUNDO botão, e o de maior tráfego (auditoria 2026-08-29, rodada 3): a
+                  guarda da rodada 1 pegou só o da topbar, e este popup de filtros ABRE SOZINHO na
+                  entrada da tela — é a primeira coisa oferecida, antes do Localizar. Sem a guarda
+                  aqui, a correção não cobria justamente o caminho que o operador usa. */}
+              {acoes.incluir && (
+                <button type="button" className="btn ghost" onClick={() => navigate('/contas-pagar/nova')}>
+                  ＋ Nova Conta a Pagar
+                </button>
+              )}
               <button type="button" className="btn" onClick={confirmarFiltros}>
                 Localizar
               </button>
