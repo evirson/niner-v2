@@ -450,13 +450,6 @@ public class FiscalConfigService {
 
     // ---------------------------------------------------------------- auxiliares
 
-    private static void exigirAdmin(Jwt jwt) {
-        List<String> roles = jwt.getClaimAsStringList("roles");
-        if (roles == null || !roles.contains("ADMIN")) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN,
-                    "Apenas administradores podem acessar a configuração fiscal.");
-        }
-    }
 
     private static boolean vazio(String s) {
         return s == null || s.isBlank();

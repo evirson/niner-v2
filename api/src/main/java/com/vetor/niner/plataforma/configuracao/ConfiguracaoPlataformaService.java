@@ -80,16 +80,25 @@ public class ConfiguracaoPlataformaService {
 
         jdbc.sql("""
                         UPDATE plataforma.configuracao_plataforma SET
-                            smtp_habilitado = ?, smtp_host = ?, smtp_porta = ?, smtp_usuario = ?,
+                            -- ⚠️ COALESCE nos booleanos (auditoria 2026-08-29, rodada 5). Trocar o tipo
+                            -- para `Boolean` na rodada 3 NÃO mudou o comportamento que o comentário
+                            -- do DTO dizia ter consertado: o `Boolean.TRUE.equals()` do serviço
+                            -- continuava transformando `null` em `false`. Um PUT parcial (script de
+                            -- provisionamento, ou um campo que o front deixe de mandar numa
+                            -- refatoração) respondia 200 e DESLIGAVA o backup noturno, com a
+                            -- resposta confirmando `false`. Os campos irmãos do mesmo UPDATE
+                            -- (`backup_hora`, `backup_retencao_dias`) já mantinham o valor por
+                            -- COALESCE — os dois booleanos eram os únicos que apagavam por omissão.
+                            smtp_habilitado = COALESCE(CAST(? AS boolean), smtp_habilitado), smtp_host = ?, smtp_porta = ?, smtp_usuario = ?,
                             -- Parâmetro comparado com NULL/'' precisa de CAST explícito: sem ele o
                             -- Postgres não infere o tipo e recusa o comando inteiro.
                             smtp_senha_cifrada = CASE
                                 WHEN CAST(? AS text) IS NULL THEN smtp_senha_cifrada  -- em branco: mantém
                                 WHEN CAST(? AS text) = ''    THEN NULL                -- LIMPAR: apaga
                                 ELSE CAST(? AS text) END,
-                            smtp_starttls = ?, smtp_remetente_email = ?,
+                            smtp_starttls = COALESCE(CAST(? AS boolean), smtp_starttls), smtp_remetente_email = ?,
                             smtp_remetente_nome = COALESCE(CAST(? AS text), smtp_remetente_nome),
-                            backup_habilitado = ?,
+                            backup_habilitado = COALESCE(CAST(? AS boolean), backup_habilitado),
                             backup_hora = COALESCE(CAST(? AS time), backup_hora),
                             backup_retencao_dias = COALESCE(CAST(? AS smallint), backup_retencao_dias),
                             mp_access_token_cifrado = CASE
@@ -105,13 +114,13 @@ public class ConfiguracaoPlataformaService {
                             atualizado_por = ?
                         WHERE id = 1
                         """)
-                .params(Boolean.TRUE.equals(req.smtpHabilitado()), vazioParaNulo(req.smtpHost()), req.smtpPorta(),
+                .params(req.smtpHabilitado(), vazioParaNulo(req.smtpHost()), req.smtpPorta(),
                         vazioParaNulo(req.smtpUsuario()),
                         cifrarOuMarcador(req.smtpSenha()), cifrarOuMarcador(req.smtpSenha()),
                         cifrarOuMarcador(req.smtpSenha()),
-                        Boolean.TRUE.equals(req.smtpStarttls()), vazioParaNulo(req.smtpRemetenteEmail()),
+                        req.smtpStarttls(), vazioParaNulo(req.smtpRemetenteEmail()),
                         vazioParaNulo(req.smtpRemetenteNome()),
-                        Boolean.TRUE.equals(req.backupHabilitado()), req.backupHora(), req.backupRetencaoDias(),
+                        req.backupHabilitado(), req.backupHora(), req.backupRetencaoDias(),
                         cifrarOuMarcador(req.mpAccessToken()), cifrarOuMarcador(req.mpAccessToken()),
                         cifrarOuMarcador(req.mpAccessToken()),
                         cifrarOuMarcador(req.mpWebhookSecret()), cifrarOuMarcador(req.mpWebhookSecret()),

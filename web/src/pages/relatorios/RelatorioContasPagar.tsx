@@ -291,7 +291,7 @@ export default function RelatorioContasPagar() {
             {/* ⚠️ Cinco números SEPARADOS: Vencido + A vencer = Em aberto, e nunca o Total.
                 Agregá-los num só faria o lojista somar duas vezes o que deve. */}
             <p className="section-label">Resumo do Período</p>
-            <div className="relatorio-kpis">
+            <div className="relatorio-kpis-grid">
               <div className="card relatorio-kpi-card">
                 <p className="muted">Total no período</p>
                 <strong>{moeda(data.kpis.totalPeriodo)}</strong>

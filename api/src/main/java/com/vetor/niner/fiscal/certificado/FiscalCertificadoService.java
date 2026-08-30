@@ -362,10 +362,4 @@ public class FiscalCertificadoService {
         }
     }
 
-    private static void exigirAdmin(Jwt jwt) {
-        List<String> roles = jwt.getClaimAsStringList("roles");
-        if (roles == null || !roles.contains("ADMIN")) {
-            throw new ResponseStatusException(FORBIDDEN, "Apenas ADMIN pode gerenciar o certificado digital.");
-        }
-    }
 }

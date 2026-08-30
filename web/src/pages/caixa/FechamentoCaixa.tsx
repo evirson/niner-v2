@@ -17,6 +17,7 @@ import { useEu } from '../../lib/eu'
 import { completarMoeda, desmascararMoeda, formatarMoeda, mascararMoeda } from '../../lib/masks'
 import FechamentoCaixaPreviewModal from './FechamentoCaixaPreviewModal'
 import LancamentosCarteiraModal from './LancamentosCarteiraModal'
+import { usePermissaoDaTela } from '../../lib/usePermissaoDaTela'
 
 function moeda(v: number): string {
   return `R$ ${formatarMoeda(v)}`
@@ -42,6 +43,10 @@ function formatarDataHora(iso: string | null): string {
  * traz esse número).
  */
 export default function FechamentoCaixa() {
+  // ⛔ RBAC (auditoria 2026-08-29, rodada 5): a varredura das rodadas 1-4 cobriu os CADASTROS
+  // e deixou as ROTINAS OPERACIONAIS de fora -- que e onde o 403 tardio custa mais caro, porque
+  // o operador so descobre depois de montar a operacao inteira com o cliente na frente.
+  const acoes = usePermissaoDaTela('fechamento-caixa')
   const queryClient = useQueryClient()
   const { data: eu } = useEu()
   const ehAdmin = eu?.usuario.papel === 'ADMIN'
@@ -207,7 +212,15 @@ export default function FechamentoCaixa() {
                       value={buscaNumeroCaixa}
                       onChange={(e) => setBuscaNumeroCaixa(e.target.value.replace(/\D/g, ''))}
                       onKeyDown={(e) => {
-                        if (e.key === 'Enter' && buscaNumeroCaixa) setIdCaixaSelecionado(Number(buscaNumeroCaixa))
+                        // ⚠️ `preventDefault` (auditoria 2026-08-29, rodada 5): a tela não está
+                        // dentro de um `<form>`, então o listener global de Enter também roda e
+                        // leva o foco para o campo seguinte — a busca acontece e o cursor some do
+                        // lugar. Era a única violação restante: os cinco leitores de código de
+                        // barras e os quatro campos de busca do projeto já o chamam.
+                        if (e.key === 'Enter' && buscaNumeroCaixa) {
+                          e.preventDefault()
+                          setIdCaixaSelecionado(Number(buscaNumeroCaixa))
+                        }
                       }}
                     />
                   </div>
@@ -253,7 +266,7 @@ export default function FechamentoCaixa() {
               {/* Reabertura (2026-08-14) — só ADMIN, e só faz sentido em caixa fechado. Existe
                   porque estorno de crediário e exclusão/reabertura de conta a pagar recusam
                   apagar lançamento de caixa fechado e mandam o operador vir reabrir aqui. */}
-              {fechamento.fechado && ehAdmin && (
+              {fechamento.fechado && ehAdmin && acoes.excluir && (
                 <div style={{ marginBottom: 12 }}>
                   <button type="button" className="btn ghost" onClick={() => setReaberturaAberta(true)}>
                     Reabrir Caixa
@@ -332,7 +345,7 @@ export default function FechamentoCaixa() {
                   {erroContagem && <p className="erro-campo">{erroContagem}</p>}
                   <div className="ajuda-rodape">
                     <span />
-                    <button type="button" className="btn" disabled={fechar.isPending} onClick={confirmarFechamento}>
+                    <button type="button" className="btn" disabled={fechar.isPending || !acoes.incluir} onClick={confirmarFechamento}>
                       {fechar.isPending ? 'Conferindo…' : 'Fechar Caixa'}
                     </button>
                   </div>

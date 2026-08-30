@@ -133,6 +133,34 @@ mensagem explicando, ou (c) aceitar a limitação e documentar. As três depende
 diz sobre inutilização retroativa. ⚠️ E o desfecho na SEFAZ **não se prova lendo** — precisa de
 transmissão em homologação, que hoje só você pode fazer.
 
+
+### 68. 🔵 Nada da auditoria de 5 rodadas foi EXECUTADO — o limite conhecido
+As dez varreduras (5 rodadas × back e front) foram **leitura de código**, `tsc -b` e a suíte de
+testes. **Nenhuma tela foi aberta no navegador, nenhum PDF foi gerado, nada foi transmitido à
+SEFAZ.** Isso não invalida os ~75 defeitos corrigidos — mas define o que a auditoria **não** podia
+achar:
+
+- **Classe CSS que não existe** — achamos três (Sangria, Relatório de Contas a Pagar, Minha Conta)
+  e só porque um agente rodou um script comparando classes usadas × declaradas. As montadas por
+  interpolação (`className={\`uso-${x}\`}`) escapam desse script; provavelmente há mais.
+- **Correção criptográfica e conformidade de XSD** (assinatura do XML, AES-GCM das colunas
+  `*_cifrado`) — não se verificam lendo, só executando.
+- **Tudo que depende da resposta da SEFAZ** — o `<ano>` da inutilização (#66), os autorizadores das
+  26 UFs fora do PR, e a reação real a qualquer XML montado. *Validação que confere o próprio
+  resultado não prova nada.*
+- **Concorrência real** — os `FOR UPDATE` (caixa, sangria, cota, OS) foram lidos e estão nos
+  lugares certos, mas nenhum foi exercitado com duas transações simultâneas.
+- **O contrato campo a campo entre os DTOs do TypeScript e os records do Java** — um campo renomeado
+  no Java que o TS ainda declara pelo nome antigo vira `undefined` na tela **sem erro de
+  compilação**, porque as interfaces de `web/src/lib/*.ts` são escritas à mão. Fechar isso pede um
+  script comparando os dois lados, que não existe.
+- **`AjudaDaTela.tsx`** — 1.458 linhas de texto de ajuda que **afirmam comportamento** e que ninguém
+  conferiu contra o código. É exatamente a forma de defeito de "conferir a própria afirmação".
+
+**O que fazer com isto:** não é tarefa de uma sessão. O caminho barato é abrir as telas que a
+auditoria mexeu (Sangria, Minha Conta, Relatório de Contas a Pagar, Permissões, Parâmetros do
+Sistema) e olhar — as três de CSS teriam sido pegas em dois minutos de navegador.
+
 ### 67. 🟢 Reimportar a mesma NF-e corrigida pode travar o arquivamento num laço a cada 10 min
 O caminho do XML de entrada é `entrada/{ano}/{mes}/{chaveNfe}.xml`, e cancelar a entrada **libera a
 chave** para reimportação (é comportamento desejado: "reimportar a mesma NF-e corrigida"). Se o XML

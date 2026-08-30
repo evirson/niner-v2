@@ -1347,7 +1347,12 @@ export default function EntradaMercadoriaForm() {
                 <button
                   type="button"
                   className="btn"
-                  onClick={() => navigate('/entrada-produtos-compra', { replace: true })}
+                  // ⚠️ `navigate(-1)`, não `replace` (rodada 5, sobre a correção da rodada 3). Com
+                  // `replace` o topo do histórico vira `/entrada-produtos-compra` — e a entrada
+                  // ANTERIOR já era essa mesma lista: ficam duas idênticas em sequência, e o ✕ da
+                  // lista (que é `navigate(-1)`) não sai do lugar. Troquei "o ✕ te devolve à tela
+                  // que você fechou" por "o ✕ não faz nada": melhor, e ainda errado.
+                  onClick={() => navigate(-1)}
                 >
                   Ver Listagem
                 </button>

@@ -314,10 +314,4 @@ public class ConformidadeFiscalService {
         return s == null || s.isBlank();
     }
 
-    private static void exigirAdmin(Jwt jwt) {
-        List<String> roles = jwt.getClaimAsStringList("roles");
-        if (roles == null || !roles.contains("ADMIN")) {
-            throw new ResponseStatusException(FORBIDDEN, "Apenas ADMIN pode consultar a Conformidade Fiscal.");
-        }
-    }
 }

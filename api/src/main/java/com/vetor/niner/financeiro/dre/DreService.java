@@ -109,14 +109,6 @@ public class DreService {
         return montarResposta(regimeEfetivo, new PeriodoDre(dataInicial, dataFinal), periodoComparado, atual, comparado);
     }
 
-    /** ADMIN-only (decisão de 2026-08-14): a DRE expõe lucro, despesa e pró-labore. Mesmo
-     *  mecanismo de {@code ConfiguracaoTelaService.exigirAdmin} — claim `roles` do JWT. */
-    private static void exigirAdmin(Jwt jwt) {
-        if (!ehAdmin(jwt)) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Apenas administradores podem consultar a DRE.");
-        }
-    }
-
     private void validarPeriodo(LocalDate dataInicial, LocalDate dataFinal) {
         if (dataInicial == null || dataFinal == null) {
             throw new IllegalArgumentException("Informe a data inicial e a data final.");

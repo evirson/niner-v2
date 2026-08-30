@@ -21,6 +21,7 @@ import { maiusculas } from '../../lib/texto'
 import PesquisaProdutoModal from '../pdv/PesquisaProdutoModal'
 import ComprovanteValeModal from './ComprovanteValeModal'
 import SelecaoItensVendaModal from './SelecaoItensVendaModal'
+import { usePermissaoDaTela } from '../../lib/usePermissaoDaTela'
 
 const CHAVE_TELA = 'vendas.devolucaoproduto.form'
 
@@ -69,6 +70,10 @@ function variacaoTexto(p: PdvProduto): string | null {
 }
 
 export default function DevolucaoProduto() {
+  // ⛔ RBAC (auditoria 2026-08-29, rodada 5): a varredura das rodadas 1-4 cobriu os CADASTROS
+  // e deixou as ROTINAS OPERACIONAIS de fora — que é onde o 403 tardio custa mais caro, porque
+  // o operador só descobre depois de montar a operação inteira, com o cliente na frente.
+  const acoes = usePermissaoDaTela('devolucao-produto')
   const { data: eu } = useEu()
   const navigate = useNavigate()
 
@@ -395,7 +400,7 @@ export default function DevolucaoProduto() {
             <button
               type="button"
               className="btn"
-              disabled={!podeConfirmar || efetivar.isPending}
+              disabled={!podeConfirmar || efetivar.isPending || !acoes.incluir}
               onClick={() => efetivar.mutate()}
             >
               {efetivar.isPending ? 'Gravando…' : 'Gravar Devolução'}

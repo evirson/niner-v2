@@ -168,7 +168,7 @@ function BlocoUso({ dados, aoAssinar }: { dados: MinhaContaDados; aoAssinar: () 
             {REAL.format(faixaRecomendada.precoMensal)}/mês (ou {REAL.format(faixaRecomendada.precoAnual)}/ano, 15% de
             desconto).
           </p>
-          <button type="button" className="btn btn-primary" onClick={aoAssinar}>
+          <button type="button" className="btn" onClick={aoAssinar}>
             Assinar esta faixa
           </button>
         </div>
@@ -216,7 +216,7 @@ function BlocoEmpresas({ dados, aoAdicionar }: { dados: MinhaContaDados; aoAdici
     <section className="card secao-conta">
       <div className="secao-conta-cabecalho">
         <div className="section-label">Empresas (CNPJs)</div>
-        <button type="button" className="btn btn-primary" onClick={aoAdicionar}>
+        <button type="button" className="btn" onClick={aoAdicionar}>
           <IconeEmpresa size={18} /> Adicionar empresa
         </button>
       </div>
@@ -273,7 +273,7 @@ function ModalNovaEmpresa({ aoFechar, aoCriar }: { aoFechar: () => void; aoCriar
           você preenche depois em <b>Dados da Empresa</b>.
         </p>
 
-        <div className="field">
+        <div className="col-12">
           <label htmlFor="razaoSocial">Razão Social *</label>
           <input
             id="razaoSocial"
@@ -282,7 +282,7 @@ function ModalNovaEmpresa({ aoFechar, aoCriar }: { aoFechar: () => void; aoCriar
             onChange={(e) => setForm({ ...form, razaoSocial: maiusculas(e.target.value) })}
           />
         </div>
-        <div className="field">
+        <div className="col-12">
           <label htmlFor="nomeFantasia">Nome Fantasia</label>
           <input
             id="nomeFantasia"
@@ -290,7 +290,7 @@ function ModalNovaEmpresa({ aoFechar, aoCriar }: { aoFechar: () => void; aoCriar
             onChange={(e) => setForm({ ...form, nomeFantasia: maiusculas(e.target.value) })}
           />
         </div>
-        <div className="field">
+        <div className="col-12">
           <label htmlFor="cnpj">CNPJ</label>
           <input
             id="cnpj"
@@ -306,12 +306,12 @@ function ModalNovaEmpresa({ aoFechar, aoCriar }: { aoFechar: () => void; aoCriar
         {erro && <Toast mensagem={erro} tipo="erro" aoFechar={() => setErro(null)} />}
 
         <div className="footer-bar">
-          <button type="button" className="btn btn-secondary" onClick={aoFechar}>
+          <button type="button" className="btn ghost" onClick={aoFechar}>
             Cancelar
           </button>
           <button
             type="button"
-            className="btn btn-primary"
+            className="btn"
             disabled={!form.razaoSocial.trim() || mutacao.isPending}
             onClick={() => {
               setErro(null)
@@ -397,7 +397,7 @@ function ModalPagamento({
               cabe no mês.
             </p>
 
-            <div className="field">
+            <div className="col-12">
               <label htmlFor="faixa">Faixa</label>
               <select id="faixa" value={idPlano ?? ''} onChange={(e) => setIdPlano(Number(e.target.value))}>
                 {(faixas ?? []).map((f) => (
@@ -408,19 +408,19 @@ function ModalPagamento({
               </select>
             </div>
 
-            <div className="field">
+            <div className="col-12">
               <label>Ciclo</label>
               <div className="ciclo-opcoes">
                 <button
                   type="button"
-                  className={`btn ${ciclo === 'MENSAL' ? 'btn-primary' : 'btn-secondary'}`}
+                  className={`btn ${ciclo === 'MENSAL' ? '' : 'ghost'}`}
                   onClick={() => setCiclo('MENSAL')}
                 >
                   Mensal
                 </button>
                 <button
                   type="button"
-                  className={`btn ${ciclo === 'ANUAL' ? 'btn-primary' : 'btn-secondary'}`}
+                  className={`btn ${ciclo === 'ANUAL' ? '' : 'ghost'}`}
                   onClick={() => setCiclo('ANUAL')}
                 >
                   Anual (15% de desconto)
@@ -437,12 +437,12 @@ function ModalPagamento({
             {erro && <Toast mensagem={erro} tipo="erro" aoFechar={() => setErro(null)} />}
 
             <div className="footer-bar">
-              <button type="button" className="btn btn-secondary" onClick={aoFechar}>
+              <button type="button" className="btn ghost" onClick={aoFechar}>
                 Cancelar
               </button>
               <button
                 type="button"
-                className="btn btn-primary"
+                className="btn"
                 disabled={!idPlano || gerar.isPending}
                 onClick={() => gerar.mutate()}
               >
@@ -465,7 +465,7 @@ function ModalPagamento({
                 height={220}
               />
             )}
-            <div className="field">
+            <div className="col-12">
               <label htmlFor="copiaecola">PIX copia e cola</label>
               <textarea id="copiaecola" className="mono" readOnly rows={3} value={pix.copiaECola} />
             </div>
@@ -473,7 +473,7 @@ function ModalPagamento({
 
               <button
                 type="button"
-                className="btn btn-primary"
+                className="btn"
                 onClick={() => {
                   navigator.clipboard?.writeText(pix.copiaECola)
                   setCopiado(true)

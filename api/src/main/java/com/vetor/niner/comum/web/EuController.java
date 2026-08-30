@@ -113,8 +113,15 @@ public class EuController {
         // 2026-08-11) — null na imensa maioria das chamadas (ADMIN, controle desligado, ou
         // dentro do horário normal); só vem preenchido nos minutos finais de tolerância antes
         // do bloqueio de verdade (HorarioAcessoFilter, mesma janela de graça).
+        // ⛔ A empresa da SESSÃO também aqui (auditoria 2026-08-29, rodada 5). A rodada 3 levou o
+        // `eid` até o filtro e **esta ponta ficou para trás**, calculando no fuso do cadastro — e o
+        // javadoc de `segundosRestantesTolerancia` EXIGE que as duas contas concordem, porque é
+        // disso que depende o aviso bater com o bloqueio. Operador com cadastro na matriz (SP)
+        // operando na filial de Manaus via o anel zerar às 17:30 sobre um servidor que estava
+        // deixando passar; na direção inversa (Acre), sobrava tempo no anel depois do 403.
         corpo.put("segundosRestantesTolerancia",
-                horarioAcesso.segundosRestantesTolerancia(idUsuario, HorarioAcessoService.TOLERANCIA_MINUTOS_PADRAO));
+                horarioAcesso.segundosRestantesTolerancia(
+                        idUsuario, HorarioAcessoService.TOLERANCIA_MINUTOS_PADRAO, idEmpresa));
         return corpo;
     }
 }

@@ -165,7 +165,23 @@ public class EntradaMercadoriaService {
                 } else {
                     BigDecimal proporcao = item.precoCusto().multiply(item.qtd())
                             .divide(baseRateio, 10, RoundingMode.HALF_UP);
-                    valorAcrescimo = req.valorRateio().multiply(proporcao).setScale(2, RoundingMode.HALF_UP);
+                    // ⛔ A cota é limitada AO QUE RESTA (rodada 5, sobre a correção da rodada 4).
+                    // Com `HALF_UP` puro, a soma parcial pode ULTRAPASSAR o total e o resíduo do
+                    // último item fica NEGATIVO: nota de 900 itens com R$ 5,00 de frete dá cota de
+                    // R$ 0,00555, que arredonda para R$ 0,01 em cada linha — 899 × R$ 0,01 =
+                    // R$ 8,99, e o item 900 recebia **−R$ 3,99**. Não há CHECK na coluna, então
+                    // gravava, e com `cfg_reajusta_preco_entrada` ligado o custo daquele item
+                    // despencava.
+                    // ⚠️ E `DOWN` em vez de `HALF_UP` **não serve**: 1/3 de R$ 30,00 vira
+                    // R$ 9,999999999 e truncaria para R$ 9,99 — medido, foi o teste
+                    // `rateioDeFreteDistribuiProporcionalmenteQuandoFlagLigada` que reprovou. O
+                    // arredondamento continua HALF_UP (que acerta a dízima) e é o TETO do restante
+                    // que impede o estouro: o caso comum fica exato e o patológico fica em zero,
+                    // nunca negativo.
+                    BigDecimal restante = req.valorRateio().setScale(2, RoundingMode.HALF_UP)
+                            .subtract(rateioDistribuido);
+                    valorAcrescimo = req.valorRateio().multiply(proporcao).setScale(2, RoundingMode.HALF_UP)
+                            .min(restante.max(BigDecimal.ZERO));
                     rateioDistribuido = rateioDistribuido.add(valorAcrescimo);
                 }
             }
@@ -838,8 +854,31 @@ public class EntradaMercadoriaService {
         return porCodigo;
     }
 
+    /**
+     * O <b>código do fornecedor</b> vem primeiro; o GTIN é o fallback.
+     *
+     * <p>⛔ A correção da rodada 4 indexou o mapa por {@code codigoFornecedor} e <b>não mexeu na
+     * chave de busca</b> — que continuava consultando por {@code cEAN} sempre que ele existisse.
+     * Fechou metade do buraco (rodada 5): o caso <b>"GTIN presente e desconhecido por nós"</b>
+     * seguia intacto. Fornecedor manda {@code cProd="ABC123"}, {@code cEAN="789…"} (o GTIN dele, que
+     * não está no nosso {@code produto_barra}); o operador aponta a linha para uma variação <b>já
+     * cadastrada</b> — cuja {@code ean} é nula, porque veio de planilha ou cadastro manual — e o
+     * mapa fica com {@code ABC123} e o nosso SKU. A busca ia em {@code 789…} e não achava:
+     * {@code id_variacao} nascia NULL de novo, e a conta chegava semanas depois, na devolução, com
+     * o estoque já baixado.
+     *
+     * <p>⚠️ <b>E não se autocorrigia</b>: na segunda nota do mesmo fornecedor o preview resolve por
+     * {@code produto_fornecedor}, o request carrega o {@code codigoFornecedor} de novo — e a busca
+     * continuava caindo no {@code cEAN}. O único caminho que funcionava era cadastrar produto novo
+     * pela pendência (aí o GTIN do fornecedor vira o nosso {@code ean}), que é justamente o caso
+     * <b>menos</b> comum numa loja com base pronta.
+     *
+     * <p>⭐ A ordem tem uma razão, não é preferência: o {@code cProd} é o par que <b>o operador
+     * casou nesta tela</b>; o {@code cEAN} é o que o emitente afirma. Entre o que a loja decidiu e
+     * o que o terceiro declarou, vale o da loja.
+     */
     private static String chaveDoItem(NfeXmlParser.ItemNfe item) {
-        return item.cEan() != null ? item.cEan() : item.cProd();
+        return item.cProd() != null ? item.cProd() : item.cEan();
     }
 
     private static BigDecimal nz(BigDecimal valor) {

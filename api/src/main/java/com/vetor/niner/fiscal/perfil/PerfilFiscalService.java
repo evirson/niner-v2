@@ -357,10 +357,4 @@ public class PerfilFiscalService {
                 rs.getString("cst_ibscbs"), rs.getString("cclasstrib"), rs.getString("codigo_beneficio"));
     }
 
-    private static void exigirAdmin(Jwt jwt) {
-        List<String> roles = jwt.getClaimAsStringList("roles");
-        if (roles == null || !roles.contains("ADMIN")) {
-            throw new ResponseStatusException(FORBIDDEN, "Apenas ADMIN pode gerenciar perfis fiscais.");
-        }
-    }
 }

@@ -348,13 +348,6 @@ public class LucratividadeService {
     }
 
     /** ADMIN-only, como a DRE: o relatório expõe lucro, despesa e pró-labore. */
-    private static void exigirAdmin(Jwt jwt) {
-        List<String> roles = jwt.getClaimAsStringList("roles");
-        if (roles == null || !roles.contains("ADMIN")) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN,
-                    "Apenas administradores podem consultar a Lucratividade.");
-        }
-    }
 
     private static void validarPeriodo(LocalDate dataInicial, LocalDate dataFinal) {
         if (dataInicial == null || dataFinal == null) {

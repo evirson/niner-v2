@@ -62,11 +62,4 @@ public class FiscalContingenciaController {
         return consultar(jwt, idEmpresa);
     }
 
-    private static void exigirAdmin(Jwt jwt) {
-        List<String> roles = jwt.getClaimAsStringList("roles");
-        if (roles == null || !roles.contains("ADMIN")) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN,
-                    "Apenas administradores podem acessar o painel de contingência.");
-        }
-    }
 }

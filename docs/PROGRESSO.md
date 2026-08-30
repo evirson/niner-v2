@@ -11,6 +11,75 @@ Registro cronológico das decisões e entregas. Atualizar a cada marco relevante
 
 ## Estado atual
 
+> ## 📌 2026-08-29 (10) — auditoria, rodada 5 (última): o que as minhas correções deixaram pela metade
+>
+> Última das cinco rodadas. Metade auditando as correções das rodadas 3 e 4, metade varrendo o que
+> tinha sobrado. **16 achados**; corrigi 14, e **cinco eram regressões ou meias-correções minhas**.
+>
+> ### ⛔ As meias-correções
+>
+> - **O vínculo do item da NF-e ficou meio consertado.** A rodada 4 indexou o mapa pelo
+>   `codigoFornecedor` e **não mexeu na chave de busca**, que continuava consultando pelo `cEAN`
+>   sempre que ele existisse. O caso *"GTIN presente e desconhecido por nós"* seguia intacto: o
+>   operador aponta a linha para uma variação **já cadastrada** (cuja `ean` é nula, porque veio de
+>   planilha), a busca vai no GTIN do fornecedor e não acha — `id_variacao` NULL de novo, com a
+>   conta chegando semanas depois na devolução, com o estoque já baixado. ⚠️ E **não se
+>   autocorrigia**: na segunda nota o preview resolve por `produto_fornecedor`, mas a busca
+>   continuava caindo no `cEAN`. Hoje o **código do fornecedor vem primeiro** — entre o que a loja
+>   casou na tela e o que o emitente declarou, vale o da loja.
+> - **O resíduo do rateio podia ficar NEGATIVO.** Com `HALF_UP` nas linhas intermediárias, a soma
+>   parcial pode ultrapassar o total: nota de 900 itens com R$ 5,00 de frete dá cota de R$ 0,00555,
+>   que arredonda para R$ 0,01 em cada linha — 899 × R$ 0,01 = R$ 8,99, e o item 900 recebia
+>   **−R$ 3,99**. Trocar `HALF_UP` por `DOWN` garante que a soma nunca passe do total. ⚠️ A correção
+>   da rodada 4 tinha trocado um erro de centavos silencioso por um erro **concentrado e com sinal
+>   trocado** — pior que o original.
+> - **O fuso do horário de acesso ficou em duas pontas.** A rodada 3 levou o `eid` até o filtro, e o
+>   `/api/v1/eu` e o **login** ficaram na empresa do cadastro. Resultado: para quem opera fora da UF
+>   do cadastro, o anel de contagem regressiva zerava meia hora antes do servidor bloquear, e o
+>   login era **recusado** com a sessão em andamento funcionando. ⚠️ Antes da rodada 3 os dois
+>   erravam junto, o que ao menos era coerente — discordar é a assinatura de *"corrigi uma ponta e
+>   não varri a outra"*.
+> - **O boxing dos booleanos da plataforma não mudou o comportamento** que o comentário afirmava ter
+>   consertado: o `Boolean.TRUE.equals()` do serviço continuava transformando `null` em `false`. Um
+>   `PUT` parcial respondia 200 e **desligava o backup noturno**. Os campos irmãos do mesmo UPDATE
+>   já usavam `COALESCE`; os dois booleanos eram os únicos que apagavam por omissão. Hoje usam
+>   `COALESCE` também.
+> - **A opção "(inativo)" do perfil fiscal aparecia para TODO produto** enquanto a lista carregava
+>   (`?? []` fazia o `some` ser sempre falso), afirmando "inativo" sobre um perfil ativo por ~200 ms
+>   — a direção que faz o operador ir "consertar". E o `replace: true` do "Ver Listagem" trocou *"o
+>   ✕ te devolve à tela que você fechou"* por *"o ✕ não faz nada"*: melhor, e ainda errado.
+>
+> ### ⛔ E o RBAC tinha coberto os cadastros e esquecido as ROTINAS
+>
+> Sangria de Caixa, Recebimento de Crediário, Devolução de Produtos e Fechamento/Reabertura de
+> Caixa — todas com ação **concedível** no catálogo e nenhuma consultando a permissão. O pior:
+> operador com só *"Acessar"* em Recebimento de Crediário localiza o crediário com o cliente no
+> balcão, monta o split-tender, fecha o saldo — e o **403 chega no "Efetivar Recebimento"**, com o
+> dinheiro já contado. É o mesmo defeito das rodadas 1–3, na metade do sistema que elas não olharam:
+> a varredura cobriu os **cadastros** e as **rotinas operacionais** são justamente onde o 403 tardio
+> custa mais caro.
+>
+> ### ⚠️ Classe CSS que não existe não dá erro em lugar nenhum
+>
+> Três telas usavam classes inexistentes, e o `tsc` não vê nada disso: o **Relatório de Contas a
+> Pagar** saía com os 5 KPIs **empilhados** (e o PDF é captura visual, então o arquivo do contador
+> saía igual); a **Minha Conta** — a tela que cobra dinheiro do lojista — tinha o seletor
+> Mensal/Anual **visualmente idêntico nos dois estados**, então clicar em "Anual" não mudava nada na
+> tela; e o filtro de fornecedor do relatório empurrava o botão "Gerar Relatório" para fora da área
+> visível quando vinham 20 sugestões.
+>
+> ### ⭐ O limite conhecido, depois de cinco rodadas
+>
+> Registro como limite, não como suspeita: **nada foi executado**. As dez varreduras são leitura de
+> código, `tsc -b` e a suíte — nenhuma tela foi aberta no navegador, nenhum PDF gerado. Os três
+> achados de CSS acima são **exatamente** a classe de defeito que só aparece abrindo a tela, o que
+> sugere que existam outros. Continuam sem cobertura: correção criptográfica e conformidade de XSD
+> (só se provam executando), tudo que depende de transmitir à SEFAZ, concorrência real (os
+> `FOR UPDATE` foram lidos, não exercitados), o contrato campo a campo entre os DTOs do TypeScript e
+> os records do Java, e o conteúdo de `AjudaDaTela.tsx` — 1.458 linhas de texto que afirmam
+> comportamento e que ninguém conferiu contra o código.
+
+
 > ## 📌 2026-08-29 (9) — auditoria, rodada 4: o fiscal, a importação e a palavra "CAMPO" na tela
 >
 > Rodada nas áreas que nenhuma das anteriores tinha coberto (fiscal, entrada por XML/planilha,

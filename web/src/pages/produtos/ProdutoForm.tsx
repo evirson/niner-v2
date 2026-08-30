@@ -662,8 +662,13 @@ export default function ProdutoForm({ somenteLeitura = false }: { somenteLeitura
                     MONOFÁSICO" fazia todo produto que o usa abrir com "Não informado", enquanto a
                     NFC-e continuava sendo calculada por ele. A tela mentia, e mentia na direção
                     que faz o operador "consertar" escolhendo outro perfil. */}
-                {form.idPerfilFiscal != null
-                  && !(perfisFiscais ?? []).some((p) => p.idPerfilFiscal === form.idPerfilFiscal) && (
+                {/* ⚠️ `perfisFiscais &&` na frente (rodada 5): com a lista ainda em voo, o `?? []`
+                    fazia o `some` ser sempre falso e a opção sintética aparecia para TODO produto,
+                    por ~200 ms, afirmando "inativo" sobre um perfil ATIVO — exatamente a direção
+                    que faz o operador ir "consertar". Regressão da própria correção da rodada 3. */}
+                {perfisFiscais
+                  && form.idPerfilFiscal != null
+                  && !perfisFiscais.some((p) => p.idPerfilFiscal === form.idPerfilFiscal) && (
                   <option value={form.idPerfilFiscal}>
                     Perfil nº {form.idPerfilFiscal} (inativo — continua valendo nas notas)
                   </option>

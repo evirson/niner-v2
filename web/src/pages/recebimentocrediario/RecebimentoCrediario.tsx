@@ -21,6 +21,7 @@ import ComprovanteRecebimentoModal from './ComprovanteRecebimentoModal'
 import EscolherFormaPagamentoModal from './EscolherFormaPagamentoModal'
 import { ROTULO_CATEGORIA_CARTEIRA } from '../../lib/tiposCarteira'
 import { maiusculas } from '../../lib/texto'
+import { usePermissaoDaTela } from '../../lib/usePermissaoDaTela'
 
 const TOLERANCIA_SALDO = 0.01
 
@@ -50,6 +51,10 @@ interface LinhaPagamento {
  * nesta rotina — diferente do PDV).
  */
 export default function RecebimentoCrediario() {
+  // ⛔ RBAC (auditoria 2026-08-29, rodada 5): a varredura das rodadas 1-4 cobriu os CADASTROS
+  // e deixou as ROTINAS OPERACIONAIS de fora — que é onde o 403 tardio custa mais caro, porque
+  // o operador só descobre depois de montar a operação inteira, com o cliente na frente.
+  const acoes = usePermissaoDaTela('recebimento-crediario')
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const { data: statusCaixa } = useQuery({ queryKey: ['caixa-status'], queryFn: buscarStatusCaixa })
@@ -233,7 +238,7 @@ export default function RecebimentoCrediario() {
             <button
               type="button"
               className="btn"
-              disabled={!saldoFechado || efetivar.isPending}
+              disabled={!saldoFechado || efetivar.isPending || !acoes.incluir}
               onClick={() => efetivar.mutate()}
             >
               {efetivar.isPending ? 'Recebendo…' : 'Efetivar Recebimento'}

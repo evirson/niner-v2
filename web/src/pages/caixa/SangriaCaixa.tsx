@@ -11,6 +11,7 @@ import { aoTeclarEnterNoFormulario } from '../../lib/formularios'
 import { completarMoeda, desmascararMoeda, formatarMoeda, mascararMoeda } from '../../lib/masks'
 import { buscarContextoSangria, listarSangrias, registrarSangria } from '../../lib/sangria'
 import { maiusculas } from '../../lib/texto'
+import { usePermissaoDaTela } from '../../lib/usePermissaoDaTela'
 
 function formatarDataHora(iso: string): string {
   return new Date(iso).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })
@@ -31,6 +32,10 @@ function formatarDataHora(iso: string): string {
  * R$ 3.000 no cartão e R$ 200 em dinheiro tem R$ 200 para sangrar — o resto não está na gaveta.
  */
 export default function SangriaCaixa() {
+  // ⛔ RBAC (auditoria 2026-08-29, rodada 5): a varredura das rodadas 1-4 cobriu os CADASTROS
+  // e deixou as ROTINAS OPERACIONAIS de fora — que é onde o 403 tardio custa mais caro, porque
+  // o operador só descobre depois de montar a operação inteira, com o cliente na frente.
+  const acoes = usePermissaoDaTela('sangria-caixa')
   const queryClient = useQueryClient()
   const [idContaCorrente, setIdContaCorrente] = useState('')
   const [idPlanoContas, setIdPlanoContas] = useState('')
@@ -84,17 +89,26 @@ export default function SangriaCaixa() {
     // inteira fora do padrão e ninguém a viu ainda: sem topbar alinhada, sem o ícone no tamanho
     // dos outros, e com a grade de sangrias saindo como tabela HTML crua, sem borda nem zebra.
     <div className="lista-tela">
-      <div className="topbar-tela">
-        <div className="titulo-tela">
-          <IconeContaCorrente size={34} />
-          <h1>Sangria de Caixa</h1>
-        </div>
-        <div className="topbar-acoes">
-          <AjudaDaTela chaveTela="sangria-caixa" />
-          <BotaoFecharTela />
+      {/* ⚠️ `lista-topo` + `lista-corpo` NÃO são decoração: `lista-tela` é
+          `height: 100%` com `flex-direction: column`, e é o `lista-corpo` que carrega o
+          `flex: 1; min-height: 0; overflow-y: auto`. Usar só o `lista-tela` (como eu fiz na
+          primeira versão desta correção) troca um layout sem estilo nenhum por um layout de
+          altura travada SEM área de rolagem — o conteúdo estoura e some numa janela baixa, que é
+          o defeito que este projeto já registrou como "altura fixa quebra em outra janela". */}
+      <div className="lista-topo">
+        <div className="topbar-tela">
+          <div className="titulo-tela">
+            <IconeContaCorrente size={34} />
+            <h1>Sangria de Caixa</h1>
+          </div>
+          <div className="topbar-acoes">
+            <AjudaDaTela chaveTela="sangria-caixa" />
+            <BotaoFecharTela />
+          </div>
         </div>
       </div>
 
+      <div className="lista-corpo">
       {contexto && !contexto.caixaAberto ? (
         <p className="muted">
           Não há caixa aberto para você agora. Abra o caixa antes de registrar uma sangria.
@@ -158,7 +172,7 @@ export default function SangriaCaixa() {
             </div>
 
             <div className="footer-bar">
-              <button type="submit" className="btn" disabled={mutacao.isPending}>
+              <button type="submit" className="btn" disabled={mutacao.isPending || !acoes.incluir}>
                 {mutacao.isPending ? 'Registrando…' : 'Registrar sangria'}
               </button>
             </div>
@@ -199,6 +213,7 @@ export default function SangriaCaixa() {
           </div>
         </>
       )}
+      </div>
 
       {erro && <Toast mensagem={erro} tipo="erro" aoFechar={() => setErro(null)} />}
       {sucesso && <Toast mensagem={sucesso} tipo="sucesso" aoFechar={() => setSucesso(null)} />}

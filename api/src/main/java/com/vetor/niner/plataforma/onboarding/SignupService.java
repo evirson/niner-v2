@@ -376,7 +376,16 @@ public class SignupService {
         // Horário de acesso (2026-08-11) — sem tolerância nenhuma aqui: não existe "rotina em
         // andamento" pra proteger numa sessão que ainda nem começou (a tolerância padrão só
         // vale pro filtro por requisição, HorarioAcessoFilter, que pode pegar uma venda no meio).
-        if (!horarioAcesso.podeAcessarAgora(usuario.idUsuario(), 0)) {
+        // ⚠️ A empresa que o usuário está ESCOLHENDO, quando ela já veio no pedido (auditoria
+        // 2026-08-29, rodada 5). A rodada 3 fez o filtro por requisição usar o `eid` da sessão e
+        // esta porta ficou na empresa do cadastro: um operador com cadastro na matriz (SP) que
+        // opera na filial de Manaus tinha a sessão em andamento funcionando e o LOGIN recusado —
+        // com tolerância 0, sem folga nenhuma. Antes da rodada 3 os dois erravam junto, o que ao
+        // menos era coerente; discordar é a assinatura de "corrigi uma ponta e não varri a outra".
+        // ⚠️ Na PRIMEIRA volta (o usuário ainda vai escolher a empresa) o pedido não traz `eid`, e
+        // aí o fallback do cadastro é a única referência que existe — é o mesmo desenho de
+        // `ContaDoUsuario`.
+        if (!horarioAcesso.podeAcessarAgora(usuario.idUsuario(), 0, req.idEmpresa())) {
             throw new ResponseStatusException(FORBIDDEN, HorarioAcessoService.MENSAGEM_FORA_DA_JANELA);
         }
 

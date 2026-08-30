@@ -317,13 +317,6 @@ public class ConfiguracaoGeralService {
                         HttpStatus.NOT_FOUND, "Configuração geral não encontrada para este tenant."));
     }
 
-    private static void exigirAdmin(Jwt jwt) {
-        List<String> roles = jwt.getClaimAsStringList("roles");
-        if (roles == null || !roles.contains("ADMIN")) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN,
-                    "Apenas administradores podem acessar os parâmetros do sistema.");
-        }
-    }
 
     private static ConfiguracaoGeralResponse mapear(ResultSet rs, int rowNum) throws SQLException {
         return new ConfiguracaoGeralResponse(

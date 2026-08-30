@@ -197,7 +197,12 @@ export default function FiltrosContasPagarModal({
                   aria-label="Buscar fornecedor"
                 />
                 {(encontrados ?? []).length > 0 && (
-                  <div className="lista-sugestoes">
+                  /* ⚠️ `lista-sugestoes` NÃO existe em styles.css (auditoria 2026-08-29, rodada 5):
+                     as 20 sugestões viravam botões de largura total em fluxo normal, EMPURRANDO
+                     "Plano de Contas", "Situação" e o rodapé com "Gerar Relatório" para fora da
+                     área visível do modal — o lojista ficava sem como gerar até apagar a busca.
+                     A altura limitada com rolagem é o que as telas irmãs fazem com `table-wrap`. */
+                  <div style={{ maxHeight: 160, overflowY: 'auto', marginTop: 6 }}>
                     {(encontrados ?? []).map((f: FornecedorOpcaoEmissao) => (
                       <button
                         type="button"

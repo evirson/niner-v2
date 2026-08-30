@@ -426,5 +426,4 @@ public class ExportacaoXmlLoteService {
         }
     }
 
-    /** ADMIN-only, como todo o módulo fiscal (§12: `fiscal.download` | ADMIN). */
 }
