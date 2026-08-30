@@ -1,6 +1,7 @@
 package com.vetor.niner.fiscal.certificado;
 
 import com.vetor.niner.cadastros.cliente.Documentos;
+import com.vetor.niner.comum.seguranca.EmpresaDaSessao;
 import com.vetor.niner.comum.seguranca.SegredoCifrador;
 import com.vetor.niner.fiscal.certificado.FiscalCertificadoDtos.FiscalCertificadoResponse;
 import com.vetor.niner.fiscal.certificado.FiscalCertificadoDtos.FiscalCertificadoUsoResponse;
@@ -92,16 +93,25 @@ public class FiscalCertificadoService {
                 .list();
     }
 
+    /**
+     * ⚠️ Único endpoint do módulo fiscal que recebia o id do certificado (e não {@code idEmpresa}) e
+     * por isso passava sem {@code EmpresaDaSessao} — um operador da filial 1 lia o histórico de uso
+     * do certificado da filial 2 enumerando o id. É só metadado (quando e em qual documento o
+     * certificado foi usado), nunca a chave privada nem a senha; mesmo assim, a fronteira entre
+     * empresas da mesma conta vale para leitura também. Aqui o guarda vem do {@code id_empresa} do
+     * próprio certificado, resolvido junto do EXISTS.
+     */
     @Transactional(readOnly = true)
     public List<FiscalCertificadoUsoResponse> listarUsos(Jwt jwt, long idCertificado) {
-        boolean existe = Boolean.TRUE.equals(jdbc.sql("""
-                        SELECT EXISTS (SELECT 1 FROM fiscal_certificado
-                                       WHERE id_tenant = plataforma.tenant_atual() AND id_certificado = ?)
+        Long idEmpresaDoCertificado = jdbc.sql("""
+                        SELECT id_empresa FROM fiscal_certificado
+                        WHERE id_tenant = plataforma.tenant_atual() AND id_certificado = ?
                         """)
-                .param(idCertificado).query(Boolean.class).single());
-        if (!existe) {
+                .param(idCertificado).query(Long.class).optional().orElse(null);
+        if (idEmpresaDoCertificado == null) {
             throw new ResponseStatusException(NOT_FOUND, "Certificado não encontrado.");
         }
+        EmpresaDaSessao.exigirAcesso(jwt, idEmpresaDoCertificado);
         return jdbc.sql("""
                         SELECT id_uso, finalidade, id_documento_fiscal, id_usuario, ocorrido_em
                         FROM fiscal_certificado_uso

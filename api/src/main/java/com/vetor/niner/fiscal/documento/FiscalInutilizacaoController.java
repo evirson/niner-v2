@@ -47,8 +47,24 @@ public class FiscalInutilizacaoController {
                 .toList();
     }
 
+    /**
+     * ⛔ O guarda de empresa faltava JUSTAMENTE aqui — nos dois GET acima ele estava.
+     *
+     * <p>Este é o endpoint que <b>executa</b> o ato, e inutilização <b>não se desfaz</b>. Um
+     * OPERADOR da empresa 1 com a tela concedida (ela deixou de ser ADMIN-only na V078) mandava
+     * {@code idEmpresa: 2} no corpo e o serviço transmitia à SEFAZ com o <b>CNPJ, a UF e o
+     * certificado da outra filial</b>, queimando a faixa dela para sempre. De brinde, a mensagem
+     * {@code "o próximo a sair nesta série é %d"} devolvia a numeração fiscal corrente da empresa 2,
+     * permitindo enumerá-la por tentativa.
+     *
+     * <p>⚠️ P8 (isolamento de tenant) seguia intacto — o repositório filtra
+     * {@code tenant_atual()} em tudo. O que se atravessava é a fronteira entre <b>empresas da mesma
+     * conta</b>, que é exatamente o que {@code EmpresaDaSessao} existe para governar; o javadoc
+     * daquela classe cita "inutilizava numeração dela" como o cenário motivador.
+     */
     @PostMapping
     public InutilizacaoResponse inutilizar(@AuthenticationPrincipal Jwt jwt, @RequestBody InutilizacaoRequest req) {
+        EmpresaDaSessao.exigirAcesso(jwt, req.idEmpresa());
         ResultadoInutilizacao resultado = service.executar(jwt, req.idEmpresa(), req.modelo(), req.serie(),
                 req.numeroInicial(), req.numeroFinal(), req.justificativa());
         return new InutilizacaoResponse(resultado.protocolo(), resultado.ano());

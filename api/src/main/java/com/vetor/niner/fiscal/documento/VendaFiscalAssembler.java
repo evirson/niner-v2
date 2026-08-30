@@ -491,7 +491,7 @@ public class VendaFiscalAssembler {
      */
     private static String exigirCfopCompleto(String bruto, String descricaoProduto, String rotulo) {
         String cfop = bruto == null ? "" : bruto.trim();
-        if (cfop.length() != 4) {
+        if (!cfop.matches("\\d{4}")) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
                     "O " + rotulo + " da regra fiscal do produto \"" + descricaoProduto + "\" está incompleto (\""
                             + cfop + "\"). Corrija em Perfil Fiscal — o CFOP tem 4 dígitos.");

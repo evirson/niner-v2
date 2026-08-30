@@ -231,10 +231,20 @@ public class PerfilFiscalService {
             // do estado — no balcão, com uma mensagem de schema que não aponta para um campo
             // preenchido semanas antes. Vazio continua legítimo: significa "esta regra só cobre
             // operação interna", e a venda interestadual é recusada com aviso próprio.
-            String cfopInter = r.cfopInterestadual() == null ? "" : r.cfopInterestadual().trim();
-            if (!cfopInter.isEmpty() && cfopInter.length() != 4) {
+            // ⚠️ O CFOP INTERNO também: ele só tinha `@Size(min=4,max=4)` sobre a string CRUA, então
+            // " 640" (4 caracteres, com espaço) passava no Bean Validation, cabia em `char(4)` e ia
+            // inteiro para o XML. E os dois exigem DÍGITO, não só tamanho: "54O5" (com a letra O)
+            // tem 4 caracteres e é recusado pelo XSD no balcão — que é o que estas checagens
+            // existem para evitar.
+            String cfopInterno = r.cfop() == null ? "" : r.cfop().trim();
+            if (!cfopInterno.matches("\\d{4}")) {
                 throw new IllegalArgumentException(
-                        "CFOP fora da UF deve ter 4 dígitos (recebido: \"%s\"). Deixe em branco se a regra "
+                        "CFOP inválido (\"%s\"): são 4 dígitos.".formatted(cfopInterno));
+            }
+            String cfopInter = r.cfopInterestadual() == null ? "" : r.cfopInterestadual().trim();
+            if (!cfopInter.isEmpty() && !cfopInter.matches("\\d{4}")) {
+                throw new IllegalArgumentException(
+                        "CFOP fora da UF inválido (recebido: \"%s\"): são 4 dígitos. Deixe em branco se a regra "
                                 .formatted(cfopInter) + "só vale dentro do estado.");
             }
             boolean temCst = r.cstIcms() != null && !r.cstIcms().isBlank();

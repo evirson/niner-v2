@@ -727,7 +727,9 @@ public class OrdemServicoService {
     }
 
     /** ⚠️ `getInt` devolve 0 em coluna nula, e 0 minuto é diferente de "sem duração cadastrada" —
-     *  daí o `wasNull`, e nunca `getObject(col, Integer.class)` numa coluna `integer`. */
+     *  daí o `wasNull`. ⚠️ Este javadoc dizia "e nunca `getObject(col, Integer.class)` numa
+     *  coluna `integer`" — FALSO, corrigido em 2026-08-30 junto com as outras duas cópias da mesma
+     *  frase: o driver aceita `Integer.class` para int2/int4; o que ele recusa é `Long.class`. */
     private static Integer duracaoOuNula(ResultSet rs) throws SQLException {
         int v = rs.getInt("duracao_minutos");
         return rs.wasNull() ? null : v;
