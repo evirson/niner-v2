@@ -414,6 +414,10 @@ export default function EntradaMercadoriaForm() {
    *  quantidade por tamanho pra esse produto recém-criado. */
   const [produtoInicialPesquisa, setProdutoInicialPesquisa] = useState<ProdutoOpcaoEntrada | undefined>(undefined)
   const [modalProdutoAberto, setModalProdutoAberto] = useState(false)
+  /** O XML veio endereçado a uma empresa que este usuário não pode operar — ver o comentário em
+   *  `processarXml`. Estado, e não toast, porque precisa sobreviver ao resumo do processamento e
+   *  continuar na tela enquanto o operador decide. */
+  const [empresaDoXmlNaoLiberada, setEmpresaDoXmlNaoLiberada] = useState(false)
   const [toast, setToast] = useState<{ texto: string; tipo: 'erro' | 'sucesso' } | null>(null)
   const [entradaGravada, setEntradaGravada] = useState<EntradaEfetivadaResponse | null>(null)
 
@@ -814,6 +818,8 @@ export default function EntradaMercadoriaForm() {
   const processarXml = useMutation({
     mutationFn: () => previewXmlEntrada(arquivoXml!),
     onSuccess: (preview) => {
+      // Cada processamento decide de novo: subir o XML certo depois do errado tem de destravar.
+      setEmpresaDoXmlNaoLiberada(false)
       setXmlBruto(preview.xmlBruto)
       setChaveNfeXml(preview.chaveNfe)
       setSerieNotaXml(preview.serieNota)
@@ -860,14 +866,16 @@ export default function EntradaMercadoriaForm() {
         if (empresasPermitidas.some((e) => e.idEmpresa === preview.idEmpresaEncontrada)) {
           setIdEmpresaEscolhida(preview.idEmpresaEncontrada)
         } else {
-          const atual = empresasPermitidas.find((e) => e.idEmpresa === idEmpresaEscolhida)
-          setToast({
-            texto:
-              'Esta nota foi faturada contra outra empresa, que não está liberada para o seu usuário. '
-              + `A entrada será lançada em ${atual?.nomeFantasia ?? atual?.razaoSocial ?? 'sua empresa atual'}`
-              + ' — se não for isso, peça acesso à empresa correta antes de confirmar.',
-            tipo: 'erro',
-          })
+          // ⛔ NÃO use `setToast` aqui: 38 linhas abaixo, no MESMO handler e sem `return` no meio,
+          // há um `setToast` incondicional com o resumo do processamento. `toast` é um estado só e
+          // o componente não enfileira — o último vence, sempre. A primeira versão deste aviso era
+          // código morto, e o operador via "12 produto(s) processado(s) com sucesso" VERDE enquanto
+          // a entrada ia para a empresa errada. É o mesmo defeito que o comentário do
+          // `setXmlTemDuplicatas` logo abaixo registra, no mesmo handler, uma rodada depois.
+          //
+          // Estado persistente + bloqueio do Confirmar: o aviso precisa sobreviver ao resumo e
+          // continuar visível enquanto o operador resolve as pendências, que é quando ele decide.
+          setEmpresaDoXmlNaoLiberada(true)
         }
       }
 
@@ -916,6 +924,21 @@ export default function EntradaMercadoriaForm() {
   })
 
   const algumCustoZerado = itens.some((i) => desmascararMoeda(i.custoTexto || '0') <= 0)
+  /**
+   * ⛔ Preço de venda abaixo do custo, barrado AQUI — o servidor recusa e o campo não está na tela.
+   *
+   * `precoVendaTexto` é preenchido pelo popup de lançamento (um preço para o lote) e **não aparece
+   * em coluna nenhuma** da grid, que mostra Descrição · Variação · Quantidade · Custo · Total. Mas
+   * o Preço de Custo da grid é editável — é para isso que ele existe. O operador aceitava R$ 12,00
+   * de venda sobre R$ 10,00 de custo no popup, depois corrigia o custo para R$ 15,00 conferindo a
+   * nota do fornecedor, e o Confirmar voltava 400 falando de um preço de venda que ele não vê e não
+   * tem como editar — com 8 tamanhos já lançados e sem saber qual item. A única saída era remover
+   * as linhas e refazer pelo popup.
+   */
+  const linhaComVendaAbaixoDoCusto = itens.find((i) => {
+    const venda = desmascararMoeda(i.precoVendaTexto || '0')
+    return venda > 0 && venda < desmascararMoeda(i.custoTexto || '0')
+  })
   /** Data de parcela digitada errada (não só em branco) — par do `dataEntradaTextoInvalida`. */
   const algumaParcelaComDataInvalida = parcelas.some((p) => p.dataVencimentoTexto.trim() !== '' && !dataValida(p.dataVencimentoTexto))
   const algumaParcelaIncompleta = parcelas.some((p) => !p.dataVencimentoTexto.trim() || desmascararMoeda(p.valorTexto || '0') <= 0)
@@ -973,8 +996,10 @@ export default function EntradaMercadoriaForm() {
     itens.length > 0 &&
     pendentes.length === 0 &&
     !algumCustoZerado &&
+    linhaComVendaAbaixoDoCusto === undefined &&
     !algumaParcelaIncompleta &&
     !dataEntradaInvalida &&
+    !empresaDoXmlNaoLiberada &&
     !dataEntradaTextoInvalida &&
     !algumaParcelaComDataInvalida &&
     !totalParcelasNaoBate &&
@@ -1181,6 +1206,18 @@ export default function EntradaMercadoriaForm() {
           </>
         )}
       </div>
+      {/* ⛔ Fica FORA do bloco do seletor de propósito: com uma única empresa permitida o
+          `<select>` não é renderizado, e é justamente aí que o operador não teria como
+          desconfiar de nada. */}
+      {empresaDoXmlNaoLiberada && (
+        <div className="col-12">
+          <p className="erro-campo">
+            Esta nota foi faturada contra <strong>outra empresa</strong>, que não está liberada para
+            o seu usuário — a entrada não pode ser confirmada assim. Peça acesso à empresa correta,
+            ou entre com um usuário que já a tenha, antes de continuar.
+          </p>
+        </div>
+      )}
       {empresasPermitidas && empresasPermitidas.length > 1 && (
         <div className="col-3">
           <label htmlFor="entrada-empresa">Empresa *</label>
@@ -1359,6 +1396,14 @@ export default function EntradaMercadoriaForm() {
         </div>
       )}
 
+      {linhaComVendaAbaixoDoCusto && (
+        <p className="erro-campo">
+          O preço de venda de "{linhaComVendaAbaixoDoCusto.descricao}" (
+          {moeda(desmascararMoeda(linhaComVendaAbaixoDoCusto.precoVendaTexto || '0'))}) ficou abaixo do
+          preço de custo ({moeda(desmascararMoeda(linhaComVendaAbaixoDoCusto.custoTexto || '0'))}).
+          Remova a linha e lance de novo pelo popup, ajustando o preço de venda.
+        </p>
+      )}
       {totalParcelasNaoBate && (
         <p className="erro-campo">
           O total das parcelas ({moeda(valorParcelasTotal)}) precisa bater com o total dos produtos lançados ({moeda(valorTotal)}).
@@ -1681,6 +1726,15 @@ export default function EntradaMercadoriaForm() {
                                                   linha.qtd ?? 1,
                                                   linha.custoUnitario ?? 0,
                                                   linha.codigoFornecedor,
+                                                  // ⛔ O `ncm` faltava, e este é o caminho PRINCIPAL
+                                                  // do XML com cor/grade: os outros três chamadores
+                                                  // de `lancarItemComCusto` sempre passaram. Sem
+                                                  // ele o payload vai sem NCM, o
+                                                  // `UPDATE produto SET codigo_ncm` não roda, e o
+                                                  // produto fica sem NCM mesmo com a nota do
+                                                  // fornecedor declarando o certo — falta que só
+                                                  // aparece na PRIMEIRA NFC-e dele, longe daqui.
+                                                  linha.ncm,
                                                 )
                                                 removerPendente(linha.numeroLinha)
                                               }}
