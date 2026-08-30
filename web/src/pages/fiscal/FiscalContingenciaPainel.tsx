@@ -9,6 +9,8 @@ import { buscarContingencia, entrarEmContingencia, sairDaContingencia } from '..
 import { ApiError } from '../../lib/api'
 import Toast from '../../components/Toast'
 import { maiusculas } from '../../lib/texto'
+import { fecharAoClicarNoFundo } from '../../lib/modais'
+import CabecalhoModal from '../../components/CabecalhoModal'
 
 function formatarDataHora(iso: string): string {
   return new Date(iso).toLocaleString('pt-BR', {
@@ -42,6 +44,7 @@ export default function FiscalContingenciaPainel() {
   const [idEmpresa, setIdEmpresa] = useState<number | null>(null)
   const [justificativa, setJustificativa] = useState('')
   const [processando, setProcessando] = useState(false)
+  const [confirmandoEntrada, setConfirmandoEntrada] = useState(false)
   const [erro, setErro] = useState<string | null>(null)
 
   const { data: empresas } = useQuery({ queryKey: ['fiscal-empresas'], queryFn: listarEmpresasFiscal })
@@ -60,8 +63,27 @@ export default function FiscalContingenciaPainel() {
     refetchInterval: 30_000,
   })
 
+  /**
+   * ⚠️ Pergunta antes de ENTRAR, e só antes de entrar — as duas ações têm custo assimétrico.
+   *
+   * O painel refaz a consulta a cada 30 s (correto: o estado muda sozinho por DF19 e pelo job de
+   * drenagem), e o MESMO lugar da tela mostra "Sair" ou "Entrar" conforme `estado.ativa`. Com a
+   * loja em contingência, o operador começa a digitar a justificativa da SAÍDA ("INTERNET
+   * VOLTOU"); nesse meio tempo o job transmite a fila e sai da contingência sozinho, o refetch
+   * chega, e o botão vira "Entrar em contingência" debaixo do cursor. O clique **entra** em
+   * contingência com aquela justificativa — e dali em diante toda NFC-e sai offline na série 9,
+   * com prazo legal de 24 h, sem ninguém perceber até alguém reabrir o painel.
+   *
+   * Sair não precisa de confirmação: é a direção que devolve a loja ao estado normal.
+   */
   async function confirmarEntrar() {
     if (idEmpresa === null || !justificativa.trim()) return
+    setConfirmandoEntrada(true)
+  }
+
+  async function entrarDeVerdade() {
+    if (idEmpresa === null || !justificativa.trim()) return
+    setConfirmandoEntrada(false)
     setProcessando(true)
     setErro(null)
     try {
@@ -186,6 +208,27 @@ export default function FiscalContingenciaPainel() {
         )}
       </div>
 
+
+      {confirmandoEntrada && (
+        <div className="modal-overlay" onClick={fecharAoClicarNoFundo(() => setConfirmandoEntrada(false))}>
+          <div className="modal" role="dialog" aria-label="Confirmar entrada em contingência" onClick={(e) => e.stopPropagation()}>
+            <CabecalhoModal titulo="Entrar em contingência?" aoFechar={() => setConfirmandoEntrada(false)} />
+            <p>
+              A partir de agora as notas serão emitidas <strong>offline</strong>, na série de
+              contingência, e precisam ser transmitidas à SEFAZ em até <strong>24 horas</strong>.
+            </p>
+            <p className="muted">Justificativa: {justificativa.trim()}</p>
+            <div className="ajuda-rodape">
+              <button type="button" className="btn ghost" onClick={() => setConfirmandoEntrada(false)}>
+                Cancelar
+              </button>
+              <button type="button" className="btn" disabled={processando} onClick={entrarDeVerdade}>
+                Entrar em contingência
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {erro && <Toast mensagem={erro} tipo="erro" aoFechar={() => setErro(null)} />}
     </div>
   )

@@ -25,8 +25,13 @@ public final class MotivoDeFalha {
     }
 
     public static String legivel(Throwable e, String padrao) {
-        if (e instanceof ResponseStatusException rse && rse.getReason() != null && !rse.getReason().isBlank()) {
-            return rse.getReason();
+        // ⚠️ O `return padrao` fica DENTRO do `instanceof`: com `reason` nulo,
+        // `ResponseStatusException.getMessage()` devolve o status cru ("409 CONFLICT") — não devolve
+        // null, então cair no ramo de baixo poria um código HTTP no campo que a tela pinta em
+        // vermelho. Sem RSE de um argumento só em `api/src/main` hoje, mas o guarda é de graça.
+        if (e instanceof ResponseStatusException rse) {
+            String reason = rse.getReason();
+            return reason == null || reason.isBlank() ? padrao : reason;
         }
         String msg = e.getMessage();
         return msg == null || msg.isBlank() ? padrao : msg;

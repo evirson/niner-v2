@@ -161,6 +161,17 @@ class ConfiguracaoPlataformaTest {
                         .contentType(APPLICATION_JSON).content("{\"smtpHost\":\"\"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.smtpHost").doesNotExist());
+
+        // ⛔ E o "vazio apaga" NÃO pode valer para `smtp_remetente_nome`, que é a única coluna
+        // NOT NULL do UPDATE (V041, DEFAULT 'Nainer'). Limpar o campo na tela — que vem preenchido —
+        // faria o CASE produzir NULL, o Postgres recusar, e o handler global responder
+        // 409 "Registro em uso por outro cadastro" numa tela de configuração, DESCARTANDO todas as
+        // outras alterações do mesmo PUT. Para uma coluna NOT NULL com DEFAULT não existe "apagar":
+        // existe "voltar ao padrão".
+        mvc.perform(put("/api/admin/configuracao").header("Authorization", "Bearer " + token)
+                        .contentType(APPLICATION_JSON).content("{\"smtpRemetenteNome\":\"\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.smtpRemetenteNome").value("Nainer"));
     }
 
     @Test

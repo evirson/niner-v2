@@ -170,11 +170,11 @@ export default function ZerarContagemEstoque() {
       {confirmandoZerar && (
         <div
           className="modal-overlay"
-          onClick={() => {
+          onClick={fecharAoClicarNoFundo(() => {
             if (zerar.isPending) return
             setConfirmandoZerar(false)
             setTextoConfirmacaoZerar('')
-          }}
+          })}
         >
           <div className="modal" role="dialog" aria-label="Confirmar zerar contagem" onClick={(e) => e.stopPropagation()}>
             <h2 style={{ marginTop: 0 }}>Zerar Contagem de Estoque?</h2>

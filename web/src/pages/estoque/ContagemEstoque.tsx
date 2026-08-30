@@ -215,11 +215,21 @@ export default function ContagemEstoque() {
                         <td>{linha.variacaoCor ?? '—'}</td>
                         <td>{linha.variacaoTamanho ?? '—'}</td>
                         <td style={{ textAlign: 'right' }}>
+                          {/* ⚠️ Corrigir a quantidade é PUT (ALTERAR) e a lixeira é DELETE
+                              (EXCLUIR) — ações diferentes da leitura do código de barras, que é
+                              INCLUIR. A primeira versão desta correção travou só o campo do leitor,
+                              e o caso comum é justamente o admin conceder "acessar + incluir": o
+                              conferente bipava 300 produtos, corrigia uma quantidade digitada
+                              errada e o `onBlur` levava 403 — com a grade "voltando" sozinha ao
+                              valor antigo, porque `qtdEditando` é limpo ANTES da mutation. Com
+                              `disabled` o `onBlur` sequer dispara. */}
                           <input
                             className="mono"
                             style={{ width: 110, textAlign: 'right' }}
                             inputMode={permiteQtdDecimal ? undefined : 'numeric'}
                             value={textoEditando(linha)}
+                            disabled={!acoes.alterar}
+                            title={acoes.alterar ? undefined : 'Você não tem permissão para alterar a contagem.'}
                             onChange={(e) => aoMudarQtd(linha.idVariacao, e.target.value)}
                             onFocus={(e) => e.target.select()}
                             onBlur={() => aoSairQtd(linha)}
@@ -229,6 +239,7 @@ export default function ContagemEstoque() {
                           <button
                             type="button"
                             className="acao-icone acao-excluir"
+                            disabled={!acoes.excluir}
                             onClick={() => setLinhaParaRemover(linha)}
                             aria-label={`Remover ${linha.descricaoProduto}`}
                             title="Remover"
@@ -281,7 +292,7 @@ export default function ContagemEstoque() {
               <button
                 type="button"
                 className="btn"
-                disabled={remover.isPending}
+                disabled={remover.isPending || !acoes.excluir}
                 onClick={() => {
                   remover.mutate(linhaParaRemover.idVariacao)
                   setLinhaParaRemover(null)

@@ -33,6 +33,7 @@ import {
   completarMoeda,
   completarQuantidade,
   dataParaIso,
+  dataValida,
   desmascararMoeda,
   desmascararQuantidade,
   formatarMoeda,
@@ -872,12 +873,30 @@ export default function EntradaMercadoriaForm() {
   })
 
   const algumCustoZerado = itens.some((i) => desmascararMoeda(i.custoTexto || '0') <= 0)
+  /** Data de parcela digitada errada (não só em branco) — par do `dataEntradaTextoInvalida`. */
+  const algumaParcelaComDataInvalida = parcelas.some((p) => p.dataVencimentoTexto.trim() !== '' && !dataValida(p.dataVencimentoTexto))
   const algumaParcelaIncompleta = parcelas.some((p) => !p.dataVencimentoTexto.trim() || desmascararMoeda(p.valorTexto || '0') <= 0)
   // "Pode mudar pra trás, nunca pra frente" (2026-08-11) — vale pros dois fluxos com abas
   // (Planilha e, desde 2026-08-12, Individual), onde o campo é exibido; comparação de string
   // "aaaa-mm-dd" já ordena cronologicamente.
   const dataEntradaIso = dataEntradaTexto.trim() ? dataParaIso(dataEntradaTexto) : null
   const dataEntradaInvalida = temAbas && dataEntradaIso != null && dataEntradaIso > dataParaIso(hojeBr())!
+  /**
+   * ⛔ Data DIGITADA ERRADA (não futura — errada mesmo) não pode passar em silêncio.
+   *
+   * `dataParaIso` devolve `null` para qualquer texto que não passe em `dataValida`, e o servidor
+   * trata `dataMovimento` nulo como **hoje** (`EntradaMercadoriaService`). Como
+   * `dataEntradaInvalida` acima só é calculado quando `dataEntradaIso != null`, a única validação
+   * de data era sobre datas VÁLIDAS e futuras: uma digitação incompleta ("15/08", porque o
+   * `onFocus` seleciona tudo e o operador não terminou) ou impossível ("31/09/2026") não gerava
+   * erro nenhum, não travava o Confirmar, e a entrada era gravada com a data de HOJE.
+   *
+   * O custo é caro e só aparece depois: a entrada cai no mês errado no Kardex, na Lucratividade e
+   * na DRE, a nota fica com data diferente da NF-e do fornecedor, e a regra "vencimento não pode
+   * ser antes da Data da Entrada" — que também depende de `dataEntradaIso != null` — deixa de
+   * valer inteira. E a entrada não é editável depois.
+   */
+  const dataEntradaTextoInvalida = temAbas && dataEntradaTexto.trim() !== '' && !dataValida(dataEntradaTexto)
 
   /** Total das parcelas precisa bater com o total dos produtos lançados (2026-08-11, pedido do
    *  dono do produto) — comparado em centavos pra não sofrer de imprecisão de ponto flutuante.
@@ -913,6 +932,8 @@ export default function EntradaMercadoriaForm() {
     !algumCustoZerado &&
     !algumaParcelaIncompleta &&
     !dataEntradaInvalida &&
+    !dataEntradaTextoInvalida &&
+    !algumaParcelaComDataInvalida &&
     !totalParcelasNaoBate &&
     !parcelaComVencimentoAntesDaEntrada &&
     !chaveJaImportada
@@ -942,7 +963,10 @@ export default function EntradaMercadoriaForm() {
           parcelas.length > 0
             ? parcelas.map((p) => ({
                 numeroDuplicata: p.numeroDuplicata.trim() || null,
-                dataVencimento: p.dataVencimentoTexto.split('/').reverse().join('-'),
+                // ⚠️ `dataParaIso`, nunca `split('/').reverse()`: aquele devolvia "09-10" para uma digitação
+        // parada no meio ("10/09") e "2026-02-31" para uma data impossível. O Jackson recusava o
+        // corpo e o toast saía genérico, sem dizer QUAL parcela — com 40 itens já digitados na tela.
+        dataVencimento: dataParaIso(p.dataVencimentoTexto)!,  // `podeConfirmar` já exige válida e não-vazia
                 valor: desmascararMoeda(p.valorTexto || '0'),
               }))
             : null,
@@ -1162,6 +1186,7 @@ export default function EntradaMercadoriaForm() {
           />
         )}
         {dataEntradaInvalida && <p className="erro-campo">Não é possível informar uma data futura.</p>}
+        {dataEntradaTextoInvalida && <p className="erro-campo">Data inválida — use o formato dd/mm/aaaa.</p>}
       </div>
       {!(modo === 'XML' && xmlTemDuplicatas) && (
         <div className="col-3">

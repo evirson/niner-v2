@@ -92,12 +92,27 @@ export default function ComprovanteValeModal({
                     ANTES disso (cadastro incompleto, certificado, XSD): não há linha em
                     `documento_fiscal`, e mandar o operador procurar lá faz com que ele não ache
                     nada e conclua que o sistema perdeu a nota. */}
+                {/* ⚠️ São TRÊS populações com conselhos diferentes, e a primeira versão desta
+                    correção separou uma de três — reabrindo, na porta ao lado, o mesmo defeito que
+                    ela veio fechar. O botão "Reprocessar" da tela de Documentos Fiscais só existe
+                    para TRANSMITINDO/ASSINADO (`SITUACOES_REPROCESSAVEIS`), e o servidor recusa o
+                    resto com 409. Mandar quem levou REJEITADO para lá é mandá-lo procurar um botão
+                    que não vai encontrar. */}
                 {devolucao.notaFiscal.situacao === 'FALHA_NA_EMISSAO' ? (
                   <>
                     <br />
                     O vale-mercadoria abaixo continua válido e a mercadoria já voltou ao estoque —
-                    mas a nota <strong>não chegou a ser emitida</strong>. Corrija o que a mensagem
-                    acima aponta e emita a NF-e de devolução de novo.
+                    mas a nota <strong>não chegou a ser emitida</strong> e não ficou registrada em
+                    Documentos Fiscais. Corrija o que a mensagem acima aponta; a nota desta devolução
+                    precisará ser emitida à parte.
+                  </>
+                ) : devolucao.notaFiscal.situacao === 'REJEITADO' || devolucao.notaFiscal.situacao === 'DENEGADO' ? (
+                  <>
+                    <br />
+                    O vale-mercadoria abaixo continua válido e a mercadoria já voltou ao estoque. A
+                    nota foi <strong>recusada pela SEFAZ</strong> e está registrada em Documentos
+                    Fiscais — <strong>recusa não se reprocessa</strong>: corrija a causa apontada
+                    acima antes de emitir de novo.
                   </>
                 ) : (
                   devolucao.notaFiscal.situacao !== 'AUTORIZADO' && (

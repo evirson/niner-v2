@@ -213,7 +213,16 @@ public class EntradaMercadoriaService {
                 // projeto inteiro) — checado aqui contra o custo JÁ com rateio, porque é o que
                 // de fato vai pro `produto.preco_custo` no UPDATE logo abaixo.
                 if (novoPrecoVenda.compareTo(custoUnitarioComRateio.setScale(2, RoundingMode.HALF_UP)) < 0) {
-                    throw new IllegalArgumentException("Preço de venda não pode ser menor que o preço de custo.");
+                    // ⚠️ A mensagem precisa dizer que o custo é COM RATEIO, e quanto ficou. O popup
+                    // de lançamento valida contra o custo DIGITADO (ele não conhece o frete, que é
+                    // do lote inteiro e mora em outra aba), então a tela mostrava 10,00 e 10,00 —
+                    // os dois iguais — e o servidor recusava. Sem o número e o nome do campo, o
+                    // operador não tem como ligar a recusa ao valor de frete que ele informou.
+                    throw new IllegalArgumentException(
+                            ("Preço de venda (R$ %s) não pode ser menor que o preço de custo COM o rateio do frete "
+                                    + "(R$ %s). Reveja o valor a ratear na aba Financeiro ou aumente o preço de venda.")
+                                    .formatted(novoPrecoVenda.toPlainString(),
+                                            custoUnitarioComRateio.setScale(2, RoundingMode.HALF_UP).toPlainString()));
                 }
                 jdbc.sql("""
                                 UPDATE produto

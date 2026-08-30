@@ -6,6 +6,7 @@ import { ApiError } from '../../../lib/api'
 import { buscarPermiteQtdDecimal, buscarUsaCorGrade } from '../../../lib/configuracaoGeral'
 import { listarCores } from '../../../lib/cores'
 import { buscarProdutosEntrada, type ProdutoOpcaoEntrada } from '../../../lib/entradaMercadoria'
+import { LIMITE_BUSCA_EMISSAO } from '../../../lib/etiquetaEmissao'
 import { buscarGrade } from '../../../lib/grades'
 import {
   completarMoeda,
@@ -293,6 +294,19 @@ export default function PesquisaProdutoEntradaModal({
                 </tbody>
               </table>
             </div>
+
+            {/* ⚠️ A busca corta em 20 no servidor (`EntradaMercadoriaService`, ORDER BY + LIMIT 20).
+                Sem este aviso, o operador que filtra por marca vê 20 linhas, não acha o produto que
+                está recebendo e conclui que ele NÃO ESTÁ CADASTRADO — clica em "Cadastrar Produto"
+                e cria um duplicado, com SKU novo, estoque partido em duas fichas e o EAN antigo
+                apontando para o produto velho. O projeto já corrigiu isso em quatro telas na
+                auditoria de 2026-08-21 (item 33); este popup, que é o passo 2 do fluxo Individual,
+                tinha ficado de fora. */}
+            {resultados && resultados.length === LIMITE_BUSCA_EMISSAO && (
+              <p className="muted" style={{ marginTop: 6 }}>
+                Mostrando os primeiros {LIMITE_BUSCA_EMISSAO} — refine a busca para ver mais.
+              </p>
+            )}
 
             <div className="ajuda-rodape">
 

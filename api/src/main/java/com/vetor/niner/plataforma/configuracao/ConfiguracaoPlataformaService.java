@@ -131,9 +131,19 @@ public class ConfiguracaoPlataformaService {
                                 WHEN CAST(? AS text) IS NULL THEN smtp_remetente_email
                                 WHEN CAST(? AS text) = ''    THEN NULL
                                 ELSE CAST(? AS text) END,
+                            -- ⛔ ESTA coluna é a única NOT NULL do UPDATE (V041, DEFAULT 'Nainer'),
+                            -- e o "vazio apaga" das irmãs NÃO se aplica a ela: gravar NULL viola a
+                            -- restrição, o handler global traduz para 409 "Registro em uso por
+                            -- outro cadastro" — mensagem sobre exclusão de cadastro numa tela de
+                            -- configuração — e, como é um UPDATE só, DESCARTA todas as demais
+                            -- alterações do mesmo PUT (host, porta, hora do backup, token do
+                            -- gateway). Foi uma regressão introduzida e medida no mesmo dia: o
+                            -- campo vem preenchido na tela, então limpá-lo é gesto natural.
+                            -- Para coluna NOT NULL com DEFAULT não existe "apagar", existe "voltar
+                            -- ao padrão" — e é isso que o ramo do vazio faz.
                             smtp_remetente_nome = CASE
                                 WHEN CAST(? AS text) IS NULL THEN smtp_remetente_nome
-                                WHEN CAST(? AS text) = ''    THEN NULL
+                                WHEN CAST(? AS text) = ''    THEN 'Nainer'
                                 ELSE CAST(? AS text) END,
                             backup_habilitado = COALESCE(CAST(? AS boolean), backup_habilitado),
                             backup_hora = COALESCE(CAST(? AS time), backup_hora),

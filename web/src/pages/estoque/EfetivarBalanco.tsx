@@ -10,6 +10,7 @@ import { efetivarBalanco, obterDiferencas } from '../../lib/estoqueBalanco'
 import { formatarQuantidade } from '../../lib/masks'
 import { maiusculas } from '../../lib/texto'
 import { usePermissaoDaTela } from '../../lib/usePermissaoDaTela'
+import { fecharAoClicarNoFundo } from '../../lib/modais'
 
 const FRASE_CONFIRMACAO_EFETIVAR = 'efetiva contagem'
 
@@ -157,11 +158,11 @@ export default function EfetivarBalanco() {
       {confirmando && (
         <div
           className="modal-overlay"
-          onClick={() => {
+          onClick={fecharAoClicarNoFundo(() => {
             if (efetivar.isPending) return
             setConfirmando(false)
             setTextoConfirmacaoEfetivar('')
-          }}
+          })}
         >
           <div className="modal" role="dialog" aria-label="Confirmar efetivação de balanço" onClick={(e) => e.stopPropagation()}>
             <h2 style={{ marginTop: 0 }}>Efetivar Balanço de Estoque?</h2>
