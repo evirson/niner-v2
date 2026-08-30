@@ -44,6 +44,7 @@ export default function FiltrosProdutosModal({
           <div className="col-3">
             <label htmlFor="crm-compras-de">Período de Compras De</label>
             <input
+              autoFocus
               id="crm-compras-de"
               placeholder="dd/mm/aaaa"
               value={valor.comprasDe}

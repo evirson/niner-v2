@@ -51,6 +51,7 @@ export default function FiltrosClientesModal({
           <div className="col-3">
             <label htmlFor="crm-cliente-inicial">Cliente Inicial</label>
             <input
+              autoFocus
               id="crm-cliente-inicial"
               placeholder="A"
               maxLength={40}

@@ -310,6 +310,18 @@ export default function ConfiguracaoGeralForm() {
                 NFC-e (o documento fiscal de serviço é a NFS-e, municipal).
               </p>
             </div>
+          </div>
+        </section>
+
+        <section className="section">
+          {/* ⚠️ Seção PRÓPRIA (auditoria 2026-08-29, rodada 4): este parâmetro tinha caído sob o
+              rótulo "Serviços", ao lado de "Usa serviços". Quem leva o 409 do fechamento vem
+              procurar por "caixa" e não acha nada — o rótulo afirmava que a regra é do módulo de
+              serviços, que é a informação errada exatamente no momento em que ele mais precisa da
+              certa. Rotulagem não muda cálculo, muda a decisão de quem lê. */}
+          <p className="section-label">Caixa</p>
+
+          <div className="form-grid">
             <div className="col-6">
               <label className="checkbox-linha" style={{ marginTop: 0 }}>
                 <input
@@ -335,7 +347,7 @@ export default function ConfiguracaoGeralForm() {
         <section className="section">
           <p className="section-label">Fiscal</p>
 
-          <div className="form-grid">CAMPO
+          <div className="form-grid">
             <div className="col-6">
               <label className="checkbox-linha" style={{ marginTop: 0 }}>
                 <input

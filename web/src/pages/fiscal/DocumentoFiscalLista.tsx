@@ -6,6 +6,7 @@ import { BotaoFecharTela } from '../../components/BotaoFecharTela'
 import { IconeDocumentoFiscal, IconeLinkExterno, IconeOlho, IconeRecibo } from '../../components/Icones'
 import { useAuth } from '../../lib/auth'
 import { ApiError } from '../../lib/api'
+import { usePermissaoDaTela } from '../../lib/usePermissaoDaTela'
 import { hojeISO } from '../../lib/datas'
 import { dataParaIso, dataValida, formatarMoeda, isoParaData, mascararData } from '../../lib/masks'
 import { listarEmpresasFiscal } from '../../lib/fiscalConfiguracao'
@@ -86,6 +87,10 @@ function paginasVisiveis(atual: number, total: number): number[] {
  * que também é uma tela de consulta pura).
  */
 export default function DocumentoFiscalLista() {
+  // ⛔ Consultar SEFAZ e Reprocessar sao POST — o interceptor deriva INCLUIR em
+  // `fiscal.documentos`, e a permissao e concedivel (auditoria 2026-08-29, rodada 4). Sem isto o
+  // operador com so "acessar" clicava em Reprocessar numa nota travada e levava 403.
+  const acoes = usePermissaoDaTela('fiscal.documentos')
   const queryClient = useQueryClient()
   const { idEmpresa: idEmpresaSessao } = useAuth()
   const [idEmpresa, setIdEmpresa] = useState<number | null>(null)
@@ -325,7 +330,7 @@ export default function DocumentoFiscalLista() {
                             <IconeLinkExterno size={18} />
                           </a>
                         )}
-                        {item.chaveAcesso !== null && (
+                        {item.chaveAcesso !== null && acoes.incluir && (
                           <button
                             type="button"
                             className="btn ghost"
@@ -335,7 +340,7 @@ export default function DocumentoFiscalLista() {
                             {consultando === item.idDocumentoFiscal ? 'Consultando…' : 'Consultar SEFAZ'}
                           </button>
                         )}
-                        {SITUACOES_REPROCESSAVEIS.has(item.situacao) && (
+                        {SITUACOES_REPROCESSAVEIS.has(item.situacao) && acoes.incluir && (
                           <button
                             type="button"
                             className="btn ghost"

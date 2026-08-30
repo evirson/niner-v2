@@ -147,12 +147,27 @@ public class EntradaMercadoriaService {
         // Sem o rateio de frete/IPI/ICMS-ST — é o "total dos produtos" que a tela exibe e a base
         // da consistência com as duplicatas (ver a checagem depois do laço).
         BigDecimal valorTotalProdutos = BigDecimal.ZERO;
+        // ⚠️ O RESÍDUO DA DÍZIMA VAI NO ÚLTIMO ITEM (auditoria 2026-08-29, rodada 4). Arredondando
+        // item a item, R$ 10,00 rateados entre 3 itens iguais viravam 3 × R$ 3,33 = R$ 9,99: um
+        // centavo de frete sumia do custo a cada entrada, em silêncio, e ninguém comparava a soma
+        // com o valor digitado. Não descasa dinheiro pago (as duplicatas são conferidas contra o
+        // total SEM rateio), mas contamina custo e margem — e é a mesma regra de dízima que o
+        // projeto já aplica no desconto: arredonda uma vez, o resto vai para a última linha.
+        BigDecimal rateioDistribuido = BigDecimal.ZERO;
+        int indiceItem = 0;
         for (ItemResolvido item : itens) {
+            indiceItem++;
             BigDecimal valorAcrescimo = BigDecimal.ZERO;
             if (rateia && baseRateio.compareTo(BigDecimal.ZERO) > 0) {
-                BigDecimal proporcao = item.precoCusto().multiply(item.qtd())
-                        .divide(baseRateio, 10, RoundingMode.HALF_UP);
-                valorAcrescimo = req.valorRateio().multiply(proporcao).setScale(2, RoundingMode.HALF_UP);
+                if (indiceItem == itens.size()) {
+                    valorAcrescimo = req.valorRateio().setScale(2, RoundingMode.HALF_UP)
+                            .subtract(rateioDistribuido);
+                } else {
+                    BigDecimal proporcao = item.precoCusto().multiply(item.qtd())
+                            .divide(baseRateio, 10, RoundingMode.HALF_UP);
+                    valorAcrescimo = req.valorRateio().multiply(proporcao).setScale(2, RoundingMode.HALF_UP);
+                    rateioDistribuido = rateioDistribuido.add(valorAcrescimo);
+                }
             }
 
             jdbc.sql("""
@@ -240,7 +255,7 @@ public class EntradaMercadoriaService {
                             VALUES (plataforma.tenant_atual(), ?, ?)
                             """)
                     .params(idMovimento, req.xmlBruto()).update();
-            gravarTributacaoDosItens(idMovimento, req.xmlBruto());
+            gravarTributacaoDosItens(idMovimento, req.xmlBruto(), req.itens());
         }
 
         // Consistência entre o total dos produtos e a soma das duplicatas (2026-08-11 na tela;
@@ -731,7 +746,8 @@ public class EntradaMercadoriaService {
      * {@code id_variacao} nulo — a tributação dele continua registrada, porque a nota do fornecedor
      * declarou aquilo e a devolução pode precisar.
      */
-    private void gravarTributacaoDosItens(long idMovimento, String xmlBruto) {
+    private void gravarTributacaoDosItens(long idMovimento, String xmlBruto,
+                                          List<ItemEntradaRequest> itensDoRequest) {
         NfeXmlParser.NotaFiscalNfe nota;
         try {
             nota = NfeXmlParser.parse(new java.io.ByteArrayInputStream(xmlBruto.getBytes(StandardCharsets.UTF_8)));
@@ -744,7 +760,7 @@ public class EntradaMercadoriaService {
             return;
         }
 
-        Map<String, Long> variacaoPorCodigo = variacoesDaEntrada(idMovimento);
+        Map<String, Long> variacaoPorCodigo = variacoesDaEntrada(idMovimento, itensDoRequest);
         for (NfeXmlParser.ItemNfe item : nota.itens()) {
             NfeXmlParser.TributacaoItemNfe t = item.tributacao();
             jdbc.sql("""
@@ -782,8 +798,27 @@ public class EntradaMercadoriaService {
 
     /** Variações que ESTA entrada movimentou, indexadas por `sku` e por `ean` — as duas chaves que
      *  o preview usa para casar o item do fornecedor com o nosso produto. */
-    private Map<String, Long> variacoesDaEntrada(long idMovimento) {
+    private Map<String, Long> variacoesDaEntrada(long idMovimento, List<ItemEntradaRequest> itensDoRequest) {
         Map<String, Long> porCodigo = new java.util.HashMap<>();
+        // ⛔ O CÓDIGO DO FORNECEDOR, que o OPERADOR já casou com a variação nesta tela (auditoria
+        // 2026-08-29, rodada 4). O mapa era montado só com o NOSSO `sku` e o NOSSO `ean`, e a chave
+        // do item é `cEAN ?? cProd` — mas `NfeXmlParser` converte `cEAN` ausente ou "SEM GTIN" em
+        // null, e aí a chave vira o `cProd`, o código DO FORNECEDOR, que por definição não é nem um
+        // nem outro. Resultado: em toda nota SEM GTIN (confecção, fornecedor pequeno) o
+        // `entrada_nfe_item.id_variacao` nascia NULL, e ninguém via nada — o estoque entrava certo.
+        // ⛔ A conta só chegava na DEVOLUÇÃO ao fornecedor, semanas depois: os itens APARECEM na
+        // tela (a view não depende do vínculo), a devolução é gravada, o estoque BAIXA, e só então
+        // a montagem da NF-e 55 não acha o item e recusa com "quantidade acima do que a nota
+        // trouxe — cancele e refaça a seleção". Mercadoria baixada, sem nota, e a mensagem culpando
+        // o operador por um erro de seleção que ele não cometeu.
+        // ⚠️ Este par (código do fornecedor → variação) é exatamente o que a tela resolveu na aba
+        // "Não Localizados" e o que `produto_fornecedor` aprende; reinferir pelo XML joga fora o
+        // trabalho que o operador já fez.
+        for (ItemEntradaRequest item : itensDoRequest) {
+            if (item.codigoFornecedor() != null && !item.codigoFornecedor().isBlank()) {
+                porCodigo.put(item.codigoFornecedor().trim(), item.idVariacao());
+            }
+        }
         jdbc.sql("""
                         SELECT DISTINCT pb.id_variacao, pb.sku, pb.ean
                           FROM produto_movimento_detalhe pmd

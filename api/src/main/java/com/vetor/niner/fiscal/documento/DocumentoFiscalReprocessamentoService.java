@@ -142,11 +142,4 @@ public class DocumentoFiscalReprocessamentoService {
         return Set.copyOf(conjunto);
     }
 
-    private static void exigirAdmin(Jwt jwt) {
-        List<String> roles = jwt.getClaimAsStringList("roles");
-        if (roles == null || !roles.contains("ADMIN")) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN,
-                    "Apenas administradores podem reprocessar documentos fiscais.");
-        }
-    }
 }

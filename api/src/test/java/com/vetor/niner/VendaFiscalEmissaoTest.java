@@ -901,7 +901,11 @@ class VendaFiscalEmissaoTest {
         mvc.perform(post("/api/v1/pdv/vendas/" + idVenda + "/nfce").header("Authorization", "Bearer " + token)
                         .contentType(APPLICATION_JSON).content("{\"incluirCpf\":false}"))
                 .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.detail").value(org.hamcrest.Matchers.containsString("já tem a NFC-e")));
+                // ⚠️ "nota fiscal", não "NFC-e" (auditoria 2026-08-29, rodada 4): a trava passou a
+                // valer para QUALQUER modelo, porque este mesmo endpoint emite NF-e 55 quando o
+                // cliente é PJ e a decisão do modelo acontece DEPOIS dela. Prender o texto antigo
+                // prenderia a versão que deixava a venda a PJ passar direto e queimar número.
+                .andExpect(jsonPath("$.detail").value(org.hamcrest.Matchers.containsString("já tem a nota fiscal")));
 
         // ⚠️ Conferir o BANCO, não só o status: um teste que valida 409 passaria mesmo se a recusa
         // viesse do índice único DEPOIS de reservar número — e número queimado vira buraco na

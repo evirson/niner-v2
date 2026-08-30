@@ -79,13 +79,17 @@ export default function SangriaCaixa() {
   }
 
   return (
-    <div className="page">
-      <div className="page-header">
+    // ⛔ As classes `page`, `page-header`, `page-header-acoes` e `btn-primary` NÃO EXISTEM em
+    // styles.css (auditoria 2026-08-29, rodada 4) — a tela mais nova do produto (V094) nasceu
+    // inteira fora do padrão e ninguém a viu ainda: sem topbar alinhada, sem o ícone no tamanho
+    // dos outros, e com a grade de sangrias saindo como tabela HTML crua, sem borda nem zebra.
+    <div className="lista-tela">
+      <div className="topbar-tela">
         <div className="titulo-tela">
-          <IconeContaCorrente size={22} />
+          <IconeContaCorrente size={34} />
           <h1>Sangria de Caixa</h1>
         </div>
-        <div className="page-header-acoes">
+        <div className="topbar-acoes">
           <AjudaDaTela chaveTela="sangria-caixa" />
           <BotaoFecharTela />
         </div>
@@ -154,7 +158,7 @@ export default function SangriaCaixa() {
             </div>
 
             <div className="footer-bar">
-              <button type="submit" className="btn btn-primary" disabled={mutacao.isPending}>
+              <button type="submit" className="btn" disabled={mutacao.isPending}>
                 {mutacao.isPending ? 'Registrando…' : 'Registrar sangria'}
               </button>
             </div>
@@ -162,7 +166,7 @@ export default function SangriaCaixa() {
 
           <p className="section-label" style={{ marginTop: 20 }}>Sangrias deste caixa</p>
           <div className="table-wrap">
-            <table>
+            <table className="table table-compacta">
               <thead>
                 <tr>
                   <th>Nº</th>

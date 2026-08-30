@@ -61,6 +61,41 @@ public class DocumentoFiscalRepositorio {
                 .query(String.class).optional().orElse(null);
     }
 
+    /**
+     * A nota viva da venda em <b>qualquer modelo</b> — 65 ou 55.
+     *
+     * <p>⛔ A trava de reemissão perguntava só pelo modelo <b>65</b> (auditoria 2026-08-29, rodada
+     * 4), e desde 2026-08-24 o <b>mesmo endpoint</b> emite NF-e 55 quando o cliente é PJ — quem
+     * decide é o assembler, <i>depois</i> da trava. Numa venda a PJ já autorizada, um duplo clique
+     * ou um retry de rede passava direto: o assembler montava a 55 de novo,
+     * {@code FiscalNumeracaoService.reservar} <b>queimava um número</b> da série, o XML era
+     * assinado, e só o índice único da V082 barrava — devolvendo 409 <i>"Registro em uso por outro
+     * cadastro"</i>. Número queimado vira buraco de numeração e obrigação de inutilização formal,
+     * que é exatamente o que a guarda em Java existe para evitar.
+     *
+     * <p>⚠️ É o irmão do defeito de 2026-08-24 (constante literal onde existe campo de domínio) na
+     * rotina ao lado — e o javadoc de {@code MODELO_NFCE} logo abaixo já avisava.
+     *
+     * <p>⛔ <b>E o {@code @Transactional} não é decoração</b>: escrevi este método sem ele e o
+     * {@code VendaFiscalEmissaoTest.segundaEmissaoDaMesmaVendaEhRecusadaSemQueimarNumero} reprovou
+     * na hora — sem transação, {@code plataforma.tenant_atual()} vem NULL, o SELECT sai vazio, e a
+     * trava responde <b>"pode emitir" sempre</b>. É a armadilha que o javadoc do método irmão, seis
+     * linhas acima, descreve palavra por palavra; eu a reintroduzi copiando o método sem a
+     * anotação. Ao copiar um método de repositório, <b>a anotação é parte do que se copia</b>.
+     */
+    @Transactional(readOnly = true)
+    public String numeroDaNotaVivaDaVendaQualquerModelo(long idEmpresa, long idVenda) {
+        return jdbc.sql("""
+                        SELECT numero::text FROM documento_fiscal
+                         WHERE id_tenant = plataforma.tenant_atual() AND id_empresa = ?
+                           AND id_venda = ?
+                           AND situacao IN ('AUTORIZADO', 'CONTINGENCIA', 'TRANSMITINDO', 'ASSINADO')
+                         LIMIT 1
+                        """)
+                .params(idEmpresa, idVenda)
+                .query(String.class).optional().orElse(null);
+    }
+
     /** ⚠️ NÃO usar para gravar documento de VENDA: desde 2026-08-24 o modelo vem do pedido
      *  ({@code pedido.modelo()}), porque venda a contribuinte de ICMS sai em NF-e 55. Gravar 65
      *  fixo aqui fazia a nota nascer 55 no XML e 65 no banco — divergência que só um teste
@@ -838,7 +873,15 @@ public class DocumentoFiscalRepositorio {
                           FROM documento_fiscal d
                           JOIN empresa e ON e.id_tenant = d.id_tenant AND e.id_empresa = d.id_empresa
                          WHERE d.id_tenant = plataforma.tenant_atual() AND d.id_documento_fiscal = ?
-                           AND d.situacao = 'AUTORIZADO'
+                           -- ⛔ CANCELADO também (auditoria 2026-08-29, rodada 4). A nota
+                           -- autorizada cujo arquivamento falhou (MinIO fora do ar — o caminho
+                           -- quente engole a falha, por desenho) e que é cancelada em seguida
+                           -- deixava de ser AUTORIZADO antes de o job pegá-la: o `nfeProc` nunca
+                           -- mais era arquivado, e a guarda legal de 5 anos ficava sem ele.
+                           -- ⚠️ E a Exportação de XML CONTA essa nota como pendente (situacao IN
+                           -- ('AUTORIZADO','CANCELADO')): duas rotinas com populações diferentes
+                           -- para o mesmo conceito, e a tela mandava aguardar um job que a ignora.
+                           AND d.situacao IN ('AUTORIZADO', 'CANCELADO')
                         """)
                 .param(idDocumentoFiscal)
                 .query((rs, n) -> new DocumentoParaArquivar(
@@ -897,7 +940,8 @@ public class DocumentoFiscalRepositorio {
         return jdbc.sql("""
                         SELECT id_documento_fiscal FROM documento_fiscal
                          WHERE id_tenant = plataforma.tenant_atual()
-                           AND situacao = 'AUTORIZADO' AND xml_objeto_bucket IS NULL
+                           -- ⛔ CANCELADO também — ver `buscarParaArquivar`.
+                           AND situacao IN ('AUTORIZADO', 'CANCELADO') AND xml_objeto_bucket IS NULL
                          ORDER BY data_autorizacao
                          LIMIT ?
                         """)

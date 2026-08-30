@@ -113,6 +113,34 @@ sair, não há defeito nenhum e a pendência fecha. Se cortar, a correção é a
 ### 17. 🔔 Estorno não revoga assinatura
 Dívida **conhecida e aceita**, política dele. **Pedido explícito: avisar em toda revisão/auditoria.**
 
+
+### 66. 🔵 Inutilização de numeração não filtra ANO — buraco de exercício anterior "resolvido" com pedido do ano corrente
+`FiscalInutilizacaoRepositorio.buracos/numerosJaConsumidos/sobrepoe` trabalham por (empresa, modelo,
+série), **sem ano** — o que é coerente com `fiscal_numeracao.proximo_numero`, que é contínuo e não
+reinicia por ano. Mas o pedido enviado à SEFAZ leva `ano = ano corrente no fuso da UF`.
+
+**Cenário:** número 120 alocado e perdido em 12/2026. Em 01/2027 a tela mostra 120 como buraco; o
+operador inutiliza; o XML declara `<ano>27</ano>`, faixa 120–120. Se a SEFAZ homologar, foi
+homologada a inutilização de um número **de 2027** que a loja nunca vai emitir (a sequência já
+passou de 120) — enquanto o buraco de **2026** continua aberto perante o fisco e **some da tela para
+sempre**, porque a lista de inutilizados também não filtra ano. O lojista fica convencido de que
+resolveu.
+
+⛔ **Não corrigi**: a pergunta é de produto e fiscal, não de código — *como inutilizar buraco de
+exercício já encerrado?* As saídas possíveis são (a) gravar/derivar o ano do buraco a partir da
+emissão vizinha na série e mandar esse ano no pedido, (b) recusar faixa de ano anterior com uma
+mensagem explicando, ou (c) aceitar a limitação e documentar. As três dependem do que o contador
+diz sobre inutilização retroativa. ⚠️ E o desfecho na SEFAZ **não se prova lendo** — precisa de
+transmissão em homologação, que hoje só você pode fazer.
+
+### 67. 🟢 Reimportar a mesma NF-e corrigida pode travar o arquivamento num laço a cada 10 min
+O caminho do XML de entrada é `entrada/{ano}/{mes}/{chaveNfe}.xml`, e cancelar a entrada **libera a
+chave** para reimportação (é comportamento desejado: "reimportar a mesma NF-e corrigida"). Se o XML
+reimportado diferir em **qualquer byte** do já arquivado, `gravarComIdempotencia` levanta divergência,
+o job engole, e tenta de novo a cada 10 minutos para sempre — com o `xml_bruto` da entrada nova nunca
+saindo do banco. A correção é incluir o `id_movimento` no caminho do objeto; deixei para a próxima
+rodada porque depende de decidir o que fazer com os objetos já gravados no caminho antigo.
+
 ## 🟢 Bola minha
 
 ### 19. A exportação de XML nunca rodou com período acima de 2.000 notas

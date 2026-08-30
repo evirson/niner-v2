@@ -11,6 +11,87 @@ Registro cronológico das decisões e entregas. Atualizar a cada marco relevante
 
 ## Estado atual
 
+> ## 📌 2026-08-29 (9) — auditoria, rodada 4: o fiscal, a importação e a palavra "CAMPO" na tela
+>
+> Rodada nas áreas que nenhuma das anteriores tinha coberto (fiscal, entrada por XML/planilha,
+> plataforma, CRM, importação/exportação) e nas **travessias entre módulos**. **19 achados**;
+> corrigi 17 e deixei 2 registrados como pendência.
+>
+> ### ⛔ O que quebrava dinheiro ou nota fiscal
+>
+> - **A trava de "uma nota por venda" só perguntava pelo modelo 65.** Desde 2026-08-24 o **mesmo
+>   endpoint** emite NF-e 55 quando o cliente é PJ — e quem decide o modelo é o assembler, **depois**
+>   da trava. Numa venda a PJ já autorizada, um duplo clique passava direto: o assembler montava a
+>   55 de novo, **queimava um número** da série, assinava o XML, e só o índice único da V082 barrava
+>   — com *"Registro em uso por outro cadastro"*. Número queimado vira buraco de numeração e
+>   obrigação de **inutilização formal**, que é exatamente o que a guarda existe para evitar.
+>   ⭐ **E o projeto já tinha o teste certo** (`segundaEmissaoDaMesmaVendaEhRecusadaSemQueimarNumero`,
+>   que confere o `proximo_numero` no banco) — ele reprovou na hora quando escrevi o método novo
+>   **sem `@Transactional`**, reintroduzindo a armadilha que o javadoc do método irmão descreve seis
+>   linhas acima: sem transação, `tenant_atual()` é NULL, o SELECT sai vazio e a trava **libera
+>   sempre**. Ao copiar um método de repositório, a anotação é parte do que se copia.
+> - **Toda nota de fornecedor SEM GTIN perdia o vínculo com a variação.** A chave do item é
+>   `cEAN ?? cProd`, e o parser converte `cEAN` ausente ou `"SEM GTIN"` em `null` — então a chave
+>   vira o `cProd`, o **código do fornecedor**, que por definição não é o nosso SKU nem o nosso EAN.
+>   O `entrada_nfe_item.id_variacao` nascia **NULL** e ninguém via nada: o estoque entrava certo.
+>   ⛔ A conta chegava semanas depois, na **devolução ao fornecedor**: os itens aparecem na tela, a
+>   devolução é gravada, **o estoque baixa**, e só então a montagem da NF-e 55 não acha o item e
+>   recusa com *"quantidade acima do que a nota trouxe — cancele e refaça a seleção"*. Mercadoria
+>   baixada, sem nota, e a mensagem culpando o operador por um erro que ele não cometeu. Hoje o
+>   mapa é indexado pelo **código do fornecedor que o próprio operador casou** na tela.
+> - **Nota cancelada com arquivamento pendente nunca mais era arquivada.** As duas consultas do job
+>   filtram `AUTORIZADO`; a nota autorizada cujo arquivamento falhou (MinIO fora do ar — o caminho
+>   quente engole a falha, por desenho) e que é cancelada em seguida deixava de ser AUTORIZADO antes
+>   de o job pegá-la. O XML sumia da guarda legal de 5 anos. ⚠️ E a Exportação **conta** essa nota
+>   como pendente: duas rotinas com populações diferentes para o mesmo conceito, e a tela mandando
+>   aguardar um job que a ignora.
+> - **O rateio de frete perdia centavos**: R$ 10,00 entre 3 itens iguais viravam 3 × R$ 3,33 =
+>   R$ 9,99, entrada após entrada, contaminando custo e margem. Resíduo da dízima agora vai no
+>   último item, como o projeto já faz no desconto.
+> - **`ConsultaCnpjService` desmontava CNPJ alfanumérico** com um cleaner de dígitos — proibido
+>   explicitamente pelo CLAUDE.md. Empresa aberta a partir de julho/2026 caía no preenchimento
+>   manual, sem sugestão de ramo, **sem nenhuma mensagem**. É o público novo do produto.
+>
+> ### ⛔ E no front: Salvar antes de carregar apagava TODAS as permissões
+>
+> A grade nasce `[]` e o `PUT` manda exatamente esse array; o servidor faz
+> `DELETE FROM usuario_permissao` e itera a lista vazia. Um clique enquanto a tela ainda dizia
+> *"Carregando…"* — rede lenta, duplo clique no cadeado, reflexo — devolvia **200, toast verde
+> "Permissões salvas."**, grade inteira desmarcada e o operador sem acesso a nada. ⚠️ E o estado
+> final é **indistinguível** do de quem nunca teve permissão: não há como saber o que reconceder.
+> `FiscalConfiguracaoForm` já tinha exatamente essa guarda, com o comentário explicando; esta é a
+> irmã que ficou de fora. Hoje o botão espera a grade **e o servidor recusa lista vazia** (P4 — a
+> trava que vale é a do servidor).
+>
+> Mais: a palavra **`CAMPO` estava impressa na tela** de Parâmetros do Sistema (texto solto no JSX,
+> que o `tsc` não acusa porque é válido); o parâmetro **"Exigir sangria antes de fechar o caixa"**
+> estava sob o rótulo **Serviços** (quem leva o 409 do fechamento procura por "caixa" e não acha);
+> a tela de **Sangria** — a mais nova do produto — usava **quatro classes CSS que não existem** e
+> uma `<table>` sem `className`, saindo inteira fora do padrão; `crypto.randomUUID()` fora do `try`
+> **travava a Importação em "Validando…"** para sempre em origem não segura (acesso por IP na LAN);
+> e a exportação particionada baixava N ZIPs **com o mesmo nome**, numerados pelo navegador a partir
+> de arquivos de exportações anteriores — o contador recebia um conjunto em que não dá para dizer
+> qual parte é qual.
+>
+> ### ⭐ O descarte que vale como achado
+>
+> A rodada 2 tinha deixado aberta a suspeita de que **todo formulário de edição** perde a digitação
+> num refetch por foco de janela. Fechado com medida: o `QueryClient` de fato usa
+> `refetchOnWindowFocus: true` e `staleTime: 0`, mas o **`structuralSharing`** (ligado por padrão)
+> devolve a **mesma referência** quando a resposta é igual — e o efeito depende de `[dados]`, então
+> não redispara. Nenhuma query usa `select:` e nada desativa o sharing. ⭐ A janela residual é real e
+> estreita: só quando o registro **mudou de fato** no servidor entre a abertura e o refetch. E o
+> sinal de que a família é a certa: os dois casos alcançáveis **sem concorrência** já tinham sido
+> corrigidos, e os dois vinham de **invalidação da própria chave**, não do Alt-Tab.
+>
+> ### 🔵 O que virou pendência dele
+>
+> **Inutilização de numeração não filtra ANO** (#66): um buraco de 12/2026 é inutilizado em 01/2027
+> com `<ano>27</ano>` — se a SEFAZ homologar, foi homologada a inutilização de um número que a loja
+> nunca vai emitir, o buraco de 2026 segue aberto perante o fisco, e **some da tela para sempre**.
+> A pergunta é fiscal, não de código, e o desfecho **só se prova transmitindo em homologação**.
+
+
 > ## 📌 2026-08-29 (8) — auditoria, rodada 3: a rodada que auditou as MINHAS correções
 >
 > Como ontem, a rodada que audita as correções anteriores foi a que mais rendeu: **das 13 coisas

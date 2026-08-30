@@ -173,7 +173,20 @@ export default function UsuarioPermissoes() {
           </div>
           <div className="topbar-acoes">
             <AjudaDaTela chaveTela="usuario-permissoes" />
-            <button className="btn" disabled={salvar.isPending} onClick={() => salvar.mutate()}>
+            {/* ⛔ SALVAR COM A GRADE VAZIA APAGAVA TODAS AS PERMISSÕES (auditoria 2026-08-29,
+                rodada 4). O estado nasce `[]`, o PUT manda exatamente esse array, e o servidor faz
+                `DELETE FROM usuario_permissao WHERE id_usuario = ?` antes de iterar a lista — que
+                está vazia. Resultado: HTTP 200, toast VERDE "Permissões salvas.", grade inteira
+                desmarcada, e o operador sem acesso a nada. E não há como saber o que reconceder:
+                o estado final é idêntico ao de quem nunca teve permissão.
+                ⚠️ Basta um clique enquanto a tela ainda diz "Carregando…" — rede lenta, duplo
+                clique no cadeado, ou reflexo. `FiscalConfiguracaoForm` já tinha exatamente esta
+                guarda, com o javadoc explicando; esta é a irmã que ficou de fora. */}
+            <button
+              className="btn"
+              disabled={salvar.isPending || isLoading || grade.length === 0}
+              onClick={() => salvar.mutate()}
+            >
               {salvar.isPending ? 'Salvando…' : 'Salvar'}
             </button>
             <BotaoFecharTela />

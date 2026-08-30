@@ -21,7 +21,14 @@ import java.time.LocalDate;
 
 /**
  * Exportação de XML em Lote (`docs/telas/exportacao-xml-lote.md`) — superfície do tenant
- * (`/api/v1`, JWT + RLS). ADMIN-only, conferido no serviço.
+ * (`/api/v1`, JWT + RLS).
+ *
+ * <p>⚠️ <b>Não é mais ADMIN-only</b> (corrigido na auditoria de 2026-08-29, rodada 4). Este javadoc
+ * dizia <i>"ADMIN-only, conferido no serviço"</i> e o {@code exigirAdmin} correspondente estava
+ * <b>morto</b> havia tempo — quem governa é o RBAC por tela e ação, o que significa que o
+ * administrador <b>pode conceder</b> a exportação do XML fiscal a um operador. Isso pode ser
+ * exatamente o desejado; o que não podia continuar era a proibição escrita que não existe, que é o
+ * defeito que esta base já pagou duas vezes.
  */
 @RestController
 @RequestMapping("/api/v1/fiscal/exportacao-xml")

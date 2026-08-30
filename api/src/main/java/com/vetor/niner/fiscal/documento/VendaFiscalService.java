@@ -65,10 +65,16 @@ public class VendaFiscalService {
      * a operação foi desfeita perante a SEFAZ.
      */
     private void exigirVendaSemNota(long idEmpresa, long idVenda) {
-        String numero = documentos.numeroDaNotaVivaDaVenda(idEmpresa, idVenda, MODELO_NFCE);
+        // ⛔ QUALQUER modelo, não só o 65 (auditoria 2026-08-29, rodada 4). Desde 2026-08-24 este
+        // mesmo endpoint emite NF-e 55 quando o cliente é PJ — e quem decide é o assembler, DEPOIS
+        // desta trava. Perguntando só pelo 65, a venda a PJ já autorizada passava direto num duplo
+        // clique: o número da série da NF-e era QUEIMADO e o índice único da V082 devolvia 409
+        // "Registro em uso por outro cadastro". Número queimado vira buraco de numeração e
+        // obrigação de inutilização formal — exatamente o que esta guarda existe para evitar.
+        String numero = documentos.numeroDaNotaVivaDaVendaQualquerModelo(idEmpresa, idVenda);
         if (numero != null) {
             throw new ConflitoDadosException(
-                    "Esta venda já tem a NFC-e nº " + numero + " emitida. Use a reimpressão em "
+                    "Esta venda já tem a nota fiscal nº " + numero + " emitida. Use a reimpressão em "
                             + "Pesquisa de Vendas.");
         }
     }

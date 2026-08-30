@@ -163,6 +163,22 @@ function escolhasValidas(tabela: Tabela, escolhas: EscolhasDraft): boolean {
  * desta página é parametrizada por `tabela` e cuida de 1 arquivo por vez: baixar modelo → escolher
  * arquivo → escolhas prévias (quando a tabela exigir) → Validar (dry-run) → Importar.
  */
+/**
+ * Identificador da barra de progresso.
+ *
+ * ⛔ `crypto.randomUUID` só existe em **contexto seguro** (HTTPS ou `localhost`) — numa origem
+ * insegura, como o ERP acessado pelo IP da LAN via HTTP, ele é `undefined` (auditoria 2026-08-29,
+ * rodada 4). A chamada ficava **fora** do `try`, depois de `setStatus('validando')`: o `TypeError`
+ * virava rejeição não tratada, o status ficava **preso em "Validando…"** com o botão desabilitado,
+ * sem mensagem e sem Toast, e o `pararPolling` nunca rodava. A única saída era recarregar a página.
+ *
+ * ⚠️ O id serve só para casar o polling com a execução — não precisa de aleatoriedade
+ * criptográfica, então o fallback é adequado, não um remendo.
+ */
+function novoIdProgresso(): string {
+  return crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`
+}
+
 export default function ImportacaoTabelaPage({ tabela }: { tabela: Tabela }) {
   const config = CONFIG[tabela]
   const Icone = config.icone
@@ -262,7 +278,7 @@ export default function ImportacaoTabelaPage({ tabela }: { tabela: Tabela }) {
     setStatus('validando')
     setErroMsg(null)
     setProgresso(null)
-    const idProgresso = crypto.randomUUID()
+    const idProgresso = novoIdProgresso()
     iniciarPolling(idProgresso)
     try {
       const rel = await processarImportacao(tabela, arquivo, montarEscolhas(tabela, escolhas), false, idProgresso)
@@ -280,7 +296,7 @@ export default function ImportacaoTabelaPage({ tabela }: { tabela: Tabela }) {
     if (!arquivo) return
     setStatus('importando')
     setProgresso(null)
-    const idProgresso = crypto.randomUUID()
+    const idProgresso = novoIdProgresso()
     iniciarPolling(idProgresso)
     try {
       const rel = await processarImportacao(tabela, arquivo, montarEscolhas(tabela, escolhas), true, idProgresso)

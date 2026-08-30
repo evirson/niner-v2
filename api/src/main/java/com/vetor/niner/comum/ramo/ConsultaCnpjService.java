@@ -56,8 +56,15 @@ public class ConsultaCnpjService {
      * casos igual, porque para a tela eles são o mesmo: preencher à mão.
      */
     public Optional<DadosCnpj> consultar(String cnpj) {
-        String limpo = cnpj == null ? "" : cnpj.replaceAll("\\D", "");
-        if (limpo.length() != 14) {
+        // ⛔ ALFANUMÉRICO (auditoria 2026-08-29, rodada 4). Era `replaceAll("\\D", "")` — um cleaner
+        // de dígitos, que o CLAUDE.md proíbe explicitamente antes de validar ou persistir CNPJ:
+        // desde a IN RFB 2.229/2024 as 12 primeiras posições aceitam A-Z. Numa empresa aberta a
+        // partir de julho/2026 (`12ABC34501DE35`), o cleaner deixava 8 caracteres, o método
+        // devolvia vazio **em silêncio**, e a tela caía no preenchimento manual sem sugestão de
+        // ramo nem razão social — sem nenhuma mensagem explicando. É exatamente o público novo do
+        // produto. A referência do projeto é `Documentos.somenteAlfanumerico`.
+        String limpo = com.vetor.niner.cadastros.cliente.Documentos.somenteAlfanumerico(cnpj);
+        if (limpo == null || limpo.length() != 14) {
             return Optional.empty();
         }
         try {

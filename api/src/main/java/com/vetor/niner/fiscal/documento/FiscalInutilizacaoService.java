@@ -181,13 +181,6 @@ public class FiscalInutilizacaoService {
         return faixas;
     }
 
-    private static void exigirAdmin(Jwt jwt) {
-        List<String> roles = jwt.getClaimAsStringList("roles");
-        if (roles == null || !roles.contains("ADMIN")) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN,
-                    "Apenas administradores podem inutilizar numeração fiscal.");
-        }
-    }
 
     private static KeyStore abrir(CertificadoParaAssinatura certificado) {
         try {

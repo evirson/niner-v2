@@ -162,11 +162,33 @@ public class ExportacaoXmlLoteService {
         // ⛔ Nunca gerar ZIP vazio em silêncio: um arquivo que abre e não tem nada dentro parece
         // pacote entregue, e o lojista só descobre quando o contador reclama.
         if (documentos.stream().noneMatch(d -> d.xmlObjetoBucket() != null)) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, documentos.isEmpty()
-                    ? "Nenhuma nota fiscal foi emitida por esta empresa no período selecionado."
-                    : ("As %d notas do período ainda não tiveram o XML arquivado. O arquivamento é automático "
-                            + "e tenta de novo a cada 10 minutos — aguarde e repita a exportação.")
-                            .formatted(documentos.size()));
+            // ⛔ SEPARAR as duas populações também aqui (auditoria 2026-08-29, rodada 4). O
+            // `resumir()` já distingue "pendente de arquivamento" de "sem valor fiscal" desde
+            // 2026-08-26 — este caminho ficou para trás com `documentos.size()` cru. No caso real
+            // que motivou aquela correção, das 40 notas 36 eram REJEITADAS e 3 NAO_EMITIDO: a
+            // mensagem mandava o lojista aguardar o arquivamento de 39 notas que NUNCA terão XML.
+            long semValorFiscal = documentos.stream()
+                    .filter(d -> List.of("REJEITADO", "DENEGADO", "NAO_EMITIDO").contains(d.situacao()))
+                    .count();
+            long pendentes = documentos.size() - semValorFiscal;
+            String detalhe;
+            if (documentos.isEmpty()) {
+                detalhe = "Nenhuma nota fiscal foi emitida por esta empresa no período selecionado.";
+            } else if (pendentes == 0) {
+                detalhe = ("Nenhuma das %d notas do período tem XML para exportar: são rejeitadas, denegadas "
+                        + "ou não emitidas. Nota sem autorização não gera XML — não há o que aguardar.")
+                        .formatted(documentos.size());
+            } else if (semValorFiscal == 0) {
+                detalhe = ("As %d notas do período ainda não tiveram o XML arquivado. O arquivamento é "
+                        + "automático e tenta de novo a cada 10 minutos — aguarde e repita a exportação.")
+                        .formatted(pendentes);
+            } else {
+                detalhe = ("Das %d notas do período, %d ainda não tiveram o XML arquivado (aguarde e repita: "
+                        + "o arquivamento tenta de novo a cada 10 minutos) e %d nunca terão XML, por serem "
+                        + "rejeitadas, denegadas ou não emitidas.")
+                        .formatted(documentos.size(), pendentes, semValorFiscal);
+            }
+            throw new ResponseStatusException(HttpStatus.CONFLICT, detalhe);
         }
 
         // Eventos DESTA parte: filtrar por período de novo repetiria o mesmo comprovante de
@@ -405,11 +427,4 @@ public class ExportacaoXmlLoteService {
     }
 
     /** ADMIN-only, como todo o módulo fiscal (§12: `fiscal.download` | ADMIN). */
-    private static void exigirAdmin(Jwt jwt) {
-        List<String> roles = jwt.getClaimAsStringList("roles");
-        if (roles == null || !roles.contains("ADMIN")) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN,
-                    "Apenas administradores podem exportar o XML fiscal em lote.");
-        }
-    }
 }

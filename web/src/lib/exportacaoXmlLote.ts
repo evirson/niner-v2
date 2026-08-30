@@ -180,7 +180,16 @@ export async function baixarTodasAsPartes(
 ): Promise<void> {
   const total = Math.max(resumo.totalPartes, 1)
   for (let parte = 1; parte <= total; parte++) {
-    await baixarZipExportacaoXml(filtros, resumo.nomeArquivo, parte, resumo.ateIdDocumento, total === 1)
+    // ⚠️ O nome PRECISA identificar a parte (auditoria 2026-08-29, rodada 4). Passando o mesmo
+    // nome para todas, `a.download` sobrescreve o `Content-Disposition` e o Chrome renomeia para
+    // "… (1).zip", "… (2).zip" — e a numeração continua de arquivos de exportações ANTERIORES que
+    // estejam na pasta. O lojista entrega ao contador um conjunto em que não dá para dizer qual
+    // parte é qual, nem se falta alguma. A barra de progresso conta partes que o nome não nomeia.
+    const nome =
+      total > 1
+        ? resumo.nomeArquivo.replace(/\.zip$/i, '') + `-parte-${parte}-de-${total}.zip`
+        : resumo.nomeArquivo
+    await baixarZipExportacaoXml(filtros, nome, parte, resumo.ateIdDocumento, total === 1)
     aoProgredir?.(parte, total)
   }
 }

@@ -132,6 +132,21 @@ public class PermissaoController {
         exigirQuemConfiguraPermissao(jwt);
         exigirUsuarioDoTenant(jwt, idUsuario);
         exigirDentroDoTeto(jwt, idUsuario, grade);
+        // ⛔ GRADE VAZIA É RECUSADA (auditoria 2026-08-29, rodada 4). "Apaga e regrava" com lista
+        // vazia é um `DELETE` sem nada em seguida: HTTP 200, e o usuário perde acesso a tudo. E a
+        // tela produzia isso sozinha — o estado nasce `[]`, então um clique em Salvar enquanto ela
+        // ainda dizia "Carregando…" mandava exatamente essa lista, com toast VERDE de sucesso.
+        // ⚠️ O front ganhou a guarda no mesmo dia, mas P4: a trava que vale é esta. E o estado
+        // final de uma grade apagada é INDISTINGUÍVEL do de quem nunca teve permissão — não há como
+        // saber o que reconceder, o que faz deste um erro sem desfazer.
+        // ⚠️ Tirar TODAS as permissões de propósito continua possível: manda-se a grade completa
+        // com as caixas desmarcadas, que é o que a tela envia. O que se recusa é a lista VAZIA.
+        if (grade.isEmpty()) {
+            throw new ResponseStatusException(BAD_REQUEST,
+                    "A grade de permissões chegou vazia. Para retirar todos os acessos, envie a grade "
+                            + "completa com as caixas desmarcadas — uma lista vazia apagaria a grade "
+                            + "sem deixar rastro do que havia.");
+        }
         if (idUsuario == Long.parseLong(jwt.getSubject())) {
             // O admin não tem grade e não pode criar uma para si — seria o caminho para uma conta
             // sem administrador nenhum, e não existe quem devolva o acesso depois.
