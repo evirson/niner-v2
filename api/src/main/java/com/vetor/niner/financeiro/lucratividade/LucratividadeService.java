@@ -87,8 +87,11 @@ public class LucratividadeService {
         BigDecimal cmv = vendas[1].subtract(devolucoes[1]);
         BigDecimal lucroBruto = vendaLiquida.subtract(cmv);
 
+        // ⭐ A comissão entra LÍQUIDA da devolução (auditoria 2026-08-29): o mesmo `venda − devolução`
+        // do Relatório de Comissões, que é o número que a loja paga. Ver `apurarDevolucoes`.
+        BigDecimal comissaoLiquida = vendas[2].subtract(devolucoes[2]);
         List<LinhaDespesa> despesas = apurarDespesas(
-                dataInicial, dataFinal, idsEmpresa, vendas[2], vendaLiquida, lucroBruto);
+                dataInicial, dataFinal, idsEmpresa, comissaoLiquida, vendaLiquida, lucroBruto);
         BigDecimal totalDespesas = despesas.stream()
                 .map(LinhaDespesa::valor).reduce(BigDecimal.ZERO, BigDecimal::add);
         BigDecimal lucroLiquido = lucroBruto.subtract(totalDespesas);
@@ -166,11 +169,20 @@ public class LucratividadeService {
      * março uma venda de fevereiro reduz o total de <b>março</b>. O contrário obrigaria a
      * recalcular meses já fechados a cada devolução.
      *
-     * <p>⚠️ <b>A devolução NÃO estorna comissão nem taxa de cartão</b>, igual à DRE: o vendedor
-     * vendeu, e a operadora do cartão já cobrou a taxa sobre a transação original. Reverter seria
-     * uma regra de negócio nova, e divergente da DRE.
+     * <p>⭐ <b>A devolução ESTORNA a comissão desde 2026-08-29 (auditoria, rodada 1).</b> O javadoc
+     * que ficava aqui dizia o contrário — <i>"não estorna, igual à DRE; reverter seria regra de
+     * negócio nova"</i> — e estava alinhado à DRE, que era o relatório errado: o <b>Relatório de
+     * Comissões</b>, o número que a loja de fato PAGA, já estornava (`RelatorioComissoesService`,
+     * CTE {@code devolucoes}). Vender R$ 1.000 a 10% e receber tudo de volta no mesmo mês fazia a
+     * Lucratividade acusar R$ 100 de despesa de comissão que ninguém recebeu — e o mês podia virar
+     * prejuízo. Quando dois cálculos do mesmo conceito divergem, <b>o que move dinheiro é a
+     * referência</b>; mudar o pagador alteraria quanto o vendedor recebe com base num palpite.
      *
-     * @return {@code [valor, custo]}
+     * <p>⚠️ <b>A TAXA de cartão continua sem estorno</b>, e isso não é descuido: a operadora já
+     * cobrou a taxa sobre a transação original e não a devolve quando a mercadoria volta. É fato do
+     * mundo, não simetria contábil.
+     *
+     * @return {@code [valor, custo, comissao]}
      */
     private BigDecimal[] apurarDevolucoes(LocalDate inicio, LocalDate fim, List<Long> idsEmpresa) {
         return jdbc.sql("""
@@ -180,7 +192,11 @@ public class LucratividadeService {
                         -- ⚠️ Linha anterior a 29/08 tem `valor_desconto = 0` e continua valendo o bruto, de propósito:
                         -- é o valor que foi impresso no papel que o cliente tem na mão.
                         SELECT COALESCE(SUM(pmd.qtd_produto * pmd.preco_venda - pmd.valor_desconto), 0) AS valor,
-                               COALESCE(SUM(pmd.qtd_produto * pmd.preco_custo), 0) AS custo
+                               COALESCE(SUM(pmd.qtd_produto * pmd.preco_custo), 0) AS custo,
+                               -- ⭐ Mesma fórmula e mesma população do pagador (`RelatorioComissoesService`),
+                               -- inclusive o COALESCE com `fn.perc_comissao` para a linha anterior à V088.
+                               COALESCE(SUM((pmd.qtd_produto * pmd.preco_venda - pmd.valor_desconto)
+                                            * COALESCE(pmd.perc_comissao, fn.perc_comissao, 0) / 100), 0) AS comissao
                         FROM produto_movimento_mestre pmm
                         JOIN produto_movimento_detalhe pmd
                              ON pmd.id_movimento = pmm.id_movimento AND pmd.id_tenant = pmm.id_tenant
@@ -188,12 +204,15 @@ public class LucratividadeService {
                         JOIN venda_devolucao vd
                              ON vd.id_tenant = pmm.id_tenant AND vd.id_devolucao = pmm.id_devolucao
                             AND vd.cancelada = false
+                        LEFT JOIN funcionario fn
+                             ON fn.id_funcionario = pmd.id_funcionario AND fn.id_tenant = pmd.id_tenant
                         WHERE pmm.id_tenant = plataforma.tenant_atual()
                               AND pmm.tipo_movimento = 'DEVOLUCAO'
                               AND (pmm.data_movimento AT TIME ZONE 'America/Sao_Paulo')::date BETWEEN ? AND ?
                         """ + filtroEmpresa("pmm.id_empresa", idsEmpresa))
                 .params(parametros(inicio, fim, idsEmpresa))
-                .query((rs, n) -> new BigDecimal[] { rs.getBigDecimal("valor"), rs.getBigDecimal("custo") })
+                .query((rs, n) -> new BigDecimal[] {
+                        rs.getBigDecimal("valor"), rs.getBigDecimal("custo"), rs.getBigDecimal("comissao") })
                 .single();
     }
 

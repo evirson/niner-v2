@@ -24,6 +24,7 @@ import {
   type StatusPlanoContas,
 } from '../../lib/planoContas'
 import { maiusculas } from '../../lib/texto'
+import { usePermissaoDaTela } from '../../lib/usePermissaoDaTela'
 
 const JANELA_PAGINACAO = 7
 const TAMANHO_PAGINA = 50
@@ -58,6 +59,10 @@ function paginasVisiveis(atual: number, total: number): number[] {
  * de campos (os campos realmente obrigatórios continuam estruturalmente NOT NULL).
  */
 export default function PlanoContasLista() {
+  // â RBAC: o admin pode conceder sÃ³ "acessar" â sem isto o operador preenchia a ficha
+  // inteira e perdia tudo num 403 no Salvar (auditoria 2026-08-29). ConveniÃªncia de
+  // interface, nunca seguranÃ§a: quem recusa Ã© o @Acao do controller (P4).
+  const acoes = usePermissaoDaTela('planos-contas')
   const location = useLocation()
   const [busca, setBusca] = useState('')
   const [status, setStatus] = useState<StatusPlanoContas>('ATIVOS')
@@ -139,9 +144,11 @@ export default function PlanoContasLista() {
           </div>
           <div className="topbar-acoes">
             <AjudaDaTela chaveTela="cadastros.planocontas.lista" />
-            <Link className="btn" to="/planos-contas/novo">
-              ＋ Novo plano de contas
-            </Link>
+            {acoes.incluir && (
+              <Link className="btn" to="/planos-contas/novo">
+                ＋ Novo plano de contas
+              </Link>
+            )}
             <BotaoFecharTela />
           </div>
         </div>
@@ -150,6 +157,7 @@ export default function PlanoContasLista() {
 
         <div className="card filtros-bar">
           <input
+            autoFocus
             placeholder="Buscar por código ou descrição…"
             value={busca}
             onChange={(e) => setBusca(maiusculas(e.target.value))}
@@ -224,24 +232,28 @@ export default function PlanoContasLista() {
                     >
                       <IconeOlho />
                     </Link>
-                    <Link
-                      className="acao-icone acao-editar"
-                      to={`/planos-contas/${encodeURIComponent(p.idPlanoContas)}`}
-                      aria-label={`Editar ${p.idPlanoContas}`}
-                      title="Editar"
-                    >
-                      <IconeEditar />
-                    </Link>
-                    <button
-                      type="button"
-                      className="acao-icone acao-excluir"
-                      disabled={excluir.isPending}
-                      onClick={() => setPlanoParaExcluir(p)}
-                      aria-label={`Excluir ${p.idPlanoContas}`}
-                      title="Excluir"
-                    >
-                      <IconeExcluir />
-                    </button>
+                    {acoes.alterar && (
+                      <Link
+                        className="acao-icone acao-editar"
+                        to={`/planos-contas/${encodeURIComponent(p.idPlanoContas)}`}
+                        aria-label={`Editar ${p.idPlanoContas}`}
+                        title="Editar"
+                      >
+                        <IconeEditar />
+                      </Link>
+                    )}
+                    {acoes.excluir && (
+                      <button
+                        type="button"
+                        className="acao-icone acao-excluir"
+                        disabled={excluir.isPending}
+                        onClick={() => setPlanoParaExcluir(p)}
+                        aria-label={`Excluir ${p.idPlanoContas}`}
+                        title="Excluir"
+                      >
+                        <IconeExcluir />
+                      </button>
+                    )}
                   </td>
                 </tr>
               ))}

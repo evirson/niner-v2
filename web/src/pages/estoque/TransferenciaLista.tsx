@@ -22,6 +22,7 @@ import {
   type ColunaOrdenacaoTransferencia,
   type Transferencia,
 } from '../../lib/transferencias'
+import { usePermissaoDaTela } from '../../lib/usePermissaoDaTela'
 
 const JANELA_PAGINACAO = 7
 const TAMANHO_PAGINA = 50
@@ -48,6 +49,10 @@ function formatarData(iso: string): string {
 }
 
 export default function TransferenciaLista() {
+  // â RBAC: o admin pode conceder sÃ³ "acessar" â sem isto o operador preenchia a ficha
+  // inteira e perdia tudo num 403 no Salvar (auditoria 2026-08-29). ConveniÃªncia de
+  // interface, nunca seguranÃ§a: quem recusa Ã© o @Acao do controller (P4).
+  const acoes = usePermissaoDaTela('estoque')
   const location = useLocation()
   const queryClient = useQueryClient()
   const [pagina, setPagina] = useState(1)
@@ -134,9 +139,11 @@ export default function TransferenciaLista() {
           </div>
           <div className="topbar-acoes">
             <AjudaDaTela chaveTela="estoque.transferencia.lista" />
-            <Link className="btn" to="/estoque/nova">
-              ＋ Nova Transferência
-            </Link>
+            {acoes.incluir && (
+              <Link className="btn" to="/estoque/nova">
+                ＋ Nova Transferência
+              </Link>
+            )}
             <BotaoFecharTela />
           </div>
         </div>
@@ -250,16 +257,18 @@ export default function TransferenciaLista() {
                       >
                         <IconeOlho />
                       </Link>
-                      <button
-                        type="button"
-                        className="acao-icone acao-excluir"
-                        disabled={excluir.isPending}
-                        onClick={() => setTransferenciaParaExcluir(t)}
-                        aria-label={`Excluir transferência ${t.idTransferencia}`}
-                        title="Excluir"
-                      >
-                        <IconeExcluir />
-                      </button>
+                      {acoes.excluir && (
+                        <button
+                          type="button"
+                          className="acao-icone acao-excluir"
+                          disabled={excluir.isPending}
+                          onClick={() => setTransferenciaParaExcluir(t)}
+                          aria-label={`Excluir transferência ${t.idTransferencia}`}
+                          title="Excluir"
+                        >
+                          <IconeExcluir />
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ))}

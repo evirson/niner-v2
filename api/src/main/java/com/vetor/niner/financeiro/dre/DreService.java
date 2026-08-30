@@ -275,7 +275,19 @@ public class DreService {
                         -- ⚠️ Linha anterior a 29/08 tem `valor_desconto = 0` e continua valendo o bruto, de propósito:
                         -- é o valor que foi impresso no papel que o cliente tem na mão.
                         SELECT COALESCE(SUM(pmd.qtd_produto * pmd.preco_venda - pmd.valor_desconto), 0) AS valor,
-                               COALESCE(SUM(pmd.qtd_produto * pmd.preco_custo), 0) AS cmv
+                               COALESCE(SUM(pmd.qtd_produto * pmd.preco_custo), 0) AS cmv,
+                               -- ⭐ A COMISSÃO da devolução também volta (auditoria 2026-08-29, rodada 1).
+                               -- Faltava, e a assimetria era literal: esta consulta nem selecionava a
+                               -- coluna. JOÃO vendia R$ 1.000 a 10%, o cliente devolvia tudo no mesmo mês,
+                               -- e a DRE fechava com R$ 100 de PREJUÍZO sobre uma operação que não
+                               -- movimentou nada — enquanto o Relatório de Comissões, o número que a loja
+                               -- PAGA, já dava R$ 0,00. Mesma fórmula e mesma população do pagador
+                               -- (`RelatorioComissoesService`, CTE `devolucoes`), inclusive o COALESCE com
+                               -- `fn.perc_comissao` para a linha anterior à V088.
+                               -- ⚠️ Sem acréscimo aqui, de propósito: a linha de DEVOLUÇÃO não grava
+                               -- `valor_acrescimo`, e é a base que o pagador usa para estornar.
+                               COALESCE(SUM((pmd.qtd_produto * pmd.preco_venda - pmd.valor_desconto)
+                                            * COALESCE(pmd.perc_comissao, fn.perc_comissao, 0) / 100), 0) AS comissao
                         FROM produto_movimento_mestre pmm
                         JOIN produto_movimento_detalhe pmd
                              ON pmd.id_movimento = pmm.id_movimento AND pmd.id_tenant = pmm.id_tenant
@@ -288,11 +300,14 @@ public class DreService {
                         JOIN venda_devolucao vd
                              ON vd.id_tenant = pmm.id_tenant AND vd.id_devolucao = pmm.id_devolucao
                             AND vd.cancelada = false
+                        LEFT JOIN funcionario fn
+                             ON fn.id_funcionario = pmd.id_funcionario AND fn.id_tenant = pmd.id_tenant
                         WHERE pmm.id_tenant = plataforma.tenant_atual() AND pmm.tipo_movimento = 'DEVOLUCAO'
                               AND (pmm.data_movimento AT TIME ZONE 'America/Sao_Paulo')::date BETWEEN ? AND ?
                         """ + filtroEmpresaMovimento)
                 .params(parametros(inicio, fim, idsEmpresa))
-                .query((rs, n) -> new BigDecimal[] { rs.getBigDecimal("valor"), rs.getBigDecimal("cmv") })
+                .query((rs, n) -> new BigDecimal[] {
+                        rs.getBigDecimal("valor"), rs.getBigDecimal("cmv"), rs.getBigDecimal("comissao") })
                 .single();
 
         // Taxa de cartão/PIX: percentual da carteira sobre o valor pago naquela forma. Em
@@ -308,7 +323,9 @@ public class DreService {
                 .params(parametros(inicio, fim, idsEmpresa))
                 .query(BigDecimal.class).single();
 
-        return montarDerivadas(vendas[0], vendas[1], vendas[2], vendas[3], devolucoes[0], devolucoes[1], taxas);
+        // ⭐ A comissão entra LÍQUIDA da devolução — o mesmo `venda − devolução` do pagador.
+        return montarDerivadas(vendas[0], vendas[1], vendas[2], vendas[3].subtract(devolucoes[2]),
+                devolucoes[0], devolucoes[1], taxas);
     }
 
     private List<Derivada> derivadasCaixa(LocalDate inicio, LocalDate fim, List<Long> idsEmpresa) {
@@ -373,6 +390,17 @@ public class DreService {
                               -- estava em aberto e o cliente veio pagar DEPOIS, pelo Recebimento de
                               -- Crediário, entrou no caixa de verdade e continua sendo receita.
                               AND (v.importado_em IS NULL OR cr.data_recebimento >= v.importado_em)
+                              -- ⛔ RESGATE DE VALE-MERCADORIA NÃO É DINHEIRO QUE ENTROU (auditoria
+                              -- 2026-08-29, rodada 1). No regime CAIXA a linha só pode entrar se houve
+                              -- entrada de dinheiro, e o vale não é dinheiro: a receita já foi
+                              -- reconhecida quando a venda ORIGINAL foi paga. Sem este corte, uma venda
+                              -- de R$ 90 em dinheiro, devolvida e represtada com o vale, virava R$ 180
+                              -- de receita e CMV em dobro para R$ 90 e uma única saída de mercadoria.
+                              -- ⭐ É o MESMO raciocínio, e o mesmo precedente, do corte da parcela
+                              -- migrada logo acima: "o Fluxo de Caixa nunca recebeu esse dinheiro". E o
+                              -- Fluxo de Caixa passou a excluir o vale no mesmo dia — deixar aqui faria
+                              -- as duas telas discordarem de novo.
+                              AND tc.categoria_carteira <> 'VALE_MERCADORIA'
                         """ + filtroEmpresaVenda)
                 .params(parametros(inicio, fim, idsEmpresa))
                 .query((rs, n) -> new BigDecimal[] {

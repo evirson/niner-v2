@@ -365,7 +365,7 @@ public class CaixaService {
                     linha.idCarteira(), linha.nomeCarteira(), linha.categoriaCarteira(), linha.valorEsperado(), contado, diferenca));
         }
 
-        if (!bate && !req.forcarComDivergencia()) {
+        if (!bate && !Boolean.TRUE.equals(req.forcarComDivergencia())) {
             return new ResultadoFechamentoResponse(caixa.idCaixa(), false, conferencia);
         }
 

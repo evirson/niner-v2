@@ -21,8 +21,10 @@ import java.sql.SQLException;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 
 import static org.springframework.http.HttpStatus.BAD_REQUEST;
 import static org.springframework.http.HttpStatus.CONFLICT;
@@ -437,7 +439,43 @@ public class OrdemServicoService {
 
     // ---------------------------------------------------------------- privados
 
+    /**
+     * A mesma variação não pode aparecer em duas linhas com <b>preços diferentes</b>.
+     *
+     * <p>⛔ <b>Por que isto é uma trava e não um detalhe</b> (auditoria 2026-08-29): o PDV congela o
+     * preço da OS num {@code Map<idVariacao, preco>} ({@code PdvVendaService}), então de duas
+     * linhas da mesma variação <b>só a última sobrevive</b> — enquanto a validação de quantidade
+     * soma as duas. Uma OS com {@code TROCA DE ÓLEO} 1× R$ 100 (negociado) e 1× R$ 150 virava uma
+     * venda de <b>2 × R$ 150 = R$ 300</b> contra os R$ 250 que o documento impresso promete. O
+     * cliente reclama com o papel na mão e nada no sistema explica os R$ 50.
+     *
+     * <p>⚠️ O orçamento <b>não</b> tem este problema, e a diferença é o motivo de a trava morar
+     * aqui: lá o preço vem sempre do cadastro ({@code OrcamentoService.resolverItens}), então duas
+     * linhas da mesma variação têm forçosamente o mesmo preço. Na OS o preço pode vir do cliente
+     * (limitado ao teto do cadastro), e é isso que abre a divergência.
+     *
+     * <p>⚠️ Recusar na ORIGEM, não no PDV: travar no fechamento da venda deixaria o operador com o
+     * cliente na frente e uma OS impossível de faturar. Aqui ele ainda está montando a ordem.
+     */
+    private static void exigirUmPrecoPorVariacao(List<ItemRequest> itens) {
+        Map<Long, BigDecimal> precoPorVariacao = new HashMap<>();
+        for (ItemRequest item : itens) {
+            if (item.precoVenda() == null) {
+                continue;
+            }
+            BigDecimal anterior = precoPorVariacao.putIfAbsent(item.idVariacao(), item.precoVenda());
+            if (anterior != null && anterior.compareTo(item.precoVenda()) != 0) {
+                throw new ConflitoDadosException(
+                        ("O mesmo item aparece duas vezes com preços diferentes (R$ %s e R$ %s). "
+                                + "Junte na mesma linha somando a quantidade, ou use o desconto da ordem "
+                                + "de serviço — senão a venda cobraria só um dos dois preços.")
+                                .formatted(anterior.toPlainString(), item.precoVenda().toPlainString()));
+            }
+        }
+    }
+
     private void gravarItens(long idOrdemServico, long idEmpresa, List<ItemRequest> itens) {
+        exigirUmPrecoPorVariacao(itens);
         for (ItemRequest item : itens) {
             // O preço vem do cadastro quando o cliente não manda — nunca se aceita preço do cliente
             // sem conferência (o DTO documenta o porquê).

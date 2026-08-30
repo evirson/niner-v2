@@ -28,6 +28,7 @@ import {
 import { useEu } from '../../lib/eu'
 import { mascararCpfCnpj, mascararIdWhatsapp, mascararTelefone } from '../../lib/masks'
 import { maiusculas } from '../../lib/texto'
+import { usePermissaoDaTela } from '../../lib/usePermissaoDaTela'
 
 const JANELA_PAGINACAO = 7
 const TAMANHO_PAGINA = 50
@@ -55,6 +56,10 @@ function paginasVisiveis(atual: number, total: number): number[] {
 }
 
 export default function ClienteLista() {
+  // â RBAC: o admin pode conceder sÃ³ "acessar" â sem isto o operador preenchia a ficha
+  // inteira e perdia tudo num 403 no Salvar (auditoria 2026-08-29). ConveniÃªncia de
+  // interface, nunca seguranÃ§a: quem recusa Ã© o @Acao do controller (P4).
+  const acoes = usePermissaoDaTela('clientes')
   const location = useLocation()
   const [nome, setNome] = useState('')
   const [status, setStatus] = useState<StatusCliente>('ATIVOS')
@@ -157,9 +162,11 @@ export default function ClienteLista() {
               </Link>
             )}
             <AjudaDaTela chaveTela="cadastros.cliente.lista" />
-            <Link className="btn" to="/clientes/novo">
-              ＋ Novo cliente
-            </Link>
+            {acoes.incluir && (
+              <Link className="btn" to="/clientes/novo">
+                ＋ Novo cliente
+              </Link>
+            )}
             <BotaoFecharTela />
           </div>
         </div>
@@ -246,14 +253,16 @@ export default function ClienteLista() {
                     >
                       <IconeOlho />
                     </Link>
-                    <Link
-                      className="acao-icone acao-editar"
-                      to={`/clientes/${c.idCliente}`}
-                      aria-label={`Editar ${c.nome}`}
-                      title="Editar"
-                    >
-                      <IconeEditar />
-                    </Link>
+                    {acoes.alterar && (
+                      <Link
+                        className="acao-icone acao-editar"
+                        to={`/clientes/${c.idCliente}`}
+                        aria-label={`Editar ${c.nome}`}
+                        title="Editar"
+                      >
+                        <IconeEditar />
+                      </Link>
+                    )}
                     <Link
                       className="acao-icone acao-historico"
                       to={`/clientes/${c.idCliente}/historico`}
@@ -262,16 +271,18 @@ export default function ClienteLista() {
                     >
                       <IconeHistorico />
                     </Link>
-                    <button
-                      type="button"
-                      className="acao-icone acao-excluir"
-                      disabled={excluir.isPending}
-                      onClick={() => setClienteParaExcluir(c)}
-                      aria-label={`Excluir ${c.nome}`}
-                      title="Excluir"
-                    >
-                      <IconeExcluir />
-                    </button>
+                    {acoes.excluir && (
+                      <button
+                        type="button"
+                        className="acao-icone acao-excluir"
+                        disabled={excluir.isPending}
+                        onClick={() => setClienteParaExcluir(c)}
+                        aria-label={`Excluir ${c.nome}`}
+                        title="Excluir"
+                      >
+                        <IconeExcluir />
+                      </button>
+                    )}
                   </td>
                 </tr>
               ))}

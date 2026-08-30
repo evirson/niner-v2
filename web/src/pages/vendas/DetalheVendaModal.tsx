@@ -1,5 +1,4 @@
 import { Fragment, useState } from 'react'
-import { usePermissaoDaTela } from '../../lib/usePermissaoDaTela'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { IconeFechar } from '../../components/Icones'
 import Toast, { type TipoToast } from '../../components/Toast'
@@ -8,6 +7,7 @@ import { buscarDetalhePesquisaVenda } from '../../lib/pesquisaVendas'
 import { formatarMoeda, mascararCpfCnpj } from '../../lib/masks'
 import ComprovantePapeletaModal from '../pdv/ComprovantePapeletaModal'
 import CancelamentoVendaModal from './CancelamentoVendaModal'
+import { usePermissaoDaTela } from '../../lib/usePermissaoDaTela'
 
 function moeda(v: number): string {
   return `R$ ${formatarMoeda(v)}`

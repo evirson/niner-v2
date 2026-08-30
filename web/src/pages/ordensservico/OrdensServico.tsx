@@ -18,6 +18,7 @@ import {
 } from '../../lib/ordensServico'
 import OrdemServicoImpressaoModal from './OrdemServicoImpressaoModal'
 import { maiusculas } from '../../lib/texto'
+import { usePermissaoDaTela } from '../../lib/usePermissaoDaTela'
 
 const TAMANHO_PAGINA = 50
 
@@ -37,6 +38,10 @@ function formatarData(iso: string): string {
  * de reimplementar tudo isso.
  */
 export default function OrdensServico() {
+  // â RBAC: o admin pode conceder sÃ³ "acessar" â sem isto o operador preenchia a ficha
+  // inteira e perdia tudo num 403 no Salvar (auditoria 2026-08-29). ConveniÃªncia de
+  // interface, nunca seguranÃ§a: quem recusa Ã© o @Acao do controller (P4).
+  const acoes = usePermissaoDaTela('ordens-servico')
   const navigate = useNavigate()
   const queryClient = useQueryClient()
 
@@ -111,9 +116,11 @@ export default function OrdensServico() {
           </div>
           <div className="topbar-acoes">
             <AjudaDaTela chaveTela="vendas.ordemservico.lista" />
-            <button type="button" className="btn" onClick={() => navigate('/ordens-servico/nova')}>
-              ＋ Nova ordem de serviço
-            </button>
+            {acoes.incluir && (
+              <button type="button" className="btn" onClick={() => navigate('/ordens-servico/nova')}>
+                ＋ Nova ordem de serviço
+              </button>
+            )}
             <BotaoFecharTela />
           </div>
         </div>
@@ -158,7 +165,14 @@ export default function OrdensServico() {
                 className="mono"
                 placeholder="dd/mm/aaaa"
                 value={dataInicialTexto}
-                onChange={(e) => setDataInicialTexto(mascararData(e.target.value))}
+                onChange={(e) => {
+                  // ⚠️ `setPagina(1)` junto (auditoria 2026-08-29): as datas entram na queryKey, então
+                  // filtrar na página 3 refazia a busca PEDINDO a página 3 de um resultado que agora
+                  // tem uma — e a tela dizia "Nenhum registro encontrado" com dezenas no período.
+                  // Os outros filtros desta tela já resetavam; só as duas datas ficaram de fora.
+                  setPagina(1)
+                  setDataInicialTexto(mascararData(e.target.value))
+                }}
                 onFocus={(e) => e.target.select()}
               />
             </div>
@@ -169,7 +183,10 @@ export default function OrdensServico() {
                 className="mono"
                 placeholder="dd/mm/aaaa"
                 value={dataFinalTexto}
-                onChange={(e) => setDataFinalTexto(mascararData(e.target.value))}
+                onChange={(e) => {
+                  setPagina(1)
+                  setDataFinalTexto(mascararData(e.target.value))
+                }}
                 onFocus={(e) => e.target.select()}
               />
             </div>
@@ -223,7 +240,7 @@ export default function OrdensServico() {
                       {/* ⚠️ Editar só enquanto a OS ainda é execução. Faturada é história (virou
                           venda) e cancelada também — a tela do formulário repete a trava, mas
                           oferecer um caminho que vai falhar é pior que não oferecer. */}
-                      {o.situacao !== 'FATURADA' && o.situacao !== 'CANCELADA' && (
+                      {o.situacao !== 'FATURADA' && o.situacao !== 'CANCELADA' && acoes.alterar && (
                         <button
                           type="button"
                           className="acao-icone acao-editar"
@@ -247,19 +264,19 @@ export default function OrdensServico() {
                           que devolve as peças reservadas ao estoque (DS17). Ícone vermelho porque
                           "desfazer é excluir": quem pode abrir OS não deveria poder cancelar a de
                           ontem, e o servidor cobra a ação EXCLUIR. */}
-                      {o.situacao !== 'FATURADA' && o.situacao !== 'CANCELADA' && (
-                        <button
-                          type="button"
-                          className="acao-icone acao-excluir"
-                          title="Cancelar ordem de serviço"
-                          aria-label={`Cancelar ordem de serviço nº ${o.idOrdemServico}`}
-                          onClick={() => {
-                            setMotivo('')
-                            setCancelando(o)
-                          }}
-                        >
-                          <IconeExcluir />
-                        </button>
+                      {o.situacao !== 'FATURADA' && o.situacao !== 'CANCELADA' && acoes.excluir && (
+                            <button
+                              type="button"
+                              className="acao-icone acao-excluir"
+                              title="Cancelar ordem de serviço"
+                              aria-label={`Cancelar ordem de serviço nº ${o.idOrdemServico}`}
+                              onClick={() => {
+                                setMotivo('')
+                                setCancelando(o)
+                              }}
+                            >
+                              <IconeExcluir />
+                            </button>
                       )}
                     </td>
                   </tr>

@@ -19,6 +19,7 @@ import {
 import { dataParaIso, dataValida, formatarMoeda, mascararData } from '../../lib/masks'
 import { maiusculas } from '../../lib/texto'
 import OrcamentoImpressaoModal from './OrcamentoImpressaoModal'
+import { usePermissaoDaTela } from '../../lib/usePermissaoDaTela'
 
 const TAMANHO_PAGINA = 50
 
@@ -33,6 +34,10 @@ function formatarDataSimples(iso: string): string {
 
 /** Pesquisa de Orçamentos + detalhe em popup (docs/telas/orcamento.md). */
 export default function OrcamentoLista() {
+  // â RBAC: o admin pode conceder sÃ³ "acessar" â sem isto o operador preenchia a ficha
+  // inteira e perdia tudo num 403 no Salvar (auditoria 2026-08-29). ConveniÃªncia de
+  // interface, nunca seguranÃ§a: quem recusa Ã© o @Acao do controller (P4).
+  const acoes = usePermissaoDaTela('orcamentos')
   const navigate = useNavigate()
   const queryClient = useQueryClient()
 
@@ -112,9 +117,11 @@ export default function OrcamentoLista() {
           </div>
           <div className="topbar-acoes">
             <AjudaDaTela chaveTela="vendas.orcamento.lista" />
-            <button type="button" className="btn" onClick={() => navigate('/orcamentos/novo')}>
-              ＋ Novo orçamento
-            </button>
+            {acoes.incluir && (
+              <button type="button" className="btn" onClick={() => navigate('/orcamentos/novo')}>
+                ＋ Novo orçamento
+              </button>
+            )}
             <BotaoFecharTela />
           </div>
         </div>
@@ -124,11 +131,19 @@ export default function OrcamentoLista() {
             <div>
               <label htmlFor="filtro-inicio">Emitido de</label>
               <input
+                autoFocus
                 id="filtro-inicio"
                 className="mono"
                 placeholder="dd/mm/aaaa"
                 value={dataInicialTexto}
-                onChange={(e) => setDataInicialTexto(mascararData(e.target.value))}
+                onChange={(e) => {
+                  // ⚠️ `setPagina(1)` junto (auditoria 2026-08-29): as datas entram na queryKey, então
+                  // filtrar na página 3 refazia a busca PEDINDO a página 3 de um resultado que agora
+                  // tem uma — e a tela dizia "Nenhum registro encontrado" com dezenas no período.
+                  // Os outros filtros desta tela já resetavam; só as duas datas ficaram de fora.
+                  setPagina(1)
+                  setDataInicialTexto(mascararData(e.target.value))
+                }}
                 onFocus={(e) => e.target.select()}
               />
             </div>
@@ -139,7 +154,10 @@ export default function OrcamentoLista() {
                 className="mono"
                 placeholder="dd/mm/aaaa"
                 value={dataFinalTexto}
-                onChange={(e) => setDataFinalTexto(mascararData(e.target.value))}
+                onChange={(e) => {
+                  setPagina(1)
+                  setDataFinalTexto(mascararData(e.target.value))
+                }}
                 onFocus={(e) => e.target.select()}
               />
             </div>
@@ -291,7 +309,10 @@ export default function OrcamentoLista() {
                 <span className={CLASSE_SITUACAO[detalhe.situacao]}>{ROTULO_SITUACAO[detalhe.situacao]}</span>
               </div>
               <div style={{ display: 'flex', gap: 8 }}>
-                {detalhe.situacao === 'ABERTO' && (
+                {/* ⛔ Cancelar orçamento cobra a ação EXCLUIR no servidor (V096) — "desfazer é
+                    excluir". Sem esta guarda o botão aparecia para quem só recebeu "acessar" e
+                    "incluir", e o 403 só chegava depois de digitar o motivo. */}
+                {detalhe.situacao === 'ABERTO' && acoes.excluir && (
                   <button type="button" className="btn ghost" onClick={() => setCancelando(detalhe)}>
                     Cancelar orçamento
                   </button>

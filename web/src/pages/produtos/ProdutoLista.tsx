@@ -27,6 +27,7 @@ import {
   type StatusProduto,
 } from '../../lib/produtos'
 import { maiusculas } from '../../lib/texto'
+import { usePermissaoDaTela } from '../../lib/usePermissaoDaTela'
 
 const JANELA_PAGINACAO = 7
 const TAMANHO_PAGINA = 50
@@ -49,6 +50,10 @@ function paginasVisiveis(atual: number, total: number): number[] {
 }
 
 export default function ProdutoLista() {
+  // â RBAC: o admin pode conceder sÃ³ "acessar" â sem isto o operador preenchia a ficha
+  // inteira e perdia tudo num 403 no Salvar (auditoria 2026-08-29). ConveniÃªncia de
+  // interface, nunca seguranÃ§a: quem recusa Ã© o @Acao do controller (P4).
+  const acoes = usePermissaoDaTela('produtos')
   const location = useLocation()
   const [busca, setBusca] = useState('')
   const [status, setStatus] = useState<StatusProduto>('ATIVOS')
@@ -146,9 +151,11 @@ export default function ProdutoLista() {
               </Link>
             )}
             <AjudaDaTela chaveTela="catalogo.produto.lista" />
-            <Link className="btn" to="/produtos/novo">
-              ＋ Novo produto
-            </Link>
+            {acoes.incluir && (
+              <Link className="btn" to="/produtos/novo">
+                ＋ Novo produto
+              </Link>
+            )}
             <BotaoFecharTela />
           </div>
         </div>
@@ -234,24 +241,28 @@ export default function ProdutoLista() {
                     >
                       <IconeOlho />
                     </Link>
-                    <Link
-                      className="acao-icone acao-editar"
-                      to={`/produtos/${p.idProduto}`}
-                      aria-label={`Editar ${p.descricao}`}
-                      title="Editar"
-                    >
-                      <IconeEditar />
-                    </Link>
-                    <button
-                      type="button"
-                      className="acao-icone acao-excluir"
-                      disabled={excluir.isPending}
-                      onClick={() => setProdutoParaExcluir(p)}
-                      aria-label={`Excluir ${p.descricao}`}
-                      title="Excluir"
-                    >
-                      <IconeExcluir />
-                    </button>
+                    {acoes.alterar && (
+                      <Link
+                        className="acao-icone acao-editar"
+                        to={`/produtos/${p.idProduto}`}
+                        aria-label={`Editar ${p.descricao}`}
+                        title="Editar"
+                      >
+                        <IconeEditar />
+                      </Link>
+                    )}
+                    {acoes.excluir && (
+                      <button
+                        type="button"
+                        className="acao-icone acao-excluir"
+                        disabled={excluir.isPending}
+                        onClick={() => setProdutoParaExcluir(p)}
+                        aria-label={`Excluir ${p.descricao}`}
+                        title="Excluir"
+                      >
+                        <IconeExcluir />
+                      </button>
+                    )}
                   </td>
                 </tr>
               ))}

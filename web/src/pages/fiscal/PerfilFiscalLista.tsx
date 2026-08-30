@@ -22,6 +22,7 @@ import {
   type PerfilFiscalLista as PerfilFiscalListaItem,
 } from '../../lib/perfilFiscal'
 import { maiusculas } from '../../lib/texto'
+import { usePermissaoDaTela } from '../../lib/usePermissaoDaTela'
 
 const JANELA_PAGINACAO = 7
 const TAMANHO_PAGINA = 50
@@ -53,6 +54,10 @@ function paginasVisiveis(atual: number, total: number): number[] {
  * então o botão não pede confirmação de "vai virar inativo": o resultado aparece no toast.
  */
 export default function PerfilFiscalLista() {
+  // â RBAC: o admin pode conceder sÃ³ "acessar" â sem isto o operador preenchia a ficha
+  // inteira e perdia tudo num 403 no Salvar (auditoria 2026-08-29). ConveniÃªncia de
+  // interface, nunca seguranÃ§a: quem recusa Ã© o @Acao do controller (P4).
+  const acoes = usePermissaoDaTela('fiscal.perfis')
   const location = useLocation()
   const estadoRecebido = (
     location.state as { toast?: { texto: string; tipo: TipoToast }; listaEstado?: EstadoListaPerfilFiscal } | null
@@ -131,9 +136,11 @@ export default function PerfilFiscalLista() {
           </div>
           <div className="topbar-acoes">
             <AjudaDaTela chaveTela="fiscal.perfil.tela" />
-            <Link className="btn" to="/fiscal/perfis/novo">
-              ＋ Novo perfil fiscal
-            </Link>
+            {acoes.incluir && (
+              <Link className="btn" to="/fiscal/perfis/novo">
+                ＋ Novo perfil fiscal
+              </Link>
+            )}
             <BotaoFecharTela />
           </div>
         </div>
@@ -212,25 +219,29 @@ export default function PerfilFiscalLista() {
                       >
                         <IconeOlho />
                       </Link>
-                      <Link
-                        className="acao-icone acao-editar"
-                        to={`/fiscal/perfis/${p.idPerfilFiscal}`}
-                        state={{ listaEstado: estadoAtual }}
-                        aria-label={`Editar ${p.nome}`}
-                        title="Editar"
-                      >
-                        <IconeEditar />
-                      </Link>
-                      <button
-                        type="button"
-                        className="acao-icone acao-excluir"
-                        disabled={excluir.isPending}
-                        onClick={() => setPerfilParaExcluir(p)}
-                        aria-label={`Excluir ${p.nome}`}
-                        title="Excluir"
-                      >
-                        <IconeExcluir />
-                      </button>
+                      {acoes.alterar && (
+                        <Link
+                          className="acao-icone acao-editar"
+                          to={`/fiscal/perfis/${p.idPerfilFiscal}`}
+                          state={{ listaEstado: estadoAtual }}
+                          aria-label={`Editar ${p.nome}`}
+                          title="Editar"
+                        >
+                          <IconeEditar />
+                        </Link>
+                      )}
+                      {acoes.excluir && (
+                        <button
+                          type="button"
+                          className="acao-icone acao-excluir"
+                          disabled={excluir.isPending}
+                          onClick={() => setPerfilParaExcluir(p)}
+                          aria-label={`Excluir ${p.nome}`}
+                          title="Excluir"
+                        >
+                          <IconeExcluir />
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ))}

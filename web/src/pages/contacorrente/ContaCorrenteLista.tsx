@@ -23,6 +23,7 @@ import {
   type StatusContaCorrente,
 } from '../../lib/contaCorrente'
 import { maiusculas } from '../../lib/texto'
+import { usePermissaoDaTela } from '../../lib/usePermissaoDaTela'
 
 const JANELA_PAGINACAO = 7
 const TAMANHO_PAGINA = 50
@@ -49,6 +50,10 @@ function paginasVisiveis(atual: number, total: number): number[] {
  * inativar na exclusão (tem `ativo`, diferente de plano de contas).
  */
 export default function ContaCorrenteLista() {
+  // â RBAC: o admin pode conceder sÃ³ "acessar" â sem isto o operador preenchia a ficha
+  // inteira e perdia tudo num 403 no Salvar (auditoria 2026-08-29). ConveniÃªncia de
+  // interface, nunca seguranÃ§a: quem recusa Ã© o @Acao do controller (P4).
+  const acoes = usePermissaoDaTela('contas-corrente')
   const location = useLocation()
   const [busca, setBusca] = useState('')
   const [status, setStatus] = useState<StatusContaCorrente>('ATIVOS')
@@ -124,9 +129,11 @@ export default function ContaCorrenteLista() {
           </div>
           <div className="topbar-acoes">
             <AjudaDaTela chaveTela="financeiro.contacorrente.lista" />
-            <Link className="btn" to="/contas-corrente/nova">
-              ＋ Nova conta corrente
-            </Link>
+            {acoes.incluir && (
+              <Link className="btn" to="/contas-corrente/nova">
+                ＋ Nova conta corrente
+              </Link>
+            )}
             <BotaoFecharTela />
           </div>
         </div>
@@ -196,24 +203,28 @@ export default function ContaCorrenteLista() {
                     >
                       <IconeOlho />
                     </Link>
-                    <Link
-                      className="acao-icone acao-editar"
-                      to={`/contas-corrente/${encodeURIComponent(c.idContaCorrente)}`}
-                      aria-label={`Editar ${c.idContaCorrente}`}
-                      title="Editar"
-                    >
-                      <IconeEditar />
-                    </Link>
-                    <button
-                      type="button"
-                      className="acao-icone acao-excluir"
-                      disabled={excluir.isPending}
-                      onClick={() => setContaParaExcluir(c)}
-                      aria-label={`Excluir ${c.idContaCorrente}`}
-                      title="Excluir"
-                    >
-                      <IconeExcluir />
-                    </button>
+                    {acoes.alterar && (
+                      <Link
+                        className="acao-icone acao-editar"
+                        to={`/contas-corrente/${encodeURIComponent(c.idContaCorrente)}`}
+                        aria-label={`Editar ${c.idContaCorrente}`}
+                        title="Editar"
+                      >
+                        <IconeEditar />
+                      </Link>
+                    )}
+                    {acoes.excluir && (
+                      <button
+                        type="button"
+                        className="acao-icone acao-excluir"
+                        disabled={excluir.isPending}
+                        onClick={() => setContaParaExcluir(c)}
+                        aria-label={`Excluir ${c.idContaCorrente}`}
+                        title="Excluir"
+                      >
+                        <IconeExcluir />
+                      </button>
+                    )}
                   </td>
                 </tr>
               ))}

@@ -68,9 +68,12 @@ public class FluxoCaixaService {
         validarPeriodo(dataInicial, dataFinal);
         OrigemDinheiro origemEfetiva = origem == null ? OrigemDinheiro.TODAS : origem;
         List<Long> empresas = resolverEmpresas(jwt, idsEmpresa);
+        // ⚠️ O fuso da LOJA vale para o SQL também, não só para o `hoje` do Java (auditoria
+        // 2026-08-29). Ver o javadoc de `parametros`.
+        String fuso = fusoDaLoja.daSessao(jwt).getId();
 
-        BigDecimal saldoInicial = saldoAte(dataInicial.minusDays(1), empresas, origemEfetiva);
-        List<Movimento> movimentos = movimentosDoPeriodo(dataInicial, dataFinal, empresas, origemEfetiva);
+        BigDecimal saldoInicial = saldoAte(fuso, dataInicial.minusDays(1), empresas, origemEfetiva);
+        List<Movimento> movimentos = movimentosDoPeriodo(fuso, dataInicial, dataFinal, empresas, origemEfetiva);
 
         Map<String, Map<String, BigDecimal>> porAtividade = new LinkedHashMap<>();
         BigDecimal entradas = BigDecimal.ZERO;
@@ -98,7 +101,7 @@ public class FluxoCaixaService {
         BigDecimal saldoFinal = saldoInicial.add(entradas).subtract(saidas);
         // "Hoje" é o da LOJA do usuário, não o da JVM (que só tem fuso definido em produção).
         LocalDate hoje = fusoDaLoja.hoje(jwt);
-        BigDecimal saldoRealAtual = saldoAte(hoje, empresas, origemEfetiva);
+        BigDecimal saldoRealAtual = saldoAte(fuso, hoje, empresas, origemEfetiva);
         // Conciliação só faz sentido quando o período alcança hoje — comparar o saldo final de um
         // período antigo com o saldo de hoje acusaria uma "diferença" que é só o tempo passando.
         BigDecimal diferenca = dataFinal.isBefore(hoje)
@@ -115,7 +118,7 @@ public class FluxoCaixaService {
 
     /** Um movimento por linha, já com sinal (crédito positivo, débito negativo) e classificado. */
     private List<Movimento> movimentosDoPeriodo(
-            LocalDate inicio, LocalDate fim, List<Long> empresas, OrigemDinheiro origem) {
+            String fuso, LocalDate inicio, LocalDate fim, List<Long> empresas, OrigemDinheiro origem) {
         List<Movimento> movimentos = new ArrayList<>();
 
         if (origem != OrigemDinheiro.CONTA_CORRENTE) {
@@ -128,8 +131,8 @@ public class FluxoCaixaService {
             // uso o fundo anterior é 0 e o do fim é 200 — a variação é 200, exatamente o que o
             // teste exigia ("acusou −150 onde o dinheiro real era 850"). No vigésimo dia a
             // variação é 0, que também é a verdade: nenhum dinheiro novo entrou na gaveta.
-            BigDecimal fundoAntes = fundoDeCaixaAte(inicio.minusDays(1), empresas);
-            BigDecimal fundoDepois = fundoDeCaixaAte(fim, empresas);
+            BigDecimal fundoAntes = fundoDeCaixaAte(fuso, inicio.minusDays(1), empresas);
+            BigDecimal fundoDepois = fundoDeCaixaAte(fuso, fim, empresas);
             BigDecimal variacaoDoFundo = fundoDepois.subtract(fundoAntes);
             if (variacaoDoFundo.signum() != 0) {
                 movimentos.add(new Movimento("OPERACIONAL",
@@ -150,13 +153,28 @@ public class FluxoCaixaService {
                             JOIN caixa_mestre cm ON cm.id_caixa = cd.id_caixa AND cm.id_tenant = cd.id_tenant
                             LEFT JOIN cfg_plano_contas pc
                                  ON pc.id_plano_contas = cd.id_plano_contas AND pc.id_tenant = cd.id_tenant
+                            -- ⛔ VALE-MERCADORIA NÃO É DINHEIRO (auditoria 2026-08-29, rodada 1). O resgate
+                            -- credita `caixa_detalhe` como qualquer outra carteira, e do outro lado a
+                            -- emissão do vale NÃO lança nada — não existe contrapartida. Venda de R$ 90
+                            -- em dinheiro, devolução com vale de R$ 90, e a venda seguinte paga com ele:
+                            -- o saldo dizia R$ 180 com R$ 90 na gaveta, e a linha `Diferença` não
+                            -- denunciava porque `saldoFinal` e `saldoRealAtual` saem da MESMA soma
+                            -- inflada — o mesmo modo de falha do fundo de caixa. Pior: é cumulativo e
+                            -- permanente, porque `exigirExcedenteSangrado` só cobra a carteira de
+                            -- abertura, então esse crédito nunca sai do acumulado.
+                            -- ⚠️ A linha CONTINUA em `caixa_detalhe`, de propósito: o fechamento agrupa
+                            -- por carteira e o operador confere o vale físico que recebeu. O que ela não
+                            -- pode é entrar num relatório que responde "quanto dinheiro existe".
+                            LEFT JOIN tipo_carteira tcv
+                                 ON tcv.id_carteira = cd.id_carteira AND tcv.id_tenant = cd.id_tenant
                             WHERE cd.id_tenant = plataforma.tenant_atual()
-                                  AND (cd.criado_em AT TIME ZONE 'America/Sao_Paulo')::date BETWEEN ? AND ?
+                                  AND (cd.criado_em AT TIME ZONE ?::text)::date BETWEEN ? AND ?
+                                  AND COALESCE(tcv.categoria_carteira::text, '') <> 'VALE_MERCADORIA'
                             """ + filtroEmpresa("cm.id_empresa", empresas) + """
 
                             GROUP BY 1, 2
                             """)
-                    .params(parametros(inicio, fim, empresas))
+                    .params(parametros(fuso, inicio, fim, empresas))
                     .query((rs, n) -> new Movimento(rs.getString("grupo"), rs.getString("rotulo"), rs.getBigDecimal("valor")))
                     .list());
         }
@@ -177,11 +195,11 @@ public class FluxoCaixaService {
                             JOIN cfg_plano_contas pc
                                  ON pc.id_plano_contas = ccm.id_plano_contas AND pc.id_tenant = ccm.id_tenant
                             WHERE ccm.id_tenant = plataforma.tenant_atual()
-                                  AND (ccm.data_movimento AT TIME ZONE 'America/Sao_Paulo')::date BETWEEN ? AND ?
+                                  AND (ccm.data_movimento AT TIME ZONE ?::text)::date BETWEEN ? AND ?
                             """ + filtroEmpresa("cc.id_empresa", empresas) + """
                             GROUP BY 1, 2
                             """)
-                    .params(parametros(inicio, fim, empresas))
+                    .params(parametros(fuso, inicio, fim, empresas))
                     .query((rs, n) -> new Movimento(rs.getString("grupo"), rs.getString("rotulo"), rs.getBigDecimal("valor")))
                     .list());
         }
@@ -218,36 +236,40 @@ public class FluxoCaixaService {
      * <p>⚠️ Funciona para data passada também: pergunta "qual era a última abertura ATÉ aquele
      * dia", não "qual está aberto agora".
      */
-    private BigDecimal fundoDeCaixaAte(LocalDate data, List<Long> empresas) {
+    private BigDecimal fundoDeCaixaAte(String fuso, LocalDate data, List<Long> empresas) {
         return jdbc.sql("""
                         SELECT COALESCE(SUM(ultimo.saldo_inicial), 0) FROM (
                             SELECT DISTINCT ON (cm.id_empresa, cm.id_usuario) cm.saldo_inicial
                               FROM caixa_mestre cm
                              WHERE cm.id_tenant = plataforma.tenant_atual()
-                               AND (cm.data_abertura AT TIME ZONE 'America/Sao_Paulo')::date <= ?
+                               AND (cm.data_abertura AT TIME ZONE ?::text)::date <= ?
                         """ + filtroEmpresa("cm.id_empresa", empresas) + """
 
                              ORDER BY cm.id_empresa, cm.id_usuario, cm.data_abertura DESC, cm.id_caixa DESC
                         ) ultimo
                         """)
-                .params(parametrosData(data, empresas))
+                .params(parametrosData(fuso, data, empresas))
                 .query(BigDecimal.class).single();
     }
 
-    private BigDecimal saldoAte(LocalDate data, List<Long> empresas, OrigemDinheiro origem) {
+    private BigDecimal saldoAte(String fuso, LocalDate data, List<Long> empresas, OrigemDinheiro origem) {
         BigDecimal saldo = BigDecimal.ZERO;
 
         if (origem != OrigemDinheiro.CONTA_CORRENTE) {
-            saldo = saldo.add(fundoDeCaixaAte(data, empresas));
+            saldo = saldo.add(fundoDeCaixaAte(fuso, data, empresas));
 
             saldo = saldo.add(jdbc.sql("""
                             SELECT COALESCE(SUM(CASE WHEN cd.credito_debito = 'C' THEN cd.valor ELSE -cd.valor END), 0)
                             FROM caixa_detalhe cd
                             JOIN caixa_mestre cm ON cm.id_caixa = cd.id_caixa AND cm.id_tenant = cd.id_tenant
+                            -- ⛔ Vale-mercadoria fora: não é dinheiro na gaveta. Ver `movimentosDoPeriodo`.
+                            LEFT JOIN tipo_carteira tcv
+                                 ON tcv.id_carteira = cd.id_carteira AND tcv.id_tenant = cd.id_tenant
                             WHERE cd.id_tenant = plataforma.tenant_atual()
-                                  AND (cd.criado_em AT TIME ZONE 'America/Sao_Paulo')::date <= ?
+                                  AND (cd.criado_em AT TIME ZONE ?::text)::date <= ?
+                                  AND COALESCE(tcv.categoria_carteira::text, '') <> 'VALE_MERCADORIA'
                             """ + filtroEmpresa("cm.id_empresa", empresas))
-                    .params(parametrosData(data, empresas))
+                    .params(parametrosData(fuso, data, empresas))
                     .query(BigDecimal.class).single());
         }
 
@@ -258,10 +280,10 @@ public class FluxoCaixaService {
                             JOIN conta_corrente cc
                                  ON cc.id_conta_corrente = ccm.id_conta_corrente AND cc.id_tenant = ccm.id_tenant
                             WHERE ccm.id_tenant = plataforma.tenant_atual()
-                                  AND (ccm.data_movimento AT TIME ZONE 'America/Sao_Paulo')::date <= ?
+                                  AND (ccm.data_movimento AT TIME ZONE ?::text)::date <= ?
                             """ + filtroEmpresa("cc.id_empresa", empresas) + """
                             """)
-                    .params(parametrosData(data, empresas))
+                    .params(parametrosData(fuso, data, empresas))
                     .query(BigDecimal.class).single());
         }
         return saldo;
@@ -275,8 +297,9 @@ public class FluxoCaixaService {
         validarPeriodo(dataInicial, dataFinal);
         Agrupamento agrupamentoEfetivo = agrupamento == null ? Agrupamento.DIA : agrupamento;
         List<Long> empresas = resolverEmpresas(jwt, idsEmpresa);
+        String fuso = fusoDaLoja.daSessao(jwt).getId();
 
-        BigDecimal saldoAtual = saldoAte(fusoDaLoja.hoje(jwt), empresas, OrigemDinheiro.TODAS);
+        BigDecimal saldoAtual = saldoAte(fuso, fusoDaLoja.hoje(jwt), empresas, OrigemDinheiro.TODAS);
 
         // Vencidos entram no primeiro balde (data inicial), não na data original — senão o saldo
         // projetado mentiria sobre o presente, mostrando dinheiro que já era pra ter entrado.
@@ -289,18 +312,18 @@ public class FluxoCaixaService {
         Map<LocalDate, BigDecimal[]> porFaixa = new LinkedHashMap<>();
 
         jdbc.sql("""
-                        SELECT GREATEST(date_trunc(?, cr.data_vencimento AT TIME ZONE 'America/Sao_Paulo')::date, ?::date) AS faixa,
+                        SELECT GREATEST(date_trunc(?, cr.data_vencimento AT TIME ZONE ?::text)::date, ?::date) AS faixa,
                                COALESCE(SUM(cr.valor_receber), 0) AS valor
                         FROM contas_receber cr
                         JOIN venda v ON v.id_venda = cr.id_venda AND v.id_tenant = cr.id_tenant
                         WHERE cr.id_tenant = plataforma.tenant_atual() AND v.cancelada = false
                               AND cr.data_recebimento IS NULL
-                              AND (cr.data_vencimento AT TIME ZONE 'America/Sao_Paulo')::date <= ?
+                              AND (cr.data_vencimento AT TIME ZONE ?::text)::date <= ?
                         """ + filtroEmpresa("v.id_empresa", empresas) + """
 
                         GROUP BY 1
                         """)
-                .params(paramsProjecao(truncamento, dataInicial, dataFinal, empresas))
+                .params(paramsProjecao(truncamento, fuso, dataInicial, dataFinal, empresas))
                 .query((rs, n) -> {
                     porFaixa.computeIfAbsent(rs.getObject("faixa", LocalDate.class), d -> novoAcumulador())[0] =
                             rs.getBigDecimal("valor");
@@ -309,16 +332,16 @@ public class FluxoCaixaService {
                 .list();
 
         jdbc.sql("""
-                        SELECT GREATEST(date_trunc(?, cp.data_vencimento AT TIME ZONE 'America/Sao_Paulo')::date, ?::date) AS faixa,
+                        SELECT GREATEST(date_trunc(?, cp.data_vencimento AT TIME ZONE ?::text)::date, ?::date) AS faixa,
                                COALESCE(SUM(cp.valor_pagar), 0) AS valor
                         FROM contas_pagar cp
                         WHERE cp.id_tenant = plataforma.tenant_atual() AND cp.data_pagamento IS NULL
-                              AND (cp.data_vencimento AT TIME ZONE 'America/Sao_Paulo')::date <= ?
+                              AND (cp.data_vencimento AT TIME ZONE ?::text)::date <= ?
                         """ + filtroEmpresa("cp.id_empresa", empresas) + """
 
                         GROUP BY 1
                         """)
-                .params(paramsProjecao(truncamento, dataInicial, dataFinal, empresas))
+                .params(paramsProjecao(truncamento, fuso, dataInicial, dataFinal, empresas))
                 .query((rs, n) -> {
                     porFaixa.computeIfAbsent(rs.getObject("faixa", LocalDate.class), d -> novoAcumulador())[1] =
                             rs.getBigDecimal("valor");
@@ -372,11 +395,15 @@ public class FluxoCaixaService {
         };
     }
 
+    /** ⚠️ O fuso aparece DUAS vezes no SQL da projeção (no `date_trunc` e no corte por vencimento),
+     *  e a ordem posicional é: truncamento, fuso, início, fuso, fim, empresas. */
     private static List<Object> paramsProjecao(
-            String truncamento, LocalDate inicio, LocalDate fim, List<Long> empresas) {
+            String truncamento, String fuso, LocalDate inicio, LocalDate fim, List<Long> empresas) {
         List<Object> params = new ArrayList<>();
         params.add(truncamento);
+        params.add(fuso);
         params.add(inicio);
+        params.add(fuso);
         params.add(fim);
         if (empresas != null) {
             params.addAll(empresas);
@@ -415,8 +442,18 @@ public class FluxoCaixaService {
         return " AND " + coluna + " IN (" + String.join(",", empresas.stream().map(id -> "?").toList()) + ")";
     }
 
-    private static List<Object> parametros(LocalDate inicio, LocalDate fim, List<Long> empresas) {
+    /**
+     * ⚠️ O FUSO vai como parâmetro, e é o da LOJA (auditoria 2026-08-29, rodada 1). Era
+     * {@code 'America/Sao_Paulo'} cravado no SQL enquanto o {@code hoje} do Java vinha de
+     * {@code fusoDaLoja} — as duas pontas discordavam. Numa loja de Manaus (UTC−4), a venda em
+     * dinheiro das 23h30 caía no bucket do dia seguinte, o "Saldo real atual" mostrava menos
+     * dinheiro do que a gaveta tem, e a linha <b>Diferença</b> acusava divergência inexistente —
+     * exatamente o que a conciliação existe para NÃO produzir. Vale para AM/RO/RR/MT/MS (1 h por
+     * dia) e AC (2 h). Mesmo padrão de {@code RecebimentoCrediarioService.listarParcelas}.
+     */
+    private static List<Object> parametros(String fuso, LocalDate inicio, LocalDate fim, List<Long> empresas) {
         List<Object> params = new ArrayList<>();
+        params.add(fuso);
         params.add(inicio);
         params.add(fim);
         if (empresas != null) {
@@ -425,8 +462,9 @@ public class FluxoCaixaService {
         return params;
     }
 
-    private static List<Object> parametrosData(LocalDate data, List<Long> empresas) {
+    private static List<Object> parametrosData(String fuso, LocalDate data, List<Long> empresas) {
         List<Object> params = new ArrayList<>();
+        params.add(fuso);
         params.add(data);
         if (empresas != null) {
             params.addAll(empresas);

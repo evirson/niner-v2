@@ -11,6 +11,83 @@ Registro cronológico das decisões e entregas. Atualizar a cada marco relevante
 
 ## Estado atual
 
+> ## 📌 2026-08-29 (6) — auditoria, rodada 1: a comissão que a DRE não estornava e o vale que virava dinheiro
+>
+> Primeira das cinco rodadas que ele pediu, com os dois agentes em paralelo. **12 achados
+> confirmados** (7 no back, 5 no front); corrigi 11 e deixei 1 para o papel.
+>
+> ### ⭐ O que custava dinheiro
+>
+> - **DRE e Lucratividade nunca estornavam a COMISSÃO da devolução.** A assimetria era literal —
+>   a consulta de devoluções **nem selecionava a coluna**. JOÃO vende R$ 1.000 a 10%, o cliente
+>   devolve tudo no mesmo mês: o **Relatório de Comissões** (o número que a loja PAGA) já dava
+>   R$ 0,00, e a DRE fechava o mês com **R$ 100 de prejuízo** sobre uma operação que não movimentou
+>   nada. ⚠️ O javadoc da Lucratividade **afirmava** que não estornar era a regra — *"igual à DRE;
+>   reverter seria regra de negócio nova"* — e estava alinhado ao relatório errado. Vale a regra de
+>   ontem: **quando dois cálculos do mesmo conceito divergem, o que move dinheiro é a referência**
+>   ([[feedback_relatorio_segue_quem_paga]]). A **taxa de cartão** continua sem estorno, e isso não
+>   é descuido: a operadora já cobrou e não devolve.
+> - **O resgate de vale-mercadoria virava dinheiro no caixa.** O resgate credita `caixa_detalhe`
+>   como qualquer carteira, e a **emissão do vale não lança nada** — não existe contrapartida.
+>   Venda de R$ 90 em dinheiro → devolução com vale de R$ 90 → venda seguinte paga com ele: o
+>   Fluxo de Caixa dizia **R$ 180 com R$ 90 na gaveta**. ⛔ E a linha **Diferença** não denunciava,
+>   porque `saldoFinal` e `saldoRealAtual` saem da **mesma soma inflada** — o mesmo modo de falha
+>   do fundo de caixa corrigido ontem. Pior: é **cumulativo e permanente**, porque a sangria só
+>   cobra a carteira de abertura. A linha continua em `caixa_detalhe` de propósito (o fechamento
+>   agrupa por carteira e o operador confere o vale que recebeu); o que ela não pode é entrar num
+>   relatório que responde *"quanto dinheiro existe"*. Mesmo corte na **DRE do regime caixa**, pelo
+>   mesmo argumento que já cortava a parcela migrada: *"o Fluxo de Caixa nunca recebeu esse
+>   dinheiro"*.
+> - **O desconto do orçamento e da OS só existia no FRONT.** O servidor lia o **preço** congelado do
+>   banco e aceitava o **desconto** cru de `req.descontoVenda()` — calculado em `Pdv.tsx`. OS de
+>   R$ 1.000 com R$ 100 de desconto, assinada pelo cliente em R$ 900: um `POST` com
+>   `descontoVenda: 0` fechava em **R$ 1.000**, marcava a OS FATURADA e **nada** registrava que a
+>   loja cobrou R$ 100 a mais do que aprovou. O javadoc de `exigirDescontoDentroDoTeto` já dizia que
+>   o desconto *"viaja"* para o PDV — viajava pelo front, que P4 diz não ser barreira. O piso agora
+>   é **proporcional ao que a venda levou** (o cliente pode levar menos), e dar mais desconto
+>   continua livre.
+> - **Preço congelado da OS mapeado por variação.** Duas linhas do mesmo item com preços diferentes
+>   e **só a última sobrevivia**, enquanto a validação de quantidade somava as duas: `TROCA DE ÓLEO`
+>   1×R$ 100 + 1×R$ 150 virava **2 × R$ 150 = R$ 300** contra os R$ 250 do documento impresso.
+>   ⭐ **O orçamento NÃO tinha o problema** — lá o preço vem sempre do cadastro, então duas linhas da
+>   mesma variação têm forçosamente o mesmo preço; na OS o preço pode vir do cliente. A trava foi
+>   para a **origem** (`gravarItens`), não para o PDV: travar no fechamento deixaria o operador com
+>   o cliente na frente e uma OS impossível de faturar.
+> - **Devolução ao fornecedor: o saldo da nota era lido FORA da trava.** `travarEstoque` cobria só o
+>   eixo do estoque. Nota de 10 unidades, estoque da empresa com 20, dois operadores confirmando 10
+>   cada: as duas passam → **20 devolvidas contra uma nota de 10** e **duas NF-e 55 autorizadas**.
+>   A leitura passou para depois da trava — as duas transações travam as mesmas linhas de
+>   `produto_estoque`, então a segunda só lê depois do commit da primeira.
+> - **Fluxo de Caixa: `hoje` no fuso da UF, SQL em `America/Sao_Paulo` cravado.** Em Manaus (UTC−4),
+>   a venda das 23h30 caía no bucket do dia seguinte: o "Saldo real atual" mostrava menos do que a
+>   gaveta tem e a **Diferença acusava divergência inexistente** — o oposto do que a conciliação
+>   existe para fazer. Vale para AM/RO/RR/MT/MS (1 h/dia) e AC (2 h).
+> - `FecharCaixaRequest.forcarComDivergencia` era `boolean` primitivo num contrato cujo próprio
+>   javadoc descreve *"uma primeira chamada SEM essa flag"* — 400 de desserialização no fechamento.
+>
+> ### ⭐ O achado do front: três colunas da grade de permissões não governavam nada
+>
+> `usePermissaoDaTela` foi criado ontem e aplicado em **2 telas de 16**. O admin marcava só
+> *acessar* em Clientes, o operador via **＋ Novo cliente**, preenchia nome, CPF, endereço do
+> ViaCEP e limite de crédito — e perdia a ficha inteira num **403 no Salvar**. O mesmo valia para o
+> lápis e a lixeira. Agora as 14 listas restantes escondem a ação que o servidor vai recusar.
+> ⚠️ Continua sendo **conveniência de interface, nunca segurança** (P4): quem recusa é o `@Acao`.
+>
+> Mais: os filtros de **data** não resetavam a paginação em Orçamentos e OS (filtrar na página 3
+> devolvia *"Nenhum registro encontrado"* com dezenas no período), `autoFocus` faltando em duas
+> telas e um filtro de fornecedor sem `maiusculas()`.
+>
+> ### 🔵 O único que NÃO corrigi, e por quê
+>
+> `.papeleta-imprimir` e `.comprovante-imprimir` continuam com `position: absolute` — o mesmo
+> mecanismo que fez o documento A4 imprimir uma página e descartar o resto em 2026-08-22, e que foi
+> corrigido lá e na Guia de Transferência, deixando as **duas classes térmicas para trás**. Uma
+> papeleta de ~25 itens poderia sair **sem TOTAL e sem as formas de pagamento**. ⛔ **Não mexi**:
+> isto só se prova imprimindo, a bobina está calibrada fisicamente por ele, e mudar `position` numa
+> impressão calibrada às cegas é exatamente o erro que a memória do projeto manda não cometer.
+> Virou pendência dele — o teste é uma venda de ~25 itens.
+
+
 > ## 📌 2026-08-29 (5) — rodada 4 da auditoria: a DRE vazava empresa, e a Projeção olhava para o passado
 >
 > A rodada 4 rodou com os dois agentes em paralelo (front e back). Cinco achados confirmados, e o

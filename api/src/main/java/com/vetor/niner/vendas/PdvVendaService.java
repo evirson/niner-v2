@@ -128,14 +128,16 @@ public class PdvVendaService {
                     "Uma venda vem de um orçamento OU de uma ordem de serviço, não dos dois.");
         }
 
-        Map<Long, BigDecimal> precosDoOrcamento = req.idOrcamento() == null
-                ? Map.of()
+        DocumentoCongelado orcamentoCongelado = req.idOrcamento() == null
+                ? DocumentoCongelado.VAZIO
                 : precosCongeladosDoOrcamento(jwt, req.idOrcamento(), req.itens());
+        Map<Long, BigDecimal> precosDoOrcamento = orcamentoCongelado.precos();
 
         // ⚠️ Mesmo contrato para a Ordem de Serviço (V087, DS16): preço congelado lido do BANCO.
-        Map<Long, BigDecimal> precosDaOrdemServico = req.idOrdemServico() == null
-                ? Map.of()
+        DocumentoCongelado ordemCongelada = req.idOrdemServico() == null
+                ? DocumentoCongelado.VAZIO
                 : precosCongeladosDaOrdemServico(jwt, req.idOrdemServico(), req.itens());
+        Map<Long, BigDecimal> precosDaOrdemServico = ordemCongelada.precos();
 
         // ⭐ Quem EXECUTOU cada item da OS (DS5). Sem isto, o `id_funcionario` de todas as linhas
         // era o vendedor da venda, e a comissão do mecânico que fez o serviço ia para quem estava
@@ -163,6 +165,9 @@ public class PdvVendaService {
                     "Desconto informado (R$ " + descontoVenda + ") excede o máximo permitido de "
                             + percentualMaximoDesconto + "% (R$ " + descontoMaximoPermitido + ").");
         }
+        exigirDescontoDoDocumento(req,
+                req.idOrdemServico() != null ? ordemCongelada : orcamentoCongelado, descontoVenda);
+
         BigDecimal valorLiquido = valorTotalProdutos.subtract(descontoVenda);
 
         List<LinhaPagamentoResolvida> linhas = resolverPagamentos(req.pagamentos(), valorLiquido);
@@ -305,8 +310,84 @@ public class PdvVendaService {
      * {@code idOrdemServico} sem nenhuma linha marcada faria a venda inteira sair a preço de
      * cadastro, consumindo a OS sem que a loja honrasse o que aprovou — e ninguém veria erro.
      */
-    private Map<Long, BigDecimal> precosCongeladosDaOrdemServico(Jwt jwt, long idOrdemServico,
-                                                                 List<ItemVendaRequest> itensDaVenda) {
+    /**
+     * O documento de origem já congelado: preços por variação, o desconto que ele aprovou e o
+     * total bruto dos itens dele.
+     *
+     * <p>⛔ Antes de 2026-08-29 só os <b>preços</b> vinham do banco; o <b>desconto</b> do orçamento
+     * ou da OS chegava cru em {@code req.descontoVenda()}, calculado pelo front
+     * ({@code Pdv.tsx}: {@code osPuxada?.valorDesconto ?? orcamentoPuxado?.valorDesconto ?? 0}).
+     * Isso contraria P4 — o front não é barreira — e o javadoc de
+     * {@code OrdemServicoService.exigirDescontoDentroDoTeto} já afirmava que o desconto "viaja"
+     * para o PDV, sem nada garantir a viagem.
+     */
+    private record DocumentoCongelado(
+            Map<Long, BigDecimal> precos, BigDecimal valorDesconto, BigDecimal totalItens) {
+        static final DocumentoCongelado VAZIO =
+                new DocumentoCongelado(Map.of(), BigDecimal.ZERO, BigDecimal.ZERO);
+    }
+
+    /**
+     * A venda vinda de um documento não pode cobrar mais do que ele aprovou.
+     *
+     * <p><b>Cenário que isto impede:</b> OS nº 12 aprovada com R$ 1.000 em peças e serviços e
+     * R$ 100 de desconto — total impresso e assinado pelo cliente, R$ 900. Um
+     * {@code POST /pdv/vendas} com {@code idOrdemServico: 12} e {@code descontoVenda: 0} fechava a
+     * venda em R$ 1.000, marcava a OS FATURADA apontando para ela, e <b>nada</b> — nem tela, nem
+     * log, nem teste — registrava que a loja cobrou R$ 100 a mais do que aprovou. Bastava uma
+     * chamada direta à API, ou o front perder o estado.
+     *
+     * <p>⚠️ <b>O mínimo é PROPORCIONAL ao que a venda levou</b>, não o desconto cheio: o cliente
+     * pode levar menos do que o documento aprovou (regra que já existia, "pode levar menos, nunca
+     * mais"), e exigir o desconto inteiro sobre metade dos itens transformaria uma venda parcial
+     * legítima em 400. A proporção usa os <b>preços congelados</b> do próprio documento.
+     *
+     * <p>⚠️ Só o piso é cobrado. Dar <b>mais</b> desconto continua livre — quem faz isso é a loja
+     * abrindo mão de margem, e o teto percentual do tipo de carteira já limita o outro lado.
+     *
+     * <p>⚠️ Arredondamento para BAIXO no piso, mais {@code TOLERANCIA_SALDO}: um centavo de dízima
+     * no rateio não pode recusar a venda com o cliente na frente.
+     */
+    private void exigirDescontoDoDocumento(
+            EfetivarVendaRequest req, DocumentoCongelado documento, BigDecimal descontoVenda) {
+        if (documento.valorDesconto().signum() <= 0 || documento.totalItens().signum() <= 0) {
+            return;
+        }
+        boolean daOrdem = req.idOrdemServico() != null;
+        BigDecimal levadoDoDocumento = BigDecimal.ZERO;
+        for (ItemVendaRequest item : req.itens()) {
+            boolean marcado = daOrdem ? item.ehDaOrdemServico() : item.ehDoOrcamento();
+            BigDecimal precoCongelado = documento.precos().get(item.idVariacao());
+            if (marcado && precoCongelado != null) {
+                levadoDoDocumento = levadoDoDocumento.add(item.qtd().multiply(precoCongelado));
+            }
+        }
+        if (levadoDoDocumento.signum() <= 0) {
+            return;
+        }
+        BigDecimal proporcao = levadoDoDocumento.min(documento.totalItens())
+                .divide(documento.totalItens(), 6, RoundingMode.DOWN);
+        BigDecimal descontoMinimo = documento.valorDesconto().multiply(proporcao)
+                .setScale(2, RoundingMode.DOWN);
+        if (descontoVenda.add(TOLERANCIA_SALDO).compareTo(descontoMinimo) < 0) {
+            throw new ConflitoDadosException(
+                    ("O desconto desta venda (R$ %s) é menor que o aprovado n%s nº %d para os itens levados "
+                            + "(R$ %s). O cliente tem o documento com esse valor na mão — refaça a venda pelo "
+                            + "F5 para o desconto vir junto.")
+                            .formatted(descontoVenda.toPlainString(),
+                                    daOrdem ? "a ordem de serviço" : "o orçamento",
+                                    daOrdem ? req.idOrdemServico() : req.idOrcamento(),
+                                    descontoMinimo.toPlainString()));
+        }
+    }
+
+    /** {@code null} de campo opcional de documento vale zero — ausente é null, zero é valor. */
+    private static BigDecimal valorOuZero(BigDecimal valor) {
+        return valor == null ? BigDecimal.ZERO : valor;
+    }
+
+    private DocumentoCongelado precosCongeladosDaOrdemServico(Jwt jwt, long idOrdemServico,
+                                                             List<ItemVendaRequest> itensDaVenda) {
         OrdemServicoResponse os = ordemServicoService.abrirParaVenda(jwt, idOrdemServico);
 
         if (itensDaVenda.stream().noneMatch(ItemVendaRequest::ehDaOrdemServico)) {
@@ -343,11 +424,15 @@ public class PdvVendaService {
                                 + " aprovou. O cliente pode levar menos, nunca mais.");
             }
         }
-        return precos;
+        BigDecimal totalDoDocumento = BigDecimal.ZERO;
+        for (var item : os.itens()) {
+            totalDoDocumento = totalDoDocumento.add(item.qtdProduto().multiply(item.precoVenda()));
+        }
+        return new DocumentoCongelado(precos, valorOuZero(os.valorDesconto()), totalDoDocumento);
     }
 
-    private Map<Long, BigDecimal> precosCongeladosDoOrcamento(Jwt jwt, long idOrcamento,
-                                                              List<ItemVendaRequest> itensDaVenda) {
+    private DocumentoCongelado precosCongeladosDoOrcamento(Jwt jwt, long idOrcamento,
+                                                          List<ItemVendaRequest> itensDaVenda) {
         OrcamentoResponse orcamento = orcamentoService.abrirParaVenda(jwt, idOrcamento);
 
         // ⚠️ Guarda de contrato (2026-08-21): desde que o preço congelado passou a valer POR LINHA
@@ -399,7 +484,11 @@ public class PdvVendaService {
                                 .formatted(pedido.getValue().toPlainString(), orcada.toPlainString()));
             }
         }
-        return precos;
+        BigDecimal totalDoDocumento = BigDecimal.ZERO;
+        for (ItemOrcamentoResponse item : orcamento.itens()) {
+            totalDoDocumento = totalDoDocumento.add(item.qtd().multiply(item.precoVenda()));
+        }
+        return new DocumentoCongelado(precos, valorOuZero(orcamento.valorDesconto()), totalDoDocumento);
     }
 
     /** Parcial = algum item saiu com quantidade menor que a orçada, ou não saiu. Estado FINAL: o

@@ -9,6 +9,7 @@ import {
   type FornecedorOpcaoEmissao,
 } from '../../lib/etiquetaEmissao'
 import { mascararData } from '../../lib/masks'
+import { maiusculas } from '../../lib/texto'
 import type { SituacaoConta } from '../../lib/relatorioContasPagar'
 
 export interface FiltrosTextoContasPagar {
@@ -190,7 +191,9 @@ export default function FiltrosContasPagarModal({
                 <input
                   value={buscaFornecedor}
                   placeholder="Digite parte do nome…"
-                  onChange={(e) => setBuscaFornecedor(e.target.value)}
+                  // Convenção do projeto: texto livre sobe em MAIÚSCULAS. As cinco telas irmãs que
+                  // fazem esta mesma busca já aplicavam; só este filtro ficou de fora.
+                  onChange={(e) => setBuscaFornecedor(maiusculas(e.target.value))}
                   aria-label="Buscar fornecedor"
                 />
                 {(encontrados ?? []).length > 0 && (

@@ -88,6 +88,28 @@ Decisão dele: promover ou manter.
 ### 14. Devolução não estorna comissão nem taxa
 Decisão de negócio.
 
+
+### 65. 🔵 Papeleta e comprovante de crediário podem estar cortando na impressão (rodada 1 da auditoria de 2026-08-29)
+`.papeleta-imprimir` (`styles.css:412`) e `.comprovante-imprimir` (`:373`) são `position: absolute`
+dentro de `.modal-overlay` (`position: fixed`). É o **mesmo mecanismo** que fez o documento A4
+imprimir uma página e descartar o resto em 2026-08-22 — corrigido lá (`.documento-a4-imprimir`) e
+na Guia de Transferência, e as **duas classes térmicas ficaram para trás**. Soma-se o
+`html, body, #root { overflow: hidden }`, que **corta** em vez de paginar.
+
+**O que deveria acontecer:** uma venda de **~25 itens** (cabeçalho ≈12 linhas + 2 por item + rodapé
+≈12 → passa de 70 linhas) sairia no papel **sem TOTAL, sem as formas de pagamento e sem a linha de
+agradecimento**. A pré-visualização na tela mostra tudo — o `<pre>` rola dentro do modal —, então
+**só o papel responde**. Vale igual para o Comprovante de Crediário com muitas parcelas e para o
+Fechamento de Caixa com muitas carteiras.
+
+⛔ **Não corrigi de propósito.** A bobina está calibrada fisicamente por você (75mm, 42 colunas,
+`left: 0`), e mexer em `position` numa impressão calibrada **às cegas** é o erro que a lição de
+2026-08-24 manda não cometer — uma hipótese por rodada, e medindo a saída.
+
+**O teste é seu, e é curto:** faça uma venda com ~25 itens e mande imprimir a papeleta. Se o TOTAL
+sair, não há defeito nenhum e a pendência fecha. Se cortar, a correção é a mesma receita do A4
+(portal para filho do `<body>`, `display: none` nos irmãos, `position: static`, destravar
+`overflow`) — e aí precisamos de **uma impressão por rodada** para confirmar.
 ### 17. 🔔 Estorno não revoga assinatura
 Dívida **conhecida e aceita**, política dele. **Pedido explícito: avisar em toda revisão/auditoria.**
 

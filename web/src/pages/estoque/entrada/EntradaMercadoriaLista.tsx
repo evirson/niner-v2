@@ -1,5 +1,4 @@
 import CabecalhoModal from '../../../components/CabecalhoModal'
-import { usePermissaoDaTela } from '../../../lib/usePermissaoDaTela'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
@@ -26,6 +25,7 @@ import {
 import { buscarFornecedoresEmissao, LIMITE_BUSCA_EMISSAO, type FornecedorOpcaoEmissao } from '../../../lib/etiquetaEmissao'
 import { dataParaIso, dataValida, formatarMoeda, mascararData } from '../../../lib/masks'
 import { maiusculas } from '../../../lib/texto'
+import { usePermissaoDaTela } from '../../../lib/usePermissaoDaTela'
 
 const JANELA_PAGINACAO = 7
 const TAMANHO_PAGINA = 50

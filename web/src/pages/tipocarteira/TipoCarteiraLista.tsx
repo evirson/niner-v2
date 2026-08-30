@@ -24,6 +24,7 @@ import {
   invalidarTiposCarteira,
 } from '../../lib/tiposCarteira'
 import { maiusculas } from '../../lib/texto'
+import { usePermissaoDaTela } from '../../lib/usePermissaoDaTela'
 
 const JANELA_PAGINACAO = 7
 const TAMANHO_PAGINA = 50
@@ -70,6 +71,10 @@ function paginasVisiveis(atual: number, total: number): number[] {
  * (não existe coluna `ativo`).
  */
 export default function TipoCarteiraLista() {
+  // â RBAC: o admin pode conceder sÃ³ "acessar" â sem isto o operador preenchia a ficha
+  // inteira e perdia tudo num 403 no Salvar (auditoria 2026-08-29). ConveniÃªncia de
+  // interface, nunca seguranÃ§a: quem recusa Ã© o @Acao do controller (P4).
+  const acoes = usePermissaoDaTela('tipos-carteira')
   const location = useLocation()
   const estadoRecebido = (
     location.state as { toast?: { texto: string; tipo: TipoToast }; listaEstado?: EstadoListaTipoCarteira } | null
@@ -148,9 +153,11 @@ export default function TipoCarteiraLista() {
           </div>
           <div className="topbar-acoes">
             <AjudaDaTela chaveTela="financeiro.tipocarteira.lista" />
-            <Link className="btn" to="/tipos-carteira/novo">
-              ＋ Novo tipo de carteira
-            </Link>
+            {acoes.incluir && (
+              <Link className="btn" to="/tipos-carteira/novo">
+                ＋ Novo tipo de carteira
+              </Link>
+            )}
             <BotaoFecharTela />
           </div>
         </div>
@@ -217,25 +224,29 @@ export default function TipoCarteiraLista() {
                     >
                       <IconeOlho />
                     </Link>
-                    <Link
-                      className="acao-icone acao-editar"
-                      to={`/tipos-carteira/${tc.idCarteira}`}
-                      state={{ listaEstado: estadoAtual }}
-                      aria-label={`Editar ${tc.nomeCarteira}`}
-                      title="Editar"
-                    >
-                      <IconeEditar />
-                    </Link>
-                    <button
-                      type="button"
-                      className="acao-icone acao-excluir"
-                      disabled={excluir.isPending}
-                      onClick={() => setCarteiraParaExcluir(tc)}
-                      aria-label={`Excluir ${tc.nomeCarteira}`}
-                      title="Excluir"
-                    >
-                      <IconeExcluir />
-                    </button>
+                    {acoes.alterar && (
+                      <Link
+                        className="acao-icone acao-editar"
+                        to={`/tipos-carteira/${tc.idCarteira}`}
+                        state={{ listaEstado: estadoAtual }}
+                        aria-label={`Editar ${tc.nomeCarteira}`}
+                        title="Editar"
+                      >
+                        <IconeEditar />
+                      </Link>
+                    )}
+                    {acoes.excluir && (
+                      <button
+                        type="button"
+                        className="acao-icone acao-excluir"
+                        disabled={excluir.isPending}
+                        onClick={() => setCarteiraParaExcluir(tc)}
+                        aria-label={`Excluir ${tc.nomeCarteira}`}
+                        title="Excluir"
+                      >
+                        <IconeExcluir />
+                      </button>
+                    )}
                   </td>
                 </tr>
               ))}

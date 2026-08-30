@@ -264,11 +264,6 @@ public class DevolucaoCompraService {
         EntradaOrigem origem = exigirEntradaElegivel(req.idMovimentoOrigem());
         long idUsuario = Long.parseLong(jwt.getSubject());
 
-        Map<Long, ItemDevolvivelResponse> devolviveis = new HashMap<>();
-        for (ItemDevolvivelResponse item : itensDevolviveis(req.idMovimentoOrigem())) {
-            devolviveis.put(item.idVariacao(), item);
-        }
-
         // A mesma variacao pode chegar em mais de uma linha do pedido - o operador digitou duas
         // vezes, ou a tela mandou uma linha por `nItem` da nota. Somar ANTES de validar: conferir
         // linha a linha deixaria duas linhas de 5 passarem contra um estoque de 8, que e
@@ -300,6 +295,20 @@ public class DevolucaoCompraService {
         // simultaneas leem o mesmo saldo e as duas passam. A trigger de estoque nao barra nada
         // (o sistema permite negativo em toda outra operacao), entao o unico guarda e este.
         Map<Long, BigDecimal> estoqueAgora = travarEstoque(origem.idEmpresa(), pedidoPorVariacao.keySet());
+
+        // ⛔ O SALDO DA NOTA é lido DEPOIS da trava (auditoria 2026-08-29, rodada 1). Ele era lido
+        // antes, e `travarEstoque` cobria só o eixo do estoque — o javadoc de lá diz que existe
+        // para impedir "duas devoluções lerem as mesmas 8 unidades", e o saldo da nota escapava.
+        // Entrada de 10 unidades, estoque da empresa com 20 (10 dessa nota, 10 de outra), dois
+        // operadores confirmando 10 cada: T1 passa; T2 leu `qtdSaldo = 10` antes do commit de T1,
+        // espera a trava, relê o ESTOQUE (10) e passa também. Resultado: 20 unidades devolvidas
+        // contra uma nota de 10, saldo −10 na view e DUAS NF-e 55 autorizadas contra uma entrada
+        // que não as comporta. Lendo aqui, T2 só chega à leitura depois do commit de T1 — as duas
+        // travam as MESMAS linhas de `produto_estoque` — e enxerga o saldo já consumido.
+        Map<Long, ItemDevolvivelResponse> devolviveis = new HashMap<>();
+        for (ItemDevolvivelResponse item : itensDevolviveis(req.idMovimentoOrigem())) {
+            devolviveis.put(item.idVariacao(), item);
+        }
 
         List<ItemDevolvidoResponse> itens = new ArrayList<>();
         BigDecimal valorTotal = BigDecimal.ZERO;

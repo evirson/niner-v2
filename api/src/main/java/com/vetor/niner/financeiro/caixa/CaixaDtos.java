@@ -88,7 +88,15 @@ public final class CaixaDtos {
     public record FecharCaixaRequest(
             @NotNull Long idCaixa,
             @NotEmpty List<@Valid ValorContadoRequest> valoresContados,
-            boolean forcarComDivergencia) {
+            /**
+             * ⚠️ {@code Boolean}, não {@code boolean} (auditoria 2026-08-29). O javadoc acima
+             * descreve o fluxo como <i>"uma primeira chamada SEM essa flag"</i> — e com o
+             * primitivo, omitir o campo dava {@code MismatchedInputException} (400 com mensagem de
+             * desserialização) no fechamento de caixa, em vez de valer "não forçar". O front sempre
+             * manda a chave, então o defeito estava latente para qualquer outro cliente da API que
+             * seguisse o contrato escrito.
+             */
+            Boolean forcarComDivergencia) {
     }
 
     /** Uma linha de conferência: {@code diferenca = valorContado - valorEsperado}. Só é

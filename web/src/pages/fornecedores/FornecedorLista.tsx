@@ -27,6 +27,7 @@ import {
 import { useEu } from '../../lib/eu'
 import { mascararCpfCnpj, mascararTelefone } from '../../lib/masks'
 import { maiusculas } from '../../lib/texto'
+import { usePermissaoDaTela } from '../../lib/usePermissaoDaTela'
 
 const JANELA_PAGINACAO = 7
 const TAMANHO_PAGINA = 50
@@ -53,6 +54,10 @@ function paginasVisiveis(atual: number, total: number): number[] {
 }
 
 export default function FornecedorLista() {
+  // â RBAC: o admin pode conceder sÃ³ "acessar" â sem isto o operador preenchia a ficha
+  // inteira e perdia tudo num 403 no Salvar (auditoria 2026-08-29). ConveniÃªncia de
+  // interface, nunca seguranÃ§a: quem recusa Ã© o @Acao do controller (P4).
+  const acoes = usePermissaoDaTela('fornecedores')
   const location = useLocation()
   const [busca, setBusca] = useState('')
   const [status, setStatus] = useState<StatusFornecedor>('ATIVOS')
@@ -148,9 +153,11 @@ export default function FornecedorLista() {
               </Link>
             )}
             <AjudaDaTela chaveTela="cadastros.fornecedor.lista" />
-            <Link className="btn" to="/fornecedores/novo">
-              ＋ Novo fornecedor
-            </Link>
+            {acoes.incluir && (
+              <Link className="btn" to="/fornecedores/novo">
+                ＋ Novo fornecedor
+              </Link>
+            )}
             <BotaoFecharTela />
           </div>
         </div>
@@ -229,24 +236,28 @@ export default function FornecedorLista() {
                     >
                       <IconeOlho />
                     </Link>
-                    <Link
-                      className="acao-icone acao-editar"
-                      to={`/fornecedores/${f.idFornecedor}`}
-                      aria-label={`Editar ${f.razaoSocial}`}
-                      title="Editar"
-                    >
-                      <IconeEditar />
-                    </Link>
-                    <button
-                      type="button"
-                      className="acao-icone acao-excluir"
-                      disabled={excluir.isPending}
-                      onClick={() => setFornecedorParaExcluir(f)}
-                      aria-label={`Excluir ${f.razaoSocial}`}
-                      title="Excluir"
-                    >
-                      <IconeExcluir />
-                    </button>
+                    {acoes.alterar && (
+                      <Link
+                        className="acao-icone acao-editar"
+                        to={`/fornecedores/${f.idFornecedor}`}
+                        aria-label={`Editar ${f.razaoSocial}`}
+                        title="Editar"
+                      >
+                        <IconeEditar />
+                      </Link>
+                    )}
+                    {acoes.excluir && (
+                      <button
+                        type="button"
+                        className="acao-icone acao-excluir"
+                        disabled={excluir.isPending}
+                        onClick={() => setFornecedorParaExcluir(f)}
+                        aria-label={`Excluir ${f.razaoSocial}`}
+                        title="Excluir"
+                      >
+                        <IconeExcluir />
+                      </button>
+                    )}
                   </td>
                 </tr>
               ))}

@@ -25,6 +25,7 @@ import {
 import { listarEmpresasPermitidas, type Empresa } from '../../../lib/empresas'
 import { buscarFornecedoresEmissao, LIMITE_BUSCA_EMISSAO, type FornecedorOpcaoEmissao } from '../../../lib/etiquetaEmissao'
 import { dataParaIso, dataValida, formatarMoeda, mascararData } from '../../../lib/masks'
+import { usePermissaoDaTela } from '../../../lib/usePermissaoDaTela'
 
 const JANELA_PAGINACAO = 7
 const TAMANHO_PAGINA = 50
@@ -62,6 +63,10 @@ function formatarData(iso: string | null): string {
  * definitiva).
  */
 export default function ContasPagarLista() {
+  // â RBAC: o admin pode conceder sÃ³ "acessar" â sem isto o operador preenchia a ficha
+  // inteira e perdia tudo num 403 no Salvar (auditoria 2026-08-29). ConveniÃªncia de
+  // interface, nunca seguranÃ§a: quem recusa Ã© o @Acao do controller (P4).
+  const acoes = usePermissaoDaTela('contas-pagar')
   const navigate = useNavigate()
   const location = useLocation()
   const queryClient = useQueryClient()
@@ -205,9 +210,11 @@ export default function ContasPagarLista() {
           </div>
           <div className="topbar-acoes">
             <AjudaDaTela chaveTela="financeiro.contaspagar.lista" />
-            <Link className="btn" to="/contas-pagar/nova">
-              ＋ Nova Conta a Pagar
-            </Link>
+            {acoes.incluir && (
+              <Link className="btn" to="/contas-pagar/nova">
+                ＋ Nova Conta a Pagar
+              </Link>
+            )}
             <BotaoFecharTela />
           </div>
         </div>
@@ -282,24 +289,28 @@ export default function ContasPagarLista() {
                         >
                           <IconeOlho />
                         </Link>
-                        <Link
-                          className="acao-icone acao-editar"
-                          to={`/contas-pagar/${c.idContaPagar}`}
-                          aria-label={`Editar conta a pagar ${c.idContaPagar}`}
-                          title="Editar"
-                        >
-                          <IconeEditar />
-                        </Link>
-                        <button
-                          type="button"
-                          className="acao-icone acao-excluir"
-                          disabled={excluir.isPending}
-                          onClick={() => setContaParaExcluir(c)}
-                          aria-label={`Excluir conta a pagar ${c.idContaPagar}`}
-                          title="Excluir"
-                        >
-                          <IconeExcluir />
-                        </button>
+                        {acoes.alterar && (
+                          <Link
+                            className="acao-icone acao-editar"
+                            to={`/contas-pagar/${c.idContaPagar}`}
+                            aria-label={`Editar conta a pagar ${c.idContaPagar}`}
+                            title="Editar"
+                          >
+                            <IconeEditar />
+                          </Link>
+                        )}
+                        {acoes.excluir && (
+                          <button
+                            type="button"
+                            className="acao-icone acao-excluir"
+                            disabled={excluir.isPending}
+                            onClick={() => setContaParaExcluir(c)}
+                            aria-label={`Excluir conta a pagar ${c.idContaPagar}`}
+                            title="Excluir"
+                          >
+                            <IconeExcluir />
+                          </button>
+                        )}
                       </td>
                     </tr>
                   ))}

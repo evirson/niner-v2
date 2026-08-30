@@ -23,6 +23,7 @@ import {
 } from '../../lib/etiquetaConfig'
 import { formatarEtiquetaMm } from '../../lib/masks'
 import { maiusculas } from '../../lib/texto'
+import { usePermissaoDaTela } from '../../lib/usePermissaoDaTela'
 
 const JANELA_PAGINACAO = 7
 const TAMANHO_PAGINA = 50
@@ -57,6 +58,10 @@ function paginasVisiveis(atual: number, total: number): number[] {
  * fallback de inativar — nada referencia esta tabela ainda, ver EtiquetaConfigService).
  */
 export default function EtiquetaConfigLista() {
+  // â RBAC: o admin pode conceder sÃ³ "acessar" â sem isto o operador preenchia a ficha
+  // inteira e perdia tudo num 403 no Salvar (auditoria 2026-08-29). ConveniÃªncia de
+  // interface, nunca seguranÃ§a: quem recusa Ã© o @Acao do controller (P4).
+  const acoes = usePermissaoDaTela('etiqueta-configuracao')
   const location = useLocation()
   const estadoRecebido = (
     location.state as { toast?: { texto: string; tipo: TipoToast }; listaEstado?: EstadoListaEtiquetaConfig } | null
@@ -133,9 +138,11 @@ export default function EtiquetaConfigLista() {
           </div>
           <div className="topbar-acoes">
             <AjudaDaTela chaveTela="configuracoes.etiquetaconfig.lista" />
-            <Link className="btn" to="/etiqueta-configuracao/novo">
-              ＋ Nova configuração
-            </Link>
+            {acoes.incluir && (
+              <Link className="btn" to="/etiqueta-configuracao/novo">
+                ＋ Nova configuração
+              </Link>
+            )}
             <BotaoFecharTela />
           </div>
         </div>
@@ -204,25 +211,29 @@ export default function EtiquetaConfigLista() {
                     >
                       <IconeOlho />
                     </Link>
-                    <Link
-                      className="acao-icone acao-editar"
-                      to={`/etiqueta-configuracao/${ec.idConfigEtiqueta}`}
-                      state={{ listaEstado: estadoAtual }}
-                      aria-label={`Editar ${ec.nome}`}
-                      title="Editar"
-                    >
-                      <IconeEditar />
-                    </Link>
-                    <button
-                      type="button"
-                      className="acao-icone acao-excluir"
-                      disabled={excluir.isPending}
-                      onClick={() => setConfigParaExcluir(ec)}
-                      aria-label={`Excluir ${ec.nome}`}
-                      title="Excluir"
-                    >
-                      <IconeExcluir />
-                    </button>
+                    {acoes.alterar && (
+                      <Link
+                        className="acao-icone acao-editar"
+                        to={`/etiqueta-configuracao/${ec.idConfigEtiqueta}`}
+                        state={{ listaEstado: estadoAtual }}
+                        aria-label={`Editar ${ec.nome}`}
+                        title="Editar"
+                      >
+                        <IconeEditar />
+                      </Link>
+                    )}
+                    {acoes.excluir && (
+                      <button
+                        type="button"
+                        className="acao-icone acao-excluir"
+                        disabled={excluir.isPending}
+                        onClick={() => setConfigParaExcluir(ec)}
+                        aria-label={`Excluir ${ec.nome}`}
+                        title="Excluir"
+                      >
+                        <IconeExcluir />
+                      </button>
+                    )}
                   </td>
                 </tr>
               ))}

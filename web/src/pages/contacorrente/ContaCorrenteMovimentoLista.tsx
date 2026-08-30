@@ -27,6 +27,7 @@ import {
 } from '../../lib/contaCorrenteMovimento'
 import { listarEmpresas } from '../../lib/empresas'
 import { dataParaIso, dataValida, formatarMoeda, mascararData } from '../../lib/masks'
+import { usePermissaoDaTela } from '../../lib/usePermissaoDaTela'
 
 const JANELA_PAGINACAO = 7
 const TAMANHO_PAGINA = 50
@@ -58,6 +59,10 @@ function formatarData(iso: string): string {
  * `financeiro.contacorrente` (PK de negócio), mesmo padrão de `cadastros.funcionario`.
  */
 export default function ContaCorrenteMovimentoLista() {
+  // â RBAC: o admin pode conceder sÃ³ "acessar" â sem isto o operador preenchia a ficha
+  // inteira e perdia tudo num 403 no Salvar (auditoria 2026-08-29). ConveniÃªncia de
+  // interface, nunca seguranÃ§a: quem recusa Ã© o @Acao do controller (P4).
+  const acoes = usePermissaoDaTela('contas-corrente-movimento')
   const location = useLocation()
   const [busca, setBusca] = useState('')
   const [idContaCorrente, setIdContaCorrente] = useState('')
@@ -149,9 +154,11 @@ export default function ContaCorrenteMovimentoLista() {
           </div>
           <div className="topbar-acoes">
             <AjudaDaTela chaveTela="financeiro.contacorrentemovimento.lista" />
-            <Link className="btn" to="/contas-corrente-movimento/novo">
-              ＋ Novo lançamento
-            </Link>
+            {acoes.incluir && (
+              <Link className="btn" to="/contas-corrente-movimento/novo">
+                ＋ Novo lançamento
+              </Link>
+            )}
             <BotaoFecharTela />
           </div>
         </div>
@@ -287,24 +294,28 @@ export default function ContaCorrenteMovimentoLista() {
                       </span>
                     ) : (
                       <>
-                    <Link
-                      className="acao-icone acao-editar"
-                      to={`/contas-corrente-movimento/${m.localizador}`}
-                      aria-label={`Editar lançamento ${m.localizador}`}
-                      title="Editar"
-                    >
-                      <IconeEditar />
-                    </Link>
-                    <button
-                      type="button"
-                      className="acao-icone acao-excluir"
-                      disabled={excluir.isPending}
-                      onClick={() => setMovimentoParaExcluir(m)}
-                      aria-label={`Excluir lançamento ${m.localizador}`}
-                      title="Excluir"
-                    >
-                      <IconeExcluir />
-                    </button>
+                    {acoes.alterar && (
+                      <Link
+                        className="acao-icone acao-editar"
+                        to={`/contas-corrente-movimento/${m.localizador}`}
+                        aria-label={`Editar lançamento ${m.localizador}`}
+                        title="Editar"
+                      >
+                        <IconeEditar />
+                      </Link>
+                    )}
+                    {acoes.excluir && (
+                      <button
+                        type="button"
+                        className="acao-icone acao-excluir"
+                        disabled={excluir.isPending}
+                        onClick={() => setMovimentoParaExcluir(m)}
+                        aria-label={`Excluir lançamento ${m.localizador}`}
+                        title="Excluir"
+                      >
+                        <IconeExcluir />
+                      </button>
+                    )}
                       </>
                     )}
                   </td>
