@@ -9,6 +9,7 @@ import { buscarPermiteQtdDecimal } from '../../lib/configuracaoGeral'
 import { desfazerUltimaEfetivacao, listarContagemAtiva, obterUltimaEfetivacao, zerarContagem, invalidarBalanco } from '../../lib/estoqueBalanco'
 import { formatarQuantidade } from '../../lib/masks'
 import { maiusculas } from '../../lib/texto'
+import { usePermissaoDaTela } from '../../lib/usePermissaoDaTela'
 
 const CHAVE_TELA = 'estoque.zerar-contagem'
 const FRASE_CONFIRMACAO_ZERAR = 'zerar estoque'
@@ -26,6 +27,9 @@ function formatarDataHora(iso: string): string {
  * empresa em que o usuário está logado.
  */
 export default function ZerarContagemEstoque() {
+  // Zerar contagem e desfazer efetivação são "desfazer" — o servidor exige EXCLUIR em
+  // `estoque.zerar-contagem` (`@Tela` de método, V091).
+  const acoes = usePermissaoDaTela('estoque.zerar-contagem')
   const queryClient = useQueryClient()
   const [toast, setToast] = useState<{ texto: string; tipo: 'erro' | 'sucesso' } | null>(null)
   const [confirmandoZerar, setConfirmandoZerar] = useState(false)
@@ -110,7 +114,7 @@ export default function ZerarContagemEstoque() {
                   type="button"
                   className="btn"
                   style={{ marginTop: 16 }}
-                  disabled={totalProdutos === 0}
+                  disabled={totalProdutos === 0 || !acoes.excluir}
                   onClick={() => {
                     setTextoConfirmacaoZerar('')
                     setConfirmandoZerar(true)
@@ -143,7 +147,13 @@ export default function ZerarContagemEstoque() {
                   <span className="muted">Produtos ajustados: </span>
                   <strong>{ultimaEfetivacao.totalProdutos}</strong>
                 </p>
-                <button type="button" className="btn ghost" style={{ marginTop: 16 }} onClick={() => setConfirmandoDesfazer(true)}>
+                <button
+                  type="button"
+                  className="btn ghost"
+                  style={{ marginTop: 16 }}
+                  disabled={!acoes.excluir}
+                  onClick={() => setConfirmandoDesfazer(true)}
+                >
                   Desfazer Última Efetivação
                 </button>
               </>

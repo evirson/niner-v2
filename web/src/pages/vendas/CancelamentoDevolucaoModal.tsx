@@ -9,6 +9,7 @@ import {
 } from '../../lib/cancelamentoDevolucao'
 import { formatarDataHora } from '../../lib/datas'
 import { formatarMoeda } from '../../lib/masks'
+import { usePermissaoDaTela } from '../../lib/usePermissaoDaTela'
 import AvisoModal from '../../components/AvisoModal'
 
 function moeda(v: number): string {
@@ -30,6 +31,10 @@ export default function CancelamentoDevolucaoModal({
   aoFechar: () => void
   aoCancelarComSucesso: () => void
 }) {
+  // O servidor exige EXCLUIR em `cancelamento-devolucao-produtos`. Sem isto, o operador localizava
+  // a devolução, escrevia os 15+ caracteres de motivo que a tela exige, confirmava — e levava 403
+  // com o cliente na frente.
+  const acoes = usePermissaoDaTela('cancelamento-devolucao-produtos')
   const queryClient = useQueryClient()
   const [motivo, setMotivo] = useState('')
   const [erro, setErro] = useState('')
@@ -174,7 +179,7 @@ export default function CancelamentoDevolucaoModal({
                 />
                 {erro && <p className="erro-campo">{erro}</p>}
                 <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 12 }}>
-                  <button type="button" className="btn" disabled={cancelar.isPending} onClick={confirmar}>
+                  <button type="button" className="btn" disabled={cancelar.isPending || !acoes.excluir} onClick={confirmar}>
                     {cancelar.isPending ? 'Cancelando…' : 'Sim, Cancelar Devolução'}
                   </button>
                 </div>

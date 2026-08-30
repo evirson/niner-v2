@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import AjudaDaTela from '../../components/AjudaDaTela'
 import { BotaoFecharTela } from '../../components/BotaoFecharTela'
 import { IconeFechamentoCaixa } from '../../components/Icones'
@@ -84,17 +84,31 @@ export default function FechamentoCaixa() {
   // nascem com o valor esperado já preenchido (a contagem não é mais às cegas): o operador ajusta
   // pra baixo/cima conforme o que contou fisicamente, em vez de digitar tudo do zero.
   //
-  // ⚠️ A dependência é o DADO (`fechamento`) mais o `isFetching`, NUNCA `fechamento?.idCaixa`.
-  // Com o id na dependência, reabrir o MESMO caixa dentro do `gcTime` (5 min) preenchia os campos
-  // a partir do cache no primeiro render, e quando o refetch trazia o esperado NOVO o id não tinha
-  // mudado — o efeito não rodava outra vez e o prefill ficava no número velho. O caminho que
-  // produz isso é o do dia a dia desde a V095: o fechamento recusa enquanto houver excedente do
-  // fundo, o operador vai sangrar e VOLTA para cá. Ele veria "Valor em Caixa: 200,00" com o campo
-  // contado dizendo "500,00" e, confiando no prefill, "Fechar Mesmo Assim" gravaria em
-  // `caixa_fechamento_conferencia` uma sobra de R$ 300,00 que nunca existiu. Esperar
-  // `isFetching === false` é o mesmo remédio de `DevolucaoProduto` e do `ComprovantePapeletaModal`.
+  // ⚠️ Este efeito tem DOIS defeitos possíveis, em direções opostas, e a guarda precisa fechar os
+  // dois — a primeira tentativa (2026-08-30) fechou um e abriu o outro, pior.
+  //
+  // 1) Dependência `[fechamento?.idCaixa]` (como era): reabrir o MESMO caixa dentro do `gcTime`
+  //    preenchia os campos a partir do cache, e quando o refetch trazia o esperado NOVO o id não
+  //    tinha mudado — o prefill ficava no número velho. É o caminho do dia a dia desde a V095: o
+  //    fechamento recusa enquanto houver excedente do fundo, o operador vai sangrar e VOLTA.
+  // 2) Dependência `[fechamento, isFetching]` (a correção ingênua): `isFetching` transita
+  //    false→true→false a cada refetch, então o efeito roda de novo e **sobrescreve o que o
+  //    operador já digitou**. E `new QueryClient()` (main.tsx) não passa defaults, então
+  //    `refetchOnWindowFocus` fica ligado com `staleTime: 0` — ou seja, **todo alt-tab** refaz o
+  //    fetch. O operador contava as cédulas, digitava 480,00, abria a calculadora, voltava, e o
+  //    campo estava de novo em 500,00; "Fechar Caixa" gravaria uma conferência dizendo que bateu,
+  //    escondendo uma falta real. Pior que (1), porque é comum e silencioso — e o mesmo alt-tab
+  //    apagaria a tela de divergência (`setResultadoDivergencia(null)`) junto com o botão
+  //    "Fechar Mesmo Assim".
+  //
+  // A guarda é de INTENÇÃO, como em `DevolucaoProduto` (`focoInicialFeito`) e `OrcamentoForm`:
+  // prefill acontece UMA vez por caixa aberto na tela. Guardar o `idCaixa` (e não um booleano)
+  // resolve de graça a troca direta de um caixa para outro pela busca por número.
+  const prefillFeitoDoCaixa = useRef<number | null>(null)
   useEffect(() => {
     if (!fechamento || isFetching) return
+    if (prefillFeitoDoCaixa.current === fechamento.idCaixa) return
+    prefillFeitoDoCaixa.current = fechamento.idCaixa
     const iniciais: Record<number, string> = {}
     fechamento.linhas.forEach((l) => {
       iniciais[l.idCarteira] = formatarMoeda(l.valorEsperado)
@@ -158,6 +172,9 @@ export default function FechamentoCaixa() {
     setIdCaixaSelecionado(null)
     setBuscaNumeroCaixa('')
     setResultadoDivergencia(null)
+    // ⚠️ Solta a guarda de prefill: reentrar no MESMO caixa depois de sangrar precisa preencher os
+    // campos com o esperado NOVO. Sem esta linha, voltaria o defeito (1) do efeito acima.
+    prefillFeitoDoCaixa.current = null
   }
 
   const naoEncontrado = error instanceof ApiError && error.status === 404

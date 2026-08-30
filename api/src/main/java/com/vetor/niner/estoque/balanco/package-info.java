@@ -24,8 +24,12 @@
  * </ul>
  *
  * <p><b>Desfazer última efetivação</b>: encontra o {@code produto_movimento_mestre} tipo
- * {@code AJUSTE} mais recente da empresa que ainda tenha ao menos uma linha de detalhe (ou
- * seja, ainda não desfeito), apaga as linhas de detalhe daquele movimento (a trigger reverte
+ * {@code AJUSTE} mais recente da empresa que ainda tenha ao menos uma linha de detalhe (ou seja,
+ * ainda não desfeito) <b>e que tenha sido produzido por um balanço</b> — isto é, que apareça em
+ * {@code produto_balanco.id_movimento}. ⚠️ O tipo {@code AJUSTE} sozinho <b>não</b> identifica o
+ * balanço: a Importação de Dados grava o mesmo tipo, e enquanto o filtro era só ele o "desfazer"
+ * apagava o estoque recém-importado (corrigido em 2026-08-30). Apaga as linhas de detalhe daquele
+ * movimento (a trigger reverte
  * {@code produto_estoque} sozinha, mesmo mecanismo de exclusão de
  * {@link com.vetor.niner.estoque.transferencia.TransferenciaService#excluir}) e libera de volta
  * as linhas de {@code produto_balanco} marcadas com aquele {@code id_movimento}

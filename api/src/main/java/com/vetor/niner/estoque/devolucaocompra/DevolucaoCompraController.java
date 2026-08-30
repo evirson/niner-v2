@@ -58,6 +58,9 @@ import java.util.List;
 @Tela("estoque.devolucao-compra")
 public class DevolucaoCompraController {
 
+    private static final org.slf4j.Logger LOG =
+            org.slf4j.LoggerFactory.getLogger(DevolucaoCompraController.class);
+
     private final DevolucaoCompraService service;
     private final EmissaoNfeDevolucaoService emissaoFiscal;
     private final CancelamentoNfceService cancelamentoFiscal;
@@ -103,11 +106,25 @@ public class DevolucaoCompraController {
         DevolucaoCompraEfetivadaResponse dev = service.efetivar(jwt, req);
 
         Integer idUsuario = Integer.valueOf(jwt.getSubject());
-        NotaFiscalDevolucaoCompraResponse nota = emissaoFiscal
-                .emitirDevolucaoDeCompraSeAplicavel(dev.idEmpresa(), dev.idMovimento(), idUsuario)
-                .map(r -> new NotaFiscalDevolucaoCompraResponse(r.situacao().name(), r.idDocumentoFiscal(),
-                        r.chaveAcesso(), r.protocolo(), r.cStat(), r.mensagem()))
-                .orElse(null);
+        NotaFiscalDevolucaoCompraResponse nota;
+        try {
+            nota = emissaoFiscal
+                    .emitirDevolucaoDeCompraSeAplicavel(dev.idEmpresa(), dev.idMovimento(), idUsuario)
+                    .map(r -> new NotaFiscalDevolucaoCompraResponse(r.situacao().name(), r.idDocumentoFiscal(),
+                            r.chaveAcesso(), r.protocolo(), r.cStat(), r.mensagem()))
+                    .orElse(null);
+        } catch (RuntimeException e) {
+            // ⛔ Mesmo defeito da Devolução de Produtos, e aqui o dado perdido é ainda mais físico:
+            // `service.efetivar` já commitou e **o estoque já saiu**. Sem este catch, uma falha na
+            // NF-e 55 (a montagem recusa quando o CRT não é 2 e o item traz CST, por exemplo)
+            // descartava o `idMovimento` da resposta — o operador via erro sobre uma devolução que
+            // aconteceu, e a tentativa de refazer bateria no teto de saldo, sem explicar por quê.
+            // A nota fica registrada em Documentos Fiscais para reprocessar.
+            LOG.warn("Devolução ao fornecedor {} gravada, mas a NF-e 55 falhou — a resposta foi preservada",
+                    dev.idMovimento(), e);
+            nota = new NotaFiscalDevolucaoCompraResponse("FALHA_NA_EMISSAO", 0L, null, null, null,
+                    e.getMessage() == null ? "Não foi possível emitir a NF-e de devolução." : e.getMessage());
+        }
 
         return new DevolucaoCompraEfetivadaResponse(dev.idMovimento(), dev.idMovimentoOrigem(),
                 dev.dataMovimento(), dev.idEmpresa(), dev.idFornecedor(), dev.nomeFornecedor(),

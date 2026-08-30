@@ -195,10 +195,26 @@ public class EstoqueImportador implements ImportadorDeTabela {
         Map<Long, Long> movimentoPorEmpresa = new LinkedHashMap<>();
 
         for (List<LinhaResolvida> grupo : grupos.values()) {
+            // ⚠️ O que estes dois mapas cacheiam é id de linha GRAVADA no banco, e o savepoint pode
+            // desfazer a gravação sem que o mapa saiba. Guardar as chaves de antes é o que permite
+            // devolver o cache ao estado consistente quando o grupo falha.
+            Set<Long> movimentosAntes = Set.copyOf(movimentoPorEmpresa.keySet());
+            Set<String> variacoesAntes = Set.copyOf(variacoesExistentes.keySet());
             try {
                 importadas += savepoints.executar(
                         () -> processarGrupo(grupo, mapeamentoEmpresas, movimentoPorEmpresa, avisos, gradesPorProduto, variacoesExistentes));
             } catch (RuntimeException e) {
+                // ⛔ SEM esta limpeza, uma linha ruim derrubava a importação inteira da empresa —
+                // o efeito-cascata que o `ImportacaoSavepointExecutor` existe para eliminar.
+                // O `computeIfAbsent` de `movimentoPorEmpresa` cria o `produto_movimento_mestre`
+                // DENTRO do savepoint; se o grupo falha depois disso (uma quantidade estourando
+                // `numeric(14,3)` na segunda empresa, por exemplo), o savepoint desfaz o INSERT do
+                // mestre — mas o Map em Java continuava com o id que deixou de existir. Todo grupo
+                // seguinte reusava esse id e violava a FK de `produto_movimento_detalhe`, rolando
+                // de volta também. O relatório saía acusando erro em TODAS as linhas, escondendo
+                // qual era a única linha ruim.
+                movimentoPorEmpresa.keySet().retainAll(movimentosAntes);
+                variacoesExistentes.keySet().retainAll(variacoesAntes);
                 for (LinhaResolvida r : grupo) {
                     erros.add(LinhaErro.de(r.origem().numeroLinha(), e));
                 }

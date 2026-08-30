@@ -60,9 +60,15 @@ class MigrationQueMexeEmDadoDeTenantTest {
      *       {@code DEFAULT} irmão;</li>
      *   <li>{@code V049} — {@code empresa}: o CHECK é {@code NOT VALID} de propósito, e a coluna
      *       aceita NULL; nada dependia do backfill;</li>
-     *   <li>{@code V055} — {@code cfg_geral}: o {@code UPDATE} saiu vazio, mas o
-     *       {@code SET DEFAULT true} da linha acima salvou o caso (medido: o parâmetro está
-     *       ligado);</li>
+     *   <li>{@code V055} — {@code cfg_geral}: o {@code UPDATE} saiu vazio. ⛔ <b>A justificativa
+     *       anterior desta linha era FALSA</b> e dizia que "o {@code SET DEFAULT true} salvou o
+     *       caso (medido: o parâmetro está ligado)". O DEFAULT cobre linha <b>nova</b>; ele nunca
+     *       tocou a que já existia. A medição estava certa e a conclusão sobre a CAUSA, errada — o
+     *       que tinha posto o parâmetro em {@code true} foi alguém salvando pela tela, nove dias
+     *       depois. Cronologia medida: tenant 1 criado em 18/08; V054 (que cria a coluna
+     *       {@code NOT NULL DEFAULT false}) em 20/08 19:35; V055 em 20/08 19:53, casando zero
+     *       linhas. O parâmetro ficou errado por nove dias. <b>Consertado pela V098</b>, que
+     *       libera o RLS, distingue acidente de escolha do lojista e confere o resultado;</li>
      *   <li>{@code V076}, {@code V078} — {@code usuario_permissao}: saíram vazios. Medido em
      *       2026-08-29: <b>zero</b> inconsistência restante, porque as concessões existentes
      *       nasceram depois delas. Em um banco com concessões anteriores, teriam falhado;</li>

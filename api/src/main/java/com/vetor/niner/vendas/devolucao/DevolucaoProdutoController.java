@@ -30,6 +30,9 @@ import org.springframework.web.bind.annotation.RestController;
 @Tela("devolucao-produto")
 public class DevolucaoProdutoController {
 
+    private static final org.slf4j.Logger LOG =
+            org.slf4j.LoggerFactory.getLogger(DevolucaoProdutoController.class);
+
     private final DevolucaoProdutoService service;
     private final EmissaoNfeDevolucaoService emissaoFiscal;
 
@@ -72,11 +75,35 @@ public class DevolucaoProdutoController {
 
         long idEmpresa = ((Number) jwt.getClaim("eid")).longValue();
         Integer idUsuario = Integer.valueOf(jwt.getSubject());
-        NotaFiscalDevolucaoResponse nota = emissaoFiscal
-                .emitirSeAplicavel(idEmpresa, devolucao.idDevolucao(), idUsuario)
-                .map(r -> new NotaFiscalDevolucaoResponse(r.situacao().name(), r.idDocumentoFiscal(),
-                        r.chaveAcesso(), r.protocolo(), r.cStat(), r.mensagem()))
-                .orElse(null);
+        NotaFiscalDevolucaoResponse nota;
+        try {
+            nota = emissaoFiscal
+                    .emitirSeAplicavel(idEmpresa, devolucao.idDevolucao(), idUsuario)
+                    .map(r -> new NotaFiscalDevolucaoResponse(r.situacao().name(), r.idDocumentoFiscal(),
+                            r.chaveAcesso(), r.protocolo(), r.cStat(), r.mensagem()))
+                    .orElse(null);
+        } catch (RuntimeException e) {
+            // ⛔ SEM este catch, o javadoc acima mentia pela metade. "Falha na nota NÃO desfaz a
+            // devolução" valia no BANCO (o serviço já commitou) e não valia na RESPOSTA: qualquer
+            // exceção da emissão substituía o 201 inteiro, e com ele o `valorVale` — o número do
+            // vale-mercadoria que o cliente leva embora.
+            //
+            // O caminho é do dia a dia, não é hipótese: cliente identificado com cadastro sem
+            // logradouro/bairro (a NFC-e não exige, o cadastro aceita) faz
+            // `DevolucaoFiscalAssembler.exigirEnderecoDoCliente` responder 409. O estoque voltou, o
+            // vale nasceu, e o operador via um ERRO — refazia a devolução, e aí ou nascia um
+            // SEGUNDO vale com o estoque voltando duas vezes, ou ele ficava preso, com um vale
+            // existente que a tela não sabia mostrar.
+            //
+            // ⚠️ `RuntimeException` de propósito, e não uma lista de tipos: o que não pode acontecer
+            // é a resposta se perder, qualquer que seja a causa. A nota fica registrada com a
+            // situação real em Documentos Fiscais e é reprocessável — exatamente o que o javadoc
+            // promete. A falha vai no campo `mensagem`, para a tela mostrar ao lado do vale.
+            LOG.warn("Devolução {} gravada, mas a NF-e de devolução falhou — o vale foi preservado na resposta",
+                    devolucao.idDevolucao(), e);
+            nota = new NotaFiscalDevolucaoResponse("FALHA_NA_EMISSAO", 0L, null, null, null,
+                    e.getMessage() == null ? "Não foi possível emitir a NF-e de devolução." : e.getMessage());
+        }
 
         return new DevolucaoEfetivadaResponse(devolucao.idMovimento(), devolucao.idDevolucao(),
                 devolucao.valorVale(), devolucao.dataMovimento(), devolucao.idFuncionario(),

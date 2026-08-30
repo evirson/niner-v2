@@ -10,6 +10,7 @@ import { ajustarContagem, listarContagemAtiva, registrarContagem, removerContage
 import { completarQuantidade, desmascararQuantidade, formatarQuantidade, mascararQuantidade } from '../../lib/masks'
 import { buscarProdutoPorCodigo, interpretarCodigoBarras } from '../../lib/pdv'
 import { maiusculas } from '../../lib/texto'
+import { usePermissaoDaTela } from '../../lib/usePermissaoDaTela'
 
 const CHAVE_TELA = 'estoque.contagem'
 const QTD_MAXIMA_POR_LEITURA = 1000
@@ -24,6 +25,7 @@ const QTD_MAXIMA_POR_LEITURA = 1000
  * inteira sem afetar as demais.
  */
 export default function ContagemEstoque() {
+  const acoes = usePermissaoDaTela('estoque.contagem')
   const queryClient = useQueryClient()
   const [valorBarras, setValorBarras] = useState('')
   const [toast, setToast] = useState<{ texto: string; tipo: 'erro' | 'sucesso' } | null>(null)
@@ -170,10 +172,17 @@ export default function ContagemEstoque() {
                 autoComplete="off"
                 inputMode="numeric"
                 value={valorBarras}
+                // Sem INCLUIR em `estoque.contagem` o servidor recusa cada leitura. Travar o campo
+                // avisa antes de o conferente começar a bipar, em vez de um 403 por produto.
+                disabled={!acoes.incluir}
                 onChange={(e) => setValorBarras(maiusculas(e.target.value))}
                 onKeyDown={aoDigitarBarras}
               />
-              <p className="pdv-dica">Leia o código de barras do produto e pressione Enter.</p>
+              <p className="pdv-dica">
+                {acoes.incluir
+                  ? 'Leia o código de barras do produto e pressione Enter.'
+                  : 'Você não tem permissão para registrar contagem nesta tela.'}
+              </p>
               <p className="pdv-dica">Dica: "5*código" soma 5 unidades de uma vez (máximo 1000 por leitura).</p>
             </div>
 

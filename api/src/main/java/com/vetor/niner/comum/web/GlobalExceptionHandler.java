@@ -4,6 +4,7 @@ import com.vetor.niner.fiscal.documento.AssinadorXmlNfe.AssinaturaInvalidaExcept
 import com.vetor.niner.fiscal.documento.MontagemNfceDtos.MontagemInvalidaException;
 import com.vetor.niner.fiscal.documento.ValidadorXsd.XmlInvalidoException;
 import com.vetor.niner.fiscal.motor.MotorTributarioDtos.TributacaoInvalidaException;
+import com.vetor.niner.fiscal.sefaz.SefazDtos.FalhaDeComunicacaoException;
 import com.vetor.niner.plataforma.onboarding.ContaJaExisteException;
 import com.vetor.niner.plataforma.uso.LimiteVendasExcedidoException;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -206,6 +207,28 @@ public class GlobalExceptionHandler {
         ProblemDetail pd = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, ex.getMessage());
         pd.setTitle("XML fiscal inválido");
         pd.setType(URI.create("urn:niner:erro:fiscal-xml-invalido"));
+        return pd;
+    }
+
+    /**
+     * A QUARTA irmã — e a que aparece justamente quando a rede está ruim (2026-08-30).
+     *
+     * <p>Sete dos oito consumidores de {@code SefazTransporte} capturam esta exceção; o oitavo é
+     * {@code DocumentoFiscalConsultaService.consultarNaSefaz} — o "Consultar na SEFAZ" de
+     * Documentos Fiscais, que existe exatamente para resolver documento preso em
+     * {@code TRANSMITINDO} (F5). Sem handler, a SEFAZ fora do ar ou um certificado vencido viravam
+     * <b>500 sem {@code detail}</b>, e o front dizia "Ocorreu um erro" — apagando a mensagem que
+     * nomeia a causa, na tela que a pessoa abriu justamente para descobrir a causa.
+     *
+     * <p>⚠️ <b>502 e não 400:</b> quem falhou foi um terceiro, não o cliente. Repetir a chamada
+     * mais tarde é a atitude certa, e o status precisa dizer isso.
+     */
+    @ExceptionHandler(FalhaDeComunicacaoException.class)
+    public ProblemDetail tratarFalhaDeComunicacao(FalhaDeComunicacaoException ex) {
+        LOG.warn("Falha de comunicação com a SEFAZ", ex);
+        ProblemDetail pd = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_GATEWAY, ex.getMessage());
+        pd.setTitle("Falha de comunicação com a SEFAZ");
+        pd.setType(URI.create("urn:niner:erro:fiscal-falha-comunicacao"));
         return pd;
     }
 

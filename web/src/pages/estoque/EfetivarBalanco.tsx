@@ -9,6 +9,7 @@ import { buscarPermiteQtdDecimal } from '../../lib/configuracaoGeral'
 import { efetivarBalanco, obterDiferencas } from '../../lib/estoqueBalanco'
 import { formatarQuantidade } from '../../lib/masks'
 import { maiusculas } from '../../lib/texto'
+import { usePermissaoDaTela } from '../../lib/usePermissaoDaTela'
 
 const FRASE_CONFIRMACAO_EFETIVAR = 'efetiva contagem'
 
@@ -20,6 +21,10 @@ const FRASE_CONFIRMACAO_EFETIVAR = 'efetiva contagem'
  * a frase de confirmação (2026-08-04, mesmo padrão de "Zerar Contagem de Estoque").
  */
 export default function EfetivarBalanco() {
+  // O servidor exige INCLUIR em `estoque.efetivar-balanco`. Sem consultar a grade aqui, o
+  // conferente contava o inventário inteiro, abria a tela, lia as diferenças, digitava a frase de
+  // confirmação por extenso — e só então levava 403.
+  const acoes = usePermissaoDaTela('estoque.efetivar-balanco')
   const queryClient = useQueryClient()
   const [confirmando, setConfirmando] = useState(false)
   const [textoConfirmacaoEfetivar, setTextoConfirmacaoEfetivar] = useState('')
@@ -84,7 +89,7 @@ export default function EfetivarBalanco() {
               <button
                 type="button"
                 className="btn"
-                disabled={linhas.length === 0}
+                disabled={linhas.length === 0 || !acoes.incluir}
                 onClick={() => {
                   setTextoConfirmacaoEfetivar('')
                   setConfirmando(true)

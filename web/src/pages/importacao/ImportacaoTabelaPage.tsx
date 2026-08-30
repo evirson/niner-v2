@@ -286,7 +286,10 @@ export default function ImportacaoTabelaPage({ tabela }: { tabela: Tabela }) {
       setStatus('validado')
     } catch (e) {
       setStatus('ocioso')
-      setErroMsg(e instanceof ApiError ? e.message : 'Ocorreu um erro.')
+      // ⚠️ Toast, não banner: o `erroMsg` fica no TOPO do card, e quando a validação falha o
+      // usuário costuma estar rolado até a lista de linhas — a tela voltava para "Validar" sem
+      // nada aparente ter acontecido. (Convenção do projeto: erro em Toast, nunca só num <div>.)
+      mostrarErro(e)
     } finally {
       pararPolling()
     }
@@ -305,7 +308,10 @@ export default function ImportacaoTabelaPage({ tabela }: { tabela: Tabela }) {
       if (!rel.confirmado) {
         setStatus('falha')
         setRelatorio(rel)
-        setErroMsg('Nada foi importado — este arquivo ainda tem linha(s) com erro.')
+        // Mesma razão do `catch` do Validar: esta é a mensagem que decide se o operador refaz o
+        // arquivo, e ela vinha fora da área visível.
+        setToastTipo('erro')
+        setToast('Nada foi importado — este arquivo ainda tem linha(s) com erro.')
         return
       }
       setRelatorio(rel)
