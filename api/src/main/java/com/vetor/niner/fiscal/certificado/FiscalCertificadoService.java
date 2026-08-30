@@ -119,9 +119,17 @@ public class FiscalCertificadoService {
                         ORDER BY ocorrido_em DESC
                         """)
                 .param(idCertificado)
+                // ⚠️ `id_usuario` é `integer` (V035) e o cast era `(Long)`: `getObject` sem tipo
+                // devolve `Integer` para `int4`, então isso é `ClassCastException` esperando o
+                // gatilho. Hoje não estoura só porque a coluna é SEMPRE nula —
+                // `registrarUsoDoCertificado` não grava o autor. No dia em que alguém completar o
+                // F7 ("todo uso do certificado deixa rastro"), que está escrito no javadoc de lá
+                // como trabalho previsto, a listagem passa a responder 500 sempre que houver um uso
+                // com autor. E o sintoma engana igual ao caso de 2026-08-20: erro de LEITURA, num
+                // GET, sem relação com o campo que o operador está olhando.
                 .query((rs, n) -> new FiscalCertificadoUsoResponse(
                         rs.getLong("id_uso"), rs.getString("finalidade"),
-                        (Long) rs.getObject("id_documento_fiscal"), (Long) rs.getObject("id_usuario"),
+                        getLongOuNulo(rs, "id_documento_fiscal"), getLongOuNulo(rs, "id_usuario"),
                         rs.getObject("ocorrido_em", OffsetDateTime.class)))
                 .list();
     }
@@ -372,4 +380,11 @@ public class FiscalCertificadoService {
         }
     }
 
+
+    /** {@code getLong} + {@code wasNull} — o idioma do projeto para coluna numérica anulável, e o
+     *  que evita depender do tipo exato que o driver devolve em {@code getObject} sem tipo. */
+    private static Long getLongOuNulo(java.sql.ResultSet rs, String coluna) throws java.sql.SQLException {
+        long valor = rs.getLong(coluna);
+        return rs.wasNull() ? null : valor;
+    }
 }

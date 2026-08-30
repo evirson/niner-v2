@@ -185,7 +185,12 @@ export default function Login() {
         <input id="senha" type="password" value={senha} onChange={(e) => setSenha(e.target.value)} required />
 
         {erro && <Toast mensagem={erro} aoFechar={() => setErro('')} />}
-        {sucesso && <Toast mensagem={sucesso} tipo="sucesso" aoFechar={() => setSucesso('')} />}
+        {/* ⚠️ `!erro &&`: os dois Toast são `position: fixed` na MESMA coordenada, com o mesmo
+          z-index — quem pinta por cima é o último do DOM, que era sempre o de sucesso. Um sucesso
+          ainda na tela ESCONDIA o erro que acabava de acontecer, nunca o contrário. Na Sangria isso
+          fazia o operador ler "sangria registrada" depois de uma recusa; no 2FA, ler "enviamos um
+          código novo" enquanto o contador de tentativas andava para o teto. O erro vence. */}
+        {!erro && sucesso && <Toast mensagem={sucesso} tipo="sucesso" aoFechar={() => setSucesso('')} />}
         <button className="btn" type="submit" disabled={carregando} style={{ width: '100%', marginTop: 12 }}>
           {carregando ? 'Entrando…' : 'Entrar'}
         </button>
@@ -347,7 +352,12 @@ function CodigoCard({
         />
 
         {erro && <Toast mensagem={erro} aoFechar={() => setErro('')} />}
-        {aviso && <Toast mensagem={aviso} tipo="sucesso" aoFechar={() => setAviso('')} />}
+        {/* ⚠️ `!erro &&`: os dois Toast são `position: fixed` na MESMA coordenada, com o mesmo
+          z-index — quem pinta por cima é o último do DOM, que era sempre o de sucesso. Um sucesso
+          ainda na tela ESCONDIA o erro que acabava de acontecer, nunca o contrário. Na Sangria isso
+          fazia o operador ler "sangria registrada" depois de uma recusa; no 2FA, ler "enviamos um
+          código novo" enquanto o contador de tentativas andava para o teto. O erro vence. */}
+        {!erro && aviso && <Toast mensagem={aviso} tipo="sucesso" aoFechar={() => setAviso('')} />}
 
         <button className="btn" type="submit" disabled={carregando || codigo.length < 4} style={{ width: '100%', marginTop: 12 }}>
           {carregando ? 'Conferindo…' : 'Entrar'}

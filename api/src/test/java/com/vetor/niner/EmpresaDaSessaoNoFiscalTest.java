@@ -116,6 +116,18 @@ class EmpresaDaSessaoNoFiscalTest {
         mvc.perform(get("/api/v1/fiscal/inutilizacoes").param("idEmpresa", String.valueOf(outra))
                         .header("Authorization", auth))
                 .andExpect(status().isForbidden());
+        // ⛔ E o POST — que é o que EXECUTA o ato, e inutilização NÃO SE DESFAZ. Este caso faltava:
+        // a trava do POST entrou em 2026-08-30 e, sem ele, revertê-la não reprovava nada. O GET
+        // acima já era guardado desde 08-27, o que dava a impressão de cobertura.
+        mvc.perform(post("/api/v1/fiscal/inutilizacoes").header("Authorization", auth)
+                        .contentType(APPLICATION_JSON).content("""
+                                {"idEmpresa":%d,"modelo":65,"serie":1,"numeroInicial":1,"numeroFinal":1,
+                                 "justificativa":"TENTATIVA DE INUTILIZAR FAIXA DA OUTRA FILIAL"}
+                                """.formatted(outra)))
+                .andExpect(status().isForbidden());
+        mvc.perform(get("/api/v1/fiscal/inutilizacoes/buracos").param("idEmpresa", String.valueOf(outra))
+                        .param("modelo", "65").param("serie", "1").header("Authorization", auth))
+                .andExpect(status().isForbidden());
         mvc.perform(get("/api/v1/fiscal/conformidade/" + outra).header("Authorization", auth))
                 .andExpect(status().isForbidden());
 

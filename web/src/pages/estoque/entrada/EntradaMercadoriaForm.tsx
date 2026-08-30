@@ -925,6 +925,29 @@ export default function EntradaMercadoriaForm() {
 
   const algumCustoZerado = itens.some((i) => desmascararMoeda(i.custoTexto || '0') <= 0)
   /**
+   * O custo unitário do item **com a cota do frete rateado** — a mesma base que o servidor usa.
+   *
+   * ⛔ A primeira versão da guarda abaixo comparava contra o custo DIGITADO, e por isso era
+   * estritamente mais fraca que o servidor: nunca barrava o que ele aceitaria, mas deixava passar
+   * todo o conjunto que ele recusa. Com o rateio ligado, lançar 10 unidades a R$ 10,00 com venda de
+   * R$ 12,00 e depois informar R$ 500,00 de frete deixava o Confirmar VERDE e voltava 400 — que é
+   * exatamente o beco que a guarda veio fechar. O rateio é proporcional a `custo × qtd`, igual ao
+   * do back.
+   */
+  function custoUnitarioComRateio(item: ItemLinha): number {
+    const rateio = rateiaFrete && valorRateioTexto.trim() ? desmascararMoeda(valorRateioTexto) : 0
+    const custo = desmascararMoeda(item.custoTexto || '0')
+    if (rateio <= 0) return custo
+    const baseTotal = itens.reduce(
+      (s, i) => s + desmascararMoeda(i.custoTexto || '0') * desmascararQuantidade(i.qtdTexto || '0', permiteQtdDecimal),
+      0,
+    )
+    if (baseTotal <= 0) return custo
+    const qtd = desmascararQuantidade(item.qtdTexto || '0', permiteQtdDecimal)
+    if (qtd <= 0) return custo
+    return custo + (rateio * ((custo * qtd) / baseTotal)) / qtd
+  }
+  /**
    * ⛔ Preço de venda abaixo do custo, barrado AQUI — o servidor recusa e o campo não está na tela.
    *
    * `precoVendaTexto` é preenchido pelo popup de lançamento (um preço para o lote) e **não aparece
@@ -937,7 +960,7 @@ export default function EntradaMercadoriaForm() {
    */
   const linhaComVendaAbaixoDoCusto = itens.find((i) => {
     const venda = desmascararMoeda(i.precoVendaTexto || '0')
-    return venda > 0 && venda < desmascararMoeda(i.custoTexto || '0')
+    return venda > 0 && venda < custoUnitarioComRateio(i)
   })
   /** Data de parcela digitada errada (não só em branco) — par do `dataEntradaTextoInvalida`. */
   const algumaParcelaComDataInvalida = parcelas.some((p) => p.dataVencimentoTexto.trim() !== '' && !dataValida(p.dataVencimentoTexto))
@@ -1206,18 +1229,6 @@ export default function EntradaMercadoriaForm() {
           </>
         )}
       </div>
-      {/* ⛔ Fica FORA do bloco do seletor de propósito: com uma única empresa permitida o
-          `<select>` não é renderizado, e é justamente aí que o operador não teria como
-          desconfiar de nada. */}
-      {empresaDoXmlNaoLiberada && (
-        <div className="col-12">
-          <p className="erro-campo">
-            Esta nota foi faturada contra <strong>outra empresa</strong>, que não está liberada para
-            o seu usuário — a entrada não pode ser confirmada assim. Peça acesso à empresa correta,
-            ou entre com um usuário que já a tenha, antes de continuar.
-          </p>
-        </div>
-      )}
       {empresasPermitidas && empresasPermitidas.length > 1 && (
         <div className="col-3">
           <label htmlFor="entrada-empresa">Empresa *</label>
@@ -1396,14 +1407,6 @@ export default function EntradaMercadoriaForm() {
         </div>
       )}
 
-      {linhaComVendaAbaixoDoCusto && (
-        <p className="erro-campo">
-          O preço de venda de "{linhaComVendaAbaixoDoCusto.descricao}" (
-          {moeda(desmascararMoeda(linhaComVendaAbaixoDoCusto.precoVendaTexto || '0'))}) ficou abaixo do
-          preço de custo ({moeda(desmascararMoeda(linhaComVendaAbaixoDoCusto.custoTexto || '0'))}).
-          Remova a linha e lance de novo pelo popup, ajustando o preço de venda.
-        </p>
-      )}
       {totalParcelasNaoBate && (
         <p className="erro-campo">
           O total das parcelas ({moeda(valorParcelasTotal)}) precisa bater com o total dos produtos lançados ({moeda(valorTotal)}).
@@ -1436,6 +1439,30 @@ export default function EntradaMercadoriaForm() {
             )}
           </div>
         </div>
+
+        {/* ⛔ O MOTIVO do Confirmar estar cinza mora AQUI, junto do botão — não dentro de uma aba.
+            As duas mensagens abaixo já existiram dentro de `renderCamposIdentificacao` (aba 1) e de
+            `renderContasPagar` (aba 3), e as duas explicavam um botão que fica na TOPBAR, visível
+            de todas as abas. Pior: o `processarXml` troca para a aba "2. Produtos" no mesmo
+            instante em que o aviso da empresa nasce, e a causa do "venda abaixo do custo" é o campo
+            de custo da aba 2 — ou seja, nos dois casos o operador via o botão morto numa aba e a
+            explicação em OUTRA. Este arquivo já registra esse defeito com nome: trocar "toast
+            genérico" por "botão morto sem diagnóstico" é o mesmo defeito um campo ao lado. */}
+        {!entradaGravada && empresaDoXmlNaoLiberada && (
+          <p className="erro-campo" style={{ marginTop: 8 }}>
+            Esta nota foi faturada contra <strong>outra empresa</strong>, que não está liberada para o
+            seu usuário — a entrada não pode ser confirmada assim. Peça acesso à empresa correta, ou
+            entre com um usuário que já a tenha.
+          </p>
+        )}
+        {!entradaGravada && linhaComVendaAbaixoDoCusto && (
+          <p className="erro-campo" style={{ marginTop: 8 }}>
+            O preço de venda de "{linhaComVendaAbaixoDoCusto.descricao}" (
+            {moeda(desmascararMoeda(linhaComVendaAbaixoDoCusto.precoVendaTexto || '0'))}) ficou abaixo do
+            preço de custo ({moeda(desmascararMoeda(linhaComVendaAbaixoDoCusto.custoTexto || '0'))}).
+            Corrija o custo na aba "2. Produtos", ou remova a linha e lance de novo pelo popup.
+          </p>
+        )}
       </div>
 
       <div className="lista-corpo">

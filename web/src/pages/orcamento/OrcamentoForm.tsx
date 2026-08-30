@@ -402,7 +402,12 @@ export default function OrcamentoForm() {
       {emitido && (
         <OrcamentoImpressaoModal
           orcamento={emitido}
-          aoFechar={() => navigate('/orcamentos', { replace: true })}
+          // ⚠️ `navigate(-1)`, não `replace`. O `replace` trocava `/orcamentos/novo` por
+          // `/orcamentos` — e a entrada ANTERIOR já era essa mesma lista: ficavam duas idênticas em
+          // sequência, e o ✕ da lista (que é `navigate(-1)`) não saía do lugar no primeiro clique.
+          // É o desfecho que `EntradaMercadoriaForm` já documenta com estas palavras: "troquei 'o ✕
+          // te devolve à tela que você fechou' por 'o ✕ não faz nada': melhor, e ainda errado".
+          aoFechar={() => navigate(-1)}
         />
       )}
 

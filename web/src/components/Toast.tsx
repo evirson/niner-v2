@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 
 export type TipoToast = 'erro' | 'sucesso'
 
@@ -19,10 +19,17 @@ export default function Toast({
   tipo?: TipoToast
   aoFechar: () => void
 }) {
+  // ⚠️ `aoFechar` NÃO entra nas dependências, e por isso vai por ref: quase toda tela o passa como
+  // arrow inline (`aoFechar={() => setErro(null)}`), que é uma função nova a cada render. Com ela
+  // na lista, o timer de 6 s era descartado e RECRIADO a cada re-render do pai — numa tela que
+  // invalida cinco query keys no `onSuccess`, cada refetch que aterrissa estica a janela, e o toast
+  // fica na tela bem mais que os 6 s nominais.
+  const aoFecharRef = useRef(aoFechar)
+  aoFecharRef.current = aoFechar
   useEffect(() => {
-    const t = setTimeout(aoFechar, 6000)
+    const t = setTimeout(() => aoFecharRef.current(), 6000)
     return () => clearTimeout(t)
-  }, [mensagem, aoFechar])
+  }, [mensagem])
 
   return (
     <div className={`toast toast-${tipo}`} role={tipo === 'erro' ? 'alert' : 'status'}>

@@ -4,6 +4,7 @@ import { ApiError } from '../lib/api'
 import { abrirCaixa, listarCarteirasParaAbertura, type CaixaStatus } from '../lib/caixa'
 import { completarMoeda, desmascararMoeda, formatarMoeda, mascararMoeda } from '../lib/masks'
 import CamposAberturaCaixa from './CamposAberturaCaixa'
+import Toast from './Toast'
 
 /**
  * Popup obrigatório (2026-07-30): quando o PDV ou o Recebimento de Crediário detectam que não
@@ -74,11 +75,14 @@ export default function AberturaCaixaModal({
           aoFinalizarValor={(t) => setValorTexto(formatarMoeda(desmascararMoeda(completarMoeda(t))))}
         />
 
-        {erro && (
-          <p className="erro" style={{ margin: '8px 0' }}>
-            {erro}
-          </p>
-        )}
+        {/* ⚠️ Toast, e não parágrafo inline: isto é a FALHA DA AÇÃO que o operador acabou de
+            disparar (403 de RBAC, 409 de caixa já aberto por outro terminal, "nenhuma carteira
+            Dinheiro cadastrada"), não um aviso de campo. Saía em cinza-avermelhado de 14px entre o
+            campo e o rodapé, sem `role="alert"`, num popup com dois botões logo abaixo — fácil não
+            registrar que houve erro e clicar de novo. E não era limitação técnica: `.toast` é
+            z-index 200 contra os 100 do `.modal-overlay`, e nove modais do projeto já fazem assim.
+            Este é o popup que TODO operador vê todo dia ao abrir o PDV. */}
+        {erro && <Toast mensagem={erro} tipo="erro" aoFechar={() => setErro(null)} />}
 
         <div className="ajuda-rodape">
           <button type="button" className="btn ghost" onClick={aoVoltar}>
