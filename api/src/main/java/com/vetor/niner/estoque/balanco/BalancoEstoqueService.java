@@ -242,6 +242,25 @@ public class BalancoEstoqueService {
                 .update();
     }
 
+    /**
+     * O movimento do ÚLTIMO balanço efetivado nesta empresa que ainda não foi desfeito.
+     *
+     * <p>⚠️ <b>{@code tipo_movimento = 'AJUSTE'} NÃO identifica o balanço.</b> A Importação de
+     * Dados grava exatamente o mesmo {@code AJUSTE} em {@code produto_movimento_mestre}
+     * ({@code EstoqueImportador.criarMovimentoAjuste}) — o INSERT é linha por linha o mesmo do
+     * {@link #efetivar}. Enquanto o filtro era só o tipo, um tenant recém-migrado que rodasse a
+     * importação de 10.000 SKUs via a Contagem de Estoque anunciar "última efetivação: hoje,
+     * 10.000 itens" <b>sem nunca ter feito balanço</b>, com o botão Desfazer aceso; um clique
+     * apagava as 10.000 linhas do ledger, a trigger {@code fn_atualiza_estoque_movimento} reagia
+     * ao DELETE <b>zerando o estoque importado</b>, o UPDATE de {@code produto_balanco} casava
+     * zero linhas e a resposta era <b>200</b>. Estoque negativo é permitido (V055), então nada
+     * barrava. A variante do dia a dia é igual de ruim: balanço ontem, importação hoje, "desfazer
+     * o balanço" desfaz a importação e o balanço continua de pé.
+     *
+     * <p>Quem separa os dois é {@code produto_balanco.id_movimento} — <b>só o balanço o
+     * preenche</b> (V019:141, com FK), e é a mesma coluna que o {@code desfazer} zera. Filtrar
+     * pela marca do dono, não pelo tipo do movimento.
+     */
     private Long buscarUltimaEfetivacaoAtiva(long idEmpresa) {
         return jdbc.sql("""
                         SELECT pm.id_movimento
@@ -250,6 +269,10 @@ public class BalancoEstoqueService {
                               AND EXISTS (
                                   SELECT 1 FROM produto_movimento_detalhe pmd
                                   WHERE pmd.id_tenant = pm.id_tenant AND pmd.id_movimento = pm.id_movimento
+                              )
+                              AND EXISTS (
+                                  SELECT 1 FROM produto_balanco pb
+                                  WHERE pb.id_tenant = pm.id_tenant AND pb.id_movimento = pm.id_movimento
                               )
                         ORDER BY pm.data_movimento DESC, pm.id_movimento DESC
                         LIMIT 1

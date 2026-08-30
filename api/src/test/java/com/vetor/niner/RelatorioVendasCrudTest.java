@@ -330,6 +330,67 @@ class RelatorioVendasCrudTest {
                 .andExpect(jsonPath("$.totalizador.linhasAnaliticas[0].qtdProdutos").value(2));
     }
 
+    /**
+     * ⛔ O KPI "Devoluções" precisa trazer NÚMERO — ele vinha zero em 100% dos casos.
+     *
+     * <p>O JOIN partia de {@code pmm.id_venda = v.id_venda}, e o movimento de devolução <b>não tem
+     * {@code id_venda}</b>: {@code DevolucaoProdutoService} grava {@code id_devolucao}, e
+     * {@code produto_movimento_mestre} é imutável por {@code REVOKE} (V024). Medido no banco de dev
+     * antes da correção: 6 movimentos {@code DEVOLUCAO}, <b>0 com {@code id_venda}</b> — e a API
+     * respondendo {@code valorDevolucao: 0} para uma massa com R$ 1.329,10 devolvidos, que a DRE e
+     * a Lucratividade mostravam certo no mesmo instante.
+     *
+     * <p>⚠️ Nenhum teste pegava porque o único que olhava este KPI ({@code kpisEComposicao…})
+     * espera <b>zero</b> — corretamente, já que ali não há devolução nenhuma. Um caso positivo
+     * faltava, e é o que este acrescenta. A auditoria de 2026-08-22 chegou a editar esta mesma
+     * query duas vezes sem perceber que ela nunca casava linha.
+     */
+    @Test
+    void kpiDeDevolucaoTrazOValorDevolvidoEAbateAVendaLiquida() throws Exception {
+        TenantNovo tenant = assinarNovoTenant("kpi-devolucao");
+        long idTenant = extrairIdTenant(tenant.token());
+        long idProduto = criarProduto(tenant.token(), "Produto KPI Devolucao");
+        long idCarteira = criarTipoCarteira(tenant.token(), "DINHEIRO DEV", "AVISTA");
+        long idCliente = criarCliente(tenant.token(), "Cliente KPI Devolucao");
+        long idFuncionario = criarFuncionario(tenant.token(), "Vendedor KPI Devolucao");
+        abrirCaixaDinheiro(tenant.token());
+
+        long idVenda;
+        long idVariacao;
+        try (Connection c = abrirConexao(idTenant)) {
+            long idEmpresa = buscarIdEmpresa(c);
+            idVariacao = criarVariacao(c, idTenant, idProduto);
+            definirEstoque(c, idTenant, idEmpresa, idVariacao, new BigDecimal("5.000"));
+            String corpo = """
+                    {"itens":[{"idVariacao":%d,"qtd":2}],"descontoVenda":0,"idCliente":%d,"idFuncionario":%d,
+                     "pagamentos":[{"idCarteira":%d,"valorPago":100.00,"numeroParcelas":1}]}
+                    """.formatted(idVariacao, idCliente, idFuncionario, idCarteira);
+            String resp = mvc.perform(post("/api/v1/pdv/vendas").header("Authorization", "Bearer " + tenant.token())
+                            .contentType(APPLICATION_JSON).content(corpo))
+                    .andExpect(status().isCreated())
+                    .andReturn().getResponse().getContentAsString();
+            idVenda = ((Number) JsonPath.read(resp, "$.idVenda")).longValue();
+        }
+
+        // O cliente devolve 1 das 2 unidades — R$ 50,00 de volta, virando vale-mercadoria.
+        mvc.perform(post("/api/v1/vendas/devolucao").header("Authorization", "Bearer " + tenant.token())
+                        .contentType(APPLICATION_JSON)
+                        .content("""
+                                {"numeroVenda":%d,"itens":[{"idVariacao":%d,"qtd":1}]}
+                                """.formatted(idVenda, idVariacao)))
+                .andExpect(status().isCreated());
+
+        mvc.perform(get("/api/v1/relatorios/vendas").header("Authorization", "Bearer " + tenant.token())
+                        .param("dataInicial", intervaloAmplo()[0]).param("dataFinal", intervaloAmplo()[1])
+                        .param("totalizarPor", "NAO_TOTALIZAR"))
+                .andExpect(status().isOk())
+                // ⭐ Sabotado (voltando o JOIN para `pmm.id_venda = v.id_venda`), este valor volta a
+                // 0.00 e as duas asserções abaixo caem junto — é o que prende a correção.
+                .andExpect(jsonPath("$.kpis.valorDevolucao").value(50.00))
+                .andExpect(jsonPath("$.kpis.percentualDevolucao").value(50.00))
+                .andExpect(jsonPath("$.composicaoFaturamento.devolucoes").value(50.00));
+    }
+
     @Test
     void vendaCanceladaNaoEntraEmKpiComposicaoNemTotalizador() throws Exception {
         TenantNovo tenant = assinarNovoTenant("cancelada");

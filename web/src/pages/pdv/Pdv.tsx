@@ -381,8 +381,15 @@ export default function Pdv() {
     }
     document.addEventListener('keydown', aoTeclar)
     return () => document.removeEventListener('keydown', aoTeclar)
+    // ⚠️ `usaServicos` PRECISA estar aqui: sem ele a closure de `f5BuscarDocumento` congela o
+    // valor `undefined` de antes da query resolver, e nenhuma das outras dependências muda quando
+    // o dado chega (com o caixa aberto, `algumModalAberto` continua false e o `ledger` continua o
+    // mesmo array vazio). Numa loja com o módulo de serviços LIGADO, quem entrasse direto em /pdv
+    // (recarga da página, atalho, login caindo aqui) veria o rótulo correto "F5 Buscar Orçamento /
+    // OS" e a TECLA abriria só Orçamento — enquanto o clique no MESMO botão funcionava, porque o
+    // clique usa a closure do render atual. Sintoma incoerente e quase irreportável.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selecionado, ledger, algumModalAberto])
+  }, [selecionado, ledger, algumModalAberto, usaServicos?.cfgUsaServicos])
 
   const qtdTotal = ledger.reduce((soma, i) => soma + i.qtd, 0)
   const valorTotal = ledger.reduce((soma, i) => soma + totalLinha(i), 0)

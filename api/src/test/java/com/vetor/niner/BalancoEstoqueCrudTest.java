@@ -463,6 +463,73 @@ class BalancoEstoqueCrudTest {
         }
     }
 
+    /**
+     * ⛔ O "desfazer" do balanço NÃO pode enxergar o {@code AJUSTE} da Importação de Dados.
+     *
+     * <p>O importador grava o <b>mesmo</b> {@code tipo_movimento = 'AJUSTE'} que a efetivação do
+     * balanço ({@code EstoqueImportador.criarMovimentoAjuste}), e o seletor filtrava só por isso.
+     * Um tenant recém-migrado via a Contagem de Estoque anunciar uma efetivação que nunca houve,
+     * com o botão Desfazer aceso; um clique apagava as linhas do ledger, a trigger reagia ao DELETE
+     * <b>zerando o estoque importado</b>, e a resposta era 200.
+     *
+     * <p>⚠️ O teste confere as DUAS coisas — o anúncio e o estoque —, porque validar só o status do
+     * {@code POST /desfazer} passaria com o defeito presente. Sabotado (removendo o
+     * {@code EXISTS produto_balanco} do seletor), ele reprova em
+     * {@code $.existe} e o estoque cai para zero.
+     */
+    @Test
+    void importacaoDeDadosNaoViraEfetivacaoDeBalancoParaDesfazer() throws Exception {
+        TenantNovo tenant = assinarNovoTenant("ajuste-importacao");
+        long idTenant = extrairIdTenant(tenant.token());
+        long idProduto = criarProduto(tenant.token(), "Produto Vindo da Importacao");
+        long idVariacao;
+        try (Connection c = abrirConexao(idTenant)) {
+            long idEmpresa = buscarIdEmpresa(c);
+            idVariacao = criarVariacao(c, idTenant, idProduto);
+            // O MESMO par de INSERTs do EstoqueImportador: mestre 'AJUSTE' + detalhe 'C', sem
+            // nenhuma linha em produto_balanco (a importação não faz balanço).
+            try (PreparedStatement ps = c.prepareStatement("""
+                    INSERT INTO produto_movimento_mestre (id_tenant, id_empresa, tipo_movimento)
+                    VALUES (?, ?, 'AJUSTE') RETURNING id_movimento
+                    """)) {
+                ps.setLong(1, idTenant);
+                ps.setLong(2, idEmpresa);
+                long idMovimento;
+                try (ResultSet rs = ps.executeQuery()) {
+                    rs.next();
+                    idMovimento = rs.getLong(1);
+                }
+                try (PreparedStatement pd = c.prepareStatement("""
+                        INSERT INTO produto_movimento_detalhe
+                            (id_tenant, id_movimento, id_empresa, id_variacao, credito_debito, qtd_produto, origem)
+                        VALUES (?, ?, ?, ?, 'C', 40.000, 'importação de dados')
+                        """)) {
+                    pd.setLong(1, idTenant);
+                    pd.setLong(2, idMovimento);
+                    pd.setLong(3, idEmpresa);
+                    pd.setLong(4, idVariacao);
+                    pd.execute();
+                }
+            }
+            // A trigger creditou o estoque — é o dado que a loja acabou de migrar.
+            assertThat(buscarEstoque(c, idVariacao)).isEqualByComparingTo("40.000");
+        }
+
+        // A tela não pode oferecer "desfazer a última efetivação": não houve efetivação nenhuma.
+        mvc.perform(get("/api/v1/estoque/balanco/ultima-efetivacao").header("Authorization", "Bearer " + tenant.token()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.existe").value(false));
+
+        // E o POST direto também recusa — esconder o botão nunca foi proteção (P4).
+        mvc.perform(post("/api/v1/estoque/balanco/desfazer").header("Authorization", "Bearer " + tenant.token()))
+                .andExpect(status().isBadRequest());
+
+        // ⭐ O que prova o defeito não é o status: é o estoque importado continuar de pé.
+        try (Connection c = abrirConexao(idTenant)) {
+            assertThat(buscarEstoque(c, idVariacao)).isEqualByComparingTo("40.000");
+        }
+    }
+
     @Test
     void isolamentoEntreTenants() throws Exception {
         TenantNovo tenantA = assinarNovoTenant("isolamento-balanco-a");

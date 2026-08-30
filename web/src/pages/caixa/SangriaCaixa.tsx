@@ -64,6 +64,10 @@ export default function SangriaCaixa() {
       // O caixa e o extrato da conta mudaram junto — as duas telas leem do mesmo dinheiro.
       queryClient.invalidateQueries({ queryKey: ['caixa-status'] })
       queryClient.invalidateQueries({ queryKey: ['contas-corrente-movimento'] })
+      // ⚠️ E o FECHAMENTO: é ele que a sangria destrava (V095 recusa fechar com excedente), então o
+      // operador volta para lá logo em seguida. Sem esta linha ele encontra o esperado ANTIGO — o
+      // valor que a sangria acabou de reduzir.
+      queryClient.invalidateQueries({ queryKey: ['caixa-fechamento'] })
     },
     onError: (e: unknown) => setErro(e instanceof ApiError ? e.message : 'Não foi possível registrar a sangria.'),
   })

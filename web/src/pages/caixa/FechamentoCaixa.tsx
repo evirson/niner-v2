@@ -71,6 +71,7 @@ export default function FechamentoCaixa() {
   const {
     data: fechamento,
     isLoading,
+    isFetching,
     error,
   } = useQuery({
     queryKey: ['caixa-fechamento', idCaixaSelecionado],
@@ -82,8 +83,18 @@ export default function FechamentoCaixa() {
   // Novo caixa carregado — reseta a contagem e qualquer divergência da tentativa anterior. Campos
   // nascem com o valor esperado já preenchido (a contagem não é mais às cegas): o operador ajusta
   // pra baixo/cima conforme o que contou fisicamente, em vez de digitar tudo do zero.
+  //
+  // ⚠️ A dependência é o DADO (`fechamento`) mais o `isFetching`, NUNCA `fechamento?.idCaixa`.
+  // Com o id na dependência, reabrir o MESMO caixa dentro do `gcTime` (5 min) preenchia os campos
+  // a partir do cache no primeiro render, e quando o refetch trazia o esperado NOVO o id não tinha
+  // mudado — o efeito não rodava outra vez e o prefill ficava no número velho. O caminho que
+  // produz isso é o do dia a dia desde a V095: o fechamento recusa enquanto houver excedente do
+  // fundo, o operador vai sangrar e VOLTA para cá. Ele veria "Valor em Caixa: 200,00" com o campo
+  // contado dizendo "500,00" e, confiando no prefill, "Fechar Mesmo Assim" gravaria em
+  // `caixa_fechamento_conferencia` uma sobra de R$ 300,00 que nunca existiu. Esperar
+  // `isFetching === false` é o mesmo remédio de `DevolucaoProduto` e do `ComprovantePapeletaModal`.
   useEffect(() => {
-    if (!fechamento) return
+    if (!fechamento || isFetching) return
     const iniciais: Record<number, string> = {}
     fechamento.linhas.forEach((l) => {
       iniciais[l.idCarteira] = formatarMoeda(l.valorEsperado)
@@ -92,7 +103,7 @@ export default function FechamentoCaixa() {
     setResultadoDivergencia(null)
     setErroContagem('')
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fechamento?.idCaixa])
+  }, [fechamento, isFetching])
 
   const fechar = useMutation({
     mutationFn: (forcarComDivergencia: boolean) => {

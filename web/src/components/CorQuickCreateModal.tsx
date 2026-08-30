@@ -44,8 +44,15 @@ export default function CorQuickCreateModal({
           value={nome}
           onChange={(e) => setNome(maiusculas(e.target.value))}
           placeholder="ex.: AZUL, PRETO…"
+          // ⚠️ `preventDefault` é obrigatório em todo campo cujo Enter tem propósito próprio: sem
+          // ele o `iniciarNavegacaoGlobalPorEnter` roda TAMBÉM e move o foco por baixo. Hoje o
+          // popup tem um único input, então `focarProximoCampo` devolve false e nada acontece —
+          // o defeito é LATENTE, e nasce no dia em que este popup ganhar um segundo campo.
           onKeyDown={(e) => {
-            if (e.key === 'Enter' && nome.trim() && !criar.isPending) criar.mutate(nome.trim())
+            if (e.key === 'Enter' && nome.trim() && !criar.isPending) {
+              e.preventDefault()
+              criar.mutate(nome.trim())
+            }
           }}
         />
 

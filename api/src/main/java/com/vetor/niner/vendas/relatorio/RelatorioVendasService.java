@@ -303,18 +303,45 @@ public class RelatorioVendasService {
      *       {@code venda_devolucao.cancelada} e lança o movimento de estorno. Sem o filtro, uma
      *       devolução cancelada seguia abatendo a venda líquida.</li>
      * </ol>
+     *
+     * <p>⛔ <b>E as duas correções acima nunca tiveram efeito nenhum, porque a consulta devolvia
+     * ZERO em 100% dos casos</b> (corrigido em 2026-08-30). O JOIN partia de
+     * {@code pmm.id_venda = v.id_venda}, e <b>o movimento de devolução não tem {@code id_venda}</b>:
+     * {@code DevolucaoProdutoService} grava {@code (id_empresa, tipo_movimento, id_devolucao)}, e
+     * {@code produto_movimento_mestre} é imutável por {@code REVOKE} (V024) — a coluna fica NULL
+     * para sempre. O vínculo com a venda mora em {@code venda_devolucao.id_venda_credito}.
+     * <b>Medido no banco antes da correção:</b> 6 movimentos {@code DEVOLUCAO}, <b>0 com
+     * {@code id_venda}</b>, 6 com {@code id_devolucao}; e a API respondia
+     * {@code valorDevolucao: 0} para uma massa com <b>R$ 1.329,10</b> devolvidos — o mesmo número
+     * que a Lucratividade e a DRE mostravam no mesmo instante. Três telas do sistema contando
+     * histórias diferentes, e a que o dono abre primeiro era a otimista: "Devoluções R$ 0,00" com
+     * a venda líquida inteira.
+     *
+     * <p>⚠️ <b>O que este javadoc ensina, e é maior que o defeito:</b> a auditoria de 2026-08-22
+     * mexeu <b>nesta mesma query</b> e não percebeu que ela nunca casava linha — o comentário
+     * afirmava que "o KPI trouxe número real por dias", e isso jamais foi verdade. Afirmação sobre
+     * comportamento em javadoc precisa ser medida, não lembrada.
+     *
+     * <p>⚠️ <b>Limite conhecido e deliberado:</b> o {@code JOIN} com {@code venda} continua
+     * <b>INNER</b>, então <b>devolução sem venda de origem não entra neste KPI</b>
+     * ({@code id_venda_credito} é nullable). É o que preserva o escopo que a tela promete — os
+     * filtros de empresa e de vendedor são sobre a venda de origem, e uma devolução sem venda não
+     * tem nem uma nem outro. Trocar por {@code LEFT} não resolveria sozinho: a cláusula filtra
+     * {@code v.id_tenant}, e a linha sairia do mesmo jeito. <b>Se deve ou não entrar é pergunta de
+     * produto</b>, registrada em {@code docs/PENDENCIAS.md}.
      */
     private BigDecimal buscarValorDevolucao(Filtro filtro) {
         String sql = """
                 SELECT COALESCE(SUM(ABS(pmd.qtd_produto * pmd.preco_venda - pmd.valor_desconto + pmd.valor_acrescimo)), 0) AS valor
-                FROM venda v
-                JOIN produto_movimento_mestre pmm
-                       ON pmm.id_venda = v.id_venda AND pmm.id_tenant = v.id_tenant AND pmm.tipo_movimento = 'DEVOLUCAO'
-                JOIN produto_movimento_detalhe pmd
-                       ON pmd.id_movimento = pmm.id_movimento AND pmd.id_tenant = pmm.id_tenant
+                FROM produto_movimento_mestre pmm
                 JOIN venda_devolucao vd
                        ON vd.id_devolucao = pmm.id_devolucao AND vd.id_tenant = pmm.id_tenant
+                      AND pmm.tipo_movimento = 'DEVOLUCAO'
                       AND vd.cancelada = false
+                JOIN venda v
+                       ON v.id_venda = vd.id_venda_credito AND v.id_tenant = vd.id_tenant
+                JOIN produto_movimento_detalhe pmd
+                       ON pmd.id_movimento = pmm.id_movimento AND pmd.id_tenant = pmm.id_tenant
                 """
                 + filtro.clausulaPorDataDeMovimento();
         return jdbc.sql(sql).params(filtro.params()).query(BigDecimal.class).single();

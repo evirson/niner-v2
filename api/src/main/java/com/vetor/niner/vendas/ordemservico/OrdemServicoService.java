@@ -138,8 +138,22 @@ public class OrdemServicoService {
         return new PaginaOrdensServico(itens, paginaEfetiva, tamanho, total, totalPaginas);
     }
 
+    /**
+     * A OS pedida, <b>conferindo a empresa da sessão</b> (2026-08-30).
+     *
+     * <p>⚠️ O guarda fica AQUI, no ponto de entrada público, e não em {@link #montarResposta}: os
+     * cinco métodos internos que montam a resposta ({@code criar}, {@code atualizar},
+     * {@code mudarSituacao}, {@code cancelar}, {@code abrirParaVenda}) já conferiram a empresa
+     * antes de chegar lá — repetir a checagem no montador faria o {@code criar} conferir uma OS
+     * que ele mesmo acabou de gravar na empresa da sessão.
+     */
     @Transactional(readOnly = true)
-    public OrdemServicoResponse buscar(long id) {
+    public OrdemServicoResponse buscar(Jwt jwt, long id) {
+        exigirEmpresaDaSessao(jwt, id);
+        return montarResposta(id);
+    }
+
+    private OrdemServicoResponse montarResposta(long id) {
         OrdemServicoResponse cabecalho = jdbc.sql("""
                         SELECT os.id_ordem_servico, os.id_empresa, os.id_cliente, c.nome AS nome_cliente,
                                c.cpf_cnpj AS documento_cliente, c.telefone AS telefone_cliente,
@@ -198,7 +212,7 @@ public class OrdemServicoService {
                 .query(Long.class).single();
 
         gravarItens(id, idEmpresa, req.itens());
-        return buscar(id);
+        return montarResposta(id);
     }
 
     /**
@@ -212,6 +226,7 @@ public class OrdemServicoService {
      */
     @Transactional
     public OrdemServicoResponse atualizar(Jwt jwt, long id, OrdemServicoRequest req) {
+        exigirEmpresaDaSessao(jwt, id);
         String situacao = situacaoAtual(id);
         exigirEditavel(situacao, "alterar");
         exigirDescontoDentroDoTeto(req);
@@ -243,7 +258,7 @@ public class OrdemServicoService {
                         + " AND id_ordem_servico = ?")
                 .param(id).update();
         gravarItens(id, idEmpresa, req.itens());
-        return buscar(id);
+        return montarResposta(id);
     }
 
     /**
@@ -255,7 +270,8 @@ public class OrdemServicoService {
      * e o {@code CHECK} do banco garante que as duas andem sempre juntas.
      */
     @Transactional
-    public OrdemServicoResponse mudarSituacao(long id, String novaSituacao) {
+    public OrdemServicoResponse mudarSituacao(Jwt jwt, long id, String novaSituacao) {
+        exigirEmpresaDaSessao(jwt, id);
         String atual = situacaoAtual(id);
         String nova = novaSituacao == null ? "" : novaSituacao.trim().toUpperCase(Locale.ROOT);
 
@@ -292,7 +308,7 @@ public class OrdemServicoService {
                          WHERE id_tenant = plataforma.tenant_atual() AND id_ordem_servico = ?
                         """)
                 .params(nova, nova, id).update();
-        return buscar(id);
+        return montarResposta(id);
     }
 
     /**
@@ -306,6 +322,7 @@ public class OrdemServicoService {
      */
     @Transactional
     public OrdemServicoResponse cancelar(Jwt jwt, long id, String motivo) {
+        exigirEmpresaDaSessao(jwt, id);
         String atual = situacaoAtual(id);
         if (atual.equals("CANCELADA")) {
             throw new ResponseStatusException(CONFLICT, "Esta ordem de serviço já está cancelada.");
@@ -329,7 +346,7 @@ public class OrdemServicoService {
         jdbc.sql("UPDATE ordem_servico_item SET qtd_reservada = 0"
                         + " WHERE id_tenant = plataforma.tenant_atual() AND id_ordem_servico = ?")
                 .param(id).update();
-        return buscar(id);
+        return montarResposta(id);
     }
 
     // ---------------------------------------------------------------- para o PDV (F5)
@@ -375,7 +392,7 @@ public class OrdemServicoService {
      */
     @Transactional(readOnly = true)
     public OrdemServicoResponse abrirParaVenda(Jwt jwt, long id) {
-        OrdemServicoResponse os = buscar(id);
+        OrdemServicoResponse os = montarResposta(id);
         // ⚠️ A OS pertence à EMPRESA que a abriu — a mesma regra que o orçamento ganhou em
         // 2026-08-22 (auditoria, item 3) e que a OS nasceu sem (auditoria 2026-08-29).
         // Não é isolamento de tenant (P8 nunca esteve em risco: as duas empresas são do mesmo
@@ -624,6 +641,34 @@ public class OrdemServicoService {
         for (Reserva r : reservas) {
             aplicarReserva(r.idEmpresa(), r.idVariacao(), r.qtd().negate());
         }
+    }
+
+    /**
+     * Recusa quando a OS pedida é de outra empresa que não a da sessão (administrador passa).
+     *
+     * <p>⛔ {@code abrirParaVenda} ganhou esta checagem na auditoria de 2026-08-29, com o javadoc
+     * dizendo <i>"a lista do F5 já filtra por empresa, então só uma chamada direta à API chegava
+     * aqui; P4 diz que a trava é do servidor, não da tela"</i> — e os <b>quatro métodos por id ao
+     * lado ficaram sem ela</b> (2026-08-30). {@code listar} sempre filtrou por
+     * {@code idEmpresaDaSessao}, então a mesma hipótese vale e o mesmo caminho existia: um
+     * {@code POST /ordens-servico/12/cancelar} feito da Filial cancelava a OS da <b>Matriz</b> e
+     * chamava {@code liberarReservas}, que lê {@code os.id_empresa} — <b>mexendo no estoque
+     * reservado da Matriz</b> sem ninguém de lá ter pedido nada, e deixando o documento
+     * {@code CANCELADA} com motivo digitado por quem não opera aquela loja. O {@code PUT} idem,
+     * reescrevendo itens e desconto.
+     *
+     * <p>⚠️ É {@code private} de propósito e <b>não</b> carrega {@code @Transactional}: todo
+     * chamador já é transacional, então a consulta roda dentro da transação dele e enxerga
+     * {@code tenant_atual()}. Anotar aqui seria auto-invocação — a anotação não pegaria, o
+     * {@code SET LOCAL} não rodaria, o SELECT viria vazio e o guarda <b>liberaria sempre</b>, que é
+     * como um guarda falha em silêncio.
+     */
+    private void exigirEmpresaDaSessao(Jwt jwt, long id) {
+        long idEmpresaDaOs = jdbc.sql("SELECT id_empresa FROM ordem_servico"
+                        + " WHERE id_tenant = plataforma.tenant_atual() AND id_ordem_servico = ?")
+                .param(id).query(Long.class).optional()
+                .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Ordem de serviço não encontrada."));
+        EmpresaDaSessao.exigirAcesso(jwt, idEmpresaDaOs);
     }
 
     private String situacaoAtual(long id) {

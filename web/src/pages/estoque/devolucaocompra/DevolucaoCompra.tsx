@@ -17,6 +17,7 @@ import {
 } from '../../../lib/devolucaoCompra'
 import { listarEmpresasPermitidas, type Empresa } from '../../../lib/empresas'
 import { buscarFornecedoresEmissao, LIMITE_BUSCA_EMISSAO, type FornecedorOpcaoEmissao } from '../../../lib/etiquetaEmissao'
+import { usePermissaoDaTela } from '../../../lib/usePermissaoDaTela'
 import {
   completarQuantidade,
   dataParaIso,
@@ -41,6 +42,7 @@ type Digitado = Record<number, string>
 export default function DevolucaoCompra() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
+  const acoes = usePermissaoDaTela('estoque.devolucao-compra')
 
   const [filtrosAberto, setFiltrosAberto] = useState(true)
   /** Já houve uma busca? É o que decide se o ✕ do popup volta para a grade ou sai da tela. */
@@ -149,7 +151,12 @@ export default function DevolucaoCompra() {
   )
   const excedeu = selecionados.filter((i) => desmascararQuantidade(qtds[i.idVariacao] ?? '0', permiteQtdDecimal) > i.qtdMaxima)
   const zerados = selecionados.filter((i) => desmascararQuantidade(qtds[i.idVariacao] ?? '0', permiteQtdDecimal) <= 0)
-  const podeDevolver = selecionados.length > 0 && excedeu.length === 0 && zerados.length === 0
+  // ⚠️ A permissão entra no MESMO booleano que já governa o botão: o servidor exige INCLUIR em
+  // `estoque.devolucao-compra`, e sem consultar a grade aqui o operador escolhia a entrada, marcava
+  // item a item, ajustava as quantidades — e só levava o 403 no botão final. Aqui o trabalho
+  // perdido é maior que no Estorno, porque a seleção é longa.
+  const podeDevolver =
+    acoes.incluir && selecionados.length > 0 && excedeu.length === 0 && zerados.length === 0
 
   const devolver = useMutation({
     mutationFn: () =>

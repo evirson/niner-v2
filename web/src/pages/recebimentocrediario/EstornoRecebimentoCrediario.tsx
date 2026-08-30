@@ -14,6 +14,7 @@ import {
   type LoteRecebimento,
 } from '../../lib/recebimentoCrediario'
 import { maiusculas } from '../../lib/texto'
+import { usePermissaoDaTela } from '../../lib/usePermissaoDaTela'
 
 function moeda(v: number): string {
   return `R$ ${formatarMoeda(v)}`
@@ -30,6 +31,12 @@ function formatarData(iso: string): string {
  * lote pode cobrir parcelas de vendas/contratos diferentes recebidas juntas na mesma operação.
  */
 export default function EstornoRecebimentoCrediario() {
+  // ⚠️ O servidor exige EXCLUIR nesta chave própria (`@Tela("estorno-recebimento-crediario")` +
+  // `@Acao(EXCLUIR)`, V091) — sem consultar a grade aqui, o operador sem a ação buscava o cliente,
+  // conferia as parcelas do lote, lia "esta ação não pode ser desfeita" e só levava o 403 no
+  // clique final. É o mesmo 403 tardio que a rodada 5 de 2026-08-29 tirou das outras rotinas
+  // operacionais; esta e a Devolução ao Fornecedor ficaram de fora.
+  const acoes = usePermissaoDaTela('estorno-recebimento-crediario')
   const queryClient = useQueryClient()
   const [nomeCliente, setNomeCliente] = useState('')
   const [dataInicialTexto, setDataInicialTexto] = useState('')
@@ -165,9 +172,10 @@ export default function EstornoRecebimentoCrediario() {
                       <button
                         type="button"
                         className="acao-icone acao-excluir"
+                        disabled={!acoes.excluir}
                         onClick={() => setLoteParaEstornar(lote)}
                         aria-label={`Estornar recebimento #${lote.idLoteRecebimento}`}
-                        title="Estornar"
+                        title={acoes.excluir ? 'Estornar' : 'Você não tem permissão para estornar recebimentos.'}
                       >
                         <IconeEstornar />
                       </button>

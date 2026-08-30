@@ -1,6 +1,9 @@
 package com.vetor.niner.comum.web;
 
+import com.vetor.niner.fiscal.documento.AssinadorXmlNfe.AssinaturaInvalidaException;
 import com.vetor.niner.fiscal.documento.MontagemNfceDtos.MontagemInvalidaException;
+import com.vetor.niner.fiscal.documento.ValidadorXsd.XmlInvalidoException;
+import com.vetor.niner.fiscal.motor.MotorTributarioDtos.TributacaoInvalidaException;
 import com.vetor.niner.plataforma.onboarding.ContaJaExisteException;
 import com.vetor.niner.plataforma.uso.LimiteVendasExcedidoException;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -166,6 +169,54 @@ public class GlobalExceptionHandler {
         ProblemDetail pd = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, ex.getMessage());
         pd.setTitle("Documento fiscal inválido");
         pd.setType(URI.create("urn:niner:erro:fiscal-montagem-invalida"));
+        return pd;
+    }
+
+    /**
+     * As TRÊS IRMÃS da {@link MontagemInvalidaException}, que ficaram sem handler quando ela ganhou
+     * o dela (2026-08-30).
+     *
+     * <p>⛔ <b>Sem estes três, a mensagem que o módulo fiscal escreveu com cuidado era jogada
+     * fora.</b> O motor tributário recusa <b>de propósito</b> quando não há regra que case (F11:
+     * <i>"nunca chuta um CFOP ou uma alíquota — errar em silêncio aqui vira multa para o
+     * lojista"</i>) e diz exatamente qual item e o que falta; o validador de XSD enumera a lista
+     * inteira de erros; o assinador nomeia o problema do certificado. Nenhuma delas era capturada
+     * no caminho da emissão ({@code EmissaoNfceService} só trata {@code FalhaDeComunicacaoException}),
+     * então caíam no {@code /error} padrão do Spring — <b>500 com corpo sem {@code detail}</b>, que
+     * o front mostra como "Ocorreu um erro".
+     *
+     * <p>⚠️ É o defeito de 2026-08-24 <b>do lado do servidor</b>: lá foi um {@code catch} genérico
+     * no front trocando o 409 do bloqueio preventivo por "não foi possível falar com o serviço
+     * fiscal", e o operador foi procurar rede, certificado e SEFAZ — tudo menos o cadastro
+     * incompleto, a única causa. Aqui a mensagem certa nem chegava a sair do servidor.
+     *
+     * <p>{@code 400} nos três, como na irmã: o que falta é <b>dado</b> (regra fiscal, campo do XML,
+     * senha do certificado), e o cliente não deve repetir a chamada sem corrigir o cadastro.
+     */
+    @ExceptionHandler(TributacaoInvalidaException.class)
+    public ProblemDetail tratarTributacaoInvalida(TributacaoInvalidaException ex) {
+        ProblemDetail pd = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, ex.getMessage());
+        pd.setTitle("Tributação incompleta");
+        pd.setType(URI.create("urn:niner:erro:fiscal-tributacao-invalida"));
+        return pd;
+    }
+
+    @ExceptionHandler(XmlInvalidoException.class)
+    public ProblemDetail tratarXmlInvalido(XmlInvalidoException ex) {
+        ProblemDetail pd = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, ex.getMessage());
+        pd.setTitle("XML fiscal inválido");
+        pd.setType(URI.create("urn:niner:erro:fiscal-xml-invalido"));
+        return pd;
+    }
+
+    @ExceptionHandler(AssinaturaInvalidaException.class)
+    public ProblemDetail tratarAssinaturaInvalida(AssinaturaInvalidaException ex) {
+        // ⚠️ `getMessage()` já é a mensagem de negócio ("O certificado digital da empresa não pôde
+        // ser aberto para assinar: …"); a causa técnica fica no log, não na resposta.
+        LOG.warn("Falha de assinatura em documento fiscal", ex);
+        ProblemDetail pd = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, ex.getMessage());
+        pd.setTitle("Assinatura digital não pôde ser feita");
+        pd.setType(URI.create("urn:niner:erro:fiscal-assinatura-invalida"));
         return pd;
     }
 }

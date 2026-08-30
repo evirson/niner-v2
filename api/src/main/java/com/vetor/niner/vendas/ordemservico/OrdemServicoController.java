@@ -61,8 +61,8 @@ public class OrdemServicoController {
     }
 
     @GetMapping("/{id}")
-    public OrdemServicoResponse buscar(@PathVariable long id) {
-        return service.buscar(id);
+    public OrdemServicoResponse buscar(@AuthenticationPrincipal Jwt jwt, @PathVariable long id) {
+        return service.buscar(jwt, id);
     }
 
     @PostMapping
@@ -80,8 +80,9 @@ public class OrdemServicoController {
 
     /** Avança o estado de execução (aprovar, iniciar, concluir). Só para frente. */
     @PutMapping("/{id}/situacao")
-    public OrdemServicoResponse mudarSituacao(@PathVariable long id, @RequestParam String para) {
-        return service.mudarSituacao(id, para);
+    public OrdemServicoResponse mudarSituacao(@AuthenticationPrincipal Jwt jwt, @PathVariable long id,
+                                              @RequestParam String para) {
+        return service.mudarSituacao(jwt, id, para);
     }
 
     @PostMapping("/{id}/cancelar")

@@ -232,7 +232,20 @@ export default function RelatorioMovimentacaoProdutos() {
     if (aplicado.modelo === 'KARDEX') {
       return [
         ...base,
-        { rotulo: 'Empresa', valor: ehAdmin ? ((empresas ?? []).find((e) => e.idEmpresa === aplicado.idEmpresaKardex)?.nomeFantasia ?? '—') : (eu?.empresa.nome ?? '—') },
+        // ⚠️ O par `nomeFantasia ?? razaoSocial`, como em `textoEmpresasFiltradas()` acima e em todo
+        // o resto do projeto: `nomeFantasia` é OPCIONAL (o signup cria a empresa só com razão
+        // social). Sem o segundo termo, o cabeçalho do Kardex dizia "Empresa: —" para uma empresa
+        // que ESTÁ filtrada — e como o PDF é captura visual, o arquivo do contador saía afirmando
+        // isso, com duas empresas gerando dois relatórios indistinguíveis pelo cabeçalho.
+        {
+          rotulo: 'Empresa',
+          valor: ehAdmin
+            ? (() => {
+                const e = (empresas ?? []).find((x) => x.idEmpresa === aplicado.idEmpresaKardex)
+                return e ? (e.nomeFantasia ?? e.razaoSocial) : '—'
+              })()
+            : (eu?.empresa.nome ?? '—'),
+        },
         { rotulo: 'Produto', valor: aplicado.variacaoKardex ? `${aplicado.variacaoKardex.sku} — ${aplicado.variacaoKardex.descricaoProduto}` : '—' },
       ]
     }
