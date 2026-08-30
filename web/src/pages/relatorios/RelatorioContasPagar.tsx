@@ -387,7 +387,7 @@ export default function RelatorioContasPagar() {
                           <td className="mono" style={{ textAlign: 'right' }}>{moeda(linha.valorPago)}</td>
                           <td className="mono" style={{ textAlign: 'right' }}>{moeda(linha.valorEmAberto)}</td>
                           <td>
-                            <span className={linha.situacao === 'VENCIDA' ? 'badge badge-erro' : 'badge'}>
+                            <span className={linha.situacao === 'VENCIDA' ? 'badge badge-perigo' : 'badge'}>
                               {ROTULO_SITUACAO[linha.situacao]}
                             </span>
                             {/* ⚠️ "Documento Pago" e "Data de Pagamento" discordam. O relatório

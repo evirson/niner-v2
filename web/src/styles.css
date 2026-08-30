@@ -91,6 +91,12 @@ code { background: var(--surface-2); padding: 1px 6px; border-radius: 6px; font-
 .muted { color: var(--ink-muted); }
 .eyebrow { color: var(--accent); font-weight: 600; text-transform: uppercase; letter-spacing: 1px; font-size: 12px; }
 .erro { color: var(--danger); font-size: 14px; }
+/* Mensagem de desfecho em texto corrido (nao e badge nem toast): a Devolucao ao Fornecedor
+   distingue por elas a NF-e AUTORIZADA da REJEITADA. Sem estas duas classes as duas mensagens
+   saiam com a MESMA cor do texto normal -- rejeitada e autorizada visualmente identicas, numa
+   tela fiscal. (2026-08-30) */
+.texto-sucesso { color: var(--sucesso); font-weight: 600; }
+.texto-erro { color: var(--danger); font-weight: 600; }
 h1 { font-size: 26px; line-height: 1.2; }
 
 .brand { font-weight: 700; letter-spacing: .5px; color: var(--ink); text-decoration: none; }
