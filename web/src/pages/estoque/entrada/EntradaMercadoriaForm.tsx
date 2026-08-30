@@ -826,7 +826,21 @@ export default function EntradaMercadoriaForm() {
       // Empresa destinatária no XML — CNPJ do `dest` casado contra o cadastro de empresas do
       // tenant (2026-08-12); sem match, mantém o padrão de sempre (empresa da sessão) e o
       // operador escolhe manualmente no select, que continua disponível.
-      if (preview.idEmpresaEncontrada != null) setIdEmpresaEscolhida(preview.idEmpresaEncontrada)
+      // ⛔ Só aceita a empresa do XML se ela estiver entre as PERMITIDAS — o mesmo guarda que o
+      // efeito do default da sessão já faz. O preview casa o CNPJ do <dest> contra todas as
+      // empresas do tenant, sem olhar permissão: com a nota faturada contra a matriz e o operador
+      // vinculado só à filial, a tela adotava a matriz em silêncio e o Confirmar respondia 404
+      // "Empresa não encontrada ou não liberada para este usuário" — depois de resolver as
+      // pendências, conferir 30 custos e digitar as duplicatas. E não havia saída: o seletor de
+      // Empresa só é renderizado com `empresasPermitidas.length > 1`, então repetir o upload
+      // reproduzia o mesmo beco. Ignorar em silêncio é o comportamento já documentado para "sem
+      // match": mantém a empresa da sessão.
+      if (
+        preview.idEmpresaEncontrada != null &&
+        empresasPermitidas?.some((e) => e.idEmpresa === preview.idEmpresaEncontrada)
+      ) {
+        setIdEmpresaEscolhida(preview.idEmpresaEncontrada)
+      }
 
       setXmlTemDuplicatas(preview.duplicatas.length > 0)
       if (preview.duplicatas.length > 0) {
@@ -1270,6 +1284,15 @@ export default function EntradaMercadoriaForm() {
                       onChange={(e) => alterarParcela(i, 'dataVencimentoTexto', mascararData(e.target.value))}
                       onFocus={(e) => e.target.select()}
                     />
+                    {/* ⚠️ Esta mensagem faltava e a guarda já existia — o pior dos dois mundos: o
+                        Confirmar (que fica na topbar, visível de todas as abas) ficava cinza sem
+                        nada na tela dizendo por quê. `vencimentoAntesDaEntrada` não cobre o caso,
+                        porque ele depende de `vencimentoIso != null` e uma data inválida é
+                        justamente a que devolve null. Trocar "toast genérico" por "botão morto sem
+                        diagnóstico" seria o mesmo defeito um campo ao lado. */}
+                    {p.dataVencimentoTexto.trim() !== '' && !dataValida(p.dataVencimentoTexto) && (
+                      <p className="erro-campo">Data inválida — use dd/mm/aaaa.</p>
+                    )}
                     {vencimentoAntesDaEntrada && <p className="erro-campo">Não pode ser antes da Data da Entrada.</p>}
                   </td>
                   <td style={{ textAlign: 'right' }}>

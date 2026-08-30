@@ -126,7 +126,21 @@ export default function RegraFiscalModal({
 }) {
   const [f, setF] = useState<FormState>(() => estadoInicial(regraInicial))
 
-  const valido = f.cfop.trim().length === 4 && (f.modoIcms === 'CSOSN' ? !!f.csosn : !!f.cstIcms)
+  /**
+   * ⚠️ O CFOP interestadual é OPCIONAL, mas quando preenchido tem de estar completo.
+   *
+   * A coluna é `character(4)` (V061), então o Postgres COMPLETA COM ESPAÇOS: um "6" digitado pela
+   * metade vira `"6   "`, que passa em todo `isBlank()` do caminho e sai no XML como
+   * `<CFOP>6   </CFOP>`. O XSD recusa (`TCfop` é `[0-9]{4}`) — na primeira venda para fora do
+   * estado, no balcão, com uma mensagem de schema que não aponta para o Perfil Fiscal cadastrado
+   * semanas antes. O irmão no servidor é `@Size(min = 4, max = 4)`.
+   */
+  const cfopInterestadualIncompleto =
+    f.cfopInterestadual.trim().length > 0 && f.cfopInterestadual.trim().length !== 4
+  const valido =
+    f.cfop.trim().length === 4 &&
+    !cfopInterestadualIncompleto &&
+    (f.modoIcms === 'CSOSN' ? !!f.csosn : !!f.cstIcms)
 
   return (
     <div className="modal-overlay" onClick={fecharAoClicarNoFundo(aoFechar)}>
@@ -181,6 +195,7 @@ export default function RegraFiscalModal({
               placeholder="6xxx"
               onChange={(e) => setF((s) => ({ ...s, cfopInterestadual: e.target.value.replace(/\D/g, '') }))}
             />
+            {cfopInterestadualIncompleto && <p className="erro-campo">O CFOP tem 4 dígitos.</p>}
             <p className="muted" style={{ fontSize: 12, marginTop: 4 }}>
               Usado quando o cliente é de outro estado. Vazio = a regra só vale dentro da UF, e a
               venda interestadual é recusada com aviso — nunca com um CFOP adivinhado.

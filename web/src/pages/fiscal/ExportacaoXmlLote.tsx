@@ -190,9 +190,13 @@ export default function ExportacaoXmlLote() {
               <GaugeProgresso rotulo="Consultando as notas do período…" />
             </div>
           ) : erroResumo ? (
-            <p className="erro">
-              {erroResumo instanceof ApiError ? erroResumo.message : 'Não foi possível conferir o período.'}
-            </p>
+            /* ⚠️ Toast (convenção do projeto: erro nunca em banner inline) E o texto no card. Aqui
+               as duas coisas se justificam: a mensagem do servidor é acionável ("período inicial
+               maior que o final", "período acima do máximo") e a atenção do lojista está na barra
+               de filtros, no TOPO — o banner sozinho ficava onde ele já parou de olhar. O texto no
+               card permanece porque é estado persistente da área ("não consegui conferir"), que um
+               toast de 6 s perderia. */
+            <ErroDoResumo erro={erroResumo} aoAvisar={(m) => { setToastTipo('erro'); setToast(m) }} />
           ) : !resumo ? (
             <p className="muted">
               Confira os filtros acima e clique em <strong>Gerar Dados</strong> para ver o que vai no arquivo.
@@ -287,4 +291,20 @@ export default function ExportacaoXmlLote() {
       {toast && <Toast mensagem={toast} tipo={toastTipo} aoFechar={() => setToast('')} />}
     </div>
   )
+}
+
+/**
+ * Mostra a falha de "Gerar Dados" no card **e** avisa por Toast uma vez.
+ *
+ * ⚠️ Componente próprio para o `useEffect` do aviso: chamar `setToast` no meio do render do pai
+ * entraria em laço. O `aoAvisar` roda só quando a mensagem muda, então clicar de novo com o mesmo
+ * erro não repete o toast, e um erro diferente avisa de novo.
+ */
+function ErroDoResumo({ erro, aoAvisar }: { erro: unknown; aoAvisar: (mensagem: string) => void }) {
+  const mensagem = erro instanceof ApiError ? erro.message : 'Não foi possível conferir o período.'
+  useEffect(() => {
+    aoAvisar(mensagem)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mensagem])
+  return <p className="erro">{mensagem}</p>
 }

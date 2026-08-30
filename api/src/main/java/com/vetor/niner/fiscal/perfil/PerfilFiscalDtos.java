@@ -48,6 +48,10 @@ public final class PerfilFiscalDtos {
             /** CFOP quando o cliente e de OUTRA UF (6xxx). Vazio = a regra so cobre operacao
              *  interna, e a venda interestadual e recusada com mensagem — nunca com um CFOP
              *  derivado: 5405 nao vira 6405, que nem existe (o correspondente e 6404). */
+            /** ⚠️ O tamanho exato é conferido em {@code PerfilFiscalService.validarRegras}, não por
+             *  {@code @Size(min = 4)}: aqui o vazio é legítimo (significa "a regra só cobre
+             *  operação interna") e o Bean Validation NÃO isenta string vazia de um {@code min} —
+             *  recusaria quem manda {@code ""} em vez de {@code null}. */
             @Size(max = 4) String cfopInterestadual,
             @Size(min = 2, max = 2) String cstIcms,
             @Size(min = 3, max = 3) String csosn,

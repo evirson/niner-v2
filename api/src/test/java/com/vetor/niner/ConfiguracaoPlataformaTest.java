@@ -172,6 +172,36 @@ class ConfiguracaoPlataformaTest {
                         .contentType(APPLICATION_JSON).content("{\"smtpRemetenteNome\":\"\"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.smtpRemetenteNome").value("Nainer"));
+
+        // ⭐ E o PAR NEGATIVO desta coluna, que é o que faltava: como ela ganhou um ramo próprio,
+        // uma regressão futura que trocasse `WHEN NULL THEN smtp_remetente_nome` por `THEN 'Nainer'`
+        // resetaria o remetente customizado a CADA PUT parcial — e nenhum teste falharia.
+        mvc.perform(put("/api/admin/configuracao").header("Authorization", "Bearer " + token)
+                        .contentType(APPLICATION_JSON).content("{\"smtpRemetenteNome\":\"LOJA DO JOAO\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.smtpRemetenteNome").value("LOJA DO JOAO"));
+        mvc.perform(put("/api/admin/configuracao").header("Authorization", "Bearer " + token)
+                        .contentType(APPLICATION_JSON).content("{\"backupHora\":\"04:20\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.smtpRemetenteNome").value("LOJA DO JOAO"));
+    }
+
+    /**
+     * ⚠️ O literal {@code 'Nainer'} do {@code CASE} tem de continuar sendo o DEFAULT da coluna.
+     *
+     * <p>Não é hipótese: este mesmo campo já derivou uma vez — a V041 nasceu com {@code 'Niner'} e a
+     * V043 trocou para {@code 'Nainer'}. Uma migration futura que mude o DEFAULT deixaria o literal
+     * em Java para trás <b>em silêncio</b>, e "voltar ao padrão" passaria a gravar o padrão antigo.
+     * Guarda de uma linha para uma classe de erro que ninguém encontra lendo.
+     */
+    @Test
+    void oPadraoDoRemetenteNoCodigoAcompanhaODefaultDaColuna() {
+        assertThat(jdbc.sql("""
+                        SELECT column_default FROM information_schema.columns
+                         WHERE table_schema = 'plataforma' AND table_name = 'configuracao_plataforma'
+                           AND column_name = 'smtp_remetente_nome'
+                        """).query(String.class).single())
+                .isEqualTo("'Nainer'::text");
     }
 
     @Test

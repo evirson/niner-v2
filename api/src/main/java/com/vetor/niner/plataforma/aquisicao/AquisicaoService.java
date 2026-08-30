@@ -127,9 +127,9 @@ public class AquisicaoService {
                                consentimento_em = COALESCE(plataforma.lead.consentimento_em, now()),
                                atualizado_em = now()
                         """)
-                .params(visitante, req.nome(), req.email(), req.telefoneWhatsapp(), req.nomeLoja())
+                .params(visitante, req.nome(), emailNormalizado(req.email()), req.telefoneWhatsapp(), req.nomeLoja())
                 .update();
-        enriquecerComPrimeiraVisita(req.email(), visitante);
+        enriquecerComPrimeiraVisita(emailNormalizado(req.email()), visitante);
     }
 
     /**
@@ -154,13 +154,20 @@ public class AquisicaoService {
                             VALUES (CAST(? AS uuid), ?, ?, ?, 'CONVERTIDO', ?, now())
                             ON CONFLICT (email) DO UPDATE
                                SET status = 'CONVERTIDO',
-                                   id_tenant = EXCLUDED.id_tenant,
+                                   -- ⚠️ COALESCE: preserva a PRIMEIRA conversão. Desde que o "criar grupo
+                                   -- separado" existe (2026-08-27), o mesmo e-mail pode abrir uma segunda
+                                   -- conta — e o `EXCLUDED` sobrescrevia o `id_tenant` da única linha de
+                                   -- lead que existe para ele, fazendo a PRIMEIRA conta desaparecer da
+                                   -- atribuição: o funil passava a contar 1 conta onde houve 2, e a receita
+                                   -- da campanha era subestimada. É a mesma regra de primeiro toque que as
+                                   -- colunas vizinhas deste UPDATE já seguem.
+                                   id_tenant = COALESCE(plataforma.lead.id_tenant, EXCLUDED.id_tenant),
                                    visitante_id = COALESCE(plataforma.lead.visitante_id, EXCLUDED.visitante_id),
                                    atualizado_em = now()
                             """)
-                    .params(visitante, nome, email, nomeLoja, idTenant)
+                    .params(visitante, nome, emailNormalizado(email), nomeLoja, idTenant)
                     .update();
-            enriquecerComPrimeiraVisita(email, visitante);
+            enriquecerComPrimeiraVisita(emailNormalizado(email), visitante);
         } catch (RuntimeException e) {
             log.warn("Não foi possível fechar o funil do lead no signup (tenant {}): {}", idTenant, e.getMessage());
         }
@@ -207,5 +214,26 @@ public class AquisicaoService {
         } catch (IllegalArgumentException e) {
             return null;
         }
+    }
+
+    /**
+     * E-mail do lead sempre em minúsculas, sem espaço nas pontas.
+     *
+     * <p>⛔ {@code lead_email_uk} é {@code UNIQUE (email)} — <b>case-sensitive</b>. Sem esta
+     * normalização, "Joao@Gmail.com" no formulário do site e "joao@gmail.com" no signup são duas
+     * linhas diferentes: o {@code ON CONFLICT} não casa, o lead original fica <b>para sempre</b> em
+     * NOVO na fila do comercial (alguém liga oferecendo o produto para quem já é cliente), e o funil
+     * conta 2 leads para 1 pessoa, cortando a taxa de conversão pela metade.
+     *
+     * <p>⚠️ Precisa valer nos <b>três</b> pontos — inclusive em
+     * {@link #enriquecerComPrimeiraVisita}, que casa por {@code l.email = ?} e ficaria mudo se só os
+     * dois primeiros fossem normalizados. É literalmente a armadilha de "corrigir uma ponta".
+     *
+     * <p>⏭️ O índice sobre {@code lower(email)} e a deduplicação das linhas que já existem ficam como
+     * pendência: escolher qual linha sobrevive quando duas têm status e UTM diferentes é decisão de
+     * negócio, não regra genérica. Isto aqui impede o problema de <b>crescer</b>.
+     */
+    private static String emailNormalizado(String email) {
+        return email == null ? null : email.trim().toLowerCase(java.util.Locale.ROOT);
     }
 }

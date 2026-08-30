@@ -213,16 +213,21 @@ public class EntradaMercadoriaService {
                 // projeto inteiro) — checado aqui contra o custo JÁ com rateio, porque é o que
                 // de fato vai pro `produto.preco_custo` no UPDATE logo abaixo.
                 if (novoPrecoVenda.compareTo(custoUnitarioComRateio.setScale(2, RoundingMode.HALF_UP)) < 0) {
-                    // ⚠️ A mensagem precisa dizer que o custo é COM RATEIO, e quanto ficou. O popup
-                    // de lançamento valida contra o custo DIGITADO (ele não conhece o frete, que é
-                    // do lote inteiro e mora em outra aba), então a tela mostrava 10,00 e 10,00 —
-                    // os dois iguais — e o servidor recusava. Sem o número e o nome do campo, o
-                    // operador não tem como ligar a recusa ao valor de frete que ele informou.
+                    // ⚠️ A mensagem precisa dizer que o custo é COM RATEIO, quanto ficou, e ONDE
+                    // fica o campo. O popup de lançamento valida contra o custo DIGITADO (ele não
+                    // conhece o frete, que é do lote inteiro), então a tela mostrava 10,00 e 10,00
+                    // — os dois iguais — e o servidor recusava.
+                    // ⛔ A primeira versão desta mensagem mandava para a aba "Financeiro", e o
+                    // campo NÃO está lá: `renderCamposIdentificacao` só é chamado dentro de
+                    // `aba === 'GERAL'`; a aba Financeiro tem apenas a grade de duplicatas. Ou
+                    // seja, ela trocou "não sei qual número está errado" por "não acho o campo" —
+                    // a mesma família do defeito que veio corrigir. Nome do campo e da aba agora
+                    // são os que estão na tela, literais.
                     throw new IllegalArgumentException(
                             ("Preço de venda (R$ %s) não pode ser menor que o preço de custo COM o rateio do frete "
-                                    + "(R$ %s). Reveja o valor a ratear na aba Financeiro ou aumente o preço de venda.")
-                                    .formatted(novoPrecoVenda.toPlainString(),
-                                            custoUnitarioComRateio.setScale(2, RoundingMode.HALF_UP).toPlainString()));
+                                    + "(R$ %s). Reveja o campo \"Frete/Acréscimo a Ratear\", na aba \"1. Dados "
+                                    + "Gerais\", ou aumente o preço de venda.")
+                                    .formatted(emReais(novoPrecoVenda), emReais(custoUnitarioComRateio)));
                 }
                 jdbc.sql("""
                                 UPDATE produto
@@ -297,9 +302,8 @@ public class EntradaMercadoriaService {
                     .reduce(BigDecimal.ZERO, BigDecimal::add);
             if (somaDuplicatas.compareTo(valorTotalProdutos.setScale(2, RoundingMode.HALF_UP)) != 0) {
                 throw new IllegalArgumentException(
-                        "A soma das duplicatas (%s) precisa ser igual ao total dos produtos (%s)."
-                                .formatted(somaDuplicatas.setScale(2, RoundingMode.HALF_UP),
-                                        valorTotalProdutos.setScale(2, RoundingMode.HALF_UP)));
+                        "A soma das duplicatas (R$ %s) precisa ser igual ao total dos produtos (R$ %s)."
+                                .formatted(emReais(somaDuplicatas), emReais(valorTotalProdutos)));
             }
         }
 
@@ -935,5 +939,18 @@ public class EntradaMercadoriaService {
     private static Long getLongOuNulo(ResultSet rs, String coluna) throws SQLException {
         long valor = rs.getLong(coluna);
         return rs.wasNull() ? null : valor;
+    }
+
+    /**
+     * Valor monetário como a TELA o mostra: duas casas e vírgula decimal.
+     *
+     * <p>⚠️ {@code BigDecimal.toString()} usa <b>ponto</b>, e sem {@code setScale} a escala é a que
+     * veio do JSON — a mesma frase saía com "R$ 10.5" e "R$ 15.00" lado a lado, contra uma tela que
+     * escreve 10,50 e 15,00. Mensagem de erro que formata o número diferente da tela obriga o
+     * operador a traduzir antes de comparar, que é exatamente o que ele não consegue fazer com o
+     * fornecedor esperando.
+     */
+    private static String emReais(BigDecimal valor) {
+        return valor.setScale(2, RoundingMode.HALF_UP).toPlainString().replace('.', ',');
     }
 }

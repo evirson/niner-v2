@@ -72,7 +72,18 @@ public class FusoDaLoja {
         return LocalDate.now(daSessao(jwt));
     }
 
-    /** Formata no fuso da empresa. {@code null} vira string vazia, não "null" na tela do usuário. */
+    /**
+     * Formata no fuso da empresa. {@code null} vira string vazia, não "null" na tela do usuário.
+     *
+     * <p>⚠️ {@code @Transactional} aqui é de graça e fecha uma armadilha latente: este método chama
+     * {@link #da(long)} <b>no próprio bean</b>, e auto-invocação não passa pelo proxy — o
+     * {@code @Transactional} de lá não vale. Hoje todos os cinco chamadores já estão dentro de uma
+     * transação (então a conexão tem {@code app.id_tenant} e a consulta enxerga a empresa), mas o
+     * primeiro chamador de fora — um controller, um {@code @Scheduled} — teria
+     * {@code tenant_atual()} NULL, o SELECT vazio e o {@code deOuPadrao} caindo no PADRÃO: hora de
+     * São Paulo impressa para uma loja do Acre, <b>sem erro nenhum</b>.
+     */
+    @Transactional(readOnly = true)
     public String formatar(OffsetDateTime instante, long idEmpresa, DateTimeFormatter formato) {
         return instante == null ? "" : formato.format(instante.atZoneSameInstant(da(idEmpresa)));
     }

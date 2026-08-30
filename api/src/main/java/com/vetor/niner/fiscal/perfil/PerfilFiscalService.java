@@ -224,6 +224,19 @@ public class PerfilFiscalService {
                         ("CRT %d fora do escopo do produto: o Niner atende Simples Nacional (CRT 1 e 2) e "
                                 + "MEI (CRT 4). Lucro Real e Lucro Presumido não são atendidos.").formatted(r.crt()));
             }
+            // ⛔ CFOP interestadual pela metade não pode ser gravado. A coluna é `character(4)`
+            // (V061), então o Postgres COMPLETA COM ESPAÇOS: um "6" digitado e interrompido vira
+            // `"6   "`, que passa em todo `isBlank()` do caminho de emissão e sai no XML como
+            // `<CFOP>6   </CFOP>`. O XSD recusa (`TCfop` é `[0-9]{4}`) na PRIMEIRA venda para fora
+            // do estado — no balcão, com uma mensagem de schema que não aponta para um campo
+            // preenchido semanas antes. Vazio continua legítimo: significa "esta regra só cobre
+            // operação interna", e a venda interestadual é recusada com aviso próprio.
+            String cfopInter = r.cfopInterestadual() == null ? "" : r.cfopInterestadual().trim();
+            if (!cfopInter.isEmpty() && cfopInter.length() != 4) {
+                throw new IllegalArgumentException(
+                        "CFOP fora da UF deve ter 4 dígitos (recebido: \"%s\"). Deixe em branco se a regra "
+                                .formatted(cfopInter) + "só vale dentro do estado.");
+            }
             boolean temCst = r.cstIcms() != null && !r.cstIcms().isBlank();
             boolean temCsosn = r.csosn() != null && !r.csosn().isBlank();
             if (temCst == temCsosn) {

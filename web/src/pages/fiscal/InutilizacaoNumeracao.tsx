@@ -211,7 +211,16 @@ export default function InutilizacaoNumeracao() {
                 <button
                   key={`${f.numeroInicial}-${f.numeroFinal}`}
                   type="button"
-                  className={faixaEscolhida === f ? 'btn' : 'btn ghost'}
+                  // ⚠️ Comparação por VALOR, não por identidade: `buracos` é `data` do React Query e o
+                  // `refetchOnWindowFocus` (ligado, `staleTime` 0) devolve objetos novos. Alternar para
+                  // outra janela e voltar apagava o destaque de TODOS os botões — na tela da ação mais
+                  // irreversível do produto, o operador perdia a confirmação visual de qual faixa
+                  // escolheu, enquanto a justificativa abaixo continuava citando a faixa certa.
+                  className={
+                    faixaEscolhida?.numeroInicial === f.numeroInicial && faixaEscolhida?.numeroFinal === f.numeroFinal
+                      ? 'btn'
+                      : 'btn ghost'
+                  }
                   onClick={() => escolherFaixa(f)}
                 >
                   {rotuloFaixa(f)}
