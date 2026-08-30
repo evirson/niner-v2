@@ -1,7 +1,7 @@
 # Progresso do Projeto — niner-v2
 
 Registro cronológico das decisões e entregas. Atualizar a cada marco relevante.
-**Última atualização:** 2026-08-29 (fechamento do dia — segunda leva de auditoria, V097, 1052 testes)
+**Última atualização:** 2026-08-30 (oito rodadas de auditoria, V098, 1099 testes)
 
 > 📄 **O que ainda falta está em `docs/PENDENCIAS.md`** (lista viva, agrupada por *de quem é a
 > bola*). Este arquivo conta a **história**; aquele conta o que está **aberto**. Ao fechar uma
@@ -10,6 +10,78 @@ Registro cronológico das decisões e entregas. Atualizar a cada marco relevante
 ---
 
 ## Estado atual
+
+> ## 📌 2026-08-30 — OITO RODADAS DE AUDITORIA, e o que elas provaram sobre as minhas correções
+>
+> **Estado medido agora:** **57 telas do ERP + 3 públicas** · **1099 testes verdes, 0 falhas, 0
+> erros, 0 pulados** · migrations até **V098** · `tsc -b` limpo · **11 commits**, 128 arquivos,
+> +1912/−326 linhas.
+>
+> ⚠️ **O total de testes "subiu" de 1052 para 1099 sem 47 testes novos.** A contagem anterior vinha
+> de somar os arquivos `.txt` do Surefire, e ela **subestimava**. O número do Maven
+> (`Tests run: 1099`) é o autoritativo, e é o que passa a valer. Entraram de fato **~5 testes**
+> nesta leva.
+>
+> ### ⭐ O achado que vale mais que a lista: em SETE das oito rodadas, o defeito mais grave era meu
+>
+> Pedido dele: *"2 agentes em paralelo, 8 rodadas cada, para ser preciso na varredura"*. Metade de
+> cada rodada foi dedicada a **reauditar as correções da rodada anterior** — e foi de lá que saiu o
+> pior achado quase todas as vezes:
+>
+> | Rodada | O que EU quebrei |
+> |---|---|
+> | 2 | `isFetching` nas deps do prefill do Fechamento de Caixa: **todo alt-tab apagava a contagem digitada**, e "Fechar Mesmo Assim" gravaria uma conferência dizendo que bateu |
+> | 3 | `ResponseStatusException.getMessage()` põe `409 CONFLICT` no texto que a tela pinta de vermelho |
+> | 4 | o `CASE` novo violava o `NOT NULL` de `smtp_remetente_nome` → 409 enganoso **descartando o formulário inteiro** |
+> | 5 | a mensagem nova mandava para a aba **Financeiro**, e o campo está na aba **1. Dados Gerais** |
+> | 6 | o guarda do XML **ignorava em silêncio**: 200, toast verde, entrada na empresa errada — pior que o 404 que ele substituiu |
+> | 7 | o `setToast` do aviso era **sobrescrito 38 linhas abaixo, no mesmo handler** — código morto, com o diff provando o contrário |
+> | 8 | a mensagem morava numa aba que o operador acabou de deixar; e a guarda era **mais fraca que a do servidor**, deixando passar exatamente o caso que ela veio fechar |
+>
+> ⭐ **A forma se repete e tem nome:** *meia correção*, *correção que troca o sintoma de lugar*,
+> *correção que o diff prova e que não existe*. Nenhuma delas foi pega por `tsc -b`, pela suíte, ou
+> por reler o próprio diff — todas por **um leitor independente perguntando "e a outra ponta?"**.
+>
+> ### O que mais custava dinheiro (os oito somados)
+>
+> - **O "Desfazer" do Balanço apagava o estoque da Importação de Dados** — o importador grava o
+>   mesmo `AJUSTE`, e um clique zerava 10.000 SKUs recém-migrados, com resposta **200**.
+> - **O KPI "Devoluções" do Relatório de Vendas era sempre R$ 0,00** — o JOIN partia de uma coluna
+>   que a devolução nunca preenche. Medido: 6 devoluções, **0 com `id_venda`**; a API dizia 0 para
+>   uma massa com **R$ 1.329,10**, que a DRE e a Lucratividade mostravam certo no mesmo instante.
+> - **Inutilizar numeração de OUTRA filial** — o POST não conferia a empresa (os dois GET ao lado
+>   conferiam), e inutilização **não se desfaz**.
+> - **Um PUT parcial no backoffice apagava o SMTP** e, com ele, o código de **login em duas etapas**
+>   — em silêncio, com a tela ainda dizendo "senha configurada".
+> - **A NF-e que falhava descartava o vale-mercadoria** já emitido, e refazer gerava um segundo vale
+>   com o estoque voltando duas vezes.
+> - **Data de entrada digitada errada virava HOJE** sem aviso: mês errado no Kardex, na DRE e na
+>   Lucratividade, e a entrada não é editável depois.
+> - **O verde cobria o vermelho** em cinco telas (dois `Toast` na mesma coordenada): no 2FA, o
+>   usuário lia "enviamos um código novo" enquanto o contador andava para o bloqueio.
+>
+> ### V098 — o quinto backfill vazio, e o mais bem provado
+>
+> A V055 (`cfg_permite_estoque_negativo = true`) casou **zero linhas**. Cronologia medida no banco:
+> tenant 1 criado 18/08; V054 em 20/08 **19:35** cria a coluna `NOT NULL DEFAULT false`; V055 em
+> **19:53** tenta corrigir e não enxerga nada. O parâmetro ficou errado por **nove dias**, até
+> alguém salvar pela tela. ⛔ E a isenção no `MigrationQueMexeEmDadoDeTenantTest` afirmava que *"o
+> `SET DEFAULT true` salvou o caso"* — medição certa, **conclusão sobre a causa errada**.
+>
+> Mecanismo provado por sabotagem: mesmo UPDATE, mesmo owner, mesma sessão — **sem `NO FORCE` casa
+> 0 linhas, com `NO FORCE` casa 1**. ⚠️ A V098 **não** repete o UPDATE cego: hoje um lojista pode
+> ter desligado o parâmetro de propósito, então ela só toca a linha que nunca foi editada desde a
+> V055.
+>
+> ### ⛔ O limite, dito por inteiro (pendência #68, ampliada)
+>
+> **As oito rodadas foram leitura de código, `grep`, `tsc -b` e a suíte.** A extensão do Chrome não
+> conecta nesta máquina, então **nenhuma tela foi aberta no navegador**, nenhum PDF foi gerado,
+> nada foi impresso, nada foi transmitido à SEFAZ. O que deu para medir sem navegador foi medido —
+> smoke da API com token real nas telas mexidas, `psql` contra o banco, sabotagem de correção para
+> ver o teste reprovar. O que não deu está listado em `docs/PENDENCIAS.md` #68, agora com o balanço
+> que os dois agentes escreveram na rodada 8, arquivo por arquivo.
+
 
 > ## 📌 2026-08-29 (11) — FECHAMENTO DO DIA: a segunda leva de cinco rodadas
 >

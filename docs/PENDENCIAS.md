@@ -11,7 +11,17 @@
 > **Como apresentar:** resumido e **agrupado por dono**, não as ~27 linhas cruas — ele já reclamou
 > de informação demais de uma vez (*"TA MUITO CONFUSO"*).
 >
-> **Última revisão:** 2026-08-29 — dia inteiro. Manhã: **cinco rodadas de dois agentes caçadores
+> **Última revisão: 2026-08-30 — OITO rodadas de dois agentes** (front e back em paralelo), a
+> pedido dele: *"8 rodadas de cada para ser preciso na varredura"*. ~40 correções, 11 commits,
+> **1099 testes verdes** (o número do Maven; a contagem antiga, somando arquivos do Surefire,
+> subestimava), migrations até **V098**.
+> ⭐ **Em sete das oito rodadas o defeito mais grave era de uma correção MINHA da rodada anterior** —
+> ver `docs/PROGRESSO.md` para a tabela rodada a rodada. Metade de cada rodada foi reauditoria, e
+> foi de lá que veio quase todo o valor.
+> 🔔 **Entraram três pendências novas** (**69**, **70**, **71**) e a **#68 foi ampliada** com o
+> balanço arquivo-por-arquivo do que continua sem cobertura.
+>
+> **Revisão anterior:** 2026-08-29 — dia inteiro. Manhã: **cinco rodadas de dois agentes caçadores
 > de bugs** (~55 correções). Tarde: as pendências que eram minha bola (**58**, **59**, **63**, parte
 > do **56**). Noite: **ele decidiu as 12 pendências item a item** e mandou executar — fecharam
 > **55**, **57**, **61**, **62**, **51**, **31**, **30** e **32**; entraram **60**–**62** e a **64**,
@@ -184,6 +194,95 @@ achar:
 **O que fazer com isto:** não é tarefa de uma sessão. O caminho barato é abrir as telas que a
 auditoria mexeu (Sangria, Minha Conta, Relatório de Contas a Pagar, Permissões, Parâmetros do
 Sistema) e olhar — as três de CSS teriam sido pegas em dois minutos de navegador.
+
+---
+
+#### 📋 Balanço de 2026-08-30 — o que continua sem cobertura, arquivo por arquivo
+
+As **oito** rodadas desta data também foram só leitura. ⚠️ Desta vez houve uma razão a mais e ela
+precisa ser dita: **a extensão do Chrome não conecta nesta máquina** (`Browser extension is not
+connected`), então nem a intenção de abrir tela existia. O que dava para medir sem navegador **foi**
+medido: smoke da API com token real, `psql` contra o banco, e sabotagem de cada correção importante
+para ver o teste reprovar. Abaixo, o que os dois agentes declararam como não coberto:
+
+**Não se verifica lendo (limite de método):**
+- `fiscal/documento/` (37 arquivos): assinatura XML, canonicalização, XSD e **o que a SEFAZ aceita**.
+  O projeto já viveu isso: passou no schema e voltou `cStat 1010`.
+- **Concorrência real** — os `FOR UPDATE`/`SKIP LOCKED`/`ON CONFLICT` de caixa, sangria, cota, OS,
+  vale-mercadoria e webhook foram lidos, **nenhum exercitado com duas transações**.
+- **Correção criptográfica** (`SegredoCifrador`, AES-GCM) — só executando.
+- **Contrato TS↔Java**: o `scripts/auditoria/contrato-ts-java.js` casa por **nome de tipo**, e na
+  rodada 8 errou em 4 de 4 por colidir com `record` privado homônimo. ⏭️ Ele deveria casar por
+  **endpoint**, não por nome — é a melhoria que fecharia o buraco de verdade.
+
+**Código que ninguém leu nas oito rodadas:**
+- **Back:** `configuracao/importacao/` (17 arquivos — o maior bloco descoberto; escreve dado em massa
+  numa transação só), `comum/armazenamento/` (a conferência do prefixo `tenants/{id}` na leitura é
+  **afirmada em doc**, nunca conferida em código), `identidade/permissao/PermissaoInterceptor`,
+  `comum/telaconfig`, `comum/arquivocompartilhado`, `configuracao/exportacao`, `cadastros/crm`,
+  `estoque/relatorioestoque`, `estoque/relatoriomovimentacao`, `financeiro/relatoriocontaspagar`,
+  `plataforma/staff`, `plataforma/tenants`.
+- **Front:** o editor visual de etiqueta inteiro (`EtiquetaConfigForm`, `EditorEtiquetaCanvas`,
+  `PainelPropriedadesCampo`, `ReguaCalibragem`, `CampoEtiquetaVisual` — a maior superfície de estado
+  local do produto), `ImportacaoTabelaPage` (o `setInterval` de polling: o cleanup não foi
+  auditado), `ExportacaoDadosPage`, `DrilldownTotalizadorModal`, `LancamentosCarteiraModal`,
+  `EscolherModeloModal`, `ProdutoExemploModal`, `GaugeProgresso`.
+
+**Buracos de teste que a rodada 8 encontrou (🟢 minha bola):**
+- Faturamento **parcial** de OS não tem teste — o comportamento ("libera a reserva inteira") está
+  correto e **não está preso**, e é o tipo de decisão que alguém "conserta" errado depois.
+- Nenhum teste exercita `id_usuario` em `fiscal_certificado_uso` — por isso o `ClassCastException`
+  latente ali pôde ficar escondido.
+- `PrivilegiosNinerAppTest`: conferir se os GRANTs da V094/V095 (sangria) ganharam caso.
+
+**⭐ A pendência mais barata de fechar, e que pegaria três achados de uma vez:** um script que case
+cada `podeConfirmar`/`disabled` com a mensagem que o explica e verifique se as duas estão sob a
+**mesma condição de aba**. Três dos seis achados da rodada 8 no front eram "a mensagem certa existe,
+mas em lugar nenhum que o usuário esteja olhando".
+
+---
+
+### 69. 🔵 A devolução não estorna o ACRÉSCIMO, e sobra comissão numa venda 100% devolvida
+`RelatorioComissoesService`: a venda soma `qtd × preço − desconto **+ acréscimo**`; a devolução
+subtrai `qtd × preço − desconto`, **sem o acréscimo** — e não é escolha, é que
+`DevolucaoProdutoService` nem grava `valor_acrescimo` na linha de devolução.
+
+**Medido:** carteira "CARTÃO 3×" com 10% de acréscimo, venda de R$ 100,00, vendedor com 10%.
+Comissão = R$ 11,11. Cliente devolve a peça **inteira** no mesmo mês → estorno = R$ 10,00. Sobram
+**R$ 1,11 de comissão** sobre uma venda que não existe mais, e a tela mostra R$ 11,11 "vendidos"
+numa devolução total. É a gêmea do defeito do desconto corrigido em 29/08, com o sinal invertido.
+
+⛔ **Não corrigi porque a pergunta é de produto:** *devolver a mercadoria devolve também o acréscimo
+de parcelamento?* O vale-mercadoria hoje **não** devolve o acréscimo — então há duas verdades
+possíveis e a que **não** pode ficar é a residual. Se mudar, tem de mudar junto na DRE e na
+Lucratividade, que foram alinhadas ao Comissões em 29/08.
+
+### 70. 🔵 Atribuição de campanha: um lead, uma conta — e o lojista pode abrir duas
+`plataforma.lead` tem **uma linha por e-mail** e **uma** coluna `id_tenant`. Desde que existe o
+"criar grupo separado" (2026-08-27), o mesmo e-mail abre duas contas, e o funil
+(`count(DISTINCT l.id_tenant)`) conta **1 onde houve 2**.
+
+Em 30/08 troquei o `EXCLUDED` por `COALESCE` (a atribuição fica com a **primeira** conversão, como
+as colunas vizinhas) e **normalizei o e-mail** nos três pontos — o `UNIQUE (email)` é
+case-sensitive, então `Joao@` e `joao@` viravam dois leads e o antigo ficava em `NOVO` para sempre,
+na fila do comercial. ⚠️ **Mas o COALESCE não conserta a contagem**, e num caso ele piora: se a
+conta abandonada for a primeira e a pagante for a segunda, a campanha recebe **R$ 0** de MRR.
+
+⏭️ **A saída de verdade é modelagem:** uma linha por conversão (`lead_conversao`), não uma coluna em
+`lead`. Muda o significado do funil, então é decisão dele. A migration do índice sobre
+`lower(email)` + deduplicação também espera: escolher qual linha sobrevive quando duas têm
+status/UTM diferentes é decisão de dado, não regra genérica.
+
+### 71. 🟢 Número fiscal queimado sem registro entre reservar e gravar
+Em `EmissaoNfeDevolucaoService`, `numeracao.reservar` roda **antes** de `gravarDevolucaoAssinada`, e
+entre os dois correm `montador.montar`, `assinador.assinar` e `validador.validarNfe` — três pontos
+que podem lançar. Se lançarem, o número está reservado e **não existe linha em `documento_fiscal`**:
+número queimado, que vira buraco, que vira inutilização formal.
+
+O projeto já trata isso na emissão da venda (item 37 da auditoria de 08-27: *"a recusa acontece
+ANTES de reservar número"*). Aqui a ordem é a inversa. ⏭️ A saída provável é registrar um
+`NAO_EMITIDO` (o conceito já existe, com série/número/chave nulos) quando a falha acontece depois da
+reserva — mas isso é decisão fiscal, não só de código.
 
 ### 67. 🟢 Reimportar a mesma NF-e corrigida pode travar o arquivamento num laço a cada 10 min
 O caminho do XML de entrada é `entrada/{ano}/{mes}/{chaveNfe}.xml`, e cancelar a entrada **libera a
