@@ -1051,24 +1051,35 @@ Levantadas conferindo o código em 2026-08-28, depois de fechar o item 53:
   não por cabeçalho: é o item que carrega o preço **congelado** na aprovação e **quem executou**,
   que é a base da comissão; um CSV por cabeçalho esconderia as duas coisas. A tela não precisou de
   nada — ela já lista as tabelas que a API oferece.
-- ✅ **Relatório de OS — FEITO em 2026-08-31.** `/relatorio-ordens-servico` (V103), em Relatórios ›
-  Faturamento, com `moduloServicos: true` (some para quem não vende serviço). Spec em
-  `docs/telas/relatorio-ordem-servico.md`. Três decisões, cada uma presa por um teste **sabotado**
-  depois de passar:
-  - **Dois eixos de data.** O Movimento conta cada evento pela sua própria data (abertas por
-    `data_abertura`, concluídas por `data_conclusao`, faturadas por `data_faturamento`, canceladas
-    por `data_cancelamento`); a produtividade conta pelo trabalho **entregue**. Eixo único
-    responderia a pergunta errada com um número plausível.
-  - **O executor é do ITEM**, nunca o funcionário do cabeçalho (que é quem atendeu) — mesmo defeito
-    que a V088/V089 corrigiu no ledger de venda.
-  - **Item sem executor vira a linha "(SEM EXECUTOR)"** em vez de ser filtrado; sem ela a soma das
-    linhas não fecharia com o total geral e nada na tela diria por quê.
+- ✅ **Relatório de OS — FEITO em 2026-08-31, e CONFERIDO NO NAVEGADOR.**
+  `/relatorio-ordens-servico` (V103), em Relatórios › Faturamento, com `moduloServicos: true`
+  (some para quem não vende serviço). Spec em `docs/telas/relatorio-ordem-servico.md`.
 
-  ⛔ **Comissão de propósito NÃO aparece ali:** quem calcula comissão é o Relatório de Comissões,
-  que é o caminho que **paga**. ⛔ E o desconto do cabeçalho **não é rateado** por executor — é
-  concessão de quem fechou o negócio, não de quem trabalhou.
-  ⚠️ **A tela ainda não foi aberta em navegador** (mesma limitação declarada em #68): o back tem
-  5 testes verdes e o front passa no `tsc -b`, mas ninguém olhou o layout nem gerou o PDF.
+  Três decisões, cada uma presa por um teste **sabotado** depois de passar: **dois eixos de data**
+  (o Movimento conta cada evento pela sua própria data; a produtividade conta pelo trabalho
+  entregue), **o executor é do ITEM** (não do cabeçalho, que é quem atendeu) e **item sem executor
+  vira a linha "(SEM EXECUTOR)"** em vez de ser filtrado. ⛔ Comissão não aparece ali (quem paga é
+  o Relatório de Comissões) e o desconto do cabeçalho não é rateado por executor.
+
+  ⚠️⚠️ **Abrir a tela achou DOIS defeitos que 6 testes verdes e o `tsc -b` não pegaram:**
+  1. **O relatório não gerava NENHUMA vez** — `ORDER BY (valor_servicos + valor_pecas)`, dois
+     **aliases dentro de uma expressão**. O Postgres aceita alias do SELECT no `ORDER BY`
+     **sozinho**, não dentro de expressão: *column "valor_servicos" does not exist*. A tela abre
+     ordenando por `valorTotal`, então batia sempre — e os 5 testes chamavam **sem** `ordenarPor`,
+     caindo no default. Hoje há `todasAsColunasOrdenaveisGeramSqlValido`, que percorre a allowlist
+     inteira nas duas direções.
+  2. **A coluna "Tempo Médio" saía vazia**, e ela existia: `COALESCE(AVG(…), 0)` transformava "não
+     há o que medir" em "medi, deu zero", e arredondar para **uma** casa matava toda duração abaixo
+     de 3 min (as OS reais do banco levaram de 0,0047 h a 0,0594 h). Hoje o campo é **nulo** quando
+     não há medida — e só o nulo vira "—" — com 4 casas, e a tela escolhe a unidade (min/h/dias).
+     Preso por `tempoMedioEhNuloSoQuandoNaoHaOQueMedir`, que tem o par: nulo × quase-zero.
+
+  ✅ **Medido na tela, com os dados reais de dev:** 4 abertas / 3 concluídas / 3 faturadas /
+  1 cancelada; serviços 160+80 = **240**, peças 183,60+0 = **183,60**, total **423,60** = Valor
+  Faturado; ticket 423,60/3 = **141,20**; tempo médio **2 min**. Ordenação por coluna funciona.
+  ✅ **PDF conferido no arquivo, não só na tela:** A4 paisagem (`/MediaBox [0 0 841.89 595.28]`),
+  `/Count 1` página, "Página 1 de 1", rodapé com a loja e "Nainer ERP", e o conteúdo capturado em
+  **tema claro** (verificado interceptando o canvas que vai para o PDF).
 - **Campos não configuráveis por tenant** (`cfg_tela_campo`). ⚠️ O **orçamento também não tem**,
   então a OS está consistente com a tela irmã — é padrão de tela de *documento*, não lacuna.
 

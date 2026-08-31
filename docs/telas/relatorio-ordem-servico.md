@@ -111,3 +111,38 @@ reprova o build se escapar.
 
 Captura visual (html2canvas + jsPDF), padrão de `relatorio-vendas.md`: `temaClaroParaCaptura` +
 `aguardarPintura` compartilhados, `[data-sem-impressao]` no aviso de atualização.
+
+---
+
+## 10. ⚠️ Duas armadilhas que só apareceram ABRINDO A TELA (2026-08-31)
+
+Os 5 testes iniciais passavam, o `tsc -b` passava, as classes CSS foram conferidas contra o
+`styles.css` — e a tela tinha **dois** defeitos, um deles impedindo o relatório de existir.
+
+### 10.1 Alias do SELECT não vale dentro de expressão no `ORDER BY`
+
+`valorTotal` era `(valor_servicos + valor_pecas)`, dois **aliases** do SELECT dentro de uma
+expressão. O Postgres aceita alias no `ORDER BY` **sozinho**, não dentro de expressão:
+
+```
+ERROR: column "valor_servicos" does not exist
+```
+
+E a tela **abre ordenando por `valorTotal`**, então batia sempre — *"Ocorreu um erro."*, nenhuma vez
+gerando. Hoje é `SUM(i.qtd_produto * i.preco_venda)` (serviços + peças é o total de todos os itens),
+e é essa a razão de o Relatório de Comissões repetir a expressão inteira em vez do alias.
+
+⚠️ **Por que a suíte não pegou:** os 5 testes chamavam **sem** `ordenarPor`, caindo no default.
+**Allowlist de ordenação é uma lista de SQL que ninguém executou até alguém executá-la** — o teste
+`todasAsColunasOrdenaveisGeramSqlValido` percorre todas as chaves, nas duas direções.
+
+### 10.2 "Não há o que medir" não é zero
+
+O tempo médio saía `—` em todas as linhas, e o dado existia: as OS reais levaram de **0,0047 h a
+0,0594 h**. Dois erros somados — `COALESCE(AVG(…), 0)` transformava *ausência* em *zero*, e
+arredondar para **uma casa** matava toda duração abaixo de 3 minutos.
+
+Hoje o campo é **nulo** quando não há medida (só o nulo vira `—`), com **4 casas**, e **a tela**
+escolhe a unidade: minutos, horas ou dias. Quem escolhe a unidade é a apresentação, e ela não pode
+recuperar o que o arredondamento já jogou fora. O teste tem o **par**: nulo quando não há × maior
+que zero para uma OS de 1 minuto — a duração exata que o arredondamento antigo matava.

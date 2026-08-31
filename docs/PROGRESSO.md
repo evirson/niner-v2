@@ -80,6 +80,49 @@ Registro cronológico das decisões e entregas. Atualizar a cada marco relevante
 > a guarda `ordenarPor == null ?` antes do `get` — o meu era o único fora do padrão. Copiar o padrão
 > inteiro, não a metade que se lembra.
 >
+> ### ⚠️⚠️ E então ABRI A TELA — dois defeitos que 6 testes verdes não pegavam
+>
+> Ele perguntou: *"vc pode testar no navegador??"*. Podia, e valeu cada minuto.
+>
+> **1. O relatório não gerava NENHUMA vez.** Primeira coisa na tela: *"Ocorreu um erro."* No log da
+> API: `column "valor_servicos" does not exist`. Causa: `ORDER BY (valor_servicos + valor_pecas)` —
+> dois **aliases do SELECT dentro de uma expressão**. O Postgres aceita alias no `ORDER BY`
+> **sozinho**, não dentro de expressão.
+>
+> ⚠️ **Por que a suíte não pegou:** os 5 testes chamavam sempre **sem** `ordenarPor`, caindo no
+> default (`ORDER BY e.razao_social, nome_funcionario`) — e a tela **abre pedindo `valorTotal`**.
+> Allowlist de ordenação é uma lista de SQL que ninguém executou até alguém executá-la; o teste novo
+> percorre **todas** as chaves, nas duas direções, não uma amostra.
+>
+> **2. A coluna "Tempo Médio" saía vazia — e o dado existia.** Todas as linhas mostravam `—`, que
+> significa *"não há o que medir"*. Fui ao banco: as OS reais levaram de **0,0047 h a 0,0594 h**.
+> Dois erros somados: o `COALESCE(AVG(…), 0)` transformava *"não há o que medir"* em *"medi, deu
+> zero"*, e arredondar para **uma casa** matava toda duração abaixo de 3 minutos. A tela então
+> escrevia "não medi" sobre um dado que existia — e, como todas as OS de dev são rápidas, a coluna
+> inteira sumiu, dando a impressão de relatório quebrado.
+>
+> Hoje: o campo é **nulo** quando não há medida (e só o nulo vira `—`), com 4 casas, e **a tela**
+> escolhe a unidade — minutos para o banho e tosa, horas para a mecânica, dias para o carro que
+> dormiu na oficina. O teste tem o **par**: nulo quando não há × maior que zero para uma OS de 1
+> minuto — que é exatamente a duração que o arredondamento antigo matava.
+>
+> **O que a tela confirmou** (dados reais de dev): 4 abertas / 3 concluídas / 3 faturadas /
+> 1 cancelada; serviços 160+80 = 240, peças 183,60+0 = 183,60, total 423,60 = Valor Faturado; ticket
+> 423,60/3 = 141,20; tempo médio 2 min. O `Nº OS` do Total Geral (3) é menor que a soma das linhas
+> (4) — e o rodapé explica por quê. Ordenação por coluna funciona.
+>
+> **E o PDF foi conferido no ARQUIVO, não só na tela:** `/MediaBox [0 0 841.89 595.28]` (A4
+> paisagem), `/Count 1` página, "Página 1 de 1", rodapé com a loja e "Nainer ERP". O conteúdo saiu em
+> **tema claro** — verificado interceptando o `toDataURL` do canvas que vai para o PDF e exibindo a
+> imagem resultante, já que o Chrome não me deixa abrir `file://`.
+>
+> ⭐ **A lição, medida:** as dez varreduras de ontem foram leitura de código, `tsc -b` e suíte — e
+> está escrito em `PENDENCIAS.md` #68 que isso **não acha o que só aparece na tela**. Aqui a tela
+> achou um defeito que impedia a função inteira de existir, e ele passou por 6 testes verdes, pelo
+> type-check e pelo meu próprio guarda de classes CSS. Nenhum deles estava errado; eles só não olham
+> para lá.
+>
+>
 > ### Uma reclassificação honesta
 >
 > Eu tinha listado a pendência **#26** (itens adiados da auditoria de 08-21) como "dá para fazer

@@ -23,6 +23,8 @@ public final class RelatorioOrdensServicoDtos {
             BigDecimal valorFaturado,
             BigDecimal valorDesconto,
             BigDecimal ticketMedio,
+            /** ⚠️ NULO quando não houve OS concluída no período — "não há o que medir" não é zero,
+             *  e só o nulo pode virar "—" na tela. */
             BigDecimal tempoMedioHoras) {
     }
 
@@ -45,6 +47,7 @@ public final class RelatorioOrdensServicoDtos {
             BigDecimal valorServicos,
             BigDecimal valorPecas,
             BigDecimal valorTotal,
+            /** ⚠️ Nulo = sem medida. Ver {@code MovimentoOrdens#tempoMedioHoras}. */
             BigDecimal tempoMedioHoras) {
     }
 

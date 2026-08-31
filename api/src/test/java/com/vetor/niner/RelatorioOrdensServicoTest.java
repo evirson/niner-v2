@@ -155,6 +155,74 @@ class RelatorioOrdensServicoTest {
                 .isEqualTo(1);
     }
 
+    /**
+     * ⭐ Percorre a allowlist INTEIRA, nas duas direções. Este teste nasceu de um defeito que os
+     * outros cinco não pegavam: eles chamavam sempre <b>sem</b> {@code ordenarPor}, caindo no
+     * default, e a tela abre pedindo {@code valorTotal} — que era {@code (valor_servicos +
+     * valor_pecas)}, dois <b>aliases dentro de uma expressão</b>. O Postgres aceita alias do SELECT
+     * no {@code ORDER BY} <b>sozinho</b>, não dentro de expressão: <i>column "valor_servicos" does
+     * not exist</i>, e o relatório não gerava nenhuma vez. Só apareceu <b>abrindo a tela</b>.
+     *
+     * <p>Regra: allowlist de ordenação é uma lista de SQL que nunca foi executada até alguém
+     * executá-la — o teste percorre todas as chaves, não uma amostra.
+     */
+    @Test
+    void todasAsColunasOrdenaveisGeramSqlValido() throws Exception {
+        prepararTenant("ordem");
+        long id = criarOs("2");
+        concluir(id);
+
+        for (String coluna : java.util.List.of("nomeEmpresa", "nomeFuncionario", "qtdOrdens",
+                "valorServicos", "valorPecas", "valorTotal", "tempoMedioHoras")) {
+            for (String direcao : java.util.List.of("ASC", "DESC")) {
+                String resp = mvc.perform(get("/api/v1/relatorios/ordens-servico")
+                                .header("Authorization", "Bearer " + token)
+                                .param("dataInicial", hoje().toString())
+                                .param("dataFinal", hoje().toString())
+                                .param("ordenarPor", coluna)
+                                .param("direcao", direcao))
+                        .andExpect(status().isOk())
+                        .andReturn().getResponse().getContentAsString();
+                assertThat(JsonPath.<java.util.List<Object>>read(resp, "$.linhas"))
+                        .as("ordenando por %s %s", coluna, direcao)
+                        .isNotEmpty();
+            }
+        }
+    }
+
+    /**
+     * ⭐ "Não há o que medir" (nulo) × "medi, deu quase zero" — o par que a tela precisa distinguir,
+     * porque só o **nulo** vira "—".
+     *
+     * <p>Achado **abrindo a tela**: o `COALESCE(AVG(...), 0)` mais o arredondamento para uma casa
+     * faziam toda OS concluída em menos de 3 minutos virar `0,0`, e o front escrevia "—" para
+     * qualquer valor `<= 0`. As OS reais do banco de dev levaram de 0,0047 h a 0,0594 h: a coluna
+     * inteira saiu vazia, dando a impressão de relatório quebrado sobre um dado que existia.
+     */
+    @Test
+    void tempoMedioEhNuloSoQuandoNaoHaOQueMedir() throws Exception {
+        prepararTenant("tempo");
+
+        String vazio = gerarRelatorio(hoje(), hoje());
+        assertThat(JsonPath.<Object>read(vazio, "$.movimento.tempoMedioHoras"))
+                .as("nenhuma OS concluída — aqui o nulo é a resposta certa, é o que vira '—' na tela")
+                .isNull();
+
+        long id = criarOs("1");
+        // 1 minuto = 0,0167 h. Com o arredondamento antigo (UMA casa) isto virava 0,0 e a tela
+        // escrevia "—" sobre um dado que existia — é a duração que separa a correção do defeito.
+        recuarAbertura(id, "1 minute");
+        concluir(id);
+
+        String comOs = gerarRelatorio(hoje(), hoje());
+        assertThat(comoDecimal(JsonPath.<Object>read(comOs, "$.movimento.tempoMedioHoras")))
+                .as("OS concluída em segundos ainda é uma medida — não pode chegar nulo nem zerado")
+                .isGreaterThan(java.math.BigDecimal.ZERO);
+        assertThat(comoDecimal(JsonPath.<Object>read(comOs, "$.linhas[0].tempoMedioHoras")))
+                .as("e o mesmo vale por executor")
+                .isGreaterThan(java.math.BigDecimal.ZERO);
+    }
+
     /** P8 — o relatório de um tenant nunca enxerga a OS de outro. */
     @Test
     void isolamentoEntreTenants() throws Exception {
@@ -236,11 +304,17 @@ class RelatorioOrdensServicoTest {
         }
     }
 
-    /** Empurra a abertura para ontem — é o que separa os dois eixos de data sem esperar um dia. */
     private void recuarAberturaUmDia(long id) throws SQLException {
+        recuarAbertura(id, "1 day");
+    }
+
+    /** Empurra a abertura para trás — é o que separa os dois eixos de data e o que dá à OS uma
+     *  duração de verdade, sem depender do relógio. O {@code intervalo} é literal do teste, nunca
+     *  entrada de usuário. */
+    private void recuarAbertura(long id, String intervalo) throws SQLException {
         try (Connection c = abrirConexao();
              PreparedStatement ps = c.prepareStatement(
-                     "UPDATE ordem_servico SET data_abertura = data_abertura - interval '1 day'"
+                     "UPDATE ordem_servico SET data_abertura = data_abertura - interval '" + intervalo + "'"
                              + " WHERE id_tenant = ? AND id_ordem_servico = ?")) {
             ps.setLong(1, idTenant);
             ps.setLong(2, id);

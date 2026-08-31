@@ -32,11 +32,22 @@ function moeda(v: number): string {
   return `R$ ${formatarMoeda(v)}`
 }
 
-/** Horas com uma casa; acima de 48h a tela também mostra os dias, que é como a oficina fala. */
-function tempo(horas: number): string {
-  if (horas <= 0) return '—'
-  const texto = `${formatarMoeda(horas).replace(',00', ',0')}h`
-  return horas >= 48 ? `${texto} (${Math.round(horas / 24)}d)` : texto
+/**
+ * Escolhe a unidade que a pessoa usa para falar daquela duração — minutos para o banho e tosa,
+ * horas para a mecânica do dia, dias para o carro que dormiu na oficina.
+ *
+ * ⚠️ **`—` significa "não há o que medir", e SÓ isso** (nenhuma OS concluída). A primeira versão
+ * escrevia `—` para qualquer valor `<= 0` e o backend arredondava o tempo para uma casa: as OS
+ * reais levaram de 0,0047 h a 0,0594 h, viraram 0,0 e a coluna inteira saiu vazia — a tela dizia
+ * "não medi" sobre um dado que existia. Achado abrindo a tela, não lendo o código.
+ */
+function tempo(horas: number | null): string {
+  if (horas === null || horas === undefined) return '—'
+  const minutos = horas * 60
+  if (minutos < 1) return 'menos de 1 min'
+  if (minutos < 60) return `${Math.round(minutos)} min`
+  if (horas < 48) return `${formatarMoeda(horas)}h`
+  return `${formatarMoeda(horas)}h (${Math.round(horas / 24)}d)`
 }
 
 function periodoPreenchido(inicial: string, final: string): boolean {

@@ -30,14 +30,23 @@ public class RelatorioOrdensServicoService {
     /** Fuso da loja em toda comparação de data — o do banco é UTC e viraria o dia às 21h. */
     private static final String FUSO = "America/Sao_Paulo";
 
-    /** Allowlist — nunca string-concatenar a coluna vinda do cliente na SQL. */
+    /**
+     * Allowlist — nunca string-concatenar a coluna vinda do cliente na SQL.
+     *
+     * <p>⚠️ <b>Alias do SELECT vale no {@code ORDER BY} sozinho, mas NÃO dentro de uma expressão.</b>
+     * {@code valorTotal} era {@code (valor_servicos + valor_pecas)} e o Postgres respondia
+     * <i>column "valor_servicos" does not exist</i> — a tela abre ordenando por essa coluna, então
+     * o relatório <b>não gerava nenhuma vez</b>. Por isso aqui ele é a soma sem {@code FILTER}
+     * (serviços + peças é o total de todos os itens), e é essa a razão de o Relatório de Comissões
+     * repetir a expressão inteira em vez do alias nos casos equivalentes.
+     */
     private static final Map<String, String> COLUNAS_ORDENAVEIS = Map.of(
             "nomeEmpresa", "e.razao_social",
             "nomeFuncionario", "nome_funcionario",
             "qtdOrdens", "qtd_ordens",
             "valorServicos", "valor_servicos",
             "valorPecas", "valor_pecas",
-            "valorTotal", "(valor_servicos + valor_pecas)",
+            "valorTotal", "SUM(i.qtd_produto * i.preco_venda)",
             "tempoMedioHoras", "tempo_medio_horas");
 
     private final JdbcClient jdbc;
@@ -122,7 +131,7 @@ public class RelatorioOrdensServicoService {
                       AND (os.data_faturamento AT TIME ZONE '%1$s')::date BETWEEN ? AND ?%2$s) AS valor_desconto,
                   -- Tempo de CALENDÁRIO (abertura → conclusão), não de bancada: inclui a espera pela
                   -- aprovação do cliente e a peça que não chegou. Está escrito na tela.
-                  (SELECT COALESCE(AVG(EXTRACT(EPOCH FROM (os.data_conclusao - os.data_abertura)) / 3600), 0)
+                  (SELECT AVG(EXTRACT(EPOCH FROM (os.data_conclusao - os.data_abertura)) / 3600)
                      FROM ordem_servico os
                     WHERE os.id_tenant = plataforma.tenant_atual() AND os.data_conclusao IS NOT NULL
                       AND os.situacao <> 'CANCELADA'
@@ -145,7 +154,7 @@ public class RelatorioOrdensServicoService {
                     valorFaturado, duasCasas(rs.getBigDecimal("valor_desconto")),
                     faturadas == 0 ? BigDecimal.ZERO.setScale(2)
                             : valorFaturado.divide(BigDecimal.valueOf(faturadas), 2, RoundingMode.HALF_UP),
-                    umaCasa(rs.getBigDecimal("tempo_medio_horas")));
+                    horas(rs.getBigDecimal("tempo_medio_horas")));
         }).single();
     }
 
@@ -170,7 +179,7 @@ public class RelatorioOrdensServicoService {
                                 FILTER (WHERE p.tipo_item = 'SERVICO'), 0) AS valor_servicos,
                        COALESCE(SUM(i.qtd_produto * i.preco_venda)
                                 FILTER (WHERE p.tipo_item <> 'SERVICO'), 0) AS valor_pecas,
-                       COALESCE(AVG(EXTRACT(EPOCH FROM (os.data_conclusao - os.data_abertura)) / 3600), 0)
+                       AVG(EXTRACT(EPOCH FROM (os.data_conclusao - os.data_abertura)) / 3600)
                            AS tempo_medio_horas
                   FROM ordem_servico os
                   JOIN ordem_servico_item i
@@ -201,7 +210,7 @@ public class RelatorioOrdensServicoService {
                     rs.getLong("id_empresa"), rs.getString("nome_empresa"),
                     rs.getLong("id_funcionario"), rs.getString("nome_funcionario"),
                     rs.getInt("qtd_ordens"), servicos, pecas, servicos.add(pecas),
-                    umaCasa(rs.getBigDecimal("tempo_medio_horas")));
+                    horas(rs.getBigDecimal("tempo_medio_horas")));
         }).list();
     }
 
@@ -295,8 +304,21 @@ public class RelatorioOrdensServicoService {
         return (valor == null ? BigDecimal.ZERO : valor).setScale(2, RoundingMode.HALF_UP);
     }
 
-    private static BigDecimal umaCasa(BigDecimal valor) {
-        return (valor == null ? BigDecimal.ZERO : valor).setScale(1, RoundingMode.HALF_UP);
+    /**
+     * Tempo médio em horas — <b>{@code null} quando não houve OS concluída</b>, nunca zero.
+     *
+     * <p>⚠️ <b>Os dois defeitos que isto conserta, achados ABRINDO A TELA:</b> (a) o {@code COALESCE
+     * (…, 0)} transformava <i>"não há o que medir"</i> em <i>"medi, deu zero"</i> — duas coisas
+     * diferentes, e a tela só pode escrever "—" para a primeira; (b) arredondar para <b>uma</b> casa
+     * matava toda duração abaixo de 3 minutos: as OS reais do banco levaram de 0,0047 h a 0,0594 h e
+     * a coluna inteira saiu vazia, dando a impressão de relatório quebrado.
+     *
+     * <p>Quatro casas porque quem escolhe a unidade é a <b>tela</b> (minutos, horas ou dias) e ela
+     * não pode recuperar o que o arredondamento já jogou fora — a decisão é de apresentação, o
+     * número aqui é o dado.
+     */
+    private static BigDecimal horas(BigDecimal valor) {
+        return valor == null ? null : valor.setScale(4, RoundingMode.HALF_UP);
     }
 
     private static boolean ehAdmin(Jwt jwt) {

@@ -14,8 +14,9 @@ export interface MovimentoOrdens {
   valorFaturado: number
   valorDesconto: number
   ticketMedio: number
-  /** Tempo de CALENDÁRIO (abertura → conclusão), não de bancada — inclui a espera do cliente. */
-  tempoMedioHoras: number
+  /** Tempo de CALENDÁRIO (abertura → conclusão), não de bancada — inclui a espera do cliente.
+   *  ⚠️ NULO quando não houve OS concluída: "não há o que medir" não é zero, e só o nulo vira "—". */
+  tempoMedioHoras: number | null
 }
 
 /**
@@ -32,7 +33,8 @@ export interface LinhaExecutor {
   valorServicos: number
   valorPecas: number
   valorTotal: number
-  tempoMedioHoras: number
+  /** ⚠️ Nulo = sem medida, nunca zero. */
+  tempoMedioHoras: number | null
 }
 
 export interface SubtotalEmpresaOrdens {
