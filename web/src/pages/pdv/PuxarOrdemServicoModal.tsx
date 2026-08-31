@@ -39,6 +39,41 @@ export default function PuxarOrdemServicoModal({
   const [erro, setErro] = useState<string | null>(null)
   const [carregando, setCarregando] = useState(false)
 
+  /**
+   * ⭐ *"Não achei"* junta DUAS situações com conselhos **opostos** — e a mensagem antiga, *"Nenhuma
+   * ordem de serviço concluída com esses filtros"*, deixava o operador escolher a errada.
+   *
+   * <p>Relato do dono do produto (2026-08-31): *"estou tentando puxar a ordem número 5 e não puxa,
+   * diz que não está cadastrada, mas ela existe"*. Ela **existia** — estava **ABERTA**, e só
+   * CONCLUÍDA vai ao PDV (DS18, decisão dele). O sistema fez a coisa certa e **contou a história
+   * errada**: quem lê "não encontrei" vai conferir o número, não concluir a OS.
+   *
+   * <p>Quando o operador digita um **número** e a busca não traz nada, aqui a OS é procurada
+   * **sem** o filtro de situação. Se ela existe, a mensagem diz o estado real e **o que fazer**;
+   * se não existe, aí sim a resposta é "confira o número". Buscar por texto (cliente, placa) cai no
+   * genérico — ali "nenhuma" é mesmo o que se pode afirmar.
+   */
+  const motivoDeNaoAchar = async (termo: string): Promise<string> => {
+    const numero = /^\d+$/.test(termo) ? Number(termo) : null
+    if (numero === null) {
+      return 'Nenhuma ordem de serviço concluída com esses filtros.'
+    }
+    try {
+      const os = await buscarOrdemServico(numero)
+      if (os.situacao === 'FATURADA') {
+        return `A OS nº ${numero} já virou a venda nº ${os.idVenda} — não pode ser faturada de novo.`
+      }
+      if (os.situacao === 'CANCELADA') {
+        return `A OS nº ${numero} foi cancelada e não pode ser faturada.`
+      }
+      return `A OS nº ${numero} existe, mas está ${os.situacao.replace('_', ' ')} — só ordens `
+        + 'CONCLUÍDAS podem ser faturadas. Conclua a ordem na tela de Ordens de Serviço e volte aqui.'
+    } catch {
+      // Não existe mesmo (404), ou é de outra empresa: aí "confira o número" é o conselho certo.
+      return `Nenhuma ordem de serviço nº ${numero} nesta empresa — confira o número.`
+    }
+  }
+
   const localizar = async () => {
     setCarregando(true)
     setErro(null)
@@ -51,7 +86,7 @@ export default function PuxarOrdemServicoModal({
       })
       setResultados(pagina.itens)
       if (pagina.itens.length === 0) {
-        setErro('Nenhuma ordem de serviço concluída com esses filtros.')
+        setErro(await motivoDeNaoAchar(busca.trim()))
       }
     } catch (e) {
       setErro(e instanceof ApiError ? e.message : 'Não foi possível localizar ordens de serviço.')

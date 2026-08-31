@@ -1,7 +1,7 @@
 # Progresso do Projeto — niner-v2
 
 Registro cronológico das decisões e entregas. Atualizar a cada marco relevante.
-**Última atualização:** 2026-08-31 (NFS-e Nacional em produção V099–V103; relatório de OS V104; serviço agora nasce com variação e aparece na OS)
+**Última atualização:** 2026-08-31 (NFS-e Nacional em produção V099–V103; relatório de OS V104; serviço nasce com variação, sem custo/margem, e a mensagem da OS no PDV diz o estado real)
 
 > 📄 **O que ainda falta está em `docs/PENDENCIAS.md`** (lista viva, agrupada por *de quem é a
 > bola*). Este arquivo conta a **história**; aquele conta o que está **aberto**. Ao fechar uma
@@ -11,6 +11,50 @@ Registro cronológico das decisões e entregas. Atualizar a cada marco relevante
 
 ## Estado atual
 
+> ## 📌 2026-08-31 (6) — "a OS 5 existe e não puxa" (existia mesmo) e o serviço sem custo
+>
+> ### 1. A OS que "não estava cadastrada" — a mensagem é que estava errada
+>
+> > *"Estou tentando no PDV puxar a ordem de serviço número 5 e não puxa, diz ordem não cadastrada,
+> > mas ela existe."*
+>
+> Ela **existia** — e estava **ABERTA**. Só `CONCLUIDA` vai ao PDV (DS18, decisão dele em 08-28), então
+> o sistema fez a coisa certa e **contou a história errada**: a mensagem era *"Nenhuma ordem de serviço
+> concluída com esses filtros"*, que junta duas situações com conselhos **opostos** — *"não existe,
+> confira o número"* e *"existe, mas falta concluir"*. Quem lê "não encontrei" vai conferir o número.
+>
+> Agora, quando o termo é um **número** e a busca volta vazia, a OS é procurada **sem** o filtro de
+> situação: se existe, a mensagem diz o estado e o caminho — *"A OS nº 5 existe, mas está ABERTA — só
+> ordens CONCLUÍDAS podem ser faturadas. Conclua a ordem na tela de Ordens de Serviço e volte aqui."*
+> Se não existe, aí sim *"confira o número"*. Busca por texto (cliente, placa) continua no genérico —
+> ali "nenhuma" é mesmo tudo o que se pode afirmar.
+>
+> ⚠️ **A mensagem que ele citou não existia no código** (`grep` por "cadastrada" não achava nada) — foi
+> paráfrase do sintoma. Reproduzi na tela para ler o texto real antes de mexer.
+>
+> ### 2. Serviço não tem preço de custo nem % de venda
+>
+> Pedido dele: *"no cadastro do produto, quando é serviço, não tem preço de custo e nem % de venda,
+> apenas o preço de venda — pode colocar isso na linha da descrição"*.
+>
+> Serviço é mão de obra: não se compra para revender, então não há custo de aquisição nem margem sobre
+> ele. Custo obrigatório em R$ 0,00 e margem 0% não são dados — são dois campos preenchidos à toa.
+>
+> O preço subiu para a **linha da Descrição**, e a seção **"Preços" some inteira** no serviço: os seis
+> itens dela eram de mercadoria (custo, % de venda, preço, e os três da oferta). ⛔ Sem isso sobrava o
+> título "Preços" com **nada** embaixo — seção vazia é pior que a ausência dela, porque o operador
+> procura o campo que o título promete.
+>
+> ⚠️ **Esconder sem soltar a validação trancaria o cadastro:** `validarCampo('precoCusto')` exige o
+> campo, e ele deixou de existir na tela — seria *"Campo obrigatório"* apontando para o nada, o mesmo
+> defeito que o `return` antecipado de `ProdutoService.validar` evita no servidor. Os dois agora são
+> pulados quando é serviço.
+>
+> **Medido na tela:** cadastrei MANICURE COMPLETA a R$ 60,00 sem tocar em custo nem margem — gravou
+> `tipo=SERVICO`, `venda=60.00`, `custo=0.00`, `perc=0.00` e **1 variação** (a correção anterior
+> funcionando junto).
+>
+>
 > ## 📌 2026-08-31 (5) — DOIS RELATOS DELE: um era ambiente, o outro era defeito de um ano
 >
 > > *"Cadastrei um produto, código 3734, este é serviço, mas não consigo colocar o % de ISS — coloco,

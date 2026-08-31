@@ -477,8 +477,12 @@ export default function ProdutoForm({ somenteLeitura = false }: { somenteLeitura
 
     const novosErros: ErrosCampo = {
       descricao: validarCampo('descricao', form, mapaConfig),
-      precoCusto: validarCampo('precoCusto', form, mapaConfig),
-      percentualVenda: validarCampo('percentualVenda', form, mapaConfig),
+      // ⛔ Serviço não tem preço de custo nem % de venda, e a tela não os mostra — exigi-los aqui
+      // recusaria o cadastro com "Campo obrigatório" apontando para um campo que NÃO EXISTE na
+      // tela. É o mesmo defeito que o `return` antecipado de `ProdutoService.validar` evita no
+      // servidor, e ele precisa do par aqui: esconder sem soltar a validação tranca o cadastro.
+      precoCusto: ehServico ? undefined : validarCampo('precoCusto', form, mapaConfig),
+      percentualVenda: ehServico ? undefined : validarCampo('percentualVenda', form, mapaConfig),
       precoVenda: validarCampo('precoVenda', form, mapaConfig),
       marca: validarCampo('marca', form, mapaConfig),
       referencia: validarCampo('referencia', form, mapaConfig),
@@ -711,7 +715,9 @@ export default function ProdutoForm({ somenteLeitura = false }: { somenteLeitura
               itens={[
                 {
                   visivel: true,
-                  peso: 8,
+                  // Serviço abre espaço para o preço ao lado (a seção "Preços" fica com um campo só
+                  // e sai daqui); mercadoria mantém os 8 de sempre, com a Marca à direita.
+                  peso: ehServico ? 8 : 8,
                   children: (
                     <>
                       <label htmlFor="descricao">Descrição *</label>
@@ -723,6 +729,42 @@ export default function ProdutoForm({ somenteLeitura = false }: { somenteLeitura
                         onBlur={aoSairDoCampo('descricao')}
                       />
                       {erros.descricao && <p className="erro-campo">{erros.descricao}</p>}
+                    </>
+                  ),
+                },
+                {
+                  /**
+                   * ⭐ Preço de venda NA LINHA DA DESCRIÇÃO quando é serviço (pedido do dono do
+                   * produto, 2026-08-31): *"quando é serviço não tem preço de custo e nem % de
+                   * venda, apenas o preço de venda — pode colocar isso na linha da descrição"*.
+                   *
+                   * <p>Serviço é mão de obra: não se compra para revender, então não há custo de
+                   * aquisição nem margem sobre ele. Um preço de custo obrigatório em R$ 0,00 e uma
+                   * margem de 0% não são dados — são dois campos que o operador preenche à toa e
+                   * que sujam o cadastro com número sem significado.
+                   *
+                   * <p>Com os outros dois fora, a seção "Preços" ficaria com um campo solitário
+                   * numa linha inteira; o preço sobe para junto da descrição, que é onde a atenção
+                   * já está. Em mercadoria nada muda — este bloco vira a Marca.
+                   */
+                  visivel: ehServico,
+                  peso: 4,
+                  children: (
+                    <>
+                      <label htmlFor="precoVendaServico">Preço de Venda (R$) *</label>
+                      <input
+                        id="precoVendaServico"
+                        inputMode="decimal"
+                        placeholder="0,00"
+                        value={form.precoVenda}
+                        onChange={aoMudarPrecoVenda}
+                        onBlur={(e) => {
+                          setForm((f) => ({ ...f, precoVenda: completarMoeda(f.precoVenda) }))
+                          aoSairDoCampo('precoVenda')(e)
+                          revalidarOferta()
+                        }}
+                      />
+                      {erros.precoVenda && <p className="erro-campo">{erros.precoVenda}</p>}
                     </>
                   ),
                 },
@@ -956,6 +998,11 @@ export default function ProdutoForm({ somenteLeitura = false }: { somenteLeitura
         </section>
         )}
 
+        {/* ⛔ A seção inteira some no serviço: os SEIS itens dela são de mercadoria (custo, % de
+            venda, preço, e os três da oferta), e o preço subiu para a linha da Descrição. Sem
+            isto sobrava o título "Preços" com NADA embaixo — seção vazia é pior que a ausência
+            dela, porque o operador procura o campo que o título promete. */}
+        {!ehServico && (
         <section className="section">
           <p className="section-label">Preços</p>
 
@@ -963,7 +1010,7 @@ export default function ProdutoForm({ somenteLeitura = false }: { somenteLeitura
             <LinhaGrid
               itens={[
                 {
-                  visivel: true,
+                  visivel: !ehServico,
                   peso: 2,
                   children: (
                     <>
@@ -985,7 +1032,7 @@ export default function ProdutoForm({ somenteLeitura = false }: { somenteLeitura
                   ),
                 },
                 {
-                  visivel: true,
+                  visivel: !ehServico,
                   peso: 2,
                   children: (
                     <>
@@ -1007,7 +1054,7 @@ export default function ProdutoForm({ somenteLeitura = false }: { somenteLeitura
                   ),
                 },
                 {
-                  visivel: true,
+                  visivel: !ehServico,
                   peso: 2,
                   children: (
                     <>
@@ -1095,6 +1142,7 @@ export default function ProdutoForm({ somenteLeitura = false }: { somenteLeitura
             />
           </div>
         </section>
+        )}
 
         {/* ⚠️ Serviço não tem peso nem grade — a seção inteira some. O back deixou de exigir a
             grade (achado ao testar ao vivo em 2026-08-28), mas manter o campo na tela com o
