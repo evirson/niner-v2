@@ -14,8 +14,16 @@ estudo e virou base de implementação no mesmo dia, a pedido dele.
 > | **S4** | **Ordem de Serviço** completa + integração com o F5 do PDV | `V087` · `vendas/ordemservico/` · `docs/telas/ordem-servico.md` |
 >
 > ⛔ **O que continua sendo só estudo:** a **NFS-e** (§5 em diante). Ele decidiu que o produto vai
-> oferecer a emissão — falta a credencial municipal da empresa de homologação, e nenhuma linha de
-> código fiscal de serviço foi escrita.
+> oferecer a emissão — e nenhuma linha de código fiscal de serviço foi escrita.
+>
+> ⭐ **A §5 foi SUPERADA em 2026-08-29 por `docs/MODULONFSE.md`.** As decisões (DS7–DS10) continuam
+> valendo; o que mudou é a **evidência**: a §5 foi escrita com fonte secundária e marcava como
+> ⚠️ *não confirmado* quase tudo sobre a API. O `MODULONFSE.md` traz o que foi **medido em dois
+> sistemas da própria Vetor que emitem NFS-e Nacional em produção** (`~/Documents/projetos/finance-v`,
+> na mesma stack Java 25 + Spring Boot 4, e `~/Documents/projetos/workshop`) — inclusive que **o S0
+> já está respondido** e que o CNPJ com IM e CNAE de serviço da 🔴 P4 **existe e é o da Vetor**.
+> ⚠️ Para **fato técnico** de NFS-e, quem manda é o `MODULONFSE.md`; para **decisão de produto**,
+> continua sendo este arquivo.
 >
 > ⚠️ **Ao ler as seções abaixo, lembre que elas foram escritas ANTES da implementação.** Onde uma
 > decisão foi refinada ao codificar, quem manda é `docs/telas/ordem-servico.md`. Duas divergências
