@@ -63,7 +63,32 @@ public final class FiscalConfigDtos {
                             + "o número do credenciamento por engano. Ele é gerado no portal da "
                             + "SEFAZ, junto com o identificador (ID do CSC).")
             @Size(max = 200) String cscToken,
-            Boolean removerCsc) {
+            Boolean removerCsc,
+
+            // ⭐ CSC POR AMBIENTE (2026-08-31). A SEFAZ credencia um CSC para homologação e OUTRO
+            // para produção; o de um não vale no outro. Até aqui havia um par só, e virar o
+            // ambiente no go-live rejeitaria TODA NFC-e com `cStat 464` — no primeiro dia de
+            // operação real, com cliente no caixa, e com um erro que não menciona CSC.
+            // ⚠️ Os dois pares são pedidos na MESMA tela, de propósito: para cadastrar o de
+            // produção o lojista teria de virar o ambiente antes, e ficaria sem emitir até
+            // acertar. Ver docs/telas/fiscal-configuracao.md.
+            @Pattern(regexp = "|\\s*\\d{1,6}\\s*",
+                    message = "O ID do CSC de homologação é numérico (ex.: 000001).")
+            @Size(max = 60) String cscIdHomologacao,
+            @Pattern(regexp = "|.{16,200}", flags = Pattern.Flag.DOTALL,
+                    message = "O CSC de homologação costuma ter 36 caracteres — confira se você não "
+                            + "colou o CSRT ou o número do credenciamento por engano.")
+            @Size(max = 200) String cscTokenHomologacao,
+            Boolean removerCscHomologacao,
+
+            @Pattern(regexp = "|\\s*\\d{1,6}\\s*",
+                    message = "O ID do CSC de produção é numérico (ex.: 000001).")
+            @Size(max = 60) String cscIdProducao,
+            @Pattern(regexp = "|.{16,200}", flags = Pattern.Flag.DOTALL,
+                    message = "O CSC de produção costuma ter 36 caracteres — confira se você não "
+                            + "colou o CSRT ou o número do credenciamento por engano.")
+            @Size(max = 200) String cscTokenProducao,
+            Boolean removerCscProducao) {
     }
 
     /**
@@ -86,6 +111,12 @@ public final class FiscalConfigDtos {
             String suframa,
             String cscId,
             boolean cscConfigurado,
+            /** ⭐ Por ambiente (2026-08-31). O segredo NUNCA volta — só o id e o booleano
+             *  "está definido", que é o que a tela precisa para dizer se o go-live vai funcionar. */
+            String cscIdHomologacao,
+            boolean cscConfiguradoHomologacao,
+            String cscIdProducao,
+            boolean cscConfiguradoProducao,
             String versaoTabelaIbpt,
             boolean serieNfceBloqueada,
             boolean serieNfeBloqueada,

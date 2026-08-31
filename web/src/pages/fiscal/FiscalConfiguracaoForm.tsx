@@ -33,6 +33,14 @@ interface FormState {
   cscId: string
   cscToken: string
   removerCsc: boolean
+  /** ⭐ Um par por AMBIENTE: a SEFAZ credencia um CSC para homologação e outro para produção, e o
+   *  de um NÃO vale no outro — usar o errado rejeita toda NFC-e com `cStat 464`. */
+  cscIdHomologacao: string
+  cscTokenHomologacao: string
+  removerCscHomologacao: boolean
+  cscIdProducao: string
+  cscTokenProducao: string
+  removerCscProducao: boolean
 }
 
 const VAZIO: FormState = {
@@ -48,6 +56,12 @@ const VAZIO: FormState = {
   cscId: '',
   cscToken: '',
   removerCsc: false,
+  cscIdHomologacao: '',
+  cscTokenHomologacao: '',
+  removerCscHomologacao: false,
+  cscIdProducao: '',
+  cscTokenProducao: '',
+  removerCscProducao: false,
 }
 
 function paraFormulario(c: FiscalConfig): FormState {
@@ -64,6 +78,12 @@ function paraFormulario(c: FiscalConfig): FormState {
     cscId: c.cscId ?? '',
     cscToken: '',
     removerCsc: false,
+    cscIdHomologacao: c.cscIdHomologacao ?? '',
+    cscTokenHomologacao: '',
+    removerCscHomologacao: false,
+    cscIdProducao: c.cscIdProducao ?? '',
+    cscTokenProducao: '',
+    removerCscProducao: false,
   }
 }
 
@@ -88,6 +108,20 @@ function paraRequisicao(f: FormState): FiscalConfigRequest {
     // ⚠️ `.trim()`: era o único campo sem ele, e um espaço colado junto do CSC quebra TODA
     // NFC-e com `cStat 464` — sem nada aparecer na tela, porque o campo é de senha.
     ...(f.removerCsc ? { removerCsc: true } : f.cscToken.trim() ? { cscToken: f.cscToken.trim() } : {}),
+    // ⭐ Mesma convenção, um par por ambiente (2026-08-31): id sempre vai; token só vai quando
+    // digitado, senão o backend PRESERVA o que está gravado. Mandar string vazia apagaria.
+    cscIdHomologacao: f.cscIdHomologacao.trim() || null,
+    ...(f.removerCscHomologacao
+      ? { removerCscHomologacao: true }
+      : f.cscTokenHomologacao.trim()
+        ? { cscTokenHomologacao: f.cscTokenHomologacao.trim() }
+        : {}),
+    cscIdProducao: f.cscIdProducao.trim() || null,
+    ...(f.removerCscProducao
+      ? { removerCscProducao: true }
+      : f.cscTokenProducao.trim()
+        ? { cscTokenProducao: f.cscTokenProducao.trim() }
+        : {}),
   }
 }
 
@@ -372,34 +406,102 @@ export default function FiscalConfiguracaoForm() {
             </section>
 
             <section className="section">
-              <p className="section-label">Credenciamento</p>
+              <p className="section-label">Credenciamento — CSC por ambiente</p>
+              {/* ⭐ DOIS pares, e eles ficam JUNTOS de propósito (2026-08-31). A SEFAZ credencia um
+                  CSC para homologação e OUTRO para produção; o de um não vale no outro. Pedir só o
+                  do ambiente corrente obrigaria o lojista a virar para produção ANTES de ter o CSC
+                  de lá — e ficar sem emitir até acertar, com `cStat 464` a cada tentativa. */}
+              <p className="muted" style={{ marginTop: -4, marginBottom: 12 }}>
+                A SEFAZ gera um CSC para cada ambiente e <strong>o de um não vale no outro</strong>. Cadastre
+                o de produção antes de virar a chave — senão toda NFC-e volta com{' '}
+                <em>&quot;Código de Hash no QR-Code difere do calculado&quot;</em>, um erro que não menciona o CSC.
+              </p>
               <div className="form-grid">
                 <div className="col-6">
-                  <label htmlFor="cscId">Identificador do CSC (CSC ID)</label>
-                  <input id="cscId" value={form.cscId} onChange={(e) => setForm((f) => ({ ...f, cscId: e.target.value }))} />
+                  <label htmlFor="cscIdHomologacao">
+                    ID do CSC — Homologação{form.ambiente === 'HOMOLOGACAO' && ' (em uso)'}
+                  </label>
+                  <input
+                    id="cscIdHomologacao"
+                    value={form.cscIdHomologacao}
+                    onChange={(e) => setForm((f) => ({ ...f, cscIdHomologacao: e.target.value }))}
+                  />
                 </div>
                 <div className="col-6">
-                  <label htmlFor="cscToken">Token do CSC</label>
+                  <label htmlFor="cscTokenHomologacao">Token do CSC — Homologação</label>
                   <input
-                    id="cscToken"
+                    id="cscTokenHomologacao"
                     type="password"
                     autoComplete="new-password"
-                    placeholder={config.cscConfigurado ? '•••••••• (gravado — deixe em branco para manter)' : ''}
-                    disabled={form.removerCsc}
-                    value={form.cscToken}
-                    onChange={(e) => setForm((f) => ({ ...f, cscToken: e.target.value }))}
+                    placeholder={
+                      config.cscConfiguradoHomologacao ? '•••••••• (gravado — deixe em branco para manter)' : ''
+                    }
+                    disabled={form.removerCscHomologacao}
+                    value={form.cscTokenHomologacao}
+                    onChange={(e) => setForm((f) => ({ ...f, cscTokenHomologacao: e.target.value }))}
                   />
-                  {config.cscConfigurado && (
+                  {config.cscConfiguradoHomologacao && (
                     <label className="checkbox-linha" style={{ fontSize: 12 }}>
                       <input
                         type="checkbox"
-                        checked={form.removerCsc}
-                        onChange={(e) => setForm((f) => ({ ...f, removerCsc: e.target.checked, cscToken: '' }))}
+                        checked={form.removerCscHomologacao}
+                        onChange={(e) =>
+                          setForm((f) => ({ ...f, removerCscHomologacao: e.target.checked, cscTokenHomologacao: '' }))
+                        }
                       />
-                      Remover o CSC atual
+                      Remover o CSC de homologação
                     </label>
                   )}
                 </div>
+
+                <div className="col-6">
+                  <label htmlFor="cscIdProducao">
+                    ID do CSC — Produção{form.ambiente === 'PRODUCAO' && ' (em uso)'}
+                  </label>
+                  <input
+                    id="cscIdProducao"
+                    value={form.cscIdProducao}
+                    onChange={(e) => setForm((f) => ({ ...f, cscIdProducao: e.target.value }))}
+                  />
+                </div>
+                <div className="col-6">
+                  <label htmlFor="cscTokenProducao">Token do CSC — Produção</label>
+                  <input
+                    id="cscTokenProducao"
+                    type="password"
+                    autoComplete="new-password"
+                    placeholder={
+                      config.cscConfiguradoProducao ? '•••••••• (gravado — deixe em branco para manter)' : ''
+                    }
+                    disabled={form.removerCscProducao}
+                    value={form.cscTokenProducao}
+                    onChange={(e) => setForm((f) => ({ ...f, cscTokenProducao: e.target.value }))}
+                  />
+                  {config.cscConfiguradoProducao && (
+                    <label className="checkbox-linha" style={{ fontSize: 12 }}>
+                      <input
+                        type="checkbox"
+                        checked={form.removerCscProducao}
+                        onChange={(e) =>
+                          setForm((f) => ({ ...f, removerCscProducao: e.target.checked, cscTokenProducao: '' }))
+                        }
+                      />
+                      Remover o CSC de produção
+                    </label>
+                  )}
+                </div>
+
+                {/* ⚠️ Aviso do go-live: o momento de descobrir que falta o CSC de produção é AGORA,
+                    não na primeira venda com o caixa cheio. */}
+                {form.ambiente === 'PRODUCAO' && !config.cscConfiguradoProducao && (
+                  <div className="col-12">
+                    <p className="erro-campo">
+                      O ambiente está em <strong>PRODUÇÃO</strong> e o CSC de produção não está cadastrado — toda
+                      NFC-e será rejeitada. Copie o CSC de produção do portal da SEFAZ antes de vender.
+                    </p>
+                  </div>
+                )}
+
                 <div className="col-6">
                   <label htmlFor="versaoTabelaIbpt">Versão da tabela IBPT</label>
                   <input id="versaoTabelaIbpt" value={config.versaoTabelaIbpt ?? '—'} disabled />

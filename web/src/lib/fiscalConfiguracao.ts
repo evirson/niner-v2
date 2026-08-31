@@ -27,6 +27,12 @@ export interface FiscalConfig {
   suframa: string | null
   cscId: string | null
   cscConfigurado: boolean
+  /** ⭐ Um par por AMBIENTE. O segredo NUNCA volta — só o id e o "está definido", que é o que a
+   *  tela precisa para avisar antes do go-live. */
+  cscIdHomologacao: string | null
+  cscConfiguradoHomologacao: boolean
+  cscIdProducao: string | null
+  cscConfiguradoProducao: boolean
   versaoTabelaIbpt: string | null
   serieNfceBloqueada: boolean
   serieNfeBloqueada: boolean
@@ -58,6 +64,12 @@ export interface FiscalConfigRequest {
   /** `undefined`/omitido preserva o token já gravado; string troca; `removerCsc: true` apaga. */
   cscToken?: string | null
   removerCsc?: boolean
+  cscIdHomologacao?: string | null
+  cscTokenHomologacao?: string | null
+  removerCscHomologacao?: boolean
+  cscIdProducao?: string | null
+  cscTokenProducao?: string | null
+  removerCscProducao?: boolean
 }
 
 /** Empresas do tenant e se cada uma já tem fiscal configurado — alimenta o seletor do topo. */

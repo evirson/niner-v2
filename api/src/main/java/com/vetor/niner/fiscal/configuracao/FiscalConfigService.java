@@ -51,6 +51,8 @@ public class FiscalConfigService {
                    c.serie_nfce, c.serie_nfe, c.serie_contingencia,
                    c.inscricao_estadual_st, c.suframa,
                    c.csc_id, c.csc_token_cifrado, c.versao_tabela_ibpt,
+                   c.csc_id_homologacao, c.csc_token_homologacao_cifrado,
+                   c.csc_id_producao, c.csc_token_producao_cifrado,
                    c.criado_em, c.atualizado_em
             FROM empresa e
             LEFT JOIN fiscal_config_empresa c
@@ -109,6 +111,12 @@ public class FiscalConfigService {
         validarSerieImutavel(atual, req);
 
         String cscToken = resolverCscToken(atual, req);
+        // ⭐ Um par por AMBIENTE (2026-08-31): cada um resolve com a MESMA convenção de segredo do
+        // projeto — vazio mantém, `remover*` apaga, valor cifra com trim.
+        String cscHomologacao = resolverSegredo(req.cscTokenHomologacao(), req.removerCscHomologacao(),
+                atual.cscConfiguradoHomologacao(), "csc_token_homologacao_cifrado", atual);
+        String cscProducao = resolverSegredo(req.cscTokenProducao(), req.removerCscProducao(),
+                atual.cscConfiguradoProducao(), "csc_token_producao_cifrado", atual);
         validarGates(idEmpresa, atual, req, cscToken);
 
         if (atual.configurado()) {
@@ -118,14 +126,19 @@ public class FiscalConfigService {
                                 emite_nfce = ?, emite_nfe = ?, ambiente = ?::ambiente_fiscal,
                                 serie_nfce = ?, serie_nfe = ?, serie_contingencia = ?,
                                 inscricao_estadual_st = ?, suframa = ?,
-                                csc_id = ?, csc_token_cifrado = ?, atualizado_em = now()
+                                csc_id = ?, csc_token_cifrado = ?,
+                                csc_id_homologacao = ?, csc_token_homologacao_cifrado = ?,
+                                csc_id_producao = ?, csc_token_producao_cifrado = ?,
+                                atualizado_em = now()
                             WHERE id_tenant = plataforma.tenant_atual() AND id_empresa = ?
                             """)
                     .params(req.crt(),
                             req.emiteNfce(), req.emiteNfe(), ambienteParaGravar(req).name(),
                             req.serieNfce(), req.serieNfe(), req.serieContingencia(),
                             req.inscricaoEstadualSt(), req.suframa(),
-                            trimOuNulo(req.cscId()), cscToken, idEmpresa)
+                            trimOuNulo(req.cscId()), cscToken,
+                            trimOuNulo(req.cscIdHomologacao()), cscHomologacao,
+                            trimOuNulo(req.cscIdProducao()), cscProducao, idEmpresa)
                     .update();
         } else {
             jdbc.sql("""
@@ -134,15 +147,19 @@ public class FiscalConfigService {
                                 emite_nfce, emite_nfe, ambiente,
                                 serie_nfce, serie_nfe, serie_contingencia,
                                 inscricao_estadual_st, suframa,
-                                csc_id, csc_token_cifrado)
+                                csc_id, csc_token_cifrado,
+                                csc_id_homologacao, csc_token_homologacao_cifrado,
+                                csc_id_producao, csc_token_producao_cifrado)
                             VALUES (plataforma.tenant_atual(), ?, ?,
-                                    ?, ?, ?::ambiente_fiscal, ?, ?, ?, ?, ?, ?, ?)
+                                    ?, ?, ?::ambiente_fiscal, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                             """)
                     .params(idEmpresa, req.crt(),
                             req.emiteNfce(), req.emiteNfe(), ambienteParaGravar(req).name(),
                             req.serieNfce(), req.serieNfe(), req.serieContingencia(),
                             req.inscricaoEstadualSt(), req.suframa(),
-                            trimOuNulo(req.cscId()), cscToken)
+                            trimOuNulo(req.cscId()), cscToken,
+                            trimOuNulo(req.cscIdHomologacao()), cscHomologacao,
+                            trimOuNulo(req.cscIdProducao()), cscProducao)
                     .update();
         }
         return carregar(idEmpresa);
@@ -326,6 +343,41 @@ public class FiscalConfigService {
      * da NFC-e, que precisou ler o CSC de volta pela primeira vez). Agora cifra com
      * {@link SegredoCifrador} (P7/F7), mesmo padrão de {@code fiscal_certificado.senha_cifrada}.
      */
+    /**
+     * ⭐ A convenção de segredo do projeto, aplicada a <b>um par por ambiente</b> (2026-08-31):
+     * <b>vazio mantém</b> o que está gravado, {@code remover = true} apaga, e valor preenchido
+     * cifra (com {@code trim}).
+     *
+     * <p>⚠️ O {@code trim} não é zelo: o CSC tem 36 caracteres e é <b>colado do portal da SEFAZ</b>
+     * — levar um espaço ou uma quebra de linha na seleção é o modo normal de errar num campo
+     * {@code type="password"}, onde nada aparece na tela. O resultado seria toda NFC-e voltando com
+     * {@code cStat 464}, que não menciona CSC em lugar nenhum.
+     *
+     * <p>⚠️ E <b>vazio precisa mesmo manter</b>: um PUT que só muda a série chegaria com os dois
+     * tokens em branco (a tela nunca os devolve preenchidos, F7) e zeraria os dois CSCs em
+     * silêncio — o mesmo defeito que a coluna única já tinha.
+     */
+    private String resolverSegredo(String tokenNovo, Boolean remover, boolean jaConfigurado,
+                                   String coluna, FiscalConfigResponse atual) {
+        if (Boolean.TRUE.equals(remover)) {
+            return null;
+        }
+        if (!vazio(tokenNovo)) {
+            return cifrador.cifrar(tokenNovo.trim());
+        }
+        if (!atual.configurado() || !jaConfigurado) {
+            return null;
+        }
+        // A coluna é escolhida por este método, nunca pelo cliente — os dois valores possíveis são
+        // literais do próprio código, então não há caminho de injeção aqui.
+        return jdbc.sql("SELECT " + coluna + " FROM fiscal_config_empresa"
+                        + " WHERE id_tenant = plataforma.tenant_atual() AND id_empresa = ?")
+                .param(atual.idEmpresa())
+                .query(String.class)
+                .optional()
+                .orElse(null);
+    }
+
     private String resolverCscToken(FiscalConfigResponse atual, FiscalConfigRequest req) {
         if (Boolean.TRUE.equals(req.removerCsc())) {
             return null;
@@ -361,26 +413,48 @@ public class FiscalConfigService {
     @Transactional(readOnly = true)
     public CscParaEmissao carregarCscParaEmissao(long idEmpresa) {
         return jdbc.sql("""
-                        SELECT csc_id, csc_token_cifrado FROM fiscal_config_empresa
+                        SELECT ambiente::text AS ambiente,
+                               csc_id, csc_token_cifrado,
+                               csc_id_homologacao, csc_token_homologacao_cifrado,
+                               csc_id_producao, csc_token_producao_cifrado
+                          FROM fiscal_config_empresa
                         WHERE id_tenant = plataforma.tenant_atual() AND id_empresa = ?
                         """)
                 .param(idEmpresa)
                 .query((rs, n) -> {
-                    String id = rs.getString("csc_id");
-                    String tokenCifrado = rs.getString("csc_token_cifrado");
+                    boolean producao = "PRODUCAO".equals(rs.getString("ambiente"));
+                    String id = rs.getString(producao ? "csc_id_producao" : "csc_id_homologacao");
+                    String tokenCifrado =
+                            rs.getString(producao ? "csc_token_producao_cifrado" : "csc_token_homologacao_cifrado");
+                    // ⚠️ Enquanto o lojista não reconfigurar, o par ANTIGO (coluna única) ainda vale
+                    // para o ambiente corrente — a V105 copiou o que existia para o ambiente em que
+                    // a empresa estava, e este fallback cobre a linha que a migration não alcançou
+                    // (empresa criada entre a migration e a primeira gravação pela tela nova).
                     if (vazio(id) || tokenCifrado == null) {
-                        throw cscNaoConfigurado();
+                        id = rs.getString("csc_id");
+                        tokenCifrado = rs.getString("csc_token_cifrado");
+                    }
+                    if (vazio(id) || tokenCifrado == null) {
+                        throw cscNaoConfigurado(producao);
                     }
                     return new CscParaEmissao(id, cifrador.decifrar(tokenCifrado));
                 })
                 .optional()
-                .orElseThrow(this::cscNaoConfigurado);
+                .orElseThrow(() -> cscNaoConfigurado(false));
     }
 
-    private ResponseStatusException cscNaoConfigurado() {
+    /**
+     * ⭐ A mensagem NOMEIA o ambiente (2026-08-31). O CSC é credenciado por ambiente e o de um não
+     * vale no outro — dizer só "CSC não configurado" mandaria o lojista conferir um campo que ele
+     * acabou de preencher, sem perceber que preencheu o do <b>outro</b> ambiente.
+     */
+    private ResponseStatusException cscNaoConfigurado(boolean producao) {
+        String ambiente = producao ? "PRODUÇÃO" : "HOMOLOGAÇÃO";
         return new ResponseStatusException(HttpStatus.CONFLICT,
-                "CSC (Código de Segurança do Contribuinte) não configurado para esta empresa — "
-                        + "obrigatório para o QR Code da NFC-e. Configure em Configurações Fiscais.");
+                "CSC (Código de Segurança do Contribuinte) de " + ambiente + " não configurado para "
+                        + "esta empresa — obrigatório para o QR Code da NFC-e. A SEFAZ credencia um "
+                        + "CSC para cada ambiente, e o de um não vale no outro. Configure em "
+                        + "Configurações Fiscais.");
     }
 
     // ---------------------------------------------------------------- leitura
@@ -397,7 +471,10 @@ public class FiscalConfigService {
                     base.emiteNfce(), base.emiteNfe(), ambientePadrao(),
                     base.serieNfce(), base.serieNfe(), base.serieContingencia(),
                     base.inscricaoEstadualSt(), base.suframa(),
-                    base.cscId(), base.cscConfigurado(), base.versaoTabelaIbpt(),
+                    base.cscId(), base.cscConfigurado(),
+                    base.cscIdHomologacao(), base.cscConfiguradoHomologacao(),
+                    base.cscIdProducao(), base.cscConfiguradoProducao(),
+                    base.versaoTabelaIbpt(),
                     false, false, ambienteTravado(), base.criadoEm(), base.atualizadoEm());
         }
         boolean nfceBloqueada = existeNumeracao(idEmpresa, 65, base.serieNfce());
@@ -407,7 +484,10 @@ public class FiscalConfigService {
                 base.emiteNfce(), base.emiteNfe(), base.ambiente(),
                 base.serieNfce(), base.serieNfe(), base.serieContingencia(),
                 base.inscricaoEstadualSt(), base.suframa(),
-                base.cscId(), base.cscConfigurado(), base.versaoTabelaIbpt(),
+                base.cscId(), base.cscConfigurado(),
+                base.cscIdHomologacao(), base.cscConfiguradoHomologacao(),
+                base.cscIdProducao(), base.cscConfiguradoProducao(),
+                base.versaoTabelaIbpt(),
                 nfceBloqueada, nfeBloqueada, ambienteTravado(), base.criadoEm(), base.atualizadoEm());
     }
 
@@ -430,7 +510,7 @@ public class FiscalConfigService {
             return new FiscalConfigResponse(
                     rs.getLong("id_empresa"), rs.getString("razao_social"), false,
                     1, false, false, AmbienteFiscal.HOMOLOGACAO,
-                    1, 1, 9, null, null, null, false, null,
+                    1, 1, 9, null, null, null, false, null, false, null, false, null,
                     false, false, false, null, null);
         }
         return new FiscalConfigResponse(
@@ -442,6 +522,10 @@ public class FiscalConfigService {
                 rs.getString("inscricao_estadual_st"), rs.getString("suframa"),
                 rs.getString("csc_id"),
                 rs.getString("csc_token_cifrado") != null,   // F7: nunca o token, só se existe
+                rs.getString("csc_id_homologacao"),
+                rs.getString("csc_token_homologacao_cifrado") != null,
+                rs.getString("csc_id_producao"),
+                rs.getString("csc_token_producao_cifrado") != null,
                 rs.getString("versao_tabela_ibpt"),
                 false, false, false,
                 rs.getObject("criado_em", OffsetDateTime.class),

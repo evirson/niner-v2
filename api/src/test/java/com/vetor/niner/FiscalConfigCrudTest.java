@@ -324,4 +324,99 @@ class FiscalConfigCrudTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.configurado").value(false));
     }
+
+    // ---------------------------------------------------------------- CSC por ambiente (V105)
+
+    /**
+     * ⭐ <b>A SEFAZ credencia um CSC POR AMBIENTE, e o de um não vale no outro</b> (2026-08-31).
+     *
+     * <p>Até a V105 havia um par só por empresa, com o ambiente num campo à parte. Virar
+     * HOMOLOGACAO → PRODUCAO no go-live manteria o CSC de homologação e <b>toda NFC-e seria
+     * rejeitada com {@code cStat 464}</b> — no primeiro dia de operação real, com um erro que fala
+     * de "hash do QR-Code" e não menciona CSC em lugar nenhum. Não é hipótese: o mesmo 464
+     * aconteceu no banco de dev (7 emissões seguidas rejeitadas, 35 autorizadas antes).
+     *
+     * <p>Este teste guarda o par: o CSC de cada ambiente é gravado no seu lugar, e trocar de
+     * ambiente <b>não</b> arrasta o CSC do outro.
+     */
+    @Test
+    void cscDeCadaAmbienteVaiParaOSeuLugar() throws Exception {
+        String token = assinarNovoTenant("csc-ambiente");
+        long idEmpresa = idEmpresaDo(token);
+
+        mvc.perform(put("/api/v1/fiscal/config/" + idEmpresa)
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(APPLICATION_JSON)
+                        .content(corpo(1, false, 1, 9,
+                                ",\"cscIdHomologacao\":\"000001\""
+                                        + ",\"cscTokenHomologacao\":\"CSC-DE-HOMOLOGACAO-0123456789abcdef\""
+                                        + ",\"cscIdProducao\":\"000002\""
+                                        + ",\"cscTokenProducao\":\"CSC-DE-PRODUCAO-9876543210fedcba98\"")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.cscIdHomologacao").value("000001"))
+                .andExpect(jsonPath("$.cscConfiguradoHomologacao").value(true))
+                .andExpect(jsonPath("$.cscIdProducao").value("000002"))
+                .andExpect(jsonPath("$.cscConfiguradoProducao").value(true))
+                // F7: nenhum dos dois segredos volta pela API, em campo nenhum.
+                .andExpect(jsonPath("$.cscTokenHomologacao").doesNotExist())
+                .andExpect(jsonPath("$.cscTokenProducao").doesNotExist());
+    }
+
+    /**
+     * ⚠️ O par negativo, e é ele que pega o defeito de verdade: um PUT que mexe só na série chega
+     * com os dois tokens em branco — a tela nunca os devolve preenchidos (F7) — e <b>não pode</b>
+     * zerar nenhum dos dois. Um teste só do caminho positivo aprovaria a versão que apaga os CSCs
+     * a cada salvamento, e o lojista só descobriria na próxima venda.
+     */
+    @Test
+    void salvarOutraCoisaNaoApagaNenhumDosDoisCsc() throws Exception {
+        String token = assinarNovoTenant("csc-ambiente-mantem");
+        long idEmpresa = idEmpresaDo(token);
+
+        mvc.perform(put("/api/v1/fiscal/config/" + idEmpresa)
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(APPLICATION_JSON)
+                        .content(corpo(1, false, 1, 9,
+                                ",\"cscIdHomologacao\":\"000001\""
+                                        + ",\"cscTokenHomologacao\":\"CSC-DE-HOMOLOGACAO-0123456789abcdef\""
+                                        + ",\"cscIdProducao\":\"000002\""
+                                        + ",\"cscTokenProducao\":\"CSC-DE-PRODUCAO-9876543210fedcba98\"")))
+                .andExpect(status().isOk());
+
+        // Só a série muda; nenhum token vai no corpo.
+        mvc.perform(put("/api/v1/fiscal/config/" + idEmpresa)
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(APPLICATION_JSON)
+                        .content(corpo(1, false, 7, 9,
+                                ",\"cscIdHomologacao\":\"000001\",\"cscIdProducao\":\"000002\"")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.serieNfce").value(7))
+                .andExpect(jsonPath("$.cscConfiguradoHomologacao").value(true))
+                .andExpect(jsonPath("$.cscConfiguradoProducao").value(true));
+    }
+
+    /** E o marcador explícito continua sendo o único jeito de apagar — um de cada vez. */
+    @Test
+    void removerApagaSoOCscDoAmbientePedido() throws Exception {
+        String token = assinarNovoTenant("csc-ambiente-remover");
+        long idEmpresa = idEmpresaDo(token);
+
+        mvc.perform(put("/api/v1/fiscal/config/" + idEmpresa)
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(APPLICATION_JSON)
+                        .content(corpo(1, false, 1, 9,
+                                ",\"cscIdHomologacao\":\"000001\""
+                                        + ",\"cscTokenHomologacao\":\"CSC-DE-HOMOLOGACAO-0123456789abcdef\""
+                                        + ",\"cscIdProducao\":\"000002\""
+                                        + ",\"cscTokenProducao\":\"CSC-DE-PRODUCAO-9876543210fedcba98\"")))
+                .andExpect(status().isOk());
+
+        mvc.perform(put("/api/v1/fiscal/config/" + idEmpresa)
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(APPLICATION_JSON)
+                        .content(corpo(1, false, 1, 9, ",\"removerCscProducao\":true")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.cscConfiguradoProducao").value(false))
+                .andExpect(jsonPath("$.cscConfiguradoHomologacao").value(true));
+    }
 }
