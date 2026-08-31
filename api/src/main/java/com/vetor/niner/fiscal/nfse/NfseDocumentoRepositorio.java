@@ -254,6 +254,18 @@ public class NfseDocumentoRepositorio {
                 .update();
     }
 
+    /** CNPJ do emitente — vai no {@code CNPJAutor} do evento de cancelamento. */
+    @Transactional(readOnly = true)
+    public String cnpjDaEmpresa(long idEmpresa) {
+        return jdbc.sql("""
+                        SELECT cnpj FROM empresa
+                         WHERE id_tenant = plataforma.tenant_atual() AND id_empresa = ?
+                        """)
+                .param(idEmpresa)
+                .query(String.class)
+                .single();
+    }
+
     // ---- registros ---------------------------------------------------------------------------
 
     public record NovoDocumento(
