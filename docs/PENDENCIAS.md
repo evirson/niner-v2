@@ -211,8 +211,15 @@ Sistema) e olhar — as três de CSS teriam sido pegas em dois minutos de navega
 #### 📋 Balanço de 2026-08-30 — o que continua sem cobertura, arquivo por arquivo
 
 As **oito** rodadas desta data também foram só leitura. ⚠️ Desta vez houve uma razão a mais e ela
-precisa ser dita: **a extensão do Chrome não conecta nesta máquina** (`Browser extension is not
-connected`), então nem a intenção de abrir tela existia. O que dava para medir sem navegador **foi**
+precisa ser dita: **a extensão do Chrome não conectava naquela sessão** (`Browser extension is not
+connected`), então nem a intenção de abrir tela existia.
+
+> ✅ **ATUALIZAÇÃO 2026-08-31 — a extensão VOLTOU a conectar.** Foi usada no mesmo dia para validar
+> a mudança da tela de Produtos: seção na posição certa, `document.activeElement` medido nos dois
+> caminhos (módulo ligado × desligado) e a galeria sumindo ao marcar Serviço. ⭐ Ou seja, **o
+> impedimento era da sessão, não da máquina** — antes de declarar este limite de novo, tente
+> conectar. O resto do balanço abaixo continua valendo: ele descreve o que aquelas rodadas não
+> cobriram, não uma impossibilidade permanente. O que dava para medir sem navegador **foi**
 medido: smoke da API com token real, `psql` contra o banco, e sabotagem de cada correção importante
 para ver o teste reprovar. Abaixo, o que os dois agentes declararam como não coberto:
 
