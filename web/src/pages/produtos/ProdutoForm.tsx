@@ -1,5 +1,6 @@
 import {
   useEffect,
+  useRef,
   useState,
   type ChangeEvent,
   type FocusEvent,
@@ -218,10 +219,60 @@ export default function ProdutoForm({ somenteLeitura = false }: { somenteLeitura
     queryFn: buscarUsaCorGrade,
   })
 
-  const { data: usaServicos } = useQuery({
+  const { data: usaServicos, isPending: carregandoUsaServicos } = useQuery({
     queryKey: ['config-geral', 'usa-servicos'],
     queryFn: buscarUsaServicos,
   })
+
+  /**
+   * Serviço não tem foto (pedido do dono do produto, 2026-08-31): a galeria some da tela.
+   *
+   * <p>⚠️ Sumir da tela não basta. O upload de foto em produto NOVO acontece depois do POST, num
+   * laço sobre `arquivosNovaFoto` — quem escolhesse fotos e só então marcasse "Serviço" teria as
+   * fotos enviadas assim mesmo, com a galeria escondida e ninguém vendo. Por isso `trocarTipoItem`
+   * descarta os arquivos locais junto.
+   */
+  const ehServico = form.tipoItem === 'SERVICO'
+
+  function trocarTipoItem(tipo: TipoItem) {
+    setForm((f) => ({ ...f, tipoItem: tipo }))
+    if (tipo === 'SERVICO') setArquivosNovaFoto([])
+  }
+
+  /**
+   * Foco inicial da tela. O primeiro campo da digitação passou a ser "O que é este item?" quando o
+   * módulo de serviços está ligado — é ele que decide o que o resto do formulário vai pedir.
+   *
+   * <p>⚠️ Por que não é um `autoFocus` no `<select>`: `cfgUsaServicos` chega por consulta, e no
+   * primeiro render ainda é `undefined` — a seção nem existe. `autoFocus` só age na montagem, então
+   * o campo nasceria sem foco justamente na loja que usa serviços. O efeito espera a resposta.
+   *
+   * <p>⚠️ E ele nunca rouba o foco de quem já está digitando: só age uma vez, e só se o foco ainda
+   * estiver onde a montagem o deixou (o `body` ou a Descrição vazia). Um efeito de foco que
+   * redispara é o mesmo defeito que apagou a contagem digitada do Fechamento de Caixa.
+   */
+  const tipoItemRef = useRef<HTMLSelectElement>(null)
+  const focoInicialAplicado = useRef(false)
+
+  useEffect(() => {
+    if (focoInicialAplicado.current || carregandoUsaServicos) return
+    if (!usaServicos?.cfgUsaServicos || editando || somenteLeitura) {
+      focoInicialAplicado.current = true   // a Descrição já recebeu o foco pelo autoFocus
+      return
+    }
+    const alvo = tipoItemRef.current
+    if (!alvo) return
+    const ativo = document.activeElement
+    const podeMover = !ativo || ativo === document.body || ativo.id === 'descricao'
+    if (podeMover && !form.descricao) {
+      alvo.focus()
+      focoInicialAplicado.current = true
+    }
+    // ⚠️ `form.descricao` NÃO entra nas dependências de propósito: ele muda a cada tecla, e o
+    // efeito só precisa correr quando a configuração chega. A leitura acima é do valor do render
+    // em que isso acontece, que é exatamente o que se quer conferir.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [carregandoUsaServicos, usaServicos?.cfgUsaServicos, editando, somenteLeitura])
 
   const { data: categorias } = useQuery({
     queryKey: ['categorias-produto'],
@@ -458,6 +509,71 @@ export default function ProdutoForm({ somenteLeitura = false }: { somenteLeitura
         noValidate
       >
       <fieldset disabled={somenteLeitura} className="form-fieldset">
+        {/* ⭐ PRIMEIRO da tela e primeiro na digitação (pedido do dono do produto, 2026-08-31): o
+            tipo governa o resto do formulário — serviço não tem estoque, não tem grade, não entra
+            na nota de mercadoria e não pede foto. Perguntar isso depois da descrição fazia o
+            operador preencher campos que iam sumir.
+            ⛔ A seção inteira só existe com o módulo de serviços LIGADO: numa loja de calçados,
+            "O que é este item?" é uma pergunta que ela nunca precisa responder — mesma regra do
+            `filtrarPorModulo` no menu. */}
+        {usaServicos?.cfgUsaServicos && (
+          <section className="section">
+            <p className="section-label">Tipo de Item</p>
+            <p className="muted" style={{ marginTop: -4 }}>
+              Serviço não tem estoque, não entra na nota fiscal de mercadoria e não sai em etiqueta.
+              {editando && ' O tipo não muda depois de cadastrado — se estiver errado, inative este cadastro e crie outro.'}
+            </p>
+
+            <div className="form-grid">
+              <div className="col-4">
+                <label htmlFor="tipoItem">O que é este item?</label>
+                <select
+                  id="tipoItem"
+                  ref={tipoItemRef}
+                  value={form.tipoItem}
+                  /* ⚠️ Imutável depois de criado (trigger da V085): o histórico de estoque, os
+                     relatórios e as notas já emitidas descrevem o item como ele era. Desabilitar
+                     ao editar é melhor que deixar tentar e receber erro do banco. */
+                  disabled={editando || somenteLeitura}
+                  onChange={(e) => trocarTipoItem(e.target.value as TipoItem)}
+                >
+                  <option value="MERCADORIA">Mercadoria (tem estoque)</option>
+                  <option value="SERVICO">Serviço (mão de obra, sem estoque)</option>
+                </select>
+              </div>
+
+              {form.tipoItem === 'SERVICO' && (
+                <>
+                  <div className="col-4">
+                    <label htmlFor="duracaoMinutos">Duração (minutos)</label>
+                    <input
+                      id="duracaoMinutos"
+                      inputMode="numeric"
+                      value={form.duracaoMinutos}
+                      disabled={somenteLeitura}
+                      onChange={(e) => setForm((f) => ({ ...f, duracaoMinutos: somenteDigitos(e.target.value) }))}
+                    />
+                  </div>
+                  <div className="col-4">
+                    <label htmlFor="percComissaoServico">% Comissão do Serviço</label>
+                    <input
+                      id="percComissaoServico"
+                      inputMode="decimal"
+                      value={form.percComissaoServico}
+                      disabled={somenteLeitura}
+                      onChange={(e) => setForm((f) => ({ ...f, percComissaoServico: mascararPercentual(e.target.value) }))}
+                      onBlur={(e) => setForm((f) => ({ ...f, percComissaoServico: completarPercentual(e.target.value) }))}
+                    />
+                    <p className="muted" style={{ marginTop: 4 }}>
+                      Em branco, vale a comissão do funcionário.
+                    </p>
+                  </div>
+                </>
+              )}
+            </div>
+          </section>
+        )}
+
         <section className="section">
           <p className="section-label">Identificação</p>
 
@@ -581,63 +697,6 @@ export default function ProdutoForm({ somenteLeitura = false }: { somenteLeitura
             />
           </div>
         </section>
-
-        {usaServicos?.cfgUsaServicos && (
-          <section className="section">
-            <p className="section-label">Tipo de Item</p>
-            <p className="muted" style={{ marginTop: -4 }}>
-              Serviço não tem estoque, não entra na nota fiscal de mercadoria e não sai em etiqueta.
-              {editando && ' O tipo não muda depois de cadastrado — se estiver errado, inative este cadastro e crie outro.'}
-            </p>
-
-            <div className="form-grid">
-              <div className="col-4">
-                <label htmlFor="tipoItem">O que é este item?</label>
-                <select
-                  id="tipoItem"
-                  value={form.tipoItem}
-                  /* ⚠️ Imutável depois de criado (trigger da V085): o histórico de estoque, os
-                     relatórios e as notas já emitidas descrevem o item como ele era. Desabilitar
-                     ao editar é melhor que deixar tentar e receber erro do banco. */
-                  disabled={editando || somenteLeitura}
-                  onChange={(e) => setForm((f) => ({ ...f, tipoItem: e.target.value as TipoItem }))}
-                >
-                  <option value="MERCADORIA">Mercadoria (tem estoque)</option>
-                  <option value="SERVICO">Serviço (mão de obra, sem estoque)</option>
-                </select>
-              </div>
-
-              {form.tipoItem === 'SERVICO' && (
-                <>
-                  <div className="col-4">
-                    <label htmlFor="duracaoMinutos">Duração (minutos)</label>
-                    <input
-                      id="duracaoMinutos"
-                      inputMode="numeric"
-                      value={form.duracaoMinutos}
-                      disabled={somenteLeitura}
-                      onChange={(e) => setForm((f) => ({ ...f, duracaoMinutos: somenteDigitos(e.target.value) }))}
-                    />
-                  </div>
-                  <div className="col-4">
-                    <label htmlFor="percComissaoServico">% Comissão do Serviço</label>
-                    <input
-                      id="percComissaoServico"
-                      inputMode="decimal"
-                      value={form.percComissaoServico}
-                      disabled={somenteLeitura}
-                      onChange={(e) => setForm((f) => ({ ...f, percComissaoServico: mascararPercentual(e.target.value) }))}
-                      onBlur={(e) => setForm((f) => ({ ...f, percComissaoServico: completarPercentual(e.target.value) }))}
-                    />
-                    <p className="muted" style={{ marginTop: 4 }}>
-                      Em branco, vale a comissão do funcionário.
-                    </p>
-                  </div>
-                </>
-              )}
-            </div>
-          </section>
-        )}
 
         <section className="section">
           <p className="section-label">Fiscal</p>
@@ -1019,14 +1078,21 @@ export default function ProdutoForm({ somenteLeitura = false }: { somenteLeitura
           </section>
         )}
 
-        <GaleriaImagensProduto
-          idProduto={editando ? Number(id) : undefined}
-          imagens={imagens}
-          arquivosLocais={arquivosNovaFoto}
-          aoMudarArquivosLocais={setArquivosNovaFoto}
-          somenteLeitura={somenteLeitura}
-          aoAtualizar={setImagens}
-        />
+        {/* ⛔ Serviço não pede foto (pedido do dono do produto, 2026-08-31): mão de obra não tem
+            vitrine, e a foto de produto existe para o PDV, a etiqueta e o marketplace — nenhum dos
+            três alcança um serviço. Ver `trocarTipoItem`, que descarta os arquivos já escolhidos:
+            esconder a galeria sem limpar a lista mandaria as fotos assim mesmo, no laço de upload
+            que roda depois do POST. */}
+        {!ehServico && (
+          <GaleriaImagensProduto
+            idProduto={editando ? Number(id) : undefined}
+            imagens={imagens}
+            arquivosLocais={arquivosNovaFoto}
+            aoMudarArquivosLocais={setArquivosNovaFoto}
+            somenteLeitura={somenteLeitura}
+            aoAtualizar={setImagens}
+          />
+        )}
 
         <InfoRegistro
           codigo={produtoExistente?.idProduto}

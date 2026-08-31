@@ -59,6 +59,17 @@ class ProdutoImagemCrudTest {
         return ((Number) JsonPath.read(resp, "$.idProduto")).longValue();
     }
 
+    /** Liga o modulo de servicos no tenant do teste — copia do ServicoNoCatalogoTest. */
+    private void ligarServicos(String token) throws Exception {
+        String atual = mvc.perform(get("/api/v1/config-geral").header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        String body = atual.replaceFirst("\"cfgUsaServicos\":\\s*false", "\"cfgUsaServicos\":true");
+        mvc.perform(put("/api/v1/config-geral").header("Authorization", "Bearer " + token)
+                        .contentType(APPLICATION_JSON).content(body))
+                .andExpect(status().isOk());
+    }
+
     private static byte[] pngValido() throws IOException {
         BufferedImage imagem = new BufferedImage(200, 100, BufferedImage.TYPE_INT_RGB);
         Graphics2D g = imagem.createGraphics();
@@ -178,5 +189,42 @@ class ProdutoImagemCrudTest {
         mvc.perform(get("/api/v1/produtos/" + produtoA).header("Authorization", "Bearer " + tokenA))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.imagens.length()").value(1));
+    }
+
+    /**
+     * Serviço não tem foto (decisão do dono do produto, 2026-08-31). A galeria some da tela quando
+     * o item é serviço, e este teste prende a metade que importa: **o servidor recusa**.
+     *
+     * <p>⚠️ Sem isso, a mudança seria só de aparência — o endpoint continuaria aceitando a foto por
+     * qualquer outro caminho, e o produto ficaria com uma vitrine que nenhuma tela mostra. É P4: a
+     * trava que vale é a do servidor.
+     */
+    @Test
+    void servicoNaoAceitaFoto() throws Exception {
+        String token = assinarNovoTenant("servico-sem-foto");
+        ligarServicos(token);   // `cfg_usa_servicos` nasce DESLIGADO (V085) — sem isto o POST dá 400
+        String resp = mvc.perform(post("/api/v1/produtos").header("Authorization", "Bearer " + token)
+                        .contentType(APPLICATION_JSON)
+                        .content("""
+                                {"descricao":"banho e tosa","precoCusto":"0","percentualVenda":"0",
+                                 "precoVenda":"50.00","tipoItem":"SERVICO"}
+                                """))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.tipoItem").value("SERVICO"))
+                .andReturn().getResponse().getContentAsString();
+        long idServico = ((Number) JsonPath.read(resp, "$.idProduto")).longValue();
+
+        MockMultipartFile arquivo = new MockMultipartFile("arquivo", "foto.png", "image/png", pngValido());
+        mvc.perform(multipart("/api/v1/produtos/" + idServico + "/imagens")
+                        .file(arquivo).header("Authorization", "Bearer " + token))
+                .andExpect(status().isBadRequest());
+
+        // ⭐ O par positivo: a mesma chamada, numa MERCADORIA, continua funcionando — sem ele, um
+        // endpoint quebrado (que recusasse tudo) passaria por "regra implementada".
+        long idMercadoria = criarProduto(token, "Coleira");
+        MockMultipartFile outro = new MockMultipartFile("arquivo", "foto.png", "image/png", pngValido());
+        mvc.perform(multipart("/api/v1/produtos/" + idMercadoria + "/imagens")
+                        .file(outro).header("Authorization", "Bearer " + token))
+                .andExpect(status().isCreated());
     }
 }

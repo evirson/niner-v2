@@ -194,9 +194,55 @@ profundidade, igual ao resto do sistema.
 Regra de negócio: **peso líquido não pode ser maior que o peso bruto** — validado ao vivo (ao
 sair de qualquer um dos dois campos) e reforçado no backend (400).
 
+## Particularidade 7: "O que é este item?" é o PRIMEIRO campo (2026-08-31)
+
+Pedido do dono do produto: *"deixe o campo 'O Que é este Item?' como primeiro campo da sequência
+para digitação, e só deixar este campo ativo se o módulo de serviço estiver ativo"*.
+
+⭐ **Por que ele vem antes de tudo:** o tipo **governa o resto do formulário**. Serviço não tem
+estoque, não tem grade, não sai em etiqueta, não entra na nota de mercadoria e — desde esta data —
+**não pede foto**. Perguntar isso depois da descrição fazia o operador preencher campos que iam
+sumir da tela.
+
+**A seção inteira só existe com `cfg_usa_servicos` ligado.** Numa loja de calçados, "O que é este
+item?" é uma pergunta que ela nunca precisa responder — é a mesma regra do `filtrarPorModulo` no
+menu: esconder o que não faz sentido para o tenant, em vez de mostrar desabilitado.
+
+⚠️ **O foco não é `autoFocus`, e há um motivo:** `cfgUsaServicos` chega por consulta, e no primeiro
+render ainda é `undefined` — a seção nem existe no DOM. Como `autoFocus` só age na montagem, o
+campo nasceria **sem foco justamente na loja que usa serviços**. Um efeito espera a resposta e move
+o foco, com duas guardas: **age uma vez só** e **só se o foco ainda estiver onde a montagem o
+deixou** (o `body` ou a Descrição ainda vazia) — efeito de foco que redispara é o defeito que já
+apagou a contagem digitada do Fechamento de Caixa.
+
+⚠️ **Ao editar, o foco continua na Descrição:** o tipo é imutável depois de criado (trigger da
+V085), o `<select>` está `disabled`, e focar campo desabilitado não funciona.
+
+## Particularidade 8: serviço não pede foto (2026-08-31)
+
+A galeria (`GaleriaImagensProduto`) **não é renderizada** quando `tipoItem === 'SERVICO'`. Foto de
+produto existe para o PDV, a etiqueta e a vitrine — nenhum dos três alcança mão de obra.
+
+⚠️ **Esconder a galeria não bastava.** Em produto **novo**, o upload acontece **depois** do POST,
+num laço sobre os arquivos escolhidos: quem selecionasse fotos e **só então** marcasse "Serviço"
+teria as fotos enviadas assim mesmo, com a galeria escondida e ninguém vendo. Por isso a troca de
+tipo **descarta os arquivos locais** (`trocarTipoItem`).
+
+⛔ **E a trava que vale é a do servidor (P4):** `ProdutoImagemService.adicionar` recusa foto em item
+`SERVICO` — sem isso o endpoint continuaria aceitando por qualquer outro caminho, e o produto
+ficaria com uma vitrine que nenhuma tela mostra.
+⭐ **Só o CRIAR é travado, nunca o desfazer:** `remover` e `reordenar` seguem livres, porque um
+serviço com foto de antes desta regra precisa poder se livrar dela — a mesma direção decidida
+quando o módulo de serviços passou a barrar a **criação** de OS, e não o cancelamento.
+
+Prende a regra `ProdutoImagemCrudTest.servicoNaoAceitaFoto`, com o **par positivo** (a mesma
+chamada numa mercadoria continua 201) e verificado por sabotagem: sem a trava, responde 201.
+
 ## Campos do formulário
 
-Tabela `produto` (V017). **Foco automático** no campo Descrição. Layout: "Produto ativo" em
+Tabela `produto` (V017). **Foco automático** em "O que é este item?" quando o módulo de serviços
+está ligado e o cadastro é novo; na Descrição nos demais casos (ver Particularidade 7). Layout:
+"Tipo de Item" é a primeira seção (só com o módulo ligado); "Produto ativo" em
 linha própria; Descrição + Marca na mesma linha; Referência + NCM (estreito) + Descrição do NCM
 na mesma linha; os 6 campos de Preços (Custo, % Venda, Venda, Início/Final da oferta, Preço de
 Oferta) numa única linha que se reajusta quando os opcionais estão ocultos; Dimensões e
@@ -218,6 +264,9 @@ Variantes (select de Grade + botão "＋ Gerenciar Grades", Peso Bruto/Líquido)
 | `peso_liquido` | Peso Líquido (kg) | peso (3 casas) | Configurável | ≤ peso bruto |
 | `id_grade` | Grade | select + "＋ Gerenciar Grades" | Não configurável (controlado por `cfg_geral`) | Só aparece se `cfg_usa_cor_grade`; FK `cfg_grade` |
 | `ativo` | Produto ativo | checkbox | — | Ativo ao criar por padrão |
+| `tipo_item` | O que é este item? | select | — | **Primeiro campo da digitação**; só existe com `cfg_usa_servicos`; imutável depois de criado (V085). Ver Particularidade 7 |
+| `duracao_minutos` | Duração (minutos) | inteiro | Não | Só com `tipo_item = SERVICO`; é **estimativa**, não agenda |
+| `perc_comissao_servico` | % Comissão do Serviço | percentual | Não | Só com `SERVICO`; em branco vale a comissão do funcionário |
 | *(N:N)* `produto_categoria` | Categorias | lista ordenável + seletor | Não | Ver Particularidade 1 |
 
 `marca`, `referencia`, `codigoNcm`, `pesoBruto`, `pesoLiquido`, `dataInicioOferta`,

@@ -60,6 +60,7 @@ public class ProdutoImagemService {
     @Transactional
     public List<ImagemResponse> adicionar(long idProduto, MultipartFile arquivo) {
         exigirProdutoExistente(idProduto);
+        exigirMercadoria(idProduto);
         long total = contarImagens(idProduto);
         if (total >= MAX_IMAGENS_POR_PRODUTO) {
             throw new IllegalArgumentException("Produto já tem o máximo de " + MAX_IMAGENS_POR_PRODUTO + " fotos.");
@@ -159,6 +160,30 @@ public class ProdutoImagemService {
                 .param(idProduto).query(Boolean.class).single());
         if (!existe) {
             throw new ResponseStatusException(NOT_FOUND, "Produto não encontrado.");
+        }
+    }
+
+    /**
+     * Serviço não tem foto (decisão do dono do produto, 2026-08-31): a galeria some da tela quando
+     * o item é {@code SERVICO}, e aqui é a trava que vale — P4, esconder no front nunca foi
+     * proteção. Sem ela, o mesmo endpoint continuaria aceitando a foto por qualquer outro caminho
+     * (um cliente da API, uma aba antiga aberta antes da mudança), e o produto ficaria com uma
+     * vitrine que nenhuma tela mostra.
+     *
+     * <p>⭐ <b>Só o CRIAR é travado, nunca o desfazer.</b> {@code remover} e {@code reordenar}
+     * continuam livres: um serviço que tenha foto de antes desta regra precisa poder se livrar
+     * dela. Travar o desfazer prenderia o dado para sempre — é a mesma direção decidida quando o
+     * módulo de serviços passou a barrar a criação de OS, e não o cancelamento.
+     */
+    private void exigirMercadoria(long idProduto) {
+        boolean servico = Boolean.TRUE.equals(jdbc.sql("""
+                        SELECT tipo_item = 'SERVICO' FROM produto
+                         WHERE id_tenant = plataforma.tenant_atual() AND id_produto = ?
+                        """)
+                .param(idProduto).query(Boolean.class).single());
+        if (servico) {
+            throw new IllegalArgumentException(
+                    "Serviço não tem foto — a galeria é só para mercadoria.");
         }
     }
 
