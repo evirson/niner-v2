@@ -22,6 +22,15 @@ niner:
   trial:
     dias: 60
     plano: Profissional
+  nfse:
+    # ⚠️ Este arquivo SOMBREIA o de produção: bloco novo em niner.* precisa existir nos DOIS,
+    # senão o valor chega nulo só nos testes (foi assim que a api-url do ML derrubou o contexto
+    # de um teste e de nenhum outro).
+    # "falso" é o que faz a suíte EXERCITAR a máquina da NFS-e inteira — numeração, montagem,
+    # assinatura, estados, cancelamento — em vez de pular o caminho fiscal como acontece hoje
+    # com emite_nfe=false na devolução ao fornecedor.
+    emissor: falso
+    versao-aplicativo: Nainer-teste
   limite-requisicao:
     # Desligado por padrão nos testes: a suíte faz dezenas de signups seguidos do mesmo "IP".
     # LimiteRequisicaoTest liga via @DynamicPropertySource com limite baixo.

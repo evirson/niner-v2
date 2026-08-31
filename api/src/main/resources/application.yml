@@ -66,6 +66,14 @@ niner:
     jdbc-url: ${NINER_BACKUP_JDBC_URL:}   # vazio = usa o endereço do próprio DataSource
     usuario: ${NINER_BACKUP_USUARIO:}
     senha: ${NINER_BACKUP_SENHA:}
+  nfse:                        # NFS-e Nacional (docs/MODULONFSE.md)
+    # ⛔ PADRÃO É "falso" ATÉ EM PRODUÇÃO, e é deliberado: emitir NFS-e é ato fiscal com CNPJ do
+    # lojista, e ligar por engano é pior do que não ligar. Quem emite de verdade declara
+    # NINER_NFSE_EMISSOR=nacional no ambiente, uma vez, conscientemente.
+    # ⚠️ Isso NÃO substitui o gate por empresa (fiscal_config_nfse.emite_nfse, F12) — são duas
+    # travas em níveis diferentes: esta é da instalação, aquela é da loja.
+    emissor: ${NINER_NFSE_EMISSOR:falso}
+    versao-aplicativo: ${NINER_NFSE_VER_APLIC:Nainer-1.0}
   # Endereço do app do lojista — usado no link de redefinição de senha enviado por e-mail.
   web-base-url: ${NINER_WEB_BASE_URL:http://localhost:5173}
   limite-requisicao:           # protege a superfície pública (única com escrita anônima).
