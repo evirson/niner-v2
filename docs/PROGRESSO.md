@@ -1,7 +1,7 @@
 # Progresso do Projeto — niner-v2
 
 Registro cronológico das decisões e entregas. Atualizar a cada marco relevante.
-**Última atualização:** 2026-08-31 (relatório de OS V103; arquivamento fiscal; PDF em aba oculta)
+**Última atualização:** 2026-08-31 (NFS-e Nacional emitida e cancelada em produção, V099–V103; relatório de OS V104; arquivamento fiscal; PDF em aba oculta)
 
 > 📄 **O que ainda falta está em `docs/PENDENCIAS.md`** (lista viva, agrupada por *de quem é a
 > bola*). Este arquivo conta a **história**; aquele conta o que está **aberto**. Ao fechar uma
@@ -11,6 +11,97 @@ Registro cronológico das decisões e entregas. Atualizar a cada marco relevante
 
 ## Estado atual
 
+> ## 📌 2026-08-31 — NFS-e NACIONAL: uma nota emitida e cancelada EM PRODUÇÃO pelo Nainer
+>
+> **Estado medido agora:** **59 telas do ERP + 3 públicas** · **1134 testes verdes, 0 falhas**
+> (5 erros pré-existentes do `ProdutoImagemCrudTest`, `libwebp` x86_64 num Mac arm64 — ambiente) ·
+> migrations até **V103** · `tsc -b` limpo · **13 commits**.
+>
+> ⚠️ **A suíte precisa de `TESTCONTAINERS_RYUK_DISABLED=true` nesta máquina** — o Testcontainers
+> não consegue montar o socket do Colima. É ambiente, não código.
+>
+> ### ⭐ O fato: a NFS-e 7308 existe
+>
+> Em 2026-08-31 o código deste repositório **emitiu e cancelou uma NFS-e de R$ 1,00 em produção**
+> contra o Sefin Nacional (nº 7308, Curitiba, CNPJ da Vetor). Não é simulação, e é o que separa
+> este módulo de um estudo.
+>
+> ### ⭐⭐ O achado que mudou o plano: o S0 já estava respondido
+>
+> O `MODULOSERVICOS.md` §7.1 tratava a prova de conceito da NFS-e como o gate mais caro do módulo,
+> com quase tudo marcado *não confirmado*. **Dois sistemas da própria Vetor já emitiam NFS-e
+> Nacional em produção**: `~/Documents/projetos/finance-v` (Java 25 + Spring Boot 4, a mesma stack)
+> e `~/Documents/projetos/workshop`. As cinco perguntas do S0 estavam respondidas por emissão real.
+>
+> ⚠️ **E a documentação deles erra em cinco pontos**, todos medidos e corrigidos em
+> `docs/MODULONFSE.md` §2.6/§2.7 — o mais grave: **a chave de acesso NÃO é derivável** do `Id` da
+> DPS (leva o `nNFSe` do Sefin e 9 dígitos aleatórios), então recuperar nota órfã só por
+> `GET /dps/{id}`. Quem implementar acreditando neles escreve um caminho que não existe.
+>
+> ### ⭐ Duas descobertas que definiram o desenho
+>
+> **A DPS não tem itens** (leiaute: `serv`, `cServ`, `xDescServ`, `vServ` são todos 1-1). Logo:
+> **uma NFS-e por código de serviço distinto da venda** — o que **quebra aqui** a invariante "uma
+> nota por venda" da V082. Venda de petshop com banho e tosa + consulta veterinária gera **duas**
+> notas.
+>
+> **O anexo oficial traz a regra de incidência do ISS por código** (271 PRESTADOR · 47 PRESTACAO ·
+> 10 TOMADOR · 5 ESPECIAL · 1 sem incidência). Isso **mata a pergunta** que o `MODULOSERVICOS.md`
+> §5.4 tinha dado por perdida (*"não consegui listar as 25 exceções do art. 3º e não vou
+> inventá-las"*): o local de incidência é derivado do código, e o lojista não responde.
+>
+> ### O autoatendimento, que era o pedido dele
+>
+> ⭐ `GET /parametrizacao/{cMun}/{cServ}/{competência}/aliquota` no **ADN** devolve a alíquota do
+> ISS do município — nem o `finance-v` nem o `workshop` usam essa API. Em vez de o suporte procurar
+> na lei municipal, **o sistema pergunta à fonte e preenche**. Medido: Curitiba 5%, Campo Largo 3%,
+> e São Paulo/Rio não publicaram (a tela degrada e pede ao lojista — nunca bloqueia).
+>
+> ⭐ E `/convenio` responde a **DS8 por município**: Salvador tem `aderenteAmbienteNacional=1` e
+> `aderenteEmissorNacional=0`. A pergunta que o estudo não conseguiu fechar em número agregado é
+> respondida por cidade, pela fonte oficial.
+>
+> ⛔ **A fronteira real do "sem suporte"** é a **alíquota efetiva do Simples**: para ME/EPP o Sefin
+> proíbe `indTotTrib` (`E0712`) e o schema exige `totTrib` (`E1235`) — não existe emissão de
+> optante sem esse percentual, que é do contador. Está como pré-requisito na configuração (F11).
+>
+> ### O que entrou
+>
+> **Banco:** V099 (lista nacional, 334 códigos derivados do anexo oficial + o atalho por ramo —
+> petshop vê 5 códigos, não 334) · V100 (tributação do serviço) · V101 (configuração + parâmetros
+> por município) · V102 (documento, itens, eventos, numeração) · V103 (telas no RBAC).
+>
+> **API:** 14 classes em `fiscal/nfse/`, com o **`EmissorFalso` como padrão** — é o que faz a
+> máquina inteira rodar na suíte, ao contrário do fiscal de mercadoria, que roda com
+> `emite_nfe = false` e por isso deixou dois defeitos passarem por 911 testes verdes.
+>
+> **Front:** Configuração da NFS-e com **assistente** (diz o que falta e o link de onde resolver) ·
+> bloco fiscal do serviço no Produto · aba de NFS-e em Documentos Fiscais.
+>
+> **Testes:** 28 unitários com **payloads reais do Sefin** + 7 de integração.
+>
+> ### ⚠️ O que NÃO está pronto — o lote não fechou
+>
+> Emitir pelo PDV · Recibo de Serviço · DANFSe · Conformidade Fiscal e exportação em ZIP ·
+> `AjudaDaTela` da aba. **O deploy está parado por decisão dele até o lote completar.**
+> Roteiro completo em `docs/HANDOFF-NFSE.md`.
+>
+> ### ⚠️ Três erros meus, repetidos, registrados para não voltarem
+>
+> 1. **Classes CSS inventadas em três telas seguidas.** O `tsc` passa limpo e a tela sai quebrada —
+>    ele não checa nome de classe. Conferir o `styles.css` **antes** de escrever o JSX.
+> 2. **Specs de tela escritas DEPOIS do código.** Neste projeto a spec precede a implementação;
+>    aqui a ordem inverteu, e as duas specs abrem admitindo isso.
+> 3. **Dois escorregões de fuso** (`LocalDate.now()` e `OffsetDateTime.now().getOffset()`). O
+>    `ComparacaoDeDataNoFusoCertoTest` pegou um, eu peguei o outro — o `TZ` do container só existe
+>    em produção e não reproduz em dev.
+>
+> ### ⚠️ Pendência com o dono do produto
+>
+> A emissão de teste consumiu o `nDPS 2001000` no CNPJ da Vetor, série 1 — a mesma que o
+> `finance-v` usa. A sequência deles precisa ser empurrada no servidor:
+> `SELECT setval('nfse_rps_vetor_a_seq', 2001000, true);`
+>
 > ## 📌 2026-08-31 (3) — RELATÓRIO DE ORDENS DE SERVIÇO, E O ARQUIVAMENTO QUE SE TRAVAVA SOZINHO
 >
 > Três entregas do dia, todas da lista "bola minha".
@@ -60,7 +151,7 @@ Registro cronológico das decisões e entregas. Atualizar a cada marco relevante
 >
 > ### Relatório de Ordens de Serviço (pendência #56)
 >
-> `/relatorio-ordens-servico`, V103, em Relatórios › Faturamento com `moduloServicos: true`. Spec
+> `/relatorio-ordens-servico`, V104, em Relatórios › Faturamento com `moduloServicos: true`. Spec
 > escrita **antes** do código: `docs/telas/relatorio-ordem-servico.md`.
 >
 > Três decisões, cada uma presa por um teste sabotado depois de passar:

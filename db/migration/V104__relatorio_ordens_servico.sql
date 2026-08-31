@@ -1,4 +1,4 @@
--- V103 — Relatório de Ordens de Serviço no catálogo de telas (RBAC).
+-- V104 — Relatório de Ordens de Serviço no catálogo de telas (RBAC).
 --
 -- Fecha a lacuna registrada em docs/PENDENCIAS.md #56 ("não há relatório de OS"). Spec da tela em
 -- docs/telas/relatorio-ordem-servico.md.

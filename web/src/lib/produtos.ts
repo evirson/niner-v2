@@ -48,6 +48,14 @@ export interface Produto {
   tipoItem: TipoItem
   duracaoMinutos: number | null
   percComissaoServico: number | null
+  /** Bloco fiscal do serviço (V100) — cTribNac e o que ele governa. */
+  codigoTributacaoNacional: string | null
+  codigoTributacaoMunicipal: string | null
+  aliquotaIss: number | null
+  issRetidoPadrao: boolean | null
+  /** Vêm por JOIN da lista nacional: a tela mostra, o lojista não escolhe. */
+  descricaoServicoLc116: string | null
+  localIncidencia: string | null
   nomePerfilFiscal: string | null
   criadoEm: string
   atualizadoEm: string
@@ -81,6 +89,13 @@ export interface ProdutoFormState {
   tipoItem: TipoItem
   duracaoMinutos: string
   percComissaoServico: string
+  codigoTributacaoNacional: string
+  codigoTributacaoMunicipal: string
+  aliquotaIss: string
+  issRetidoPadrao: boolean
+  /** Só para exibir o que foi escolhido — não vai no request. */
+  descricaoServicoLc116: string | null
+  localIncidencia: string | null
 }
 
 export const PRODUTO_VAZIO: ProdutoFormState = {
@@ -104,6 +119,12 @@ export const PRODUTO_VAZIO: ProdutoFormState = {
   tipoItem: 'MERCADORIA',
   duracaoMinutos: '',
   percComissaoServico: '',
+  codigoTributacaoNacional: '',
+  codigoTributacaoMunicipal: '',
+  aliquotaIss: '',
+  issRetidoPadrao: false,
+  descricaoServicoLc116: null,
+  localIncidencia: null,
 }
 
 /** "dd/mm/aaaa" (campo de texto, ver masks.ts#mascararData) -> ISO com hora, para a API. */
@@ -134,6 +155,12 @@ export function paraFormulario(p: Produto): ProdutoFormState {
     tipoItem: p.tipoItem ?? 'MERCADORIA',
     duracaoMinutos: p.duracaoMinutos == null ? '' : String(p.duracaoMinutos),
     percComissaoServico: p.percComissaoServico == null ? '' : formatarPercentual(p.percComissaoServico),
+    codigoTributacaoNacional: p.codigoTributacaoNacional ?? '',
+    codigoTributacaoMunicipal: p.codigoTributacaoMunicipal ?? '',
+    aliquotaIss: p.aliquotaIss == null ? '' : formatarPercentual(p.aliquotaIss),
+    issRetidoPadrao: p.issRetidoPadrao ?? false,
+    descricaoServicoLc116: p.descricaoServicoLc116,
+    localIncidencia: p.localIncidencia,
   }
 }
 
@@ -178,6 +205,20 @@ export function paraRequisicao(f: ProdutoFormState) {
     percComissaoServico: f.tipoItem === 'SERVICO' && f.percComissaoServico.trim()
       ? desmascararPercentual(f.percComissaoServico)
       : null,
+    // ⚠️ Vazio vira null, não "": codigo_tributacao_nacional tem FK, e "" passaria como valor de
+    // verdade e estouraria com erro de integridade traduzido para "registro em uso por outro
+    // cadastro" — mensagem sobre exclusão para quem estava salvando.
+    codigoTributacaoNacional:
+      f.tipoItem === 'SERVICO' && f.codigoTributacaoNacional.trim()
+        ? f.codigoTributacaoNacional.trim()
+        : null,
+    codigoTributacaoMunicipal:
+      f.tipoItem === 'SERVICO' && f.codigoTributacaoMunicipal.trim()
+        ? f.codigoTributacaoMunicipal.trim()
+        : null,
+    aliquotaIss:
+      f.tipoItem === 'SERVICO' && f.aliquotaIss.trim() ? desmascararPercentual(f.aliquotaIss) : null,
+    issRetidoPadrao: f.tipoItem === 'SERVICO' ? f.issRetidoPadrao : false,
   }
 }
 

@@ -79,6 +79,7 @@ import EtiquetaEmissaoForm from './pages/etiquetaemissao/EtiquetaEmissaoForm'
 import ImportacaoTabelaPage from './pages/importacao/ImportacaoTabelaPage'
 import ExportacaoDadosPage from './pages/exportacao/ExportacaoDadosPage'
 import FiscalConfiguracaoForm from './pages/fiscal/FiscalConfiguracaoForm'
+import NfseConfiguracaoForm from './pages/fiscal/NfseConfiguracaoForm'
 import PerfilFiscalLista from './pages/fiscal/PerfilFiscalLista'
 import PerfilFiscalForm from './pages/fiscal/PerfilFiscalForm'
 import FiscalCertificadoLista from './pages/fiscal/FiscalCertificadoLista'
@@ -239,6 +240,7 @@ export default function App() {
           <Route path="/etiqueta-configuracao/:id/visualizar" element={<EtiquetaConfigForm somenteLeitura />} />
           <Route path="/etiqueta-configuracao/:id" element={<EtiquetaConfigForm />} />
           <Route path="/fiscal/configuracao" element={<FiscalConfiguracaoForm />} />
+          <Route path="/fiscal/nfse" element={<NfseConfiguracaoForm />} />
           <Route path="/fiscal/perfis" element={<PerfilFiscalLista />} />
           <Route path="/fiscal/perfis/novo" element={<PerfilFiscalForm />} />
           <Route path="/fiscal/perfis/:id/visualizar" element={<PerfilFiscalForm somenteLeitura />} />

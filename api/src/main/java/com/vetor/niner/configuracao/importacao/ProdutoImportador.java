@@ -259,9 +259,11 @@ public class ProdutoImportador implements ImportadorDeTabela {
                 idGrade, true, List.of(), idPerfilFiscal,
                 // A planilha de importação é de MERCADORIA — serviço não tem estoque inicial nem
                 // código de barras, que é o que esta carga existe para trazer. Quando o bloco S5
-                // criar a planilha de serviços, ela terá colunas próprias (LC 116, ISS), não
-                // colunas a mais aqui. Nulo resolve para MERCADORIA em tipoItemValidado().
-                null, null, null);
+                // criar a planilha de serviços, ela terá colunas próprias (LC 116, ISS), não uma
+                // coluna a mais aqui. Nulo resolve para MERCADORIA em tipoItemValidado().
+                null, null, null,
+                // Bloco fiscal de serviço (V100): nulo aqui pelo mesmo motivo acima.
+                null, null, null, null);
         long idProduto = produtoService.criar(req).idProduto();
         gravarCodigoImportacaoSeInformado(idProduto, codigoProduto);
         return true;

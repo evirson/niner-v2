@@ -62,7 +62,14 @@ public final class ProdutoDtos {
              * Comissão <b>deste serviço</b>, que sobrepõe a do funcionário quando preenchida (DS5).
              * Nulo = usa a do funcionário, como hoje.
              */
-            @DecimalMin("0") @DecimalMax("100") BigDecimal percComissaoServico) {
+            @DecimalMin("0") @DecimalMax("100") BigDecimal percComissaoServico,
+            /** cTribNac — o código deste serviço na Lista Nacional (V099). */
+            @Size(max = 6) String codigoTributacaoNacional,
+            /** cTribMun — 3 dígitos, só quando a prefeitura exige. Quase sempre nulo. */
+            @Size(max = 3) String codigoTributacaoMunicipal,
+            /** ⚠️ Teto de 5% é a LC 116 art. 8º-A, não palpite; piso 0 cobre imunidade e ISS fixo. */
+            @DecimalMin("0") @DecimalMax("5") BigDecimal aliquotaIss,
+            Boolean issRetidoPadrao) {
     }
 
     public record CategoriaSelecionada(long idCategoria, String nomeCategoria, int indice) {
@@ -87,6 +94,13 @@ public final class ProdutoDtos {
             String tipoItem,
             Integer duracaoMinutos,
             BigDecimal percComissaoServico,
+            String codigoTributacaoNacional,
+            String codigoTributacaoMunicipal,
+            BigDecimal aliquotaIss,
+            Boolean issRetidoPadrao,
+            /** Vem por JOIN de cfg_servico_lc116 — a tela mostra, o lojista não escolhe. */
+            String descricaoServicoLc116,
+            String localIncidencia,
             boolean ativo,
             List<CategoriaSelecionada> categorias,
             List<ProdutoImagemDtos.ImagemResponse> imagens,

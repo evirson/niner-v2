@@ -7,9 +7,15 @@
 > ⚠️ **É retrato do CÓDIGO, não da intenção.** Se divergir de outra documentação, o código
 > está certo e a outra doc envelheceu.
 >
-> **Contagem em 2026-08-29 (medida deste arquivo, não estimada):** **57 telas do ERP em uso** +
-> **3 públicas** (entrada, sem login) + **6 em Implementações Futuras** = 66 linhas. A 57ª é a
-> **Sangria de Caixa** (V094, 2026-08-29).
+> **Contagem em 2026-08-31 (medida deste arquivo, não estimada):** **58 telas do ERP em uso** +
+> **3 públicas** (entrada, sem login) + **6 em Implementações Futuras** = 67 linhas. A 58ª é a
+> **Configuração da NFS-e** (V101/V103, 2026-08-31).
+>
+> ⚠️ **A NFS-e acrescentou uma tela e meia, não duas.** A *Configuração da NFS-e* é tela própria
+> com rota e item de menu; a listagem de NFS-e é uma **aba dentro de Documentos Fiscais**, sem rota
+> própria — mas tem chave em `cfg_tela` (`fiscal.nfse`) porque o RBAC governa emitir e cancelar.
+> Quem contar por `cfg_tela` acha 59; quem contar por rota acha 58. As duas contagens estão certas,
+> medem coisas diferentes.
 >
 > ⚠️ **Declare sempre a base ao citar o número.** Até hoje três documentos traziam contagens
 > diferentes (57, 58 e 60) porque cada um incluía coisas distintas — as públicas, as futuras, ou
@@ -119,6 +125,8 @@
 | Contingência Fiscal | `/fiscal/contingencia` | `docs/MODULOFISCAL.md §9.7` |
 | Documentos Fiscais | `/fiscal/documentos` | `docs/MODULOFISCAL.md §12` |
 | Exportação de XML em Lote | `/fiscal/exportacao-xml` | `docs/telas/exportacao-xml-lote.md` |
+| Configuração da NFS-e | `/fiscal/nfse` | `docs/telas/nfse-configuracao.md` |
+| NFS-e (aba em Documentos Fiscais) | — (aba, sem rota) | `docs/telas/nfse-emissao.md` |
 | Inutilização de Numeração | `/fiscal/inutilizacao` | `docs/MODULOFISCAL.md §9.8` |
 
 ## Relatórios

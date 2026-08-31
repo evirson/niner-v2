@@ -1098,7 +1098,7 @@ Levantadas conferindo o código em 2026-08-28, depois de fechar o item 53:
   que é a base da comissão; um CSV por cabeçalho esconderia as duas coisas. A tela não precisou de
   nada — ela já lista as tabelas que a API oferece.
 - ✅ **Relatório de OS — FEITO em 2026-08-31, e CONFERIDO NO NAVEGADOR.**
-  `/relatorio-ordens-servico` (V103), em Relatórios › Faturamento, com `moduloServicos: true`
+  `/relatorio-ordens-servico` (V104), em Relatórios › Faturamento, com `moduloServicos: true`
   (some para quem não vende serviço). Spec em `docs/telas/relatorio-ordem-servico.md`.
 
   Três decisões, cada uma presa por um teste **sabotado** depois de passar: **dois eixos de data**
