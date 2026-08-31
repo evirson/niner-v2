@@ -1,7 +1,7 @@
 # Progresso do Projeto — niner-v2
 
 Registro cronológico das decisões e entregas. Atualizar a cada marco relevante.
-**Última atualização:** 2026-08-30 (oito rodadas de auditoria, V098, 1099 testes)
+**Última atualização:** 2026-08-31 (módulo NFS-e Nacional, V099–V102)
 
 > 📄 **O que ainda falta está em `docs/PENDENCIAS.md`** (lista viva, agrupada por *de quem é a
 > bola*). Este arquivo conta a **história**; aquele conta o que está **aberto**. Ao fechar uma
@@ -10,6 +10,172 @@ Registro cronológico das decisões e entregas. Atualizar a cada marco relevante
 ---
 
 ## Estado atual
+
+> ## 📌 2026-08-31 (2) — A "BOLA MINHA" DAS PENDÊNCIAS: 24, 25, 48 fechadas, 19 medida, 22 devolvida a ele
+>
+> **Estado medido no fechamento:** **1141 testes, 0 falhas, 0 erros, 0 pulados**
+> (`./mvnw clean test`, exit 0) — eram **1127** ao começar o dia, e os **14 novos** são 9 de
+> isolamento entre tenants, 2 do guard de exclusão do Tipo de Carteira, 2 de privilégio de
+> `niner_app` e 1 da partição da exportação acima do teto. Migrations em **V102**, `tsc -b` limpo.
+>
+> Pedido dele, depois de mandar acertar as três divergências de documentação: *"e após ajuste estas
+> pendências? Minha bola: exportação de XML acima de 2.000 notas, SVC da NF-e 55, specs de Efetivar
+> Balanço e Tipo de Carteira, db/migration/README.md parado na V035, cobertura de teste de
+> isolamento."*
+>
+> ### ⭐ O achado do dia veio de escrever documentação, não de procurar bug
+>
+> Ao escrever a spec do **Tipo de Carteira** (pendência 24), a seção "guard de exclusão" precisava
+> listar as FKs. Conferindo no schema em vez de confiar no serviço, apareceu que ele conhecia
+> **2 das 5**: faltavam `caixa_mestre`, `caixa_fechamento_conferencia` e
+> `documento_fiscal_pagamento`. Sem elas o `DELETE` ia ao banco, violava a restrição, e o handler
+> global respondia o 409 genérico *"Registro em uso por outro cadastro"* — **sem dizer onde e sem
+> caminho de volta**, porque `tipo_carteira` não tem coluna `ativo` e a tela não oferece inativar.
+>
+> ⛔ **O caso mais provável era o mais banal:** a carteira **DINHEIRO** é a carteira de *abertura*
+> do caixa, então bastava a loja ter aberto o caixa uma vez — sem nenhum lançamento — para ela ficar
+> presa. Hoje o guard cobre as cinco e a mensagem **nomeia o vínculo**.
+>
+> ⚠️ **Por que o teste antigo não pegava:** ele criava o caixa **com** lançamento, então passava
+> pelo guard e pela FK ao mesmo tempo, sem distinguir os dois. Os dois testes novos usam **só** a
+> abertura e **só** a conferência, e foram verificados **sabotando a correção** — sem ela, reprovam
+> com *Expected: a string containing "abertura de caixa"*.
+>
+> ### 48 — cobertura de isolamento: o item media pelo NOME do método, e por isso exagerava
+>
+> Ele dizia *"19 testes para ~112 classes"* e listava transferência, pesquisa de vendas e contas a
+> pagar como descobertas. Medindo por **comportamento** (dois tokens no mesmo teste) em vez de por
+> nome: **44 dos 117 arquivos** já exercitavam dois tenants — os três citados inclusive. Catálogo
+> medido pelo nome erra, e é o mesmo defeito do `cfg_tela` da V076.
+>
+> **Entraram 8 testes**, priorizados por dinheiro, identidade e cadastro central: PDV (ler produto
+> alheio **pelo SKU exato**, que vem de sequência global e por isso é adivinhável), Cliente, Usuário
+> (⛔ o pior caso: **trocar a senha** do usuário do vizinho), Produto, Fornecedor, Funcionário, Tipo
+> de Carteira, Sangria (⭐ aqui o vetor é **escrever**: o caixa vem do servidor, mas a conta de
+> destino vem do corpo) e Vale-mercadoria. Todos testam **o par** — o dono enxerga, o vizinho não.
+>
+> ⭐ **Provado por sabotagem:** removido o `AND id_tenant = plataforma.tenant_atual()` do
+> `ClienteService.buscar`, o teste reprova com `Status expected:<404> but was:<200>` — o vizinho
+> passa a ler o cliente. (E lembra por que o filtro explícito existe: em teste o RLS não protege,
+> porque o Testcontainers conecta como superusuário.)
+>
+> ⚠️ **Uma armadilha reencontrada na própria correção:** a primeira versão do teste da Sangria
+> **passava sozinha e reprovava na suíte**. O `count(*)` de conferência não tinha `id_tenant`
+> explícito, e como a conexão de inspeção é do superusuário, ele media o **banco inteiro** —
+> contando a sangria legítima de outro teste da mesma classe. Asserção também precisa do filtro.
+>
+> `PrivilegiosNinerAppTest` foi de 13 para 15 casos, cobrindo os dois `REVOKE` órfãos:
+> `diretorio_login` (V071 — só a trigger escreve, senão o login entregaria a loja de outra pessoa) e
+> `codigo_login` (V079 — sem `DELETE`, porque apagar o desafio zeraria o teto de tentativas do
+> código de 4 dígitos).
+>
+> ### 19 — a partição da exportação rodou acima do teto pela primeira vez
+>
+> Teste novo com **2.001 documentos** (teto 2.000): duas partes, com o mesmo `ateIdDocumento`
+> congelado, provando o que a aritmética não provava — **2.000 + 1, sem repetição e sem buraco**, as
+> duas cobrindo o conjunto inteiro, com as pontas do período em partes diferentes.
+>
+> ⚠️ **Declarado como NÃO medido:** o consumo de memória de um ZIP com 2.000 XMLs reais. Só duas
+> notas têm XML no bucket — gravar 2.001 objetos deixaria a suíte lenta sem medir a partição, que
+> era o que estava em dúvida.
+>
+> ⚠️ E o teste pegou um defeito de método meu: extrair as chaves com regex sobre o CSV inteiro conta
+> errado, porque na linha de um documento arquivado a chave aparece **duas vezes** (a coluna e o
+> caminho no ZIP). A leitura é por linha.
+>
+> ### 22 — SVC não é (só) bola minha, e o item escondia isso
+>
+> A pendência dizia *"não implementada"* como trabalho meu. Existe **decisão registrada dele, de
+> 2026-08-24**, escrita em `EmissaoNfceService`: se a SEFAZ não responder, a venda é registrada e a
+> nota fica em `NAO_EMITIDO` para reprocessar. Ou seja, **há comportamento definido**; SVC é
+> ampliação.
+>
+> Dimensionei no schema e no código, e está no item: migration nova (a PK de `cfg_uf_autorizador` é
+> `(uf, modelo, ambiente)` — **sem dimensão de tipo de emissão**, e SVC-AN/SVC-RS são autorizadores
+> diferentes para a mesma UF), o mapa UF→SVC carregado **da fonte**, `tpEmis` 6/7 que **muda a chave
+> de acesso e o DV**, máquina de estados própria para a 55 e três chamadores.
+> ⛔ **Não implementei às cegas:** XML fiscal só se valida transmitindo, e este caminho só é
+> exercitado quando a SEFAZ da UF já caiu — o pior momento para descobrir um defeito. A pergunta
+> voltou para ele.
+>
+> ### 25 — o índice de migrations saiu da V035 e foi até a V102
+>
+> As 67 que faltavam entraram com uma linha cada, reconstruídas do **cabeçalho de cada `.sql`** e
+> com as datas do `git log --diff-filter=A`. O índice marca as **V063–V070 como desfeitas pela
+> V084** e fecha com o aviso dos **cinco backfills que saíram vazios** sob `FORCE RLS`.
+>
+> ### ⛔ O limite desta sessão
+>
+> Tudo verificado por suíte, sabotagem e `psql`/`grep`. **Nenhuma tela foi aberta no navegador** —
+> as duas specs novas descrevem telas que eu li no código, não que eu vi funcionando.
+
+
+> ## 📌 2026-08-31 — O MÓDULO NFS-e NACIONAL (V099–V102), e o que dele ainda não está ligado
+>
+> **Estado medido nesta data, nesta máquina:** **1127 testes, 0 falhas, 0 erros, 0 pulados**
+> (`./mvnw clean test`, exit 0, linha `Tests run:` do Maven) · migrations até **V102** · `tsc -b`
+> limpo (exit 0) · 57 telas do ERP + 3 públicas (`docs/TELAS.md`).
+>
+> ⚠️ **Este dia foi trabalhado em OUTRA sessão e noutra máquina** — os commits registram *"5 erros
+> pré-existentes do `ProdutoImagemCrudTest`, libwebp x86_64 num Mac arm64"*. Aqui esse artefato
+> **não** aparece: a suíte fecha com 0 erros. Vale saber antes de tratar diferença de contagem
+> entre sessões como regressão.
+>
+> ### ⭐ O S0 fechou: uma NFS-e foi emitida E CANCELADA em produção pelo código do Nainer
+>
+> Nota de **R$ 1,00** em Curitiba, número **7308** na prefeitura, cancelada na mesma execução
+> (`api/scripts/EmitirNfseTeste.java`, autorizado pelo dono do produto). ⭐ **A verificação não foi o
+> HTTP 201 do cancelamento — foi reenviar o mesmo evento e receber `E0840`** (*"o evento de
+> Cancelamento já está vinculado"*), que é o que prova que ele **registrou**. Mesmo princípio do
+> teste de sabotagem: validação que confere o próprio resultado não prova nada.
+>
+> Três correções de fato que a medição impôs, e que contradizem os projetos de referência da Vetor:
+> - ⛔ **A chave da NFS-e NÃO é derivável.** O `IMPLEMENTACAO_FINANCE_V.md` afirma que sim; medido,
+>   ela carrega o `nNFSe` (que só existe depois de autorizada) e **9 dígitos aleatórios**.
+>   Consequência direta: recuperação de nota órfã **só por consulta** (`GET /dps/{id}`).
+> - ⚠️ **`pTotTribSN` é incontornável para o Simples** — o SEFIN proíbe `indTotTrib` (`E0712`) e o
+>   schema exige `totTrib` (`E1235`). A alíquota efetiva do contador virou **pré-requisito de
+>   emissão**, não campo opcional.
+> - ⚠️ **O contêiner de erro muda de nome entre emissão e evento** (`erros[]`/`Codigo` × `erro[]`/
+>   `codigo`); o parser cobre as quatro combinações.
+>
+> ### O que entrou no banco e no código
+>
+> **V099** lista nacional de serviços (334 códigos + regra de incidência, carregada do anexo
+> oficial) · **V100** o bloco fiscal em `produto_servico` (⭐ sem `local_incidencia`: ele passou a
+> ser **derivado** por JOIN da V099, então o lojista não responde e não há duas verdades) ·
+> **V101** `fiscal_config_nfse` + `cfg_municipio_nfse` · **V102** `nfse_documento`/`_item`/
+> `_evento`/`nfse_numeracao`.
+>
+> ⭐ **A DPS não tem itens** — medido no leiaute oficial (`serv 1-1`, `cServ 1-1`, `vServ 1-1`).
+> Uma venda de petshop com banho e tosa mais consulta veterinária **não cabe numa NFS-e só**: o
+> desenho é **uma NFS-e por código de serviço distinto da venda**, o que **quebra aqui** a
+> invariante "uma nota por venda" da V082. É do layout, não escolha nossa.
+>
+> No código, 15 classes em `fiscal/nfse/`: `IdDps`, `MontadorXmlDps`, `AssinadorXmlDps` (⚠️
+> SHA-256 + C14N **exclusiva**, contra SHA-1 + inclusiva da NF-e — trocar devolve `E0714`),
+> `EmpacotadorDps`, `NfseTransporte` (mTLS, HTTP/1.1 forçado, um `SSLContext` por certificado),
+> `RespostaSefin`, `EmissorDeNfse`/`EmissorNacionalNfse`/`EmissorFalso`, `NfseNumeracaoService`,
+> `VendaNfseAssembler`, `NfseDocumentoRepositorio`, `NfseEmissaoService`,
+> `ParametrosMunicipaisClient` e `MunicipioNfseService`.
+>
+> ### ⛔ E o que NÃO está ligado — medido ao conferir o dia, não suposto
+>
+> | O que | Medida |
+> |---|---|
+> | **Nenhuma venda emite NFS-e** | não há `@RestController` no pacote, e `grep -rln "nfse\|Nfse" api/src/main/java --include=*.java \| grep -v /nfse/` devolve **zero**: nada fora do próprio pacote o referencia |
+> | **A máquina de emissão não tem um único teste** | `grep -rl "EmissorFalso\|NfseEmissaoService\|nfse_documento" api/src/test/` devolve **vazio**. Os 28 testes cobrem as três classes puras (`IdDps`, `MontadorXmlDps`, `RespostaSefin`) |
+> | **O `ParametrosMunicipaisClient` é inerte** | ninguém o chama; `registrarConvenio`/`registrarEnvioDeIm` também não. A alíquota do ISS fica com **dois donos sem conciliação** |
+>
+> ⚠️ O `application.yml` de teste **afirma** que o `EmissorFalso` "faz a suíte exercitar a máquina
+> inteira" — promessa escrita e ainda não cumprida. É o padrão *"mecanismo pronto e desligado nas
+> duas pontas"* que este repositório já catalogou no outbox do marketplace, e o `EmissorFalso`
+> torna o conserto barato: **não depende de credencial nenhuma**. Virou `docs/PENDENCIAS.md`
+> **#72–#74**.
+>
+> ✅ **E uma suspeita minha que caiu na conferência**, registrada para ninguém "consertar" de novo:
+> `nfse_documento_item` **é** gravado (`DELETE`+`INSERT` no repositório). A auditoria P3 está de pé.
+
 
 > ## 📌 2026-08-30 — OITO RODADAS DE AUDITORIA, e o que elas provaram sobre as minhas correções
 >

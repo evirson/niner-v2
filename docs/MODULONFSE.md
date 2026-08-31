@@ -1,11 +1,17 @@
 # NFS-e Nacional — escopo dos blocos S5–S7 e a configuração que o lojista faz sozinho
 
-**Produto:** Nainer (Vetor Sistemas) · **Banco:** `niner_db` · **Versão do documento:** 1.0
+**Produto:** Nainer (Vetor Sistemas) · **Banco:** `niner_db` · **Versão do documento:** 1.1
 **Data:** 2026-08-29, atualizado em 2026-08-31 · **Status:** ⭐ **S0 CONCLUÍDO — uma NFS-e foi
-emitida e cancelada em produção pelo código do Nainer** (§2.7). A **V099** (lista nacional de
-serviços + atalho por ramo) está aplicada e conferida no banco. Da §4 em diante continua sendo
-escopo: nada disso nasce de uma venda ainda — o que existe é um script (`api/scripts/`), não o
-produto.
+emitida e cancelada em produção pelo código do Nainer** (§2.7). **S5 pronto** (V099/V100), **S5.5
+pela metade** (V101 + `ParametrosMunicipaisClient`, sem tela) e **S6 com o motor construído**
+(V102 + 15 classes em `fiscal/nfse/`).
+
+⛔ **Mas nenhuma venda emite NFS-e ainda, e o motivo não é sutil:** não existe **controller**, não
+existe **tela**, e **nenhuma classe fora de `fiscal/nfse/` referencia o módulo** — medido com
+`grep -rln "nfse\|Nfse" api/src/main/java --include=*.java | grep -v /nfse/`, que devolve **zero**.
+O motor está inteiro e **desconectado nas duas pontas**, que é exatamente o padrão que este
+repositório já pagou para aprender (o outbox do marketplace, `CLAUDE.md`: *"antes de 'ligar' um
+mecanismo pronto, meça se ele está ligado nas duas pontas"*).
 
 > **Relação com os outros documentos.** O estudo que decidiu *se* o Nainer emite NFS-e é
 > `docs/MODULOSERVICOS.md` §5 (DS7–DS10, decididas em 2026-08-28). Ele continua valendo como
@@ -26,9 +32,33 @@ produto.
 | **S3** Quem executou + comissão congelada | ✅ pronto | `V088`, `V089`, `V090` |
 | **S4** Ordem de Serviço | ✅ pronto | `V087`, `V092`, `vendas/ordemservico/`, `docs/telas/ordem-servico.md` |
 | **S0** Prova de conceito da NFS-e | ✅ **concluído em 2026-08-31** — NFS-e emitida **e cancelada** em produção | §2.7 · `api/scripts/EmitirNfseTeste.java` |
-| **S5** Cadastro tributário de serviço | ⚠️ **começou** — `cfg_servico_lc116` (334 códigos) e `cfg_ramo_servico_lc116` aplicadas na **V099**; falta o bloco fiscal em `produto_servico` e a tela | `V099`, `db/scripts/gerar_lista_nacional_servicos.py` |
-| **S6** Emissão | ⛔ **zero** | `grep -ril nfse api/src` devolve **um** arquivo, e é um XSD de MDF-e sem relação |
-| **S7** Ciclo de vida (cancelamento, exportação, aba) | ⛔ **zero** | — |
+| **S5** Cadastro tributário de serviço | ✅ **pronto no banco** (2026-08-31) — `cfg_servico_lc116` (334 códigos) + `cfg_ramo_servico_lc116` (V099) e o bloco fiscal em `produto_servico` (V100). ⚠️ **A tela de Produtos ainda não expõe nenhum desses campos** | `V099`, `V100`, `db/scripts/gerar_lista_nacional_servicos.py` |
+| **S5.5** Configuração autoatendida | ⚠️ **metade** — `fiscal_config_nfse` + `cfg_municipio_nfse` (V101) e `ParametrosMunicipaisClient`/`MunicipioNfseService` existem. ⛔ Faltam a **tela**, o assistente, o teste de conexão e a descoberta do `enviar_im` | `V101`, `fiscal/nfse/ParametrosMunicipaisClient.java` |
+| **S6** Emissão | ⚠️ **motor construído, não ligado** — V102 + `IdDps`, `MontadorXmlDps`, `AssinadorXmlDps`, `EmpacotadorDps`, `NfseTransporte`, `RespostaSefin`, `EmissorDeNfse`/`EmissorNacionalNfse`/`EmissorFalso`, `NfseNumeracaoService`, `VendaNfseAssembler`, `NfseDocumentoRepositorio`, `NfseEmissaoService`. ⛔ **Sem controller, sem tela e sem chamador**: o PDV não emite | `V102`, `api/src/main/java/com/vetor/niner/fiscal/nfse/` |
+| **S7** Ciclo de vida (cancelamento, exportação, aba) | ⚠️ **só o schema e o método** — `nfse_documento_evento` (V102) e o cancelamento no emissor; sem tela, sem prazo por município preenchido, e o ZIP do contador **não** leva NFS-e | `V102` |
+
+⚠️ **Três lacunas de verificação que a tabela acima não mostra, e que valem mais que ela** (medidas
+em 2026-08-31, ao conferir o dia):
+
+1. ⛔ **O `EmissorFalso` foi construído para a suíte exercitar a máquina inteira — e nenhum teste o
+   usa.** `grep -rl "EmissorFalso\|NfseEmissaoService\|nfse_documento" api/src/test/` devolve
+   **vazio**. Os 28 testes do S6 cobrem `IdDps`, `MontadorXmlDps` e `RespostaSefin` (as três classes
+   puras); **numeração, máquina de estados, gravação, recuperação de nota órfã e cancelamento não
+   têm um único teste**. A promessa está escrita no `application.yml` de teste e ainda não foi
+   cumprida — é a mesma forma de defeito que o próprio comentário lá cita.
+2. ⛔ **O `ParametrosMunicipaisClient` não é chamado por ninguém** — `grep` fora do próprio arquivo
+   devolve só uma menção em javadoc. Ou seja: a peça que o §5 chama de *"o coração do
+   autoatendimento"* está escrita e **inerte**. Do `MunicipioNfseService`, a emissão usa apenas
+   `enviarInscricaoMunicipal`; `registrarConvenio` e `registrarEnvioDeIm` — os dois métodos que o
+   assistente chamaria — também não têm chamador.
+3. ⚠️ **A alíquota do ISS tem dois donos, e nada os concilia hoje.** Quem monta a DPS lê
+   `produto_servico.aliquota_iss` (V100, digitada pelo lojista); a alíquota oficial do ADN existe
+   só no cliente inerte do item acima. Enquanto a tela do S5.5 não nascer, o §5 item 6 descreve uma
+   intenção, não o comportamento.
+
+✅ **E o que eu suspeitei e estava errado, registrado para ninguém "consertar" de novo:**
+`nfse_documento_item` **é** gravado — `NfseDocumentoRepositorio` faz o par `DELETE`+`INSERT` do
+idioma "apaga e regrava". A auditoria da tabela P3 está de pé.
 
 ⚠️ **`produto_servico` nasceu de propósito sem os campos fiscais** — está escrito na V085:
 *"os campos FISCAIS (código da LC 116, alíquota de ISS, retenção, local de incidência) NÃO entram

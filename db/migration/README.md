@@ -67,6 +67,87 @@ RLS. Só depois os módulos de domínio do lojista e, por fim, as políticas RLS
 | **V032** | **Entrada por planilha + plano de contas da compra** (2026-08-11): `cfg_geral.id_plano_contas_compra_mercadoria` (conta de CUSTO usada nas contas a pagar geradas pela entrada — não a conta do fornecedor) + seed da árvore mínima do plano de contas | ✅ |
 | **V033** | **`usuario_horario_acesso`** (2026-08-11, `docs/telas/usuario.md`): janela de acesso por dia da semana (1=segunda..7=domingo), com `usuario.controla_horario_acesso` ligando a regra. RLS próprio no arquivo | ✅ |
 
+### V034–V102 — índice (2026-08-16 a 2026-08-31)
+
+> ⚠️ **Este índice estava parado na V035** e foi reconstruído em 2026-08-31 a partir dos próprios
+> arquivos (cabeçalho de cada `.sql`) e das datas reais do `git log --diff-filter=A` — nunca da
+> memória, que é como as datas deste repositório já ficaram 10 dias à frente uma vez.
+> **V034 e V035 têm detalhamento longo mais abaixo**, na seção do módulo fiscal; aqui vão só as
+> linhas de índice.
+
+| Faixa | Data | Conteúdo | Situação |
+|-------|------|----------|----------|
+| **V034** | 08-16 | fiscal: referência nacional **global** (`cfg_uf_autorizador`, CFOP, CST/CSOSN) — ver seção detalhada abaixo | ✅ |
+| **V035** | 08-16 | fiscal: as tabelas de tenant (`fiscal_config_empresa`, `fiscal_certificado`, `cfg_perfil_fiscal`, `fiscal_numeracao`, `fiscal_inutilizacao`, `documento_fiscal` + filhas) — ver seção detalhada abaixo | ✅ |
+| **V036** | 08-18 | **arquivamento do XML fiscal** no bucket privado (DF21/ADR-014): ponteiro do objeto + fila de pendência por índice parcial | ✅ |
+| **V037** | 08-18 | **modelo comercial por volume de vendas** (ADR-015) — sai o trial de 60 dias e os 3 planos por funcionalidade (D1/V012), entram as faixas geradas por `plataforma.gerar_faixas_planos()` | ✅ |
+| **V038** | 08-18 | `plataforma.uso_venda_mes` — medição da cota por venda emitida no PDV, somando as empresas do tenant | ✅ |
+| **V039** | 08-18 | cobrança da assinatura via **Mercado Pago** (ADR-016): PIX avulso + recorrência atrás de adapter | ✅ |
+| **V040** | 08-18 | **aquisição e marketing** (ADR-017): `lead`, campanha e UTM no control-plane — dado que existe **antes** de haver tenant | ✅ |
+| **V041** | 08-18 | `plataforma.configuracao_plataforma` — SMTP, agenda/retenção de backup e credencial do gateway saem do `application.yml` e passam a ser editáveis pelo backoffice. ⚠️ Três camadas de segredo (nunca no banco / cifrado / em claro) | ✅ |
+| **V042** | 08-19 | `plataforma.recuperacao_senha` — **hash** do token (nunca o token), uso único, 2 h, pedido novo invalida os anteriores | ✅ |
+| **V043** | 08-19 | o produto passa a se chamar **Nainer**: só o que é visível ao usuário muda; identificadores internos (`niner_db`, pacote Java, `localStorage`) ficam | ✅ |
+| **V044** | 08-19 | grants de **SELECT em SEQUÊNCIA** para `niner_backup` — sem isso o `pg_dump` aborta com código 1, e o backup automático passou o primeiro dia de produção gravando `ERRO` sem gerar arquivo | ✅ |
+| **V045** | 08-19 | ⛔ **realinha bancos que aplicaram V017/V035 antes de elas serem editadas.** É a migration corretiva do incidente que parou o deploy (`checksum mismatch`) — a prova de que **migration aplicada nunca se edita** | ✅ |
+| **V046** | 08-20 | **CSRT do responsável técnico por UF** (`cfg_csrt_resptec`, NT 2018.005): com o par global, a 1ª nota de um lojista fora do PR sairia com o código do Paraná e voltaria `cStat 974` | ✅ |
+| **V047** | 08-20 | `cfg_uf_autorizador` para **as 27 UFs** (108 linhas = 27 × 2 modelos × 2 ambientes), geradas de fonte machine-readable. ⚠️ O autorizador muda com o **modelo** (BA/PE/MA) | ✅ |
+| **V048** | 08-20 | competência da cota no fuso da **plataforma** — sem isso, loja bloqueada por cota voltava a vender às 21:05 de 31/08 | ✅ |
+| **V049** | 08-20 | `empresa.estado` só aceita **UF válida** — CHECK `NOT VALID` de propósito (constraint que varre linha existente derruba deploy); NULL continua valendo porque o signup cria a empresa sem UF | ✅ |
+| **V050** | 08-20 | o **prefixo do EAN interno vira dado** (`cfg_ean_gerador.prefixo` + `prefixos_reservados`): trocar é `UPDATE`, sem deploy, e o prefixo já emitido nunca pode ser liberado | ✅ |
+| **V051** | 08-20 | XML da entrada vai para o bucket fiscal + **tributação item a item** da nota do fornecedor — pré-requisito da devolução ao fornecedor | ✅ |
+| **V052** | 08-20 | valor novo no enum `tipo_movimento`: `DEVOLUCAO_COMPRA` | ✅ |
+| **V053** | 08-20 | **devolução ao fornecedor**: o vínculo com a entrada de origem (e o que a rotina **não** precisou de schema) | ✅ |
+| **V054** | 08-20 | ⭐ **`cfg_permite_estoque_negativo`** — a regra mora na **trigger** `fn_atualiza_estoque_movimento`, não nos serviços: são oito rotinas que debitam estoque, e espalhar a checagem garante que uma fique de fora | ✅ |
+| **V055** | 08-20 | o parâmetro acima nasce **LIGADO** (controle de estoque é opt-in). ⛔ O backfill saiu **vazio** sob `FORCE RLS` e ninguém notou por nove dias — consertado só na **V098** | ✅ |
+| **V056** | 08-20 | espaçamento vertical entre fileiras de etiqueta | ✅ |
+| **V057** | 08-20 | geometria do rolo passa a ser **derivada de 7 números**. ⚠️ **Primeiro backfill vazio por RLS** do projeto (a posição das colunas virou 0,00) — pego só porque o resultado foi conferido no banco | ✅ |
+| **V058** | 08-20 | **Orçamento de Venda**: validade, preço congelado, vencimento automático e conversão pelo F5 do PDV | ✅ |
+| **V059** | 08-22 | `venda.origem` — distingue a venda real da **sintética** criada pela importação de Contas a Receber | ✅ |
+| **V060** | 08-24 | permite o **mesmo campo repetido** na etiqueta (etiqueta destacável). ⚠️ A `UNIQUE` era só metade: havia uma validação irmã em Java, invisível no schema | ✅ |
+| **V061** | 08-24 | **CFOP interestadual** na regra do perfil fiscal — o sistema nunca deriva um do outro (5405 não vira 6405, que não existe) | ✅ |
+| **V062** | 08-24 | fornecedor ganha código do município (IBGE) e indicador de IE | ✅ |
+| **V063–V070** | 08-25/26 | **integração com marketplaces (Mercado Livre)**: venda de origem marketplace, preço por canal, `state` do OAuth, anúncio por variação (⚠️ `NULLS NOT DISTINCT`), gatilhos de sincronização, webhook, pedido→venda e fila de expedição | ⛔ **DESFEITAS pela V084** |
+| **V071** | 08-27 | `diretorio_login` — índice global e-mail → conta, para o login deixar de pedir o identificador da loja. ⚠️ `REVOKE INSERT/UPDATE/DELETE`: só a trigger escreve | ✅ |
+| **V072** | 08-27 | **ramo de atividade** (28 de varejo) + mapa CNAE→ramo da tabela oficial do IBGE | ✅ |
+| **V073** | 08-27 | ⭐ **RBAC — permissão por tela e por ação**, presa ao usuário (sem perfis, decisão dele) | ✅ |
+| **V074** | 08-27 | catálogo de telas: o grupo passa a levar o **caminho** | ✅ |
+| **V075** | 08-27 | catálogo de telas: abas nos 6 grupos de topo do menu | ✅ |
+| **V076** | 08-27 | quais **ações** cada tela tem. ⛔ Mediu pelo **front** e errou em seis telas — inclusive deixando o PDV sem "incluir", o que impedia **qualquer operador de vender** | ✅ |
+| **V077** | 08-27 | telas cuja ação "excluir" é **desfazer** (8 métodos) | ✅ |
+| **V078** | 08-27 | as telas exclusivas do administrador, definidas por ele **tela a tela** | ✅ |
+| **V079** | 08-27 | **login em duas etapas** (código de 4 dígitos por e-mail), opção por usuário | ✅ |
+| **V080** | 08-27 | **revogação de sessão** — trocar senha, desativar ou excluir derruba o token na requisição seguinte, **sem consulta nova** | ✅ |
+| **V081** | 08-27 | ações por tela **alinhadas ao que o código exige**. ⭐ O conserto durável não é esta migration, é o `AcoesPorTelaConferemTest` | ✅ |
+| **V082** | 08-27 | **uma nota fiscal viva por venda** — índice único parcial sobre as situações vivas; rejeitada/cancelada ficam de fora porque ali reemitir é o certo | ✅ |
+| **V083** | 08-27 | percentual de desconto/acréscimo da carteira **0–100** (era `numeric(5,2)` sem CHECK: 999,99% fechava venda de R$ 1.000 com R$ 91) | ✅ |
+| **V084** | 08-28 | ⛔ **remove a integração com marketplaces** (desfaz V063–V070, inclusive os dois gatilhos em caminho quente). As tabelas `canal`/`anuncio`/`pedido`/`outbox_evento` de V020–V022 **ficaram**, vazias | ✅ |
+| **V085** | 08-28 | **serviço no catálogo** (`produto.tipo_item`, `produto_servico`) — tipo **imutável** depois de criado; `cfg_usa_servicos` nasce **desligado** | ✅ |
+| **V086** | 08-28 | **serviço não mexe no estoque** — de novo na **trigger**, não nos serviços | ✅ |
+| **V087** | 08-28 | **Ordem de Serviço** (⛔ OS **não** é orçamento): estados, reserva de estoque, vira venda pelo F5 | ✅ |
+| **V088** | 08-28 | ⭐ **comissão congelada na linha** — o relatório multiplicava pelo percentual do cadastro **na consulta**, então promover um vendedor reescrevia meses já pagos | ✅ |
+| **V089** | 08-28 | `venda.id_funcionario`: quem **vendeu**, separado de quem **executou** cada linha (o significado da coluna do ledger mudou e quebrou 5 leitores) | ✅ |
+| **V090** | 08-28 | conserta o backfill da V089, **vazio em silêncio** (347 vendas, 0 preenchidas): o `NO FORCE` cobria só a tabela escrita, não as duas que o UPDATE **lia** | ✅ |
+| **V091** | 08-29 | cinco chaves da grade passam a **governar de verdade** (Zerar Contagem, Efetivar Balanço, Diferenças, Estorno de Crediário) | ✅ |
+| **V092** | 08-29 | **cancelar a venda cancela a OS e o orçamento** que a originaram — o `id_venda` sobrevive na linha cancelada, porque é ele que responde "qual venda caiu?" | ✅ |
+| **V093** | 08-29 | **cinco ramos de serviço** (oficina, salão, assistência técnica, clínica veterinária, lava-rápido), CNAEs carregados da API do IBGE | ✅ |
+| **V094** | 08-29 | ⭐ **Sangria de Caixa** — dinheiro que sai da gaveta é **transferência**, com destino obrigatório e FK de verdade | ✅ |
+| **V095** | 08-29 | o **fechamento exige sangrar o excedente** do fundo de troco (parâmetro `cfg_exige_sangria_fechamento`, ligado por padrão). ⭐ É o que faz o Fluxo de Caixa fechar inteiro | ✅ |
+| **V096** | 08-29 | cancelar orçamento passa a exigir **EXCLUIR** | ✅ |
+| **V097** | 08-29 | conserta a migração de concessões da V096 — **vazia em silêncio**, o mesmo defeito da V089 | ✅ |
+| **V098** | 08-30 | conserta o backfill da **V055**, vazio há nove dias. ⚠️ **Quinta** ocorrência do mesmo defeito (V057, V089, V096, V055) — daí o `MigrationQueMexeEmDadoDeTenantTest` | ✅ |
+| **V099** | 08-31 | **lista nacional de serviços** da NFS-e: 334 códigos + regra de incidência, derivados do anexo oficial (271 prestador / 47 prestação / 10 tomador / 5 especial / 1 sem incidência) + atalho por ramo. **Global**, sem RLS | ✅ |
+| **V100** | 08-31 | bloco fiscal em `produto_servico` (`codigo_tributacao_nacional`, alíquota de ISS, retenção). ⭐ **Sem `local_incidencia`**: passou a ser **derivado** por JOIN da V099 — o lojista não responde e não há duas verdades | ✅ |
+| **V101** | 08-31 | `fiscal_config_nfse` (por empresa, com RLS) + `cfg_municipio_nfse` (global, **nasce vazia** de propósito: semear exigiria inventar prazo de cancelamento municipal). ⚠️ `niner_app` tem INSERT/UPDATE nela — quem descobre o convênio é a aplicação | ✅ |
+| **V102** | 08-31 | **documento fiscal de serviço**: `nfse_documento`, `_item`, `_evento`, `nfse_numeracao`. ⭐ A DPS **não tem itens**, então é **uma NFS-e por código de serviço** — o que quebra aqui a invariante "uma nota por venda" da V082 | ✅ |
+
+> ⚠️ **Cinco backfills deste índice saíram VAZIOS em silêncio** (V057, V089, V096, V055/V098) pelo
+> mesmo motivo: migration roda como `niner_owner` e o `FORCE ROW LEVEL SECURITY` (V024) vale até
+> para o dono, então `SELECT` devolve 0 linhas, `UPDATE … WHERE` casa 0, e o **Flyway anuncia
+> sucesso**. Migration que **lê ou transforma** dado de tenant precisa de
+> `ALTER TABLE x NO FORCE ROW LEVEL SECURITY;` antes e `FORCE` depois — **cobrindo também as
+> tabelas que ela apenas LÊ** (foi assim que a V089 caiu). Hoje isso é travado pelo
+> `MigrationQueMexeEmDadoDeTenantTest`, que varre `db/migration` e reprova o build.
+
 > As tabelas do schema `plataforma` são **globais** (P9) e **não** entram no RLS de tenant.
 > O RLS (`FORCE`) se aplica a toda tabela de **domínio** do lojista — V014–V023 (ativado em V024)
 > e V025/V026 (cada uma com RLS próprio no arquivo, por terem sido criadas depois do

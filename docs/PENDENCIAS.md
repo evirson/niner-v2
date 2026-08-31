@@ -11,7 +11,18 @@
 > **Como apresentar:** resumido e **agrupado por dono**, não as ~27 linhas cruas — ele já reclamou
 > de informação demais de uma vez (*"TA MUITO CONFUSO"*).
 >
-> **Última revisão: 2026-08-30 — OITO rodadas de dois agentes** (front e back em paralelo), a
+> **Última revisão: 2026-08-31.** Entrou o **módulo NFS-e** (V099–V102, sessão de outra máquina):
+> S5 pronto no banco, S5.5 pela metade e o **motor do S6 construído — porém sem controller, sem
+> tela e sem chamador**, e com a máquina de emissão ainda **sem nenhum teste**. Os três buracos
+> estão em `docs/MODULONFSE.md` §1 e viraram os itens **72–74** aqui. No mesmo dia foi atacada a
+> "bola minha" que restava: **24**, **25** e **48** ✅ **fechadas**; **19** fechada na parte que
+> estava em dúvida (a partição rodou com 2.001 documentos) com o peso em memória **declarado como
+> não medido**; e **22 (SVC) reclassificada** — não era só trabalho meu, existe decisão dele de
+> 2026-08-24 escrita no código, e o item agora traz o dimensionamento para ele decidir.
+> ⭐ Escrever a spec do Tipo de Carteira **achou um defeito real** (guard de exclusão com 2 das 5
+> FKs), corrigido e provado por sabotagem.
+>
+> **Revisão anterior: 2026-08-30 — OITO rodadas de dois agentes** (front e back em paralelo), a
 > pedido dele: *"8 rodadas de cada para ser preciso na varredura"*. ~40 correções, 11 commits,
 > **1099 testes verdes** (o número do Maven; a contagem antiga, somando arquivos do Surefire,
 > subestimava), migrations até **V098**.
@@ -48,20 +59,20 @@
 > encerrado — pergunta para o contador). 🔔 E **#49** — ele prometeu as **credenciais da NFS-e para
 > a segunda-feira**.
 
-**Estado na data desta revisão (tudo medido agora, não estimado):** **57 telas do ERP + 3 públicas**
-(contagem de `docs/TELAS.md`, que declara a base) · **1052 testes verdes, 0 falhas** ·
-migrations até **V097** · `web/` sem erro de tipo (`tsc -b`).
+**Estado em 2026-08-31 (medido nesta data, não estimado):** **57 telas do ERP + 3 públicas**
+(contagem de `docs/TELAS.md`, que declara a base) · migrations até **V102** · suíte medida pela
+linha `Tests run:` do Maven, que é a autoridade (ver `feedback_exit_depois_de_pipe_mente`).
 
-⚠️ **O total de testes aparece MENOR que o 1085 da revisão anterior, e eu não sei explicar a
-diferença** — não reconferi como aquele número foi contado, e não vou inventar a causa. O que posso
-afirmar é o que medi agora: `./mvnw clean test` termina com **exit 0**, e a soma dos relatórios do
-Surefire, arquivo a arquivo, dá **1052 testes / 0 falhas / 0 erros**. Nesta leva
-**entraram 7 testes novos**: 3 na Ordem de Serviço (desconto do documento, com o par negativo, e
-preço duplicado), 1 cruzando os três relatórios de comissão sobre a mesma massa, e 3 na importação
-de Contas a Receber — que **não tinha nenhum**, e foi por isso que um defeito que quebrava a
-importação inteira passou por uma suíte verde. ⚠️ Os "0 a 5 pulados conforme a hora" do guard de
-meia-noite continuam valendo — a última execução, já passada da meia-noite, deu **1 pulado**
-(`HorarioAcessoTest`), que é o mecanismo funcionando e não regressão.
+⚠️ **O dia 2026-08-31 trouxe o módulo NFS-e (V099–V102), feito em OUTRA sessão e noutra máquina** —
+os commits registram *"5 erros pré-existentes do `ProdutoImagemCrudTest`, libwebp x86_64 num Mac
+arm64"*, um artefato de ambiente que **não** ocorre nesta máquina. Ao comparar contagens entre
+sessões, é preciso saber disso antes de chamar diferença de regressão.
+
+⚠️ **Nota de método sobre a contagem anterior:** o 1052 registrado na revisão de 29/08 vinha de
+somar os arquivos do Surefire, que **subestima**; o 1099 de 30/08 já é a linha do Maven. Os dois
+números descrevem quase a mesma suíte medida de dois jeitos — não houve queda de cobertura entre
+eles. ⚠️ E os "0 a 5 pulados conforme a hora" do guard de meia-noite do `HorarioAcessoTest`
+continuam valendo: o número oscilar é o mecanismo funcionando, não regressão.
 
 ---
 
@@ -284,6 +295,32 @@ ANTES de reservar número"*). Aqui a ordem é a inversa. ⏭️ A saída prováv
 `NAO_EMITIDO` (o conceito já existe, com série/número/chave nulos) quando a falha acontece depois da
 reserva — mas isso é decisão fiscal, não só de código.
 
+### 72. 🟢 O motor da NFS-e existe e não tem chamador — nem controller, nem tela, nem PDV
+Medido em 2026-08-31: `grep -rln "nfse\|Nfse" api/src/main/java --include=*.java | grep -v /nfse/`
+devolve **zero**, e não há `@RestController` no pacote. As 15 classes de `fiscal/nfse/` formam uma
+ilha — montagem, assinatura, transporte, numeração, emissão e cancelamento prontos, e **nenhuma
+venda emite**. É o padrão *"mecanismo pronto e desligado nas duas pontas"* já catalogado no
+`CLAUDE.md` (o outbox do marketplace), com o agravante de que aqui o painel nem existe para mostrar
+"0 pendentes" e enganar.
+⏭️ O que falta: endpoints de `docs/MODULONFSE.md` §7, a chamada a partir da venda (pelo **mesmo**
+`cfg_emite_fiscal_apos_venda`, DS13) e as telas do §8.
+
+### 73. 🟢 A máquina da NFS-e não tem um único teste — e o `EmissorFalso` existe justamente para isso
+`grep -rl "EmissorFalso\|NfseEmissaoService\|nfse_documento" api/src/test/` devolve **vazio**. Os 28
+testes do S6 cobrem as três classes puras (`IdDps`, `MontadorXmlDps`, `RespostaSefin`); **numeração,
+máquina de estados, gravação, recuperação de nota órfã e cancelamento não são exercitados**.
+⚠️ O `application.yml` de teste **afirma** que o falso "faz a suíte exercitar a máquina inteira" —
+promessa escrita e ainda não cumprida, que é a forma de defeito que o próprio comentário cita.
+⭐ Fechar isto não depende de credencial nenhuma: é o caminho mais barato de blindar o módulo antes
+que ele ganhe chamador (item 72).
+
+### 74. 🟢 `ParametrosMunicipaisClient` está inerte, e é a peça do autoatendimento
+Ninguém o chama (só uma menção em javadoc). `MunicipioNfseService.registrarConvenio` e
+`registrarEnvioDeIm` — os dois métodos do assistente — também não têm chamador. Consequência: a
+alíquota do ISS tem **dois donos sem conciliação** — quem monta a DPS lê `produto_servico.aliquota_iss`
+(digitada), e a alíquota oficial do ADN não chega a lugar nenhum. Enquanto isso, `docs/MODULONFSE.md`
+§5 item 6 descreve *"o sistema pergunta à fonte e preenche"*, que hoje é intenção, não comportamento.
+
 ### 67. 🟢 Reimportar a mesma NF-e corrigida pode travar o arquivamento num laço a cada 10 min
 O caminho do XML de entrada é `entrada/{ano}/{mes}/{chaveNfe}.xml`, e cancelar a entrada **libera a
 chave** para reimportação (é comportamento desejado: "reimportar a mesma NF-e corrigida"). Se o XML
@@ -294,21 +331,77 @@ rodada porque depende de decidir o que fazer com os objetos já gravados no cami
 
 ## 🟢 Bola minha
 
-### 19. A exportação de XML nunca rodou com período acima de 2.000 notas
-A partição é validada pela aritmética e por um teste de congelamento, nunca por um período que
-realmente estoure. Depende dele usar + de mim medir.
+### 19. ✅ A partição da exportação de XML **RODOU acima do teto** — 2026-08-31 (resta o peso em memória)
+`ExportacaoXmlLoteTest.periodoAcimaDoTetoParticionaEAsPartesCobremTudoSemRepetir` cria **2.001
+documentos** (o teto é 2.000), pede as duas partes com o mesmo `ateIdDocumento` congelado e prova o
+que a aritmética sozinha não provava: parte 1 com 2.000, parte 2 com 1, **sem repetição e sem
+buraco** — as duas juntas cobrem os 2.001, e as pontas do período caem em partes diferentes.
 
-### 22. SVC — contingência da NF-e 55
-Não implementada.
+⚠️ **O que fica de fora, declarado:** só **duas** notas têm XML no bucket (a primeira e a última).
+Gravar 2.001 objetos no MinIO deixaria a suíte lenta sem medir a partição, que é o que estava em
+dúvida. Portanto **continua sem medição o consumo de memória de um ZIP com 2.000 XMLs reais**
+(~20 MB crus pela conta do javadoc) — é o número que sustenta a escolha de montar em memória em vez
+de `StreamingResponseBody`, e só um período real de uso mede isso.
+
+⚠️ E um defeito de método que o próprio teste pegou: extrair as chaves com um regex sobre o CSV
+inteiro **conta errado** — na linha de um documento arquivado a chave aparece duas vezes (a coluna
+e o caminho do arquivo no ZIP). A leitura é por linha.
+
+### 22. 🔵 SVC — contingência da NF-e 55: **é decisão dele, não só trabalho meu** (dimensionado em 2026-08-31)
+⚠️ **A descrição anterior ("não implementada", bola minha) escondia o fato principal:** existe
+**decisão registrada do dono do produto, de 2026-08-24**, escrita em `EmissaoNfceService`:
+
+> *"Contingência OFFLINE (tpEmis 9) é EXCLUSIVA da NFC-e. A NF-e 55 só tem SVC, que não está
+> implementada — decisão do dono do produto: se a SEFAZ não responder, a venda é registrada e a
+> nota fica em `NAO_EMITIDO` para reprocessar em Documentos Fiscais."*
+
+Ou seja, hoje **há um comportamento definido e funcionando**; SVC é ampliação, não conserto.
+
+**O tamanho real, medido no schema e no código:**
+
+| O que muda | Por quê |
+|---|---|
+| **Migration nova** | `cfg_uf_autorizador` tem PK `(uf, modelo, ambiente)` — **sem dimensão de tipo de emissão**. SVC-AN e SVC-RS são autorizadores *diferentes* para a mesma UF |
+| **Dado oficial** | o mapa UF → SVC-AN/SVC-RS e as URLs precisam vir **da fonte**, como as 27 UFs da V047 — nunca digitados |
+| **Chave de acesso** | `tpEmis` ocupa a posição 34 da chave: 6/7 mudam a chave **e o DV**. É exatamente o ponto onde o `cStat 253` já mordeu (constante literal no lugar do campo) |
+| **Máquina de estados** | o estado de contingência hoje só existe para a 65 (`FiscalContingenciaService`); a 55 precisaria de entrada, saída e dreno próprios |
+| **3 chamadores** | `EmissaoNfceService`, `CancelamentoNfceService` e o dreno resolvem o autorizador por `(uf, modelo, ambiente)` |
+
+⛔ **Por que não implementei hoje:** montagem de XML fiscal **só se valida transmitindo**, e a suíte
+roda com `emite_nfe = false` — é o mesmo motivo pelo qual o item **60** foi adiado. Entregar SVC
+"verde na suíte" seria entregar uma nota que ninguém viu a SEFAZ aceitar, num caminho que só é
+exercitado quando a SEFAZ da UF **já caiu**, isto é, no pior momento possível para descobrir um
+defeito.
+
+🔵 **A pergunta que sobra é dele:** o comportamento atual (venda registrada + nota em `NAO_EMITIDO`
+para reprocessar) é suficiente para o cliente de NF-e 55, ou vale abrir a frente de SVC junto com
+uma janela de homologação?
 
 ### 23. CSOSN 500 com ST retido (`cStat 938`)
 Minha, mas **depende do contador**.
 
-### 24. Efetivar Balanço e Tipo de Carteira não têm spec nenhuma
-Duas telas em uso sem arquivo em `docs/telas/` (ver `docs/TELAS.md`).
+### 24. ✅ **FECHADO em 2026-08-31** — Efetivar Balanço e Tipo de Carteira ganharam spec
+`docs/telas/efetivar-balanco.md` e `docs/telas/tipo-carteira.md`, as duas **derivadas do código**
+(cada afirmação conferida no arquivo citado), e `docs/TELAS.md` atualizado nas duas pontas.
 
-### 25. `db/migration/README.md` parou na V035
-As ~35 migrations seguintes nunca foram indexadas.
+⭐ **E escrever a segunda achou um defeito real, corrigido no mesmo dia:** o guard de exclusão de
+`tipo_carteira` conhecia **2 das 5 FKs** — faltavam `caixa_mestre`, `caixa_fechamento_conferencia`
+e `documento_fiscal_pagamento`. Sem elas o `DELETE` violava a restrição e o handler global
+respondia o 409 genérico *"Registro em uso por outro cadastro"*, **sem dizer onde e sem caminho de
+volta** (a tabela não tem `ativo`, então não há fallback de inativar). O caso mais provável era o
+mais banal: a carteira **DINHEIRO**, presa por ser a carteira de **abertura** do caixa mesmo num dia
+sem nenhum lançamento. Hoje a mensagem nomeia o vínculo, e os dois testes novos foram verificados
+**sabotando a correção** (sem ela, reprovam).
+
+⚠️ O teste antigo não pegava porque criava o caixa **com** lançamento — passava pelo guard e pela
+FK ao mesmo tempo, sem distinguir os dois.
+
+### 25. ✅ **FECHADO em 2026-08-31** — `db/migration/README.md` indexado até a V102
+As 67 migrations que faltavam (V036–V102) entraram com uma linha cada, **reconstruídas do cabeçalho
+de cada `.sql`** e com as datas do `git log --diff-filter=A` — não da memória. O índice marca
+explicitamente as **V063–V070 como desfeitas pela V084** (marketplace) e traz, no fim, o aviso dos
+**cinco backfills que saíram vazios** sob `FORCE RLS` (V057, V089, V096, V055→V098) com a regra que
+o `MigrationQueMexeEmDadoDeTenantTest` hoje trava.
 
 ### 26. Itens adiados da auditoria de 2026-08-21
 21+32, 25, 26+30, 27 — detalhe em `docs/PENDENCIAS-AUDITORIA-2026-08-21.md` (24 das 33 já
@@ -546,12 +639,53 @@ anônimo sobrescrever nome e telefone de um lead existente, e grava `consentimen
 nunca consentiu — justo o campo que provaria a base legal do contato (LGPD). Não mexi porque muda o
 funil de aquisição. **Decisão dele.**
 
-### 48. 🟢 Cobertura de teste de isolamento e privilégio 🟢
-19 testes `isolamentoEntreTenants` para ~112 classes — ficam sem teste PDV/venda, caixa, contas a
-pagar, crediário, transferência e os cadastros. O código está correto (foi lido), mas **nada trava
-o comportamento contra a próxima edição**. E a suíte conecta como superusuário do container, então
-os `GRANT/REVOKE` novos (V071, V079) não têm caso em `PrivilegiosNinerAppTest` — é o
-`REVOKE INSERT/UPDATE/DELETE ON diretorio_login` que sustenta "só a trigger escreve". **Bola minha.**
+### 48. ✅ **Cobertura de isolamento ampliada em 2026-08-31** (resta o privilégio)
+
+⚠️ **Primeiro, a correção do próprio item:** ele dizia *"19 testes para ~112 classes"* e listava
+como descobertos **PDV/venda, caixa, contas a pagar, crediário e transferência**. Medindo por
+comportamento em vez de por nome de método, **transferência, pesquisa de vendas e contas a pagar já
+tinham cobertura cross-tenant** — só não se chamavam `isolamentoEntreTenants`. Contagem real antes
+desta rodada: **44 dos 117 arquivos** de teste já exercitavam dois tenants. Catálogo medido pelo
+nome erra; é o mesmo defeito do `cfg_tela` da V076.
+
+**O que entrou agora — 8 testes, priorizados por dinheiro, identidade e cadastro central:**
+
+| Onde | O que o teste recusa |
+|---|---|
+| **PDV** | ler produto do vizinho **pelo SKU exato** — e o SKU vem de uma sequência **global da instância** (V017), então é o identificador mais fácil de adivinhar |
+| **Cliente** | ler, listar, **alterar** e **excluir** — dado pessoal, LGPD |
+| **Usuário** | ⛔ o pior caso: **trocar a senha** do usuário do vizinho e entrar na conta |
+| **Produto** | inclusive amarrar o produto alheio a uma categoria própria |
+| **Fornecedor** · **Funcionário** | ler, listar, alterar, excluir |
+| **Tipo de Carteira** | alterar o `percDesconto` do vizinho — faria toda venda daquela loja fechar mais barato |
+| **Sangria de Caixa** | ⭐ aqui o vetor é **escrever**: o caixa vem do servidor, mas a **conta de destino vem do corpo** — sangrar para a conta do vizinho move dinheiro entre lojas |
+| **Vale-mercadoria** | o número do vale é sequencial pequeno; é o registro mais perto de "dinheiro ao portador" |
+
+⭐ **Todos testam o par**: o dono **enxerga** e o vizinho **não**. Sem a asserção positiva, um
+endpoint quebrado (404 para todo mundo) passaria por "isolado" —
+`feedback_caso_negativo_pega_guarda_que_expulsa_todos`.
+
+⭐ **E o mecanismo foi verificado por sabotagem:** removido o `AND id_tenant = plataforma.tenant_atual()`
+do `ClienteService.buscar`, o teste **reprova com `Status expected:<404> but was:<200>`** — o vizinho
+passa a ler o cliente. Restaurado em seguida.
+
+⚠️ **Uma armadilha que este trabalho reencontrou:** a primeira versão do teste da Sangria passava
+sozinha e **reprovava na suíte**. Causa: `abrirConexao` conecta com o **superusuário do container**,
+que ignora RLS, então `count(*)` sem `id_tenant` explícito media o **banco inteiro** e contava a
+sangria legítima de outro teste da mesma classe. Asserção de teste também precisa do filtro
+explícito — `feedback_testcontainers_nao_usa_niner_app`.
+
+✅ **E a outra metade também fechou:** `PrivilegiosNinerAppTest` (13 → **15** casos) passou a cobrir
+os dois `REVOKE` que não tinham caso — `plataforma.diretorio_login` (V071: só a trigger escreve,
+senão um e-mail apontaria para a conta errada e o login **entregaria a loja de outra pessoa**) e
+`plataforma.codigo_login` (V079: sem `DELETE`, porque apagar o desafio zeraria o **teto de
+tentativas** do código de 4 dígitos — o mesmo bypass que o rollback causou em 2026-08-27, agora
+pela porta do privilégio). A sangria (V094/V095) **já tinha** caso.
+
+⛔ **O que continua sem cobertura, e é estrutural:** o datasource da aplicação conecta como
+**superusuário do container**, então um `GRANT` esquecido numa tabela **não coberta** por esse teste
+segue invisível. `PrivilegiosNinerAppTest` é a rede barata, não a solução — separar as credenciais
+do Testcontainers continua no backlog estrutural.
 
 ## ✅ Fechadas recentemente (para não reabrir por engano)
 

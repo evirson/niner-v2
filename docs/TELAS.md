@@ -65,7 +65,7 @@
 |---|---|---|
 | Contagem de Estoque | `/estoque/contagem` | `docs/telas/contagem-estoque.md` |
 | Diferenças de Estoque | `/estoque/diferencas` | `docs/telas/contagem-estoque.md` |
-| Efetivar Balanço | `/estoque/efetivar-balanco` | — |
+| Efetivar Balanço | `/estoque/efetivar-balanco` | `docs/telas/efetivar-balanco.md` · `contagem-estoque.md` |
 | Zerar Contagem de Estoque | `/estoque/zerar-contagem` | `docs/telas/contagem-estoque.md` |
 
 ## Financeiro
@@ -75,7 +75,7 @@
 | Conta Corrente | `/contas-corrente` | `docs/telas/conta-corrente-movimento.md` |
 | Movimentação de Conta Corrente | `/contas-corrente-movimento` | `docs/telas/conta-corrente-movimento.md` |
 | Plano de Contas | `/planos-contas` | `docs/telas/plano-contas.md` |
-| Tipo de Carteira | `/tipos-carteira` | — |
+| Tipo de Carteira | `/tipos-carteira` | `docs/telas/tipo-carteira.md` |
 | Contas a Pagar / Pagas | `/contas-pagar` | `docs/telas/contas-pagar.md` |
 
 ## Cadastros
@@ -189,9 +189,10 @@ apontando para o placeholder `EmBreve`, que foi removido junto, ver
 [[feedback_placeholder_embreve_vira_rota_duplicada]]), além de **Fila de Expedição** e **Vincular
 Anúncios** do marketplace. O grupo **Relatórios** ganhou a coluna **Subgrupo** no mesmo dia.
 
-⚠️ Sem spec localizada: **Efetivar Balanço** · **Tipo de Carteira**.
-⚠️ Do Tipo de Carteira, ao menos o teto de 0–100% do desconto/acréscimo ficou registrado em
-`docs/telas/configuracao-geral.md` (auditoria de 2026-08-27) — a spec da tela continua faltando.
+✅ **As duas telas sem spec ganharam a sua em 2026-08-31** (pendência 24): `docs/telas/efetivar-balanco.md`
+e `docs/telas/tipo-carteira.md`, as duas **derivadas do código**, não da memória. ⭐ Escrever a
+segunda revelou um defeito real — o guard de exclusão conhecia 2 das 5 FKs de `tipo_carteira`, e a
+carteira DINHEIRO ficava presa num 409 mudo por estar na abertura do caixa.
 
 ---
 
