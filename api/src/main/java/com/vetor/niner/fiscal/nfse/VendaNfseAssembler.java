@@ -48,7 +48,7 @@ public class VendaNfseAssembler {
     private static final int MAX_DESCRICAO = 1000;
 
     @Transactional(readOnly = true)
-    public List<DpsDaVenda> montar(long idVenda) {
+    public PlanoDeEmissao montar(long idVenda) {
         Cabecalho cab = buscarCabecalho(idVenda);
         List<LinhaServico> linhas = buscarLinhasDeServico(idVenda);
 
@@ -70,7 +70,16 @@ public class VendaNfseAssembler {
         for (var grupo : porCodigo.entrySet()) {
             saida.add(agrupar(cab, grupo.getKey(), grupo.getValue()));
         }
-        return saida;
+        return new PlanoDeEmissao(cab, saida);
+    }
+
+    /**
+     * O que a venda rende: o cabeçalho resolvido uma vez e as N notas.
+     *
+     * <p>Os dois juntos de propósito — buscar o cabeçalho de novo no serviço de emissão seria ler
+     * a mesma venda duas vezes, e duas leituras é onde nasce divergência.
+     */
+    public record PlanoDeEmissao(Cabecalho cabecalho, List<DpsDaVenda> notas) {
     }
 
     private DpsDaVenda agrupar(Cabecalho cab, String codigo, List<LinhaServico> linhas) {
