@@ -981,6 +981,27 @@ const CONTEUDOS: Record<string, ConteudoAjuda> = {
     ],
     urlVideo: null,
   },
+  'relatorios.ordens-servico.tela': {
+    titulo: 'Relatório de Ordens de Serviço',
+    objetivo: 'Ver o movimento de OS do período e quanto cada executor produziu.',
+    passos: [
+      'Escolha o período (data inicial e final) e, se for ADMIN, a(s) empresa(s).',
+      'O bloco "Movimento do Período" conta abertas, concluídas, faturadas e canceladas, mais o valor faturado, o desconto concedido, o ticket médio e o tempo médio.',
+      'A grid traz uma linha por executor com o nº de OS, o valor de serviços, o de peças, o total e o tempo médio; com mais de uma empresa aparece subtotal por empresa.',
+      '"Gerar PDF" captura a tela como está, com filtros aplicados na 1ª página e cabeçalho/rodapé repetidos em todas.',
+    ],
+    errosComuns: [
+      'Os quatro contadores do Movimento NÃO somam: cada um conta pela sua própria data. Uma OS aberta no mês passado e concluída neste aparece só em "Concluídas".',
+      'O executor sai do ITEM da OS, não do funcionário que abriu a ordem — numa oficina, quem atende o balcão não é quem trabalha no carro.',
+      'A linha "(SEM EXECUTOR)" é o que ninguém assumiu, normalmente as peças. Ela aparece de propósito: sem ela, a soma das linhas não fecharia com o total geral.',
+      'O "Nº OS" do Total Geral conta ordens distintas — uma OS com dois executores aparece para cada um, então a coluna não soma.',
+      'O tempo médio é de calendário (abertura → conclusão): inclui a espera pela aprovação do cliente e pela peça que não chegou, não são horas de bancada.',
+      'Os valores por executor são brutos — o desconto do cabeçalho não é rateado entre eles, aparece no bloco de Movimento.',
+      'A produtividade só conta OS CONCLUÍDAS no período. OS cancelada sai da grid (o trabalho foi desfeito) mas continua no contador de canceladas.',
+      'Comissão não aparece aqui: quem calcula comissão é o Relatório de Comissões, que é o número que a loja paga.',
+    ],
+    urlVideo: null,
+  },
   'relatorios.contasreceber.tela': {
     titulo: 'Contas a Receber / Recebidas',
     objetivo: 'Ver as parcelas de cartão e crediário por período de venda, vencimento ou recebimento, com valor bruto e líquido.',

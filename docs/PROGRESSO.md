@@ -1,7 +1,7 @@
 # Progresso do Projeto — niner-v2
 
 Registro cronológico das decisões e entregas. Atualizar a cada marco relevante.
-**Última atualização:** 2026-08-31 (módulo NFS-e Nacional, V099–V102)
+**Última atualização:** 2026-08-31 (relatório de OS V103; arquivamento fiscal; PDF em aba oculta)
 
 > 📄 **O que ainda falta está em `docs/PENDENCIAS.md`** (lista viva, agrupada por *de quem é a
 > bola*). Este arquivo conta a **história**; aquele conta o que está **aberto**. Ao fechar uma
@@ -11,6 +11,84 @@ Registro cronológico das decisões e entregas. Atualizar a cada marco relevante
 
 ## Estado atual
 
+> ## 📌 2026-08-31 (3) — RELATÓRIO DE ORDENS DE SERVIÇO, E O ARQUIVAMENTO QUE SE TRAVAVA SOZINHO
+>
+> Três entregas do dia, todas da lista "bola minha".
+>
+> ### O PDF travava para sempre quando a aba saía da frente (pendência #7)
+>
+> Fui conferir a barra do gráfico no PDF e achei coisa pior: **`requestAnimationFrame` não dispara em
+> aba oculta**, e duas esperas do caminho de exportação dependiam só dele — `aguardarPintura()`,
+> copiada em **dez telas**, e o laço de `aguardarGraficosEstaveis`. Com `document.hidden = true` o
+> botão ficava em "Gerando PDF…" indefinidamente. E trocar de aba durante a exportação é exatamente o
+> que a pessoa faz, porque demora.
+>
+> ⚠️ **A primeira correção não era a causa.** Consertei `aguardarGraficosEstaveis` (defeito real,
+> provado por sabotagem) e o sintoma **continuou**. Só a instrumentação mostrou que **nenhum** log da
+> captura aparecia — o travamento estava antes, na tela. É o `feedback_defeito_provado_nao_e_causa_provada`
+> em estado puro: sem medir, eu teria fechado a pendência errada com um diff que parecia prová-la.
+>
+> Correção: cada espera corre contra um `setTimeout`, e o laço ganhou teto de **tempo real** (os dois
+> são necessários — em aba oculta o Chrome também estrangula `setTimeout` a ~1 s). E `aguardarPintura`
+> foi para `lib/temaClaroParaCaptura`, **uma vez só**: era a duplicação que fazia o mesmo defeito
+> existir em dez lugares. Medido com a aba oculta: sabotado trava; corrigido conclui em ~11 s.
+>
+> ### O caminho no bucket travava o arquivamento num laço (pendência #67, e mais dois irmãos)
+>
+> O XML da NF-e de **entrada** ia para `entrada/{ano}/{mes}/{chave}.xml`, e cancelar a entrada
+> **libera a chave** (a UNIQUE de `produto_movimento_mestre` é parcial exatamente para permitir
+> reimportar a nota corrigida). XML diferente em um byte → divergência → o job engole e repete **a
+> cada 10 minutos, para sempre**.
+>
+> ⭐ Corrigindo, apareceram **mais dois casos da mesma família** — o caminho era montado só com dados
+> do documento, que não são únicos:
+> - **Inutilização**, e este foi **medido**: `inut-{serie}-{ini}-{fim}.xml` não distinguia a
+>   **empresa**. Numeração fiscal é por empresa e não há (nem pode haver) UNIQUE por (série, faixa) —
+>   duas filiais inutilizando a mesma faixa é legítimo. Reproduzido antes de corrigir:
+>   `'tenants/1/fiscal/2026/08/65/inut-1-700-705.xml' diverge`.
+> - **Evento**: a UNIQUE do registro inclui `tentativa` (V035) **de propósito**, porque a mesma
+>   sequência pode ser reenviada.
+>
+> Os três passaram a levar o **id do próprio registro** no caminho. ⛔ O documento (nfeProc) ficou
+> como estava: a chave de acesso inclui CNPJ, número, série e cNF — é única por construção fiscal, e é
+> o caminho que o contador espera. **Sem migração**: objeto no caminho antigo continua apontado pela
+> coluna e nunca é reprocessado.
+>
+> ⚠️ **A sabotagem pegou um defeito na minha própria fixture**: eu criava as duas entradas sem cancelar
+> a primeira, e o INSERT batia na UNIQUE parcial antes de chegar ao arquivamento — o teste estava
+> medindo outra coisa e teria passado por acidente.
+>
+> ### Relatório de Ordens de Serviço (pendência #56)
+>
+> `/relatorio-ordens-servico`, V103, em Relatórios › Faturamento com `moduloServicos: true`. Spec
+> escrita **antes** do código: `docs/telas/relatorio-ordem-servico.md`.
+>
+> Três decisões, cada uma presa por um teste sabotado depois de passar:
+> 1. **Dois eixos de data.** O Movimento conta cada evento pela sua própria data; a produtividade
+>    conta pelo trabalho **entregue**. Uma OS aberta em julho e concluída em agosto é movimento de
+>    julho e produção de agosto — eixo único faria o relatório mentir sobre uma das duas perguntas,
+>    com um número plausível.
+> 2. **O executor é do ITEM**, nunca o do cabeçalho (que é quem atendeu).
+> 3. **Item sem executor vira a linha "(SEM EXECUTOR)"**, não some — senão a soma das linhas não
+>    fecha com o total geral e nada explica.
+>
+> ⛔ Comissão **não** aparece ali: quem paga é o Relatório de Comissões. ⛔ O desconto do cabeçalho
+> **não é rateado** por executor.
+>
+> ⚠️ **Meu próprio código trouxe um defeito que o teste pegou de primeira:** `Map.of(...).get(null)`
+> **lança NPE**, e `ordenarPor` é opcional no contrato. Os outros **20** serviços do projeto escrevem
+> a guarda `ordenarPor == null ?` antes do `get` — o meu era o único fora do padrão. Copiar o padrão
+> inteiro, não a metade que se lembra.
+>
+> ### Uma reclassificação honesta
+>
+> Eu tinha listado a pendência **#26** (itens adiados da auditoria de 08-21) como "dá para fazer
+> agora". Conferindo os quatro um a um: **nenhum é**. 21+32 só se provam transmitindo em homologação;
+> 26+30 são política de produto a definir; 25 espera o dono decidir a forma do aviso (ele quer um
+> sino) e construir só o endpoint contador seria mecanismo desligado nas duas pontas; 27 é "aceito e a
+> lembrar". Corrigido na lista.
+>
+>
 > ## 📌 2026-08-31 (2) — A "BOLA MINHA" DAS PENDÊNCIAS: 24, 25, 48 fechadas, 19 medida, 22 devolvida a ele
 >
 > **Estado medido no fechamento:** **1141 testes, 0 falhas, 0 erros, 0 pulados**

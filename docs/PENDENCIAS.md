@@ -97,8 +97,17 @@ ajustado do outro lado. Registrado como **fato observado**, não como causa esta
 
 ## 🔵 Bola dele (dono do produto)
 
-### 5. Tela de Lucratividade nunca aberta em navegador
+### 5. ✅ Tela de Lucratividade — ABERTA em 2026-08-31, e tinha defeito
 (O Relatório de Contas a Pagar foi aberto em 2026-08-26 e funciona.)
+
+Aberta no navegador nesta data. ⭐ **A linha de Lucro Bruto estava invisível** — os dois cards de
+seção herdavam o `flex: 1` do `.relatorio-corpo-fixo`, que silencia o `height: 100%` da
+`.table-wrap`; a tabela de 5 linhas ocupava a altura de uma grade cheia e empurrava as seções
+seguintes para fora. Corrigido com `.secao-fixa` (`flex: 0 0 auto` **+ `height: auto`** — só o
+primeiro deixaria o `height: 100%` da classe base acordar e piorava, medido e revertido no ato).
+
+⚠️ **Fica declarado que o resto da tela foi visto, não conferido conta a conta:** os números não
+foram cruzados com a DRE nesta passagem.
 
 ### 6. Nenhum relatório foi IMPRESSO no papel depois da correção do tema do PDF (2026-08-26)
 O PDF foi conferido na tela e por análise de pixels — papel é outra coisa.
@@ -431,11 +440,23 @@ explicitamente as **V063–V070 como desfeitas pela V084** (marketplace) e traz,
 **cinco backfills que saíram vazios** sob `FORCE RLS` (V057, V089, V096, V055→V098) com a regra que
 o `MigrationQueMexeEmDadoDeTenantTest` hoje trava.
 
-### 26. Itens adiados da auditoria de 2026-08-21
+### 26. ⛔ Itens adiados da auditoria de 2026-08-21 — NÃO são bola minha (reclassificado 2026-08-31)
 21+32, 25, 26+30, 27 — detalhe em `docs/PENDENCIAS-AUDITORIA-2026-08-21.md` (24 das 33 já
 corrigidas em 08-22).
 
----
+⚠️ **Eu tinha listado este item como "dá para fazer agora", e conferindo os quatro um a um: nenhum
+é.** Os quatro estão travados fora do código:
+- **21+32** (FIFO do `nItem` e NF-e de devolução ao fornecedor) — só se provam **transmitindo em
+  homologação**, e a homologação na SEFAZ/PR continua pendente.
+- **26+30** (impersonação auditada e gestão de staff) — **política de produto a definir**: quem é
+  staff, quantos papéis, o que cada um enxerga. Não é dívida técnica, é escopo a decidir.
+- **25** (alarme de nota presa em transmissão) — adiado pelo dono em 08-22, com a forma ainda por
+  decidir (ele quer um **sino** no topo). ⛔ Construir só o endpoint contador seria mecanismo
+  desligado nas duas pontas — o defeito que o outbox do marketplace ensinou.
+- **27** — aceito e a lembrar, não é correção.
+
+⭐ O que sobra para mim aqui é **nada**; a bola é do dono do produto (25, 26+30) e da homologação
+(21+32).
 
 ## Backlog estrutural (do `PROGRESSO.md`, não é regressão)
 
@@ -1030,8 +1051,24 @@ Levantadas conferindo o código em 2026-08-28, depois de fechar o item 53:
   não por cabeçalho: é o item que carrega o preço **congelado** na aprovação e **quem executou**,
   que é a base da comissão; um CSV por cabeçalho esconderia as duas coisas. A tela não precisou de
   nada — ela já lista as tabelas que a API oferece.
-- **Não há relatório de OS** — produtividade por mecânico, tempo médio de execução, OS abertas por
-  período. Hoje só a lista com filtros.
+- ✅ **Relatório de OS — FEITO em 2026-08-31.** `/relatorio-ordens-servico` (V103), em Relatórios ›
+  Faturamento, com `moduloServicos: true` (some para quem não vende serviço). Spec em
+  `docs/telas/relatorio-ordem-servico.md`. Três decisões, cada uma presa por um teste **sabotado**
+  depois de passar:
+  - **Dois eixos de data.** O Movimento conta cada evento pela sua própria data (abertas por
+    `data_abertura`, concluídas por `data_conclusao`, faturadas por `data_faturamento`, canceladas
+    por `data_cancelamento`); a produtividade conta pelo trabalho **entregue**. Eixo único
+    responderia a pergunta errada com um número plausível.
+  - **O executor é do ITEM**, nunca o funcionário do cabeçalho (que é quem atendeu) — mesmo defeito
+    que a V088/V089 corrigiu no ledger de venda.
+  - **Item sem executor vira a linha "(SEM EXECUTOR)"** em vez de ser filtrado; sem ela a soma das
+    linhas não fecharia com o total geral e nada na tela diria por quê.
+
+  ⛔ **Comissão de propósito NÃO aparece ali:** quem calcula comissão é o Relatório de Comissões,
+  que é o caminho que **paga**. ⛔ E o desconto do cabeçalho **não é rateado** por executor — é
+  concessão de quem fechou o negócio, não de quem trabalhou.
+  ⚠️ **A tela ainda não foi aberta em navegador** (mesma limitação declarada em #68): o back tem
+  5 testes verdes e o front passa no `tsc -b`, mas ninguém olhou o layout nem gerou o PDF.
 - **Campos não configuráveis por tenant** (`cfg_tela_campo`). ⚠️ O **orçamento também não tem**,
   então a OS está consistente com a tela irmã — é padrão de tela de *documento*, não lacuna.
 

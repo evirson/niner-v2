@@ -505,6 +505,15 @@ export const MENU: NavGrupo[] = [
             descricao: 'Venda, devolução e comissão por funcionário no período, subtotal por empresa.',
             sinonimos: ['Relatório de Comissões'],
           },
+          {
+            to: '/relatorio-ordens-servico',
+            label: 'Ordens de Serviço',
+            icone: IconeRelatorio,
+            descricao:
+              'Movimento de OS do período (abertas, concluídas, faturadas, canceladas) e produtividade por executor, com tempo médio.',
+            sinonimos: ['Relatório de Ordens de Serviço', 'os', 'oficina', 'produtividade', 'mecanico', 'mecânico'],
+            moduloServicos: true,
+          },
         ],
       },
       {

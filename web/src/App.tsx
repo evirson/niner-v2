@@ -66,6 +66,7 @@ import ContasPagarLista from './pages/financeiro/contaspagar/ContasPagarLista'
 import ContasPagarForm from './pages/financeiro/contaspagar/ContasPagarForm'
 import RelatorioVendas from './pages/relatorios/RelatorioVendas'
 import RelatorioComissoes from './pages/relatorios/RelatorioComissoes'
+import RelatorioOrdensServico from './pages/relatorios/RelatorioOrdensServico'
 import RelatorioContasReceber from './pages/relatorios/RelatorioContasReceber'
 import RelatorioContasPagar from './pages/relatorios/RelatorioContasPagar'
 import RelatorioEstoque from './pages/relatorios/RelatorioEstoque'
@@ -113,6 +114,7 @@ export default function App() {
           <Route path="/devolucao-produto" element={<DevolucaoProduto />} />
           <Route path="/relatorio-vendas" element={<RelatorioVendas />} />
           <Route path="/relatorio-comissoes" element={<RelatorioComissoes />} />
+          <Route path="/relatorio-ordens-servico" element={<RelatorioOrdensServico />} />
           <Route path="/relatorio-contas-receber" element={<RelatorioContasReceber />} />
           <Route path="/relatorio-contas-pagar" element={<RelatorioContasPagar />} />
           <Route path="/relatorio-estoque" element={<RelatorioEstoque />} />
