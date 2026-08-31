@@ -180,6 +180,7 @@ export default function ProdutoForm({ somenteLeitura = false }: { somenteLeitura
   const [modalGradeAberto, setModalGradeAberto] = useState(false)
   const [modalNcmAberto, setModalNcmAberto] = useState(false)
 
+
   /**
    * Busca a descrição do NCM digitado (mesmo estilo do autopreenchimento de CEP). Código que
    * não existe: limpa o campo e avisa, em vez de deixar um código inválido no formulário.
@@ -234,9 +235,47 @@ export default function ProdutoForm({ somenteLeitura = false }: { somenteLeitura
    */
   const ehServico = form.tipoItem === 'SERVICO'
 
+  /**
+   * Troca o tipo do item e **limpa o que deixou de existir** (pedido do dono do produto,
+   * 2026-08-31: serviço não tem Marca, Referência, NCM, oferta, Categorias nem foto).
+   *
+   * <p>⚠️ Limpar aqui é pela TELA — para o operador não guardar dado fantasma que reaparece se ele
+   * voltar para "Mercadoria" no meio do cadastro. A trava que garante o **corpo enviado** é o
+   * `paraRequisicao` (lib/produtos.ts), e ela existe separada de propósito: esconder campo nunca
+   * foi o mesmo que não mandar o valor.
+   */
   function trocarTipoItem(tipo: TipoItem) {
-    setForm((f) => ({ ...f, tipoItem: tipo }))
-    if (tipo === 'SERVICO') setArquivosNovaFoto([])
+    setForm((f) =>
+      tipo === 'SERVICO'
+        ? {
+            ...f,
+            tipoItem: tipo,
+            marca: '',
+            referencia: '',
+            codigoNcm: '',
+            dataInicioOferta: '',
+            dataFinalOferta: '',
+            precoOferta: '',
+            categorias: [],
+          }
+        : { ...f, tipoItem: tipo },
+    )
+    if (tipo === 'SERVICO') {
+      setArquivosNovaFoto([])
+      setDescricaoNcm('')
+      // Os erros pendentes desses campos vão junto: manter "Data de início da oferta não pode ser
+      // no passado" apontando para um campo que sumiu da tela é o defeito de "a mensagem mora onde
+      // o usuário não está olhando", com o agravante de travar o Salvar sem dizer por quê.
+      setErros((e) => ({
+        ...e,
+        marca: undefined,
+        referencia: undefined,
+        codigoNcm: undefined,
+        dataInicioOferta: undefined,
+        dataFinalOferta: undefined,
+        precoOferta: undefined,
+      }))
+    }
   }
 
   /**
@@ -609,7 +648,7 @@ export default function ProdutoForm({ somenteLeitura = false }: { somenteLeitura
                   ),
                 },
                 {
-                  visivel: campoVisivel('marca', mapaConfig),
+                  visivel: !ehServico && campoVisivel('marca', mapaConfig),
                   peso: 4,
                   children: (
                     <>
@@ -625,7 +664,7 @@ export default function ProdutoForm({ somenteLeitura = false }: { somenteLeitura
             <LinhaGrid
               itens={[
                 {
-                  visivel: campoVisivel('referencia', mapaConfig),
+                  visivel: !ehServico && campoVisivel('referencia', mapaConfig),
                   peso: 4,
                   children: (
                     <>
@@ -643,7 +682,7 @@ export default function ProdutoForm({ somenteLeitura = false }: { somenteLeitura
                   ),
                 },
                 {
-                  visivel: campoVisivel('codigoNcm', mapaConfig),
+                  visivel: !ehServico && campoVisivel('codigoNcm', mapaConfig),
                   peso: 2,
                   children: (
                     <>
@@ -677,7 +716,7 @@ export default function ProdutoForm({ somenteLeitura = false }: { somenteLeitura
                   ),
                 },
                 {
-                  visivel: campoVisivel('codigoNcm', mapaConfig),
+                  visivel: !ehServico && campoVisivel('codigoNcm', mapaConfig),
                   peso: 6,
                   children: (
                     <>
@@ -693,6 +732,11 @@ export default function ProdutoForm({ somenteLeitura = false }: { somenteLeitura
                     </>
                   ),
                 },
+                /* ⏭️ O classificador do SERVIÇO (NBS) entra aqui quando a NFS-e definir o campo —
+                   decisão do dono do produto em 2026-08-31: ele está sendo construído em paralelo,
+                   e o código do serviço sai de lá para não nascerem duas verdades sobre como o
+                   serviço se classifica. Por ora o serviço simplesmente não tem classificador na
+                   tela: o NCM some (é de mercadoria) e nada ocupa o lugar. */
               ]}
             />
           </div>
@@ -742,6 +786,11 @@ export default function ProdutoForm({ somenteLeitura = false }: { somenteLeitura
           </div>
         </section>
 
+        {/* ⛔ Serviço não tem categoria (pedido do dono do produto, 2026-08-31): a árvore de
+            categorias é de vitrine de mercadoria — organiza a busca do PDV e a exibição do
+            catálogo, nenhum dos dois aplicável a mão de obra. `trocarTipoItem` esvazia a lista
+            junto, e o `paraRequisicao` manda `[]` de qualquer jeito. */}
+        {!ehServico && (
         <section className="section">
           <p className="section-label">Categorias</p>
 
@@ -826,6 +875,7 @@ export default function ProdutoForm({ somenteLeitura = false }: { somenteLeitura
             </div>
           </div>
         </section>
+        )}
 
         <section className="section">
           <p className="section-label">Preços</p>
@@ -900,7 +950,7 @@ export default function ProdutoForm({ somenteLeitura = false }: { somenteLeitura
                   ),
                 },
                 {
-                  visivel: campoVisivel('dataInicioOferta', mapaConfig),
+                  visivel: !ehServico && campoVisivel('dataInicioOferta', mapaConfig),
                   peso: 2,
                   children: (
                     <>
@@ -920,7 +970,7 @@ export default function ProdutoForm({ somenteLeitura = false }: { somenteLeitura
                   ),
                 },
                 {
-                  visivel: campoVisivel('dataFinalOferta', mapaConfig),
+                  visivel: !ehServico && campoVisivel('dataFinalOferta', mapaConfig),
                   peso: 2,
                   children: (
                     <>
@@ -940,7 +990,7 @@ export default function ProdutoForm({ somenteLeitura = false }: { somenteLeitura
                   ),
                 },
                 {
-                  visivel: campoVisivel('precoOferta', mapaConfig),
+                  visivel: !ehServico && campoVisivel('precoOferta', mapaConfig),
                   peso: 2,
                   children: (
                     <>
@@ -1136,6 +1186,7 @@ export default function ProdutoForm({ somenteLeitura = false }: { somenteLeitura
           }}
         />
       )}
+
 
       {confirmarSalvarAberto && (
         <ConfirmarSalvarModal

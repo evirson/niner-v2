@@ -583,4 +583,66 @@ class ServicoNoCatalogoTest {
         mvc.perform(get("/api/v1/produtos/" + idServicoA).header("Authorization", "Bearer " + tokenB))
                 .andExpect(status().isNotFound());
     }
+
+    // -------------------------------------------------------- os campos de mercadoria que somem
+    // Pedido do dono do produto (2026-08-31): no cadastro de serviço não há Marca, Referência,
+    // NCM, os três campos de oferta, nem Categorias.
+    // ⏭️ O classificador do serviço (NBS) fica para a NFS-e, que está sendo construída em paralelo
+    // — decisão dele no mesmo dia, para o campo não nascer definido em dois lugares.
+
+    /**
+     * ⭐ O teste que mais importa deste bloco, e o menos óbvio: num tenant que marcou "Marca" como
+     * <b>obrigatória</b> em `cfg_tela_campo`, o serviço tem de cadastrar do mesmo jeito.
+     *
+     * <p>Sem a regra, o servidor recusaria com <i>"Campo obrigatório"</i> apontando para um campo
+     * que a tela do serviço <b>não mostra</b> — o operador leria a mensagem, procuraria o campo,
+     * não acharia, e ficaria sem caminho. A configuração por tenant é da tela de mercadoria.
+     */
+    @Test
+    void servicoCadastraMesmoComMarcaObrigatoriaNoTenant() throws Exception {
+        String token = assinarNovoTenant("marca-obrigatoria-servico");
+        ligarServicos(token);
+
+        mvc.perform(put("/api/v1/config-tela/catalogo.produto.form")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(APPLICATION_JSON)
+                        .content("""
+                                [{"campo":"marca","visivel":true,"obrigatorio":true}]
+                                """))
+                .andExpect(status().isOk());
+
+        // Mercadoria sem marca continua sendo recusada — é o par que prova que a configuração
+        // está mesmo valendo, e que o serviço passa pela REGRA e não porque a config não pegou.
+        mvc.perform(post("/api/v1/produtos").header("Authorization", "Bearer " + token)
+                        .contentType(APPLICATION_JSON)
+                        .content("""
+                                {"descricao":"COLEIRA","precoCusto":10,"percentualVenda":0,"precoVenda":10}
+                                """))
+                .andExpect(status().isBadRequest());
+
+        mvc.perform(post("/api/v1/produtos").header("Authorization", "Bearer " + token)
+                        .contentType(APPLICATION_JSON)
+                        .content("""
+                                {"descricao":"BANHO SIMPLES","precoCusto":0,"percentualVenda":0,
+                                 "precoVenda":40.00,"tipoItem":"SERVICO"}
+                                """))
+                .andExpect(status().isCreated());
+    }
+
+    /** Os campos de mercadoria são RECUSADOS num serviço, e a mensagem nomeia quais vieram. */
+    @Test
+    void servicoRecusaCamposDeMercadoriaNomeandoOsQueVieram() throws Exception {
+        String token = assinarNovoTenant("recusa-campos-mercadoria");
+        ligarServicos(token);
+
+        mvc.perform(post("/api/v1/produtos").header("Authorization", "Bearer " + token)
+                        .contentType(APPLICATION_JSON)
+                        .content("""
+                                {"descricao":"BANHO","precoCusto":0,"percentualVenda":0,"precoVenda":50.00,
+                                 "tipoItem":"SERVICO","marca":"ACME","codigoNcm":"85171231"}
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.detail").value(org.hamcrest.Matchers.containsString("Marca")))
+                .andExpect(jsonPath("$.detail").value(org.hamcrest.Matchers.containsString("NCM")));
+    }
 }

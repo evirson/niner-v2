@@ -238,6 +238,48 @@ quando o módulo de serviços passou a barrar a **criação** de OS, e não o ca
 Prende a regra `ProdutoImagemCrudTest.servicoNaoAceitaFoto`, com o **par positivo** (a mesma
 chamada numa mercadoria continua 201) e verificado por sabotagem: sem a trava, responde 201.
 
+## Particularidade 9: serviço não tem sete campos da mercadoria (2026-08-31)
+
+Pedido do dono do produto, item a item: no cadastro classificado como **serviço** não há **Marca**,
+**Referência**, **NCM**, **Início da oferta**, **Final da oferta**, **Preço de oferta** nem
+**Categorias**. A tela some com os sete.
+
+**Por que o NCM sai:** a NCM classifica **mercadoria** (é o código do Mercosul para bens); serviço
+não tem uma. Categoria é vitrine de produto; oferta é promoção de preço de mercadoria; marca e
+referência são do fabricante.
+
+⏭️ **E o que entra no lugar do NCM ainda não está decidido — de propósito.** O classificador do
+serviço (NBS, ou o que a nota exigir) **sai junto com a NFS-e**, que está sendo construída em
+paralelo: decisão do dono do produto em 2026-08-31, para o campo não nascer definido em dois
+lugares e as duas definições divergirem depois. Por ora o serviço simplesmente **não tem
+classificador na tela**.
+
+### Onde a regra fica travada — três camadas, e cada uma por um motivo
+
+1. **A tela esconde** os sete campos quando `tipoItem === 'SERVICO'`.
+2. **`paraRequisicao` anula** os sete no corpo enviado. ⚠️ Esconder não bastava: os valores
+   continuam no estado do formulário, e quem preenchesse descrição, marca e NCM e **só então**
+   marcasse "Serviço" mandaria tudo assim mesmo — com os campos invisíveis e ninguém vendo. É a
+   mesma armadilha das fotos, que seriam enviadas depois do POST.
+   (`trocarTipoItem` também limpa o estado, mas por outro motivo: para a tela não guardar dado
+   fantasma que reaparece se o operador voltar para "Mercadoria".)
+3. **O servidor recusa**, nomeando os campos que vieram (P4 — a trava que vale é a de lá).
+   ⭐ Recusar em vez de limpar em silêncio é deliberado: o silêncio faria o integrador achar que
+   gravou.
+
+### ⚠️ A metade menos óbvia, e a que mais doeria
+
+Os `exigirSeObrigatorio` de `cfg_tela_campo` **não valem para serviço**. Num tenant que marcou
+"Marca" como **obrigatória** (comum numa loja de calçados que também virou petshop), exigir marca
+de um serviço recusaria o cadastro com *"Campo obrigatório"* apontando para um campo que a tela
+**não mostra** — o operador leria a mensagem, procuraria o campo e não acharia. A configuração por
+tenant é da tela de **mercadoria**.
+
+Preso por `servicoCadastraMesmoComMarcaObrigatoriaNoTenant`, que traz o par: a **mercadoria** sem
+marca continua sendo recusada — sem isso o teste passaria mesmo que a configuração não tivesse
+pegado.
+
+
 ## Campos do formulário
 
 Tabela `produto` (V017). **Foco automático** em "O que é este item?" quando o módulo de serviços

@@ -340,6 +340,20 @@ public class ProdutoService {
             }
         }
 
+        if (ehServico(req)) {
+            recusarCamposDeMercadoriaEmServico(req);
+            // ⛔ E os `exigirSeObrigatorio` abaixo NÃO valem para serviço — este `return` é a metade
+            // menos óbvia e mais importante da mudança de 2026-08-31.
+            //
+            // `cfg_tela_campo` configura a tela de MERCADORIA. Num tenant que marcou "Marca" como
+            // obrigatória (coisa comum numa loja de calçados que também virou petshop), exigir
+            // marca de um serviço recusaria o cadastro com *"Campo obrigatório"* apontando para um
+            // campo que a tela **não mostra mais** — o operador leria a mensagem, procuraria o
+            // campo, não acharia, e não teria caminho nenhum. É o defeito de "a mensagem mora onde
+            // o usuário não está olhando", na sua forma mais cruel: o campo nem existe.
+            return;
+        }
+
         Map<String, ConfiguracaoCampoResponse> config = configuracaoTelaService.listar(CHAVE_TELA_FORM).stream()
                 .collect(Collectors.toMap(ConfiguracaoCampoResponse::campo, c -> c));
         exigirSeObrigatorio(config, "marca", req.marca());
@@ -351,6 +365,39 @@ public class ProdutoService {
         exigirSeObrigatorioValor(config, "dataInicioOferta", req.dataInicioOferta());
         exigirSeObrigatorioValor(config, "dataFinalOferta", req.dataFinalOferta());
     }
+
+    /**
+     * Serviço não tem Marca, Referência, NCM, oferta nem Categorias (pedido do dono do produto,
+     * 2026-08-31) — a tela esconde os sete campos, e aqui está a trava que vale (P4).
+     *
+     * <p>⭐ <b>Recusa em vez de ignorar.</b> Limpar em silêncio seria mais "gentil" e é justamente
+     * o que este repositório já pagou caro para aprender a não fazer: o cliente da API mandaria o
+     * NCM achando que gravou, e o dado sumiria sem ninguém saber. A mensagem <b>nomeia</b> os
+     * campos recusados, para quem estiver integrando saber exatamente o que tirar.
+     *
+     * <p>⚠️ O NCM é o que mais importa dos sete: ele classifica <b>mercadoria</b>, e um serviço com
+     * NCM gravado é um dado que a nota fiscal usaria errado.
+     *
+     * <p>⏭️ <b>O classificador do serviço (NBS) ainda não existe aqui</b>, por decisão do dono do
+     * produto em 2026-08-31: ele sai junto com a NFS-e, que está sendo construída em paralelo — o
+     * campo que fica no lugar do NCM será definido lá, para não nascerem duas verdades sobre como
+     * o serviço se classifica.
+     */
+    private static void recusarCamposDeMercadoriaEmServico(ProdutoRequest req) {
+        List<String> indevidos = new ArrayList<>();
+        if (req.marca() != null && !req.marca().isBlank()) indevidos.add("Marca");
+        if (req.referencia() != null && !req.referencia().isBlank()) indevidos.add("Referência");
+        if (req.codigoNcm() != null && !req.codigoNcm().isBlank()) indevidos.add("NCM");
+        if (req.dataInicioOferta() != null) indevidos.add("Início da oferta");
+        if (req.dataFinalOferta() != null) indevidos.add("Final da oferta");
+        if (req.precoOferta() != null) indevidos.add("Preço de oferta");
+        if (req.categorias() != null && !req.categorias().isEmpty()) indevidos.add("Categorias");
+        if (!indevidos.isEmpty()) {
+            throw new IllegalArgumentException(
+                    "Serviço não tem " + String.join(", ", indevidos) + " — esses campos são de mercadoria.");
+        }
+    }
+
 
     /**
      * Preço de venda nunca pode ficar abaixo do preço de custo (2026-08-12, regra do projeto

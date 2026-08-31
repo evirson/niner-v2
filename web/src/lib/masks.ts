@@ -59,6 +59,7 @@ export function mascararNcm(valor: string): string {
   return aplicarMascara(digitos, '0000.00.00')
 }
 
+
 /**
  * Código do plano de contas: máscara fixa "9.99.999" (grupo.família.conta —
  * docs/telas/plano-contas.md, encurtada de 9.99.999.999 em 2026-08-13). 1+2+3 = 6 dígitos.

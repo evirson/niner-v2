@@ -137,25 +137,40 @@ export function paraFormulario(p: Produto): ProdutoFormState {
   }
 }
 
-/** Monta o corpo da requisição: máscaras removidas, vazio vira null, texto em MAIÚSCULAS. */
+/**
+ * Monta o corpo da requisição: máscaras removidas, vazio vira null, texto em MAIÚSCULAS.
+ *
+ * ⭐ **E é aqui que a regra "serviço não tem esses campos" fica travada de verdade** (pedido do
+ * dono do produto, 2026-08-31: serviço não tem Marca, Referência, NCM, os três campos de oferta,
+ * nem Categorias). Esconder na tela não basta: os valores continuam no estado do formulário, e
+ * quem preenchesse a descrição, a marca e o NCM e **só então** marcasse "Serviço" mandaria tudo
+ * assim mesmo — com os campos invisíveis e ninguém vendo. É a mesma armadilha das fotos, que
+ * seriam enviadas depois do POST.
+ *
+ * ⚠️ O `ProdutoForm` **também** limpa esses campos ao trocar o tipo, mas por outro motivo: para a
+ * tela não guardar dado fantasma que reaparece se o operador voltar para "Mercadoria". Uma coisa é
+ * a interface, outra é o que sai no corpo — e a segunda é a que não pode falhar.
+ */
 export function paraRequisicao(f: ProdutoFormState) {
   const maiusculoOuNulo = (v: string) => (v.trim() ? maiusculas(v.trim()) : null)
+  const ehServico = f.tipoItem === 'SERVICO'
+  const soMercadoria = <T,>(valor: T): T | null => (ehServico ? null : valor)
   return {
     descricao: maiusculas(f.descricao.trim()),
-    marca: maiusculoOuNulo(f.marca),
-    referencia: maiusculoOuNulo(f.referencia),
+    marca: soMercadoria(maiusculoOuNulo(f.marca)),
+    referencia: soMercadoria(maiusculoOuNulo(f.referencia)),
     precoCusto: desmascararMoeda(f.precoCusto),
     percentualVenda: desmascararPercentual(f.percentualVenda),
     precoVenda: desmascararMoeda(f.precoVenda),
-    dataInicioOferta: paraIsoOuNulo(f.dataInicioOferta),
-    dataFinalOferta: paraIsoOuNulo(f.dataFinalOferta),
-    precoOferta: f.precoOferta ? desmascararMoeda(f.precoOferta) : null,
-    codigoNcm: f.codigoNcm ? somenteDigitos(f.codigoNcm) : null,
+    dataInicioOferta: soMercadoria(paraIsoOuNulo(f.dataInicioOferta)),
+    dataFinalOferta: soMercadoria(paraIsoOuNulo(f.dataFinalOferta)),
+    precoOferta: soMercadoria(f.precoOferta ? desmascararMoeda(f.precoOferta) : null),
+    codigoNcm: soMercadoria(f.codigoNcm ? somenteDigitos(f.codigoNcm) : null),
     pesoBruto: desmascararPeso(f.pesoBruto),
     pesoLiquido: desmascararPeso(f.pesoLiquido),
     idGrade: f.idGrade,
     ativo: f.ativo,
-    categorias: f.categorias.map((c) => c.idCategoria),
+    categorias: ehServico ? [] : f.categorias.map((c) => c.idCategoria),
     idPerfilFiscal: f.idPerfilFiscal,
     tipoItem: f.tipoItem,
     // Só fazem sentido em serviço; vazio vira null (zero é valor legítimo em percentual).

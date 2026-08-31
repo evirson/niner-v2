@@ -633,7 +633,7 @@ const CONTEUDOS: Record<string, ConteudoAjuda> = {
     titulo: 'Cadastro de produto',
     objetivo: 'Cadastrar um produto novo ou editar um existente.',
     passos: [
-      'Se a loja usa serviços, o primeiro campo é "O que é este item?" — responda antes de tudo: é ele que decide o que o resto da tela vai pedir. Serviço não tem estoque, não tem grade, não sai em etiqueta e não pede foto.',
+      'Se a loja usa serviços, o primeiro campo é "O que é este item?" — responda antes de tudo: é ele que decide o que o resto da tela vai pedir. Serviço não tem Marca, Referência, NCM, oferta, Categorias, estoque, grade, etiqueta nem foto — a tela some com esses campos.',
       'Preencha a descrição e os preços de custo/venda — são os únicos campos obrigatórios por padrão.',
       'Escolha uma ou mais categorias — a ordem da lista é a ordem de exibição do produto nas categorias.',
       'Crie uma categoria nova pela opção "＋ Gerenciar categorias" sem sair da tela.',
@@ -649,6 +649,7 @@ const CONTEUDOS: Record<string, ConteudoAjuda> = {
       'Data final da oferta antes da inicial: corrija o intervalo de datas.',
       'Não consigo adicionar foto: o produto precisa estar salvo primeiro, e o limite é de 6 fotos por produto.',
       'A seção "Fotos" sumiu: o item está marcado como Serviço — serviço não tem foto. Se o tipo estiver errado, inative este cadastro e crie outro (o tipo não muda depois de salvo).',
+      'Sumiram Marca, Referência, NCM, os campos de oferta e as Categorias: é o mesmo motivo — são campos de mercadoria, e este item é um serviço.',
       'Não aparece "O que é este item?": o módulo de serviços está desligado. Ligue "Usa serviços" nos Parâmetros do Sistema (só ADMIN acessa) — sem ele, todo cadastro é mercadoria.',
       'Não tem Perfil Fiscal nenhum na lista: cadastre um em Configurações > Fiscal > Perfis Fiscais antes.',
     ],

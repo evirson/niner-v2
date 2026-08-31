@@ -45,7 +45,13 @@ public class NcmService {
      *  sempre sabe o código de cabeça) — {@code ILIKE} por {@code descricao_ncm}, mesmo idioma
      *  de busca por nome já usado em {@code EtiquetaEmissaoService.buscarProdutos}/
      *  {@code buscarFornecedores}. Limitado a 30 linhas; sem termo, não busca (a tabela tem
-     *  milhares de códigos oficiais). */
+     *  milhares de códigos oficiais).
+     *
+     *  <p>⚠️ <b>`unaccent` acrescentado em 2026-08-31, e era defeito de verdade:</b> <b>10.419</b>
+     *  das 10.515 descrições da Receita têm acento, e o modal força MAIÚSCULAS — quem digitava
+     *  "ALGODAO" recebia <i>"Nenhum NCM encontrado"</i> para um código que existe, desde que a
+     *  busca por nome nasceu em 2026-08-11. Medido na tela; a extensão (V016) e o
+     *  {@code unaccent_imutavel} já existiam no banco, então o conserto foi de uma linha. */
     @Transactional(readOnly = true)
     public List<NcmResponse> buscarPorNome(String busca) {
         if (busca == null || busca.isBlank()) {
@@ -55,7 +61,7 @@ public class NcmService {
                         SELECT codigo_ncm, descricao_ncm, alq_federal_nacional, alq_federal_importado,
                                alq_estadual, alq_municipal
                         FROM cfg_produto_ncm
-                        WHERE descricao_ncm ILIKE ?
+                        WHERE unaccent_imutavel(descricao_ncm) ILIKE unaccent_imutavel(?)
                         ORDER BY descricao_ncm
                         LIMIT 30
                         """)
