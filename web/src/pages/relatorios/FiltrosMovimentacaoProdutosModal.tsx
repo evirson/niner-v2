@@ -1,4 +1,5 @@
 import type { CategoriaProduto } from '../../lib/categoriasProduto'
+import CabecalhoModal from '../../components/CabecalhoModal'
 import EmpresaMultiSelect from '../../components/EmpresaMultiSelect'
 import MultiSelectGenerico from '../../components/MultiSelectGenerico'
 import type { Empresa } from '../../lib/empresas'
@@ -98,7 +99,7 @@ export default function FiltrosMovimentacaoProdutosModal({
   return (
     <div className="modal-overlay" onClick={fecharAoClicarNoFundo(primeiraVez ? undefined : aoFechar)}>
       <div className="modal modal-medio" role="dialog" aria-label="Filtros do relatório" onClick={(e) => e.stopPropagation()}>
-        <h2 style={{ marginTop: 0 }}>Filtros do Relatório</h2>
+        <CabecalhoModal titulo="Filtros do Relatório" aoFechar={aoFechar} />
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
@@ -234,9 +235,6 @@ export default function FiltrosMovimentacaoProdutosModal({
         </div>
 
         <div className="ajuda-rodape">
-          <button type="button" className="btn ghost" onClick={aoFechar}>
-            {primeiraVez ? 'Voltar' : 'Cancelar'}
-          </button>
           <button type="button" className="btn" disabled={!podeGerar} onClick={aoGerar}>
             Gerar Relatório
           </button>

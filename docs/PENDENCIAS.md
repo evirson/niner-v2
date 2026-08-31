@@ -132,9 +132,35 @@ Não existe valor único que sirva a dois rolos, e a web não tem API de DEVMODE
 Ele tem a credencial de teste do Mercado Pago em mãos; é só ligar (`NINER_MP_ACCESS_TOKEN` /
 `NINER_MP_WEBHOOK_SECRET`).
 
-### 12. ~15 popups de TRABALHO ainda sem ✕
-Filtros do Relatório, Nova cor, Forma de Pagamento… Os ~24 popups de **confirmação** ficam de fora
-de propósito. Decisão dele.
+### 12. 🔵 Popups de trabalho sem ✕ — **MEDIDO em 2026-08-31: eram 18, agora são 13**
+O padrão está decidido (*"para as telas ficarem no mesmo padrão"*, 2026-08-25) e o componente
+existe: `CabecalhoModal` — título à esquerda, **✕ no canto superior direito**, e o rodapé só para a
+ação que a tela existe para fazer. **41 arquivos já o usam.**
+
+✅ **Feitos em 2026-08-31** — os 5 popups de **filtro de relatório**, que são inequivocamente "de
+trabalho" (Comissões, Contas a Pagar, Contas a Receber, Estoque, Movimentação de Produtos). Ganharam
+o ✕ e **perderam** o botão "Voltar/Cancelar" do rodapé, que era a mesma saída duplicada — deixar os
+dois seria meio caminho. Conferido no navegador: o ✕ aparece, o rodapé fica só com "Gerar
+Relatório" (à esquerda, **igual ao Fluxo de Caixa**, que já usava o padrão), e clicar no ✕ na
+primeira abertura **sai da tela**, exatamente como o antigo "Voltar" fazia.
+
+**Os 13 que faltam** (nenhum está sem saída — todos têm Cancelar/Voltar ou fecham no clique do
+fundo; o que falta é o padrão):
+`AberturaCaixaModal`, `ConfirmarSalvarModal`, `CorQuickCreateModal`, `EnviarWhatsAppModal`,
+`FornecedorQuickCreateModal`, `PlanoContasModal`, `ProdutoQuickCreateModal`, `RegraFiscalModal`,
+`EscolherDestinoModal`, `TesteImpressaoModal`, `EscolherModeloModal`, `ClienteFormModal`,
+`EscolherFormaPagamentoModal`.
+
+⚠️ **Por que parei nos 5 e não fiz os 13:** os que sobraram são **de confirmação e de criação
+rápida** (`ConfirmarSalvarModal` é literalmente um "tem certeza?"), e ali o ✕ concorre com o
+"Cancelar" em significado — é decisão de produto, não trabalho mecânico. Os 5 de filtro não tinham
+essa dúvida.
+
+⚠️ **O script que mediu isto errou DUAS vezes antes de acertar**, e as duas formas valem para
+qualquer varredura de UI: (a) o rótulo do botão é **dinâmico** (`{primeiraVez ? 'Voltar' :
+'Cancelar'}`) e escapa de um regex `>Cancelar<`; (b) o ✕ costuma vir de um **componente**
+(`CabecalhoModal`), não de um caractere no arquivo — procurar o símbolo acusou 41 falsos. O script
+final está em `/tmp/modais3.js` e procura o componente, o `aria-label` e o caractere.
 
 ### 13. "Painel" (`/`) está dentro de "Implementações Futuras" e é tela real
 Decisão dele: promover ou manter.

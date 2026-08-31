@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { useState } from 'react'
+import CabecalhoModal from '../../components/CabecalhoModal'
 import EmpresaMultiSelect from '../../components/EmpresaMultiSelect'
 import SeletorPlanoContas from '../../components/SeletorPlanoContas'
 import type { Empresa } from '../../lib/empresas'
@@ -141,7 +142,7 @@ export default function FiltrosContasPagarModal({
         aria-label="Filtros do relatório"
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 style={{ marginTop: 0 }}>Filtros do Relatório</h2>
+        <CabecalhoModal titulo="Filtros do Relatório" aoFechar={aoFechar} />
         <p className="muted" style={{ marginTop: -4 }}>
           Informe ao menos um período completo (início e fim) — Lançamento, Vencimento ou Pagamento.
         </p>
@@ -279,9 +280,6 @@ export default function FiltrosContasPagarModal({
         </div>
 
         <div className="ajuda-rodape">
-          <button type="button" className="btn ghost" onClick={aoFechar}>
-            {primeiraVez ? 'Voltar' : 'Cancelar'}
-          </button>
           <button type="button" className="btn" disabled={!podeGerar} onClick={aoGerar}>
             Gerar Relatório
           </button>

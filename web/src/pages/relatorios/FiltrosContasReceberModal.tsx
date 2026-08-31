@@ -1,4 +1,5 @@
 import type { Empresa } from '../../lib/empresas'
+import CabecalhoModal from '../../components/CabecalhoModal'
 import EmpresaMultiSelect from '../../components/EmpresaMultiSelect'
 import { mascararData } from '../../lib/masks'
 import type { CategoriaParcela, StatusParcela } from '../../lib/relatorioContasReceber'
@@ -116,7 +117,7 @@ export default function FiltrosContasReceberModal({
   return (
     <div className="modal-overlay" onClick={fecharAoClicarNoFundo(primeiraVez ? undefined : aoFechar)}>
       <div className="modal modal-medio" role="dialog" aria-label="Filtros do relatório" onClick={(e) => e.stopPropagation()}>
-        <h2 style={{ marginTop: 0 }}>Filtros do Relatório</h2>
+        <CabecalhoModal titulo="Filtros do Relatório" aoFechar={aoFechar} />
         <p className="muted" style={{ marginTop: -4 }}>
           Informe ao menos um período completo (início e fim) — Venda, Vencimento ou Recebimento.
         </p>
@@ -190,9 +191,6 @@ export default function FiltrosContasReceberModal({
         </div>
 
         <div className="ajuda-rodape">
-          <button type="button" className="btn ghost" onClick={aoFechar}>
-            {primeiraVez ? 'Voltar' : 'Cancelar'}
-          </button>
           <button type="button" className="btn" disabled={!podeGerar} onClick={aoGerar}>
             Gerar Relatório
           </button>
