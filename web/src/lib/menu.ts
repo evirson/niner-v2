@@ -426,6 +426,14 @@ export const MENU: NavGrupo[] = [
             descricao: 'Regime tributário, ambiente, numeração e credenciamento de cada empresa junto à SEFAZ.',
           },
           {
+            to: '/fiscal/nfse',
+            label: 'Configuração da NFS-e',
+            icone: IconeFiscal,
+            descricao: 'Emissão de nota de serviço: ambiente, série, Simples Nacional e o assistente que diz o que falta.',
+            // A busca do topo tem de achar por como o lojista chama a coisa, não só pelo rótulo.
+            sinonimos: ['nota de servico', 'iss', 'servico fiscal', 'nfse'],
+          },
+          {
             to: '/fiscal/perfis',
             label: 'Perfis Fiscais',
             icone: IconeFiscal,

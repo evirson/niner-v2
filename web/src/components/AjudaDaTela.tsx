@@ -464,6 +464,27 @@ const CONTEUDOS: Record<string, ConteudoAjuda> = {
     ],
     urlVideo: null,
   },
+  'fiscal.nfse-configuracao.form': {
+    titulo: 'Configuração da NFS-e',
+    objetivo:
+      'Ligar a emissão da nota fiscal de SERVIÇO (NFS-e) desta empresa, contra o Emissor Nacional. É a nota da mão de obra — banho e tosa, conserto, corte de cabelo. Mercadoria continua saindo em NFC-e/NF-e.',
+    passos: [
+      'Escolha a empresa no seletor do topo — cada empresa tem sua própria configuração e sua própria numeração.',
+      'Clique em "Verificar configuração" ANTES de tentar ligar a emissão. Ele confere tudo (CNPJ, município, certificado, alíquota do Simples, se o município opera no Emissor Nacional e a conexão) e mostra cada pendência com o link de onde resolver.',
+      'A alíquota efetiva do Simples é OBRIGATÓRIA para quem é optante: sem ela o Sefin Nacional recusa a nota. O valor está no extrato do PGDAS-D do mês anterior — confirme com seu contador.',
+      'A série da DPS separa a sua numeração. Se esta empresa já emitiu NFS-e por outro sistema com o mesmo CNPJ e a mesma série, avise o suporte antes de emitir: começar do 1 recusaria toda nota como duplicada.',
+      '"Testar conexão" é uma consulta de uma nota que não existe. A resposta certa é o Sefin dizer "não encontrada" — é isso que prova que o certificado e a conexão estão bons.',
+      'Emitir NFS-e é um passo separado do fechamento da venda: a papeleta sai primeiro e você decide se emite, igual à NFC-e.',
+    ],
+    errosComuns: [
+      'Só administradores acessam esta tela.',
+      'Não consigo ligar a emissão: a mensagem lista exatamente o que falta — quase sempre é a alíquota do Simples ou o certificado A1.',
+      'Em homologação nada passa: alguns municípios não têm a Inscrição Municipal cadastrada no ambiente de teste da prefeitura e recusam toda emissão ali. Nesses casos a primeira nota válida sai direto em produção — fale com o suporte antes.',
+      'O município não opera no Emissor Nacional: o Nainer não emite NFS-e nessa cidade. Não é falta de configuração, é limite do produto.',
+      'A nota foi recusada com um código começando por E: a mensagem traz o texto do próprio Sefin, que diz o que corrigir. Códigos de esquema (E1235) trazem ainda o campo exato que faltou.',
+    ],
+    urlVideo: null,
+  },
   'fiscal.perfil.tela': {
     titulo: 'Perfis Fiscais',
     objetivo: 'Cadastrar as regras de tributação (CFOP, ICMS, PIS/COFINS, IBS/CBS) que o produto usa na nota — sem digitar isso em cada produto individualmente.',
