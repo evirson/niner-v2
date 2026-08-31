@@ -293,6 +293,26 @@ cada `podeConfirmar`/`disabled` com a mensagem que o explica e verifique se as d
 **mesma condição de aba**. Três dos seis achados da rodada 8 no front eram "a mensagem certa existe,
 mas em lugar nenhum que o usuário esteja olhando".
 
+> ✅ **FEITO em 2026-08-31 — e o resultado foi um ACHADO e um DESCARTE.**
+>
+> O script varre `disabled={!<variável derivada>}` e procura, no mesmo arquivo, uma renderização
+> condicional que a explique. Apontou **14** botões. Conferidos um a um:
+>
+> - **1 defeito real, grave, e corrigido:** `EntradaMercadoriaForm` — `podeConfirmar` era um `&&` de
+>   **treze** condições com mensagem para apenas **duas**. As mais comuns (*sem fornecedor*, *sem
+>   itens*) deixavam o botão cinza sem nenhum diagnóstico. Virou uma lista onde a mesma entrada
+>   produz o bloqueio e o texto — não há como acrescentar condição muda.
+> - **13 falsos positivos, e o motivo importa:** as outras telas têm **2–3** condições, não treze, e
+>   as que não são óbvias **já mostram o erro na própria linha da grade** — `DevolucaoProduto`
+>   (`{erro && <p className="erro-campo">…}`), `TransferenciaForm` (*"Informe uma quantidade maior
+>   que zero."*), `ExportacaoXmlLote` (as duas contagens da correção de 08-26). No **PDV**,
+>   `podeConfirmar = saldoFechado` — uma condição só, visível na tela, e cliente/vendedor já têm
+>   toast próprio.
+>
+> ⭐ **A família não existe.** O defeito era específico de uma tela com treze condições; fica
+> **fechada** em vez de aberta. O script está em `/tmp/botoes.js` e vale re-rodar quando uma tela
+> nova acumular condições.
+
 ---
 
 ### 69. 🔵 A devolução não estorna o ACRÉSCIMO, e sobra comissão numa venda 100% devolvida
