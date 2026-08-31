@@ -626,6 +626,20 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
 .relatorio-corpo-fixo { overflow-y: hidden; display: flex; flex-direction: column; }
 .relatorio-corpo-fixo .relatorio-conteudo { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .relatorio-corpo-fixo .table-wrap { flex: 1; min-height: 0; }
+/* Seção de tamanho CONHECIDO dentro de um relatório de corpo travado (2026-08-31): não divide a
+   altura com as irmãs — mostra as suas linhas e pronto. Sem isto, um relatório com três blocos
+   reparte o espaço igualmente e o bloco de 5 linhas fica com altura para 4, escondendo a última
+   atrás de uma barra de rolagem de 25px. Achado na Lucratividade, onde a linha escondida era o
+   **Lucro Bruto**. Quem cresce (e rola) é só o bloco de número variável de linhas.
+   ⚠️ **`height: auto` é obrigatório aqui, e foi o que custou duas tentativas erradas.** A regra
+   base `.table-wrap` traz `height: 100%`, que fica INERTE enquanto o item é `flex: 1` (o flex
+   resolve a altura) e volta a valer no instante em que se troca para `flex: 0 0 auto` — aí o
+   bloco de 5 linhas estica para a altura inteira do container (medido: 590px para 159px de
+   conteúdo) e empurra as outras duas seções para fora da tela. Trocar "uma linha cortada" por
+   "duas seções invisíveis" é meio caminho pior que nenhum.
+   ⭐ A lição geral: ao mudar o `flex` de um item, procure as propriedades que o flex estava
+   silenciando — `height`, `width`, `min-*` — porque elas acordam juntas. */
+.relatorio-corpo-fixo .table-wrap.secao-fixa { flex: 0 0 auto; height: auto; overflow: visible; }
 .relatorio-corpo-fixo .table tfoot td { position: sticky; bottom: 0; z-index: 1; }
 /* Grid de 12 colunas (2026-08-03) — espaçamento horizontal mais estreito que o padrão
    `.table-compacta` pra caber sem precisar de scroll horizontal na maioria das telas. */

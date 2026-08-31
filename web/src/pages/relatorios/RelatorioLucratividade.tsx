@@ -189,7 +189,15 @@ export default function RelatorioLucratividade() {
             )}
 
             <p className="section-label" style={{ marginTop: gerandoPdf ? 24 : 0 }}>Resultado do Período</p>
-            <div className={`card table-wrap${gerandoPdf ? ' pdf-expandido' : ''}`}>
+            {/* ⚠️ `secao-fixa` (2026-08-31): esta tabela tem SEMPRE 5 linhas, e sem ela a regra
+                `.relatorio-corpo-fixo .table-wrap { flex: 1 }` repartia a altura igualmente entre as
+                três seções — a primeira ficava com 134px para 159px de conteúdo e **escondia a linha
+                do Lucro Bruto**, a que dá nome ao relatório, atrás de uma barra de rolagem de 25px
+                que ninguém procura. ⭐ Só a seção de Despesas cresce/rola, porque só ela tem número
+                variável de linhas (uma por conta do plano).
+                ⚠️ E o PDF saía CERTO (`pdf-expandido` desfaz o flex), o que é justamente o motivo de
+                isto ter sobrevivido: quem conferiu pelo PDF viu o relatório inteiro. */}
+            <div className={`card table-wrap secao-fixa${gerandoPdf ? ' pdf-expandido' : ''}`}>
               <table className="table table-compacta dre-tabela">
                 <tbody>
                   <tr className="dre-linha dre-linha-grupo">
@@ -282,7 +290,8 @@ export default function RelatorioLucratividade() {
             </div>
 
             <p className="section-label" style={{ marginTop: 24 }}>Lucro Líquido</p>
-            <div className={`card table-wrap${gerandoPdf ? ' pdf-expandido' : ''}`}>
+            {/* Fixa pelo mesmo motivo: 3 linhas, sempre. */}
+            <div className={`card table-wrap secao-fixa${gerandoPdf ? ' pdf-expandido' : ''}`}>
               <table className="table table-compacta dre-tabela">
                 <tbody>
                   <tr className="dre-linha dre-linha-subtotal">
