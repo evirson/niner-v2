@@ -9,6 +9,7 @@ import {
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import AjudaDaTela from '../../components/AjudaDaTela'
+import SeletorServicoLc116 from '../../components/SeletorServicoLc116'
 import { BotaoFecharTela } from '../../components/BotaoFecharTela'
 import CategoriaProdutoModal from '../../components/CategoriaProdutoModal'
 import ConfirmarSalvarModal from '../../components/ConfirmarSalvarModal'
@@ -20,6 +21,7 @@ import LinhaGrid from '../../components/LinhaGrid'
 import PesquisaNcmModal from '../../components/PesquisaNcmModal'
 import Toast from '../../components/Toast'
 import { ApiError } from '../../lib/api'
+import { useAuth } from '../../lib/auth'
 import { listarCategoriasProduto } from '../../lib/categoriasProduto'
 import { enviarImagem, type ImagemProduto } from '../../lib/produtoImagens'
 import { buscarConfiguracaoTela, paraMapa, type ConfiguracaoCampo } from '../../lib/configuracaoTela'
@@ -162,6 +164,8 @@ function validarCampo(chave: CampoValidavel, f: ProdutoFormState, mapaConfig: Ma
 }
 
 export default function ProdutoForm({ somenteLeitura = false }: { somenteLeitura?: boolean }) {
+  // A empresa da sessão define o município que o ADN consulta ao sugerir a alíquota do ISS.
+  const { idEmpresa: idEmpresaSessao } = useAuth()
   const { id } = useParams()
   const editando = Boolean(id)
   const navigate = useNavigate()
@@ -631,6 +635,79 @@ export default function ProdutoForm({ somenteLeitura = false }: { somenteLeitura
                     />
                     <p className="muted" style={{ marginTop: 4 }}>
                       Em branco, vale a comissão do funcionário.
+                    </p>
+                  </div>
+
+                  {/*
+                    Bloco fiscal do serviço (V100). ⭐ O `localIncidencia` NÃO é perguntado: ele vem
+                    da lista oficial junto com o código, e é o que o estudo tinha dado por perdido
+                    ("não consegui listar as 25 exceções do art. 3º e não vou inventá-las").
+                  */}
+                  <SeletorServicoLc116
+                    idEmpresa={idEmpresaSessao}
+                    codigo={form.codigoTributacaoNacional}
+                    descricaoAtual={form.descricaoServicoLc116}
+                    localIncidenciaAtual={form.localIncidencia}
+                    somenteLeitura={somenteLeitura}
+                    aoEscolher={(s) =>
+                      setForm((f) => ({
+                        ...f,
+                        codigoTributacaoNacional: s?.codigo ?? '',
+                        descricaoServicoLc116: s?.descricao ?? null,
+                        localIncidencia: s?.localIncidencia ?? null,
+                      }))
+                    }
+                    aoSugerirAliquota={(percentual) =>
+                      setForm((f) => ({ ...f, aliquotaIss: formatarPercentual(percentual) }))
+                    }
+                  />
+
+                  <div className="col-4">
+                    <label htmlFor="aliquotaIss">Alíquota do ISS (%)</label>
+                    <input
+                      id="aliquotaIss"
+                      inputMode="decimal"
+                      value={form.aliquotaIss}
+                      disabled={somenteLeitura}
+                      onChange={(e) => setForm((f) => ({ ...f, aliquotaIss: mascararPercentual(e.target.value) }))}
+                      onBlur={(e) => setForm((f) => ({ ...f, aliquotaIss: completarPercentual(e.target.value) }))}
+                    />
+                    <p className="muted" style={{ marginTop: 4 }}>
+                      Máximo 5% (LC 116). Escolhendo o código acima, o sistema consulta a alíquota
+                      do seu município e preenche aqui.
+                    </p>
+                  </div>
+                  <div className="col-4">
+                    <label htmlFor="codigoTributacaoMunicipal">Código municipal (opcional)</label>
+                    <input
+                      id="codigoTributacaoMunicipal"
+                      inputMode="numeric"
+                      maxLength={3}
+                      value={form.codigoTributacaoMunicipal}
+                      disabled={somenteLeitura}
+                      onChange={(e) =>
+                        setForm((f) => ({
+                          ...f,
+                          codigoTributacaoMunicipal: e.target.value.replace(/\D/g, '').slice(0, 3),
+                        }))
+                      }
+                    />
+                    <p className="muted" style={{ marginTop: 4 }}>
+                      Só quando a sua prefeitura exigir um código próprio além do nacional.
+                    </p>
+                  </div>
+                  <div className="col-4">
+                    <label className="checkbox-linha">
+                      <input
+                        type="checkbox"
+                        checked={form.issRetidoPadrao}
+                        disabled={somenteLeitura}
+                        onChange={(e) => setForm((f) => ({ ...f, issRetidoPadrao: e.target.checked }))}
+                      />
+                      ISS retido pelo tomador
+                    </label>
+                    <p className="muted" style={{ marginTop: 4 }}>
+                      Deixe desmarcado no atendimento a pessoa física, que é o caso comum do balcão.
                     </p>
                   </div>
                 </>

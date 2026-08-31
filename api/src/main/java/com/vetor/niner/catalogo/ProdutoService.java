@@ -524,11 +524,31 @@ public class ProdutoService {
             return;
         }
         jdbc.sql("""
-                        INSERT INTO produto_servico (id_tenant, id_produto, duracao_minutos, perc_comissao)
-                        VALUES (plataforma.tenant_atual(), ?, ?, ?)
+                        INSERT INTO produto_servico (
+                            id_tenant, id_produto, duracao_minutos, perc_comissao,
+                            codigo_tributacao_nacional, codigo_tributacao_municipal,
+                            aliquota_iss, iss_retido_padrao)
+                        VALUES (plataforma.tenant_atual(), ?, ?, ?, ?, ?, ?, ?)
                         """)
-                .params(idProduto, req.duracaoMinutos(), req.percComissaoServico())
+                .params(idProduto, req.duracaoMinutos(), req.percComissaoServico(),
+                        vazioParaNulo(req.codigoTributacaoNacional()),
+                        vazioParaNulo(req.codigoTributacaoMunicipal()),
+                        req.aliquotaIss(),
+                        Boolean.TRUE.equals(req.issRetidoPadrao()))
                 .update();
+    }
+
+    /**
+     * String vazia vira NULL antes do INSERT.
+     *
+     * <p>⚠️ Não é cosmético: {@code codigo_tributacao_nacional} tem FK para
+     * {@code cfg_servico_lc116}, e "" não é código nenhum — passaria pela FK como valor de
+     * verdade e estouraria com erro de integridade que o handler global traduz para "registro em
+     * uso por outro cadastro", mensagem sobre exclusão para quem estava salvando um cadastro. É a
+     * mesma armadilha registrada na V066 do marketplace.
+     */
+    private static String vazioParaNulo(String s) {
+        return s == null || s.isBlank() ? null : s.trim();
     }
 
     /** {@code getInt} + {@code wasNull} para {@code int} anulável — idioma do projeto.
@@ -561,11 +581,17 @@ public class ProdutoService {
                    p.peso_bruto, p.peso_liquido, p.id_grade, g.descricao AS descricao_grade, p.ativo,
                    p.id_perfil_fiscal, pf.nome AS nome_perfil_fiscal,
                    p.tipo_item, ps.duracao_minutos, ps.perc_comissao AS perc_comissao_servico,
+                   ps.codigo_tributacao_nacional, ps.codigo_tributacao_municipal,
+                   ps.aliquota_iss, COALESCE(ps.iss_retido_padrao, false) AS iss_retido_padrao,
+                   lc.descricao AS descricao_servico_lc116,
+                   lc.local_incidencia::text AS local_incidencia,
                    p.criado_em, p.atualizado_em, p.reajustado_em
             FROM produto p
             LEFT JOIN cfg_grade g ON g.id_grade = p.id_grade AND g.id_tenant = p.id_tenant AND g.id_grade <> 1
             LEFT JOIN cfg_perfil_fiscal pf ON pf.id_perfil_fiscal = p.id_perfil_fiscal AND pf.id_tenant = p.id_tenant
             LEFT JOIN produto_servico ps ON ps.id_produto = p.id_produto AND ps.id_tenant = p.id_tenant
+            -- Tabela GLOBAL (V099): sem id_tenant no ON, de propósito — é a lista da União.
+            LEFT JOIN cfg_servico_lc116 lc ON lc.codigo = ps.codigo_tributacao_nacional
             """;
 
     /** id_grade=1 é a grade PADRÃO (2026-08-13, reservada/invisível, ver {@code SignupService})
@@ -603,6 +629,12 @@ public class ProdutoService {
                 // por clareza, não por impossibilidade.
                 duracaoOuNulo(rs),
                 rs.getBigDecimal("perc_comissao_servico"),
+                rs.getString("codigo_tributacao_nacional"),
+                rs.getString("codigo_tributacao_municipal"),
+                rs.getBigDecimal("aliquota_iss"),
+                rs.getBoolean("iss_retido_padrao"),
+                rs.getString("descricao_servico_lc116"),
+                rs.getString("local_incidencia"),
                 rs.getBoolean("ativo"),
                 buscarCategorias(id),
                 produtoImagemService.listar(id),
