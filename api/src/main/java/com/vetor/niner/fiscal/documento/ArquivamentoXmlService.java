@@ -147,8 +147,14 @@ public class ArquivamentoXmlService {
         // própria no mesmo caminho faria o pacote do contador (DF22) sair com as duas.
         OffsetDateTime local = entrada.dataMovimento()
                 .atZoneSameInstant(FusoDaUf.deOuPadrao(entrada.uf())).toOffsetDateTime();
-        String caminho = "entrada/%d/%02d/%s.xml".formatted(
-                local.getYear(), local.getMonthValue(), entrada.chaveNfe());
+        // O `idMovimento` no caminho e o que impede o LACO ETERNO. Cancelar a entrada libera a
+        // chave da NF-e para reimportacao (comportamento desejado: "reimportar a mesma nota
+        // corrigida"), e o XML reimportado pode diferir em qualquer byte do ja arquivado —
+        // encoding, BOM, espaco em branco de outro download. Com o caminho so por chave, a segunda
+        // gravacao batia na divergencia de `gravarComIdempotencia`, o job engolia o erro e tentava
+        // DE NOVO a cada 10 minutos, para sempre, com o xml_bruto preso no banco.
+        String caminho = "entrada/%d/%02d/%d/%s.xml".formatted(
+                local.getYear(), local.getMonthValue(), idMovimento, entrada.chaveNfe());
 
         byte[] bytes = entrada.xmlBruto().getBytes(StandardCharsets.UTF_8);
         String chave = gravarComIdempotencia(caminho, bytes);
@@ -247,8 +253,11 @@ public class ArquivamentoXmlService {
         }
 
         OffsetDateTime local = evt.criadoEm().atZoneSameInstant(FusoDaUf.deOuPadrao(evt.uf())).toOffsetDateTime();
-        String caminho = "%d/%02d/%d/%s-%s-%d.xml".formatted(
-                local.getYear(), local.getMonthValue(), evt.modelo(),
+        // `idEvento` no caminho pelo mesmo motivo da entrada: a UNIQUE deste registro inclui
+        // `tentativa` (V035) de proposito — a MESMA sequencia pode ser reenviada, e duas tentativas
+        // autorizadas da mesma sequencia teriam `dhEvento` diferente no mesmo caminho.
+        String caminho = "%d/%02d/%d/%d/%s-%s-%d.xml".formatted(
+                local.getYear(), local.getMonthValue(), evt.modelo(), idEvento,
                 evt.chaveAcesso(), evt.tipoEvento(), evt.sequencia());
 
         byte[] bytes = evt.xmlEvento().getBytes(StandardCharsets.UTF_8);
@@ -265,8 +274,13 @@ public class ArquivamentoXmlService {
         }
 
         OffsetDateTime local = inu.criadoEm().atZoneSameInstant(FusoDaUf.deOuPadrao(inu.uf())).toOffsetDateTime();
-        String caminho = "%d/%02d/%d/inut-%d-%d-%d.xml".formatted(
-                local.getYear(), local.getMonthValue(), inu.modelo(),
+        // `idInutilizacao` no caminho — aqui o defeito foi MEDIDO (ArquivamentoXmlTest): a
+        // numeracao fiscal e por EMPRESA, entao duas filiais do mesmo tenant inutilizando a mesma
+        // serie e a mesma faixa e cenario legitimo (nao ha, nem pode haver, UNIQUE por serie+faixa).
+        // O caminho antigo nao carregava nada que distinguisse a empresa: as duas colidiam, o
+        // conteudo diferia (CNPJ do emitente) e a SEGUNDA nunca era arquivada.
+        String caminho = "%d/%02d/%d/%d/inut-%d-%d-%d.xml".formatted(
+                local.getYear(), local.getMonthValue(), inu.modelo(), idInutilizacao,
                 inu.serie(), inu.numeroInicial(), inu.numeroFinal());
 
         byte[] bytes = inu.xmlInutilizacao().getBytes(StandardCharsets.UTF_8);
@@ -281,6 +295,21 @@ public class ArquivamentoXmlService {
      * "segunda gravação apagou a primeira". No 409, confere se é a MESMA gravação de uma passada
      * anterior que falhou entre gravar e apontar a coluna (conteúdo igual — segue em frente) ou uma
      * divergência real (para e registra erro; nunca resolve sozinho apagando ou trocando de chave).
+     *
+     * <p><b>⚠️ Por que os caminhos carregam o id do registro (2026-08-31).</b> "Parar e registrar
+     * erro" é a atitude certa para um bug, mas era o desfecho de dois cenários <b>legítimos</b>:
+     * a entrada reimportada depois de um cancelamento (a UNIQUE de {@code produto_movimento_mestre}
+     * é parcial de propósito) e duas filiais inutilizando a mesma série e faixa (a numeração fiscal
+     * é por empresa). Nos dois, o caminho era montado só com dados do documento, que <b>não são
+     * únicos</b> — o job engolia a divergência e repetia a mesma falha a cada 10 minutos para
+     * sempre, com o XML preso no banco. Hoje entrada, evento e inutilização levam o id do próprio
+     * registro no caminho, que é único por construção e estável entre retentativas; a divergência
+     * voltou a significar só o que o javadoc sempre disse: bug.
+     *
+     * <p><b>Sem migração:</b> objeto já gravado no caminho antigo continua apontado pela coluna
+     * {@code xml_objeto_bucket} (que guarda a chave completa, nunca só o sufixo) e nunca é
+     * reprocessado — cada rotina sai cedo quando a coluna está preenchida. Área imutável não
+     * aceita apagar, então nada é movido: o caminho antigo simplesmente deixa de ser gerado.
      */
     private String gravarComIdempotencia(String caminhoRelativo, byte[] conteudo) {
         try {

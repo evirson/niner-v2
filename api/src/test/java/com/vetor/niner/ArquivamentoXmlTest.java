@@ -563,4 +563,134 @@ class ArquivamentoXmlTest {
         // O caminho carrega ano/mês do instante LOCAL da UF da empresa (PR), não do offset cru.
         assertThat(chave).contains("/65/").contains("inut-1-500-505.xml");
     }
+
+    /**
+     * Duas FILIAIS do mesmo tenant inutilizam a mesma série e a mesma faixa — cenário legítimo: a
+     * numeração fiscal é por empresa, e {@code fiscal_inutilizacao} não tem (nem pode ter) UNIQUE
+     * por (série, faixa). O caminho no bucket era {@code inut-{serie}-{ini}-{fim}.xml}, sem nada
+     * que distinguisse a empresa: as duas colidiam, o conteúdo diferia (CNPJ do emitente), e a
+     * segunda batia na divergência de {@code gravarComIdempotencia} — XML nunca arquivado e o job
+     * repetindo a mesma falha a cada 10 minutos, para sempre.
+     */
+    @Test
+    void duasFiliaisInutilizamAMesmaFaixaESaoArquivadasSeparadamente() throws Exception {
+        String token = assinarNovoTenant("inut-duas-filiais");
+        long idTenant = idTenantDo(token);
+        long idMatriz = idEmpresaDo(token);
+        completarDadosDaEmpresa(idTenant, idMatriz, "22333444000162");
+
+        long idFilial = jdbc.sql("""
+                        INSERT INTO empresa (id_tenant, codigo_empresa, razao_social, cnpj, estado,
+                                             matriz, cfg_nome_etiqueta)
+                        VALUES (?, 2, 'FILIAL DA INUTILIZACAO', '22333444000243', 'PR', false, 'FILIAL')
+                        RETURNING id_empresa
+                        """)
+                .param(idTenant).query(Long.class).single();
+
+        long idMatrizInut = inserirInutilizacao(idTenant, idMatriz, "22333444000162");
+        long idFilialInut = inserirInutilizacao(idTenant, idFilial, "22333444000243");
+
+        TenantContext.comTenant(idTenant, () -> {
+            arquivamento.arquivarInutilizacao(idMatrizInut);
+            arquivamento.arquivarInutilizacao(idFilialInut);
+        });
+
+        String chaveMatriz = chaveArquivadaDaInutilizacao(idTenant, idMatrizInut);
+        String chaveFilial = chaveArquivadaDaInutilizacao(idTenant, idFilialInut);
+
+        assertThat(chaveMatriz).as("XML da inutilização da matriz").isNotBlank();
+        assertThat(chaveFilial)
+                .as("XML da inutilização da FILIAL — em branco significa que o caminho colidiu com o "
+                        + "da matriz e a gravação foi recusada por divergência")
+                .isNotBlank();
+        assertThat(chaveFilial)
+                .as("as duas filiais não podem dividir o mesmo objeto no bucket")
+                .isNotEqualTo(chaveMatriz);
+    }
+
+    private long inserirInutilizacao(long idTenant, long idEmpresa, String cnpjNoXml) {
+        return jdbc.sql("""
+                        INSERT INTO fiscal_inutilizacao
+                            (id_tenant, id_empresa, modelo, serie, ano, numero_inicial, numero_final,
+                             justificativa, autorizado, protocolo, xml_inutilizacao)
+                        VALUES (?, ?, 65, 1, 26, 700, 705,
+                                'Numeros queimados por rejeicao de schema, nunca autorizados', true,
+                                '141260009999999', ?)
+                        RETURNING id_inutilizacao
+                        """)
+                // O CNPJ no corpo é o que faz os dois XMLs diferirem — é isso que transforma a
+                // colisão de caminho em divergência, em vez de passar batido como "mesmo conteúdo".
+                .params(idTenant, idEmpresa,
+                        "<inutNFe versao=\"4.00\"><infInut><CNPJ>" + cnpjNoXml + "</CNPJ></infInut></inutNFe>")
+                .query(Long.class).single();
+    }
+
+    private String chaveArquivadaDaInutilizacao(long idTenant, long idInutilizacao) {
+        return jdbc.sql("""
+                        SELECT xml_objeto_bucket FROM fiscal_inutilizacao
+                         WHERE id_tenant = ? AND id_inutilizacao = ?
+                        """)
+                .params(idTenant, idInutilizacao).query(String.class).optional().orElse(null);
+    }
+
+    /**
+     * O caso que a pendência #67 descrevia: cancelar a entrada <b>libera a chave</b> da NF-e para
+     * reimportação (comportamento desejado — "reimportar a mesma nota corrigida"), e o XML
+     * reimportado pode diferir em qualquer byte do já arquivado. Com o caminho montado só a partir
+     * da chave, a segunda gravação batia na divergência de {@code gravarComIdempotencia}, o job
+     * engolia o erro e repetia a cada 10 minutos <b>para sempre</b>, com o {@code xml_bruto} da
+     * entrada nova preso no banco.
+     */
+    @Test
+    void entradaReimportadaComXmlDiferenteArquivaEmCaminhoProprio() throws Exception {
+        String token = assinarNovoTenant("entrada-reimportada");
+        long idTenant = idTenantDo(token);
+        long idEmpresa = idEmpresaDo(token);
+        completarDadosDaEmpresa(idTenant, idEmpresa, "22333444000162");
+
+        String chaveNfe = "41260722333444000162550010000009991000009990";
+        long primeira = inserirEntradaComXml(idTenant, idEmpresa, chaveNfe, "<nfeProc>primeira</nfeProc>");
+        TenantContext.comTenant(idTenant, () -> arquivamento.arquivarEntradaXml(primeira));
+
+        // O cancelamento é o que LIBERA a chave: a UNIQUE de produto_movimento_mestre é parcial
+        // (WHERE cancelado = false), de propósito, para permitir reimportar a nota corrigida.
+        jdbc.sql("UPDATE produto_movimento_mestre SET cancelado = true WHERE id_tenant = ? AND id_movimento = ?")
+                .params(idTenant, primeira).update();
+
+        // Mesma chave (a nota do fornecedor é a mesma), conteúdo diferente — outro download, outro
+        // encoding, um byte a mais. É exatamente o que a reimportação produz.
+        long segunda = inserirEntradaComXml(idTenant, idEmpresa, chaveNfe, "<nfeProc>segunda</nfeProc>");
+        TenantContext.comTenant(idTenant, () -> arquivamento.arquivarEntradaXml(segunda));
+
+        String chavePrimeira = chaveArquivadaDaEntrada(idTenant, primeira);
+        String chaveSegunda = chaveArquivadaDaEntrada(idTenant, segunda);
+
+        assertThat(chavePrimeira).as("XML da primeira importação").isNotBlank();
+        assertThat(chaveSegunda)
+                .as("XML da REIMPORTAÇÃO — em branco significa que o caminho colidiu com o da "
+                        + "importação anterior e o job ficaria repetindo a falha a cada 10 min")
+                .isNotBlank();
+        assertThat(chaveSegunda).isNotEqualTo(chavePrimeira);
+    }
+
+    private long inserirEntradaComXml(long idTenant, long idEmpresa, String chaveNfe, String xml) {
+        long idMovimento = jdbc.sql("""
+                        INSERT INTO produto_movimento_mestre
+                            (id_tenant, id_empresa, tipo_movimento, chave_nfe)
+                        VALUES (?, ?, 'COMPRA', ?)
+                        RETURNING id_movimento
+                        """)
+                .params(idTenant, idEmpresa, chaveNfe).query(Long.class).single();
+        jdbc.sql("INSERT INTO entrada_xml (id_tenant, id_movimento, xml_bruto) VALUES (?, ?, ?)")
+                .params(idTenant, idMovimento, xml).update();
+        return idMovimento;
+    }
+
+    private String chaveArquivadaDaEntrada(long idTenant, long idMovimento) {
+        return jdbc.sql("""
+                        SELECT xml_objeto_bucket FROM entrada_xml
+                         WHERE id_tenant = ? AND id_movimento = ?
+                        """)
+                .params(idTenant, idMovimento).query(String.class).optional().orElse(null);
+    }
 }

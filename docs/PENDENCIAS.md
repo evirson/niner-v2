@@ -328,13 +328,34 @@ alíquota do ISS tem **dois donos sem conciliação** — quem monta a DPS lê `
 (digitada), e a alíquota oficial do ADN não chega a lugar nenhum. Enquanto isso, `docs/MODULONFSE.md`
 §5 item 6 descreve *"o sistema pergunta à fonte e preenche"*, que hoje é intenção, não comportamento.
 
-### 67. 🟢 Reimportar a mesma NF-e corrigida pode travar o arquivamento num laço a cada 10 min
-O caminho do XML de entrada é `entrada/{ano}/{mes}/{chaveNfe}.xml`, e cancelar a entrada **libera a
-chave** para reimportação (é comportamento desejado: "reimportar a mesma NF-e corrigida"). Se o XML
-reimportado diferir em **qualquer byte** do já arquivado, `gravarComIdempotencia` levanta divergência,
-o job engole, e tenta de novo a cada 10 minutos para sempre — com o `xml_bruto` da entrada nova nunca
-saindo do banco. A correção é incluir o `id_movimento` no caminho do objeto; deixei para a próxima
-rodada porque depende de decidir o que fazer com os objetos já gravados no caminho antigo.
+### 67. ✅ Reimportar a mesma NF-e corrigida travava o arquivamento num laço a cada 10 min — RESOLVIDO 2026-08-31
+O caminho do XML de entrada era `entrada/{ano}/{mes}/{chaveNfe}.xml`, e cancelar a entrada **libera a
+chave** para reimportação (comportamento desejado, e a UNIQUE de `produto_movimento_mestre` é parcial
+`WHERE cancelado = false` justamente por isso). XML reimportado diferente em qualquer byte →
+`gravarComIdempotencia` levanta divergência → o job engole e repete a cada 10 min **para sempre**,
+com o `xml_bruto` da entrada nova preso no banco.
+
+**Corrigido:** o caminho passou a levar o `id_movimento`. **Sem migração** — objeto já gravado no
+caminho antigo continua apontado pela coluna `xml_objeto_bucket` (que guarda a chave completa) e
+nunca é reprocessado; área imutável não aceita mover, então o caminho antigo só deixa de ser gerado.
+
+⚠️ **Ao corrigir apareceram mais DOIS casos da mesma família, e um foi medido:**
+- **Inutilização** — o caminho era `inut-{serie}-{ini}-{fim}.xml`, sem nada que distinguisse a
+  **empresa**. A numeração fiscal é por empresa e `fiscal_inutilizacao` não tem (nem pode ter)
+  UNIQUE por (série, faixa): duas filiais do mesmo tenant inutilizando a mesma faixa é cenário
+  legítimo. Reproduzido em teste **antes** de corrigir — `inut-1-700-705.xml diverge`, e a filial
+  nunca arquivava.
+- **Evento** — o caminho era `{chave}-{tipo}-{seq}.xml`, e a UNIQUE do registro inclui `tentativa`
+  (V035) de propósito, porque a MESMA sequência pode ser reenviada. Duas tentativas autorizadas da
+  mesma sequência teriam `dhEvento` diferente no mesmo caminho. Corrigido junto, por simetria.
+
+O **documento** (nfeProc) ficou como estava: a chave de acesso inclui CNPJ do emitente, número,
+série e cNF — é única por construção fiscal, e `{ano}/{mes}/{modelo}/{chave}.xml` é o caminho que o
+contador espera.
+
+Testes: `ArquivamentoXmlTest.entradaReimportadaComXmlDiferenteArquivaEmCaminhoProprio` e
+`duasFiliaisInutilizamAMesmaFaixaESaoArquivadasSeparadamente` — os dois **sabotados** depois de
+passar, cada um reproduzindo a divergência exata.
 
 ## 🟢 Bola minha
 
