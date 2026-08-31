@@ -176,6 +176,7 @@ public class ProdutoService {
                     .query(Long.class).single();
             salvarCategorias(id, req.categorias());
             salvarServico(id, req);
+            garantirVariacaoDeServico(id);
             return buscar(id);
         } catch (DataIntegrityViolationException e) {
             throw erroDeVinculo(e);
@@ -235,6 +236,7 @@ public class ProdutoService {
             }
             salvarCategorias(id, req.categorias());
             salvarServico(id, req);
+            garantirVariacaoDeServico(id);
             return buscar(id);
         } catch (DataIntegrityViolationException e) {
             throw erroDeVinculo(e);
@@ -558,6 +560,47 @@ public class ProdutoService {
      * cliente pode nem tê-lo enviado. Confiar no request faria a edição de um serviço apagar a
      * linha de {@code produto_servico} sempre que o campo viesse vazio.
      */
+    /**
+     * ⭐ <b>Serviço nasce com a sua variação</b> (2026-08-31, defeito relatado pelo dono do produto:
+     * *"cadastrei CORTE DE CABELO, mas na Ordem de Serviço este serviço não aparece"*).
+     *
+     * <p><b>Por que ele sumia.</b> O cadastro de Produto <b>nunca</b> criou variação — quem cria é
+     * o cadastro rápido do PDV/Entrada ({@link #criarComVariacao}) ou a Entrada de Estoque. E
+     * <b>tudo</b> que procura item para lançar parte de {@code produto_barra}: a pesquisa do PDV
+     * ({@code PdvProdutoService.VARIACOES_BASE}) e a da OS, que reusa o mesmo popup. Produto sem
+     * variação é <b>invisível</b> nas duas telas.
+     *
+     * <p>⚠️ <b>Para MERCADORIA isso ficava escondido</b>, e é por isso que passou despercebido: a
+     * Entrada de Estoque cria a variação quando a compra chega, então o produto aparece "sozinho"
+     * um pouco depois. Medido neste banco no dia do relato: <b>330</b> mercadorias sem variação,
+     * todas esperando a primeira entrada. <b>Serviço não tem entrada de estoque</b> — não existe
+     * segundo caminho, e ele ficaria invisível para sempre.
+     *
+     * <p>⛔ <b>Só para serviço, de propósito.</b> Fazer o mesmo para mercadoria mudaria o fluxo de
+     * compra de 330 cadastros e emitiria SKU para produto que talvez nunca entre — não foi pedido,
+     * e o gerador de EAN tem sequencial global (V017) que não se gasta à toa.
+     *
+     * <p>⚠️ Pergunta ao <b>banco</b>, não ao request, pelo mesmo motivo de {@link #salvarServico}:
+     * {@code tipo_item} é imutável (V085) e o cliente pode nem enviá-lo numa edição. Como roda
+     * também no {@code atualizar}, um serviço cadastrado <b>antes</b> desta correção ganha a
+     * variação na primeira vez que for editado — sem migration de dados.
+     *
+     * <p>Cor e tamanho vão <b>nulos</b>: serviço não tem grade e não tem saldo (a trigger da V086
+     * garante), então a variação é sempre única. {@code validarGrade = false} pelo mesmo motivo —
+     * exigir grade de um serviço recusaria o cadastro num tenant com "usa cor/grade" ligado.
+     */
+    private void garantirVariacaoDeServico(long idProduto) {
+        boolean ehServicoNoBanco = Boolean.TRUE.equals(jdbc.sql("""
+                        SELECT tipo_item = 'SERVICO' FROM produto
+                         WHERE id_tenant = plataforma.tenant_atual() AND id_produto = ?
+                        """)
+                .param(idProduto).query(Boolean.class).optional().orElse(false));
+        if (!ehServicoNoBanco) {
+            return;
+        }
+        produtoBarraService.obterOuCriar(idProduto, null, null, false);
+    }
+
     private void salvarServico(long idProduto, ProdutoRequest req) {
         boolean ehServico = Boolean.TRUE.equals(jdbc.sql("""
                         SELECT tipo_item = 'SERVICO' FROM produto

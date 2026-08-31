@@ -1,7 +1,7 @@
 # Progresso do Projeto — niner-v2
 
 Registro cronológico das decisões e entregas. Atualizar a cada marco relevante.
-**Última atualização:** 2026-08-31 (NFS-e Nacional emitida e cancelada em produção, V099–V103; relatório de OS V104; sessão de navegador: 5 telas conferidas, o "Confirmar Entrada" mudo e os popups sem ✕)
+**Última atualização:** 2026-08-31 (NFS-e Nacional em produção V099–V103; relatório de OS V104; serviço agora nasce com variação e aparece na OS)
 
 > 📄 **O que ainda falta está em `docs/PENDENCIAS.md`** (lista viva, agrupada por *de quem é a
 > bola*). Este arquivo conta a **história**; aquele conta o que está **aberto**. Ao fechar uma
@@ -11,6 +11,66 @@ Registro cronológico das decisões e entregas. Atualizar a cada marco relevante
 
 ## Estado atual
 
+> ## 📌 2026-08-31 (5) — DOIS RELATOS DELE: um era ambiente, o outro era defeito de um ano
+>
+> > *"Cadastrei um produto, código 3734, este é serviço, mas não consigo colocar o % de ISS — coloco,
+> > gravo e ele aparece zerado. E quando vou em Ordem de Serviço, este serviço, CORTE DE CABELO, não
+> > aparece."*
+>
+> Dois sintomas na mesma tela, **duas causas diferentes** — e separá-las foi o trabalho.
+>
+> ### 1. O ISS zerado: **não era defeito, era a API rodando código velho**
+>
+> Medido: o front **enviava** `aliquotaIss: 5` (interceptei o `fetch`), o backend **grava**
+> `req.aliquotaIss()`, e o banco tinha `NULL`. A conta que fechou o caso foi de **relógio**: a imagem
+> da API em execução era de **17:19** e o merge da NFS-e — que trouxe o campo — foi às **18:23**. Ele
+> cadastrou às 18:42, contra uma API que não conhecia `aliquotaIss`: o Jackson descartava o campo em
+> silêncio, enquanto `duracaoMinutos` (que já existia) gravava normalmente.
+>
+> ⚠️ **Eu fiz o pull e não rebuildei a API.** Está escrito na memória há semanas que *restart não
+> rebuilda*; depois de um merge que traz coluna e DTO novos, o rebuild é parte do merge.
+> Depois de `docker compose up -d --build api`: mandei 5, voltou 5, e o banco gravou **5.00**.
+>
+> ### 2. O serviço invisível na OS: **defeito de verdade, e antigo**
+>
+> O cadastro de Produto **nunca criou variação** — quem cria é o cadastro rápido do PDV/Entrada
+> (`criarComVariacao`) ou a Entrada de Estoque. E **tudo** que procura item para lançar parte de
+> `produto_barra`: a pesquisa do PDV e a da OS, que reusa o mesmo popup.
+>
+> ⭐ **Por que ninguém tinha notado:** para **mercadoria** o defeito é invisível — a Entrada de Estoque
+> cria a variação quando a compra chega, e o produto "aparece sozinho" um pouco depois. Medido neste
+> banco: **330 mercadorias sem variação**, todas esperando a primeira entrada. **Serviço não tem
+> entrada de estoque** — não existe segundo caminho, e ele ficaria invisível para sempre.
+>
+> **A correção:** `garantirVariacaoDeServico`, chamada no `criar` **e** no `atualizar`. Pergunta ao
+> **banco** (não ao request), pelo mesmo motivo de `salvarServico`: `tipo_item` é imutável (V085) e o
+> cliente pode nem enviá-lo numa edição. Como roda também no `atualizar`, **serviço cadastrado antes
+> da correção se conserta na primeira edição — sem migration de dados**.
+>
+> ⛔ **Só para serviço, de propósito:** fazer o mesmo para mercadoria mudaria o fluxo de compra de 330
+> cadastros e emitiria SKU para produto que talvez nunca entre — o gerador de EAN tem sequencial
+> global (V017) que não se gasta à toa.
+>
+> ### ⚠️ A correção quebrou 42 testes — e isso foi a prova de que ela funciona
+>
+> `duplicate key value violates unique constraint "produto_barra_variacao_uk"` em
+> `OrdemServicoTest` (27), `NfseEmissaoIntegracaoTest` (7), `RelatorioOrdensServicoTest` (7) e
+> `RelatorioComissoesCrudTest` (1). Eles criavam a variação **à mão** justamente porque o cadastro não
+> criava — não estavam errados, estavam **compensando**.
+>
+> ⭐ **Antes de mexer nos testes, a pergunta certa:** isso pode acontecer em produção? Medido —
+> **não**: só o `ProdutoBarraService` insere em `produto_barra`, e o `obterOuCriar` já é idempotente
+> (`buscarPorCombinacao(...).orElseGet(criar)`). O INSERT cego era só dos testes. Os quatro helpers
+> passaram a **procurar antes de inserir**, e o nome passou a dizer a verdade.
+>
+> **Verificado na ponta**: CORTE DE CABELO **aparece** na pesquisa de itens da Ordem de Serviço
+> (aberta no navegador), o ISS grava 5,00, e os três serviços do banco agora têm SKU — o 3733, que
+> ficou de fora por ter sido cadastrado antes, foi reparado por um **PUT com o corpo idêntico ao já
+> gravado**: não altera nada que ele digitou, só passa pela garantia da variação.
+>
+> Suíte: **1163 testes, 0 falhas**.
+>
+>
 > ## 📌 2026-08-31 (4) — A SESSÃO DO NAVEGADOR: o que cinco telas abertas acharam
 >
 > Ele perguntou *"vc pode testar no navegador??"* e depois *"há algo mais que você poderia fazer para

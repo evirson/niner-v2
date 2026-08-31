@@ -145,7 +145,23 @@ class RelatorioComissoesCrudTest {
         }
     }
 
+    /**
+     * ⚠️ Obter-ou-criar, não criar (2026-08-31). Desde que o serviço passa a nascer com a própria
+     * variação — sem ela ficava invisível na Ordem de Serviço e no PDV —, o INSERT cego bate em
+     * produto_barra_variacao_uk. Este helper não estava errado: criava a variação à mão porque o
+     * cadastro não criava, e o que os testes precisam é TER uma.
+     */
     private long criarVariacao(Connection c, long idTenant, long idProduto) throws SQLException {
+        try (PreparedStatement busca = c.prepareStatement(
+                "SELECT id_variacao FROM produto_barra WHERE id_produto = ? LIMIT 1")) {
+            busca.setLong(1, idProduto);
+            try (ResultSet rs = busca.executeQuery()) {
+                if (rs.next()) {
+                    return rs.getLong(1);
+                }
+            }
+        }
+
         try (PreparedStatement ps = c.prepareStatement("""
                 INSERT INTO produto_barra (id_tenant, id_produto, sku) VALUES (?, ?, gerar_ean13_interno())
                 RETURNING id_variacao

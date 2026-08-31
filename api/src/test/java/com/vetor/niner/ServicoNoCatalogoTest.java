@@ -93,7 +93,25 @@ class ServicoNoCatalogoTest {
         return ((Number) JsonPath.read(resp, "$.idProduto")).longValue();
     }
 
+    /**
+     * ⚠️ <b>Obter-ou-criar, não criar</b> (2026-08-31). Desde que o serviço passou a nascer com a
+     * própria variação — sem ela ficava invisível na OS e no PDV —, o INSERT cego batia em
+     * {@code produto_barra_variacao_uk} e derrubava <b>nove</b> testes de uma vez. Eles não estavam
+     * errados: criavam a variação à mão porque o cadastro não criava, e o que precisam é
+     * <b>ter uma</b> para exercitar outra coisa. Quem prende a criação é
+     * {@code servicoNasceComVariacaoEApareceNaBuscaDeItens}; aqui o nome passou a dizer a verdade.
+     */
     private long criarVariacao(Connection c, long idTenant, long idProduto) throws SQLException {
+        try (PreparedStatement ps = c.prepareStatement(
+                "SELECT id_variacao FROM produto_barra WHERE id_tenant = ? AND id_produto = ? LIMIT 1")) {
+            ps.setLong(1, idTenant);
+            ps.setLong(2, idProduto);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    return rs.getLong(1);
+                }
+            }
+        }
         try (PreparedStatement ps = c.prepareStatement(
                 "INSERT INTO produto_barra (id_tenant, id_produto, sku) VALUES (?, ?, gerar_ean13_interno())"
                         + " RETURNING id_variacao")) {
@@ -644,5 +662,106 @@ class ServicoNoCatalogoTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.detail").value(org.hamcrest.Matchers.containsString("Marca")))
                 .andExpect(jsonPath("$.detail").value(org.hamcrest.Matchers.containsString("NCM")));
+    }
+
+    /**
+     * ⭐ **Serviço nasce com variação, e sem ela é invisível na OS e no PDV** (defeito relatado pelo
+     * dono do produto em 2026-08-31: *"cadastrei CORTE DE CABELO, mas na Ordem de Serviço este
+     * serviço não aparece"*).
+     *
+     * <p>O cadastro de Produto nunca criou variação, e **tudo** que procura item para lançar parte
+     * de {@code produto_barra}. Para MERCADORIA isso ficava escondido — a Entrada de Estoque cria a
+     * variação quando a compra chega. **Serviço não tem entrada de estoque**: sem esta correção ele
+     * ficaria invisível para sempre.
+     */
+    @Test
+    void servicoNasceComVariacaoEApareceNaBuscaDeItens() throws Exception {
+        String token = assinarNovoTenant("servico-variacao");
+        long idTenant = idTenantDoToken(token);
+        ligarServicos(token);
+
+        long idServico = criarProduto(token, "CORTE DE CABELO", "SERVICO");
+
+        try (Connection c = abrirConexao(idTenant)) {
+            assertThat(variacoesDe(c, idServico))
+                    .as("serviço sem variação é invisível na OS e no PDV — a busca dos dois parte de produto_barra")
+                    .isEqualTo(1);
+        }
+
+        // A prova que interessa ao lojista: ele APARECE na busca que a OS usa (o mesmo popup do PDV).
+        String achados = mvc.perform(get("/api/v1/pdv/produtos")
+                        .header("Authorization", "Bearer " + token).param("busca", "CORTE DE CABELO"))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        assertThat(achados)
+                .as("o serviço recém-cadastrado tem de aparecer na pesquisa de itens")
+                .contains("CORTE DE CABELO");
+    }
+
+    /**
+     * ⛔ O par negativo, e ele é a metade que define o escopo: **mercadoria continua SEM** variação
+     * no cadastro. Criar uma aqui mudaria o fluxo de compra de centenas de cadastros e gastaria o
+     * sequencial global do gerador de EAN (V017) com produto que talvez nunca entre — quem cria a
+     * variação da mercadoria é a Entrada de Estoque, e isso não foi pedido.
+     */
+    @Test
+    void mercadoriaContinuaSemVariacaoNoCadastro() throws Exception {
+        String token = assinarNovoTenant("mercadoria-sem-variacao");
+        long idTenant = idTenantDoToken(token);
+
+        long idProduto = criarProduto(token, "COLEIRA AZUL", null);   // sem tipoItem = MERCADORIA
+
+        try (Connection c = abrirConexao(idTenant)) {
+            assertThat(variacoesDe(c, idProduto))
+                    .as("mercadoria ganha variação na Entrada de Estoque, não no cadastro")
+                    .isZero();
+        }
+    }
+
+    /**
+     * Um serviço cadastrado ANTES desta correção ganha a variação na primeira edição — é por isso
+     * que a garantia roda também no {@code atualizar}, e é o que dispensa migration de dados.
+     */
+    @Test
+    void servicoAntigoSemVariacaoGanhaUmaAoSerEditado() throws Exception {
+        String token = assinarNovoTenant("servico-antigo");
+        long idTenant = idTenantDoToken(token);
+        ligarServicos(token);
+
+        long idServico = criarProduto(token, "TOSA COMPLETA", "SERVICO");
+        // Recria o estado anterior à correção: o serviço existe e não tem variação nenhuma.
+        try (Connection c = abrirConexao(idTenant);
+             PreparedStatement ps = c.prepareStatement(
+                     "DELETE FROM produto_barra WHERE id_tenant = ? AND id_produto = ?")) {
+            ps.setLong(1, idTenant);
+            ps.setLong(2, idServico);
+            ps.executeUpdate();
+        }
+        try (Connection c = abrirConexao(idTenant)) {
+            assertThat(variacoesDe(c, idServico)).as("cenário montado: sem variação").isZero();
+        }
+
+        mvc.perform(put("/api/v1/produtos/" + idServico).header("Authorization", "Bearer " + token)
+                        .contentType(APPLICATION_JSON)
+                        .content("{\"descricao\":\"TOSA COMPLETA\",\"precoCusto\":10.00,"
+                                + "\"percentualVenda\":0,\"precoVenda\":80.00}"))
+                .andExpect(status().isOk());
+
+        try (Connection c = abrirConexao(idTenant)) {
+            assertThat(variacoesDe(c, idServico))
+                    .as("editar o serviço antigo tem de criar a variação que faltava")
+                    .isEqualTo(1);
+        }
+    }
+
+    private int variacoesDe(Connection c, long idProduto) throws SQLException {
+        try (PreparedStatement ps = c.prepareStatement(
+                "SELECT count(*) FROM produto_barra WHERE id_produto = ?")) {
+            ps.setLong(1, idProduto);
+            try (ResultSet rs = ps.executeQuery()) {
+                rs.next();
+                return rs.getInt(1);
+            }
+        }
     }
 }
