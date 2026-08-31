@@ -1014,20 +1014,56 @@ export default function EntradaMercadoriaForm() {
       return vencimentoIso != null && vencimentoIso < dataEntradaIso
     })
 
-  const podeConfirmar =
-    Boolean(fornecedorEscolhido) &&
-    itens.length > 0 &&
-    pendentes.length === 0 &&
-    !algumCustoZerado &&
-    linhaComVendaAbaixoDoCusto === undefined &&
-    !algumaParcelaIncompleta &&
-    !dataEntradaInvalida &&
-    !empresaDoXmlNaoLiberada &&
-    !dataEntradaTextoInvalida &&
-    !algumaParcelaComDataInvalida &&
-    !totalParcelasNaoBate &&
-    !parcelaComVencimentoAntesDaEntrada &&
-    !chaveJaImportada
+  /**
+   * ⭐ **Por que isto é uma LISTA e não um booleano** (2026-08-31, achado abrindo a tela).
+   *
+   * O `podeConfirmar` era um `&&` de **treze** condições, e só **duas** tinham mensagem — as duas
+   * que a correção de 2026-08-30 mudou de lugar. As outras onze, inclusive as mais comuns (*sem
+   * fornecedor*, *sem itens*), deixavam o "Confirmar Entrada" cinza **sem nenhum diagnóstico**:
+   * medido na tela, `disabled: true`, `title` vazio, nenhum texto explicando. O operador via um
+   * botão morto e não tinha por onde começar.
+   *
+   * Escrever onze `{cond && <p>…</p>}` consertaria o hoje e não o amanhã: a décima quarta condição
+   * nasceria muda, como estas nasceram. Aqui a **mesma lista** produz o bloqueio e o texto, então
+   * `podeConfirmar` é literalmente "não há motivo" — não existe caminho para adicionar uma condição
+   * e esquecer a mensagem, porque a condição *é* o par.
+   *
+   * A ordem importa: é a ordem em que o operador resolve as coisas (fornecedor → itens → custos →
+   * datas → parcelas), e a topbar mostra **o primeiro** motivo pendente, não os treze de uma vez.
+   */
+  const motivosDoConfirmarBloqueado: string[] = [
+    !fornecedorEscolhido ? 'Escolha o fornecedor na aba "1. Dados Gerais".' : null,
+    itens.length === 0 ? 'Nenhum produto lançado — inclua ao menos um item na aba "2. Produtos".' : null,
+    pendentes.length > 0
+      ? `${pendentes.length} produto(s) da planilha ainda não foram localizados no cadastro — resolva a lista "Não Localizados" na aba "2. Produtos".`
+      : null,
+    chaveJaImportada
+      ? 'Esta NF-e já foi importada antes. Cancele a entrada anterior se quiser lançá-la de novo.'
+      : null,
+    empresaDoXmlNaoLiberada
+      ? 'Esta nota foi faturada contra outra empresa, que não está liberada para o seu usuário — peça acesso à empresa correta, ou entre com um usuário que já a tenha.'
+      : null,
+    algumCustoZerado ? 'Há item com custo zerado — informe o custo na aba "2. Produtos".' : null,
+    linhaComVendaAbaixoDoCusto
+      ? `O preço de venda de "${linhaComVendaAbaixoDoCusto.descricao}" (${moeda(desmascararMoeda(linhaComVendaAbaixoDoCusto.precoVendaTexto || '0'))}) ficou abaixo do preço de custo (${moeda(desmascararMoeda(linhaComVendaAbaixoDoCusto.custoTexto || '0'))}). Corrija na aba "2. Produtos", ou remova a linha e lance de novo pelo popup.`
+      : null,
+    dataEntradaTextoInvalida ? 'A Data da Entrada não é uma data válida (dd/mm/aaaa).' : null,
+    dataEntradaInvalida ? 'A Data da Entrada não pode ser futura.' : null,
+    algumaParcelaComDataInvalida
+      ? 'Há parcela com data de vencimento inválida na aba "3. Financeiro".'
+      : null,
+    algumaParcelaIncompleta
+      ? 'Há parcela sem data de vencimento ou sem valor na aba "3. Financeiro".'
+      : null,
+    parcelaComVencimentoAntesDaEntrada
+      ? 'Há parcela vencendo antes da Data da Entrada — confira as datas na aba "3. Financeiro".'
+      : null,
+    totalParcelasNaoBate
+      ? `A soma das parcelas (${moeda(valorParcelasTotal)}) não fecha com o total da nota (${moeda(valorTotal)}) — ajuste na aba "3. Financeiro".`
+      : null,
+  ].filter((m): m is string => m !== null)
+
+  const podeConfirmar = motivosDoConfirmarBloqueado.length === 0
 
   const efetivar = useMutation({
     mutationFn: () =>
@@ -1448,19 +1484,21 @@ export default function EntradaMercadoriaForm() {
             de custo da aba 2 — ou seja, nos dois casos o operador via o botão morto numa aba e a
             explicação em OUTRA. Este arquivo já registra esse defeito com nome: trocar "toast
             genérico" por "botão morto sem diagnóstico" é o mesmo defeito um campo ao lado. */}
-        {!entradaGravada && empresaDoXmlNaoLiberada && (
+        {/* ⭐ UMA mensagem, vinda da MESMA lista que bloqueia o botão (2026-08-31). Antes eram dois
+            blocos soltos aqui, cobrindo 2 das 13 condições — as outras 11 deixavam o botão cinza em
+            silêncio, e as duas mais comuns ("sem fornecedor", "sem itens") estavam entre elas.
+            Mostra só o PRIMEIRO motivo: a ordem da lista é a ordem em que o operador resolve, e
+            despejar treze linhas de uma vez é o mesmo que não dizer nada.
+            ⚠️ A condição é **idêntica** à do botão (`!entradaGravada && modo !== null`), e isso não
+            é zelo: na primeira versão faltava o `modo !== null` e a mensagem aparecia com o popup de
+            origem ainda aberto, explicando um botão que a topbar nem tinha renderizado. Mensagem que
+            aparece onde o botão não está é o mesmo defeito que ela veio corrigir, do outro lado. */}
+        {!entradaGravada && modo !== null && motivosDoConfirmarBloqueado.length > 0 && (
           <p className="erro-campo" style={{ marginTop: 8 }}>
-            Esta nota foi faturada contra <strong>outra empresa</strong>, que não está liberada para o
-            seu usuário — a entrada não pode ser confirmada assim. Peça acesso à empresa correta, ou
-            entre com um usuário que já a tenha.
-          </p>
-        )}
-        {!entradaGravada && linhaComVendaAbaixoDoCusto && (
-          <p className="erro-campo" style={{ marginTop: 8 }}>
-            O preço de venda de "{linhaComVendaAbaixoDoCusto.descricao}" (
-            {moeda(desmascararMoeda(linhaComVendaAbaixoDoCusto.precoVendaTexto || '0'))}) ficou abaixo do
-            preço de custo ({moeda(desmascararMoeda(linhaComVendaAbaixoDoCusto.custoTexto || '0'))}).
-            Corrija o custo na aba "2. Produtos", ou remova a linha e lance de novo pelo popup.
+            {motivosDoConfirmarBloqueado[0]}
+            {motivosDoConfirmarBloqueado.length > 1 && (
+              <span className="muted"> (e mais {motivosDoConfirmarBloqueado.length - 1} pendência(s))</span>
+            )}
           </p>
         )}
       </div>
