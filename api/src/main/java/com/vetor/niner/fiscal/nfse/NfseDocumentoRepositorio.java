@@ -231,6 +231,58 @@ public class NfseDocumentoRepositorio {
                 .list();
     }
 
+    /**
+     * Listagem por período para a aba de NFS-e em Documentos Fiscais.
+     *
+     * <p>⭐ A ordem coloca o que precisa de ação em cima: pendente e rejeitada antes de
+     * autorizada. É a consequência de tela da DS13 — nota que ninguém emitiu por esquecimento é
+     * pior que nota que falhou, porque não aparece em lugar nenhum. Ordenar por data deixaria a
+     * pendente de ontem enterrada sob as autorizadas de hoje.
+     */
+    @Transactional(readOnly = true)
+    public List<Documento> listar(long idEmpresa, OffsetDateTime de, OffsetDateTime ate,
+                                  String situacao, int limite, int deslocamento) {
+        return jdbc.sql("""
+                        SELECT id_nfse, id_empresa, id_venda, serie, numero_dps, id_dps,
+                               chave_acesso, numero_nfse, situacao::text AS situacao,
+                               ambiente::text AS ambiente, codigo_municipio_ibge, competencia,
+                               codigo_tributacao_nacional, descricao_servico, valor_servicos,
+                               xml_chave, xml_cancelamento_chave, codigo_status, motivo_status,
+                               tentativas, data_autorizacao, data_cancelamento
+                          FROM nfse_documento
+                         WHERE id_tenant = plataforma.tenant_atual()
+                           AND id_empresa = ?
+                           AND criado_em >= ? AND criado_em < ?
+                           AND (? = '' OR situacao::text = ?)
+                         ORDER BY CASE
+                                    WHEN situacao IN ('RASCUNHO','ASSINADA','TRANSMITINDO') THEN 0
+                                    WHEN situacao = 'REJEITADA' THEN 1
+                                    ELSE 2
+                                  END,
+                                  criado_em DESC
+                         LIMIT ? OFFSET ?
+                        """)
+                .params(idEmpresa, de, ate, situacao == null ? "" : situacao,
+                        situacao == null ? "" : situacao, limite, deslocamento)
+                .query(Documento.class)
+                .list();
+    }
+
+    @Transactional(readOnly = true)
+    public long contar(long idEmpresa, OffsetDateTime de, OffsetDateTime ate, String situacao) {
+        return jdbc.sql("""
+                        SELECT count(*) FROM nfse_documento
+                         WHERE id_tenant = plataforma.tenant_atual()
+                           AND id_empresa = ?
+                           AND criado_em >= ? AND criado_em < ?
+                           AND (? = '' OR situacao::text = ?)
+                        """)
+                .params(idEmpresa, de, ate, situacao == null ? "" : situacao,
+                        situacao == null ? "" : situacao)
+                .query(Long.class)
+                .single();
+    }
+
     @Transactional
     public void registrarEvento(long idNfse, String tipoEvento, String idPedido, int motivoCodigo,
                                 String motivoTexto, String situacao, String codigoStatus,

@@ -1,6 +1,7 @@
 package com.vetor.niner.fiscal.nfse;
 
 import com.vetor.niner.comum.armazenamento.AreaPrivada;
+import com.vetor.niner.comum.seguranca.EmpresaDaSessao;
 import com.vetor.niner.comum.armazenamento.ArmazenamentoPrivado;
 import com.vetor.niner.identidade.permissao.Acao;
 import com.vetor.niner.identidade.permissao.PermissaoService;
@@ -18,6 +19,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Emissão, consulta e cancelamento da NFS-e.
@@ -36,14 +38,17 @@ public class NfseController {
     private final NfseCancelamentoService cancelamento;
     private final NfseDocumentoRepositorio repositorio;
     private final ArmazenamentoPrivado armazenamento;
+    private final com.vetor.niner.comum.tempo.FusoDaLoja fusoDaLoja;
 
     public NfseController(NfseEmissaoService emissao, NfseCancelamentoService cancelamento,
                           NfseDocumentoRepositorio repositorio,
-                          ArmazenamentoPrivado armazenamento) {
+                          ArmazenamentoPrivado armazenamento,
+                          com.vetor.niner.comum.tempo.FusoDaLoja fusoDaLoja) {
         this.emissao = emissao;
         this.cancelamento = cancelamento;
         this.repositorio = repositorio;
         this.armazenamento = armazenamento;
+        this.fusoDaLoja = fusoDaLoja;
     }
 
     /**
@@ -56,6 +61,35 @@ public class NfseController {
     @PostMapping("/vendas/{idVenda}/emitir")
     public List<NfseEmissaoService.Resultado> emitir(@PathVariable long idVenda) {
         return emissao.emitirDaVenda(idVenda);
+    }
+
+    /**
+     * Listagem por período — a aba de NFS-e em Documentos Fiscais.
+     *
+     * <p>Paginação por número de página, como o resto do produto (não cursor): a tela precisa
+     * poder pular para qualquer página.
+     */
+    @GetMapping
+    public Map<String, Object> listar(@AuthenticationPrincipal Jwt jwt,
+                                      @RequestParam long idEmpresa,
+                                      @RequestParam String de,
+                                      @RequestParam String ate,
+                                      @RequestParam(required = false) String situacao,
+                                      @RequestParam(defaultValue = "1") int pagina,
+                                      @RequestParam(defaultValue = "50") int limite) {
+        EmpresaDaSessao.exigirAcesso(jwt, idEmpresa);
+        // ⚠️ O fuso é o DA LOJA, nunca o da JVM: OffsetDateTime.now().getOffset() pega o TZ do
+        // container, que só existe em produção — o filtro de data perderia as notas emitidas
+        // depois das 21h e o defeito não reproduziria em dev.
+        var fuso = fusoDaLoja.da(idEmpresa);
+        var inicio = java.time.LocalDate.parse(de).atStartOfDay(fuso).toOffsetDateTime();
+        var fim = java.time.LocalDate.parse(ate).plusDays(1).atStartOfDay(fuso).toOffsetDateTime();
+        int deslocamento = Math.max(0, (pagina - 1) * limite);
+        return Map.of(
+                "itens", repositorio.listar(idEmpresa, inicio, fim, situacao, limite, deslocamento),
+                "total", repositorio.contar(idEmpresa, inicio, fim, situacao),
+                "pagina", pagina,
+                "tamanhoPagina", limite);
     }
 
     /** As notas de uma venda, com situação e motivo — alimenta a fila de pendentes. */

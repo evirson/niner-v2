@@ -1,4 +1,5 @@
 import CabecalhoModal from '../../components/CabecalhoModal'
+import NfseAba from './NfseAba'
 import { useEffect, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import AjudaDaTela from '../../components/AjudaDaTela'
@@ -106,6 +107,13 @@ export default function DocumentoFiscalLista() {
   const [consultando, setConsultando] = useState<number | null>(null)
   const [reprocessando, setReprocessando] = useState<number | null>(null)
   const [aviso, setAviso] = useState<{ mensagem: string; tipo: 'erro' | 'sucesso' } | null>(null)
+  /**
+   * ⚠️ Aba separada, não um valor a mais no filtro de modelo. A NFS-e vem de outro endpoint, tem
+   * outras colunas e outra cardinalidade (uma venda pode ter N notas de serviço e uma só de
+   * mercadoria). Espremer as duas na mesma tabela deixaria metade das colunas vazia — é o mesmo
+   * motivo pelo qual a DS9 recusou juntá-las no banco.
+   */
+  const [aba, setAba] = useState<'MERCADORIA' | 'SERVICO'>('MERCADORIA')
 
   const { data: empresas } = useQuery({ queryKey: ['fiscal-empresas'], queryFn: listarEmpresasFiscal })
 
@@ -238,6 +246,35 @@ export default function DocumentoFiscalLista() {
       </div>
 
       <div className="lista-corpo">
+        <div className="abas" style={{ marginBottom: 12 }}>
+          <button
+            type="button"
+            className={aba === 'MERCADORIA' ? 'aba ativa' : 'aba'}
+            onClick={() => setAba('MERCADORIA')}
+          >
+            NF-e / NFC-e
+          </button>
+          <button
+            type="button"
+            className={aba === 'SERVICO' ? 'aba ativa' : 'aba'}
+            onClick={() => setAba('SERVICO')}
+          >
+            NFS-e (serviço)
+          </button>
+        </div>
+
+        {aba === 'SERVICO' ? (
+          podeBuscar ? (
+            <NfseAba
+              idEmpresa={idEmpresa as number}
+              dataInicialIso={dataInicialIso as string}
+              dataFinalIso={dataFinalIso as string}
+              aoAvisar={(mensagem, tipo) => setAviso({ mensagem, tipo })}
+            />
+          ) : (
+            <p className="muted">Informe a data inicial e final.</p>
+          )
+        ) : (
         <div className="card table-wrap">
           {!podeBuscar ? (
             <p className="muted">Informe a data inicial e final.</p>
@@ -359,9 +396,12 @@ export default function DocumentoFiscalLista() {
             </table>
           )}
         </div>
+        )}
       </div>
 
-      {itens.length > 0 && (
+      {/* ⚠️ A paginação é da lista de NF-e/NFC-e. Sem o guarda de aba ela apareceria embaixo da
+          tabela de NFS-e, paginando outra coisa — controle que mente sobre o que controla. */}
+      {aba === 'MERCADORIA' && itens.length > 0 && (
         <div className="lista-rodape">
           <div className="paginacao-bar">
             <span className="muted">
