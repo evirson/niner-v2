@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { useRef, useState } from 'react'
+import { aguardarPintura } from '../../lib/temaClaroParaCaptura'
 import AjudaDaTela from '../../components/AjudaDaTela'
 import { BotaoFecharTela } from '../../components/BotaoFecharTela'
 import { IconeRelatorio } from '../../components/Icones'
@@ -66,9 +67,6 @@ export default function DiferencasEstoque() {
     }
   }
 
-  function aguardarPintura(): Promise<void> {
-    return new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())))
-  }
 
   const handleGerarPdf = async () => {
     if (!conteudoRef.current) return

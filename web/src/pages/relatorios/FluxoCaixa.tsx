@@ -1,5 +1,6 @@
 import CabecalhoModal from '../../components/CabecalhoModal'
 import { useQuery } from '@tanstack/react-query'
+import { aguardarPintura } from '../../lib/temaClaroParaCaptura'
 import { Fragment, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import AjudaDaTela from '../../components/AjudaDaTela'
@@ -159,9 +160,6 @@ export default function FluxoCaixa() {
     setModalAberto(false)
   }
 
-  function aguardarPintura(): Promise<void> {
-    return new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())))
-  }
 
   const handleGerarPdf = async () => {
     if (!conteudoRef.current) return

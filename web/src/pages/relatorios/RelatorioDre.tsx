@@ -1,5 +1,6 @@
 import CabecalhoModal from '../../components/CabecalhoModal'
 import { useQuery } from '@tanstack/react-query'
+import { aguardarPintura } from '../../lib/temaClaroParaCaptura'
 import { useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import AjudaDaTela from '../../components/AjudaDaTela'
@@ -128,9 +129,6 @@ export default function RelatorioDre() {
 
   /** Dois frames antes de capturar: o React precisa ter pintado os blocos que só existem no PDF
    *  (filtros aplicados, resumo) antes do html2canvas ler o DOM. */
-  function aguardarPintura(): Promise<void> {
-    return new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())))
-  }
 
   const handleGerarPdf = async () => {
     if (!conteudoRef.current) return

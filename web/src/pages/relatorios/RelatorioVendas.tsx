@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { useRef, useState } from 'react'
+import { aguardarPintura } from '../../lib/temaClaroParaCaptura'
 import { useNavigate } from 'react-router-dom'
 import {
   Bar,
@@ -293,14 +294,12 @@ export default function RelatorioVendas() {
     ]
   }
 
-  /** A seção "Filtros Aplicados" só existe no PDF, nunca na tela — ela só entra no DOM
-   *  enquanto `gerandoPdf` está true (renderizada dentro de `topoRef`, então a própria captura
-   *  do html2canvas a pega junto). Precisa de 2 `requestAnimationFrame` depois do `setState`
-   *  pra garantir que o React já commitou e o navegador já pintou o novo nó antes da captura —
-   *  senão o html2canvas roda contra o DOM antigo (sem a seção). */
-  function aguardarPintura(): Promise<void> {
-    return new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())))
-  }
+  /** A seção "Filtros Aplicados" só existe no PDF, nunca na tela — ela só entra no DOM enquanto
+   *  `gerandoPdf` está true (renderizada dentro de `topoRef`, então a própria captura do
+   *  html2canvas a pega junto). Por isso o `aguardarPintura()` antes de capturar: sem ele o
+   *  html2canvas roda contra o DOM antigo, sem a seção.
+   *  ⚠️ A espera vive em `lib/temaClaroParaCaptura` desde 2026-08-31 — era uma cópia local em
+   *  **dez** telas, e todas travavam o PDF em aba oculta (ver o javadoc de lá). */
 
   const handleGerarPdf = async () => {
     if (!topoRef.current || !gridRef.current) return

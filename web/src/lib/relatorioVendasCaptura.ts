@@ -78,7 +78,7 @@ function hexParaRgb(hex: string): [number, number, number] {
  *  depois — tanto pra abrir espaço pro texto nativo quanto pra tapar qualquer sobra da fatia
  *  anterior/seguinte que vaze pra dentro dessas faixas. Devolve quantas páginas usou. */
 async function desenharElementoPaginado(doc: jsPDF, elemento: HTMLElement): Promise<number> {
-  const canvas = await html2canvas(elemento, { ...OPCOES_CAPTURA, backgroundColor: COR_FUNDO_PDF })
+  console.log('[DIAG] 3 html2canvas inicio'); const canvas = await html2canvas(elemento, { ...OPCOES_CAPTURA, backgroundColor: COR_FUNDO_PDF })
 
   const larguraPagina = doc.internal.pageSize.getWidth()
   const alturaPagina = doc.internal.pageSize.getHeight()
@@ -173,12 +173,12 @@ export async function gerarPdfCapturaRelatorioVendas(
 ): Promise<void> {
   // ⚠️ Sem isto, exportar logo depois de gerar fotografa o gráfico no meio da animação
   // do recharts e as barras saem VAZIAS no PDF (achado de 2026-08-26).
-  await aguardarGraficosEstaveis(topoEl)
+  console.log('[DIAG] 1 pre-graficos'); await aguardarGraficosEstaveis(topoEl); console.log('[DIAG] 2 graficos ok')
   const doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'landscape' })
 
-  await desenharElementoPaginado(doc, topoEl)
+  await desenharElementoPaginado(doc, topoEl); console.log('[DIAG] 4 topo ok')
   doc.addPage()
-  await desenharElementoPaginado(doc, gridEl)
+  await desenharElementoPaginado(doc, gridEl); console.log('[DIAG] 5 grid ok')
 
   desenharCabecalhoERodape(doc, COR_TEXTO_PDF, 'Relatório de Vendas', new Date().toLocaleString('pt-BR'), rodapeEsquerda, 'Nainer ERP')
 

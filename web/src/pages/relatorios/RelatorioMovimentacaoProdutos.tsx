@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { useRef, useState } from 'react'
+import { aguardarPintura } from '../../lib/temaClaroParaCaptura'
 import { useNavigate } from 'react-router-dom'
 import { Bar, BarChart, CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import AjudaDaTela from '../../components/AjudaDaTela'
@@ -256,9 +257,6 @@ export default function RelatorioMovimentacaoProdutos() {
     ]
   }
 
-  function aguardarPintura(): Promise<void> {
-    return new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())))
-  }
 
   const handleGerarPdf = async () => {
     if (!topoRef.current || !gridRef.current) return

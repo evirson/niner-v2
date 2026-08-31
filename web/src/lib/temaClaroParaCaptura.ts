@@ -228,12 +228,71 @@ export function forcarTemaClaroNoClone(doc: Document): void {
  * a animação continua existindo na tela (é decisão visual do dono do produto, não minha), e um
  * `setTimeout` fixo seria chute — curto demais captura no meio, longo demais atrasa todo mundo.
  *
- * Compara a geometria das barras entre quadros; dois quadros iguais bastam. O teto de ~2,5 s
- * garante que nada trave o PDF se algum gráfico animar para sempre.
+ * Compara a geometria das barras entre quadros; dois quadros iguais bastam.
+ *
+ * ⛔ **O teto de QUADROS não bastava, e isso travava o PDF de verdade (medido em 2026-08-31).**
+ * `requestAnimationFrame` **não dispara em aba oculta** — e trocar de aba enquanto um relatório
+ * grande exporta é exatamente o que a pessoa faz, porque demora. Com o laço esperando só por
+ * quadros, o primeiro `await` ficava pendurado **indefinidamente**: medido com
+ * `document.hidden = true`, nenhum quadro em 1,5 s e o botão parado em *"Gerando PDF…"*,
+ * desabilitado, **seis segundos depois** — e assim ficaria até a pessoa voltar para a aba.
+ *
+ * Por isso cada espera corre contra um `setTimeout`, e existe um **teto de tempo real** além do
+ * de quadros. ⚠️ Os dois são necessários: em aba oculta o Chrome também estrangula `setTimeout`
+ * (mínimo de ~1 s), então 90 iterações levariam ~90 s — quem corta é o teto de tempo.
  */
+/**
+ * Espera o navegador **pintar** o que o `setState` acabou de mudar, antes de fotografar a tela.
+ *
+ * Dois quadros depois do `setState`: o primeiro aplica o DOM novo, o segundo garante que ele foi
+ * pintado. Sem isso o html2canvas roda contra o DOM antigo (sem a seção "Filtros Aplicados", que
+ * só existe durante a captura).
+ *
+ * ⛔ **Por que não é `requestAnimationFrame` puro, que é como as 10 telas faziam até 2026-08-31:**
+ * `rAF` **não dispara em aba oculta**. Quem clicava em "Gerar PDF" e trocava de aba — o que se faz
+ * justamente porque o relatório demora — ficava com o botão em *"Gerando PDF…"*, desabilitado,
+ * **para sempre**, e o PDF nunca saía. Medido: com `document.hidden = true`, nenhum quadro em
+ * 1,5 s e o botão travado 8 s depois; a captura **nem começava** (nenhum log da primeira linha
+ * dela aparecia no console).
+ *
+ * ⚠️ O `setTimeout` de reserva é o que resolve, e ele também é estrangulado em aba oculta (mínimo
+ * de ~1 s no Chrome) — por isso o valor é generoso: o objetivo é **destravar**, não competir em
+ * velocidade com o caminho normal, que continua sendo o `rAF` quando a aba está visível.
+ *
+ * ⭐ Vive aqui, e não copiada em cada tela, porque era a duplicação que fazia o mesmo defeito
+ * existir em dez lugares ao mesmo tempo.
+ */
+export function aguardarPintura(): Promise<void> {
+  const quadro = () =>
+    new Promise<void>((r) => {
+      let resolvido = false
+      const concluir = () => {
+        if (resolvido) return
+        resolvido = true
+        r()
+      }
+      requestAnimationFrame(concluir)
+      setTimeout(concluir, 50)
+    })
+  return quadro().then(quadro)
+}
+
 export async function aguardarGraficosEstaveis(elemento: HTMLElement): Promise<void> {
   const LIMITE_QUADROS = 90 // ~1,5 s a 60 fps, acima da animação padrão do recharts
-  const quadro = () => new Promise<void>((r) => requestAnimationFrame(() => r()))
+  const TETO_MS = 2500 // teto de tempo REAL — é ele que salva a aba oculta
+  const inicio = performance.now()
+  // Resolve no primeiro que chegar: o quadro (aba visível) ou o timer (aba oculta).
+  const quadro = () =>
+    new Promise<void>((r) => {
+      let resolvido = false
+      const concluir = () => {
+        if (resolvido) return
+        resolvido = true
+        r()
+      }
+      requestAnimationFrame(concluir)
+      setTimeout(concluir, 32) // ~2 quadros a 60 fps
+    })
 
   const geometria = () =>
     Array.from(elemento.querySelectorAll('.recharts-bar-rectangle path, .recharts-rectangle, .recharts-line-curve'))
@@ -244,7 +303,7 @@ export async function aguardarGraficosEstaveis(elemento: HTMLElement): Promise<v
 
   let anterior = geometria()
   let iguais = 0
-  for (let i = 0; i < LIMITE_QUADROS && iguais < 2; i++) {
+  for (let i = 0; i < LIMITE_QUADROS && iguais < 2 && performance.now() - inicio < TETO_MS; i++) {
     await quadro()
     const atual = geometria()
     iguais = atual === anterior ? iguais + 1 : 0
