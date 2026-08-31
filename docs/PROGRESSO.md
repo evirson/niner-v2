@@ -1,7 +1,7 @@
 # Progresso do Projeto — niner-v2
 
 Registro cronológico das decisões e entregas. Atualizar a cada marco relevante.
-**Última atualização:** 2026-08-31 (NFS-e Nacional emitida e cancelada em produção, V099–V103; relatório de OS V104; arquivamento fiscal; PDF em aba oculta)
+**Última atualização:** 2026-08-31 (NFS-e Nacional emitida e cancelada em produção, V099–V103; relatório de OS V104; sessão de navegador: 5 telas conferidas, o "Confirmar Entrada" mudo e os popups sem ✕)
 
 > 📄 **O que ainda falta está em `docs/PENDENCIAS.md`** (lista viva, agrupada por *de quem é a
 > bola*). Este arquivo conta a **história**; aquele conta o que está **aberto**. Ao fechar uma
@@ -11,6 +11,93 @@ Registro cronológico das decisões e entregas. Atualizar a cada marco relevante
 
 ## Estado atual
 
+> ## 📌 2026-08-31 (4) — A SESSÃO DO NAVEGADOR: o que cinco telas abertas acharam
+>
+> Ele perguntou *"vc pode testar no navegador??"* e depois *"há algo mais que você poderia fazer para
+> adiantar os trabalhos?"*. A resposta estava escrita na própria lista: a pendência **#68** diz que o
+> caminho barato é *"abrir as telas que a auditoria mexeu"*. Abri.
+>
+> ### As correções feitas ÀS CEGAS, agora medidas
+>
+> As três correções de CSS de 2026-08-29 e as duas da leva de 08-30 nunca tinham sido vistas.
+>
+> - **Sangria de Caixa** — layout correto. ✅
+> - **Minha Conta** — o seletor Mensal/Anual está distinto (sólido × contorno) e a troca muda o total
+>   (R$ 99,00 → R$ 1.009,80). ✅
+> - **Relatório de Contas a Pagar** — os 5 KPIs em grid (4+1). ✅
+> - **Parâmetros do Sistema** — apaguei o campo "Validade do orçamento" e salvei: **toast verde**,
+>   valor mantido em 15, e as outras três flags intactas **conferidas no banco**. O 409 que descartava
+>   o UPDATE inteiro não existe mais. ✅
+> - **Fechamento de Caixa** — digitei `1.234,56` e disparei o ciclo real de `visibilitychange` +
+>   `focus`. O valor **sobreviveu**. ✅
+>
+> ⚠️ **Dois falsos alarmes meus, e os dois valem como método.** (a) No Relatório de Contas a Pagar,
+> uma barra minúscula e uma faixa cinza *pareciam* defeito; medi no DOM — a barra tem **600px** e a
+> faixa era o cursor de hover do recharts. Eram artefatos da automação (a animação congela em aba
+> controlada), não defeitos. (b) No Fechamento de Caixa meu primeiro teste imprimiu *"APAGOU (defeito
+> voltou)"* — falso: eu filtrava por `1234` e o campo mostra `1.234,56`, com ponto. Só não reportei
+> errado porque conferi o estado real antes de concluir.
+>
+> ### 🔴 O defeito que a tela achou: o "Confirmar Entrada" ficava cinza por 13 motivos
+>
+> Na **Entrada de Produtos**, fluxo Individual, tela recém-aberta: botão cinza, `title` vazio, nenhum
+> texto. Medido no DOM: `disabled: true`, `opacity: 0.6`.
+>
+> `podeConfirmar` era um `&&` de **treze** condições, e só **duas** tinham mensagem — as duas que a
+> correção de 08-30 mudou de lugar. As outras onze nasceram mudas, inclusive **sem fornecedor** (o
+> estado inicial da tela) e **sem itens**.
+>
+> ⛔ Escrever onze `{cond && <p>…</p>}` consertaria o hoje e não o amanhã. Agora **a mesma lista**
+> produz o bloqueio e o texto (`podeConfirmar = motivos.length === 0`): não existe caminho para
+> acrescentar condição e esquecer a mensagem.
+>
+> ⚠️⚠️ **E a minha primeira versão já nasceu com o defeito que ela vinha corrigir:** sem o
+> `modo !== null`, a mensagem aparecia com o popup de origem ainda aberto, explicando um botão que a
+> topbar nem tinha renderizado. Peguei em dois minutos porque a tela estava aberta — o `tsc -b` passou
+> nas **duas** versões.
+>
+> Medido na tela, os quatro passos: nada no início → *"Escolha o fornecedor… (e mais 1 pendência(s))"*
+> → **continua visível ao trocar para a aba 3** (o defeito de 08-30, provado corrigido) → avança para
+> *"Nenhum produto lançado…"* ao escolher o fornecedor.
+>
+> ### ⭐ O script que a #68 pedia: 1 achado e 13 DESCARTES
+>
+> A #68 chamava de *"a pendência mais barata de fechar"* um script cruzando `disabled` × mensagem.
+> Escrito, rodado e guardado em `scripts/auditoria/botoes-bloqueados-sem-mensagem.js`. Apontou **14**
+> botões; conferidos um a um: **1 real** (a Entrada) e **13 falsos**.
+>
+> O motivo do descarte é o que fecha a pendência: as outras telas têm **duas ou três** condições, não
+> treze, e as que não são óbvias **já mostram o erro na própria linha da grade** — `DevolucaoProduto`,
+> `TransferenciaForm` (*"Informe uma quantidade maior que zero."*), `ExportacaoXmlLote`. No **PDV**,
+> `podeConfirmar = saldoFechado`: uma condição só, visível, e cliente/vendedor já têm toast.
+> **A família não existe** — fica fechada em vez de aberta.
+>
+> ### Popups sem ✕ (#12): eram 18, agora são 13
+>
+> Medido, não estimado. Corrigi os **5 de filtro de relatório** — ganharam o `CabecalhoModal` e
+> **perderam** o "Voltar/Cancelar" do rodapé, que era a mesma saída duplicada. Conferido na tela,
+> inclusive comparando lado a lado com o Fluxo de Caixa (que já usava o padrão): botão à esquerda, ✕
+> no topo, e o ✕ na primeira abertura **sai da tela** — medido, de `/relatorio-estoque` voltou para
+> `/fluxo-caixa`.
+>
+> ⛔ **Parei nos 5 de propósito:** os 13 restantes são de **confirmação e criação rápida**
+> (`ConfirmarSalvarModal` é um "tem certeza?"), onde o ✕ concorre em significado com o "Cancelar" — é
+> decisão de produto, não trabalho mecânico.
+>
+> ⚠️ **O script de medição errou DUAS vezes antes de acertar**, e as duas formas valem para qualquer
+> varredura de UI: o rótulo do botão é **dinâmico** (`{primeiraVez ? 'Voltar' : 'Cancelar'}`) e escapa
+> de um regex `>Cancelar<`; e o ✕ vem de um **componente** (`CabecalhoModal`), não de um caractere no
+> arquivo. Cheguei a escrever *"27 sem saída nenhuma"* numa versão intermediária — era falso, e só não
+> virou relatório porque eu tinha **visto** o "Voltar" na tela.
+>
+> ### Um resíduo de ambiente, medido
+>
+> `npm run build` **no host Windows** falha com *"Cannot find native binding"* — e falha igual **sem
+> nenhuma mudança minha** (confirmado com `git stash`). O `node_modules` foi instalado pelo container
+> Linux num volume compartilhado. A verificação real é `docker compose exec web npm run build`: 1321
+> módulos, exit 0.
+>
+>
 > ## 📌 2026-08-31 — NFS-e NACIONAL: uma nota emitida e cancelada EM PRODUÇÃO pelo Nainer
 >
 > **Estado medido agora:** **59 telas do ERP + 3 públicas** · **1134 testes verdes, 0 falhas**
