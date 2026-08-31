@@ -591,6 +591,59 @@ class ProdutoCrudTest {
      * mantida por script, global, sem tenant). Conecta como {@code niner_owner}: {@code
      * niner_app} só tem SELECT nessa tabela (V017).
      */
+    /**
+     * P8 no catálogo (pendência 48, 2026-08-31).
+     *
+     * <p>⚠️ <b>Cuidado ao ler este teste:</b> o NCM é a exceção documentada — {@code
+     * cfg_produto_ncm} é GLOBAL, sem {@code id_tenant} e sem RLS (V017), e por isso os dois
+     * tenants enxergam o mesmo código de propósito. O que não pode atravessar é o <b>produto</b>.
+     */
+    @Test
+    void isolamentoEntreTenants() throws Exception {
+        String tokenA = assinarNovoTenant("isolamento-prod-a");
+        String tokenB = assinarNovoTenant("isolamento-prod-b");
+        long categoriaA = criarCategoria(tokenA, "Categoria A");
+
+        String resp = mvc.perform(post("/api/v1/produtos").header("Authorization", "Bearer " + tokenA)
+                        .contentType(APPLICATION_JSON)
+                        .content("""
+                                {"descricao":"produto exclusivo do tenant a","precoCusto":"10.00",
+                                 "percentualVenda":"100","precoVenda":"20.00","categorias":[%d]}
+                                """.formatted(categoriaA)))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        long idProdutoA = ((Number) JsonPath.read(resp, "$.idProduto")).longValue();
+
+        mvc.perform(get("/api/v1/produtos/" + idProdutoA).header("Authorization", "Bearer " + tokenA))
+                .andExpect(status().isOk());
+
+        mvc.perform(get("/api/v1/produtos/" + idProdutoA).header("Authorization", "Bearer " + tokenB))
+                .andExpect(status().isNotFound());
+
+        mvc.perform(get("/api/v1/produtos").param("descricao", "EXCLUSIVO DO TENANT")
+                        .header("Authorization", "Bearer " + tokenB))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.itens.length()").value(0));
+
+        // ⭐ A categoria do tenant A também não pode ser referenciada de B: sem a checagem, o
+        // vizinho amarraria o produto dele a uma categoria que não é sua.
+        long categoriaB = criarCategoria(tokenB, "Categoria B");
+        mvc.perform(put("/api/v1/produtos/" + idProdutoA).header("Authorization", "Bearer " + tokenB)
+                        .contentType(APPLICATION_JSON)
+                        .content("""
+                                {"descricao":"sequestrado pelo tenant b","precoCusto":"10.00",
+                                 "percentualVenda":"100","precoVenda":"20.00","categorias":[%d]}
+                                """.formatted(categoriaB)))
+                .andExpect(status().isNotFound());
+
+        mvc.perform(delete("/api/v1/produtos/" + idProdutoA).header("Authorization", "Bearer " + tokenB))
+                .andExpect(status().isNotFound());
+
+        mvc.perform(get("/api/v1/produtos/" + idProdutoA).header("Authorization", "Bearer " + tokenA))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.descricao").value("PRODUTO EXCLUSIVO DO TENANT A"));
+    }
+
     private void criarNcm(String codigo, String descricao) throws Exception {
         try (Connection c = DriverManager.getConnection(postgres.getJdbcUrl(), "niner_owner", "dev_owner");
              Statement st = c.createStatement()) {

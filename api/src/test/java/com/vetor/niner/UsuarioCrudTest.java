@@ -308,6 +308,56 @@ class UsuarioCrudTest {
                 .andExpect(jsonPath("$.ativo").value(false));
     }
 
+    /**
+     * P8 na identidade (pendência 48, 2026-08-31) — o vazamento mais grave possível, porque quem
+     * alcança o cadastro de usuário do vizinho <b>troca a senha dele e entra na conta</b>. É a
+     * mesma classe de tomada de conta que o achado 35 da auditoria de 2026-08-27 fechou dentro do
+     * tenant (o administrador virou 404 para operador); aqui a fronteira é entre tenants.
+     *
+     * <p>⚠️ 404, nunca 403 — pelo mesmo motivo de lá: 403 confirmaria que aquele id existe.
+     */
+    @Test
+    void isolamentoEntreTenants() throws Exception {
+        TenantNovo a = assinarNovoTenant("isolamento-a");
+        TenantNovo b = assinarNovoTenant("isolamento-b");
+        long idEmpresaA = buscarPrimeiraEmpresa(a.token());
+        long idEmpresaB = buscarPrimeiraEmpresa(b.token());
+
+        String resp = mvc.perform(post("/api/v1/usuarios").header("Authorization", "Bearer " + a.token())
+                        .contentType(APPLICATION_JSON)
+                        .content("""
+                                {"nome":"operador do tenant a","email":"operador.isolamento.a@loja.com",
+                                 "senha":"senha1234","administrador":false,"idsEmpresa":[%d]}
+                                """.formatted(idEmpresaA)))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        long idUsuarioA = ((Number) JsonPath.read(resp, "$.idUsuario")).longValue();
+
+        mvc.perform(get("/api/v1/usuarios/" + idUsuarioA).header("Authorization", "Bearer " + a.token()))
+                .andExpect(status().isOk());
+
+        mvc.perform(get("/api/v1/usuarios/" + idUsuarioA).header("Authorization", "Bearer " + b.token()))
+                .andExpect(status().isNotFound());
+
+        // ⛔ o caso que dói: trocar a senha do usuário do vizinho
+        mvc.perform(put("/api/v1/usuarios/" + idUsuarioA).header("Authorization", "Bearer " + b.token())
+                        .contentType(APPLICATION_JSON)
+                        .content("""
+                                {"nome":"sequestrado","email":"invasor@tenantb.com","senha":"trocada12345",
+                                 "administrador":false,"idsEmpresa":[%d]}
+                                """.formatted(idEmpresaB)))
+                .andExpect(status().isNotFound());
+
+        mvc.perform(delete("/api/v1/usuarios/" + idUsuarioA).header("Authorization", "Bearer " + b.token()))
+                .andExpect(status().isNotFound());
+
+        // e o login do dono continua com o e-mail e a empresa originais
+        mvc.perform(get("/api/v1/usuarios/" + idUsuarioA).header("Authorization", "Bearer " + a.token()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.email").value("operador.isolamento.a@loja.com"))
+                .andExpect(jsonPath("$.ativo").value(true));
+    }
+
     private static long extrairIdTenant(String token) {
         String[] partes = token.split("\\.");
         String payload = new String(java.util.Base64.getUrlDecoder().decode(partes[1]));

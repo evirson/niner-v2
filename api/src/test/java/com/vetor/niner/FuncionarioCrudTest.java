@@ -172,6 +172,42 @@ class FuncionarioCrudTest {
                 .andExpect(jsonPath("$.itens[0].nome").value("ORDENACAOTESTE GAMA"));
     }
 
+    /** P8 no cadastro de funcionário (pendência 48, 2026-08-31) — ler, listar, alterar, excluir. */
+    @Test
+    void isolamentoEntreTenants() throws Exception {
+        String tokenA = assinarNovoTenant("isolamento-func-a");
+        String tokenB = assinarNovoTenant("isolamento-func-b");
+        String resp = mvc.perform(post("/api/v1/funcionarios").header("Authorization", "Bearer " + tokenA)
+                        .contentType(APPLICATION_JSON)
+                        .content("{\"nome\":\"FUNCIONARIO EXCLUSIVO DO TENANT A\"}"))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        long idFuncionarioA = ((Number) JsonPath.read(resp, "$.idFuncionario")).longValue();
+
+        mvc.perform(get("/api/v1/funcionarios/" + idFuncionarioA).header("Authorization", "Bearer " + tokenA))
+                .andExpect(status().isOk());
+
+        mvc.perform(get("/api/v1/funcionarios/" + idFuncionarioA).header("Authorization", "Bearer " + tokenB))
+                .andExpect(status().isNotFound());
+
+        mvc.perform(get("/api/v1/funcionarios").param("nome", "EXCLUSIVO DO TENANT")
+                        .header("Authorization", "Bearer " + tokenB))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.itens.length()").value(0));
+
+        mvc.perform(put("/api/v1/funcionarios/" + idFuncionarioA).header("Authorization", "Bearer " + tokenB)
+                        .contentType(APPLICATION_JSON)
+                        .content("{\"nome\":\"SEQUESTRADO PELO TENANT B\"}"))
+                .andExpect(status().isNotFound());
+
+        mvc.perform(delete("/api/v1/funcionarios/" + idFuncionarioA).header("Authorization", "Bearer " + tokenB))
+                .andExpect(status().isNotFound());
+
+        mvc.perform(get("/api/v1/funcionarios/" + idFuncionarioA).header("Authorization", "Bearer " + tokenA))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.nome").value("FUNCIONARIO EXCLUSIVO DO TENANT A"));
+    }
+
     private void criarFuncionarioSimples(String token, String nome) throws Exception {
         mvc.perform(post("/api/v1/funcionarios").header("Authorization", "Bearer " + token)
                         .contentType(APPLICATION_JSON).content("{\"nome\":\"" + nome + "\"}"))

@@ -1227,4 +1227,46 @@ class PdvCrudTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.length()").value(0));
     }
+
+    /**
+     * P8 no caminho do balcão (pendência 48 de {@code docs/PENDENCIAS.md}, 2026-08-31).
+     *
+     * <p>⭐ <b>Por que o SKU é o caso que importa:</b> ele vem de {@code gerar_ean13_interno()},
+     * uma sequência <b>global da instância de banco</b> (V017) — o mesmo código existe no banco
+     * inteiro e é o identificador mais fácil de "adivinhar" de outro tenant, porque é sequencial.
+     * Bipar o código de barras da loja vizinha é a forma mais barata de tentar atravessar a
+     * fronteira, e é exatamente o que este teste recusa.
+     *
+     * <p>⚠️ O par POSITIVO importa tanto quanto o negativo: sem a primeira asserção, um endpoint
+     * quebrado (que devolvesse 404 para todo mundo) passaria por "isolado".
+     */
+    @Test
+    void isolamentoEntreTenants() throws Exception {
+        String tokenA = assinarNovoTenant("isolamento-pdv-a");
+        String tokenB = assinarNovoTenant("isolamento-pdv-b");
+        long idTenantA = extrairIdTenant(tokenA);
+        long idProduto = criarProduto(tokenA, "Produto Exclusivo Do Tenant A", true);
+
+        try (Connection c = abrirConexao(idTenantA)) {
+            long idEmpresa = buscarIdEmpresa(c);
+            long idVariacao = criarVariacao(c, idTenantA, idProduto);
+            definirEstoque(c, idTenantA, idEmpresa, idVariacao, new BigDecimal("7.000"));
+            String sku = buscarSku(c, idVariacao);
+
+            // (a) o dono enxerga — senão o teste passaria por endpoint quebrado
+            mvc.perform(get("/api/v1/pdv/produtos/codigo/" + sku).header("Authorization", "Bearer " + tokenA))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.idVariacao").value(idVariacao));
+
+            // (b) o vizinho não, nem com o código exato em mãos
+            mvc.perform(get("/api/v1/pdv/produtos/codigo/" + sku).header("Authorization", "Bearer " + tokenB))
+                    .andExpect(status().isNotFound());
+
+            // (c) nem pela busca por descrição
+            mvc.perform(get("/api/v1/pdv/produtos?busca=EXCLUSIVO DO TENANT")
+                            .header("Authorization", "Bearer " + tokenB))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.length()").value(0));
+        }
+    }
 }

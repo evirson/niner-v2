@@ -113,6 +113,66 @@ class SangriaCaixaCrudTest {
         return JsonPath.read(resp, "$.itens[0].idPlanoContas");
     }
 
+    /**
+     * P8 na rotina de dinheiro mais nova do produto (pendência 48, 2026-08-31).
+     *
+     * <p>⭐ <b>Aqui o vetor não é ler dado alheio — é ESCREVER nele.</b> A sangria pega o caixa do
+     * servidor (nunca do corpo, justamente para um operador não sangrar o caixa de outro), mas a
+     * <b>conta corrente de destino vem do corpo</b>. Como {@code id_conta_corrente} é chave de
+     * negócio por tenant (texto), nada impede o vizinho de mandar o código de uma conta que não é
+     * dele — e sangrar é uma <b>transferência</b>: o dinheiro sairia da gaveta dele e entraria no
+     * extrato da loja alheia.
+     *
+     * <p>⚠️ E o teste confere o BANCO, não só o status: um 4xx que já tivesse gravado metade
+     * passaria por uma asserção de status.
+     */
+    @Test
+    void isolamentoEntreTenants() throws Exception {
+        TenantNovo a = assinar("isolamento-a");
+        TenantNovo b = assinar("isolamento-b");
+        long idTenantA = extrairIdTenant(a.token());
+
+        criarConta(a.token(), a.idEmpresa(), "SODOA1");
+        abrirCaixaComFundo(b.token(), "500.00");
+        String planoB = primeiroPlanoDeContas(b.token());
+
+        // B tenta depositar na conta de A — o código existe, mas não para ele.
+        mvc.perform(post("/api/v1/caixa/sangrias").header("Authorization", "Bearer " + b.token())
+                        .contentType(APPLICATION_JSON)
+                        .content("""
+                                {"idContaCorrente":"SODOA1","valor":100.00,"idPlanoContas":"%s",
+                                 "observacao":"Tentativa cross-tenant"}
+                                """.formatted(planoB)))
+                .andExpect(status().isNotFound());
+
+        // ⭐ e nada nasceu do lado de A — nem o crédito no extrato, nem a sangria.
+        // ⚠️ O `id_tenant` explícito aqui NÃO é redundância: `abrirConexao` conecta com o
+        // superusuário do container (Testcontainers), que ignora RLS mesmo com FORCE — o
+        // `set_config` só serve às funções que o leem. Sem o filtro, este `count(*)` mede o banco
+        // INTEIRO: a primeira versão deste teste passava sozinha e reprovava na suíte, contando a
+        // sangria legítima que outro teste da mesma classe tinha acabado de criar.
+        try (Connection c = abrirConexao(idTenantA)) {
+            try (PreparedStatement ps = c.prepareStatement("""
+                    SELECT count(*) FROM conta_corrente_movimento
+                     WHERE id_tenant = ? AND id_conta_corrente = 'SODOA1'
+                    """)) {
+                ps.setLong(1, idTenantA);
+                try (ResultSet rs = ps.executeQuery()) {
+                    rs.next();
+                    assertThat(rs.getInt(1)).as("nenhum movimento pode ter entrado na conta do tenant A").isZero();
+                }
+            }
+            try (PreparedStatement ps = c.prepareStatement(
+                    "SELECT count(*) FROM caixa_sangria WHERE id_tenant = ?")) {
+                ps.setLong(1, idTenantA);
+                try (ResultSet rs = ps.executeQuery()) {
+                    rs.next();
+                    assertThat(rs.getInt(1)).as("nenhuma sangria pode ter nascido no tenant A").isZero();
+                }
+            }
+        }
+    }
+
     @Test
     void sangriaEscreveOsTresLadosNaMesmaTransacao() throws Exception {
         TenantNovo t = assinar("tres-lados");

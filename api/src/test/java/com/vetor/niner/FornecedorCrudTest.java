@@ -253,6 +253,38 @@ class FornecedorCrudTest {
                 .andExpect(jsonPath("$.ativo").value(false));
     }
 
+    /**
+     * P8 no cadastro de fornecedor (pendência 48, 2026-08-31) — mesmo formato de
+     * {@code ClienteCrudTest.isolamentoEntreTenants}: ler, listar, ALTERAR e EXCLUIR, porque foi
+     * o UPDATE cruzando que originou a regra do projeto em 2026-08-08.
+     */
+    @Test
+    void isolamentoEntreTenants() throws Exception {
+        String tokenA = assinarNovoTenant("isolamento-forn-a");
+        String tokenB = assinarNovoTenant("isolamento-forn-b");
+        criarPlano(tokenA, "9.00.000");
+        criarPlano(tokenB, "9.00.000");
+        long idFornecedorA = criarFornecedorSimples(tokenA, "9.00.000", "FORNECEDOR EXCLUSIVO DO TENANT A");
+
+        mvc.perform(get("/api/v1/fornecedores/" + idFornecedorA).header("Authorization", "Bearer " + tokenA))
+                .andExpect(status().isOk());
+
+        mvc.perform(get("/api/v1/fornecedores/" + idFornecedorA).header("Authorization", "Bearer " + tokenB))
+                .andExpect(status().isNotFound());
+
+        mvc.perform(put("/api/v1/fornecedores/" + idFornecedorA).header("Authorization", "Bearer " + tokenB)
+                        .contentType(APPLICATION_JSON)
+                        .content("{\"razaoSocial\":\"SEQUESTRADO PELO TENANT B\",\"idPlanoContas\":\"9.00.000\"}"))
+                .andExpect(status().isNotFound());
+
+        mvc.perform(delete("/api/v1/fornecedores/" + idFornecedorA).header("Authorization", "Bearer " + tokenB))
+                .andExpect(status().isNotFound());
+
+        mvc.perform(get("/api/v1/fornecedores/" + idFornecedorA).header("Authorization", "Bearer " + tokenA))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.razaoSocial").value("FORNECEDOR EXCLUSIVO DO TENANT A"));
+    }
+
     private long criarFornecedorSimples(String token, String plano, String razaoSocial) throws Exception {
         String resp = mvc.perform(post("/api/v1/fornecedores").header("Authorization", "Bearer " + token)
                         .contentType(APPLICATION_JSON)

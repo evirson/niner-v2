@@ -109,6 +109,42 @@ class PrivilegiosNinerAppTest {
      *
      * <p>⛔ {@code plataforma.*} é a exceção documentada (control plane, fora do RLS de tenant).
      */
+    /**
+     * V071 — o diretório de login é <b>escrito só pela trigger</b>, nunca pela aplicação.
+     *
+     * <p>É o índice global de e-mail → conta que fez o login deixar de pedir o identificador da
+     * loja. Se {@code niner_app} pudesse escrever nele, um caminho com defeito apontaria um e-mail
+     * para a conta errada — e o login passaria a <b>entregar a loja de outra pessoa</b>. O
+     * {@code GRANT SELECT} é o que a aplicação precisa; o {@code REVOKE} é o que sustenta a
+     * afirmação "só a trigger escreve", e até 2026-08-31 nada na suíte a checava.
+     */
+    @Test
+    void diretorioDeLoginSoEhLidoPorNinerApp() throws Exception {
+        try (Connection c = conexaoApp(); Statement st = c.createStatement()) {
+            st.execute("SELECT 1 FROM plataforma.diretorio_login WHERE false");   // leitura: permitida
+            permissaoNegada(st, "INSERT INTO plataforma.diretorio_login (email) VALUES ('x@y.z')");
+            permissaoNegada(st, "UPDATE plataforma.diretorio_login SET email = 'x@y.z' WHERE false");
+            permissaoNegada(st, "DELETE FROM plataforma.diretorio_login");
+        }
+    }
+
+    /**
+     * V079 — o código do login em duas etapas <b>não se apaga</b>.
+     *
+     * <p>⭐ O que protege um código de 4 dígitos (10.000 combinações) não é o tamanho, é o teto de
+     * tentativas — e o teto vive na própria linha. Com {@code DELETE}, apagar o desafio zeraria o
+     * contador: o mesmo bypass que o rollback da transação já causou uma vez (2026-08-27), agora
+     * pela porta do privilégio. {@code INSERT}/{@code UPDATE} continuam permitidos porque é assim
+     * que o desafio nasce e conta tentativa.
+     */
+    @Test
+    void codigoDeLoginEmDuasEtapasNaoPodeSerApagadoPorNinerApp() throws Exception {
+        try (Connection c = conexaoApp(); Statement st = c.createStatement()) {
+            st.execute("SELECT 1 FROM plataforma.codigo_login WHERE false");
+            permissaoNegada(st, "DELETE FROM plataforma.codigo_login");
+        }
+    }
+
     @Test
     void todaTabelaComIdTenantTemRlsHabilitadoEForcado() throws Exception {
         try (Connection c = conexaoDeInspecao(); Statement st = c.createStatement();

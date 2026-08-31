@@ -707,6 +707,136 @@ class ExportacaoXmlLoteTest {
         assertThat(semTeto).containsKey(pasta + "/saidas/" + chaveC + ".xml");
     }
 
+    /**
+     * ⭐ <b>A partição rodando ACIMA do teto de verdade</b> — pendência 19 de
+     * {@code docs/PENDENCIAS.md}, aberta desde 2026-08-26 com a observação honesta de que *"a
+     * partição é validada pela aritmética e por um teste de congelamento, nunca por um período
+     * que realmente estoure"*.
+     *
+     * <p>2.001 documentos: o teto é 2.000, então são <b>duas</b> partes, e o que este teste prova
+     * é o que a aritmética sozinha não prova — que as duas partes juntas cobrem <b>todo</b> o
+     * conjunto, <b>sem repetir</b> e <b>sem pular</b> nenhum documento. O `LIMIT/OFFSET` errado
+     * por um deixaria um XML de fora do pacote do contador sem nenhum erro aparecer.
+     *
+     * <p>⚠️ <b>Por que só duas notas têm XML no bucket:</b> gravar 2.001 objetos no MinIO tornaria
+     * o teste lento sem medir nada de novo — o que está sob teste é a <b>partição do conjunto</b>,
+     * e ela opera sobre a lista de documentos (o `relatorio.csv`), não sobre quantos arquivos
+     * existem. As duas com XML são a <b>primeira</b> e a <b>última</b> do período, exatamente para
+     * provar que as pontas caem em partes diferentes.
+     */
+    @Test
+    void periodoAcimaDoTetoParticionaEAsPartesCobremTudoSemRepetir() throws Exception {
+        String token = assinarNovoTenant("acima-do-teto");
+        long idTenant = idTenantDo(token);
+        long idEmpresa = idEmpresaDo(token);
+        LocalDate ontem = hojeMais(-1);
+
+        // 2.001 documentos numa tacada só — 2.001 INSERTs por JDBC levariam minutos.
+        jdbc.sql("""
+                        INSERT INTO documento_fiscal (
+                            id_tenant, id_empresa, modelo, serie, numero, chave_acesso, codigo_numerico,
+                            digito_verificador, tipo_operacao, situacao, ambiente, tipo_emissao,
+                            data_emissao, valor_produtos, valor_desconto, valor_outros, valor_total,
+                            valor_troco, protocolo, data_autorizacao)
+                        SELECT ?, ?, 65, 1, 2000 + n,
+                               '412608378294530001356500100000000000' || to_char(2000 + n, 'FM00000000'),
+                               '12345678', 9, 'VENDA_CONSUMIDOR', 'AUTORIZADO', 'HOMOLOGACAO', 1,
+                               ?, 30.00, 0, 0, 30.00, 0, '141260001999999', ?
+                          FROM generate_series(1, 2001) AS n
+                        """)
+                .params(idTenant, idEmpresa, meioDiaDe(ontem), meioDiaDe(ontem))
+                .update();
+
+        var ids = jdbc.sql("""
+                        SELECT min(id_documento_fiscal) AS menor, max(id_documento_fiscal) AS maior
+                          FROM documento_fiscal
+                         WHERE id_tenant = ? AND id_empresa = ?
+                        """)
+                .params(idTenant, idEmpresa)
+                .query((rs, n) -> new long[]{rs.getLong("menor"), rs.getLong("maior")})
+                .single();
+        long primeiro = ids[0];
+        long ultimo = ids[1];
+        String chavePrimeiro = chaveDoDocumento(idTenant, primeiro);
+        String chaveUltimo = chaveDoDocumento(idTenant, ultimo);
+        arquivar(idTenant, primeiro, 65, chavePrimeiro, ontem, "<nfeProc>PRIMEIRO</nfeProc>");
+        arquivar(idTenant, ultimo, 65, chaveUltimo, ontem, "<nfeProc>ULTIMO</nfeProc>");
+
+        // (1) a pré-conferência anuncia as duas partes e congela o teto
+        String resumo = mvc.perform(get("/api/v1/fiscal/exportacao-xml/resumo")
+                        .header("Authorization", "Bearer " + token)
+                        .param("idEmpresa", String.valueOf(idEmpresa))
+                        .param("dataInicial", hojeMais(-5).toString())
+                        .param("dataFinal", hojeMais(0).toString()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalDocumentos").value(2001))
+                .andExpect(jsonPath("$.totalPartes").value(2))
+                .andExpect(jsonPath("$.ateIdDocumento").value((int) ultimo))
+                .andReturn().getResponse().getContentAsString();
+        assertThat(resumo).contains("\"limiteDocumentos\":2000");
+
+        // (2) as duas partes, com o mesmo teto congelado
+        List<String> chavesParte1 = chavesDoCsv(lerZip(baixarParte(token, idEmpresa, 1, ultimo)));
+        List<String> chavesParte2 = chavesDoCsv(lerZip(baixarParte(token, idEmpresa, 2, ultimo)));
+
+        assertThat(chavesParte1).as("a parte 1 leva exatamente o teto").hasSize(2000);
+        assertThat(chavesParte2).as("a parte 2 leva o resto").hasSize(1);
+
+        // (3) ⭐ o que a aritmética não prova: nem repetição, nem buraco
+        assertThat(chavesParte1).doesNotContainAnyElementsOf(chavesParte2);
+        List<String> todas = new java.util.ArrayList<>(chavesParte1);
+        todas.addAll(chavesParte2);
+        assertThat(todas).doesNotHaveDuplicates();
+        assertThat(new java.util.HashSet<>(todas))
+                .as("as duas partes juntas cobrem o conjunto inteiro")
+                .hasSize(2001);
+
+        // (4) e as pontas caem em partes diferentes, com o XML junto
+        String pasta = pastaDoMes(ontem);
+        assertThat(lerZip(baixarParte(token, idEmpresa, 1, ultimo)))
+                .containsKey(pasta + "/saidas/" + chavePrimeiro + ".xml");
+        assertThat(lerZip(baixarParte(token, idEmpresa, 2, ultimo)))
+                .containsKey(pasta + "/saidas/" + chaveUltimo + ".xml");
+    }
+
+    private byte[] baixarParte(String token, long idEmpresa, int parte, long ateIdDocumento) throws Exception {
+        return mvc.perform(get("/api/v1/fiscal/exportacao-xml")
+                        .header("Authorization", "Bearer " + token)
+                        .param("idEmpresa", String.valueOf(idEmpresa))
+                        .param("dataInicial", hojeMais(-5).toString())
+                        .param("dataFinal", hojeMais(0).toString())
+                        .param("parte", String.valueOf(parte))
+                        .param("ateIdDocumento", String.valueOf(ateIdDocumento)))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsByteArray();
+    }
+
+    private String chaveDoDocumento(long idTenant, long idDocumento) {
+        return jdbc.sql("SELECT chave_acesso FROM documento_fiscal WHERE id_tenant = ? AND id_documento_fiscal = ?")
+                .params(idTenant, idDocumento).query(String.class).single();
+    }
+
+    /**
+     * As chaves de acesso listadas no {@code relatorio.csv} — <b>uma por linha</b>.
+     *
+     * <p>⚠️ Extrair com um regex sobre o CSV inteiro conta errado: na linha de um documento cujo
+     * XML foi arquivado, a chave aparece <b>duas vezes</b> (a coluna da chave e o caminho do
+     * arquivo dentro do ZIP). Foi o que fez a primeira versão deste teste acusar 2001 numa parte
+     * de 2000.
+     */
+    private List<String> chavesDoCsv(Map<String, byte[]> zip) {
+        String csv = new String(zip.get("relatorio.csv"), StandardCharsets.UTF_8);
+        java.util.regex.Pattern chave = java.util.regex.Pattern.compile("\\b(\\d{44})\\b");
+        List<String> chaves = new java.util.ArrayList<>();
+        for (String linha : csv.split("\\R")) {
+            java.util.regex.Matcher m = chave.matcher(linha);
+            if (m.find()) {
+                chaves.add(m.group(1));
+            }
+        }
+        return chaves;
+    }
+
     /** Pedir uma parte que não existe é erro do cliente, não um ZIP vazio entregue como se fosse o pacote. */
     @Test
     void parteInexistenteEhRecusadaEmVezDeVirVazia() throws Exception {

@@ -480,4 +480,45 @@ class ValeMercadoriaCrudTest {
                         .contentType(APPLICATION_JSON).content(corpoVenda2))
                 .andExpect(status().isCreated());
     }
+
+    /**
+     * P8 no vale-mercadoria (pendência 48, 2026-08-31) — o registro mais perto de "dinheiro ao
+     * portador" que o ERP tem: o número do vale é um <b>sequencial pequeno</b>, então adivinhar o
+     * de outra loja é trivial, e resgatá-lo significaria a loja vizinha pagar a compra.
+     *
+     * <p>⚠️ Por isso este teste não se contenta com o GET: ele tenta <b>resgatar</b> o vale numa
+     * venda do outro tenant, que é o caminho que move dinheiro de verdade.
+     */
+    @Test
+    void isolamentoEntreTenants() throws Exception {
+        TenantNovo a = assinarNovoTenant("isolamento-vale-a");
+        TenantNovo b = assinarNovoTenant("isolamento-vale-b");
+        long idTenantA = extrairIdTenant(a.token());
+        long idProdutoA = criarProdutoComPreco(a.token(), "Produto Vale Isolamento", "60.00");
+
+        ValeGerado vale;
+        try (Connection c = abrirConexao(idTenantA)) {
+            long idEmpresa = buscarIdEmpresa(c);
+            long idVariacao = criarVariacao(c, idTenantA, idProdutoA);
+            definirEstoque(c, idTenantA, idEmpresa, idVariacao, BigDecimal.ZERO);
+            vale = gerarVale(a.token(), idVariacao);
+        }
+
+        // (a) o dono consulta
+        mvc.perform(get("/api/v1/vendas/devolucao/vale/" + vale.idDevolucao())
+                        .header("Authorization", "Bearer " + a.token()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.valorVale").value(60.00));
+
+        // (b) o vizinho não consulta, mesmo com o número em mãos
+        mvc.perform(get("/api/v1/vendas/devolucao/vale/" + vale.idDevolucao())
+                        .header("Authorization", "Bearer " + b.token()))
+                .andExpect(status().isNotFound());
+
+        // (c) e o vale continua NÃO USADO para o dono — nenhuma tentativa do vizinho pode
+        //     consumi-lo pelo caminho de leitura
+        mvc.perform(get("/api/v1/vendas/devolucao/vale/" + vale.idDevolucao())
+                        .header("Authorization", "Bearer " + a.token()))
+                .andExpect(jsonPath("$.valeUsado").value(false));
+    }
 }

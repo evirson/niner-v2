@@ -331,6 +331,54 @@ class TipoCarteiraCrudTest {
                 .andExpect(status().isConflict());
     }
 
+    /**
+     * ⚠️ 2026-08-31 — o guard conhecia 2 das 5 FKs, e este é o caso mais banal dos três que
+     * faltavam: a carteira <b>DINHEIRO</b> é a carteira de <b>abertura</b> do caixa
+     * ({@code caixa_mestre.id_carteira}), e num dia sem nenhum lançamento ela não aparece em
+     * {@code caixa_detalhe}. Sem a correção, o DELETE ia ao banco, violava a FK, e o
+     * {@code GlobalExceptionHandler} respondia o 409 genérico "Registro em uso por outro
+     * cadastro" — sem dizer onde, e sem caminho de volta (esta tabela não tem "inativar").
+     *
+     * <p>⭐ O que separa este teste do irmão acima é o helper: ali o caixa nasce <b>com</b>
+     * detalhe, então o guard antigo já pegava. Aqui só existe a abertura.
+     */
+    @Test
+    void excluirCarteiraUsadaSoNaAberturaDeCaixaRespondeConflitoDizendoOnde() throws Exception {
+        String token = assinarNovoTenant("exclusao-vinculo-abertura");
+        long idTenant = extrairIdTenant(token);
+        long id = criarCarteira(token, "CARTEIRA SO ABERTURA", "AVISTA", 0, 1, 1, "0");
+
+        abrirCaixaComCarteira(idTenant, id);
+
+        mvc.perform(delete("/api/v1/tipos-carteira/" + id).header("Authorization", "Bearer " + token))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.detail").value(org.hamcrest.Matchers.containsString("abertura de caixa")));
+
+        // ⭐ e o 409 não pode ter apagado nada pelo caminho.
+        mvc.perform(get("/api/v1/tipos-carteira/" + id).header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk());
+    }
+
+    /**
+     * A terceira FK esquecida: a conferência gravada no fechamento do caixa. Uma carteira que só
+     * apareceu numa conferência (o caixa fechou com ela zerada, sem lançamento) prendia a
+     * exclusão pelo mesmo 409 mudo.
+     */
+    @Test
+    void excluirCarteiraUsadaSoNaConferenciaDeFechamentoRespondeConflitoDizendoOnde() throws Exception {
+        String token = assinarNovoTenant("exclusao-vinculo-conferencia");
+        long idTenant = extrairIdTenant(token);
+        long idAbertura = criarCarteira(token, "CARTEIRA ABERTURA CONF", "AVISTA", 0, 1, 1, "0");
+        long idConferida = criarCarteira(token, "CARTEIRA SO CONFERENCIA", "CARTAO_DEBITO", 30, 1, 1, "0");
+
+        long idCaixa = abrirCaixaComCarteira(idTenant, idAbertura);
+        criarConferenciaDeFechamento(idTenant, idCaixa, idConferida);
+
+        mvc.perform(delete("/api/v1/tipos-carteira/" + idConferida).header("Authorization", "Bearer " + token))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.detail").value(org.hamcrest.Matchers.containsString("conferência de fechamento")));
+    }
+
     /** Fiscal (2026-08-18, `docs/MODULOFISCAL.md` §6.4) — o CRUD só ganhou os campos, sem
      *  torná-los obrigatórios: quem cobra o preenchimento é a Conformidade Fiscal. */
     @Test
@@ -459,6 +507,87 @@ class TipoCarteiraCrudTest {
                         (id_tenant, id_venda, id_carteira, numero_parcela, data_vencimento, valor_receber)
                     VALUES (%d, %d, %d, 1, now(), 100.00)
                     """.formatted(idTenant, idVenda, idCarteira));
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    /**
+     * P8 na forma de pagamento (pendência 48, 2026-08-31). ⭐ Aqui a alteração cruzada valeria
+     * <b>dinheiro direto</b>: quem conseguisse editar a carteira do vizinho mudaria o
+     * {@code percDesconto} dela e faria toda venda daquela loja fechar mais barato.
+     */
+    @Test
+    void isolamentoEntreTenants() throws Exception {
+        String tokenA = assinarNovoTenant("isolamento-carteira-a");
+        String tokenB = assinarNovoTenant("isolamento-carteira-b");
+        long idA = criarCarteira(tokenA, "CARTEIRA EXCLUSIVA DO TENANT A", "CARTAO_CREDITO", 30, 1, 6, "2.50");
+
+        mvc.perform(get("/api/v1/tipos-carteira/" + idA).header("Authorization", "Bearer " + tokenA))
+                .andExpect(status().isOk());
+
+        mvc.perform(get("/api/v1/tipos-carteira/" + idA).header("Authorization", "Bearer " + tokenB))
+                .andExpect(status().isNotFound());
+
+        mvc.perform(get("/api/v1/tipos-carteira?busca=EXCLUSIVA DO TENANT")
+                        .header("Authorization", "Bearer " + tokenB))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalItens").value(0));
+
+        mvc.perform(put("/api/v1/tipos-carteira/" + idA).header("Authorization", "Bearer " + tokenB)
+                        .contentType(APPLICATION_JSON)
+                        .content("""
+                                {"nomeCarteira":"SEQUESTRADA","categoriaCarteira":"CARTAO_CREDITO","prazoPagamento":30,
+                                 "pcMinima":1,"pcMaxima":6,"percDesconto":99,"permiteReceberCrediario":true}
+                                """))
+                .andExpect(status().isNotFound());
+
+        mvc.perform(delete("/api/v1/tipos-carteira/" + idA).header("Authorization", "Bearer " + tokenB))
+                .andExpect(status().isNotFound());
+
+        // o desconto do dono continua o que ele configurou
+        mvc.perform(get("/api/v1/tipos-carteira/" + idA).header("Authorization", "Bearer " + tokenA))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.nomeCarteira").value("CARTEIRA EXCLUSIVA DO TENANT A"))
+                .andExpect(jsonPath("$.taxaAdministradora").value(2.50));
+    }
+
+    /** Só a ABERTURA do caixa (sem nenhum lançamento), que é o vínculo mais fácil de esquecer. */
+    private long abrirCaixaComCarteira(long idTenant, long idCarteira) {
+        try (Connection c = DriverManager.getConnection(postgres.getJdbcUrl(), "niner_app", "dev_app");
+             Statement st = c.createStatement()) {
+            st.execute("SET app.id_tenant = " + idTenant);
+            long idEmpresa;
+            long idUsuario;
+            try (ResultSet rs = st.executeQuery("SELECT id_empresa FROM empresa LIMIT 1")) {
+                rs.next();
+                idEmpresa = rs.getLong(1);
+            }
+            try (ResultSet rs = st.executeQuery("SELECT id_usuario FROM usuario LIMIT 1")) {
+                rs.next();
+                idUsuario = rs.getLong(1);
+            }
+            try (ResultSet rs = st.executeQuery(
+                    "INSERT INTO caixa_mestre (id_tenant, id_empresa, id_usuario, id_carteira) VALUES ("
+                            + idTenant + ", " + idEmpresa + ", " + idUsuario + ", " + idCarteira + ") RETURNING id_caixa")) {
+                rs.next();
+                return rs.getLong(1);
+            }
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    /** Uma linha de conferência do fechamento, apontando para outra carteira que não a de abertura. */
+    private void criarConferenciaDeFechamento(long idTenant, long idCaixa, long idCarteira) {
+        try (Connection c = DriverManager.getConnection(postgres.getJdbcUrl(), "niner_app", "dev_app");
+             Statement st = c.createStatement()) {
+            st.execute("SET app.id_tenant = " + idTenant);
+            st.executeUpdate("""
+                    INSERT INTO caixa_fechamento_conferencia
+                        (id_tenant, id_caixa, id_carteira, valor_esperado, valor_contado)
+                    VALUES (%d, %d, %d, 0.00, 0.00)
+                    """.formatted(idTenant, idCaixa, idCarteira));
         } catch (SQLException e) {
             throw new RuntimeException(e);
         }

@@ -156,22 +156,51 @@ public class TipoCarteiraService {
 
     /**
      * Exclui de verdade — sem fallback de inativar ({@code tipo_carteira} não tem coluna
-     * {@code ativo}). Com vínculo em {@code contas_receber} (já usado numa venda) ou {@code
-     * caixa_detalhe} (já usado num lançamento de caixa), responde 409 e nada muda.
+     * {@code ativo}). Com qualquer vínculo, responde 409 <b>dizendo onde</b> e nada muda.
+     *
+     * <p>⚠️ <b>As CINCO FKs precisam estar aqui, e até 2026-08-31 só duas estavam.</b> Sem
+     * {@code caixa_mestre}, {@code caixa_fechamento_conferencia} e
+     * {@code documento_fiscal_pagamento}, o {@code DELETE} chegava ao banco, violava a
+     * restrição, e o {@code GlobalExceptionHandler} devolvia o 409 genérico
+     * <i>"Registro em uso por outro cadastro"</i> — mensagem sem caminho de volta, porque a tela
+     * não oferece "inativar" (esta tabela não tem {@code ativo}) e o lojista não tem como
+     * descobrir qual das cinco tabelas o prende. O caso mais provável era o mais banal: a
+     * carteira <b>DINHEIRO</b>, usada como carteira de <b>abertura</b> do caixa
+     * ({@code caixa_mestre.id_carteira}) mesmo num dia sem nenhum lançamento.
+     *
+     * <p>A lista sai do {@code pg_constraint}, nunca da memória — é a receita de
+     * {@code project_guards_de_exclusao_incompletos}:
+     * <pre>
+     * SELECT conrelid::regclass FROM pg_constraint
+     *  WHERE contype = 'f' AND confrelid = 'tipo_carteira'::regclass;
+     * </pre>
      */
     @Transactional
     public ExclusaoTipoCarteiraResponse excluir(long id) {
-        boolean temDependente = Boolean.TRUE.equals(
-                jdbc.sql("""
-                                SELECT EXISTS (SELECT 1 FROM contas_receber
-                                               WHERE id_tenant = plataforma.tenant_atual() AND id_carteira = ?)
-                                    OR EXISTS (SELECT 1 FROM caixa_detalhe
-                                               WHERE id_tenant = plataforma.tenant_atual() AND id_carteira = ?)
-                                """)
-                        .params(id, id).query(Boolean.class).single());
-        if (temDependente) {
+        String vinculo = jdbc.sql("""
+                        SELECT CASE
+                            WHEN EXISTS (SELECT 1 FROM contas_receber
+                                         WHERE id_tenant = plataforma.tenant_atual() AND id_carteira = ?)
+                                THEN 'contas a receber'
+                            WHEN EXISTS (SELECT 1 FROM caixa_detalhe
+                                         WHERE id_tenant = plataforma.tenant_atual() AND id_carteira = ?)
+                                THEN 'lançamento de caixa'
+                            WHEN EXISTS (SELECT 1 FROM caixa_mestre
+                                         WHERE id_tenant = plataforma.tenant_atual() AND id_carteira = ?)
+                                THEN 'abertura de caixa'
+                            WHEN EXISTS (SELECT 1 FROM caixa_fechamento_conferencia
+                                         WHERE id_tenant = plataforma.tenant_atual() AND id_carteira = ?)
+                                THEN 'conferência de fechamento de caixa'
+                            WHEN EXISTS (SELECT 1 FROM documento_fiscal_pagamento
+                                         WHERE id_tenant = plataforma.tenant_atual() AND id_carteira = ?)
+                                THEN 'pagamento de nota fiscal'
+                            ELSE ''
+                        END
+                        """)
+                .params(id, id, id, id, id).query(String.class).single();
+        if (vinculo != null && !vinculo.isEmpty()) {
             throw new ConflitoDadosException(
-                    "Tipo de carteira em uso em contas a receber ou lançamento de caixa — não pode ser excluído.");
+                    "Tipo de carteira em uso em " + vinculo + " — não pode ser excluído.");
         }
 
         int linhas = jdbc.sql("DELETE FROM tipo_carteira WHERE id_tenant = plataforma.tenant_atual() AND id_carteira = ?")

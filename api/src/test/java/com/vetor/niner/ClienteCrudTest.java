@@ -371,6 +371,67 @@ class ClienteCrudTest {
                 .andExpect(jsonPath("$.ativo").value(false));
     }
 
+    /**
+     * P8 no cadastro central de dado pessoal (pendência 48 de {@code docs/PENDENCIAS.md},
+     * 2026-08-31). É o mais caro de todos vazar: nome, CPF, telefone e endereço de cliente são
+     * dado pessoal — vazamento aqui não é só bug, é LGPD.
+     *
+     * <p>⭐ <b>Testa os três verbos, não só o GET.</b> O achado que originou a regra do projeto
+     * ({@code CorGradeTamanhoCrudTest.isolamentoEntreTenants}, 2026-08-08) provou que
+     * <b>UPDATE e DELETE</b> também atravessavam quando o SQL confiava apenas na política RLS —
+     * e alterar a linha do vizinho é pior que lê-la.
+     *
+     * <p>⚠️ A resposta certa é <b>404</b>, não 403: 403 confirmaria que aquele id existe em
+     * algum lugar.
+     */
+    @Test
+    void isolamentoEntreTenants() throws Exception {
+        String tokenA = assinarNovoTenant("isolamento-cliente-a");
+        String tokenB = assinarNovoTenant("isolamento-cliente-b");
+        long idCategoriaA = criarCategoria(tokenA, "Padrão");
+        String corpo = """
+                {"fisicaJuridica":false,"nome":"CLIENTE EXCLUSIVO DO TENANT A","idCategoriaCliente":%d}
+                """.formatted(idCategoriaA);
+        String resp = mvc.perform(post("/api/v1/clientes").header("Authorization", "Bearer " + tokenA)
+                        .contentType(APPLICATION_JSON).content(corpo))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        long idClienteA = ((Number) JsonPath.read(resp, "$.idCliente")).longValue();
+
+        // (a) o dono enxerga — o par positivo, sem o qual um endpoint quebrado passaria por isolado
+        mvc.perform(get("/api/v1/clientes/" + idClienteA).header("Authorization", "Bearer " + tokenA))
+                .andExpect(status().isOk());
+
+        // (b) o vizinho não lê
+        mvc.perform(get("/api/v1/clientes/" + idClienteA).header("Authorization", "Bearer " + tokenB))
+                .andExpect(status().isNotFound());
+
+        // (c) não aparece na listagem dele
+        mvc.perform(get("/api/v1/clientes").param("nome", "EXCLUSIVO DO TENANT")
+                        .header("Authorization", "Bearer " + tokenB))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.itens.length()").value(0));
+
+        // (d) não ALTERA
+        long idCategoriaB = criarCategoria(tokenB, "Padrão B");
+        mvc.perform(put("/api/v1/clientes/" + idClienteA).header("Authorization", "Bearer " + tokenB)
+                        .contentType(APPLICATION_JSON)
+                        .content("""
+                                {"fisicaJuridica":false,"nome":"SEQUESTRADO PELO TENANT B","idCategoriaCliente":%d}
+                                """.formatted(idCategoriaB)))
+                .andExpect(status().isNotFound());
+
+        // (e) não EXCLUI
+        mvc.perform(delete("/api/v1/clientes/" + idClienteA).header("Authorization", "Bearer " + tokenB))
+                .andExpect(status().isNotFound());
+
+        // (f) e o registro do dono continua intacto depois das duas tentativas
+        mvc.perform(get("/api/v1/clientes/" + idClienteA).header("Authorization", "Bearer " + tokenA))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.nome").value("CLIENTE EXCLUSIVO DO TENANT A"))
+                .andExpect(jsonPath("$.ativo").value(true));
+    }
+
     private static long extrairIdTenant(String token) {
         // O claim "tid" está no payload do JWT (segunda parte, base64url) — decodifica sem validar assinatura.
         String[] partes = token.split("\\.");
