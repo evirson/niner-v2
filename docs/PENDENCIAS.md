@@ -357,32 +357,35 @@ ANTES de reservar número"*). Aqui a ordem é a inversa. ⏭️ A saída prováv
 `NAO_EMITIDO` (o conceito já existe, com série/número/chave nulos) quando a falha acontece depois da
 reserva — mas isso é decisão fiscal, não só de código.
 
-### 72. 🟢 O motor da NFS-e existe e não tem chamador — nem controller, nem tela, nem PDV
-Medido em 2026-08-31: `grep -rln "nfse\|Nfse" api/src/main/java --include=*.java | grep -v /nfse/`
-devolve **zero**, e não há `@RestController` no pacote. As 15 classes de `fiscal/nfse/` formam uma
-ilha — montagem, assinatura, transporte, numeração, emissão e cancelamento prontos, e **nenhuma
-venda emite**. É o padrão *"mecanismo pronto e desligado nas duas pontas"* já catalogado no
-`CLAUDE.md` (o outbox do marketplace), com o agravante de que aqui o painel nem existe para mostrar
-"0 pendentes" e enganar.
-⏭️ O que falta: endpoints de `docs/MODULONFSE.md` §7, a chamada a partir da venda (pelo **mesmo**
-`cfg_emite_fiscal_apos_venda`, DS13) e as telas do §8.
+### 72. 🟡 O motor da NFS-e ganhou chamador — **falta só o PDV** (medido em 2026-08-31, depois do pull)
+Quando abri este item, `grep` por `Nfse` fora do pacote devolvia **zero**: montagem, assinatura,
+transporte, numeração, emissão e cancelamento prontos e **nenhuma venda emitindo** — o padrão
+*"mecanismo pronto e desligado nas duas pontas"*.
 
-### 73. 🟢 A máquina da NFS-e não tem um único teste — e o `EmissorFalso` existe justamente para isso
-`grep -rl "EmissorFalso\|NfseEmissaoService\|nfse_documento" api/src/test/` devolve **vazio**. Os 28
-testes do S6 cobrem as três classes puras (`IdDps`, `MontadorXmlDps`, `RespostaSefin`); **numeração,
-máquina de estados, gravação, recuperação de nota órfã e cancelamento não são exercitados**.
-⚠️ O `application.yml` de teste **afirma** que o falso "faz a suíte exercitar a máquina inteira" —
-promessa escrita e ainda não cumprida, que é a forma de defeito que o próprio comentário cita.
-⭐ Fechar isto não depende de credencial nenhuma: é o caminho mais barato de blindar o módulo antes
-que ele ganhe chamador (item 72).
+✅ **Fechado em grande parte no mesmo dia pelo Evirson:** existem `NfseController` e
+`NfseConfigController`, a tela de Configuração com assistente, a aba de NFS-e em Documentos Fiscais
+e a tributação do serviço no cadastro de Produto. E o que separa isto de um estudo: **uma NFS-e de
+R$ 1,00 foi emitida e cancelada em produção** contra o Sefin Nacional (nº 7308, Curitiba).
 
-### 74. 🟢 `ParametrosMunicipaisClient` está inerte, e é a peça do autoatendimento
-Ninguém o chama (só uma menção em javadoc). `MunicipioNfseService.registrarConvenio` e
-`registrarEnvioDeIm` — os dois métodos do assistente — também não têm chamador. Consequência: a
-alíquota do ISS tem **dois donos sem conciliação** — quem monta a DPS lê `produto_servico.aliquota_iss`
-(digitada), e a alíquota oficial do ADN não chega a lugar nenhum. Enquanto isso, `docs/MODULONFSE.md`
-§5 item 6 descreve *"o sistema pergunta à fonte e preenche"*, que hoje é intenção, não comportamento.
+🟡 **O que continua aberto, e ele mesmo declarou** — `docs/telas/nfse-emissao.md` abre com
+*"Status: Parcial (falta o PDV)"*: **a venda ainda não emite**. Medido agora, `grep -rn "Nfse"
+api/src/main/java/com/vetor/niner/vendas/` devolve **vazio**. Falta também o Recibo de Serviço.
 
+⚠️ **E há uma decisão de produto embutida ali**, registrada na spec dele: *uma NFS-e por código de
+serviço distinto da venda* — banho e tosa (`050801`) + consulta veterinária (`050101`) na mesma
+venda geram **duas** notas, o que **quebra** a invariante "uma nota por venda" que a V082
+estabeleceu para a NFC-e.
+### 73. ✅ A máquina da NFS-e ganhou teste — **FECHADO em 2026-08-31** (pelo Evirson)
+Quando abri, `grep -rl "EmissorFalso\|NfseEmissaoService\|nfse_documento" api/src/test/` devolvia
+**vazio**, e o `application.yml` de teste **afirmava** que o falso "faz a suíte exercitar a máquina
+inteira" — promessa escrita e não cumprida.
+
+Existe agora `NfseEmissaoIntegracaoTest`. ⏭️ Não conferi cobertura caso a caso (numeração, máquina
+de estados, nota órfã, cancelamento) — isso fica para quando alguém precisar mexer ali.
+### 74. ✅ `ParametrosMunicipaisClient` ganhou chamador — **FECHADO em 2026-08-31** (pelo Evirson)
+Quando abri, ninguém o chamava (só uma menção em javadoc), e a alíquota do ISS tinha **dois donos
+sem conciliação**. Medido agora: é chamado por `EmissorNacionalNfse`, `MunicipioNfseService` e
+`NfseConfigService` — o assistente da tela de Configuração é quem o exercita.
 ### 67. ✅ Reimportar a mesma NF-e corrigida travava o arquivamento num laço a cada 10 min — RESOLVIDO 2026-08-31
 O caminho do XML de entrada era `entrada/{ano}/{mes}/{chaveNfe}.xml`, e cancelar a entrada **libera a
 chave** para reimportação (comportamento desejado, e a UNIQUE de `produto_movimento_mestre` é parcial
