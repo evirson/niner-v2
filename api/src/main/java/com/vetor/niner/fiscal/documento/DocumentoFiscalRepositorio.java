@@ -96,6 +96,48 @@ public class DocumentoFiscalRepositorio {
                 .query(String.class).optional().orElse(null);
     }
 
+    /**
+     * ⭐ Quanto da venda é <b>SERVIÇO</b> — o que <b>não</b> entra na NFC-e (2026-08-31). Serve ao
+     * aviso de {@code VendaFiscalService#avisoDeServicosForaDaNota}: serviço é ISS municipal e tem
+     * documento próprio (NFS-e), então a nota da venda mista cobre só as mercadorias, e o operador
+     * precisa saber disso <b>antes</b> de ir embora achando que documentou tudo.
+     *
+     * <p>⚠️ Soma pelo <b>ledger</b> ({@code produto_movimento_detalhe}), não pela venda: é ele que
+     * carrega o preço efetivamente praticado por linha — o mesmo que a NFC-e usa —, e o preço do
+     * cadastro pode ter mudado depois. Desconto e acréscimo do item entram na conta pelo mesmo
+     * motivo: o valor citado no aviso tem de ser o que o cliente pagou pelo serviço.
+     *
+     * <p>Devolve {@code null} quando não há serviço nenhum — a esmagadora maioria das vendas.
+     *
+     * <p>⛔ <b>O {@code @Transactional} não é decoração, e eu esqueci dele na primeira versão</b> —
+     * no mesmo dia em que reli a lição que descreve exatamente isto. Sem ele, o
+     * {@code TenantAwareTransactionManager} nunca executa o {@code SET LOCAL app.id_tenant}, o
+     * {@code tenant_atual()} vem <b>NULL</b>, a consulta casa <b>zero linhas</b> e o método devolve
+     * {@code null} — que aqui significa "esta venda não tem serviço". Ou seja: <b>falha em
+     * silêncio, e no sentido que desliga o aviso</b>. Medido: a venda 628, com R$ 310 de serviço,
+     * respondia {@code avisoServicos: null} pela API enquanto a mesma consulta devolvia 310,00 no
+     * {@code psql}. Ver [[feedback_repositorio_sem_transactional_tenant_nulo]].
+     */
+    @Transactional(readOnly = true)
+    public java.math.BigDecimal somarServicosDaVenda(long idEmpresa, long idVenda) {
+        return jdbc.sql("""
+                        SELECT SUM(d.qtd_produto * d.preco_venda - d.valor_desconto + d.valor_acrescimo)
+                          FROM produto_movimento_mestre m
+                          JOIN produto_movimento_detalhe d
+                            ON d.id_tenant = m.id_tenant AND d.id_movimento = m.id_movimento
+                          JOIN produto_barra pb
+                            ON pb.id_tenant = d.id_tenant AND pb.id_variacao = d.id_variacao
+                          JOIN produto p
+                            ON p.id_tenant = pb.id_tenant AND p.id_produto = pb.id_produto
+                         WHERE m.id_tenant = plataforma.tenant_atual()
+                           AND m.id_empresa = ? AND m.id_venda = ?
+                           AND m.tipo_movimento = 'VENDA'
+                           AND p.tipo_item = 'SERVICO'
+                        """)
+                .params(idEmpresa, idVenda)
+                .query(java.math.BigDecimal.class).optional().orElse(null);
+    }
+
     /** ⚠️ NÃO usar para gravar documento de VENDA: desde 2026-08-24 o modelo vem do pedido
      *  ({@code pedido.modelo()}), porque venda a contribuinte de ICMS sai em NF-e 55. Gravar 65
      *  fixo aqui fazia a nota nascer 55 no XML e 65 no banco — divergência que só um teste

@@ -536,6 +536,97 @@ class ServicoNoCatalogoTest {
                     assertThat(rs.next()).isFalse();
                 }
             }
+
+            // ⭐ E o que a nota DEIXA DE FORA precisa ser dito ao operador (2026-08-31, relato do
+            // dono do produto: *"a venda também tinha serviços, por que não emitiu a nota de
+            // serviço?"*). A NFC-e estava certa; faltava avisar que ela cobre metade da venda.
+            // Mesma soma de `DocumentoFiscalRepositorio.somarServicosDaVenda`.
+            try (PreparedStatement ps = c.prepareStatement("""
+                    SELECT SUM(d.qtd_produto * d.preco_venda - d.valor_desconto + d.valor_acrescimo)
+                      FROM produto_movimento_mestre m
+                      JOIN produto_movimento_detalhe d
+                        ON d.id_tenant = m.id_tenant AND d.id_movimento = m.id_movimento
+                      JOIN produto_barra pb
+                        ON pb.id_tenant = d.id_tenant AND pb.id_variacao = d.id_variacao
+                      JOIN produto p ON p.id_tenant = pb.id_tenant AND p.id_produto = pb.id_produto
+                     WHERE m.id_venda = ? AND m.tipo_movimento = 'VENDA' AND p.tipo_item = 'SERVICO'
+                    """)) {
+                ps.setLong(1, idVenda);
+                try (ResultSet rs = ps.executeQuery()) {
+                    rs.next();
+                    assertThat(rs.getBigDecimal(1))
+                            .as("o BANHO E TOSA de 80,00 é o que ficou fora da nota — é este valor "
+                                    + "que o aviso cita, e ele vem do LEDGER (preço praticado), não do cadastro")
+                            .isEqualByComparingTo("80.00");
+                }
+            }
+        }
+    }
+
+    /**
+     * ⛔ O par negativo, e é ele que impede o aviso de virar ruído: venda <b>só de mercadoria</b> —
+     * a esmagadora maioria — não pode gerar aviso nenhum. Um aviso que aparece em toda venda é um
+     * aviso que ninguém lê, e aí ele deixa de proteger justamente a venda mista.
+     */
+    @Test
+    void vendaSoDeMercadoriaNaoTemValorDeServicoParaAvisar() throws Exception {
+        String token = assinarNovoTenant("so-mercadoria");
+        long idTenant = idTenantDoToken(token);
+        long idProduto = criarProduto(token, "RACAO 15KG", null);   // sem tipoItem = MERCADORIA
+
+        try (Connection c = abrirConexao(idTenant)) {
+            long idEmpresa = buscarIdEmpresa(c);
+            long idVariacao = criarVariacao(c, idTenant, idProduto);
+            long idVenda;
+            try (PreparedStatement ps = c.prepareStatement(
+                    "INSERT INTO venda (id_tenant, id_empresa, data_venda, tipo_operacao)"
+                            + " VALUES (?, ?, now(), 'VENDA') RETURNING id_venda")) {
+                ps.setLong(1, idTenant);
+                ps.setLong(2, idEmpresa);
+                try (ResultSet rs = ps.executeQuery()) {
+                    rs.next();
+                    idVenda = rs.getLong(1);
+                }
+            }
+            long idMovimento;
+            try (PreparedStatement ps = c.prepareStatement(
+                    "INSERT INTO produto_movimento_mestre (id_tenant, tipo_movimento, data_movimento,"
+                            + " id_empresa, id_venda) VALUES (?, 'VENDA', now(), ?, ?) RETURNING id_movimento")) {
+                ps.setLong(1, idTenant);
+                ps.setLong(2, idEmpresa);
+                ps.setLong(3, idVenda);
+                try (ResultSet rs = ps.executeQuery()) {
+                    rs.next();
+                    idMovimento = rs.getLong(1);
+                }
+            }
+            try (PreparedStatement ps = c.prepareStatement(
+                    "INSERT INTO produto_movimento_detalhe (id_tenant, id_movimento, id_empresa,"
+                            + " id_variacao, credito_debito, qtd_produto, preco_venda)"
+                            + " VALUES (?, ?, ?, ?, 'D', 1, 50.00)")) {
+                ps.setLong(1, idTenant); ps.setLong(2, idMovimento);
+                ps.setLong(3, idEmpresa); ps.setLong(4, idVariacao);
+                ps.executeUpdate();
+            }
+
+            try (PreparedStatement ps = c.prepareStatement("""
+                    SELECT SUM(d.qtd_produto * d.preco_venda - d.valor_desconto + d.valor_acrescimo)
+                      FROM produto_movimento_mestre m
+                      JOIN produto_movimento_detalhe d
+                        ON d.id_tenant = m.id_tenant AND d.id_movimento = m.id_movimento
+                      JOIN produto_barra pb
+                        ON pb.id_tenant = d.id_tenant AND pb.id_variacao = d.id_variacao
+                      JOIN produto p ON p.id_tenant = pb.id_tenant AND p.id_produto = pb.id_produto
+                     WHERE m.id_venda = ? AND m.tipo_movimento = 'VENDA' AND p.tipo_item = 'SERVICO'
+                    """)) {
+                ps.setLong(1, idVenda);
+                try (ResultSet rs = ps.executeQuery()) {
+                    rs.next();
+                    assertThat(rs.getBigDecimal(1))
+                            .as("sem serviço não há o que avisar — nulo, e a tela não mostra nada")
+                            .isNull();
+                }
+            }
         }
     }
 

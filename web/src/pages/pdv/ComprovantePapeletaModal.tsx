@@ -133,6 +133,8 @@ export default function ComprovantePapeletaModal({
       protocolo: null,
       cStat: null,
       mensagem: 'Não foi possível falar com o serviço fiscal. A venda está registrada.',
+      // A emissão nem chegou ao servidor, então não há como saber o que ficaria de fora dela.
+      avisoServicos: null,
     }
   }
 
@@ -356,6 +358,18 @@ export default function ComprovantePapeletaModal({
               <pre className="papeleta-preview papeleta-imprimir">{linhas.join('\n')}</pre>
             )}
           </div>
+
+          {/* ⭐ O que a nota DEIXOU DE FORA fica na TELA, não num toast (2026-08-31, relato do dono
+              do produto: *"a venda também tinha serviços, por que não emitiu a nota de serviço?"*).
+              ⛔ Toast não serve aqui: some em 6 s, e o que ele diz continua valendo depois — a
+              parte de serviço da venda segue sem documento fiscal. E há um segundo motivo, já
+              catalogado neste projeto: dois toasts irmãos disputam o mesmo canto, e o verde do
+              "Nota autorizada" cobriria este. */}
+          {resultadoFiscal?.avisoServicos && (
+            <p className="erro-campo" data-sem-impressao style={{ flexShrink: 0, marginTop: 8 }}>
+              {resultadoFiscal.avisoServicos}
+            </p>
+          )}
 
           {!mostrarPerguntaCpf && (
             <div className="ajuda-rodape" style={{ flexShrink: 0 }}>

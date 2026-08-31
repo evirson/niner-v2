@@ -5,6 +5,7 @@ import com.vetor.niner.fiscal.documento.EmissaoNfceService.ResultadoEmissao;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Service;
 
+import java.math.BigDecimal;
 import java.util.Optional;
 
 /**
@@ -46,7 +47,41 @@ public class VendaFiscalService {
         Integer idUsuario = Integer.parseInt(jwt.getSubject());
 
         exigirVendaSemNota(idEmpresa, idVenda);
-        return assembler.montar(idTenant, idEmpresa, idVenda, idUsuario, incluirCpf).map(emissao::emitir);
+        return assembler.montar(idTenant, idEmpresa, idVenda, idUsuario, incluirCpf)
+                .map(emissao::emitir)
+                .map(r -> r.comAvisoServicos(avisoDeServicosForaDaNota(idEmpresa, idVenda)));
+    }
+
+    /**
+     * ⭐ <b>Venda mista emite METADE do documento fiscal — e isso precisa ser DITO</b> (2026-08-31,
+     * relato do dono do produto: *"a venda também tinha serviços, por que não emitiu a nota de
+     * serviço?"*).
+     *
+     * <p>Serviço <b>não entra</b> na NFC-e — está certo: mercadoria é ICMS estadual e serviço é ISS
+     * municipal, com documento próprio (NFS-e). O {@code VendaNfceAssembler} filtra os serviços
+     * corretamente, e a nota da venda 628 saiu com as duas mercadorias e R$ 739,80, sem os R$ 310
+     * de serviço. <b>O defeito não era a nota; era o silêncio.</b>
+     *
+     * <p>A emissão de NFS-e a partir do PDV ainda não existe (pendência #72 — a máquina está
+     * pronta, falta o chamador). Até lá, o operador clicava em "emitir", via o cupom sair e ia
+     * embora achando que a venda inteira estava documentada — com uma parte do faturamento sem
+     * documento nenhum e ninguém para lhe contar. Um aviso não substitui a NFS-e, mas troca
+     * "ele não sabe" por "ele sabe", que é a diferença que importa numa fiscalização.
+     *
+     * <p>Devolve {@code null} quando a venda não tem serviço — a esmagadora maioria das vendas —,
+     * e aí a tela não mostra nada.
+     */
+    private String avisoDeServicosForaDaNota(long idEmpresa, long idVenda) {
+        BigDecimal valorServicos = documentos.somarServicosDaVenda(idEmpresa, idVenda);
+        if (valorServicos == null || valorServicos.signum() <= 0) {
+            return null;
+        }
+        return ("Esta venda tem R$ %s em SERVIÇOS, que não entram na NFC-e — serviço é ISS "
+                + "municipal e tem documento próprio (NFS-e). A nota emitida cobre só as "
+                + "mercadorias. A emissão de NFS-e pelo PDV ainda não está disponível: por "
+                + "enquanto, emita a nota de serviço pelo portal da sua prefeitura.")
+                .formatted(valorServicos.setScale(2, java.math.RoundingMode.HALF_UP).toPlainString()
+                        .replace('.', ','));
     }
 
     /**

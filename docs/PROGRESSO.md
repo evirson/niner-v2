@@ -11,6 +11,48 @@ Registro cronológico das decisões e entregas. Atualizar a cada marco relevante
 
 ## Estado atual
 
+> ## 📌 2026-08-31 (7) — "a venda tinha serviços, por que não emitiu a nota de serviço?"
+>
+> A NFC-e **estava certa**. Medido no XML da venda 628: **2 itens**, as duas mercadorias, `vNF`
+> **739,80** — os R$ 310 de serviço ficaram **corretamente** de fora. Mercadoria é ICMS estadual e
+> serviço é ISS municipal, com documento próprio.
+>
+> ⭐ **O defeito não era a nota; era o SILÊNCIO.** A emissão de NFS-e pelo PDV ainda não existe
+> (pendência **#72** — a máquina está pronta, falta o chamador; o próprio Evirson declara na spec:
+> *"Status: Parcial (falta o PDV)"*). Até aqui o operador clicava em emitir, via o cupom sair e ia
+> embora achando que documentou a venda inteira — com **R$ 310 de faturamento sem documento nenhum e
+> ninguém para lhe contar**.
+>
+> Agora a resposta da emissão traz `avisoServicos` quando a venda tem serviço, com o **valor exato**,
+> e a tela mostra: *"Esta venda tem R$ 310,00 em SERVIÇOS, que não entram na NFC-e (…) emita a nota de
+> serviço pelo portal da sua prefeitura."*
+>
+> ⛔ **Na TELA, não num toast.** Toast some em 6 s e o que ele diz continua valendo depois. E há um
+> segundo motivo já catalogado aqui: dois toasts irmãos disputam o mesmo canto, e o verde do "Nota
+> autorizada" cobriria este.
+>
+> ⛔ E o aviso **não aparece** em venda só de mercadoria — a esmagadora maioria. Aviso que aparece
+> sempre é aviso que ninguém lê, e aí ele deixa de proteger justamente a venda mista. É o par negativo
+> do teste.
+>
+> ### ⚠️⚠️ E eu caí na armadilha que reli hoje de manhã
+>
+> A primeira versão respondia `avisoServicos: null` para a venda 628 — **com a mesma consulta
+> devolvendo 310,00 no `psql`**. Causa: `emitirNfce` **não é `@Transactional`** (de propósito: as
+> transações são curtas e próprias), então o método novo do repositório rodava **sem transação**, o
+> `SET LOCAL app.id_tenant` nunca acontecia, `tenant_atual()` vinha **NULL** e a consulta casava
+> **zero linhas**.
+>
+> ⛔ **E falhou no sentido que desliga o aviso:** `null` ali significa "esta venda não tem serviço".
+> Os métodos vizinhos do mesmo repositório **têm** `@Transactional(readOnly = true)` — inclusive um
+> com o comentário *"e o `@Transactional` não é decoração: escrevi este método sem ele"*. Eu li isso
+> hoje e escrevi o meu sem mesmo assim. Ver `feedback_repositorio_sem_transactional_tenant_nulo`.
+>
+> ⭐ **O que pegou:** chamar a API de verdade depois do rebuild e comparar com o `psql`. `tsc -b`,
+> `clean compile` e **1167 testes verdes** passaram com o defeito presente — porque o teste que
+> escrevi confere a **consulta** (no banco, com tenant setado), não o caminho HTTP.
+>
+>
 > ## 📌 2026-08-31 (6) — "a OS 5 existe e não puxa" (existia mesmo) e o serviço sem custo
 >
 > ### 1. A OS que "não estava cadastrada" — a mensagem é que estava errada

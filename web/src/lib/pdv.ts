@@ -374,6 +374,10 @@ export interface ResultadoEmissaoNfce {
   protocolo: string | null
   cStat: string | null
   mensagem: string
+  /** ⭐ Preenchido só quando a venda tem SERVIÇO: a NFC-e cobre apenas as mercadorias, e sem este
+   *  aviso o operador vai embora achando que documentou a venda inteira. Serviço é ISS municipal
+   *  e tem documento próprio (NFS-e), que o PDV ainda não emite. `null` na maioria das vendas. */
+  avisoServicos: string | null
 }
 
 /**
