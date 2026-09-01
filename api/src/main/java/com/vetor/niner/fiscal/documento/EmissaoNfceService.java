@@ -104,6 +104,21 @@ public class EmissaoNfceService {
         return emitirInterno(pedido).comModelo(pedido.modelo().codigo());
     }
 
+    /**
+     * Motivo gravado na linha do número queimado (pendência #71).
+     *
+     * <p>⚠️ A mensagem da exceção entra <b>inteira</b>, truncada só pelo limite da coluna: quem vai
+     * ler isto é quem precisa decidir se inutiliza a faixa, meses depois, e "erro ao emitir" não
+     * ajuda ninguém a decidir nada. O nome da classe vai junto porque exceção de validação de
+     * schema costuma vir com {@code getMessage()} nulo.
+     */
+    static String motivoDoNumeroQueimado(RuntimeException e) {
+        String detalhe = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
+        String texto = "Número reservado e não utilizado: a montagem/assinatura/validação do XML "
+                + "falhou antes de gravar a nota. " + detalhe;
+        return texto.length() > 500 ? texto.substring(0, 500) : texto;
+    }
+
     private ResultadoEmissao emitirInterno(PedidoDeEmissao pedido) {
         // ---------- DF13: contribuinte de ICMS sai em NF-e 55, não em NFC-e ----------
         // Até 2026-08-24 este caso era apenas RECUSADO aqui e a venda ficava sem documento nenhum.
@@ -158,23 +173,37 @@ public class EmissaoNfceService {
                 pedido.ambiente() == AmbienteSefaz.PRODUCAO);
 
         // ---------- 2. montar, assinar e validar — nenhum I/O de rede ----------
-        XmlMontado montado = montador.montar(
-                new NotaParaMontar(
-                        pedido.ambiente(), pedido.modelo(), numero.serie(), numero.numero(), numero.codigoNumerico(),
-                        pedido.emissao(), pedido.naturezaOperacao(), tipoEmissao,
-                        pedido.emitente(), dest, pedido.itens(), pedido.itensTributados(), pedido.totais(),
-                        pedido.pagamentos(), pedido.troco(), pedido.informacoesComplementares(),
-                        pedido.responsavelTecnico(),
-                        new UrlsConsultaUf(autorizador.urlQrCode(), autorizador.urlConsultaPublica()),
-                        csc, pedido.versaoAplicativo()),
-                parametros -> assinador.assinarQrCodeOffline(parametros, keystore, certificado.senha()));
+        // ⚠️ O número JÁ ESTÁ RESERVADO daqui para baixo, e os três passos a seguir podem lançar.
+        // Sem o try, uma falha de montagem, assinatura ou schema consumia o número e não deixava
+        // linha nenhuma em documento_fiscal: buraco silencioso na numeração, que só reaparece
+        // como pendência de inutilização perante a SEFAZ, sem ninguém saber o que houve ali
+        // (pendência #71 — que apontava só a devolução; a venda tinha o mesmo defeito).
+        XmlMontado montado;
+        String xmlAssinado;
+        try {
+            montado = montador.montar(
+                    new NotaParaMontar(
+                            pedido.ambiente(), pedido.modelo(), numero.serie(), numero.numero(), numero.codigoNumerico(),
+                            pedido.emissao(), pedido.naturezaOperacao(), tipoEmissao,
+                            pedido.emitente(), dest, pedido.itens(), pedido.itensTributados(), pedido.totais(),
+                            pedido.pagamentos(), pedido.troco(), pedido.informacoesComplementares(),
+                            pedido.responsavelTecnico(),
+                            new UrlsConsultaUf(autorizador.urlQrCode(), autorizador.urlConsultaPublica()),
+                            csc, pedido.versaoAplicativo()),
+                    parametros -> assinador.assinarQrCodeOffline(parametros, keystore, certificado.senha()));
 
-        String xmlAssinado = assinador.assinar(
-                montado.xml(), montado.chaveAcesso(), keystore, certificado.senha());
+            xmlAssinado = assinador.assinar(
+                    montado.xml(), montado.chaveAcesso(), keystore, certificado.senha());
 
-        // F11 — bloqueio preventivo: rejeição por schema é a mais barata de evitar, e evitá-la
-        // aqui poupa a viagem de rede e a mensagem críptica que a SEFAZ devolveria.
-        validador.validarNfe(xmlAssinado);
+            // F11 — bloqueio preventivo: rejeição por schema é a mais barata de evitar, e evitá-la
+            // aqui poupa a viagem de rede e a mensagem críptica que a SEFAZ devolveria.
+            validador.validarNfe(xmlAssinado);
+        } catch (RuntimeException e) {
+            repositorio.gravarNumeroQueimado(pedido.idEmpresa(), modelo, pedido.ambiente().name(),
+                    "VENDA_CONSUMIDOR", numero.serie(), numero.numero(), pedido.idVenda(),
+                    pedido.idUsuario(), motivoDoNumeroQueimado(e));
+            throw e;
+        }
 
         long idDocumento = repositorio.gravarAssinado(
                 pedido, numero, montado.chaveAcesso(), xmlAssinado, tipoEmissao);

@@ -60,6 +60,17 @@ class VendaFiscalEmissaoTest {
     @MockitoBean
     SefazTransporte transporte;
 
+    /**
+     * Espião do validador de schema, usado por um teste só
+     * ({@link #falhaDepoisDeReservarONumeroDeixaRastroComONumeroQueimado}).
+     *
+     * <p>⚠️ {@code @MockitoSpyBean}, não {@code @MockitoBean}: os outros nove testes desta classe
+     * precisam da validação <b>de verdade</b> — trocá-la por um mock mudo desligaria o F11 na
+     * suíte inteira para provar um caso, que é o oposto de um teste.
+     */
+    @org.springframework.test.context.bean.override.mockito.MockitoSpyBean
+    com.vetor.niner.fiscal.documento.ValidadorXsd validador;
+
     @TempDir
     Path tempDir;
 
@@ -917,6 +928,85 @@ class VendaFiscalEmissaoTest {
         long notas = jdbc.sql("SELECT count(*) FROM documento_fiscal WHERE id_tenant = ? AND id_venda = ?")
                 .params(idTenant, idVenda).query(Long.class).single();
         assertThat(notas).as("uma venda, uma nota").isEqualTo(1L);
+    }
+
+    /**
+     * ⭐ Falha <b>depois</b> de o número estar reservado deixa RASTRO — pendência #71.
+     *
+     * <p>A numeração é reservada antes de montar o XML (tem de ser: o número entra na chave de
+     * acesso), e entre a reserva e a gravação correm três passos que podem lançar — montar,
+     * assinar e validar contra o schema. Antes de 2026-09-01, se qualquer um falhasse, o número
+     * ficava consumido na sequência e <b>não existia linha nenhuma</b> em {@code documento_fiscal}:
+     * um buraco silencioso, que só reaparece meses depois como pendência de inutilização perante a
+     * SEFAZ, sem ninguém saber o que houve ali.
+     *
+     * <p>⚠️ <b>A asserção que importa é a do BANCO.</b> Um teste que conferisse só o erro HTTP
+     * passaria com o defeito inteiro presente — o operador vê o erro dos dois jeitos; o que muda é
+     * o que fica registrado. E ela confere as duas coisas: que a linha existe <b>e</b> que ela
+     * carrega o número, porque {@code gravarNaoEmitido} (que já existia) grava série e número
+     * <b>nulos</b> e não resolveria nada aqui.
+     *
+     * <p>⚠️ O item #71 apontava só a devolução ao fornecedor. Conferindo o código, a emissão da
+     * <b>venda</b> tinha o mesmo defeito — o que já estava resolvido lá era a recusa por
+     * duplicidade, que acontece antes de reservar. É por isso que este teste está aqui.
+     */
+    @Test
+    void falhaDepoisDeReservarONumeroDeixaRastroComONumeroQueimado() throws Exception {
+        String token = assinarNovoTenant("queimado");
+        long idTenant = idTenantDo(token);
+        long idEmpresa = idEmpresaDo(token);
+        String cnpj = "11222333000181";
+
+        completarDadosDaEmpresa(idTenant, idEmpresa, cnpj);
+        enviarCertificado(token, idEmpresa, cnpj);
+        ligarFiscal(token, idEmpresa);
+        long idPerfil = criarPerfilFiscalCsosn102(idTenant);
+        long idVariacao = criarProdutoComPerfil(token, idTenant, "PRODUTO NUMERO QUEIMADO", idPerfil, "30.00");
+        long idCliente = criarClienteAnonimo(token, "Cliente Queimado");
+        long idFuncionario = criarFuncionario(token, "Vendedor Queimado");
+        long idCarteira = carteiraDinheiroComTpag(token, idTenant);
+        abrirCaixa(token, idCarteira);
+        long idVenda = efetivarVenda(token, idVariacao, idCliente, idFuncionario, idCarteira, "30.00");
+
+        // ⚠️ A linha de fiscal_numeracao só nasce na PRIMEIRA reserva — antes disso a consulta
+        // devolve zero linhas. Nesta empresa recém-criada, o primeiro número é o 1.
+        int numeroQueEsperoQueimar = jdbc.sql("""
+                        SELECT proximo_numero FROM fiscal_numeracao
+                         WHERE id_tenant = ? AND id_empresa = ? AND modelo = 65
+                        """)
+                .params(idTenant, idEmpresa).query(Integer.class).optional().orElse(1);
+
+        // Sabota o passo de validação — é o último dos três que rodam com o número já reservado.
+        Mockito.doThrow(new IllegalStateException("schema recusou o XML (sabotagem do teste)"))
+                .when(validador).validarNfe(org.mockito.ArgumentMatchers.anyString());
+        try {
+            mvc.perform(post("/api/v1/pdv/vendas/" + idVenda + "/nfce")
+                    .header("Authorization", "Bearer " + token)
+                    .contentType(APPLICATION_JSON).content("{\"incluirCpf\":false}"));
+        } catch (Exception esperado) {
+            // A exceção sobe de propósito: o que este teste mede é o que ficou GRAVADO.
+        } finally {
+            Mockito.reset(validador);
+        }
+
+        var queimado = jdbc.sql("""
+                        SELECT numero, serie, situacao::text AS situacao, motivo_nao_emissao
+                          FROM documento_fiscal
+                         WHERE id_tenant = ? AND id_empresa = ? AND numero = ?
+                        """)
+                .params(idTenant, idEmpresa, numeroQueEsperoQueimar)
+                .query((rs, n) -> rs.getString("situacao") + "|" + rs.getString("motivo_nao_emissao"))
+                .optional();
+
+        assertThat(queimado)
+                .as("o número %d foi consumido: tem de existir linha em documento_fiscal, senão "
+                        + "ele vira buraco silencioso na numeração", numeroQueEsperoQueimar)
+                .isPresent();
+        assertThat(queimado.get()).startsWith("NAO_EMITIDO|");
+        assertThat(queimado.get())
+                .as("o motivo é o que alguém vai ler meses depois para decidir se inutiliza a faixa")
+                .contains("Número reservado e não utilizado")
+                .contains("sabotagem do teste");
     }
 
     private int proximoNumero(long idTenant, long idEmpresa) {

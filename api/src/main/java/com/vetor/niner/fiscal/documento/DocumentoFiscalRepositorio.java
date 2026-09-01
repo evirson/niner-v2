@@ -238,6 +238,53 @@ public class DocumentoFiscalRepositorio {
                 .query(Long.class).single();
     }
 
+    /**
+     * Registra um número <b>já reservado</b> que não virou nota (pendência #71, 2026-09-01).
+     *
+     * <h2>O buraco que isto fecha</h2>
+     * A numeração é reservada <b>antes</b> de montar o XML — tem de ser, porque o número entra na
+     * chave de acesso. Entre a reserva e a gravação correm três passos que podem lançar:
+     * {@code montar}, {@code assinar} e {@code validarNfe}. Se qualquer um deles falhava, o número
+     * ficava consumido na sequência e <b>não existia linha nenhuma</b> em {@code documento_fiscal}:
+     * um buraco silencioso, que só aparece meses depois como pendência de inutilização perante a
+     * SEFAZ — sem ninguém saber o que aconteceu ali.
+     *
+     * <p>⚠️ O item #71 apontava só a devolução. Conferindo o código, <b>a emissão da venda tinha o
+     * mesmo defeito</b>: o que já estava resolvido lá era a recusa por duplicidade (item 37), que
+     * de fato acontece antes de reservar — outra coisa. Por isso este método é chamado nos
+     * <b>três</b> pontos que reservam número.
+     *
+     * <h2>Por que grava o NÚMERO, e não uma linha vazia</h2>
+     * {@code gravarNaoEmitido} existe e deixa série/número nulos — serve para "a nota não devia
+     * sair", em que nada foi consumido. Aqui é o contrário: o número <b>foi</b> consumido, e é
+     * exatamente ele que precisa aparecer. Com o número gravado, a linha entra em Documentos
+     * Fiscais, o índice {@code documento_fiscal_numero_uk} impede que ele seja reaproveitado, e a
+     * Inutilização encontra a faixa.
+     *
+     * <p>⚠️ Não colide com uma emissão bem-sucedida da mesma venda depois:
+     * {@code documento_fiscal_uma_por_venda_uk} é parcial e só cobre AUTORIZADO, CONTINGENCIA,
+     * TRANSMITINDO e ASSINADO — {@code NAO_EMITIDO} fica de fora, de propósito.
+     *
+     * <p>⚠️ {@code REQUIRES_NEW}: este método roda <b>enquanto uma exceção sobe</b>. Numa transação
+     * herdada, o Postgres já teria abortado tudo e o INSERT se perderia no rollback — o mesmo
+     * mecanismo que apagava o contador de tentativas do 2FA.
+     */
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.REQUIRES_NEW)
+    public long gravarNumeroQueimado(long idEmpresa, int modelo, String ambiente, String tipoOperacao,
+                                     int serie, int numero, Integer idVenda, Integer idUsuario,
+                                     String motivo) {
+        return jdbc.sql("""
+                        INSERT INTO documento_fiscal (
+                            id_tenant, id_empresa, modelo, serie, numero, tipo_operacao, situacao,
+                            ambiente, id_venda, motivo_nao_emissao, id_usuario)
+                        VALUES (plataforma.tenant_atual(), ?, ?, ?, ?, ?::tipo_operacao_fiscal,
+                                'NAO_EMITIDO', ?::ambiente_fiscal, ?, ?, ?)
+                        RETURNING id_documento_fiscal
+                        """)
+                .params(idEmpresa, modelo, serie, numero, tipoOperacao, ambiente, idVenda, motivo, idUsuario)
+                .query(Long.class).single();
+    }
+
     @Transactional
     public long gravarAssinado(PedidoDeEmissao pedido, NumeroReservado numero,
                                String chave, String xmlAssinado, int tipoEmissao) {

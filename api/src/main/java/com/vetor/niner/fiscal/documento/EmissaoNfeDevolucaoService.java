@@ -101,10 +101,21 @@ public class EmissaoNfeDevolucaoService {
                 base.ambiente() == AmbienteSefaz.PRODUCAO);
 
         // ---------- 2. montar, assinar e validar — nenhum I/O de rede ----------
+        // ⚠️ Ver o javadoc de gravarNumeroQueimado: daqui para baixo o número já está consumido, e
+        // os três passos podem lançar. Sem o try, o número virava buraco silencioso (pendência #71).
         DevolucaoParaMontar dev = comNumeracao(base, numero);
-        XmlMontado montado = montador.montar(dev);
-        String xmlAssinado = assinador.assinar(montado.xml(), montado.chaveAcesso(), keystore, certificado.senha());
-        validador.validarNfe(xmlAssinado);
+        XmlMontado montado;
+        String xmlAssinado;
+        try {
+            montado = montador.montar(dev);
+            xmlAssinado = assinador.assinar(montado.xml(), montado.chaveAcesso(), keystore, certificado.senha());
+            validador.validarNfe(xmlAssinado);
+        } catch (RuntimeException e) {
+            repositorio.gravarNumeroQueimado(idEmpresa, MODELO_NFE, base.ambiente().name(),
+                    "DEVOLUCAO_VENDA", numero.serie(), numero.numero(), null, idUsuario,
+                    EmissaoNfceService.motivoDoNumeroQueimado(e));
+            throw e;
+        }
 
         long idDocumentoOriginal = assembler.idDocumentoOriginal(idDevolucao);
         long idDocumento = repositorio.gravarDevolucaoAssinada(idEmpresa, idDevolucao, idUsuario, dev,
@@ -142,9 +153,19 @@ public class EmissaoNfeDevolucaoService {
         NumeroReservado numero = numeracao.reservar(idEmpresa, MODELO_NFE, base.serie(),
                 base.ambiente() == AmbienteSefaz.PRODUCAO);
         DevolucaoParaMontar dev = comNumeracao(base, numero);
-        XmlMontado montado = montador.montar(dev);
-        String xmlAssinado = assinador.assinar(montado.xml(), montado.chaveAcesso(), keystore, certificado.senha());
-        validador.validarNfe(xmlAssinado);
+        // ⚠️ Mesma guarda do método acima — número já reservado, três passos que podem lançar.
+        XmlMontado montado;
+        String xmlAssinado;
+        try {
+            montado = montador.montar(dev);
+            xmlAssinado = assinador.assinar(montado.xml(), montado.chaveAcesso(), keystore, certificado.senha());
+            validador.validarNfe(xmlAssinado);
+        } catch (RuntimeException e) {
+            repositorio.gravarNumeroQueimado(idEmpresa, MODELO_NFE, base.ambiente().name(),
+                    "DEVOLUCAO_FORNECEDOR", numero.serie(), numero.numero(), null, idUsuario,
+                    EmissaoNfceService.motivoDoNumeroQueimado(e));
+            throw e;
+        }
 
         long idDocumento = repositorio.gravarDevolucaoCompraAssinada(idEmpresa, idMovimento, idUsuario, dev,
                 numero, montado.chaveAcesso(), xmlAssinado);

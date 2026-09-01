@@ -447,16 +447,40 @@ conta abandonada for a primeira e a pagante for a segunda, a campanha recebe **R
 `lower(email)` + deduplicação também espera: escolher qual linha sobrevive quando duas têm
 status/UTM diferentes é decisão de dado, não regra genérica.
 
-### 71. 🟢 Número fiscal queimado sem registro entre reservar e gravar
-Em `EmissaoNfeDevolucaoService`, `numeracao.reservar` roda **antes** de `gravarDevolucaoAssinada`, e
-entre os dois correm `montador.montar`, `assinador.assinar` e `validador.validarNfe` — três pontos
-que podem lançar. Se lançarem, o número está reservado e **não existe linha em `documento_fiscal`**:
-número queimado, que vira buraco, que vira inutilização formal.
+### 71. ✅ Número fiscal queimado agora deixa RASTRO — **FECHADO em 2026-09-01**
 
-O projeto já trata isso na emissão da venda (item 37 da auditoria de 08-27: *"a recusa acontece
-ANTES de reservar número"*). Aqui a ordem é a inversa. ⏭️ A saída provável é registrar um
-`NAO_EMITIDO` (o conceito já existe, com série/número/chave nulos) quando a falha acontece depois da
-reserva — mas isso é decisão fiscal, não só de código.
+⚠️ **O item apontava só a devolução. A emissão da VENDA tinha o mesmo defeito** — conferido no
+código antes de corrigir. O que já estava resolvido lá (item 37) era a recusa por **duplicidade**,
+que de fato acontece antes de reservar; outra coisa. Por isso a correção foi aplicada nos **três**
+pontos que reservam número: NFC-e/NF-e da venda, devolução de venda e devolução ao fornecedor.
+
+**O que mudou.** `DocumentoFiscalRepositorio.gravarNumeroQueimado` grava uma linha `NAO_EMITIDO`
+**com a série e o número**, e com o motivo por extenso. Com isso o número aparece em Documentos
+Fiscais, o índice `documento_fiscal_numero_uk` impede que ele seja reaproveitado, e a Inutilização
+encontra a faixa.
+
+⚠️ **`gravarNaoEmitido`, que já existia, NÃO resolvia:** ele deixa série e número **nulos** — serve
+para "a nota não devia sair", em que nada foi consumido. Aqui é o oposto: o número **foi** consumido,
+e é exatamente ele que precisa aparecer.
+
+⚠️ Três detalhes que decidem se funciona: (a) `REQUIRES_NEW`, porque o método roda **enquanto uma
+exceção sobe** — numa transação herdada o Postgres já teria abortado tudo e o INSERT se perderia,
+o mesmo mecanismo que apagava o contador do 2FA; (b) o índice "uma nota por venda" é **parcial** e
+não cobre `NAO_EMITIDO`, então a linha não impede uma emissão bem-sucedida depois; (c) o
+`tipo_operacao` correto é **`DEVOLUCAO_FORNECEDOR`** — escrevi `DEVOLUCAO_COMPRA`, que não existe no
+enum, e só não virou erro em produção porque conferi contra o banco.
+
+⭐ Provado por **sabotagem**: desligando a gravação, o teste reprova com *"o número 1 foi consumido:
+tem de existir linha em documento_fiscal"*. E a asserção é no **banco** — um teste que conferisse só
+o erro HTTP passaria com o defeito inteiro presente, porque o operador vê o erro dos dois jeitos.
+
+⚠️ **Não fecha a #76**: os 7 números já queimados (52 a 58) foram queimados **antes** disto e
+continuam sem linha. Esta correção evita os próximos; o que fazer com os que existem continua sendo
+decisão dele.
+
+⚠️ **Armadilha do dia:** `./mvnw compile` respondeu **EXIT=0** com um erro de tipo real
+(`Integer` × `Long`) — a compilação incremental não refez a classe. Só apareceu apagando
+`target/classes/.../documento`. É [[feedback_mvn_compile_incremental_falso_positivo]] de novo.
 
 ### 72. 🟡 O motor da NFS-e ganhou chamador — **falta só o PDV** (medido em 2026-08-31, depois do pull)
 Quando abri este item, `grep` por `Nfse` fora do pacote devolvia **zero**: montagem, assinatura,
